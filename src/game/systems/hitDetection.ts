@@ -24,8 +24,8 @@ export function isEnemyHit(
 ): boolean {
   if (w.prIsmelee[p]) {
     // Melee: cone-based collision in front of aim direction
-    const aimX = w.lastAimX;
-    const aimY = w.lastAimY;
+    const aimX = w.prDirX[p];
+    const aimY = w.prDirY[p];
     const toEnemyX = w.ex[e] - w.px;
     const toEnemyY = w.ey[e] - w.py;
     const toEnemyDist = Math.hypot(toEnemyX, toEnemyY);

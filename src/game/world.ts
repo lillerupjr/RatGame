@@ -68,6 +68,8 @@ export type World = {
   prIsmelee: boolean[]; // is melee attack
   prCone: number[]; // cone angle (radians) for melee slashes
   prMeleeRange: number[]; // reach for melee cone (distance from player)
+  prDirX: number[]; // direction X for melee projectiles (locked at spawn)
+  prDirY: number[]; // direction Y for melee projectiles (locked at spawn)
   prTtl: number[];    // seconds remaining
 
   // Pickups (XP gems)
@@ -152,6 +154,8 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     prIsmelee: [],
     prCone: [],
     prMeleeRange: [],
+    prDirX: [],
+    prDirY: [],
     prTtl: [],
 
     xAlive: [],
