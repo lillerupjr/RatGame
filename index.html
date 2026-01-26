@@ -14,12 +14,33 @@
     /* IMPORTANT: ensure hidden attribute actually hides overlays (CSS IDs otherwise override it) */
     [hidden] { display: none !important; }
 
-
     /* Menu */
     #menu { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.55); z-index: 4; }
     #menu .panel { width: min(560px, 92vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
     #menu .title { font-size: 24px; font-weight: 800; margin-bottom: 6px; }
-    #menu button { margin-top: 14px; width: 100%; padding: 12px 14px; border-radius: 12px; border: 0; cursor: pointer; font-weight: 700; background: rgba(255,255,255,0.16); color: #fff; }
+    #menu .subline { opacity: 0.9; margin-bottom: 14px; }
+
+    /* Weapon picker */
+    #weaponPickerLabel { font-weight: 800; margin: 12px 0 8px; }
+    #weaponChoices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    @media (max-width: 520px) { #weaponChoices { grid-template-columns: 1fr; } }
+
+    .wpnBtn {
+      text-align: left;
+      padding: 12px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.08);
+      cursor: pointer;
+      color: #fff;
+      transition: transform 80ms ease, background 120ms ease, border-color 120ms ease;
+    }
+    .wpnBtn:hover { transform: translateY(-1px); background: rgba(255,255,255,0.11); border-color: rgba(255,255,255,0.18); }
+    .wpnBtn[aria-pressed="true"] { border-color: rgba(255,255,255,0.36); background: rgba(255,255,255,0.14); }
+    .wpnTitle { font-weight: 900; font-size: 14px; margin-bottom: 2px; }
+    .wpnDesc { opacity: 0.9; font-size: 12px; line-height: 1.35; }
+
+    #menu button#startBtn { margin-top: 14px; width: 100%; padding: 12px 14px; border-radius: 12px; border: 0; cursor: pointer; font-weight: 800; background: rgba(255,255,255,0.16); color: #fff; }
 
     /* Level-up overlay */
     #levelup { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.62); z-index: 5; }
@@ -67,7 +88,11 @@
 <div id="menu">
   <div class="panel">
     <div class="title">Rat Noir Survivors</div>
-    <div>Slice v0.1 — Docks (8 min → boss). Starter weapon: Throwing Knife.</div>
+    <div class="subline" id="menuSubline">Slice v0.1 — Docks (8 min → boss).</div>
+
+    <div id="weaponPickerLabel">Starter weapon</div>
+    <div id="weaponChoices"></div>
+
     <button id="startBtn">Start Run</button>
   </div>
 </div>

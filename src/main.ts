@@ -1,4 +1,5 @@
 import { createGame } from "./game/game";
+import { WEAPONS, type WeaponId } from "./game/content/weapons";
 
 const canvas = document.getElementById("c") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d");
@@ -12,6 +13,9 @@ const levelupRoot = document.getElementById("levelup") as HTMLDivElement;
 const levelupChoices = document.getElementById("luChoices") as HTMLDivElement;
 const levelupSub = document.getElementById("luSub") as HTMLDivElement;
 
+const weaponChoicesEl = document.getElementById("weaponChoices") as HTMLDivElement;
+const menuSublineEl = document.getElementById("menuSubline") as HTMLDivElement;
+
 function resize() {
   const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
   canvas.width = Math.floor(window.innerWidth * dpr);
@@ -24,6 +28,62 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
+// ---- Weapon picker ----
+const weaponIds = Object.keys(WEAPONS) as WeaponId[];
+
+let selectedWeapon: WeaponId =
+    (startBtn.dataset.weapon as WeaponId) ||
+    (weaponIds.includes("KNIFE" as WeaponId) ? ("KNIFE" as WeaponId) : weaponIds[0]);
+
+function setSelectedWeapon(id: WeaponId) {
+  selectedWeapon = id;
+  startBtn.dataset.weapon = id;
+
+  // Update visual pressed state
+  const buttons = weaponChoicesEl.querySelectorAll("button[data-weapon]");
+  buttons.forEach((b) => {
+    const wid = (b as HTMLButtonElement).dataset.weapon as WeaponId;
+    b.setAttribute("aria-pressed", wid === selectedWeapon ? "true" : "false");
+  });
+
+  const title = WEAPONS[id]?.title ?? id;
+  menuSublineEl.textContent = `Slice v0.1 — Docks (8 min → boss). Starter weapon: ${title}.`;
+}
+
+function buildWeaponPicker() {
+  weaponChoicesEl.innerHTML = "";
+
+  for (const id of weaponIds) {
+    const def = WEAPONS[id];
+    const btn = document.createElement("button");
+    btn.className = "wpnBtn";
+    btn.type = "button";
+    btn.dataset.weapon = id;
+    btn.setAttribute("aria-pressed", "false");
+
+    // Keep descriptions simple (data-driven later)
+    const desc =
+        id === "KNIFE"
+            ? "Fan of knives. Great early clear."
+            : id === "PISTOL"
+                ? "Single shot. Good precision and scaling."
+                : "Starter weapon.";
+
+    btn.innerHTML = `
+      <div class="wpnTitle">${def.title}</div>
+      <div class="wpnDesc">${desc}</div>
+    `;
+
+    btn.addEventListener("click", () => setSelectedWeapon(id));
+    weaponChoicesEl.appendChild(btn);
+  }
+
+  setSelectedWeapon(selectedWeapon);
+}
+
+buildWeaponPicker();
+
+// ---- Game ----
 const game = createGame({
   canvas,
   ctx,
@@ -50,8 +110,5 @@ function frame(now: number) {
 }
 requestAnimationFrame(frame);
 
-startBtn.addEventListener("click", () => {
-  menuEl.hidden = true;
-  hudEl.hidden = false;
-  game.startRun();
-});
+// NOTE: no startBtn handler here — game.ts owns menu click-to-start,
+// and reads startBtn.dataset.weapon.

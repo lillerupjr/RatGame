@@ -1,11 +1,17 @@
+// src/game/systems/collisions.ts
 import { World, emitEvent } from "../world";
 
 /**
- * Handles projectile ↔ enemy collisions.
+ * Handles:
+ * - projectile ↔ enemy collisions
+ * - player ↔ enemy contact damage (with i-frames)
+ *
  * Emits events instead of spawning XP or doing other cross-system side effects.
  */
-export function collisionsSystem(w: World, _dt: number) {
+export function collisionsSystem(w: World, dt: number) {
+  // -------------------------
   // Projectiles vs Enemies
+  // -------------------------
   for (let p = 0; p < w.pAlive.length; p++) {
     if (!w.pAlive[p]) continue;
 
@@ -13,7 +19,7 @@ export function collisionsSystem(w: World, _dt: number) {
     const py = w.pry[p];
     const pr = w.prR[p];
 
-    // Track whether this projectile hit something this frame
+    // Track whether this projectile hit something this frame (kept for future use)
     let hitSomething = false;
 
     for (let e = 0; e < w.eAlive.length; e++) {
@@ -72,7 +78,62 @@ export function collisionsSystem(w: World, _dt: number) {
     void hitSomething;
   }
 
-  // Player vs Enemies (if you already have this logic, keep it here, but emit PLAYER_HIT events)
-  // NOTE: If you already have player collision damage elsewhere, paste it and I’ll event-ify it.
-}
+  // -------------------------
+  // Player vs Enemies
+  // -------------------------
+  // Player is rendered with radius 14 in render.ts, so keep it consistent here.
+  const PLAYER_R = 14;
 
+  // Simple "i-frames" cooldown so player doesn't get deleted in 1 frame.
+  // Stored on world as a private field to avoid touching the World type.
+  const IFRAME_SECS = 0.6;
+
+  let hitCd = (w as any)._playerHitCd ?? 0;
+  hitCd = Math.max(0, hitCd - dt);
+
+  if (hitCd <= 0) {
+    for (let e = 0; e < w.eAlive.length; e++) {
+      if (!w.eAlive[e]) continue;
+
+      const dx = w.ex[e] - w.px;
+      const dy = w.ey[e] - w.py;
+      const rr = w.eR[e] + PLAYER_R;
+
+      if (dx * dx + dy * dy > rr * rr) continue;
+
+      // CONTACT HIT
+      const dmg = w.eDamage[e] || 1;
+
+      w.playerHp -= dmg;
+
+      emitEvent(w, {
+        type: "PLAYER_HIT",
+        damage: dmg,
+        x: w.px,
+        y: w.py,
+      });
+
+      // Push-out so the player isn't stuck inside the enemy.
+      // Split correction between player and enemy to reduce jitter.
+      const dist = Math.hypot(dx, dy) || 0.0001;
+      const ux = dx / dist;
+      const uy = dy / dist;
+
+      const penetration = rr - dist;
+      if (penetration > 0) {
+        const push = penetration + 0.5;
+        // Move player away from enemy
+        w.px -= ux * push * 0.6;
+        w.py -= uy * push * 0.6;
+        // Move enemy away from player a bit too
+        w.ex[e] += ux * push * 0.4;
+        w.ey[e] += uy * push * 0.4;
+      }
+
+      hitCd = IFRAME_SECS;
+      break; // only one contact hit per i-frame window
+    }
+  }
+
+  (w as any)._playerHitCd = hitCd;
+}
