@@ -1,34 +1,16 @@
+// src/game/factories/enemyFactory.ts
 import type { World } from "../world";
+import { registry } from "../content/registry";
+import { ENEMY_TYPE, type EnemyType } from "../content/enemies";
 
-export const ENEMY_TYPE = {
-    CHASER: 1,
-    RUNNER: 2,
-    BRUISER: 3,
-    BOSS: 99,
-} as const;
-
-export type EnemyType = (typeof ENEMY_TYPE)[keyof typeof ENEMY_TYPE];
-
-type EnemyStats = {
-    hp: number;
-    radius: number;
-    speed: number;
-    damage: number;
-};
-
-const STATS: Record<number, EnemyStats> = {
-    [ENEMY_TYPE.CHASER]: { hp: 20, radius: 14, speed: 90, damage: 10 },
-    [ENEMY_TYPE.RUNNER]: { hp: 12, radius: 12, speed: 130, damage: 8 },
-    [ENEMY_TYPE.BRUISER]: { hp: 60, radius: 18, speed: 70, damage: 16 },
-    [ENEMY_TYPE.BOSS]: { hp: 800, radius: 34, speed: 55, damage: 22 }, // placeholder
-};
+export { ENEMY_TYPE };
+export type { EnemyType };
 
 /**
- * Factory: creates one enemy with standardized stats.
- * Later you can route to content/enemies.ts if you want full data-driven.
+ * Factory: creates one enemy with standardized stats (from registry).
  */
 export function spawnEnemy(w: World, type: EnemyType, x: number, y: number) {
-    const s = STATS[type] ?? STATS[ENEMY_TYPE.CHASER];
+    const s = registry.enemy(type);
 
     const i = w.eAlive.length;
     w.eAlive.push(true);

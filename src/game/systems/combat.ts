@@ -1,5 +1,5 @@
 import { World } from "../world";
-import { WEAPONS, WeaponId } from "../content/weapons";
+import { registry } from "../content/registry";
 
 export function combatSystem(w: World, dt: number) {
   // Aim-at-fire-time (NOT homing): nearest enemy if present, else last movement aim.
@@ -40,7 +40,7 @@ export function combatSystem(w: World, dt: number) {
   // Fire all weapons in loadout
   for (let i = 0; i < w.weapons.length; i++) {
     const inst = w.weapons[i];
-    const def = WEAPONS[inst.id as WeaponId];
+    const def = registry.weapon(inst.id);
     if (!def) continue;
 
     inst.cdLeft -= dt;
