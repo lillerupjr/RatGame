@@ -176,30 +176,6 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
 
 
 
-export function spawnProjectile(
-    w: World,
-    kind: number,
-    x: number,
-    y: number,
-    vx: number,
-    vy: number,
-    dmg: number,
-    r: number,
-    pierce: number
-) {
-  const i = w.pAlive.length;
-  w.pAlive.push(true);
-  w.prjKind.push(kind);
-  w.prx.push(x);
-  w.pry.push(y);
-  w.prvx.push(vx);
-  w.prvy.push(vy);
-  w.prDamage.push(dmg);
-  w.prR.push(r);
-  w.prPierce.push(pierce);
-  return i;
-}
-
 export function spawnXp(w: World, x: number, y: number, value: number) {
   const i = w.xAlive.length;
   w.xAlive.push(true);
