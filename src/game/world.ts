@@ -64,6 +64,9 @@ export type World = {
   xy: number[];
   xValue: number[];
 
+  prStartX: number[];
+  prStartY: number[];
+  prMaxDist: number[]; // 0 = unlimited
   // Progression
   level: number;
   xp: number;
@@ -94,6 +97,9 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
 
     time: 0,
     kills: 0,
+    prStartX: [],
+    prStartY: [],
+    prMaxDist: [], // 0 = unlimited
 
     px: 0,
     py: 0,

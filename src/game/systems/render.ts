@@ -3,7 +3,8 @@ import { World } from "../world";
 export function renderSystem(w: World, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
   const ww = canvas.clientWidth;
   const hh = canvas.clientHeight;
-
+  w.viewW = canvas.clientWidth;
+  w.viewH = canvas.clientHeight;
   // Clear
   ctx.clearRect(0, 0, ww, hh);
 

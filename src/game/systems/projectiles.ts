@@ -24,5 +24,14 @@ export function projectilesSystem(w: World, dt: number) {
         if (Math.abs(w.prx[i] - w.px) > 1600 || Math.abs(w.pry[i] - w.py) > 1600) {
             w.pAlive[i] = false;
         }
+        const md = w.prMaxDist[i];
+        if (md > 0) {
+            const dx = w.prx[i] - w.prStartX[i];
+            const dy = w.pry[i] - w.prStartY[i];
+            if (dx * dx + dy * dy >= md * md) {
+                w.pAlive[i] = false;
+                continue;
+            }
+        }
     }
 }

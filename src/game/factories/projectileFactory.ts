@@ -22,6 +22,8 @@ export type SpawnProjectileArgs = {
     radius: number;
     pierce: number;
 
+    // NEW: max travel distance in world pixels (0 = unlimited)
+    maxDist?: number;
     // lifetime in seconds
     ttl: number;
 };
@@ -57,6 +59,9 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     w.prR.push(a.radius);
     w.prPierce.push(a.pierce);
     w.prTtl.push(a.ttl);
+    w.prStartX.push(a.x);
+    w.prStartY.push(a.y);
+    w.prMaxDist.push(a.maxDist ?? 0);
 
     return i;
 }
