@@ -69,13 +69,14 @@ export function renderSystem(
 
     const def = registry.enemy(w.eType[i]);
     ctx.fillStyle =
-        (def as any).color ??
+        def.color ??
         (w.eType[i] === 3 ? "#f8b" : w.eType[i] === 2 ? "#fb8" : "#f66");
 
     ctx.beginPath();
     ctx.arc(x, y, w.eR[i], 0, Math.PI * 2);
     ctx.fill();
   }
+
 
   // Projectiles (source mapping from registry; stable as you add more kinds)
   for (let i = 0; i < w.pAlive.length; i++) {
