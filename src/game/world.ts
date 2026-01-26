@@ -56,6 +56,9 @@ export type World = {
   prDamage: number[];
   prR: number[];
   prPierce: number[]; // remaining pierces
+  prIsmelee: boolean[]; // is melee attack
+  prCone: number[]; // cone angle (radians) for melee slashes
+  prMeleeRange: number[]; // reach for melee cone (distance from player)
   prTtl: number[];    // seconds remaining
 
   // Pickups (XP gems)
@@ -137,6 +140,9 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     prDamage: [],
     prR: [],
     prPierce: [],
+    prIsmelee: [],
+    prCone: [],
+    prMeleeRange: [],
     prTtl: [],
 
     xAlive: [],
@@ -196,35 +202,41 @@ export function spawnEnemy(w: World, type: number, x: number, y: number) {
 }
 
 export function spawnProjectile(
-    w: World,
-    kind: number,
-    x: number,
-    y: number,
-    vx: number,
-    vy: number,
-    dmg: number,
-    r: number,
-    pierce: number
+    w: World, 
+    kind: number, // projectile kind: 1 knife, 2 pistol
+    x: number,// x position
+    y: number, // y position
+    vx: number, // x velocity
+    vy: number, // y velocity
+    dmg: number, // damage
+    r: number, // radius
+    pierce: number, // pierce count
+    ismelee: boolean = false, //is the projectile melee (sword slash) or an actual projectile
+    coneAngle: number = Math.PI / 6, // melee cone angle
+    meleeRange: number = r // melee reach distance
 ) {
   const i = w.pAlive.length;
-  w.pAlive.push(true);
-  w.prjKind.push(kind);
-  w.prx.push(x);
-  w.pry.push(y);
-  w.prvx.push(vx);
-  w.prvy.push(vy);
-  w.prDamage.push(dmg);
-  w.prR.push(r);
-  w.prPierce.push(pierce);
+  w.pAlive.push(true); // all projectiles start alive
+  w.prjKind.push(kind); // projectile kind
+  w.prx.push(x); // x position
+  w.pry.push(y); // y position
+  w.prvx.push(vx); // x velocity
+  w.prvy.push(vy); // y velocity
+  w.prDamage.push(dmg); // damage
+  w.prR.push(r); // radius
+  w.prPierce.push(pierce); // pierce count
+  w.prIsmelee.push(ismelee); // is melee
+  w.prCone.push(coneAngle); // cone angle
+  w.prMeleeRange.push(meleeRange); // cone reach
   return i;
 }
 
 export function spawnXp(w: World, x: number, y: number, value: number) {
   const i = w.xAlive.length;
-  w.xAlive.push(true);
-  w.xx.push(x);
-  w.xy.push(y);
-  w.xValue.push(value);
+  w.xAlive.push(true); // all XP gems start alive
+  w.xx.push(x); // x position
+  w.xy.push(y); // y position
+  w.xValue.push(value); // XP value
   return i;
 }
 
