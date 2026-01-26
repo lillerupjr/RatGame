@@ -1,4 +1,4 @@
-import { World, createWorld } from "./world";
+import { World, createWorld, clearEvents } from "./world";
 import { InputState, createInputState, inputSystem } from "./systems/input";
 import { movementSystem } from "./systems/movement";
 import { spawnSystem } from "./systems/spawn";
@@ -132,6 +132,8 @@ export function createGame(args: CreateGameArgs) {
     collisionsSystem(world, dt);
     pickupsSystem(world, dt);
     xpSystem(world, dt);
+    // Clear events AFTER all consumers ran this frame
+    clearEvents(world)
 
     // Enter level-up state if needed
     if (world.pendingLevelUps > 0) {

@@ -1,10 +1,12 @@
 import { RNG } from "./util/rng";
 import { StageDef } from "./content/stages";
 import { ITEMS } from "./content/items";
+import type { GameEvent } from "./events";
 
 export type GameState = "MENU" | "RUN" | "LEVELUP" | "LOSE" | "WIN";
 
 export type World = {
+  events: GameEvent[];
   state: GameState;
   rng: RNG;
   stage: StageDef;
@@ -84,6 +86,7 @@ export type World = {
 
 export function createWorld(args: { seed: number; stage: StageDef }): World {
   const w: World = {
+    events: [],
     state: "MENU",
     rng: new RNG(args.seed),
     stage: args.stage,
@@ -232,4 +235,11 @@ export function recomputeDerivedStats(w: World) {
     const def = ITEMS[inst.id];
     def.apply(w, inst.level);
   }
+}
+export function emitEvent(w: World, e: import("./events").GameEvent) {
+  w.events.push(e);
+}
+
+export function clearEvents(w: World) {
+  w.events.length = 0;
 }
