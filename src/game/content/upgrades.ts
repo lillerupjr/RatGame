@@ -18,6 +18,9 @@ export type UpgradeDef = {
 
     /** Optional: show current rank/level. */
     getRankText?: (w: World) => string;
+
+    /** Evolutions are forced when available (pool becomes evolution-only). */
+    isEvolution?: boolean;
 };
 
 const MAX_WEAPON_SLOTS = 4;
@@ -28,6 +31,17 @@ function ownedWeaponSet(w: World) {
 }
 function getWeaponInst(w: World, id: WeaponId) {
     return w.weapons.find((x) => x.id === id);
+}
+function hasWeaponOrEvolvedFrom(w: World, baseId: WeaponId): boolean {
+    // Owns base directly?
+    if (w.weapons.some((x) => x.id === baseId)) return true;
+
+    // Owns an evolved weapon that came from base?
+    for (const inst of w.weapons) {
+        const def = registry.weapon(inst.id);
+        if ((def as any).evolvedFrom === baseId) return true;
+    }
+    return false;
 }
 
 function ownedItemSet(w: World) {
@@ -45,6 +59,33 @@ function buildAllUpgrades(): UpgradeDef[] {
     const MAX_ITEM = registry.maxItemLevel();
 
     // -----------------------
+    // EVOLUTIONS (forced when available)
+    // -----------------------
+    defs.push({
+        id: "EVOLVE_KNIFE_RING",
+        title: "Knife Cyclone",
+        desc: 'EVOLUTION: Throwing Knife becomes a 24-knife burst in a full circle. (Requires Throwing Knife Lv 10 + Fire Rate.)',
+        isEvolution: true,
+        isAvailable: (w) => {
+            const knife = getWeaponInst(w, "KNIFE");
+            const fireRate = getItemInst(w, "FIRE_RATE");
+            return !!knife && knife.level >= MAX_WPN && !!fireRate;
+        },
+        apply: (w) => {
+            // Replace the weapon in-place (same slot)
+            const idx = w.weapons.findIndex((x) => x.id === "KNIFE");
+            if (idx < 0) return;
+
+            w.weapons[idx] = {
+                id: "KNIFE_EVOLVED_RING",
+                level: 1,
+                cdLeft: 0,
+            };
+        },
+        getRankText: (_w) => "EVOLUTION",
+    });
+
+    // -----------------------
     // Weapons: Add + Level-up
     // -----------------------
     const weaponIds = registry.weaponIds();
@@ -54,8 +95,10 @@ function buildAllUpgrades(): UpgradeDef[] {
         defs.push({
             id: `WPN_ADD_${id}`,
             title: wpn.title,
-            desc: `Add weapon. ${wpn.title} joins your loadout.`,
-            isAvailable: (w) => w.weapons.length < MAX_WEAPON_SLOTS && !ownedWeaponSet(w).has(id),
+            desc: `${wpn.title} joins your loadout.`,
+            isAvailable: (w) =>
+                w.weapons.length < MAX_WEAPON_SLOTS &&
+                !hasWeaponOrEvolvedFrom(w, id),
             apply: (w) => {
                 w.weapons.push({ id, level: 1, cdLeft: 0 });
             },
@@ -68,7 +111,7 @@ function buildAllUpgrades(): UpgradeDef[] {
         defs.push({
             id: `WPN_LV_${id}`,
             title: `${wpn.title} +1`,
-            desc: `Increase weapon level. (Evolution at Lv ${MAX_WPN} later.)`,
+            desc: `Increase weapon level. (Evolution at Lv ${MAX_WPN}.)`,
             isAvailable: (w) => {
                 const inst = getWeaponInst(w, id);
                 return !!inst && inst.level < MAX_WPN;
@@ -134,5 +177,11 @@ function buildAllUpgrades(): UpgradeDef[] {
 /** Current loot pool = all upgrades whose isAvailable(world) is true. */
 export function getUpgradePool(w: World): UpgradeDef[] {
     const all = buildAllUpgrades();
-    return all.filter((u) => u.isAvailable(w));
+    const available = all.filter((u) => u.isAvailable(w));
+
+    // Forced evolutions: if ANY evolution is available, only show evolutions.
+    const evolutions = available.filter((u) => u.isEvolution);
+    if (evolutions.length > 0) return evolutions;
+
+    return available;
 }

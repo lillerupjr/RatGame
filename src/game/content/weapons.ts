@@ -1,8 +1,8 @@
+// src/game/content/weapons.ts
 import type { World } from "../world";
 import { spawnProjectile, PRJ_KIND } from "../factories/projectileFactory";
 
-
-export type WeaponId = "KNIFE" | "PISTOL";
+export type WeaponId = "KNIFE" | "PISTOL" | "KNIFE_EVOLVED_RING";
 export const MAX_WEAPON_LEVEL = 10;
 
 export type Aim = { x: number; y: number };
@@ -23,6 +23,17 @@ export type WeaponDef = {
     id: WeaponId;
     title: string;
 
+    /**
+     * If true, weapon will NOT appear in:
+     * - starter weapon picker
+     * - "add weapon" upgrades
+     * - "level weapon" upgrades (unless you explicitly include it)
+     */
+    hiddenFromPools?: boolean;
+
+    /** If set, UI can show "EVOLUTION" etc. */
+    evolvedFrom?: WeaponId;
+
     /** compute derived stats for this level */
     getStats: (level: number, w: World) => WeaponStats;
 
@@ -32,12 +43,6 @@ export type WeaponDef = {
 
 function clampLevel(level: number): number {
     return Math.max(1, Math.min(MAX_WEAPON_LEVEL, Math.floor(level)));
-}
-
-function rotate(ax: number, ay: number, ang: number) {
-    const c = Math.cos(ang);
-    const s = Math.sin(ang);
-    return { x: ax * c - ay * s, y: ax * s + ay * c };
 }
 
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
@@ -52,8 +57,8 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const damagePer = 1.2;
 
             // Spread: slightly tighter than before
-            const baseFanArc = 0.28; // was 0.35
-            const fanArcPer = 0.16;  // was 0.22
+            const baseFanArc = 0.28;
+            const fanArcPer = 0.16;
             const fanArc = Math.min(Math.PI, baseFanArc + (lv - 1) * fanArcPer);
 
             return {
@@ -70,19 +75,12 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         fire: (w, s, aim) => {
             const count = Math.max(1, s.projectileCount ?? 1);
 
-            // Range (world pixels): 1/4 of screen width
-            // NOTE: requires you to set w.viewW every frame (or uses fallback).
-            // Range limiting is done by vector-space distance check in projectilesSystem,
-            // using prStartX/prStartY + prMaxDist written by spawnProjectile().
             const viewW = (w as any).viewW ?? 800;
-            const maxDist = viewW * 0.15;
+            const maxDist = viewW * 0.25;
 
-            // TTL becomes just a safety cap now (distance is the real limiter)
             const ttlSafety = 10;
-
             const baseAngle = Math.atan2(aim.y, aim.x);
 
-            // If only 1 projectile: straight ahead
             if (count === 1) {
                 spawnProjectile(w, {
                     kind: PRJ_KIND.KNIFE,
@@ -100,27 +98,74 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
                 return;
             }
 
-            // Center blade rule:
-            // - Odd count => includes center at baseAngle
-            // - Even count => no center blade; symmetric around baseAngle
             const fanArc = Math.max(0, s.fanArc ?? 0);
             const half = fanArc * 0.5;
 
-            const isEven = (count % 2) === 0;
-            const step = isEven ? (fanArc / count) : (fanArc / (count - 1));
+            const isEven = count % 2 === 0;
+            const step = isEven ? fanArc / count : fanArc / (count - 1);
             const start = baseAngle - half + (isEven ? step * 0.5 : 0);
 
-            for (let i = 0; i < count; i++) {
-                const ang = start + step * i;
-                const dx = Math.cos(ang);
-                const dy = Math.sin(ang);
-
+            for (let k = 0; k < count; k++) {
+                const a = start + k * step;
                 spawnProjectile(w, {
                     kind: PRJ_KIND.KNIFE,
                     x: w.px,
                     y: w.py,
-                    dirX: dx,
-                    dirY: dy,
+                    dirX: Math.cos(a),
+                    dirY: Math.sin(a),
+                    speed: s.projectileSpeed,
+                    damage: s.damage,
+                    radius: s.projectileRadius,
+                    pierce: s.pierce ?? 0,
+                    ttl: ttlSafety,
+                    maxDist,
+                });
+            }
+        },
+    },
+
+    // --- EVOLUTION ---
+    // Fires 24 knives in a perfect ring outward from the player.
+    KNIFE_EVOLVED_RING: {
+        id: "KNIFE_EVOLVED_RING",
+        title: "Knife Cyclone",
+        hiddenFromPools: true,
+        evolvedFrom: "KNIFE",
+
+        getStats: (level, w) => {
+            // You can decide later if evolved weapons level up.
+            // For now, it still supports levels (if you ever choose to).
+            const lv = clampLevel(level);
+
+            const cooldownBase = 1.05;  // slower, big burst
+            const damageBase = 10;      // per projectile (24 projectiles)
+            const damagePer = 0.9;
+
+            return {
+                cooldown: cooldownBase / w.fireRateMult,
+                projectileSpeed: 440,
+                projectileRadius: 5,
+                damage: (damageBase + (lv - 1) * damagePer) * w.dmgMult,
+                projectileCount: 24,
+                pierce: 0,
+            };
+        },
+
+        fire: (w, s, _aim) => {
+            const count = 24;
+
+            const viewW = (w as any).viewW ?? 800;
+            const maxDist = viewW * 0.40;
+            const ttlSafety = 10;
+
+            for (let k = 0; k < count; k++) {
+                const a = (k / count) * Math.PI * 2;
+                spawnProjectile(w, {
+                    kind: PRJ_KIND.KNIFE,
+                    x: w.px,
+                    y: w.py,
+                    dirX: Math.cos(a),
+                    dirY: Math.sin(a),
                     speed: s.projectileSpeed,
                     damage: s.damage,
                     radius: s.projectileRadius,
