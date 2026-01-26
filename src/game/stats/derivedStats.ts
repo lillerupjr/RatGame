@@ -1,6 +1,7 @@
 // src/game/stats/derivedStats.ts
 import type { World } from "../world";
-import { ITEMS } from "../content/items";
+import { registry } from "../content/registry";
+
 
 /**
  * Recompute all derived stats from base stats + current items.
@@ -17,7 +18,7 @@ export function recomputeDerivedStats(w: World) {
 
     // Apply all items
     for (const inst of w.items) {
-        const def = ITEMS[inst.id];
+        const def = registry.item(inst.id);
         def.apply(w, inst.level);
     }
 }
