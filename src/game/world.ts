@@ -29,7 +29,8 @@ export type World = {
   playerHpMax: number;
 
   // Items (max 4)
-  items: { id: string; level: number }[];
+  items: { id: import("./content/items").ItemId; level: number }[];
+
   // Entities (arrays for ECS-lite)
   eAlive: boolean[];
   eType: number[]; // 1 chaser, 2 runner, 3 bruiser, 99 boss
@@ -72,7 +73,7 @@ export type World = {
   lastAimY: number;
 
   // Player weapons (max 4)
-  weapons: { id: string; level: number; cdLeft: number }[];
+  weapons: { id: import("./content/weapons").WeaponId; level: number; cdLeft: number }[];
 
 
   dmgMult: number;
@@ -228,8 +229,7 @@ export function recomputeDerivedStats(w: World) {
 
   // Apply all items
   for (const inst of w.items) {
-    const def = ITEMS[inst.id as any];
-    if (!def) continue;
+    const def = ITEMS[inst.id];
     def.apply(w, inst.level);
   }
 }
