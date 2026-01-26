@@ -8,6 +8,7 @@ import { pickupsSystem } from "./systems/pickups";
 import { xpSystem } from "./systems/xp";
 import { renderSystem } from "./systems/render";
 import { stageDocks } from "./content/stages";
+import { getUpgradePool, UpgradeDef } from "./content/upgrades";
 import { formatTimeMMSS } from "./util/time";
 
 type HudRefs = {
@@ -31,21 +32,12 @@ type CreateGameArgs = {
   ui: { menuEl: HTMLDivElement; levelupEl: LevelUpRefs };
 };
 
-type UpgradeId = "DMG" | "FIRE_RATE" | "PICKUP_RADIUS" | "MOVE_SPEED";
-type UpgradeDef = { id: UpgradeId; title: string; desc: string };
-
-const UPGRADES: UpgradeDef[] = [
-  { id: "DMG", title: "+Damage", desc: "Bigger numbers. Faster deaths." },
-  { id: "FIRE_RATE", title: "+Fire Rate", desc: "Weapons fire more often." },
-  { id: "PICKUP_RADIUS", title: "+Pickup Radius", desc: "Vacuum XP from farther away." },
-  { id: "MOVE_SPEED", title: "+Move Speed", desc: "Run faster. Live longer." },
-];
 
 export function createGame(args: CreateGameArgs) {
   const input: InputState = createInputState();
   let world: World = createWorld({ seed: 1337, stage: stageDocks });
 
-  let currentChoices: UpgradeId[] = [];
+  let currentChoices: UpgradeDef[] = [];
 
   function resetRun() {
     world = createWorld({
@@ -74,9 +66,10 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function rollChoices() {
-    // 3 unique random choices from the 4 upgrade pool
-    const pool = [...UPGRADES.map((u) => u.id)];
+    const pool = getUpgradePool(world).slice();
     currentChoices = [];
+
+    // Pick 3 unique upgrades
     while (currentChoices.length < 3 && pool.length > 0) {
       const idx = world.rng.int(0, pool.length - 1);
       currentChoices.push(pool[idx]);
@@ -84,47 +77,35 @@ export function createGame(args: CreateGameArgs) {
     }
   }
 
+
   function renderChoices() {
     const container = args.ui.levelupEl.choices;
     container.innerHTML = "";
 
-    for (const id of currentChoices) {
-      const def = UPGRADES.find((u) => u.id === id)!;
-
+    for (const def of currentChoices) {
       const btn = document.createElement("button");
       btn.className = "choiceBtn";
-      btn.dataset.upgrade = id;
+      btn.dataset.upgrade = def.id;
 
-      const t = document.createElement("div");
-      t.className = "choiceTitle";
-      t.textContent = def.title;
+      const titleRow = document.createElement("div");
+      titleRow.className = "choiceTitle";
+      titleRow.textContent = def.getRankText ? `${def.title} (${def.getRankText(world)})` : def.title;
 
       const d = document.createElement("div");
       d.className = "choiceDesc";
       d.textContent = def.desc;
 
-      btn.appendChild(t);
+      btn.appendChild(titleRow);
       btn.appendChild(d);
       container.appendChild(btn);
     }
   }
 
-  function applyUpgrade(id: UpgradeId) {
-    // Conservative early-game scaling (tune later)
-    switch (id) {
-      case "DMG":
-        world.dmgMult *= 1.15;
-        break;
-      case "FIRE_RATE":
-        world.fireRateMult *= 1.12;
-        break;
-      case "PICKUP_RADIUS":
-        world.pickupRadius += 18;
-        break;
-      case "MOVE_SPEED":
-        world.pSpeed += 18;
-        break;
-    }
+  function applyUpgrade(def: UpgradeDef) {
+    def.apply(world);
+    // If an upgrade changed items/stats, ensure derived stats are up to date.
+    // (Safe even if nothing changed.)
+    // recomputeDerivedStats is already called by item upgrades, but keeping this is future-proof.
   }
 
   function update(dt: number) {
@@ -194,10 +175,13 @@ export function createGame(args: CreateGameArgs) {
     const el = e.target as HTMLElement;
     const btn = el.closest("button") as HTMLButtonElement | null;
     if (!btn) return;
-    const id = btn.dataset.upgrade as UpgradeId | undefined;
+    const id = btn.dataset.upgrade;
     if (!id) return;
 
-    applyUpgrade(id);
+    const def = currentChoices.find((c) => c.id === id);
+    if (!def) return;
+
+    applyUpgrade(def);
     world.pendingLevelUps = Math.max(0, world.pendingLevelUps - 1);
 
     if (world.pendingLevelUps > 0) {

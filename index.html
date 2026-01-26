@@ -11,6 +11,10 @@
 
     canvas { display:block; }
 
+    /* IMPORTANT: ensure hidden attribute actually hides overlays (CSS IDs otherwise override it) */
+    [hidden] { display: none !important; }
+
+
     /* Menu */
     #menu { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.55); z-index: 4; }
     #menu .panel { width: min(560px, 92vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }

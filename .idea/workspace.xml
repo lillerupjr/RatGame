@@ -4,19 +4,45 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="559d6793-a80d-4c3d-9675-d2b5a35ab978" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/index.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tsconfig.json" afterDir="false" />
+    <list default="true" id="559d6793-a80d-4c3d-9675-d2b5a35ab978" name="Changes" comment="v0.3.1">
+      <change afterPath="$PROJECT_DIR$/src/game/content/items.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/game/content/loot.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/game/content/upgrades.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/game/content/weapons.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/game/game.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/game/game.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/game/systems/combat.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/game/systems/combat.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/game/systems/movement.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/game/systems/movement.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/game/world.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/game/world.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="TypeScript File" />
+      </list>
+    </option>
+  </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;lillerupjr&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/lillerupjr/RatGame.git&quot;,
+    &quot;accountId&quot;: &quot;f1440bbb-0109-4eb8-b3f9-f95a5b160bb6&quot;
+  }
+}</component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 0
 }</component>
@@ -57,8 +83,17 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1769447085946</updated>
-      <workItem from="1769447086998" duration="1304000" />
+      <workItem from="1769447086998" duration="3786000" />
     </task>
+    <task id="LOCAL-00001" summary="v0.3.1">
+      <option name="closed" value="true" />
+      <created>1769448509735</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1769448509736</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -74,5 +109,9 @@
         </entry>
       </map>
     </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="v0.3.1" />
+    <option name="LAST_COMMIT_MESSAGE" value="v0.3.1" />
   </component>
 </project>
