@@ -1,5 +1,6 @@
 // src/game/systems/collisions.ts
 import { World, emitEvent } from "../world";
+import { registry } from "../content/registry";
 
 /**
  * Handles:
@@ -43,7 +44,7 @@ export function collisionsSystem(w: World, dt: number) {
         damage: dmg,
         x: w.ex[e],
         y: w.ey[e],
-        source: w.prjKind[p] === 2 ? "PISTOL" : "KNIFE",
+        source: registry.projectileSourceFromKind(w.prjKind[p]),
       });
 
       // Pierce handling: pierce is "remaining extra enemies it can pass through"
@@ -65,7 +66,7 @@ export function collisionsSystem(w: World, dt: number) {
           x: w.ex[e],
           y: w.ey[e],
           xpValue: 1, // tune later or base on enemy type
-          source: w.prjKind[p] === 2 ? "PISTOL" : "KNIFE",
+          source: registry.projectileSourceFromKind(w.prjKind[p]),
         });
       }
 
