@@ -85,9 +85,31 @@ export function renderSystem(
     const x = w.prx[i] + cx;
     const y = w.pry[i] + cy;
 
+    // Melee projectiles render as a forward-facing slash wedge
+    if (w.prIsmelee[i]) {
+      const baseAng = Math.atan2(w.lastAimY, w.lastAimX);
+      const half = (w.prCone[i] ?? Math.PI / 6) * 0.5; // must stay in sync with hitDetection cone
+      const r = w.prMeleeRange?.[i] ?? w.prR[i];
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(baseAng);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, r, -half, half);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(250, 180, 255, 0.35)";
+      ctx.strokeStyle = "#f5b";
+      ctx.lineWidth = 2;
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+      continue;
+    }
+
+    // Ranged projectiles: simple circles
     const src = registry.projectileSourceFromKind(w.prjKind[i]);
     ctx.fillStyle = src === "KNIFE" ? "#fff" : src === "PISTOL" ? "#9f9" : "#bbb";
-
     ctx.beginPath();
     ctx.arc(x, y, w.prR[i], 0, Math.PI * 2);
     ctx.fill();

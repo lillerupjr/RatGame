@@ -37,6 +37,10 @@ export function combatSystem(w: World, dt: number) {
     }
   }
 
+  // Keep melee cone aim in sync with the direction we're firing (not just movement).
+  w.lastAimX = aimX;
+  w.lastAimY = aimY;
+
   // Fire all weapons in loadout
   for (let i = 0; i < w.weapons.length; i++) {
     const inst = w.weapons[i];

@@ -65,6 +65,9 @@ export type World = {
   prDamage: number[];
   prR: number[];
   prPierce: number[]; // remaining pierces
+  prIsmelee: boolean[]; // is melee attack
+  prCone: number[]; // cone angle (radians) for melee slashes
+  prMeleeRange: number[]; // reach for melee cone (distance from player)
   prTtl: number[];    // seconds remaining
 
   // Pickups (XP gems)
@@ -146,6 +149,9 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     prDamage: [],
     prR: [],
     prPierce: [],
+    prIsmelee: [],
+    prCone: [],
+    prMeleeRange: [],
     prTtl: [],
 
     xAlive: [],
@@ -175,13 +181,12 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
 }
 
 
-
 export function spawnXp(w: World, x: number, y: number, value: number) {
   const i = w.xAlive.length;
-  w.xAlive.push(true);
-  w.xx.push(x);
-  w.xy.push(y);
-  w.xValue.push(value);
+  w.xAlive.push(true); // all XP gems start alive
+  w.xx.push(x); // x position
+  w.xy.push(y); // y position
+  w.xValue.push(value); // XP value
   return i;
 }
 
