@@ -10,33 +10,31 @@ export type UpgradeDef = {
     title: string;
     desc: string;
 
-    /** If false, upgrade is not in loot pool. */
     isAvailable: (w: World) => boolean;
-
-    /** Apply one pick of this upgrade. */
     apply: (w: World) => void;
 
-    /** Optional: show current rank/level. */
     getRankText?: (w: World) => string;
 
-    /** Evolutions are forced when available (pool becomes evolution-only). */
+    // Evolutions are forced when available
     isEvolution?: boolean;
 };
 
 const MAX_WEAPON_SLOTS = 4;
 const MAX_ITEM_SLOTS = 4;
 
-function ownedWeaponSet(w: World) {
-    return new Set(w.weapons.map((x) => x.id));
-}
 function getWeaponInst(w: World, id: WeaponId) {
     return w.weapons.find((x) => x.id === id);
 }
+
+function getItemInst(w: World, id: ItemId) {
+    return w.items.find((x) => x.id === id);
+}
+
+// Treat "having an evolved weapon" as also owning its base weapon,
+// so base weapons don't appear in ADD pool when evolved starter is chosen.
 function hasWeaponOrEvolvedFrom(w: World, baseId: WeaponId): boolean {
-    // Owns base directly?
     if (w.weapons.some((x) => x.id === baseId)) return true;
 
-    // Owns an evolved weapon that came from base?
     for (const inst of w.weapons) {
         const def = registry.weapon(inst.id);
         if ((def as any).evolvedFrom === baseId) return true;
@@ -44,14 +42,7 @@ function hasWeaponOrEvolvedFrom(w: World, baseId: WeaponId): boolean {
     return false;
 }
 
-function ownedItemSet(w: World) {
-    return new Set(w.items.map((x) => x.id));
-}
-function getItemInst(w: World, id: ItemId) {
-    return w.items.find((x) => x.id === id);
-}
-
-/** Build all upgrades. New weapons/items auto-appear by adding to their registries. */
+/** Build all upgrades. */
 function buildAllUpgrades(): UpgradeDef[] {
     const defs: UpgradeDef[] = [];
 
@@ -61,10 +52,13 @@ function buildAllUpgrades(): UpgradeDef[] {
     // -----------------------
     // EVOLUTIONS (forced when available)
     // -----------------------
+
+    // Knife evo: requires Knife Lv10 + FIRE_RATE owned
     defs.push({
         id: "EVOLVE_KNIFE_RING",
         title: "Knife Cyclone",
-        desc: 'EVOLUTION: Throwing Knife becomes a 24-knife burst in a full circle. (Requires Throwing Knife Lv 10 + Fire Rate.)',
+        desc:
+            "EVOLUTION: Throwing Knife becomes a 24-knife burst in a full circle. (Requires Throwing Knife Lv 10 + Fire Rate.)",
         isEvolution: true,
         isAvailable: (w) => {
             const knife = getWeaponInst(w, "KNIFE");
@@ -72,17 +66,37 @@ function buildAllUpgrades(): UpgradeDef[] {
             return !!knife && knife.level >= MAX_WPN && !!fireRate;
         },
         apply: (w) => {
-            // Replace the weapon in-place (same slot)
             const idx = w.weapons.findIndex((x) => x.id === "KNIFE");
             if (idx < 0) return;
 
-            w.weapons[idx] = {
-                id: "KNIFE_EVOLVED_RING",
-                level: 1,
-                cdLeft: 0,
-            };
+            w.weapons[idx] = { id: "KNIFE_EVOLVED_RING", level: 1, cdLeft: 0 };
         },
-        getRankText: (_w) => "EVOLUTION",
+        getRankText: () => "EVOLUTION",
+    });
+
+    // Pistol evo: requires Pistol Lv10 + DMG owned (your choices)
+    defs.push({
+        id: "EVOLVE_PISTOL_SPIRAL",
+        title: "Spiral Viper",
+        desc:
+            "EVOLUTION: Pistol fires two opposite bullets that rotate clockwise, creating a spiral bullet hell. (Requires Pistol Lv 10 + Damage.)",
+        isEvolution: true,
+        isAvailable: (w) => {
+            const pistol = getWeaponInst(w, "PISTOL");
+            const dmg = getItemInst(w, "DMG");
+            // You answered: NOT "Lv10 only" -> so Lv10 + DMG is required
+            return !!pistol && pistol.level >= MAX_WPN && !!dmg;
+        },
+        apply: (w) => {
+            const idx = w.weapons.findIndex((x) => x.id === "PISTOL");
+            if (idx < 0) return;
+
+            w.weapons[idx] = { id: "PISTOL_EVOLVED_SPIRAL", level: 1, cdLeft: 0 };
+
+            // reset spiral angle so it initializes from aim next time it fires
+            delete (w as any)._pistolSpiralAng;
+        },
+        getRankText: () => "EVOLUTION",
     });
 
     // -----------------------
@@ -95,14 +109,13 @@ function buildAllUpgrades(): UpgradeDef[] {
         defs.push({
             id: `WPN_ADD_${id}`,
             title: wpn.title,
-            desc: `${wpn.title} joins your loadout.`,
+            desc: `Add weapon. ${wpn.title} joins your loadout.`,
             isAvailable: (w) =>
-                w.weapons.length < MAX_WEAPON_SLOTS &&
-                !hasWeaponOrEvolvedFrom(w, id),
+                w.weapons.length < MAX_WEAPON_SLOTS && !hasWeaponOrEvolvedFrom(w, id),
             apply: (w) => {
                 w.weapons.push({ id, level: 1, cdLeft: 0 });
             },
-            getRankText: (_w) => `Lv 1/${MAX_WPN}`,
+            getRankText: () => `Lv 1/${MAX_WPN}`,
         });
     }
 
@@ -139,12 +152,12 @@ function buildAllUpgrades(): UpgradeDef[] {
             id: `ITEM_ADD_${id}`,
             title: item.title,
             desc: `Add item. ${item.desc}`,
-            isAvailable: (w) => w.items.length < MAX_ITEM_SLOTS && !ownedItemSet(w).has(id),
+            isAvailable: (w) => w.items.length < MAX_ITEM_SLOTS && !w.items.some((x) => x.id === id),
             apply: (w) => {
                 w.items.push({ id, level: 1 });
                 recomputeDerivedStats(w);
             },
-            getRankText: (_w) => `Lv 1/${MAX_ITEM}`,
+            getRankText: () => `Lv 1/${MAX_ITEM}`,
         });
     }
 
@@ -174,12 +187,11 @@ function buildAllUpgrades(): UpgradeDef[] {
     return defs;
 }
 
-/** Current loot pool = all upgrades whose isAvailable(world) is true. */
+/** Current loot pool. Forced evolutions override everything else. */
 export function getUpgradePool(w: World): UpgradeDef[] {
     const all = buildAllUpgrades();
     const available = all.filter((u) => u.isAvailable(w));
 
-    // Forced evolutions: if ANY evolution is available, only show evolutions.
     const evolutions = available.filter((u) => u.isEvolution);
     if (evolutions.length > 0) return evolutions;
 
