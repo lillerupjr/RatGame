@@ -6,7 +6,6 @@ dist/
 build/
 
 # vite / caches
-.vite/
 .cache/
 *.tsbuildinfo
 
