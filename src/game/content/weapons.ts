@@ -1,8 +1,14 @@
+// src/game/content/weapons.ts
 import type { World } from "../world";
 import { spawnProjectile, spawnSwordProjectile, PRJ_KIND } from "../factories/projectileFactory";
 
+export type WeaponId =
+    | "KNIFE"
+    | "PISTOL"
+    | "KNIFE_EVOLVED_RING"
+    | "PISTOL_EVOLVED_SPIRAL"
+    | "SWORD";
 
-export type WeaponId = "KNIFE" | "PISTOL" | "SWORD";
 export const MAX_WEAPON_LEVEL = 10;
 
 export type Aim = { x: number; y: number };
@@ -25,21 +31,16 @@ export type WeaponDef = {
     id: WeaponId;
     title: string;
 
-    /** compute derived stats for this level */
-    getStats: (level: number, w: World) => WeaponStats;
+    // Evolutions support
+    hiddenFromPools?: boolean; // keep out of normal upgrade pools
+    evolvedFrom?: WeaponId;    // links evolved weapon -> base weapon
 
-    /** spawn projectiles for one firing event (static direction, no homing) */
+    getStats: (level: number, w: World) => WeaponStats;
     fire: (w: World, stats: WeaponStats, aim: Aim) => void;
 };
 
 function clampLevel(level: number): number {
     return Math.max(1, Math.min(MAX_WEAPON_LEVEL, Math.floor(level)));
-}
-
-function rotate(ax: number, ay: number, ang: number) {
-    const c = Math.cos(ang);
-    const s = Math.sin(ang);
-    return { x: ax * c - ay * s, y: ax * s + ay * c };
 }
 
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
@@ -53,9 +54,9 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const damageBase = 20;
             const damagePer = 1.2;
 
-            // Spread: slightly tighter than before
-            const baseFanArc = 0.28; // was 0.35
-            const fanArcPer = 0.16;  // was 0.22
+            // Spread
+            const baseFanArc = 0.28;
+            const fanArcPer = 0.16;
             const fanArc = Math.min(Math.PI, baseFanArc + (lv - 1) * fanArcPer);
 
             return {
@@ -63,7 +64,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
                 projectileSpeed: 460,
                 projectileRadius: 5,
                 damage: (damageBase + (lv - 1) * damagePer) * w.dmgMult,
-                projectileCount: lv, // +1 per level
+                projectileCount: lv,
                 fanArc,
                 pierce: 0,
             };
@@ -72,19 +73,12 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         fire: (w, s, aim) => {
             const count = Math.max(1, s.projectileCount ?? 1);
 
-            // Range (world pixels): 1/4 of screen width
-            // NOTE: requires you to set w.viewW every frame (or uses fallback).
-            // Range limiting is done by vector-space distance check in projectilesSystem,
-            // using prStartX/prStartY + prMaxDist written by spawnProjectile().
             const viewW = (w as any).viewW ?? 800;
             const maxDist = viewW * 0.15;
-
-            // TTL becomes just a safety cap now (distance is the real limiter)
             const ttlSafety = 10;
 
             const baseAngle = Math.atan2(aim.y, aim.x);
 
-            // If only 1 projectile: straight ahead
             if (count === 1) {
                 spawnProjectile(w, {
                     kind: PRJ_KIND.KNIFE,
@@ -102,9 +96,6 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
                 return;
             }
 
-            // Center blade rule:
-            // - Odd count => includes center at baseAngle
-            // - Even count => no center blade; symmetric around baseAngle
             const fanArc = Math.max(0, s.fanArc ?? 0);
             const half = fanArc * 0.5;
 
@@ -114,15 +105,63 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             for (let i = 0; i < count; i++) {
                 const ang = start + step * i;
-                const dx = Math.cos(ang);
-                const dy = Math.sin(ang);
 
                 spawnProjectile(w, {
                     kind: PRJ_KIND.KNIFE,
                     x: w.px,
                     y: w.py,
-                    dirX: dx,
-                    dirY: dy,
+                    dirX: Math.cos(ang),
+                    dirY: Math.sin(ang),
+                    speed: s.projectileSpeed,
+                    damage: s.damage,
+                    radius: s.projectileRadius,
+                    pierce: s.pierce ?? 0,
+                    ttl: ttlSafety,
+                    maxDist,
+                });
+            }
+        },
+    },
+
+    // --- EVOLUTION: Knife -> Ring burst ---
+    KNIFE_EVOLVED_RING: {
+        id: "KNIFE_EVOLVED_RING",
+        title: "Knife Cyclone",
+        hiddenFromPools: true,
+        evolvedFrom: "KNIFE",
+
+        getStats: (level, w) => {
+            const lv = clampLevel(level);
+
+            const cooldownBase = 1.05;
+            const damageBase = 10;
+            const damagePer = 0.9;
+
+            return {
+                cooldown: cooldownBase / w.fireRateMult,
+                projectileSpeed: 440,
+                projectileRadius: 5,
+                damage: (damageBase + (lv - 1) * damagePer) * w.dmgMult,
+                projectileCount: 24,
+                pierce: 0,
+            };
+        },
+
+        fire: (w, s, _aim) => {
+            const count = 24;
+
+            const viewW = (w as any).viewW ?? 800;
+            const maxDist = viewW * 0.18;
+            const ttlSafety = 10;
+
+            for (let k = 0; k < count; k++) {
+                const a = (k / count) * Math.PI * 2;
+                spawnProjectile(w, {
+                    kind: PRJ_KIND.KNIFE,
+                    x: w.px,
+                    y: w.py,
+                    dirX: Math.cos(a),
+                    dirY: Math.sin(a),
                     speed: s.projectileSpeed,
                     damage: s.damage,
                     radius: s.projectileRadius,
@@ -209,6 +248,92 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
                 coneAngle: s.meleeCone ?? Math.PI / 6,
                 meleeRange: s.meleeRange ?? s.projectileRadius,
             });
+        },
+    },
+
+    // --- EVOLUTION: Pistol -> Spiral (2 opposite bullets, rotating direction) ---
+    PISTOL_EVOLVED_SPIRAL: {
+        id: "PISTOL_EVOLVED_SPIRAL",
+        title: "Spiral Viper",
+        hiddenFromPools: true,
+        evolvedFrom: "PISTOL",
+
+        getStats: (level, w) => {
+            const lv = clampLevel(level);
+            const multiplier = 5;
+            // "Same as pistol" (your choice)
+            const cooldownBase = 0.55/multiplier;
+            const dmg = (10 + (lv - 1) * 3) * w.dmgMult/multiplier;
+
+            return {
+                cooldown: cooldownBase / w.fireRateMult,
+                projectileSpeed: 520,
+                projectileRadius: 5,
+                damage: dmg,
+                // ONLY evolved pistol bullets pierce (your choice)
+                pierce: 999,
+            };
+        },
+
+        fire: (w, s, aim) => {
+            // Persisted angle state on world (kept off World type like other systems do)
+            // Clockwise rotation ≈ +90° per burst (medium)
+            const multiplier = 5;
+            const STEP = Math.PI / 2 / multiplier;
+
+            const key = "_pistolSpiralAng";
+            let ang = (w as any)[key] as number | undefined;
+
+            // Initialize angle from current aim, so it feels responsive on first shot
+            if (typeof ang !== "number" || !isFinite(ang)) {
+                ang = Math.atan2(aim.y, aim.x);
+            }
+
+            // Fire two bullets in opposite directions
+            const dx = Math.cos(ang);
+            const dy = Math.sin(ang);
+
+            // Optional: range limit similar to knife (keeps perf sane)
+            const viewW = (w as any).viewW ?? 800;
+            const maxDist = viewW;
+            const ttlSafety = 10;
+
+            // Forward
+            spawnProjectile(w, {
+                kind: PRJ_KIND.PISTOL,
+                x: w.px,
+                y: w.py,
+                dirX: dx,
+                dirY: dy,
+                speed: s.projectileSpeed,
+                damage: s.damage,
+                radius: s.projectileRadius,
+                pierce: s.pierce ?? 999,
+                ttl: ttlSafety,
+                maxDist,
+            });
+
+            // Opposite
+            spawnProjectile(w, {
+                kind: PRJ_KIND.PISTOL,
+                x: w.px,
+                y: w.py,
+                dirX: -dx,
+                dirY: -dy,
+                speed: s.projectileSpeed,
+                damage: s.damage,
+                radius: s.projectileRadius,
+                pierce: s.pierce ?? 999,
+                ttl: ttlSafety,
+                maxDist,
+            });
+
+            // Advance angle clockwise for next burst
+            ang += STEP;
+            // keep it bounded
+            if (ang > Math.PI * 2) ang -= Math.PI * 2;
+
+            (w as any)[key] = ang;
         },
     },
 };

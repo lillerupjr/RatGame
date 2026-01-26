@@ -1,3 +1,4 @@
+// src/main.ts
 import { createGame } from "./game/game";
 import { WEAPONS, type WeaponId } from "./game/content/weapons";
 
@@ -29,6 +30,8 @@ window.addEventListener("resize", resize);
 resize();
 
 // ---- Weapon picker ----
+// NOTE: This picker is intentionally "directly from WEAPONS" so you can allow
+// hidden / evolved / dev weapons as starter options when you want.
 const weaponIds = Object.keys(WEAPONS) as WeaponId[];
 
 let selectedWeapon: WeaponId =
@@ -50,6 +53,25 @@ function setSelectedWeapon(id: WeaponId) {
   menuSublineEl.textContent = `Slice v0.1 — Docks (8 min → boss). Starter weapon: ${title}.`;
 }
 
+function weaponDesc(id: WeaponId): string {
+  switch (id) {
+    case "KNIFE":
+      return "Fan of knives. Great early clear.";
+    case "PISTOL":
+      return "Single shot. Good precision and scaling.";
+    case "KNIFE_EVOLVED_RING":
+      return "EVOLUTION starter: fires 24 knives in a full circle.";
+    default:
+      return "Starter weapon.";
+  }
+}
+
+function isEvolutionStarter(id: WeaponId): boolean {
+  // Minimal rule for now: if the weapon id looks like an evolved one.
+  // If you later add explicit metadata on the weapon def, swap to that.
+  return id === "KNIFE_EVOLVED_RING";
+}
+
 function buildWeaponPicker() {
   weaponChoicesEl.innerHTML = "";
 
@@ -61,17 +83,13 @@ function buildWeaponPicker() {
     btn.dataset.weapon = id;
     btn.setAttribute("aria-pressed", "false");
 
-    // Keep descriptions simple (data-driven later)
-    const desc =
-        id === "KNIFE"
-            ? "Fan of knives. Great early clear."
-            : id === "PISTOL"
-                ? "Single shot. Good precision and scaling."
-                : "Starter weapon.";
+    const evoTag = isEvolutionStarter(id)
+        ? `<div style="display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;border:1px solid rgba(255,255,255,0.25);font-size:11px;font-weight:900;opacity:0.95;">EVOLUTION</div>`
+        : "";
 
     btn.innerHTML = `
-      <div class="wpnTitle">${def.title}</div>
-      <div class="wpnDesc">${desc}</div>
+      <div class="wpnTitle">${def.title}${evoTag}</div>
+      <div class="wpnDesc">${weaponDesc(id)}</div>
     `;
 
     btn.addEventListener("click", () => setSelectedWeapon(id));
