@@ -11,6 +11,7 @@ import { renderSystem } from "./systems/render";
 import { stageDocks } from "./content/stages";
 import { getUpgradePool, UpgradeDef } from "./content/upgrades";
 import { formatTimeMMSS } from "./util/time";
+import type { WeaponId } from "./content/weapons";
 
 type HudRefs = {
   root: HTMLDivElement;
@@ -49,8 +50,14 @@ export function createGame(args: CreateGameArgs) {
     hideLevelUp();
   }
 
-  function startRun() {
+  function startRun(starterWeapon?: WeaponId) {
     resetRun();
+
+    // Override starter weapon if provided (from menu picker)
+    if (starterWeapon) {
+      world.weapons = [{ id: starterWeapon, level: 1, cdLeft: 0 }];
+    }
+
     world.state = "RUN";
   }
 
@@ -164,16 +171,20 @@ export function createGame(args: CreateGameArgs) {
     renderSystem(world, args.ctx, args.canvas);
   }
 
-  // Menu click starts/restarts
+// Menu click starts/restarts
   args.ui.menuEl.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
-    if (t?.id === "startBtn" || t?.tagName === "BUTTON") {
+    const btn = t?.closest("button") as HTMLButtonElement | null;
+    if (!btn) return;
+
+    if (btn.id === "startBtn") {
+      const starter = btn.dataset.weapon as WeaponId | undefined;
+
       args.ui.menuEl.hidden = true;
       args.hud.root.hidden = false;
-      startRun();
+      startRun(starter);
     }
   });
-
   // Level-up choice click
   args.ui.levelupEl.root.addEventListener("click", (e) => {
     const el = e.target as HTMLElement;
