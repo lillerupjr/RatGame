@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+
+# builds
+dist/
+build/
+
+# vite / caches
+.vite/
+.cache/
+*.tsbuildinfo
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.log
+
+# junk files sometimes created when zips are made on mac
+._*
