@@ -1,5 +1,6 @@
 import { RNG } from "./util/rng";
 import { StageDef } from "./content/stages";
+import { ITEMS } from "./content/items";
 
 export type GameState = "MENU" | "RUN" | "LEVELUP" | "LOSE" | "WIN";
 
@@ -16,11 +17,19 @@ export type World = {
   py: number;
   pvx: number;
   pvy: number;
+  // Base stats (never modified directly by upgrades)
+  baseMoveSpeed: number;
+  basePickupRadius: number;
+
+  // Derived stats (recomputed from items)
   pSpeed: number;
-  playerHp: number;
-  playerHpMax: number;
   pickupRadius: number;
 
+  playerHp: number;
+  playerHpMax: number;
+
+  // Items (max 4)
+  items: { id: string; level: number }[];
   // Entities (arrays for ECS-lite)
   eAlive: boolean[];
   eType: number[]; // 1 chaser, 2 runner, 3 bruiser, 99 boss
@@ -58,12 +67,19 @@ export type World = {
 
   pendingLevelUps: number;
 
-  // Weapon timers
-  knifeCd: number;
-  pistolCd: number;
+  // Aim (used when no target exists)
+  lastAimX: number;
+  lastAimY: number;
+
+  // Player weapons (max 4)
+  weapons: { id: string; level: number; cdLeft: number }[];
+
+
   dmgMult: number;
   fireRateMult: number;
+
 };
+
 
 export function createWorld(args: { seed: number; stage: StageDef }): World {
   const w: World = {
@@ -78,11 +94,17 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     py: 0,
     pvx: 0,
     pvy: 0,
+    baseMoveSpeed: 210,
+    basePickupRadius: 70,
+
+    // derived (will be recomputed)
     pSpeed: 210,
-    playerHp: 100,
-    playerHpMax: 100,
     pickupRadius: 70,
 
+    playerHp: 100,
+    playerHpMax: 100,
+
+    items: [],
     eAlive: [],
     eType: [],
     ex: [],
@@ -115,12 +137,20 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     xpToNext: 10,
     pendingLevelUps: 0,
 
-    knifeCd: 0,
-    pistolCd: 0,
+    lastAimX: 1,
+    lastAimY: 0,
+
+    weapons: [
+      // Starter weapon
+      { id: "KNIFE", level: 1, cdLeft: 0 },
+    ],
+
+
     dmgMult: 1,
     fireRateMult: 1,
   };
 
+  recomputeDerivedStats(w);
   return w;
 }
 
@@ -184,4 +214,22 @@ export function spawnXp(w: World, x: number, y: number, value: number) {
   w.xy.push(y);
   w.xValue.push(value);
   return i;
+}
+
+
+export function recomputeDerivedStats(w: World) {
+  // Reset derived stats to base
+  w.pSpeed = w.baseMoveSpeed;
+  w.pickupRadius = w.basePickupRadius;
+
+  // Reset multipliers
+  w.dmgMult = 1;
+  w.fireRateMult = 1;
+
+  // Apply all items
+  for (const inst of w.items) {
+    const def = ITEMS[inst.id as any];
+    if (!def) continue;
+    def.apply(w, inst.level);
+  }
 }

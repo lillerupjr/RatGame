@@ -41,6 +41,12 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     // Simple lifetime bounds
     if (Math.abs(w.prx[i] - w.px) > 1200 || Math.abs(w.pry[i] - w.py) > 1200) {
       w.pAlive[i] = false;
+
+    }
+    const mag = Math.hypot(w.pvx, w.pvy);
+    if (mag > 0.0001) {
+      w.lastAimX = w.pvx / mag;
+      w.lastAimY = w.pvy / mag;
     }
   }
 }

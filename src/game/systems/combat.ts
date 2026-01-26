@@ -1,43 +1,56 @@
-import { World, spawnProjectile } from "../world";
+import { World } from "../world";
+import { WEAPONS, WeaponId } from "../content/weapons";
 
+/**
+ * Combat system: fires all weapons in the player's weapon array.
+ * Projectiles are "static": we aim once at fire-time (nearest enemy if present),
+ * then spawned projectiles never adjust direction (no homing).
+ */
 export function combatSystem(w: World, dt: number) {
-  // Throwing knife (starter)
-  // Fires at nearest enemy direction
-  const knifeBaseCd = 0.55; // seconds
-  w.knifeCd -= dt * w.fireRateMult;
-  if (w.knifeCd <= 0) {
-    w.knifeCd += knifeBaseCd;
+  // Pick aim direction (static at fire time): nearest enemy or last movement
+  let aimX = w.lastAimX;
+  let aimY = w.lastAimY;
 
-    const target = findNearestEnemy(w);
-    if (target) {
-      const [tx, ty] = target;
-      const dx = tx - w.px;
-      const dy = ty - w.py;
-      const d = Math.hypot(dx, dy) || 1;
-      const speed = 420;
-      const vx = (dx / d) * speed;
-      const vy = (dy / d) * speed;
-      spawnProjectile(w, 1, w.px, w.py, vx, vy, 10 * w.dmgMult, 6, 0);
-    }
-  }
-
-  // Pistol placeholder (we'll gate it behind an upgrade later)
-  // For now: off until you add upgrade acquisition
-}
-
-function findNearestEnemy(w: World): [number, number] | null {
-  let bestI = -1;
-  let bestD = Infinity;
+  // Prefer nearest living enemy
+  let best = -1;
+  let bestD2 = Infinity;
   for (let i = 0; i < w.eAlive.length; i++) {
     if (!w.eAlive[i]) continue;
     const dx = w.ex[i] - w.px;
     const dy = w.ey[i] - w.py;
-    const d = dx * dx + dy * dy;
-    if (d < bestD) {
-      bestD = d;
-      bestI = i;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < bestD2) {
+      bestD2 = d2;
+      best = i;
     }
   }
-  if (bestI === -1) return null;
-  return [w.ex[bestI], w.ey[bestI]];
+
+  if (best !== -1) {
+    const dx = w.ex[best] - w.px;
+    const dy = w.ey[best] - w.py;
+    const len = Math.hypot(dx, dy) || 1;
+    aimX = dx / len;
+    aimY = dy / len;
+  }
+
+  // Fire all weapons in loadout (max 4 recommended)
+  for (let i = 0; i < w.weapons.length; i++) {
+    const inst = w.weapons[i];
+    const def = WEAPONS[inst.id as WeaponId];
+    if (!def) continue;
+
+    // Tick cooldown
+    inst.cdLeft -= dt;
+    if (inst.cdLeft > 0) continue;
+
+    // Compute stats at current level (includes multipliers like fireRateMult/dmgMult)
+    const stats = def.getStats(inst.level, w);
+
+    // Reset cooldown (avoid 0/negative edge cases)
+    const cd = Math.max(0.01, stats.cooldown);
+    inst.cdLeft += cd;
+
+    // Fire once using the static aim direction
+    def.fire(w, stats, { x: aimX, y: aimY });
+  }
 }
