@@ -14,6 +14,7 @@ build/
 Thumbs.db
 *.log
 RatGame.zip
+workspace.xml
 
 # junk files sometimes created when zips are made on mac
 ._*
