@@ -6,6 +6,7 @@ export type ProjectileSource = "KNIFE" | "PISTOL" | "OTHER";
 export const PRJ_KIND = {
     KNIFE: 1,
     PISTOL: 2,
+    SWORD: 3,
 } as const;
 
 export type SpawnProjectileArgs = {
@@ -26,6 +27,12 @@ export type SpawnProjectileArgs = {
     maxDist?: number;
     // lifetime in seconds
     ttl: number;
+    // melee weapon flag (uses cone-based collision instead of circular)
+    melee?: boolean;
+    // melee cone angle in radians (used only when melee is true)
+    coneAngle?: number;
+    // melee reach distance (radius of the cone arc)
+    meleeRange?: number;
 };
 
 /**
@@ -62,6 +69,9 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     w.prStartX.push(a.x);
     w.prStartY.push(a.y);
     w.prMaxDist.push(a.maxDist ?? 0);
+    w.prIsmelee.push(a.melee ?? false);
+    w.prCone.push(a.coneAngle ?? Math.PI / 6);
+    w.prMeleeRange.push(a.meleeRange ?? a.radius);
 
     return i;
 }
@@ -73,4 +83,8 @@ export function spawnKnifeProjectile(w: World, args: Omit<SpawnProjectileArgs, "
 
 export function spawnPistolBullet(w: World, args: Omit<SpawnProjectileArgs, "kind">) {
     return spawnProjectile(w, { ...args, kind: PRJ_KIND.PISTOL });
+}
+
+export function spawnSwordProjectile(w: World, args: Omit<SpawnProjectileArgs, "kind">) {
+    return spawnProjectile(w, { ...args, kind: PRJ_KIND.SWORD });
 }

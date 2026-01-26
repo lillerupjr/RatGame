@@ -1,8 +1,8 @@
 import type { World } from "../world";
-import { spawnProjectile, PRJ_KIND } from "../factories/projectileFactory";
+import { spawnProjectile, spawnSwordProjectile, PRJ_KIND } from "../factories/projectileFactory";
 
 
-export type WeaponId = "KNIFE" | "PISTOL";
+export type WeaponId = "KNIFE" | "PISTOL" | "SWORD";
 export const MAX_WEAPON_LEVEL = 10;
 
 export type Aim = { x: number; y: number };
@@ -17,6 +17,8 @@ export type WeaponStats = {
     projectileCount?: number;
     fanArc?: number; // radians
     pierce?: number;
+    meleeCone?: number; // radians, for melee slashes
+    meleeRange?: number; // reach for melee slashes (cone length)
 };
 
 export type WeaponDef = {
@@ -160,6 +162,52 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
                 radius: s.projectileRadius,
                 pierce: s.pierce ?? 0,
                 ttl: 2.2,
+            });
+        },
+    },
+    SWORD: {
+        id: "SWORD",
+        title: "Sword",
+        getStats: (level: number, w: World) => {
+            const lv = clampLevel(level);
+            const cooldownBase = 0.75;
+            const dmg = (30 + (lv - 1) * 5) * w.dmgMult;
+
+            // Cone grows with level: from 60deg to 360deg at max level
+            const minCone = Math.PI / 3; // 60 deg
+            const maxCone = Math.PI * 2; // 360 deg
+            const t = (lv - 1) / (MAX_WEAPON_LEVEL - 1);
+            const meleeCone = minCone + (maxCone - minCone) * t;
+
+            // Range (cone length) grows modestly with level
+            const minRange = 90;
+            const maxRange = 150;
+            const meleeRange = minRange + (maxRange - minRange) * t;
+
+            return {
+                cooldown: cooldownBase / w.fireRateMult,
+                projectileSpeed: 0,
+                projectileRadius: 35,
+                damage: dmg,
+                pierce: 2 + Math.floor((lv - 1) / 3),
+                meleeCone,
+                meleeRange,
+            };
+        },
+        fire: (w: World, s: WeaponStats, aim: Aim) => {
+            spawnSwordProjectile(w, {
+                x: w.px,
+                y: w.py,
+                dirX: aim.x,
+                dirY: aim.y,
+                speed: 0,
+                damage: s.damage,
+                radius: s.projectileRadius,
+                pierce: s.pierce ?? 0,
+                ttl: 0.15,
+                melee: true,
+                coneAngle: s.meleeCone ?? Math.PI / 6,
+                meleeRange: s.meleeRange ?? s.projectileRadius,
             });
         },
     },
