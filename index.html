@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rat Noir Survivors — Prototype</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0b0b0f; overflow: hidden; }
+    #hud { position: fixed; left: 12px; top: 12px; color: #eaeaf2; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto; font-size: 14px; line-height: 1.4; user-select: none; z-index: 3; }
+    #hud .pill { display: inline-block; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,0.08); margin-right: 8px; }
+
+    canvas { display:block; }
+
+    /* Menu */
+    #menu { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.55); z-index: 4; }
+    #menu .panel { width: min(560px, 92vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
+    #menu .title { font-size: 24px; font-weight: 800; margin-bottom: 6px; }
+    #menu button { margin-top: 14px; width: 100%; padding: 12px 14px; border-radius: 12px; border: 0; cursor: pointer; font-weight: 700; background: rgba(255,255,255,0.16); color: #fff; }
+
+    /* Level-up overlay */
+    #levelup { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.62); z-index: 5; }
+    #levelup .panel { width: min(720px, 94vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
+    #levelup .title { font-size: 22px; font-weight: 900; margin-bottom: 6px; }
+    #levelup .sub { opacity: 0.9; margin-bottom: 14px; }
+
+    #luChoices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .choiceBtn {
+      text-align: left;
+      padding: 14px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.08);
+      cursor: pointer;
+      color: #fff;
+      transition: transform 80ms ease, background 120ms ease, border-color 120ms ease;
+    }
+    .choiceBtn:hover { transform: translateY(-1px); background: rgba(255,255,255,0.11); border-color: rgba(255,255,255,0.18); }
+    .choiceTitle { font-weight: 900; font-size: 16px; margin-bottom: 4px; }
+    .choiceDesc { opacity: 0.9; font-size: 13px; line-height: 1.35; }
+    @media (max-width: 720px) {
+      #luChoices { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud" hidden>
+  <span class="pill" id="timePill">00:00</span>
+  <span class="pill" id="killsPill">Kills: 0</span>
+  <span class="pill" id="hpPill">HP: 0/0</span>
+  <span class="pill" id="lvlPill">Lv: 1</span>
+</div>
+
+<div id="levelup" hidden>
+  <div class="panel">
+    <div class="title">Level Up</div>
+    <div class="sub" id="luSub">Choose an upgrade</div>
+    <div id="luChoices"></div>
+  </div>
+</div>
+
+<div id="menu">
+  <div class="panel">
+    <div class="title">Rat Noir Survivors</div>
+    <div>Slice v0.1 — Docks (8 min → boss). Starter weapon: Throwing Knife.</div>
+    <button id="startBtn">Start Run</button>
+  </div>
+</div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
