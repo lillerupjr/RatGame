@@ -56,6 +56,7 @@ export type World = {
   prDamage: number[];
   prR: number[];
   prPierce: number[]; // remaining pierces
+  prTtl: number[];    // seconds remaining
 
   // Pickups (XP gems)
   xAlive: boolean[];
@@ -130,6 +131,7 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     prDamage: [],
     prR: [],
     prPierce: [],
+    prTtl: [],
 
     xAlive: [],
     xx: [],

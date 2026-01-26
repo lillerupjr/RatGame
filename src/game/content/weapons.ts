@@ -1,5 +1,6 @@
 import type { World } from "../world";
-import { spawnProjectile } from "../world";
+import { spawnProjectile, PRJ_KIND } from "../factories/projectileFactory";
+
 
 export type WeaponId = "KNIFE" | "PISTOL";
 export const MAX_WEAPON_LEVEL = 10;
@@ -72,17 +73,19 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             // always center projectile first
             const center = { x: Math.cos(baseAngle), y: Math.sin(baseAngle) };
-            spawnProjectile(
-                w,
-                1,
-                w.px,
-                w.py,
-                center.x * s.projectileSpeed,
-                center.y * s.projectileSpeed,
-                s.damage,
-                s.projectileRadius,
-                s.pierce ?? 0
-            );
+            spawnProjectile(w, {
+                kind: PRJ_KIND.KNIFE,
+                x: w.px,
+                y: w.py,
+                dirX: center.x,
+                dirY: center.y,
+                speed: s.projectileSpeed,
+                damage: s.damage,
+                radius: s.projectileRadius,
+                pierce: s.pierce ?? 0,
+                ttl: 1.8,
+            });
+
 
             if (count === 1) return;
 
@@ -96,33 +99,37 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
                 if (spawned < count) {
                     const dir = rotate(center.x, center.y, -off);
-                    spawnProjectile(
-                        w,
-                        1,
-                        w.px,
-                        w.py,
-                        dir.x * s.projectileSpeed,
-                        dir.y * s.projectileSpeed,
-                        s.damage,
-                        s.projectileRadius,
-                        s.pierce ?? 0
-                    );
+                    spawnProjectile(w, {
+                        kind: PRJ_KIND.KNIFE,
+                        x: w.px,
+                        y: w.py,
+                        dirX: dir.x,
+                        dirY: dir.y,
+                        speed: s.projectileSpeed,
+                        damage: s.damage,
+                        radius: s.projectileRadius,
+                        pierce: s.pierce ?? 0,
+                        ttl: 1.8,
+                    });
+
                     spawned++;
                 }
 
                 if (spawned < count) {
                     const dir = rotate(center.x, center.y, +off);
-                    spawnProjectile(
-                        w,
-                        1,
-                        w.px,
-                        w.py,
-                        dir.x * s.projectileSpeed,
-                        dir.y * s.projectileSpeed,
-                        s.damage,
-                        s.projectileRadius,
-                        s.pierce ?? 0
-                    );
+                    spawnProjectile(w, {
+                        kind: PRJ_KIND.PISTOL,
+                        x: w.px,
+                        y: w.py,
+                        dirX: aim.x,
+                        dirY: aim.y,
+                        speed: s.projectileSpeed,
+                        damage: s.damage,
+                        radius: s.projectileRadius,
+                        pierce: s.pierce ?? 0,
+                        ttl: 2.2,
+                    });
+
                     spawned++;
                 }
 
@@ -148,17 +155,18 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             };
         },
         fire: (w, s, aim) => {
-            spawnProjectile(
-                w,
-                2,
-                w.px,
-                w.py,
-                aim.x * s.projectileSpeed,
-                aim.y * s.projectileSpeed,
-                s.damage,
-                s.projectileRadius,
-                s.pierce ?? 0
-            );
+            spawnProjectile(w, {
+                kind: PRJ_KIND.PISTOL,
+                x: w.px,
+                y: w.py,
+                dirX: aim.x,
+                dirY: aim.y,
+                speed: s.projectileSpeed,
+                damage: s.damage,
+                radius: s.projectileRadius,
+                pierce: s.pierce ?? 0,
+                ttl: 2.2,
+            });
         },
     },
 };
