@@ -4,16 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="559d6793-a80d-4c3d-9675-d2b5a35ab978" name="Changes" comment="v0.3.1">
-      <change afterPath="$PROJECT_DIR$/src/game/content/items.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/game/content/loot.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/game/content/upgrades.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/game/content/weapons.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/game/game.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/game/game.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/game/systems/combat.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/game/systems/combat.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/game/systems/movement.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/game/systems/movement.ts" afterDir="false" />
+    <list default="true" id="559d6793-a80d-4c3d-9675-d2b5a35ab978" name="Changes" comment="v0.3.2 - weapons and items made modular">
       <change beforePath="$PROJECT_DIR$/src/game/world.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/game/world.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -83,7 +74,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1769447085946</updated>
-      <workItem from="1769447086998" duration="3786000" />
+      <workItem from="1769447086998" duration="4181000" />
     </task>
     <task id="LOCAL-00001" summary="v0.3.1">
       <option name="closed" value="true" />
@@ -93,7 +84,15 @@
       <option name="project" value="LOCAL" />
       <updated>1769448509736</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="v0.3.2 - weapons and items made modular">
+      <option name="closed" value="true" />
+      <created>1769451106633</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1769451106633</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -112,6 +111,7 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="v0.3.1" />
-    <option name="LAST_COMMIT_MESSAGE" value="v0.3.1" />
+    <MESSAGE value="v0.3.2 - weapons and items made modular" />
+    <option name="LAST_COMMIT_MESSAGE" value="v0.3.2 - weapons and items made modular" />
   </component>
 </project>
