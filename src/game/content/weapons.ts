@@ -46,7 +46,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         getStats: (level, w) => {
             const lv = clampLevel(level);
             const cooldownBase = 0.75;
-            const damageBase = 7;
+            const damageBase = 20;
             const damagePer = 1.2;
 
             const baseFanArc = 0.35;
