@@ -8,10 +8,11 @@ import { projectilesSystem } from "./systems/projectiles";
 import { pickupsSystem } from "./systems/pickups";
 import { xpSystem } from "./systems/xp";
 import { renderSystem } from "./systems/render";
-import { stageDocks } from "./content/stages";
+
 import { getUpgradePool, UpgradeDef } from "./content/upgrades";
 import { formatTimeMMSS } from "./util/time";
 import type { WeaponId } from "./content/weapons";
+import { registry } from "./content/registry";
 
 type HudRefs = {
   root: HTMLDivElement;
@@ -37,14 +38,14 @@ type CreateGameArgs = {
 
 export function createGame(args: CreateGameArgs) {
   const input: InputState = createInputState();
-  let world: World = createWorld({ seed: 1337, stage: stageDocks });
+  let world: World = createWorld({ seed: 1337, stage: registry.stage("DOCKS") });
 
   let currentChoices: UpgradeDef[] = [];
 
   function resetRun() {
     world = createWorld({
       seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0,
-      stage: stageDocks,
+      stage: registry.stage("DOCKS"),
     });
     currentChoices = [];
     hideLevelUp();
