@@ -1,5 +1,6 @@
 // src/game/systems/collisions.ts
 import { World, emitEvent } from "../world";
+import { isEnemyHit } from "./hitDetection";
 
 /**
  * Handles:
@@ -29,8 +30,8 @@ export function collisionsSystem(w: World, dt: number) {
       const dy = w.ey[e] - py;
       const rr = w.eR[e] + pr;
 
-      if (dx * dx + dy * dy > rr * rr) continue;
-
+      if (!isEnemyHit(w, p, e, dx, dy, rr)) continue;
+      
       // HIT
       hitSomething = true;
 
