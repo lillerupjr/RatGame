@@ -98,7 +98,10 @@ export function createGame(args: CreateGameArgs) {
 
       const titleRow = document.createElement("div");
       titleRow.className = "choiceTitle";
-      titleRow.textContent = def.getRankText ? `${def.title} (${def.getRankText(world)})` : def.title;
+      const prefix = def.isEvolution ? "EVOLUTION — " : "";
+      titleRow.textContent = def.getRankText
+          ? `${prefix}${def.title} (${def.getRankText(world)})`
+          : `${prefix}${def.title}`;
 
       const d = document.createElement("div");
       d.className = "choiceDesc";
