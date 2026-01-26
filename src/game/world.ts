@@ -1,9 +1,18 @@
 import { RNG } from "./util/rng";
 import { StageDef } from "./content/stages";
-import { ITEMS } from "./content/items";
+import { registry } from "./content/registry";
 import type { GameEvent } from "./events";
+import type { ItemId } from "./content/items";
+import type { WeaponId } from "./content/weapons";
+import type { EnemyType } from "./content/enemies";
 
 export type GameState = "MENU" | "RUN" | "LEVELUP" | "LOSE" | "WIN";
+
+const defaultStarter = ((): WeaponId => {
+  const ids = registry.weaponIds();
+  if (ids.includes("KNIFE" as WeaponId)) return "KNIFE";
+  return ids[0] ?? "KNIFE";
+})();
 
 export type World = {
   events: GameEvent[];
@@ -35,7 +44,7 @@ export type World = {
 
   // Entities (arrays for ECS-lite)
   eAlive: boolean[];
-  eType: number[]; // 1 chaser, 2 runner, 3 bruiser, 99 boss
+  eType: EnemyType[]; // 1 chaser, 2 runner, 3 bruiser, 99 boss
   ex: number[];
   ey: number[];
   evx: number[];
@@ -153,8 +162,7 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     lastAimY: 0,
 
     weapons: [
-      // Starter weapon
-      { id: "KNIFE", level: 1, cdLeft: 0 },
+      { id: defaultStarter, level: 1, cdLeft: 0 },
     ],
 
 
@@ -166,34 +174,7 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
   return w;
 }
 
-export function spawnEnemy(w: World, type: number, x: number, y: number) {
-  const i = w.eAlive.length;
-  w.eAlive.push(true);
-  w.eType.push(type);
-  w.ex.push(x);
-  w.ey.push(y);
-  w.evx.push(0);
-  w.evy.push(0);
 
-  // Stats by type (tune later)
-  if (type === 1) {
-    w.eHp.push(20);
-    w.eR.push(14);
-    w.eSpeed.push(90);
-    w.eDamage.push(10);
-  } else if (type === 2) {
-    w.eHp.push(12);
-    w.eR.push(12);
-    w.eSpeed.push(130);
-    w.eDamage.push(8);
-  } else {
-    w.eHp.push(60);
-    w.eR.push(18);
-    w.eSpeed.push(70);
-    w.eDamage.push(16);
-  }
-  return i;
-}
 
 export function spawnProjectile(
     w: World,
@@ -240,7 +221,7 @@ export function recomputeDerivedStats(w: World) {
 
   // Apply all items
   for (const inst of w.items) {
-    const def = ITEMS[inst.id];
+    const def = registry.item(inst.id as ItemId);
     def.apply(w, inst.level);
   }
 }
