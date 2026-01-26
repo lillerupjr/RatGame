@@ -61,7 +61,7 @@ export function collisionsSystem(w: World, dt: number) {
         w.eAlive[e] = false;
         w.kills++;
 
-        emitEvent(w, {
+        emitEvent(w, { 
           type: "ENEMY_KILLED",
           enemyIndex: e,
           x: w.ex[e],

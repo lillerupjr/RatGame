@@ -1,6 +1,6 @@
 import type { World } from "../world";
 
-export type ProjectileSource = "KNIFE" | "PISTOL" | "OTHER";
+export type ProjectileSource = "KNIFE" | "PISTOL" | "SWORD" | "OTHER";
 
 // Your existing world uses prjKind: 1 knife, 2 pistol (keep that for now)
 export const PRJ_KIND = {
@@ -72,6 +72,8 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     w.prIsmelee.push(a.melee ?? false);
     w.prCone.push(a.coneAngle ?? Math.PI / 6);
     w.prMeleeRange.push(a.meleeRange ?? a.radius);
+    w.prDirX.push(dx);
+    w.prDirY.push(dy);
 
     return i;
 }

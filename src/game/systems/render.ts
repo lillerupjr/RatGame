@@ -87,7 +87,7 @@ export function renderSystem(
 
     // Melee projectiles render as a forward-facing slash wedge
     if (w.prIsmelee[i]) {
-      const baseAng = Math.atan2(w.lastAimY, w.lastAimX);
+      const baseAng = Math.atan2(w.prDirY[i], w.prDirX[i]);
       const half = (w.prCone[i] ?? Math.PI / 6) * 0.5; // must stay in sync with hitDetection cone
       const r = w.prMeleeRange?.[i] ?? w.prR[i];
 
