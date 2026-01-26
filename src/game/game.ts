@@ -4,6 +4,7 @@ import { movementSystem } from "./systems/movement";
 import { spawnSystem } from "./systems/spawn";
 import { combatSystem } from "./systems/combat";
 import { collisionsSystem } from "./systems/collisions";
+import { projectilesSystem } from "./systems/projectiles";
 import { pickupsSystem } from "./systems/pickups";
 import { xpSystem } from "./systems/xp";
 import { renderSystem } from "./systems/render";
@@ -129,6 +130,7 @@ export function createGame(args: CreateGameArgs) {
     movementSystem(world, input, dt);
     spawnSystem(world, dt);
     combatSystem(world, dt);
+    projectilesSystem(world, dt);
     collisionsSystem(world, dt);
     pickupsSystem(world, dt);
     xpSystem(world, dt);

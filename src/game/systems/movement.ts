@@ -34,19 +34,11 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   }
 
   // Projectiles move
-  for (let i = 0; i < w.pAlive.length; i++) {
-    if (!w.pAlive[i]) continue;
-    w.prx[i] += w.prvx[i] * dt;
-    w.pry[i] += w.prvy[i] * dt;
-    // Simple lifetime bounds
-    if (Math.abs(w.prx[i] - w.px) > 1200 || Math.abs(w.pry[i] - w.py) > 1200) {
-      w.pAlive[i] = false;
-
-    }
-    const mag = Math.hypot(w.pvx, w.pvy);
-    if (mag > 0.0001) {
-      w.lastAimX = w.pvx / mag;
-      w.lastAimY = w.pvy / mag;
-    }
+  // Update last aim direction from player movement (used when no enemies exist)
+  const mag = Math.hypot(w.pvx, w.pvy);
+  if (mag > 0.0001) {
+    w.lastAimX = w.pvx / mag;
+    w.lastAimY = w.pvy / mag;
   }
+
 }
