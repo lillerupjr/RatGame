@@ -18,6 +18,9 @@ workspace.xml
 
 # junk files sometimes created when zips are made on mac
 ._*
-
-.DS_Store
 **/.DS_Store
+
+# JetBrains / WebStorm
+.idea/
+!.idea/codeStyles/
+!.idea/runConfigurations/
