@@ -1,4 +1,4 @@
-// src/game/map/actGraph.ts
+// src/game/map/runMap.ts
 import type { StageId } from "../content/stages";
 
 export type MapNodeType = "ZONE";
@@ -19,14 +19,14 @@ export type MapNode = {
 
 export type MapEdge = { from: string; to: string };
 
-export type ActGraph = {
+export type runMap = {
     cols: number;
     rows: number;
     nodes: MapNode[];
     edges: MapEdge[];
 };
 
-export function buildStaticActGraph(): ActGraph {
+export function buildStaticRunMap(): runMap {
     // v0: single mandatory route
     const nodes: MapNode[] = [
         // 5 cols (0..4), 4 rows (0..3): spread diagonally, centered lanes
@@ -48,11 +48,11 @@ export function buildStaticActGraph(): ActGraph {
     };
 }
 
-export function getNode(g: ActGraph, id: string): MapNode | undefined {
+export function getNode(g: runMap, id: string): MapNode | undefined {
     return g.nodes.find((n) => n.id === id);
 }
 
-export function getReachable(g: ActGraph, fromId: string | null): MapNode[] {
+export function getReachable(g: runMap, fromId: string | null): MapNode[] {
     // Start-of-run: reachable nodes are those with no incoming edges
     if (!fromId) {
         const hasIncoming = new Set<string>();
