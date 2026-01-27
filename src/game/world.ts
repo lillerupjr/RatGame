@@ -204,16 +204,6 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
 }
 
 
-export function spawnXp(w: World, x: number, y: number, value: number) {
-  const i = w.xAlive.length;
-  w.xAlive.push(true); // all XP gems start alive
-  w.xx.push(x); // x position
-  w.xy.push(y); // y position
-  w.xValue.push(value); // XP value
-  return i;
-}
-
-
 export function emitEvent(w: World, e: import("./events").GameEvent) {
   w.events.push(e);
 }

@@ -1,9 +1,9 @@
 // src/game/content/upgrades.ts
 import type { World } from "../world";
-import { recomputeDerivedStats } from "../world";
 import { registry } from "./registry";
 import type { WeaponId } from "./weapons";
 import type { ItemId } from "./items";
+import {recomputeDerivedStats} from "../stats/derivedStats";
 
 export type UpgradeDef = {
     id: string;

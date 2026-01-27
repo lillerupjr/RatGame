@@ -16,3 +16,12 @@ export function pickupsSystem(w: World, dt: number) {
     }
   }
 }
+
+export function spawnXp(w: World, x: number, y: number, value: number) {
+  const i = w.xAlive.length;
+  w.xAlive.push(true); // all XP gems start alive
+  w.xx.push(x); // x position
+  w.xy.push(y); // y position
+  w.xValue.push(value); // XP value
+  return i;
+}

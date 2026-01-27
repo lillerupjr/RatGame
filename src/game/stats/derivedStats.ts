@@ -7,6 +7,8 @@ import { registry } from "../content/registry";
  * Recompute all derived stats from base stats + current items.
  * This should be the ONLY place that knows how items affect derived stats.
  */
+
+
 export function recomputeDerivedStats(w: World) {
     // Reset derived stats to base
     w.pSpeed = w.baseMoveSpeed;
@@ -15,6 +17,8 @@ export function recomputeDerivedStats(w: World) {
     // Reset multipliers
     w.dmgMult = 1;
     w.fireRateMult = 1;
+    w.areaMult = 1;
+    w.durationMult = 1;
 
     // Apply all items
     for (const inst of w.items) {
