@@ -224,10 +224,10 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
         getStats: (level, w) => {
             const lv = clampLevel(level);
-            const multiplier = 240;
+            const multiplier = 60;
             // "Same as pistol" (your choice)
             const cooldownBase = 1/multiplier;
-            const dmg = (10 + (lv - 1) * 3) * w.dmgMult/multiplier;
+            const dmg = (10 + (lv - 1) * 3) * w.dmgMult;
 
             return {
                 cooldown: cooldownBase / w.fireRateMult,
@@ -242,7 +242,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         fire: (w, s, aim) => {
             // Persisted angle state on world (kept off World type like other systems do)
             // Clockwise rotation ≈ +90° per burst (medium)
-            const multiplier = 4;
+            const multiplier = 10;
             const STEP = Math.PI / 2 / multiplier;
 
             const key = "_pistolSpiralAng";
