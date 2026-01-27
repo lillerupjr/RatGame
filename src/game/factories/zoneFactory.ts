@@ -4,6 +4,7 @@ import type { World } from "../world";
 export const ZONE_KIND = {
     AURA: 1,
     FIRE: 2, // molotov later
+    EXPLOSION: 3, // NEW: visual-only
 } as const;
 
 export type SpawnZoneArgs = {

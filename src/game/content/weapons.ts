@@ -12,7 +12,8 @@ export type WeaponId =
     | "SWORD"
     | "KNUCKLES"
     | "AURA"
-    | "MOLOTOV";
+    | "MOLOTOV"
+    | "SYRINGE";
 
 export const MAX_WEAPON_LEVEL = 10;
 
@@ -588,4 +589,101 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             w.zTickLeft[z] = 0;
         },
     },
+    SYRINGE: {
+        id: "SYRINGE",
+        title: "Volatile Reagent",
+
+        getStats: (level, w) => {
+            const lv = clampLevel(level);
+
+            // ---- Fire / needle baseline ----
+            // Syringe identity is poison + conditional explosions, not raw hit damage.
+            const cooldownBase = 2;
+
+            // Needle feel: fast, small, short-ish life
+            const needleSpeed = 560;
+
+            // Small direct hit (still scales with dmgMult)
+            const hitDmgBase = 4.0;
+            const hitDmgPer = 0.8;
+            const hitDamage = (hitDmgBase + (lv - 1) * hitDmgPer) * w.dmgMult;
+
+            // ---- Poison payload ----
+            // DPS scales with dmgMult. Duration scales with durationMult.
+            const poisonDpsBase = 7.0;
+            const poisonDpsPer = 1.35;
+            const poisonDps = (poisonDpsBase + (lv - 1) * poisonDpsPer) * w.dmgMult;
+
+            const poisonDurBase = 5;
+            const poisonDurPer = 0.18;
+            const poisonDur = (poisonDurBase + (lv - 1) * poisonDurPer) * (w.durationMult ?? 1);
+
+            // ---- Poison-gated explode-on-kill (handled by onKillExplodeSystem) ----
+            // Explosions ONLY occur when a poisoned enemy dies.
+            const pctBase = 2;
+            const pctPer = 0.02;
+            const pct = pctBase + (lv - 1) * pctPer;
+
+            // Base radius before areaMult (system multiplies by areaMult)
+            const radiusBase = 200;
+            const radiusPer = 5.0;
+            const baseRadius = radiusBase + (lv - 1) * radiusPer;
+
+            (w as any)._explodeOnKill = {
+                enabled: true,
+                pct,
+                baseRadius,
+                maxPerFrame: 80,
+
+                // Base syringe: explosions DO NOT apply poison (no free chains).
+                applyPoison: true,
+                poisonDur: 5,
+                poisonDps: poisonDps,
+            };
+
+            // We keep WeaponStats unchanged and stash poison fields as escape-hatch.
+            return {
+                cooldown: cooldownBase / w.fireRateMult,
+                projectileSpeed: needleSpeed,
+                projectileRadius: 4,
+                damage: hitDamage,
+                pierce: 0,
+
+                ...( { poisonDps, poisonDur } as any ),
+            } as any;
+        },
+
+        fire: (w, s, aim) => {
+            // Fire a single needle that applies poison on hit.
+            // Requires projectileFactory + collisionsSystem support for:
+            // - w.prPoisonDps[] / w.prPoisonDur[] arrays
+            // - applying poison when projectile hits an enemy
+
+            const viewW = (w as any).viewW ?? 800;
+            const maxDist = viewW * 2;
+            const ttlSafety = 10;
+
+            const poisonDps = Math.max(0, (s as any).poisonDps ?? 0);
+            const poisonDur = Math.max(0, (s as any).poisonDur ?? 0);
+
+            const p = spawnProjectile(w, {
+                kind: PRJ_KIND.PISTOL, // reuse bullet visuals/behavior; poison payload differentiates it
+                x: w.px,
+                y: w.py,
+                dirX: aim.x,
+                dirY: aim.y,
+                speed: s.projectileSpeed,
+                damage: s.damage,
+                radius: s.projectileRadius,
+                pierce: 999, // for now
+                ttl: ttlSafety,
+                maxDist,
+            });
+
+            // Attach poison payload (arrays must exist + be default-pushed on spawn)
+            (w as any).prPoisonDps[p] = poisonDps;
+            (w as any).prPoisonDur[p] = poisonDur;
+        },
+    },
+
 };

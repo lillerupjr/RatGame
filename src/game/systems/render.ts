@@ -1,6 +1,7 @@
 // src/game/systems/render.ts
 import type { World } from "../world";
 import { registry } from "../content/registry";
+import {ZONE_KIND} from "../factories/zoneFactory";
 
 export function renderSystem(
     w: World,
@@ -45,23 +46,47 @@ export function renderSystem(
 
   ctx.globalAlpha = 1;
 
-  // Zones (auras / ground effects)
+  // Zones (auras / ground effects / visuals)
   for (let i = 0; i < w.zAlive.length; i++) {
     if (!w.zAlive[i]) continue;
 
     const x = w.zx[i] + cx;
     const y = w.zy[i] + cy;
+    const r = w.zR[i];
 
-    // Simple styling by kind
     const kind = w.zKind[i];
-    ctx.globalAlpha = kind === 2 ? 0.18 : 0.12; // FIRE a bit stronger than AURA
-    ctx.fillStyle = kind === 2 ? "#ffb347" : "#7dd3fc"; // orange vs cyan
+
+    if (kind === ZONE_KIND.EXPLOSION) {
+      // Purple explosion ring (clarity > style for now)
+      ctx.globalAlpha = 0.75;
+      ctx.strokeStyle = "#a855f7"; // clear purple
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Optional inner glow
+      ctx.globalAlpha = 0.15;
+      ctx.fillStyle = "#a855f7";
+      ctx.beginPath();
+      ctx.arc(x, y, r * 0.92, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalAlpha = 1;
+      continue;
+    }
+
+    // Existing zone rendering (AURA / FIRE)
+    ctx.globalAlpha = kind === ZONE_KIND.FIRE ? 0.18 : 0.12;
+    ctx.fillStyle = kind === ZONE_KIND.FIRE ? "#ffb347" : "#7dd3fc";
 
     ctx.beginPath();
-    ctx.arc(x, y, w.zR[i], 0, Math.PI * 2);
+    ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fill();
+
     ctx.globalAlpha = 1;
   }
+
 
   // XP gems
   for (let i = 0; i < w.xAlive.length; i++) {
@@ -82,14 +107,40 @@ export function renderSystem(
     const y = w.ey[i] + cy;
 
     const def = registry.enemy(w.eType[i]);
-    ctx.fillStyle =
+    const baseColor =
         def.color ??
         (w.eType[i] === 3 ? "#f8b" : w.eType[i] === 2 ? "#fb8" : "#f66");
 
+    // Base enemy body
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = baseColor;
     ctx.beginPath();
     ctx.arc(x, y, w.eR[i], 0, Math.PI * 2);
     ctx.fill();
+
+    // Poison tint overlay (easy to spot)
+    // Requires: w.ePoisonT[] exists and is kept > 0 while poisoned
+    const poisonT = (w as any).ePoisonT?.[i] ?? 0;
+    if (poisonT > 0) {
+      // Strong but readable tint — keeps silhouette and base color visible
+      ctx.globalAlpha = 0.42;
+      ctx.fillStyle = "#37ff6b";
+      ctx.beginPath();
+      ctx.arc(x, y, w.eR[i] * 0.92, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Optional: subtle ring to really pop
+      ctx.globalAlpha = 0.55;
+      ctx.strokeStyle = "#37ff6b";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, w.eR[i] * 1.06, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.globalAlpha = 1;
   }
+
 
   // Projectiles
   for (let i = 0; i < w.pAlive.length; i++) {

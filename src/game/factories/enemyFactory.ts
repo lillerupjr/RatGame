@@ -20,9 +20,13 @@ export function spawnEnemy(w: World, type: EnemyType, x: number, y: number) {
     w.evx.push(0);
     w.evy.push(0);
     w.eHp.push(s.hp);
+    w.eHpMax.push(s.hp);
     w.eR.push(s.radius);
     w.eSpeed.push(s.speed);
     w.eDamage.push(s.damage);
+    w.ePoisonT.push(0);
+    w.ePoisonDps.push(0);
+    w.ePoisonedOnDeath.push(false);
 
     return i;
 }

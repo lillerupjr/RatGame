@@ -63,5 +63,6 @@ export function projectilesSystem(w: World, dt: number) {
                 w.pAlive[i] = false;
             }
         }
+        if (w.prLastHitCd[i] > 0) w.prLastHitCd[i] = Math.max(0, w.prLastHitCd[i] - dt);
     }
 }

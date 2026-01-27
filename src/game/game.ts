@@ -9,11 +9,13 @@ import { pickupsSystem } from "./systems/pickups";
 import { xpSystem } from "./systems/xp";
 import { renderSystem } from "./systems/render";
 import { zonesSystem } from "./systems/zones";
+import { onKillExplodeSystem } from "./systems/onKillExplode";
 
 import { getUpgradePool, UpgradeDef } from "./content/upgrades";
 import { formatTimeMMSS } from "./util/time";
 import type { WeaponId } from "./content/weapons";
 import { registry } from "./content/registry";
+import {poisonSystem} from "./systems/poison";
 
 type HudRefs = {
   root: HTMLDivElement;
@@ -144,6 +146,8 @@ export function createGame(args: CreateGameArgs) {
     combatSystem(world, dt);
     projectilesSystem(world, dt);
     collisionsSystem(world, dt);
+    poisonSystem(world, dt);
+    onKillExplodeSystem(world, dt); // NEW: explode on kill (can add more kills)
     zonesSystem(world, dt);
     pickupsSystem(world, dt);
     xpSystem(world, dt);
