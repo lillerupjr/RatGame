@@ -19,7 +19,7 @@ import { registry } from "./content/registry";
 import { spawnEnemy, ENEMY_TYPE } from "./factories/enemyFactory";
 import { poisonSystem } from "./systems/poison";
 import { recomputeDerivedStats } from "./stats/derivedStats";
-import { buildStaticRunMap, getReachable, type runMap, type MapNode } from "./map/runMap";
+import {buildStaticRunMap, getReachable, type RunMap, type MapNode} from "./map/runMap";
 
 
 type HudRefs = {
@@ -228,7 +228,7 @@ export function createGame(args: CreateGameArgs) {
     }
 
     // Build act graph (static for now; later this becomes the generator output)
-    const g = buildStaticRunMap() as runMap;
+    const g = buildStaticRunMap() as RunMap;
     (world as any).runMap = g;
     (world as any).mapCurrentNodeId = null;
     (world as any).mapPendingNextFloorIndex = 0;
@@ -254,7 +254,7 @@ export function createGame(args: CreateGameArgs) {
 
     args.ui.mapEl.sub.textContent = subText;
 
-    const g = (world as any).runMap as runMap;
+    const g = (world as any).runMap as RunMap;
     const fromId = (world as any).mapCurrentNodeId as string | null;
 
     // Reachable set (clickable)
@@ -672,7 +672,7 @@ export function createGame(args: CreateGameArgs) {
     const nodeId = btn.dataset.nodeId;
     if (!nodeId) return;
 
-    const g = (world as any).runMap as runMap;
+    const g = (world as any).runMap as RunMap;
     const node = g.nodes.find((n) => n.id === nodeId);
     if (!node) return;
 
