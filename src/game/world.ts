@@ -53,9 +53,15 @@ export type World = {
   evx: number[];
   evy: number[];
   eHp: number[];
+  eHpMax: number[]; // NEW
   eR: number[];
   eSpeed: number[];
   eDamage: number[];
+
+  // NEW: Poison status
+  ePoisonT: number[];    // seconds remaining
+  ePoisonDps: number[];  // damage per second
+  ePoisonedOnDeath: boolean[];
 
   // Zones (auras / ground effects)
   zAlive: boolean[];
@@ -91,6 +97,12 @@ export type World = {
   prStartX: number[];
   prStartY: number[];
   prMaxDist: number[]; // 0 = unlimited
+  prLastHitEnemy: number[]; // last enemy index hit
+  prLastHitCd: number[];    // seconds remaining until it can hit that same enemy again
+
+  prPoisonDps: number[];  // NEW
+  prPoisonDur: number[];  // NEW
+
 
   // NEW: Orbital projectiles (Knuckle Ring)
   prIsOrbital: boolean[];
@@ -160,9 +172,14 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     evx: [],
     evy: [],
     eHp: [],
+    eHpMax: [], // NEW
     eR: [],
     eSpeed: [],
     eDamage: [],
+
+    ePoisonT: [],
+    ePoisonDps: [],
+    ePoisonedOnDeath: [],
 
     // Zones
     zAlive: [],
@@ -197,6 +214,13 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     prStartX: [],
     prStartY: [],
     prMaxDist: [],
+    prLastHitEnemy: [],
+    prLastHitCd: [],
+
+    prPoisonDps: [],
+    prPoisonDur: [],
+
+
 
     // orbital
     prIsOrbital: [],

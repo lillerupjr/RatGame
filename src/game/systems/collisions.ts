@@ -32,12 +32,29 @@ export function collisionsSystem(w: World, dt: number) {
       const rr = w.eR[e] + pr;
 
       if (!isEnemyHit(w, p, e, dx, dy, rr)) continue;
-      
+
+      // Prevent the same piercing projectile from repeatedly hitting the same enemy every frame
+      if (w.prLastHitEnemy[p] === e && w.prLastHitCd[p] > 0) {
+        continue; // skip this hit entirely (no dmg, no poison, no pierce consume)
+      }
+
       // HIT
       hitSomething = true;
 
       const dmg = w.prDamage[p];
       w.eHp[e] -= dmg;
+
+      // Poison payload (applied once per hit)
+      const pdps = w.prPoisonDps[p];
+      const pdur = w.prPoisonDur[p];
+      if (pdur > 0 && pdps > 0) {
+        w.ePoisonDps[e] += pdps;
+        w.ePoisonT[e] = Math.max(w.ePoisonT[e], pdur);
+      }
+
+      // Lock out re-hitting this same enemy for a short time
+      w.prLastHitEnemy[p] = e;
+      w.prLastHitCd[p] = 0.12; // tune: 0.08–0.16
 
       emitEvent(w, {
         type: "ENEMY_HIT",
@@ -48,8 +65,7 @@ export function collisionsSystem(w: World, dt: number) {
         source: registry.projectileSourceFromKind(w.prjKind[p]),
       });
 
-      // Pierce handling: pierce is "remaining extra enemies it can pass through"
-      // pierce=0 means it dies on first hit
+      // Pierce handling
       if (w.prPierce[p] > 0) {
         w.prPierce[p] -= 1;
       } else {
@@ -61,18 +77,21 @@ export function collisionsSystem(w: World, dt: number) {
         w.eAlive[e] = false;
         w.kills++;
 
-        emitEvent(w, { 
+        // snapshot poison-at-death BEFORE any cleanup
+        w.ePoisonedOnDeath[e] = (w.ePoisonT[e] > 0);
+
+        emitEvent(w, {
           type: "ENEMY_KILLED",
           enemyIndex: e,
           x: w.ex[e],
           y: w.ey[e],
-          xpValue: 1, // tune later or base on enemy type
+          xpValue: 1,
           source: registry.projectileSourceFromKind(w.prjKind[p]),
         });
       }
 
-      // If projectile died on hit, stop checking further enemies
       if (!w.pAlive[p]) break;
+
     }
 
     // Optional: if you want projectiles to despawn when they don't hit anything after some time,

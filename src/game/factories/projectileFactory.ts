@@ -84,6 +84,12 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     w.prOrbBaseRadius.push(a.orbBaseRadius ?? 0);
     w.prOrbBaseAngVel.push(a.orbBaseAngVel ?? 0);
 
+
+    w.prPoisonDps.push(0);
+    w.prPoisonDur.push(0);
+    w.prLastHitEnemy.push(-1);
+    w.prLastHitCd.push(0);
+
     return i;
 }
 
