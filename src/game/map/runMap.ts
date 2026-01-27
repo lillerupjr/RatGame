@@ -19,14 +19,14 @@ export type MapNode = {
 
 export type MapEdge = { from: string; to: string };
 
-export type runMap = {
+export type RunMap = {
     cols: number;
     rows: number;
     nodes: MapNode[];
     edges: MapEdge[];
 };
 
-export function buildStaticRunMap(): runMap {
+export function buildStaticRunMap(): RunMap {
     // v0: single mandatory route
     const nodes: MapNode[] = [
         // 5 cols (0..4), 4 rows (0..3): spread diagonally, centered lanes
@@ -48,11 +48,11 @@ export function buildStaticRunMap(): runMap {
     };
 }
 
-export function getNode(g: runMap, id: string): MapNode | undefined {
+export function getNode(g: RunMap, id: string): MapNode | undefined {
     return g.nodes.find((n) => n.id === id);
 }
 
-export function getReachable(g: runMap, fromId: string | null): MapNode[] {
+export function getReachable(g: RunMap, fromId: string | null): MapNode[] {
     // Start-of-run: reachable nodes are those with no incoming edges
     if (!fromId) {
         const hasIncoming = new Set<string>();
