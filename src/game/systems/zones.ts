@@ -1,6 +1,7 @@
 // src/game/systems/zones.ts
 import type { World } from "../world";
 import { emitEvent } from "../world";
+import { isEnemyInCircle } from "./hitDetection";
 
 /**
  * Generic “zone / aura / ground effect” system.
@@ -45,14 +46,11 @@ export function zonesSystem(w: World, dt: number) {
         const dmg = w.zDamage[z];
         if (dmg <= 0 || zr <= 0) continue;
 
-        // Apply damage to all enemies inside zone (include enemy radius for feel)
+        // Apply damage to all enemies inside zone (includes enemy radius via isEnemyInCircle)
         for (let e = 0; e < w.eAlive.length; e++) {
             if (!w.eAlive[e]) continue;
 
-            const dx = w.ex[e] - zx;
-            const dy = w.ey[e] - zy;
-            const rr = zr + w.eR[e];
-            if (dx * dx + dy * dy > rr * rr) continue;
+            if (!isEnemyInCircle(w, e, zx, zy, zr)) continue;
 
             w.eHp[e] -= dmg;
 
