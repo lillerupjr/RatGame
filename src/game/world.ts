@@ -8,7 +8,7 @@ import type { WeaponId } from "./content/weapons";
 import type { EnemyType } from "./content/enemies";
 import { recomputeDerivedStats } from "./stats/derivedStats";
 
-export type GameState = "MENU" | "RUN" | "LEVELUP" | "LOSE" | "WIN";
+export type GameState = "MENU" | "RUN" | "LEVELUP" | "CHEST" | "LOSE" | "WIN";
 
 // Run progression state machine (active only while state === "RUN")
 export type RunState = "FLOOR" | "BOSS" | "TRANSITION" | "GAME_OVER" | "RUN_COMPLETE";
@@ -85,6 +85,9 @@ export type World = {
   zTtl: number[];
   zFollowPlayer: boolean[];
 
+  // NEW: zones can optionally damage the player (boss hazards)
+  zDamagePlayer: number[];
+
   // Projectiles
   pAlive: boolean[];
   pKind: number; // reserved
@@ -118,11 +121,20 @@ export type World = {
   prOrbBaseRadius: number[];
   prOrbBaseAngVel: number[];
 
-  // Pickups (XP gems)
+  // Pickups (XP gems + drops)
+  // xKind: 1 = XP, 2 = CHEST
   xAlive: boolean[];
+  xKind: number[];
   xx: number[];
   xy: number[];
-  xValue: number[];
+  xValue: number[];     // XP amount for XP gems, 0 for chests
+  xDropId: string[];    // "" for XP gems, "BOSS_CHEST" for chests
+
+  // Boss reward gating (prevents transition clearing the chest)
+  bossRewardPending: boolean;
+
+  // Chest pickup handshake (system -> game.ts)
+  chestOpenRequested: boolean;
 
   // Progression
   level: number;
@@ -207,6 +219,7 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     zTickLeft: [],
     zTtl: [],
     zFollowPlayer: [],
+    zDamagePlayer: [],
 
     pAlive: [],
     pKind: 0,
@@ -240,10 +253,14 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     prOrbBaseAngVel: [],
 
     xAlive: [],
+    xKind: [],
     xx: [],
     xy: [],
     xValue: [],
+    xDropId: [],
 
+    bossRewardPending: false,
+    chestOpenRequested: false,
     level: 1,
     xp: 0,
     xpToNext: 10,

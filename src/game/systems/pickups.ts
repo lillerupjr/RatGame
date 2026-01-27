@@ -1,4 +1,10 @@
 import { World } from "../world";
+import type { DropId } from "../content/drops";
+
+export const PICKUP_KIND = {
+  XP: 1,
+  CHEST: 2,
+} as const;
 
 export function pickupsSystem(w: World, dt: number) {
   // Pickups drift toward player when close (classic vacuum feel)
@@ -19,9 +25,26 @@ export function pickupsSystem(w: World, dt: number) {
 
 export function spawnXp(w: World, x: number, y: number, value: number) {
   const i = w.xAlive.length;
-  w.xAlive.push(true); // all XP gems start alive
-  w.xx.push(x); // x position
-  w.xy.push(y); // y position
-  w.xValue.push(value); // XP value
+
+  w.xAlive.push(true);
+  w.xKind.push(PICKUP_KIND.XP);
+  w.xx.push(x);
+  w.xy.push(y);
+  w.xValue.push(value);
+  w.xDropId.push("");
+
+  return i;
+}
+
+export function spawnChest(w: World, x: number, y: number, dropId: DropId = "BOSS_CHEST") {
+  const i = w.xAlive.length;
+
+  w.xAlive.push(true);
+  w.xKind.push(PICKUP_KIND.CHEST);
+  w.xx.push(x);
+  w.xy.push(y);
+  w.xValue.push(0);
+  w.xDropId.push(dropId);
+
   return i;
 }
