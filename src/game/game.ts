@@ -47,17 +47,17 @@ type CreateGameArgs = {
 
 export function createGame(args: CreateGameArgs) {
   const input: InputState = createInputState();
-  let world: World = createWorld({ seed: 1337, stage: cloneStage() });
+  let world: World = createWorld({ seed: 1337, stage: cloneStage("DOCKS") });
 
   let currentChoices: UpgradeDef[] = [];
 
   const FLOORS_PER_RUN = 3;
-  const TRANSITION_SECS = 5.0;
+  const TRANSITION_SECS = 0;
 
-  function cloneStage() {
+  function cloneStage(stageId: "DOCKS" | "SEWERS" | "CHINATOWN") {
     // IMPORTANT: stage spawns are mutated (t is set to Infinity) at runtime.
     // So each floor needs a fresh cloned stage definition.
-    const base = registry.stage("DOCKS");
+    const base = registry.stage(stageId);
     return { ...base, spawns: base.spawns.map((s) => ({ ...s })) };
   }
 
@@ -143,10 +143,16 @@ export function createGame(args: CreateGameArgs) {
   function enterFloor(w: World, floorIndex: number) {
     w.floorIndex = floorIndex;
     w.runState = "FLOOR";
-    w.floorDuration = 20; // Adjust this
     w.phaseTime = 0;
     w.transitionTime = 0;
-    w.stage = cloneStage();
+
+// Pick stage by floor
+    const stageId = floorIndex === 0 ? "DOCKS" : floorIndex === 1 ? "SEWERS" : "CHINATOWN";
+    w.stage = cloneStage(stageId);
+
+// Drive floor timing from stage (so each floor can tune boss time independently)
+    w.floorDuration = w.stage.duration;
+
     clearFloorEntities(w);
   }
 
@@ -190,7 +196,7 @@ export function createGame(args: CreateGameArgs) {
   function resetRun() {
     world = createWorld({
       seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0,
-      stage: cloneStage(),
+      stage: cloneStage("DOCKS"),
     });
     currentChoices = [];
     hideLevelUp();

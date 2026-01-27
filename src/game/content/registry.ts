@@ -1,7 +1,7 @@
 // src/game/content/registry.ts
 import { WEAPONS, type WeaponDef, type WeaponId, MAX_WEAPON_LEVEL } from "./weapons";
 import { ITEMS, type ItemDef, type ItemId, MAX_ITEM_LEVEL } from "./items";
-import { stageDocks, type StageDef } from "./stages";
+import { stageDocks, stageSewers, stageChinatown, type StageDef, type StageId } from "./stages";
 import { ENEMIES, type EnemyDef, type EnemyType } from "./enemies";
 import { PRJ_KIND, type ProjectileSource } from "../factories/projectileFactory";
 
@@ -60,10 +60,14 @@ export const registry = {
     },
 
     // ---- Stages ----
-    stage(id: "DOCKS"): StageDef {
+    stage(id: StageId): StageDef {
         switch (id) {
             case "DOCKS":
                 return stageDocks;
+            case "SEWERS":
+                return stageSewers;
+            case "CHINATOWN":
+                return stageChinatown;
             default:
                 throw new Error(`Unknown stage id: ${id satisfies never}`);
         }
