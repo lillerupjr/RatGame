@@ -1,6 +1,6 @@
 // src/game/systems/collisions.ts
 import { World, emitEvent } from "../world";
-import { isEnemyHit } from "./hitDetection";
+import { isEnemyHit, isPlayerHit } from "./hitDetection";
 import { registry } from "../content/registry";
 
 /**
@@ -120,7 +120,7 @@ export function collisionsSystem(w: World, dt: number) {
       const dy = w.ey[e] - w.py;
       const rr = w.eR[e] + PLAYER_R;
 
-      if (dx * dx + dy * dy > rr * rr) continue;
+      if (!isPlayerHit(w, e, PLAYER_R)) continue;
 
       // CONTACT HIT
       const dmg = w.eDamage[e] || 1;
