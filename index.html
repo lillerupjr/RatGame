@@ -9,6 +9,69 @@
     #hud { position: fixed; left: 12px; top: 12px; color: #eaeaf2; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto; font-size: 14px; line-height: 1.4; user-select: none; z-index: 3; }
     #hud .pill { display: inline-block; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,0.08); margin-right: 8px; }
 
+    /* HUD inventory (weapons + items) */
+    #hudTop { display: inline-block; }
+
+    #hud .hudInv {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column; /* NEW: stack vertically */
+      gap: 10px;
+      align-items: stretch;
+      max-width: min(860px, calc(100vw - 24px));
+    }
+
+    #hud .invCol {
+      padding: 8px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.10);
+      width: 100%;          /* NEW */
+      min-width: 0;         /* NEW: prevents forcing side-by-side */
+      box-sizing: border-box;
+    }
+
+
+    #hud .invLabel {
+      font-size: 12px;
+      font-weight: 900;
+      opacity: 0.9;
+      margin-bottom: 6px;
+    }
+
+    #hud .invGrid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(78px, 1fr));
+      gap: 8px;
+    }
+
+    #hud .slot {
+      padding: 6px 8px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.10);
+      min-height: 34px;
+    }
+
+    #hud .slot.empty { opacity: 0.45; }
+
+    #hud .slotTitle {
+      font-weight: 900;
+      font-size: 12px;
+      line-height: 1.1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+
+    #hud .slotSub {
+      font-size: 11px;
+      opacity: 0.85;
+      margin-top: 2px;
+    }
+
+
     canvas { display:block; }
 
     /* IMPORTANT: ensure hidden attribute actually hides overlays (CSS IDs otherwise override it) */
@@ -71,11 +134,36 @@
 <canvas id="c"></canvas>
 
 <div id="hud" hidden>
-  <span class="pill" id="timePill">00:00</span>
-  <span class="pill" id="killsPill">Kills: 0</span>
-  <span class="pill" id="hpPill">HP: 0/0</span>
-  <span class="pill" id="lvlPill">Lv: 1</span>
+  <div id="hudTop">
+    <span class="pill" id="timePill">00:00</span>
+    <span class="pill" id="killsPill">Kills: 0</span>
+    <span class="pill" id="hpPill">HP: 0/0</span>
+    <span class="pill" id="lvlPill">Lv: 1</span>
+  </div>
+
+  <div class="hudInv">
+    <div class="invCol">
+      <div class="invLabel">Weapons</div>
+      <div class="invGrid" id="weaponSlots">
+        <div class="slot empty"><div class="slotTitle">—</div><div class="slotSub"></div></div>
+        <div class="slot empty"><div class="slotTitle">—</div><div class="slotSub"></div></div>
+        <div class="slot empty"><div class="slotTitle">—</div><div class="slotSub"></div></div>
+        <div class="slot empty"><div class="slotTitle">—</div><div class="slotSub"></div></div>
+      </div>
+    </div>
+
+    <div class="invCol">
+      <div class="invLabel">Items</div>
+      <div class="invGrid" id="itemSlots">
+        <div class="slot empty"><div class="slotTitle">—</div><div class="slotSub"></div></div>
+        <div class="slot empty"><div class="slotTitle">—</div><div class="slotSub"></div></div>
+        <div class="slot empty"><div class="slotTitle">—</div><div class="slotSub"></div></div>
+        <div class="slot empty"><div class="slotTitle">—</div><div class="slotSub"></div></div>
+      </div>
+    </div>
+  </div>
 </div>
+
 
 <div id="levelup" hidden>
   <div class="panel">
