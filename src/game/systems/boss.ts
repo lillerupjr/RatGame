@@ -2,7 +2,7 @@ import type { World } from "../world";
 import { ENEMY_TYPE } from "../content/enemies";
 import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
 
-type BossId = "DOCKS_BOMBARD" | "CHINATOWN_DASH" | "SEWERS_PUDDLES";
+type BossId = "DOCKS_BOMBARD" | "SEWERS_PUDDLES" | "CHINATOWN_DASH";
 
 type BossCtx = {
     id: BossId;
@@ -25,19 +25,32 @@ function findBossIndex(w: World): number {
 
 function bossIdForFloor(floorIndex: number): BossId {
     if (floorIndex === 0) return "DOCKS_BOMBARD";
-    if (floorIndex === 1) return "CHINATOWN_DASH";
-    return "SEWERS_PUDDLES";
+    if (floorIndex === 1) return "SEWERS_PUDDLES";
+    return "CHINATOWN_DASH";
 }
 
 function ensureCtx(w: World): BossCtx {
     const key = "_bossCtx";
     const existing = (w as any)[key] as BossCtx | undefined;
+
+    // Tie boss behavior to FLOOR (not stage timeline), so it always matches floor visuals/mobs.
     const want = bossIdForFloor(w.floorIndex ?? 0);
 
+    // Reset state when changing floor or restarting boss encounter
     if (existing && existing.id === want) return existing;
 
-    const ctx: BossCtx = { id: want, t: 0, delayed: [], dashPhase: "IDLE", dashT: 0 };
+    const ctx: BossCtx = {
+        id: want,
+        t: 0,
+        delayed: [],
+        dashPhase: "IDLE",
+        dashT: 0,
+    };
     (w as any)[key] = ctx;
+
+    // Clear any dash mark cooldown from the previous boss
+    (w as any)._dashMarkCd = 0;
+
     return ctx;
 }
 
