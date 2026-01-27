@@ -1,3 +1,4 @@
+// src/game/world.ts
 import { RNG } from "./util/rng";
 import { StageDef } from "./content/stages";
 import { registry } from "./content/registry";
@@ -28,6 +29,7 @@ export type World = {
   py: number;
   pvx: number;
   pvy: number;
+
   // Base stats (never modified directly by upgrades)
   baseMoveSpeed: number;
   basePickupRadius: number;
@@ -40,11 +42,11 @@ export type World = {
   playerHpMax: number;
 
   // Items (max 4)
-  items: { id: import("./content/items").ItemId; level: number }[];
+  items: { id: ItemId; level: number }[];
 
   // Entities (arrays for ECS-lite)
   eAlive: boolean[];
-  eType: EnemyType[]; // 1 chaser, 2 runner, 3 bruiser, 99 boss
+  eType: EnemyType[];
   ex: number[];
   ey: number[];
   evx: number[];
@@ -56,21 +58,31 @@ export type World = {
 
   // Projectiles
   pAlive: boolean[];
-  pKind: number; // reserved (not used yet)
-  prjKind: number[]; // 1 knife, 2 pistol
+  pKind: number; // reserved
+  prjKind: number[];
   prx: number[];
   pry: number[];
   prvx: number[];
   prvy: number[];
   prDamage: number[];
   prR: number[];
-  prPierce: number[]; // remaining pierces
-  prIsmelee: boolean[]; // is melee attack
-  prCone: number[]; // cone angle (radians) for melee slashes
-  prMeleeRange: number[]; // reach for melee cone (distance from player)
-  prDirX: number[]; // direction X for melee projectiles (locked at spawn)
-  prDirY: number[]; // direction Y for melee projectiles (locked at spawn)
-  prTtl: number[];    // seconds remaining
+  prPierce: number[];
+  prIsmelee: boolean[];
+  prCone: number[];
+  prMeleeRange: number[];
+  prDirX: number[];
+  prDirY: number[];
+  prTtl: number[];
+
+  prStartX: number[];
+  prStartY: number[];
+  prMaxDist: number[]; // 0 = unlimited
+
+  // NEW: Orbital projectiles (Knuckle Ring)
+  prIsOrbital: boolean[];
+  prOrbAngle: number[];
+  prOrbBaseRadius: number[];
+  prOrbBaseAngVel: number[];
 
   // Pickups (XP gems)
   xAlive: boolean[];
@@ -78,14 +90,10 @@ export type World = {
   xy: number[];
   xValue: number[];
 
-  prStartX: number[];
-  prStartY: number[];
-  prMaxDist: number[]; // 0 = unlimited
   // Progression
   level: number;
   xp: number;
   xpToNext: number;
-
   pendingLevelUps: number;
 
   // Aim (used when no target exists)
@@ -93,14 +101,16 @@ export type World = {
   lastAimY: number;
 
   // Player weapons (max 4)
-  weapons: { id: import("./content/weapons").WeaponId; level: number; cdLeft: number }[];
+  weapons: { id: WeaponId; level: number; cdLeft: number }[];
 
-
+  // Derived multipliers
   dmgMult: number;
   fireRateMult: number;
 
+  // NEW: for orbit weapons/items
+  areaMult: number;
+  durationMult: number;
 };
-
 
 export function createWorld(args: { seed: number; stage: StageDef }): World {
   const w: World = {
@@ -111,18 +121,16 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
 
     time: 0,
     kills: 0,
-    prStartX: [],
-    prStartY: [],
-    prMaxDist: [], // 0 = unlimited
 
     px: 0,
     py: 0,
     pvx: 0,
     pvy: 0,
+
     baseMoveSpeed: 210,
     basePickupRadius: 70,
 
-    // derived (will be recomputed)
+    // derived
     pSpeed: 210,
     pickupRadius: 70,
 
@@ -130,6 +138,7 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     playerHpMax: 100,
 
     items: [],
+
     eAlive: [],
     eType: [],
     ex: [],
@@ -157,6 +166,15 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     prDirX: [],
     prDirY: [],
     prTtl: [],
+    prStartX: [],
+    prStartY: [],
+    prMaxDist: [],
+
+    // orbital
+    prIsOrbital: [],
+    prOrbAngle: [],
+    prOrbBaseRadius: [],
+    prOrbBaseAngVel: [],
 
     xAlive: [],
     xx: [],
@@ -171,13 +189,13 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     lastAimX: 1,
     lastAimY: 0,
 
-    weapons: [
-      { id: defaultStarter, level: 1, cdLeft: 0 },
-    ],
-
+    weapons: [{ id: defaultStarter, level: 1, cdLeft: 0 }],
 
     dmgMult: 1,
     fireRateMult: 1,
+
+    areaMult: 1,
+    durationMult: 1,
   };
 
   recomputeDerivedStats(w);
@@ -203,13 +221,16 @@ export function recomputeDerivedStats(w: World) {
   // Reset multipliers
   w.dmgMult = 1;
   w.fireRateMult = 1;
+  w.areaMult = 1;
+  w.durationMult = 1;
 
   // Apply all items
   for (const inst of w.items) {
-    const def = registry.item(inst.id as ItemId);
+    const def = registry.item(inst.id);
     def.apply(w, inst.level);
   }
 }
+
 export function emitEvent(w: World, e: import("./events").GameEvent) {
   w.events.push(e);
 }

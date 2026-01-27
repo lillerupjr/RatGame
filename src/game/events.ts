@@ -1,3 +1,4 @@
+// src/game/events.ts
 export type GameEvent =
     | {
     type: "ENEMY_HIT";
@@ -5,7 +6,7 @@ export type GameEvent =
     damage: number;
     x: number;
     y: number;
-    source: "KNIFE" | "PISTOL" | "SWORD" | "OTHER";
+    source: "KNIFE" | "PISTOL" | "SWORD" | "KNUCKLES" | "OTHER";
 }
     | {
     type: "ENEMY_KILLED";
@@ -13,7 +14,7 @@ export type GameEvent =
     x: number;
     y: number;
     xpValue: number;
-    source: "KNIFE" | "PISTOL" | "SWORD" | "OTHER";
+    source: "KNIFE" | "PISTOL" | "SWORD" | "KNUCKLES" | "OTHER";
 }
     | {
     type: "PLAYER_HIT";

@@ -1,6 +1,13 @@
+// src/game/content/items.ts
 import type { World } from "../world";
 
-export type ItemId = "DMG" | "FIRE_RATE" | "MOVE_SPEED" | "PICKUP_RADIUS";
+export type ItemId =
+    | "DMG"
+    | "FIRE_RATE"
+    | "MOVE_SPEED"
+    | "PICKUP_RADIUS"
+    | "AREA"
+    | "DURATION";
 
 export const MAX_ITEM_LEVEL = 10;
 
@@ -8,8 +15,6 @@ export type ItemDef = {
     id: ItemId;
     title: string;
     desc: string;
-
-    /** Apply this item's effect at a given level into derived stats (mutate world stats). */
     apply: (w: World, level: number) => void;
 };
 
@@ -19,9 +24,7 @@ export const ITEMS: Record<ItemId, ItemDef> = {
         title: "Damage",
         desc: "All weapon damage increases.",
         apply: (w, level) => {
-            // multiplicative scaling
             const lv = Math.max(1, Math.min(MAX_ITEM_LEVEL, Math.floor(level)));
-            // +15% per level (tune later)
             w.dmgMult *= Math.pow(1.15, lv);
         },
     },
@@ -53,6 +56,28 @@ export const ITEMS: Record<ItemId, ItemDef> = {
         apply: (w, level) => {
             const lv = Math.max(1, Math.min(MAX_ITEM_LEVEL, Math.floor(level)));
             w.pickupRadius += 18 * lv;
+        },
+    },
+
+    AREA: {
+        id: "AREA",
+        title: "Area",
+        desc: "Bigger weapon effects (radius/size).",
+        apply: (w, level) => {
+            const lv = Math.max(1, Math.min(MAX_ITEM_LEVEL, Math.floor(level)));
+            // +10% per level (tune later)
+            w.areaMult *= Math.pow(1.10, lv);
+        },
+    },
+
+    DURATION: {
+        id: "DURATION",
+        title: "Duration",
+        desc: "Effects last longer (orbitals, DoTs, etc.).",
+        apply: (w, level) => {
+            const lv = Math.max(1, Math.min(MAX_ITEM_LEVEL, Math.floor(level)));
+            // +10% per level (tune later)
+            w.durationMult *= Math.pow(1.10, lv);
         },
     },
 };

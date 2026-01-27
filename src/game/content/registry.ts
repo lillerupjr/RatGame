@@ -29,6 +29,8 @@ export const registry = {
                 return "PISTOL";
             case PRJ_KIND.SWORD:
                 return "SWORD";
+            case PRJ_KIND.KNUCKLES:
+                return "KNUCKLES";
             default:
                 return "OTHER";
         }
