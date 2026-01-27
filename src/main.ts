@@ -139,12 +139,21 @@ const game = createGame({
     killsPill: document.getElementById("killsPill") as HTMLSpanElement,
     hpPill: document.getElementById("hpPill") as HTMLSpanElement,
     lvlPill: document.getElementById("lvlPill") as HTMLSpanElement,
+
+    // NEW: inventory HUD
+    weaponSlots: document.getElementById("weaponSlots") as HTMLDivElement,
+    itemSlots: document.getElementById("itemSlots") as HTMLDivElement,
   },
   ui: {
     menuEl,
-    levelupEl: { root: levelupRoot, choices: levelupChoices, sub: levelupSub },
+    levelupEl: {
+      root: levelupRoot,
+      choices: levelupChoices,
+      sub: levelupSub,
+    },
   },
 });
+
 
 let last = performance.now();
 function frame(now: number) {

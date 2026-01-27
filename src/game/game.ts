@@ -24,6 +24,10 @@ type HudRefs = {
   killsPill: HTMLSpanElement;
   hpPill: HTMLSpanElement;
   lvlPill: HTMLSpanElement;
+
+  // NEW: inventory HUD
+  weaponSlots: HTMLDivElement;
+  itemSlots: HTMLDivElement;
 };
 
 type LevelUpRefs = {
@@ -262,6 +266,47 @@ export function createGame(args: CreateGameArgs) {
     // recomputeDerivedStats is already called by item upgrades, but keeping this is future-proof.
   }
 
+  // ----- HUD inventory helpers -----
+  function renderSlots(
+      container: HTMLDivElement,
+      insts: Array<{ id: any; level: number }>,
+      getTitle: (id: any) => string
+  ) {
+    const slots = Array.from(container.querySelectorAll<HTMLElement>(".slot"));
+
+    for (let i = 0; i < 4; i++) {
+      const slot = slots[i];
+      if (!slot) continue;
+
+      const titleEl = slot.querySelector(".slotTitle") as HTMLElement | null;
+      const subEl = slot.querySelector(".slotSub") as HTMLElement | null;
+
+      const inst = insts[i];
+
+      if (inst) {
+        if (titleEl) titleEl.textContent = getTitle(inst.id);
+        if (subEl) subEl.textContent = `Lv ${inst.level}`;
+        slot.classList.remove("empty");
+      } else {
+        if (titleEl) titleEl.textContent = "—";
+        if (subEl) subEl.textContent = "";
+        slot.classList.add("empty");
+      }
+    }
+  }
+
+  function updateHud() {
+    args.hud.timePill.textContent = formatTimeMMSS(world.time);
+    args.hud.killsPill.textContent = `Kills: ${world.kills}`;
+    args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
+    args.hud.lvlPill.textContent = `Lv: ${world.level}`;
+
+    // 4 weapon slots + 4 item slots, order = array order
+    renderSlots(args.hud.weaponSlots, world.weapons as any, (id) => registry.weapon(id as any).title);
+    renderSlots(args.hud.itemSlots, world.items as any, (id) => registry.item(id as any).title);
+  }
+  // ---------------------------------
+
   function update(dt: number) {
     // Always poll input (so movement is responsive immediately after closing menus)
     inputSystem(input, args.canvas);
@@ -273,6 +318,7 @@ export function createGame(args: CreateGameArgs) {
       args.hud.killsPill.textContent = `Kills: ${world.kills}`;
       args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
       args.hud.lvlPill.textContent = `Lv: ${world.level}`;
+      updateHud();
       return;
     }
 
@@ -309,7 +355,7 @@ export function createGame(args: CreateGameArgs) {
     projectilesSystem(world, dt);
     collisionsSystem(world, dt);
     poisonSystem(world, dt);
-    onKillExplodeSystem(world, dt); // explode on kill
+    onKillExplodeSystem(world, dt); // NEW: explode on kill (can add more kills)
     zonesSystem(world, dt);
     pickupsSystem(world, dt);
     xpSystem(world, dt);
@@ -339,6 +385,7 @@ export function createGame(args: CreateGameArgs) {
     args.hud.killsPill.textContent = `Kills: ${world.kills}`;
     args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
     args.hud.lvlPill.textContent = `Lv: ${world.level}`;
+    updateHud();
   }
 
   function render() {
