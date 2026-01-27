@@ -98,6 +98,26 @@ function buildAllUpgrades(): UpgradeDef[] {
         },
         getRankText: () => "EVOLUTION",
     });
+// Syringe evo: requires Syringe Lv10 + DURATION owned
+    defs.push({
+        id: "EVOLVE_SYRINGE_CHAIN",
+        title: "Chain Syringe",
+        desc:
+            "EVOLUTION: Syringe explosions apply poison, allowing chain reactions. (Requires Syringe Lv 10 + Duration.)",
+        isEvolution: true,
+        isAvailable: (w) => {
+            const syringe = getWeaponInst(w, "SYRINGE");
+            const duration = getItemInst(w, "DURATION");
+            return !!syringe && syringe.level >= MAX_WPN && !!duration;
+        },
+        apply: (w) => {
+            const idx = w.weapons.findIndex((x) => x.id === "SYRINGE");
+            if (idx < 0) return;
+
+            w.weapons[idx] = { id: "SYRINGE_EVOLVED_CHAIN", level: 1, cdLeft: 0 };
+        },
+        getRankText: () => "EVOLUTION",
+    });
 
     // -----------------------
     // Weapons: Add + Level-up
