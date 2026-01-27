@@ -8,12 +8,15 @@ import type { EnemyType } from "../factories/enemyFactory";
  * - Handles a simple repeating trickle spawn to maintain pressure.
  */
 export function spawnSystem(w: World, dt: number) {
+  // Floors only (no spawns during boss/transition)
+  if (w.runState !== "FLOOR") return;
+
   // Run stage timeline spawns once
   for (const s of w.stage.spawns) {
     // Skip if this spawn has already fired
     if ((s as any).t === Infinity) continue;
 
-    if (w.time >= s.t) {
+    if (w.phaseTime >= s.t) {
       // Spawn the specified number of enemies in a ring around the player
       for (let k = 0; k < s.count; k++) {
         const angle = w.rng.range(0, Math.PI * 2);
@@ -34,13 +37,13 @@ export function spawnSystem(w: World, dt: number) {
   while ((w as any)._spawnAcc >= cadence) {
     (w as any)._spawnAcc -= cadence;
 
-    // Decide enemy type based on time and random roll
+    // Decide enemy type based on phase time and random roll
     const roll = w.rng.next();
     let type: EnemyType = ENEMY_TYPE.CHASER;
-    if (w.time > 60 && roll < 0.35) {
+    if (w.phaseTime > 60 && roll < 0.35) {
       type = ENEMY_TYPE.RUNNER;
     }
-    if (w.time > 120 && roll < 0.08) {
+    if (w.phaseTime > 120 && roll < 0.08) {
       type = ENEMY_TYPE.BRUISER;
     }
 

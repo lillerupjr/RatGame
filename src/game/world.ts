@@ -6,9 +6,12 @@ import type { GameEvent } from "./events";
 import type { ItemId } from "./content/items";
 import type { WeaponId } from "./content/weapons";
 import type { EnemyType } from "./content/enemies";
-import {recomputeDerivedStats} from "./stats/derivedStats";
+import { recomputeDerivedStats } from "./stats/derivedStats";
 
 export type GameState = "MENU" | "RUN" | "LEVELUP" | "LOSE" | "WIN";
+
+// Run progression state machine (active only while state === "RUN")
+export type RunState = "FLOOR" | "BOSS" | "TRANSITION" | "GAME_OVER" | "RUN_COMPLETE";
 
 const defaultStarter = ((): WeaponId => {
   const ids = registry.weaponIds();
@@ -21,6 +24,13 @@ export type World = {
   state: GameState;
   rng: RNG;
   stage: StageDef;
+  floorDuration: number;
+
+  // Run structure
+  runState: RunState;
+  floorIndex: number;      // 0..2 (3 floors)
+  phaseTime: number;       // seconds since current phase started (FLOOR/BOSS/TRANSITION)
+  transitionTime: number;  // seconds remaining in TRANSITION
 
   time: number;
   kills: number;
@@ -75,7 +85,6 @@ export type World = {
   zTtl: number[];
   zFollowPlayer: boolean[];
 
-
   // Projectiles
   pAlive: boolean[];
   pKind: number; // reserved
@@ -102,7 +111,6 @@ export type World = {
 
   prPoisonDps: number[];  // NEW
   prPoisonDur: number[];  // NEW
-
 
   // NEW: Orbital projectiles (Knuckle Ring)
   prIsOrbital: boolean[];
@@ -143,7 +151,15 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     events: [],
     state: "MENU",
     rng: new RNG(args.seed),
-    stage: args.stage,
+
+    // IMPORTANT: stage spawns are mutated at runtime (t -> Infinity), so clone them.
+    stage: { ...args.stage, spawns: args.stage.spawns.map((s) => ({ ...s })) },
+
+    runState: "FLOOR",
+    floorIndex: 0,
+    phaseTime: 0,
+    transitionTime: 0,
+    floorDuration: 0,
 
     time: 0,
     kills: 0,
@@ -172,7 +188,7 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     evx: [],
     evy: [],
     eHp: [],
-    eHpMax: [], // NEW
+    eHpMax: [],
     eR: [],
     eSpeed: [],
     eDamage: [],
@@ -181,7 +197,6 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     ePoisonDps: [],
     ePoisonedOnDeath: [],
 
-    // Zones
     zAlive: [],
     zKind: [],
     zx: [],
@@ -192,8 +207,6 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     zTickLeft: [],
     zTtl: [],
     zFollowPlayer: [],
-
-
 
     pAlive: [],
     pKind: 0,
@@ -211,6 +224,7 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     prDirX: [],
     prDirY: [],
     prTtl: [],
+
     prStartX: [],
     prStartY: [],
     prMaxDist: [],
@@ -220,9 +234,6 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     prPoisonDps: [],
     prPoisonDur: [],
 
-
-
-    // orbital
     prIsOrbital: [],
     prOrbAngle: [],
     prOrbBaseRadius: [],
@@ -245,17 +256,17 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
 
     dmgMult: 1,
     fireRateMult: 1,
-
     areaMult: 1,
     durationMult: 1,
   };
 
+  // Ensure derived stats consistent with items (even if empty).
   recomputeDerivedStats(w);
+
   return w;
 }
 
-
-export function emitEvent(w: World, e: import("./events").GameEvent) {
+export function emitEvent(w: World, e: GameEvent) {
   w.events.push(e);
 }
 
