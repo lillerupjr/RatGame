@@ -1,3 +1,4 @@
+// src/game/game.ts
 import { World, createWorld, clearEvents } from "./world";
 import { InputState, createInputState, inputSystem } from "./systems/input";
 import { movementSystem } from "./systems/movement";
@@ -10,13 +11,14 @@ import { xpSystem } from "./systems/xp";
 import { renderSystem } from "./systems/render";
 import { zonesSystem } from "./systems/zones";
 import { onKillExplodeSystem } from "./systems/onKillExplode";
-
+import { bossSystem } from "./systems/boss";
 import { getUpgradePool, UpgradeDef } from "./content/upgrades";
 import { formatTimeMMSS } from "./util/time";
 import type { WeaponId } from "./content/weapons";
 import { registry } from "./content/registry";
 import { spawnEnemy, ENEMY_TYPE } from "./factories/enemyFactory";
 import { poisonSystem } from "./systems/poison";
+import { recomputeDerivedStats } from "./stats/derivedStats";
 
 type HudRefs = {
   root: HTMLDivElement;
@@ -86,6 +88,11 @@ export function createGame(args: CreateGameArgs) {
     w.zTickLeft = [];
     w.zTtl = [];
     w.zFollowPlayer = [];
+    w.zDamagePlayer = [];
+
+    // if your World has zDamagePlayer, keep this reset (safe even if unused)
+    // @ts-ignore
+    if ("zDamagePlayer" in w) (w as any).zDamagePlayer = [];
 
     w.pAlive = [];
     w.prjKind = [];
@@ -118,9 +125,11 @@ export function createGame(args: CreateGameArgs) {
     w.prOrbBaseAngVel = [];
 
     w.xAlive = [];
+    w.xKind = [];
     w.xx = [];
     w.xy = [];
     w.xValue = [];
+    w.xDropId = [];
   }
 
   function bossAlive(w: World): boolean {
@@ -145,6 +154,10 @@ export function createGame(args: CreateGameArgs) {
     w.runState = "BOSS";
     w.phaseTime = 0;
     w.transitionTime = 0;
+
+    // Ensure boss reward gate is reset for this encounter (if present on World)
+    (w as any).bossRewardPending = false;
+    (w as any).chestOpenRequested = false;
 
     // Clean slate for the boss encounter (feels fair + deterministic).
     clearFloorEntities(w);
@@ -198,13 +211,41 @@ export function createGame(args: CreateGameArgs) {
   function showLevelUp() {
     world.state = "LEVELUP";
     args.ui.levelupEl.root.hidden = false;
+    (args.ui.levelupEl.root.querySelector(".title") as HTMLElement).textContent = "Level Up";
     args.ui.levelupEl.sub.textContent = `Choose an upgrade (${world.pendingLevelUps} pending)`;
     rollChoices();
     renderChoices();
   }
 
+  function showChestPopup(message: string) {
+    world.state = "CHEST";
+    args.ui.levelupEl.root.hidden = false;
+    (args.ui.levelupEl.root.querySelector(".title") as HTMLElement).textContent = "Boss Chest";
+    args.ui.levelupEl.sub.textContent = message;
+
+    const container = args.ui.levelupEl.choices;
+    container.innerHTML = "";
+
+    const btn = document.createElement("button");
+    btn.className = "choiceBtn";
+    btn.dataset.chestContinue = "1";
+
+    const titleRow = document.createElement("div");
+    titleRow.className = "choiceTitle";
+    titleRow.textContent = "Continue";
+
+    const d = document.createElement("div");
+    d.className = "choiceDesc";
+    d.textContent = "Resume the run.";
+
+    btn.appendChild(titleRow);
+    btn.appendChild(d);
+    container.appendChild(btn);
+  }
+
   function hideLevelUp() {
     args.ui.levelupEl.root.hidden = true;
+    (args.ui.levelupEl.root.querySelector(".title") as HTMLElement).textContent = "Level Up";
   }
 
   function rollChoices() {
@@ -262,7 +303,6 @@ export function createGame(args: CreateGameArgs) {
   function applyUpgrade(def: UpgradeDef) {
     def.apply(world);
     // If an upgrade changed items/stats, ensure derived stats are up to date.
-    // (Safe even if nothing changed.)
     // recomputeDerivedStats is already called by item upgrades, but keeping this is future-proof.
   }
 
@@ -311,8 +351,8 @@ export function createGame(args: CreateGameArgs) {
     // Always poll input (so movement is responsive immediately after closing menus)
     inputSystem(input, args.canvas);
 
-    // Handle level-up pause
-    if (world.state === "LEVELUP") {
+    // Handle pause states
+    if (world.state === "LEVELUP" || world.state === "CHEST") {
       // HUD still updates while paused
       args.hud.timePill.textContent = hudTimeText(world);
       args.hud.killsPill.textContent = `Kills: ${world.kills}`;
@@ -334,18 +374,23 @@ export function createGame(args: CreateGameArgs) {
     if (world.runState === "FLOOR" && world.phaseTime >= world.floorDuration) {
       enterBoss(world);
     } else if (world.runState === "BOSS") {
-      // If boss was killed, advance
+      // If boss was killed, advance (but wait for the boss chest to be collected)
       if (!bossAlive(world)) {
-        if (world.floorIndex >= FLOORS_PER_RUN - 1) {
-          completeRun(world);
-          return;
+        const pending = (world as any).bossRewardPending as boolean | undefined;
+        if (pending) {
+          // Do nothing; chest must be picked up first
+        } else {
+          if (world.floorIndex >= FLOORS_PER_RUN - 1) {
+            completeRun(world);
+            return;
+          }
+          enterTransition(world);
         }
-        enterTransition(world);
       }
     } else if (world.runState === "TRANSITION") {
       world.transitionTime = Math.max(0, world.transitionTime - dt);
       if (world.transitionTime <= 0) {
-        enterFloor(world, world.floorIndex + 1);
+        enterFloor(world, (world.floorIndex ?? 0) + 1);
       }
     }
 
@@ -356,9 +401,71 @@ export function createGame(args: CreateGameArgs) {
     collisionsSystem(world, dt);
     poisonSystem(world, dt);
     onKillExplodeSystem(world, dt); // NEW: explode on kill (can add more kills)
+    bossSystem(world, dt);          // NEW: boss mechanics (telegraphs/hazards/dash)
     zonesSystem(world, dt);
     pickupsSystem(world, dt);
     xpSystem(world, dt);
+
+    // If a chest was opened this frame, roll/apply reward and pause with a popup
+    if ((world as any).chestOpenRequested) {
+      (world as any).chestOpenRequested = false;
+
+      const pool = getUpgradePool(world);
+
+      // 1) EVOLUTION ALWAYS WINS
+      const evoChoices = pool.filter((u) => u.isEvolution && u.isAvailable(world));
+      if (evoChoices.length > 0) {
+        const evo = evoChoices[world.rng.int(0, evoChoices.length - 1)];
+        applyUpgrade(evo);
+        showChestPopup(`EVOLUTION — ${evo.title}\n${evo.desc}`);
+        clearEvents(world);
+        return;
+      }
+
+      // 2) Otherwise: upgrade an already-owned weapon or item directly
+      type Candidate = { kind: "weapon"; index: number } | { kind: "item"; index: number };
+      const candidates: Candidate[] = [];
+
+      const MAX_WPN_LV = registry.maxWeaponLevel();
+      const MAX_ITEM_LV = registry.maxItemLevel();
+
+      for (let i = 0; i < world.weapons.length; i++) {
+        const wpn = world.weapons[i];
+        if (wpn.level < MAX_WPN_LV) candidates.push({ kind: "weapon", index: i });
+      }
+
+      for (let i = 0; i < world.items.length; i++) {
+        const it = world.items[i];
+        if (it.level < MAX_ITEM_LV) candidates.push({ kind: "item", index: i });
+      }
+
+      if (candidates.length === 0) {
+        showChestPopup("Nothing happened. (All owned upgrades are maxed.)");
+        clearEvents(world);
+        return;
+      }
+
+      const pick = candidates[world.rng.int(0, candidates.length - 1)];
+
+      if (pick.kind === "weapon") {
+        const inst = world.weapons[pick.index];
+        inst.level = Math.min(MAX_WPN_LV, inst.level + 1);
+
+        const def = registry.weapon(inst.id);
+        showChestPopup(`Upgrade — ${def.title}\nLevel ${inst.level}/${MAX_WPN_LV}`);
+      } else {
+        const inst = world.items[pick.index];
+        inst.level = Math.min(MAX_ITEM_LV, inst.level + 1);
+
+        recomputeDerivedStats(world);
+
+        const def = registry.item(inst.id);
+        showChestPopup(`Upgrade — ${def.title}\nLevel ${inst.level}/${MAX_ITEM_LV}`);
+      }
+
+      clearEvents(world);
+      return;
+    }
 
     // Clear events AFTER all consumers ran this frame
     clearEvents(world);
@@ -412,6 +519,15 @@ export function createGame(args: CreateGameArgs) {
     const el = e.target as HTMLElement;
     const btn = el.closest("button") as HTMLButtonElement | null;
     if (!btn) return;
+
+    // Chest popup: single "Continue"
+    if (btn.dataset.chestContinue === "1") {
+      hideLevelUp();
+      world.state = "RUN";
+      return;
+    }
+
+    // Normal level-up choice
     const id = btn.dataset.upgrade;
     if (!id) return;
 

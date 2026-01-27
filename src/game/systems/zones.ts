@@ -1,18 +1,10 @@
-// src/game/systems/zones.ts
 import type { World } from "../world";
 import { emitEvent } from "../world";
 import { isEnemyInCircle } from "./hitDetection";
 
-/**
- * Generic “zone / aura / ground effect” system.
- *
- * - Updates TTL
- * - If followPlayer: keeps zone centered on player
- * - Deals tick damage to enemies inside radius
- *
- * NOTE: This is intentionally NOT tied to projectiles, so Molotov can reuse it.
- */
 export function zonesSystem(w: World, dt: number) {
+    const PLAYER_R = 14;
+
     for (let z = 0; z < w.zAlive.length; z++) {
         if (!w.zAlive[z]) continue;
 
@@ -26,7 +18,7 @@ export function zonesSystem(w: World, dt: number) {
             }
         }
 
-        // Follow player if requested
+        // Follow player
         if (w.zFollowPlayer[z]) {
             w.zx[z] = w.px;
             w.zy[z] = w.py;
@@ -36,20 +28,31 @@ export function zonesSystem(w: World, dt: number) {
         w.zTickLeft[z] -= dt;
         if (w.zTickLeft[z] > 0) continue;
 
-        // Reset tick timer (supports “catch-up” a bit if dt is large)
         const every = Math.max(0.02, w.zTickEvery[z]);
         while (w.zTickLeft[z] <= 0) w.zTickLeft[z] += every;
 
         const zx = w.zx[z];
         const zy = w.zy[z];
         const zr = w.zR[z];
+
+        // NEW: player damage (boss hazards)
+        const pdmg = w.zDamagePlayer[z] ?? 0;
+        if (pdmg > 0 && zr > 0) {
+            const dx = w.px - zx;
+            const dy = w.py - zy;
+            const rr = zr + PLAYER_R;
+            if (dx * dx + dy * dy <= rr * rr) {
+                w.playerHp -= pdmg;
+                emitEvent(w, { type: "PLAYER_HIT", damage: pdmg, x: w.px, y: w.py });
+            }
+        }
+
+        // Enemy damage (existing behavior)
         const dmg = w.zDamage[z];
         if (dmg <= 0 || zr <= 0) continue;
 
-        // Apply damage to all enemies inside zone (includes enemy radius via isEnemyInCircle)
         for (let e = 0; e < w.eAlive.length; e++) {
             if (!w.eAlive[e]) continue;
-
             if (!isEnemyInCircle(w, e, zx, zy, zr)) continue;
 
             w.eHp[e] -= dmg;
@@ -60,7 +63,7 @@ export function zonesSystem(w: World, dt: number) {
                 damage: dmg,
                 x: w.ex[e],
                 y: w.ey[e],
-                source: "OTHER", // (optional upgrade later: add "AURA"/"MOLOTOV" to event union)
+                source: "OTHER",
             });
 
             if (w.eHp[e] <= 0) {

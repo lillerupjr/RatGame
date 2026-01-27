@@ -76,6 +76,30 @@ export function renderSystem(
       continue;
     }
 
+    if (kind === 4 /* TELEGRAPH */) {
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    } else if (kind === 5 /* HAZARD */) {
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = "#f66";
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalAlpha = 0.55;
+      ctx.strokeStyle = "#f66";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
     // Existing zone rendering (AURA / FIRE)
     ctx.globalAlpha = kind === ZONE_KIND.FIRE ? 0.18 : 0.12;
     ctx.fillStyle = kind === ZONE_KIND.FIRE ? "#ffb347" : "#7dd3fc";
@@ -87,16 +111,38 @@ export function renderSystem(
     ctx.globalAlpha = 1;
   }
 
-
-  // XP gems
+// Pickups (XP + Boss Chest)
   for (let i = 0; i < w.xAlive.length; i++) {
     if (!w.xAlive[i]) continue;
+
     const x = w.xx[i] + cx;
     const y = w.xy[i] + cy;
-    ctx.fillStyle = "#8bf";
-    ctx.beginPath();
-    ctx.arc(x, y, 4, 0, Math.PI * 2);
-    ctx.fill();
+    const kind = (w as any).xKind?.[i] ?? 1;
+
+    if (kind === 1) {
+      // XP gem
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "#7df";
+      ctx.beginPath();
+      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Chest
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "#fdc";
+      ctx.fillRect(x - 10, y - 8, 20, 16);
+
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x - 10, y - 8, 20, 16);
+
+      ctx.strokeStyle = "#b85";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x - 10, y);
+      ctx.lineTo(x + 10, y);
+      ctx.stroke();
+    }
   }
 
   // Enemies
