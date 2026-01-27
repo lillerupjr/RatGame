@@ -213,14 +213,47 @@ export function renderSystem(
 
     ctx.globalAlpha = 1;
   }
-
-  // Projectiles
+// Projectiles
   for (let i = 0; i < w.pAlive.length; i++) {
     if (!w.pAlive[i]) continue;
 
     const x = w.prx[i] + cx;
     const y = w.pry[i] + cy;
 
+    // --- Melee: forward-facing cone/sector (old sword slash look) ---
+    if ((w as any).prIsmelee?.[i]) {
+      const dirX = (w as any).prDirX?.[i] ?? 1;
+      const dirY = (w as any).prDirY?.[i] ?? 0;
+
+      const baseAng = Math.atan2(dirY, dirX);
+      const cone = (w as any).prCone?.[i] ?? (Math.PI / 6); // total cone width
+      const half = cone * 0.5;
+
+      // Prefer explicit melee range if you have it, otherwise fall back to projectile radius
+      const r = (w as any).prMeleeRange?.[i] ?? w.prR[i];
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(baseAng);
+
+      // Sector (circle segment)
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, r, -half, half);
+      ctx.closePath();
+
+      // Style (match your old look; tweak as desired)
+      ctx.fillStyle = "rgba(250, 180, 255, 0.35)";
+      ctx.strokeStyle = "#f5b";
+      ctx.lineWidth = 2;
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.restore();
+      continue;
+    }
+
+    // --- Ranged: simple circles (existing behavior) ---
     const src = registry.projectileSourceFromKind(w.prjKind[i]);
     ctx.fillStyle =
         src === "KNIFE"
@@ -235,6 +268,7 @@ export function renderSystem(
     ctx.arc(x, y, w.prR[i], 0, Math.PI * 2);
     ctx.fill();
   }
+
 // Pickups (XP + Boss Chest)
   for (let i = 0; i < w.xAlive.length; i++) {
     if (!w.xAlive[i]) continue;
