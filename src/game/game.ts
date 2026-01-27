@@ -15,7 +15,8 @@ import { getUpgradePool, UpgradeDef } from "./content/upgrades";
 import { formatTimeMMSS } from "./util/time";
 import type { WeaponId } from "./content/weapons";
 import { registry } from "./content/registry";
-import {poisonSystem} from "./systems/poison";
+import { spawnEnemy, ENEMY_TYPE } from "./factories/enemyFactory";
+import { poisonSystem } from "./systems/poison";
 
 type HudRefs = {
   root: HTMLDivElement;
@@ -38,17 +39,141 @@ type CreateGameArgs = {
   ui: { menuEl: HTMLDivElement; levelupEl: LevelUpRefs };
 };
 
-
 export function createGame(args: CreateGameArgs) {
   const input: InputState = createInputState();
-  let world: World = createWorld({ seed: 1337, stage: registry.stage("DOCKS") });
+  let world: World = createWorld({ seed: 1337, stage: cloneStage() });
 
   let currentChoices: UpgradeDef[] = [];
+
+  const FLOORS_PER_RUN = 3;
+  const TRANSITION_SECS = 5.0;
+
+  function cloneStage() {
+    // IMPORTANT: stage spawns are mutated (t is set to Infinity) at runtime.
+    // So each floor needs a fresh cloned stage definition.
+    const base = registry.stage("DOCKS");
+    return { ...base, spawns: base.spawns.map((s) => ({ ...s })) };
+  }
+
+  function clearFloorEntities(w: World) {
+    // Keep player stats/items/weapons/xp/level; wipe transient entities.
+    w.eAlive = [];
+    w.eType = [];
+    w.ex = [];
+    w.ey = [];
+    w.evx = [];
+    w.evy = [];
+    w.eHp = [];
+    w.eHpMax = [];
+    w.eR = [];
+    w.eSpeed = [];
+    w.eDamage = [];
+    w.ePoisonT = [];
+    w.ePoisonDps = [];
+    w.ePoisonedOnDeath = [];
+
+    w.zAlive = [];
+    w.zKind = [];
+    w.zx = [];
+    w.zy = [];
+    w.zR = [];
+    w.zDamage = [];
+    w.zTickEvery = [];
+    w.zTickLeft = [];
+    w.zTtl = [];
+    w.zFollowPlayer = [];
+
+    w.pAlive = [];
+    w.prjKind = [];
+    w.prx = [];
+    w.pry = [];
+    w.prvx = [];
+    w.prvy = [];
+    w.prDamage = [];
+    w.prR = [];
+    w.prPierce = [];
+    w.prIsmelee = [];
+    w.prCone = [];
+    w.prMeleeRange = [];
+    w.prDirX = [];
+    w.prDirY = [];
+    w.prTtl = [];
+
+    w.prStartX = [];
+    w.prStartY = [];
+    w.prMaxDist = [];
+    w.prLastHitEnemy = [];
+    w.prLastHitCd = [];
+
+    w.prPoisonDps = [];
+    w.prPoisonDur = [];
+
+    w.prIsOrbital = [];
+    w.prOrbAngle = [];
+    w.prOrbBaseRadius = [];
+    w.prOrbBaseAngVel = [];
+
+    w.xAlive = [];
+    w.xx = [];
+    w.xy = [];
+    w.xValue = [];
+  }
+
+  function bossAlive(w: World): boolean {
+    for (let i = 0; i < w.eAlive.length; i++) {
+      if (!w.eAlive[i]) continue;
+      if (w.eType[i] === ENEMY_TYPE.BOSS) return true;
+    }
+    return false;
+  }
+
+  function enterFloor(w: World, floorIndex: number) {
+    w.floorIndex = floorIndex;
+    w.runState = "FLOOR";
+    w.floorDuration = 20; // Adjust this
+    w.phaseTime = 0;
+    w.transitionTime = 0;
+    w.stage = cloneStage();
+    clearFloorEntities(w);
+  }
+
+  function enterBoss(w: World) {
+    w.runState = "BOSS";
+    w.phaseTime = 0;
+    w.transitionTime = 0;
+
+    // Clean slate for the boss encounter (feels fair + deterministic).
+    clearFloorEntities(w);
+
+    const a = w.rng.range(0, Math.PI * 2);
+    const r = 320;
+    spawnEnemy(w, ENEMY_TYPE.BOSS, w.px + Math.cos(a) * r, w.py + Math.sin(a) * r);
+  }
+
+  function enterTransition(w: World) {
+    w.runState = "TRANSITION";
+    w.phaseTime = 0;
+    w.transitionTime = TRANSITION_SECS;
+
+    // Clear remaining enemies/projectiles so transition is calm.
+    clearFloorEntities(w);
+  }
+
+  function completeRun(w: World) {
+    w.runState = "RUN_COMPLETE";
+    w.state = "WIN";
+
+    args.ui.menuEl.hidden = false;
+    args.hud.root.hidden = true;
+    hideLevelUp();
+    (args.ui.menuEl.querySelector(".title") as HTMLElement).textContent = "Run complete!";
+    (args.ui.menuEl.querySelector("button") as HTMLButtonElement).textContent = "Restart";
+  }
 
   function resetRun() {
     world = createWorld({
       seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0,
-      stage: registry.stage("DOCKS"),
+      stage: cloneStage(),
     });
     currentChoices = [];
     hideLevelUp();
@@ -63,6 +188,7 @@ export function createGame(args: CreateGameArgs) {
     }
 
     world.state = "RUN";
+    enterFloor(world, 0);
   }
 
   function showLevelUp() {
@@ -88,7 +214,6 @@ export function createGame(args: CreateGameArgs) {
       pool.splice(idx, 1);
     }
   }
-
 
   function renderChoices() {
     const container = args.ui.levelupEl.choices;
@@ -116,6 +241,20 @@ export function createGame(args: CreateGameArgs) {
     }
   }
 
+  function hudTimeText(w: World): string {
+    const floor = `F${(w.floorIndex ?? 0) + 1}/3`;
+    switch (w.runState) {
+      case "FLOOR":
+        return `${floor} ${formatTimeMMSS(w.phaseTime)} / ${formatTimeMMSS(w.floorDuration)}`;
+      case "BOSS":
+        return `${floor} BOSS ${formatTimeMMSS(w.phaseTime)}`;
+      case "TRANSITION":
+        return `${floor} TRANSITION ${Math.ceil(w.transitionTime)}s`;
+      default:
+        return `${floor} ${formatTimeMMSS(w.phaseTime)}`;
+    }
+  }
+
   function applyUpgrade(def: UpgradeDef) {
     def.apply(world);
     // If an upgrade changed items/stats, ensure derived stats are up to date.
@@ -130,7 +269,7 @@ export function createGame(args: CreateGameArgs) {
     // Handle level-up pause
     if (world.state === "LEVELUP") {
       // HUD still updates while paused
-      args.hud.timePill.textContent = formatTimeMMSS(world.time);
+      args.hud.timePill.textContent = hudTimeText(world);
       args.hud.killsPill.textContent = `Kills: ${world.kills}`;
       args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
       args.hud.lvlPill.textContent = `Lv: ${world.level}`;
@@ -139,7 +278,30 @@ export function createGame(args: CreateGameArgs) {
 
     if (world.state !== "RUN") return;
 
+    // total run time (optional for future meta / analytics)
     world.time += dt;
+
+    // phase time (drives FLOOR/BOSS/TRANSITION)
+    world.phaseTime += dt;
+
+    // RunState progression
+    if (world.runState === "FLOOR" && world.phaseTime >= world.floorDuration) {
+      enterBoss(world);
+    } else if (world.runState === "BOSS") {
+      // If boss was killed, advance
+      if (!bossAlive(world)) {
+        if (world.floorIndex >= FLOORS_PER_RUN - 1) {
+          completeRun(world);
+          return;
+        }
+        enterTransition(world);
+      }
+    } else if (world.runState === "TRANSITION") {
+      world.transitionTime = Math.max(0, world.transitionTime - dt);
+      if (world.transitionTime <= 0) {
+        enterFloor(world, world.floorIndex + 1);
+      }
+    }
 
     movementSystem(world, input, dt);
     spawnSystem(world, dt);
@@ -147,12 +309,13 @@ export function createGame(args: CreateGameArgs) {
     projectilesSystem(world, dt);
     collisionsSystem(world, dt);
     poisonSystem(world, dt);
-    onKillExplodeSystem(world, dt); // NEW: explode on kill (can add more kills)
+    onKillExplodeSystem(world, dt); // explode on kill
     zonesSystem(world, dt);
     pickupsSystem(world, dt);
     xpSystem(world, dt);
+
     // Clear events AFTER all consumers ran this frame
-    clearEvents(world)
+    clearEvents(world);
 
     // Enter level-up state if needed
     if (world.pendingLevelUps > 0) {
@@ -162,6 +325,7 @@ export function createGame(args: CreateGameArgs) {
 
     // Simple lose condition
     if (world.playerHp <= 0) {
+      world.runState = "GAME_OVER";
       world.state = "LOSE";
       args.ui.menuEl.hidden = false;
       args.hud.root.hidden = true;
@@ -171,7 +335,7 @@ export function createGame(args: CreateGameArgs) {
     }
 
     // HUD
-    args.hud.timePill.textContent = formatTimeMMSS(world.time);
+    args.hud.timePill.textContent = hudTimeText(world);
     args.hud.killsPill.textContent = `Kills: ${world.kills}`;
     args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
     args.hud.lvlPill.textContent = `Lv: ${world.level}`;
@@ -181,7 +345,7 @@ export function createGame(args: CreateGameArgs) {
     renderSystem(world, args.ctx, args.canvas);
   }
 
-// Menu click starts/restarts
+  // Menu click starts/restarts
   args.ui.menuEl.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
     const btn = t?.closest("button") as HTMLButtonElement | null;
@@ -195,6 +359,7 @@ export function createGame(args: CreateGameArgs) {
       startRun(starter);
     }
   });
+
   // Level-up choice click
   args.ui.levelupEl.root.addEventListener("click", (e) => {
     const el = e.target as HTMLElement;
