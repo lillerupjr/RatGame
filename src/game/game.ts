@@ -119,6 +119,11 @@ export function createGame(args: CreateGameArgs) {
     w.prR = [];
     w.prPierce = [];
     w.prIsmelee = [];
+    // NEW: bounce mechanic arrays must be cleared too (keep index alignment!)
+    // @ts-ignore
+    if ("prBouncesLeft" in w) (w as any).prBouncesLeft = [];
+    // @ts-ignore
+    if ("prWallBounce" in w) (w as any).prWallBounce = [];
     w.prCone = [];
     w.prMeleeRange = [];
     w.prDirX = [];
@@ -138,6 +143,10 @@ export function createGame(args: CreateGameArgs) {
     w.prOrbAngle = [];
     w.prOrbBaseRadius = [];
     w.prOrbBaseAngVel = [];
+
+    // NEW: bouncer arrays must stay index-aligned with all projectile arrays
+    (w as any).prBouncesLeft = [];
+    (w as any).prWallBounce = [];
 
     w.xAlive = [];
     w.xKind = [];
