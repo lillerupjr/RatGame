@@ -3,11 +3,14 @@
 A **Vampire Survivors–style top-down roguelike** set in a sleazy, faction-driven rat underworld.  
 Built with **TypeScript + Vite + HTML5 Canvas**, using a **data-driven, ECS-lite architecture** designed for scalability, determinism, and fast iteration.
 
-This repo currently contains the **Slice v0.1** foundation:
-- Modular weapons & items
+This repo currently contains the **Slice v0.4.0** foundation:
+- Modular weapons with **evolutions**
+- Status effects (poison, burn, aura damage)
+- Explosion & chain-reaction mechanics
 - Upgrade-driven progression
 - Event-queue–based system decoupling
 - Canvas-based rendering (engine-agnostic)
+- Starter weapon selection (including evolutions, for testing)
 
 ---
 
@@ -56,7 +59,7 @@ The game reloads automatically on file changes.
 
 ```
 src/
-  main.ts                # App bootstrap + RAF loop
+  main.ts                # App bootstrap + RAF loop + starter selection
   game/
     game.ts              # Game state machine
     world.ts             # World state + entity storage
@@ -72,6 +75,7 @@ src/
       spawn.ts
       combat.ts
       collisions.ts
+      zones.ts
       xp.ts
       pickups.ts
       render.ts
@@ -140,19 +144,22 @@ RatGame.zip
 - **ECS-lite** for performance and clarity
 - **Event queue** to decouple systems
 - **No engine lock-in**
-- Evolutions, synergies, bosses added without rewriting core systems
+- Evolutions, synergies, bosses, and zones added without rewriting core systems
 
 ---
 
 ## Status
 
-🚧 **Active development**  
+🚧 **Active development — v0.4.0**  
 Current focus:
-- Solidifying core architecture
-- Preparing for evolutions & bosses
+- Hit detection cleanup & unification
+- Weapon identity separation (base vs evolved behavior)
+- Scalable collision & damage systems
+- Preparing architecture for bosses, floors, and factions
 - Performance hardening for large enemy counts
 
 ---
 
 ## License
+
 TBD
