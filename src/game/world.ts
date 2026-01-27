@@ -8,7 +8,7 @@ import type { WeaponId } from "./content/weapons";
 import type { EnemyType } from "./content/enemies";
 import { recomputeDerivedStats } from "./stats/derivedStats";
 
-export type GameState = "MENU" | "RUN" | "LEVELUP" | "CHEST" | "LOSE" | "WIN";
+export type GameState = "MENU" | "RUN" | "MAP" | "LEVELUP" | "CHEST" | "LOSE" | "WIN";
 
 // Run progression state machine (active only while state === "RUN")
 export type RunState = "FLOOR" | "BOSS" | "TRANSITION" | "GAME_OVER" | "RUN_COMPLETE";
@@ -25,6 +25,11 @@ export type World = {
   rng: RNG;
   stage: StageDef;
   floorDuration: number;
+
+  // Route map (Slay-the-Spire style, shown between floors)
+  actGraph: any; // typed in game.ts via map module to avoid circular deps here
+  mapCurrentNodeId: string | null;
+  mapPendingNextFloorIndex: number; // which floor index we are selecting for
 
   // Run structure
   runState: RunState;
@@ -172,6 +177,11 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     phaseTime: 0,
     transitionTime: 0,
     floorDuration: 0,
+
+    // Map / route
+    actGraph: null,
+    mapCurrentNodeId: null,
+    mapPendingNextFloorIndex: 0,
 
     time: 0,
     kills: 0,

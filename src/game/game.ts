@@ -19,6 +19,8 @@ import { registry } from "./content/registry";
 import { spawnEnemy, ENEMY_TYPE } from "./factories/enemyFactory";
 import { poisonSystem } from "./systems/poison";
 import { recomputeDerivedStats } from "./stats/derivedStats";
+import { buildStaticActGraph, getReachable, type ActGraph, type MapNode } from "./map/actGraph";
+
 
 type HudRefs = {
   root: HTMLDivElement;
@@ -42,7 +44,20 @@ type CreateGameArgs = {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
   hud: HudRefs;
-  ui: { menuEl: HTMLDivElement; levelupEl: LevelUpRefs };
+  ui: {
+    menuEl: HTMLDivElement;
+    levelupEl: {
+      root: HTMLDivElement;
+      choices: HTMLDivElement;
+      sub: HTMLDivElement;
+    };
+    mapEl: {
+      root: HTMLDivElement;
+      sub: HTMLDivElement;
+      svg: SVGSVGElement;
+      hit: HTMLDivElement;
+    };
+  };
 };
 
 export function createGame(args: CreateGameArgs) {
@@ -140,17 +155,20 @@ export function createGame(args: CreateGameArgs) {
     return false;
   }
 
-  function enterFloor(w: World, floorIndex: number) {
+  function enterFloor(w: World, floorIndex: number, stageId?: string) {
     w.floorIndex = floorIndex;
     w.runState = "FLOOR";
     w.phaseTime = 0;
     w.transitionTime = 0;
 
-// Pick stage by floor
-    const stageId = floorIndex === 0 ? "DOCKS" : floorIndex === 1 ? "SEWERS" : "CHINATOWN";
-    w.stage = cloneStage(stageId);
+    // If stageId provided (map-driven), use it; otherwise fallback (legacy behavior).
+    const sid =
+        stageId ??
+        (floorIndex === 0 ? "DOCKS" : floorIndex === 1 ? "SEWERS" : "CHINATOWN");
 
-// Drive floor timing from stage (so each floor can tune boss time independently)
+    w.stage = cloneStage(sid as any);
+
+    // Drive floor timing from stage
     w.floorDuration = w.stage.duration;
 
     clearFloorEntities(w);
@@ -205,14 +223,20 @@ export function createGame(args: CreateGameArgs) {
   function startRun(starterWeapon?: WeaponId) {
     resetRun();
 
-    // Override starter weapon if provided (from menu picker)
     if (starterWeapon) {
       world.weapons = [{ id: starterWeapon, level: 1, cdLeft: 0 }];
     }
 
-    world.state = "RUN";
-    enterFloor(world, 0);
+    // Build act graph (static for now; later this becomes the generator output)
+    const g = buildStaticActGraph() as ActGraph;
+    (world as any).actGraph = g;
+    (world as any).mapCurrentNodeId = null;
+    (world as any).mapPendingNextFloorIndex = 0;
+
+    // Pick starting node
+    showMap("Pick a starting location.");
   }
+
 
   function showLevelUp() {
     world.state = "LEVELUP";
@@ -222,6 +246,123 @@ export function createGame(args: CreateGameArgs) {
     rollChoices();
     renderChoices();
   }
+
+  function showMap(subText: string) {
+    world.state = "MAP";
+    args.ui.mapEl.root.hidden = false;
+    args.hud.root.hidden = true;
+
+    args.ui.mapEl.sub.textContent = subText;
+
+    const g = (world as any).actGraph as ActGraph;
+    const fromId = (world as any).mapCurrentNodeId as string | null;
+
+    // Reachable set (clickable)
+    const reachable = new Set(getReachable(g, fromId).map((n) => n.id));
+
+    // --- Layout: convert node.row/col into SVG + percent positions ---
+    // Fixed grid layout (future-proof): always use g.cols x g.rows for positioning,
+    // even if we currently have only 3 nodes.
+    const cols = Math.max(1, g.cols | 0);
+    const rows = Math.max(1, g.rows | 0);
+
+    // Safe clamp in case a node has col/row outside the grid
+    const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+    // Visual margins in SVG coords (1000x520)
+    const x0 = 140, x1 = 860;
+    const y0 = 90,  y1 = 430;
+
+    const pos = new Map<string, { x: number; y: number }>();
+    for (const n of g.nodes) {
+      const c = clamp(n.col | 0, 0, cols - 1);
+      const r = clamp(n.row | 0, 0, rows - 1);
+
+      const tx = cols > 1 ? c / (cols - 1) : 0.5;
+      const ty = rows > 1 ? r / (rows - 1) : 0.5;
+
+      const x = x0 + (x1 - x0) * tx;
+      const y = y0 + (y1 - y0) * ty;
+
+      pos.set(n.id, { x, y });
+    }
+
+
+    // --- Draw SVG edges + nodes (visuals) ---
+    const svg = args.ui.mapEl.svg;
+    const edgeLines = g.edges
+        .map((e) => {
+          const a = pos.get(e.from);
+          const b = pos.get(e.to);
+          if (!a || !b) return "";
+          return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="rgba(255,255,255,0.22)" stroke-width="6" stroke-linecap="round" />`;
+        })
+        .join("");
+
+    const nodeCircles = g.nodes
+        .map((n) => {
+          const p = pos.get(n.id)!;
+          const isReach = reachable.has(n.id);
+          const isChosen = (world as any).mapCurrentNodeId === n.id;
+
+          const fill = isChosen
+              ? "rgba(255,255,255,0.32)"
+              : isReach
+                  ? "rgba(255,255,255,0.18)"
+                  : "rgba(255,255,255,0.10)";
+
+          const stroke = isReach
+              ? "rgba(255,255,255,0.42)"
+              : "rgba(255,255,255,0.18)";
+
+          return `
+        <circle cx="${p.x}" cy="${p.y}" r="22" fill="${fill}" stroke="${stroke}" stroke-width="4" />
+        <text x="${p.x}" y="${p.y + 52}" text-anchor="middle" font-size="18" fill="rgba(255,255,255,0.92)" font-weight="800">${n.title}</text>
+      `;
+        })
+        .join("");
+
+    svg.innerHTML = `
+    <rect x="0" y="0" width="1000" height="520" fill="rgba(0,0,0,0)" />
+    ${edgeLines}
+    ${nodeCircles}
+  `;
+
+    // --- Hit layer buttons (clickable, but we show all nodes) ---
+    const hit = args.ui.mapEl.hit;
+    hit.innerHTML = "";
+
+    // Convert SVG coords to % so it scales with the container.
+    const toPct = (x: number, y: number) => ({ left: (x / 1000) * 100, top: (y / 520) * 100 });
+
+    for (const n of g.nodes) {
+      const p = pos.get(n.id)!;
+      const { left, top } = toPct(p.x, p.y);
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "mapHitBtn";
+      btn.dataset.nodeId = n.id;
+      btn.style.left = `${left}%`;
+      btn.style.top = `${top}%`;
+
+      const isReach = reachable.has(n.id) || (!fromId && reachable.has(n.id));
+      btn.disabled = !isReach;
+
+      btn.innerHTML = `
+      <div class="mapHitTitle">${n.title}</div>
+      <div class="mapHitDesc">${btn.disabled ? "Locked" : "Select"} · Boss at end</div>
+    `;
+
+      hit.appendChild(btn);
+    }
+  }
+
+  function hideMap() {
+    args.ui.mapEl.root.hidden = true;
+    args.hud.root.hidden = false;
+  }
+
 
   function showChestPopup(message: string) {
     world.state = "CHEST";
@@ -358,7 +499,7 @@ export function createGame(args: CreateGameArgs) {
     inputSystem(input, args.canvas);
 
     // Handle pause states
-    if (world.state === "LEVELUP" || world.state === "CHEST") {
+    if (world.state === "LEVELUP" || world.state === "CHEST" || world.state === "MAP") {
       // HUD still updates while paused
       args.hud.timePill.textContent = hudTimeText(world);
       args.hud.killsPill.textContent = `Kills: ${world.kills}`;
@@ -390,7 +531,11 @@ export function createGame(args: CreateGameArgs) {
             completeRun(world);
             return;
           }
-          enterTransition(world);
+          // Between floors: show route map selection
+          (world as any).mapPendingNextFloorIndex = (world.floorIndex ?? 0) + 1;
+
+          showMap("Choose your next zone.\n(There is a boss at the end of every floor.)");
+          return;
         }
       }
     } else if (world.runState === "TRANSITION") {
@@ -519,6 +664,29 @@ export function createGame(args: CreateGameArgs) {
       startRun(starter);
     }
   });
+  args.ui.mapEl.root.addEventListener("click", (e) => {
+    const el = e.target as HTMLElement;
+    const btn = el.closest("button") as HTMLButtonElement | null;
+    if (!btn) return;
+
+    const nodeId = btn.dataset.nodeId;
+    if (!nodeId) return;
+
+    const g = (world as any).actGraph as ActGraph;
+    const node = g.nodes.find((n) => n.id === nodeId);
+    if (!node) return;
+
+    // Commit choice
+    (world as any).mapCurrentNodeId = node.id;
+
+    const nextFloor = (world as any).mapPendingNextFloorIndex as number;
+
+    hideMap();
+    world.state = "RUN";
+
+    // Enter chosen floor/zone (boss is still at end of the floor like today)
+    enterFloor(world, nextFloor, node.zoneId);
+  });
 
   // Level-up choice click
   args.ui.levelupEl.root.addEventListener("click", (e) => {
@@ -529,6 +697,14 @@ export function createGame(args: CreateGameArgs) {
     // Chest popup: single "Continue"
     if (btn.dataset.chestContinue === "1") {
       hideLevelUp();
+
+      // If map overlay is up, do NOT resume gameplay yet.
+      if (!args.ui.mapEl.root.hidden) {
+        // Stay in MAP state (player must pick next node)
+        world.state = "MAP";
+        return;
+      }
+
       world.state = "RUN";
       return;
     }

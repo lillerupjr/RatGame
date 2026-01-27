@@ -14,6 +14,12 @@ const levelupRoot = document.getElementById("levelup") as HTMLDivElement;
 const levelupChoices = document.getElementById("luChoices") as HTMLDivElement;
 const levelupSub = document.getElementById("luSub") as HTMLDivElement;
 
+const mapRoot = document.getElementById("map") as HTMLDivElement;
+const mapSub = document.getElementById("mapSub") as HTMLDivElement;
+const mapSvg = document.querySelector<SVGSVGElement>("#mapSvg")!;
+const mapHit = document.getElementById("mapHit") as HTMLDivElement;
+
+
 const weaponChoicesEl = document.getElementById("weaponChoices") as HTMLDivElement;
 const menuSublineEl = document.getElementById("menuSubline") as HTMLDivElement;
 
@@ -150,6 +156,12 @@ const game = createGame({
       root: levelupRoot,
       choices: levelupChoices,
       sub: levelupSub,
+    },
+    mapEl: {
+      root: mapRoot,
+      sub: mapSub,
+      svg: mapSvg,
+      hit: mapHit,
     },
   },
 });
