@@ -56,11 +56,21 @@ function setSelectedWeapon(id: WeaponId) {
 function weaponDesc(id: WeaponId): string {
   switch (id) {
     case "KNIFE":
-      return "Fan of knives. Great early clear.";
+      return "Throws multiple knives forward.";
     case "PISTOL":
-      return "Single shot. Good precision and scaling.";
+      return "Accurate single shots.";
     case "KNIFE_EVOLVED_RING":
-      return "EVOLUTION starter: fires 24 knives in a full circle.";
+      return "Evolution: knives in all directions.";
+    case "MOLOTOV":
+      return "Burning ground effect.";
+    case "AURA":
+      return "Damaging aura around you.";
+    case "KNUCKLES":
+        return "Orbiting projectiles";
+    case "PISTOL_EVOLVED_SPIRAL":
+        return "Evolution: Spiral spiral";
+    case "SWORD":
+      return "Melee gaming bby"
     default:
       return "Starter weapon.";
   }
@@ -69,7 +79,8 @@ function weaponDesc(id: WeaponId): string {
 function isEvolutionStarter(id: WeaponId): boolean {
   // Minimal rule for now: if the weapon id looks like an evolved one.
   // If you later add explicit metadata on the weapon def, swap to that.
-  return id === "KNIFE_EVOLVED_RING";
+  return id === "KNIFE_EVOLVED_RING" || id == "PISTOL_EVOLVED_SPIRAL";
+
 }
 
 function buildWeaponPicker() {

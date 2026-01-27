@@ -11,7 +11,8 @@ export type WeaponId =
     | "PISTOL_EVOLVED_SPIRAL"
     | "SWORD"
     | "KNUCKLES"
-    | "AURA";
+    | "AURA"
+    | "MOLOTOV";
 
 export const MAX_WEAPON_LEVEL = 10;
 
@@ -511,6 +512,80 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             (w as any)[key] = idx;
         },
     },
+    MOLOTOV: {
+        id: "MOLOTOV",
+        title: "Molotov Cocktail",
 
+        getStats: (level, w) => {
+            const lv = clampLevel(level);
 
+            // How often you throw a molotov (separate from burn tick rate)
+            const cooldownBase = 2.35;
+
+            // Fire puddle radius (scales with AREA multiplier)
+            const baseRadius = 62;
+            const radiusPer = 5.5;
+            const radius = (baseRadius + (lv - 1) * radiusPer) * (w.areaMult ?? 1);
+
+            // Damage is "damage per tick" (scales with DMG multiplier)
+            const dmgBase = 6.0;
+            const dmgPer = 1.15;
+            const dmgPerTick = (dmgBase + (lv - 1) * dmgPer) * w.dmgMult;
+
+            // Throw distance along aim (feel-tuning; not part of your item multipliers)
+            const baseThrow = 190;
+            const throwPer = 10;
+            const throwDist = baseThrow + (lv - 1) * throwPer;
+
+            // Duration scales with DURATION item multiplier
+            const baseDuration = 3.6 + (lv - 1) * 0.18;
+            const duration = baseDuration * (w.durationMult ?? 1);
+
+            // Tick rate scales with FIRE_RATE (this is the "hit rate" you asked for)
+            const baseTickEvery = 0.28;
+            const tickEvery = Math.max(0.08, baseTickEvery / (w.fireRateMult ?? 1));
+
+            // We reuse existing WeaponStats fields:
+            // - projectileSpeed = throw distance
+            // - projectileRadius = puddle radius
+            // - damage = damage per tick
+            return {
+                cooldown: cooldownBase / w.fireRateMult,
+                projectileSpeed: throwDist,
+                projectileRadius: radius,
+                damage: dmgPerTick,
+
+                // use duration field even though it isn't an orbital here
+                duration,
+                // optional: stash tickEvery using a private field so fire() can read it
+                // (WeaponStats has no tickEvery field, so we attach it as an escape hatch)
+                ...( { tickEvery } as any ),
+            } as any;
+        },
+
+        fire: (w, s, aim) => {
+            const throwDist = s.projectileSpeed;
+
+            // Spawn point in front of player along aim direction
+            const x = w.px + aim.x * throwDist;
+            const y = w.py + aim.y * throwDist;
+
+            // Pull tickEvery back out (stored in stats as an escape hatch)
+            const tickEvery = Math.max(0.08, ((s as any).tickEvery ?? 0.28));
+
+            const z = spawnZone(w, {
+                kind: ZONE_KIND.FIRE,
+                x,
+                y,
+                radius: s.projectileRadius,
+                damage: s.damage,
+                tickEvery,
+                ttl: s.duration ?? 3.5,
+                followPlayer: false,
+            });
+
+            // Make it feel “impactful”: apply first tick immediately
+            w.zTickLeft[z] = 0;
+        },
+    },
 };
