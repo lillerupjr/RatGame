@@ -10,6 +10,12 @@ const menuEl = document.getElementById("menu") as HTMLDivElement;
 const startBtn = document.getElementById("startBtn") as HTMLButtonElement;
 const hudEl = document.getElementById("hud") as HTMLDivElement;
 
+// Run end overlay (WIN / LOSE)
+const endRoot = document.getElementById("end") as HTMLDivElement;
+const endTitle = document.getElementById("endTitle") as HTMLDivElement;
+const endSubline = document.getElementById("endSubline") as HTMLDivElement;
+const endBtn = document.getElementById("endBtn") as HTMLButtonElement;
+
 const levelupRoot = document.getElementById("levelup") as HTMLDivElement;
 const levelupChoices = document.getElementById("luChoices") as HTMLDivElement;
 const levelupSub = document.getElementById("luSub") as HTMLDivElement;
@@ -90,7 +96,10 @@ function weaponDesc(id: WeaponId): string {
       return "Damaging aura around you.";
     case "MOLOTOV":
       return "Burning ground effect.";
-
+    case "BOUNCER":
+        return "Bouncing projectiles";
+    case "BOUNCER_EVOLVED_BANKSHOT":
+        return "EXTREME BOUNCES!!";
     default:
       return "Starter weapon.";
   }
@@ -102,7 +111,8 @@ function isEvolutionStarter(id: WeaponId): boolean {
   return (
       id === "KNIFE_EVOLVED_RING" ||
       id === "PISTOL_EVOLVED_SPIRAL" ||
-      id === "SYRINGE_EVOLVED_CHAIN"
+      id === "SYRINGE_EVOLVED_CHAIN" ||
+      id === "BOUNCER_EVOLVED_BANKSHOT"
   );
 }
 
@@ -152,6 +162,12 @@ const game = createGame({
   },
   ui: {
     menuEl,
+    endEl: {
+      root: endRoot,
+      title: endTitle,
+      sub: endSubline,
+      btn: endBtn,
+    },
     levelupEl: {
       root: levelupRoot,
       choices: levelupChoices,
@@ -165,6 +181,7 @@ const game = createGame({
     },
   },
 });
+
 
 
 let last = performance.now();

@@ -105,6 +105,13 @@
 
     #menu button#startBtn { margin-top: 14px; width: 100%; padding: 12px 14px; border-radius: 12px; border: 0; cursor: pointer; font-weight: 800; background: rgba(255,255,255,0.16); color: #fff; }
 
+    /* Run end overlay (WIN / LOSE) */
+    #end { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.62); z-index: 7; }
+    #end .panel { width: min(560px, 92vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
+    #end .title { font-size: 26px; font-weight: 900; margin-bottom: 6px; }
+    #end .subline { opacity: 0.92; margin-bottom: 14px; white-space: pre-wrap; }
+    #end button#endBtn { margin-top: 14px; width: 100%; padding: 12px 14px; border-radius: 12px; border: 0; cursor: pointer; font-weight: 900; background: rgba(255,255,255,0.16); color: #fff; }
+
     /* Level-up overlay */
     #levelup { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.62); z-index: 5; }
     #levelup .panel { width: min(720px, 94vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
@@ -232,6 +239,13 @@
   </div>
 </div>
 
+<div id="end" hidden>
+  <div class="panel">
+    <div class="title" id="endTitle">Run complete!</div>
+    <div class="subline" id="endSubline"></div>
+    <button id="endBtn" type="button">Back to Menu</button>
+  </div>
+</div>
 
 <div id="menu">
   <div class="panel">

@@ -46,6 +46,15 @@ type CreateGameArgs = {
   hud: HudRefs;
   ui: {
     menuEl: HTMLDivElement;
+
+    // Run end overlay (WIN / LOSE)
+    endEl: {
+      root: HTMLDivElement;
+      title: HTMLDivElement;
+      sub: HTMLDivElement;
+      btn: HTMLButtonElement;
+    };
+
     levelupEl: {
       root: HTMLDivElement;
       choices: HTMLDivElement;
@@ -59,6 +68,7 @@ type CreateGameArgs = {
     };
   };
 };
+
 
 export function createGame(args: CreateGameArgs) {
   const input: InputState = createInputState();
@@ -210,15 +220,21 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function completeRun(w: World) {
+    // WIN CONDITION: beat floor 3 boss (i.e., floorIndex 2) AFTER boss chest is collected.
     w.runState = "RUN_COMPLETE";
     w.state = "WIN";
 
-    args.ui.menuEl.hidden = false;
+    args.ui.endEl.title.textContent = "Run Complete";
+    args.ui.endEl.sub.textContent =
+        `You beat the floor 3 boss.\n` +
+        `Time: ${formatTimeMMSS(w.time)} · Kills: ${w.kills}`;
+
+    args.ui.endEl.root.hidden = false;
+    args.ui.menuEl.hidden = true;
     args.hud.root.hidden = true;
     hideLevelUp();
-    (args.ui.menuEl.querySelector(".title") as HTMLElement).textContent = "Run complete!";
-    (args.ui.menuEl.querySelector("button") as HTMLButtonElement).textContent = "Restart";
   }
+
 
   function resetRun() {
     world = createWorld({
@@ -640,12 +656,20 @@ export function createGame(args: CreateGameArgs) {
     if (world.playerHp <= 0) {
       world.runState = "GAME_OVER";
       world.state = "LOSE";
-      args.ui.menuEl.hidden = false;
+
+      // Show proper Game Over screen
+      args.ui.endEl.title.textContent = "Game Over";
+      args.ui.endEl.sub.textContent =
+          `You died on floor ${Math.max(1, (world.floorIndex ?? 0) + 1)}.\n` +
+          `Time: ${formatTimeMMSS(world.time)} · Kills: ${world.kills}`;
+
+      args.ui.endEl.root.hidden = false;
+      args.ui.menuEl.hidden = true;
       args.hud.root.hidden = true;
       hideLevelUp();
-      (args.ui.menuEl.querySelector(".title") as HTMLElement).textContent = "You died.";
-      (args.ui.menuEl.querySelector("button") as HTMLButtonElement).textContent = "Restart";
+      return;
     }
+
 
     // HUD
     args.hud.timePill.textContent = hudTimeText(world);
@@ -659,7 +683,7 @@ export function createGame(args: CreateGameArgs) {
     renderSystem(world, args.ctx, args.canvas);
   }
 
-  // Menu click starts/restarts
+  // Menu click starts
   args.ui.menuEl.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
     const btn = t?.closest("button") as HTMLButtonElement | null;
@@ -669,10 +693,27 @@ export function createGame(args: CreateGameArgs) {
       const starter = btn.dataset.weapon as WeaponId | undefined;
 
       args.ui.menuEl.hidden = true;
+      args.ui.endEl.root.hidden = true;
       args.hud.root.hidden = false;
       startRun(starter);
     }
   });
+
+  // End screen button -> back to menu
+  args.ui.endEl.root.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    const btn = t?.closest("button") as HTMLButtonElement | null;
+    if (!btn) return;
+    if (btn.id !== "endBtn") return;
+
+    args.ui.endEl.root.hidden = true;
+    args.hud.root.hidden = true;
+
+    // Back to menu (weapon select is already there)
+    args.ui.menuEl.hidden = false;
+    hideLevelUp();
+  });
+
   args.ui.mapEl.root.addEventListener("click", (e) => {
     const el = e.target as HTMLElement;
     const btn = el.closest("button") as HTMLButtonElement | null;
