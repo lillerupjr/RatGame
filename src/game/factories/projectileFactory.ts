@@ -23,10 +23,13 @@ export type SpawnProjectileArgs = {
     radius: number;
     pierce: number;
 
-    // Bounce mechanic:
-    // -1 (default) => not a bouncer, use normal pierce behavior
-    //  0+          => bouncer, dies when it hits with 0 bounces left
+    // Bounce mechanic
+    // -1 (default) => not a bouncer, use normal pierce
+    //  0+          => bouncer, consumes bounces on ricochet events
     bounces?: number;
+
+    // If true, bouncer also reflects off screen edges.
+    wallBounce?: boolean;
 
     maxDist?: number;
     ttl: number;
@@ -41,6 +44,7 @@ export type SpawnProjectileArgs = {
     orbBaseRadius?: number;
     orbBaseAngVel?: number;
 };
+
 
 
 export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
@@ -75,6 +79,7 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
 
     // Bounce counter (index-aligned with all other projectile arrays)
     w.prBouncesLeft.push(Number.isFinite(a.bounces as any) ? (a.bounces as number) : -1);
+    w.prWallBounce.push(!!a.wallBounce);
 
     w.prTtl.push(a.ttl);
 

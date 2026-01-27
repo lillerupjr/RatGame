@@ -111,6 +111,8 @@ export type World = {
   prDirY: number[];
   prTtl: number[];
   prBouncesLeft: number[];
+  // If true, projectile also bounces off the screen edges (camera view bounds).
+  prWallBounce: boolean[];
 
   prStartX: number[];
   prStartY: number[];
@@ -241,7 +243,10 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     prvy: [],
     prDamage: [],
     prR: [],
+
     prPierce: [],
+    prWallBounce: [],
+
     prIsmelee: [],
     prCone: [],
     prMeleeRange: [],

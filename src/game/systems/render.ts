@@ -12,6 +12,8 @@ export function renderSystem(
 ) {
   const ww = canvas.clientWidth;
   const hh = canvas.clientHeight;
+  (w as any).viewW = ww;
+  (w as any).viewH = hh;
 
   ctx.clearRect(0, 0, ww, hh);
 

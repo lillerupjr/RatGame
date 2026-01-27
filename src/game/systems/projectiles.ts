@@ -25,29 +25,111 @@ export function projectilesSystem(w: World, dt: number) {
         }
 
         // Orbital projectiles
-        if (w.prIsOrbital[i]) {
-            // Radius scales with AREA (dynamic)
-            const r = (w.prOrbBaseRadius[i] ?? 0) * w.areaMult;
+        if (!w.prIsOrbital[i]) {
+            const vx = w.prvx[i] * moveSpeedMult;
+            const vy = w.prvy[i] * moveSpeedMult;
 
-            // Rotational speed scales with MOVE_SPEED (dynamic)
-            const angVel = (w.prOrbBaseAngVel[i] ?? 0) * moveSpeedMult;
+            w.prx[i] += vx * dt;
+            w.pry[i] += vy * dt;
 
-            let ang = (w.prOrbAngle[i] ?? 0) + angVel * dt;
-            // keep bounded
-            if (ang > Math.PI * 2) ang -= Math.PI * 2;
-            if (ang < 0) ang += Math.PI * 2;
+            // Wall bounce (only for projectiles that opted-in)
+            if (w.prWallBounce[i] && w.pAlive[i]) {
+                const ww = (w as any).viewW ?? 800;
+                const hh = (w as any).viewH ?? 600;
 
-            w.prOrbAngle[i] = ang;
+                // Camera is centered on player in renderSystem:
+                // cx = ww*0.5 - w.px, so world-space view bounds:
+                const left = w.px - ww * 0.5;
+                const right = w.px + ww * 0.5;
+                const top = w.py - hh * 0.5;
+                const bottom = w.py + hh * 0.5;
 
-            // Orbit around player
-            w.prx[i] = w.px + Math.cos(ang) * r;
-            w.pry[i] = w.py + Math.sin(ang) * r;
+                const r = w.prR[i];
+                let bounced = false;
 
-            // no range limit for orbitals (optional). If you *do* want it, enable below:
-            // const maxDist = w.prMaxDist[i] ?? 0;
-            // if (maxDist > 0) { ... }
+                // If this projectile uses bounce rules, wall bounce consumes bounces too.
+                const bLeft = w.prBouncesLeft[i];
 
-            continue;
+                // Left / Right
+                if (w.prx[i] - r < left) {
+                    if (bLeft >= 0 && bLeft <= 0) {
+                        w.pAlive[i] = false;
+                    } else {
+                        w.prx[i] = left + r;
+                        w.prvx[i] = Math.abs(w.prvx[i]);
+                        bounced = true;
+                    }
+                } else if (w.prx[i] + r > right) {
+                    if (bLeft >= 0 && bLeft <= 0) {
+                        w.pAlive[i] = false;
+                    } else {
+                        w.prx[i] = right - r;
+                        w.prvx[i] = -Math.abs(w.prvx[i]);
+                        bounced = true;
+                    }
+                }
+
+                // Top / Bottom
+                if (w.pAlive[i]) {
+                    if (w.pry[i] - r < top) {
+                        if (bLeft >= 0 && bLeft <= 0) {
+                            w.pAlive[i] = false;
+                        } else {
+                            w.pry[i] = top + r;
+                            w.prvy[i] = Math.abs(w.prvy[i]);
+                            bounced = true;
+                        }
+                    } else if (w.pry[i] + r > bottom) {
+                        if (bLeft >= 0 && bLeft <= 0) {
+                            w.pAlive[i] = false;
+                        } else {
+                            w.pry[i] = bottom - r;
+                            w.prvy[i] = -Math.abs(w.prvy[i]);
+                            bounced = true;
+                        }
+                    }
+                }
+
+                if (w.pAlive[i] && bounced) {
+                    // Update direction vectors (some systems rely on prDirX/Y being sane)
+                    const nvx = w.prvx[i];
+                    const nvy = w.prvy[i];
+                    const nLen = Math.hypot(nvx, nvy) || 0.0001;
+                    w.prDirX[i] = nvx / nLen;
+                    w.prDirY[i] = nvy / nLen;
+
+                    // Consume a bounce if this projectile is a bouncer
+                    if (w.prBouncesLeft[i] >= 0) {
+                        w.prBouncesLeft[i] -= 1;
+                    }
+
+                    // Also clear "last hit" so it doesn't get stuck in an ignore loop after wall bounce
+                    w.prLastHitEnemy[i] = -1;
+                    w.prLastHitCd[i] = 0;
+                }
+            }
+        } if (w.prIsOrbital[i]) {
+            // Orbitals ignore prVx/prVy. They are positioned around the player each frame.
+            const angVel = w.prOrbBaseAngVel[i] || 0;
+            const baseR = w.prOrbBaseRadius[i] || 0;
+
+            // Advance angle
+            let a = w.prOrbAngle[i] || 0;
+            a += angVel * dt;
+            if (a > Math.PI * 2) a -= Math.PI * 2;
+            w.prOrbAngle[i] = a;
+
+            // Orbit radius scales with AREA (matches your other patterns)
+            const areaMult = (w as any).areaMult ?? 1;
+            const r = baseR * areaMult;
+
+            // Center on player
+            w.prx[i] = w.px + Math.cos(a) * r;
+            w.pry[i] = w.py + Math.sin(a) * r;
+
+            // Keep direction sane (optional, but prevents NaNs in any render that uses prDir)
+            w.prDirX[i] = Math.cos(a);
+            w.prDirY[i] = Math.sin(a);
         }
 
         // Normal projectiles: integrate velocity

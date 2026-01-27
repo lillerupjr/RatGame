@@ -15,7 +15,8 @@ export type WeaponId =
     | "KNUCKLES"
     | "AURA"
     | "MOLOTOV"
-    | "BOUNCER";
+    | "BOUNCER"
+    | "BOUNCER_EVOLVED_BANKSHOT";
 
 
 export const MAX_WEAPON_LEVEL = 10;
@@ -502,7 +503,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         getStats: (level, w) => {
             const lv = clampLevel(level);
 
-            const cooldownBase = 0.85;
+            const cooldownBase = 0.25;
 
             const dmgBase = 14;
             const dmgPer = 2.2;
@@ -510,7 +511,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             // Gains bounces as it levels:
             // Lv1 -> 0 bounces (dies on first hit)
             // Lv2 -> 1 bounce, ... Lv10 -> 9 bounces
-            const bounces = Math.max(0, lv - 1);
+            const bounces = Math.max(0, lv - 1)+10;
 
             return {
                 cooldown: cooldownBase / w.fireRateMult,
@@ -518,7 +519,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
                 projectileRadius: 6,
                 damage: (dmgBase + (lv - 1) * dmgPer) * w.dmgMult,
 
-                // We don't want pierce to be the limiter for this weapon.
+                // We don't want to pierce to be the limiter for this weapon.
                 // Ricochet rules control lifetime.
                 pierce: 999,
 
@@ -545,7 +546,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
                 speed: s.projectileSpeed,
                 damage: s.damage,
                 radius: s.projectileRadius,
-                pierce: s.pierce ?? 999,
+                pierce: 999,
                 ttl: ttlSafety,
 
                 // IMPORTANT: enables the ricochet path
@@ -553,6 +554,89 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             });
         },
     },
+    BOUNCER_EVOLVED_BANKSHOT: {
+        id: "BOUNCER_EVOLVED_BANKSHOT",
+        title: "Bankshot",
+        hiddenFromPools: true,
+        evolvedFrom: "BOUNCER",
+
+        // DEBUG: number of firing directions
+        // 1 = aim direction
+        // 2 = north + south
+        // 4 = north, east, south, west
+        // 8 = includes diagonals
+
+        // @ts-ignore — debug-only extra field
+        directions: 1,
+
+        getStats: (level, w) => {
+            const cooldownBase = 0.1;
+
+            return {
+                cooldown: cooldownBase / w.fireRateMult,
+                projectileSpeed: 620,
+                projectileRadius: 7,
+                damage: 5 * w.dmgMult,
+                pierce: 999,
+
+                ...( { bounces: 10, wallBounce: true } as any ),
+            } as any;
+        },
+
+        fire: (w, s, aim) => {
+            const ttlSafety = 10.0;
+            const bounces = 10;
+
+            // 👇 read directly from weapon def (debug only)
+            const dirs = (WEAPONS as any).BOUNCER_EVOLVED_BANKSHOT.directions ?? 1;
+
+            // Single-direction fallback (normal aimed shot)
+            if (dirs === 1) {
+                spawnProjectile(w, {
+                    kind: PRJ_KIND.PISTOL,
+                    x: w.px,
+                    y: w.py,
+                    dirX: aim.x,
+                    dirY: aim.y,
+                    speed: s.projectileSpeed,
+                    damage: s.damage,
+                    radius: s.projectileRadius,
+                    pierce: 999,
+                    ttl: ttlSafety,
+                    bounces,
+                    wallBounce: true,
+                });
+                return;
+            }
+
+            const step = (Math.PI * 2) / dirs;
+
+            for (let i = 0; i < dirs; i++) {
+                const a = i * step;
+
+                // 0 = north
+                const dx = Math.cos(a - Math.PI / 2);
+                const dy = Math.sin(a - Math.PI / 2);
+
+                spawnProjectile(w, {
+                    kind: PRJ_KIND.PISTOL,
+                    x: w.px,
+                    y: w.py,
+                    dirX: dx,
+                    dirY: dy,
+                    speed: s.projectileSpeed,
+                    damage: s.damage,
+                    radius: s.projectileRadius,
+                    pierce: 999,
+                    ttl: ttlSafety,
+                    bounces,
+                    wallBounce: true,
+                });
+            }
+        },
+    },
+
+
 
     SWORD: {
         id: "SWORD",
