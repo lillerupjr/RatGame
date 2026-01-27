@@ -27,7 +27,7 @@ export type World = {
   floorDuration: number;
 
   // Route map (Slay-the-Spire style, shown between floors)
-  actGraph: any; // typed in game.ts via map module to avoid circular deps here
+  runMap: any; // typed in game.ts via map module to avoid circular deps here
   mapCurrentNodeId: string | null;
   mapPendingNextFloorIndex: number; // which floor index we are selecting for
 
@@ -179,7 +179,7 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     floorDuration: 0,
 
     // Map / route
-    actGraph: null,
+    runMap: null,
     mapCurrentNodeId: null,
     mapPendingNextFloorIndex: 0,
 
