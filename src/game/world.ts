@@ -6,6 +6,7 @@ import type { GameEvent } from "./events";
 import type { ItemId } from "./content/items";
 import type { WeaponId } from "./content/weapons";
 import type { EnemyType } from "./content/enemies";
+import {recomputeDerivedStats} from "./stats/derivedStats";
 
 export type GameState = "MENU" | "RUN" | "LEVELUP" | "LOSE" | "WIN";
 
@@ -212,24 +213,6 @@ export function spawnXp(w: World, x: number, y: number, value: number) {
   return i;
 }
 
-
-export function recomputeDerivedStats(w: World) {
-  // Reset derived stats to base
-  w.pSpeed = w.baseMoveSpeed;
-  w.pickupRadius = w.basePickupRadius;
-
-  // Reset multipliers
-  w.dmgMult = 1;
-  w.fireRateMult = 1;
-  w.areaMult = 1;
-  w.durationMult = 1;
-
-  // Apply all items
-  for (const inst of w.items) {
-    const def = registry.item(inst.id);
-    def.apply(w, inst.level);
-  }
-}
 
 export function emitEvent(w: World, e: import("./events").GameEvent) {
   w.events.push(e);
