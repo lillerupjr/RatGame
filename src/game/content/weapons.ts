@@ -146,13 +146,13 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         getStats: (level, w) => {
             const lv = clampLevel(level);
 
-            const cooldownBase = 1.05;
+            const cooldownBase = 0.3;
             const damageBase = 10;
             const damagePer = 0.9;
 
             return {
                 cooldown: cooldownBase / w.fireRateMult,
-                projectileSpeed: 440,
+                projectileSpeed: 700,
                 projectileRadius: 5,
                 damage: (damageBase + (lv - 1) * damagePer) * w.dmgMult,
                 projectileCount: 24,
