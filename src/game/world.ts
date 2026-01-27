@@ -57,6 +57,19 @@ export type World = {
   eSpeed: number[];
   eDamage: number[];
 
+  // Zones (auras / ground effects)
+  zAlive: boolean[];
+  zKind: number[];
+  zx: number[];
+  zy: number[];
+  zR: number[];
+  zDamage: number[];
+  zTickEvery: number[];
+  zTickLeft: number[];
+  zTtl: number[];
+  zFollowPlayer: boolean[];
+
+
   // Projectiles
   pAlive: boolean[];
   pKind: number; // reserved
@@ -150,6 +163,20 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     eR: [],
     eSpeed: [],
     eDamage: [],
+
+    // Zones
+    zAlive: [],
+    zKind: [],
+    zx: [],
+    zy: [],
+    zR: [],
+    zDamage: [],
+    zTickEvery: [],
+    zTickLeft: [],
+    zTtl: [],
+    zFollowPlayer: [],
+
+
 
     pAlive: [],
     pKind: 0,

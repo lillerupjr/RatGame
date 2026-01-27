@@ -8,6 +8,7 @@ import { projectilesSystem } from "./systems/projectiles";
 import { pickupsSystem } from "./systems/pickups";
 import { xpSystem } from "./systems/xp";
 import { renderSystem } from "./systems/render";
+import { zonesSystem } from "./systems/zones";
 
 import { getUpgradePool, UpgradeDef } from "./content/upgrades";
 import { formatTimeMMSS } from "./util/time";
@@ -143,6 +144,7 @@ export function createGame(args: CreateGameArgs) {
     combatSystem(world, dt);
     projectilesSystem(world, dt);
     collisionsSystem(world, dt);
+    zonesSystem(world, dt);
     pickupsSystem(world, dt);
     xpSystem(world, dt);
     // Clear events AFTER all consumers ran this frame

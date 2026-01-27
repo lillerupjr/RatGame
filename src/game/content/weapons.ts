@@ -1,6 +1,8 @@
 // src/game/content/weapons.ts
 import type { World } from "../world";
 import { spawnProjectile, spawnSwordProjectile, spawnKnucklesOrbital, PRJ_KIND } from "../factories/projectileFactory";
+import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
+
 
 export type WeaponId =
     | "KNIFE"
@@ -8,7 +10,8 @@ export type WeaponId =
     | "KNIFE_EVOLVED_RING"
     | "PISTOL_EVOLVED_SPIRAL"
     | "SWORD"
-    | "KNUCKLES";
+    | "KNUCKLES"
+    | "AURA";
 
 export const MAX_WEAPON_LEVEL = 10;
 
@@ -347,64 +350,167 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         getStats: (level, w) => {
             const lv = clampLevel(level);
 
-            // Fires often (spawn rate scales with FIRE_RATE via cooldown division)
-            const cooldownBase = 0.18;
-
-            // Damage scaling (tune later)
             const dmgBase = 9;
             const dmgPer = 1.4;
 
-            // Orbital properties:
-            // Base radius scales with level; final radius scales with AREA in projectilesSystem
             const orbitBaseRadius = 42 + (lv - 1) * 5.5;
-
-            // Base angular velocity; final ang vel scales with MOVE_SPEED in projectilesSystem
-            // (positive = clockwise here because canvas Y+ down; feel free to invert if you want)
             const orbitBaseAngVel = 6.5;
 
-            // Duration scales with DURATION multiplier (applied at spawn)
-            const baseDuration = 1.25 + (lv - 1) * 0.08;
+            // === UPTIME MODEL ===
+            // Baseline: 2s up, 2s down => 50% uptime with no buffs
+            const BASE_DURATION = 2.0; // seconds alive
+            const BASE_COOLDOWN = 4.0; // seconds between spawns
+
+            // Fire rate scales ONLY how often we spawn (uptime)
+            const cooldown = BASE_COOLDOWN / w.fireRateMult;
+
+            // Projectile count scales with WEAPON LEVEL (density), not fire rate
+            // Lv1 -> 2, Lv2 -> 3, ... Lv10 -> 11 (tune later if needed)
+            const projectileCount = Math.max(2, 2 + (lv - 1));
 
             return {
-                cooldown: cooldownBase / w.fireRateMult,
+                cooldown,
                 projectileSpeed: 0,
                 projectileRadius: 9,
                 damage: (dmgBase + (lv - 1) * dmgPer) * w.dmgMult,
-                pierce: 999, // orbitals should punch through
-                duration: baseDuration * w.durationMult,
+                pierce: 999,
+
+                // Duration scales with DURATION items
+                duration: BASE_DURATION * w.durationMult,
+
                 orbitBaseRadius,
                 orbitBaseAngVel,
+
+                projectileCount,
             };
         },
 
         fire: (w, s, _aim) => {
-            // spread newly spawned knuckles around the ring
-            const key = "_knucklesSpawnAng";
-            let ang = (w as any)[key] ?? 0;
-            const step = Math.PI * 0.55; // pseudo-golden-ish spacing for nice distribution
+            // Maintain ring: ensure we have exactly N orbitals alive.
+            const target = Math.max(2, s.projectileCount ?? 2);
 
-            (w as any)[key] = ang + step;
+            // Count current alive knuckles
+            let alive = 0;
+            for (let i = 0; i < w.pAlive.length; i++) {
+                if (!w.pAlive[i]) continue;
+                if (w.prjKind[i] !== PRJ_KIND.KNUCKLES) continue;
+                alive++;
+            }
 
-            spawnKnucklesOrbital(w, {
-                x: w.px,
-                y: w.py,
+            const missing = target - alive;
+            if (missing <= 0) return;
 
-                // dir is unused for orbitals, but keep sane values for arrays
-                dirX: 1,
-                dirY: 0,
+            // Spawn ALL at once, evenly spaced to maximize distance.
+            // To guarantee perfect spacing (and avoid clumping when target changes),
+            // we re-seed the entire ring whenever we detect missing orbitals.
+            for (let i = 0; i < w.pAlive.length; i++) {
+                if (!w.pAlive[i]) continue;
+                if (w.prjKind[i] !== PRJ_KIND.KNUCKLES) continue;
+                w.pAlive[i] = false;
+            }
 
-                speed: 0,
-                damage: s.damage,
-                radius: s.projectileRadius,
-                pierce: s.pierce ?? 999,
+            // Optional: keep a slowly rotating phase so it doesn’t look “locked”
+            const phaseKey = "_knuckleRingPhase";
+            let phase = (w as any)[phaseKey] as number | undefined;
+            if (typeof phase !== "number" || !isFinite(phase)) phase = 0;
 
-                ttl: s.duration ?? 1.2,
+            // small phase drift so ring doesn't always align same axes
+            phase += 0.15;
+            (w as any)[phaseKey] = phase;
 
-                // orbital params (base values; actual radius/angVel are scaled dynamically)
-                orbAngle: ang,
-                orbBaseRadius: s.orbitBaseRadius ?? 40,
-                orbBaseAngVel: s.orbitBaseAngVel ?? 6.0,
-            });
+            for (let k = 0; k < target; k++) {
+                const ang = phase + (k / target) * Math.PI * 2;
+
+                spawnKnucklesOrbital(w, {
+                    x: w.px,
+                    y: w.py,
+                    dirX: 1,
+                    dirY: 0,
+                    speed: 0,
+                    damage: s.damage,
+                    radius: s.projectileRadius,
+                    pierce: s.pierce ?? 999,
+
+                    // Orbitals live for the intended duration (default 2s * durationMult)
+                    ttl: s.duration ?? 2.0,
+
+                    orbAngle: ang,
+                    orbBaseRadius: s.orbitBaseRadius ?? 40,
+                    orbBaseAngVel: s.orbitBaseAngVel ?? 6.0,
+                });
+            }
         },
     },
+    AURA: {
+        id: "AURA",
+        title: "Intimidation Aura",
+        getStats: (level, w) => {
+            const lv = clampLevel(level);
+
+            // Tick fairly often; damage per tick is modest.
+            const cooldownBase = 0.25;
+
+            const baseRadius = 55;
+            const radiusPer = 4.5;
+
+            const dmgBase = 4.0;
+            const dmgPer = 1.1;
+
+            // Area scales with areaMult, damage scales with dmgMult.
+            const radius = (baseRadius + (lv - 1) * radiusPer) * (w.areaMult ?? 1);
+            const damagePerTick = (dmgBase + (lv - 1) * dmgPer) * w.dmgMult;
+
+            return {
+                cooldown: cooldownBase / w.fireRateMult,
+
+                // We reuse existing fields so we don’t have to redesign WeaponStats right now:
+                projectileSpeed: 0,
+                projectileRadius: radius,
+                damage: damagePerTick,
+                pierce: 999,
+            };
+        },
+        fire: (w, s, _aim) => {
+            // Keep EXACTLY ONE aura zone alive and just update it.
+            const key = "_auraZoneIdx";
+            const existing = (w as any)[key] as number | undefined;
+
+            const radius = s.projectileRadius;
+            const dmg = s.damage;
+
+            if (existing !== undefined && w.zAlive[existing]) {
+                w.zKind[existing] = ZONE_KIND.AURA;
+                w.zFollowPlayer[existing] = true;
+
+                w.zx[existing] = w.px;
+                w.zy[existing] = w.py;
+
+                w.zR[existing] = radius;
+                w.zDamage[existing] = dmg;
+
+                // Tick settings: aura should feel continuous
+                w.zTickEvery[existing] = 0.20;
+                // Don’t fully reset tickLeft each refresh; keep it “smooth”.
+                w.zTickLeft[existing] = Math.min(w.zTickLeft[existing], w.zTickEvery[existing]);
+
+                w.zTtl[existing] = Infinity;
+                return;
+            }
+
+            const idx = spawnZone(w, {
+                kind: ZONE_KIND.AURA,
+                x: w.px,
+                y: w.py,
+                radius,
+                damage: dmg,
+                tickEvery: 0.20,
+                ttl: Infinity,
+                followPlayer: true,
+            });
+
+            (w as any)[key] = idx;
+        },
+    },
+
+
 };
