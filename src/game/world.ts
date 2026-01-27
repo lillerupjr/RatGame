@@ -110,6 +110,7 @@ export type World = {
   prDirX: number[];
   prDirY: number[];
   prTtl: number[];
+  prBouncesLeft: number[];
 
   prStartX: number[];
   prStartY: number[];
@@ -247,6 +248,7 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     prDirX: [],
     prDirY: [],
     prTtl: [],
+    prBouncesLeft: [],
 
     prStartX: [],
     prStartY: [],
