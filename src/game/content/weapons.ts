@@ -636,7 +636,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
                 maxPerFrame: 80,
 
                 // Base syringe: explosions DO NOT apply poison (no free chains).
-                applyPoison: true,
+                applyPoison: false,
                 poisonDur: 5,
                 poisonDps: poisonDps,
             };
