@@ -45,6 +45,24 @@ export function renderSystem(
 
   ctx.globalAlpha = 1;
 
+  // Zones (auras / ground effects)
+  for (let i = 0; i < w.zAlive.length; i++) {
+    if (!w.zAlive[i]) continue;
+
+    const x = w.zx[i] + cx;
+    const y = w.zy[i] + cy;
+
+    // Simple styling by kind
+    const kind = w.zKind[i];
+    ctx.globalAlpha = kind === 2 ? 0.18 : 0.12; // FIRE a bit stronger than AURA
+    ctx.fillStyle = kind === 2 ? "#ffb347" : "#7dd3fc"; // orange vs cyan
+
+    ctx.beginPath();
+    ctx.arc(x, y, w.zR[i], 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
   // XP gems
   for (let i = 0; i < w.xAlive.length; i++) {
     if (!w.xAlive[i]) continue;
