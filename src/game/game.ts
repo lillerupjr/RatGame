@@ -15,7 +15,7 @@ import { getUpgradePool, UpgradeDef } from "./content/upgrades";
 import { formatTimeMMSS } from "./util/time";
 import type { WeaponId } from "./content/weapons";
 import { registry } from "./content/registry";
-import {poisonSystem} from "./systems/poison";
+import { poisonSystem } from "./systems/poison";
 
 type HudRefs = {
   root: HTMLDivElement;
@@ -23,6 +23,10 @@ type HudRefs = {
   killsPill: HTMLSpanElement;
   hpPill: HTMLSpanElement;
   lvlPill: HTMLSpanElement;
+
+  // NEW: inventory HUD
+  weaponSlots: HTMLDivElement;
+  itemSlots: HTMLDivElement;
 };
 
 type LevelUpRefs = {
@@ -37,7 +41,6 @@ type CreateGameArgs = {
   hud: HudRefs;
   ui: { menuEl: HTMLDivElement; levelupEl: LevelUpRefs };
 };
-
 
 export function createGame(args: CreateGameArgs) {
   const input: InputState = createInputState();
@@ -89,7 +92,6 @@ export function createGame(args: CreateGameArgs) {
     }
   }
 
-
   function renderChoices() {
     const container = args.ui.levelupEl.choices;
     container.innerHTML = "";
@@ -123,6 +125,47 @@ export function createGame(args: CreateGameArgs) {
     // recomputeDerivedStats is already called by item upgrades, but keeping this is future-proof.
   }
 
+  // ----- HUD inventory helpers -----
+  function renderSlots(
+      container: HTMLDivElement,
+      insts: Array<{ id: any; level: number }>,
+      getTitle: (id: any) => string
+  ) {
+    const slots = Array.from(container.querySelectorAll<HTMLElement>(".slot"));
+
+    for (let i = 0; i < 4; i++) {
+      const slot = slots[i];
+      if (!slot) continue;
+
+      const titleEl = slot.querySelector(".slotTitle") as HTMLElement | null;
+      const subEl = slot.querySelector(".slotSub") as HTMLElement | null;
+
+      const inst = insts[i];
+
+      if (inst) {
+        if (titleEl) titleEl.textContent = getTitle(inst.id);
+        if (subEl) subEl.textContent = `Lv ${inst.level}`;
+        slot.classList.remove("empty");
+      } else {
+        if (titleEl) titleEl.textContent = "—";
+        if (subEl) subEl.textContent = "";
+        slot.classList.add("empty");
+      }
+    }
+  }
+
+  function updateHud() {
+    args.hud.timePill.textContent = formatTimeMMSS(world.time);
+    args.hud.killsPill.textContent = `Kills: ${world.kills}`;
+    args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
+    args.hud.lvlPill.textContent = `Lv: ${world.level}`;
+
+    // 4 weapon slots + 4 item slots, order = array order
+    renderSlots(args.hud.weaponSlots, world.weapons as any, (id) => registry.weapon(id as any).title);
+    renderSlots(args.hud.itemSlots, world.items as any, (id) => registry.item(id as any).title);
+  }
+  // ---------------------------------
+
   function update(dt: number) {
     // Always poll input (so movement is responsive immediately after closing menus)
     inputSystem(input, args.canvas);
@@ -130,10 +173,7 @@ export function createGame(args: CreateGameArgs) {
     // Handle level-up pause
     if (world.state === "LEVELUP") {
       // HUD still updates while paused
-      args.hud.timePill.textContent = formatTimeMMSS(world.time);
-      args.hud.killsPill.textContent = `Kills: ${world.kills}`;
-      args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
-      args.hud.lvlPill.textContent = `Lv: ${world.level}`;
+      updateHud();
       return;
     }
 
@@ -151,8 +191,9 @@ export function createGame(args: CreateGameArgs) {
     zonesSystem(world, dt);
     pickupsSystem(world, dt);
     xpSystem(world, dt);
+
     // Clear events AFTER all consumers ran this frame
-    clearEvents(world)
+    clearEvents(world);
 
     // Enter level-up state if needed
     if (world.pendingLevelUps > 0) {
@@ -171,17 +212,14 @@ export function createGame(args: CreateGameArgs) {
     }
 
     // HUD
-    args.hud.timePill.textContent = formatTimeMMSS(world.time);
-    args.hud.killsPill.textContent = `Kills: ${world.kills}`;
-    args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
-    args.hud.lvlPill.textContent = `Lv: ${world.level}`;
+    updateHud();
   }
 
   function render() {
     renderSystem(world, args.ctx, args.canvas);
   }
 
-// Menu click starts/restarts
+  // Menu click starts/restarts
   args.ui.menuEl.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
     const btn = t?.closest("button") as HTMLButtonElement | null;
@@ -195,6 +233,7 @@ export function createGame(args: CreateGameArgs) {
       startRun(starter);
     }
   });
+
   // Level-up choice click
   args.ui.levelupEl.root.addEventListener("click", (e) => {
     const el = e.target as HTMLElement;
