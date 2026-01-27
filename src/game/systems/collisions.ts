@@ -34,7 +34,7 @@ export function collisionsSystem(w: World, dt: number) {
       if (!isEnemyHit(w, p, e, dx, dy, rr)) continue;
 
       // Prevent the same piercing projectile from repeatedly hitting the same enemy every frame
-      if (w.prLastHitEnemy[p] === e && w.prLastHitCd[p] > 0) {
+      if (w.prLastHitEnemy[p] === e && w.prLastHitCd[p] > 0) { // TODO: Fix this to handle multiple hits properly + duration
         continue; // skip this hit entirely (no dmg, no poison, no pierce consume)
       }
 
