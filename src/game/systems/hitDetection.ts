@@ -2,10 +2,10 @@ import { World } from "../world";
 
 /**
  * Determines if a projectile hits an enemy based on whether it's melee or ranged.
- * 
+ *
  * For melee: checks if enemy is within a cone in front of the aim direction.
  * For ranged: checks if enemy is within circular collision radius.
- * 
+ *
  * @param w - The game world
  * @param p - Projectile index
  * @param e - Enemy index
@@ -42,4 +42,34 @@ export function isEnemyHit(
     // Ranged: simple circular collision
     return dx * dx + dy * dy <= rr * rr;
   }
+}
+
+/**
+ * Determines if the player is hit by an enemy via simple circular overlap.
+ *
+ * @param w - The game world
+ * @param e - Enemy index
+ * @param playerR - Player collision radius
+ * @returns true if enemy overlaps player radius, false otherwise
+ */
+export function isPlayerHit(w: World, e: number, playerR: number): boolean {
+  const dx = w.ex[e] - w.px;
+  const dy = w.ey[e] - w.py;
+  const rr = w.eR[e] + playerR;
+  return dx * dx + dy * dy <= rr * rr;
+}
+
+export function isCircleHit(dx: number, dy: number, rr: number): boolean {
+  return dx * dx + dy * dy <= rr * rr;
+}
+
+/**
+ * Enemy inside a circle centered at (cx, cy).
+ * Includes enemy radius so it "feels" correct.
+ */
+export function isEnemyInCircle(w: World, e: number, cx: number, cy: number, radius: number): boolean {
+  const dx = w.ex[e] - cx;
+  const dy = w.ey[e] - cy;
+  const rr = radius + w.eR[e];
+  return isCircleHit(dx, dy, rr);
 }
