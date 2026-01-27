@@ -65,12 +65,62 @@ export function collisionsSystem(w: World, dt: number) {
         source: registry.projectileSourceFromKind(w.prjKind[p]),
       });
 
-      // Pierce handling
-      if (w.prPierce[p] > 0) {
-        w.prPierce[p] -= 1;
+      // Bounce / pierce handling
+      // If prBouncesLeft[p] >= 0 => this projectile uses ricochet rules.
+      // Otherwise, use normal pierce rules.
+      const bLeft = w.prBouncesLeft[p];
+
+      if (bLeft >= 0) {
+        // If no bounces left, it dies on this hit (after dealing damage).
+        if (bLeft <= 0) {
+          w.pAlive[p] = false;
+        } else {
+          // Pool-style ricochet: reflect velocity about the collision normal.
+          // Normal points from enemy center -> projectile center.
+          const ex = w.ex[e];
+          const ey = w.ey[e];
+
+          let nx = px - ex;
+          let ny = py - ey;
+
+          const nLen = Math.hypot(nx, ny) || 0.0001;
+          nx /= nLen;
+          ny /= nLen;
+
+          const vx = w.prvx[p];
+          const vy = w.prvy[p];
+
+          // Reflect: v' = v - 2*(v·n)*n
+          const dot = vx * nx + vy * ny;
+          const rvx = vx - 2 * dot * nx;
+          const rvy = vy - 2 * dot * ny;
+
+          w.prvx[p] = rvx;
+          w.prvy[p] = rvy;
+
+          // Keep direction arrays in sync (used by some mechanics/render assumptions)
+          const vLen = Math.hypot(rvx, rvy) || 0.0001;
+          w.prDirX[p] = rvx / vLen;
+          w.prDirY[p] = rvy / vLen;
+
+          // Push the projectile just outside the enemy so it doesn't instantly re-collide
+          // rr is already (enemy radius + projectile radius).
+          const pushOut = rr + 0.6;
+          w.prx[p] = ex + nx * pushOut;
+          w.pry[p] = ey + ny * pushOut;
+
+          // Consume one bounce
+          w.prBouncesLeft[p] = bLeft - 1;
+        }
       } else {
-        w.pAlive[p] = false;
+        // Normal pierce behavior for non-bouncing projectiles
+        if (w.prPierce[p] > 0) {
+          w.prPierce[p] -= 1;
+        } else {
+          w.pAlive[p] = false;
+        }
       }
+
 
       // Death handling
       if (w.eHp[e] <= 0) {

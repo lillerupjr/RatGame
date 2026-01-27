@@ -14,7 +14,8 @@ export type WeaponId =
     | "SWORD"
     | "KNUCKLES"
     | "AURA"
-    | "MOLOTOV";
+    | "MOLOTOV"
+    | "BOUNCER";
 
 
 export const MAX_WEAPON_LEVEL = 10;
@@ -495,6 +496,64 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             (w as any).prPoisonDur[p] = poisonDur;
         },
     },
+    BOUNCER: {
+        id: "BOUNCER",
+        title: "Bouncer",
+        getStats: (level, w) => {
+            const lv = clampLevel(level);
+
+            const cooldownBase = 0.85;
+
+            const dmgBase = 14;
+            const dmgPer = 2.2;
+
+            // Gains bounces as it levels:
+            // Lv1 -> 0 bounces (dies on first hit)
+            // Lv2 -> 1 bounce, ... Lv10 -> 9 bounces
+            const bounces = Math.max(0, lv - 1);
+
+            return {
+                cooldown: cooldownBase / w.fireRateMult,
+                projectileSpeed: 560,
+                projectileRadius: 6,
+                damage: (dmgBase + (lv - 1) * dmgPer) * w.dmgMult,
+
+                // We don't want pierce to be the limiter for this weapon.
+                // Ricochet rules control lifetime.
+                pierce: 999,
+
+                // stash bounces as an escape hatch
+                ...( { bounces } as any ),
+            } as any;
+        },
+
+        fire: (w, s, aim) => {
+            const viewW = (w as any).viewW ?? 800;
+
+            // Give it enough life to bounce around.
+            // (It will still die early if it runs out of bounces and hits again.)
+            const ttlSafety = 6.0;
+
+            const bounces = Math.max(0, ((s as any).bounces ?? 0));
+
+            spawnProjectile(w, {
+                kind: PRJ_KIND.PISTOL, // reuse bullet visuals for now
+                x: w.px,
+                y: w.py,
+                dirX: aim.x,
+                dirY: aim.y,
+                speed: s.projectileSpeed,
+                damage: s.damage,
+                radius: s.projectileRadius,
+                pierce: s.pierce ?? 999,
+                ttl: ttlSafety,
+
+                // IMPORTANT: enables the ricochet path
+                bounces,
+            });
+        },
+    },
+
     SWORD: {
         id: "SWORD",
         title: "Sword",
