@@ -28,7 +28,7 @@ export function spawnSystem(w: World, dt: number) {
   }
 
   // Simple repeating trickle spawn (keeps enemy pressure)
-  const cadence = 0.6;
+  const cadence = 0.1;
   (w as any)._spawnAcc = ((w as any)._spawnAcc ?? 0) + dt;
 
   while ((w as any)._spawnAcc >= cadence) {
