@@ -1,5 +1,5 @@
-import { World, spawnXp } from "../world";
-
+import type { World } from "../world";
+import { spawnXp } from "./pickups";
 /**
  * XP + leveling.
  * - Spawns XP gems from ENEMY_KILLED events (decoupled from collisions/combat).
