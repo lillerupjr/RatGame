@@ -1,20 +1,20 @@
+// src/game/factories/projectileFactory.ts
 import type { World } from "../world";
 
-export type ProjectileSource = "KNIFE" | "PISTOL" | "SWORD" | "OTHER";
+export type ProjectileSource = "KNIFE" | "PISTOL" | "SWORD" | "KNUCKLES" | "OTHER";
 
-// Your existing world uses prjKind: 1 knife, 2 pistol (keep that for now)
 export const PRJ_KIND = {
     KNIFE: 1,
     PISTOL: 2,
     SWORD: 3,
+    KNUCKLES: 4,
 } as const;
 
 export type SpawnProjectileArgs = {
-    kind: number; // matches world.prjKind values
+    kind: number;
     x: number;
     y: number;
 
-    // direction (will be normalized)
     dirX: number;
     dirY: number;
 
@@ -23,22 +23,20 @@ export type SpawnProjectileArgs = {
     radius: number;
     pierce: number;
 
-    // NEW: max travel distance in world pixels (0 = unlimited)
     maxDist?: number;
-    // lifetime in seconds
     ttl: number;
-    // melee weapon flag (uses cone-based collision instead of circular)
+
     melee?: boolean;
-    // melee cone angle in radians (used only when melee is true)
     coneAngle?: number;
-    // melee reach distance (radius of the cone arc)
     meleeRange?: number;
+
+    // NEW: orbital
+    orbital?: boolean;
+    orbAngle?: number;
+    orbBaseRadius?: number;
+    orbBaseAngVel?: number;
 };
 
-/**
- * Factory: spawns a projectile with a static velocity.
- * After spawn, its velocity is NEVER updated again (no homing).
- */
 export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     let dx = a.dirX;
     let dy = a.dirY;
@@ -52,10 +50,13 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
         dy /= len;
     }
 
-    const vx = dx * a.speed;
-    const vy = dy * a.speed;
+    const isOrbital = !!a.orbital;
+
+    const vx = isOrbital ? 0 : dx * a.speed;
+    const vy = isOrbital ? 0 : dy * a.speed;
 
     const i = w.pAlive.length;
+
     w.pAlive.push(true);
     w.prjKind.push(a.kind);
     w.prx.push(a.x);
@@ -66,27 +67,30 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     w.prR.push(a.radius);
     w.prPierce.push(a.pierce);
     w.prTtl.push(a.ttl);
+
     w.prStartX.push(a.x);
     w.prStartY.push(a.y);
     w.prMaxDist.push(a.maxDist ?? 0);
+
     w.prIsmelee.push(a.melee ?? false);
     w.prCone.push(a.coneAngle ?? Math.PI / 6);
     w.prMeleeRange.push(a.meleeRange ?? a.radius);
     w.prDirX.push(dx);
     w.prDirY.push(dy);
 
+    // orbital arrays (must stay index-aligned)
+    w.prIsOrbital.push(isOrbital);
+    w.prOrbAngle.push(a.orbAngle ?? 0);
+    w.prOrbBaseRadius.push(a.orbBaseRadius ?? 0);
+    w.prOrbBaseAngVel.push(a.orbBaseAngVel ?? 0);
+
     return i;
-}
-
-/** Convenience helpers (optional but nice) */
-export function spawnKnifeProjectile(w: World, args: Omit<SpawnProjectileArgs, "kind">) {
-    return spawnProjectile(w, { ...args, kind: PRJ_KIND.KNIFE });
-}
-
-export function spawnPistolBullet(w: World, args: Omit<SpawnProjectileArgs, "kind">) {
-    return spawnProjectile(w, { ...args, kind: PRJ_KIND.PISTOL });
 }
 
 export function spawnSwordProjectile(w: World, args: Omit<SpawnProjectileArgs, "kind">) {
     return spawnProjectile(w, { ...args, kind: PRJ_KIND.SWORD });
+}
+
+export function spawnKnucklesOrbital(w: World, args: Omit<SpawnProjectileArgs, "kind" | "orbital">) {
+    return spawnProjectile(w, { ...args, kind: PRJ_KIND.KNUCKLES, orbital: true });
 }

@@ -1,13 +1,14 @@
 // src/game/content/weapons.ts
 import type { World } from "../world";
-import { spawnProjectile, spawnSwordProjectile, PRJ_KIND } from "../factories/projectileFactory";
+import { spawnProjectile, spawnSwordProjectile, spawnKnucklesOrbital, PRJ_KIND } from "../factories/projectileFactory";
 
 export type WeaponId =
     | "KNIFE"
     | "PISTOL"
     | "KNIFE_EVOLVED_RING"
     | "PISTOL_EVOLVED_SPIRAL"
-    | "SWORD";
+    | "SWORD"
+    | "KNUCKLES";
 
 export const MAX_WEAPON_LEVEL = 10;
 
@@ -19,21 +20,25 @@ export type WeaponStats = {
     projectileRadius: number;
     damage: number;
 
-    // optional
     projectileCount?: number;
-    fanArc?: number; // radians
+    fanArc?: number;
     pierce?: number;
-    meleeCone?: number; // radians, for melee slashes
-    meleeRange?: number; // reach for melee slashes (cone length)
+
+    meleeCone?: number;
+    meleeRange?: number;
+
+    // for orbitals
+    duration?: number;
+    orbitBaseRadius?: number;
+    orbitBaseAngVel?: number; // radians/sec
 };
 
 export type WeaponDef = {
     id: WeaponId;
     title: string;
 
-    // Evolutions support
-    hiddenFromPools?: boolean; // keep out of normal upgrade pools
-    evolvedFrom?: WeaponId;    // links evolved weapon -> base weapon
+    hiddenFromPools?: boolean;
+    evolvedFrom?: WeaponId;
 
     getStats: (level: number, w: World) => WeaponStats;
     fire: (w: World, stats: WeaponStats, aim: Aim) => void;
@@ -42,7 +47,6 @@ export type WeaponDef = {
 function clampLevel(level: number): number {
     return Math.max(1, Math.min(MAX_WEAPON_LEVEL, Math.floor(level)));
 }
-
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
     KNIFE: {
         id: "KNIFE",
@@ -334,6 +338,73 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             if (ang > Math.PI * 2) ang -= Math.PI * 2;
 
             (w as any)[key] = ang;
+        },
+    },
+    // --- Orbit weapon: Brass Knuckles / "Knuckle Ring" ---
+    KNUCKLES: {
+        id: "KNUCKLES",
+        title: "Knuckle Ring",
+        getStats: (level, w) => {
+            const lv = clampLevel(level);
+
+            // Fires often (spawn rate scales with FIRE_RATE via cooldown division)
+            const cooldownBase = 0.18;
+
+            // Damage scaling (tune later)
+            const dmgBase = 9;
+            const dmgPer = 1.4;
+
+            // Orbital properties:
+            // Base radius scales with level; final radius scales with AREA in projectilesSystem
+            const orbitBaseRadius = 42 + (lv - 1) * 5.5;
+
+            // Base angular velocity; final ang vel scales with MOVE_SPEED in projectilesSystem
+            // (positive = clockwise here because canvas Y+ down; feel free to invert if you want)
+            const orbitBaseAngVel = 6.5;
+
+            // Duration scales with DURATION multiplier (applied at spawn)
+            const baseDuration = 1.25 + (lv - 1) * 0.08;
+
+            return {
+                cooldown: cooldownBase / w.fireRateMult,
+                projectileSpeed: 0,
+                projectileRadius: 9,
+                damage: (dmgBase + (lv - 1) * dmgPer) * w.dmgMult,
+                pierce: 999, // orbitals should punch through
+                duration: baseDuration * w.durationMult,
+                orbitBaseRadius,
+                orbitBaseAngVel,
+            };
+        },
+
+        fire: (w, s, _aim) => {
+            // spread newly spawned knuckles around the ring
+            const key = "_knucklesSpawnAng";
+            let ang = (w as any)[key] ?? 0;
+            const step = Math.PI * 0.55; // pseudo-golden-ish spacing for nice distribution
+
+            (w as any)[key] = ang + step;
+
+            spawnKnucklesOrbital(w, {
+                x: w.px,
+                y: w.py,
+
+                // dir is unused for orbitals, but keep sane values for arrays
+                dirX: 1,
+                dirY: 0,
+
+                speed: 0,
+                damage: s.damage,
+                radius: s.projectileRadius,
+                pierce: s.pierce ?? 999,
+
+                ttl: s.duration ?? 1.2,
+
+                // orbital params (base values; actual radius/angVel are scaled dynamically)
+                orbAngle: ang,
+                orbBaseRadius: s.orbitBaseRadius ?? 40,
+                orbBaseAngVel: s.orbitBaseAngVel ?? 6.0,
+            });
         },
     },
 };
