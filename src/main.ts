@@ -53,34 +53,51 @@ function setSelectedWeapon(id: WeaponId) {
   menuSublineEl.textContent = `Slice v0.1 — Docks (8 min → boss). Starter weapon: ${title}.`;
 }
 
+/**
+ * Keep switch order aligned with WeaponId order:
+ * KNIFE, KNIFE_EVOLVED_RING, PISTOL, PISTOL_EVOLVED_SPIRAL, SYRINGE,
+ * SYRINGE_EVOLVED_CHAIN, SWORD, KNUCKLES, AURA, MOLOTOV
+ */
 function weaponDesc(id: WeaponId): string {
   switch (id) {
     case "KNIFE":
       return "Throws multiple knives forward.";
-    case "PISTOL":
-      return "Accurate single shots.";
     case "KNIFE_EVOLVED_RING":
       return "Evolution: knives in all directions.";
-    case "MOLOTOV":
-      return "Burning ground effect.";
+
+    case "PISTOL":
+      return "Accurate single shots.";
+    case "PISTOL_EVOLVED_SPIRAL":
+      return "Evolution: spiral shots.";
+
+    case "SYRINGE":
+      return "Poison shots. Poisoned kills cause an explosion (non-chaining).";
+    case "SYRINGE_EVOLVED_CHAIN":
+      return "Evolution: explosions apply poison and can chain.";
+
+    case "SWORD":
+      return "Melee slash in a cone.";
+    case "KNUCKLES":
+      return "Orbiting projectiles around you.";
+
     case "AURA":
       return "Damaging aura around you.";
-    case "KNUCKLES":
-        return "Orbiting projectiles";
-    case "PISTOL_EVOLVED_SPIRAL":
-        return "Evolution: Spiral spiral";
-    case "SWORD":
-      return "Melee gaming bby"
+    case "MOLOTOV":
+      return "Burning ground effect.";
+
     default:
       return "Starter weapon.";
   }
 }
 
 function isEvolutionStarter(id: WeaponId): boolean {
-  // Minimal rule for now: if the weapon id looks like an evolved one.
+  // Minimal rule for now: explicit evolved ids.
   // If you later add explicit metadata on the weapon def, swap to that.
-  return id === "KNIFE_EVOLVED_RING" || id == "PISTOL_EVOLVED_SPIRAL";
-
+  return (
+      id === "KNIFE_EVOLVED_RING" ||
+      id === "PISTOL_EVOLVED_SPIRAL" ||
+      id === "SYRINGE_EVOLVED_CHAIN"
+  );
 }
 
 function buildWeaponPicker() {
