@@ -60,7 +60,9 @@ export function zonesSystem(w: World, dt: number) {
 
                 const baseAng = w.rng.range(0, Math.PI * 2);
                 const ring = ex.ringR + nextWave * ex.ringStep;
-                const ang0 = baseAng + nextWave * ex.rot*2;
+                // Rotate each wave by 360/n (n = count) to maximize coverage
+                const rotStep = (Math.PI * 2) / Math.max(1, count);
+                const ang0 = baseAng + nextWave * rotStep;
 
                 for (let k = 0; k < count; k++) {
                     const ang = ang0 + (k * Math.PI * 2) / count;
