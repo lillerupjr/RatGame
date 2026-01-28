@@ -6,33 +6,91 @@ import {spawnZone, ZONE_KIND} from "../factories/zoneFactory";
 export function zonesSystem(w: World, dt: number) {
     const PLAYER_R = 14;
 
-    type DelayedExplosion = { t: number; x: number; y: number; r: number; dmg: number; ttl: number };
+    // -----------------------------------------------------------------
+// NEW: delayed explosion queue (Bazooka evolution recursive aftershocks)
+// Each entry spawns one explosion, then can spawn the next wave around itself.
+// -----------------------------------------------------------------
+    type DelayedExplosion = {
+        t: number;
+        x: number;
+        y: number;
+        r: number;
+        dmg: number;
+        ttl: number;
+
+        // recursion controls
+        wave: number;        // 0 = first aftershock wave
+        maxWaves: number;    // total waves (layers)
+        baseN: number;       // branching base (e.g. 4)
+        delay: number;       // seconds between waves
+        ringR: number;       // radius used for children placement
+        ringStep: number;    // optional: expand ring as it spreads
+        rot: number;         // rotation offset per wave
+    };
 
     const q = (w as any)._delayedExplosions as DelayedExplosion[] | undefined;
     if (q && q.length > 0) {
         for (let i = q.length - 1; i >= 0; i--) {
-            q[i].t -= dt;
-            if (q[i].t <= 0) {
-                const ex = q[i];
+            const ex = q[i];
+            ex.t -= dt;
 
-                const z = spawnZone(w, {
-                    kind: ZONE_KIND.EXPLOSION,
-                    x: ex.x,
-                    y: ex.y,
-                    radius: ex.r,
-                    damage: ex.dmg,
-                    tickEvery: 0.2,
-                    ttl: ex.ttl,
-                    followPlayer: false,
-                });
+            if (ex.t > 0) continue;
 
-                // single-hit burst immediately
-                w.zTickLeft[z] = 0;
+            // 1) Spawn the explosion zone now
+            const z = spawnZone(w, {
+                kind: ZONE_KIND.EXPLOSION,
+                x: ex.x,
+                y: ex.y,
+                radius: ex.r,
+                damage: ex.dmg,
+                tickEvery: 0.2,
+                ttl: ex.ttl,
+                followPlayer: false,
+            });
 
-                q.splice(i, 1);
+            // Single-hit burst immediately
+            w.zTickLeft[z] = 0;
+
+            // 2) Schedule the next wave around *this* explosion
+            const nextWave = ex.wave + 1;
+            if (nextWave < ex.maxWaves) {
+                // per your request: N, N^2, N^3 ... but now it's branching per node.
+                // To keep it sane, we branch as baseN each node (true spreading).
+                const count = ex.baseN; // children per explosion (branch factor)
+
+                const baseAng = w.rng.range(0, Math.PI * 2);
+                const ring = ex.ringR + nextWave * ex.ringStep;
+                const ang0 = baseAng + nextWave * ex.rot*2;
+
+                for (let k = 0; k < count; k++) {
+                    const ang = ang0 + (k * Math.PI * 2) / count;
+                    const x2 = ex.x + Math.cos(ang) * ring;
+                    const y2 = ex.y + Math.sin(ang) * ring;
+
+                    q.push({
+                        t: ex.delay,
+                        x: x2,
+                        y: y2,
+                        r: ex.r,
+                        dmg: ex.dmg,
+                        ttl: ex.ttl,
+
+                        wave: nextWave,
+                        maxWaves: ex.maxWaves,
+                        baseN: ex.baseN,
+                        delay: ex.delay,
+                        ringR: ex.ringR,
+                        ringStep: ex.ringStep,
+                        rot: ex.rot,
+                    });
+                }
             }
+
+            // remove processed entry
+            q.splice(i, 1);
         }
     }
+
 
     for (let z = 0; z < w.zAlive.length; z++) {
         if (!w.zAlive[z]) continue;

@@ -159,6 +159,8 @@ export function createGame(args: CreateGameArgs) {
     (w as any).prAftershockN = [];
     (w as any).prAftershockDelay = [];
     (w as any).prAftershockRingR = [];
+    (w as any).prAftershockWaves = [];
+    (w as any).prAftershockRingStep = [];
 
     // NEW: explosion payload
     (w as any).prExplodeR = [];

@@ -136,6 +136,8 @@ export type World = {
   prAftershockN: number[];       // 0 = none
   prAftershockDelay: number[];   // seconds
   prAftershockRingR: number[];   // radius around initial explosion
+  prAftershockWaves: number[];
+  prAftershockRingStep: number[];
 
 
   // NEW: explosion payload (bazooka etc.)
@@ -295,6 +297,8 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     prAftershockN: [],
     prAftershockDelay: [],
     prAftershockRingR: [],
+    prAftershockWaves: [],
+    prAftershockRingStep: [],
 
 
     prExplodeR: [],
