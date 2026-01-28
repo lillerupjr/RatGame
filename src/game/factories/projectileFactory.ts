@@ -18,7 +18,9 @@ export const PRJ_KIND = {
     KNUCKLES: 4,
     SYRINGE: 5,
     BOUNCER: 6,
+    BAZOOKA: 7,
 } as const;
+
 
 export type SpawnProjectileArgs = {
     kind: number;
@@ -53,7 +55,18 @@ export type SpawnProjectileArgs = {
     orbAngle?: number;
     orbBaseRadius?: number;
     orbBaseAngVel?: number;
+
+    // NEW: “no-collide” projectile (used by Bazooka rocket)
+    noCollide?: boolean;
+
+    // NEW: static target coordinate (rocket explodes when it reaches this point)
+    targetX?: number;
+    targetY?: number;
+
+    // NEW: explosion radius on arrival
+    explodeRadius?: number;
 };
+
 
 
 
@@ -87,15 +100,25 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     w.prR.push(a.radius);
     w.prPierce.push(a.pierce);
 
-    // Bounce counter (index-aligned with all other projectile arrays)
+// Bounce counter (index-aligned with all other projectile arrays)
     w.prBouncesLeft.push(Number.isFinite(a.bounces as any) ? (a.bounces as number) : -1);
     w.prWallBounce.push(!!a.wallBounce);
+
+// NEW: no-collide flag
+    w.prNoCollide.push(!!a.noCollide);
 
     w.prTtl.push(a.ttl);
 
     w.prStartX.push(a.x);
     w.prStartY.push(a.y);
     w.prMaxDist.push(a.maxDist ?? 0);
+
+// NEW: static target + explosion config
+    const hasTarget = Number.isFinite(a.targetX as any) && Number.isFinite(a.targetY as any);
+    w.prHasTarget.push(!!hasTarget);
+    w.prTargetX.push(hasTarget ? (a.targetX as number) : 0);
+    w.prTargetY.push(hasTarget ? (a.targetY as number) : 0);
+    w.prExplodeR.push(Math.max(0, a.explodeRadius ?? 0));
 
     w.prIsmelee.push(a.melee ?? false);
     w.prCone.push(a.coneAngle ?? Math.PI / 6);

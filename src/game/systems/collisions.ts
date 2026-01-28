@@ -17,6 +17,10 @@ export function collisionsSystem(w: World, dt: number) {
   for (let p = 0; p < w.pAlive.length; p++) {
     if (!w.pAlive[p]) continue;
 
+    // NEW: Bazooka rockets (and other special projectiles) can opt out of collisions
+    if (w.prNoCollide[p]) continue;
+
+
     const px = w.prx[p];
     const py = w.pry[p];
     const pr = w.prR[p];

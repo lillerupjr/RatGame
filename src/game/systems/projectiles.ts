@@ -1,5 +1,6 @@
 // src/game/systems/projectiles.ts
 import type { World } from "../world";
+import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
 
 /**
  * Projectile movement + lifetime cleanup.
@@ -132,11 +133,50 @@ export function projectilesSystem(w: World, dt: number) {
             w.prDirY[i] = Math.sin(a);
         }
 
-        // Normal projectiles: integrate velocity
+// Normal projectiles: integrate velocity
         w.prx[i] += w.prvx[i] * dt;
         w.pry[i] += w.prvy[i] * dt;
 
-        // Range limit (if enabled)
+// NEW: explode when reaching static target coordinates
+        if (w.prHasTarget[i]) {
+            const tx = w.prTargetX[i];
+            const ty = w.prTargetY[i];
+
+            const dx = tx - w.prx[i];
+            const dy = ty - w.pry[i];
+
+            // “Arrived” threshold (tune-friendly)
+            const thresh = Math.max(8, w.prR[i] || 0);
+            if (dx * dx + dy * dy <= thresh * thresh) {
+                // Snap to target for clean visuals
+                w.prx[i] = tx;
+                w.pry[i] = ty;
+
+                const blastR = Math.max(0, w.prExplodeR[i] ?? 0);
+                if (blastR > 0) {
+                    const z = spawnZone(w, {
+                        kind: ZONE_KIND.EXPLOSION,
+                        x: tx,
+                        y: ty,
+                        radius: blastR,
+                        damage: w.prDamage[i],
+                        tickEvery: 0.05,
+                        ttl: 0.12,
+                        followPlayer: false,
+                    });
+
+                    // Apply first tick immediately (instant explosion feel)
+                    w.zTickLeft[z] = 0;
+                }
+
+                // Rocket is consumed by the explosion
+                w.pAlive[i] = false;
+                continue;
+            }
+        }
+
+// Range limit (if enabled)
+
         const maxDist = w.prMaxDist[i] ?? 0;
         if (maxDist > 0) {
             const dx = w.prx[i] - (w.prStartX[i] ?? w.prx[i]);
