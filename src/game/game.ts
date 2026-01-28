@@ -21,6 +21,7 @@ import { poisonSystem } from "./systems/poison";
 import { recomputeDerivedStats } from "./stats/derivedStats";
 import {buildStaticRunMap, getReachable, type RunMap, type MapNode} from "./map/runMap";
 import { preloadPlayerSprites } from "./visual/playerSprites";
+import { preloadBackgrounds} from "./visual/background";
 
 type HudRefs = {
   root: HTMLDivElement;
@@ -74,7 +75,7 @@ export function createGame(args: CreateGameArgs) {
 
   const input: InputState = createInputState();
   let world: World = createWorld({ seed: 1337, stage: cloneStage("DOCKS") });
-
+  preloadBackgrounds();
   preloadPlayerSprites();
 
   let currentChoices: UpgradeDef[] = [];
