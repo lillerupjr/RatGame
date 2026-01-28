@@ -854,6 +854,112 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             (w as any)[key] = idx;
         },
     },
+    BAZOOKA: {
+        id: "BAZOOKA",
+        title: "Bazooka",
+
+        getStats: (level: number, w: World) => {
+            const lv = clampLevel(level);
+
+            const cooldownBase = 3.25;
+
+            // Rocket travel speed (world units/sec)
+            const rocketSpeedBase = 620;
+            const rocketSpeedPer = 18;
+
+            // Explosion radius (scales with AREA)
+            const blastBase = 86;
+            const blastPer = 6.5;
+            const blastR = (blastBase + (lv - 1) * blastPer) * (w.areaMult ?? 1);
+
+            // Explosion damage (scales with DMG)
+            const dmgBase = 34;
+            const dmgPer = 3.1;
+            const dmg = (dmgBase + (lv - 1) * dmgPer) * (w.dmgMult ?? 1);
+
+            // Targeting radius around player (not a “blast radius”; this is acquisition range)
+            const targetRadiusBase = 420;
+            const targetRadiusPer = 12;
+            const targetRadius = targetRadiusBase + (lv - 1) * targetRadiusPer;
+
+            // Rocket visual “arrival threshold” radius
+            const rocketR = 7;
+
+            return {
+                cooldown: cooldownBase / (w.fireRateMult ?? 1),
+                projectileSpeed: rocketSpeedBase + (lv - 1) * rocketSpeedPer,
+                projectileRadius: blastR, // we use this as explosion radius for this weapon
+                damage: dmg,
+
+                // escape hatch fields for fire()
+                ...({ targetRadius, rocketR } as any),
+            } as any;
+        },
+
+        fire: (w: World, s: any, aim: Aim): void => {
+            const targetRadius = (s as any).targetRadius ?? 420;
+            const rocketR = (s as any).rocketR ?? 7;
+
+            // Find candidates within acquisition radius
+            const cand: number[] = [];
+            const tr2 = targetRadius * targetRadius;
+
+            for (let e = 0; e < w.eAlive.length; e++) {
+                if (!w.eAlive[e]) continue;
+                const dx = w.ex[e] - w.px;
+                const dy = w.ey[e] - w.py;
+                if (dx * dx + dy * dy <= tr2) cand.push(e);
+            }
+
+            // If none in radius, fallback: fire at a point in front of player (still “static target coords”)
+            let tx: number;
+            let ty: number;
+
+            if (cand.length > 0) {
+                const pick = cand[w.rng.int(0, cand.length - 1)];
+                tx = w.ex[pick];
+                ty = w.ey[pick];
+            } else {
+                tx = w.px + aim.x * targetRadius;
+                ty = w.py + aim.y * targetRadius;
+            }
+
+            // Direction to the static target
+            let dx = tx - w.px;
+            let dy = ty - w.py;
+            const len = Math.hypot(dx, dy) || 1;
+            dx /= len;
+            dy /= len;
+
+            const speed = s.projectileSpeed;
+
+            // TTL long enough to arrive + tiny buffer
+            const dist = Math.hypot(tx - w.px, ty - w.py);
+            const ttl = Math.max(0.25, dist / Math.max(1, speed) + 0.35);
+
+            spawnProjectile(w, {
+                kind: PRJ_KIND.BAZOOKA,
+                x: w.px,
+                y: w.py,
+                dirX: dx,
+                dirY: dy,
+                speed,
+                damage: s.damage,
+                radius: rocketR,
+
+                // Rocket never collides; it ONLY explodes at target coords
+                pierce: 0,
+                noCollide: true,
+
+                // Static target coordinate + explosion radius
+                targetX: tx,
+                targetY: ty,
+                explodeRadius: s.projectileRadius,
+
+                ttl,
+            });
+        },
+    },
     MOLOTOV: {
         id: "MOLOTOV",
         title: "Molotov Cocktail",

@@ -114,11 +114,21 @@ export type World = {
   // If true, projectile also bounces off the screen edges (camera view bounds).
   prWallBounce: boolean[];
 
+  // NEW: projectiles that should not collide with enemies (Bazooka rocket)
+  prNoCollide: boolean[];
+
+  // NEW: static target + explode-on-arrival
+  prHasTarget: boolean[];
+  prTargetX: number[];
+  prTargetY: number[];
+  prExplodeR: number[];
+
   prStartX: number[];
   prStartY: number[];
   prMaxDist: number[]; // 0 = unlimited
   prLastHitEnemy: number[]; // last enemy index hit
   prLastHitCd: number[];    // seconds remaining until it can hit that same enemy again
+
 
   prPoisonDps: number[];  // NEW
   prPoisonDur: number[];  // NEW
@@ -247,9 +257,17 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     prPierce: [],
     prWallBounce: [],
 
+    // NEW
+    prNoCollide: [],
+    prHasTarget: [],
+    prTargetX: [],
+    prTargetY: [],
+    prExplodeR: [],
+
     prIsmelee: [],
     prCone: [],
     prMeleeRange: [],
+
     prDirX: [],
     prDirY: [],
     prTtl: [],
