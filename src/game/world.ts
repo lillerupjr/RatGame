@@ -121,7 +121,6 @@ export type World = {
   prHasTarget: boolean[];
   prTargetX: number[];
   prTargetY: number[];
-  prExplodeR: number[];
 
   prStartX: number[];
   prStartY: number[];
@@ -132,6 +131,12 @@ export type World = {
 
   prPoisonDps: number[];  // NEW
   prPoisonDur: number[];  // NEW
+
+  // NEW: explosion payload (bazooka etc.)
+  prExplodeR: number[];     // 0 = no explosion
+  prExplodeDmg: number[];   // damage per tick (we'll tick once instantly)
+  prExplodeTtl: number[];   // visual TTL for the explosion ring
+
 
   // NEW: Orbital projectiles (Knuckle Ring)
   prIsOrbital: boolean[];
@@ -262,7 +267,6 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     prHasTarget: [],
     prTargetX: [],
     prTargetY: [],
-    prExplodeR: [],
 
     prIsmelee: [],
     prCone: [],
@@ -281,6 +285,10 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
 
     prPoisonDps: [],
     prPoisonDur: [],
+
+    prExplodeR: [],
+    prExplodeDmg: [],
+    prExplodeTtl: [],
 
     prIsOrbital: [],
     prOrbAngle: [],

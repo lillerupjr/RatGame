@@ -2,6 +2,8 @@
 import { World, emitEvent } from "../world";
 import { isEnemyHit, isPlayerHit } from "./hitDetection";
 import { registry } from "../content/registry";
+import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
+
 
 /**
  * Handles:
@@ -123,6 +125,35 @@ export function collisionsSystem(w: World, dt: number) {
         } else {
           w.pAlive[p] = false;
         }
+      }
+
+      // -------------------------
+      // Explode-on-hit (Bazooka etc.)
+      // -------------------------
+      const exR = (w as any).prExplodeR?.[p] ?? 0;
+      const exDmg = (w as any).prExplodeDmg?.[p] ?? 0;
+      const exTtl = (w as any).prExplodeTtl?.[p] ?? 0.25;
+
+      if (exR > 0 && exDmg > 0) {
+        const zx = w.prx[p];
+        const zy = w.pry[p];
+
+        const z = spawnZone(w, {
+          kind: ZONE_KIND.EXPLOSION,
+          x: zx,
+          y: zy,
+          radius: exR,
+          damage: exDmg,
+          tickEvery: 0.2,      // doesn't matter; we force the first tick immediately
+          ttl: exTtl,
+          followPlayer: false,
+        });
+
+        // Force immediate tick this frame so it *feels* like an explosion
+        w.zTickLeft[z] = 0;
+
+        // Bazooka identity: explode then vanish (no multi-hits)
+        w.pAlive[p] = false;
       }
 
 
