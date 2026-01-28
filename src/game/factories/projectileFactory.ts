@@ -1,13 +1,23 @@
 // src/game/factories/projectileFactory.ts
 import type { World } from "../world";
 
-export type ProjectileSource = "KNIFE" | "PISTOL" | "SWORD" | "KNUCKLES" | "OTHER";
+export type ProjectileSource =
+    | "KNIFE"
+    | "PISTOL"
+    | "SWORD"
+    | "KNUCKLES"
+    | "SYRINGE"
+    | "BOUNCER"
+    | "OTHER";
+
 
 export const PRJ_KIND = {
     KNIFE: 1,
     PISTOL: 2,
     SWORD: 3,
     KNUCKLES: 4,
+    SYRINGE: 5,
+    BOUNCER: 6,
 } as const;
 
 export type SpawnProjectileArgs = {

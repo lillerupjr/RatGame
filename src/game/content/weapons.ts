@@ -380,7 +380,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const poisonDur = Math.max(0, (s as any).poisonDur ?? 0);
 
             const p = spawnProjectile(w, {
-                kind: PRJ_KIND.PISTOL, // reuse bullet visuals/behavior; poison payload differentiates it
+                kind: PRJ_KIND.SYRINGE,
                 x: w.px,
                 y: w.py,
                 dirX: aim.x,
@@ -479,7 +479,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const poisonDur = Math.max(0, (s as any).poisonDur ?? 0);
 
             const p = spawnProjectile(w, {
-                kind: PRJ_KIND.PISTOL, // reuse bullet visuals/behavior; poison payload differentiates it
+                kind: PRJ_KIND.SYRINGE,
                 x: w.px,
                 y: w.py,
                 dirX: aim.x,
@@ -538,7 +538,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const bounces = Math.max(0, ((s as any).bounces ?? 0));
 
             spawnProjectile(w, {
-                kind: PRJ_KIND.PISTOL, // reuse bullet visuals for now
+                kind: PRJ_KIND.BOUNCER,
                 x: w.px,
                 y: w.py,
                 dirX: aim.x,
@@ -593,7 +593,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             // Single-direction fallback (normal aimed shot)
             if (dirs === 1) {
                 spawnProjectile(w, {
-                    kind: PRJ_KIND.PISTOL,
+                    kind: PRJ_KIND.BOUNCER,
                     x: w.px,
                     y: w.py,
                     dirX: aim.x,

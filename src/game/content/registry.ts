@@ -31,10 +31,16 @@ export const registry = {
                 return "SWORD";
             case PRJ_KIND.KNUCKLES:
                 return "KNUCKLES";
+            case PRJ_KIND.SYRINGE:
+                return "SYRINGE";
+            case PRJ_KIND.BOUNCER:
+                return "BOUNCER";
+
             default:
                 return "OTHER";
         }
     },
+
 
     // ---- Items ----
     itemIds(): ItemId[] {
