@@ -7,6 +7,7 @@ import { ENEMY_TYPE } from "../content/enemies";
 import { getPlayerSprite, playerSpritesReady, PLAYER_SPRITE_SCALE, type Dir8, type Frame3 } from "../visual/playerSprites";
 import { getEnemySpriteFrame, preloadEnemySprites } from "../visual/enemySprites";
 import { getBackground } from "../visual/background";
+import { getProjectileSpriteByKind, preloadProjectileSprites } from "../visual/projectileSprites";
 
 export async function renderSystem(
     w: World,
@@ -24,6 +25,12 @@ export async function renderSystem(
   if (!(w as any)._enemySpritesPreloaded) {
     (w as any)._enemySpritesPreloaded = true;
     preloadEnemySprites();
+  }
+
+  // one-time projectile sprite preload
+  if (!(w as any)._projectileSpritesPreloaded) {
+    (w as any)._projectileSpritesPreloaded = true;
+    preloadProjectileSprites();
   }
 
   const cx = ww * 0.5 - w.px;
@@ -228,61 +235,60 @@ export async function renderSystem(
 
     ctx.globalAlpha = 1;
   }
-// Projectiles
+  // Projectiles (sprites; fallback to circles)
   for (let i = 0; i < w.pAlive.length; i++) {
     if (!w.pAlive[i]) continue;
 
     const x = w.prx[i] + cx;
     const y = w.pry[i] + cy;
 
-    // --- Melee: forward-facing cone/sector (old sword slash look) ---
-    if ((w as any).prIsmelee?.[i]) {
-      const dirX = (w as any).prDirX?.[i] ?? 1;
-      const dirY = (w as any).prDirY?.[i] ?? 0;
+    const spr = getProjectileSpriteByKind(w.prjKind[i]);
 
-      const baseAng = Math.atan2(dirY, dirX);
-      const cone = (w as any).prCone?.[i] ?? (Math.PI / 6); // total cone width
-      const half = cone * 0.5;
+    // Rotation uses projectile direction (works for both moving + orbitals)
+    const dx = w.prDirX[i] ?? 1;
+    const dy = w.prDirY[i] ?? 0;
+    const ang = Math.atan2(dy, dx); // assumes sprite faces RIGHT by default
 
-      // Prefer explicit melee range if you have it, otherwise fall back to projectile radius
-      const r = (w as any).prMeleeRange?.[i] ?? w.prR[i];
+    if (spr?.ready && spr.img && spr.img.width > 0 && spr.img.height > 0) {
+      // Size: tie sprite size to projectile radius (so upgrades/area feel consistent)
+      // Target diameter in px:
+      const target = Math.max(10, (w.prR[i] ?? 4) * 4);
+
+      const iw = spr.img.width;
+      const ih = spr.img.height;
+
+      // Keep aspect ratio, fit to target
+      const scale = target / Math.max(iw, ih);
+      const dw = iw * scale;
+      const dh = ih * scale;
 
       ctx.save();
       ctx.translate(x, y);
-      ctx.rotate(baseAng);
-
-      // Sector (circle segment)
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.arc(0, 0, r, -half, half);
-      ctx.closePath();
-
-      // Style (match your old look; tweak as desired)
-      ctx.fillStyle = "rgba(250, 180, 255, 0.35)";
-      ctx.strokeStyle = "#f5b";
-      ctx.lineWidth = 2;
-      ctx.fill();
-      ctx.stroke();
-
+      ctx.rotate(ang);
+      ctx.drawImage(spr.img, -dw * 0.5, -dh * 0.5, dw, dh);
       ctx.restore();
-      continue;
+    } else {
+      // fallback circle (old behavior)
+      const src = registry.projectileSourceFromKind(w.prjKind[i]);
+      ctx.fillStyle =
+          src === "KNIFE"
+              ? "#fff"
+              : src === "PISTOL"
+                  ? "#9f9"
+                  : src === "KNUCKLES"
+                      ? "#fc6"
+                      : src === "SYRINGE"
+                          ? "#7df"
+                          : src === "BOUNCER"
+                              ? "#fdc"
+                              : "#bbb";
+
+      ctx.beginPath();
+      ctx.arc(x, y, w.prR[i], 0, Math.PI * 2);
+      ctx.fill();
     }
-
-    // --- Ranged: simple circles (existing behavior) ---
-    const src = registry.projectileSourceFromKind(w.prjKind[i]);
-    ctx.fillStyle =
-        src === "KNIFE"
-            ? "#fff"
-            : src === "PISTOL"
-                ? "#9f9"
-                : src === "KNUCKLES"
-                    ? "#fc6"
-                    : "#bbb";
-
-    ctx.beginPath();
-    ctx.arc(x, y, w.prR[i], 0, Math.PI * 2);
-    ctx.fill();
   }
+
 
 // Pickups (XP + Boss Chest)
   for (let i = 0; i < w.xAlive.length; i++) {
