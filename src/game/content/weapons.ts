@@ -314,7 +314,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const cooldownBase = 2;
 
             // Needle feel: fast, small, short-ish life
-            const needleSpeed = 560;
+            const needleSpeed = 200;
 
             // Small direct hit (still scales with dmgMult)
             const hitDmgBase = 4.0;
@@ -413,7 +413,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const cooldownBase = 2;
 
             // Needle feel: fast, small, short-ish life
-            const needleSpeed = 560;
+            const needleSpeed = 200;
 
             // Small direct hit (still scales with dmgMult)
             const hitDmgBase = 4.0;

@@ -19,9 +19,9 @@ const modules = import.meta.glob("../../assets/backgrounds/*.png", {
 // floorIndex: 0=Floor1, 1=Floor2, 2=Floor3
 // ─────────────────────────────────────────────────────────────
 export const BG_BY_FLOOR_INDEX: Record<number, string> = {
-    0: "test3.png",   // DOCKS
-    1: "test3.png",  // SEWERS
-    2: "test2.png",  // CHINATOWN
+    0: "test2.png",   // DOCKS
+    1: "test.png",  // SEWERS
+    2: "test3.png",  // CHINATOWN
 };
 
 const DEFAULT_BG_FILE = "";
