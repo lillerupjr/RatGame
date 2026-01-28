@@ -100,6 +100,10 @@ function weaponDesc(id: WeaponId): string {
         return "Bouncing projectiles";
     case "BOUNCER_EVOLVED_BANKSHOT":
         return "EXTREME BOUNCES!!";
+    case "BAZOOKA":
+      return "Shoots a slow moving missile";
+    case "BAZOOKA_EVOLVED":
+      return "kaboom.";
     default:
       return "Starter weapon.";
   }
@@ -112,6 +116,7 @@ function isEvolutionStarter(id: WeaponId): boolean {
       id === "KNIFE_EVOLVED_RING" ||
       id === "PISTOL_EVOLVED_SPIRAL" ||
       id === "SYRINGE_EVOLVED_CHAIN" ||
+      id === "BAZOOKA_EVOLVED" ||
       id === "BOUNCER_EVOLVED_BANKSHOT"
   );
 }

@@ -151,34 +151,42 @@ export function collisionsSystem(w: World, dt: number) {
 
         // Force immediate tick this frame so it *feels* like an explosion
         w.zTickLeft[z] = 0;
-// --------------------------------------------------
-// NEW: Bazooka evolution aftershocks (delayed ring)
-// --------------------------------------------------
-        const n = (w as any).prAftershockN?.[p] ?? 0;
+
+        // NEW: Bazooka evolution aftershocks (delayed ring)
+
+
+        const baseN = (w as any).prAftershockN?.[p] ?? 0;
         const delay = (w as any).prAftershockDelay?.[p] ?? 0;
         const ringR = (w as any).prAftershockRingR?.[p] ?? 0;
+        const maxWaves = (w as any).prAftershockWaves?.[p] ?? 0;
+        const ringStep = (w as any).prAftershockRingStep?.[p] ?? 0;
 
-        if (n > 0 && delay > 0 && ringR > 0) {
+        if (baseN > 0 && delay > 0 && ringR > 0 && maxWaves > 0) {
           const q = ((w as any)._delayedExplosions ??= []);
-          const baseAng = w.rng.range(0, Math.PI * 2); // deterministic rotation
+          const baseAng = w.rng.range(0, Math.PI * 2);
+          const rot = w.rng.range(0.15, 0.55);
 
-          for (let k = 0; k < n; k++) {
-            const ang = baseAng + (k * (Math.PI * 2)) / n; // uniform around circle
-            const x2 = zx + Math.cos(ang) * ringR;
-            const y2 = zy + Math.sin(ang) * ringR;
-
+          // wave 0 around the impact point (zx, zy)
+          for (let k = 0; k < baseN; k++) {
+            const ang = baseAng + (k * Math.PI * 2) / baseN;
             q.push({
               t: delay,
-              x: x2,
-              y: y2,
+              x: zx + Math.cos(ang) * ringR,
+              y: zy + Math.sin(ang) * ringR,
               r: exR,
               dmg: exDmg,
               ttl: exTtl,
+
+              wave: 0,
+              maxWaves,
+              baseN,
+              delay,
+              ringR,
+              ringStep,
+              rot,
             });
           }
         }
-
-        // Bazooka identity: explode then vanish (no multi-hits)
         w.pAlive[p] = false;
       }
 

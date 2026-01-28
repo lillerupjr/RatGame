@@ -149,6 +149,9 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     (w as any).prAftershockN?.push(0);
     (w as any).prAftershockDelay?.push(0);
     (w as any).prAftershockRingR?.push(0);
+    (w as any).prAftershockWaves?.push(0);
+    (w as any).prAftershockRingStep?.push(0);
+
 
     w.prLastHitEnemy.push(-1);
     w.prLastHitCd.push(0);
