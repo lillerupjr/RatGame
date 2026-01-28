@@ -4,8 +4,9 @@ import { registry } from "../content/registry";
 import { ZONE_KIND } from "../factories/zoneFactory";
 import { getBossAccent, getFloorVisual } from "../content/floors";
 import { ENEMY_TYPE } from "../content/enemies";
+import { getPlayerSprite, playerSpritesReady, PLAYER_SPRITE_SCALE, type Dir8, type Frame3 } from "../visual/playerSprites";
 
-export function renderSystem(
+export async function renderSystem(
     w: World,
     ctx: CanvasRenderingContext2D,
     canvas: HTMLCanvasElement
@@ -304,9 +305,27 @@ export function renderSystem(
       ctx.stroke();
     }
   }
-  // Player
-  ctx.fillStyle = "#eaeaf2";
-  ctx.beginPath();
-  ctx.arc(ww * 0.5, hh * 0.5, 14, 0, Math.PI * 2);
-  ctx.fill();
+  // Player (8-dir sprite; fallback circle)
+  ctx.globalAlpha = 1;
+
+  const dir = (((w as any)._plDir ?? "S") as Dir8);
+  const frame = (((w as any)._plFrame ?? 2) as Frame3);
+
+  const img = playerSpritesReady() ? getPlayerSprite(dir, frame) : null;
+
+  if (img && img.width > 0 && img.height > 0) {
+    const sw = img.width * PLAYER_SPRITE_SCALE;
+    const sh = img.height * PLAYER_SPRITE_SCALE;
+
+    const x = ww * 0.5 - sw * 0.5;
+    const y = hh * 0.5 - sh * 0.5;
+
+    ctx.drawImage(img, x, y, sw, sh);
+  } else {
+    // fallback
+    ctx.fillStyle = "#eaeaf2";
+    ctx.beginPath();
+    ctx.arc(ww * 0.5, hh * 0.5, 14, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }

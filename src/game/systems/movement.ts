@@ -35,10 +35,46 @@ export function movementSystem(w: World, input: InputState, dt: number) {
 
   // Projectiles move
   // Update last aim direction from player movement (used when no enemies exist)
+  // Update last aim direction from player movement (used when no enemies exist)
   const mag = Math.hypot(w.pvx, w.pvy);
   if (mag > 0.0001) {
     w.lastAimX = w.pvx / mag;
     w.lastAimY = w.pvy / mag;
   }
 
+  // -------------------------
+  // Player sprite dir + anim (movement-based)
+  // -------------------------
+  type Dir8 = "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW";
+
+  function dirFromVec(dx: number, dy: number): Dir8 {
+    // Canvas coords: +x right, +y down
+    const ang = Math.atan2(dy, dx); // -pi..pi, 0=E
+    // Convert to 8-way index where 0=E, 1=SE, 2=S, 3=SW, 4=W, 5=NW, 6=N, 7=NE
+    const idx = (Math.round(ang / (Math.PI / 4)) + 8) % 8;
+    const map: Dir8[] = ["E", "SE", "S", "SW", "W", "NW", "N", "NE"];
+    return map[idx];
+  }
+
+  const moving = mag > 8; // same threshold you were using elsewhere
+  if (!moving) {
+    // Idle snaps to S2 (your request)
+    (w as any)._plDir = "S";
+    (w as any)._plFrame = 2;
+    (w as any)._plAnimT = 0;
+  } else {
+    const dxn = w.pvx / (mag || 1);
+    const dyn = w.pvy / (mag || 1);
+
+    (w as any)._plDir = dirFromVec(dxn, dyn);
+
+    // 1 → 2 → 3 → 2 loop (uses all 3 frames)
+    const seq = [1, 2, 3, 2] as const;
+    const stepSec = 0.11; // tweak later (faster = smaller)
+    const t0 = ((w as any)._plAnimT ?? 0) + dt;
+    (w as any)._plAnimT = t0;
+
+    const step = Math.floor(t0 / stepSec) % seq.length;
+    (w as any)._plFrame = seq[step];
+  }
 }
