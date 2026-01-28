@@ -20,7 +20,7 @@ import { spawnEnemy, ENEMY_TYPE } from "./factories/enemyFactory";
 import { poisonSystem } from "./systems/poison";
 import { recomputeDerivedStats } from "./stats/derivedStats";
 import {buildStaticRunMap, getReachable, type RunMap, type MapNode} from "./map/runMap";
-
+import { preloadPlayerSprites } from "./visual/playerSprites";
 
 type HudRefs = {
   root: HTMLDivElement;
@@ -71,8 +71,11 @@ type CreateGameArgs = {
 
 
 export function createGame(args: CreateGameArgs) {
+
   const input: InputState = createInputState();
   let world: World = createWorld({ seed: 1337, stage: cloneStage("DOCKS") });
+
+  preloadPlayerSprites();
 
   let currentChoices: UpgradeDef[] = [];
 
@@ -520,6 +523,7 @@ export function createGame(args: CreateGameArgs) {
   // ---------------------------------
 
   function update(dt: number) {
+
     // Always poll input (so movement is responsive immediately after closing menus)
     inputSystem(input, args.canvas);
 
