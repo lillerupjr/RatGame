@@ -5,6 +5,7 @@ import { ZONE_KIND } from "../factories/zoneFactory";
 import { getBossAccent, getFloorVisual } from "../content/floors";
 import { ENEMY_TYPE } from "../content/enemies";
 import { getPlayerSprite, playerSpritesReady, PLAYER_SPRITE_SCALE, type Dir8, type Frame3 } from "../visual/playerSprites";
+import { getEnemySpriteFrame, preloadEnemySprites } from "../visual/enemySprites";
 
 export async function renderSystem(
     w: World,
@@ -17,6 +18,12 @@ export async function renderSystem(
   (w as any).viewH = hh;
 
   ctx.clearRect(0, 0, ww, hh);
+
+  // one-time enemy sprite preload
+  if (!(w as any)._enemySpritesPreloaded) {
+    (w as any)._enemySpritesPreloaded = true;
+    preloadEnemySprites();
+  }
 
   const cx = ww * 0.5 - w.px;
   const cy = hh * 0.5 - w.py;
@@ -170,12 +177,36 @@ export async function renderSystem(
     const isBoss = w.eType[i] === ENEMY_TYPE.BOSS;
     if (isBoss) baseColor = getBossAccent(w) ?? baseColor;
 
-    // Base enemy body
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = baseColor;
-    ctx.beginPath();
-    ctx.arc(x, y, w.eR[i], 0, Math.PI * 2);
-    ctx.fill();
+    // Try sprite sheet (fallback to circle if missing/not ready)
+    const faceDx = w.px - w.ex[i];
+    const faceDy = w.py - w.ey[i];
+
+    // Simple “moving” heuristic (enemies always chase, but let’s not animate if basically stationary)
+    const moving = (w.eSpeed[i] ?? 0) > 1;
+
+    const fr = getEnemySpriteFrame({
+      type: w.eType[i] as any,
+      time: w.time ?? 0,
+      faceDx,
+      faceDy,
+      moving,
+    });
+
+    if (fr) {
+      const dw = fr.sw * fr.scale;
+      const dh = fr.sh * fr.scale;
+
+      ctx.globalAlpha = 1;
+      ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, x - dw / 2, y - dh / 2, dw, dh);
+    } else {
+      // fallback: old circle
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = baseColor;
+      ctx.beginPath();
+      ctx.arc(x, y, w.eR[i], 0, Math.PI * 2);
+      ctx.fill();
+    }
+
 
     // Boss “presence”: double ring + pulsing halo
     if (isBoss) {
