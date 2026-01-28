@@ -861,7 +861,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         getStats: (level: number, w: World) => {
             const lv = clampLevel(level);
 
-            const cooldownBase = 3.25;
+            const cooldownBase = 1;
 
             // Rocket travel speed (world units/sec)
             const rocketSpeedBase = 620;
@@ -877,18 +877,22 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const dmgPer = 3.1;
             const dmg = (dmgBase + (lv - 1) * dmgPer) * (w.dmgMult ?? 1);
 
-            // Targeting radius around player (not a “blast radius”; this is acquisition range)
+            // Targeting radius around player (acquisition range)
             const targetRadiusBase = 420;
             const targetRadiusPer = 12;
             const targetRadius = targetRadiusBase + (lv - 1) * targetRadiusPer;
 
-            // Rocket visual “arrival threshold” radius
+            // Rocket collision radius (visual/feel)
             const rocketR = 7;
 
             return {
                 cooldown: cooldownBase / (w.fireRateMult ?? 1),
                 projectileSpeed: rocketSpeedBase + (lv - 1) * rocketSpeedPer,
-                projectileRadius: blastR, // we use this as explosion radius for this weapon
+
+                // IMPORTANT:
+                // We keep projectileRadius = blast radius for convenience (your original pattern),
+                // and use rocketR as the actual rocket collision radius.
+                projectileRadius: blastR,
                 damage: dmg,
 
                 // escape hatch fields for fire()
@@ -911,7 +915,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
                 if (dx * dx + dy * dy <= tr2) cand.push(e);
             }
 
-            // If none in radius, fallback: fire at a point in front of player (still “static target coords”)
+            // Pick a target point
             let tx: number;
             let ty: number;
 
@@ -920,11 +924,12 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
                 tx = w.ex[pick];
                 ty = w.ey[pick];
             } else {
+                // fallback: fire forward
                 tx = w.px + aim.x * targetRadius;
                 ty = w.py + aim.y * targetRadius;
             }
 
-            // Direction to the static target
+            // Direction toward target point
             let dx = tx - w.px;
             let dy = ty - w.py;
             const len = Math.hypot(dx, dy) || 1;
@@ -933,33 +938,35 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             const speed = s.projectileSpeed;
 
-            // TTL long enough to arrive + tiny buffer
+            // TTL long enough to cross acquisition radius + buffer
             const dist = Math.hypot(tx - w.px, ty - w.py);
-            const ttl = Math.max(0.25, dist / Math.max(1, speed) + 0.35);
+            const ttl = Math.max(0.35, dist / Math.max(1, speed) + 0.45);
 
-            spawnProjectile(w, {
-                kind: PRJ_KIND.BAZOOKA,
+            // Optional: keep impact damage smaller so explosion is the identity (prevents double-dipping)
+            const impactDmg = Math.max(1, (s.damage ?? 0) * 0.25);
+
+            // Spawn rocket (collides normally). Explosion is triggered by collisionsSystem using payload arrays.
+            const p = spawnProjectile(w, {
+                kind: PRJ_KIND.BAZOOKA, // keep your bazooka visual kind if it exists in your project
                 x: w.px,
                 y: w.py,
                 dirX: dx,
                 dirY: dy,
                 speed,
-                damage: s.damage,
+                damage: impactDmg,
                 radius: rocketR,
-
-                // Rocket never collides; it ONLY explodes at target coords
-                pierce: 0,
-                noCollide: true,
-
-                // Static target coordinate + explosion radius
-                targetX: tx,
-                targetY: ty,
-                explodeRadius: s.projectileRadius,
-
+                pierce: 999, // we kill it ourselves on first hit when explosion triggers
                 ttl,
+                maxDist: (w as any).viewW ? (w as any).viewW * 2 : undefined,
             });
+
+            // Attach explode-on-hit payload
+            (w as any).prExplodeR[p] = Math.max(1, s.projectileRadius ?? 0); // blast radius
+            (w as any).prExplodeDmg[p] = Math.max(0, s.damage ?? 0);         // explosion damage
+            (w as any).prExplodeTtl[p] = 0.30;                               // VFX ring duration
         },
     },
+
     MOLOTOV: {
         id: "MOLOTOV",
         title: "Molotov Cocktail",

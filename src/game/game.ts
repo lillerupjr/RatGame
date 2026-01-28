@@ -155,6 +155,11 @@ export function createGame(args: CreateGameArgs) {
     w.prPoisonDps = [];
     w.prPoisonDur = [];
 
+    // NEW: explosion payload
+    (w as any).prExplodeR = [];
+    (w as any).prExplodeDmg = [];
+    (w as any).prExplodeTtl = [];
+
     w.prIsOrbital = [];
     w.prOrbAngle = [];
     w.prOrbBaseRadius = [];
