@@ -1,9 +1,38 @@
 import type { World } from "../world";
 import { emitEvent } from "../world";
 import { isEnemyInCircle } from "./hitDetection";
+import {spawnZone, ZONE_KIND} from "../factories/zoneFactory";
 
 export function zonesSystem(w: World, dt: number) {
     const PLAYER_R = 14;
+
+    type DelayedExplosion = { t: number; x: number; y: number; r: number; dmg: number; ttl: number };
+
+    const q = (w as any)._delayedExplosions as DelayedExplosion[] | undefined;
+    if (q && q.length > 0) {
+        for (let i = q.length - 1; i >= 0; i--) {
+            q[i].t -= dt;
+            if (q[i].t <= 0) {
+                const ex = q[i];
+
+                const z = spawnZone(w, {
+                    kind: ZONE_KIND.EXPLOSION,
+                    x: ex.x,
+                    y: ex.y,
+                    radius: ex.r,
+                    damage: ex.dmg,
+                    tickEvery: 0.2,
+                    ttl: ex.ttl,
+                    followPlayer: false,
+                });
+
+                // single-hit burst immediately
+                w.zTickLeft[z] = 0;
+
+                q.splice(i, 1);
+            }
+        }
+    }
 
     for (let z = 0; z < w.zAlive.length; z++) {
         if (!w.zAlive[z]) continue;

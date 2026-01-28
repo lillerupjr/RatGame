@@ -132,6 +132,12 @@ export type World = {
   prPoisonDps: number[];  // NEW
   prPoisonDur: number[];  // NEW
 
+  // NEW: Bazooka evolution aftershock payload (index-aligned with projectiles)
+  prAftershockN: number[];       // 0 = none
+  prAftershockDelay: number[];   // seconds
+  prAftershockRingR: number[];   // radius around initial explosion
+
+
   // NEW: explosion payload (bazooka etc.)
   prExplodeR: number[];     // 0 = no explosion
   prExplodeDmg: number[];   // damage per tick (we'll tick once instantly)
@@ -285,6 +291,11 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
 
     prPoisonDps: [],
     prPoisonDur: [],
+
+    prAftershockN: [],
+    prAftershockDelay: [],
+    prAftershockRingR: [],
+
 
     prExplodeR: [],
     prExplodeDmg: [],

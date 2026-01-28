@@ -155,6 +155,11 @@ export function createGame(args: CreateGameArgs) {
     w.prPoisonDps = [];
     w.prPoisonDur = [];
 
+    // NEW: bazooka evolution aftershock payload
+    (w as any).prAftershockN = [];
+    (w as any).prAftershockDelay = [];
+    (w as any).prAftershockRingR = [];
+
     // NEW: explosion payload
     (w as any).prExplodeR = [];
     (w as any).prExplodeDmg = [];
