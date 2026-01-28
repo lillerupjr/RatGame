@@ -6,6 +6,7 @@ import { getBossAccent, getFloorVisual } from "../content/floors";
 import { ENEMY_TYPE } from "../content/enemies";
 import { getPlayerSprite, playerSpritesReady, PLAYER_SPRITE_SCALE, type Dir8, type Frame3 } from "../visual/playerSprites";
 import { getEnemySpriteFrame, preloadEnemySprites } from "../visual/enemySprites";
+import { getBackground } from "../visual/background";
 
 export async function renderSystem(
     w: World,
@@ -28,65 +29,37 @@ export async function renderSystem(
   const cx = ww * 0.5 - w.px;
   const cy = hh * 0.5 - w.py;
 
-  // Base background
+  // --- Infinite tiled background texture ---
   ctx.globalAlpha = 1;
-  ctx.fillStyle = "#0b0b0f";
-  ctx.fillRect(0, 0, ww, hh);
 
-  // Floor visuals (tint + grid + decals)
-  const vis = getFloorVisual(w);
+  const bg = getBackground(); // should load /assets/background/test.png internally
+  if (bg?.ready && bg.img) {
+    const tileW = bg.img.width || 1024;
+    const tileH = bg.img.height || 1024;
 
-  // tint
-  ctx.globalAlpha = Math.max(0, Math.min(1, vis.tintAlpha));
-  ctx.fillStyle = vis.tint;
-  ctx.fillRect(0, 0, ww, hh);
+    // Screen top-left in world coords is (-cx, -cy)
+    // Find the world-aligned tile start so the texture "sticks" to the world.
+    const worldLeft = -cx;
+    const worldTop = -cy;
 
-  // grid
-  ctx.globalAlpha = Math.max(0, Math.min(1, vis.gridAlpha));
-  ctx.strokeStyle = vis.gridColor;
-  ctx.lineWidth = 1;
+    const startTileX = Math.floor(worldLeft / tileW) * tileW;
+    const startTileY = Math.floor(worldTop / tileH) * tileH;
 
-  const cell = Math.max(24, vis.cell | 0);
-  const startX = ((-cx) / cell) | 0;
-  const startY = ((-cy) / cell) | 0;
-
-  const gridStartX = startX * cell - cell * 2;
-  const gridStartY = startY * cell - cell * 2;
-
-  for (let x = gridStartX; x < -cx + ww + cell * 2; x += cell) {
-    ctx.beginPath();
-    ctx.moveTo(x + cx, 0);
-    ctx.lineTo(x + cx, hh);
-    ctx.stroke();
-  }
-  for (let y = gridStartY; y < -cy + hh + cell * 2; y += cell) {
-    ctx.beginPath();
-    ctx.moveTo(0, y + cy);
-    ctx.lineTo(ww, y + cy);
-    ctx.stroke();
-  }
-
-  // decals (simple dotted texture)
-  ctx.globalAlpha = Math.max(0, Math.min(1, vis.decalAlpha));
-  ctx.fillStyle = vis.decalColor;
-  const step = Math.max(80, vis.decalEvery | 0);
-
-  // anchor decals to world coordinates so they “scroll”
-  const dotStartX = (((-cx) / step) | 0) * step - step * 2;
-  const dotStartY = (((-cy) / step) | 0) * step - step * 2;
-
-  for (let x = dotStartX; x < -cx + ww + step * 2; x += step) {
-    for (let y = dotStartY; y < -cy + hh + step * 2; y += step) {
-      const px = x + cx;
-      const py = y + cy;
-      ctx.beginPath();
-      ctx.arc(px, py, 2, 0, Math.PI * 2);
-      ctx.fill();
+    // Draw enough tiles to cover the viewport (plus one extra tile for safety)
+    for (let tx = startTileX; tx < worldLeft + ww + tileW; tx += tileW) {
+      for (let ty = startTileY; ty < worldTop + hh + tileH; ty += tileH) {
+        const sx = tx + cx; // world -> screen
+        const sy = ty + cy;
+        ctx.drawImage(bg.img, sx, sy, tileW, tileH);
+      }
     }
+  } else {
+    // Fallback while loading
+    ctx.fillStyle = "#0b0b0f";
+    ctx.fillRect(0, 0, ww, hh);
   }
 
   ctx.globalAlpha = 1;
-
   // Zones (auras / ground effects / visuals)
   for (let i = 0; i < w.zAlive.length; i++) {
     if (!w.zAlive[i]) continue;
