@@ -22,6 +22,7 @@ import { recomputeDerivedStats } from "./stats/derivedStats";
 import {buildStaticRunMap, getReachable, type RunMap, type MapNode} from "./map/runMap";
 import { preloadPlayerSprites } from "./visual/playerSprites";
 import { preloadBackgrounds} from "./visual/background";
+import {getProjectileSpriteByKind, preloadProjectileSprites} from "./visual/projectileSprites";
 
 type HudRefs = {
   root: HTMLDivElement;
@@ -77,6 +78,7 @@ export function createGame(args: CreateGameArgs) {
   let world: World = createWorld({ seed: 1337, stage: cloneStage("DOCKS") });
   preloadBackgrounds();
   preloadPlayerSprites();
+  preloadProjectileSprites();
 
   let currentChoices: UpgradeDef[] = [];
 

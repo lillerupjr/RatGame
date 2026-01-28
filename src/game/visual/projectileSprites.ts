@@ -1,18 +1,18 @@
 // src/game/visual/projectileSprites.ts
 // Loads projectile sprites from: src/assets/projectiles/
-// Expected filenames (you can change these constants to match your actual png names):
-//   knife.png, pistol.png, syringe.png, bouncer.png, sword.png, knuckles.png
-//
 // Notes:
-// - Uses Vite import.meta.glob with eager URLs (same pattern as background/playerSprites).
-// - Returns { img, ready } and never throws at runtime.
+// - Vite import.meta.glob eager URLs
+// - Centralized per-weapon scaling via PROJECTILE_SCALE_BY_KIND
+// - Exposes getProjectileDrawScale(kind) so render.ts stays simple
 
-type Loaded = { img: HTMLImageElement; ready: boolean; src?: string };
+export type Loaded = { img: HTMLImageElement; ready: boolean; src?: string };
 
-const modules = import.meta.glob("././assets/projectiles/*.png", {
+const modules = import.meta.glob("../../assets/projectiles/*.png", {
     eager: true,
     import: "default",
 }) as Record<string, string>;
+
+export const PROJECTILE_BASE_DRAW_PX = 36;
 
 // ---- Configure expected filenames here ----
 const FILES = {
@@ -39,7 +39,6 @@ function loadByFile(file: string): Loaded {
 
     const url = resolveUrl(file);
     if (!url) {
-        // Keep it non-fatal: render.ts will fall back to circles
         console.warn(`[projectileSprites] Missing ${file} in src/assets/projectiles/`);
         cache[key] = { img: new Image(), ready: false };
         return cache[key];
@@ -63,9 +62,9 @@ export function preloadProjectileSprites() {
     for (const f of Object.values(FILES)) loadByFile(f);
 }
 
+// ---- Projectile Kind -> sprite ----
+// Kind numbers come from projectileFactory.ts
 export function getProjectileSpriteByKind(kind: number): Loaded | null {
-    // Local mapping to avoid importing PRJ_KIND here (keeps this module “visual-only”)
-    // Kind numbers come from projectileFactory.ts
     switch (kind) {
         case 1: // KNIFE
             return loadByFile(FILES.KNIFE);
@@ -82,4 +81,25 @@ export function getProjectileSpriteByKind(kind: number): Loaded | null {
         default:
             return null;
     }
+}
+
+// ---- Centralized scaling ----
+// Multiplier applied on top of your radius-based target size in render.ts.
+// Example: knife at 1.0, sword at 1.4, syringe at 0.9, bouncer at 1.2, etc.
+const PROJECTILE_SCALE_BY_KIND: Record<number, number> = {
+    1: 2, // KNIFE
+    2: 0.5, // PISTOL
+    3: 1.0, // SWORD
+    4: 1.0, // KNUCKLES
+    5: 3, // SYRINGE
+    6: 1.0, // BOUNCER
+};
+
+export function getProjectileDrawScale(kind: number): number {
+    return PROJECTILE_SCALE_BY_KIND[kind] ?? 1.0;
+}
+
+// Optional: quick runtime tweaking from console/dev tools if you want
+export function setProjectileDrawScale(kind: number, mult: number) {
+    PROJECTILE_SCALE_BY_KIND[kind] = Math.max(0.1, Math.min(10, mult));
 }

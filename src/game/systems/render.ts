@@ -7,7 +7,12 @@ import { ENEMY_TYPE } from "../content/enemies";
 import { getPlayerSprite, playerSpritesReady, PLAYER_SPRITE_SCALE, type Dir8, type Frame3 } from "../visual/playerSprites";
 import { getEnemySpriteFrame, preloadEnemySprites } from "../visual/enemySprites";
 import { getBackground } from "../visual/background";
-import { getProjectileSpriteByKind, preloadProjectileSprites } from "../visual/projectileSprites";
+import {
+  getProjectileSpriteByKind,
+  preloadProjectileSprites,
+  getProjectileDrawScale,
+  PROJECTILE_BASE_DRAW_PX,
+} from "../visual/projectileSprites";
 
 export async function renderSystem(
     w: World,
@@ -252,7 +257,8 @@ export async function renderSystem(
     if (spr?.ready && spr.img && spr.img.width > 0 && spr.img.height > 0) {
       // Size: tie sprite size to projectile radius (so upgrades/area feel consistent)
       // Target diameter in px:
-      const target = Math.max(10, (w.prR[i] ?? 4) * 4);
+      const areaMult = Math.max(0.6, Math.min(2.5, (w.prR[i] ?? 4) / 4));
+      const target = PROJECTILE_BASE_DRAW_PX * areaMult * getProjectileDrawScale(w.prjKind[i]);
 
       const iw = spr.img.width;
       const ih = spr.img.height;
