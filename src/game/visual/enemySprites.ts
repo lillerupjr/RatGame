@@ -2,51 +2,118 @@
 import { ENEMY_TYPE, type EnemyType } from "../content/enemies";
 
 /**
- * Enemy sprite sheet format (your current sheet):
- * - 8 columns = 8 directions
- * - 32 rows total
- * - We use:
- *   - idle: row 4 (1-based) => index 3 (0-based)
- *   - walk: rows 5–12 (1-based) => indices 4..11 (0-based), 8 frames
+ * Enemy sprite sheet format:
+ * - PNG size: 4096x1024
+ * - Grid: 32 columns x 8 rows
+ * - Cell: 128x128
+ *
+ * Layout:
+ * - ROWS (8) = directions (sheet-specific order)
+ * - COLUMNS (32) = frames for one direction
+ *
+ * Animation:
+ * - idle column = 4 (1-based) => col0 = 3
+ * - walk columns = 5–12 (1-based) => col0 = 4..11 (8 frames)
  */
 
-// You asked for a scale constant (same idea as we did for player)
-export const ENEMY_SPRITE_SCALE = 2.0;
+// ─────────────────────────────────────────────────────────────
+// Grid constants
+// ─────────────────────────────────────────────────────────────
+const CELL_W = 128;
+const CELL_H = 128;
 
-// 0-based row indices
-const IDLE_ROW = 3; // frame 4 (1-based)
-const WALK_ROWS = [4, 5, 6, 7, 8, 9, 10, 11]; // rows 5–12 (1-based)
+// ─────────────────────────────────────────────────────────────
+// Animation definition
+// ─────────────────────────────────────────────────────────────
+const IDLE_COL = 3; // frame 4 (1-based)
+const WALK_COLS = [4, 5, 6, 7, 8, 9, 10, 11]; // frames 5–12 (1-based)
+const WALK_FPS = 10;
 
-// Animation tuning
-const WALK_FPS = 10; // 8 frames * 10fps = 0.8s loop
+// ─────────────────────────────────────────────────────────────
+// Direction row order (your sheet)
+// rows:
+// 1=W, 2=NW, 3=N, 4=NE, 5=E, 6=SE, 7=S, 8=SW
+// ─────────────────────────────────────────────────────────────
+const ROW_ORDER = ["W", "NW", "N", "NE", "E", "SE", "S", "SW"] as const;
+type Dir8 = (typeof ROW_ORDER)[number];
 
+// ─────────────────────────────────────────────────────────────
+// Sheet config
+// ─────────────────────────────────────────────────────────────
 type SheetConfig = {
-    // 1-based: 8 dirs across, 32 frames down
-    rows: number; // 32
-    cols: number; // 8
-    idleRow: number; // 0-based
-    walkRows: number[]; // 0-based list
+    rows: number;
+    cols: number;
+    idleCol: number;
+    walkCols: number[];
     scale: number;
+
+    // NEW
+    anchorX: number; // 0..1 (0 = left, 0.5 = center)
+    anchorY: number; // 0..1 (0 = top, 1 = bottom / feet)
 };
 
-// Map enemy type -> sheet asset
-// (Start simple: CHASER uses antlion_0.png)
+
+// ─────────────────────────────────────────────────────────────
+// Enemy → sheet + scale mapping
+// ─────────────────────────────────────────────────────────────
 const SHEET_BY_TYPE: Partial<Record<EnemyType, { path: string; cfg: SheetConfig }>> = {
     [ENEMY_TYPE.CHASER]: {
         path: "/src/assets/enemies/antlion_0.png",
         cfg: {
-            rows: 32,
-            cols: 8,
-            idleRow: IDLE_ROW,
-            walkRows: WALK_ROWS,
-            scale: ENEMY_SPRITE_SCALE,
+            rows: 8,
+            cols: 32,
+            idleCol: IDLE_COL,
+            walkCols: WALK_COLS,
+            scale: 1,
+            anchorX: 0.5,
+            anchorY: 0.65,
+        },
+    },
+
+    [ENEMY_TYPE.RUNNER]: {
+        path: "/src/assets/enemies/antlion_0.png",
+        cfg: {
+            rows: 8,
+            cols: 32,
+            idleCol: IDLE_COL,
+            walkCols: WALK_COLS,
+            scale: 2,
+            anchorX: 0.5,
+            anchorY: 0.65,
+        },
+    },
+
+    [ENEMY_TYPE.BRUISER]: {
+        path: "/src/assets/enemies/antlion_0.png",
+        cfg: {
+            rows: 8,
+            cols: 32,
+            idleCol: IDLE_COL,
+            walkCols: WALK_COLS,
+            scale: 3,
+            anchorX: 0.5,
+            anchorY: 0.65,
+        },
+    },
+
+    [ENEMY_TYPE.BOSS]: {
+        path: "/src/assets/enemies/antlion_0.png",
+        cfg: {
+            rows: 8,
+            cols: 32,
+            idleCol: IDLE_COL,
+            walkCols: WALK_COLS,
+            scale: 5,
+            anchorX: 0.5,
+            anchorY: 0.65,
         },
     },
 };
 
-type Loaded = { img: HTMLImageElement; ready: boolean; w: number; h: number };
-
-// Cache load results
+// ─────────────────────────────────────────────────────────────
+// Image loading
+// ─────────────────────────────────────────────────────────────
+type Loaded = { img: HTMLImageElement; ready: boolean };
 const cache: Record<string, Loaded> = Object.create(null);
 
 function loadImage(path: string): Loaded {
@@ -54,14 +121,11 @@ function loadImage(path: string): Loaded {
     if (existing) return existing;
 
     const img = new Image();
-    const entry: Loaded = { img, ready: false, w: 0, h: 0 };
+    const entry: Loaded = { img, ready: false };
     cache[path] = entry;
 
-    img.onload = () => {
-        entry.ready = true;
-        entry.w = img.naturalWidth || img.width;
-        entry.h = img.naturalHeight || img.height;
-    };
+    img.onload = () => (entry.ready = true);
+    img.onerror = () => (entry.ready = false);
     img.src = path;
 
     return entry;
@@ -74,22 +138,29 @@ export function preloadEnemySprites() {
     }
 }
 
-function dir8FromVector(dx: number, dy: number): number {
-    // dir order: 0=N,1=NE,2=E,3=SE,4=S,5=SW,6=W,7=NW
-    // Using angle where 0 is "up" (north)
-    const ang = Math.atan2(dy, dx); // -pi..pi, 0 = east
-    // rotate so 0 = north
-    const a = ang + Math.PI / 2;
-    // map to 8 slices
+// ─────────────────────────────────────────────────────────────
+// Direction helpers
+// ─────────────────────────────────────────────────────────────
+function dirLabelFromVector(dx: number, dy: number): Dir8 {
+    const ang = Math.atan2(dy, dx); // 0 = east
+    const a = ang + Math.PI / 2;    // rotate so 0 = north
     let idx = Math.round((a / (Math.PI * 2)) * 8);
     idx = ((idx % 8) + 8) % 8;
-    return idx;
+
+    const STANDARD: Dir8[] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+    return STANDARD[idx];
 }
 
+function dirRowFromVector(dx: number, dy: number): number {
+    return ROW_ORDER.indexOf(dirLabelFromVector(dx, dy));
+}
+
+// ─────────────────────────────────────────────────────────────
+// Public API
+// ─────────────────────────────────────────────────────────────
 export function getEnemySpriteFrame(args: {
     type: EnemyType;
     time: number;
-    // facing vector (enemy -> player) OR velocity, your choice
     faceDx: number;
     faceDy: number;
     moving: boolean;
@@ -101,36 +172,38 @@ export function getEnemySpriteFrame(args: {
     sw: number;
     sh: number;
     scale: number;
+
+    // NEW
+    anchorX: number;
+    anchorY: number;
 }
     | null {
     const entry = SHEET_BY_TYPE[args.type];
     if (!entry) return null;
 
     const loaded = loadImage(entry.path);
-    if (!loaded.ready || loaded.w <= 0 || loaded.h <= 0) return null;
+    if (!loaded.ready) return null;
 
     const { cfg } = entry;
 
-    // Fixed grid: 32x8 over 4096x1024 => 128x128 per cell
-    const CELL_W = 128;
-    const CELL_H = 128;
+    // Row = direction
+    const row0 = dirRowFromVector(args.faceDx, args.faceDy);
 
-    const col = dir8FromVector(args.faceDx, args.faceDy);
-
-    let row = cfg.idleRow;
+    // Column = animation frame
+    let col0 = cfg.idleCol;
     if (args.moving) {
-        const t = Math.max(0, args.time);
-        const walkIndex = Math.floor(t * WALK_FPS) % cfg.walkRows.length;
-        row = cfg.walkRows[walkIndex];
+        const k = Math.floor(Math.max(0, args.time) * WALK_FPS) % cfg.walkCols.length;
+        col0 = cfg.walkCols[k];
     }
 
     return {
         img: loaded.img,
-        sx: col * CELL_W,
-        sy: row * CELL_H,
+        sx: col0 * CELL_W,
+        sy: row0 * CELL_H,
         sw: CELL_W,
         sh: CELL_H,
         scale: cfg.scale,
+        anchorX: cfg.anchorX,
+        anchorY: cfg.anchorY,
     };
-
 }

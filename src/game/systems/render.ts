@@ -196,8 +196,16 @@ export async function renderSystem(
       const dw = fr.sw * fr.scale;
       const dh = fr.sh * fr.scale;
 
-      ctx.globalAlpha = 1;
-      ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, x - dw / 2, y - dh / 2, dw, dh);
+      const dx = x - dw * fr.anchorX;
+      const dy = y - dh * fr.anchorY;
+
+      ctx.drawImage(
+          fr.img,
+          fr.sx, fr.sy, fr.sw, fr.sh,
+          dx, dy,
+          dw, dh
+      );
+
     } else {
       // fallback: old circle
       ctx.globalAlpha = 1;
