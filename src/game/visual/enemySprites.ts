@@ -71,7 +71,7 @@ const SHEET_BY_TYPE: Partial<Record<EnemyType, { path: string; cfg: SheetConfig 
     },
 
     [ENEMY_TYPE.RUNNER]: {
-        path: "/src/assets/enemies/antlion_0.png",
+        path: "/src/assets/enemies/fire_ant.png",
         cfg: {
             rows: 8,
             cols: 32,
@@ -84,7 +84,7 @@ const SHEET_BY_TYPE: Partial<Record<EnemyType, { path: string; cfg: SheetConfig 
     },
 
     [ENEMY_TYPE.BRUISER]: {
-        path: "/src/assets/enemies/antlion_0.png",
+        path: "/src/assets/enemies/ice_ant.png",
         cfg: {
             rows: 8,
             cols: 32,

@@ -32,7 +32,7 @@ export async function renderSystem(
   // --- Infinite tiled background texture ---
   ctx.globalAlpha = 1;
 
-  const bg = getBackground(); // should load /assets/background/test.png internally
+  const bg = getBackground(w); // should load /assets/background/test.png internally
   if (bg?.ready && bg.img) {
     const tileW = bg.img.width || 1024;
     const tileH = bg.img.height || 1024;

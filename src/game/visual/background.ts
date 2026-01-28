@@ -1,62 +1,78 @@
 // src/game/visual/background.ts
+import type { World } from "../world";
 
-type BgAsset = {
+export type BgAsset = {
     img: HTMLImageElement | null;
     ready: boolean;
     src?: string;
 };
 
-let _bg: BgAsset | null = null;
-
-// We are inside src/game/visual, so assets are ../../assets
-const modules = import.meta.glob("../../assets/background/test.png", {
+// background.ts is in src/game/visual
+// assets are in src/assets/backgrounds
+const modules = import.meta.glob("../../assets/backgrounds/*.png", {
     eager: true,
     import: "default",
 }) as Record<string, string>;
 
-// Pick your desired background
-const BG_FILE = "test.png";
+// ─────────────────────────────────────────────────────────────
+// FloorIndex (0-based) → background file mapping
+// floorIndex: 0=Floor1, 1=Floor2, 2=Floor3
+// ─────────────────────────────────────────────────────────────
+export const BG_BY_FLOOR_INDEX: Record<number, string> = {
+    0: "test3.png",   // DOCKS
+    1: "test3.png",  // SEWERS
+    2: "test2.png",  // CHINATOWN
+};
 
-function resolveBgUrl(): string {
-    // Find by filename suffix to avoid OS path differences
-    const hit = Object.entries(modules).find(([path]) => path.endsWith(`/background/${BG_FILE}`));
-    if (!hit) {
-        // Fallback: first background we can find (useful if filename changes)
-        const first = Object.values(modules)[0];
-        if (!first) {
-            console.warn(`[background] No background images found in ../../assets/background/*.png`);
-            return "";
-        }
-        console.warn(`[background] ${BG_FILE} not found, falling back to first background.`);
-        return first;
+const DEFAULT_BG_FILE = "";
+
+// Cache by floorIndex
+const cache: Record<number, BgAsset> = {};
+
+function resolveBgUrl(file: string): string | null {
+    for (const [path, url] of Object.entries(modules)) {
+        if (path.endsWith(`/backgrounds/${file}`)) return url;
     }
-    return hit[1];
+    return null;
 }
 
-export function preloadBackground() {
-    if (_bg) return;
+function ensureLoadedForIndex(floorIndex: number): BgAsset {
+    if (cache[floorIndex]) return cache[floorIndex];
 
-    const url = resolveBgUrl();
+    const file = BG_BY_FLOOR_INDEX[floorIndex] ?? DEFAULT_BG_FILE;
+    const url = resolveBgUrl(file);
+
     if (!url) {
-        _bg = { img: null, ready: false };
-        return;
+        console.warn(`[background] ${file} not found in src/assets/backgrounds/`);
+        cache[floorIndex] = { img: null, ready: false };
+        return cache[floorIndex];
     }
 
     const img = new Image();
-    _bg = { img, ready: false, src: url };
+    const asset: BgAsset = { img, ready: false, src: url };
+    cache[floorIndex] = asset;
 
     img.onload = () => {
-        if (_bg) _bg.ready = true;
+        asset.ready = true;
     };
     img.onerror = () => {
-        console.warn(`[background] Failed to load background: ${url}`);
-        if (_bg) _bg.ready = false;
+        console.warn(`[background] Failed to load: ${url}`);
+        asset.ready = false;
     };
 
     img.src = url;
+    return asset;
 }
 
-export function getBackground(): BgAsset {
-    if (!_bg) preloadBackground();
-    return _bg!;
+// Preload all mapped backgrounds (called in game.ts)
+export function preloadBackgrounds() {
+    for (const key of Object.keys(BG_BY_FLOOR_INDEX)) {
+        ensureLoadedForIndex(Number(key));
+    }
+}
+
+// Render-time getter (uses world.floorIndex)
+export function getBackground(w: World): BgAsset {
+    const idx = (w.floorIndex ?? 0) | 0;
+    return ensureLoadedForIndex(idx);
 }
