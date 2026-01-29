@@ -15,6 +15,31 @@ const FILES: Record<StageId, string> = {
 let cur: HTMLAudioElement | null = null;
 let curStage: StageId | null = null;
 
+// autoplay may be blocked until user gesture
+let _unlocked = false;
+let _wired = false;
+
+function wireUnlock() {
+    if (_wired) return;
+    _wired = true;
+
+    const unlock = async () => {
+        _unlocked = true;
+
+        // If we already have a track selected, try again now
+        if (cur) {
+            try {
+                await cur.play();
+            } catch {
+                // still blocked or no device — ignore
+            }
+        }
+    };
+
+    window.addEventListener("pointerdown", unlock, { passive: true });
+    window.addEventListener("keydown", unlock);
+}
+
 function findUrl(filename: string): string | null {
     for (const [k, url] of Object.entries(modules)) {
         if (k.endsWith("/" + filename)) return url;
@@ -23,12 +48,15 @@ function findUrl(filename: string): string | null {
 }
 
 export function setMusicStage(stage: StageId) {
+    wireUnlock();
+
     if (curStage === stage) return;
     curStage = stage;
 
-    const url = findUrl(FILES[stage]);
+    const file = FILES[stage];
+    const url = findUrl(file);
     if (!url) {
-        console.warn("[music] Missing file:", FILES[stage]);
+        console.warn("[music] Missing file:", file, "Known keys:", Object.keys(modules));
         return;
     }
 
@@ -41,12 +69,20 @@ export function setMusicStage(stage: StageId) {
 
     const a = new Audio(url);
     a.loop = true;
-    a.volume = 0.35;
+    a.volume = 0.75; // bump while testing
     a.preload = "auto";
     cur = a;
 
-    // Try to play (may be blocked until first user gesture)
-    void a.play().catch(() => {});
+    // Try to play now; if blocked, it will start on first gesture via unlock handler
+    void a.play().catch((e) => {
+        // Don’t hide this during dev—this tells you it’s autoplay-blocked.
+        console.warn("[music] play blocked (expected until click/keypress):", e);
+    });
+
+    // If already unlocked, force a play attempt again (some browsers need it)
+    if (_unlocked) {
+        void a.play().catch(() => {});
+    }
 }
 
 export function stopMusic() {

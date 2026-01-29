@@ -4,13 +4,74 @@ import { playSfx } from "../audio/sfx";
 import type { GameEvent } from "../events";
 import { PRJ_KIND } from "../factories/projectileFactory";
 
+type VolMap = Record<string, number>;
+
+function clamp01(x: number): number {
+    if (!isFinite(x)) return 0;
+    return Math.max(0, Math.min(1, x));
+}
+
 export function audioSystem(w: World, dt: number) {
     const anyW = w as any;
 
     // -------------------------
+    // Global + per-SFX volume controls
+    // -------------------------
+    // Master SFX volume (0..1)
+    if (anyW.sfxMaster === undefined) anyW.sfxMaster = 1.0;
+
+    // Per SFX id volume multipliers (0..1)
+    // You can tweak these at runtime: (world as any).sfxVol["FIRE_PISTOL"] = 0.6;
+    if (!anyW.sfxVol) {
+        anyW.sfxVol = {
+            // fire
+            FIRE_KNIFE: 1.0,
+            FIRE_PISTOL: 0.4,
+            FIRE_SYRINGE: 1.0,
+            FIRE_BOUNCER: 1.0,
+            FIRE_BAZOOKA: 1.0,
+            FIRE_OTHER: 1.0,
+
+            // movement
+            WALK_STEP: 1.0,
+
+            // explosions
+            EXPLOSION_BAZOOKA: 1.0,
+            EXPLOSION_SYRINGE: 1.0,
+
+            // hits / kills
+            ENEMY_HIT: 1.0,
+            ENEMY_KILL: 1.0,
+            PLAYER_HIT: 1.0,
+
+            // progression
+            XP_PICKUP: 1.0,
+            LEVEL_UP: 1.0,
+            CHEST_PICKUP: 1.0,
+
+            // structure
+            FLOOR_START: 1.0,
+            BOSS_START: 1.0,
+            RUN_WIN: 1.0,
+            RUN_LOSE: 1.0,
+
+            // ui
+            UI_CLICK: 1.0,
+        } satisfies VolMap;
+    }
+
+    const master = clamp01(Number(anyW.sfxMaster ?? 1));
+    const per: VolMap = anyW.sfxVol as VolMap;
+
+    function volFor(id: string, base: number): number {
+        const baseV = clamp01(base);
+        const perV = clamp01(Number(per[id] ?? 1));
+        return baseV * master * perV;
+    }
+
+    // -------------------------
     // Footsteps (cadenced while moving)
     // -------------------------
-    // Only during RUN (avoid menu spam)
     if (w.state === "RUN") {
         const speed = Math.hypot(w.pvx, w.pvy);
         const moving = speed > 12;
@@ -18,14 +79,13 @@ export function audioSystem(w: World, dt: number) {
         anyW._walkStepT = (anyW._walkStepT ?? 0) - dt;
 
         if (!moving) {
-            // reset so first step happens quickly when you start moving again
             anyW._walkStepT = Math.min(anyW._walkStepT, 0);
         } else if (anyW._walkStepT <= 0) {
-            const stepEvery = 0.22; // tweak to taste
+            const stepEvery = 0.22;
             anyW._walkStepT = stepEvery;
 
             void playSfx("WALK_STEP", {
-                vol: 0.22,
+                vol: volFor("WALK_STEP", 0.22),
                 rate: 0.95 + (w.rng?.range?.(0, 0.08) ?? 0),
             });
         }
@@ -44,7 +104,6 @@ export function audioSystem(w: World, dt: number) {
     // Consume events
     // -------------------------
     for (const ev of w.events as GameEvent[]) {
-        // Generic SFX trigger
         if (ev.type === "SFX") {
             // Fire SFX mapped from last projectile kind
             if (ev.id.startsWith("FIRE_")) {
@@ -67,15 +126,18 @@ export function audioSystem(w: World, dt: number) {
                 else if (kind === PRJ_KIND.BOUNCER) sfx = "FIRE_BOUNCER";
                 else if (kind === PRJ_KIND.BAZOOKA) sfx = "FIRE_BAZOOKA";
 
-                void playSfx(sfx, { vol: ev.vol ?? 0.55, rate: ev.rate ?? 1 });
+                const base = ev.vol ?? 0.55;
+                void playSfx(sfx, { vol: volFor(sfx, base), rate: ev.rate ?? 1 });
                 continue;
             }
 
-            // Explosion variants (bazooka vs syringe)
+            // Explosion variants
             if (ev.id === "EXPLOSION_BAZOOKA" || ev.id === "EXPLOSION_SYRINGE") {
                 if (anyW._sfxExplodeCd > 0) continue;
                 anyW._sfxExplodeCd = 0.06;
-                void playSfx(ev.id, { vol: ev.vol ?? 0.75, rate: ev.rate ?? 1 });
+
+                const base = ev.vol ?? 0.75;
+                void playSfx(ev.id as any, { vol: volFor(ev.id, base), rate: ev.rate ?? 1 });
                 continue;
             }
 
@@ -83,32 +145,35 @@ export function audioSystem(w: World, dt: number) {
             if (ev.id === "XP_PICKUP") {
                 if (anyW._sfxXpCd > 0) continue;
                 anyW._sfxXpCd = 0.04;
-                void playSfx("XP_PICKUP", { vol: ev.vol ?? 0.35, rate: ev.rate ?? 1 });
+
+                const base = ev.vol ?? 0.35;
+                void playSfx("XP_PICKUP", { vol: volFor("XP_PICKUP", base), rate: ev.rate ?? 1 });
                 continue;
             }
 
-            // Everything else: play as-is
-            void playSfx(ev.id as any, { vol: ev.vol ?? 1, rate: ev.rate ?? 1 });
+            // Everything else: play as-is, but apply volume controls
+            const base = ev.vol ?? 1;
+            void playSfx(ev.id as any, { vol: volFor(ev.id, base), rate: ev.rate ?? 1 });
             continue;
         }
 
-        // Derived sounds from game events
+        // Derived sounds from game events (also routed through volume controls)
         if (ev.type === "PLAYER_HIT") {
-            void playSfx("PLAYER_HIT", { vol: 0.9, rate: 1 });
+            void playSfx("PLAYER_HIT", { vol: volFor("PLAYER_HIT", 0.9), rate: 1 });
             continue;
         }
 
         if (ev.type === "ENEMY_HIT") {
             if (anyW._sfxHitCd > 0) continue;
             anyW._sfxHitCd = 0.02;
-            void playSfx("ENEMY_HIT", { vol: 0.25, rate: 1 });
+            void playSfx("ENEMY_HIT", { vol: volFor("ENEMY_HIT", 0.25), rate: 1 });
             continue;
         }
 
         if (ev.type === "ENEMY_KILLED") {
             if (anyW._sfxKillCd > 0) continue;
             anyW._sfxKillCd = 0.04;
-            void playSfx("ENEMY_KILL", { vol: 0.45, rate: 1 });
+            void playSfx("ENEMY_KILL", { vol: volFor("ENEMY_KILL", 0.45), rate: 1 });
             continue;
         }
     }
