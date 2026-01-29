@@ -1,5 +1,5 @@
 // src/game/audio/sfx.ts
-// Minimal WebAudio SFX loader + player (safe no-op until audio is "unlocked" by a user gesture)
+// Minimal WebAudio SFX loader + player with global + per-SFX volume controls
 
 import type { SfxId } from "../events";
 
@@ -10,37 +10,80 @@ const modules = import.meta.glob("../../assets/sfx/*.{wav,mp3,ogg}", {
     import: "default",
 }) as Record<string, string>;
 
+/* ============================================================
+   🔊 VOLUME CONTROLS (EDIT THESE)
+   ============================================================ */
 
-// TODO: Implement volume control for each SFX
+// Master SFX volume (0..1)
+export let SFX_MASTER_VOL = 1.0;
 
+// Per-SFX volume multipliers (0..1)
+export const SFX_VOL: Record<SfxId, number> = {
+    FIRE_KNIFE: 1.0,
+    FIRE_PISTOL: 1.0,
+    FIRE_SYRINGE: 1.0,
+    FIRE_BOUNCER: 1.0,
+    FIRE_BAZOOKA: 1.0,
+    FIRE_OTHER: 1.0,
 
-// Map SfxId -> filename in src/assets/sfx/
-const FILES: Record<SfxId, string> = {
-    FIRE_KNIFE: "fire_knife.wav", // done
-    FIRE_PISTOL: "fire_pistol.wav", // done
-    FIRE_SYRINGE: "fire_syringe.wav", // done
-    FIRE_BOUNCER: "fire_bouncer.wav", // done
-    FIRE_BAZOOKA: "fire_bazooka.wav", // done
-    FIRE_OTHER: "fire_other.wav",
+    WALK_STEP: 0.5,
 
-    WALK_STEP: "walk_step2.wav", // done
+    EXPLOSION_BAZOOKA: 1.0,
+    EXPLOSION_SYRINGE: 1.0,
 
-    EXPLOSION_BAZOOKA: "explosion_bazooka.wav", // done
-    EXPLOSION_SYRINGE: "explosion_syringe.wav", // done
+    ENEMY_HIT: 1.0,
+    ENEMY_KILL: 0.2,
+    PLAYER_HIT: 1.0,
 
-    ENEMY_HIT: "enemy_hit.wav",
-    ENEMY_KILL: "enemy_kill.wav", // done
-    PLAYER_HIT: "player_hit.wav", // done
-    XP_PICKUP: "xp_pickup.wav", // done
-    LEVEL_UP: "level_up.wav", // done
-    CHEST_PICKUP: "chest_pickup.wav",
-    FLOOR_START: "floor_start.wav",
-    BOSS_START: "boss_start.wav",
-    RUN_WIN: "run_win.wav", // done
-    RUN_LOSE: "run_lose.wav",
-    UI_CLICK: "ui_click.wav",
+    XP_PICKUP: 1.0,
+    LEVEL_UP: 1.0,
+    CHEST_PICKUP: 1.0,
+
+    FLOOR_START: 1.0,
+    BOSS_START: 1.0,
+
+    RUN_WIN: 1.0,
+    RUN_LOSE: 1.0,
+
+    UI_CLICK: 1.0,
 };
 
+/* ============================================================ */
+
+function clamp01(v: number) {
+    return Math.max(0, Math.min(1, v));
+}
+
+// Map SfxId -> filename
+const FILES: Record<SfxId, string> = {
+    FIRE_KNIFE: "fire_knife.wav",
+    FIRE_PISTOL: "fire_pistol.wav",
+    FIRE_SYRINGE: "fire_syringe.wav",
+    FIRE_BOUNCER: "fire_bouncer.wav",
+    FIRE_BAZOOKA: "fire_bazooka.wav",
+    FIRE_OTHER: "fire_other.wav",
+
+    WALK_STEP: "walk_step2.wav",
+
+    EXPLOSION_BAZOOKA: "explosion_bazooka.wav",
+    EXPLOSION_SYRINGE: "explosion_syringe.wav",
+
+    ENEMY_HIT: "enemy_hit.wav",
+    ENEMY_KILL: "enemy_kill.wav",
+    PLAYER_HIT: "player_hit.wav",
+
+    XP_PICKUP: "xp_pickup.wav",
+    LEVEL_UP: "level_up.wav",
+    CHEST_PICKUP: "chest_pickup.wav",
+
+    FLOOR_START: "floor_start.wav",
+    BOSS_START: "boss_start.wav",
+
+    RUN_WIN: "run_win.wav",
+    RUN_LOSE: "run_lose.wav",
+
+    UI_CLICK: "ui_click.wav",
+};
 
 function resolveUrl(file: string): string | null {
     for (const [path, url] of Object.entries(modules)) {
@@ -55,7 +98,6 @@ const cache: Partial<Record<SfxId, BufferRec>> = {};
 function ctx(): AudioContext | null {
     if (_ctx) return _ctx;
 
-    // WebAudio exists?
     const AC = (window.AudioContext || (window as any).webkitAudioContext) as
         | typeof AudioContext
         | undefined;
@@ -66,112 +108,74 @@ function ctx(): AudioContext | null {
 }
 
 async function loadBuffer(id: SfxId): Promise<BufferRec> {
-    const existing = cache[id];
-    if (existing) return existing;
+    if (cache[id]) return cache[id]!;
 
-    const file = FILES[id];
-    const url = resolveUrl(file);
-
+    const url = resolveUrl(FILES[id]);
     const rec: BufferRec = { buf: null, ready: false, url: url ?? undefined };
     cache[id] = rec;
 
     const c = ctx();
-    if (!c) return rec;
-
-    if (!url) {
-        console.warn(`[sfx] Missing file for ${id}: src/assets/sfx/${file}`);
-        return rec;
-    }
+    if (!c || !url) return rec;
 
     try {
         const res = await fetch(url);
-        const arr = await res.arrayBuffer();
-        rec.buf = await c.decodeAudioData(arr);
+        rec.buf = await c.decodeAudioData(await res.arrayBuffer());
         rec.ready = true;
-    } catch (e) {
-        console.warn(`[sfx] Failed to load ${id} (${url})`, e);
+    } catch {
         rec.ready = false;
     }
 
     return rec;
 }
 
-// Unlock on first gesture (best-effort)
-let _unlockWired = false;
+// Unlock audio on first user gesture
+let unlocked = false;
 function wireUnlock() {
-    if (_unlockWired) return;
-    _unlockWired = true;
+    if (unlocked) return;
+    unlocked = true;
 
-    const tryResume = async () => {
+    const resume = async () => {
         const c = ctx();
-        if (!c) return;
-        if (c.state === "suspended") {
-            try {
-                await c.resume();
-            } catch {
-                // ignore
-            }
-        }
+        if (c && c.state === "suspended") await c.resume();
     };
 
-    window.addEventListener("pointerdown", tryResume, { passive: true });
-    window.addEventListener("keydown", tryResume);
+    window.addEventListener("pointerdown", resume, { passive: true });
+    window.addEventListener("keydown", resume);
 }
 
 export async function preloadSfx() {
     wireUnlock();
-    // Kick off loads (don’t await all; just warm caches)
     for (const id of Object.keys(FILES) as SfxId[]) {
         void loadBuffer(id);
     }
-}
-
-function playFallbackBeep(volume: number, rate: number) {
-
-    const c = ctx();
-    if (!c) return;
-    if (c.state !== "running") return;
-
-    const o = c.createOscillator();
-    const g = c.createGain();
-    o.type = "square";
-    o.frequency.value = 220 * Math.max(0.25, Math.min(4, rate));
-    g.gain.value = Math.max(0, Math.min(1, volume)) * 0;
-
-    o.connect(g);
-    g.connect(c.destination);
-
-    const t0 = c.currentTime;
-    o.start(t0);
-    o.stop(t0 + 0.06);
 }
 
 export async function playSfx(id: SfxId, opts?: { vol?: number; rate?: number }) {
     wireUnlock();
 
     const c = ctx();
-    if (!c) return;
-    if (c.state !== "running") return;
+    if (!c || c.state !== "running") return;
 
-    const vol = Math.max(0, Math.min(1, opts?.vol ?? 1));
+    const base = clamp01(opts?.vol ?? 1);
+    const master = clamp01(SFX_MASTER_VOL);
+    const per = clamp01(SFX_VOL[id] ?? 1);
+
+    const finalVol = base * master * per;
+    if (finalVol <= 0) return;
+
     const rate = Math.max(0.25, Math.min(4, opts?.rate ?? 1));
 
     const rec = await loadBuffer(id);
-    if (!rec.ready || !rec.buf) {
-        // Dev-friendly: still give audible feedback even before files exist.
-        playFallbackBeep(vol, rate);
-        return;
-    }
+    if (!rec.ready || !rec.buf) return;
 
     const src = c.createBufferSource();
+    const gain = c.createGain();
+
     src.buffer = rec.buf;
     src.playbackRate.value = rate;
-
-    const gain = c.createGain();
-    gain.gain.value = vol;
+    gain.gain.value = finalVol;
 
     src.connect(gain);
     gain.connect(c.destination);
-
     src.start();
 }
