@@ -1,45 +1,32 @@
 import { World, emitEvent } from "../world";
 import { registry } from "../content/registry";
+import { findTarget, findClosestTarget, type TargetingStrategy } from "../util/targeting";
 
 export function combatSystem(w: World, dt: number) {
-  // Aim-at-fire-time (NOT homing): nearest enemy if present, else last movement aim.
-  let aimX = w.lastAimX;
-  let aimY = w.lastAimY;
+  // Default aim (used when no target exists or as fallback)
+  let defaultAimX = w.lastAimX;
+  let defaultAimY = w.lastAimY;
 
-  let best = -1;
-  let bestD2 = Infinity;
-
-  for (let e = 0; e < w.eAlive.length; e++) {
-    if (!w.eAlive[e]) continue;
-    const dx = w.ex[e] - w.px;
-    const dy = w.ey[e] - w.py;
-    const d2 = dx * dx + dy * dy;
-    if (d2 < bestD2) {
-      bestD2 = d2;
-      best = e;
-    }
-  }
-
-  if (best !== -1) {
-    const dx = w.ex[best] - w.px;
-    const dy = w.ey[best] - w.py;
-    const len = Math.hypot(dx, dy) || 1;
-    aimX = dx / len;
-    aimY = dy / len;
+  // Find default target (closest enemy) for weapons that don't specify targeting
+  const defaultTarget = findClosestTarget(w, 0);
+  
+  if (defaultTarget.enemyIndex !== -1) {
+    defaultAimX = defaultTarget.dirX;
+    defaultAimY = defaultTarget.dirY;
   } else {
-    const len = Math.hypot(aimX, aimY);
+    const len = Math.hypot(defaultAimX, defaultAimY);
     if (len < 0.0001) {
-      aimX = 1;
-      aimY = 0;
+      defaultAimX = 1;
+      defaultAimY = 0;
     } else {
-      aimX /= len;
-      aimY /= len;
+      defaultAimX /= len;
+      defaultAimY /= len;
     }
   }
 
   // Keep melee cone aim in sync with the direction we're firing (not just movement).
-  w.lastAimX = aimX;
-  w.lastAimY = aimY;
+  w.lastAimX = defaultAimX;
+  w.lastAimY = defaultAimY;
 
   // Fire all weapons in loadout
   for (let i = 0; i < w.weapons.length; i++) {
@@ -53,7 +40,25 @@ export function combatSystem(w: World, dt: number) {
     const stats = def.getStats(inst.level, w);
     inst.cdLeft += Math.max(0.01, stats.cooldown);
 
-    def.fire(w, stats, {x: aimX, y: aimY});
+    // Determine aim direction based on weapon's targeting strategy
+    let aimX = defaultAimX;
+    let aimY = defaultAimY;
+
+    if (stats.targeting) {
+      const target = findTarget(
+        w,
+        stats.targeting,
+        stats.targetingRange ?? 0,
+        stats.clusterRadius ?? 80
+      );
+      
+      if (target.enemyIndex !== -1) {
+        aimX = target.dirX;
+        aimY = target.dirY;
+      }
+    }
+
+    def.fire(w, stats, { x: aimX, y: aimY });
 
     // SFX: weapon fired (throttled in audioSystem)
     emitEvent(w, {
