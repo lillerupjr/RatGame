@@ -7,6 +7,7 @@ import type { ItemId } from "./content/items";
 import type { WeaponId } from "./content/weapons";
 import type { EnemyType } from "./content/enemies";
 import { recomputeDerivedStats } from "./stats/derivedStats";
+import { createSpatialHash, type SpatialHash } from "./util/spatialHash";
 
 export type GameState = "MENU" | "RUN" | "MAP" | "LEVELUP" | "CHEST" | "LOSE" | "WIN";
 
@@ -187,6 +188,9 @@ export type World = {
   // NEW: for orbit weapons/items
   areaMult: number;
   durationMult: number;
+
+  // Spatial hash for efficient collision detection
+  enemySpatialHash: SpatialHash;
 };
 
 export function createWorld(args: { seed: number; stage: StageDef }): World {
@@ -333,6 +337,9 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     fireRateMult: 1,
     areaMult: 1,
     durationMult: 1,
+
+    // Spatial hash for efficient collision detection (cell size ~2x max enemy radius)
+    enemySpatialHash: createSpatialHash(80),
   };
 
   // Ensure derived stats consistent with items (even if empty).

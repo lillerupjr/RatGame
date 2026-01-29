@@ -3,6 +3,7 @@ import { World, emitEvent } from "../world";
 import { isEnemyHit, isPlayerHit } from "./hitDetection";
 import { registry } from "../content/registry";
 import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
+import { clearSpatialHash, insertEntity, queryCircle } from "../util/spatialHash";
 
 
 /**
@@ -11,10 +12,23 @@ import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
  * - player ↔ enemy contact damage (with i-frames)
  *
  * Emits events instead of spawning XP or doing other cross-system side effects.
+ * 
+ * Uses spatial hashing for O(n+m) collision detection instead of O(n*m) brute force.
  */
 export function collisionsSystem(w: World, dt: number) {
   // -------------------------
-  // Projectiles vs Enemies
+  // Build spatial hash of enemies (once per frame)
+  // -------------------------
+  const hash = w.enemySpatialHash;
+  clearSpatialHash(hash);
+  
+  for (let e = 0; e < w.eAlive.length; e++) {
+    if (!w.eAlive[e]) continue;
+    insertEntity(hash, e, w.ex[e], w.ey[e], w.eR[e]);
+  }
+
+  // -------------------------
+  // Projectiles vs Enemies (using spatial hash)
   // -------------------------
   for (let p = 0; p < w.pAlive.length; p++) {
     if (!w.pAlive[p]) continue;
@@ -30,7 +44,24 @@ export function collisionsSystem(w: World, dt: number) {
     // Track whether this projectile hit something this frame (kept for future use)
     let hitSomething = false;
 
-    for (let e = 0; e < w.eAlive.length; e++) {
+    // Query only nearby enemies from spatial hash
+    // Use a generous query radius to account for enemy radii
+    const maxEnemyRadius = 40; // Assume max enemy radius; could be tracked if needed
+    const queryRadius = pr + maxEnemyRadius;
+    const nearbyEnemies = queryCircle(hash, px, py, queryRadius);
+    
+    // Track which enemies we've already checked this frame to avoid duplicate checks
+    // (enemies can appear in multiple cells if they span cell boundaries)
+    const checkedThisFrame = new Set<number>();
+
+    for (let i = 0; i < nearbyEnemies.length; i++) {
+      const e = nearbyEnemies[i];
+      
+      // Skip if already checked (entity appears in multiple cells)
+      if (checkedThisFrame.has(e)) continue;
+      checkedThisFrame.add(e);
+      
+      // Double-check alive (enemy may have died from another projectile this frame)
       if (!w.eAlive[e]) continue;
 
       const dx = w.ex[e] - px;
@@ -226,7 +257,7 @@ export function collisionsSystem(w: World, dt: number) {
   }
 
   // -------------------------
-  // Player vs Enemies
+  // Player vs Enemies (using spatial hash)
   // -------------------------
   // Player is rendered with radius 14 in render.ts, so keep it consistent here.
   const PLAYER_R = 14;
@@ -239,7 +270,11 @@ export function collisionsSystem(w: World, dt: number) {
   hitCd = Math.max(0, hitCd - dt);
 
   if (hitCd <= 0) {
-    for (let e = 0; e < w.eAlive.length; e++) {
+    // Query enemies near the player using spatial hash
+    const nearbyToPlayer = queryCircle(hash, w.px, w.py, PLAYER_R + 50); // 50 = generous max enemy radius
+    
+    for (let i = 0; i < nearbyToPlayer.length; i++) {
+      const e = nearbyToPlayer[i];
       if (!w.eAlive[e]) continue;
 
       const dx = w.ex[e] - w.px;

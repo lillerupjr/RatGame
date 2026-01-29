@@ -2,6 +2,8 @@
 import type { World } from "../world";
 import { spawnProjectile, spawnSwordProjectile, spawnKnucklesOrbital, PRJ_KIND } from "../factories/projectileFactory";
 import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
+import type { TargetingStrategy } from "../util/targeting";
+import { findTarget, getEnemiesInRange } from "../util/targeting";
 
 
 export type WeaponId =
@@ -42,6 +44,11 @@ export type WeaponStats = {
     duration?: number;
     orbitBaseRadius?: number;
     orbitBaseAngVel?: number; // radians/sec
+
+    // Targeting configuration
+    targeting?: TargetingStrategy;   // defaults to CLOSEST
+    targetingRange?: number;         // max range for target acquisition (0 = unlimited)
+    clusterRadius?: number;          // for CLUSTER strategy, radius to consider enemies grouped
 };
 
 export type WeaponDef = {
@@ -678,6 +685,11 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
                 projectileRadius: blastR,
                 damage: dmg,
 
+                // Bazooka uses CLUSTER targeting to hit groups of enemies
+                targeting: "CLUSTER" as TargetingStrategy,
+                targetingRange: targetRadius,
+                clusterRadius: blastR, // cluster radius matches blast radius
+
                 // escape hatch fields for fire()
                 ...({ targetRadius, rocketR } as any),
             } as any;
@@ -686,26 +698,19 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         fire: (w: World, s: any, aim: Aim): void => {
             const targetRadius = (s as any).targetRadius ?? 420;
             const rocketR = (s as any).rocketR ?? 7;
+            const blastR = s.projectileRadius ?? 86;
 
-            // Find candidates within acquisition radius
-            const cand: number[] = [];
-            const tr2 = targetRadius * targetRadius;
-
-            for (let e = 0; e < w.eAlive.length; e++) {
-                if (!w.eAlive[e]) continue;
-                const dx = w.ex[e] - w.px;
-                const dy = w.ey[e] - w.py;
-                if (dx * dx + dy * dy <= tr2) cand.push(e);
-            }
+            // Use the targeting system to find the best cluster
+            const target = findTarget(w, "CLUSTER", targetRadius, blastR);
 
             // Pick a target point
             let tx: number;
             let ty: number;
 
-            if (cand.length > 0) {
-                const pick = cand[w.rng.int(0, cand.length - 1)];
-                tx = w.ex[pick];
-                ty = w.ey[pick];
+            if (target.enemyIndex !== -1) {
+                // Use the cluster centroid (not just the enemy position)
+                tx = target.x;
+                ty = target.y;
             } else {
                 // fallback: fire forward
                 tx = w.px + aim.x * targetRadius;
@@ -792,6 +797,11 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
                 projectileRadius: blastR,
                 damage: dmg,
 
+                // Bazooka evolved also uses CLUSTER targeting
+                targeting: "CLUSTER" as TargetingStrategy,
+                targetingRange: targetRadius,
+                clusterRadius: blastR,
+
                 // escape hatch fields for fire()
                 ...({ targetRadius, rocketR } as any),
             } as any;
@@ -800,26 +810,19 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         fire: (w: World, s: any, aim: Aim): void => {
             const targetRadius = (s as any).targetRadius ?? 420;
             const rocketR = (s as any).rocketR ?? 7;
+            const blastR = s.projectileRadius ?? 100;
 
-            // Find candidates within acquisition radius
-            const cand: number[] = [];
-            const tr2 = targetRadius * targetRadius;
-
-            for (let e = 0; e < w.eAlive.length; e++) {
-                if (!w.eAlive[e]) continue;
-                const dx = w.ex[e] - w.px;
-                const dy = w.ey[e] - w.py;
-                if (dx * dx + dy * dy <= tr2) cand.push(e);
-            }
+            // Use the targeting system to find the best cluster
+            const target = findTarget(w, "CLUSTER", targetRadius, blastR);
 
             // Pick a target point
             let tx: number;
             let ty: number;
 
-            if (cand.length > 0) {
-                const pick = cand[w.rng.int(0, cand.length - 1)];
-                tx = w.ex[pick];
-                ty = w.ey[pick];
+            if (target.enemyIndex !== -1) {
+                // Use the cluster centroid (not just the enemy position)
+                tx = target.x;
+                ty = target.y;
             } else {
                 // fallback: fire forward
                 tx = w.px + aim.x * targetRadius;
@@ -1133,6 +1136,11 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
                 projectileRadius: radius,
                 damage: dmgPerTick,
 
+                // Molotov uses CLUSTER targeting to throw at groups of enemies
+                targeting: "CLUSTER" as TargetingStrategy,
+                targetingRange: throwDist + 50, // slightly larger than throw distance
+                clusterRadius: radius, // cluster radius matches puddle radius
+
                 // use duration field even though it isn't an orbital here
                 duration,
                 // optional: stash tickEvery using a private field so fire() can read it
@@ -1143,10 +1151,33 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
         fire: (w, s, aim) => {
             const throwDist = s.projectileSpeed;
+            const radius = s.projectileRadius ?? 62;
 
-            // Spawn point in front of player along aim direction
-            const x = w.px + aim.x * throwDist;
-            const y = w.py + aim.y * throwDist;
+            // Use targeting to find the best cluster within throw range
+            const target = findTarget(w, "CLUSTER", throwDist + 50, radius);
+
+            let x: number;
+            let y: number;
+
+            if (target.enemyIndex !== -1) {
+                // Throw at the cluster centroid, but clamp to throw distance
+                const dx = target.x - w.px;
+                const dy = target.y - w.py;
+                const dist = Math.hypot(dx, dy);
+                
+                if (dist <= throwDist) {
+                    x = target.x;
+                    y = target.y;
+                } else {
+                    // Clamp to max throw distance
+                    x = w.px + (dx / dist) * throwDist;
+                    y = w.py + (dy / dist) * throwDist;
+                }
+            } else {
+                // Fallback: throw in aim direction
+                x = w.px + aim.x * throwDist;
+                y = w.py + aim.y * throwDist;
+            }
 
             // Pull tickEvery back out (stored in stats as an escape hatch)
             const tickEvery = Math.max(0.08, ((s as any).tickEvery ?? 0.28));

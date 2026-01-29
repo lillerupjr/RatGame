@@ -2,6 +2,7 @@ import type { World } from "../world";
 import { emitEvent } from "../world";
 import { isEnemyInCircle } from "./hitDetection";
 import {spawnZone, ZONE_KIND} from "../factories/zoneFactory";
+import { queryCircle } from "../util/spatialHash";
 
 export function zonesSystem(w: World, dt: number) {
     const PLAYER_R = 14;
@@ -144,11 +145,21 @@ export function zonesSystem(w: World, dt: number) {
             }
         }
 
-        // Enemy damage (existing behavior)
+        // Enemy damage (existing behavior) - now using spatial hash
         const dmg = w.zDamage[z];
         if (dmg <= 0 || zr <= 0) continue;
 
-        for (let e = 0; e < w.eAlive.length; e++) {
+        // Query nearby enemies from spatial hash (already populated by collisionsSystem)
+        const nearbyEnemies = queryCircle(w.enemySpatialHash, zx, zy, zr + 50); // 50 = max enemy radius buffer
+        const checkedEnemies = new Set<number>();
+
+        for (let i = 0; i < nearbyEnemies.length; i++) {
+            const e = nearbyEnemies[i];
+            
+            // Skip duplicates (enemies spanning multiple cells)
+            if (checkedEnemies.has(e)) continue;
+            checkedEnemies.add(e);
+            
             if (!w.eAlive[e]) continue;
             if (!isEnemyInCircle(w, e, zx, zy, zr)) continue;
 

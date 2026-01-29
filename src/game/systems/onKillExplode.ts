@@ -3,6 +3,7 @@ import type { World } from "../world";
 import { emitEvent } from "../world";
 import { isEnemyInCircle } from "./hitDetection";
 import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
+import { queryCircle } from "../util/spatialHash";
 
 /**
  * Explode-on-kill (poison-gated):
@@ -87,8 +88,17 @@ export function onKillExplodeSystem(w: World, _dt: number) {
 // NEW: syringe explosion sound (distinct from bazooka)
         emitEvent(w, { type: "SFX", id: "EXPLOSION_SYRINGE", vol: 0.55 });
 
-        // AoE damage application
-        for (let e = 0; e < w.eAlive.length; e++) {
+        // AoE damage application - using spatial hash for efficiency
+        const nearbyEnemies = queryCircle(w.enemySpatialHash, cx, cy, radius + 50); // 50 = max enemy radius buffer
+        const checkedEnemies = new Set<number>();
+
+        for (let i = 0; i < nearbyEnemies.length; i++) {
+            const e = nearbyEnemies[i];
+            
+            // Skip duplicates (enemies spanning multiple cells)
+            if (checkedEnemies.has(e)) continue;
+            checkedEnemies.add(e);
+            
             if (!w.eAlive[e]) continue;
             if (!isEnemyInCircle(w, e, cx, cy, radius)) continue;
 
