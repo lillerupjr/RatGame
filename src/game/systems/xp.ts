@@ -59,6 +59,8 @@ export function xpSystem(w: World, _dt: number) {
 
       // Unblock boss progression once chest is taken
       w.bossRewardPending = false;
+      // Boss beat reward: heal to full
+      w.playerHp = w.playerHpMax;
 
       // SFX: chest pickup
       emitEvent(w, { type: "SFX", id: "CHEST_PICKUP", vol: 1.0, rate: 1 });
