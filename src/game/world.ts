@@ -153,6 +153,10 @@ export type World = {
   prOrbBaseRadius: number[];
   prOrbBaseAngVel: number[];
 
+  // NEW: Nuclear Fission (projectile-projectile collision spawns new projectiles)
+  prFission: boolean[];     // true = this projectile can fission
+  prFissionCd: number[];    // cooldown before it can fission again (prevents infinite spawns)
+
   // Pickups (XP gems + drops)
   // xKind: 1 = XP, 2 = CHEST
   xAlive: boolean[];
@@ -313,6 +317,9 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     prOrbAngle: [],
     prOrbBaseRadius: [],
     prOrbBaseAngVel: [],
+
+    prFission: [],
+    prFissionCd: [],
 
     xAlive: [],
     xKind: [],
