@@ -45,7 +45,7 @@ export function xpSystem(w: World, _dt: number) {
       while (w.xp >= w.xpToNext) {
         w.xp -= w.xpToNext;
         w.level++;
-        w.xpToNext = Math.floor(w.xpToNext * 1.25 + 3);
+        w.xpToNext = Math.floor(w.xpToNext * 1.15 + 3);
         w.pendingLevelUps++;
 
         // SFX: level up
