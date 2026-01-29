@@ -22,7 +22,7 @@ export type StageDef = {
 export const stageDocks: StageDef = {
   id: "DOCKS",
   name: "Docks",
-  duration: 180,
+  duration: 120,
   spawns: [
     // 0:00–0:30 (settle in)
     { t: 0,  type: 1, count: 10, radius: 560 },
@@ -59,7 +59,7 @@ export const stageDocks: StageDef = {
 export const stageSewers: StageDef = {
   id: "SEWERS",
   name: "Sewers",
-  duration: 180,
+  duration: 120,
   spawns: [
     // more bruisers earlier than docks
     { t: 0,  type: 1, count: 10, radius: 560 },
@@ -91,7 +91,7 @@ export const stageSewers: StageDef = {
 export const stageChinatown: StageDef = {
   id: "CHINATOWN",
   name: "Chinatown",
-  duration: 180,
+  duration: 120,
   spawns: [
     // runner-heavy identity, bruisers become scary late
     { t: 0,  type: 2, count: 12, radius: 580 },
