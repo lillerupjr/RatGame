@@ -1,41 +1,33 @@
 // src/game/content/floors.ts
 import type { World } from "../world";
 import type { StageId } from "./stages";
-import { ENEMY_TYPE, type EnemyType } from "../content/enemies";
+import { ENEMY_TYPE, type EnemyType } from "./enemies";
 
 export type FloorId = "DOCKS" | "SEWERS" | "CHINATOWN";
 
 export type FloorVisual = {
-    // background tint overlay
-    tint: string;         // css color
-    tintAlpha: number;    // 0..1
+    tint: string;
+    tintAlpha: number;
 
-    // grid styling
-    gridAlpha: number;    // 0..1
-    gridColor: string;    // css color
-    cell: number;         // grid cell size (px)
+    gridAlpha: number;
+    gridColor: string;
+    cell: number;
 
-    // subtle “decal” dots/lines (cheap texture)
-    decalAlpha: number;   // 0..1
-    decalColor: string;   // css color
-    decalEvery: number;   // spacing (px)
+    decalAlpha: number;
+    decalColor: string;
+    decalEvery: number;
 };
 
 export type Weight = { type: EnemyType; w: number };
 
 export type FloorSpawnProfile = {
-    // how often we spawn trickle enemies (seconds)
-    cadence: number;
-
-    // how many enemies per tick (min/max inclusive)
+    cadence: number; // seconds between trickle spawn ticks
     perTickMin: number;
     perTickMax: number;
 
-    // ring spawn radius
     ringMin: number;
     ringMax: number;
 
-    // weights for early/mid/late segments of the floor
     early: Weight[];
     mid: Weight[];
     late: Weight[];
@@ -48,10 +40,16 @@ export type FloorDef = {
     visual: FloorVisual;
     spawns: FloorSpawnProfile;
 
-    // Used for boss “presence” (visual-only for now)
     bossTitle: string;
-    bossAccent: string; // css color
+    bossAccent: string;
 };
+
+// For 180s floors:
+// - Reduce trickle rate vs old 20s tuning, or you get *thousands* of enemies.
+// - Ramp counts late so Lv5 evolutions don’t auto-win.
+// - Docks: mostly chasers early.
+// - Sewers: bruisers show earlier.
+// - Chinatown: runner-heavy + bruiser-heavy late.
 
 export const FLOORS: readonly FloorDef[] = [
     {
@@ -69,14 +67,16 @@ export const FLOORS: readonly FloorDef[] = [
             decalEvery: 180,
         },
         spawns: {
-            cadence: 0.12,
+            // ~4 ticks/sec; early = 1, mid/late = 1-2 => ramps naturally
+            cadence: 0.25,
             perTickMin: 1,
-            perTickMax: 1,
+            perTickMax: 2,
             ringMin: 520,
-            ringMax: 650,
+            ringMax: 680,
+
             early: [
-                { type: ENEMY_TYPE.CHASER, w: 0.80 },
-                { type: ENEMY_TYPE.RUNNER, w: 0.20 },
+                { type: ENEMY_TYPE.CHASER, w: 0.82 },
+                { type: ENEMY_TYPE.RUNNER, w: 0.18 },
             ],
             mid: [
                 { type: ENEMY_TYPE.CHASER, w: 0.55 },
@@ -84,9 +84,9 @@ export const FLOORS: readonly FloorDef[] = [
                 { type: ENEMY_TYPE.BRUISER, w: 0.10 },
             ],
             late: [
-                { type: ENEMY_TYPE.CHASER, w: 0.45 },
-                { type: ENEMY_TYPE.RUNNER, w: 0.38 },
-                { type: ENEMY_TYPE.BRUISER, w: 0.17 },
+                { type: ENEMY_TYPE.CHASER, w: 0.40 },
+                { type: ENEMY_TYPE.RUNNER, w: 0.34 },
+                { type: ENEMY_TYPE.BRUISER, w: 0.26 },
             ],
         },
         bossTitle: "Dock Kingpin",
@@ -108,24 +108,25 @@ export const FLOORS: readonly FloorDef[] = [
             decalEvery: 160,
         },
         spawns: {
-            cadence: 0.11,
+            cadence: 0.23,
             perTickMin: 1,
             perTickMax: 2,
             ringMin: 520,
-            ringMax: 680,
+            ringMax: 700,
+
             early: [
-                { type: ENEMY_TYPE.CHASER, w: 0.65 },
-                { type: ENEMY_TYPE.RUNNER, w: 0.25 },
-                { type: ENEMY_TYPE.BRUISER, w: 0.10 },
+                { type: ENEMY_TYPE.CHASER, w: 0.62 },
+                { type: ENEMY_TYPE.RUNNER, w: 0.23 },
+                { type: ENEMY_TYPE.BRUISER, w: 0.15 },
             ],
             mid: [
-                { type: ENEMY_TYPE.CHASER, w: 0.45 },
-                { type: ENEMY_TYPE.RUNNER, w: 0.30 },
-                { type: ENEMY_TYPE.BRUISER, w: 0.25 },
+                { type: ENEMY_TYPE.CHASER, w: 0.44 },
+                { type: ENEMY_TYPE.RUNNER, w: 0.28 },
+                { type: ENEMY_TYPE.BRUISER, w: 0.28 },
             ],
             late: [
-                { type: ENEMY_TYPE.CHASER, w: 0.35 },
-                { type: ENEMY_TYPE.RUNNER, w: 0.25 },
+                { type: ENEMY_TYPE.CHASER, w: 0.34 },
+                { type: ENEMY_TYPE.RUNNER, w: 0.26 },
                 { type: ENEMY_TYPE.BRUISER, w: 0.40 },
             ],
         },
@@ -148,25 +149,27 @@ export const FLOORS: readonly FloorDef[] = [
             decalEvery: 170,
         },
         spawns: {
-            cadence: 0.10,
-            perTickMin: 1,
-            perTickMax: 2,
+            // Chinatown is the “fast” floor: slightly higher trickle
+            cadence: 0.20,
+            perTickMin: 2,
+            perTickMax: 3,
             ringMin: 520,
-            ringMax: 700,
+            ringMax: 720,
+
             early: [
-                { type: ENEMY_TYPE.RUNNER, w: 0.55 },
-                { type: ENEMY_TYPE.CHASER, w: 0.40 },
+                { type: ENEMY_TYPE.RUNNER, w: 0.60 },
+                { type: ENEMY_TYPE.CHASER, w: 0.35 },
                 { type: ENEMY_TYPE.BRUISER, w: 0.05 },
             ],
             mid: [
-                { type: ENEMY_TYPE.RUNNER, w: 0.45 },
-                { type: ENEMY_TYPE.CHASER, w: 0.35 },
-                { type: ENEMY_TYPE.BRUISER, w: 0.20 },
+                { type: ENEMY_TYPE.RUNNER, w: 0.46 },
+                { type: ENEMY_TYPE.CHASER, w: 0.30 },
+                { type: ENEMY_TYPE.BRUISER, w: 0.24 },
             ],
             late: [
                 { type: ENEMY_TYPE.RUNNER, w: 0.34 },
-                { type: ENEMY_TYPE.CHASER, w: 0.30 },
-                { type: ENEMY_TYPE.BRUISER, w: 0.36 },
+                { type: ENEMY_TYPE.CHASER, w: 0.24 },
+                { type: ENEMY_TYPE.BRUISER, w: 0.42 },
             ],
         },
         bossTitle: "Neon Triad Captain",
