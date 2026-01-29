@@ -62,7 +62,7 @@ function setSelectedWeapon(id: WeaponId) {
   });
 
   const title = WEAPONS[id]?.title ?? id;
-  menuSublineEl.textContent = `Slice v0.1 — Docks (8 min → boss). Starter weapon: ${title}.`;
+  menuSublineEl.textContent = `Slice v0.5 — 3 floors (20 sec → boss). Starter weapon: ${title}.`;
 }
 
 /**
