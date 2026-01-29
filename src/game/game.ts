@@ -238,7 +238,7 @@ export function createGame(args: CreateGameArgs) {
     (w as any).chestOpenRequested = false;
 
     // Clean slate for the boss encounter (feels fair + deterministic).
-    clearFloorEntities(w);
+    //clearFloorEntities(w);
 
     const a = w.rng.range(0, Math.PI * 2);
     const r = 320;
