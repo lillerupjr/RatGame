@@ -13,7 +13,7 @@ export type StageDef = {
 export const stageDocks: StageDef = {
   id: "DOCKS",
   name: "Docks",
-  duration: 20,
+  duration: 180,
   spawns: [
     { t: 0, type: 1, count: 6, radius: 520 },
     { t: 10, type: 1, count: 8, radius: 520 },
@@ -27,7 +27,7 @@ export const stageDocks: StageDef = {
 export const stageSewers: StageDef = {
   id: "SEWERS",
   name: "Sewers",
-  duration: 20,
+  duration: 180,
   spawns: [
     { t: 0, type: 1, count: 7, radius: 520 },
     { t: 12, type: 2, count: 6, radius: 520 },
@@ -41,7 +41,7 @@ export const stageSewers: StageDef = {
 export const stageChinatown: StageDef = {
   id: "CHINATOWN",
   name: "Chinatown",
-  duration: 20,
+  duration: 180,
   spawns: [
     { t: 0, type: 2, count: 8, radius: 520 },
     { t: 14, type: 1, count: 6, radius: 520 },
