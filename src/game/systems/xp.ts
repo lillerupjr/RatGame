@@ -1,26 +1,40 @@
 import type { World } from "../world";
-import { spawnXp } from "./pickups";
+import { spawnChest, spawnXp, PICKUP_KIND } from "./pickups";
+import { ENEMY_TYPE } from "../factories/enemyFactory";
+
 /**
- * XP + leveling.
+ * XP + drops + leveling.
  * - Spawns XP gems from ENEMY_KILLED events (decoupled from collisions/combat).
- * - Collects XP gems on pickup and triggers LEVELUP.
+ * - When a BOSS is killed, also spawns a Boss Chest and blocks transition until collected.
+ * - Collects XP gems and chests (chest triggers a game.ts popup + reward resolution).
  */
 export function xpSystem(w: World, _dt: number) {
-  // 1) Spawn XP from kill events (decoupled from collisions/combat)
+  // 1) Spawn XP (and boss chest) from kill events
   for (let i = 0; i < w.events.length; i++) {
     const e = w.events[i];
     if (e.type !== "ENEMY_KILLED") continue;
+
     spawnXp(w, e.x, e.y, e.xpValue);
+
+    // Boss chest drop
+    if (w.eType[e.enemyIndex] === ENEMY_TYPE.BOSS) {
+      spawnChest(w, e.x, e.y, "BOSS_CHEST");
+      w.bossRewardPending = true;
+    }
   }
 
-  // 2) Collect XP gems
+  // 2) Collect pickups
+  const pickupR = 18; // physical pickup radius (separate from vacuum radius)
   for (let i = 0; i < w.xAlive.length; i++) {
     if (!w.xAlive[i]) continue;
 
     const dx = w.xx[i] - w.px;
     const dy = w.xy[i] - w.py;
-    const pickupR = 18; // physical pickup radius (separate from vacuum radius)
-    if (dx * dx + dy * dy <= pickupR * pickupR) {
+    if (dx * dx + dy * dy > pickupR * pickupR) continue;
+
+    const kind = w.xKind[i] ?? PICKUP_KIND.XP;
+
+    if (kind === PICKUP_KIND.XP) {
       w.xAlive[i] = false;
       w.xp += w.xValue[i];
 
@@ -30,6 +44,17 @@ export function xpSystem(w: World, _dt: number) {
         w.xpToNext = Math.floor(w.xpToNext * 1.25 + 3);
         w.pendingLevelUps++;
       }
+      continue;
+    }
+
+    if (kind === PICKUP_KIND.CHEST) {
+      w.xAlive[i] = false;
+
+      // Unblock boss progression once chest is taken
+      w.bossRewardPending = false;
+
+      // Signal game.ts to pause + roll/apply reward + show popup
+      w.chestOpenRequested = true;
     }
   }
 }

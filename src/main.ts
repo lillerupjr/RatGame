@@ -10,9 +10,21 @@ const menuEl = document.getElementById("menu") as HTMLDivElement;
 const startBtn = document.getElementById("startBtn") as HTMLButtonElement;
 const hudEl = document.getElementById("hud") as HTMLDivElement;
 
+// Run end overlay (WIN / LOSE)
+const endRoot = document.getElementById("end") as HTMLDivElement;
+const endTitle = document.getElementById("endTitle") as HTMLDivElement;
+const endSubline = document.getElementById("endSubline") as HTMLDivElement;
+const endBtn = document.getElementById("endBtn") as HTMLButtonElement;
+
 const levelupRoot = document.getElementById("levelup") as HTMLDivElement;
 const levelupChoices = document.getElementById("luChoices") as HTMLDivElement;
 const levelupSub = document.getElementById("luSub") as HTMLDivElement;
+
+const mapRoot = document.getElementById("map") as HTMLDivElement;
+const mapSub = document.getElementById("mapSub") as HTMLDivElement;
+const mapSvg = document.querySelector<SVGSVGElement>("#mapSvg")!;
+const mapHit = document.getElementById("mapHit") as HTMLDivElement;
+
 
 const weaponChoicesEl = document.getElementById("weaponChoices") as HTMLDivElement;
 const menuSublineEl = document.getElementById("menuSubline") as HTMLDivElement;
@@ -50,7 +62,7 @@ function setSelectedWeapon(id: WeaponId) {
   });
 
   const title = WEAPONS[id]?.title ?? id;
-  menuSublineEl.textContent = `Slice v0.1 — Docks (8 min → boss). Starter weapon: ${title}.`;
+  menuSublineEl.textContent = `Slice v0.5 — 3 floors (20 sec → boss). Starter weapon: ${title}.`;
 }
 
 /**
@@ -84,7 +96,14 @@ function weaponDesc(id: WeaponId): string {
       return "Damaging aura around you.";
     case "MOLOTOV":
       return "Burning ground effect.";
-
+    case "BOUNCER":
+        return "Bouncing projectiles";
+    case "BOUNCER_EVOLVED_BANKSHOT":
+        return "EXTREME BOUNCES!!";
+    case "BAZOOKA":
+      return "Shoots a slow moving missile";
+    case "BAZOOKA_EVOLVED":
+      return "kaboom.";
     default:
       return "Starter weapon.";
   }
@@ -96,7 +115,9 @@ function isEvolutionStarter(id: WeaponId): boolean {
   return (
       id === "KNIFE_EVOLVED_RING" ||
       id === "PISTOL_EVOLVED_SPIRAL" ||
-      id === "SYRINGE_EVOLVED_CHAIN"
+      id === "SYRINGE_EVOLVED_CHAIN" ||
+      id === "BAZOOKA_EVOLVED" ||
+      id === "BOUNCER_EVOLVED_BANKSHOT"
   );
 }
 
@@ -139,12 +160,34 @@ const game = createGame({
     killsPill: document.getElementById("killsPill") as HTMLSpanElement,
     hpPill: document.getElementById("hpPill") as HTMLSpanElement,
     lvlPill: document.getElementById("lvlPill") as HTMLSpanElement,
+
+    // NEW: inventory HUD
+    weaponSlots: document.getElementById("weaponSlots") as HTMLDivElement,
+    itemSlots: document.getElementById("itemSlots") as HTMLDivElement,
   },
   ui: {
     menuEl,
-    levelupEl: { root: levelupRoot, choices: levelupChoices, sub: levelupSub },
+    endEl: {
+      root: endRoot,
+      title: endTitle,
+      sub: endSubline,
+      btn: endBtn,
+    },
+    levelupEl: {
+      root: levelupRoot,
+      choices: levelupChoices,
+      sub: levelupSub,
+    },
+    mapEl: {
+      root: mapRoot,
+      sub: mapSub,
+      svg: mapSvg,
+      hit: mapHit,
+    },
   },
 });
+
+
 
 let last = performance.now();
 function frame(now: number) {

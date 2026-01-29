@@ -3,8 +3,12 @@ import type { World } from "../world";
 
 export const ZONE_KIND = {
     AURA: 1,
-    FIRE: 2, // molotov later
-    EXPLOSION: 3, // NEW: visual-only
+    FIRE: 2,
+    EXPLOSION: 3,
+
+    // NEW: boss telegraph + hazards
+    TELEGRAPH: 4, // warning only
+    HAZARD: 5,    // damages player (optional) and/or enemies
 } as const;
 
 export type SpawnZoneArgs = {
@@ -14,10 +18,13 @@ export type SpawnZoneArgs = {
     y: number;
 
     radius: number;
-    damage: number;        // damage per tick
+    damage: number;        // damage per tick to enemies
     tickEvery: number;     // seconds between ticks
-    ttl: number;           // seconds, use Infinity for “permanent”
+    ttl: number;           // seconds (Infinity allowed)
     followPlayer?: boolean;
+
+    // NEW: optional damage per tick to player (used by boss hazards)
+    damagePlayer?: number;
 };
 
 export function spawnZone(w: World, a: SpawnZoneArgs) {
@@ -33,10 +40,13 @@ export function spawnZone(w: World, a: SpawnZoneArgs) {
     w.zDamage.push(a.damage);
 
     w.zTickEvery.push(Math.max(0.02, a.tickEvery));
-    w.zTickLeft.push(Math.max(0.02, a.tickEvery)); // start ticking soon-ish
+    w.zTickLeft.push(Math.max(0.02, a.tickEvery));
 
     w.zTtl.push(a.ttl);
     w.zFollowPlayer.push(!!a.followPlayer);
+
+    // NEW
+    w.zDamagePlayer.push(Math.max(0, a.damagePlayer ?? 0));
 
     return i;
 }

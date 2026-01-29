@@ -3,14 +3,16 @@
 A **Vampire Survivors–style top-down roguelike** set in a sleazy, faction-driven rat underworld.  
 Built with **TypeScript + Vite + HTML5 Canvas**, using a **data-driven, ECS-lite architecture** designed for scalability, determinism, and fast iteration.
 
-This repo currently contains the **Slice v0.4.0** foundation:
+This repo currently contains **Slice v0.5.0** — the first **fully playable run**:
+- Complete **multi-floor run structure**
+- **Boss encounters** with clear win / loss conditions
 - Modular weapons with **evolutions**
+- New weapons (Bazooka, Bouncer) with unique mechanics
 - Status effects (poison, burn, aura damage)
-- Explosion & chain-reaction mechanics
-- Upgrade-driven progression
-- Event-queue–based system decoupling
-- Canvas-based rendering (engine-agnostic)
-- Starter weapon selection (including evolutions, for testing)
+- Explosion, chaining, and wave-based effects
+- Run map (`runMap`) inspired by *Slay the Spire*
+- Proper **Run Complete** and **Game Over** screens
+- Player, enemy, projectile sprites, and seamless backgrounds
 
 ---
 
@@ -106,26 +108,6 @@ This:
 
 ---
 
-### Manual Zip (without git)
-If you’re zipping manually, **exclude**:
-
-- `node_modules/`
-- `dist/`
-- `.vite/`
-- `.git/`
-
-On macOS / Linux:
-```bash
-zip -r RatGame.zip . -x "node_modules/*" "dist/*" ".git/*" ".vite/*"
-```
-
-On Windows (PowerShell):
-```powershell
-Compress-Archive -Path * -DestinationPath RatGame.zip -Exclude node_modules,dist,.git,.vite
-```
-
----
-
 ## Git Ignore Notes
 
 Make sure your `.gitignore` includes:
@@ -150,13 +132,12 @@ RatGame.zip
 
 ## Status
 
-🚧 **Active development — v0.4.0**  
-Current focus:
-- Hit detection cleanup & unification
-- Weapon identity separation (base vs evolved behavior)
-- Scalable collision & damage systems
-- Preparing architecture for bosses, floors, and factions
-- Performance hardening for large enemy counts
+**Next focus (v0.6+):**
+- Meta-progression between runs
+- Faction identity & zone theming
+- More boss variety and mechanics
+- Run map depth (branching, node types)
+- Balance, polish, and performance scaling
 
 ---
 
