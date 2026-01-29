@@ -149,6 +149,13 @@ export function collisionsSystem(w: World, dt: number) {
           followPlayer: false,
         });
 
+// Force immediate tick this frame so it *feels* like an explosion
+        w.zTickLeft[z] = 0;
+
+// NEW: bazooka explosion sound
+        emitEvent(w, { type: "SFX", id: "EXPLOSION_BAZOOKA", vol: 0.65 });
+
+
         // Force immediate tick this frame so it *feels* like an explosion
         w.zTickLeft[z] = 0;
 

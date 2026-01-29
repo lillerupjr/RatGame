@@ -37,6 +37,7 @@ export function zonesSystem(w: World, dt: number) {
             if (ex.t > 0) continue;
 
             // 1) Spawn the explosion zone now
+            // 1) Spawn the explosion zone now
             const z = spawnZone(w, {
                 kind: ZONE_KIND.EXPLOSION,
                 x: ex.x,
@@ -47,6 +48,13 @@ export function zonesSystem(w: World, dt: number) {
                 ttl: ex.ttl,
                 followPlayer: false,
             });
+
+// Single-hit burst immediately
+            w.zTickLeft[z] = 0;
+
+// NEW: aftershock sound (same identity as bazooka)
+            emitEvent(w, { type: "SFX", id: "EXPLOSION_BAZOOKA", vol: 0.55 });
+
 
             // Single-hit burst immediately
             w.zTickLeft[z] = 0;

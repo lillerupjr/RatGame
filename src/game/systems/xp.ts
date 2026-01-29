@@ -1,4 +1,5 @@
 import type { World } from "../world";
+import { emitEvent } from "../world";
 import { spawnChest, spawnXp, PICKUP_KIND } from "./pickups";
 import { ENEMY_TYPE } from "../factories/enemyFactory";
 
@@ -38,14 +39,34 @@ export function xpSystem(w: World, _dt: number) {
       w.xAlive[i] = false;
       w.xp += w.xValue[i];
 
+      // SFX: xp pickup (throttled in audioSystem)
+      emitEvent(w, { type: "SFX", id: "XP_PICKUP", vol: 0.35, rate: 0.98 + w.rng.range(0, 0.08) });
+
       while (w.xp >= w.xpToNext) {
         w.xp -= w.xpToNext;
         w.level++;
         w.xpToNext = Math.floor(w.xpToNext * 1.25 + 3);
         w.pendingLevelUps++;
+
+        // SFX: level up
+        emitEvent(w, { type: "SFX", id: "LEVEL_UP", vol: 0.9, rate: 1 });
       }
       continue;
     }
+
+    if (kind === PICKUP_KIND.CHEST) {
+      w.xAlive[i] = false;
+
+      // Unblock boss progression once chest is taken
+      w.bossRewardPending = false;
+
+      // SFX: chest pickup
+      emitEvent(w, { type: "SFX", id: "CHEST_PICKUP", vol: 1.0, rate: 1 });
+
+      // Signal game.ts to pause + roll/apply reward + show popup
+      w.chestOpenRequested = true;
+    }
+
 
     if (kind === PICKUP_KIND.CHEST) {
       w.xAlive[i] = false;

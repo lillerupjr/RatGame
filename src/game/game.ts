@@ -1,5 +1,6 @@
 // src/game/game.ts
-import { World, createWorld, clearEvents } from "./world";
+import { World, createWorld, clearEvents, emitEvent } from "./world";
+
 import { InputState, createInputState, inputSystem } from "./systems/input";
 import { movementSystem } from "./systems/movement";
 import { spawnSystem } from "./systems/spawn";
@@ -12,6 +13,9 @@ import { renderSystem } from "./systems/render";
 import { zonesSystem } from "./systems/zones";
 import { onKillExplodeSystem } from "./systems/onKillExplode";
 import { bossSystem } from "./systems/boss";
+import { audioSystem } from "./systems/audio";
+import { preloadSfx } from "./audio/sfx";
+
 import { getUpgradePool, UpgradeDef } from "./content/upgrades";
 import { formatTimeMMSS } from "./util/time";
 import type { WeaponId } from "./content/weapons";
@@ -21,8 +25,10 @@ import { poisonSystem } from "./systems/poison";
 import { recomputeDerivedStats } from "./stats/derivedStats";
 import {buildStaticRunMap, getReachable, type RunMap, type MapNode} from "./map/runMap";
 import { preloadPlayerSprites } from "./visual/playerSprites";
-import { preloadBackgrounds} from "./visual/background";
-import {getProjectileSpriteByKind, preloadProjectileSprites} from "./visual/projectileSprites";
+import { preloadBackgrounds } from "./visual/background";
+import { getProjectileSpriteByKind, preloadProjectileSprites } from "./visual/projectileSprites";
+import { setMusicStage, stopMusic } from "./audio/music";
+
 
 type HudRefs = {
   root: HTMLDivElement;
@@ -76,9 +82,13 @@ export function createGame(args: CreateGameArgs) {
 
   const input: InputState = createInputState();
   let world: World = createWorld({ seed: 1337, stage: cloneStage("DOCKS") });
+  setMusicStage("DOCKS");
+
   preloadBackgrounds();
   preloadPlayerSprites();
   preloadProjectileSprites();
+  preloadSfx();
+
 
   let currentChoices: UpgradeDef[] = [];
 
@@ -204,17 +214,24 @@ export function createGame(args: CreateGameArgs) {
         (floorIndex === 0 ? "DOCKS" : floorIndex === 1 ? "SEWERS" : "CHINATOWN");
 
     w.stage = cloneStage(sid as any);
+    setMusicStage(sid as any);
+
+    w.stage = cloneStage(sid as any);
 
     // Drive floor timing from stage
     w.floorDuration = w.stage.duration;
 
     clearFloorEntities(w);
+
+    emitEvent(w, { type: "SFX", id: "FLOOR_START", vol: 0.9, rate: 1 });
   }
 
   function enterBoss(w: World) {
     w.runState = "BOSS";
     w.phaseTime = 0;
     w.transitionTime = 0;
+
+    emitEvent(w, { type: "SFX", id: "BOSS_START", vol: 1.0, rate: 1 });
 
     // Ensure boss reward gate is reset for this encounter (if present on World)
     (w as any).bossRewardPending = false;
@@ -601,8 +618,12 @@ export function createGame(args: CreateGameArgs) {
     pickupsSystem(world, dt);
     xpSystem(world, dt);
 
+    // SFX consumes events before any early-return branches
+    audioSystem(world, dt);
+
     // If a chest was opened this frame, roll/apply reward and pause with a popup
     if ((world as any).chestOpenRequested) {
+
       (world as any).chestOpenRequested = false;
 
       const pool = getUpgradePool(world);
@@ -675,6 +696,10 @@ export function createGame(args: CreateGameArgs) {
     if (world.playerHp <= 0) {
       world.runState = "GAME_OVER";
       world.state = "LOSE";
+
+      emitEvent(world, { type: "SFX", id: "RUN_LOSE", vol: 1.0, rate: 1 });
+      audioSystem(world, dt);
+      clearEvents(world);
 
       // Show proper Game Over screen
       args.ui.endEl.title.textContent = "Game Over";
