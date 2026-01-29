@@ -3,6 +3,68 @@
 All notable changes to **Rat Noir Survivors** are documented here.  
 This project is under active development; versions are **slice-based**, not strict semantic releases.
 
+## [v0.5.0] — Full Run Loop, Bosses & Content Expansion
+
+> **v0.5 goal achieved:** Rat Noir Survivors now supports a *complete run* with floors, bosses, win/lose states, expanded weapons, and finalized visuals.
+
+### Added
+- **Full run structure with floors**
+  - Multi-floor progression system
+  - Floor transitions integrated into the core game loop
+- **Boss encounters**
+  - Dedicated boss entities per floor
+  - Boss logic integrated into run progression
+- **Run map (`runMap`, formerly `actGraph`)**
+  - Slay-the-Spire–style run map abstraction
+  - Stabilized and integrated into run flow
+- **Proper run end states**
+  - **Run Complete** screen
+  - **Game Over** screen
+- **Bazooka weapon**
+  - Heavy projectile weapon
+  - **Bazooka evolution** featuring wave-based / chained explosions
+- **Bouncer weapon**
+  - Bouncing projectile mechanics
+  - Bank-shot–style behavior
+- **Weapons & items HUD**
+  - On-screen display of active weapons and items
+- **Player sprite implementation**
+- **Enemy sprite implementation**
+  - Multi-scale enemy rendering
+- **Projectile sprites**
+  - Dedicated visual assets for projectiles
+- **Seamless scrolling backgrounds**
+
+### Changed
+- Knife evolution balance pass
+- Pistol evolution balance pass
+- Syringe balance adjustments
+- Sword melee cone restored and corrected
+- **Run map refactor**
+  - `actGraph` renamed to `runMap`
+  - Internal logic corrected and cleaned up
+- General visual and gameplay polish
+  - Sprite alignment tweaks
+  - Minor system-level refinements
+
+### Fixed
+- Broken run map behavior during early WIP phase
+- Refactor regressions introduced during `actGraph` → `runMap` transition
+- Assorted weapon behavior edge cases discovered during v0.5 testing
+
+### Notes
+- v0.5 marks the transition from a **technical slice** to a **fully playable roguelike loop**
+- All core pillars are now present:
+  - Floors
+  - Bosses
+  - Weapon evolutions
+  - Clear win / loss states
+- Future slices can now focus on **depth, variation, and meta-progression**, not structural foundations
+
+
+
+
+
 ---
 
 ## [v0.4.0] — Current Slice (Architecture & Combat Consolidation)
