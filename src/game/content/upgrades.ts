@@ -118,6 +118,26 @@ function buildAllUpgrades(): UpgradeDef[] {
         },
         getRankText: () => "EVOLUTION",
     });
+    // EVOLUTION: Bouncer -> Bankshot
+    // Requires: Bouncer Lv 10 + Area owned
+    defs.push({
+        id: "EVOLVE_BOUNCER_BANKSHOT",
+        title: "Bankshot",
+        desc:
+            "EVOLUTION: Bouncer gains 10 bounces and also ricochets off screen edges. (Requires Bouncer Lv 10 + Area.)",
+        isEvolution: true,
+        isAvailable: (w) => {
+            const bouncer = getWeaponInst(w, "BOUNCER");
+            const area = getItemInst(w, "AREA");
+            return !!bouncer && bouncer.level >= MAX_WPN && !!area;
+        },
+        apply: (w) => {
+            const idx = w.weapons.findIndex((x) => x.id === "BOUNCER");
+            if (idx < 0) return;
+
+            w.weapons[idx] = { id: "BOUNCER_EVOLVED_BANKSHOT", level: 1, cdLeft: 0 };
+        },
+    });
 
     // -----------------------
     // Weapons: Add + Level-up

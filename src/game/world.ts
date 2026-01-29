@@ -6,9 +6,12 @@ import type { GameEvent } from "./events";
 import type { ItemId } from "./content/items";
 import type { WeaponId } from "./content/weapons";
 import type { EnemyType } from "./content/enemies";
-import {recomputeDerivedStats} from "./stats/derivedStats";
+import { recomputeDerivedStats } from "./stats/derivedStats";
 
-export type GameState = "MENU" | "RUN" | "LEVELUP" | "LOSE" | "WIN";
+export type GameState = "MENU" | "RUN" | "MAP" | "LEVELUP" | "CHEST" | "LOSE" | "WIN";
+
+// Run progression state machine (active only while state === "RUN")
+export type RunState = "FLOOR" | "BOSS" | "TRANSITION" | "GAME_OVER" | "RUN_COMPLETE";
 
 const defaultStarter = ((): WeaponId => {
   const ids = registry.weaponIds();
@@ -21,6 +24,18 @@ export type World = {
   state: GameState;
   rng: RNG;
   stage: StageDef;
+  floorDuration: number;
+
+  // Route map (Slay-the-Spire style, shown between floors)
+  runMap: any; // typed in game.ts via map module to avoid circular deps here
+  mapCurrentNodeId: string | null;
+  mapPendingNextFloorIndex: number; // which floor index we are selecting for
+
+  // Run structure
+  runState: RunState;
+  floorIndex: number;      // 0..2 (3 floors)
+  phaseTime: number;       // seconds since current phase started (FLOOR/BOSS/TRANSITION)
+  transitionTime: number;  // seconds remaining in TRANSITION
 
   time: number;
   kills: number;
@@ -75,6 +90,8 @@ export type World = {
   zTtl: number[];
   zFollowPlayer: boolean[];
 
+  // NEW: zones can optionally damage the player (boss hazards)
+  zDamagePlayer: number[];
 
   // Projectiles
   pAlive: boolean[];
@@ -93,6 +110,17 @@ export type World = {
   prDirX: number[];
   prDirY: number[];
   prTtl: number[];
+  prBouncesLeft: number[];
+  // If true, projectile also bounces off the screen edges (camera view bounds).
+  prWallBounce: boolean[];
+
+  // NEW: projectiles that should not collide with enemies (Bazooka rocket)
+  prNoCollide: boolean[];
+
+  // NEW: static target + explode-on-arrival
+  prHasTarget: boolean[];
+  prTargetX: number[];
+  prTargetY: number[];
 
   prStartX: number[];
   prStartY: number[];
@@ -100,8 +128,22 @@ export type World = {
   prLastHitEnemy: number[]; // last enemy index hit
   prLastHitCd: number[];    // seconds remaining until it can hit that same enemy again
 
+
   prPoisonDps: number[];  // NEW
   prPoisonDur: number[];  // NEW
+
+  // NEW: Bazooka evolution aftershock payload (index-aligned with projectiles)
+  prAftershockN: number[];       // 0 = none
+  prAftershockDelay: number[];   // seconds
+  prAftershockRingR: number[];   // radius around initial explosion
+  prAftershockWaves: number[];
+  prAftershockRingStep: number[];
+
+
+  // NEW: explosion payload (bazooka etc.)
+  prExplodeR: number[];     // 0 = no explosion
+  prExplodeDmg: number[];   // damage per tick (we'll tick once instantly)
+  prExplodeTtl: number[];   // visual TTL for the explosion ring
 
 
   // NEW: Orbital projectiles (Knuckle Ring)
@@ -110,11 +152,20 @@ export type World = {
   prOrbBaseRadius: number[];
   prOrbBaseAngVel: number[];
 
-  // Pickups (XP gems)
+  // Pickups (XP gems + drops)
+  // xKind: 1 = XP, 2 = CHEST
   xAlive: boolean[];
+  xKind: number[];
   xx: number[];
   xy: number[];
-  xValue: number[];
+  xValue: number[];     // XP amount for XP gems, 0 for chests
+  xDropId: string[];    // "" for XP gems, "BOSS_CHEST" for chests
+
+  // Boss reward gating (prevents transition clearing the chest)
+  bossRewardPending: boolean;
+
+  // Chest pickup handshake (system -> game.ts)
+  chestOpenRequested: boolean;
 
   // Progression
   level: number;
@@ -143,7 +194,20 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     events: [],
     state: "MENU",
     rng: new RNG(args.seed),
-    stage: args.stage,
+
+    // IMPORTANT: stage spawns are mutated at runtime (t -> Infinity), so clone them.
+    stage: { ...args.stage, spawns: args.stage.spawns.map((s) => ({ ...s })) },
+
+    runState: "FLOOR",
+    floorIndex: 0,
+    phaseTime: 0,
+    transitionTime: 0,
+    floorDuration: 0,
+
+    // Map / route
+    runMap: null,
+    mapCurrentNodeId: null,
+    mapPendingNextFloorIndex: 0,
 
     time: 0,
     kills: 0,
@@ -172,7 +236,7 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     evx: [],
     evy: [],
     eHp: [],
-    eHpMax: [], // NEW
+    eHpMax: [],
     eR: [],
     eSpeed: [],
     eDamage: [],
@@ -181,7 +245,6 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     ePoisonDps: [],
     ePoisonedOnDeath: [],
 
-    // Zones
     zAlive: [],
     zKind: [],
     zx: [],
@@ -192,8 +255,7 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     zTickLeft: [],
     zTtl: [],
     zFollowPlayer: [],
-
-
+    zDamagePlayer: [],
 
     pAlive: [],
     pKind: 0,
@@ -204,13 +266,25 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     prvy: [],
     prDamage: [],
     prR: [],
+
     prPierce: [],
+    prWallBounce: [],
+
+    // NEW
+    prNoCollide: [],
+    prHasTarget: [],
+    prTargetX: [],
+    prTargetY: [],
+
     prIsmelee: [],
     prCone: [],
     prMeleeRange: [],
+
     prDirX: [],
     prDirY: [],
     prTtl: [],
+    prBouncesLeft: [],
+
     prStartX: [],
     prStartY: [],
     prMaxDist: [],
@@ -220,19 +294,31 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     prPoisonDps: [],
     prPoisonDur: [],
 
+    prAftershockN: [],
+    prAftershockDelay: [],
+    prAftershockRingR: [],
+    prAftershockWaves: [],
+    prAftershockRingStep: [],
 
 
-    // orbital
+    prExplodeR: [],
+    prExplodeDmg: [],
+    prExplodeTtl: [],
+
     prIsOrbital: [],
     prOrbAngle: [],
     prOrbBaseRadius: [],
     prOrbBaseAngVel: [],
 
     xAlive: [],
+    xKind: [],
     xx: [],
     xy: [],
     xValue: [],
+    xDropId: [],
 
+    bossRewardPending: false,
+    chestOpenRequested: false,
     level: 1,
     xp: 0,
     xpToNext: 10,
@@ -245,17 +331,17 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
 
     dmgMult: 1,
     fireRateMult: 1,
-
     areaMult: 1,
     durationMult: 1,
   };
 
+  // Ensure derived stats consistent with items (even if empty).
   recomputeDerivedStats(w);
+
   return w;
 }
 
-
-export function emitEvent(w: World, e: import("./events").GameEvent) {
+export function emitEvent(w: World, e: GameEvent) {
   w.events.push(e);
 }
 

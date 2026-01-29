@@ -14,7 +14,11 @@ export type WeaponId =
     | "SWORD"
     | "KNUCKLES"
     | "AURA"
-    | "MOLOTOV";
+    | "MOLOTOV"
+    | "BOUNCER"
+    | "BOUNCER_EVOLVED_BANKSHOT"
+    | "BAZOOKA"
+    | "BAZOOKA_EVOLVED";
 
 
 export const MAX_WEAPON_LEVEL = 10;
@@ -144,13 +148,13 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         getStats: (level, w) => {
             const lv = clampLevel(level);
 
-            const cooldownBase = 1.05;
+            const cooldownBase = 0.3;
             const damageBase = 10;
             const damagePer = 0.9;
 
             return {
                 cooldown: cooldownBase / w.fireRateMult,
-                projectileSpeed: 440,
+                projectileSpeed: 700,
                 projectileRadius: 5,
                 damage: (damageBase + (lv - 1) * damagePer) * w.dmgMult,
                 projectileCount: 24,
@@ -224,10 +228,10 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
         getStats: (level, w) => {
             const lv = clampLevel(level);
-            const multiplier = 240;
+            const multiplier = 60;
             // "Same as pistol" (your choice)
             const cooldownBase = 1/multiplier;
-            const dmg = (10 + (lv - 1) * 3) * w.dmgMult/multiplier;
+            const dmg = (10 + (lv - 1) * 3) * w.dmgMult;
 
             return {
                 cooldown: cooldownBase / w.fireRateMult,
@@ -242,7 +246,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         fire: (w, s, aim) => {
             // Persisted angle state on world (kept off World type like other systems do)
             // Clockwise rotation ≈ +90° per burst (medium)
-            const multiplier = 4;
+            const multiplier = 10;
             const STEP = Math.PI / 2 / multiplier;
 
             const key = "_pistolSpiralAng";
@@ -312,7 +316,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const cooldownBase = 2;
 
             // Needle feel: fast, small, short-ish life
-            const needleSpeed = 560;
+            const needleSpeed = 200;
 
             // Small direct hit (still scales with dmgMult)
             const hitDmgBase = 4.0;
@@ -378,7 +382,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const poisonDur = Math.max(0, (s as any).poisonDur ?? 0);
 
             const p = spawnProjectile(w, {
-                kind: PRJ_KIND.PISTOL, // reuse bullet visuals/behavior; poison payload differentiates it
+                kind: PRJ_KIND.SYRINGE,
                 x: w.px,
                 y: w.py,
                 dirX: aim.x,
@@ -411,7 +415,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const cooldownBase = 2;
 
             // Needle feel: fast, small, short-ish life
-            const needleSpeed = 560;
+            const needleSpeed = 200;
 
             // Small direct hit (still scales with dmgMult)
             const hitDmgBase = 4.0;
@@ -477,7 +481,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const poisonDur = Math.max(0, (s as any).poisonDur ?? 0);
 
             const p = spawnProjectile(w, {
-                kind: PRJ_KIND.PISTOL, // reuse bullet visuals/behavior; poison payload differentiates it
+                kind: PRJ_KIND.SYRINGE,
                 x: w.px,
                 y: w.py,
                 dirX: aim.x,
@@ -495,6 +499,379 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             (w as any).prPoisonDur[p] = poisonDur;
         },
     },
+    BOUNCER: {
+        id: "BOUNCER",
+        title: "Bouncer",
+        getStats: (level, w) => {
+            const lv = clampLevel(level);
+
+            const cooldownBase = 0.25;
+
+            const dmgBase = 14;
+            const dmgPer = 2.2;
+
+            // Gains bounces as it levels:
+            // Lv1 -> 0 bounces (dies on first hit)
+            // Lv2 -> 1 bounce, ... Lv10 -> 9 bounces
+            const bounces = Math.max(0, lv - 1)+10;
+
+            return {
+                cooldown: cooldownBase / w.fireRateMult,
+                projectileSpeed: 560,
+                projectileRadius: 6,
+                damage: (dmgBase + (lv - 1) * dmgPer) * w.dmgMult,
+
+                // We don't want to pierce to be the limiter for this weapon.
+                // Ricochet rules control lifetime.
+                pierce: 999,
+
+                // stash bounces as an escape hatch
+                ...( { bounces } as any ),
+            } as any;
+        },
+
+        fire: (w, s, aim) => {
+            const viewW = (w as any).viewW ?? 800;
+
+            // Give it enough life to bounce around.
+            // (It will still die early if it runs out of bounces and hits again.)
+            const ttlSafety = 6.0;
+
+            const bounces = Math.max(0, ((s as any).bounces ?? 0));
+
+            spawnProjectile(w, {
+                kind: PRJ_KIND.BOUNCER,
+                x: w.px,
+                y: w.py,
+                dirX: aim.x,
+                dirY: aim.y,
+                speed: s.projectileSpeed,
+                damage: s.damage,
+                radius: s.projectileRadius,
+                pierce: 999,
+                ttl: ttlSafety,
+
+                // IMPORTANT: enables the ricochet path
+                bounces,
+            });
+        },
+    },
+    BOUNCER_EVOLVED_BANKSHOT: {
+        id: "BOUNCER_EVOLVED_BANKSHOT",
+        title: "Bankshot",
+        hiddenFromPools: true,
+        evolvedFrom: "BOUNCER",
+
+        // DEBUG: number of firing directions
+        // 1 = aim direction
+        // 2 = north + south
+        // 4 = north, east, south, west
+        // 8 = includes diagonals
+
+        // @ts-ignore — debug-only extra field
+        directions: 1,
+
+        getStats: (level, w) => {
+            const cooldownBase = 0.1;
+
+            return {
+                cooldown: cooldownBase / w.fireRateMult,
+                projectileSpeed: 620,
+                projectileRadius: 7,
+                damage: 5 * w.dmgMult,
+                pierce: 999,
+
+                ...( { bounces: 10, wallBounce: true } as any ),
+            } as any;
+        },
+
+        fire: (w, s, aim) => {
+            const ttlSafety = 10.0;
+            const bounces = 10;
+
+            // 👇 read directly from weapon def (debug only)
+            const dirs = (WEAPONS as any).BOUNCER_EVOLVED_BANKSHOT.directions ?? 1;
+
+            // Single-direction fallback (normal aimed shot)
+            if (dirs === 1) {
+                spawnProjectile(w, {
+                    kind: PRJ_KIND.BOUNCER,
+                    x: w.px,
+                    y: w.py,
+                    dirX: aim.x,
+                    dirY: aim.y,
+                    speed: s.projectileSpeed,
+                    damage: s.damage,
+                    radius: s.projectileRadius,
+                    pierce: 999,
+                    ttl: ttlSafety,
+                    bounces,
+                    wallBounce: true,
+                });
+                return;
+            }
+
+            const step = (Math.PI * 2) / dirs;
+
+            for (let i = 0; i < dirs; i++) {
+                const a = i * step;
+
+                // 0 = north
+                const dx = Math.cos(a - Math.PI / 2);
+                const dy = Math.sin(a - Math.PI / 2);
+
+                spawnProjectile(w, {
+                    kind: PRJ_KIND.PISTOL,
+                    x: w.px,
+                    y: w.py,
+                    dirX: dx,
+                    dirY: dy,
+                    speed: s.projectileSpeed,
+                    damage: s.damage,
+                    radius: s.projectileRadius,
+                    pierce: 999,
+                    ttl: ttlSafety,
+                    bounces,
+                    wallBounce: true,
+                });
+            }
+        },
+    },
+    BAZOOKA: {
+        id: "BAZOOKA",
+        title: "Bazooka",
+
+        getStats: (level: number, w: World) => {
+            const lv = clampLevel(level);
+
+            const cooldownBase = 1;
+
+            // Rocket travel speed (world units/sec)
+            const rocketSpeedBase = 150;
+            const rocketSpeedPer = 18;
+
+            // Explosion radius (scales with AREA)
+            const blastBase = 86;
+            const blastPer = 6.5;
+            const blastR = (blastBase + (lv - 1) * blastPer) * (w.areaMult ?? 1);
+
+            // Explosion damage (scales with DMG)
+            const dmgBase = 34;
+            const dmgPer = 3.1;
+            const dmg = (dmgBase + (lv - 1) * dmgPer) * (w.dmgMult ?? 1);
+
+            // Targeting radius around player (acquisition range)
+            const targetRadiusBase = 420;
+            const targetRadiusPer = 12;
+            const targetRadius = targetRadiusBase + (lv - 1) * targetRadiusPer;
+
+            // Rocket collision radius (visual/feel)
+            const rocketR = 7;
+
+            return {
+                cooldown: cooldownBase / (w.fireRateMult ?? 1),
+                projectileSpeed: rocketSpeedBase + (lv - 1) * rocketSpeedPer,
+
+                // IMPORTANT:
+                // We keep projectileRadius = blast radius for convenience (your original pattern),
+                // and use rocketR as the actual rocket collision radius.
+                projectileRadius: blastR,
+                damage: dmg,
+
+                // escape hatch fields for fire()
+                ...({ targetRadius, rocketR } as any),
+            } as any;
+        },
+
+        fire: (w: World, s: any, aim: Aim): void => {
+            const targetRadius = (s as any).targetRadius ?? 420;
+            const rocketR = (s as any).rocketR ?? 7;
+
+            // Find candidates within acquisition radius
+            const cand: number[] = [];
+            const tr2 = targetRadius * targetRadius;
+
+            for (let e = 0; e < w.eAlive.length; e++) {
+                if (!w.eAlive[e]) continue;
+                const dx = w.ex[e] - w.px;
+                const dy = w.ey[e] - w.py;
+                if (dx * dx + dy * dy <= tr2) cand.push(e);
+            }
+
+            // Pick a target point
+            let tx: number;
+            let ty: number;
+
+            if (cand.length > 0) {
+                const pick = cand[w.rng.int(0, cand.length - 1)];
+                tx = w.ex[pick];
+                ty = w.ey[pick];
+            } else {
+                // fallback: fire forward
+                tx = w.px + aim.x * targetRadius;
+                ty = w.py + aim.y * targetRadius;
+            }
+
+            // Direction toward target point
+            let dx = tx - w.px;
+            let dy = ty - w.py;
+            const len = Math.hypot(dx, dy) || 1;
+            dx /= len;
+            dy /= len;
+
+            const speed = s.projectileSpeed;
+
+            // TTL long enough to cross acquisition radius + buffer
+            const dist = Math.hypot(tx - w.px, ty - w.py);
+            const ttl = Math.max(0.35, dist / Math.max(1, speed) + 0.45);
+
+            // Optional: keep impact damage smaller so explosion is the identity (prevents double-dipping)
+            const impactDmg = Math.max(1, (s.damage ?? 0) * 0.25);
+
+            // Spawn rocket (collides normally). Explosion is triggered by collisionsSystem using payload arrays.
+            const p = spawnProjectile(w, {
+                kind: PRJ_KIND.BAZOOKA, // keep your bazooka visual kind if it exists in your project
+                x: w.px,
+                y: w.py,
+                dirX: dx,
+                dirY: dy,
+                speed,
+                damage: impactDmg,
+                radius: rocketR,
+                pierce: 999, // we kill it ourselves on first hit when explosion triggers
+                ttl,
+                maxDist: (w as any).viewW ? (w as any).viewW * 2 : undefined,
+            });
+
+            // Attach explode-on-hit payload
+            (w as any).prExplodeR[p] = Math.max(1, s.projectileRadius ?? 0); // blast radius
+            (w as any).prExplodeDmg[p] = Math.max(0, s.damage ?? 0);         // explosion damage
+            (w as any).prExplodeTtl[p] = 0.30;                               // VFX ring duration
+        },
+    },
+    BAZOOKA_EVOLVED: {
+        id: "BAZOOKA_EVOLVED",
+        title: "Bazooka evolved",
+        hiddenFromPools: true,
+        evolvedFrom: "BAZOOKA",
+
+        getStats: (level: number, w: World) => {
+            const lv = clampLevel(level);
+
+            const cooldownBase = 5;
+
+            // Rocket travel speed (world units/sec)
+            const rocketSpeedBase = 150;
+            const rocketSpeedPer = 18;
+
+            // Explosion radius (scales with AREA)
+            const blastBase = 100;
+            const blastPer = 6.5;
+            const blastR = (blastBase + (lv - 1) * blastPer) * (w.areaMult ?? 1);
+
+            // Explosion damage (scales with DMG)
+            const dmgBase = 34;
+            const dmgPer = 3.1;
+            const dmg = (dmgBase + (lv - 1) * dmgPer) * (w.dmgMult ?? 1);
+
+            // Targeting radius around player (acquisition range)
+            const targetRadiusBase = 420;
+            const targetRadiusPer = 12;
+            const targetRadius = targetRadiusBase + (lv - 1) * targetRadiusPer;
+
+            // Rocket collision radius (visual/feel)
+            const rocketR = 7;
+
+            return {
+                cooldown: cooldownBase / (w.fireRateMult ?? 1),
+                projectileSpeed: rocketSpeedBase + (lv - 1) * rocketSpeedPer,
+
+                // IMPORTANT:
+                // We keep projectileRadius = blast radius for convenience (your original pattern),
+                // and use rocketR as the actual rocket collision radius.
+                projectileRadius: blastR,
+                damage: dmg,
+
+                // escape hatch fields for fire()
+                ...({ targetRadius, rocketR } as any),
+            } as any;
+        },
+
+        fire: (w: World, s: any, aim: Aim): void => {
+            const targetRadius = (s as any).targetRadius ?? 420;
+            const rocketR = (s as any).rocketR ?? 7;
+
+            // Find candidates within acquisition radius
+            const cand: number[] = [];
+            const tr2 = targetRadius * targetRadius;
+
+            for (let e = 0; e < w.eAlive.length; e++) {
+                if (!w.eAlive[e]) continue;
+                const dx = w.ex[e] - w.px;
+                const dy = w.ey[e] - w.py;
+                if (dx * dx + dy * dy <= tr2) cand.push(e);
+            }
+
+            // Pick a target point
+            let tx: number;
+            let ty: number;
+
+            if (cand.length > 0) {
+                const pick = cand[w.rng.int(0, cand.length - 1)];
+                tx = w.ex[pick];
+                ty = w.ey[pick];
+            } else {
+                // fallback: fire forward
+                tx = w.px + aim.x * targetRadius;
+                ty = w.py + aim.y * targetRadius;
+            }
+
+            // Direction toward target point
+            let dx = tx - w.px;
+            let dy = ty - w.py;
+            const len = Math.hypot(dx, dy) || 1;
+            dx /= len;
+            dy /= len;
+
+            const speed = s.projectileSpeed;
+
+            // TTL long enough to cross acquisition radius + buffer
+            const dist = Math.hypot(tx - w.px, ty - w.py);
+            const ttl = Math.max(0.35, dist / Math.max(1, speed) + 0.45);
+
+            // Optional: keep impact damage smaller so explosion is the identity (prevents double-dipping)
+            const impactDmg = Math.max(1, (s.damage ?? 0) * 0.25);
+
+            // Spawn rocket (collides normally). Explosion is triggered by collisionsSystem using payload arrays.
+            const p = spawnProjectile(w, {
+                kind: PRJ_KIND.BAZOOKA, // keep your bazooka visual kind if it exists in your project
+                x: w.px,
+                y: w.py,
+                dirX: dx,
+                dirY: dy,
+                speed,
+                damage: impactDmg,
+                radius: rocketR,
+                pierce: 999, // we kill it ourselves on first hit when explosion triggers
+                ttl,
+                maxDist: (w as any).viewW ? (w as any).viewW * 2 : undefined,
+            });
+
+            // Attach explode-on-hit payload
+            (w as any).prExplodeR[p] = Math.max(1, s.projectileRadius ?? 0); // blast radius
+            (w as any).prExplodeDmg[p] = Math.max(0, s.damage ?? 0);         // explosion damage
+            (w as any).prExplodeTtl[p] = 0.25;                               // VFX ring duration
+
+            // NEW: evolution aftershocks (N delayed explosions in a ring)
+            (w as any).prAftershockN[p] = 3;               // N (tune)
+            (w as any).prAftershockDelay[p] = 0.85 * (w.durationMult ?? 1);        // seconds after initial explosion
+            (w as any).prAftershockRingR[p] = 200 * (w.areaMult ?? 1); // ring radius scales w/ area
+            (w as any).prAftershockWaves[p] = 3; // Wave count tune
+            (w as any).prAftershockRingStep[p] = 60 * (w.areaMult ?? 1);   // ring spacing
+        },
+    },
+
+
     SWORD: {
         id: "SWORD",
         title: "Sword",
@@ -711,6 +1088,8 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             (w as any)[key] = idx;
         },
     },
+
+
     MOLOTOV: {
         id: "MOLOTOV",
         title: "Molotov Cocktail",

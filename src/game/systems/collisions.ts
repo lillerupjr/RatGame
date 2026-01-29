@@ -2,6 +2,8 @@
 import { World, emitEvent } from "../world";
 import { isEnemyHit, isPlayerHit } from "./hitDetection";
 import { registry } from "../content/registry";
+import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
+
 
 /**
  * Handles:
@@ -16,6 +18,10 @@ export function collisionsSystem(w: World, dt: number) {
   // -------------------------
   for (let p = 0; p < w.pAlive.length; p++) {
     if (!w.pAlive[p]) continue;
+
+    // NEW: Bazooka rockets (and other special projectiles) can opt out of collisions
+    if (w.prNoCollide[p]) continue;
+
 
     const px = w.prx[p];
     const py = w.pry[p];
@@ -65,12 +71,125 @@ export function collisionsSystem(w: World, dt: number) {
         source: registry.projectileSourceFromKind(w.prjKind[p]),
       });
 
-      // Pierce handling
-      if (w.prPierce[p] > 0) {
-        w.prPierce[p] -= 1;
+      // Bounce / pierce handling
+      // If prBouncesLeft[p] >= 0 => this projectile uses ricochet rules.
+      // Otherwise, use normal pierce rules.
+      const bLeft = w.prBouncesLeft[p];
+
+      if (bLeft >= 0) {
+        // If no bounces left, it dies on this hit (after dealing damage).
+        if (bLeft <= 0) {
+          w.pAlive[p] = false;
+        } else {
+          // Pool-style ricochet: reflect velocity about the collision normal.
+          // Normal points from enemy center -> projectile center.
+          const ex = w.ex[e];
+          const ey = w.ey[e];
+
+          let nx = px - ex;
+          let ny = py - ey;
+
+          const nLen = Math.hypot(nx, ny) || 0.0001;
+          nx /= nLen;
+          ny /= nLen;
+
+          const vx = w.prvx[p];
+          const vy = w.prvy[p];
+
+          // Reflect: v' = v - 2*(v·n)*n
+          const dot = vx * nx + vy * ny;
+          const rvx = vx - 2 * dot * nx;
+          const rvy = vy - 2 * dot * ny;
+
+          w.prvx[p] = rvx;
+          w.prvy[p] = rvy;
+
+          // Keep direction arrays in sync (used by some mechanics/render assumptions)
+          const vLen = Math.hypot(rvx, rvy) || 0.0001;
+          w.prDirX[p] = rvx / vLen;
+          w.prDirY[p] = rvy / vLen;
+
+          // Push the projectile just outside the enemy so it doesn't instantly re-collide
+          // rr is already (enemy radius + projectile radius).
+          const pushOut = rr + 0.6;
+          w.prx[p] = ex + nx * pushOut;
+          w.pry[p] = ey + ny * pushOut;
+
+          // Consume one bounce
+          w.prBouncesLeft[p] = bLeft - 1;
+        }
       } else {
+        // Normal pierce behavior for non-bouncing projectiles
+        if (w.prPierce[p] > 0) {
+          w.prPierce[p] -= 1;
+        } else {
+          w.pAlive[p] = false;
+        }
+      }
+
+      // -------------------------
+      // Explode-on-hit (Bazooka etc.)
+      // -------------------------
+      const exR = (w as any).prExplodeR?.[p] ?? 0;
+      const exDmg = (w as any).prExplodeDmg?.[p] ?? 0;
+      const exTtl = (w as any).prExplodeTtl?.[p] ?? 0.25;
+
+      if (exR > 0 && exDmg > 0) {
+        const zx = w.prx[p];
+        const zy = w.pry[p];
+
+        const z = spawnZone(w, {
+          kind: ZONE_KIND.EXPLOSION,
+          x: zx,
+          y: zy,
+          radius: exR,
+          damage: exDmg,
+          tickEvery: 0.2,      // doesn't matter; we force the first tick immediately
+          ttl: exTtl,
+          followPlayer: false,
+        });
+
+        // Force immediate tick this frame so it *feels* like an explosion
+        w.zTickLeft[z] = 0;
+
+        // NEW: Bazooka evolution aftershocks (delayed ring)
+
+
+        const baseN = (w as any).prAftershockN?.[p] ?? 0;
+        const delay = (w as any).prAftershockDelay?.[p] ?? 0;
+        const ringR = (w as any).prAftershockRingR?.[p] ?? 0;
+        const maxWaves = (w as any).prAftershockWaves?.[p] ?? 0;
+        const ringStep = (w as any).prAftershockRingStep?.[p] ?? 0;
+
+        if (baseN > 0 && delay > 0 && ringR > 0 && maxWaves > 0) {
+          const q = ((w as any)._delayedExplosions ??= []);
+          const baseAng = w.rng.range(0, Math.PI * 2);
+          const rot = w.rng.range(0.15, 0.55);
+
+          // wave 0 around the impact point (zx, zy)
+          for (let k = 0; k < baseN; k++) {
+            const ang = baseAng + (k * Math.PI * 2) / baseN;
+            q.push({
+              t: delay,
+              x: zx + Math.cos(ang) * ringR,
+              y: zy + Math.sin(ang) * ringR,
+              r: exR,
+              dmg: exDmg,
+              ttl: exTtl,
+
+              wave: 0,
+              maxWaves,
+              baseN,
+              delay,
+              ringR,
+              ringStep,
+              rot,
+            });
+          }
+        }
         w.pAlive[p] = false;
       }
+
 
       // Death handling
       if (w.eHp[e] <= 0) {

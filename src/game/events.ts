@@ -6,7 +6,7 @@ export type GameEvent =
     damage: number;
     x: number;
     y: number;
-    source: "KNIFE" | "PISTOL" | "SWORD" | "KNUCKLES" | "OTHER";
+    source: "KNIFE" | "PISTOL" | "SWORD" | "KNUCKLES" | "SYRINGE" | "BOUNCER" | "OTHER";
 }
     | {
     type: "ENEMY_KILLED";
@@ -14,7 +14,7 @@ export type GameEvent =
     x: number;
     y: number;
     xpValue: number;
-    source: "KNIFE" | "PISTOL" | "SWORD" | "KNUCKLES" | "OTHER";
+    source: "KNIFE" | "PISTOL" | "SWORD" | "KNUCKLES" | "SYRINGE" | "BOUNCER" | "OTHER";
 }
     | {
     type: "PLAYER_HIT";
