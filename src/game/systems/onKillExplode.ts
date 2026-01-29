@@ -70,7 +70,6 @@ export function onKillExplodeSystem(w: World, _dt: number) {
         const cx = ev.x;
         const cy = ev.y;
 
-        // Optional: purple ring VFX using zones
         if (cfg.spawnVfx !== false) {
             // Requires ZONE_KIND.EXPLOSION in zoneFactory + render handling
             spawnZone(w, {
@@ -84,6 +83,9 @@ export function onKillExplodeSystem(w: World, _dt: number) {
                 followPlayer: false,
             });
         }
+
+// NEW: syringe explosion sound (distinct from bazooka)
+        emitEvent(w, { type: "SFX", id: "EXPLOSION_SYRINGE", vol: 0.55 });
 
         // AoE damage application
         for (let e = 0; e < w.eAlive.length; e++) {

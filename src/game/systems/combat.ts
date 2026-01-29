@@ -1,4 +1,4 @@
-import { World } from "../world";
+import { World, emitEvent } from "../world";
 import { registry } from "../content/registry";
 
 export function combatSystem(w: World, dt: number) {
@@ -53,6 +53,17 @@ export function combatSystem(w: World, dt: number) {
     const stats = def.getStats(inst.level, w);
     inst.cdLeft += Math.max(0.01, stats.cooldown);
 
-    def.fire(w, stats, { x: aimX, y: aimY });
+    def.fire(w, stats, {x: aimX, y: aimY});
+
+    // SFX: weapon fired (throttled in audioSystem)
+    emitEvent(w, {
+      type: "SFX",
+      id: "FIRE_OTHER", // resolved later by audioSystem
+      weaponId: inst.id,
+      vol: 0.55,
+      rate: 0.95 + w.rng.range(0, 0.1),
+    });
+
+
   }
 }
