@@ -133,6 +133,10 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     w.prOrbBaseRadius.push(a.orbBaseRadius ?? 0);
     w.prOrbBaseAngVel.push(a.orbBaseAngVel ?? 0);
 
+    // Fission arrays (nuclear fission bouncer evolution)
+    w.prFission.push(false);
+    w.prFissionCd.push(0);
+
     w.prPoisonDps.push(0);
     w.prPoisonDur.push(0);
 

@@ -22,6 +22,7 @@ import type { WeaponId } from "./content/weapons";
 import { registry } from "./content/registry";
 import { spawnEnemy, ENEMY_TYPE } from "./factories/enemyFactory";
 import { poisonSystem } from "./systems/poison";
+import { fissionSystem } from "./systems/fission";
 import { recomputeDerivedStats } from "./stats/derivedStats";
 import {buildStaticRunMap, getReachable, type RunMap, type MapNode} from "./map/runMap";
 import { preloadPlayerSprites } from "./visual/playerSprites";
@@ -626,6 +627,7 @@ export function createGame(args: CreateGameArgs) {
     combatSystem(world, dt);
     projectilesSystem(world, dt);
     collisionsSystem(world, dt);
+    fissionSystem(world, dt);  // Nuclear fission: projectile-projectile collisions
     poisonSystem(world, dt);
     onKillExplodeSystem(world, dt); // NEW: explode on kill (can add more kills)
     bossSystem(world, dt);          // NEW: boss mechanics (telegraphs/hazards/dash)

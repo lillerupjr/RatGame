@@ -19,6 +19,7 @@ export type WeaponId =
     | "MOLOTOV"
     | "BOUNCER"
     | "BOUNCER_EVOLVED_BANKSHOT"
+    | "BOUNCER_EVOLVED_FISSION"
     | "BAZOOKA"
     | "BAZOOKA_EVOLVED";
 
@@ -644,6 +645,68 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             }
         },
     },
+
+    // --- EVOLUTION: Bankshot -> Nuclear Fission (projectiles split on collision with each other) ---
+    BOUNCER_EVOLVED_FISSION: {
+        id: "BOUNCER_EVOLVED_FISSION",
+        title: "Nuclear Fission",
+        hiddenFromPools: true,
+        evolvedFrom: "BOUNCER_EVOLVED_BANKSHOT",
+
+        getStats: (level, w) => {
+            const lv = clampLevel(level);
+            const cooldownBase = 0.35;
+
+            const dmgBase = 8;
+            const dmgPer = 1.5;
+
+            return {
+                cooldown: cooldownBase / w.fireRateMult,
+                projectileSpeed: 480,
+                projectileRadius: 8,
+                damage: (dmgBase + (lv - 1) * dmgPer) * w.dmgMult,
+                pierce: 999,
+
+                // Fission balls bounce off walls and enemies
+                ...({ bounces: 15, wallBounce: true, fission: true } as any),
+            } as any;
+        },
+
+        fire: (w, s, aim) => {
+            const ttlSafety = 12.0;
+            const bounces = 15;
+
+            // Fire in 4 cardinal directions for maximum chaos
+            const directions = [
+                { x: 0, y: -1 },  // up
+                { x: 1, y: 0 },   // right
+                { x: 0, y: 1 },   // down
+                { x: -1, y: 0 },  // left
+            ];
+
+            for (const dir of directions) {
+                const p = spawnProjectile(w, {
+                    kind: PRJ_KIND.BOUNCER,
+                    x: w.px,
+                    y: w.py,
+                    dirX: dir.x,
+                    dirY: dir.y,
+                    speed: s.projectileSpeed,
+                    damage: s.damage,
+                    radius: s.projectileRadius,
+                    pierce: 999,
+                    ttl: ttlSafety,
+                    bounces,
+                    wallBounce: true,
+                });
+
+                // Mark as fission-capable
+                (w as any).prFission[p] = true;
+                (w as any).prFissionCd[p] = 0; // cooldown before it can fission again
+            }
+        },
+    },
+
     BAZOOKA: {
         id: "BAZOOKA",
         title: "Bazooka",
