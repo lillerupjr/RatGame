@@ -88,6 +88,11 @@ export function createGame(args: CreateGameArgs) {
   preloadPlayerSprites();
   preloadProjectileSprites();
   preloadSfx();
+  // ---- FPS counter ----
+  let fpsFrames = 0;
+  let fpsLastTime = performance.now();
+  let fpsValue = 0;
+  // FPS tracking
 
 
   let currentChoices: UpgradeDef[] = [];
@@ -238,7 +243,7 @@ export function createGame(args: CreateGameArgs) {
     (w as any).chestOpenRequested = false;
 
     // Clean slate for the boss encounter (feels fair + deterministic).
-    clearFloorEntities(w);
+    //clearFloorEntities(w);
 
     const a = w.rng.range(0, Math.PI * 2);
     const r = 320;
@@ -569,7 +574,17 @@ export function createGame(args: CreateGameArgs) {
       updateHud();
       return;
     }
+    // FPS tracking
+    fpsFrames++;
+    const now = performance.now();
+    if (now - fpsLastTime >= 1000) {
+      fpsValue = fpsFrames;
+      fpsFrames = 0;
+      fpsLastTime = now;
 
+      // expose to renderSystem
+      (world as any).fps = fpsValue;
+    }
     if (world.state !== "RUN") return;
 
     // total run time (optional for future meta / analytics)

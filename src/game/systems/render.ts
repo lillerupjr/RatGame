@@ -240,6 +240,7 @@ export async function renderSystem(
 
     ctx.globalAlpha = 1;
   }
+
   // Projectiles (sprites; fallback to circles)
   for (let i = 0; i < w.pAlive.length; i++) {
     if (!w.pAlive[i]) continue;
@@ -352,4 +353,11 @@ export async function renderSystem(
     ctx.arc(ww * 0.5, hh * 0.5, 14, 0, Math.PI * 2);
     ctx.fill();
   }
+  ctx.save();
+  ctx.font = "12px monospace";
+  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  ctx.textBaseline = "top";
+  const fps = Math.round((w as any).fps ?? 0);
+  ctx.fillText(`FPS: ${fps}`, 8, 8);
+  ctx.restore();
 }

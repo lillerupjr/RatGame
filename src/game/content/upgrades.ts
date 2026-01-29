@@ -45,7 +45,8 @@ function hasWeaponOrEvolvedFrom(w: World, baseId: WeaponId): boolean {
 /** Build all upgrades. */
 function buildAllUpgrades(): UpgradeDef[] {
     const defs: UpgradeDef[] = [];
-
+    // NEW: evolution unlock level
+    const EVOLVE_WPN_LEVEL = 5;
     const MAX_WPN = registry.maxWeaponLevel();
     const MAX_ITEM = registry.maxItemLevel();
 
@@ -58,12 +59,12 @@ function buildAllUpgrades(): UpgradeDef[] {
         id: "EVOLVE_KNIFE_RING",
         title: "Knife Cyclone",
         desc:
-            "EVOLUTION: Throwing Knife becomes a 24-knife burst in a full circle. (Requires Throwing Knife Lv 10 + Fire Rate.)",
+            "EVOLUTION: Throwing Knife becomes a 24-knife burst in a full circle. (Requires Throwing Knife Lv 5 + Fire Rate.)",
         isEvolution: true,
         isAvailable: (w) => {
             const knife = getWeaponInst(w, "KNIFE");
             const fireRate = getItemInst(w, "FIRE_RATE");
-            return !!knife && knife.level >= MAX_WPN && !!fireRate;
+            return !!knife && knife.level >= EVOLVE_WPN_LEVEL && !!fireRate;
         },
         apply: (w) => {
             const idx = w.weapons.findIndex((x) => x.id === "KNIFE");
@@ -85,7 +86,7 @@ function buildAllUpgrades(): UpgradeDef[] {
             const pistol = getWeaponInst(w, "PISTOL");
             const dmg = getItemInst(w, "DMG");
             // You answered: NOT "Lv10 only" -> so Lv10 + DMG is required
-            return !!pistol && pistol.level >= MAX_WPN && !!dmg;
+            return !!pistol && pistol.level >= EVOLVE_WPN_LEVEL && !!dmg;
         },
         apply: (w) => {
             const idx = w.weapons.findIndex((x) => x.id === "PISTOL");
@@ -108,7 +109,7 @@ function buildAllUpgrades(): UpgradeDef[] {
         isAvailable: (w) => {
             const syringe = getWeaponInst(w, "SYRINGE");
             const duration = getItemInst(w, "DURATION");
-            return !!syringe && syringe.level >= MAX_WPN && !!duration;
+            return !!syringe && syringe.level >= EVOLVE_WPN_LEVEL && !!duration;
         },
         apply: (w) => {
             const idx = w.weapons.findIndex((x) => x.id === "SYRINGE");
@@ -129,7 +130,7 @@ function buildAllUpgrades(): UpgradeDef[] {
         isAvailable: (w) => {
             const bouncer = getWeaponInst(w, "BOUNCER");
             const area = getItemInst(w, "AREA");
-            return !!bouncer && bouncer.level >= MAX_WPN && !!area;
+            return !!bouncer && bouncer.level >= EVOLVE_WPN_LEVEL && !!area;
         },
         apply: (w) => {
             const idx = w.weapons.findIndex((x) => x.id === "BOUNCER");
@@ -164,10 +165,10 @@ function buildAllUpgrades(): UpgradeDef[] {
         defs.push({
             id: `WPN_LV_${id}`,
             title: `${wpn.title} +1`,
-            desc: `Increase weapon level. (Evolution at Lv ${MAX_WPN}.)`,
+            desc: `Increase weapon level. (Evolution at Lv ${EVOLVE_WPN_LEVEL}.)`,
             isAvailable: (w) => {
                 const inst = getWeaponInst(w, id);
-                return !!inst && inst.level < MAX_WPN;
+                return !!inst && inst.level < EVOLVE_WPN_LEVEL;
             },
             apply: (w) => {
                 const inst = getWeaponInst(w, id);
