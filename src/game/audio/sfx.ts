@@ -10,29 +10,33 @@ const modules = import.meta.glob("../../assets/sfx/*.{wav,mp3,ogg}", {
     import: "default",
 }) as Record<string, string>;
 
+
+// TODO: Implement volume control for each SFX
+
+
 // Map SfxId -> filename in src/assets/sfx/
 const FILES: Record<SfxId, string> = {
-    FIRE_KNIFE: "fire_knife.wav",
-    FIRE_PISTOL: "fire_pistol.wav",
-    FIRE_SYRINGE: "fire_syringe.wav",
-    FIRE_BOUNCER: "fire_bouncer.wav",
-    FIRE_BAZOOKA: "fire_bazooka.wav",
+    FIRE_KNIFE: "fire_knife.wav", // done
+    FIRE_PISTOL: "fire_pistol.wav", // done
+    FIRE_SYRINGE: "fire_syringe.wav", // done
+    FIRE_BOUNCER: "fire_bouncer.wav", // done
+    FIRE_BAZOOKA: "fire_bazooka.wav", // done
     FIRE_OTHER: "fire_other.wav",
 
-    WALK_STEP: "walk_step.wav",
+    WALK_STEP: "walk_step2.wav", // done
 
-    EXPLOSION_BAZOOKA: "explosion_bazooka.wav",
-    EXPLOSION_SYRINGE: "explosion_syringe.wav",
+    EXPLOSION_BAZOOKA: "explosion_bazooka.wav", // done
+    EXPLOSION_SYRINGE: "explosion_syringe.wav", // done
 
     ENEMY_HIT: "enemy_hit.wav",
-    ENEMY_KILL: "enemy_kill.wav",
-    PLAYER_HIT: "player_hit.wav",
-    XP_PICKUP: "xp_pickup.wav",
-    LEVEL_UP: "level_up.wav",
+    ENEMY_KILL: "enemy_kill.wav", // done
+    PLAYER_HIT: "player_hit.wav", // done
+    XP_PICKUP: "xp_pickup.wav", // done
+    LEVEL_UP: "level_up.wav", // done
     CHEST_PICKUP: "chest_pickup.wav",
     FLOOR_START: "floor_start.wav",
     BOSS_START: "boss_start.wav",
-    RUN_WIN: "run_win.wav",
+    RUN_WIN: "run_win.wav", // done
     RUN_LOSE: "run_lose.wav",
     UI_CLICK: "ui_click.wav",
 };
