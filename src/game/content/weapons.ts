@@ -332,7 +332,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             // ---- Poison payload ----
             // DPS scales with dmgMult. Duration scales with durationMult.
-            const poisonDpsBase = 7.0;
+            const poisonDpsBase = 20.0;
             const poisonDpsPer = 1.35;
             const poisonDps = (poisonDpsBase + (lv - 1) * poisonDpsPer) * w.dmgMult;
 
@@ -342,7 +342,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             // ---- Poison-gated explode-on-kill (handled by onKillExplodeSystem) ----
             // Explosions ONLY occur when a poisoned enemy dies.
-            const pctBase = 0.5;
+            const pctBase = 0.2;
             const pctPer = 0.02;
             const pct = pctBase + (lv - 1) * pctPer;
 
@@ -431,7 +431,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             // ---- Poison payload ----
             // DPS scales with dmgMult. Duration scales with durationMult.
-            const poisonDpsBase = 7.0;
+            const poisonDpsBase = 20.0;
             const poisonDpsPer = 1.35;
             const poisonDps = (poisonDpsBase + (lv - 1) * poisonDpsPer) * w.dmgMult;
 
@@ -441,7 +441,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             // ---- Poison-gated explode-on-kill (handled by onKillExplodeSystem) ----
             // Explosions ONLY occur when a poisoned enemy dies.
-            const pctBase = 1;
+            const pctBase = 0.20;
             const pctPer = 0.02;
             const pct = pctBase + (lv - 1) * pctPer;
 
@@ -514,7 +514,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             const cooldownBase = 0.25;
 
-            const dmgBase = 14;
+            const dmgBase = 7;
             const dmgPer = 2.2;
 
             // Gains bounces as it levels:
@@ -579,7 +579,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         directions: 1,
 
         getStats: (level, w) => {
-            const cooldownBase = 0.1;
+            const cooldownBase = 0.2;
 
             return {
                 cooldown: cooldownBase / w.fireRateMult,

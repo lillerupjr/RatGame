@@ -9,8 +9,21 @@ export const registry = {
     // ---- Weapons ----
     weaponIds(): WeaponId[] {
         const ids = Object.keys(WEAPONS) as WeaponId[];
-        return ids.filter((id) => !WEAPONS[id]?.hiddenFromPools);
+
+        // Base weapons = visible in pools (not hidden)
+        const base = ids.filter((id) => !WEAPONS[id]?.hiddenFromPools);
+
+        // Evolvable bases = any weapon that has at least one evolution pointing to it
+        const evolvableBases = new Set<WeaponId>();
+        for (const wid of ids) {
+            const from = WEAPONS[wid]?.evolvedFrom;
+            if (from) evolvableBases.add(from);
+        }
+
+        // Loot pool should only include weapons that can evolve
+        return base.filter((id) => evolvableBases.has(id));
     },
+
     weapon(id: WeaponId): WeaponDef {
         const def = WEAPONS[id];
         if (!def) throw new Error(`Unknown weapon id: ${id}`);
