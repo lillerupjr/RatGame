@@ -7,9 +7,9 @@ const modules = import.meta.glob("../../assets/music/*.{mp3,ogg,wav}", {
 }) as Record<string, string>;
 
 const FILES: Record<StageId, string> = {
-    DOCKS: "theme_docks.ogg",
-    SEWERS: "theme_sewers.ogg",
-    CHINATOWN: "theme_chinatown.ogg",
+    DOCKS: "test2.ogg",
+    SEWERS: "test1.ogg",
+    CHINATOWN: "test3.ogg",
 };
 
 let cur: HTMLAudioElement | null = null;
