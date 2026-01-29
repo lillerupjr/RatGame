@@ -193,8 +193,8 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         title: "Pistol",
         getStats: (level, w) => {
             const lv = clampLevel(level);
-            const cooldownBase = 0.55;
-            const dmg = (10 + (lv - 1) * 3) * w.dmgMult;
+            const cooldownBase = 0.4;
+            const dmg = (20 + (lv - 1) * 3) * w.dmgMult;
 
             return {
                 cooldown: cooldownBase / w.fireRateMult,
@@ -231,7 +231,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const multiplier = 60;
             // "Same as pistol" (your choice)
             const cooldownBase = 1/multiplier;
-            const dmg = (10 + (lv - 1) * 3) * w.dmgMult;
+            const dmg = (20 + (lv - 1) * 3) * w.dmgMult;
 
             return {
                 cooldown: cooldownBase / w.fireRateMult,
