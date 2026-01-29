@@ -6,9 +6,10 @@ import { spawnProjectile, PRJ_KIND } from "../factories/projectileFactory";
 /**
  * Nuclear Fission system:
  * When two fission-capable projectiles collide with each other,
- * they spawn a 3rd projectile traveling in a perpendicular direction.
+ * they spawn 2 NEW projectiles traveling perpendicular to the collision.
  * 
- * This creates exponential chaos as more balls spawn and collide!
+ * NO CAPS, NO LIMITS - true exponential chaos!
+ * The only natural limit is TTL/bounces running out.
  */
 export function fissionSystem(w: World, dt: number) {
   // Update fission cooldowns
@@ -19,110 +20,132 @@ export function fissionSystem(w: World, dt: number) {
     }
   }
 
-  // Cap on total fission projectiles to prevent performance death
-  const MAX_FISSION_PROJECTILES = 80;
-  
+  // Count current fission projectiles for logging
   let fissionCount = 0;
   for (let p = 0; p < w.pAlive.length; p++) {
     if (w.pAlive[p] && w.prFission[p]) fissionCount++;
   }
 
-  if (fissionCount >= MAX_FISSION_PROJECTILES) return;
+  // Hard cap to prevent performance issues (but high enough for chaos)
+  const MAX_FISSION = 300;
+  if (fissionCount >= MAX_FISSION) {
+    return; // Stop spawning new ones
+  }
 
   // Check for fission projectile collisions
   // We'll queue spawns to avoid modifying arrays while iterating
-  const spawns: { x: number; y: number; dirX: number; dirY: number; damage: number; speed: number; radius: number }[] = [];
+  const spawns: { x: number; y: number; vx1: number; vy1: number; vx2: number; vy2: number; damage: number; speed: number; radius: number }[] = [];
 
-  for (let p1 = 0; p1 < w.pAlive.length; p1++) {
-    if (!w.pAlive[p1]) continue;
-    if (!w.prFission[p1]) continue;
-    if (w.prFissionCd[p1] > 0) continue;
+  // Track pairs that have already collided this frame (not individual projectiles!)
+  const collidedPairs = new Set<string>();
 
+  // Collect all fission-capable projectiles that are off cooldown
+  const fissionProjectiles: number[] = [];
+  for (let p = 0; p < w.pAlive.length; p++) {
+    if (w.pAlive[p] && w.prFission[p] && w.prFissionCd[p] <= 0) {
+      fissionProjectiles.push(p);
+    }
+  }
+
+  // Check each pair of fission projectiles
+  for (let i = 0; i < fissionProjectiles.length; i++) {
+    const p1 = fissionProjectiles[i];
+    
     const x1 = w.prx[p1];
     const y1 = w.pry[p1];
     const r1 = w.prR[p1];
+    const vx1 = w.prvx[p1];
+    const vy1 = w.prvy[p1];
 
-    for (let p2 = p1 + 1; p2 < w.pAlive.length; p2++) {
-      if (!w.pAlive[p2]) continue;
-      if (!w.prFission[p2]) continue;
-      if (w.prFissionCd[p2] > 0) continue;
+    for (let j = i + 1; j < fissionProjectiles.length; j++) {
+      const p2 = fissionProjectiles[j];
+      
+      // Create unique pair key
+      const pairKey = `${Math.min(p1, p2)}_${Math.max(p1, p2)}`;
+      if (collidedPairs.has(pairKey)) continue;
 
       const x2 = w.prx[p2];
       const y2 = w.pry[p2];
       const r2 = w.prR[p2];
+      const vx2 = w.prvx[p2];
+      const vy2 = w.prvy[p2];
 
-      // Check collision
+      // Check collision - generous collision radius
       const dx = x2 - x1;
       const dy = y2 - y1;
       const distSq = dx * dx + dy * dy;
-      const rr = r1 + r2;
+      const collisionDist = (r1 + r2) * 3; // 3x radius for generous detection
 
-      if (distSq > rr * rr) continue;
+      if (distSq > collisionDist * collisionDist) continue;
 
-      // COLLISION! Spawn a new projectile
+      // COLLISION DETECTED!
+      collidedPairs.add(pairKey);
       
-      // Put both on cooldown so they don't immediately fission again
-      w.prFissionCd[p1] = 0.15;
-      w.prFissionCd[p2] = 0.15;
+      // Short cooldown - just enough to prevent same-frame spam
+      w.prFissionCd[p1] = 0.06;
+      w.prFissionCd[p2] = 0.06;
 
-      // Spawn point is midway between the two
+      // Spawn point is at collision midpoint
       const spawnX = (x1 + x2) / 2;
       const spawnY = (y1 + y2) / 2;
 
-      // New projectile direction: perpendicular to the collision axis
-      // with some randomness for variety
-      const dist = Math.sqrt(distSq) || 0.0001;
+      // Calculate perpendicular directions to collision axis
+      const dist = Math.sqrt(distSq) || 1;
       const nx = dx / dist;
       const ny = dy / dist;
+      
+      // Perpendicular vectors (both directions)
+      const perpX = -ny;
+      const perpY = nx;
 
-      // Perpendicular (rotate 90 degrees), randomly pick one of two perpendiculars
-      const sign = w.rng.range(0, 1) > 0.5 ? 1 : -1;
-      const perpX = -ny * sign;
-      const perpY = nx * sign;
+      // Use average speed of the two balls
+      const speed1 = Math.hypot(vx1, vy1);
+      const speed2 = Math.hypot(vx2, vy2);
+      const avgSpeed = Math.max((speed1 + speed2) / 2, 300); // minimum 300 speed
 
-      // Average the properties of the two colliding projectiles
+      // Average properties
       const avgDamage = (w.prDamage[p1] + w.prDamage[p2]) / 2;
-      const avgSpeed = (Math.hypot(w.prvx[p1], w.prvy[p1]) + Math.hypot(w.prvx[p2], w.prvy[p2])) / 2;
       const avgRadius = (r1 + r2) / 2;
 
       spawns.push({
         x: spawnX,
         y: spawnY,
-        dirX: perpX,
-        dirY: perpY,
-        damage: avgDamage * 0.9, // slight damage falloff to prevent infinite scaling
+        vx1: perpX * avgSpeed,  // First new ball goes one perpendicular direction
+        vy1: perpY * avgSpeed,
+        vx2: -perpX * avgSpeed, // Second new ball goes opposite perpendicular
+        vy2: -perpY * avgSpeed,
+        damage: avgDamage,
         speed: avgSpeed,
         radius: avgRadius,
       });
-
-      // Only one fission event per projectile per frame
-      break;
+      
+      // DON'T break - allow this projectile to collide with others too!
     }
   }
 
-  // Spawn the new fission projectiles
+  // Spawn the new fission projectiles (2 per collision for exponential growth!)
   for (const s of spawns) {
-    if (fissionCount >= MAX_FISSION_PROJECTILES) break;
-
-    const p = spawnProjectile(w, {
-      kind: PRJ_KIND.BOUNCER,
-      x: s.x,
-      y: s.y,
-      dirX: s.dirX,
-      dirY: s.dirY,
-      speed: s.speed,
-      damage: s.damage,
-      radius: s.radius,
-      pierce: 999,
-      ttl: 8.0,
-      bounces: 12,
-      wallBounce: true,
-    });
-
-    // Mark the new projectile as fission-capable too!
-    w.prFission[p] = true;
-    w.prFissionCd[p] = 0.2; // start with a short cooldown
-
-    fissionCount++;
+    // Spawn BOTH perpendicular directions
+    for (const [vx, vy] of [[s.vx1, s.vy1], [s.vx2, s.vy2]]) {
+      if (fissionCount >= MAX_FISSION) break;
+      
+      const p = spawnProjectile(w, {
+        kind: PRJ_KIND.BOUNCER,
+        x: s.x,
+        y: s.y,
+        dirX: vx,
+        dirY: vy,
+        speed: s.speed,
+        damage: s.damage,
+        radius: s.radius,
+        pierce: 999,
+        ttl: 9999,       // effectively infinite
+        bounces: 9999,   // effectively infinite
+        wallBounce: true,
+      });
+      w.prFission[p] = true;
+      w.prFissionCd[p] = 0.04; // tiny cooldown
+      fissionCount++;
+    }
   }
 }

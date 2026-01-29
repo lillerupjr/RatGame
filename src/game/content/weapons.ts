@@ -673,18 +673,19 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         },
 
         fire: (w, s, aim) => {
-            const ttlSafety = 12.0;
-            const bounces = 15;
+            const ttl = 9999;       // effectively infinite
+            const bounces = 9999;   // effectively infinite
 
-            // Fire in 4 cardinal directions for maximum chaos
-            const directions = [
-                { x: 0, y: -1 },  // up
-                { x: 1, y: 0 },   // right
-                { x: 0, y: 1 },   // down
-                { x: -1, y: 0 },  // left
-            ];
+            // Fire in 8 directions for maximum chaos and collision potential
+            // With wall bouncing, these will eventually collide!
+            const numBalls = 8;
+            for (let i = 0; i < numBalls; i++) {
+                const angle = (i / numBalls) * Math.PI * 2 + w.rng.range(-0.2, 0.2); // more randomness
+                const dir = {
+                    x: Math.cos(angle),
+                    y: Math.sin(angle),
+                };
 
-            for (const dir of directions) {
                 const p = spawnProjectile(w, {
                     kind: PRJ_KIND.BOUNCER,
                     x: w.px,
@@ -695,14 +696,14 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
                     damage: s.damage,
                     radius: s.projectileRadius,
                     pierce: 999,
-                    ttl: ttlSafety,
+                    ttl,
                     bounces,
                     wallBounce: true,
                 });
 
                 // Mark as fission-capable
-                (w as any).prFission[p] = true;
-                (w as any).prFissionCd[p] = 0; // cooldown before it can fission again
+                w.prFission[p] = true;
+                w.prFissionCd[p] = 0; // no initial cooldown - let them collide immediately
             }
         },
     },
