@@ -25,6 +25,18 @@ import { poisonSystem } from "./systems/poison";
 import { fissionSystem } from "./systems/fission";
 import { recomputeDerivedStats } from "./stats/derivedStats";
 import {buildStaticRunMap, getReachable, type RunMap, type MapNode} from "./map/runMap";
+import {
+  createDelveMap,
+  ensureAdjacentNodes,
+  getReachableNodes,
+  moveToNode,
+  getVisibleNodes,
+  getVisibleEdges,
+  getDepthScaling,
+  getNodeDepth,
+  type DelveMap,
+  type DelveNode,
+} from "./map/delveMap";
 import { preloadPlayerSprites } from "./visual/playerSprites";
 import { preloadBackgrounds } from "./visual/background";
 import { getProjectileSpriteByKind, preloadProjectileSprites } from "./visual/projectileSprites";
@@ -303,14 +315,21 @@ export function createGame(args: CreateGameArgs) {
       world.weapons = [{ id: starterWeapon, level: 1, cdLeft: 0 }];
     }
 
-    // Build act graph (static for now; later this becomes the generator output)
+    // Create infinite delve map
+    const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
+    const delve = createDelveMap(seed);
+    world.delveMap = delve;
+    world.delveDepth = 1;
+    world.delveScaling = getDepthScaling(1);
+
+    // Also keep legacy map for compatibility (will be phased out)
     const g = buildStaticRunMap() as RunMap;
     (world as any).runMap = g;
     (world as any).mapCurrentNodeId = null;
     (world as any).mapPendingNextFloorIndex = 0;
 
     // Pick starting node
-    showMap("Pick a starting location.");
+    showDelveMap("Choose your starting location.\nGo deeper for greater challenge and rewards.");
   }
 
 
@@ -429,6 +448,147 @@ export function createGame(args: CreateGameArgs) {
       <div class="mapHitTitle">${n.title}</div>
       <div class="mapHitDesc">${btn.disabled ? "Locked" : "Select"} · Boss at end</div>
     `;
+
+      hit.appendChild(btn);
+    }
+  }
+
+  function showDelveMap(subText: string) {
+    world.state = "MAP";
+    args.ui.mapEl.root.hidden = false;
+    args.hud.root.hidden = true;
+    args.ui.mapEl.sub.textContent = subText;
+
+    const delve = world.delveMap as DelveMap;
+    if (!delve) {
+      // Fallback to old map system
+      showMap(subText);
+      return;
+    }
+
+    const seed = world.rng.int(0, 0x7fffffff);
+
+    // Generate adjacent nodes from current position
+    if (delve.currentNodeId) {
+      ensureAdjacentNodes(delve, delve.currentNodeId, seed);
+    }
+
+    // Get visible nodes and edges
+    const visibleNodes = getVisibleNodes(delve, 4);
+    const visibleEdges = getVisibleEdges(delve, visibleNodes);
+    const reachable = new Set(getReachableNodes(delve).map(n => n.id));
+
+    // Calculate bounds for positioning
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    for (const n of visibleNodes) {
+      minX = Math.min(minX, n.x);
+      maxX = Math.max(maxX, n.x);
+      minY = Math.min(minY, n.y);
+      maxY = Math.max(maxY, n.y);
+    }
+
+    // Visual margins in SVG coords (1000x520)
+    const x0 = 140, x1 = 860;
+    const y0 = 90, y1 = 430;
+
+    const rangeX = Math.max(1, maxX - minX);
+    const rangeY = Math.max(1, maxY - minY);
+
+    const pos = new Map<string, { x: number; y: number }>();
+    for (const n of visibleNodes) {
+      const tx = rangeX > 0 ? (n.x - minX) / rangeX : 0.5;
+      // Invert Y so deeper nodes are at the bottom
+      const ty = rangeY > 0 ? (n.y - minY) / rangeY : 0.5;
+
+      const x = x0 + (x1 - x0) * tx;
+      const y = y0 + (y1 - y0) * ty;
+
+      pos.set(n.id, { x, y });
+    }
+
+    // --- Draw SVG edges + nodes ---
+    const svg = args.ui.mapEl.svg;
+
+    const edgeLines = visibleEdges
+      .map((e) => {
+        const a = pos.get(e.from);
+        const b = pos.get(e.to);
+        if (!a || !b) return "";
+        return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="rgba(255,255,255,0.22)" stroke-width="6" stroke-linecap="round" />`;
+      })
+      .join("");
+
+    const nodeCircles = visibleNodes
+      .map((n) => {
+        const p = pos.get(n.id)!;
+        const isReach = reachable.has(n.id);
+        const isCurrent = delve.currentNodeId === n.id;
+        const isCompleted = n.completed;
+
+        // Color coding based on state
+        let fill: string;
+        let stroke: string;
+        if (isCurrent) {
+          fill = "rgba(100,200,255,0.4)";
+          stroke = "rgba(100,200,255,0.8)";
+        } else if (isCompleted) {
+          fill = "rgba(100,255,100,0.2)";
+          stroke = "rgba(100,255,100,0.4)";
+        } else if (isReach) {
+          fill = "rgba(255,255,255,0.18)";
+          stroke = "rgba(255,255,255,0.42)";
+        } else {
+          fill = "rgba(255,255,255,0.06)";
+          stroke = "rgba(255,255,255,0.12)";
+        }
+
+        const depth = getNodeDepth(n);
+        const scaling = getDepthScaling(depth);
+        const difficultyText = `Depth ${depth} (${Math.round(scaling.hpMult * 100)}% HP)`;
+
+        return `
+          <circle cx="${p.x}" cy="${p.y}" r="22" fill="${fill}" stroke="${stroke}" stroke-width="4" />
+          <text x="${p.x}" y="${p.y + 40}" text-anchor="middle" font-size="14" fill="rgba(255,255,255,0.92)" font-weight="700">${n.title}</text>
+          <text x="${p.x}" y="${p.y + 56}" text-anchor="middle" font-size="10" fill="rgba(255,255,255,0.6)">${difficultyText}</text>
+        `;
+      })
+      .join("");
+
+    svg.innerHTML = `
+      <rect x="0" y="0" width="1000" height="520" fill="rgba(0,0,0,0)" />
+      ${edgeLines}
+      ${nodeCircles}
+    `;
+
+    // --- Hit layer buttons ---
+    const hit = args.ui.mapEl.hit;
+    hit.innerHTML = "";
+
+    const toPct = (x: number, y: number) => ({ left: (x / 1000) * 100, top: (y / 520) * 100 });
+
+    for (const n of visibleNodes) {
+      const p = pos.get(n.id)!;
+      const { left, top } = toPct(p.x, p.y);
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "mapHitBtn";
+      btn.dataset.delveNodeId = n.id;
+      btn.style.left = `${left}%`;
+      btn.style.top = `${top}%`;
+
+      const isReach = reachable.has(n.id);
+      const isCurrent = delve.currentNodeId === n.id;
+      btn.disabled = !isReach || isCurrent;
+
+      const depth = getNodeDepth(n);
+      const statusText = isCurrent ? "Current" : n.completed ? "Completed" : isReach ? "Select" : "Locked";
+
+      btn.innerHTML = `
+        <div class="mapHitTitle">${n.title}</div>
+        <div class="mapHitDesc">${statusText} · Boss at end</div>
+      `;
 
       hit.appendChild(btn);
     }
@@ -562,7 +722,10 @@ export function createGame(args: CreateGameArgs) {
     args.hud.timePill.textContent = formatTimeMMSS(world.time);
     args.hud.killsPill.textContent = `Kills: ${world.kills}`;
     args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
-    args.hud.lvlPill.textContent = `Lv: ${world.level}`;
+    
+    // Show depth in delve mode
+    const depthText = world.delveMap ? ` · Depth ${world.delveDepth}` : "";
+    args.hud.lvlPill.textContent = `Lv: ${world.level}${depthText}`;
 
     // 4 weapon slots + 4 item slots, order = array order
     renderSlots(args.hud.weaponSlots, world.weapons as any, (id) => registry.weapon(id as any).title);
@@ -614,6 +777,14 @@ export function createGame(args: CreateGameArgs) {
         if (pending) {
           // Do nothing; chest must be picked up first
         } else {
+          // Delve mode: always show map after boss defeat (infinite progression)
+          const delve = world.delveMap as DelveMap;
+          if (delve) {
+            showDelveMap(`Depth ${world.delveDepth} cleared!\nChoose your next destination.`);
+            return;
+          }
+
+          // Legacy mode: end after 3 floors
           if (world.floorIndex >= FLOORS_PER_RUN - 1) {
             completeRun(world);
             return;
@@ -790,6 +961,34 @@ export function createGame(args: CreateGameArgs) {
     const btn = el.closest("button") as HTMLButtonElement | null;
     if (!btn) return;
 
+    // Handle delve node clicks
+    const delveNodeId = btn.dataset.delveNodeId;
+    if (delveNodeId) {
+      const delve = world.delveMap as DelveMap;
+      if (!delve) return;
+
+      const node = moveToNode(delve, delveNodeId);
+      if (!node) return;
+
+      // Update depth and scaling
+      const depth = getNodeDepth(node);
+      world.delveDepth = depth;
+      world.delveScaling = getDepthScaling(depth);
+
+      // Generate adjacent nodes for next time
+      const seed = world.rng.int(0, 0x7fffffff);
+      ensureAdjacentNodes(delve, delveNodeId, seed);
+
+      hideMap();
+      world.state = "RUN";
+
+      // Enter the chosen zone with depth-scaled difficulty
+      // floorIndex is used for enemy type weights, zoneId for visuals/music
+      enterFloor(world, Math.min(2, Math.floor((depth - 1) / 3)), node.zoneId);
+      return;
+    }
+
+    // Legacy map node clicks
     const nodeId = btn.dataset.nodeId;
     if (!nodeId) return;
 
