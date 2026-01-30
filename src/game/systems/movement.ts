@@ -1,6 +1,8 @@
 import { World } from "../world";
 import { InputState } from "./input";
 import { worldDeltaToScreen } from "../visual/iso";
+import { isWalkableWorld } from "../map/kenneyMap";
+import {KENNEY_TILE_WORLD} from "../visual/kenneyTiles";
 
 export function movementSystem(w: World, input: InputState, dt: number) {
   // -------------------------------------------------------
@@ -24,19 +26,46 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   if (input.up) sy -= 1;
   if (input.down) sy += 1;
 
-  // Convert screen-intent to world movement
+// sx, sy from input (WASD)
   let dx = (sx + sy) * 0.5;
   let dy = (sy - sx) * 0.5;
 
-  const len = Math.hypot(dx, dy) || 1;
-  dx /= len;
-  dy /= len;
-
+  const len = Math.hypot(dx, dy);
+  if (len > 1e-6) {
+    dx /= len;
+    dy /= len;
+  }
   w.pvx = dx * w.pSpeed;
   w.pvy = dy * w.pSpeed;
 
-  w.px += w.pvx * dt;
-  w.py += w.pvy * dt;
+  // --- Tile-hole collision (Milestone A placeholder) ---
+  // If target tile is a hole, block + slide on axes.
+  const oldX = w.px;
+  const oldY = w.py;
+
+  const nx = oldX + w.pvx * dt;
+  const ny = oldY + w.pvy * dt;
+
+  // Treat player's "feet" as the collision point.
+  // If you want softer edges, add a small radius check later.
+  if (isWalkableWorld(nx, ny, KENNEY_TILE_WORLD)) {
+    w.px = nx;
+    w.py = ny;
+  } else {
+    // Slide: try X only then Y only
+    const okX = isWalkableWorld(nx, oldY, KENNEY_TILE_WORLD);
+    const okY = isWalkableWorld(oldX, ny, KENNEY_TILE_WORLD);
+
+    if (okX) w.px = nx;
+    else w.px = oldX;
+
+    if (okY) w.py = ny;
+    else w.py = oldY;
+
+    // If neither axis works, you stay put.
+  }
+
+
 
   // Enemies chase player (world space unchanged)
   for (let i = 0; i < w.eAlive.length; i++) {

@@ -12,13 +12,16 @@ import {
   type Frame3,
 } from "../visual/playerSprites";
 import { getEnemySpriteFrame, preloadEnemySprites } from "../visual/enemySprites";
+
 import { getBackground } from "../visual/background";
+
 import {
   getProjectileSpriteByKind,
   preloadProjectileSprites,
   getProjectileDrawScale,
   PROJECTILE_BASE_DRAW_PX,
 } from "../visual/projectileSprites";
+
 import {
   worldToScreen,
   worldDeltaToScreen,
@@ -27,6 +30,13 @@ import {
   depthKey,
   screenToWorld,
 } from "../visual/iso";
+
+import {
+  getKenneyGroundTile,
+  KENNEY_TILE_WORLD,
+  KENNEY_TILE_ANCHOR_Y,
+} from "../visual/kenneyTiles";
+import {isHoleTile} from "../map/kenneyMap";
 
 export async function renderSystem(
     w: World,
@@ -64,60 +74,72 @@ export async function renderSystem(
     return { x: p.x + camX, y: p.y + camY };
   };
 
-  // --- Infinite tiled background texture (FAKE ISO TRICK) ---
+  // --- Kenney-style iso ground tiles (Milestone A: Phase 1 placeholder) ---
+  // Draw a real iso tile grid in correct back-to-front order (x+y diagonals).
+  // Uses the placeholder tile: landscape_13.png (via getKenneyGroundTile()).
+
   ctx.globalAlpha = 1;
 
-  const bg = getBackground(w);
-  if (bg?.ready && bg.img) {
-    const tileW = bg.img.width || 1024;
-    const tileH = bg.img.height || 1024;
+  const tile = getKenneyGroundTile();
 
-    // Important: main.ts sets a DPR transform on ctx (via setTransform).
-    // If we call setTransform directly, we must re-apply DPR.
-    const base = ctx.getTransform();
-    const dpr = base.a || 1;
+  // World-units per tile step (tune later; this is just to get it on screen).
+  const T = 64;
 
-    ctx.save();
+  // Anchor: tile sprites are usually taller than their footprint.
+  // This value makes the tile “sit” on the projected ground point.
+  const ANCHOR_Y = 0.55;
 
-    // Reset to DPR-only, then apply iso transform on top.
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.transform(ISO_X, ISO_Y, -ISO_X, ISO_Y, camX, camY);
+  // How many tiles around the player to draw (simple view-based estimate).
+  const radius = Math.max(12, Math.ceil(Math.max(ww, hh) / (T * 0.9)));
 
-    // Compute visible WORLD bounds by inverse-projecting screen corners
-    const p00 = screenToWorld(0 - camX, 0 - camY);
-    const p10 = screenToWorld(ww - camX, 0 - camY);
-    const p01 = screenToWorld(0 - camX, hh - camY);
-    const p11 = screenToWorld(ww - camX, hh - camY);
+  const cx = Math.floor(w.px / T);
+  const cy = Math.floor(w.py / T);
 
-    let minX = Math.min(p00.x, p10.x, p01.x, p11.x);
-    let maxX = Math.max(p00.x, p10.x, p01.x, p11.x);
-    let minY = Math.min(p00.y, p10.y, p01.y, p11.y);
-    let maxY = Math.max(p00.y, p10.y, p01.y, p11.y);
+  const minTx = cx - radius;
+  const maxTx = cx + radius;
+  const minTy = cy - radius;
+  const maxTy = cy + radius;
 
-    // Expand so we never see gaps at the edges
-    const pad = Math.max(tileW, tileH) * 2;
-    minX -= pad;
-    minY -= pad;
-    maxX += pad;
-    maxY += pad;
+  const minSum = minTx + minTy;
+  const maxSum = maxTx + maxTy;
 
-    // Tile in WORLD coordinates (background is now sheared/iso)
-    const startTileX = Math.floor(minX / tileW) * tileW;
-    const startTileY = Math.floor(minY / tileH) * tileH;
+  if (tile?.ready && tile.img && tile.img.width > 0 && tile.img.height > 0) {
+    const iw = tile.img.width;
+    const ih = tile.img.height;
 
-    for (let tx = startTileX; tx < maxX + tileW; tx += tileW) {
-      for (let ty = startTileY; ty < maxY + tileH; ty += tileH) {
-        ctx.drawImage(bg.img, tx, ty, tileW, tileH);
+    // Diagonal (x+y) order ensures correct overlap for iso tiles.
+    for (let s = minSum; s <= maxSum; s++) {
+      const tx0 = Math.max(minTx, s - maxTy);
+      const tx1 = Math.min(maxTx, s - minTy);
+
+      for (let tx = tx0; tx <= tx1; tx++) {
+        const ty = s - tx;
+
+        // Holes (shared with collision)
+        if (isHoleTile(tx, ty)) continue;
+
+
+        // Tile "center" in world coords (use +0.5 to center the tile).
+        const wx = (tx + 0.5) * T;
+        const wy = (ty + 0.5) * T;
+
+        const p = worldToScreen(wx, wy);
+
+        // Draw sprite with bottom-ish anchor so it rests on the diamond point.
+        const dx = p.x + camX - iw * 0.5;
+        const dy = p.y + camY - ih * KENNEY_TILE_ANCHOR_Y;
+
+        ctx.drawImage(tile.img, dx, dy, iw, ih);
       }
-    }
 
-    ctx.restore();
+    }
   } else {
+    // Fallback: plain dark fill until the tile asset is found/loaded.
     ctx.fillStyle = "#0b0b0f";
     ctx.fillRect(0, 0, ww, hh);
   }
 
-  // Optional floor tint overlay
+  // Optional floor tint overlay (keep your existing visual style)
   const floorVis = getFloorVisual(w);
   if (floorVis) {
     ctx.globalAlpha = floorVis.tintAlpha;

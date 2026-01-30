@@ -25,6 +25,8 @@ import { poisonSystem } from "./systems/poison";
 import { fissionSystem } from "./systems/fission";
 import { recomputeDerivedStats } from "./stats/derivedStats";
 import {buildStaticRunMap, getReachable, type RunMap, type MapNode} from "./map/runMap";
+import { preloadKenneyTiles } from "./visual/kenneyTiles";
+
 import {
   createDelveMap,
   ensureAdjacentNodes,
@@ -101,6 +103,18 @@ export function createGame(args: CreateGameArgs) {
   preloadPlayerSprites();
   preloadProjectileSprites();
   preloadSfx();
+  preloadKenneyTiles();
+
+  // NEW: Kenney iso tile (placeholder for Milestone A)
+  // Expects: src/game/assets/tiles/landscape_13.png
+  // (safe even if missing; render will fallback)
+  const anyW = (world as any);
+  if (!anyW._kenneyTilesPreloaded) {
+    anyW._kenneyTilesPreloaded = true;
+    // Lazy import-style usage stays consistent with the rest of the project
+    // (you can also import at top if you prefer)
+  }
+
   // ---- FPS counter ----
   let fpsFrames = 0;
   let fpsLastTime = performance.now();
