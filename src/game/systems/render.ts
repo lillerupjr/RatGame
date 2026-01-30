@@ -98,7 +98,7 @@ export async function renderSystem(
     } else if (kind === ZONE_KIND.EXPLOSION) {
       // Old look: hotter core + soft ring
       ctx.globalAlpha = 0.22;
-      ctx.fillStyle = "#a855f7";
+      ctx.fillStyle = "#ff9a3c";
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
