@@ -1,4 +1,5 @@
 // src/game/util/spatialHash.test.ts
+// @ts-ignore
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   createSpatialHash,

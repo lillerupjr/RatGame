@@ -56,7 +56,8 @@ export type World = {
   py: number;
   pvx: number;
   pvy: number;
-
+  // Player collision radius (shared by render/collisions/zones)
+  playerR: number;
   // Base stats (never modified directly by upgrades)
   baseMoveSpeed: number;
   basePickupRadius: number;
@@ -261,6 +262,7 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     py: 0,
     pvx: 0,
     pvy: 0,
+    playerR: 14,
 
     baseMoveSpeed: 210,
     basePickupRadius: 70,

@@ -1,4 +1,5 @@
 // src/game/content/items.test.ts
+// @ts-ignore
 import { describe, it, expect, beforeEach } from "vitest";
 import { ITEMS, MAX_ITEM_LEVEL } from "./items";
 import type { World } from "../world";

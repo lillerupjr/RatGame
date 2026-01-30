@@ -5,7 +5,7 @@ import {spawnZone, ZONE_KIND} from "../factories/zoneFactory";
 import { queryCircle } from "../util/spatialHash";
 
 export function zonesSystem(w: World, dt: number) {
-    const PLAYER_R = 14;
+    const PLAYER_R = w.playerR;
 
     // -----------------------------------------------------------------
 // NEW: delayed explosion queue (Bazooka evolution recursive aftershocks)
