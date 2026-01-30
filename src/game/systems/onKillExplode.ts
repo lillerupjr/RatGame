@@ -120,6 +120,7 @@ export function onKillExplodeSystem(w: World, _dt: number) {
                 damage: dmg,
                 x: w.ex[e],
                 y: w.ey[e],
+                isCrit: false, // Explosion damage doesn't crit
                 source: "OTHER",
             });
 

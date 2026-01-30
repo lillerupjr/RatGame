@@ -193,6 +193,19 @@ export type World = {
   areaMult: number;
   durationMult: number;
 
+  // Critical hit stats
+  baseCritChance: number;  // base crit chance (0.25 = 25%)
+  critChanceBonus: number; // bonus crit chance from items
+  critMultiplier: number;  // crit damage multiplier (default 2.0)
+
+  // Floating combat text
+  floatTextX: number[];
+  floatTextY: number[];
+  floatTextValue: number[];
+  floatTextColor: string[];
+  floatTextTtl: number[];
+  floatTextIsCrit: boolean[];
+
   // Spatial hash for efficient collision detection
   enemySpatialHash: SpatialHash;
 };
@@ -344,6 +357,19 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     fireRateMult: 1,
     areaMult: 1,
     durationMult: 1,
+
+    // Critical hit stats
+    baseCritChance: 0.25,  // 25% base crit chance
+    critChanceBonus: 0,
+    critMultiplier: 2.0,
+
+    // Floating combat text
+    floatTextX: [],
+    floatTextY: [],
+    floatTextValue: [],
+    floatTextColor: [],
+    floatTextTtl: [],
+    floatTextIsCrit: [],
 
     // Spatial hash for efficient collision detection (cell size ~2x max enemy radius)
     enemySpatialHash: createSpatialHash(80),

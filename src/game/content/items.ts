@@ -7,7 +7,8 @@ export type ItemId =
     | "MOVE_SPEED"
     | "PICKUP_RADIUS"
     | "AREA"
-    | "DURATION";
+    | "DURATION"
+    | "CRIT_CHANCE";
 
 export const MAX_ITEM_LEVEL = 10;
 
@@ -78,6 +79,17 @@ export const ITEMS: Record<ItemId, ItemDef> = {
             const lv = Math.max(1, Math.min(MAX_ITEM_LEVEL, Math.floor(level)));
             // +10% per level (tune later)
             w.durationMult *= Math.pow(1.10, lv);
+        },
+    },
+
+    CRIT_CHANCE: {
+        id: "CRIT_CHANCE",
+        title: "Lucky Strike",
+        desc: "+15% critical hit chance per level.",
+        apply: (w, level) => {
+            const lv = Math.max(1, Math.min(MAX_ITEM_LEVEL, Math.floor(level)));
+            // +15% crit chance per level
+            w.critChanceBonus += 0.15 * lv;
         },
     },
 };

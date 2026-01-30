@@ -171,6 +171,7 @@ export function zonesSystem(w: World, dt: number) {
                 damage: dmg,
                 x: w.ex[e],
                 y: w.ey[e],
+                isCrit: false, // Zone damage doesn't crit
                 source: "OTHER",
             });
 

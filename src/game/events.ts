@@ -30,6 +30,7 @@ export type GameEvent =
     damage: number;
     x: number;
     y: number;
+    isCrit: boolean;
     source:
         | "KNIFE"
         | "PISTOL"
