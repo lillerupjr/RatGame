@@ -31,7 +31,9 @@ export function spawnSystem(w: World, dt: number) {
   // Floor-specific trickle spawn
   const floor = floorForIndex(w.floorIndex ?? 0);
 
-  const cadence = Math.max(0.02, floor.spawns.cadence);
+  // Apply delve spawn rate scaling
+  const spawnRateMult = w.delveScaling?.spawnRateMult ?? 1;
+  const cadence = Math.max(0.02, floor.spawns.cadence / spawnRateMult);
   (w as any)._spawnAcc = ((w as any)._spawnAcc ?? 0) + dt;
 
   while ((w as any)._spawnAcc >= cadence) {

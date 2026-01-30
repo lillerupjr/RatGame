@@ -15,7 +15,10 @@ export function xpSystem(w: World, _dt: number) {
     const e = w.events[i];
     if (e.type !== "ENEMY_KILLED") continue;
 
-    spawnXp(w, e.x, e.y, e.xpValue);
+    // Apply delve XP scaling
+    const xpMult = w.delveScaling?.xpMult ?? 1;
+    const scaledXp = Math.round(e.xpValue * xpMult);
+    spawnXp(w, e.x, e.y, scaledXp);
 
     // Boss chest drop + magnet effect
     if (w.eType[e.enemyIndex] === ENEMY_TYPE.BOSS) {

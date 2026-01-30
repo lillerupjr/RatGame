@@ -32,9 +32,19 @@ export type World = {
   mapCurrentNodeId: string | null;
   mapPendingNextFloorIndex: number; // which floor index we are selecting for
 
+  // Delve system (infinite progression)
+  delveMap: any; // DelveMap type, avoiding circular deps
+  delveDepth: number;  // current depth (1 = starting depth)
+  delveScaling: {
+    hpMult: number;
+    damageMult: number;
+    spawnRateMult: number;
+    xpMult: number;
+  };
+
   // Run structure
   runState: RunState;
-  floorIndex: number;      // 0..2 (3 floors)
+  floorIndex: number;      // 0..2 (3 floors) - now also used as depth indicator
   phaseTime: number;       // seconds since current phase started (FLOOR/BOSS/TRANSITION)
   transitionTime: number;  // seconds remaining in TRANSITION
 
@@ -233,6 +243,16 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     runMap: null,
     mapCurrentNodeId: null,
     mapPendingNextFloorIndex: 0,
+
+    // Delve system
+    delveMap: null,
+    delveDepth: 1,
+    delveScaling: {
+      hpMult: 1,
+      damageMult: 1,
+      spawnRateMult: 1,
+      xpMult: 1,
+    },
 
     time: 0,
     kills: 0,
