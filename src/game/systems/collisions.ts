@@ -306,8 +306,7 @@ export function collisionsSystem(w: World, dt: number) {
   // -------------------------
   // Player vs Enemies (using spatial hash)
   // -------------------------
-  // Player is rendered with radius 14 in render.ts, so keep it consistent here.
-  const PLAYER_R = 14;
+  const PLAYER_R = w.playerR;
 
   // Simple "i-frames" cooldown so player doesn't get deleted in 1 frame.
   // Stored on world as a private field to avoid touching the World type.

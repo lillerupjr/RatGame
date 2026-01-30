@@ -1,13 +1,32 @@
 import { World } from "../world";
 import { InputState } from "./input";
+import { worldDeltaToScreen } from "../visual/iso";
 
 export function movementSystem(w: World, input: InputState, dt: number) {
-  let dx = 0;
-  let dy = 0;
-  if (input.left) dx -= 1;
-  if (input.right) dx += 1;
-  if (input.up) dy -= 1;
-  if (input.down) dy += 1;
+  // -------------------------------------------------------
+  // Isometric controls (Diablo-style):
+  // Arrow/WASD map to SCREEN directions, then we convert
+  // that to WORLD dx/dy so physics stays unchanged.
+  //
+  // screen sx,sy are the player's intended direction ON SCREEN:
+  //   W = up, S = down, A = left, D = right
+  //
+  // Inverse of our projection (ignoring scale):
+  //   sx = x - y
+  //   sy = x + y
+  // => x = (sx + sy)/2
+  //    y = (sy - sx)/2
+  // -------------------------------------------------------
+  let sx = 0;
+  let sy = 0;
+  if (input.left) sx -= 1;
+  if (input.right) sx += 1;
+  if (input.up) sy -= 1;
+  if (input.down) sy += 1;
+
+  // Convert screen-intent to world movement
+  let dx = (sx + sy) * 0.5;
+  let dy = (sy - sx) * 0.5;
 
   const len = Math.hypot(dx, dy) || 1;
   dx /= len;
@@ -19,7 +38,7 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   w.px += w.pvx * dt;
   w.py += w.pvy * dt;
 
-  // Enemies chase player
+  // Enemies chase player (world space unchanged)
   for (let i = 0; i < w.eAlive.length; i++) {
     if (!w.eAlive[i]) continue;
     const ex = w.ex[i];
@@ -33,8 +52,6 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     w.ey[i] = ey + uy * w.eSpeed[i] * dt;
   }
 
-  // Projectiles move
-  // Update last aim direction from player movement (used when no enemies exist)
   // Update last aim direction from player movement (used when no enemies exist)
   const mag = Math.hypot(w.pvx, w.pvy);
   if (mag > 0.0001) {
@@ -44,33 +61,35 @@ export function movementSystem(w: World, input: InputState, dt: number) {
 
   // -------------------------
   // Player sprite dir + anim (movement-based)
+  // In iso: compute facing from SCREEN-projected velocity,
+  // so the sprite faces the direction it appears to move.
   // -------------------------
   type Dir8 = "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW";
 
   function dirFromVec(dx: number, dy: number): Dir8 {
     // Canvas coords: +x right, +y down
     const ang = Math.atan2(dy, dx); // -pi..pi, 0=E
-    // Convert to 8-way index where 0=E, 1=SE, 2=S, 3=SW, 4=W, 5=NW, 6=N, 7=NE
     const idx = (Math.round(ang / (Math.PI / 4)) + 8) % 8;
     const map: Dir8[] = ["E", "SE", "S", "SW", "W", "NW", "N", "NE"];
     return map[idx];
   }
 
-  const moving = mag > 8; // same threshold you were using elsewhere
+  const moving = mag > 8;
   if (!moving) {
-    // Idle snaps to S2 (your request)
     (w as any)._plDir = "S";
     (w as any)._plFrame = 2;
     (w as any)._plAnimT = 0;
   } else {
-    const dxn = w.pvx / (mag || 1);
-    const dyn = w.pvy / (mag || 1);
+    // Project movement into screen space for facing
+    const wnX = w.pvx / (mag || 1);
+    const wnY = w.pvy / (mag || 1);
+    const sd = worldDeltaToScreen(wnX, wnY);
 
-    (w as any)._plDir = dirFromVec(dxn, dyn);
+    (w as any)._plDir = dirFromVec(sd.dx, sd.dy);
 
-    // 1 → 2 → 3 → 2 loop (uses all 3 frames)
+    // 1 → 2 → 3 → 2 loop
     const seq = [1, 2, 3, 2] as const;
-    const stepSec = 0.11; // tweak later (faster = smaller)
+    const stepSec = 0.11;
     const t0 = ((w as any)._plAnimT ?? 0) + dt;
     (w as any)._plAnimT = t0;
 
