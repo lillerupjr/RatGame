@@ -1,20 +1,5 @@
 # Rat Noir Survivors (Working Title)
-
-A **Vampire Survivors–style top-down roguelike** set in a sleazy, faction-driven rat underworld.  
 Built with **TypeScript + Vite + HTML5 Canvas**, using a **data-driven, ECS-lite architecture** designed for scalability, determinism, and fast iteration.
-
-This repo currently contains **Slice v0.5.0** — the first **fully playable run**:
-- Complete **multi-floor run structure**
-- **Boss encounters** with clear win / loss conditions
-- Modular weapons with **evolutions**
-- New weapons (Bazooka, Bouncer) with unique mechanics
-- Status effects (poison, burn, aura damage)
-- Explosion, chaining, and wave-based effects
-- Run map (`runMap`) inspired by *Slay the Spire*
-- Proper **Run Complete** and **Game Over** screens
-- Player, enemy, projectile sprites, and seamless backgrounds
-
----
 
 ## Requirements
 
@@ -118,8 +103,6 @@ dist/
 RatGame.zip
 ```
 
----
-
 ## Design Goals
 
 - **Data-driven content** (weapons, items, upgrades)
@@ -128,19 +111,6 @@ RatGame.zip
 - **No engine lock-in**
 - Evolutions, synergies, bosses, and zones added without rewriting core systems
 
----
-
-## Status
-
-**Next focus (v0.6+):**
-- Meta-progression between runs
-- Faction identity & zone theming
-- More boss variety and mechanics
-- Run map depth (branching, node types)
-- Balance, polish, and performance scaling
-
----
-
-## License
+-
 
 TBD
