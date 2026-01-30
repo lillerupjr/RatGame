@@ -250,6 +250,8 @@ export function createGame(args: CreateGameArgs) {
     // Ensure boss reward gate is reset for this encounter (if present on World)
     (w as any).bossRewardPending = false;
     (w as any).chestOpenRequested = false;
+    w.magnetActive = false;
+    w.magnetTimer = 0;
 
     // Clean slate for the boss encounter (feels fair + deterministic).
     //clearFloorEntities(w);

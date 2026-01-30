@@ -7,14 +7,31 @@ export const PICKUP_KIND = {
 } as const;
 
 export function pickupsSystem(w: World, dt: number) {
+  // Update magnet timer
+  if (w.magnetActive) {
+    w.magnetTimer -= dt;
+    if (w.magnetTimer <= 0) {
+      w.magnetActive = false;
+      w.magnetTimer = 0;
+    }
+  }
+
   // Pickups drift toward player when close (classic vacuum feel)
+  // OR when magnet is active (pulls ALL XP from anywhere)
   for (let i = 0; i < w.xAlive.length; i++) {
     if (!w.xAlive[i]) continue;
+    
     const dx = w.px - w.xx[i];
     const dy = w.py - w.xy[i];
     const d = Math.hypot(dx, dy);
-    if (d < w.pickupRadius) {
-      const pull = 420; // px/s
+    
+    // Magnet pulls all XP pickups regardless of distance
+    const isXp = (w.xKind[i] ?? PICKUP_KIND.XP) === PICKUP_KIND.XP;
+    const shouldPull = d < w.pickupRadius || (w.magnetActive && isXp);
+    
+    if (shouldPull) {
+      // Magnet pulls faster and from further away
+      const pull = w.magnetActive && isXp ? 800 : 420; // px/s
       const ux = dx / (d || 1);
       const uy = dy / (d || 1);
       w.xx[i] += ux * pull * dt;

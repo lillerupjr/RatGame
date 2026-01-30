@@ -17,10 +17,14 @@ export function xpSystem(w: World, _dt: number) {
 
     spawnXp(w, e.x, e.y, e.xpValue);
 
-    // Boss chest drop
+    // Boss chest drop + magnet effect
     if (w.eType[e.enemyIndex] === ENEMY_TYPE.BOSS) {
       spawnChest(w, e.x, e.y, "BOSS_CHEST");
       w.bossRewardPending = true;
+      
+      // Activate magnet to pull all XP towards player
+      w.magnetActive = true;
+      w.magnetTimer = 3.0; // 3 seconds of magnet effect
     }
   }
 

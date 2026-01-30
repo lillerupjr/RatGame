@@ -169,6 +169,10 @@ export type World = {
   // Boss reward gating (prevents transition clearing the chest)
   bossRewardPending: boolean;
 
+  // Magnet effect (pulls all XP to player, e.g., after boss kill)
+  magnetActive: boolean;
+  magnetTimer: number;  // seconds remaining
+
   // Chest pickup handshake (system -> game.ts)
   chestOpenRequested: boolean;
 
@@ -342,6 +346,8 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     xDropId: [],
 
     bossRewardPending: false,
+    magnetActive: false,
+    magnetTimer: 0,
     chestOpenRequested: false,
     level: 1,
     xp: 0,
