@@ -4,6 +4,43 @@ import { isEnemyHit, isPlayerHit } from "./hitDetection";
 import { registry } from "../content/registry";
 import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
 import { clearSpatialHash, insertEntity, queryCircle } from "../util/spatialHash";
+import type { ProjectileSource } from "../factories/projectileFactory";
+
+// Weapon type -> damage text color mapping
+const WEAPON_COLORS: Record<ProjectileSource, string> = {
+  KNIFE: "#ffffff",    // white
+  PISTOL: "#9fff9f",   // green
+  SWORD: "#ff9f9f",    // red
+  KNUCKLES: "#ffcc66", // orange
+  SYRINGE: "#7df7ff",  // cyan
+  BOUNCER: "#ffdcdc",  // pink
+  OTHER: "#cccccc",    // gray
+};
+
+/**
+ * Spawn floating combat text at position (x, y).
+ */
+function spawnFloatText(
+  w: World,
+  x: number,
+  y: number,
+  value: number,
+  source: ProjectileSource,
+  isCrit: boolean
+) {
+  const color = WEAPON_COLORS[source] ?? "#ffffff";
+  
+  // Add slight random offset so numbers don't stack perfectly
+  const offsetX = w.rng.range(-8, 8);
+  const offsetY = w.rng.range(-4, 4);
+
+  w.floatTextX.push(x + offsetX);
+  w.floatTextY.push(y + offsetY);
+  w.floatTextValue.push(value);
+  w.floatTextColor.push(color);
+  w.floatTextTtl.push(0.8); // float for 0.8 seconds
+  w.floatTextIsCrit.push(isCrit);
+}
 
 
 /**
@@ -78,8 +115,17 @@ export function collisionsSystem(w: World, dt: number) {
       // HIT
       hitSomething = true;
 
-      const dmg = w.prDamage[p];
+      // Calculate crit chance and apply crit damage
+      const totalCritChance = Math.min(1, w.baseCritChance + w.critChanceBonus);
+      const isCrit = w.rng.range(0, 1) < totalCritChance;
+      const baseDmg = w.prDamage[p];
+      const dmg = isCrit ? baseDmg * w.critMultiplier : baseDmg;
+      
       w.eHp[e] -= dmg;
+
+      // Spawn floating combat text
+      const source = registry.projectileSourceFromKind(w.prjKind[p]);
+      spawnFloatText(w, w.ex[e], w.ey[e], Math.round(dmg), source, isCrit);
 
       // Poison payload (applied once per hit)
       const pdps = w.prPoisonDps[p];
@@ -99,7 +145,8 @@ export function collisionsSystem(w: World, dt: number) {
         damage: dmg,
         x: w.ex[e],
         y: w.ey[e],
-        source: registry.projectileSourceFromKind(w.prjKind[p]),
+        isCrit,
+        source,
       });
 
       // Bounce / pierce handling
@@ -318,4 +365,41 @@ export function collisionsSystem(w: World, dt: number) {
   }
 
   (w as any)._playerHitCd = hitCd;
+
+  // -------------------------
+  // Update floating combat text
+  // -------------------------
+  updateFloatText(w, dt);
+}
+
+/**
+ * Update floating text TTLs and remove expired entries.
+ */
+function updateFloatText(w: World, dt: number) {
+  // Tick down TTL for all floating text
+  for (let i = 0; i < w.floatTextTtl.length; i++) {
+    w.floatTextTtl[i] -= dt;
+  }
+
+  // Compact: remove dead entries (could do this less often for perf, but it's fine)
+  for (let i = w.floatTextTtl.length - 1; i >= 0; i--) {
+    if (w.floatTextTtl[i] <= 0) {
+      // Swap-remove from all parallel arrays
+      const last = w.floatTextTtl.length - 1;
+      if (i !== last) {
+        w.floatTextX[i] = w.floatTextX[last];
+        w.floatTextY[i] = w.floatTextY[last];
+        w.floatTextValue[i] = w.floatTextValue[last];
+        w.floatTextColor[i] = w.floatTextColor[last];
+        w.floatTextTtl[i] = w.floatTextTtl[last];
+        w.floatTextIsCrit[i] = w.floatTextIsCrit[last];
+      }
+      w.floatTextX.pop();
+      w.floatTextY.pop();
+      w.floatTextValue.pop();
+      w.floatTextColor.pop();
+      w.floatTextTtl.pop();
+      w.floatTextIsCrit.pop();
+    }
+  }
 }

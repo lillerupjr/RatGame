@@ -20,6 +20,9 @@ export function recomputeDerivedStats(w: World) {
     w.areaMult = 1;
     w.durationMult = 1;
 
+    // Reset crit bonus (base crit chance stays constant)
+    w.critChanceBonus = 0;
+
     // Apply all items
     for (const inst of w.items) {
         const def = registry.item(inst.id);

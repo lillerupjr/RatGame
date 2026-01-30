@@ -23,6 +23,7 @@ export function poisonSystem(w: World, dt: number) {
             damage: dmg,
             x: w.ex[e],
             y: w.ey[e],
+            isCrit: false, // Poison damage doesn't crit
             source: "OTHER",
         });
 

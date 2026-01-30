@@ -360,4 +360,69 @@ export async function renderSystem(
   const fps = Math.round((w as any).fps ?? 0);
   ctx.fillText(`FPS: ${fps}`, 8, 8);
   ctx.restore();
+
+  // --- Floating Combat Text ---
+  renderFloatingText(w, ctx, cx, cy);
+}
+
+/**
+ * Render floating combat text (damage numbers).
+ */
+function renderFloatingText(
+  w: World,
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number
+) {
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  for (let i = 0; i < w.floatTextX.length; i++) {
+    const ttl = w.floatTextTtl[i];
+    if (ttl <= 0) continue;
+
+    const x = w.floatTextX[i] + cx;
+    const y = w.floatTextY[i] + cy;
+    const value = w.floatTextValue[i];
+    const color = w.floatTextColor[i];
+    const isCrit = w.floatTextIsCrit[i];
+
+    // Calculate animation progress (0 = just spawned, 1 = about to disappear)
+    const maxTtl = 0.8;
+    const progress = 1 - ttl / maxTtl;
+
+    // Float upward over time
+    const floatOffset = progress * 30;
+
+    // Fade out in the last 40% of lifetime
+    const alpha = progress > 0.6 ? 1 - (progress - 0.6) / 0.4 : 1;
+
+    // Scale effect for crits (start bigger, shrink to normal)
+    const baseSize = isCrit ? 16 : 12;
+    const scaleBoost = isCrit ? 1.5 - progress * 0.5 : 1;
+    const fontSize = Math.round(baseSize * scaleBoost);
+
+    ctx.globalAlpha = alpha;
+    ctx.font = `bold ${fontSize}px monospace`;
+    
+    // Draw text with outline for visibility
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 3;
+    ctx.strokeText(String(value), x, y - floatOffset);
+    
+    ctx.fillStyle = isCrit ? "#ffff00" : color; // Crits are yellow!
+    ctx.fillText(String(value), x, y - floatOffset);
+
+    // Add "CRIT!" label for critical hits
+    if (isCrit && progress < 0.3) {
+      ctx.font = "bold 10px monospace";
+      ctx.fillStyle = "#ff4444";
+      ctx.strokeText("CRIT!", x, y - floatOffset - 12);
+      ctx.fillText("CRIT!", x, y - floatOffset - 12);
+    }
+  }
+
+  ctx.globalAlpha = 1;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
 }

@@ -198,6 +198,14 @@ export function createGame(args: CreateGameArgs) {
     w.xy = [];
     w.xValue = [];
     w.xDropId = [];
+
+    // Clear floating combat text
+    w.floatTextX = [];
+    w.floatTextY = [];
+    w.floatTextValue = [];
+    w.floatTextColor = [];
+    w.floatTextTtl = [];
+    w.floatTextIsCrit = [];
   }
 
   function bossAlive(w: World): boolean {
