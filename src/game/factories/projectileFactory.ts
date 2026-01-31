@@ -96,9 +96,12 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     const i = w.pAlive.length;
 
     // Milestone C: flat-Z projectiles (no gravity yet)
-    const HIT_MUZZLE_Z = 0.35; // tune later if needed
+    // Fire at +1 height step so shots "travel above" the stair ramp from the lower floor.
+    // (We still keep the stair collision rule at projectileHeight+1.)
+    const HIT_MUZZLE_Z = 1.0;
     const shooterZ = (w as any).pz ?? 0;
     const projZ = Number.isFinite(a.z as any) ? (a.z as number) : (shooterZ + HIT_MUZZLE_Z);
+
 
     w.pAlive.push(true);
     w.prjKind.push(a.kind);
