@@ -69,10 +69,32 @@ export async function renderSystem(
   const camX = ww * 0.5 - p0.x;
   const camY = hh * 0.5 - p0.y;
 
+  const tileHAtWorld = (x: number, y: number) => {
+    const tx = Math.floor(x / KENNEY_TILE_WORLD);
+    const ty = Math.floor(y / KENNEY_TILE_WORLD);
+    const t = getTile(tx, ty);
+    return t.kind === "STAIRS" ? (t.h ?? 0) : tileHeight(tx, ty);
+  };
+
+  const isOnActiveFloor = (x: number, y: number) => {
+    const tx = Math.floor(x / KENNEY_TILE_WORLD);
+    const ty = Math.floor(y / KENNEY_TILE_WORLD);
+    const t = getTile(tx, ty);
+    if (t.kind === "VOID") return false;
+    if (t.kind === "STAIRS") return true; // stairs are always drawable
+    return tileHeight(tx, ty) === (w.activeFloorH ?? 0);
+  };
+
   const toScreen = (x: number, y: number) => {
     const p = worldToScreen(x, y);
-    return { x: p.x + camX, y: p.y + camY };
+
+    // Milestone B: lift anything grounded by its tile height
+    const h = tileHAtWorld(x, y);
+    const elev = h * ELEV_PX;
+
+    return { x: p.x + camX, y: p.y + camY - elev };
   };
+
 
   // --- Kenney-style iso ground tiles (Milestone A: Phase 1 placeholder) ---
   // Draw a real iso tile grid in correct back-to-front order (x+y diagonals).
@@ -158,10 +180,22 @@ export async function renderSystem(
 
         // Elevation:
         // - FLOOR uses integer tileHeight
-        // - STAIRS uses step 0..1 for visual ramp (still h=0 logically for now)
-        const h = tdef.kind === "STAIRS" ? (tdef.h ?? 0) : tileHeight(tx, ty);
+        // Milestone B: only render the active floor.
+        // Always allow drawing STAIRS near the active floor so transitions read well.
+        const activeH = (w.activeFloorH ?? 0);
 
+        if (tdef.kind !== "STAIRS") {
+          const h0 = tileHeight(tx, ty);
+          if (h0 !== activeH) continue;
+        } else {
+          const hs = (tdef.h ?? 0);
+          if (Math.abs(hs - activeH) > 1) continue; // keep nearby stair steps visible
+        }
+
+        // stairs are visually elevated by their own h
+        const h = tdef.kind === "STAIRS" ? (tdef.h ?? 0) : tileHeight(tx, ty);
         const elev = h * ELEV_PX;
+
 
 
         dy -= elev;
@@ -258,6 +292,10 @@ export async function renderSystem(
   for (const it of grounded) {
     if (it.kind === "pickup") {
       const i = it.i;
+
+      // Milestone B: don't draw pickups not on active floor (stairs ok)
+      if (!isOnActiveFloor(w.xx[i], w.xy[i])) continue;
+
       const p = toScreen(w.xx[i], w.xy[i]);
       const kind = w.xKind?.[i] ?? 1; // 1=XP, 2=CHEST
 
@@ -290,7 +328,12 @@ export async function renderSystem(
 
     if (it.kind === "enemy") {
       const i = it.i;
+
+      // Milestone B: don't draw enemies that are not on the active floor (stairs ok)
+      if (!isOnActiveFloor(w.ex[i], w.ey[i])) continue;
+
       const p = toScreen(w.ex[i], w.ey[i]);
+
 
       const def = registry.enemy(w.eType[i] as any);
       let baseColor: string = (def as any).color ?? "#f66";
