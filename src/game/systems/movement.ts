@@ -42,12 +42,13 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   // -------------------------------------------------------
   const curInfo = walkInfo(w.px, w.py, KENNEY_TILE_WORLD);
 
-  // Integer "floor level" for gating/active floor
-  const curFloorH = curInfo.h;
+// Integer "floor level" for gating/active floor
+  const curFloorH = curInfo.floorH;
 
-  // Keep world state synced even if we don't move this frame
+// Keep world state synced even if we don't move this frame
   w.activeFloorH = curFloorH;
-  w.pz = heightAtWorld(w.px, w.py, KENNEY_TILE_WORLD);
+  w.pz = curInfo.z;
+
 
   // Attempt move
   const nx = w.px + w.pvx * dt;
@@ -60,8 +61,8 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     // Must be inside walk mask (top-face diamond etc.)
     if (!nextInfo.walkable) return false;
 
-    // Integer floor height for gating
-    const nextFloorH = nextInfo.h;
+// Integer floor height for gating
+    const nextFloorH = nextInfo.floorH;
 
     // Same-floor unless stairs involved
     const stairsInvolved = curInfo.kind === "STAIRS" || nextInfo.kind === "STAIRS";
@@ -77,9 +78,10 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     w.activeFloorH = nextFloorH;
 
     // Continuous Z for smooth stair traversal + render lift
-    w.pz = heightAtWorld(wx, wy, KENNEY_TILE_WORLD);
+    w.pz = nextInfo.z;
 
     return true;
+
   };
 
   const movedX = tryMove(nx, w.py);
@@ -92,16 +94,32 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   }
 
   // -------------------------------------------------------
-  // Enemies: still use the same walkInfo(...) query (no duplication)
-  // NOTE: This does NOT apply floor-gating yet, just walkability.
-  // If you want enemies to respect floor height too, we can add it next.
+  // Enemies: single-query Z + (optional) floor gating
+  //
+  // - Store continuous z for enemies in (w as any).ez[i]
+  // - Enforce same-floor movement like player:
+  //     * can move within same integer floorH
+  //     * stairs allow transition
+  // - Additionally, keep enemies on the active floor (prevents cross-platform weirdness)
+  //   If your spawn system already enforces this, this becomes a safety net.
   // -------------------------------------------------------
+
+  // Lazily allocate enemy Z buffer without changing World type
+  const ez = ((w as any).ez ??= [] as number[]);
+
   for (let i = 0; i < w.eAlive.length; i++) {
     if (!w.eAlive[i]) continue;
 
     const ex = w.ex[i];
     const ey = w.ey[i];
 
+    // Current enemy tile info (walk + floor + z)
+    const eCur = walkInfo(ex, ey, KENNEY_TILE_WORLD);
+    ez[i] = eCur.z;
+
+    const eCurFloorH = eCur.floorH;
+
+    // Simple steering toward player
     const vx = w.px - ex;
     const vy = w.py - ey;
     const d = Math.hypot(vx, vy) || 1;
@@ -111,15 +129,34 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     const enx = ex + ux * w.eSpeed[i] * dt;
     const eny = ey + uy * w.eSpeed[i] * dt;
 
-    // Axis-separated, same as player
-    const canX = walkInfo(enx, ey, KENNEY_TILE_WORLD).walkable;
-    const canY = walkInfo(ex, eny, KENNEY_TILE_WORLD).walkable;
+    const tryEnemyMove = (wx: number, wy: number) => {
+      const eNext = walkInfo(wx, wy, KENNEY_TILE_WORLD);
+      if (!eNext.walkable) return false;
 
-    if (canX) w.ex[i] = enx;
-    if (canY) w.ey[i] = eny;
+      // Same-floor unless stairs involved
+      const stairsInvolved = eCur.kind === "STAIRS" || eNext.kind === "STAIRS";
+      const sameFloor = eNext.floorH === eCurFloorH;
+      if (!stairsInvolved && !sameFloor) return false;
+
+      // No player-floor gating: enemies can move on their own floor.
+      // (They are still prevented from "stepping" between floors unless on STAIRS.)
+
+      // Commit position
+      w.ex[i] = wx;
+      w.ey[i] = wy;
+
+      // Update stored Z
+      ez[i] = eNext.z;
+      return true;
+    };
+
+    // Axis-separated movement (sliding)
+    tryEnemyMove(enx, ey);
+    tryEnemyMove(w.ex[i], eny);
 
     // If neither worked, enemy just stalls against edges (fine for now)
   }
+
 
   // Update last aim direction from player movement (used when no enemies exist)
   const mag = Math.hypot(w.pvx, w.pvy);
