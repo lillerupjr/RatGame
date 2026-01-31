@@ -1,21 +1,17 @@
+// src/game/systems/movement.ts
 import { World } from "../world";
 import { InputState } from "./input";
 import { worldDeltaToScreen } from "../visual/iso";
-import { isWalkableWorld } from "../map/kenneyMap";
-import {KENNEY_TILE_WORLD} from "../visual/kenneyTiles";
+import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
+import { moveCircleWithTileCollision } from "../map/tileCollision";
 
 export function movementSystem(w: World, input: InputState, dt: number) {
   // -------------------------------------------------------
   // Isometric controls (Diablo-style):
-  // Arrow/WASD map to SCREEN directions, then we convert
-  // that to WORLD dx/dy so physics stays unchanged.
+  // WASD/Arrows map to SCREEN directions, then convert to WORLD.
   //
-  // screen sx,sy are the player's intended direction ON SCREEN:
-  //   W = up, S = down, A = left, D = right
-  //
-  // Inverse of our projection (ignoring scale):
-  //   sx = x - y
-  //   sy = x + y
+  // sx = x - y
+  // sy = x + y
   // => x = (sx + sy)/2
   //    y = (sy - sx)/2
   // -------------------------------------------------------
@@ -26,7 +22,6 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   if (input.up) sy -= 1;
   if (input.down) sy += 1;
 
-// sx, sy from input (WASD)
   let dx = (sx + sy) * 0.5;
   let dy = (sy - sx) * 0.5;
 
@@ -35,50 +30,73 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     dx /= len;
     dy /= len;
   }
+
   w.pvx = dx * w.pSpeed;
   w.pvy = dy * w.pSpeed;
 
-  // --- Tile-hole collision (Milestone A placeholder) ---
-  // If target tile is a hole, block + slide on axes.
+  // -------------------------------------------------------
+  // Tile collision (revamped):
+  // Use a feet-circle radius rather than a single point.
+  //
+  // Important: playerR is used for combat collisions too.
+  // For "feet", we usually want slightly smaller than sprite/combat radius.
+  // Tune this ratio to taste.
+  // -------------------------------------------------------
+  const feetR = Math.max(6, w.playerR * 0.65);
+
   const oldX = w.px;
   const oldY = w.py;
 
-  const nx = oldX + w.pvx * dt;
-  const ny = oldY + w.pvy * dt;
+  const stepX = w.pvx * dt;
+  const stepY = w.pvy * dt;
 
-  // Treat player's "feet" as the collision point.
-  // If you want softer edges, add a small radius check later.
-  if (isWalkableWorld(nx, ny, KENNEY_TILE_WORLD)) {
-    w.px = nx;
-    w.py = ny;
-  } else {
-    // Slide: try X only then Y only
-    const okX = isWalkableWorld(nx, oldY, KENNEY_TILE_WORLD);
-    const okY = isWalkableWorld(oldX, ny, KENNEY_TILE_WORLD);
+  const moved = moveCircleWithTileCollision(
+      oldX,
+      oldY,
+      stepX,
+      stepY,
+      feetR,
+      KENNEY_TILE_WORLD
+  );
 
-    if (okX) w.px = nx;
-    else w.px = oldX;
+  w.px = moved.x;
+  w.py = moved.y;
 
-    if (okY) w.py = ny;
-    else w.py = oldY;
-
-    // If neither axis works, you stay put.
-  }
-
-
-
-  // Enemies chase player (world space unchanged)
+  // -------------------------------------------------------
+  // Enemies chase player, BUT ALSO respect tile collision.
+  // This prevents them walking through holes and keeps encounters fair.
+  // You can later special-case flying enemies, etc.
+  // -------------------------------------------------------
   for (let i = 0; i < w.eAlive.length; i++) {
     if (!w.eAlive[i]) continue;
+
     const ex = w.ex[i];
     const ey = w.ey[i];
+
     const vx = w.px - ex;
     const vy = w.py - ey;
     const d = Math.hypot(vx, vy) || 1;
+
     const ux = vx / d;
     const uy = vy / d;
-    w.ex[i] = ex + ux * w.eSpeed[i] * dt;
-    w.ey[i] = ey + uy * w.eSpeed[i] * dt;
+
+    const eStepX = ux * w.eSpeed[i] * dt;
+    const eStepY = uy * w.eSpeed[i] * dt;
+
+    // Enemy "feet radius": slightly smaller than their combat radius.
+    const eFeetR = Math.max(4, w.eR[i] * 0.65);
+
+    const em = moveCircleWithTileCollision(
+        ex,
+        ey,
+        eStepX,
+        eStepY,
+        eFeetR,
+        KENNEY_TILE_WORLD
+    );
+
+    w.ex[i] = em.x;
+    w.ey[i] = em.y;
   }
 
   // Update last aim direction from player movement (used when no enemies exist)
