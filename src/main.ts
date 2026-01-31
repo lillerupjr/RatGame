@@ -2,6 +2,21 @@
 import { createGame } from "./game/game";
 import { WEAPONS, type WeaponId } from "./game/content/weapons";
 
+// Load background image using Vite's import.meta.glob
+const backgroundAssets = import.meta.glob("./assets/backgrounds/*.png", {
+  eager: true,
+  import: "default",
+}) as Record<string, string>;
+
+// Find the background.png URL
+let backgroundImageUrl = "";
+for (const [path, url] of Object.entries(backgroundAssets)) {
+  if (path.endsWith("/background.png")) {
+    backgroundImageUrl = url;
+    break;
+  }
+}
+
 const canvas = document.getElementById("c") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d");
 if (!ctx) throw new Error("Canvas 2D context not available");
@@ -10,12 +25,28 @@ if (!ctx) throw new Error("Canvas 2D context not available");
 const welcomeScreen = document.getElementById("welcomeScreen") as HTMLDivElement;
 const continueBtn = document.getElementById("continueBtn") as HTMLButtonElement;
 
+// Apply background image to welcome screen and main menu
+if (backgroundImageUrl) {
+  welcomeScreen.style.backgroundImage = `url(${backgroundImageUrl})`;
+  welcomeScreen.style.backgroundSize = "cover";
+  welcomeScreen.style.backgroundPosition = "center";
+  welcomeScreen.style.backgroundRepeat = "no-repeat";
+}
+
 // Main menu
 const mainMenuEl = document.getElementById("mainMenu") as HTMLDivElement;
 const startRunBtn = document.getElementById("startRunBtn") as HTMLButtonElement;
 const innkeeperBtn = document.getElementById("innkeeperBtn") as HTMLButtonElement;
 const settingsBtn = document.getElementById("settingsBtn") as HTMLButtonElement;
 const likeSubBtn = document.getElementById("likeSubBtn") as HTMLButtonElement;
+
+// Apply background image to main menu
+if (backgroundImageUrl) {
+  mainMenuEl.style.backgroundImage = `url(${backgroundImageUrl})`;
+  mainMenuEl.style.backgroundSize = "cover";
+  mainMenuEl.style.backgroundPosition = "center";
+  mainMenuEl.style.backgroundRepeat = "no-repeat";
+}
 
 // Innkeeper menu
 const innkeeperMenuEl = document.getElementById("innkeeperMenu") as HTMLDivElement;
