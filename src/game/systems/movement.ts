@@ -54,11 +54,12 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   const nx = w.px + w.pvx * dt;
   const ny = w.py + w.pvy * dt;
 
-  // simple axis-separated resolution (gives nice "sliding" on void edges)
-  const tryMove = (tx: number, ty: number) => {
-    if (!isWalkableWorld(tx, ty, KENNEY_TILE_WORLD)) return false;
+  // simple axis-separated resolution (gives nice "sliding" on edges)
+  const tryMove = (wx: number, wy: number) => {
+    // IMPORTANT: isWalkableWorld expects WORLD coords
+    if (!isWalkableWorld(wx, wy, KENNEY_TILE_WORLD)) return false;
 
-    const next = tileAt(tx, ty);
+    const next = tileAt(wx, wy);
 
     // same-floor unless stairs involved
     const stairsInvolved = cur.t.kind === "STAIRS" || next.t.kind === "STAIRS";
@@ -66,9 +67,9 @@ export function movementSystem(w: World, input: InputState, dt: number) {
 
     if (!stairsInvolved && !sameFloor) return false;
 
-    // commit
-    w.px = tx;
-    w.py = ty;
+    // commit WORLD position
+    w.px = wx;
+    w.py = wy;
 
     // update floor state to match the tile we occupy
     w.activeFloorH = next.h;
@@ -81,6 +82,40 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   const movedY = tryMove(w.px, ny);
 
   // if neither axis worked, stop velocity so sprite settles
+  if (!movedX && !movedY) {
+    w.pvx = 0;
+    w.pvy = 0;
+  }
+
+  // -------------------------------------------------------
+  // Enemies: apply the same map-authoritative walkability
+  // (Milestone B: keep it simple; later you can add floor-gating)
+  // -------------------------------------------------------
+  for (let i = 0; i < w.eAlive.length; i++) {
+    if (!w.eAlive[i]) continue;
+
+    const ex = w.ex[i];
+    const ey = w.ey[i];
+
+    const vx = w.px - ex;
+    const vy = w.py - ey;
+    const d = Math.hypot(vx, vy) || 1;
+    const ux = vx / d;
+    const uy = vy / d;
+
+    const enx = ex + ux * w.eSpeed[i] * dt;
+    const eny = ey + uy * w.eSpeed[i] * dt;
+
+    // axis-separated, same as player
+    const canX = isWalkableWorld(enx, ey, KENNEY_TILE_WORLD);
+    const canY = isWalkableWorld(ex, eny, KENNEY_TILE_WORLD);
+
+    if (canX) w.ex[i] = enx;
+    if (canY) w.ey[i] = eny;
+
+    // If neither worked, enemy just stalls against edges (fine for now)
+  }
+
   if (!movedX && !movedY) {
     w.pvx = 0;
     w.pvy = 0;

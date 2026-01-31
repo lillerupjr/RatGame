@@ -12,7 +12,7 @@ import {
   type Frame3,
 } from "../visual/playerSprites";
 import { getEnemySpriteFrame, preloadEnemySprites } from "../visual/enemySprites";
-import { isHoleTile, isStairsTile, getTile, tileHeight } from "../map/kenneyMap";
+import {isHoleTile, isStairsTile, getTile, tileHeight, getWalkOutlineLocalPx} from "../map/kenneyMap";
 import { getBackground } from "../visual/background";
 
 import {
@@ -114,6 +114,130 @@ export async function renderSystem(
   // Visual height step in screen pixels per tile-level (tune later).
   // This is purely visual right now; gameplay height will come later.
   const ELEV_PX = 16;
+  // -------------------------------------------------------
+  // DEBUG: Logical walk-mask overlay (matches isWalkableWorld)
+  // Toggle at runtime: (w as any).debugWalkMask = true
+  // Optimized: cache + throttle + smaller radius.
+  // -------------------------------------------------------
+  const SHOW_WALK_MASK = !!(w as any).debugWalkMask;
+
+  // Tune these if you want:
+  const WALK_MASK_RADIUS_TILES = 10;   // only draw within NxN around player
+  const WALK_MASK_STEP = 1;           // 1 = every tile, 2 = every other tile
+  const WALK_MASK_THROTTLE_MS = 120;  // redraw ~8 fps (overlay only)
+
+  // cache outlines by "tx,ty"
+  const wm = (w as any);
+  if (!wm._walkMaskCache) wm._walkMaskCache = new Map<string, any>();
+  if (!wm._walkMaskLastMs) wm._walkMaskLastMs = 0;
+  if (!wm._walkMaskImg) wm._walkMaskImg = null;
+
+  // Convert tile-local top-face px -> screen position.
+  // This inverts worldToTileTopLocalPx mapping in kenneyMap.ts.
+  const tileLocalPxToScreen = (tx: number, ty: number, lx: number, ly: number) => {
+    const wx = (tx + 0.5) * T;
+    const wy = (ty + 0.5) * T;
+
+    const sdx = ((lx - 64) / 64) * T;
+    const sdy = ((ly - 32) / 32) * (T * 0.5);
+
+    const p = worldToScreen(wx, wy);
+
+    const h = tileHAtWorld(wx, wy);
+    const elev = h * ELEV_PX;
+
+    return { x: p.x + camX + sdx, y: p.y + camY + sdy - elev };
+  };
+
+  const drawWalkMaskOverlay = () => {
+    if (!SHOW_WALK_MASK) return;
+
+    const nowMs = performance.now();
+    const lastMs = wm._walkMaskLastMs as number;
+
+    // Throttle: only rebuild the overlay image every N ms
+    const shouldRebuild = (nowMs - lastMs) >= WALK_MASK_THROTTLE_MS;
+
+    // If we have a cached overlay image for recent frame, just draw it
+    if (!shouldRebuild && wm._walkMaskImg) {
+      ctx.save();
+      ctx.globalAlpha = 1;
+      ctx.drawImage(wm._walkMaskImg, 0, 0);
+      ctx.restore();
+      return;
+    }
+
+    // Rebuild overlay into an offscreen canvas (fast to blit)
+    wm._walkMaskLastMs = nowMs;
+
+    const off = document.createElement("canvas");
+    off.width = ww;
+    off.height = hh;
+    const octx = off.getContext("2d");
+    if (!octx) return;
+
+    octx.globalAlpha = 0.95;
+    octx.lineWidth = 2;
+
+    const pcx = Math.floor(w.px / T);
+    const pcy = Math.floor(w.py / T);
+    const r = WALK_MASK_RADIUS_TILES;
+
+    const activeH = (w.activeFloorH ?? 0);
+
+    for (let ty = pcy - r; ty <= pcy + r; ty += WALK_MASK_STEP) {
+      for (let tx = pcx - r; tx <= pcx + r; tx += WALK_MASK_STEP) {
+        if (isHoleTile(tx, ty)) continue;
+
+        const tdef = getTile(tx, ty);
+
+        // Match your tile draw rules: only draw current active floor,
+        // but keep stairs near it visible.
+        if (tdef.kind !== "STAIRS") {
+          const h0 = tileHeight(tx, ty);
+          if (h0 !== activeH) continue;
+        } else {
+          const hs = (tdef.h ?? 0);
+          if (Math.abs(hs - activeH) > 1) continue;
+        }
+
+        // Cache outline per tile coordinate (deterministic map)
+        const key = `${tx},${ty}`;
+        let o = wm._walkMaskCache.get(key);
+        if (!o) {
+          o = getWalkOutlineLocalPx(tx, ty);
+          wm._walkMaskCache.set(key, o);
+        }
+        if (o.blocked || !o.pts || o.pts.length === 0) continue;
+
+        // Color coding
+        octx.strokeStyle =
+            tdef.kind === "STAIRS"
+                ? "rgba(255,220,120,0.95)"
+                : o.shape === "TOP_CUT_16"
+                    ? "rgba(255,140,140,0.95)"
+                    : "rgba(120,220,255,0.95)";
+
+        octx.beginPath();
+        for (let i = 0; i < o.pts.length; i++) {
+          const p = o.pts[i];
+          const sp = tileLocalPxToScreen(tx, ty, p.x, p.y);
+          if (i === 0) octx.moveTo(sp.x, sp.y);
+          else octx.lineTo(sp.x, sp.y);
+        }
+        octx.closePath();
+        octx.stroke();
+      }
+    }
+
+    // store & blit
+    wm._walkMaskImg = off;
+    ctx.save();
+    ctx.globalAlpha = 1;
+    ctx.drawImage(off, 0, 0);
+    ctx.restore();
+  };
+
 
   // How many tiles around the player to draw (simple view-based estimate).
   const radius = Math.max(12, Math.ceil(Math.max(ww, hh) / (T * 0.9)));
@@ -195,7 +319,7 @@ export async function renderSystem(
         // stairs are visually elevated by their own h
         const h = tdef.kind === "STAIRS" ? (tdef.h ?? 0) : tileHeight(tx, ty);
         const elev = h * ELEV_PX;
-
+        drawWalkMaskOverlay();
 
 
         dy -= elev;
