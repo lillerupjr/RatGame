@@ -24,13 +24,16 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   if (input.up) sy -= 1;
   if (input.down) sy += 1;
 
-  // Convert screen-intent to world movement
+// sx, sy from input (WASD)
   let dx = (sx + sy) * 0.5;
   let dy = (sy - sx) * 0.5;
 
-  const len = Math.hypot(dx, dy) || 1;
-  dx /= len;
-  dy /= len;
+  const len = Math.hypot(dx, dy);
+  if (len > 1e-6) {
+    dx /= len;
+    dy /= len;
+  }
+
 
   w.pvx = dx * w.pSpeed;
   w.pvy = dy * w.pSpeed;
