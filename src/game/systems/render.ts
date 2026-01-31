@@ -76,14 +76,25 @@ export async function renderSystem(
     return t.kind === "STAIRS" ? (t.h ?? 0) : tileHeight(tx, ty);
   };
 
+  // Render all heights by default.
+  // You can disable at runtime via: (w as any).renderAllHeights = false
+  const RENDER_ALL_HEIGHTS: boolean = (w as any).renderAllHeights ?? true;
+
   const isOnActiveFloor = (x: number, y: number) => {
     const tx = Math.floor(x / KENNEY_TILE_WORLD);
     const ty = Math.floor(y / KENNEY_TILE_WORLD);
     const t = getTile(tx, ty);
+
     if (t.kind === "VOID") return false;
-    if (t.kind === "STAIRS") return true; // stairs are always drawable
+
+    // When rendering all heights, anything non-void is drawable.
+    if (RENDER_ALL_HEIGHTS) return true;
+
+    // Old behavior: only active floor + stairs
+    if (t.kind === "STAIRS") return true;
     return tileHeight(tx, ty) === (w.activeFloorH ?? 0);
   };
+
 
   const toScreen = (x: number, y: number) => {
     const p = worldToScreen(x, y);
@@ -196,15 +207,17 @@ export async function renderSystem(
 
         const tdef = getTile(tx, ty);
 
-        // Match your tile draw rules: only draw current active floor,
-        // but keep stairs near it visible.
-        if (tdef.kind !== "STAIRS") {
-          const h0 = tileHeight(tx, ty);
-          if (h0 !== activeH) continue;
-        } else {
-          const hs = (tdef.h ?? 0);
-          if (Math.abs(hs - activeH) > 1) continue;
+        // Match tile draw rules (now supports "render all heights")
+        if (!RENDER_ALL_HEIGHTS) {
+          if (tdef.kind !== "STAIRS") {
+            const h0 = tileHeight(tx, ty);
+            if (h0 !== activeH) continue;
+          } else {
+            const hs = (tdef.h ?? 0);
+            if (Math.abs(hs - activeH) > 1) continue;
+          }
         }
+
 
         // Cache outline per tile coordinate (deterministic map)
         const key = `${tx},${ty}`;
@@ -308,19 +321,19 @@ export async function renderSystem(
         // Fine tune after anchoring (stairs only)
         if (useStairs) dy += STAIRS_DY_PX;
 
-        // Elevation:
-        // - FLOOR uses integer tileHeight
-        // Milestone B: only render the active floor.
-        // Always allow drawing STAIRS near the active floor so transitions read well.
-        const activeH = (w.activeFloorH ?? 0);
+        // Milestone B (updated): optionally filter to active floor.
+        if (!RENDER_ALL_HEIGHTS) {
+          const activeH = (w.activeFloorH ?? 0);
 
-        if (tdef.kind !== "STAIRS") {
-          const h0 = tileHeight(tx, ty);
-          if (h0 !== activeH) continue;
-        } else {
-          const hs = (tdef.h ?? 0);
-          if (Math.abs(hs - activeH) > 1) continue; // keep nearby stair steps visible
+          if (tdef.kind !== "STAIRS") {
+            const h0 = tileHeight(tx, ty);
+            if (h0 !== activeH) continue;
+          } else {
+            const hs = (tdef.h ?? 0);
+            if (Math.abs(hs - activeH) > 1) continue;
+          }
         }
+
 
         // stairs are visually elevated by their own h
         const h = tdef.kind === "STAIRS" ? (tdef.h ?? 0) : tileHeight(tx, ty);
@@ -423,7 +436,6 @@ export async function renderSystem(
     if (it.kind === "pickup") {
       const i = it.i;
 
-      // Milestone B: don't draw pickups not on active floor (stairs ok)
       if (!isOnActiveFloor(w.xx[i], w.xy[i])) continue;
 
       const p = toScreen(w.xx[i], w.xy[i]);
@@ -459,7 +471,6 @@ export async function renderSystem(
     if (it.kind === "enemy") {
       const i = it.i;
 
-      // Milestone B: don't draw enemies that are not on the active floor (stairs ok)
       if (!isOnActiveFloor(w.ex[i], w.ey[i])) continue;
 
       const p = toScreen(w.ex[i], w.ey[i]);
