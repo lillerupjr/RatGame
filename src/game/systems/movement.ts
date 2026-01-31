@@ -121,21 +121,6 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     w.pvy = 0;
   }
 
-  // Enemies chase player (world space unchanged) — NOTE:
-  // later we should also floor-gate enemies (Milestone C),
-  // but keep behavior unchanged for now.
-  for (let i = 0; i < w.eAlive.length; i++) {
-    if (!w.eAlive[i]) continue;
-    const ex = w.ex[i];
-    const ey = w.ey[i];
-    const vx = w.px - ex;
-    const vy = w.py - ey;
-    const d = Math.hypot(vx, vy) || 1;
-    const ux = vx / d;
-    const uy = vy / d;
-    w.ex[i] = ex + ux * w.eSpeed[i] * dt;
-    w.ey[i] = ey + uy * w.eSpeed[i] * dt;
-  }
 
   // Update last aim direction from player movement (used when no enemies exist)
   const mag = Math.hypot(w.pvx, w.pvy);

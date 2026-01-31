@@ -278,7 +278,7 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     // map-driven "active floor" (Milestone B)
     activeFloorH: 0,
 
-    baseMoveSpeed: 200,
+    baseMoveSpeed: 210,
     basePickupRadius: 70,
 
     // derived
