@@ -334,10 +334,16 @@ export type WalkInfo = {
     kind: IsoTileKind;
     shape: TileWalkShape;
 
-    // Authoritative height level at this location
-    // - stairs => t.h (or 0)
-    // - normal => tileHeight(tx,ty)
+    // Integer floor level at this location (used for gating / active floor)
+    floorH: number;
+
+    // Back-compat alias (older code expects `.h`)
+    // Keep equal to floorH.
     h: number;
+
+    // Continuous Z at this location (stairs interpolate inside tile)
+    // For non-stairs, z === floorH.
+    z: number;
 
     // Walk decision
     blocked: boolean;   // true if shape is BLOCKED or tile is VOID
@@ -349,20 +355,12 @@ export type WalkInfo = {
 };
 
 /**
- * Authoritative height at world point.
- * NOTE: This returns the tile's height level even if (wx,wy) is outside the walkable top-face diamond.
- * Movement/AI should usually use walkInfo(...).walkable to decide if it can stand there.
- */
-export function heightAt(wx: number, wy: number, tileWorld: number): number {
-    const tx = Math.floor(wx / tileWorld);
-    const ty = Math.floor(wy / tileWorld);
-    const t = getTile(tx, ty);
-    return t.kind === "STAIRS" ? (t.h ?? 0) : tileHeight(tx, ty);
-}
-
-/**
  * Rich walkability info for a world point.
- * This is the new "map-authoritative" query that movement, enemies, and projectiles can share.
+ * This is the map-authoritative query that movement, enemies, and projectiles can share.
+ *
+ * Includes both:
+ * - floorH (integer) for gating
+ * - z (float) for smooth stairs
  */
 export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
     const { tx, ty, lx, ly } = worldToTileTopLocalPx(wx, wy, tileWorld);
@@ -373,14 +371,21 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
     const shape = tileWalkShape(tx, ty);
     const blocked = (shape === "BLOCKED") || (kind === "VOID");
 
-    const h = kind === "STAIRS" ? (t.h ?? 0) : tileHeight(tx, ty);
+    // Integer floor level (gating)
+    const floorH = kind === "STAIRS" ? (t.h ?? 0) : tileHeight(tx, ty);
+
+    // Continuous Z (stairs interpolate within tile)
+    // NOTE: This works even when not walkable; callers should still use .walkable to gate occupancy.
+    const z = heightAtWorld(wx, wy, tileWorld);
 
     if (blocked) {
         return {
             wx, wy, tileWorld,
             tx, ty, lx, ly,
             kind, shape,
-            h,
+            floorH,
+            h: floorH, // back-compat
+            z,
             blocked: true,
             inside: false,
             walkable: false,
@@ -407,13 +412,16 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
         wx, wy, tileWorld,
         tx, ty, lx, ly,
         kind, shape,
-        h,
+        floorH,
+        h: floorH, // back-compat
+        z,
         blocked: false,
         inside,
         walkable,
         reason: inside ? undefined : "OUTSIDE",
     };
 }
+
 
 /**
  * Legacy API preserved.
