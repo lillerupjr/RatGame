@@ -19,7 +19,9 @@ import {
   tileHeight,
   heightAtWorld,
   getWalkOutlineLocalPx,
+  walkInfo,
 } from "../map/kenneyMap";
+
 
 import { getBackground } from "../visual/background";
 

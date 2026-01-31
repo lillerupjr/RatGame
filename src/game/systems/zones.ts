@@ -103,6 +103,10 @@ export function zonesSystem(w: World, dt: number) {
     }
 
 
+    // Cache zone floor height so we don’t recompute every tick.
+    // Stored on world as a private field to avoid touching the World type.
+    const zFloorH = ((w as any)._zFloorH ??= []) as number[];
+
     for (let z = 0; z < w.zAlive.length; z++) {
         if (!w.zAlive[z]) continue;
 
@@ -120,6 +124,9 @@ export function zonesSystem(w: World, dt: number) {
         if (w.zFollowPlayer[z]) {
             w.zx[z] = w.px;
             w.zy[z] = w.py;
+
+            // If it follows the player, its floor height should follow too
+            zFloorH[z] = w.activeFloorH | 0;
         }
 
         // Tick countdown
@@ -133,34 +140,53 @@ export function zonesSystem(w: World, dt: number) {
         const zy = w.zy[z];
         const zr = w.zR[z];
 
-        // NEW: player damage (boss hazards)
+        // Initialize cached zone floor height if missing:
+        // Use player-follow height if available, otherwise infer from the CURRENT active floor.
+        // (This is correct for your current Sanctuary layout because all combat happens on active floor.)
+        if (zFloorH[z] === undefined) zFloorH[z] = w.activeFloorH | 0;
+
+        const zoneFloor = zFloorH[z] | 0;
+
+        // ---------------------------------------------------------
+        // SAME-FLOOR GATING (Milestone C)
+        // Zones ONLY affect entities on the same integer floor height.
+        // ---------------------------------------------------------
+
+        // Player damage (boss hazards) — only if player is on same floor
         const pdmg = w.zDamagePlayer[z] ?? 0;
         if (pdmg > 0 && zr > 0) {
-            const dx = w.px - zx;
-            const dy = w.py - zy;
-            const rr = zr + PLAYER_R;
-            if (dx * dx + dy * dy <= rr * rr) {
-                w.playerHp -= pdmg;
-                emitEvent(w, { type: "PLAYER_HIT", damage: pdmg, x: w.px, y: w.py });
+            if ((w.activeFloorH | 0) === zoneFloor) {
+                const dx = w.px - zx;
+                const dy = w.py - zy;
+                const rr = zr + PLAYER_R;
+                if (dx * dx + dy * dy <= rr * rr) {
+                    w.playerHp -= pdmg;
+                    emitEvent(w, { type: "PLAYER_HIT", damage: pdmg, x: w.px, y: w.py });
+                }
             }
         }
 
-        // Enemy damage (existing behavior) - now using spatial hash
+        // Enemy damage — only enemies on same floor
         const dmg = w.zDamage[z];
         if (dmg <= 0 || zr <= 0) continue;
 
-        // Query nearby enemies from spatial hash (already populated by collisionsSystem)
-        const nearbyEnemies = queryCircle(w.enemySpatialHash, zx, zy, zr + 50); // 50 = max enemy radius buffer
+        const nearbyEnemies = queryCircle(w.enemySpatialHash, zx, zy, zr + 50);
         const checkedEnemies = new Set<number>();
 
         for (let i = 0; i < nearbyEnemies.length; i++) {
             const e = nearbyEnemies[i];
-            
-            // Skip duplicates (enemies spanning multiple cells)
             if (checkedEnemies.has(e)) continue;
             checkedEnemies.add(e);
-            
+
             if (!w.eAlive[e]) continue;
+
+            // Gate by floor:
+            // enemies store continuous Z in (w as any).ez, and we already have the integer active floor.
+            // We’ll treat an enemy as “on a floor” by rounding its z to integer.
+            const ez = ((w as any).ez?.[e] ?? 0) as number;
+            const enemyFloor = (ez + 0.00001) | 0; // stable int floor
+
+            if (enemyFloor !== zoneFloor) continue;
             if (!isEnemyInCircle(w, e, zx, zy, zr)) continue;
 
             w.eHp[e] -= dmg;
@@ -171,7 +197,7 @@ export function zonesSystem(w: World, dt: number) {
                 damage: dmg,
                 x: w.ex[e],
                 y: w.ey[e],
-                isCrit: false, // Zone damage doesn't crit
+                isCrit: false,
                 source: "OTHER",
             });
 
@@ -190,4 +216,5 @@ export function zonesSystem(w: World, dt: number) {
             }
         }
     }
+
 }

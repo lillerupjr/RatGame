@@ -223,6 +223,8 @@ export function createGame(args: CreateGameArgs) {
     // NEW: bouncer arrays must stay index-aligned with all projectile arrays
     (w as any).prBouncesLeft = [];
     (w as any).prWallBounce = [];
+    // Milestone C: clear cached zone floor heights
+    (w as any)._zFloorH = [];
 
     w.xAlive = [];
     w.xKind = [];
