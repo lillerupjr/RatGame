@@ -9,7 +9,7 @@ import { floorForIndex, pickFloorEnemyType } from "../content/floors";
  * - Handles a floor-configurable trickle spawn (cadence, counts, weighted mix).
  */
 export function spawnSystem(w: World, dt: number) {
-  return
+  //return
   // Floors only (no spawns during boss/transition)
   if (w.runState !== "FLOOR") return;
 
