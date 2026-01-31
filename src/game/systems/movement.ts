@@ -1,7 +1,7 @@
 import { World } from "../world";
 import { InputState } from "./input";
 import { worldDeltaToScreen } from "../visual/iso";
-import { walkInfo, heightAtWorld } from "../map/kenneyMap";
+import {walkInfo, heightAtWorld, findNearestStairsWorld} from "../map/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
 export function movementSystem(w: World, input: InputState, dt: number) {
@@ -104,8 +104,17 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   //   If your spawn system already enforces this, this becomes a safety net.
   // -------------------------------------------------------
 
-  // Lazily allocate enemy Z buffer without changing World type
+  // -------------------------------------------------------
+  // Enemies: Option B — “Always converge”
+  //
+  // If an enemy is not on the player's floor, it steers toward
+  // a nearby STAIRS tile (map-level helper), then transitions floors.
+  // -------------------------------------------------------
   const ez = ((w as any).ez ??= [] as number[]);
+
+  // Player floor used as “goal floor”
+  const pInfo = walkInfo(w.px, w.py, KENNEY_TILE_WORLD);
+  const playerFloorH = pInfo.h;
 
   for (let i = 0; i < w.eAlive.length; i++) {
     if (!w.eAlive[i]) continue;
@@ -113,15 +122,34 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     const ex = w.ex[i];
     const ey = w.ey[i];
 
-    // Current enemy tile info (walk + floor + z)
     const eCur = walkInfo(ex, ey, KENNEY_TILE_WORLD);
-    ez[i] = eCur.z;
+    const eCurFloorH = eCur.h;
+    ez[i] = heightAtWorld(ex, ey, KENNEY_TILE_WORLD);
 
-    const eCurFloorH = eCur.floorH;
+    // Choose steering target:
+    // - same floor: go straight to player
+    // - different floor: go to best stairs target (fallback to player)
+    let tx = w.px;
+    let ty = w.py;
 
-    // Simple steering toward player
-    const vx = w.px - ex;
-    const vy = w.py - ey;
+    if (eCurFloorH !== playerFloorH && eCur.kind !== "STAIRS") {
+      const stair = findNearestStairsWorld(
+          ex,
+          ey,
+          eCurFloorH,
+          playerFloorH,
+          KENNEY_TILE_WORLD,
+          50
+      );
+      if (stair) {
+        tx = stair.wx;
+        ty = stair.wy;
+      }
+    }
+
+    // Simple steering toward target
+    const vx = tx - ex;
+    const vy = ty - ey;
     const d = Math.hypot(vx, vy) || 1;
     const ux = vx / d;
     const uy = vy / d;
@@ -133,29 +161,23 @@ export function movementSystem(w: World, input: InputState, dt: number) {
       const eNext = walkInfo(wx, wy, KENNEY_TILE_WORLD);
       if (!eNext.walkable) return false;
 
-      // Same-floor unless stairs involved
+      // Same-floor unless stairs involved (same rule as player)
       const stairsInvolved = eCur.kind === "STAIRS" || eNext.kind === "STAIRS";
-      const sameFloor = eNext.floorH === eCurFloorH;
+      const sameFloor = eNext.h === eCurFloorH;
       if (!stairsInvolved && !sameFloor) return false;
 
-      // No player-floor gating: enemies can move on their own floor.
-      // (They are still prevented from "stepping" between floors unless on STAIRS.)
-
-      // Commit position
       w.ex[i] = wx;
       w.ey[i] = wy;
 
-      // Update stored Z
-      ez[i] = eNext.z;
+      ez[i] = heightAtWorld(wx, wy, KENNEY_TILE_WORLD);
       return true;
     };
 
-    // Axis-separated movement (sliding)
+    // Axis-separated sliding
     tryEnemyMove(enx, ey);
     tryEnemyMove(w.ex[i], eny);
-
-    // If neither worked, enemy just stalls against edges (fine for now)
   }
+
 
 
   // Update last aim direction from player movement (used when no enemies exist)
