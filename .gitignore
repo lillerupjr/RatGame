@@ -20,6 +20,9 @@ workspace.xml
 ._*
 **/.DS_Store
 
+repo_dump*.txt
+*_dump*.txt
+
 # JetBrains / WebStorm
 .idea/
 !.idea/codeStyles/
