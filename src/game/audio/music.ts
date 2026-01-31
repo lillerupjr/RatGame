@@ -1,4 +1,5 @@
 // src/game/audio/music.ts
+
 type StageId = "DOCKS" | "SEWERS" | "CHINATOWN";
 
 const modules = import.meta.glob("../../assets/music/*.{mp3,ogg,wav}", {
@@ -15,7 +16,46 @@ const FILES: Record<StageId, string> = {
 let cur: HTMLAudioElement | null = null;
 let curStage: StageId | null = null;
 
-// autoplay may be blocked until user gesture
+// -----------------------------
+// Volume control
+// -----------------------------
+
+/**
+ * Global master volume for music [0..1]
+ * This should usually be driven by settings / UI.
+ */
+let musicMasterVolume = 0;
+
+/**
+ * Per-track base mix volume (before master volume).
+ * Useful if some tracks are louder than others.
+ */
+const BASE_TRACK_VOLUME = 0.75;
+
+function applyVolume() {
+    if (!cur) return;
+    cur.volume = BASE_TRACK_VOLUME * musicMasterVolume;
+}
+
+/**
+ * Set global music volume (0..1)
+ */
+export function setMusicMasterVolume(v: number) {
+    musicMasterVolume = Math.max(0, Math.min(1, v));
+    applyVolume();
+}
+
+/**
+ * Optional getter (useful for UI sliders)
+ */
+export function getMusicMasterVolume() {
+    return musicMasterVolume;
+}
+
+// -----------------------------
+// Autoplay unlock handling
+// -----------------------------
+
 let _unlocked = false;
 let _wired = false;
 
@@ -26,12 +66,11 @@ function wireUnlock() {
     const unlock = async () => {
         _unlocked = true;
 
-        // If we already have a track selected, try again now
         if (cur) {
             try {
                 await cur.play();
             } catch {
-                // still blocked or no device — ignore
+                // still blocked — ignore
             }
         }
     };
@@ -40,12 +79,20 @@ function wireUnlock() {
     window.addEventListener("keydown", unlock);
 }
 
+// -----------------------------
+// Helpers
+// -----------------------------
+
 function findUrl(filename: string): string | null {
     for (const [k, url] of Object.entries(modules)) {
         if (k.endsWith("/" + filename)) return url;
     }
     return null;
 }
+
+// -----------------------------
+// Public API
+// -----------------------------
 
 export function setMusicStage(stage: StageId) {
     wireUnlock();
@@ -69,17 +116,16 @@ export function setMusicStage(stage: StageId) {
 
     const a = new Audio(url);
     a.loop = true;
-    a.volume = 0.75; // bump while testing
     a.preload = "auto";
     cur = a;
 
-    // Try to play now; if blocked, it will start on first gesture via unlock handler
+    applyVolume();
+
+    // Try to play now; if blocked, unlock handler will retry
     void a.play().catch((e) => {
-        // Don’t hide this during dev—this tells you it’s autoplay-blocked.
         console.warn("[music] play blocked (expected until click/keypress):", e);
     });
 
-    // If already unlocked, force a play attempt again (some browsers need it)
     if (_unlocked) {
         void a.play().catch(() => {});
     }

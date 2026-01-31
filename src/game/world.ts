@@ -264,7 +264,7 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     pvy: 0,
     playerR: 14,
 
-    baseMoveSpeed: 210,
+    baseMoveSpeed: 2000,
     basePickupRadius: 70,
 
     // derived
