@@ -18,7 +18,8 @@ export const KENNEY_TILE_ANCHOR_Y = 0.55;
 
 // ---- Configure expected filenames here ----
 const FILES = {
-    GROUND: "landscape_13.png",
+    GROUND: "landscape_28.png",
+    STAIRS: "landscape_20.png",
 } as const;
 
 const cache: Record<string, Loaded> = Object.create(null);
@@ -58,4 +59,8 @@ export function preloadKenneyTiles() {
 
 export function getKenneyGroundTile(): Loaded {
     return loadByFile(FILES.GROUND);
+}
+
+export function getKenneyStairsTile(): Loaded {
+    return loadByFile(FILES.STAIRS);
 }

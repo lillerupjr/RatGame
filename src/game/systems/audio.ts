@@ -18,7 +18,7 @@ export function audioSystem(w: World, dt: number) {
     // Global + per-SFX volume controls
     // -------------------------
     // Master SFX volume (0..1)
-    if (anyW.sfxMaster === undefined) anyW.sfxMaster = 1.0;
+    if (anyW.sfxMaster === undefined) anyW.sfxMaster = 0;
 
     // Per SFX id volume multipliers (0..1)
     // You can tweak these at runtime: (world as any).sfxVol["FIRE_PISTOL"] = 0.6;

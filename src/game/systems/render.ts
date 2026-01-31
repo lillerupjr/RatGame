@@ -12,7 +12,7 @@ import {
   type Frame3,
 } from "../visual/playerSprites";
 import { getEnemySpriteFrame, preloadEnemySprites } from "../visual/enemySprites";
-
+import { isHoleTile, isStairsTile, getTile, tileHeight } from "../map/kenneyMap";
 import { getBackground } from "../visual/background";
 
 import {
@@ -33,10 +33,10 @@ import {
 
 import {
   getKenneyGroundTile,
+  getKenneyStairsTile,
   KENNEY_TILE_WORLD,
   KENNEY_TILE_ANCHOR_Y,
 } from "../visual/kenneyTiles";
-import {isHoleTile} from "../map/kenneyMap";
 
 export async function renderSystem(
     w: World,
@@ -80,14 +80,18 @@ export async function renderSystem(
 
   ctx.globalAlpha = 1;
 
-  const tile = getKenneyGroundTile();
+  const groundTile = getKenneyGroundTile();
+  const stairsTile = getKenneyStairsTile();
 
-  // World-units per tile step (tune later; this is just to get it on screen).
-  const T = 64;
+  // World-units per tile step (keep in sync with kenneyTiles constants)
+  const T = KENNEY_TILE_WORLD;
 
   // Anchor: tile sprites are usually taller than their footprint.
-  // This value makes the tile “sit” on the projected ground point.
-  const ANCHOR_Y = 0.55;
+  const ANCHOR_Y = KENNEY_TILE_ANCHOR_Y;
+
+  // Visual height step in screen pixels per tile-level (tune later).
+  // This is purely visual right now; gameplay height will come later.
+  const ELEV_PX = 16;
 
   // How many tiles around the player to draw (simple view-based estimate).
   const radius = Math.max(12, Math.ceil(Math.max(ww, hh) / (T * 0.9)));
@@ -103,11 +107,13 @@ export async function renderSystem(
   const minSum = minTx + minTy;
   const maxSum = maxTx + maxTy;
 
-  if (tile?.ready && tile.img && tile.img.width > 0 && tile.img.height > 0) {
-    const iw = tile.img.width;
-    const ih = tile.img.height;
+  const tilesReady =
+      groundTile?.ready &&
+      groundTile.img &&
+      groundTile.img.width > 0 &&
+      groundTile.img.height > 0;
 
-    // Diagonal (x+y) order ensures correct overlap for iso tiles.
+  if (tilesReady) {
     for (let s = minSum; s <= maxSum; s++) {
       const tx0 = Math.max(minTx, s - maxTy);
       const tx1 = Math.min(maxTx, s - minTy);
@@ -115,29 +121,55 @@ export async function renderSystem(
       for (let tx = tx0; tx <= tx1; tx++) {
         const ty = s - tx;
 
-        // Holes (shared with collision)
+        // VOID (shared with collision)
         if (isHoleTile(tx, ty)) continue;
 
+        const tdef = getTile(tx, ty);
 
-        // Tile "center" in world coords (use +0.5 to center the tile).
+        // Choose sprite: STAIRS uses landscape_20.png, FLOOR uses landscape_13.png
+        const useStairs = tdef.kind === "STAIRS" || isStairsTile(tx, ty);
+        const tileRec = useStairs && stairsTile?.ready ? stairsTile : groundTile;
+
+        if (!tileRec?.ready || !tileRec.img || tileRec.img.width <= 0 || tileRec.img.height <= 0) {
+          // If stairs tile missing, skip (ground still renders elsewhere)
+          continue;
+        }
+
+        const iw = tileRec.img.width;
+        const ih = tileRec.img.height;
+
+        // Tile "center" in world coords (+0.5 centers the tile).
         const wx = (tx + 0.5) * T;
         const wy = (ty + 0.5) * T;
 
         const p = worldToScreen(wx, wy);
 
-        // Draw sprite with bottom-ish anchor so it rests on the diamond point.
         const dx = p.x + camX - iw * 0.5;
-        const dy = p.y + camY - ih * KENNEY_TILE_ANCHOR_Y;
 
-        ctx.drawImage(tile.img, dx, dy, iw, ih);
+        // Per-tile anchor: stairs art often has different vertical footprint/padding
+        const stairsAnchorY = 0.62;
+        const STAIRS_DY_PX = 16// tweak: try -12..+12
+
+        const anchorY = useStairs ? stairsAnchorY : ANCHOR_Y;
+        let dy = p.y + camY - ih * anchorY;
+
+        // Fine tune after anchoring (stairs only)
+        if (useStairs) dy += STAIRS_DY_PX;
+
+        // Elevation:
+        // - FLOOR uses integer tileHeight
+        // - STAIRS uses step 0..1 for visual ramp (still h=0 logically for now)
+        const h = tdef.kind === "STAIRS" ? (tdef.h ?? 0) : tileHeight(tx, ty);
+
+        const elev = h * ELEV_PX;
+
+
+        dy -= elev;
+        ctx.drawImage(tileRec.img, dx, dy, iw, ih);
       }
-
     }
-  } else {
-    // Fallback: plain dark fill until the tile asset is found/loaded.
-    ctx.fillStyle = "#0b0b0f";
-    ctx.fillRect(0, 0, ww, hh);
   }
+
 
   // Optional floor tint overlay (keep your existing visual style)
   const floorVis = getFloorVisual(w);
@@ -294,7 +326,15 @@ export async function renderSystem(
         ctx.globalAlpha = 1;
         ctx.fillStyle = baseColor;
         ctx.beginPath();
-        ctx.ellipse(p.x, p.y, (w.eR[i] ?? 10) * ISO_X, (w.eR[i] ?? 10) * ISO_Y, 0, 0, Math.PI * 2);
+        ctx.ellipse(
+            p.x,
+            p.y,
+            (w.eR[i] ?? 10) * ISO_X,
+            (w.eR[i] ?? 10) * ISO_Y,
+            0,
+            0,
+            Math.PI * 2
+        );
         ctx.fill();
       }
 
@@ -319,7 +359,15 @@ export async function renderSystem(
         ctx.globalAlpha = 0.28;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.ellipse(p.x, p.y, (w.eR[i] ?? 10) * 1.55 * ISO_X, (w.eR[i] ?? 10) * 1.55 * ISO_Y, 0, 0, Math.PI * 2);
+        ctx.ellipse(
+            p.x,
+            p.y,
+            (w.eR[i] ?? 10) * 1.55 * ISO_X,
+            (w.eR[i] ?? 10) * 1.55 * ISO_Y,
+            0,
+            0,
+            Math.PI * 2
+        );
         ctx.stroke();
 
         ctx.globalAlpha = 1;
@@ -329,7 +377,15 @@ export async function renderSystem(
         ctx.globalAlpha = 0.35;
         ctx.fillStyle = "#3dff7a";
         ctx.beginPath();
-        ctx.ellipse(p.x, p.y, (w.eR[i] ?? 10) * 1.05 * ISO_X, (w.eR[i] ?? 10) * 1.05 * ISO_Y, 0, 0, Math.PI * 2);
+        ctx.ellipse(
+            p.x,
+            p.y,
+            (w.eR[i] ?? 10) * 1.05 * ISO_X,
+            (w.eR[i] ?? 10) * 1.05 * ISO_Y,
+            0,
+            0,
+            Math.PI * 2
+        );
         ctx.fill();
         ctx.globalAlpha = 1;
       }
