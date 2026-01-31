@@ -12,40 +12,39 @@ import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
  *
  * Milestone B:
  * - Spawns must respect tile walk logic (no void, no outside top-face diamond).
- * - Spawns should respect active floor height (avoid popping onto other platforms).
+ * - Spawns must respect active floor height (avoid unreachable mobs on other platforms).
  */
 export function spawnSystem(w: World, dt: number) {
   // Floors only (no spawns during boss/transition)
   if (w.runState !== "FLOOR") return;
 
-  const activeH = w.activeFloorH ?? 0;
+  // Allow spawning on any height (platforms/floors), as long as it is walkable.
 
-  // Try to find a valid spawn point near the desired ring position.
-  // We keep this intentionally cheap: a few tries + small jitter.
+  // Find a valid spawn point near a base ring point.
+  // Cheap retries + small jitter to escape void seams/cutouts.
   const findSpawnPoint = (baseX: number, baseY: number, maxTries: number) => {
     for (let t = 0; t < maxTries; t++) {
-      // jitter grows slightly with retries (helps escape void seams / cutouts)
       const j = 18 + t * 6;
       const x = baseX + w.rng.range(-j, j);
       const y = baseY + w.rng.range(-j, j);
 
       const info = walkInfo(x, y, KENNEY_TILE_WORLD);
 
-      // must be walkable
+      // Must be walkable top-face
       if (!info.walkable) continue;
 
-      // prefer not to spawn on stairs (usually bad feel)
-      if (info.kind === "STAIRS") continue;
+      // Allow any height (no active-floor gating)
 
-      // enforce same-height as active floor
-      if (info.h !== activeH) continue;
+      // Optional: avoid stairs spawns (usually feels bad)
+      // If you WANT stairs spawns, delete this line.
+      if (info.kind === "STAIRS") continue;
 
       return { x, y };
     }
     return null;
   };
 
-  // Run stage timeline spawns once (now validated)
+  // Run stage timeline spawns once (validated)
   for (const s of w.stage.spawns) {
     if ((s as any).t === Infinity) continue;
 
