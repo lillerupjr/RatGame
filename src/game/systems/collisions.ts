@@ -123,6 +123,13 @@ export function collisionsSystem(w: World, dt: number) {
       
       w.eHp[e] -= dmg;
 
+      // Track damage for DPS meter
+      if (w.dpsEnabled) {
+        w.dpsTotalDamage += dmg;
+        w.dpsRecentDamage.push(dmg);
+        w.dpsRecentTimes.push(w.time);
+      }
+
       // Spawn floating combat text
       const source = registry.projectileSourceFromKind(w.prjKind[p]);
       spawnFloatText(w, w.ex[e], w.ey[e], Math.round(dmg), source, isCrit);
@@ -366,9 +373,35 @@ export function collisionsSystem(w: World, dt: number) {
   (w as any)._playerHitCd = hitCd;
 
   // -------------------------
+  // Update DPS tracking
+  // -------------------------
+  if (w.dpsEnabled) {
+    updateDPSTracking(w);
+  }
+
+  // -------------------------
   // Update floating combat text
   // -------------------------
   updateFloatText(w, dt);
+}
+
+/**
+ * Update DPS tracking - keep only recent damage samples (last 3 seconds)
+ */
+function updateDPSTracking(w: World) {
+  const currentTime = w.time;
+  const windowSize = 3.0; // Track last 3 seconds
+
+  // Initialize start time if needed
+  if (w.dpsStartTime === 0) {
+    w.dpsStartTime = currentTime;
+  }
+
+  // Remove old samples outside the window
+  while (w.dpsRecentTimes.length > 0 && currentTime - w.dpsRecentTimes[0] > windowSize) {
+    w.dpsRecentTimes.shift();
+    w.dpsRecentDamage.shift();
+  }
 }
 
 /**
