@@ -12,7 +12,15 @@ import {
   type Frame3,
 } from "../visual/playerSprites";
 import { getEnemySpriteFrame, preloadEnemySprites } from "../visual/enemySprites";
-import {isHoleTile, isStairsTile, getTile, tileHeight, getWalkOutlineLocalPx} from "../map/kenneyMap";
+import {
+  isHoleTile,
+  isStairsTile,
+  getTile,
+  tileHeight,
+  heightAtWorld,
+  getWalkOutlineLocalPx,
+} from "../map/kenneyMap";
+
 import { getBackground } from "../visual/background";
 
 import {
@@ -70,11 +78,10 @@ export async function renderSystem(
   const camY = hh * 0.5 - p0.y;
 
   const tileHAtWorld = (x: number, y: number) => {
-    const tx = Math.floor(x / KENNEY_TILE_WORLD);
-    const ty = Math.floor(y / KENNEY_TILE_WORLD);
-    const t = getTile(tx, ty);
-    return t.kind === "STAIRS" ? (t.h ?? 0) : tileHeight(tx, ty);
+    // Smooth stair lift (float), integer elsewhere
+    return heightAtWorld(x, y, KENNEY_TILE_WORLD);
   };
+
 
   // Render all heights by default.
   // You can disable at runtime via: (w as any).renderAllHeights = false
