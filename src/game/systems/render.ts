@@ -677,6 +677,9 @@ export async function renderSystem(
   // --- Boss Health Bar (top of screen, Diablo/PoE style) ---
   renderBossHealthBar(w, ctx, ww, hh);
 
+  // --- DPS Meter (top-right corner) ---
+  renderDPSMeter(w, ctx, ww, hh);
+
   // --- Floating Combat Text ---
   renderFloatingText(w, ctx, toScreen);
 }
@@ -851,3 +854,76 @@ function renderBossHealthBar(w: World, ctx: CanvasRenderingContext2D, ww: number
 
   ctx.restore();
 }
+
+/**
+ * Render DPS meter in top-right corner
+ * Toggle with w.dpsEnabled boolean
+ */
+function renderDPSMeter(w: World, ctx: CanvasRenderingContext2D, ww: number, hh: number) {
+  if (!w.dpsEnabled) return; // Easy toggle - set to false to hide
+
+  const currentTime = w.time;
+  const totalTime = currentTime - w.dpsStartTime;
+
+  // Calculate average DPS over entire run
+  const avgDPS = totalTime > 0 ? w.dpsTotalDamage / totalTime : 0;
+
+  // Calculate recent DPS (last 3 seconds)
+  let recentDPS = 0;
+  if (w.dpsRecentDamage.length > 0) {
+    const recentTotal = w.dpsRecentDamage.reduce((sum, dmg) => sum + dmg, 0);
+    const oldestTime = w.dpsRecentTimes[0] || currentTime;
+    const recentWindow = currentTime - oldestTime;
+    recentDPS = recentWindow > 0 ? recentTotal / recentWindow : 0;
+  }
+
+  // Position in top-right corner
+  const panelW = 180;
+  const panelH = 80;
+  const x = ww - panelW - 12;
+  const y = 12;
+
+  ctx.save();
+
+  // Background panel
+  ctx.globalAlpha = 0.7;
+  ctx.fillStyle = "#111";
+  ctx.fillRect(x, y, panelW, panelH);
+
+  // Border
+  ctx.globalAlpha = 0.8;
+  ctx.strokeStyle = "rgba(255,255,255,0.2)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x, y, panelW, panelH);
+
+  // Title
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 14px monospace";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.fillText("DPS METER", x + 8, y + 8);
+
+  // Current/Recent DPS (larger, more prominent)
+  ctx.font = "bold 18px monospace";
+  ctx.fillStyle = "#4fc3f7"; // Cyan color
+  ctx.fillText(`${Math.round(recentDPS).toLocaleString()}`, x + 8, y + 28);
+
+  ctx.font = "11px monospace";
+  ctx.fillStyle = "rgba(255,255,255,0.7)";
+  ctx.fillText("current", x + 8, y + 50);
+
+  // Average DPS (smaller)
+  ctx.font = "12px monospace";
+  ctx.fillStyle = "rgba(255,255,255,0.6)";
+  ctx.textAlign = "right";
+  ctx.fillText(`avg: ${Math.round(avgDPS).toLocaleString()}`, x + panelW - 8, y + 28);
+
+  // Total damage
+  ctx.font = "10px monospace";
+  ctx.fillStyle = "rgba(255,255,255,0.5)";
+  ctx.fillText(`total: ${Math.round(w.dpsTotalDamage).toLocaleString()}`, x + panelW - 8, y + panelH - 10);
+
+  ctx.restore();
+}
+
