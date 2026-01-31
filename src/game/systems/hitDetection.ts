@@ -25,12 +25,23 @@ export function isEnemyHit(
   // -----------------------------------------
   // Milestone C: symmetric height-aware hits
   // -----------------------------------------
-  const HIT_HEIGHT_Z = 0.9;        // enemy vertical size (zFeet..zFeet+H)
   const PROJECTILE_Z_RADIUS = 0.25; // projectile vertical thickness
 
-  const ezFeet = (w as any).ez?.[e] ?? 0;         // stored by movement on stairs
+  // Enemy vertical height depends on enemy type (Milestone C)
+// Enemy vertical height depends on enemy type (Milestone C)
+  const et = (w.eType?.[e] ?? 1) | 0; // fallback to CHASER-ish
+  const HIT_HEIGHT_Z =
+      et === 1 ? 2 :      // CHASER (was 1)
+          et === 2 ? 3 :      // RUNNER (was 2)
+              et === 3 ? 4 :      // BRUISER (was 3)
+                  et === 99 ? 4 :     // BOSS   (was 3)
+                      2;
+
+
+  const ezFeet = (w as any).ez?.[e] ?? 0; // stored by movement on stairs
   const ezMin = ezFeet;
   const ezMax = ezFeet + HIT_HEIGHT_Z;
+
 
   const pz = (w as any).prZ?.[p] ?? (w as any).pz ?? 0;
 
@@ -84,7 +95,14 @@ export function isPlayerHit(w: World, e: number, playerR: number): boolean {
   // Player and enemy only collide if their vertical ranges overlap.
   // -----------------------------------------
   const PLAYER_HIT_HEIGHT_Z = 0.9;
-  const ENEMY_HIT_HEIGHT_Z = 0.9;
+
+  const et = (w.eType?.[e] ?? 1) | 0;
+  const ENEMY_HIT_HEIGHT_Z =
+      et === 1 ? 1 :
+          et === 2 ? 2 :
+              et === 3 ? 3 :
+                  et === 99 ? 3 :
+                      1;
 
   const pzFeet = (w as any).pz ?? 0;
   const ezFeet = (w as any).ez?.[e] ?? 0;
@@ -94,6 +112,7 @@ export function isPlayerHit(w: World, e: number, playerR: number): boolean {
 
   const ezMin = ezFeet;
   const ezMax = ezFeet + ENEMY_HIT_HEIGHT_Z;
+
 
   const zOverlap = pzMax >= ezMin && ezMax >= pzMin;
   if (!zOverlap) return false;

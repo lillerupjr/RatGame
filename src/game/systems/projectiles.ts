@@ -23,6 +23,7 @@ import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 export function projectilesSystem(w: World, dt: number) {
     const moveSpeedMult = w.baseMoveSpeed > 0 ? w.pSpeed / w.baseMoveSpeed : 1;
     const T = KENNEY_TILE_WORLD;
+    const STAIR_PROJECTILE_BLOCK_OFFSET = 3;
 
     for (let i = 0; i < w.pAlive.length; i++) {
         if (!w.pAlive[i]) continue;
@@ -144,17 +145,18 @@ export function projectilesSystem(w: World, dt: number) {
             // -------------------------
             // Map collision: STAIRS step-up
             // -------------------------
-            const tx = Math.floor(w.prx[i] / T);
-            const ty = Math.floor(w.pry[i] / T);
+            const tx = Math.floor(w.prx[i] / KENNEY_TILE_WORLD);
+            const ty = Math.floor(w.pry[i] / KENNEY_TILE_WORLD);
             const t = getTile(tx, ty);
 
             if (t.kind === "STAIRS") {
                 const stairBaseH = (t.h ?? 0) | 0;
-                const projZ = (w as any).prZ?.[i] ?? (w as any).pz ?? 0;
+                const projZ = w.prZ?.[i] ?? 0;
                 const projH = Math.floor(projZ);
 
-                // "Stair is projectileHeight + 1"  <=>  (stairBaseH + 1) == (projH + 1)  <=> stairBaseH == projH
-                if (stairBaseH === projH) {
+                // stairTopH = stairBaseH + 1
+                // kill when stairTopH == projH + STAIR_PROJECTILE_BLOCK_OFFSET
+                if (stairBaseH + 1 === projH + STAIR_PROJECTILE_BLOCK_OFFSET) {
                     w.pAlive[i] = false;
                     continue;
                 }
