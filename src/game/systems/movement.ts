@@ -1,7 +1,7 @@
 import { World } from "../world";
 import { InputState } from "./input";
 import { worldDeltaToScreen } from "../visual/iso";
-import { walkInfo } from "../map/kenneyMap";
+import { walkInfo, heightAtWorld } from "../map/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
 export function movementSystem(w: World, input: InputState, dt: number) {
@@ -29,45 +29,55 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   w.pvy = dy * w.pSpeed;
 
   // -------------------------------------------------------
-  // Milestone B: map-authoritative walkability + floor height
-  // Using walkInfo(...) so movement and height come from the same query.
+  // Milestone B + stairs Z:
+  // - walkInfo(...) drives walkability + integer height level (h)
+  // - heightAtWorld(...) drives continuous Z (float) for stairs
   //
   // Rules:
-  // - walkInfo(...).walkable gates "inside top face + not void"
-  // - non-stairs tiles require same-height as current standing tile
-  // - stairs tiles are allowed (height changes handled later; for now allow)
-  // - w.activeFloorH and w.pz track the tile we are currently standing on
+  // - must be walkable (inside top-face + not void)
+  // - non-stairs tiles require same integer floor height
+  // - stairs tiles are allowed (and may change floor height)
+  // - w.activeFloorH tracks integer floor level
+  // - w.pz tracks continuous Z (smooth on stairs)
   // -------------------------------------------------------
-  const cur = walkInfo(w.px, w.py, KENNEY_TILE_WORLD);
+  const curInfo = walkInfo(w.px, w.py, KENNEY_TILE_WORLD);
 
-  // keep world state synced even if we don't move this frame
-  w.activeFloorH = cur.h;
-  w.pz = cur.h;
+  // Integer "floor level" for gating/active floor
+  const curFloorH = curInfo.h;
 
-  // attempt move
+  // Keep world state synced even if we don't move this frame
+  w.activeFloorH = curFloorH;
+  w.pz = heightAtWorld(w.px, w.py, KENNEY_TILE_WORLD);
+
+  // Attempt move
   const nx = w.px + w.pvx * dt;
   const ny = w.py + w.pvy * dt;
 
-  // simple axis-separated resolution (gives nice "sliding" on edges)
+  // Simple axis-separated resolution (gives nice "sliding" on edges)
   const tryMove = (wx: number, wy: number) => {
-    const next = walkInfo(wx, wy, KENNEY_TILE_WORLD);
+    const nextInfo = walkInfo(wx, wy, KENNEY_TILE_WORLD);
 
-    // must be inside walk mask (top-face diamond etc.)
-    if (!next.walkable) return false;
+    // Must be inside walk mask (top-face diamond etc.)
+    if (!nextInfo.walkable) return false;
 
-    // same-floor unless stairs involved
-    const stairsInvolved = cur.kind === "STAIRS" || next.kind === "STAIRS";
-    const sameFloor = next.h === cur.h;
+    // Integer floor height for gating
+    const nextFloorH = nextInfo.h;
+
+    // Same-floor unless stairs involved
+    const stairsInvolved = curInfo.kind === "STAIRS" || nextInfo.kind === "STAIRS";
+    const sameFloor = nextFloorH === curFloorH;
 
     if (!stairsInvolved && !sameFloor) return false;
 
-    // commit WORLD position
+    // Commit WORLD position
     w.px = wx;
     w.py = wy;
 
-    // update floor state to match the tile we occupy
-    w.activeFloorH = next.h;
-    w.pz = next.h;
+    // Update floor state to match the tile we occupy (integer)
+    w.activeFloorH = nextFloorH;
+
+    // Continuous Z for smooth stair traversal + render lift
+    w.pz = heightAtWorld(wx, wy, KENNEY_TILE_WORLD);
 
     return true;
   };
@@ -75,15 +85,16 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   const movedX = tryMove(nx, w.py);
   const movedY = tryMove(w.px, ny);
 
-  // if neither axis worked, stop velocity so sprite settles
+  // If neither axis worked, stop velocity so sprite settles
   if (!movedX && !movedY) {
     w.pvx = 0;
     w.pvy = 0;
   }
 
   // -------------------------------------------------------
-  // Enemies: use the same walkInfo(...) query (no duplication)
-  // (still "simple" steering; floor-gating can be expanded later)
+  // Enemies: still use the same walkInfo(...) query (no duplication)
+  // NOTE: This does NOT apply floor-gating yet, just walkability.
+  // If you want enemies to respect floor height too, we can add it next.
   // -------------------------------------------------------
   for (let i = 0; i < w.eAlive.length; i++) {
     if (!w.eAlive[i]) continue;
@@ -100,7 +111,7 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     const enx = ex + ux * w.eSpeed[i] * dt;
     const eny = ey + uy * w.eSpeed[i] * dt;
 
-    // axis-separated, same as player
+    // Axis-separated, same as player
     const canX = walkInfo(enx, ey, KENNEY_TILE_WORLD).walkable;
     const canY = walkInfo(ex, eny, KENNEY_TILE_WORLD).walkable;
 

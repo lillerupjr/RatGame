@@ -154,6 +154,42 @@ export function tileHeight(tx: number, ty: number): number {
     return getTile(tx, ty).h | 0;
 }
 
+function clamp01(v: number) {
+    return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+/**
+ * Continuous height at a WORLD position (wx,wy).
+ *
+ * - FLOOR: returns integer height (h)
+ * - VOID: returns its h (usually 0) (caller should treat VOID as not-walkable)
+ * - STAIRS: returns h + step, where step is 0..1 within the tile
+ *
+ * IMPORTANT:
+ * Current sanctuary layout defines stairs as a vertical run in tile-space:
+ *   dx = 0, dy = -1  (moving "up" the stairs means decreasing ty)
+ *
+ * With our worldToTileTopLocalPx mapping:
+ *   ly ∈ [0..64], where ly=0 is the "top" tip of the diamond,
+ *   and ly=64 is the "bottom" tip.
+ *
+ * So moving up the stairs (towards the next higher tile) corresponds to
+ * decreasing ly → step increases towards 1.
+ */
+export function heightAtWorld(wx: number, wy: number, tileWorld: number): number {
+    const { tx, ty, lx: _lx, ly } = worldToTileTopLocalPx(wx, wy, tileWorld);
+    const t = getTile(tx, ty);
+    const baseH = (t.h | 0);
+
+    if (t.kind !== "STAIRS") return baseH;
+
+    // STAIRS: interpolate within this tile
+    // ly=64 (bottom) => step=0
+    // ly=0  (top)    => step=1
+    const step = clamp01(1 - (ly / 64));
+    return baseH + step;
+}
+
 /**
  * Convert world coords -> tile coords given world-units-per-tile.
  * Uses the same convention as the renderer.
@@ -163,6 +199,7 @@ export function worldToTile(wx: number, wy: number, tileWorld: number) {
     const ty = Math.floor(wy / tileWorld);
     return { tx, ty };
 }
+
 
 /**
  * Convert world position -> tile coords + tile-local top-face pixels (lx,ly).
