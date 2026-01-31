@@ -118,6 +118,8 @@ export type World = {
   prjKind: number[];
   prx: number[];
   pry: number[];
+  // Milestone C: projectile height (continuous Z)
+  prz: number[];
   prvx: number[];
   prvy: number[];
   prDamage: number[];
@@ -331,6 +333,8 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     prx: [],
     pry: [],
     prvx: [],
+    // Milestone C
+    prz: [],
     prvy: [],
     prDamage: [],
     prR: [],
