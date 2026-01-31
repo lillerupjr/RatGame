@@ -352,6 +352,19 @@ export async function renderSystem(
 
         dy -= elev;
         ctx.drawImage(tileRec.img, dx, dy, iw, ih);
+
+// Collect stair occluders for a second pass (drawn AFTER entities/projectiles)
+        if (useStairs) {
+          const occ = ((w as any)._stairOccluders ??= []);
+          occ.push({
+            img: tileRec.img,
+            dx,
+            dy,
+            iw,
+            ih,
+          });
+        }
+
       }
     }
   }
@@ -418,7 +431,9 @@ export async function renderSystem(
   type GroundItem =
       | { kind: "pickup"; i: number; depth: number }
       | { kind: "enemy"; i: number; depth: number }
+      | { kind: "projectile"; i: number; depth: number; zLift: number }
       | { kind: "player"; depth: number };
+
 
   const grounded: GroundItem[] = [];
 
@@ -430,6 +445,18 @@ export async function renderSystem(
 
   // Enemy Z buffer (written by movementSystem; optional)
   const ez = (w as any).ez as number[] | undefined;
+// Projectiles (depth-sorted + zLift)
+  for (let i = 0; i < w.pAlive.length; i++) {
+    if (!w.pAlive[i]) continue;
+
+    const pz = (w.prZ?.[i] ?? tileHAtWorld(w.prx[i], w.pry[i])) || 0;
+    const zLift = pz * ELEV_PX;
+
+    // Use huge Z multiplier so any height difference wins over XY depth.
+    const depth = depthKey(w.prx[i], w.pry[i]) + pz * 1e9;
+
+    grounded.push({ kind: "projectile", i, depth, zLift });
+  }
 
   // Enemies (include Z in depth so upper floors layer correctly)
   for (let i = 0; i < w.eAlive.length; i++) {
@@ -597,7 +624,54 @@ export async function renderSystem(
       }
 
       continue;
+    } if (it.kind === "projectile") {
+      const i = it.i;
+
+      const p = toScreen(w.prx[i], w.pry[i]);
+      const spr = getProjectileSpriteByKind(w.prjKind[i]);
+
+      // apply lift visually
+      const px = p.x;
+      const py = p.y - it.zLift;
+
+      const wdx = w.prDirX[i] ?? 1;
+      const wdy = w.prDirY[i] ?? 0;
+      const d = worldDeltaToScreen(wdx, wdy);
+      const ang = Math.atan2(d.dy, d.dx);
+
+      if (spr?.ready && spr.img && spr.img.width > 0 && spr.img.height > 0) {
+        const areaMult = Math.max(0.6, Math.min(2.5, (w.prR[i] ?? 4) / 4));
+        const target = PROJECTILE_BASE_DRAW_PX * areaMult * getProjectileDrawScale(w.prjKind[i]);
+
+        const iw = spr.img.width;
+        const ih = spr.img.height;
+
+        const scale = target / Math.max(iw, ih);
+        const dw = iw * scale;
+        const dh = ih * scale;
+
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(ang);
+        ctx.drawImage(spr.img, -dw * 0.5, -dh * 0.5, dw, dh);
+        ctx.restore();
+      } else {
+        const src = registry.projectileSourceFromKind(w.prjKind[i]);
+        ctx.fillStyle =
+            src === "KNIFE" ? "#fff" :
+                src === "PISTOL" ? "#9f9" :
+                    src === "KNUCKLES" ? "#fc6" :
+                        src === "SYRINGE" ? "#7df" :
+                            src === "BOUNCER" ? "#fdc" : "#bbb";
+
+        ctx.beginPath();
+        ctx.ellipse(px, py, (w.prR[i] ?? 4) * ISO_X, (w.prR[i] ?? 4) * ISO_Y, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      continue;
     }
+
 
     // Player (8-dir sprite; fallback ellipse)
     {
@@ -626,53 +700,33 @@ export async function renderSystem(
     }
   }
 
-  // Projectiles (sprites; fallback to ellipses)
-  for (let i = 0; i < w.pAlive.length; i++) {
-    if (!w.pAlive[i]) continue;
+// -------------------------------------------------------
+// Milestone C: Stairs occlusion pass
+// Draw ONLY the bottom apron of stair tiles on top,
+// so they occlude bullets/enemies behind the stair face.
+// -------------------------------------------------------
+  {
+    const occ = ((w as any)._stairOccluders as any[] | undefined) ?? [];
+    if (occ.length > 0) {
+      // How much of the tile image is "vertical face / apron"
+      // Tune this if needed (common values: 24..48)
+      const APRON_PX = 0;
 
-    const p = toScreen(w.prx[i], w.pry[i]);
-    const spr = getProjectileSpriteByKind(w.prjKind[i]);
+      for (const o of occ) {
+        const sh = Math.min(APRON_PX, o.ih);
+        const sy = o.ih - sh;
 
-    const wdx = w.prDirX[i] ?? 1;
-    const wdy = w.prDirY[i] ?? 0;
-    const d = worldDeltaToScreen(wdx, wdy);
-    const ang = Math.atan2(d.dy, d.dx);
-
-    if (spr?.ready && spr.img && spr.img.width > 0 && spr.img.height > 0) {
-      const areaMult = Math.max(0.6, Math.min(2.5, (w.prR[i] ?? 4) / 4));
-      const target = PROJECTILE_BASE_DRAW_PX * areaMult * getProjectileDrawScale(w.prjKind[i]);
-
-      const iw = spr.img.width;
-      const ih = spr.img.height;
-
-      const scale = target / Math.max(iw, ih);
-      const dw = iw * scale;
-      const dh = ih * scale;
-
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.rotate(ang);
-      ctx.drawImage(spr.img, -dw * 0.5, -dh * 0.5, dw, dh);
-      ctx.restore();
-    } else {
-      const src = registry.projectileSourceFromKind(w.prjKind[i]);
-      ctx.fillStyle =
-          src === "KNIFE"
-              ? "#fff"
-              : src === "PISTOL"
-                  ? "#9f9"
-                  : src === "KNUCKLES"
-                      ? "#fc6"
-                      : src === "SYRINGE"
-                          ? "#7df"
-                          : src === "BOUNCER"
-                              ? "#fdc"
-                              : "#bbb";
-
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y, (w.prR[i] ?? 4) * ISO_X, (w.prR[i] ?? 4) * ISO_Y, 0, 0, Math.PI * 2);
-      ctx.fill();
+        // draw bottom slice of the stair tile
+        ctx.drawImage(
+            o.img,
+            0, sy, o.iw, sh,      // source rect (bottom strip)
+            o.dx, o.dy + sy, o.iw, sh // dest rect
+        );
+      }
     }
+
+    // clear for next frame
+    (w as any)._stairOccluders = [];
   }
 
   // FPS
