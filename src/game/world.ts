@@ -228,6 +228,13 @@ export type World = {
   floatTextTtl: number[];
   floatTextIsCrit: boolean[];
 
+  // DPS Tracking
+  dpsEnabled: boolean;        // Toggle for DPS meter display
+  dpsTotalDamage: number;     // Total damage dealt
+  dpsStartTime: number;       // When DPS tracking started
+  dpsRecentDamage: number[];  // Damage samples for recent DPS (last few seconds)
+  dpsRecentTimes: number[];   // Timestamps for recent samples
+
   // Spatial hash for efficient collision detection
   enemySpatialHash: SpatialHash;
 };
@@ -413,8 +420,15 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     floatTextTtl: [],
     floatTextIsCrit: [],
 
-    // Spatial hash for efficient collision detection (cell size ~2x max enemy radius)
-    enemySpatialHash: createSpatialHash(80),
+    // DPS Tracking (set dpsEnabled to false to disable)
+    dpsEnabled: true,      // Toggle this to show/hide DPS meter
+    dpsTotalDamage: 0,
+    dpsStartTime: 0,
+    dpsRecentDamage: [],
+    dpsRecentTimes: [],
+
+    // Spatial hash for efficient collision detection
+    enemySpatialHash: createSpatialHash(128),
   };
 
   // Ensure derived stats consistent with items (even if empty).

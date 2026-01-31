@@ -17,6 +17,10 @@ export type EnemyDef = {
     speed: number;
     damage: number;
 
+    // Health scaling weight per level (default: 1.0 = normal scaling)
+    // Higher = scales more with depth, Lower = scales less
+    hpScaleWeight?: number;
+
     // optional: used later for UI/render variants
     color?: string;
 };
@@ -29,6 +33,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
         radius: 14,
         speed: 90,
         damage: 10,
+        hpScaleWeight: 1.2, // Moderate scaling
         color: "#f66",
     },
     [ENEMY_TYPE.RUNNER]: {
@@ -38,6 +43,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
         radius: 12,
         speed: 130,
         damage: 8,
+        hpScaleWeight: 1.0, // Lightest scaling (still squishy)
         color: "#fb8",
     },
     [ENEMY_TYPE.BRUISER]: {
@@ -47,6 +53,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
         radius: 18,
         speed: 70,
         damage: 16,
+        hpScaleWeight: 1.5, // Heavy scaling (true tank)
         color: "#f8b",
     },
     [ENEMY_TYPE.BOSS]: {
@@ -56,6 +63,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
         radius: 34,
         speed: 55,
         damage: 22,
+        hpScaleWeight: 2.0, // Extreme scaling (endgame challenge)
         color: "#c8f",
     },
 };
