@@ -199,13 +199,13 @@ function worldToTileTopLocalPx(wx: number, wy: number, tileWorld: number) {
 //   BRIDGE_TOP   -> narrow top face (optional/later)
 // ─────────────────────────────────────────────────────────────
 
-export type TileWalkShape = "FULL_TOP" | "TOP_CUT_16" | "BLOCKED" | "BRIDGE_TOP";
+export type TileWalkShape = "FULL_TOP"  | "BLOCKED" | "BRIDGE_TOP";
 
 const TOP_W = 128;
 const TOP_H_FULL = 64;
 
-const TOP_CUT_16_H = TOP_H_FULL - 16; // 48  ✅ (your pasted version had a bug here)
 const BRIDGE_TOP_H = 32; // optional, tune later
+
 
 // ─────────────────────────────────────────────────────────────
 // Anchor offsets (in TOP-LOCAL PIXELS)
@@ -221,7 +221,6 @@ const BRIDGE_TOP_H = 32; // optional, tune later
 // Per-walk-shape default anchors:
 export const WALK_SHAPE_ANCHOR_PX: Record<TileWalkShape, { ox: number; oy: number }> = {
     FULL_TOP: { ox: 0, oy: 0 },
-    TOP_CUT_16: { ox: 0, oy: 0 },
     BRIDGE_TOP: { ox: 0, oy: 0 },
     BLOCKED: { ox: 0, oy: 0 },
 };
@@ -250,8 +249,6 @@ function shapeDims(shape: TileWalkShape): { w: number; h: number } {
     switch (shape) {
         case "FULL_TOP":
             return { w: TOP_W, h: TOP_H_FULL }; // 128x64
-        case "TOP_CUT_16":
-            return { w: TOP_W, h: TOP_CUT_16_H }; // 128x48
         case "BRIDGE_TOP":
             return { w: TOP_W, h: BRIDGE_TOP_H }; // 128x32
         case "BLOCKED":
@@ -265,9 +262,8 @@ export function tileWalkShape(tx: number, ty: number): TileWalkShape {
     switch (t.kind) {
         case "VOID":
             return "BLOCKED";
-        case "STAIRS":
-            return "TOP_CUT_16";
         case "FLOOR":
+            return "FULL_TOP"
         default:
             return "FULL_TOP";
     }

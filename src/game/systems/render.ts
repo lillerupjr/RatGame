@@ -111,6 +111,11 @@ export async function renderSystem(
   // Anchor: tile sprites are usually taller than their footprint.
   const ANCHOR_Y = KENNEY_TILE_ANCHOR_Y;
 
+  // Milestone B: Kenney tile art has a 32px "vertical apron".
+  // We keep the LOGIC diamond perfectly tiling (no walk-shape offsets),
+  // and instead shift the ART down so the visible top face matches the logical top.
+  const TILE_ART_Y_SHIFT_PX = 18;
+
   // Visual height step in screen pixels per tile-level (tune later).
   // This is purely visual right now; gameplay height will come later.
   const ELEV_PX = 16;
@@ -298,7 +303,8 @@ export async function renderSystem(
 
         const anchorY = useStairs ? stairsAnchorY : ANCHOR_Y;
         let dy = p.y + camY - ih * anchorY;
-
+// Apply global art shift so top-face aligns with logic (keeps tile-to-tile crossing intact)
+        dy += TILE_ART_Y_SHIFT_PX;
         // Fine tune after anchoring (stairs only)
         if (useStairs) dy += STAIRS_DY_PX;
 
@@ -574,8 +580,8 @@ export async function renderSystem(
         const sw = img.width * PLAYER_SPRITE_SCALE;
         const sh = img.height * PLAYER_SPRITE_SCALE;
 
-        const x = pp.x - sw * 0.5;
-        const y = pp.y - sh * 0.5;
+        const x = (pp.x - sw * 0.5) - 0;
+        const y = (pp.y - sh * 0.5) - 32;
 
         ctx.drawImage(img, x, y, sw, sh);
       } else {
