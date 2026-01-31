@@ -6,6 +6,26 @@ const canvas = document.getElementById("c") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d");
 if (!ctx) throw new Error("Canvas 2D context not available");
 
+// Welcome screen
+const welcomeScreen = document.getElementById("welcomeScreen") as HTMLDivElement;
+const continueBtn = document.getElementById("continueBtn") as HTMLButtonElement;
+
+// Main menu
+const mainMenuEl = document.getElementById("mainMenu") as HTMLDivElement;
+const startRunBtn = document.getElementById("startRunBtn") as HTMLButtonElement;
+const innkeeperBtn = document.getElementById("innkeeperBtn") as HTMLButtonElement;
+const settingsBtn = document.getElementById("settingsBtn") as HTMLButtonElement;
+const likeSubBtn = document.getElementById("likeSubBtn") as HTMLButtonElement;
+
+// Innkeeper menu
+const innkeeperMenuEl = document.getElementById("innkeeperMenu") as HTMLDivElement;
+const innkeeperBackBtn = document.getElementById("innkeeperBackBtn") as HTMLButtonElement;
+
+// Settings menu
+const settingsMenuEl = document.getElementById("settingsMenu") as HTMLDivElement;
+const settingsBackBtn = document.getElementById("settingsBackBtn") as HTMLButtonElement;
+
+// Weapon selection menu
 const menuEl = document.getElementById("menu") as HTMLDivElement;
 const startBtn = document.getElementById("startBtn") as HTMLButtonElement;
 const hudEl = document.getElementById("hud") as HTMLDivElement;
@@ -149,6 +169,48 @@ function buildWeaponPicker() {
 }
 
 buildWeaponPicker();
+
+// ---- Menu Navigation ----
+// Welcome screen → Main menu
+continueBtn.addEventListener("click", () => {
+  welcomeScreen.hidden = true;
+  mainMenuEl.hidden = false;
+});
+
+// Main menu → Weapon selection
+startRunBtn.addEventListener("click", () => {
+  mainMenuEl.hidden = true;
+  menuEl.hidden = false;
+});
+
+// Main menu → Innkeeper
+innkeeperBtn.addEventListener("click", () => {
+  mainMenuEl.hidden = true;
+  innkeeperMenuEl.hidden = false;
+});
+
+// Innkeeper → Main menu
+innkeeperBackBtn.addEventListener("click", () => {
+  innkeeperMenuEl.hidden = true;
+  mainMenuEl.hidden = false;
+});
+
+// Main menu → Settings
+settingsBtn.addEventListener("click", () => {
+  mainMenuEl.hidden = true;
+  settingsMenuEl.hidden = false;
+});
+
+// Settings → Main menu
+settingsBackBtn.addEventListener("click", () => {
+  settingsMenuEl.hidden = true;
+  mainMenuEl.hidden = false;
+});
+
+// Like & Subscribe button
+likeSubBtn.addEventListener("click", () => {
+  window.open("https://www.youtube.com/@YourChannel", "_blank");
+});
 
 // ---- Game ----
 const game = createGame({
