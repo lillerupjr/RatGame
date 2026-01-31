@@ -54,10 +54,17 @@ export type World = {
   // Player
   px: number;
   py: number;
+  // Player elevation in "height levels" (0/1/2...). For now this is map-driven.
+  pz: number;
+
   pvx: number;
   pvy: number;
   // Player collision radius (shared by render/collisions/zones)
   playerR: number;
+
+  // Active floor height level (only this height is rendered/interactive; stairs are a special case)
+  activeFloorH: number;
+
   // Base stats (never modified directly by upgrades)
   baseMoveSpeed: number;
   basePickupRadius: number;
@@ -260,11 +267,17 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
 
     px: 0,
     py: 0,
+    // map-driven elevation (Milestone B)
+    pz: 0,
+
     pvx: 0,
     pvy: 0,
     playerR: 14,
 
-    baseMoveSpeed: 2000,
+    // map-driven "active floor" (Milestone B)
+    activeFloorH: 0,
+
+    baseMoveSpeed: 200,
     basePickupRadius: 70,
 
     // derived
