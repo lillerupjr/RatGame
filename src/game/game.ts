@@ -175,6 +175,8 @@ export function createGame(args: CreateGameArgs) {
     w.prjKind = [];
     w.prx = [];
     w.pry = [];
+    // Milestone C
+    w.prz = [];
     w.prvx = [];
     w.prvy = [];
     w.prDamage = [];

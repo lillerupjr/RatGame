@@ -90,12 +90,20 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
 
     const i = w.pAlive.length;
 
+    // Milestone C: flat-Z projectiles (no gravity yet)
+    const HIT_MUZZLE_Z = 0.35; // tune later if needed
+    const shooterZ = (w as any).pz ?? 0;
+
     w.pAlive.push(true);
     w.prjKind.push(a.kind);
     (w as any)._lastFireProjKind = a.kind;
     w.prx.push(a.x);
     w.pry.push(a.y);
-    w.prvx.push(vx);
+
+    // Milestone C: projectile height
+    w.prz.push(shooterZ + HIT_MUZZLE_Z);
+
+    w.prvx.push(dx * a.speed);
     w.prvy.push(vy);
     w.prDamage.push(a.damage);
     w.prR.push(a.radius);
