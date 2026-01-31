@@ -99,6 +99,10 @@ export function createGame(args: CreateGameArgs) {
   let world: World = createWorld({ seed: 1337, stage: cloneStage("DOCKS") });
   setMusicStage("DOCKS");
 
+
+  // DEBUG: show logical walk-mask overlay (render.ts)
+  (world as any).debugWalkMask = true;
+
   preloadBackgrounds();
   preloadPlayerSprites();
   preloadProjectileSprites();
@@ -318,6 +322,9 @@ export function createGame(args: CreateGameArgs) {
       seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0,
       stage: cloneStage("DOCKS"),
     });
+
+    // DEBUG: show logical walk-mask overlay (render.ts)
+    (world as any).debugWalkMask = true;
     currentChoices = [];
     hideLevelUp();
   }

@@ -233,6 +233,7 @@ export type World = {
 };
 
 export function createWorld(args: { seed: number; stage: StageDef }): World {
+
   const w: World = {
     events: [],
     state: "MENU",
