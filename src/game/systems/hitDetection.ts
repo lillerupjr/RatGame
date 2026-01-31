@@ -32,7 +32,7 @@ export function isEnemyHit(
   const ezMin = ezFeet;
   const ezMax = ezFeet + HIT_HEIGHT_Z;
 
-  const pz = (w as any).prz?.[p] ?? (w as any).pz ?? 0;
+  const pz = (w as any).prZ?.[p] ?? (w as any).pz ?? 0;
 
   // vertical overlap test (symmetric)
   const zHit = pz >= (ezMin - PROJECTILE_Z_RADIUS) && pz <= (ezMax + PROJECTILE_Z_RADIUS);
@@ -102,6 +102,31 @@ export function isPlayerHit(w: World, e: number, playerR: number): boolean {
   const dx = w.ex[e] - w.px;
   const dy = w.ey[e] - w.py;
   const rr = w.eR[e] + playerR;
+  return dx * dx + dy * dy <= rr * rr;
+}
+
+/**
+ * Projectile -> Player hit test (height-aware).
+ * Uses player's vertical range and projectile's Z "thickness".
+ */
+export function isPlayerProjectileHit(w: World, p: number, playerR: number): boolean {
+  const PLAYER_HIT_HEIGHT_Z = 0.9;
+  const PROJECTILE_Z_RADIUS = 0.25;
+
+  const pzFeet = (w as any).pz ?? 0;
+  const pzMin = pzFeet;
+  const pzMax = pzFeet + PLAYER_HIT_HEIGHT_Z;
+
+  const projZ = (w as any).prZ?.[p] ?? pzFeet;
+
+  // symmetric overlap: projectile z within player's range (with thickness)
+  const zHit = projZ >= (pzMin - PROJECTILE_Z_RADIUS) && projZ <= (pzMax + PROJECTILE_Z_RADIUS);
+  if (!zHit) return false;
+
+  const dx = (w as any).prx[p] - (w as any).px;
+  const dy = (w as any).pry[p] - (w as any).py;
+  const rr = ((w as any).prR[p] ?? 0) + playerR;
+
   return dx * dx + dy * dy <= rr * rr;
 }
 

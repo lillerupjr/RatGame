@@ -65,8 +65,13 @@ export type SpawnProjectileArgs = {
 
     // NEW: explosion radius on arrival
     explodeRadius?: number;
-};
 
+    // NEW (Milestone C): can this projectile damage the player?
+    hitsPlayer?: boolean;
+
+    // NEW (Milestone C): optional explicit projectile Z (otherwise derived from shooter)
+    z?: number;
+};
 
 
 
@@ -93,27 +98,34 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     // Milestone C: flat-Z projectiles (no gravity yet)
     const HIT_MUZZLE_Z = 0.35; // tune later if needed
     const shooterZ = (w as any).pz ?? 0;
+    const projZ = Number.isFinite(a.z as any) ? (a.z as number) : (shooterZ + HIT_MUZZLE_Z);
 
     w.pAlive.push(true);
     w.prjKind.push(a.kind);
     (w as any)._lastFireProjKind = a.kind;
+
     w.prx.push(a.x);
     w.pry.push(a.y);
 
-    // Milestone C: projectile height
-    w.prz.push(shooterZ + HIT_MUZZLE_Z);
+    // Milestone C: projectile height (keep index-aligned)
+    w.prZ.push(projZ);
 
-    w.prvx.push(dx * a.speed);
+    // Milestone C: projectile can-hit-player flag (keep index-aligned)
+    w.prHitsPlayer.push(!!a.hitsPlayer);
+
+    // velocity
+    w.prvx.push(vx);
     w.prvy.push(vy);
+
     w.prDamage.push(a.damage);
     w.prR.push(a.radius);
     w.prPierce.push(a.pierce);
 
-// Bounce counter (index-aligned with all other projectile arrays)
+    // Bounce counter (index-aligned with all other projectile arrays)
     w.prBouncesLeft.push(Number.isFinite(a.bounces as any) ? (a.bounces as number) : -1);
     w.prWallBounce.push(!!a.wallBounce);
 
-// NEW: no-collide flag
+    // no-collide flag
     w.prNoCollide.push(!!a.noCollide);
 
     w.prTtl.push(a.ttl);
@@ -122,12 +134,16 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     w.prStartY.push(a.y);
     w.prMaxDist.push(a.maxDist ?? 0);
 
-// NEW: static target + explosion config
+    // static target + explosion config
     const hasTarget = Number.isFinite(a.targetX as any) && Number.isFinite(a.targetY as any);
     w.prHasTarget.push(!!hasTarget);
     w.prTargetX.push(hasTarget ? (a.targetX as number) : 0);
     w.prTargetY.push(hasTarget ? (a.targetY as number) : 0);
+
+    // NOTE: prExplodeR is already a core array in World; push exactly once.
     w.prExplodeR.push(Math.max(0, a.explodeRadius ?? 0));
+    w.prExplodeDmg.push(0);
+    w.prExplodeTtl.push(0);
 
     w.prIsmelee.push(a.melee ?? false);
     w.prCone.push(a.coneAngle ?? Math.PI / 6);
@@ -145,33 +161,24 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     w.prFission.push(false);
     w.prFissionCd.push(0);
 
+    // poison payload defaults
     w.prPoisonDps.push(0);
     w.prPoisonDur.push(0);
 
+    // last-hit lockouts
     w.prLastHitEnemy.push(-1);
     w.prLastHitCd.push(0);
 
-    // NEW: explode payload defaults (index-aligned)
-    (w as any).prExplodeR?.push(0);
-    (w as any).prExplodeDmg?.push(0);
-    (w as any).prExplodeTtl?.push(0);
-    w.prPoisonDps.push(0);
-    w.prPoisonDur.push(0);
-
-    // NEW: bazooka evolution aftershock payload (index-aligned)
-    (w as any).prAftershockN?.push(0);
-    (w as any).prAftershockDelay?.push(0);
-    (w as any).prAftershockRingR?.push(0);
-    (w as any).prAftershockWaves?.push(0);
-    (w as any).prAftershockRingStep?.push(0);
-
-
-    w.prLastHitEnemy.push(-1);
-    w.prLastHitCd.push(0);
-
+    // bazooka evolution aftershock payload defaults
+    w.prAftershockN.push(0);
+    w.prAftershockDelay.push(0);
+    w.prAftershockRingR.push(0);
+    w.prAftershockWaves.push(0);
+    w.prAftershockRingStep.push(0);
 
     return i;
 }
+
 
 export function spawnSwordProjectile(w: World, args: Omit<SpawnProjectileArgs, "kind">) {
     return spawnProjectile(w, { ...args, kind: PRJ_KIND.SWORD });

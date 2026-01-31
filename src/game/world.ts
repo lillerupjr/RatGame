@@ -1,40 +1,64 @@
 // src/game/world.ts
 import { RNG } from "./util/rng";
-import { StageDef } from "./content/stages";
-import { registry } from "./content/registry";
-import type { GameEvent } from "./events";
-import type { ItemId } from "./content/items";
-import type { WeaponId } from "./content/weapons";
-import type { EnemyType } from "./content/enemies";
-import { recomputeDerivedStats } from "./stats/derivedStats";
 import { createSpatialHash, type SpatialHash } from "./util/spatialHash";
+import type { StageDef } from "./content/stages";
+import type { GameEvent } from "./events";
+import type { WeaponId } from "./content/weapons";
 
-export type GameState = "MENU" | "RUN" | "MAP" | "LEVELUP" | "CHEST" | "LOSE" | "WIN";
+/**
+ * NOTE:
+ * game.ts already uses world.state = "MAP", so GameState MUST include "MAP".
+ */
+export type GameState =
+    | "MENU"
+    | "RUN"
+    | "MAP"
+    | "CHEST"
+    | "LEVELUP"
+    | "PAUSED"
+    | "LOSE"
+    | "WIN";
 
-// Run progression state machine (active only while state === "RUN")
-export type RunState = "FLOOR" | "BOSS" | "TRANSITION" | "GAME_OVER" | "RUN_COMPLETE";
+/**
+ * Run phase inside the RUN game-state.
+ * (game.ts uses these values.)
+ */
+export type RunState = "FLOOR" | "BOSS" | "TRANSITION" | "RUN_COMPLETE"  | "GAME_OVER";
 
-const defaultStarter = ((): WeaponId => {
-  const ids = registry.weaponIds();
-  if (ids.includes("KNIFE" as WeaponId)) return "KNIFE";
-  return ids[0] ?? "KNIFE";
-})();
+export type StageId = "DOCKS" | "SEWERS" | "CHINATOWN";
 
 export type World = {
-  events: GameEvent[];
+  // -------------------------
+  // Core
+  // -------------------------
   state: GameState;
+  runState: RunState;
   rng: RNG;
-  stage: StageDef;
-  floorDuration: number;
 
-  // Route map (Slay-the-Spire style, shown between floors)
-  runMap: any; // typed in game.ts via map module to avoid circular deps here
-  mapCurrentNodeId: string | null;
-  mapPendingNextFloorIndex: number; // which floor index we are selecting for
+  // Event queue (audio, hits, kills, pickups, etc.)
+  events: GameEvent[];
 
-  // Delve system (infinite progression)
-  delveMap: any; // DelveMap type, avoiding circular deps
-  delveDepth: number;  // current depth (1 = starting depth)
+  // -------------------------
+  // Stage / floor
+  // -------------------------
+  stage: StageDef | null;
+  stageId: StageId;
+  stageTime: number;
+
+  // Floor index (0..2) and timers
+  floorIndex: number;
+  floorDuration: number; // seconds until boss for this stage
+  phaseTime: number; // seconds since current phase began
+  transitionTime: number; // seconds remaining in TRANSITION
+
+  // Total run time
+  time: number;
+
+  // -------------------------
+  // Delve / route (kept loose to avoid circular deps)
+  // -------------------------
+  delveMap: any | null;
+  delveDepth: number;
   delveScaling: {
     hpMult: number;
     damageMult: number;
@@ -42,30 +66,30 @@ export type World = {
     xpMult: number;
   };
 
-  // Run structure
-  runState: RunState;
-  floorIndex: number;      // 0..2 (3 floors) - now also used as depth indicator
-  phaseTime: number;       // seconds since current phase started (FLOOR/BOSS/TRANSITION)
-  transitionTime: number;  // seconds remaining in TRANSITION
+  // Legacy map compatibility (if you still use it)
+  runMap?: any;
+  mapCurrentNodeId?: string | null;
+  mapPendingNextFloorIndex?: number;
 
-  time: number;
-  kills: number;
-
+  // -------------------------
   // Player
+  // -------------------------
   px: number;
   py: number;
-  // Player elevation in "height levels" (0/1/2...). For now this is map-driven.
+
+  // Continuous elevation (Milestone B/C). Typically map-driven.
   pz: number;
 
   pvx: number;
   pvy: number;
-  // Player collision radius (shared by render/collisions/zones)
+
+  // Collision radius
   playerR: number;
 
-  // Active floor height level (only this height is rendered/interactive; stairs are a special case)
+  // Active integer floor height (used by zones / collisions gating)
   activeFloorH: number;
 
-  // Base stats (never modified directly by upgrades)
+  // Base stats
   baseMoveSpeed: number;
   basePickupRadius: number;
 
@@ -73,31 +97,67 @@ export type World = {
   pSpeed: number;
   pickupRadius: number;
 
+  // Player combat stats
   playerHp: number;
   playerHpMax: number;
 
-  // Items (max 4)
-  items: { id: ItemId; level: number }[];
+  dmgMult: number;
+  fireRateMult: number;
+  areaMult: number;
+  durationMult: number;
 
-  // Entities (arrays for ECS-lite)
+  // Crit stats
+  baseCritChance: number;
+  critChanceBonus: number;
+  critMultiplier: number;
+
+  // Run stats
+  kills: number;
+
+  // -------------------------
+  // Weapons + items
+  // -------------------------
+  weapons: { id: WeaponId; level: number; cdLeft: number }[];
+  items: { id: any; level: number }[];
+
+  // -------------------------
+  // XP / Level
+  // -------------------------
+  level: number;
+  xp: number;
+  xpToNext: number;
+  pendingLevelUps: number;
+
+  // Aim cache (used for melee cone / fallback aim)
+  lastAimX: number;
+  lastAimY: number;
+
+  // -------------------------
+  // Enemies
+  // -------------------------
   eAlive: boolean[];
-  eType: EnemyType[];
+  eType: number[];
   ex: number[];
   ey: number[];
   evx: number[];
   evy: number[];
   eHp: number[];
-  eHpMax: number[]; // NEW
+  eHpMax: number[];
   eR: number[];
   eSpeed: number[];
   eDamage: number[];
 
-  // NEW: Poison status
-  ePoisonT: number[];    // seconds remaining
-  ePoisonDps: number[];  // damage per second
+  // Poison (enemy status)
+  ePoisonT: number[];
+  ePoisonDps: number[];
   ePoisonedOnDeath: boolean[];
 
-  // Zones (auras / ground effects)
+  // Enemy spatial hash (perf)
+  enemySpatialHash: SpatialHash;
+
+  // -------------------------
+  // Zones
+  // -------------------------
   zAlive: boolean[];
   zKind: number[];
   zx: number[];
@@ -108,18 +168,22 @@ export type World = {
   zTickLeft: number[];
   zTtl: number[];
   zFollowPlayer: boolean[];
-
-  // NEW: zones can optionally damage the player (boss hazards)
   zDamagePlayer: number[];
 
+  // -------------------------
   // Projectiles
+  // -------------------------
   pAlive: boolean[];
   pKind: number; // reserved
   prjKind: number[];
   prx: number[];
   pry: number[];
-  // Milestone C: projectile height (continuous Z)
-  prz: number[];
+
+  // Milestone C: projectile height (continuous)
+  prZ: number[];
+  // Milestone C: can this projectile hit the player?
+  prHitsPlayer: boolean[];
+
   prvx: number[];
   prvy: number[];
   prDamage: number[];
@@ -132,97 +196,75 @@ export type World = {
   prDirY: number[];
   prTtl: number[];
   prBouncesLeft: number[];
-  // If true, projectile also bounces off the screen edges (camera view bounds).
+
+  // Bounces off camera bounds
   prWallBounce: boolean[];
 
-  // NEW: projectiles that should not collide with enemies (Bazooka rocket)
+  // Special: skip enemy collision (e.g., bazooka rocket that explodes via target)
   prNoCollide: boolean[];
 
-  // NEW: static target + explode-on-arrival
+  // Static target / explode-on-arrival
   prHasTarget: boolean[];
   prTargetX: number[];
   prTargetY: number[];
 
   prStartX: number[];
   prStartY: number[];
-  prMaxDist: number[]; // 0 = unlimited
-  prLastHitEnemy: number[]; // last enemy index hit
-  prLastHitCd: number[];    // seconds remaining until it can hit that same enemy again
+  prMaxDist: number[];
 
+  // Anti-multi-hit guard
+  prLastHitEnemy: number[];
+  prLastHitCd: number[];
 
-  prPoisonDps: number[];  // NEW
-  prPoisonDur: number[];  // NEW
+  // Poison payload
+  prPoisonDps: number[];
+  prPoisonDur: number[];
 
-  // NEW: Bazooka evolution aftershock payload (index-aligned with projectiles)
-  prAftershockN: number[];       // 0 = none
-  prAftershockDelay: number[];   // seconds
-  prAftershockRingR: number[];   // radius around initial explosion
+  // Bazooka evolution aftershocks
+  prAftershockN: number[];
+  prAftershockDelay: number[];
+  prAftershockRingR: number[];
   prAftershockWaves: number[];
   prAftershockRingStep: number[];
 
+  // Explosion payload
+  prExplodeR: number[];
+  prExplodeDmg: number[];
+  prExplodeTtl: number[];
 
-  // NEW: explosion payload (bazooka etc.)
-  prExplodeR: number[];     // 0 = no explosion
-  prExplodeDmg: number[];   // damage per tick (we'll tick once instantly)
-  prExplodeTtl: number[];   // visual TTL for the explosion ring
-
-
-  // NEW: Orbital projectiles (Knuckle Ring)
+  // Orbitals
   prIsOrbital: boolean[];
   prOrbAngle: number[];
   prOrbBaseRadius: number[];
   prOrbBaseAngVel: number[];
 
-  // NEW: Nuclear Fission (projectile-projectile collision spawns new projectiles)
-  prFission: boolean[];     // true = this projectile can fission
-  prFissionCd: number[];    // cooldown before it can fission again (prevents infinite spawns)
+  // Fission (projectile-projectile)
+  prFission: boolean[];
+  prFissionCd: number[];
 
-  // Pickups (XP gems + drops)
-  // xKind: 1 = XP, 2 = CHEST
+  // -------------------------
+  // Pickups
+  // -------------------------
   xAlive: boolean[];
   xKind: number[];
   xx: number[];
   xy: number[];
-  xValue: number[];     // XP amount for XP gems, 0 for chests
-  xDropId: string[];    // "" for XP gems, "BOSS_CHEST" for chests
+  xValue: number[];
+  xDropId: string[];
 
-  // Boss reward gating (prevents transition clearing the chest)
+  // Boss reward gating
   bossRewardPending: boolean;
 
-  // Magnet effect (pulls all XP to player, e.g., after boss kill)
+  // Magnet effect (pull XP to player)
   magnetActive: boolean;
-  magnetTimer: number;  // seconds remaining
+  magnetTimer: number;
 
-  // Chest pickup handshake (system -> game.ts)
+  // Chest handshake (system -> game.ts)
   chestOpenRequested: boolean;
 
-  // Progression
-  level: number;
-  xp: number;
-  xpToNext: number;
-  pendingLevelUps: number;
-
-  // Aim (used when no target exists)
-  lastAimX: number;
-  lastAimY: number;
-
-  // Player weapons (max 4)
-  weapons: { id: WeaponId; level: number; cdLeft: number }[];
-
-  // Derived multipliers
-  dmgMult: number;
-  fireRateMult: number;
-
-  // NEW: for orbit weapons/items
-  areaMult: number;
-  durationMult: number;
-
-  // Critical hit stats
-  baseCritChance: number;  // base crit chance (0.25 = 25%)
-  critChanceBonus: number; // bonus crit chance from items
-  critMultiplier: number;  // crit damage multiplier (default 2.0)
-
+  // -------------------------
   // Floating combat text
+  // -------------------------
   floatTextX: number[];
   floatTextY: number[];
   floatTextValue: number[];
@@ -230,39 +272,52 @@ export type World = {
   floatTextTtl: number[];
   floatTextIsCrit: boolean[];
 
-  // DPS Tracking
-  dpsEnabled: boolean;        // Toggle for DPS meter display
-  dpsTotalDamage: number;     // Total damage dealt
-  dpsStartTime: number;       // When DPS tracking started
-  dpsRecentDamage: number[];  // Damage samples for recent DPS (last few seconds)
-  dpsRecentTimes: number[];   // Timestamps for recent samples
-
-  // Spatial hash for efficient collision detection
-  enemySpatialHash: SpatialHash;
+  // -------------------------
+  // DPS tracking (render.ts expects these)
+  // -------------------------
+  dpsEnabled: boolean;
+  dpsSamples: { t: number; dmg: number }[];
+  dpsTotalDamage: number;
+  dpsStartTime: number;
+  dpsRecentDamage: number[];
+  dpsRecentTimes: number[];
 };
 
-export function createWorld(args: { seed: number; stage: StageDef }): World {
+export type CreateWorldArgs = {
+  seed?: number;
+  stage: StageDef;
+};
+
+function cloneStage(stage: StageDef): StageDef {
+  // IMPORTANT: stage spawns are mutated at runtime (t -> Infinity), so clone them.
+  return { ...stage, spawns: stage.spawns.map((s) => ({ ...s })) };
+}
+
+export function createWorld(args: CreateWorldArgs): World {
+  const rng = new RNG((args.seed ?? 1337) >>> 0);
+
+  const stage = cloneStage(args.stage);
 
   const w: World = {
-    events: [],
+    // Core
     state: "MENU",
-    rng: new RNG(args.seed),
-
-    // IMPORTANT: stage spawns are mutated at runtime (t -> Infinity), so clone them.
-    stage: { ...args.stage, spawns: args.stage.spawns.map((s) => ({ ...s })) },
-
     runState: "FLOOR",
+    rng,
+    events: [],
+
+    // Stage / floor
+    stage,
+    stageId: stage.id,
+    stageTime: 0,
+
     floorIndex: 0,
+    floorDuration: stage.duration,
     phaseTime: 0,
     transitionTime: 0,
-    floorDuration: 0,
 
-    // Map / route
-    runMap: null,
-    mapCurrentNodeId: null,
-    mapPendingNextFloorIndex: 0,
+    time: 0,
 
-    // Delve system
+    // Delve / route
     delveMap: null,
     delveDepth: 1,
     delveScaling: {
@@ -272,33 +327,51 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
       xpMult: 1,
     },
 
-    time: 0,
-    kills: 0,
-
+    // Player
     px: 0,
     py: 0,
-    // map-driven elevation (Milestone B)
     pz: 0,
-
     pvx: 0,
     pvy: 0,
-    playerR: 14,
+    playerR: 18,
 
-    // map-driven "active floor" (Milestone B)
     activeFloorH: 0,
 
-    baseMoveSpeed: 210,
-    basePickupRadius: 70,
+    baseMoveSpeed: 260,
+    basePickupRadius: 90,
 
-    // derived
-    pSpeed: 210,
-    pickupRadius: 70,
+    pSpeed: 260,
+    pickupRadius: 90,
 
     playerHp: 100,
     playerHpMax: 100,
 
+    dmgMult: 1,
+    fireRateMult: 1,
+    areaMult: 1,
+    durationMult: 1,
+
+    baseCritChance: 0.25,
+    critChanceBonus: 0,
+    critMultiplier: 2.0,
+
+    kills: 0,
+
+    // Weapons + items
+    weapons: [],
     items: [],
 
+    // XP / Level
+    level: 1,
+    xp: 0,
+    xpToNext: 6,
+    pendingLevelUps: 0,
+
+    // Aim
+    lastAimX: 1,
+    lastAimY: 0,
+
+    // Enemies
     eAlive: [],
     eType: [],
     ex: [],
@@ -315,6 +388,9 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     ePoisonDps: [],
     ePoisonedOnDeath: [],
 
+    enemySpatialHash: createSpatialHash(128),
+
+    // Zones
     zAlive: [],
     zKind: [],
     zx: [],
@@ -327,39 +403,37 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     zFollowPlayer: [],
     zDamagePlayer: [],
 
+    // Projectiles
     pAlive: [],
     pKind: 0,
     prjKind: [],
     prx: [],
     pry: [],
+    prZ: [],
+    prHitsPlayer: [],
     prvx: [],
-    // Milestone C
-    prz: [],
     prvy: [],
     prDamage: [],
     prR: [],
-
     prPierce: [],
-    prWallBounce: [],
-
-    // NEW
-    prNoCollide: [],
-    prHasTarget: [],
-    prTargetX: [],
-    prTargetY: [],
-
     prIsmelee: [],
     prCone: [],
     prMeleeRange: [],
-
     prDirX: [],
     prDirY: [],
     prTtl: [],
     prBouncesLeft: [],
+    prWallBounce: [],
+    prNoCollide: [],
+
+    prHasTarget: [],
+    prTargetX: [],
+    prTargetY: [],
 
     prStartX: [],
     prStartY: [],
     prMaxDist: [],
+
     prLastHitEnemy: [],
     prLastHitCd: [],
 
@@ -371,7 +445,6 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     prAftershockRingR: [],
     prAftershockWaves: [],
     prAftershockRingStep: [],
-
 
     prExplodeR: [],
     prExplodeDmg: [],
@@ -385,6 +458,7 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     prFission: [],
     prFissionCd: [],
 
+    // Pickups
     xAlive: [],
     xKind: [],
     xx: [],
@@ -392,29 +466,11 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     xValue: [],
     xDropId: [],
 
+    // Boss / chest / magnet
     bossRewardPending: false,
     magnetActive: false,
     magnetTimer: 0,
     chestOpenRequested: false,
-    level: 1,
-    xp: 0,
-    xpToNext: 10,
-    pendingLevelUps: 0,
-
-    lastAimX: 1,
-    lastAimY: 0,
-
-    weapons: [{ id: defaultStarter, level: 1, cdLeft: 0 }],
-
-    dmgMult: 1,
-    fireRateMult: 1,
-    areaMult: 1,
-    durationMult: 1,
-
-    // Critical hit stats
-    baseCritChance: 0.25,  // 25% base crit chance
-    critChanceBonus: 0,
-    critMultiplier: 2.0,
 
     // Floating combat text
     floatTextX: [],
@@ -424,27 +480,22 @@ export function createWorld(args: { seed: number; stage: StageDef }): World {
     floatTextTtl: [],
     floatTextIsCrit: [],
 
-    // DPS Tracking (set dpsEnabled to false to disable)
-    dpsEnabled: true,      // Toggle this to show/hide DPS meter
+    // DPS tracking
+    dpsEnabled: true,
+    dpsSamples: [],
     dpsTotalDamage: 0,
     dpsStartTime: 0,
     dpsRecentDamage: [],
     dpsRecentTimes: [],
-
-    // Spatial hash for efficient collision detection
-    enemySpatialHash: createSpatialHash(128),
   };
-
-  // Ensure derived stats consistent with items (even if empty).
-  recomputeDerivedStats(w);
 
   return w;
 }
 
-export function emitEvent(w: World, e: GameEvent) {
-  w.events.push(e);
-}
-
 export function clearEvents(w: World) {
   w.events.length = 0;
+}
+
+export function emitEvent(w: World, ev: GameEvent) {
+  w.events.push(ev);
 }

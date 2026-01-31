@@ -1,6 +1,6 @@
 // src/game/systems/collisions.ts
 import { World, emitEvent } from "../world";
-import { isEnemyHit, isPlayerHit } from "./hitDetection";
+import {isEnemyHit, isPlayerHit, isPlayerProjectileHit} from "./hitDetection";
 import { registry } from "../content/registry";
 import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
 import { clearSpatialHash, insertEntity, queryCircle } from "../util/spatialHash";
@@ -318,14 +318,47 @@ export function collisionsSystem(w: World, dt: number) {
   // Simple "i-frames" cooldown so player doesn't get deleted in 1 frame.
   // Stored on world as a private field to avoid touching the World type.
   const IFRAME_SECS = 0.6;
-
   let hitCd = (w as any)._playerHitCd ?? 0;
   hitCd = Math.max(0, hitCd - dt);
 
+  // -------------------------
+  // Projectiles -> Player (height-aware, gated by prHitsPlayer)
+  // Shares the same i-frame window as contact hits.
+  // -------------------------
+  if (hitCd <= 0) {
+    for (let p = 0; p < w.pAlive.length; p++) {
+      if (!w.pAlive[p]) continue;
+
+      // only enemy/boss projectiles should set this
+      if (!w.prHitsPlayer?.[p]) continue;
+
+      if (!isPlayerProjectileHit(w, p, PLAYER_R)) continue;
+
+      const dmg = w.prDamage[p] || 1;
+      w.playerHp -= dmg;
+
+      emitEvent(w, {
+        type: "PLAYER_HIT",
+        damage: dmg,
+        x: w.px,
+        y: w.py,
+      });
+
+      // usually enemy bullets should be consumed on hit
+      w.pAlive[p] = false;
+
+      hitCd = IFRAME_SECS;
+      break;
+    }
+  }
+
+  // -------------------------
+  // Player vs Enemies (using spatial hash)
+  // -------------------------
   if (hitCd <= 0) {
     // Query enemies near the player using spatial hash
     const nearbyToPlayer = queryCircle(hash, w.px, w.py, PLAYER_R + 50); // 50 = generous max enemy radius
-    
+
     for (let i = 0; i < nearbyToPlayer.length; i++) {
       const e = nearbyToPlayer[i];
       if (!w.eAlive[e]) continue;
@@ -366,7 +399,7 @@ export function collisionsSystem(w: World, dt: number) {
       }
 
       hitCd = IFRAME_SECS;
-      break; // only one contact hit per i-frame window
+      break; // only one hit per i-frame window
     }
   }
 
