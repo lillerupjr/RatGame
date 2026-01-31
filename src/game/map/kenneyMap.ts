@@ -273,18 +273,89 @@ export function tileWalkShape(tx: number, ty: number): TileWalkShape {
  * True if (wx, wy) is walkable within the tile's top face shape.
  * This is the core Milestone B logic gate (no sprite sampling).
  */
-export function isWalkableWorld(wx: number, wy: number, tileWorld: number): boolean {
+// ─────────────────────────────────────────────────────────────
+// Milestone B Map API
+// - heightAt(wx,wy): authoritative "floor height" at world point
+// - walkInfo(wx,wy): rich walkability info for movement, AI, etc.
+// - isWalkableWorld: legacy wrapper kept for compatibility
+// ─────────────────────────────────────────────────────────────
+
+export type WalkInfo = {
+    // World → tile
+    wx: number;
+    wy: number;
+    tileWorld: number;
+    tx: number;
+    ty: number;
+
+    // Position inside the tile's "top-face local px" space
+    // lx: 0..128, ly: 0..64 (for classic 2:1 iso top box)
+    lx: number;
+    ly: number;
+
+    // Tile definition + derived fields
+    kind: IsoTileKind;
+    shape: TileWalkShape;
+
+    // Authoritative height level at this location
+    // - stairs => t.h (or 0)
+    // - normal => tileHeight(tx,ty)
+    h: number;
+
+    // Walk decision
+    blocked: boolean;   // true if shape is BLOCKED or tile is VOID
+    inside: boolean;    // true if point lies inside the top-face diamond for this shape
+    walkable: boolean;  // final decision: !blocked && inside
+
+    // Debug helper (why it failed)
+    reason?: "BLOCKED" | "OUTSIDE";
+};
+
+/**
+ * Authoritative height at world point.
+ * NOTE: This returns the tile's height level even if (wx,wy) is outside the walkable top-face diamond.
+ * Movement/AI should usually use walkInfo(...).walkable to decide if it can stand there.
+ */
+export function heightAt(wx: number, wy: number, tileWorld: number): number {
+    const tx = Math.floor(wx / tileWorld);
+    const ty = Math.floor(wy / tileWorld);
+    const t = getTile(tx, ty);
+    return t.kind === "STAIRS" ? (t.h ?? 0) : tileHeight(tx, ty);
+}
+
+/**
+ * Rich walkability info for a world point.
+ * This is the new "map-authoritative" query that movement, enemies, and projectiles can share.
+ */
+export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
     const { tx, ty, lx, ly } = worldToTileTopLocalPx(wx, wy, tileWorld);
 
     const t = getTile(tx, ty);
-    const shape = tileWalkShape(tx, ty);
-    if (shape === "BLOCKED") return false;
+    const kind = t.kind;
 
-    const { w, h } = shapeDims(shape);
+    const shape = tileWalkShape(tx, ty);
+    const blocked = (shape === "BLOCKED") || (kind === "VOID");
+
+    const h = kind === "STAIRS" ? (t.h ?? 0) : tileHeight(tx, ty);
+
+    if (blocked) {
+        return {
+            wx, wy, tileWorld,
+            tx, ty, lx, ly,
+            kind, shape,
+            h,
+            blocked: true,
+            inside: false,
+            walkable: false,
+            reason: "BLOCKED",
+        };
+    }
+
+    const { w, h: hh } = shapeDims(shape);
 
     // Compose anchors: shape anchor + optional kind anchor
     const aShape = WALK_SHAPE_ANCHOR_PX[shape] ?? { ox: 0, oy: 0 };
-    const aKind = WALK_KIND_ANCHOR_PX[t.kind] ?? { ox: 0, oy: 0 };
+    const aKind = WALK_KIND_ANCHOR_PX[kind] ?? { ox: 0, oy: 0 };
     const ox = aShape.ox + aKind.ox;
     const oy = aShape.oy + aKind.oy;
 
@@ -292,7 +363,27 @@ export function isWalkableWorld(wx: number, wy: number, tileWorld: number): bool
     const ax = lx - ox;
     const ay = ly - oy;
 
-    return diamondContains(ax, ay, w, h);
+    const inside = diamondContains(ax, ay, w, hh);
+    const walkable = inside;
+
+    return {
+        wx, wy, tileWorld,
+        tx, ty, lx, ly,
+        kind, shape,
+        h,
+        blocked: false,
+        inside,
+        walkable,
+        reason: inside ? undefined : "OUTSIDE",
+    };
+}
+
+/**
+ * Legacy API preserved.
+ * Prefer walkInfo(...).walkable in new code.
+ */
+export function isWalkableWorld(wx: number, wy: number, tileWorld: number): boolean {
+    return walkInfo(wx, wy, tileWorld).walkable;
 }
 
 // ─────────────────────────────────────────────────────────────
