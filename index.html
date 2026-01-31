@@ -77,7 +77,34 @@
     /* IMPORTANT: ensure hidden attribute actually hides overlays (CSS IDs otherwise override it) */
     [hidden] { display: none !important; }
 
-    /* Menu */
+    /* Welcome Screen */
+    #welcomeScreen { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.85); z-index: 5; }
+    #welcomeScreen .panel { width: min(520px, 90vw); padding: 60px 40px; border-radius: 20px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; text-align: center; }
+    #welcomeScreen .welcomeTitle { font-size: 48px; font-weight: 900; margin-bottom: 60px; line-height: 1.2; }
+    #welcomeScreen button { width: 100%; padding: 18px 24px; border-radius: 14px; border: 0; cursor: pointer; font-weight: 900; font-size: 20px; background: rgba(255,255,255,0.20); color: #fff; transition: background 120ms ease, transform 80ms ease; }
+    #welcomeScreen button:hover { background: rgba(255,255,255,0.28); transform: translateY(-2px); }
+
+    /* Main Menu (submenu after welcome) */
+    #mainMenu { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.75); z-index: 4; }
+    #mainMenu .panel { width: min(440px, 88vw); padding: 40px 30px; border-radius: 20px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; text-align: center; }
+    #mainMenu .title { font-size: 32px; font-weight: 900; margin-bottom: 30px; }
+    #mainMenu .menuButtons { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+    #mainMenu .menuButtons button { width: 100%; padding: 16px 20px; border-radius: 14px; border: 0; cursor: pointer; font-weight: 900; font-size: 18px; background: rgba(255,255,255,0.18); color: #fff; transition: background 120ms ease, transform 80ms ease; }
+    #mainMenu .menuButtons button:hover { background: rgba(255,255,255,0.24); transform: translateY(-1px); }
+    #mainMenu .menuButtons button#startRunBtn { background: rgba(255,255,255,0.24); font-size: 20px; }
+    #mainMenu .menuButtons button#startRunBtn:hover { background: rgba(255,255,255,0.30); }
+    #mainMenu .menuFooter { padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.08); }
+    #mainMenu .menuFooter button { padding: 10px 16px; border-radius: 10px; border: 0; cursor: pointer; font-weight: 700; font-size: 14px; background: rgba(255,100,100,0.15); color: #fff; transition: background 120ms ease, transform 80ms ease; }
+    #mainMenu .menuFooter button:hover { background: rgba(255,100,100,0.25); transform: scale(1.05); }
+
+    /* Innkeeper & Settings Menus */
+    #innkeeperMenu, #settingsMenu { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.75); z-index: 4; }
+    #innkeeperMenu .panel, #settingsMenu .panel { width: min(560px, 92vw); padding: 30px; border-radius: 20px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
+    #innkeeperMenu .title, #settingsMenu .title { font-size: 28px; font-weight: 900; margin-bottom: 8px; text-align: center; }
+    #innkeeperMenu .subline, #settingsMenu .subline { opacity: 0.85; margin-bottom: 20px; font-size: 14px; text-align: center; }
+    #innkeeperMenu button, #settingsMenu button { margin-top: 14px; width: 100%; padding: 12px 14px; border-radius: 12px; border: 0; cursor: pointer; font-weight: 800; background: rgba(255,255,255,0.16); color: #fff; }
+
+    /* Weapon Selection Menu */
     #menu { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.55); z-index: 4; }
     #menu .panel { width: min(560px, 92vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
     #menu .title { font-size: 24px; font-weight: 800; margin-bottom: 6px; }
@@ -247,7 +274,50 @@
   </div>
 </div>
 
-<div id="menu">
+<div id="welcomeScreen">
+  <div class="panel">
+    <div class="welcomeTitle">Good Rat - Gone Bad</div>
+    <button id="continueBtn" type="button">Continue</button>
+  </div>
+</div>
+
+<div id="mainMenu" hidden>
+  <div class="panel">
+    <div class="title">Main Menu</div>
+    <div class="menuButtons">
+      <button id="startRunBtn" type="button">Start Run</button>
+      <button id="innkeeperBtn" type="button">Innkeeper</button>
+      <button id="settingsBtn" type="button">Settings</button>
+    </div>
+    <div class="menuFooter">
+      <button id="likeSubBtn" type="button">❤️ Like & Subscribe</button>
+    </div>
+  </div>
+</div>
+
+<div id="innkeeperMenu" hidden>
+  <div class="panel">
+    <div class="title">Innkeeper</div>
+    <div class="subline">Permanent upgrades and unlocks</div>
+    <div style="padding: 20px; text-align: center; opacity: 0.7;">
+      Coming soon...
+    </div>
+    <button id="innkeeperBackBtn" type="button">Back to Menu</button>
+  </div>
+</div>
+
+<div id="settingsMenu" hidden>
+  <div class="panel">
+    <div class="title">Settings</div>
+    <div class="subline">Game configuration</div>
+    <div style="padding: 20px; text-align: center; opacity: 0.7;">
+      Coming soon...
+    </div>
+    <button id="settingsBackBtn" type="button">Back to Menu</button>
+  </div>
+</div>
+
+<div id="menu" hidden>
   <div class="panel">
     <div class="title">Rat Noir Survivors</div>
     <div class="subline" id="menuSubline">Slice v0.1 — Docks (8 min → boss).</div>
