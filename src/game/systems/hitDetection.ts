@@ -79,11 +79,32 @@ export function isEnemyHit(
  * @returns true if enemy overlaps player radius, false otherwise
  */
 export function isPlayerHit(w: World, e: number, playerR: number): boolean {
+  // -----------------------------------------
+  // Milestone C: height-aware contact hits
+  // Player and enemy only collide if their vertical ranges overlap.
+  // -----------------------------------------
+  const PLAYER_HIT_HEIGHT_Z = 0.9;
+  const ENEMY_HIT_HEIGHT_Z = 0.9;
+
+  const pzFeet = (w as any).pz ?? 0;
+  const ezFeet = (w as any).ez?.[e] ?? 0;
+
+  const pzMin = pzFeet;
+  const pzMax = pzFeet + PLAYER_HIT_HEIGHT_Z;
+
+  const ezMin = ezFeet;
+  const ezMax = ezFeet + ENEMY_HIT_HEIGHT_Z;
+
+  const zOverlap = pzMax >= ezMin && ezMax >= pzMin;
+  if (!zOverlap) return false;
+
+  // Existing XY overlap
   const dx = w.ex[e] - w.px;
   const dy = w.ey[e] - w.py;
   const rr = w.eR[e] + playerR;
   return dx * dx + dy * dy <= rr * rr;
 }
+
 
 export function isCircleHit(dx: number, dy: number, rr: number): boolean {
   return dx * dx + dy * dy <= rr * rr;

@@ -1,11 +1,11 @@
 // src/game/systems/hitDetection.test.ts
+// @ts-ignore
 import { describe, it, expect } from "vitest";
 import { isCircleHit, isPlayerHit, isEnemyInCircle } from "./hitDetection";
 import type { World } from "../world";
 
-// Create a minimal mock world for hit detection tests
 function createMockWorld(overrides: Partial<World> = {}): World {
-  return {
+  const w = {
     px: 0,
     py: 0,
     ex: [100],
@@ -19,7 +19,14 @@ function createMockWorld(overrides: Partial<World> = {}): World {
     prR: [5],
     ...overrides,
   } as World;
+
+  // Milestone C: provide Z buffers for contact hit tests
+  (w as any).pz ??= 0;
+  (w as any).ez ??= [0];
+
+  return w;
 }
+
 
 describe("hitDetection", () => {
   describe("isCircleHit", () => {
@@ -65,17 +72,24 @@ describe("hitDetection", () => {
       expect(isPlayerHit(w, 0, 10)).toBe(true);
     });
 
-    it("should not detect collision when enemy is far away", () => {
+    it("should not detect collision when enemy is on different elevation (no Z overlap)", () => {
       const w = createMockWorld({
         px: 0,
         py: 0,
-        ex: [100], // Enemy far away
+        ex: [15],
         ey: [0],
         eR: [10],
       });
 
+      // Same XY overlap would normally be true:
+      // playerR=10, enemyR=10, dist=15 -> overlap in XY.
+      // But different Z should block contact hit.
+      (w as any).pz = 0;
+      (w as any).ez = [10]; // enemy 10 units above
+
       expect(isPlayerHit(w, 0, 10)).toBe(false);
     });
+
 
     it("should work with different enemy indices", () => {
       const w = createMockWorld({
