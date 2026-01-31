@@ -3,8 +3,11 @@
 // World coordinates remain your existing "flat 2D" units.
 // Rendering projects world -> screen using a 45° rotate + vertical squash.
 //
-// Tweak ISO_X / ISO_Y to taste:
-// - ISO_Y = 0.5 gives the classic 2:1 iso feel.
+// With ISO_X=1 and ISO_Y=0.5, one world-tile (tileWorld=64) projects to:
+// - top face width  = 2 * tileWorld * ISO_X  => 128px
+// - top face height = 2 * tileWorld * ISO_Y  => 64px
+//
+// This matches classic 2:1 isometric.
 
 export const ISO_X = 1.0;
 export const ISO_Y = 0.5;
@@ -36,4 +39,14 @@ export function screenToWorld(sx: number, sy: number) {
 // Sort key for grounded sprites (back to front)
 export function depthKey(x: number, y: number) {
     return x + y;
+}
+
+/**
+ * Given a tileWorld size (e.g. 64), return the projected diamond size in pixels.
+ */
+export function isoTileTopSize(tileWorld: number) {
+    return {
+        w: 2 * tileWorld * ISO_X,
+        h: 2 * tileWorld * ISO_Y,
+    };
 }
