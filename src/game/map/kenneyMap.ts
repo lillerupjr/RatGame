@@ -190,6 +190,86 @@ export function heightAtWorld(wx: number, wy: number, tileWorld: number): number
     return baseH + step;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Enemy/AI helper: find a good stairs "magnet" target
+// Used by Option B (“Always converge”).
+// ─────────────────────────────────────────────────────────────
+
+export type StairsTarget = {
+    tx: number;
+    ty: number;
+    h: number;      // integer stair level at that tile
+    wx: number;     // world target (tile center)
+    wy: number;
+};
+
+/**
+ * Find a nearby STAIRS tile to steer toward when you want to change floors.
+ *
+ * Scoring favors:
+ * - closer distance
+ * - stairs whose integer h is close to the caller's current floor
+ * - stairs whose integer h moves you toward the target floor
+ *
+ * Returns a world-space point you can steer toward (tile center).
+ */
+export function findNearestStairsWorld(
+    fromWx: number,
+    fromWy: number,
+    fromFloorH: number,
+    targetFloorH: number,
+    tileWorld: number,
+    radiusTiles = 40
+): StairsTarget | null {
+    const { tx: cx, ty: cy } = worldToTile(fromWx, fromWy, tileWorld);
+
+    let best: StairsTarget | null = null;
+    let bestScore = Infinity;
+
+    for (let ty = cy - radiusTiles; ty <= cy + radiusTiles; ty++) {
+        for (let tx = cx - radiusTiles; tx <= cx + radiusTiles; tx++) {
+            const t = getTile(tx, ty);
+            if (t.kind !== "STAIRS") continue;
+
+            const h = (t.h | 0);
+
+            // Candidate world target (tile center)
+            const wx = (tx + 0.5) * tileWorld;
+            const wy = (ty + 0.5) * tileWorld;
+
+            // Ensure the point is actually inside the walkable top-face
+            const wi = walkInfo(wx, wy, tileWorld);
+            if (!wi.walkable) continue;
+
+            // Distance term
+            const dx = wx - fromWx;
+            const dy = wy - fromWy;
+            const dist2 = dx * dx + dy * dy;
+
+            // Prefer stairs that are "reachable" from our current floor band
+            // (still allow others, but penalize heavily)
+            const floorBandPenalty = Math.abs(h - fromFloorH);
+
+            // Prefer stairs whose h is closer to the player's floor direction
+            const towardPenalty = Math.abs(h - targetFloorH);
+
+            // Weighted score
+            const score =
+                dist2
+                + floorBandPenalty * floorBandPenalty * 1200
+                + towardPenalty * towardPenalty * 250;
+
+            if (score < bestScore) {
+                bestScore = score;
+                best = { tx, ty, h, wx, wy };
+            }
+        }
+    }
+
+    return best;
+}
+
+
 /**
  * Convert world coords -> tile coords given world-units-per-tile.
  * Uses the same convention as the renderer.

@@ -426,14 +426,28 @@ export async function renderSystem(
     grounded.push({ kind: "pickup", i, depth: depthKey(w.xx[i], w.xy[i]) });
   }
 
-  // Enemies
+  // Enemy Z buffer (written by movementSystem; optional)
+  const ez = (w as any).ez as number[] | undefined;
+
+  // Enemies (include Z in depth so upper floors layer correctly)
   for (let i = 0; i < w.eAlive.length; i++) {
     if (!w.eAlive[i]) continue;
-    grounded.push({ kind: "enemy", i, depth: depthKey(w.ex[i], w.ey[i]) });
+
+    const z = ez?.[i] ?? tileHAtWorld(w.ex[i], w.ey[i]); // continuous on stairs
+    grounded.push({
+      kind: "enemy",
+      i,
+      depth: depthKey(w.ex[i], w.ey[i]) + z * 1e9,
+    });
   }
 
-  // Player
-  grounded.push({ kind: "player", depth: depthKey(w.px, w.py) });
+  // Player (include continuous Z for stair traversal)
+  const pz = (w as any).pz ?? tileHAtWorld(w.px, w.py);
+  grounded.push({
+    kind: "player",
+    depth: depthKey(w.px, w.py) + pz * 1e9,
+  });
+
 
   // back -> front
   grounded.sort((a, b) => a.depth - b.depth);
@@ -478,10 +492,9 @@ export async function renderSystem(
     if (it.kind === "enemy") {
       const i = it.i;
 
-      if (!isOnActiveFloor(w.ex[i], w.ey[i])) continue;
-
+      // Milestone B originally hid enemies not on the active floor.
+      // Now that we allow spawning on other heights, render them all.
       const p = toScreen(w.ex[i], w.ey[i]);
-
 
       const def = registry.enemy(w.eType[i] as any);
       let baseColor: string = (def as any).color ?? "#f66";
