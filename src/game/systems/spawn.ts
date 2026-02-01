@@ -46,8 +46,12 @@ export function spawnSystem(w: World, dt: number) {
     return null;
   };
 
-  // Run stage timeline spawns once (validated)
-  for (const s of w.stage.spawns) {
+  const stage = w.stage;
+  if (!stage) return; // no stage loaded yet (MENU/INIT/etc.)
+
+// Run stage timeline spawns once (validated)
+  for (const s of stage.spawns) {
+
     if ((s as any).t === Infinity) continue;
 
     if (w.phaseTime >= s.t) {
