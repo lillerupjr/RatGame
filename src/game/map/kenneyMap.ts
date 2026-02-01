@@ -75,132 +75,33 @@ export function tileHeight(tx: number, ty: number): number {
 function clamp01(v: number) {
     return v < 0 ? 0 : v > 1 ? 1 : v;
 }
-
 /**
- * Continuous height at a WORLD position (wx,wy).
+ * Phase 1 (connectors migration): NO ramp math.
  *
- * - FLOOR: returns integer height (h)
- * - VOID: returns its h (usually 0) (caller should treat VOID as not-walkable)
- * - STAIRS: returns h + step, where step is 0..1 within the tile
- *
- * IMPORTANT:
- * Current sanctuary layout defines stairs as a vertical run in tile-space:
- *   dx = 0, dy = -1  (moving "up" the stairs means decreasing ty)
- *
- * With our worldToTileTopLocalPx mapping:
- *   ly ∈ [0..64], where ly=0 is the "top" tip of the diamond,
- *   and ly=64 is the "bottom" tip.
- *
- * So moving up the stairs (towards the next higher tile) corresponds to
- * decreasing ly → step increases towards 1.
+ * Logical height is always integer.
+ * Stairs are decorative only (connectors come later).
  */
 export function heightAtWorld(wx: number, wy: number, tileWorld: number): number {
     const { tx, ty } = worldToTileTopLocalPx(wx, wy, tileWorld);
     const t = getTile(tx, ty);
-    const baseH = (t.h | 0);
-
-    if (t.kind !== "STAIRS") return baseH;
-
-    // World-space fractions inside this tile (0..1)
-    const fx = (wx - tx * tileWorld) / tileWorld;
-    const fy = (wy - ty * tileWorld) / tileWorld;
-
-    // Authoritative ramp direction:
-    // N: step increases when moving north (fy ↓)
-    // S: step increases when moving south (fy ↑)
-    // W: step increases when moving west  (fx ↓)
-    // E: step increases when moving east  (fx ↑)
-    const dir = (t.dir ?? "N") as any;
-
-    let step = 0;
-    if (dir === "N") step = 1 - fy;
-    else if (dir === "S") step = fy;
-    else if (dir === "W") step = 1 - fx;
-    else if (dir === "E") step = fx;
-    else step = 1 - fy; // hard fallback
-
-    return baseH + clamp01(step);
+    return (t.h | 0);
 }
 
-
 // ─────────────────────────────────────────────────────────────
-// Enemy/AI helper: find a good stairs "magnet" target
-// Used by Option B (“Always converge”).
+// Phase 1 (decorative stairs): removed stairs-as-gameplay helpers.
+// Connectors will replace stairs targeting in Phase 2+.
 // ─────────────────────────────────────────────────────────────
 
-export type StairsTarget = {
-    tx: number;
-    ty: number;
-    h: number;      // integer stair level at that tile
-    wx: number;     // world target (tile center)
-    wy: number;
-};
+export type StairsTarget = never;
 
 /**
- * Find a nearby STAIRS tile to steer toward when you want to change floors.
- *
- * Scoring favors:
- * - closer distance
- * - stairs whose integer h is close to the caller's current floor
- * - stairs whose integer h moves you toward the target floor
- *
- * Returns a world-space point you can steer toward (tile center).
+ * Phase 1: stairs are decorative only.
+ * This helper will be reintroduced as "findNearestConnectorWorld" once connectors exist.
  */
-export function findNearestStairsWorld(
-    fromWx: number,
-    fromWy: number,
-    fromFloorH: number,
-    targetFloorH: number,
-    tileWorld: number,
-    radiusTiles = 40
-): StairsTarget | null {
-    const { tx: cx, ty: cy } = worldToTile(fromWx, fromWy, tileWorld);
-
-    let best: StairsTarget | null = null;
-    let bestScore = Infinity;
-
-    for (let ty = cy - radiusTiles; ty <= cy + radiusTiles; ty++) {
-        for (let tx = cx - radiusTiles; tx <= cx + radiusTiles; tx++) {
-            const t = getTile(tx, ty);
-            if (t.kind !== "STAIRS") continue;
-
-            const h = (t.h | 0);
-
-            // Candidate world target (tile center)
-            const wx = (tx + 0.5) * tileWorld;
-            const wy = (ty + 0.5) * tileWorld;
-
-            // Ensure the point is actually inside the walkable top-face
-            const wi = walkInfo(wx, wy, tileWorld);
-            if (!wi.walkable) continue;
-
-            // Distance term
-            const dx = wx - fromWx;
-            const dy = wy - fromWy;
-            const dist2 = dx * dx + dy * dy;
-
-            // Prefer stairs that are "reachable" from our current floor band
-            // (still allow others, but penalize heavily)
-            const floorBandPenalty = Math.abs(h - fromFloorH);
-
-            // Prefer stairs whose h is closer to the player's floor direction
-            const towardPenalty = Math.abs(h - targetFloorH);
-
-            // Weighted score
-            const score =
-                dist2
-                + floorBandPenalty * floorBandPenalty * 1200
-                + towardPenalty * towardPenalty * 250;
-
-            if (score < bestScore) {
-                bestScore = score;
-                best = { tx, ty, h, wx, wy };
-            }
-        }
-    }
-
-    return best;
+export function findNearestStairsWorld(): null {
+    return null;
 }
+
 
 
 /**
@@ -276,18 +177,8 @@ export const WALK_SHAPE_ANCHOR_PX: Record<TileWalkShape, { ox: number; oy: numbe
 };
 
 // Optional per-kind anchor nudges (adds on top of shape anchor).
-// Use this to move the *logical walkable face* relative to the 128x64 top-local box.
-//
-// Positive oy moves the walkable hitbox DOWN (toward the player / screen bottom).
-// Negative oy moves it UP (toward screen top).
-export const STAIRS_WALK_FACE_OY_PX = 0; // <- tune this (try -6 .. +6)
-
-// (Optional) X nudge too, if you ever need it:
-export const STAIRS_WALK_FACE_OX_PX = 0;
-
-export const WALK_KIND_ANCHOR_PX: Partial<Record<IsoTileKind, { ox: number; oy: number }>> = {
-    STAIRS: { ox: STAIRS_WALK_FACE_OX_PX, oy: STAIRS_WALK_FACE_OY_PX },
-};
+// NOTE: In Phase 1, STAIRS are decorative and never walkable, so no STAIRS anchors here.
+export const WALK_KIND_ANCHOR_PX: Partial<Record<IsoTileKind, { ox: number; oy: number }>> = {};
 
 
 
@@ -315,8 +206,8 @@ export function tileWalkShape(tx: number, ty: number): TileWalkShape {
         case "FLOOR":
             return "FULL_TOP";
         case "STAIRS":
-            // still a "top" walkable surface; we special-case hitbox test by kind === "STAIRS"
-            return "FULL_TOP";
+            // Phase 1: stairs are decorative only (connectors later)
+            return "BLOCKED";
         default:
             return "FULL_TOP";
     }
@@ -423,10 +314,12 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
     const ax = lx - ox;
     const ay = ly - oy;
 
-    // STAIRS == FLOOR for walk hitbox:
-    // Use the same top-face diamond for all walkable kinds.
+    // Phase 1: STAIRS are NOT walkable (decorative only).
+    // Floors are the only walk surfaces. Connectors come later.
     const inside = diamondContains(ax, ay, w, hh);
-    const walkable = inside;
+
+    const isStairs = kind === "STAIRS";
+    const walkable = inside && !isStairs;
 
     return {
         wx, wy, tileWorld,
@@ -435,11 +328,12 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
         floorH,
         h: floorH, // back-compat
         z,
-        blocked: false,
+        blocked: !walkable,
         inside,
         walkable,
-        reason: inside ? undefined : "OUTSIDE",
+        reason: !inside ? "OUTSIDE" : isStairs ? "STAIRS_DECORATIVE" : undefined,
     };
+
 }
 function diamondContains(lx: number, ly: number, w: number, h: number): boolean {
     // |(x-cx)/hw| + |(y-cy)/hh| <= 1
@@ -452,73 +346,8 @@ function diamondContains(lx: number, ly: number, w: number, h: number): boolean 
     const dy = Math.abs(ly - cy) / hh;
     return dx + dy <= 1;
 }
-
-// ─────────────────────────────────────────────────────────────
-// STAIRS TOP-FACE HITBOX (skew-friendly)
-// Your map-local top space is canonical 128x64.
-// But the stair art top face is ~130x80 and slightly skewed.
-//
-// We solve this by:
-//  1) scaling (lx,ly) from 128x64 → 130x80
-//  2) testing inside a convex quad (4 points) in that 130x80 space
-// ─────────────────────────────────────────────────────────────
-
-type Pt = { x: number; y: number };
-
-export const STAIRS_TOP_W = 128;
-
-// Walkable top-face height (NOT the sprite height)
-export const STAIRS_TOP_H = 64;
-
-// Single “feel” knob: shrink inset to avoid edge-snags (tune 0..6)
-// IMPORTANT: keep non-negative. Negative expands and causes seam disagreement.
-export let STAIRS_TOP_INSET_PX = 0;
-
-// Define the walkable top as a 128x64 diamond in STAIRS pixel space.
-// Keep it within [0..128] x [0..64].
-export const STAIRS_TOP_QUAD_PX: { p0: Pt; p1: Pt; p2: Pt; p3: Pt } = {
-    p0: { x: STAIRS_TOP_W * 0.5, y: 0 },                 // top
-    p1: { x: STAIRS_TOP_W,       y: STAIRS_TOP_H * 0.5 },// right
-    p2: { x: STAIRS_TOP_W * 0.5, y: STAIRS_TOP_H },      // bottom
-    p3: { x: 0,                  y: STAIRS_TOP_H * 0.5 },// left
-};
-
-function cross(ax: number, ay: number, bx: number, by: number) {
-    return ax * by - ay * bx;
-}
-
-function pointInConvexQuad(px: number, py: number, a: Pt, b: Pt, c: Pt, d: Pt) {
-    // Convex quad, consistent winding (CW or CCW).
-    const ab = cross(b.x - a.x, b.y - a.y, px - a.x, py - a.y);
-    const bc = cross(c.x - b.x, c.y - b.y, px - b.x, py - b.y);
-    const cd = cross(d.x - c.x, d.y - c.y, px - c.x, py - c.y);
-    const da = cross(a.x - d.x, a.y - d.y, px - d.x, py - d.y);
-
-    const hasNeg = (ab < 0) || (bc < 0) || (cd < 0) || (da < 0);
-    const hasPos = (ab > 0) || (bc > 0) || (cd > 0) || (da > 0);
-    return !(hasNeg && hasPos);
-}
-
-function insetQuadTowardCenter(q: { p0: Pt; p1: Pt; p2: Pt; p3: Pt }, inset: number) {
-    if (inset <= 0) return q;
-
-    const cx = (q.p0.x + q.p1.x + q.p2.x + q.p3.x) / 4;
-    const cy = (q.p0.y + q.p1.y + q.p2.y + q.p3.y) / 4;
-
-    function move(p: Pt): Pt {
-        const vx = cx - p.x;
-        const vy = cy - p.y;
-        const len = Math.hypot(vx, vy) || 1;
-        return { x: p.x + (vx / len) * inset, y: p.y + (vy / len) * inset };
-    }
-
-    return { p0: move(q.p0), p1: move(q.p1), p2: move(q.p2), p3: move(q.p3) };
-}
-
-function stairsTopContainsTopLocal(lx: number, ly: number): boolean {
-    const q = insetQuadTowardCenter(STAIRS_TOP_QUAD_PX, STAIRS_TOP_INSET_PX);
-    return pointInConvexQuad(lx, ly, q.p0, q.p1, q.p2, q.p3);
-}
+// Phase 1: removed stairs-walk hitbox helpers.
+// Stairs are decorative only until connector volumes exist.
 
 
 /**

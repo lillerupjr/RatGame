@@ -1,7 +1,7 @@
 import { World } from "../world";
 import { InputState } from "./input";
 import { worldDeltaToScreen } from "../visual/iso";
-import { walkInfo, heightAtWorld } from "../map/kenneyMap";
+import { walkInfo } from "../map/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
 export function movementSystem(w: World, input: InputState, dt: number) {
@@ -29,21 +29,23 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   w.pvy = dy * w.pSpeed;
 
   // -------------------------------------------------------
-  // Milestone B + stairs Z:
-  // - walkInfo(...) drives walkability + integer height level (h)
-  // - heightAtWorld(...) drives continuous Z (float) for stairs
+  // Phase 1 (connectors migration): CONTRACT
   //
-  // Rules:
-  // - must be walkable (inside top-face + not void)
-  // - non-stairs tiles require same integer floor height
-  // - stairs tiles are allowed (and may change floor height)
-  // - w.activeFloorH tracks integer floor level
-  // - w.pz tracks continuous Z (smooth on stairs)
+  // - walkInfo(.) is the single source of truth:
+  //     * inside top-face diamond?
+  //     * walkable?
+  //     * integer floorH?
+  // - Stairs are decorative-only (NON-walkable) until connectors exist.
+  // - Logical height is integer-only:
+  //     * w.activeFloorH = current tile integer floorH
+  //     * w.pz         = current tile integer floorH
   // -------------------------------------------------------
+
   // Keep world state synced even if we don't move this frame
   let curInfo = walkInfo(w.px, w.py, KENNEY_TILE_WORLD);
   w.activeFloorH = curInfo.floorH;
-  w.pz = curInfo.z;
+  // Phase 1: logical height is always integer (no stair ramp Z)
+  w.pz = curInfo.floorH;
 
   // Attempt move
   const nx = w.px + w.pvx * dt;
@@ -56,10 +58,9 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     // Must be inside walk mask (top-face diamond etc.)
     if (!nextInfo.walkable) return false;
 
-    // Same-floor unless stairs involved (use LIVE curInfo)
-    const stairsInvolved = curInfo.kind === "STAIRS" || nextInfo.kind === "STAIRS";
+    // Phase 1: same-floor ONLY (stairs are decorative and non-walkable)
     const sameFloor = nextInfo.floorH === curInfo.floorH;
-    if (!stairsInvolved && !sameFloor) return false;
+    if (!sameFloor) return false;
 
     // Commit WORLD position
     w.px = wx;
@@ -71,8 +72,8 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     // Update floor state to match the tile we occupy (integer)
     w.activeFloorH = nextInfo.floorH;
 
-    // Continuous Z for smooth stair traversal + render lift
-    w.pz = nextInfo.z;
+    // Phase 1: integer-only Z
+    w.pz = nextInfo.floorH;
 
     return true;
   };
@@ -122,17 +123,16 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     let eCur = walkInfo(ex, ey, KENNEY_TILE_WORLD);
     ez[i] = eCur.z;
 
-    // Choose steering target:
-    // - same floor: go to player
-    // - different floor: go to stairs tile center (you already added/find one elsewhere)
-    // NOTE: keep your existing stairs-target choice; this block assumes you already compute (tx,ty).
-    let tx = w.px;
-    let ty = w.py;
+    // Phase 1: no stairs traversal (stairs are decorative-only).
+    // Enemies only move when they are on the same integer floor as the player.
+    if (eCur.floorH !== playerFloorH) {
+      // Still keep ez updated for hit detection / zones, but don't steer.
+      continue;
+    }
 
-    if (eCur.floorH !== playerFloorH && eCur.kind !== "STAIRS") {
-      // If you already have a stairs target helper, keep using it here.
-      // Otherwise, leave tx/ty as player for now.
-      // (This patch focuses on removing "stuck", not changing targeting.)
+    // Same floor: chase player.
+    const tx = w.px;
+    const ty = w.py;
     }
 
     // Steer toward target
@@ -151,9 +151,9 @@ export function movementSystem(w: World, input: InputState, dt: number) {
       if (!next.walkable) return false;
 
       // Same-floor unless stairs involved (BUT use CURRENT eCur, not stale!)
-      const stairsInvolved = eCur.kind === "STAIRS" || next.kind === "STAIRS";
       const sameFloor = next.floorH === eCur.floorH;
-      if (!stairsInvolved && !sameFloor) return false;
+      if (!sameFloor) return false;
+
 
       // Commit
       w.ex[i] = wx;
@@ -164,9 +164,7 @@ export function movementSystem(w: World, input: InputState, dt: number) {
       ey = wy;
       eCur = next;
 
-      // Update stored Z
-      ez[i] = next.z;
-
+      ez[i] = next.floorH;
       return true;
     };
 
