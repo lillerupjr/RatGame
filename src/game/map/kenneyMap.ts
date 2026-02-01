@@ -183,11 +183,17 @@ export function heightAtWorld(wx: number, wy: number, tileWorld: number): number
 
     if (t.kind !== "STAIRS") return baseH;
 
-    // STAIRS: interpolate within this tile
-    // ly=64 (bottom) => step=0
-    // ly=0  (top)    => step=1
-    const step = clamp01(1 - (ly / 64));
+// STAIRS: interpolate within this tile in WORLD space (stable across tile seams).
+// Our stairs run "north" in tile-space (ty decreasing), so:
+// - south edge of tile => step = 0
+// - north edge of tile => step = 1
+//
+// Use world fraction inside the tile instead of top-local ly, so the height ramp
+// lines up with the actual boundary you cross.
+    const fy = (wy - ty * tileWorld) / tileWorld; // 0..1
+    const step = clamp01(1 - fy);
     return baseH + step;
+
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -350,17 +356,7 @@ export const WALK_KIND_ANCHOR_PX: Partial<Record<IsoTileKind, { ox: number; oy: 
     // FLOOR:  { ox: 0, oy: 0 },
 };
 
-function diamondContains(lx: number, ly: number, w: number, h: number): boolean {
-    // |(x-cx)/hw| + |(y-cy)/hh| <= 1
-    const cx = w * 0.5;
-    const cy = h * 0.5;
-    const hw = w * 0.5;
-    const hh = h * 0.5;
 
-    const dx = Math.abs(lx - cx) / hw;
-    const dy = Math.abs(ly - cy) / hh;
-    return dx + dy <= 1;
-}
 
 function shapeDims(shape: TileWalkShape): { w: number; h: number } {
     switch (shape) {
@@ -485,7 +481,17 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
     const ax = lx - ox;
     const ay = ly - oy;
 
-    const inside = diamondContains(ax, ay, w, hh);
+    let inside = false;
+
+// STAIRS: use the skew-friendly quad in 130x80 space
+    if (kind === "STAIRS") {
+        // Note: anchors still apply (ax/ay), then we test in stairs pixel space.
+        inside = stairsTopContainsTopLocal(ax, ay);
+    } else {
+        // FLOOR (and any other future kind): classic diamond contains
+        inside = diamondContains(ax, ay, w, hh);
+    }
+
     const walkable = inside;
 
     return {
@@ -500,6 +506,84 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
         walkable,
         reason: inside ? undefined : "OUTSIDE",
     };
+}
+function diamondContains(lx: number, ly: number, w: number, h: number): boolean {
+    // |(x-cx)/hw| + |(y-cy)/hh| <= 1
+    const cx = w * 0.5;
+    const cy = h * 0.5;
+    const hw = w * 0.5;
+    const hh = h * 0.5;
+
+    const dx = Math.abs(lx - cx) / hw;
+    const dy = Math.abs(ly - cy) / hh;
+    return dx + dy <= 1;
+}
+
+// ─────────────────────────────────────────────────────────────
+// STAIRS TOP-FACE HITBOX (skew-friendly)
+// Your map-local top space is canonical 128x64.
+// But the stair art top face is ~130x80 and slightly skewed.
+//
+// We solve this by:
+//  1) scaling (lx,ly) from 128x64 → 130x80
+//  2) testing inside a convex quad (4 points) in that 130x80 space
+// ─────────────────────────────────────────────────────────────
+
+type Pt = { x: number; y: number };
+
+export const STAIRS_TOP_W = 128;
+
+// Walkable top-face height (NOT the sprite height)
+export const STAIRS_TOP_H = 64;
+
+// Single “feel” knob: shrink inset to avoid edge-snags (tune 0..6)
+// IMPORTANT: keep non-negative. Negative expands and causes seam disagreement.
+export let STAIRS_TOP_INSET_PX = 0;
+
+// Define the walkable top as a 128x64 diamond in STAIRS pixel space.
+// Keep it within [0..128] x [0..64].
+export const STAIRS_TOP_QUAD_PX: { p0: Pt; p1: Pt; p2: Pt; p3: Pt } = {
+    p0: { x: STAIRS_TOP_W * 0.5, y: 0 },                 // top
+    p1: { x: STAIRS_TOP_W,       y: STAIRS_TOP_H * 0.5 },// right
+    p2: { x: STAIRS_TOP_W * 0.5, y: STAIRS_TOP_H },      // bottom
+    p3: { x: 0,                  y: STAIRS_TOP_H * 0.5 },// left
+};
+
+function cross(ax: number, ay: number, bx: number, by: number) {
+    return ax * by - ay * bx;
+}
+
+function pointInConvexQuad(px: number, py: number, a: Pt, b: Pt, c: Pt, d: Pt) {
+    // Convex quad, consistent winding (CW or CCW).
+    const ab = cross(b.x - a.x, b.y - a.y, px - a.x, py - a.y);
+    const bc = cross(c.x - b.x, c.y - b.y, px - b.x, py - b.y);
+    const cd = cross(d.x - c.x, d.y - c.y, px - c.x, py - c.y);
+    const da = cross(a.x - d.x, a.y - d.y, px - d.x, py - d.y);
+
+    const hasNeg = (ab < 0) || (bc < 0) || (cd < 0) || (da < 0);
+    const hasPos = (ab > 0) || (bc > 0) || (cd > 0) || (da > 0);
+    return !(hasNeg && hasPos);
+}
+
+function insetQuadTowardCenter(q: { p0: Pt; p1: Pt; p2: Pt; p3: Pt }, inset: number) {
+    if (inset <= 0) return q;
+
+    const cx = (q.p0.x + q.p1.x + q.p2.x + q.p3.x) / 4;
+    const cy = (q.p0.y + q.p1.y + q.p2.y + q.p3.y) / 4;
+
+    function move(p: Pt): Pt {
+        const vx = cx - p.x;
+        const vy = cy - p.y;
+        const len = Math.hypot(vx, vy) || 1;
+        return { x: p.x + (vx / len) * inset, y: p.y + (vy / len) * inset };
+    }
+
+    return { p0: move(q.p0), p1: move(q.p1), p2: move(q.p2), p3: move(q.p3) };
+}
+
+function stairsTopContainsTopLocal(lx: number, ly: number): boolean {
+    const q = insetQuadTowardCenter(STAIRS_TOP_QUAD_PX, STAIRS_TOP_INSET_PX);
+    return pointInConvexQuad(lx, ly, q.p0, q.p1, q.p2, q.p3);
 }
 
 
@@ -531,7 +615,32 @@ export function getWalkOutlineLocalPx(tx: number, ty: number): WalkOutlineLocal 
 
     const { w, h } = shapeDims(shape);
 
-    // Base diamond for the chosen shape dims (w x h)
+// Same anchor composition as isWalkableWorld
+    const aShape = WALK_SHAPE_ANCHOR_PX[shape] ?? { ox: 0, oy: 0 };
+    const aKind = WALK_KIND_ANCHOR_PX[t.kind] ?? { ox: 0, oy: 0 };
+    const ox = aShape.ox + aKind.ox;
+    const oy = aShape.oy + aKind.oy;
+
+    if (t.kind === "STAIRS") {
+        // Convert the STAIRS quad (130x80 space) back into top-local (128x64) for debug overlay.
+        const sxInv = TOP_W / STAIRS_TOP_W;        // 128/130
+        const syInv = TOP_H_FULL / STAIRS_TOP_H;   // 64/80
+
+        const q = insetQuadTowardCenter(STAIRS_TOP_QUAD_PX, STAIRS_TOP_INSET_PX);
+
+        const base = [
+            { x: q.p0.x * sxInv, y: q.p0.y * syInv },
+            { x: q.p1.x * sxInv, y: q.p1.y * syInv },
+            { x: q.p2.x * sxInv, y: q.p2.y * syInv },
+            { x: q.p3.x * sxInv, y: q.p3.y * syInv },
+        ];
+
+        // Apply same anchor shift as the walk test (diamond/quad is shifted by +ox/+oy)
+        const pts = base.map((p) => ({ x: p.x + ox, y: p.y + oy }));
+        return { blocked: false, shape, pts };
+    }
+
+// Default: diamond outline for non-stairs
     const base = [
         { x: w * 0.5, y: 0 }, // top
         { x: w, y: h * 0.5 }, // right
@@ -539,14 +648,7 @@ export function getWalkOutlineLocalPx(tx: number, ty: number): WalkOutlineLocal 
         { x: 0, y: h * 0.5 }, // left
     ];
 
-    // Same anchor composition as isWalkableWorld
-    const aShape = WALK_SHAPE_ANCHOR_PX[shape] ?? { ox: 0, oy: 0 };
-    const aKind = WALK_KIND_ANCHOR_PX[t.kind] ?? { ox: 0, oy: 0 };
-    const ox = aShape.ox + aKind.ox;
-    const oy = aShape.oy + aKind.oy;
-
-    // Because we test (lx - ox, ly - oy), the diamond itself is shifted by (+ox, +oy)
     const pts = base.map((p) => ({ x: p.x + ox, y: p.y + oy }));
-
     return { blocked: false, shape, pts };
+
 }

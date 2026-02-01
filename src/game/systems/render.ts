@@ -134,7 +134,7 @@ export async function renderSystem(
   // Milestone B: Kenney tile art has a 32px "vertical apron".
   // We keep the LOGIC diamond perfectly tiling (no walk-shape offsets),
   // and instead shift the ART down so the visible top face matches the logical top.
-  const TILE_ART_Y_SHIFT_PX = 18;
+  const TILE_ART_Y_SHIFT_PX = 20;
 
   // Visual height step in screen pixels per tile-level (tune later).
   // This is purely visual right now; gameplay height will come later.
