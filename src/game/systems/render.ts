@@ -18,7 +18,7 @@ import {
   tileHeight,
   heightAtWorld,
   getWalkOutlineLocalPx,
-  walkInfo,
+  walkInfo, heightAtWorldOcclusion,
 } from "../map/kenneyMap";
 
 
@@ -44,6 +44,7 @@ import {
   KENNEY_TILE_WORLD,
   KENNEY_TILE_ANCHOR_Y, Loaded,
 } from "../visual/kenneyTiles";
+import {RAMP_FACES} from "../map/walkableGeometry";
 
 export async function renderSystem(
     w: World,
@@ -77,9 +78,49 @@ export async function renderSystem(
   const camY = hh * 0.5 - p0.y;
 
   const tileHAtWorld = (x: number, y: number) => {
-    // Phase 1: integer-only tile height (stairs are decorative-only)
     return heightAtWorld(x, y, KENNEY_TILE_WORLD);
   };
+
+  // -------------------------------------------------------
+  // Phase 3 polish: Snap shadows/decals to the nearest WALKABLE ground point
+  // so they don't float over void edges or hang off platform cutouts.
+  //
+  // We do a cheap expanding-ring probe around (x,y) in world space.
+  // -------------------------------------------------------
+  const snapToNearestWalkableGround = (x: number, y: number) => {
+    const T = KENNEY_TILE_WORLD;
+
+    // If we're already on walkable top-face, keep it.
+    const i0 = walkInfo(x, y, T);
+    if (i0.walkable) return { x, y, z: i0.z };
+
+    // Probe pattern (world units). Keep this small for perf.
+    // This is tuned for your Kenney tile scale (T=128-ish world).
+    const RINGS = [6, 10, 16, 24, 34];
+    const DIRS: Array<[number, number]> = [
+      [1, 0], [-1, 0], [0, 1], [0, -1],
+      [1, 1], [1, -1], [-1, 1], [-1, -1],
+    ];
+
+    for (let r = 0; r < RINGS.length; r++) {
+      const rr = RINGS[r];
+      for (let d = 0; d < DIRS.length; d++) {
+        const ox = DIRS[d][0] * rr;
+        const oy = DIRS[d][1] * rr;
+
+        const ix = x + ox;
+        const iy = y + oy;
+
+        const info = walkInfo(ix, iy, T);
+        if (info.walkable) return { x: ix, y: iy, z: info.z };
+      }
+    }
+
+    // Fallback: give up and use the original position.
+    // (This should be rare unless you're deep over void.)
+    return { x, y, z: tileHAtWorld(x, y) };
+  };
+
 
 
   // Render all heights by default.
@@ -142,7 +183,22 @@ export async function renderSystem(
   // Optimized: cache + throttle + smaller radius.
   // -------------------------------------------------------
   const SHOW_WALK_MASK = !!(w as any).debugWalkMask;
+  if ((w as any).debugRamps) {
+    ctx.strokeStyle = "#00ffcc";
+    ctx.lineWidth = 2;
 
+    for (const r of RAMP_FACES) {
+      ctx.beginPath();
+      const p0 = worldToScreen(r.poly[0].x, r.poly[0].y);
+      ctx.moveTo(p0.x, p0.y);
+      for (let i = 1; i < 4; i++) {
+        const p = worldToScreen(r.poly[i].x, r.poly[i].y);
+        ctx.lineTo(p.x, p.y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
+  }
   // Tune these if you want:
   const WALK_MASK_RADIUS_TILES = 10;   // only draw within NxN around player
   const WALK_MASK_STEP = 1;           // 1 = every tile, 2 = every other tile
@@ -399,12 +455,33 @@ export async function renderSystem(
   for (let i = 0; i < w.zAlive.length; i++) {
     if (!w.zAlive[i]) continue;
 
-    const p = toScreen(w.zx[i], w.zy[i]);
+    // ---------------------------------------------------
+    // Phase 3: ground decals should NOT draw under ceilings
+    // (prevents aura/explosion visuals from bleeding under platforms)
+    // ---------------------------------------------------
+    const zx0 = w.zx[i];
+    const zy0 = w.zy[i];
+
+    // Snap decal origin to nearest walkable ground so it won't hang over void edges.
+    const sn = snapToNearestWalkableGround(zx0, zy0);
+    const zx = sn.x;
+    const zy = sn.y;
+
+    // The decal should not draw if that snapped ground point is under a ceiling.
+    const groundZ = sn.z;
+    const occZ = heightAtWorldOcclusion(zx, zy, KENNEY_TILE_WORLD);
+
+    const DECAL_OCCLUSION_EPS = 0.05;
+    if (groundZ < occZ - DECAL_OCCLUSION_EPS) continue;
+
+    const p = toScreen(zx, zy);
+
     const r = w.zR[i];
     const kind = w.zKind[i];
 
     const rx = r * ISO_X;
     const ry = r * ISO_Y;
+
 
     if (kind === ZONE_KIND.AURA) {
       ctx.globalAlpha = 0.16;
@@ -660,22 +737,43 @@ export async function renderSystem(
       {
         const r = (w.prR[i] ?? 4);
 
-        // Bigger lift => smaller + fainter shadow
-        const lift = Math.max(0, it.zLift || 0);
-        const t = Math.max(0, Math.min(1, 1 - lift / 70)); // tune "70" to taste
+        // Snap shadow to nearest WALKABLE ground so it doesn't float over void seams.
+        const wx0 = w.prx[i];
+        const wy0 = w.pry[i];
+        const sn = snapToNearestWalkableGround(wx0, wy0);
 
-        // Slightly squashed ellipse feels like iso ground contact
-        const rx = r * ISO_X * (0.95 + 0.15 * t);
-        const ry = r * ISO_Y * (0.85 + 0.10 * t);
+        const sx = sn.x;
+        const sy = sn.y;
+        const groundZ = sn.z;
 
-        ctx.save();
-        ctx.globalAlpha = 0.18 * t;
-        ctx.fillStyle = "#000";
-        ctx.beginPath();
-        ctx.ellipse(px, p.y, rx, ry, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
+        // Shadow should not draw if that snapped ground point is under a ceiling.
+        const occZ = heightAtWorldOcclusion(sx, sy, KENNEY_TILE_WORLD);
+        const SHADOW_OCCLUSION_EPS = 0.05;
+        const shadowOccluded = groundZ < occZ - SHADOW_OCCLUSION_EPS;
+
+        if (!shadowOccluded) {
+          // Shadow screen position should use the snapped ground point (not projectile px/py)
+          const sp = toScreen(sx, sy);
+
+          // Bigger lift => smaller + fainter shadow
+          const lift = Math.max(0, it.zLift || 0);
+          const t = Math.max(0, Math.min(1, 1 - lift / 70)); // tune "70" to taste
+
+          // Slightly squashed ellipse feels like iso ground contact
+          const rx = r * ISO_X * (0.95 + 0.15 * t);
+          const ry = r * ISO_Y * (0.85 + 0.10 * t);
+
+          ctx.save();
+          ctx.globalAlpha = 0.18 * t;
+          ctx.fillStyle = "#000";
+          ctx.beginPath();
+          ctx.ellipse(sp.x, sp.y, rx, ry, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
       }
+
+
 
       const wdx = w.prDirX[i] ?? 1;
       const wdy = w.prDirY[i] ?? 0;

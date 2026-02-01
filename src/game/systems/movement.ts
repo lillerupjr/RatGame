@@ -1,7 +1,7 @@
 import { World } from "../world";
 import { InputState } from "./input";
 import { worldDeltaToScreen } from "../visual/iso";
-import { walkInfo } from "../map/kenneyMap";
+import {isOccludedAlongSegment, walkInfo} from "../map/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
 export function movementSystem(w: World, input: InputState, dt: number) {
@@ -28,23 +28,43 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   w.pvx = dx * w.pSpeed;
   w.pvy = dy * w.pSpeed;
 
-  // -------------------------------------------------------
-  // Phase 1 (connectors migration): CONTRACT
-  //
-  // - walkInfo(.) is the single source of truth:
-  //     * inside top-face diamond?
-  //     * walkable?
-  //     * integer floorH?
-  // - Stairs are decorative-only (NON-walkable) until connectors exist.
-  // - Logical height is integer-only:
-  //     * w.activeFloorH = current tile integer floorH
-  //     * w.pz         = current tile integer floorH
-  // -------------------------------------------------------
+
   // Keep world state synced even if we don't move this frame
   let curInfo = walkInfo(w.px, w.py, KENNEY_TILE_WORLD);
 
-  // Phase 2: continuous height (stairs ramp)
+
+// Player Z:
+// - Default: map-provided z (stairs, etc.)
+// - CONVERTER: player-only smooth 0..1 ramp inside the tile toward tile.dir
   w.pz = curInfo.z;
+
+  if (curInfo.kind === "CONVERTER") {
+    const T = KENNEY_TILE_WORLD;
+
+    // Fractions inside tile (0..1)
+    const fx = (w.px - curInfo.tx * T) / T;
+    const fy = (w.py - curInfo.ty * T) / T;
+
+    const dir = (curInfo.tile.dir ?? "N") as any;
+
+    let step = 0;
+    if (dir === "N") step = 1 - fy;
+    else if (dir === "S") step = fy;
+    else if (dir === "W") step = 1 - fx;
+    else if (dir === "E") step = fx;
+
+// Invert ramp direction and bias by 0.1h
+    step = 1 - step + 0.1;
+
+// clamp 0..1
+    if (step < 0) step = 0;
+    else if (step > 1) step = 1;
+
+    const baseH = (curInfo.tile.h | 0);
+    w.pz = baseH + step;
+
+  }
+
 
   // Active floor is still an integer concept (used by spawns / filtering).
   // On stairs we track the nearest integer to current z.
@@ -55,10 +75,6 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   const nx = w.px + w.pvx * dt;
   const ny = w.py + w.pvy * dt;
 
-  // Phase 2 movement gate:
-  // - must be walkable
-  // - allow same-floor moves normally
-  // - allow floor transitions if STAIRS involved, as long as the z jump is small
   const MAX_STEP_Z = 1.05;
 
   const tryMove = (wx: number, wy: number) => {
@@ -85,7 +101,11 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     curInfo = nextInfo;
 
     // Update height + active floor
+// Update player Z after commit (same converter rule as above)
     w.pz = nextInfo.z;
+
+
+
     w.activeFloorH =
         nextInfo.kind === "STAIRS" ? (Math.floor(nextInfo.z + 0.5) | 0) : (nextInfo.floorH | 0);
 
@@ -138,24 +158,20 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     let eCur = walkInfo(ex, ey, KENNEY_TILE_WORLD);
     ez[i] = eCur.z;
 
-    // Phase 2:
-    // - Enemies can traverse stairs, so we no longer hard-stop just because floorH differs.
-    // - But we DO still prevent "teleport" floor jumps: only chase if player is reachable
-    //   through local stepping (stairs or same floor).
-    //
-    // Simple rule for now:
-    // - If neither enemy nor player is on STAIRS, require same floorH (prevents cross-platform weirdness).
-    // - If STAIRS involved, allow.
     const playerOnStairs = (pInfo.kind === "STAIRS");
     const enemyOnStairs = (eCur.kind === "STAIRS");
 
     if (!playerOnStairs && !enemyOnStairs) {
       if (eCur.floorH !== playerFloorH) continue;
     }
+    // Step 2 NOTE (changed): Open stairs/connector-style layouts should not block AI vision yet.
+    // We will reintroduce LOS/vision blocking later for doors/tunnels/walls (not stairs).
+
 
     // Steer toward player
     const tx = w.px;
     const ty = w.py;
+
 
     const vx = tx - ex;
     const vy = ty - ey;
@@ -170,7 +186,6 @@ export function movementSystem(w: World, input: InputState, dt: number) {
       const next = walkInfo(wx, wy, KENNEY_TILE_WORLD);
       if (!next.walkable) return false;
 
-      // Phase 2: allow stairs traversal + small z steps.
       const stairsInvolved = (eCur.kind === "STAIRS") || (next.kind === "STAIRS");
       const MAX_STEP_Z = 1.05;
 

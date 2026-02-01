@@ -1,10 +1,5 @@
 // src/game/map/kenneyMap.ts
-// Arcane-Sanctuary-style placeholder:
-// - deterministic platforms over void
-// - multi-height tiles
-// - stairs currently exist in the map, but are migrating to CONNECTORS
-//
-// IMPORTANT: render + movement MUST use the same functions so visuals/collision match.
+
 //
 // STAIRS → CONNECTORS migration (Phase 0: contract freeze)
 // See: docs/stairs-connectors-master.md
@@ -92,32 +87,23 @@ function clamp01(v: number) {
  */
 export let OCCLUSION_LOOKAHEAD_FRAC = 0.50; // 0.50 tile is a good starting point for Kenney apron overlap
 
+import { RAMP_FACES, pointInQuad, rampHeightAt } from "./walkableGeometry";
+import {KENNEY_TILE_WORLD} from "../visual/kenneyTiles";
+
 export function heightAtWorld(wx: number, wy: number, tileWorld: number): number {
+    // 1. Ramp faces override tiles
+    for (const r of RAMP_FACES) {
+        if (pointInQuad({ x: wx, y: wy }, r.poly)) {
+            return rampHeightAt(r, { x: wx, y: wy });
+        }
+    }
+
+    // 2. Fallback to tile tops (flat)
     const { tx, ty } = worldToTileTopLocalPx(wx, wy, tileWorld);
     const t = getTile(tx, ty);
-    const baseH = (t.h | 0);
-
-    if (t.kind !== "STAIRS") return baseH;
-
-    // World-space fractions inside this tile (0..1)
-    const fx = (wx - tx * tileWorld) / tileWorld;
-    const fy = (wy - ty * tileWorld) / tileWorld;
-
-    // Authoritative ramp direction:
-    // N: increases when moving north (fy ↓)
-    // S: increases when moving south (fy ↑)
-    // W: increases when moving west  (fx ↓)
-    // E: increases when moving east  (fx ↑)
-    const dir = (t.dir ?? "N") as any;
-
-    let step = 0;
-    if (dir === "N") step = 1 - fy;
-    else if (dir === "S") step = fy;
-    else if (dir === "W") step = 1 - fx;
-    else if (dir === "E") step = fx;
-
-    return baseH + clamp01(step);
+    return t ? t.h : 0;
 }
+
 
 /**
  * Occlusion-aware "ceiling" height at a world point.
@@ -156,7 +142,6 @@ function localPxForTile(tx: number, ty: number, wx: number, wy: number, tileWorl
 
     return { lx, ly };
 }
-
 export function heightAtWorldOcclusion(wx: number, wy: number, tileWorld: number): number {
     const base = heightAtWorld(wx, wy, tileWorld);
 
@@ -193,6 +178,74 @@ export function heightAtWorldOcclusion(wx: number, wy: number, tileWorld: number
 
     return best;
 }
+
+/**
+ * Generic visibility query at a world point.
+ *
+ * This is the “unified occlusion API”:
+ * - It always uses the map occlusion ceiling (heightAtWorldOcclusion)
+ * - And compares a caller-provided absolute Z against that ceiling
+ *
+ * If zAbs is below the occlusion ceiling (minus eps), the point is considered occluded.
+ */
+export type VisibilityQuery = {
+    occZ: number;      // integer-ish occlusion ceiling at (wx, wy)
+    occluded: boolean; // true if zAbs is under the ceiling (with eps)
+};
+
+export function queryVisibilityAtWorld(
+    wx: number,
+    wy: number,
+    zAbs: number,
+    tileWorld: number,
+    eps = 0
+): VisibilityQuery {
+    const occZ = heightAtWorldOcclusion(wx, wy, tileWorld);
+    return { occZ, occluded: zAbs < occZ - eps };
+}
+
+// ---- Segment visibility (for LOS, future enemy vision, etc.) ----
+export let VIS_SAMPLE_SPAN_FRAC = 0.10;   // ~10 samples per tile
+export let VIS_SAMPLE_MAX_STEPS = 64;
+export let VIS_SAMPLE_MIN_STEPS = 1;
+
+/**
+ * Returns true if any point along the segment is occluded for the segment's Z.
+ * Z is linearly interpolated from (az) to (bz).
+ */
+export function isOccludedAlongSegment(
+    ax: number, ay: number, az: number,
+    bx: number, by: number, bz: number,
+    tileWorld: number,
+    eps = 0
+): boolean {
+    const dx = bx - ax;
+    const dy = by - ay;
+    const dz = bz - az;
+
+    const dist = Math.hypot(dx, dy);
+    if (dist <= 1e-6) {
+        return queryVisibilityAtWorld(ax, ay, az, tileWorld, eps).occluded;
+    }
+
+    const spanFrac = Math.max(1e-4, VIS_SAMPLE_SPAN_FRAC);
+    const wantSteps = Math.ceil(dist / (tileWorld * spanFrac));
+    const baseSteps = Math.max(1, VIS_SAMPLE_MIN_STEPS | 0);
+    const maxSteps = Math.max(1, VIS_SAMPLE_MAX_STEPS | 0);
+    const steps = Math.min(maxSteps, Math.max(baseSteps, wantSteps));
+
+    for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const x = ax + dx * t;
+        const y = ay + dy * t;
+        const z = az + dz * t;
+
+        if (queryVisibilityAtWorld(x, y, z, tileWorld, eps).occluded) return true;
+    }
+
+    return false;
+}
+
 
 
 
@@ -289,8 +342,11 @@ export const WALK_SHAPE_ANCHOR_PX: Record<TileWalkShape, { ox: number; oy: numbe
 
 // Optional per-kind anchor nudges (adds on top of shape anchor).
 // Phase 2: STAIRS are walkable, so you MAY add STAIRS anchor tweaks here if art needs it.
-export const WALK_KIND_ANCHOR_PX: Partial<Record<IsoTileKind, { ox: number; oy: number }>> = {};
-
+export const WALK_KIND_ANCHOR_PX: Partial<Record<IsoTileKind, { ox: number; oy: number }>> = {
+    // Keep CONVERTER collision perfectly identical to FLOOR.
+    // If you ever tune FLOOR anchors, CONVERTER must inherit them.
+    CONVERTER: { ox: 0, oy: 0 },
+};
 
 
 
@@ -317,8 +373,9 @@ export function tileWalkShape(tx: number, ty: number): TileWalkShape {
             return "BLOCKED";
         case "FLOOR":
             return "FULL_TOP";
+        case "CONVERTER":
+            return "FULL_TOP";
         case "STAIRS":
-            // Phase 2: stairs are walkable; treat as a normal top-face diamond.
             return "FULL_TOP";
         default:
             return "FULL_TOP";
@@ -431,7 +488,6 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
     const ax = lx - ox;
     const ay = ly - oy;
 
-    // Phase 2: STAIRS are walkable (ramp Z comes from heightAtWorld)
     const inside = diamondContains(ax, ay, w, hh);
 
     // Walkable if you're inside the top-face diamond.
@@ -470,12 +526,19 @@ function diamondContains(lx: number, ly: number, w: number, h: number): boolean 
 // Stairs are decorative only until connector volumes exist.
 
 
-/**
- * Legacy API preserved.
- * Prefer walkInfo(...).walkable in new code.
- */
-export function isWalkableWorld(wx: number, wy: number, tileWorld: number): boolean {
-    return walkInfo(wx, wy, tileWorld).walkable;
+
+export function isWalkableWorld(wx: number, wy: number): boolean {
+    // 1. Ramp faces are always walkable
+    for (const r of RAMP_FACES) {
+        if (pointInQuad({ x: wx, y: wy }, r.poly)) {
+            return true;
+        }
+    }
+
+    // 2. Tile tops
+    const { tx, ty } = worldToTileTopLocalPx(wx, wy, KENNEY_TILE_WORLD);
+    const t = getTile(tx, ty);
+    return !!t && t.kind !== "VOID";
 }
 
 // ─────────────────────────────────────────────────────────────
