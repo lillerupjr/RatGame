@@ -1,13 +1,18 @@
 // src/game/map/kenneyMap.ts
-
 //
 // STAIRS → CONNECTORS migration (Phase 0: contract freeze)
 // See: docs/stairs-connectors-master.md
 // Phase 1 will delete: ramp math, stair walk masks/hitboxes, movement exceptions, projectile stair coupling.
 
-import {compileKenneyMapFromTable, type IsoTile, type IsoTileKind, STAIR_SKIN_BY_DIR} from "./kenneyMapLoader";
+import {
+    compileKenneyMapFromTable,
+    type IsoTile,
+    type IsoTileKind,
+    STAIR_SKIN_BY_DIR,
+} from "./kenneyMapLoader";
 import { EXCEL_SANCTUARY_01 } from "./maps";
 import { worldDeltaToScreen } from "../visual/iso";
+import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
 export type { IsoTileKind, IsoTile } from "./kenneyMapLoader";
 
@@ -32,7 +37,14 @@ export function getTile(tx: number, ty: number): IsoTile {
  * Map-authored spawn point (tile-space -> world-space center).
  * Uses the first P<number> token found in maps.ts.
  */
-export function getSpawnWorld(tileWorld: number): { x: number; y: number; z: number; tx: number; ty: number; h: number } {
+export function getSpawnWorld(tileWorld: number): {
+    x: number;
+    y: number;
+    z: number;
+    tx: number;
+    ty: number;
+    h: number;
+} {
     const tx = (_compiled as any).spawnTx ?? 0;
     const ty = (_compiled as any).spawnTy ?? 0;
 
@@ -71,6 +83,154 @@ function clamp01(v: number) {
     return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Walkable Geometry: Ramp Faces (NEW DIRECTION)
+// Movement and height are determined by walkable geometry (tile tops + ramp faces).
+// Tile tops are flat discrete surfaces. Ramp faces are continuous connectors.
+// ─────────────────────────────────────────────────────────────
+
+type Pt = { x: number; y: number };
+
+export type RampFace = {
+    id: string;
+
+    // Convex quad in WORLD (x,y)
+    poly: [Pt, Pt, Pt, Pt];
+
+    // Height endpoints
+    z0: number;
+    z1: number;
+
+    // Optional: debugging / intent
+    tag?: string;
+};
+
+function dot(ax: number, ay: number, bx: number, by: number) {
+    return ax * bx + ay * by;
+}
+function clamp(v: number, lo: number, hi: number) {
+    return v < lo ? lo : v > hi ? hi : v;
+}
+
+/**
+ * Convex quad containment test (winding-agnostic).
+ * Returns true if p is inside or on the boundary.
+ */
+export function pointInQuad(p: Pt, q: [Pt, Pt, Pt, Pt]): boolean {
+    // Cross sign consistency
+    let sign = 0;
+    for (let i = 0; i < 4; i++) {
+        const a = q[i];
+        const b = q[(i + 1) & 3];
+        const cx = b.x - a.x;
+        const cy = b.y - a.y;
+        const px = p.x - a.x;
+        const py = p.y - a.y;
+        const cross = cx * py - cy * px;
+
+        if (Math.abs(cross) < 1e-6) continue;
+        const s = cross > 0 ? 1 : -1;
+        if (sign === 0) sign = s;
+        else if (sign !== s) return false;
+    }
+    return true;
+}
+
+/**
+ * Height across a ramp face is defined by projecting onto the axis from low-edge midpoint to high-edge midpoint.
+ *
+ * Convention:
+ * - low edge is (q0,q1) at z0
+ * - high edge is (q3,q2) at z1
+ * (i.e. t=0 at midpoint(q0,q1), t=1 at midpoint(q3,q2))
+ */
+export function rampHeightAt(r: RampFace, p: Pt): number {
+    const q = r.poly;
+    const lowMid = { x: (q[0].x + q[1].x) * 0.5, y: (q[0].y + q[1].y) * 0.5 };
+    const highMid = { x: (q[3].x + q[2].x) * 0.5, y: (q[3].y + q[2].y) * 0.5 };
+
+    const ax = highMid.x - lowMid.x;
+    const ay = highMid.y - lowMid.y;
+
+    const denom = ax * ax + ay * ay;
+    if (denom < 1e-9) return r.z0;
+
+    const px = p.x - lowMid.x;
+    const py = p.y - lowMid.y;
+
+    const t = clamp(dot(px, py, ax, ay) / denom, 0, 1);
+    return r.z0 + (r.z1 - r.z0) * t;
+}
+
+// --- Step 2: first real ramp (Arcane-Sanctuary bridge) ---
+// Authored in TILE space, converted to WORLD based on tileWorld.
+// We cache per tileWorld so you can tune tileWorld without re-authoring.
+
+const _rampCache = new Map<number, RampFace[]>();
+
+function buildSanctuaryBridgeRamp(tileWorld: number): RampFace[] {
+    // We ramp over the 3-tile vertical bridge:
+    // maps.ts cells: (x=4,y=7..9) => tile (tx=-2, ty=0..2) when centerOnZero=true.
+    //
+    // We want a smooth ramp matching S1N..S3N:
+    // - south end (ty=2) ~ z=1
+    // - north end (ty=0) ~ z=3
+    const tx = -2;
+    const ty0 = 0;
+    const ty1 = 2;
+
+    const x0 = tx * tileWorld;
+    const x1 = (tx + 1) * tileWorld;
+
+    // North-most edge (top of strip)
+    const yN0 = ty0 * tileWorld;
+    // South-most edge (bottom of strip)
+    const yS1 = (ty1 + 1) * tileWorld;
+
+    const r: RampFace = {
+        id: "sanctuary_bridge_col4_y7to9_1to3",
+        tag: "bridge-ramp-N",
+
+        // IMPORTANT for rampHeightAt convention:
+        // - low edge = (q0,q1) at z0
+        // - high edge = (q3,q2) at z1
+        //
+        // Here: low at SOUTH, high at NORTH.
+        poly: [
+            { x: x0, y: yS1 }, // q0 (south-west) low
+            { x: x1, y: yS1 }, // q1 (south-east) low
+            { x: x1, y: yN0 }, // q2 (north-east) high
+            { x: x0, y: yN0 }, // q3 (north-west) high
+        ],
+
+        z0: 1,
+        z1: 3,
+    };
+
+    return [r];
+}
+
+
+function getRampFaces(tileWorld: number): RampFace[] {
+    const key = tileWorld | 0;
+    const hit = _rampCache.get(key);
+    if (hit) return hit;
+
+    const ramps = buildSanctuaryBridgeRamp(tileWorld);
+    _rampCache.set(key, ramps);
+    return ramps;
+}
+
+function rampHitAtWorld(wx: number, wy: number, tileWorld: number): { r: RampFace; z: number } | null {
+    const p = { x: wx, y: wy };
+    const ramps = getRampFaces(tileWorld);
+    for (let i = 0; i < ramps.length; i++) {
+        const r = ramps[i];
+        if (!pointInQuad(p, r.poly)) continue;
+        return { r, z: rampHeightAt(r, p) };
+    }
+    return null;
+}
 
 /**
  * OCCLUSION height (render/visibility):
@@ -87,23 +247,20 @@ function clamp01(v: number) {
  */
 export let OCCLUSION_LOOKAHEAD_FRAC = 0.50; // 0.50 tile is a good starting point for Kenney apron overlap
 
-import { RAMP_FACES, pointInQuad, rampHeightAt } from "./walkableGeometry";
-import {KENNEY_TILE_WORLD} from "../visual/kenneyTiles";
-
+/**
+ * Authoritative height at a world point.
+ * NEW RULE: ramps override tiles; tiles are flat.
+ */
 export function heightAtWorld(wx: number, wy: number, tileWorld: number): number {
-    // 1. Ramp faces override tiles
-    for (const r of RAMP_FACES) {
-        if (pointInQuad({ x: wx, y: wy }, r.poly)) {
-            return rampHeightAt(r, { x: wx, y: wy });
-        }
-    }
+    // 1) Walkable geometry (ramps) wins
+    const rh = rampHitAtWorld(wx, wy, tileWorld);
+    if (rh) return rh.z;
 
-    // 2. Fallback to tile tops (flat)
+    // 2) Fallback to tile top height (flat)
     const { tx, ty } = worldToTileTopLocalPx(wx, wy, tileWorld);
     const t = getTile(tx, ty);
-    return t ? t.h : 0;
+    return (t.h | 0);
 }
-
 
 /**
  * Occlusion-aware "ceiling" height at a world point.
@@ -114,7 +271,7 @@ export function heightAtWorld(wx: number, wy: number, tileWorld: number): number
  *   by extending the top-face diamond downward in tile-local space.
  *
  * Contract:
- * - Returns the maximum integer tile height (or stairs base height) among nearby tiles
+ * - Returns the maximum integer tile height among nearby tiles
  *   whose (extended) top-face diamond covers this point in screen-projection space.
  * - If nothing occludes, falls back to normal heightAtWorld.
  *
@@ -125,8 +282,6 @@ export function heightAtWorld(wx: number, wy: number, tileWorld: number): number
 export let OCCLUSION_EXTRA_LOCAL_PX = 24;
 
 // How far around the point we search for potential occluders.
-// Occluders usually come from tiles "north-ish", but this cheap neighborhood scan
-// is robust and still fast (small constant).
 export let OCCLUSION_SCAN_RX = 2;
 export let OCCLUSION_SCAN_RY = 2;
 
@@ -142,6 +297,7 @@ function localPxForTile(tx: number, ty: number, wx: number, wy: number, tileWorl
 
     return { lx, ly };
 }
+
 export function heightAtWorldOcclusion(wx: number, wy: number, tileWorld: number): number {
     const base = heightAtWorld(wx, wy, tileWorld);
 
@@ -159,7 +315,7 @@ export function heightAtWorldOcclusion(wx: number, wy: number, tileWorld: number
             if (t.kind === "VOID") continue;
 
             // Occlusion height is integer tile height.
-            // (Stairs still have base integer h; the ramp is not treated as an overhang ceiling.)
+            // Ramps are NOT treated as an overhang ceiling.
             const th = (t.h | 0);
 
             // Only care about tiles that are >= current best.
@@ -168,8 +324,6 @@ export function heightAtWorldOcclusion(wx: number, wy: number, tileWorld: number
             const { lx, ly } = localPxForTile(xx, yy, wx, wy, tileWorld);
 
             // Extend the diamond downward to approximate the Kenney sprite apron/overhang.
-            // This makes "under platform" hiding happen as soon as the projectile is visually
-            // behind the vertical face, not one whole tile later.
             const insideExtended = diamondContains(lx, ly, 128, 64 + Math.max(0, OCCLUSION_EXTRA_LOCAL_PX));
 
             if (insideExtended) best = th;
@@ -189,7 +343,7 @@ export function heightAtWorldOcclusion(wx: number, wy: number, tileWorld: number
  * If zAbs is below the occlusion ceiling (minus eps), the point is considered occluded.
  */
 export type VisibilityQuery = {
-    occZ: number;      // integer-ish occlusion ceiling at (wx, wy)
+    occZ: number; // integer-ish occlusion ceiling at (wx, wy)
     occluded: boolean; // true if zAbs is under the ceiling (with eps)
 };
 
@@ -205,7 +359,7 @@ export function queryVisibilityAtWorld(
 }
 
 // ---- Segment visibility (for LOS, future enemy vision, etc.) ----
-export let VIS_SAMPLE_SPAN_FRAC = 0.10;   // ~10 samples per tile
+export let VIS_SAMPLE_SPAN_FRAC = 0.10; // ~10 samples per tile
 export let VIS_SAMPLE_MAX_STEPS = 64;
 export let VIS_SAMPLE_MIN_STEPS = 1;
 
@@ -214,8 +368,12 @@ export let VIS_SAMPLE_MIN_STEPS = 1;
  * Z is linearly interpolated from (az) to (bz).
  */
 export function isOccludedAlongSegment(
-    ax: number, ay: number, az: number,
-    bx: number, by: number, bz: number,
+    ax: number,
+    ay: number,
+    az: number,
+    bx: number,
+    by: number,
+    bz: number,
     tileWorld: number,
     eps = 0
 ): boolean {
@@ -246,11 +404,6 @@ export function isOccludedAlongSegment(
     return false;
 }
 
-
-
-
-
-
 // ─────────────────────────────────────────────────────────────
 // Phase 1 (decorative stairs): removed stairs-as-gameplay helpers.
 // Connectors will replace stairs targeting in Phase 2+.
@@ -266,8 +419,6 @@ export function findNearestStairsWorld(): null {
     return null;
 }
 
-
-
 /**
  * Convert world coords -> tile coords given world-units-per-tile.
  * Uses the same convention as the renderer.
@@ -277,7 +428,6 @@ export function worldToTile(wx: number, wy: number, tileWorld: number) {
     const ty = Math.floor(wy / tileWorld);
     return { tx, ty };
 }
-
 
 /**
  * Convert world position -> tile coords + tile-local top-face pixels (lx,ly).
@@ -306,50 +456,29 @@ function worldToTileTopLocalPx(wx: number, wy: number, tileWorld: number) {
 
 // ─────────────────────────────────────────────────────────────
 // Milestone B: hardcoded logical top-face shapes (no sprite sampling)
-//
-// Practical shapes (minimum set):
-//   FULL_TOP     -> standard floor tile (128x64 diamond)
-//   TOP_CUT_16   -> floor/stairs tile with visible front face (cuts bottom 16px)
-//   BLOCKED      -> walls/void
-//   BRIDGE_TOP   -> narrow top face (optional/later)
 // ─────────────────────────────────────────────────────────────
 
-export type TileWalkShape = "FULL_TOP"  | "BLOCKED" | "BRIDGE_TOP";
+export type TileWalkShape = "FULL_TOP" | "BLOCKED" | "BRIDGE_TOP";
 
 const TOP_W = 128;
 const TOP_H_FULL = 64;
 
 const BRIDGE_TOP_H = 32; // optional, tune later
 
-
 // ─────────────────────────────────────────────────────────────
 // Anchor offsets (in TOP-LOCAL PIXELS)
-// These shift the logical diamond relative to the tile’s visual 128x64 box.
-//
-// +ox moves diamond right
-// +oy moves diamond down
-//
-// Use-case: if a tile’s art top face is not centered in the 128x64 local
-// box, you can “recenter” collision by nudging anchors here.
 // ─────────────────────────────────────────────────────────────
 
-// Per-walk-shape default anchors:
 export const WALK_SHAPE_ANCHOR_PX: Record<TileWalkShape, { ox: number; oy: number }> = {
     FULL_TOP: { ox: 0, oy: 0 },
     BRIDGE_TOP: { ox: 0, oy: 0 },
     BLOCKED: { ox: 0, oy: 0 },
 };
 
-// Optional per-kind anchor nudges (adds on top of shape anchor).
-// Phase 2: STAIRS are walkable, so you MAY add STAIRS anchor tweaks here if art needs it.
 export const WALK_KIND_ANCHOR_PX: Partial<Record<IsoTileKind, { ox: number; oy: number }>> = {
     // Keep CONVERTER collision perfectly identical to FLOOR.
-    // If you ever tune FLOOR anchors, CONVERTER must inherit them.
     CONVERTER: { ox: 0, oy: 0 },
 };
-
-
-
 
 function shapeDims(shape: TileWalkShape): { w: number; h: number } {
     switch (shape) {
@@ -364,7 +493,6 @@ function shapeDims(shape: TileWalkShape): { w: number; h: number } {
 }
 
 export type StairDir = "N" | "W" | "E" | "S";
-
 
 export function tileWalkShape(tx: number, ty: number): TileWalkShape {
     const t = getTile(tx, ty);
@@ -382,18 +510,8 @@ export function tileWalkShape(tx: number, ty: number): TileWalkShape {
     }
 }
 
-
-
-
-/**
- * True if (wx, wy) is walkable within the tile's top face shape.
- * This is the core Milestone B logic gate (no sprite sampling).
- */
 // ─────────────────────────────────────────────────────────────
 // Milestone B Map API
-// - heightAt(wx,wy): authoritative "floor height" at world point
-// - walkInfo(wx,wy): rich walkability info for movement, AI, etc.
-// - isWalkableWorld: legacy wrapper kept for compatibility
 // ─────────────────────────────────────────────────────────────
 
 export type WalkInfo = {
@@ -404,13 +522,12 @@ export type WalkInfo = {
     tx: number;
     ty: number;
 
-    // Position inside the tile's "top-face local px" space
-    // lx: 0..128, ly: 0..64 (for classic 2:1 iso top box)
+    // Position inside tile-local top-face px space
     lx: number;
     ly: number;
 
     // Tile definition + derived fields
-    tile: IsoTile;      // <-- NEW: full tile record
+    tile: IsoTile;
     kind: IsoTileKind;
     shape: TileWalkShape;
 
@@ -418,22 +535,18 @@ export type WalkInfo = {
     floorH: number;
 
     // Back-compat alias (older code expects `.h`)
-    // Keep equal to floorH.
     h: number;
 
-    // Continuous Z at this location (stairs interpolate inside tile)
-    // For non-stairs, z === floorH.
+    // Continuous Z at this location (ramps continuous; tiles flat)
     z: number;
 
     // Walk decision
-    blocked: boolean;   // true if shape is BLOCKED or tile is VOID
-    inside: boolean;    // true if point lies inside the top-face diamond for this shape
-    walkable: boolean;  // final decision: !blocked && inside
+    blocked: boolean;
+    inside: boolean;
+    walkable: boolean;
 
-    // Debug helper (why it failed)
     reason?: "BLOCKED" | "OUTSIDE";
 };
-
 
 /**
  * Rich walkability info for a world point.
@@ -441,32 +554,67 @@ export type WalkInfo = {
  *
  * Includes both:
  * - floorH (integer) for gating
- * - z (float) for smooth stairs
+ * - z (float) for continuous ramps
  */
 export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
     const { tx, ty, lx, ly } = worldToTileTopLocalPx(wx, wy, tileWorld);
 
+    // 1) Ramp faces override tiles (walkable even over VOID)
+    const rh = rampHitAtWorld(wx, wy, tileWorld);
+    if (rh) {
+        const z = rh.z;
+        const floorH = Math.floor(z + 1e-6);
+
+        // Virtual "tile" record for downstream code that expects tile/kind.
+        const virtualTile: IsoTile = { kind: "FLOOR", h: floorH };
+
+        return {
+            wx,
+            wy,
+            tileWorld,
+            tx,
+            ty,
+            lx,
+            ly,
+            tile: virtualTile,
+            kind: "FLOOR",
+            shape: "FULL_TOP",
+            floorH,
+            h: floorH,
+            z,
+            blocked: false,
+            inside: true,
+            walkable: true,
+        };
+    }
+
+    // 2) Normal tile-top walking (flat, discrete)
     const t = getTile(tx, ty);
     const kind = t.kind;
 
     const shape = tileWalkShape(tx, ty);
-    const blocked = (shape === "BLOCKED") || (kind === "VOID");
+    const blocked = shape === "BLOCKED" || kind === "VOID";
 
     // Integer floor level (gating)
-    const floorH = kind === "STAIRS" ? (t.h ?? 0) : tileHeight(tx, ty);
+    const floorH = tileHeight(tx, ty);
 
-    // Continuous Z (stairs interpolate within tile)
-    // NOTE: This works even when not walkable; callers should still use .walkable to gate occupancy.
-    const z = heightAtWorld(wx, wy, tileWorld);
+    // Continuous Z (flat tiles)
+    const z = floorH;
 
     if (blocked) {
         return {
-            wx, wy, tileWorld,
-            tx, ty, lx, ly,
+            wx,
+            wy,
+            tileWorld,
+            tx,
+            ty,
+            lx,
+            ly,
             tile: t,
-            kind, shape,
+            kind,
+            shape,
             floorH,
-            h: floorH, // back-compat
+            h: floorH,
             z,
             blocked: true,
             inside: false,
@@ -474,7 +622,6 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
             reason: "BLOCKED",
         };
     }
-
 
     const { w, h: hh } = shapeDims(shape);
 
@@ -489,28 +636,29 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
     const ay = ly - oy;
 
     const inside = diamondContains(ax, ay, w, hh);
-
-    // Walkable if you're inside the top-face diamond.
-    // (Stairs are allowed here now.)
     const walkable = inside;
 
     return {
-        wx, wy, tileWorld,
-        tx, ty, lx, ly,
+        wx,
+        wy,
+        tileWorld,
+        tx,
+        ty,
+        lx,
+        ly,
         tile: t,
-        kind, shape,
+        kind,
+        shape,
         floorH,
-        h: floorH, // back-compat
+        h: floorH,
         z,
         blocked: !walkable,
         inside,
         walkable,
         reason: !inside ? "OUTSIDE" : undefined,
     };
-
-
-
 }
+
 function diamondContains(lx: number, ly: number, w: number, h: number): boolean {
     // |(x-cx)/hw| + |(y-cy)/hh| <= 1
     const cx = w * 0.5;
@@ -522,32 +670,24 @@ function diamondContains(lx: number, ly: number, w: number, h: number): boolean 
     const dy = Math.abs(ly - cy) / hh;
     return dx + dy <= 1;
 }
-// Phase 1: removed stairs-walk hitbox helpers.
-// Stairs are decorative only until connector volumes exist.
 
+// ─────────────────────────────────────────────────────────────
+// Legacy API preserved.
+// Prefer walkInfo(...).walkable in new code.
+// ─────────────────────────────────────────────────────────────
 
+export function isWalkableWorld(wx: number, wy: number, tileWorld: number): boolean {
+    // 1) Ramp faces are always walkable
+    if (rampHitAtWorld(wx, wy, tileWorld)) return true;
 
-export function isWalkableWorld(wx: number, wy: number): boolean {
-    // 1. Ramp faces are always walkable
-    for (const r of RAMP_FACES) {
-        if (pointInQuad({ x: wx, y: wy }, r.poly)) {
-            return true;
-        }
-    }
-
-    // 2. Tile tops
-    const { tx, ty } = worldToTileTopLocalPx(wx, wy, KENNEY_TILE_WORLD);
-    const t = getTile(tx, ty);
-    return !!t && t.kind !== "VOID";
+    // 2) Tile tops via walkInfo (includes top-face diamond)
+    return walkInfo(wx, wy, tileWorld).walkable;
 }
 
 // ─────────────────────────────────────────────────────────────
 // DEBUG: outline of the logical walk shape (tile-local top-face px)
-//
-// Returns points in the SAME "top local px" space as (lx, ly):
-//   lx: 0..128, ly: 0..64 (visual top box)
-// Anchors are applied so it matches isWalkableWorld exactly.
 // ─────────────────────────────────────────────────────────────
+
 export type WalkOutlineLocal = {
     blocked: boolean;
     shape: TileWalkShape;
@@ -561,13 +701,13 @@ export function getWalkOutlineLocalPx(tx: number, ty: number): WalkOutlineLocal 
 
     const { w, h } = shapeDims(shape);
 
-// Same anchor composition as isWalkableWorld
+    // Same anchor composition as isWalkableWorld
     const aShape = WALK_SHAPE_ANCHOR_PX[shape] ?? { ox: 0, oy: 0 };
     const aKind = WALK_KIND_ANCHOR_PX[t.kind] ?? { ox: 0, oy: 0 };
     const ox = aShape.ox + aKind.ox;
     const oy = aShape.oy + aKind.oy;
 
-// Default: diamond outline for non-stairs
+    // Default: diamond outline
     const base = [
         { x: w * 0.5, y: 0 }, // top
         { x: w, y: h * 0.5 }, // right
@@ -577,5 +717,4 @@ export function getWalkOutlineLocalPx(tx: number, ty: number): WalkOutlineLocal 
 
     const pts = base.map((p) => ({ x: p.x + ox, y: p.y + oy }));
     return { blocked: false, shape, pts };
-
 }

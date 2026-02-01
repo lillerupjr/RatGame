@@ -124,6 +124,8 @@ export function createGame(args: CreateGameArgs) {
 
   // DEBUG: show logical walk-mask overlay (render.ts)
   (world as any).debugWalkMask = true;
+  (world as any).debugRamps = true;
+
 
   preloadBackgrounds();
   preloadPlayerSprites();
@@ -355,6 +357,8 @@ export function createGame(args: CreateGameArgs) {
 
     // DEBUG: show logical walk-mask overlay (render.ts)
     (world as any).debugWalkMask = true;
+    (world as any).debugRamps = true;
+
     currentChoices = [];
     hideLevelUp();
   }
