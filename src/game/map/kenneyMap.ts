@@ -89,7 +89,6 @@ function clamp01(v: number) {
 // Tile tops are flat discrete surfaces. Ramp faces are continuous connectors.
 // ─────────────────────────────────────────────────────────────
 
-type Pt = { x: number; y: number };
 
 export type RampFace = {
     id: string;
@@ -168,62 +167,183 @@ export function rampHeightAt(r: RampFace, p: Pt): number {
 
 const _rampCache = new Map<number, RampFace[]>();
 
-function buildSanctuaryBridgeRamp(tileWorld: number): RampFace[] {
-    // We ramp over the 3-tile vertical bridge:
-    // maps.ts cells: (x=4,y=7..9) => tile (tx=-2, ty=0..2) when centerOnZero=true.
-    //
-    // We want a smooth ramp matching S1N..S3N:
-    // - south end (ty=2) ~ z=1
-    // - north end (ty=0) ~ z=3
-    const tx = -2;
-    const ty0 = 0;
-    const ty1 = 2;
+// Build the single “bridge ramp” face used in the Sanctuary placeholder.
+// This version adds a fast-debug “corner wiring” system so you can instantly
+// swap which corners are used for low/high edges without rewriting the poly.
 
-    const x0 = tx * tileWorld;
-    const x1 = (tx + 1) * tileWorld;
+type Pt = { x: number; y: number };
+type CornerKey = "SW" | "SE" | "NE" | "NW";
 
-    // North-most edge (top of strip)
-    const yN0 = ty0 * tileWorld;
-    // South-most edge (bottom of strip)
-    const yS1 = (ty1 + 1) * tileWorld;
+type CornerPts = Record<CornerKey, Pt>;
 
-    const r: RampFace = {
-        id: "sanctuary_bridge_col4_y7to9_1to3",
-        tag: "bridge-ramp-N",
+type RampCornerWiring = {
+    // rampHeightAt convention:
+    // - low edge = (q0,q1) at z0
+    // - high edge = (q3,q2) at z1
+    lowEdge: [CornerKey, CornerKey];   // becomes q0,q1
+    highEdge: [CornerKey, CornerKey];  // becomes q3,q2 (NOTE: order matters)
+};
 
-        // IMPORTANT for rampHeightAt convention:
-        // - low edge = (q0,q1) at z0
-        // - high edge = (q3,q2) at z1
-        //
-        // Here: low at SOUTH, high at NORTH.
-        poly: [
-            { x: x0, y: yS1 }, // q0 (south-west) low
-            { x: x1, y: yS1 }, // q1 (south-east) low
-            { x: x1, y: yN0 }, // q2 (north-east) high
-            { x: x0, y: yN0 }, // q3 (north-west) high
-        ],
+const RAMP_WIRING_PRESET: Record<
+    | "S->N" | "N->S" | "W->E" | "E->W"
+    | "S->N_swapLow" | "S->N_swapHigh"
+    | "N->S_swapLow" | "N->S_swapHigh",
+    RampCornerWiring
+> = {
+    // Low = SOUTH edge, High = NORTH edge
+    "S->N": { lowEdge: ["SW", "SE"], highEdge: ["NW", "NE"] },
+    // Low = NORTH edge, High = SOUTH edge
+    "N->S": { lowEdge: ["NW", "NE"], highEdge: ["SW", "SE"] },
+    // Low = WEST edge, High = EAST edge
+    "W->E": { lowEdge: ["NW", "SW"], highEdge: ["NE", "SE"] },
+    // Low = EAST edge, High = WEST edge
+    "E->W": { lowEdge: ["NE", "SE"], highEdge: ["NW", "SW"] },
 
-        z0: 1,
-        z1: 3,
-    };
+    // Debug variants (swap ordering)
+    "S->N_swapLow": { lowEdge: ["SE", "SW"], highEdge: ["NW", "NE"] },
+    "S->N_swapHigh": { lowEdge: ["SW", "SE"], highEdge: ["NE", "NW"] },
+    "N->S_swapLow": { lowEdge: ["NE", "NW"], highEdge: ["SW", "SE"] },
+    "N->S_swapHigh": { lowEdge: ["NW", "NE"], highEdge: ["SE", "SW"] },
+};
 
-    return [r];
+// Single knob: switch this string to try different corner selections quickly.
+export let DEBUG_BRIDGE_RAMP_WIRING: keyof typeof RAMP_WIRING_PRESET = "N->S";
+
+function buildRampPolyFromCorners(
+    corners: CornerPts,
+    wiring: RampCornerWiring
+): [Pt, Pt, Pt, Pt] {
+    const [l0, l1] = wiring.lowEdge;
+    const [h0, h1] = wiring.highEdge;
+
+    // rampHeightAt convention:
+    // q0,q1 = low edge at z0
+    // q3,q2 = high edge at z1
+    const q0 = corners[l0];
+    const q1 = corners[l1];
+    const q3 = corners[h0];
+    const q2 = corners[h1];
+
+    // Poly order must remain [q0,q1,q2,q3]
+    return [q0, q1, q2, q3];
 }
 
 
-function getRampFaces(tileWorld: number): RampFace[] {
+type RampConnector = {
+    id: string;
+    tag?: string;
+
+    // Tile-space endpoints (tops)
+    low: { tx: number; ty: number };
+    high: { tx: number; ty: number };
+
+    // Which facing edges connect (debug-friendly knob)
+    wiring: keyof typeof RAMP_WIRING_PRESET;
+
+    // Optional overrides (otherwise read from tile.h)
+    z0Override?: number;
+    z1Override?: number;
+};
+
+// Author ramps here (tile-space).
+// Add your other stair locations as additional connectors.
+const RAMP_CONNECTORS: RampConnector[] = [
+    {
+        id: "sanctuary_bridge_col4_y7to9_0to3",
+        tag: "bridge-ramp",
+        // Existing one: low at south tile, high at north tile
+        low: { tx: -2, ty: 2 },
+        high: { tx: -2, ty: 0 },
+        wiring: DEBUG_BRIDGE_RAMP_WIRING,
+        z0Override: 0, z1Override: 3,
+    },
+
+    // TODO: add more ramps here, one per former stair segment.
+    // Example template:
+    // {
+    //   id: "ramp_somewhere",
+    //   low: { tx: X0, ty: Y0 },
+    //   high:{ tx: X1, ty: Y1 },
+    //   wiring: "S->N",
+    // },
+];
+
+function tileTopCornersWorld(tx: number, ty: number, tileWorld: number): CornerPts {
+    // NOTE: these corners describe the FULL tile extents in world.
+    // For perfect seam matching, later we can switch this to use the tile’s walk quad.
+    const x0 = tx * tileWorld;
+    const x1 = (tx + 1) * tileWorld;
+    const y0 = ty * tileWorld;
+    const y1 = (ty + 1) * tileWorld;
+
+    return {
+        NW: { x: x0, y: y0 },
+        NE: { x: x1, y: y0 },
+        SW: { x: x0, y: y1 },
+        SE: { x: x1, y: y1 },
+    };
+}
+
+function buildRampFaceFromConnector(c: RampConnector, tileWorld: number): RampFace {
+    // Heights come from the connected tiles unless overridden.
+    const lowTile = getTile(c.low.tx, c.low.ty);
+    const highTile = getTile(c.high.tx, c.high.ty);
+
+    const z0 = (c.z0Override ?? (lowTile.h | 0)) as number;
+    const z1 = (c.z1Override ?? (highTile.h | 0)) as number;
+
+    // Build a single quad spanning from low tile to high tile.
+    // We map SW/SE from the low tile, and NW/NE from the high tile,
+    // then use wiring to choose which edge is low/high.
+    const lowCorners = tileTopCornersWorld(c.low.tx, c.low.ty, tileWorld);
+    const highCorners = tileTopCornersWorld(c.high.tx, c.high.ty, tileWorld);
+
+    const corners: CornerPts = {
+        SW: lowCorners.SW,
+        SE: lowCorners.SE,
+        NW: highCorners.NW,
+        NE: highCorners.NE,
+    };
+
+    const wiring = RAMP_WIRING_PRESET[c.wiring];
+
+    return {
+        id: c.id,
+        tag: c.tag ?? `ramp-${c.wiring}`,
+        poly: buildRampPolyFromCorners(corners, wiring),
+        z0,
+        z1,
+    };
+}
+
+export function buildAllRamps(tileWorld: number): RampFace[] {
+    const out: RampFace[] = [];
+    for (const c of RAMP_CONNECTORS) {
+        out.push(buildRampFaceFromConnector(c, tileWorld));
+    }
+    return out;
+}
+
+
+function _getRampFaces(tileWorld: number): RampFace[] {
     const key = tileWorld | 0;
     const hit = _rampCache.get(key);
     if (hit) return hit;
 
-    const ramps = buildSanctuaryBridgeRamp(tileWorld);
+    const ramps = buildAllRamps(tileWorld);
     _rampCache.set(key, ramps);
     return ramps;
 }
 
+// Debug/render helper: expose the authoritative ramp faces (same ones used by heightAtWorld / walkInfo)
+export function getRampFacesForDebug(tileWorld: number): RampFace[] {
+    return _getRampFaces(tileWorld);
+}
+
+
 function rampHitAtWorld(wx: number, wy: number, tileWorld: number): { r: RampFace; z: number } | null {
     const p = { x: wx, y: wy };
-    const ramps = getRampFaces(tileWorld);
+    const ramps = _getRampFaces(tileWorld);
     for (let i = 0; i < ramps.length; i++) {
         const r = ramps[i];
         if (!pointInQuad(p, r.poly)) continue;
@@ -525,7 +645,7 @@ export type WalkInfo = {
     // Position inside tile-local top-face px space
     lx: number;
     ly: number;
-
+    isRamp: boolean;
     // Tile definition + derived fields
     tile: IsoTile;
     kind: IsoTileKind;
@@ -572,8 +692,8 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
             wx,
             wy,
             tileWorld,
-            tx,
-            ty,
+            tx: NaN,
+            ty: NaN,
             lx,
             ly,
             tile: virtualTile,
@@ -582,10 +702,15 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
             floorH,
             h: floorH,
             z,
+
+            // NEW: mark as ramp surface
+            isRamp: true,
+
             blocked: false,
             inside: true,
             walkable: true,
         };
+
     }
 
     // 2) Normal tile-top walking (flat, discrete)
@@ -610,6 +735,9 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
             ty,
             lx,
             ly,
+
+            isRamp: false,
+
             tile: t,
             kind,
             shape,
@@ -622,6 +750,7 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
             reason: "BLOCKED",
         };
     }
+
 
     const { w, h: hh } = shapeDims(shape);
 
@@ -646,6 +775,9 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
         ty,
         lx,
         ly,
+
+        isRamp: false,
+
         tile: t,
         kind,
         shape,
@@ -657,6 +789,7 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
         walkable,
         reason: !inside ? "OUTSIDE" : undefined,
     };
+
 }
 
 function diamondContains(lx: number, ly: number, w: number, h: number): boolean {
