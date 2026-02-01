@@ -449,13 +449,17 @@ export async function renderSystem(
   for (let i = 0; i < w.pAlive.length; i++) {
     if (!w.pAlive[i]) continue;
 
-    const pz = (w.prZ?.[i] ?? tileHAtWorld(w.prx[i], w.pry[i])) || 0;
-    const zLift = pz * ELEV_PX;
+    const baseH = tileHAtWorld(w.prx[i], w.pry[i]); // what toScreen() already subtracts
+    const pzAbs = (w.prZ?.[i] ?? baseH) || 0;       // absolute projectile Z in tile-height units
 
-    // Use huge Z multiplier so any height difference wins over XY depth.
-    const depth = depthKey(w.prx[i], w.pry[i]) + pz * 1e9;
+// Only lift relative to the local ground, so we don't double-subtract height on stairs.
+    const zLift = (pzAbs - baseH) * ELEV_PX;
+
+// Use huge Z multiplier so any height difference wins over XY depth.
+    const depth = depthKey(w.prx[i], w.pry[i]) + pzAbs * 1e9;
 
     grounded.push({ kind: "projectile", i, depth, zLift });
+
   }
 
   // Enemies (include Z in depth so upper floors layer correctly)
