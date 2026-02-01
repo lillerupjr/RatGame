@@ -78,7 +78,7 @@ export async function renderSystem(
   const camY = hh * 0.5 - p0.y;
 
   const tileHAtWorld = (x: number, y: number) => {
-    // Smooth stair lift (float), integer elsewhere
+    // Phase 1: integer-only tile height (stairs are decorative-only)
     return heightAtWorld(x, y, KENNEY_TILE_WORLD);
   };
 
@@ -97,9 +97,10 @@ export async function renderSystem(
     // When rendering all heights, anything non-void is drawable.
     if (RENDER_ALL_HEIGHTS) return true;
 
-    // Old behavior: only active floor + stairs
-    if (t.kind === "STAIRS") return true;
+    // Phase 1: active-floor gating is pure integer-floor gating.
+    // (Stairs are decorative and should not bypass gating.)
     return tileHeight(tx, ty) === (w.activeFloorH ?? 0);
+
   };
 
 

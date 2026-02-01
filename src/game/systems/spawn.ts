@@ -18,7 +18,8 @@ export function spawnSystem(w: World, dt: number) {
   // Floors only (no spawns during boss/transition)
   if (w.runState !== "FLOOR") return;
 
-  // Allow spawning on any height (platforms/floors), as long as it is walkable.
+  // Phase 1: spawn ONLY on the active integer floor.
+  // (No connectors yet, so other platforms are unreachable.)
 
   // Find a valid spawn point near a base ring point.
   // Cheap retries + small jitter to escape void seams/cutouts.
@@ -33,7 +34,8 @@ export function spawnSystem(w: World, dt: number) {
       // Must be walkable top-face
       if (!info.walkable) continue;
 
-      // Allow any height (no active-floor gating)
+      // Phase 1: active-floor gating (avoid unreachable mobs)
+      if (info.floorH !== (w.activeFloorH | 0)) continue;
 
       // Optional: avoid stairs spawns (usually feels bad)
       // If you WANT stairs spawns, delete this line.
