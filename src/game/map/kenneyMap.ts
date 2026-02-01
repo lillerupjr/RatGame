@@ -2,9 +2,14 @@
 // Arcane-Sanctuary-style placeholder:
 // - deterministic platforms over void
 // - multi-height tiles
-// - stairs connecting levels
+// - stairs currently exist in the map, but are migrating to CONNECTORS
 //
 // IMPORTANT: render + movement MUST use the same functions so visuals/collision match.
+//
+// STAIRS → CONNECTORS migration (Phase 0: contract freeze)
+// See: docs/stairs-connectors-master.md
+// Phase 1 will delete: ramp math, stair walk masks/hitboxes, movement exceptions, projectile stair coupling.
+
 import {compileKenneyMapFromTable, type IsoTile, type IsoTileKind, STAIR_SKIN_BY_DIR} from "./kenneyMapLoader";
 import { EXCEL_SANCTUARY_01 } from "./maps";
 import { worldDeltaToScreen } from "../visual/iso";

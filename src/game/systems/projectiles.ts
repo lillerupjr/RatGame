@@ -14,11 +14,13 @@ import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
  * Range limiting:
  * - If prMaxDist > 0, projectile is removed once it exceeds start->current distance.
  *
- * Milestone C:
- * - Projectiles have height (prZ).
- * - Projectiles die if they collide with a stairs tile whose "step up" is exactly +1 above the projectile.
- *   With our tile defs, STAIRS has base height h and ramps to (h+1), so this is:
- *     stairBaseH == floor(projectileZ)
+ * * Milestone C:
+ *  * - Projectiles have height (prZ).
+ *  *
+ *  * STAIRS → CONNECTORS migration note (Phase 0: contract freeze):
+ *  * - Phase 1 will REMOVE any stair-tile coupling for projectile lifetime/collision.
+ *  * - Projectiles must not reference stair tiles; only compare prZ vs enemy vertical hit ranges.
+ *  * See: docs/stairs-connectors-master.md)
  */
 export function projectilesSystem(w: World, dt: number) {
     const moveSpeedMult = w.baseMoveSpeed > 0 ? w.pSpeed / w.baseMoveSpeed : 1;
