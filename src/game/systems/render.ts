@@ -43,10 +43,11 @@ import {
 
 import {
   getKenneyGroundTile,
-  getKenneyStairsTile,
+  getKenneyTileBySkin,
   KENNEY_TILE_WORLD,
   KENNEY_TILE_ANCHOR_Y,
 } from "../visual/kenneyTiles";
+
 
 export async function renderSystem(
     w: World,
@@ -123,7 +124,6 @@ export async function renderSystem(
   ctx.globalAlpha = 1;
 
   const groundTile = getKenneyGroundTile();
-  const stairsTile = getKenneyStairsTile();
 
   // World-units per tile step (keep in sync with kenneyTiles constants)
   const T = KENNEY_TILE_WORLD;
@@ -299,14 +299,17 @@ export async function renderSystem(
 
         const tdef = getTile(tx, ty);
 
-        // Choose sprite: STAIRS uses landscape_20.png, FLOOR uses landscape_13.png
+        // Choose sprite:
+        // - STAIRS: use authored tdef.skin (loader sets it from token dir)
+        // - FLOOR: use ground tile (default floor skin is handled elsewhere later)
         const useStairs = tdef.kind === "STAIRS" || isStairsTile(tx, ty);
-        const tileRec = useStairs && stairsTile?.ready ? stairsTile : groundTile;
+        const tileRec = useStairs ? getKenneyTileBySkin(tdef.skin) : groundTile;
 
         if (!tileRec?.ready || !tileRec.img || tileRec.img.width <= 0 || tileRec.img.height <= 0) {
-          // If stairs tile missing, skip (ground still renders elsewhere)
+          // If a specific stairs tile is missing, skip this tile (avoids broken draw)
           continue;
         }
+
 
         const iw = tileRec.img.width;
         const ih = tileRec.img.height;
