@@ -104,6 +104,7 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
 
 
     w.pAlive.push(true);
+    w.prHidden.push(false);
     w.prjKind.push(a.kind);
     (w as any)._lastFireProjKind = a.kind;
 

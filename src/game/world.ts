@@ -177,6 +177,7 @@ export type World = {
   // Projectiles
   // -------------------------
   pAlive: boolean[];
+  prHidden: boolean[]; // Phase 3: render-only hide (e.g., underground)
   pKind: number; // reserved
   prjKind: number[];
   prx: number[];
@@ -408,6 +409,7 @@ export function createWorld(args: CreateWorldArgs): World {
 
     // Projectiles
     pAlive: [],
+    prHidden: [],
     pKind: 0,
     prjKind: [],
     prx: [],

@@ -45,7 +45,6 @@ import {
   KENNEY_TILE_ANCHOR_Y, Loaded,
 } from "../visual/kenneyTiles";
 
-
 export async function renderSystem(
     w: World,
     ctx: CanvasRenderingContext2D,
@@ -465,19 +464,17 @@ export async function renderSystem(
 // Projectiles (depth-sorted + zLift)
   for (let i = 0; i < w.pAlive.length; i++) {
     if (!w.pAlive[i]) continue;
+    if (w.prHidden?.[i]) continue; // Phase 3: render-only hiding
 
-    const baseH = tileHAtWorld(w.prx[i], w.pry[i]); // what toScreen() already subtracts
-    const pzAbs = (w.prZ?.[i] ?? baseH) || 0;       // absolute projectile Z in tile-height units
+    const baseH = tileHAtWorld(w.prx[i], w.pry[i]); // local ground height (continuous on stairs)
+    const pzAbs = (w.prZ?.[i] ?? baseH) || 0;
 
-// Only lift relative to the local ground, so we don't double-subtract height on stairs.
     const zLift = (pzAbs - baseH) * ELEV_PX;
-
-// Use huge Z multiplier so any height difference wins over XY depth.
     const depth = depthKey(w.prx[i], w.pry[i]) + pzAbs * 1e9;
 
     grounded.push({ kind: "projectile", i, depth, zLift });
-
   }
+
 
   // Enemies (include Z in depth so upper floors layer correctly)
   for (let i = 0; i < w.eAlive.length; i++) {
@@ -655,6 +652,31 @@ export async function renderSystem(
       const px = p.x;
       const py = p.y - it.zLift;
 
+      // ---------------------------------------------------
+      // Phase 3: projectile ground shadow (depth cue)
+      // Shadow is drawn on the nearest ground plane at p.y,
+      // while projectile sprite is lifted to py.
+      // ---------------------------------------------------
+      {
+        const r = (w.prR[i] ?? 4);
+
+        // Bigger lift => smaller + fainter shadow
+        const lift = Math.max(0, it.zLift || 0);
+        const t = Math.max(0, Math.min(1, 1 - lift / 70)); // tune "70" to taste
+
+        // Slightly squashed ellipse feels like iso ground contact
+        const rx = r * ISO_X * (0.95 + 0.15 * t);
+        const ry = r * ISO_Y * (0.85 + 0.10 * t);
+
+        ctx.save();
+        ctx.globalAlpha = 0.18 * t;
+        ctx.fillStyle = "#000";
+        ctx.beginPath();
+        ctx.ellipse(px, p.y, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
       const wdx = w.prDirX[i] ?? 1;
       const wdy = w.prDirY[i] ?? 0;
       const d = worldDeltaToScreen(wdx, wdy);
@@ -662,7 +684,10 @@ export async function renderSystem(
 
       if (spr?.ready && spr.img && spr.img.width > 0 && spr.img.height > 0) {
         const areaMult = Math.max(0.6, Math.min(2.5, (w.prR[i] ?? 4) / 4));
-        const target = PROJECTILE_BASE_DRAW_PX * areaMult * getProjectileDrawScale(w.prjKind[i]);
+        const target =
+            PROJECTILE_BASE_DRAW_PX *
+            areaMult *
+            getProjectileDrawScale(w.prjKind[i]);
 
         const iw = spr.img.width;
         const ih = spr.img.height;
@@ -692,6 +717,7 @@ export async function renderSystem(
 
       continue;
     }
+
 
 
     // Player (8-dir sprite; fallback ellipse)
