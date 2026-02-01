@@ -1,15 +1,20 @@
 // src/game/systems/projectiles.ts
 import type { World } from "../world";
 import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
-import { heightAtWorld, heightAtWorldOcclusion, WalkInfo, walkInfo } from "../map/kenneyMap";
+import {heightAtWorld, queryVisibilityAtWorld, WalkInfo, walkInfo} from "../map/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
+import {
+    isUnderOcclusionCeiling,
+    VISIBILITY_BELOW_CEILING_EPS,
+} from "../map/visibility";
 
 // Phase 2: projectile vs stairs collision
 // Tune this to make stairs “thicker/thinner” for projectile blocking.
 export let PROJECTILE_STAIRS_Z_TOL = 0.35;
-// How far below occlusion ceiling counts as "under"
-// Smaller = hide sooner, larger = hide later
-export let PROJECTILE_BELOW_GROUND_EPS = 0.02;
+// How far below occlusion ceiling counts as "under" for projectile hiding.
+// NOTE: unified with generic visibility epsilon. Keep this as a projectile-facing
+// alias so existing tuning workflows still work.
+export let PROJECTILE_BELOW_GROUND_EPS = VISIBILITY_BELOW_CEILING_EPS;
 
 // --- Movement substepping (prevents "one whole tile per frame") ---
 export let PROJECTILE_MAX_MOVE_FRAC_PER_STEP = 0.5;   // fraction of tile per move substep
@@ -124,16 +129,29 @@ export function projectilesSystem(w: World, dt: number) {
                     const sx = ox + segDx * tt;
                     const sy = oy + segDy * tt;
 
-                    const groundZ = heightAtWorldOcclusion(sx, sy, T);
-
-                    const occZ = heightAtWorldOcclusion(sx, sy, T);
                     const pzAbs = (w.prZ?.[i] ?? 0);
 
-                    if (pzAbs < occZ - PROJECTILE_BELOW_GROUND_EPS) {
+                    // Open-stairs rule:
+                    // - Stairs do NOT visually hide projectiles
+                    // - But stairs DO block projectiles if they collide at the stair surface height
+                    const wi = walkInfo(sx, sy, T);
+                    if (wi.walkable && wi.kind === "STAIRS") {
+                        const dz = Math.abs(pzAbs - wi.z);
+                        if (dz <= PROJECTILE_STAIRS_Z_TOL) {
+                            w.pAlive[i] = false;
+                            hitGround = true; // stop further work this frame
+                            break;
+                        }
+                        // If we're not colliding, we also don't treat stairs as occluders.
+                        continue;
+                    }
+
+                    // Non-stairs: keep the existing occlusion-based “underground / under-platform” behavior
+                    const vis = queryVisibilityAtWorld(sx, sy, pzAbs, T, PROJECTILE_BELOW_GROUND_EPS);
+                    if (vis.occluded) {
                         hitGround = true;
                         break;
                     }
-
                 }
 
 
@@ -225,9 +243,7 @@ export function projectilesSystem(w: World, dt: number) {
                     w.prLastHitCd[i] = 0;
                 }
             }
-            // Phase 2: stairs can block projectiles when they intersect at the same Z.
-            // Rule: if the projectile is inside a STAIRS tile top-face AND its prZ matches
-            // the stairs ramp height at that point (within tolerance), kill it.
+
             if (w.pAlive[i]) {
                 const info: WalkInfo = walkInfo(w.prx[i], w.pry[i], T);
                 if (info.kind === "STAIRS" && info.walkable) {

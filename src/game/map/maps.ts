@@ -1,8 +1,7 @@
 // src/game/map/maps.ts
 import type { TableMapDef } from "./tableMapTypes";
 
-// Excel selection size (cols x rows).
-// If you later change the selection box, update w/h and coordinates.
+
 export const EXCEL_SANCTUARY_01: TableMapDef = {
     id: "EXCEL_SANCTUARY_01",
     w: 13,
