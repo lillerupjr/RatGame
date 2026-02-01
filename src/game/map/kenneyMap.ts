@@ -5,7 +5,7 @@
 // - stairs connecting levels
 //
 // IMPORTANT: render + movement MUST use the same functions so visuals/collision match.
-import { compileKenneyMapFromTable, type IsoTile, type IsoTileKind } from "./kenneyMapLoader";
+import {compileKenneyMapFromTable, type IsoTile, type IsoTileKind, STAIR_SKIN_BY_DIR} from "./kenneyMapLoader";
 import { EXCEL_SANCTUARY_01 } from "./maps";
 import { worldDeltaToScreen } from "../visual/iso";
 
@@ -26,6 +26,27 @@ const _compiled = compileKenneyMapFromTable(EXCEL_SANCTUARY_01);
 
 export function getTile(tx: number, ty: number): IsoTile {
     return _compiled.getTile(tx, ty);
+}
+
+/**
+ * Map-authored spawn point (tile-space -> world-space center).
+ * Uses the first P<number> token found in maps.ts.
+ */
+export function getSpawnWorld(tileWorld: number): { x: number; y: number; z: number; tx: number; ty: number; h: number } {
+    const tx = (_compiled as any).spawnTx ?? 0;
+    const ty = (_compiled as any).spawnTy ?? 0;
+
+    const t = getTile(tx, ty);
+    const h = (t.h | 0);
+
+    // center of tile in world space
+    const x = (tx + 0.5) * tileWorld;
+    const y = (ty + 0.5) * tileWorld;
+
+    // floors/spawn => z = h (stairs would be h+step, but we don't recommend spawning mid-ramp)
+    const z = h;
+
+    return { x, y, z, tx, ty, h };
 }
 
 /**
@@ -69,24 +90,33 @@ function clamp01(v: number) {
  * decreasing ly → step increases towards 1.
  */
 export function heightAtWorld(wx: number, wy: number, tileWorld: number): number {
-    const { tx, ty, lx: _lx, ly } = worldToTileTopLocalPx(wx, wy, tileWorld);
+    const { tx, ty } = worldToTileTopLocalPx(wx, wy, tileWorld);
     const t = getTile(tx, ty);
     const baseH = (t.h | 0);
 
     if (t.kind !== "STAIRS") return baseH;
 
-// STAIRS: interpolate within this tile in WORLD space (stable across tile seams).
-// Our stairs run "north" in tile-space (ty decreasing), so:
-// - south edge of tile => step = 0
-// - north edge of tile => step = 1
-//
-// Use world fraction inside the tile instead of top-local ly, so the height ramp
-// lines up with the actual boundary you cross.
-    const fy = (wy - ty * tileWorld) / tileWorld; // 0..1
-    const step = clamp01(1 - fy);
-    return baseH + step;
+    // World-space fractions inside this tile (0..1)
+    const fx = (wx - tx * tileWorld) / tileWorld;
+    const fy = (wy - ty * tileWorld) / tileWorld;
 
+    // Authoritative ramp direction:
+    // N: step increases when moving north (fy ↓)
+    // S: step increases when moving south (fy ↑)
+    // W: step increases when moving west  (fx ↓)
+    // E: step increases when moving east  (fx ↑)
+    const dir = (t.dir ?? "N") as any;
+
+    let step = 0;
+    if (dir === "N") step = 1 - fy;
+    else if (dir === "S") step = fy;
+    else if (dir === "W") step = 1 - fx;
+    else if (dir === "E") step = fx;
+    else step = 1 - fy; // hard fallback
+
+    return baseH + clamp01(step);
 }
+
 
 // ─────────────────────────────────────────────────────────────
 // Enemy/AI helper: find a good stairs "magnet" target
@@ -241,12 +271,19 @@ export const WALK_SHAPE_ANCHOR_PX: Record<TileWalkShape, { ox: number; oy: numbe
 };
 
 // Optional per-kind anchor nudges (adds on top of shape anchor).
-// Keep these at 0 unless you notice a particular tile kind is “off”.
+// Use this to move the *logical walkable face* relative to the 128x64 top-local box.
+//
+// Positive oy moves the walkable hitbox DOWN (toward the player / screen bottom).
+// Negative oy moves it UP (toward screen top).
+export const STAIRS_WALK_FACE_OY_PX = 0; // <- tune this (try -6 .. +6)
+
+// (Optional) X nudge too, if you ever need it:
+export const STAIRS_WALK_FACE_OX_PX = 0;
+
 export const WALK_KIND_ANCHOR_PX: Partial<Record<IsoTileKind, { ox: number; oy: number }>> = {
-    // Example knobs (leave at 0 until needed):
-    // STAIRS: { ox: 0, oy: -8 },
-    // FLOOR:  { ox: 0, oy: 0 },
+    STAIRS: { ox: STAIRS_WALK_FACE_OX_PX, oy: STAIRS_WALK_FACE_OY_PX },
 };
+
 
 
 
@@ -264,13 +301,6 @@ function shapeDims(shape: TileWalkShape): { w: number; h: number } {
 
 export type StairDir = "N" | "W" | "E" | "S";
 
-// Your mapping:
-export const STAIR_SPRITE_BY_DIR: Record<StairDir, string> = {
-    N: "landscape_20",
-    W: "landscape_23",
-    E: "landscape_19",
-    S: "landscape_16",
-};
 
 export function tileWalkShape(tx: number, ty: number): TileWalkShape {
     const t = getTile(tx, ty);
@@ -287,49 +317,6 @@ export function tileWalkShape(tx: number, ty: number): TileWalkShape {
     }
 }
 
-/**
- * Derive stair direction from neighbor heights.
- * We assume each stairs tile has an integer base h, and it connects to ONE neighbor at h+1.
- * If ambiguous, fall back to "N" (matches your current heightAtWorld assumption).
- */
-export function stairDirAt(tx: number, ty: number): StairDir {
-    const t = getTile(tx, ty);
-    if (t.kind !== "STAIRS") return "N";
-
-    const h = (t.h | 0);
-
-    // Look for the adjacent tile that is higher (h+1). Prefer exact h+1.
-    const n = tileHeight(tx, ty - 1);
-    const s = tileHeight(tx, ty + 1);
-    const w = tileHeight(tx - 1, ty);
-    const e = tileHeight(tx + 1, ty);
-
-    // exact h+1 neighbors first
-    if (n === h + 1) return "N";
-    if (s === h + 1) return "S";
-    if (w === h + 1) return "W";
-    if (e === h + 1) return "E";
-
-    // If the map is authored differently, pick the steepest upward neighbor as a fallback.
-    const dn = n - h;
-    const ds = s - h;
-    const dw = w - h;
-    const de = e - h;
-
-    let best: StairDir = "N";
-    let bestDelta = dn;
-
-    if (ds > bestDelta) { bestDelta = ds; best = "S"; }
-    if (dw > bestDelta) { bestDelta = dw; best = "W"; }
-    if (de > bestDelta) { bestDelta = de; best = "E"; }
-
-    return best;
-}
-
-export function stairSpriteIdAt(tx: number, ty: number): string {
-    const dir = stairDirAt(tx, ty);
-    return STAIR_SPRITE_BY_DIR[dir];
-}
 
 
 /**

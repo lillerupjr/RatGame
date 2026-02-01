@@ -16,7 +16,7 @@ export type TableMapDef = {
 
     // Optional: default floor skin (e.g. "landscape_23")
     defaultFloorSkin?: string;
-
+    defaultSpawnSkin?: string;
     // Optional: place the selection so its center ends up at tile (0,0)
     centerOnZero?: boolean;
 

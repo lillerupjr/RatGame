@@ -40,58 +40,56 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   // - w.activeFloorH tracks integer floor level
   // - w.pz tracks continuous Z (smooth on stairs)
   // -------------------------------------------------------
-  const curInfo = walkInfo(w.px, w.py, KENNEY_TILE_WORLD);
-
-// Integer "floor level" for gating/active floor
-  const curFloorH = curInfo.floorH;
-
-// Keep world state synced even if we don't move this frame
-  w.activeFloorH = curFloorH;
+  // Keep world state synced even if we don't move this frame
+  let curInfo = walkInfo(w.px, w.py, KENNEY_TILE_WORLD);
+  w.activeFloorH = curInfo.floorH;
   w.pz = curInfo.z;
-
 
   // Attempt move
   const nx = w.px + w.pvx * dt;
   const ny = w.py + w.pvy * dt;
 
-  // Simple axis-separated resolution (gives nice "sliding" on edges)
+  // Sliding resolution, but stair entry needs diagonal-first (axis split can miss).
   const tryMove = (wx: number, wy: number) => {
     const nextInfo = walkInfo(wx, wy, KENNEY_TILE_WORLD);
 
     // Must be inside walk mask (top-face diamond etc.)
     if (!nextInfo.walkable) return false;
 
-// Integer floor height for gating
-    const nextFloorH = nextInfo.floorH;
-
-    // Same-floor unless stairs involved
+    // Same-floor unless stairs involved (use LIVE curInfo)
     const stairsInvolved = curInfo.kind === "STAIRS" || nextInfo.kind === "STAIRS";
-    const sameFloor = nextFloorH === curFloorH;
-
+    const sameFloor = nextInfo.floorH === curInfo.floorH;
     if (!stairsInvolved && !sameFloor) return false;
 
     // Commit WORLD position
     w.px = wx;
     w.py = wy;
 
+    // Update LIVE tile info for subsequent checks THIS FRAME
+    curInfo = nextInfo;
+
     // Update floor state to match the tile we occupy (integer)
-    w.activeFloorH = nextFloorH;
+    w.activeFloorH = nextInfo.floorH;
 
     // Continuous Z for smooth stair traversal + render lift
     w.pz = nextInfo.z;
 
     return true;
-
   };
 
-  const movedX = tryMove(nx, w.py);
-  const movedY = tryMove(w.px, ny);
+  // 1) Try full move first (critical for entering offset stair top-faces)
+  const movedDiag = tryMove(nx, ny);
 
-  // If neither axis worked, stop velocity so sprite settles
+  // 2) Then axis-slide if needed
+  const movedX = movedDiag ? true : tryMove(nx, w.py);
+  const movedY = movedDiag ? true : tryMove(w.px, ny);
+
+  // If nothing worked, stop velocity so sprite settles
   if (!movedX && !movedY) {
     w.pvx = 0;
     w.pvy = 0;
   }
+
 
   // -------------------------------------------------------
   // Enemies: single-query Z + (optional) floor gating
