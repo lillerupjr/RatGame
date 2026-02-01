@@ -19,8 +19,14 @@ export const KENNEY_TILE_ANCHOR_Y = 0.55;
 // ---- Configure expected filenames here ----
 const FILES = {
     GROUND: "landscape_28.png",
-    STAIRS: "landscape_20.png",
+
+    // Directional stairs (maps.ts tokens are authoritative; loader sets tile.skin)
+    STAIRS_N: "landscape_20.png",
+    STAIRS_W: "landscape_23.png",
+    STAIRS_E: "landscape_19.png",
+    STAIRS_S: "landscape_16.png",
 } as const;
+
 
 const cache: Record<string, Loaded> = Object.create(null);
 
@@ -53,6 +59,14 @@ function loadByFile(file: string): Loaded {
     return rec;
 }
 
+function skinToFile(skin?: string): string | null {
+    if (!skin) return null;
+    // Loader currently stores e.g. "landscape_23" (no extension). Accept both.
+    const s = skin.trim();
+    if (!s) return null;
+    return s.toLowerCase().endsWith(".png") ? s : `${s}.png`;
+}
+
 export function preloadKenneyTiles() {
     for (const file of Object.values(FILES)) loadByFile(file);
 }
@@ -61,6 +75,14 @@ export function getKenneyGroundTile(): Loaded {
     return loadByFile(FILES.GROUND);
 }
 
-export function getKenneyStairsTile(): Loaded {
-    return loadByFile(FILES.STAIRS);
+// New: load by authored skin (tile.skin), with fallback to ground
+export function getKenneyTileBySkin(skin?: string): Loaded {
+    const file = skinToFile(skin);
+    return file ? loadByFile(file) : loadByFile(FILES.GROUND);
 }
+
+// Back-compat: keep old API (defaults to "north" stairs art)
+export function getKenneyStairsTile(): Loaded {
+    return loadByFile(FILES.STAIRS_N);
+}
+

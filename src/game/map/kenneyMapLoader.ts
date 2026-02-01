@@ -6,10 +6,10 @@ export type StairDir = "N" | "E" | "S" | "W";
 
 // Sprite mapping (your decision):
 export const STAIR_SKIN_BY_DIR: Record<StairDir, string> = {
-    N: "landscape_20",
-    W: "landscape_23",
-    E: "landscape_19",
-    S: "landscape_16",
+    S: "landscape_20",
+    E: "landscape_23",
+    W: "landscape_19",
+    N: "landscape_16",
 };
 export type IsoTile = {
     kind: IsoTileKind;
