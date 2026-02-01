@@ -1,9 +1,22 @@
 // src/game/systems/projectiles.ts
 import type { World } from "../world";
 import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
-import { getTile } from "../map/kenneyMap";
+import { heightAtWorld, heightAtWorldOcclusion, WalkInfo, walkInfo } from "../map/kenneyMap";
+
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
+// Phase 2: projectile vs stairs collision
+// Tune this to make stairs “thicker/thinner” for projectile blocking.
+export let PROJECTILE_STAIRS_Z_TOL = 0.35;
+
+// How far below ground counts as "under" (smaller = hides sooner)
+export let PROJECTILE_BELOW_GROUND_EPS = 0.02;
+export let PROJECTILE_MAX_MOVE_STEPS = 12;
+
+export let PROJECTILE_MAX_MOVE_FRAC_PER_STEP = 0.5;   // fewer move substeps (still ok)
+export let PROJECTILE_GROUND_SAMPLE_SPAN_FRAC = 0.10; // ~10 samples per tile traveled
+export let PROJECTILE_GROUND_SAMPLE_MAX_STEPS = 32;
+export let PROJECTILE_GROUND_SAMPLE_STEPS = 1;
 /**
  * Projectile movement + lifetime cleanup.
  *
@@ -62,14 +75,76 @@ export function projectilesSystem(w: World, dt: number) {
             w.prDirX[i] = Math.cos(a);
             w.prDirY[i] = Math.sin(a);
         } else {
-// Restore previous "double integration" feel (pre-fix behavior) without reintroducing the bug.
-            const PROJECTILE_SPEED_MULT = 2;
+            // Restore previous "double integration" feel (pre-fix behavior) without reintroducing the bug.
+            const PROJECTILE_SPEED_MULT = .2;
 
             const vx = w.prvx[i] * moveSpeedMult * PROJECTILE_SPEED_MULT;
             const vy = w.prvy[i] * moveSpeedMult * PROJECTILE_SPEED_MULT;
 
-            w.prx[i] += vx * dt;
-            w.pry[i] += vy * dt;
+            let ox = w.prx[i];
+            let oy = w.pry[i];
+
+
+
+            const maxStepDist = Math.max(1e-6, T * Math.max(0.05, PROJECTILE_MAX_MOVE_FRAC_PER_STEP));
+            const totalDist = Math.hypot(vx * dt, vy * dt);
+            const moveSteps = Math.min(PROJECTILE_MAX_MOVE_STEPS, Math.max(1, Math.ceil(totalDist / maxStepDist)));
+
+            let hitGround = false;
+
+            for (let m = 0; m < moveSteps; m++) {
+                const subDt = dt / moveSteps;
+
+                const nx = ox + vx * subDt;
+                const ny = oy + vy * subDt;
+
+                // Ground-under sampling inside THIS small move (adaptive to distance)
+                const segDx = nx - ox;
+                const segDy = ny - oy;
+                const segDist = Math.hypot(segDx, segDy);
+
+// baseline minimum
+                const baseSteps = Math.max(1, PROJECTILE_GROUND_SAMPLE_STEPS | 0);
+
+// adaptive: aim for ~1 sample every (tile * spanFrac)
+                const spanFrac = Math.max(1e-4, PROJECTILE_GROUND_SAMPLE_SPAN_FRAC);
+                const wantSteps = Math.ceil(segDist / (T * spanFrac));
+
+// clamp for perf
+                const maxSteps = Math.max(1, PROJECTILE_GROUND_SAMPLE_MAX_STEPS | 0);
+                const steps = Math.min(maxSteps, Math.max(baseSteps, wantSteps));
+
+                for (let s = 1; s <= steps; s++) {
+                    const tt = s / steps;
+                    const sx = ox + segDx * tt;
+                    const sy = oy + segDy * tt;
+
+                    const groundZ = heightAtWorldOcclusion(sx, sy, T);
+
+                    const pzAbs = (w.prZ?.[i] ?? 0) || 0;
+
+                    if (pzAbs < groundZ - PROJECTILE_BELOW_GROUND_EPS) {
+                        hitGround = true;
+                        break;
+                    }
+                }
+
+
+                // Commit the substep move
+                w.prx[i] = nx;
+                w.pry[i] = ny;
+
+                ox = nx;
+                oy = ny;
+
+                if (hitGround) break;
+            }
+
+            if (hitGround) {
+                w.prHidden[i] = true;
+                continue;
+            }
+
             // Wall bounce (only for projectiles that opted-in)
             if (w.prWallBounce[i] && w.pAlive[i]) {
                 const ww = (w as any).viewW ?? 800;
@@ -143,8 +218,19 @@ export function projectilesSystem(w: World, dt: number) {
                     w.prLastHitCd[i] = 0;
                 }
             }
-            // Phase 1: no map collision coupling for stairs/connectors.
-
+            // Phase 2: stairs can block projectiles when they intersect at the same Z.
+            // Rule: if the projectile is inside a STAIRS tile top-face AND its prZ matches
+            // the stairs ramp height at that point (within tolerance), kill it.
+            if (w.pAlive[i]) {
+                const info: WalkInfo = walkInfo(w.prx[i], w.pry[i], T);
+                if (info.kind === "STAIRS" && info.walkable) {
+                    const stairZ = heightAtWorld(w.prx[i], w.pry[i], T);
+                    const dz = Math.abs((w.prZ[i] ?? 0) - stairZ);
+                    if (dz <= PROJECTILE_STAIRS_Z_TOL) {
+                        w.pAlive[i] = false;
+                    }
+                }
+            }
         }
 
         // -------------------------

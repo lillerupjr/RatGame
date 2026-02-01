@@ -75,6 +75,7 @@ export function tileHeight(tx: number, ty: number): number {
 function clamp01(v: number) {
     return v < 0 ? 0 : v > 1 ? 1 : v;
 }
+
 /**
  * Phase 2: STAIRS are walkable and provide SMOOTH ramp Z.
  *
@@ -84,7 +85,7 @@ function clamp01(v: number) {
  * - STAIRS without dir: treated as flat at baseH
  *
  * NOTE:
- * We use top-face local px (lx,ly) because it matches your iso projection (128x64 box).
+ * This is the MOVEMENT/PHYSICS height: "what tile am I standing on (top-face mapping)?".
  */
 export function heightAtWorld(wx: number, wy: number, tileWorld: number): number {
     const { tx, ty } = worldToTileTopLocalPx(wx, wy, tileWorld);
@@ -112,6 +113,40 @@ export function heightAtWorld(wx: number, wy: number, tileWorld: number): number
 
     return baseH + clamp01(step);
 }
+
+/**
+ * OCCLUSION height (render/visibility):
+ *
+ * In isometric Kenney tiles, the vertical apron of a higher tile visually overlaps
+ * a region *south* of that tile. A point can be "under" a higher tile in screen-space
+ * before its world position maps into that tile's top-face.
+ *
+ * This function returns the height of "the tile that can visually cover this point".
+ *
+ * Tuning knobs:
+ * - OCCLUSION_LOOKAHEAD_FRAC: how far "north" we sample (in world units, as a fraction of tileWorld)
+ *   to detect the tile whose apron might cover this point.
+ */
+export let OCCLUSION_LOOKAHEAD_FRAC = 2.50; // 0.50 tile is a good starting point for Kenney apron overlap
+
+export function heightAtWorldOcclusion(wx: number, wy: number, tileWorld: number): number {
+    // Base: movement height at this point
+    const h0 = heightAtWorld(wx, wy, tileWorld);
+
+    // In isometric, "screen-up" corresponds roughly to decreasing (wx + wy),
+    // so we sample diagonally northwest in world space.
+    const look = tileWorld * OCCLUSION_LOOKAHEAD_FRAC;
+
+    const hNW = heightAtWorld(wx - look, wy - look, tileWorld);
+
+    // Optional: also sample straight "north-ish" to be robust for edge cases
+    // where your world axes or map orientation differs slightly.
+    const hN = heightAtWorld(wx, wy - look, tileWorld);
+
+    return Math.max(h0, hNW, hN);
+}
+
+
 
 
 // ─────────────────────────────────────────────────────────────
@@ -269,6 +304,7 @@ export type WalkInfo = {
     ly: number;
 
     // Tile definition + derived fields
+    tile: IsoTile;      // <-- NEW: full tile record
     kind: IsoTileKind;
     shape: TileWalkShape;
 
@@ -291,6 +327,7 @@ export type WalkInfo = {
     // Debug helper (why it failed)
     reason?: "BLOCKED" | "OUTSIDE";
 };
+
 
 /**
  * Rich walkability info for a world point.
@@ -320,6 +357,7 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
         return {
             wx, wy, tileWorld,
             tx, ty, lx, ly,
+            tile: t,
             kind, shape,
             floorH,
             h: floorH, // back-compat
@@ -330,6 +368,7 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
             reason: "BLOCKED",
         };
     }
+
 
     const { w, h: hh } = shapeDims(shape);
 
@@ -353,6 +392,7 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
     return {
         wx, wy, tileWorld,
         tx, ty, lx, ly,
+        tile: t,
         kind, shape,
         floorH,
         h: floorH, // back-compat
@@ -362,6 +402,7 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
         walkable,
         reason: !inside ? "OUTSIDE" : undefined,
     };
+
 
 
 }
