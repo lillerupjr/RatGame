@@ -40,27 +40,42 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   //     * w.activeFloorH = current tile integer floorH
   //     * w.pz         = current tile integer floorH
   // -------------------------------------------------------
-
   // Keep world state synced even if we don't move this frame
   let curInfo = walkInfo(w.px, w.py, KENNEY_TILE_WORLD);
-  w.activeFloorH = curInfo.floorH;
-  // Phase 1: logical height is always integer (no stair ramp Z)
-  w.pz = curInfo.floorH;
+
+  // Phase 2: continuous height (stairs ramp)
+  w.pz = curInfo.z;
+
+  // Active floor is still an integer concept (used by spawns / filtering).
+  // On stairs we track the nearest integer to current z.
+  w.activeFloorH =
+      curInfo.kind === "STAIRS" ? (Math.floor(curInfo.z + 0.5) | 0) : (curInfo.floorH | 0);
 
   // Attempt move
   const nx = w.px + w.pvx * dt;
   const ny = w.py + w.pvy * dt;
 
-  // Sliding resolution, but stair entry needs diagonal-first (axis split can miss).
+  // Phase 2 movement gate:
+  // - must be walkable
+  // - allow same-floor moves normally
+  // - allow floor transitions if STAIRS involved, as long as the z jump is small
+  const MAX_STEP_Z = 1.05;
+
   const tryMove = (wx: number, wy: number) => {
     const nextInfo = walkInfo(wx, wy, KENNEY_TILE_WORLD);
 
-    // Must be inside walk mask (top-face diamond etc.)
     if (!nextInfo.walkable) return false;
 
-    // Phase 1: same-floor ONLY (stairs are decorative and non-walkable)
-    const sameFloor = nextInfo.floorH === curInfo.floorH;
-    if (!sameFloor) return false;
+    const stairsInvolved = (curInfo.kind === "STAIRS") || (nextInfo.kind === "STAIRS");
+
+    if (!stairsInvolved) {
+      // Pure floor movement: keep same integer floor
+      if (nextInfo.floorH !== curInfo.floorH) return false;
+    } else {
+      // Stairs movement: allow transition as long as z doesn't jump too far
+      const dz = Math.abs(nextInfo.z - curInfo.z);
+      if (dz > MAX_STEP_Z) return false;
+    }
 
     // Commit WORLD position
     w.px = wx;
@@ -69,14 +84,14 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     // Update LIVE tile info for subsequent checks THIS FRAME
     curInfo = nextInfo;
 
-    // Update floor state to match the tile we occupy (integer)
-    w.activeFloorH = nextInfo.floorH;
-
-    // Phase 1: integer-only Z
-    w.pz = nextInfo.floorH;
+    // Update height + active floor
+    w.pz = nextInfo.z;
+    w.activeFloorH =
+        nextInfo.kind === "STAIRS" ? (Math.floor(nextInfo.z + 0.5) | 0) : (nextInfo.floorH | 0);
 
     return true;
   };
+
 
   // 1) Try full move first (critical for entering offset stair top-faces)
   const movedDiag = tryMove(nx, ny);
@@ -123,19 +138,25 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     let eCur = walkInfo(ex, ey, KENNEY_TILE_WORLD);
     ez[i] = eCur.z;
 
-    // Phase 1: no stairs traversal (stairs are decorative-only).
-    // Enemies only move when they are on the same integer floor as the player.
-    if (eCur.floorH !== playerFloorH) {
-      // Still keep ez updated for hit detection / zones, but don't steer.
-      continue;
+    // Phase 2:
+    // - Enemies can traverse stairs, so we no longer hard-stop just because floorH differs.
+    // - But we DO still prevent "teleport" floor jumps: only chase if player is reachable
+    //   through local stepping (stairs or same floor).
+    //
+    // Simple rule for now:
+    // - If neither enemy nor player is on STAIRS, require same floorH (prevents cross-platform weirdness).
+    // - If STAIRS involved, allow.
+    const playerOnStairs = (pInfo.kind === "STAIRS");
+    const enemyOnStairs = (eCur.kind === "STAIRS");
+
+    if (!playerOnStairs && !enemyOnStairs) {
+      if (eCur.floorH !== playerFloorH) continue;
     }
 
-    // Same floor: chase player.
+    // Steer toward player
     const tx = w.px;
     const ty = w.py;
-    }
 
-    // Steer toward target
     const vx = tx - ex;
     const vy = ty - ey;
     const d = Math.hypot(vx, vy) || 1;
@@ -145,15 +166,22 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     const enx = ex + ux * w.eSpeed[i] * dt;
     const eny = ey + uy * w.eSpeed[i] * dt;
 
-    // Attempt one axis move, returning updated current info if move succeeds
     const tryEnemyMove = (wx: number, wy: number) => {
       const next = walkInfo(wx, wy, KENNEY_TILE_WORLD);
       if (!next.walkable) return false;
 
-      // Same-floor unless stairs involved (BUT use CURRENT eCur, not stale!)
-      const sameFloor = next.floorH === eCur.floorH;
-      if (!sameFloor) return false;
+      // Phase 2: allow stairs traversal + small z steps.
+      const stairsInvolved = (eCur.kind === "STAIRS") || (next.kind === "STAIRS");
+      const MAX_STEP_Z = 1.05;
 
+      if (!stairsInvolved) {
+        // Pure floor move: same integer floor only
+        if (next.floorH !== eCur.floorH) return false;
+      } else {
+        // Stairs move: must not jump too far in one step
+        const dz = Math.abs(next.z - eCur.z);
+        if (dz > MAX_STEP_Z) return false;
+      }
 
       // Commit
       w.ex[i] = wx;
@@ -164,13 +192,15 @@ export function movementSystem(w: World, input: InputState, dt: number) {
       ey = wy;
       eCur = next;
 
-      ez[i] = next.floorH;
+      // Continuous enemy z for rendering/hit logic
+      ez[i] = next.z;
       return true;
     };
 
     // Axis-separated sliding WITH live eCur updates
     tryEnemyMove(enx, ey);
     tryEnemyMove(ex, eny);
+
   }
 
 

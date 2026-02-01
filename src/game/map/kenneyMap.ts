@@ -76,16 +76,43 @@ function clamp01(v: number) {
     return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 /**
- * Phase 1 (connectors migration): NO ramp math.
+ * Phase 2: STAIRS are walkable and provide SMOOTH ramp Z.
  *
- * Logical height is always integer.
- * Stairs are decorative only (connectors come later).
+ * Rule:
+ * - FLOORS/SPAWN: z = tile.h (integer)
+ * - STAIRS with dir: z = baseH + step(0..1) based on position in the tile
+ * - STAIRS without dir: treated as flat at baseH
+ *
+ * NOTE:
+ * We use top-face local px (lx,ly) because it matches your iso projection (128x64 box).
  */
 export function heightAtWorld(wx: number, wy: number, tileWorld: number): number {
     const { tx, ty } = worldToTileTopLocalPx(wx, wy, tileWorld);
     const t = getTile(tx, ty);
-    return (t.h | 0);
+    const baseH = (t.h | 0);
+
+    if (t.kind !== "STAIRS") return baseH;
+
+    // World-space fractions inside this tile (0..1)
+    const fx = (wx - tx * tileWorld) / tileWorld;
+    const fy = (wy - ty * tileWorld) / tileWorld;
+
+    // Authoritative ramp direction:
+    // N: increases when moving north (fy ↓)
+    // S: increases when moving south (fy ↑)
+    // W: increases when moving west  (fx ↓)
+    // E: increases when moving east  (fx ↑)
+    const dir = (t.dir ?? "N") as any;
+
+    let step = 0;
+    if (dir === "N") step = 1 - fy;
+    else if (dir === "S") step = fy;
+    else if (dir === "W") step = 1 - fx;
+    else if (dir === "E") step = fx;
+
+    return baseH + clamp01(step);
 }
+
 
 // ─────────────────────────────────────────────────────────────
 // Phase 1 (decorative stairs): removed stairs-as-gameplay helpers.
@@ -177,8 +204,9 @@ export const WALK_SHAPE_ANCHOR_PX: Record<TileWalkShape, { ox: number; oy: numbe
 };
 
 // Optional per-kind anchor nudges (adds on top of shape anchor).
-// NOTE: In Phase 1, STAIRS are decorative and never walkable, so no STAIRS anchors here.
+// Phase 2: STAIRS are walkable, so you MAY add STAIRS anchor tweaks here if art needs it.
 export const WALK_KIND_ANCHOR_PX: Partial<Record<IsoTileKind, { ox: number; oy: number }>> = {};
+
 
 
 
@@ -206,12 +234,13 @@ export function tileWalkShape(tx: number, ty: number): TileWalkShape {
         case "FLOOR":
             return "FULL_TOP";
         case "STAIRS":
-            // Phase 1: stairs are decorative only (connectors later)
-            return "BLOCKED";
+            // Phase 2: stairs are walkable; treat as a normal top-face diamond.
+            return "FULL_TOP";
         default:
             return "FULL_TOP";
     }
 }
+
 
 
 
@@ -314,12 +343,12 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
     const ax = lx - ox;
     const ay = ly - oy;
 
-    // Phase 1: STAIRS are NOT walkable (decorative only).
-    // Floors are the only walk surfaces. Connectors come later.
+    // Phase 2: STAIRS are walkable (ramp Z comes from heightAtWorld)
     const inside = diamondContains(ax, ay, w, hh);
 
-    const isStairs = kind === "STAIRS";
-    const walkable = inside && !isStairs;
+    // Walkable if you're inside the top-face diamond.
+    // (Stairs are allowed here now.)
+    const walkable = inside;
 
     return {
         wx, wy, tileWorld,
@@ -331,8 +360,9 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
         blocked: !walkable,
         inside,
         walkable,
-        reason: !inside ? "OUTSIDE" : isStairs ? "STAIRS_DECORATIVE" : undefined,
+        reason: !inside ? "OUTSIDE" : undefined,
     };
+
 
 }
 function diamondContains(lx: number, ly: number, w: number, h: number): boolean {
