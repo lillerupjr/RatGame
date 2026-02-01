@@ -82,7 +82,11 @@ export function movementSystem(w: World, input: InputState, dt: number) {
 
     if (!nextInfo.walkable) return false;
 
-    const stairsInvolved = (curInfo.kind === "STAIRS") || (nextInfo.kind === "STAIRS");
+    const stairsInvolved =
+        curInfo.kind === "STAIRS" ||
+        nextInfo.kind === "STAIRS" ||
+        (curInfo as any).isRamp ||
+        (nextInfo as any).isRamp;
 
     if (!stairsInvolved) {
       // Pure floor movement: keep same integer floor

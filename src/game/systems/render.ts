@@ -20,10 +20,10 @@ import {
   getWalkOutlineLocalPx,
   walkInfo,
   heightAtWorldOcclusion,
+  getRampFacesForDebug,
+  pointInQuad,
+  rampHeightAt,
 } from "../map/kenneyMap";
-
-import { RAMP_FACES, pointInQuad, rampHeightAt } from "../map/walkableGeometry";
-
 
 
 import {
@@ -46,8 +46,10 @@ import {
   getKenneyGroundTile,
   getKenneyTileBySkin,
   KENNEY_TILE_WORLD,
-  KENNEY_TILE_ANCHOR_Y, Loaded,
+  KENNEY_TILE_ANCHOR_Y,
+  Loaded,
 } from "../visual/kenneyTiles";
+
 
 export async function renderSystem(
     w: World,
@@ -101,8 +103,14 @@ export async function renderSystem(
     // This is tuned for your Kenney tile scale (T=128-ish world).
     const RINGS = [6, 10, 16, 24, 34];
     const DIRS: Array<[number, number]> = [
-      [1, 0], [-1, 0], [0, 1], [0, -1],
-      [1, 1], [1, -1], [-1, 1], [-1, -1],
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+      [1, 1],
+      [1, -1],
+      [-1, 1],
+      [-1, -1],
     ];
 
     for (let r = 0; r < RINGS.length; r++) {
@@ -124,8 +132,6 @@ export async function renderSystem(
     return { x, y, z: tileHAtWorld(x, y) };
   };
 
-
-
   // Render all heights by default.
   // You can disable at runtime via: (w as any).renderAllHeights = false
   const RENDER_ALL_HEIGHTS: boolean = (w as any).renderAllHeights ?? true;
@@ -143,20 +149,17 @@ export async function renderSystem(
     // Phase 1: active-floor gating is pure integer-floor gating.
     // (Stairs are decorative and should not bypass gating.)
     return tileHeight(tx, ty) === (w.activeFloorH ?? 0);
-
   };
-
 
   const toScreen = (x: number, y: number) => {
     const p = worldToScreen(x, y);
 
-    // Milestone B: lift anything grounded by its tile height
+    // lift anything grounded by its map height (ramps included via heightAtWorld)
     const h = tileHAtWorld(x, y);
     const elev = h * ELEV_PX;
 
     return { x: p.x + camX, y: p.y + camY - elev };
   };
-
 
   // --- Kenney-style iso ground tiles (Milestone A: Phase 1 placeholder) ---
   // Draw a real iso tile grid in correct back-to-front order (x+y diagonals).
@@ -178,8 +181,8 @@ export async function renderSystem(
   const TILE_ART_Y_SHIFT_PX = 20;
 
   // Visual height step in screen pixels per tile-level (tune later).
-  // This is purely visual right now; gameplay height will come later.
   const ELEV_PX = 16;
+
   // -------------------------------------------------------
   // DEBUG: Logical walk-mask overlay (matches isWalkableWorld)
   // Toggle at runtime: (w as any).debugWalkMask = true
@@ -187,27 +190,10 @@ export async function renderSystem(
   // -------------------------------------------------------
   const SHOW_WALK_MASK = !!(w as any).debugWalkMask;
 
-  if ((w as any).debugRamps) {
-    ctx.strokeStyle = "#00ffcc";
-    ctx.lineWidth = 2;
-
-    for (const r of RAMP_FACES) {
-      ctx.beginPath();
-      const p0 = toScreen(r.poly[0].x, r.poly[0].y);
-      ctx.moveTo(p0.x, p0.y);
-      for (let i = 1; i < 4; i++) {
-        const p = toScreen(r.poly[i].x, r.poly[i].y);
-        ctx.lineTo(p.x, p.y);
-      }
-      ctx.closePath();
-      ctx.stroke();
-    }
-
-  }
   // Tune these if you want:
-  const WALK_MASK_RADIUS_TILES = 10;   // only draw within NxN around player
-  const WALK_MASK_STEP = 1;           // 1 = every tile, 2 = every other tile
-  const WALK_MASK_THROTTLE_MS = 120;  // redraw ~8 fps (overlay only)
+  const WALK_MASK_RADIUS_TILES = 10; // only draw within NxN around player
+  const WALK_MASK_STEP = 1; // 1 = every tile, 2 = every other tile
+  const WALK_MASK_THROTTLE_MS = 120; // redraw ~8 fps (overlay only)
 
   // cache outlines by "tx,ty"
   const wm = (w as any);
@@ -239,7 +225,7 @@ export async function renderSystem(
     const lastMs = wm._walkMaskLastMs as number;
 
     // Throttle: only rebuild the overlay image every N ms
-    const shouldRebuild = (nowMs - lastMs) >= WALK_MASK_THROTTLE_MS;
+    const shouldRebuild = nowMs - lastMs >= WALK_MASK_THROTTLE_MS;
 
     // If we have a cached overlay image for recent frame, just draw it
     if (!shouldRebuild && wm._walkMaskImg) {
@@ -266,7 +252,7 @@ export async function renderSystem(
     const pcy = Math.floor(w.py / T);
     const r = WALK_MASK_RADIUS_TILES;
 
-    const activeH = (w.activeFloorH ?? 0);
+    const activeH = w.activeFloorH ?? 0;
 
     for (let ty = pcy - r; ty <= pcy + r; ty += WALK_MASK_STEP) {
       for (let tx = pcx - r; tx <= pcx + r; tx += WALK_MASK_STEP) {
@@ -280,7 +266,7 @@ export async function renderSystem(
             const h0 = tileHeight(tx, ty);
             if (h0 !== activeH) continue;
           } else {
-            const hs = (tdef.h ?? 0);
+            const hs = tdef.h ?? 0;
             if (Math.abs(hs - activeH) > 1) continue;
           }
         }
@@ -294,25 +280,44 @@ export async function renderSystem(
         }
         if (o.blocked || !o.pts || o.pts.length === 0) continue;
 
-        // Color coding (keep your existing logic below in your file)
-        // ...
+        // Color coding
+        octx.strokeStyle =
+            tdef.kind === "STAIRS"
+                ? "rgba(255,220,120,0.95)"
+                : o.shape === "TOP_CUT_16"
+                    ? "rgba(255,140,140,0.95)"
+                    : "rgba(120,220,255,0.95)";
+
+        octx.beginPath();
+        for (let i = 0; i < o.pts.length; i++) {
+          const p = o.pts[i];
+          const sp = tileLocalPxToScreen(tx, ty, p.x, p.y);
+          if (i === 0) octx.moveTo(sp.x, sp.y);
+          else octx.lineTo(sp.x, sp.y);
+        }
+        octx.closePath();
+        octx.stroke();
       }
     }
 
-    // store the finished overlay so we can blit fast
+    // store & blit
     wm._walkMaskImg = off;
+    ctx.save();
+    ctx.globalAlpha = 1;
     ctx.drawImage(off, 0, 0);
+    ctx.restore();
   };
 
-// -------------------------------------------------------
-// DEBUG: Ramp faces overlay (world-space quads)
-// Toggle at runtime: (w as any).debugRamps = true
-// -------------------------------------------------------
+  // -------------------------------------------------------
+  // DEBUG: Ramp faces overlay (world-space quads + player-in-ramp dot)
+  // Toggle at runtime: (w as any).debugRamps = true
+  // -------------------------------------------------------
   const SHOW_RAMPS = !!(w as any).debugRamps;
 
   const drawRampOverlay = () => {
     if (!SHOW_RAMPS) return;
-    if (!RAMP_FACES || RAMP_FACES.length === 0) return;
+    const ramps = getRampFacesForDebug(KENNEY_TILE_WORLD);
+    if (!ramps || ramps.length === 0) return;
 
     ctx.save();
     ctx.globalAlpha = 1;
@@ -321,67 +326,70 @@ export async function renderSystem(
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
 
-    // Draw each ramp polygon
-    for (let i = 0; i < RAMP_FACES.length; i++) {
-      const r = RAMP_FACES[i];
+    // Draw each ramp polygon (use toScreen so it matches elevation)
+    for (let i = 0; i < ramps.length; i++) {
+      const r = ramps[i];
       const poly = r.poly;
       if (!poly || poly.length < 3) continue;
 
-      // Outline
       ctx.strokeStyle = "rgba(0,255,255,0.95)";
       ctx.beginPath();
       for (let k = 0; k < poly.length; k++) {
         const wp = poly[k];
-        const sp = worldToScreen(wp.x, wp.y);
-        const x = sp.x + camX;
-        const y = sp.y + camY; // debug on ground plane (no elev)
-        if (k === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        const sp = toScreen(wp.x, wp.y);
+        if (k === 0) ctx.moveTo(sp.x, sp.y);
+        else ctx.lineTo(sp.x, sp.y);
       }
       ctx.closePath();
       ctx.stroke();
 
-      // Vertex dots + z labels (uses ramp math directly)
+      // Vertex dots + z labels
       for (let k = 0; k < poly.length; k++) {
         const wp = poly[k];
-        const sp = worldToScreen(wp.x, wp.y);
-        const x = sp.x + camX;
-        const y = sp.y + camY;
-
-        const z = rampHeightAt(r, wp);
+        const sp = toScreen(wp.x, wp.y);
+        const z = rampHeightAt(r, { x: wp.x, y: wp.y });
 
         ctx.fillStyle = "rgba(0,255,255,0.95)";
         ctx.beginPath();
-        ctx.arc(x, y, 3, 0, Math.PI * 2);
+        ctx.arc(sp.x, sp.y, 3, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.fillStyle = "rgba(0,255,255,0.85)";
-        ctx.fillText(`r${i} v${k} z=${z.toFixed(2)}`, x + 6, y + 6);
+        ctx.fillText(`r${i} v${k} z=${z.toFixed(2)}`, sp.x + 6, sp.y + 6);
       }
     }
 
     // Player point-in-ramp indicator
     let insideAny = false;
-    for (const r of RAMP_FACES) {
+    let which = -1;
+    for (let i = 0; i < ramps.length; i++) {
+      const r = ramps[i];
       if (pointInQuad({ x: w.px, y: w.py }, r.poly)) {
         insideAny = true;
+        which = i;
         break;
       }
     }
 
-    const pp = worldToScreen(w.px, w.py);
+    const pp = toScreen(w.px, w.py);
     ctx.fillStyle = insideAny ? "rgba(0,255,255,0.95)" : "rgba(255,80,80,0.95)";
     ctx.beginPath();
-    ctx.arc(pp.x + camX, pp.y + camY, 5, 0, Math.PI * 2);
+    ctx.arc(pp.x, pp.y, 6, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.fillStyle = insideAny ? "rgba(0,255,255,0.95)" : "rgba(255,80,80,0.95)";
-    ctx.fillText(`player in ramp: ${insideAny ? "YES" : "NO"}`, pp.x + camX + 10, pp.y + camY - 18);
+    ctx.fillText(
+        insideAny ? `player in ramp: YES (r${which})` : "player in ramp: NO",
+        pp.x + 10,
+        pp.y - 18
+    );
+
+    // Also print the current queried z (so you can see if heightAtWorld is ramping)
+    const hz = heightAtWorld(w.px, w.py, KENNEY_TILE_WORLD);
+    ctx.fillText(`heightAtWorld(p): ${hz.toFixed(3)}`, pp.x + 10, pp.y - 4);
 
     ctx.restore();
   };
-
-
 
   // How many tiles around the player to draw (simple view-based estimate).
   const radius = Math.max(12, Math.ceil(Math.max(ww, hh) / (T * 0.9)));
@@ -417,25 +425,26 @@ export async function renderSystem(
         const tdef = getTile(tx, ty);
 
         // Choose sprite:
-// - STAIRS: use authored tdef.skin (kenneyMapLoader must assign it)
-// - FLOOR/SPAWN: use authored skin if present, else ground
+        // - STAIRS: use authored tdef.skin (kenneyMapLoader must assign it)
+        // - FLOOR/SPAWN: use authored skin if present, else ground
         const useStairs = tdef.kind === "STAIRS";
 
         let tileRec: Loaded = groundTile;
 
         if (useStairs) {
-          // Stair skin MUST be set by kenneyMapLoader (dir → skin)
-          // Fallback to groundTile if somehow missing.
           tileRec = tdef.skin ? getKenneyTileBySkin(tdef.skin) : groundTile;
         } else {
           tileRec = tdef.skin ? getKenneyTileBySkin(tdef.skin) : groundTile;
         }
 
-        if (!tileRec?.ready || !tileRec.img || tileRec.img.width <= 0 || tileRec.img.height <= 0) {
-          // If a specific stairs tile is missing, skip this tile (avoids broken draw)
+        if (
+            !tileRec?.ready ||
+            !tileRec.img ||
+            tileRec.img.width <= 0 ||
+            tileRec.img.height <= 0
+        ) {
           continue;
         }
-
 
         const iw = tileRec.img.width;
         const ih = tileRec.img.height;
@@ -445,51 +454,55 @@ export async function renderSystem(
         const wy = (ty + 0.5) * T;
 
         const p = worldToScreen(wx, wy);
-
         const dx = p.x + camX - iw * 0.5;
 
         // Per-tile anchor: stairs art often has different vertical footprint/padding
         const stairsAnchorY = 0.62;
-// Per-direction fine tune (lets you fix “3 of 4” issues without breaking the good one)
+
+        // Per-direction fine tune (lets you fix “3 of 4” issues without breaking the good one)
         const STAIRS_DY_BY_DIR: Partial<Record<"N" | "E" | "S" | "W", number>> = {
           N: 24,
           E: 24,
           S: 16,
           W: 24,
         };
+
         const anchorY = useStairs ? stairsAnchorY : ANCHOR_Y;
         let dy = p.y + camY - ih * anchorY;
-// Apply global art shift so top-face aligns with logic (keeps tile-to-tile crossing intact)
+
+        // Apply global art shift so top-face aligns with logic
         dy += TILE_ART_Y_SHIFT_PX;
+
         // Fine tune after anchoring (stairs only)
         if (useStairs) {
           const d = (tdef.dir as ("N" | "E" | "S" | "W" | undefined)) ?? "N";
           dy += STAIRS_DY_BY_DIR[d] ?? 16;
         }
-        // Milestone B (updated): optionally filter to active floor.
+
+        // Milestone B: optionally filter to active floor.
         if (!RENDER_ALL_HEIGHTS) {
-          const activeH = (w.activeFloorH ?? 0);
+          const activeH = w.activeFloorH ?? 0;
 
           if (tdef.kind !== "STAIRS") {
             const h0 = tileHeight(tx, ty);
             if (h0 !== activeH) continue;
           } else {
-            const hs = (tdef.h ?? 0);
+            const hs = tdef.h ?? 0;
             if (Math.abs(hs - activeH) > 1) continue;
           }
         }
-
 
         // stairs are visually elevated by their own h
         const h = tdef.kind === "STAIRS" ? (tdef.h ?? 0) : tileHeight(tx, ty);
         const elev = h * ELEV_PX;
 
+        // Draw walk overlay throttled (it will blit a cached image most frames)
         drawWalkMaskOverlay();
 
         dy -= elev;
         ctx.drawImage(tileRec.img, dx, dy, iw, ih);
 
-// Collect stair occluders for a second pass (drawn AFTER entities/projectiles)
+        // Collect stair occluders for a second pass (drawn AFTER entities/projectiles)
         if (useStairs) {
           const occ = ((w as any)._stairOccluders ??= []);
           occ.push({
@@ -500,13 +513,12 @@ export async function renderSystem(
             ih,
           });
         }
-
       }
     }
   }
 
+  // Draw ramp overlay ONCE per frame (not inside tile loop)
   drawRampOverlay();
-
 
   // Optional floor tint overlay (keep your existing visual style)
   const floorVis = getFloorVisual(w);
@@ -521,10 +533,6 @@ export async function renderSystem(
   for (let i = 0; i < w.zAlive.length; i++) {
     if (!w.zAlive[i]) continue;
 
-    // ---------------------------------------------------
-    // Phase 3: ground decals should NOT draw under ceilings
-    // (prevents aura/explosion visuals from bleeding under platforms)
-    // ---------------------------------------------------
     const zx0 = w.zx[i];
     const zy0 = w.zy[i];
 
@@ -548,7 +556,6 @@ export async function renderSystem(
     const rx = r * ISO_X;
     const ry = r * ISO_Y;
 
-
     if (kind === ZONE_KIND.AURA) {
       ctx.globalAlpha = 0.16;
       ctx.fillStyle = "#7bdcff";
@@ -565,7 +572,6 @@ export async function renderSystem(
 
       ctx.globalAlpha = 1;
     } else if (kind === ZONE_KIND.EXPLOSION) {
-      // Your code had EXPLOSION colored like molotov; keep the same look for now.
       ctx.globalAlpha = 0.22;
       ctx.fillStyle = "#ff7a18";
       ctx.beginPath();
@@ -585,14 +591,12 @@ export async function renderSystem(
 
   // -------------------------
   // Grounded draw list + depth sorting (iso-friendly)
-  // Sort by depthKey(x,y) ~ (x+y)
   // -------------------------
   type GroundItem =
       | { kind: "pickup"; i: number; depth: number }
       | { kind: "enemy"; i: number; depth: number }
       | { kind: "projectile"; i: number; depth: number; zLift: number }
       | { kind: "player"; depth: number };
-
 
   const grounded: GroundItem[] = [];
 
@@ -604,12 +608,13 @@ export async function renderSystem(
 
   // Enemy Z buffer (written by movementSystem; optional)
   const ez = (w as any).ez as number[] | undefined;
-// Projectiles (depth-sorted + zLift)
+
+  // Projectiles (depth-sorted + zLift)
   for (let i = 0; i < w.pAlive.length; i++) {
     if (!w.pAlive[i]) continue;
     if (w.prHidden?.[i]) continue; // Phase 3: render-only hiding
 
-    const baseH = tileHAtWorld(w.prx[i], w.pry[i]); // local ground height (continuous on stairs)
+    const baseH = tileHAtWorld(w.prx[i], w.pry[i]);
     const pzAbs = (w.prZ?.[i] ?? baseH) || 0;
 
     const zLift = (pzAbs - baseH) * ELEV_PX;
@@ -618,12 +623,11 @@ export async function renderSystem(
     grounded.push({ kind: "projectile", i, depth, zLift });
   }
 
-
   // Enemies (include Z in depth so upper floors layer correctly)
   for (let i = 0; i < w.eAlive.length; i++) {
     if (!w.eAlive[i]) continue;
 
-    const z = ez?.[i] ?? tileHAtWorld(w.ex[i], w.ey[i]); // continuous on stairs
+    const z = ez?.[i] ?? tileHAtWorld(w.ex[i], w.ey[i]);
     grounded.push({
       kind: "enemy",
       i,
@@ -631,15 +635,13 @@ export async function renderSystem(
     });
   }
 
-  // Player (include continuous Z for stair traversal)
+  // Player (include continuous Z)
   const pz = (w as any).pz ?? tileHAtWorld(w.px, w.py);
   grounded.push({
     kind: "player",
     depth: depthKey(w.px, w.py) + pz * 1e9,
   });
 
-
-  // back -> front
   grounded.sort((a, b) => a.depth - b.depth);
 
   // Draw them
@@ -653,14 +655,12 @@ export async function renderSystem(
       const kind = w.xKind?.[i] ?? 1; // 1=XP, 2=CHEST
 
       if (kind === 1) {
-        // XP gem
         ctx.globalAlpha = 1;
         ctx.fillStyle = "#7df";
         ctx.beginPath();
         ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
         ctx.fill();
       } else {
-        // Chest
         ctx.globalAlpha = 1;
         ctx.fillStyle = "#fdc";
         ctx.fillRect(p.x - 10, p.y - 8, 20, 16);
@@ -682,8 +682,6 @@ export async function renderSystem(
     if (it.kind === "enemy") {
       const i = it.i;
 
-      // Milestone B originally hid enemies not on the active floor.
-      // Now that we allow spawning on other heights, render them all.
       const p = toScreen(w.ex[i], w.ey[i]);
 
       const def = registry.enemy(w.eType[i] as any);
@@ -692,7 +690,6 @@ export async function renderSystem(
       const isBoss = w.eType[i] === ENEMY_TYPE.BOSS;
       if (isBoss) baseColor = getBossAccent(w) ?? baseColor;
 
-      // Face vector: use screen-projected delta so facing matches iso view
       const faceWx = w.px - w.ex[i];
       const faceWy = w.py - w.ey[i];
       const face = worldDeltaToScreen(faceWx, faceWy);
@@ -716,7 +713,6 @@ export async function renderSystem(
 
         ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, dx, dy, dw, dh);
       } else {
-        // fallback: ellipse on ground plane
         ctx.globalAlpha = 1;
         ctx.fillStyle = baseColor;
         ctx.beginPath();
@@ -785,25 +781,21 @@ export async function renderSystem(
       }
 
       continue;
-    } if (it.kind === "projectile") {
+    }
+
+    if (it.kind === "projectile") {
       const i = it.i;
 
       const p = toScreen(w.prx[i], w.pry[i]);
       const spr = getProjectileSpriteByKind(w.prjKind[i]);
 
-      // apply lift visually
       const px = p.x;
       const py = p.y - it.zLift;
 
-      // ---------------------------------------------------
-      // Phase 3: projectile ground shadow (depth cue)
-      // Shadow is drawn on the nearest ground plane at p.y,
-      // while projectile sprite is lifted to py.
-      // ---------------------------------------------------
+      // Projectile ground shadow
       {
-        const r = (w.prR[i] ?? 4);
+        const r = w.prR[i] ?? 4;
 
-        // Snap shadow to nearest WALKABLE ground so it doesn't float over void seams.
         const wx0 = w.prx[i];
         const wy0 = w.pry[i];
         const sn = snapToNearestWalkableGround(wx0, wy0);
@@ -812,22 +804,18 @@ export async function renderSystem(
         const sy = sn.y;
         const groundZ = sn.z;
 
-        // Shadow should not draw if that snapped ground point is under a ceiling.
         const occZ = heightAtWorldOcclusion(sx, sy, KENNEY_TILE_WORLD);
         const SHADOW_OCCLUSION_EPS = 0.05;
         const shadowOccluded = groundZ < occZ - SHADOW_OCCLUSION_EPS;
 
         if (!shadowOccluded) {
-          // Shadow screen position should use the snapped ground point (not projectile px/py)
           const sp = toScreen(sx, sy);
 
-          // Bigger lift => smaller + fainter shadow
           const lift = Math.max(0, it.zLift || 0);
-          const t = Math.max(0, Math.min(1, 1 - lift / 70)); // tune "70" to taste
+          const t = Math.max(0, Math.min(1, 1 - lift / 70));
 
-          // Slightly squashed ellipse feels like iso ground contact
           const rx = r * ISO_X * (0.95 + 0.15 * t);
-          const ry = r * ISO_Y * (0.85 + 0.10 * t);
+          const ry = r * ISO_Y * (0.85 + 0.1 * t);
 
           ctx.save();
           ctx.globalAlpha = 0.18 * t;
@@ -839,8 +827,6 @@ export async function renderSystem(
         }
       }
 
-
-
       const wdx = w.prDirX[i] ?? 1;
       const wdy = w.prDirY[i] ?? 0;
       const d = worldDeltaToScreen(wdx, wdy);
@@ -849,9 +835,7 @@ export async function renderSystem(
       if (spr?.ready && spr.img && spr.img.width > 0 && spr.img.height > 0) {
         const areaMult = Math.max(0.6, Math.min(2.5, (w.prR[i] ?? 4) / 4));
         const target =
-            PROJECTILE_BASE_DRAW_PX *
-            areaMult *
-            getProjectileDrawScale(w.prjKind[i]);
+            PROJECTILE_BASE_DRAW_PX * areaMult * getProjectileDrawScale(w.prjKind[i]);
 
         const iw = spr.img.width;
         const ih = spr.img.height;
@@ -868,28 +852,40 @@ export async function renderSystem(
       } else {
         const src = registry.projectileSourceFromKind(w.prjKind[i]);
         ctx.fillStyle =
-            src === "KNIFE" ? "#fff" :
-                src === "PISTOL" ? "#9f9" :
-                    src === "KNUCKLES" ? "#fc6" :
-                        src === "SYRINGE" ? "#7df" :
-                            src === "BOUNCER" ? "#fdc" : "#bbb";
+            src === "KNIFE"
+                ? "#fff"
+                : src === "PISTOL"
+                    ? "#9f9"
+                    : src === "KNUCKLES"
+                        ? "#fc6"
+                        : src === "SYRINGE"
+                            ? "#7df"
+                            : src === "BOUNCER"
+                                ? "#fdc"
+                                : "#bbb";
 
         ctx.beginPath();
-        ctx.ellipse(px, py, (w.prR[i] ?? 4) * ISO_X, (w.prR[i] ?? 4) * ISO_Y, 0, 0, Math.PI * 2);
+        ctx.ellipse(
+            px,
+            py,
+            (w.prR[i] ?? 4) * ISO_X,
+            (w.prR[i] ?? 4) * ISO_Y,
+            0,
+            0,
+            Math.PI * 2
+        );
         ctx.fill();
       }
 
       continue;
     }
 
-
-
     // Player (8-dir sprite; fallback ellipse)
     {
       ctx.globalAlpha = 1;
 
-      const dir = (((w as any)._plDir ?? "S") as Dir8);
-      const frame = (((w as any)._plFrame ?? 2) as Frame3);
+      const dir = ((w as any)._plDir ?? "S") as Dir8;
+      const frame = ((w as any)._plFrame ?? 2) as Frame3;
       const img = playerSpritesReady() ? getPlayerSprite(dir, frame) : null;
 
       const pp = toScreen(w.px, w.py);
@@ -898,8 +894,8 @@ export async function renderSystem(
         const sw = img.width * PLAYER_SPRITE_SCALE;
         const sh = img.height * PLAYER_SPRITE_SCALE;
 
-        const x = (pp.x - sw * 0.5) - 0;
-        const y = (pp.y - sh * 0.5) - 32;
+        const x = pp.x - sw * 0.5;
+        const y = pp.y - sh * 0.5 - 32;
 
         ctx.drawImage(img, x, y, sw, sh);
       } else {
@@ -911,32 +907,32 @@ export async function renderSystem(
     }
   }
 
-// -------------------------------------------------------
-// Milestone C: Stairs occlusion pass
-// Draw ONLY the bottom apron of stair tiles on top,
-// so they occlude bullets/enemies behind the stair face.
-// -------------------------------------------------------
+  // -------------------------------------------------------
+  // Milestone C: Stairs occlusion pass
+  // -------------------------------------------------------
   {
     const occ = ((w as any)._stairOccluders as any[] | undefined) ?? [];
     if (occ.length > 0) {
-      // How much of the tile image is "vertical face / apron"
-      // Tune this if needed (common values: 24..48)
       const APRON_PX = 0;
 
       for (const o of occ) {
         const sh = Math.min(APRON_PX, o.ih);
         const sy = o.ih - sh;
 
-        // draw bottom slice of the stair tile
         ctx.drawImage(
             o.img,
-            0, sy, o.iw, sh,      // source rect (bottom strip)
-            o.dx, o.dy + sy, o.iw, sh // dest rect
+            0,
+            sy,
+            o.iw,
+            sh, // source rect
+            o.dx,
+            o.dy + sy,
+            o.iw,
+            sh // dest rect
         );
       }
     }
 
-    // clear for next frame
     (w as any)._stairOccluders = [];
   }
 
@@ -948,19 +944,11 @@ export async function renderSystem(
   ctx.fillText(`FPS: ${fps}`, 8, 14);
   ctx.restore();
 
-  // --- Diablo-style Health Orb (bottom-left) ---
+  // --- UI ---
   renderHealthOrb(w, ctx, ww, hh);
-
-  // --- Experience Bar (bottom of screen, WoW/PoE style) ---
   renderExperienceBar(w, ctx, ww, hh);
-
-  // --- Boss Health Bar (top of screen, Diablo/PoE style) ---
   renderBossHealthBar(w, ctx, ww, hh);
-
-  // --- DPS Meter (top-right corner) ---
   renderDPSMeter(w, ctx, ww, hh);
-
-  // --- Floating Combat Text ---
   renderFloatingText(w, ctx, toScreen);
 }
 
@@ -1015,14 +1003,12 @@ function renderHealthOrb(w: World, ctx: CanvasRenderingContext2D, ww: number, hh
 
   ctx.save();
 
-  // Orb frame
   ctx.globalAlpha = 0.9;
   ctx.fillStyle = "#111";
   ctx.beginPath();
   ctx.arc(x, y, r + 6, 0, Math.PI * 2);
   ctx.fill();
 
-  // Health fill
   const hp = Math.max(0, Math.min(1, w.playerHp / w.playerHpMax));
   ctx.globalAlpha = 0.85;
   ctx.fillStyle = "#c33";
@@ -1030,14 +1016,12 @@ function renderHealthOrb(w: World, ctx: CanvasRenderingContext2D, ww: number, hh
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
 
-  // Empty overlay
   ctx.globalAlpha = 1 - hp;
   ctx.fillStyle = "rgba(0,0,0,0.75)";
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
 
-  // Text
   ctx.globalAlpha = 1;
   ctx.fillStyle = "#fff";
   ctx.font = "14px monospace";
@@ -1085,7 +1069,6 @@ function renderExperienceBar(w: World, ctx: CanvasRenderingContext2D, ww: number
 }
 
 function renderBossHealthBar(w: World, ctx: CanvasRenderingContext2D, ww: number, hh: number) {
-  // Find boss
   let bossIdx = -1;
   for (let i = 0; i < w.eAlive.length; i++) {
     if (!w.eAlive[i]) continue;
@@ -1109,23 +1092,19 @@ function renderBossHealthBar(w: World, ctx: CanvasRenderingContext2D, ww: number
 
   ctx.save();
 
-  // Back
   ctx.globalAlpha = 0.8;
   ctx.fillStyle = "#111";
   ctx.fillRect(x, y, barW, barH);
 
-  // Fill
   ctx.globalAlpha = 0.95;
   ctx.fillStyle = accent;
   ctx.fillRect(x, y, barW * t, barH);
 
-  // Frame
   ctx.globalAlpha = 1;
   ctx.strokeStyle = "rgba(255,255,255,0.25)";
   ctx.lineWidth = 2;
   ctx.strokeRect(x, y, barW, barH);
 
-  // Text
   ctx.fillStyle = "#fff";
   ctx.font = "12px monospace";
   ctx.textAlign = "center";
@@ -1140,15 +1119,13 @@ function renderBossHealthBar(w: World, ctx: CanvasRenderingContext2D, ww: number
  * Toggle with w.dpsEnabled boolean
  */
 function renderDPSMeter(w: World, ctx: CanvasRenderingContext2D, ww: number, hh: number) {
-  if (!w.dpsEnabled) return; // Easy toggle - set to false to hide
+  if (!w.dpsEnabled) return;
 
   const currentTime = w.time;
   const totalTime = currentTime - w.dpsStartTime;
 
-  // Calculate average DPS over entire run
   const avgDPS = totalTime > 0 ? w.dpsTotalDamage / totalTime : 0;
 
-  // Calculate recent DPS (last 3 seconds)
   let recentDPS = 0;
   if (w.dpsRecentDamage.length > 0) {
     const recentTotal = w.dpsRecentDamage.reduce((sum, dmg) => sum + dmg, 0);
@@ -1157,7 +1134,6 @@ function renderDPSMeter(w: World, ctx: CanvasRenderingContext2D, ww: number, hh:
     recentDPS = recentWindow > 0 ? recentTotal / recentWindow : 0;
   }
 
-  // Position in top-right corner
   const panelW = 180;
   const panelH = 80;
   const x = ww - panelW - 12;
@@ -1165,18 +1141,15 @@ function renderDPSMeter(w: World, ctx: CanvasRenderingContext2D, ww: number, hh:
 
   ctx.save();
 
-  // Background panel
   ctx.globalAlpha = 0.7;
   ctx.fillStyle = "#111";
   ctx.fillRect(x, y, panelW, panelH);
 
-  // Border
   ctx.globalAlpha = 0.8;
   ctx.strokeStyle = "rgba(255,255,255,0.2)";
   ctx.lineWidth = 2;
   ctx.strokeRect(x, y, panelW, panelH);
 
-  // Title
   ctx.globalAlpha = 1;
   ctx.fillStyle = "#fff";
   ctx.font = "bold 14px monospace";
@@ -1184,26 +1157,22 @@ function renderDPSMeter(w: World, ctx: CanvasRenderingContext2D, ww: number, hh:
   ctx.textBaseline = "top";
   ctx.fillText("DPS METER", x + 8, y + 8);
 
-  // Current/Recent DPS (larger, more prominent)
   ctx.font = "bold 18px monospace";
-  ctx.fillStyle = "#4fc3f7"; // Cyan color
+  ctx.fillStyle = "#4fc3f7";
   ctx.fillText(`${Math.round(recentDPS).toLocaleString()}`, x + 8, y + 28);
 
   ctx.font = "11px monospace";
   ctx.fillStyle = "rgba(255,255,255,0.7)";
   ctx.fillText("current", x + 8, y + 50);
 
-  // Average DPS (smaller)
   ctx.font = "12px monospace";
   ctx.fillStyle = "rgba(255,255,255,0.6)";
   ctx.textAlign = "right";
   ctx.fillText(`avg: ${Math.round(avgDPS).toLocaleString()}`, x + panelW - 8, y + 28);
 
-  // Total damage
   ctx.font = "10px monospace";
   ctx.fillStyle = "rgba(255,255,255,0.5)";
   ctx.fillText(`total: ${Math.round(w.dpsTotalDamage).toLocaleString()}`, x + panelW - 8, y + panelH - 10);
 
   ctx.restore();
 }
-
