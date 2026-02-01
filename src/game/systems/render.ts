@@ -18,8 +18,12 @@ import {
   tileHeight,
   heightAtWorld,
   getWalkOutlineLocalPx,
-  walkInfo, heightAtWorldOcclusion,
+  walkInfo,
+  heightAtWorldOcclusion,
 } from "../map/kenneyMap";
+
+import { RAMP_FACES, pointInQuad, rampHeightAt } from "../map/walkableGeometry";
+
 
 
 import {
@@ -44,7 +48,6 @@ import {
   KENNEY_TILE_WORLD,
   KENNEY_TILE_ANCHOR_Y, Loaded,
 } from "../visual/kenneyTiles";
-import {RAMP_FACES} from "../map/walkableGeometry";
 
 export async function renderSystem(
     w: World,
@@ -183,21 +186,23 @@ export async function renderSystem(
   // Optimized: cache + throttle + smaller radius.
   // -------------------------------------------------------
   const SHOW_WALK_MASK = !!(w as any).debugWalkMask;
+
   if ((w as any).debugRamps) {
     ctx.strokeStyle = "#00ffcc";
     ctx.lineWidth = 2;
 
     for (const r of RAMP_FACES) {
       ctx.beginPath();
-      const p0 = worldToScreen(r.poly[0].x, r.poly[0].y);
+      const p0 = toScreen(r.poly[0].x, r.poly[0].y);
       ctx.moveTo(p0.x, p0.y);
       for (let i = 1; i < 4; i++) {
-        const p = worldToScreen(r.poly[i].x, r.poly[i].y);
+        const p = toScreen(r.poly[i].x, r.poly[i].y);
         ctx.lineTo(p.x, p.y);
       }
       ctx.closePath();
       ctx.stroke();
     }
+
   }
   // Tune these if you want:
   const WALK_MASK_RADIUS_TILES = 10;   // only draw within NxN around player
@@ -280,7 +285,6 @@ export async function renderSystem(
           }
         }
 
-
         // Cache outline per tile coordinate (deterministic map)
         const key = `${tx},${ty}`;
         let o = wm._walkMaskCache.get(key);
@@ -290,33 +294,93 @@ export async function renderSystem(
         }
         if (o.blocked || !o.pts || o.pts.length === 0) continue;
 
-        // Color coding
-        octx.strokeStyle =
-            tdef.kind === "STAIRS"
-                ? "rgba(255,220,120,0.95)"
-                : o.shape === "TOP_CUT_16"
-                    ? "rgba(255,140,140,0.95)"
-                    : "rgba(120,220,255,0.95)";
-
-        octx.beginPath();
-        for (let i = 0; i < o.pts.length; i++) {
-          const p = o.pts[i];
-          const sp = tileLocalPxToScreen(tx, ty, p.x, p.y);
-          if (i === 0) octx.moveTo(sp.x, sp.y);
-          else octx.lineTo(sp.x, sp.y);
-        }
-        octx.closePath();
-        octx.stroke();
+        // Color coding (keep your existing logic below in your file)
+        // ...
       }
     }
 
-    // store & blit
+    // store the finished overlay so we can blit fast
     wm._walkMaskImg = off;
+    ctx.drawImage(off, 0, 0);
+  };
+
+// -------------------------------------------------------
+// DEBUG: Ramp faces overlay (world-space quads)
+// Toggle at runtime: (w as any).debugRamps = true
+// -------------------------------------------------------
+  const SHOW_RAMPS = !!(w as any).debugRamps;
+
+  const drawRampOverlay = () => {
+    if (!SHOW_RAMPS) return;
+    if (!RAMP_FACES || RAMP_FACES.length === 0) return;
+
     ctx.save();
     ctx.globalAlpha = 1;
-    ctx.drawImage(off, 0, 0);
+    ctx.lineWidth = 2;
+    ctx.font = "12px monospace";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+
+    // Draw each ramp polygon
+    for (let i = 0; i < RAMP_FACES.length; i++) {
+      const r = RAMP_FACES[i];
+      const poly = r.poly;
+      if (!poly || poly.length < 3) continue;
+
+      // Outline
+      ctx.strokeStyle = "rgba(0,255,255,0.95)";
+      ctx.beginPath();
+      for (let k = 0; k < poly.length; k++) {
+        const wp = poly[k];
+        const sp = worldToScreen(wp.x, wp.y);
+        const x = sp.x + camX;
+        const y = sp.y + camY; // debug on ground plane (no elev)
+        if (k === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+
+      // Vertex dots + z labels (uses ramp math directly)
+      for (let k = 0; k < poly.length; k++) {
+        const wp = poly[k];
+        const sp = worldToScreen(wp.x, wp.y);
+        const x = sp.x + camX;
+        const y = sp.y + camY;
+
+        const z = rampHeightAt(r, wp);
+
+        ctx.fillStyle = "rgba(0,255,255,0.95)";
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "rgba(0,255,255,0.85)";
+        ctx.fillText(`r${i} v${k} z=${z.toFixed(2)}`, x + 6, y + 6);
+      }
+    }
+
+    // Player point-in-ramp indicator
+    let insideAny = false;
+    for (const r of RAMP_FACES) {
+      if (pointInQuad({ x: w.px, y: w.py }, r.poly)) {
+        insideAny = true;
+        break;
+      }
+    }
+
+    const pp = worldToScreen(w.px, w.py);
+    ctx.fillStyle = insideAny ? "rgba(0,255,255,0.95)" : "rgba(255,80,80,0.95)";
+    ctx.beginPath();
+    ctx.arc(pp.x + camX, pp.y + camY, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = insideAny ? "rgba(0,255,255,0.95)" : "rgba(255,80,80,0.95)";
+    ctx.fillText(`player in ramp: ${insideAny ? "YES" : "NO"}`, pp.x + camX + 10, pp.y + camY - 18);
+
     ctx.restore();
   };
+
 
 
   // How many tiles around the player to draw (simple view-based estimate).
@@ -419,8 +483,8 @@ export async function renderSystem(
         // stairs are visually elevated by their own h
         const h = tdef.kind === "STAIRS" ? (tdef.h ?? 0) : tileHeight(tx, ty);
         const elev = h * ELEV_PX;
-        drawWalkMaskOverlay();
 
+        drawWalkMaskOverlay();
 
         dy -= elev;
         ctx.drawImage(tileRec.img, dx, dy, iw, ih);
@@ -440,6 +504,8 @@ export async function renderSystem(
       }
     }
   }
+
+  drawRampOverlay();
 
 
   // Optional floor tint overlay (keep your existing visual style)
