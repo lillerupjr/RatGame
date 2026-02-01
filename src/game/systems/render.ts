@@ -14,7 +14,6 @@ import {
 import { getEnemySpriteFrame, preloadEnemySprites } from "../visual/enemySprites";
 import {
   isHoleTile,
-  isStairsTile,
   getTile,
   tileHeight,
   heightAtWorld,
@@ -22,8 +21,6 @@ import {
   walkInfo,
 } from "../map/kenneyMap";
 
-
-import { getBackground } from "../visual/background";
 
 import {
   getProjectileSpriteByKind,
@@ -45,7 +42,7 @@ import {
   getKenneyGroundTile,
   getKenneyTileBySkin,
   KENNEY_TILE_WORLD,
-  KENNEY_TILE_ANCHOR_Y,
+  KENNEY_TILE_ANCHOR_Y, Loaded,
 } from "../visual/kenneyTiles";
 
 
@@ -300,10 +297,19 @@ export async function renderSystem(
         const tdef = getTile(tx, ty);
 
         // Choose sprite:
-        // - STAIRS: use authored tdef.skin (loader sets it from token dir)
-        // - FLOOR: use ground tile (default floor skin is handled elsewhere later)
-        const useStairs = tdef.kind === "STAIRS" || isStairsTile(tx, ty);
-        const tileRec = useStairs ? getKenneyTileBySkin(tdef.skin) : groundTile;
+// - STAIRS: use authored tdef.skin (kenneyMapLoader must assign it)
+// - FLOOR/SPAWN: use authored skin if present, else ground
+        const useStairs = tdef.kind === "STAIRS";
+
+        let tileRec: Loaded = groundTile;
+
+        if (useStairs) {
+          // Stair skin MUST be set by kenneyMapLoader (dir → skin)
+          // Fallback to groundTile if somehow missing.
+          tileRec = tdef.skin ? getKenneyTileBySkin(tdef.skin) : groundTile;
+        } else {
+          tileRec = tdef.skin ? getKenneyTileBySkin(tdef.skin) : groundTile;
+        }
 
         if (!tileRec?.ready || !tileRec.img || tileRec.img.width <= 0 || tileRec.img.height <= 0) {
           // If a specific stairs tile is missing, skip this tile (avoids broken draw)
@@ -324,15 +330,22 @@ export async function renderSystem(
 
         // Per-tile anchor: stairs art often has different vertical footprint/padding
         const stairsAnchorY = 0.62;
-        const STAIRS_DY_PX = 16// tweak: try -12..+12
-
+// Per-direction fine tune (lets you fix “3 of 4” issues without breaking the good one)
+        const STAIRS_DY_BY_DIR: Partial<Record<"N" | "E" | "S" | "W", number>> = {
+          N: 24,
+          E: 24,
+          S: 16,
+          W: 24,
+        };
         const anchorY = useStairs ? stairsAnchorY : ANCHOR_Y;
         let dy = p.y + camY - ih * anchorY;
 // Apply global art shift so top-face aligns with logic (keeps tile-to-tile crossing intact)
         dy += TILE_ART_Y_SHIFT_PX;
         // Fine tune after anchoring (stairs only)
-        if (useStairs) dy += STAIRS_DY_PX;
-
+        if (useStairs) {
+          const d = (tdef.dir as ("N" | "E" | "S" | "W" | undefined)) ?? "N";
+          dy += STAIRS_DY_BY_DIR[d] ?? 16;
+        }
         // Milestone B (updated): optionally filter to active floor.
         if (!RENDER_ALL_HEIGHTS) {
           const activeH = (w.activeFloorH ?? 0);

@@ -95,8 +95,30 @@ type CreateGameArgs = {
 
 export function createGame(args: CreateGameArgs) {
 
+  // ------------------------------------------------------------
+  // DEBUG: optional spawn override (OFF by default)
+  // ------------------------------------------------------------
+  const DEBUG_FORCE_SPAWN = false;
+  const DEBUG_SPAWN_OFF_X = 0;   // world-space offset from map spawn
+  const DEBUG_SPAWN_OFF_Y = 0;
+
+  function applyDebugSpawn(w: World) {
+    if (!DEBUG_FORCE_SPAWN) return;
+
+    w.px += DEBUG_SPAWN_OFF_X;
+    w.py += DEBUG_SPAWN_OFF_Y;
+
+    // Keep these sane when debugging spawn
+    w.pvx = 0;
+    w.pvy = 0;
+    w.lastAimX = 1;
+    w.lastAimY = 0;
+  }
+
   const input: InputState = createInputState();
   let world: World = createWorld({ seed: 1337, stage: cloneStage("DOCKS") });
+  applyDebugSpawn(world);
+
   setMusicStage("DOCKS");
 
 
@@ -328,11 +350,15 @@ export function createGame(args: CreateGameArgs) {
       stage: cloneStage("DOCKS"),
     });
 
+    // DEBUG: spawn offset
+    applyDebugSpawn(world);
+
     // DEBUG: show logical walk-mask overlay (render.ts)
     (world as any).debugWalkMask = true;
     currentChoices = [];
     hideLevelUp();
   }
+
 
   function startRun(starterWeapon?: WeaponId) {
     resetRun();

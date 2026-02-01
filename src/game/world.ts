@@ -3,6 +3,9 @@ import { RNG } from "./util/rng";
 import { createSpatialHash, type SpatialHash } from "./util/spatialHash";
 import type { StageDef } from "./content/stages";
 import type { GameEvent } from "./events";
+import { KENNEY_TILE_WORLD } from "./visual/kenneyTiles";
+import { getSpawnWorld } from "./map/kenneyMap";
+
 import type { WeaponId } from "./content/weapons";
 
 /**
@@ -489,8 +492,18 @@ export function createWorld(args: CreateWorldArgs): World {
     dpsRecentTimes: [],
   };
 
+  // Map-authored player spawn (SPAWN/P<number> tile)
+  {
+    const sp = getSpawnWorld(KENNEY_TILE_WORLD);
+    w.px = sp.x;
+    w.py = sp.y;
+    w.pz = sp.z;
+    w.activeFloorH = sp.h | 0;
+  }
+
   return w;
 }
+
 
 export function clearEvents(w: World) {
   w.events.length = 0;

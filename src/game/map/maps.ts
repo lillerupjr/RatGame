@@ -7,7 +7,8 @@ export const EXCEL_SANCTUARY_01: TableMapDef = {
     id: "EXCEL_SANCTUARY_01",
     w: 13,
     h: 15,
-    defaultFloorSkin: "landscape_23",
+    defaultFloorSkin: "landscape_28",
+    defaultSpawnSkin: "landscape_30",
     centerOnZero: true,
 
     // Coordinates are (x,y) inside the Excel selection box, top-left = (0,0).
@@ -17,14 +18,15 @@ export const EXCEL_SANCTUARY_01: TableMapDef = {
         { x: 4, y: 0, t: "F0" },
 
         // Row 1: F0 F0 S0W S1W S2W S3W S4 S5 F5
+
         { x: 3, y: 1, t: "F0" },
         { x: 4, y: 1, t: "F0" },
-        { x: 5, y: 1, t: "S0W" },
+        { x: 5, y: 1, t: "F0" },
         { x: 6, y: 1, t: "S1W" },
         { x: 7, y: 1, t: "S2W" },
         { x: 8, y: 1, t: "S3W" },
-        { x: 9, y: 1, t: "S4S" },
-        { x: 10, y: 1, t: "S5" },
+        { x: 9, y: 1, t: "S4W" },
+        { x: 10, y: 1, t: "S5W" },
         { x: 11, y: 1, t: "F5" },
 
         // Row 2
@@ -47,7 +49,7 @@ export const EXCEL_SANCTUARY_01: TableMapDef = {
         // Row 4
         { x: 1, y: 4, t: "F0" },
         { x: 2, y: 4, t: "F0" },
-        { x: 3, y: 4, t: "F0" },
+        { x: 3, y: 4, t: "P0" },
         { x: 4, y: 4, t: "F0" },
         { x: 5, y: 4, t: "F0" },
         { x: 9, y: 4, t: "F5" },
@@ -96,6 +98,9 @@ export const EXCEL_SANCTUARY_01: TableMapDef = {
         { x: 3, y: 10, t: "F3" },
         { x: 4, y: 10, t: "F3" },
         { x: 8, y: 10, t: "S4S" },
+        { x: 8, y: 11, t: "F3" },
+        { x: 8, y: 12, t: "F3" },
+        { x: 8, y: 13, t: "F3" },
 
         // Row 11
         { x: 1, y: 11, t: "F3" },
