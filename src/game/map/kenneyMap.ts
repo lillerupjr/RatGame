@@ -418,17 +418,9 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
     const ax = lx - ox;
     const ay = ly - oy;
 
-    let inside = false;
-
-// STAIRS: use the skew-friendly quad in 130x80 space
-    if (kind === "STAIRS") {
-        // Note: anchors still apply (ax/ay), then we test in stairs pixel space.
-        inside = stairsTopContainsTopLocal(ax, ay);
-    } else {
-        // FLOOR (and any other future kind): classic diamond contains
-        inside = diamondContains(ax, ay, w, hh);
-    }
-
+    // STAIRS == FLOOR for walk hitbox:
+    // Use the same top-face diamond for all walkable kinds.
+    const inside = diamondContains(ax, ay, w, hh);
     const walkable = inside;
 
     return {
@@ -557,25 +549,6 @@ export function getWalkOutlineLocalPx(tx: number, ty: number): WalkOutlineLocal 
     const aKind = WALK_KIND_ANCHOR_PX[t.kind] ?? { ox: 0, oy: 0 };
     const ox = aShape.ox + aKind.ox;
     const oy = aShape.oy + aKind.oy;
-
-    if (t.kind === "STAIRS") {
-        // Convert the STAIRS quad (130x80 space) back into top-local (128x64) for debug overlay.
-        const sxInv = TOP_W / STAIRS_TOP_W;        // 128/130
-        const syInv = TOP_H_FULL / STAIRS_TOP_H;   // 64/80
-
-        const q = insetQuadTowardCenter(STAIRS_TOP_QUAD_PX, STAIRS_TOP_INSET_PX);
-
-        const base = [
-            { x: q.p0.x * sxInv, y: q.p0.y * syInv },
-            { x: q.p1.x * sxInv, y: q.p1.y * syInv },
-            { x: q.p2.x * sxInv, y: q.p2.y * syInv },
-            { x: q.p3.x * sxInv, y: q.p3.y * syInv },
-        ];
-
-        // Apply same anchor shift as the walk test (diamond/quad is shifted by +ox/+oy)
-        const pts = base.map((p) => ({ x: p.x + ox, y: p.y + oy }));
-        return { blocked: false, shape, pts };
-    }
 
 // Default: diamond outline for non-stairs
     const base = [
