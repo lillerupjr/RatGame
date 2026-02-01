@@ -2,18 +2,20 @@
 import type { World } from "../world";
 import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
 import { heightAtWorld, heightAtWorldOcclusion, WalkInfo, walkInfo } from "../map/kenneyMap";
-
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
 // Phase 2: projectile vs stairs collision
 // Tune this to make stairs “thicker/thinner” for projectile blocking.
 export let PROJECTILE_STAIRS_Z_TOL = 0.35;
-
-// How far below ground counts as "under" (smaller = hides sooner)
+// How far below occlusion ceiling counts as "under"
+// Smaller = hide sooner, larger = hide later
 export let PROJECTILE_BELOW_GROUND_EPS = 0.02;
-export let PROJECTILE_MAX_MOVE_STEPS = 12;
 
-export let PROJECTILE_MAX_MOVE_FRAC_PER_STEP = 0.5;   // fewer move substeps (still ok)
+// --- Movement substepping (prevents "one whole tile per frame") ---
+export let PROJECTILE_MAX_MOVE_FRAC_PER_STEP = 0.5;   // fraction of tile per move substep
+export let PROJECTILE_MAX_MOVE_STEPS = 12;            // hard cap for perf
+
+// --- Ground / occlusion sampling ---
 export let PROJECTILE_GROUND_SAMPLE_SPAN_FRAC = 0.10; // ~10 samples per tile traveled
 export let PROJECTILE_GROUND_SAMPLE_MAX_STEPS = 32;
 export let PROJECTILE_GROUND_SAMPLE_STEPS = 1;
@@ -49,6 +51,9 @@ export function projectilesSystem(w: World, dt: number) {
             w.pAlive[i] = false;
             continue;
         }
+
+        // Phase 3: render-only hide should be evaluated continuously (not sticky)
+        w.prHidden[i] = false;
 
         // -------------------------
         // Move
@@ -121,12 +126,14 @@ export function projectilesSystem(w: World, dt: number) {
 
                     const groundZ = heightAtWorldOcclusion(sx, sy, T);
 
-                    const pzAbs = (w.prZ?.[i] ?? 0) || 0;
+                    const occZ = heightAtWorldOcclusion(sx, sy, T);
+                    const pzAbs = (w.prZ?.[i] ?? 0);
 
-                    if (pzAbs < groundZ - PROJECTILE_BELOW_GROUND_EPS) {
+                    if (pzAbs < occZ - PROJECTILE_BELOW_GROUND_EPS) {
                         hitGround = true;
                         break;
                     }
+
                 }
 
 

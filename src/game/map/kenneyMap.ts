@@ -76,17 +76,22 @@ function clamp01(v: number) {
     return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
+
 /**
- * Phase 2: STAIRS are walkable and provide SMOOTH ramp Z.
+ * OCCLUSION height (render/visibility):
  *
- * Rule:
- * - FLOORS/SPAWN: z = tile.h (integer)
- * - STAIRS with dir: z = baseH + step(0..1) based on position in the tile
- * - STAIRS without dir: treated as flat at baseH
+ * In isometric Kenney tiles, the vertical apron of a higher tile visually overlaps
+ * a region *south* of that tile. A point can be "under" a higher tile in screen-space
+ * before its world position maps into that tile's top-face.
  *
- * NOTE:
- * This is the MOVEMENT/PHYSICS height: "what tile am I standing on (top-face mapping)?".
+ * This function returns the height of "the tile that can visually cover this point".
+ *
+ * Tuning knobs:
+ * - OCCLUSION_LOOKAHEAD_FRAC: how far "north" we sample (in world units, as a fraction of tileWorld)
+ *   to detect the tile whose apron might cover this point.
  */
+export let OCCLUSION_LOOKAHEAD_FRAC = 0.50; // 0.50 tile is a good starting point for Kenney apron overlap
+
 export function heightAtWorld(wx: number, wy: number, tileWorld: number): number {
     const { tx, ty } = worldToTileTopLocalPx(wx, wy, tileWorld);
     const t = getTile(tx, ty);
@@ -115,36 +120,80 @@ export function heightAtWorld(wx: number, wy: number, tileWorld: number): number
 }
 
 /**
- * OCCLUSION height (render/visibility):
+ * Occlusion-aware "ceiling" height at a world point.
  *
- * In isometric Kenney tiles, the vertical apron of a higher tile visually overlaps
- * a region *south* of that tile. A point can be "under" a higher tile in screen-space
- * before its world position maps into that tile's top-face.
+ * Purpose:
+ * - Used for *render-only* hiding (e.g. projectiles going "under" raised tiles).
+ * - This intentionally accounts for Kenney tile sprite overhang/apron
+ *   by extending the top-face diamond downward in tile-local space.
  *
- * This function returns the height of "the tile that can visually cover this point".
+ * Contract:
+ * - Returns the maximum integer tile height (or stairs base height) among nearby tiles
+ *   whose (extended) top-face diamond covers this point in screen-projection space.
+ * - If nothing occludes, falls back to normal heightAtWorld.
  *
- * Tuning knobs:
- * - OCCLUSION_LOOKAHEAD_FRAC: how far "north" we sample (in world units, as a fraction of tileWorld)
- *   to detect the tile whose apron might cover this point.
+ * Tuning:
+ * - Increase OCCLUSION_EXTRA_LOCAL_PX to hide sooner (bigger apron).
+ * - Decrease it if bullets hide too aggressively near edges.
  */
-export let OCCLUSION_LOOKAHEAD_FRAC = 2.50; // 0.50 tile is a good starting point for Kenney apron overlap
+export let OCCLUSION_EXTRA_LOCAL_PX = 24;
+
+// How far around the point we search for potential occluders.
+// Occluders usually come from tiles "north-ish", but this cheap neighborhood scan
+// is robust and still fast (small constant).
+export let OCCLUSION_SCAN_RX = 2;
+export let OCCLUSION_SCAN_RY = 2;
+
+function localPxForTile(tx: number, ty: number, wx: number, wy: number, tileWorld: number) {
+    // Same math as worldToTileTopLocalPx, but relative to an explicit (tx,ty)
+    const ox = wx - (tx + 0.5) * tileWorld;
+    const oy = wy - (ty + 0.5) * tileWorld;
+
+    const d = worldDeltaToScreen(ox, oy);
+
+    const lx = (d.dx / tileWorld) * 64 + 64;
+    const ly = (d.dy / (tileWorld * 0.5)) * 32 + 32;
+
+    return { lx, ly };
+}
 
 export function heightAtWorldOcclusion(wx: number, wy: number, tileWorld: number): number {
-    // Base: movement height at this point
-    const h0 = heightAtWorld(wx, wy, tileWorld);
+    const base = heightAtWorld(wx, wy, tileWorld);
 
-    // In isometric, "screen-up" corresponds roughly to decreasing (wx + wy),
-    // so we sample diagonally northwest in world space.
-    const look = tileWorld * OCCLUSION_LOOKAHEAD_FRAC;
+    const { tx, ty } = worldToTile(wx, wy, tileWorld);
 
-    const hNW = heightAtWorld(wx - look, wy - look, tileWorld);
+    let best = base;
 
-    // Optional: also sample straight "north-ish" to be robust for edge cases
-    // where your world axes or map orientation differs slightly.
-    const hN = heightAtWorld(wx, wy - look, tileWorld);
+    // Scan nearby tiles (including "north" tiles whose apron can occlude south space)
+    const rx = Math.max(1, OCCLUSION_SCAN_RX | 0);
+    const ry = Math.max(1, OCCLUSION_SCAN_RY | 0);
 
-    return Math.max(h0, hNW, hN);
+    for (let yy = ty - ry; yy <= ty + ry; yy++) {
+        for (let xx = tx - rx; xx <= tx + rx; xx++) {
+            const t = getTile(xx, yy);
+            if (t.kind === "VOID") continue;
+
+            // Occlusion height is integer tile height.
+            // (Stairs still have base integer h; the ramp is not treated as an overhang ceiling.)
+            const th = (t.h | 0);
+
+            // Only care about tiles that are >= current best.
+            if (th <= best) continue;
+
+            const { lx, ly } = localPxForTile(xx, yy, wx, wy, tileWorld);
+
+            // Extend the diamond downward to approximate the Kenney sprite apron/overhang.
+            // This makes "under platform" hiding happen as soon as the projectile is visually
+            // behind the vertical face, not one whole tile later.
+            const insideExtended = diamondContains(lx, ly, 128, 64 + Math.max(0, OCCLUSION_EXTRA_LOCAL_PX));
+
+            if (insideExtended) best = th;
+        }
+    }
+
+    return best;
 }
+
 
 
 
