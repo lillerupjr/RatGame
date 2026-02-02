@@ -35,7 +35,7 @@ export function spawnSystem(w: World, dt: number) {
       if (!info.walkable) continue;
 
       // Phase 1: active-floor gating (avoid unreachable mobs)
-      if (info.floorH !== (w.activeFloorH | 0)) continue;
+      //if (info.floorH !== (w.activeFloorH | 0)) continue;
 
       // Optional: avoid stairs spawns (usually feels bad)
       // If you WANT stairs spawns, delete this line.

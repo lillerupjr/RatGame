@@ -28,7 +28,7 @@ export type { IsoTileKind, IsoTile } from "./kenneyMapLoader";
  * - Smaller raised diamond platform at h=1 (offset)
  * - A stair "bridge" strip that connects them
  */
-const _compiled = compileKenneyMapFromTable(EXCEL_SANCTUARY_02);
+const _compiled = compileKenneyMapFromTable(EXCEL_SANCTUARY_01);
 
 export function getTile(tx: number, ty: number): IsoTile {
     return _compiled.getTile(tx, ty);
