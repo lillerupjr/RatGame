@@ -11,7 +11,7 @@ import {
     type StairDir,
     STAIR_SKIN_BY_DIR,
 } from "./kenneyMapLoader";
-import { EXCEL_SANCTUARY_01 } from "./maps";
+import {EXCEL_SANCTUARY_01, EXCEL_SANCTUARY_02} from "./maps";
 import { worldDeltaToScreen } from "../visual/iso";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
@@ -28,7 +28,7 @@ export type { IsoTileKind, IsoTile } from "./kenneyMapLoader";
  * - Smaller raised diamond platform at h=1 (offset)
  * - A stair "bridge" strip that connects them
  */
-const _compiled = compileKenneyMapFromTable(EXCEL_SANCTUARY_01);
+const _compiled = compileKenneyMapFromTable(EXCEL_SANCTUARY_02);
 
 export function getTile(tx: number, ty: number): IsoTile {
     return _compiled.getTile(tx, ty);
