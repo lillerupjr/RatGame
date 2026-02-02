@@ -624,7 +624,7 @@ export function tileWalkShape(tx: number, ty: number): TileWalkShape {
         case "CONVERTER":
             return "FULL_TOP";
         case "STAIRS":
-            return "FULL_TOP";
+            return "BLOCKED";
         default:
             return "FULL_TOP";
     }

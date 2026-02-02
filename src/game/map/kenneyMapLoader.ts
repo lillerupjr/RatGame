@@ -92,43 +92,30 @@ function parseToken(t: string, defaultFloorSkin?: string, defaultSpawnSkin?: str
 // STAIRS: S<number><dir?>
 // TEMP: convert to CONVERTER for gameplay, keeping dir for player-only height scaling.
 // ALSO: apply height mapping knobs (offset + clamp).
+    // STAIRS: S<number><dir?>
+// Load as STAIRS tiles (no gameplay coercion here).
     if (up.startsWith("S")) {
-
         const m = up.match(/^S(\d+)([NESW])?$/);
         if (m) {
-            const rawH = parseInt(m[1], 10) | 0;
+            const h = (parseInt(m[1], 10) | 0);
             const dir = (m[2] as StairDir | undefined) ?? undefined;
-
-            const h = Math.max(
-                STAIRS_AS_FLOOR_MIN_H | 0,
-                (rawH + (STAIRS_AS_FLOOR_H_OFFSET | 0)) | 0
-            );
-
-            return { kind: "CONVERTER", h, dir, skin: defaultFloorSkin };
+            const skin = dir ? STAIR_SKIN_BY_DIR[dir] : defaultFloorSkin;
+            return { kind: "STAIRS", h, dir, skin };
         }
 
         const cleaned = "S" + up.slice(1).replace(/[^0-9NESW]/g, "");
         const m2 = cleaned.match(/^S(\d+)([NESW])?$/);
         if (m2) {
-            const rawH = parseInt(m2[1], 10) | 0;
+            const h = (parseInt(m2[1], 10) | 0);
             const dir = (m2[2] as StairDir | undefined) ?? undefined;
-
-            const h = Math.max(
-                STAIRS_AS_FLOOR_MIN_H | 0,
-                (rawH + (STAIRS_AS_FLOOR_H_OFFSET | 0)) | 0
-            );
-
-            return { kind: "CONVERTER", h, dir, skin: defaultFloorSkin };
+            const skin = dir ? STAIR_SKIN_BY_DIR[dir] : defaultFloorSkin;
+            return { kind: "STAIRS", h, dir, skin };
         }
 
-        // No number parsed => treat as height 0, then apply mapping knobs
-        const h = Math.max(
-            STAIRS_AS_FLOOR_MIN_H | 0,
-            (0 + (STAIRS_AS_FLOOR_H_OFFSET | 0)) | 0
-        );
-
-        return { kind: "CONVERTER", h, skin: defaultFloorSkin };
+        // Fallback: stairs at height 0
+        return { kind: "STAIRS", h: 0, skin: defaultFloorSkin };
     }
+
 
 
 
