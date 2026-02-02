@@ -8,6 +8,7 @@ import {
     compileKenneyMapFromTable,
     type IsoTile,
     type IsoTileKind,
+    type StairDir,
     STAIR_SKIN_BY_DIR,
 } from "./kenneyMapLoader";
 import { EXCEL_SANCTUARY_01 } from "./maps";
@@ -206,67 +207,6 @@ const RAMP_WIRING_PRESET: Record<
     "N->S_swapHigh": { lowEdge: ["NW", "NE"], highEdge: ["SE", "SW"] },
 };
 
-// Single knob: switch this string to try different corner selections quickly.
-export let DEBUG_BRIDGE_RAMP_WIRING: keyof typeof RAMP_WIRING_PRESET = "N->S";
-
-function buildRampPolyFromCorners(
-    corners: CornerPts,
-    wiring: RampCornerWiring
-): [Pt, Pt, Pt, Pt] {
-    const [l0, l1] = wiring.lowEdge;
-    const [h0, h1] = wiring.highEdge;
-
-    // rampHeightAt convention:
-    // q0,q1 = low edge at z0
-    // q3,q2 = high edge at z1
-    const q0 = corners[l0];
-    const q1 = corners[l1];
-    const q3 = corners[h0];
-    const q2 = corners[h1];
-
-    // Poly order must remain [q0,q1,q2,q3]
-    return [q0, q1, q2, q3];
-}
-
-
-type RampConnector = {
-    id: string;
-    tag?: string;
-
-    // Tile-space endpoints (tops)
-    low: { tx: number; ty: number };
-    high: { tx: number; ty: number };
-
-    // Which facing edges connect (debug-friendly knob)
-    wiring: keyof typeof RAMP_WIRING_PRESET;
-
-    // Optional overrides (otherwise read from tile.h)
-    z0Override?: number;
-    z1Override?: number;
-};
-
-// Author ramps here (tile-space).
-// Add your other stair locations as additional connectors.
-const RAMP_CONNECTORS: RampConnector[] = [
-    {
-        id: "sanctuary_bridge_col4_y7to9_0to3",
-        tag: "bridge-ramp",
-        // Existing one: low at south tile, high at north tile
-        low: { tx: -2, ty: 2 },
-        high: { tx: -2, ty: 0 },
-        wiring: DEBUG_BRIDGE_RAMP_WIRING,
-        z0Override: 0, z1Override: 3,
-    },
-
-    // TODO: add more ramps here, one per former stair segment.
-    // Example template:
-    // {
-    //   id: "ramp_somewhere",
-    //   low: { tx: X0, ty: Y0 },
-    //   high:{ tx: X1, ty: Y1 },
-    //   wiring: "S->N",
-    // },
-];
 
 function tileTopCornersWorld(tx: number, ty: number, tileWorld: number): CornerPts {
     // NOTE: these corners describe the FULL tile extents in world.
@@ -284,45 +224,154 @@ function tileTopCornersWorld(tx: number, ty: number, tileWorld: number): CornerP
     };
 }
 
-function buildRampFaceFromConnector(c: RampConnector, tileWorld: number): RampFace {
-    // Heights come from the connected tiles unless overridden.
-    const lowTile = getTile(c.low.tx, c.low.ty);
-    const highTile = getTile(c.high.tx, c.high.ty);
 
-    const z0 = (c.z0Override ?? (lowTile.h | 0)) as number;
-    const z1 = (c.z1Override ?? (highTile.h | 0)) as number;
+type StairTileRec = { tx: number; ty: number; h: number; dir: StairDir };
 
-    // Build a single quad spanning from low tile to high tile.
-    // We map SW/SE from the low tile, and NW/NE from the high tile,
-    // then use wiring to choose which edge is low/high.
-    const lowCorners = tileTopCornersWorld(c.low.tx, c.low.ty, tileWorld);
-    const highCorners = tileTopCornersWorld(c.high.tx, c.high.ty, tileWorld);
-
-    const corners: CornerPts = {
-        SW: lowCorners.SW,
-        SE: lowCorners.SE,
-        NW: highCorners.NW,
-        NE: highCorners.NE,
-    };
-
-    const wiring = RAMP_WIRING_PRESET[c.wiring];
-
-    return {
-        id: c.id,
-        tag: c.tag ?? `ramp-${c.wiring}`,
-        poly: buildRampPolyFromCorners(corners, wiring),
-        z0,
-        z1,
-    };
+function stairDirToDelta(dir: StairDir): { dx: number; dy: number } {
+    switch (dir) {
+        case "N": return { dx: 0, dy: -1 };
+        case "S": return { dx: 0, dy: 1 };
+        case "W": return { dx: -1, dy: 0 };
+        case "E": return { dx: 1, dy: 0 };
+        default:  return { dx: 0, dy: -1 };
+    }
 }
 
-export function buildAllRamps(tileWorld: number): RampFace[] {
-    const out: RampFace[] = [];
-    for (const c of RAMP_CONNECTORS) {
-        out.push(buildRampFaceFromConnector(c, tileWorld));
+function stairDirToWiring(dir: StairDir): keyof typeof RAMP_WIRING_PRESET {
+    // Direction meaning: “up” along that dir.
+    // So N means low at SOUTH edge, high at NORTH edge, etc.
+    switch (dir) {
+        case "N": return "S->N";
+        case "S": return "N->S";
+        case "E": return "W->E";
+        case "W": return "E->W";
+        default:  return "S->N";
     }
+}
+
+function buildStaircaseRamps(tileWorld: number): RampFace[] {
+    const out: RampFace[] = [];
+
+    // Scan bounds based on the table map def and compiled origin.
+    const minTx = _compiled.originTx;
+    const minTy = _compiled.originTy;
+    const maxTx = _compiled.originTx + EXCEL_SANCTUARY_01.w - 1;
+    const maxTy = _compiled.originTy + EXCEL_SANCTUARY_01.h - 1;
+
+    const visited = new Set<string>();
+
+    function key(tx: number, ty: number) {
+        return `${tx},${ty}`;
+    }
+
+    function readStair(tx: number, ty: number): StairTileRec | null {
+        const t = getTile(tx, ty);
+        if (t.kind !== "STAIRS") return null;
+        const dir = (t.dir ?? "N") as StairDir;
+        return { tx, ty, h: (t.h | 0), dir };
+    }
+
+    for (let ty = minTy; ty <= maxTy; ty++) {
+        for (let tx = minTx; tx <= maxTx; tx++) {
+            const s0 = readStair(tx, ty);
+            if (!s0) continue;
+
+            // If we've already consumed this tile into a staircase, skip.
+            if (visited.has(key(tx, ty))) continue;
+
+            const dir = s0.dir;
+            const { dx, dy } = stairDirToDelta(dir);
+
+            // Walk backwards to find the "start" of this staircase run.
+            // We treat a run as adjacent STAIRS with SAME dir and CONSECUTIVE heights.
+            let start = s0;
+            while (true) {
+                const px = start.tx - dx;
+                const py = start.ty - dy;
+                const prev = readStair(px, py);
+                if (!prev) break;
+                if (prev.dir !== dir) break;
+
+                // Require consecutive heights (prev is one step lower)
+                if ((prev.h | 0) !== ((start.h | 0) - 1)) break;
+
+                start = prev;
+            }
+
+            // Walk forward to collect the full run.
+            const tiles: StairTileRec[] = [];
+            let cur = start;
+            while (true) {
+                const k = key(cur.tx, cur.ty);
+                if (visited.has(k)) break; // safety
+                visited.add(k);
+                tiles.push(cur);
+
+                const nx = cur.tx + dx;
+                const ny = cur.ty + dy;
+                const next = readStair(nx, ny);
+                if (!next) break;
+                if (next.dir !== dir) break;
+
+                // Require consecutive heights (next is one step higher)
+                if ((next.h | 0) !== ((cur.h | 0) + 1)) break;
+
+                cur = next;
+            }
+
+            if (tiles.length <= 0) continue;
+
+            const low = tiles[0];
+            const high = tiles[tiles.length - 1];
+
+            // Ramp endpoints:
+            // low tile contributes z0 at its “low edge”
+            // high tile contributes z1 at its “high edge”
+            const z0 = low.h | 0;
+            const z1 = (high.h | 0) -1;
+
+            const wiringKey = stairDirToWiring(dir);
+            const wiring = RAMP_WIRING_PRESET[wiringKey];
+
+            const lowCorners = tileTopCornersWorld(low.tx, low.ty, tileWorld);
+            const highCorners = tileTopCornersWorld(high.tx, high.ty, tileWorld);
+
+            const [l0, l1] = wiring.lowEdge;
+            const [h0, h1] = wiring.highEdge;
+
+            // rampHeightAt convention:
+            // q0,q1 = low edge at z0
+            // q3,q2 = high edge at z1
+            const q0 = lowCorners[l0];
+            const q1 = lowCorners[l1];
+            const q3 = highCorners[h0];
+            const q2 = highCorners[h1];
+
+            const id =
+                `staircase_${dir}_${low.tx}_${low.ty}_len${tiles.length}_h${z0}_to_${z1}`;
+
+            out.push({
+                id,
+                tag: "staircase",
+                poly: [q0, q1, q2, q3],
+                z0,
+                z1,
+            });
+        }
+    }
+
     return out;
 }
+
+function buildAllRamps(tileWorld: number): RampFace[] {
+    const out: RampFace[] = [];
+
+    // 2) Auto staircases (one combined polygon per run)
+    out.push(...buildStaircaseRamps(tileWorld));
+
+    return out;
+}
+
 
 
 function _getRampFaces(tileWorld: number): RampFace[] {
@@ -529,16 +578,6 @@ export function isOccludedAlongSegment(
 // Connectors will replace stairs targeting in Phase 2+.
 // ─────────────────────────────────────────────────────────────
 
-export type StairsTarget = never;
-
-/**
- * Phase 1: stairs are decorative only.
- * This helper will be reintroduced as "findNearestConnectorWorld" once connectors exist.
- */
-export function findNearestStairsWorld(): null {
-    return null;
-}
-
 /**
  * Convert world coords -> tile coords given world-units-per-tile.
  * Uses the same convention as the renderer.
@@ -597,7 +636,6 @@ export const WALK_SHAPE_ANCHOR_PX: Record<TileWalkShape, { ox: number; oy: numbe
 
 export const WALK_KIND_ANCHOR_PX: Partial<Record<IsoTileKind, { ox: number; oy: number }>> = {
     // Keep CONVERTER collision perfectly identical to FLOOR.
-    CONVERTER: { ox: 0, oy: 0 },
 };
 
 function shapeDims(shape: TileWalkShape): { w: number; h: number } {
@@ -612,16 +650,12 @@ function shapeDims(shape: TileWalkShape): { w: number; h: number } {
     }
 }
 
-export type StairDir = "N" | "W" | "E" | "S";
-
 export function tileWalkShape(tx: number, ty: number): TileWalkShape {
     const t = getTile(tx, ty);
     switch (t.kind) {
         case "VOID":
             return "BLOCKED";
         case "FLOOR":
-            return "FULL_TOP";
-        case "CONVERTER":
             return "FULL_TOP";
         case "STAIRS":
             return "BLOCKED";
@@ -804,18 +838,6 @@ function diamondContains(lx: number, ly: number, w: number, h: number): boolean 
     return dx + dy <= 1;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Legacy API preserved.
-// Prefer walkInfo(...).walkable in new code.
-// ─────────────────────────────────────────────────────────────
-
-export function isWalkableWorld(wx: number, wy: number, tileWorld: number): boolean {
-    // 1) Ramp faces are always walkable
-    if (rampHitAtWorld(wx, wy, tileWorld)) return true;
-
-    // 2) Tile tops via walkInfo (includes top-face diamond)
-    return walkInfo(wx, wy, tileWorld).walkable;
-}
 
 // ─────────────────────────────────────────────────────────────
 // DEBUG: outline of the logical walk shape (tile-local top-face px)
