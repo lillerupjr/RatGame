@@ -23,7 +23,7 @@ export const EXCEL_SANCTUARY_01: TableMapDef = {
         { x: 5, y: 1, t: "F0" },
         { x: 6, y: 1, t: "S1W" },
         { x: 7, y: 1, t: "S2W" },
-//
+        { x: 8, y: 1, t: "S3W" },
         { x: 9, y: 1, t: "S4W" },
         { x: 10, y: 1, t: "S5W" },
         { x: 11, y: 1, t: "F5" },
@@ -74,21 +74,21 @@ export const EXCEL_SANCTUARY_01: TableMapDef = {
         { x: 11, y: 6, t: "F5" },
 
         // Row 7
-        // { x: 4, y: 7, t: "S1N" },
+        { x: 4, y: 7, t: "S1N" },
         { x: 8, y: 7, t: "F5" },
         { x: 9, y: 7, t: "F5" },
         { x: 10, y: 7, t: "F5" },
         { x: 11, y: 7, t: "F5" },
 
         // Row 8
-        // { x: 4, y: 8, t: "S2N" },
+        { x: 4, y: 8, t: "S2N" },
         { x: 8, y: 8, t: "F5" },
         { x: 9, y: 8, t: "F5" },
         { x: 10, y: 8, t: "F5" },
         { x: 11, y: 8, t: "F5" },
 
         // Row 9
-        // { x: 4, y: 9, t: "S3N" },
+        { x: 4, y: 9, t: "S3N" },
         { x: 8, y: 9, t: "S5S" },
 
         // Row 10

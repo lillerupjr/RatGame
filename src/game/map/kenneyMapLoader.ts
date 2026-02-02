@@ -1,21 +1,10 @@
 // src/game/map/kenneyMapLoader.ts
 import type { TableMapDef } from "./tableMapTypes";
 
-export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "CONVERTER";
+export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN";
 export type StairDir = "N" | "E" | "S" | "W";
-/**
- * TEMP: When we "translate" STAIRS tokens into FLOOR tiles,
- * you can adjust the resulting height here.
- *
- * Example:
- *  - offset = +0 keeps authored height
- *  - offset = -1 pulls all former-stairs down 1 level
- *
- * You can also clamp to avoid negative heights.
- */
-export let STAIRS_AS_FLOOR_H_OFFSET = -1;
-export let STAIRS_AS_FLOOR_MIN_H = 0;
-// This mapping is intentional - DON'T change!!
+
+// Authoritative stair sprite mapping:
 export const STAIR_SKIN_BY_DIR: Record<StairDir, string> = {
     S: "landscape_20",
     E: "landscape_23",
@@ -25,9 +14,9 @@ export const STAIR_SKIN_BY_DIR: Record<StairDir, string> = {
 
 export type IsoTile = {
     kind: IsoTileKind;
-    h: number;
-    skin?: string;
-    dir?: StairDir;
+    h: number;      // integer base height (authored)
+    skin?: string;  // e.g. "landscape_23"
+    dir?: StairDir; // stairs direction (optional)
 };
 
 export type CompiledKenneyMap = {
@@ -35,6 +24,7 @@ export type CompiledKenneyMap = {
     originTx: number;
     originTy: number;
 
+    // Map-authored spawn (tile coords)
     spawnTx: number;
     spawnTy: number;
     spawnH: number;
@@ -42,62 +32,38 @@ export type CompiledKenneyMap = {
     getTile(tx: number, ty: number): IsoTile;
 };
 
-
-function parseToken(t: string, defaultFloorSkin?: string, defaultSpawnSkin?: string): IsoTile | null {
+// Parse tokens like: F0, F5, S0W, S3N, S4S, S5, P0, C2E
+function parseToken(
+    t: string,
+    defaultFloorSkin?: string,
+    defaultSpawnSkin?: string
+): IsoTile | null {
     const tok = (t ?? "").trim();
     if (!tok) return null;
 
     const up = tok.toUpperCase();
 
-// FLOOR: F<number>
+    // FLOOR: F<number>
     if (up.startsWith("F")) {
         const n = parseInt(up.slice(1), 10);
         const h = Number.isFinite(n) ? (n | 0) : 0;
         return { kind: "FLOOR", h, skin: defaultFloorSkin };
     }
 
-// CONVERTER: C<number><dir?>
-// Exact copy of FLOOR data-wise, but can carry a dir (N/E/S/W) used for *player-only* height scaling.
-    if (up.startsWith("C")) {
-        const m = up.match(/^C(\d+)([NESW])?$/);
-        if (m) {
-            const h = parseInt(m[1], 10) | 0;
-            const dir = (m[2] as StairDir | undefined) ?? undefined;
-            return { kind: "CONVERTER", h, skin: defaultFloorSkin, dir };
-        }
-
-        const cleaned = "C" + up.slice(1).replace(/[^0-9NESW]/g, "");
-        const m2 = cleaned.match(/^C(\d+)([NESW])?$/);
-        if (m2) {
-            const h = parseInt(m2[1], 10) | 0;
-            const dir = (m2[2] as StairDir | undefined) ?? undefined;
-            return { kind: "CONVERTER", h, skin: defaultFloorSkin, dir };
-        }
-
-        return { kind: "CONVERTER", h: 0, skin: defaultFloorSkin };
-    }
-
-
-
-    // SPAWN: P<number>  (acts like FLOOR for gameplay, but marks the player spawn)
+    // SPAWN: P<number> (acts like FLOOR visually/gameplay, but marks spawn)
     if (up.startsWith("P")) {
         const n = parseInt(up.slice(1), 10);
         const h = Number.isFinite(n) ? (n | 0) : 0;
-
-
         const skin = defaultSpawnSkin ?? defaultFloorSkin;
         return { kind: "SPAWN", h, skin };
     }
 
-// STAIRS: S<number><dir?>
-// TEMP: convert to CONVERTER for gameplay, keeping dir for player-only height scaling.
-// ALSO: apply height mapping knobs (offset + clamp).
     // STAIRS: S<number><dir?>
-// Load as STAIRS tiles (no gameplay coercion here).
+    // We load as STAIRS tiles. Direction (when present) determines sprite skin.
     if (up.startsWith("S")) {
         const m = up.match(/^S(\d+)([NESW])?$/);
         if (m) {
-            const h = (parseInt(m[1], 10) | 0);
+            const h = parseInt(m[1], 10) | 0;
             const dir = (m[2] as StairDir | undefined) ?? undefined;
             const skin = dir ? STAIR_SKIN_BY_DIR[dir] : defaultFloorSkin;
             return { kind: "STAIRS", h, dir, skin };
@@ -106,18 +72,15 @@ function parseToken(t: string, defaultFloorSkin?: string, defaultSpawnSkin?: str
         const cleaned = "S" + up.slice(1).replace(/[^0-9NESW]/g, "");
         const m2 = cleaned.match(/^S(\d+)([NESW])?$/);
         if (m2) {
-            const h = (parseInt(m2[1], 10) | 0);
+            const h = parseInt(m2[1], 10) | 0;
             const dir = (m2[2] as StairDir | undefined) ?? undefined;
             const skin = dir ? STAIR_SKIN_BY_DIR[dir] : defaultFloorSkin;
             return { kind: "STAIRS", h, dir, skin };
         }
 
-        // Fallback: stairs at height 0
+        // Fallback: stairs at height 0 (no direction)
         return { kind: "STAIRS", h: 0, skin: defaultFloorSkin };
     }
-
-
-
 
     return null;
 }
@@ -126,10 +89,10 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
     const defaultFloorSkin = def.defaultFloorSkin;
     const defaultSpawnSkin = def.defaultSpawnSkin;
 
-
+    // Keyed by "x,y" in table coords
     const placed = new Map<string, IsoTile>();
 
-
+    // First SPAWN found becomes the authoritative spawn point
     let spawnTableX: number | null = null;
     let spawnTableY: number | null = null;
     let spawnH: number = 0;
@@ -147,6 +110,7 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         placed.set(`${c.x},${c.y}`, tile);
     }
 
+    // Decide where table (0,0) lands in tile-space.
     const originTx = def.centerOnZero ? -Math.floor(def.w / 2) : 0;
     const originTy = def.centerOnZero ? -Math.floor(def.h / 2) : 0;
 
@@ -161,8 +125,8 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         return placed.get(`${x},${y}`) ?? { kind: "VOID", h: 0 };
     }
 
-    // Convert authored spawn table coords -> tile coords
-    // Fallback: selection center (0,0 in tile-space when centerOnZero=true)
+    // Convert authored spawn table coords -> tile coords.
+    // Fallback: selection center.
     const spawnTx = (spawnTableX ?? Math.floor(def.w / 2)) + originTx;
     const spawnTy = (spawnTableY ?? Math.floor(def.h / 2)) + originTy;
 
