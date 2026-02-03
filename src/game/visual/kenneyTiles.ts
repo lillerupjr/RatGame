@@ -18,13 +18,13 @@ export const KENNEY_TILE_ANCHOR_Y = 0.55;
 
 // ---- Configure expected filenames here ----
 const FILES = {
-    GROUND: "landscape_28.png",
+    GROUND: "edges_landscape_28.png",
 
     // Directional stairs (maps.ts tokens are authoritative; loader sets tile.skin)
-    STAIRS_N: "landscape_20.png",
-    STAIRS_W: "landscape_23.png",
-    STAIRS_E: "landscape_19.png",
-    STAIRS_S: "landscape_16.png",
+    STAIRS_N: "edges_landscape_20.png",
+    STAIRS_W: "edges_landscape_23.png",
+    STAIRS_E: "edges_landscape_19.png",
+    STAIRS_S: "edges_landscape_16.png",
 } as const;
 
 

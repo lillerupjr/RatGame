@@ -165,8 +165,8 @@ type PathSegment = {
 // Floor Skins (cosmetic variety)
 // ─────────────────────────────────────────────────────────────
 
-const FLOOR_SKINS = ["landscape_28", "landscape_13"];
-const SPAWN_SKIN = "landscape_30";
+const FLOOR_SKINS = ["edges_landscape_28", "edges_landscape_13"];
+const SPAWN_SKIN = "edges_landscape_30";
 
 // ─────────────────────────────────────────────────────────────
 // Main Generator
@@ -717,15 +717,15 @@ function carveLineCorridor(
 
 function getRampSkin(dir: Dir): string {
     // Ramp tiles - direction indicates which way is "uphill":
-    // - landscape_16: North up to South (walking N->S goes up)
-    // - landscape_19: West up to East (walking W->E goes up)  
-    // - landscape_20: South up to North (walking S->N goes up)
-    // - landscape_23: East up to West (walking E->W goes up)
+    // - edges_landscape_16: North up to South (walking N->S goes up)
+    // - edges_landscape_19: West up to East (walking W->E goes up)  
+    // - edges_landscape_20: South up to North (walking S->N goes up)
+    // - edges_landscape_23: East up to West (walking E->W goes up)
     switch (dir) {
-        case "S": return "landscape_16"; // Going South = going up
-        case "E": return "landscape_19"; // Going East = going up
-        case "N": return "landscape_20"; // Going North = going up
-        case "W": return "landscape_23"; // Going West = going up
+        case "S": return "edges_landscape_16"; // Going South = going up
+        case "E": return "edges_landscape_19"; // Going East = going up
+        case "N": return "edges_landscape_20"; // Going North = going up
+        case "W": return "edges_landscape_23"; // Going West = going up
     }
 }
 
@@ -924,8 +924,8 @@ function gridToTableMapDef(grid: TileData[][], config: ProceduralMapConfig): Tab
         id: `PROCEDURAL_F${config.floorIndex}_${config.seed}`,
         w,
         h,
-        defaultFloorSkin: "landscape_28",
-        defaultSpawnSkin: "landscape_30",
+        defaultFloorSkin: "edges_landscape_28",
+        defaultSpawnSkin: "edges_landscape_30",
         centerOnZero: true,
         cells,
     };
