@@ -140,7 +140,7 @@ export async function renderSystem(
 
   const tileLayer = (tx: number, ty: number) => {
     const t = getTile(tx, ty);
-    return t.kind === "STAIRS" ? ((t.h ?? 0) - 1) : tileHeight(tx, ty);
+    return t.kind === "STAIRS" ? ((t.h ?? 0) + STAIR_LAYER_OFFSET) : tileHeight(tx, ty);
   };
 
   const toScreen = (x: number, y: number) => {
@@ -174,6 +174,12 @@ export async function renderSystem(
 
   // Visual height step in screen pixels per tile-level (tune later).
   const ELEV_PX = 16;
+
+  // Global scale for floor/ground tile sprites (1 = default size).
+  const TILE_SCALE = (w as any).tileSpriteScale ?? 1;
+
+  // Optional render-layer offset for stairs (e.g. -1 to render under same-height tiles).
+  const STAIR_LAYER_OFFSET = (w as any).stairLayerOffset ?? 0;
 
   // -------------------------------------------------------
   // DEBUG: Logical walk-mask overlay (matches isWalkableWorld)
@@ -251,6 +257,8 @@ export async function renderSystem(
         if (isHoleTile(tx, ty)) continue;
 
         const tdef = getTile(tx, ty);
+
+        if (RENDER_ALL_HEIGHTS && tdef.kind === "STAIRS" && tdef.stairGroupId) continue;
 
         // Match tile draw rules (now supports "render all heights")
         if (!RENDER_ALL_HEIGHTS) {
@@ -557,16 +565,127 @@ export async function renderSystem(
     depth: depthKey(w.px, w.py),
   });
 
+  const drawTileAt = (tx: number, ty: number, tdef: any) => {
+    // Choose sprite:
+    // - STAIRS: use authored tdef.skin (kenneyMapLoader must assign it)
+    // - FLOOR/SPAWN: use authored skin if present, else ground
+    const useStairs = tdef.kind === "STAIRS";
+
+    let tileRec: Loaded = groundTile;
+
+    if (useStairs) {
+      tileRec = tdef.skin ? getKenneyTileBySkin(tdef.skin) : groundTile;
+    } else {
+      tileRec = tdef.skin ? getKenneyTileBySkin(tdef.skin) : groundTile;
+    }
+
+    if (
+        !tileRec?.ready ||
+        !tileRec.img ||
+        tileRec.img.width <= 0 ||
+        tileRec.img.height <= 0
+    ) {
+      return;
+    }
+
+    const iw = tileRec.img.width * TILE_SCALE;
+    const ih = tileRec.img.height * TILE_SCALE;
+
+    // Tile "center" in world coords (+0.5 centers the tile).
+    const wx = (tx + 0.5) * T;
+    const wy = (ty + 0.5) * T;
+
+    const p = worldToScreen(wx, wy);
+    const dx = p.x + camX - iw * 0.5;
+
+    // Per-tile anchor: stairs art often has different vertical footprint/padding
+    const stairsAnchorY = 0.62;
+
+    // Per-direction fine tune (lets you fix ?3 of 4? issues without breaking the good one)
+    const STAIRS_DY_BY_DIR: Partial<Record<"N" | "E" | "S" | "W", number>> = {
+      N: 16,
+      E: 16,
+      S: 16,
+      W: 16,
+    };
+
+    const anchorY = useStairs ? stairsAnchorY : ANCHOR_Y;
+    let dy = p.y + camY - ih * anchorY;
+
+    // Apply global art shift so top-face aligns with logic
+    dy += TILE_ART_Y_SHIFT_PX;
+
+    // Fine tune after anchoring (stairs only)
+    if (useStairs) {
+      const d = (tdef.dir as ("N" | "E" | "S" | "W" | undefined)) ?? "N";
+      dy += STAIRS_DY_BY_DIR[d] ?? 16;
+    }
+
+    // stairs are visually elevated by their own h
+    const h = tdef.kind === "STAIRS" ? (tdef.h ?? 0) : tileHeight(tx, ty);
+    const elev = h * ELEV_PX;
+
+    dy -= elev;
+    ctx.drawImage(tileRec.img, dx, dy, iw, ih);
+
+    // Collect stair occluders for a second pass (drawn AFTER entities/projectiles)
+    if (useStairs) {
+      const occ = ((w as any)._stairOccluders ??= []);
+      occ.push({
+        img: tileRec.img,
+        dx,
+        dy,
+        iw,
+        ih,
+      });
+    }
+  };
+
+  type StairTileDraw = { tx: number; ty: number; step: number; depth: number };
+  type StairGroupDraw = { maxH: number; tiles: StairTileDraw[]; drawn?: boolean };
+
+  const stairGroups = new Map<number, StairGroupDraw>();
+
+  if (RENDER_ALL_HEIGHTS && tilesReady) {
+    for (let ty = minTy; ty <= maxTy; ty++) {
+      for (let tx = minTx; tx <= maxTx; tx++) {
+        if (isHoleTile(tx, ty)) continue;
+        const tdef = getTile(tx, ty);
+        if (tdef.kind !== "STAIRS") continue;
+        const gid = tdef.stairGroupId;
+        if (!gid) continue;
+
+        let g = stairGroups.get(gid);
+        if (!g) {
+          g = { maxH: (tdef.h ?? 0) + STAIR_LAYER_OFFSET, tiles: [] };
+          stairGroups.set(gid, g);
+        }
+
+        const h = (tdef.h ?? 0) + STAIR_LAYER_OFFSET;
+        if (h > g.maxH) g.maxH = h;
+
+        const wx = (tx + 0.5) * T;
+        const wy = (ty + 0.5) * T;
+        g.tiles.push({
+          tx,
+          ty,
+          step: tdef.stairStepIndex ?? 0,
+          depth: depthKey(wx, wy),
+        });
+      }
+    }
+  }
+
   for (let li = 0; li < layers.length; li++) {
     const layer = layers[li];
 
     if (tilesReady) {
       for (let s = minSum; s <= maxSum; s++) {
-        const tx0 = Math.max(minTx, s - maxTy);
-        const tx1 = Math.min(maxTx, s - minTy);
+        const ty0 = Math.max(minTy, s - maxTx);
+        const ty1 = Math.min(maxTy, s - minTx);
 
-        for (let tx = tx0; tx <= tx1; tx++) {
-          const ty = s - tx;
+        for (let ty = ty1; ty >= ty0; ty--) {
+          const tx = s - ty;
 
           // VOID (shared with collision)
           if (isHoleTile(tx, ty)) continue;
@@ -597,8 +716,8 @@ export async function renderSystem(
             continue;
           }
 
-          const iw = tileRec.img.width;
-          const ih = tileRec.img.height;
+          const iw = tileRec.img.width * TILE_SCALE;
+          const ih = tileRec.img.height * TILE_SCALE;
 
           // Tile "center" in world coords (+0.5 centers the tile).
           const wx = (tx + 0.5) * T;
@@ -659,6 +778,26 @@ export async function renderSystem(
               ih,
             });
           }
+        }
+      }
+    }
+
+    if (RENDER_ALL_HEIGHTS && stairGroups.size > 0) {
+      for (const [gid, group] of stairGroups) {
+        if (group.drawn) continue;
+        if (group.maxH !== layer) continue;
+        group.drawn = true;
+
+        group.tiles.sort((a, b) => {
+          const stepDiff = (b.step | 0) - (a.step | 0);
+          if (stepDiff !== 0) return stepDiff;
+          return a.depth - b.depth;
+        });
+
+        for (let i = 0; i < group.tiles.length; i++) {
+          const t = group.tiles[i];
+          const tdef = getTile(t.tx, t.ty);
+          drawTileAt(t.tx, t.ty, tdef);
         }
       }
     }

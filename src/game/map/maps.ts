@@ -18,7 +18,10 @@ export const EXCEL_SANCTUARY_01: TableMapDef = {
 
         // Row 1: F0 F0 S0W S1W S2W S3W S4 S5 F5
 
-        { x: 3, y: 1, t: "F0" },
+        { x: 1, y: 5, t: "S1E" },
+        { x: 0, y: 5, t: "S2E" },
+
+
         { x: 4, y: 1, t: "F0" },
         { x: 5, y: 1, t: "F0" },
         { x: 6, y: 1, t: "S1W" },

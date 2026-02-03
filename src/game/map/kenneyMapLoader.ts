@@ -17,6 +17,8 @@ export type IsoTile = {
     h: number;      // integer base height (authored)
     skin?: string;  // e.g. "landscape_23"
     dir?: StairDir; // stairs direction (optional)
+    stairGroupId?: number;
+    stairStepIndex?: number; // 0..n-1 low->high within a staircase group
 };
 
 export type CompiledKenneyMap = {
@@ -134,6 +136,61 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         }
 
         placed.set(`${c.x},${c.y}`, tile);
+    }
+
+    // Group contiguous stair tiles into staircase runs (for render ordering).
+    // Group rule: 4-neighbor connected components with matching dir.
+    // Step index is based on height within the group (low->high).
+    {
+        let nextGroupId = 1;
+        const visited = new Set<string>();
+
+        const key = (x: number, y: number) => `${x},${y}`;
+        const getPlaced = (x: number, y: number) => placed.get(key(x, y));
+
+        for (let y = 0; y < def.h; y++) {
+            for (let x = 0; x < def.w; x++) {
+                const t0 = getPlaced(x, y);
+                if (!t0 || t0.kind !== "STAIRS") continue;
+                if (visited.has(key(x, y))) continue;
+
+                const dir = t0.dir;
+                if (dir !== "E" && dir !== "S") continue;
+
+                const stack: Array<{ x: number; y: number }> = [{ x, y }];
+                const tiles: IsoTile[] = [];
+                let minH = t0.h | 0;
+
+                while (stack.length > 0) {
+                    const cur = stack.pop()!;
+                    const k = key(cur.x, cur.y);
+                    if (visited.has(k)) continue;
+
+                    const t = getPlaced(cur.x, cur.y);
+                    if (!t || t.kind !== "STAIRS") continue;
+                    if ((t.dir ?? undefined) !== (dir ?? undefined)) continue;
+
+                    visited.add(k);
+                    tiles.push(t);
+                    const h = t.h | 0;
+                    if (h < minH) minH = h;
+
+                    stack.push({ x: cur.x + 1, y: cur.y });
+                    stack.push({ x: cur.x - 1, y: cur.y });
+                    stack.push({ x: cur.x, y: cur.y + 1 });
+                    stack.push({ x: cur.x, y: cur.y - 1 });
+                }
+
+                if (tiles.length === 0) continue;
+
+                const gid = nextGroupId++;
+                for (let i = 0; i < tiles.length; i++) {
+                    const t = tiles[i];
+                    t.stairGroupId = gid;
+                    t.stairStepIndex = (t.h | 0) - minH;
+                }
+            }
+        }
     }
 
     // Decide where table (0,0) lands in tile-space.
