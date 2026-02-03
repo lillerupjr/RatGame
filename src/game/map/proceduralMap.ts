@@ -178,7 +178,7 @@ const SPAWN_SKIN = "edges_landscape_30";
 // ─────────────────────────────────────────────────────────────
 // Main Generator
 // ─────────────────────────────────────────────────────────────
-
+//
 export function generateProceduralMap(config: ProceduralMapConfig): TableMapDef {
     const rng = new RNG(42069);
     const { width, height } = config;
