@@ -9,13 +9,18 @@ import {
     type IsoTile,
     type IsoTileKind,
     type StairDir,
+    type CompiledKenneyMap,
     STAIR_SKIN_BY_DIR,
 } from "./kenneyMapLoader";
+import type { TableMapDef } from "./tableMapTypes";
 import {EXCEL_SANCTUARY_01, EXCEL_SANCTUARY_02} from "./maps";
 import { worldDeltaToScreen } from "../visual/iso";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
 export type { IsoTileKind, IsoTile } from "./kenneyMapLoader";
+
+// Plane tiles are visually 2 units tall; lower their placement by 1 unit.
+export const PLANE_TILE_Z_OFFSET = -1;
 
 /**
  * A simple deterministic "Arcane Sanctuary" layout in tile-space.
@@ -28,7 +33,22 @@ export type { IsoTileKind, IsoTile } from "./kenneyMapLoader";
  * - Smaller raised diamond platform at h=1 (offset)
  * - A stair "bridge" strip that connects them
  */
-const _compiled = compileKenneyMapFromTable(EXCEL_SANCTUARY_02);
+let _compiled: CompiledKenneyMap = compileKenneyMapFromTable(EXCEL_SANCTUARY_02);
+
+/**
+ * Set the active map dynamically (e.g., for procedural generation).
+ */
+export function setActiveMap(mapDef: TableMapDef): CompiledKenneyMap {
+    _compiled = compileKenneyMapFromTable(mapDef);
+    return _compiled;
+}
+
+/**
+ * Get the current compiled map.
+ */
+export function getActiveMap(): CompiledKenneyMap {
+    return _compiled;
+}
 
 export function getTile(tx: number, ty: number): IsoTile {
     return _compiled.getTile(tx, ty);

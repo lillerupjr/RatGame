@@ -38,7 +38,7 @@ export function movementSystem(w: World, input: InputState, dt: number) {
 // - CONVERTER: player-only smooth 0..1 ramp inside the tile toward tile.dir
   w.pz = curInfo.z;
 
-  if (curInfo.kind === "CONVERTER") {
+  if ((curInfo.kind as string) === "CONVERTER") {
     const T = KENNEY_TILE_WORLD;
 
     // Fractions inside tile (0..1)
