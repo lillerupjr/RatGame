@@ -86,7 +86,7 @@ export function projectilesSystem(w: World, dt: number) {
             w.prDirY[i] = Math.sin(a);
         } else {
             // Restore previous "double integration" feel (pre-fix behavior) without reintroducing the bug.
-            const PROJECTILE_SPEED_MULT = 1.0;
+            const PROJECTILE_SPEED_MULT = 2;
 
             const vx = w.prvx[i] * moveSpeedMult * PROJECTILE_SPEED_MULT;
             const vy = w.prvy[i] * moveSpeedMult * PROJECTILE_SPEED_MULT;
