@@ -6,8 +6,8 @@ export const EXCEL_SANCTUARY_01: TableMapDef = {
     id: "EXCEL_SANCTUARY_01",
     w: 13,
     h: 15,
-    defaultFloorSkin: "landscape_28",
-    defaultSpawnSkin: "landscape_30",
+    defaultFloorSkin: "edges_landscape_28",
+    defaultSpawnSkin: "edges_landscape_30",
     centerOnZero: true,
 
     // Coordinates are (x,y) inside the Excel selection box, top-left = (0,0).
@@ -149,8 +149,8 @@ export const EXCEL_SANCTUARY_02: TableMapDef = {
     id: "EXCEL_SANCTUARY_02_LARGE",
     w: 60,
     h: 60,
-    defaultFloorSkin: "landscape_28",
-    defaultSpawnSkin: "landscape_30",
+    defaultFloorSkin: "edges_landscape_28",
+    defaultSpawnSkin: "edges_landscape_30",
     centerOnZero: true,
 
     // Coordinates (x,y) in table space; top-left is (0,0).
