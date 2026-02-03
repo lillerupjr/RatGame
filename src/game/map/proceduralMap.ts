@@ -33,7 +33,14 @@ import type { TableMapDef, TableMapCell } from "./tableMapTypes";
 // ─────────────────────────────────────────────────────────────
 
 export type FloorDifficulty = "EASY" | "MEDIUM" | "HARD" | "BOSS";
-
+function oppositeDir(d: Dir): Dir {
+    switch (d) {
+        case "N": return "S";
+        case "S": return "N";
+        case "E": return "W";
+        case "W": return "E";
+    }
+}
 export type ProceduralMapConfig = {
     seed: number;
     floorIndex: number;            // 0-based floor number
@@ -173,7 +180,7 @@ const SPAWN_SKIN = "edges_landscape_30";
 // ─────────────────────────────────────────────────────────────
 
 export function generateProceduralMap(config: ProceduralMapConfig): TableMapDef {
-    const rng = new RNG(config.seed + config.floorIndex * 7919);
+    const rng = new RNG(42069);
     const { width, height } = config;
     
     // Initialize grid with VOID
@@ -623,13 +630,13 @@ function createRampConnection(
         // Calculate height for this ramp tile
         // Ramp i sits at height (lowerHeight + 1 + i) - first ramp is one above floor level
         const rampHeight = lowerHeight + 1 + i;
-        
+
         // Place the ramp tile
         grid[rampY][rampX] = {
             kind: "STAIRS",
             h: rampHeight,
-            dir: rampDir,
-            skin: getRampSkin(rampDir),
+            dir: oppositeDir(rampDir),
+            skin: getRampSkin(oppositeDir(rampDir)),
         };
         
         // Also carve adjacent tiles for width (make ramp 3 tiles wide)
@@ -641,8 +648,8 @@ function createRampConnection(
                     grid[adjY][adjX] = {
                         kind: "STAIRS",
                         h: rampHeight,
-                        dir: rampDir,
-                        skin: getRampSkin(rampDir),
+                        dir: oppositeDir(rampDir),
+                        skin: getRampSkin(oppositeDir(rampDir)),
                     };
                 }
             }
