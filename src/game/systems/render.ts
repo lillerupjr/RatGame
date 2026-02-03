@@ -528,10 +528,10 @@ export async function renderSystem(
 
         // Per-direction fine tune (lets you fix “3 of 4” issues without breaking the good one)
         const STAIRS_DY_BY_DIR: Partial<Record<"N" | "E" | "S" | "W", number>> = {
-          N: 24,
-          E: 24,
+          N: 16,
+          E: 16,
           S: 16,
-          W: 24,
+          W: 16,
         };
 
         const anchorY = useStairs ? stairsAnchorY : ANCHOR_Y;
