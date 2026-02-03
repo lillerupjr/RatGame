@@ -16,8 +16,8 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   if (input.up) sy -= 1;
   if (input.down) sy += 1;
 
-  let dx = (sx + sy) * 0.5;
-  let dy = (sy - sx) * 0.5;
+  let dx = (sx + sy) * 1;
+  let dy = (sy - sx) * 1;
 
   const len = Math.hypot(dx, dy);
   if (len > 1e-6) {

@@ -1,6 +1,8 @@
 // src/game/systems/collisions.ts
 import { World, emitEvent } from "../world";
 import {isEnemyHit, isPlayerHit, isPlayerProjectileHit} from "./hitDetection";
+import { walkInfo } from "../map/kenneyMap";
+import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 import { registry } from "../content/registry";
 import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
 import { clearSpatialHash, insertEntity, queryCircle } from "../util/spatialHash";
@@ -54,6 +56,44 @@ function spawnFloatText(
  * Uses spatial hashing for O(n+m) collision detection instead of O(n*m) brute force.
  */
 export function collisionsSystem(w: World, dt: number) {
+  const tryPlayerDisplace = (dx: number, dy: number) => {
+    let curInfo = walkInfo(w.px, w.py, KENNEY_TILE_WORLD);
+    const MAX_STEP_Z = 1.05;
+
+    const tryMove = (wx: number, wy: number) => {
+      const nextInfo = walkInfo(wx, wy, KENNEY_TILE_WORLD);
+      if (!nextInfo.walkable) return false;
+
+      const stairsInvolved =
+          curInfo.kind === "STAIRS" ||
+          nextInfo.kind === "STAIRS" ||
+          (curInfo as any).isRamp ||
+          (nextInfo as any).isRamp;
+
+      if (!stairsInvolved) {
+        if (nextInfo.floorH !== curInfo.floorH) return false;
+      } else {
+        const dz = Math.abs(nextInfo.z - curInfo.z);
+        if (dz > MAX_STEP_Z) return false;
+      }
+
+      w.px = wx;
+      w.py = wy;
+      w.pz = nextInfo.z;
+      w.activeFloorH =
+          nextInfo.kind === "STAIRS" ? (Math.floor(nextInfo.z + 0.5) | 0) : (nextInfo.floorH | 0);
+      curInfo = nextInfo;
+      return true;
+    };
+
+    const nx = w.px + dx;
+    const ny = w.py + dy;
+    const movedDiag = tryMove(nx, ny);
+    if (!movedDiag) {
+      tryMove(nx, w.py);
+      tryMove(w.px, ny);
+    }
+  };
   // -------------------------
   // Build spatial hash of enemies (once per frame)
   // -------------------------
@@ -393,8 +433,7 @@ export function collisionsSystem(w: World, dt: number) {
       if (penetration > 0) {
         const push = penetration + 0.5;
         // Move player away from enemy
-        w.px -= ux * push * 0.6;
-        w.py -= uy * push * 0.6;
+        tryPlayerDisplace(-ux * push * 0.6, -uy * push * 0.6);
         // Move enemy away from player a bit too
         w.ex[e] += ux * push * 0.4;
         w.ey[e] += uy * push * 0.4;
