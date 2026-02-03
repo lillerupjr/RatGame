@@ -10,12 +10,10 @@ import {
     type IsoTileKind,
     type StairDir,
     type CompiledKenneyMap,
-    STAIR_SKIN_BY_DIR,
 } from "./kenneyMapLoader";
 import type { TableMapDef } from "./tableMapTypes";
-import {EXCEL_SANCTUARY_01, EXCEL_SANCTUARY_02} from "./maps";
 import { worldDeltaToScreen } from "../visual/iso";
-import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
+import { generateFloorMap } from "./proceduralMap";
 
 export type { IsoTileKind, IsoTile } from "./kenneyMapLoader";
 
@@ -33,14 +31,22 @@ export const PLANE_TILE_Z_OFFSET = -1;
  * - Smaller raised diamond platform at h=1 (offset)
  * - A stair "bridge" strip that connects them
  */
-let _compiled: CompiledKenneyMap = compileKenneyMapFromTable(EXCEL_SANCTUARY_02);
+let _compiled: CompiledKenneyMap = compileKenneyMapFromTable(generateFloorMap(Date.now(), 0));
 
 /**
  * Set the active map dynamically (e.g., for procedural generation).
  */
 export function setActiveMap(mapDef: TableMapDef): CompiledKenneyMap {
     _compiled = compileKenneyMapFromTable(mapDef);
+    _rampCache.clear();
     return _compiled;
+}
+
+/**
+ * Regenerate and set a new procedural map.
+ */
+export function regenerateProceduralMap(): CompiledKenneyMap {
+    return setActiveMap(generateFloorMap(Date.now(), 0));
 }
 
 /**
@@ -98,10 +104,6 @@ export function isStairsTile(tx: number, ty: number): boolean {
  */
 export function tileHeight(tx: number, ty: number): number {
     return getTile(tx, ty).h | 0;
-}
-
-function clamp01(v: number) {
-    return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -195,8 +197,6 @@ const _rampCache = new Map<number, RampFace[]>();
 type Pt = { x: number; y: number };
 type CornerKey = "SW" | "SE" | "NE" | "NW";
 
-type CornerPts = Record<CornerKey, Pt>;
-
 type RampCornerWiring = {
     // rampHeightAt convention:
     // - low edge = (q0,q1) at z0
@@ -228,7 +228,7 @@ const RAMP_WIRING_PRESET: Record<
 };
 
 
-function tileTopCornersWorld(tx: number, ty: number, tileWorld: number): CornerPts {
+function tileTopCornersWorld(tx: number, ty: number, tileWorld: number): Record<CornerKey, Pt> {
     // NOTE: these corners describe the FULL tile extents in world.
     // For perfect seam matching, later we can switch this to use the tile’s walk quad.
     const x0 = tx * tileWorld;
@@ -272,11 +272,11 @@ function stairDirToWiring(dir: StairDir): keyof typeof RAMP_WIRING_PRESET {
 function buildStaircaseRamps(tileWorld: number): RampFace[] {
     const out: RampFace[] = [];
 
-    // Scan bounds based on the table map def and compiled origin.
+    // Use compiled map's actual dimensions
     const minTx = _compiled.originTx;
     const minTy = _compiled.originTy;
-    const maxTx = _compiled.originTx + EXCEL_SANCTUARY_01.w - 1;
-    const maxTy = _compiled.originTy + EXCEL_SANCTUARY_01.h - 1;
+    const maxTx = _compiled.originTx + _compiled.width - 1;
+    const maxTy = _compiled.originTy + _compiled.height - 1;
 
     const visited = new Set<string>();
 
