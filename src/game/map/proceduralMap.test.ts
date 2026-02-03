@@ -1,4 +1,5 @@
 // src/game/map/proceduralMap.test.ts
+// @ts-ignore
 import { describe, it, expect } from "vitest";
 import {
     generateProceduralMap,
