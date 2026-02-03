@@ -136,19 +136,11 @@ export async function renderSystem(
   // You can disable at runtime via: (w as any).renderAllHeights = false
   const RENDER_ALL_HEIGHTS: boolean = (w as any).renderAllHeights ?? true;
 
-  const isOnActiveFloor = (x: number, y: number) => {
-    const tx = Math.floor(x / KENNEY_TILE_WORLD);
-    const ty = Math.floor(y / KENNEY_TILE_WORLD);
+  const floorFromZ = (z: number) => Math.floor(z + 1e-6);
+
+  const tileLayer = (tx: number, ty: number) => {
     const t = getTile(tx, ty);
-
-    if (t.kind === "VOID") return false;
-
-    // When rendering all heights, anything non-void is drawable.
-    if (RENDER_ALL_HEIGHTS) return true;
-
-    // Phase 1: active-floor gating is pure integer-floor gating.
-    // (Stairs are decorative and should not bypass gating.)
-    return tileHeight(tx, ty) === (w.activeFloorH ?? 0);
+    return t.kind === "STAIRS" ? ((t.h ?? 0) - 1) : tileHeight(tx, ty);
   };
 
   const toScreen = (x: number, y: number) => {
@@ -397,52 +389,6 @@ export async function renderSystem(
   const cx = Math.floor(w.px / T);
   const cy = Math.floor(w.py / T);
 
-  // Player depth for occlusion transparency
-  const playerDepth = depthKey(w.px, w.py);
-
-  // -------------------------------------------------------
-  // Procedural Occlusion System
-  // Tiles that would visually obstruct the player become transparent
-  // -------------------------------------------------------
-  // Configuration for visibility
-  const OCCLUSION_FADE_RADIUS = T * 3.0;    // How far in front fading begins
-  const OCCLUSION_MIN_ALPHA = 0.18;          // Minimum opacity (never fully invisible)
-  const OCCLUSION_EDGE_GLOW = true;          // Draw subtle edge on transparent tiles
-  const OCCLUSION_HEIGHT_FACTOR = 1.5;       // How much height difference affects fade
-
-  // Calculate occlusion alpha for a tile
-  const calcTileAlpha = (wx: number, wy: number, tileH: number): number => {
-    const tileDepth = depthKey(wx, wy);
-    const depthDiff = tileDepth - playerDepth;
-
-    // Tile is behind player - fully opaque
-    if (depthDiff <= 0) return 1.0;
-
-    // Distance from tile center to player
-    const distToPlayer = Math.sqrt((wx - w.px) ** 2 + (wy - w.py) ** 2);
-
-    // Too far to matter
-    if (distToPlayer >= OCCLUSION_FADE_RADIUS) return 1.0;
-
-    // Get player height (including jump)
-    const playerH = w.pz ?? heightAtWorld(w.px, w.py, T);
-
-    // Only fade tiles at or above player height
-    const heightDiff = tileH - playerH;
-    if (heightDiff < -0.5) return 1.0;
-
-    // Smooth fade based on distance, depth, and height
-    const distFactor = 1 - (distToPlayer / OCCLUSION_FADE_RADIUS);
-    const depthFactor = Math.min(1, depthDiff / (T * 1.5));
-    const heightFactor = Math.min(1, Math.max(0, heightDiff + 1) * OCCLUSION_HEIGHT_FACTOR);
-
-    // Combine factors with smooth curve
-    const rawFade = distFactor * depthFactor * heightFactor;
-    const smoothFade = rawFade * rawFade * (3 - 2 * rawFade); // smoothstep
-
-    return Math.max(OCCLUSION_MIN_ALPHA, 1 - smoothFade * (1 - OCCLUSION_MIN_ALPHA));
-  };
-
   const minTx = cx - radius;
   const maxTx = cx + radius;
   const minTy = cy - radius;
@@ -457,267 +403,122 @@ export async function renderSystem(
       groundTile.img.width > 0 &&
       groundTile.img.height > 0;
 
-  // -------------------------------------------------------
-  // Pass 1: Collect all visible tiles with metadata
-  // -------------------------------------------------------
-  type TileDrawInfo = {
-    tx: number;
-    ty: number;
-    wx: number;
-    wy: number;
-    dx: number;
-    dy: number;
-    iw: number;
-    ih: number;
-    img: HTMLImageElement;
-    h: number;
-    alpha: number;
-    isStairs: boolean;
-    depth: number;
-  };
+  const activeH = w.activeFloorH ?? 0;
+  let minLayer = activeH;
+  let maxLayer = activeH;
 
-  const tilesToDraw: TileDrawInfo[] = [];
+  if (RENDER_ALL_HEIGHTS && tilesReady) {
+    minLayer = Infinity;
+    maxLayer = -Infinity;
 
-  if (tilesReady) {
-    for (let s = minSum; s <= maxSum; s++) {
-      const tx0 = Math.max(minTx, s - maxTy);
-      const tx1 = Math.min(maxTx, s - minTy);
-
-      for (let tx = tx0; tx <= tx1; tx++) {
-        const ty = s - tx;
-
-        // VOID (shared with collision)
+    for (let ty = minTy; ty <= maxTy; ty++) {
+      for (let tx = minTx; tx <= maxTx; tx++) {
         if (isHoleTile(tx, ty)) continue;
-
-        const tdef = getTile(tx, ty);
-
-        // Choose sprite:
-        // - STAIRS: use authored tdef.skin (kenneyMapLoader must assign it)
-        // - FLOOR/SPAWN: use authored skin if present, else ground
-        const useStairs = tdef.kind === "STAIRS";
-
-        let tileRec: Loaded = groundTile;
-
-        if (useStairs) {
-          tileRec = tdef.skin ? getKenneyTileBySkin(tdef.skin) : groundTile;
-        } else {
-          tileRec = tdef.skin ? getKenneyTileBySkin(tdef.skin) : groundTile;
-        }
-
-        if (
-            !tileRec?.ready ||
-            !tileRec.img ||
-            tileRec.img.width <= 0 ||
-            tileRec.img.height <= 0
-        ) {
-          continue;
-        }
-
-        const iw = tileRec.img.width;
-        const ih = tileRec.img.height;
-
-        // Tile "center" in world coords (+0.5 centers the tile).
-        const wx = (tx + 0.5) * T;
-        const wy = (ty + 0.5) * T;
-
-        const p = worldToScreen(wx, wy);
-        const dx = p.x + camX - iw * 0.5;
-
-        // Per-tile anchor: stairs art often has different vertical footprint/padding
-        const stairsAnchorY = 0.62;
-
-        // Per-direction fine tune (lets you fix “3 of 4” issues without breaking the good one)
-        const STAIRS_DY_BY_DIR: Partial<Record<"N" | "E" | "S" | "W", number>> = {
-          N: 16,
-          E: 16,
-          S: 16,
-          W: 16,
-        };
-
-        const anchorY = useStairs ? stairsAnchorY : ANCHOR_Y;
-        let dy = p.y + camY - ih * anchorY;
-
-        // Apply global art shift so top-face aligns with logic
-        dy += TILE_ART_Y_SHIFT_PX;
-
-        // Fine tune after anchoring (stairs only)
-        if (useStairs) {
-          const d = (tdef.dir as ("N" | "E" | "S" | "W" | undefined)) ?? "N";
-          dy += STAIRS_DY_BY_DIR[d] ?? 16;
-        }
-
-        // Milestone B: optionally filter to active floor.
-        if (!RENDER_ALL_HEIGHTS) {
-          const activeH = w.activeFloorH ?? 0;
-
-          if (tdef.kind !== "STAIRS") {
-            const h0 = tileHeight(tx, ty);
-            if (h0 !== activeH) continue;
-          } else {
-            const hs = tdef.h ?? 0;
-            if (Math.abs(hs - activeH) > 1) continue;
-          }
-        }
-
-        // stairs are visually elevated by their own h
-        const h = tdef.kind === "STAIRS" ? (tdef.h ?? 0) : tileHeight(tx, ty);
-        const elev = h * ELEV_PX;
-
-        dy -= elev;
-
-        // Use the new procedural occlusion system
-        const tileAlpha = calcTileAlpha(wx, wy, h);
-        const tileDepth = depthKey(wx, wy) + h * 0.001;
-
-        // Add to draw list for multi-pass rendering
-        tilesToDraw.push({
-          tx, ty, wx, wy,
-          dx, dy, iw, ih,
-          img: tileRec.img,
-          h, alpha: tileAlpha,
-          isStairs: useStairs,
-          depth: tileDepth,
-        });
+        const h = tileLayer(tx, ty);
+        if (h < minLayer) minLayer = h;
+        if (h > maxLayer) maxLayer = h;
       }
     }
-  }
 
-  // -------------------------------------------------------
-  // Pass 2: Draw all tiles (sorted by depth, back to front)
-  // -------------------------------------------------------
-  // Tiles are already collected in depth order due to the s-loop
-  // Draw walk overlay first (throttled - it will blit a cached image most frames)
-  drawWalkMaskOverlay();
-
-  for (const tile of tilesToDraw) {
-    ctx.globalAlpha = tile.alpha;
-    ctx.drawImage(tile.img, tile.dx, tile.dy, tile.iw, tile.ih);
-
-    // Draw subtle edge glow on transparent tiles for visibility
-    if (OCCLUSION_EDGE_GLOW && tile.alpha < 0.7) {
-      const edgeAlpha = (0.7 - tile.alpha) * 0.4;
-      ctx.globalAlpha = edgeAlpha;
-      ctx.strokeStyle = "#fff";
-      ctx.lineWidth = 1;
-
-      // Draw a diamond outline at the tile's base
-      const baseY = tile.dy + tile.ih - 16; // Approximate base of tile art
-      const halfW = tile.iw * 0.35;
-      const halfH = tile.iw * 0.18;
-      const centerX = tile.dx + tile.iw * 0.5;
-
-      ctx.beginPath();
-      ctx.moveTo(centerX, baseY - halfH);
-      ctx.lineTo(centerX + halfW, baseY);
-      ctx.lineTo(centerX, baseY + halfH);
-      ctx.lineTo(centerX - halfW, baseY);
-      ctx.closePath();
-      ctx.stroke();
-    }
-
-    ctx.globalAlpha = 1;
-
-    // Collect stair occluders for a second pass (drawn AFTER entities/projectiles)
-    if (tile.isStairs) {
-      const occ = ((w as any)._stairOccluders ??= []);
-      occ.push({
-        img: tile.img,
-        dx: tile.dx,
-        dy: tile.dy,
-        iw: tile.iw,
-        ih: tile.ih,
-        alpha: tile.alpha,
-      });
+    if (!Number.isFinite(minLayer) || !Number.isFinite(maxLayer)) {
+      minLayer = activeH;
+      maxLayer = activeH;
     }
   }
 
-  // Draw ramp overlay ONCE per frame (not inside tile loop)
-  drawRampOverlay();
+  // Include entities/projectiles so layers exist even if tiles are sparse
+  if (RENDER_ALL_HEIGHTS) {
+    const pz = (w as any).pz ?? tileHAtWorld(w.px, w.py);
+    const pLayer = floorFromZ(pz);
+    minLayer = Math.min(minLayer, pLayer);
+    maxLayer = Math.max(maxLayer, pLayer);
 
-  // Optional floor tint overlay (keep your existing visual style)
-  const floorVis = getFloorVisual(w);
-  if (floorVis) {
-    ctx.globalAlpha = floorVis.tintAlpha;
-    ctx.fillStyle = floorVis.tint;
-    ctx.fillRect(0, 0, ww, hh);
-    ctx.globalAlpha = 1;
-  }
+    const ez = (w as any).ez as number[] | undefined;
+    for (let i = 0; i < w.eAlive.length; i++) {
+      if (!w.eAlive[i]) continue;
+      const z = ez?.[i] ?? tileHAtWorld(w.ex[i], w.ey[i]);
+      const h = floorFromZ(z);
+      minLayer = Math.min(minLayer, h);
+      maxLayer = Math.max(maxLayer, h);
+    }
 
-  // Zones (auras / ground effects / visuals) — rendered on the ground plane (iso)
-  for (let i = 0; i < w.zAlive.length; i++) {
-    if (!w.zAlive[i]) continue;
-
-    const zx0 = w.zx[i];
-    const zy0 = w.zy[i];
-
-    // Snap decal origin to nearest walkable ground so it won't hang over void edges.
-    const sn = snapToNearestWalkableGround(zx0, zy0);
-    const zx = sn.x;
-    const zy = sn.y;
-
-    // The decal should not draw if that snapped ground point is under a ceiling.
-    const groundZ = sn.z;
-    const occZ = heightAtWorldOcclusion(zx, zy, KENNEY_TILE_WORLD);
-
-    const DECAL_OCCLUSION_EPS = 0.05;
-    if (groundZ < occZ - DECAL_OCCLUSION_EPS) continue;
-
-    const p = toScreen(zx, zy);
-
-    const r = w.zR[i];
-    const kind = w.zKind[i];
-
-    const rx = r * ISO_X;
-    const ry = r * ISO_Y;
-
-    if (kind === ZONE_KIND.AURA) {
-      ctx.globalAlpha = 0.16;
-      ctx.fillStyle = "#7bdcff";
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y, rx, ry, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.globalAlpha = 0.28;
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y, rx * 0.98, ry * 0.98, 0, 0, Math.PI * 2);
-      ctx.stroke();
-
-      ctx.globalAlpha = 1;
-    } else if (kind === ZONE_KIND.EXPLOSION) {
-      ctx.globalAlpha = 0.22;
-      ctx.fillStyle = "#ff7a18";
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y, rx, ry, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.globalAlpha = 0.45;
-      ctx.strokeStyle = "#ffcf9a";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y, rx * 0.98, ry * 0.98, 0, 0, Math.PI * 2);
-      ctx.stroke();
-
-      ctx.globalAlpha = 1;
+    for (let i = 0; i < w.pAlive.length; i++) {
+      if (!w.pAlive[i]) continue;
+      const baseH = tileHAtWorld(w.prx[i], w.pry[i]);
+      const pzAbs = (w.prZ?.[i] ?? baseH) || 0;
+      const h = floorFromZ(pzAbs);
+      minLayer = Math.min(minLayer, h);
+      maxLayer = Math.max(maxLayer, h);
     }
   }
 
-  // -------------------------
-  // Grounded draw list + depth sorting (iso-friendly)
-  // -------------------------
+  const layers: number[] = [];
+  if (RENDER_ALL_HEIGHTS) {
+    for (let h = minLayer; h <= maxLayer; h++) layers.push(h);
+  } else {
+    layers.push(activeH);
+  }
+
   type GroundItem =
       | { kind: "pickup"; i: number; depth: number }
       | { kind: "enemy"; i: number; depth: number }
       | { kind: "projectile"; i: number; depth: number; zLift: number }
       | { kind: "player"; depth: number };
 
-  const grounded: GroundItem[] = [];
+  type ZoneDraw = {
+    kind: number;
+    x: number;
+    y: number;
+    r: number;
+    layer: number;
+  };
+
+  const addItem = (map: Map<number, GroundItem[]>, layer: number, item: GroundItem) => {
+    const list = map.get(layer);
+    if (list) list.push(item);
+    else map.set(layer, [item]);
+  };
+
+  const addZone = (map: Map<number, ZoneDraw[]>, layer: number, z: ZoneDraw) => {
+    const list = map.get(layer);
+    if (list) list.push(z);
+    else map.set(layer, [z]);
+  };
+
+  const zonesByLayer = new Map<number, ZoneDraw[]>();
+  const itemsByLayer = new Map<number, GroundItem[]>();
+
+  // Zones (auras / ground effects / visuals) bucketed by floor layer
+  for (let i = 0; i < w.zAlive.length; i++) {
+    if (!w.zAlive[i]) continue;
+
+    const zx0 = w.zx[i];
+    const zy0 = w.zy[i];
+
+    const sn = snapToNearestWalkableGround(zx0, zy0);
+    const zx = sn.x;
+    const zy = sn.y;
+
+    const groundZ = sn.z;
+    const occZ = heightAtWorldOcclusion(zx, zy, KENNEY_TILE_WORLD);
+
+    const DECAL_OCCLUSION_EPS = 0.05;
+    if (groundZ < occZ - DECAL_OCCLUSION_EPS) continue;
+
+    addZone(zonesByLayer, floorFromZ(groundZ), {
+      kind: w.zKind[i],
+      x: zx,
+      y: zy,
+      r: w.zR[i],
+      layer: floorFromZ(groundZ),
+    });
+  }
 
   // Pickups
   for (let i = 0; i < w.xAlive.length; i++) {
     if (!w.xAlive[i]) continue;
-    grounded.push({ kind: "pickup", i, depth: depthKey(w.xx[i], w.xy[i]) });
+    const h = floorFromZ(tileHAtWorld(w.xx[i], w.xy[i]));
+    addItem(itemsByLayer, h, { kind: "pickup", i, depth: depthKey(w.xx[i], w.xy[i]) });
   }
 
   // Enemy Z buffer (written by movementSystem; optional)
@@ -732,315 +533,459 @@ export async function renderSystem(
     const pzAbs = (w.prZ?.[i] ?? baseH) || 0;
 
     const zLift = (pzAbs - baseH) * ELEV_PX;
-    const depth = depthKey(w.prx[i], w.pry[i]) + pzAbs * 1e9;
+    const depth = depthKey(w.prx[i], w.pry[i]);
 
-    grounded.push({ kind: "projectile", i, depth, zLift });
+    addItem(itemsByLayer, floorFromZ(pzAbs), { kind: "projectile", i, depth, zLift });
   }
 
-  // Enemies (include Z in depth so upper floors layer correctly)
+  // Enemies (bucketed by Z floor)
   for (let i = 0; i < w.eAlive.length; i++) {
     if (!w.eAlive[i]) continue;
 
     const z = ez?.[i] ?? tileHAtWorld(w.ex[i], w.ey[i]);
-    grounded.push({
+    addItem(itemsByLayer, floorFromZ(z), {
       kind: "enemy",
       i,
-      depth: depthKey(w.ex[i], w.ey[i]) + z * 1e9,
+      depth: depthKey(w.ex[i], w.ey[i]),
     });
   }
 
-  // Player (include continuous Z)
+  // Player
   const pz = (w as any).pz ?? tileHAtWorld(w.px, w.py);
-  grounded.push({
+  addItem(itemsByLayer, floorFromZ(pz), {
     kind: "player",
-    depth: depthKey(w.px, w.py) + pz * 1e9,
+    depth: depthKey(w.px, w.py),
   });
 
-  grounded.sort((a, b) => a.depth - b.depth);
+  for (let li = 0; li < layers.length; li++) {
+    const layer = layers[li];
 
-  // Draw them
-  for (const it of grounded) {
-    if (it.kind === "pickup") {
-      const i = it.i;
+    if (tilesReady) {
+      for (let s = minSum; s <= maxSum; s++) {
+        const tx0 = Math.max(minTx, s - maxTy);
+        const tx1 = Math.min(maxTx, s - minTy);
 
-      if (!isOnActiveFloor(w.xx[i], w.xy[i])) continue;
+        for (let tx = tx0; tx <= tx1; tx++) {
+          const ty = s - tx;
 
-      const p = toScreen(w.xx[i], w.xy[i]);
-      const kind = w.xKind?.[i] ?? 1; // 1=XP, 2=CHEST
+          // VOID (shared with collision)
+          if (isHoleTile(tx, ty)) continue;
 
-      if (kind === 1) {
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = "#7df";
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = "#fdc";
-        ctx.fillRect(p.x - 10, p.y - 8, 20, 16);
+          if (RENDER_ALL_HEIGHTS && tileLayer(tx, ty) !== layer) continue;
 
-        ctx.strokeStyle = "#000";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(p.x - 10, p.y - 8, 20, 16);
+          const tdef = getTile(tx, ty);
 
-        ctx.strokeStyle = "#b85";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(p.x - 10, p.y);
-        ctx.lineTo(p.x + 10, p.y);
-        ctx.stroke();
-      }
-      continue;
-    }
+          // Choose sprite:
+          // - STAIRS: use authored tdef.skin (kenneyMapLoader must assign it)
+          // - FLOOR/SPAWN: use authored skin if present, else ground
+          const useStairs = tdef.kind === "STAIRS";
 
-    if (it.kind === "enemy") {
-      const i = it.i;
+          let tileRec: Loaded = groundTile;
 
-      const p = toScreen(w.ex[i], w.ey[i]);
+          if (useStairs) {
+            tileRec = tdef.skin ? getKenneyTileBySkin(tdef.skin) : groundTile;
+          } else {
+            tileRec = tdef.skin ? getKenneyTileBySkin(tdef.skin) : groundTile;
+          }
 
-      const def = registry.enemy(w.eType[i] as any);
-      let baseColor: string = (def as any).color ?? "#f66";
+          if (
+              !tileRec?.ready ||
+              !tileRec.img ||
+              tileRec.img.width <= 0 ||
+              tileRec.img.height <= 0
+          ) {
+            continue;
+          }
 
-      const isBoss = w.eType[i] === ENEMY_TYPE.BOSS;
-      if (isBoss) baseColor = getBossAccent(w) ?? baseColor;
+          const iw = tileRec.img.width;
+          const ih = tileRec.img.height;
 
-      const faceWx = w.px - w.ex[i];
-      const faceWy = w.py - w.ey[i];
-      const face = worldDeltaToScreen(faceWx, faceWy);
+          // Tile "center" in world coords (+0.5 centers the tile).
+          const wx = (tx + 0.5) * T;
+          const wy = (ty + 0.5) * T;
 
-      const moving = (w.eSpeed[i] ?? 0) > 1;
+          const p = worldToScreen(wx, wy);
+          const dx = p.x + camX - iw * 0.5;
 
-      const fr = getEnemySpriteFrame({
-        type: w.eType[i] as any,
-        time: w.time ?? 0,
-        faceDx: face.dx,
-        faceDy: face.dy,
-        moving,
-      });
+          // Per-tile anchor: stairs art often has different vertical footprint/padding
+          const stairsAnchorY = 0.62;
 
-      if (fr) {
-        const dw = fr.sw * fr.scale;
-        const dh = fr.sh * fr.scale;
+          // Per-direction fine tune (lets you fix ?3 of 4? issues without breaking the good one)
+          const STAIRS_DY_BY_DIR: Partial<Record<"N" | "E" | "S" | "W", number>> = {
+            N: 16,
+            E: 16,
+            S: 16,
+            W: 16,
+          };
 
-        const dx = p.x - dw * fr.anchorX;
-        const dy = p.y - dh * fr.anchorY;
+          const anchorY = useStairs ? stairsAnchorY : ANCHOR_Y;
+          let dy = p.y + camY - ih * anchorY;
 
-        ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, dx, dy, dw, dh);
-      } else {
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = baseColor;
-        ctx.beginPath();
-        ctx.ellipse(
-            p.x,
-            p.y,
-            (w.eR[i] ?? 10) * ISO_X,
-            (w.eR[i] ?? 10) * ISO_Y,
-            0,
-            0,
-            Math.PI * 2
-        );
-        ctx.fill();
-      }
+          // Apply global art shift so top-face aligns with logic
+          dy += TILE_ART_Y_SHIFT_PX;
 
-      if (isBoss) {
-        const pulse = 0.5 + 0.5 * Math.sin((w.time ?? 0) * 2.5);
+          // Fine tune after anchoring (stairs only)
+          if (useStairs) {
+            const d = (tdef.dir as ("N" | "E" | "S" | "W" | undefined)) ?? "N";
+            dy += STAIRS_DY_BY_DIR[d] ?? 16;
+          }
 
-        ctx.globalAlpha = 0.18 + pulse * 0.12;
-        ctx.strokeStyle = baseColor;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.ellipse(
-            p.x,
-            p.y,
-            (w.eR[i] ?? 10) * (1.25 + pulse * 0.05) * ISO_X,
-            (w.eR[i] ?? 10) * (1.25 + pulse * 0.05) * ISO_Y,
-            0,
-            0,
-            Math.PI * 2
-        );
-        ctx.stroke();
+          // Milestone B: optionally filter to active floor.
+          if (!RENDER_ALL_HEIGHTS) {
+            if (tdef.kind !== "STAIRS") {
+              const h0 = tileHeight(tx, ty);
+              if (h0 !== activeH) continue;
+            } else {
+              const hs = tdef.h ?? 0;
+              if (Math.abs(hs - activeH) > 1) continue;
+            }
+          }
 
-        ctx.globalAlpha = 0.28;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.ellipse(
-            p.x,
-            p.y,
-            (w.eR[i] ?? 10) * 1.55 * ISO_X,
-            (w.eR[i] ?? 10) * 1.55 * ISO_Y,
-            0,
-            0,
-            Math.PI * 2
-        );
-        ctx.stroke();
+          // stairs are visually elevated by their own h
+          const h = tdef.kind === "STAIRS" ? (tdef.h ?? 0) : tileHeight(tx, ty);
+          const elev = h * ELEV_PX;
 
-        ctx.globalAlpha = 1;
-      }
+          dy -= elev;
+          ctx.drawImage(tileRec.img, dx, dy, iw, ih);
 
-      if ((w.ePoisonT?.[i] ?? 0) > 0) {
-        ctx.globalAlpha = 0.35;
-        ctx.fillStyle = "#3dff7a";
-        ctx.beginPath();
-        ctx.ellipse(
-            p.x,
-            p.y,
-            (w.eR[i] ?? 10) * 1.05 * ISO_X,
-            (w.eR[i] ?? 10) * 1.05 * ISO_Y,
-            0,
-            0,
-            Math.PI * 2
-        );
-        ctx.fill();
-        ctx.globalAlpha = 1;
-      }
-
-      continue;
-    }
-
-    if (it.kind === "projectile") {
-      const i = it.i;
-
-      const p = toScreen(w.prx[i], w.pry[i]);
-      const spr = getProjectileSpriteByKind(w.prjKind[i]);
-
-      const px = p.x;
-      const py = p.y - it.zLift;
-
-      // Projectile ground shadow
-      {
-        const r = w.prR[i] ?? 4;
-
-        const wx0 = w.prx[i];
-        const wy0 = w.pry[i];
-        const sn = snapToNearestWalkableGround(wx0, wy0);
-
-        const sx = sn.x;
-        const sy = sn.y;
-        const groundZ = sn.z;
-
-        const occZ = heightAtWorldOcclusion(sx, sy, KENNEY_TILE_WORLD);
-        const SHADOW_OCCLUSION_EPS = 0.05;
-        const shadowOccluded = groundZ < occZ - SHADOW_OCCLUSION_EPS;
-
-        if (!shadowOccluded) {
-          const sp = toScreen(sx, sy);
-
-          const lift = Math.max(0, it.zLift || 0);
-          const t = Math.max(0, Math.min(1, 1 - lift / 70));
-
-          const rx = r * ISO_X * (0.95 + 0.15 * t);
-          const ry = r * ISO_Y * (0.85 + 0.1 * t);
-
-          ctx.save();
-          ctx.globalAlpha = 0.18 * t;
-          ctx.fillStyle = "#000";
-          ctx.beginPath();
-          ctx.ellipse(sp.x, sp.y, rx, ry, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.restore();
+          // Collect stair occluders for a second pass (drawn AFTER entities/projectiles)
+          if (useStairs) {
+            const occ = ((w as any)._stairOccluders ??= []);
+            occ.push({
+              img: tileRec.img,
+              dx,
+              dy,
+              iw,
+              ih,
+            });
+          }
         }
       }
-
-      const wdx = w.prDirX[i] ?? 1;
-      const wdy = w.prDirY[i] ?? 0;
-      const d = worldDeltaToScreen(wdx, wdy);
-      const ang = Math.atan2(d.dy, d.dx);
-
-      if (spr?.ready && spr.img && spr.img.width > 0 && spr.img.height > 0) {
-        const areaMult = Math.max(0.6, Math.min(2.5, (w.prR[i] ?? 4) / 4));
-        const target =
-            PROJECTILE_BASE_DRAW_PX * areaMult * getProjectileDrawScale(w.prjKind[i]);
-
-        const iw = spr.img.width;
-        const ih = spr.img.height;
-
-        const scale = target / Math.max(iw, ih);
-        const dw = iw * scale;
-        const dh = ih * scale;
-
-        ctx.save();
-        ctx.translate(px, py);
-        ctx.rotate(ang);
-        ctx.drawImage(spr.img, -dw * 0.5, -dh * 0.5, dw, dh);
-        ctx.restore();
-      } else {
-        const src = registry.projectileSourceFromKind(w.prjKind[i]);
-        ctx.fillStyle =
-            src === "KNIFE"
-                ? "#fff"
-                : src === "PISTOL"
-                    ? "#9f9"
-                    : src === "KNUCKLES"
-                        ? "#fc6"
-                        : src === "SYRINGE"
-                            ? "#7df"
-                            : src === "BOUNCER"
-                                ? "#fdc"
-                                : "#bbb";
-
-        ctx.beginPath();
-        ctx.ellipse(
-            px,
-            py,
-            (w.prR[i] ?? 4) * ISO_X,
-            (w.prR[i] ?? 4) * ISO_Y,
-            0,
-            0,
-            Math.PI * 2
-        );
-        ctx.fill();
-      }
-
-      continue;
     }
 
-    // Player (8-dir sprite; fallback ellipse)
-    {
-      ctx.globalAlpha = 1;
+    const zoneLayer = zonesByLayer.get(layer);
+    if (zoneLayer) {
+      for (let zi = 0; zi < zoneLayer.length; zi++) {
+        const z = zoneLayer[zi];
+        const p = toScreen(z.x, z.y);
 
-      const dir = ((w as any)._plDir ?? "S") as Dir8;
-      const frame = ((w as any)._plFrame ?? 2) as Frame3;
-      const img = playerSpritesReady() ? getPlayerSprite(dir, frame) : null;
+        const rx = z.r * ISO_X;
+        const ry = z.r * ISO_Y;
 
-      const pp = toScreen(w.px, w.py);
+        if (z.kind === ZONE_KIND.AURA) {
+          ctx.globalAlpha = 0.16;
+          ctx.fillStyle = "#7bdcff";
+          ctx.beginPath();
+          ctx.ellipse(p.x, p.y, rx, ry, 0, 0, Math.PI * 2);
+          ctx.fill();
 
-      // Jump offset: w.pz includes jump height, subtract ground height for visual lift
-      const groundZ = tileHAtWorld(w.px, w.py);
-      const jumpOffset = (w.pz - groundZ) * ELEV_PX;
+          ctx.globalAlpha = 0.28;
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.ellipse(p.x, p.y, rx * 0.98, ry * 0.98, 0, 0, Math.PI * 2);
+          ctx.stroke();
 
-      // Draw shadow when airborne (gives depth cue)
-      if (jumpOffset > 1) {
-        const shadowR = PLAYER_R * 0.8;
-        // Shadow fades and shrinks with height
-        const t = Math.max(0, Math.min(1, 1 - jumpOffset / 80));
-        const rx = shadowR * ISO_X * (0.8 + 0.2 * t);
-        const ry = shadowR * ISO_Y * (0.7 + 0.2 * t);
+          ctx.globalAlpha = 1;
+        } else if (z.kind === ZONE_KIND.EXPLOSION) {
+          ctx.globalAlpha = 0.22;
+          ctx.fillStyle = "#ff7a18";
+          ctx.beginPath();
+          ctx.ellipse(p.x, p.y, rx, ry, 0, 0, Math.PI * 2);
+          ctx.fill();
 
-        ctx.save();
-        ctx.globalAlpha = 0.25 * t;
-        ctx.fillStyle = "#000";
-        ctx.beginPath();
-        ctx.ellipse(pp.x, pp.y, rx, ry, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
+          ctx.globalAlpha = 0.45;
+          ctx.strokeStyle = "#ffcf9a";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.ellipse(p.x, p.y, rx * 0.98, ry * 0.98, 0, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.globalAlpha = 1;
+        }
+      }
+    }
+
+    const grounded = itemsByLayer.get(layer);
+    if (!grounded || grounded.length === 0) continue;
+
+    grounded.sort((a, b) => a.depth - b.depth);
+
+    for (const it of grounded) {
+      if (it.kind === "pickup") {
+        const i = it.i;
+
+        const p = toScreen(w.xx[i], w.xy[i]);
+        const kind = w.xKind?.[i] ?? 1; // 1=XP, 2=CHEST
+
+        if (kind === 1) {
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = "#7df";
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = "#fdc";
+          ctx.fillRect(p.x - 10, p.y - 8, 20, 16);
+
+          ctx.strokeStyle = "#000";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(p.x - 10, p.y - 8, 20, 16);
+
+          ctx.strokeStyle = "#b85";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(p.x - 10, p.y);
+          ctx.lineTo(p.x + 10, p.y);
+          ctx.stroke();
+        }
+        continue;
       }
 
-      if (img && img.width > 0 && img.height > 0) {
-        const sw = img.width * PLAYER_SPRITE_SCALE;
-        const sh = img.height * PLAYER_SPRITE_SCALE;
+      if (it.kind === "enemy") {
+        const i = it.i;
 
-        const x = pp.x - sw * 0.5;
-        const y = pp.y - sh * 0.5 - 32 - jumpOffset;
+        const p = toScreen(w.ex[i], w.ey[i]);
 
-        ctx.drawImage(img, x, y, sw, sh);
-      } else {
-        ctx.fillStyle = "#eaeaf2";
-        ctx.beginPath();
-        ctx.ellipse(pp.x, pp.y - jumpOffset, PLAYER_R * ISO_X, PLAYER_R * ISO_Y, 0, 0, Math.PI * 2);
-        ctx.fill();
+        const def = registry.enemy(w.eType[i] as any);
+        let baseColor: string = (def as any).color ?? "#f66";
+
+        const isBoss = w.eType[i] === ENEMY_TYPE.BOSS;
+        if (isBoss) baseColor = getBossAccent(w) ?? baseColor;
+
+        const faceWx = w.px - w.ex[i];
+        const faceWy = w.py - w.ey[i];
+        const face = worldDeltaToScreen(faceWx, faceWy);
+
+        const moving = (w.eSpeed[i] ?? 0) > 1;
+
+        const fr = getEnemySpriteFrame({
+          type: w.eType[i] as any,
+          time: w.time ?? 0,
+          faceDx: face.dx,
+          faceDy: face.dy,
+          moving,
+        });
+
+        if (fr) {
+          const dw = fr.sw * fr.scale;
+          const dh = fr.sh * fr.scale;
+
+          const dx = p.x - dw * fr.anchorX;
+          const dy = p.y - dh * fr.anchorY;
+
+          ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, dx, dy, dw, dh);
+        } else {
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = baseColor;
+          ctx.beginPath();
+          ctx.ellipse(
+              p.x,
+              p.y,
+              (w.eR[i] ?? 10) * ISO_X,
+              (w.eR[i] ?? 10) * ISO_Y,
+              0,
+              0,
+              Math.PI * 2
+          );
+          ctx.fill();
+        }
+
+        if (isBoss) {
+          const pulse = 0.5 + 0.5 * Math.sin((w.time ?? 0) * 2.5);
+
+          ctx.globalAlpha = 0.18 + pulse * 0.12;
+          ctx.strokeStyle = baseColor;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.ellipse(
+              p.x,
+              p.y,
+              (w.eR[i] ?? 10) * (1.25 + pulse * 0.05) * ISO_X,
+              (w.eR[i] ?? 10) * (1.25 + pulse * 0.05) * ISO_Y,
+              0,
+              0,
+              Math.PI * 2
+          );
+          ctx.stroke();
+
+          ctx.globalAlpha = 0.28;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.ellipse(
+              p.x,
+              p.y,
+              (w.eR[i] ?? 10) * 1.55 * ISO_X,
+              (w.eR[i] ?? 10) * 1.55 * ISO_Y,
+              0,
+              0,
+              Math.PI * 2
+          );
+          ctx.stroke();
+
+          ctx.globalAlpha = 1;
+        }
+
+        if ((w.ePoisonT?.[i] ?? 0) > 0) {
+          ctx.globalAlpha = 0.35;
+          ctx.fillStyle = "#3dff7a";
+          ctx.beginPath();
+          ctx.ellipse(
+              p.x,
+              p.y,
+              (w.eR[i] ?? 10) * 1.05 * ISO_X,
+              (w.eR[i] ?? 10) * 1.05 * ISO_Y,
+              0,
+              0,
+              Math.PI * 2
+          );
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+
+        continue;
+      }
+
+      if (it.kind === "projectile") {
+        const i = it.i;
+
+        const p = toScreen(w.prx[i], w.pry[i]);
+        const spr = getProjectileSpriteByKind(w.prjKind[i]);
+
+        const px = p.x;
+        const py = p.y - it.zLift;
+
+        // Projectile ground shadow
+        {
+          const r = w.prR[i] ?? 4;
+
+          const wx0 = w.prx[i];
+          const wy0 = w.pry[i];
+          const sn = snapToNearestWalkableGround(wx0, wy0);
+
+          const sx = sn.x;
+          const sy = sn.y;
+          const groundZ = sn.z;
+
+          const occZ = heightAtWorldOcclusion(sx, sy, KENNEY_TILE_WORLD);
+          const SHADOW_OCCLUSION_EPS = 0.05;
+          const shadowOccluded = groundZ < occZ - SHADOW_OCCLUSION_EPS;
+
+          if (!shadowOccluded) {
+            const sp = toScreen(sx, sy);
+
+            const lift = Math.max(0, it.zLift || 0);
+            const t = Math.max(0, Math.min(1, 1 - lift / 70));
+
+            const rx = r * ISO_X * (0.95 + 0.15 * t);
+            const ry = r * ISO_Y * (0.85 + 0.1 * t);
+
+            ctx.save();
+            ctx.globalAlpha = 0.18 * t;
+            ctx.fillStyle = "#000";
+            ctx.beginPath();
+            ctx.ellipse(sp.x, sp.y, rx, ry, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          }
+        }
+
+        const wdx = w.prDirX[i] ?? 1;
+        const wdy = w.prDirY[i] ?? 0;
+        const d = worldDeltaToScreen(wdx, wdy);
+        const ang = Math.atan2(d.dy, d.dx);
+
+        if (spr?.ready && spr.img && spr.img.width > 0 && spr.img.height > 0) {
+          const areaMult = Math.max(0.6, Math.min(2.5, (w.prR[i] ?? 4) / 4));
+          const target =
+              PROJECTILE_BASE_DRAW_PX * areaMult * getProjectileDrawScale(w.prjKind[i]);
+
+          const iw = spr.img.width;
+          const ih = spr.img.height;
+
+          const scale = target / Math.max(iw, ih);
+          const dw = iw * scale;
+          const dh = ih * scale;
+
+          ctx.save();
+          ctx.translate(px, py);
+          ctx.rotate(ang);
+          ctx.drawImage(spr.img, -dw * 0.5, -dh * 0.5, dw, dh);
+          ctx.restore();
+        } else {
+          const src = registry.projectileSourceFromKind(w.prjKind[i]);
+          ctx.fillStyle =
+              src === "KNIFE"
+                  ? "#fff"
+                  : src === "PISTOL"
+                      ? "#9f9"
+                      : src === "KNUCKLES"
+                          ? "#fc6"
+                          : src === "SYRINGE"
+                              ? "#7df"
+                              : src === "BOUNCER"
+                                  ? "#fdc"
+                                  : "#bbb";
+
+          ctx.beginPath();
+          ctx.ellipse(
+              px,
+              py,
+              (w.prR[i] ?? 4) * ISO_X,
+              (w.prR[i] ?? 4) * ISO_Y,
+              0,
+              0,
+              Math.PI * 2
+          );
+          ctx.fill();
+        }
+
+        continue;
+      }
+
+      // Player (8-dir sprite; fallback ellipse)
+      {
+        ctx.globalAlpha = 1;
+
+        const dir = ((w as any)._plDir ?? "S") as Dir8;
+        const frame = ((w as any)._plFrame ?? 2) as Frame3;
+        const img = playerSpritesReady() ? getPlayerSprite(dir, frame) : null;
+
+        const pp = toScreen(w.px, w.py);
+
+        if (img && img.width > 0 && img.height > 0) {
+          const sw = img.width * PLAYER_SPRITE_SCALE;
+          const sh = img.height * PLAYER_SPRITE_SCALE;
+
+          const x = pp.x - sw * 0.5;
+          const y = pp.y - sh * 0.5 - 32;
+
+          ctx.drawImage(img, x, y, sw, sh);
+        } else {
+          ctx.fillStyle = "#eaeaf2";
+          ctx.beginPath();
+          ctx.ellipse(pp.x, pp.y, PLAYER_R * ISO_X, PLAYER_R * ISO_Y, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
     }
   }
+
+  // Optional floor tint overlay (keep your existing visual style)
+  const floorVis = getFloorVisual(w);
+  if (floorVis) {
+    ctx.globalAlpha = floorVis.tintAlpha;
+    ctx.fillStyle = floorVis.tint;
+    ctx.fillRect(0, 0, ww, hh);
+    ctx.globalAlpha = 1;
+  }
+
+  // Draw walk overlay throttled (it will blit a cached image most frames)
+  drawWalkMaskOverlay();
+
+  // Draw ramp overlay ONCE per frame (not inside tile loop)
+  drawRampOverlay();
 
   // -------------------------------------------------------
   // Milestone C: Stairs occlusion pass
@@ -1054,8 +999,6 @@ export async function renderSystem(
         const sh = Math.min(APRON_PX, o.ih);
         const sy = o.ih - sh;
 
-        // Apply the same transparency from the first pass
-        ctx.globalAlpha = o.alpha ?? 1;
         ctx.drawImage(
             o.img,
             0,
@@ -1067,7 +1010,6 @@ export async function renderSystem(
             o.iw,
             sh // dest rect
         );
-        ctx.globalAlpha = 1;
       }
     }
 
@@ -1086,7 +1028,6 @@ export async function renderSystem(
   renderHealthOrb(w, ctx, ww, hh);
   renderExperienceBar(w, ctx, ww, hh);
   renderBossHealthBar(w, ctx, ww, hh);
-  renderRoomChallenge(w, ctx, ww, hh);
   renderDPSMeter(w, ctx, ww, hh);
   renderFloatingText(w, ctx, toScreen);
 }
@@ -1249,69 +1190,6 @@ function renderBossHealthBar(w: World, ctx: CanvasRenderingContext2D, ww: number
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(`BOSS  ${Math.ceil(hp)} / ${Math.ceil(max)}`, x + barW * 0.5, y + barH * 0.5);
-
-  ctx.restore();
-}
-
-/**
- * Render room challenge progress indicator (kill X enemies to unlock exit)
- */
-function renderRoomChallenge(w: World, ctx: CanvasRenderingContext2D, ww: number, hh: number) {
-  // Only show if a challenge is active
-  if (!w.roomChallengeActive) return;
-
-  const kills = w.roomChallengeKillsCount;
-  const needed = w.roomChallengeKillsNeeded;
-  const locked = w.roomChallengeLocked;
-
-  // Position: center-top of screen, below any boss bar
-  const barW = 220;
-  const barH = 24;
-  const x = (ww - barW) / 2;
-  const y = 60; // Below boss bar area
-
-  const t = Math.min(1, kills / Math.max(1, needed));
-
-  ctx.save();
-
-  // Background
-  ctx.globalAlpha = 0.85;
-  ctx.fillStyle = "#1a1a2e";
-  ctx.fillRect(x - 4, y - 4, barW + 8, barH + 28);
-  
-  // Border with locked indicator color
-  ctx.strokeStyle = locked ? "#ff4444" : "#44ff44";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(x - 4, y - 4, barW + 8, barH + 28);
-
-  // Progress bar background
-  ctx.globalAlpha = 0.6;
-  ctx.fillStyle = "#333";
-  ctx.fillRect(x, y, barW, barH);
-
-  // Progress bar fill
-  ctx.globalAlpha = 0.95;
-  ctx.fillStyle = locked ? "#ff6b6b" : "#51cf66";
-  ctx.fillRect(x, y, barW * t, barH);
-
-  // Progress bar border
-  ctx.globalAlpha = 1;
-  ctx.strokeStyle = "rgba(255,255,255,0.3)";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(x, y, barW, barH);
-
-  // Text: "ROOM LOCKED" or "ROOM CLEARED"
-  ctx.fillStyle = "#fff";
-  ctx.font = "bold 11px monospace";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  
-  const statusText = locked ? "🔒 ROOM LOCKED" : "✓ ROOM CLEARED";
-  ctx.fillText(statusText, x + barW / 2, y + barH + 12);
-
-  // Kill counter on the bar
-  ctx.font = "bold 12px monospace";
-  ctx.fillText(`${kills} / ${needed} kills`, x + barW / 2, y + barH / 2);
 
   ctx.restore();
 }
