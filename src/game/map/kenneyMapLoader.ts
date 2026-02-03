@@ -23,6 +23,8 @@ export type CompiledKenneyMap = {
     id: string;
     originTx: number;
     originTy: number;
+    width: number;
+    height: number;
 
     // Map-authored spawn (tile coords)
     spawnTx: number;
@@ -163,6 +165,8 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         id: def.id,
         originTx,
         originTy,
+        width: def.w,
+        height: def.h,
 
         spawnTx,
         spawnTy,
