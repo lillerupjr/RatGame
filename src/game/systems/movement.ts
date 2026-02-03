@@ -1,7 +1,7 @@
 import { World } from "../world";
 import { InputState } from "./input";
 import { worldDeltaToScreen } from "../visual/iso";
-import {isOccludedAlongSegment, walkInfo} from "../map/kenneyMap";
+import {getRampFacesForDebug, isOccludedAlongSegment, walkInfo} from "../map/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
 export function movementSystem(w: World, input: InputState, dt: number) {
@@ -130,19 +130,41 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     w.pvy = 0;
   }
 
-
-  // -------------------------------------------------------
-  // Enemies: single-query Z + (optional) floor gating
-  //
-  // - Store continuous z for enemies in (w as any).ez[i]
-  // - Enforce same-floor movement like player:
-  //     * can move within same integer floorH
-  //     * stairs allow transition
-  // - Additionally, keep enemies on the active floor (prevents cross-platform weirdness)
-  //   If your spawn system already enforces this, this becomes a safety net.
-  // -------------------------------------------------------
-
   const ez = ((w as any).ez ??= [] as number[]);
+
+  const pInfo = walkInfo(w.px, w.py, KENNEY_TILE_WORLD);
+  const playerFloorH = pInfo.floorH; // or .h, both are fine
+  const playerOnRamp = (pInfo as any).isRamp;
+  const playerOnStairs = (pInfo.kind === "STAIRS");
+
+  const rampTargets = (() => {
+    const ramps = getRampFacesForDebug(KENNEY_TILE_WORLD);
+    if (!ramps || ramps.length === 0) return [] as Array<{ x: number; y: number }>;
+    const out: Array<{ x: number; y: number }> = [];
+    for (let i = 0; i < ramps.length; i++) {
+      const r = ramps[i];
+      const cx = (r.poly[0].x + r.poly[1].x + r.poly[2].x + r.poly[3].x) * 0.25;
+      const cy = (r.poly[0].y + r.poly[1].y + r.poly[2].y + r.poly[3].y) * 0.25;
+      const wi = walkInfo(cx, cy, KENNEY_TILE_WORLD);
+      if (wi.walkable) out.push({ x: cx, y: cy });
+    }
+    return out;
+  })();
+
+  const findNearestRampTarget = (x: number, y: number) => {
+    if (rampTargets.length === 0) return null;
+    let best = rampTargets[0];
+    let bestD2 = (best.x - x) * (best.x - x) + (best.y - y) * (best.y - y);
+    for (let i = 1; i < rampTargets.length; i++) {
+      const r = rampTargets[i];
+      const d2 = (r.x - x) * (r.x - x) + (r.y - y) * (r.y - y);
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        best = r;
+      }
+    }
+    return best;
+  };
 
   for (let i = 0; i < w.eAlive.length; i++) {
     if (!w.eAlive[i]) continue;
@@ -155,111 +177,24 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     let eCur = walkInfo(ex, ey, KENNEY_TILE_WORLD);
     ez[i] = eCur.z;
 
+    const enemyOnStairs = (eCur.kind === "STAIRS");
+    const enemyOnRamp = (eCur as any).isRamp;
+
+    const differentHeight = eCur.floorH !== playerFloorH;
+    const playerOnConnector = playerOnStairs || playerOnRamp;
+    const enemyOnConnector = enemyOnStairs || enemyOnRamp;
+    // Step 2 NOTE (changed): Open stairs/connector-style layouts should not block AI vision yet.
+    // We will reintroduce LOS/vision blocking later for doors/tunnels/walls (not stairs).
 
 
-    // Height-aware goal switching:
-    // If player is on another floor, steer toward a nearby "connector-like" point first.
-    const findBestConnectorEntryTile = (
-        ex: number,
-        ey: number,
-        eCur: any,
-        pInfo: any
-    ): { gx: number; gy: number } | null => {
-      // Scan in expanding rings around the enemy (world units).
-      // Keep this small/cheap — it runs per-enemy per-frame.
-      const RINGS = [32, 48, 64, 80, 96, 112, 128, 160, 192];
-      const DIRS: Array<[number, number]> = [
-        [1, 0], [-1, 0], [0, 1], [0, -1],
-        [1, 1], [1, -1], [-1, 1], [-1, -1],
-      ];
-
-      const pFloor = (pInfo.floorH | 0);
-      const eFloor = (eCur.floorH | 0);
-
-      let best: { gx: number; gy: number; score: number } | null = null;
-
-      for (let r = 0; r < RINGS.length; r++) {
-        const rad = RINGS[r];
-
-        for (let k = 0; k < DIRS.length; k++) {
-          const dx = DIRS[k][0];
-          const dy = DIRS[k][1];
-
-          const gx = ex + dx * rad;
-          const gy = ey + dy * rad;
-
-          const info = walkInfo(gx, gy, KENNEY_TILE_WORLD);
-          if (!info.walkable) continue;
-
-          // We want "connector-ish" points:
-          // - ramp faces (isRamp) are your new real connectors
-          // - converters (if present)
-          // - stairs ONLY if they are ever walkable in your current build
-          const isConnectorish =
-              (info as any).isRamp ||
-              (info.kind as any) === "CONVERTER" ||
-              (info.kind as any) === "STAIRS";
-
-          if (!isConnectorish) continue;
-
-          // Prefer points reachable from the enemy's current floor immediately.
-          // Ramp faces return continuous z; allow "near the current floor" as entry.
-          const pFloor = (pInfo.floorH | 0);
-          const eFloor = (eCur.floorH | 0);
-          const infoFloor = (info.floorH | 0);
-
-// Allow entry if it's close in z OR it moves us toward player's floor.
-          const entryDz = Math.abs((info.z ?? info.floorH) - eCur.z);
-          const movesTowardPlayerFloor =
-              Math.abs(infoFloor - pFloor) < Math.abs(eFloor - pFloor);
-
-          if (entryDz > 0.6 && !movesTowardPlayerFloor) continue;
-
-
-          // Score: prefer moving toward player's floor + toward player position
-          const toHere = Math.hypot(gx - ex, gy - ey);
-          const toPlayer = Math.hypot(w.px - gx, w.py - gy);
-          const floorPenalty = Math.abs((info.floorH | 0) - pFloor) * 120;
-
-          const score = toHere + toPlayer + floorPenalty;
-
-          if (!best || score < best.score) best = { gx, gy, score };
-        }
-
-        // If we found something at this ring, stop expanding (keeps behavior local & cheap)
-        if (best) break;
-      }
-
-      return best ? { gx: best.gx, gy: best.gy } : null;
-    };
-    const pInfo = walkInfo(w.px, w.py, KENNEY_TILE_WORLD);
-    const eOnOtherFloor = (eCur.floorH | 0) !== (pInfo.floorH | 0);
-
+    // Steer toward player unless we're on a different height (then head for nearest ramp)
     let tx = w.px;
     let ty = w.py;
-
-    if (eOnOtherFloor) {
-      const g = findBestConnectorEntryTile(ex, ey, eCur, pInfo);
-
-      if (g) {
-        const ARRIVE_R = 22; // world units; tune 16..32
-        const nearGoal = Math.hypot(g.gx - ex, g.gy - ey) <= ARRIVE_R;
-
-        // Recompute current info after any movement updates above (you already keep eCur live)
-        const onConnectorish =
-            (eCur as any).isRamp ||
-            (eCur.kind as any) === "CONVERTER" ||
-            (eCur.kind as any) === "STAIRS";
-
-        // Also consider "in the same tile" as arrival
-        const gInfo = walkInfo(g.gx, g.gy, KENNEY_TILE_WORLD);
-        const sameGoalTile = (eCur.tx === gInfo.tx) && (eCur.ty === gInfo.ty);
-
-        // If we’ve arrived/entered, stop steering to the stair point and just chase player.
-        if (!nearGoal && !onConnectorish && !sameGoalTile) {
-          tx = g.gx;
-          ty = g.gy;
-        }
+    if (differentHeight && !playerOnConnector && !enemyOnConnector) {
+      const rampTarget = findNearestRampTarget(ex, ey);
+      if (rampTarget) {
+        tx = rampTarget.x;
+        ty = rampTarget.y;
       }
     }
 
@@ -270,32 +205,25 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     const ux = vx / d;
     const uy = vy / d;
 
-    // --- Probe-based steering (reduces “stuck on terrain”) ---
-    const speed = w.eSpeed[i] ?? 0;
-    const step = speed * dt;
-
-    // Per-enemy stuck timer + turn preference (stored off-type to avoid World type edits)
-    const eStuckT = ((w as any).eStuckT ??= [] as number[]);
-    const eTurnSign = ((w as any).eTurnSign ??= [] as number[]); // +1 or -1
-    eStuckT[i] = eStuckT[i] ?? 0;
-    eTurnSign[i] = eTurnSign[i] ?? (Math.random() < 0.5 ? 1 : -1);
+    const enx = ex + ux * w.eSpeed[i] * dt;
+    const eny = ey + uy * w.eSpeed[i] * dt;
 
     const tryEnemyMove = (wx: number, wy: number) => {
       const next = walkInfo(wx, wy, KENNEY_TILE_WORLD);
       if (!next.walkable) return false;
 
       const stairsInvolved =
-          (eCur.kind === "STAIRS") || (next.kind === "STAIRS") ||
-          (eCur as any).isRamp || (next as any).isRamp ||
-          (eCur.kind as any) === "CONVERTER" || (next.kind as any) === "CONVERTER";
-
+          (eCur.kind === "STAIRS") ||
+          (next.kind === "STAIRS") ||
+          (eCur as any).isRamp ||
+          (next as any).isRamp;
       const MAX_STEP_Z = 1.05;
 
       if (!stairsInvolved) {
         // Pure floor move: same integer floor only
         if (next.floorH !== eCur.floorH) return false;
       } else {
-        // Transition move: must not jump too far in one step
+        // Stairs move: must not jump too far in one step
         const dz = Math.abs(next.z - eCur.z);
         if (dz > MAX_STEP_Z) return false;
       }
@@ -314,50 +242,9 @@ export function movementSystem(w: World, input: InputState, dt: number) {
       return true;
     };
 
-    // Helper: rotate (dx,dy) by angle
-    const rot = (dx: number, dy: number, a: number) => {
-      const ca = Math.cos(a), sa = Math.sin(a);
-      return { x: dx * ca - dy * sa, y: dx * sa + dy * ca };
-    };
-
-    // Desired direction to player
-    const dx0 = ux;
-    const dy0 = uy;
-
-    // Candidate angles (radians). Small fan first, then wider.
-    // We bias the order by eTurnSign so enemies “choose a side” when blocked (less oscillation).
-    const s = eTurnSign[i];
-    const ANG = [0, 0.35, -0.35, 0.7, -0.7, 1.05, -1.05, 1.4, -1.4];
-    const angs = ANG.map((a) => a * s); // flip order by turn sign
-
-    let moved = false;
-
-    for (let k = 0; k < angs.length; k++) {
-      const a = angs[k];
-      const r = (a === 0) ? { x: dx0, y: dy0 } : rot(dx0, dy0, a);
-
-      // Single intended step
-      const nx = ex + r.x * step;
-      const ny = ey + r.y * step;
-
-      // Try direct first
-      if (tryEnemyMove(nx, ny)) { moved = true; break; }
-
-      // If direct fails, try axis-slide for THIS candidate (helps on tight corners)
-      if (tryEnemyMove(nx, ey)) { moved = true; break; }
-      if (tryEnemyMove(ex, ny)) { moved = true; break; }
-    }
-
-    if (!moved) {
-      // We’re wedged. Accumulate stuck time and occasionally flip turn direction
-      eStuckT[i] += dt;
-      if (eStuckT[i] > 0.35) {
-        eTurnSign[i] *= -1;
-        eStuckT[i] = 0;
-      }
-    } else {
-      eStuckT[i] = 0;
-    }
+    // Axis-separated sliding WITH live eCur updates
+    tryEnemyMove(enx, ey);
+    tryEnemyMove(ex, eny);
 
   }
 
