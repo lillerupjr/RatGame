@@ -1,7 +1,7 @@
 // src/game/map/kenneyMapLoader.ts
 import type { TableMapDef } from "./tableMapTypes";
 
-export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN";
+export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL";
 export type StairDir = "N" | "E" | "S" | "W";
 
 // Authoritative stair sprite mapping:
@@ -28,6 +28,11 @@ export type CompiledKenneyMap = {
     spawnTx: number;
     spawnTy: number;
     spawnH: number;
+
+    // Map-authored goal (tile coords) - for procedural maps
+    goalTx: number | null;
+    goalTy: number | null;
+    goalH: number;
 
     getTile(tx: number, ty: number): IsoTile;
 };
@@ -56,6 +61,14 @@ function parseToken(
         const h = Number.isFinite(n) ? (n | 0) : 0;
         const skin = defaultSpawnSkin ?? defaultFloorSkin;
         return { kind: "SPAWN", h, skin };
+    }
+
+    // GOAL: G<number> (destination/objective marker)
+    if (up.startsWith("G")) {
+        const n = parseInt(up.slice(1), 10);
+        const h = Number.isFinite(n) ? (n | 0) : 0;
+        const skin = defaultSpawnSkin ?? defaultFloorSkin;
+        return { kind: "GOAL", h, skin };
     }
 
     // STAIRS: S<number><dir?>
@@ -97,6 +110,11 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
     let spawnTableY: number | null = null;
     let spawnH: number = 0;
 
+    // First GOAL found becomes the authoritative goal point
+    let goalTableX: number | null = null;
+    let goalTableY: number | null = null;
+    let goalH: number = 0;
+
     for (const c of def.cells) {
         const tile = parseToken(c.t, defaultFloorSkin, defaultSpawnSkin);
         if (!tile) continue;
@@ -105,6 +123,12 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
             spawnTableX = c.x | 0;
             spawnTableY = c.y | 0;
             spawnH = tile.h | 0;
+        }
+
+        if (tile.kind === "GOAL" && goalTableX === null) {
+            goalTableX = c.x | 0;
+            goalTableY = c.y | 0;
+            goalH = tile.h | 0;
         }
 
         placed.set(`${c.x},${c.y}`, tile);
@@ -130,6 +154,11 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
     const spawnTx = (spawnTableX ?? Math.floor(def.w / 2)) + originTx;
     const spawnTy = (spawnTableY ?? Math.floor(def.h / 2)) + originTy;
 
+    // Convert authored goal table coords -> tile coords.
+    // Goal may be null if not defined in map.
+    const goalTx = goalTableX !== null ? goalTableX + originTx : null;
+    const goalTy = goalTableY !== null ? goalTableY + originTy : null;
+
     return {
         id: def.id,
         originTx,
@@ -138,6 +167,10 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         spawnTx,
         spawnTy,
         spawnH,
+
+        goalTx,
+        goalTy,
+        goalH,
 
         getTile,
     };
