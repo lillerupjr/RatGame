@@ -572,11 +572,11 @@ function createRampConnection(
         // Horizontal ramp - going East or West
         if (dx > 0) {
             rampDir = "E";  // Walking East goes uphill
-            stepX = 1;
+            stepX = -1;
             stepY = 0;
         } else {
             rampDir = "W";  // Walking West goes uphill
-            stepX = -1;
+            stepX = 1;
             stepY = 0;
         }
     } else {
@@ -584,11 +584,11 @@ function createRampConnection(
         if (dy > 0) {
             rampDir = "S";  // Walking South goes uphill
             stepX = 0;
-            stepY = 1;
+            stepY = -1;
         } else {
             rampDir = "N";  // Walking North goes uphill
             stepX = 0;
-            stepY = -1;
+            stepY = 1;
         }
     }
     
