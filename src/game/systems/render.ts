@@ -143,6 +143,14 @@ export async function renderSystem(
     return t.kind === "STAIRS" ? ((t.h ?? 0) + STAIR_LAYER_OFFSET) : tileHeight(tx, ty);
   };
 
+  const entityLayerAt = (x: number, y: number, zAbs: number) => {
+    const tx = Math.floor(x / T);
+    const ty = Math.floor(y / T);
+    const tl = tileLayer(tx, ty);
+    const zl = floorFromZ(zAbs);
+    return Math.max(zl, tl);
+  };
+
   const toScreen = (x: number, y: number) => {
     const p = worldToScreen(x, y);
 
@@ -434,18 +442,17 @@ export async function renderSystem(
     }
   }
 
-  // Include entities/projectiles so layers exist even if tiles are sparse
   if (RENDER_ALL_HEIGHTS) {
-    const pz = (w as any).pz ?? tileHAtWorld(w.px, w.py);
-    const pLayer = floorFromZ(pz);
+    const pzAbs = (w as any).pz ?? tileHAtWorld(w.px, w.py);
+    const pLayer = entityLayerAt(w.px, w.py, pzAbs);
     minLayer = Math.min(minLayer, pLayer);
     maxLayer = Math.max(maxLayer, pLayer);
 
     const ez = (w as any).ez as number[] | undefined;
     for (let i = 0; i < w.eAlive.length; i++) {
       if (!w.eAlive[i]) continue;
-      const z = ez?.[i] ?? tileHAtWorld(w.ex[i], w.ey[i]);
-      const h = floorFromZ(z);
+      const zAbs = ez?.[i] ?? tileHAtWorld(w.ex[i], w.ey[i]);
+      const h = entityLayerAt(w.ex[i], w.ey[i], zAbs);
       minLayer = Math.min(minLayer, h);
       maxLayer = Math.max(maxLayer, h);
     }
@@ -453,12 +460,13 @@ export async function renderSystem(
     for (let i = 0; i < w.pAlive.length; i++) {
       if (!w.pAlive[i]) continue;
       const baseH = tileHAtWorld(w.prx[i], w.pry[i]);
-      const pzAbs = (w.prZ?.[i] ?? baseH) || 0;
-      const h = floorFromZ(pzAbs);
+      const zAbs = (w.prZ?.[i] ?? baseH) || 0;
+      const h = entityLayerAt(w.prx[i], w.pry[i], zAbs);
       minLayer = Math.min(minLayer, h);
       maxLayer = Math.max(maxLayer, h);
     }
   }
+
 
   const layers: number[] = [];
   if (RENDER_ALL_HEIGHTS) {
@@ -525,9 +533,11 @@ export async function renderSystem(
   // Pickups
   for (let i = 0; i < w.xAlive.length; i++) {
     if (!w.xAlive[i]) continue;
-    const h = floorFromZ(tileHAtWorld(w.xx[i], w.xy[i]));
+    const zAbs = tileHAtWorld(w.xx[i], w.xy[i]);
+    const h = entityLayerAt(w.xx[i], w.xy[i], zAbs);
     addItem(itemsByLayer, h, { kind: "pickup", i, depth: depthKey(w.xx[i], w.xy[i]) });
   }
+
 
   // Enemy Z buffer (written by movementSystem; optional)
   const ez = (w as any).ez as number[] | undefined;
@@ -543,27 +553,30 @@ export async function renderSystem(
     const zLift = (pzAbs - baseH) * ELEV_PX;
     const depth = depthKey(w.prx[i], w.pry[i]);
 
-    addItem(itemsByLayer, floorFromZ(pzAbs), { kind: "projectile", i, depth, zLift });
+    addItem(itemsByLayer, entityLayerAt(w.prx[i], w.pry[i], pzAbs), { kind: "projectile", i, depth, zLift });
+
   }
 
   // Enemies (bucketed by Z floor)
   for (let i = 0; i < w.eAlive.length; i++) {
     if (!w.eAlive[i]) continue;
 
-    const z = ez?.[i] ?? tileHAtWorld(w.ex[i], w.ey[i]);
-    addItem(itemsByLayer, floorFromZ(z), {
+    const zAbs = ez?.[i] ?? tileHAtWorld(w.ex[i], w.ey[i]);
+    addItem(itemsByLayer, entityLayerAt(w.ex[i], w.ey[i], zAbs), {
       kind: "enemy",
       i,
       depth: depthKey(w.ex[i], w.ey[i]),
     });
+
   }
 
   // Player
-  const pz = (w as any).pz ?? tileHAtWorld(w.px, w.py);
-  addItem(itemsByLayer, floorFromZ(pz), {
+  const pzAbs2 = (w as any).pz ?? tileHAtWorld(w.px, w.py);
+  addItem(itemsByLayer, entityLayerAt(w.px, w.py, pzAbs2), {
     kind: "player",
     depth: depthKey(w.px, w.py),
   });
+
 
   const drawTileAt = (tx: number, ty: number, tdef: any) => {
     // Choose sprite:
@@ -782,25 +795,6 @@ export async function renderSystem(
       }
     }
 
-    if (RENDER_ALL_HEIGHTS && stairGroups.size > 0) {
-      for (const [gid, group] of stairGroups) {
-        if (group.drawn) continue;
-        if (group.maxH !== layer) continue;
-        group.drawn = true;
-
-        group.tiles.sort((a, b) => {
-          const stepDiff = (b.step | 0) - (a.step | 0);
-          if (stepDiff !== 0) return stepDiff;
-          return a.depth - b.depth;
-        });
-
-        for (let i = 0; i < group.tiles.length; i++) {
-          const t = group.tiles[i];
-          const tdef = getTile(t.tx, t.ty);
-          drawTileAt(t.tx, t.ty, tdef);
-        }
-      }
-    }
 
     const zoneLayer = zonesByLayer.get(layer);
     if (zoneLayer) {
