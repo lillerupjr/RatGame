@@ -445,8 +445,10 @@ export async function renderSystem(
   if (RENDER_ALL_HEIGHTS) {
     const pzAbs = (w as any).pz ?? tileHAtWorld(w.px, w.py);
     const pLayer = entityLayerAt(w.px, w.py, pzAbs);
-    minLayer = Math.min(minLayer, pLayer);
-    maxLayer = Math.max(maxLayer, pLayer);
+    const pRenderLayer = pLayer + 1; // render player one layer above its computed layer
+    minLayer = Math.min(minLayer, pRenderLayer);
+    maxLayer = Math.max(maxLayer, pRenderLayer);
+
 
     const ez = (w as any).ez as number[] | undefined;
     for (let i = 0; i < w.eAlive.length; i++) {
@@ -570,89 +572,19 @@ export async function renderSystem(
 
   }
 
-  // Player
+// Player
   const pzAbs2 = (w as any).pz ?? tileHAtWorld(w.px, w.py);
-  addItem(itemsByLayer, entityLayerAt(w.px, w.py, pzAbs2), {
+  const pBaseLayer = entityLayerAt(w.px, w.py, pzAbs2);
+  const pRenderLayer = RENDER_ALL_HEIGHTS ? (pBaseLayer + 1) : pBaseLayer;
+
+// Tiny depth bias so player sorts last *within* the same layer
+  const PLAYER_DEPTH_BIAS = 0;
+
+  addItem(itemsByLayer, pRenderLayer, {
     kind: "player",
-    depth: depthKey(w.px, w.py),
+    depth: depthKey(w.px, w.py) + PLAYER_DEPTH_BIAS,
   });
 
-
-  const drawTileAt = (tx: number, ty: number, tdef: any) => {
-    // Choose sprite:
-    // - STAIRS: use authored tdef.skin (kenneyMapLoader must assign it)
-    // - FLOOR/SPAWN: use authored skin if present, else ground
-    const useStairs = tdef.kind === "STAIRS";
-
-    let tileRec: Loaded = groundTile;
-
-    if (useStairs) {
-      tileRec = tdef.skin ? getKenneyTileBySkin(tdef.skin) : groundTile;
-    } else {
-      tileRec = tdef.skin ? getKenneyTileBySkin(tdef.skin) : groundTile;
-    }
-
-    if (
-        !tileRec?.ready ||
-        !tileRec.img ||
-        tileRec.img.width <= 0 ||
-        tileRec.img.height <= 0
-    ) {
-      return;
-    }
-
-    const iw = tileRec.img.width * TILE_SCALE;
-    const ih = tileRec.img.height * TILE_SCALE;
-
-    // Tile "center" in world coords (+0.5 centers the tile).
-    const wx = (tx + 0.5) * T;
-    const wy = (ty + 0.5) * T;
-
-    const p = worldToScreen(wx, wy);
-    const dx = p.x + camX - iw * 0.5;
-
-    // Per-tile anchor: stairs art often has different vertical footprint/padding
-    const stairsAnchorY = 0.62;
-
-    // Per-direction fine tune (lets you fix ?3 of 4? issues without breaking the good one)
-    const STAIRS_DY_BY_DIR: Partial<Record<"N" | "E" | "S" | "W", number>> = {
-      N: 16,
-      E: 16,
-      S: 16,
-      W: 16,
-    };
-
-    const anchorY = useStairs ? stairsAnchorY : ANCHOR_Y;
-    let dy = p.y + camY - ih * anchorY;
-
-    // Apply global art shift so top-face aligns with logic
-    dy += TILE_ART_Y_SHIFT_PX;
-
-    // Fine tune after anchoring (stairs only)
-    if (useStairs) {
-      const d = (tdef.dir as ("N" | "E" | "S" | "W" | undefined)) ?? "N";
-      dy += STAIRS_DY_BY_DIR[d] ?? 16;
-    }
-
-    // stairs are visually elevated by their own h
-    const h = tdef.kind === "STAIRS" ? (tdef.h ?? 0) : tileHeight(tx, ty);
-    const elev = h * ELEV_PX;
-
-    dy -= elev;
-    ctx.drawImage(tileRec.img, dx, dy, iw, ih);
-
-    // Collect stair occluders for a second pass (drawn AFTER entities/projectiles)
-    if (useStairs) {
-      const occ = ((w as any)._stairOccluders ??= []);
-      occ.push({
-        img: tileRec.img,
-        dx,
-        dy,
-        iw,
-        ih,
-      });
-    }
-  };
 
   type StairTileDraw = { tx: number; ty: number; step: number; depth: number };
   type StairGroupDraw = { maxH: number; tiles: StairTileDraw[]; drawn?: boolean };
