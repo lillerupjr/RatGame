@@ -844,269 +844,289 @@ export async function renderSystem(
         }
       }
     }
-
     const grounded = itemsByLayer.get(layer);
     if (!grounded || grounded.length === 0) continue;
 
-    grounded.sort((a, b) => a.depth - b.depth);
+    // Enforce category order on the SAME layer:
+    // pickups -> enemies -> projectiles -> player
+    const pickups: Array<{ kind: "pickup"; i: number; depth: number }> = [];
+    const enemies: Array<{ kind: "enemy"; i: number; depth: number }> = [];
+    const projectiles: Array<{ kind: "projectile"; i: number; depth: number; zLift: number }> = [];
+    let hasPlayer = false;
 
     for (const it of grounded) {
-      if (it.kind === "pickup") {
-        const i = it.i;
+      if (it.kind === "pickup") pickups.push(it);
+      else if (it.kind === "enemy") enemies.push(it);
+      else if (it.kind === "projectile") projectiles.push(it);
+      else if (it.kind === "player") hasPlayer = true;
+    }
 
-        const p = toScreen(w.xx[i], w.xy[i]);
-        const kind = w.xKind?.[i] ?? 1; // 1=XP, 2=CHEST
+    // Stable within-category depth
+    pickups.sort((a, b) => a.depth - b.depth);
+    enemies.sort((a, b) => a.depth - b.depth);
+    projectiles.sort((a, b) => a.depth - b.depth);
 
-        if (kind === 1) {
-          ctx.globalAlpha = 1;
-          ctx.fillStyle = "#7df";
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
-          ctx.fill();
-        } else {
-          ctx.globalAlpha = 1;
-          ctx.fillStyle = "#fdc";
-          ctx.fillRect(p.x - 10, p.y - 8, 20, 16);
+    // -----------------------------
+    // 1) Pickups
+    // -----------------------------
+    for (const it of pickups) {
+      const i = it.i;
 
-          ctx.strokeStyle = "#000";
-          ctx.lineWidth = 2;
-          ctx.strokeRect(p.x - 10, p.y - 8, 20, 16);
+      const p = toScreen(w.xx[i], w.xy[i]);
+      const kind = w.xKind?.[i] ?? 1; // 1=XP, 2=CHEST
 
-          ctx.strokeStyle = "#b85";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(p.x - 10, p.y);
-          ctx.lineTo(p.x + 10, p.y);
-          ctx.stroke();
-        }
-        continue;
+      if (kind === 1) {
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = "#7df";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = "#fdc";
+        ctx.fillRect(p.x - 10, p.y - 8, 20, 16);
+
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(p.x - 10, p.y - 8, 20, 16);
+
+        ctx.strokeStyle = "#b85";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(p.x - 10, p.y);
+        ctx.lineTo(p.x + 10, p.y);
+        ctx.stroke();
+      }
+    }
+
+    // -----------------------------
+    // 2) Enemies
+    // -----------------------------
+    for (const it of enemies) {
+      const i = it.i;
+
+      const p = toScreen(w.ex[i], w.ey[i]);
+
+      const def = registry.enemy(w.eType[i] as any);
+      let baseColor: string = (def as any).color ?? "#f66";
+
+      const isBoss = w.eType[i] === ENEMY_TYPE.BOSS;
+      if (isBoss) baseColor = getBossAccent(w) ?? baseColor;
+
+      const faceWx = w.px - w.ex[i];
+      const faceWy = w.py - w.ey[i];
+      const face = worldDeltaToScreen(faceWx, faceWy);
+
+      const moving = (w.eSpeed[i] ?? 0) > 1;
+
+      const fr = getEnemySpriteFrame({
+        type: w.eType[i] as any,
+        time: w.time ?? 0,
+        faceDx: face.dx,
+        faceDy: face.dy,
+        moving,
+      });
+
+      if (fr) {
+        const dw = fr.sw * fr.scale;
+        const dh = fr.sh * fr.scale;
+
+        const dx = p.x - dw * fr.anchorX;
+        const dy = p.y - dh * fr.anchorY;
+
+        ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, dx, dy, dw, dh);
+      } else {
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = baseColor;
+        ctx.beginPath();
+        ctx.ellipse(
+            p.x,
+            p.y,
+            (w.eR[i] ?? 10) * ISO_X,
+            (w.eR[i] ?? 10) * ISO_Y,
+            0,
+            0,
+            Math.PI * 2
+        );
+        ctx.fill();
       }
 
-      if (it.kind === "enemy") {
-        const i = it.i;
+      if (isBoss) {
+        const pulse = 0.5 + 0.5 * Math.sin((w.time ?? 0) * 2.5);
 
-        const p = toScreen(w.ex[i], w.ey[i]);
+        ctx.globalAlpha = 0.18 + pulse * 0.12;
+        ctx.strokeStyle = baseColor;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(
+            p.x,
+            p.y,
+            (w.eR[i] ?? 10) * (1.25 + pulse * 0.05) * ISO_X,
+            (w.eR[i] ?? 10) * (1.25 + pulse * 0.05) * ISO_Y,
+            0,
+            0,
+            Math.PI * 2
+        );
+        ctx.stroke();
 
-        const def = registry.enemy(w.eType[i] as any);
-        let baseColor: string = (def as any).color ?? "#f66";
+        ctx.globalAlpha = 0.28;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(
+            p.x,
+            p.y,
+            (w.eR[i] ?? 10) * 1.55 * ISO_X,
+            (w.eR[i] ?? 10) * 1.55 * ISO_Y,
+            0,
+            0,
+            Math.PI * 2
+        );
+        ctx.stroke();
 
-        const isBoss = w.eType[i] === ENEMY_TYPE.BOSS;
-        if (isBoss) baseColor = getBossAccent(w) ?? baseColor;
-
-        const faceWx = w.px - w.ex[i];
-        const faceWy = w.py - w.ey[i];
-        const face = worldDeltaToScreen(faceWx, faceWy);
-
-        const moving = (w.eSpeed[i] ?? 0) > 1;
-
-        const fr = getEnemySpriteFrame({
-          type: w.eType[i] as any,
-          time: w.time ?? 0,
-          faceDx: face.dx,
-          faceDy: face.dy,
-          moving,
-        });
-
-        if (fr) {
-          const dw = fr.sw * fr.scale;
-          const dh = fr.sh * fr.scale;
-
-          const dx = p.x - dw * fr.anchorX;
-          const dy = p.y - dh * fr.anchorY;
-
-          ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, dx, dy, dw, dh);
-        } else {
-          ctx.globalAlpha = 1;
-          ctx.fillStyle = baseColor;
-          ctx.beginPath();
-          ctx.ellipse(
-              p.x,
-              p.y,
-              (w.eR[i] ?? 10) * ISO_X,
-              (w.eR[i] ?? 10) * ISO_Y,
-              0,
-              0,
-              Math.PI * 2
-          );
-          ctx.fill();
-        }
-
-        if (isBoss) {
-          const pulse = 0.5 + 0.5 * Math.sin((w.time ?? 0) * 2.5);
-
-          ctx.globalAlpha = 0.18 + pulse * 0.12;
-          ctx.strokeStyle = baseColor;
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          ctx.ellipse(
-              p.x,
-              p.y,
-              (w.eR[i] ?? 10) * (1.25 + pulse * 0.05) * ISO_X,
-              (w.eR[i] ?? 10) * (1.25 + pulse * 0.05) * ISO_Y,
-              0,
-              0,
-              Math.PI * 2
-          );
-          ctx.stroke();
-
-          ctx.globalAlpha = 0.28;
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.ellipse(
-              p.x,
-              p.y,
-              (w.eR[i] ?? 10) * 1.55 * ISO_X,
-              (w.eR[i] ?? 10) * 1.55 * ISO_Y,
-              0,
-              0,
-              Math.PI * 2
-          );
-          ctx.stroke();
-
-          ctx.globalAlpha = 1;
-        }
-
-        if ((w.ePoisonT?.[i] ?? 0) > 0) {
-          ctx.globalAlpha = 0.35;
-          ctx.fillStyle = "#3dff7a";
-          ctx.beginPath();
-          ctx.ellipse(
-              p.x,
-              p.y,
-              (w.eR[i] ?? 10) * 1.05 * ISO_X,
-              (w.eR[i] ?? 10) * 1.05 * ISO_Y,
-              0,
-              0,
-              Math.PI * 2
-          );
-          ctx.fill();
-          ctx.globalAlpha = 1;
-        }
-
-        continue;
+        ctx.globalAlpha = 1;
       }
 
-      if (it.kind === "projectile") {
-        const i = it.i;
+      if ((w.ePoisonT?.[i] ?? 0) > 0) {
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = "#3dff7a";
+        ctx.beginPath();
+        ctx.ellipse(
+            p.x,
+            p.y,
+            (w.eR[i] ?? 10) * 1.05 * ISO_X,
+            (w.eR[i] ?? 10) * 1.05 * ISO_Y,
+            0,
+            0,
+            Math.PI * 2
+        );
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
 
-        const p = toScreen(w.prx[i], w.pry[i]);
-        const spr = getProjectileSpriteByKind(w.prjKind[i]);
+    // -----------------------------
+    // 3) Projectiles
+    // -----------------------------
+    for (const it of projectiles) {
+      const i = it.i;
 
-        const px = p.x;
-        const py = p.y - it.zLift;
+      const p = toScreen(w.prx[i], w.pry[i]);
+      const spr = getProjectileSpriteByKind(w.prjKind[i]);
 
-        // Projectile ground shadow
-        {
-          const r = w.prR[i] ?? 4;
+      const px = p.x;
+      const py = p.y - it.zLift;
 
-          const wx0 = w.prx[i];
-          const wy0 = w.pry[i];
-          const sn = snapToNearestWalkableGround(wx0, wy0);
+      // Projectile ground shadow
+      {
+        const r = w.prR[i] ?? 4;
 
-          const sx = sn.x;
-          const sy = sn.y;
-          const groundZ = sn.z;
+        const wx0 = w.prx[i];
+        const wy0 = w.pry[i];
+        const sn = snapToNearestWalkableGround(wx0, wy0);
 
-          const occZ = heightAtWorldOcclusion(sx, sy, KENNEY_TILE_WORLD);
-          const SHADOW_OCCLUSION_EPS = 0.05;
-          const shadowOccluded = groundZ < occZ - SHADOW_OCCLUSION_EPS;
+        const sx = sn.x;
+        const sy = sn.y;
+        const groundZ = sn.z;
 
-          if (!shadowOccluded) {
-            const sp = toScreen(sx, sy);
+        const occZ = heightAtWorldOcclusion(sx, sy, KENNEY_TILE_WORLD);
+        const SHADOW_OCCLUSION_EPS = 0.05;
+        const shadowOccluded = groundZ < occZ - SHADOW_OCCLUSION_EPS;
 
-            const lift = Math.max(0, it.zLift || 0);
-            const t = Math.max(0, Math.min(1, 1 - lift / 70));
+        if (!shadowOccluded) {
+          const sp = toScreen(sx, sy);
 
-            const rx = r * ISO_X * (0.95 + 0.15 * t);
-            const ry = r * ISO_Y * (0.85 + 0.1 * t);
+          const lift = Math.max(0, it.zLift || 0);
+          const t = Math.max(0, Math.min(1, 1 - lift / 70));
 
-            ctx.save();
-            ctx.globalAlpha = 0.18 * t;
-            ctx.fillStyle = "#000";
-            ctx.beginPath();
-            ctx.ellipse(sp.x, sp.y, rx, ry, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-          }
-        }
-
-        const wdx = w.prDirX[i] ?? 1;
-        const wdy = w.prDirY[i] ?? 0;
-        const d = worldDeltaToScreen(wdx, wdy);
-        const ang = Math.atan2(d.dy, d.dx);
-
-        if (spr?.ready && spr.img && spr.img.width > 0 && spr.img.height > 0) {
-          const areaMult = Math.max(0.6, Math.min(2.5, (w.prR[i] ?? 4) / 4));
-          const target =
-              PROJECTILE_BASE_DRAW_PX * areaMult * getProjectileDrawScale(w.prjKind[i]);
-
-          const iw = spr.img.width;
-          const ih = spr.img.height;
-
-          const scale = target / Math.max(iw, ih);
-          const dw = iw * scale;
-          const dh = ih * scale;
+          const rx = r * ISO_X * (0.95 + 0.15 * t);
+          const ry = r * ISO_Y * (0.85 + 0.1 * t);
 
           ctx.save();
-          ctx.translate(px, py);
-          ctx.rotate(ang);
-          ctx.drawImage(spr.img, -dw * 0.5, -dh * 0.5, dw, dh);
-          ctx.restore();
-        } else {
-          const src = registry.projectileSourceFromKind(w.prjKind[i]);
-          ctx.fillStyle =
-              src === "KNIFE"
-                  ? "#fff"
-                  : src === "PISTOL"
-                      ? "#9f9"
-                      : src === "KNUCKLES"
-                          ? "#fc6"
-                          : src === "SYRINGE"
-                              ? "#7df"
-                              : src === "BOUNCER"
-                                  ? "#fdc"
-                                  : "#bbb";
-
+          ctx.globalAlpha = 0.18 * t;
+          ctx.fillStyle = "#000";
           ctx.beginPath();
-          ctx.ellipse(
-              px,
-              py,
-              (w.prR[i] ?? 4) * ISO_X,
-              (w.prR[i] ?? 4) * ISO_Y,
-              0,
-              0,
-              Math.PI * 2
-          );
+          ctx.ellipse(sp.x, sp.y, rx, ry, 0, 0, Math.PI * 2);
           ctx.fill();
+          ctx.restore();
         }
-
-        continue;
       }
 
-      // Player (8-dir sprite; fallback ellipse)
-      {
-        ctx.globalAlpha = 1;
+      const wdx = w.prDirX[i] ?? 1;
+      const wdy = w.prDirY[i] ?? 0;
+      const d = worldDeltaToScreen(wdx, wdy);
+      const ang = Math.atan2(d.dy, d.dx);
 
-        const dir = ((w as any)._plDir ?? "S") as Dir8;
-        const frame = ((w as any)._plFrame ?? 2) as Frame3;
-        const img = playerSpritesReady() ? getPlayerSprite(dir, frame) : null;
+      if (spr?.ready && spr.img && spr.img.width > 0 && spr.img.height > 0) {
+        const areaMult = Math.max(0.6, Math.min(2.5, (w.prR[i] ?? 4) / 4));
+        const target =
+            PROJECTILE_BASE_DRAW_PX * areaMult * getProjectileDrawScale(w.prjKind[i]);
 
-        const pp = toScreen(w.px, w.py);
+        const iw = spr.img.width;
+        const ih = spr.img.height;
 
-        if (img && img.width > 0 && img.height > 0) {
-          const sw = img.width * PLAYER_SPRITE_SCALE;
-          const sh = img.height * PLAYER_SPRITE_SCALE;
+        const scale = target / Math.max(iw, ih);
+        const dw = iw * scale;
+        const dh = ih * scale;
 
-          const x = pp.x - sw * 0.5;
-          const y = pp.y - sh * 0.5 - 32;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(ang);
+        ctx.drawImage(spr.img, -dw * 0.5, -dh * 0.5, dw, dh);
+        ctx.restore();
+      } else {
+        const src = registry.projectileSourceFromKind(w.prjKind[i]);
+        ctx.fillStyle =
+            src === "KNIFE"
+                ? "#fff"
+                : src === "PISTOL"
+                    ? "#9f9"
+                    : src === "KNUCKLES"
+                        ? "#fc6"
+                        : src === "SYRINGE"
+                            ? "#7df"
+                            : src === "BOUNCER"
+                                ? "#fdc"
+                                : "#bbb";
 
-          ctx.drawImage(img, x, y, sw, sh);
-        } else {
-          ctx.fillStyle = "#eaeaf2";
-          ctx.beginPath();
-          ctx.ellipse(pp.x, pp.y, PLAYER_R * ISO_X, PLAYER_R * ISO_Y, 0, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        ctx.beginPath();
+        ctx.ellipse(
+            px,
+            py,
+            (w.prR[i] ?? 4) * ISO_X,
+            (w.prR[i] ?? 4) * ISO_Y,
+            0,
+            0,
+            Math.PI * 2
+        );
+        ctx.fill();
+      }
+    }
+
+    // -----------------------------
+    // 4) Player (always last on layer)
+    // -----------------------------
+    if (hasPlayer) {
+      ctx.globalAlpha = 1;
+
+      const dir = ((w as any)._plDir ?? "S") as Dir8;
+      const frame = ((w as any)._plFrame ?? 2) as Frame3;
+      const img = playerSpritesReady() ? getPlayerSprite(dir, frame) : null;
+
+      const pp = toScreen(w.px, w.py);
+
+      if (img && img.width > 0 && img.height > 0) {
+        const sw = img.width * PLAYER_SPRITE_SCALE;
+        const sh = img.height * PLAYER_SPRITE_SCALE;
+
+        const x = pp.x - sw * 0.5;
+        const y = pp.y - sh * 0.5 - 32;
+
+        ctx.drawImage(img, x, y, sw, sh);
+      } else {
+        ctx.fillStyle = "#eaeaf2";
+        ctx.beginPath();
+        ctx.ellipse(pp.x, pp.y, PLAYER_R * ISO_X, PLAYER_R * ISO_Y, 0, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
   }
