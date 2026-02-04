@@ -6,10 +6,10 @@ export type StairDir = "N" | "E" | "S" | "W";
 
 // Authoritative stair sprite mapping:
 export const STAIR_SKIN_BY_DIR: Record<StairDir, string> = {
-    S: "edges_landscape_20",
-    E: "edges_landscape_23",
-    W: "edges_landscape_19",
-    N: "edges_landscape_16",
+    S: "wedgeTest20",
+    E: "wedgeTest23",
+    W: "wedgeTest19",
+    N: "wedgeTest16",
 };
 
 export type IsoTile = {
