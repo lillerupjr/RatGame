@@ -8,7 +8,7 @@ import { canExitRoom } from "./roomChallenge";
 // -------------------------------------------------------
 // Jump / Gravity constants (in world units)
 // -------------------------------------------------------
-/** Gravity acceleration (world units per second²). Positive = downward. */
+/** Gravity acceleration (world units per second squared). Positive = downward. */
 const GRAVITY = 800;
 /** Initial upward velocity when jumping. */
 const JUMP_VELOCITY = 350;
@@ -192,27 +192,39 @@ export function movementSystem(w: World, input: InputState, dt: number) {
 
 
   // -------------------------------------------------------
-  // Enemies: single-query Z + (optional) floor gating
+  // Enemies: Enhanced Pathfinding with Stuck Detection
   //
-  // - Store continuous z for enemies in (w as any).ez[i]
-  // - Enforce same-floor movement like player:
-  //     * can move within same integer floorH
-  //     * stairs allow transition
-  // - Additionally, keep enemies on the active floor (prevents cross-platform weirdness)
-  //   If your spawn system already enforces this, this becomes a safety net.
-  // -------------------------------------------------------
-
-  // -------------------------------------------------------
-  // Enemies: Option B — “Always converge”
-  // Fix: update current tile info between axis moves (prevents stair/edge sticking)
+  // Features:
+  // - Stuck detection: track if enemy hasn't moved meaningfully
+  // - Obstacle probing: sample multiple directions to find best path
+  // - Wall-hugging: when stuck, try perpendicular directions
+  // - Smooth steering: gradual direction changes
   // -------------------------------------------------------
   const ez = ((w as any).ez ??= [] as number[]);
+  const eStuckTime = ((w as any).eStuckTime ??= [] as number[]);
+  const eLastX = ((w as any).eLastX ??= [] as number[]);
+  const eLastY = ((w as any).eLastY ??= [] as number[]);
+  const eAvoidDir = ((w as any).eAvoidDir ??= [] as number[]); // Avoidance angle offset
 
   const pInfo = walkInfo(w.px, w.py, KENNEY_TILE_WORLD);
-  const playerFloorH = pInfo.floorH; // or .h, both are fine
+  const playerFloorH = pInfo.floorH;
+
+  // Constants for pathfinding
+  const STUCK_THRESHOLD = 0.15;      // Time before considered stuck (seconds)
+  const STUCK_DIST_THRESHOLD = 2;    // Min distance to not be stuck
+  const PROBE_ANGLES = [-Math.PI/4, -Math.PI/8, 0, Math.PI/8, Math.PI/4]; // Sample directions
+  const PROBE_DIST = 24;             // How far ahead to probe
+  const AVOID_DECAY = 3.0;           // How fast avoidance angle decays
+  const MAX_AVOID_ANGLE = Math.PI * 0.6; // Maximum avoidance turn
 
   for (let i = 0; i < w.eAlive.length; i++) {
     if (!w.eAlive[i]) continue;
+
+    // Initialize tracking arrays if needed
+    if (eStuckTime[i] === undefined) eStuckTime[i] = 0;
+    if (eLastX[i] === undefined) eLastX[i] = w.ex[i];
+    if (eLastY[i] === undefined) eLastY[i] = w.ey[i];
+    if (eAvoidDir[i] === undefined) eAvoidDir[i] = 0;
 
     // Current position
     let ex = w.ex[i];
@@ -225,26 +237,107 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     const playerOnStairs = (pInfo.kind === "STAIRS");
     const enemyOnStairs = (eCur.kind === "STAIRS");
 
+    // Floor gating (skip enemies on different floors unless stairs involved)
     if (!playerOnStairs && !enemyOnStairs) {
       if (eCur.floorH !== playerFloorH) continue;
     }
-    // Step 2 NOTE (changed): Open stairs/connector-style layouts should not block AI vision yet.
-    // We will reintroduce LOS/vision blocking later for doors/tunnels/walls (not stairs).
 
-
-    // Steer toward player
+    // Calculate base direction toward player
     const tx = w.px;
     const ty = w.py;
-
-
     const vx = tx - ex;
     const vy = ty - ey;
-    const d = Math.hypot(vx, vy) || 1;
-    const ux = vx / d;
-    const uy = vy / d;
+    const distToPlayer = Math.hypot(vx, vy);
+    
+    // Skip if already at player
+    if (distToPlayer < 1) continue;
 
-    const enx = ex + ux * w.eSpeed[i] * dt;
-    const eny = ey + uy * w.eSpeed[i] * dt;
+    const baseAngle = Math.atan2(vy, vx);
+    
+    // Check if stuck (hasn't moved much since last frame)
+    const movedDist = Math.hypot(ex - eLastX[i], ey - eLastY[i]);
+    if (movedDist < STUCK_DIST_THRESHOLD * dt * 60) {
+      eStuckTime[i] += dt;
+    } else {
+      eStuckTime[i] = Math.max(0, eStuckTime[i] - dt * 2); // Decay stuck time faster
+    }
+    
+    // Update last position
+    eLastX[i] = ex;
+    eLastY[i] = ey;
+
+    // Decay avoidance angle over time
+    if (Math.abs(eAvoidDir[i]) > 0.01) {
+      eAvoidDir[i] *= Math.max(0, 1 - AVOID_DECAY * dt);
+    }
+
+    // If stuck, find an alternate direction
+    if (eStuckTime[i] > STUCK_THRESHOLD) {
+      // Probe multiple directions to find a clear path
+      let bestAngle = baseAngle;
+      let bestScore = -Infinity;
+
+      for (const probeOffset of PROBE_ANGLES) {
+        // Also try the current avoidance direction
+        const anglesToTry = [probeOffset, probeOffset + eAvoidDir[i]];
+        
+        for (const offset of anglesToTry) {
+          const testAngle = baseAngle + offset;
+          const probeX = ex + Math.cos(testAngle) * PROBE_DIST;
+          const probeY = ey + Math.sin(testAngle) * PROBE_DIST;
+          
+          const probeInfo = walkInfo(probeX, probeY, KENNEY_TILE_WORLD);
+          
+          // Score: prefer walkable, prefer toward player, prefer less angle change
+          let score = 0;
+          
+          if (probeInfo.walkable) {
+            score += 100;
+            
+            // Bonus for being closer to player
+            const newDistToPlayer = Math.hypot(tx - probeX, ty - probeY);
+            score += (distToPlayer - newDistToPlayer) * 2;
+            
+            // Slight penalty for deviating from direct path
+            score -= Math.abs(offset) * 10;
+            
+            // Check height compatibility
+            const stairsInvolved = (eCur.kind === "STAIRS") || (probeInfo.kind === "STAIRS");
+            if (!stairsInvolved && probeInfo.floorH !== eCur.floorH) {
+              score -= 200; // Heavy penalty for floor mismatch
+            }
+          }
+          
+          if (score > bestScore) {
+            bestScore = score;
+            bestAngle = testAngle;
+          }
+        }
+      }
+
+      // If we found a better direction, update avoidance
+      const angleChange = bestAngle - baseAngle;
+      if (Math.abs(angleChange) > 0.1) {
+        // Clamp the avoidance angle
+        eAvoidDir[i] = Math.max(-MAX_AVOID_ANGLE, Math.min(MAX_AVOID_ANGLE, angleChange));
+        eStuckTime[i] = 0; // Reset stuck timer since we found a new path
+      } else {
+        // No good path found, try a random perpendicular direction
+        if (eStuckTime[i] > STUCK_THRESHOLD * 3) {
+          eAvoidDir[i] = (Math.random() > 0.5 ? 1 : -1) * Math.PI * 0.5;
+          eStuckTime[i] = 0;
+        }
+      }
+    }
+
+    // Apply avoidance to movement direction
+    const finalAngle = baseAngle + eAvoidDir[i];
+    const ux = Math.cos(finalAngle);
+    const uy = Math.sin(finalAngle);
+
+    const speed = w.eSpeed[i] * dt;
+    const enx = ex + ux * speed;
+    const eny = ey + uy * speed;
 
     const tryEnemyMove = (wx: number, wy: number) => {
       const next = walkInfo(wx, wy, KENNEY_TILE_WORLD);
@@ -276,10 +369,40 @@ export function movementSystem(w: World, input: InputState, dt: number) {
       return true;
     };
 
-    // Axis-separated sliding WITH live eCur updates
-    tryEnemyMove(enx, ey);
-    tryEnemyMove(ex, eny);
-
+    // Try diagonal move first (most efficient)
+    const movedDiagonal = tryEnemyMove(enx, eny);
+    
+    // If diagonal failed, try axis-separated sliding
+    if (!movedDiagonal) {
+      const enemyMovedX = tryEnemyMove(enx, ey);
+      const enemyMovedY = tryEnemyMove(ex, eny);
+      
+      // If both axis moves failed, try perpendicular escape
+      if (!enemyMovedX && !enemyMovedY) {
+        // Try perpendicular directions (wall-hugging)
+        const perpAngle1 = baseAngle + Math.PI / 2;
+        const perpAngle2 = baseAngle - Math.PI / 2;
+        
+        const perpX1 = ex + Math.cos(perpAngle1) * speed * 0.7;
+        const perpY1 = ey + Math.sin(perpAngle1) * speed * 0.7;
+        const perpX2 = ex + Math.cos(perpAngle2) * speed * 0.7;
+        const perpY2 = ey + Math.sin(perpAngle2) * speed * 0.7;
+        
+        // Try the perpendicular that gets us closer to player
+        const dist1 = Math.hypot(tx - perpX1, ty - perpY1);
+        const dist2 = Math.hypot(tx - perpX2, ty - perpY2);
+        
+        if (dist1 < dist2) {
+          if (!tryEnemyMove(perpX1, perpY1)) {
+            tryEnemyMove(perpX2, perpY2);
+          }
+        } else {
+          if (!tryEnemyMove(perpX2, perpY2)) {
+            tryEnemyMove(perpX1, perpY1);
+          }
+        }
+      }
+    }
   }
 
 
@@ -296,8 +419,8 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   // -------------------------
   type Dir8 = "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW";
 
-  function dirFromVec(dx: number, dy: number): Dir8 {
-    const ang = Math.atan2(dy, dx); // -pi..pi, 0=E
+  function dirFromVec(ddx: number, ddy: number): Dir8 {
+    const ang = Math.atan2(ddy, ddx); // -pi..pi, 0=E
     const idx = (Math.round(ang / (Math.PI / 4)) + 8) % 8;
     const map: Dir8[] = ["E", "SE", "S", "SW", "W", "NW", "N", "NE"];
     return map[idx];
