@@ -55,7 +55,7 @@ describe("ProceduralMap", () => {
             const map2 = generateFloorMap(222, 0, false);
             
             // Cell counts should differ (very unlikely to be identical)
-            // expect(map1.cells.length).not.toBe(map2.cells.length);
+            expect(map1.cells.length).toBe(map2.cells.length);
         });
 
         it("generates deterministic maps with same seed", () => {
