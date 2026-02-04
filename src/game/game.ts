@@ -126,7 +126,7 @@ export function createGame(args: CreateGameArgs) {
 
 
   // DEBUG: show logical walk-mask overlay (render.ts)
-  (world as any).debugWalkMask = false;
+  (world as any).debugWalkMask = true;
   (world as any).debugRamps = true;
 
 
@@ -359,7 +359,7 @@ export function createGame(args: CreateGameArgs) {
     applyDebugSpawn(world);
 
     // DEBUG: show logical walk-mask overlay (render.ts)
-    (world as any).debugWalkMask = false;
+    (world as any).debugWalkMask = true;
     (world as any).debugRamps = true;
 
     currentChoices = [];
