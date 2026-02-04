@@ -15,6 +15,7 @@ import { onKillExplodeSystem } from "./systems/onKillExplode";
 import { bossSystem } from "./systems/boss";
 import { audioSystem } from "./systems/audio";
 import { preloadSfx } from "./audio/sfx";
+import { roomChallengeSystem } from "./systems/roomChallenge";
 
 import { getUpgradePool, UpgradeDef } from "./content/upgrades";
 import { formatTimeMMSS } from "./util/time";
@@ -26,6 +27,8 @@ import { fissionSystem } from "./systems/fission";
 import { recomputeDerivedStats } from "./stats/derivedStats";
 import {buildStaticRunMap, getReachable, type RunMap, type MapNode} from "./map/runMap";
 import { preloadKenneyTiles } from "./visual/kenneyTiles";
+import { getActiveRoomData } from "./map/kenneyMap";
+import { initializeRoomChallenges } from "./systems/roomChallenge";
 
 import {
   createDelveMap,
@@ -369,6 +372,12 @@ export function createGame(args: CreateGameArgs) {
 
     if (starterWeapon) {
       world.weapons = [{ id: starterWeapon, level: 1, cdLeft: 0 }];
+    }
+
+    // Initialize room challenges from the current map
+    const roomData = getActiveRoomData();
+    if (roomData && roomData.length > 0) {
+      initializeRoomChallenges(world, roomData);
     }
 
     // Create infinite delve map
@@ -721,6 +730,50 @@ export function createGame(args: CreateGameArgs) {
 
       btn.appendChild(titleRow);
       btn.appendChild(d);
+
+      // Add stat diffs if available
+      if (def.getStatsDiff) {
+        const diffs = def.getStatsDiff(world);
+        if (diffs.length > 0) {
+          const diffContainer = document.createElement("div");
+          diffContainer.className = "choiceStats";
+
+          for (const diff of diffs) {
+            const row = document.createElement("div");
+            row.className = "statRow";
+
+            const label = document.createElement("span");
+            label.className = "statLabel";
+            label.textContent = diff.label;
+
+            const values = document.createElement("span");
+            values.className = "statValues";
+
+            const oldSpan = document.createElement("span");
+            oldSpan.className = "statOld";
+            oldSpan.textContent = diff.oldVal;
+
+            const arrow = document.createElement("span");
+            arrow.className = diff.isIncrease ? "statArrow statUp" : "statArrow statDown";
+            arrow.textContent = diff.isIncrease ? "▲" : "▼";
+
+            const newSpan = document.createElement("span");
+            newSpan.className = diff.isIncrease ? "statNew statUp" : "statNew statDown";
+            newSpan.textContent = diff.newVal;
+
+            values.appendChild(oldSpan);
+            values.appendChild(arrow);
+            values.appendChild(newSpan);
+
+            row.appendChild(label);
+            row.appendChild(values);
+            diffContainer.appendChild(row);
+          }
+
+          btn.appendChild(diffContainer);
+        }
+      }
+
       container.appendChild(btn);
     }
   }
@@ -860,6 +913,7 @@ export function createGame(args: CreateGameArgs) {
     }
 
     movementSystem(world, input, dt);
+    roomChallengeSystem(world, dt);  // Track room challenges and lock exits
     spawnSystem(world, dt);
     combatSystem(world, dt);
     projectilesSystem(world, dt);

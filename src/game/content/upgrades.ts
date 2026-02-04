@@ -1,9 +1,17 @@
 // src/game/content/upgrades.ts
 import type { World } from "../world";
 import { registry } from "./registry";
-import type { WeaponId } from "./weapons";
+import type { WeaponId, WeaponStats } from "./weapons";
 import type { ItemId } from "./items";
 import {recomputeDerivedStats} from "../stats/derivedStats";
+
+/** A single stat change to display in the level-up UI */
+export type StatDiff = {
+    label: string;
+    oldVal: string;
+    newVal: string;
+    isIncrease: boolean;
+};
 
 export type UpgradeDef = {
     id: string;
@@ -14,6 +22,9 @@ export type UpgradeDef = {
     apply: (w: World) => void;
 
     getRankText?: (w: World) => string;
+
+    /** Return stat changes to display in the level-up UI */
+    getStatsDiff?: (w: World) => StatDiff[];
 
     // Evolutions are forced when available
     isEvolution?: boolean;
@@ -40,6 +51,203 @@ function hasWeaponOrEvolvedFrom(w: World, baseId: WeaponId): boolean {
         if ((def as any).evolvedFrom === baseId) return true;
     }
     return false;
+}
+
+/** Format a number for display in stat diffs */
+function formatStatValue(val: number, decimals: number = 1): string {
+    if (Number.isInteger(val)) return val.toString();
+    return val.toFixed(decimals);
+}
+
+/** Get weapon stat diffs between current and next level */
+function getWeaponStatsDiff(w: World, id: WeaponId): StatDiff[] {
+    const inst = getWeaponInst(w, id);
+    if (!inst) return [];
+
+    const wpn = registry.weapon(id);
+    const currLevel = inst.level;
+    const nextLevel = currLevel + 1;
+
+    const currStats = wpn.getStats(currLevel, w);
+    const nextStats = wpn.getStats(nextLevel, w);
+
+    const diffs: StatDiff[] = [];
+
+    // Damage
+    if (currStats.damage !== nextStats.damage) {
+        diffs.push({
+            label: "Damage",
+            oldVal: formatStatValue(currStats.damage),
+            newVal: formatStatValue(nextStats.damage),
+            isIncrease: nextStats.damage > currStats.damage,
+        });
+    }
+
+    // Cooldown (lower is better, so flip isIncrease)
+    if (currStats.cooldown !== nextStats.cooldown) {
+        diffs.push({
+            label: "Cooldown",
+            oldVal: formatStatValue(currStats.cooldown, 2) + "s",
+            newVal: formatStatValue(nextStats.cooldown, 2) + "s",
+            isIncrease: nextStats.cooldown < currStats.cooldown,
+        });
+    }
+
+    // Projectile count
+    if ((currStats.projectileCount ?? 1) !== (nextStats.projectileCount ?? 1)) {
+        diffs.push({
+            label: "Projectiles",
+            oldVal: formatStatValue(currStats.projectileCount ?? 1),
+            newVal: formatStatValue(nextStats.projectileCount ?? 1),
+            isIncrease: (nextStats.projectileCount ?? 1) > (currStats.projectileCount ?? 1),
+        });
+    }
+
+    // Pierce
+    if ((currStats.pierce ?? 0) !== (nextStats.pierce ?? 0)) {
+        diffs.push({
+            label: "Pierce",
+            oldVal: formatStatValue(currStats.pierce ?? 0),
+            newVal: formatStatValue(nextStats.pierce ?? 0),
+            isIncrease: (nextStats.pierce ?? 0) > (currStats.pierce ?? 0),
+        });
+    }
+
+    // Duration (for orbitals etc.)
+    if (currStats.duration !== undefined && nextStats.duration !== undefined && currStats.duration !== nextStats.duration) {
+        diffs.push({
+            label: "Duration",
+            oldVal: formatStatValue(currStats.duration) + "s",
+            newVal: formatStatValue(nextStats.duration) + "s",
+            isIncrease: nextStats.duration > currStats.duration,
+        });
+    }
+
+    // Fan arc (spread) - show as degrees
+    if (currStats.fanArc !== undefined && nextStats.fanArc !== undefined && currStats.fanArc !== nextStats.fanArc) {
+        const currDeg = Math.round((currStats.fanArc * 180) / Math.PI);
+        const nextDeg = Math.round((nextStats.fanArc * 180) / Math.PI);
+        diffs.push({
+            label: "Spread",
+            oldVal: currDeg + "°",
+            newVal: nextDeg + "°",
+            isIncrease: nextStats.fanArc > currStats.fanArc,
+        });
+    }
+
+    // Projectile speed
+    if (currStats.projectileSpeed !== nextStats.projectileSpeed) {
+        diffs.push({
+            label: "Speed",
+            oldVal: formatStatValue(currStats.projectileSpeed),
+            newVal: formatStatValue(nextStats.projectileSpeed),
+            isIncrease: nextStats.projectileSpeed > currStats.projectileSpeed,
+        });
+    }
+
+    // Area/radius
+    if (currStats.projectileRadius !== nextStats.projectileRadius) {
+        diffs.push({
+            label: "Size",
+            oldVal: formatStatValue(currStats.projectileRadius),
+            newVal: formatStatValue(nextStats.projectileRadius),
+            isIncrease: nextStats.projectileRadius > currStats.projectileRadius,
+        });
+    }
+
+    return diffs;
+}
+
+/** Get item stat diffs - items affect world multipliers */
+function getItemStatsDiff(w: World, id: ItemId): StatDiff[] {
+    const inst = getItemInst(w, id);
+    if (!inst) return [];
+
+    const diffs: StatDiff[] = [];
+    const currLevel = inst.level;
+    const nextLevel = currLevel + 1;
+
+    switch (id) {
+        case "DMG": {
+            const currMult = Math.pow(1.15, currLevel);
+            const nextMult = Math.pow(1.15, nextLevel);
+            diffs.push({
+                label: "Damage",
+                oldVal: "+" + formatStatValue((currMult - 1) * 100, 0) + "%",
+                newVal: "+" + formatStatValue((nextMult - 1) * 100, 0) + "%",
+                isIncrease: true,
+            });
+            break;
+        }
+        case "FIRE_RATE": {
+            const currMult = Math.pow(1.12, currLevel);
+            const nextMult = Math.pow(1.12, nextLevel);
+            diffs.push({
+                label: "Fire Rate",
+                oldVal: "+" + formatStatValue((currMult - 1) * 100, 0) + "%",
+                newVal: "+" + formatStatValue((nextMult - 1) * 100, 0) + "%",
+                isIncrease: true,
+            });
+            break;
+        }
+        case "MOVE_SPEED": {
+            const currBonus = 18 * currLevel;
+            const nextBonus = 18 * nextLevel;
+            diffs.push({
+                label: "Speed",
+                oldVal: "+" + formatStatValue(currBonus),
+                newVal: "+" + formatStatValue(nextBonus),
+                isIncrease: true,
+            });
+            break;
+        }
+        case "PICKUP_RADIUS": {
+            const currBonus = 18 * currLevel;
+            const nextBonus = 18 * nextLevel;
+            diffs.push({
+                label: "Radius",
+                oldVal: "+" + formatStatValue(currBonus),
+                newVal: "+" + formatStatValue(nextBonus),
+                isIncrease: true,
+            });
+            break;
+        }
+        case "AREA": {
+            const currMult = Math.pow(1.10, currLevel);
+            const nextMult = Math.pow(1.10, nextLevel);
+            diffs.push({
+                label: "Area",
+                oldVal: "+" + formatStatValue((currMult - 1) * 100, 0) + "%",
+                newVal: "+" + formatStatValue((nextMult - 1) * 100, 0) + "%",
+                isIncrease: true,
+            });
+            break;
+        }
+        case "DURATION": {
+            const currMult = Math.pow(1.10, currLevel);
+            const nextMult = Math.pow(1.10, nextLevel);
+            diffs.push({
+                label: "Duration",
+                oldVal: "+" + formatStatValue((currMult - 1) * 100, 0) + "%",
+                newVal: "+" + formatStatValue((nextMult - 1) * 100, 0) + "%",
+                isIncrease: true,
+            });
+            break;
+        }
+        case "CRIT_CHANCE": {
+            const currBonus = 15 * currLevel;
+            const nextBonus = 15 * nextLevel;
+            diffs.push({
+                label: "Crit Chance",
+                oldVal: "+" + formatStatValue(currBonus) + "%",
+                newVal: "+" + formatStatValue(nextBonus) + "%",
+                isIncrease: true,
+            });
+            break;
+        }
+    }
+
+    return diffs;
 }
 
 /** Build all upgrades. */
@@ -200,6 +408,7 @@ function buildAllUpgrades(): UpgradeDef[] {
                 const inst = getWeaponInst(w, id);
                 return inst ? `Lv ${inst.level}/${MAX_WPN}` : "—";
             },
+            getStatsDiff: (w) => getWeaponStatsDiff(w, id),
         });
     }
 
@@ -243,6 +452,7 @@ function buildAllUpgrades(): UpgradeDef[] {
                 const inst = getItemInst(w, id);
                 return inst ? `Lv ${inst.level}/${MAX_ITEM}` : "—";
             },
+            getStatsDiff: (w) => getItemStatsDiff(w, id),
         });
     }
 

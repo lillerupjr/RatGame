@@ -397,6 +397,13 @@ export async function renderSystem(
   const cx = Math.floor(w.px / T);
   const cy = Math.floor(w.py / T);
 
+  // Player depth for occlusion transparency
+  const playerDepth = depthKey(w.px, w.py);
+  // Radius (in world units) within which tiles in front of the player fade out
+  const OCCLUSION_FADE_RADIUS = T * 2.5;
+  // Minimum alpha for occluding tiles (so they don't disappear entirely)
+  const OCCLUSION_MIN_ALPHA = 0.25;
+
   const minTx = cx - radius;
   const maxTx = cx + radius;
   const minTy = cy - radius;
@@ -500,7 +507,34 @@ export async function renderSystem(
         drawWalkMaskOverlay();
 
         dy -= elev;
+
+        // Occlusion transparency: fade tiles that are in front of the player and could obstruct view
+        // A tile is "in front" if its depth is greater than the player's depth
+        const tileDepth = depthKey(wx, wy);
+        const depthDiff = tileDepth - playerDepth;
+
+        // Calculate distance from tile center to player in world space
+        const distToPlayer = Math.sqrt((wx - w.px) ** 2 + (wy - w.py) ** 2);
+
+        // Only apply transparency to tiles that are:
+        // 1. In front of the player (higher depth)
+        // 2. Close enough to potentially obstruct the player
+        // 3. At the same height level or higher (could visually block)
+        let tileAlpha = 1.0;
+        if (depthDiff > 0 && distToPlayer < OCCLUSION_FADE_RADIUS) {
+          const playerH = heightAtWorld(w.px, w.py, T);
+          if (h >= playerH) {
+            // Calculate fade based on distance and depth
+            const distFactor = 1 - (distToPlayer / OCCLUSION_FADE_RADIUS);
+            const depthFactor = Math.min(1, depthDiff / T);
+            const fadeFactor = distFactor * depthFactor;
+            tileAlpha = 1 - fadeFactor * (1 - OCCLUSION_MIN_ALPHA);
+          }
+        }
+
+        ctx.globalAlpha = tileAlpha;
         ctx.drawImage(tileRec.img, dx, dy, iw, ih);
+        ctx.globalAlpha = 1;
 
         // Collect stair occluders for a second pass (drawn AFTER entities/projectiles)
         if (useStairs) {
@@ -511,6 +545,7 @@ export async function renderSystem(
             dy,
             iw,
             ih,
+            alpha: tileAlpha,
           });
         }
       }
@@ -919,6 +954,8 @@ export async function renderSystem(
         const sh = Math.min(APRON_PX, o.ih);
         const sy = o.ih - sh;
 
+        // Apply the same transparency from the first pass
+        ctx.globalAlpha = o.alpha ?? 1;
         ctx.drawImage(
             o.img,
             0,
@@ -930,6 +967,7 @@ export async function renderSystem(
             o.iw,
             sh // dest rect
         );
+        ctx.globalAlpha = 1;
       }
     }
 
@@ -948,6 +986,7 @@ export async function renderSystem(
   renderHealthOrb(w, ctx, ww, hh);
   renderExperienceBar(w, ctx, ww, hh);
   renderBossHealthBar(w, ctx, ww, hh);
+  renderRoomChallenge(w, ctx, ww, hh);
   renderDPSMeter(w, ctx, ww, hh);
   renderFloatingText(w, ctx, toScreen);
 }
@@ -1110,6 +1149,69 @@ function renderBossHealthBar(w: World, ctx: CanvasRenderingContext2D, ww: number
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(`BOSS  ${Math.ceil(hp)} / ${Math.ceil(max)}`, x + barW * 0.5, y + barH * 0.5);
+
+  ctx.restore();
+}
+
+/**
+ * Render room challenge progress indicator (kill X enemies to unlock exit)
+ */
+function renderRoomChallenge(w: World, ctx: CanvasRenderingContext2D, ww: number, hh: number) {
+  // Only show if a challenge is active
+  if (!w.roomChallengeActive) return;
+
+  const kills = w.roomChallengeKillsCount;
+  const needed = w.roomChallengeKillsNeeded;
+  const locked = w.roomChallengeLocked;
+
+  // Position: center-top of screen, below any boss bar
+  const barW = 220;
+  const barH = 24;
+  const x = (ww - barW) / 2;
+  const y = 60; // Below boss bar area
+
+  const t = Math.min(1, kills / Math.max(1, needed));
+
+  ctx.save();
+
+  // Background
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = "#1a1a2e";
+  ctx.fillRect(x - 4, y - 4, barW + 8, barH + 28);
+  
+  // Border with locked indicator color
+  ctx.strokeStyle = locked ? "#ff4444" : "#44ff44";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x - 4, y - 4, barW + 8, barH + 28);
+
+  // Progress bar background
+  ctx.globalAlpha = 0.6;
+  ctx.fillStyle = "#333";
+  ctx.fillRect(x, y, barW, barH);
+
+  // Progress bar fill
+  ctx.globalAlpha = 0.95;
+  ctx.fillStyle = locked ? "#ff6b6b" : "#51cf66";
+  ctx.fillRect(x, y, barW * t, barH);
+
+  // Progress bar border
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = "rgba(255,255,255,0.3)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, barW, barH);
+
+  // Text: "ROOM LOCKED" or "ROOM CLEARED"
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 11px monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  
+  const statusText = locked ? "🔒 ROOM LOCKED" : "✓ ROOM CLEARED";
+  ctx.fillText(statusText, x + barW / 2, y + barH + 12);
+
+  // Kill counter on the bar
+  ctx.font = "bold 12px monospace";
+  ctx.fillText(`${kills} / ${needed} kills`, x + barW / 2, y + barH / 2);
 
   ctx.restore();
 }

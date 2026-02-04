@@ -3,6 +3,7 @@ import { InputState } from "./input";
 import { worldDeltaToScreen } from "../visual/iso";
 import {isOccludedAlongSegment, walkInfo} from "../map/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
+import { canExitRoom } from "./roomChallenge";
 
 export function movementSystem(w: World, input: InputState, dt: number) {
   // -------------------------------------------------------
@@ -76,11 +77,17 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   const ny = w.py + w.pvy * dt;
 
   const MAX_STEP_Z = 1.05;
+  const T = KENNEY_TILE_WORLD;
 
   const tryMove = (wx: number, wy: number) => {
     const nextInfo = walkInfo(wx, wy, KENNEY_TILE_WORLD);
 
     if (!nextInfo.walkable) return false;
+
+    // Room challenge lock: prevent leaving a locked room
+    const newTx = Math.floor(wx / T);
+    const newTy = Math.floor(wy / T);
+    if (!canExitRoom(w, newTx, newTy)) return false;
 
     const stairsInvolved =
         curInfo.kind === "STAIRS" ||

@@ -6,8 +6,11 @@
 import { RNG } from "../util/rng";
 import {
     generateFloorMap,
+    generateFloorMapWithRooms,
     generateProceduralMap,
+    generateProceduralMapWithRooms,
     type ProceduralMapConfig,
+    type ProceduralMapResult,
 } from "./proceduralMap";
 import {
     generateMazeFloorMap,
@@ -23,6 +26,8 @@ import {
 import type { TableMapDef } from "./tableMapTypes";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 import { PLANE_TILE_Z_OFFSET, setActiveMap as setKenneyActiveMap } from "./kenneyMap";
+import { initializeRoomChallenges } from "../systems/roomChallenge";
+import type { World } from "../world";
 
 // ─────────────────────────────────────────────────────────────
 // Active Map State
@@ -30,6 +35,7 @@ import { PLANE_TILE_Z_OFFSET, setActiveMap as setKenneyActiveMap } from "./kenne
 
 let _activeMap: CompiledKenneyMap | null = null;
 let _activeMapDef: TableMapDef | null = null;
+let _activeRoomData: ProceduralMapResult["rooms"] | null = null;
 
 /**
  * Get the currently active compiled map.
@@ -55,35 +61,68 @@ export function getActiveMapDef(): TableMapDef | null {
  * @param seed - Base RNG seed for the run
  * @param floorIndex - 0-based floor number (affects difficulty)
  * @param isBoss - Whether this is a boss arena
+ * @param world - Optional world to initialize room challenges (if provided, challenges are enabled)
  * @returns The compiled map
  */
 export function generateAndActivateFloorMap(
     seed: number,
     floorIndex: number,
-    isBoss: boolean = false
+    isBoss: boolean = false,
+    world?: World
 ): CompiledKenneyMap {
-    const mapDef = generateFloorMap(seed, floorIndex, isBoss);
+    // Generate map with room data for challenges
+    const { mapDef, rooms } = generateFloorMapWithRooms(seed, floorIndex, isBoss);
     
     // CRITICAL: Update the global kenneyMap state so all game systems use the new map
     const compiled = setKenneyActiveMap(mapDef);
     
     _activeMapDef = mapDef;
     _activeMap = compiled;
+    _activeRoomData = rooms;
+    
+    // Initialize room challenges if world is provided
+    if (world) {
+        initializeRoomChallenges(world, rooms);
+    }
     
     return compiled;
 }
 
 /**
+ * Initialize room challenges for an already-active map.
+ * Call this if you generated a map without passing world, but want to enable challenges later.
+ */
+export function activateRoomChallenges(world: World): void {
+    if (_activeRoomData) {
+        initializeRoomChallenges(world, _activeRoomData);
+    }
+}
+
+/**
+ * Get the room data for the currently active map.
+ */
+export function getActiveRoomData(): ProceduralMapResult["rooms"] | null {
+    return _activeRoomData;
+}
+
+/**
  * Generate a map with custom configuration.
  */
-export function generateAndActivateCustomMap(config: ProceduralMapConfig): CompiledKenneyMap {
-    const mapDef = generateProceduralMap(config);
+export function generateAndActivateCustomMap(config: ProceduralMapConfig, world?: World): CompiledKenneyMap {
+    // Generate map with room data for challenges
+    const { mapDef, rooms } = generateProceduralMapWithRooms(config);
     
     // CRITICAL: Update the global kenneyMap state so all game systems use the new map
     const compiled = setKenneyActiveMap(mapDef);
     
     _activeMapDef = mapDef;
     _activeMap = compiled;
+    _activeRoomData = rooms;
+    
+    // Initialize room challenges if world is provided
+    if (world) {
+        initializeRoomChallenges(world, rooms);
+    }
     
     return compiled;
 }

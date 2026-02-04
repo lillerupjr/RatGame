@@ -5,6 +5,7 @@ import { registry } from "../content/registry";
 import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
 import { clearSpatialHash, insertEntity, queryCircle } from "../util/spatialHash";
 import type { ProjectileSource } from "../factories/projectileFactory";
+import { onEnemyKilledForChallenge } from "./roomChallenge";
 
 // Weapon type -> damage text color mapping
 const WEAPON_COLORS: Record<ProjectileSource, string> = {
@@ -287,6 +288,7 @@ export function collisionsSystem(w: World, dt: number) {
       if (w.eHp[e] <= 0) {
         w.eAlive[e] = false;
         w.kills++;
+        onEnemyKilledForChallenge(w);
 
         // snapshot poison-at-death BEFORE any cleanup
         w.ePoisonedOnDeath[e] = (w.ePoisonT[e] > 0);

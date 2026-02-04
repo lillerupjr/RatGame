@@ -69,8 +69,8 @@ export const DEFAULT_CONFIGS: Record<FloorDifficulty, Omit<ProceduralMapConfig, 
         height: 112,
         minPathLength: 200,
         numPlatforms: 40,      // 40 rooms
-        maxHeight: 3,          // Max 3 levels up
-        narrowPassageChance: 0.3,
+        maxHeight: 10,          // Max # levels up
+        narrowPassageChance: 0.20,
         pitDensity: 0.02,
         rampComplexity: 0.3,
     },
@@ -80,8 +80,8 @@ export const DEFAULT_CONFIGS: Record<FloorDifficulty, Omit<ProceduralMapConfig, 
         height: 136,
         minPathLength: 300,
         numPlatforms: 50,      // 50 rooms
-        maxHeight: 4,          // Max 4 levels up
-        narrowPassageChance: 0.4,
+        maxHeight: 15,          // Max # levels up
+        narrowPassageChance: 0.25,
         pitDensity: 0.05,
         rampComplexity: 0.5,
     },
@@ -91,8 +91,8 @@ export const DEFAULT_CONFIGS: Record<FloorDifficulty, Omit<ProceduralMapConfig, 
         height: 160,
         minPathLength: 400,
         numPlatforms: 60,     // 60 rooms
-        maxHeight: 5,         // Max 5 levels up
-        narrowPassageChance: 0.5,
+        maxHeight: 20,         // Max # levels up
+        narrowPassageChance: 0.33,
         pitDensity: 0.08,
         rampComplexity: 0.7,
     },
@@ -102,7 +102,7 @@ export const DEFAULT_CONFIGS: Record<FloorDifficulty, Omit<ProceduralMapConfig, 
         height: 64,
         minPathLength: 100,
         numPlatforms: 15,     // 15 rooms for boss arena
-        maxHeight: 2,
+        maxHeight: 20,
         narrowPassageChance: 0.1,
         pitDensity: 0.01,
         rampComplexity: 0.2,
@@ -138,6 +138,14 @@ type TileData = {
     skin?: string;
 };
 
+// Room challenge types
+export type RoomChallengeType = "NONE" | "KILL_COUNT";
+
+export type RoomChallenge = {
+    type: RoomChallengeType;
+    killsRequired: number;  // Number of kills needed to unlock exits
+};
+
 // A Room is a platform/arena in the dungeon
 type Room = {
     id: number;
@@ -148,6 +156,7 @@ type Room = {
     level: number;      // Floor level (0, 1, 2...) - actual height = level * BLOCK_HEIGHT
     difficulty: "EASY" | "MEDIUM" | "HARD";
     shape: "RECT" | "CIRCLE" | "IRREGULAR";
+    challenge: RoomChallenge; // Room challenge configuration
 };
 
 // Connection types between rooms
@@ -168,6 +177,23 @@ type PathSegment = {
     toLevel: number;    // Floor level at end
 };
 
+// Exported room data for runtime tracking
+export type RoomData = {
+    id: number;
+    cx: number;         // Center X in tile coords  
+    cy: number;         // Center Y in tile coords
+    width: number;      // Room width in tiles
+    height: number;     // Room height in tiles
+    level: number;      // Floor level
+    challenge: RoomChallenge;
+};
+
+// Result of procedural map generation - includes both map and room metadata
+export type ProceduralMapResult = {
+    mapDef: TableMapDef;
+    rooms: RoomData[];
+};
+
 // ─────────────────────────────────────────────────────────────
 // Floor Skins (cosmetic variety)
 // ─────────────────────────────────────────────────────────────
@@ -176,11 +202,85 @@ const FLOOR_SKINS = ["edges_landscape_28", "edges_landscape_13"];
 const SPAWN_SKIN = "edges_landscape_30";
 
 // ─────────────────────────────────────────────────────────────
+// Room Challenge Generation
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Determine if a room should have a challenge and what kind.
+ * Challenge chance increases with room index (later rooms are harder).
+ */
+function generateRoomChallenge(
+    rng: RNG,
+    roomIndex: number,
+    totalRooms: number,
+    difficulty: FloorDifficulty
+): RoomChallenge {
+    // First room (spawn) and last room (goal) have no challenges
+    if (roomIndex === 0 || roomIndex === totalRooms - 1) {
+        return { type: "NONE", killsRequired: 0 };
+    }
+    
+    // Challenge probability based on difficulty and room position
+    const progressRatio = roomIndex / totalRooms;
+    let challengeChance: number;
+    let baseKills: number;
+    let killsPerProgress: number;
+    
+    switch (difficulty) {
+        case "EASY":
+            challengeChance = 0.15 + progressRatio * 0.1; // 15-25%
+            baseKills = 3;
+            killsPerProgress = 5;
+            break;
+        case "MEDIUM":
+            challengeChance = 0.20 + progressRatio * 0.15; // 20-35%
+            baseKills = 5;
+            killsPerProgress = 8;
+            break;
+        case "HARD":
+            challengeChance = 0.25 + progressRatio * 0.20; // 25-45%
+            baseKills = 8;
+            killsPerProgress = 12;
+            break;
+        case "BOSS":
+            // Boss arenas don't have room challenges
+            return { type: "NONE", killsRequired: 0 };
+        default:
+            challengeChance = 0.2;
+            baseKills = 5;
+            killsPerProgress = 8;
+    }
+    
+    if (rng.next() > challengeChance) {
+        return { type: "NONE", killsRequired: 0 };
+    }
+    
+    // Calculate kills required based on progress through the map
+    const killsRequired = Math.floor(baseKills + progressRatio * killsPerProgress + rng.int(0, 3));
+    
+    return {
+        type: "KILL_COUNT",
+        killsRequired,
+    };
+}
+
+// ─────────────────────────────────────────────────────────────
 // Main Generator
 // ─────────────────────────────────────────────────────────────
-//
+
+/**
+ * Generate a procedural map (backwards compatible - returns just the map def).
+ */
 export function generateProceduralMap(config: ProceduralMapConfig): TableMapDef {
-    const rng = new RNG(42069);
+    const result = generateProceduralMapWithRooms(config);
+    return result.mapDef;
+}
+
+/**
+ * Generate a procedural map with room metadata for runtime challenge tracking.
+ */
+export function generateProceduralMapWithRooms(config: ProceduralMapConfig): ProceduralMapResult {
+    const rng = new RNG(config.seed + config.floorIndex * 7919);
     const { width, height } = config;
     
     // Initialize grid with VOID
@@ -194,6 +294,11 @@ export function generateProceduralMap(config: ProceduralMapConfig): TableMapDef 
     
     // 1. Generate rooms in a linear progression path
     const rooms = generateRoomPath(rng, config);
+    
+    // 1b. Assign challenges to rooms
+    for (let i = 0; i < rooms.length; i++) {
+        rooms[i].challenge = generateRoomChallenge(rng, i, rooms.length, config.difficulty);
+    }
     
     // 2. Carve rooms into grid
     for (const room of rooms) {
@@ -230,7 +335,20 @@ export function generateProceduralMap(config: ProceduralMapConfig): TableMapDef 
     polishMap(grid, rng);
     
     // 8. Convert to TableMapDef format
-    return gridToTableMapDef(grid, config);
+    const mapDef = gridToTableMapDef(grid, config);
+    
+    // 9. Export room data for runtime challenge system
+    const roomData: RoomData[] = rooms.map(r => ({
+        id: r.id,
+        cx: r.cx,
+        cy: r.cy,
+        width: r.width,
+        height: r.height,
+        level: r.level,
+        challenge: r.challenge,
+    }));
+    
+    return { mapDef, rooms: roomData };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -350,6 +468,7 @@ function generateRoomPath(rng: RNG, config: ProceduralMapConfig): Room[] {
                     level: currentLevel,
                     difficulty,
                     shape: rng.pick(["RECT", "RECT", "CIRCLE", "IRREGULAR"]),
+                    challenge: { type: "NONE", killsRequired: 0 }, // Will be assigned later
                 };
                 rooms.push(room);
                 placed = true;
@@ -372,6 +491,7 @@ function generateRoomPath(rng: RNG, config: ProceduralMapConfig): Room[] {
                             level: currentLevel,
                             difficulty,
                             shape: rng.pick(["RECT", "RECT", "CIRCLE", "IRREGULAR"]),
+                            challenge: { type: "NONE", killsRequired: 0 }, // Will be assigned later
                         };
                         rooms.push(room);
                         placed = true;
@@ -975,6 +1095,42 @@ export function generateFloorMap(
     };
     
     return generateProceduralMap(config);
+}
+
+/**
+ * Generate a complete floor map with room data for challenge tracking.
+ * Use this when you need to initialize room challenges in the game.
+ * 
+ * @param seed - Base RNG seed for the run
+ * @param floorIndex - 0-based floor number
+ * @param isBoss - Whether this is a boss arena (smaller, simpler)
+ */
+export function generateFloorMapWithRooms(
+    seed: number,
+    floorIndex: number,
+    isBoss: boolean = false
+): ProceduralMapResult {
+    // Determine difficulty based on floor progression
+    let difficulty: FloorDifficulty;
+    if (isBoss) {
+        difficulty = "BOSS";
+    } else if (floorIndex === 0) {
+        difficulty = "EASY";
+    } else if (floorIndex === 1) {
+        difficulty = "MEDIUM";
+    } else {
+        difficulty = "HARD";
+    }
+    
+    const baseConfig = DEFAULT_CONFIGS[difficulty];
+    
+    const config: ProceduralMapConfig = {
+        ...baseConfig,
+        seed,
+        floorIndex,
+    };
+    
+    return generateProceduralMapWithRooms(config);
 }
 
 /**

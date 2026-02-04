@@ -3,6 +3,7 @@ import { emitEvent } from "../world";
 import { isEnemyInCircle } from "./hitDetection";
 import {spawnZone, ZONE_KIND} from "../factories/zoneFactory";
 import { queryCircle } from "../util/spatialHash";
+import { onEnemyKilledForChallenge } from "./roomChallenge";
 
 export function zonesSystem(w: World, dt: number) {
     const PLAYER_R = w.playerR;
@@ -204,6 +205,7 @@ export function zonesSystem(w: World, dt: number) {
             if (w.eHp[e] <= 0) {
                 w.eAlive[e] = false;
                 w.kills++;
+                onEnemyKilledForChallenge(w);
 
                 emitEvent(w, {
                     type: "ENEMY_KILLED",

@@ -4,6 +4,7 @@ import { emitEvent } from "../world";
 import { isEnemyInCircle } from "./hitDetection";
 import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
 import { queryCircle } from "../util/spatialHash";
+import { onEnemyKilledForChallenge } from "./roomChallenge";
 
 /**
  * Explode-on-kill (poison-gated):
@@ -127,6 +128,7 @@ export function onKillExplodeSystem(w: World, _dt: number) {
             if (w.eHp[e] <= 0) {
                 w.eAlive[e] = false;
                 w.kills++;
+                onEnemyKilledForChallenge(w);
 
                 // Snapshot poison-at-death for chain gating (if you have the array)
                 if (hasPoisonedOnDeath) {

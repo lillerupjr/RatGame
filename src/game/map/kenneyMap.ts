@@ -13,7 +13,7 @@ import {
 } from "./kenneyMapLoader";
 import type { TableMapDef } from "./tableMapTypes";
 import { worldDeltaToScreen } from "../visual/iso";
-import { generateFloorMap } from "./proceduralMap";
+import { generateFloorMap, generateFloorMapWithRooms, type RoomData } from "./proceduralMap";
 
 export type { IsoTileKind, IsoTile } from "./kenneyMapLoader";
 
@@ -31,7 +31,9 @@ export const PLANE_TILE_Z_OFFSET = -1;
  * - Smaller raised diamond platform at h=1 (offset)
  * - A stair "bridge" strip that connects them
  */
-let _compiled: CompiledKenneyMap = compileKenneyMapFromTable(generateFloorMap(Date.now(), 0));
+const initialMap = generateFloorMapWithRooms(Date.now(), 0);
+let _compiled: CompiledKenneyMap = compileKenneyMapFromTable(initialMap.mapDef);
+let _roomData: RoomData[] = initialMap.rooms;
 
 /**
  * Set the active map dynamically (e.g., for procedural generation).
@@ -44,9 +46,20 @@ export function setActiveMap(mapDef: TableMapDef): CompiledKenneyMap {
 
 /**
  * Regenerate and set a new procedural map.
+ * Returns both the compiled map and room data for challenge initialization.
  */
-export function regenerateProceduralMap(): CompiledKenneyMap {
-    return setActiveMap(generateFloorMap(Date.now(), 0));
+export function regenerateProceduralMap(): { compiled: CompiledKenneyMap; rooms: RoomData[] } {
+    const { mapDef, rooms } = generateFloorMapWithRooms(Date.now(), 0);
+    const compiled = setActiveMap(mapDef);
+    _roomData = rooms;
+    return { compiled, rooms };
+}
+
+/**
+ * Get room data for the current map (for initializing room challenges).
+ */
+export function getActiveRoomData(): RoomData[] {
+    return _roomData;
 }
 
 /**

@@ -75,6 +75,30 @@ export type World = {
   mapPendingNextFloorIndex?: number;
 
   // -------------------------
+  // Room Challenges
+  // -------------------------
+  // Room data from procedural map (null if no procedural map loaded)
+  roomData: { 
+    id: number; 
+    cx: number; 
+    cy: number; 
+    width: number; 
+    height: number;
+    level: number;
+    challengeType: string;
+    killsRequired: number;
+  }[] | null;
+  
+  // Current room the player is in (-1 if not in any room)
+  currentRoomId: number;
+  
+  // Challenge state for current room
+  roomChallengeActive: boolean;     // Is a challenge currently active?
+  roomChallengeKillsNeeded: number; // Kills needed to complete challenge
+  roomChallengeKillsCount: number;  // Kills so far in this challenge
+  roomChallengeLocked: boolean;     // Is the room exit locked?
+
+  // -------------------------
   // Player
   // -------------------------
   px: number;
@@ -330,6 +354,14 @@ export function createWorld(args: CreateWorldArgs): World {
       spawnRateMult: 1,
       xpMult: 1,
     },
+
+    // Room Challenges
+    roomData: null,
+    currentRoomId: -1,
+    roomChallengeActive: false,
+    roomChallengeKillsNeeded: 0,
+    roomChallengeKillsCount: 0,
+    roomChallengeLocked: false,
 
     // Player
     px: 0,

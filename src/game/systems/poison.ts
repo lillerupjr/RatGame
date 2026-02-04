@@ -1,5 +1,6 @@
 import type { World } from "../world";
 import { emitEvent } from "../world";
+import { onEnemyKilledForChallenge } from "./roomChallenge";
 
 export function poisonSystem(w: World, dt: number) {
     for (let e = 0; e < w.eAlive.length; e++) {
@@ -30,6 +31,7 @@ export function poisonSystem(w: World, dt: number) {
         if (w.eHp[e] <= 0) {
             w.eAlive[e] = false;
             w.kills++;
+            onEnemyKilledForChallenge(w);
 
             w.ePoisonedOnDeath[e] = (w.ePoisonT[e] > 0);
 
