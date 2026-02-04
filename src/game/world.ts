@@ -109,6 +109,10 @@ export type World = {
 
   pvx: number;
   pvy: number;
+  /** Vertical velocity (for jumping/falling). Positive = upward. */
+  pvz: number;
+  /** Whether the player is currently on the ground (can jump). */
+  isGrounded: boolean;
 
   // Collision radius
   playerR: number;
@@ -369,6 +373,8 @@ export function createWorld(args: CreateWorldArgs): World {
     pz: 0,
     pvx: 0,
     pvy: 0,
+    pvz: 0,
+    isGrounded: true,
     playerR: 18,
 
     activeFloorH: 0,

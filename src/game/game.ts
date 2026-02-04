@@ -1,7 +1,7 @@
 // src/game/game.ts
 import { World, createWorld, clearEvents, emitEvent } from "./world";
 
-import { InputState, createInputState, inputSystem } from "./systems/input";
+import { InputState, createInputState, inputSystem, clearInputEdges } from "./systems/input";
 import { movementSystem } from "./systems/movement";
 import { spawnSystem } from "./systems/spawn";
 import { combatSystem } from "./systems/combat";
@@ -1029,6 +1029,9 @@ export function createGame(args: CreateGameArgs) {
     args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
     args.hud.lvlPill.textContent = `Lv: ${world.level}`;
     updateHud();
+
+    // Clear per-frame edge-triggered inputs (must be at END of update)
+    clearInputEdges(input);
   }
 
   function render() {

@@ -925,18 +925,39 @@ export async function renderSystem(
 
       const pp = toScreen(w.px, w.py);
 
+      // Jump offset: w.pz includes jump height, subtract ground height for visual lift
+      const groundZ = tileHAtWorld(w.px, w.py);
+      const jumpOffset = (w.pz - groundZ) * ELEV_PX;
+
+      // Draw shadow when airborne (gives depth cue)
+      if (jumpOffset > 1) {
+        const shadowR = PLAYER_R * 0.8;
+        // Shadow fades and shrinks with height
+        const t = Math.max(0, Math.min(1, 1 - jumpOffset / 80));
+        const rx = shadowR * ISO_X * (0.8 + 0.2 * t);
+        const ry = shadowR * ISO_Y * (0.7 + 0.2 * t);
+
+        ctx.save();
+        ctx.globalAlpha = 0.25 * t;
+        ctx.fillStyle = "#000";
+        ctx.beginPath();
+        ctx.ellipse(pp.x, pp.y, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
       if (img && img.width > 0 && img.height > 0) {
         const sw = img.width * PLAYER_SPRITE_SCALE;
         const sh = img.height * PLAYER_SPRITE_SCALE;
 
         const x = pp.x - sw * 0.5;
-        const y = pp.y - sh * 0.5 - 32;
+        const y = pp.y - sh * 0.5 - 32 - jumpOffset;
 
         ctx.drawImage(img, x, y, sw, sh);
       } else {
         ctx.fillStyle = "#eaeaf2";
         ctx.beginPath();
-        ctx.ellipse(pp.x, pp.y, PLAYER_R * ISO_X, PLAYER_R * ISO_Y, 0, 0, Math.PI * 2);
+        ctx.ellipse(pp.x, pp.y - jumpOffset, PLAYER_R * ISO_X, PLAYER_R * ISO_Y, 0, 0, Math.PI * 2);
         ctx.fill();
       }
     }

@@ -5,6 +5,16 @@ import {isOccludedAlongSegment, walkInfo} from "../map/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 import { canExitRoom } from "./roomChallenge";
 
+// -------------------------------------------------------
+// Jump / Gravity constants (in world units)
+// -------------------------------------------------------
+/** Gravity acceleration (world units per second²). Positive = downward. */
+const GRAVITY = 800;
+/** Initial upward velocity when jumping. */
+const JUMP_VELOCITY = 350;
+/** Minimum time between jumps to prevent bunny-hopping exploits. */
+const JUMP_COOLDOWN = 0.05;
+
 export function movementSystem(w: World, input: InputState, dt: number) {
   // -------------------------------------------------------
   // Isometric controls (Diablo-style):
@@ -33,11 +43,10 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   // Keep world state synced even if we don't move this frame
   let curInfo = walkInfo(w.px, w.py, KENNEY_TILE_WORLD);
 
-
-// Player Z:
-// - Default: map-provided z (stairs, etc.)
-// - CONVERTER: player-only smooth 0..1 ramp inside the tile toward tile.dir
-  w.pz = curInfo.z;
+  // -------------------------------------------------------
+  // Ground height from map (stairs, converters, etc.)
+  // -------------------------------------------------------
+  let groundZ = curInfo.z;
 
   if ((curInfo.kind as string) === "CONVERTER") {
     const T = KENNEY_TILE_WORLD;
@@ -54,18 +63,50 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     else if (dir === "W") step = 1 - fx;
     else if (dir === "E") step = fx;
 
-// Invert ramp direction and bias by 0.1h
+    // Invert ramp direction and bias by 0.1h
     step = 1 - step + 0.1;
 
-// clamp 0..1
+    // clamp 0..1
     if (step < 0) step = 0;
     else if (step > 1) step = 1;
 
     const baseH = (curInfo.tile.h | 0);
-    w.pz = baseH + step;
-
+    groundZ = baseH + step;
   }
 
+  // -------------------------------------------------------
+  // Jump physics (applies on top of map-driven ground)
+  // -------------------------------------------------------
+  // Initialize jump cooldown tracker
+  const jumpCd = ((w as any)._jumpCooldown ?? 0) as number;
+  (w as any)._jumpCooldown = Math.max(0, jumpCd - dt);
+
+  // Check if grounded: player's feet at or below ground level
+  w.isGrounded = w.pz <= groundZ + 0.01;
+
+  // Handle jump input (edge-triggered via jumpPressed)
+  if (input.jumpPressed && w.isGrounded && (w as any)._jumpCooldown <= 0) {
+    w.pvz = JUMP_VELOCITY;
+    w.isGrounded = false;
+    (w as any)._jumpCooldown = JUMP_COOLDOWN;
+  }
+
+  // Apply gravity when airborne
+  if (!w.isGrounded) {
+    w.pvz -= GRAVITY * dt;
+  }
+
+  // Integrate vertical position
+  const newPz = w.pz + w.pvz * dt;
+
+  // Ground collision: land if we fall below ground
+  if (newPz <= groundZ) {
+    w.pz = groundZ;
+    w.pvz = 0;
+    w.isGrounded = true;
+  } else {
+    w.pz = newPz;
+  }
 
   // Active floor is still an integer concept (used by spawns / filtering).
   // On stairs we track the nearest integer to current z.
@@ -88,6 +129,19 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     const newTx = Math.floor(wx / T);
     const newTy = Math.floor(wy / T);
     if (!canExitRoom(w, newTx, newTy)) return false;
+
+    // When airborne, allow XY movement over different floor heights
+    // (we'll check ground collision when landing)
+    if (!w.isGrounded) {
+      // Still check that destination is walkable, but skip floor checks
+      w.px = wx;
+      w.py = wy;
+      curInfo = nextInfo;
+      // Don't update pz here - it's handled by jump physics
+      w.activeFloorH =
+          nextInfo.kind === "STAIRS" ? (Math.floor(nextInfo.z + 0.5) | 0) : (nextInfo.floorH | 0);
+      return true;
+    }
 
     const stairsInvolved =
         curInfo.kind === "STAIRS" ||
@@ -112,10 +166,9 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     curInfo = nextInfo;
 
     // Update height + active floor
-// Update player Z after commit (same converter rule as above)
+    // Update player Z after commit (same converter rule as above)
+    // Only when grounded - jump physics handles Z when airborne
     w.pz = nextInfo.z;
-
-
 
     w.activeFloorH =
         nextInfo.kind === "STAIRS" ? (Math.floor(nextInfo.z + 0.5) | 0) : (nextInfo.floorH | 0);
