@@ -399,10 +399,49 @@ export async function renderSystem(
 
   // Player depth for occlusion transparency
   const playerDepth = depthKey(w.px, w.py);
-  // Radius (in world units) within which tiles in front of the player fade out
-  const OCCLUSION_FADE_RADIUS = T * 2.5;
-  // Minimum alpha for occluding tiles (so they don't disappear entirely)
-  const OCCLUSION_MIN_ALPHA = 0.25;
+
+  // -------------------------------------------------------
+  // Procedural Occlusion System
+  // Tiles that would visually obstruct the player become transparent
+  // -------------------------------------------------------
+  // Configuration for visibility
+  const OCCLUSION_FADE_RADIUS = T * 3.0;    // How far in front fading begins
+  const OCCLUSION_MIN_ALPHA = 0.18;          // Minimum opacity (never fully invisible)
+  const OCCLUSION_EDGE_GLOW = true;          // Draw subtle edge on transparent tiles
+  const OCCLUSION_HEIGHT_FACTOR = 1.5;       // How much height difference affects fade
+
+  // Calculate occlusion alpha for a tile
+  const calcTileAlpha = (wx: number, wy: number, tileH: number): number => {
+    const tileDepth = depthKey(wx, wy);
+    const depthDiff = tileDepth - playerDepth;
+
+    // Tile is behind player - fully opaque
+    if (depthDiff <= 0) return 1.0;
+
+    // Distance from tile center to player
+    const distToPlayer = Math.sqrt((wx - w.px) ** 2 + (wy - w.py) ** 2);
+
+    // Too far to matter
+    if (distToPlayer >= OCCLUSION_FADE_RADIUS) return 1.0;
+
+    // Get player height (including jump)
+    const playerH = w.pz ?? heightAtWorld(w.px, w.py, T);
+
+    // Only fade tiles at or above player height
+    const heightDiff = tileH - playerH;
+    if (heightDiff < -0.5) return 1.0;
+
+    // Smooth fade based on distance, depth, and height
+    const distFactor = 1 - (distToPlayer / OCCLUSION_FADE_RADIUS);
+    const depthFactor = Math.min(1, depthDiff / (T * 1.5));
+    const heightFactor = Math.min(1, Math.max(0, heightDiff + 1) * OCCLUSION_HEIGHT_FACTOR);
+
+    // Combine factors with smooth curve
+    const rawFade = distFactor * depthFactor * heightFactor;
+    const smoothFade = rawFade * rawFade * (3 - 2 * rawFade); // smoothstep
+
+    return Math.max(OCCLUSION_MIN_ALPHA, 1 - smoothFade * (1 - OCCLUSION_MIN_ALPHA));
+  };
 
   const minTx = cx - radius;
   const maxTx = cx + radius;
@@ -417,6 +456,27 @@ export async function renderSystem(
       groundTile.img &&
       groundTile.img.width > 0 &&
       groundTile.img.height > 0;
+
+  // -------------------------------------------------------
+  // Pass 1: Collect all visible tiles with metadata
+  // -------------------------------------------------------
+  type TileDrawInfo = {
+    tx: number;
+    ty: number;
+    wx: number;
+    wy: number;
+    dx: number;
+    dy: number;
+    iw: number;
+    ih: number;
+    img: HTMLImageElement;
+    h: number;
+    alpha: number;
+    isStairs: boolean;
+    depth: number;
+  };
+
+  const tilesToDraw: TileDrawInfo[] = [];
 
   if (tilesReady) {
     for (let s = minSum; s <= maxSum; s++) {
@@ -503,52 +563,71 @@ export async function renderSystem(
         const h = tdef.kind === "STAIRS" ? (tdef.h ?? 0) : tileHeight(tx, ty);
         const elev = h * ELEV_PX;
 
-        // Draw walk overlay throttled (it will blit a cached image most frames)
-        drawWalkMaskOverlay();
-
         dy -= elev;
 
-        // Occlusion transparency: fade tiles that are in front of the player and could obstruct view
-        // A tile is "in front" if its depth is greater than the player's depth
-        const tileDepth = depthKey(wx, wy);
-        const depthDiff = tileDepth - playerDepth;
+        // Use the new procedural occlusion system
+        const tileAlpha = calcTileAlpha(wx, wy, h);
+        const tileDepth = depthKey(wx, wy) + h * 0.001;
 
-        // Calculate distance from tile center to player in world space
-        const distToPlayer = Math.sqrt((wx - w.px) ** 2 + (wy - w.py) ** 2);
-
-        // Only apply transparency to tiles that are:
-        // 1. In front of the player (higher depth)
-        // 2. Close enough to potentially obstruct the player
-        // 3. At the same height level or higher (could visually block)
-        let tileAlpha = 1.0;
-        if (depthDiff > 0 && distToPlayer < OCCLUSION_FADE_RADIUS) {
-          const playerH = heightAtWorld(w.px, w.py, T);
-          if (h >= playerH) {
-            // Calculate fade based on distance and depth
-            const distFactor = 1 - (distToPlayer / OCCLUSION_FADE_RADIUS);
-            const depthFactor = Math.min(1, depthDiff / T);
-            const fadeFactor = distFactor * depthFactor;
-            tileAlpha = 1 - fadeFactor * (1 - OCCLUSION_MIN_ALPHA);
-          }
-        }
-
-        ctx.globalAlpha = tileAlpha;
-        ctx.drawImage(tileRec.img, dx, dy, iw, ih);
-        ctx.globalAlpha = 1;
-
-        // Collect stair occluders for a second pass (drawn AFTER entities/projectiles)
-        if (useStairs) {
-          const occ = ((w as any)._stairOccluders ??= []);
-          occ.push({
-            img: tileRec.img,
-            dx,
-            dy,
-            iw,
-            ih,
-            alpha: tileAlpha,
-          });
-        }
+        // Add to draw list for multi-pass rendering
+        tilesToDraw.push({
+          tx, ty, wx, wy,
+          dx, dy, iw, ih,
+          img: tileRec.img,
+          h, alpha: tileAlpha,
+          isStairs: useStairs,
+          depth: tileDepth,
+        });
       }
+    }
+  }
+
+  // -------------------------------------------------------
+  // Pass 2: Draw all tiles (sorted by depth, back to front)
+  // -------------------------------------------------------
+  // Tiles are already collected in depth order due to the s-loop
+  // Draw walk overlay first (throttled - it will blit a cached image most frames)
+  drawWalkMaskOverlay();
+
+  for (const tile of tilesToDraw) {
+    ctx.globalAlpha = tile.alpha;
+    ctx.drawImage(tile.img, tile.dx, tile.dy, tile.iw, tile.ih);
+
+    // Draw subtle edge glow on transparent tiles for visibility
+    if (OCCLUSION_EDGE_GLOW && tile.alpha < 0.7) {
+      const edgeAlpha = (0.7 - tile.alpha) * 0.4;
+      ctx.globalAlpha = edgeAlpha;
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1;
+
+      // Draw a diamond outline at the tile's base
+      const baseY = tile.dy + tile.ih - 16; // Approximate base of tile art
+      const halfW = tile.iw * 0.35;
+      const halfH = tile.iw * 0.18;
+      const centerX = tile.dx + tile.iw * 0.5;
+
+      ctx.beginPath();
+      ctx.moveTo(centerX, baseY - halfH);
+      ctx.lineTo(centerX + halfW, baseY);
+      ctx.lineTo(centerX, baseY + halfH);
+      ctx.lineTo(centerX - halfW, baseY);
+      ctx.closePath();
+      ctx.stroke();
+    }
+
+    ctx.globalAlpha = 1;
+
+    // Collect stair occluders for a second pass (drawn AFTER entities/projectiles)
+    if (tile.isStairs) {
+      const occ = ((w as any)._stairOccluders ??= []);
+      occ.push({
+        img: tile.img,
+        dx: tile.dx,
+        dy: tile.dy,
+        iw: tile.iw,
+        ih: tile.ih,
+        alpha: tile.alpha,
+      });
     }
   }
 
