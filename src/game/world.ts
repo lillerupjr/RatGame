@@ -379,7 +379,7 @@ export function createWorld(args: CreateWorldArgs): World {
 
     activeFloorH: 0,
 
-    baseMoveSpeed: 260,
+    baseMoveSpeed: 760,
     basePickupRadius: 90,
 
     pSpeed: 260,
