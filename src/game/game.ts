@@ -127,7 +127,7 @@ export function createGame(args: CreateGameArgs) {
 
   // DEBUG: show logical walk-mask overlay (render.ts)
   (world as any).debugWalkMask = false;
-  (world as any).debugRamps = false;
+  (world as any).debugRamps = true;
 
 
   preloadBackgrounds();
@@ -360,7 +360,7 @@ export function createGame(args: CreateGameArgs) {
 
     // DEBUG: show logical walk-mask overlay (render.ts)
     (world as any).debugWalkMask = false;
-    (world as any).debugRamps = false;
+    (world as any).debugRamps = true;
 
     currentChoices = [];
     hideLevelUp();
