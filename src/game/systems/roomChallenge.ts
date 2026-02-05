@@ -66,6 +66,7 @@ function findCurrentRoom(w: World): number {
  * 3. Update challenge progress (kills are tracked elsewhere)
  * 4. Unlock room when challenge is complete
  */
+/** Track room entry/exit and update challenge state. */
 export function roomChallengeSystem(w: World, dt: number): void {
     // Skip if no room data is loaded
     if (!w.roomData || w.roomData.length === 0) return;
@@ -122,6 +123,7 @@ export function roomChallengeSystem(w: World, dt: number): void {
  * Called when an enemy is killed to update challenge progress.
  * Should be called from places where w.kills++ happens.
  */
+/** Increment challenge kill counts when active. */
 export function onEnemyKilledForChallenge(w: World): void {
     if (w.roomChallengeActive && w.roomChallengeLocked) {
         w.roomChallengeKillsCount++;
@@ -132,6 +134,7 @@ export function onEnemyKilledForChallenge(w: World): void {
  * Check if the player can exit the current room.
  * Used by movement system to block exits during active challenges.
  */
+/** Return true if exiting the current room is allowed. */
 export function canExitRoom(w: World, newTx: number, newTy: number): boolean {
     // If no challenge is active or room isn't locked, allow movement
     if (!w.roomChallengeActive || !w.roomChallengeLocked) return true;
@@ -157,6 +160,7 @@ export function canExitRoom(w: World, newTx: number, newTy: number): boolean {
  * Initialize room data from procedural map generation result.
  * Call this when loading a new procedural map.
  */
+/** Initialize room challenge metadata from map rooms. */
 export function initializeRoomChallenges(
     w: World,
     rooms: { 
@@ -193,6 +197,7 @@ export function initializeRoomChallenges(
 /**
  * Get the current challenge progress for UI display.
  */
+/** Return current challenge progress for UI. */
 export function getChallengeProgress(w: World): { 
     active: boolean; 
     kills: number; 

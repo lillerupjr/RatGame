@@ -7,6 +7,7 @@ import { worldToGrid } from "../coords/grid";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 import { getEnemyWorld, getPlayerWorld, getZoneWorld } from "../coords/worldViews";
 
+/** Update zones, apply periodic damage, and process delayed explosions. */
 export function zonesSystem(w: World, dt: number) {
     const PLAYER_R = w.playerR;
     const T = KENNEY_TILE_WORLD;

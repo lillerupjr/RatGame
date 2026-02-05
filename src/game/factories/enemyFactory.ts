@@ -12,6 +12,7 @@ export type { EnemyType };
  * Factory: creates one enemy with standardized stats (from registry).
  * Applies delve depth scaling to HP and damage, with per-enemy HP weight.
  */
+/** Spawn an enemy at grid coordinates with scaled stats. */
 export function spawnEnemyGrid(
     w: World,
     type: EnemyType,
@@ -55,6 +56,7 @@ export function spawnEnemyGrid(
     return i;
 }
 
+/** Spawn an enemy at world coordinates (converted to grid). */
 export function spawnEnemy(w: World, type: EnemyType, x: number, y: number) {
     const gp = worldToGrid(x, y, KENNEY_TILE_WORLD);
     return spawnEnemyGrid(w, type, gp.gx, gp.gy, KENNEY_TILE_WORLD);

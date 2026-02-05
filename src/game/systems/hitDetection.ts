@@ -20,6 +20,7 @@ import {
  * @param rr - Combined radius (enemy radius + projectile radius)
  * @returns true if the projectile hits the enemy, false otherwise
  */
+/** Return true if a projectile hits an enemy. */
 export function isEnemyHit(
     w: World,
     p: number,
@@ -97,6 +98,7 @@ export function isEnemyHit(
  * @param playerR - Player collision radius
  * @returns true if enemy overlaps player radius, false otherwise
  */
+/** Return true if the player overlaps an enemy. */
 export function isPlayerHit(w: World, e: number, playerR: number): boolean {
   // -----------------------------------------
   // Milestone C: height-aware contact hits
@@ -162,6 +164,7 @@ export function isPlayerProjectileHit(w: World, p: number, playerR: number): boo
 }
 
 
+/** Return true if distance-squared is within radius-squared. */
 export function isCircleHit(dx: number, dy: number, rr: number): boolean {
   return dx * dx + dy * dy <= rr * rr;
 }

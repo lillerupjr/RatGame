@@ -35,6 +35,7 @@ export type SpawnZoneGridArgs = Omit<SpawnZoneArgs, "x" | "y"> & {
     tileWorld?: number;
 };
 
+/** Spawn a zone at world coordinates and initialize its SoA fields. */
 export function spawnZone(w: World, a: SpawnZoneArgs) {
     const i = w.zAlive.length;
 
@@ -64,6 +65,7 @@ export function spawnZone(w: World, a: SpawnZoneArgs) {
     return i;
 }
 
+/** Spawn a zone at grid coordinates. */
 export function spawnZoneGrid(w: World, a: SpawnZoneGridArgs) {
     const tileWorld = a.tileWorld ?? KENNEY_TILE_WORLD;
     const pos = gridToWorld(a.gx, a.gy, tileWorld);

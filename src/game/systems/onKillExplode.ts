@@ -15,6 +15,7 @@ import { getEnemyWorld } from "../coords/worldViews";
  * - Scales with dmgMult (damage) and areaMult (radius)
  * - Allows chains by processing newly-added kill events in the same frame
  */
+/** Apply explode-on-kill effects for poisoned enemies. */
 export function onKillExplodeSystem(w: World, _dt: number) {
     const cfg =
         (w as any)._explodeOnKill as

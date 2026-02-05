@@ -45,6 +45,7 @@ export let PROJECTILE_GROUND_SAMPLE_STEPS = 1;
  *  * - Projectiles must not reference stair tiles; only compare prZ vs enemy vertical hit ranges.
  *  * See: docs/stairs-connectors-master.md)
  */
+/** Update projectile movement, lifetime, and occlusion/hiding. */
 export function projectilesSystem(w: World, dt: number) {
     const moveSpeedMult = w.baseMoveSpeed > 0 ? w.pSpeed / w.baseMoveSpeed : 1;
     const T = KENNEY_TILE_WORLD;

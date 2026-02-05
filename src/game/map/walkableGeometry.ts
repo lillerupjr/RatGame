@@ -23,6 +23,7 @@ export const RAMP_FACES: RampFace[] = [];
 // Helpers
 // ------------------------------------------------------------
 
+/** Return true if a point is inside a convex quad. */
 export function pointInQuad(p: Vec2, q: RampFace["poly"]): boolean {
     // Standard convex quad test via cross products
     function sign(a: Vec2, b: Vec2, c: Vec2) {
@@ -37,6 +38,7 @@ export function pointInQuad(p: Vec2, q: RampFace["poly"]): boolean {
     return b1 === b2 && b2 === b3 && b3 === b4;
 }
 
+/** Return interpolated height at a point on a ramp face. */
 export function rampHeightAt(r: RampFace, p: Vec2): number {
     const dx = p.x - r.poly[0].x;
     const dy = p.y - r.poly[0].y;

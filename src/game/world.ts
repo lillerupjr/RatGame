@@ -342,6 +342,7 @@ function cloneStage(stage: StageDef): StageDef {
   return { ...stage, spawns: stage.spawns.map((s) => ({ ...s })) };
 }
 
+/** Initialize a new World with seeded RNG and stage state. */
 export function createWorld(args: CreateWorldArgs): World {
   const rng = new RNG((args.seed ?? 1337) >>> 0);
 
@@ -581,14 +582,17 @@ function gridFromAnchor(gxi: number, gyi: number, gox: number, goy: number) {
   return { gx: gxi + gox, gy: gyi + goy };
 }
 
+/** Return the player's logical grid position (gx/gy) from anchors. */
 export function gridAtPlayer(w: World) {
   return gridFromAnchor(w.pgxi, w.pgyi, w.pgox, w.pgoy);
 }
 
+/** Clear all queued game events for the frame. */
 export function clearEvents(w: World) {
   w.events.length = 0;
 }
 
+/** Enqueue a game event for downstream systems. */
 export function emitEvent(w: World, ev: GameEvent) {
   w.events.push(ev);
 }

@@ -14,6 +14,7 @@ import { getProjectileWorld } from "../coords/worldViews";
  * NO CAPS, NO LIMITS - true exponential chaos!
  * The only natural limit is TTL/bounces running out.
  */
+/** Handle fission projectile collisions and spawn split projectiles. */
 export function fissionSystem(w: World, dt: number) {
   // Update fission cooldowns
   for (let p = 0; p < w.pAlive.length; p++) {

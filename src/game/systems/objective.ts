@@ -42,6 +42,7 @@ let _objectiveState: ObjectiveState | null = null;
 /**
  * Get the current objective state.
  */
+/** Return the current objective state if active. */
 export function getObjectiveState(): ObjectiveState | null {
     return _objectiveState;
 }
@@ -49,6 +50,7 @@ export function getObjectiveState(): ObjectiveState | null {
 /**
  * Check if the current objective is completed.
  */
+/** Return true if the current objective is completed. */
 export function isObjectiveCompleted(): boolean {
     return _objectiveState?.completed ?? false;
 }
@@ -61,6 +63,7 @@ export function isObjectiveCompleted(): boolean {
  * Initialize a "reach goal" objective from the active procedural map.
  * Call this after generating and activating a procedural map.
  */
+/** Initialize a reach-goal or survive objective for the active map. */
 export function initReachGoalObjective(world: World, timeLimitSeconds: number | null = null): ObjectiveState | null {
     const goal = getGoalWorldFromActive();
     
@@ -107,6 +110,7 @@ export function initReachGoalObjective(world: World, timeLimitSeconds: number | 
 /**
  * Initialize a boss fight objective.
  */
+/** Initialize a boss objective with an optional time limit. */
 export function initBossObjective(timeLimitSeconds: number = 30): ObjectiveState {
     _objectiveState = {
         type: "KILL_BOSS",
@@ -128,6 +132,7 @@ export function initBossObjective(timeLimitSeconds: number = 30): ObjectiveState
 /**
  * Clear the current objective.
  */
+/** Clear the current objective state. */
 export function clearObjective(): void {
     _objectiveState = null;
 }
@@ -140,6 +145,7 @@ export function clearObjective(): void {
  * Update the objective system each frame.
  * Call this in your main game loop.
  */
+/** Update objective progress each frame. */
 export function objectiveSystem(world: World, dt: number): void {
     if (!_objectiveState || _objectiveState.completed) return;
     
@@ -201,6 +207,7 @@ function updateSurviveObjective(world: World): void {
 /**
  * Mark the boss objective as completed (call when boss dies).
  */
+/** Mark the current boss objective as completed. */
 export function completeBossObjective(): void {
     if (_objectiveState && _objectiveState.type === "KILL_BOSS") {
         _objectiveState.completed = true;
@@ -215,6 +222,7 @@ export function completeBossObjective(): void {
 /**
  * Get the direction from player to goal (normalized).
  */
+/** Return normalized direction to the goal if one exists. */
 export function getDirectionToGoal(world: World): { dx: number; dy: number } | null {
     if (!_objectiveState || _objectiveState.type !== "REACH_GOAL") {
         return null;
@@ -232,6 +240,7 @@ export function getDirectionToGoal(world: World): { dx: number; dy: number } | n
 /**
  * Get time remaining (for timed objectives).
  */
+/** Return remaining time for timed objectives. */
 export function getTimeRemaining(): number | null {
     if (!_objectiveState || _objectiveState.timeLimit === null) {
         return null;
@@ -243,6 +252,7 @@ export function getTimeRemaining(): number | null {
 /**
  * Check if player is close to the goal (for UI hints).
  */
+/** Return true if the player is within threshold of the goal. */
 export function isNearGoal(world: World, threshold: number = KENNEY_TILE_WORLD * 3): boolean {
     if (!_objectiveState || _objectiveState.type !== "REACH_GOAL") {
         return false;

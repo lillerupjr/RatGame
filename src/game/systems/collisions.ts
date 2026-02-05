@@ -61,6 +61,7 @@ function spawnFloatText(
  * 
  * Uses spatial hashing for O(n+m) collision detection instead of O(n*m) brute force.
  */
+/** Handle projectile/enemy and player/enemy collision resolution. */
 export function collisionsSystem(w: World, dt: number) {
   const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
   let px = pWorld.wx;

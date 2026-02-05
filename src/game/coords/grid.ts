@@ -7,6 +7,7 @@ export type GridDelta = { dx: number; dy: number };
 export type GridAnchor = { gxi: number; gyi: number; gox: number; goy: number };
 export type GridDir = "N" | "E" | "S" | "W" | "NE" | "NW" | "SE" | "SW";
 
+/** Convert logical grid coordinates to iso tile-space coordinates (continuous). */
 export function gridToTile(gx: number, gy: number): { tx: number; ty: number } {
     return {
         tx: (gx - gy) * 0.5,
@@ -14,6 +15,7 @@ export function gridToTile(gx: number, gy: number): { tx: number; ty: number } {
     };
 }
 
+/** Convert iso tile-space coordinates to logical grid coordinates (continuous). */
 export function tileToGrid(tx: number, ty: number): { gx: number; gy: number } {
     return {
         gx: tx - ty,
@@ -21,6 +23,7 @@ export function tileToGrid(tx: number, ty: number): { gx: number; gy: number } {
     };
 }
 
+/** Convert logical grid coordinates to world-space coordinates using tile size. */
 export function gridToWorld(
     gx: number,
     gy: number,
@@ -33,6 +36,7 @@ export function gridToWorld(
     };
 }
 
+/** Convert world-space coordinates to logical grid coordinates using tile size. */
 export function worldToGrid(
     wx: number,
     wy: number,
@@ -43,6 +47,7 @@ export function worldToGrid(
     return tileToGrid(tx, ty);
 }
 
+/** Map a grid-facing direction to a unit grid delta (N is +gy). */
 export function gridDirDelta(dir: GridDir): GridDelta {
     switch (dir) {
         case "N":

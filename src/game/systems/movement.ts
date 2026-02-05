@@ -38,6 +38,7 @@ function dirFromGrid(dx: number, dy: number): Dir8 {
   return map[idx];
 }
 
+/** Update player/enemy movement, steering, and facing. */
 export function movementSystem(w: World, input: InputState, dt: number) {
   const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
   let px = pWorld.wx;

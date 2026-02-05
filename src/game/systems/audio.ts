@@ -11,6 +11,7 @@ function clamp01(x: number): number {
     return Math.max(0, Math.min(1, x));
 }
 
+/** Play SFX based on queued events and throttles. */
 export function audioSystem(w: World, dt: number) {
     const anyW = w as any;
 

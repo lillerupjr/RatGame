@@ -85,6 +85,7 @@ export type SpawnProjectileGridArgs = Omit<SpawnProjectileArgs, "x" | "y" | "dir
 
 
 
+/** Spawn a projectile from world coordinates and initialize its SoA fields. */
 export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     let dx = a.dirX;
     let dy = a.dirY;
@@ -201,6 +202,7 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     return i;
 }
 
+/** Spawn a projectile from grid coordinates and grid-space direction. */
 export function spawnProjectileGrid(w: World, a: SpawnProjectileGridArgs) {
     const tileWorld = a.tileWorld ?? KENNEY_TILE_WORLD;
     const pos = gridToWorld(a.gx, a.gy, tileWorld);
@@ -209,10 +211,12 @@ export function spawnProjectileGrid(w: World, a: SpawnProjectileGridArgs) {
     return spawnProjectile(w, { ...rest, x: pos.wx, y: pos.wy, dirX: dir.wx, dirY: dir.wy });
 }
 
+/** Spawn a sword projectile using grid-space coordinates. */
 export function spawnSwordProjectileGrid(w: World, args: Omit<SpawnProjectileGridArgs, "kind">) {
     return spawnProjectileGrid(w, { ...args, kind: PRJ_KIND.SWORD });
 }
 
+/** Spawn a knuckles orbital projectile using grid-space coordinates. */
 export function spawnKnucklesOrbitalGrid(
     w: World,
     args: Omit<SpawnProjectileGridArgs, "kind" | "orbital">
@@ -221,10 +225,12 @@ export function spawnKnucklesOrbitalGrid(
 }
 
 
+/** Spawn a sword projectile using world coordinates. */
 export function spawnSwordProjectile(w: World, args: Omit<SpawnProjectileArgs, "kind">) {
     return spawnProjectile(w, { ...args, kind: PRJ_KIND.SWORD });
 }
 
+/** Spawn a knuckles orbital projectile using world coordinates. */
 export function spawnKnucklesOrbital(w: World, args: Omit<SpawnProjectileArgs, "kind" | "orbital">) {
     return spawnProjectile(w, { ...args, kind: PRJ_KIND.KNUCKLES, orbital: true });
 }

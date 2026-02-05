@@ -2,6 +2,7 @@ import { World, emitEvent } from "../world";
 import { registry } from "../content/registry";
 import { findTarget, findClosestTarget, type TargetingStrategy } from "../util/targeting";
 
+/** Handle weapon cooldowns, targeting, and firing events. */
 export function combatSystem(w: World, dt: number) {
   // Default aim (used when no target exists or as fallback)
   let defaultAimX = w.lastAimX;

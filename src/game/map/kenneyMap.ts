@@ -38,6 +38,7 @@ let _compiled: CompiledKenneyMap = compileKenneyMapFromTable(EXCEL_SANCTUARY_01)
 /**
  * Set the active map dynamically (e.g., for procedural generation).
  */
+/** Compile and activate a new map definition. */
 export function setActiveMap(mapDef: TableMapDef): CompiledKenneyMap {
     _compiled = compileKenneyMapFromTable(mapDef);
     _rampCache.clear();
@@ -47,6 +48,7 @@ export function setActiveMap(mapDef: TableMapDef): CompiledKenneyMap {
 /**
  * Regenerate and set a new procedural map.
  */
+/** Generate and activate a new procedural map with a fresh seed. */
 export function regenerateProceduralMap(): CompiledKenneyMap {
     return setActiveMap(generateFloorMap(Date.now(), 0));
 }
@@ -54,14 +56,17 @@ export function regenerateProceduralMap(): CompiledKenneyMap {
 /**
  * Get the current compiled map.
  */
+/** Return the currently active compiled map. */
 export function getActiveMap(): CompiledKenneyMap {
     return _compiled;
 }
 
+/** Fetch a tile by tile-space coordinates. */
 export function getTile(tx: number, ty: number): IsoTile {
     return _compiled.getTile(tx, ty);
 }
 
+/** Fetch a tile by logical grid coordinates. */
 export function getTileAtGrid(gx: number, gy: number, tileWorld: number): IsoTile {
     const { wx, wy } = gridToWorld(gx, gy, tileWorld);
     const { tx, ty } = worldToTile(wx, wy, tileWorld);
@@ -103,6 +108,7 @@ export function isHoleTile(tx: number, ty: number): boolean {
     return getTile(tx, ty).kind === "VOID";
 }
 
+/** Return true if the tile is a stairs tile. */
 export function isStairsTile(tx: number, ty: number): boolean {
     return getTile(tx, ty).kind === "STAIRS";
 }
@@ -114,6 +120,7 @@ export function tileHeight(tx: number, ty: number): number {
     return getTile(tx, ty).h | 0;
 }
 
+/** Return height at a logical grid position. */
 export function heightAtGrid(gx: number, gy: number, tileWorld: number): number {
     const { wx, wy } = gridToWorld(gx, gy, tileWorld);
     return heightAtWorld(wx, wy, tileWorld);
@@ -179,6 +186,7 @@ export function pointInQuad(p: Pt, q: [Pt, Pt, Pt, Pt]): boolean {
  * - high edge is (q3,q2) at z1
  * (i.e. t=0 at midpoint(q0,q1), t=1 at midpoint(q3,q2))
  */
+/** Return interpolated height at a point on a ramp face. */
 export function rampHeightAt(r: RampFace, p: Pt): number {
     const q = r.poly;
     const lowMid = { x: (q[0].x + q[1].x) * 0.5, y: (q[0].y + q[1].y) * 0.5 };
@@ -418,6 +426,7 @@ function _getRampFaces(tileWorld: number): RampFace[] {
 }
 
 // Debug/render helper: expose the authoritative ramp faces (same ones used by heightAtWorld / walkInfo)
+/** Return ramp faces for debugging overlays and queries. */
 export function getRampFacesForDebug(tileWorld: number): RampFace[] {
     return _getRampFaces(tileWorld);
 }
@@ -500,6 +509,7 @@ function localPxForTile(tx: number, ty: number, wx: number, wy: number, tileWorl
     return { lx, ly };
 }
 
+/** Return occlusion-aware height at a world position. */
 export function heightAtWorldOcclusion(wx: number, wy: number, tileWorld: number): number {
     const base = heightAtWorld(wx, wy, tileWorld);
 
@@ -549,6 +559,7 @@ export type VisibilityQuery = {
     occluded: boolean; // true if zAbs is under the ceiling (with eps)
 };
 
+/** Return occlusion result for a world position and absolute Z. */
 export function queryVisibilityAtWorld(
     wx: number,
     wy: number,
@@ -683,6 +694,7 @@ function shapeDims(shape: TileWalkShape): { w: number; h: number } {
     }
 }
 
+/** Return the walkable top-face shape for a tile. */
 export function tileWalkShape(tx: number, ty: number): TileWalkShape {
     const t = getTile(tx, ty);
     switch (t.kind) {
@@ -743,6 +755,7 @@ export type WalkInfo = {
  * - floorH (integer) for gating
  * - z (float) for continuous ramps
  */
+/** Return walkability and height info for a world position. */
 export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
     const { tx, ty, lx, ly } = worldToTileTopLocalPx(wx, wy, tileWorld);
 
@@ -859,6 +872,7 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
 
 }
 
+/** Return walkability info for a logical grid position. */
 export function walkInfoGrid(gx: number, gy: number, tileWorld: number): WalkInfo {
     const { wx, wy } = gridToWorld(gx, gy, tileWorld);
     return walkInfo(wx, wy, tileWorld);
@@ -887,6 +901,7 @@ export type WalkOutlineLocal = {
     pts: Array<{ x: number; y: number }>; // closed by renderer
 };
 
+/** Return the walk-shape outline in tile-local pixel coordinates. */
 export function getWalkOutlineLocalPx(tx: number, ty: number): WalkOutlineLocal {
     const t = getTile(tx, ty);
     const shape = tileWalkShape(tx, ty);

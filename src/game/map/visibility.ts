@@ -56,6 +56,7 @@ export function isUnderOcclusionCeiling(
  * - This is *ceiling-based* occlusion, not “wall” collision.
  * - We sample in world space using distance-adaptive stepping, consistent with projectile sampling.
  */
+/** Return true if any sample along the segment is under occlusion. */
 export function isOccludedAlongSegment(
     ax: number, ay: number, az: number,
     bx: number, by: number, bz: number,

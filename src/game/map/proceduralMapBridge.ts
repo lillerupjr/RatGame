@@ -65,6 +65,7 @@ export function getActiveMapDef(): TableMapDef | null {
  * @param world - Optional world to initialize room challenges (if provided, challenges are enabled)
  * @returns The compiled map
  */
+/** Generate a procedural floor map and set it as active. */
 export function generateAndActivateFloorMap(
     seed: number,
     floorIndex: number,

@@ -16,6 +16,7 @@ import { getPlayerWorld } from "../coords/worldViews";
  * - Spawns must respect tile walk logic (no void, no outside top-face diamond).
  * - Spawns must respect active floor height (avoid unreachable mobs on other platforms).
  */
+/** Handle stage timeline spawns and floor trickle spawns. */
 export function spawnSystem(w: World, dt: number) {
   // Floors only (no spawns during boss/transition)
   if (w.runState !== "FLOOR") return;

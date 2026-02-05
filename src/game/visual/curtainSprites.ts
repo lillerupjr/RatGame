@@ -25,7 +25,7 @@ function load(url: string): LoadedImg {
 const FLOOR_TOP = load(new URL("../../assets/tiles/floor/top/floor_top.png", import.meta.url).href);
 const FLOOR_APRON_S = load(new URL("../../assets/tiles/floor/curtain/floor_apron_diag.png", import.meta.url).href);
 const FLOOR_APRON_DIAG = load(
-    new URL("./../assets/tiles/floor/curtain/floor_apron_s.png", import.meta.url).href
+    new URL("../../assets/tiles/floor/curtain/floor_apron_s.png", import.meta.url).href
 );
 
 const STAIR_TOP_N = load(
@@ -42,10 +42,10 @@ const STAIR_TOP_W = load(
 );
 
 const STAIR_APRON_W = load(
-    new URL("./../assets/tiles/stairs/curtain/stair_apron_w.png", import.meta.url).href
+    new URL("../../assets/tiles/stairs/curtain/stair_apron_w.png", import.meta.url).href
 );
 const STAIR_APRON_S = load(
-    new URL("./../assets/tiles/stairs/curtain/stair_apron_s.png", import.meta.url).href
+    new URL("../../assets/tiles/stairs/curtain/stair_apron_s.png", import.meta.url).href
 );
 
 export function preloadCurtainSprites() {

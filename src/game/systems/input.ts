@@ -9,6 +9,7 @@ export type InputState = {
   jumpPressed: boolean;
 };
 
+/** Create a fresh input state and register key listeners. */
 export function createInputState(): InputState {
   const s: InputState = {
     up: false,
@@ -46,10 +47,12 @@ export function createInputState(): InputState {
  * Clear per-frame edge-triggered inputs.
  * Call this at the END of each frame to reset jumpPressed.
  */
+/** Clear per-frame edge flags. */
 export function clearInputEdges(input: InputState) {
   input.jumpPressed = false;
 }
 
+/** Poll pointer input or aim state (placeholder for now). */
 export function inputSystem(_input: InputState, _canvas: HTMLCanvasElement) {
   // Placeholder for mouse aim later (pistol targeting, UI clicks, etc.)
 }

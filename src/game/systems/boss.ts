@@ -99,6 +99,7 @@ function hazardPuddle(w: World, x: number, y: number, r: number, dmg: number, ti
     });
 }
 
+/** Update boss behaviors and spawn boss-specific hazards. */
 export function bossSystem(w: World, dt: number) {
     if (w.runState !== "BOSS") return;
 

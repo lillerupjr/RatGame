@@ -102,6 +102,7 @@ function parseToken(
     return null;
 }
 
+/** Compile a table-based map definition into a render/query-friendly map. */
 export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
     const defaultFloorSkin = def.defaultFloorSkin;
     const defaultSpawnSkin = def.defaultSpawnSkin;

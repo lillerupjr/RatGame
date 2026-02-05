@@ -80,6 +80,7 @@ export const DEFAULT_MAZE_CONFIGS: Record<FloorDifficulty, Omit<MazeMapConfig, "
     },
 };
 
+/** Build a room graph layout for a maze map. */
 export function createMazeRoomGraph(
     width: number,
     height: number,
@@ -153,6 +154,7 @@ export function createMazeRoomGraph(
     return { rooms, edges };
 }
 
+/** Generate a maze map definition and its room graph. */
 export function generateMazeMapDef(config: MazeMapConfig): { mapDef: TableMapDef; graph: RoomGraph } {
     const rng = mulberry32(config.seed + 0x9e3779b9);
     const graph = createMazeRoomGraph(config.width, config.height, config.seed, config.branchChance);
@@ -405,6 +407,7 @@ export function generateMazeMapDef(config: MazeMapConfig): { mapDef: TableMapDef
     return { mapDef, graph };
 }
 
+/** Generate a maze map definition for a floor seed. */
 export function generateMazeFloorMap(
     seed: number,
     floorIndex: number,

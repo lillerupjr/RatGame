@@ -26,6 +26,7 @@ export type RunMap = {
     edges: MapEdge[];
 };
 
+/** Build the static run map graph used for legacy routing. */
 export function buildStaticRunMap(): RunMap {
     // v0: single mandatory route
     const nodes: MapNode[] = [
@@ -48,10 +49,12 @@ export function buildStaticRunMap(): RunMap {
     };
 }
 
+/** Find a node by id within a run map. */
 export function getNode(g: RunMap, id: string): MapNode | undefined {
     return g.nodes.find((n) => n.id === id);
 }
 
+/** Return nodes reachable from the given node id. */
 export function getReachable(g: RunMap, fromId: string | null): MapNode[] {
     // Start-of-run: reachable nodes are those with no incoming edges
     if (!fromId) {

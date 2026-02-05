@@ -105,6 +105,7 @@ type CreateGameArgs = {
 };
 
 
+/** Create a game instance and return update/render/start handlers. */
 export function createGame(args: CreateGameArgs) {
 
   // ------------------------------------------------------------

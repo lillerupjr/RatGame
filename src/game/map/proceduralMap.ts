@@ -1069,6 +1069,7 @@ function gridToTableMapDef(grid: TileData[][], config: ProceduralMapConfig): Tab
  * @param floorIndex - 0-based floor number
  * @param isBoss - Whether this is a boss arena (smaller, simpler)
  */
+/** Generate a floor map definition for a seed and floor index. */
 export function generateFloorMap(
     seed: number,
     floorIndex: number,
@@ -1105,6 +1106,7 @@ export function generateFloorMap(
  * @param floorIndex - 0-based floor number
  * @param isBoss - Whether this is a boss arena (smaller, simpler)
  */
+/** Generate a floor map definition with room metadata. */
 export function generateFloorMapWithRooms(
     seed: number,
     floorIndex: number,

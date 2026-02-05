@@ -3,6 +3,7 @@ import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 import { onEnemyKilledForChallenge } from "./roomChallenge";
 import { getEnemyWorld } from "../coords/worldViews";
 
+/** Tick poison damage and emit poison hit/kill events. */
 export function poisonSystem(w: World, dt: number) {
     for (let e = 0; e < w.eAlive.length; e++) {
         if (!w.eAlive[e]) continue;

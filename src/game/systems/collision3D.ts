@@ -79,6 +79,7 @@ const DEFAULT_CONFIG: Collision3DConfig = {
  * @param bh Second entity height
  * @returns true if entities collide
  */
+/** Return true if two 3D entities overlap. */
 export function entitiesCollide3D(
     ax: number, ay: number, az: number, ar: number, ah: number,
     bx: number, by: number, bz: number, br: number, bh: number
@@ -104,6 +105,7 @@ export function entitiesCollide3D(
  * Get the separation vector to push entity A out of entity B (XY only).
  * Returns { dx, dy } representing the push direction and magnitude.
  */
+/** Return separation vector to resolve a 3D overlap. */
 export function getSeparation3D(
     ax: number, ay: number, az: number, ar: number, ah: number,
     bx: number, by: number, bz: number, br: number, bh: number
@@ -152,6 +154,7 @@ export function getSeparation3D(
  * Resolve entity movement against the layered 3D map.
  * Handles wall collision, floor/ceiling checks, and stepping.
  */
+/** Resolve collisions between an entity and the map geometry. */
 export function resolveMapCollision3D(
     currentX: number, currentY: number, currentZ: number,
     targetX: number, targetY: number,
@@ -252,6 +255,7 @@ export function resolveMapCollision3D(
  * Check if a projectile at position (px, py, pz) with radius pr hits an enemy.
  * Uses cylinder collision for the enemy and sphere/cylinder for the projectile.
  */
+/** Test whether a projectile hits an entity in 3D. */
 export function projectileHitsEntity3D(
     px: number, py: number, pz: number, pr: number,
     ex: number, ey: number, ez: number, er: number, eh: number
@@ -275,6 +279,7 @@ export function projectileHitsEntity3D(
  * Check if a projectile hits any solid tile in the layered map.
  * Returns true if the projectile should be blocked/destroyed.
  */
+/** Test whether a projectile hits the map in 3D. */
 export function projectileHitsMap3D(
     px: number, py: number, pz: number, pr: number,
     map: LayeredTileMap3D | null = getActiveLayeredMap()
@@ -298,6 +303,7 @@ export function projectileHitsMap3D(
  * Check if an entity is within a 3D zone (cylinder).
  * Zones are typically cylindrical areas with a center (zx, zy, zz), radius zr, and height zh.
  */
+/** Return true if an entity overlaps a 3D zone volume. */
 export function entityInZone3D(
     ex: number, ey: number, ez: number, er: number, eh: number,
     zx: number, zy: number, zz: number, zr: number, zh: number
@@ -323,6 +329,7 @@ export function entityInZone3D(
  * Get all entities within a 3D spherical radius.
  * Returns indices of matching entities from SoA arrays.
  */
+/** Collect entities within a 3D radius. */
 export function getEntitiesInRadius3D(
     centerX: number, centerY: number, centerZ: number,
     radius: number,
@@ -363,6 +370,7 @@ export function getEntitiesInRadius3D(
  * Get all entities within a 3D cylindrical area (XY radius + Z range).
  * More common for game mechanics than spherical.
  */
+/** Collect entities within a 3D cylinder volume. */
 export function getEntitiesInCylinder3D(
     centerX: number, centerY: number,
     zMin: number, zMax: number,
@@ -409,6 +417,7 @@ export function getEntitiesInCylinder3D(
  * Check if two entities are on the same floor level.
  * Used for floor-gated collision (enemies can only hit player on same floor).
  */
+/** Return true if two entities are on the same integer floor. */
 export function onSameFloor(
     az: number, aHeight: number,
     bz: number, bHeight: number,
@@ -424,6 +433,7 @@ export function onSameFloor(
 /**
  * Get the floor level for a Z position.
  */
+/** Convert a Z value to its integer floor level. */
 export function getFloorLevel(z: number): number {
     return Math.floor(z);
 }
@@ -446,6 +456,7 @@ export type RaycastResult3D = {
 /**
  * Cast a ray in 3D space, checking against the map and optionally entities.
  */
+/** Raycast against 3D map geometry and entities. */
 export function raycast3D(
     originX: number, originY: number, originZ: number,
     dirX: number, dirY: number, dirZ: number,
@@ -519,6 +530,7 @@ export function raycast3D(
  * Apply 3D collision resolution to an entity movement.
  * Call this from movement system to handle all collision types.
  */
+/** Apply map collision response and update velocities. */
 export function applyCollision3D(
     world: World,
     entityIndex: number,

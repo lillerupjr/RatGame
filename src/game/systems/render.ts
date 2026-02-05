@@ -51,6 +51,7 @@ import {
   getStairApron,
 } from "../visual/curtainSprites";
 
+/** Render tiles, entities, overlays, and debug layers. */
 export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
   const ww = canvas.clientWidth;
   const hh = canvas.clientHeight;

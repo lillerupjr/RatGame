@@ -10,6 +10,7 @@ import { getPickupWorld, getPlayerWorld } from "../coords/worldViews";
  * - When a BOSS is killed, also spawns a Boss Chest and blocks transition until collected.
  * - Collects XP gems and chests (chest triggers a game.ts popup + reward resolution).
  */
+/** Handle XP/chest spawns from events and pickup collection. */
 export function xpSystem(w: World, _dt: number) {
   // 1) Spawn XP (and boss chest) from kill events
   for (let i = 0; i < w.events.length; i++) {

@@ -9,6 +9,7 @@ export const PICKUP_KIND = {
   CHEST: 2,
 } as const;
 
+/** Update pickup movement (vacuum/magnet) and sync grid anchors. */
 export function pickupsSystem(w: World, dt: number) {
   const syncPickupGrid = (i: number, wx: number, wy: number) => {
     const gp = worldToGrid(wx, wy, KENNEY_TILE_WORLD);
@@ -61,6 +62,7 @@ export function pickupsSystem(w: World, dt: number) {
   }
 }
 
+/** Spawn an XP pickup at world coordinates. */
 export function spawnXp(w: World, x: number, y: number, value: number) {
   const i = w.xAlive.length;
 
@@ -79,6 +81,7 @@ export function spawnXp(w: World, x: number, y: number, value: number) {
   return i;
 }
 
+/** Spawn an XP pickup at grid coordinates. */
 export function spawnXpGrid(
   w: World,
   gx: number,
@@ -90,6 +93,7 @@ export function spawnXpGrid(
   return spawnXp(w, pos.wx, pos.wy, value);
 }
 
+/** Spawn a chest pickup at world coordinates. */
 export function spawnChest(w: World, x: number, y: number, dropId: DropId = "BOSS_CHEST") {
   const i = w.xAlive.length;
 
@@ -108,6 +112,7 @@ export function spawnChest(w: World, x: number, y: number, dropId: DropId = "BOS
   return i;
 }
 
+/** Spawn a chest pickup at grid coordinates. */
 export function spawnChestGrid(
   w: World,
   gx: number,
