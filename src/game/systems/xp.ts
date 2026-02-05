@@ -1,19 +1,8 @@
-import { emitEvent, gridAtPlayer, type World } from "../world";
-import { gridToWorld } from "../coords/grid";
+import { emitEvent, type World } from "../world";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 import { spawnChestGrid, spawnXpGrid, PICKUP_KIND } from "./pickups";
 import { ENEMY_TYPE } from "../factories/enemyFactory";
-
-function playerWorld(w: World, tileWorld: number) {
-  const pg = gridAtPlayer(w);
-  return gridToWorld(pg.gx, pg.gy, tileWorld);
-}
-
-function pickupWorld(w: World, i: number, tileWorld: number) {
-  const gx = w.xgxi[i] + w.xgox[i];
-  const gy = w.xgyi[i] + w.xgoy[i];
-  return gridToWorld(gx, gy, tileWorld);
-}
+import { getPickupWorld, getPlayerWorld } from "../coords/worldViews";
 
 /**
  * XP + drops + leveling.
@@ -47,14 +36,14 @@ export function xpSystem(w: World, _dt: number) {
 
   // 2) Collect pickups
   const pickupR = 18; // physical pickup radius (separate from vacuum radius)
-  const pw = playerWorld(w, KENNEY_TILE_WORLD);
+  const pw = getPlayerWorld(w, KENNEY_TILE_WORLD);
   const px = pw.wx;
   const py = pw.wy;
 
   for (let i = 0; i < w.xAlive.length; i++) {
     if (!w.xAlive[i]) continue;
 
-    const wp = pickupWorld(w, i, KENNEY_TILE_WORLD);
+    const wp = getPickupWorld(w, i, KENNEY_TILE_WORLD);
     const dx = wp.wx - px;
     const dy = wp.wy - py;
     if (dx * dx + dy * dy > pickupR * pickupR) continue;

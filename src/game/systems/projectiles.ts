@@ -1,13 +1,14 @@
 // src/game/systems/projectiles.ts
-import { gridAtPlayer, type World } from "../world";
+import { type World } from "../world";
 import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
 import {heightAtWorld, queryVisibilityAtWorld, WalkInfo, walkInfo} from "../map/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
-import { gridToWorld, worldToGrid } from "../coords/grid";
+import { worldToGrid } from "../coords/grid";
 import {
     isUnderOcclusionCeiling,
     VISIBILITY_BELOW_CEILING_EPS,
 } from "../map/visibility";
+import { getPlayerWorld, getProjectileWorld } from "../coords/worldViews";
 
 // Phase 2: projectile vs stairs collision
 // Tune this to make stairs “thicker/thinner” for projectile blocking.
@@ -26,16 +27,6 @@ export let PROJECTILE_GROUND_SAMPLE_SPAN_FRAC = 0.10; // ~10 samples per tile tr
 export let PROJECTILE_GROUND_SAMPLE_MAX_STEPS = 32;
 export let PROJECTILE_GROUND_SAMPLE_STEPS = 1;
 
-function playerWorld(w: World, tileWorld: number) {
-    const pg = gridAtPlayer(w);
-    return gridToWorld(pg.gx, pg.gy, tileWorld);
-}
-
-function projectileWorld(w: World, i: number, tileWorld: number) {
-    const gx = w.prgxi[i] + w.prgox[i];
-    const gy = w.prgyi[i] + w.prgoy[i];
-    return gridToWorld(gx, gy, tileWorld);
-}
 /**
  * Projectile movement + lifetime cleanup.
  *
@@ -57,7 +48,7 @@ function projectileWorld(w: World, i: number, tileWorld: number) {
 export function projectilesSystem(w: World, dt: number) {
     const moveSpeedMult = w.baseMoveSpeed > 0 ? w.pSpeed / w.baseMoveSpeed : 1;
     const T = KENNEY_TILE_WORLD;
-    const pw = playerWorld(w, T);
+    const pw = getPlayerWorld(w, T);
     const px = pw.wx;
     const py = pw.wy;
     // Phase 1: no stair/projectile coupling
@@ -74,7 +65,7 @@ export function projectilesSystem(w: World, dt: number) {
 
     for (let i = 0; i < w.pAlive.length; i++) {
         if (!w.pAlive[i]) continue;
-        const wp0 = projectileWorld(w, i, T);
+        const wp0 = getProjectileWorld(w, i, T);
         let ox = wp0.wx;
         let oy = wp0.wy;
 

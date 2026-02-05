@@ -5,13 +5,7 @@ import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
 import { queryCircle } from "../util/spatialHash";
 import { onEnemyKilledForChallenge } from "./roomChallenge";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
-import { gridToWorld } from "../coords/grid";
-
-function enemyWorld(w: World, e: number) {
-    const gx = w.egxi[e] + w.egox[e];
-    const gy = w.egyi[e] + w.egoy[e];
-    return gridToWorld(gx, gy, KENNEY_TILE_WORLD);
-}
+import { getEnemyWorld } from "../coords/worldViews";
 
 /**
  * Explode-on-kill (poison-gated):
@@ -122,7 +116,7 @@ export function onKillExplodeSystem(w: World, _dt: number) {
 
             w.eHp[e] -= dmg;
 
-            const ew = enemyWorld(w, e);
+            const ew = getEnemyWorld(w, e, KENNEY_TILE_WORLD);
             emitEvent(w, {
                 type: "ENEMY_HIT",
                 enemyIndex: e,

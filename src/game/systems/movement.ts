@@ -4,20 +4,10 @@ import { getRampFacesForDebug, walkInfo } from "../map/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 import { Dir8 } from "../visual/playerSprites";
 import { gridToWorld, worldToGrid } from "../coords/grid";
+import { getEnemyWorld, getPlayerWorld } from "../coords/worldViews";
 
 type GridPos = { gx: number; gy: number };
 type WorldPos = { wx: number; wy: number };
-
-function playerWorld(w: World, tileWorld: number): WorldPos {
-  const pg = gridAtPlayer(w);
-  return gridToWorld(pg.gx, pg.gy, tileWorld);
-}
-
-function enemyWorld(w: World, i: number, tileWorld: number): WorldPos {
-  const gx = w.egxi[i] + w.egox[i];
-  const gy = w.egyi[i] + w.egoy[i];
-  return gridToWorld(gx, gy, tileWorld);
-}
 
 function gridFromAnchor(gxi: number, gyi: number, gox: number, goy: number): GridPos {
   return { gx: gxi + gox, gy: gyi + goy };
@@ -49,7 +39,7 @@ function dirFromGrid(dx: number, dy: number): Dir8 {
 }
 
 export function movementSystem(w: World, input: InputState, dt: number) {
-  const pWorld = playerWorld(w, KENNEY_TILE_WORLD);
+  const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
   let px = pWorld.wx;
   let py = pWorld.wy;
 
@@ -106,7 +96,7 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     w.pgox = anchor.gox;
     w.pgoy = anchor.goy;
 
-    const pw = playerWorld(w, KENNEY_TILE_WORLD);
+    const pw = getPlayerWorld(w, KENNEY_TILE_WORLD);
     px = pw.wx;
     py = pw.wy;
 
@@ -168,7 +158,7 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   for (let i = 0; i < w.eAlive.length; i++) {
     if (!w.eAlive[i]) continue;
 
-    const eWorld = enemyWorld(w, i, KENNEY_TILE_WORLD);
+    const eWorld = getEnemyWorld(w, i, KENNEY_TILE_WORLD);
     let ex = eWorld.wx;
     let ey = eWorld.wy;
 
@@ -228,7 +218,7 @@ export function movementSystem(w: World, input: InputState, dt: number) {
       w.egox[i] = anchor.gox;
       w.egoy[i] = anchor.goy;
 
-      const ew = enemyWorld(w, i, KENNEY_TILE_WORLD);
+      const ew = getEnemyWorld(w, i, KENNEY_TILE_WORLD);
       ex = ew.wx;
       ey = ew.wy;
       eCur = next;

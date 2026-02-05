@@ -1,15 +1,11 @@
-import { gridAtPlayer, type World } from "../world";
+import { type World } from "../world";
 import { spawnEnemyGrid } from "../factories/enemyFactory";
 import type { EnemyType } from "../factories/enemyFactory";
 import { floorForIndex, pickFloorEnemyType } from "../content/floors";
 import { walkInfo } from "../map/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
-import { gridToWorld, worldToGrid } from "../coords/grid";
-
-function playerWorld(w: World, tileWorld: number) {
-  const pg = gridAtPlayer(w);
-  return gridToWorld(pg.gx, pg.gy, tileWorld);
-}
+import { worldToGrid } from "../coords/grid";
+import { getPlayerWorld } from "../coords/worldViews";
 
 /**
  * Spawning system:
@@ -23,7 +19,7 @@ function playerWorld(w: World, tileWorld: number) {
 export function spawnSystem(w: World, dt: number) {
   // Floors only (no spawns during boss/transition)
   if (w.runState !== "FLOOR") return;
-  const pw = playerWorld(w, KENNEY_TILE_WORLD);
+  const pw = getPlayerWorld(w, KENNEY_TILE_WORLD);
   const px = pw.wx;
   const py = pw.wy;
 
