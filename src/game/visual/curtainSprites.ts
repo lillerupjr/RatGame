@@ -80,12 +80,12 @@ export function getStairTop(dir: "N" | "E" | "S" | "W"): LoadedImg {
 }
 
 export function getStairApron(dir: "N" | "E" | "S" | "W"): { rec: LoadedImg; flipX: boolean } {
-    // "Your/my" screen directions:
-    // N = ~10:30 (back)
-    // E = ~4:30  (front-right)
-    // S = ~6:00  (front)
-    // W = ~9:30  (front-left)
-    //
+    // Screen directions (your convention):
+    // N = top-left of screen (↖)
+    // E = top-right of screen (↗)
+    // S = bottom-right of screen (↘)
+    // W = bottom-left of screen (↙)
+
     // Available sprites:
     // - STAIR_APRON_S (stair_apron_s.png)
     // - STAIR_APRON_W (stair_apron_w.png)

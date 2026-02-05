@@ -3,6 +3,7 @@ import { InputState } from "./input";
 import { worldDeltaToScreen } from "../visual/iso";
 import {getRampFacesForDebug, isOccludedAlongSegment, walkInfo} from "../map/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
+import {Dir8} from "../visual/playerSprites";
 
 export function movementSystem(w: World, input: InputState, dt: number) {
   // -------------------------------------------------------
@@ -37,34 +38,6 @@ export function movementSystem(w: World, input: InputState, dt: number) {
 // - Default: map-provided z (stairs, etc.)
 // - CONVERTER: player-only smooth 0..1 ramp inside the tile toward tile.dir
   w.pz = curInfo.z;
-
-  if ((curInfo.kind as string) === "CONVERTER") {
-    const T = KENNEY_TILE_WORLD;
-
-    // Fractions inside tile (0..1)
-    const fx = (w.px - curInfo.tx * T) / T;
-    const fy = (w.py - curInfo.ty * T) / T;
-
-    const dir = (curInfo.tile.dir ?? "N") as any;
-
-    let step = 0;
-    if (dir === "N") step = 1 - fy;
-    else if (dir === "S") step = fy;
-    else if (dir === "W") step = 1 - fx;
-    else if (dir === "E") step = fx;
-
-// Invert ramp direction and bias by 0.1h
-    step = 1 - step + 0.1;
-
-// clamp 0..1
-    if (step < 0) step = 0;
-    else if (step > 1) step = 1;
-
-    const baseH = (curInfo.tile.h | 0);
-    w.pz = baseH + step;
-
-  }
-
 
   // Active floor is still an integer concept (used by spawns / filtering).
   // On stairs we track the nearest integer to current z.
@@ -105,7 +78,6 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     curInfo = nextInfo;
 
     // Update height + active floor
-// Update player Z after commit (same converter rule as above)
     w.pz = nextInfo.z;
 
 
@@ -260,14 +232,23 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   // -------------------------
   // Player sprite dir + anim (movement-based)
   // -------------------------
-  type Dir8 = "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW";
 
+  // -------------------------
+  // Player sprite dir + anim (movement-based)
+  // -------------------------
+  // Screen-space convention:
+  // N = ↖ (top-left on screen)
   function dirFromVec(dx: number, dy: number): Dir8 {
-    const ang = Math.atan2(dy, dx); // -pi..pi, 0=E
+    // atan2(dy, dx): 0 = →, +pi/2 = ↓, -pi/2 = ↑
+    const ang = Math.atan2(dy, dx);
     const idx = (Math.round(ang / (Math.PI / 4)) + 8) % 8;
-    const map: Dir8[] = ["E", "SE", "S", "SW", "W", "NW", "N", "NE"];
+
+    // idx: 0,45,90,135,180,225,270,315 degrees
+    // map to: →,↘,↓,↙,←,↖,↑,↗  (with N = ↖)
+    const map: Dir8[] = ["SE", "S", "SW", "W", "NW", "N", "NE", "E"];
     return map[idx];
   }
+
 
   const moving = mag > 8;
   if (!moving) {

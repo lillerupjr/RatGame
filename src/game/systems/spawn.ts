@@ -23,7 +23,7 @@ export function spawnSystem(w: World, dt: number) {
     const T = KENNEY_TILE_WORLD;
 
     const isConnectorish = (info: any) =>
-        !!(info as any).isRamp || info.kind === "CONVERTER" || info.kind === "STAIRS";
+        !!(info as any).isRamp || info.kind === "STAIRS";
 
     const keyOf = (tx: number, ty: number) => (tx & 0xffff) | ((ty & 0xffff) << 16);
 

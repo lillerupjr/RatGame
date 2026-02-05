@@ -11,7 +11,6 @@ export type { EnemyType };
  * Applies delve depth scaling to HP and damage, with per-enemy HP weight.
  */
 export function spawnEnemy(w: World, type: EnemyType, x: number, y: number) {
-    return
     const s = registry.enemy(type);
 
     // Apply delve depth scaling

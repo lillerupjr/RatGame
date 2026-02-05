@@ -32,9 +32,9 @@ const WALK_FPS = 10;
 // ─────────────────────────────────────────────────────────────
 // Direction row order (your sheet)
 // rows:
-// 1=W, 2=NW, 3=N, 4=NE, 5=E, 6=SE, 7=S, 8=SW
+// 1=NW, 2=N, 3=NE, 4=E, 5=SE, 6=S, 7=SW, 8=W
 // ─────────────────────────────────────────────────────────────
-const ROW_ORDER = ["W", "NW", "N", "NE", "E", "SE", "S", "SW"] as const;
+const ROW_ORDER = ["NW", "N", "NE", "E", "SE", "S", "SW", "W"] as const;
 type Dir8 = (typeof ROW_ORDER)[number];
 
 // ─────────────────────────────────────────────────────────────
@@ -141,19 +141,21 @@ export function preloadEnemySprites() {
 // ─────────────────────────────────────────────────────────────
 // Direction helpers
 // ─────────────────────────────────────────────────────────────
-function dirLabelFromVector(dx: number, dy: number): Dir8 {
-    const ang = Math.atan2(dy, dx); // 0 = east
-    const a = ang + Math.PI / 2;    // rotate so 0 = north
-    let idx = Math.round((a / (Math.PI * 2)) * 8);
-    idx = ((idx % 8) + 8) % 8;
 
-    const STANDARD: Dir8[] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
-    return STANDARD[idx];
+function dirLabelFromVector(dx: number, dy: number): Dir8 {
+    // Screen-space convention (matches player/movement):
+    // N = ↖ (top-left on screen)
+    const ang = Math.atan2(dy, dx);
+    const idx = (Math.round(ang / (Math.PI / 4)) + 8) % 8;
+    const map: Dir8[] = ["SE", "S", "SW", "W", "NW", "N", "NE", "E"];
+    return map[idx];
 }
 
 function dirRowFromVector(dx: number, dy: number): number {
-    return ROW_ORDER.indexOf(dirLabelFromVector(dx, dy));
+    const i = (ROW_ORDER as readonly string[]).indexOf(dirLabelFromVector(dx, dy));
+    return i >= 0 ? i : 0; // fallback to row 0 (NW) if something unexpected happens
 }
+
 
 // ─────────────────────────────────────────────────────────────
 // Public API

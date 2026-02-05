@@ -155,8 +155,7 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
                 if (visited.has(key(x, y))) continue;
 
                 const dir = t0.dir;
-                if (dir !== "E" && dir !== "S") continue;
-
+                if (dir !== "N" && dir !== "E" && dir !== "S" && dir !== "W") continue;
                 const stack: Array<{ x: number; y: number }> = [{ x, y }];
                 const tiles: IsoTile[] = [];
                 let minH = t0.h | 0;

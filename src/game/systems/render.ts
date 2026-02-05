@@ -991,7 +991,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       if (hasPlayer) {
         ctx.globalAlpha = 1;
 
-        const dir = ((w as any)._plDir ?? "S") as Dir8;
+        const dir = ((w as any)._plDir ?? "N") as Dir8;
         const frame = ((w as any)._plFrame ?? 2) as Frame3;
         const img = playerSpritesReady() ? getPlayerSprite(dir, frame) : null;
 
