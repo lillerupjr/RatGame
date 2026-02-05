@@ -1,5 +1,5 @@
 // src/game/game.ts
-import { World, createWorld, clearEvents, emitEvent, playerWorldPos } from "./world";
+import { World, createWorld, clearEvents, emitEvent, gridAtPlayer } from "./world";
 
 import { InputState, createInputState, inputSystem, clearInputEdges } from "./systems/input";
 import { movementSystem } from "./systems/movement";
@@ -22,7 +22,7 @@ import { formatTimeMMSS } from "./util/time";
 import type { WeaponId } from "./content/weapons";
 import { registry } from "./content/registry";
 import { spawnEnemyGrid, ENEMY_TYPE } from "./factories/enemyFactory";
-import { worldToGrid } from "./coords/grid";
+import { gridToWorld, worldToGrid } from "./coords/grid";
 import { poisonSystem } from "./systems/poison";
 import { fissionSystem } from "./systems/fission";
 import { recomputeDerivedStats } from "./stats/derivedStats";
@@ -117,7 +117,8 @@ export function createGame(args: CreateGameArgs) {
   function applyDebugSpawn(w: World) {
     if (!DEBUG_FORCE_SPAWN) return;
 
-    const pw = playerWorldPos(w, KENNEY_TILE_WORLD);
+    const pg = gridAtPlayer(w);
+    const pw = gridToWorld(pg.gx, pg.gy, KENNEY_TILE_WORLD);
     const px = pw.wx + DEBUG_SPAWN_OFF_X;
     const py = pw.wy + DEBUG_SPAWN_OFF_Y;
     const gp = worldToGrid(px, py, KENNEY_TILE_WORLD);
@@ -362,7 +363,8 @@ export function createGame(args: CreateGameArgs) {
 
     const a = w.rng.range(0, Math.PI * 2);
     const r = 320;
-    const pw = playerWorldPos(w, KENNEY_TILE_WORLD);
+    const pg = gridAtPlayer(w);
+    const pw = gridToWorld(pg.gx, pg.gy, KENNEY_TILE_WORLD);
     const sx = pw.wx + Math.cos(a) * r;
     const sy = pw.wy + Math.sin(a) * r;
     const gp = worldToGrid(sx, sy, KENNEY_TILE_WORLD);

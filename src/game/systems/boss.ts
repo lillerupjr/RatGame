@@ -1,8 +1,10 @@
 // src/game/systems/boss.ts
 
-import { enemyWorldPos, playerWorldPos, type World } from "../world";
+import { gridAtPlayer, type World } from "../world";
+import { gridToWorld } from "../coords/grid";
 import { ENEMY_TYPE } from "../content/enemies";
 import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
+import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
 type BossId = "DOCKS_BOMBARD" | "SEWERS_PUDDLES" | "CHINATOWN_DASH";
 
@@ -17,6 +19,17 @@ type BossCtx = {
     // delayed blasts
     delayed?: Array<{ t: number; x: number; y: number; r: number; dmg: number }>;
 };
+
+function playerWorld(w: World) {
+    const pg = gridAtPlayer(w);
+    return gridToWorld(pg.gx, pg.gy, KENNEY_TILE_WORLD);
+}
+
+function enemyWorld(w: World, i: number) {
+    const gx = w.egxi[i] + w.egox[i];
+    const gy = w.egyi[i] + w.egoy[i];
+    return gridToWorld(gx, gy, KENNEY_TILE_WORLD);
+}
 
 function findBossIndex(w: World): number {
     for (let i = 0; i < w.eAlive.length; i++) {
@@ -106,7 +119,7 @@ export function bossSystem(w: World, dt: number) {
 
     const ctx = ensureCtx(w);
     ctx.t += dt;
-    const pw = playerWorldPos(w);
+    const pw = playerWorld(w);
     const px = pw.wx;
     const py = pw.wy;
 
@@ -192,7 +205,7 @@ export function bossSystem(w: World, dt: number) {
         if (ctx.dashPhase === "TELEGRAPH") {
             ctx.dashT = Math.max(0, (ctx.dashT ?? 0) - dt);
 
-            const ew = enemyWorldPos(w, boss);
+            const ew = enemyWorld(w, boss);
             const dx = px - ew.wx;
             const dy = py - ew.wy;
             const len = Math.hypot(dx, dy) || 1;

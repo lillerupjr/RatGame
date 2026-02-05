@@ -1,6 +1,13 @@
-import { emitEvent, enemyWorldPos, type World } from "../world";
+import { emitEvent, type World } from "../world";
+import { gridToWorld } from "../coords/grid";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 import { onEnemyKilledForChallenge } from "./roomChallenge";
+
+function enemyWorld(w: World, e: number) {
+    const gx = w.egxi[e] + w.egox[e];
+    const gy = w.egyi[e] + w.egoy[e];
+    return gridToWorld(gx, gy, KENNEY_TILE_WORLD);
+}
 
 export function poisonSystem(w: World, dt: number) {
     for (let e = 0; e < w.eAlive.length; e++) {
@@ -18,7 +25,7 @@ export function poisonSystem(w: World, dt: number) {
 
         w.eHp[e] -= dmg;
 
-        const ew = enemyWorldPos(w, e, KENNEY_TILE_WORLD);
+        const ew = enemyWorld(w, e);
 
         emitEvent(w, {
             type: "ENEMY_HIT",

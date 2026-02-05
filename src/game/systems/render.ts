@@ -1,13 +1,5 @@
 // src/game/systems/render.ts
-import type { World } from "../world";
-import {
-  enemyWorldPos,
-  gridAtPlayer,
-  pickupWorldPos,
-  playerWorldPos,
-  projectileWorldPos,
-  zoneWorldPos,
-} from "../world";
+import { gridAtPlayer, type World } from "../world";
 import { registry } from "../content/registry";
 import { ZONE_KIND } from "../factories/zoneFactory";
 import { getBossAccent, getFloorVisual } from "../content/floors";
@@ -43,6 +35,7 @@ import {
 import { worldToScreen, ISO_X, ISO_Y, depthKey } from "../visual/iso";
 
 import { getKenneyGroundTile, KENNEY_TILE_WORLD, KENNEY_TILE_ANCHOR_Y } from "../visual/kenneyTiles";
+import { gridToWorld } from "../coords/grid";
 
 import {
   preloadCurtainSprites,
@@ -51,6 +44,35 @@ import {
   getStairTop,
   getStairApron,
 } from "../visual/curtainSprites";
+
+function playerWorld(w: World, tileWorld: number) {
+  const pg = gridAtPlayer(w);
+  return gridToWorld(pg.gx, pg.gy, tileWorld);
+}
+
+function enemyWorld(w: World, i: number, tileWorld: number) {
+  const gx = w.egxi[i] + w.egox[i];
+  const gy = w.egyi[i] + w.egoy[i];
+  return gridToWorld(gx, gy, tileWorld);
+}
+
+function projectileWorld(w: World, i: number, tileWorld: number) {
+  const gx = w.prgxi[i] + w.prgox[i];
+  const gy = w.prgyi[i] + w.prgoy[i];
+  return gridToWorld(gx, gy, tileWorld);
+}
+
+function pickupWorld(w: World, i: number, tileWorld: number) {
+  const gx = w.xgxi[i] + w.xgox[i];
+  const gy = w.xgyi[i] + w.xgoy[i];
+  return gridToWorld(gx, gy, tileWorld);
+}
+
+function zoneWorld(w: World, i: number, tileWorld: number) {
+  const gx = w.zgxi[i] + w.zgox[i];
+  const gy = w.zgyi[i] + w.zgoy[i];
+  return gridToWorld(gx, gy, tileWorld);
+}
 
 export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
   const ww = canvas.clientWidth;
@@ -62,7 +84,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   ctx.clearRect(0, 0, ww, hh);
 
-  const pWorld = playerWorldPos(w, KENNEY_TILE_WORLD);
+  const pWorld = playerWorld(w, KENNEY_TILE_WORLD);
   const px = pWorld.wx;
   const py = pWorld.wy;
 
@@ -467,7 +489,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const ez = (w as any).ez as number[] | undefined;
     for (let i = 0; i < w.eAlive.length; i++) {
       if (!w.eAlive[i]) continue;
-      const ew = enemyWorldPos(w, i, KENNEY_TILE_WORLD);
+      const ew = enemyWorld(w, i, KENNEY_TILE_WORLD);
       const zAbs = ez?.[i] ?? tileHAtWorld(ew.wx, ew.wy);
       const h = entityLayerAt(ew.wx, ew.wy, zAbs);
       minLayer = Math.min(minLayer, h);
@@ -476,7 +498,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
     for (let i = 0; i < w.pAlive.length; i++) {
       if (!w.pAlive[i]) continue;
-      const pp = projectileWorldPos(w, i, KENNEY_TILE_WORLD);
+      const pp = projectileWorld(w, i, KENNEY_TILE_WORLD);
       const baseH = tileHAtWorld(pp.wx, pp.wy);
       const zAbs = (w.prZ?.[i] ?? baseH) || 0;
       const h = entityLayerAt(pp.wx, pp.wy, zAbs);
@@ -522,7 +544,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   for (let i = 0; i < w.zAlive.length; i++) {
     if (!w.zAlive[i]) continue;
 
-    const zp0 = zoneWorldPos(w, i, KENNEY_TILE_WORLD);
+    const zp0 = zoneWorld(w, i, KENNEY_TILE_WORLD);
     const zx0 = zp0.wx;
     const zy0 = zp0.wy;
 
@@ -548,7 +570,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // Pickups
   for (let i = 0; i < w.xAlive.length; i++) {
     if (!w.xAlive[i]) continue;
-    const xp = pickupWorldPos(w, i, KENNEY_TILE_WORLD);
+    const xp = pickupWorld(w, i, KENNEY_TILE_WORLD);
     const zAbs = tileHAtWorld(xp.wx, xp.wy);
     const h = entityLayerAt(xp.wx, xp.wy, zAbs);
     addItem(itemsByLayer, h, { kind: "pickup", i, depth: depthKey(xp.wx, xp.wy) });
@@ -562,7 +584,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     if (!w.pAlive[i]) continue;
     if (w.prHidden?.[i]) continue;
 
-    const pp = projectileWorldPos(w, i, KENNEY_TILE_WORLD);
+    const pp = projectileWorld(w, i, KENNEY_TILE_WORLD);
     const baseH = tileHAtWorld(pp.wx, pp.wy);
     const pzAbs = (w.prZ?.[i] ?? baseH) || 0;
 
@@ -581,7 +603,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   for (let i = 0; i < w.eAlive.length; i++) {
     if (!w.eAlive[i]) continue;
 
-    const ew = enemyWorldPos(w, i, KENNEY_TILE_WORLD);
+    const ew = enemyWorld(w, i, KENNEY_TILE_WORLD);
     const zAbs = ez?.[i] ?? tileHAtWorld(ew.wx, ew.wy);
     addItem(itemsByLayer, entityLayerAt(ew.wx, ew.wy, zAbs), {
       kind: "enemy",
@@ -815,7 +837,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       // Pickups
       for (const it of pickups) {
         const i = it.i;
-        const xp = pickupWorldPos(w, i, KENNEY_TILE_WORLD);
+        const xp = pickupWorld(w, i, KENNEY_TILE_WORLD);
         const p = toScreen(xp.wx, xp.wy);
         const kind = w.xKind?.[i] ?? 1; // 1=XP, 2=CHEST
 
@@ -846,7 +868,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       // Enemies
       for (const it of enemies) {
         const i = it.i;
-        const ew = enemyWorldPos(w, i, KENNEY_TILE_WORLD);
+        const ew = enemyWorld(w, i, KENNEY_TILE_WORLD);
         const p = toScreen(ew.wx, ew.wy);
 
         const def = registry.enemy(w.eType[i] as any);
@@ -928,7 +950,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       for (const it of projectiles) {
         const i = it.i;
 
-        const pp = projectileWorldPos(w, i, KENNEY_TILE_WORLD);
+        const pp = projectileWorld(w, i, KENNEY_TILE_WORLD);
         const p = toScreen(pp.wx, pp.wy);
         const spr = getProjectileSpriteByKind(w.prjKind[i]);
 

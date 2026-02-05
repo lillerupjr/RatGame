@@ -1,9 +1,8 @@
 // src/game/systems/fission.ts
 
 import type { World } from "../world";
-import { projectileWorldPos } from "../world";
 import { spawnProjectileGrid, PRJ_KIND } from "../factories/projectileFactory";
-import { worldToGrid } from "../coords/grid";
+import { gridToWorld, worldToGrid } from "../coords/grid";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
 /**
@@ -54,7 +53,7 @@ export function fissionSystem(w: World, dt: number) {
   for (let i = 0; i < fissionProjectiles.length; i++) {
     const p1 = fissionProjectiles[i];
     
-    const p1w = projectileWorldPos(w, p1);
+    const p1w = projectileWorld(w, p1, KENNEY_TILE_WORLD);
     const x1 = p1w.wx;
     const y1 = p1w.wy;
     const r1 = w.prR[p1];
@@ -68,7 +67,7 @@ export function fissionSystem(w: World, dt: number) {
       const pairKey = `${Math.min(p1, p2)}_${Math.max(p1, p2)}`;
       if (collidedPairs.has(pairKey)) continue;
 
-      const p2w = projectileWorldPos(w, p2);
+      const p2w = projectileWorld(w, p2, KENNEY_TILE_WORLD);
       const x2 = p2w.wx;
       const y2 = p2w.wy;
       const r2 = w.prR[p2];
@@ -155,4 +154,10 @@ export function fissionSystem(w: World, dt: number) {
       fissionCount++;
     }
   }
+}
+
+function projectileWorld(w: World, i: number, tileWorld: number) {
+  const gx = w.prgxi[i] + w.prgox[i];
+  const gy = w.prgyi[i] + w.prgoy[i];
+  return gridToWorld(gx, gy, tileWorld);
 }

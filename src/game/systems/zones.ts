@@ -1,15 +1,32 @@
-import { emitEvent, enemyWorldPos, playerWorldPos, type World, zoneWorldPos } from "../world";
+import { emitEvent, gridAtPlayer, type World } from "../world";
 import { isEnemyInCircle } from "./hitDetection";
 import {spawnZone, ZONE_KIND} from "../factories/zoneFactory";
 import { queryCircle } from "../util/spatialHash";
 import { onEnemyKilledForChallenge } from "./roomChallenge";
-import { worldToGrid } from "../coords/grid";
+import { gridToWorld, worldToGrid } from "../coords/grid";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
+
+function playerWorld(w: World, tileWorld: number) {
+    const pg = gridAtPlayer(w);
+    return gridToWorld(pg.gx, pg.gy, tileWorld);
+}
+
+function enemyWorld(w: World, e: number, tileWorld: number) {
+    const gx = w.egxi[e] + w.egox[e];
+    const gy = w.egyi[e] + w.egoy[e];
+    return gridToWorld(gx, gy, tileWorld);
+}
+
+function zoneWorld(w: World, i: number, tileWorld: number) {
+    const gx = w.zgxi[i] + w.zgox[i];
+    const gy = w.zgyi[i] + w.zgoy[i];
+    return gridToWorld(gx, gy, tileWorld);
+}
 
 export function zonesSystem(w: World, dt: number) {
     const PLAYER_R = w.playerR;
     const T = KENNEY_TILE_WORLD;
-    const pw = playerWorldPos(w, T);
+    const pw = playerWorld(w, T);
     const px = pw.wx;
     const py = pw.wy;
 
@@ -151,7 +168,7 @@ export function zonesSystem(w: World, dt: number) {
         const every = Math.max(0.02, w.zTickEvery[z]);
         while (w.zTickLeft[z] <= 0) w.zTickLeft[z] += every;
 
-        const zp = zoneWorldPos(w, z, T);
+        const zp = zoneWorld(w, z, T);
         const zx = zp.wx;
         const zy = zp.wy;
         const zr = w.zR[z];
@@ -207,7 +224,7 @@ export function zonesSystem(w: World, dt: number) {
 
             w.eHp[e] -= dmg;
 
-            const ew = enemyWorldPos(w, e, T);
+            const ew = enemyWorld(w, e, T);
             emitEvent(w, {
                 type: "ENEMY_HIT",
                 enemyIndex: e,

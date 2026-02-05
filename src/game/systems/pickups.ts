@@ -1,4 +1,4 @@
-import { World, pickupWorldPos, playerWorldPos } from "../world";
+import { World, gridAtPlayer } from "../world";
 import type { DropId } from "../content/drops";
 import { gridToWorld, worldToGrid } from "../coords/grid";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
@@ -7,6 +7,17 @@ export const PICKUP_KIND = {
   XP: 1,
   CHEST: 2,
 } as const;
+
+function playerWorld(w: World, tileWorld: number) {
+  const pg = gridAtPlayer(w);
+  return gridToWorld(pg.gx, pg.gy, tileWorld);
+}
+
+function pickupWorld(w: World, i: number, tileWorld: number) {
+  const gx = w.xgxi[i] + w.xgox[i];
+  const gy = w.xgyi[i] + w.xgoy[i];
+  return gridToWorld(gx, gy, tileWorld);
+}
 
 export function pickupsSystem(w: World, dt: number) {
   const syncPickupGrid = (i: number, wx: number, wy: number) => {
@@ -30,14 +41,14 @@ export function pickupsSystem(w: World, dt: number) {
 
   // Pickups drift toward player when close (classic vacuum feel)
   // OR when magnet is active (pulls ALL XP from anywhere)
-  const pw = playerWorldPos(w, KENNEY_TILE_WORLD);
+  const pw = playerWorld(w, KENNEY_TILE_WORLD);
   const px = pw.wx;
   const py = pw.wy;
 
   for (let i = 0; i < w.xAlive.length; i++) {
     if (!w.xAlive[i]) continue;
 
-    const wp = pickupWorldPos(w, i, KENNEY_TILE_WORLD);
+    const wp = pickupWorld(w, i, KENNEY_TILE_WORLD);
     let wx = wp.wx;
     let wy = wp.wy;
     const dx = px - wx;

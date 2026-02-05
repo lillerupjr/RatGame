@@ -1,5 +1,5 @@
 // src/game/systems/collisions.ts
-import { World, emitEvent, enemyWorldPos, playerWorldPos, projectileWorldPos } from "../world";
+import { World, emitEvent, gridAtPlayer } from "../world";
 import {isEnemyHit, isPlayerHit, isPlayerProjectileHit} from "./hitDetection";
 import { walkInfo } from "../map/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
@@ -8,7 +8,7 @@ import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
 import { clearSpatialHash, insertEntity, queryCircle } from "../util/spatialHash";
 import type { ProjectileSource } from "../factories/projectileFactory";
 import { onEnemyKilledForChallenge } from "./roomChallenge";
-import { worldToGrid } from "../coords/grid";
+import { gridToWorld, worldToGrid } from "../coords/grid";
 
 // Weapon type -> damage text color mapping
 const WEAPON_COLORS: Record<ProjectileSource, string> = {
@@ -20,6 +20,23 @@ const WEAPON_COLORS: Record<ProjectileSource, string> = {
   BOUNCER: "#ffdcdc",  // pink
   OTHER: "#cccccc",    // gray
 };
+
+function playerWorld(w: World, tileWorld: number) {
+  const pg = gridAtPlayer(w);
+  return gridToWorld(pg.gx, pg.gy, tileWorld);
+}
+
+function enemyWorld(w: World, i: number, tileWorld: number) {
+  const gx = w.egxi[i] + w.egox[i];
+  const gy = w.egyi[i] + w.egoy[i];
+  return gridToWorld(gx, gy, tileWorld);
+}
+
+function projectileWorld(w: World, i: number, tileWorld: number) {
+  const gx = w.prgxi[i] + w.prgox[i];
+  const gy = w.prgyi[i] + w.prgoy[i];
+  return gridToWorld(gx, gy, tileWorld);
+}
 
 /**
  * Spawn floating combat text at position (x, y).
@@ -57,7 +74,7 @@ function spawnFloatText(
  * Uses spatial hashing for O(n+m) collision detection instead of O(n*m) brute force.
  */
 export function collisionsSystem(w: World, dt: number) {
-  const pWorld = playerWorldPos(w, KENNEY_TILE_WORLD);
+  const pWorld = playerWorld(w, KENNEY_TILE_WORLD);
   let px = pWorld.wx;
   let py = pWorld.wy;
 
@@ -69,7 +86,7 @@ export function collisionsSystem(w: World, dt: number) {
     w.pgyi = gyi;
     w.pgox = gp.gx - gxi;
     w.pgoy = gp.gy - gyi;
-    const wp = playerWorldPos(w, KENNEY_TILE_WORLD);
+    const wp = playerWorld(w, KENNEY_TILE_WORLD);
     px = wp.wx;
     py = wp.wy;
   };
@@ -139,7 +156,7 @@ export function collisionsSystem(w: World, dt: number) {
   
   for (let e = 0; e < w.eAlive.length; e++) {
     if (!w.eAlive[e]) continue;
-    const ew = enemyWorldPos(w, e, KENNEY_TILE_WORLD);
+    const ew = enemyWorld(w, e, KENNEY_TILE_WORLD);
     insertEntity(hash, e, ew.wx, ew.wy, w.eR[e]);
   }
 
@@ -153,7 +170,7 @@ export function collisionsSystem(w: World, dt: number) {
     if (w.prNoCollide[p]) continue;
 
 
-    const pp = projectileWorldPos(w, p, KENNEY_TILE_WORLD);
+    const pp = projectileWorld(w, p, KENNEY_TILE_WORLD);
     const px = pp.wx;
     const py = pp.wy;
     const pr = w.prR[p];
@@ -181,7 +198,7 @@ export function collisionsSystem(w: World, dt: number) {
       // Double-check alive (enemy may have died from another projectile this frame)
       if (!w.eAlive[e]) continue;
 
-      const ew = enemyWorldPos(w, e, KENNEY_TILE_WORLD);
+      const ew = enemyWorld(w, e, KENNEY_TILE_WORLD);
       const dx = ew.wx - px;
       const dy = ew.wy - py;
       const rr = w.eR[e] + pr;
@@ -446,7 +463,7 @@ export function collisionsSystem(w: World, dt: number) {
       const e = nearbyToPlayer[i];
       if (!w.eAlive[e]) continue;
 
-      const ew = enemyWorldPos(w, e, KENNEY_TILE_WORLD);
+      const ew = enemyWorld(w, e, KENNEY_TILE_WORLD);
       const dx = ew.wx - px;
       const dy = ew.wy - py;
       const rr = w.eR[e] + PLAYER_R;

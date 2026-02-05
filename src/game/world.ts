@@ -6,7 +6,7 @@ import type { GameEvent } from "./events";
 import { KENNEY_TILE_WORLD } from "./visual/kenneyTiles";
 import { getSpawnWorld } from "./map/kenneyMap";
 import { recomputeDerivedStats } from "./stats/derivedStats";
-import { gridToWorld, worldToGrid } from "./coords/grid";
+import { worldToGrid } from "./coords/grid";
 
 import type { WeaponId } from "./content/weapons";
 
@@ -584,36 +584,6 @@ function gridFromAnchor(gxi: number, gyi: number, gox: number, goy: number) {
 export function gridAtPlayer(w: World) {
   return gridFromAnchor(w.pgxi, w.pgyi, w.pgox, w.pgoy);
 }
-
-export function playerWorldPos(w: World, tileWorld = KENNEY_TILE_WORLD) {
-  const { gx, gy } = gridAtPlayer(w);
-  return gridToWorld(gx, gy, tileWorld);
-}
-
-export function enemyWorldPos(w: World, i: number, tileWorld = KENNEY_TILE_WORLD) {
-  const gx = w.egxi[i] + w.egox[i];
-  const gy = w.egyi[i] + w.egoy[i];
-  return gridToWorld(gx, gy, tileWorld);
-}
-
-export function projectileWorldPos(w: World, i: number, tileWorld = KENNEY_TILE_WORLD) {
-  const gx = w.prgxi[i] + w.prgox[i];
-  const gy = w.prgyi[i] + w.prgoy[i];
-  return gridToWorld(gx, gy, tileWorld);
-}
-
-export function pickupWorldPos(w: World, i: number, tileWorld = KENNEY_TILE_WORLD) {
-  const gx = w.xgxi[i] + w.xgox[i];
-  const gy = w.xgyi[i] + w.xgoy[i];
-  return gridToWorld(gx, gy, tileWorld);
-}
-
-export function zoneWorldPos(w: World, i: number, tileWorld = KENNEY_TILE_WORLD) {
-  const gx = w.zgxi[i] + w.zgox[i];
-  const gy = w.zgyi[i] + w.zgoy[i];
-  return gridToWorld(gx, gy, tileWorld);
-}
-
 
 export function clearEvents(w: World) {
   w.events.length = 0;
