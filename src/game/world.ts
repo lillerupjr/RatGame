@@ -5,6 +5,7 @@ import type { StageDef } from "./content/stages";
 import type { GameEvent } from "./events";
 import { KENNEY_TILE_WORLD } from "./visual/kenneyTiles";
 import { getSpawnWorld } from "./map/kenneyMap";
+import { recomputeDerivedStats } from "./stats/derivedStats";
 
 import type { WeaponId } from "./content/weapons";
 
@@ -540,6 +541,8 @@ export function createWorld(args: CreateWorldArgs): World {
     w.pz = sp.z;
     w.activeFloorH = sp.h | 0;
   }
+
+  recomputeDerivedStats(w);
 
   return w;
 }

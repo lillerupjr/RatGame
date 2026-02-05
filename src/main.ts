@@ -1,6 +1,8 @@
 // src/main.ts
 import { createGame } from "./game/game";
 import { WEAPONS, type WeaponId } from "./game/content/weapons";
+import type { TableMapDef } from "./game/map/tableMapTypes";
+import * as MapDefs from "./game/map/maps";
 
 // Load background image using Vite's import.meta.glob
 const backgroundAssets = import.meta.glob("./assets/backgrounds/*.png", {
@@ -122,12 +124,28 @@ type MapChoice = {
   desc: string;
 };
 
-const mapChoices: MapChoice[] = [
-  { id: "EXCEL_SANCTUARY_01", label: "Excel Sanctuary 01", desc: "Hand-built starter map." },
-  { id: "EXCEL_SANCTUARY_02", label: "Excel Sanctuary 02", desc: "Large rotated layout." },
+function toTitleCase(value: string): string {
+  return value
+    .toLowerCase()
+    .split("_")
+    .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : part))
+    .join(" ");
+}
+
+const staticMapChoices: MapChoice[] = Object.values(MapDefs)
+  .filter((def): def is TableMapDef => typeof def === "object" && def !== null && "id" in def)
+  .map((def) => ({
+    id: def.id,
+    label: toTitleCase(def.id),
+    desc: `Static map (${def.w}x${def.h}).`,
+  }));
+
+const proceduralChoices: MapChoice[] = [
   { id: "PROC_ROOMS", label: "Procedural Rooms", desc: "Generated room chain with ramps." },
   { id: "PROC_MAZE", label: "Procedural Maze", desc: "Generated maze layout." },
 ];
+
+const mapChoices: MapChoice[] = [...proceduralChoices, ...staticMapChoices];
 
 let selectedMapId = startBtn.dataset.map || mapChoices[0]?.id;
 
@@ -152,9 +170,9 @@ function setSelectedWeapon(id: WeaponId) {
     b.setAttribute("aria-pressed", wid === selectedWeapon ? "true" : "false");
   });
 
-  const title = WEAPONS[id]?.title ?? id;
-  menuSublineEl.textContent = `Slice v0.5 — 3 floors (20 sec → boss). Starter weapon: ${title}.`;
+  updateMenuSubline();
 }
+
 
 /**
  * Keep switch order aligned with WeaponId order:
@@ -240,12 +258,6 @@ function buildWeaponPicker() {
 }
 
 buildWeaponPicker();
-
-weaponChoicesEl.addEventListener("click", (e) => {
-  const target = e.target as HTMLElement | null;
-  if (!target?.closest("button[data-weapon]")) return;
-  updateMenuSubline();
-});
 
 function setSelectedMap(id: string) {
   selectedMapId = id;

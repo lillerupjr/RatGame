@@ -46,7 +46,8 @@ import { preloadPlayerSprites } from "./visual/playerSprites";
 import { preloadBackgrounds } from "./visual/background";
 import { getProjectileSpriteByKind, preloadProjectileSprites } from "./visual/projectileSprites";
 import { setMusicStage, stopMusic } from "./audio/music";
-import { EXCEL_SANCTUARY_01, EXCEL_SANCTUARY_02 } from "./map/maps";
+import type { TableMapDef } from "./map/tableMapTypes";
+import * as MapDefs from "./map/maps";
 import {
   activateMapDef,
   generateAndActivateFloorMap,
@@ -127,8 +128,23 @@ export function createGame(args: CreateGameArgs) {
 
   const input: InputState = createInputState();
 
+  const staticMaps = Object.values(MapDefs).filter(
+    (def): def is TableMapDef => typeof def === "object" && def !== null && "id" in def
+  );
+
+  function getStaticMapById(id: string | undefined): TableMapDef | undefined {
+    return staticMaps.find((def) => def.id === id);
+  }
+
+  function getDefaultStaticMap(): TableMapDef | undefined {
+    return staticMaps[0];
+  }
+
   // Ensure a map is compiled before we create the World (spawn uses the active map).
-  activateMapDef(EXCEL_SANCTUARY_01);
+  const initialMap = getDefaultStaticMap();
+  if (initialMap) {
+    activateMapDef(initialMap);
+  }
 
   let world: World = createWorld({ seed: 1337, stage: cloneStage("DOCKS") });
   applyDebugSpawn(world);
@@ -362,20 +378,18 @@ export function createGame(args: CreateGameArgs) {
 
 
   function applyMapSelection(mapId: string | undefined, seed: number) {
-    switch (mapId) {
-      case "EXCEL_SANCTUARY_02":
-        activateMapDef(EXCEL_SANCTUARY_02);
-        break;
-      case "PROC_ROOMS":
-        generateAndActivateFloorMap(seed, 0, false);
-        break;
-      case "PROC_MAZE":
-        generateAndActivateMazeFloorMap(seed, 0, false);
-        break;
-      case "EXCEL_SANCTUARY_01":
-      default:
-        activateMapDef(EXCEL_SANCTUARY_01);
-        break;
+    if (mapId === "PROC_ROOMS") {
+      generateAndActivateFloorMap(seed, 0, false);
+      return;
+    }
+    if (mapId === "PROC_MAZE") {
+      generateAndActivateMazeFloorMap(seed, 0, false);
+      return;
+    }
+
+    const staticDef = getStaticMapById(mapId) ?? getDefaultStaticMap();
+    if (staticDef) {
+      activateMapDef(staticDef);
     }
   }
 
