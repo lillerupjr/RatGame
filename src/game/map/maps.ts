@@ -382,3 +382,30 @@ export const EXCEL_SANCTUARY_02: TableMapDef = {
         { x: 16, y: 10, t: "F8" },
     ],
 };
+
+export const EXCEL_TEST_SPAWN_3X3: TableMapDef = {
+    id: "EXCEL_TEST_SPAWN_3X3",
+    w: 3,
+    h: 3,
+    defaultFloorSkin: "landscape_28",
+    defaultSpawnSkin: "landscape_30",
+    centerOnZero: true,
+
+    cells: [
+        // Top row
+        { x: 0, y: 0, t: "F0" },
+        { x: 1, y: 0, t: "F0" },
+        { x: 2, y: 0, t: "F0" },
+
+        // Middle row
+        { x: 0, y: 1, t: "F0" },
+        { x: 1, y: 1, t: "S0" }, // spawn at height 0
+        { x: 2, y: 1, t: "F0" },
+
+        // Bottom row
+        { x: 0, y: 2, t: "F0" },
+        { x: 1, y: 2, t: "F0" },
+        { x: 2, y: 2, t: "F0" },
+    ],
+};
+

@@ -27,7 +27,7 @@ import { fissionSystem } from "./systems/fission";
 import { recomputeDerivedStats } from "./stats/derivedStats";
 import {buildStaticRunMap, getReachable, type RunMap, type MapNode} from "./map/runMap";
 import { preloadKenneyTiles } from "./visual/kenneyTiles";
-import { getActiveRoomData } from "./map/kenneyMap";
+
 import { initializeRoomChallenges } from "./systems/roomChallenge";
 
 import {
@@ -46,6 +46,13 @@ import { preloadPlayerSprites } from "./visual/playerSprites";
 import { preloadBackgrounds } from "./visual/background";
 import { getProjectileSpriteByKind, preloadProjectileSprites } from "./visual/projectileSprites";
 import { setMusicStage, stopMusic } from "./audio/music";
+import { EXCEL_SANCTUARY_01, EXCEL_SANCTUARY_02 } from "./map/maps";
+import {
+  activateMapDef,
+  generateAndActivateFloorMap,
+  generateAndActivateMazeFloorMap,
+  getActiveRoomData,
+} from "./map/proceduralMapBridge";
 
 
 type HudRefs = {
@@ -119,8 +126,13 @@ export function createGame(args: CreateGameArgs) {
   }
 
   const input: InputState = createInputState();
+
+  // Ensure a map is compiled before we create the World (spawn uses the active map).
+  activateMapDef(EXCEL_SANCTUARY_01);
+
   let world: World = createWorld({ seed: 1337, stage: cloneStage("DOCKS") });
   applyDebugSpawn(world);
+
 
   setMusicStage("DOCKS");
 
@@ -349,9 +361,34 @@ export function createGame(args: CreateGameArgs) {
   }
 
 
-  function resetRun() {
+  function applyMapSelection(mapId: string | undefined, seed: number) {
+    switch (mapId) {
+      case "EXCEL_SANCTUARY_02":
+        activateMapDef(EXCEL_SANCTUARY_02);
+        break;
+      case "PROC_ROOMS":
+        generateAndActivateFloorMap(seed, 0, false);
+        break;
+      case "PROC_MAZE":
+        generateAndActivateMazeFloorMap(seed, 0, false);
+        break;
+      case "EXCEL_SANCTUARY_01":
+      default:
+        activateMapDef(EXCEL_SANCTUARY_01);
+        break;
+    }
+  }
+
+  function previewMap(mapId?: string) {
+    const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
+    applyMapSelection(mapId, seed);
+  }
+
+  function resetRun(mapId?: string) {
+    const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
+    applyMapSelection(mapId, seed);
     world = createWorld({
-      seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0,
+      seed,
       stage: cloneStage("DOCKS"),
     });
 
@@ -367,8 +404,8 @@ export function createGame(args: CreateGameArgs) {
   }
 
 
-  function startRun(starterWeapon?: WeaponId) {
-    resetRun();
+  function startRun(starterWeapon?: WeaponId, mapId?: string) {
+    resetRun(mapId);
 
     if (starterWeapon) {
       world.weapons = [{ id: starterWeapon, level: 1, cdLeft: 0 }];
@@ -1046,11 +1083,12 @@ export function createGame(args: CreateGameArgs) {
 
     if (btn.id === "startBtn") {
       const starter = btn.dataset.weapon as WeaponId | undefined;
+      const mapId = btn.dataset.map;
 
       args.ui.menuEl.hidden = true;
       args.ui.endEl.root.hidden = true;
       args.hud.root.hidden = false;
-      startRun(starter);
+      startRun(starter, mapId);
     }
   });
 
@@ -1163,5 +1201,5 @@ export function createGame(args: CreateGameArgs) {
     world.state = "RUN";
   });
 
-  return { update, render, startRun };
+  return { update, render, startRun, previewMap };
 }

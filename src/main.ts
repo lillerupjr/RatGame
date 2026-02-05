@@ -40,12 +40,27 @@ const innkeeperBtn = document.getElementById("innkeeperBtn") as HTMLButtonElemen
 const settingsBtn = document.getElementById("settingsBtn") as HTMLButtonElement;
 const likeSubBtn = document.getElementById("likeSubBtn") as HTMLButtonElement;
 
+// Map selection menu
+const mapMenuEl = document.getElementById("mapMenu") as HTMLDivElement;
+const mapChoicesEl = document.getElementById("mapChoices") as HTMLDivElement;
+const mapMenuSublineEl = document.getElementById("mapMenuSubline") as HTMLDivElement;
+const mapBackBtn = document.getElementById("mapBackBtn") as HTMLButtonElement;
+const mapContinueBtn = document.getElementById("mapContinueBtn") as HTMLButtonElement;
+
 // Apply background image to main menu
 if (backgroundImageUrl) {
   mainMenuEl.style.backgroundImage = `url(${backgroundImageUrl})`;
   mainMenuEl.style.backgroundSize = "cover";
   mainMenuEl.style.backgroundPosition = "center";
   mainMenuEl.style.backgroundRepeat = "no-repeat";
+}
+
+// Apply background image to map menu
+if (backgroundImageUrl) {
+  mapMenuEl.style.backgroundImage = `url(${backgroundImageUrl})`;
+  mapMenuEl.style.backgroundSize = "cover";
+  mapMenuEl.style.backgroundPosition = "center";
+  mapMenuEl.style.backgroundRepeat = "no-repeat";
 }
 
 // Innkeeper menu
@@ -100,6 +115,31 @@ const weaponIds = Object.keys(WEAPONS) as WeaponId[];
 let selectedWeapon: WeaponId =
     (startBtn.dataset.weapon as WeaponId) ||
     (weaponIds.includes("KNIFE" as WeaponId) ? ("KNIFE" as WeaponId) : weaponIds[0]);
+
+type MapChoice = {
+  id: string;
+  label: string;
+  desc: string;
+};
+
+const mapChoices: MapChoice[] = [
+  { id: "EXCEL_SANCTUARY_01", label: "Excel Sanctuary 01", desc: "Hand-built starter map." },
+  { id: "EXCEL_SANCTUARY_02", label: "Excel Sanctuary 02", desc: "Large rotated layout." },
+  { id: "PROC_ROOMS", label: "Procedural Rooms", desc: "Generated room chain with ramps." },
+  { id: "PROC_MAZE", label: "Procedural Maze", desc: "Generated maze layout." },
+];
+
+let selectedMapId = startBtn.dataset.map || mapChoices[0]?.id;
+
+function getSelectedMapLabel(): string {
+  return mapChoices.find((m) => m.id === selectedMapId)?.label ?? "Unknown Map";
+}
+
+function updateMenuSubline() {
+  const title = WEAPONS[selectedWeapon]?.title ?? selectedWeapon;
+  const mapLabel = getSelectedMapLabel();
+  menuSublineEl.textContent = `Slice v0.5 - 3 floors (20 sec -> boss). Map: ${mapLabel}. Starter weapon: ${title}.`;
+}
 
 function setSelectedWeapon(id: WeaponId) {
   selectedWeapon = id;
@@ -201,6 +241,52 @@ function buildWeaponPicker() {
 
 buildWeaponPicker();
 
+weaponChoicesEl.addEventListener("click", (e) => {
+  const target = e.target as HTMLElement | null;
+  if (!target?.closest("button[data-weapon]")) return;
+  updateMenuSubline();
+});
+
+function setSelectedMap(id: string) {
+  selectedMapId = id;
+  startBtn.dataset.map = id;
+
+  const buttons = mapChoicesEl.querySelectorAll("button[data-map]");
+  buttons.forEach((b) => {
+    const mid = (b as HTMLButtonElement).dataset.map;
+    b.setAttribute("aria-pressed", mid === selectedMapId ? "true" : "false");
+  });
+
+  mapMenuSublineEl.textContent = `Selected: ${getSelectedMapLabel()}`;
+  updateMenuSubline();
+}
+
+function buildMapPicker() {
+  mapChoicesEl.innerHTML = "";
+
+  for (const choice of mapChoices) {
+    const btn = document.createElement("button");
+    btn.className = "mapChoiceBtn";
+    btn.type = "button";
+    btn.dataset.map = choice.id;
+    btn.setAttribute("aria-pressed", "false");
+
+    btn.innerHTML = `
+      <div class="mapChoiceTitle">${choice.label}</div>
+      <div class="mapChoiceDesc">${choice.desc}</div>
+    `;
+
+    btn.addEventListener("click", () => setSelectedMap(choice.id));
+    mapChoicesEl.appendChild(btn);
+  }
+
+  if (selectedMapId) {
+    setSelectedMap(selectedMapId);
+  }
+}
+
+buildMapPicker();
+
 // ---- Menu Navigation ----
 // Welcome screen → Main menu
 continueBtn.addEventListener("click", () => {
@@ -211,7 +297,18 @@ continueBtn.addEventListener("click", () => {
 // Main menu → Weapon selection
 startRunBtn.addEventListener("click", () => {
   mainMenuEl.hidden = true;
+  mapMenuEl.hidden = false;
+});
+
+mapBackBtn.addEventListener("click", () => {
+  mapMenuEl.hidden = true;
+  mainMenuEl.hidden = false;
+});
+
+mapContinueBtn.addEventListener("click", () => {
+  mapMenuEl.hidden = true;
   menuEl.hidden = false;
+  game.previewMap(selectedMapId);
 });
 
 // Main menu → Innkeeper

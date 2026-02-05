@@ -29,6 +29,7 @@ import { PLANE_TILE_Z_OFFSET, setActiveMap as setKenneyActiveMap } from "./kenne
 import { initializeRoomChallenges } from "../systems/roomChallenge";
 import type { World } from "../world";
 
+
 // ─────────────────────────────────────────────────────────────
 // Active Map State
 // ─────────────────────────────────────────────────────────────
@@ -138,6 +139,7 @@ export function generateAndActivateMazeMap(config: MazeMapConfig): { compiled: C
 
     _activeMapDef = mapDef;
     _activeMap = compiled;
+    _activeRoomData = null;
 
     return { compiled, graph };
 }
@@ -157,6 +159,7 @@ export function generateAndActivateMazeFloorMap(
 
     _activeMapDef = mapDef;
     _activeMap = compiled;
+    _activeRoomData = null;
 
     return { compiled, graph };
 }
@@ -170,6 +173,7 @@ export function activateMapDef(mapDef: TableMapDef): CompiledKenneyMap {
     
     _activeMapDef = mapDef;
     _activeMap = compiled;
+    _activeRoomData = null;
     
     return compiled;
 }
