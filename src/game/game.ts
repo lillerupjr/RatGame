@@ -1,5 +1,5 @@
 // src/game/game.ts
-import { World, createWorld, clearEvents, emitEvent } from "./world";
+import { World, createWorld, clearEvents, emitEvent, playerWorldPos } from "./world";
 
 import { InputState, createInputState, inputSystem, clearInputEdges } from "./systems/input";
 import { movementSystem } from "./systems/movement";
@@ -21,12 +21,13 @@ import { getUpgradePool, UpgradeDef } from "./content/upgrades";
 import { formatTimeMMSS } from "./util/time";
 import type { WeaponId } from "./content/weapons";
 import { registry } from "./content/registry";
-import { spawnEnemy, ENEMY_TYPE } from "./factories/enemyFactory";
+import { spawnEnemyGrid, ENEMY_TYPE } from "./factories/enemyFactory";
+import { worldToGrid } from "./coords/grid";
 import { poisonSystem } from "./systems/poison";
 import { fissionSystem } from "./systems/fission";
 import { recomputeDerivedStats } from "./stats/derivedStats";
 import {buildStaticRunMap, getReachable, type RunMap, type MapNode} from "./map/runMap";
-import { preloadKenneyTiles } from "./visual/kenneyTiles";
+import { KENNEY_TILE_WORLD, preloadKenneyTiles } from "./visual/kenneyTiles";
 
 import { initializeRoomChallenges } from "./systems/roomChallenge";
 
@@ -116,9 +117,14 @@ export function createGame(args: CreateGameArgs) {
   function applyDebugSpawn(w: World) {
     if (!DEBUG_FORCE_SPAWN) return;
 
-    w.px += DEBUG_SPAWN_OFF_X;
-    w.py += DEBUG_SPAWN_OFF_Y;
-
+    const pw = playerWorldPos(w, KENNEY_TILE_WORLD);
+    const px = pw.wx + DEBUG_SPAWN_OFF_X;
+    const py = pw.wy + DEBUG_SPAWN_OFF_Y;
+    const gp = worldToGrid(px, py, KENNEY_TILE_WORLD);
+    w.pgxi = Math.floor(gp.gx);
+    w.pgyi = Math.floor(gp.gy);
+    w.pgox = gp.gx - w.pgxi;
+    w.pgoy = gp.gy - w.pgyi;
     // Keep these sane when debugging spawn
     w.pvx = 0;
     w.pvy = 0;
@@ -197,8 +203,10 @@ export function createGame(args: CreateGameArgs) {
     // Keep player stats/items/weapons/xp/level; wipe transient entities.
     w.eAlive = [];
     w.eType = [];
-    w.ex = [];
-    w.ey = [];
+    w.egxi = [];
+    w.egyi = [];
+    w.egox = [];
+    w.egoy = [];
     w.evx = [];
     w.evy = [];
     w.eHp = [];
@@ -212,8 +220,10 @@ export function createGame(args: CreateGameArgs) {
 
     w.zAlive = [];
     w.zKind = [];
-    w.zx = [];
-    w.zy = [];
+    w.zgxi = [];
+    w.zgyi = [];
+    w.zgox = [];
+    w.zgoy = [];
     w.zR = [];
     w.zDamage = [];
     w.zTickEvery = [];
@@ -228,8 +238,10 @@ export function createGame(args: CreateGameArgs) {
 
     w.pAlive = [];
     w.prjKind = [];
-    w.prx = [];
-    w.pry = [];
+    w.prgxi = [];
+    w.prgyi = [];
+    w.prgox = [];
+    w.prgoy = [];
     // Milestone C
     w.prZ = [];
     w.prHitsPlayer = [];
@@ -284,8 +296,10 @@ export function createGame(args: CreateGameArgs) {
 
     w.xAlive = [];
     w.xKind = [];
-    w.xx = [];
-    w.xy = [];
+    w.xgxi = [];
+    w.xgyi = [];
+    w.xgox = [];
+    w.xgoy = [];
     w.xValue = [];
     w.xDropId = [];
 
@@ -348,7 +362,11 @@ export function createGame(args: CreateGameArgs) {
 
     const a = w.rng.range(0, Math.PI * 2);
     const r = 320;
-    spawnEnemy(w, ENEMY_TYPE.BOSS, w.px + Math.cos(a) * r, w.py + Math.sin(a) * r);
+    const pw = playerWorldPos(w, KENNEY_TILE_WORLD);
+    const sx = pw.wx + Math.cos(a) * r;
+    const sy = pw.wy + Math.sin(a) * r;
+    const gp = worldToGrid(sx, sy, KENNEY_TILE_WORLD);
+    spawnEnemyGrid(w, ENEMY_TYPE.BOSS, gp.gx, gp.gy, KENNEY_TILE_WORLD);
   }
 
   function enterTransition(w: World) {

@@ -1,5 +1,5 @@
 // src/game/systems/collisions.ts
-import { World, emitEvent } from "../world";
+import { World, emitEvent, enemyWorldPos, playerWorldPos, projectileWorldPos } from "../world";
 import {isEnemyHit, isPlayerHit, isPlayerProjectileHit} from "./hitDetection";
 import { walkInfo } from "../map/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
@@ -8,6 +8,7 @@ import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
 import { clearSpatialHash, insertEntity, queryCircle } from "../util/spatialHash";
 import type { ProjectileSource } from "../factories/projectileFactory";
 import { onEnemyKilledForChallenge } from "./roomChallenge";
+import { worldToGrid } from "../coords/grid";
 
 // Weapon type -> damage text color mapping
 const WEAPON_COLORS: Record<ProjectileSource, string> = {
@@ -56,8 +57,45 @@ function spawnFloatText(
  * Uses spatial hashing for O(n+m) collision detection instead of O(n*m) brute force.
  */
 export function collisionsSystem(w: World, dt: number) {
+  const pWorld = playerWorldPos(w, KENNEY_TILE_WORLD);
+  let px = pWorld.wx;
+  let py = pWorld.wy;
+
+  const setPlayerAnchorFromWorld = (wx: number, wy: number) => {
+    const gp = worldToGrid(wx, wy, KENNEY_TILE_WORLD);
+    const gxi = Math.floor(gp.gx);
+    const gyi = Math.floor(gp.gy);
+    w.pgxi = gxi;
+    w.pgyi = gyi;
+    w.pgox = gp.gx - gxi;
+    w.pgoy = gp.gy - gyi;
+    const wp = playerWorldPos(w, KENNEY_TILE_WORLD);
+    px = wp.wx;
+    py = wp.wy;
+  };
+
+  const setEnemyAnchorFromWorld = (i: number, wx: number, wy: number) => {
+    const gp = worldToGrid(wx, wy, KENNEY_TILE_WORLD);
+    const gxi = Math.floor(gp.gx);
+    const gyi = Math.floor(gp.gy);
+    w.egxi[i] = gxi;
+    w.egyi[i] = gyi;
+    w.egox[i] = gp.gx - gxi;
+    w.egoy[i] = gp.gy - gyi;
+  };
+
+  const setProjectileAnchorFromWorld = (i: number, wx: number, wy: number) => {
+    const gp = worldToGrid(wx, wy, KENNEY_TILE_WORLD);
+    const gxi = Math.floor(gp.gx);
+    const gyi = Math.floor(gp.gy);
+    w.prgxi[i] = gxi;
+    w.prgyi[i] = gyi;
+    w.prgox[i] = gp.gx - gxi;
+    w.prgoy[i] = gp.gy - gyi;
+  };
+
   const tryPlayerDisplace = (dx: number, dy: number) => {
-    let curInfo = walkInfo(w.px, w.py, KENNEY_TILE_WORLD);
+    let curInfo = walkInfo(px, py, KENNEY_TILE_WORLD);
     const MAX_STEP_Z = 1.05;
 
     const tryMove = (wx: number, wy: number) => {
@@ -77,8 +115,7 @@ export function collisionsSystem(w: World, dt: number) {
         if (dz > MAX_STEP_Z) return false;
       }
 
-      w.px = wx;
-      w.py = wy;
+      setPlayerAnchorFromWorld(wx, wy);
       w.pz = nextInfo.z;
       w.activeFloorH =
           nextInfo.kind === "STAIRS" ? (Math.floor(nextInfo.z + 0.5) | 0) : (nextInfo.floorH | 0);
@@ -86,12 +123,12 @@ export function collisionsSystem(w: World, dt: number) {
       return true;
     };
 
-    const nx = w.px + dx;
-    const ny = w.py + dy;
+    const nx = px + dx;
+    const ny = py + dy;
     const movedDiag = tryMove(nx, ny);
     if (!movedDiag) {
-      tryMove(nx, w.py);
-      tryMove(w.px, ny);
+      tryMove(nx, py);
+      tryMove(px, ny);
     }
   };
   // -------------------------
@@ -102,7 +139,8 @@ export function collisionsSystem(w: World, dt: number) {
   
   for (let e = 0; e < w.eAlive.length; e++) {
     if (!w.eAlive[e]) continue;
-    insertEntity(hash, e, w.ex[e], w.ey[e], w.eR[e]);
+    const ew = enemyWorldPos(w, e, KENNEY_TILE_WORLD);
+    insertEntity(hash, e, ew.wx, ew.wy, w.eR[e]);
   }
 
   // -------------------------
@@ -115,8 +153,9 @@ export function collisionsSystem(w: World, dt: number) {
     if (w.prNoCollide[p]) continue;
 
 
-    const px = w.prx[p];
-    const py = w.pry[p];
+    const pp = projectileWorldPos(w, p, KENNEY_TILE_WORLD);
+    const px = pp.wx;
+    const py = pp.wy;
     const pr = w.prR[p];
 
     // Track whether this projectile hit something this frame (kept for future use)
@@ -142,8 +181,9 @@ export function collisionsSystem(w: World, dt: number) {
       // Double-check alive (enemy may have died from another projectile this frame)
       if (!w.eAlive[e]) continue;
 
-      const dx = w.ex[e] - px;
-      const dy = w.ey[e] - py;
+      const ew = enemyWorldPos(w, e, KENNEY_TILE_WORLD);
+      const dx = ew.wx - px;
+      const dy = ew.wy - py;
       const rr = w.eR[e] + pr;
 
       if (!isEnemyHit(w, p, e, dx, dy, rr)) continue;
@@ -173,7 +213,7 @@ export function collisionsSystem(w: World, dt: number) {
 
       // Spawn floating combat text
       const source = registry.projectileSourceFromKind(w.prjKind[p]);
-      spawnFloatText(w, w.ex[e], w.ey[e], Math.round(dmg), source, isCrit);
+      spawnFloatText(w, ew.wx, ew.wy, Math.round(dmg), source, isCrit);
 
       // Poison payload (applied once per hit)
       const pdps = w.prPoisonDps[p];
@@ -191,8 +231,8 @@ export function collisionsSystem(w: World, dt: number) {
         type: "ENEMY_HIT",
         enemyIndex: e,
         damage: dmg,
-        x: w.ex[e],
-        y: w.ey[e],
+        x: ew.wx,
+        y: ew.wy,
         isCrit,
         source,
       });
@@ -209,8 +249,8 @@ export function collisionsSystem(w: World, dt: number) {
         } else {
           // Pool-style ricochet: reflect velocity about the collision normal.
           // Normal points from enemy center -> projectile center.
-          const ex = w.ex[e];
-          const ey = w.ey[e];
+          const ex = ew.wx;
+          const ey = ew.wy;
 
           let nx = px - ex;
           let ny = py - ey;
@@ -238,8 +278,9 @@ export function collisionsSystem(w: World, dt: number) {
           // Push the projectile just outside the enemy so it doesn't instantly re-collide
           // rr is already (enemy radius + projectile radius).
           const pushOut = rr + 0.6;
-          w.prx[p] = ex + nx * pushOut;
-          w.pry[p] = ey + ny * pushOut;
+          const px1 = ex + nx * pushOut;
+          const py1 = ey + ny * pushOut;
+          setProjectileAnchorFromWorld(p, px1, py1);
 
           // Consume one bounce
           w.prBouncesLeft[p] = bLeft - 1;
@@ -261,8 +302,8 @@ export function collisionsSystem(w: World, dt: number) {
       const exTtl = (w as any).prExplodeTtl?.[p] ?? 0.25;
 
       if (exR > 0 && exDmg > 0) {
-        const zx = w.prx[p];
-        const zy = w.pry[p];
+        const zx = px;
+        const zy = py;
 
         const z = spawnZone(w, {
           kind: ZONE_KIND.EXPLOSION,
@@ -336,8 +377,8 @@ export function collisionsSystem(w: World, dt: number) {
         emitEvent(w, {
           type: "ENEMY_KILLED",
           enemyIndex: e,
-          x: w.ex[e],
-          y: w.ey[e],
+          x: ew.wx,
+          y: ew.wy,
           xpValue: 1,
           source: registry.projectileSourceFromKind(w.prjKind[p]),
         });
@@ -382,8 +423,8 @@ export function collisionsSystem(w: World, dt: number) {
       emitEvent(w, {
         type: "PLAYER_HIT",
         damage: dmg,
-        x: w.px,
-        y: w.py,
+        x: px,
+        y: py,
       });
 
       // usually enemy bullets should be consumed on hit
@@ -399,14 +440,15 @@ export function collisionsSystem(w: World, dt: number) {
   // -------------------------
   if (hitCd <= 0) {
     // Query enemies near the player using spatial hash
-    const nearbyToPlayer = queryCircle(hash, w.px, w.py, PLAYER_R + 50); // 50 = generous max enemy radius
+    const nearbyToPlayer = queryCircle(hash, px, py, PLAYER_R + 50); // 50 = generous max enemy radius
 
     for (let i = 0; i < nearbyToPlayer.length; i++) {
       const e = nearbyToPlayer[i];
       if (!w.eAlive[e]) continue;
 
-      const dx = w.ex[e] - w.px;
-      const dy = w.ey[e] - w.py;
+      const ew = enemyWorldPos(w, e, KENNEY_TILE_WORLD);
+      const dx = ew.wx - px;
+      const dy = ew.wy - py;
       const rr = w.eR[e] + PLAYER_R;
 
       if (!isPlayerHit(w, e, PLAYER_R)) continue;
@@ -419,8 +461,8 @@ export function collisionsSystem(w: World, dt: number) {
       emitEvent(w, {
         type: "PLAYER_HIT",
         damage: dmg,
-        x: w.px,
-        y: w.py,
+        x: px,
+        y: py,
       });
 
       // Push-out so the player isn't stuck inside the enemy.
@@ -435,8 +477,9 @@ export function collisionsSystem(w: World, dt: number) {
         // Move player away from enemy
         tryPlayerDisplace(-ux * push * 0.6, -uy * push * 0.6);
         // Move enemy away from player a bit too
-        w.ex[e] += ux * push * 0.4;
-        w.ey[e] += uy * push * 0.4;
+        const ex2 = ew.wx + ux * push * 0.4;
+        const ey2 = ew.wy + uy * push * 0.4;
+        setEnemyAnchorFromWorld(e, ex2, ey2);
       }
 
       hitCd = IFRAME_SECS;

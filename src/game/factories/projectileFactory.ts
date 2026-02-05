@@ -1,5 +1,7 @@
 // src/game/factories/projectileFactory.ts
 import type { World } from "../world";
+import { gridToWorld, worldToGrid } from "../coords/grid";
+import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
 export type ProjectileSource =
     | "KNIFE"
@@ -73,6 +75,14 @@ export type SpawnProjectileArgs = {
     z?: number;
 };
 
+export type SpawnProjectileGridArgs = Omit<SpawnProjectileArgs, "x" | "y" | "dirX" | "dirY"> & {
+    gx: number;
+    gy: number;
+    dirGx: number;
+    dirGy: number;
+    tileWorld?: number;
+};
+
 
 
 export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
@@ -108,8 +118,16 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     w.prjKind.push(a.kind);
     (w as any)._lastFireProjKind = a.kind;
 
-    w.prx.push(a.x);
-    w.pry.push(a.y);
+    const gp = worldToGrid(a.x, a.y, KENNEY_TILE_WORLD);
+    const gxi = Math.floor(gp.gx);
+    const gyi = Math.floor(gp.gy);
+    w.prgxi.push(gxi);
+    w.prgyi.push(gyi);
+    w.prgox.push(gp.gx - gxi);
+    w.prgoy.push(gp.gy - gyi);
+    const wp = gridToWorld(gp.gx, gp.gy, KENNEY_TILE_WORLD);
+    const wx = wp.wx;
+    const wy = wp.wy;
 
     // Milestone C: projectile height (keep index-aligned)
     w.prZ.push(projZ);
@@ -134,8 +152,8 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
 
     w.prTtl.push(a.ttl);
 
-    w.prStartX.push(a.x);
-    w.prStartY.push(a.y);
+    w.prStartX.push(wx);
+    w.prStartY.push(wy);
     w.prMaxDist.push(a.maxDist ?? 0);
 
     // static target + explosion config
@@ -181,6 +199,25 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     w.prAftershockRingStep.push(0);
 
     return i;
+}
+
+export function spawnProjectileGrid(w: World, a: SpawnProjectileGridArgs) {
+    const tileWorld = a.tileWorld ?? KENNEY_TILE_WORLD;
+    const pos = gridToWorld(a.gx, a.gy, tileWorld);
+    const dir = gridToWorld(a.dirGx, a.dirGy, tileWorld);
+    const { gx, gy, dirGx, dirGy, tileWorld: _tw, ...rest } = a;
+    return spawnProjectile(w, { ...rest, x: pos.wx, y: pos.wy, dirX: dir.wx, dirY: dir.wy });
+}
+
+export function spawnSwordProjectileGrid(w: World, args: Omit<SpawnProjectileGridArgs, "kind">) {
+    return spawnProjectileGrid(w, { ...args, kind: PRJ_KIND.SWORD });
+}
+
+export function spawnKnucklesOrbitalGrid(
+    w: World,
+    args: Omit<SpawnProjectileGridArgs, "kind" | "orbital">
+) {
+    return spawnProjectileGrid(w, { ...args, kind: PRJ_KIND.KNUCKLES, orbital: true });
 }
 
 

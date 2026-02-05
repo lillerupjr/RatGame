@@ -1,9 +1,17 @@
 // src/game/content/weapons.ts
 import type { World } from "../world";
-import { spawnProjectile, spawnSwordProjectile, spawnKnucklesOrbital, PRJ_KIND } from "../factories/projectileFactory";
-import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
+import { gridAtPlayer } from "../world";
+import {
+    PRJ_KIND,
+    spawnKnucklesOrbitalGrid,
+    spawnProjectileGrid,
+    spawnSwordProjectileGrid,
+} from "../factories/projectileFactory";
+import { spawnZoneGrid, ZONE_KIND } from "../factories/zoneFactory";
 import type { TargetingStrategy } from "../util/targeting";
 import { findTarget, getEnemiesInRange } from "../util/targeting";
+import { gridToWorld, worldToGrid } from "../coords/grid";
+import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
 
 export type WeaponId =
@@ -26,6 +34,7 @@ export type WeaponId =
 
 export const MAX_WEAPON_LEVEL = 10;
 
+// Aim is expressed in grid space (screen-aligned).
 export type Aim = { x: number; y: number };
 
 export type WeaponStats = {
@@ -66,6 +75,31 @@ export type WeaponDef = {
 function clampLevel(level: number): number {
     return Math.max(1, Math.min(MAX_WEAPON_LEVEL, Math.floor(level)));
 }
+
+const TILE_WORLD = KENNEY_TILE_WORLD;
+
+function worldPosFromGrid(gx: number, gy: number) {
+    const wp = gridToWorld(gx, gy, TILE_WORLD);
+    return { x: wp.wx, y: wp.wy };
+}
+
+function gridPosFromWorld(x: number, y: number) {
+    return worldToGrid(x, y, TILE_WORLD);
+}
+
+function gridDir(dx: number, dy: number) {
+    const len = Math.hypot(dx, dy) || 0.0001;
+    return { dx: dx / len, dy: dy / len };
+}
+
+function gridDeltaFromWorldDist(dxg: number, dyg: number, dist: number) {
+    const wv = gridToWorld(dxg, dyg, TILE_WORLD);
+    const wlen = Math.hypot(wv.wx, wv.wy) || 0.0001;
+    const wx = (wv.wx / wlen) * dist;
+    const wy = (wv.wy / wlen) * dist;
+    const gd = worldToGrid(wx, wy, TILE_WORLD);
+    return { dx: gd.gx, dy: gd.gy };
+}
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
     KNIFE: {
         id: "KNIFE",
@@ -94,6 +128,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         },
 
         fire: (w, s, aim) => {
+            const pg = gridAtPlayer(w);
             const count = Math.max(1, s.projectileCount ?? 1);
 
             const viewW = (w as any).viewW ?? 800;
@@ -103,12 +138,12 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const baseAngle = Math.atan2(aim.y, aim.x);
 
             if (count === 1) {
-                spawnProjectile(w, {
+                spawnProjectileGrid(w, {
                     kind: PRJ_KIND.KNIFE,
-                    x: w.px,
-                    y: w.py,
-                    dirX: Math.cos(baseAngle),
-                    dirY: Math.sin(baseAngle),
+                    gx: pg.gx,
+                    gy: pg.gy,
+                    dirGx: Math.cos(baseAngle),
+                    dirGy: Math.sin(baseAngle),
                     speed: s.projectileSpeed,
                     damage: s.damage,
                     radius: s.projectileRadius,
@@ -129,12 +164,12 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             for (let i = 0; i < count; i++) {
                 const ang = start + step * i;
 
-                spawnProjectile(w, {
+                spawnProjectileGrid(w, {
                     kind: PRJ_KIND.KNIFE,
-                    x: w.px,
-                    y: w.py,
-                    dirX: Math.cos(ang),
-                    dirY: Math.sin(ang),
+                    gx: pg.gx,
+                    gy: pg.gy,
+                    dirGx: Math.cos(ang),
+                    dirGy: Math.sin(ang),
                     speed: s.projectileSpeed,
                     damage: s.damage,
                     radius: s.projectileRadius,
@@ -171,6 +206,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         },
 
         fire: (w, s, _aim) => {
+            const pg = gridAtPlayer(w);
             const count = 24;
 
             const viewW = (w as any).viewW ?? 800;
@@ -179,12 +215,12 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             for (let k = 0; k < count; k++) {
                 const a = (k / count) * Math.PI * 2;
-                spawnProjectile(w, {
+                spawnProjectileGrid(w, {
                     kind: PRJ_KIND.KNIFE,
-                    x: w.px,
-                    y: w.py,
-                    dirX: Math.cos(a),
-                    dirY: Math.sin(a),
+                    gx: pg.gx,
+                    gy: pg.gy,
+                    dirGx: Math.cos(a),
+                    dirGy: Math.sin(a),
                     speed: s.projectileSpeed,
                     damage: s.damage,
                     radius: s.projectileRadius,
@@ -213,12 +249,13 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             };
         },
         fire: (w, s, aim) => {
-            spawnProjectile(w, {
+            const pg = gridAtPlayer(w);
+            spawnProjectileGrid(w, {
                 kind: PRJ_KIND.PISTOL,
-                x: w.px,
-                y: w.py,
-                dirX: aim.x,
-                dirY: aim.y,
+                gx: pg.gx,
+                gy: pg.gy,
+                dirGx: aim.x,
+                dirGy: aim.y,
                 speed: s.projectileSpeed,
                 damage: s.damage,
                 radius: s.projectileRadius,
@@ -252,6 +289,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         },
 
         fire: (w, s, aim) => {
+            const pg = gridAtPlayer(w);
             // Persisted angle state on world (kept off World type like other systems do)
             // Clockwise rotation ≈ +90° per burst (medium)
             const multiplier = 10;
@@ -275,12 +313,12 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const ttlSafety = 10;
 
             // Forward
-            spawnProjectile(w, {
+            spawnProjectileGrid(w, {
                 kind: PRJ_KIND.PISTOL,
-                x: w.px,
-                y: w.py,
-                dirX: dx,
-                dirY: dy,
+                gx: pg.gx,
+                gy: pg.gy,
+                dirGx: dx,
+                dirGy: dy,
                 speed: s.projectileSpeed,
                 damage: s.damage,
                 radius: s.projectileRadius,
@@ -290,12 +328,12 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             });
 
             // Opposite
-            spawnProjectile(w, {
+            spawnProjectileGrid(w, {
                 kind: PRJ_KIND.PISTOL,
-                x: w.px,
-                y: w.py,
-                dirX: -dx,
-                dirY: -dy,
+                gx: pg.gx,
+                gy: pg.gy,
+                dirGx: -dx,
+                dirGy: -dy,
                 speed: s.projectileSpeed,
                 damage: s.damage,
                 radius: s.projectileRadius,
@@ -377,6 +415,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         },
 
         fire: (w, s, aim) => {
+            const pg = gridAtPlayer(w);
             // Fire a single needle that applies poison on hit.
             // Requires projectileFactory + collisionsSystem support for:
             // - w.prPoisonDps[] / w.prPoisonDur[] arrays
@@ -389,12 +428,12 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const poisonDps = Math.max(0, (s as any).poisonDps ?? 0);
             const poisonDur = Math.max(0, (s as any).poisonDur ?? 0);
 
-            const p = spawnProjectile(w, {
+            const p = spawnProjectileGrid(w, {
                 kind: PRJ_KIND.SYRINGE,
-                x: w.px,
-                y: w.py,
-                dirX: aim.x,
-                dirY: aim.y,
+                gx: pg.gx,
+                gy: pg.gy,
+                dirGx: aim.x,
+                dirGy: aim.y,
                 speed: s.projectileSpeed,
                 damage: s.damage,
                 radius: s.projectileRadius,
@@ -476,6 +515,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         },
 
         fire: (w, s, aim) => {
+            const pg = gridAtPlayer(w);
             // Fire a single needle that applies poison on hit.
             // Requires projectileFactory + collisionsSystem support for:
             // - w.prPoisonDps[] / w.prPoisonDur[] arrays
@@ -488,12 +528,12 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const poisonDps = Math.max(0, (s as any).poisonDps ?? 0);
             const poisonDur = Math.max(0, (s as any).poisonDur ?? 0);
 
-            const p = spawnProjectile(w, {
+            const p = spawnProjectileGrid(w, {
                 kind: PRJ_KIND.SYRINGE,
-                x: w.px,
-                y: w.py,
-                dirX: aim.x,
-                dirY: aim.y,
+                gx: pg.gx,
+                gy: pg.gy,
+                dirGx: aim.x,
+                dirGy: aim.y,
                 speed: s.projectileSpeed,
                 damage: s.damage,
                 radius: s.projectileRadius,
@@ -539,6 +579,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         },
 
         fire: (w, s, aim) => {
+            const pg = gridAtPlayer(w);
             const viewW = (w as any).viewW ?? 800;
 
             // Give it enough life to bounce around.
@@ -547,12 +588,12 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             const bounces = Math.max(0, ((s as any).bounces ?? 0));
 
-            spawnProjectile(w, {
+            spawnProjectileGrid(w, {
                 kind: PRJ_KIND.BOUNCER,
-                x: w.px,
-                y: w.py,
-                dirX: aim.x,
-                dirY: aim.y,
+                gx: pg.gx,
+                gy: pg.gy,
+                dirGx: aim.x,
+                dirGy: aim.y,
                 speed: s.projectileSpeed,
                 damage: s.damage,
                 radius: s.projectileRadius,
@@ -594,6 +635,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         },
 
         fire: (w, s, aim) => {
+            const pg = gridAtPlayer(w);
             const ttlSafety = 10.0;
             const bounces = 10;
 
@@ -602,12 +644,12 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             // Single-direction fallback (normal aimed shot)
             if (dirs === 1) {
-                spawnProjectile(w, {
+                spawnProjectileGrid(w, {
                     kind: PRJ_KIND.BOUNCER,
-                    x: w.px,
-                    y: w.py,
-                    dirX: aim.x,
-                    dirY: aim.y,
+                    gx: pg.gx,
+                    gy: pg.gy,
+                    dirGx: aim.x,
+                    dirGy: aim.y,
                     speed: s.projectileSpeed,
                     damage: s.damage,
                     radius: s.projectileRadius,
@@ -628,12 +670,12 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
                 const dx = Math.cos(a - Math.PI / 2);
                 const dy = Math.sin(a - Math.PI / 2);
 
-                spawnProjectile(w, {
+                spawnProjectileGrid(w, {
                     kind: PRJ_KIND.PISTOL,
-                    x: w.px,
-                    y: w.py,
-                    dirX: dx,
-                    dirY: dy,
+                    gx: pg.gx,
+                    gy: pg.gy,
+                    dirGx: dx,
+                    dirGy: dy,
                     speed: s.projectileSpeed,
                     damage: s.damage,
                     radius: s.projectileRadius,
@@ -673,6 +715,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         },
 
         fire: (w, s, aim) => {
+            const pg = gridAtPlayer(w);
             const ttl = 9999;       // effectively infinite
             const bounces = 9999;   // effectively infinite
 
@@ -686,12 +729,12 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
                     y: Math.sin(angle),
                 };
 
-                const p = spawnProjectile(w, {
+                const p = spawnProjectileGrid(w, {
                     kind: PRJ_KIND.BOUNCER,
-                    x: w.px,
-                    y: w.py,
-                    dirX: dir.x,
-                    dirY: dir.y,
+                    gx: pg.gx,
+                    gy: pg.gy,
+                    dirGx: dir.x,
+                    dirGy: dir.y,
                     speed: s.projectileSpeed,
                     damage: s.damage,
                     radius: s.projectileRadius,
@@ -760,6 +803,8 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         },
 
         fire: (w: World, s: any, aim: Aim): void => {
+            const pg = gridAtPlayer(w);
+            const pw = worldPosFromGrid(pg.gx, pg.gy);
             const targetRadius = (s as any).targetRadius ?? 420;
             const rocketR = (s as any).rocketR ?? 7;
             const blastR = s.projectileRadius ?? 86;
@@ -768,42 +813,43 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const target = findTarget(w, "CLUSTER", targetRadius, blastR);
 
             // Pick a target point
-            let tx: number;
-            let ty: number;
+            let tgx: number;
+            let tgy: number;
 
             if (target.enemyIndex !== -1) {
                 // Use the cluster centroid (not just the enemy position)
-                tx = target.x;
-                ty = target.y;
+                const tg = gridPosFromWorld(target.x, target.y);
+                tgx = tg.gx;
+                tgy = tg.gy;
             } else {
                 // fallback: fire forward
-                tx = w.px + aim.x * targetRadius;
-                ty = w.py + aim.y * targetRadius;
+                const delta = gridDeltaFromWorldDist(aim.x, aim.y, targetRadius);
+                tgx = pg.gx + delta.dx;
+                tgy = pg.gy + delta.dy;
             }
 
             // Direction toward target point
-            let dx = tx - w.px;
-            let dy = ty - w.py;
-            const len = Math.hypot(dx, dy) || 1;
-            dx /= len;
-            dy /= len;
+            const dxg = tgx - pg.gx;
+            const dyg = tgy - pg.gy;
+            const gdir = gridDir(dxg, dyg);
 
             const speed = s.projectileSpeed;
 
             // TTL long enough to cross acquisition radius + buffer
-            const dist = Math.hypot(tx - w.px, ty - w.py);
+            const tw = worldPosFromGrid(tgx, tgy);
+            const dist = Math.hypot(tw.x - pw.x, tw.y - pw.y);
             const ttl = Math.max(0.35, dist / Math.max(1, speed) + 0.45);
 
             // Optional: keep impact damage smaller so explosion is the identity (prevents double-dipping)
             const impactDmg = Math.max(1, (s.damage ?? 0) * 0.25);
 
             // Spawn rocket (collides normally). Explosion is triggered by collisionsSystem using payload arrays.
-            const p = spawnProjectile(w, {
+            const p = spawnProjectileGrid(w, {
                 kind: PRJ_KIND.BAZOOKA, // keep your bazooka visual kind if it exists in your project
-                x: w.px,
-                y: w.py,
-                dirX: dx,
-                dirY: dy,
+                gx: pg.gx,
+                gy: pg.gy,
+                dirGx: gdir.dx,
+                dirGy: gdir.dy,
                 speed,
                 damage: impactDmg,
                 radius: rocketR,
@@ -872,6 +918,8 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         },
 
         fire: (w: World, s: any, aim: Aim): void => {
+            const pg = gridAtPlayer(w);
+            const pw = worldPosFromGrid(pg.gx, pg.gy);
             const targetRadius = (s as any).targetRadius ?? 420;
             const rocketR = (s as any).rocketR ?? 7;
             const blastR = s.projectileRadius ?? 100;
@@ -880,42 +928,43 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const target = findTarget(w, "CLUSTER", targetRadius, blastR);
 
             // Pick a target point
-            let tx: number;
-            let ty: number;
+            let tgx: number;
+            let tgy: number;
 
             if (target.enemyIndex !== -1) {
                 // Use the cluster centroid (not just the enemy position)
-                tx = target.x;
-                ty = target.y;
+                const tg = gridPosFromWorld(target.x, target.y);
+                tgx = tg.gx;
+                tgy = tg.gy;
             } else {
                 // fallback: fire forward
-                tx = w.px + aim.x * targetRadius;
-                ty = w.py + aim.y * targetRadius;
+                const delta = gridDeltaFromWorldDist(aim.x, aim.y, targetRadius);
+                tgx = pg.gx + delta.dx;
+                tgy = pg.gy + delta.dy;
             }
 
             // Direction toward target point
-            let dx = tx - w.px;
-            let dy = ty - w.py;
-            const len = Math.hypot(dx, dy) || 1;
-            dx /= len;
-            dy /= len;
+            const dxg = tgx - pg.gx;
+            const dyg = tgy - pg.gy;
+            const gdir = gridDir(dxg, dyg);
 
             const speed = s.projectileSpeed;
 
             // TTL long enough to cross acquisition radius + buffer
-            const dist = Math.hypot(tx - w.px, ty - w.py);
+            const tw = worldPosFromGrid(tgx, tgy);
+            const dist = Math.hypot(tw.x - pw.x, tw.y - pw.y);
             const ttl = Math.max(0.35, dist / Math.max(1, speed) + 0.45);
 
             // Optional: keep impact damage smaller so explosion is the identity (prevents double-dipping)
             const impactDmg = Math.max(1, (s.damage ?? 0) * 0.25);
 
             // Spawn rocket (collides normally). Explosion is triggered by collisionsSystem using payload arrays.
-            const p = spawnProjectile(w, {
+            const p = spawnProjectileGrid(w, {
                 kind: PRJ_KIND.BAZOOKA, // keep your bazooka visual kind if it exists in your project
-                x: w.px,
-                y: w.py,
-                dirX: dx,
-                dirY: dy,
+                gx: pg.gx,
+                gy: pg.gy,
+                dirGx: gdir.dx,
+                dirGy: gdir.dy,
                 speed,
                 damage: impactDmg,
                 radius: rocketR,
@@ -969,11 +1018,12 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             };
         },
         fire: (w: World, s: WeaponStats, aim: Aim) => {
-            spawnSwordProjectile(w, {
-                x: w.px,
-                y: w.py,
-                dirX: aim.x,
-                dirY: aim.y,
+            const pg = gridAtPlayer(w);
+            spawnSwordProjectileGrid(w, {
+                gx: pg.gx,
+                gy: pg.gy,
+                dirGx: aim.x,
+                dirGy: aim.y,
                 speed: 0,
                 damage: s.damage,
                 radius: s.projectileRadius,
@@ -1030,6 +1080,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         },
 
         fire: (w, s, _aim) => {
+            const pg = gridAtPlayer(w);
             // Maintain ring: ensure we have exactly N orbitals alive.
             const target = Math.max(2, s.projectileCount ?? 2);
 
@@ -1065,11 +1116,11 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             for (let k = 0; k < target; k++) {
                 const ang = phase + (k / target) * Math.PI * 2;
 
-                spawnKnucklesOrbital(w, {
-                    x: w.px,
-                    y: w.py,
-                    dirX: 1,
-                    dirY: 0,
+                spawnKnucklesOrbitalGrid(w, {
+                    gx: pg.gx,
+                    gy: pg.gy,
+                    dirGx: 1,
+                    dirGy: 0,
                     speed: 0,
                     damage: s.damage,
                     radius: s.projectileRadius,
@@ -1121,14 +1172,19 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             const radius = s.projectileRadius;
             const dmg = s.damage;
+            const pg = gridAtPlayer(w);
+            const gxi = Math.floor(pg.gx);
+            const gyi = Math.floor(pg.gy);
+            const pw = worldPosFromGrid(pg.gx, pg.gy);
 
             if (existing !== undefined && w.zAlive[existing]) {
                 w.zKind[existing] = ZONE_KIND.AURA;
                 w.zFollowPlayer[existing] = true;
 
-                w.zx[existing] = w.px;
-                w.zy[existing] = w.py;
-
+                w.zgxi[existing] = gxi;
+                w.zgyi[existing] = gyi;
+                w.zgox[existing] = pg.gx - gxi;
+                w.zgoy[existing] = pg.gy - gyi;
                 w.zR[existing] = radius;
                 w.zDamage[existing] = dmg;
 
@@ -1141,10 +1197,10 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
                 return;
             }
 
-            const idx = spawnZone(w, {
+            const idx = spawnZoneGrid(w, {
                 kind: ZONE_KIND.AURA,
-                x: w.px,
-                y: w.py,
+                gx: pg.gx,
+                gy: pg.gy,
                 radius,
                 damage: dmg,
                 tickEvery: 0.20,
@@ -1216,6 +1272,8 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         fire: (w, s, aim) => {
             const throwDist = s.projectileSpeed;
             const radius = s.projectileRadius ?? 62;
+            const pg = gridAtPlayer(w);
+            const pw = worldPosFromGrid(pg.gx, pg.gy);
 
             // Use targeting to find the best cluster within throw range
             const target = findTarget(w, "CLUSTER", throwDist + 50, radius);
@@ -1225,8 +1283,8 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             if (target.enemyIndex !== -1) {
                 // Throw at the cluster centroid, but clamp to throw distance
-                const dx = target.x - w.px;
-                const dy = target.y - w.py;
+                const dx = target.x - pw.x;
+                const dy = target.y - pw.y;
                 const dist = Math.hypot(dx, dy);
                 
                 if (dist <= throwDist) {
@@ -1234,22 +1292,25 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
                     y = target.y;
                 } else {
                     // Clamp to max throw distance
-                    x = w.px + (dx / dist) * throwDist;
-                    y = w.py + (dy / dist) * throwDist;
+                    x = pw.x + (dx / dist) * throwDist;
+                    y = pw.y + (dy / dist) * throwDist;
                 }
             } else {
                 // Fallback: throw in aim direction
-                x = w.px + aim.x * throwDist;
-                y = w.py + aim.y * throwDist;
+                const delta = gridDeltaFromWorldDist(aim.x, aim.y, throwDist);
+                const tw = worldPosFromGrid(pg.gx + delta.dx, pg.gy + delta.dy);
+                x = tw.x;
+                y = tw.y;
             }
 
             // Pull tickEvery back out (stored in stats as an escape hatch)
             const tickEvery = Math.max(0.08, ((s as any).tickEvery ?? 0.28));
+            const tg = gridPosFromWorld(x, y);
 
-            const z = spawnZone(w, {
+            const z = spawnZoneGrid(w, {
                 kind: ZONE_KIND.FIRE,
-                x,
-                y,
+                gx: tg.gx,
+                gy: tg.gy,
                 radius: s.projectileRadius,
                 damage: s.damage,
                 tickEvery,

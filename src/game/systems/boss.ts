@@ -1,6 +1,6 @@
 // src/game/systems/boss.ts
 
-import type { World } from "../world";
+import { enemyWorldPos, playerWorldPos, type World } from "../world";
 import { ENEMY_TYPE } from "../content/enemies";
 import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
 
@@ -106,6 +106,9 @@ export function bossSystem(w: World, dt: number) {
 
     const ctx = ensureCtx(w);
     ctx.t += dt;
+    const pw = playerWorldPos(w);
+    const px = pw.wx;
+    const py = pw.wy;
 
     // -------------------------
     // Boss difficulty scaling
@@ -149,8 +152,8 @@ export function bossSystem(w: World, dt: number) {
             for (let k = 0; k < n; k++) {
                 const a = w.rng.range(0, Math.PI * 2);
                 const rr = w.rng.range(120, 280); // slightly tighter => more relevant pressure
-                const x = w.px + Math.cos(a) * rr;
-                const y = w.py + Math.sin(a) * rr;
+                const x = px + Math.cos(a) * rr;
+                const y = py + Math.sin(a) * rr;
 
                 const teleT = 0.52; // faster warning than before (0.9), but still readable
                 const teleR = 34 * COVER;
@@ -189,8 +192,9 @@ export function bossSystem(w: World, dt: number) {
         if (ctx.dashPhase === "TELEGRAPH") {
             ctx.dashT = Math.max(0, (ctx.dashT ?? 0) - dt);
 
-            const dx = w.px - w.ex[boss];
-            const dy = w.py - w.ey[boss];
+            const ew = enemyWorldPos(w, boss);
+            const dx = px - ew.wx;
+            const dy = py - ew.wy;
             const len = Math.hypot(dx, dy) || 1;
             const ux = dx / len;
             const uy = dy / len;
@@ -201,8 +205,8 @@ export function bossSystem(w: World, dt: number) {
 
             if ((w as any)._dashMarkCd <= 0) {
                 (w as any)._dashMarkCd = 0.085; // was 0.10 (denser lane telegraph)
-                const sx = w.ex[boss];
-                const sy = w.ey[boss];
+                const sx = ew.wx;
+                const sy = ew.wy;
 
                 const marks = 8; // was 7
                 for (let j = 1; j <= marks; j++) {
@@ -225,8 +229,8 @@ export function bossSystem(w: World, dt: number) {
                 // trail blasts (telegraph quick then explode) — now bigger + hurts
                 const steps = 9; // was 8
                 for (let j = 1; j <= steps; j++) {
-                    const x = w.ex[boss] + ux * j * 58;
-                    const y = w.ey[boss] + uy * j * 58;
+                    const x = ew.wx + ux * j * 58;
+                    const y = ew.wy + uy * j * 58;
 
                     const teleT = 0.26;
                     telegraphCircle(w, x, y, 26 * COVER, teleT);
@@ -262,8 +266,8 @@ export function bossSystem(w: World, dt: number) {
 
             const a = w.rng.range(0, Math.PI * 2);
             const rr = w.rng.range(80, 220); // slightly tighter + sometimes closer
-            const x = w.px + Math.cos(a) * rr;
-            const y = w.py + Math.sin(a) * rr;
+            const x = px + Math.cos(a) * rr;
+            const y = py + Math.sin(a) * rr;
 
             // Main puddle: bigger + longer + more dmg
             hazardPuddle(
@@ -286,8 +290,8 @@ export function bossSystem(w: World, dt: number) {
 
                     hazardPuddle(
                         w,
-                        w.px + Math.cos(a2) * rr2,
-                        w.py + Math.sin(a2) * rr2,
+                        px + Math.cos(a2) * rr2,
+                        py + Math.sin(a2) * rr2,
                         58 * COVER,             // was 52
                         6 * HAZ * ENRAGE,       // was 4
                         0.22,                   // was 0.22

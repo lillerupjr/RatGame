@@ -2,6 +2,8 @@
 import type { World } from "../world";
 import { registry } from "../content/registry";
 import { ENEMY_TYPE, type EnemyType } from "../content/enemies";
+import { worldToGrid } from "../coords/grid";
+import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
 export { ENEMY_TYPE };
 export type { EnemyType };
@@ -10,7 +12,13 @@ export type { EnemyType };
  * Factory: creates one enemy with standardized stats (from registry).
  * Applies delve depth scaling to HP and damage, with per-enemy HP weight.
  */
-export function spawnEnemy(w: World, type: EnemyType, x: number, y: number) {
+export function spawnEnemyGrid(
+    w: World,
+    type: EnemyType,
+    gx: number,
+    gy: number,
+    _tileWorld: number = KENNEY_TILE_WORLD
+) {
     const s = registry.enemy(type);
 
     // Apply delve depth scaling
@@ -26,8 +34,13 @@ export function spawnEnemy(w: World, type: EnemyType, x: number, y: number) {
     const i = w.eAlive.length;
     w.eAlive.push(true);
     w.eType.push(type);
-    w.ex.push(x);
-    w.ey.push(y);
+    const gxi = Math.floor(gx);
+    const gyi = Math.floor(gy);
+    w.egxi.push(gxi);
+    w.egyi.push(gyi);
+    w.egox.push(gx - gxi);
+    w.egoy.push(gy - gyi);
+
     w.evx.push(0);
     w.evy.push(0);
     w.eHp.push(scaledHp);
@@ -40,4 +53,9 @@ export function spawnEnemy(w: World, type: EnemyType, x: number, y: number) {
     w.ePoisonedOnDeath.push(false);
 
     return i;
+}
+
+export function spawnEnemy(w: World, type: EnemyType, x: number, y: number) {
+    const gp = worldToGrid(x, y, KENNEY_TILE_WORLD);
+    return spawnEnemyGrid(w, type, gp.gx, gp.gy, KENNEY_TILE_WORLD);
 }

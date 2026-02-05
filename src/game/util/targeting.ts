@@ -1,6 +1,9 @@
 // src/game/util/targeting.ts
 
 import type { World } from "../world";
+import { gridAtPlayer } from "../world";
+import { gridToWorld, worldToGrid } from "../coords/grid";
+import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 import { queryCircle, queryCircleUnique } from "./spatialHash";
 
 /**
@@ -18,11 +21,11 @@ export type TargetingStrategy =
 export type TargetResult = {
   /** Enemy index, or -1 if no target found */
   enemyIndex: number;
-  /** Target world position X (may differ from enemy position for CLUSTER) */
+  /** Target world position X (derived from grid) */
   x: number;
-  /** Target world position Y */
+  /** Target world position Y (derived from grid) */
   y: number;
-  /** Direction from player to target (normalized) */
+  /** Direction from player to target (grid-space) */
   dirX: number;
   dirY: number;
   /** Distance to target */
@@ -37,6 +40,40 @@ const NO_TARGET: TargetResult = {
   dirY: 0,
   distance: 0,
 };
+
+const TILE_WORLD = KENNEY_TILE_WORLD;
+
+function enemyGrid(w: World, e: number) {
+  return { gx: w.egxi[e] + w.egox[e], gy: w.egyi[e] + w.egoy[e] };
+}
+
+function worldPosFromGrid(gx: number, gy: number) {
+  const wp = gridToWorld(gx, gy, TILE_WORLD);
+  return { x: wp.wx, y: wp.wy };
+}
+
+function gridPosFromWorld(x: number, y: number) {
+  return worldToGrid(x, y, TILE_WORLD);
+}
+
+function worldDeltaFromGridDelta(dxg: number, dyg: number) {
+  const wp = gridToWorld(dxg, dyg, TILE_WORLD);
+  return { dx: wp.wx, dy: wp.wy };
+}
+
+function worldDistSqFromGridDelta(dxg: number, dyg: number) {
+  const wv = worldDeltaFromGridDelta(dxg, dyg);
+  return wv.dx * wv.dx + wv.dy * wv.dy;
+}
+
+function worldDistFromGridDelta(dxg: number, dyg: number) {
+  return Math.sqrt(worldDistSqFromGridDelta(dxg, dyg));
+}
+
+function gridDir(dxg: number, dyg: number) {
+  const len = Math.hypot(dxg, dyg) || 0.0001;
+  return { dx: dxg / len, dy: dyg / len };
+}
 
 /**
  * Finds a target using the specified strategy.
@@ -77,15 +114,18 @@ export function findTarget(
 export function findClosestTarget(w: World, maxRange: number = 0): TargetResult {
   let best = -1;
   let bestD2 = maxRange > 0 ? maxRange * maxRange : Infinity;
+  const pg = gridAtPlayer(w);
+  const pw = worldPosFromGrid(pg.gx, pg.gy);
 
   // Use spatial hash if range is limited, otherwise scan all
   if (maxRange > 0) {
-    const nearby = queryCircleUnique(w.enemySpatialHash, w.px, w.py, maxRange + 50);
+    const nearby = queryCircleUnique(w.enemySpatialHash, pw.x, pw.y, maxRange + 50);
     for (const e of nearby) {
       if (!w.eAlive[e]) continue;
-      const dx = w.ex[e] - w.px;
-      const dy = w.ey[e] - w.py;
-      const d2 = dx * dx + dy * dy;
+      const eg = enemyGrid(w, e);
+      const dxg = eg.gx - pg.gx;
+      const dyg = eg.gy - pg.gy;
+      const d2 = worldDistSqFromGridDelta(dxg, dyg);
       if (d2 < bestD2) {
         bestD2 = d2;
         best = e;
@@ -94,9 +134,10 @@ export function findClosestTarget(w: World, maxRange: number = 0): TargetResult 
   } else {
     for (let e = 0; e < w.eAlive.length; e++) {
       if (!w.eAlive[e]) continue;
-      const dx = w.ex[e] - w.px;
-      const dy = w.ey[e] - w.py;
-      const d2 = dx * dx + dy * dy;
+      const eg = enemyGrid(w, e);
+      const dxg = eg.gx - pg.gx;
+      const dyg = eg.gy - pg.gy;
+      const d2 = worldDistSqFromGridDelta(dxg, dyg);
       if (d2 < bestD2) {
         bestD2 = d2;
         best = e;
@@ -119,17 +160,20 @@ export function findClusterTarget(
   clusterRadius: number = 80
 ): TargetResult {
   const maxR2 = maxRange > 0 ? maxRange * maxRange : Infinity;
+  const pg = gridAtPlayer(w);
+  const pw = worldPosFromGrid(pg.gx, pg.gy);
   
   // Collect candidates within range
   const candidates: number[] = [];
   
   if (maxRange > 0) {
-    const nearby = queryCircleUnique(w.enemySpatialHash, w.px, w.py, maxRange + 50);
+    const nearby = queryCircleUnique(w.enemySpatialHash, pw.x, pw.y, maxRange + 50);
     for (const e of nearby) {
       if (!w.eAlive[e]) continue;
-      const dx = w.ex[e] - w.px;
-      const dy = w.ey[e] - w.py;
-      if (dx * dx + dy * dy <= maxR2) {
+      const eg = enemyGrid(w, e);
+      const dxg = eg.gx - pg.gx;
+      const dyg = eg.gy - pg.gy;
+      if (worldDistSqFromGridDelta(dxg, dyg) <= maxR2) {
         candidates.push(e);
       }
     }
@@ -147,28 +191,30 @@ export function findClusterTarget(
   // The candidate with the most neighbors defines the cluster center
   let bestCenter = candidates[0];
   let bestCount = 0;
-  let bestCenterX = w.ex[candidates[0]];
-  let bestCenterY = w.ey[candidates[0]];
+  let bestCenterGx = enemyGrid(w, candidates[0]).gx;
+  let bestCenterGy = enemyGrid(w, candidates[0]).gy;
 
   const cr2 = clusterRadius * clusterRadius;
 
   for (let i = 0; i < candidates.length; i++) {
     const e = candidates[i];
-    const ex = w.ex[e];
-    const ey = w.ey[e];
+    const eg = enemyGrid(w, e);
+    const exg = eg.gx;
+    const eyg = eg.gy;
     
     let count = 0;
-    let sumX = 0;
-    let sumY = 0;
+    let sumGx = 0;
+    let sumGy = 0;
 
     for (let j = 0; j < candidates.length; j++) {
       const other = candidates[j];
-      const dx = w.ex[other] - ex;
-      const dy = w.ey[other] - ey;
-      if (dx * dx + dy * dy <= cr2) {
+      const og = enemyGrid(w, other);
+      const dxg = og.gx - exg;
+      const dyg = og.gy - eyg;
+      if (worldDistSqFromGridDelta(dxg, dyg) <= cr2) {
         count++;
-        sumX += w.ex[other];
-        sumY += w.ey[other];
+        sumGx += og.gx;
+        sumGy += og.gy;
       }
     }
 
@@ -176,22 +222,24 @@ export function findClusterTarget(
       bestCount = count;
       bestCenter = e;
       // Use centroid of the cluster as the target point
-      bestCenterX = sumX / count;
-      bestCenterY = sumY / count;
+      bestCenterGx = sumGx / count;
+      bestCenterGy = sumGy / count;
     }
   }
 
   // Return the cluster centroid (not necessarily an enemy position)
-  const dx = bestCenterX - w.px;
-  const dy = bestCenterY - w.py;
-  const dist = Math.hypot(dx, dy) || 0.0001;
+  const dxg = bestCenterGx - pg.gx;
+  const dyg = bestCenterGy - pg.gy;
+  const dist = worldDistFromGridDelta(dxg, dyg) || 0.0001;
+  const wpos = worldPosFromGrid(bestCenterGx, bestCenterGy);
+  const gdir = gridDir(dxg, dyg);
 
   return {
     enemyIndex: bestCenter, // The enemy that anchors the cluster
-    x: bestCenterX,
-    y: bestCenterY,
-    dirX: dx / dist,
-    dirY: dy / dist,
+    x: wpos.x,
+    y: wpos.y,
+    dirX: gdir.dx,
+    dirY: gdir.dy,
     distance: dist,
   };
 }
@@ -202,14 +250,17 @@ export function findClusterTarget(
 export function findRandomTarget(w: World, maxRange: number = 0): TargetResult {
   const maxR2 = maxRange > 0 ? maxRange * maxRange : Infinity;
   const candidates: number[] = [];
+  const pg = gridAtPlayer(w);
+  const pw = worldPosFromGrid(pg.gx, pg.gy);
 
   if (maxRange > 0) {
-    const nearby = queryCircleUnique(w.enemySpatialHash, w.px, w.py, maxRange + 50);
+    const nearby = queryCircleUnique(w.enemySpatialHash, pw.x, pw.y, maxRange + 50);
     for (const e of nearby) {
       if (!w.eAlive[e]) continue;
-      const dx = w.ex[e] - w.px;
-      const dy = w.ey[e] - w.py;
-      if (dx * dx + dy * dy <= maxR2) {
+      const eg = enemyGrid(w, e);
+      const dxg = eg.gx - pg.gx;
+      const dyg = eg.gy - pg.gy;
+      if (worldDistSqFromGridDelta(dxg, dyg) <= maxR2) {
         candidates.push(e);
       }
     }
@@ -233,12 +284,15 @@ export function findStrongestTarget(w: World, maxRange: number = 0): TargetResul
   const maxR2 = maxRange > 0 ? maxRange * maxRange : Infinity;
   let best = -1;
   let bestHp = -Infinity;
+  const pg = gridAtPlayer(w);
+  const pw = worldPosFromGrid(pg.gx, pg.gy);
 
   const checkEnemy = (e: number) => {
     if (!w.eAlive[e]) return;
-    const dx = w.ex[e] - w.px;
-    const dy = w.ey[e] - w.py;
-    if (maxRange > 0 && dx * dx + dy * dy > maxR2) return;
+    const eg = enemyGrid(w, e);
+    const dxg = eg.gx - pg.gx;
+    const dyg = eg.gy - pg.gy;
+    if (maxRange > 0 && worldDistSqFromGridDelta(dxg, dyg) > maxR2) return;
     
     if (w.eHp[e] > bestHp) {
       bestHp = w.eHp[e];
@@ -247,7 +301,7 @@ export function findStrongestTarget(w: World, maxRange: number = 0): TargetResul
   };
 
   if (maxRange > 0) {
-    const nearby = queryCircleUnique(w.enemySpatialHash, w.px, w.py, maxRange + 50);
+    const nearby = queryCircleUnique(w.enemySpatialHash, pw.x, pw.y, maxRange + 50);
     for (const e of nearby) checkEnemy(e);
   } else {
     for (let e = 0; e < w.eAlive.length; e++) checkEnemy(e);
@@ -264,12 +318,15 @@ export function findWeakestTarget(w: World, maxRange: number = 0): TargetResult 
   const maxR2 = maxRange > 0 ? maxRange * maxRange : Infinity;
   let best = -1;
   let bestHp = Infinity;
+  const pg = gridAtPlayer(w);
+  const pw = worldPosFromGrid(pg.gx, pg.gy);
 
   const checkEnemy = (e: number) => {
     if (!w.eAlive[e]) return;
-    const dx = w.ex[e] - w.px;
-    const dy = w.ey[e] - w.py;
-    if (maxRange > 0 && dx * dx + dy * dy > maxR2) return;
+    const eg = enemyGrid(w, e);
+    const dxg = eg.gx - pg.gx;
+    const dyg = eg.gy - pg.gy;
+    if (maxRange > 0 && worldDistSqFromGridDelta(dxg, dyg) > maxR2) return;
     
     if (w.eHp[e] < bestHp) {
       bestHp = w.eHp[e];
@@ -278,7 +335,7 @@ export function findWeakestTarget(w: World, maxRange: number = 0): TargetResult 
   };
 
   if (maxRange > 0) {
-    const nearby = queryCircleUnique(w.enemySpatialHash, w.px, w.py, maxRange + 50);
+    const nearby = queryCircleUnique(w.enemySpatialHash, pw.x, pw.y, maxRange + 50);
     for (const e of nearby) checkEnemy(e);
   } else {
     for (let e = 0; e < w.eAlive.length; e++) checkEnemy(e);
@@ -295,12 +352,15 @@ export function findFarthestTarget(w: World, maxRange: number = 0): TargetResult
   const maxR2 = maxRange > 0 ? maxRange * maxRange : Infinity;
   let best = -1;
   let bestD2 = 0;
+  const pg = gridAtPlayer(w);
+  const pw = worldPosFromGrid(pg.gx, pg.gy);
 
   const checkEnemy = (e: number) => {
     if (!w.eAlive[e]) return;
-    const dx = w.ex[e] - w.px;
-    const dy = w.ey[e] - w.py;
-    const d2 = dx * dx + dy * dy;
+    const eg = enemyGrid(w, e);
+    const dxg = eg.gx - pg.gx;
+    const dyg = eg.gy - pg.gy;
+    const d2 = worldDistSqFromGridDelta(dxg, dyg);
     if (maxRange > 0 && d2 > maxR2) return;
     
     if (d2 > bestD2) {
@@ -310,7 +370,7 @@ export function findFarthestTarget(w: World, maxRange: number = 0): TargetResult
   };
 
   if (maxRange > 0) {
-    const nearby = queryCircleUnique(w.enemySpatialHash, w.px, w.py, maxRange + 50);
+    const nearby = queryCircleUnique(w.enemySpatialHash, pw.x, pw.y, maxRange + 50);
     for (const e of nearby) checkEnemy(e);
   } else {
     for (let e = 0; e < w.eAlive.length; e++) checkEnemy(e);
@@ -324,16 +384,20 @@ export function findFarthestTarget(w: World, maxRange: number = 0): TargetResult
  * Helper to build a TargetResult from an enemy index.
  */
 function makeTargetResult(w: World, e: number): TargetResult {
-  const dx = w.ex[e] - w.px;
-  const dy = w.ey[e] - w.py;
-  const dist = Math.hypot(dx, dy) || 0.0001;
+  const pg = gridAtPlayer(w);
+  const eg = enemyGrid(w, e);
+  const dxg = eg.gx - pg.gx;
+  const dyg = eg.gy - pg.gy;
+  const dist = worldDistFromGridDelta(dxg, dyg) || 0.0001;
+  const wpos = worldPosFromGrid(eg.gx, eg.gy);
+  const gdir = gridDir(dxg, dyg);
 
   return {
     enemyIndex: e,
-    x: w.ex[e],
-    y: w.ey[e],
-    dirX: dx / dist,
-    dirY: dy / dist,
+    x: wpos.x,
+    y: wpos.y,
+    dirX: gdir.dx,
+    dirY: gdir.dy,
     distance: dist,
   };
 }
@@ -345,13 +409,16 @@ function makeTargetResult(w: World, e: number): TargetResult {
 export function getEnemiesInRange(w: World, maxRange: number): number[] {
   const maxR2 = maxRange * maxRange;
   const candidates: number[] = [];
+  const pg = gridAtPlayer(w);
+  const pw = worldPosFromGrid(pg.gx, pg.gy);
 
-  const nearby = queryCircleUnique(w.enemySpatialHash, w.px, w.py, maxRange + 50);
+  const nearby = queryCircleUnique(w.enemySpatialHash, pw.x, pw.y, maxRange + 50);
   for (const e of nearby) {
     if (!w.eAlive[e]) continue;
-    const dx = w.ex[e] - w.px;
-    const dy = w.ey[e] - w.py;
-    if (dx * dx + dy * dy <= maxR2) {
+    const eg = enemyGrid(w, e);
+    const dxg = eg.gx - pg.gx;
+    const dyg = eg.gy - pg.gy;
+    if (worldDistSqFromGridDelta(dxg, dyg) <= maxR2) {
       candidates.push(e);
     }
   }
@@ -380,9 +447,11 @@ export function countEnemiesNear(
     seen.add(e);
     
     if (!w.eAlive[e]) continue;
-    const dx = w.ex[e] - x;
-    const dy = w.ey[e] - y;
-    if (dx * dx + dy * dy <= r2) {
+    const eg = enemyGrid(w, e);
+    const tg = gridPosFromWorld(x, y);
+    const dxg = eg.gx - tg.gx;
+    const dyg = eg.gy - tg.gy;
+    if (worldDistSqFromGridDelta(dxg, dyg) <= r2) {
       count++;
     }
   }

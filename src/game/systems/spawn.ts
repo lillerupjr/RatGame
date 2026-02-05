@@ -1,9 +1,10 @@
-import type { World } from "../world";
-import { spawnEnemy } from "../factories/enemyFactory";
+import { playerWorldPos, type World } from "../world";
+import { spawnEnemyGrid } from "../factories/enemyFactory";
 import type { EnemyType } from "../factories/enemyFactory";
 import { floorForIndex, pickFloorEnemyType } from "../content/floors";
 import { walkInfo } from "../map/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
+import { worldToGrid } from "../coords/grid";
 
 /**
  * Spawning system:
@@ -17,6 +18,9 @@ import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 export function spawnSystem(w: World, dt: number) {
   // Floors only (no spawns during boss/transition)
   if (w.runState !== "FLOOR") return;
+  const pw = playerWorldPos(w, KENNEY_TILE_WORLD);
+  const px = pw.wx;
+  const py = pw.wy;
 
   // Spawn zone: tiles reachable from player within N steps (guarantees a path).
   const findSpawnPoint = (baseX: number, baseY: number, maxTries: number) => {
@@ -33,7 +37,7 @@ export function spawnSystem(w: World, dt: number) {
     });
 
     // --- 1) Walk tiles from player (bounded BFS depth = 10) ---
-    const p0 = walkInfo(w.px, w.py, T);
+    const p0 = walkInfo(px, py, T);
     const startTx = p0.tx | 0;
     const startTy = p0.ty | 0;
 
@@ -157,13 +161,14 @@ export function spawnSystem(w: World, dt: number) {
       for (let k = 0; k < s.count; k++) {
         const angle = w.rng.range(0, Math.PI * 2);
         const radius = w.rng.range(s.radius * 0.8, s.radius);
-        const baseX = w.px + Math.cos(angle) * radius;
-        const baseY = w.py + Math.sin(angle) * radius;
+        const baseX = px + Math.cos(angle) * radius;
+        const baseY = py + Math.sin(angle) * radius;
 
         const p = findSpawnPoint(baseX, baseY, 18);
         if (!p) continue;
 
-        spawnEnemy(w, s.type as EnemyType, p.x, p.y);
+        const gp = worldToGrid(p.x, p.y, KENNEY_TILE_WORLD);
+        spawnEnemyGrid(w, s.type as EnemyType, gp.gx, gp.gy, KENNEY_TILE_WORLD);
       }
       (s as any).t = Infinity;
     }
@@ -187,13 +192,14 @@ export function spawnSystem(w: World, dt: number) {
 
       const angle = w.rng.range(0, Math.PI * 2);
       const radius = w.rng.range(floor.spawns.ringMin, floor.spawns.ringMax);
-      const baseX = w.px + Math.cos(angle) * radius;
-      const baseY = w.py + Math.sin(angle) * radius;
+      const baseX = px + Math.cos(angle) * radius;
+      const baseY = py + Math.sin(angle) * radius;
 
       const p = findSpawnPoint(baseX, baseY, 18);
       if (!p) continue;
 
-      spawnEnemy(w, type, p.x, p.y);
+      const gp = worldToGrid(p.x, p.y, KENNEY_TILE_WORLD);
+      spawnEnemyGrid(w, type, gp.gx, gp.gy, KENNEY_TILE_WORLD);
     }
   }
 }

@@ -6,6 +6,7 @@ import type { GameEvent } from "./events";
 import { KENNEY_TILE_WORLD } from "./visual/kenneyTiles";
 import { getSpawnWorld } from "./map/kenneyMap";
 import { recomputeDerivedStats } from "./stats/derivedStats";
+import { gridToWorld, worldToGrid } from "./coords/grid";
 
 import type { WeaponId } from "./content/weapons";
 
@@ -102,8 +103,11 @@ export type World = {
   // -------------------------
   // Player
   // -------------------------
-  px: number;
-  py: number;
+  // Grid-authoritative position (screen-aligned logical grid)
+  pgxi: number;
+  pgyi: number;
+  pgox: number;
+  pgoy: number;
 
   // Continuous elevation (Milestone B/C). Typically map-driven.
   pz: number;
@@ -169,8 +173,11 @@ export type World = {
   // -------------------------
   eAlive: boolean[];
   eType: number[];
-  ex: number[];
-  ey: number[];
+  // Grid-authoritative positions
+  egxi: number[];
+  egyi: number[];
+  egox: number[];
+  egoy: number[];
   evx: number[];
   evy: number[];
   eHp: number[];
@@ -192,8 +199,11 @@ export type World = {
   // -------------------------
   zAlive: boolean[];
   zKind: number[];
-  zx: number[];
-  zy: number[];
+  // Grid-authoritative positions
+  zgxi: number[];
+  zgyi: number[];
+  zgox: number[];
+  zgoy: number[];
   zR: number[];
   zDamage: number[];
   zTickEvery: number[];
@@ -209,8 +219,11 @@ export type World = {
   prHidden: boolean[]; // Phase 3: render-only hide (e.g., underground)
   pKind: number; // reserved
   prjKind: number[];
-  prx: number[];
-  pry: number[];
+  // Grid-authoritative positions
+  prgxi: number[];
+  prgyi: number[];
+  prgox: number[];
+  prgoy: number[];
 
   // Milestone C: projectile height (continuous)
   prZ: number[];
@@ -280,8 +293,11 @@ export type World = {
   // -------------------------
   xAlive: boolean[];
   xKind: number[];
-  xx: number[];
-  xy: number[];
+  // Grid-authoritative positions
+  xgxi: number[];
+  xgyi: number[];
+  xgox: number[];
+  xgoy: number[];
   xValue: number[];
   xDropId: string[];
 
@@ -369,8 +385,10 @@ export function createWorld(args: CreateWorldArgs): World {
     roomChallengeLocked: false,
 
     // Player
-    px: 0,
-    py: 0,
+    pgxi: 0,
+    pgyi: 0,
+    pgox: 0,
+    pgoy: 0,
     pz: 0,
     pvx: 0,
     pvy: 0,
@@ -417,8 +435,10 @@ export function createWorld(args: CreateWorldArgs): World {
     // Enemies
     eAlive: [],
     eType: [],
-    ex: [],
-    ey: [],
+    egxi: [],
+    egyi: [],
+    egox: [],
+    egoy: [],
     evx: [],
     evy: [],
     eHp: [],
@@ -436,8 +456,10 @@ export function createWorld(args: CreateWorldArgs): World {
     // Zones
     zAlive: [],
     zKind: [],
-    zx: [],
-    zy: [],
+    zgxi: [],
+    zgyi: [],
+    zgox: [],
+    zgoy: [],
     zR: [],
     zDamage: [],
     zTickEvery: [],
@@ -451,8 +473,10 @@ export function createWorld(args: CreateWorldArgs): World {
     prHidden: [],
     pKind: 0,
     prjKind: [],
-    prx: [],
-    pry: [],
+    prgxi: [],
+    prgyi: [],
+    prgox: [],
+    prgoy: [],
     prZ: [],
     prHitsPlayer: [],
     prvx: [],
@@ -505,8 +529,10 @@ export function createWorld(args: CreateWorldArgs): World {
     // Pickups
     xAlive: [],
     xKind: [],
-    xx: [],
-    xy: [],
+    xgxi: [],
+    xgyi: [],
+    xgox: [],
+    xgoy: [],
     xValue: [],
     xDropId: [],
 
@@ -536,8 +562,12 @@ export function createWorld(args: CreateWorldArgs): World {
   // Map-authored player spawn (SPAWN/P<number> tile)
   {
     const sp = getSpawnWorld(KENNEY_TILE_WORLD);
-    w.px = sp.x;
-    w.py = sp.y;
+    const gp = worldToGrid(sp.x, sp.y, KENNEY_TILE_WORLD);
+    w.pgxi = Math.floor(gp.gx);
+    w.pgyi = Math.floor(gp.gy);
+    w.pgox = gp.gx - w.pgxi;
+    w.pgoy = gp.gy - w.pgyi;
+
     w.pz = sp.z;
     w.activeFloorH = sp.h | 0;
   }
@@ -545,6 +575,43 @@ export function createWorld(args: CreateWorldArgs): World {
   recomputeDerivedStats(w);
 
   return w;
+}
+
+function gridFromAnchor(gxi: number, gyi: number, gox: number, goy: number) {
+  return { gx: gxi + gox, gy: gyi + goy };
+}
+
+export function gridAtPlayer(w: World) {
+  return gridFromAnchor(w.pgxi, w.pgyi, w.pgox, w.pgoy);
+}
+
+export function playerWorldPos(w: World, tileWorld = KENNEY_TILE_WORLD) {
+  const { gx, gy } = gridAtPlayer(w);
+  return gridToWorld(gx, gy, tileWorld);
+}
+
+export function enemyWorldPos(w: World, i: number, tileWorld = KENNEY_TILE_WORLD) {
+  const gx = w.egxi[i] + w.egox[i];
+  const gy = w.egyi[i] + w.egoy[i];
+  return gridToWorld(gx, gy, tileWorld);
+}
+
+export function projectileWorldPos(w: World, i: number, tileWorld = KENNEY_TILE_WORLD) {
+  const gx = w.prgxi[i] + w.prgox[i];
+  const gy = w.prgyi[i] + w.prgoy[i];
+  return gridToWorld(gx, gy, tileWorld);
+}
+
+export function pickupWorldPos(w: World, i: number, tileWorld = KENNEY_TILE_WORLD) {
+  const gx = w.xgxi[i] + w.xgox[i];
+  const gy = w.xgyi[i] + w.xgoy[i];
+  return gridToWorld(gx, gy, tileWorld);
+}
+
+export function zoneWorldPos(w: World, i: number, tileWorld = KENNEY_TILE_WORLD) {
+  const gx = w.zgxi[i] + w.zgox[i];
+  const gy = w.zgyi[i] + w.zgoy[i];
+  return gridToWorld(gx, gy, tileWorld);
 }
 
 

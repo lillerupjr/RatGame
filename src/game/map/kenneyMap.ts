@@ -13,6 +13,7 @@ import {
 } from "./kenneyMapLoader";
 import type { TableMapDef } from "./tableMapTypes";
 import { worldDeltaToScreen } from "../visual/iso";
+import { gridToWorld, worldToGrid } from "../coords/grid";
 import { generateFloorMap } from "./proceduralMap";
 import {EXCEL_SANCTUARY_01} from "./maps";
 
@@ -61,6 +62,12 @@ export function getTile(tx: number, ty: number): IsoTile {
     return _compiled.getTile(tx, ty);
 }
 
+export function getTileAtGrid(gx: number, gy: number, tileWorld: number): IsoTile {
+    const { wx, wy } = gridToWorld(gx, gy, tileWorld);
+    const { tx, ty } = worldToTile(wx, wy, tileWorld);
+    return getTile(tx, ty);
+}
+
 /**
  * Map-authored spawn point (tile-space -> world-space center).
  * Uses the first P<number> token found in maps.ts.
@@ -105,6 +112,11 @@ export function isStairsTile(tx: number, ty: number): boolean {
  */
 export function tileHeight(tx: number, ty: number): number {
     return getTile(tx, ty).h | 0;
+}
+
+export function heightAtGrid(gx: number, gy: number, tileWorld: number): number {
+    const { wx, wy } = gridToWorld(gx, gy, tileWorld);
+    return heightAtWorld(wx, wy, tileWorld);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -845,6 +857,11 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
         reason: !inside ? "OUTSIDE" : undefined,
     };
 
+}
+
+export function walkInfoGrid(gx: number, gy: number, tileWorld: number): WalkInfo {
+    const { wx, wy } = gridToWorld(gx, gy, tileWorld);
+    return walkInfo(wx, wy, tileWorld);
 }
 
 function diamondContains(lx: number, ly: number, w: number, h: number): boolean {

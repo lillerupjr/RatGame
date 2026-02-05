@@ -1,7 +1,10 @@
 // src/game/systems/fission.ts
 
 import type { World } from "../world";
-import { spawnProjectile, PRJ_KIND } from "../factories/projectileFactory";
+import { projectileWorldPos } from "../world";
+import { spawnProjectileGrid, PRJ_KIND } from "../factories/projectileFactory";
+import { worldToGrid } from "../coords/grid";
+import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
 /**
  * Nuclear Fission system:
@@ -51,8 +54,9 @@ export function fissionSystem(w: World, dt: number) {
   for (let i = 0; i < fissionProjectiles.length; i++) {
     const p1 = fissionProjectiles[i];
     
-    const x1 = w.prx[p1];
-    const y1 = w.pry[p1];
+    const p1w = projectileWorldPos(w, p1);
+    const x1 = p1w.wx;
+    const y1 = p1w.wy;
     const r1 = w.prR[p1];
     const vx1 = w.prvx[p1];
     const vy1 = w.prvy[p1];
@@ -64,8 +68,9 @@ export function fissionSystem(w: World, dt: number) {
       const pairKey = `${Math.min(p1, p2)}_${Math.max(p1, p2)}`;
       if (collidedPairs.has(pairKey)) continue;
 
-      const x2 = w.prx[p2];
-      const y2 = w.pry[p2];
+      const p2w = projectileWorldPos(w, p2);
+      const x2 = p2w.wx;
+      const y2 = p2w.wy;
       const r2 = w.prR[p2];
       const vx2 = w.prvx[p2];
       const vy2 = w.prvy[p2];
@@ -129,12 +134,14 @@ export function fissionSystem(w: World, dt: number) {
     for (const [vx, vy] of [[s.vx1, s.vy1], [s.vx2, s.vy2]]) {
       if (fissionCount >= MAX_FISSION) break;
       
-      const p = spawnProjectile(w, {
+      const gp = worldToGrid(s.x, s.y, KENNEY_TILE_WORLD);
+      const gd = worldToGrid(vx, vy, KENNEY_TILE_WORLD);
+      const p = spawnProjectileGrid(w, {
         kind: PRJ_KIND.BOUNCER,
-        x: s.x,
-        y: s.y,
-        dirX: vx,
-        dirY: vy,
+        gx: gp.gx,
+        gy: gp.gy,
+        dirGx: gd.gx,
+        dirGy: gd.gy,
         speed: s.speed,
         damage: s.damage,
         radius: s.radius,

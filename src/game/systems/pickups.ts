@@ -1,5 +1,7 @@
-import { World } from "../world";
+import { World, pickupWorldPos, playerWorldPos } from "../world";
 import type { DropId } from "../content/drops";
+import { gridToWorld, worldToGrid } from "../coords/grid";
+import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
 export const PICKUP_KIND = {
   XP: 1,
@@ -7,6 +9,16 @@ export const PICKUP_KIND = {
 } as const;
 
 export function pickupsSystem(w: World, dt: number) {
+  const syncPickupGrid = (i: number, wx: number, wy: number) => {
+    const gp = worldToGrid(wx, wy, KENNEY_TILE_WORLD);
+    const gxi = Math.floor(gp.gx);
+    const gyi = Math.floor(gp.gy);
+    w.xgxi[i] = gxi;
+    w.xgyi[i] = gyi;
+    w.xgox[i] = gp.gx - gxi;
+    w.xgoy[i] = gp.gy - gyi;
+  };
+
   // Update magnet timer
   if (w.magnetActive) {
     w.magnetTimer -= dt;
@@ -18,11 +30,18 @@ export function pickupsSystem(w: World, dt: number) {
 
   // Pickups drift toward player when close (classic vacuum feel)
   // OR when magnet is active (pulls ALL XP from anywhere)
+  const pw = playerWorldPos(w, KENNEY_TILE_WORLD);
+  const px = pw.wx;
+  const py = pw.wy;
+
   for (let i = 0; i < w.xAlive.length; i++) {
     if (!w.xAlive[i]) continue;
-    
-    const dx = w.px - w.xx[i];
-    const dy = w.py - w.xy[i];
+
+    const wp = pickupWorldPos(w, i, KENNEY_TILE_WORLD);
+    let wx = wp.wx;
+    let wy = wp.wy;
+    const dx = px - wx;
+    const dy = py - wy;
     const d = Math.hypot(dx, dy);
     
     // Magnet pulls all XP pickups regardless of distance
@@ -34,8 +53,9 @@ export function pickupsSystem(w: World, dt: number) {
       const pull = w.magnetActive && isXp ? 800 : 420; // px/s
       const ux = dx / (d || 1);
       const uy = dy / (d || 1);
-      w.xx[i] += ux * pull * dt;
-      w.xy[i] += uy * pull * dt;
+      wx += ux * pull * dt;
+      wy += uy * pull * dt;
+      syncPickupGrid(i, wx, wy);
     }
   }
 }
@@ -45,12 +65,28 @@ export function spawnXp(w: World, x: number, y: number, value: number) {
 
   w.xAlive.push(true);
   w.xKind.push(PICKUP_KIND.XP);
-  w.xx.push(x);
-  w.xy.push(y);
+  const gp = worldToGrid(x, y, KENNEY_TILE_WORLD);
+  const gxi = Math.floor(gp.gx);
+  const gyi = Math.floor(gp.gy);
+  w.xgxi.push(gxi);
+  w.xgyi.push(gyi);
+  w.xgox.push(gp.gx - gxi);
+  w.xgoy.push(gp.gy - gyi);
   w.xValue.push(value);
   w.xDropId.push("");
 
   return i;
+}
+
+export function spawnXpGrid(
+  w: World,
+  gx: number,
+  gy: number,
+  value: number,
+  tileWorld: number = KENNEY_TILE_WORLD
+) {
+  const pos = gridToWorld(gx, gy, tileWorld);
+  return spawnXp(w, pos.wx, pos.wy, value);
 }
 
 export function spawnChest(w: World, x: number, y: number, dropId: DropId = "BOSS_CHEST") {
@@ -58,10 +94,26 @@ export function spawnChest(w: World, x: number, y: number, dropId: DropId = "BOS
 
   w.xAlive.push(true);
   w.xKind.push(PICKUP_KIND.CHEST);
-  w.xx.push(x);
-  w.xy.push(y);
+  const gp = worldToGrid(x, y, KENNEY_TILE_WORLD);
+  const gxi = Math.floor(gp.gx);
+  const gyi = Math.floor(gp.gy);
+  w.xgxi.push(gxi);
+  w.xgyi.push(gyi);
+  w.xgox.push(gp.gx - gxi);
+  w.xgoy.push(gp.gy - gyi);
   w.xValue.push(0);
   w.xDropId.push(dropId);
 
   return i;
+}
+
+export function spawnChestGrid(
+  w: World,
+  gx: number,
+  gy: number,
+  dropId: DropId = "BOSS_CHEST",
+  tileWorld: number = KENNEY_TILE_WORLD
+) {
+  const pos = gridToWorld(gx, gy, tileWorld);
+  return spawnChest(w, pos.wx, pos.wy, dropId);
 }

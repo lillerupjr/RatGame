@@ -1,8 +1,10 @@
 // src/game/systems/projectiles.ts
 import type { World } from "../world";
+import { playerWorldPos, projectileWorldPos } from "../world";
 import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
 import {heightAtWorld, queryVisibilityAtWorld, WalkInfo, walkInfo} from "../map/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
+import { worldToGrid } from "../coords/grid";
 import {
     isUnderOcclusionCeiling,
     VISIBILITY_BELOW_CEILING_EPS,
@@ -45,10 +47,26 @@ export let PROJECTILE_GROUND_SAMPLE_STEPS = 1;
 export function projectilesSystem(w: World, dt: number) {
     const moveSpeedMult = w.baseMoveSpeed > 0 ? w.pSpeed / w.baseMoveSpeed : 1;
     const T = KENNEY_TILE_WORLD;
+    const pw = playerWorldPos(w, T);
+    const px = pw.wx;
+    const py = pw.wy;
     // Phase 1: no stair/projectile coupling
+
+    const syncProjectileGrid = (i: number, wx: number, wy: number) => {
+        const gp = worldToGrid(wx, wy, T);
+        const gxi = Math.floor(gp.gx);
+        const gyi = Math.floor(gp.gy);
+        w.prgxi[i] = gxi;
+        w.prgyi[i] = gyi;
+        w.prgox[i] = gp.gx - gxi;
+        w.prgoy[i] = gp.gy - gyi;
+    };
 
     for (let i = 0; i < w.pAlive.length; i++) {
         if (!w.pAlive[i]) continue;
+        const wp0 = projectileWorldPos(w, i, T);
+        let ox = wp0.wx;
+        let oy = wp0.wy;
 
         // TTL
         w.prTtl[i] -= dt;
@@ -78,8 +96,9 @@ export function projectilesSystem(w: World, dt: number) {
             const r = baseR * areaMult;
 
             // Center on player
-            w.prx[i] = w.px + Math.cos(a) * r;
-            w.pry[i] = w.py + Math.sin(a) * r;
+            ox = px + Math.cos(a) * r;
+            oy = py + Math.sin(a) * r;
+            syncProjectileGrid(i, ox, oy);
 
             // Keep direction sane
             w.prDirX[i] = Math.cos(a);
@@ -91,8 +110,7 @@ export function projectilesSystem(w: World, dt: number) {
             const vx = w.prvx[i] * moveSpeedMult * PROJECTILE_SPEED_MULT;
             const vy = w.prvy[i] * moveSpeedMult * PROJECTILE_SPEED_MULT;
 
-            let ox = w.prx[i];
-            let oy = w.pry[i];
+            // ox/oy already set from grid
 
 
 
@@ -156,9 +174,6 @@ export function projectilesSystem(w: World, dt: number) {
 
 
                 // Commit the substep move
-                w.prx[i] = nx;
-                w.pry[i] = ny;
-
                 ox = nx;
                 oy = ny;
 
@@ -171,16 +186,16 @@ export function projectilesSystem(w: World, dt: number) {
             }
 
             // Wall bounce (only for projectiles that opted-in)
-            if (w.prWallBounce[i] && w.pAlive[i]) {
-                const ww = (w as any).viewW ?? 800;
-                const hh = (w as any).viewH ?? 600;
+                if (w.prWallBounce[i] && w.pAlive[i]) {
+                    const ww = (w as any).viewW ?? 800;
+                    const hh = (w as any).viewH ?? 600;
 
                 // Camera is centered on player in renderSystem:
                 // camX = ww*0.5 - proj(player), so world-space view bounds:
-                const left = w.px - ww * 0.5;
-                const right = w.px + ww * 0.5;
-                const top = w.py - hh * 0.5;
-                const bottom = w.py + hh * 0.5;
+                const left = px - ww * 0.5;
+                const right = px + ww * 0.5;
+                const top = py - hh * 0.5;
+                const bottom = py + hh * 0.5;
 
                 const r = w.prR[i];
                 let bounced = false;
@@ -188,19 +203,19 @@ export function projectilesSystem(w: World, dt: number) {
                 const bLeft = w.prBouncesLeft[i];
 
                 // Left / Right
-                if (w.prx[i] - r < left) {
+                if (ox - r < left) {
                     if (bLeft >= 0 && bLeft <= 0) {
                         w.pAlive[i] = false;
                     } else {
-                        w.prx[i] = left + r;
+                        ox = left + r;
                         w.prvx[i] = Math.abs(w.prvx[i]);
                         bounced = true;
                     }
-                } else if (w.prx[i] + r > right) {
+                } else if (ox + r > right) {
                     if (bLeft >= 0 && bLeft <= 0) {
                         w.pAlive[i] = false;
                     } else {
-                        w.prx[i] = right - r;
+                        ox = right - r;
                         w.prvx[i] = -Math.abs(w.prvx[i]);
                         bounced = true;
                     }
@@ -208,19 +223,19 @@ export function projectilesSystem(w: World, dt: number) {
 
                 // Top / Bottom
                 if (w.pAlive[i]) {
-                    if (w.pry[i] - r < top) {
+                    if (oy - r < top) {
                         if (bLeft >= 0 && bLeft <= 0) {
                             w.pAlive[i] = false;
                         } else {
-                            w.pry[i] = top + r;
+                            oy = top + r;
                             w.prvy[i] = Math.abs(w.prvy[i]);
                             bounced = true;
                         }
-                    } else if (w.pry[i] + r > bottom) {
+                    } else if (oy + r > bottom) {
                         if (bLeft >= 0 && bLeft <= 0) {
                             w.pAlive[i] = false;
                         } else {
-                            w.pry[i] = bottom - r;
+                            oy = bottom - r;
                             w.prvy[i] = -Math.abs(w.prvy[i]);
                             bounced = true;
                         }
@@ -245,9 +260,9 @@ export function projectilesSystem(w: World, dt: number) {
             }
 
             if (w.pAlive[i]) {
-                const info: WalkInfo = walkInfo(w.prx[i], w.pry[i], T);
+                const info: WalkInfo = walkInfo(ox, oy, T);
                 if (info.kind === "STAIRS" && info.walkable) {
-                    const stairZ = heightAtWorld(w.prx[i], w.pry[i], T);
+                    const stairZ = heightAtWorld(ox, oy, T);
                     const dz = Math.abs((w.prZ[i] ?? 0) - stairZ);
                     if (dz <= PROJECTILE_STAIRS_Z_TOL) {
                         w.pAlive[i] = false;
@@ -263,14 +278,14 @@ export function projectilesSystem(w: World, dt: number) {
             const tx = w.prTargetX[i];
             const ty = w.prTargetY[i];
 
-            const dx = tx - w.prx[i];
-            const dy = ty - w.pry[i];
+            const dx = tx - ox;
+            const dy = ty - oy;
 
             const thresh = Math.max(8, w.prR[i] || 0);
             if (dx * dx + dy * dy <= thresh * thresh) {
                 // Snap to target for clean visuals
-                w.prx[i] = tx;
-                w.pry[i] = ty;
+                ox = tx;
+                oy = ty;
 
                 const blastR = Math.max(0, w.prExplodeR[i] ?? 0);
                 if (blastR > 0) {
@@ -300,13 +315,17 @@ export function projectilesSystem(w: World, dt: number) {
         // -------------------------
         const maxDist = w.prMaxDist[i] ?? 0;
         if (maxDist > 0) {
-            const dx = w.prx[i] - (w.prStartX[i] ?? w.prx[i]);
-            const dy = w.pry[i] - (w.prStartY[i] ?? w.pry[i]);
+            const dx = ox - (w.prStartX[i] ?? ox);
+            const dy = oy - (w.prStartY[i] ?? oy);
             if (dx * dx + dy * dy > maxDist * maxDist) {
                 w.pAlive[i] = false;
             }
         }
 
         if (w.prLastHitCd[i] > 0) w.prLastHitCd[i] = Math.max(0, w.prLastHitCd[i] - dt);
+
+        if (w.pAlive[i]) {
+            syncProjectileGrid(i, ox, oy);
+        }
     }
 }

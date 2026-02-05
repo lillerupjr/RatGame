@@ -1,10 +1,10 @@
 // src/game/systems/onKillExplode.ts
-import type { World } from "../world";
-import { emitEvent } from "../world";
+import { emitEvent, enemyWorldPos, type World } from "../world";
 import { isEnemyInCircle } from "./hitDetection";
 import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
 import { queryCircle } from "../util/spatialHash";
 import { onEnemyKilledForChallenge } from "./roomChallenge";
+import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
 /**
  * Explode-on-kill (poison-gated):
@@ -115,12 +115,13 @@ export function onKillExplodeSystem(w: World, _dt: number) {
 
             w.eHp[e] -= dmg;
 
+            const ew = enemyWorldPos(w, e, KENNEY_TILE_WORLD);
             emitEvent(w, {
                 type: "ENEMY_HIT",
                 enemyIndex: e,
                 damage: dmg,
-                x: w.ex[e],
-                y: w.ey[e],
+                x: ew.wx,
+                y: ew.wy,
                 isCrit: false, // Explosion damage doesn't crit
                 source: "OTHER",
             });
@@ -138,8 +139,8 @@ export function onKillExplodeSystem(w: World, _dt: number) {
                 emitEvent(w, {
                     type: "ENEMY_KILLED",
                     enemyIndex: e,
-                    x: w.ex[e],
-                    y: w.ey[e],
+                    x: ew.wx,
+                    y: ew.wy,
                     xpValue: 1,
                     source: "OTHER",
                 });

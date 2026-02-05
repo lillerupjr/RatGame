@@ -1,5 +1,5 @@
-import type { World } from "../world";
-import { emitEvent } from "../world";
+import { emitEvent, enemyWorldPos, type World } from "../world";
+import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 import { onEnemyKilledForChallenge } from "./roomChallenge";
 
 export function poisonSystem(w: World, dt: number) {
@@ -18,12 +18,14 @@ export function poisonSystem(w: World, dt: number) {
 
         w.eHp[e] -= dmg;
 
+        const ew = enemyWorldPos(w, e, KENNEY_TILE_WORLD);
+
         emitEvent(w, {
             type: "ENEMY_HIT",
             enemyIndex: e,
             damage: dmg,
-            x: w.ex[e],
-            y: w.ey[e],
+            x: ew.wx,
+            y: ew.wy,
             isCrit: false, // Poison damage doesn't crit
             source: "OTHER",
         });
@@ -38,8 +40,8 @@ export function poisonSystem(w: World, dt: number) {
             emitEvent(w, {
                 type: "ENEMY_KILLED",
                 enemyIndex: e,
-                x: w.ex[e],
-                y: w.ey[e],
+                x: ew.wx,
+                y: ew.wy,
                 xpValue: 1,
                 source: "OTHER",
             });

@@ -1,135 +1,149 @@
-import { World } from "../world";
+import { World, enemyWorldPos, gridAtPlayer, playerWorldPos } from "../world";
 import { InputState } from "./input";
-import { worldDeltaToScreen } from "../visual/iso";
-import {getRampFacesForDebug, isOccludedAlongSegment, walkInfo} from "../map/kenneyMap";
+import { getRampFacesForDebug, walkInfo } from "../map/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
-import {Dir8} from "../visual/playerSprites";
+import { Dir8 } from "../visual/playerSprites";
+import { gridToWorld, worldToGrid } from "../coords/grid";
+
+type GridPos = { gx: number; gy: number };
+type WorldPos = { wx: number; wy: number };
+
+function gridFromAnchor(gxi: number, gyi: number, gox: number, goy: number): GridPos {
+  return { gx: gxi + gox, gy: gyi + goy };
+}
+
+function setAnchorFromWorld(
+  tileWorld: number,
+  wx: number,
+  wy: number
+): { gxi: number; gyi: number; gox: number; goy: number } {
+  const gp = worldToGrid(wx, wy, tileWorld);
+  const gxi = Math.floor(gp.gx);
+  const gyi = Math.floor(gp.gy);
+  return { gxi, gyi, gox: gp.gx - gxi, goy: gp.gy - gyi };
+}
+
+function gridDirToWorldDir(tileWorld: number, dx: number, dy: number): WorldPos {
+  const w = gridToWorld(dx, dy, tileWorld);
+  const len = Math.hypot(w.wx, w.wy);
+  if (len <= 1e-6) return { wx: 0, wy: 0 };
+  return { wx: w.wx / len, wy: w.wy / len };
+}
+
+function dirFromGrid(dx: number, dy: number): Dir8 {
+  const ang = Math.atan2(dy, dx);
+  const idx = (Math.round(ang / (Math.PI / 4)) + 8) % 8;
+  const map: Dir8[] = ["E", "NE", "N", "NW", "W", "SW", "S", "SE"];
+  return map[idx];
+}
 
 export function movementSystem(w: World, input: InputState, dt: number) {
-  // -------------------------------------------------------
-  // Isometric controls (Diablo-style):
-  // screen intent -> world dx/dy
-  // -------------------------------------------------------
-  let sx = 0;
-  let sy = 0;
-  if (input.left) sx -= 1;
-  if (input.right) sx += 1;
-  if (input.up) sy -= 1;
-  if (input.down) sy += 1;
+  const pWorld = playerWorldPos(w, KENNEY_TILE_WORLD);
+  let px = pWorld.wx;
+  let py = pWorld.wy;
 
-  let dx = (sx + sy) * 1;
-  let dy = (sy - sx) * 1;
+  // Screen-aligned input: north = +gy, east = +gx.
+  let gx = 0;
+  let gy = 0;
+  if (input.left) gx -= 1;
+  if (input.right) gx += 1;
+  if (input.up) gy += 1;
+  if (input.down) gy -= 1;
 
-  const len = Math.hypot(dx, dy);
-  if (len > 1e-6) {
-    dx /= len;
-    dy /= len;
+  let gdx = gx;
+  let gdy = gy;
+  const glen = Math.hypot(gdx, gdy);
+  if (glen > 1e-6) {
+    gdx /= glen;
+    gdy /= glen;
   }
 
-  w.pvx = dx * w.pSpeed;
-  w.pvy = dy * w.pSpeed;
+  const worldDir = gridDirToWorldDir(KENNEY_TILE_WORLD, gdx, gdy);
+  w.pvx = worldDir.wx * w.pSpeed;
+  w.pvy = worldDir.wy * w.pSpeed;
 
+  let curInfo = walkInfo(px, py, KENNEY_TILE_WORLD);
 
-  // Keep world state synced even if we don't move this frame
-  let curInfo = walkInfo(w.px, w.py, KENNEY_TILE_WORLD);
-
-
-// Player Z:
-// - Default: map-provided z (stairs, etc.)
-// - CONVERTER: player-only smooth 0..1 ramp inside the tile toward tile.dir
   w.pz = curInfo.z;
-
-  // Active floor is still an integer concept (used by spawns / filtering).
-  // On stairs we track the nearest integer to current z.
   w.activeFloorH =
-      curInfo.kind === "STAIRS" ? (Math.floor(curInfo.z + 0.5) | 0) : (curInfo.floorH | 0);
+    curInfo.kind === "STAIRS" ? (Math.floor(curInfo.z + 0.5) | 0) : (curInfo.floorH | 0);
 
-  // Attempt move
-  const nx = w.px + w.pvx * dt;
-  const ny = w.py + w.pvy * dt;
-
+  const nx = px + w.pvx * dt;
+  const ny = py + w.pvy * dt;
   const MAX_STEP_Z = 1.05;
 
   const tryMove = (wx: number, wy: number) => {
     const nextInfo = walkInfo(wx, wy, KENNEY_TILE_WORLD);
-
     if (!nextInfo.walkable) return false;
 
     const stairsInvolved =
-        curInfo.kind === "STAIRS" ||
-        nextInfo.kind === "STAIRS" ||
-        (curInfo as any).isRamp ||
-        (nextInfo as any).isRamp;
+      curInfo.kind === "STAIRS" ||
+      nextInfo.kind === "STAIRS" ||
+      (curInfo as any).isRamp ||
+      (nextInfo as any).isRamp;
 
     if (!stairsInvolved) {
-      // Pure floor movement: keep same integer floor
       if (nextInfo.floorH !== curInfo.floorH) return false;
     } else {
-      // Stairs movement: allow transition as long as z doesn't jump too far
       const dz = Math.abs(nextInfo.z - curInfo.z);
       if (dz > MAX_STEP_Z) return false;
     }
 
-    // Commit WORLD position
-    w.px = wx;
-    w.py = wy;
+    const anchor = setAnchorFromWorld(KENNEY_TILE_WORLD, wx, wy);
+    w.pgxi = anchor.gxi;
+    w.pgyi = anchor.gyi;
+    w.pgox = anchor.gox;
+    w.pgoy = anchor.goy;
 
-    // Update LIVE tile info for subsequent checks THIS FRAME
+    const pw = playerWorldPos(w, KENNEY_TILE_WORLD);
+    px = pw.wx;
+    py = pw.wy;
+
     curInfo = nextInfo;
-
-    // Update height + active floor
     w.pz = nextInfo.z;
-
-
-
     w.activeFloorH =
-        nextInfo.kind === "STAIRS" ? (Math.floor(nextInfo.z + 0.5) | 0) : (nextInfo.floorH | 0);
-
+      nextInfo.kind === "STAIRS" ? (Math.floor(nextInfo.z + 0.5) | 0) : (nextInfo.floorH | 0);
     return true;
   };
 
-
-  // 1) Try full move first (critical for entering offset stair top-faces)
   const movedDiag = tryMove(nx, ny);
+  const movedX = movedDiag ? true : tryMove(nx, py);
+  const movedY = movedDiag ? true : tryMove(px, ny);
 
-  // 2) Then axis-slide if needed
-  const movedX = movedDiag ? true : tryMove(nx, w.py);
-  const movedY = movedDiag ? true : tryMove(w.px, ny);
-
-  // If nothing worked, stop velocity so sprite settles
   if (!movedX && !movedY) {
     w.pvx = 0;
     w.pvy = 0;
   }
 
   const ez = ((w as any).ez ??= [] as number[]);
-
-  const pInfo = walkInfo(w.px, w.py, KENNEY_TILE_WORLD);
-  const playerFloorH = pInfo.floorH; // or .h, both are fine
+  const pInfo = walkInfo(px, py, KENNEY_TILE_WORLD);
+  const playerFloorH = pInfo.floorH;
   const playerOnRamp = (pInfo as any).isRamp;
-  const playerOnStairs = (pInfo.kind === "STAIRS");
+  const playerOnStairs = pInfo.kind === "STAIRS";
 
   const rampTargets = (() => {
     const ramps = getRampFacesForDebug(KENNEY_TILE_WORLD);
-    if (!ramps || ramps.length === 0) return [] as Array<{ x: number; y: number }>;
-    const out: Array<{ x: number; y: number }> = [];
+    if (!ramps || ramps.length === 0) return [] as Array<WorldPos & GridPos>;
+    const out: Array<WorldPos & GridPos> = [];
     for (let i = 0; i < ramps.length; i++) {
       const r = ramps[i];
-      const cx = (r.poly[0].x + r.poly[1].x + r.poly[2].x + r.poly[3].x) * 0.25;
-      const cy = (r.poly[0].y + r.poly[1].y + r.poly[2].y + r.poly[3].y) * 0.25;
-      const wi = walkInfo(cx, cy, KENNEY_TILE_WORLD);
-      if (wi.walkable) out.push({ x: cx, y: cy });
+      const wx = (r.poly[0].x + r.poly[1].x + r.poly[2].x + r.poly[3].x) * 0.25;
+      const wy = (r.poly[0].y + r.poly[1].y + r.poly[2].y + r.poly[3].y) * 0.25;
+      const wi = walkInfo(wx, wy, KENNEY_TILE_WORLD);
+      if (!wi.walkable) continue;
+      const gp = worldToGrid(wx, wy, KENNEY_TILE_WORLD);
+      out.push({ wx, wy, gx: gp.gx, gy: gp.gy });
     }
     return out;
   })();
 
-  const findNearestRampTarget = (x: number, y: number) => {
+  const findNearestRampTarget = (gx: number, gy: number) => {
     if (rampTargets.length === 0) return null;
     let best = rampTargets[0];
-    let bestD2 = (best.x - x) * (best.x - x) + (best.y - y) * (best.y - y);
+    let bestD2 = (best.gx - gx) * (best.gx - gx) + (best.gy - gy) * (best.gy - gy);
     for (let i = 1; i < rampTargets.length; i++) {
       const r = rampTargets[i];
-      const d2 = (r.x - x) * (r.x - x) + (r.y - y) * (r.y - y);
+      const d2 = (r.gx - gx) * (r.gx - gx) + (r.gy - gy) * (r.gy - gy);
       if (d2 < bestD2) {
         bestD2 = d2;
         best = r;
@@ -138,129 +152,96 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     return best;
   };
 
+  const playerGrid = gridAtPlayer(w);
+
   for (let i = 0; i < w.eAlive.length; i++) {
     if (!w.eAlive[i]) continue;
 
-    // Current position
-    let ex = w.ex[i];
-    let ey = w.ey[i];
+    const eWorld = enemyWorldPos(w, i, KENNEY_TILE_WORLD);
+    let ex = eWorld.wx;
+    let ey = eWorld.wy;
 
-    // Current tile info (this MUST be updated as we move)
     let eCur = walkInfo(ex, ey, KENNEY_TILE_WORLD);
     ez[i] = eCur.z;
 
-    const enemyOnStairs = (eCur.kind === "STAIRS");
+    const enemyOnStairs = eCur.kind === "STAIRS";
     const enemyOnRamp = (eCur as any).isRamp;
 
     const differentHeight = eCur.floorH !== playerFloorH;
     const playerOnConnector = playerOnStairs || playerOnRamp;
     const enemyOnConnector = enemyOnStairs || enemyOnRamp;
-    // Step 2 NOTE (changed): Open stairs/connector-style layouts should not block AI vision yet.
-    // We will reintroduce LOS/vision blocking later for doors/tunnels/walls (not stairs).
 
+    const enemyGrid = gridFromAnchor(w.egxi[i], w.egyi[i], w.egox[i], w.egoy[i]);
+    let tgx = playerGrid.gx;
+    let tgy = playerGrid.gy;
 
-    // Steer toward player unless we're on a different height (then head for nearest ramp)
-    let tx = w.px;
-    let ty = w.py;
     if (differentHeight && !playerOnConnector && !enemyOnConnector) {
-      const rampTarget = findNearestRampTarget(ex, ey);
+      const rampTarget = findNearestRampTarget(enemyGrid.gx, enemyGrid.gy);
       if (rampTarget) {
-        tx = rampTarget.x;
-        ty = rampTarget.y;
+        tgx = rampTarget.gx;
+        tgy = rampTarget.gy;
       }
     }
 
+    const gvx = tgx - enemyGrid.gx;
+    const gvy = tgy - enemyGrid.gy;
+    const gdist = Math.hypot(gvx, gvy) || 1;
+    const gux = gvx / gdist;
+    const guy = gvy / gdist;
 
-    const vx = tx - ex;
-    const vy = ty - ey;
-    const d = Math.hypot(vx, vy) || 1;
-    const ux = vx / d;
-    const uy = vy / d;
-
-    const enx = ex + ux * w.eSpeed[i] * dt;
-    const eny = ey + uy * w.eSpeed[i] * dt;
+    const eWorldDir = gridDirToWorldDir(KENNEY_TILE_WORLD, gux, guy);
+    const enx = ex + eWorldDir.wx * w.eSpeed[i] * dt;
+    const eny = ey + eWorldDir.wy * w.eSpeed[i] * dt;
 
     const tryEnemyMove = (wx: number, wy: number) => {
       const next = walkInfo(wx, wy, KENNEY_TILE_WORLD);
       if (!next.walkable) return false;
 
       const stairsInvolved =
-          (eCur.kind === "STAIRS") ||
-          (next.kind === "STAIRS") ||
-          (eCur as any).isRamp ||
-          (next as any).isRamp;
-      const MAX_STEP_Z = 1.05;
+        eCur.kind === "STAIRS" ||
+        next.kind === "STAIRS" ||
+        (eCur as any).isRamp ||
+        (next as any).isRamp;
+      const MAX_STEP_Z_LOCAL = 1.05;
 
       if (!stairsInvolved) {
-        // Pure floor move: same integer floor only
         if (next.floorH !== eCur.floorH) return false;
       } else {
-        // Stairs move: must not jump too far in one step
         const dz = Math.abs(next.z - eCur.z);
-        if (dz > MAX_STEP_Z) return false;
+        if (dz > MAX_STEP_Z_LOCAL) return false;
       }
 
-      // Commit
-      w.ex[i] = wx;
-      w.ey[i] = wy;
+      const anchor = setAnchorFromWorld(KENNEY_TILE_WORLD, wx, wy);
+      w.egxi[i] = anchor.gxi;
+      w.egyi[i] = anchor.gyi;
+      w.egox[i] = anchor.gox;
+      w.egoy[i] = anchor.goy;
 
-      // Update locals + current tile info for subsequent checks THIS FRAME
-      ex = wx;
-      ey = wy;
+      const ew = enemyWorldPos(w, i, KENNEY_TILE_WORLD);
+      ex = ew.wx;
+      ey = ew.wy;
       eCur = next;
-
-      // Continuous enemy z for rendering/hit logic
       ez[i] = next.z;
       return true;
     };
 
-    // Axis-separated sliding WITH live eCur updates
     tryEnemyMove(enx, ey);
     tryEnemyMove(ex, eny);
-
   }
 
-
-
-  // Update last aim direction from player movement (used when no enemies exist)
-  const mag = Math.hypot(w.pvx, w.pvy);
+  const mag = Math.hypot(gdx, gdy);
   if (mag > 0.0001) {
-    w.lastAimX = w.pvx / mag;
-    w.lastAimY = w.pvy / mag;
+    w.lastAimX = gdx / mag;
+    w.lastAimY = gdy / mag;
   }
 
-  // -------------------------
-  // Player sprite dir + anim (movement-based)
-  // -------------------------
-
-  // -------------------------
-  // Player sprite dir + anim (movement-based)
-  // -------------------------
-  // Screen-space convention:
-  // N = ↖ (top-left on screen)
-  function dirFromVec(dx: number, dy: number): Dir8 {
-    // atan2(dy, dx): 0 = →, +pi/2 = ↓, -pi/2 = ↑
-    const ang = Math.atan2(dy, dx);
-    const idx = (Math.round(ang / (Math.PI / 4)) + 8) % 8;
-
-    // idx: 0,45,90,135,180,225,270,315 degrees
-    // map to: →,↘,↓,↙,←,↖,↑,↗  (with N = ↖)
-    const map: Dir8[] = ["SE", "S", "SW", "W", "NW", "N", "NE", "E"];
-    return map[idx];
-  }
-
-
-  const moving = mag > 8;
+  const moving = glen > 0.0001;
   if (!moving) {
     (w as any)._plDir = "S";
     (w as any)._plFrame = 2;
     (w as any)._plAnimT = 0;
   } else {
-    const wnX = w.pvx / (mag || 1);
-    const wnY = w.pvy / (mag || 1);
-    const sd = worldDeltaToScreen(wnX, wnY);
-
-    (w as any)._plDir = dirFromVec(sd.dx, sd.dy);
+    (w as any)._plDir = dirFromGrid(gdx, gdy);
 
     const seq = [1, 2, 3, 2] as const;
     const stepSec = 0.11;

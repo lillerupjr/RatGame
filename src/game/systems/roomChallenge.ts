@@ -4,7 +4,7 @@
 // Tracks player position relative to rooms and manages kill-count challenges
 // that lock room exits until a certain number of enemies are defeated.
 
-import { World, emitEvent } from "../world";
+import { World, emitEvent, playerWorldPos } from "../world";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
 /**
@@ -44,7 +44,8 @@ function findCurrentRoom(w: World): number {
     if (!w.roomData || w.roomData.length === 0) return -1;
     
     const tileSize = KENNEY_TILE_WORLD;
-    const { tx, ty } = worldToTile(w.px, w.py, tileSize);
+    const pw = playerWorldPos(w, tileSize);
+    const { tx, ty } = worldToTile(pw.wx, pw.wy, tileSize);
     
     for (const room of w.roomData) {
         if (isInsideRoom(tx, ty, room)) {

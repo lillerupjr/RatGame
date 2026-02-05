@@ -1,4 +1,5 @@
-import { World } from "../world";
+import { World, enemyWorldPos, playerWorldPos, projectileWorldPos } from "../world";
+import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
 /**
  * Determines if a projectile hits an enemy based on whether it's melee or ranged.
@@ -56,8 +57,10 @@ export function isEnemyHit(
     // Melee: cone-based collision in front of aim direction
     const aimX = w.prDirX[p];
     const aimY = w.prDirY[p];
-    const toEnemyX = w.ex[e] - w.px;
-    const toEnemyY = w.ey[e] - w.py;
+    const pw = playerWorldPos(w, KENNEY_TILE_WORLD);
+    const ew = enemyWorldPos(w, e, KENNEY_TILE_WORLD);
+    const toEnemyX = ew.wx - pw.wx;
+    const toEnemyY = ew.wy - pw.wy;
     const toEnemyDist = Math.hypot(toEnemyX, toEnemyY);
 
     // Guard against NaNs
@@ -118,8 +121,10 @@ export function isPlayerHit(w: World, e: number, playerR: number): boolean {
   if (!zOverlap) return false;
 
   // Existing XY overlap
-  const dx = w.ex[e] - w.px;
-  const dy = w.ey[e] - w.py;
+  const pw = playerWorldPos(w, KENNEY_TILE_WORLD);
+  const ew = enemyWorldPos(w, e, KENNEY_TILE_WORLD);
+  const dx = ew.wx - pw.wx;
+  const dy = ew.wy - pw.wy;
   const rr = w.eR[e] + playerR;
   return dx * dx + dy * dy <= rr * rr;
 }
@@ -142,8 +147,10 @@ export function isPlayerProjectileHit(w: World, p: number, playerR: number): boo
   const zHit = projZ >= (pzMin - PROJECTILE_Z_RADIUS) && projZ <= (pzMax + PROJECTILE_Z_RADIUS);
   if (!zHit) return false;
 
-  const dx = (w as any).prx[p] - (w as any).px;
-  const dy = (w as any).pry[p] - (w as any).py;
+  const pp = projectileWorldPos(w as any, p, KENNEY_TILE_WORLD);
+  const pw = playerWorldPos(w as any, KENNEY_TILE_WORLD);
+  const dx = pp.wx - pw.wx;
+  const dy = pp.wy - pw.wy;
   const rr = ((w as any).prR[p] ?? 0) + playerR;
 
   return dx * dx + dy * dy <= rr * rr;
@@ -159,8 +166,9 @@ export function isCircleHit(dx: number, dy: number, rr: number): boolean {
  * Includes enemy radius so it "feels" correct.
  */
 export function isEnemyInCircle(w: World, e: number, cx: number, cy: number, radius: number): boolean {
-  const dx = w.ex[e] - cx;
-  const dy = w.ey[e] - cy;
+  const ew = enemyWorldPos(w, e, KENNEY_TILE_WORLD);
+  const dx = ew.wx - cx;
+  const dy = ew.wy - cy;
   const rr = radius + w.eR[e];
   return isCircleHit(dx, dy, rr);
 }

@@ -143,11 +143,10 @@ export function preloadEnemySprites() {
 // ─────────────────────────────────────────────────────────────
 
 function dirLabelFromVector(dx: number, dy: number): Dir8 {
-    // Screen-space convention (matches player/movement):
-    // N = ↖ (top-left on screen)
+    // Grid-space convention: N = screen up, E = screen right.
     const ang = Math.atan2(dy, dx);
     const idx = (Math.round(ang / (Math.PI / 4)) + 8) % 8;
-    const map: Dir8[] = ["SE", "S", "SW", "W", "NW", "N", "NE", "E"];
+    const map: Dir8[] = ["E", "NE", "N", "NW", "W", "SW", "S", "SE"];
     return map[idx];
 }
 

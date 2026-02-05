@@ -1,12 +1,27 @@
-import type { World } from "../world";
-import { emitEvent } from "../world";
+import { emitEvent, enemyWorldPos, playerWorldPos, type World, zoneWorldPos } from "../world";
 import { isEnemyInCircle } from "./hitDetection";
 import {spawnZone, ZONE_KIND} from "../factories/zoneFactory";
 import { queryCircle } from "../util/spatialHash";
 import { onEnemyKilledForChallenge } from "./roomChallenge";
+import { worldToGrid } from "../coords/grid";
+import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
 export function zonesSystem(w: World, dt: number) {
     const PLAYER_R = w.playerR;
+    const T = KENNEY_TILE_WORLD;
+    const pw = playerWorldPos(w, T);
+    const px = pw.wx;
+    const py = pw.wy;
+
+    const syncZoneGrid = (i: number, wx: number, wy: number) => {
+        const gp = worldToGrid(wx, wy, T);
+        const gxi = Math.floor(gp.gx);
+        const gyi = Math.floor(gp.gy);
+        w.zgxi[i] = gxi;
+        w.zgyi[i] = gyi;
+        w.zgox[i] = gp.gx - gxi;
+        w.zgoy[i] = gp.gy - gyi;
+    };
 
     // -----------------------------------------------------------------
 // NEW: delayed explosion queue (Bazooka evolution recursive aftershocks)
@@ -123,8 +138,7 @@ export function zonesSystem(w: World, dt: number) {
 
         // Follow player
         if (w.zFollowPlayer[z]) {
-            w.zx[z] = w.px;
-            w.zy[z] = w.py;
+            syncZoneGrid(z, px, py);
 
             // If it follows the player, its floor height should follow too
             zFloorH[z] = w.activeFloorH | 0;
@@ -137,8 +151,9 @@ export function zonesSystem(w: World, dt: number) {
         const every = Math.max(0.02, w.zTickEvery[z]);
         while (w.zTickLeft[z] <= 0) w.zTickLeft[z] += every;
 
-        const zx = w.zx[z];
-        const zy = w.zy[z];
+        const zp = zoneWorldPos(w, z, T);
+        const zx = zp.wx;
+        const zy = zp.wy;
         const zr = w.zR[z];
 
         // Initialize cached zone floor height if missing:
@@ -157,12 +172,12 @@ export function zonesSystem(w: World, dt: number) {
         const pdmg = w.zDamagePlayer[z] ?? 0;
         if (pdmg > 0 && zr > 0) {
             if ((w.activeFloorH | 0) === zoneFloor) {
-                const dx = w.px - zx;
-                const dy = w.py - zy;
+                const dx = px - zx;
+                const dy = py - zy;
                 const rr = zr + PLAYER_R;
                 if (dx * dx + dy * dy <= rr * rr) {
                     w.playerHp -= pdmg;
-                    emitEvent(w, { type: "PLAYER_HIT", damage: pdmg, x: w.px, y: w.py });
+                    emitEvent(w, { type: "PLAYER_HIT", damage: pdmg, x: px, y: py });
                 }
             }
         }
@@ -192,12 +207,13 @@ export function zonesSystem(w: World, dt: number) {
 
             w.eHp[e] -= dmg;
 
+            const ew = enemyWorldPos(w, e, T);
             emitEvent(w, {
                 type: "ENEMY_HIT",
                 enemyIndex: e,
                 damage: dmg,
-                x: w.ex[e],
-                y: w.ey[e],
+                x: ew.wx,
+                y: ew.wy,
                 isCrit: false,
                 source: "OTHER",
             });
@@ -210,8 +226,8 @@ export function zonesSystem(w: World, dt: number) {
                 emitEvent(w, {
                     type: "ENEMY_KILLED",
                     enemyIndex: e,
-                    x: w.ex[e],
-                    y: w.ey[e],
+                    x: ew.wx,
+                    y: ew.wy,
                     xpValue: 1,
                     source: "OTHER",
                 });

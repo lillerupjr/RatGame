@@ -1,6 +1,7 @@
 import type { World } from "../world";
-import { emitEvent } from "../world";
-import { spawnChest, spawnXp, PICKUP_KIND } from "./pickups";
+import { emitEvent, pickupWorldPos, playerWorldPos } from "../world";
+import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
+import { spawnChestGrid, spawnXpGrid, PICKUP_KIND } from "./pickups";
 import { ENEMY_TYPE } from "../factories/enemyFactory";
 
 /**
@@ -18,11 +19,13 @@ export function xpSystem(w: World, _dt: number) {
     // Apply delve XP scaling
     const xpMult = w.delveScaling?.xpMult ?? 1;
     const scaledXp = Math.round(e.xpValue * xpMult);
-    spawnXp(w, e.x, e.y, scaledXp);
+    const egx = w.egxi[e.enemyIndex] + w.egox[e.enemyIndex];
+    const egy = w.egyi[e.enemyIndex] + w.egoy[e.enemyIndex];
+    spawnXpGrid(w, egx, egy, scaledXp);
 
     // Boss chest drop + magnet effect
     if (w.eType[e.enemyIndex] === ENEMY_TYPE.BOSS) {
-      spawnChest(w, e.x, e.y, "BOSS_CHEST");
+      spawnChestGrid(w, egx, egy, "BOSS_CHEST");
       w.bossRewardPending = true;
       
       // Activate magnet to pull all XP towards player
@@ -33,11 +36,16 @@ export function xpSystem(w: World, _dt: number) {
 
   // 2) Collect pickups
   const pickupR = 18; // physical pickup radius (separate from vacuum radius)
+  const pw = playerWorldPos(w, KENNEY_TILE_WORLD);
+  const px = pw.wx;
+  const py = pw.wy;
+
   for (let i = 0; i < w.xAlive.length; i++) {
     if (!w.xAlive[i]) continue;
 
-    const dx = w.xx[i] - w.px;
-    const dy = w.xy[i] - w.py;
+    const wp = pickupWorldPos(w, i);
+    const dx = wp.wx - px;
+    const dy = wp.wy - py;
     if (dx * dx + dy * dy > pickupR * pickupR) continue;
 
     const kind = w.xKind[i] ?? PICKUP_KIND.XP;

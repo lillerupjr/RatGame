@@ -1,5 +1,7 @@
 // src/game/factories/zoneFactory.ts
 import type { World } from "../world";
+import { gridToWorld, worldToGrid } from "../coords/grid";
+import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
 export const ZONE_KIND = {
     AURA: 1,
@@ -27,14 +29,25 @@ export type SpawnZoneArgs = {
     damagePlayer?: number;
 };
 
+export type SpawnZoneGridArgs = Omit<SpawnZoneArgs, "x" | "y"> & {
+    gx: number;
+    gy: number;
+    tileWorld?: number;
+};
+
 export function spawnZone(w: World, a: SpawnZoneArgs) {
     const i = w.zAlive.length;
 
     w.zAlive.push(true);
     w.zKind.push(a.kind);
+    const gp = worldToGrid(a.x, a.y, KENNEY_TILE_WORLD);
+    const gxi = Math.floor(gp.gx);
+    const gyi = Math.floor(gp.gy);
+    w.zgxi.push(gxi);
+    w.zgyi.push(gyi);
+    w.zgox.push(gp.gx - gxi);
+    w.zgoy.push(gp.gy - gyi);
 
-    w.zx.push(a.x);
-    w.zy.push(a.y);
 
     w.zR.push(a.radius);
     w.zDamage.push(a.damage);
@@ -49,4 +62,11 @@ export function spawnZone(w: World, a: SpawnZoneArgs) {
     w.zDamagePlayer.push(Math.max(0, a.damagePlayer ?? 0));
 
     return i;
+}
+
+export function spawnZoneGrid(w: World, a: SpawnZoneGridArgs) {
+    const tileWorld = a.tileWorld ?? KENNEY_TILE_WORLD;
+    const pos = gridToWorld(a.gx, a.gy, tileWorld);
+    const { gx, gy, tileWorld: _tw, ...rest } = a;
+    return spawnZone(w, { ...rest, x: pos.wx, y: pos.wy });
 }
