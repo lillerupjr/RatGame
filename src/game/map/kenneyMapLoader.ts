@@ -378,6 +378,26 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         return false;
     }
 
+    function hasStairDirAtZ(tx: number, ty: number, zBase: number, dir: StairDir): boolean {
+        const surfaces = surfacesAtXY(tx, ty);
+        for (let i = 0; i < surfaces.length; i++) {
+            const s = surfaces[i];
+            if (s.zBase === zBase && s.tile.kind === "STAIRS" && (s.tile.dir ?? "N") === dir) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function stairApronNeighborDelta(dir: StairDir): { dx: number; dy: number } {
+        switch (dir) {
+            case "N": return { dx: 1, dy: 0 };  // apron faces along E edge
+            case "E": return { dx: 0, dy: -1 }; // apron faces along S edge
+            case "S": return { dx: -1, dy: 0 }; // apron faces along W edge
+            case "W": return { dx: 0, dy: 1 };  // apron faces along N edge
+        }
+    }
+
     for (const list of surfacesByKey.values()) {
         for (let i = 0; i < list.length; i++) {
             const surface = list[i];
@@ -385,6 +405,10 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
 
             if (tile.kind === "STAIRS") {
                 const dir = (tile.dir ?? "N") as StairDir;
+                const delta = stairApronNeighborDelta(dir);
+                if (hasSurfaceAtZ(surface.tx + delta.dx, surface.ty + delta.dy, surface.zBase)) {
+                    continue;
+                }
                 addCurtain({
                     id: `curtain_stair_${surface.tx}_${surface.ty}_${surface.zBase}`,
                     kind: "STAIR_APRON",
@@ -404,7 +428,8 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
             }
 
             const southMissing = !hasSurfaceAtZ(surface.tx, surface.ty + 1, surface.zBase);
-            if (southMissing) {
+            const southBlockedByStair = hasStairDirAtZ(surface.tx, surface.ty + 1, surface.zBase, "N");
+            if (southMissing && !southBlockedByStair) {
                 const apronKind: "S" = "S";
                 const apronDyOffset = -100;
                 addCurtain({
@@ -426,7 +451,8 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
             }
 
             const eastMissing = !hasSurfaceAtZ(surface.tx + 1, surface.ty, surface.zBase);
-            if (eastMissing) {
+            const eastBlockedByStair = hasStairDirAtZ(surface.tx + 1, surface.ty, surface.zBase, "W");
+            if (eastMissing && !eastBlockedByStair) {
                 const apronKind: "E" = "E";
                 const apronDyOffset = -100;
                 addCurtain({
