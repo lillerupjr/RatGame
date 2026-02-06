@@ -138,6 +138,28 @@ export function projectilesSystem(w: World, dt: number) {
                         ? solidFace(tx0, ty0, zLogical - 1, dir)
                         : false;
                     if (hitPrimary || hitLower) {
+                        if (w.prWallBounce[i]) {
+                            const bLeft = w.prBouncesLeft[i];
+                            if (bLeft >= 0 && bLeft <= 0) {
+                                w.pAlive[i] = false;
+                                break;
+                            }
+
+                            if (dir === "E" || dir === "W") w.prvx[i] = -w.prvx[i];
+                            else w.prvy[i] = -w.prvy[i];
+
+                            const nvx = w.prvx[i];
+                            const nvy = w.prvy[i];
+                            const nLen = Math.hypot(nvx, nvy) || 0.0001;
+                            w.prDirX[i] = nvx / nLen;
+                            w.prDirY[i] = nvy / nLen;
+
+                            if (w.prBouncesLeft[i] >= 0) w.prBouncesLeft[i] -= 1;
+                            w.prLastHitEnemy[i] = -1;
+                            w.prLastHitCd[i] = 0;
+                            break;
+                        }
+
                         w.pAlive[i] = false;
                         break;
                     }

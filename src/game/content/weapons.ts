@@ -618,16 +618,18 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         // 8 = includes diagonals
 
         // @ts-ignore — debug-only extra field
-        directions: 1,
+        directions: 5,
 
         getStats: (level, w) => {
-            const cooldownBase = 0.2;
+            const cooldownBase = 0.4;
 
             return {
                 cooldown: cooldownBase / w.fireRateMult,
                 projectileSpeed: 620,
                 projectileRadius: 7,
                 damage: 5 * w.dmgMult,
+                projectileCount: 2,
+                fanArc: 0.35,
                 pierce: 999,
 
                 ...( { bounces: 10, wallBounce: true } as any ),
@@ -640,27 +642,39 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const bounces = 10;
 
             // 👇 read directly from weapon def (debug only)
-            const dirs = (WEAPONS as any).BOUNCER_EVOLVED_BANKSHOT.directions ?? 1;
+            const baseDirs = (WEAPONS as any).BOUNCER_EVOLVED_BANKSHOT.directions ?? 1;
 
             // Single-direction fallback (normal aimed shot)
-            if (dirs === 1) {
-                spawnProjectileGrid(w, {
-                    kind: PRJ_KIND.BOUNCER,
-                    gx: pg.gx,
-                    gy: pg.gy,
-                    dirGx: aim.x,
-                    dirGy: aim.y,
-                    speed: s.projectileSpeed,
-                    damage: s.damage,
-                    radius: s.projectileRadius,
-                    pierce: 999,
-                    ttl: ttlSafety,
-                    bounces,
-                    wallBounce: true,
-                });
+            if (baseDirs === 1) {
+                const count = Math.max(2, s.projectileCount ?? 2);
+                const fanArc = Math.max(0, s.fanArc ?? 0);
+                const baseAngle = Math.atan2(aim.y, aim.x);
+                const half = fanArc * 0.5;
+                const isEven = (count % 2) === 0;
+                const step = isEven ? (fanArc / count) : (fanArc / Math.max(1, count - 1));
+                const start = baseAngle - half + (isEven ? step * 0.5 : 0);
+
+                for (let i = 0; i < count; i++) {
+                    const ang = start + step * i;
+                    spawnProjectileGrid(w, {
+                        kind: PRJ_KIND.BOUNCER,
+                        gx: pg.gx,
+                        gy: pg.gy,
+                        dirGx: Math.cos(ang),
+                        dirGy: Math.sin(ang),
+                        speed: s.projectileSpeed,
+                        damage: s.damage,
+                        radius: s.projectileRadius,
+                        pierce: 999,
+                        ttl: ttlSafety,
+                        bounces,
+                        wallBounce: true,
+                    });
+                }
                 return;
             }
 
+            const dirs = Math.max(1, baseDirs + 1);
             const step = (Math.PI * 2) / dirs;
 
             for (let i = 0; i < dirs; i++) {
@@ -671,7 +685,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
                 const dy = Math.sin(a - Math.PI / 2);
 
                 spawnProjectileGrid(w, {
-                    kind: PRJ_KIND.PISTOL,
+                    kind: PRJ_KIND.BOUNCER,
                     gx: pg.gx,
                     gy: pg.gy,
                     dirGx: dx,

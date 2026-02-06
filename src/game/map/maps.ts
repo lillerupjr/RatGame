@@ -139,27 +139,60 @@ export const EXCEL_SANCTUARY_01: TableMapDef = {
 };
 export const WALL_TEST: TableMapDef = {
     id: "WALL_TEST",
-    w: 10,
-    h: 10,
+    w: 6,
+    h: 6,
     defaultFloorSkin: "landscape_28",
     defaultSpawnSkin: "landscape_30",
     centerOnZero: true,
 
     cells: [
-        // South row
-        { x: 0, y: 0, t: "F0|W2S|W2E" },
-        { x: 1, y: 0, t: "F0|W2S" },
-        { x: 2, y: 0, t: "F0|W2S|W2W" },
+        // Row 0 (south edge)
+        { x: 0, y: 0, t: "F0|W4S|W4E" },
+        { x: 1, y: 0, t: "F0|W4S" },
+        { x: 2, y: 0, t: "F0|W4S" },
+        { x: 3, y: 0, t: "F0|W4S" },
+        { x: 4, y: 0, t: "F0|W4S" },
+        { x: 5, y: 0, t: "F0|W4S|W4W" },
 
-        // Middle row
-        { x: 0, y: 1, t: "F0|W2E" },
-        { x: 1, y: 1, t: "P0" }, // spawn at height 0
-        { x: 2, y: 1, t: "F0|W2W" },
+        // Row 1
+        { x: 0, y: 1, t: "F0|W4E" },
+        { x: 1, y: 1, t: "F0" },
+        { x: 2, y: 1, t: "F0" },
+        { x: 3, y: 1, t: "F0" },
+        { x: 4, y: 1, t: "F0" },
+        { x: 5, y: 1, t: "F0|W4W" },
 
-        // North row
-        { x: 0, y: 2, t: "F0|W8N|W2E" },
-        { x: 1, y: 2, t: "F0|W8N" },
-        { x: 2, y: 2, t: "F0|W8N|W2W" },
+        // Row 2
+        { x: 0, y: 2, t: "F0|W4E" },
+        { x: 1, y: 2, t: "F0" },
+        { x: 2, y: 2, t: "P0" }, // spawn at height 0
+        { x: 3, y: 2, t: "F0" },
+        { x: 4, y: 2, t: "F0" },
+        { x: 5, y: 2, t: "F0|W4W" },
+
+        // Row 3
+        { x: 0, y: 3, t: "F0|W4E" },
+        { x: 1, y: 3, t: "F0" },
+        { x: 2, y: 3, t: "F0" },
+        { x: 3, y: 3, t: "F0" },
+        { x: 4, y: 3, t: "F0" },
+        { x: 5, y: 3, t: "F0|W4W" },
+
+        // Row 4
+        { x: 0, y: 4, t: "F0|W4E" },
+        { x: 1, y: 4, t: "F0" },
+        { x: 2, y: 4, t: "F0" },
+        { x: 3, y: 4, t: "F0" },
+        { x: 4, y: 4, t: "F0" },
+        { x: 5, y: 4, t: "F0|W4W" },
+
+        // Row 5 (north edge)
+        { x: 0, y: 5, t: "F0|W4N|W4E" },
+        { x: 1, y: 5, t: "F0|W4N" },
+        { x: 2, y: 5, t: "F0|W4N" },
+        { x: 3, y: 5, t: "F0|W4N" },
+        { x: 4, y: 5, t: "F0|W4N" },
+        { x: 5, y: 5, t: "F0|W4N|W4W" },
     ],
 };
 
