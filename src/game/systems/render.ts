@@ -21,13 +21,13 @@ import {
   getRampFacesForDebug,
   pointInQuad,
   rampHeightAt,
-  surfaceHitAtWorld,
   surfacesAtXY,
   apronUnderlaysInView,
   occluderLayers,
   occludersInViewForLayer,
+  topLayers,
   viewRectFromWorldCenter,
-  type Curtain,
+  type RenderPiece,
   type ViewRect,
 } from "../map/kenneyMap";
 
@@ -40,7 +40,7 @@ import {
 
 import { worldDeltaToScreen, worldToScreen, ISO_X, ISO_Y } from "../visual/iso";
 
-import { getKenneyGroundTile, KENNEY_TILE_WORLD, KENNEY_TILE_ANCHOR_Y } from "../visual/kenneyTiles";
+import { KENNEY_TILE_WORLD, KENNEY_TILE_ANCHOR_Y } from "../visual/kenneyTiles";
 import {
   getEnemyWorld,
   getPickupWorld,
@@ -50,7 +50,7 @@ import {
 } from "../coords/worldViews";
 
 import {
-  preloadCurtainSprites,
+  preloadRenderSprites,
   getFloorTop,
   getFloorApron,
   getStairTop,
@@ -62,7 +62,7 @@ import {
   FLOOR_APRON_DY_PX,
   STAIR_APRON_DY_PX,
   WALL_APRON_DY_PX,
-} from "../visual/curtainSprites";
+} from "../visual/renderSprites";
 
 /** Render tiles, entities, overlays, and debug layers. */
 export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
@@ -93,10 +93,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     preloadProjectileSprites();
   }
 
-  // one-time curtain/top sprite preload
-  if (!(w as any)._curtainSpritesPreloaded) {
-    (w as any)._curtainSpritesPreloaded = true;
-    preloadCurtainSprites();
+  // one-time render sprite preload
+  if (!(w as any)._renderSpritesPreloaded) {
+    (w as any)._renderSpritesPreloaded = true;
+    preloadRenderSprites();
   }
 
   // Isometric camera: project world coords into screen space, then keep player centered
@@ -122,8 +122,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // Optional render-layer offset for stairs.
   const STAIR_LAYER_OFFSET = (w as any).stairLayerOffset ?? 0;
 
-  // Enable floor curtains too
-  const FLOOR_CURTAINS: boolean = (w as any).floorCurtains ?? true;
+  // Enable floor aprons too
+  const FLOOR_APRONS: boolean = (w as any).floorAprons ?? true;
 
   // Adjust how tightly apron joins the top (helps remove visible seam)
   const APRON_JOIN_PX = (w as any).apronJoinPx ?? 0;
@@ -177,15 +177,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // Render all heights by default.
   const RENDER_ALL_HEIGHTS: boolean = (w as any).renderAllHeights ?? true;
 
-  const floorFromZ = (z: number) => Math.floor(z + 1e-6);
-
-  const entityLayerAt = (x: number, y: number, zAbs: number) => {
-    const hit = surfaceHitAtWorld(x, y, T, zAbs, {
-      includeBlocked: true,
-      requireInside: false,
-    });
-    return hit ? hit.zLogical : floorFromZ(zAbs);
-  };
+  const floorFromZ = (z: number) => Math.ceil(z - 1e-6);
 
   const toScreen = (x: number, y: number) => {
     const p = worldToScreen(x, y);
@@ -213,9 +205,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     return best;
   };
 
-  // Decide if a floor tile should emit a curtain (edge-only)
-
-  type CurtainDraw = {
+  type RenderPieceDraw = {
     img: HTMLImageElement; // apron-only sprite
     dx: number;
     dy: number;
@@ -234,9 +224,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     depth: number;
   };
 
-  const buildApronDraw = (c: Curtain, stableId: number): CurtainDraw | null => {
+  const buildApronDraw = (c: RenderPiece, stableId: number): RenderPieceDraw | null => {
     const isFloor = c.renderTopKind === "FLOOR";
-    if (isFloor && !FLOOR_CURTAINS) return null;
+    if (isFloor && !FLOOR_APRONS) return null;
 
     const dir4 = c.renderDir ?? "N";
     const topRec = isFloor ? getFloorTop() : getStairTop(dir4);
@@ -289,7 +279,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     };
   };
 
-  const buildWallDraw = (c: Curtain, stableId: number): CurtainDraw | null => {
+  const buildWallDraw = (c: RenderPiece, stableId: number): RenderPieceDraw | null => {
     if (c.kind !== "WALL") return null;
 
     const dir4 = c.renderDir ?? "N";
@@ -539,7 +529,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const SHOW_UNDERLAY_DEBUG = !!(w as any).debugUnderlays;
   const SHOW_OCCLUDER_DEBUG = !!(w as any).debugOccluders;
 
-  const drawCurtainDebugOverlays = (viewRect: ViewRect) => {
+  const drawRenderDebugOverlays = (viewRect: ViewRect) => {
     if (!SHOW_UNDERLAY_DEBUG && !SHOW_OCCLUDER_DEBUG) return;
 
     ctx.save();
@@ -602,82 +592,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const maxSum = maxTx + maxTy;
 
   const viewRect = viewRectFromWorldCenter(px, py, T, radius);
-
-  // We only use this to decide if the fallback ground tile is ready.
-  const groundTile = getKenneyGroundTile();
-  const tilesReady =
-      groundTile?.ready && groundTile.img && groundTile.img.width > 0 && groundTile.img.height > 0;
-
   const activeH = w.activeFloorH ?? 0;
-
-  let minLayer = activeH;
-  let maxLayer = activeH;
-
-  if (RENDER_ALL_HEIGHTS && tilesReady) {
-    minLayer = Infinity;
-    maxLayer = -Infinity;
-
-    for (let ty = minTy; ty <= maxTy; ty++) {
-      for (let tx = minTx; tx <= maxTx; tx++) {
-        const surfaces = surfacesAtXY(tx, ty);
-        if (surfaces.length === 0) continue;
-        for (let i = 0; i < surfaces.length; i++) {
-          const h = surfaces[i].zLogical;
-          if (h < minLayer) minLayer = h;
-          if (h > maxLayer) maxLayer = h;
-        }
-      }
-    }
-
-    if (!Number.isFinite(minLayer) || !Number.isFinite(maxLayer)) {
-      minLayer = activeH;
-      maxLayer = activeH;
-    }
-  }
-
-  if (RENDER_ALL_HEIGHTS) {
-    const pzAbs = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
-    const pLayer = entityLayerAt(px, py, pzAbs);
-    const pRenderLayer = pLayer + 1;
-    minLayer = Math.min(minLayer, pRenderLayer);
-    maxLayer = Math.max(maxLayer, pRenderLayer);
-
-    const ez = w.ezVisual;
-    for (let i = 0; i < w.eAlive.length; i++) {
-      if (!w.eAlive[i]) continue;
-      const ew = getEnemyWorld(w, i, KENNEY_TILE_WORLD);
-      const zAbs = ez?.[i] ?? tileHAtWorld(ew.wx, ew.wy);
-      const h = entityLayerAt(ew.wx, ew.wy, zAbs);
-      minLayer = Math.min(minLayer, h);
-      maxLayer = Math.max(maxLayer, h);
-    }
-
-    for (let i = 0; i < w.pAlive.length; i++) {
-      if (!w.pAlive[i]) continue;
-      const pp = getProjectileWorld(w, i, KENNEY_TILE_WORLD);
-      const baseH = tileHAtWorld(pp.wx, pp.wy);
-      const zAbs = (w.prZVisual?.[i] ?? w.prZ?.[i] ?? baseH) || 0;
-      const h = entityLayerAt(pp.wx, pp.wy, zAbs);
-      minLayer = Math.min(minLayer, h);
-      maxLayer = Math.max(maxLayer, h);
-    }
-  }
-
-  // Build the layer list.
-  // IMPORTANT: we must include *occluder* layers too (e.g. tall walls W8*)
-  // otherwise only the lowest segment (zLogical=0) renders.
-  const layerSet = new Set<number>();
-
-  if (RENDER_ALL_HEIGHTS) {
-    for (let h = minLayer; h <= maxLayer; h++) layerSet.add(h);
-  } else {
-    layerSet.add(activeH);
-  }
-
-  for (const h of occluderLayers()) layerSet.add(h);
-
-  const layers = Array.from(layerSet);
-  layers.sort((a, b) => a - b);
 
 
   // ----------------------------
@@ -733,7 +648,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     if (!w.xAlive[i]) continue;
     const xp = getPickupWorld(w, i, KENNEY_TILE_WORLD);
     const zAbs = tileHAtWorld(xp.wx, xp.wy);
-    const h = entityLayerAt(xp.wx, xp.wy, zAbs);
+    const h = floorFromZ(zAbs);
     addItem(itemsByLayer, h, {
       kind: "pickup",
       i,
@@ -755,8 +670,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
     const zLift = (pzAbs - baseH) * ELEV_PX;
     const depth = renderDepthFor(pp.wx, pp.wy, pzAbs, 20000 + i);
+    const layer = Number.isFinite(w.prZLogical?.[i] as any) ? (w.prZLogical[i] as number) : floorFromZ(pzAbs);
 
-    addItem(itemsByLayer, entityLayerAt(pp.wx, pp.wy, pzAbs), {
+    addItem(itemsByLayer, layer, {
       kind: "projectile",
       i,
       depth,
@@ -770,7 +686,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
     const ew = getEnemyWorld(w, i, KENNEY_TILE_WORLD);
     const zAbs = ez?.[i] ?? tileHAtWorld(ew.wx, ew.wy);
-    addItem(itemsByLayer, entityLayerAt(ew.wx, ew.wy, zAbs), {
+    const layer = Number.isFinite(w.ezLogical?.[i] as any) ? (w.ezLogical[i] as number) : floorFromZ(zAbs);
+    addItem(itemsByLayer, layer, {
       kind: "enemy",
       i,
       depth: renderDepthFor(ew.wx, ew.wy, zAbs, 30000 + i),
@@ -779,31 +696,30 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   // Player
   const pzAbs2 = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
-  const pBaseLayer = entityLayerAt(px, py, pzAbs2);
-  const pRenderLayer = RENDER_ALL_HEIGHTS ? pBaseLayer + 1 : pBaseLayer;
+  const pBaseLayer = Number.isFinite(w.pzLogical as any) ? (w.pzLogical as number) : floorFromZ(pzAbs2);
 
-  addItem(itemsByLayer, pRenderLayer, {
+  addItem(itemsByLayer, pBaseLayer, {
     kind: "player",
     depth: renderDepthFor(px, py, pzAbs2, 0),
   });
 
   // ----------------------------
-  // Pass 0: Underlay aprons
+  // Global APRONS pass (background-only, all heights)
   // ----------------------------
-  const underlays = apronUnderlaysInView(viewRect);
-  if (underlays.length > 0) {
-    const underlayDraws: CurtainDraw[] = [];
-    let underlayId = 0;
-    for (let i = 0; i < underlays.length; i++) {
-      const draw = buildApronDraw(underlays[i], underlayId++);
-      if (draw) underlayDraws.push(draw);
+  const apronsInView = apronUnderlaysInView(viewRect);
+  if (apronsInView.length > 0) {
+    const apronDraws: RenderPieceDraw[] = [];
+    let apronId = 0;
+    for (let i = 0; i < apronsInView.length; i++) {
+      const draw = buildApronDraw(apronsInView[i], apronId++);
+      if (draw) apronDraws.push(draw);
     }
 
-    if (underlayDraws.length > 0) {
-      underlayDraws.sort((a, b) => a.depth - b.depth);
+    if (apronDraws.length > 0) {
+      apronDraws.sort((a, b) => a.depth - b.depth);
       ctx.globalAlpha = 1;
-      for (let i = 0; i < underlayDraws.length; i++) {
-        const c = underlayDraws[i];
+      for (let i = 0; i < apronDraws.length; i++) {
+        const c = apronDraws[i];
         const img = c.img;
         if (!img || img.width <= 0 || img.height <= 0) continue;
 
@@ -821,12 +737,32 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   }
 
   // ----------------------------
+  // Build the layer list (union of all renderable layers)
+  // ----------------------------
+  const layerSet = new Set<number>();
+  if (RENDER_ALL_HEIGHTS) {
+    for (const h of topLayers()) layerSet.add(h);
+    for (const h of occluderLayers()) layerSet.add(h);
+    for (const h of zonesByLayer.keys()) layerSet.add(h);
+    for (const h of itemsByLayer.keys()) layerSet.add(h);
+  } else {
+    layerSet.add(activeH);
+    for (const h of occluderLayers()) layerSet.add(h);
+  }
+
+  const layers = Array.from(layerSet);
+  layers.sort((a, b) => a - b);
+
+  // ----------------------------
   // Main render loop: per-layer
   // ----------------------------
   for (let li = 0; li < layers.length; li++) {
     const layer = layers[li];
 
     // 1) TOPS (surfaces)
+    if (!RENDER_ALL_HEIGHTS && layer !== activeH) {
+      // Only draw top surfaces once when filtering to the active floor.
+    } else {
     const tops: TopDraw[] = [];
     let topId = 0;
     for (let s = minSum; s <= maxSum; s++) {
@@ -903,6 +839,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         const t = tops[i];
         ctx.drawImage(t.img, t.dx, t.dy, t.dw, t.dh);
       }
+    }
     }
 
     // 2) Zones (same as your version)
@@ -1192,7 +1129,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     // 4) Occluders (walls) AFTER entities
     const occluders = occludersInViewForLayer(layer, viewRect);
     if (occluders.length > 0) {
-      const occluderDraws: CurtainDraw[] = [];
+      const occluderDraws: RenderPieceDraw[] = [];
       let occluderId = 0;
       for (let i = 0; i < occluders.length; i++) {
         const draw = buildWallDraw(occluders[i], occluderId++);
@@ -1232,7 +1169,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   drawWalkMaskOverlay();
   drawRampOverlay();
-  drawCurtainDebugOverlays(viewRect);
+  drawRenderDebugOverlays(viewRect);
 
   // FPS
   ctx.save();

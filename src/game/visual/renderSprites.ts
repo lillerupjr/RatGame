@@ -1,6 +1,6 @@
-// src/game/visual/curtainSprites.ts
+// src/game/visual/renderSprites.ts
 //
-// Explicit TOP + APRON sprites for Phase 1.x render pipeline.
+// Explicit TOP + APRON sprites for the height-based render pipeline.
 // Floors: one top + 2 aprons (S and E)
 // Stairs: 2 tops (big = N/S, small = E/W) + 2 aprons (N and E), mirrored for S/W.
 
@@ -97,7 +97,7 @@ const WALL_2_E = load(
     new URL("../../assets/tiles/walls/wall_2_e.png", import.meta.url).href
 );
 
-export function preloadCurtainSprites() {
+export function preloadRenderSprites() {
     // Images start loading on module import; this function exists for symmetry.
     // Keeping it allows render.ts to do one-time "preload" like other sprite packs.
     void FLOOR_TOP;

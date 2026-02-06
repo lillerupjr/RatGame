@@ -9,9 +9,9 @@ import {
     type IsoTile,
     type IsoTileKind,
     type StairDir,
-    type Curtain,
-    type CurtainClass,
-    type CurtainKind,
+    type RenderPiece,
+    type RenderPieceKind,
+    type RenderRole,
     type ViewRect,
     type Surface,
     type CompiledKenneyMap,
@@ -26,9 +26,9 @@ export type {
     IsoTileKind,
     IsoTile,
     Surface,
-    Curtain,
-    CurtainClass,
-    CurtainKind,
+    RenderPiece,
+    RenderPieceKind,
+    RenderRole,
     ViewRect,
 } from "./kenneyMapLoader";
 
@@ -167,39 +167,43 @@ export function surfacesAtXY(tx: number, ty: number): Surface[] {
     return _compiled.surfacesAtXY(tx, ty);
 }
 
-/** Return curtains for a logical layer. */
-export function curtainsForLayer(layer: number): Curtain[] {
-    return _compiled.curtainsForLayer(layer);
+/** Return apron underlays for a logical layer. */
+export function apronsForLayer(layer: number): RenderPiece[] {
+    return _compiled.apronsByLayer.get(layer) ?? [];
 }
 
-/** Return underlay curtains (floor/stair aprons). */
-export function underlayCurtains(): Curtain[] {
-    return _compiled.underlays;
+/** Return top surfaces for a logical layer. */
+export function topsForLayer(layer: number): Surface[] {
+    return _compiled.topsByLayer.get(layer) ?? [];
 }
 
-/** Return underlay curtains within a tile-bounds view. */
-export function apronUnderlaysInView(view: ViewRect): Curtain[] {
+/** Return every logical layer index that has at least one apron. */
+export function apronLayers(): number[] {
+    const ks = Array.from(_compiled.apronsByLayer.keys());
+    ks.sort((a, b) => a - b);
+    return ks;
+}
+
+/** Return every logical layer index that has at least one top surface. */
+export function topLayers(): number[] {
+    const ks = Array.from(_compiled.topsByLayer.keys());
+    ks.sort((a, b) => a - b);
+    return ks;
+}
+
+/** Return underlay aprons within a tile-bounds view. */
+export function apronUnderlaysInView(view: ViewRect): RenderPiece[] {
     return _compiled.apronUnderlaysInView(view);
 }
 
-/** Return occluder curtains for a logical layer. */
-export function occludersForLayer(layer: number): Curtain[] {
+/** Return occluders for a logical layer. */
+export function occludersForLayer(layer: number): RenderPiece[] {
     return _compiled.occludersForLayer(layer);
 }
 
-/** Return occluder curtains within a tile-bounds view for a logical layer. */
-export function occludersInViewForLayer(layer: number, view: ViewRect): Curtain[] {
+/** Return occluders within a tile-bounds view for a logical layer. */
+export function occludersInViewForLayer(layer: number, view: ViewRect): RenderPiece[] {
     return _compiled.occludersInViewForLayer(layer, view);
-}
-
-/**
- * Return every logical layer index that has at least one curtain in the active map.
- * Used by the renderer to ensure tall walls (e.g. W8*) actually show all segments.
- */
-export function curtainLayers(): number[] {
-    const ks = Array.from(_compiled.curtainsByLayer.keys());
-    ks.sort((a, b) => a - b);
-    return ks;
 }
 
 /** Return every logical layer index that has at least one occluder. */
@@ -238,6 +242,10 @@ function localPxForTile(tx: number, ty: number, wx: number, wy: number, tileWorl
     const lx = (d.dx / tileWorld) * 64 + 64;
     const ly = (d.dy / (tileWorld * 0.5)) * 32 + 32;
     return { lx, ly };
+}
+
+function logicalLayerFromZ(z: number): number {
+    return Math.ceil(z - 1e-6);
 }
 
 function tileSurfaceHitAtWorld(
@@ -300,7 +308,7 @@ function rampSurfaceHitAtWorld(
     return {
         surface,
         zVisual,
-        zLogical: Math.floor(zVisual + 1e-6),
+        zLogical: logicalLayerFromZ(zVisual),
         isRamp: true,
     };
 }
@@ -925,7 +933,7 @@ export function walkInfo(wx: number, wy: number, tileWorld: number, hintZ?: numb
     const rh = rampHitAtWorld(wx, wy, tileWorld);
     if (rh) {
         const z = rh.z;
-        const floorH = Math.floor(z + 1e-6);
+        const floorH = logicalLayerFromZ(z);
 
         // Virtual "tile" record for downstream code that expects tile/kind.
         const virtualTile: IsoTile = { kind: "FLOOR", h: floorH };

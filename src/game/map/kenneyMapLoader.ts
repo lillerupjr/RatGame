@@ -26,7 +26,7 @@ export type IsoTile = {
 export type SurfaceKind = "TILE_TOP";
 export type RenderTopKind = "FLOOR" | "STAIR";
 
-export type CurtainClass = "UNDERLAY" | "OCCLUDER";
+export type RenderRole = "UNDERLAY" | "OCCLUDER";
 export type ViewRect = {
     minTx: number;
     maxTx: number;
@@ -47,12 +47,12 @@ export type Surface = {
     renderDyOffset: number;
 };
 
-export type CurtainKind = "FLOOR_APRON" | "STAIR_APRON" | "WALL";
+export type RenderPieceKind = "FLOOR_APRON" | "STAIR_APRON" | "WALL";
 
-export type Curtain = {
+export type RenderPiece = {
     id: string;
-    cls: CurtainClass;
-    kind: CurtainKind;
+    cls: RenderRole;
+    kind: RenderPieceKind;
     tx: number;
     ty: number;
     zFrom: number;
@@ -97,14 +97,13 @@ export type CompiledKenneyMap = {
     getTile(tx: number, ty: number): IsoTile;
     surfacesByKey: Map<string, Surface[]>;
     surfacesAtXY(tx: number, ty: number): Surface[];
-    curtains: Curtain[];
-    curtainsByLayer: Map<number, Curtain[]>;
-    curtainsForLayer(layer: number): Curtain[];
-    underlays: Curtain[];
-    occludersByLayer: Map<number, Curtain[]>;
-    occludersForLayer(layer: number): Curtain[];
-    apronUnderlaysInView(view: ViewRect): Curtain[];
-    occludersInViewForLayer(layer: number, view: ViewRect): Curtain[];
+    topsByLayer: Map<number, Surface[]>;
+    apronsByLayer: Map<number, RenderPiece[]>;
+    occludersByLayer: Map<number, RenderPiece[]>;
+    underlays: RenderPiece[];
+    occludersForLayer(layer: number): RenderPiece[];
+    apronUnderlaysInView(view: ViewRect): RenderPiece[];
+    occludersInViewForLayer(layer: number, view: ViewRect): RenderPiece[];
 };
 
 // Parse tokens like: F0, F5, S0W, S3N, S4S, S5, P0, C2E
@@ -322,6 +321,7 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
     }
 
     const surfacesByKey = new Map<string, Surface[]>();
+    const topsByLayer = new Map<number, Surface[]>();
 
     const floorAnchorY = KENNEY_TILE_ANCHOR_Y;
     const stairAnchorY = 0.62;
@@ -337,6 +337,10 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         const list = surfacesByKey.get(k);
         if (list) list.push(surface);
         else surfacesByKey.set(k, [surface]);
+
+        const layerList = topsByLayer.get(surface.zLogical);
+        if (layerList) layerList.push(surface);
+        else topsByLayer.set(surface.zLogical, [surface]);
     }
 
     for (const [key, tile] of placed.entries()) {
@@ -375,30 +379,23 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         return surfacesByKey.get(`${tx},${ty}`) ?? [];
     }
 
-    const curtains: Curtain[] = [];
-    const curtainsByLayer = new Map<number, Curtain[]>();
-    const underlays: Curtain[] = [];
-    const occludersByLayer = new Map<number, Curtain[]>();
+    const underlays: RenderPiece[] = [];
+    const apronsByLayer = new Map<number, RenderPiece[]>();
+    const occludersByLayer = new Map<number, RenderPiece[]>();
 
-    function addCurtainToLayerMap(map: Map<number, Curtain[]>, curtain: Curtain) {
-        const list = map.get(curtain.zLogical);
-        if (list) list.push(curtain);
-        else map.set(curtain.zLogical, [curtain]);
+    function addPieceToLayerMap(map: Map<number, RenderPiece[]>, piece: RenderPiece) {
+        const list = map.get(piece.zLogical);
+        if (list) list.push(piece);
+        else map.set(piece.zLogical, [piece]);
     }
 
-    function addLegacyCurtain(curtain: Curtain) {
-        curtains.push(curtain);
-        addCurtainToLayerMap(curtainsByLayer, curtain);
+    function addUnderlay(piece: RenderPiece) {
+        underlays.push(piece);
+        addPieceToLayerMap(apronsByLayer, piece);
     }
 
-    function addUnderlay(curtain: Curtain) {
-        underlays.push(curtain);
-        addLegacyCurtain(curtain);
-    }
-
-    function addOccluder(curtain: Curtain) {
-        addCurtainToLayerMap(occludersByLayer, curtain);
-        addLegacyCurtain(curtain);
+    function addOccluder(piece: RenderPiece) {
+        addPieceToLayerMap(occludersByLayer, piece);
     }
 
     function hasSurfaceAtZ(tx: number, ty: number, zBase: number): boolean {
@@ -439,7 +436,7 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
                     continue;
                 }
                 addUnderlay({
-                    id: `curtain_stair_${surface.tx}_${surface.ty}_${surface.zBase}`,
+                    id: `apron_stair_${surface.tx}_${surface.ty}_${surface.zBase}`,
                     cls: "UNDERLAY",
                     kind: "STAIR_APRON",
                     tx: surface.tx,
@@ -463,7 +460,7 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
                 const apronKind: "S" = "S";
                 const apronDyOffset = -100;
                 addUnderlay({
-                    id: `curtain_floor_${surface.tx}_${surface.ty}_${surface.zBase}_S`,
+                    id: `apron_floor_${surface.tx}_${surface.ty}_${surface.zBase}_S`,
                     cls: "UNDERLAY",
                     kind: "FLOOR_APRON",
                     tx: surface.tx,
@@ -487,7 +484,7 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
                 const apronKind: "E" = "E";
                 const apronDyOffset = -100;
                 addUnderlay({
-                    id: `curtain_floor_${surface.tx}_${surface.ty}_${surface.zBase}_E`,
+                    id: `apron_floor_${surface.tx}_${surface.ty}_${surface.zBase}_E`,
                     cls: "UNDERLAY",
                     kind: "FLOOR_APRON",
                     tx: surface.tx,
@@ -525,7 +522,7 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
             const segTo = Math.min(z + segmentHeight, zTo);
             const zLogical = Math.floor(segFrom + 1e-6);
             addOccluder({
-                id: `curtain_wall_${tx}_${ty}_${w.dir}_${segFrom}_${segTo}`,
+                id: `wall_${tx}_${ty}_${w.dir}_${segFrom}_${segTo}`,
                 cls: "OCCLUDER",
                 kind: "WALL",
                 tx,
@@ -545,37 +542,33 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         }
     }
 
-    function curtainsForLayer(layer: number): Curtain[] {
-        return curtainsByLayer.get(layer) ?? [];
-    }
-
-    function occludersForLayer(layer: number): Curtain[] {
+    function occludersForLayer(layer: number): RenderPiece[] {
         return occludersByLayer.get(layer) ?? [];
     }
 
-    function curtainInView(curtain: Curtain, view: ViewRect): boolean {
-        return curtain.tx >= view.minTx
-            && curtain.tx <= view.maxTx
-            && curtain.ty >= view.minTy
-            && curtain.ty <= view.maxTy;
+    function pieceInView(piece: RenderPiece, view: ViewRect): boolean {
+        return piece.tx >= view.minTx
+            && piece.tx <= view.maxTx
+            && piece.ty >= view.minTy
+            && piece.ty <= view.maxTy;
     }
 
-    function apronUnderlaysInView(view: ViewRect): Curtain[] {
-        const out: Curtain[] = [];
+    function apronUnderlaysInView(view: ViewRect): RenderPiece[] {
+        const out: RenderPiece[] = [];
         for (let i = 0; i < underlays.length; i++) {
             const c = underlays[i];
-            if (curtainInView(c, view)) out.push(c);
+            if (pieceInView(c, view)) out.push(c);
         }
         return out;
     }
 
-    function occludersInViewForLayer(layer: number, view: ViewRect): Curtain[] {
+    function occludersInViewForLayer(layer: number, view: ViewRect): RenderPiece[] {
         const list = occludersByLayer.get(layer);
         if (!list || list.length === 0) return [];
-        const out: Curtain[] = [];
+        const out: RenderPiece[] = [];
         for (let i = 0; i < list.length; i++) {
             const c = list[i];
-            if (curtainInView(c, view)) out.push(c);
+            if (pieceInView(c, view)) out.push(c);
         }
         return out;
     }
@@ -608,11 +601,10 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         getTile,
         surfacesByKey,
         surfacesAtXY,
-        curtains,
-        curtainsByLayer,
-        curtainsForLayer,
-        underlays,
+        topsByLayer,
+        apronsByLayer,
         occludersByLayer,
+        underlays,
         occludersForLayer,
         apronUnderlaysInView,
         occludersInViewForLayer,

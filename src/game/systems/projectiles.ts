@@ -58,7 +58,9 @@ export function projectilesSystem(w: World, dt: number) {
     const syncProjectileZ = (i: number) => {
         const zVisual = w.prZVisual?.[i] ?? w.prZ?.[i] ?? 0;
         w.prZVisual[i] = zVisual;
-        w.prZLogical[i] = Math.floor(zVisual + 1e-6);
+        if (!Number.isFinite(w.prZLogical[i] as any)) {
+            w.prZLogical[i] = Math.ceil(zVisual - 1e-6);
+        }
         w.prZ[i] = zVisual;
     };
 

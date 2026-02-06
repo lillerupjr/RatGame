@@ -73,6 +73,9 @@ export type SpawnProjectileArgs = {
 
     // NEW (Milestone C): optional explicit projectile Z (otherwise derived from shooter)
     z?: number;
+
+    // NEW (Height-based): explicit logical layer for this projectile
+    zLogical?: number;
 };
 
 export type SpawnProjectileGridArgs = Omit<SpawnProjectileArgs, "x" | "y" | "dirX" | "dirY"> & {
@@ -107,11 +110,11 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     const i = w.pAlive.length;
 
     // Milestone C: flat-Z projectiles (no gravity yet)
-    // Fire at +1 height step so shots "travel above" the stair ramp from the lower floor.
-    // (We still keep the stair collision rule at projectileHeight+1.)
-    const HIT_MUZZLE_Z = 1.0;
     const shooterZ = w.pzVisual ?? w.pz ?? 0;
-    const projZ = Number.isFinite(a.z as any) ? (a.z as number) : (shooterZ + HIT_MUZZLE_Z);
+    const projZ = Number.isFinite(a.z as any) ? (a.z as number) : shooterZ;
+    const spawnLayer = Number.isFinite(a.zLogical as any)
+        ? (a.zLogical as number)
+        : (Number.isFinite(w.pzLogical as any) ? w.pzLogical : Math.ceil(projZ - 1e-6));
 
 
     w.pAlive.push(true);
@@ -133,7 +136,7 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     // Milestone C: projectile height (keep index-aligned)
     w.prZ.push(projZ);
     w.prZVisual.push(projZ);
-    w.prZLogical.push(Math.floor(projZ + 1e-6));
+    w.prZLogical.push(spawnLayer);
 
     // Milestone C: projectile can-hit-player flag (keep index-aligned)
     w.prHitsPlayer.push(!!a.hitsPlayer);

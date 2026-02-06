@@ -38,7 +38,7 @@ export function fissionSystem(w: World, dt: number) {
 
   // Check for fission projectile collisions
   // We'll queue spawns to avoid modifying arrays while iterating
-  const spawns: { x: number; y: number; vx1: number; vy1: number; vx2: number; vy2: number; damage: number; speed: number; radius: number }[] = [];
+  const spawns: { x: number; y: number; vx1: number; vy1: number; vx2: number; vy2: number; damage: number; speed: number; radius: number; layer: number }[] = [];
 
   // Track pairs that have already collided this frame (not individual projectiles!)
   const collidedPairs = new Set<string>();
@@ -94,6 +94,7 @@ export function fissionSystem(w: World, dt: number) {
       // Spawn point is at collision midpoint
       const spawnX = (x1 + x2) / 2;
       const spawnY = (y1 + y2) / 2;
+      const spawnLayer = Math.max(w.prZLogical[p1] ?? 0, w.prZLogical[p2] ?? 0);
 
       // Calculate perpendicular directions to collision axis
       const dist = Math.sqrt(distSq) || 1;
@@ -123,6 +124,7 @@ export function fissionSystem(w: World, dt: number) {
         damage: avgDamage,
         speed: avgSpeed,
         radius: avgRadius,
+        layer: spawnLayer,
       });
       
       // DON'T break - allow this projectile to collide with others too!
@@ -150,6 +152,7 @@ export function fissionSystem(w: World, dt: number) {
         ttl: 9999,       // effectively infinite
         bounces: 9999,   // effectively infinite
         wallBounce: true,
+        zLogical: s.layer,
       });
       w.prFission[p] = true;
       w.prFissionCd[p] = 0.04; // tiny cooldown
