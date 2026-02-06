@@ -1,10 +1,16 @@
 import { World, gridAtPlayer } from "../world";
 import { InputState } from "./input";
-import { getRampFacesForDebug, walkInfo } from "../map/kenneyMap";
+import { walkInfo, worldToTile } from "../map/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 import { Dir8 } from "../visual/playerSprites";
 import { gridToWorld, worldToGrid } from "../coords/grid";
 import { getEnemyWorld, getPlayerWorld } from "../coords/worldViews";
+import {
+  computeFlowField,
+  queryFlowDirection,
+  isFieldStale,
+  type FlowField,
+} from "../map/flowField";
 
 type GridPos = { gx: number; gy: number };
 type WorldPos = { wx: number; wy: number };
@@ -37,6 +43,8 @@ function dirFromGrid(dx: number, dy: number): Dir8 {
   const map: Dir8[] = ["E", "NE", "N", "NW", "W", "SW", "S", "SE"];
   return map[idx];
 }
+
+let _cachedField: FlowField | null = null;
 
 /** Update player/enemy movement, steering, and facing. */
 export function movementSystem(w: World, input: InputState, dt: number) {
@@ -125,39 +133,13 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   const ezLogical = w.ezLogical;
   const pInfo = walkInfo(px, py, KENNEY_TILE_WORLD, w.pzVisual);
   const playerFloorH = pInfo.floorH;
-  const playerOnRamp = (pInfo as any).isRamp;
-  const playerOnStairs = pInfo.kind === "STAIRS";
 
-  const rampTargets = (() => {
-    const ramps = getRampFacesForDebug(KENNEY_TILE_WORLD);
-    if (!ramps || ramps.length === 0) return [] as Array<WorldPos & GridPos>;
-    const out: Array<WorldPos & GridPos> = [];
-    for (let i = 0; i < ramps.length; i++) {
-      const r = ramps[i];
-      const wx = (r.poly[0].x + r.poly[1].x + r.poly[2].x + r.poly[3].x) * 0.25;
-      const wy = (r.poly[0].y + r.poly[1].y + r.poly[2].y + r.poly[3].y) * 0.25;
-      const wi = walkInfo(wx, wy, KENNEY_TILE_WORLD);
-      if (!wi.walkable) continue;
-      const gp = worldToGrid(wx, wy, KENNEY_TILE_WORLD);
-      out.push({ wx, wy, gx: gp.gx, gy: gp.gy });
-    }
-    return out;
-  })();
-
-  const findNearestRampTarget = (gx: number, gy: number) => {
-    if (rampTargets.length === 0) return null;
-    let best = rampTargets[0];
-    let bestD2 = (best.gx - gx) * (best.gx - gx) + (best.gy - gy) * (best.gy - gy);
-    for (let i = 1; i < rampTargets.length; i++) {
-      const r = rampTargets[i];
-      const d2 = (r.gx - gx) * (r.gx - gx) + (r.gy - gy) * (r.gy - gy);
-      if (d2 < bestD2) {
-        bestD2 = d2;
-        best = r;
-      }
-    }
-    return best;
-  };
+  // Compute / refresh flow field for enemy pathfinding
+  const playerTile = worldToTile(px, py, KENNEY_TILE_WORLD);
+  if (isFieldStale(_cachedField, playerTile.tx, playerTile.ty, playerFloorH)) {
+    _cachedField = computeFlowField(px, py, playerFloorH, KENNEY_TILE_WORLD);
+  }
+  const flowField = _cachedField!;
 
   const playerGrid = gridAtPlayer(w);
 
@@ -172,30 +154,23 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     ezVisual[i] = eCur.zVisual;
     ezLogical[i] = eCur.zLogical;
 
-    const enemyOnStairs = eCur.kind === "STAIRS";
-    const enemyOnRamp = (eCur as any).isRamp;
+    // Query flow field for optimal direction toward player
+    const flowDir = queryFlowDirection(flowField, ex, ey, eCur.floorH, KENNEY_TILE_WORLD);
 
-    const differentHeight = eCur.floorH !== playerFloorH;
-    const playerOnConnector = playerOnStairs || playerOnRamp;
-    const enemyOnConnector = enemyOnStairs || enemyOnRamp;
-
-    const enemyGrid = gridFromAnchor(w.egxi[i], w.egyi[i], w.egox[i], w.egoy[i]);
-    let tgx = playerGrid.gx;
-    let tgy = playerGrid.gy;
-
-    if (differentHeight && !playerOnConnector && !enemyOnConnector) {
-      const rampTarget = findNearestRampTarget(enemyGrid.gx, enemyGrid.gy);
-      if (rampTarget) {
-        tgx = rampTarget.gx;
-        tgy = rampTarget.gy;
-      }
+    let gux: number;
+    let guy: number;
+    if (flowDir) {
+      gux = flowDir.dx;
+      guy = flowDir.dy;
+    } else {
+      // Fallback: direct chase for off-graph or unreachable enemies
+      const enemyGrid = gridFromAnchor(w.egxi[i], w.egyi[i], w.egox[i], w.egoy[i]);
+      const gvx = playerGrid.gx - enemyGrid.gx;
+      const gvy = playerGrid.gy - enemyGrid.gy;
+      const gdist = Math.hypot(gvx, gvy) || 1;
+      gux = gvx / gdist;
+      guy = gvy / gdist;
     }
-
-    const gvx = tgx - enemyGrid.gx;
-    const gvy = tgy - enemyGrid.gy;
-    const gdist = Math.hypot(gvx, gvy) || 1;
-    const gux = gvx / gdist;
-    const guy = gvy / gdist;
 
     const eWorldDir = gridDirToWorldDir(KENNEY_TILE_WORLD, gux, guy);
     const enx = ex + eWorldDir.wx * w.eSpeed[i] * dt;
