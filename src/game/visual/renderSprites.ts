@@ -32,7 +32,7 @@ export const FLOOR_APRON_DY_PX: Record<"S" | "E", number> = {
     E: 0,
 };
 export const STAIR_APRON_DY_PX: Record<"N" | "E" | "S" | "W", number> = {
-    N: -114,
+    N: -116,
     E: -100,
     S: -107,
     W: -116,
