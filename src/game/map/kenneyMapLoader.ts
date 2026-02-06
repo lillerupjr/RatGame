@@ -50,7 +50,7 @@ export type Curtain = {
     zFrom: number;
     zTo: number;
     zLogical: number;
-    apronKind?: "S" | "DIAG";
+    apronKind?: "S" | "E";
     dir?: StairDir;
     wallDir?: WallDir;
     flipX?: boolean;
@@ -59,7 +59,7 @@ export type Curtain = {
     renderAnchorY: number;
     renderDyOffset: number;
     apronDyOffset: number;
-    wallKind?: "S" | "DIAG";
+    wallKind?: "S" | "E";
 };
 
 export type WallToken = {
@@ -370,16 +370,12 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         else curtainsByLayer.set(curtain.zLogical, [curtain]);
     }
 
-    function maxNonStairSurfaceZ(tx: number, ty: number): number | null {
+    function hasSurfaceAtZ(tx: number, ty: number, zBase: number): boolean {
         const surfaces = surfacesAtXY(tx, ty);
-        if (surfaces.length === 0) return null;
-        let best: number | null = null;
         for (let i = 0; i < surfaces.length; i++) {
-            const s = surfaces[i];
-            if (s.tile.kind === "STAIRS") continue;
-            if (best === null || s.zBase > best) best = s.zBase;
+            if (surfaces[i].zBase === zBase) return true;
         }
-        return best;
+        return false;
     }
 
     for (const list of surfacesByKey.values()) {
@@ -407,53 +403,49 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
                 continue;
             }
 
-            const hHere = surface.zBase;
-
-            const checkDrop = (nx: number, ny: number) => {
-                const nMax = maxNonStairSurfaceZ(nx, ny);
-                if (nMax === null) return true;
-                return nMax < hHere;
-            };
-
-            let apronKind: "S" | "DIAG" | null = null;
-            let flipX = false;
-
-            if (checkDrop(surface.tx, surface.ty + 1)) {
-                apronKind = "S";
-                flipX = false;
-            } else if (checkDrop(surface.tx + 1, surface.ty + 1)) {
-                apronKind = "DIAG";
-                flipX = false; // SE
-            } else if (checkDrop(surface.tx - 1, surface.ty + 1)) {
-                apronKind = "DIAG";
-                flipX = false; // SW mirror
+            const southMissing = !hasSurfaceAtZ(surface.tx, surface.ty + 1, surface.zBase);
+            if (southMissing) {
+                const apronKind: "S" = "S";
+                const apronDyOffset = -100;
+                addCurtain({
+                    id: `curtain_floor_${surface.tx}_${surface.ty}_${surface.zBase}_S`,
+                    kind: "FLOOR_APRON",
+                    tx: surface.tx,
+                    ty: surface.ty,
+                    zFrom: surface.zBase - 1,
+                    zTo: surface.zBase,
+                    zLogical: surface.zLogical,
+                    apronKind,
+                    flipX: false,
+                    renderTopKind: "FLOOR",
+                    renderDir: "N",
+                    renderAnchorY: floorAnchorY,
+                    renderDyOffset: 0,
+                    apronDyOffset,
+                });
             }
 
-            if (!apronKind) continue;
-
-            const neighborZ = maxNonStairSurfaceZ(
-                surface.tx + (apronKind === "S" ? 0 : flipX ? -1 : 1),
-                surface.ty + 1
-            );
-            const zFrom = neighborZ ?? (surface.zBase - 1);
-            const apronDyOffset = apronKind === "S" ? -100 : -100;
-
-            addCurtain({
-                id: `curtain_floor_${surface.tx}_${surface.ty}_${surface.zBase}_${apronKind}_${flipX ? "L" : "R"}`,
-                kind: "FLOOR_APRON",
-                tx: surface.tx,
-                ty: surface.ty,
-                zFrom,
-                zTo: surface.zBase,
-                zLogical: surface.zLogical,
-                apronKind,
-                flipX,
-                renderTopKind: "FLOOR",
-                renderDir: "N",
-                renderAnchorY: floorAnchorY,
-                renderDyOffset: 0,
-                apronDyOffset,
-            });
+            const eastMissing = !hasSurfaceAtZ(surface.tx + 1, surface.ty, surface.zBase);
+            if (eastMissing) {
+                const apronKind: "E" = "E";
+                const apronDyOffset = -100;
+                addCurtain({
+                    id: `curtain_floor_${surface.tx}_${surface.ty}_${surface.zBase}_E`,
+                    kind: "FLOOR_APRON",
+                    tx: surface.tx,
+                    ty: surface.ty,
+                    zFrom: surface.zBase - 1,
+                    zTo: surface.zBase,
+                    zLogical: surface.zLogical,
+                    apronKind,
+                    flipX: false,
+                    renderTopKind: "FLOOR",
+                    renderDir: "N",
+                    renderAnchorY: floorAnchorY,
+                    renderDyOffset: 0,
+                    apronDyOffset,
+                });
+            }
         }
     }
 
@@ -464,8 +456,8 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         const height = Math.max(0, w.height | 0);
         if (height <= 0) continue;
 
-        const wallKind: "S" | "DIAG" = (w.dir === "N" || w.dir === "S") ? "S" : "DIAG";
-        const flipX = w.dir === "N" || w.dir === "W";
+        const wallKind: "S" | "E" = (w.dir === "N" || w.dir === "S") ? "S" : "E";
+        const flipX = false;
         const segmentHeight = 2;
         const zFrom = 0;
         const zTo = height;

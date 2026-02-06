@@ -27,7 +27,6 @@ export const PLANE_TILE_Z_OFFSET = -1;
 export type ZRoles = {
     zLogical: number;
     zVisual: number;
-    zOcclusion: number;
 };
 
 export type RampSurface = {
@@ -162,6 +161,15 @@ export function curtainsForLayer(layer: number): Curtain[] {
     return _compiled.curtainsForLayer(layer);
 }
 
+/**
+ * Return every logical layer index that has at least one curtain in the active map.
+ * Used by the renderer to ensure tall walls (e.g. W8*) actually show all segments.
+ */
+export function curtainLayers(): number[] {
+    const ks = Array.from(_compiled.curtainsByLayer.keys());
+    ks.sort((a, b) => a - b);
+    return ks;
+}
 type SurfaceHitOptions = {
     includeBlocked?: boolean;
     requireInside?: boolean;
@@ -670,21 +678,6 @@ function rampHitAtWorld(wx: number, wy: number, tileWorld: number): { r: RampFac
 }
 
 /**
- * OCCLUSION height (render/visibility):
- *
- * In isometric Kenney tiles, the vertical apron of a higher tile visually overlaps
- * a region *south* of that tile. A point can be "under" a higher tile in screen-space
- * before its world position maps into that tile's top-face.
- *
- * This function returns the height of "the tile that can visually cover this point".
- *
- * Tuning knobs:
- * - OCCLUSION_LOOKAHEAD_FRAC: how far "north" we sample (in world units, as a fraction of tileWorld)
- *   to detect the tile whose apron might cover this point.
- */
-export let OCCLUSION_LOOKAHEAD_FRAC = 0.50; // 0.50 tile is a good starting point for Kenney apron overlap
-
-/**
  * Authoritative height at a world point.
  * NEW RULE: ramps override tiles; tiles are flat.
  */
@@ -712,160 +705,6 @@ export function heightAtWorld(
     return (t.h | 0);
 }
 
-/**
- * Occlusion-aware "ceiling" height at a world point.
- *
- * Purpose:
- * - Used for *render-only* hiding (e.g. projectiles going "under" raised tiles).
- * - This intentionally accounts for Kenney tile sprite overhang/apron
- *   by extending the top-face diamond downward in tile-local space.
- *
- * Contract:
- * - Returns the maximum integer tile height among nearby tiles
- *   whose (extended) top-face diamond covers this point in screen-projection space.
- * - If nothing occludes, falls back to normal heightAtWorld.
- *
- * Tuning:
- * - Increase OCCLUSION_EXTRA_LOCAL_PX to hide sooner (bigger apron).
- * - Decrease it if bullets hide too aggressively near edges.
- */
-export let OCCLUSION_EXTRA_LOCAL_PX = 24;
-
-// How far around the point we search for potential occluders.
-export let OCCLUSION_SCAN_RX = 2;
-export let OCCLUSION_SCAN_RY = 2;
-
-function localPxForTile(tx: number, ty: number, wx: number, wy: number, tileWorld: number) {
-    // Same math as worldToTileTopLocalPx, but relative to an explicit (tx,ty)
-    const ox = wx - (tx + 0.5) * tileWorld;
-    const oy = wy - (ty + 0.5) * tileWorld;
-
-    const d = worldDeltaToScreen(ox, oy);
-
-    const lx = (d.dx / tileWorld) * 64 + 64;
-    const ly = (d.dy / (tileWorld * 0.5)) * 32 + 32;
-
-    return { lx, ly };
-}
-
-/** Return occlusion-aware height at a world position. */
-export function heightAtWorldOcclusion(wx: number, wy: number, tileWorld: number): number {
-    const base = heightAtWorld(wx, wy, tileWorld);
-
-    const { tx, ty } = worldToTile(wx, wy, tileWorld);
-
-    let best = base;
-
-    // Scan nearby tiles (including "north" tiles whose apron can occlude south space)
-    const rx = Math.max(1, OCCLUSION_SCAN_RX | 0);
-    const ry = Math.max(1, OCCLUSION_SCAN_RY | 0);
-
-    for (let yy = ty - ry; yy <= ty + ry; yy++) {
-        for (let xx = tx - rx; xx <= tx + rx; xx++) {
-            const surfaces = surfacesAtXY(xx, yy);
-            if (surfaces.length === 0) continue;
-
-            for (let i = 0; i < surfaces.length; i++) {
-                const surface = surfaces[i];
-                if (surface.tile.kind === "VOID") continue;
-
-                // Occlusion height is integer tile height.
-                // Ramps are NOT treated as an overhang ceiling.
-                const th = surface.zBase;
-
-                // Only care about tiles that are >= current best.
-                if (th <= best) continue;
-
-                const { lx, ly } = localPxForTile(xx, yy, wx, wy, tileWorld);
-
-                // Extend the diamond downward to approximate the Kenney sprite apron/overhang.
-                const insideExtended = diamondContains(lx, ly, 128, 64 + Math.max(0, OCCLUSION_EXTRA_LOCAL_PX));
-
-                if (insideExtended) best = th;
-            }
-        }
-    }
-
-    return best;
-}
-
-/** Return zOcclusion at a world position. */
-export function zOcclusionAtWorld(wx: number, wy: number, tileWorld: number): number {
-    return heightAtWorldOcclusion(wx, wy, tileWorld);
-}
-
-/**
- * Generic visibility query at a world point.
- *
- * This is the “unified occlusion API”:
- * - It always uses the map occlusion ceiling (zOcclusionAtWorld)
- * - And compares a caller-provided absolute Z against that ceiling
- *
- * If zAbs is below the occlusion ceiling (minus eps), the point is considered occluded.
- */
-export type VisibilityQuery = {
-    zOcclusion: number; // integer-ish occlusion ceiling at (wx, wy)
-    occZ: number; // alias for compatibility
-    occluded: boolean; // true if zAbs is under the ceiling (with eps)
-};
-
-/** Return occlusion result for a world position and absolute Z. */
-export function queryVisibilityAtWorld(
-    wx: number,
-    wy: number,
-    zAbs: number,
-    tileWorld: number,
-    eps = 0
-): VisibilityQuery {
-    const zOcclusion = zOcclusionAtWorld(wx, wy, tileWorld);
-    return { zOcclusion, occZ: zOcclusion, occluded: zAbs < zOcclusion - eps };
-}
-
-// ---- Segment visibility (for LOS, future enemy vision, etc.) ----
-export let VIS_SAMPLE_SPAN_FRAC = 0.10; // ~10 samples per tile
-export let VIS_SAMPLE_MAX_STEPS = 64;
-export let VIS_SAMPLE_MIN_STEPS = 1;
-
-/**
- * Returns true if any point along the segment is occluded for the segment's Z.
- * Z is linearly interpolated from (az) to (bz).
- */
-export function isOccludedAlongSegment(
-    ax: number,
-    ay: number,
-    az: number,
-    bx: number,
-    by: number,
-    bz: number,
-    tileWorld: number,
-    eps = 0
-): boolean {
-    const dx = bx - ax;
-    const dy = by - ay;
-    const dz = bz - az;
-
-    const dist = Math.hypot(dx, dy);
-    if (dist <= 1e-6) {
-        return queryVisibilityAtWorld(ax, ay, az, tileWorld, eps).occluded;
-    }
-
-    const spanFrac = Math.max(1e-4, VIS_SAMPLE_SPAN_FRAC);
-    const wantSteps = Math.ceil(dist / (tileWorld * spanFrac));
-    const baseSteps = Math.max(1, VIS_SAMPLE_MIN_STEPS | 0);
-    const maxSteps = Math.max(1, VIS_SAMPLE_MAX_STEPS | 0);
-    const steps = Math.min(maxSteps, Math.max(baseSteps, wantSteps));
-
-    for (let s = 0; s <= steps; s++) {
-        const t = s / steps;
-        const x = ax + dx * t;
-        const y = ay + dy * t;
-        const z = az + dz * t;
-
-        if (queryVisibilityAtWorld(x, y, z, tileWorld, eps).occluded) return true;
-    }
-
-    return false;
-}
 
 // ─────────────────────────────────────────────────────────────
 // Phase 1 (decorative stairs): removed stairs-as-gameplay helpers.

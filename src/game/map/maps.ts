@@ -10,8 +10,6 @@ export const EXCEL_SANCTUARY_01: TableMapDef = {
     defaultSpawnSkin: "edges_landscape_30",
     centerOnZero: true,
 
-    // Coordinates are (x,y) inside the Excel selection box, top-left = (0,0).
-    // Only non-empty cells are listed (everything else is VOID).
     cells: [
         // Row 0
         { x: 4, y: 0, t: "F0" },
@@ -139,30 +137,29 @@ export const EXCEL_SANCTUARY_01: TableMapDef = {
         { x: 6, y: 14, t: "F3" },
     ],
 };
-export const EXCEL_TEST_SPAWN_3X3: TableMapDef = {
-    id: "EXCEL_TEST_SPAWN_3X3",
-    w: 3,
-    h: 3,
+export const WALL_TEST: TableMapDef = {
+    id: "WALL_TEST",
+    w: 10,
+    h: 10,
     defaultFloorSkin: "landscape_28",
     defaultSpawnSkin: "landscape_30",
     centerOnZero: true,
 
     cells: [
-        // Top row (north edge walls)
-        { x: 0, y: 0, t: "F0|W0N" },
-        { x: 1, y: 0, t: "F0|W0N" },
-        { x: 2, y: 0, t: "F0|W0N" },
+        // South row
+        { x: 0, y: 0, t: "F0|W2S|W2E" },
+        { x: 1, y: 0, t: "F0|W2S" },
+        { x: 2, y: 0, t: "F0|W2S|W2W" },
 
         // Middle row
-        { x: 0, y: 1, t: "F0" },
+        { x: 0, y: 1, t: "F0|W2E" },
         { x: 1, y: 1, t: "P0" }, // spawn at height 0
-        { x: 2, y: 1, t: "F0" },
+        { x: 2, y: 1, t: "F0|W2W" },
 
-        // Bottom row
-        { x: 0, y: 2, t: "F0" },
-        { x: 1, y: 2, t: "F0" },
-        { x: 2, y: 2, t: "F0" },
-        { x: 1, y: 3, t: "S1S" }
+        // North row
+        { x: 0, y: 2, t: "F0|W8N|W2E" },
+        { x: 1, y: 2, t: "F0|W8N" },
+        { x: 2, y: 2, t: "F0|W8N|W2W" },
     ],
 };
 
@@ -173,19 +170,6 @@ export const EXCEL_RENDER_STRESS_01: TableMapDef = {
     defaultFloorSkin: "edges_landscape_28",
     defaultSpawnSkin: "edges_landscape_30",
     centerOnZero: true,
-
-    // Goals:
-    // - Base plaza at F0 with spawn.
-    // - Stair run E: 0 -> 3 leading onto a bridge deck (F3).
-    // - Under/near-bridge lower floor (F0) to stress occlusion ordering.
-    // - Stair run N: 3 -> 6 up to a top plateau (F6).
-    // - Stair run W: 3 -> 6 up to a small tower (F6).
-    // - Stair run S: 0 -> 2 down to a mid platform (F2).
-    // - Additional E stairs: 0 -> 2 connecting corridor into the F2 area.
-    //
-    // IMPORTANT:
-    // - Do not “fix” visuals in render.ts by inspecting tile kinds.
-    // - This map is designed to validate Tops → Entities → Curtains.
 
     cells: [
         // Row 9
@@ -242,7 +226,7 @@ export const EXCEL_RENDER_STRESS_01: TableMapDef = {
         { x: 8, y: 13, t: "F0" },
         { x: 9, y: 13, t: "F0" },
         { x: 10, y: 13, t: "F0" },
-        { x: 19, y: 13, t: "S6S" }, // was S6N
+        { x: 19, y: 13, t: "S6S" },
         { x: 18, y: 13, t: "F6" },
         { x: 20, y: 13, t: "F6" },
         { x: 21, y: 13, t: "F6" },
@@ -262,7 +246,7 @@ export const EXCEL_RENDER_STRESS_01: TableMapDef = {
         { x: 16, y: 14, t: "F3" },
         { x: 17, y: 14, t: "F3" },
         { x: 18, y: 14, t: "F3" },
-        { x: 19, y: 14, t: "S5S" }, // was S5N
+        { x: 19, y: 14, t: "S5S" },
         { x: 20, y: 14, t: "F3" },
 
         // Row 15
@@ -273,15 +257,15 @@ export const EXCEL_RENDER_STRESS_01: TableMapDef = {
         { x: 8, y: 15, t: "F0" },
         { x: 9, y: 15, t: "F0" },
         { x: 10, y: 15, t: "F0" },
-        { x: 11, y: 15, t: "S1W" }, // was S1E
-        { x: 12, y: 15, t: "S2W" }, // was S2E
-        { x: 13, y: 15, t: "S3W" }, // was S3E
+        { x: 11, y: 15, t: "S1W" },
+        { x: 12, y: 15, t: "S2W" },
+        { x: 13, y: 15, t: "S3W" },
         { x: 14, y: 15, t: "F3" },
         { x: 15, y: 15, t: "F3" },
         { x: 16, y: 15, t: "F3" },
         { x: 17, y: 15, t: "F3" },
         { x: 18, y: 15, t: "F3" },
-        { x: 19, y: 15, t: "S4S" }, // was S4N
+        { x: 19, y: 15, t: "S4S" },
 
         // Row 16
         { x: 4, y: 16, t: "F0" },
@@ -350,8 +334,8 @@ export const EXCEL_RENDER_STRESS_01: TableMapDef = {
         { x: 7, y: 22, t: "F2" },
         { x: 8, y: 22, t: "F2" },
         { x: 9, y: 22, t: "F0" },
-        { x: 10, y: 22, t: "S1W" }, // was S1E
-        { x: 11, y: 22, t: "S2W" }, // was S2E
+        { x: 10, y: 22, t: "S1W" },
+        { x: 11, y: 22, t: "S2W" },
         { x: 12, y: 22, t: "F2" },
         { x: 13, y: 22, t: "F2" },
         { x: 14, y: 22, t: "F2" },
@@ -453,5 +437,31 @@ export const test_west_5: TableMapDef = {
         { x: 2, y: 5, t: "F0" },
         { x: 1, y: 5, t: "F0" },
         { x: 0, y: 5, t: "F0" },
+    ],
+};
+
+export const FLOOR_TEST: TableMapDef = {
+    id: "FLOOR_TEST",
+    w: 10,
+    h: 10,
+    defaultFloorSkin: "landscape_28",
+    defaultSpawnSkin: "landscape_30",
+    centerOnZero: true,
+
+    cells: [
+        // South row
+        { x: 0, y: 0, t: "F0" },
+        { x: 1, y: 0, t: "F0" },
+        { x: 2, y: 0, t: "F0" },
+
+        // Middle row
+        { x: 0, y: 1, t: "F0" },
+        { x: 1, y: 1, t: "P0" }, // spawn at height 0
+        { x: 2, y: 1, t: "F0" },
+
+        // North row
+        { x: 0, y: 2, t: "F0" },
+        { x: 1, y: 2, t: "F0" },
+        { x: 2, y: 2, t: "F0" },
     ],
 };

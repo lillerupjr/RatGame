@@ -1,7 +1,7 @@
 // src/game/visual/curtainSprites.ts
 //
 // Explicit TOP + APRON sprites for Phase 1.x render pipeline.
-// Floors: one top + 2 aprons (S and DIAG)
+// Floors: one top + 2 aprons (S and E)
 // Stairs: 2 tops (big = N/S, small = E/W) + 2 aprons (N and E), mirrored for S/W.
 
 export type LoadedImg = {
@@ -27,15 +27,15 @@ export const WALL_TOP_DY_PX: Record<"N" | "E" | "S" | "W", number> = {
     S: 0,
     W: 0,
 };
-export const FLOOR_APRON_DY_PX: Record<"S" | "DIAG", number> = {
-    S: -100,
-    DIAG: -100,
+export const FLOOR_APRON_DY_PX: Record<"S" | "E", number> = {
+    S: 0,
+    E: 0,
 };
 export const STAIR_APRON_DY_PX: Record<"N" | "E" | "S" | "W", number> = {
-    N: -100,
-    E: -114,
-    S: -164,
-    W: -50,
+    N: -114,
+    E: -100,
+    S: -107,
+    W: -116,
 };
 export const WALL_APRON_DY_PX: Record<"N" | "E" | "S" | "W", number> = {
     N: -100,
@@ -58,9 +58,11 @@ function load(url: string): LoadedImg {
 // ------------------------------------------------------------------
 
 const FLOOR_TOP = load(new URL("../../assets/tiles/floor/top/floor_top.png", import.meta.url).href);
-const FLOOR_APRON_S = load(new URL("../../assets/tiles/floor/curtain/floor_apron_e.png", import.meta.url).href);
+const FLOOR_APRON_S = load(
+    new URL("../../assets/tiles/floor/curtain/floor_apron_s.png", import.meta.url).href
+);
 const FLOOR_APRON_E = load(
-    new URL("../../assets/tiles/floor/curtain/floor_apron_s.png.png", import.meta.url).href
+    new URL("../../assets/tiles/floor/curtain/floor_apron_e.png", import.meta.url).href
 );
 
 const STAIR_TOP_N = load(
@@ -76,17 +78,23 @@ const STAIR_TOP_W = load(
     new URL("../../assets/tiles/stairs/top/stair_top_w.png", import.meta.url).href
 );
 
-const STAIR_APRON_W = load(
-    new URL("../../assets/tiles/stairs/curtain/stair_apron_w.png", import.meta.url).href
+const STAIR_APRON_N = load(
+    new URL("../../assets/tiles/stairs/curtain/stair_apron_n.png", import.meta.url).href
+);
+const STAIR_APRON_E = load(
+    new URL("../../assets/tiles/stairs/curtain/stair_apron_e.png", import.meta.url).href
 );
 const STAIR_APRON_S = load(
     new URL("../../assets/tiles/stairs/curtain/stair_apron_s.png", import.meta.url).href
 );
+const STAIR_APRON_W = load(
+    new URL("../../assets/tiles/stairs/curtain/stair_apron_w.png", import.meta.url).href
+);
 const WALL_2_S = load(
     new URL("../../assets/tiles/walls/wall_2_s.png", import.meta.url).href
 );
-const WALL_2_DIAG = load(
-    new URL("../../assets/tiles/walls/wall-2-diag.png", import.meta.url).href
+const WALL_2_E = load(
+    new URL("../../assets/tiles/walls/wall_2_e.png", import.meta.url).href
 );
 
 export function preloadCurtainSprites() {
@@ -99,19 +107,21 @@ export function preloadCurtainSprites() {
     void STAIR_TOP_S;
     void STAIR_TOP_E;
     void STAIR_TOP_W;
-    void STAIR_APRON_W;
-    void STAIR_APRON_S;
+    void STAIR_APRON_N;
+    void STAIR_APRON_E;
+    void STAIR_APRON_W
+    void STAIR_APRON_S
     void WALL_2_S;
-    void WALL_2_DIAG;
+    void WALL_2_E;
 }
 export function getFloorTop(): LoadedImg {
     return FLOOR_TOP;
 }
 
-export function getFloorApron(kind: "S" | "DIAG"): LoadedImg {
+export function getFloorApron(kind: "S" | "E"): LoadedImg {
     // File names:
-    // - wall_2_s.png
-    // - wall_2_diag.png
+    // - floor_apron_s.png
+    // - floor_apron_e.png
     return kind === "S" ? FLOOR_APRON_S : FLOOR_APRON_E;
 }
 
@@ -130,21 +140,16 @@ export function getStairApron(dir: "N" | "E" | "S" | "W"): { rec: LoadedImg; fli
     // E = top-right of screen (↗)
     // S = bottom-right of screen (↘)
     // W = bottom-left of screen (↙)
-
-    // Available sprites:
-    // - STAIR_APRON_S (stair_apron_s.png)
-    // - STAIR_APRON_W (stair_apron_w.png)
     //
     // We reuse each sprite for its opposite direction by flipping.
+    if (dir === "N") return { rec: STAIR_APRON_N, flipX: false };
     if (dir === "S") return { rec: STAIR_APRON_S, flipX: false };
-    if (dir === "N") return { rec: STAIR_APRON_S, flipX: true };
 
+    if (dir === "E") return { rec: STAIR_APRON_E, flipX: false };
     if (dir === "W") return { rec: STAIR_APRON_W, flipX: false };
-    // E
-    return { rec: STAIR_APRON_W, flipX: true };
+    return { rec: STAIR_APRON_E, flipX: true };
 }
 
-export function getWallSegment(kind: "S" | "DIAG"): LoadedImg {
-    if (kind === "S") return WALL_2_S;
-    return WALL_2_DIAG.ready ? WALL_2_DIAG : WALL_2_S;
+export function getWallSegment(kind: "S" | "E"): LoadedImg {
+    return kind === "S" ? WALL_2_S : WALL_2_E;
 }

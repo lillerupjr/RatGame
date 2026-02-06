@@ -1,23 +1,14 @@
 // src/game/systems/projectiles.ts
 import { type World } from "../world";
 import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
-import {heightAtWorld, queryVisibilityAtWorld, WalkInfo, walkInfo} from "../map/kenneyMap";
+import { heightAtWorld, type WalkInfo, walkInfo } from "../map/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 import { worldToGrid } from "../coords/grid";
-import {
-    isUnderOcclusionCeiling,
-    VISIBILITY_BELOW_CEILING_EPS,
-} from "../map/visibility";
 import { getPlayerWorld, getProjectileWorld } from "../coords/worldViews";
 
 // Phase 2: projectile vs stairs collision
 // Tune this to make stairs “thicker/thinner” for projectile blocking.
 export let PROJECTILE_STAIRS_Z_TOL = 0.35;
-// How far below occlusion ceiling counts as "under" for projectile hiding.
-// NOTE: unified with generic visibility epsilon. Keep this as a projectile-facing
-// alias so existing tuning workflows still work.
-export let PROJECTILE_BELOW_GROUND_EPS = VISIBILITY_BELOW_CEILING_EPS;
-
 // --- Movement substepping (prevents "one whole tile per frame") ---
 export let PROJECTILE_MAX_MOVE_FRAC_PER_STEP = 0.5;   // fraction of tile per move substep
 export let PROJECTILE_MAX_MOVE_STEPS = 12;            // hard cap for perf
@@ -45,7 +36,7 @@ export let PROJECTILE_GROUND_SAMPLE_STEPS = 1;
  *  * - Projectiles must not reference stair tiles; only compare prZ vs enemy vertical hit ranges.
  *  * See: docs/stairs-connectors-master.md)
  */
-/** Update projectile movement, lifetime, and occlusion/hiding. */
+/** Update projectile movement, lifetime, and hiding. */
 export function projectilesSystem(w: World, dt: number) {
     const moveSpeedMult = w.baseMoveSpeed > 0 ? w.pSpeed / w.baseMoveSpeed : 1;
     const T = KENNEY_TILE_WORLD;
@@ -174,12 +165,7 @@ export function projectilesSystem(w: World, dt: number) {
                         continue;
                     }
 
-                    // Non-stairs: keep the existing occlusion-based “underground / under-platform” behavior
-                    const vis = queryVisibilityAtWorld(sx, sy, pzAbs, T, PROJECTILE_BELOW_GROUND_EPS);
-                    if (vis.occluded) {
-                        hitGround = true;
-                        break;
-                    }
+                    // Non-stairs: no occlusion handling in this phase.
                 }
 
 

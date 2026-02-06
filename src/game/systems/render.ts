@@ -18,13 +18,12 @@ import {
   heightAtWorld,
   getWalkOutlineLocalPx,
   walkInfo,
-  zOcclusionAtWorld,
   getRampFacesForDebug,
   pointInQuad,
   rampHeightAt,
   surfaceHitAtWorld,
   surfacesAtXY,
-  curtainsForLayer,
+  curtainsForLayer, curtainLayers,
 } from "../map/kenneyMap";
 
 import {
@@ -493,12 +492,22 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     }
   }
 
-  const layers: number[] = [];
+  // Build the layer list.
+  // IMPORTANT: we must include *curtain* layers too (e.g. tall walls W8*)
+  // otherwise only the lowest segment (zLogical=0) renders.
+  const layerSet = new Set<number>();
+
   if (RENDER_ALL_HEIGHTS) {
-    for (let h = minLayer; h <= maxLayer; h++) layers.push(h);
+    for (let h = minLayer; h <= maxLayer; h++) layerSet.add(h);
   } else {
-    layers.push(activeH);
+    layerSet.add(activeH);
   }
+
+  for (const h of curtainLayers()) layerSet.add(h);
+
+  const layers = Array.from(layerSet);
+  layers.sort((a, b) => a - b);
+
 
   // ----------------------------
   // Buckets: zones/items by layer
@@ -539,11 +548,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const zy = sn.y;
 
     const groundZ = sn.z;
-    const occZ = zOcclusionAtWorld(zx, zy, KENNEY_TILE_WORLD);
-
-    const DECAL_OCCLUSION_EPS = 0.05;
-    if (groundZ < occZ - DECAL_OCCLUSION_EPS) continue;
-
     addZone(zonesByLayer, floorFromZ(groundZ), {
       kind: w.zKind[i],
       x: zx,
@@ -712,9 +716,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
         const isWall = c.kind === "WALL";
         const apronRec = isWall
-            ? getWallSegment(c.wallKind ?? "S")
+            ? getWallSegment((c.wallKind as "S" | "E") ?? "S")
             : isFloor
-                ? getFloorApron(c.apronKind ?? "S")
+                ? getFloorApron((c.apronKind as "S" | "E") ?? "S")
                 : getStairApron(dir4).rec;
         const apronFlipX = isWall ? !!c.flipX : isFloor ? !!c.flipX : getStairApron(dir4).flipX;
         if (!apronRec?.ready || !apronRec.img || apronRec.img.width <= 0 || apronRec.img.height <= 0) continue;
@@ -723,8 +727,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         const topW = topImg.width * TILE_SCALE;
         const topH = topImg.height * TILE_SCALE;
 
-        const wx = (c.tx + 0.5) * T;
-        const wy = (c.ty + 0.5) * T;
+        let wx = (c.tx + 0.5) * T;
+        let wy = (c.ty + 0.5) * T;
+        if (isWall && c.wallDir) {
+          if (c.wallDir === "N") wy -= T;
+          else if (c.wallDir === "W") wx -= T;
+        }
 
         const p = worldToScreen(wx, wy);
         const dx = p.x + camX - topW * 0.5;
@@ -751,7 +759,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         const apronDy = isWall
             ? (WALL_APRON_DY_PX[dir4] ?? 0)
             : isFloor
-                ? (FLOOR_APRON_DY_PX[c.apronKind ?? "S"] ?? 0)
+                ? (FLOOR_APRON_DY_PX[(c.apronKind as "S" | "E") ?? "S"] ?? 0)
                 : (STAIR_APRON_DY_PX[dir4] ?? 0);
         const ay = dy + topH - APRON_JOIN_PX + (c.apronDyOffset ?? 0) + apronDy;
 
@@ -965,27 +973,21 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           const sy = sn.y;
           const groundZ = sn.z;
 
-          const occZ = zOcclusionAtWorld(sx, sy, KENNEY_TILE_WORLD);
-          const SHADOW_OCCLUSION_EPS = 0.05;
-          const shadowOccluded = groundZ < occZ - SHADOW_OCCLUSION_EPS;
+          const sp = toScreen(sx, sy);
 
-          if (!shadowOccluded) {
-            const sp = toScreen(sx, sy);
+          const lift = Math.max(0, it.zLift || 0);
+          const t = Math.max(0, Math.min(1, 1 - lift / 70));
 
-            const lift = Math.max(0, it.zLift || 0);
-            const t = Math.max(0, Math.min(1, 1 - lift / 70));
+          const rx = r * ISO_X * (0.95 + 0.15 * t);
+          const ry = r * ISO_Y * (0.85 + 0.1 * t);
 
-            const rx = r * ISO_X * (0.95 + 0.15 * t);
-            const ry = r * ISO_Y * (0.85 + 0.1 * t);
-
-            ctx.save();
-            ctx.globalAlpha = 0.18 * t;
-            ctx.fillStyle = "#000";
-            ctx.beginPath();
-            ctx.ellipse(sp.x, sp.y, rx, ry, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-          }
+          ctx.save();
+          ctx.globalAlpha = 0.18 * t;
+          ctx.fillStyle = "#000";
+          ctx.beginPath();
+          ctx.ellipse(sp.x, sp.y, rx, ry, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
         }
 
         const wdx = w.prDirX[i] ?? 1;
