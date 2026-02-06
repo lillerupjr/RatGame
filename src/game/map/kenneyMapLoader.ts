@@ -378,13 +378,11 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         return false;
     }
 
-    function hasStairDirAtZ(tx: number, ty: number, zBase: number, dir: StairDir): boolean {
+    function hasStairAtZ(tx: number, ty: number, zBase: number): boolean {
         const surfaces = surfacesAtXY(tx, ty);
         for (let i = 0; i < surfaces.length; i++) {
             const s = surfaces[i];
-            if (s.zBase === zBase && s.tile.kind === "STAIRS" && (s.tile.dir ?? "N") === dir) {
-                return true;
-            }
+            if (s.zBase === zBase && s.tile.kind === "STAIRS") return true;
         }
         return false;
     }
@@ -427,9 +425,9 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
                 continue;
             }
 
-            const southMissing = !hasSurfaceAtZ(surface.tx, surface.ty + 1, surface.zBase);
-            const southBlockedByStair = hasStairDirAtZ(surface.tx, surface.ty + 1, surface.zBase, "N");
-            if (southMissing && !southBlockedByStair) {
+            const southMissing = !hasSurfaceAtZ(surface.tx, surface.ty + 1, surface.zBase)
+                || hasStairAtZ(surface.tx, surface.ty + 1, surface.zBase);
+            if (southMissing) {
                 const apronKind: "S" = "S";
                 const apronDyOffset = -100;
                 addCurtain({
@@ -450,9 +448,9 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
                 });
             }
 
-            const eastMissing = !hasSurfaceAtZ(surface.tx + 1, surface.ty, surface.zBase);
-            const eastBlockedByStair = hasStairDirAtZ(surface.tx + 1, surface.ty, surface.zBase, "W");
-            if (eastMissing && !eastBlockedByStair) {
+            const eastMissing = !hasSurfaceAtZ(surface.tx + 1, surface.ty, surface.zBase)
+                || hasStairAtZ(surface.tx + 1, surface.ty, surface.zBase);
+            if (eastMissing) {
                 const apronKind: "E" = "E";
                 const apronDyOffset = -100;
                 addCurtain({
