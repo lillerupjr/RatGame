@@ -81,6 +81,13 @@ export type WallToken = {
     dir: WallDir;
 };
 
+export type SolidFaceRec = {
+    tx: number;
+    ty: number;
+    zLogical: number;
+    dir: WallDir;
+};
+
 export type CompiledKenneyMap = {
     id: string;
     originTx: number;
@@ -122,6 +129,8 @@ export type CompiledKenneyMap = {
     deferredApronsAtXY(tx: number, ty: number): RenderPiece[];
     occludersForLayer(layer: number): RenderPiece[];
     occludersInViewForLayer(layer: number, view: ViewRect): RenderPiece[];
+    solidFace(tx: number, ty: number, zLogical: number, dir: WallDir): boolean;
+    solidFacesInView(view: ViewRect): SolidFaceRec[];
 };
 
 // Parse tokens like: F0, F5, S0W, S3N, S4S, S5, P0, C2E
@@ -401,6 +410,8 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
     const underlays: RenderPiece[] = [];
     const deferredApronsByKey = new Map<string, RenderPiece[]>();
     const occludersByLayer = new Map<number, RenderPiece[]>();
+    const wallFaces = new Set<string>();
+    const wallFaceList: SolidFaceRec[] = [];
 
     function addPieceToLayerMap(map: Map<number, RenderPiece[]>, piece: RenderPiece) {
         const list = map.get(piece.zLogical);
@@ -414,6 +425,9 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         const list = underlaysByKey.get(k);
         if (list) list.push(piece);
         else underlaysByKey.set(k, [piece]);
+        if ((piece.kind === "FLOOR_APRON" || piece.kind === "STAIR_APRON") && piece.edgeDir) {
+            addSolidFace(piece.tx, piece.ty, piece.zLogical, piece.edgeDir);
+        }
     }
 
     function addDeferredApron(ownerTx: number, ownerTy: number, piece: RenderPiece) {
@@ -425,6 +439,9 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
 
     function addOccluder(piece: RenderPiece) {
         addPieceToLayerMap(occludersByLayer, piece);
+        if (piece.kind === "WALL" && piece.wallDir) {
+            addSolidFace(piece.tx, piece.ty, piece.zLogical, piece.wallDir);
+        }
     }
 
     function maxSurfaceZAt(tx: number, ty: number): number | null {
@@ -473,6 +490,19 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         if (dir === "N") return { tx, ty: ty - 1, dir: "S" };
         if (dir === "W") return { tx: tx - 1, ty, dir: "E" };
         return { tx, ty, dir };
+    }
+
+    function addSolidFace(tx: number, ty: number, zLogical: number, dir: WallDir) {
+        const canonical = canonicalizeEdge(tx, ty, dir);
+        const key = `${canonical.tx},${canonical.ty},${zLogical | 0},${canonical.dir}`;
+        if (wallFaces.has(key)) return;
+        wallFaces.add(key);
+        wallFaceList.push({
+            tx: canonical.tx,
+            ty: canonical.ty,
+            zLogical: zLogical | 0,
+            dir: canonical.dir,
+        });
     }
 
     const FLOOR_SORT_MULT = 1000000;
@@ -673,6 +703,7 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
                     zFrom: surfaceZ - 1,
                     zTo: surfaceZ,
                     zLogical: surface.zLogical,
+                    edgeDir: dir,
                     apronKind: dir === "E" || dir === "S" ? dir : undefined,
                     apronDyOffset: isStair ? 0 : -100,
                     flipX: false,
@@ -755,6 +786,23 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         return out;
     }
 
+    function solidFace(tx: number, ty: number, zLogical: number, dir: WallDir): boolean {
+        const canonical = canonicalizeEdge(tx, ty, dir);
+        const key = `${canonical.tx},${canonical.ty},${zLogical | 0},${canonical.dir}`;
+        return wallFaces.has(key);
+    }
+
+    function solidFacesInView(view: ViewRect): SolidFaceRec[] {
+        const out: SolidFaceRec[] = [];
+        for (let i = 0; i < wallFaceList.length; i++) {
+            const rec = wallFaceList[i];
+            if (rec.tx < view.minTx || rec.tx > view.maxTx) continue;
+            if (rec.ty < view.minTy || rec.ty > view.maxTy) continue;
+            out.push(rec);
+        }
+        return out;
+    }
+
     // Convert authored spawn table coords -> tile coords.
     // Fallback: selection center.
     const spawnTx = (spawnTableX ?? Math.floor(def.w / 2)) + originTx;
@@ -802,5 +850,7 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         deferredApronsAtXY,
         occludersForLayer,
         occludersInViewForLayer,
+        solidFace,
+        solidFacesInView,
     };
 }

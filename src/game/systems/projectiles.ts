@@ -1,22 +1,14 @@
 // src/game/systems/projectiles.ts
 import { type World } from "../world";
 import { spawnZone, ZONE_KIND } from "../factories/zoneFactory";
-import { heightAtWorld, type WalkInfo, walkInfo } from "../map/kenneyMap";
+import { solidFace, worldToTile } from "../map/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 import { worldToGrid } from "../coords/grid";
 import { getPlayerWorld, getProjectileWorld } from "../coords/worldViews";
 
-// Phase 2: projectile vs stairs collision
-// Tune this to make stairs “thicker/thinner” for projectile blocking.
-export let PROJECTILE_STAIRS_Z_TOL = 0.35;
 // --- Movement substepping (prevents "one whole tile per frame") ---
 export let PROJECTILE_MAX_MOVE_FRAC_PER_STEP = 0.5;   // fraction of tile per move substep
 export let PROJECTILE_MAX_MOVE_STEPS = 12;            // hard cap for perf
-
-// --- Ground / occlusion sampling ---
-export let PROJECTILE_GROUND_SAMPLE_SPAN_FRAC = 0.10; // ~10 samples per tile traveled
-export let PROJECTILE_GROUND_SAMPLE_MAX_STEPS = 32;
-export let PROJECTILE_GROUND_SAMPLE_STEPS = 1;
 
 /**
  * Projectile movement + lifetime cleanup.
@@ -67,6 +59,9 @@ export function projectilesSystem(w: World, dt: number) {
     for (let i = 0; i < w.pAlive.length; i++) {
         if (!w.pAlive[i]) continue;
         syncProjectileZ(i);
+        const zLogical = w.prZLogical[i] ?? 0;
+        const zVisual = w.prZVisual[i] ?? w.prZ?.[i] ?? 0;
+        const zIsInteger = Math.abs(zVisual - Math.round(zVisual)) <= 1e-6;
         const wp0 = getProjectileWorld(w, i, T);
         let ox = wp0.wx;
         let oy = wp0.wy;
@@ -121,66 +116,35 @@ export function projectilesSystem(w: World, dt: number) {
             const totalDist = Math.hypot(vx * dt, vy * dt);
             const moveSteps = Math.min(PROJECTILE_MAX_MOVE_STEPS, Math.max(1, Math.ceil(totalDist / maxStepDist)));
 
-            let hitGround = false;
-
             for (let m = 0; m < moveSteps; m++) {
                 const subDt = dt / moveSteps;
 
                 const nx = ox + vx * subDt;
                 const ny = oy + vy * subDt;
 
-                // Ground-under sampling inside THIS small move (adaptive to distance)
-                const segDx = nx - ox;
-                const segDy = ny - oy;
-                const segDist = Math.hypot(segDx, segDy);
+                const t0 = worldToTile(ox, oy, T);
+                const t1 = worldToTile(nx, ny, T);
+                const tx0 = Math.floor(t0.tx);
+                const ty0 = Math.floor(t0.ty);
+                const tx1 = Math.floor(t1.tx);
+                const ty1 = Math.floor(t1.ty);
 
-// baseline minimum
-                const baseSteps = Math.max(1, PROJECTILE_GROUND_SAMPLE_STEPS | 0);
-
-// adaptive: aim for ~1 sample every (tile * spanFrac)
-                const spanFrac = Math.max(1e-4, PROJECTILE_GROUND_SAMPLE_SPAN_FRAC);
-                const wantSteps = Math.ceil(segDist / (T * spanFrac));
-
-// clamp for perf
-                const maxSteps = Math.max(1, PROJECTILE_GROUND_SAMPLE_MAX_STEPS | 0);
-                const steps = Math.min(maxSteps, Math.max(baseSteps, wantSteps));
-
-                for (let s = 1; s <= steps; s++) {
-                    const tt = s / steps;
-                    const sx = ox + segDx * tt;
-                    const sy = oy + segDy * tt;
-
-                    const pzAbs = w.prZVisual[i] ?? w.prZ?.[i] ?? 0;
-
-                    // Open-stairs rule:
-                    // - Stairs do NOT visually hide projectiles
-                    // - But stairs DO block projectiles if they collide at the stair surface height
-                    const wi = walkInfo(sx, sy, T, pzAbs);
-                    if (wi.walkable && wi.kind === "STAIRS") {
-                        const dz = Math.abs(pzAbs - wi.z);
-                        if (dz <= PROJECTILE_STAIRS_Z_TOL) {
-                            w.pAlive[i] = false;
-                            hitGround = true; // stop further work this frame
-                            break;
-                        }
-                        // If we're not colliding, we also don't treat stairs as occluders.
-                        continue;
+                if (tx0 !== tx1 || ty0 !== ty1) {
+                    let dir: "N" | "E" | "S" | "W";
+                    if (tx1 !== tx0) dir = tx1 > tx0 ? "E" : "W";
+                    else dir = ty1 > ty0 ? "S" : "N";
+                    const hitPrimary = solidFace(tx0, ty0, zLogical, dir);
+                    const hitLower = zIsInteger && zLogical > 0
+                        ? solidFace(tx0, ty0, zLogical - 1, dir)
+                        : false;
+                    if (hitPrimary || hitLower) {
+                        w.pAlive[i] = false;
+                        break;
                     }
-
-                    // Non-stairs: no occlusion handling in this phase.
                 }
 
-
-                // Commit the substep move
                 ox = nx;
                 oy = ny;
-
-                if (hitGround) break;
-            }
-
-            if (hitGround) {
-                w.prHidden[i] = true;
-                continue;
             }
 
             // Wall bounce (only for projectiles that opted-in)
@@ -257,16 +221,6 @@ export function projectilesSystem(w: World, dt: number) {
                 }
             }
 
-            if (w.pAlive[i]) {
-                const info: WalkInfo = walkInfo(ox, oy, T, w.prZVisual[i] ?? w.prZ?.[i]);
-                if (info.kind === "STAIRS" && info.walkable) {
-                    const stairZ = heightAtWorld(ox, oy, T);
-                    const dz = Math.abs((w.prZVisual[i] ?? w.prZ[i] ?? 0) - stairZ);
-                    if (dz <= PROJECTILE_STAIRS_Z_TOL) {
-                        w.pAlive[i] = false;
-                    }
-                }
-            }
         }
 
         // -------------------------

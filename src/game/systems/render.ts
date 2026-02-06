@@ -27,6 +27,7 @@ import {
   deferredApronsAtXY,
   occluderLayers,
   occludersInViewForLayer,
+  solidFacesInView,
   topLayers,
   viewRectFromWorldCenter,
   type RenderPiece,
@@ -636,6 +637,55 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     ctx.restore();
   };
 
+  // -------------------------------------------------------
+  // DEBUG: Projectile solid-face overlay (walls + aprons)
+  // -------------------------------------------------------
+  const SHOW_PROJECTILE_FACES = !!(w as any).debugProjectileFaces;
+
+  const faceEndpoints = (tx: number, ty: number, dir: "N" | "E" | "S" | "W") => {
+    const x0 = tx * T;
+    const y0 = ty * T;
+    const x1 = (tx + 1) * T;
+    const y1 = (ty + 1) * T;
+
+    switch (dir) {
+      case "N":
+        return { ax: x0, ay: y0, bx: x1, by: y0 };
+      case "S":
+        return { ax: x0, ay: y1, bx: x1, by: y1 };
+      case "W":
+        return { ax: x0, ay: y0, bx: x0, by: y1 };
+      case "E":
+      default:
+        return { ax: x1, ay: y0, bx: x1, by: y1 };
+    }
+  };
+
+  const drawProjectileFaceOverlay = (viewRect: ViewRect) => {
+    if (!SHOW_PROJECTILE_FACES) return;
+
+    const faces = solidFacesInView(viewRect);
+    if (faces.length === 0) return;
+
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    ctx.strokeStyle = "rgba(255,60,200,0.95)";
+    ctx.lineWidth = 2;
+
+    for (let i = 0; i < faces.length; i++) {
+      const f = faces[i];
+      const seg = faceEndpoints(f.tx, f.ty, f.dir);
+      const p0 = toScreenAtZ(seg.ax, seg.ay, f.zLogical);
+      const p1 = toScreenAtZ(seg.bx, seg.by, f.zLogical);
+      ctx.beginPath();
+      ctx.moveTo(p0.x, p0.y);
+      ctx.lineTo(p1.x, p1.y);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  };
+
   // ----------------------------
   // Tile range / diagonals
   // ----------------------------
@@ -1233,6 +1283,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   drawWalkMaskOverlay();
   drawRampOverlay();
   drawRenderDebugOverlays(viewRect);
+  drawProjectileFaceOverlay(viewRect);
   drawApronOwnershipStats();
 
   // FPS

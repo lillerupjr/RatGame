@@ -6,6 +6,7 @@
 import type { World } from "../world";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 import { getGoalWorldFromActive, getActiveMap } from "../map/proceduralMapBridge";
+import { getPlayerWorld } from "../coords/worldViews";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -85,9 +86,10 @@ export function initReachGoalObjective(world: World, timeLimitSeconds: number | 
         return _objectiveState;
     }
     
+    const playerWorld = getPlayerWorld(world, KENNEY_TILE_WORLD);
     const distanceToGoal = Math.hypot(
-        goal.x - world.px,
-        goal.y - world.py
+        goal.x - playerWorld.wx,
+        goal.y - playerWorld.wy
     );
     
     _objectiveState = {
@@ -168,8 +170,9 @@ export function objectiveSystem(world: World, dt: number): void {
 function updateReachGoalObjective(world: World): void {
     if (!_objectiveState) return;
     
-    const dx = _objectiveState.goalX - world.px;
-    const dy = _objectiveState.goalY - world.py;
+    const playerWorld = getPlayerWorld(world, KENNEY_TILE_WORLD);
+    const dx = _objectiveState.goalX - playerWorld.wx;
+    const dy = _objectiveState.goalY - playerWorld.wy;
     const distance = Math.hypot(dx, dy);
     
     _objectiveState.distanceToGoal = distance;
@@ -228,8 +231,9 @@ export function getDirectionToGoal(world: World): { dx: number; dy: number } | n
         return null;
     }
     
-    const dx = _objectiveState.goalX - world.px;
-    const dy = _objectiveState.goalY - world.py;
+    const playerWorld = getPlayerWorld(world, KENNEY_TILE_WORLD);
+    const dx = _objectiveState.goalX - playerWorld.wx;
+    const dy = _objectiveState.goalY - playerWorld.wy;
     const len = Math.hypot(dx, dy);
     
     if (len < 0.001) return { dx: 0, dy: 0 };

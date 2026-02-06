@@ -221,6 +221,16 @@ export function occluderLayers(): number[] {
     return ks;
 }
 
+/** Return true if a solid wall face exists on a tile edge at a logical layer. */
+export function solidFace(tx: number, ty: number, zLogical: number, dir: "N" | "E" | "S" | "W"): boolean {
+    return _compiled.solidFace(tx, ty, zLogical, dir);
+}
+
+/** Return solid faces within a tile-bounds view (for debug). */
+export function solidFacesInView(view: ViewRect) {
+    return _compiled.solidFacesInView(view);
+}
+
 /** Return tile-bounds view rect around a world position. */
 export function viewRectFromWorldCenter(
     wx: number,
