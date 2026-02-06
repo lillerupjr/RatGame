@@ -494,6 +494,16 @@ function stairDirToDelta(dir: StairDir): { dx: number; dy: number } {
     }
 }
 
+function flipStairDir(dir: StairDir): StairDir {
+    switch (dir) {
+        case "N": return "S";
+        case "S": return "N";
+        case "E": return "W";
+        case "W": return "E";
+        default: return "N";
+    }
+}
+
 function stairDirToWiring(dir: StairDir): keyof typeof RAMP_WIRING_PRESET {
     // Direction meaning: “up” along that dir.
     // So N means low at SOUTH edge, high at NORTH edge, etc.
@@ -524,7 +534,7 @@ function buildStaircaseRamps(tileWorld: number): RampFace[] {
     function readStair(tx: number, ty: number): StairTileRec | null {
         const t = getTile(tx, ty);
         if (t.kind !== "STAIRS") return null;
-        const dir = (t.dir ?? "N") as StairDir;
+        const dir = flipStairDir((t.dir ?? "N") as StairDir);
         return { tx, ty, h: (t.h | 0), dir };
     }
 

@@ -210,29 +210,31 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
     let goalH: number = 0;
 
     for (const c of def.cells) {
+        const fx = (def.w - 1) - (c.x | 0);
+        const fy = (def.h - 1) - (c.y | 0);
         const parsed = parseTokens(c.t, defaultFloorSkin, defaultSpawnSkin);
         if (!parsed.tile && parsed.walls.length === 0) continue;
 
         const tile = parsed.tile;
         if (tile) {
             if (tile.kind === "SPAWN" && spawnTableX === null) {
-                spawnTableX = c.x | 0;
-                spawnTableY = c.y | 0;
+                spawnTableX = fx;
+                spawnTableY = fy;
                 spawnH = tile.h | 0;
             }
 
             if (tile.kind === "GOAL" && goalTableX === null) {
-                goalTableX = c.x | 0;
-                goalTableY = c.y | 0;
+                goalTableX = fx;
+                goalTableY = fy;
                 goalH = tile.h | 0;
             }
 
-            placed.set(`${c.x},${c.y}`, tile);
+            placed.set(`${fx},${fy}`, tile);
         }
 
         if (parsed.walls.length > 0) {
             for (let i = 0; i < parsed.walls.length; i++) {
-                wallTokens.push({ ...parsed.walls[i], x: c.x | 0, y: c.y | 0 });
+                wallTokens.push({ ...parsed.walls[i], x: fx, y: fy });
             }
         }
     }

@@ -16,10 +16,10 @@ export const FLOOR_TOP_DY_PX: Record<"N" | "E" | "S" | "W", number> = {
     W: 0,
 };
 export const STAIR_TOP_DY_PX: Record<"N" | "E" | "S" | "W", number> = {
-    N: 0,
-    E: 0,
-    S: 0,
-    W: 0,
+    N: -8,
+    E: 8,
+    S: 8,
+    W: -8,
 };
 export const WALL_TOP_DY_PX: Record<"N" | "E" | "S" | "W", number> = {
     N: 0,
@@ -58,9 +58,9 @@ function load(url: string): LoadedImg {
 // ------------------------------------------------------------------
 
 const FLOOR_TOP = load(new URL("../../assets/tiles/floor/top/floor_top.png", import.meta.url).href);
-const FLOOR_APRON_S = load(new URL("../../assets/tiles/floor/curtain/floor_apron_s.png", import.meta.url).href);
-const FLOOR_APRON_DIAG = load(
-    new URL("../../assets/tiles/floor/curtain/floor_apron_diag.png.png", import.meta.url).href
+const FLOOR_APRON_S = load(new URL("../../assets/tiles/floor/curtain/floor_apron_e.png", import.meta.url).href);
+const FLOOR_APRON_E = load(
+    new URL("../../assets/tiles/floor/curtain/floor_apron_s.png.png", import.meta.url).href
 );
 
 const STAIR_TOP_N = load(
@@ -94,7 +94,7 @@ export function preloadCurtainSprites() {
     // Keeping it allows render.ts to do one-time "preload" like other sprite packs.
     void FLOOR_TOP;
     void FLOOR_APRON_S;
-    void FLOOR_APRON_DIAG;
+    void FLOOR_APRON_E;
     void STAIR_TOP_N;
     void STAIR_TOP_S;
     void STAIR_TOP_E;
@@ -112,7 +112,7 @@ export function getFloorApron(kind: "S" | "DIAG"): LoadedImg {
     // File names:
     // - wall_2_s.png
     // - wall_2_diag.png
-    return kind === "S" ? FLOOR_APRON_S : FLOOR_APRON_DIAG;
+    return kind === "S" ? FLOOR_APRON_S : FLOOR_APRON_E;
 }
 
 export function getStairTop(dir: "N" | "E" | "S" | "W"): LoadedImg {

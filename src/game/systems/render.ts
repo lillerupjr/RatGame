@@ -1099,6 +1099,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   ctx.restore();
 
   // --- UI ---
+  renderTileGridCompass(w, ctx, ww, hh); // tile-grid N/E/S/W (matches in-game tests)
+
   renderHealthOrb(w, ctx, ww, hh);
   renderExperienceBar(w, ctx, ww, hh);
   renderBossHealthBar(w, ctx, ww, hh);
@@ -1106,6 +1108,131 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   renderFloatingText(w, ctx, toScreen);
 }
 
+
+/**
+ * Render a compass that shows TILE-GRID directions (TableMapDef x/y axes),
+ * using the empirically verified mapping:
+ *  - tile East  (+x) => screen South-East (↘)
+ *  - tile North (-y) => screen North-East (↗)
+ *  - tile South (+y) => screen South-West (↙)
+ *  - tile West  (-x) => screen North-West (↖)
+ *
+ * This compass is intentionally NOT "screen north"; it is the tile grid axes.
+ */
+function renderTileGridCompass(w: World, ctx: CanvasRenderingContext2D, ww: number, hh: number) {
+  // Optional toggle (defaults ON)
+  const enabled = ((w as any).tileCompassEnabled ?? true) as boolean;
+  if (!enabled) return;
+
+  // Panel placement (top-right) and sizing
+  const pad = 12;
+  const size = 120;
+
+  // Top-aligned, horizontally centered
+  const x0 = Math.round(ww * 0.5 - size * 0.5);
+  const y0 = pad;
+
+
+  const cx = x0 + size * 0.5;
+  const cy = y0 + size * 0.5;
+
+  // Radius for arrows/labels
+  const R = size * 0.36;
+
+  // Draw panel
+  ctx.save();
+  ctx.globalAlpha = 0.75;
+  ctx.fillStyle = "#111";
+  ctx.fillRect(x0, y0, size, size);
+
+  ctx.globalAlpha = 0.9;
+  ctx.strokeStyle = "rgba(255,255,255,0.22)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x0, y0, size, size);
+
+  // Title
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  ctx.font = "bold 12px monospace";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+
+  // Center dot
+  ctx.fillStyle = "rgba(255,255,255,0.65)";
+  ctx.beginPath();
+  ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Helper: draw a single arrow + label
+  const drawArrow = (dx: number, dy: number, label: string) => {
+    // Normalize direction
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len;
+    const uy = dy / len;
+
+    const x1 = cx + ux * R;
+    const y1 = cy + uy * R;
+
+    // Shaft
+    ctx.strokeStyle = "rgba(255,255,255,0.85)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+
+    // Arrow head
+    const headL = 10;
+    const headW = 6;
+
+    // Perp vector
+    const px = -uy;
+    const py = ux;
+
+    const hx0 = x1 - ux * headL;
+    const hy0 = y1 - uy * headL;
+
+    const hxL = hx0 + px * headW;
+    const hyL = hy0 + py * headW;
+
+    const hxR = hx0 - px * headW;
+    const hyR = hy0 - py * headW;
+
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(hxL, hyL);
+    ctx.lineTo(hxR, hyR);
+    ctx.closePath();
+    ctx.fill();
+
+    // Label near arrow tip
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.font = "bold 14px monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, cx + ux * (R + 18), cy + uy * (R + 18));
+  };
+
+  // IMPORTANT: these are SCREEN vectors (pixels), not world or tile vectors.
+  // Based on your verified mapping:
+  //  N(tile) = ↗ , E(tile) = ↘ , S(tile) = ↙ , W(tile) = ↖
+  drawArrow(+1, -1, "N"); // ↗
+  drawArrow(+1, +1, "E"); // ↘
+  drawArrow(-1, +1, "S"); // ↙
+  drawArrow(-1, -1, "W"); // ↖
+
+  // Optional: show player grid coords for sanity (tiny)
+  const g = gridAtPlayer(w);
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  ctx.font = "10px monospace";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "bottom";
+  ctx.fillText(`gx:${g.gx.toFixed(2)} gy:${g.gy.toFixed(2)}`, x0 + 8, y0 + size - 8);
+
+  ctx.restore();
+}
 /**
  * Render floating combat text (damage numbers).
  */
