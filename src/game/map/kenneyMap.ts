@@ -9,6 +9,7 @@ import {
     type IsoTile,
     type IsoTileKind,
     type StairDir,
+    type Curtain,
     type Surface,
     type CompiledKenneyMap,
 } from "./kenneyMapLoader";
@@ -18,7 +19,7 @@ import { gridToWorld, worldToGrid } from "../coords/grid";
 import { generateFloorMap } from "./proceduralMap";
 import {EXCEL_SANCTUARY_01} from "./maps";
 
-export type { IsoTileKind, IsoTile, Surface } from "./kenneyMapLoader";
+export type { IsoTileKind, IsoTile, Surface, Curtain } from "./kenneyMapLoader";
 
 // Plane tiles are visually 2 units tall; lower their placement by 1 unit.
 export const PLANE_TILE_Z_OFFSET = -1;
@@ -154,6 +155,11 @@ export function heightAtGrid(gx: number, gy: number, tileWorld: number): number 
 /** Return all authored surfaces at a tile coordinate. */
 export function surfacesAtXY(tx: number, ty: number): Surface[] {
     return _compiled.surfacesAtXY(tx, ty);
+}
+
+/** Return curtains for a logical layer. */
+export function curtainsForLayer(layer: number): Curtain[] {
+    return _compiled.curtainsForLayer(layer);
 }
 
 type SurfaceHitOptions = {

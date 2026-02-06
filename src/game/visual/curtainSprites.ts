@@ -9,6 +9,41 @@ export type LoadedImg = {
     ready: boolean;
 };
 
+export const FLOOR_TOP_DY_PX: Record<"N" | "E" | "S" | "W", number> = {
+    N: 0,
+    E: 0,
+    S: 0,
+    W: 0,
+};
+export const STAIR_TOP_DY_PX: Record<"N" | "E" | "S" | "W", number> = {
+    N: 0,
+    E: 0,
+    S: 0,
+    W: 0,
+};
+export const WALL_TOP_DY_PX: Record<"N" | "E" | "S" | "W", number> = {
+    N: 0,
+    E: 0,
+    S: 0,
+    W: 0,
+};
+export const FLOOR_APRON_DY_PX: Record<"S" | "DIAG", number> = {
+    S: -100,
+    DIAG: -100,
+};
+export const STAIR_APRON_DY_PX: Record<"N" | "E" | "S" | "W", number> = {
+    N: -100,
+    E: -114,
+    S: -164,
+    W: -50,
+};
+export const WALL_APRON_DY_PX: Record<"N" | "E" | "S" | "W", number> = {
+    N: -100,
+    E: -100,
+    S: -100,
+    W: -100,
+};
+
 function load(url: string): LoadedImg {
     const img = new Image();
     const rec: LoadedImg = { img, ready: false };
@@ -23,9 +58,9 @@ function load(url: string): LoadedImg {
 // ------------------------------------------------------------------
 
 const FLOOR_TOP = load(new URL("../../assets/tiles/floor/top/floor_top.png", import.meta.url).href);
-const FLOOR_APRON_S = load(new URL("../../assets/tiles/floor/curtain/floor_apron_diag.png", import.meta.url).href);
+const FLOOR_APRON_S = load(new URL("../../assets/tiles/floor/curtain/floor_apron_s.png", import.meta.url).href);
 const FLOOR_APRON_DIAG = load(
-    new URL("../../assets/tiles/floor/curtain/floor_apron_s.png", import.meta.url).href
+    new URL("../../assets/tiles/floor/curtain/floor_apron_diag.png.png", import.meta.url).href
 );
 
 const STAIR_TOP_N = load(
@@ -47,6 +82,12 @@ const STAIR_APRON_W = load(
 const STAIR_APRON_S = load(
     new URL("../../assets/tiles/stairs/curtain/stair_apron_s.png", import.meta.url).href
 );
+const WALL_2_S = load(
+    new URL("../../assets/tiles/walls/wall_2_s.png", import.meta.url).href
+);
+const WALL_2_DIAG = load(
+    new URL("../../assets/tiles/walls/wall-2-diag.png", import.meta.url).href
+);
 
 export function preloadCurtainSprites() {
     // Images start loading on module import; this function exists for symmetry.
@@ -60,6 +101,8 @@ export function preloadCurtainSprites() {
     void STAIR_TOP_W;
     void STAIR_APRON_W;
     void STAIR_APRON_S;
+    void WALL_2_S;
+    void WALL_2_DIAG;
 }
 export function getFloorTop(): LoadedImg {
     return FLOOR_TOP;
@@ -67,16 +110,18 @@ export function getFloorTop(): LoadedImg {
 
 export function getFloorApron(kind: "S" | "DIAG"): LoadedImg {
     // File names:
-    // - floor_apron_s.png
-    // - floor_apron_diag.png
+    // - wall_2_s.png
+    // - wall_2_diag.png
     return kind === "S" ? FLOOR_APRON_S : FLOOR_APRON_DIAG;
 }
 
 export function getStairTop(dir: "N" | "E" | "S" | "W"): LoadedImg {
-    if (dir === "E") return STAIR_TOP_N;
-    if (dir === "W") return STAIR_TOP_S;
-    if (dir === "S") return STAIR_TOP_E;
-    return STAIR_TOP_W;
+    switch (dir) {
+        case "N": return STAIR_TOP_N;
+        case "E": return STAIR_TOP_E;
+        case "S": return STAIR_TOP_S;
+        case "W": return STAIR_TOP_W;
+    }
 }
 
 export function getStairApron(dir: "N" | "E" | "S" | "W"): { rec: LoadedImg; flipX: boolean } {
@@ -97,4 +142,9 @@ export function getStairApron(dir: "N" | "E" | "S" | "W"): { rec: LoadedImg; fli
     if (dir === "W") return { rec: STAIR_APRON_W, flipX: false };
     // E
     return { rec: STAIR_APRON_W, flipX: true };
+}
+
+export function getWallSegment(kind: "S" | "DIAG"): LoadedImg {
+    if (kind === "S") return WALL_2_S;
+    return WALL_2_DIAG.ready ? WALL_2_DIAG : WALL_2_S;
 }

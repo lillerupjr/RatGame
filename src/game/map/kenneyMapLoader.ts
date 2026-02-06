@@ -1,8 +1,10 @@
 // src/game/map/kenneyMapLoader.ts
 import type { TableMapDef } from "./tableMapTypes";
+import { KENNEY_TILE_ANCHOR_Y } from "../visual/kenneyTiles";
 
 export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL";
 export type StairDir = "N" | "E" | "S" | "W";
+export type WallDir = "N" | "E" | "S" | "W";
 
 // Authoritative stair sprite mapping:
 export const STAIR_SKIN_BY_DIR: Record<StairDir, string> = {
@@ -22,6 +24,7 @@ export type IsoTile = {
 };
 
 export type SurfaceKind = "TILE_TOP";
+export type RenderTopKind = "FLOOR" | "STAIR";
 
 export type Surface = {
     id: string;
@@ -31,6 +34,39 @@ export type Surface = {
     zBase: number;
     zLogical: number;
     tile: IsoTile;
+    renderTopKind: RenderTopKind;
+    renderDir: StairDir;
+    renderAnchorY: number;
+    renderDyOffset: number;
+};
+
+export type CurtainKind = "FLOOR_APRON" | "STAIR_APRON" | "WALL";
+
+export type Curtain = {
+    id: string;
+    kind: CurtainKind;
+    tx: number;
+    ty: number;
+    zFrom: number;
+    zTo: number;
+    zLogical: number;
+    apronKind?: "S" | "DIAG";
+    dir?: StairDir;
+    wallDir?: WallDir;
+    flipX?: boolean;
+    renderTopKind: RenderTopKind;
+    renderDir: StairDir;
+    renderAnchorY: number;
+    renderDyOffset: number;
+    apronDyOffset: number;
+    wallKind?: "S" | "DIAG";
+};
+
+export type WallToken = {
+    x: number;
+    y: number;
+    height: number;
+    dir: WallDir;
 };
 
 export type CompiledKenneyMap = {
@@ -53,6 +89,9 @@ export type CompiledKenneyMap = {
     getTile(tx: number, ty: number): IsoTile;
     surfacesByKey: Map<string, Surface[]>;
     surfacesAtXY(tx: number, ty: number): Surface[];
+    curtains: Curtain[];
+    curtainsByLayer: Map<number, Curtain[]>;
+    curtainsForLayer(layer: number): Curtain[];
 };
 
 // Parse tokens like: F0, F5, S0W, S3N, S4S, S5, P0, C2E
@@ -116,6 +155,41 @@ function parseToken(
     return null;
 }
 
+// Parse multi-tokens like: F0|W4S
+function parseTokens(
+    t: string,
+    defaultFloorSkin?: string,
+    defaultSpawnSkin?: string
+): { tile: IsoTile | null; walls: WallToken[] } {
+    const raw = (t ?? "").trim();
+    if (!raw) return { tile: null, walls: [] };
+
+    const parts = raw.split("|").map((p) => p.trim()).filter(Boolean);
+    let tile: IsoTile | null = null;
+    const walls: WallToken[] = [];
+
+    for (let i = 0; i < parts.length; i++) {
+        const tok = parts[i];
+        const up = tok.toUpperCase();
+
+        if (up.startsWith("W")) {
+            const m = up.match(/^W(\d+)([NESW])$/);
+            if (m) {
+                const height = parseInt(m[1], 10) | 0;
+                const dir = (m[2] as WallDir) ?? "S";
+                walls.push({ x: 0, y: 0, height, dir });
+            }
+            continue;
+        }
+
+        if (!tile) {
+            tile = parseToken(tok, defaultFloorSkin, defaultSpawnSkin);
+        }
+    }
+
+    return { tile, walls };
+}
+
 /** Compile a table-based map definition into a render/query-friendly map. */
 export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
     const defaultFloorSkin = def.defaultFloorSkin;
@@ -123,6 +197,7 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
 
     // Keyed by "x,y" in table coords
     const placed = new Map<string, IsoTile>();
+    const wallTokens: WallToken[] = [];
 
     // First SPAWN found becomes the authoritative spawn point
     let spawnTableX: number | null = null;
@@ -135,22 +210,31 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
     let goalH: number = 0;
 
     for (const c of def.cells) {
-        const tile = parseToken(c.t, defaultFloorSkin, defaultSpawnSkin);
-        if (!tile) continue;
+        const parsed = parseTokens(c.t, defaultFloorSkin, defaultSpawnSkin);
+        if (!parsed.tile && parsed.walls.length === 0) continue;
 
-        if (tile.kind === "SPAWN" && spawnTableX === null) {
-            spawnTableX = c.x | 0;
-            spawnTableY = c.y | 0;
-            spawnH = tile.h | 0;
+        const tile = parsed.tile;
+        if (tile) {
+            if (tile.kind === "SPAWN" && spawnTableX === null) {
+                spawnTableX = c.x | 0;
+                spawnTableY = c.y | 0;
+                spawnH = tile.h | 0;
+            }
+
+            if (tile.kind === "GOAL" && goalTableX === null) {
+                goalTableX = c.x | 0;
+                goalTableY = c.y | 0;
+                goalH = tile.h | 0;
+            }
+
+            placed.set(`${c.x},${c.y}`, tile);
         }
 
-        if (tile.kind === "GOAL" && goalTableX === null) {
-            goalTableX = c.x | 0;
-            goalTableY = c.y | 0;
-            goalH = tile.h | 0;
+        if (parsed.walls.length > 0) {
+            for (let i = 0; i < parsed.walls.length; i++) {
+                wallTokens.push({ ...parsed.walls[i], x: c.x | 0, y: c.y | 0 });
+            }
         }
-
-        placed.set(`${c.x},${c.y}`, tile);
     }
 
     // Group contiguous stair tiles into staircase runs (for render ordering).
@@ -224,6 +308,15 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
 
     const surfacesByKey = new Map<string, Surface[]>();
 
+    const floorAnchorY = KENNEY_TILE_ANCHOR_Y;
+    const stairAnchorY = 0.62;
+    const stairDyByDir: Record<StairDir, number> = {
+        N: 24,
+        E: 16,
+        S: 16,
+        W: 24,
+    };
+
     function addSurface(surface: Surface) {
         const k = `${surface.tx},${surface.ty}`;
         const list = surfacesByKey.get(k);
@@ -241,6 +334,10 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         const tx = tableX + originTx;
         const ty = tableY + originTy;
         const zBase = tile.h | 0;
+        const renderTopKind: RenderTopKind = tile.kind === "STAIRS" ? "STAIR" : "FLOOR";
+        const renderDir = (tile.dir ?? "N") as StairDir;
+        const renderAnchorY = renderTopKind === "STAIR" ? stairAnchorY : floorAnchorY;
+        const renderDyOffset = renderTopKind === "STAIR" ? (stairDyByDir[renderDir] ?? 16) : 0;
 
         addSurface({
             id: `tile_${tx}_${ty}_${tile.kind}_${zBase}`,
@@ -250,11 +347,153 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
             zBase,
             zLogical: zBase,
             tile,
+            renderTopKind,
+            renderDir,
+            renderAnchorY,
+            renderDyOffset,
         });
     }
 
     function surfacesAtXY(tx: number, ty: number): Surface[] {
         return surfacesByKey.get(`${tx},${ty}`) ?? [];
+    }
+
+    const curtains: Curtain[] = [];
+    const curtainsByLayer = new Map<number, Curtain[]>();
+
+    function addCurtain(curtain: Curtain) {
+        curtains.push(curtain);
+        const list = curtainsByLayer.get(curtain.zLogical);
+        if (list) list.push(curtain);
+        else curtainsByLayer.set(curtain.zLogical, [curtain]);
+    }
+
+    function maxNonStairSurfaceZ(tx: number, ty: number): number | null {
+        const surfaces = surfacesAtXY(tx, ty);
+        if (surfaces.length === 0) return null;
+        let best: number | null = null;
+        for (let i = 0; i < surfaces.length; i++) {
+            const s = surfaces[i];
+            if (s.tile.kind === "STAIRS") continue;
+            if (best === null || s.zBase > best) best = s.zBase;
+        }
+        return best;
+    }
+
+    for (const list of surfacesByKey.values()) {
+        for (let i = 0; i < list.length; i++) {
+            const surface = list[i];
+            const tile = surface.tile;
+
+            if (tile.kind === "STAIRS") {
+                const dir = (tile.dir ?? "N") as StairDir;
+                addCurtain({
+                    id: `curtain_stair_${surface.tx}_${surface.ty}_${surface.zBase}`,
+                    kind: "STAIR_APRON",
+                    tx: surface.tx,
+                    ty: surface.ty,
+                    zFrom: surface.zBase - 1,
+                    zTo: surface.zBase,
+                    zLogical: surface.zLogical,
+                    dir,
+                    renderTopKind: "STAIR",
+                    renderDir: dir,
+                    renderAnchorY: stairAnchorY,
+                    renderDyOffset: stairDyByDir[dir] ?? 16,
+                    apronDyOffset: 0,
+                });
+                continue;
+            }
+
+            const hHere = surface.zBase;
+
+            const checkDrop = (nx: number, ny: number) => {
+                const nMax = maxNonStairSurfaceZ(nx, ny);
+                if (nMax === null) return true;
+                return nMax < hHere;
+            };
+
+            let apronKind: "S" | "DIAG" | null = null;
+            let flipX = false;
+
+            if (checkDrop(surface.tx, surface.ty + 1)) {
+                apronKind = "S";
+                flipX = false;
+            } else if (checkDrop(surface.tx + 1, surface.ty + 1)) {
+                apronKind = "DIAG";
+                flipX = false; // SE
+            } else if (checkDrop(surface.tx - 1, surface.ty + 1)) {
+                apronKind = "DIAG";
+                flipX = false; // SW mirror
+            }
+
+            if (!apronKind) continue;
+
+            const neighborZ = maxNonStairSurfaceZ(
+                surface.tx + (apronKind === "S" ? 0 : flipX ? -1 : 1),
+                surface.ty + 1
+            );
+            const zFrom = neighborZ ?? (surface.zBase - 1);
+            const apronDyOffset = apronKind === "S" ? -100 : -100;
+
+            addCurtain({
+                id: `curtain_floor_${surface.tx}_${surface.ty}_${surface.zBase}_${apronKind}_${flipX ? "L" : "R"}`,
+                kind: "FLOOR_APRON",
+                tx: surface.tx,
+                ty: surface.ty,
+                zFrom,
+                zTo: surface.zBase,
+                zLogical: surface.zLogical,
+                apronKind,
+                flipX,
+                renderTopKind: "FLOOR",
+                renderDir: "N",
+                renderAnchorY: floorAnchorY,
+                renderDyOffset: 0,
+                apronDyOffset,
+            });
+        }
+    }
+
+    for (let i = 0; i < wallTokens.length; i++) {
+        const w = wallTokens[i];
+        const tx = w.x + originTx;
+        const ty = w.y + originTy;
+        const height = Math.max(0, w.height | 0);
+        if (height <= 0) continue;
+
+        const wallKind: "S" | "DIAG" = (w.dir === "N" || w.dir === "S") ? "S" : "DIAG";
+        const flipX = w.dir === "N" || w.dir === "W";
+        const segmentHeight = 2;
+        const zFrom = 0;
+        const zTo = height;
+
+        for (let z = zFrom; z < zTo; z += segmentHeight) {
+            const segFrom = z;
+            const segTo = Math.min(z + segmentHeight, zTo);
+            const zLogical = Math.floor(segFrom + 1e-6);
+            addCurtain({
+                id: `curtain_wall_${tx}_${ty}_${w.dir}_${segFrom}_${segTo}`,
+                kind: "WALL",
+                tx,
+                ty,
+                zFrom: segFrom,
+                zTo: segTo,
+                zLogical,
+                wallDir: w.dir,
+                wallKind,
+                flipX,
+                renderTopKind: "FLOOR",
+                renderDir: "N",
+                renderAnchorY: floorAnchorY,
+                renderDyOffset: 0,
+                apronDyOffset: 0,
+            });
+        }
+    }
+
+    function curtainsForLayer(layer: number): Curtain[] {
+        return curtainsByLayer.get(layer) ?? [];
     }
 
     // Convert authored spawn table coords -> tile coords.
@@ -285,5 +524,8 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         getTile,
         surfacesByKey,
         surfacesAtXY,
+        curtains,
+        curtainsByLayer,
+        curtainsForLayer,
     };
 }

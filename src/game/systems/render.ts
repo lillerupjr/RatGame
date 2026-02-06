@@ -24,7 +24,7 @@ import {
   rampHeightAt,
   surfaceHitAtWorld,
   surfacesAtXY,
-  type Surface,
+  curtainsForLayer,
 } from "../map/kenneyMap";
 
 import {
@@ -51,6 +51,13 @@ import {
   getFloorApron,
   getStairTop,
   getStairApron,
+  getWallSegment,
+  FLOOR_TOP_DY_PX,
+  STAIR_TOP_DY_PX,
+  WALL_TOP_DY_PX,
+  FLOOR_APRON_DY_PX,
+  STAIR_APRON_DY_PX,
+  WALL_APRON_DY_PX,
 } from "../visual/curtainSprites";
 
 /** Render tiles, entities, overlays, and debug layers. */
@@ -113,9 +120,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   // Enable floor curtains too
   const FLOOR_CURTAINS: boolean = (w as any).floorCurtains ?? true;
-
-  // Edge-only floor curtains (prevents interior seams)
-  const FLOOR_CURTAIN_EDGES_ONLY: boolean = (w as any).floorCurtainEdgesOnly ?? true;
 
   // Adjust how tightly apron joins the top (helps remove visible seam)
   const APRON_JOIN_PX = (w as any).apronJoinPx ?? 0;
@@ -200,29 +204,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   };
 
   // Decide if a floor tile should emit a curtain (edge-only)
-  const shouldEmitFloorCurtain = (surface: Surface) => {
-    if (!FLOOR_CURTAIN_EDGES_ONLY) return true;
-
-    if (surface.tile.kind === "STAIRS") return false;
-    const hHere = surface.zBase;
-
-    const neigh: Array<[number, number]> = [
-      [0, 1], // S
-      [1, 1], // SE
-      [-1, 1], // SW
-    ];
-
-    for (const [dx, dy] of neigh) {
-      const nx = surface.tx + dx;
-      const ny = surface.ty + dy;
-
-      const nMax = maxNonStairSurfaceZ(nx, ny);
-      if (nMax === null) return true;
-      if (nMax < hHere) return true;
-    }
-
-    return false;
-  };
 
   type CurtainDraw = {
     img: HTMLImageElement; // apron-only sprite
@@ -234,13 +215,16 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     flipX?: boolean;
   };
 
-  const curtainsByLayer = new Map<number, CurtainDraw[]>();
-  let curtainId = 0;
-  const addCurtain = (layer: number, c: CurtainDraw) => {
-    const list = curtainsByLayer.get(layer);
-    if (list) list.push(c);
-    else curtainsByLayer.set(layer, [c]);
+  type TopDraw = {
+    img: HTMLImageElement;
+    dx: number;
+    dy: number;
+    dw: number;
+    dh: number;
+    depth: number;
   };
+
+  let curtainId = 0;
 
   // -------------------------------------------------------
   // DEBUG: Logical walk-mask overlay
@@ -635,6 +619,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const layer = layers[li];
 
     // 1) TOPS (surfaces) + queue APRONS
+    const tops: TopDraw[] = [];
+    let topId = 0;
+    const curtainDraws: CurtainDraw[] = [];
     for (let s = minSum; s <= maxSum; s++) {
       const ty0 = Math.max(minTy, s - maxTx);
       const ty1 = Math.min(maxTy, s - minTx);
@@ -648,13 +635,13 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           for (let si = 0; si < surfaces.length; si++) {
             const surface = surfaces[si];
             const tdef = surface.tile;
-            const useStairs = tdef.kind === "STAIRS";
+            const isStairTop = surface.renderTopKind === "STAIR";
 
             if (RENDER_ALL_HEIGHTS && surface.zLogical !== layer) continue;
 
             // Optional filter to active floor when not rendering all
             if (!RENDER_ALL_HEIGHTS) {
-              if (!useStairs) {
+              if (!isStairTop) {
                 if (surface.zLogical !== activeH) continue;
               } else {
                 const hs = tdef.h ?? 0;
@@ -662,9 +649,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
               }
             }
 
-            const dir4 = ((tdef.dir as ("N" | "E" | "S" | "W" | undefined)) ?? "N");
+            const dir4 = surface.renderDir ?? "N";
 
-            const topRec = useStairs ? getStairTop(dir4) : getFloorTop();
+            const topRec = isStairTop ? getStairTop(dir4) : getFloorTop();
             if (!topRec?.ready || !topRec.img || topRec.img.width <= 0 || topRec.img.height <= 0) continue;
 
             const topImg = topRec.img;
@@ -677,108 +664,108 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
             const p = worldToScreen(wx, wy);
             const dx = p.x + camX - topW * 0.5;
 
-            const stairsAnchorY = 0.62;
-            const anchorY = useStairs ? stairsAnchorY : ANCHOR_Y;
+            const anchorY = surface.renderAnchorY ?? ANCHOR_Y;
 
             let dy = p.y + camY - topH * anchorY;
             dy += TILE_ART_Y_SHIFT_PX;
+            dy += isStairTop ? (STAIR_TOP_DY_PX[dir4] ?? 0) : (FLOOR_TOP_DY_PX[dir4] ?? 0);
 
-            // keep your current per-dir tweak hook (tune later)
-            const STAIRS_DY_BY_DIR: Partial<Record<"N" | "E" | "S" | "W", number>> = {
-              N: 24,
-              E: 16,
-              S: 16,
-              W: 24,
-            };
-            if (useStairs) dy += STAIRS_DY_BY_DIR[dir4] ?? 16;
+            dy += surface.renderDyOffset ?? 0;
 
             const h = surface.zBase;
             dy -= h * ELEV_PX;
 
-            // Draw TOP
-            ctx.globalAlpha = 1;
-            ctx.drawImage(topImg, dx, dy, topW, topH);
+            // Queue TOP draw (sorted later by render depth)
+            tops.push({
+              img: topImg,
+              dx,
+              dy,
+              dw: topW,
+              dh: topH,
+              depth: renderDepthFor(wx, wy, h, topId++),
+            });
 
-            // Queue APRON
-            const queueApron = (apronImg: HTMLImageElement, flipX: boolean) => {
-              if (!apronImg || apronImg.width <= 0 || apronImg.height <= 0) return;
-
-              const aw = apronImg.width * TILE_SCALE;
-              const ah = apronImg.height * TILE_SCALE;
-
-              const ax = dx + (topW - aw) * 0.5;
-              const ay = dy + topH - APRON_JOIN_PX;
-
-              addCurtain(layer, {
-                img: apronImg,
-                dx: ax,
-                dy: ay,
-                dw: aw,
-                dh: ah,
-                depth: renderDepthFor(wx, wy, h, curtainId++),
-                flipX,
-              });
-            };
-
-            if (useStairs) {
-              const a = getStairApron(dir4);
-              if (a?.rec?.ready && a.rec.img && a.rec.img.width > 0 && a.rec.img.height > 0) {
-                queueApron(a.rec.img, !!a.flipX);
-              }
-            } else if (FLOOR_CURTAINS && shouldEmitFloorCurtain(surface)) {
-              let apronKind: "S" | "DIAG" = "S";
-              let flipX = false;
-
-              const hHere = surface.zBase;
-
-              const checkDrop = (nx: number, ny: number) => {
-                const nMax = maxNonStairSurfaceZ(nx, ny);
-                if (nMax === null) return true;
-                return nMax < hHere;
-              };
-
-              if (checkDrop(tx, ty + 1)) {
-                apronKind = "S";
-                flipX = false;
-              } else if (checkDrop(tx + 1, ty + 1)) {
-                apronKind = "DIAG";
-                flipX = false; // SE
-              } else if (checkDrop(tx - 1, ty + 1)) {
-                apronKind = "DIAG";
-                flipX = true; // SW mirror
-              }
-
-              const fr = getFloorApron(apronKind);
-              if (fr?.ready && fr.img && fr.img.width > 0 && fr.img.height > 0) {
-                // Compensate for apron art anchor differences (tune if assets change).
-                const FLOOR_APRON_DY_BY_KIND: Record<"S" | "DIAG", number> = {
-                  S: -100,
-                  DIAG: -100,
-                };
-                const dyOffset = FLOOR_APRON_DY_BY_KIND[apronKind] ?? 0;
-                if (dyOffset !== 0) {
-                  // Requeue with adjusted Y without touching queueApron signature.
-                  const aw = fr.img.width * TILE_SCALE;
-                  const ah = fr.img.height * TILE_SCALE;
-                  const ax = dx + (topW - aw) * 0.5;
-                  const ay = dy + topH - APRON_JOIN_PX + dyOffset;
-                  addCurtain(layer, {
-                    img: fr.img,
-                    dx: ax,
-                    dy: ay,
-                    dw: aw,
-                    dh: ah,
-                    depth: renderDepthFor(wx, wy, hHere, curtainId++),
-                    flipX,
-                  });
-                } else {
-                  queueApron(fr.img, flipX);
-                }
-              }
-            }
-          }
         }
       }
+    }
+
+    if (tops.length > 0) {
+      tops.sort((a, b) => a.depth - b.depth);
+      ctx.globalAlpha = 1;
+      for (let i = 0; i < tops.length; i++) {
+        const t = tops[i];
+        ctx.drawImage(t.img, t.dx, t.dy, t.dw, t.dh);
+      }
+    }
+
+    const curtainList = curtainsForLayer(layer);
+    if (curtainList.length > 0) {
+      for (let i = 0; i < curtainList.length; i++) {
+        const c = curtainList[i];
+
+        const isFloor = c.renderTopKind === "FLOOR";
+        if (isFloor && !FLOOR_CURTAINS) continue;
+
+        const dir4 = c.renderDir ?? "N";
+        const topRec = isFloor ? getFloorTop() : getStairTop(dir4);
+        if (!topRec?.ready || !topRec.img || topRec.img.width <= 0 || topRec.img.height <= 0) continue;
+
+        const isWall = c.kind === "WALL";
+        const apronRec = isWall
+            ? getWallSegment(c.wallKind ?? "S")
+            : isFloor
+                ? getFloorApron(c.apronKind ?? "S")
+                : getStairApron(dir4).rec;
+        const apronFlipX = isWall ? !!c.flipX : isFloor ? !!c.flipX : getStairApron(dir4).flipX;
+        if (!apronRec?.ready || !apronRec.img || apronRec.img.width <= 0 || apronRec.img.height <= 0) continue;
+
+        const topImg = topRec.img;
+        const topW = topImg.width * TILE_SCALE;
+        const topH = topImg.height * TILE_SCALE;
+
+        const wx = (c.tx + 0.5) * T;
+        const wy = (c.ty + 0.5) * T;
+
+        const p = worldToScreen(wx, wy);
+        const dx = p.x + camX - topW * 0.5;
+
+        const anchorY = c.renderAnchorY ?? ANCHOR_Y;
+
+        let dy = p.y + camY - topH * anchorY;
+        dy += TILE_ART_Y_SHIFT_PX;
+        dy += isWall
+            ? (WALL_TOP_DY_PX[dir4] ?? 0)
+            : isFloor
+                ? (FLOOR_TOP_DY_PX[dir4] ?? 0)
+                : (STAIR_TOP_DY_PX[dir4] ?? 0);
+
+        dy += c.renderDyOffset ?? 0;
+
+        const h = c.zTo;
+        dy -= h * ELEV_PX;
+
+        const aw = apronRec.img.width * TILE_SCALE;
+        const ah = apronRec.img.height * TILE_SCALE;
+        const ax = dx + (topW - aw) * 0.5;
+
+        const apronDy = isWall
+            ? (WALL_APRON_DY_PX[dir4] ?? 0)
+            : isFloor
+                ? (FLOOR_APRON_DY_PX[c.apronKind ?? "S"] ?? 0)
+                : (STAIR_APRON_DY_PX[dir4] ?? 0);
+        const ay = dy + topH - APRON_JOIN_PX + (c.apronDyOffset ?? 0) + apronDy;
+
+        curtainDraws.push({
+          img: apronRec.img,
+          dx: ax,
+          dy: ay,
+          dw: aw,
+          dh: ah,
+          depth: renderDepthFor(wx, wy, h, curtainId++),
+          flipX: apronFlipX,
+        });
+      }
+    }
 
     // 2) Zones (same as your version)
     const zoneLayer = zonesByLayer.get(layer);
@@ -1071,11 +1058,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     }
 
     // 4) Curtains (aprons) AFTER entities
-    const curtains = curtainsByLayer.get(layer);
-    if (curtains && curtains.length > 0) {
-      curtains.sort((a, b) => a.depth - b.depth);
+    if (curtainDraws.length > 0) {
+      curtainDraws.sort((a, b) => a.depth - b.depth);
 
-      for (const c of curtains) {
+      for (const c of curtainDraws) {
         const img = c.img;
         if (!img || img.width <= 0 || img.height <= 0) continue;
 

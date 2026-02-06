@@ -148,20 +148,21 @@ export const EXCEL_TEST_SPAWN_3X3: TableMapDef = {
     centerOnZero: true,
 
     cells: [
-        // Top row
-        { x: 0, y: 0, t: "F0" },
-        { x: 1, y: 0, t: "F0" },
-        { x: 2, y: 0, t: "F0" },
+        // Top row (north edge walls)
+        { x: 0, y: 0, t: "F0|W2N" },
+        { x: 1, y: 0, t: "F0|W2N" },
+        { x: 2, y: 0, t: "F0|W2N|W2E" },
 
         // Middle row
         { x: 0, y: 1, t: "F0" },
         { x: 1, y: 1, t: "P0" }, // spawn at height 0
-        { x: 2, y: 1, t: "F0" },
+        { x: 2, y: 1, t: "F0|W2E" },
 
         // Bottom row
         { x: 0, y: 2, t: "F0" },
         { x: 1, y: 2, t: "F0" },
-        { x: 2, y: 2, t: "F0" },
+        { x: 2, y: 2, t: "F0|W2E" },
+        { x: 1, y: 3, t: "S1N" }
     ],
 };
 
@@ -363,4 +364,20 @@ export const EXCEL_RENDER_STRESS_01: TableMapDef = {
         { x: 8, y: 23, t: "F2" },
     ],
 
+};
+export const simple_test: TableMapDef = {
+    id: "simple_test",
+    w: 3,
+    h: 3,
+    defaultFloorSkin: "landscape_28",
+    defaultSpawnSkin: "landscape_30",
+    centerOnZero: true,
+
+    cells: [
+        { x: 0, y: 1, t: "S1W" },
+        { x: 2, y: 1, t: "S1E" },
+        { x: 1, y: 1, t: "P0" },
+        { x: 1, y: 0, t: "S1N" },
+        { x: 1, y: 2, t: "S1S" },
+    ],
 };
