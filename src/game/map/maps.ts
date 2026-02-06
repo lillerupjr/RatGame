@@ -381,3 +381,75 @@ export const simple_test: TableMapDef = {
         { x: 1, y: 2, t: "S1S" },
     ],
 };
+
+export const test_north_5: TableMapDef = {
+    id: "north_5",
+    w: 11,
+    h: 11,
+    defaultFloorSkin: "landscape_28",
+    defaultSpawnSkin: "landscape_30",
+    centerOnZero: false,
+
+    cells: [
+        { x: 5, y: 5, t: "P0" },
+        { x: 5, y: 4, t: "F0" },
+        { x: 5, y: 3, t: "F0" },
+        { x: 5, y: 2, t: "F0" },
+        { x: 5, y: 1, t: "F0" },
+        { x: 5, y: 0, t: "F0" },
+    ],
+};
+
+export const test_south_5: TableMapDef = {
+    id: "south_5",
+    w: 11,
+    h: 11,
+    defaultFloorSkin: "landscape_28",
+    defaultSpawnSkin: "landscape_30",
+    centerOnZero: false,
+
+    cells: [
+        { x: 5, y: 5, t: "P0" },
+        { x: 5, y: 6, t: "F0" },
+        { x: 5, y: 7, t: "F0" },
+        { x: 5, y: 8, t: "F0" },
+        { x: 5, y: 9, t: "F0" },
+        { x: 5, y: 10, t: "F0" },
+    ],
+};
+
+export const test_east_5: TableMapDef = {
+    id: "east_5",
+    w: 11,
+    h: 11,
+    defaultFloorSkin: "landscape_28",
+    defaultSpawnSkin: "landscape_30",
+    centerOnZero: false,
+
+    cells: [
+        { x: 5, y: 5, t: "P0" },
+        { x: 6, y: 5, t: "F0" },
+        { x: 7, y: 5, t: "F0" },
+        { x: 8, y: 5, t: "F0" },
+        { x: 9, y: 5, t: "F0" },
+        { x: 10, y: 5, t: "F0" },
+    ],
+};
+
+export const test_west_5: TableMapDef = {
+    id: "west_5",
+    w: 11,
+    h: 11,
+    defaultFloorSkin: "landscape_28",
+    defaultSpawnSkin: "landscape_30",
+    centerOnZero: false,
+
+    cells: [
+        { x: 5, y: 5, t: "P0" },
+        { x: 4, y: 5, t: "F0" },
+        { x: 3, y: 5, t: "F0" },
+        { x: 2, y: 5, t: "F0" },
+        { x: 1, y: 5, t: "F0" },
+        { x: 0, y: 5, t: "F0" },
+    ],
+};
