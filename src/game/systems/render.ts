@@ -19,10 +19,12 @@ import {
   getWalkOutlineLocalPx,
   walkInfo,
   getRampFacesForDebug,
+  getApronDebugStats,
   pointInQuad,
   rampHeightAt,
   surfacesAtXY,
   apronUnderlaysAtXY,
+  deferredApronsAtXY,
   occluderLayers,
   occludersInViewForLayer,
   topLayers,
@@ -211,6 +213,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     dh: number;
     depth: number;
     flipX?: boolean;
+    sortKey?: number;
   };
 
   const wallSkinDyOffset: Record<string, number> = {
@@ -466,6 +469,63 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // DEBUG: Ramp faces overlay
   // -------------------------------------------------------
   const SHOW_RAMPS = !!(w as any).debugRamps;
+  const SHOW_APRON_OWNERSHIP = !!(w as any).debugApronOwnership;
+
+  const drawApronOwnershipOverlay = (piece: RenderPiece, draw: RenderPieceDraw) => {
+    if (!SHOW_APRON_OWNERSHIP) return;
+    if (piece.kind !== "FLOOR_APRON") return;
+
+    const ownsStair = !!piece.ownerStairId;
+    const pad = 3;
+    const x = draw.dx - pad;
+    const y = draw.dy - pad;
+    const w = draw.dw + pad * 2;
+    const h = draw.dh + pad * 2;
+
+    ctx.save();
+    ctx.globalAlpha = 0.8;
+    if (ownsStair) {
+      ctx.strokeStyle = "rgba(255,230,80,0.95)";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(x, y, w, h);
+    } else {
+      ctx.fillStyle = "rgba(255,40,40,0.25)";
+      ctx.strokeStyle = "rgba(255,40,40,0.95)";
+      ctx.lineWidth = 4;
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeRect(x, y, w, h);
+    }
+    ctx.restore();
+  };
+
+  const drawApronOwnershipStats = () => {
+    if (!SHOW_APRON_OWNERSHIP) return;
+    const stats = getApronDebugStats();
+    if (!stats) return;
+
+    const fmtOffsets = (list: Array<{ offset: string; count: number }>, limit: number) => {
+      const slice = list.slice(0, limit);
+      return slice.map((item) => `${item.offset}:${item.count}`).join(" ");
+    };
+
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(10, 10, 420, 140);
+    ctx.fillStyle = "rgba(255,255,255,0.95)";
+    ctx.font = "12px monospace";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText(`apron candidates: ${stats.apronCandidates}`, 16, 16);
+    ctx.fillText(`scan hits: ${stats.apronScanHits}`, 16, 32);
+    ctx.fillText(`owned by stairs: ${stats.apronOwnedByStair}`, 16, 48);
+    ctx.fillText(`any stair hits: ${stats.apronAnyStairHits}`, 16, 64);
+    ctx.fillText(`same-z hits: ${stats.apronSameZHits}`, 16, 80);
+    ctx.fillText(`stair deltas: ${fmtOffsets(stats.stairDeltaCounts.map((d) => ({ offset: d.delta, count: d.count })), 4) || "-"}`, 16, 96);
+    ctx.fillText(`E offsets: ${fmtOffsets(stats.offsetCountsE, 4) || "-"}`, 16, 112);
+    ctx.fillText(`S offsets: ${fmtOffsets(stats.offsetCountsS, 4) || "-"}`, 16, 128);
+    ctx.restore();
+  };
 
   const drawRampOverlay = () => {
     if (!SHOW_RAMPS) return;
@@ -761,19 +821,54 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
             }
 
             if (underlays.length > 0) {
-              const apronDraws: RenderPieceDraw[] = [];
+              const apronDraws: Array<{ draw: RenderPieceDraw; piece: RenderPiece }> = [];
               for (let ui = 0; ui < underlays.length; ui++) {
                 const u = underlays[ui];
                 if (u.zTo !== surface.zBase) continue;
                 if (u.renderTopKind !== surface.renderTopKind) continue;
                 const draw = buildApronDraw(u, apronId++);
-                if (draw) apronDraws.push(draw);
+                if (draw) apronDraws.push({ draw, piece: u });
               }
 
               if (apronDraws.length > 0) {
-                apronDraws.sort((a, b) => a.depth - b.depth);
+                apronDraws.sort((a, b) => a.draw.depth - b.draw.depth);
                 for (let i = 0; i < apronDraws.length; i++) {
-                  drawRenderPiece(apronDraws[i]);
+                  const item = apronDraws[i];
+                  drawRenderPiece(item.draw);
+                  drawApronOwnershipOverlay(item.piece, item.draw);
+                }
+              }
+            }
+
+            if (isStairTop) {
+              const deferred = deferredApronsAtXY(surface.tx, surface.ty);
+              if (deferred.length > 0) {
+                const deferredDraws: Array<{ draw: RenderPieceDraw; piece: RenderPiece }> = [];
+                for (let di = 0; di < deferred.length; di++) {
+                  const d = deferred[di];
+                  const stableId = Number.isFinite(d.sortKeyFromFloor) ? (d.sortKeyFromFloor as number) : apronId++;
+                  const draw = buildApronDraw(d, stableId);
+                  if (draw) {
+                    draw.sortKey = d.sortKeyFromFloor;
+                    deferredDraws.push({ draw, piece: d });
+                  }
+                }
+                if (deferredDraws.length > 0) {
+                  deferredDraws.sort((a, b) => {
+                    const ak = a.draw.sortKey;
+                    const bk = b.draw.sortKey;
+                    if (ak !== undefined || bk !== undefined) {
+                      if (ak === undefined) return 1;
+                      if (bk === undefined) return -1;
+                      if (ak !== bk) return ak - bk;
+                    }
+                    return a.draw.depth - b.draw.depth;
+                  });
+                  for (let i = 0; i < deferredDraws.length; i++) {
+                    const item = deferredDraws[i];
+                    drawRenderPiece(item.draw);
+                    drawApronOwnershipOverlay(item.piece, item.draw);
+                  }
                 }
               }
             }
@@ -1138,6 +1233,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   drawWalkMaskOverlay();
   drawRampOverlay();
   drawRenderDebugOverlays(viewRect);
+  drawApronOwnershipStats();
 
   // FPS
   ctx.save();

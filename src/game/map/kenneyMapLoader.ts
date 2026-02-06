@@ -58,6 +58,11 @@ export type RenderPiece = {
     zFrom: number;
     zTo: number;
     zLogical: number;
+    ownerStairId?: string;
+    sourceFloorTxTy?: string;
+    edgeDir?: "E" | "S";
+    seamZ?: number;
+    sortKeyFromFloor?: number;
     apronKind?: "S" | "E";
     apronDyOffset?: number;
     wallDir?: WallDir;
@@ -99,8 +104,22 @@ export type CompiledKenneyMap = {
     topsByLayer: Map<number, Surface[]>;
     underlaysByKey: Map<string, RenderPiece[]>;
     underlays: RenderPiece[];
+    deferredApronsByKey: Map<string, RenderPiece[]>;
+    debugApronStats?: {
+        apronCandidates: number;
+        apronScanHits: number;
+        apronOwnedByStair: number;
+        apronAnyStairHits: number;
+        apronSameZHits: number;
+        stairDeltaCounts: Array<{ delta: string; count: number }>;
+        offsetCountsE: Array<{ offset: string; count: number }>;
+        offsetCountsS: Array<{ offset: string; count: number }>;
+        pickedOffsetsE: Array<{ offset: string; count: number }>;
+        pickedOffsetsS: Array<{ offset: string; count: number }>;
+    };
     occludersByLayer: Map<number, RenderPiece[]>;
     apronUnderlaysAtXY(tx: number, ty: number): RenderPiece[];
+    deferredApronsAtXY(tx: number, ty: number): RenderPiece[];
     occludersForLayer(layer: number): RenderPiece[];
     occludersInViewForLayer(layer: number, view: ViewRect): RenderPiece[];
 };
@@ -380,6 +399,7 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
 
     const underlaysByKey = new Map<string, RenderPiece[]>();
     const underlays: RenderPiece[] = [];
+    const deferredApronsByKey = new Map<string, RenderPiece[]>();
     const occludersByLayer = new Map<number, RenderPiece[]>();
 
     function addPieceToLayerMap(map: Map<number, RenderPiece[]>, piece: RenderPiece) {
@@ -396,6 +416,13 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         else underlaysByKey.set(k, [piece]);
     }
 
+    function addDeferredApron(ownerTx: number, ownerTy: number, piece: RenderPiece) {
+        const k = `${ownerTx},${ownerTy}`;
+        const list = deferredApronsByKey.get(k);
+        if (list) list.push(piece);
+        else deferredApronsByKey.set(k, [piece]);
+    }
+
     function addOccluder(piece: RenderPiece) {
         addPieceToLayerMap(occludersByLayer, piece);
     }
@@ -407,6 +434,19 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         for (let i = 1; i < surfaces.length; i++) {
             const z = surfaces[i].zBase;
             if (z > best) best = z;
+        }
+        return best;
+    }
+
+    function maxNonStairSurfaceZAt(tx: number, ty: number): number | null {
+        const surfaces = surfacesAtXY(tx, ty);
+        if (surfaces.length === 0) return null;
+        let best: number | null = null;
+        for (let i = 0; i < surfaces.length; i++) {
+            const s = surfaces[i];
+            if (s.tile.kind === "STAIRS") continue;
+            const z = s.zBase;
+            if (best === null || z > best) best = z;
         }
         return best;
     }
@@ -435,34 +475,84 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         return { tx, ty, dir };
     }
 
-    function stairConnectsInto(neighborTx: number, neighborTy: number, tx: number, ty: number): boolean {
-        const surfaces = surfacesAtXY(neighborTx, neighborTy);
+    const FLOOR_SORT_MULT = 1000000;
+    const FLOOR_SORT_TY_OFFSET = 100000;
+
+    function floorSortKey(tx: number, ty: number): number {
+        const sum = tx + ty;
+        return sum * FLOOR_SORT_MULT + (FLOOR_SORT_TY_OFFSET - ty);
+    }
+
+    function hasBlockingStairForApron(edgeDir: "E" | "S", floorSurface: Surface): boolean {
+        const seamZ = (floorSurface.zBase | 0) - 1;
+        const { dx, dy } = dirToDelta(edgeDir);
+        const nTx = floorSurface.tx + dx;
+        const nTy = floorSurface.ty + dy;
+        const surfaces = surfacesAtXY(nTx, nTy);
+        if (surfaces.length === 0) return false;
+
+        const relDir = oppositeDir(edgeDir);
         for (let i = 0; i < surfaces.length; i++) {
             const s = surfaces[i];
             if (s.tile.kind !== "STAIRS") continue;
-            const dir = (s.tile.dir ?? "N") as StairDir;
-            const d = dirToDelta(dir);
-            if (neighborTx + d.dx === tx && neighborTy + d.dy === ty) return true;
+            if ((s.zLogical | 0) !== seamZ) continue;
+            if (!s.tile.dir) continue;
+            if (s.tile.dir !== relDir) continue;
+            return true;
         }
+
         return false;
     }
 
-    function hasStairAtXY(tx: number, ty: number): boolean {
-        const surfaces = surfacesAtXY(tx, ty);
-        for (let i = 0; i < surfaces.length; i++) {
-            if (surfaces[i].tile.kind === "STAIRS") return true;
+    type StairScanEntry = {
+        ox: number;
+        oy: number;
+        surface: Surface;
+    };
+
+    type StairScanResult = {
+        floorSurface: Surface;
+        entries: StairScanEntry[];
+        anyStairHits: boolean;
+        sameZHits: boolean;
+        deltaCounts: Map<string, number>;
+    };
+
+    function scanStairsAtSeamForApron(edgeDir: "E" | "S", floorSurface: Surface): StairScanResult {
+        const entries: StairScanEntry[] = [];
+        const seamZ = (floorSurface.zBase | 0) - 1;
+        const deltaCounts = new Map<string, number>();
+        let anyStairHits = false;
+        let sameZHits = false;
+
+        const offsets = edgeDir === "E"
+            ? [{ ox: 1, oy: -1 }, { ox: 1, oy: 0 }, { ox: 1, oy: 1 }]
+            : [{ ox: -1, oy: 1 }, { ox: 0, oy: 1 }, { ox: 1, oy: 1 }];
+
+        for (let i = 0; i < offsets.length; i++) {
+            const { ox, oy } = offsets[i];
+            const tx = floorSurface.tx + ox;
+            const ty = floorSurface.ty + oy;
+            const surfaces = surfacesAtXY(tx, ty);
+            for (let j = 0; j < surfaces.length; j++) {
+                const s = surfaces[j];
+                if (s.tile.kind !== "STAIRS") continue;
+                anyStairHits = true;
+                const delta = (s.zLogical | 0) - seamZ;
+                const deltaKey = `${delta}`;
+                deltaCounts.set(deltaKey, (deltaCounts.get(deltaKey) ?? 0) + 1);
+                if (delta === 0) sameZHits = true;
+                if ((s.zLogical | 0) !== seamZ) continue;
+                entries.push({ ox, oy, surface: s });
+            }
         }
-        return false;
+
+        return { floorSurface, entries, anyStairHits, sameZHits, deltaCounts };
     }
 
-    function stairDirAtXY(tx: number, ty: number): StairDir | null {
-        const surfaces = surfacesAtXY(tx, ty);
-        for (let i = 0; i < surfaces.length; i++) {
-            const s = surfaces[i];
-            if (s.tile.kind !== "STAIRS") continue;
-            return (s.tile.dir ?? "N") as StairDir;
-        }
-        return null;
+    function pickBestStairForApron(edgeDir: "E" | "S", scan: StairScanResult): Surface | null {
+        void edgeDir;
+        return scan.entries[0]?.surface ?? null;
     }
 
     const DIRS: Array<{ dir: WallDir; dx: number; dy: number }> = [
@@ -471,6 +561,36 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         { dir: "S", dx: 0, dy: 1 },
         { dir: "W", dx: -1, dy: 0 },
     ];
+
+    const offsetCountsE = new Map<string, number>();
+    const offsetCountsS = new Map<string, number>();
+    const pickedOffsetsE = new Map<string, number>();
+    const pickedOffsetsS = new Map<string, number>();
+    const stairDeltaCounts = new Map<string, number>();
+
+    const bumpOffset = (map: Map<string, number>, ox: number, oy: number) => {
+        const key = `${ox},${oy}`;
+        map.set(key, (map.get(key) ?? 0) + 1);
+    };
+
+    const toSortedOffsets = (map: Map<string, number>) => {
+        const entries = Array.from(map.entries()).map(([offset, count]) => ({ offset, count }));
+        entries.sort((a, b) => b.count - a.count);
+        return entries;
+    };
+
+    const debugApronStats = {
+        apronCandidates: 0,
+        apronScanHits: 0,
+        apronOwnedByStair: 0,
+        apronAnyStairHits: 0,
+        apronSameZHits: 0,
+        stairDeltaCounts: [] as Array<{ delta: string; count: number }>,
+        offsetCountsE: [] as Array<{ offset: string; count: number }>,
+        offsetCountsS: [] as Array<{ offset: string; count: number }>,
+        pickedOffsetsE: [] as Array<{ offset: string; count: number }>,
+        pickedOffsetsS: [] as Array<{ offset: string; count: number }>,
+    };
 
     for (const list of surfacesByKey.values()) {
         for (let i = 0; i < list.length; i++) {
@@ -491,17 +611,58 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
 
                 const nTx = surface.tx + dx;
                 const nTy = surface.ty + dy;
-                const neighborZ = maxSurfaceZAt(nTx, nTy);
-                const stairNeighborAllowsApron =
-                    !isStair && (dir === "S" || dir === "E") && hasStairAtXY(nTx, nTy);
-                if (stairNeighborAllowsApron) {
-                    const stairDir = stairDirAtXY(nTx, nTy);
-                    if (stairDir && oppositeDir(stairDir) === dir) continue;
+                const neighborZ = isStair ? maxSurfaceZAt(nTx, nTy) : maxNonStairSurfaceZAt(nTx, nTy);
+                if (neighborZ !== null && neighborZ >= surfaceZ) continue;
+                if (!isStair && (dir === "E" || dir === "S")) {
+                    if (hasBlockingStairForApron(dir, surface)) continue;
                 }
-                if (!stairNeighborAllowsApron && neighborZ !== null && neighborZ >= surfaceZ) continue;
-                if (!isStair && !stairNeighborAllowsApron && stairConnectsInto(nTx, nTy, surface.tx, surface.ty)) continue;
-
-                const apronZLogical = stairNeighborAllowsApron ? surface.zLogical - 1 : surface.zLogical;
+                if (!isStair && (dir === "E" || dir === "S")) {
+                    debugApronStats.apronCandidates += 1;
+                    const scan = scanStairsAtSeamForApron(dir, surface);
+                    if (scan.entries.length > 0) debugApronStats.apronScanHits += 1;
+                    if (scan.anyStairHits) debugApronStats.apronAnyStairHits += 1;
+                    if (scan.sameZHits) debugApronStats.apronSameZHits += 1;
+                    for (const [delta, count] of scan.deltaCounts.entries()) {
+                        stairDeltaCounts.set(delta, (stairDeltaCounts.get(delta) ?? 0) + count);
+                    }
+                    for (let si = 0; si < scan.entries.length; si++) {
+                        const entry = scan.entries[si];
+                        if (dir === "E") bumpOffset(offsetCountsE, entry.ox, entry.oy);
+                        else bumpOffset(offsetCountsS, entry.ox, entry.oy);
+                    }
+                    const stairOwner = pickBestStairForApron(dir, scan);
+                    if (stairOwner) {
+                        debugApronStats.apronOwnedByStair += 1;
+                        const picked = scan.entries.find((entry) => entry.surface.id === stairOwner.id);
+                        if (picked) {
+                            if (dir === "E") bumpOffset(pickedOffsetsE, picked.ox, picked.oy);
+                            else bumpOffset(pickedOffsetsS, picked.ox, picked.oy);
+                        }
+                        addDeferredApron(stairOwner.tx, stairOwner.ty, {
+                            id: `deferred_apron_${surface.tx}_${surface.ty}_${surfaceZ}_${dir}`,
+                            cls: "UNDERLAY",
+                            kind: "FLOOR_APRON",
+                            tx: surface.tx,
+                            ty: surface.ty,
+                            zFrom: surfaceZ - 1,
+                            zTo: surfaceZ,
+                            zLogical: surface.zLogical,
+                            ownerStairId: stairOwner.id,
+                            sourceFloorTxTy: `${surface.tx},${surface.ty}`,
+                            edgeDir: dir,
+                            seamZ: surfaceZ,
+                            sortKeyFromFloor: floorSortKey(surface.tx, surface.ty),
+                            apronKind: dir,
+                            apronDyOffset: -100,
+                            flipX: false,
+                            renderTopKind: "FLOOR",
+                            renderDir: "N",
+                            renderAnchorY: floorAnchorY,
+                            renderDyOffset: 0,
+                        });
+                        continue;
+                    }
+                }
 
                 addUnderlay({
                     id: `apron_${surface.tx}_${surface.ty}_${surfaceZ}_${dir}`,
@@ -511,7 +672,7 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
                     ty: surface.ty,
                     zFrom: surfaceZ - 1,
                     zTo: surfaceZ,
-                    zLogical: apronZLogical,
+                    zLogical: surface.zLogical,
                     apronKind: dir === "E" || dir === "S" ? dir : undefined,
                     apronDyOffset: isStair ? 0 : -100,
                     flipX: false,
@@ -572,6 +733,10 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         return underlaysByKey.get(`${tx},${ty}`) ?? [];
     }
 
+    function deferredApronsAtXY(tx: number, ty: number): RenderPiece[] {
+        return deferredApronsByKey.get(`${tx},${ty}`) ?? [];
+    }
+
     function pieceInView(piece: RenderPiece, view: ViewRect): boolean {
         return piece.tx >= view.minTx
             && piece.tx <= view.maxTx
@@ -621,8 +786,20 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         topsByLayer,
         underlaysByKey,
         underlays,
+        deferredApronsByKey,
+        debugApronStats: {
+            ...debugApronStats,
+            stairDeltaCounts: Array.from(stairDeltaCounts.entries())
+                .map(([delta, count]) => ({ delta, count }))
+                .sort((a, b) => b.count - a.count),
+            offsetCountsE: toSortedOffsets(offsetCountsE),
+            offsetCountsS: toSortedOffsets(offsetCountsS),
+            pickedOffsetsE: toSortedOffsets(pickedOffsetsE),
+            pickedOffsetsS: toSortedOffsets(pickedOffsetsS),
+        },
         occludersByLayer,
         apronUnderlaysAtXY,
+        deferredApronsAtXY,
         occludersForLayer,
         occludersInViewForLayer,
     };

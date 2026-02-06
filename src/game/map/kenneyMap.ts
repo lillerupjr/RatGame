@@ -97,6 +97,21 @@ export function getActiveMap(): CompiledKenneyMap {
     return _compiled;
 }
 
+export function getApronDebugStats(): {
+    apronCandidates: number;
+    apronScanHits: number;
+    apronOwnedByStair: number;
+    apronAnyStairHits: number;
+    apronSameZHits: number;
+    stairDeltaCounts: Array<{ delta: string; count: number }>;
+    offsetCountsE: Array<{ offset: string; count: number }>;
+    offsetCountsS: Array<{ offset: string; count: number }>;
+    pickedOffsetsE: Array<{ offset: string; count: number }>;
+    pickedOffsetsS: Array<{ offset: string; count: number }>;
+} | null {
+    return _compiled.debugApronStats ?? null;
+}
+
 /** Fetch a tile by tile-space coordinates. */
 export function getTile(tx: number, ty: number): IsoTile {
     return _compiled.getTile(tx, ty);
@@ -187,6 +202,11 @@ export function occludersForLayer(layer: number): RenderPiece[] {
 /** Return apron underlays for a tile coordinate. */
 export function apronUnderlaysAtXY(tx: number, ty: number): RenderPiece[] {
     return _compiled.apronUnderlaysAtXY(tx, ty);
+}
+
+/** Return stair-owned deferred aprons for a tile coordinate. */
+export function deferredApronsAtXY(tx: number, ty: number): RenderPiece[] {
+    return _compiled.deferredApronsAtXY(tx, ty);
 }
 
 /** Return occluders within a tile-bounds view for a logical layer. */
