@@ -22,7 +22,7 @@ import {
   pointInQuad,
   rampHeightAt,
   surfacesAtXY,
-  apronUnderlaysInView,
+  apronUnderlaysAtXY,
   occluderLayers,
   occludersInViewForLayer,
   topLayers,
@@ -55,13 +55,14 @@ import {
   getFloorApron,
   getStairTop,
   getStairApron,
-  getWallSegment,
+  getWallSkinTop,
+  getWallSkinTopDy,
+  getWallSkinSegment,
+  getWallSkinSegmentDy,
   FLOOR_TOP_DY_PX,
   STAIR_TOP_DY_PX,
-  WALL_TOP_DY_PX,
   FLOOR_APRON_DY_PX,
   STAIR_APRON_DY_PX,
-  WALL_APRON_DY_PX,
 } from "../visual/renderSprites";
 
 /** Render tiles, entities, overlays, and debug layers. */
@@ -121,9 +122,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   // Optional render-layer offset for stairs.
   const STAIR_LAYER_OFFSET = (w as any).stairLayerOffset ?? 0;
-
-  // Enable floor aprons too
-  const FLOOR_APRONS: boolean = (w as any).floorAprons ?? true;
 
   // Adjust how tightly apron joins the top (helps remove visible seam)
   const APRON_JOIN_PX = (w as any).apronJoinPx ?? 0;
@@ -206,7 +204,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   };
 
   type RenderPieceDraw = {
-    img: HTMLImageElement; // apron-only sprite
+    img: HTMLImageElement;
     dx: number;
     dy: number;
     dw: number;
@@ -215,19 +213,29 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     flipX?: boolean;
   };
 
-  type TopDraw = {
-    img: HTMLImageElement;
-    dx: number;
-    dy: number;
-    dw: number;
-    dh: number;
-    depth: number;
+  const wallSkinDyOffset: Record<string, number> = {
+    FLOOR_EDGE: -100,
+    STAIR_FACE: 0,
+    WALL: 0,
+  };
+
+  const drawRenderPiece = (c: RenderPieceDraw) => {
+    const img = c.img;
+    if (!img || img.width <= 0 || img.height <= 0) return;
+
+    if (c.flipX) {
+      ctx.save();
+      ctx.translate(c.dx + c.dw * 0.5, c.dy + c.dh * 0.5);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, -c.dw * 0.5, -c.dh * 0.5, c.dw, c.dh);
+      ctx.restore();
+    } else {
+      ctx.drawImage(img, c.dx, c.dy, c.dw, c.dh);
+    }
   };
 
   const buildApronDraw = (c: RenderPiece, stableId: number): RenderPieceDraw | null => {
-    const isFloor = c.renderTopKind === "FLOOR";
-    if (isFloor && !FLOOR_APRONS) return null;
-
+    const isFloor = c.kind === "FLOOR_APRON";
     const dir4 = c.renderDir ?? "N";
     const topRec = isFloor ? getFloorTop() : getStairTop(dir4);
     if (!topRec?.ready || !topRec.img || topRec.img.width <= 0 || topRec.img.height <= 0) return null;
@@ -278,16 +286,21 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       flipX: apronFlipX,
     };
   };
-
   const buildWallDraw = (c: RenderPiece, stableId: number): RenderPieceDraw | null => {
     if (c.kind !== "WALL") return null;
+    const wallDir = c.wallDir ?? "N";
+    const wallSkin = c.wallSkin ?? "WALL";
+    const topDir = c.renderDir ?? "N";
 
-    const dir4 = c.renderDir ?? "N";
-    const topRec = getFloorTop();
+    const topRec = getWallSkinTop(wallSkin, topDir);
+    const topDy = getWallSkinTopDy(wallSkin, topDir);
+    const segmentDir = wallSkin === "STAIR_FACE" ? topDir : wallDir;
+    const seg = getWallSkinSegment(wallSkin, segmentDir);
+    const apronRec = seg.rec;
+    const apronFlipX = wallSkin === "STAIR_FACE" ? seg.flipX : (seg.flipX || !!c.flipX);
+    const apronDy = getWallSkinSegmentDy(wallSkin, segmentDir);
+
     if (!topRec?.ready || !topRec.img || topRec.img.width <= 0 || topRec.img.height <= 0) return null;
-
-    const apronRec = getWallSegment((c.wallKind as "S" | "E") ?? "S");
-    const apronFlipX = !!c.flipX;
     if (!apronRec?.ready || !apronRec.img || apronRec.img.width <= 0 || apronRec.img.height <= 0) return null;
 
     const topImg = topRec.img;
@@ -296,8 +309,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
     let wx = (c.tx + 0.5) * T;
     let wy = (c.ty + 0.5) * T;
-    if (c.wallDir === "N") wy -= T;
-    else if (c.wallDir === "W") wx -= T;
+    if (wallDir === "N") wy -= T;
+    else if (wallDir === "W") wx -= T;
 
     const p = worldToScreen(wx, wy);
     const dx = p.x + camX - topW * 0.5;
@@ -306,7 +319,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
     let dy = p.y + camY - topH * anchorY;
     dy += TILE_ART_Y_SHIFT_PX;
-    dy += WALL_TOP_DY_PX[dir4] ?? 0;
+    dy += topDy;
 
     dy += c.renderDyOffset ?? 0;
 
@@ -317,8 +330,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const ah = apronRec.img.height * TILE_SCALE;
     const ax = dx + (topW - aw) * 0.5;
 
-    const apronDy = WALL_APRON_DY_PX[dir4] ?? 0;
-    const ay = dy + topH - APRON_JOIN_PX + (c.apronDyOffset ?? 0) + apronDy;
+    const skinDyOffset = wallSkinDyOffset[wallSkin] ?? 0;
+    const ay = dy + topH - APRON_JOIN_PX + apronDy + skinDyOffset;
 
     return {
       img: apronRec.img,
@@ -524,13 +537,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   };
 
   // -------------------------------------------------------
-  // DEBUG: Underlay / Occluder overlays
+  // DEBUG: Occluder overlays
   // -------------------------------------------------------
-  const SHOW_UNDERLAY_DEBUG = !!(w as any).debugUnderlays;
   const SHOW_OCCLUDER_DEBUG = !!(w as any).debugOccluders;
 
   const drawRenderDebugOverlays = (viewRect: ViewRect) => {
-    if (!SHOW_UNDERLAY_DEBUG && !SHOW_OCCLUDER_DEBUG) return;
+    if (!SHOW_OCCLUDER_DEBUG) return;
 
     ctx.save();
     ctx.globalAlpha = 0.9;
@@ -538,18 +550,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     ctx.font = "10px monospace";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-
-    if (SHOW_UNDERLAY_DEBUG) {
-      const list = apronUnderlaysInView(viewRect);
-      ctx.strokeStyle = "rgba(80,220,140,0.95)";
-      for (let i = 0; i < list.length; i++) {
-        const c = list[i];
-        const wx = (c.tx + 0.5) * T;
-        const wy = (c.ty + 0.5) * T;
-        const p = toScreenAtZ(wx, wy, c.zFrom);
-        ctx.strokeRect(p.x - 6, p.y - 6, 12, 12);
-      }
-    }
 
     if (SHOW_OCCLUDER_DEBUG) {
       const layers = occluderLayers();
@@ -704,39 +704,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   });
 
   // ----------------------------
-  // Global APRONS pass (background-only, all heights)
-  // ----------------------------
-  const apronsInView = apronUnderlaysInView(viewRect);
-  if (apronsInView.length > 0) {
-    const apronDraws: RenderPieceDraw[] = [];
-    let apronId = 0;
-    for (let i = 0; i < apronsInView.length; i++) {
-      const draw = buildApronDraw(apronsInView[i], apronId++);
-      if (draw) apronDraws.push(draw);
-    }
-
-    if (apronDraws.length > 0) {
-      apronDraws.sort((a, b) => a.depth - b.depth);
-      ctx.globalAlpha = 1;
-      for (let i = 0; i < apronDraws.length; i++) {
-        const c = apronDraws[i];
-        const img = c.img;
-        if (!img || img.width <= 0 || img.height <= 0) continue;
-
-        if (c.flipX) {
-          ctx.save();
-          ctx.translate(c.dx + c.dw * 0.5, c.dy + c.dh * 0.5);
-          ctx.scale(-1, 1);
-          ctx.drawImage(img, -c.dw * 0.5, -c.dh * 0.5, c.dw, c.dh);
-          ctx.restore();
-        } else {
-          ctx.drawImage(img, c.dx, c.dy, c.dw, c.dh);
-        }
-      }
-    }
-  }
-
-  // ----------------------------
   // Build the layer list (union of all renderable layers)
   // ----------------------------
   const layerSet = new Set<number>();
@@ -763,17 +730,18 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     if (!RENDER_ALL_HEIGHTS && layer !== activeH) {
       // Only draw top surfaces once when filtering to the active floor.
     } else {
-    const tops: TopDraw[] = [];
-    let topId = 0;
-    for (let s = minSum; s <= maxSum; s++) {
-      const ty0 = Math.max(minTy, s - maxTx);
-      const ty1 = Math.min(maxTy, s - minTx);
+      let apronId = 0;
+      for (let s = minSum; s <= maxSum; s++) {
+        const ty0 = Math.max(minTy, s - maxTx);
+        const ty1 = Math.min(maxTy, s - minTx);
 
         for (let ty = ty1; ty >= ty0; ty--) {
           const tx = s - ty;
 
           const surfaces = surfacesAtXY(tx, ty);
           if (surfaces.length === 0) continue;
+
+          const underlays = apronUnderlaysAtXY(tx, ty);
 
           for (let si = 0; si < surfaces.length; si++) {
             const surface = surfaces[si];
@@ -789,6 +757,24 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
               } else {
                 const hs = tdef.h ?? 0;
                 if (Math.abs(hs - activeH) > 1) continue;
+              }
+            }
+
+            if (underlays.length > 0) {
+              const apronDraws: RenderPieceDraw[] = [];
+              for (let ui = 0; ui < underlays.length; ui++) {
+                const u = underlays[ui];
+                if (u.zTo !== surface.zBase) continue;
+                if (u.renderTopKind !== surface.renderTopKind) continue;
+                const draw = buildApronDraw(u, apronId++);
+                if (draw) apronDraws.push(draw);
+              }
+
+              if (apronDraws.length > 0) {
+                apronDraws.sort((a, b) => a.depth - b.depth);
+                for (let i = 0; i < apronDraws.length; i++) {
+                  drawRenderPiece(apronDraws[i]);
+                }
               }
             }
 
@@ -818,28 +804,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
             const h = surface.zBase;
             dy -= h * ELEV_PX;
 
-            // Queue TOP draw (sorted later by render depth)
-            tops.push({
-              img: topImg,
-              dx,
-              dy,
-              dw: topW,
-              dh: topH,
-              depth: renderDepthFor(wx, wy, h, topId++),
-            });
-
+            ctx.drawImage(topImg, dx, dy, topW, topH);
+          }
         }
       }
-    }
-
-    if (tops.length > 0) {
-      tops.sort((a, b) => a.depth - b.depth);
-      ctx.globalAlpha = 1;
-      for (let i = 0; i < tops.length; i++) {
-        const t = tops[i];
-        ctx.drawImage(t.img, t.dx, t.dy, t.dw, t.dh);
-      }
-    }
     }
 
     // 2) Zones (same as your version)

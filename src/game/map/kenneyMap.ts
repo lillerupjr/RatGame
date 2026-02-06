@@ -167,21 +167,9 @@ export function surfacesAtXY(tx: number, ty: number): Surface[] {
     return _compiled.surfacesAtXY(tx, ty);
 }
 
-/** Return apron underlays for a logical layer. */
-export function apronsForLayer(layer: number): RenderPiece[] {
-    return _compiled.apronsByLayer.get(layer) ?? [];
-}
-
 /** Return top surfaces for a logical layer. */
 export function topsForLayer(layer: number): Surface[] {
     return _compiled.topsByLayer.get(layer) ?? [];
-}
-
-/** Return every logical layer index that has at least one apron. */
-export function apronLayers(): number[] {
-    const ks = Array.from(_compiled.apronsByLayer.keys());
-    ks.sort((a, b) => a - b);
-    return ks;
 }
 
 /** Return every logical layer index that has at least one top surface. */
@@ -191,14 +179,14 @@ export function topLayers(): number[] {
     return ks;
 }
 
-/** Return underlay aprons within a tile-bounds view. */
-export function apronUnderlaysInView(view: ViewRect): RenderPiece[] {
-    return _compiled.apronUnderlaysInView(view);
-}
-
 /** Return occluders for a logical layer. */
 export function occludersForLayer(layer: number): RenderPiece[] {
     return _compiled.occludersForLayer(layer);
+}
+
+/** Return apron underlays for a tile coordinate. */
+export function apronUnderlaysAtXY(tx: number, ty: number): RenderPiece[] {
+    return _compiled.apronUnderlaysAtXY(tx, ty);
 }
 
 /** Return occluders within a tile-bounds view for a logical layer. */

@@ -153,3 +153,61 @@ export function getStairApron(dir: "N" | "E" | "S" | "W"): { rec: LoadedImg; fli
 export function getWallSegment(kind: "S" | "E"): LoadedImg {
     return kind === "S" ? WALL_2_S : WALL_2_E;
 }
+
+type WallSkinDef = {
+    topKind: "FLOOR" | "STAIR";
+    segmentKind: "WALL" | "FLOOR_EDGE" | "STAIR_FACE";
+};
+
+const WALL_SKINS: Record<string, WallSkinDef> = {
+    FLOOR_EDGE: { topKind: "FLOOR", segmentKind: "FLOOR_EDGE" },
+    STAIR_FACE: { topKind: "STAIR", segmentKind: "STAIR_FACE" },
+    WALL: { topKind: "FLOOR", segmentKind: "WALL" },
+};
+
+function wallAxisFromDir(dir: "N" | "E" | "S" | "W"): "S" | "E" {
+    return dir === "E" || dir === "W" ? "E" : "S";
+}
+
+function wallSkinDef(skin: string | undefined): WallSkinDef {
+    return WALL_SKINS[skin ?? ""] ?? WALL_SKINS.WALL;
+}
+
+export function getWallSkinTop(skin: string, dir: "N" | "E" | "S" | "W"): LoadedImg {
+    const def = wallSkinDef(skin);
+    return def.topKind === "STAIR" ? getStairTop(dir) : getFloorTop();
+}
+
+export function getWallSkinTopDy(skin: string, dir: "N" | "E" | "S" | "W"): number {
+    const def = wallSkinDef(skin);
+    return def.topKind === "STAIR"
+        ? (STAIR_TOP_DY_PX[dir] ?? 0)
+        : (FLOOR_TOP_DY_PX[dir] ?? 0);
+}
+
+export function getWallSkinSegment(
+    skin: string,
+    dir: "N" | "E" | "S" | "W"
+): { rec: LoadedImg; flipX: boolean } {
+    const def = wallSkinDef(skin);
+    if (def.segmentKind === "FLOOR_EDGE") {
+        const axis = wallAxisFromDir(dir);
+        return { rec: getFloorApron(axis), flipX: false };
+    }
+    if (def.segmentKind === "STAIR_FACE") {
+        return getStairApron(dir);
+    }
+    const axis = wallAxisFromDir(dir);
+    return { rec: getWallSegment(axis), flipX: false };
+}
+
+export function getWallSkinSegmentDy(skin: string, dir: "N" | "E" | "S" | "W"): number {
+    const def = wallSkinDef(skin);
+    if (def.segmentKind === "FLOOR_EDGE") {
+        return FLOOR_APRON_DY_PX[wallAxisFromDir(dir)] ?? 0;
+    }
+    if (def.segmentKind === "STAIR_FACE") {
+        return STAIR_APRON_DY_PX[dir] ?? 0;
+    }
+    return WALL_APRON_DY_PX[dir] ?? 0;
+}

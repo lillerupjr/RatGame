@@ -59,15 +59,14 @@ export type RenderPiece = {
     zTo: number;
     zLogical: number;
     apronKind?: "S" | "E";
-    dir?: StairDir;
+    apronDyOffset?: number;
     wallDir?: WallDir;
+    wallSkin?: string;
     flipX?: boolean;
     renderTopKind: RenderTopKind;
     renderDir: StairDir;
     renderAnchorY: number;
     renderDyOffset: number;
-    apronDyOffset: number;
-    wallKind?: "S" | "E";
 };
 
 export type WallToken = {
@@ -98,11 +97,11 @@ export type CompiledKenneyMap = {
     surfacesByKey: Map<string, Surface[]>;
     surfacesAtXY(tx: number, ty: number): Surface[];
     topsByLayer: Map<number, Surface[]>;
-    apronsByLayer: Map<number, RenderPiece[]>;
-    occludersByLayer: Map<number, RenderPiece[]>;
+    underlaysByKey: Map<string, RenderPiece[]>;
     underlays: RenderPiece[];
+    occludersByLayer: Map<number, RenderPiece[]>;
+    apronUnderlaysAtXY(tx: number, ty: number): RenderPiece[];
     occludersForLayer(layer: number): RenderPiece[];
-    apronUnderlaysInView(view: ViewRect): RenderPiece[];
     occludersInViewForLayer(layer: number, view: ViewRect): RenderPiece[];
 };
 
@@ -379,8 +378,8 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         return surfacesByKey.get(`${tx},${ty}`) ?? [];
     }
 
+    const underlaysByKey = new Map<string, RenderPiece[]>();
     const underlays: RenderPiece[] = [];
-    const apronsByLayer = new Map<number, RenderPiece[]>();
     const occludersByLayer = new Map<number, RenderPiece[]>();
 
     function addPieceToLayerMap(map: Map<number, RenderPiece[]>, piece: RenderPiece) {
@@ -391,114 +390,135 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
 
     function addUnderlay(piece: RenderPiece) {
         underlays.push(piece);
-        addPieceToLayerMap(apronsByLayer, piece);
+        const k = `${piece.tx},${piece.ty}`;
+        const list = underlaysByKey.get(k);
+        if (list) list.push(piece);
+        else underlaysByKey.set(k, [piece]);
     }
 
     function addOccluder(piece: RenderPiece) {
         addPieceToLayerMap(occludersByLayer, piece);
     }
 
-    function hasSurfaceAtZ(tx: number, ty: number, zBase: number): boolean {
+    function maxSurfaceZAt(tx: number, ty: number): number | null {
         const surfaces = surfacesAtXY(tx, ty);
+        if (surfaces.length === 0) return null;
+        let best = surfaces[0].zBase;
+        for (let i = 1; i < surfaces.length; i++) {
+            const z = surfaces[i].zBase;
+            if (z > best) best = z;
+        }
+        return best;
+    }
+
+    function dirToDelta(dir: WallDir): { dx: number; dy: number } {
+        switch (dir) {
+            case "N": return { dx: 0, dy: -1 };
+            case "E": return { dx: 1, dy: 0 };
+            case "S": return { dx: 0, dy: 1 };
+            case "W": return { dx: -1, dy: 0 };
+        }
+    }
+
+    function oppositeDir(dir: WallDir): WallDir {
+        switch (dir) {
+            case "N": return "S";
+            case "S": return "N";
+            case "E": return "W";
+            case "W": return "E";
+        }
+    }
+
+    function canonicalizeEdge(tx: number, ty: number, dir: WallDir): { tx: number; ty: number; dir: WallDir } {
+        if (dir === "N") return { tx, ty: ty - 1, dir: "S" };
+        if (dir === "W") return { tx: tx - 1, ty, dir: "E" };
+        return { tx, ty, dir };
+    }
+
+    function stairConnectsInto(neighborTx: number, neighborTy: number, tx: number, ty: number): boolean {
+        const surfaces = surfacesAtXY(neighborTx, neighborTy);
         for (let i = 0; i < surfaces.length; i++) {
-            if (surfaces[i].zBase === zBase) return true;
+            const s = surfaces[i];
+            if (s.tile.kind !== "STAIRS") continue;
+            const dir = (s.tile.dir ?? "N") as StairDir;
+            const d = dirToDelta(dir);
+            if (neighborTx + d.dx === tx && neighborTy + d.dy === ty) return true;
         }
         return false;
     }
 
-    function hasStairAtZ(tx: number, ty: number, zBase: number): boolean {
+    function hasStairAtXY(tx: number, ty: number): boolean {
+        const surfaces = surfacesAtXY(tx, ty);
+        for (let i = 0; i < surfaces.length; i++) {
+            if (surfaces[i].tile.kind === "STAIRS") return true;
+        }
+        return false;
+    }
+
+    function stairDirAtXY(tx: number, ty: number): StairDir | null {
         const surfaces = surfacesAtXY(tx, ty);
         for (let i = 0; i < surfaces.length; i++) {
             const s = surfaces[i];
-            if (s.zBase === zBase && s.tile.kind === "STAIRS") return true;
+            if (s.tile.kind !== "STAIRS") continue;
+            return (s.tile.dir ?? "N") as StairDir;
         }
-        return false;
+        return null;
     }
 
-    function stairApronNeighborDelta(dir: StairDir): { dx: number; dy: number } {
-        switch (dir) {
-            case "N": return { dx: 1, dy: 0 };  // apron faces along E edge
-            case "E": return { dx: 0, dy: -1 }; // apron faces along S edge
-            case "S": return { dx: -1, dy: 0 }; // apron faces along W edge
-            case "W": return { dx: 0, dy: 1 };  // apron faces along N edge
-        }
-    }
+    const DIRS: Array<{ dir: WallDir; dx: number; dy: number }> = [
+        { dir: "N", dx: 0, dy: -1 },
+        { dir: "E", dx: 1, dy: 0 },
+        { dir: "S", dx: 0, dy: 1 },
+        { dir: "W", dx: -1, dy: 0 },
+    ];
 
     for (const list of surfacesByKey.values()) {
         for (let i = 0; i < list.length; i++) {
             const surface = list[i];
-            const tile = surface.tile;
+            const surfaceZ = surface.zBase;
+            const isStair = surface.tile.kind === "STAIRS";
 
-            if (tile.kind === "STAIRS") {
-                const dir = (tile.dir ?? "N") as StairDir;
-                const delta = stairApronNeighborDelta(dir);
-                if (hasSurfaceAtZ(surface.tx + delta.dx, surface.ty + delta.dy, surface.zBase)) {
-                    continue;
+            const stairUphillDir = isStair ? ((surface.tile.dir ?? "N") as StairDir) : null;
+            const stairDownhillDir = stairUphillDir ? oppositeDir(stairUphillDir) : null;
+
+            for (let d = 0; d < DIRS.length; d++) {
+                const { dir, dx, dy } = DIRS[d];
+                if (isStair) {
+                    if (stairDownhillDir && dir !== stairDownhillDir) continue;
+                } else {
+                    if (dir !== "E" && dir !== "S") continue;
                 }
-                addUnderlay({
-                    id: `apron_stair_${surface.tx}_${surface.ty}_${surface.zBase}`,
-                    cls: "UNDERLAY",
-                    kind: "STAIR_APRON",
-                    tx: surface.tx,
-                    ty: surface.ty,
-                    zFrom: surface.zBase - 1,
-                    zTo: surface.zBase,
-                    zLogical: surface.zLogical,
-                    dir,
-                    renderTopKind: "STAIR",
-                    renderDir: dir,
-                    renderAnchorY: stairAnchorY,
-                    renderDyOffset: stairDyByDir[dir] ?? 16,
-                    apronDyOffset: 0,
-                });
-                continue;
-            }
 
-            const southMissing = !hasSurfaceAtZ(surface.tx, surface.ty + 1, surface.zBase)
-                || hasStairAtZ(surface.tx, surface.ty + 1, surface.zBase);
-            if (southMissing) {
-                const apronKind: "S" = "S";
-                const apronDyOffset = -100;
-                addUnderlay({
-                    id: `apron_floor_${surface.tx}_${surface.ty}_${surface.zBase}_S`,
-                    cls: "UNDERLAY",
-                    kind: "FLOOR_APRON",
-                    tx: surface.tx,
-                    ty: surface.ty,
-                    zFrom: surface.zBase - 1,
-                    zTo: surface.zBase,
-                    zLogical: surface.zLogical,
-                    apronKind,
-                    flipX: false,
-                    renderTopKind: "FLOOR",
-                    renderDir: "N",
-                    renderAnchorY: floorAnchorY,
-                    renderDyOffset: 0,
-                    apronDyOffset,
-                });
-            }
+                const nTx = surface.tx + dx;
+                const nTy = surface.ty + dy;
+                const neighborZ = maxSurfaceZAt(nTx, nTy);
+                const stairNeighborAllowsApron =
+                    !isStair && (dir === "S" || dir === "E") && hasStairAtXY(nTx, nTy);
+                if (stairNeighborAllowsApron) {
+                    const stairDir = stairDirAtXY(nTx, nTy);
+                    if (stairDir && oppositeDir(stairDir) === dir) continue;
+                }
+                if (!stairNeighborAllowsApron && neighborZ !== null && neighborZ >= surfaceZ) continue;
+                if (!isStair && !stairNeighborAllowsApron && stairConnectsInto(nTx, nTy, surface.tx, surface.ty)) continue;
 
-            const eastMissing = !hasSurfaceAtZ(surface.tx + 1, surface.ty, surface.zBase)
-                || hasStairAtZ(surface.tx + 1, surface.ty, surface.zBase);
-            if (eastMissing) {
-                const apronKind: "E" = "E";
-                const apronDyOffset = -100;
+                const apronZLogical = stairNeighborAllowsApron ? surface.zLogical - 1 : surface.zLogical;
+
                 addUnderlay({
-                    id: `apron_floor_${surface.tx}_${surface.ty}_${surface.zBase}_E`,
+                    id: `apron_${surface.tx}_${surface.ty}_${surfaceZ}_${dir}`,
                     cls: "UNDERLAY",
-                    kind: "FLOOR_APRON",
+                    kind: isStair ? "STAIR_APRON" : "FLOOR_APRON",
                     tx: surface.tx,
                     ty: surface.ty,
-                    zFrom: surface.zBase - 1,
-                    zTo: surface.zBase,
-                    zLogical: surface.zLogical,
-                    apronKind,
+                    zFrom: surfaceZ - 1,
+                    zTo: surfaceZ,
+                    zLogical: apronZLogical,
+                    apronKind: dir === "E" || dir === "S" ? dir : undefined,
+                    apronDyOffset: isStair ? 0 : -100,
                     flipX: false,
-                    renderTopKind: "FLOOR",
-                    renderDir: "N",
-                    renderAnchorY: floorAnchorY,
-                    renderDyOffset: 0,
-                    apronDyOffset,
+                    renderTopKind: surface.renderTopKind,
+                    renderDir: surface.renderDir,
+                    renderAnchorY: surface.renderAnchorY,
+                    renderDyOffset: surface.renderDyOffset,
                 });
             }
         }
@@ -506,12 +526,14 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
 
     for (let i = 0; i < wallTokens.length; i++) {
         const w = wallTokens[i];
-        const tx = w.x + originTx;
-        const ty = w.y + originTy;
+        const rawTx = w.x + originTx;
+        const rawTy = w.y + originTy;
+        const canonical = canonicalizeEdge(rawTx, rawTy, w.dir);
+        const tx = canonical.tx;
+        const ty = canonical.ty;
         const height = Math.max(0, w.height | 0);
         if (height <= 0) continue;
 
-        const wallKind: "S" | "E" = (w.dir === "N" || w.dir === "S") ? "S" : "E";
         const flipX = false;
         const segmentHeight = 2;
         const zFrom = 0;
@@ -530,14 +552,14 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
                 zFrom: segFrom,
                 zTo: segTo,
                 zLogical,
-                wallDir: w.dir,
-                wallKind,
+                wallDir: canonical.dir,
+                wallSkin: "WALL",
+                apronDyOffset: 0,
                 flipX,
                 renderTopKind: "FLOOR",
                 renderDir: "N",
                 renderAnchorY: floorAnchorY,
                 renderDyOffset: 0,
-                apronDyOffset: 0,
             });
         }
     }
@@ -546,20 +568,15 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         return occludersByLayer.get(layer) ?? [];
     }
 
+    function apronUnderlaysAtXY(tx: number, ty: number): RenderPiece[] {
+        return underlaysByKey.get(`${tx},${ty}`) ?? [];
+    }
+
     function pieceInView(piece: RenderPiece, view: ViewRect): boolean {
         return piece.tx >= view.minTx
             && piece.tx <= view.maxTx
             && piece.ty >= view.minTy
             && piece.ty <= view.maxTy;
-    }
-
-    function apronUnderlaysInView(view: ViewRect): RenderPiece[] {
-        const out: RenderPiece[] = [];
-        for (let i = 0; i < underlays.length; i++) {
-            const c = underlays[i];
-            if (pieceInView(c, view)) out.push(c);
-        }
-        return out;
     }
 
     function occludersInViewForLayer(layer: number, view: ViewRect): RenderPiece[] {
@@ -602,11 +619,11 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         surfacesByKey,
         surfacesAtXY,
         topsByLayer,
-        apronsByLayer,
-        occludersByLayer,
+        underlaysByKey,
         underlays,
+        occludersByLayer,
+        apronUnderlaysAtXY,
         occludersForLayer,
-        apronUnderlaysInView,
         occludersInViewForLayer,
     };
 }
