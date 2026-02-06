@@ -23,7 +23,12 @@ import {
   rampHeightAt,
   surfaceHitAtWorld,
   surfacesAtXY,
-  curtainsForLayer, curtainLayers,
+  apronUnderlaysInView,
+  occluderLayers,
+  occludersInViewForLayer,
+  viewRectFromWorldCenter,
+  type Curtain,
+  type ViewRect,
 } from "../map/kenneyMap";
 
 import {
@@ -189,6 +194,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     return { x: p.x + camX, y: p.y + camY - elev };
   };
 
+  const toScreenAtZ = (x: number, y: number, zVisual: number) => {
+    const p = worldToScreen(x, y);
+    const elev = zVisual * ELEV_PX;
+    return { x: p.x + camX, y: p.y + camY - elev };
+  };
+
   const maxNonStairSurfaceZ = (tx: number, ty: number): number | null => {
     const surfaces = surfacesAtXY(tx, ty);
     if (surfaces.length === 0) return null;
@@ -223,7 +234,112 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     depth: number;
   };
 
-  let curtainId = 0;
+  const buildApronDraw = (c: Curtain, stableId: number): CurtainDraw | null => {
+    const isFloor = c.renderTopKind === "FLOOR";
+    if (isFloor && !FLOOR_CURTAINS) return null;
+
+    const dir4 = c.renderDir ?? "N";
+    const topRec = isFloor ? getFloorTop() : getStairTop(dir4);
+    if (!topRec?.ready || !topRec.img || topRec.img.width <= 0 || topRec.img.height <= 0) return null;
+
+    const apronRec = isFloor
+        ? getFloorApron((c.apronKind as "S" | "E") ?? "S")
+        : getStairApron(dir4).rec;
+    const apronFlipX = isFloor ? !!c.flipX : getStairApron(dir4).flipX;
+    if (!apronRec?.ready || !apronRec.img || apronRec.img.width <= 0 || apronRec.img.height <= 0) return null;
+
+    const topImg = topRec.img;
+    const topW = topImg.width * TILE_SCALE;
+    const topH = topImg.height * TILE_SCALE;
+
+    const wx = (c.tx + 0.5) * T;
+    const wy = (c.ty + 0.5) * T;
+
+    const p = worldToScreen(wx, wy);
+    const dx = p.x + camX - topW * 0.5;
+
+    const anchorY = c.renderAnchorY ?? ANCHOR_Y;
+
+    let dy = p.y + camY - topH * anchorY;
+    dy += TILE_ART_Y_SHIFT_PX;
+    dy += isFloor ? (FLOOR_TOP_DY_PX[dir4] ?? 0) : (STAIR_TOP_DY_PX[dir4] ?? 0);
+
+    dy += c.renderDyOffset ?? 0;
+
+    const h = c.zTo;
+    dy -= h * ELEV_PX;
+
+    const aw = apronRec.img.width * TILE_SCALE;
+    const ah = apronRec.img.height * TILE_SCALE;
+    const ax = dx + (topW - aw) * 0.5;
+
+    const apronDy = isFloor
+        ? (FLOOR_APRON_DY_PX[(c.apronKind as "S" | "E") ?? "S"] ?? 0)
+        : (STAIR_APRON_DY_PX[dir4] ?? 0);
+    const ay = dy + topH - APRON_JOIN_PX + (c.apronDyOffset ?? 0) + apronDy;
+
+    return {
+      img: apronRec.img,
+      dx: ax,
+      dy: ay,
+      dw: aw,
+      dh: ah,
+      depth: renderDepthFor(wx, wy, h, stableId),
+      flipX: apronFlipX,
+    };
+  };
+
+  const buildWallDraw = (c: Curtain, stableId: number): CurtainDraw | null => {
+    if (c.kind !== "WALL") return null;
+
+    const dir4 = c.renderDir ?? "N";
+    const topRec = getFloorTop();
+    if (!topRec?.ready || !topRec.img || topRec.img.width <= 0 || topRec.img.height <= 0) return null;
+
+    const apronRec = getWallSegment((c.wallKind as "S" | "E") ?? "S");
+    const apronFlipX = !!c.flipX;
+    if (!apronRec?.ready || !apronRec.img || apronRec.img.width <= 0 || apronRec.img.height <= 0) return null;
+
+    const topImg = topRec.img;
+    const topW = topImg.width * TILE_SCALE;
+    const topH = topImg.height * TILE_SCALE;
+
+    let wx = (c.tx + 0.5) * T;
+    let wy = (c.ty + 0.5) * T;
+    if (c.wallDir === "N") wy -= T;
+    else if (c.wallDir === "W") wx -= T;
+
+    const p = worldToScreen(wx, wy);
+    const dx = p.x + camX - topW * 0.5;
+
+    const anchorY = c.renderAnchorY ?? ANCHOR_Y;
+
+    let dy = p.y + camY - topH * anchorY;
+    dy += TILE_ART_Y_SHIFT_PX;
+    dy += WALL_TOP_DY_PX[dir4] ?? 0;
+
+    dy += c.renderDyOffset ?? 0;
+
+    const h = c.zTo;
+    dy -= h * ELEV_PX;
+
+    const aw = apronRec.img.width * TILE_SCALE;
+    const ah = apronRec.img.height * TILE_SCALE;
+    const ax = dx + (topW - aw) * 0.5;
+
+    const apronDy = WALL_APRON_DY_PX[dir4] ?? 0;
+    const ay = dy + topH - APRON_JOIN_PX + (c.apronDyOffset ?? 0) + apronDy;
+
+    return {
+      img: apronRec.img,
+      dx: ax,
+      dy: ay,
+      dw: aw,
+      dh: ah,
+      depth: renderDepthFor(wx, wy, h, stableId),
+      flipX: apronFlipX,
+    };
+  };
 
   // -------------------------------------------------------
   // DEBUG: Logical walk-mask overlay
@@ -417,6 +533,59 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     ctx.restore();
   };
 
+  // -------------------------------------------------------
+  // DEBUG: Underlay / Occluder overlays
+  // -------------------------------------------------------
+  const SHOW_UNDERLAY_DEBUG = !!(w as any).debugUnderlays;
+  const SHOW_OCCLUDER_DEBUG = !!(w as any).debugOccluders;
+
+  const drawCurtainDebugOverlays = (viewRect: ViewRect) => {
+    if (!SHOW_UNDERLAY_DEBUG && !SHOW_OCCLUDER_DEBUG) return;
+
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    ctx.lineWidth = 2;
+    ctx.font = "10px monospace";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+
+    if (SHOW_UNDERLAY_DEBUG) {
+      const list = apronUnderlaysInView(viewRect);
+      ctx.strokeStyle = "rgba(80,220,140,0.95)";
+      for (let i = 0; i < list.length; i++) {
+        const c = list[i];
+        const wx = (c.tx + 0.5) * T;
+        const wy = (c.ty + 0.5) * T;
+        const p = toScreenAtZ(wx, wy, c.zFrom);
+        ctx.strokeRect(p.x - 6, p.y - 6, 12, 12);
+      }
+    }
+
+    if (SHOW_OCCLUDER_DEBUG) {
+      const layers = occluderLayers();
+      ctx.strokeStyle = "rgba(255,120,120,0.95)";
+      ctx.fillStyle = "rgba(255,120,120,0.95)";
+      for (let li = 0; li < layers.length; li++) {
+        const layer = layers[li];
+        const list = occludersInViewForLayer(layer, viewRect);
+        for (let i = 0; i < list.length; i++) {
+          const c = list[i];
+          const wx = (c.tx + 0.5) * T;
+          const wy = (c.ty + 0.5) * T;
+          const p0 = toScreenAtZ(wx, wy, c.zFrom);
+          const p1 = toScreenAtZ(wx, wy, c.zTo);
+          ctx.beginPath();
+          ctx.moveTo(p0.x, p0.y);
+          ctx.lineTo(p1.x, p1.y);
+          ctx.stroke();
+          ctx.fillText(c.id, p1.x + 6, p1.y - 6);
+        }
+      }
+    }
+
+    ctx.restore();
+  };
+
   // ----------------------------
   // Tile range / diagonals
   // ----------------------------
@@ -431,6 +600,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   const minSum = minTx + minTy;
   const maxSum = maxTx + maxTy;
+
+  const viewRect = viewRectFromWorldCenter(px, py, T, radius);
 
   // We only use this to decide if the fallback ground tile is ready.
   const groundTile = getKenneyGroundTile();
@@ -493,7 +664,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   }
 
   // Build the layer list.
-  // IMPORTANT: we must include *curtain* layers too (e.g. tall walls W8*)
+  // IMPORTANT: we must include *occluder* layers too (e.g. tall walls W8*)
   // otherwise only the lowest segment (zLogical=0) renders.
   const layerSet = new Set<number>();
 
@@ -503,7 +674,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     layerSet.add(activeH);
   }
 
-  for (const h of curtainLayers()) layerSet.add(h);
+  for (const h of occluderLayers()) layerSet.add(h);
 
   const layers = Array.from(layerSet);
   layers.sort((a, b) => a - b);
@@ -617,15 +788,47 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   });
 
   // ----------------------------
+  // Pass 0: Underlay aprons
+  // ----------------------------
+  const underlays = apronUnderlaysInView(viewRect);
+  if (underlays.length > 0) {
+    const underlayDraws: CurtainDraw[] = [];
+    let underlayId = 0;
+    for (let i = 0; i < underlays.length; i++) {
+      const draw = buildApronDraw(underlays[i], underlayId++);
+      if (draw) underlayDraws.push(draw);
+    }
+
+    if (underlayDraws.length > 0) {
+      underlayDraws.sort((a, b) => a.depth - b.depth);
+      ctx.globalAlpha = 1;
+      for (let i = 0; i < underlayDraws.length; i++) {
+        const c = underlayDraws[i];
+        const img = c.img;
+        if (!img || img.width <= 0 || img.height <= 0) continue;
+
+        if (c.flipX) {
+          ctx.save();
+          ctx.translate(c.dx + c.dw * 0.5, c.dy + c.dh * 0.5);
+          ctx.scale(-1, 1);
+          ctx.drawImage(img, -c.dw * 0.5, -c.dh * 0.5, c.dw, c.dh);
+          ctx.restore();
+        } else {
+          ctx.drawImage(img, c.dx, c.dy, c.dw, c.dh);
+        }
+      }
+    }
+  }
+
+  // ----------------------------
   // Main render loop: per-layer
   // ----------------------------
   for (let li = 0; li < layers.length; li++) {
     const layer = layers[li];
 
-    // 1) TOPS (surfaces) + queue APRONS
+    // 1) TOPS (surfaces)
     const tops: TopDraw[] = [];
     let topId = 0;
-    const curtainDraws: CurtainDraw[] = [];
     for (let s = minSum; s <= maxSum; s++) {
       const ty0 = Math.max(minTy, s - maxTx);
       const ty1 = Math.min(maxTy, s - minTx);
@@ -699,79 +902,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       for (let i = 0; i < tops.length; i++) {
         const t = tops[i];
         ctx.drawImage(t.img, t.dx, t.dy, t.dw, t.dh);
-      }
-    }
-
-    const curtainList = curtainsForLayer(layer);
-    if (curtainList.length > 0) {
-      for (let i = 0; i < curtainList.length; i++) {
-        const c = curtainList[i];
-
-        const isFloor = c.renderTopKind === "FLOOR";
-        if (isFloor && !FLOOR_CURTAINS) continue;
-
-        const dir4 = c.renderDir ?? "N";
-        const topRec = isFloor ? getFloorTop() : getStairTop(dir4);
-        if (!topRec?.ready || !topRec.img || topRec.img.width <= 0 || topRec.img.height <= 0) continue;
-
-        const isWall = c.kind === "WALL";
-        const apronRec = isWall
-            ? getWallSegment((c.wallKind as "S" | "E") ?? "S")
-            : isFloor
-                ? getFloorApron((c.apronKind as "S" | "E") ?? "S")
-                : getStairApron(dir4).rec;
-        const apronFlipX = isWall ? !!c.flipX : isFloor ? !!c.flipX : getStairApron(dir4).flipX;
-        if (!apronRec?.ready || !apronRec.img || apronRec.img.width <= 0 || apronRec.img.height <= 0) continue;
-
-        const topImg = topRec.img;
-        const topW = topImg.width * TILE_SCALE;
-        const topH = topImg.height * TILE_SCALE;
-
-        let wx = (c.tx + 0.5) * T;
-        let wy = (c.ty + 0.5) * T;
-        if (isWall && c.wallDir) {
-          if (c.wallDir === "N") wy -= T;
-          else if (c.wallDir === "W") wx -= T;
-        }
-
-        const p = worldToScreen(wx, wy);
-        const dx = p.x + camX - topW * 0.5;
-
-        const anchorY = c.renderAnchorY ?? ANCHOR_Y;
-
-        let dy = p.y + camY - topH * anchorY;
-        dy += TILE_ART_Y_SHIFT_PX;
-        dy += isWall
-            ? (WALL_TOP_DY_PX[dir4] ?? 0)
-            : isFloor
-                ? (FLOOR_TOP_DY_PX[dir4] ?? 0)
-                : (STAIR_TOP_DY_PX[dir4] ?? 0);
-
-        dy += c.renderDyOffset ?? 0;
-
-        const h = c.zTo;
-        dy -= h * ELEV_PX;
-
-        const aw = apronRec.img.width * TILE_SCALE;
-        const ah = apronRec.img.height * TILE_SCALE;
-        const ax = dx + (topW - aw) * 0.5;
-
-        const apronDy = isWall
-            ? (WALL_APRON_DY_PX[dir4] ?? 0)
-            : isFloor
-                ? (FLOOR_APRON_DY_PX[(c.apronKind as "S" | "E") ?? "S"] ?? 0)
-                : (STAIR_APRON_DY_PX[dir4] ?? 0);
-        const ay = dy + topH - APRON_JOIN_PX + (c.apronDyOffset ?? 0) + apronDy;
-
-        curtainDraws.push({
-          img: apronRec.img,
-          dx: ax,
-          dy: ay,
-          dw: aw,
-          dh: ah,
-          depth: renderDepthFor(wx, wy, h, curtainId++),
-          flipX: apronFlipX,
-        });
       }
     }
 
@@ -1059,22 +1189,33 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       }
     }
 
-    // 4) Curtains (aprons) AFTER entities
-    if (curtainDraws.length > 0) {
-      curtainDraws.sort((a, b) => a.depth - b.depth);
+    // 4) Occluders (walls) AFTER entities
+    const occluders = occludersInViewForLayer(layer, viewRect);
+    if (occluders.length > 0) {
+      const occluderDraws: CurtainDraw[] = [];
+      let occluderId = 0;
+      for (let i = 0; i < occluders.length; i++) {
+        const draw = buildWallDraw(occluders[i], occluderId++);
+        if (draw) occluderDraws.push(draw);
+      }
 
-      for (const c of curtainDraws) {
-        const img = c.img;
-        if (!img || img.width <= 0 || img.height <= 0) continue;
+      if (occluderDraws.length > 0) {
+        occluderDraws.sort((a, b) => a.depth - b.depth);
 
-        if (c.flipX) {
-          ctx.save();
-          ctx.translate(c.dx + c.dw * 0.5, c.dy + c.dh * 0.5);
-          ctx.scale(-1, 1);
-          ctx.drawImage(img, -c.dw * 0.5, -c.dh * 0.5, c.dw, c.dh);
-          ctx.restore();
-        } else {
-          ctx.drawImage(img, c.dx, c.dy, c.dw, c.dh);
+        for (let i = 0; i < occluderDraws.length; i++) {
+          const c = occluderDraws[i];
+          const img = c.img;
+          if (!img || img.width <= 0 || img.height <= 0) continue;
+
+          if (c.flipX) {
+            ctx.save();
+            ctx.translate(c.dx + c.dw * 0.5, c.dy + c.dh * 0.5);
+            ctx.scale(-1, 1);
+            ctx.drawImage(img, -c.dw * 0.5, -c.dh * 0.5, c.dw, c.dh);
+            ctx.restore();
+          } else {
+            ctx.drawImage(img, c.dx, c.dy, c.dw, c.dh);
+          }
         }
       }
     }
@@ -1091,6 +1232,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   drawWalkMaskOverlay();
   drawRampOverlay();
+  drawCurtainDebugOverlays(viewRect);
 
   // FPS
   ctx.save();

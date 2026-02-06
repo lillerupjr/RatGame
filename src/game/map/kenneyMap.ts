@@ -10,6 +10,9 @@ import {
     type IsoTileKind,
     type StairDir,
     type Curtain,
+    type CurtainClass,
+    type CurtainKind,
+    type ViewRect,
     type Surface,
     type CompiledKenneyMap,
 } from "./kenneyMapLoader";
@@ -19,7 +22,15 @@ import { gridToWorld, worldToGrid } from "../coords/grid";
 import { generateFloorMap } from "./proceduralMap";
 import {EXCEL_SANCTUARY_01} from "./maps";
 
-export type { IsoTileKind, IsoTile, Surface, Curtain } from "./kenneyMapLoader";
+export type {
+    IsoTileKind,
+    IsoTile,
+    Surface,
+    Curtain,
+    CurtainClass,
+    CurtainKind,
+    ViewRect,
+} from "./kenneyMapLoader";
 
 // Plane tiles are visually 2 units tall; lower their placement by 1 unit.
 export const PLANE_TILE_Z_OFFSET = -1;
@@ -161,6 +172,26 @@ export function curtainsForLayer(layer: number): Curtain[] {
     return _compiled.curtainsForLayer(layer);
 }
 
+/** Return underlay curtains (floor/stair aprons). */
+export function underlayCurtains(): Curtain[] {
+    return _compiled.underlays;
+}
+
+/** Return underlay curtains within a tile-bounds view. */
+export function apronUnderlaysInView(view: ViewRect): Curtain[] {
+    return _compiled.apronUnderlaysInView(view);
+}
+
+/** Return occluder curtains for a logical layer. */
+export function occludersForLayer(layer: number): Curtain[] {
+    return _compiled.occludersForLayer(layer);
+}
+
+/** Return occluder curtains within a tile-bounds view for a logical layer. */
+export function occludersInViewForLayer(layer: number, view: ViewRect): Curtain[] {
+    return _compiled.occludersInViewForLayer(layer, view);
+}
+
 /**
  * Return every logical layer index that has at least one curtain in the active map.
  * Used by the renderer to ensure tall walls (e.g. W8*) actually show all segments.
@@ -169,6 +200,31 @@ export function curtainLayers(): number[] {
     const ks = Array.from(_compiled.curtainsByLayer.keys());
     ks.sort((a, b) => a - b);
     return ks;
+}
+
+/** Return every logical layer index that has at least one occluder. */
+export function occluderLayers(): number[] {
+    const ks = Array.from(_compiled.occludersByLayer.keys());
+    ks.sort((a, b) => a - b);
+    return ks;
+}
+
+/** Return tile-bounds view rect around a world position. */
+export function viewRectFromWorldCenter(
+    wx: number,
+    wy: number,
+    tileWorld: number,
+    radiusTiles: number
+): ViewRect {
+    const cx = Math.floor(wx / tileWorld);
+    const cy = Math.floor(wy / tileWorld);
+    const r = Math.max(0, Math.floor(radiusTiles));
+    return {
+        minTx: cx - r,
+        maxTx: cx + r,
+        minTy: cy - r,
+        maxTy: cy + r,
+    };
 }
 type SurfaceHitOptions = {
     includeBlocked?: boolean;
