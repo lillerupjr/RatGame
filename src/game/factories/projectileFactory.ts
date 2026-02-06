@@ -111,10 +111,10 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
 
     // Milestone C: flat-Z projectiles (no gravity yet)
     const shooterZ = w.pzVisual ?? w.pz ?? 0;
-    const projZ = Number.isFinite(a.z as any) ? (a.z as number) : shooterZ;
+    const projZ = Number.isFinite(a.z as any) ? (a.z as number) : (shooterZ + 1);
     const spawnLayer = Number.isFinite(a.zLogical as any)
         ? (a.zLogical as number)
-        : (Number.isFinite(w.pzLogical as any) ? w.pzLogical : Math.ceil(projZ - 1e-6));
+        : (Number.isFinite(w.pzLogical as any) ? (w.pzLogical + 1) : Math.ceil(projZ - 1e-6));
 
 
     w.pAlive.push(true);
