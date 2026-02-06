@@ -165,3 +165,202 @@ export const EXCEL_TEST_SPAWN_3X3: TableMapDef = {
     ],
 };
 
+export const EXCEL_RENDER_STRESS_01: TableMapDef = {
+    id: "EXCEL_RENDER_STRESS_01",
+    w: 25,
+    h: 25,
+    defaultFloorSkin: "edges_landscape_28",
+    defaultSpawnSkin: "edges_landscape_30",
+    centerOnZero: true,
+
+    // Goals:
+    // - Base plaza at F0 with spawn.
+    // - Stair run E: 0 -> 3 leading onto a bridge deck (F3).
+    // - Under/near-bridge lower floor (F0) to stress occlusion ordering.
+    // - Stair run N: 3 -> 6 up to a top plateau (F6).
+    // - Stair run W: 3 -> 6 up to a small tower (F6).
+    // - Stair run S: 0 -> 2 down to a mid platform (F2).
+    // - Additional E stairs: 0 -> 2 connecting corridor into the F2 area.
+    //
+    // IMPORTANT:
+    // - Do not “fix” visuals in render.ts by inspecting tile kinds.
+    // - This map is designed to validate Tops → Entities → Curtains.
+
+    cells: [
+        // Row 9
+        { x: 11, y: 9, t: "F6" },
+        { x: 12, y: 9, t: "F6" },
+        { x: 13, y: 9, t: "F6" },
+
+        // Row 10
+        { x: 11, y: 10, t: "F6" },
+        { x: 12, y: 10, t: "F6" },
+        { x: 13, y: 10, t: "F6" },
+        { x: 18, y: 10, t: "F6" },
+        { x: 19, y: 10, t: "F6" },
+        { x: 20, y: 10, t: "F6" },
+        { x: 21, y: 10, t: "F6" },
+        { x: 22, y: 10, t: "F6" },
+        { x: 23, y: 10, t: "F6" },
+
+        // Row 11
+        { x: 11, y: 11, t: "F6" },
+        { x: 12, y: 11, t: "F6" },
+        { x: 13, y: 11, t: "F6" },
+        { x: 14, y: 11, t: "S6E" }, // was S6W
+        { x: 15, y: 11, t: "S5E" }, // was S5W
+        { x: 16, y: 11, t: "S4E" }, // was S4W
+        { x: 17, y: 11, t: "F3" },
+        { x: 18, y: 11, t: "F6" },
+        { x: 19, y: 11, t: "F6" },
+        { x: 20, y: 11, t: "F6" },
+        { x: 21, y: 11, t: "F6" },
+        { x: 22, y: 11, t: "F6" },
+        { x: 23, y: 11, t: "F6" },
+
+        // Row 12
+        { x: 4, y: 12, t: "F0" },
+        { x: 5, y: 12, t: "F0" },
+        { x: 6, y: 12, t: "F0" },
+        { x: 7, y: 12, t: "F0" },
+        { x: 8, y: 12, t: "F0" },
+        { x: 9, y: 12, t: "F0" },
+        { x: 10, y: 12, t: "F0" },
+        { x: 18, y: 12, t: "F6" },
+        { x: 19, y: 12, t: "F6" },
+        { x: 20, y: 12, t: "F6" },
+        { x: 21, y: 12, t: "F6" },
+        { x: 22, y: 12, t: "F6" },
+        { x: 23, y: 12, t: "F6" },
+
+        // Row 13
+        { x: 4, y: 13, t: "F0" },
+        { x: 5, y: 13, t: "F0" },
+        { x: 6, y: 13, t: "F0" },
+        { x: 7, y: 13, t: "F0" },
+        { x: 8, y: 13, t: "F0" },
+        { x: 9, y: 13, t: "F0" },
+        { x: 10, y: 13, t: "F0" },
+        { x: 19, y: 13, t: "S6S" }, // was S6N
+        { x: 18, y: 13, t: "F6" },
+        { x: 20, y: 13, t: "F6" },
+        { x: 21, y: 13, t: "F6" },
+        { x: 22, y: 13, t: "F6" },
+        { x: 23, y: 13, t: "F6" },
+
+        // Row 14
+        { x: 4, y: 14, t: "F0" },
+        { x: 5, y: 14, t: "F0" },
+        { x: 6, y: 14, t: "F0" },
+        { x: 7, y: 14, t: "F0" },
+        { x: 8, y: 14, t: "F0" },
+        { x: 9, y: 14, t: "F0" },
+        { x: 10, y: 14, t: "F0" },
+        { x: 14, y: 14, t: "F3" },
+        { x: 15, y: 14, t: "F3" },
+        { x: 16, y: 14, t: "F3" },
+        { x: 17, y: 14, t: "F3" },
+        { x: 18, y: 14, t: "F3" },
+        { x: 19, y: 14, t: "S5S" }, // was S5N
+        { x: 20, y: 14, t: "F3" },
+
+        // Row 15
+        { x: 4, y: 15, t: "F0" },
+        { x: 5, y: 15, t: "F0" },
+        { x: 6, y: 15, t: "F0" },
+        { x: 7, y: 15, t: "P0" },
+        { x: 8, y: 15, t: "F0" },
+        { x: 9, y: 15, t: "F0" },
+        { x: 10, y: 15, t: "F0" },
+        { x: 11, y: 15, t: "S1W" }, // was S1E
+        { x: 12, y: 15, t: "S2W" }, // was S2E
+        { x: 13, y: 15, t: "S3W" }, // was S3E
+        { x: 14, y: 15, t: "F3" },
+        { x: 15, y: 15, t: "F3" },
+        { x: 16, y: 15, t: "F3" },
+        { x: 17, y: 15, t: "F3" },
+        { x: 18, y: 15, t: "F3" },
+        { x: 19, y: 15, t: "S4S" }, // was S4N
+
+        // Row 16
+        { x: 4, y: 16, t: "F0" },
+        { x: 5, y: 16, t: "F0" },
+        { x: 6, y: 16, t: "F0" },
+        { x: 7, y: 16, t: "F0" },
+        { x: 8, y: 16, t: "F0" },
+        { x: 9, y: 16, t: "F0" },
+        { x: 10, y: 16, t: "F0" },
+        { x: 13, y: 16, t: "F0" },
+        { x: 14, y: 16, t: "F3" },
+        { x: 15, y: 16, t: "F3" },
+        { x: 16, y: 16, t: "F3" },
+        { x: 17, y: 16, t: "F3" },
+        { x: 18, y: 16, t: "F3" },
+        { x: 19, y: 16, t: "F3" },
+
+        // Row 17
+        { x: 4, y: 17, t: "F0" },
+        { x: 5, y: 17, t: "F0" },
+        { x: 6, y: 17, t: "F0" },
+        { x: 7, y: 17, t: "F0" },
+        { x: 8, y: 17, t: "F0" },
+        { x: 9, y: 17, t: "F0" },
+        { x: 10, y: 17, t: "F0" },
+        { x: 13, y: 17, t: "F0" },
+        { x: 14, y: 17, t: "F0" },
+        { x: 15, y: 17, t: "F0" },
+        { x: 16, y: 17, t: "F0" },
+        { x: 17, y: 17, t: "F0" },
+
+        // Row 18
+        { x: 4, y: 18, t: "F0" },
+        { x: 5, y: 18, t: "F0" },
+        { x: 6, y: 18, t: "F0" },
+        { x: 7, y: 18, t: "F0" },
+        { x: 8, y: 18, t: "F0" },
+        { x: 9, y: 18, t: "F0" },
+        { x: 10, y: 18, t: "F0" },
+        { x: 11, y: 18, t: "F0" },
+        { x: 12, y: 18, t: "F0" },
+        { x: 13, y: 18, t: "F0" },
+        { x: 14, y: 18, t: "F0" },
+        { x: 15, y: 18, t: "F0" },
+
+        // Row 19
+        { x: 6, y: 19, t: "S1N" }, // was S1S
+        { x: 9, y: 19, t: "F0" },
+
+        // Row 20
+        { x: 6, y: 20, t: "S2N" }, // was S2S
+        { x: 9, y: 20, t: "F0" },
+
+        // Row 21
+        { x: 4, y: 21, t: "F2" },
+        { x: 5, y: 21, t: "F2" },
+        { x: 6, y: 21, t: "F2" },
+        { x: 7, y: 21, t: "F2" },
+        { x: 8, y: 21, t: "F2" },
+        { x: 9, y: 21, t: "F0" },
+
+        // Row 22
+        { x: 4, y: 22, t: "F2" },
+        { x: 5, y: 22, t: "F2" },
+        { x: 6, y: 22, t: "F2" },
+        { x: 7, y: 22, t: "F2" },
+        { x: 8, y: 22, t: "F2" },
+        { x: 9, y: 22, t: "F0" },
+        { x: 10, y: 22, t: "S1W" }, // was S1E
+        { x: 11, y: 22, t: "S2W" }, // was S2E
+        { x: 12, y: 22, t: "F2" },
+        { x: 13, y: 22, t: "F2" },
+        { x: 14, y: 22, t: "F2" },
+
+        // Row 23
+        { x: 4, y: 23, t: "F2" },
+        { x: 5, y: 23, t: "F2" },
+        { x: 6, y: 23, t: "F2" },
+        { x: 7, y: 23, t: "F2" },
+        { x: 8, y: 23, t: "F2" },
+    ],
+
+};
