@@ -175,6 +175,15 @@ type SurfaceHitOptions = {
     requireInside?: boolean;
 };
 
+function localPxForTile(tx: number, ty: number, wx: number, wy: number, tileWorld: number) {
+    const ox = wx - (tx + 0.5) * tileWorld;
+    const oy = wy - (ty + 0.5) * tileWorld;
+    const d = worldDeltaToScreen(ox, oy);
+    const lx = (d.dx / tileWorld) * 64 + 64;
+    const ly = (d.dy / (tileWorld * 0.5)) * 32 + 32;
+    return { lx, ly };
+}
+
 function tileSurfaceHitAtWorld(
     surface: Surface,
     wx: number,
