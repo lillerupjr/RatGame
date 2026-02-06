@@ -101,11 +101,11 @@ export function collisionsSystem(w: World, dt: number) {
   };
 
   const tryPlayerDisplace = (dx: number, dy: number) => {
-    let curInfo = walkInfo(px, py, KENNEY_TILE_WORLD);
+    let curInfo = walkInfo(px, py, KENNEY_TILE_WORLD, w.pz);
     const MAX_STEP_Z = 1.05;
 
     const tryMove = (wx: number, wy: number) => {
-      const nextInfo = walkInfo(wx, wy, KENNEY_TILE_WORLD);
+      const nextInfo = walkInfo(wx, wy, KENNEY_TILE_WORLD, curInfo.z);
       if (!nextInfo.walkable) return false;
 
       const stairsInvolved =
@@ -123,6 +123,8 @@ export function collisionsSystem(w: World, dt: number) {
 
       setPlayerAnchorFromWorld(wx, wy);
       w.pz = nextInfo.z;
+      w.pzVisual = nextInfo.zVisual;
+      w.pzLogical = nextInfo.zLogical;
       w.activeFloorH =
           nextInfo.kind === "STAIRS" ? (Math.floor(nextInfo.z + 0.5) | 0) : (nextInfo.floorH | 0);
       curInfo = nextInfo;

@@ -45,12 +45,12 @@ export function isEnemyHit(
                       2;
 
 
-  const ezFeet = (w as any).ez?.[e] ?? 0; // stored by movement on stairs
+  const ezFeet = w.ezVisual?.[e] ?? 0; // stored by movement on stairs
   const ezMin = ezFeet;
   const ezMax = ezFeet + HIT_HEIGHT_Z;
 
 
-  const pz = (w as any).prZ?.[p] ?? (w as any).pz ?? 0;
+  const pz = w.prZVisual?.[p] ?? w.prZ?.[p] ?? w.pzVisual ?? w.pz ?? 0;
 
   // vertical overlap test (symmetric)
   const zHit = pz >= (ezMin - PROJECTILE_Z_RADIUS) && pz <= (ezMax + PROJECTILE_Z_RADIUS);
@@ -114,8 +114,8 @@ export function isPlayerHit(w: World, e: number, playerR: number): boolean {
                   et === 99 ? 3 :
                       1;
 
-  const pzFeet = (w as any).pz ?? 0;
-  const ezFeet = (w as any).ez?.[e] ?? 0;
+  const pzFeet = w.pzVisual ?? w.pz ?? 0;
+  const ezFeet = w.ezVisual?.[e] ?? 0;
 
   const pzMin = pzFeet;
   const pzMax = pzFeet + PLAYER_HIT_HEIGHT_Z;
@@ -144,11 +144,11 @@ export function isPlayerProjectileHit(w: World, p: number, playerR: number): boo
   const PLAYER_HIT_HEIGHT_Z = 0.9;
   const PROJECTILE_Z_RADIUS = 0.25;
 
-  const pzFeet = (w as any).pz ?? 0;
+  const pzFeet = w.pzVisual ?? w.pz ?? 0;
   const pzMin = pzFeet;
   const pzMax = pzFeet + PLAYER_HIT_HEIGHT_Z;
 
-  const projZ = (w as any).prZ?.[p] ?? pzFeet;
+  const projZ = w.prZVisual?.[p] ?? w.prZ?.[p] ?? pzFeet;
 
   // symmetric overlap: projectile z within player's range (with thickness)
   const zHit = projZ >= (pzMin - PROJECTILE_Z_RADIUS) && projZ <= (pzMax + PROJECTILE_Z_RADIUS);

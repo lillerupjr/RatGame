@@ -3,7 +3,7 @@
 // Generic “visibility / occlusion” queries built on top of the map's occlusion height.
 //
 // Why this exists:
-// - Projectiles currently call heightAtWorldOcclusion directly.
+// - Projectiles currently call zOcclusionAtWorld directly.
 // - Future systems (LOS, connectors, enemy vision, shadow/decal placement)
 //   should all consume ONE shared visibility primitive instead of re-implementing
 //   sampling, epsilon rules, and stepping.
@@ -12,7 +12,7 @@
 // - Occlusion is a *ceiling/top-face* concept (integer heights + apron extension).
 // - Stairs ramps do not create ceilings; the occlusion height model already enforces this.
 
-import { heightAtWorldOcclusion } from "./kenneyMap";
+import { zOcclusionAtWorld } from "./kenneyMap";
 import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
 
 // How far below occlusion ceiling counts as "under"
@@ -26,7 +26,7 @@ export let VISIBILITY_SEGMENT_BASE_STEPS = 1;
 
 /** Convenience wrapper so call sites don't need to know which map fn provides occlusion. */
 export function occlusionHeightAtWorld(wx: number, wy: number, tileWorld: number = KENNEY_TILE_WORLD): number {
-    return heightAtWorldOcclusion(wx, wy, tileWorld);
+    return zOcclusionAtWorld(wx, wy, tileWorld);
 }
 
 /**
@@ -40,8 +40,8 @@ export function isUnderOcclusionCeiling(
     tileWorld: number = KENNEY_TILE_WORLD,
     eps: number = VISIBILITY_BELOW_CEILING_EPS
 ): boolean {
-    const occZ = occlusionHeightAtWorld(wx, wy, tileWorld);
-    return pzAbs < occZ - eps;
+    const zOcclusion = occlusionHeightAtWorld(wx, wy, tileWorld);
+    return pzAbs < zOcclusion - eps;
 }
 
 /**

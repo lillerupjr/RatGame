@@ -15,14 +15,16 @@ import { getEnemySpriteFrame, preloadEnemySprites } from "../visual/enemySprites
 import {
   isHoleTile,
   getTile,
-  tileHeight,
   heightAtWorld,
   getWalkOutlineLocalPx,
   walkInfo,
-  heightAtWorldOcclusion,
+  zOcclusionAtWorld,
   getRampFacesForDebug,
   pointInQuad,
   rampHeightAt,
+  surfaceHitAtWorld,
+  surfacesAtXY,
+  type Surface,
 } from "../map/kenneyMap";
 
 import {
@@ -32,7 +34,7 @@ import {
   PROJECTILE_BASE_DRAW_PX,
 } from "../visual/projectileSprites";
 
-import { worldDeltaToScreen, worldToScreen, ISO_X, ISO_Y, depthKey } from "../visual/iso";
+import { worldDeltaToScreen, worldToScreen, ISO_X, ISO_Y } from "../visual/iso";
 
 import { getKenneyGroundTile, KENNEY_TILE_WORLD, KENNEY_TILE_ANCHOR_Y } from "../visual/kenneyTiles";
 import {
@@ -120,6 +122,15 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   const tileHAtWorld = (x: number, y: number) => heightAtWorld(x, y, KENNEY_TILE_WORLD);
 
+  const DEPTH_EPS_X = 1e-3;
+  const DEPTH_EPS_Z = 1e-4;
+  const DEPTH_EPS_ID = 1e-6;
+
+  const renderDepthFor = (x: number, y: number, zVisual: number, stableId: number) => {
+    const sp = worldToScreen(x, y);
+    return sp.y + sp.x * DEPTH_EPS_X + zVisual * DEPTH_EPS_Z + stableId * DEPTH_EPS_ID;
+  };
+
   const snapToNearestWalkableGround = (x: number, y: number) => {
     // If we're already on walkable top-face, keep it.
     const i0 = walkInfo(x, y, T);
@@ -160,17 +171,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   const floorFromZ = (z: number) => Math.floor(z + 1e-6);
 
-  const tileLayer = (tx: number, ty: number) => {
-    const t = getTile(tx, ty);
-    return t.kind === "STAIRS" ? (t.h ?? 0) + STAIR_LAYER_OFFSET : tileHeight(tx, ty);
-  };
-
   const entityLayerAt = (x: number, y: number, zAbs: number) => {
-    const tx = Math.floor(x / T);
-    const ty = Math.floor(y / T);
-    const tl = tileLayer(tx, ty);
-    const zl = floorFromZ(zAbs);
-    return Math.max(zl, tl);
+    const hit = surfaceHitAtWorld(x, y, T, zAbs, {
+      includeBlocked: true,
+      requireInside: false,
+    });
+    return hit ? hit.zLogical : floorFromZ(zAbs);
   };
 
   const toScreen = (x: number, y: number) => {
@@ -180,14 +186,25 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     return { x: p.x + camX, y: p.y + camY - elev };
   };
 
+  const maxNonStairSurfaceZ = (tx: number, ty: number): number | null => {
+    const surfaces = surfacesAtXY(tx, ty);
+    if (surfaces.length === 0) return null;
+    let best: number | null = null;
+    for (let i = 0; i < surfaces.length; i++) {
+      const s = surfaces[i];
+      if (s.tile.kind === "STAIRS") continue;
+      const z = s.zBase;
+      if (best === null || z > best) best = z;
+    }
+    return best;
+  };
+
   // Decide if a floor tile should emit a curtain (edge-only)
-  const shouldEmitFloorCurtain = (tx: number, ty: number) => {
+  const shouldEmitFloorCurtain = (surface: Surface) => {
     if (!FLOOR_CURTAIN_EDGES_ONLY) return true;
 
-    const here = getTile(tx, ty);
-    if (here.kind === "STAIRS") return false;
-
-    const hHere = tileHeight(tx, ty);
+    if (surface.tile.kind === "STAIRS") return false;
+    const hHere = surface.zBase;
 
     const neigh: Array<[number, number]> = [
       [0, 1], // S
@@ -196,16 +213,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     ];
 
     for (const [dx, dy] of neigh) {
-      const nx = tx + dx;
-      const ny = ty + dy;
+      const nx = surface.tx + dx;
+      const ny = surface.ty + dy;
 
-      if (isHoleTile(nx, ny)) return true;
-
-      const n = getTile(nx, ny);
-      if (n.kind === "STAIRS") continue;
-
-      const hN = tileHeight(nx, ny);
-      if (hN < hHere) return true;
+      const nMax = maxNonStairSurfaceZ(nx, ny);
+      if (nMax === null) return true;
+      if (nMax < hHere) return true;
     }
 
     return false;
@@ -222,6 +235,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   };
 
   const curtainsByLayer = new Map<number, CurtainDraw[]>();
+  let curtainId = 0;
   const addCurtain = (layer: number, c: CurtainDraw) => {
     const list = curtainsByLayer.get(layer);
     if (list) list.push(c);
@@ -304,8 +318,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         // match tile draw rules
         if (!RENDER_ALL_HEIGHTS) {
           if (tdef.kind !== "STAIRS") {
-            const h0 = tileHeight(tx, ty);
-            if (h0 !== activeH) continue;
+            const h0 = maxNonStairSurfaceZ(tx, ty);
+            if (h0 === null || h0 !== activeH) continue;
           } else {
             const hs = tdef.h ?? 0;
             if (Math.abs(hs - activeH) > 1) continue;
@@ -451,10 +465,13 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
     for (let ty = minTy; ty <= maxTy; ty++) {
       for (let tx = minTx; tx <= maxTx; tx++) {
-        if (isHoleTile(tx, ty)) continue;
-        const h = tileLayer(tx, ty);
-        if (h < minLayer) minLayer = h;
-        if (h > maxLayer) maxLayer = h;
+        const surfaces = surfacesAtXY(tx, ty);
+        if (surfaces.length === 0) continue;
+        for (let i = 0; i < surfaces.length; i++) {
+          const h = surfaces[i].zLogical;
+          if (h < minLayer) minLayer = h;
+          if (h > maxLayer) maxLayer = h;
+        }
       }
     }
 
@@ -465,13 +482,13 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   }
 
   if (RENDER_ALL_HEIGHTS) {
-    const pzAbs = (w as any).pz ?? tileHAtWorld(px, py);
+    const pzAbs = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
     const pLayer = entityLayerAt(px, py, pzAbs);
     const pRenderLayer = pLayer + 1;
     minLayer = Math.min(minLayer, pRenderLayer);
     maxLayer = Math.max(maxLayer, pRenderLayer);
 
-    const ez = (w as any).ez as number[] | undefined;
+    const ez = w.ezVisual;
     for (let i = 0; i < w.eAlive.length; i++) {
       if (!w.eAlive[i]) continue;
       const ew = getEnemyWorld(w, i, KENNEY_TILE_WORLD);
@@ -485,7 +502,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       if (!w.pAlive[i]) continue;
       const pp = getProjectileWorld(w, i, KENNEY_TILE_WORLD);
       const baseH = tileHAtWorld(pp.wx, pp.wy);
-      const zAbs = (w.prZ?.[i] ?? baseH) || 0;
+      const zAbs = (w.prZVisual?.[i] ?? w.prZ?.[i] ?? baseH) || 0;
       const h = entityLayerAt(pp.wx, pp.wy, zAbs);
       minLayer = Math.min(minLayer, h);
       maxLayer = Math.max(maxLayer, h);
@@ -538,7 +555,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const zy = sn.y;
 
     const groundZ = sn.z;
-    const occZ = heightAtWorldOcclusion(zx, zy, KENNEY_TILE_WORLD);
+    const occZ = zOcclusionAtWorld(zx, zy, KENNEY_TILE_WORLD);
 
     const DECAL_OCCLUSION_EPS = 0.05;
     if (groundZ < occZ - DECAL_OCCLUSION_EPS) continue;
@@ -558,11 +575,15 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const xp = getPickupWorld(w, i, KENNEY_TILE_WORLD);
     const zAbs = tileHAtWorld(xp.wx, xp.wy);
     const h = entityLayerAt(xp.wx, xp.wy, zAbs);
-    addItem(itemsByLayer, h, { kind: "pickup", i, depth: depthKey(xp.wx, xp.wy) });
+    addItem(itemsByLayer, h, {
+      kind: "pickup",
+      i,
+      depth: renderDepthFor(xp.wx, xp.wy, zAbs, 10000 + i),
+    });
   }
 
   // Enemy Z buffer (optional)
-  const ez = (w as any).ez as number[] | undefined;
+  const ez = w.ezVisual;
 
   // Projectiles
   for (let i = 0; i < w.pAlive.length; i++) {
@@ -571,10 +592,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
     const pp = getProjectileWorld(w, i, KENNEY_TILE_WORLD);
     const baseH = tileHAtWorld(pp.wx, pp.wy);
-    const pzAbs = (w.prZ?.[i] ?? baseH) || 0;
+    const pzAbs = (w.prZVisual?.[i] ?? w.prZ?.[i] ?? baseH) || 0;
 
     const zLift = (pzAbs - baseH) * ELEV_PX;
-    const depth = depthKey(pp.wx, pp.wy);
+    const depth = renderDepthFor(pp.wx, pp.wy, pzAbs, 20000 + i);
 
     addItem(itemsByLayer, entityLayerAt(pp.wx, pp.wy, pzAbs), {
       kind: "projectile",
@@ -593,18 +614,18 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     addItem(itemsByLayer, entityLayerAt(ew.wx, ew.wy, zAbs), {
       kind: "enemy",
       i,
-      depth: depthKey(ew.wx, ew.wy),
+      depth: renderDepthFor(ew.wx, ew.wy, zAbs, 30000 + i),
     });
   }
 
   // Player
-  const pzAbs2 = (w as any).pz ?? tileHAtWorld(px, py);
+  const pzAbs2 = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
   const pBaseLayer = entityLayerAt(px, py, pzAbs2);
   const pRenderLayer = RENDER_ALL_HEIGHTS ? pBaseLayer + 1 : pBaseLayer;
 
   addItem(itemsByLayer, pRenderLayer, {
     kind: "player",
-    depth: depthKey(px, py),
+    depth: renderDepthFor(px, py, pzAbs2, 0),
   });
 
   // ----------------------------
@@ -618,143 +639,146 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const ty0 = Math.max(minTy, s - maxTx);
       const ty1 = Math.min(maxTy, s - minTx);
 
-      for (let ty = ty1; ty >= ty0; ty--) {
-        const tx = s - ty;
+        for (let ty = ty1; ty >= ty0; ty--) {
+          const tx = s - ty;
 
-        if (isHoleTile(tx, ty)) continue;
-        if (RENDER_ALL_HEIGHTS && tileLayer(tx, ty) !== layer) continue;
+          const surfaces = surfacesAtXY(tx, ty);
+          if (surfaces.length === 0) continue;
 
-        const tdef = getTile(tx, ty);
-        const useStairs = tdef.kind === "STAIRS";
+          for (let si = 0; si < surfaces.length; si++) {
+            const surface = surfaces[si];
+            const tdef = surface.tile;
+            const useStairs = tdef.kind === "STAIRS";
 
-        // Optional filter to active floor when not rendering all
-        if (!RENDER_ALL_HEIGHTS) {
-          if (!useStairs) {
-            const h0 = tileHeight(tx, ty);
-            if (h0 !== activeH) continue;
-          } else {
-            const hs = tdef.h ?? 0;
-            if (Math.abs(hs - activeH) > 1) continue;
-          }
-        }
+            if (RENDER_ALL_HEIGHTS && surface.zLogical !== layer) continue;
 
-        const dir4 = ((tdef.dir as ("N" | "E" | "S" | "W" | undefined)) ?? "N");
+            // Optional filter to active floor when not rendering all
+            if (!RENDER_ALL_HEIGHTS) {
+              if (!useStairs) {
+                if (surface.zLogical !== activeH) continue;
+              } else {
+                const hs = tdef.h ?? 0;
+                if (Math.abs(hs - activeH) > 1) continue;
+              }
+            }
 
-        const topRec = useStairs ? getStairTop(dir4) : getFloorTop();
-        if (!topRec?.ready || !topRec.img || topRec.img.width <= 0 || topRec.img.height <= 0) continue;
+            const dir4 = ((tdef.dir as ("N" | "E" | "S" | "W" | undefined)) ?? "N");
 
-        const topImg = topRec.img;
-        const topW = topImg.width * TILE_SCALE;
-        const topH = topImg.height * TILE_SCALE;
+            const topRec = useStairs ? getStairTop(dir4) : getFloorTop();
+            if (!topRec?.ready || !topRec.img || topRec.img.width <= 0 || topRec.img.height <= 0) continue;
 
-        const wx = (tx + 0.5) * T;
-        const wy = (ty + 0.5) * T;
+            const topImg = topRec.img;
+            const topW = topImg.width * TILE_SCALE;
+            const topH = topImg.height * TILE_SCALE;
 
-        const p = worldToScreen(wx, wy);
-        const dx = p.x + camX - topW * 0.5;
+            const wx = (tx + 0.5) * T;
+            const wy = (ty + 0.5) * T;
 
-        const stairsAnchorY = 0.62;
-        const anchorY = useStairs ? stairsAnchorY : ANCHOR_Y;
+            const p = worldToScreen(wx, wy);
+            const dx = p.x + camX - topW * 0.5;
 
-        let dy = p.y + camY - topH * anchorY;
-        dy += TILE_ART_Y_SHIFT_PX;
+            const stairsAnchorY = 0.62;
+            const anchorY = useStairs ? stairsAnchorY : ANCHOR_Y;
 
-        // keep your current per-dir tweak hook (tune later)
-        const STAIRS_DY_BY_DIR: Partial<Record<"N" | "E" | "S" | "W", number>> = {
-          N: 24,
-          E: 16,
-          S: 16,
-          W: 24,
-        };
-        if (useStairs) dy += STAIRS_DY_BY_DIR[dir4] ?? 16;
+            let dy = p.y + camY - topH * anchorY;
+            dy += TILE_ART_Y_SHIFT_PX;
 
-        const h = useStairs ? (tdef.h ?? 0) : tileHeight(tx, ty);
-        dy -= h * ELEV_PX;
-
-        // Draw TOP
-        ctx.globalAlpha = 1;
-        ctx.drawImage(topImg, dx, dy, topW, topH);
-
-        // Queue APRON
-        const queueApron = (apronImg: HTMLImageElement, flipX: boolean) => {
-          if (!apronImg || apronImg.width <= 0 || apronImg.height <= 0) return;
-
-          const aw = apronImg.width * TILE_SCALE;
-          const ah = apronImg.height * TILE_SCALE;
-
-          const ax = dx + (topW - aw) * 0.5;
-          const ay = dy + topH - APRON_JOIN_PX;
-
-          addCurtain(layer, {
-            img: apronImg,
-            dx: ax,
-            dy: ay,
-            dw: aw,
-            dh: ah,
-            depth: depthKey(wx, wy),
-            flipX,
-          });
-        };
-
-        if (useStairs) {
-          const a = getStairApron(dir4);
-          if (a?.rec?.ready && a.rec.img && a.rec.img.width > 0 && a.rec.img.height > 0) {
-            queueApron(a.rec.img, !!a.flipX);
-          }
-        } else if (FLOOR_CURTAINS && shouldEmitFloorCurtain(tx, ty)) {
-          let apronKind: "S" | "DIAG" = "S";
-          let flipX = false;
-
-          const hHere = tileHeight(tx, ty);
-
-          const checkDrop = (nx: number, ny: number) => {
-            if (isHoleTile(nx, ny)) return true;
-            const n = getTile(nx, ny);
-            if (n.kind === "STAIRS") return false;
-            return tileHeight(nx, ny) < hHere;
-          };
-
-          if (checkDrop(tx, ty + 1)) {
-            apronKind = "S";
-            flipX = false;
-          } else if (checkDrop(tx + 1, ty + 1)) {
-            apronKind = "DIAG";
-            flipX = false; // SE
-          } else if (checkDrop(tx - 1, ty + 1)) {
-            apronKind = "DIAG";
-            flipX = true; // SW mirror
-          }
-
-          const fr = getFloorApron(apronKind);
-          if (fr?.ready && fr.img && fr.img.width > 0 && fr.img.height > 0) {
-            // Compensate for apron art anchor differences (tune if assets change).
-            const FLOOR_APRON_DY_BY_KIND: Record<"S" | "DIAG", number> = {
-              S: -100,
-              DIAG: -100,
+            // keep your current per-dir tweak hook (tune later)
+            const STAIRS_DY_BY_DIR: Partial<Record<"N" | "E" | "S" | "W", number>> = {
+              N: 24,
+              E: 16,
+              S: 16,
+              W: 24,
             };
-            const dyOffset = FLOOR_APRON_DY_BY_KIND[apronKind] ?? 0;
-            if (dyOffset !== 0) {
-              // Requeue with adjusted Y without touching queueApron signature.
-              const aw = fr.img.width * TILE_SCALE;
-              const ah = fr.img.height * TILE_SCALE;
+            if (useStairs) dy += STAIRS_DY_BY_DIR[dir4] ?? 16;
+
+            const h = surface.zBase;
+            dy -= h * ELEV_PX;
+
+            // Draw TOP
+            ctx.globalAlpha = 1;
+            ctx.drawImage(topImg, dx, dy, topW, topH);
+
+            // Queue APRON
+            const queueApron = (apronImg: HTMLImageElement, flipX: boolean) => {
+              if (!apronImg || apronImg.width <= 0 || apronImg.height <= 0) return;
+
+              const aw = apronImg.width * TILE_SCALE;
+              const ah = apronImg.height * TILE_SCALE;
+
               const ax = dx + (topW - aw) * 0.5;
-              const ay = dy + topH - APRON_JOIN_PX + dyOffset;
+              const ay = dy + topH - APRON_JOIN_PX;
+
               addCurtain(layer, {
-                img: fr.img,
+                img: apronImg,
                 dx: ax,
                 dy: ay,
                 dw: aw,
                 dh: ah,
-                depth: depthKey(wx, wy),
+                depth: renderDepthFor(wx, wy, h, curtainId++),
                 flipX,
               });
-            } else {
-              queueApron(fr.img, flipX);
+            };
+
+            if (useStairs) {
+              const a = getStairApron(dir4);
+              if (a?.rec?.ready && a.rec.img && a.rec.img.width > 0 && a.rec.img.height > 0) {
+                queueApron(a.rec.img, !!a.flipX);
+              }
+            } else if (FLOOR_CURTAINS && shouldEmitFloorCurtain(surface)) {
+              let apronKind: "S" | "DIAG" = "S";
+              let flipX = false;
+
+              const hHere = surface.zBase;
+
+              const checkDrop = (nx: number, ny: number) => {
+                const nMax = maxNonStairSurfaceZ(nx, ny);
+                if (nMax === null) return true;
+                return nMax < hHere;
+              };
+
+              if (checkDrop(tx, ty + 1)) {
+                apronKind = "S";
+                flipX = false;
+              } else if (checkDrop(tx + 1, ty + 1)) {
+                apronKind = "DIAG";
+                flipX = false; // SE
+              } else if (checkDrop(tx - 1, ty + 1)) {
+                apronKind = "DIAG";
+                flipX = true; // SW mirror
+              }
+
+              const fr = getFloorApron(apronKind);
+              if (fr?.ready && fr.img && fr.img.width > 0 && fr.img.height > 0) {
+                // Compensate for apron art anchor differences (tune if assets change).
+                const FLOOR_APRON_DY_BY_KIND: Record<"S" | "DIAG", number> = {
+                  S: -100,
+                  DIAG: -100,
+                };
+                const dyOffset = FLOOR_APRON_DY_BY_KIND[apronKind] ?? 0;
+                if (dyOffset !== 0) {
+                  // Requeue with adjusted Y without touching queueApron signature.
+                  const aw = fr.img.width * TILE_SCALE;
+                  const ah = fr.img.height * TILE_SCALE;
+                  const ax = dx + (topW - aw) * 0.5;
+                  const ay = dy + topH - APRON_JOIN_PX + dyOffset;
+                  addCurtain(layer, {
+                    img: fr.img,
+                    dx: ax,
+                    dy: ay,
+                    dw: aw,
+                    dh: ah,
+                    depth: renderDepthFor(wx, wy, hHere, curtainId++),
+                    flipX,
+                  });
+                } else {
+                  queueApron(fr.img, flipX);
+                }
+              }
             }
           }
         }
       }
-    }
 
     // 2) Zones (same as your version)
     const zoneLayer = zonesByLayer.get(layer);
@@ -954,7 +978,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           const sy = sn.y;
           const groundZ = sn.z;
 
-          const occZ = heightAtWorldOcclusion(sx, sy, KENNEY_TILE_WORLD);
+          const occZ = zOcclusionAtWorld(sx, sy, KENNEY_TILE_WORLD);
           const SHADOW_OCCLUSION_EPS = 0.05;
           const shadowOccluded = groundZ < occZ - SHADOW_OCCLUSION_EPS;
 

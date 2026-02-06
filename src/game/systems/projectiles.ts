@@ -64,8 +64,16 @@ export function projectilesSystem(w: World, dt: number) {
         w.prgoy[i] = gp.gy - gyi;
     };
 
+    const syncProjectileZ = (i: number) => {
+        const zVisual = w.prZVisual?.[i] ?? w.prZ?.[i] ?? 0;
+        w.prZVisual[i] = zVisual;
+        w.prZLogical[i] = Math.floor(zVisual + 1e-6);
+        w.prZ[i] = zVisual;
+    };
+
     for (let i = 0; i < w.pAlive.length; i++) {
         if (!w.pAlive[i]) continue;
+        syncProjectileZ(i);
         const wp0 = getProjectileWorld(w, i, T);
         let ox = wp0.wx;
         let oy = wp0.wy;
@@ -149,12 +157,12 @@ export function projectilesSystem(w: World, dt: number) {
                     const sx = ox + segDx * tt;
                     const sy = oy + segDy * tt;
 
-                    const pzAbs = (w.prZ?.[i] ?? 0);
+                    const pzAbs = w.prZVisual[i] ?? w.prZ?.[i] ?? 0;
 
                     // Open-stairs rule:
                     // - Stairs do NOT visually hide projectiles
                     // - But stairs DO block projectiles if they collide at the stair surface height
-                    const wi = walkInfo(sx, sy, T);
+                    const wi = walkInfo(sx, sy, T, pzAbs);
                     if (wi.walkable && wi.kind === "STAIRS") {
                         const dz = Math.abs(pzAbs - wi.z);
                         if (dz <= PROJECTILE_STAIRS_Z_TOL) {
@@ -262,10 +270,10 @@ export function projectilesSystem(w: World, dt: number) {
             }
 
             if (w.pAlive[i]) {
-                const info: WalkInfo = walkInfo(ox, oy, T);
+                const info: WalkInfo = walkInfo(ox, oy, T, w.prZVisual[i] ?? w.prZ?.[i]);
                 if (info.kind === "STAIRS" && info.walkable) {
                     const stairZ = heightAtWorld(ox, oy, T);
-                    const dz = Math.abs((w.prZ[i] ?? 0) - stairZ);
+                    const dz = Math.abs((w.prZVisual[i] ?? w.prZ[i] ?? 0) - stairZ);
                     if (dz <= PROJECTILE_STAIRS_Z_TOL) {
                         w.pAlive[i] = false;
                     }
@@ -327,6 +335,7 @@ export function projectilesSystem(w: World, dt: number) {
         if (w.prLastHitCd[i] > 0) w.prLastHitCd[i] = Math.max(0, w.prLastHitCd[i] - dt);
 
         if (w.pAlive[i]) {
+            syncProjectileZ(i);
             syncProjectileGrid(i, ox, oy);
         }
     }

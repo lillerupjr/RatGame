@@ -199,9 +199,9 @@ export function zonesSystem(w: World, dt: number) {
             if (!w.eAlive[e]) continue;
 
             // Gate by floor:
-            // enemies store continuous Z in (w as any).ez, and we already have the integer active floor.
+            // enemies store continuous Z in w.ezVisual, and we already have the integer active floor.
             // We’ll treat an enemy as “on a floor” by rounding its z to integer.
-            const ez = ((w as any).ez?.[e] ?? 0) as number;
+            const ez = (w.ezVisual?.[e] ?? 0) as number;
             const enemyFloor = (ez + 0.00001) | 0; // stable int floor
 
             if (enemyFloor !== zoneFloor) continue;

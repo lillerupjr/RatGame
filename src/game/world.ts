@@ -111,6 +111,8 @@ export type World = {
 
   // Continuous elevation (Milestone B/C). Typically map-driven.
   pz: number;
+  pzVisual: number;
+  pzLogical: number;
 
   pvx: number;
   pvy: number;
@@ -185,6 +187,8 @@ export type World = {
   eR: number[];
   eSpeed: number[];
   eDamage: number[];
+  ezVisual: number[];
+  ezLogical: number[];
 
   // Poison (enemy status)
   ePoisonT: number[];
@@ -227,6 +231,8 @@ export type World = {
 
   // Milestone C: projectile height (continuous)
   prZ: number[];
+  prZVisual: number[];
+  prZLogical: number[];
   // Milestone C: can this projectile hit the player?
   prHitsPlayer: boolean[];
 
@@ -391,6 +397,8 @@ export function createWorld(args: CreateWorldArgs): World {
     pgox: 0,
     pgoy: 0,
     pz: 0,
+    pzVisual: 0,
+    pzLogical: 0,
     pvx: 0,
     pvy: 0,
     pvz: 0,
@@ -447,6 +455,8 @@ export function createWorld(args: CreateWorldArgs): World {
     eR: [],
     eSpeed: [],
     eDamage: [],
+    ezVisual: [],
+    ezLogical: [],
 
     ePoisonT: [],
     ePoisonDps: [],
@@ -479,6 +489,8 @@ export function createWorld(args: CreateWorldArgs): World {
     prgox: [],
     prgoy: [],
     prZ: [],
+    prZVisual: [],
+    prZLogical: [],
     prHitsPlayer: [],
     prvx: [],
     prvy: [],
@@ -570,6 +582,8 @@ export function createWorld(args: CreateWorldArgs): World {
     w.pgoy = gp.gy - w.pgyi;
 
     w.pz = sp.z;
+    w.pzVisual = sp.z;
+    w.pzLogical = sp.h | 0;
     w.activeFloorH = sp.h | 0;
   }
 

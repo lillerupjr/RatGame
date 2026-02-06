@@ -21,8 +21,8 @@ function createMockWorld(overrides: Partial<World> = {}): World {
   } as World;
 
   // Milestone C: provide Z buffers for contact hit tests
-  (w as any).pz ??= 0;
-  (w as any).ez ??= [0];
+  (w as any).pzVisual ??= 0;
+  (w as any).ezVisual ??= [0];
 
   return w;
 }
@@ -84,8 +84,8 @@ describe("hitDetection", () => {
       // Same XY overlap would normally be true:
       // playerR=10, enemyR=10, dist=15 -> overlap in XY.
       // But different Z should block contact hit.
-      (w as any).pz = 0;
-      (w as any).ez = [10]; // enemy 10 units above
+      (w as any).pzVisual = 0;
+      (w as any).ezVisual = [10]; // enemy 10 units above
 
       expect(isPlayerHit(w, 0, 10)).toBe(false);
     });

@@ -110,7 +110,7 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     // Fire at +1 height step so shots "travel above" the stair ramp from the lower floor.
     // (We still keep the stair collision rule at projectileHeight+1.)
     const HIT_MUZZLE_Z = 1.0;
-    const shooterZ = (w as any).pz ?? 0;
+    const shooterZ = w.pzVisual ?? w.pz ?? 0;
     const projZ = Number.isFinite(a.z as any) ? (a.z as number) : (shooterZ + HIT_MUZZLE_Z);
 
 
@@ -132,6 +132,8 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
 
     // Milestone C: projectile height (keep index-aligned)
     w.prZ.push(projZ);
+    w.prZVisual.push(projZ);
+    w.prZLogical.push(Math.floor(projZ + 1e-6));
 
     // Milestone C: projectile can-hit-player flag (keep index-aligned)
     w.prHitsPlayer.push(!!a.hitsPlayer);

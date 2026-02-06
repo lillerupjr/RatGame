@@ -21,6 +21,18 @@ export type IsoTile = {
     stairStepIndex?: number; // 0..n-1 low->high within a staircase group
 };
 
+export type SurfaceKind = "TILE_TOP";
+
+export type Surface = {
+    id: string;
+    kind: SurfaceKind;
+    tx: number;
+    ty: number;
+    zBase: number;
+    zLogical: number;
+    tile: IsoTile;
+};
+
 export type CompiledKenneyMap = {
     id: string;
     originTx: number;
@@ -39,6 +51,8 @@ export type CompiledKenneyMap = {
     goalH: number;
 
     getTile(tx: number, ty: number): IsoTile;
+    surfacesByKey: Map<string, Surface[]>;
+    surfacesAtXY(tx: number, ty: number): Surface[];
 };
 
 // Parse tokens like: F0, F5, S0W, S3N, S4S, S5, P0, C2E
@@ -208,6 +222,41 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         return placed.get(`${x},${y}`) ?? { kind: "VOID", h: 0 };
     }
 
+    const surfacesByKey = new Map<string, Surface[]>();
+
+    function addSurface(surface: Surface) {
+        const k = `${surface.tx},${surface.ty}`;
+        const list = surfacesByKey.get(k);
+        if (list) list.push(surface);
+        else surfacesByKey.set(k, [surface]);
+    }
+
+    for (const [key, tile] of placed.entries()) {
+        if (tile.kind === "VOID") continue;
+        const parts = key.split(",");
+        const tableX = parseInt(parts[0], 10);
+        const tableY = parseInt(parts[1], 10);
+        if (!Number.isFinite(tableX) || !Number.isFinite(tableY)) continue;
+
+        const tx = tableX + originTx;
+        const ty = tableY + originTy;
+        const zBase = tile.h | 0;
+
+        addSurface({
+            id: `tile_${tx}_${ty}_${tile.kind}_${zBase}`,
+            kind: "TILE_TOP",
+            tx,
+            ty,
+            zBase,
+            zLogical: zBase,
+            tile,
+        });
+    }
+
+    function surfacesAtXY(tx: number, ty: number): Surface[] {
+        return surfacesByKey.get(`${tx},${ty}`) ?? [];
+    }
+
     // Convert authored spawn table coords -> tile coords.
     // Fallback: selection center.
     const spawnTx = (spawnTableX ?? Math.floor(def.w / 2)) + originTx;
@@ -234,5 +283,7 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         goalH,
 
         getTile,
+        surfacesByKey,
+        surfacesAtXY,
     };
 }

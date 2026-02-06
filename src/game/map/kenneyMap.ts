@@ -9,6 +9,7 @@ import {
     type IsoTile,
     type IsoTileKind,
     type StairDir,
+    type Surface,
     type CompiledKenneyMap,
 } from "./kenneyMapLoader";
 import type { TableMapDef } from "./tableMapTypes";
@@ -17,10 +18,34 @@ import { gridToWorld, worldToGrid } from "../coords/grid";
 import { generateFloorMap } from "./proceduralMap";
 import {EXCEL_SANCTUARY_01} from "./maps";
 
-export type { IsoTileKind, IsoTile } from "./kenneyMapLoader";
+export type { IsoTileKind, IsoTile, Surface } from "./kenneyMapLoader";
 
 // Plane tiles are visually 2 units tall; lower their placement by 1 unit.
 export const PLANE_TILE_Z_OFFSET = -1;
+
+export type ZRoles = {
+    zLogical: number;
+    zVisual: number;
+    zOcclusion: number;
+};
+
+export type RampSurface = {
+    id: string;
+    kind: "RAMP_FACE";
+    tx: number;
+    ty: number;
+    zBase: number;
+    ramp: RampFace;
+};
+
+export type SurfaceLike = Surface | RampSurface;
+
+export type SurfaceHit = {
+    surface: SurfaceLike;
+    zVisual: number;
+    zLogical: number;
+    isRamp: boolean;
+};
 
 /**
  * A simple deterministic "Arcane Sanctuary" layout in tile-space.
@@ -124,6 +149,191 @@ export function tileHeight(tx: number, ty: number): number {
 export function heightAtGrid(gx: number, gy: number, tileWorld: number): number {
     const { wx, wy } = gridToWorld(gx, gy, tileWorld);
     return heightAtWorld(wx, wy, tileWorld);
+}
+
+/** Return all authored surfaces at a tile coordinate. */
+export function surfacesAtXY(tx: number, ty: number): Surface[] {
+    return _compiled.surfacesAtXY(tx, ty);
+}
+
+type SurfaceHitOptions = {
+    includeBlocked?: boolean;
+    requireInside?: boolean;
+};
+
+function tileSurfaceHitAtWorld(
+    surface: Surface,
+    wx: number,
+    wy: number,
+    tileWorld: number,
+    options: SurfaceHitOptions
+): SurfaceHit | null {
+    if (surface.kind !== "TILE_TOP") return null;
+    if (surface.tile.kind === "VOID") return null;
+
+    const includeBlocked = options.includeBlocked ?? false;
+    const requireInside = options.requireInside ?? true;
+
+    const shape = tileWalkShape(surface.tx, surface.ty);
+    if (!includeBlocked && shape === "BLOCKED") return null;
+    if (requireInside && shape === "BLOCKED") return null;
+
+    if (requireInside) {
+        const { lx, ly } = localPxForTile(surface.tx, surface.ty, wx, wy, tileWorld);
+        const { w, h: hh } = shapeDims(shape);
+        const aShape = WALK_SHAPE_ANCHOR_PX[shape] ?? { ox: 0, oy: 0 };
+        const aKind = WALK_KIND_ANCHOR_PX[surface.tile.kind] ?? { ox: 0, oy: 0 };
+        const ax = lx - (aShape.ox + aKind.ox);
+        const ay = ly - (aShape.oy + aKind.oy);
+        if (!diamondContains(ax, ay, w, hh)) return null;
+    }
+
+    const zVisual = surface.zBase;
+    return {
+        surface,
+        zVisual,
+        zLogical: surface.zLogical,
+        isRamp: false,
+    };
+}
+
+function rampSurfaceHitAtWorld(
+    wx: number,
+    wy: number,
+    tileWorld: number
+): SurfaceHit | null {
+    const rh = rampHitAtWorld(wx, wy, tileWorld);
+    if (!rh) return null;
+
+    const { tx, ty } = worldToTile(wx, wy, tileWorld);
+    const zVisual = rh.z;
+    const zBase = Math.min(rh.r.z0, rh.r.z1);
+
+    const surface: RampSurface = {
+        id: rh.r.id,
+        kind: "RAMP_FACE",
+        tx,
+        ty,
+        zBase,
+        ramp: rh.r,
+    };
+
+    return {
+        surface,
+        zVisual,
+        zLogical: Math.floor(zVisual + 1e-6),
+        isRamp: true,
+    };
+}
+
+function collectSurfaceHitsAtWorld(
+    wx: number,
+    wy: number,
+    tileWorld: number,
+    options: SurfaceHitOptions
+): SurfaceHit[] {
+    const hits: SurfaceHit[] = [];
+
+    const rampHit = rampSurfaceHitAtWorld(wx, wy, tileWorld);
+    if (rampHit) hits.push(rampHit);
+
+    const { tx, ty } = worldToTile(wx, wy, tileWorld);
+    const surfaces = surfacesAtXY(tx, ty);
+    for (let i = 0; i < surfaces.length; i++) {
+        const hit = tileSurfaceHitAtWorld(surfaces[i], wx, wy, tileWorld, options);
+        if (hit) hits.push(hit);
+    }
+
+    return hits;
+}
+
+/** Return the best surface hit at a world position. */
+export function surfaceHitAtWorld(
+    wx: number,
+    wy: number,
+    tileWorld: number,
+    hintZ?: number,
+    options: SurfaceHitOptions = {}
+): SurfaceHit | null {
+    const hits = collectSurfaceHitsAtWorld(wx, wy, tileWorld, options);
+    if (hits.length === 0) return null;
+
+    if (Number.isFinite(hintZ)) {
+        let best = hits[0];
+        let bestDist = Math.abs(best.zVisual - (hintZ as number));
+        for (let i = 1; i < hits.length; i++) {
+            const h = hits[i];
+            const dist = Math.abs(h.zVisual - (hintZ as number));
+            if (dist < bestDist || (dist === bestDist && h.zVisual > best.zVisual)) {
+                best = h;
+                bestDist = dist;
+            }
+        }
+        return best;
+    }
+
+    let best = hits[0];
+    for (let i = 1; i < hits.length; i++) {
+        const h = hits[i];
+        if (h.zVisual > best.zVisual) best = h;
+    }
+    return best;
+}
+
+/** Return the surface at a world position (walkable surfaces only). */
+export function surfaceAtWorld(
+    wx: number,
+    wy: number,
+    tileWorld: number,
+    hintZ?: number
+): SurfaceLike | null {
+    const hit = surfaceHitAtWorld(wx, wy, tileWorld, hintZ, {
+        includeBlocked: false,
+        requireInside: true,
+    });
+    return hit ? hit.surface : null;
+}
+
+/** Return the nearest surface at or below the given Z. */
+export function surfaceBelow(
+    wx: number,
+    wy: number,
+    z: number,
+    tileWorld: number
+): SurfaceLike | null {
+    const hits = collectSurfaceHitsAtWorld(wx, wy, tileWorld, {
+        includeBlocked: false,
+        requireInside: true,
+    });
+    let best: SurfaceHit | null = null;
+    for (let i = 0; i < hits.length; i++) {
+        const h = hits[i];
+        if (h.zVisual <= z + 1e-6 && (!best || h.zVisual > best.zVisual)) {
+            best = h;
+        }
+    }
+    return best ? best.surface : null;
+}
+
+/** Return the nearest surface at or above the given Z. */
+export function surfaceAbove(
+    wx: number,
+    wy: number,
+    z: number,
+    tileWorld: number
+): SurfaceLike | null {
+    const hits = collectSurfaceHitsAtWorld(wx, wy, tileWorld, {
+        includeBlocked: false,
+        requireInside: true,
+    });
+    let best: SurfaceHit | null = null;
+    for (let i = 0; i < hits.length; i++) {
+        const h = hits[i];
+        if (h.zVisual >= z - 1e-6 && (!best || h.zVisual < best.zVisual)) {
+            best = h;
+        }
+    }
+    return best ? best.surface : null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -462,7 +672,20 @@ export let OCCLUSION_LOOKAHEAD_FRAC = 0.50; // 0.50 tile is a good starting poin
  * Authoritative height at a world point.
  * NEW RULE: ramps override tiles; tiles are flat.
  */
-export function heightAtWorld(wx: number, wy: number, tileWorld: number): number {
+export function heightAtWorld(
+    wx: number,
+    wy: number,
+    tileWorld: number,
+    hintZ?: number
+): number {
+    if (Number.isFinite(hintZ)) {
+        const hit = surfaceHitAtWorld(wx, wy, tileWorld, hintZ, {
+            includeBlocked: true,
+            requireInside: false,
+        });
+        if (hit) return hit.zVisual;
+    }
+
     // 1) Walkable geometry (ramps) wins
     const rh = rampHitAtWorld(wx, wy, tileWorld);
     if (rh) return rh.z;
@@ -523,39 +746,50 @@ export function heightAtWorldOcclusion(wx: number, wy: number, tileWorld: number
 
     for (let yy = ty - ry; yy <= ty + ry; yy++) {
         for (let xx = tx - rx; xx <= tx + rx; xx++) {
-            const t = getTile(xx, yy);
-            if (t.kind === "VOID") continue;
+            const surfaces = surfacesAtXY(xx, yy);
+            if (surfaces.length === 0) continue;
 
-            // Occlusion height is integer tile height.
-            // Ramps are NOT treated as an overhang ceiling.
-            const th = (t.h | 0);
+            for (let i = 0; i < surfaces.length; i++) {
+                const surface = surfaces[i];
+                if (surface.tile.kind === "VOID") continue;
 
-            // Only care about tiles that are >= current best.
-            if (th <= best) continue;
+                // Occlusion height is integer tile height.
+                // Ramps are NOT treated as an overhang ceiling.
+                const th = surface.zBase;
 
-            const { lx, ly } = localPxForTile(xx, yy, wx, wy, tileWorld);
+                // Only care about tiles that are >= current best.
+                if (th <= best) continue;
 
-            // Extend the diamond downward to approximate the Kenney sprite apron/overhang.
-            const insideExtended = diamondContains(lx, ly, 128, 64 + Math.max(0, OCCLUSION_EXTRA_LOCAL_PX));
+                const { lx, ly } = localPxForTile(xx, yy, wx, wy, tileWorld);
 
-            if (insideExtended) best = th;
+                // Extend the diamond downward to approximate the Kenney sprite apron/overhang.
+                const insideExtended = diamondContains(lx, ly, 128, 64 + Math.max(0, OCCLUSION_EXTRA_LOCAL_PX));
+
+                if (insideExtended) best = th;
+            }
         }
     }
 
     return best;
 }
 
+/** Return zOcclusion at a world position. */
+export function zOcclusionAtWorld(wx: number, wy: number, tileWorld: number): number {
+    return heightAtWorldOcclusion(wx, wy, tileWorld);
+}
+
 /**
  * Generic visibility query at a world point.
  *
  * This is the “unified occlusion API”:
- * - It always uses the map occlusion ceiling (heightAtWorldOcclusion)
+ * - It always uses the map occlusion ceiling (zOcclusionAtWorld)
  * - And compares a caller-provided absolute Z against that ceiling
  *
  * If zAbs is below the occlusion ceiling (minus eps), the point is considered occluded.
  */
 export type VisibilityQuery = {
-    occZ: number; // integer-ish occlusion ceiling at (wx, wy)
+    zOcclusion: number; // integer-ish occlusion ceiling at (wx, wy)
+    occZ: number; // alias for compatibility
     occluded: boolean; // true if zAbs is under the ceiling (with eps)
 };
 
@@ -567,8 +801,8 @@ export function queryVisibilityAtWorld(
     tileWorld: number,
     eps = 0
 ): VisibilityQuery {
-    const occZ = heightAtWorldOcclusion(wx, wy, tileWorld);
-    return { occZ, occluded: zAbs < occZ - eps };
+    const zOcclusion = zOcclusionAtWorld(wx, wy, tileWorld);
+    return { zOcclusion, occZ: zOcclusion, occluded: zAbs < zOcclusion - eps };
 }
 
 // ---- Segment visibility (for LOS, future enemy vision, etc.) ----
@@ -694,9 +928,7 @@ function shapeDims(shape: TileWalkShape): { w: number; h: number } {
     }
 }
 
-/** Return the walkable top-face shape for a tile. */
-export function tileWalkShape(tx: number, ty: number): TileWalkShape {
-    const t = getTile(tx, ty);
+function tileWalkShapeFromTile(t: IsoTile): TileWalkShape {
     switch (t.kind) {
         case "VOID":
             return "BLOCKED";
@@ -707,6 +939,12 @@ export function tileWalkShape(tx: number, ty: number): TileWalkShape {
         default:
             return "FULL_TOP";
     }
+}
+
+/** Return the walkable top-face shape for a tile. */
+export function tileWalkShape(tx: number, ty: number): TileWalkShape {
+    const t = getTile(tx, ty);
+    return tileWalkShapeFromTile(t);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -739,6 +977,10 @@ export type WalkInfo = {
     // Continuous Z at this location (ramps continuous; tiles flat)
     z: number;
 
+    // Explicit Z roles
+    zLogical: number;
+    zVisual: number;
+
     // Walk decision
     blocked: boolean;
     inside: boolean;
@@ -756,7 +998,7 @@ export type WalkInfo = {
  * - z (float) for continuous ramps
  */
 /** Return walkability and height info for a world position. */
-export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
+export function walkInfo(wx: number, wy: number, tileWorld: number, hintZ?: number): WalkInfo {
     const { tx, ty, lx, ly } = worldToTileTopLocalPx(wx, wy, tileWorld);
 
     // 1) Ramp faces override tiles (walkable even over VOID)
@@ -782,6 +1024,8 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
             floorH,
             h: floorH,
             z,
+            zLogical: floorH,
+            zVisual: z,
 
             // NEW: mark as ramp surface
             isRamp: true,
@@ -794,14 +1038,37 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
     }
 
     // 2) Normal tile-top walking (flat, discrete)
-    const t = getTile(tx, ty);
+    const surfaces = surfacesAtXY(tx, ty);
+    let selectedSurface: Surface | null = null;
+    if (surfaces.length > 0) {
+        let best = surfaces[0];
+        if (Number.isFinite(hintZ)) {
+            let bestDist = Math.abs(best.zBase - (hintZ as number));
+            for (let i = 1; i < surfaces.length; i++) {
+                const s = surfaces[i];
+                const dist = Math.abs(s.zBase - (hintZ as number));
+                if (dist < bestDist || (dist === bestDist && s.zBase > best.zBase)) {
+                    best = s;
+                    bestDist = dist;
+                }
+            }
+        } else {
+            for (let i = 1; i < surfaces.length; i++) {
+                const s = surfaces[i];
+                if (s.zBase > best.zBase) best = s;
+            }
+        }
+        selectedSurface = best;
+    }
+
+    const t = selectedSurface?.tile ?? getTile(tx, ty);
     const kind = t.kind;
 
-    const shape = tileWalkShape(tx, ty);
+    const shape = tileWalkShapeFromTile(t);
     const blocked = shape === "BLOCKED" || kind === "VOID";
 
     // Integer floor level (gating)
-    const floorH = tileHeight(tx, ty);
+    const floorH = selectedSurface ? selectedSurface.zBase : (t.h | 0);
 
     // Continuous Z (flat tiles)
     const z = floorH;
@@ -824,6 +1091,8 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
             floorH,
             h: floorH,
             z,
+            zLogical: floorH,
+            zVisual: z,
             blocked: true,
             inside: false,
             walkable: false,
@@ -864,6 +1133,8 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
         floorH,
         h: floorH,
         z,
+        zLogical: floorH,
+        zVisual: z,
         blocked: !walkable,
         inside,
         walkable,
@@ -873,9 +1144,9 @@ export function walkInfo(wx: number, wy: number, tileWorld: number): WalkInfo {
 }
 
 /** Return walkability info for a logical grid position. */
-export function walkInfoGrid(gx: number, gy: number, tileWorld: number): WalkInfo {
+export function walkInfoGrid(gx: number, gy: number, tileWorld: number, hintZ?: number): WalkInfo {
     const { wx, wy } = gridToWorld(gx, gy, tileWorld);
-    return walkInfo(wx, wy, tileWorld);
+    return walkInfo(wx, wy, tileWorld, hintZ);
 }
 
 function diamondContains(lx: number, ly: number, w: number, h: number): boolean {

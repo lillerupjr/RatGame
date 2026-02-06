@@ -216,6 +216,8 @@ export function createGame(args: CreateGameArgs) {
     w.eR = [];
     w.eSpeed = [];
     w.eDamage = [];
+    w.ezVisual = [];
+    w.ezLogical = [];
     w.ePoisonT = [];
     w.ePoisonDps = [];
     w.ePoisonedOnDeath = [];
@@ -246,6 +248,8 @@ export function createGame(args: CreateGameArgs) {
     w.prgoy = [];
     // Milestone C
     w.prZ = [];
+    w.prZVisual = [];
+    w.prZLogical = [];
     w.prHitsPlayer = [];
     w.prvx = [];
     w.prvy = [];

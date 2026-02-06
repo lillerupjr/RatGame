@@ -64,9 +64,11 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   w.pvx = worldDir.wx * w.pSpeed;
   w.pvy = worldDir.wy * w.pSpeed;
 
-  let curInfo = walkInfo(px, py, KENNEY_TILE_WORLD);
+  let curInfo = walkInfo(px, py, KENNEY_TILE_WORLD, w.pz);
 
   w.pz = curInfo.z;
+  w.pzVisual = curInfo.zVisual;
+  w.pzLogical = curInfo.zLogical;
   w.activeFloorH =
     curInfo.kind === "STAIRS" ? (Math.floor(curInfo.z + 0.5) | 0) : (curInfo.floorH | 0);
 
@@ -75,7 +77,7 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   const MAX_STEP_Z = 1.05;
 
   const tryMove = (wx: number, wy: number) => {
-    const nextInfo = walkInfo(wx, wy, KENNEY_TILE_WORLD);
+    const nextInfo = walkInfo(wx, wy, KENNEY_TILE_WORLD, curInfo.z);
     if (!nextInfo.walkable) return false;
 
     const stairsInvolved =
@@ -103,6 +105,8 @@ export function movementSystem(w: World, input: InputState, dt: number) {
 
     curInfo = nextInfo;
     w.pz = nextInfo.z;
+    w.pzVisual = nextInfo.zVisual;
+    w.pzLogical = nextInfo.zLogical;
     w.activeFloorH =
       nextInfo.kind === "STAIRS" ? (Math.floor(nextInfo.z + 0.5) | 0) : (nextInfo.floorH | 0);
     return true;
@@ -117,8 +121,9 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     w.pvy = 0;
   }
 
-  const ez = ((w as any).ez ??= [] as number[]);
-  const pInfo = walkInfo(px, py, KENNEY_TILE_WORLD);
+  const ezVisual = w.ezVisual;
+  const ezLogical = w.ezLogical;
+  const pInfo = walkInfo(px, py, KENNEY_TILE_WORLD, w.pzVisual);
   const playerFloorH = pInfo.floorH;
   const playerOnRamp = (pInfo as any).isRamp;
   const playerOnStairs = pInfo.kind === "STAIRS";
@@ -163,8 +168,9 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     let ex = eWorld.wx;
     let ey = eWorld.wy;
 
-    let eCur = walkInfo(ex, ey, KENNEY_TILE_WORLD);
-    ez[i] = eCur.z;
+    let eCur = walkInfo(ex, ey, KENNEY_TILE_WORLD, ezVisual?.[i]);
+    ezVisual[i] = eCur.zVisual;
+    ezLogical[i] = eCur.zLogical;
 
     const enemyOnStairs = eCur.kind === "STAIRS";
     const enemyOnRamp = (eCur as any).isRamp;
@@ -196,7 +202,7 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     const eny = ey + eWorldDir.wy * w.eSpeed[i] * dt;
 
     const tryEnemyMove = (wx: number, wy: number) => {
-      const next = walkInfo(wx, wy, KENNEY_TILE_WORLD);
+      const next = walkInfo(wx, wy, KENNEY_TILE_WORLD, eCur.z);
       if (!next.walkable) return false;
 
       const stairsInvolved =
@@ -223,7 +229,8 @@ export function movementSystem(w: World, input: InputState, dt: number) {
       ex = ew.wx;
       ey = ew.wy;
       eCur = next;
-      ez[i] = next.z;
+      ezVisual[i] = next.zVisual;
+      ezLogical[i] = next.zLogical;
       return true;
     };
 
