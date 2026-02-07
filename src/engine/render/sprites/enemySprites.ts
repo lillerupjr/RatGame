@@ -1,111 +1,131 @@
 // src/game/sprites/enemySprites.ts
 import { ENEMY_TYPE, type EnemyType } from "../../../game/content/enemies";
+import { dir8IndexFromVector } from "./dir8";
 
 /**
  * Enemy sprite sheet format:
- * - PNG size: 4096x1024
- * - Grid: 32 columns x 8 rows
- * - Cell: 128x128
- *
- * Layout:
- * - ROWS (8) = directions (sheet-specific order)
- * - COLUMNS (32) = frames for one direction
- *
- * Animation:
- * - idle column = 4 (1-based) => col0 = 3
- * - walk columns = 5–12 (1-based) => col0 = 4..11 (8 frames)
+ * - Separate PNGs for idle, run A, run B
+ * - Each sheet is a 3x3 grid (center cell empty)
+ * - Cell size defines frame size
  */
-
-// ─────────────────────────────────────────────────────────────
-// Grid constants
-// ─────────────────────────────────────────────────────────────
-const CELL_W = 128;
-const CELL_H = 128;
 
 // ─────────────────────────────────────────────────────────────
 // Animation definition
 // ─────────────────────────────────────────────────────────────
-const IDLE_COL = 3; // frame 4 (1-based)
-const WALK_COLS = [4, 5, 6, 7, 8, 9, 10, 11]; // frames 5–12 (1-based)
-const WALK_FPS = 10;
+const RUN_FRAME_SEC = 0.12;
 
 // ─────────────────────────────────────────────────────────────
-// Direction row order (your sheet)
-// rows:
-// 1=NW, 2=N, 3=NE, 4=E, 5=SE, 6=S, 7=SW, 8=W
-// ─────────────────────────────────────────────────────────────
-const ROW_ORDER = ["NW", "N", "NE", "E", "SE", "S", "SW", "W"] as const;
-type Dir8 = (typeof ROW_ORDER)[number];
-
 // ─────────────────────────────────────────────────────────────
 // Sheet config
 // ─────────────────────────────────────────────────────────────
-type SheetConfig = {
+type SpriteAnimationDef = {
+    frameTime: "static" | "fixed";
+};
+
+type SpriteSetDef = {
+    idle: string;
+    runA: string;
+    runB: string;
+    cellW: number;
+    cellH: number;
     rows: number;
     cols: number;
-    idleCol: number;
-    walkCols: number[];
-    scale: number;
-
-    // NEW
+    directions: number;
     anchorX: number; // 0..1 (0 = left, 0.5 = center)
     anchorY: number; // 0..1 (0 = top, 1 = bottom / feet)
+    animations: {
+        idle: SpriteAnimationDef;
+        run: SpriteAnimationDef;
+    };
+};
+
+type EnemySpriteDef = {
+    spriteSet: SpriteSetDef;
+    scale: number;
 };
 
 
 // ─────────────────────────────────────────────────────────────
 // Enemy → sheet + scale mapping
 // ─────────────────────────────────────────────────────────────
-const SHEET_BY_TYPE: Partial<Record<EnemyType, { path: string; cfg: SheetConfig }>> = {
+const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
     [ENEMY_TYPE.CHASER]: {
-        path: "/src/assets/enemies/antlion_0.png",
-        cfg: {
-            rows: 8,
-            cols: 32,
-            idleCol: IDLE_COL,
-            walkCols: WALK_COLS,
-            scale: 1,
+        scale: 1,
+        spriteSet: {
+            idle: "/src/assets/enemies/idle/rat-test.png",
+            runA: "/src/assets/enemies/walk/rat-test.1.png",
+            runB: "/src/assets/enemies/walk/rat-test-2.png",
+            cellW: 64,
+            cellH: 64,
+            rows: 3,
+            cols: 3,
+            directions: 8,
             anchorX: 0.5,
             anchorY: 0.65,
+            animations: {
+                idle: { frameTime: "static" },
+                run: { frameTime: "fixed" },
+            },
         },
     },
 
     [ENEMY_TYPE.RUNNER]: {
-        path: "/src/assets/enemies/fire_ant.png",
-        cfg: {
-            rows: 8,
-            cols: 32,
-            idleCol: IDLE_COL,
-            walkCols: WALK_COLS,
-            scale: 2,
+        scale: 2,
+        spriteSet: {
+            idle: "/src/assets/enemies/idle/rat-test.png",
+            runA: "/src/assets/enemies/walk/rat-test.1.png",
+            runB: "/src/assets/enemies/walk/rat-test-2.png",
+            cellW: 64,
+            cellH: 64,
+            rows: 3,
+            cols: 3,
+            directions: 8,
             anchorX: 0.5,
             anchorY: 0.65,
+            animations: {
+                idle: { frameTime: "static" },
+                run: { frameTime: "fixed" },
+            },
         },
     },
 
     [ENEMY_TYPE.BRUISER]: {
-        path: "/src/assets/enemies/ice_ant.png",
-        cfg: {
-            rows: 8,
-            cols: 32,
-            idleCol: IDLE_COL,
-            walkCols: WALK_COLS,
-            scale: 3,
+        scale: 3,
+        spriteSet: {
+            idle: "/src/assets/enemies/idle/rat-test.png",
+            runA: "/src/assets/enemies/walk/rat-test.1.png",
+            runB: "/src/assets/enemies/walk/rat-test-2.png",
+            cellW: 64,
+            cellH: 64,
+            rows: 3,
+            cols: 3,
+            directions: 8,
             anchorX: 0.5,
             anchorY: 0.65,
+            animations: {
+                idle: { frameTime: "static" },
+                run: { frameTime: "fixed" },
+            },
         },
     },
 
     [ENEMY_TYPE.BOSS]: {
-        path: "/src/assets/enemies/antlion_0.png",
-        cfg: {
-            rows: 8,
-            cols: 32,
-            idleCol: IDLE_COL,
-            walkCols: WALK_COLS,
-            scale: 5,
+        scale: 5,
+        spriteSet: {
+            idle: "/src/assets/enemies/idle/rat-test.png",
+            runA: "/src/assets/enemies/walk/rat-test.1.png",
+            runB: "/src/assets/enemies/walk/rat-test-2.png",
+            cellW: 64,
+            cellH: 64,
+            rows: 3,
+            cols: 3,
+            directions: 8,
             anchorX: 0.5,
             anchorY: 0.65,
+            animations: {
+                idle: { frameTime: "static" },
+                run: { frameTime: "fixed" },
+            },
         },
     },
 };
@@ -115,6 +135,62 @@ const SHEET_BY_TYPE: Partial<Record<EnemyType, { path: string; cfg: SheetConfig 
 // ─────────────────────────────────────────────────────────────
 type Loaded = { img: HTMLImageElement; ready: boolean };
 const cache: Record<string, Loaded> = Object.create(null);
+
+function isPngPath(path: string): boolean {
+    return path.toLowerCase().endsWith(".png");
+}
+
+function validateFrameAsset(
+    spriteSet: SpriteSetDef,
+    img: HTMLImageElement,
+    path: string,
+): boolean {
+    if (!isPngPath(path)) {
+        console.warn(`[enemySprites] Sprite sheet must be PNG: ${path}`);
+        return false;
+    }
+
+    if (spriteSet.cellW <= 0 || spriteSet.cellH <= 0) {
+        console.warn(`[enemySprites] Invalid frame size for sprite: ${path}`);
+        return false;
+    }
+
+    if (spriteSet.rows <= 0 || spriteSet.cols <= 0) {
+        console.warn(`[enemySprites] Invalid grid for sprite sheet: ${path}`);
+        return false;
+    }
+
+    const expectedW = spriteSet.cellW * spriteSet.cols;
+    const expectedH = spriteSet.cellH * spriteSet.rows;
+    if (img.width !== expectedW || img.height !== expectedH) {
+        console.warn(`[enemySprites] Sprite sheet size mismatch: ${path} (${img.width}x${img.height}) expected ${expectedW}x${expectedH}`);
+        return false;
+    }
+
+    if (spriteSet.directions !== 8 || spriteSet.rows !== 3 || spriteSet.cols !== 3) {
+        console.warn(`[enemySprites] Sprite sheet must be 3x3 with 8 directions: ${path}`);
+        return false;
+    }
+
+    if (spriteSet.anchorX < 0 || spriteSet.anchorX > 1 || spriteSet.anchorY < 0 || spriteSet.anchorY > 1) {
+        console.warn(`[enemySprites] Anchor out of range for sprite sheet: ${path}`);
+        return false;
+    }
+
+    const idle = spriteSet.animations.idle;
+    if (idle.frameTime !== "static") {
+        console.warn(`[enemySprites] Idle animation must be a single static frame: ${path}`);
+        return false;
+    }
+
+    const run = spriteSet.animations.run;
+    if (run.frameTime !== "fixed") {
+        console.warn(`[enemySprites] Run animation must be a fixed two-frame loop: ${path}`);
+        return false;
+    }
+
+    return true;
+}
 
 function loadImage(path: string): Loaded {
     const existing = cache[path];
@@ -132,30 +208,15 @@ function loadImage(path: string): Loaded {
 }
 
 export function preloadEnemySprites() {
-    for (const v of Object.values(SHEET_BY_TYPE)) {
+    for (const v of Object.values(ENEMY_SPRITES)) {
         if (!v) continue;
-        loadImage(v.path);
+        loadImage(v.spriteSet.idle);
+        loadImage(v.spriteSet.runA);
+        loadImage(v.spriteSet.runB);
     }
 }
 
 // ─────────────────────────────────────────────────────────────
-// Direction helpers
-// ─────────────────────────────────────────────────────────────
-
-function dirLabelFromVector(dx: number, dy: number): Dir8 {
-    // Grid-space convention: N = screen up, E = screen right.
-    const ang = Math.atan2(dy, dx);
-    const idx = (Math.round(ang / (Math.PI / 4)) + 8) % 8;
-    const map: Dir8[] = ["E", "NE", "N", "NW", "W", "SW", "S", "SE"];
-    return map[idx];
-}
-
-function dirRowFromVector(dx: number, dy: number): number {
-    const i = (ROW_ORDER as readonly string[]).indexOf(dirLabelFromVector(dx, dy));
-    return i >= 0 ? i : 0; // fallback to row 0 (NW) if something unexpected happens
-}
-
-
 // ─────────────────────────────────────────────────────────────
 // Public API
 // ─────────────────────────────────────────────────────────────
@@ -179,32 +240,44 @@ export function getEnemySpriteFrame(args: {
     anchorY: number;
 }
     | null {
-    const entry = SHEET_BY_TYPE[args.type];
+    const entry = ENEMY_SPRITES[args.type];
     if (!entry) return null;
 
-    const loaded = loadImage(entry.path);
-    if (!loaded.ready) return null;
+    const { spriteSet } = entry;
+    const useRun = args.moving;
+    const anim = useRun ? spriteSet.animations.run : spriteSet.animations.idle;
 
-    const { cfg } = entry;
-
-    // Row = direction
-    const row0 = dirRowFromVector(args.faceDx, args.faceDy);
-
-    // Column = animation frame
-    let col0 = cfg.idleCol;
-    if (args.moving) {
-        const k = Math.floor(Math.max(0, args.time) * WALK_FPS) % cfg.walkCols.length;
-        col0 = cfg.walkCols[k];
+    let framePath = spriteSet.idle;
+    if (useRun) {
+        const k = Math.floor(Math.max(0, args.time) / RUN_FRAME_SEC) % 2;
+        framePath = k === 0 ? spriteSet.runA : spriteSet.runB;
     }
+
+    const loaded = loadImage(framePath);
+    if (!loaded.ready) return null;
+    if (!validateFrameAsset(spriteSet, loaded.img, framePath)) return null;
+
+    const dirIndex = dir8IndexFromVector(args.faceDx, args.faceDy);
+    const dirToCell: Array<{ row: number; col: number }> = [
+        { row: 0, col: 1 }, // N
+        { row: 0, col: 2 }, // NE
+        { row: 1, col: 2 }, // E
+        { row: 2, col: 2 }, // SE
+        { row: 2, col: 1 }, // S
+        { row: 2, col: 0 }, // SW
+        { row: 1, col: 0 }, // W
+        { row: 0, col: 0 }, // NW
+    ];
+    const cell = dirToCell[dirIndex] ?? dirToCell[0];
 
     return {
         img: loaded.img,
-        sx: col0 * CELL_W,
-        sy: row0 * CELL_H,
-        sw: CELL_W,
-        sh: CELL_H,
-        scale: cfg.scale,
-        anchorX: cfg.anchorX,
-        anchorY: cfg.anchorY,
+        sx: cell.col * spriteSet.cellW,
+        sy: cell.row * spriteSet.cellH,
+        sw: spriteSet.cellW,
+        sh: spriteSet.cellH,
+        scale: entry.scale,
+        anchorX: spriteSet.anchorX,
+        anchorY: spriteSet.anchorY,
     };
 }

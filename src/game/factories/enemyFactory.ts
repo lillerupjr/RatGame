@@ -45,6 +45,8 @@ export function spawnEnemyGrid(
 
     w.evx.push(0);
     w.evy.push(0);
+    w.eFaceX.push(0);
+    w.eFaceY.push(-1);
     w.eHp.push(scaledHp);
     w.eHpMax.push(scaledHp);
     w.eR.push(s.radius);

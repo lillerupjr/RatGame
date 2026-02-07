@@ -232,6 +232,8 @@ export function createGame(args: CreateGameArgs) {
     w.egoy = [];
     w.evx = [];
     w.evy = [];
+    w.eFaceX = [];
+    w.eFaceY = [];
     w.eHp = [];
     w.eHpMax = [];
     w.eR = [];

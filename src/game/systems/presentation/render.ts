@@ -4,13 +4,8 @@ import { registry } from "../../content/registry";
 import { ZONE_KIND } from "../../factories/zoneFactory";
 import { getBossAccent, getFloorVisual } from "../../content/floors";
 import { ENEMY_TYPE } from "../../content/enemies";
-import {
-  getPlayerSprite,
-  playerSpritesReady,
-  PLAYER_SPRITE_SCALE,
-  type Dir8,
-  type Frame3,
-} from "../../../engine/render/sprites/playerSprites";
+import { getPlayerSpriteFrame, playerSpritesReady } from "../../../engine/render/sprites/playerSprites";
+import { type Dir8 } from "../../../engine/render/sprites/dir8";
 import { getEnemySpriteFrame, preloadEnemySprites } from "../../../engine/render/sprites/enemySprites";
 import {
   heightAtWorld,
@@ -84,8 +79,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
   const px = pWorld.wx;
   const py = pWorld.wy;
-
-  const playerGrid = gridAtPlayer(w);
 
   // one-time enemy sprite preload
   if (!(w as any)._enemySpritesPreloaded) {
@@ -748,13 +741,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         const isBoss = w.eType[i] === ENEMY_TYPE.BOSS;
         if (isBoss) baseColor = getBossAccent(w) ?? baseColor;
 
-        const egx = w.egxi[i] + w.egox[i];
-        const egy = w.egyi[i] + w.egoy[i];
-        const enemyGrid = { gx: egx, gy: egy };
-        const faceDx = playerGrid.gx - enemyGrid.gx;
-        const faceDy = playerGrid.gy - enemyGrid.gy;
-
-        const moving = (w.eSpeed[i] ?? 0) > 1;
+        const faceDx = w.eFaceX?.[i] ?? 0;
+        const faceDy = w.eFaceY?.[i] ?? -1;
+        const moving = Math.hypot(w.evx?.[i] ?? 0, w.evy?.[i] ?? 0) > 1e-4;
 
         const fr = getEnemySpriteFrame({
           type: w.eType[i] as any,
@@ -903,21 +892,23 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       if (hasPlayer) {
         ctx.globalAlpha = 1;
 
-        const dir = ((w as any)._plDir ?? "N") as Dir8;
-        const frame = ((w as any)._plFrame ?? 2) as Frame3;
-        const img = playerSpritesReady() ? getPlayerSprite(dir, frame) : null;
+          const dir = ((w as any)._plDir ?? "N") as Dir8;
+          const moving = (w as any)._plMoving ?? false;
+          const fr = playerSpritesReady()
+            ? getPlayerSpriteFrame({ dir, moving, time: w.time ?? 0 })
+            : null;
 
         const pp = toScreen(px, py);
 
-        if (img && img.width > 0 && img.height > 0) {
-          const sw = img.width * PLAYER_SPRITE_SCALE;
-          const sh = img.height * PLAYER_SPRITE_SCALE;
+          if (fr) {
+            const dw = fr.sw * fr.scale;
+            const dh = fr.sh * fr.scale;
 
-          const x = pp.x - sw * 0.5;
-          const y = pp.y - sh * 0.5 - 32;
+            const x = pp.x - dw * fr.anchorX;
+            const y = pp.y - dh * fr.anchorY;
 
-          ctx.drawImage(img, x, y, sw, sh);
-        } else {
+            ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, x, y, dw, dh);
+          } else {
           ctx.fillStyle = "#eaeaf2";
           ctx.beginPath();
           ctx.ellipse(pp.x, pp.y, PLAYER_R * ISO_X, PLAYER_R * ISO_Y, 0, 0, Math.PI * 2);

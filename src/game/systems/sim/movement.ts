@@ -2,7 +2,7 @@ import { World, gridAtPlayer } from "../../../engine/world/world";
 import { InputState } from "./input";
 import { walkInfo, worldToTile } from "../../map/compile/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
-import { Dir8 } from "../../../engine/render/sprites/playerSprites";
+import { dir8FromVector, type Dir8 } from "../../../engine/render/sprites/dir8";
 import { gridToWorld } from "../../coords/grid";
 import { anchorFromWorld, writeAnchor } from "../../coords/anchor";
 import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
@@ -33,13 +33,6 @@ function gridDirToWorldDir(tileWorld: number, dx: number, dy: number): WorldPos 
   const len = Math.hypot(w.wx, w.wy);
   if (len <= 1e-6) return { wx: 0, wy: 0 };
   return { wx: w.wx / len, wy: w.wy / len };
-}
-
-function dirFromGrid(dx: number, dy: number): Dir8 {
-  const ang = Math.atan2(dy, dx);
-  const idx = (Math.round(ang / (Math.PI / 4)) + 8) % 8;
-  const map: Dir8[] = ["E", "NE", "N", "NW", "W", "SW", "S", "SE"];
-  return map[idx];
 }
 
 let _cachedField: FlowField | null = null;
@@ -147,6 +140,7 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     const eWorld = getEnemyWorld(w, i, KENNEY_TILE_WORLD);
     let ex = eWorld.wx;
     let ey = eWorld.wy;
+    const eGrid0 = gridFromAnchor(w.egxi[i], w.egyi[i], w.egox[i], w.egoy[i]);
 
     let eCur = walkInfo(ex, ey, KENNEY_TILE_WORLD, ezVisual?.[i]);
     ezVisual[i] = eCur.zVisual;
@@ -206,6 +200,19 @@ export function movementSystem(w: World, input: InputState, dt: number) {
 
     tryEnemyMove(enx, ey);
     tryEnemyMove(ex, eny);
+
+    const eGrid1 = gridFromAnchor(w.egxi[i], w.egyi[i], w.egox[i], w.egoy[i]);
+    const dGx = eGrid1.gx - eGrid0.gx;
+    const dGy = eGrid1.gy - eGrid0.gy;
+    if (Math.hypot(dGx, dGy) > 1e-4) {
+      w.evx[i] = dGx;
+      w.evy[i] = dGy;
+      w.eFaceX[i] = dGx;
+      w.eFaceY[i] = dGy;
+    } else {
+      w.evx[i] = 0;
+      w.evy[i] = 0;
+    }
   }
 
   const mag = Math.hypot(gdx, gdy);
@@ -217,17 +224,11 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   const moving = glen > 0.0001;
   if (!moving) {
     (w as any)._plDir = "S";
-    (w as any)._plFrame = 2;
+    (w as any)._plMoving = false;
     (w as any)._plAnimT = 0;
   } else {
-    (w as any)._plDir = dirFromGrid(gdx, gdy);
-
-    const seq = [1, 2, 3, 2] as const;
-    const stepSec = 0.11;
-    const t0 = ((w as any)._plAnimT ?? 0) + dt;
-    (w as any)._plAnimT = t0;
-
-    const step = Math.floor(t0 / stepSec) % seq.length;
-    (w as any)._plFrame = seq[step];
+    (w as any)._plDir = dir8FromVector(gdx, gdy);
+    (w as any)._plMoving = true;
+    (w as any)._plAnimT = ((w as any)._plAnimT ?? 0) + dt;
   }
 }

@@ -182,6 +182,8 @@ export type World = {
   egoy: number[];
   evx: number[];
   evy: number[];
+  eFaceX: number[];
+  eFaceY: number[];
   eHp: number[];
   eHpMax: number[];
   eR: number[];
@@ -450,6 +452,8 @@ export function createWorld(args: CreateWorldArgs): World {
     egoy: [],
     evx: [],
     evy: [],
+    eFaceX: [],
+    eFaceY: [],
     eHp: [],
     eHpMax: [],
     eR: [],
