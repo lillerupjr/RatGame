@@ -1,10 +1,15 @@
 import { type Dir8 } from "./dir8";
 
 export type AnimKey = string;
+export type SpriteLoaderSource = {
+    packRoot: string;
+    modules: Record<string, string>;
+};
 
 export type SpritePack = {
     skin: string;
     size: { w: number; h: number };
+    frameCount: number;
     rotations: Partial<Record<Dir8, HTMLImageElement>>;
     animations: Record<AnimKey, Partial<Record<Dir8, HTMLImageElement[]>>>;
 };
@@ -34,13 +39,14 @@ const DIR_KEY_TO_DIR8: Record<DirKey, Dir8> = {
 };
 
 const DIR_FALLBACK_PRIORITY: Dir8[] = ["S", "SE", "E", "NE", "N", "NW", "W", "SW"];
-const FRAME_COUNT = 4;
+const DEFAULT_FRAME_COUNT = 4;
 const DEFAULT_FPS = 10;
 
 const ENEMY_ASSET_MODULES = import.meta.glob("../../../assets/enemies/**/*", {
     eager: true,
     import: "default",
 }) as Record<string, string>;
+const ENEMY_SOURCE: SpriteLoaderSource = { packRoot: "/enemies", modules: ENEMY_ASSET_MODULES };
 
 const imageCache = new Map<string, Promise<HTMLImageElement>>();
 const packCache = new Map<string, Promise<SpritePack>>();
@@ -55,27 +61,27 @@ function dirKeyToDir8(key: string): Dir8 {
     return mapped;
 }
 
-function resolveUrlBySuffix(suffix: string): string | null {
-    for (const [path, url] of Object.entries(ENEMY_ASSET_MODULES)) {
+function resolveUrlBySuffix(suffix: string, modules: Record<string, string>): string | null {
+    for (const [path, url] of Object.entries(modules)) {
         if (normalizePath(path).endsWith(suffix)) return url;
     }
     return null;
 }
 
-function requireUrl(suffix: string): string {
-    const url = resolveUrlBySuffix(suffix);
+function requireUrl(suffix: string, modules: Record<string, string>): string {
+    const url = resolveUrlBySuffix(suffix, modules);
     if (!url) throw new Error(`[spriteLoader] Missing asset: ${suffix}`);
     return url;
 }
 
-function packSuffix(skin: string, relative: string): string {
-    return `/enemies/${skin}/${relative}`;
+function packSuffix(packRoot: string, skin: string, relative: string): string {
+    return `${packRoot}/${skin}/${relative}`;
 }
 
-function discoverAnimKeys(skin: string): AnimKey[] {
-    const marker = `/enemies/${skin}/animations/`;
+function discoverAnimKeys(skin: string, source: SpriteLoaderSource): AnimKey[] {
+    const marker = `${source.packRoot}/${skin}/animations/`;
     const keys = new Set<AnimKey>();
-    for (const path of Object.keys(ENEMY_ASSET_MODULES)) {
+    for (const path of Object.keys(source.modules)) {
         const normalized = normalizePath(path);
         const idx = normalized.indexOf(marker);
         if (idx === -1) continue;
@@ -134,14 +140,39 @@ function freezePack(pack: SpritePack): SpritePack {
     return pack;
 }
 
-export async function preloadSpritePack(skin: string): Promise<SpritePack> {
-    const cached = packCache.get(skin);
+function packCacheKey(
+    skin: string,
+    source: SpriteLoaderSource,
+    animKeys?: AnimKey[],
+    frameCount?: number,
+) {
+    const animKey = animKeys ? animKeys.join(",") : "*";
+    const frames = frameCount ?? DEFAULT_FRAME_COUNT;
+    return `${source.packRoot}:${skin}:${animKey}:${frames}`;
+}
+
+export async function preloadSpritePack(
+    skin: string,
+    options?: {
+        source?: SpriteLoaderSource;
+        animKeys?: AnimKey[];
+        frameCount?: number;
+    },
+): Promise<SpritePack> {
+    const source = options?.source ?? ENEMY_SOURCE;
+    const animKeys = options?.animKeys;
+    const frameCount = options?.frameCount ?? DEFAULT_FRAME_COUNT;
+    const cacheKey = packCacheKey(skin, source, animKeys, frameCount);
+    const cached = packCache.get(cacheKey);
     if (cached) return cached;
 
     const job = (async () => {
         const rotations: Partial<Record<Dir8, HTMLImageElement>> = {};
         const rotationJobs = DIR_KEYS.map(async (dirKey) => {
-            const url = requireUrl(packSuffix(skin, `rotations/${dirKey}.png`));
+            const url = requireUrl(
+                packSuffix(source.packRoot, skin, `rotations/${dirKey}.png`),
+                source.modules,
+            );
             const img = await loadImage(url);
             rotations[dirKeyToDir8(dirKey)] = img;
         });
@@ -152,18 +183,19 @@ export async function preloadSpritePack(skin: string): Promise<SpritePack> {
         const size = { w: south.width, h: south.height };
 
         const animations: Record<AnimKey, Partial<Record<Dir8, HTMLImageElement[]>>> = {};
-        const animKeys = discoverAnimKeys(skin);
+        const keys = animKeys ?? discoverAnimKeys(skin, source);
 
-        for (const animKey of animKeys) {
+        for (const animKey of keys) {
             const perDir: Partial<Record<Dir8, HTMLImageElement[]>> = {};
             const animJobs: Promise<void>[] = [];
             for (const dirKey of DIR_KEYS) {
                 const dir8 = dirKeyToDir8(dirKey);
-                const frames: HTMLImageElement[] = new Array(FRAME_COUNT);
-                for (let i = 0; i < FRAME_COUNT; i++) {
+                const frames: HTMLImageElement[] = new Array(frameCount);
+                for (let i = 0; i < frameCount; i++) {
                     const frameName = `frame_${String(i).padStart(3, "0")}.png`;
                     const url = requireUrl(
-                        packSuffix(skin, `animations/${animKey}/${dirKey}/${frameName}`),
+                        packSuffix(source.packRoot, skin, `animations/${animKey}/${dirKey}/${frameName}`),
+                        source.modules,
                     );
                     animJobs.push(
                         loadImage(url).then((img) => {
@@ -180,17 +212,18 @@ export async function preloadSpritePack(skin: string): Promise<SpritePack> {
         return freezePack({
             skin,
             size,
+            frameCount,
             rotations,
             animations,
         });
     })();
 
-    packCache.set(skin, job);
+    packCache.set(cacheKey, job);
 
     try {
         return await job;
     } catch (err) {
-        packCache.delete(skin);
+        packCache.delete(cacheKey);
         throw err;
     }
 }
@@ -206,14 +239,15 @@ export function getSpriteFrame(
     },
 ): HTMLImageElement {
     const fps = opts.fps ?? DEFAULT_FPS;
-    const frameIndex = Math.floor(Math.max(0, opts.t) * fps) % FRAME_COUNT;
+    const frameCount = Math.max(1, pack.frameCount || DEFAULT_FRAME_COUNT);
+    const frameIndex = Math.floor(Math.max(0, opts.t) * fps) % frameCount;
     const useRotation = opts.useRotationIfNoAnim ?? true;
 
     if (opts.anim && pack.animations[opts.anim]) {
         const anim = pack.animations[opts.anim];
         const dir = pickDir(anim, opts.dir);
         const frames = anim[dir];
-        if (!frames || frames.length < FRAME_COUNT) {
+        if (!frames || frames.length < frameCount) {
             throw new Error(`[spriteLoader] Missing frames for ${pack.skin}:${opts.anim}:${dir}`);
         }
         return frames[frameIndex];

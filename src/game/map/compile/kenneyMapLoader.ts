@@ -419,6 +419,17 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         else map.set(piece.zLogical, [piece]);
     }
 
+    const APRON_FACE_HEIGHT = 2;
+    const WALL_FACE_HEIGHT = 2;
+
+    function addSolidFaceSpan(tx: number, ty: number, zStart: number, zEnd: number, dir: WallDir) {
+        const z0 = Math.min(zStart, zEnd);
+        const z1 = Math.max(zStart, zEnd);
+        for (let z = z0; z < z1; z += 1) {
+            addSolidFace(tx, ty, z, dir);
+        }
+    }
+
     function addUnderlay(piece: RenderPiece) {
         underlays.push(piece);
         const k = `${piece.tx},${piece.ty}`;
@@ -426,7 +437,13 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         if (list) list.push(piece);
         else underlaysByKey.set(k, [piece]);
         if ((piece.kind === "FLOOR_APRON" || piece.kind === "STAIR_APRON") && piece.edgeDir) {
-            addSolidFace(piece.tx, piece.ty, piece.zLogical, piece.edgeDir);
+            addSolidFaceSpan(
+                piece.tx,
+                piece.ty,
+                piece.zLogical - APRON_FACE_HEIGHT,
+                piece.zLogical,
+                piece.edgeDir,
+            );
         }
     }
 
@@ -435,12 +452,27 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         const list = deferredApronsByKey.get(k);
         if (list) list.push(piece);
         else deferredApronsByKey.set(k, [piece]);
+        if ((piece.kind === "FLOOR_APRON" || piece.kind === "STAIR_APRON") && piece.edgeDir) {
+            addSolidFaceSpan(
+                piece.tx,
+                piece.ty,
+                piece.zLogical - APRON_FACE_HEIGHT,
+                piece.zLogical,
+                piece.edgeDir,
+            );
+        }
     }
 
     function addOccluder(piece: RenderPiece) {
         addPieceToLayerMap(occludersByLayer, piece);
         if (piece.kind === "WALL" && piece.wallDir) {
-            addSolidFace(piece.tx, piece.ty, piece.zLogical, piece.wallDir);
+            addSolidFaceSpan(
+                piece.tx,
+                piece.ty,
+                piece.zLogical,
+                piece.zLogical + WALL_FACE_HEIGHT,
+                piece.wallDir,
+            );
         }
     }
 

@@ -1,22 +1,13 @@
-// src/game/systems/playerSprites.ts
-import { dir8Index, type Dir8 } from "./dir8";
+import { type Dir8 } from "./dir8";
+import {
+    getSpriteFrame,
+    preloadSpritePack,
+    type SpriteLoaderSource,
+    type SpritePack,
+} from "./spriteLoader";
 
-export const PLAYER_SPRITE_SCALE = 2;
-const RUN_FRAME_SEC = 0.12;
+export const PLAYER_SPRITE_SCALE = 1;
 
-type SpriteSetDef = {
-    idle: string;
-    runA: string;
-    runB: string;
-    cellW: number;
-    cellH: number;
-    rows: number;
-    cols: number;
-    anchorX: number;
-    anchorY: number;
-};
-
-type Loaded = { img: HTMLImageElement; ready: boolean };
 type SpriteFrame = {
     img: HTMLImageElement;
     sx: number;
@@ -28,83 +19,37 @@ type SpriteFrame = {
     anchorY: number;
 };
 
-const PLAYER_SPRITES: SpriteSetDef = {
-    idle: "/src/assets/player/idle.png",
-    runA: "/src/assets/player/walk-1.png",
-    runB: "/src/assets/player/walk-2.png",
-    cellW: 64,
-    cellH: 64,
-    rows: 3,
-    cols: 3,
-    anchorX: 0.5,
-    anchorY: 0.65,
+const PLAYER_ASSET_MODULES = import.meta.glob("../../../assets/player/**/*", {
+    eager: true,
+    import: "default",
+}) as Record<string, string>;
+
+const PLAYER_SOURCE: SpriteLoaderSource = { packRoot: "/player", modules: PLAYER_ASSET_MODULES };
+const PLAYER_SKIN = "jack";
+const PLAYER_WALK_ANIM = "walk";
+const PLAYER_ANCHOR_X = 0.5;
+const PLAYER_ANCHOR_Y = 0.65;
+const PLAYER_SKIN_SCALE: Record<string, number> = {
+    jack: 1.25,
 };
 
-const cache: Record<string, Loaded> = Object.create(null);
+let playerPack: SpritePack | null = null;
 let _ready = false;
-
-function loadImage(path: string): Loaded {
-    const existing = cache[path];
-    if (existing) return existing;
-
-    const img = new Image();
-    const entry: Loaded = { img, ready: false };
-    cache[path] = entry;
-
-    img.onload = () => (entry.ready = true);
-    img.onerror = () => (entry.ready = false);
-    img.src = path;
-
-    return entry;
-}
-
-function validateSpriteSheet(def: SpriteSetDef, img: HTMLImageElement, path: string): boolean {
-    if (!path.toLowerCase().endsWith(".png")) {
-        console.warn(`[playerSprites] Sprite sheet must be PNG: ${path}`);
-        return false;
-    }
-    if (def.cellW <= 0 || def.cellH <= 0 || def.rows <= 0 || def.cols <= 0) {
-        console.warn(`[playerSprites] Invalid grid for sprite sheet: ${path}`);
-        return false;
-    }
-
-    const expectedW = def.cellW * def.cols;
-    const expectedH = def.cellH * def.rows;
-    if (img.width !== expectedW || img.height !== expectedH) {
-        console.warn(
-            `[playerSprites] Sprite sheet size mismatch: ${path} (${img.width}x${img.height}) expected ${expectedW}x${expectedH}`,
-        );
-        return false;
-    }
-
-    if (def.anchorX < 0 || def.anchorX > 1 || def.anchorY < 0 || def.anchorY > 1) {
-        console.warn(`[playerSprites] Anchor out of range for sprite sheet: ${path}`);
-        return false;
-    }
-
-    return true;
-}
 
 export async function preloadPlayerSprites() {
     if (_ready) return;
 
-    const paths = [PLAYER_SPRITES.idle, PLAYER_SPRITES.runA, PLAYER_SPRITES.runB];
-    const jobs = paths.map(
-        (path) =>
-            new Promise<void>((resolve) => {
-                const entry = loadImage(path);
-                if (entry.ready) {
-                    resolve();
-                    return;
-                }
-                const onDone = () => resolve();
-                entry.img.addEventListener("load", onDone, { once: true });
-                entry.img.addEventListener("error", onDone, { once: true });
-            }),
-    );
-
-    await Promise.all(jobs);
-    _ready = true;
+    try {
+        playerPack = await preloadSpritePack(PLAYER_SKIN, {
+            source: PLAYER_SOURCE,
+            animKeys: [PLAYER_WALK_ANIM],
+            frameCount: 6,
+        });
+        _ready = true;
+    } catch (err) {
+        console.warn("[playerSprites] Failed to preload player pack", err);
+        _ready = false;
+    }
 }
 
 export function playerSpritesReady() {
@@ -116,38 +61,28 @@ export function getPlayerSpriteFrame(args: {
     moving: boolean;
     time: number;
 }): SpriteFrame | null {
-    const def = PLAYER_SPRITES;
-    const framePath = args.moving
-        ? Math.floor(Math.max(0, args.time) / RUN_FRAME_SEC) % 2 === 0
-            ? def.runA
-            : def.runB
-        : def.idle;
+    if (!_ready || !playerPack) return null;
 
-    const loaded = loadImage(framePath);
-    if (!loaded.ready) return null;
-    if (!validateSpriteSheet(def, loaded.img, framePath)) return null;
+    try {
+        const img = getSpriteFrame(playerPack, {
+            dir: args.dir,
+            anim: args.moving ? PLAYER_WALK_ANIM : undefined,
+            t: args.time,
+            useRotationIfNoAnim: true,
+        });
 
-    const dirIndex = dir8Index(args.dir);
-    const dirToCell: Array<{ row: number; col: number }> = [
-        { row: 1, col: 1 }, // N (slot 5)
-        { row: 1, col: 0 }, // NE (slot 4)
-        { row: 0, col: 2 }, // E (slot 7)
-        { row: 0, col: 1 }, // SE (slot 2)
-        { row: 0, col: 0 }, // S (slot 1)
-        { row: 2, col: 1 }, // SW (slot 8)
-        { row: 0, col: 2 }, // W (slot 3)
-        { row: 1, col: 2 }, // NW (slot 6)
-    ];
-    const cell = dirToCell[dirIndex] ?? dirToCell[0];
-
-    return {
-        img: loaded.img,
-        sx: cell.col * def.cellW,
-        sy: cell.row * def.cellH,
-        sw: def.cellW,
-        sh: def.cellH,
-        scale: PLAYER_SPRITE_SCALE,
-        anchorX: def.anchorX,
-        anchorY: def.anchorY,
-    };
+        return {
+            img,
+            sx: 0,
+            sy: 0,
+            sw: playerPack.size.w,
+            sh: playerPack.size.h,
+            scale: PLAYER_SKIN_SCALE[PLAYER_SKIN] ?? PLAYER_SPRITE_SCALE,
+            anchorX: PLAYER_ANCHOR_X,
+            anchorY: PLAYER_ANCHOR_Y,
+        };
+    } catch (err) {
+        console.warn("[playerSprites] Failed to read player frame", err);
+        return null;
+    }
 }
