@@ -592,7 +592,7 @@ export function createWorld(args: CreateWorldArgs): World {
   }
 
   recomputeDerivedStats(w);
-  (w as any).debugProjectileFaces = true;
+  (w as any).debugProjectileFaces = false;
 
   return w;
 }
