@@ -29,4 +29,4 @@ npm run test
 ```
 
 ## Agents
-See `src/ai/AGENTS.md`.
+See `docs/AGENTS.md`.

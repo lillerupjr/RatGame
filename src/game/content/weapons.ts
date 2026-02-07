@@ -1,6 +1,6 @@
 // src/game/content/weapons.ts
-import type { World } from "../world";
-import { gridAtPlayer } from "../world";
+import type { World } from "../../engine/world/world";
+import { gridAtPlayer } from "../../engine/world/world";
 import {
     PRJ_KIND,
     spawnKnucklesOrbitalGrid,
@@ -11,7 +11,7 @@ import { spawnZoneGrid, ZONE_KIND } from "../factories/zoneFactory";
 import type { TargetingStrategy } from "../util/targeting";
 import { findTarget, getEnemiesInRange } from "../util/targeting";
 import { gridToWorld, worldToGrid } from "../coords/grid";
-import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
+import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 
 
 export type WeaponId =

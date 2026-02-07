@@ -1,21 +1,21 @@
 // src/game/game.ts
-import { World, createWorld, clearEvents, emitEvent, gridAtPlayer } from "./world";
+import { World, createWorld, clearEvents, emitEvent, gridAtPlayer } from "../engine/world/world";
 
-import { InputState, createInputState, inputSystem, clearInputEdges } from "./systems/input";
-import { movementSystem } from "./systems/movement";
-import { spawnSystem } from "./systems/spawn";
-import { combatSystem } from "./systems/combat";
-import { collisionsSystem } from "./systems/collisions";
-import { projectilesSystem } from "./systems/projectiles";
-import { pickupsSystem } from "./systems/pickups";
-import { xpSystem } from "./systems/xp";
-import { renderSystem } from "./systems/render";
-import { zonesSystem } from "./systems/zones";
-import { onKillExplodeSystem } from "./systems/onKillExplode";
-import { bossSystem } from "./systems/boss";
-import { audioSystem } from "./systems/audio";
-import { preloadSfx } from "./audio/sfx";
-import { roomChallengeSystem } from "./systems/roomChallenge";
+import { InputState, createInputState, inputSystem, clearInputEdges } from "./systems/sim/input";
+import { movementSystem } from "./systems/sim/movement";
+import { spawnSystem } from "./systems/spawn/spawn";
+import { combatSystem } from "./systems/sim/combat";
+import { collisionsSystem } from "./systems/sim/collisions";
+import { projectilesSystem } from "./systems/sim/projectiles";
+import { pickupsSystem } from "./systems/progression/pickups";
+import { xpSystem } from "./systems/progression/xp";
+import { renderSystem } from "./systems/presentation/render";
+import { zonesSystem } from "./systems/sim/zones";
+import { onKillExplodeSystem } from "./systems/sim/onKillExplode";
+import { bossSystem } from "./systems/progression/boss";
+import { audioSystem } from "./systems/presentation/audio";
+import { preloadSfx } from "../engine/audio/sfx";
+import { roomChallengeSystem } from "./systems/progression/roomChallenge";
 
 import { getUpgradePool, UpgradeDef } from "./content/upgrades";
 import { formatTimeMMSS } from "./util/time";
@@ -23,13 +23,13 @@ import type { WeaponId } from "./content/weapons";
 import { registry } from "./content/registry";
 import { spawnEnemyGrid, ENEMY_TYPE } from "./factories/enemyFactory";
 import { gridToWorld, worldToGrid } from "./coords/grid";
-import { poisonSystem } from "./systems/poison";
-import { fissionSystem } from "./systems/fission";
+import { poisonSystem } from "./systems/sim/poison";
+import { fissionSystem } from "./systems/sim/fission";
 import { recomputeDerivedStats } from "./stats/derivedStats";
 import {buildStaticRunMap, getReachable, type RunMap, type MapNode} from "./map/runMap";
-import { KENNEY_TILE_WORLD, preloadKenneyTiles } from "./visual/kenneyTiles";
+import { KENNEY_TILE_WORLD, preloadKenneyTiles } from "../engine/render/kenneyTiles";
 
-import { initializeRoomChallenges } from "./systems/roomChallenge";
+import { initializeRoomChallenges } from "./systems/progression/roomChallenge";
 
 import {
   createDelveMap,
@@ -43,22 +43,22 @@ import {
   type DelveMap,
   type DelveNode,
 } from "./map/delveMap";
-import { preloadPlayerSprites } from "./visual/playerSprites";
-import { preloadBackgrounds } from "./visual/background";
-import { getProjectileSpriteByKind, preloadProjectileSprites } from "./visual/projectileSprites";
-import { setMusicStage, stopMusic } from "./audio/music";
-import type { TableMapDef } from "./map/tableMapTypes";
-import { loadTableMapDefFromJson } from "./map/jsonMapLoader";
-import excelSanctuary01Json from "./map/jsonMaps/excel_sanctuary_01.json";
-import wallTestJson from "./map/jsonMaps/wall_test.json";
-import excelRenderStress01Json from "./map/jsonMaps/excel_render_stress_01.json";
-import simpleTestJson from "./map/jsonMaps/simple_test.json";
-import testNorth5Json from "./map/jsonMaps/test_north_5.json";
-import testSouth5Json from "./map/jsonMaps/test_south_5.json";
-import testEast5Json from "./map/jsonMaps/test_east_5.json";
-import testWest5Json from "./map/jsonMaps/test_west_5.json";
-import floorTestJson from "./map/jsonMaps/floor_test.json";
-import jsonMinimalMap from "./map/jsonMaps/minimal.json";
+import { preloadPlayerSprites } from "../engine/render/sprites/playerSprites";
+import { preloadBackgrounds } from "./render/background";
+import { getProjectileSpriteByKind, preloadProjectileSprites } from "../engine/render/sprites/projectileSprites";
+import { setMusicStage, stopMusic } from "../engine/audio/music";
+import type { TableMapDef } from "./map/formats/table/tableMapTypes";
+import { loadTableMapDefFromJson } from "./map/formats/json/jsonMapLoader";
+import excelSanctuary01Json from "./map/authored/maps/jsonMaps/excel_sanctuary_01.json";
+import wallTestJson from "./map/authored/maps/jsonMaps/wall_test.json";
+import excelRenderStress01Json from "./map/authored/maps/jsonMaps/excel_render_stress_01.json";
+import simpleTestJson from "./map/authored/maps/jsonMaps/simple_test.json";
+import testNorth5Json from "./map/authored/maps/jsonMaps/test_north_5.json";
+import testSouth5Json from "./map/authored/maps/jsonMaps/test_south_5.json";
+import testEast5Json from "./map/authored/maps/jsonMaps/test_east_5.json";
+import testWest5Json from "./map/authored/maps/jsonMaps/test_west_5.json";
+import floorTestJson from "./map/authored/maps/jsonMaps/floor_test.json";
+import jsonMinimalMap from "./map/authored/maps/jsonMaps/minimal.json";
 import {
   activateMapDef,
   generateAndActivateFloorMap,
@@ -147,16 +147,16 @@ export function createGame(args: CreateGameArgs) {
   const input: InputState = createInputState();
 
   const staticMaps: TableMapDef[] = [
-    loadTableMapDefFromJson(excelSanctuary01Json, "jsonMaps/excel_sanctuary_01.json"),
-    loadTableMapDefFromJson(wallTestJson, "jsonMaps/wall_test.json"),
-    loadTableMapDefFromJson(excelRenderStress01Json, "jsonMaps/excel_render_stress_01.json"),
-    loadTableMapDefFromJson(simpleTestJson, "jsonMaps/simple_test.json"),
-    loadTableMapDefFromJson(testNorth5Json, "jsonMaps/test_north_5.json"),
-    loadTableMapDefFromJson(testSouth5Json, "jsonMaps/test_south_5.json"),
-    loadTableMapDefFromJson(testEast5Json, "jsonMaps/test_east_5.json"),
-    loadTableMapDefFromJson(testWest5Json, "jsonMaps/test_west_5.json"),
-    loadTableMapDefFromJson(floorTestJson, "jsonMaps/floor_test.json"),
-    loadTableMapDefFromJson(jsonMinimalMap, "jsonMaps/minimal.json"),
+    loadTableMapDefFromJson(excelSanctuary01Json, "authored/maps/jsonMaps/excel_sanctuary_01.json"),
+    loadTableMapDefFromJson(wallTestJson, "authored/maps/jsonMaps/wall_test.json"),
+    loadTableMapDefFromJson(excelRenderStress01Json, "authored/maps/jsonMaps/excel_render_stress_01.json"),
+    loadTableMapDefFromJson(simpleTestJson, "authored/maps/jsonMaps/simple_test.json"),
+    loadTableMapDefFromJson(testNorth5Json, "authored/maps/jsonMaps/test_north_5.json"),
+    loadTableMapDefFromJson(testSouth5Json, "authored/maps/jsonMaps/test_south_5.json"),
+    loadTableMapDefFromJson(testEast5Json, "authored/maps/jsonMaps/test_east_5.json"),
+    loadTableMapDefFromJson(testWest5Json, "authored/maps/jsonMaps/test_west_5.json"),
+    loadTableMapDefFromJson(floorTestJson, "authored/maps/jsonMaps/floor_test.json"),
+    loadTableMapDefFromJson(jsonMinimalMap, "authored/maps/jsonMaps/minimal.json"),
   ];
 
   function getStaticMapById(id: string | undefined): TableMapDef | undefined {

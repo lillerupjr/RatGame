@@ -1,7 +1,7 @@
-import type { World } from "../world";
-import { gridAtPlayer } from "../world";
+import type { World } from "../../engine/world/world";
+import { gridAtPlayer } from "../../engine/world/world";
 import { gridToWorld } from "./grid";
-import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
+import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 
 /** Get player world position derived from grid anchors. */
 export function getPlayerWorld(w: World, tileWorld = KENNEY_TILE_WORLD) {

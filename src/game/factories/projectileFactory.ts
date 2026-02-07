@@ -1,7 +1,7 @@
 // src/game/factories/projectileFactory.ts
-import type { World } from "../world";
+import type { World } from "../../engine/world/world";
 import { gridToWorld, worldToGrid } from "../coords/grid";
-import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
+import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 
 export type ProjectileSource =
     | "KNIFE"

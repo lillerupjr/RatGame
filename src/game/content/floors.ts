@@ -1,5 +1,5 @@
 // src/game/content/floors.ts
-import type { World } from "../world";
+import type { World } from "../../engine/world/world";
 import type { StageId } from "./stages";
 import { ENEMY_TYPE, type EnemyType } from "./enemies";
 

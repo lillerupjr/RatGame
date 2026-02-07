@@ -1,9 +1,9 @@
 // src/game/factories/enemyFactory.ts
-import type { World } from "../world";
+import type { World } from "../../engine/world/world";
 import { registry } from "../content/registry";
 import { ENEMY_TYPE, type EnemyType } from "../content/enemies";
 import { worldToGrid } from "../coords/grid";
-import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
+import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 
 export { ENEMY_TYPE };
 export type { EnemyType };

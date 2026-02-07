@@ -1,5 +1,5 @@
 // src/game/content/items.ts
-import type { World } from "../world";
+import type { World } from "../../engine/world/world";
 
 export type ItemId =
     | "DMG"

@@ -11,23 +11,23 @@ import {
     generateProceduralMapWithRooms,
     type ProceduralMapConfig,
     type ProceduralMapResult,
-} from "./proceduralMap";
+} from "./generators/proceduralMap";
 import {
     generateMazeFloorMap,
     generateMazeMapDef,
     type MazeMapConfig,
     type RoomGraph,
-} from "./mazeMap";
+} from "./generators/mazeMap";
 import {
     compileKenneyMapFromTable,
     type CompiledKenneyMap,
     type IsoTile,
-} from "./kenneyMapLoader";
-import type { TableMapDef } from "./tableMapTypes";
-import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
-import { PLANE_TILE_Z_OFFSET, setActiveMap as setKenneyActiveMap } from "./kenneyMap";
-import { initializeRoomChallenges } from "../systems/roomChallenge";
-import type { World } from "../world";
+} from "./compile/kenneyMapLoader";
+import type { TableMapDef } from "./formats/table/tableMapTypes";
+import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
+import { PLANE_TILE_Z_OFFSET, setActiveMap as setKenneyActiveMap } from "./compile/kenneyMap";
+import { initializeRoomChallenges } from "../systems/progression/roomChallenge";
+import type { World } from "../../engine/world/world";
 
 
 // ─────────────────────────────────────────────────────────────

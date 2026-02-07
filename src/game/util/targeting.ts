@@ -1,9 +1,9 @@
 // src/game/util/targeting.ts
 
-import type { World } from "../world";
-import { gridAtPlayer } from "../world";
+import type { World } from "../../engine/world/world";
+import { gridAtPlayer } from "../../engine/world/world";
 import { gridToWorld, worldToGrid } from "../coords/grid";
-import { KENNEY_TILE_WORLD } from "../visual/kenneyTiles";
+import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { queryCircle, queryCircleUnique } from "./spatialHash";
 
 /**

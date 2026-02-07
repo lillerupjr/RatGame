@@ -1,5 +1,5 @@
 // src/game/content/upgrades.ts
-import type { World } from "../world";
+import type { World } from "../../engine/world/world";
 import { registry } from "./registry";
 import type { WeaponId, WeaponStats } from "./weapons";
 import type { ItemId } from "./items";
