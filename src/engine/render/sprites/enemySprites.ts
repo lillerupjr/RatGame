@@ -259,14 +259,14 @@ export function getEnemySpriteFrame(args: {
 
     const dirIndex = dir8IndexFromVector(args.faceDx, args.faceDy);
     const dirToCell: Array<{ row: number; col: number }> = [
-        { row: 0, col: 1 }, // N
-        { row: 0, col: 2 }, // NE
-        { row: 1, col: 2 }, // E
-        { row: 2, col: 2 }, // SE
-        { row: 2, col: 1 }, // S
-        { row: 2, col: 0 }, // SW
-        { row: 1, col: 0 }, // W
-        { row: 0, col: 0 }, // NW
+        { row: 1, col: 1 }, // N (slot 5)
+        { row: 1, col: 0 }, // NE (slot 4)
+        { row: 0, col: 2 }, // E (slot 3)
+        { row: 0, col: 1 }, // SE (slot 2)
+        { row: 0, col: 0 }, // S (slot 1)
+        { row: 2, col: 1 }, // SW (slot 8)
+        { row: 2, col: 0 }, // W (slot 7)
+        { row: 1, col: 2 }, // NW (slot 6)
     ];
     const cell = dirToCell[dirIndex] ?? dirToCell[0];
 

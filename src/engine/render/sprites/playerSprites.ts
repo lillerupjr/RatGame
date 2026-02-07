@@ -1,7 +1,7 @@
 // src/game/systems/playerSprites.ts
 import { dir8Index, type Dir8 } from "./dir8";
 
-export const PLAYER_SPRITE_SCALE = 3;
+export const PLAYER_SPRITE_SCALE = 2;
 const RUN_FRAME_SEC = 0.12;
 
 type SpriteSetDef = {
@@ -32,8 +32,8 @@ const PLAYER_SPRITES: SpriteSetDef = {
     idle: "/src/assets/player/idle.png",
     runA: "/src/assets/player/walk-1.png",
     runB: "/src/assets/player/walk-2.png",
-    cellW: 32,
-    cellH: 32,
+    cellW: 64,
+    cellH: 64,
     rows: 3,
     cols: 3,
     anchorX: 0.5,
@@ -129,14 +129,14 @@ export function getPlayerSpriteFrame(args: {
 
     const dirIndex = dir8Index(args.dir);
     const dirToCell: Array<{ row: number; col: number }> = [
-        { row: 0, col: 1 }, // N
-        { row: 0, col: 2 }, // NE
-        { row: 1, col: 2 }, // E
-        { row: 2, col: 2 }, // SE
-        { row: 2, col: 1 }, // S
-        { row: 2, col: 0 }, // SW
-        { row: 1, col: 0 }, // W
-        { row: 0, col: 0 }, // NW
+        { row: 1, col: 1 }, // N (slot 5)
+        { row: 1, col: 0 }, // NE (slot 4)
+        { row: 0, col: 2 }, // E (slot 7)
+        { row: 0, col: 1 }, // SE (slot 2)
+        { row: 0, col: 0 }, // S (slot 1)
+        { row: 2, col: 1 }, // SW (slot 8)
+        { row: 0, col: 2 }, // W (slot 3)
+        { row: 1, col: 2 }, // NW (slot 6)
     ];
     const cell = dirToCell[dirIndex] ?? dirToCell[0];
 

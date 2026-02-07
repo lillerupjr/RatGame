@@ -3,14 +3,14 @@ export type Dir8 = (typeof DIR8_ORDER)[number];
 
 const ANGLE_TO_DIR8: Dir8[] = ["E", "NE", "N", "NW", "W", "SW", "S", "SE"];
 const DIR8_INDEX: Record<Dir8, number> = {
-    N: 5,
-    NE: 4,
-    E: 3,
-    SE: 2,
-    S: 1,
-    SW: 8,
-    W: 7,
-    NW: 6,
+    N: 0,
+    NE: 1,
+    E: 2,
+    SE: 3,
+    S: 4,
+    SW: 5,
+    W: 6,
+    NW: 7,
 };
 
 export function dir8FromVector(dx: number, dy: number): Dir8 {
