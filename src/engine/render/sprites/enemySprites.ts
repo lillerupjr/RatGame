@@ -4,36 +4,37 @@ import { getSpriteFrame, preloadSpritePack, type SpritePack } from "./spriteLoad
 
 type EnemySpriteDef = {
     skin: string;
+    scale: number;
     anchorX: number;
     anchorY: number;
     runAnim?: string;
 };
 
-const SKIN_SCALE: Record<string, number> = {
-    rat1: 3,
-};
-
 const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
     [ENEMY_TYPE.CHASER]: {
         skin: "rat1",
+        scale: 2,
         anchorX: 0.5,
         anchorY: 0.65,
         runAnim: "running-4-frames",
     },
     [ENEMY_TYPE.RUNNER]: {
         skin: "rat1",
+        scale: 4,
         anchorX: 0.5,
         anchorY: 0.65,
         runAnim: "running-4-frames",
     },
     [ENEMY_TYPE.BRUISER]: {
         skin: "rat1",
+        scale: 6,
         anchorX: 0.5,
         anchorY: 0.65,
         runAnim: "running-4-frames",
     },
     [ENEMY_TYPE.BOSS]: {
         skin: "rat1",
+        scale: 10,
         anchorX: 0.5,
         anchorY: 0.65,
         runAnim: "running-4-frames",
@@ -99,7 +100,7 @@ export function getEnemySpriteFrame(args: {
         sy: 0,
         sw: pack.size.w,
         sh: pack.size.h,
-        scale: SKIN_SCALE[def.skin] ?? 1,
+        scale: def.scale,
         anchorX: def.anchorX,
         anchorY: def.anchorY,
     };
