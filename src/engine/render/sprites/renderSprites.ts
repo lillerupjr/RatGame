@@ -57,12 +57,12 @@ function load(url: string): LoadedImg {
 // Paths (Vite-friendly): new URL(..., import.meta.url).href
 // ------------------------------------------------------------------
 
-const FLOOR_TOP = load(new URL("../../../assets/tiles/floor/top/floor_top.png", import.meta.url).href);
+const FLOOR_TOP = load(new URL("../../../assets/tiles/floor/top/test_top.png", import.meta.url).href);
 const FLOOR_APRON_S = load(
-    new URL("../../../assets/tiles/floor/curtain/floor_apron_s.png", import.meta.url).href
+    new URL("../../../assets/tiles/floor/curtain/test_apron_s.png", import.meta.url).href
 );
 const FLOOR_APRON_E = load(
-    new URL("../../../assets/tiles/floor/curtain/floor_apron_e.png", import.meta.url).href
+    new URL("../../../assets/tiles/floor/curtain/test_apron_e.png", import.meta.url).href
 );
 
 const STAIR_TOP_N = load(
