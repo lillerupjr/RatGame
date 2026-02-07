@@ -3,14 +3,11 @@
 import { describe, it, expect } from "vitest";
 import { isCircleHit, isPlayerHit, isEnemyInCircle } from "../../../../game/systems/sim/hitDetection";
 import type { World } from "../../../../engine/world/world";
-import { worldToGrid } from "../../../../game/coords/grid";
+import { anchorFromWorld } from "../../../../game/coords/anchor";
 import { KENNEY_TILE_WORLD } from "../../../../engine/render/kenneyTiles";
 
 function worldToAnchor(wx: number, wy: number) {
-  const gp = worldToGrid(wx, wy, KENNEY_TILE_WORLD);
-  const gxi = Math.floor(gp.gx);
-  const gyi = Math.floor(gp.gy);
-  return { gxi, gyi, gox: gp.gx - gxi, goy: gp.gy - gyi };
+  return anchorFromWorld(wx, wy, KENNEY_TILE_WORLD);
 }
 
 function setPlayerWorld(w: World, wx: number, wy: number) {

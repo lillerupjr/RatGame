@@ -3,7 +3,8 @@ import { InputState } from "./input";
 import { walkInfo, worldToTile } from "../../map/compile/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { Dir8 } from "../../../engine/render/sprites/playerSprites";
-import { gridToWorld, worldToGrid } from "../../coords/grid";
+import { gridToWorld } from "../../coords/grid";
+import { anchorFromWorld, writeAnchor } from "../../coords/anchor";
 import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
 import {
   computeFlowField,
@@ -24,10 +25,7 @@ function setAnchorFromWorld(
   wx: number,
   wy: number
 ): { gxi: number; gyi: number; gox: number; goy: number } {
-  const gp = worldToGrid(wx, wy, tileWorld);
-  const gxi = Math.floor(gp.gx);
-  const gyi = Math.floor(gp.gy);
-  return { gxi, gyi, gox: gp.gx - gxi, goy: gp.gy - gyi };
+  return anchorFromWorld(wx, wy, tileWorld);
 }
 
 function gridDirToWorldDir(tileWorld: number, dx: number, dy: number): WorldPos {
@@ -195,10 +193,7 @@ export function movementSystem(w: World, input: InputState, dt: number) {
       }
 
       const anchor = setAnchorFromWorld(KENNEY_TILE_WORLD, wx, wy);
-      w.egxi[i] = anchor.gxi;
-      w.egyi[i] = anchor.gyi;
-      w.egox[i] = anchor.gox;
-      w.egoy[i] = anchor.goy;
+      writeAnchor({ gxi: w.egxi, gyi: w.egyi, gox: w.egox, goy: w.egoy }, i, anchor);
 
       const ew = getEnemyWorld(w, i, KENNEY_TILE_WORLD);
       ex = ew.wx;

@@ -6,17 +6,8 @@
 
 import { World, emitEvent } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
+import { worldToTile } from "../../coords/tile";
 import { getPlayerWorld } from "../../coords/worldViews";
-
-/**
- * Convert world coordinates to tile coordinates.
- */
-function worldToTile(wx: number, wy: number, tileSize: number): { tx: number; ty: number } {
-    return {
-        tx: Math.floor(wx / tileSize),
-        ty: Math.floor(wy / tileSize),
-    };
-}
 
 /**
  * Check if a tile position is inside a room's bounds.

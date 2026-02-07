@@ -8,7 +8,8 @@ import { spawnZone, ZONE_KIND } from "../../factories/zoneFactory";
 import { clearSpatialHash, insertEntity, queryCircle } from "../../util/spatialHash";
 import type { ProjectileSource } from "../../factories/projectileFactory";
 import { onEnemyKilledForChallenge } from "../progression/roomChallenge";
-import { worldToGrid } from "../../coords/grid";
+import { anchorFromWorld, writeAnchor } from "../../coords/anchor";
+import { enqueueDelayedExplosion } from "./delayedExplosions";
 import {
   getEnemyWorld,
   getPlayerWorld,
@@ -68,36 +69,24 @@ export function collisionsSystem(w: World, dt: number) {
   let py = pWorld.wy;
 
   const setPlayerAnchorFromWorld = (wx: number, wy: number) => {
-    const gp = worldToGrid(wx, wy, KENNEY_TILE_WORLD);
-    const gxi = Math.floor(gp.gx);
-    const gyi = Math.floor(gp.gy);
-    w.pgxi = gxi;
-    w.pgyi = gyi;
-    w.pgox = gp.gx - gxi;
-    w.pgoy = gp.gy - gyi;
+    const anchor = anchorFromWorld(wx, wy, KENNEY_TILE_WORLD);
+    w.pgxi = anchor.gxi;
+    w.pgyi = anchor.gyi;
+    w.pgox = anchor.gox;
+    w.pgoy = anchor.goy;
     const wp = getPlayerWorld(w, KENNEY_TILE_WORLD);
     px = wp.wx;
     py = wp.wy;
   };
 
   const setEnemyAnchorFromWorld = (i: number, wx: number, wy: number) => {
-    const gp = worldToGrid(wx, wy, KENNEY_TILE_WORLD);
-    const gxi = Math.floor(gp.gx);
-    const gyi = Math.floor(gp.gy);
-    w.egxi[i] = gxi;
-    w.egyi[i] = gyi;
-    w.egox[i] = gp.gx - gxi;
-    w.egoy[i] = gp.gy - gyi;
+    const anchor = anchorFromWorld(wx, wy, KENNEY_TILE_WORLD);
+    writeAnchor({ gxi: w.egxi, gyi: w.egyi, gox: w.egox, goy: w.egoy }, i, anchor);
   };
 
   const setProjectileAnchorFromWorld = (i: number, wx: number, wy: number) => {
-    const gp = worldToGrid(wx, wy, KENNEY_TILE_WORLD);
-    const gxi = Math.floor(gp.gx);
-    const gyi = Math.floor(gp.gy);
-    w.prgxi[i] = gxi;
-    w.prgyi[i] = gyi;
-    w.prgox[i] = gp.gx - gxi;
-    w.prgoy[i] = gp.gy - gyi;
+    const anchor = anchorFromWorld(wx, wy, KENNEY_TILE_WORLD);
+    writeAnchor({ gxi: w.prgxi, gyi: w.prgyi, gox: w.prgox, goy: w.prgoy }, i, anchor);
   };
 
   const tryPlayerDisplace = (dx: number, dy: number) => {
@@ -344,14 +333,13 @@ export function collisionsSystem(w: World, dt: number) {
         const ringStep = (w as any).prAftershockRingStep?.[p] ?? 0;
 
         if (baseN > 0 && delay > 0 && ringR > 0 && maxWaves > 0) {
-          const q = ((w as any)._delayedExplosions ??= []);
           const baseAng = w.rng.range(0, Math.PI * 2);
           const rot = w.rng.range(0.15, 0.55);
 
           // wave 0 around the impact point (zx, zy)
           for (let k = 0; k < baseN; k++) {
             const ang = baseAng + (k * Math.PI * 2) / baseN;
-            q.push({
+            enqueueDelayedExplosion(w, {
               t: delay,
               x: zx + Math.cos(ang) * ringR,
               y: zy + Math.sin(ang) * ringR,

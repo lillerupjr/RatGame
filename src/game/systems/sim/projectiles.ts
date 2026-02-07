@@ -3,7 +3,7 @@ import { type World } from "../../../engine/world/world";
 import { spawnZone, ZONE_KIND } from "../../factories/zoneFactory";
 import { solidFace, worldToTile } from "../../map/compile/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
-import { worldToGrid } from "../../coords/grid";
+import { anchorFromWorld, writeAnchor } from "../../coords/anchor";
 import { getPlayerWorld, getProjectileWorld } from "../../coords/worldViews";
 
 // --- Movement substepping (prevents "one whole tile per frame") ---
@@ -38,13 +38,8 @@ export function projectilesSystem(w: World, dt: number) {
     // Phase 1: no stair/projectile coupling
 
     const syncProjectileGrid = (i: number, wx: number, wy: number) => {
-        const gp = worldToGrid(wx, wy, T);
-        const gxi = Math.floor(gp.gx);
-        const gyi = Math.floor(gp.gy);
-        w.prgxi[i] = gxi;
-        w.prgyi[i] = gyi;
-        w.prgox[i] = gp.gx - gxi;
-        w.prgoy[i] = gp.gy - gyi;
+        const anchor = anchorFromWorld(wx, wy, T);
+        writeAnchor({ gxi: w.prgxi, gyi: w.prgyi, gox: w.prgox, goy: w.prgoy }, i, anchor);
     };
 
     const syncProjectileZ = (i: number) => {

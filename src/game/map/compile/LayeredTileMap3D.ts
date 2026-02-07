@@ -12,6 +12,7 @@ import { Vector3D, v3, v3Add } from "../../math/Vector3D";
 import { BoundingBox3D, bb3, bb3Intersects, bb3ContainsPoint } from "../../math/BoundingBox3D";
 import type { IsoTile, IsoTileKind } from "./kenneyMapLoader";
 import type { TableMapDef } from "../formats/table/tableMapTypes";
+import { worldToTile as worldToTileHelper, tileToWorldCenter } from "../../coords/tile";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -253,20 +254,14 @@ export class LayeredTileMap3D {
      * Convert world coordinates to tile coordinates.
      */
     worldToTile(wx: number, wy: number): { tx: number; ty: number } {
-        return {
-            tx: Math.floor(wx / this.config.tileSize),
-            ty: Math.floor(wy / this.config.tileSize),
-        };
+        return worldToTileHelper(wx, wy, this.config.tileSize);
     }
     
     /**
      * Convert tile coordinates to world coordinates (center of tile).
      */
     tileToWorld(tx: number, ty: number): { wx: number; wy: number } {
-        return {
-            wx: (tx + 0.5) * this.config.tileSize,
-            wy: (ty + 0.5) * this.config.tileSize,
-        };
+        return tileToWorldCenter(tx, ty, this.config.tileSize);
     }
     
     /**

@@ -1,6 +1,7 @@
 // src/game/factories/zoneFactory.ts
 import type { World } from "../../engine/world/world";
-import { gridToWorld, worldToGrid } from "../coords/grid";
+import { gridToWorld } from "../coords/grid";
+import { anchorFromWorld } from "../coords/anchor";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 
 export const ZONE_KIND = {
@@ -41,13 +42,11 @@ export function spawnZone(w: World, a: SpawnZoneArgs) {
 
     w.zAlive.push(true);
     w.zKind.push(a.kind);
-    const gp = worldToGrid(a.x, a.y, KENNEY_TILE_WORLD);
-    const gxi = Math.floor(gp.gx);
-    const gyi = Math.floor(gp.gy);
-    w.zgxi.push(gxi);
-    w.zgyi.push(gyi);
-    w.zgox.push(gp.gx - gxi);
-    w.zgoy.push(gp.gy - gyi);
+    const anchor = anchorFromWorld(a.x, a.y, KENNEY_TILE_WORLD);
+    w.zgxi.push(anchor.gxi);
+    w.zgyi.push(anchor.gyi);
+    w.zgox.push(anchor.gox);
+    w.zgoy.push(anchor.goy);
 
 
     w.zR.push(a.radius);

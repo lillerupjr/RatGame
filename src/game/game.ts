@@ -23,6 +23,7 @@ import type { WeaponId } from "./content/weapons";
 import { registry } from "./content/registry";
 import { spawnEnemyGrid, ENEMY_TYPE } from "./factories/enemyFactory";
 import { gridToWorld, worldToGrid } from "./coords/grid";
+import { anchorFromWorld } from "./coords/anchor";
 import { poisonSystem } from "./systems/sim/poison";
 import { fissionSystem } from "./systems/sim/fission";
 import { recomputeDerivedStats } from "./stats/derivedStats";
@@ -132,11 +133,11 @@ export function createGame(args: CreateGameArgs) {
     const pw = gridToWorld(pg.gx, pg.gy, KENNEY_TILE_WORLD);
     const px = pw.wx + DEBUG_SPAWN_OFF_X;
     const py = pw.wy + DEBUG_SPAWN_OFF_Y;
-    const gp = worldToGrid(px, py, KENNEY_TILE_WORLD);
-    w.pgxi = Math.floor(gp.gx);
-    w.pgyi = Math.floor(gp.gy);
-    w.pgox = gp.gx - w.pgxi;
-    w.pgoy = gp.gy - w.pgyi;
+    const anchor = anchorFromWorld(px, py, KENNEY_TILE_WORLD);
+    w.pgxi = anchor.gxi;
+    w.pgyi = anchor.gyi;
+    w.pgox = anchor.gox;
+    w.pgoy = anchor.goy;
     // Keep these sane when debugging spawn
     w.pvx = 0;
     w.pvy = 0;

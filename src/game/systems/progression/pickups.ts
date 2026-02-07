@@ -1,24 +1,30 @@
 import { World } from "../../../engine/world/world";
 import type { DropId } from "../../content/drops";
-import { gridToWorld, worldToGrid } from "../../coords/grid";
+import { gridToWorld } from "../../coords/grid";
+import { anchorFromWorld, writeAnchor } from "../../coords/anchor";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getPickupWorld, getPlayerWorld } from "../../coords/worldViews";
+import { handleChestPickup } from "../sim/pickupHandlers";
 
 export const PICKUP_KIND = {
   XP: 1,
   CHEST: 2,
 } as const;
 
+export function handlePickupSpecialCase(w: World, i: number, kind: number): boolean {
+  if (kind === PICKUP_KIND.CHEST) {
+    handleChestPickup(w, i);
+    return true;
+  }
+
+  return false;
+}
+
 /** Update pickup movement (vacuum/magnet) and sync grid anchors. */
 export function pickupsSystem(w: World, dt: number) {
   const syncPickupGrid = (i: number, wx: number, wy: number) => {
-    const gp = worldToGrid(wx, wy, KENNEY_TILE_WORLD);
-    const gxi = Math.floor(gp.gx);
-    const gyi = Math.floor(gp.gy);
-    w.xgxi[i] = gxi;
-    w.xgyi[i] = gyi;
-    w.xgox[i] = gp.gx - gxi;
-    w.xgoy[i] = gp.gy - gyi;
+    const anchor = anchorFromWorld(wx, wy, KENNEY_TILE_WORLD);
+    writeAnchor({ gxi: w.xgxi, gyi: w.xgyi, gox: w.xgox, goy: w.xgoy }, i, anchor);
   };
 
   // Update magnet timer
@@ -68,13 +74,11 @@ export function spawnXp(w: World, x: number, y: number, value: number) {
 
   w.xAlive.push(true);
   w.xKind.push(PICKUP_KIND.XP);
-  const gp = worldToGrid(x, y, KENNEY_TILE_WORLD);
-  const gxi = Math.floor(gp.gx);
-  const gyi = Math.floor(gp.gy);
-  w.xgxi.push(gxi);
-  w.xgyi.push(gyi);
-  w.xgox.push(gp.gx - gxi);
-  w.xgoy.push(gp.gy - gyi);
+  const anchor = anchorFromWorld(x, y, KENNEY_TILE_WORLD);
+  w.xgxi.push(anchor.gxi);
+  w.xgyi.push(anchor.gyi);
+  w.xgox.push(anchor.gox);
+  w.xgoy.push(anchor.goy);
   w.xValue.push(value);
   w.xDropId.push("");
 
@@ -99,13 +103,11 @@ export function spawnChest(w: World, x: number, y: number, dropId: DropId = "BOS
 
   w.xAlive.push(true);
   w.xKind.push(PICKUP_KIND.CHEST);
-  const gp = worldToGrid(x, y, KENNEY_TILE_WORLD);
-  const gxi = Math.floor(gp.gx);
-  const gyi = Math.floor(gp.gy);
-  w.xgxi.push(gxi);
-  w.xgyi.push(gyi);
-  w.xgox.push(gp.gx - gxi);
-  w.xgoy.push(gp.gy - gyi);
+  const anchor = anchorFromWorld(x, y, KENNEY_TILE_WORLD);
+  w.xgxi.push(anchor.gxi);
+  w.xgyi.push(anchor.gyi);
+  w.xgox.push(anchor.gox);
+  w.xgoy.push(anchor.goy);
   w.xValue.push(0);
   w.xDropId.push(dropId);
 

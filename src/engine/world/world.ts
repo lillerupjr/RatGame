@@ -6,7 +6,7 @@ import type { GameEvent } from "../../game/events";
 import { KENNEY_TILE_WORLD } from "../render/kenneyTiles";
 import { getSpawnWorld } from "../../game/map/compile/kenneyMap";
 import { recomputeDerivedStats } from "../../game/stats/derivedStats";
-import { worldToGrid } from "../../game/coords/grid";
+import { anchorFromWorld } from "../../game/coords/anchor";
 
 import type { WeaponId } from "../../game/content/weapons";
 
@@ -575,11 +575,11 @@ export function createWorld(args: CreateWorldArgs): World {
   // Map-authored player spawn (SPAWN/P<number> tile)
   {
     const sp = getSpawnWorld(KENNEY_TILE_WORLD);
-    const gp = worldToGrid(sp.x, sp.y, KENNEY_TILE_WORLD);
-    w.pgxi = Math.floor(gp.gx);
-    w.pgyi = Math.floor(gp.gy);
-    w.pgox = gp.gx - w.pgxi;
-    w.pgoy = gp.gy - w.pgyi;
+    const anchor = anchorFromWorld(sp.x, sp.y, KENNEY_TILE_WORLD);
+    w.pgxi = anchor.gxi;
+    w.pgyi = anchor.gyi;
+    w.pgox = anchor.gox;
+    w.pgoy = anchor.goy;
 
     w.pz = sp.z;
     w.pzVisual = sp.z;

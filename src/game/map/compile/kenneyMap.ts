@@ -19,6 +19,7 @@ import {
 import type { TableMapDef } from "../formats/table/tableMapTypes";
 import { worldDeltaToScreen } from "../../../engine/math/iso";
 import { gridToWorld, worldToGrid } from "../../coords/grid";
+import { worldToTile, tileToWorldCenter } from "../../coords/tile";
 import { generateFloorMap } from "../generators/proceduralMap";
 import { loadTableMapDefFromJson } from "../formats/json/jsonMapLoader";
 import excelSanctuary01Json from "../authored/maps/jsonMaps/excel_sanctuary_01.json";
@@ -32,6 +33,7 @@ export type {
     RenderRole,
     ViewRect,
 } from "./kenneyMapLoader";
+export { worldToTile, tileToWorldCenter };
 
 // Plane tiles are visually 2 units tall; lower their placement by 1 unit.
 export const PLANE_TILE_Z_OFFSET = -1;
@@ -225,6 +227,16 @@ export function occluderLayers(): number[] {
     const ks = Array.from(_compiled.occludersByLayer.keys());
     ks.sort((a, b) => a - b);
     return ks;
+}
+
+/** Return logical layers relevant for rendering (tops + occluders). */
+export function renderLayers(): number[] {
+    const layerSet = new Set<number>();
+    for (const h of topLayers()) layerSet.add(h);
+    for (const h of occluderLayers()) layerSet.add(h);
+    const layers = Array.from(layerSet);
+    layers.sort((a, b) => a - b);
+    return layers;
 }
 
 /** Return true if a solid wall face exists on a tile edge at a logical layer. */
@@ -809,16 +821,6 @@ export function heightAtWorld(
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Convert world coords -> tile coords given world-units-per-tile.
- * Uses the same convention as the renderer.
- */
-export function worldToTile(wx: number, wy: number, tileWorld: number) {
-    const tx = Math.floor(wx / tileWorld);
-    const ty = Math.floor(wy / tileWorld);
-    return { tx, ty };
-}
-
-/**
  * Convert world position -> tile coords + tile-local top-face pixels (lx,ly).
  *
  * NOTE:
@@ -827,8 +829,7 @@ export function worldToTile(wx: number, wy: number, tileWorld: number) {
  * - then we map that projected offset into the canonical top-face box: 128x64.
  */
 function worldToTileTopLocalPx(wx: number, wy: number, tileWorld: number) {
-    const tx = Math.floor(wx / tileWorld);
-    const ty = Math.floor(wy / tileWorld);
+    const { tx, ty } = worldToTile(wx, wy, tileWorld);
 
     const ox = wx - (tx + 0.5) * tileWorld;
     const oy = wy - (ty + 0.5) * tileWorld;

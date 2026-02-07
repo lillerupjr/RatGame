@@ -1,6 +1,7 @@
 // src/game/content/weapons.ts
 import type { World } from "../../engine/world/world";
 import { gridAtPlayer } from "../../engine/world/world";
+import { anchorFromWorld, writeAnchor } from "../coords/anchor";
 import {
     PRJ_KIND,
     spawnKnucklesOrbitalGrid,
@@ -1187,18 +1188,18 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const radius = s.projectileRadius;
             const dmg = s.damage;
             const pg = gridAtPlayer(w);
-            const gxi = Math.floor(pg.gx);
-            const gyi = Math.floor(pg.gy);
             const pw = worldPosFromGrid(pg.gx, pg.gy);
+            const anchor = anchorFromWorld(pw.x, pw.y, TILE_WORLD);
 
             if (existing !== undefined && w.zAlive[existing]) {
                 w.zKind[existing] = ZONE_KIND.AURA;
                 w.zFollowPlayer[existing] = true;
 
-                w.zgxi[existing] = gxi;
-                w.zgyi[existing] = gyi;
-                w.zgox[existing] = pg.gx - gxi;
-                w.zgoy[existing] = pg.gy - gyi;
+                writeAnchor(
+                    { gxi: w.zgxi, gyi: w.zgyi, gox: w.zgox, goy: w.zgoy },
+                    existing,
+                    anchor
+                );
                 w.zR[existing] = radius;
                 w.zDamage[existing] = dmg;
 

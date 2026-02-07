@@ -20,6 +20,7 @@ import {
   deferredApronsAtXY,
   occluderLayers,
   occludersInViewForLayer,
+  renderLayers,
   topLayers,
   viewRectFromWorldCenter,
   type RenderPiece,
@@ -505,8 +506,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // ----------------------------
   const layerSet = new Set<number>();
   if (RENDER_ALL_HEIGHTS) {
-    for (const h of topLayers()) layerSet.add(h);
-    for (const h of occluderLayers()) layerSet.add(h);
+    for (const h of renderLayers()) layerSet.add(h);
     for (const h of zonesByLayer.keys()) layerSet.add(h);
     for (const h of itemsByLayer.keys()) layerSet.add(h);
   } else {

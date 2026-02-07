@@ -2,7 +2,8 @@
 import type { World } from "../../engine/world/world";
 import { registry } from "../content/registry";
 import { ENEMY_TYPE, type EnemyType } from "../content/enemies";
-import { worldToGrid } from "../coords/grid";
+import { gridToWorld, worldToGrid } from "../coords/grid";
+import { anchorFromWorld } from "../coords/anchor";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 
 export { ENEMY_TYPE };
@@ -35,12 +36,12 @@ export function spawnEnemyGrid(
     const i = w.eAlive.length;
     w.eAlive.push(true);
     w.eType.push(type);
-    const gxi = Math.floor(gx);
-    const gyi = Math.floor(gy);
-    w.egxi.push(gxi);
-    w.egyi.push(gyi);
-    w.egox.push(gx - gxi);
-    w.egoy.push(gy - gyi);
+    const wp = gridToWorld(gx, gy, _tileWorld);
+    const anchor = anchorFromWorld(wp.wx, wp.wy, _tileWorld);
+    w.egxi.push(anchor.gxi);
+    w.egyi.push(anchor.gyi);
+    w.egox.push(anchor.gox);
+    w.egoy.push(anchor.goy);
 
     w.evx.push(0);
     w.evy.push(0);

@@ -1,6 +1,6 @@
 import { emitEvent, type World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
-import { spawnChestGrid, spawnXpGrid, PICKUP_KIND } from "./pickups";
+import { spawnChestGrid, spawnXpGrid, PICKUP_KIND, handlePickupSpecialCase } from "./pickups";
 import { ENEMY_TYPE } from "../../factories/enemyFactory";
 import { getPickupWorld, getPlayerWorld } from "../../coords/worldViews";
 
@@ -71,29 +71,7 @@ export function xpSystem(w: World, _dt: number) {
     }
 
     if (kind === PICKUP_KIND.CHEST) {
-      w.xAlive[i] = false;
-
-      // Unblock boss progression once chest is taken
-      w.bossRewardPending = false;
-      // Boss beat reward: heal to full
-      w.playerHp = w.playerHpMax;
-
-      // SFX: chest pickup
-      emitEvent(w, { type: "SFX", id: "CHEST_PICKUP", vol: 1.0, rate: 1 });
-
-      // Signal game.ts to pause + roll/apply reward + show popup
-      w.chestOpenRequested = true;
-    }
-
-
-    if (kind === PICKUP_KIND.CHEST) {
-      w.xAlive[i] = false;
-
-      // Unblock boss progression once chest is taken
-      w.bossRewardPending = false;
-
-      // Signal game.ts to pause + roll/apply reward + show popup
-      w.chestOpenRequested = true;
+      handlePickupSpecialCase(w, i, kind);
     }
   }
 }

@@ -1,6 +1,7 @@
 // src/game/factories/projectileFactory.ts
 import type { World } from "../../engine/world/world";
-import { gridToWorld, worldToGrid } from "../coords/grid";
+import { gridToWorld } from "../coords/grid";
+import { anchorFromWorld } from "../coords/anchor";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 
 export type ProjectileSource =
@@ -122,13 +123,12 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     w.prjKind.push(a.kind);
     (w as any)._lastFireProjKind = a.kind;
 
-    const gp = worldToGrid(a.x, a.y, KENNEY_TILE_WORLD);
-    const gxi = Math.floor(gp.gx);
-    const gyi = Math.floor(gp.gy);
-    w.prgxi.push(gxi);
-    w.prgyi.push(gyi);
-    w.prgox.push(gp.gx - gxi);
-    w.prgoy.push(gp.gy - gyi);
+    const anchor = anchorFromWorld(a.x, a.y, KENNEY_TILE_WORLD);
+    const gp = { gx: anchor.gxi + anchor.gox, gy: anchor.gyi + anchor.goy };
+    w.prgxi.push(anchor.gxi);
+    w.prgyi.push(anchor.gyi);
+    w.prgox.push(anchor.gox);
+    w.prgoy.push(anchor.goy);
     const wp = gridToWorld(gp.gx, gp.gy, KENNEY_TILE_WORLD);
     const wx = wp.wx;
     const wy = wp.wy;
