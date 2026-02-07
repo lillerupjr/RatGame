@@ -7,6 +7,9 @@ import { KENNEY_TILE_WORLD } from "../render/kenneyTiles";
 import { getSpawnWorld } from "../../game/map/compile/kenneyMap";
 import { recomputeDerivedStats } from "../../game/stats/derivedStats";
 import { anchorFromWorld } from "../../game/coords/anchor";
+import type { TriggerInstance } from "../../game/triggers/triggerTypes";
+import type { TriggerSignal } from "../../game/triggers/triggerSignals";
+import type { ObjectiveDef, ObjectiveEvent, ObjectiveState } from "../../game/systems/progression/objective";
 
 import type { WeaponId } from "../../game/content/weapons";
 
@@ -42,6 +45,16 @@ export type World = {
 
   // Event queue (audio, hits, kills, pickups, etc.)
   events: GameEvent[];
+
+  // Trigger registry and signal queue
+  triggerMapId: string | null;
+  triggerRegistry: TriggerInstance[];
+  triggerSignals: TriggerSignal[];
+
+  // Objective registry and events
+  objectiveDefs: ObjectiveDef[];
+  objectiveStates: ObjectiveState[];
+  objectiveEvents: ObjectiveEvent[];
 
   // -------------------------
   // Stage / floor
@@ -362,6 +375,14 @@ export function createWorld(args: CreateWorldArgs): World {
     runState: "FLOOR",
     rng,
     events: [],
+
+    triggerMapId: null,
+    triggerRegistry: [],
+    triggerSignals: [],
+
+    objectiveDefs: [],
+    objectiveStates: [],
+    objectiveEvents: [],
 
     // Stage / floor
     stage,

@@ -1,10 +1,19 @@
 // src/game/map/jsonMapLoader.ts
-import type { TableMapCell, TableMapDef } from "../table/tableMapTypes";
+import type {
+  TableMapCell,
+  TableMapDef,
+  TableObjectiveDef,
+  TableObjectiveRule,
+  TableOutcomeDef,
+} from "../table/tableMapTypes";
 
 type JsonMapCell = {
   x: number;
   y: number;
   t: string;
+  triggerId?: string;
+  triggerType?: string;
+  radius?: number;
 };
 
 type JsonMapDef = {
@@ -16,6 +25,7 @@ type JsonMapDef = {
   defaultSpawnSkin?: string;
   centerOnZero?: boolean;
   metadata?: unknown;
+  objectiveDefs?: TableObjectiveDef[];
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -68,6 +78,115 @@ function optionalBooleanField(obj: Record<string, unknown>, key: string): boolea
   return value;
 }
 
+function optionalNumberField(obj: Record<string, unknown>, key: string): number | undefined {
+  const value = obj[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`JSON map loader: optional field "${key}" must be a number.`);
+  }
+  return value;
+}
+
+function requireArrayField(
+  obj: Record<string, unknown>,
+  key: string,
+  source?: string
+): unknown[] {
+  const value = obj[key];
+  if (!Array.isArray(value)) {
+    throw new Error(`JSON map loader${formatSource(source)}: missing array field "${key}".`);
+  }
+  return value;
+}
+
+function requireStringArrayField(
+  obj: Record<string, unknown>,
+  key: string,
+  source?: string
+): string[] {
+  const value = requireArrayField(obj, key, source);
+  for (let i = 0; i < value.length; i++) {
+    if (typeof value[i] !== "string") {
+      throw new Error(`JSON map loader${formatSource(source)}: "${key}" must be an array of strings.`);
+    }
+  }
+  return value as string[];
+}
+
+function parseObjectiveRule(
+  data: Record<string, unknown>,
+  source?: string
+): TableObjectiveRule {
+  const type = requireStringField(data, "type", source);
+  if (type !== "SIGNAL_COUNT") {
+    throw new Error(`JSON map loader${formatSource(source)}: unsupported objective rule "${type}".`);
+  }
+  const count = requireNumberField(data, "count", source);
+  const signalType = optionalStringField(data, "signalType");
+  if (signalType && !["ENTER", "EXIT", "KILL", "TICK", "INTERACT"].includes(signalType)) {
+    throw new Error(`JSON map loader${formatSource(source)}: invalid signalType "${signalType}".`);
+  }
+  return {
+    type: "SIGNAL_COUNT",
+    count,
+    signalType: signalType as TableObjectiveRule["signalType"],
+  };
+}
+
+function parseOutcomeDef(
+  data: Record<string, unknown>,
+  source?: string
+): TableOutcomeDef {
+  const id = requireStringField(data, "id", source);
+  const payload = data.payload;
+  if (payload !== undefined && !isRecord(payload)) {
+    throw new Error(`JSON map loader${formatSource(source)}: outcome payload must be an object.`);
+  }
+  return {
+    id,
+    payload: payload as Record<string, unknown> | undefined,
+  };
+}
+
+function parseObjectiveDefs(
+  obj: Record<string, unknown>,
+  source?: string
+): TableObjectiveDef[] | undefined {
+  if (obj.objectiveDefs === undefined) return undefined;
+  const entries = requireArrayField(obj, "objectiveDefs", source);
+  return entries.map((entry, index) => {
+    if (!isRecord(entry)) {
+      throw new Error(
+        `JSON map loader${formatSource(source)}: objectiveDefs[${index}] must be an object.`
+      );
+    }
+    const id = requireStringField(entry, "id", source);
+    const listensTo = requireStringArrayField(entry, "listensTo", source);
+    const completionRuleRaw = entry.completionRule;
+    if (!isRecord(completionRuleRaw)) {
+      throw new Error(
+        `JSON map loader${formatSource(source)}: objectiveDefs[${index}].completionRule must be an object.`
+      );
+    }
+    const completionRule = parseObjectiveRule(completionRuleRaw, source);
+    const outcomesRaw = requireArrayField(entry, "outcomes", source);
+    const outcomes = outcomesRaw.map((outcome, outcomeIndex) => {
+      if (!isRecord(outcome)) {
+        throw new Error(
+          `JSON map loader${formatSource(source)}: objectiveDefs[${index}].outcomes[${outcomeIndex}] must be an object.`
+        );
+      }
+      return parseOutcomeDef(outcome, source);
+    });
+    return {
+      id,
+      listensTo,
+      completionRule,
+      outcomes,
+    };
+  });
+}
+
 function requireCellsField(
   obj: Record<string, unknown>,
   source?: string
@@ -87,8 +206,11 @@ function requireCellsField(
     const x = requireNumberField(cell, "x", source);
     const y = requireNumberField(cell, "y", source);
     const t = requireStringField(cell, "t", source);
+    const triggerId = optionalStringField(cell, "triggerId");
+    const triggerType = optionalStringField(cell, "triggerType");
+    const radius = optionalNumberField(cell, "radius");
 
-    return { x, y, t };
+    return { x, y, t, triggerId, triggerType, radius };
   });
 }
 
@@ -105,6 +227,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
   const defaultFloorSkin = optionalStringField(data, "defaultFloorSkin");
   const defaultSpawnSkin = optionalStringField(data, "defaultSpawnSkin");
   const centerOnZero = optionalBooleanField(data, "centerOnZero");
+  const objectiveDefs = parseObjectiveDefs(data, source);
 
   const jsonDef: JsonMapDef = {
     id,
@@ -115,6 +238,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     defaultSpawnSkin,
     centerOnZero,
     metadata: data.metadata,
+    objectiveDefs,
   };
 
   return {
@@ -125,6 +249,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     defaultSpawnSkin: jsonDef.defaultSpawnSkin,
     centerOnZero: jsonDef.centerOnZero,
     cells: jsonDef.cells,
+    objectiveDefs: jsonDef.objectiveDefs,
   };
 }
 

@@ -16,6 +16,9 @@ import { bossSystem } from "./systems/progression/boss";
 import { audioSystem } from "./systems/presentation/audio";
 import { preloadSfx } from "../engine/audio/sfx";
 import { roomChallengeSystem } from "./systems/progression/roomChallenge";
+import { triggerSystem } from "./systems/progression/triggerSystem";
+import { objectiveSystem } from "./systems/progression/objective";
+import { outcomeSystem } from "./systems/progression/outcomeSystem";
 
 import { getUpgradePool, UpgradeDef } from "./content/upgrades";
 import { formatTimeMMSS } from "./util/time";
@@ -65,6 +68,7 @@ import {
   generateAndActivateFloorMap,
   generateAndActivateMazeFloorMap,
   getActiveRoomData,
+  applyObjectivesFromActiveMap,
 } from "./map/proceduralMapBridge";
 
 
@@ -175,6 +179,7 @@ export function createGame(args: CreateGameArgs) {
   }
 
   let world: World = createWorld({ seed: 1337, stage: cloneStage("DOCKS") });
+  applyObjectivesFromActiveMap(world);
   applyDebugSpawn(world);
 
 
@@ -453,6 +458,7 @@ export function createGame(args: CreateGameArgs) {
       seed,
       stage: cloneStage("DOCKS"),
     });
+    applyObjectivesFromActiveMap(world);
 
     // DEBUG: spawn offset
     applyDebugSpawn(world);
@@ -1025,6 +1031,9 @@ export function createGame(args: CreateGameArgs) {
     zonesSystem(world, dt);
     pickupsSystem(world, dt);
     xpSystem(world, dt);
+    triggerSystem(world, dt);
+    objectiveSystem(world);
+    outcomeSystem(world);
 
     // SFX consumes events before any early-return branches
     audioSystem(world, dt);

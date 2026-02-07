@@ -1,6 +1,7 @@
 // src/game/map/kenneyMapLoader.ts
 import type { TableMapDef } from "../formats/table/tableMapTypes";
 import { KENNEY_TILE_ANCHOR_Y } from "../../../engine/render/kenneyTiles";
+import type { TriggerDef } from "../../triggers/triggerTypes";
 
 export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL";
 export type StairDir = "N" | "E" | "S" | "W";
@@ -104,6 +105,8 @@ export type CompiledKenneyMap = {
     goalTx: number | null;
     goalTy: number | null;
     goalH: number;
+
+    triggerDefs: TriggerDef[];
 
     getTile(tx: number, ty: number): IsoTile;
     surfacesByKey: Map<string, Surface[]>;
@@ -845,6 +848,20 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
     const goalTx = goalTableX !== null ? goalTableX + originTx : null;
     const goalTy = goalTableY !== null ? goalTableY + originTy : null;
 
+    const triggerDefs: TriggerDef[] = [];
+    for (const c of def.cells) {
+        if (!c.triggerId || !c.triggerType) continue;
+        const fx = (def.w - 1) - (c.x | 0);
+        const fy = (def.h - 1) - (c.y | 0);
+        triggerDefs.push({
+            id: c.triggerId,
+            type: c.triggerType,
+            tx: fx + originTx,
+            ty: fy + originTy,
+            radius: c.radius,
+        });
+    }
+
     return {
         id: def.id,
         originTx,
@@ -859,6 +876,8 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         goalTx,
         goalTy,
         goalH,
+
+        triggerDefs,
 
         getTile,
         surfacesByKey,

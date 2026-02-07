@@ -28,6 +28,7 @@ import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { PLANE_TILE_Z_OFFSET, setActiveMap as setKenneyActiveMap } from "./compile/kenneyMap";
 import { initializeRoomChallenges } from "../systems/progression/roomChallenge";
 import type { World } from "../../engine/world/world";
+import { setObjectives } from "../systems/progression/objective";
 
 
 // ─────────────────────────────────────────────────────────────
@@ -177,6 +178,12 @@ export function activateMapDef(mapDef: TableMapDef): CompiledKenneyMap {
     _activeRoomData = null;
     
     return compiled;
+}
+
+/** Apply objectives from the active map definition to the world. */
+export function applyObjectivesFromActiveMap(world: World): void {
+    const defs = _activeMapDef?.objectiveDefs ?? [];
+    setObjectives(world, defs);
 }
 
 // ─────────────────────────────────────────────────────────────

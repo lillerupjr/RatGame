@@ -1,266 +1,118 @@
-// src/game/systems/objective.ts
-//
-// Objective System
-// Handles tracking progress toward map objectives (e.g., reaching a destination).
+// src/game/systems/progression/objective.ts
 
 import type { World } from "../../../engine/world/world";
-import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
-import { getGoalWorldFromActive, getActiveMap } from "../../map/proceduralMapBridge";
-import { getPlayerWorld } from "../../coords/worldViews";
+import type { TriggerSignal } from "../../triggers/triggerSignals";
 
-// ─────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────
-
-export type ObjectiveType = "REACH_GOAL" | "SURVIVE" | "KILL_BOSS";
-
-export type ObjectiveState = {
-    type: ObjectiveType;
-    completed: boolean;
-    
-    // For REACH_GOAL objectives
-    goalX: number;
-    goalY: number;
-    goalZ: number;
-    goalRadius: number;  // World units - how close player must get
-    
-    // Progress tracking
-    distanceToGoal: number;
-    initialDistance: number;
-    progressPercent: number;
-    
-    // Time tracking
-    timeElapsed: number;
-    timeLimit: number | null;  // null = no time limit
+export type OutcomeDef = {
+    id: string;
+    payload?: Record<string, unknown>;
 };
 
-// ─────────────────────────────────────────────────────────────
-// State
-// ─────────────────────────────────────────────────────────────
+export type ObjectiveRule =
+    | {
+    type: "SIGNAL_COUNT";
+    count: number;
+    signalType?: TriggerSignal["type"];
+};
 
-let _objectiveState: ObjectiveState | null = null;
+export type ObjectiveDef = {
+    id: string;
+    listensTo: string[];
+    completionRule: ObjectiveRule;
+    outcomes: OutcomeDef[];
+};
 
-/**
- * Get the current objective state.
- */
-/** Return the current objective state if active. */
-export function getObjectiveState(): ObjectiveState | null {
-    return _objectiveState;
-}
+export type ObjectiveStatus = "IDLE" | "ACTIVE" | "COMPLETED" | "FAILED";
 
-/**
- * Check if the current objective is completed.
- */
-/** Return true if the current objective is completed. */
-export function isObjectiveCompleted(): boolean {
-    return _objectiveState?.completed ?? false;
-}
+export type ObjectiveProgress = {
+    signalCount: number;
+};
 
-// ─────────────────────────────────────────────────────────────
-// Initialization
-// ─────────────────────────────────────────────────────────────
+export type ObjectiveState = {
+    id: string;
+    status: ObjectiveStatus;
+    progress: ObjectiveProgress;
+};
 
-/**
- * Initialize a "reach goal" objective from the active procedural map.
- * Call this after generating and activating a procedural map.
- */
-/** Initialize a reach-goal or survive objective for the active map. */
-export function initReachGoalObjective(world: World, timeLimitSeconds: number | null = null): ObjectiveState | null {
-    const goal = getGoalWorldFromActive();
-    
-    if (!goal) {
-        // No goal on this map - use SURVIVE objective instead
-        _objectiveState = {
-            type: "SURVIVE",
-            completed: false,
-            goalX: 0,
-            goalY: 0,
-            goalZ: 0,
-            goalRadius: 0,
-            distanceToGoal: 0,
-            initialDistance: 0,
-            progressPercent: 0,
-            timeElapsed: 0,
-            timeLimit: timeLimitSeconds,
-        };
-        return _objectiveState;
-    }
-    
-    const playerWorld = getPlayerWorld(world, KENNEY_TILE_WORLD);
-    const distanceToGoal = Math.hypot(
-        goal.x - playerWorld.wx,
-        goal.y - playerWorld.wy
-    );
-    
-    _objectiveState = {
-        type: "REACH_GOAL",
-        completed: false,
-        goalX: goal.x,
-        goalY: goal.y,
-        goalZ: goal.z,
-        goalRadius: KENNEY_TILE_WORLD * 1.5, // Must be within 1.5 tiles
-        distanceToGoal,
-        initialDistance: distanceToGoal,
-        progressPercent: 0,
-        timeElapsed: 0,
-        timeLimit: timeLimitSeconds,
+export type ObjectiveEvent = {
+    type: "OBJECTIVE_RESOLVED";
+    objectiveId: string;
+    status: "COMPLETED" | "FAILED";
+    outcomes: OutcomeDef[];
+};
+
+/** Create a runtime state for an objective definition. */
+export function createObjectiveState(def: ObjectiveDef): ObjectiveState {
+    return {
+        id: def.id,
+        status: "IDLE",
+        progress: {
+            signalCount: 0,
+        },
     };
-    
-    return _objectiveState;
 }
 
-/**
- * Initialize a boss fight objective.
- */
-/** Initialize a boss objective with an optional time limit. */
-export function initBossObjective(timeLimitSeconds: number = 30): ObjectiveState {
-    _objectiveState = {
-        type: "KILL_BOSS",
-        completed: false,
-        goalX: 0,
-        goalY: 0,
-        goalZ: 0,
-        goalRadius: 0,
-        distanceToGoal: 0,
-        initialDistance: 0,
-        progressPercent: 0,
-        timeElapsed: 0,
-        timeLimit: timeLimitSeconds,
+/** Apply trigger signals to an objective state without mutating world state. */
+export function applySignalsToObjective(
+    def: ObjectiveDef,
+    state: ObjectiveState,
+    signals: TriggerSignal[]
+): ObjectiveState {
+    if (state.status === "COMPLETED" || state.status === "FAILED") return state;
+
+    const nextState: ObjectiveState = {
+        ...state,
+        status: state.status === "IDLE" ? "ACTIVE" : state.status,
+        progress: { ...state.progress },
     };
-    
-    return _objectiveState;
-}
 
-/**
- * Clear the current objective.
- */
-/** Clear the current objective state. */
-export function clearObjective(): void {
-    _objectiveState = null;
-}
+    const relevantSignals = signals.filter((signal) => def.listensTo.includes(signal.triggerId));
 
-// ─────────────────────────────────────────────────────────────
-// Update System
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Update the objective system each frame.
- * Call this in your main game loop.
- */
-/** Update objective progress each frame. */
-export function objectiveSystem(world: World, dt: number): void {
-    if (!_objectiveState || _objectiveState.completed) return;
-    
-    // Update time
-    _objectiveState.timeElapsed += dt;
-    
-    switch (_objectiveState.type) {
-        case "REACH_GOAL":
-            updateReachGoalObjective(world);
+    switch (def.completionRule.type) {
+        case "SIGNAL_COUNT": {
+            const countSignals = def.completionRule.signalType
+                ? relevantSignals.filter((signal) => signal.type === def.completionRule.signalType)
+                : relevantSignals;
+            nextState.progress.signalCount += countSignals.length;
+            if (nextState.progress.signalCount >= def.completionRule.count) {
+                nextState.status = "COMPLETED";
+            }
             break;
-        case "SURVIVE":
-            updateSurviveObjective(world);
-            break;
-        case "KILL_BOSS":
-            // Boss completion is handled externally when boss dies
-            break;
+        }
     }
+
+    return nextState;
 }
 
-function updateReachGoalObjective(world: World): void {
-    if (!_objectiveState) return;
-    
-    const playerWorld = getPlayerWorld(world, KENNEY_TILE_WORLD);
-    const dx = _objectiveState.goalX - playerWorld.wx;
-    const dy = _objectiveState.goalY - playerWorld.wy;
-    const distance = Math.hypot(dx, dy);
-    
-    _objectiveState.distanceToGoal = distance;
-    
-    // Calculate progress (inverse of distance ratio)
-    if (_objectiveState.initialDistance > 0) {
-        const traveled = _objectiveState.initialDistance - distance;
-        _objectiveState.progressPercent = Math.max(0, Math.min(100,
-            (traveled / _objectiveState.initialDistance) * 100
-        ));
-    }
-    
-    // Check completion
-    if (distance <= _objectiveState.goalRadius) {
-        _objectiveState.completed = true;
-        _objectiveState.progressPercent = 100;
-    }
+/** Initialize objectives for the world. */
+export function setObjectives(world: World, defs: ObjectiveDef[]): void {
+    world.objectiveDefs = defs;
+    world.objectiveStates = defs.map((def) => createObjectiveState(def));
+    world.objectiveEvents.length = 0;
 }
 
-function updateSurviveObjective(world: World): void {
-    if (!_objectiveState || !_objectiveState.timeLimit) return;
-    
-    // Progress is time-based
-    _objectiveState.progressPercent = Math.min(100,
-        (_objectiveState.timeElapsed / _objectiveState.timeLimit) * 100
-    );
-    
-    // Check completion
-    if (_objectiveState.timeElapsed >= _objectiveState.timeLimit) {
-        _objectiveState.completed = true;
-        _objectiveState.progressPercent = 100;
-    }
-}
+/** Process trigger signals and emit objective resolution events. */
+export function objectiveSystem(world: World): void {
+    if (world.objectiveDefs.length === 0) return;
 
-/**
- * Mark the boss objective as completed (call when boss dies).
- */
-/** Mark the current boss objective as completed. */
-export function completeBossObjective(): void {
-    if (_objectiveState && _objectiveState.type === "KILL_BOSS") {
-        _objectiveState.completed = true;
-        _objectiveState.progressPercent = 100;
-    }
-}
+    const signals = world.triggerSignals;
+    const nextStates: ObjectiveState[] = [];
 
-// ─────────────────────────────────────────────────────────────
-// Query Functions
-// ─────────────────────────────────────────────────────────────
+    for (let i = 0; i < world.objectiveDefs.length; i++) {
+        const def = world.objectiveDefs[i];
+        const state = world.objectiveStates[i] ?? createObjectiveState(def);
+        const updated = applySignalsToObjective(def, state, signals);
+        nextStates.push(updated);
 
-/**
- * Get the direction from player to goal (normalized).
- */
-/** Return normalized direction to the goal if one exists. */
-export function getDirectionToGoal(world: World): { dx: number; dy: number } | null {
-    if (!_objectiveState || _objectiveState.type !== "REACH_GOAL") {
-        return null;
+        if (state.status !== updated.status && (updated.status === "COMPLETED" || updated.status === "FAILED")) {
+            world.objectiveEvents.push({
+                type: "OBJECTIVE_RESOLVED",
+                objectiveId: def.id,
+                status: updated.status,
+                outcomes: def.outcomes,
+            });
+        }
     }
-    
-    const playerWorld = getPlayerWorld(world, KENNEY_TILE_WORLD);
-    const dx = _objectiveState.goalX - playerWorld.wx;
-    const dy = _objectiveState.goalY - playerWorld.wy;
-    const len = Math.hypot(dx, dy);
-    
-    if (len < 0.001) return { dx: 0, dy: 0 };
-    
-    return { dx: dx / len, dy: dy / len };
-}
 
-/**
- * Get time remaining (for timed objectives).
- */
-/** Return remaining time for timed objectives. */
-export function getTimeRemaining(): number | null {
-    if (!_objectiveState || _objectiveState.timeLimit === null) {
-        return null;
-    }
-    
-    return Math.max(0, _objectiveState.timeLimit - _objectiveState.timeElapsed);
-}
-
-/**
- * Check if player is close to the goal (for UI hints).
- */
-/** Return true if the player is within threshold of the goal. */
-export function isNearGoal(world: World, threshold: number = KENNEY_TILE_WORLD * 3): boolean {
-    if (!_objectiveState || _objectiveState.type !== "REACH_GOAL") {
-        return false;
-    }
-    
-    return _objectiveState.distanceToGoal <= threshold;
+    world.objectiveStates = nextStates;
 }
