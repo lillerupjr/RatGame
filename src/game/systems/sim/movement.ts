@@ -198,8 +198,9 @@ export function movementSystem(w: World, input: InputState, dt: number) {
       return true;
     };
 
-    tryEnemyMove(enx, ey);
-    tryEnemyMove(ex, eny);
+    const movedDiag = tryEnemyMove(enx, eny);
+    const movedX = movedDiag ? true : tryEnemyMove(enx, ey);
+    const movedY = movedDiag ? true : tryEnemyMove(ex, eny);
 
     const eGrid1 = gridFromAnchor(w.egxi[i], w.egyi[i], w.egox[i], w.egoy[i]);
     const dGx = eGrid1.gx - eGrid0.gx;
@@ -223,7 +224,9 @@ export function movementSystem(w: World, input: InputState, dt: number) {
 
   const moving = glen > 0.0001;
   if (!moving) {
-    (w as any)._plDir = "S";
+    const aimX = w.lastAimX ?? 0;
+    const aimY = w.lastAimY ?? 0;
+    (w as any)._plDir = Math.hypot(aimX, aimY) > 1e-4 ? dir8FromVector(aimX, aimY) : "S";
     (w as any)._plMoving = false;
     (w as any)._plAnimT = 0;
   } else {

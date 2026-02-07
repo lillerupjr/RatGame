@@ -40,7 +40,8 @@ export type FlowField = {
     dist: Float32Array;
     /**
      * Direction toward the player, encoded as tile-space delta index:
-     * 0 = at goal / unreachable, 1 = +tx, 2 = -tx, 3 = +ty, 4 = -ty
+     * 0 = at goal / unreachable, 1 = +tx, 2 = -tx, 3 = +ty, 4 = -ty,
+     * 5 = +tx+ty, 6 = +tx-ty, 7 = -tx+ty, 8 = -tx-ty
      */
     parentDir: Int8Array;
     /** The nav graph this field was built on. */
@@ -53,13 +54,9 @@ export type FlowField = {
     buildTime: number;
 };
 
-// Direction encoding: index → tile-space delta
-const DIR_DTX = [0, 1, -1, 0, 0];
-const DIR_DTY = [0, 0, 0, 1, -1];
-
-// Reverse direction: if we arrived at a neighbor by going +tx, the neighbor
-// should point back -tx (toward the player). So reverse[1]=2, reverse[2]=1, etc.
-const DIR_REVERSE = [0, 2, 1, 4, 3];
+// Direction encoding: index -> tile-space delta
+const DIR_DTX = [0, 1, -1, 0, 0, 1, 1, -1, -1];
+const DIR_DTY = [0, 0, 0, 1, -1, 1, -1, 1, -1];
 
 // ─────────────────────────────────────────────────────────────
 // MinHeap (priority queue for Dijkstra)
@@ -166,14 +163,14 @@ function buildNavGraph(tileWorld: number): NavGraph {
         }
     }
 
-    // Phase 2: build adjacency (4-directional)
+    // Phase 2: build adjacency (8-directional)
     const adj: { idx: number; cost: number }[][] = new Array(nodes.length);
     for (let i = 0; i < nodes.length; i++) adj[i] = [];
 
     for (let i = 0; i < nodes.length; i++) {
         const n = nodes[i];
 
-        for (let d = 1; d <= 4; d++) {
+        for (let d = 1; d <= 8; d++) {
             const ntx = n.tx + DIR_DTX[d];
             const nty = n.ty + DIR_DTY[d];
 
@@ -209,7 +206,9 @@ function buildNavGraph(tileWorld: number): NavGraph {
                 if (dz > MAX_STEP_Z) continue;
             }
 
-            const cost = rampInvolved ? RAMP_COST_MULT : 1.0;
+            const isDiagonal = DIR_DTX[d] !== 0 && DIR_DTY[d] !== 0;
+            const baseCost = isDiagonal ? Math.SQRT2 : 1.0;
+            const cost = rampInvolved ? baseCost * RAMP_COST_MULT : baseCost;
             adj[i].push({ idx: nIdx, cost });
         }
     }
@@ -288,6 +287,10 @@ export function computeFlowField(
                 else if (dtx === -1 && dty === 0) dir = 2;
                 else if (dtx === 0 && dty === 1) dir = 3;
                 else if (dtx === 0 && dty === -1) dir = 4;
+                else if (dtx === 1 && dty === 1) dir = 5;
+                else if (dtx === 1 && dty === -1) dir = 6;
+                else if (dtx === -1 && dty === 1) dir = 7;
+                else if (dtx === -1 && dty === -1) dir = 8;
 
                 parentDir[v] = dir;
                 heap.push(newDist, v);

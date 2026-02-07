@@ -1,6 +1,11 @@
 import { ENEMY_TYPE, type EnemyType } from "../../../game/content/enemies";
 import { dir8FromVector } from "./dir8";
-import { getSpriteFrame, preloadSpritePack, type SpritePack } from "./spriteLoader";
+import {
+    getSpriteFrame,
+    preloadSpritePack,
+    type SpriteLoaderSource,
+    type SpritePack,
+} from "./spriteLoader";
 
 type EnemySpriteDef = {
     skin: string;
@@ -8,7 +13,15 @@ type EnemySpriteDef = {
     anchorX: number;
     anchorY: number;
     runAnim?: string;
+    source?: SpriteLoaderSource;
+    frameCount?: number;
 };
+
+const PLAYER_ASSET_MODULES = import.meta.glob("../../../assets/player/**/*", {
+    eager: true,
+    import: "default",
+}) as Record<string, string>;
+const PLAYER_SOURCE: SpriteLoaderSource = { packRoot: "/player", modules: PLAYER_ASSET_MODULES };
 
 const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
     [ENEMY_TYPE.CHASER]: {
@@ -19,18 +32,21 @@ const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
         runAnim: "running-4-frames",
     },
     [ENEMY_TYPE.RUNNER]: {
-        skin: "rat1",
-        scale: 4,
+        skin: "jamal",
+        scale: 1.8,
         anchorX: 0.5,
         anchorY: 0.65,
-        runAnim: "running-4-frames",
+        runAnim: "walk",
+        source: PLAYER_SOURCE,
+        frameCount: 6,
     },
     [ENEMY_TYPE.BRUISER]: {
-        skin: "rat1",
-        scale: 6,
+        skin: "joey",
+        scale: 2,
         anchorX: 0.5,
         anchorY: 0.65,
         runAnim: "running-4-frames",
+        source: PLAYER_SOURCE,
     },
     [ENEMY_TYPE.BOSS]: {
         skin: "rat1",
@@ -51,7 +67,12 @@ export function preloadEnemySprites() {
 
     for (const skin of skins) {
         if (loadedPacks.has(skin)) continue;
-        preloadSpritePack(skin)
+        const def = Object.values(ENEMY_SPRITES).find((entry) => entry?.skin === skin);
+        preloadSpritePack(skin, {
+            source: def?.source,
+            animKeys: def?.runAnim ? [def.runAnim] : undefined,
+            frameCount: def?.frameCount,
+        })
             .then((pack) => {
                 loadedPacks.set(skin, pack);
             })
