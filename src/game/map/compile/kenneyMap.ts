@@ -521,7 +521,7 @@ export type RampFace = {
 function dot(ax: number, ay: number, bx: number, by: number) {
     return ax * bx + ay * by;
 }
-function clamp(v: number, lo: number, hi: number) {
+function clampRange(v: number, lo: number, hi: number) {
     return v < lo ? lo : v > hi ? hi : v;
 }
 
@@ -572,7 +572,7 @@ export function rampHeightAt(r: RampFace, p: Pt): number {
     const px = p.x - lowMid.x;
     const py = p.y - lowMid.y;
 
-    const t = clamp(dot(px, py, ax, ay) / denom, 0, 1);
+    const t = clampRange(dot(px, py, ax, ay) / denom, 0, 1);
     return r.z0 + (r.z1 - r.z0) * t;
 }
 

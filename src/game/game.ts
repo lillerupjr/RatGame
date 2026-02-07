@@ -21,6 +21,7 @@ import { objectiveSystem } from "./systems/progression/objective";
 import { outcomeSystem } from "./systems/progression/outcomeSystem";
 import { goldSystem } from "./systems/progression/gold";
 import { vendorSystem } from "./systems/progression/vendorSystem";
+import { bossZoneSpawnSystem } from "./systems/progression/bossZoneSpawn";
 
 import { getUpgradePool, UpgradeDef } from "./content/upgrades";
 import { formatTimeMMSS } from "./util/time";
@@ -90,6 +91,9 @@ type HudRefs = {
   killsPill: HTMLSpanElement;
   hpPill: HTMLSpanElement;
   lvlPill: HTMLSpanElement;
+  objectiveOverlay: HTMLDivElement;
+  objectiveTitle: HTMLDivElement;
+  objectiveStatus: HTMLDivElement;
 
   // NEW: inventory HUD
   weaponSlots: HTMLDivElement;
@@ -428,6 +432,7 @@ export function createGame(args: CreateGameArgs) {
     w.vendorOffers =
       floorIntent.archetype === "VENDOR" ? generateVendorOffers(floorIntent) : [];
     (w as any)._surviveBossSpawned = false;
+    w.bossZoneSpawned = [];
 
     emitEvent(w, { type: "SFX", id: "FLOOR_START", vol: 0.9, rate: 1 });
   }
@@ -1179,6 +1184,7 @@ export function createGame(args: CreateGameArgs) {
     xpSystem(world, dt);
     vendorSystem(world);
     triggerSystem(world, dt, input);
+    bossZoneSpawnSystem(world);
     objectiveSystem(world);
     outcomeSystem(world);
 

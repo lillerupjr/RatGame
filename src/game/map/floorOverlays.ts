@@ -6,8 +6,6 @@ import type { TriggerDef } from "../triggers/triggerTypes";
 import type { FloorIntent, PlacementPolicy } from "./floorIntent";
 import { OBJECTIVE_TRIGGER_IDS } from "../systems/progression/objectiveSpec";
 import { RNG } from "../util/rng";
-import { spawnEnemyGrid, ENEMY_TYPE } from "../factories/enemyFactory";
-import { worldToGrid } from "../coords/grid";
 
 export type OverlayAction =
   | {
@@ -70,9 +68,9 @@ function unpackKey(key: number): TilePoint {
 
 function collectReachableTiles(
   spawnTile: TilePoint
-): { tiles: TilePoint[]; walkable: Set<number> } {
+): { tiles: TilePoint[]; walkable: Set<number>; nodes: Map<number, WalkNode> } {
   const map = getActiveMap();
-  if (!map) return { tiles: [], walkable: new Set<number>() };
+  if (!map) return { tiles: [], walkable: new Set<number>(), nodes: new Map<number, WalkNode>() };
 
   const nodes = new Map<number, WalkNode>();
   const minTx = map.originTx;
@@ -100,7 +98,7 @@ function collectReachableTiles(
 
   const startKey = packKey(spawnTile.tx, spawnTile.ty);
   const start = nodes.get(startKey) ?? nodes.values().next().value;
-  if (!start) return { tiles: [], walkable: new Set<number>() };
+  if (!start) return { tiles: [], walkable: new Set<number>(), nodes };
 
   const walkable = new Set<number>();
   const tiles: TilePoint[] = [];
@@ -145,7 +143,7 @@ function collectReachableTiles(
     }
   }
 
-  return { tiles, walkable };
+  return { tiles, walkable, nodes };
 }
 
 function tileDist(a: TilePoint, b: TilePoint): number {
@@ -186,6 +184,7 @@ function pickSpawnZonesStatic(
 
 function bfsFarthest(
   start: TilePoint,
+  nodes: Map<number, WalkNode>,
   walkable: Set<number>
 ): { farthest: TilePoint; parents: Map<number, number> } {
   const queue: TilePoint[] = [];
@@ -208,12 +207,16 @@ function bfsFarthest(
     [0, 1],
     [0, -1],
   ];
+  const MAX_STEP_Z = 1.05;
+  const isConnectorish = (node: WalkNode) => node.isRamp || node.kind === "STAIRS";
 
   let qi = 0;
   while (qi < queue.length) {
     const cur = queue[qi++];
     const curKey = packKey(cur.tx, cur.ty);
     const curDist = dist.get(curKey) ?? 0;
+    const curNode = nodes.get(curKey);
+    if (!curNode) continue;
 
     if (curDist > farthestDist || (curDist === farthestDist && curKey < farthestKey)) {
       farthest = cur;
@@ -227,6 +230,17 @@ function bfsFarthest(
       const nKey = packKey(nx, ny);
       if (visited.has(nKey)) continue;
       if (!walkable.has(nKey)) continue;
+      const next = nodes.get(nKey);
+      if (!next) continue;
+
+      const connector = isConnectorish(curNode) || isConnectorish(next);
+      if (!connector) {
+        if (next.floorH !== curNode.floorH) continue;
+      } else {
+        const dz = Math.abs(next.z - curNode.z);
+        if (dz > MAX_STEP_Z) continue;
+      }
+
       visited.add(nKey);
       parents.set(nKey, curKey);
       dist.set(nKey, curDist + 1);
@@ -239,9 +253,10 @@ function bfsFarthest(
 
 function buildFarthestPath(
   start: TilePoint,
+  nodes: Map<number, WalkNode>,
   walkable: Set<number>
 ): TilePoint[] {
-  const result = bfsFarthest(start, walkable);
+  const result = bfsFarthest(start, nodes, walkable);
   const endKey = packKey(result.farthest.tx, result.farthest.ty);
 
   const path: TilePoint[] = [];
@@ -256,6 +271,7 @@ function buildFarthestPath(
 
 function pickSpawnZonesLongestPath(
   candidates: TilePoint[],
+  nodes: Map<number, WalkNode>,
   walkable: Set<number>,
   count: number,
   minSep: number,
@@ -265,7 +281,7 @@ function pickSpawnZonesLongestPath(
 ): TilePoint[] {
   if (candidates.length === 0) return [];
   const start = walkable.has(packKey(spawn.tx, spawn.ty)) ? spawn : candidates[0];
-  const path = buildFarthestPath(start, walkable);
+  const path = buildFarthestPath(start, nodes, walkable);
   if (path.length === 0) return [];
 
   const picks: TilePoint[] = [];
@@ -347,7 +363,7 @@ export function applyFloorOverlays(world: World, intent: FloorIntent): void {
   const spec = overlaySpecFromFloorIntent(intent);
   const spawn = getSpawnWorldFromActive();
   const spawnTile = { tx: spawn.tx, ty: spawn.ty };
-  const { tiles: candidates, walkable } = collectReachableTiles(spawnTile);
+  const { tiles: candidates, walkable, nodes } = collectReachableTiles(spawnTile);
   const rng = new RNG(buildOverlaySeed(intent));
 
   const overlayTriggers: TriggerDef[] = [];
@@ -369,6 +385,7 @@ export function applyFloorOverlays(world: World, intent: FloorIntent): void {
           action.placementPolicy === "LONGEST_PATH"
             ? pickSpawnZonesLongestPath(
                 candidates,
+                nodes,
                 walkable,
                 action.count,
                 action.minSeparationTiles,
@@ -399,6 +416,7 @@ export function applyFloorOverlays(world: World, intent: FloorIntent): void {
           action.placementPolicy === "LONGEST_PATH"
             ? pickSpawnZonesLongestPath(
                 candidates,
+                nodes,
                 walkable,
                 action.count,
                 action.minSeparationTiles,
@@ -414,15 +432,9 @@ export function applyFloorOverlays(world: World, intent: FloorIntent): void {
                 spawnTile
               );
         for (let i = 0; i < centers.length; i++) {
-          const cw = {
-            x: (centers[i].tx + 0.5) * KENNEY_TILE_WORLD,
-            y: (centers[i].ty + 0.5) * KENNEY_TILE_WORLD,
-          };
-          const gp = worldToGrid(cw.x, cw.y, KENNEY_TILE_WORLD);
-          spawnEnemyGrid(world, ENEMY_TYPE.BOSS, gp.gx, gp.gy, KENNEY_TILE_WORLD);
           overlayTriggers.push({
             id: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}${i + 1}`,
-            type: "kill",
+            type: "radius",
             tx: centers[i].tx,
             ty: centers[i].ty,
             radius: action.radiusTiles,

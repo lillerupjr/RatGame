@@ -98,8 +98,8 @@ function updateInteractSignals(
 }
 
 function updateKillSignals(world: World, trigger: TriggerInstance) {
-    if (trigger.type !== "kill") return;
     const requireBoss = trigger.id.startsWith(OBJECTIVE_TRIGGER_IDS.bossZonePrefix);
+    if (trigger.type !== "kill" && !requireBoss) return;
 
     for (let i = 0; i < world.events.length; i++) {
         const ev = world.events[i];

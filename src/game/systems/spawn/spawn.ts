@@ -80,7 +80,7 @@ export function spawnSystem(w: World, dt: number) {
   }
 
   // Spawn zone: tiles reachable from player within N steps (guarantees a path).
-  const findSpawnPoint = (baseX: number, baseY: number, maxTries: number) => {
+  function findSpawnPoint(baseX: number, baseY: number, maxTries: number) {
     const T = KENNEY_TILE_WORLD;
 
     const isConnectorish = (info: any) =>
@@ -203,7 +203,7 @@ export function spawnSystem(w: World, dt: number) {
 
     // Fall back to exact center if jitter couldn’t find a clean spot
     return { x: center.x, y: center.y };
-  };
+  }
 
 
   const stage = w.stage;

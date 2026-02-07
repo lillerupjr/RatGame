@@ -341,6 +341,7 @@ export type World = {
 
   // Boss reward gating
   bossRewardPending: boolean;
+  bossZoneSpawned: string[];
 
   // Magnet effect (pull XP to player)
   magnetActive: boolean;
@@ -607,6 +608,7 @@ export function createWorld(args: CreateWorldArgs): World {
 
     // Boss / chest / magnet
     bossRewardPending: false,
+    bossZoneSpawned: [],
     magnetActive: false,
     magnetTimer: 0,
     chestOpenRequested: false,

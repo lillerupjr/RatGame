@@ -7,7 +7,7 @@
 
 export type Loaded = { img: HTMLImageElement; ready: boolean; src?: string };
 
-const modules = import.meta.glob("../../../assets/projectiles/*test.png", {
+const modules = import.meta.glob("../../../assets/projectiles/*.png", {
     eager: true,
     import: "default",
 }) as Record<string, string>;

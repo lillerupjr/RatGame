@@ -677,7 +677,7 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
                 const nTx = surface.tx + dx;
                 const nTy = surface.ty + dy;
                 const neighborZ = isStair ? maxSurfaceZAt(nTx, nTy) : maxNonStairSurfaceZAt(nTx, nTy);
-                if (neighborZ !== null && neighborZ >= surfaceZ) continue;
+                if (neighborZ !== null && neighborZ === surfaceZ) continue;
                 if (!isStair && (dir === "E" || dir === "S")) {
                     if (hasBlockingStairForApron(dir, surface)) continue;
                 }
