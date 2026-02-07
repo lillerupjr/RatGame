@@ -20,7 +20,8 @@ import type { TableMapDef } from "./tableMapTypes";
 import { worldDeltaToScreen } from "../visual/iso";
 import { gridToWorld, worldToGrid } from "../coords/grid";
 import { generateFloorMap } from "./proceduralMap";
-import {EXCEL_SANCTUARY_01} from "./maps";
+import { loadTableMapDefFromJson } from "./jsonMapLoader";
+import excelSanctuary01Json from "./jsonMaps/excel_sanctuary_01.json";
 
 export type {
     IsoTileKind,
@@ -69,6 +70,11 @@ export type SurfaceHit = {
  * - Smaller raised diamond platform at h=1 (offset)
  * - A stair "bridge" strip that connects them
  */
+const EXCEL_SANCTUARY_01 = loadTableMapDefFromJson(
+    excelSanctuary01Json,
+    "jsonMaps/excel_sanctuary_01.json"
+);
+
 let _compiled: CompiledKenneyMap = compileKenneyMapFromTable(EXCEL_SANCTUARY_01);
 
 /**

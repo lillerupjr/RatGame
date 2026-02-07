@@ -2,7 +2,17 @@
 import { createGame } from "./game/game";
 import { WEAPONS, type WeaponId } from "./game/content/weapons";
 import type { TableMapDef } from "./game/map/tableMapTypes";
-import * as MapDefs from "./game/map/maps";
+import { loadTableMapDefFromJson } from "./game/map/jsonMapLoader";
+import excelSanctuary01Json from "./game/map/jsonMaps/excel_sanctuary_01.json";
+import wallTestJson from "./game/map/jsonMaps/wall_test.json";
+import excelRenderStress01Json from "./game/map/jsonMaps/excel_render_stress_01.json";
+import simpleTestJson from "./game/map/jsonMaps/simple_test.json";
+import testNorth5Json from "./game/map/jsonMaps/test_north_5.json";
+import testSouth5Json from "./game/map/jsonMaps/test_south_5.json";
+import testEast5Json from "./game/map/jsonMaps/test_east_5.json";
+import testWest5Json from "./game/map/jsonMaps/test_west_5.json";
+import floorTestJson from "./game/map/jsonMaps/floor_test.json";
+import jsonMinimalMap from "./game/map/jsonMaps/minimal.json";
 
 // Load background image using Vite's import.meta.glob
 const backgroundAssets = import.meta.glob("./assets/backgrounds/*.png", {
@@ -132,13 +142,24 @@ function toTitleCase(value: string): string {
     .join(" ");
 }
 
-const staticMapChoices: MapChoice[] = Object.values(MapDefs)
-  .filter((def): def is TableMapDef => typeof def === "object" && def !== null && "id" in def)
-  .map((def) => ({
-    id: def.id,
-    label: toTitleCase(def.id),
-    desc: `Static map (${def.w}x${def.h}).`,
-  }));
+const staticMapDefs: TableMapDef[] = [
+  loadTableMapDefFromJson(excelSanctuary01Json, "jsonMaps/excel_sanctuary_01.json"),
+  loadTableMapDefFromJson(wallTestJson, "jsonMaps/wall_test.json"),
+  loadTableMapDefFromJson(excelRenderStress01Json, "jsonMaps/excel_render_stress_01.json"),
+  loadTableMapDefFromJson(simpleTestJson, "jsonMaps/simple_test.json"),
+  loadTableMapDefFromJson(testNorth5Json, "jsonMaps/test_north_5.json"),
+  loadTableMapDefFromJson(testSouth5Json, "jsonMaps/test_south_5.json"),
+  loadTableMapDefFromJson(testEast5Json, "jsonMaps/test_east_5.json"),
+  loadTableMapDefFromJson(testWest5Json, "jsonMaps/test_west_5.json"),
+  loadTableMapDefFromJson(floorTestJson, "jsonMaps/floor_test.json"),
+  loadTableMapDefFromJson(jsonMinimalMap, "jsonMaps/minimal.json"),
+];
+
+const staticMapChoices: MapChoice[] = staticMapDefs.map((def) => ({
+  id: def.id,
+  label: toTitleCase(def.id),
+  desc: `Static map (${def.w}x${def.h}).`,
+}));
 
 const proceduralChoices: MapChoice[] = [
   { id: "PROC_ROOMS", label: "Procedural Rooms", desc: "Generated room chain with ramps." },

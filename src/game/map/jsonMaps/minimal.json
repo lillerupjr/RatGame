@@ -1,0 +1,17 @@
+{
+  "id": "JSON_MINIMAL",
+  "width": 3,
+  "height": 3,
+  "defaultFloorSkin": "landscape_28",
+  "defaultSpawnSkin": "landscape_30",
+  "metadata": {
+    "author": "contract"
+  },
+  "cells": [
+    { "x": 1, "y": 1, "t": "P0" },
+    { "x": 0, "y": 1, "t": "F0" },
+    { "x": 2, "y": 1, "t": "F0" },
+    { "x": 1, "y": 0, "t": "F0" },
+    { "x": 1, "y": 2, "t": "F0" }
+  ]
+}

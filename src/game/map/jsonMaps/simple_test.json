@@ -1,0 +1,15 @@
+{
+  "id": "simple_test",
+  "width": 3,
+  "height": 3,
+  "defaultFloorSkin": "landscape_28",
+  "defaultSpawnSkin": "landscape_30",
+  "centerOnZero": true,
+  "cells": [
+    { "x": 1, "y": 1, "t": "P0" },
+    { "x": 0, "y": 1, "t": "S1E" },
+    { "x": 2, "y": 1, "t": "S1W" },
+    { "x": 1, "y": 0, "t": "S1S" },
+    { "x": 1, "y": 2, "t": "S1N" }
+  ]
+}

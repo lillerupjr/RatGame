@@ -48,7 +48,17 @@ import { preloadBackgrounds } from "./visual/background";
 import { getProjectileSpriteByKind, preloadProjectileSprites } from "./visual/projectileSprites";
 import { setMusicStage, stopMusic } from "./audio/music";
 import type { TableMapDef } from "./map/tableMapTypes";
-import * as MapDefs from "./map/maps";
+import { loadTableMapDefFromJson } from "./map/jsonMapLoader";
+import excelSanctuary01Json from "./map/jsonMaps/excel_sanctuary_01.json";
+import wallTestJson from "./map/jsonMaps/wall_test.json";
+import excelRenderStress01Json from "./map/jsonMaps/excel_render_stress_01.json";
+import simpleTestJson from "./map/jsonMaps/simple_test.json";
+import testNorth5Json from "./map/jsonMaps/test_north_5.json";
+import testSouth5Json from "./map/jsonMaps/test_south_5.json";
+import testEast5Json from "./map/jsonMaps/test_east_5.json";
+import testWest5Json from "./map/jsonMaps/test_west_5.json";
+import floorTestJson from "./map/jsonMaps/floor_test.json";
+import jsonMinimalMap from "./map/jsonMaps/minimal.json";
 import {
   activateMapDef,
   generateAndActivateFloorMap,
@@ -136,9 +146,18 @@ export function createGame(args: CreateGameArgs) {
 
   const input: InputState = createInputState();
 
-  const staticMaps = Object.values(MapDefs).filter(
-    (def): def is TableMapDef => typeof def === "object" && def !== null && "id" in def
-  );
+  const staticMaps: TableMapDef[] = [
+    loadTableMapDefFromJson(excelSanctuary01Json, "jsonMaps/excel_sanctuary_01.json"),
+    loadTableMapDefFromJson(wallTestJson, "jsonMaps/wall_test.json"),
+    loadTableMapDefFromJson(excelRenderStress01Json, "jsonMaps/excel_render_stress_01.json"),
+    loadTableMapDefFromJson(simpleTestJson, "jsonMaps/simple_test.json"),
+    loadTableMapDefFromJson(testNorth5Json, "jsonMaps/test_north_5.json"),
+    loadTableMapDefFromJson(testSouth5Json, "jsonMaps/test_south_5.json"),
+    loadTableMapDefFromJson(testEast5Json, "jsonMaps/test_east_5.json"),
+    loadTableMapDefFromJson(testWest5Json, "jsonMaps/test_west_5.json"),
+    loadTableMapDefFromJson(floorTestJson, "jsonMaps/floor_test.json"),
+    loadTableMapDefFromJson(jsonMinimalMap, "jsonMaps/minimal.json"),
+  ];
 
   function getStaticMapById(id: string | undefined): TableMapDef | undefined {
     return staticMaps.find((def) => def.id === id);

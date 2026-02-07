@@ -13,7 +13,6 @@
     "test:coverage": "vitest run --coverage",
     "precommit": "npm run typecheck && npm run test",
     "prepare": "husky",
-
     "dump:txt": "node tools/dump-repo.mjs --out repo_dump.txt"
   },
   "devDependencies": {
