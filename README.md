@@ -1,116 +1,32 @@
-# Rat Noir Survivors (Working Title)
-Built with **TypeScript + Vite + HTML5 Canvas**, using a **data-driven, ECS-lite architecture** designed for scalability, determinism, and fast iteration.
+# Rat Game (Rat Survivors prototype)
 
-## Requirements
+Rat underworld where a lone survivor cuts through escalating floors, bosses, and branching routes.
+Engine is a lightweight TypeScript + Vite + Canvas2D ECS-lite stack with isometric tile maps.
 
-- **Node.js** ≥ 18 (recommended: latest LTS)
-- **npm** (comes with Node)
+## Current State
+- Canvas2D, ECS-lite systems, and isometric tile maps.
+- Menu flow: welcome, main menu, map selection, weapon selection.
+- Timed floors (120s) ending in a boss, chest rewards, and level-up upgrades.
+- Weapons and items with evolutions, plus a 4-slot inventory HUD.
+- Map selection supports static JSON maps and procedural rooms/maze.
+- Delve map overlay for route choices and depth-based scaling.
 
-Check versions:
-```bash
-node -v
-npm -v
-```
+## Gameplay
+Pick a map and starter weapon, clear a floor, beat the boss, then choose your next node.
 
----
+## Controls
+- Move: WASD or arrow keys.
 
-## Install & Run (Development)
-
-1. **Install dependencies**
+## Dev
 ```bash
 npm install
-```
-
-2. **Start dev server**
-```bash
 npm run dev
 ```
 
-3. **Open the game**
-- Vite will print a local URL (usually `http://localhost:5173`)
-- Open it in your browser
-
-The game reloads automatically on file changes.
-
----
-
-## Controls
-
-- **WASD / Arrow keys** — Move
-- Weapons auto-fire
-- Level-up screen pauses the game until you choose an upgrade
-
----
-
-## Project Structure (Simplified)
-
-```
-src/
-  main.ts                # App bootstrap + RAF loop + starter selection
-  game/
-    game.ts              # Game state machine
-    world.ts             # World state + entity storage
-    events.ts            # Global event definitions
-    content/             # Data-only definitions
-      weapons.ts
-      items.ts
-      upgrades.ts
-      stages.ts
-    systems/             # ECS-lite systems
-      input.ts
-      movement.ts
-      spawn.ts
-      combat.ts
-      collisions.ts
-      zones.ts
-      xp.ts
-      pickups.ts
-      render.ts
-    util/
-      rng.ts
-      time.ts
-```
-
-**Key rule:**
-> Systems do not directly depend on each other.  
-> Communication happens via shared world state and the event queue.
-
----
-
-## Creating a Zip of the Repo (for sharing or review)
-
-### Recommended (git-based, clean)
-If the project is a git repo:
-
 ```bash
-git archive --format=zip -o RatGame.zip HEAD
+npm run build
+npm run test
 ```
 
-This:
-- Includes only tracked files
-- Excludes `node_modules`, `dist`, `.vite`, etc.
-- Produces a clean `RatGame.zip`
-
----
-
-## Git Ignore Notes
-
-Make sure your `.gitignore` includes:
-```gitignore
-node_modules/
-dist/
-.vite/
-RatGame.zip
-```
-
-## Design Goals
-
-- **Data-driven content** (weapons, items, upgrades)
-- **ECS-lite** for performance and clarity
-- **Event queue** to decouple systems
-- **No engine lock-in**
-- Evolutions, synergies, bosses, and zones added without rewriting core systems
-
--
-
-TBD
+## Agents
+See `src/ai/AGENTS.md`.
