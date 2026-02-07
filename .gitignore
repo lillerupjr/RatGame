@@ -27,3 +27,6 @@ repo_dump*.txt
 .idea/
 !.idea/codeStyles/
 !.idea/runConfigurations/
+
+# Contracts
+**/contracts/**
