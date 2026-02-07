@@ -79,7 +79,7 @@ const HEADER = "=".repeat(80);
 
 function isBinaryLikeExt(ext) {
     return [
-        ".png",
+        "test.png",
         ".jpg",
         ".jpeg",
         ".webp",

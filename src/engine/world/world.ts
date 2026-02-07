@@ -10,6 +10,10 @@ import { anchorFromWorld } from "../../game/coords/anchor";
 import type { TriggerInstance } from "../../game/triggers/triggerTypes";
 import type { TriggerSignal } from "../../game/triggers/triggerSignals";
 import type { ObjectiveDef, ObjectiveEvent, ObjectiveState } from "../../game/systems/progression/objective";
+import type { ObjectiveSpec } from "../../game/systems/progression/objectiveSpec";
+import type { FloorArchetype } from "../../game/map/floorArchetype";
+import type { FloorIntent } from "../../game/map/floorIntent";
+import type { TriggerDef } from "../../game/triggers/triggerTypes";
 
 import type { WeaponId } from "../../game/content/weapons";
 
@@ -50,11 +54,15 @@ export type World = {
   triggerMapId: string | null;
   triggerRegistry: TriggerInstance[];
   triggerSignals: TriggerSignal[];
+  overlayTriggerDefs: TriggerDef[];
+  overlayTriggerVersion: number;
+  triggerRegistryVersion: number;
 
   // Objective registry and events
   objectiveDefs: ObjectiveDef[];
   objectiveStates: ObjectiveState[];
   objectiveEvents: ObjectiveEvent[];
+  currentObjectiveSpec: ObjectiveSpec | null;
 
   // -------------------------
   // Stage / floor
@@ -65,6 +73,8 @@ export type World = {
 
   // Floor index (0..2) and timers
   floorIndex: number;
+  floorArchetype: FloorArchetype;
+  currentFloorIntent: FloorIntent | null;
   floorDuration: number; // seconds until boss for this stage
   phaseTime: number; // seconds since current phase began
   transitionTime: number; // seconds remaining in TRANSITION
@@ -164,6 +174,13 @@ export type World = {
 
   // Run stats
   kills: number;
+  gold: number;
+
+  // Vendor economy (scaffold)
+  vendorOffers: { kind: "RELIC" | "UPGRADE" | "HEAL" | "REROLL"; id: string; cost: number }[];
+  vendorPurchases: string[];
+  relics: string[];
+  relicEffects: { xpMult: number; hpBonus: number };
 
   // -------------------------
   // Weapons + items
@@ -379,10 +396,14 @@ export function createWorld(args: CreateWorldArgs): World {
     triggerMapId: null,
     triggerRegistry: [],
     triggerSignals: [],
+    overlayTriggerDefs: [],
+    overlayTriggerVersion: 0,
+    triggerRegistryVersion: 0,
 
     objectiveDefs: [],
     objectiveStates: [],
     objectiveEvents: [],
+    currentObjectiveSpec: null,
 
     // Stage / floor
     stage,
@@ -390,6 +411,8 @@ export function createWorld(args: CreateWorldArgs): World {
     stageTime: 0,
 
     floorIndex: 0,
+    floorArchetype: "SURVIVE",
+    currentFloorIntent: null,
     floorDuration: stage.duration,
     phaseTime: 0,
     transitionTime: 0,
@@ -449,6 +472,14 @@ export function createWorld(args: CreateWorldArgs): World {
     critMultiplier: 2.0,
 
     kills: 0,
+    gold: 0,
+    vendorOffers: [],
+    vendorPurchases: [],
+    relics: [],
+    relicEffects: {
+      xpMult: 1,
+      hpBonus: 0,
+    },
 
     // Weapons + items
     weapons: [],

@@ -1,11 +1,12 @@
 import { type World } from "../../../engine/world/world";
-import { spawnEnemyGrid } from "../../factories/enemyFactory";
+import { spawnEnemyGrid, ENEMY_TYPE } from "../../factories/enemyFactory";
 import type { EnemyType } from "../../factories/enemyFactory";
 import { floorForIndex, pickFloorEnemyType } from "../../content/floors";
 import { walkInfo } from "../../map/compile/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { worldToGrid } from "../../coords/grid";
 import { getPlayerWorld } from "../../coords/worldViews";
+import { OBJECTIVE_TRIGGER_IDS } from "../progression/objectiveSpec";
 
 /**
  * Spawning system:
@@ -23,6 +24,60 @@ export function spawnSystem(w: World, dt: number) {
   const pw = getPlayerWorld(w, KENNEY_TILE_WORLD);
   const px = pw.wx;
   const py = pw.wy;
+
+  const isObjectiveCompleted = (id: string) => {
+    for (let i = 0; i < w.objectiveStates.length; i++) {
+      if (w.objectiveStates[i]?.id !== id) continue;
+      return w.objectiveStates[i].status === "COMPLETED";
+    }
+    return false;
+  };
+
+  const overlayZones = (prefix: string) => {
+    const defs = w.overlayTriggerDefs ?? [];
+    const zones: Array<{ x: number; y: number }> = [];
+    for (const def of defs) {
+      if (!def.id.startsWith(prefix)) continue;
+      if (def.type !== "radius" && def.type !== "kill") continue;
+      zones.push({
+        x: (def.tx + 0.5) * KENNEY_TILE_WORLD,
+        y: (def.ty + 0.5) * KENNEY_TILE_WORLD,
+      });
+    }
+    return zones;
+  };
+
+  let spawnBases: Array<{ x: number; y: number }> = [{ x: px, y: py }];
+  if (w.floorArchetype === "VENDOR" || w.floorArchetype === "HEAL") {
+    return;
+  }
+  if (w.floorArchetype === "TIME_TRIAL") {
+    spawnBases = overlayZones(OBJECTIVE_TRIGGER_IDS.zonePrefix);
+  } else if (w.floorArchetype === "BOSS_TRIPLE") {
+    if (isObjectiveCompleted("OBJ_BOSS_RARES")) return;
+    spawnBases = overlayZones(OBJECTIVE_TRIGGER_IDS.bossZonePrefix);
+  }
+  if (spawnBases.length === 0) return;
+
+  const pickBase = () => spawnBases[w.rng.int(0, spawnBases.length - 1)];
+
+  const isTimeTrial = w.floorArchetype === "TIME_TRIAL";
+  const isBossTriple = w.floorArchetype === "BOSS_TRIPLE";
+
+  if (w.floorArchetype === "SURVIVE") {
+    const remain = w.floorDuration - w.phaseTime;
+    if (remain <= 30 && !(w as any)._surviveBossSpawned) {
+      const angle = w.rng.range(0, Math.PI * 2);
+      const radius = w.rng.range(320, 520);
+      const baseX = px + Math.cos(angle) * radius;
+      const baseY = py + Math.sin(angle) * radius;
+      const p = findSpawnPoint(baseX, baseY, 18);
+      const spawn = p ?? { x: px, y: py };
+      const gp = worldToGrid(spawn.x, spawn.y, KENNEY_TILE_WORLD);
+      spawnEnemyGrid(w, ENEMY_TYPE.BOSS, gp.gx, gp.gy, KENNEY_TILE_WORLD);
+      (w as any)._surviveBossSpawned = true;
+    }
+  }
 
   // Spawn zone: tiles reachable from player within N steps (guarantees a path).
   const findSpawnPoint = (baseX: number, baseY: number, maxTries: number) => {
@@ -160,11 +215,13 @@ export function spawnSystem(w: World, dt: number) {
     if ((s as any).t === Infinity) continue;
 
     if (w.phaseTime >= s.t) {
-      for (let k = 0; k < s.count; k++) {
+      const count = isTimeTrial ? Math.max(1, Math.ceil(s.count * 0.5)) : s.count;
+      for (let k = 0; k < count; k++) {
+        const origin = pickBase();
         const angle = w.rng.range(0, Math.PI * 2);
         const radius = w.rng.range(s.radius * 0.8, s.radius);
-        const baseX = px + Math.cos(angle) * radius;
-        const baseY = py + Math.sin(angle) * radius;
+        const baseX = origin.x + Math.cos(angle) * radius;
+        const baseY = origin.y + Math.sin(angle) * radius;
 
         const p = findSpawnPoint(baseX, baseY, 18);
         if (!p) continue;
@@ -181,21 +238,26 @@ export function spawnSystem(w: World, dt: number) {
 
   // Apply delve spawn rate scaling
   const spawnRateMult = w.delveScaling?.spawnRateMult ?? 1;
-  const cadence = Math.max(0.02, floor.spawns.cadence / spawnRateMult);
+  const cadenceBase = floor.spawns.cadence / spawnRateMult;
+  const cadence = Math.max(0.02, isBossTriple ? cadenceBase * 2 : cadenceBase);
   (w as any)._spawnAcc = ((w as any)._spawnAcc ?? 0) + dt;
 
   while ((w as any)._spawnAcc >= cadence) {
     (w as any)._spawnAcc -= cadence;
 
-    const n = w.rng.int(floor.spawns.perTickMin, floor.spawns.perTickMax);
+    const perTickMax = isTimeTrial
+      ? Math.max(floor.spawns.perTickMin, Math.floor(floor.spawns.perTickMax * 0.5))
+      : floor.spawns.perTickMax;
+    const n = w.rng.int(floor.spawns.perTickMin, perTickMax);
 
     for (let i = 0; i < n; i++) {
       const type = pickFloorEnemyType(w);
 
+      const origin = pickBase();
       const angle = w.rng.range(0, Math.PI * 2);
       const radius = w.rng.range(floor.spawns.ringMin, floor.spawns.ringMax);
-      const baseX = px + Math.cos(angle) * radius;
-      const baseY = py + Math.sin(angle) * radius;
+      const baseX = origin.x + Math.cos(angle) * radius;
+      const baseY = origin.y + Math.sin(angle) * radius;
 
       const p = findSpawnPoint(baseX, baseY, 18);
       if (!p) continue;

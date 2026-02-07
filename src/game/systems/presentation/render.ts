@@ -61,6 +61,7 @@ import {
   drawOccluderOverlay,
   drawProjectileFaceOverlay,
   drawRampOverlay,
+  drawTriggerOverlay,
   drawWalkMaskOverlay,
   type DebugOverlayContext,
 } from "../../../engine/render/debug/renderDebug";
@@ -366,6 +367,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const SHOW_APRON_OWNERSHIP = !!(w as any).debugApronOwnership;
   const SHOW_OCCLUDER_DEBUG = !!(w as any).debugOccluders;
   const SHOW_PROJECTILE_FACES = !!(w as any).debugProjectileFaces;
+  const SHOW_TRIGGER_ZONES = !!(w as any).debugTriggerZones;
 
   // ----------------------------
   // Tile range / diagonals
@@ -962,6 +964,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   drawRampOverlay(debugContext, SHOW_RAMPS);
   drawOccluderOverlay(debugContext, SHOW_OCCLUDER_DEBUG, viewRect);
   drawProjectileFaceOverlay(debugContext, SHOW_PROJECTILE_FACES, viewRect);
+  drawTriggerOverlay(debugContext, SHOW_TRIGGER_ZONES);
   drawApronOwnershipStats(debugContext, SHOW_APRON_OWNERSHIP);
 
   // FPS

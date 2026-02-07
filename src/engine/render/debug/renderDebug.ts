@@ -170,6 +170,63 @@ export function drawWalkMaskOverlay(ctx: DebugOverlayContext, show: boolean) {
   c.restore();
 }
 
+function triggerColor(id: string): string {
+  if (id.startsWith("OBJ_BOSS_ZONE_")) return "rgba(235,95,95,0.95)";
+  if (id.startsWith("OBJ_ZONE_")) return "rgba(255,165,64,0.95)";
+  if (id === "OBJ_VENDOR") return "rgba(240,210,90,0.95)";
+  if (id === "OBJ_HEAL") return "rgba(90,200,200,0.95)";
+  if (id === "OBJ_TIMER") return "rgba(110,180,255,0.95)";
+  return "rgba(200,200,200,0.85)";
+}
+
+export function drawTriggerOverlay(ctx: DebugOverlayContext, show: boolean) {
+  if (!show) return;
+
+  const w = ctx.w as any;
+  const defs = (w.overlayTriggerDefs ?? []) as Array<{ id: string; tx: number; ty: number }>;
+  if (defs.length === 0) return;
+
+  const c = ctx.ctx;
+  const T = ctx.T;
+
+  c.save();
+  c.globalAlpha = 0.9;
+  c.lineWidth = 2;
+  c.font = "10px monospace";
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+
+  for (const def of defs) {
+    const cx = (def.tx + 0.5) * T;
+    const cy = (def.ty + 0.5) * T;
+    const z = ctx.tileHAtWorld(cx, cy);
+
+    const pN = ctx.toScreenAtZ(cx, cy - T * 0.5, z);
+    const pE = ctx.toScreenAtZ(cx + T * 0.5, cy, z);
+    const pS = ctx.toScreenAtZ(cx, cy + T * 0.5, z);
+    const pW = ctx.toScreenAtZ(cx - T * 0.5, cy, z);
+    const pC = ctx.toScreenAtZ(cx, cy, z);
+
+    const color = triggerColor(def.id);
+    c.strokeStyle = color;
+    c.fillStyle = color;
+
+    c.beginPath();
+    c.moveTo(pN.x, pN.y);
+    c.lineTo(pE.x, pE.y);
+    c.lineTo(pS.x, pS.y);
+    c.lineTo(pW.x, pW.y);
+    c.closePath();
+    c.stroke();
+
+    c.beginPath();
+    c.arc(pC.x, pC.y, 3, 0, Math.PI * 2);
+    c.fill();
+  }
+
+  c.restore();
+}
+
 export function drawApronOwnershipOverlay(
   ctx: DebugOverlayContext,
   show: boolean,

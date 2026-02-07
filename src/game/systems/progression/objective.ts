@@ -2,6 +2,7 @@
 
 import type { World } from "../../../engine/world/world";
 import type { TriggerSignal } from "../../triggers/triggerSignals";
+import { objectiveSpecToObjectiveDefs, type ObjectiveSpec } from "./objectiveSpec";
 
 export type OutcomeDef = {
     id: string;
@@ -73,7 +74,13 @@ export function applySignalsToObjective(
             const countSignals = def.completionRule.signalType
                 ? relevantSignals.filter((signal) => signal.type === def.completionRule.signalType)
                 : relevantSignals;
-            nextState.progress.signalCount += countSignals.length;
+            if (def.completionRule.signalType === "TICK") {
+                let total = 0;
+                for (const signal of countSignals) total += signal.type === "TICK" ? signal.dt : 0;
+                nextState.progress.signalCount += total;
+            } else {
+                nextState.progress.signalCount += countSignals.length;
+            }
             if (nextState.progress.signalCount >= def.completionRule.count) {
                 nextState.status = "COMPLETED";
             }
@@ -89,6 +96,10 @@ export function setObjectives(world: World, defs: ObjectiveDef[]): void {
     world.objectiveDefs = defs;
     world.objectiveStates = defs.map((def) => createObjectiveState(def));
     world.objectiveEvents.length = 0;
+}
+
+export function setObjectivesFromSpec(world: World, spec: ObjectiveSpec): void {
+    setObjectives(world, objectiveSpecToObjectiveDefs(spec));
 }
 
 /** Process trigger signals and emit objective resolution events. */

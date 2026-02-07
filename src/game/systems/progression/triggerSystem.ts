@@ -4,8 +4,11 @@ import type { World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getActiveMap } from "../../map/compile/kenneyMap";
 import { getPlayerWorld } from "../../coords/worldViews";
+import type { InputState } from "../sim/input";
 import { instantiateTriggers, type TriggerInstance } from "../../triggers/triggerTypes";
 import type { TriggerSignal } from "../../triggers/triggerSignals";
+import { OBJECTIVE_TRIGGER_IDS } from "./objectiveSpec";
+import { ENEMY_TYPE } from "../../content/enemies";
 
 const PLAYER_ENTITY_ID = 0;
 const DEFAULT_RADIUS_TILES = 0.5;
@@ -19,13 +22,16 @@ function ensureTriggerRegistry(world: World) {
     if (!map) {
         world.triggerRegistry = [];
         world.triggerMapId = null;
+        world.triggerRegistryVersion = world.overlayTriggerVersion;
         return;
     }
 
-    if (world.triggerMapId === map.id) return;
+    if (world.triggerMapId === map.id && world.triggerRegistryVersion === world.overlayTriggerVersion) return;
 
-    world.triggerRegistry = instantiateTriggers(map.triggerDefs ?? []);
+    const overlayDefs = world.overlayTriggerDefs ?? [];
+    world.triggerRegistry = instantiateTriggers([...(map.triggerDefs ?? []), ...overlayDefs]);
     world.triggerMapId = map.id;
+    world.triggerRegistryVersion = world.overlayTriggerVersion;
 }
 
 function isInsideRadius(
@@ -77,12 +83,28 @@ function updateEnterExit(
     }
 }
 
+function updateInteractSignals(
+    world: World,
+    trigger: TriggerInstance,
+    entityId: number,
+    entityX: number,
+    entityY: number,
+    interactPressed: boolean
+) {
+    if (!interactPressed) return;
+    if (trigger.type !== "radius") return;
+    if (!isInsideRadius(trigger, entityX, entityY, KENNEY_TILE_WORLD)) return;
+    emitTriggerSignal(world, { type: "INTERACT", entityId, triggerId: trigger.id });
+}
+
 function updateKillSignals(world: World, trigger: TriggerInstance) {
     if (trigger.type !== "kill") return;
+    const requireBoss = trigger.id.startsWith(OBJECTIVE_TRIGGER_IDS.bossZonePrefix);
 
     for (let i = 0; i < world.events.length; i++) {
         const ev = world.events[i];
         if (ev.type !== "ENEMY_KILLED") continue;
+        if (requireBoss && world.eType[ev.enemyIndex] !== ENEMY_TYPE.BOSS) continue;
         if (!isInsideRadius(trigger, ev.x, ev.y, KENNEY_TILE_WORLD)) continue;
         emitTriggerSignal(world, { type: "KILL", entityId: ev.enemyIndex, triggerId: trigger.id });
     }
@@ -94,7 +116,7 @@ function updateTimerSignals(world: World, trigger: TriggerInstance, dt: number) 
 }
 
 /** Update triggers and emit trigger signals for this frame. */
-export function triggerSystem(world: World, dt: number): void {
+export function triggerSystem(world: World, dt: number, input: InputState): void {
     ensureTriggerRegistry(world);
 
     world.triggerSignals.length = 0;
@@ -109,6 +131,7 @@ export function triggerSystem(world: World, dt: number): void {
             updateEnterExit(world, trigger, PLAYER_ENTITY_ID, playerWorld.wx, playerWorld.wy);
         }
 
+        updateInteractSignals(world, trigger, PLAYER_ENTITY_ID, playerWorld.wx, playerWorld.wy, input.interactPressed);
         updateKillSignals(world, trigger);
         updateTimerSignals(world, trigger, dt);
     }

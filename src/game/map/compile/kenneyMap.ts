@@ -144,8 +144,11 @@ export function getSpawnWorld(tileWorld: number): {
     ty: number;
     h: number;
 } {
-    const tx = (_compiled as any).spawnTx ?? 0;
-    const ty = (_compiled as any).spawnTy ?? 0;
+    const startTx = (_compiled as any).spawnTx ?? 0;
+    const startTy = (_compiled as any).spawnTy ?? 0;
+    const safe = findSafeSpawnTile(startTx, startTy);
+    const tx = safe.tx;
+    const ty = safe.ty;
 
     const t = getTile(tx, ty);
     const h = (t.h | 0);
@@ -158,6 +161,41 @@ export function getSpawnWorld(tileWorld: number): {
     const z = h;
 
     return { x, y, z, tx, ty, h };
+}
+
+function isSpawnSafe(kind: IsoTileKind): boolean {
+    return kind !== "VOID" && kind !== "STAIRS";
+}
+
+function clampSpawn(v: number, lo: number, hi: number): number {
+    return Math.max(lo, Math.min(hi, v));
+}
+
+function findSafeSpawnTile(tx: number, ty: number): { tx: number; ty: number } {
+    const minTx = _compiled.originTx;
+    const minTy = _compiled.originTy;
+    const maxTx = _compiled.originTx + _compiled.width - 1;
+    const maxTy = _compiled.originTy + _compiled.height - 1;
+
+    const startTx = clampSpawn(tx, minTx, maxTx);
+    const startTy = clampSpawn(ty, minTy, maxTy);
+    const startTile = getTile(startTx, startTy);
+    if (isSpawnSafe(startTile.kind)) return { tx: startTx, ty: startTy };
+
+    const maxR = Math.max(_compiled.width, _compiled.height);
+    for (let r = 1; r <= maxR; r++) {
+        for (let dy = -r; dy <= r; dy++) {
+            for (let dx = -r; dx <= r; dx++) {
+                const nx = startTx + dx;
+                const ny = startTy + dy;
+                if (nx < minTx || nx > maxTx || ny < minTy || ny > maxTy) continue;
+                const tile = getTile(nx, ny);
+                if (isSpawnSafe(tile.kind)) return { tx: nx, ty: ny };
+            }
+        }
+    }
+
+    return { tx: startTx, ty: startTy };
 }
 
 /**

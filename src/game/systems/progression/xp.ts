@@ -17,8 +17,9 @@ export function xpSystem(w: World, _dt: number) {
     const e = w.events[i];
     if (e.type !== "ENEMY_KILLED") continue;
 
-    // Apply delve XP scaling
-    const xpMult = w.delveScaling?.xpMult ?? 1;
+    // Apply delve XP scaling + relic bonus
+    const relicMult = w.relicEffects?.xpMult ?? 1;
+    const xpMult = (w.delveScaling?.xpMult ?? 1) * relicMult;
     const scaledXp = Math.round(e.xpValue * xpMult);
     const egx = w.egxi[e.enemyIndex] + w.egox[e.enemyIndex];
     const egy = w.egyi[e.enemyIndex] + w.egoy[e.enemyIndex];

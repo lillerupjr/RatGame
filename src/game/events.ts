@@ -1,3 +1,5 @@
+import type { VendorOffer } from "./events/vendor";
+
 export type SfxId =
     | "FIRE_KNIFE"
     | "FIRE_PISTOL"
@@ -70,4 +72,8 @@ export type GameEvent =
     weaponId?: string;
     vol?: number; // 0..1
     rate?: number; // playback rate
+}
+    | {
+    type: "VENDOR_PURCHASE";
+    offer: VendorOffer;
 };

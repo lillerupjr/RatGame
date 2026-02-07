@@ -13,10 +13,10 @@ import {
 
 describe("delveMap", () => {
   describe("createDelveMap", () => {
-    it("should create a map with a starting node at origin", () => {
+    it("should create a map with a starting node and initial adjacency", () => {
       const map = createDelveMap(12345);
 
-      expect(map.nodes.size).toBe(1);
+      expect(map.nodes.size).toBeGreaterThanOrEqual(3);
       expect(map.nodes.has("0,0")).toBe(true);
       expect(map.currentNodeId).toBeNull();
       expect(map.exploredDepth).toBe(0);
@@ -45,12 +45,28 @@ describe("delveMap", () => {
 
   describe("getNodeDepth", () => {
     it("should return depth 1 for y=0", () => {
-      const node = { id: "0,0", x: 0, y: 0, zoneId: "DOCKS" as const, title: "Test", completed: false };
+      const node = {
+        id: "0,0",
+        x: 0,
+        y: 0,
+        zoneId: "DOCKS" as const,
+        floorArchetype: "SURVIVE" as const,
+        title: "Test",
+        completed: false,
+      };
       expect(getNodeDepth(node)).toBe(1);
     });
 
     it("should return depth = y + 1", () => {
-      const node = { id: "0,5", x: 0, y: 5, zoneId: "DOCKS" as const, title: "Test", completed: false };
+      const node = {
+        id: "0,5",
+        x: 0,
+        y: 5,
+        zoneId: "DOCKS" as const,
+        floorArchetype: "SURVIVE" as const,
+        title: "Test",
+        completed: false,
+      };
       expect(getNodeDepth(node)).toBe(6);
     });
   });
@@ -114,12 +130,12 @@ describe("delveMap", () => {
   });
 
   describe("getReachableNodes", () => {
-    it("should return only starting node when no current position", () => {
+    it("should return multiple starting nodes when no current position", () => {
       const map = createDelveMap(12345);
       const reachable = getReachableNodes(map);
 
-      expect(reachable.length).toBe(1);
-      expect(reachable[0].id).toBe("0,0");
+      expect(reachable.length).toBeGreaterThanOrEqual(3);
+      expect(reachable.some((n) => n.id === "0,0")).toBe(true);
     });
 
     it("should return connected nodes from current position", () => {

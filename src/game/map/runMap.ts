@@ -1,5 +1,6 @@
 // src/game/map/runMap.ts
 import type { StageId } from "../content/stages";
+import type { FloorArchetype } from "./floorArchetype";
 
 export type MapNodeType = "ZONE";
 
@@ -14,6 +15,7 @@ export type MapNode = {
 
     // First-class zone node (faction/biome later)
     zoneId: StageId;
+    floorArchetype: FloorArchetype;
     title: string;
 };
 
@@ -31,9 +33,9 @@ export function buildStaticRunMap(): RunMap {
     // v0: single mandatory route
     const nodes: MapNode[] = [
         // 5 cols (0..4), 4 rows (0..3): spread diagonally, centered lanes
-        { id: "N_DOCKS",     col: 2, row: 2, type: "ZONE", zoneId: "DOCKS",     title: "Docks" },
-        { id: "N_SEWERS",    col: 2, row: 1, type: "ZONE", zoneId: "SEWERS",    title: "Sewers" },
-        { id: "N_CHINATOWN", col: 2, row: 0, type: "ZONE", zoneId: "CHINATOWN", title: "Chinatown" },
+        { id: "N_DOCKS",     col: 2, row: 2, type: "ZONE", zoneId: "DOCKS",     floorArchetype: "SURVIVE",     title: "Docks" },
+        { id: "N_SEWERS",    col: 2, row: 1, type: "ZONE", zoneId: "SEWERS",    floorArchetype: "TIME_TRIAL",  title: "Sewers" },
+        { id: "N_CHINATOWN", col: 2, row: 0, type: "ZONE", zoneId: "CHINATOWN", floorArchetype: "BOSS_TRIPLE", title: "Chinatown" },
     ];
 
     const edges: MapEdge[] = [

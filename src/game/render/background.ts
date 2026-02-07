@@ -9,7 +9,7 @@ export type BgAsset = {
 
 // background.ts is in src/game/visual
 // assets are in src/assets/backgrounds
-const modules = import.meta.glob("../../assets/backgrounds/*.png", {
+const modules = import.meta.glob("../../assets/backgrounds/*test.png", {
     eager: true,
     import: "default",
 }) as Record<string, string>;

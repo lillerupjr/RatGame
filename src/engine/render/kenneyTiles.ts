@@ -4,7 +4,7 @@
 
 export type Loaded = { img: HTMLImageElement; ready: boolean; src?: string };
 
-const modules = import.meta.glob("../../../assets/tiles/*.png", {
+const modules = import.meta.glob("../../../assets/tiles/*test.png", {
     eager: true,
     import: "default",
 }) as Record<string, string>;
@@ -64,7 +64,7 @@ function skinToFile(skin?: string): string | null {
     // Loader currently stores e.g. "landscape_23" (no extension). Accept both.
     const s = skin.trim();
     if (!s) return null;
-    return s.toLowerCase().endsWith(".png") ? s : `${s}.png`;
+    return s.toLowerCase().endsWith("test.png") ? s : `${s}.png`;
 }
 
 export function preloadKenneyTiles() {

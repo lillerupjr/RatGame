@@ -85,6 +85,9 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     applyBackground(refs.welcomeScreen, backgroundImageUrl);
     applyBackground(refs.mainMenuEl, backgroundImageUrl);
     applyBackground(refs.mapMenuEl, backgroundImageUrl);
+    applyBackground(refs.menuEl, backgroundImageUrl);
+    applyBackground(refs.innkeeperMenuEl, backgroundImageUrl);
+    applyBackground(refs.settingsMenuEl, backgroundImageUrl);
 
     const weaponIds = Object.keys(WEAPONS) as WeaponId[];
 
@@ -239,6 +242,13 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
 
     // Main menu -> Weapon selection
     refs.startRunBtn.addEventListener("click", () => {
+        refs.mainMenuEl.hidden = true;
+        refs.menuEl.hidden = false;
+        game.previewMap(selectedMapId);
+    });
+
+    // Main menu -> Map selection
+    refs.mapsBtn.addEventListener("click", () => {
         refs.mainMenuEl.hidden = true;
         refs.mapMenuEl.hidden = false;
     });

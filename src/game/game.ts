@@ -19,6 +19,8 @@ import { roomChallengeSystem } from "./systems/progression/roomChallenge";
 import { triggerSystem } from "./systems/progression/triggerSystem";
 import { objectiveSystem } from "./systems/progression/objective";
 import { outcomeSystem } from "./systems/progression/outcomeSystem";
+import { goldSystem } from "./systems/progression/gold";
+import { vendorSystem } from "./systems/progression/vendorSystem";
 
 import { getUpgradePool, UpgradeDef } from "./content/upgrades";
 import { formatTimeMMSS } from "./util/time";
@@ -47,6 +49,8 @@ import {
   type DelveMap,
   type DelveNode,
 } from "./map/delveMap";
+import type { FloorArchetype } from "./map/floorArchetype";
+import type { FloorIntent } from "./map/floorIntent";
 import { preloadPlayerSprites } from "../engine/render/sprites/playerSprites";
 import { preloadBackgrounds } from "./render/background";
 import { getProjectileSpriteByKind, preloadProjectileSprites } from "../engine/render/sprites/projectileSprites";
@@ -63,13 +67,21 @@ import testEast5Json from "./map/authored/maps/jsonMaps/test_east_5.json";
 import testWest5Json from "./map/authored/maps/jsonMaps/test_west_5.json";
 import floorTestJson from "./map/authored/maps/jsonMaps/floor_test.json";
 import jsonMinimalMap from "./map/authored/maps/jsonMaps/minimal.json";
+import vendor01Json from "./map/authored/maps/jsonMaps/vendor_01.json";
+import heal01Json from "./map/authored/maps/jsonMaps/heal_01.json";
 import {
   activateMapDef,
   generateAndActivateFloorMap,
   generateAndActivateMazeFloorMap,
   getActiveRoomData,
   applyObjectivesFromActiveMap,
+  getSpawnWorldFromActive,
 } from "./map/proceduralMapBridge";
+import { objectiveSpecFromFloorIntent } from "./map/floorObjectiveBinding";
+import { mapSourceFromFloorIntent } from "./map/floorMapSourceBinding";
+import { applyFloorOverlays } from "./map/floorOverlays";
+import { setObjectivesFromSpec } from "./systems/progression/objective";
+import { generateVendorOffers } from "./events/vendor";
 
 
 type HudRefs = {
@@ -162,6 +174,8 @@ export function createGame(args: CreateGameArgs) {
     loadTableMapDefFromJson(testWest5Json, "authored/maps/jsonMaps/test_west_5.json"),
     loadTableMapDefFromJson(floorTestJson, "authored/maps/jsonMaps/floor_test.json"),
     loadTableMapDefFromJson(jsonMinimalMap, "authored/maps/jsonMaps/minimal.json"),
+    loadTableMapDefFromJson(vendor01Json, "authored/maps/jsonMaps/vendor_01.json"),
+    loadTableMapDefFromJson(heal01Json, "authored/maps/jsonMaps/heal_01.json"),
   ];
 
   function getStaticMapById(id: string | undefined): TableMapDef | undefined {
@@ -190,6 +204,7 @@ export function createGame(args: CreateGameArgs) {
   (world as any).debugWalkMask = false;
   (world as any).debugRamps = false;
   (world as any).debugApronOwnership = false;
+  (world as any).debugTriggerZones = true;
 
 
   preloadBackgrounds();
@@ -354,16 +369,15 @@ export function createGame(args: CreateGameArgs) {
     return false;
   }
 
-  function enterFloor(w: World, floorIndex: number, stageId?: string) {
-    w.floorIndex = floorIndex;
+  function enterFloor(w: World, floorIntent: FloorIntent) {
+    w.floorIndex = floorIntent.floorIndex;
+    w.floorArchetype = floorIntent.archetype;
+    w.currentFloorIntent = floorIntent;
     w.runState = "FLOOR";
     w.phaseTime = 0;
     w.transitionTime = 0;
 
-    // If stageId provided (map-driven), use it; otherwise fallback (legacy behavior).
-    const sid =
-        stageId ??
-        (floorIndex === 0 ? "DOCKS" : floorIndex === 1 ? "SEWERS" : "CHINATOWN");
+    const sid = floorIntent.zoneId;
 
     w.stage = cloneStage(sid as any);
     setMusicStage(sid as any);
@@ -373,9 +387,80 @@ export function createGame(args: CreateGameArgs) {
     // Drive floor timing from stage
     w.floorDuration = w.stage.duration;
 
+    const mapSource = mapSourceFromFloorIntent(floorIntent);
+    if (mapSource.type === "PROCEDURAL_ROOMS") {
+      const mapSeed = w.rng.int(0, 0x7fffffff);
+      generateAndActivateFloorMap(mapSeed, floorIntent.floorIndex, false, w);
+    } else if (mapSource.type === "PROCEDURAL_MAZE") {
+      const mapSeed = w.rng.int(0, 0x7fffffff);
+      generateAndActivateMazeFloorMap(mapSeed, floorIntent.floorIndex, false);
+    } else {
+      const staticDef = getStaticMapById(mapSource.mapId) ?? getDefaultStaticMap();
+      if (staticDef) {
+        activateMapDef(staticDef);
+      }
+    }
+
+    const spawn = getSpawnWorldFromActive();
+    const anchor = anchorFromWorld(spawn.x, spawn.y, KENNEY_TILE_WORLD);
+    w.pgxi = anchor.gxi;
+    w.pgyi = anchor.gyi;
+    w.pgox = anchor.gox;
+    w.pgoy = anchor.goy;
+    w.pz = spawn.z;
+    w.pzVisual = spawn.z;
+    w.pzLogical = spawn.h | 0;
+    w.activeFloorH = spawn.h | 0;
+
+    applyFloorOverlays(w, floorIntent);
+
     clearFloorEntities(w);
 
+    const objectiveSpec = objectiveSpecFromFloorIntent(floorIntent);
+    w.currentObjectiveSpec = objectiveSpec;
+    setObjectivesFromSpec(w, objectiveSpec);
+    if (objectiveSpec.objectiveType === "SURVIVE_TIMER") {
+      w.floorDuration = objectiveSpec.params.timeLimitSec;
+    } else if (objectiveSpec.objectiveType === "TIME_TRIAL_ZONES") {
+      w.floorDuration = objectiveSpec.params.timeLimitSec;
+    }
+
+    w.vendorOffers =
+      floorIntent.archetype === "VENDOR" ? generateVendorOffers(floorIntent) : [];
+    (w as any)._surviveBossSpawned = false;
+
     emitEvent(w, { type: "SFX", id: "FLOOR_START", vol: 0.9, rate: 1 });
+  }
+
+  function buildFloorIntentFromDelveNode(node: DelveNode, floorIndex: number): FloorIntent {
+    return {
+      nodeId: node.id,
+      zoneId: node.zoneId,
+      depth: getNodeDepth(node),
+      floorIndex,
+      archetype: node.floorArchetype,
+    };
+  }
+
+  function buildFloorIntentFromRunNode(node: MapNode, floorIndex: number): FloorIntent {
+    return {
+      nodeId: node.id,
+      zoneId: node.zoneId,
+      depth: floorIndex + 1,
+      floorIndex,
+      archetype: node.floorArchetype,
+    };
+  }
+
+  function buildFallbackFloorIntent(w: World, floorIndex: number): FloorIntent {
+    const zoneId = (w.stage?.id ?? w.stageId ?? "DOCKS") as any;
+    return {
+      nodeId: "LEGACY_FLOOR",
+      zoneId,
+      depth: floorIndex + 1,
+      floorIndex,
+      archetype: w.floorArchetype ?? "SURVIVE",
+    };
   }
 
   function enterBoss(w: World) {
@@ -467,6 +552,7 @@ export function createGame(args: CreateGameArgs) {
     (world as any).debugWalkMask = false;
     (world as any).debugRamps = false;
     (world as any).debugApronOwnership = false;
+    (world as any).debugTriggerZones = true;
 
     currentChoices = [];
     hideLevelUp();
@@ -645,9 +731,36 @@ export function createGame(args: CreateGameArgs) {
     }
 
     // Get visible nodes and edges
-    const visibleNodes = getVisibleNodes(delve, 4);
-    const visibleEdges = getVisibleEdges(delve, visibleNodes);
-    const reachable = new Set(getReachableNodes(delve).map(n => n.id));
+      const visibleNodes = getVisibleNodes(delve, 4);
+      const visibleEdges = getVisibleEdges(delve, visibleNodes);
+      const reachable = new Set(getReachableNodes(delve).map(n => n.id));
+
+      const archetypeLabel = (archetype: FloorArchetype) => {
+        switch (archetype) {
+          case "SURVIVE":
+            return "Survive";
+          case "TIME_TRIAL":
+            return "Time Trial";
+          case "VENDOR":
+            return "Vendor";
+          case "HEAL":
+            return "Heal";
+          case "BOSS_TRIPLE":
+            return "Boss Triple";
+        }
+      };
+
+      const archetypeColor = (archetype: FloorArchetype, alpha: number) => {
+        const palette: Record<FloorArchetype, { r: number; g: number; b: number }> = {
+          SURVIVE: { r: 96, g: 210, b: 120 },
+          TIME_TRIAL: { r: 255, g: 165, b: 64 },
+          VENDOR: { r: 240, g: 210, b: 90 },
+          HEAL: { r: 90, g: 200, b: 200 },
+          BOSS_TRIPLE: { r: 235, g: 95, b: 95 },
+        };
+        const c = palette[archetype];
+        return `rgba(${c.r},${c.g},${c.b},${alpha})`;
+      };
 
     // Calculate bounds for positioning
     let minX = Infinity, maxX = -Infinity;
@@ -697,32 +810,20 @@ export function createGame(args: CreateGameArgs) {
         const isCurrent = delve.currentNodeId === n.id;
         const isCompleted = n.completed;
 
-        // Color coding based on state
-        let fill: string;
-        let stroke: string;
-        if (isCurrent) {
-          fill = "rgba(100,200,255,0.4)";
-          stroke = "rgba(100,200,255,0.8)";
-        } else if (isCompleted) {
-          fill = "rgba(100,255,100,0.2)";
-          stroke = "rgba(100,255,100,0.4)";
-        } else if (isReach) {
-          fill = "rgba(255,255,255,0.18)";
-          stroke = "rgba(255,255,255,0.42)";
-        } else {
-          fill = "rgba(255,255,255,0.06)";
-          stroke = "rgba(255,255,255,0.12)";
-        }
+          const fill = archetypeColor(
+            n.floorArchetype,
+            isCurrent ? 0.55 : isCompleted ? 0.22 : isReach ? 0.32 : 0.12
+          );
+          const stroke = archetypeColor(
+            n.floorArchetype,
+            isCurrent ? 0.95 : isReach ? 0.65 : isCompleted ? 0.45 : 0.25
+          );
+          const label = archetypeLabel(n.floorArchetype);
 
-        const depth = getNodeDepth(n);
-        const scaling = getDepthScaling(depth);
-        const difficultyText = `Depth ${depth} (${Math.round(scaling.hpMult * 100)}% HP)`;
-
-        return `
-          <circle cx="${p.x}" cy="${p.y}" r="22" fill="${fill}" stroke="${stroke}" stroke-width="4" />
-          <text x="${p.x}" y="${p.y + 40}" text-anchor="middle" font-size="14" fill="rgba(255,255,255,0.92)" font-weight="700">${n.title}</text>
-          <text x="${p.x}" y="${p.y + 56}" text-anchor="middle" font-size="10" fill="rgba(255,255,255,0.6)">${difficultyText}</text>
-        `;
+          return `
+            <circle cx="${p.x}" cy="${p.y}" r="22" fill="${fill}" stroke="${stroke}" stroke-width="4" />
+            <text x="${p.x}" y="${p.y + 44}" text-anchor="middle" font-size="12" fill="rgba(255,255,255,0.92)" font-weight="800">${label}</text>
+          `;
       })
       .join("");
 
@@ -753,12 +854,12 @@ export function createGame(args: CreateGameArgs) {
       const isCurrent = delve.currentNodeId === n.id;
       btn.disabled = !isReach || isCurrent;
 
-      const depth = getNodeDepth(n);
       const statusText = isCurrent ? "Current" : n.completed ? "Completed" : isReach ? "Select" : "Locked";
+      const label = archetypeLabel(n.floorArchetype);
 
       btn.innerHTML = `
-        <div class="mapHitTitle">${n.title}</div>
-        <div class="mapHitDesc">${statusText} · Boss at end</div>
+        <div class="mapHitTitle">${label}</div>
+        <div class="mapHitDesc">${statusText}</div>
       `;
 
       hit.appendChild(btn);
@@ -945,6 +1046,49 @@ export function createGame(args: CreateGameArgs) {
     // 4 weapon slots + 4 item slots, order = array order
     renderSlots(args.hud.weaponSlots, world.weapons as any, (id) => registry.weapon(id as any).title);
     renderSlots(args.hud.itemSlots, world.items as any, (id) => registry.item(id as any).title);
+
+    const spec = world.currentObjectiveSpec;
+    if (!spec || world.runState !== "FLOOR") {
+      args.hud.objectiveOverlay.hidden = true;
+      return;
+    }
+
+    const status = world.objectiveStates[0]?.status ?? "IDLE";
+    let title = "Objective";
+    let detail = "";
+
+    switch (spec.objectiveType) {
+      case "SURVIVE_TIMER": {
+        const remaining = Math.max(0, spec.params.timeLimitSec - world.phaseTime);
+        title = "Survive";
+        detail = `Time Remaining: ${formatTimeMMSS(remaining)} · ${status}`;
+        break;
+      }
+      case "TIME_TRIAL_ZONES": {
+        const remaining = Math.max(0, spec.params.timeLimitSec - world.phaseTime);
+        title = "Time Trial";
+        detail = `Time Remaining: ${formatTimeMMSS(remaining)} · ${status}`;
+        break;
+      }
+      case "VENDOR_VISIT":
+        title = "Vendor";
+        detail = `Interact to exit · ${status}`;
+        break;
+      case "HEAL_VISIT":
+        title = "Heal";
+        detail = `Interact to exit · ${status}`;
+        break;
+      case "KILL_RARES_IN_ZONES": {
+        const progress = world.objectiveStates[0]?.progress?.signalCount ?? 0;
+        title = "Boss Hunt";
+        detail = `Bosses: ${Math.min(progress, spec.params.bossCount)}/${spec.params.bossCount} · ${status}`;
+        break;
+      }
+    }
+
+    args.hud.objectiveTitle.textContent = title;
+    args.hud.objectiveStatus.textContent = detail;
+    args.hud.objectiveOverlay.hidden = false;
   }
   // ---------------------------------
 
@@ -983,7 +1127,7 @@ export function createGame(args: CreateGameArgs) {
     world.phaseTime += dt;
 
     // RunState progression
-    if (world.runState === "FLOOR" && world.phaseTime >= world.floorDuration) {
+    if (world.runState === "FLOOR" && world.objectiveDefs.length === 0 && world.phaseTime >= world.floorDuration) {
       enterBoss(world);
     } else if (world.runState === "BOSS") {
       // If boss was killed, advance (but wait for the boss chest to be collected)
@@ -1014,7 +1158,8 @@ export function createGame(args: CreateGameArgs) {
     } else if (world.runState === "TRANSITION") {
       world.transitionTime = Math.max(0, world.transitionTime - dt);
       if (world.transitionTime <= 0) {
-        enterFloor(world, (world.floorIndex ?? 0) + 1);
+        const nextFloorIndex = (world.floorIndex ?? 0) + 1;
+        enterFloor(world, buildFallbackFloorIntent(world, nextFloorIndex));
       }
     }
 
@@ -1029,9 +1174,11 @@ export function createGame(args: CreateGameArgs) {
     onKillExplodeSystem(world, dt); // NEW: explode on kill (can add more kills)
     bossSystem(world, dt);          // NEW: boss mechanics (telegraphs/hazards/dash)
     zonesSystem(world, dt);
+    goldSystem(world);
     pickupsSystem(world, dt);
     xpSystem(world, dt);
-    triggerSystem(world, dt);
+    vendorSystem(world);
+    triggerSystem(world, dt, input);
     objectiveSystem(world);
     outcomeSystem(world);
 
@@ -1102,6 +1249,25 @@ export function createGame(args: CreateGameArgs) {
 
     // Clear events AFTER all consumers ran this frame
     clearEvents(world);
+
+    const isFloorObjectiveCompleted = () => {
+      for (let i = 0; i < world.objectiveStates.length; i++) {
+        if (world.objectiveStates[i]?.status === "COMPLETED") return true;
+      }
+      return false;
+    };
+
+    if (world.runState === "FLOOR" && isFloorObjectiveCompleted() && !world.bossRewardPending) {
+      const delve = world.delveMap as DelveMap;
+      if (delve) {
+        showDelveMap(`Depth ${world.delveDepth} cleared!\nChoose your next destination.`);
+        return;
+      }
+
+      (world as any).mapPendingNextFloorIndex = (world.floorIndex ?? 0) + 1;
+      showMap("Choose your next zone.\n(There is a boss at the end of every floor.)");
+      return;
+    }
 
     // Enter level-up state if needed
     if (world.pendingLevelUps > 0) {
@@ -1207,7 +1373,8 @@ export function createGame(args: CreateGameArgs) {
 
       // Enter the chosen zone with depth-scaled difficulty
       // floorIndex is used for enemy type weights, zoneId for visuals/music
-      enterFloor(world, Math.min(2, Math.floor((depth - 1) / 3)), node.zoneId);
+      const floorIndex = Math.min(2, Math.floor((depth - 1) / 3));
+      enterFloor(world, buildFloorIntentFromDelveNode(node, floorIndex));
       return;
     }
 
@@ -1228,7 +1395,7 @@ export function createGame(args: CreateGameArgs) {
     world.state = "RUN";
 
     // Enter chosen floor/zone (boss is still at end of the floor like today)
-    enterFloor(world, nextFloor, node.zoneId);
+    enterFloor(world, buildFloorIntentFromRunNode(node, nextFloor));
   });
 
   // Level-up choice click
@@ -1275,3 +1442,4 @@ export function createGame(args: CreateGameArgs) {
 
   return { update, render, startRun, previewMap };
 }
+

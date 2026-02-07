@@ -3,12 +3,14 @@
 
 import type { StageId } from "../content/stages";
 import { RNG } from "../util/rng";
+import { FLOOR_ARCHETYPES, type FloorArchetype } from "./floorArchetype";
 
 export type DelveNode = {
   id: string;
   x: number;  // grid x coordinate
   y: number;  // grid y coordinate (depth - higher = deeper/harder)
   zoneId: StageId;
+  floorArchetype: FloorArchetype;
   title: string;
   completed: boolean;
 };
@@ -38,6 +40,29 @@ function parseNodeId(id: string): { x: number; y: number } {
   return { x: parseInt(xs, 10), y: parseInt(ys, 10) };
 }
 
+function pickFloorArchetype(
+  rng: RNG,
+  depth: number,
+  prevArchetype?: FloorArchetype | null
+): FloorArchetype {
+  const options = FLOOR_ARCHETYPES.filter((archetype) => {
+    if (depth <= 3 && (archetype === "VENDOR" || archetype === "HEAL")) return false;
+    if (
+      (prevArchetype === "VENDOR" || prevArchetype === "HEAL") &&
+      (archetype === "VENDOR" || archetype === "HEAL")
+    ) {
+      return false;
+    }
+    return true;
+  });
+
+  if (options.length === 0) {
+    return "SURVIVE";
+  }
+
+  return options[rng.int(0, options.length - 1)];
+}
+
 /**
  * Create a new delve map with a starting node at (0, 0)
  */
@@ -52,17 +77,23 @@ export function createDelveMap(seed: number): DelveMap {
     x: 0,
     y: 0,
     zoneId: startZone,
+    floorArchetype: pickFloorArchetype(rng, 1, null),
     title: `${ZONE_NAMES[startZone]} (Depth 1)`,
     completed: false,
   };
   nodes.set(startNode.id, startNode);
 
-  return {
+  const map: DelveMap = {
     nodes,
     edges: [],
     currentNodeId: null,
     exploredDepth: 0,
   };
+
+  // Pre-generate adjacency so the start has multiple choices.
+  ensureAdjacentNodes(map, startNode.id, seed ^ 0x9e3779b9);
+
+  return map;
 }
 
 /**
@@ -122,15 +153,16 @@ export function ensureAdjacentNodes(map: DelveMap, fromId: string, seed: number)
     if (!edgeExists) {
       // Create node if it doesn't exist
       if (!map.nodes.has(nid)) {
-        const zoneRng = new RNG(seed ^ hashString(nid));
-        const zoneId = ZONE_IDS[zoneRng.int(0, ZONE_IDS.length - 1)];
+        const nodeRng = new RNG(seed ^ hashString(nid));
+        const zoneId = ZONE_IDS[nodeRng.int(0, ZONE_IDS.length - 1)];
         const depth = ny + 1;
-        
+
         const newNode: DelveNode = {
           id: nid,
           x: nx,
           y: ny,
           zoneId,
+          floorArchetype: pickFloorArchetype(nodeRng, depth, from.floorArchetype),
           title: `${ZONE_NAMES[zoneId]} (Depth ${depth})`,
           completed: false,
         };
@@ -151,8 +183,8 @@ export function ensureAdjacentNodes(map: DelveMap, fromId: string, seed: number)
   
   if (!hasDeeper && Math.abs(from.x) <= Math.floor((from.y + 1) / 2) + 2) {
     if (!map.nodes.has(deeperId)) {
-      const zoneRng = new RNG(seed ^ hashString(deeperId));
-      const zoneId = ZONE_IDS[zoneRng.int(0, ZONE_IDS.length - 1)];
+      const nodeRng = new RNG(seed ^ hashString(deeperId));
+      const zoneId = ZONE_IDS[nodeRng.int(0, ZONE_IDS.length - 1)];
       const depth = from.y + 2;
       
       map.nodes.set(deeperId, {
@@ -160,6 +192,7 @@ export function ensureAdjacentNodes(map: DelveMap, fromId: string, seed: number)
         x: from.x,
         y: from.y + 1,
         zoneId,
+        floorArchetype: pickFloorArchetype(nodeRng, depth, from.floorArchetype),
         title: `${ZONE_NAMES[zoneId]} (Depth ${depth})`,
         completed: false,
       });
@@ -173,9 +206,22 @@ export function ensureAdjacentNodes(map: DelveMap, fromId: string, seed: number)
  */
 export function getReachableNodes(map: DelveMap): DelveNode[] {
   if (!map.currentNodeId) {
-    // Start of run: only the origin node is reachable
-    const origin = map.nodes.get(nodeId(0, 0));
-    return origin ? [origin] : [];
+    // Start of run: origin + its connected neighbors are reachable
+    const originId = nodeId(0, 0);
+    const reachable = new Map<string, DelveNode>();
+    const origin = map.nodes.get(originId);
+    if (origin) reachable.set(origin.id, origin);
+
+    for (const edge of map.edges) {
+      let targetId: string | null = null;
+      if (edge.from === originId) targetId = edge.to;
+      else if (edge.to === originId) targetId = edge.from;
+      if (!targetId) continue;
+      const node = map.nodes.get(targetId);
+      if (node) reachable.set(node.id, node);
+    }
+
+    return Array.from(reachable.values());
   }
   
   const current = map.nodes.get(map.currentNodeId);

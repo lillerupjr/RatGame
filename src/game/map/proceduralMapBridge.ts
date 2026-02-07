@@ -215,16 +215,54 @@ export function getSpawnWorldFromActive(): {
         return { x: 0, y: 0, z: 0, tx: 0, ty: 0, h: 0 };
     }
     
-    const { spawnTx, spawnTy, spawnH } = _activeMap;
-    const tile = _activeMap.getTile(spawnTx, spawnTy);
+    const { spawnTx, spawnTy } = _activeMap;
+    const safe = findSafeSpawnTile(spawnTx, spawnTy);
+    const tile = _activeMap.getTile(safe.tx, safe.ty);
     const h = (tile.kind === "VOID" ? 0 : (tile.h | 0) + PLANE_TILE_Z_OFFSET);
     
     // Center of tile in world space
-    const x = (spawnTx + 0.5) * KENNEY_TILE_WORLD;
-    const y = (spawnTy + 0.5) * KENNEY_TILE_WORLD;
+    const x = (safe.tx + 0.5) * KENNEY_TILE_WORLD;
+    const y = (safe.ty + 0.5) * KENNEY_TILE_WORLD;
     const z = h;
     
-    return { x, y, z, tx: spawnTx, ty: spawnTy, h };
+    return { x, y, z, tx: safe.tx, ty: safe.ty, h };
+}
+
+function isSpawnSafe(kind: IsoTile["kind"]): boolean {
+    return kind !== "VOID" && kind !== "STAIRS";
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+    return Math.max(lo, Math.min(hi, v));
+}
+
+function findSafeSpawnTile(tx: number, ty: number): { tx: number; ty: number } {
+    if (!_activeMap || !_activeMapDef) return { tx, ty };
+
+    const minTx = _activeMap.originTx;
+    const minTy = _activeMap.originTy;
+    const maxTx = _activeMap.originTx + _activeMapDef.w - 1;
+    const maxTy = _activeMap.originTy + _activeMapDef.h - 1;
+
+    const startTx = clamp(tx, minTx, maxTx);
+    const startTy = clamp(ty, minTy, maxTy);
+    const startTile = _activeMap.getTile(startTx, startTy);
+    if (isSpawnSafe(startTile.kind)) return { tx: startTx, ty: startTy };
+
+    const maxR = Math.max(_activeMapDef.w, _activeMapDef.h);
+    for (let r = 1; r <= maxR; r++) {
+        for (let dy = -r; dy <= r; dy++) {
+            for (let dx = -r; dx <= r; dx++) {
+                const nx = startTx + dx;
+                const ny = startTy + dy;
+                if (nx < minTx || nx > maxTx || ny < minTy || ny > maxTy) continue;
+                const tile = _activeMap.getTile(nx, ny);
+                if (isSpawnSafe(tile.kind)) return { tx: nx, ty: ny };
+            }
+        }
+    }
+
+    return { tx: startTx, ty: startTy };
 }
 
 /**

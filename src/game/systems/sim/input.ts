@@ -7,6 +7,10 @@ export type InputState = {
   jump: boolean;
   /** True only on the frame jump was pressed (edge-triggered) */
   jumpPressed: boolean;
+  /** True while interact is held */
+  interact: boolean;
+  /** True only on the frame interact was pressed (edge-triggered) */
+  interactPressed: boolean;
 };
 
 /** Create a fresh input state and register key listeners. */
@@ -18,6 +22,8 @@ export function createInputState(): InputState {
     right: false,
     jump: false,
     jumpPressed: false,
+    interact: false,
+    interactPressed: false,
   };
 
   window.addEventListener("keydown", (e) => {
@@ -30,6 +36,10 @@ export function createInputState(): InputState {
       if (!s.jump) s.jumpPressed = true;
       s.jump = true;
     }
+    if (e.key === "e" || e.key === "Enter") {
+      if (!s.interact) s.interactPressed = true;
+      s.interact = true;
+    }
   });
 
   window.addEventListener("keyup", (e) => {
@@ -38,6 +48,7 @@ export function createInputState(): InputState {
     if (e.key === "a" || e.key === "ArrowLeft") s.left = false;
     if (e.key === "d" || e.key === "ArrowRight") s.right = false;
     if (e.key === " ") s.jump = false;
+    if (e.key === "e" || e.key === "Enter") s.interact = false;
   });
 
   return s;
@@ -50,6 +61,7 @@ export function createInputState(): InputState {
 /** Clear per-frame edge flags. */
 export function clearInputEdges(input: InputState) {
   input.jumpPressed = false;
+  input.interactPressed = false;
 }
 
 /** Poll pointer input or aim state (placeholder for now). */

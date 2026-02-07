@@ -24,6 +24,9 @@ export type HudRefs = {
     killsPill: HTMLSpanElement;
     hpPill: HTMLSpanElement;
     lvlPill: HTMLSpanElement;
+    objectiveOverlay: HTMLDivElement;
+    objectiveTitle: HTMLDivElement;
+    objectiveStatus: HTMLDivElement;
     weaponSlots: HTMLDivElement;
     itemSlots: HTMLDivElement;
 };
@@ -41,6 +44,7 @@ export type DomRefs = {
     continueBtn: HTMLButtonElement;
     mainMenuEl: HTMLDivElement;
     startRunBtn: HTMLButtonElement;
+    mapsBtn: HTMLButtonElement;
     innkeeperBtn: HTMLButtonElement;
     settingsBtn: HTMLButtonElement;
     likeSubBtn: HTMLButtonElement;
@@ -98,6 +102,7 @@ export function getDomRefs(): DomRefs {
 
     const mainMenuEl = getEl<HTMLDivElement>("mainMenu");
     const startRunBtn = getEl<HTMLButtonElement>("startRunBtn");
+    const mapsBtn = getEl<HTMLButtonElement>("mapsBtn");
     const innkeeperBtn = getEl<HTMLButtonElement>("innkeeperBtn");
     const settingsBtn = getEl<HTMLButtonElement>("settingsBtn");
     const likeSubBtn = getEl<HTMLButtonElement>("likeSubBtn");
@@ -124,6 +129,9 @@ export function getDomRefs(): DomRefs {
     const killsPill = getEl<HTMLSpanElement>("killsPill");
     const hpPill = getEl<HTMLSpanElement>("hpPill");
     const lvlPill = getEl<HTMLSpanElement>("lvlPill");
+    const objectiveOverlay = getEl<HTMLDivElement>("objectiveOverlay");
+    const objectiveTitle = getEl<HTMLDivElement>("objectiveTitle");
+    const objectiveStatus = getEl<HTMLDivElement>("objectiveStatus");
     const weaponSlots = getEl<HTMLDivElement>("weaponSlots");
     const itemSlots = getEl<HTMLDivElement>("itemSlots");
 
@@ -147,6 +155,9 @@ export function getDomRefs(): DomRefs {
         killsPill,
         hpPill,
         lvlPill,
+        objectiveOverlay,
+        objectiveTitle,
+        objectiveStatus,
         weaponSlots,
         itemSlots,
     };
@@ -178,6 +189,7 @@ export function getDomRefs(): DomRefs {
         continueBtn,
         mainMenuEl,
         startRunBtn,
+        mapsBtn,
         innkeeperBtn,
         settingsBtn,
         likeSubBtn,
