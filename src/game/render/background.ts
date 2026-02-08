@@ -9,7 +9,7 @@ export type BgAsset = {
 
 // background.ts is in src/game/visual
 // assets are in src/assets/backgrounds
-const modules = import.meta.glob("../../assets/backgrounds/*test.png", {
+const modules = import.meta.glob("../../assets/backgrounds/*.png", {
     eager: true,
     import: "default",
 }) as Record<string, string>;
@@ -19,12 +19,12 @@ const modules = import.meta.glob("../../assets/backgrounds/*test.png", {
 // floorIndex: 0=Floor1, 1=Floor2, 2=Floor3
 // ─────────────────────────────────────────────────────────────
 export const BG_BY_FLOOR_INDEX: Record<number, string> = {
-    0: "test2.png",   // DOCKS
-    1: "test.png",  // SEWERS
-    2: "test3.png",  // CHINATOWN
+    0: "sewer_background.png", // DOCKS
+    1: "sewer_background.png", // SEWERS
+    2: "sewer_background.png", // CHINATOWN
 };
 
-const DEFAULT_BG_FILE = "";
+const DEFAULT_BG_FILE = "sewer_background.png";
 
 // Cache by floorIndex
 const cache: Record<number, BgAsset> = {};
