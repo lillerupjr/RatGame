@@ -6,7 +6,7 @@ import { clamp01 } from "../util/clamp";
 
 type BufferRec = { buf: AudioBuffer | null; ready: boolean; url?: string };
 
-const modules = import.meta.glob("../../../assets/sfx/*.{wav,mp3,ogg}", {
+const modules = import.meta.glob("../../assets/sfx/*.{wav,mp3,ogg}", {
     eager: true,
     import: "default",
 }) as Record<string, string>;

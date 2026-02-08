@@ -2,7 +2,7 @@
 
 type StageId = "DOCKS" | "SEWERS" | "CHINATOWN";
 
-const modules = import.meta.glob("../../../assets/music/*.{mp3,ogg,wav}", {
+const modules = import.meta.glob("../../assets/music/*.{mp3,ogg,wav}", {
     eager: true,
     import: "default",
 }) as Record<string, string>;
@@ -24,7 +24,7 @@ let curStage: StageId | null = null;
  * Global master volume for music [0..1]
  * This should usually be driven by settings / UI.
  */
-let musicMasterVolume = 0;
+let musicMasterVolume = 1;
 
 /**
  * Per-track base mix volume (before master volume).
