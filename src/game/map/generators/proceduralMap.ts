@@ -16,15 +16,6 @@
 //   - Passages: narrow corridors at the same height
 //   - Ramps/Stairs: inclined tiles to transition between height levels
 //
-// Tile assets (isometric view, viewer from south):
-// - landscape_28 (flat floor, default)
-// - landscape_30 (flat floor, spawn marker visual)
-// - landscape_13 (flat floor, cosmetic variation)
-// - landscape_16 (ramp: North up to South - walking N->S goes up)
-// - landscape_19 (ramp: West up to East - walking W->E goes up)
-// - landscape_20 (ramp: South up to North - walking S->N goes up)
-// - landscape_23 (ramp: East up to West - walking E->W goes up)
-
 import { RNG } from "../../util/rng";
 import type { ApronBaseMode, TableMapDef, TableMapCell } from "../formats/table/tableMapTypes";
 
@@ -138,7 +129,6 @@ type TileData = {
     h: number;      // Height in ramp units (multiples of RAMP_HEIGHT)
     level?: number; // Floor level (0, 1, 2...) - only for FLOOR tiles
     dir?: Dir;
-    skin?: string;
 };
 
 // Room challenge types
@@ -198,11 +188,8 @@ export type ProceduralMapResult = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// Floor Skins (cosmetic variety)
 // ─────────────────────────────────────────────────────────────
 
-const FLOOR_SKINS = ["edges_landscape_28", "edges_landscape_13"];
-const SPAWN_SKIN = "edges_landscape_30";
 
 // ─────────────────────────────────────────────────────────────
 // Room Challenge Generation
@@ -317,8 +304,7 @@ export function generateProceduralMapWithRooms(config: ProceduralMapConfig): Pro
     grid[spawn.y][spawn.x] = { 
         kind: "SPAWN", 
         h: spawnRoom.level * BLOCK_HEIGHT, 
-        level: spawnRoom.level, 
-        skin: SPAWN_SKIN 
+        level: spawnRoom.level
     };
     
     // 5. Place goal in last room
@@ -327,8 +313,7 @@ export function generateProceduralMapWithRooms(config: ProceduralMapConfig): Pro
     grid[goal.y][goal.x] = { 
         kind: "GOAL", 
         h: goalRoom.level * BLOCK_HEIGHT, 
-        level: goalRoom.level, 
-        skin: SPAWN_SKIN 
+        level: goalRoom.level
     };
     
     // 6. Add challenge elements (pits, decorations)
@@ -520,7 +505,6 @@ function carveRoom(
     const w = grid[0].length;
     const h = grid.length;
     
-    const skin = rng.pick(FLOOR_SKINS);
     const actualHeight = level * BLOCK_HEIGHT;
     
     const halfW = Math.floor(rw / 2);
@@ -550,7 +534,7 @@ function carveRoom(
             }
             
             if (inRoom && grid[y][x].kind === "VOID") {
-                grid[y][x] = { kind: "FLOOR", h: actualHeight, level, skin };
+                grid[y][x] = { kind: "FLOOR", h: actualHeight, level };
             }
         }
     }
@@ -618,7 +602,6 @@ function createPassage(
     
     // Passage width: narrow or regular
     const passageWidth = rng.next() < config.narrowPassageChance ? 1 : rng.int(2, 3);
-    const skin = rng.pick(FLOOR_SKINS);
     const level = fromRoom.level;
     const actualHeight = level * BLOCK_HEIGHT;
     
@@ -632,12 +615,12 @@ function createPassage(
     
     if (goHorizFirst) {
         // Horizontal then vertical
-        carveLineCorridor(grid, x0, y0, x1, y0, passageWidth, actualHeight, level, skin);
-        carveLineCorridor(grid, x1, y0, x1, y1, passageWidth, actualHeight, level, skin);
+        carveLineCorridor(grid, x0, y0, x1, y0, passageWidth, actualHeight, level);
+        carveLineCorridor(grid, x1, y0, x1, y1, passageWidth, actualHeight, level);
     } else {
         // Vertical then horizontal
-        carveLineCorridor(grid, x0, y0, x0, y1, passageWidth, actualHeight, level, skin);
-        carveLineCorridor(grid, x0, y1, x1, y1, passageWidth, actualHeight, level, skin);
+        carveLineCorridor(grid, x0, y0, x0, y1, passageWidth, actualHeight, level);
+        carveLineCorridor(grid, x0, y1, x1, y1, passageWidth, actualHeight, level);
     }
 }
 
@@ -674,8 +657,6 @@ function createRampConnection(
     // Each level difference requires RAMPS_PER_LEVEL (2) ramp tiles
     // Level 0 (h=0) to Level 1 (h=2) needs ramps at h=1 and h=2
     const rampsNeeded = levelDiff * RAMPS_PER_LEVEL;
-    
-    const skin = rng.pick(FLOOR_SKINS);
     
     // Determine which room is lower and which is higher
     const lowerRoom = goingUp ? fromRoom : toRoom;
@@ -736,7 +717,7 @@ function createRampConnection(
     const lowerLevel = lowerRoom.level;
     
     // Create lead-in corridor at lower level (from room center to ramp start)
-    carveLineCorridor(grid, lowerRoom.cx, lowerRoom.cy, startX, startY, 2, lowerHeight, lowerLevel, skin);
+    carveLineCorridor(grid, lowerRoom.cx, lowerRoom.cy, startX, startY, 2, lowerHeight, lowerLevel);
     
     // Place the ramps sequentially
     // Each ramp starts at height (lowerHeight + i) and provides +1 height
@@ -759,7 +740,6 @@ function createRampConnection(
             kind: "STAIRS",
             h: rampHeight,
             dir: oppositeDir(rampDir),
-            skin: getRampSkin(oppositeDir(rampDir)),
         };
         
         // Also carve adjacent tiles for width (make ramp 3 tiles wide)
@@ -772,7 +752,6 @@ function createRampConnection(
                         kind: "STAIRS",
                         h: rampHeight,
                         dir: oppositeDir(rampDir),
-                        skin: getRampSkin(oppositeDir(rampDir)),
                     };
                 }
             }
@@ -786,7 +765,7 @@ function createRampConnection(
     const higherHeight = higherRoom.level * BLOCK_HEIGHT;
     const higherLevel = higherRoom.level;
     
-    carveLineCorridor(grid, endX, endY, higherRoom.cx, higherRoom.cy, 2, higherHeight, higherLevel, skin);
+    carveLineCorridor(grid, endX, endY, higherRoom.cx, higherRoom.cy, 2, higherHeight, higherLevel);
 }
 
 function carveLineCorridor(
@@ -797,8 +776,7 @@ function carveLineCorridor(
     y1: number,
     width: number,
     height: number,
-    level: number,
-    skin: string
+    level: number
 ): void {
     const w = grid[0].length;
     const h = grid.length;
@@ -821,7 +799,7 @@ function carveLineCorridor(
                 const ty = y + wy;
                 if (tx >= 0 && tx < w && ty >= 0 && ty < h) {
                     if (grid[ty][tx].kind === "VOID") {
-                        grid[ty][tx] = { kind: "FLOOR", h: height, level, skin };
+                        grid[ty][tx] = { kind: "FLOOR", h: height, level };
                     }
                 }
             }
@@ -842,22 +820,7 @@ function carveLineCorridor(
 }
 
 // ─────────────────────────────────────────────────────────────
-// Ramp Skin Helper
 // ─────────────────────────────────────────────────────────────
-
-function getRampSkin(dir: Dir): string {
-    // Ramp tiles - direction indicates which way is "uphill":
-    // - edges_landscape_16: North up to South (walking N->S goes up)
-    // - edges_landscape_19: West up to East (walking W->E goes up)  
-    // - edges_landscape_20: South up to North (walking S->N goes up)
-    // - edges_landscape_23: East up to West (walking E->W goes up)
-    switch (dir) {
-        case "S": return "edges_landscape_16"; // Going South = going up
-        case "E": return "edges_landscape_19"; // Going East = going up
-        case "N": return "edges_landscape_20"; // Going North = going up
-        case "W": return "edges_landscape_23"; // Going West = going up
-    }
-}
 
 // ─────────────────────────────────────────────────────────────
 // Challenge Elements
@@ -1004,7 +967,7 @@ function polishMap(grid: TileData[][], rng: RNG): void {
                         }
                     }
                     const avgH = countH > 0 ? Math.round(sumH / countH) : 0;
-                    grid[y][x] = { kind: "FLOOR", h: avgH, skin: rng.pick(FLOOR_SKINS) };
+                    grid[y][x] = { kind: "FLOOR", h: avgH };
                 }
             }
         }
@@ -1054,8 +1017,6 @@ function gridToTableMapDef(grid: TileData[][], config: ProceduralMapConfig): Tab
         id: `PROCEDURAL_F${config.floorIndex}_${config.seed}`,
         w,
         h,
-        defaultFloorSkin: "edges_landscape_28",
-        defaultSpawnSkin: "edges_landscape_30",
         centerOnZero: true,
         apronBaseMode: config.apronBaseMode,
         cells,

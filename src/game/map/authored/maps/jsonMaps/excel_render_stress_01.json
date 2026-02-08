@@ -1,10 +1,9 @@
-{
+﻿{
   "id": "EXCEL_RENDER_STRESS_01",
   "width": 25,
   "height": 25,
-  "defaultFloorSkin": "edges_landscape_28",
-  "defaultSpawnSkin": "edges_landscape_30",
   "centerOnZero": true,
+  "mapSkinId": "sewer_green",
   "cells": [
     { "x": 11, "y": 9, "t": "F6" },
     { "x": 12, "y": 9, "t": "F6" },

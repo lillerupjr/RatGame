@@ -43,12 +43,9 @@ import {
 
 import {
   preloadRenderSprites,
-  getFloorTop,
-  getFloorApron,
-  getStairTop,
-  getStairApron,
-  getWallSkinSegment,
+  getTileSpriteById,
   getVoidTop,
+  setActiveMapSkinId
 } from "../../../engine/render/sprites/renderSprites";
 import {
   drawApronOwnershipOverlay,
@@ -64,6 +61,7 @@ import {
 /** Render tiles, entities, overlays, and debug layers. */
 export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
   const ww = canvas.clientWidth;
+  setActiveMapSkinId(w.chosenMapSkinId);
   const hh = canvas.clientHeight;
   (w as any).viewW = ww;
   (w as any).viewH = hh;
@@ -233,19 +231,13 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     };
 
   const buildApronDraws = (c: RenderPiece, stableId: number): RenderPieceDraw[] => {
-    const isFloor = c.kind === "FLOOR_APRON";
     const dir4 = c.renderDir ?? "N";
-    const topRec = isFloor ? getFloorTop() : getStairTop(dir4);
-    if (!topRec?.ready || !topRec.img || topRec.img.width <= 0 || topRec.img.height <= 0) return [];
-
-    const apronRec = isFloor
-        ? getFloorApron((c.apronKind as "S" | "E") ?? "S")
-        : getStairApron(dir4).rec;
-    const apronFlipX = isFloor ? !!c.flipX : getStairApron(dir4).flipX;
+    const apronRec = c.spriteId ? getTileSpriteById(c.spriteId) : null;
+    const apronFlipX = !!c.flipX;
     if (!apronRec?.ready || !apronRec.img || apronRec.img.width <= 0 || apronRec.img.height <= 0) return [];
 
       const anchorY = c.renderAnchorY ?? ANCHOR_Y;
-      const apronScale = isFloor ? FLOOR_APRON_SCALE : STAIR_APRON_SCALE;
+      const apronScale = c.kind === "FLOOR_APRON" ? FLOOR_APRON_SCALE : STAIR_APRON_SCALE;
       const aw = apronRec.img.width * apronScale;
       const ah = apronRec.img.height * apronScale;
 
@@ -306,13 +298,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const buildWallDraw = (c: RenderPiece, stableId: number): RenderPieceDraw | null => {
       if (c.kind !== "WALL") return null;
       const wallDir = c.wallDir ?? "N";
-      const wallSkin = c.wallSkin ?? "WALL";
-      const topDir = c.renderDir ?? "N";
-
-      const segmentDir = wallSkin === "STAIR_FACE" ? topDir : wallDir;
-      const seg = getWallSkinSegment(wallSkin, segmentDir);
-      const apronRec = seg.rec;
-      const apronFlipX = wallSkin === "STAIR_FACE" ? seg.flipX : (seg.flipX || !!c.flipX);
+      const apronRec = c.spriteId ? getTileSpriteById(c.spriteId) : null;
+      const apronFlipX = !!c.flipX;
       if (!apronRec?.ready || !apronRec.img || apronRec.img.width <= 0 || apronRec.img.height <= 0) return null;
 
       let wx = (c.tx + 0.5) * T;
@@ -511,7 +498,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   layers.sort((a, b) => a - b);
 
   // ----------------------------
-  // Void background.png (draw once per frame)
+  // Void green_water.png (draw once per frame)
   // ----------------------------
   {
     const voidRec = getVoidTop();
@@ -644,7 +631,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
             const dir4 = surface.renderDir ?? "N";
 
-            const topRec = isStairTop ? getStairTop(dir4) : getFloorTop();
+            const topRec = surface.spriteIdTop ? getTileSpriteById(surface.spriteIdTop) : null;
             if (!topRec?.ready || !topRec.img || topRec.img.width <= 0 || topRec.img.height <= 0) continue;
 
             const topScale = isStairTop ? STAIR_TOP_SCALE : FLOOR_TOP_SCALE;

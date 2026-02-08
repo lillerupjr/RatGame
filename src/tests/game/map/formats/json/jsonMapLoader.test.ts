@@ -11,8 +11,6 @@ describe("jsonMapLoader", () => {
       id: "JSON_MINIMAL",
       w: 3,
       h: 3,
-      defaultFloorSkin: "landscape_28",
-      defaultSpawnSkin: "landscape_30",
       cells: [
         { x: 1, y: 1, t: "P0" },
         { x: 0, y: 1, t: "F0" },

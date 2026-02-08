@@ -23,6 +23,7 @@ import { worldToTile, tileToWorldCenter } from "../../coords/tile";
 import { generateFloorMap } from "../generators/proceduralMap";
 import { loadTableMapDefFromJson } from "../formats/json/jsonMapLoader";
 import excelSanctuary01Json from "../authored/maps/jsonMaps/excel_sanctuary_01.json";
+import type { MapSkinId } from "../../content/mapSkins";
 
 export type {
     IsoTileKind,
@@ -83,8 +84,8 @@ let _compiled: CompiledKenneyMap = compileKenneyMapFromTable(EXCEL_SANCTUARY_01)
  * Set the active map dynamically (e.g., for procedural generation).
  */
 /** Compile and activate a new map definition. */
-export function setActiveMap(mapDef: TableMapDef): CompiledKenneyMap {
-    _compiled = compileKenneyMapFromTable(mapDef);
+export function setActiveMap(mapDef: TableMapDef, mapSkinId?: MapSkinId): CompiledKenneyMap {
+    _compiled = compileKenneyMapFromTable(mapDef, { mapSkinId });
     _rampCache.clear();
     return _compiled;
 }

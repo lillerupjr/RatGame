@@ -1,10 +1,15 @@
-{
+﻿{
   "id": "WALL_TEST",
   "width": 6,
   "height": 6,
-  "defaultFloorSkin": "landscape_28",
-  "defaultSpawnSkin": "landscape_30",
   "centerOnZero": true,
+  "mapSkinDefaults": {
+    "floor": "tiles/floor/top/tile1",
+    "apron": "tiles/floor/curtain/test_apron",
+    "wall": "tiles/walls/wall_test_4",
+    "stair": "tiles/stairs/top/stair_top",
+    "stairApron": "tiles/stairs/curtain/stair_apron"
+  },
   "cells": [
     { "x": 0, "y": 0, "t": "F0|W4S|W4E" },
     { "x": 1, "y": 0, "t": "F0|W4S" },

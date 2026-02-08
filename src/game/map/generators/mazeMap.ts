@@ -399,8 +399,6 @@ export function generateMazeMapDef(config: MazeMapConfig): { mapDef: TableMapDef
         id: config.id ?? `MAZE_${config.width}x${config.height}_S${config.seed}`,
         w: mapWidth,
         h: mapHeight,
-        defaultFloorSkin: "landscape_28",
-        defaultSpawnSkin: "landscape_30",
         centerOnZero: config.centerOnZero ?? true,
         apronBaseMode: config.apronBaseMode,
         cells,

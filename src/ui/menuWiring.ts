@@ -5,16 +5,13 @@ import excelSanctuary01Json from "../game/map/authored/maps/jsonMaps/excel_sanct
 import wallTestJson from "../game/map/authored/maps/jsonMaps/wall_test.json";
 import excelRenderStress01Json from "../game/map/authored/maps/jsonMaps/excel_render_stress_01.json";
 import simpleTestJson from "../game/map/authored/maps/jsonMaps/simple_test.json";
-import testNorth5Json from "../game/map/authored/maps/jsonMaps/test_north_5.json";
-import testSouth5Json from "../game/map/authored/maps/jsonMaps/test_south_5.json";
-import testEast5Json from "../game/map/authored/maps/jsonMaps/test_east_5.json";
-import testWest5Json from "../game/map/authored/maps/jsonMaps/test_west_5.json";
 import floorTestJson from "../game/map/authored/maps/jsonMaps/floor_test.json";
 import jsonMinimalMap from "../game/map/authored/maps/jsonMaps/minimal.json";
 import type { DomRefs } from "./domRefs";
 
 type GameApi = {
     previewMap: (mapId?: string) => void;
+    startRun: (starterWeapon?: WeaponId, mapId?: string) => void;
 };
 
 type MapChoice = {
@@ -23,7 +20,7 @@ type MapChoice = {
     desc: string;
 };
 
-// Load background.png image using Vite's import.meta.glob
+// Load green_water.png image using Vite's import.meta.glob
 const backgroundAssets = import.meta.glob("../assets/backgrounds/*dirt.png", {
     eager: true,
     import: "default",
@@ -31,7 +28,7 @@ const backgroundAssets = import.meta.glob("../assets/backgrounds/*dirt.png", {
 
 function getBackgroundUrl(): string {
     for (const [path, url] of Object.entries(backgroundAssets)) {
-        if (path.endsWith("/background.png.png")) {
+        if (path.endsWith("/green_water.png.png")) {
             return url;
         }
     }
@@ -59,10 +56,6 @@ const staticMapDefs: TableMapDef[] = [
     loadTableMapDefFromJson(wallTestJson, "jsonMaps/wall_test.json"),
     loadTableMapDefFromJson(excelRenderStress01Json, "jsonMaps/excel_render_stress_01.json"),
     loadTableMapDefFromJson(simpleTestJson, "jsonMaps/simple_test.json"),
-    loadTableMapDefFromJson(testNorth5Json, "jsonMaps/test_north_5.json"),
-    loadTableMapDefFromJson(testSouth5Json, "jsonMaps/test_south_5.json"),
-    loadTableMapDefFromJson(testEast5Json, "jsonMaps/test_east_5.json"),
-    loadTableMapDefFromJson(testWest5Json, "jsonMaps/test_west_5.json"),
     loadTableMapDefFromJson(floorTestJson, "jsonMaps/floor_test.json"),
     loadTableMapDefFromJson(jsonMinimalMap, "jsonMaps/minimal.json"),
 ];
@@ -95,9 +88,11 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         (refs.startBtn.dataset.weapon as WeaponId) ||
         (weaponIds.includes("KNIFE" as WeaponId) ? ("KNIFE" as WeaponId) : weaponIds[0]);
 
-    let selectedMapId = refs.startBtn.dataset.map || mapChoices[0]?.id;
+    // Start with undefined (Delve mode) by default, not PROC_ROOMS
+    let selectedMapId: string | undefined = refs.startBtn.dataset.map || undefined;
 
     function getSelectedMapLabel(): string {
+        if (!selectedMapId) return "Delve (random route)";
         return mapChoices.find((m) => m.id === selectedMapId)?.label ?? "Unknown Map";
     }
 
@@ -195,7 +190,11 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
 
     function setSelectedMap(id: string) {
         selectedMapId = id;
-        refs.startBtn.dataset.map = id;
+        if (id) {
+            refs.startBtn.dataset.map = id;
+        } else {
+            delete refs.startBtn.dataset.map;
+        }
 
         const buttons = refs.mapChoicesEl.querySelectorAll("button[data-map]");
         buttons.forEach((b) => {
@@ -242,6 +241,11 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
 
     // Main menu -> Weapon selection
     refs.startRunBtn.addEventListener("click", () => {
+        // Clear map selection for delve mode
+        selectedMapId = undefined;
+        delete refs.startBtn.dataset.map;
+        updateMenuSubline();
+
         refs.mainMenuEl.hidden = true;
         refs.menuEl.hidden = false;
         game.previewMap(selectedMapId);

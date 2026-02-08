@@ -27,6 +27,7 @@ import { getUpgradePool, UpgradeDef } from "./content/upgrades";
 import { formatTimeMMSS } from "./util/time";
 import type { WeaponId } from "./content/weapons";
 import { registry } from "./content/registry";
+import { DEFAULT_MAP_SKIN_ID, pickMapSkinId } from "./content/mapSkins";
 import { spawnEnemyGrid, ENEMY_TYPE } from "./factories/enemyFactory";
 import { gridToWorld, worldToGrid } from "./coords/grid";
 import { anchorFromWorld } from "./coords/anchor";
@@ -62,10 +63,6 @@ import excelSanctuary01Json from "./map/authored/maps/jsonMaps/excel_sanctuary_0
 import wallTestJson from "./map/authored/maps/jsonMaps/wall_test.json";
 import excelRenderStress01Json from "./map/authored/maps/jsonMaps/excel_render_stress_01.json";
 import simpleTestJson from "./map/authored/maps/jsonMaps/simple_test.json";
-import testNorth5Json from "./map/authored/maps/jsonMaps/test_north_5.json";
-import testSouth5Json from "./map/authored/maps/jsonMaps/test_south_5.json";
-import testEast5Json from "./map/authored/maps/jsonMaps/test_east_5.json";
-import testWest5Json from "./map/authored/maps/jsonMaps/test_west_5.json";
 import floorTestJson from "./map/authored/maps/jsonMaps/floor_test.json";
 import jsonMinimalMap from "./map/authored/maps/jsonMaps/minimal.json";
 import vendor01Json from "./map/authored/maps/jsonMaps/vendor_01.json";
@@ -172,10 +169,6 @@ export function createGame(args: CreateGameArgs) {
     loadTableMapDefFromJson(wallTestJson, "authored/maps/jsonMaps/wall_test.json"),
     loadTableMapDefFromJson(excelRenderStress01Json, "authored/maps/jsonMaps/excel_render_stress_01.json"),
     loadTableMapDefFromJson(simpleTestJson, "authored/maps/jsonMaps/simple_test.json"),
-    loadTableMapDefFromJson(testNorth5Json, "authored/maps/jsonMaps/test_north_5.json"),
-    loadTableMapDefFromJson(testSouth5Json, "authored/maps/jsonMaps/test_south_5.json"),
-    loadTableMapDefFromJson(testEast5Json, "authored/maps/jsonMaps/test_east_5.json"),
-    loadTableMapDefFromJson(testWest5Json, "authored/maps/jsonMaps/test_west_5.json"),
     loadTableMapDefFromJson(floorTestJson, "authored/maps/jsonMaps/floor_test.json"),
     loadTableMapDefFromJson(jsonMinimalMap, "authored/maps/jsonMaps/minimal.json"),
     loadTableMapDefFromJson(vendor01Json, "authored/maps/jsonMaps/vendor_01.json"),
@@ -218,7 +211,7 @@ export function createGame(args: CreateGameArgs) {
   preloadKenneyTiles();
 
   // NEW: Kenney iso tile (placeholder for Milestone A)
-  // Expects: src/game/assets/tiles/landscape_13.png
+  // Uses the default map skin sprite set.
   // (safe even if missing; render will fallback)
   const anyW = (world as any);
   if (!anyW._kenneyTilesPreloaded) {
@@ -374,6 +367,16 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function enterFloor(w: World, floorIntent: FloorIntent) {
+    const mapSkinId = (() => {
+      const nodeId = floorIntent.nodeId ?? "LEGACY_FLOOR";
+      const delve = w.delveMap as DelveMap | null;
+      const pool = delve?.nodes?.get?.(nodeId)?.skinPool;
+      const chosen = pickMapSkinId(pool, w.runSeed ?? 0, nodeId);
+      console.log(`[enterFloor] nodeId: ${nodeId}, pool: [${pool?.join(", ") ?? "none"}], chosenSkin: ${chosen}`);
+      return chosen;
+    })();
+
+    w.chosenMapSkinId = mapSkinId;
     w.floorIndex = floorIntent.floorIndex;
     w.floorArchetype = floorIntent.archetype;
     w.currentFloorIntent = floorIntent;
@@ -394,14 +397,14 @@ export function createGame(args: CreateGameArgs) {
     const mapSource = mapSourceFromFloorIntent(floorIntent);
     if (mapSource.type === "PROCEDURAL_ROOMS") {
       const mapSeed = w.rng.int(0, 0x7fffffff);
-      generateAndActivateFloorMap(mapSeed, floorIntent.floorIndex, false, w);
+      generateAndActivateFloorMap(mapSeed, floorIntent.floorIndex, false, w, mapSkinId);
     } else if (mapSource.type === "PROCEDURAL_MAZE") {
       const mapSeed = w.rng.int(0, 0x7fffffff);
-      generateAndActivateMazeFloorMap(mapSeed, floorIntent.floorIndex, false);
+      generateAndActivateMazeFloorMap(mapSeed, floorIntent.floorIndex, false, mapSkinId);
     } else {
       const staticDef = getStaticMapById(mapSource.mapId) ?? getDefaultStaticMap();
       if (staticDef) {
-        activateMapDef(staticDef);
+        activateMapDef(staticDef, mapSkinId);
       }
     }
 
@@ -522,17 +525,17 @@ export function createGame(args: CreateGameArgs) {
 
   function applyMapSelection(mapId: string | undefined, seed: number) {
     if (mapId === "PROC_ROOMS") {
-      generateAndActivateFloorMap(seed, 0, false);
+      generateAndActivateFloorMap(seed, 0, false, undefined, DEFAULT_MAP_SKIN_ID);
       return;
     }
     if (mapId === "PROC_MAZE") {
-      generateAndActivateMazeFloorMap(seed, 0, false);
+      generateAndActivateMazeFloorMap(seed, 0, false, DEFAULT_MAP_SKIN_ID);
       return;
     }
 
     const staticDef = getStaticMapById(mapId) ?? getDefaultStaticMap();
     if (staticDef) {
-      activateMapDef(staticDef);
+      activateMapDef(staticDef, DEFAULT_MAP_SKIN_ID);
     }
   }
 
@@ -606,7 +609,12 @@ export function createGame(args: CreateGameArgs) {
     } else {
       world.delveMap = null;
       world.delveDepth = 0;
-      world.delveScaling = undefined;
+      world.delveScaling = {
+        hpMult: 1,
+        damageMult: 1,
+        spawnRateMult: 1,
+        xpMult: 1,
+      };
       world.state = "RUN";
     }
   }

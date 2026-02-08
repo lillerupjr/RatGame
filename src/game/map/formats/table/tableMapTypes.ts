@@ -1,4 +1,6 @@
 // src/game/map/tableMapTypes.ts
+import type { MapSkinBundle, MapSkinId } from "../../../content/mapSkins";
+
 export type TableToken = string;
 
 export type TableMapCell = {
@@ -38,9 +40,13 @@ export type TableMapDef = {
     w: number;
     h: number;
 
-    // Optional: default floor skin (e.g. "landscape_23")
+    // Optional: map skin ID from MAP_SKINS registry
+    mapSkinId?: MapSkinId;
+    // Optional: default floor skin (legacy identifier)
     defaultFloorSkin?: string;
     defaultSpawnSkin?: string;
+    // Optional: map-level sprite defaults for the tile skin pipeline
+    mapSkinDefaults?: MapSkinBundle;
     // Optional: place the selection so its center ends up at tile (0,0)
     centerOnZero?: boolean;
     // Optional: how far aprons extend down (plateau uses min height; islands extend to 0)

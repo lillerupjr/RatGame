@@ -7,6 +7,7 @@ import type {
   TableObjectiveRule,
   TableOutcomeDef,
 } from "../table/tableMapTypes";
+import type { MapSkinBundle, MapSkinId } from "../../../content/mapSkins";
 
 type JsonMapCell = {
   x: number;
@@ -22,8 +23,10 @@ type JsonMapDef = {
   width: number;
   height: number;
   cells: JsonMapCell[];
+  mapSkinId?: MapSkinId;
   defaultFloorSkin?: string;
   defaultSpawnSkin?: string;
+  mapSkinDefaults?: MapSkinBundle;
   centerOnZero?: boolean;
   apronBaseMode?: ApronBaseMode;
   metadata?: unknown;
@@ -78,6 +81,24 @@ function optionalBooleanField(obj: Record<string, unknown>, key: string): boolea
     throw new Error(`JSON map loader: optional field "${key}" must be a boolean.`);
   }
   return value;
+}
+
+function optionalMapSkinDefaultsField(
+  obj: Record<string, unknown>,
+  key: string
+): MapSkinBundle | undefined {
+  const value = obj[key];
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) {
+    throw new Error(`JSON map loader: optional field "${key}" must be an object.`);
+  }
+  return {
+    floor: optionalStringField(value, "floor"),
+    apron: optionalStringField(value, "apron"),
+    wall: optionalStringField(value, "wall"),
+    stair: optionalStringField(value, "stair"),
+    stairApron: optionalStringField(value, "stairApron"),
+  };
 }
 
 function optionalNumberField(obj: Record<string, unknown>, key: string): number | undefined {
@@ -238,8 +259,10 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
   const height = requireNumberField(data, "height", source);
   const cells = requireCellsField(data, source);
 
+  const mapSkinId = optionalStringField(data, "mapSkinId");
   const defaultFloorSkin = optionalStringField(data, "defaultFloorSkin");
   const defaultSpawnSkin = optionalStringField(data, "defaultSpawnSkin");
+  const mapSkinDefaults = optionalMapSkinDefaultsField(data, "mapSkinDefaults");
   const centerOnZero = optionalBooleanField(data, "centerOnZero");
   const apronBaseMode = optionalApronBaseModeField(data, "apronBaseMode");
   const objectiveDefs = parseObjectiveDefs(data, source);
@@ -249,8 +272,10 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     width,
     height,
     cells,
+    mapSkinId,
     defaultFloorSkin,
     defaultSpawnSkin,
+    mapSkinDefaults,
     centerOnZero,
     apronBaseMode,
     metadata: data.metadata,
@@ -261,8 +286,10 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     id: jsonDef.id,
     w: jsonDef.width,
     h: jsonDef.height,
+    mapSkinId: jsonDef.mapSkinId,
     defaultFloorSkin: jsonDef.defaultFloorSkin,
     defaultSpawnSkin: jsonDef.defaultSpawnSkin,
+    mapSkinDefaults: jsonDef.mapSkinDefaults,
     centerOnZero: jsonDef.centerOnZero,
     apronBaseMode: jsonDef.apronBaseMode,
     cells: jsonDef.cells,

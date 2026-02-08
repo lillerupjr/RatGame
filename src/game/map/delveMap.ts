@@ -4,6 +4,7 @@
 import type { StageId } from "../content/stages";
 import { RNG } from "../util/rng";
 import { FLOOR_ARCHETYPES, type FloorArchetype } from "./floorArchetype";
+import type { MapSkinId } from "../content/mapSkins";
 
 export type DelveNode = {
   id: string;
@@ -13,6 +14,7 @@ export type DelveNode = {
   floorArchetype: FloorArchetype;
   title: string;
   completed: boolean;
+  skinPool?: MapSkinId[];
 };
 
 export type DelveEdge = { from: string; to: string };
@@ -30,6 +32,15 @@ const ZONE_NAMES: Record<StageId, string> = {
   SEWERS: "Sewers",
   CHINATOWN: "Chinatown",
 };
+const ZONE_SKIN_POOLS: Record<StageId, MapSkinId[]> = {
+  DOCKS: ["default", "docks_rust"],
+  SEWERS: ["default", "sewer_green"],
+  CHINATOWN: ["default", "neon_stone"],
+};
+
+function skinPoolForZone(zoneId: StageId): MapSkinId[] {
+  return ZONE_SKIN_POOLS[zoneId] ?? ["default"];
+}
 
 function nodeId(x: number, y: number): string {
   return `${x},${y}`;
@@ -80,6 +91,7 @@ export function createDelveMap(seed: number): DelveMap {
     floorArchetype: pickFloorArchetype(rng, 1, null),
     title: `${ZONE_NAMES[startZone]} (Depth 1)`,
     completed: false,
+    skinPool: skinPoolForZone(startZone),
   };
   nodes.set(startNode.id, startNode);
 
@@ -165,6 +177,7 @@ export function ensureAdjacentNodes(map: DelveMap, fromId: string, seed: number)
           floorArchetype: pickFloorArchetype(nodeRng, depth, from.floorArchetype),
           title: `${ZONE_NAMES[zoneId]} (Depth ${depth})`,
           completed: false,
+          skinPool: skinPoolForZone(zoneId),
         };
         map.nodes.set(nid, newNode);
       }
@@ -195,6 +208,7 @@ export function ensureAdjacentNodes(map: DelveMap, fromId: string, seed: number)
         floorArchetype: pickFloorArchetype(nodeRng, depth, from.floorArchetype),
         title: `${ZONE_NAMES[zoneId]} (Depth ${depth})`,
         completed: false,
+        skinPool: skinPoolForZone(zoneId),
       });
     }
     map.edges.push({ from: fromId, to: deeperId });

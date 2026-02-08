@@ -2,23 +2,17 @@
 import type { TableMapDef } from "../formats/table/tableMapTypes";
 import { KENNEY_TILE_ANCHOR_Y } from "../../../engine/render/kenneyTiles";
 import type { TriggerDef } from "../../triggers/triggerTypes";
+import { resolveMapSkin, type MapSkinBundle, type MapSkinId } from "../../content/mapSkins";
+import { resolveTileSpriteId } from "../skins/tileSpriteResolver";
 
 export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL";
 export type StairDir = "N" | "E" | "S" | "W";
 export type WallDir = "N" | "E" | "S" | "W";
 
-// Authoritative stair sprite mapping:
-export const STAIR_SKIN_BY_DIR: Record<StairDir, string> = {
-    S: "wedgeTest20",
-    E: "wedgeTest23",
-    W: "wedgeTest19",
-    N: "wedgeTest16",
-};
-
 export type IsoTile = {
     kind: IsoTileKind;
     h: number;      // integer base height (authored)
-    skin?: string;  // e.g. "landscape_23"
+    skin?: string;  // optional per-tile sprite override id
     dir?: StairDir; // stairs direction (optional)
     stairGroupId?: number;
     stairStepIndex?: number; // 0..n-1 low->high within a staircase group
@@ -46,6 +40,7 @@ export type Surface = {
     renderDir: StairDir;
     renderAnchorY: number;
     renderDyOffset: number;
+    spriteIdTop: string;
 };
 
 export type RenderPieceKind = "FLOOR_APRON" | "STAIR_APRON" | "WALL";
@@ -73,6 +68,7 @@ export type RenderPiece = {
     renderDir: StairDir;
     renderAnchorY: number;
     renderDyOffset: number;
+    spriteId: string;
 };
 
 export type WallToken = {
@@ -137,11 +133,7 @@ export type CompiledKenneyMap = {
 };
 
 // Parse tokens like: F0, F5, S0W, S3N, S4S, S5, P0, C2E
-function parseToken(
-    t: string,
-    defaultFloorSkin?: string,
-    defaultSpawnSkin?: string
-): IsoTile | null {
+function parseToken(t: string): IsoTile | null {
     const tok = (t ?? "").trim();
     if (!tok) return null;
 
@@ -151,23 +143,21 @@ function parseToken(
     if (up.startsWith("F")) {
         const n = parseInt(up.slice(1), 10);
         const h = Number.isFinite(n) ? (n | 0) : 0;
-        return { kind: "FLOOR", h, skin: defaultFloorSkin };
+        return { kind: "FLOOR", h };
     }
 
     // SPAWN: P<number> (acts like FLOOR visually/gameplay, but marks spawn)
     if (up.startsWith("P")) {
         const n = parseInt(up.slice(1), 10);
         const h = Number.isFinite(n) ? (n | 0) : 0;
-        const skin = defaultSpawnSkin ?? defaultFloorSkin;
-        return { kind: "SPAWN", h, skin };
+        return { kind: "SPAWN", h };
     }
 
     // GOAL: G<number> (destination/objective marker)
     if (up.startsWith("G")) {
         const n = parseInt(up.slice(1), 10);
         const h = Number.isFinite(n) ? (n | 0) : 0;
-        const skin = defaultSpawnSkin ?? defaultFloorSkin;
-        return { kind: "GOAL", h, skin };
+        return { kind: "GOAL", h };
     }
 
     // STAIRS: S<number><dir?>
@@ -177,8 +167,7 @@ function parseToken(
         if (m) {
             const h = parseInt(m[1], 10) | 0;
             const dir = (m[2] as StairDir | undefined) ?? undefined;
-            const skin = dir ? STAIR_SKIN_BY_DIR[dir] : defaultFloorSkin;
-            return { kind: "STAIRS", h, dir, skin };
+            return { kind: "STAIRS", h, dir };
         }
 
         const cleaned = "S" + up.slice(1).replace(/[^0-9NESW]/g, "");
@@ -186,23 +175,18 @@ function parseToken(
         if (m2) {
             const h = parseInt(m2[1], 10) | 0;
             const dir = (m2[2] as StairDir | undefined) ?? undefined;
-            const skin = dir ? STAIR_SKIN_BY_DIR[dir] : defaultFloorSkin;
-            return { kind: "STAIRS", h, dir, skin };
+            return { kind: "STAIRS", h, dir };
         }
 
         // Fallback: stairs at height 0 (no direction)
-        return { kind: "STAIRS", h: 0, skin: defaultFloorSkin };
+        return { kind: "STAIRS", h: 0 };
     }
 
     return null;
 }
 
 // Parse multi-tokens like: F0|W4S
-function parseTokens(
-    t: string,
-    defaultFloorSkin?: string,
-    defaultSpawnSkin?: string
-): { tile: IsoTile | null; walls: WallToken[] } {
+function parseTokens(t: string): { tile: IsoTile | null; walls: WallToken[] } {
     const raw = (t ?? "").trim();
     if (!raw) return { tile: null, walls: [] };
 
@@ -225,7 +209,7 @@ function parseTokens(
         }
 
         if (!tile) {
-            tile = parseToken(tok, defaultFloorSkin, defaultSpawnSkin);
+            tile = parseToken(tok);
         }
     }
 
@@ -233,9 +217,21 @@ function parseTokens(
 }
 
 /** Compile a table-based map definition into a render/query-friendly map. */
-export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
-    const defaultFloorSkin = def.defaultFloorSkin;
-    const defaultSpawnSkin = def.defaultSpawnSkin;
+function mapSkinDefaultsFromDef(def: TableMapDef): MapSkinBundle {
+    const defaults: MapSkinBundle = { ...(def.mapSkinDefaults ?? {}) };
+    if (!defaults.floor && def.defaultFloorSkin) defaults.floor = def.defaultFloorSkin;
+    return defaults;
+}
+
+export function compileKenneyMapFromTable(
+    def: TableMapDef,
+    options?: { mapSkinId?: MapSkinId }
+): CompiledKenneyMap {
+    const mapSkinDefaults = mapSkinDefaultsFromDef(def);
+    // Priority: def.mapSkinId (authored) > options.mapSkinId (runtime override)
+    // This allows authored maps to specify their own skin, while procedural maps use runtime selection
+    const skinIdToUse = def.mapSkinId ?? options?.mapSkinId;
+    const resolvedMapSkin = resolveMapSkin(skinIdToUse);
 
     // Keyed by "x,y" in table coords
     const placed = new Map<string, IsoTile>();
@@ -254,7 +250,7 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
     for (const c of def.cells) {
         const fx = (def.w - 1) - (c.x | 0);
         const fy = (def.h - 1) - (c.y | 0);
-        const parsed = parseTokens(c.t, defaultFloorSkin, defaultSpawnSkin);
+        const parsed = parseTokens(c.t);
         if (!parsed.tile && parsed.walls.length === 0) continue;
 
         const tile = parsed.tile;
@@ -389,6 +385,16 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         const renderDyOffset = renderTopKind === "STAIR" ? (stairDyByDir[renderDir] ?? 16) : 0;
 
         const zLogical = renderTopKind === "STAIR" ? Math.max(0, zBase - 1) : zBase;
+        const tileOverride: MapSkinBundle | undefined = tile.skin
+            ? (renderTopKind === "STAIR" ? { stair: tile.skin } : { floor: tile.skin })
+            : undefined;
+        const spriteIdTop = resolveTileSpriteId({
+            slot: renderTopKind === "STAIR" ? "stair" : "floor",
+            dir: renderTopKind === "STAIR" ? renderDir : undefined,
+            mapSkin: resolvedMapSkin,
+            mapDefaults: mapSkinDefaults,
+            tileOverride,
+        });
 
         addSurface({
             id: `tile_${tx}_${ty}_${tile.kind}_${zBase}`,
@@ -402,6 +408,7 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
             renderDir,
             renderAnchorY,
             renderDyOffset,
+            spriteIdTop,
         });
     }
 
@@ -737,6 +744,12 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
                             renderDir: "N",
                             renderAnchorY: floorAnchorY,
                             renderDyOffset: 0,
+                            spriteId: resolveTileSpriteId({
+                                slot: "apron",
+                                dir,
+                                mapSkin: resolvedMapSkin,
+                                mapDefaults: mapSkinDefaults,
+                            }),
                         });
                         continue;
                     }
@@ -759,6 +772,12 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
                     renderDir: surface.renderDir,
                     renderAnchorY: surface.renderAnchorY,
                     renderDyOffset: surface.renderDyOffset,
+                    spriteId: resolveTileSpriteId({
+                        slot: isStair ? "stairApron" : "apron",
+                        dir: isStair ? dir : (dir === "E" || dir === "S" ? dir : "S"),
+                        mapSkin: resolvedMapSkin,
+                        mapDefaults: mapSkinDefaults,
+                    }),
                 });
             }
         }
@@ -778,6 +797,20 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
         const segmentHeight = 2;
         const zFrom = 0;
         const zTo = height;
+        const wallSkin = "WALL";
+        const wallAxis = canonical.dir === "E" || canonical.dir === "W" ? "E" : "S";
+        const wallSlot = wallSkin === "FLOOR_EDGE"
+            ? "apron"
+            : wallSkin === "STAIR_FACE"
+                ? "stairApron"
+                : "wall";
+        const wallSpriteDir = wallSlot === "stairApron" ? "N" : wallAxis;
+        const spriteId = resolveTileSpriteId({
+            slot: wallSlot,
+            dir: wallSpriteDir,
+            mapSkin: resolvedMapSkin,
+            mapDefaults: mapSkinDefaults,
+        });
 
         for (let z = zFrom; z < zTo; z += segmentHeight) {
             const segFrom = z;
@@ -793,13 +826,14 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
                 zTo: segTo,
                 zLogical,
                 wallDir: canonical.dir,
-                wallSkin: "WALL",
+                wallSkin,
                 apronDyOffset: 0,
                 flipX,
                 renderTopKind: "FLOOR",
                 renderDir: "N",
                 renderAnchorY: floorAnchorY,
                 renderDyOffset: 0,
+                spriteId,
             });
         }
     }
