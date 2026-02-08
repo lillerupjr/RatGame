@@ -10,6 +10,7 @@ import { getEnemySpriteFrame, preloadEnemySprites } from "../../../engine/render
 import {
   heightAtWorld,
   walkInfo,
+  getTile,
   surfacesAtXY,
   apronUnderlaysAtXY,
   deferredApronsAtXY,
@@ -50,6 +51,7 @@ import {
   getWallSkinTopDy,
   getWallSkinSegment,
   getWallSkinSegmentDy,
+  getVoidTop,
   FLOOR_TOP_DY_PX,
   STAIR_TOP_DY_PX,
   FLOOR_APRON_DY_PX,
@@ -127,6 +129,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const STAIR_APRON_SCALE = 1;
   const WALL_TOP_SCALE = 1;
   const WALL_APRON_SCALE = 1;
+  const VOID_TOP_SCALE = 1.12;
 
   // Optional render-layer offset for stairs.
   const STAIR_LAYER_OFFSET = (w as any).stairLayerOffset ?? 0;
@@ -523,6 +526,42 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   const layers = Array.from(layerSet);
   layers.sort((a, b) => a - b);
+
+  // ----------------------------
+  // Void background (draw once per frame)
+  // ----------------------------
+  {
+    const voidRec = getVoidTop();
+    if (voidRec?.ready && voidRec.img && voidRec.img.width > 0 && voidRec.img.height > 0) {
+      const topImg = voidRec.img;
+      const topW = topImg.width * VOID_TOP_SCALE;
+      const topH = topImg.height * VOID_TOP_SCALE;
+
+      for (let s = minSum; s <= maxSum; s++) {
+        const ty0 = Math.max(minTy, s - maxTx);
+        const ty1 = Math.min(maxTy, s - minTx);
+
+        for (let ty = ty1; ty >= ty0; ty--) {
+          const tx = s - ty;
+          const tile = getTile(tx, ty);
+          if (tile.kind !== "VOID") continue;
+
+          const wx = (tx + 0.5) * T;
+          const wy = (ty + 0.5) * T;
+
+          const p = worldToScreen(wx, wy);
+          const dx = p.x + camX - topW * 0.5;
+
+          const anchorY = ANCHOR_Y;
+
+          let dy = p.y + camY - topH * anchorY;
+          dy += FLOOR_TOP_Y_SHIFT_PX;
+
+          ctx.drawImage(topImg, dx, dy, topW, topH);
+        }
+      }
+    }
+  }
 
   // ----------------------------
   // Main render loop: per-layer

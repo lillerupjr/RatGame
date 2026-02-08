@@ -58,6 +58,7 @@ function load(url: string): LoadedImg {
 // ------------------------------------------------------------------
 
 const FLOOR_TOP = load(new URL("../../../assets/tiles/floor/top/test_top.png", import.meta.url).href);
+const VOID_TOP = load(new URL("../../../assets/tiles/floor/top/background.png", import.meta.url).href);
 const FLOOR_APRON_S = load(
     new URL("../../../assets/tiles/floor/curtain/test_apron_s.png", import.meta.url).href
 );
@@ -101,6 +102,7 @@ export function preloadRenderSprites() {
     // Images start loading on module import; this function exists for symmetry.
     // Keeping it allows render.ts to do one-time "preload" like other sprite packs.
     void FLOOR_TOP;
+    void VOID_TOP;
     void FLOOR_APRON_S;
     void FLOOR_APRON_E;
     void STAIR_TOP_N;
@@ -116,6 +118,10 @@ export function preloadRenderSprites() {
 }
 export function getFloorTop(): LoadedImg {
     return FLOOR_TOP;
+}
+
+export function getVoidTop(): LoadedImg {
+    return VOID_TOP;
 }
 
 export function getFloorApron(kind: "S" | "E"): LoadedImg {
