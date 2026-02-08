@@ -23,15 +23,15 @@ type MapChoice = {
     desc: string;
 };
 
-// Load background image using Vite's import.meta.glob
-const backgroundAssets = import.meta.glob("../assets/backgrounds/*test2.png", {
+// Load background.png image using Vite's import.meta.glob
+const backgroundAssets = import.meta.glob("../assets/backgrounds/*dirt.png", {
     eager: true,
     import: "default",
 }) as Record<string, string>;
 
 function getBackgroundUrl(): string {
     for (const [path, url] of Object.entries(backgroundAssets)) {
-        if (path.endsWith("/background.png")) {
+        if (path.endsWith("/background.png.png")) {
             return url;
         }
     }

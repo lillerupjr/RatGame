@@ -57,8 +57,9 @@ function load(url: string): LoadedImg {
 // Paths (Vite-friendly): new URL(..., import.meta.url).href
 // ------------------------------------------------------------------
 
-const FLOOR_TOP = load(new URL("../../../assets/tiles/floor/top/test2.png", import.meta.url).href);
+const FLOOR_TOP = load(new URL("../../../assets/tiles/floor/top/dirt.png", import.meta.url).href);
 const VOID_TOP = load(new URL("../../../assets/tiles/floor/top/background.png", import.meta.url).href);
+
 const FLOOR_APRON_S = load(
     new URL("../../../assets/tiles/floor/curtain/test_apron_s.png", import.meta.url).href
 );

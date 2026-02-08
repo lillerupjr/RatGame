@@ -1,4 +1,4 @@
-// src/game/visual/background.ts
+// src/game/visual/background.png.ts
 import type { World } from "../../engine/world/world";
 
 export type BgAsset = {
@@ -7,15 +7,15 @@ export type BgAsset = {
     src?: string;
 };
 
-// background.ts is in src/game/visual
+// background.png.ts is in src/game/visual
 // assets are in src/assets/backgrounds
-const modules = import.meta.glob("../../assets/backgrounds/*test2.png", {
+const modules = import.meta.glob("../../assets/backgrounds/*dirt.png", {
     eager: true,
     import: "default",
 }) as Record<string, string>;
 
 // ─────────────────────────────────────────────────────────────
-// FloorIndex (0-based) → background file mapping
+// FloorIndex (0-based) → background.png file mapping
 // floorIndex: 0=Floor1, 1=Floor2, 2=Floor3
 // ─────────────────────────────────────────────────────────────
 export const BG_BY_FLOOR_INDEX: Record<number, string> = {

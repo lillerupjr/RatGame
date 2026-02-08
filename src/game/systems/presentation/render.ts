@@ -511,7 +511,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   layers.sort((a, b) => a - b);
 
   // ----------------------------
-  // Void background (draw once per frame)
+  // Void background.png (draw once per frame)
   // ----------------------------
   {
     const voidRec = getVoidTop();
@@ -538,8 +538,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           const anchorY = ANCHOR_Y;
 
             let dy = p.y + camY - topH * anchorY;
+            dy += 2 * ELEV_PX;
 
-          ctx.drawImage(topImg, dx, dy, topW, topH);
+            ctx.drawImage(topImg, dx, dy, topW, topH);
         }
       }
     }
