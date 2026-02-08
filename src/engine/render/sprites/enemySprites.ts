@@ -33,26 +33,25 @@ const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
     },
     [ENEMY_TYPE.RUNNER]: {
         skin: "abomination",
-        scale: 2,
+        scale: 3,
         anchorX: 0.5,
         anchorY: 0.65,
         runAnim: "walk-6-frames",
     },
     [ENEMY_TYPE.BRUISER]: {
         skin: "bruiser",
-        scale: 2,
-        anchorX: 0.5,
-        anchorY: 0.65,
-        runAnim: "running-4-frames",
-        source: PLAYER_SOURCE,
-    },
-    [ENEMY_TYPE.BOSS]: {
-        skin: "abomination",
-        scale: 2,
+        scale: 3.5,
         anchorX: 0.5,
         anchorY: 0.65,
         runAnim: "walk-6-frames",
-        source: PLAYER_SOURCE,
+
+    },
+    [ENEMY_TYPE.BOSS]: {
+        skin: "abomination",
+        scale: 8,
+        anchorX: 0.5,
+        anchorY: 0.65,
+        runAnim: "walk-6-frames",
     },
 };
 
