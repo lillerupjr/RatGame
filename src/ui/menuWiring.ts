@@ -21,7 +21,7 @@ type MapChoice = {
 };
 
 // Load green_water.png image using Vite's import.meta.glob
-const backgroundAssets = import.meta.glob("../assets/backgrounds/*dirt.png", {
+const backgroundAssets = import.meta.glob("../assets/backgrounds/*.png", {
     eager: true,
     import: "default",
 }) as Record<string, string>;

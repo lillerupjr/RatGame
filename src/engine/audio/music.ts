@@ -24,7 +24,7 @@ let curStage: StageId | null = null;
  * Global master volume for music [0..1]
  * This should usually be driven by settings / UI.
  */
-let musicMasterVolume = 1;
+let musicMasterVolume = 0.6;
 
 /**
  * Per-track base mix volume (before master volume).

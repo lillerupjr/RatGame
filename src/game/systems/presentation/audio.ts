@@ -15,7 +15,7 @@ export function audioSystem(w: World, dt: number) {
     // Global + per-SFX volume controls
     // -------------------------
     // Master SFX volume (0..1)
-    if (anyW.sfxMaster === undefined) anyW.sfxMaster = 0;
+    if (anyW.sfxMaster === undefined) anyW.sfxMaster = 0.3;
 
     // Per SFX id volume multipliers (0..1)
     // You can tweak these at runtime: (world as any).sfxVol["FIRE_PISTOL"] = 0.6;
@@ -23,7 +23,7 @@ export function audioSystem(w: World, dt: number) {
         anyW.sfxVol = {
             // fire
             FIRE_KNIFE: 1.0,
-            FIRE_PISTOL: 0.4,
+            FIRE_PISTOL: 0.2,
             FIRE_SYRINGE: 1.0,
             FIRE_BOUNCER: 1.0,
             FIRE_BAZOOKA: 1.0,
@@ -38,7 +38,7 @@ export function audioSystem(w: World, dt: number) {
 
             // hits / kills
             ENEMY_HIT: 1.0,
-            ENEMY_KILL: 1.0,
+            ENEMY_KILL: 0,
             PLAYER_HIT: 1.0,
 
             // progression
