@@ -678,7 +678,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
             if (RENDER_ALL_HEIGHTS && surface.zLogical !== layer) continue;
 
-            // Optional filter to active floor when not rendering all
+            // Optional filter to active floor when not rendering
+            // all
             if (!RENDER_ALL_HEIGHTS) {
               if (!isStairTop) {
                 if (surface.zLogical !== activeH) continue;
