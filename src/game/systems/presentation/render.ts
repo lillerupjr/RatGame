@@ -110,14 +110,23 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // Anchor: tile sprites are usually taller than their footprint.
   const ANCHOR_Y = KENNEY_TILE_ANCHOR_Y;
 
-  // Global shift so top-face aligns with logic (tune later)
-  const TILE_ART_Y_SHIFT_PX = 20;
+  // Global shifts so top-faces and aprons can be tuned independently (tune later).
+  const FLOOR_TOP_Y_SHIFT_PX = 40;
+  const FLOOR_APRON_Y_SHIFT_PX = 4;
+  const STAIR_APRON_Y_SHIFT_PX = 0;
+  const WALL_TOP_Y_SHIFT_PX = 0;
+  const WALL_APRON_Y_SHIFT_PX = 0;
 
   // Visual height step in screen pixels per tile-level (tune later).
   const ELEV_PX = 16;
 
-  // Global scale for tile sprites (1 = default size).
-  const TILE_SCALE = (w as any).tileSpriteScale ?? 1;
+  // Per-type sprite scale (1 = default size).
+  const FLOOR_TOP_SCALE = 1.12;
+  const FLOOR_APRON_SCALE = 1.12;
+  const STAIR_TOP_SCALE = 1;
+  const STAIR_APRON_SCALE = 1;
+  const WALL_TOP_SCALE = 1;
+  const WALL_APRON_SCALE = 1;
 
   // Optional render-layer offset for stairs.
   const STAIR_LAYER_OFFSET = (w as any).stairLayerOffset ?? 0;
@@ -246,9 +255,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const apronFlipX = isFloor ? !!c.flipX : getStairApron(dir4).flipX;
     if (!apronRec?.ready || !apronRec.img || apronRec.img.width <= 0 || apronRec.img.height <= 0) return null;
 
+    const topScale = isFloor ? FLOOR_TOP_SCALE : STAIR_TOP_SCALE;
     const topImg = topRec.img;
-    const topW = topImg.width * TILE_SCALE;
-    const topH = topImg.height * TILE_SCALE;
+    const topW = topImg.width * topScale;
+    const topH = topImg.height * topScale;
 
     const wx = (c.tx + 0.5) * T;
     const wy = (c.ty + 0.5) * T;
@@ -259,7 +269,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const anchorY = c.renderAnchorY ?? ANCHOR_Y;
 
     let dy = p.y + camY - topH * anchorY;
-    dy += TILE_ART_Y_SHIFT_PX;
+    dy += FLOOR_TOP_Y_SHIFT_PX;
     dy += isFloor ? (FLOOR_TOP_DY_PX[dir4] ?? 0) : (STAIR_TOP_DY_PX[dir4] ?? 0);
 
     dy += c.renderDyOffset ?? 0;
@@ -267,14 +277,16 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const h = c.zTo;
     dy -= h * ELEV_PX;
 
-    const aw = apronRec.img.width * TILE_SCALE;
-    const ah = apronRec.img.height * TILE_SCALE;
+    const apronScale = isFloor ? FLOOR_APRON_SCALE : STAIR_APRON_SCALE;
+    const aw = apronRec.img.width * apronScale;
+    const ah = apronRec.img.height * apronScale;
     const ax = dx + (topW - aw) * 0.5;
 
     const apronDy = isFloor
         ? (FLOOR_APRON_DY_PX[(c.apronKind as "S" | "E") ?? "S"] ?? 0)
         : (STAIR_APRON_DY_PX[dir4] ?? 0);
-    const ay = dy + topH - APRON_JOIN_PX + (c.apronDyOffset ?? 0) + apronDy;
+    const apronShift = isFloor ? FLOOR_APRON_Y_SHIFT_PX : STAIR_APRON_Y_SHIFT_PX;
+    const ay = dy + topH - APRON_JOIN_PX + (c.apronDyOffset ?? 0) + apronDy + apronShift;
 
     return {
       img: apronRec.img,
@@ -304,8 +316,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     if (!apronRec?.ready || !apronRec.img || apronRec.img.width <= 0 || apronRec.img.height <= 0) return null;
 
     const topImg = topRec.img;
-    const topW = topImg.width * TILE_SCALE;
-    const topH = topImg.height * TILE_SCALE;
+    const topW = topImg.width * WALL_TOP_SCALE;
+    const topH = topImg.height * WALL_TOP_SCALE;
 
     let wx = (c.tx + 0.5) * T;
     let wy = (c.ty + 0.5) * T;
@@ -318,7 +330,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const anchorY = c.renderAnchorY ?? ANCHOR_Y;
 
     let dy = p.y + camY - topH * anchorY;
-    dy += TILE_ART_Y_SHIFT_PX;
+    dy += WALL_TOP_Y_SHIFT_PX;
     dy += topDy;
 
     dy += c.renderDyOffset ?? 0;
@@ -326,12 +338,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const h = c.zTo;
     dy -= h * ELEV_PX;
 
-    const aw = apronRec.img.width * TILE_SCALE;
-    const ah = apronRec.img.height * TILE_SCALE;
+    const aw = apronRec.img.width * WALL_APRON_SCALE;
+    const ah = apronRec.img.height * WALL_APRON_SCALE;
     const ax = dx + (topW - aw) * 0.5;
 
     const skinDyOffset = wallSkinDyOffset[wallSkin] ?? 0;
-    const ay = dy + topH - APRON_JOIN_PX + apronDy + skinDyOffset;
+    const ay = dy + topH - APRON_JOIN_PX + apronDy + skinDyOffset + WALL_APRON_Y_SHIFT_PX;
 
     return {
       img: apronRec.img,
@@ -610,9 +622,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
             const topRec = isStairTop ? getStairTop(dir4) : getFloorTop();
             if (!topRec?.ready || !topRec.img || topRec.img.width <= 0 || topRec.img.height <= 0) continue;
 
+            const topScale = isStairTop ? STAIR_TOP_SCALE : FLOOR_TOP_SCALE;
             const topImg = topRec.img;
-            const topW = topImg.width * TILE_SCALE;
-            const topH = topImg.height * TILE_SCALE;
+            const topW = topImg.width * topScale;
+            const topH = topImg.height * topScale;
 
             const wx = (tx + 0.5) * T;
             const wy = (ty + 0.5) * T;
@@ -623,7 +636,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
             const anchorY = surface.renderAnchorY ?? ANCHOR_Y;
 
             let dy = p.y + camY - topH * anchorY;
-            dy += TILE_ART_Y_SHIFT_PX;
+            dy += FLOOR_TOP_Y_SHIFT_PX;
             dy += isStairTop ? (STAIR_TOP_DY_PX[dir4] ?? 0) : (FLOOR_TOP_DY_PX[dir4] ?? 0);
 
             dy += surface.renderDyOffset ?? 0;

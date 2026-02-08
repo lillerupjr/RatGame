@@ -38,10 +38,10 @@ export const STAIR_APRON_DY_PX: Record<"N" | "E" | "S" | "W", number> = {
     W: -116,
 };
 export const WALL_APRON_DY_PX: Record<"N" | "E" | "S" | "W", number> = {
-    N: -100,
-    E: -100,
-    S: -100,
-    W: -100,
+    N: 0,
+    E: 0,
+    S: 0,
+    W: 0,
 };
 
 function load(url: string): LoadedImg {
