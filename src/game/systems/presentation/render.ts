@@ -129,6 +129,18 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     return sp.y + sp.x * DEPTH_EPS_X + zVisual * DEPTH_EPS_Z + stableId * DEPTH_EPS_ID;
   };
 
+  const apronDrawsByLayer = new Map<number, Array<{ draw: RenderPieceDraw; piece: RenderPiece }>>();
+
+  const pushApronDraw = (layer: number, draw: RenderPieceDraw, piece: RenderPiece) => {
+    let arr = apronDrawsByLayer.get(layer);
+    if (!arr) {
+      arr = [];
+      apronDrawsByLayer.set(layer, arr);
+    }
+    arr.push({ draw, piece });
+  };
+
+
   const snapToNearestWalkableGround = (x: number, y: number) => {
     // If we're already on walkable top-face, keep it.
     const i0 = walkInfo(x, y, T);
@@ -202,9 +214,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     dw: number;
     dh: number;
     depth: number;
+    zVisual?: number;
+
     flipX?: boolean;
     sortKey?: number;
   };
+
 
     const drawRenderPiece = (c: RenderPieceDraw) => {
       const img = c.img;
@@ -289,6 +304,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           dw: aw,
           dh: ah,
           depth: renderDepthFor(apronWx, apronWy, zVisual, stableId + (zEnd - z)),
+          zVisual,
           flipX: apronFlipX,
         });
       }
@@ -536,9 +552,109 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // ----------------------------
   // Main render loop: per-layer
   // ----------------------------
-  for (let li = 0; li < layers.length; li++) {
-    const layer = layers[li];
+  // ----------------------------
+  // Prepass: build all apron slice draws and bucket them by the height they occupy.
+  // IMPORTANT: This must happen BEFORE the per-layer loop, otherwise earlier layers
+  // will never see apron slices that get pushed later.
+  // ----------------------------
+  {
+    let apronId = 0;
 
+    for (let s = minSum; s <= maxSum; s++) {
+      const ty0 = Math.max(minTy, s - maxTx);
+      const ty1 = Math.min(maxTy, s - minTx);
+
+      for (let ty = ty1; ty >= ty0; ty--) {
+        const tx = s - ty;
+
+        const surfaces = surfacesAtXY(tx, ty);
+        if (surfaces.length === 0) continue;
+
+        const underlays = apronUnderlaysAtXY(tx, ty);
+        if (underlays.length === 0) continue;
+
+        // Build a fast allow-set of (zBase + topKind) that exist at this tile.
+        // Underlays should only render if they attach to an existing surface top.
+        const allow = new Set<string>();
+        for (let i = 0; i < surfaces.length; i++) {
+          const sf = surfaces[i];
+          allow.add(`${sf.zBase}|${sf.renderTopKind}`);
+        }
+
+        // Normal underlays
+        for (let ui = 0; ui < underlays.length; ui++) {
+          const u = underlays[ui];
+          if (!allow.has(`${u.zTo}|${u.renderTopKind}`)) continue;
+
+          const draws = buildApronDraws(u, apronId++);
+          for (let di = 0; di < draws.length; di++) {
+            const d = draws[di];
+            const zv = d.zVisual ?? u.zFrom ?? u.zTo ?? 0;
+            const layerForDraw = Math.max(0, Math.floor(zv));
+            pushApronDraw(layerForDraw, d, u);
+          }
+        }
+      }
+    }
+
+    // Deferred aprons (stairs ownership transfers etc.)
+    // These are keyed off stair surfaces in your current code, but we can safely
+    // query them per tile and bucket them by their zVisual.
+    for (let s = minSum; s <= maxSum; s++) {
+      const ty0 = Math.max(minTy, s - maxTx);
+      const ty1 = Math.min(maxTy, s - minTx);
+
+      for (let ty = ty1; ty >= ty0; ty--) {
+        const tx = s - ty;
+
+        const deferred = deferredApronsAtXY(tx, ty);
+        if (deferred.length === 0) continue;
+
+        for (let i = 0; i < deferred.length; i++) {
+          const piece = deferred[i];
+
+          const stableId = Number.isFinite(piece.sortKeyFromFloor)
+              ? (piece.sortKeyFromFloor as number)
+              : apronId++;
+
+          const draws = buildApronDraws(piece, stableId);
+          for (let di = 0; di < draws.length; di++) {
+            const d = draws[di];
+            d.sortKey = piece.sortKeyFromFloor;
+
+            const zv = d.zVisual ?? piece.zFrom ?? piece.zTo ?? 0;
+            const layerForDraw = Math.max(0, Math.floor(zv));
+            pushApronDraw(layerForDraw, d, piece);
+          }
+        }
+      }
+    }
+  }
+
+  // ----------------------------
+  // Main render loop: per-layer
+  // ----------------------------
+  for (let li = 0; li < layers.length; li++) {
+
+    const layer = layers[li];
+    const apronItems = apronDrawsByLayer.get(layer);
+    if (apronItems && apronItems.length > 0) {
+      apronItems.sort((a, b) => {
+        const ak = a.draw.sortKey;
+        const bk = b.draw.sortKey;
+        if (ak !== undefined || bk !== undefined) {
+          if (ak === undefined) return 1;
+          if (bk === undefined) return -1;
+          if (ak !== bk) return ak - bk;
+        }
+        return a.draw.depth - b.draw.depth;
+      });
+      for (let i = 0; i < apronItems.length; i++) {
+        const item = apronItems[i];
+        drawRenderPiece(item.draw);
+        drawApronOwnershipOverlay(debugContext, SHOW_APRON_OWNERSHIP, item.piece, item.draw);
+      }
+    }
     // 1) TOPS (surfaces)
     if (!RENDER_ALL_HEIGHTS && layer !== activeH) {
       // Only draw top surfaces once when filtering to the active floor.
@@ -554,7 +670,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           const surfaces = surfacesAtXY(tx, ty);
           if (surfaces.length === 0) continue;
 
-          const underlays = apronUnderlaysAtXY(tx, ty);
 
           for (let si = 0; si < surfaces.length; si++) {
             const surface = surfaces[si];
@@ -573,61 +688,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
               }
             }
 
-            if (underlays.length > 0) {
-              const apronDraws: Array<{ draw: RenderPieceDraw; piece: RenderPiece }> = [];
-              for (let ui = 0; ui < underlays.length; ui++) {
-                const u = underlays[ui];
-                if (u.zTo !== surface.zBase) continue;
-                if (u.renderTopKind !== surface.renderTopKind) continue;
-                const draws = buildApronDraws(u, apronId++);
-                for (let di = 0; di < draws.length; di++) {
-                  apronDraws.push({ draw: draws[di], piece: u });
-                }
-              }
-
-              if (apronDraws.length > 0) {
-                apronDraws.sort((a, b) => a.draw.depth - b.draw.depth);
-                for (let i = 0; i < apronDraws.length; i++) {
-                  const item = apronDraws[i];
-                  drawRenderPiece(item.draw);
-                  drawApronOwnershipOverlay(debugContext, SHOW_APRON_OWNERSHIP, item.piece, item.draw);
-                }
-              }
-            }
-
-            if (isStairTop) {
-              const deferred = deferredApronsAtXY(surface.tx, surface.ty);
-              if (deferred.length > 0) {
-                const deferredDraws: Array<{ draw: RenderPieceDraw; piece: RenderPiece }> = [];
-                for (let di = 0; di < deferred.length; di++) {
-                  const d = deferred[di];
-                  const stableId = Number.isFinite(d.sortKeyFromFloor) ? (d.sortKeyFromFloor as number) : apronId++;
-                    const draws = buildApronDraws(d, stableId);
-                    for (let di = 0; di < draws.length; di++) {
-                      const draw = draws[di];
-                      draw.sortKey = d.sortKeyFromFloor;
-                      deferredDraws.push({ draw, piece: d });
-                    }
-                }
-                if (deferredDraws.length > 0) {
-                  deferredDraws.sort((a, b) => {
-                    const ak = a.draw.sortKey;
-                    const bk = b.draw.sortKey;
-                    if (ak !== undefined || bk !== undefined) {
-                      if (ak === undefined) return 1;
-                      if (bk === undefined) return -1;
-                      if (ak !== bk) return ak - bk;
-                    }
-                    return a.draw.depth - b.draw.depth;
-                  });
-                  for (let i = 0; i < deferredDraws.length; i++) {
-                    const item = deferredDraws[i];
-                    drawRenderPiece(item.draw);
-                    drawApronOwnershipOverlay(debugContext, SHOW_APRON_OWNERSHIP, item.piece, item.draw);
-                  }
-                }
-              }
-            }
 
             const dir4 = surface.renderDir ?? "N";
 
