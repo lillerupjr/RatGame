@@ -3,13 +3,6 @@
   "width": 10,
   "height": 10,
   "centerOnZero": true,
-  "mapSkinDefaults": {
-    "floor": "tiles/floor/top/dirt",
-    "apron": "tiles/floor/curtain/test_apron",
-    "wall": "tiles/walls/test_wall",
-    "stair": "tiles/stairs/top/stair_top",
-    "stairApron": "tiles/stairs/curtain/stair_apron"
-  },
   "cells": [
     { "x": 0, "y": 0, "t": "F0" },
     { "x": 1, "y": 0, "t": "F0" },

@@ -25,10 +25,10 @@ export const DEFAULT_MAP_SKIN: ResolvedMapSkin = {
     floor: "tiles/floor/top/tile1",
     apron: "tiles/floor/curtain/test_apron",
     wall: "tiles/walls/test_wall",
-    stair: "tiles/stairs/top/stair_top",
-    stairApron: "tiles/stairs/curtain/stair_apron",
+    stair: "",
+    stairApron: "",
 
-    background: "tiles/backgrounds/green_water",
+    background: "tiles/backgrounds/water1",
 };
 
 export const DEFAULT_MAP_SKIN_ID: MapSkinId = "default";
@@ -52,7 +52,6 @@ export const MAP_SKINS: Record<MapSkinId, MapSkinBundle> = {
         floor: "tiles/floor/top/sand",
         background: "tiles/backgrounds/water2",
     },
-
 };
 
 export function resolveMapSkin(id?: MapSkinId): ResolvedMapSkin {
@@ -77,9 +76,19 @@ function hashString(s: string): number {
     return hash >>> 0;
 }
 
+export function allMapSkinIds(): MapSkinId[] {
+    const raw = Object.keys(MAP_SKINS).map((id) => id.trim()).filter(Boolean);
+
+    // Stable ordering for deterministic picks across environments:
+    // - Always put default first (if present)
+    // - Sort the rest alphabetically
+    const rest = raw.filter((id) => id !== DEFAULT_MAP_SKIN_ID).sort();
+    return raw.includes(DEFAULT_MAP_SKIN_ID) ? [DEFAULT_MAP_SKIN_ID, ...rest] : rest;
+}
+
 export function normalizeMapSkinPool(pool?: MapSkinId[]): MapSkinId[] {
     const cleaned = (pool ?? []).map((id) => id.trim()).filter(Boolean);
-    return cleaned.length > 0 ? cleaned : [DEFAULT_MAP_SKIN_ID];
+    return cleaned.length > 0 ? cleaned : allMapSkinIds();
 }
 
 export function pickMapSkinId(

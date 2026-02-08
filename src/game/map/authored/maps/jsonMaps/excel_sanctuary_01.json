@@ -3,13 +3,7 @@
   "width": 13,
   "height": 15,
   "centerOnZero": true,
-  "mapSkinDefaults": {
-    "floor": "tiles/floor/top/tile2",
-    "apron": "tiles/floor/curtain/test_apron",
-    "wall": "tiles/walls/test_wall",
-    "stair": "tiles/stairs/top/stair_top",
-    "stairApron": "tiles/stairs/curtain/stair_apron"
-  },
+  "mapSkinId": "ice",
   "cells": [
     { "x": 4, "y": 0, "t": "F0" },
     { "x": 1, "y": 5, "t": "S1E" },

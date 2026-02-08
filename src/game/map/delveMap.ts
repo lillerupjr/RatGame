@@ -4,7 +4,7 @@
 import type { StageId } from "../content/stages";
 import { RNG } from "../util/rng";
 import { FLOOR_ARCHETYPES, type FloorArchetype } from "./floorArchetype";
-import type { MapSkinId } from "../content/mapSkins";
+import { allMapSkinIds, type MapSkinId } from "../content/mapSkins";
 
 export type DelveNode = {
   id: string;
@@ -38,8 +38,10 @@ const ZONE_SKIN_POOLS: Record<StageId, MapSkinId[]> = {
   CHINATOWN: ["default", "neon_stone"],
 };
 
-function skinPoolForZone(zoneId: StageId): MapSkinId[] {
-  return ZONE_SKIN_POOLS[zoneId] ?? ["default"];
+function skinPoolForZone(_zoneId: StageId): MapSkinId[] {
+  // Global pool: any MapSkinId in MAP_SKINS is eligible everywhere.
+  // This means adding a new skin key automatically expands the pool.
+  return allMapSkinIds();
 }
 
 function nodeId(x: number, y: number): string {

@@ -2,13 +2,6 @@
   "id": "VENDOR_01",
   "width": 5,
   "height": 5,
-  "mapSkinDefaults": {
-    "floor": "tiles/floor/top/dirt",
-    "apron": "tiles/floor/curtain/test_apron",
-    "wall": "tiles/walls/test_wall",
-    "stair": "tiles/stairs/top/stair_top",
-    "stairApron": "tiles/stairs/curtain/stair_apron"
-  },
   "metadata": {
     "author": "contract"
   },

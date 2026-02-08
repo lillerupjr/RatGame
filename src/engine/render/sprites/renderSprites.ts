@@ -5,7 +5,7 @@ export type LoadedImg = {
     ready: boolean;
 };
 
-const TILE_MODULES = import.meta.glob("../../../assets/tiles/**/*water1.png", {
+const TILE_MODULES = import.meta.glob("../../../assets/tiles/**/*.png", {
     eager: true,
     import: "default",
 }) as Record<string, string>;
@@ -15,7 +15,7 @@ const cache: Record<string, LoadedImg> = Object.create(null);
 function resolveUrl(spriteId: string): string | null {
     const trimmed = spriteId.trim();
     if (!trimmed) return null;
-    const file = trimmed.toLowerCase().endsWith("water1.png") ? trimmed : `${trimmed}.png`;
+    const file = trimmed.toLowerCase().endsWith(".png") ? trimmed : `${trimmed}.png`;
     for (const [path, url] of Object.entries(TILE_MODULES)) {
         const normalized = path.replace(/\\/g, "/");
         if (normalized.endsWith(`/assets/${file}`)) return url;
