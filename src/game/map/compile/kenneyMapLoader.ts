@@ -354,12 +354,12 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
     const topsByLayer = new Map<number, Surface[]>();
 
     const floorAnchorY = KENNEY_TILE_ANCHOR_Y;
-    const stairAnchorY = 0.62;
+    const stairAnchorY = floorAnchorY;
     const stairDyByDir: Record<StairDir, number> = {
-        N: 24,
-        E: 16,
-        S: 16,
-        W: 24,
+        N: 0,
+        E: 0,
+        S: 0,
+        W: 0,
     };
 
     function addSurface(surface: Surface) {
@@ -408,6 +408,19 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
     function surfacesAtXY(tx: number, ty: number): Surface[] {
         return surfacesByKey.get(`${tx},${ty}`) ?? [];
     }
+
+    const apronBaseMode = def.apronBaseMode ?? "ISLANDS";
+    const apronBaseZ = (() => {
+        if (apronBaseMode !== "PLATEAU") return 0;
+        let minZ: number | null = null;
+        for (const list of surfacesByKey.values()) {
+            for (let i = 0; i < list.length; i++) {
+                const z = list[i].zBase | 0;
+                if (minZ === null || z < minZ) minZ = z;
+            }
+        }
+        return Math.max(0, minZ ?? 0);
+    })();
 
     const underlaysByKey = new Map<string, RenderPiece[]>();
     const underlays: RenderPiece[] = [];
@@ -709,7 +722,7 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
                             kind: "FLOOR_APRON",
                             tx: surface.tx,
                             ty: surface.ty,
-                            zFrom: surfaceZ - 1,
+                            zFrom: apronBaseZ,
                             zTo: surfaceZ,
                             zLogical: surface.zLogical,
                             ownerStairId: stairOwner.id,
@@ -735,7 +748,7 @@ export function compileKenneyMapFromTable(def: TableMapDef): CompiledKenneyMap {
                     kind: isStair ? "STAIR_APRON" : "FLOOR_APRON",
                     tx: surface.tx,
                     ty: surface.ty,
-                    zFrom: surfaceZ - 1,
+                    zFrom: apronBaseZ,
                     zTo: surfaceZ,
                     zLogical: surface.zLogical,
                     edgeDir: dir,

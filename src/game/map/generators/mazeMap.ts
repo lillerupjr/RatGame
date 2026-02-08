@@ -3,7 +3,7 @@
 // Maze-like room graph generator + map compiler.
 // Produces a tile map compatible with the Kenney isometric system.
 
-import type { TableMapCell, TableMapDef } from "../formats/table/tableMapTypes";
+import type { ApronBaseMode, TableMapCell, TableMapDef } from "../formats/table/tableMapTypes";
 import type { FloorDifficulty } from "./proceduralMap";
 
 export type RoomType = "start" | "combat" | "puzzle" | "treasure" | "boss" | "shop" | "rest";
@@ -39,6 +39,7 @@ export type MazeMapConfig = {
     corridorWidth: number;   // tiles wide (e.g. 1)
     centerOnZero?: boolean;
     id?: string;
+    apronBaseMode?: ApronBaseMode;
 };
 
 export const DEFAULT_MAZE_CONFIGS: Record<FloorDifficulty, Omit<MazeMapConfig, "seed" | "id">> = {
@@ -401,6 +402,7 @@ export function generateMazeMapDef(config: MazeMapConfig): { mapDef: TableMapDef
         defaultFloorSkin: "landscape_28",
         defaultSpawnSkin: "landscape_30",
         centerOnZero: config.centerOnZero ?? true,
+        apronBaseMode: config.apronBaseMode,
         cells,
     };
 

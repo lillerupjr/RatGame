@@ -29,6 +29,8 @@ export type TableObjectiveDef = {
     outcomes: TableOutcomeDef[];
 };
 
+export type ApronBaseMode = "PLATEAU" | "ISLANDS";
+
 export type TableMapDef = {
     id: string;
 
@@ -41,6 +43,8 @@ export type TableMapDef = {
     defaultSpawnSkin?: string;
     // Optional: place the selection so its center ends up at tile (0,0)
     centerOnZero?: boolean;
+    // Optional: how far aprons extend down (plateau uses min height; islands extend to 0)
+    apronBaseMode?: ApronBaseMode;
 
     // Sparse placed cells (everything else is VOID)
     cells: TableMapCell[];

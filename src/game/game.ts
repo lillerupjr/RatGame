@@ -81,7 +81,7 @@ import {
 import { objectiveSpecFromFloorIntent } from "./map/floorObjectiveBinding";
 import { mapSourceFromFloorIntent } from "./map/floorMapSourceBinding";
 import { applyFloorOverlays } from "./map/floorOverlays";
-import { setObjectivesFromSpec } from "./systems/progression/objective";
+import { setObjectives, setObjectivesFromSpec } from "./systems/progression/objective";
 import { generateVendorOffers } from "./events/vendor";
 
 
@@ -536,6 +536,10 @@ export function createGame(args: CreateGameArgs) {
     }
   }
 
+  function isMapMode(mapId: string | undefined): boolean {
+    return !!mapId;
+  }
+
   function previewMap(mapId?: string) {
     const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
     applyMapSelection(mapId, seed);
@@ -548,14 +552,20 @@ export function createGame(args: CreateGameArgs) {
       seed,
       stage: cloneStage("DOCKS"),
     });
-    applyObjectivesFromActiveMap(world);
+    const mapMode = isMapMode(mapId);
+    (world as any).mapMode = mapMode;
+    if (mapMode) {
+      setObjectives(world, []);
+    } else {
+      applyObjectivesFromActiveMap(world);
+    }
 
     // DEBUG: spawn offset
     applyDebugSpawn(world);
 
     // DEBUG: show logical walk-mask overlay (render.ts)
-    (world as any).debugWalkMask = false;
-    (world as any).debugRamps = false;
+    (world as any).debugWalkMask = true;
+    (world as any).debugRamps = true;
     (world as any).debugApronOwnership = false;
     (world as any).debugTriggerZones = true;
 
@@ -571,27 +581,34 @@ export function createGame(args: CreateGameArgs) {
       world.weapons = [{ id: starterWeapon, level: 1, cdLeft: 0 }];
     }
 
-    // Initialize room challenges from the current map
-    const roomData = getActiveRoomData();
-    if (roomData && roomData.length > 0) {
-      initializeRoomChallenges(world, roomData);
+    if (!(world as any).mapMode) {
+      // Initialize room challenges from the current map
+      const roomData = getActiveRoomData();
+      if (roomData && roomData.length > 0) {
+        initializeRoomChallenges(world, roomData);
+      }
+
+      // Create infinite delve map
+      const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
+      const delve = createDelveMap(seed);
+      world.delveMap = delve;
+      world.delveDepth = 1;
+      world.delveScaling = getDepthScaling(1);
+
+      // Also keep legacy map for compatibility (will be phased out)
+      const g = buildStaticRunMap() as RunMap;
+      (world as any).runMap = g;
+      (world as any).mapCurrentNodeId = null;
+      (world as any).mapPendingNextFloorIndex = 0;
+
+      // Pick starting node
+      showDelveMap("Choose your starting location.\nGo deeper for greater challenge and rewards.");
+    } else {
+      world.delveMap = null;
+      world.delveDepth = 0;
+      world.delveScaling = undefined;
+      world.state = "RUN";
     }
-
-    // Create infinite delve map
-    const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
-    const delve = createDelveMap(seed);
-    world.delveMap = delve;
-    world.delveDepth = 1;
-    world.delveScaling = getDepthScaling(1);
-
-    // Also keep legacy map for compatibility (will be phased out)
-    const g = buildStaticRunMap() as RunMap;
-    (world as any).runMap = g;
-    (world as any).mapCurrentNodeId = null;
-    (world as any).mapPendingNextFloorIndex = 0;
-
-    // Pick starting node
-    showDelveMap("Choose your starting location.\nGo deeper for greater challenge and rewards.");
   }
 
 
@@ -1131,40 +1148,44 @@ export function createGame(args: CreateGameArgs) {
     // phase time (drives FLOOR/BOSS/TRANSITION)
     world.phaseTime += dt;
 
-    // RunState progression
-    if (world.runState === "FLOOR" && world.objectiveDefs.length === 0 && world.phaseTime >= world.floorDuration) {
-      enterBoss(world);
-    } else if (world.runState === "BOSS") {
-      // If boss was killed, advance (but wait for the boss chest to be collected)
-      if (!bossAlive(world)) {
-        const pending = (world as any).bossRewardPending as boolean | undefined;
-        if (pending) {
-          // Do nothing; chest must be picked up first
-        } else {
-          // Delve mode: always show map after boss defeat (infinite progression)
-          const delve = world.delveMap as DelveMap;
-          if (delve) {
-            showDelveMap(`Depth ${world.delveDepth} cleared!\nChoose your next destination.`);
+    const mapMode = !!(world as any).mapMode;
+
+    // RunState progression (delve mode only)
+    if (!mapMode) {
+      if (world.runState === "FLOOR" && world.objectiveDefs.length === 0 && world.phaseTime >= world.floorDuration) {
+        enterBoss(world);
+      } else if (world.runState === "BOSS") {
+        // If boss was killed, advance (but wait for the boss chest to be collected)
+        if (!bossAlive(world)) {
+          const pending = (world as any).bossRewardPending as boolean | undefined;
+          if (pending) {
+            // Do nothing; chest must be picked up first
+          } else {
+            // Delve mode: always show map after boss defeat (infinite progression)
+            const delve = world.delveMap as DelveMap;
+            if (delve) {
+              showDelveMap(`Depth ${world.delveDepth} cleared!\nChoose your next destination.`);
+              return;
+            }
+
+            // Legacy mode: end after 3 floors
+            if (world.floorIndex >= FLOORS_PER_RUN - 1) {
+              completeRun(world);
+              return;
+            }
+            // Between floors: show route map selection
+            (world as any).mapPendingNextFloorIndex = (world.floorIndex ?? 0) + 1;
+
+            showMap("Choose your next zone.\n(There is a boss at the end of every floor.)");
             return;
           }
-
-          // Legacy mode: end after 3 floors
-          if (world.floorIndex >= FLOORS_PER_RUN - 1) {
-            completeRun(world);
-            return;
-          }
-          // Between floors: show route map selection
-          (world as any).mapPendingNextFloorIndex = (world.floorIndex ?? 0) + 1;
-
-          showMap("Choose your next zone.\n(There is a boss at the end of every floor.)");
-          return;
         }
-      }
-    } else if (world.runState === "TRANSITION") {
-      world.transitionTime = Math.max(0, world.transitionTime - dt);
-      if (world.transitionTime <= 0) {
-        const nextFloorIndex = (world.floorIndex ?? 0) + 1;
-        enterFloor(world, buildFallbackFloorIntent(world, nextFloorIndex));
+      } else if (world.runState === "TRANSITION") {
+        world.transitionTime = Math.max(0, world.transitionTime - dt);
+        if (world.transitionTime <= 0) {
+          const nextFloorIndex = (world.floorIndex ?? 0) + 1;
+          enterFloor(world, buildFallbackFloorIntent(world, nextFloorIndex));
+        }
       }
     }
 

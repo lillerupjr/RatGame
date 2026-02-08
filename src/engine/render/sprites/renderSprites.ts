@@ -16,10 +16,10 @@ export const FLOOR_TOP_DY_PX: Record<"N" | "E" | "S" | "W", number> = {
     W: 0,
 };
 export const STAIR_TOP_DY_PX: Record<"N" | "E" | "S" | "W", number> = {
-    N: -8,
-    E: 8,
-    S: 8,
-    W: -8,
+    N: 0,
+    E: 0,
+    S: 0,
+    W: 0,
 };
 export const WALL_TOP_DY_PX: Record<"N" | "E" | "S" | "W", number> = {
     N: 0,
@@ -32,10 +32,10 @@ export const FLOOR_APRON_DY_PX: Record<"S" | "E", number> = {
     E: 0,
 };
 export const STAIR_APRON_DY_PX: Record<"N" | "E" | "S" | "W", number> = {
-    N: -116,
-    E: -100,
-    S: -107,
-    W: -116,
+    N: 0,
+    E: 0,
+    S: 0,
+    W: 0,
 };
 export const WALL_APRON_DY_PX: Record<"N" | "E" | "S" | "W", number> = {
     N: 0,
@@ -57,7 +57,7 @@ function load(url: string): LoadedImg {
 // Paths (Vite-friendly): new URL(..., import.meta.url).href
 // ------------------------------------------------------------------
 
-const FLOOR_TOP = load(new URL("../../../assets/tiles/floor/top/test_top.png", import.meta.url).href);
+const FLOOR_TOP = load(new URL("../../../assets/tiles/floor/top/test2.png", import.meta.url).href);
 const VOID_TOP = load(new URL("../../../assets/tiles/floor/top/background.png", import.meta.url).href);
 const FLOOR_APRON_S = load(
     new URL("../../../assets/tiles/floor/curtain/test_apron_s.png", import.meta.url).href
@@ -67,35 +67,35 @@ const FLOOR_APRON_E = load(
 );
 
 const STAIR_TOP_N = load(
-    new URL("../../../assets/tiles/stairs/top/stair_top_n.png", import.meta.url).href
+    new URL("./../../assets/tiles/stairs/top/stair_top_n.png", import.meta.url).href
 );
 const STAIR_TOP_S = load(
-    new URL("../../../assets/tiles/stairs/top/stair_top_s.png", import.meta.url).href
+    new URL("./../../assets/tiles/stairs/top/stair_top_s.png", import.meta.url).href
 );
 const STAIR_TOP_E = load(
-    new URL("../../../assets/tiles/stairs/top/stair_top_e.png", import.meta.url).href
+    new URL("./../../assets/tiles/stairs/top/stair_top_e.png", import.meta.url).href
 );
 const STAIR_TOP_W = load(
-    new URL("../../../assets/tiles/stairs/top/stair_top_w.png", import.meta.url).href
+    new URL("./../../assets/tiles/stairs/top/stair_top_w.png", import.meta.url).href
 );
 
 const STAIR_APRON_N = load(
-    new URL("../../../assets/tiles/stairs/curtain/stair_apron_n.png", import.meta.url).href
+    new URL("./../../assets/tiles/stairs/curtain/stair_apron_n.png", import.meta.url).href
 );
 const STAIR_APRON_E = load(
-    new URL("../../../assets/tiles/stairs/curtain/stair_apron_e.png", import.meta.url).href
+    new URL("./../../assets/tiles/stairs/curtain/stair_apron_e.png", import.meta.url).href
 );
 const STAIR_APRON_S = load(
-    new URL("../../../assets/tiles/stairs/curtain/stair_apron_s.png", import.meta.url).href
+    new URL("./../../assets/tiles/stairs/curtain/stair_apron_s.png", import.meta.url).href
 );
 const STAIR_APRON_W = load(
-    new URL("../../../assets/tiles/stairs/curtain/stair_apron_w.png", import.meta.url).href
+    new URL("./../../assets/tiles/stairs/curtain/stair_apron_w.png", import.meta.url).href
 );
 const WALL_2_S = load(
-    new URL("../../../assets/tiles/walls/wall_2_s.png", import.meta.url).href
+    new URL("../../../assets/tiles/walls/test_wall_s.png", import.meta.url).href
 );
 const WALL_2_E = load(
-    new URL("../../../assets/tiles/walls/wall_2_e.png", import.meta.url).href
+    new URL("../../../assets/tiles/walls/test_wall_e.png", import.meta.url).href
 );
 
 export function preloadRenderSprites() {

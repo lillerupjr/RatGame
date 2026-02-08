@@ -1,5 +1,6 @@
 // src/game/map/jsonMapLoader.ts
 import type {
+  ApronBaseMode,
   TableMapCell,
   TableMapDef,
   TableObjectiveDef,
@@ -24,6 +25,7 @@ type JsonMapDef = {
   defaultFloorSkin?: string;
   defaultSpawnSkin?: string;
   centerOnZero?: boolean;
+  apronBaseMode?: ApronBaseMode;
   metadata?: unknown;
   objectiveDefs?: TableObjectiveDef[];
 };
@@ -83,6 +85,18 @@ function optionalNumberField(obj: Record<string, unknown>, key: string): number 
   if (value === undefined) return undefined;
   if (typeof value !== "number" || !Number.isFinite(value)) {
     throw new Error(`JSON map loader: optional field "${key}" must be a number.`);
+  }
+  return value;
+}
+
+function optionalApronBaseModeField(
+  obj: Record<string, unknown>,
+  key: string
+): ApronBaseMode | undefined {
+  const value = optionalStringField(obj, key);
+  if (value === undefined) return undefined;
+  if (value !== "PLATEAU" && value !== "ISLANDS") {
+    throw new Error(`JSON map loader: optional field "${key}" must be "PLATEAU" or "ISLANDS".`);
   }
   return value;
 }
@@ -227,6 +241,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
   const defaultFloorSkin = optionalStringField(data, "defaultFloorSkin");
   const defaultSpawnSkin = optionalStringField(data, "defaultSpawnSkin");
   const centerOnZero = optionalBooleanField(data, "centerOnZero");
+  const apronBaseMode = optionalApronBaseModeField(data, "apronBaseMode");
   const objectiveDefs = parseObjectiveDefs(data, source);
 
   const jsonDef: JsonMapDef = {
@@ -237,6 +252,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     defaultFloorSkin,
     defaultSpawnSkin,
     centerOnZero,
+    apronBaseMode,
     metadata: data.metadata,
     objectiveDefs,
   };
@@ -248,6 +264,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     defaultFloorSkin: jsonDef.defaultFloorSkin,
     defaultSpawnSkin: jsonDef.defaultSpawnSkin,
     centerOnZero: jsonDef.centerOnZero,
+    apronBaseMode: jsonDef.apronBaseMode,
     cells: jsonDef.cells,
     objectiveDefs: jsonDef.objectiveDefs,
   };

@@ -47,15 +47,8 @@ import {
   getFloorApron,
   getStairTop,
   getStairApron,
-  getWallSkinTop,
-  getWallSkinTopDy,
   getWallSkinSegment,
-  getWallSkinSegmentDy,
   getVoidTop,
-  FLOOR_TOP_DY_PX,
-  STAIR_TOP_DY_PX,
-  FLOOR_APRON_DY_PX,
-  STAIR_APRON_DY_PX,
 } from "../../../engine/render/sprites/renderSprites";
 import {
   drawApronOwnershipOverlay,
@@ -112,30 +105,20 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // Anchor: tile sprites are usually taller than their footprint.
   const ANCHOR_Y = KENNEY_TILE_ANCHOR_Y;
 
-  // Global shifts so top-faces and aprons can be tuned independently (tune later).
-  const FLOOR_TOP_Y_SHIFT_PX = 40;
-  const FLOOR_APRON_Y_SHIFT_PX = 4;
-  const STAIR_APRON_Y_SHIFT_PX = 0;
-  const WALL_TOP_Y_SHIFT_PX = 0;
-  const WALL_APRON_Y_SHIFT_PX = 0;
-
   // Visual height step in screen pixels per tile-level (tune later).
   const ELEV_PX = 16;
 
   // Per-type sprite scale (1 = default size).
-  const FLOOR_TOP_SCALE = 1.12;
-  const FLOOR_APRON_SCALE = 1.12;
+  const FLOOR_TOP_SCALE = 1;
+  const FLOOR_APRON_SCALE = 1;
   const STAIR_TOP_SCALE = 1;
   const STAIR_APRON_SCALE = 1;
-  const WALL_TOP_SCALE = 1;
   const WALL_APRON_SCALE = 1;
-  const VOID_TOP_SCALE = 1.12;
+  const VOID_TOP_SCALE = 1;
 
   // Optional render-layer offset for stairs.
   const STAIR_LAYER_OFFSET = (w as any).stairLayerOffset ?? 0;
 
-  // Adjust how tightly apron joins the top (helps remove visible seam)
-  const APRON_JOIN_PX = (w as any).apronJoinPx ?? 0;
 
   const tileHAtWorld = (x: number, y: number) => heightAtWorld(x, y, KENNEY_TILE_WORLD);
 
@@ -225,15 +208,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     sortKey?: number;
   };
 
-  const wallSkinDyOffset: Record<string, number> = {
-    FLOOR_EDGE: -100,
-    STAIR_FACE: 0,
-    WALL: 0,
-  };
-
-  const drawRenderPiece = (c: RenderPieceDraw) => {
-    const img = c.img;
-    if (!img || img.width <= 0 || img.height <= 0) return;
+    const drawRenderPiece = (c: RenderPieceDraw) => {
+      const img = c.img;
+      if (!img || img.width <= 0 || img.height <= 0) return;
 
     if (c.flipX) {
       ctx.save();
@@ -243,118 +220,124 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       ctx.restore();
     } else {
       ctx.drawImage(img, c.dx, c.dy, c.dw, c.dh);
-    }
-  };
+      }
+    };
 
-  const buildApronDraw = (c: RenderPiece, stableId: number): RenderPieceDraw | null => {
+    const dirToDelta = (dir: "N" | "E" | "S" | "W") => {
+      switch (dir) {
+        case "N": return { dx: 0, dy: -1 };
+        case "E": return { dx: 1, dy: 0 };
+        case "S": return { dx: 0, dy: 1 };
+        case "W": return { dx: -1, dy: 0 };
+      }
+    };
+
+  const buildApronDraws = (c: RenderPiece, stableId: number): RenderPieceDraw[] => {
     const isFloor = c.kind === "FLOOR_APRON";
     const dir4 = c.renderDir ?? "N";
     const topRec = isFloor ? getFloorTop() : getStairTop(dir4);
-    if (!topRec?.ready || !topRec.img || topRec.img.width <= 0 || topRec.img.height <= 0) return null;
+    if (!topRec?.ready || !topRec.img || topRec.img.width <= 0 || topRec.img.height <= 0) return [];
 
     const apronRec = isFloor
         ? getFloorApron((c.apronKind as "S" | "E") ?? "S")
         : getStairApron(dir4).rec;
     const apronFlipX = isFloor ? !!c.flipX : getStairApron(dir4).flipX;
-    if (!apronRec?.ready || !apronRec.img || apronRec.img.width <= 0 || apronRec.img.height <= 0) return null;
+    if (!apronRec?.ready || !apronRec.img || apronRec.img.width <= 0 || apronRec.img.height <= 0) return [];
 
-    const topScale = isFloor ? FLOOR_TOP_SCALE : STAIR_TOP_SCALE;
-    const topImg = topRec.img;
-    const topW = topImg.width * topScale;
-    const topH = topImg.height * topScale;
+      const anchorY = c.renderAnchorY ?? ANCHOR_Y;
+      const apronScale = isFloor ? FLOOR_APRON_SCALE : STAIR_APRON_SCALE;
+      const aw = apronRec.img.width * apronScale;
+      const ah = apronRec.img.height * apronScale;
 
-    const wx = (c.tx + 0.5) * T;
-    const wy = (c.ty + 0.5) * T;
+      const wx = (c.tx + 0.5) * T;
+      const wy = (c.ty + 0.5) * T;
+      const edgeDirForApron = c.edgeDir ?? dir4;
+      const apronDelta = dirToDelta(edgeDirForApron);
+      const apronWx = wx + apronDelta.dx * T * 0.5;
+      const apronWy = wy + apronDelta.dy * T * 0.5;
 
-    const p = worldToScreen(wx, wy);
-    const dx = p.x + camX - topW * 0.5;
+      const p = worldToScreen(apronWx, apronWy);
+      const ax = p.x + camX - aw * 0.5;
+      const ayBase = p.y + camY - ah * anchorY;
 
-    const anchorY = c.renderAnchorY ?? ANCHOR_Y;
+    const zTop = Math.max(0, Math.floor(c.zTo));
+    const zBottom = Math.max(0, Math.floor(c.zFrom ?? c.zTo));
+    const zStart = Math.min(zTop, zBottom);
+    const zEnd = Math.max(zTop, zBottom);
+    const draws: RenderPieceDraw[] = [];
 
-    let dy = p.y + camY - topH * anchorY;
-    dy += FLOOR_TOP_Y_SHIFT_PX;
-    dy += isFloor ? (FLOOR_TOP_DY_PX[dir4] ?? 0) : (STAIR_TOP_DY_PX[dir4] ?? 0);
-
-    dy += c.renderDyOffset ?? 0;
-
-    const h = c.zTo;
-    dy -= h * ELEV_PX;
-
-    const apronScale = isFloor ? FLOOR_APRON_SCALE : STAIR_APRON_SCALE;
-    const aw = apronRec.img.width * apronScale;
-    const ah = apronRec.img.height * apronScale;
-    const ax = dx + (topW - aw) * 0.5;
-
-    const apronDy = isFloor
-        ? (FLOOR_APRON_DY_PX[(c.apronKind as "S" | "E") ?? "S"] ?? 0)
-        : (STAIR_APRON_DY_PX[dir4] ?? 0);
-    const apronShift = isFloor ? FLOOR_APRON_Y_SHIFT_PX : STAIR_APRON_Y_SHIFT_PX;
-    const ay = dy + topH - APRON_JOIN_PX + (c.apronDyOffset ?? 0) + apronDy + apronShift;
-
-    return {
-      img: apronRec.img,
-      dx: ax,
-      dy: ay,
-      dw: aw,
-      dh: ah,
-      depth: renderDepthFor(wx, wy, h, stableId),
-      flipX: apronFlipX,
+    const edgeDir = c.edgeDir;
+    const neighborBlocksAtZ = (z: number) => {
+      if (!edgeDir) return false;
+      let dx = 0;
+      let dy = 0;
+      if (edgeDir === "N") dy = -1;
+      else if (edgeDir === "S") dy = 1;
+      else if (edgeDir === "E") dx = 1;
+      else if (edgeDir === "W") dx = -1;
+      const nTx = c.tx + dx;
+      const nTy = c.ty + dy;
+      const surfaces = surfacesAtXY(nTx, nTy);
+      if (surfaces.length === 0) return false;
+      let maxZ = surfaces[0].zBase;
+      for (let i = 1; i < surfaces.length; i++) {
+        const zBase = surfaces[i].zBase;
+        if (zBase > maxZ) maxZ = zBase;
+      }
+      return maxZ >= z;
     };
+
+      for (let z = zEnd; z >= zStart; z -= 2) {
+        if (neighborBlocksAtZ(z)) continue;
+        const zVisual = z - 1;
+        draws.push({
+          img: apronRec.img,
+          dx: ax,
+          dy: ayBase - zVisual * ELEV_PX,
+          dw: aw,
+          dh: ah,
+          depth: renderDepthFor(apronWx, apronWy, zVisual, stableId + (zEnd - z)),
+          flipX: apronFlipX,
+        });
+      }
+
+    return draws;
   };
-  const buildWallDraw = (c: RenderPiece, stableId: number): RenderPieceDraw | null => {
-    if (c.kind !== "WALL") return null;
-    const wallDir = c.wallDir ?? "N";
-    const wallSkin = c.wallSkin ?? "WALL";
-    const topDir = c.renderDir ?? "N";
+    const buildWallDraw = (c: RenderPiece, stableId: number): RenderPieceDraw | null => {
+      if (c.kind !== "WALL") return null;
+      const wallDir = c.wallDir ?? "N";
+      const wallSkin = c.wallSkin ?? "WALL";
+      const topDir = c.renderDir ?? "N";
 
-    const topRec = getWallSkinTop(wallSkin, topDir);
-    const topDy = getWallSkinTopDy(wallSkin, topDir);
-    const segmentDir = wallSkin === "STAIR_FACE" ? topDir : wallDir;
-    const seg = getWallSkinSegment(wallSkin, segmentDir);
-    const apronRec = seg.rec;
-    const apronFlipX = wallSkin === "STAIR_FACE" ? seg.flipX : (seg.flipX || !!c.flipX);
-    const apronDy = getWallSkinSegmentDy(wallSkin, segmentDir);
+      const segmentDir = wallSkin === "STAIR_FACE" ? topDir : wallDir;
+      const seg = getWallSkinSegment(wallSkin, segmentDir);
+      const apronRec = seg.rec;
+      const apronFlipX = wallSkin === "STAIR_FACE" ? seg.flipX : (seg.flipX || !!c.flipX);
+      if (!apronRec?.ready || !apronRec.img || apronRec.img.width <= 0 || apronRec.img.height <= 0) return null;
 
-    if (!topRec?.ready || !topRec.img || topRec.img.width <= 0 || topRec.img.height <= 0) return null;
-    if (!apronRec?.ready || !apronRec.img || apronRec.img.width <= 0 || apronRec.img.height <= 0) return null;
+      let wx = (c.tx + 0.5) * T;
+      let wy = (c.ty + 0.5) * T;
+      const wallDelta = dirToDelta(wallDir);
+      wx += wallDelta.dx * T * 0.5;
+      wy += wallDelta.dy * T * 0.5;
 
-    const topImg = topRec.img;
-    const topW = topImg.width * WALL_TOP_SCALE;
-    const topH = topImg.height * WALL_TOP_SCALE;
+      const p = worldToScreen(wx, wy);
+      const anchorY = c.renderAnchorY ?? ANCHOR_Y;
 
-    let wx = (c.tx + 0.5) * T;
-    let wy = (c.ty + 0.5) * T;
-    if (wallDir === "N") wy -= T;
-    else if (wallDir === "W") wx -= T;
+      const h = c.zFrom;
 
-    const p = worldToScreen(wx, wy);
-    const dx = p.x + camX - topW * 0.5;
+      const aw = apronRec.img.width * WALL_APRON_SCALE;
+      const ah = apronRec.img.height * WALL_APRON_SCALE;
+      const ax = p.x + camX - aw * 0.5;
+      const ay = p.y + camY - ah * anchorY - h * ELEV_PX;
 
-    const anchorY = c.renderAnchorY ?? ANCHOR_Y;
-
-    let dy = p.y + camY - topH * anchorY;
-    dy += WALL_TOP_Y_SHIFT_PX;
-    dy += topDy;
-
-    dy += c.renderDyOffset ?? 0;
-
-    const h = c.zTo;
-    dy -= h * ELEV_PX;
-
-    const aw = apronRec.img.width * WALL_APRON_SCALE;
-    const ah = apronRec.img.height * WALL_APRON_SCALE;
-    const ax = dx + (topW - aw) * 0.5;
-
-    const skinDyOffset = wallSkinDyOffset[wallSkin] ?? 0;
-    const ay = dy + topH - APRON_JOIN_PX + apronDy + skinDyOffset + WALL_APRON_Y_SHIFT_PX;
-
-    return {
-      img: apronRec.img,
-      dx: ax,
+      return {
+        img: apronRec.img,
+        dx: ax,
       dy: ay,
       dw: aw,
       dh: ah,
-      depth: renderDepthFor(wx, wy, h, stableId),
+        depth: renderDepthFor(wx, wy, h, stableId),
       flipX: apronFlipX,
     };
   };
@@ -554,8 +537,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
           const anchorY = ANCHOR_Y;
 
-          let dy = p.y + camY - topH * anchorY;
-          dy += FLOOR_TOP_Y_SHIFT_PX;
+            let dy = p.y + camY - topH * anchorY;
 
           ctx.drawImage(topImg, dx, dy, topW, topH);
         }
@@ -609,8 +591,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
                 const u = underlays[ui];
                 if (u.zTo !== surface.zBase) continue;
                 if (u.renderTopKind !== surface.renderTopKind) continue;
-                const draw = buildApronDraw(u, apronId++);
-                if (draw) apronDraws.push({ draw, piece: u });
+                const draws = buildApronDraws(u, apronId++);
+                for (let di = 0; di < draws.length; di++) {
+                  apronDraws.push({ draw: draws[di], piece: u });
+                }
               }
 
               if (apronDraws.length > 0) {
@@ -630,11 +614,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
                 for (let di = 0; di < deferred.length; di++) {
                   const d = deferred[di];
                   const stableId = Number.isFinite(d.sortKeyFromFloor) ? (d.sortKeyFromFloor as number) : apronId++;
-                  const draw = buildApronDraw(d, stableId);
-                  if (draw) {
-                    draw.sortKey = d.sortKeyFromFloor;
-                    deferredDraws.push({ draw, piece: d });
-                  }
+                    const draws = buildApronDraws(d, stableId);
+                    for (let di = 0; di < draws.length; di++) {
+                      const draw = draws[di];
+                      draw.sortKey = d.sortKeyFromFloor;
+                      deferredDraws.push({ draw, piece: d });
+                    }
                 }
                 if (deferredDraws.length > 0) {
                   deferredDraws.sort((a, b) => {
@@ -674,11 +659,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
             const anchorY = surface.renderAnchorY ?? ANCHOR_Y;
 
-            let dy = p.y + camY - topH * anchorY;
-            dy += FLOOR_TOP_Y_SHIFT_PX;
-            dy += isStairTop ? (STAIR_TOP_DY_PX[dir4] ?? 0) : (FLOOR_TOP_DY_PX[dir4] ?? 0);
-
-            dy += surface.renderDyOffset ?? 0;
+              let dy = p.y + camY - topH * anchorY;
 
             const h = surface.zBase;
             dy -= h * ELEV_PX;

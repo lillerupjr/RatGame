@@ -26,7 +26,7 @@
 // - landscape_23 (ramp: East up to West - walking E->W goes up)
 
 import { RNG } from "../../util/rng";
-import type { TableMapDef, TableMapCell } from "../formats/table/tableMapTypes";
+import type { ApronBaseMode, TableMapDef, TableMapCell } from "../formats/table/tableMapTypes";
 
 // ─────────────────────────────────────────────────────────────
 // Configuration
@@ -59,6 +59,9 @@ export type ProceduralMapConfig = {
     narrowPassageChance: number;   // 0-1, chance of narrow corridors
     pitDensity: number;            // 0-1, density of void/pit tiles
     rampComplexity: number;        // 0-1, how winding ramps are
+
+    // Apron rendering behavior for this map
+    apronBaseMode?: ApronBaseMode;
 };
 
 // Sensible defaults for ~2 min objective + 30s boss
@@ -1054,6 +1057,7 @@ function gridToTableMapDef(grid: TileData[][], config: ProceduralMapConfig): Tab
         defaultFloorSkin: "edges_landscape_28",
         defaultSpawnSkin: "edges_landscape_30",
         centerOnZero: true,
+        apronBaseMode: config.apronBaseMode,
         cells,
     };
 }
