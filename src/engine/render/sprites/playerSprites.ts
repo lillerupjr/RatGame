@@ -25,12 +25,14 @@ const PLAYER_ASSET_MODULES = import.meta.glob("../../../assets/player/**/*", {
 }) as Record<string, string>;
 
 const PLAYER_SOURCE: SpriteLoaderSource = { packRoot: "/player", modules: PLAYER_ASSET_MODULES };
-const PLAYER_SKIN = "jack";
+const PLAYER_SKIN = "jack"; // TODO: make this dynamic
 const PLAYER_WALK_ANIM = "walk";
 const PLAYER_ANCHOR_X = 0.5;
 const PLAYER_ANCHOR_Y = 0.65;
 const PLAYER_SKIN_SCALE: Record<string, number> = {
-    jack: 1.25,
+    jack: 1,
+    hobo: 1,
+
 };
 
 let playerPack: SpritePack | null = null;

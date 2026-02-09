@@ -3,7 +3,7 @@
   "width": 25,
   "height": 25,
   "centerOnZero": true,
-  "mapSkinId": "beach",
+  "mapSkinId": "test",
   "cells": [
     { "x": 11, "y": 9, "t": "F6" },
     { "x": 12, "y": 9, "t": "F6" },

@@ -28,7 +28,7 @@ export const DEFAULT_MAP_SKIN: ResolvedMapSkin = {
     stair: "",
     stairApron: "",
 
-    background: "tiles/backgrounds/water1",
+    background: "tiles/backgrounds/water3",
 };
 
 export const DEFAULT_MAP_SKIN_ID: MapSkinId = "default";
@@ -38,7 +38,7 @@ export const MAP_SKINS: Record<MapSkinId, MapSkinBundle> = {
 
     docks_rust: {
         floor: "tiles/floor/top/tile1",
-        background: "tiles/backgrounds/water4",
+        background: "tiles/backgrounds/water1",
     },
     sewer_green: {
         floor: "tiles/floor/top/tile2",
@@ -46,11 +46,15 @@ export const MAP_SKINS: Record<MapSkinId, MapSkinBundle> = {
     },
     ice: {
         floor: "tiles/floor/top/ice",
-        background: "tiles/backgrounds/water3",
+        background: "tiles/backgrounds/water2",
     },
     beach: {
         floor: "tiles/floor/top/sand",
-        background: "tiles/backgrounds/water2",
+        background: "tiles/backgrounds/water3",
+    },
+    test: {
+        floor: "tiles/floor/top/sandstone_top",
+        wall: "tiles/walls/sandstone_wall_4",
     },
 };
 
