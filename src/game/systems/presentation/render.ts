@@ -363,12 +363,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     toScreenAtZ,
   };
 
-  const SHOW_WALK_MASK = !!(w as any).debugWalkMask;
-  const SHOW_RAMPS = !!(w as any).debugRamps;
-  const SHOW_APRON_OWNERSHIP = !!(w as any).debugApronOwnership;
-  const SHOW_OCCLUDER_DEBUG = !!(w as any).debugOccluders;
-  const SHOW_PROJECTILE_FACES = !!(w as any).debugProjectileFaces;
-  const SHOW_TRIGGER_ZONES = !!(w as any).debugTriggerZones;
+  const SHOW_WALK_MASK = false;
+  const SHOW_RAMPS = false;
+  const SHOW_APRON_OWNERSHIP = false;
+  const SHOW_OCCLUDER_DEBUG = false;
+  const SHOW_PROJECTILE_FACES = false;
+  const SHOW_TRIGGER_ZONES = false;
 
   // ----------------------------
   // Tile range / diagonals

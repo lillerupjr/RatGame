@@ -197,11 +197,6 @@ export function createGame(args: CreateGameArgs) {
   setMusicStage("DOCKS");
 
 
-  // DEBUG: show logical walk-mask overlay (render.ts)
-  (world as any).debugWalkMask = false;
-  (world as any).debugRamps = false;
-  (world as any).debugApronOwnership = false;
-  (world as any).debugTriggerZones = true;
 
 
   preloadBackgrounds();
@@ -565,12 +560,6 @@ export function createGame(args: CreateGameArgs) {
 
     // DEBUG: spawn offset
     applyDebugSpawn(world);
-
-    // DEBUG: show logical walk-mask overlay (render.ts)
-    (world as any).debugWalkMask = false;
-    (world as any).debugRamps = true;
-    (world as any).debugApronOwnership = false;
-    (world as any).debugTriggerZones = true;
 
     currentChoices = [];
     hideLevelUp();
