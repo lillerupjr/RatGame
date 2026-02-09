@@ -26,7 +26,7 @@ const PLAYER_SOURCE: SpriteLoaderSource = { packRoot: "/player", modules: PLAYER
 const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
     [ENEMY_TYPE.CHASER]: {
         skin: "rat1",
-        scale: 2,
+        scale: 1.5,
         anchorX: 0.5,
         anchorY: 0.65,
         runAnim: "running-4-frames",
@@ -40,7 +40,7 @@ const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
     },
     [ENEMY_TYPE.BRUISER]: {
         skin: "bruiser",
-        scale: 2.5,
+        scale: 2,
         anchorX: 0.5,
         anchorY: 0.65,
         runAnim: "walk-6-frames",
@@ -48,7 +48,7 @@ const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
     },
     [ENEMY_TYPE.BOSS]: {
         skin: "infested",
-        scale: 3,
+        scale: 2,
         anchorX: 0.5,
         anchorY: 0.65,
         runAnim: "walk",

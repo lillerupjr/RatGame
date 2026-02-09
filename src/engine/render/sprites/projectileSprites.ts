@@ -87,11 +87,11 @@ export function getProjectileSpriteByKind(kind: number): Loaded | null {
 // Multiplier applied on top of your radius-based target size in render.ts.
 // Example: knife at 1.0, sword at 1.4, syringe at 0.9, bouncer at 1.2, etc.
 const PROJECTILE_SCALE_BY_KIND: Record<number, number> = {
-    1: 2, // KNIFE
-    2: 0.5, // PISTOL
+    1: 1, // KNIFE
+    2: 0.2, // PISTOL
     3: 1.0, // SWORD
     4: 1.0, // KNUCKLES
-    5: 3, // SYRINGE
+    5: 1, // SYRINGE
     6: 1.0, // BOUNCER
 };
 

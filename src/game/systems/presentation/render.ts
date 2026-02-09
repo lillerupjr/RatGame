@@ -63,12 +63,28 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const ww = canvas.clientWidth;
   setActiveMapSkinId(w.chosenMapSkinId);
   const hh = canvas.clientHeight;
-  (w as any).viewW = ww;
-  (w as any).viewH = hh;
+
+  // Camera zoom ("distance"):
+  //   > 1 = closer (zoom in)
+  //   < 1 = farther (zoom out)
+  const camZoom = Math.max(0.5, Math.min(2.5, (w as any).cameraZoom ?? 1.5));
+
+  // Many systems use viewW/viewH as "world view extents".
+  // Make them zoom-aware so "screen-relative" ranges track what you actually see.
+  (w as any).viewW = ww / camZoom;
+  (w as any).viewH = hh / camZoom;
 
   const PLAYER_R = w.playerR;
 
   ctx.clearRect(0, 0, ww, hh);
+
+  // Apply zoom around screen center for WORLD rendering only.
+  // We'll ctx.restore() before FPS/HUD/UI so UI stays crisp and unscaled.
+  ctx.save();
+  ctx.translate(ww * 0.5, hh * 0.5);
+  ctx.scale(camZoom, camZoom);
+  ctx.translate(-ww * 0.5, -hh * 0.5);
+
 
   const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
   const px = pWorld.wx;
@@ -1049,6 +1065,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   drawTriggerOverlay(debugContext, SHOW_TRIGGER_ZONES);
   drawApronOwnershipStats(debugContext, SHOW_APRON_OWNERSHIP);
 
+  // Restore (undo camera zoom) before drawing screen-space overlays / HUD
+  ctx.restore();
+
   // FPS
   ctx.save();
   ctx.font = "12px monospace";
@@ -1065,6 +1084,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   renderBossHealthBar(w, ctx, ww, hh);
   renderDPSMeter(w, ctx, ww, hh);
   renderFloatingText(w, ctx, toScreen);
+
 }
 
 
