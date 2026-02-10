@@ -246,16 +246,6 @@ export function occludersForLayer(layer: number): RenderPiece[] {
     return _compiled.occludersForLayer(layer);
 }
 
-/** Return apron underlays for a tile coordinate. */
-export function apronUnderlaysAtXY(tx: number, ty: number): RenderPiece[] {
-    return _compiled.apronUnderlaysAtXY(tx, ty);
-}
-
-/** Return stair-owned deferred aprons for a tile coordinate. */
-export function deferredApronsAtXY(tx: number, ty: number): RenderPiece[] {
-    return _compiled.deferredApronsAtXY(tx, ty);
-}
-
 /** Return occluders within a tile-bounds view for a logical layer. */
 export function occludersInViewForLayer(layer: number, view: ViewRect): RenderPiece[] {
     return _compiled.occludersInViewForLayer(layer, view);

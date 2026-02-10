@@ -12,8 +12,6 @@ import {
   walkInfo,
   getTile,
   surfacesAtXY,
-  apronUnderlaysAtXY,
-  deferredApronsAtXY,
   occluderLayers,
   occludersInViewForLayer,
   renderLayers,
@@ -48,8 +46,6 @@ import {
   setActiveMapSkinId
 } from "../../../engine/render/sprites/renderSprites";
 import {
-  drawApronOwnershipOverlay,
-  drawApronOwnershipStats,
   drawOccluderOverlay,
   drawProjectileFaceOverlay,
   drawRampOverlay,
@@ -64,12 +60,11 @@ import {
 
 /** Semantic layer ordering (used as tie-breaker in slice ordering). */
 enum KindOrder {
-  UNDERLAY = 0,
-  FLOOR = 1,
-  ENTITY = 2,
-  VFX = 3,
-  OCCLUDER = 4,
-  OVERLAY = 5,
+  FLOOR = 0,
+  ENTITY = 1,
+  VFX = 2,
+  OCCLUDER = 3,
+  OVERLAY = 4,
 }
 
 /** Canonical render key for deterministic ordering. */
@@ -163,12 +158,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const VOID_TOP_SCALE = 1;
 
   // Optional render-layer offset for stairs.
-  const STAIR_LAYER_OFFSET = (w as any).stairLayerOffset ?? 0;
   // --- Render HEIGHT knobs (screen-space Y offsets, in pixels) ---
   // Positive moves DOWN on screen; negative moves UP.
   // These do NOT affect layer/sort; they only shift draw Y.
   const STAIR_TOP_DY = (w as any).stairTopDy ?? 8;
-  const STAIR_APRON_DY = (w as any).stairApronDy ?? 0;
 
   const tileHAtWorld = (x: number, y: number) => heightAtWorld(x, y, KENNEY_TILE_WORLD);
 
@@ -274,7 +267,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       }
     };
 
-  const buildApronDraws = (c: RenderPiece): RenderPieceDraw[] => {
+  const buildFaceDraws = (c: RenderPiece): RenderPieceDraw[] => {
     const dir4 = c.renderDir ?? "N";
     const apronRec = c.spriteId ? getTileSpriteById(c.spriteId) : null;
     const apronFlipX = !!c.flipX;
@@ -296,10 +289,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const ax = p.x + camX - aw * 0.5;
       const ayBase = p.y + camY - ah * anchorY;
 
-    const zTop = Math.max(0, Math.floor(c.zTo));
-    const zBottom = Math.max(0, Math.floor(c.zFrom ?? c.zTo));
+// Allow negative apron spans (e.g. -1 -> 0) so height-0 platforms still show aprons.
+    const zTop = Math.floor(c.zTo);
+    const zBottom = Math.floor(c.zFrom ?? c.zTo);
     const zStart = Math.min(zTop, zBottom);
     const zEnd = Math.max(zTop, zBottom);
+
     const draws: RenderPieceDraw[] = [];
 
     const edgeDir = c.edgeDir;
@@ -339,7 +334,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
     return draws;
   };
-    const buildWallDraw = (c: RenderPiece, stableId: number): RenderPieceDraw | null => {
+  const buildWallDraw = (c: RenderPiece, stableId: number): RenderPieceDraw | null => {
       if (c.kind !== "WALL") return null;
       const wallDir = c.wallDir ?? "N";
       const apronRec = c.spriteId ? getTileSpriteById(c.spriteId) : null;
@@ -392,7 +387,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   const SHOW_WALK_MASK = true;
   const SHOW_RAMPS = true;
-  const SHOW_APRON_OWNERSHIP = false;
   const SHOW_OCCLUDER_DEBUG = false;
   const SHOW_PROJECTILE_FACES = false;
   const SHOW_TRIGGER_ZONES = false;
@@ -478,99 +472,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // ----------------------------
   // Prepass: build all apron slice draws and bucket them by slice.
   // ----------------------------
-  {
-    let apronId = 0;
-
-    for (let s = minSum; s <= maxSum; s++) {
-      const ty0 = Math.max(minTy, s - maxTx);
-      const ty1 = Math.min(maxTy, s - minTx);
-
-      for (let ty = ty1; ty >= ty0; ty--) {
-        const tx = s - ty;
-
-        const surfaces = surfacesAtXY(tx, ty);
-        if (surfaces.length === 0) continue;
-
-        const underlays = apronUnderlaysAtXY(tx, ty);
-        if (underlays.length === 0) continue;
-
-        // Build a fast allow-set of (zBase + topKind) that exist at this tile.
-        // Underlays should only render if they attach to an existing surface top.
-        const allow = new Set<string>();
-        for (let i = 0; i < surfaces.length; i++) {
-          const sf = surfaces[i];
-          allow.add(`${sf.zBase}|${sf.renderTopKind}`);
-        }
-
-        // Normal underlays
-        for (let ui = 0; ui < underlays.length; ui++) {
-          const u = underlays[ui];
-          if (!allow.has(`${u.zTo}|${u.renderTopKind}`)) continue;
-
-          const draws = buildApronDraws(u);
-          for (let di = 0; di < draws.length; di++) {
-            const d = draws[di];
-
-            const renderKey: RenderKey = {
-              slice: tx + ty,
-              within: tx,
-              baseZ: u.zFrom ?? u.zTo ?? 0,
-              kindOrder: KindOrder.UNDERLAY,
-              stableId: apronId - 1 + (di * 0.001),
-            };
-
-            const drawClosure = () => {
-              drawRenderPiece(d);
-              drawApronOwnershipOverlay(debugContext, SHOW_APRON_OWNERSHIP, u, d);
-            };
-
-            addToSlice(tx + ty, renderKey, drawClosure);
-          }
-        }
-      }
-    }
-
-    // Deferred aprons (stairs ownership transfers etc.)
-    for (let s = minSum; s <= maxSum; s++) {
-      const ty0 = Math.max(minTy, s - maxTx);
-      const ty1 = Math.min(maxTy, s - minTx);
-
-      for (let ty = ty1; ty >= ty0; ty--) {
-        const tx = s - ty;
-
-        const deferred = deferredApronsAtXY(tx, ty);
-        if (deferred.length === 0) continue;
-
-        for (let i = 0; i < deferred.length; i++) {
-          const piece = deferred[i];
-
-          const stableId = Number.isFinite(piece.sortKeyFromFloor)
-              ? (piece.sortKeyFromFloor as number)
-              : apronId++;
-
-          const draws = buildApronDraws(piece);
-          for (let di = 0; di < draws.length; di++) {
-            const d = draws[di];
-
-            const renderKey: RenderKey = {
-              slice: tx + ty,
-              within: tx,
-              baseZ: piece.zFrom ?? piece.zTo ?? 0,
-              kindOrder: KindOrder.UNDERLAY,
-              stableId: stableId + (di * 0.001),
-            };
-
-            const drawClosure = () => {
-              drawRenderPiece(d);
-              drawApronOwnershipOverlay(debugContext, SHOW_APRON_OWNERSHIP, piece, d);
-            };
-
-            addToSlice(tx + ty, renderKey, drawClosure);
-          }
-        }
-      }
-    }
-  }
+  // (Underlay prepass removed; faces now render as occluders)
 
   // ----------------------------
   // COLLECTION PHASE: All drawable types collected into slices
@@ -1029,41 +931,56 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // Collect OCCLUDERS into slices (optimized: single query + bucketing)
   // ----------------------------
   {
-    // Query occluders once for entire view, then bucket by slice
-    const allOccluders = occludersInViewForLayer(0, viewRect);
+    // Query occluders once for entire view across all layers, then bucket by slice
+    const allOccluders: RenderPiece[] = [];
+    const layers = occluderLayers();
+    for (let li = 0; li < layers.length; li++) {
+      const layer = layers[li];
+      const list = occludersInViewForLayer(layer, viewRect);
+      if (list.length > 0) allOccluders.push(...list);
+    }
     let occluderId = 0;
 
     for (let oi = 0; oi < allOccluders.length; oi++) {
       const occ = allOccluders[oi];
-      const draw = buildWallDraw(occ, occluderId++);
-      if (!draw) continue;
-
-      // Deterministic stableId based on occluder properties
       const occStableId = occ.tx * 73856093 ^ occ.ty * 19349663 ^ (occ.zFrom * 100 | 0) * 83492791;
 
-      const renderKey: RenderKey = {
-        slice: occ.tx + occ.ty,
-        within: occ.tx,
-        baseZ: occ.zFrom,
-        kindOrder: KindOrder.OCCLUDER,
-        stableId: occStableId,
-      };
+      if (occ.kind === "WALL") {
+        const draw = buildWallDraw(occ, occluderId++);
+        if (!draw) continue;
+        const renderKey: RenderKey = {
+          slice: occ.tx + occ.ty,
+          within: occ.tx,
+          baseZ: occ.zFrom,
+          kindOrder: KindOrder.OCCLUDER,
+          stableId: occStableId,
+        };
 
-      const drawClosure = () => {
-        if (draw.img && draw.img.width > 0 && draw.img.height > 0) {
-          if (draw.flipX) {
-            ctx.save();
-            ctx.translate(draw.dx + draw.dw * 0.5, draw.dy + draw.dh * 0.5);
-            ctx.scale(-1, 1);
-            ctx.drawImage(draw.img, -draw.dw * 0.5, -draw.dh * 0.5, draw.dw, draw.dh);
-            ctx.restore();
-          } else {
-            ctx.drawImage(draw.img, draw.dx, draw.dy, draw.dw, draw.dh);
-          }
-        }
-      };
+        const drawClosure = () => {
+          drawRenderPiece(draw);
+        };
 
-      addToSlice(occ.tx + occ.ty, renderKey, drawClosure);
+        addToSlice(occ.tx + occ.ty, renderKey, drawClosure);
+        continue;
+      }
+
+      const draws = buildFaceDraws(occ);
+      for (let di = 0; di < draws.length; di++) {
+        const d = draws[di];
+        const renderKey: RenderKey = {
+          slice: occ.tx + occ.ty,
+          within: occ.tx,
+          baseZ: occ.zFrom ?? occ.zTo ?? 0,
+          kindOrder: KindOrder.OCCLUDER,
+          stableId: occStableId + di * 0.001,
+        };
+
+        const drawClosure = () => {
+          drawRenderPiece(d);
+        };
+
+        addToSlice(occ.tx + occ.ty, renderKey, drawClosure);
+      }
     }
   }
 
@@ -1099,7 +1016,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   drawOccluderOverlay(debugContext, SHOW_OCCLUDER_DEBUG, viewRect);
   drawProjectileFaceOverlay(debugContext, SHOW_PROJECTILE_FACES, viewRect);
   drawTriggerOverlay(debugContext, SHOW_TRIGGER_ZONES);
-  drawApronOwnershipStats(debugContext, SHOW_APRON_OWNERSHIP);
 
   // Restore (undo camera zoom) before drawing screen-space overlays / HUD
   ctx.restore();
