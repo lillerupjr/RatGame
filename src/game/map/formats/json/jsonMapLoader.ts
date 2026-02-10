@@ -6,19 +6,38 @@ import type {
   TableObjectiveDef,
   TableObjectiveRule,
   TableOutcomeDef,
+  SemanticStampType,
+  SemanticStamp,
 } from "../table/tableMapTypes";
 import type { MapSkinBundle, MapSkinId } from "../../../content/mapSkins";
 
 type JsonMapCell = {
   x: number;
   y: number;
-  t?: string;
   z?: number;
   type?: string;
   sprite?: string;
   blocksMove?: boolean;
   blocksSight?: boolean;
-  meta?: Record<string, unknown>;
+  zone?: string;
+  tags?: string[];
+  triggerId?: string;
+  triggerType?: string;
+  radius?: number;
+};
+
+type JsonMapField = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+
+  z?: number;
+  type?: string;
+  sprite?: string;
+  blocksMove?: boolean;
+  blocksSight?: boolean;
+  zone?: string;
   tags?: string[];
   triggerId?: string;
   triggerType?: string;
@@ -29,18 +48,17 @@ type JsonMapDef = {
   id: string;
   width?: number;
   height?: number;
-  cells?: JsonMapCell[];
+  fields?: JsonMapField[];
+  cells?: TableMapCell[];
   stamps?: {
     x: number;
     y: number;
     z?: number;
-    type: string;
+    type: SemanticStampType;
     w?: number;
     h?: number;
   }[];
   mapSkinId?: MapSkinId;
-  defaultFloorSkin?: string;
-  defaultSpawnSkin?: string;
   mapSkinDefaults?: MapSkinBundle;
   centerOnZero?: boolean;
   apronBaseMode?: ApronBaseMode;
@@ -96,6 +114,17 @@ function optionalBooleanField(obj: Record<string, unknown>, key: string): boolea
     throw new Error(`JSON map loader: optional field "${key}" must be a boolean.`);
   }
   return value;
+}
+
+function optionalDirField(obj: Record<string, unknown>, key: string): "N" | "E" | "S" | "W" | undefined {
+  const value = obj[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") {
+    throw new Error(`JSON map loader: optional field "${key}" must be a string.`);
+  }
+  const up = value.toUpperCase();
+  if (up === "N" || up === "E" || up === "S" || up === "W") return up as "N" | "E" | "S" | "W";
+  throw new Error(`JSON map loader: optional field "${key}" must be one of N/E/S/W.`);
 }
 
 function optionalNumberField(obj: Record<string, unknown>, key: string): number | undefined {
@@ -254,22 +283,21 @@ function requireCellsField(
       );
     }
 
+    if ("t" in cell) {
+      throw new Error(`JSON map loader${formatSource(source)}: legacy token field "t" is forbidden. Use structured fields.`);
+    }
+    if ("meta" in cell) {
+      throw new Error(`JSON map loader${formatSource(source)}: authored maps must not use "meta".`);
+    }
+
     const x = requireNumberField(cell, "x", source);
     const y = requireNumberField(cell, "y", source);
-    const t = optionalStringField(cell, "t");
     const type = optionalStringField(cell, "type");
     const sprite = optionalStringField(cell, "sprite");
     const z = optionalNumberField(cell, "z") ?? 0;
     const blocksMove = optionalBooleanField(cell, "blocksMove");
     const blocksSight = optionalBooleanField(cell, "blocksSight");
-    const meta = (() => {
-      const m = cell.meta;
-      if (m === undefined) return undefined;
-      if (!isRecord(m)) {
-        throw new Error(`JSON map loader${formatSource(source)}: optional field "meta" must be an object.`);
-      }
-      return m;
-    })();
+    const zone = optionalStringField(cell, "zone");
     const tags = (() => {
       const arr = cell.tags;
       if (arr === undefined) return undefined;
@@ -284,34 +312,121 @@ function requireCellsField(
       return arr as string[];
     })();
 
-    if (!t && (!type || !sprite)) {
-      throw new Error(
-        `JSON map loader${formatSource(source)}: cell ${index} must include legacy "t" or new "type" + "sprite".`
-      );
-    }
     const triggerId = optionalStringField(cell, "triggerId");
     const triggerType = optionalStringField(cell, "triggerType");
     const radius = optionalNumberField(cell, "radius");
+    const dir = optionalDirField(cell, "dir");
+    const height = optionalNumberField(cell, "height");
 
-    return {
+    const resolvedType = ((type ?? "floor").toLowerCase()) as TableMapCell["type"];
+    const resolvedZ = z ?? 0;
+
+    const parsed: TableMapCell = {
       x,
       y,
-      t: t ?? undefined,
-      z,
-      type: type ?? undefined,
+      z: resolvedZ,
+      type: resolvedType,
       sprite: sprite ?? undefined,
       blocksMove,
       blocksSight,
-      meta,
+      dir,
+      height,
+      zone: zone ?? undefined,
       tags,
       triggerId,
       triggerType,
       radius,
     };
+    return parsed;
   });
 }
 
-function optionalSemanticStamp(obj: Record<string, unknown>, source?: string) {
+function optionalFieldsField(obj: Record<string, unknown>, source?: string): TableMapCell[] {
+  const value = obj.fields;
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    throw new Error(`JSON map loader${formatSource(source)}: optional field "fields" must be an array if present.`);
+  }
+
+  const out: TableMapCell[] = [];
+
+  for (let index = 0; index < value.length; index++) {
+    const field = value[index];
+    if (!isRecord(field)) {
+      throw new Error(`JSON map loader${formatSource(source)}: fields[${index}] must be an object.`);
+    }
+
+    if ("t" in field) {
+      throw new Error(`JSON map loader${formatSource(source)}: legacy token field "t" is forbidden. Use structured fields.`);
+    }
+    if ("meta" in field) {
+      throw new Error(`JSON map loader${formatSource(source)}: authored maps must not use "meta".`);
+    }
+
+    const x0 = requireNumberField(field, "x", source);
+    const y0 = requireNumberField(field, "y", source);
+    const w = requireNumberField(field, "w", source);
+    const h = requireNumberField(field, "h", source);
+
+    const iw = Math.max(1, w | 0);
+    const ih = Math.max(1, h | 0);
+
+    const z = optionalNumberField(field, "z") ?? undefined;
+    const type = optionalStringField(field, "type") ?? undefined;
+    const sprite = optionalStringField(field, "sprite") ?? undefined;
+    const blocksMove = optionalBooleanField(field, "blocksMove");
+    const blocksSight = optionalBooleanField(field, "blocksSight");
+    const zone = optionalStringField(field, "zone");
+
+    const tags = (() => {
+      const arr = field.tags;
+      if (arr === undefined) return undefined;
+      if (!Array.isArray(arr)) {
+        throw new Error(`JSON map loader${formatSource(source)}: "tags" must be an array.`);
+      }
+      for (let i = 0; i < arr.length; i++) {
+        if (typeof arr[i] !== "string") {
+          throw new Error(`JSON map loader${formatSource(source)}: "tags" must be an array of strings.`);
+        }
+      }
+      return arr as string[];
+    })();
+
+    const triggerId = optionalStringField(field, "triggerId") ?? undefined;
+    const triggerType = optionalStringField(field, "triggerType") ?? undefined;
+    const radius = optionalNumberField(field, "radius") ?? undefined;
+    const dir = optionalDirField(field, "dir");
+    const height = optionalNumberField(field, "height");
+    const resolvedType = ((type ?? "floor").toLowerCase()) as TableMapCell["type"];
+    const resolvedZ = z ?? 0;
+
+    for (let dy = 0; dy < ih; dy++) {
+      for (let dx = 0; dx < iw; dx++) {
+        const parsed: TableMapCell = {
+          x: x0 + dx,
+          y: y0 + dy,
+          z: resolvedZ,
+          type: resolvedType,
+          sprite,
+          blocksMove,
+          blocksSight,
+          dir,
+          height,
+          zone: zone ?? undefined,
+          tags,
+          triggerId,
+          triggerType,
+          radius,
+        };
+        out.push(parsed);
+      }
+    }
+  }
+
+  return out;
+}
+
+function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): SemanticStamp[] | undefined {
   const arr = obj.stamps;
   if (arr === undefined) return undefined;
   if (!Array.isArray(arr)) {
@@ -323,7 +438,24 @@ function optionalSemanticStamp(obj: Record<string, unknown>, source?: string) {
     }
     const x = requireNumberField(entry, "x", source);
     const y = requireNumberField(entry, "y", source);
-    const type = requireStringField(entry, "type", source);
+    const typeRaw = requireStringField(entry, "type", source);
+    const type: SemanticStampType = (() => {
+      const lowered = typeRaw.toLowerCase();
+      if (
+        lowered === "building" ||
+        lowered === "road" ||
+        lowered === "sidewalk" ||
+        lowered === "park" ||
+        lowered === "sea" ||
+        lowered === "boss_room" ||
+        lowered === "fence"
+      ) {
+        return lowered as SemanticStampType;
+      }
+      throw new Error(
+        `JSON map loader${formatSource(source)}: stamps[${index}].type must be one of building|road|sidewalk|park|sea|boss_room|fence.`
+      );
+    })();
     const z = optionalNumberField(entry, "z") ?? 0;
     const w = optionalNumberField(entry, "w");
     const h = optionalNumberField(entry, "h");
@@ -339,12 +471,30 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
   const id = requireStringField(data, "id", source);
   const width = optionalNumberField(data, "width");
   const height = optionalNumberField(data, "height");
-  const cells = requireCellsField(data, source);
+  const fieldCells = optionalFieldsField(data, source);
+  const pointCells = requireCellsField(data, source);
+
+  const merged: TableMapCell[] = [];
+  const indexByKey = new Map<string, number>();
+
+  const add = (c: TableMapCell) => {
+    const key = `${c.x},${c.y}`;
+    const existing = indexByKey.get(key);
+    if (existing === undefined) {
+      indexByKey.set(key, merged.length);
+      merged.push(c);
+    } else {
+      merged[existing] = c;
+    }
+  };
+
+  for (let i = 0; i < fieldCells.length; i++) add(fieldCells[i]);
+  for (let i = 0; i < pointCells.length; i++) add(pointCells[i]);
+
+  const cells = merged;
   const stamps = optionalSemanticStamp(data, source);
 
   const mapSkinId = optionalStringField(data, "mapSkinId");
-  const defaultFloorSkin = optionalStringField(data, "defaultFloorSkin");
-  const defaultSpawnSkin = optionalStringField(data, "defaultSpawnSkin");
   const mapSkinDefaults = optionalMapSkinDefaultsField(data, "mapSkinDefaults");
   const centerOnZero = optionalBooleanField(data, "centerOnZero");
   const apronBaseMode = optionalApronBaseModeField(data, "apronBaseMode");
@@ -357,8 +507,6 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     cells,
     stamps,
     mapSkinId,
-    defaultFloorSkin,
-    defaultSpawnSkin,
     mapSkinDefaults,
     centerOnZero,
     apronBaseMode,
@@ -402,8 +550,6 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     w: (jsonDef.width ?? bounds.w) | 0,
     h: (jsonDef.height ?? bounds.h) | 0,
     mapSkinId: jsonDef.mapSkinId,
-    defaultFloorSkin: jsonDef.defaultFloorSkin,
-    defaultSpawnSkin: jsonDef.defaultSpawnSkin,
     mapSkinDefaults: jsonDef.mapSkinDefaults,
     centerOnZero: jsonDef.centerOnZero,
     apronBaseMode: jsonDef.apronBaseMode,

@@ -987,29 +987,24 @@ function gridToTableMapDef(grid: TileData[][], config: ProceduralMapConfig): Tab
         for (let x = 0; x < w; x++) {
             const tile = grid[y][x];
             if (tile.kind === "VOID") continue;
-            
-            let token: string;
-            
+
+            const base: TableMapCell = { x, y, z: tile.h };
+
             switch (tile.kind) {
                 case "SPAWN":
-                    token = `P${tile.h}`;
+                    cells.push({ ...base, type: "spawn" });
                     break;
                 case "GOAL":
-                    // Mark goals as G<height> - we'll need to handle this in the loader
-                    // For now, use floor with a special marker
-                    token = `G${tile.h}`;
+                    cells.push({ ...base, type: "goal" });
                     break;
                 case "STAIRS":
-                    // Use cardinal directions (N, S, E, W) for uphill direction
-                    token = `S${tile.h}${tile.dir || "N"}`;
+                    cells.push({ ...base, type: "stairs", dir: tile.dir ?? "N" });
                     break;
                 case "FLOOR":
                 default:
-                    token = `F${tile.h}`;
+                    cells.push({ ...base, type: "floor" });
                     break;
             }
-            
-            cells.push({ x, y, t: token });
         }
     }
     

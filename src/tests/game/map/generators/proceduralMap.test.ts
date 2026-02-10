@@ -21,11 +21,11 @@ describe("ProceduralMap", () => {
             expect(mapDef.cells.length).toBeGreaterThan(0);
             
             // Should have at least one spawn (P) token
-            const hasSpawn = mapDef.cells.some(c => c.t.startsWith("P"));
+            const hasSpawn = mapDef.cells.some((c) => c.type === "spawn");
             expect(hasSpawn).toBe(true);
             
             // Should have at least one goal (G) token
-            const hasGoal = mapDef.cells.some(c => c.t.startsWith("G"));
+            const hasGoal = mapDef.cells.some((c) => c.type === "goal");
             expect(hasGoal).toBe(true);
         });
 

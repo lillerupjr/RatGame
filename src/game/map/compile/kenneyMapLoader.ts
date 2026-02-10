@@ -141,94 +141,9 @@ export type CompiledKenneyMap = {
     overlaysInView(view: ViewRect): StampOverlay[];
 };
 
-// Parse tokens like: F0, F5, S0W, S3N, S4S, S5, P0, C2E
-function parseToken(t: string): IsoTile | null {
-    const tok = (t ?? "").trim();
-    if (!tok) return null;
-
-    const up = tok.toUpperCase();
-
-    // FLOOR: F<number>
-    if (up.startsWith("F")) {
-        const n = parseInt(up.slice(1), 10);
-        const h = Number.isFinite(n) ? (n | 0) : 0;
-        return { kind: "FLOOR", h };
-    }
-
-    // SPAWN: P<number> (acts like FLOOR visually/gameplay, but marks spawn)
-    if (up.startsWith("P")) {
-        const n = parseInt(up.slice(1), 10);
-        const h = Number.isFinite(n) ? (n | 0) : 0;
-        return { kind: "SPAWN", h };
-    }
-
-    // GOAL: G<number> (destination/objective marker)
-    if (up.startsWith("G")) {
-        const n = parseInt(up.slice(1), 10);
-        const h = Number.isFinite(n) ? (n | 0) : 0;
-        return { kind: "GOAL", h };
-    }
-
-    // STAIRS: S<number><dir?>
-    // We load as STAIRS tiles. Direction (when present) determines sprite skin.
-    if (up.startsWith("S")) {
-        const m = up.match(/^S(\d+)([NESW])?$/);
-        if (m) {
-            const h = parseInt(m[1], 10) | 0;
-            const dir = (m[2] as StairDir | undefined) ?? undefined;
-            return { kind: "STAIRS", h, dir };
-        }
-
-        const cleaned = "S" + up.slice(1).replace(/[^0-9NESW]/g, "");
-        const m2 = cleaned.match(/^S(\d+)([NESW])?$/);
-        if (m2) {
-            const h = parseInt(m2[1], 10) | 0;
-            const dir = (m2[2] as StairDir | undefined) ?? undefined;
-            return { kind: "STAIRS", h, dir };
-        }
-
-        // Fallback: stairs at height 0 (no direction)
-        return { kind: "STAIRS", h: 0 };
-    }
-
-    return null;
-}
-
-// Parse multi-tokens like: F0|W4S
-function parseTokens(t: string): { tile: IsoTile | null; walls: WallToken[] } {
-    const raw = (t ?? "").trim();
-    if (!raw) return { tile: null, walls: [] };
-
-    const parts = raw.split("|").map((p) => p.trim()).filter(Boolean);
-    let tile: IsoTile | null = null;
-    const walls: WallToken[] = [];
-
-    for (let i = 0; i < parts.length; i++) {
-        const tok = parts[i];
-        const up = tok.toUpperCase();
-
-        if (up.startsWith("W")) {
-            const m = up.match(/^W(\d+)([NESW])$/);
-            if (m) {
-                const height = parseInt(m[1], 10) | 0;
-                const dir = (m[2] as WallDir) ?? "S";
-                walls.push({ x: 0, y: 0, height, dir });
-            }
-            continue;
-        }
-
-        if (!tile) {
-            tile = parseToken(tok);
-        }
-    }
-
-    return { tile, walls };
-}
-
 /** Compile a table-based map definition into a render/query-friendly map. */
 function mapSkinDefaultsFromDef(def: TableMapDef): MapSkinBundle {
     const defaults: MapSkinBundle = { ...(def.mapSkinDefaults ?? {}) };
-    if (!defaults.floor && def.defaultFloorSkin) defaults.floor = def.defaultFloorSkin;
     return defaults;
 }
 
@@ -242,12 +157,7 @@ export function compileKenneyMapFromTable(
     const skinIdToUse = def.mapSkinId ?? options?.mapSkinId;
     const resolvedMapSkin = resolveMapSkin(skinIdToUse);
 
-    // Excel -> tile mapping:
-    // - Excel x (right) becomes tile -y (north)
-    // - Excel y (down) becomes tile +x (east)
-    const excelToTile = (ex: number, ey: number) => {
-        return { tx: ey, ty: -ex };
-    };
+    // Excel/table coords are tile coords (identity mapping).
 
     type ParsedCell = {
         tx: number;
@@ -274,18 +184,16 @@ export function compileKenneyMapFromTable(
     let goalH: number = 0;
 
     for (const c of def.cells) {
-        const ex = c.x | 0;
-        const ey = c.y | 0;
-        const parsed = (() => {
-            if (c.t) return parseTokens(c.t);
-
-            const type = (c.type ?? "").toLowerCase();
+        const tx = c.x | 0;
+        const ty = c.y | 0;
+        const parsed: { tile: IsoTile | null; walls: WallToken[] } = (() => {
+            const type = (c.type ?? "floor").toLowerCase();
             const sprite = c.sprite;
             const z = c.z ?? 0;
-            const dirFromMeta = (() => {
-                const d = (c.meta as any)?.dir;
-                if (typeof d === "string") {
-                    const up = d.toUpperCase();
+            const parsedDir = (() => {
+                const rawDir = c.dir;
+                if (typeof rawDir === "string") {
+                    const up = rawDir.toUpperCase();
                     if (up === "N" || up === "E" || up === "S" || up === "W") return up as WallDir;
                 }
                 if (Array.isArray(c.tags)) {
@@ -298,24 +206,24 @@ export function compileKenneyMapFromTable(
             })();
 
             if (type === "floor") {
-                return { tile: { kind: "FLOOR", h: z, skin: sprite }, walls: [] as WallToken[] };
+                return { tile: { kind: "FLOOR" as const, h: z, skin: sprite }, walls: [] as WallToken[] };
             }
             if (type === "spawn") {
-                return { tile: { kind: "SPAWN", h: z, skin: sprite }, walls: [] as WallToken[] };
+                return { tile: { kind: "SPAWN" as const, h: z, skin: sprite }, walls: [] as WallToken[] };
             }
             if (type === "goal") {
-                return { tile: { kind: "GOAL", h: z, skin: sprite }, walls: [] as WallToken[] };
+                return { tile: { kind: "GOAL" as const, h: z, skin: sprite }, walls: [] as WallToken[] };
             }
             if (type === "stairs") {
-                const stairDir = dirFromMeta ?? "N";
+                const stairDir = parsedDir ?? "N";
                 return {
-                    tile: { kind: "STAIRS", h: z, dir: stairDir as StairDir, skin: sprite },
+                    tile: { kind: "STAIRS" as const, h: z, dir: stairDir as StairDir, skin: sprite },
                     walls: [] as WallToken[],
                 };
             }
             if (type === "wall") {
-                const height = Math.max(0, z | 0);
-                const dir = dirFromMeta ?? "S";
+                const height = Math.max(0, (c.height ?? z) | 0);
+                const dir = parsedDir ?? "S";
                 const wt: WallToken = { x: 0, y: 0, height, dir, skin: sprite, slot: "wall" };
                 return { tile: null, walls: [wt] };
             }
@@ -327,30 +235,29 @@ export function compileKenneyMapFromTable(
         })();
         if (!parsed.tile && parsed.walls.length === 0) continue;
 
-        const mapped = excelToTile(ex, ey);
-        if (mapped.tx < minTx) minTx = mapped.tx;
-        if (mapped.tx > maxTx) maxTx = mapped.tx;
-        if (mapped.ty < minTy) minTy = mapped.ty;
-        if (mapped.ty > maxTy) maxTy = mapped.ty;
+        if (tx < minTx) minTx = tx;
+        if (tx > maxTx) maxTx = tx;
+        if (ty < minTy) minTy = ty;
+        if (ty > maxTy) maxTy = ty;
 
         if (parsed.tile) {
             const tile = parsed.tile;
             if (tile.kind === "SPAWN" && spawnTableX === null) {
-                spawnTableX = mapped.tx;
-                spawnTableY = mapped.ty;
+                spawnTableX = tx;
+                spawnTableY = ty;
                 spawnH = tile.h | 0;
             }
 
             if (tile.kind === "GOAL" && goalTableX === null) {
-                goalTableX = mapped.tx;
-                goalTableY = mapped.ty;
+                goalTableX = tx;
+                goalTableY = ty;
                 goalH = tile.h | 0;
             }
         }
 
         parsedCells.push({
-            tx: mapped.tx,
-            ty: mapped.ty,
+            tx,
+            ty,
             tile: parsed.tile,
             walls: parsed.walls,
         });
@@ -370,9 +277,9 @@ export function compileKenneyMapFromTable(
 
     if (!Number.isFinite(minTx)) {
         minTx = 0;
-        maxTx = def.h - 1;
+        maxTx = def.w - 1;
         minTy = 0;
-        maxTy = def.w - 1;
+        maxTy = def.h - 1;
     }
 
     // Decide where table (0,0) lands in tile-space.
@@ -527,11 +434,6 @@ export function compileKenneyMapFromTable(
         });
     }
 
-    if (def.stamps && def.stamps.length > 0) {
-        for (let i = 0; i < def.stamps.length; i++) {
-            compileStamp(def.stamps[i]);
-        }
-    }
 
     function surfacesAtXY(tx: number, ty: number): Surface[] {
         return surfacesByKey.get(`${tx},${ty}`) ?? [];
@@ -598,14 +500,15 @@ export function compileKenneyMapFromTable(
 
     const buildingHeight = 8;
 
-    function addStampWall(
+
+    const addStampWall = (
         tx: number,
         ty: number,
         dir: WallDir,
         spriteId: string,
         zBase: number,
         height: number,
-    ) {
+    ) => {
         if (!spriteId) return;
         const zFrom = zBase;
         const zTo = zBase + height;
@@ -628,25 +531,39 @@ export function compileKenneyMapFromTable(
             apronDyOffset: 0,
             flipX: false,
         });
-    }
+    };
 
-    function compileStamp(stamp: SemanticStamp) {
+    const compileStamp = (stamp: SemanticStamp) => {
         const sx = (stamp.x | 0) + originTx;
         const sy = (stamp.y | 0) + originTy;
         const zBase = stamp.z ?? 0;
         const w = Math.max(1, (stamp.w ?? 1) | 0);
         const h = Math.max(1, (stamp.h ?? 1) | 0);
-
         if (stamp.type === "building") {
             const wallSouthSlot = "BUILDING_WALL_SOUTH";
             const wallEastSlot = "BUILDING_WALL_EAST";
+            const wallNorthSlot = "BUILDING_WALL_NORTH";
+            const wallWestSlot = "BUILDING_WALL_WEST";
+
+            // South edge (bottom row)
             for (let i = 0; i < w; i++) {
                 const spriteId = resolveSemanticSprite(skinIdToUse, wallSouthSlot, i);
                 addStampWall(sx + i, sy + h - 1, "S", spriteId, zBase, buildingHeight);
             }
-            for (let j = 0; j < h - 1; j++) {
+            // North edge (top row)
+            for (let i = 0; i < w; i++) {
+                const spriteId = resolveSemanticSprite(skinIdToUse, wallNorthSlot, i);
+                addStampWall(sx + i, sy, "N", spriteId, zBase, buildingHeight);
+            }
+            // East edge (right column)
+            for (let j = 0; j < h; j++) {
                 const spriteId = resolveSemanticSprite(skinIdToUse, wallEastSlot, j);
                 addStampWall(sx + w - 1, sy + j, "E", spriteId, zBase, buildingHeight);
+            }
+            // West edge (left column)
+            for (let j = 0; j < h; j++) {
+                const spriteId = resolveSemanticSprite(skinIdToUse, wallWestSlot, j);
+                addStampWall(sx, sy + j, "W", spriteId, zBase, buildingHeight);
             }
 
             const roofSlot = `BUILDING_ROOF_${w}x${h}`;
@@ -730,6 +647,11 @@ export function compileKenneyMapFromTable(
                     spriteIdTop,
                 });
             }
+        }
+    };
+    if (def.stamps && def.stamps.length > 0) {
+        for (let i = 0; i < def.stamps.length; i++) {
+            compileStamp(def.stamps[i]);
         }
     }
 
@@ -837,7 +759,7 @@ export function compileKenneyMapFromTable(
                 zTo,
                 zLogical,
                 edgeDir: canonical.dir,
-                apronKind: canonical.dir,
+                apronKind: canonical.dir === "E" || canonical.dir === "W" ? "E" : "S",
                 apronDyOffset: 0,
                 flipX: false,
                 renderTopKind,
@@ -949,7 +871,7 @@ export function compileKenneyMapFromTable(
     }
 
     // Convert authored spawn table coords -> tile coords.
-    // Fallback: mapped bounds center.
+    // Fallback: bounds center.
     const fallbackSpawnTx = Math.floor(boundsCenterTx);
     const fallbackSpawnTy = Math.floor(boundsCenterTy);
     const spawnTx = (spawnTableX ?? fallbackSpawnTx) + originTx;
@@ -963,8 +885,8 @@ export function compileKenneyMapFromTable(
     const triggerDefs: TriggerDef[] = [];
     for (const c of def.cells) {
         if (!c.triggerId || !c.triggerType) continue;
-        const fx = (def.w - 1) - (c.x | 0);
-        const fy = (def.h - 1) - (c.y | 0);
+        const fx = c.x | 0;
+        const fy = c.y | 0;
         triggerDefs.push({
             id: c.triggerId,
             type: c.triggerType,

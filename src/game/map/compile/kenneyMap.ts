@@ -22,7 +22,6 @@ import { gridToWorld, worldToGrid } from "../../coords/grid";
 import { worldToTile, tileToWorldCenter } from "../../coords/tile";
 import { generateFloorMap } from "../generators/proceduralMap";
 import { loadTableMapDefFromJson } from "../formats/json/jsonMapLoader";
-import excelSanctuary01Json from "../authored/maps/jsonMaps/excel_sanctuary_01.json";
 import type { MapSkinId } from "../../content/mapSkins";
 
 export type {
@@ -63,24 +62,16 @@ export type SurfaceHit = {
     isRamp: boolean;
 };
 
-/**
- * A simple deterministic "Arcane Sanctuary" layout in tile-space.
- *
- * Coordinate system:
- * - (tx, ty) are the same tiles your renderer already draws.
- *
- * Layout idea:
- * - Big base diamond platform at h=0
- * - Smaller raised diamond platform at h=1 (offset)
- * - A stair "bridge" strip that connects them
- */
-const EXCEL_SANCTUARY_01 = loadTableMapDefFromJson(
-    excelSanctuary01Json,
-    "authored/maps/jsonMaps/excel_sanctuary_01.json"
-);
 
-let _compiled: CompiledKenneyMap = compileKenneyMapFromTable(EXCEL_SANCTUARY_01);
-
+// NOTE: We intentionally do NOT import any authored maps here.
+// The active map is set by higher-level game flow (menu/proceduralMapBridge).
+let _compiled: CompiledKenneyMap = compileKenneyMapFromTable({
+    id: "EMPTY_BOOT",
+    w: 1,
+    h: 1,
+    centerOnZero: true,
+    cells: [{ x: 0, y: 0, type: "spawn", z: 0 }], // spawn so systems don’t explode if queried before activation
+});
 /**
  * Set the active map dynamically (e.g., for procedural generation).
  */
@@ -136,7 +127,7 @@ export function getTileAtGrid(gx: number, gy: number, tileWorld: number): IsoTil
 
 /**
  * Map-authored spawn point (tile-space -> world-space center).
- * Uses the first P<number> token found in maps.ts.
+ * Uses the first spawn tile found in the compiled map.
  */
 export function getSpawnWorld(tileWorld: number): {
     x: number;
@@ -1185,3 +1176,4 @@ export function getWalkOutlineLocalPx(tx: number, ty: number): WalkOutlineLocal 
     const pts = base.map((p) => ({ x: p.x + ox, y: p.y + oy }));
     return { blocked: false, shape, pts };
 }
+

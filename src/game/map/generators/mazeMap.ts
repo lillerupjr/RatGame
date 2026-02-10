@@ -390,8 +390,8 @@ export function generateMazeMapDef(config: MazeMapConfig): { mapDef: TableMapDef
         for (let x = 0; x < mapWidth; x++) {
             const t = grid[y][x];
             if (t === "VOID") continue;
-            const token = t === "SPAWN" ? "P0" : t === "GOAL" ? "G0" : "F0";
-            cells.push({ x, y, t: token });
+            const type = t === "SPAWN" ? "spawn" : t === "GOAL" ? "goal" : "floor";
+            cells.push({ x, y, type, z: 0 });
         }
     }
 

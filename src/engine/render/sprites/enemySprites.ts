@@ -39,11 +39,11 @@ const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
         runAnim: "walk-4-frames",
     },
     [ENEMY_TYPE.BRUISER]: {
-        skin: "bruiser",
+        skin: "rat4",
         scale: 2,
         anchorX: 0.5,
         anchorY: 0.65,
-        runAnim: "walk-6-frames",
+        runAnim: "walk-4-frames",
 
     },
     [ENEMY_TYPE.BOSS]: {

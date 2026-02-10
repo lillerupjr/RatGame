@@ -58,16 +58,7 @@ import { preloadBackgrounds } from "./render/background";
 import { getProjectileSpriteByKind, preloadProjectileSprites } from "../engine/render/sprites/projectileSprites";
 import { setMusicStage, stopMusic } from "../engine/audio/music";
 import type { TableMapDef } from "./map/formats/table/tableMapTypes";
-import { loadTableMapDefFromJson } from "./map/formats/json/jsonMapLoader";
-import excelSanctuary01Json from "./map/authored/maps/jsonMaps/excel_sanctuary_01.json";
-import wallTestJson from "./map/authored/maps/jsonMaps/wall_test.json";
-import excelRenderStress01Json from "./map/authored/maps/jsonMaps/excel_render_stress_01.json";
-import simpleTestJson from "./map/authored/maps/jsonMaps/simple_test.json";
-import floorTestJson from "./map/authored/maps/jsonMaps/floor_test.json";
-import jsonMinimalMap from "./map/authored/maps/jsonMaps/minimal.json";
-import vendor01Json from "./map/authored/maps/jsonMaps/vendor_01.json";
-import heal01Json from "./map/authored/maps/jsonMaps/heal_01.json";
-import semanticBuildingMap from "./map/authored/maps/jsonMaps/semantic_building_3x2.json";
+import { AUTHORED_MAP_DEFS, getAuthoredMapDefById } from "./map/authored/authoredMapRegistry";
 import {
   activateMapDef,
   generateAndActivateFloorMap,
@@ -165,20 +156,11 @@ export function createGame(args: CreateGameArgs) {
 
   const input: InputState = createInputState();
 
-  const staticMaps: TableMapDef[] = [
-    loadTableMapDefFromJson(excelSanctuary01Json, "authored/maps/jsonMaps/excel_sanctuary_01.json"),
-    loadTableMapDefFromJson(wallTestJson, "authored/maps/jsonMaps/wall_test.json"),
-    loadTableMapDefFromJson(excelRenderStress01Json, "authored/maps/jsonMaps/excel_render_stress_01.json"),
-    loadTableMapDefFromJson(simpleTestJson, "authored/maps/jsonMaps/simple_test.json"),
-    loadTableMapDefFromJson(floorTestJson, "authored/maps/jsonMaps/floor_test.json"),
-    loadTableMapDefFromJson(jsonMinimalMap, "authored/maps/jsonMaps/minimal.json"),
-    loadTableMapDefFromJson(vendor01Json, "authored/maps/jsonMaps/vendor_01.json"),
-    loadTableMapDefFromJson(heal01Json, "authored/maps/jsonMaps/heal_01.json"),
-    loadTableMapDefFromJson(semanticBuildingMap, "authored/maps/jsonMaps/semantic_building_3x2.json"),
-  ];
+  const staticMaps: TableMapDef[] = AUTHORED_MAP_DEFS;
 
   function getStaticMapById(id: string | undefined): TableMapDef | undefined {
-    return staticMaps.find((def) => def.id === id);
+    if (!id) return undefined;
+    return getAuthoredMapDefById(id);
   }
 
   function getDefaultStaticMap(): TableMapDef | undefined {

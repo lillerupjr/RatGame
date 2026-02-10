@@ -11,7 +11,7 @@
 import { Vector3D, v3, v3Add } from "../../math/Vector3D";
 import { BoundingBox3D, bb3, bb3Intersects, bb3ContainsPoint } from "../../math/BoundingBox3D";
 import type { IsoTile, IsoTileKind } from "./kenneyMapLoader";
-import type { TableMapDef } from "../formats/table/tableMapTypes";
+import type { TableMapCell, TableMapDef } from "../formats/table/tableMapTypes";
 import { worldToTile as worldToTileHelper, tileToWorldCenter } from "../../coords/tile";
 
 // ─────────────────────────────────────────────────────────────
@@ -662,18 +662,31 @@ export function createLayeredMapFromTable(
     
     // Parse the map definition using the cells array (sparse format)
     const { cells, w, h } = mapDef;
-    
+
+    const tileFromCell = (cell: TableMapCell): IsoTile => {
+        const type = (cell.type ?? "floor").toLowerCase();
+        const heightLevel = cell.z ?? 0;
+        switch (type) {
+            case "spawn":
+                return { kind: "SPAWN", h: heightLevel };
+            case "goal":
+                return { kind: "GOAL", h: heightLevel };
+            case "stairs":
+                return { kind: "STAIRS", h: heightLevel, dir: cell.dir as any };
+            case "void":
+                return { kind: "VOID", h: 0 };
+            case "wall":
+                return { kind: "VOID", h: heightLevel };
+            case "floor":
+            default:
+                return { kind: "FLOOR", h: heightLevel };
+        }
+    };
+
     for (const cell of cells) {
-        const tileToken = cell.t;
-        if (!tileToken || tileToken === "_") continue;
-        
-        // Parse height from token (e.g., "F2" = Floor at h=2)
-        const hMatch = tileToken.match(/(\d+)$/);
-        const heightLevel = hMatch ? parseInt(hMatch[1], 10) : 0;
-        
-        // Create basic tile from token
-        const tile: IsoTile = parseTileToken(tileToken, heightLevel);
-        
+        const tile = tileFromCell(cell);
+        const heightLevel = cell.z ?? 0;
+
         if (!tilesByLevel.has(heightLevel)) {
             tilesByLevel.set(heightLevel, []);
         }
@@ -728,26 +741,8 @@ function createLayer(
 }
 
 /**
- * Parse a tile token into an IsoTile.
+ * Structured tiles only (legacy token pipeline removed).
  */
-function parseTileToken(token: string, defaultH: number): IsoTile {
-    // Extract the base kind from the token
-    const kindChar = token.charAt(0);
-    
-    let kind: IsoTileKind = "FLOOR";
-    
-    switch (kindChar) {
-        case "F": kind = "FLOOR"; break;
-        case "S": kind = "STAIRS"; break;
-        case "P": kind = "SPAWN"; break;
-        case "G": kind = "GOAL"; break;
-        case "_": kind = "VOID"; break;
-        default: kind = "FLOOR";
-    }
-    
-    return { kind, h: defaultH };
-}
-
 // ─────────────────────────────────────────────────────────────
 // Global Active Map (for backward compatibility)
 // ─────────────────────────────────────────────────────────────

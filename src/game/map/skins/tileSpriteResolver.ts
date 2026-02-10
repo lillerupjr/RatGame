@@ -18,7 +18,7 @@ function normalizeId(id?: string): string | undefined {
 }
 
 function stripPng(id: string): string {
-    return id.toLowerCase().endsWith("water1.png") ? id.slice(0, -4) : id;
+    return id.toLowerCase().endsWith(".png") ? id.slice(0, -4) : id;
 }
 
 function appendSuffix(base: string, suffix: string): string {

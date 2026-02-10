@@ -1,13 +1,6 @@
 import { WEAPONS, type WeaponId } from "../game/content/weapons";
 import type { TableMapDef } from "../game/map/formats/table/tableMapTypes";
-import { loadTableMapDefFromJson } from "../game/map/formats/json/jsonMapLoader";
-import excelSanctuary01Json from "../game/map/authored/maps/jsonMaps/excel_sanctuary_01.json";
-import wallTestJson from "../game/map/authored/maps/jsonMaps/wall_test.json";
-import excelRenderStress01Json from "../game/map/authored/maps/jsonMaps/excel_render_stress_01.json";
-import simpleTestJson from "../game/map/authored/maps/jsonMaps/simple_test.json";
-import floorTestJson from "../game/map/authored/maps/jsonMaps/floor_test.json";
-import jsonMinimalMap from "../game/map/authored/maps/jsonMaps/minimal.json";
-import semanticBuildingMap from "../game/map/authored/maps/jsonMaps/semantic_building_3x2.json";
+import { AUTHORED_MAP_DEFS } from "../game/map/authored/authoredMapRegistry";
 import type { DomRefs } from "./domRefs";
 
 type GameApi = {
@@ -52,15 +45,7 @@ function toTitleCase(value: string): string {
         .join(" ");
 }
 
-const staticMapDefs: TableMapDef[] = [
-    loadTableMapDefFromJson(excelSanctuary01Json, "jsonMaps/excel_sanctuary_01.json"),
-    loadTableMapDefFromJson(wallTestJson, "jsonMaps/wall_test.json"),
-    loadTableMapDefFromJson(excelRenderStress01Json, "jsonMaps/excel_render_stress_01.json"),
-    loadTableMapDefFromJson(simpleTestJson, "jsonMaps/simple_test.json"),
-    loadTableMapDefFromJson(floorTestJson, "jsonMaps/floor_test.json"),
-    loadTableMapDefFromJson(jsonMinimalMap, "jsonMaps/minimal.json"),
-    loadTableMapDefFromJson(semanticBuildingMap, "jsonMaps/semantic_building_3x2.json"),
-];
+const staticMapDefs: TableMapDef[] = AUTHORED_MAP_DEFS;
 
 const staticMapChoices: MapChoice[] = staticMapDefs.map((def) => ({
     id: def.id,

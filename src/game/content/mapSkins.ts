@@ -41,7 +41,7 @@ export const DEFAULT_MAP_SKIN: ResolvedMapSkin = {
     apron: "tiles/floor/curtain/stone",
     wall: "tiles/walls/stone",
     stair: "tiles/stairs/top/stone",
-    stairApron: "",
+    stairApron: "tiles/floor/curtain/stone",
 
     background: "tiles/backgrounds/water3",
 };

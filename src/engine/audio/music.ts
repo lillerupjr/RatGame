@@ -30,7 +30,7 @@ let musicMasterVolume = 0.6;
  * Per-track base mix volume (before master volume).
  * Useful if some tracks are louder than others.
  */
-const BASE_TRACK_VOLUME = 0.75;
+const BASE_TRACK_VOLUME = 0;
 
 function applyVolume() {
     if (!cur) return;

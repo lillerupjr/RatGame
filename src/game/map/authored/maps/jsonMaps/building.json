@@ -1,0 +1,30 @@
+{
+  "id": "Building",
+  "width": 6,
+  "height": 6,
+  "centerOnZero": false,
+
+  "fields": [
+    {
+      "x": 0,
+      "y": 3,
+      "w": 3,
+      "h": 6,
+      "type": "floor"
+    }
+  ],
+
+  "cells": [
+    { "x": 0, "y": 5, "type": "spawn" }
+  ],
+
+  "stamps": [
+    {
+      "x": 0,
+      "y": 0,
+      "type": "building",
+      "w": 3,
+      "h": 2
+    }
+  ]
+}

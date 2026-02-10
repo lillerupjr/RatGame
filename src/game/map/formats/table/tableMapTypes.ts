@@ -1,27 +1,24 @@
 // src/game/map/tableMapTypes.ts
 import type { MapSkinBundle, MapSkinId } from "../../../content/mapSkins";
 
-export type TableToken = string;
-
 export type TableMapCell = {
-    x: number;  // column index in the Excel selection
-    y: number;  // row index in the Excel selection
-    // Legacy token format (e.g., "F0|W2E"); kept for backward compatibility.
-    t?: TableToken;
-    // Structured cell format (preferred).
+    x: number;  // column index in the Excel selection (tile +x / east)
+    y: number;  // row index in the Excel selection (tile +y / south)
     z?: number;
-    type?: string;
+    type?: "floor" | "stairs" | "spawn" | "goal" | "wall" | "void" | "road" | "sidewalk";
     sprite?: string;
     blocksMove?: boolean;
     blocksSight?: boolean;
-    meta?: Record<string, unknown>;
+    dir?: "N" | "E" | "S" | "W";
+    height?: number;
+    zone?: string;
     tags?: string[];
     triggerId?: string;
     triggerType?: string;
     radius?: number;
 };
 
-export type SemanticStampType = "building" | "road" | "sidewalk" | "park" | "sea";
+export type SemanticStampType = "building" | "road" | "sidewalk" | "park" | "sea" | "boss_room" | "fence";
 
 export type SemanticStamp = {
     x: number;
@@ -56,15 +53,12 @@ export type ApronBaseMode = "PLATEAU" | "ISLANDS";
 export type TableMapDef = {
     id: string;
 
-    // Size of the selected region in Excel grid units (for centering/origin).
+    // Size of the selected region: w = columns (+x), h = rows (+y).
     w: number;
     h: number;
 
     // Optional: map skin ID from MAP_SKINS registry
     mapSkinId?: MapSkinId;
-    // Optional: default floor skin (legacy identifier)
-    defaultFloorSkin?: string;
-    defaultSpawnSkin?: string;
     // Optional: map-level sprite defaults for the tile skin pipeline
     mapSkinDefaults?: MapSkinBundle;
     // Optional: place the selection so its center ends up at tile (0,0)
