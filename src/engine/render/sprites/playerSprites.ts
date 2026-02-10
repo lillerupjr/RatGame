@@ -28,7 +28,7 @@ const PLAYER_SOURCE: SpriteLoaderSource = { packRoot: "/player", modules: PLAYER
 const PLAYER_SKIN = "jamal"; // TODO: make this dynamic
 const PLAYER_WALK_ANIM = "walk";
 const PLAYER_ANCHOR_X = 0.5;
-const PLAYER_ANCHOR_Y = 0.65;
+const PLAYER_ANCHOR_Y = 0.75;
 const PLAYER_SKIN_SCALE: Record<string, number> = {
     jack: 1,
     hobo: 1.5,

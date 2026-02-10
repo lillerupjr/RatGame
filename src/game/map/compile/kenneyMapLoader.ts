@@ -755,10 +755,14 @@ export function compileKenneyMapFromTable(
                     }
                 }
 
+                // Skip underlay creation for stairs; their tread is rendered as a surface.
+                // Only create underlays for floors and other surfaces.
+                if (isStair) continue;
+
                 addUnderlay({
                     id: `apron_${surface.tx}_${surface.ty}_${surfaceZ}_${dir}`,
                     cls: "UNDERLAY",
-                    kind: isStair ? "STAIR_APRON" : "FLOOR_APRON",
+                    kind: "FLOOR_APRON",
                     tx: surface.tx,
                     ty: surface.ty,
                     zFrom: apronBaseZ,
@@ -766,20 +770,67 @@ export function compileKenneyMapFromTable(
                     zLogical: surface.zLogical,
                     edgeDir: dir,
                     apronKind: dir === "E" || dir === "S" ? dir : undefined,
-                    apronDyOffset: isStair ? 0 : -100,
+                    apronDyOffset: -100,
                     flipX: false,
                     renderTopKind: surface.renderTopKind,
                     renderDir: surface.renderDir,
                     renderAnchorY: surface.renderAnchorY,
                     renderDyOffset: surface.renderDyOffset,
                     spriteId: resolveTileSpriteId({
-                        slot: isStair ? "stairApron" : "apron",
-                        dir: isStair ? dir : (dir === "E" || dir === "S" ? dir : "S"),
+                        slot: "apron",
+                        dir: dir === "E" || dir === "S" ? dir : "S",
                         mapSkin: resolvedMapSkin,
                         mapDefaults: mapSkinDefaults,
                     }),
                 });
             }
+        }
+    }
+
+    // Create stair apron pieces for vertical stair faces (renders after entities as occluders/deferred)
+    for (const list of surfacesByKey.values()) {
+        for (let i = 0; i < list.length; i++) {
+            const surface = list[i];
+            if (surface.tile.kind !== "STAIRS") continue;
+
+            const surfaceZ = surface.zBase;
+            const stairDir = surface.tile.dir ?? "N";
+
+            // Stair aprons face in the downhill direction
+            const stairDownhillDir = oppositeDir(stairDir);
+
+            const nTx = surface.tx + dirToDelta(stairDownhillDir).dx;
+            const nTy = surface.ty + dirToDelta(stairDownhillDir).dy;
+            const neighborZ = maxSurfaceZAt(nTx, nTy);
+
+            // Only create apron if there's a height difference (vertical face exists)
+            if (neighborZ !== null && neighborZ === surfaceZ) continue;
+
+            // Create STAIR_APRON as deferred/occluder piece (renders after entities)
+            addDeferredApron(surface.tx, surface.ty, {
+                id: `stair_apron_${surface.tx}_${surface.ty}_${surfaceZ}_${stairDownhillDir}`,
+                cls: "UNDERLAY",
+                kind: "STAIR_APRON",
+                tx: surface.tx,
+                ty: surface.ty,
+                zFrom: apronBaseZ,
+                zTo: surfaceZ,
+                zLogical: surface.zLogical,
+                edgeDir: stairDownhillDir,
+                apronKind: stairDownhillDir === "E" || stairDownhillDir === "S" ? stairDownhillDir : undefined,
+                apronDyOffset: 0,
+                flipX: false,
+                renderTopKind: "STAIR",
+                renderDir: surface.renderDir,
+                renderAnchorY: surface.renderAnchorY,
+                renderDyOffset: surface.renderDyOffset,
+                spriteId: resolveTileSpriteId({
+                    slot: "stairApron",
+                    dir: stairDownhillDir,
+                    mapSkin: resolvedMapSkin,
+                    mapDefaults: mapSkinDefaults,
+                }),
+            });
         }
     }
 

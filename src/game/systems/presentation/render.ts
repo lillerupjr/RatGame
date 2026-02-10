@@ -58,6 +58,38 @@ import {
   type DebugOverlayContext,
 } from "../../../engine/render/debug/renderDebug";
 
+// ============================================
+// RenderKey & KindOrder (Isometric Painter Model)
+// ============================================
+
+/** Semantic layer ordering (used as tie-breaker in slice ordering). */
+enum KindOrder {
+  UNDERLAY = 0,
+  FLOOR = 1,
+  ENTITY = 2,
+  VFX = 3,
+  OCCLUDER = 4,
+  OVERLAY = 5,
+}
+
+/** Canonical render key for deterministic ordering. */
+interface RenderKey {
+  slice: number;      // tx + ty (primary: slice ordering, NW → SE)
+  within: number;     // tx (secondary: within-slice ordering)
+  baseZ: number;      // surface height (tertiary: occlusion)
+  kindOrder: KindOrder; // semantic layer (quaternary: kind bias)
+  stableId: number;   // deterministic tie-breaker (quinary)
+}
+
+/** Compare two RenderKeys lexicographically. */
+function compareRenderKeys(a: RenderKey, b: RenderKey): number {
+  if (a.slice !== b.slice) return a.slice - b.slice;
+  if (a.within !== b.within) return a.within - b.within;
+  if (a.baseZ !== b.baseZ) return a.baseZ - b.baseZ;
+  if (a.kindOrder !== b.kindOrder) return a.kindOrder - b.kindOrder;
+  return a.stableId - b.stableId;
+}
+
 /** Render tiles, entities, overlays, and debug layers. */
 export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
   const ww = canvas.clientWidth;
@@ -140,27 +172,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   const tileHAtWorld = (x: number, y: number) => heightAtWorld(x, y, KENNEY_TILE_WORLD);
 
-  const DEPTH_EPS_X = 1e-3;
-  const DEPTH_EPS_Z = 1e-4;
-  const DEPTH_EPS_ID = 1e-6;
-
-  const renderDepthFor = (x: number, y: number, zVisual: number, stableId: number) => {
-    const sp = worldToScreen(x, y);
-    return sp.y + sp.x * DEPTH_EPS_X + zVisual * DEPTH_EPS_Z + stableId * DEPTH_EPS_ID;
-  };
-
-  const apronDrawsByLayer = new Map<number, Array<{ draw: RenderPieceDraw; piece: RenderPiece }>>();
-
-  const pushApronDraw = (layer: number, draw: RenderPieceDraw, piece: RenderPiece) => {
-    let arr = apronDrawsByLayer.get(layer);
-    if (!arr) {
-      arr = [];
-      apronDrawsByLayer.set(layer, arr);
-    }
-    arr.push({ draw, piece });
-  };
-
-
   const snapToNearestWalkableGround = (x: number, y: number) => {
     // If we're already on walkable top-face, keep it.
     const i0 = walkInfo(x, y, T);
@@ -233,11 +244,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     dy: number;
     dw: number;
     dh: number;
-    depth: number;
     zVisual?: number;
 
     flipX?: boolean;
-    sortKey?: number;
   };
 
 
@@ -265,7 +274,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       }
     };
 
-  const buildApronDraws = (c: RenderPiece, stableId: number): RenderPieceDraw[] => {
+  const buildApronDraws = (c: RenderPiece): RenderPieceDraw[] => {
     const dir4 = c.renderDir ?? "N";
     const apronRec = c.spriteId ? getTileSpriteById(c.spriteId) : null;
     const apronFlipX = !!c.flipX;
@@ -323,7 +332,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           dy: ayBase - zVisual * ELEV_PX,
           dw: aw,
           dh: ah,
-          depth: renderDepthFor(apronWx, apronWy, zVisual, stableId + (zEnd - z)),
           zVisual,
           flipX: apronFlipX,
         });
@@ -357,12 +365,11 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       return {
         img: apronRec.img,
         dx: ax,
-      dy: ay,
-      dw: aw,
-      dh: ah,
-        depth: renderDepthFor(wx, wy, h, stableId),
-      flipX: apronFlipX,
-    };
+        dy: ay,
+        dw: aw,
+        dh: ah,
+        flipX: apronFlipX,
+      };
   };
 
   const debugContext: DebugOverlayContext = {
@@ -383,17 +390,20 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     toScreenAtZ,
   };
 
-  const SHOW_WALK_MASK = false;
-  const SHOW_RAMPS = false;
+  const SHOW_WALK_MASK = true;
+  const SHOW_RAMPS = true;
   const SHOW_APRON_OWNERSHIP = false;
   const SHOW_OCCLUDER_DEBUG = false;
   const SHOW_PROJECTILE_FACES = false;
   const SHOW_TRIGGER_ZONES = false;
 
+  // Enemy Z buffer (optional visual override)
+  const ez = w.ezVisual;
+
   // ----------------------------
-  // Tile range / diagonals
+  // Tile range / diagonals (zoom-aware)
   // ----------------------------
-  const radius = Math.max(12, Math.ceil(Math.max(ww, hh) / (T * 0.9)));
+  const radius = Math.max(12, Math.ceil(Math.max(ww / camZoom, hh / camZoom) / (T * 0.9)));
   const cx = Math.floor(px / T);
   const cy = Math.floor(py / T);
 
@@ -407,131 +417,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   const viewRect = viewRectFromWorldCenter(px, py, T, radius);
   const activeH = w.activeFloorH ?? 0;
-
-
-  // ----------------------------
-  // Buckets: zones/items by layer
-  // ----------------------------
-  type GroundItem =
-      | { kind: "pickup"; i: number; depth: number }
-      | { kind: "enemy"; i: number; depth: number }
-      | { kind: "projectile"; i: number; depth: number; zLift: number }
-      | { kind: "player"; depth: number };
-
-  type ZoneDraw = { kind: number; x: number; y: number; r: number; layer: number };
-
-  const addItem = (map: Map<number, GroundItem[]>, layer: number, item: GroundItem) => {
-    const list = map.get(layer);
-    if (list) list.push(item);
-    else map.set(layer, [item]);
-  };
-
-  const addZone = (map: Map<number, ZoneDraw[]>, layer: number, z: ZoneDraw) => {
-    const list = map.get(layer);
-    if (list) list.push(z);
-    else map.set(layer, [z]);
-  };
-
-  const zonesByLayer = new Map<number, ZoneDraw[]>();
-  const itemsByLayer = new Map<number, GroundItem[]>();
-
-  // Zones
-  for (let i = 0; i < w.zAlive.length; i++) {
-    if (!w.zAlive[i]) continue;
-
-    const zp0 = getZoneWorld(w, i, KENNEY_TILE_WORLD);
-    const zx0 = zp0.wx;
-    const zy0 = zp0.wy;
-
-    const sn = snapToNearestWalkableGround(zx0, zy0);
-    const zx = sn.x;
-    const zy = sn.y;
-
-    const groundZ = sn.z;
-    addZone(zonesByLayer, floorFromZ(groundZ), {
-      kind: w.zKind[i],
-      x: zx,
-      y: zy,
-      r: w.zR[i],
-      layer: floorFromZ(groundZ),
-    });
-  }
-
-  // Pickups
-  for (let i = 0; i < w.xAlive.length; i++) {
-    if (!w.xAlive[i]) continue;
-    const xp = getPickupWorld(w, i, KENNEY_TILE_WORLD);
-    const zAbs = tileHAtWorld(xp.wx, xp.wy);
-    const h = floorFromZ(zAbs);
-    addItem(itemsByLayer, h, {
-      kind: "pickup",
-      i,
-      depth: renderDepthFor(xp.wx, xp.wy, zAbs, 10000 + i),
-    });
-  }
-
-  // Enemy Z buffer (optional)
-  const ez = w.ezVisual;
-
-  // Projectiles
-  for (let i = 0; i < w.pAlive.length; i++) {
-    if (!w.pAlive[i]) continue;
-    if (w.prHidden?.[i]) continue;
-
-    const pp = getProjectileWorld(w, i, KENNEY_TILE_WORLD);
-    const baseH = tileHAtWorld(pp.wx, pp.wy);
-    const pzAbs = (w.prZVisual?.[i] ?? w.prZ?.[i] ?? baseH) || 0;
-
-    const zLift = (pzAbs - baseH) * ELEV_PX;
-    const depth = renderDepthFor(pp.wx, pp.wy, pzAbs, 20000 + i);
-    const layer = Number.isFinite(w.prZLogical?.[i] as any) ? (w.prZLogical[i] as number) : floorFromZ(pzAbs);
-
-    addItem(itemsByLayer, layer, {
-      kind: "projectile",
-      i,
-      depth,
-      zLift,
-    });
-  }
-
-  // Enemies
-  for (let i = 0; i < w.eAlive.length; i++) {
-    if (!w.eAlive[i]) continue;
-
-    const ew = getEnemyWorld(w, i, KENNEY_TILE_WORLD);
-    const zAbs = ez?.[i] ?? tileHAtWorld(ew.wx, ew.wy);
-    const layer = Number.isFinite(w.ezLogical?.[i] as any) ? (w.ezLogical[i] as number) : floorFromZ(zAbs);
-    addItem(itemsByLayer, layer, {
-      kind: "enemy",
-      i,
-      depth: renderDepthFor(ew.wx, ew.wy, zAbs, 30000 + i),
-    });
-  }
-
-  // Player
-  const pzAbs2 = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
-  const pBaseLayer = Number.isFinite(w.pzLogical as any) ? (w.pzLogical as number) : floorFromZ(pzAbs2);
-
-  addItem(itemsByLayer, pBaseLayer, {
-    kind: "player",
-    depth: renderDepthFor(px, py, pzAbs2, 0),
-  });
-
-  // ----------------------------
-  // Build the layer list (union of all renderable layers)
-  // ----------------------------
-  const layerSet = new Set<number>();
-  if (RENDER_ALL_HEIGHTS) {
-    for (const h of renderLayers()) layerSet.add(h);
-    for (const h of zonesByLayer.keys()) layerSet.add(h);
-    for (const h of itemsByLayer.keys()) layerSet.add(h);
-  } else {
-    layerSet.add(activeH);
-    for (const h of occluderLayers()) layerSet.add(h);
-  }
-
-  const layers = Array.from(layerSet);
-  layers.sort((a, b) => a - b);
 
   // ----------------------------
   // Void green_water.png (draw once per frame)
@@ -569,13 +454,29 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     }
   }
 
+  // ============================================
+  // SLICE-BUCKETED COLLECTION AND DRAWING
+  // ============================================
+  // Drawable descriptor for any render element
+  type SliceDrawable = {
+    key: RenderKey;
+    draw: () => void;  // closure that executes the draw
+  };
+
+  // Map from slice -> array of drawables for that slice
+  const sliceDrawables = new Map<number, SliceDrawable[]>();
+
+  const addToSlice = (slice: number, key: RenderKey, draw: () => void) => {
+    let bucket = sliceDrawables.get(slice);
+    if (!bucket) {
+      bucket = [];
+      sliceDrawables.set(slice, bucket);
+    }
+    bucket.push({ key, draw });
+  };
+
   // ----------------------------
-  // Main render loop: per-layer
-  // ----------------------------
-  // ----------------------------
-  // Prepass: build all apron slice draws and bucket them by the height they occupy.
-  // IMPORTANT: This must happen BEFORE the per-layer loop, otherwise earlier layers
-  // will never see apron slices that get pushed later.
+  // Prepass: build all apron slice draws and bucket them by slice.
   // ----------------------------
   {
     let apronId = 0;
@@ -606,20 +507,30 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           const u = underlays[ui];
           if (!allow.has(`${u.zTo}|${u.renderTopKind}`)) continue;
 
-          const draws = buildApronDraws(u, apronId++);
+          const draws = buildApronDraws(u);
           for (let di = 0; di < draws.length; di++) {
             const d = draws[di];
-            const zv = d.zVisual ?? u.zFrom ?? u.zTo ?? 0;
-            const layerForDraw = Math.max(0, Math.floor(zv));
-            pushApronDraw(layerForDraw, d, u);
+
+            const renderKey: RenderKey = {
+              slice: tx + ty,
+              within: tx,
+              baseZ: u.zFrom ?? u.zTo ?? 0,
+              kindOrder: KindOrder.UNDERLAY,
+              stableId: apronId - 1 + (di * 0.001),
+            };
+
+            const drawClosure = () => {
+              drawRenderPiece(d);
+              drawApronOwnershipOverlay(debugContext, SHOW_APRON_OWNERSHIP, u, d);
+            };
+
+            addToSlice(tx + ty, renderKey, drawClosure);
           }
         }
       }
     }
 
     // Deferred aprons (stairs ownership transfers etc.)
-    // These are keyed off stair surfaces in your current code, but we can safely
-    // query them per tile and bucket them by their zVisual.
     for (let s = minSum; s <= maxSum; s++) {
       const ty0 = Math.max(minTy, s - maxTx);
       const ty1 = Math.min(maxTy, s - minTx);
@@ -637,14 +548,24 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
               ? (piece.sortKeyFromFloor as number)
               : apronId++;
 
-          const draws = buildApronDraws(piece, stableId);
+          const draws = buildApronDraws(piece);
           for (let di = 0; di < draws.length; di++) {
             const d = draws[di];
-            d.sortKey = piece.sortKeyFromFloor;
 
-            const zv = d.zVisual ?? piece.zFrom ?? piece.zTo ?? 0;
-            const layerForDraw = Math.max(0, Math.floor(zv));
-            pushApronDraw(layerForDraw, d, piece);
+            const renderKey: RenderKey = {
+              slice: tx + ty,
+              within: tx,
+              baseZ: piece.zFrom ?? piece.zTo ?? 0,
+              kindOrder: KindOrder.UNDERLAY,
+              stableId: stableId + (di * 0.001),
+            };
+
+            const drawClosure = () => {
+              drawRenderPiece(d);
+              drawApronOwnershipOverlay(debugContext, SHOW_APRON_OWNERSHIP, piece, d);
+            };
+
+            addToSlice(tx + ty, renderKey, drawClosure);
           }
         }
       }
@@ -652,108 +573,122 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   }
 
   // ----------------------------
-  // Main render loop: per-layer
+  // COLLECTION PHASE: All drawable types collected into slices
   // ----------------------------
-  for (let li = 0; li < layers.length; li++) {
 
-    const layer = layers[li];
-    const apronItems = apronDrawsByLayer.get(layer);
-    if (apronItems && apronItems.length > 0) {
-      apronItems.sort((a, b) => {
-        const ak = a.draw.sortKey;
-        const bk = b.draw.sortKey;
-        if (ak !== undefined || bk !== undefined) {
-          if (ak === undefined) return 1;
-          if (bk === undefined) return -1;
-          if (ak !== bk) return ak - bk;
-        }
-        return a.draw.depth - b.draw.depth;
-      });
-      for (let i = 0; i < apronItems.length; i++) {
-        const item = apronItems[i];
-        drawRenderPiece(item.draw);
-        drawApronOwnershipOverlay(debugContext, SHOW_APRON_OWNERSHIP, item.piece, item.draw);
-      }
-    }
-    // 1) TOPS (surfaces)
-    if (!RENDER_ALL_HEIGHTS && layer !== activeH) {
-      // Only draw top surfaces once when filtering to the active floor.
-    } else {
-      let apronId = 0;
-      for (let s = minSum; s <= maxSum; s++) {
-        const ty0 = Math.max(minTy, s - maxTx);
-        const ty1 = Math.min(maxTy, s - minTx);
+  // Collect TOPS (surfaces) into slices
+  // ----------------------------
+  {
+    for (let s = minSum; s <= maxSum; s++) {
+      const ty0 = Math.max(minTy, s - maxTx);
+      const ty1 = Math.min(maxTy, s - minTx);
 
-        for (let ty = ty1; ty >= ty0; ty--) {
-          const tx = s - ty;
+      for (let ty = ty1; ty >= ty0; ty--) {
+        const tx = s - ty;
 
-          const surfaces = surfacesAtXY(tx, ty);
-          if (surfaces.length === 0) continue;
+        const surfaces = surfacesAtXY(tx, ty);
+        if (surfaces.length === 0) continue;
 
+        for (let si = 0; si < surfaces.length; si++) {
+          const surface = surfaces[si];
+          const tdef = surface.tile;
+          const isStairTop = surface.renderTopKind === "STAIR";
 
-          for (let si = 0; si < surfaces.length; si++) {
-            const surface = surfaces[si];
-            const tdef = surface.tile;
-            const isStairTop = surface.renderTopKind === "STAIR";
-
-            if (RENDER_ALL_HEIGHTS && surface.zLogical !== layer) continue;
-
-            // Optional filter to active floor when not rendering
-            // all
-            if (!RENDER_ALL_HEIGHTS) {
-              if (!isStairTop) {
-                if (surface.zLogical !== activeH) continue;
-              } else {
-                const hs = tdef.h ?? 0;
-                if (Math.abs(hs - activeH) > 1) continue;
-              }
+          // Height filtering
+          if (RENDER_ALL_HEIGHTS) {
+            // noop - render all
+          } else {
+            // Filter by activeH
+            if (!isStairTop) {
+              if (surface.zLogical !== activeH) continue;
+            } else {
+              const hs = tdef.h ?? 0;
+              if (Math.abs(hs - activeH) > 1) continue;
             }
-
-
-            const dir4 = surface.renderDir ?? "N";
-
-            const topRec = surface.spriteIdTop ? getTileSpriteById(surface.spriteIdTop) : null;
-            if (!topRec?.ready || !topRec.img || topRec.img.width <= 0 || topRec.img.height <= 0) continue;
-
-            const topScale = isStairTop ? STAIR_TOP_SCALE : FLOOR_TOP_SCALE;
-            const topImg = topRec.img;
-            const topW = topImg.width * topScale;
-            const topH = topImg.height * topScale;
-
-            const wx = (tx + 0.5) * T;
-            const wy = (ty + 0.5) * T;
-
-            const p = worldToScreen(wx, wy);
-            const dx = p.x + camX - topW * 0.5;
-
-            const anchorY = surface.renderAnchorY ?? ANCHOR_Y;
-
-            let dy = p.y + camY - topH * anchorY;
-
-            const h = surface.zBase;
-            dy -= h * ELEV_PX;
-
-            // Stair render-height tweak (screen-space)
-            if (isStairTop) dy += STAIR_TOP_DY;
-
-            ctx.drawImage(topImg, dx, dy, topW, topH);
-
           }
+
+          const topRec = surface.spriteIdTop ? getTileSpriteById(surface.spriteIdTop) : null;
+          if (!topRec?.ready || !topRec.img || topRec.img.width <= 0 || topRec.img.height <= 0) continue;
+
+          const topScale = isStairTop ? STAIR_TOP_SCALE : FLOOR_TOP_SCALE;
+          const topImg = topRec.img;
+          const topW = topImg.width * topScale;
+          const topH = topImg.height * topScale;
+
+          const wx = (tx + 0.5) * T;
+          const wy = (ty + 0.5) * T;
+
+          const p = worldToScreen(wx, wy);
+          const dx = p.x + camX - topW * 0.5;
+
+          const anchorY = surface.renderAnchorY ?? ANCHOR_Y;
+          let dy = p.y + camY - topH * anchorY;
+
+          const h = surface.zBase;
+          dy -= h * ELEV_PX;
+
+          // Stair render-height tweak (screen-space)
+          if (isStairTop) dy += STAIR_TOP_DY;
+
+          // Deterministic stableId based on tile and surface properties
+          const topStableId = tx * 73856093 ^ ty * 19349663 ^ (surface.zBase * 100 | 0) * 83492791;
+
+          const renderKey: RenderKey = {
+            slice: tx + ty,
+            within: tx,
+            baseZ: surface.zBase,
+            kindOrder: KindOrder.FLOOR,
+            stableId: topStableId,
+          };
+
+          const drawClosure = () => {
+            ctx.drawImage(topImg, dx, dy, topW, topH);
+          };
+
+          addToSlice(tx + ty, renderKey, drawClosure);
         }
       }
     }
+  }
 
-    // 2) Zones (same as your version)
-    const zoneLayer = zonesByLayer.get(layer);
-    if (zoneLayer) {
-      for (let zi = 0; zi < zoneLayer.length; zi++) {
-        const z = zoneLayer[zi];
-        const p = toScreen(z.x, z.y);
+  // ----------------------------
+  // Collect ZONES into slices
+  // ----------------------------
+  {
+    for (let i = 0; i < w.zAlive.length; i++) {
+      if (!w.zAlive[i]) continue;
 
-        const rx = z.r * ISO_X;
-        const ry = z.r * ISO_Y;
+      const zp0 = getZoneWorld(w, i, KENNEY_TILE_WORLD);
+      const zx0 = zp0.wx;
+      const zy0 = zp0.wy;
 
-        if (z.kind === ZONE_KIND.AURA) {
+      const sn = snapToNearestWalkableGround(zx0, zy0);
+      const zx = sn.x;
+      const zy = sn.y;
+      const groundZ = sn.z;
+
+      // Determine zone's anchor tile
+      const ztx = Math.floor(zx / T);
+      const zty = Math.floor(zy / T);
+      const zSlice = ztx + zty;
+
+      const renderKey: RenderKey = {
+        slice: zSlice,
+        within: ztx,
+        baseZ: groundZ,
+        kindOrder: KindOrder.ENTITY,
+        stableId: 100000 + i,
+      };
+
+      const kind = w.zKind[i];
+      const r = w.zR[i];
+
+      const drawClosure = () => {
+        const p = toScreen(zx, zy);
+        const rx = r * ISO_X;
+        const ry = r * ISO_Y;
+
+        if (kind === ZONE_KIND.AURA) {
           ctx.globalAlpha = 0.16;
           ctx.fillStyle = "#7bdcff";
           ctx.beginPath();
@@ -768,7 +703,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           ctx.stroke();
 
           ctx.globalAlpha = 1;
-        } else if (z.kind === ZONE_KIND.EXPLOSION) {
+        } else if (kind === ZONE_KIND.EXPLOSION) {
           ctx.globalAlpha = 0.22;
           ctx.fillStyle = "#ff7a18";
           ctx.beginPath();
@@ -784,35 +719,36 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
           ctx.globalAlpha = 1;
         }
-      }
+      };
+
+      addToSlice(zSlice, renderKey, drawClosure);
     }
+  }
 
-    // 3) Entities on this layer
-    const grounded = itemsByLayer.get(layer);
-    if (grounded && grounded.length > 0) {
-      const pickups: Array<{ kind: "pickup"; i: number; depth: number }> = [];
-      const enemies: Array<{ kind: "enemy"; i: number; depth: number }> = [];
-      const projectiles: Array<{ kind: "projectile"; i: number; depth: number; zLift: number }> = [];
-      let hasPlayer = false;
+  // ----------------------------
+  // Collect PICKUPS into slices
+  // ----------------------------
+  {
+    for (let i = 0; i < w.xAlive.length; i++) {
+      if (!w.xAlive[i]) continue;
 
-      for (const it of grounded) {
-        if (it.kind === "pickup") pickups.push(it);
-        else if (it.kind === "enemy") enemies.push(it);
-        else if (it.kind === "projectile") projectiles.push(it);
-        else if (it.kind === "player") hasPlayer = true;
-      }
+      const xp = getPickupWorld(w, i, KENNEY_TILE_WORLD);
+      const xtx = Math.floor(xp.wx / T);
+      const xty = Math.floor(xp.wy / T);
+      const zAbs = tileHAtWorld(xp.wx, xp.wy);
 
-      pickups.sort((a, b) => a.depth - b.depth);
-      enemies.sort((a, b) => a.depth - b.depth);
-      projectiles.sort((a, b) => a.depth - b.depth);
+      const renderKey: RenderKey = {
+        slice: xtx + xty,
+        within: xtx,
+        baseZ: zAbs,
+        kindOrder: KindOrder.ENTITY,
+        stableId: 110000 + i,
+      };
 
-      // Pickups
-      for (const it of pickups) {
-        const i = it.i;
-        const xp = getPickupWorld(w, i, KENNEY_TILE_WORLD);
-        const p = toScreen(xp.wx, xp.wy);
-        const kind = w.xKind?.[i] ?? 1; // 1=XP, 2=CHEST
+      const kind = w.xKind?.[i] ?? 1;
+      const p = toScreen(xp.wx, xp.wy);
 
+      const drawClosure = () => {
         if (kind === 1) {
           ctx.globalAlpha = 1;
           ctx.fillStyle = "#7df";
@@ -835,20 +771,41 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           ctx.lineTo(p.x + 10, p.y);
           ctx.stroke();
         }
-      }
+      };
 
-      // Enemies
-      for (const it of enemies) {
-        const i = it.i;
-        const ew = getEnemyWorld(w, i, KENNEY_TILE_WORLD);
-        const p = toScreen(ew.wx, ew.wy);
+      addToSlice(xtx + xty, renderKey, drawClosure);
+    }
+  }
 
-        const def = registry.enemy(w.eType[i] as any);
-        let baseColor: string = (def as any).color ?? "#f66";
+  // ----------------------------
+  // Collect ENEMIES into slices
+  // ----------------------------
+  {
+    for (let i = 0; i < w.eAlive.length; i++) {
+      if (!w.eAlive[i]) continue;
 
-        const isBoss = w.eType[i] === ENEMY_TYPE.BOSS;
-        if (isBoss) baseColor = getBossAccent(w) ?? baseColor;
+      const ew = getEnemyWorld(w, i, KENNEY_TILE_WORLD);
+      const etx = Math.floor(ew.wx / T);
+      const ety = Math.floor(ew.wy / T);
+      const zAbs = ez?.[i] ?? tileHAtWorld(ew.wx, ew.wy);
 
+      const renderKey: RenderKey = {
+        slice: etx + ety,
+        within: etx,
+        baseZ: zAbs,
+        kindOrder: KindOrder.ENTITY,
+        stableId: 120000 + i,
+      };
+
+      const def = registry.enemy(w.eType[i] as any);
+      let baseColor: string = (def as any).color ?? "#f66";
+
+      const isBoss = w.eType[i] === ENEMY_TYPE.BOSS;
+      if (isBoss) baseColor = getBossAccent(w) ?? baseColor;
+
+      const p = toScreen(ew.wx, ew.wy);
+
+      const drawClosure = () => {
         const faceDx = w.eFaceX?.[i] ?? 0;
         const faceDy = w.eFaceY?.[i] ?? -1;
         const moving = Math.hypot(w.evx?.[i] ?? 0, w.evy?.[i] ?? 0) > 1e-4;
@@ -912,20 +869,43 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           ctx.fill();
           ctx.globalAlpha = 1;
         }
-      }
+      };
 
-      // Projectiles
-      for (const it of projectiles) {
-        const i = it.i;
+      addToSlice(etx + ety, renderKey, drawClosure);
+    }
+  }
 
-        const pp = getProjectileWorld(w, i, KENNEY_TILE_WORLD);
-        const p = toScreen(pp.wx, pp.wy);
-        const spr = getProjectileSpriteByKind(w.prjKind[i]);
+  // ----------------------------
+  // Collect PROJECTILES into slices (as VFX, not special cased anymore)
+  // ----------------------------
+  {
+    for (let i = 0; i < w.pAlive.length; i++) {
+      if (!w.pAlive[i]) continue;
+      if (w.prHidden?.[i]) continue;
 
+      const pp = getProjectileWorld(w, i, KENNEY_TILE_WORLD);
+      const ptx = Math.floor(pp.wx / T);
+      const pty = Math.floor(pp.wy / T);
+      const baseH = tileHAtWorld(pp.wx, pp.wy);
+      const pzAbs = (w.prZVisual?.[i] ?? w.prZ?.[i] ?? baseH) || 0;
+
+      const renderKey: RenderKey = {
+        slice: ptx + pty,
+        within: ptx,
+        baseZ: pzAbs,
+        kindOrder: KindOrder.VFX,  // Projectiles are now VFX, not hidden under platforms
+        stableId: 130000 + i,
+      };
+
+      const zLift = (pzAbs - baseH) * ELEV_PX;
+      const p = toScreen(pp.wx, pp.wy);
+      const spr = getProjectileSpriteByKind(w.prjKind[i]);
+
+      const drawClosure = () => {
         const px = p.x;
-        const py = p.y - it.zLift;
+        const py = p.y - zLift;
 
-        // shadow
+        // Shadow
         {
           const r = w.prR[i] ?? 4;
 
@@ -935,11 +915,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
           const sx = sn.x;
           const sy = sn.y;
-          const groundZ = sn.z;
 
           const sp = toScreen(sx, sy);
 
-          const lift = Math.max(0, it.zLift || 0);
+          const lift = Math.max(0, zLift || 0);
           const t = Math.max(0, Math.min(1, 1 - lift / 70));
 
           const rx = r * ISO_X * (0.95 + 0.15 * t);
@@ -994,66 +973,115 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           ctx.ellipse(px, py, (w.prR[i] ?? 4) * ISO_X, (w.prR[i] ?? 4) * ISO_Y, 0, 0, Math.PI * 2);
           ctx.fill();
         }
-      }
+      };
 
-      // Player
-      if (hasPlayer) {
-        ctx.globalAlpha = 1;
-
-          const dir = ((w as any)._plDir ?? "N") as Dir8;
-          const moving = (w as any)._plMoving ?? false;
-          const fr = playerSpritesReady()
-            ? getPlayerSpriteFrame({ dir, moving, time: w.time ?? 0 })
-            : null;
-
-        const pp = toScreen(px, py);
-
-          if (fr) {
-            const dw = fr.sw * fr.scale;
-            const dh = fr.sh * fr.scale;
-
-            const x = pp.x - dw * fr.anchorX;
-            const y = pp.y - dh * fr.anchorY;
-
-            ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, x, y, dw, dh);
-          } else {
-          ctx.fillStyle = "#eaeaf2";
-          ctx.beginPath();
-          ctx.ellipse(pp.x, pp.y, PLAYER_R * ISO_X, PLAYER_R * ISO_Y, 0, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
+      addToSlice(ptx + pty, renderKey, drawClosure);
     }
+  }
 
-    // 4) Occluders (walls) AFTER entities
-    const occluders = occludersInViewForLayer(layer, viewRect);
-    if (occluders.length > 0) {
-      const occluderDraws: RenderPieceDraw[] = [];
-      let occluderId = 0;
-      for (let i = 0; i < occluders.length; i++) {
-        const draw = buildWallDraw(occluders[i], occluderId++);
-        if (draw) occluderDraws.push(draw);
+  // ----------------------------
+  // Collect PLAYER into slices
+  // ----------------------------
+  {
+    const pzAbs2 = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
+    const ptx = Math.floor(px / T);
+    const pty = Math.floor(py / T);
+
+    const renderKey: RenderKey = {
+      slice: ptx + pty,
+      within: ptx,
+      baseZ: pzAbs2,
+      kindOrder: KindOrder.ENTITY,
+      stableId: 0,
+    };
+
+    const pp = toScreen(px, py);
+
+    const drawClosure = () => {
+      ctx.globalAlpha = 1;
+
+      const dir = ((w as any)._plDir ?? "N") as Dir8;
+      const moving = (w as any)._plMoving ?? false;
+      const fr = playerSpritesReady()
+        ? getPlayerSpriteFrame({ dir, moving, time: w.time ?? 0 })
+        : null;
+
+      if (fr) {
+        const dw = fr.sw * fr.scale;
+        const dh = fr.sh * fr.scale;
+
+        const x = pp.x - dw * fr.anchorX;
+        const y = pp.y - dh * fr.anchorY;
+
+        ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, x, y, dw, dh);
+      } else {
+        ctx.fillStyle = "#eaeaf2";
+        ctx.beginPath();
+        ctx.ellipse(pp.x, pp.y, PLAYER_R * ISO_X, PLAYER_R * ISO_Y, 0, 0, Math.PI * 2);
+        ctx.fill();
       }
+    };
 
-      if (occluderDraws.length > 0) {
-        occluderDraws.sort((a, b) => a.depth - b.depth);
+    addToSlice(ptx + pty, renderKey, drawClosure);
+  }
 
-        for (let i = 0; i < occluderDraws.length; i++) {
-          const c = occluderDraws[i];
-          const img = c.img;
-          if (!img || img.width <= 0 || img.height <= 0) continue;
+  // ----------------------------
+  // Collect OCCLUDERS into slices (optimized: single query + bucketing)
+  // ----------------------------
+  {
+    // Query occluders once for entire view, then bucket by slice
+    const allOccluders = occludersInViewForLayer(0, viewRect);
+    let occluderId = 0;
 
-          if (c.flipX) {
+    for (let oi = 0; oi < allOccluders.length; oi++) {
+      const occ = allOccluders[oi];
+      const draw = buildWallDraw(occ, occluderId++);
+      if (!draw) continue;
+
+      // Deterministic stableId based on occluder properties
+      const occStableId = occ.tx * 73856093 ^ occ.ty * 19349663 ^ (occ.zFrom * 100 | 0) * 83492791;
+
+      const renderKey: RenderKey = {
+        slice: occ.tx + occ.ty,
+        within: occ.tx,
+        baseZ: occ.zFrom,
+        kindOrder: KindOrder.OCCLUDER,
+        stableId: occStableId,
+      };
+
+      const drawClosure = () => {
+        if (draw.img && draw.img.width > 0 && draw.img.height > 0) {
+          if (draw.flipX) {
             ctx.save();
-            ctx.translate(c.dx + c.dw * 0.5, c.dy + c.dh * 0.5);
+            ctx.translate(draw.dx + draw.dw * 0.5, draw.dy + draw.dh * 0.5);
             ctx.scale(-1, 1);
-            ctx.drawImage(img, -c.dw * 0.5, -c.dh * 0.5, c.dw, c.dh);
+            ctx.drawImage(draw.img, -draw.dw * 0.5, -draw.dh * 0.5, draw.dw, draw.dh);
             ctx.restore();
           } else {
-            ctx.drawImage(img, c.dx, c.dy, c.dw, c.dh);
+            ctx.drawImage(draw.img, draw.dx, draw.dy, draw.dw, draw.dh);
           }
         }
-      }
+      };
+
+      addToSlice(occ.tx + occ.ty, renderKey, drawClosure);
+    }
+  }
+
+  // ============================================
+  // FINAL RENDER PASS: Execute all slices in order
+  // ============================================
+  const sliceKeys = Array.from(sliceDrawables.keys());
+  sliceKeys.sort((a, b) => a - b);
+
+  for (const slice of sliceKeys) {
+    const drawables = sliceDrawables.get(slice)!;
+
+    // Sort drawables within this slice lexicographically by RenderKey
+    drawables.sort((a, b) => compareRenderKeys(a.key, b.key));
+
+    // Execute all draws for this slice
+    for (const drawable of drawables) {
+      drawable.draw();
     }
   }
 

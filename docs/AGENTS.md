@@ -168,6 +168,8 @@ For each zLogical layer (ascending):
 Rules
 - Occluders must render after entities
 - All relevant layers must be included (not only surface layers)
+- Depth sorting within each pass is driven by zVisual (no per-system depth heuristics)
+
 
 Achievements
 - [ ] Entities are hidden by higher occluders via render order alone
