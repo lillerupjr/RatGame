@@ -132,7 +132,11 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   // Optional render-layer offset for stairs.
   const STAIR_LAYER_OFFSET = (w as any).stairLayerOffset ?? 0;
-
+  // --- Render HEIGHT knobs (screen-space Y offsets, in pixels) ---
+  // Positive moves DOWN on screen; negative moves UP.
+  // These do NOT affect layer/sort; they only shift draw Y.
+  const STAIR_TOP_DY = (w as any).stairTopDy ?? 8;
+  const STAIR_APRON_DY = (w as any).stairApronDy ?? 0;
 
   const tileHAtWorld = (x: number, y: number) => heightAtWorld(x, y, KENNEY_TILE_WORLD);
 
@@ -724,12 +728,16 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
             const anchorY = surface.renderAnchorY ?? ANCHOR_Y;
 
-              let dy = p.y + camY - topH * anchorY;
+            let dy = p.y + camY - topH * anchorY;
 
             const h = surface.zBase;
             dy -= h * ELEV_PX;
 
+            // Stair render-height tweak (screen-space)
+            if (isStairTop) dy += STAIR_TOP_DY;
+
             ctx.drawImage(topImg, dx, dy, topW, topH);
+
           }
         }
       }
