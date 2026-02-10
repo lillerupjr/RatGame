@@ -6,7 +6,16 @@ export type TableToken = string;
 export type TableMapCell = {
     x: number;  // column index in the Excel selection
     y: number;  // row index in the Excel selection
-    t: TableToken;
+    // Legacy token format (e.g., "F0|W2E"); kept for backward compatibility.
+    t?: TableToken;
+    // Structured cell format (preferred).
+    z?: number;
+    type?: string;
+    sprite?: string;
+    blocksMove?: boolean;
+    blocksSight?: boolean;
+    meta?: Record<string, unknown>;
+    tags?: string[];
     triggerId?: string;
     triggerType?: string;
     radius?: number;

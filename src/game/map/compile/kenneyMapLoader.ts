@@ -76,6 +76,8 @@ export type WallToken = {
     y: number;
     height: number;
     dir: WallDir;
+    skin?: string;
+    slot?: "wall" | "apron" | "stairApron";
 };
 
 export type SolidFaceRec = {
@@ -228,9 +230,26 @@ export function compileKenneyMapFromTable(
     const skinIdToUse = def.mapSkinId ?? options?.mapSkinId;
     const resolvedMapSkin = resolveMapSkin(skinIdToUse);
 
-    // Keyed by "x,y" in table coords
-    const placed = new Map<string, IsoTile>();
+    // Excel -> tile mapping:
+    // - Excel x (right) becomes tile -y (north)
+    // - Excel y (down) becomes tile +x (east)
+    const excelToTile = (ex: number, ey: number) => {
+        return { tx: ey, ty: -ex };
+    };
+
+    type ParsedCell = {
+        tx: number;
+        ty: number;
+        tile: IsoTile | null;
+        walls: WallToken[];
+    };
+
+    const parsedCells: ParsedCell[] = [];
     const wallTokens: WallToken[] = [];
+    let minTx = Number.POSITIVE_INFINITY;
+    let maxTx = Number.NEGATIVE_INFINITY;
+    let minTy = Number.POSITIVE_INFINITY;
+    let maxTy = Number.NEGATIVE_INFINITY;
 
     // First SPAWN found becomes the authoritative spawn point
     let spawnTableX: number | null = null;
@@ -243,31 +262,115 @@ export function compileKenneyMapFromTable(
     let goalH: number = 0;
 
     for (const c of def.cells) {
-        const fx = (def.w - 1) - (c.x | 0);
-        const fy = (def.h - 1) - (c.y | 0);
-        const parsed = parseTokens(c.t);
+        const ex = c.x | 0;
+        const ey = c.y | 0;
+        const parsed = (() => {
+            if (c.t) return parseTokens(c.t);
+
+            const type = (c.type ?? "").toLowerCase();
+            const sprite = c.sprite;
+            const z = c.z ?? 0;
+            const dirFromMeta = (() => {
+                const d = (c.meta as any)?.dir;
+                if (typeof d === "string") {
+                    const up = d.toUpperCase();
+                    if (up === "N" || up === "E" || up === "S" || up === "W") return up as WallDir;
+                }
+                if (Array.isArray(c.tags)) {
+                    for (let i = 0; i < c.tags.length; i++) {
+                        const up = c.tags[i].toUpperCase();
+                        if (up === "N" || up === "E" || up === "S" || up === "W") return up as WallDir;
+                    }
+                }
+                return undefined;
+            })();
+
+            if (type === "floor") {
+                return { tile: { kind: "FLOOR", h: z, skin: sprite }, walls: [] as WallToken[] };
+            }
+            if (type === "spawn") {
+                return { tile: { kind: "SPAWN", h: z, skin: sprite }, walls: [] as WallToken[] };
+            }
+            if (type === "goal") {
+                return { tile: { kind: "GOAL", h: z, skin: sprite }, walls: [] as WallToken[] };
+            }
+            if (type === "stairs") {
+                const stairDir = dirFromMeta ?? "N";
+                return {
+                    tile: { kind: "STAIRS", h: z, dir: stairDir as StairDir, skin: sprite },
+                    walls: [] as WallToken[],
+                };
+            }
+            if (type === "wall") {
+                const height = Math.max(0, z | 0);
+                const dir = dirFromMeta ?? "S";
+                const wt: WallToken = { x: 0, y: 0, height, dir, skin: sprite, slot: "wall" };
+                return { tile: null, walls: [wt] };
+            }
+            if (type === "void") {
+                return { tile: { kind: "VOID", h: 0 }, walls: [] as WallToken[] };
+            }
+
+            return { tile: null, walls: [] as WallToken[] };
+        })();
         if (!parsed.tile && parsed.walls.length === 0) continue;
 
-        const tile = parsed.tile;
-        if (tile) {
+        const mapped = excelToTile(ex, ey);
+        if (mapped.tx < minTx) minTx = mapped.tx;
+        if (mapped.tx > maxTx) maxTx = mapped.tx;
+        if (mapped.ty < minTy) minTy = mapped.ty;
+        if (mapped.ty > maxTy) maxTy = mapped.ty;
+
+        if (parsed.tile) {
+            const tile = parsed.tile;
             if (tile.kind === "SPAWN" && spawnTableX === null) {
-                spawnTableX = fx;
-                spawnTableY = fy;
+                spawnTableX = mapped.tx;
+                spawnTableY = mapped.ty;
                 spawnH = tile.h | 0;
             }
 
             if (tile.kind === "GOAL" && goalTableX === null) {
-                goalTableX = fx;
-                goalTableY = fy;
+                goalTableX = mapped.tx;
+                goalTableY = mapped.ty;
                 goalH = tile.h | 0;
             }
-
-            placed.set(`${fx},${fy}`, tile);
         }
 
-        if (parsed.walls.length > 0) {
-            for (let i = 0; i < parsed.walls.length; i++) {
-                wallTokens.push({ ...parsed.walls[i], x: fx, y: fy });
+        parsedCells.push({
+            tx: mapped.tx,
+            ty: mapped.ty,
+            tile: parsed.tile,
+            walls: parsed.walls,
+        });
+    }
+
+    if (!Number.isFinite(minTx)) {
+        minTx = 0;
+        maxTx = def.h - 1;
+        minTy = 0;
+        maxTy = def.w - 1;
+    }
+
+    // Decide where table (0,0) lands in tile-space.
+    const boundsCenterTx = (minTx + maxTx) * 0.5;
+    const boundsCenterTy = (minTy + maxTy) * 0.5;
+    const originTx = def.centerOnZero ? -Math.floor(boundsCenterTx) : 0;
+    const originTy = def.centerOnZero ? -Math.floor(boundsCenterTy) : 0;
+
+    const placed = new Map<string, IsoTile>();
+
+    for (let i = 0; i < parsedCells.length; i++) {
+        const cell = parsedCells[i];
+        const tx = cell.tx + originTx;
+        const ty = cell.ty + originTy;
+        const tile = cell.tile;
+        if (tile) {
+            placed.set(`${tx},${ty}`, tile);
+        }
+
+        if (cell.walls.length > 0) {
+            for (let j = 0; j < cell.walls.length; j++) {
+                wallTokens.push({ ...cell.walls[j], x: tx, y: ty });
             }
         }
     }
@@ -280,65 +383,61 @@ export function compileKenneyMapFromTable(
         const visited = new Set<string>();
 
         const key = (x: number, y: number) => `${x},${y}`;
-        const getPlaced = (x: number, y: number) => placed.get(key(x, y));
+        const dirs = [
+            { dx: 1, dy: 0 },
+            { dx: -1, dy: 0 },
+            { dx: 0, dy: 1 },
+            { dx: 0, dy: -1 },
+        ];
 
-        for (let y = 0; y < def.h; y++) {
-            for (let x = 0; x < def.w; x++) {
-                const t0 = getPlaced(x, y);
-                if (!t0 || t0.kind !== "STAIRS") continue;
-                if (visited.has(key(x, y))) continue;
+        for (const [k, t0] of placed.entries()) {
+            if (!t0 || t0.kind !== "STAIRS") continue;
+            if (visited.has(k)) continue;
+            const parts = k.split(",");
+            const baseX = parseInt(parts[0], 10);
+            const baseY = parseInt(parts[1], 10);
+            if (!Number.isFinite(baseX) || !Number.isFinite(baseY)) continue;
 
-                const dir = t0.dir;
-                if (dir !== "N" && dir !== "E" && dir !== "S" && dir !== "W") continue;
-                const stack: Array<{ x: number; y: number }> = [{ x, y }];
-                const tiles: IsoTile[] = [];
-                let minH = t0.h | 0;
+            const dir = t0.dir;
+            if (dir !== "N" && dir !== "E" && dir !== "S" && dir !== "W") continue;
 
-                while (stack.length > 0) {
-                    const cur = stack.pop()!;
-                    const k = key(cur.x, cur.y);
-                    if (visited.has(k)) continue;
+            const stack: Array<{ x: number; y: number }> = [{ x: baseX, y: baseY }];
+            const tiles: IsoTile[] = [];
+            let minH = t0.h | 0;
 
-                    const t = getPlaced(cur.x, cur.y);
-                    if (!t || t.kind !== "STAIRS") continue;
-                    if ((t.dir ?? undefined) !== (dir ?? undefined)) continue;
+            while (stack.length > 0) {
+                const cur = stack.pop()!;
+                const ck = key(cur.x, cur.y);
+                if (visited.has(ck)) continue;
 
-                    visited.add(k);
-                    tiles.push(t);
-                    const h = t.h | 0;
-                    if (h < minH) minH = h;
+                const t = placed.get(ck);
+                if (!t || t.kind !== "STAIRS") continue;
+                if ((t.dir ?? undefined) !== (dir ?? undefined)) continue;
 
-                    stack.push({ x: cur.x + 1, y: cur.y });
-                    stack.push({ x: cur.x - 1, y: cur.y });
-                    stack.push({ x: cur.x, y: cur.y + 1 });
-                    stack.push({ x: cur.x, y: cur.y - 1 });
+                visited.add(ck);
+                tiles.push(t);
+                const h = t.h | 0;
+                if (h < minH) minH = h;
+
+                for (let di = 0; di < dirs.length; di++) {
+                    const { dx, dy } = dirs[di];
+                    stack.push({ x: cur.x + dx, y: cur.y + dy });
                 }
+            }
 
-                if (tiles.length === 0) continue;
+            if (tiles.length === 0) continue;
 
-                const gid = nextGroupId++;
-                for (let i = 0; i < tiles.length; i++) {
-                    const t = tiles[i];
-                    t.stairGroupId = gid;
-                    t.stairStepIndex = (t.h | 0) - minH;
-                }
+            const gid = nextGroupId++;
+            for (let i = 0; i < tiles.length; i++) {
+                const t = tiles[i];
+                t.stairGroupId = gid;
+                t.stairStepIndex = (t.h | 0) - minH;
             }
         }
     }
 
-    // Decide where table (0,0) lands in tile-space.
-    const originTx = def.centerOnZero ? -Math.floor(def.w / 2) : 0;
-    const originTy = def.centerOnZero ? -Math.floor(def.h / 2) : 0;
-
     function getTile(tx: number, ty: number): IsoTile {
-        // Convert tile coords -> table coords
-        const x = tx - originTx;
-        const y = ty - originTy;
-
-        // Outside selection => VOID
-        if (x < 0 || y < 0 || x >= def.w || y >= def.h) return { kind: "VOID", h: 0 };
-
-        return placed.get(`${x},${y}`) ?? { kind: "VOID", h: 0 };
+        return placed.get(`${tx},${ty}`) ?? { kind: "VOID", h: 0 };
     }
 
     const surfacesByKey = new Map<string, Surface[]>();
@@ -367,12 +466,9 @@ export function compileKenneyMapFromTable(
     for (const [key, tile] of placed.entries()) {
         if (tile.kind === "VOID") continue;
         const parts = key.split(",");
-        const tableX = parseInt(parts[0], 10);
-        const tableY = parseInt(parts[1], 10);
-        if (!Number.isFinite(tableX) || !Number.isFinite(tableY)) continue;
-
-        const tx = tableX + originTx;
-        const ty = tableY + originTy;
+        const tx = parseInt(parts[0], 10);
+        const ty = parseInt(parts[1], 10);
+        if (!Number.isFinite(tx) || !Number.isFinite(ty)) continue;
         const zBase = tile.h | 0;
         const renderTopKind: RenderTopKind = tile.kind === "STAIRS" ? "STAIR" : "FLOOR";
         const renderDir = (tile.dir ?? "N") as StairDir;
@@ -587,9 +683,7 @@ export function compileKenneyMapFromTable(
 
     for (let i = 0; i < wallTokens.length; i++) {
         const w = wallTokens[i];
-        const rawTx = w.x + originTx;
-        const rawTy = w.y + originTy;
-        const canonical = canonicalizeEdge(rawTx, rawTy, w.dir);
+        const canonical = canonicalizeEdge(w.x, w.y, w.dir);
         const tx = canonical.tx;
         const ty = canonical.ty;
         const height = Math.max(0, w.height | 0);
@@ -599,14 +693,10 @@ export function compileKenneyMapFromTable(
         const segmentHeight = 2;
         const zFrom = 0;
         const zTo = height;
-        const wallSkin = "WALL";
+        const wallSlot: "wall" | "apron" | "stairApron" = w.slot ?? "wall";
         const wallAxis = canonical.dir === "E" || canonical.dir === "W" ? "E" : "S";
-        const wallSlot = wallSkin === "FLOOR_EDGE"
-            ? "apron"
-            : wallSkin === "STAIR_FACE"
-                ? "stairApron"
-                : "wall";
         const wallSpriteDir = wallSlot === "stairApron" ? "N" : wallAxis;
+        const wallSkin = w.skin;
         const spriteId = resolveTileSpriteId({
             slot: wallSlot,
             dir: wallSpriteDir,
@@ -680,9 +770,11 @@ export function compileKenneyMapFromTable(
     }
 
     // Convert authored spawn table coords -> tile coords.
-    // Fallback: selection center.
-    const spawnTx = (spawnTableX ?? Math.floor(def.w / 2)) + originTx;
-    const spawnTy = (spawnTableY ?? Math.floor(def.h / 2)) + originTy;
+    // Fallback: mapped bounds center.
+    const fallbackSpawnTx = Math.floor(boundsCenterTx);
+    const fallbackSpawnTy = Math.floor(boundsCenterTy);
+    const spawnTx = (spawnTableX ?? fallbackSpawnTx) + originTx;
+    const spawnTy = (spawnTableY ?? fallbackSpawnTy) + originTy;
 
     // Convert authored goal table coords -> tile coords.
     // Goal may be null if not defined in map.

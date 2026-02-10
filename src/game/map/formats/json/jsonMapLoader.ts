@@ -12,7 +12,14 @@ import type { MapSkinBundle, MapSkinId } from "../../../content/mapSkins";
 type JsonMapCell = {
   x: number;
   y: number;
-  t: string;
+  t?: string;
+  z?: number;
+  type?: string;
+  sprite?: string;
+  blocksMove?: boolean;
+  blocksSight?: boolean;
+  meta?: Record<string, unknown>;
+  tags?: string[];
   triggerId?: string;
   triggerType?: string;
   radius?: number;
@@ -83,6 +90,15 @@ function optionalBooleanField(obj: Record<string, unknown>, key: string): boolea
   return value;
 }
 
+function optionalNumberField(obj: Record<string, unknown>, key: string): number | undefined {
+  const value = obj[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`JSON map loader: optional field "${key}" must be a number.`);
+  }
+  return value;
+}
+
 function optionalMapSkinDefaultsField(
   obj: Record<string, unknown>,
   key: string
@@ -99,15 +115,6 @@ function optionalMapSkinDefaultsField(
     stair: optionalStringField(value, "stair"),
     stairApron: optionalStringField(value, "stairApron"),
   };
-}
-
-function optionalNumberField(obj: Record<string, unknown>, key: string): number | undefined {
-  const value = obj[key];
-  if (value === undefined) return undefined;
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    throw new Error(`JSON map loader: optional field "${key}" must be a number.`);
-  }
-  return value;
 }
 
 function optionalApronBaseModeField(
@@ -240,12 +247,58 @@ function requireCellsField(
 
     const x = requireNumberField(cell, "x", source);
     const y = requireNumberField(cell, "y", source);
-    const t = requireStringField(cell, "t", source);
+    const t = optionalStringField(cell, "t");
+    const type = optionalStringField(cell, "type");
+    const sprite = optionalStringField(cell, "sprite");
+    const z = optionalNumberField(cell, "z") ?? 0;
+    const blocksMove = optionalBooleanField(cell, "blocksMove");
+    const blocksSight = optionalBooleanField(cell, "blocksSight");
+    const meta = (() => {
+      const m = cell.meta;
+      if (m === undefined) return undefined;
+      if (!isRecord(m)) {
+        throw new Error(`JSON map loader${formatSource(source)}: optional field "meta" must be an object.`);
+      }
+      return m;
+    })();
+    const tags = (() => {
+      const arr = cell.tags;
+      if (arr === undefined) return undefined;
+      if (!Array.isArray(arr)) {
+        throw new Error(`JSON map loader${formatSource(source)}: optional field "tags" must be an array.`);
+      }
+      for (let i = 0; i < arr.length; i++) {
+        if (typeof arr[i] !== "string") {
+          throw new Error(`JSON map loader${formatSource(source)}: "tags" must be an array of strings.`);
+        }
+      }
+      return arr as string[];
+    })();
+
+    if (!t && (!type || !sprite)) {
+      throw new Error(
+        `JSON map loader${formatSource(source)}: cell ${index} must include legacy "t" or new "type" + "sprite".`
+      );
+    }
     const triggerId = optionalStringField(cell, "triggerId");
     const triggerType = optionalStringField(cell, "triggerType");
     const radius = optionalNumberField(cell, "radius");
 
-    return { x, y, t, triggerId, triggerType, radius };
+    return {
+      x,
+      y,
+      t: t ?? undefined,
+      z,
+      type: type ?? undefined,
+      sprite: sprite ?? undefined,
+      blocksMove,
+      blocksSight,
+      meta,
+      tags,
+      triggerId,
+      triggerType,
+      radius,
+    };
   });
 }
 
