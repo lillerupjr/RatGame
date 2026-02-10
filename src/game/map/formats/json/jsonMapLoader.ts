@@ -57,6 +57,10 @@ type JsonMapDef = {
     type: SemanticStampType;
     w?: number;
     h?: number;
+    skinId?: string;
+    pool?: string[];
+    heightUnitsMin?: number;
+    heightUnitsMax?: number;
   }[];
   mapSkinId?: MapSkinId;
   mapSkinDefaults?: MapSkinBundle;
@@ -184,6 +188,24 @@ function requireStringArrayField(
   source?: string
 ): string[] {
   const value = requireArrayField(obj, key, source);
+  for (let i = 0; i < value.length; i++) {
+    if (typeof value[i] !== "string") {
+      throw new Error(`JSON map loader${formatSource(source)}: "${key}" must be an array of strings.`);
+    }
+  }
+  return value as string[];
+}
+
+function optionalStringArrayField(
+  obj: Record<string, unknown>,
+  key: string,
+  source?: string
+): string[] | undefined {
+  const value = obj[key];
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw new Error(`JSON map loader${formatSource(source)}: optional field "${key}" must be an array of strings.`);
+  }
   for (let i = 0; i < value.length; i++) {
     if (typeof value[i] !== "string") {
       throw new Error(`JSON map loader${formatSource(source)}: "${key}" must be an array of strings.`);
@@ -459,7 +481,11 @@ function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): S
     const z = optionalNumberField(entry, "z") ?? 0;
     const w = optionalNumberField(entry, "w");
     const h = optionalNumberField(entry, "h");
-    return { x, y, z, type, w, h };
+    const skinId = optionalStringField(entry, "skinId");
+    const pool = optionalStringArrayField(entry, "pool", source);
+    const heightUnitsMin = optionalNumberField(entry, "heightUnitsMin");
+    const heightUnitsMax = optionalNumberField(entry, "heightUnitsMax");
+    return { x, y, z, type, w, h, skinId, pool, heightUnitsMin, heightUnitsMax };
   });
 }
 

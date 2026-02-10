@@ -1,5 +1,7 @@
 import type { World } from "../../world/world";
 import { worldToScreen } from "../../math/iso";
+import { KENNEY_TILE_ANCHOR_Y } from "../kenneyTiles";
+import { getTileSpriteById } from "../sprites/renderSprites";
 import {
   getApronDebugStats,
   getRampFacesForDebug,
@@ -8,6 +10,7 @@ import {
   isHoleTile,
   occluderLayers,
   occludersInViewForLayer,
+  overlaysInView,
   pointInQuad,
   rampHeightAt,
   solidFacesInView,
@@ -402,6 +405,94 @@ export function drawOccluderOverlay(ctx: DebugOverlayContext, show: boolean, vie
       c.stroke();
       c.fillText(cull.id, p1.x + 6, p1.y - 6);
     }
+  }
+
+  c.restore();
+}
+
+export function drawStructureHeightOverlay(ctx: DebugOverlayContext, show: boolean, viewRect: ViewRect) {
+  if (!show) return;
+  const c = ctx.ctx;
+  const { T } = ctx;
+
+  c.save();
+  c.globalAlpha = 0.9;
+  c.lineWidth = 1.5;
+  c.font = "10px monospace";
+  c.textAlign = "left";
+  c.textBaseline = "middle";
+
+  const layers = occluderLayers();
+  c.fillStyle = "rgba(140,220,140,0.95)";
+  c.strokeStyle = "rgba(140,220,140,0.95)";
+  for (let li = 0; li < layers.length; li++) {
+    const layer = layers[li];
+    const list = occludersInViewForLayer(layer, viewRect);
+    for (let i = 0; i < list.length; i++) {
+      const piece = list[i];
+      if (piece.kind !== "WALL") continue;
+
+      const rec = piece.spriteId ? getTileSpriteById(piece.spriteId) : null;
+      if (!rec?.ready || !rec.img || rec.img.width <= 0 || rec.img.height <= 0) continue;
+
+      const wallDir = piece.wallDir ?? "N";
+      const wallDelta = (() => {
+        switch (wallDir) {
+          case "N": return { dx: 0, dy: -1 };
+          case "E": return { dx: 1, dy: 0 };
+          case "S": return { dx: 0, dy: 1 };
+          case "W": return { dx: -1, dy: 0 };
+        }
+      })();
+
+      let wx = (piece.tx + 0.5) * T;
+      let wy = (piece.ty + 0.5) * T;
+      wx += wallDelta.dx * T * 0.5;
+      wy += wallDelta.dy * T * 0.5;
+
+      const midZ = (piece.zFrom + piece.zTo) * 0.5;
+      const p = ctx.toScreenAtZ(wx, wy, midZ);
+      const anchorY = piece.renderAnchorY ?? KENNEY_TILE_ANCHOR_Y;
+      const dy = piece.renderDyOffset ?? 0;
+
+      const aw = rec.img.width;
+      const ah = rec.img.height;
+      const dx = p.x - aw * 0.5;
+      const dyDraw = p.y - ah * anchorY - dy;
+
+      c.strokeRect(dx, dyDraw, aw, ah);
+      const ax = dx + aw * 0.5;
+      const ay = dyDraw + ah * anchorY;
+      c.beginPath();
+      c.arc(ax, ay, 2, 0, Math.PI * 2);
+      c.fill();
+      c.fillText(`wall z=${piece.zFrom}->${piece.zTo} mid=${midZ} dy=${dy}`, dx + 6, dyDraw - 8);
+    }
+  }
+
+  const overlays = overlaysInView(viewRect);
+  c.fillStyle = "rgba(140,200,255,0.95)";
+  c.strokeStyle = "rgba(140,200,255,0.95)";
+  for (let i = 0; i < overlays.length; i++) {
+    const o = overlays[i];
+    const rec = o.spriteId ? getTileSpriteById(o.spriteId) : null;
+    if (!rec?.ready || !rec.img || rec.img.width <= 0 || rec.img.height <= 0) continue;
+    const wx = (o.tx + o.w * 0.5) * T;
+    const wy = (o.ty + o.h * 0.5) * T;
+    const p = ctx.toScreenAtZ(wx, wy, o.z);
+    const dy = o.drawDyOffset ?? 0;
+    const ow = rec.img.width;
+    const oh = rec.img.height;
+    const dx = p.x - ow * 0.5;
+    const dyDraw = p.y - oh * KENNEY_TILE_ANCHOR_Y - dy;
+
+    c.strokeRect(dx, dyDraw, ow, oh);
+    const ax = dx + ow * 0.5;
+    const ay = dyDraw + oh * KENNEY_TILE_ANCHOR_Y;
+    c.beginPath();
+    c.arc(ax, ay, 2, 0, Math.PI * 2);
+    c.fill();
+    c.fillText(`roof z=${o.z} dy=${dy}`, dx + 6, dyDraw - 8);
   }
 
   c.restore();

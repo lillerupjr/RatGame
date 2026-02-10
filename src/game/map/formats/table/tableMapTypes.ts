@@ -27,6 +27,10 @@ export type SemanticStamp = {
     type: SemanticStampType;
     w?: number;
     h?: number;
+    skinId?: string;
+    pool?: string[];
+    heightUnitsMin?: number;
+    heightUnitsMax?: number;
 };
 
 export type TableObjectiveRule =

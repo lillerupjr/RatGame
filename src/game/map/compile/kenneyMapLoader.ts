@@ -4,6 +4,7 @@ import { KENNEY_TILE_ANCHOR_Y } from "../../../engine/render/kenneyTiles";
 import type { TriggerDef } from "../../triggers/triggerTypes";
 import { resolveMapSkin, resolveSemanticSprite, type MapSkinBundle, type MapSkinId } from "../../content/mapSkins";
 import { resolveTileSpriteId } from "../skins/tileSpriteResolver";
+import { HEIGHT_UNIT_PX, pickBuildingSkin } from "../../content/buildings";
 
 export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL";
 export type StairDir = "N" | "E" | "S" | "W";
@@ -79,6 +80,7 @@ export type StampOverlay = {
     h: number;
     z: number;
     spriteId: string;
+    drawDyOffset?: number;
 };
 
 export type WallToken = {
@@ -149,13 +151,15 @@ function mapSkinDefaultsFromDef(def: TableMapDef): MapSkinBundle {
 
 export function compileKenneyMapFromTable(
     def: TableMapDef,
-    options?: { mapSkinId?: MapSkinId }
+    options?: { mapSkinId?: MapSkinId; runSeed?: number; mapId?: string }
 ): CompiledKenneyMap {
     const mapSkinDefaults = mapSkinDefaultsFromDef(def);
     // Priority: def.mapSkinId (authored) > options.mapSkinId (runtime override)
     // This allows authored maps to specify their own skin, while procedural maps use runtime selection
     const skinIdToUse = def.mapSkinId ?? options?.mapSkinId;
     const resolvedMapSkin = resolveMapSkin(skinIdToUse);
+    const runSeed = options?.runSeed ?? 0;
+    const mapId = options?.mapId ?? def.id;
 
     // Excel/table coords are tile coords (identity mapping).
 
@@ -498,9 +502,6 @@ export function compileKenneyMapFromTable(
         return best;
     }
 
-    const buildingHeight = 8;
-
-
     const addStampWall = (
         tx: number,
         ty: number,
@@ -508,6 +509,7 @@ export function compileKenneyMapFromTable(
         spriteId: string,
         zBase: number,
         height: number,
+        drawDyOffset: number,
     ) => {
         if (!spriteId) return;
         const zFrom = zBase;
@@ -526,61 +528,86 @@ export function compileKenneyMapFromTable(
             renderTopKind: "FLOOR",
             renderDir: "N",
             renderAnchorY: floorAnchorY,
-            renderDyOffset: 0,
+            renderDyOffset: drawDyOffset,
             spriteId,
             apronDyOffset: 0,
             flipX: false,
         });
     };
 
-    const compileStamp = (stamp: SemanticStamp) => {
+    const compileStamp = (stamp: SemanticStamp, stampIndex: number) => {
         const sx = (stamp.x | 0) + originTx;
         const sy = (stamp.y | 0) + originTy;
         const zBase = stamp.z ?? 0;
         const w = Math.max(1, (stamp.w ?? 1) | 0);
         const h = Math.max(1, (stamp.h ?? 1) | 0);
         if (stamp.type === "building") {
-            const wallSouthSlot = "BUILDING_WALL_SOUTH";
-            const wallEastSlot = "BUILDING_WALL_EAST";
-            const wallNorthSlot = "BUILDING_WALL_NORTH";
-            const wallWestSlot = "BUILDING_WALL_WEST";
+            if (stamp.w === undefined || stamp.h === undefined) {
+                throw new Error(`Building stamp at (${stamp.x},${stamp.y}) must define w/h.`);
+            }
+            const skin = pickBuildingSkin({
+                skinId: stamp.skinId,
+                pool: stamp.pool,
+                heightUnitsMin: stamp.heightUnitsMin,
+                heightUnitsMax: stamp.heightUnitsMax,
+                mapSkinPool: resolvedMapSkin.buildingPool,
+                context: {
+                    runSeed,
+                    mapId,
+                    stampIndex,
+                    stampX: stamp.x | 0,
+                    stampY: stamp.y | 0,
+                    stampW: w,
+                    stampH: h,
+                },
+            });
+
+            const heightUnits = skin.heightUnits | 0;
+            const anchorLiftPx = (skin.anchorLiftUnits | 0) * HEIGHT_UNIT_PX;
+            const wallLiftPx = (skin.wallLiftUnits | 0) * HEIGHT_UNIT_PX;
+            const roofLiftPx = (skin.roofLiftUnits | 0) * HEIGHT_UNIT_PX;
+
+            if (skin.wallSouth.length === 0 || skin.wallEast.length === 0 || !skin.roof) {
+                throw new Error(`Building skin "${skin.id}" is missing required sprites.`);
+            }
 
             // South edge (bottom row)
             for (let i = 0; i < w; i++) {
-                const spriteId = resolveSemanticSprite(skinIdToUse, wallSouthSlot, i);
-                addStampWall(sx + i, sy + h - 1, "S", spriteId, zBase, buildingHeight);
-            }
-            // North edge (top row)
-            for (let i = 0; i < w; i++) {
-                const spriteId = resolveSemanticSprite(skinIdToUse, wallNorthSlot, i);
-                addStampWall(sx + i, sy, "N", spriteId, zBase, buildingHeight);
+                const spriteId = skin.wallSouth[Math.min(i, skin.wallSouth.length - 1)];
+                addStampWall(
+                    sx + i,
+                    sy + h - 1,
+                    "S",
+                    spriteId,
+                    zBase,
+                    heightUnits,
+                    anchorLiftPx + wallLiftPx
+                );
             }
             // East edge (right column)
             for (let j = 0; j < h; j++) {
-                const spriteId = resolveSemanticSprite(skinIdToUse, wallEastSlot, j);
-                addStampWall(sx + w - 1, sy + j, "E", spriteId, zBase, buildingHeight);
-            }
-            // West edge (left column)
-            for (let j = 0; j < h; j++) {
-                const spriteId = resolveSemanticSprite(skinIdToUse, wallWestSlot, j);
-                addStampWall(sx, sy + j, "W", spriteId, zBase, buildingHeight);
+                const spriteId = skin.wallEast[Math.min(j, skin.wallEast.length - 1)];
+                addStampWall(
+                    sx + w - 1,
+                    sy + j,
+                    "E",
+                    spriteId,
+                    zBase,
+                    heightUnits,
+                    anchorLiftPx + wallLiftPx
+                );
             }
 
-            const roofSlot = `BUILDING_ROOF_${w}x${h}`;
-            const roofSprite =
-                resolveSemanticSprite(skinIdToUse, roofSlot) ||
-                resolveSemanticSprite(skinIdToUse, "BUILDING_ROOF");
-            if (roofSprite) {
-                overlays.push({
-                    id: `roof_${sx}_${sy}_${w}x${h}`,
-                    tx: sx,
-                    ty: sy,
-                    w,
-                    h,
-                    z: zBase + buildingHeight,
-                    spriteId: roofSprite,
-                });
-            }
+            overlays.push({
+                id: `roof_${sx}_${sy}_${w}x${h}`,
+                tx: sx,
+                ty: sy,
+                w,
+                h,
+                z: zBase + heightUnits,
+                spriteId: skin.roof,
+                drawDyOffset: anchorLiftPx + roofLiftPx,
+            });
 
             const buildingFloorSprite =
                 resolveSemanticSprite(skinIdToUse, "BUILDING_FLOOR") ||
@@ -651,7 +678,7 @@ export function compileKenneyMapFromTable(
     };
     if (def.stamps && def.stamps.length > 0) {
         for (let i = 0; i < def.stamps.length; i++) {
-            compileStamp(def.stamps[i]);
+            compileStamp(def.stamps[i], i);
         }
     }
 

@@ -8,6 +8,7 @@ export type MapSkinBundle = {
     stairApron?: string;
 
     background?: string;
+    buildingPool?: string[];
 };
 
 export type ResolvedMapSkin = {
@@ -19,20 +20,21 @@ export type ResolvedMapSkin = {
 
 
     background: string;
+    buildingPool: string[];
 };
 
 export const MAP_SKIN_SEMANTIC: Record<MapSkinId, Record<string, string | string[]>> = {
     building1: {
         BUILDING_WALL_SOUTH: [
-            "buildings/3x2x8/building1/building1_s_1",
-            "buildings/3x2x8/building1/building1_s_2",
-            "buildings/3x2x8/building1/building1_s_3",
+            "buildings/building1/s_1",
+            "buildings/building1/s_2",
+            "buildings/building1/s_3",
         ],
         BUILDING_WALL_EAST: [
-            "buildings/3x2x8/building1/building1_e_1",
-            "buildings/3x2x8/building1/building1_e_2",
+            "buildings/building1/e_1",
+            "buildings/building1/e_2",
         ],
-        BUILDING_ROOF_3x2: "buildings/3x2x8/building1/building1_top",
+        BUILDING_ROOF_3x2: "buildings/building1/top",
     },
 };
 
@@ -77,6 +79,7 @@ export function resolveMapSkin(id?: MapSkinId): ResolvedMapSkin {
         stairApron: bundle.stairApron ?? DEFAULT_MAP_SKIN.stairApron,
 
         background: bundle.background ?? DEFAULT_MAP_SKIN.background,
+        buildingPool: bundle.buildingPool ?? ["default_buildings"],
     };
 }
 

@@ -51,6 +51,7 @@ import {
   drawOccluderOverlay,
   drawProjectileFaceOverlay,
   drawRampOverlay,
+  drawStructureHeightOverlay,
   drawTriggerOverlay,
   drawWalkMaskOverlay,
   type DebugOverlayContext,
@@ -352,12 +353,15 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const p = worldToScreen(wx, wy);
       const anchorY = c.renderAnchorY ?? ANCHOR_Y;
 
-      const h = c.zFrom;
+    // Walls should render at the midpoint of their vertical span (centered on half-height).
+    const h = ((c.zFrom ?? c.zTo) + c.zTo) * 0.5;
+    const dyOffset = c.renderDyOffset ?? 0;
 
-      const aw = apronRec.img.width * WALL_APRON_SCALE;
-      const ah = apronRec.img.height * WALL_APRON_SCALE;
-      const ax = p.x + camX - aw * 0.5;
-    const ay = p.y + camY - ah * anchorY - h * ELEV_PX;
+    const aw = apronRec.img.width * WALL_APRON_SCALE;
+    const ah = apronRec.img.height * WALL_APRON_SCALE;
+    const ax = p.x + camX - aw * 0.5;
+    const ay = p.y + camY - ah * anchorY - h * ELEV_PX - dyOffset;
+
 
     return {
       img: apronRec.img,
@@ -378,7 +382,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const wy = (o.ty + o.h * 0.5) * T;
     const p = worldToScreen(wx, wy);
     const dx = p.x + camX - ow * 0.5;
-    const dy = p.y + camY - oh * KENNEY_TILE_ANCHOR_Y - o.z * ELEV_PX;
+    const dy = p.y + camY - oh  - o.z * ELEV_PX - (o.drawDyOffset ?? 0);
     return {
       img: rec.img,
       dx,
@@ -411,6 +415,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const SHOW_OCCLUDER_DEBUG = false;
   const SHOW_PROJECTILE_FACES = false;
   const SHOW_TRIGGER_ZONES = false;
+  const SHOW_STRUCTURE_HEIGHTS = true;
 
   // Enemy Z buffer (optional visual override)
   const ez = w.ezVisual;
@@ -1058,6 +1063,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   drawRampOverlay(debugContext, SHOW_RAMPS);
   drawOccluderOverlay(debugContext, SHOW_OCCLUDER_DEBUG, viewRect);
   drawProjectileFaceOverlay(debugContext, SHOW_PROJECTILE_FACES, viewRect);
+  drawStructureHeightOverlay(debugContext, SHOW_STRUCTURE_HEIGHTS, viewRect);
   drawTriggerOverlay(debugContext, SHOW_TRIGGER_ZONES);
 
   // Restore (undo camera zoom) before drawing screen-space overlays / HUD
