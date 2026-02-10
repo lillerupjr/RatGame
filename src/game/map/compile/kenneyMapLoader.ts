@@ -1,8 +1,8 @@
 // src/game/map/kenneyMapLoader.ts
-import type { TableMapDef } from "../formats/table/tableMapTypes";
+import type { SemanticStamp, TableMapDef } from "../formats/table/tableMapTypes";
 import { KENNEY_TILE_ANCHOR_Y } from "../../../engine/render/kenneyTiles";
 import type { TriggerDef } from "../../triggers/triggerTypes";
-import { resolveMapSkin, type MapSkinBundle, type MapSkinId } from "../../content/mapSkins";
+import { resolveMapSkin, resolveSemanticSprite, type MapSkinBundle, type MapSkinId } from "../../content/mapSkins";
 import { resolveTileSpriteId } from "../skins/tileSpriteResolver";
 
 export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL";
@@ -71,6 +71,16 @@ export type RenderPiece = {
     spriteId: string;
 };
 
+export type StampOverlay = {
+    id: string;
+    tx: number;
+    ty: number;
+    w: number;
+    h: number;
+    z: number;
+    spriteId: string;
+};
+
 export type WallToken = {
     x: number;
     y: number;
@@ -127,6 +137,8 @@ export type CompiledKenneyMap = {
     occludersInViewForLayer(layer: number, view: ViewRect): RenderPiece[];
     solidFace(tx: number, ty: number, zLogical: number, dir: WallDir): boolean;
     solidFacesInView(view: ViewRect): SolidFaceRec[];
+    overlays: StampOverlay[];
+    overlaysInView(view: ViewRect): StampOverlay[];
 };
 
 // Parse tokens like: F0, F5, S0W, S3N, S4S, S5, P0, C2E
@@ -344,6 +356,18 @@ export function compileKenneyMapFromTable(
         });
     }
 
+    if (def.stamps && def.stamps.length > 0) {
+        for (let i = 0; i < def.stamps.length; i++) {
+            const s = def.stamps[i];
+            const w = Math.max(1, (s.w ?? 1) | 0);
+            const h = Math.max(1, (s.h ?? 1) | 0);
+            if (s.x < minTx) minTx = s.x;
+            if (s.x + w - 1 > maxTx) maxTx = s.x + w - 1;
+            if (s.y < minTy) minTy = s.y;
+            if (s.y + h - 1 > maxTy) maxTy = s.y + h - 1;
+        }
+    }
+
     if (!Number.isFinite(minTx)) {
         minTx = 0;
         maxTx = def.h - 1;
@@ -503,6 +527,12 @@ export function compileKenneyMapFromTable(
         });
     }
 
+    if (def.stamps && def.stamps.length > 0) {
+        for (let i = 0; i < def.stamps.length; i++) {
+            compileStamp(def.stamps[i]);
+        }
+    }
+
     function surfacesAtXY(tx: number, ty: number): Surface[] {
         return surfacesByKey.get(`${tx},${ty}`) ?? [];
     }
@@ -526,6 +556,7 @@ export function compileKenneyMapFromTable(
 
 
     const occludersByLayer = new Map<number, RenderPiece[]>();
+    const overlays: StampOverlay[] = [];
     const wallFaces = new Set<string>();
     const wallFaceList: SolidFaceRec[] = [];
 
@@ -563,6 +594,143 @@ export function compileKenneyMapFromTable(
             if (z > best) best = z;
         }
         return best;
+    }
+
+    const buildingHeight = 8;
+
+    function addStampWall(
+        tx: number,
+        ty: number,
+        dir: WallDir,
+        spriteId: string,
+        zBase: number,
+        height: number,
+    ) {
+        if (!spriteId) return;
+        const zFrom = zBase;
+        const zTo = zBase + height;
+        const zLogical = Math.floor(zFrom + 1e-6);
+        addFace({
+            id: `stamp_wall_${tx}_${ty}_${dir}_${zFrom}_${zTo}`,
+            cls: "FACE",
+            kind: "WALL",
+            tx,
+            ty,
+            zFrom,
+            zTo,
+            zLogical,
+            wallDir: dir,
+            renderTopKind: "FLOOR",
+            renderDir: "N",
+            renderAnchorY: floorAnchorY,
+            renderDyOffset: 0,
+            spriteId,
+            apronDyOffset: 0,
+            flipX: false,
+        });
+    }
+
+    function compileStamp(stamp: SemanticStamp) {
+        const sx = (stamp.x | 0) + originTx;
+        const sy = (stamp.y | 0) + originTy;
+        const zBase = stamp.z ?? 0;
+        const w = Math.max(1, (stamp.w ?? 1) | 0);
+        const h = Math.max(1, (stamp.h ?? 1) | 0);
+
+        if (stamp.type === "building") {
+            const wallSouthSlot = "BUILDING_WALL_SOUTH";
+            const wallEastSlot = "BUILDING_WALL_EAST";
+            for (let i = 0; i < w; i++) {
+                const spriteId = resolveSemanticSprite(skinIdToUse, wallSouthSlot, i);
+                addStampWall(sx + i, sy + h - 1, "S", spriteId, zBase, buildingHeight);
+            }
+            for (let j = 0; j < h - 1; j++) {
+                const spriteId = resolveSemanticSprite(skinIdToUse, wallEastSlot, j);
+                addStampWall(sx + w - 1, sy + j, "E", spriteId, zBase, buildingHeight);
+            }
+
+            const roofSlot = `BUILDING_ROOF_${w}x${h}`;
+            const roofSprite =
+                resolveSemanticSprite(skinIdToUse, roofSlot) ||
+                resolveSemanticSprite(skinIdToUse, "BUILDING_ROOF");
+            if (roofSprite) {
+                overlays.push({
+                    id: `roof_${sx}_${sy}_${w}x${h}`,
+                    tx: sx,
+                    ty: sy,
+                    w,
+                    h,
+                    z: zBase + buildingHeight,
+                    spriteId: roofSprite,
+                });
+            }
+
+            const buildingFloorSprite =
+                resolveSemanticSprite(skinIdToUse, "BUILDING_FLOOR") ||
+                resolveTileSpriteId({
+                    slot: "floor",
+                    dir: undefined,
+                    mapSkin: resolvedMapSkin,
+                    mapDefaults: mapSkinDefaults,
+                });
+            for (let dx = 0; dx < w; dx++) {
+                for (let dy = 0; dy < h; dy++) {
+                    addSurface({
+                        id: `building_floor_${sx + dx}_${sy + dy}_${zBase}`,
+                        kind: "TILE_TOP",
+                        tx: sx + dx,
+                        ty: sy + dy,
+                        zBase,
+                        zLogical: zBase | 0,
+                        tile: { kind: "FLOOR", h: zBase } as IsoTile,
+                        renderTopKind: "FLOOR",
+                        renderDir: "N",
+                        renderAnchorY: floorAnchorY,
+                        renderDyOffset: 0,
+                        spriteIdTop: buildingFloorSprite,
+                    });
+                }
+            }
+            return;
+        }
+
+        const slotForType: Record<string, string> = {
+            road: "ROAD_FLOOR",
+            sidewalk: "SIDEWALK_FLOOR",
+            park: "PARK_FLOOR",
+            sea: "SEA_FLOOR",
+        };
+        const slot = slotForType[stamp.type];
+        if (!slot) return;
+
+        for (let dx = 0; dx < w; dx++) {
+            for (let dy = 0; dy < h; dy++) {
+                const tx = sx + dx;
+                const ty = sy + dy;
+                const spriteIdTop =
+                    resolveSemanticSprite(skinIdToUse, slot) ||
+                    resolveTileSpriteId({
+                        slot: "floor",
+                        dir: undefined,
+                        mapSkin: resolvedMapSkin,
+                        mapDefaults: mapSkinDefaults,
+                    });
+                addSurface({
+                    id: `stamp_${stamp.type}_${tx}_${ty}_${zBase}`,
+                    kind: "TILE_TOP",
+                    tx,
+                    ty,
+                    zBase,
+                    zLogical: zBase | 0,
+                    tile: { kind: "FLOOR", h: zBase } as IsoTile,
+                    renderTopKind: "FLOOR",
+                    renderDir: "N",
+                    renderAnchorY: floorAnchorY,
+                    renderDyOffset: 0,
+                    spriteIdTop,
+                });
+            }
+        }
     }
 
     function oppositeDir(dir: WallDir): WallDir {
@@ -752,6 +920,17 @@ export function compileKenneyMapFromTable(
         return out;
     }
 
+    function overlaysInView(view: ViewRect): StampOverlay[] {
+        const out: StampOverlay[] = [];
+        for (let i = 0; i < overlays.length; i++) {
+            const o = overlays[i];
+            if (o.tx > view.maxTx || o.ty > view.maxTy) continue;
+            if (o.tx + o.w - 1 < view.minTx || o.ty + o.h - 1 < view.minTy) continue;
+            out.push(o);
+        }
+        return out;
+    }
+
     function solidFace(tx: number, ty: number, zLogical: number, dir: WallDir): boolean {
         const canonical = canonicalizeEdge(tx, ty, dir);
         const key = `${canonical.tx},${canonical.ty},${zLogical | 0},${canonical.dir}`;
@@ -822,5 +1001,7 @@ export function compileKenneyMapFromTable(
         occludersInViewForLayer,
         solidFace,
         solidFacesInView,
+        overlays,
+        overlaysInView,
     };
 }

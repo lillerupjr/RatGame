@@ -33,6 +33,7 @@ export type {
     RenderPieceKind,
     RenderRole,
     ViewRect,
+    StampOverlay,
 } from "./kenneyMapLoader";
 export { worldToTile, tileToWorldCenter };
 
@@ -249,6 +250,11 @@ export function occludersForLayer(layer: number): RenderPiece[] {
 /** Return occluders within a tile-bounds view for a logical layer. */
 export function occludersInViewForLayer(layer: number, view: ViewRect): RenderPiece[] {
     return _compiled.occludersInViewForLayer(layer, view);
+}
+
+/** Return overlays within a tile-bounds view. */
+export function overlaysInView(view: ViewRect) {
+    return _compiled.overlaysInView(view);
 }
 
 /** Return every logical layer index that has at least one occluder. */

@@ -21,6 +21,17 @@ export type TableMapCell = {
     radius?: number;
 };
 
+export type SemanticStampType = "building" | "road" | "sidewalk" | "park" | "sea";
+
+export type SemanticStamp = {
+    x: number;
+    y: number;
+    z?: number;
+    type: SemanticStampType;
+    w?: number;
+    h?: number;
+};
+
 export type TableObjectiveRule =
     | {
     type: "SIGNAL_COUNT";
@@ -63,6 +74,9 @@ export type TableMapDef = {
 
     // Sparse placed cells (everything else is VOID)
     cells: TableMapCell[];
+
+    // Optional semantic stamps (v2 pipeline)
+    stamps?: SemanticStamp[];
 
     // Optional data-driven objectives attached to this map.
     objectiveDefs?: TableObjectiveDef[];

@@ -27,9 +27,17 @@ type JsonMapCell = {
 
 type JsonMapDef = {
   id: string;
-  width: number;
-  height: number;
-  cells: JsonMapCell[];
+  width?: number;
+  height?: number;
+  cells?: JsonMapCell[];
+  stamps?: {
+    x: number;
+    y: number;
+    z?: number;
+    type: string;
+    w?: number;
+    h?: number;
+  }[];
   mapSkinId?: MapSkinId;
   defaultFloorSkin?: string;
   defaultSpawnSkin?: string;
@@ -234,8 +242,9 @@ function requireCellsField(
   source?: string
 ): TableMapCell[] {
   const value = obj.cells;
+  if (value === undefined) return [];
   if (!Array.isArray(value)) {
-    throw new Error(`JSON map loader${formatSource(source)}: missing array field "cells".`);
+    throw new Error(`JSON map loader${formatSource(source)}: optional field "cells" must be an array if present.`);
   }
 
   return value.map((cell, index) => {
@@ -302,15 +311,36 @@ function requireCellsField(
   });
 }
 
+function optionalSemanticStamp(obj: Record<string, unknown>, source?: string) {
+  const arr = obj.stamps;
+  if (arr === undefined) return undefined;
+  if (!Array.isArray(arr)) {
+    throw new Error(`JSON map loader${formatSource(source)}: optional field "stamps" must be an array.`);
+  }
+  return arr.map((entry, index) => {
+    if (!isRecord(entry)) {
+      throw new Error(`JSON map loader${formatSource(source)}: stamps[${index}] must be an object.`);
+    }
+    const x = requireNumberField(entry, "x", source);
+    const y = requireNumberField(entry, "y", source);
+    const type = requireStringField(entry, "type", source);
+    const z = optionalNumberField(entry, "z") ?? 0;
+    const w = optionalNumberField(entry, "w");
+    const h = optionalNumberField(entry, "h");
+    return { x, y, z, type, w, h };
+  });
+}
+
 export function loadTableMapDefFromJson(data: unknown, source?: string): TableMapDef {
   if (!isRecord(data)) {
     throw new Error(`JSON map loader${formatSource(source)}: root must be an object.`);
   }
 
   const id = requireStringField(data, "id", source);
-  const width = requireNumberField(data, "width", source);
-  const height = requireNumberField(data, "height", source);
+  const width = optionalNumberField(data, "width");
+  const height = optionalNumberField(data, "height");
   const cells = requireCellsField(data, source);
+  const stamps = optionalSemanticStamp(data, source);
 
   const mapSkinId = optionalStringField(data, "mapSkinId");
   const defaultFloorSkin = optionalStringField(data, "defaultFloorSkin");
@@ -325,6 +355,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     width,
     height,
     cells,
+    stamps,
     mapSkinId,
     defaultFloorSkin,
     defaultSpawnSkin,
@@ -335,17 +366,49 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     objectiveDefs,
   };
 
+  // Derive bounds if width/height omitted using cells + stamps.
+  const bounds = (() => {
+    let minX = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+
+    const consider = (x: number, y: number) => {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    };
+
+    for (let i = 0; i < cells.length; i++) {
+      consider(cells[i].x, cells[i].y);
+    }
+    if (stamps) {
+      for (let i = 0; i < stamps.length; i++) {
+        const s = stamps[i];
+        const w = Math.max(1, (s.w ?? 1) | 0);
+        const h = Math.max(1, (s.h ?? 1) | 0);
+        consider(s.x, s.y);
+        consider(s.x + w - 1, s.y + h - 1);
+      }
+    }
+
+    if (!Number.isFinite(minX)) return { w: 0, h: 0 };
+    return { w: (maxX - minX + 1) | 0, h: (maxY - minY + 1) | 0 };
+  })();
+
   return {
     id: jsonDef.id,
-    w: jsonDef.width,
-    h: jsonDef.height,
+    w: (jsonDef.width ?? bounds.w) | 0,
+    h: (jsonDef.height ?? bounds.h) | 0,
     mapSkinId: jsonDef.mapSkinId,
     defaultFloorSkin: jsonDef.defaultFloorSkin,
     defaultSpawnSkin: jsonDef.defaultSpawnSkin,
     mapSkinDefaults: jsonDef.mapSkinDefaults,
     centerOnZero: jsonDef.centerOnZero,
     apronBaseMode: jsonDef.apronBaseMode,
-    cells: jsonDef.cells,
+    cells: jsonDef.cells ?? [],
+    stamps: jsonDef.stamps,
     objectiveDefs: jsonDef.objectiveDefs,
   };
 }

@@ -7,6 +7,7 @@ import excelRenderStress01Json from "../game/map/authored/maps/jsonMaps/excel_re
 import simpleTestJson from "../game/map/authored/maps/jsonMaps/simple_test.json";
 import floorTestJson from "../game/map/authored/maps/jsonMaps/floor_test.json";
 import jsonMinimalMap from "../game/map/authored/maps/jsonMaps/minimal.json";
+import semanticBuildingMap from "../game/map/authored/maps/jsonMaps/semantic_building_3x2.json";
 import type { DomRefs } from "./domRefs";
 
 type GameApi = {
@@ -58,6 +59,7 @@ const staticMapDefs: TableMapDef[] = [
     loadTableMapDefFromJson(simpleTestJson, "jsonMaps/simple_test.json"),
     loadTableMapDefFromJson(floorTestJson, "jsonMaps/floor_test.json"),
     loadTableMapDefFromJson(jsonMinimalMap, "jsonMaps/minimal.json"),
+    loadTableMapDefFromJson(semanticBuildingMap, "jsonMaps/semantic_building_3x2.json"),
 ];
 
 const staticMapChoices: MapChoice[] = staticMapDefs.map((def) => ({

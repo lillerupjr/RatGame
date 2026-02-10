@@ -67,6 +67,7 @@ import floorTestJson from "./map/authored/maps/jsonMaps/floor_test.json";
 import jsonMinimalMap from "./map/authored/maps/jsonMaps/minimal.json";
 import vendor01Json from "./map/authored/maps/jsonMaps/vendor_01.json";
 import heal01Json from "./map/authored/maps/jsonMaps/heal_01.json";
+import semanticBuildingMap from "./map/authored/maps/jsonMaps/semantic_building_3x2.json";
 import {
   activateMapDef,
   generateAndActivateFloorMap,
@@ -173,6 +174,7 @@ export function createGame(args: CreateGameArgs) {
     loadTableMapDefFromJson(jsonMinimalMap, "authored/maps/jsonMaps/minimal.json"),
     loadTableMapDefFromJson(vendor01Json, "authored/maps/jsonMaps/vendor_01.json"),
     loadTableMapDefFromJson(heal01Json, "authored/maps/jsonMaps/heal_01.json"),
+    loadTableMapDefFromJson(semanticBuildingMap, "authored/maps/jsonMaps/semantic_building_3x2.json"),
   ];
 
   function getStaticMapById(id: string | undefined): TableMapDef | undefined {

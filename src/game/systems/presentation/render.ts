@@ -17,7 +17,9 @@ import {
   renderLayers,
   topLayers,
   viewRectFromWorldCenter,
+  overlaysInView,
   type RenderPiece,
+  type StampOverlay,
   type ViewRect,
 } from "../../map/compile/kenneyMap";
 
@@ -335,10 +337,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     return draws;
   };
   const buildWallDraw = (c: RenderPiece, stableId: number): RenderPieceDraw | null => {
-      if (c.kind !== "WALL") return null;
-      const wallDir = c.wallDir ?? "N";
-      const apronRec = c.spriteId ? getTileSpriteById(c.spriteId) : null;
-      const apronFlipX = !!c.flipX;
+    if (c.kind !== "WALL") return null;
+    const wallDir = c.wallDir ?? "N";
+    const apronRec = c.spriteId ? getTileSpriteById(c.spriteId) : null;
+    const apronFlipX = !!c.flipX;
       if (!apronRec?.ready || !apronRec.img || apronRec.img.width <= 0 || apronRec.img.height <= 0) return null;
 
       let wx = (c.tx + 0.5) * T;
@@ -355,16 +357,35 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const aw = apronRec.img.width * WALL_APRON_SCALE;
       const ah = apronRec.img.height * WALL_APRON_SCALE;
       const ax = p.x + camX - aw * 0.5;
-      const ay = p.y + camY - ah * anchorY - h * ELEV_PX;
+    const ay = p.y + camY - ah * anchorY - h * ELEV_PX;
 
-      return {
-        img: apronRec.img,
-        dx: ax,
-        dy: ay,
-        dw: aw,
-        dh: ah,
-        flipX: apronFlipX,
-      };
+    return {
+      img: apronRec.img,
+      dx: ax,
+      dy: ay,
+      dw: aw,
+      dh: ah,
+      flipX: apronFlipX,
+    };
+  };
+
+  const buildOverlayDraw = (o: StampOverlay): RenderPieceDraw | null => {
+    const rec = o.spriteId ? getTileSpriteById(o.spriteId) : null;
+    if (!rec?.ready || !rec.img || rec.img.width <= 0 || rec.img.height <= 0) return null;
+    const ow = rec.img.width;
+    const oh = rec.img.height;
+    const wx = (o.tx + o.w * 0.5) * T;
+    const wy = (o.ty + o.h * 0.5) * T;
+    const p = worldToScreen(wx, wy);
+    const dx = p.x + camX - ow * 0.5;
+    const dy = p.y + camY - oh * KENNEY_TILE_ANCHOR_Y - o.z * ELEV_PX;
+    return {
+      img: rec.img,
+      dx,
+      dy,
+      dw: ow,
+      dh: oh,
+    };
   };
 
   const debugContext: DebugOverlayContext = {
@@ -979,9 +1000,31 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           drawRenderPiece(d);
         };
 
-        addToSlice(occ.tx + occ.ty, renderKey, drawClosure);
-      }
+      addToSlice(occ.tx + occ.ty, renderKey, drawClosure);
     }
+  }
+
+  // ----------------------------
+  // Collect OVERLAYS (roofs) into slices
+  // ----------------------------
+  {
+    const ovs = overlaysInView(viewRect);
+    for (let i = 0; i < ovs.length; i++) {
+      const o = ovs[i];
+      const draw = buildOverlayDraw(o);
+      if (!draw) continue;
+      const slice = (o.tx + o.w - 1) + (o.ty + o.h - 1);
+      const within = o.tx + o.w - 1;
+      const overlayKey: RenderKey = {
+        slice,
+        within,
+        baseZ: o.z,
+        kindOrder: KindOrder.OVERLAY,
+        stableId: 200000 + i,
+      };
+      addToSlice(slice, overlayKey, () => drawRenderPiece(draw));
+    }
+  }
   }
 
   // ============================================

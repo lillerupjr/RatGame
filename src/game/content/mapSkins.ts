@@ -21,6 +21,21 @@ export type ResolvedMapSkin = {
     background: string;
 };
 
+export const MAP_SKIN_SEMANTIC: Record<MapSkinId, Record<string, string | string[]>> = {
+    building1: {
+        BUILDING_WALL_SOUTH: [
+            "buildings/3x2x8/building1/building1_s_1",
+            "buildings/3x2x8/building1/building1_s_2",
+            "buildings/3x2x8/building1/building1_s_3",
+        ],
+        BUILDING_WALL_EAST: [
+            "buildings/3x2x8/building1/building1_e_1",
+            "buildings/3x2x8/building1/building1_e_2",
+        ],
+        BUILDING_ROOF_3x2: "buildings/3x2x8/building1/building1_top",
+    },
+};
+
 export const DEFAULT_MAP_SKIN: ResolvedMapSkin = {
     floor: "tiles/floor/top/stone",
     apron: "tiles/floor/curtain/stone",
@@ -48,6 +63,7 @@ export const MAP_SKINS: Record<MapSkinId, MapSkinBundle> = {
         wall: "tiles/walls/green",
         background: "tiles/backgrounds/green_water",
     },
+    building1: {},
 
 };
 
@@ -97,4 +113,17 @@ export function pickMapSkinId(
     const hash = hashString(`${runSeed}:${nodeId}`);
     const idx = list.length > 0 ? (hash % list.length) : 0;
     return list[idx] ?? DEFAULT_MAP_SKIN_ID;
+}
+
+export function resolveSemanticSprite(mapSkinId: MapSkinId | undefined, slot: string, index?: number): string {
+    const skinKey = mapSkinId ?? DEFAULT_MAP_SKIN_ID;
+    const table = MAP_SKIN_SEMANTIC[skinKey] ?? MAP_SKIN_SEMANTIC[DEFAULT_MAP_SKIN_ID] ?? {};
+    const raw = table[slot];
+    if (Array.isArray(raw)) {
+        if (raw.length === 0) return "";
+        const idx = typeof index === "number" && raw.length > 0 ? Math.max(0, Math.min(raw.length - 1, index)) : 0;
+        return raw[idx] ?? raw[0] ?? "";
+    }
+    if (typeof raw === "string") return raw;
+    return "";
 }
