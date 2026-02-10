@@ -57,6 +57,37 @@ Rules
 
 Achievements
 - [ ] All coordinate conversions flow through shared helpers
+- [ ] No system redefines axis orientation or dimension meaning
+## 2.1 Axis and dimension identity (locked)
+
+Table space and tile space share the same axis orientation.
+
+Canonical truths:
+- +x is east (right)
+- +y is south (down)
+- Width extends along +x
+- Height extends along +y
+
+One-liners (never revisit):
+> Excel +y == Tile-grid +y == South  
+> w+ == x+ and h+ == y+
+
+Rules
+- Excel column index maps directly to tile-grid `x`
+- Excel row index maps directly to tile-grid `y`
+- `w` is the extent of +x (number of columns)
+- `h` is the extent of +y (number of rows)
+- No axis swaps, sign flips, or rotations are permitted
+- No system may reinterpret width as height or height as width
+
+Forbidden
+- Any Excel→tile transform that swaps or flips axes
+- Any bounds logic that uses `h` as an x-extent or `w` as a y-extent
+- Any “north-is-right” or compass-compensation hacks
+
+Achievements
+- [ ] Table space, tile space, and grid math use identity axis mapping
+- [ ] No code path swaps `w/h` or `x/y`
 
 ---
 
@@ -211,7 +242,8 @@ If you change any of these, update all consumers together:
 - Z role definitions
 - Map compile outputs
 - Render pass order
-
+- Axis or dimension identity (x/y, w/h)
+- 
 When adding new behavior:
 - Centralize logic
 - Avoid new magic constants
