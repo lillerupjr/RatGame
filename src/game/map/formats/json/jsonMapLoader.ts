@@ -84,6 +84,8 @@ type JsonMapDef = {
     pool?: string[];
     heightUnitsMin?: number;
     heightUnitsMax?: number;
+    stackChance?: number;
+    propId?: string;
   }[];
   mapSkinId?: MapSkinId;
   mapSkinDefaults?: MapSkinBundle;
@@ -458,10 +460,10 @@ function optionalFieldsField(obj: Record<string, unknown>, source?: string): { c
     const radius = optionalNumberField(field, "radius") ?? undefined;
     const dir = optionalDirField(field, "dir");
     const height = optionalNumberField(field, "height");
-    const resolvedType = ((type ?? "floor").toLowerCase()) as TableMapCell["type"];
+    const resolvedTypeRaw = (type ?? "floor").toLowerCase();
     const resolvedZ = z ?? 0;
 
-    if (resolvedType === "building") {
+    if (resolvedTypeRaw === "building") {
       stamps.push({
         x: x0,
         y: y0,
@@ -472,6 +474,7 @@ function optionalFieldsField(obj: Record<string, unknown>, source?: string): { c
       });
       continue;
     }
+    const resolvedType = resolvedTypeRaw as TableMapCell["type"];
 
     for (let dy = 0; dy < ih; dy++) {
       for (let dx = 0; dx < iw; dx++) {
@@ -516,6 +519,8 @@ function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): S
       const lowered = typeRaw.toLowerCase();
       if (
         lowered === "building" ||
+        lowered === "container" ||
+        lowered === "prop" ||
         lowered === "road" ||
         lowered === "sidewalk" ||
         lowered === "park" ||
@@ -526,7 +531,7 @@ function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): S
         return lowered as SemanticStampType;
       }
       throw new Error(
-        `JSON map loader${formatSource(source)}: stamps[${index}].type must be one of building|road|sidewalk|park|sea|boss_room|fence.`
+        `JSON map loader${formatSource(source)}: stamps[${index}].type must be one of building|container|prop|road|sidewalk|park|sea|boss_room|fence.`
       );
     })();
     const z = optionalNumberField(entry, "z") ?? 0;
@@ -536,7 +541,9 @@ function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): S
     const pool = optionalStringArrayField(entry, "pool", source);
     const heightUnitsMin = optionalNumberField(entry, "heightUnitsMin");
     const heightUnitsMax = optionalNumberField(entry, "heightUnitsMax");
-    return { x, y, z, type, w, h, skinId, pool, heightUnitsMin, heightUnitsMax };
+    const stackChance = optionalNumberField(entry, "stackChance");
+    const propId = optionalStringField(entry, "propId");
+    return { x, y, z, type, w, h, skinId, pool, heightUnitsMin, heightUnitsMax, stackChance, propId };
   });
 }
 

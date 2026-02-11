@@ -1,4 +1,4 @@
-import { resolveMapSkin, type MapSkinId } from "../../../game/content/mapSkins";
+import { resolveMapSkin, resolveSemanticSprite, type MapSkinId } from "../../../game/content/mapSkins";
 
 export type LoadedImg = {
     img: HTMLImageElement;
@@ -10,7 +10,12 @@ const TILE_MODULES = import.meta.glob("../../../assets/tiles/**/*.png", {
     import: "default",
 }) as Record<string, string>;
 
-const BUILDING_MODULES = import.meta.glob("../../../assets/buildings/**/*.png", {
+const STRUCTURE_MODULES = import.meta.glob("../../../assets/structures/**/*.png", {
+    eager: true,
+    import: "default",
+}) as Record<string, string>;
+
+const PROP_MODULES = import.meta.glob("../../../assets/props/**/*.png", {
     eager: true,
     import: "default",
 }) as Record<string, string>;
@@ -30,8 +35,10 @@ function resolveUrl(spriteId: string): string | null {
     };
     const tileHit = findIn(TILE_MODULES);
     if (tileHit) return tileHit;
-    const buildingHit = findIn(BUILDING_MODULES);
-    if (buildingHit) return buildingHit;
+    const structureHit = findIn(STRUCTURE_MODULES);
+    if (structureHit) return structureHit;
+    const propHit = findIn(PROP_MODULES);
+    if (propHit) return propHit;
     return null;
 }
 
@@ -70,8 +77,9 @@ export function setActiveMapSkinId(id?: MapSkinId): void {
 }
 
 export function getVoidTop(): LoadedImg {
+    const semantic = resolveSemanticSprite(_activeMapSkinId, "VOID_TOP");
     const skin = resolveMapSkin(_activeMapSkinId);
-    const bg = skin.background;
+    const bg = semantic || skin.background;
     return loadById(bg);
 }
 // IMPORTANT: this must be a named export (your render.ts imports it by name)

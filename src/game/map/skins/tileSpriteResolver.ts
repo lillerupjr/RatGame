@@ -1,12 +1,13 @@
-import { DEFAULT_MAP_SKIN, type MapSkinBundle, type ResolvedMapSkin } from "../../content/mapSkins";
+import { DEFAULT_MAP_SKIN, resolveSemanticSprite, type MapSkinBundle, type MapSkinId, type ResolvedMapSkin } from "../../content/mapSkins";
 
-export type TileSpriteSlot = keyof ResolvedMapSkin;
+export type TileSpriteSlot = "floor" | "apron" | "wall" | "stair" | "stairApron";
 export type TileSpriteDir = "N" | "E" | "S" | "W";
 
 export type TileSpriteRequest = {
     slot: TileSpriteSlot;
     dir?: TileSpriteDir;
     mapSkin: ResolvedMapSkin;
+    mapSkinId?: MapSkinId;
     tileOverride?: MapSkinBundle;
     mapDefaults?: MapSkinBundle;
 };
@@ -38,12 +39,23 @@ function stairSuffix(dir?: TileSpriteDir): string | null {
 
 export function resolveTileSpriteId(request: TileSpriteRequest): string {
     const slot = request.slot;
+    const semanticKey = (() => {
+        switch (slot) {
+            case "floor": return "FLOOR";
+            case "apron": return "APRON";
+            case "wall": return "WALL";
+            case "stair": return "STAIR";
+            case "stairApron": return "STAIR_APRON";
+            default: return "";
+        }
+    })();
+    const semanticId = semanticKey && request.mapSkinId ? resolveSemanticSprite(request.mapSkinId, semanticKey) : "";
     const overrideId = normalizeId(request.tileOverride?.[slot]);
     const skinId = normalizeId(request.mapSkin[slot]);
     const mapDefaultId = normalizeId(request.mapDefaults?.[slot]);
     const fallbackId = normalizeId(DEFAULT_MAP_SKIN[slot]);
 
-    const base = overrideId ?? skinId ?? mapDefaultId ?? fallbackId;
+    const base = normalizeId(semanticId) ?? overrideId ?? skinId ?? mapDefaultId ?? fallbackId;
     if (!base) return "";
 
     const stripped = stripPng(base);

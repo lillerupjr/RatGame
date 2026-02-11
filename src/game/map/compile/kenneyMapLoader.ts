@@ -4,7 +4,9 @@ import { KENNEY_TILE_ANCHOR_Y } from "../../../engine/render/kenneyTiles";
 import type { TriggerDef } from "../../triggers/triggerTypes";
 import { resolveMapSkin, resolveSemanticSprite, type MapSkinBundle, type MapSkinId } from "../../content/mapSkins";
 import { resolveTileSpriteId } from "../skins/tileSpriteResolver";
-import { BUILDING_SKINS, HEIGHT_UNIT_PX, pickBuildingSkin, resolveBuildingCandidates } from "../../content/buildings";
+import { HEIGHT_UNIT_PX, pickBuildingSkin, resolveBuildingCandidates } from "../../content/buildings";
+import type { BuildingSkin } from "../../content/structureSkins";
+import { requireProp } from "../../content/props";
 import { RNG } from "../../util/rng";
 
 export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL";
@@ -66,6 +68,7 @@ export type RenderPiece = {
     wallDir?: WallDir;
     wallSkin?: string;
     flipX?: boolean;
+    scale?: number;
     renderTopKind: RenderTopKind;
     renderDir: StairDir;
     renderAnchorY: number;
@@ -79,9 +82,14 @@ export type StampOverlay = {
     ty: number;
     w: number;
     h: number;
+    anchorTx?: number;
+    anchorTy?: number;
     z: number;
     spriteId: string;
     drawDyOffset?: number;
+    drawDxOffset?: number;
+    scale?: number;
+    kind?: "ROOF" | "PROP";
 };
 
 export type WallToken = {
@@ -142,6 +150,7 @@ export type CompiledKenneyMap = {
     solidFacesInView(view: ViewRect): SolidFaceRec[];
     overlays: StampOverlay[];
     overlaysInView(view: ViewRect): StampOverlay[];
+    blockedTiles: Set<string>;
 };
 
 /** Compile a table-based map definition into a render/query-friendly map. */
@@ -440,6 +449,7 @@ export function compileKenneyMapFromTable(
             slot: renderTopKind === "STAIR" ? "stair" : "floor",
             dir: renderTopKind === "STAIR" ? renderDir : undefined,
             mapSkin: resolvedMapSkin,
+            mapSkinId: skinIdToUse,
             mapDefaults: mapSkinDefaults,
             tileOverride,
         });
@@ -485,6 +495,7 @@ export function compileKenneyMapFromTable(
 
     const occludersByLayer = new Map<number, RenderPiece[]>();
     const overlays: StampOverlay[] = [];
+    const blockedTiles = new Set<string>();
     const wallFaces = new Set<string>();
     const wallFaceList: SolidFaceRec[] = [];
 
@@ -532,6 +543,7 @@ export function compileKenneyMapFromTable(
         zBase: number,
         height: number,
         drawDyOffset: number,
+        scale: number,
     ) => {
         if (!spriteId) return;
         const zFrom = zBase;
@@ -547,6 +559,7 @@ export function compileKenneyMapFromTable(
             zTo,
             zLogical,
             wallDir: dir,
+            scale,
             renderTopKind: "FLOOR",
             renderDir: "N",
             renderAnchorY: floorAnchorY,
@@ -557,13 +570,17 @@ export function compileKenneyMapFromTable(
         });
     };
 
-    const compileStamp = (stamp: SemanticStamp, stampIndex: number) => {
+    const compileBuildingStamp = (
+        stamp: SemanticStamp,
+        stampIndex: number,
+        skinOverride?: string
+    ) => {
         const sx = (stamp.x | 0) + originTx;
         const sy = (stamp.y | 0) + originTy;
         const zBase = stamp.z ?? 0;
         const w = Math.max(1, (stamp.w ?? 1) | 0);
         const h = Math.max(1, (stamp.h ?? 1) | 0);
-        if (stamp.type === "building") {
+        if (stamp.type === "building" || stamp.type === "container") {
             if (stamp.w === undefined || stamp.h === undefined) {
                 throw new Error(`Building stamp at (${stamp.x},${stamp.y}) must define w/h.`);
             }
@@ -573,10 +590,13 @@ export function compileKenneyMapFromTable(
                     slot: "floor",
                     dir: undefined,
                     mapSkin: resolvedMapSkin,
+                    mapSkinId: skinIdToUse,
                     mapDefaults: mapSkinDefaults,
                 });
 
-            if (!stamp.skinId) {
+            const forcedSkinId = skinOverride ?? stamp.skinId;
+
+            if (!forcedSkinId) {
                 const candidates = resolveBuildingCandidates({
                     pool: stamp.pool,
                     mapSkinPool: resolvedMapSkin.buildingPool,
@@ -592,7 +612,7 @@ export function compileKenneyMapFromTable(
                     const seed = hashString(`${runSeed}:${mapId}:${stampIndex}:${stamp.x},${stamp.y}:${w}x${h}`);
                     const rng = new RNG(seed);
 
-                    const fitsAt = (x0: number, y0: number, skin: (typeof BUILDING_SKINS)[string]) => {
+                    const fitsAt = (x0: number, y0: number, skin: BuildingSkin) => {
                         if (x0 + skin.w > w || y0 + skin.h > h) return false;
                         for (let dy = 0; dy < skin.h; dy++) {
                             for (let dx = 0; dx < skin.w; dx++) {
@@ -602,7 +622,7 @@ export function compileKenneyMapFromTable(
                         return true;
                     };
 
-                    const occupy = (x0: number, y0: number, skin: (typeof BUILDING_SKINS)[string]) => {
+                    const occupy = (x0: number, y0: number, skin: BuildingSkin) => {
                         for (let dy = 0; dy < skin.h; dy++) {
                             for (let dx = 0; dx < skin.w; dx++) {
                                 occupied[(y0 + dy) * w + (x0 + dx)] = true;
@@ -637,7 +657,7 @@ export function compileKenneyMapFromTable(
 
                 for (let i = 0; i < placements.length; i++) {
                     const p = placements[i];
-                    compileStamp({
+                    compileBuildingStamp({
                         x: stamp.x + p.x,
                         y: stamp.y + p.y,
                         z: zBase,
@@ -670,7 +690,7 @@ export function compileKenneyMapFromTable(
                 return;
             }
             const skin = pickBuildingSkin({
-                skinId: stamp.skinId,
+                skinId: forcedSkinId,
                 pool: stamp.pool,
                 heightUnitsMin: stamp.heightUnitsMin,
                 heightUnitsMax: stamp.heightUnitsMax,
@@ -688,8 +708,9 @@ export function compileKenneyMapFromTable(
 
             const heightUnits = skin.heightUnits | 0;
             const anchorLiftPx = (skin.anchorLiftUnits | 0) * HEIGHT_UNIT_PX;
-            const wallLiftPx = (skin.wallLiftUnits | 0) * HEIGHT_UNIT_PX;
-            const roofLiftPx = (skin.roofLiftUnits | 0) * HEIGHT_UNIT_PX;
+            const wallLiftPx = ((skin.wallLiftUnits ?? 0) | 0) * HEIGHT_UNIT_PX;
+            const scale = skin.spriteScale ?? 1;
+            const roofLiftPx = (skin.roofLiftPx ?? (((skin.roofLiftUnits ?? 0) | 0) * HEIGHT_UNIT_PX)) * scale;
 
             if (skin.wallSouth.length === 0 || skin.wallEast.length === 0 || !skin.roof) {
                 throw new Error(`Building skin "${skin.id}" is missing required sprites.`);
@@ -705,7 +726,8 @@ export function compileKenneyMapFromTable(
                     spriteId,
                     zBase,
                     heightUnits,
-                    anchorLiftPx + wallLiftPx
+                    anchorLiftPx + wallLiftPx,
+                    scale
                 );
             }
             // East edge (right column)
@@ -718,7 +740,8 @@ export function compileKenneyMapFromTable(
                     spriteId,
                     zBase,
                     heightUnits,
-                    anchorLiftPx + wallLiftPx
+                    anchorLiftPx + wallLiftPx,
+                    scale
                 );
             }
 
@@ -731,6 +754,8 @@ export function compileKenneyMapFromTable(
                 z: zBase + heightUnits,
                 spriteId: skin.roof,
                 drawDyOffset: anchorLiftPx + roofLiftPx,
+                scale,
+                kind: "ROOF",
             });
 
             for (let dx = 0; dx < w; dx++) {
@@ -773,6 +798,7 @@ export function compileKenneyMapFromTable(
                         slot: "floor",
                         dir: undefined,
                         mapSkin: resolvedMapSkin,
+                        mapSkinId: skinIdToUse,
                         mapDefaults: mapSkinDefaults,
                     });
                 addSurface({
@@ -791,6 +817,90 @@ export function compileKenneyMapFromTable(
                 });
             }
         }
+    };
+    const compileStamp = (stamp: SemanticStamp, stampIndex: number) => {
+        if (stamp.type === "container") {
+            const w = stamp.w ?? 2;
+            const h = stamp.h ?? 3;
+            const pool = stamp.pool ?? ["containers"];
+            const chosen = pickBuildingSkin({
+                skinId: stamp.skinId,
+                pool,
+                heightUnitsMin: stamp.heightUnitsMin,
+                heightUnitsMax: stamp.heightUnitsMax,
+                mapSkinPool: resolvedMapSkin.buildingPool,
+                context: {
+                    runSeed,
+                    mapId,
+                    stampIndex,
+                    stampX: stamp.x | 0,
+                    stampY: stamp.y | 0,
+                    stampW: w,
+                    stampH: h,
+                },
+            });
+
+            const baseStamp: SemanticStamp = {
+                ...stamp,
+                type: "building",
+                w,
+                h,
+                pool,
+                skinId: chosen.id,
+            };
+            compileBuildingStamp(baseStamp, stampIndex, chosen.id);
+
+            const chance = Math.max(0, Math.min(1, stamp.stackChance ?? 0.2));
+            if (chance > 0) {
+                const seed = hashString(`${runSeed}:${mapId}:${stampIndex}:stack:${stamp.x},${stamp.y}`);
+                const roll = (seed % 10000) / 10000;
+                if (roll < chance) {
+                    compileBuildingStamp(
+                        { ...baseStamp, z: (stamp.z ?? 0) + chosen.heightUnits },
+                        stampIndex,
+                        chosen.id
+                    );
+                }
+            }
+            return;
+        }
+        if (stamp.type === "prop") {
+            const propId = stamp.propId ?? "";
+            const prop = requireProp(propId, "prop stamp");
+            const w = stamp.w ?? prop.w;
+            const h = stamp.h ?? prop.h;
+            const anchorTx = (stamp.x | 0) + (w - 1);
+            const anchorTy = (stamp.y | 0) + (h - 1);
+            const zBase = stamp.z ?? 0;
+            const anchorLiftPx = (prop.anchorLiftUnits ?? 0) * HEIGHT_UNIT_PX;
+            const offset = prop.anchorOffsetPx ?? { x: 0, y: 0 };
+
+            overlays.push({
+                id: `prop_${prop.id}_${anchorTx}_${anchorTy}_${zBase}`,
+                tx: stamp.x | 0,
+                ty: stamp.y | 0,
+                w,
+                h,
+                anchorTx,
+                anchorTy,
+                z: zBase,
+                spriteId: prop.sprite,
+                drawDyOffset: anchorLiftPx + offset.y,
+                drawDxOffset: offset.x,
+                scale: 1,
+                kind: "PROP",
+            });
+
+            for (let dx = 0; dx < w; dx++) {
+                for (let dy = 0; dy < h; dy++) {
+                    const bx = (stamp.x | 0) + dx + originTx;
+                    const by = (stamp.y | 0) + dy + originTy;
+                    blockedTiles.add(`${bx},${by}`);
+                }
+            }
+            return;
+        }
+        compileBuildingStamp(stamp, stampIndex);
     };
     if (def.stamps && def.stamps.length > 0) {
         for (let i = 0; i < def.stamps.length; i++) {
@@ -889,6 +999,7 @@ export function compileKenneyMapFromTable(
                 slot: renderTopKind === "STAIR" ? "stairApron" : "apron",
                 dir: canonical.dir,
                 mapSkin: resolvedMapSkin,
+                mapSkinId: skinIdToUse,
                 mapDefaults: mapSkinDefaults,
             });
 
@@ -934,6 +1045,7 @@ export function compileKenneyMapFromTable(
             slot: wallSlot,
             dir: wallSpriteDir,
             mapSkin: resolvedMapSkin,
+            mapSkinId: skinIdToUse,
             mapDefaults: mapSkinDefaults,
         });
 
@@ -1068,5 +1180,6 @@ export function compileKenneyMapFromTable(
         solidFacesInView,
         overlays,
         overlaysInView,
+        blockedTiles,
     };
 }

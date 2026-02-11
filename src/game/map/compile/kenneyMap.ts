@@ -922,6 +922,7 @@ function tileWalkShapeFromTile(t: IsoTile): TileWalkShape {
 
 /** Return the walkable top-face shape for a tile. */
 export function tileWalkShape(tx: number, ty: number): TileWalkShape {
+    if (_compiled.blockedTiles?.has(`${tx},${ty}`)) return "BLOCKED";
     const t = getTile(tx, ty);
     return tileWalkShapeFromTile(t);
 }

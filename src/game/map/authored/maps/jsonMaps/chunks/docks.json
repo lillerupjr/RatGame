@@ -1,0 +1,39 @@
+{
+  "id": "docks",
+  "width": 24,
+  "height": 24,
+  "fields": [
+
+
+    { "x": 0, "y": 2, "w": 24, "h": 2, "type": "sidewalk" },
+    { "x": 2, "y": 20, "w": 24, "h": 2, "type": "sidewalk" },
+
+    { "x": 0, "y": 4,  "w": 24, "h": 16, "type": "road" },
+
+    { "x": 22, "y": 0,  "w": 2, "h": 24, "type": "road" },
+    { "x": 0, "y": 0,  "w": 2, "h": 24, "type": "road" }
+
+  ],
+  "stamps": [
+    { "x": 5,  "y": 6,  "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 7,  "y": 6,  "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 5,  "y": 9,  "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 7,  "y": 9,  "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+
+    { "x": 15, "y": 6,  "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 17, "y": 6,  "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 15, "y": 9,  "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 17, "y": 9,  "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+
+    { "x": 5,  "y": 14, "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 7,  "y": 14, "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 5,  "y": 17, "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 7,  "y": 17, "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+
+    { "x": 15, "y": 14, "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 17, "y": 14, "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 15, "y": 17, "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 17, "y": 17, "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 3, "y": 0, "type": "prop", "propId": "boat1", "w": 1, "h": 1 }
+  ]
+}

@@ -256,22 +256,24 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     zVisual?: number;
 
     flipX?: boolean;
+    scale?: number;
   };
 
 
     const drawRenderPiece = (c: RenderPieceDraw) => {
       const img = c.img;
       if (!img || img.width <= 0 || img.height <= 0) return;
+      const scale = c.scale ?? 1;
 
-    if (c.flipX) {
       ctx.save();
-      ctx.translate(c.dx + c.dw * 0.5, c.dy + c.dh * 0.5);
-      ctx.scale(-1, 1);
-      ctx.drawImage(img, -c.dw * 0.5, -c.dh * 0.5, c.dw, c.dh);
-      ctx.restore();
-    } else {
-      ctx.drawImage(img, c.dx, c.dy, c.dw, c.dh);
+      ctx.translate(c.dx, c.dy);
+      ctx.scale(scale, scale);
+      if (c.flipX) {
+        ctx.translate(c.dw, 0);
+        ctx.scale(-1, 1);
       }
+      ctx.drawImage(img, 0, 0, c.dw, c.dh);
+      ctx.restore();
     };
 
     const dirToDelta = (dir: "N" | "E" | "S" | "W") => {
@@ -293,6 +295,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const apronScale = c.kind === "FLOOR_APRON" ? FLOOR_APRON_SCALE : STAIR_APRON_SCALE;
       const aw = apronRec.img.width * apronScale;
       const ah = apronRec.img.height * apronScale;
+      const scale = c.scale ?? 1;
 
       const wx = (c.tx + 0.5) * T;
       const wy = (c.ty + 0.5) * T;
@@ -302,8 +305,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const apronWy = wy + apronDelta.dy * T * 0.5;
 
       const p = worldToScreen(apronWx, apronWy);
-      const ax = p.x + camX - aw * 0.5;
-      const ayBase = p.y + camY - ah * anchorY;
+      const ax = p.x + camX - aw * scale * 0.5;
+      const ayBase = p.y + camY - ah * scale * anchorY;
 
 // Allow negative apron spans (e.g. -1 -> 0) so height-0 platforms still show aprons.
     const zTop = Math.floor(c.zTo);
@@ -345,6 +348,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           dh: ah,
           zVisual,
           flipX: apronFlipX,
+          scale,
         });
       }
 
@@ -369,11 +373,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     // Walls should render at the midpoint of their vertical span (centered on half-height).
     const h = ((c.zFrom ?? c.zTo) + c.zTo) * 0.5;
     const dyOffset = c.renderDyOffset ?? 0;
+    const scale = c.scale ?? 1;
 
     const aw = apronRec.img.width * WALL_APRON_SCALE;
     const ah = apronRec.img.height * WALL_APRON_SCALE;
-    const ax = p.x + camX - aw * 0.5;
-    const ay = p.y + camY - ah * anchorY - h * ELEV_PX - dyOffset;
+    const ax = p.x + camX - aw * scale * 0.5;
+    const ay = p.y + camY - ah * scale * anchorY - h * ELEV_PX - dyOffset;
 
 
     return {
@@ -383,6 +388,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       dw: aw,
       dh: ah,
       flipX: apronFlipX,
+      scale,
     };
   };
 
@@ -391,17 +397,21 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     if (!rec?.ready || !rec.img || rec.img.width <= 0 || rec.img.height <= 0) return null;
     const ow = rec.img.width;
     const oh = rec.img.height;
-    const wx = (o.tx + o.w * 0.5) * T;
-    const wy = (o.ty + o.h * 0.5) * T;
+    const scale = o.scale ?? 1;
+    const anchorTx = o.anchorTx ?? (o.tx + o.w * 0.5);
+    const anchorTy = o.anchorTy ?? (o.ty + o.h * 0.5);
+    const wx = (anchorTx + 0.5) * T;
+    const wy = (anchorTy + 0.5) * T;
     const p = worldToScreen(wx, wy);
-    const dx = p.x + camX - ow * 0.5;
-    const dy = p.y + camY - oh  - o.z * ELEV_PX - (o.drawDyOffset ?? 0);
+    const dx = p.x + camX - ow * scale * 0.5 + (o.drawDxOffset ?? 0);
+    const dy = p.y + camY - oh * scale - o.z * ELEV_PX - (o.drawDyOffset ?? 0);
     return {
       img: rec.img,
       dx,
       dy,
       dw: ow,
       dh: oh,
+      scale,
     };
   };
 
@@ -1024,28 +1034,29 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     }
   }
 
-  // ----------------------------
-  // Collect OVERLAYS (roofs) into slices
-  // ----------------------------
-  {
-    const ovs = overlaysInView(viewRect);
-    for (let i = 0; i < ovs.length; i++) {
-      const o = ovs[i];
-      if (o.id.startsWith("roof_") && shouldCullBuildingAt(o.tx, o.ty, o.w, o.h)) continue;
-      const draw = buildOverlayDraw(o);
-      if (!draw) continue;
-      const slice = (o.tx + o.w - 1) + (o.ty + o.h - 1);
-      const within = o.tx + o.w - 1;
-      const overlayKey: RenderKey = {
-        slice,
-        within,
-        baseZ: o.z,
-        kindOrder: KindOrder.OVERLAY,
-        stableId: 200000 + i,
-      };
-      addToSlice(slice, overlayKey, () => drawRenderPiece(draw));
+    // ----------------------------
+    // Collect OVERLAYS (roofs + props) into slices
+    // ----------------------------
+    {
+      const ovs = overlaysInView(viewRect);
+      for (let i = 0; i < ovs.length; i++) {
+        const o = ovs[i];
+        if ((o.kind ?? "ROOF") === "ROOF" && shouldCullBuildingAt(o.tx, o.ty, o.w, o.h)) continue;
+        const draw = buildOverlayDraw(o);
+        if (!draw) continue;
+        const slice = (o.anchorTx ?? (o.tx + o.w - 1)) + (o.anchorTy ?? (o.ty + o.h - 1));
+        const within = o.anchorTx ?? (o.tx + o.w - 1);
+        const kindOrder = (o.kind ?? "ROOF") === "PROP" ? KindOrder.ENTITY : KindOrder.OVERLAY;
+        const overlayKey: RenderKey = {
+          slice,
+          within,
+          baseZ: o.z,
+          kindOrder,
+          stableId: 200000 + i,
+        };
+        addToSlice(slice, overlayKey, () => drawRenderPiece(draw));
+      }
     }
-  }
   }
 
   // ============================================

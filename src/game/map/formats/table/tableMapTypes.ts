@@ -18,7 +18,7 @@ export type TableMapCell = {
     radius?: number;
 };
 
-export type SemanticStampType = "building" | "road" | "sidewalk" | "park" | "sea" | "boss_room" | "fence";
+export type SemanticStampType = "building" | "container" | "prop" | "road" | "sidewalk" | "park" | "sea" | "boss_room" | "fence";
 
 export type SemanticStamp = {
     x: number;
@@ -31,6 +31,8 @@ export type SemanticStamp = {
     pool?: string[];
     heightUnitsMin?: number;
     heightUnitsMax?: number;
+    stackChance?: number;
+    propId?: string;
 };
 
 export type TableObjectiveRule =

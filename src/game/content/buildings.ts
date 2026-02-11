@@ -1,20 +1,10 @@
-export const HEIGHT_UNIT_PX = 16;
+import { CONTAINER_PACKS, CONTAINER_SKINS } from "./containers";
+import type { BuildingPackId, BuildingSkin, BuildingSkinId } from "./structureSkins";
+import { HEIGHT_UNIT_PX } from "./structureSkins";
 
-export type BuildingSkinId = string;
-export type BuildingPackId = string;
+export { HEIGHT_UNIT_PX };
 
-export type BuildingSkin = {
-    id: BuildingSkinId;
-    w: number;
-    h: number;
-    heightUnits: number;
-    anchorLiftUnits: number;
-    wallLiftUnits?: number;
-    roofLiftUnits?: number;
-    roof: string;
-    wallSouth: string[];
-    wallEast: string[];
-};
+export type { BuildingPackId, BuildingSkin, BuildingSkinId } from "./structureSkins";
 
 export const DEFAULT_BUILDING_PACK_ID: BuildingPackId = "default_buildings";
 
@@ -27,15 +17,15 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
         anchorLiftUnits: -2,
         wallLiftUnits: 0,
         roofLiftUnits: -4,
-        roof: "buildings/building1/top",
+        roof: "structures/buildings/1/top",
         wallSouth: [
-            "buildings/building1/s_1",
-            "buildings/building1/s_2",
-            "buildings/building1/s_3",
+            "structures/buildings/1/s_1",
+            "structures/buildings/1/s_2",
+            "structures/buildings/1/s_3",
         ],
         wallEast: [
-            "buildings/building1/e_1",
-            "buildings/building1/e_2",
+            "structures/buildings/1/e_1",
+            "structures/buildings/1/e_2",
         ],
     },
     building2: {
@@ -46,15 +36,15 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
         anchorLiftUnits: -2,
         wallLiftUnits: 0,
         roofLiftUnits: -4,
-        roof: "buildings/building2/top",
+        roof: "structures/buildings/2/top",
         wallSouth: [
-            "buildings/building2/s_1",
-            "buildings/building2/s_2",
-            "buildings/building2/s_3",
+            "structures/buildings/2/s_1",
+            "structures/buildings/2/s_2",
+            "structures/buildings/2/s_3",
         ],
         wallEast: [
-            "buildings/building2/e_1",
-            "buildings/building2/e_2",
+            "structures/buildings/2/e_1",
+            "structures/buildings/2/e_2",
         ],
     },
     building3: {
@@ -65,15 +55,15 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
         anchorLiftUnits: -2,
         wallLiftUnits: 0,
         roofLiftUnits: -4,
-        roof: "buildings/building3/top",
+        roof: "structures/buildings/3/top",
         wallSouth: [
-            "buildings/building3/s_1",
-            "buildings/building3/s_2",
-            "buildings/building3/s_3",
+            "structures/buildings/3/s_1",
+            "structures/buildings/3/s_2",
+            "structures/buildings/3/s_3",
         ],
         wallEast: [
-            "buildings/building3/e_1",
-            "buildings/building3/e_2",
+            "structures/buildings/3/e_1",
+            "structures/buildings/3/e_2",
         ],
     },
     building4: {
@@ -84,15 +74,15 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
         anchorLiftUnits: -2,
         wallLiftUnits: 0,
         roofLiftUnits: -4,
-        roof: "buildings/building4/top",
+        roof: "structures/buildings/4/top",
         wallSouth: [
-            "buildings/building4/s_1",
-            "buildings/building4/s_2",
-            "buildings/building4/s_3",
+            "structures/buildings/4/s_1",
+            "structures/buildings/4/s_2",
+            "structures/buildings/4/s_3",
         ],
         wallEast: [
-            "buildings/building4/e_1",
-            "buildings/building4/e_2",
+            "structures/buildings/4/e_1",
+            "structures/buildings/4/e_2",
         ],
     },
     building5: {
@@ -103,15 +93,15 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
         anchorLiftUnits: -2,
         wallLiftUnits: 0,
         roofLiftUnits: -4,
-        roof: "buildings/building5/top",
+        roof: "structures/buildings/5/top",
         wallSouth: [
-            "buildings/building5/s_1",
-            "buildings/building5/s_2",
-            "buildings/building5/s_3",
+            "structures/buildings/5/s_1",
+            "structures/buildings/5/s_2",
+            "structures/buildings/5/s_3",
         ],
         wallEast: [
-            "buildings/building5/e_1",
-            "buildings/building5/e_2",
+            "structures/buildings/5/e_1",
+            "structures/buildings/5/e_2",
         ],
     },
 
@@ -123,15 +113,15 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
         anchorLiftUnits: -2,
         wallLiftUnits: 0,
         roofLiftUnits: -4,
-        roof: "buildings/building6/top",
+        roof: "structures/buildings/6/top",
         wallSouth: [
-            "buildings/building6/s_1",
-            "buildings/building6/s_2",
-            "buildings/building6/s_3",
+            "structures/buildings/6/s_1",
+            "structures/buildings/6/s_2",
+            "structures/buildings/6/s_3",
         ],
         wallEast: [
-            "buildings/building6/e_1",
-            "buildings/building6/e_2",
+            "structures/buildings/6/e_1",
+            "structures/buildings/6/e_2",
         ],
     },
 
@@ -143,15 +133,15 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
         anchorLiftUnits: -2,
         wallLiftUnits: 0,
         roofLiftUnits: -4,
-        roof: "buildings/building7/top",
+        roof: "structures/buildings/7/top",
         wallSouth: [
-            "buildings/building7/s_1",
-            "buildings/building7/s_2",
-            "buildings/building7/s_3",
+            "structures/buildings/7/s_1",
+            "structures/buildings/7/s_2",
+            "structures/buildings/7/s_3",
         ],
         wallEast: [
-            "buildings/building7/e_1",
-            "buildings/building7/e_2",
+            "structures/buildings/7/e_1",
+            "structures/buildings/7/e_2",
         ],
     },
 
@@ -163,23 +153,31 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
         anchorLiftUnits: -2,
         wallLiftUnits: 0,
         roofLiftUnits: -4,
-        roof: "buildings/building8/top",
+        roof: "structures/buildings/8/top",
         wallSouth: [
-            "buildings/building8/s_1",
-            "buildings/building8/s_2",
-            "buildings/building8/s_3",
+            "structures/buildings/8/s_1",
+            "structures/buildings/8/s_2",
+            "structures/buildings/8/s_3",
         ],
         wallEast: [
-            "buildings/building8/e_1",
-            "buildings/building8/e_2",
+            "structures/buildings/8/e_1",
+            "structures/buildings/8/e_2",
         ],
     },
-
-
 };
 
 export const BUILDING_PACKS: Record<BuildingPackId, BuildingSkinId[]> = {
     [DEFAULT_BUILDING_PACK_ID]: ["building1", "building2", "building3", "building4", "building5", "building6", "building7", "building8"],
+};
+
+const ALL_PACKS: Record<BuildingPackId, BuildingSkinId[]> = {
+    ...BUILDING_PACKS,
+    ...CONTAINER_PACKS,
+};
+
+const ALL_SKINS: Record<BuildingSkinId, BuildingSkin> = {
+    ...BUILDING_SKINS,
+    ...CONTAINER_SKINS,
 };
 
 function hashString(s: string): number {
@@ -191,7 +189,7 @@ function hashString(s: string): number {
 }
 
 function requireBuildingSkin(id: BuildingSkinId, context: string): BuildingSkin {
-    const skin = BUILDING_SKINS[id];
+    const skin = ALL_SKINS[id];
     if (!skin) {
         throw new Error(`Building selection: unknown BuildingSkin id "${id}" (${context}).`);
     }
@@ -199,7 +197,7 @@ function requireBuildingSkin(id: BuildingSkinId, context: string): BuildingSkin 
 }
 
 function requireBuildingPack(id: BuildingPackId, context: string): BuildingSkinId[] {
-    const pack = BUILDING_PACKS[id];
+    const pack = ALL_PACKS[id];
     if (!pack) {
         throw new Error(`Building selection: unknown BuildingPack id "${id}" (${context}).`);
     }

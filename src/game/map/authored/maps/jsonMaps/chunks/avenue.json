@@ -1,11 +1,11 @@
 {
-  "id": "chunk1",
+  "id": "avenue",
   "width": 24,
   "height": 24,
 
   "fields": [
-    { "x": 2, "y": 0, "w": 21, "h": 2, "type": "building" },
-    { "x": 2, "y": 22, "w": 21, "h": 2, "type": "building" },
+    { "x": 2, "y": 0, "w": 20, "h": 2, "type": "building" },
+    { "x": 2, "y": 22, "w": 20, "h": 2, "type": "building" },
 
     { "x": 0, "y": 0, "w": 24, "h": 24, "type": "sidewalk" },
 
