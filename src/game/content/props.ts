@@ -14,10 +14,35 @@ export const PROPS: Record<PropId, PropDef> = {
         id: "boat1",
         w: 3,
         h: 2,
-        sprite: "props/boats/boat1",
+        sprite: "props/boats/boat1_e",
         anchorLiftUnits: 0,
         anchorOffsetPx: { x: 0, y: 0 },
     },
+    boat2: {
+        id: "boat2",
+        w: 3,
+        h: 2,
+        sprite: "props/boats/boat2_e",
+        anchorLiftUnits: 0,
+        anchorOffsetPx: { x: 0, y: 0 },
+    },
+    boat3: {
+        id: "boat3",
+        w: 2,
+        h: 3,
+        sprite: "props/boats/boat1_s",
+        anchorLiftUnits: 0,
+        anchorOffsetPx: { x: 0, y: 0 },
+    },
+    boat4: {
+        id: "boat4",
+        w: 2,
+        h: 3,
+        sprite: "props/boats/boat2_s",
+        anchorLiftUnits: 0,
+        anchorOffsetPx: { x: 0, y: 0 },
+    },
+
 };
 
 export function requireProp(id: PropId, context: string): PropDef {

@@ -162,6 +162,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const WALL_APRON_SCALE = 1;
   const VOID_TOP_SCALE = 1;
 
+  // Small render-order bias so container walls can occlude stacked container roofs.
+  const CONTAINER_WALL_SORT_BIAS = 0.001;
+
   // Optional render-layer offset for stairs.
   // --- Render HEIGHT knobs (screen-space Y offsets, in pixels) ---
   // Positive moves DOWN on screen; negative moves UP.
@@ -999,10 +1002,11 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         if (occ.id.startsWith("stamp_wall_") && shouldCullBuildingAt(occ.tx, occ.ty)) continue;
         const draw = buildWallDraw(occ, occluderId++);
         if (!draw) continue;
+        const isContainerWall = occ.spriteId?.includes("structures/containers/");
         const renderKey: RenderKey = {
           slice: occ.tx + occ.ty,
           within: occ.tx,
-          baseZ: occ.zFrom,
+          baseZ: occ.zFrom + (isContainerWall ? CONTAINER_WALL_SORT_BIAS : 0),
           kindOrder: KindOrder.OCCLUDER,
           stableId: occStableId,
         };
