@@ -4,7 +4,8 @@ import { KENNEY_TILE_ANCHOR_Y } from "../../../engine/render/kenneyTiles";
 import type { TriggerDef } from "../../triggers/triggerTypes";
 import { resolveMapSkin, resolveSemanticSprite, type MapSkinBundle, type MapSkinId } from "../../content/mapSkins";
 import { resolveTileSpriteId } from "../skins/tileSpriteResolver";
-import { HEIGHT_UNIT_PX, pickBuildingSkin } from "../../content/buildings";
+import { BUILDING_SKINS, HEIGHT_UNIT_PX, pickBuildingSkin, resolveBuildingCandidates } from "../../content/buildings";
+import { RNG } from "../../util/rng";
 
 export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL";
 export type StairDir = "N" | "E" | "S" | "W";
@@ -161,6 +162,14 @@ export function compileKenneyMapFromTable(
     const runSeed = options?.runSeed ?? 0;
     const mapId = options?.mapId ?? def.id;
 
+    const hashString = (s: string): number => {
+        let hash = 0;
+        for (let i = 0; i < s.length; i++) {
+            hash = ((hash << 5) - hash + s.charCodeAt(i)) | 0;
+        }
+        return hash >>> 0;
+    };
+
     // Excel/table coords are tile coords (identity mapping).
 
     type ParsedCell = {
@@ -209,8 +218,21 @@ export function compileKenneyMapFromTable(
                 return undefined;
             })();
 
-            if (type === "floor") {
-                return { tile: { kind: "FLOOR" as const, h: z, skin: sprite }, walls: [] as WallToken[] };
+            const semanticFloorSlot = (() => {
+                switch (type) {
+                    case "road": return "ROAD_FLOOR";
+                    case "sidewalk": return "SIDEWALK_FLOOR";
+                    case "park": return "PARK_FLOOR";
+                    case "sea": return "SEA_FLOOR";
+                    default: return undefined;
+                }
+            })();
+            if (type === "floor" || semanticFloorSlot) {
+                const semanticSprite = semanticFloorSlot
+                    ? resolveSemanticSprite(skinIdToUse, semanticFloorSlot)
+                    : "";
+                const floorSprite = sprite ?? (semanticSprite || undefined);
+                return { tile: { kind: "FLOOR" as const, h: z, skin: floorSprite }, walls: [] as WallToken[] };
             }
             if (type === "spawn") {
                 return { tile: { kind: "SPAWN" as const, h: z, skin: sprite }, walls: [] as WallToken[] };
@@ -545,6 +567,108 @@ export function compileKenneyMapFromTable(
             if (stamp.w === undefined || stamp.h === undefined) {
                 throw new Error(`Building stamp at (${stamp.x},${stamp.y}) must define w/h.`);
             }
+            const buildingFloorSprite =
+                resolveSemanticSprite(skinIdToUse, "BUILDING_FLOOR") ||
+                resolveTileSpriteId({
+                    slot: "floor",
+                    dir: undefined,
+                    mapSkin: resolvedMapSkin,
+                    mapDefaults: mapSkinDefaults,
+                });
+
+            if (!stamp.skinId) {
+                const candidates = resolveBuildingCandidates({
+                    pool: stamp.pool,
+                    mapSkinPool: resolvedMapSkin.buildingPool,
+                    heightUnitsMin: stamp.heightUnitsMin,
+                    heightUnitsMax: stamp.heightUnitsMax,
+                }).filter((skin) => skin.w <= w && skin.h <= h);
+
+                const occupied = new Array(w * h).fill(false);
+                const placements: Array<{ x: number; y: number; w: number; h: number; skinId: string }> = [];
+                const gaps: Array<{ x: number; y: number }> = [];
+
+                if (candidates.length > 0) {
+                    const seed = hashString(`${runSeed}:${mapId}:${stampIndex}:${stamp.x},${stamp.y}:${w}x${h}`);
+                    const rng = new RNG(seed);
+
+                    const fitsAt = (x0: number, y0: number, skin: (typeof BUILDING_SKINS)[string]) => {
+                        if (x0 + skin.w > w || y0 + skin.h > h) return false;
+                        for (let dy = 0; dy < skin.h; dy++) {
+                            for (let dx = 0; dx < skin.w; dx++) {
+                                if (occupied[(y0 + dy) * w + (x0 + dx)]) return false;
+                            }
+                        }
+                        return true;
+                    };
+
+                    const occupy = (x0: number, y0: number, skin: (typeof BUILDING_SKINS)[string]) => {
+                        for (let dy = 0; dy < skin.h; dy++) {
+                            for (let dx = 0; dx < skin.w; dx++) {
+                                occupied[(y0 + dy) * w + (x0 + dx)] = true;
+                            }
+                        }
+                    };
+
+                    for (let y = 0; y < h; y++) {
+                        for (let x = 0; x < w; x++) {
+                            const idx = y * w + x;
+                            if (occupied[idx]) continue;
+
+                            const fitList = candidates.filter((skin) => fitsAt(x, y, skin));
+                            if (fitList.length === 0) {
+                                occupied[idx] = true;
+                                gaps.push({ x, y });
+                                continue;
+                            }
+
+                            const chosen = fitList[rng.int(0, fitList.length - 1)];
+                            placements.push({ x, y, w: chosen.w, h: chosen.h, skinId: chosen.id });
+                            occupy(x, y, chosen);
+                        }
+                    }
+                } else {
+                    for (let y = 0; y < h; y++) {
+                        for (let x = 0; x < w; x++) {
+                            gaps.push({ x, y });
+                        }
+                    }
+                }
+
+                for (let i = 0; i < placements.length; i++) {
+                    const p = placements[i];
+                    compileStamp({
+                        x: stamp.x + p.x,
+                        y: stamp.y + p.y,
+                        z: zBase,
+                        type: "building",
+                        w: p.w,
+                        h: p.h,
+                        skinId: p.skinId,
+                    }, stampIndex);
+                }
+
+                if (gaps.length > 0) {
+                    for (let i = 0; i < gaps.length; i++) {
+                        const g = gaps[i];
+                        addSurface({
+                            id: `building_gap_${sx + g.x}_${sy + g.y}_${zBase}`,
+                            kind: "TILE_TOP",
+                            tx: sx + g.x,
+                            ty: sy + g.y,
+                            zBase,
+                            zLogical: zBase | 0,
+                            tile: { kind: "FLOOR", h: zBase } as IsoTile,
+                            renderTopKind: "FLOOR",
+                            renderDir: "N",
+                            renderAnchorY: floorAnchorY,
+                            renderDyOffset: 0,
+                            spriteIdTop: buildingFloorSprite,
+                        });
+                    }
+                }
+                return;
+            }
             const skin = pickBuildingSkin({
                 skinId: stamp.skinId,
                 pool: stamp.pool,
@@ -609,14 +733,6 @@ export function compileKenneyMapFromTable(
                 drawDyOffset: anchorLiftPx + roofLiftPx,
             });
 
-            const buildingFloorSprite =
-                resolveSemanticSprite(skinIdToUse, "BUILDING_FLOOR") ||
-                resolveTileSpriteId({
-                    slot: "floor",
-                    dir: undefined,
-                    mapSkin: resolvedMapSkin,
-                    mapDefaults: mapSkinDefaults,
-                });
             for (let dx = 0; dx < w; dx++) {
                 for (let dy = 0; dy < h; dy++) {
                     addSurface({

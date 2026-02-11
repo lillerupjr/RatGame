@@ -22,8 +22,13 @@ export type ResolvedMapSkin = {
     background: string;
     buildingPool: string[];
 };
-
+export const DEFAULT_MAP_SKIN_ID: MapSkinId = "default";
 export const MAP_SKIN_SEMANTIC: Record<MapSkinId, Record<string, string | string[]>> = {
+    [DEFAULT_MAP_SKIN_ID]: {
+        SIDEWALK_FLOOR: "tiles/floor/top/sidewalk",
+        ROAD_FLOOR: "tiles/floor/top/road",
+        PARK_FLOOR: "tiles/floor/top/park",
+    },
     building1: {
         BUILDING_WALL_SOUTH: [
             "buildings/building1/s_1",
@@ -48,7 +53,7 @@ export const DEFAULT_MAP_SKIN: ResolvedMapSkin = {
     background: "tiles/backgrounds/water3",
 };
 
-export const DEFAULT_MAP_SKIN_ID: MapSkinId = "default";
+
 
 export const MAP_SKINS: Record<MapSkinId, MapSkinBundle> = {
     [DEFAULT_MAP_SKIN_ID]: {},

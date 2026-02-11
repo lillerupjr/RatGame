@@ -11,6 +11,24 @@ import type {
 } from "../table/tableMapTypes";
 import type { MapSkinBundle, MapSkinId } from "../../../content/mapSkins";
 
+const RAW_CHUNK_MAPS = import.meta.glob("../../authored/maps/jsonMaps/chunks/*.json", {
+  eager: true,
+  import: "default",
+}) as Record<string, unknown>;
+
+const CHUNK_BY_ID: Map<string, Record<string, unknown>> = (() => {
+  const out = new Map<string, Record<string, unknown>>();
+  for (const json of Object.values(RAW_CHUNK_MAPS)) {
+    if (!isRecord(json)) continue;
+    const id = json.id;
+    if (typeof id === "string" && id.trim()) {
+      out.set(id.trim(), json);
+    }
+  }
+  return out;
+})();
+const CHUNK_SIZE = 24;
+
 type JsonMapCell = {
   x: number;
   y: number;
@@ -48,6 +66,11 @@ type JsonMapDef = {
   id: string;
   width?: number;
   height?: number;
+  chunkGrid?: {
+    id: string;
+    cols: number;
+    rows: number;
+  };
   fields?: JsonMapField[];
   cells?: TableMapCell[];
   stamps?: {
@@ -168,6 +191,21 @@ function optionalApronBaseModeField(
     throw new Error(`JSON map loader: optional field "${key}" must be "PLATEAU" or "ISLANDS".`);
   }
   return value;
+}
+
+function optionalChunkGridField(obj: Record<string, unknown>, source?: string): JsonMapDef["chunkGrid"] | undefined {
+  const raw = obj.chunkGrid;
+  if (raw === undefined) return undefined;
+  if (!isRecord(raw)) {
+    throw new Error(`JSON map loader${formatSource(source)}: "chunkGrid" must be an object.`);
+  }
+  const id = requireStringField(raw, "id", source);
+  const cols = requireNumberField(raw, "cols", source);
+  const rows = requireNumberField(raw, "rows", source);
+  if (cols <= 0 || rows <= 0) {
+    throw new Error(`JSON map loader${formatSource(source)}: "chunkGrid.cols/rows" must be > 0.`);
+  }
+  return { id, cols: cols | 0, rows: rows | 0 };
 }
 
 function requireArrayField(
@@ -363,14 +401,15 @@ function requireCellsField(
   });
 }
 
-function optionalFieldsField(obj: Record<string, unknown>, source?: string): TableMapCell[] {
+function optionalFieldsField(obj: Record<string, unknown>, source?: string): { cells: TableMapCell[]; stamps: SemanticStamp[] } {
   const value = obj.fields;
-  if (value === undefined) return [];
+  if (value === undefined) return { cells: [], stamps: [] };
   if (!Array.isArray(value)) {
     throw new Error(`JSON map loader${formatSource(source)}: optional field "fields" must be an array if present.`);
   }
 
   const out: TableMapCell[] = [];
+  const stamps: SemanticStamp[] = [];
 
   for (let index = 0; index < value.length; index++) {
     const field = value[index];
@@ -422,6 +461,18 @@ function optionalFieldsField(obj: Record<string, unknown>, source?: string): Tab
     const resolvedType = ((type ?? "floor").toLowerCase()) as TableMapCell["type"];
     const resolvedZ = z ?? 0;
 
+    if (resolvedType === "building") {
+      stamps.push({
+        x: x0,
+        y: y0,
+        z: resolvedZ,
+        type: "building",
+        w: iw,
+        h: ih,
+      });
+      continue;
+    }
+
     for (let dy = 0; dy < ih; dy++) {
       for (let dx = 0; dx < iw; dx++) {
         const parsed: TableMapCell = {
@@ -445,7 +496,7 @@ function optionalFieldsField(obj: Record<string, unknown>, source?: string): Tab
     }
   }
 
-  return out;
+  return { cells: out, stamps };
 }
 
 function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): SemanticStamp[] | undefined {
@@ -495,9 +546,9 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
   }
 
   const id = requireStringField(data, "id", source);
-  const width = optionalNumberField(data, "width");
-  const height = optionalNumberField(data, "height");
-  const fieldCells = optionalFieldsField(data, source);
+  const chunkGrid = optionalChunkGridField(data, source);
+  const fieldParsed = optionalFieldsField(data, source);
+  const fieldCells = fieldParsed.cells;
   const pointCells = requireCellsField(data, source);
 
   const merged: TableMapCell[] = [];
@@ -514,17 +565,81 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     }
   };
 
-  for (let i = 0; i < fieldCells.length; i++) add(fieldCells[i]);
-  for (let i = 0; i < pointCells.length; i++) add(pointCells[i]);
-
-  const cells = merged;
-  const stamps = optionalSemanticStamp(data, source);
-
   const mapSkinId = optionalStringField(data, "mapSkinId");
   const mapSkinDefaults = optionalMapSkinDefaultsField(data, "mapSkinDefaults");
   const centerOnZero = optionalBooleanField(data, "centerOnZero");
   const apronBaseMode = optionalApronBaseModeField(data, "apronBaseMode");
   const objectiveDefs = parseObjectiveDefs(data, source);
+
+  if (chunkGrid) {
+    const chunkData = CHUNK_BY_ID.get(chunkGrid.id);
+    if (!chunkData) {
+      throw new Error(
+        `JSON map loader${formatSource(source)}: unknown chunk id "${chunkGrid.id}".`
+      );
+    }
+    const chunkDef = loadTableMapDefFromJson(chunkData, `chunk ${chunkGrid.id}`);
+    if (chunkDef.w !== CHUNK_SIZE || chunkDef.h !== CHUNK_SIZE) {
+      throw new Error(
+        `JSON map loader${formatSource(source)}: chunk "${chunkGrid.id}" must be ${CHUNK_SIZE}x${CHUNK_SIZE}.`
+      );
+    }
+    const expandedCells: TableMapCell[] = [];
+    const expandedStamps: SemanticStamp[] = [];
+
+    for (let cy = 0; cy < chunkGrid.rows; cy++) {
+      for (let cx = 0; cx < chunkGrid.cols; cx++) {
+        const ox = cx * chunkDef.w;
+        const oy = cy * chunkDef.h;
+        for (let i = 0; i < chunkDef.cells.length; i++) {
+          const c = chunkDef.cells[i];
+          expandedCells.push({ ...c, x: c.x + ox, y: c.y + oy });
+        }
+        if (chunkDef.stamps) {
+          for (let i = 0; i < chunkDef.stamps.length; i++) {
+            const s = chunkDef.stamps[i];
+            expandedStamps.push({ ...s, x: s.x + ox, y: s.y + oy });
+          }
+        }
+      }
+    }
+
+    for (let i = 0; i < expandedCells.length; i++) add(expandedCells[i]);
+    for (let i = 0; i < fieldCells.length; i++) add(fieldCells[i]);
+    for (let i = 0; i < pointCells.length; i++) add(pointCells[i]);
+
+    const stampsRaw = optionalSemanticStamp(data, source);
+    const stamps = (() => {
+      const merged = [...expandedStamps, ...fieldParsed.stamps, ...(stampsRaw ?? [])];
+      return merged.length > 0 ? merged : undefined;
+    })();
+
+    return {
+      id,
+      w: chunkDef.w * chunkGrid.cols,
+      h: chunkDef.h * chunkGrid.rows,
+      mapSkinId,
+      mapSkinDefaults,
+      centerOnZero,
+      apronBaseMode,
+      cells: merged,
+      stamps,
+      objectiveDefs,
+    };
+  }
+
+  const width = optionalNumberField(data, "width");
+  const height = optionalNumberField(data, "height");
+
+  for (let i = 0; i < fieldCells.length; i++) add(fieldCells[i]);
+  for (let i = 0; i < pointCells.length; i++) add(pointCells[i]);
+
+  const cells = merged;
+  const stampsRaw = optionalSemanticStamp(data, source);
+  const stamps = (() => {
+    const merged = [...fieldParsed.stamps, ...(stampsRaw ?? [])];
+    return merged.length > 0 ? merged : undefined;
+  })();
 
   const jsonDef: JsonMapDef = {
     id,
@@ -580,7 +695,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     centerOnZero: jsonDef.centerOnZero,
     apronBaseMode: jsonDef.apronBaseMode,
     cells: jsonDef.cells ?? [],
-    stamps: jsonDef.stamps,
+    stamps,
     objectiveDefs: jsonDef.objectiveDefs,
   };
 }

@@ -1,0 +1,23 @@
+{
+  "id": "chunk1",
+  "width": 24,
+  "height": 24,
+
+  "fields": [
+    { "x": 2, "y": 0, "w": 21, "h": 2, "type": "building" },
+    { "x": 2, "y": 22, "w": 21, "h": 2, "type": "building" },
+
+    { "x": 0, "y": 0, "w": 24, "h": 24, "type": "sidewalk" },
+
+    { "x": 4, "y": 10, "w": 8, "h": 4, "type": "park" },
+    { "x": 12, "y": 10, "w": 8, "h": 4, "type": "park" },
+
+    { "x": 0, "y": 3, "w": 24, "h": 5, "type": "road" },
+    { "x": 0, "y": 16, "w": 24, "h": 5, "type": "road" },
+
+    { "x": 0, "y": 0, "w": 1, "h": 24, "type": "road" },
+    { "x": 23, "y": 0, "w": 1, "h": 24, "type": "road" }
+
+
+  ]
+}

@@ -145,6 +145,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   // World-units per tile step (keep in sync with kenneyTiles constants)
   const T = KENNEY_TILE_WORLD;
+  const playerTx = Math.floor(px / T);
+  const playerTy = Math.floor(py / T);
 
   // Anchor: tile sprites are usually taller than their footprint.
   const ANCHOR_Y = KENNEY_TILE_ANCHOR_Y;
@@ -219,6 +221,17 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const p = worldToScreen(x, y);
     const elev = zVisual * ELEV_PX;
     return { x: p.x + camX, y: p.y + camY - elev };
+  };
+
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  const shouldCullBuildingAt = (tx: number, ty: number, w: number = 1, h: number = 1) => {
+    const nx = clamp(playerTx, tx, tx + w - 1);
+    const ny = clamp(playerTy, ty, ty + h - 1);
+    const dx = Math.abs(playerTx - nx);
+    const dy = Math.abs(playerTy - ny);
+    const within3 = Math.max(dx, dy) <= 6;
+    const south = ny > playerTy;
+    return within3 && south;
   };
 
   const maxNonStairSurfaceZ = (tx: number, ty: number): number | null => {
@@ -410,12 +423,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     toScreenAtZ,
   };
 
-  const SHOW_WALK_MASK = true;
-  const SHOW_RAMPS = true;
+  const SHOW_WALK_MASK = false;
+  const SHOW_RAMPS = false;
   const SHOW_OCCLUDER_DEBUG = false;
   const SHOW_PROJECTILE_FACES = false;
   const SHOW_TRIGGER_ZONES = false;
-  const SHOW_STRUCTURE_HEIGHTS = true;
+  const SHOW_STRUCTURE_HEIGHTS = false;
 
   // Enemy Z buffer (optional visual override)
   const ez = w.ezVisual;
@@ -535,6 +548,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
             }
           }
 
+          if (surface.id.startsWith("building_floor_") && shouldCullBuildingAt(tx, ty)) continue;
           const topRec = surface.spriteIdTop ? getTileSpriteById(surface.spriteIdTop) : null;
           if (!topRec?.ready || !topRec.img || topRec.img.width <= 0 || topRec.img.height <= 0) continue;
 
@@ -972,6 +986,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const occStableId = occ.tx * 73856093 ^ occ.ty * 19349663 ^ (occ.zFrom * 100 | 0) * 83492791;
 
       if (occ.kind === "WALL") {
+        if (occ.id.startsWith("stamp_wall_") && shouldCullBuildingAt(occ.tx, occ.ty)) continue;
         const draw = buildWallDraw(occ, occluderId++);
         if (!draw) continue;
         const renderKey: RenderKey = {
@@ -1016,6 +1031,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const ovs = overlaysInView(viewRect);
     for (let i = 0; i < ovs.length; i++) {
       const o = ovs[i];
+      if (o.id.startsWith("roof_") && shouldCullBuildingAt(o.tx, o.ty, o.w, o.h)) continue;
       const draw = buildOverlayDraw(o);
       if (!draw) continue;
       const slice = (o.tx + o.w - 1) + (o.ty + o.h - 1);
@@ -1055,6 +1071,14 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   if (floorVis) {
     ctx.globalAlpha = floorVis.tintAlpha;
     ctx.fillStyle = floorVis.tint;
+    ctx.fillRect(0, 0, ww, hh);
+    ctx.globalAlpha = 1;
+  }
+
+  const GLOBAL_SCREEN_TINT_ALPHA = 0.5;
+  if (GLOBAL_SCREEN_TINT_ALPHA > 0) {
+    ctx.globalAlpha = GLOBAL_SCREEN_TINT_ALPHA;
+    ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, ww, hh);
     ctx.globalAlpha = 1;
   }

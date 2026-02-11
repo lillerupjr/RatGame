@@ -225,6 +225,40 @@ export type BuildingSelectionRequest = {
     context: BuildingSelectionContext;
 };
 
+export type BuildingCandidateRequest = {
+    pool?: string[];
+    heightUnitsMin?: number;
+    heightUnitsMax?: number;
+    mapSkinPool?: string[];
+};
+
+export function resolveBuildingCandidates(request: BuildingCandidateRequest): BuildingSkin[] {
+    const { pool, heightUnitsMin, heightUnitsMax, mapSkinPool } = request;
+    const poolIds = (() => {
+        const cleaned = (pool ?? []).map((id) => id.trim()).filter(Boolean);
+        if (cleaned.length > 0) return cleaned;
+        const mapPool = (mapSkinPool ?? []).map((id) => id.trim()).filter(Boolean);
+        if (mapPool.length > 0) return mapPool;
+        return [DEFAULT_BUILDING_PACK_ID];
+    })();
+
+    const candidates = new Map<BuildingSkinId, BuildingSkin>();
+    for (let i = 0; i < poolIds.length; i++) {
+        const packId = poolIds[i];
+        const pack = requireBuildingPack(packId, "pool resolution");
+        for (let j = 0; j < pack.length; j++) {
+            const skinIdFromPack = pack[j];
+            const skin = requireBuildingSkin(skinIdFromPack, `pack "${packId}"`);
+            candidates.set(skin.id, skin);
+        }
+    }
+
+    return Array.from(candidates.values())
+        .filter((skin) => heightUnitsMin === undefined || skin.heightUnits >= heightUnitsMin)
+        .filter((skin) => heightUnitsMax === undefined || skin.heightUnits <= heightUnitsMax)
+        .sort((a, b) => a.id.localeCompare(b.id));
+}
+
 export function pickBuildingSkin(request: BuildingSelectionRequest): BuildingSkin {
     const { skinId, pool, heightUnitsMin, heightUnitsMax, mapSkinPool, context } = request;
 
