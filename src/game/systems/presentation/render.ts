@@ -1090,7 +1090,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     ctx.globalAlpha = 1;
   }
 
-  const GLOBAL_SCREEN_TINT_ALPHA = 0.5;
+  const GLOBAL_SCREEN_TINT_ALPHA = 0.3;
   if (GLOBAL_SCREEN_TINT_ALPHA > 0) {
     ctx.globalAlpha = GLOBAL_SCREEN_TINT_ALPHA;
     ctx.fillStyle = "#000";
