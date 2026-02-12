@@ -189,10 +189,10 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
         id: "building10",
         w: 3,
         h: 2,
-        heightUnits: 20,
+        heightUnits: 24,
         anchorLiftUnits: -1,
         wallLiftUnits: 0,
-        roofLiftUnits: -2,
+        roofLiftUnits: -1,
         roof: "structures/buildings/10/top",
         wallSouth: [
             "structures/buildings/10/s_1",
@@ -204,10 +204,29 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
             "structures/buildings/10/e_2",
         ],
     },
+    building11: {
+        id: "building11",
+        w: 3,
+        h: 2,
+        heightUnits: 20,
+        anchorLiftUnits: -1,
+        wallLiftUnits: 0,
+        roofLiftUnits: -2,
+        roof: "structures/buildings/11/top",
+        wallSouth: [
+            "structures/buildings/11/s_1",
+            "structures/buildings/11/s_2",
+            "structures/buildings/11/s_3",
+        ],
+        wallEast: [
+            "structures/buildings/11/e_1",
+            "structures/buildings/11/e_2",
+        ],
+    },
 };
 
 export const BUILDING_PACKS: Record<BuildingPackId, BuildingSkinId[]> = {
-    [DEFAULT_BUILDING_PACK_ID]: ["building1", "building2", "building3", "building4", "building5", "building6", "building7", "building8", "building9", "building10"],
+    [DEFAULT_BUILDING_PACK_ID]: ["building1", "building2", "building3", "building4", "building5", "building6", "building7", "building8", "building9", "building10", "building11"],
 };
 
 const ALL_PACKS: Record<BuildingPackId, BuildingSkinId[]> = {

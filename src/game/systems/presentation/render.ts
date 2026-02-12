@@ -439,7 +439,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const SHOW_WALK_MASK = false;
   const SHOW_RAMPS = false;
   const SHOW_OCCLUDER_DEBUG = false;
-  const SHOW_PROJECTILE_FACES = false;
+  const SHOW_PROJECTILE_FACES = true;
   const SHOW_TRIGGER_ZONES = false;
   const SHOW_STRUCTURE_HEIGHTS = false;
 
