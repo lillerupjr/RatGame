@@ -288,11 +288,55 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       }
     };
 
+  const buildMultiZFaceDraw = (
+    c: RenderPiece,
+    apronRec: { img: HTMLImageElement; ready: boolean },
+    flipX: boolean,
+  ): RenderPieceDraw[] => {
+    if (!apronRec?.ready || !apronRec.img) return [];
+
+    const scale = c.scale ?? 1;
+    const anchorY = c.renderAnchorY ?? ANCHOR_Y;
+    // Use native image dimensions (same pattern as buildOverlayDraw)
+    const ow = apronRec.img.width;
+    const oh = apronRec.img.height;
+
+    // Position at the tile edge
+    const wx = (c.tx + 0.5) * T;
+    const wy = (c.ty + 0.5) * T;
+    const edgeDir = c.edgeDir ?? c.renderDir ?? "N";
+    const delta = dirToDelta(edgeDir);
+    const apronWx = wx + delta.dx * T * 0.5;
+    const apronWy = wy + delta.dy * T * 0.5;
+
+    const p = worldToScreen(apronWx, apronWy);
+    // Anchor at the top of the Z range; image hangs downward
+    const zVisual = Math.floor(c.zTo) - 1;
+    const dx = p.x + camX - ow * scale * 0.5;
+    const dy = p.y + camY - oh * scale * anchorY - zVisual * ELEV_PX;
+
+    return [{
+      img: apronRec.img,
+      dx,
+      dy,
+      dw: ow,
+      dh: oh,
+      zVisual,
+      flipX,
+      scale,
+    }];
+  };
+
   const buildFaceDraws = (c: RenderPiece): RenderPieceDraw[] => {
     const dir4 = c.renderDir ?? "N";
     const apronRec = c.spriteId ? getTileSpriteById(c.spriteId) : null;
     const apronFlipX = !!c.flipX;
     if (!apronRec?.ready || !apronRec.img || apronRec.img.width <= 0 || apronRec.img.height <= 0) return [];
+
+      // Multi-Z sprite: draw one image covering the full Z range
+      if (c.zSpan && c.zSpan > 1) {
+        return buildMultiZFaceDraw(c, apronRec, apronFlipX);
+      }
 
       const anchorY = c.renderAnchorY ?? ANCHOR_Y;
       const apronScale = c.kind === "FLOOR_APRON" ? FLOOR_APRON_SCALE : STAIR_APRON_SCALE;
@@ -378,8 +422,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const dyOffset = c.renderDyOffset ?? 0;
     const scale = c.scale ?? 1;
 
-    const aw = apronRec.img.width * WALL_APRON_SCALE;
-    const ah = apronRec.img.height * WALL_APRON_SCALE;
+    // Multi-Z wall sprites use native image dimensions
+    const useNative = !!(c.zSpan && c.zSpan > 1);
+    const aw = useNative ? apronRec.img.width : apronRec.img.width * WALL_APRON_SCALE;
+    const ah = useNative ? apronRec.img.height : apronRec.img.height * WALL_APRON_SCALE;
     const ax = p.x + camX - aw * scale * 0.5;
     const ay = p.y + camY - ah * scale * anchorY - h * ELEV_PX - dyOffset;
 

@@ -3,8 +3,8 @@
     "allow": [
       "Bash(npx tsc --noEmit)",
       "Bash(npx:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)"
     ]
   }
 }
-

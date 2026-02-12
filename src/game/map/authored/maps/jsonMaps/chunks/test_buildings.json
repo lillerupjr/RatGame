@@ -1,0 +1,30 @@
+{
+  "id": "test_buildings",
+  "width": 24,
+  "height": 24,
+  "fields": [
+    { "x": 0, "y": 2, "w": 24, "h": 2, "type": "sidewalk" },
+    { "x": 0, "y": 20, "w": 24, "h": 2, "type": "sidewalk" },
+
+    { "x": 0, "y": 4, "w": 24, "h": 16, "type": "road" },
+
+    { "x": 22, "y": 0, "w": 2, "h": 24, "type": "road" },
+    { "x": 0, "y": 0, "w": 2, "h": 24, "type": "road" }
+  ],
+  "stamps": [
+    { "x": 3,  "y": 5,  "type": "prop", "propId": "testBuilding1", "w": 3, "h": 2 },
+    { "x": 7,  "y": 5,  "type": "prop", "propId": "testBuilding2", "w": 3, "h": 2 },
+    { "x": 11, "y": 5,  "type": "prop", "propId": "testBuilding3", "w": 3, "h": 2 },
+    { "x": 15, "y": 5,  "type": "prop", "propId": "testBuilding1", "w": 3, "h": 2 },
+
+    { "x": 3,  "y": 9,  "type": "prop", "propId": "testBuilding2", "w": 3, "h": 2 },
+    { "x": 7,  "y": 9,  "type": "prop", "propId": "testBuilding3", "w": 3, "h": 2 },
+    { "x": 11, "y": 9,  "type": "prop", "propId": "testBuilding1", "w": 3, "h": 2 },
+    { "x": 15, "y": 9,  "type": "prop", "propId": "testBuilding2", "w": 3, "h": 2 },
+
+    { "x": 3,  "y": 14, "type": "prop", "propId": "testBuilding3", "w": 3, "h": 2 },
+    { "x": 7,  "y": 14, "type": "prop", "propId": "testBuilding1", "w": 3, "h": 2 },
+    { "x": 11, "y": 14, "type": "prop", "propId": "testBuilding2", "w": 3, "h": 2 },
+    { "x": 15, "y": 14, "type": "prop", "propId": "testBuilding3", "w": 3, "h": 2 }
+  ]
+}

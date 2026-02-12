@@ -8,6 +8,7 @@ import { HEIGHT_UNIT_PX, pickBuildingSkin, resolveBuildingCandidates } from "../
 import type { BuildingSkin } from "../../content/structureSkins";
 import { requireProp } from "../../content/props";
 import { RNG } from "../../util/rng";
+import { getSpriteMeta } from "../../../engine/render/sprites/spriteMeta";
 
 export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL";
 export type StairDir = "N" | "E" | "S" | "W";
@@ -74,6 +75,12 @@ export type RenderPiece = {
     renderAnchorY: number;
     renderDyOffset: number;
     spriteId: string;
+    /** Tile-width span for multi-tile sprites (undefined = 1). */
+    tw?: number;
+    /** Tile-height span for multi-tile sprites (undefined = 1). */
+    th?: number;
+    /** Z-levels the sprite image covers (undefined = 1). */
+    zSpan?: number;
 };
 
 export type StampOverlay = {
@@ -1003,6 +1010,7 @@ export function compileKenneyMapFromTable(
                 mapDefaults: mapSkinDefaults,
             });
 
+            const faceMeta = getSpriteMeta(spriteId);
             addFace({
                 id: `face_${canonical.tx}_${canonical.ty}_${canonical.dir}_${zFrom}_${zTo}_${faceId++}`,
                 cls: "FACE",
@@ -1021,6 +1029,9 @@ export function compileKenneyMapFromTable(
                 renderAnchorY,
                 renderDyOffset,
                 spriteId,
+                tw: faceMeta.tileWidth > 1 ? faceMeta.tileWidth : undefined,
+                th: faceMeta.tileHeight > 1 ? faceMeta.tileHeight : undefined,
+                zSpan: faceMeta.zHeight > 1 ? faceMeta.zHeight : undefined,
             });
         }
     }
@@ -1048,6 +1059,7 @@ export function compileKenneyMapFromTable(
             mapSkinId: skinIdToUse,
             mapDefaults: mapSkinDefaults,
         });
+        const wallMeta = getSpriteMeta(spriteId);
 
         for (let z = zFrom; z < zTo; z += segmentHeight) {
             const segFrom = z;
@@ -1071,6 +1083,9 @@ export function compileKenneyMapFromTable(
                 renderAnchorY: floorAnchorY,
                 renderDyOffset: 0,
                 spriteId,
+                tw: wallMeta.tileWidth > 1 ? wallMeta.tileWidth : undefined,
+                th: wallMeta.tileHeight > 1 ? wallMeta.tileHeight : undefined,
+                zSpan: wallMeta.zHeight > 1 ? wallMeta.zHeight : undefined,
             });
         }
     }
@@ -1080,9 +1095,11 @@ export function compileKenneyMapFromTable(
     }
 
     function pieceInView(piece: RenderPiece, view: ViewRect): boolean {
-        return piece.tx >= view.minTx
+        const tw = piece.tw ?? 1;
+        const th = piece.th ?? 1;
+        return piece.tx + tw - 1 >= view.minTx
             && piece.tx <= view.maxTx
-            && piece.ty >= view.minTy
+            && piece.ty + th - 1 >= view.minTy
             && piece.ty <= view.maxTy;
     }
 
