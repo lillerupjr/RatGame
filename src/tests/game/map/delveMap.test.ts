@@ -30,6 +30,10 @@ describe("delveMap", () => {
       expect(startNode.completed).toBe(false);
       expect(startNode.x).toBe(0);
       expect(startNode.y).toBe(0);
+      expect(startNode.plan.depth).toBe(1);
+      expect(["docks", "avenue", "china_town"]).toContain(startNode.plan.mapId);
+      expect(startNode.plan.objectiveId).toBeTruthy();
+      expect(startNode.plan.variantSeed).toBeGreaterThanOrEqual(0);
     });
 
     it("should produce deterministic maps for same seed", () => {
@@ -51,6 +55,12 @@ describe("delveMap", () => {
         y: 0,
         zoneId: "DOCKS" as const,
         floorArchetype: "SURVIVE" as const,
+        plan: {
+          depth: 1,
+          mapId: "docks" as const,
+          objectiveId: "SURVIVE_TIMER" as const,
+          variantSeed: 123,
+        },
         title: "Test",
         completed: false,
       };
@@ -64,6 +74,12 @@ describe("delveMap", () => {
         y: 5,
         zoneId: "DOCKS" as const,
         floorArchetype: "SURVIVE" as const,
+        plan: {
+          depth: 6,
+          mapId: "docks" as const,
+          objectiveId: "SURVIVE_TIMER" as const,
+          variantSeed: 123,
+        },
         title: "Test",
         completed: false,
       };

@@ -58,7 +58,7 @@ import { preloadBackgrounds } from "./render/background";
 import { getProjectileSpriteByKind, preloadProjectileSprites } from "../engine/render/sprites/projectileSprites";
 import { setMusicStage, stopMusic } from "../engine/audio/music";
 import type { TableMapDef } from "./map/formats/table/tableMapTypes";
-import { AUTHORED_MAP_DEFS, getAuthoredMapDefById } from "./map/authored/authoredMapRegistry";
+import { AUTHORED_MAP_DEFS, getAuthoredMapDefByMapId } from "./map/authored/authoredMapRegistry";
 import {
   activateMapDef,
   generateAndActivateFloorMap,
@@ -72,6 +72,9 @@ import { mapSourceFromFloorIntent } from "./map/floorMapSourceBinding";
 import { applyFloorOverlays } from "./map/floorOverlays";
 import { setObjectives, setObjectivesFromSpec } from "./systems/progression/objective";
 import { generateVendorOffers } from "./events/vendor";
+import { RNG } from "./util/rng";
+import { applyObjective } from "./map/objectiveTransforms";
+import { objectiveIdFromArchetype } from "./map/objectivePlan";
 
 
 type HudRefs = {
@@ -160,7 +163,7 @@ export function createGame(args: CreateGameArgs) {
 
   function getStaticMapById(id: string | undefined): TableMapDef | undefined {
     if (!id) return undefined;
-    return getAuthoredMapDefById(id);
+    return getAuthoredMapDefByMapId(id);
   }
 
   function getDefaultStaticMap(): TableMapDef | undefined {
@@ -346,6 +349,10 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function enterFloor(w: World, floorIntent: FloorIntent) {
+    if (w.delveMap && !floorIntent.mapId) {
+      console.error("[enterFloor] delve floor intent missing mapId");
+      return;
+    }
     const mapSkinId = (() => {
       const nodeId = floorIntent.nodeId ?? "LEGACY_FLOOR";
       const delve = w.delveMap as DelveMap | null;
@@ -373,17 +380,38 @@ export function createGame(args: CreateGameArgs) {
     // Drive floor timing from stage
     w.floorDuration = w.stage.duration;
 
-    const mapSource = mapSourceFromFloorIntent(floorIntent);
-    if (mapSource.type === "PROCEDURAL_ROOMS") {
-      const mapSeed = w.rng.int(0, 0x7fffffff);
-      generateAndActivateFloorMap(mapSeed, floorIntent.floorIndex, false, w, mapSkinId);
-    } else if (mapSource.type === "PROCEDURAL_MAZE") {
-      const mapSeed = w.rng.int(0, 0x7fffffff);
-      generateAndActivateMazeFloorMap(mapSeed, floorIntent.floorIndex, false, mapSkinId);
+    const objectiveId = floorIntent.objectiveId ?? objectiveIdFromArchetype(floorIntent.archetype);
+
+    if (floorIntent.mapId) {
+      if (!floorIntent.objectiveId) {
+        console.error("[enterFloor] missing objectiveId for planned floor");
+        return;
+      }
+      const baseMap = getStaticMapById(floorIntent.mapId);
+      if (!baseMap) {
+        console.error(`[enterFloor] missing authored map for mapId="${floorIntent.mapId}"`);
+        return;
+      }
+      if (floorIntent.variantSeed === undefined) {
+        console.error("[enterFloor] missing variantSeed for planned floor");
+        return;
+      }
+      const rng = new RNG(floorIntent.variantSeed);
+      const finalMap = applyObjective(baseMap, floorIntent.objectiveId, rng);
+      activateMapDef(finalMap, mapSkinId);
     } else {
-      const staticDef = getStaticMapById(mapSource.mapId) ?? getDefaultStaticMap();
-      if (staticDef) {
-        activateMapDef(staticDef, mapSkinId);
+      const mapSource = mapSourceFromFloorIntent(floorIntent);
+      if (mapSource.type === "PROCEDURAL_ROOMS") {
+        const mapSeed = w.rng.int(0, 0x7fffffff);
+        generateAndActivateFloorMap(mapSeed, floorIntent.floorIndex, false, w, mapSkinId);
+      } else if (mapSource.type === "PROCEDURAL_MAZE") {
+        const mapSeed = w.rng.int(0, 0x7fffffff);
+        generateAndActivateMazeFloorMap(mapSeed, floorIntent.floorIndex, false, mapSkinId);
+      } else {
+        const staticDef = getStaticMapById(mapSource.mapId) ?? getDefaultStaticMap();
+        if (staticDef) {
+          activateMapDef(staticDef, mapSkinId);
+        }
       }
     }
 
@@ -426,6 +454,9 @@ export function createGame(args: CreateGameArgs) {
       depth: getNodeDepth(node),
       floorIndex,
       archetype: node.floorArchetype,
+      mapId: node.plan.mapId,
+      objectiveId: node.plan.objectiveId,
+      variantSeed: node.plan.variantSeed,
     };
   }
 
@@ -436,6 +467,7 @@ export function createGame(args: CreateGameArgs) {
       depth: floorIndex + 1,
       floorIndex,
       archetype: node.floorArchetype,
+      objectiveId: objectiveIdFromArchetype(node.floorArchetype),
     };
   }
 
@@ -447,6 +479,7 @@ export function createGame(args: CreateGameArgs) {
       depth: floorIndex + 1,
       floorIndex,
       archetype: w.floorArchetype ?? "SURVIVE",
+      objectiveId: objectiveIdFromArchetype(w.floorArchetype ?? "SURVIVE"),
     };
   }
 

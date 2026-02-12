@@ -5,6 +5,15 @@ import type { StageId } from "../content/stages";
 import { RNG } from "../util/rng";
 import { FLOOR_ARCHETYPES, type FloorArchetype } from "./floorArchetype";
 import { allMapSkinIds, type MapSkinId } from "../content/mapSkins";
+import { DEFAULT_MAP_POOL, type MapId } from "./mapIds";
+import { objectiveIdFromArchetype, type ObjectiveId } from "./objectivePlan";
+
+export type NodePlan = {
+  depth: number;
+  mapId: MapId;
+  objectiveId: ObjectiveId;
+  variantSeed: number;
+};
 
 export type DelveNode = {
   id: string;
@@ -12,6 +21,7 @@ export type DelveNode = {
   y: number;  // grid y coordinate (depth - higher = deeper/harder)
   zoneId: StageId;
   floorArchetype: FloorArchetype;
+  plan: NodePlan;
   title: string;
   completed: boolean;
   skinPool?: MapSkinId[];
@@ -76,6 +86,19 @@ function pickFloorArchetype(
   return options[rng.int(0, options.length - 1)];
 }
 
+function pickMapId(rng: RNG): MapId {
+  return DEFAULT_MAP_POOL[rng.int(0, DEFAULT_MAP_POOL.length - 1)];
+}
+
+function buildNodePlan(rng: RNG, depth: number, archetype: FloorArchetype): NodePlan {
+  return {
+    depth,
+    mapId: pickMapId(rng),
+    objectiveId: objectiveIdFromArchetype(archetype),
+    variantSeed: rng.int(0, 0x7fffffff),
+  };
+}
+
 /**
  * Create a new delve map with a starting node at (0, 0)
  */
@@ -85,13 +108,16 @@ export function createDelveMap(seed: number): DelveMap {
   
   // Create starting node at depth 0
   const startZone = ZONE_IDS[rng.int(0, ZONE_IDS.length - 1)];
+  const startDepth = 1;
+  const startArchetype = pickFloorArchetype(rng, startDepth, null);
   const startNode: DelveNode = {
     id: nodeId(0, 0),
     x: 0,
     y: 0,
     zoneId: startZone,
-    floorArchetype: pickFloorArchetype(rng, 1, null),
-    title: `${ZONE_NAMES[startZone]} (Depth 1)`,
+    floorArchetype: startArchetype,
+    plan: buildNodePlan(rng, startDepth, startArchetype),
+    title: `${ZONE_NAMES[startZone]} (Depth ${startDepth})`,
     completed: false,
     skinPool: skinPoolForZone(startZone),
   };
@@ -170,13 +196,15 @@ export function ensureAdjacentNodes(map: DelveMap, fromId: string, seed: number)
         const nodeRng = new RNG(seed ^ hashString(nid));
         const zoneId = ZONE_IDS[nodeRng.int(0, ZONE_IDS.length - 1)];
         const depth = ny + 1;
+        const floorArchetype = pickFloorArchetype(nodeRng, depth, from.floorArchetype);
 
         const newNode: DelveNode = {
           id: nid,
           x: nx,
           y: ny,
           zoneId,
-          floorArchetype: pickFloorArchetype(nodeRng, depth, from.floorArchetype),
+          floorArchetype,
+          plan: buildNodePlan(nodeRng, depth, floorArchetype),
           title: `${ZONE_NAMES[zoneId]} (Depth ${depth})`,
           completed: false,
           skinPool: skinPoolForZone(zoneId),
@@ -201,13 +229,15 @@ export function ensureAdjacentNodes(map: DelveMap, fromId: string, seed: number)
       const nodeRng = new RNG(seed ^ hashString(deeperId));
       const zoneId = ZONE_IDS[nodeRng.int(0, ZONE_IDS.length - 1)];
       const depth = from.y + 2;
+      const floorArchetype = pickFloorArchetype(nodeRng, depth, from.floorArchetype);
       
       map.nodes.set(deeperId, {
         id: deeperId,
         x: from.x,
         y: from.y + 1,
         zoneId,
-        floorArchetype: pickFloorArchetype(nodeRng, depth, from.floorArchetype),
+        floorArchetype,
+        plan: buildNodePlan(nodeRng, depth, floorArchetype),
         title: `${ZONE_NAMES[zoneId]} (Depth ${depth})`,
         completed: false,
         skinPool: skinPoolForZone(zoneId),

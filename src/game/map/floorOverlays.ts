@@ -6,6 +6,7 @@ import type { TriggerDef } from "../triggers/triggerTypes";
 import type { FloorIntent, PlacementPolicy } from "./floorIntent";
 import { OBJECTIVE_TRIGGER_IDS } from "../systems/progression/objectiveSpec";
 import { RNG } from "../util/rng";
+import { objectiveIdFromArchetype, type ObjectiveId } from "./objectivePlan";
 
 export type OverlayAction =
   | {
@@ -48,8 +49,9 @@ function hashString(s: string): number {
   return hash >>> 0;
 }
 
-function buildOverlaySeed(intent: FloorIntent): number {
-  return hashString(`${intent.nodeId}|${intent.floorIndex}|${intent.archetype}`);
+function buildOverlaySeed(intent: FloorIntent, objectiveId: ObjectiveId): number {
+  if (typeof intent.variantSeed === "number") return intent.variantSeed;
+  return hashString(`${intent.nodeId}|${intent.floorIndex}|${objectiveId}`);
 }
 
 function packKey(tx: number, ty: number): number {
@@ -321,8 +323,9 @@ function pickSpawnZonesLongestPath(
 }
 
 export function overlaySpecFromFloorIntent(intent: FloorIntent): OverlaySpec {
-  switch (intent.archetype) {
-    case "TIME_TRIAL":
+  const objectiveId = intent.objectiveId ?? objectiveIdFromArchetype(intent.archetype);
+  switch (objectiveId) {
+    case "TIME_TRIAL_ZONES":
       return [
         {
           type: "PLACE_SPAWN_ZONES",
@@ -332,7 +335,7 @@ export function overlaySpecFromFloorIntent(intent: FloorIntent): OverlaySpec {
           placementPolicy: intent.placementPolicy ?? "LONGEST_PATH",
         },
       ];
-    case "BOSS_TRIPLE":
+    case "KILL_RARES_IN_ZONES":
       return [
         {
           type: "PLACE_BOSS_SPAWN_ZONES",
@@ -342,11 +345,10 @@ export function overlaySpecFromFloorIntent(intent: FloorIntent): OverlaySpec {
           placementPolicy: intent.placementPolicy ?? "LONGEST_PATH",
         },
       ];
-    case "VENDOR":
+    case "VENDOR_VISIT":
       return [{ type: "PLACE_VENDOR_NPC" }];
-    case "HEAL":
+    case "HEAL_VISIT":
       return [{ type: "PLACE_HEAL_INTERACTABLE" }];
-    case "SURVIVE":
     default:
       return [];
   }
@@ -360,15 +362,16 @@ export function applyFloorOverlays(world: World, intent: FloorIntent): void {
     return;
   }
 
+  const objectiveId = intent.objectiveId ?? objectiveIdFromArchetype(intent.archetype);
   const spec = overlaySpecFromFloorIntent(intent);
   const spawn = getSpawnWorldFromActive();
   const spawnTile = { tx: spawn.tx, ty: spawn.ty };
   const { tiles: candidates, walkable, nodes } = collectReachableTiles(spawnTile);
-  const rng = new RNG(buildOverlaySeed(intent));
+  const rng = new RNG(buildOverlaySeed(intent, objectiveId));
 
   const overlayTriggers: TriggerDef[] = [];
 
-  if (intent.archetype === "SURVIVE" || intent.archetype === "TIME_TRIAL") {
+  if (objectiveId === "SURVIVE_TIMER" || objectiveId === "TIME_TRIAL_ZONES") {
     overlayTriggers.push({
       id: OBJECTIVE_TRIGGER_IDS.timer,
       type: "timer",

@@ -6,6 +6,9 @@ export type MapSource =
   | { type: "AUTHORED_JSON"; mapId: string };
 
 export function mapSourceFromFloorIntent(intent: FloorIntent): MapSource {
+  if (intent.mapId) {
+    return { type: "AUTHORED_JSON", mapId: intent.mapId };
+  }
   switch (intent.archetype) {
     case "VENDOR":
       return { type: "AUTHORED_JSON", mapId: "VENDOR_01" };

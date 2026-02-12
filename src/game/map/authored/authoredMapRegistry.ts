@@ -24,3 +24,20 @@ export const AUTHORED_MAP_DEFS: TableMapDef[] = buildAuthoredMaps();
 export function getAuthoredMapDefById(id: string): TableMapDef | undefined {
   return AUTHORED_MAP_DEFS.find((m) => m.id === id);
 }
+
+function normalizeMapId(id: string): string {
+  return id.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+const AUTHORED_MAP_DEF_BY_NORMALIZED = (() => {
+  const map = new Map<string, TableMapDef>();
+  for (const def of AUTHORED_MAP_DEFS) {
+    map.set(normalizeMapId(def.id), def);
+  }
+  return map;
+})();
+
+export function getAuthoredMapDefByMapId(mapId: string): TableMapDef | undefined {
+  if (!mapId) return undefined;
+  return getAuthoredMapDefById(mapId) ?? AUTHORED_MAP_DEF_BY_NORMALIZED.get(normalizeMapId(mapId));
+}
