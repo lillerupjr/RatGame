@@ -562,8 +562,8 @@ export function createGame(args: CreateGameArgs) {
     });
     const mapMode = isMapMode(mapId);
     (world as any).mapMode = mapMode;
-    (world as any).runtimeStructureSlicingEnabled = true;
-    (world as any).runtimeStructureSliceDebug = true;
+    (world as any).runtimeStructureSlicingEnabled = false;
+    (world as any).runtimeStructureSliceDebug = false;
     if (mapMode) {
       setObjectives(world, []);
     } else {
