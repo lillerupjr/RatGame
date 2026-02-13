@@ -453,8 +453,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const ow = rec.img.width;
     const oh = rec.img.height;
     const scale = o.scale ?? 1;
-    const anchorTx = o.anchorTx ?? (o.tx + o.w - 1);
-    const anchorTy = o.anchorTy ?? (o.ty + o.h - 1);
+    const southY = o.ty + o.h - 1;
+    const anchorTx =
+        o.anchorTx ??
+        (o.w >= o.h ? (o.tx + o.w - 1) : o.tx); // SE if wide, SW if tall
+
+    const anchorTy = o.anchorTy ?? southY;
     const footprintW = Math.max(1, o.w | 0);
     const isFootprintOverlay =
       o.layerRole === "STRUCTURE" || ((o.kind ?? "ROOF") === "PROP" && (footprintW > 1 || (o.h | 0) > 1));
@@ -462,7 +466,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const halfTileW = tileWidth * 0.5;
   // Compensates for engine-wide half-tile X projection bias.
   // Do NOT remove unless tile projection baseline is normalized.
-    const footprintAnchorAdjustX = -halfTileW / 2;
+
+    const footprintAnchorAdjustX = -32;
     const wx = (anchorTx + 0.5) * T;
     const wy = (anchorTy + 0.5) * T;
     const p = worldToScreen(wx, wy);
