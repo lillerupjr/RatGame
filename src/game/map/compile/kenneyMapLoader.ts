@@ -924,23 +924,147 @@ export function compileKenneyMapFromTable(
         }
     }
 
-    const surfacesInView = new Set<Surface>();
-    const addSurfacesInView = (view: ViewRect) => {
-        for (let tx = view.minTx; tx <= view.maxTx; tx++) {
-            for (let ty = view.minTy; ty <= view.maxTy; ty++) {
-                const key = `${tx},${ty}`;
-                const list = surfacesByKey.get(key);
-                if (list) {
-                    for (let i = 0; i < list.length; i++) {
-                        surfacesInView.add(list[i]);
-                    }
-                }
-            }
+    const emittedFaces = new Set<string>();
+    let faceId = 0;
+
+    for (const [key, list] of surfacesByKey.entries()) {
+        if (!list || list.length === 0) continue;
+        const [txStr, tyStr] = key.split(",");
+        const tx = parseInt(txStr, 10);
+        const ty = parseInt(tyStr, 10);
+        if (!Number.isFinite(tx) || !Number.isFinite(ty)) continue;
+
+        const zHere = maxSurfaceZAt(tx, ty);
+        if (zHere === null) continue;
+
+        for (let d = 0; d < DIRS.length; d++) {
+            const { dir, dx, dy } = DIRS[d];
+            const nTx = tx + dx;
+            const nTy = ty + dy;
+
+            const zNeighbor = maxSurfaceZAt(nTx, nTy);
+            const neighborZ = zNeighbor === null ? apronBaseZ : zNeighbor;
+            const zA = zHere;
+            const zB = neighborZ;
+            if (zA === zB) continue;
+
+            const ownerIsHere = zA > zB;
+            const ownerTx = ownerIsHere ? tx : nTx;
+            const ownerTy = ownerIsHere ? ty : nTy;
+            const ownerDir = ownerIsHere ? dir : oppositeDir(dir);
+            const canonical = canonicalizeEdge(ownerTx, ownerTy, ownerDir);
+
+            const zFrom = Math.min(zA, zB);
+            const zTo = Math.max(zA, zB);
+            const dedupKey = `${canonical.tx},${canonical.ty},${canonical.dir},${zFrom},${zTo}`;
+            if (emittedFaces.has(dedupKey)) continue;
+            emittedFaces.add(dedupKey);
+
+            const ownerSurface = highestSurfaceAt(ownerTx, ownerTy);
+            const renderTopKind = ownerSurface?.renderTopKind ?? "FLOOR";
+            const renderDir = ownerSurface?.renderDir ?? "N";
+            const renderAnchorY = ownerSurface?.renderAnchorY ?? floorAnchorY;
+            const renderDyOffset = ownerSurface?.renderDyOffset ?? 0;
+            const zLogical = ownerSurface?.zLogical ?? Math.floor(zTo);
+            const spriteId = resolveTileSpriteId({
+                slot: renderTopKind === "STAIR" ? "stairApron" : "apron",
+                dir: canonical.dir,
+                mapSkin: resolvedMapSkin,
+                mapSkinId: skinIdToUse,
+                mapDefaults: mapSkinDefaults,
+            });
+
+            const faceMeta = getSpriteMeta(spriteId);
+            addFace({
+                id: `face_${canonical.tx}_${canonical.ty}_${canonical.dir}_${zFrom}_${zTo}_${faceId++}`,
+                cls: "FACE",
+                kind: renderTopKind === "STAIR" ? "STAIR_APRON" : "FLOOR_APRON",
+                tx: canonical.tx,
+                ty: canonical.ty,
+                zFrom,
+                zTo,
+                zLogical,
+                edgeDir: canonical.dir,
+                apronKind: canonical.dir === "E" || canonical.dir === "W" ? "E" : "S",
+                apronDyOffset: 0,
+                flipX: false,
+                renderTopKind,
+                renderDir,
+                renderAnchorY,
+                renderDyOffset,
+                spriteId,
+                tw: faceMeta.tileWidth > 1 ? faceMeta.tileWidth : undefined,
+                th: faceMeta.tileHeight > 1 ? faceMeta.tileHeight : undefined,
+                zSpan: faceMeta.zHeight > 1 ? faceMeta.zHeight : undefined,
+            });
         }
-    };
+    }
+
+    for (let i = 0; i < wallTokens.length; i++) {
+        const w = wallTokens[i];
+        const canonical = canonicalizeEdge(w.x, w.y, w.dir);
+        const tx = canonical.tx;
+        const ty = canonical.ty;
+        const height = Math.max(0, w.height | 0);
+        if (height <= 0) continue;
+
+        const flipX = false;
+        const segmentHeight = 2;
+        const zFrom = 0;
+        const zTo = height;
+        const wallSlot: "wall" | "apron" | "stairApron" = w.slot ?? "wall";
+        const wallAxis = canonical.dir === "E" || canonical.dir === "W" ? "E" : "S";
+        const wallSpriteDir = wallSlot === "stairApron" ? "N" : wallAxis;
+        const wallSkin = w.skin;
+        const spriteId = resolveTileSpriteId({
+            slot: wallSlot,
+            dir: wallSpriteDir,
+            mapSkin: resolvedMapSkin,
+            mapSkinId: skinIdToUse,
+            mapDefaults: mapSkinDefaults,
+        });
+        const wallMeta = getSpriteMeta(spriteId);
+
+        for (let z = zFrom; z < zTo; z += segmentHeight) {
+            const segFrom = z;
+            const segTo = Math.min(z + segmentHeight, zTo);
+            const zLogical = Math.floor(segFrom + 1e-6);
+            addFace({
+                id: `wall_${tx}_${ty}_${w.dir}_${segFrom}_${segTo}`,
+                cls: "FACE",
+                kind: "WALL",
+                tx,
+                ty,
+                zFrom: segFrom,
+                zTo: segTo,
+                zLogical,
+                wallDir: canonical.dir,
+                wallSkin,
+                apronDyOffset: 0,
+                flipX,
+                renderTopKind: "FLOOR",
+                renderDir: "N",
+                renderAnchorY: floorAnchorY,
+                renderDyOffset: 0,
+                spriteId,
+                tw: wallMeta.tileWidth > 1 ? wallMeta.tileWidth : undefined,
+                th: wallMeta.tileHeight > 1 ? wallMeta.tileHeight : undefined,
+                zSpan: wallMeta.zHeight > 1 ? wallMeta.zHeight : undefined,
+            });
+        }
+    }
 
     function occludersForLayer(layer: number): RenderPiece[] {
         return occludersByLayer.get(layer) ?? [];
+    }
+
+    function pieceInView(piece: RenderPiece, view: ViewRect): boolean {
+        const tw = piece.tw ?? 1;
+        const th = piece.th ?? 1;
+        return piece.tx + tw - 1 >= view.minTx
+            && piece.tx <= view.maxTx
+            && piece.ty + th - 1 >= view.minTy
+            && piece.ty <= view.maxTy;
     }
 
     function occludersInViewForLayer(layer: number, view: ViewRect): RenderPiece[] {

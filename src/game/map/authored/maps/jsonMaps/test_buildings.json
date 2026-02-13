@@ -1,0 +1,9 @@
+{
+  "id": "TEST_BUILDINGS",
+  "chunkGrid": {
+    "id": "test_buildings",
+    "cols": 2,
+    "rows": 2
+  },
+  "mapSkinId": "docks"
+}
