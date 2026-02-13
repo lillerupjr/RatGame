@@ -30,10 +30,8 @@ describe("runtimeStructureSlicing", () => {
     const pieces = buildRuntimeStructureBandPieces({
       structureInstanceId: "runtime_explicit_anchor",
       spriteId: "structures/buildings/test/runtime_explicit_anchor",
-      tx: 10,
-      ty: 10,
-      anchorTx: 3,
-      anchorTy: 4,
+      seTx: 3,
+      seTy: 4,
       footprintW: 3,
       footprintH: 2,
       baseZ: 0,
@@ -70,8 +68,8 @@ describe("runtimeStructureSlicing", () => {
     const pieces = buildRuntimeStructureBandPieces({
       structureInstanceId: "runtime_band_count_A",
       spriteId: "structures/buildings/test/runtime_band_count",
-      tx: 0,
-      ty: 0,
+      seTx: 1,
+      seTy: 2,
       baseZ: 1,
       baseDx: 100,
       baseDy: 20,
@@ -95,8 +93,8 @@ describe("runtimeStructureSlicing", () => {
     const pieces = buildRuntimeStructureBandPieces({
       structureInstanceId: "building_A",
       spriteId: "structures/buildings/test/runtime_padding_owner",
-      tx: 0,
-      ty: 0,
+      seTx: 1,
+      seTy: 2,
       baseZ: 3,
       baseDx: 100,
       baseDy: 200,
@@ -137,8 +135,8 @@ describe("runtimeStructureSlicing", () => {
     const pieces = buildRuntimeStructureBandPieces({
       structureInstanceId: "bounds_A",
       spriteId: "structures/buildings/test/runtime_footprint_bounds",
-      tx,
-      ty,
+      seTx: tx + w - 1,
+      seTy: ty + h - 1,
       baseZ: 0,
       baseDx: 0,
       baseDy: 0,
@@ -169,8 +167,8 @@ describe("runtimeStructureSlicing", () => {
     const pieces = buildRuntimeStructureBandPieces({
       structureInstanceId: "dst_x_base",
       spriteId: "structures/buildings/test/runtime_dst_x_base",
-      tx: 0,
-      ty: 0,
+      seTx: 1,
+      seTy: 2,
       baseZ: 0,
       baseDx: 10,
       baseDy: 0,
@@ -196,8 +194,8 @@ describe("runtimeStructureSlicing", () => {
     const input = {
       structureInstanceId: "dst_x_offset",
       spriteId: "structures/buildings/test/runtime_dst_x_offset",
-      tx: 0,
-      ty: 0,
+      seTx: 1,
+      seTy: 2,
       baseZ: 0,
       baseDx: 10,
       baseDy: 0,
@@ -231,8 +229,6 @@ describe("runtimeStructureSlicing", () => {
     const common = {
       structureInstanceId: "flip_owner",
       spriteId: "structures/buildings/test/runtime_flip_owner",
-      tx: 0,
-      ty: 0,
       baseZ: 0,
       baseDx: 0,
       baseDy: 0,
@@ -243,10 +239,14 @@ describe("runtimeStructureSlicing", () => {
     };
     const normal = buildRuntimeStructureBandPieces({
       ...common,
+      seTx: 2,
+      seTy: 1,
       flipped: false,
     });
     const flipped = buildRuntimeStructureBandPieces({
       ...common,
+      seTx: 1,
+      seTy: 2,
       flipped: true,
     });
 
@@ -254,18 +254,18 @@ describe("runtimeStructureSlicing", () => {
     const flippedOwners = flipped.map((p) => ({ tx: p.renderKey.within, ty: p.renderKey.slice - p.renderKey.within }));
 
     expect(normalOwners).toEqual([
-      { tx: 2, ty: 1 },
-      { tx: 2, ty: 1 },
-      { tx: 1, ty: 1 },
       { tx: 0, ty: 1 },
+      { tx: 0, ty: 1 },
+      { tx: 1, ty: 1 },
+      { tx: 2, ty: 1 },
       { tx: 2, ty: 1 },
       { tx: 2, ty: 0 },
       { tx: 2, ty: 0 },
     ]);
     expect(flippedOwners).toEqual([
-      { tx: 1, ty: 2 },
-      { tx: 1, ty: 2 },
       { tx: 0, ty: 2 },
+      { tx: 0, ty: 2 },
+      { tx: 1, ty: 2 },
       { tx: 1, ty: 2 },
       { tx: 1, ty: 1 },
       { tx: 1, ty: 0 },
@@ -283,8 +283,8 @@ describe("runtimeStructureSlicing", () => {
     const pieces = buildRuntimeStructureBandPieces({
       structureInstanceId: "flip_south_edge",
       spriteId: "structures/buildings/test/runtime_flip_south_edge",
-      tx: 0,
-      ty: 0,
+      seTx: 1,
+      seTy: 2,
       baseZ: 0,
       baseDx: 0,
       baseDy: 0,
@@ -298,5 +298,72 @@ describe("runtimeStructureSlicing", () => {
     const southEdgeOwners = owners.filter((o) => o.ty === 2);
     expect(southEdgeOwners).toContainEqual({ tx: 1, ty: 2 });
     expect(southEdgeOwners).toContainEqual({ tx: 0, ty: 2 });
+  });
+
+  it("does not re-orient already oriented footprint dimensions when flipped is true", () => {
+    clearRuntimeStructureSliceCache();
+    registerSpriteMeta("structures/buildings/test/runtime_flip_double_orient_guard", {
+      tileWidth: 3,
+      tileHeight: 2,
+      zHeight: 1,
+    });
+    const pieces = buildRuntimeStructureBandPieces({
+      structureInstanceId: "flip_double_orient_guard",
+      spriteId: "structures/buildings/test/runtime_flip_double_orient_guard",
+      seTx: 1,
+      seTy: 2,
+      footprintW: 2,
+      footprintH: 3,
+      baseZ: 0,
+      baseDx: 0,
+      baseDy: 0,
+      spriteWidth: 420,
+      spriteHeight: 128,
+      bandPx: 64,
+      scale: 1,
+      flipped: true,
+    });
+    const owners = pieces.map((p) => ({ tx: p.renderKey.within, ty: p.renderKey.slice - p.renderKey.within }));
+
+    // 2x3 south-edge ownership from SE must include both (1,2) and (0,2),
+    // with duplicated SE corner ownership.
+    expect(owners).toContainEqual({ tx: 1, ty: 2 });
+    expect(owners).toContainEqual({ tx: 0, ty: 2 });
+    expect(owners.filter((o) => o.tx === 1 && o.ty === 2).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("keeps flipped south-edge owner slices at or ahead of immediate south floor slices", () => {
+    clearRuntimeStructureSliceCache();
+    registerSpriteMeta("structures/buildings/test/runtime_flip_overlap_guard", {
+      tileWidth: 3,
+      tileHeight: 2,
+      zHeight: 1,
+    });
+    const pieces = buildRuntimeStructureBandPieces({
+      structureInstanceId: "flip_overlap_guard",
+      spriteId: "structures/buildings/test/runtime_flip_overlap_guard",
+      seTx: 1,
+      seTy: 2,
+      baseZ: 0,
+      baseDx: 0,
+      baseDy: 0,
+      spriteWidth: 420,
+      spriteHeight: 128,
+      bandPx: 64,
+      scale: 1,
+      flipped: true,
+    });
+
+    const owners = pieces.map((p) => ({ tx: p.renderKey.within, ty: p.renderKey.slice - p.renderKey.within }));
+    const southEdgeSlices = owners
+      .filter((o) => o.ty === 2)
+      .map((o) => o.tx + o.ty);
+
+    const immediateSouthFloorSlices = [
+      0 + 3, // floor tile south of SW footprint corner
+      1 + 3, // floor tile south of SE footprint corner
+    ];
+
+    expect(Math.max(...southEdgeSlices)).toBeGreaterThanOrEqual(Math.min(...immediateSouthFloorSlices));
   });
 });

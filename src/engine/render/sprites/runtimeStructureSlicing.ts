@@ -1,5 +1,5 @@
 import { getSpriteMeta } from "./spriteMeta";
-import { orientedDims, ownerTileForBandFromSE, seAnchorFromTopLeft } from "./structureFootprintOwnership";
+import { orientedDims, ownerTileForBandFromSE } from "./structureFootprintOwnership";
 
 export const DEFAULT_STRUCTURE_BAND_PX = 64;
 export const DEFAULT_STRUCTURE_SLICE_STRIDE = 1;
@@ -20,10 +20,8 @@ export type RuntimeBandLayout = {
 export type RuntimeStructureBandInput = {
   structureInstanceId: string;
   spriteId: string;
-  tx: number;
-  ty: number;
-  anchorTx?: number;
-  anchorTy?: number;
+  seTx: number;
+  seTy: number;
   baseZ: number;
   baseDx: number;
   baseDy: number;
@@ -145,23 +143,30 @@ export function buildRuntimeStructureBandPieces(
   const meta = getSpriteMeta(input.spriteId);
   const baseTileW = Math.max(1, (input.footprintW ?? meta.tileWidth) | 0);
   const baseTileH = Math.max(1, (input.footprintH ?? meta.tileHeight) | 0);
-  const oriented = orientedDims(baseTileW, baseTileH, flipped);
+  // When footprint is supplied by map compile, it is already oriented.
+  // Only orient metadata fallback dimensions.
+  const hasExplicitFootprint = input.footprintW !== undefined && input.footprintH !== undefined;
+  const oriented = hasExplicitFootprint
+    ? { w: baseTileW, h: baseTileH }
+    : orientedDims(baseTileW, baseTileH, flipped);
   const tileW = oriented.w;
   const tileH = oriented.h;
-  const seAnchor = seAnchorFromTopLeft(input.tx, input.ty, tileW, tileH);
-  const anchorTx = (input.anchorTx ?? seAnchor.anchorTx) | 0;
-  const anchorTy = (input.anchorTy ?? seAnchor.anchorTy) | 0;
+  const anchorTx = input.seTx | 0;
+  const anchorTy = input.seTy | 0;
   const coreCount = tileW + tileH;
 
   const out: RuntimeStructureBandRenderPiece[] = new Array(layout.length);
   for (let i = 0; i < layout.length; i++) {
     const band = layout[i];
-    const coreIndex = band.index === 0
+    const spriteBandIndex = band.index === 0
       ? 0
       : band.index === coreCount + 1
         ? coreCount - 1
         : band.index - 1;
-    const owner = ownerTileForBandFromSE(anchorTx, anchorTy, tileW, tileH, coreIndex);
+    const ownerBandIndex = spriteBandIndex < tileW
+      ? (tileW - 1) - spriteBandIndex
+      : spriteBandIndex;
+    const owner = ownerTileForBandFromSE(anchorTx, anchorTy, tileW, tileH, ownerBandIndex);
 
     out[i] = {
       index: band.index,
