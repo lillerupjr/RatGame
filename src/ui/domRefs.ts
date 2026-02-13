@@ -48,6 +48,10 @@ export type DomRefs = {
     innkeeperBtn: HTMLButtonElement;
     settingsBtn: HTMLButtonElement;
     likeSubBtn: HTMLButtonElement;
+    characterSelectEl: HTMLDivElement;
+    characterChoicesEl: HTMLDivElement;
+    characterBackBtn: HTMLButtonElement;
+    characterContinueBtn: HTMLButtonElement;
     mapMenuEl: HTMLDivElement;
     mapChoicesEl: HTMLDivElement;
     mapMenuSublineEl: HTMLDivElement;
@@ -106,6 +110,11 @@ export function getDomRefs(): DomRefs {
     const innkeeperBtn = getEl<HTMLButtonElement>("innkeeperBtn");
     const settingsBtn = getEl<HTMLButtonElement>("settingsBtn");
     const likeSubBtn = getEl<HTMLButtonElement>("likeSubBtn");
+
+    const characterSelectEl = getEl<HTMLDivElement>("characterSelect");
+    const characterChoicesEl = getEl<HTMLDivElement>("characterChoices");
+    const characterBackBtn = getEl<HTMLButtonElement>("characterBackBtn");
+    const characterContinueBtn = getEl<HTMLButtonElement>("characterContinueBtn");
 
     const mapMenuEl = getEl<HTMLDivElement>("mapMenu");
     const mapChoicesEl = getEl<HTMLDivElement>("mapChoices");
@@ -193,6 +202,10 @@ export function getDomRefs(): DomRefs {
         innkeeperBtn,
         settingsBtn,
         likeSubBtn,
+        characterSelectEl,
+        characterChoicesEl,
+        characterBackBtn,
+        characterContinueBtn,
         mapMenuEl,
         mapChoicesEl,
         mapMenuSublineEl,

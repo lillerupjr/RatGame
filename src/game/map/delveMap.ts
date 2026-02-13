@@ -4,7 +4,6 @@
 import type { StageId } from "../content/stages";
 import { RNG } from "../util/rng";
 import { FLOOR_ARCHETYPES, type FloorArchetype } from "./floorArchetype";
-import { allMapSkinIds, type MapSkinId } from "../content/mapSkins";
 import { DEFAULT_MAP_POOL, type MapId } from "./mapIds";
 import { objectiveIdFromArchetype, type ObjectiveId } from "./objectivePlan";
 
@@ -24,7 +23,6 @@ export type DelveNode = {
   plan: NodePlan;
   title: string;
   completed: boolean;
-  skinPool?: MapSkinId[];
 };
 
 export type DelveEdge = { from: string; to: string };
@@ -42,17 +40,6 @@ const ZONE_NAMES: Record<StageId, string> = {
   SEWERS: "Sewers",
   CHINATOWN: "Chinatown",
 };
-const ZONE_SKIN_POOLS: Record<StageId, MapSkinId[]> = {
-  DOCKS: ["default", "docks_rust"],
-  SEWERS: ["default", "sewer_green"],
-  CHINATOWN: ["default", "neon_stone"],
-};
-
-function skinPoolForZone(_zoneId: StageId): MapSkinId[] {
-  // Global pool: any MapSkinId in MAP_SKINS is eligible everywhere.
-  // This means adding a new skin key automatically expands the pool.
-  return allMapSkinIds();
-}
 
 function nodeId(x: number, y: number): string {
   return `${x},${y}`;
@@ -119,7 +106,6 @@ export function createDelveMap(seed: number): DelveMap {
     plan: buildNodePlan(rng, startDepth, startArchetype),
     title: `${ZONE_NAMES[startZone]} (Depth ${startDepth})`,
     completed: false,
-    skinPool: skinPoolForZone(startZone),
   };
   nodes.set(startNode.id, startNode);
 
@@ -207,7 +193,6 @@ export function ensureAdjacentNodes(map: DelveMap, fromId: string, seed: number)
           plan: buildNodePlan(nodeRng, depth, floorArchetype),
           title: `${ZONE_NAMES[zoneId]} (Depth ${depth})`,
           completed: false,
-          skinPool: skinPoolForZone(zoneId),
         };
         map.nodes.set(nid, newNode);
       }
@@ -240,7 +225,6 @@ export function ensureAdjacentNodes(map: DelveMap, fromId: string, seed: number)
         plan: buildNodePlan(nodeRng, depth, floorArchetype),
         title: `${ZONE_NAMES[zoneId]} (Depth ${depth})`,
         completed: false,
-        skinPool: skinPoolForZone(zoneId),
       });
     }
     map.edges.push({ from: fromId, to: deeperId });
@@ -269,23 +253,23 @@ export function getReachableNodes(map: DelveMap): DelveNode[] {
 
     return Array.from(reachable.values());
   }
-  
+
   const current = map.nodes.get(map.currentNodeId);
   if (!current) return [];
-  
+
   // Find all connected nodes
   const reachable: DelveNode[] = [];
   for (const edge of map.edges) {
     let targetId: string | null = null;
     if (edge.from === map.currentNodeId) targetId = edge.to;
     else if (edge.to === map.currentNodeId) targetId = edge.from;
-    
+
     if (targetId) {
       const node = map.nodes.get(targetId);
       if (node) reachable.push(node);
     }
   }
-  
+
   return reachable;
 }
 
@@ -295,16 +279,16 @@ export function getReachableNodes(map: DelveMap): DelveNode[] {
 export function moveToNode(map: DelveMap, nodeId: string): DelveNode | null {
   const node = map.nodes.get(nodeId);
   if (!node) return null;
-  
+
   // Mark previous node as completed
   if (map.currentNodeId) {
     const prev = map.nodes.get(map.currentNodeId);
     if (prev) prev.completed = true;
   }
-  
+
   map.currentNodeId = nodeId;
   map.exploredDepth = Math.max(map.exploredDepth, node.y);
-  
+
   return node;
 }
 
@@ -315,10 +299,10 @@ export function getVisibleNodes(map: DelveMap, radius: number = 5): DelveNode[] 
   if (!map.currentNodeId) {
     return Array.from(map.nodes.values());
   }
-  
+
   const current = map.nodes.get(map.currentNodeId);
   if (!current) return Array.from(map.nodes.values());
-  
+
   return Array.from(map.nodes.values()).filter(n => {
     const dx = Math.abs(n.x - current.x);
     const dy = Math.abs(n.y - current.y);
@@ -360,9 +344,9 @@ export function getDepthScaling(depth: number): {
   // Depth 5 = ~1.5x HP, ~1.3x damage
   // Depth 10 = ~2.6x HP, ~1.7x damage
   // Depth 20 = ~7x HP, ~3x damage
-  
+
   const d = Math.max(1, depth);
-  
+
   return {
     hpMult: Math.pow(1.1, d - 1),           // +10% per depth
     damageMult: Math.pow(1.05, d - 1),      // +5% per depth

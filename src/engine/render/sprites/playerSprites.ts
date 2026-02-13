@@ -25,7 +25,6 @@ const PLAYER_ASSET_MODULES = import.meta.glob("../../../assets/player/**/*", {
 }) as Record<string, string>;
 
 const PLAYER_SOURCE: SpriteLoaderSource = { packRoot: "/player", modules: PLAYER_ASSET_MODULES };
-const PLAYER_SKIN = "jamal"; // TODO: make this dynamic
 const PLAYER_WALK_ANIM = "walk";
 const PLAYER_ANCHOR_X = 0.5;
 const PLAYER_ANCHOR_Y = 0.75;
@@ -33,17 +32,33 @@ const PLAYER_SKIN_SCALE: Record<string, number> = {
     jack: 1,
     hobo: 1.5,
     jamal: 1.5,
-
+    joey: 1.2,
 };
 
+let playerSkin = "jamal";
 let playerPack: SpritePack | null = null;
 let _ready = false;
+
+export function setPlayerSkin(skin: string) {
+    if (skin === playerSkin) return;
+    playerSkin = skin;
+    playerPack = null;
+    _ready = false;
+}
+
+export function getPlayerIdleSpriteUrl(skin: string): string {
+    const suffix = `/player/${skin}/rotations/south.png`;
+    for (const [path, url] of Object.entries(PLAYER_ASSET_MODULES)) {
+        if (path.endsWith(suffix)) return url;
+    }
+    return "";
+}
 
 export async function preloadPlayerSprites() {
     if (_ready) return;
 
     try {
-        playerPack = await preloadSpritePack(PLAYER_SKIN, {
+        playerPack = await preloadSpritePack(playerSkin, {
             source: PLAYER_SOURCE,
             animKeys: [PLAYER_WALK_ANIM],
             frameCount: 6,
@@ -80,7 +95,7 @@ export function getPlayerSpriteFrame(args: {
             sy: 0,
             sw: playerPack.size.w,
             sh: playerPack.size.h,
-            scale: PLAYER_SKIN_SCALE[PLAYER_SKIN] ?? PLAYER_SPRITE_SCALE,
+            scale: PLAYER_SKIN_SCALE[playerSkin] ?? PLAYER_SPRITE_SCALE,
             anchorX: PLAYER_ANCHOR_X,
             anchorY: PLAYER_ANCHOR_Y,
         };

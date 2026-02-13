@@ -86,63 +86,29 @@ export const MAP_SKINS: Record<MapSkinId, MapSkinBundle> = {
 };
 
 export function resolveMapSkin(id?: MapSkinId): ResolvedMapSkin {
-    const bundle = MAP_SKINS[id ?? ""] ?? {};
-    return {
-        floor: bundle.floor ?? DEFAULT_MAP_SKIN.floor,
-        apron: bundle.apron ?? DEFAULT_MAP_SKIN.apron,
-        wall: bundle.wall ?? DEFAULT_MAP_SKIN.wall,
-        stair: bundle.stair ?? DEFAULT_MAP_SKIN.stair,
-        stairApron: bundle.stairApron ?? DEFAULT_MAP_SKIN.stairApron,
+     const bundle = MAP_SKINS[id ?? ""] ?? {};
+     return {
+         floor: bundle.floor ?? DEFAULT_MAP_SKIN.floor,
+         apron: bundle.apron ?? DEFAULT_MAP_SKIN.apron,
+         wall: bundle.wall ?? DEFAULT_MAP_SKIN.wall,
+         stair: bundle.stair ?? DEFAULT_MAP_SKIN.stair,
+         stairApron: bundle.stairApron ?? DEFAULT_MAP_SKIN.stairApron,
 
-        background: bundle.background ?? DEFAULT_MAP_SKIN.background,
-        buildingPool: bundle.buildingPool ?? ["default_buildings"],
-    };
-}
+         background: bundle.background ?? DEFAULT_MAP_SKIN.background,
+         buildingPool: bundle.buildingPool ?? ["default_buildings"],
+     };
+ }
 
-
-function hashString(s: string): number {
-    let hash = 0;
-    for (let i = 0; i < s.length; i++) {
-        hash = ((hash << 5) - hash + s.charCodeAt(i)) | 0;
-    }
-    return hash >>> 0;
-}
-
-export function allMapSkinIds(): MapSkinId[] {
-    const raw = Object.keys(MAP_SKINS).map((id) => id.trim()).filter(Boolean);
-
-    // Stable ordering for deterministic picks across environments:
-    // - Always put default first (if present)
-    // - Sort the rest alphabetically
-    const rest = raw.filter((id) => id !== DEFAULT_MAP_SKIN_ID).sort();
-    return raw.includes(DEFAULT_MAP_SKIN_ID) ? [DEFAULT_MAP_SKIN_ID, ...rest] : rest;
-}
-
-export function normalizeMapSkinPool(pool?: MapSkinId[]): MapSkinId[] {
-    const cleaned = (pool ?? []).map((id) => id.trim()).filter(Boolean);
-    return cleaned.length > 0 ? cleaned : allMapSkinIds();
-}
-
-export function pickMapSkinId(
-    pool: MapSkinId[] | undefined,
-    runSeed: number,
-    nodeId: string
-): MapSkinId {
-    const list = normalizeMapSkinPool(pool);
-    const hash = hashString(`${runSeed}:${nodeId}`);
-    const idx = list.length > 0 ? (hash % list.length) : 0;
-    return list[idx] ?? DEFAULT_MAP_SKIN_ID;
-}
 
 export function resolveSemanticSprite(mapSkinId: MapSkinId | undefined, slot: string, index?: number): string {
-    const skinKey = mapSkinId ?? DEFAULT_MAP_SKIN_ID;
-    const table = MAP_SKINS[skinKey]?.semantic ?? MAP_SKINS[DEFAULT_MAP_SKIN_ID]?.semantic ?? {};
-    const raw = table[slot];
-    if (Array.isArray(raw)) {
-        if (raw.length === 0) return "";
-        const idx = typeof index === "number" && raw.length > 0 ? Math.max(0, Math.min(raw.length - 1, index)) : 0;
-        return raw[idx] ?? raw[0] ?? "";
-    }
-    if (typeof raw === "string") return raw;
-    return "";
-}
+     const skinKey = mapSkinId ?? DEFAULT_MAP_SKIN_ID;
+     const table = MAP_SKINS[skinKey]?.semantic ?? MAP_SKINS[DEFAULT_MAP_SKIN_ID]?.semantic ?? {};
+     const raw = table[slot];
+     if (Array.isArray(raw)) {
+         if (raw.length === 0) return "";
+         const idx = typeof index === "number" && raw.length > 0 ? Math.max(0, Math.min(raw.length - 1, index)) : 0;
+         return raw[idx] ?? raw[0] ?? "";
+     }
+     if (typeof raw === "string") return raw;
+     return "";
+ }

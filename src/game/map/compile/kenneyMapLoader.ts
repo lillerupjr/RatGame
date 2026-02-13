@@ -2,7 +2,7 @@
 import type { SemanticStamp, TableMapDef } from "../formats/table/tableMapTypes";
 import { KENNEY_TILE_ANCHOR_Y } from "../../../engine/render/kenneyTiles";
 import type { TriggerDef } from "../../triggers/triggerTypes";
-import { resolveMapSkin, resolveSemanticSprite, type MapSkinBundle, type MapSkinId } from "../../content/mapSkins";
+import { resolveMapSkin, resolveSemanticSprite, type MapSkinId, MapSkinBundle } from "../../content/mapSkins";
 import { resolveTileSpriteId } from "../skins/tileSpriteResolver";
 import { HEIGHT_UNIT_PX, pickBuildingSkin, resolveBuildingCandidates } from "../../content/buildings";
 import type { BuildingSkin } from "../../content/structureSkins";
@@ -154,20 +154,13 @@ export type CompiledKenneyMap = {
 };
 
 /** Compile a table-based map definition into a render/query-friendly map. */
-function mapSkinDefaultsFromDef(def: TableMapDef): MapSkinBundle {
-    const defaults: MapSkinBundle = { ...(def.mapSkinDefaults ?? {}) };
-    return defaults;
-}
-
 export function compileKenneyMapFromTable(
     def: TableMapDef,
-    options?: { mapSkinId?: MapSkinId; runSeed?: number; mapId?: string }
+    options?: { runSeed?: number; mapId?: string }
 ): CompiledKenneyMap {
-    const mapSkinDefaults = mapSkinDefaultsFromDef(def);
-    // Priority: def.mapSkinId (authored) > options.mapSkinId (runtime override)
-    // This allows authored maps to specify their own skin, while procedural maps use runtime selection
-    const skinIdToUse = def.mapSkinId ?? options?.mapSkinId;
+    const skinIdToUse = def.mapSkinId;
     const resolvedMapSkin = resolveMapSkin(skinIdToUse);
+    const mapSkinDefaults = def.mapSkinDefaults;
     const runSeed = options?.runSeed ?? 0;
     const mapId = options?.mapId ?? def.id;
 
@@ -190,6 +183,7 @@ export function compileKenneyMapFromTable(
 
     const parsedCells: ParsedCell[] = [];
     const wallTokens: WallToken[] = [];
+    const pendingTriggers: Array<{ tx: number; ty: number; id: string; type: string; radius?: number }> = [];
     let minTx = Number.POSITIVE_INFINITY;
     let maxTx = Number.NEGATIVE_INFINITY;
     let minTy = Number.POSITIVE_INFINITY;
@@ -208,6 +202,12 @@ export function compileKenneyMapFromTable(
     for (const c of def.cells) {
         const tx = c.x | 0;
         const ty = c.y | 0;
+        const triggerType = c.triggerType;
+        const triggerId = c.triggerId;
+        if (triggerType) {
+            const id = triggerId && triggerId.trim() ? triggerId : `trigger_${triggerType}_${tx}_${ty}`;
+            pendingTriggers.push({ tx, ty, id, type: triggerType, radius: c.radius });
+        }
         const parsed: { tile: IsoTile | null; walls: WallToken[] } = (() => {
             const type = (c.type ?? "floor").toLowerCase();
             const sprite = c.sprite;
@@ -237,10 +237,14 @@ export function compileKenneyMapFromTable(
                 }
             })();
             if (type === "floor" || semanticFloorSlot) {
-                const semanticSprite = semanticFloorSlot
-                    ? resolveSemanticSprite(skinIdToUse, semanticFloorSlot)
-                    : "";
-                const floorSprite = sprite ?? (semanticSprite || undefined);
+                const semanticSprite = semanticFloorSlot ? resolveSemanticSprite(skinIdToUse, semanticFloorSlot) : "";
+                const fallbackFloor = resolveTileSpriteId({
+                    slot: "floor",
+                    mapSkin: resolvedMapSkin,
+                    mapSkinId: skinIdToUse,
+                    mapDefaults: mapSkinDefaults,
+                });
+                const floorSprite = sprite ?? semanticSprite ?? fallbackFloor;
                 return { tile: { kind: "FLOOR" as const, h: z, skin: floorSprite }, walls: [] as WallToken[] };
             }
             if (type === "spawn") {
@@ -322,6 +326,14 @@ export function compileKenneyMapFromTable(
     const boundsCenterTy = (minTy + maxTy) * 0.5;
     const originTx = def.centerOnZero ? -Math.floor(boundsCenterTx) : 0;
     const originTy = def.centerOnZero ? -Math.floor(boundsCenterTy) : 0;
+
+    const triggerDefs: TriggerDef[] = pendingTriggers.map((t) => ({
+        id: t.id,
+        type: t.type,
+        tx: t.tx + originTx,
+        ty: t.ty + originTy,
+        radius: t.radius,
+    }));
 
     const placed = new Map<string, IsoTile>();
 
@@ -505,6 +517,13 @@ export function compileKenneyMapFromTable(
         else map.set(piece.zLogical, [piece]);
     }
 
+    function addSolidFace(tx: number, ty: number, zLogical: number, dir: WallDir) {
+        const key = `${tx},${ty},${zLogical},${dir}`;
+        if (wallFaces.has(key)) return;
+        wallFaces.add(key);
+        wallFaceList.push({ tx, ty, zLogical, dir });
+    }
+
 
     function addSolidFaceSpan(tx: number, ty: number, zStart: number, zEnd: number, dir: WallDir) {
         const z0 = Math.min(zStart, zEnd);
@@ -584,15 +603,13 @@ export function compileKenneyMapFromTable(
             if (stamp.w === undefined || stamp.h === undefined) {
                 throw new Error(`Building stamp at (${stamp.x},${stamp.y}) must define w/h.`);
             }
-            const buildingFloorSprite =
-                resolveSemanticSprite(skinIdToUse, "BUILDING_FLOOR") ||
-                resolveTileSpriteId({
-                    slot: "floor",
-                    dir: undefined,
-                    mapSkin: resolvedMapSkin,
-                    mapSkinId: skinIdToUse,
-                    mapDefaults: mapSkinDefaults,
-                });
+            const buildingFloorSemantic = resolveSemanticSprite(skinIdToUse, "BUILDING_FLOOR");
+            const buildingFloorSprite = buildingFloorSemantic || resolveTileSpriteId({
+                slot: "floor",
+                mapSkin: resolvedMapSkin,
+                mapSkinId: skinIdToUse,
+                mapDefaults: mapSkinDefaults,
+            });
 
             const forcedSkinId = skinOverride ?? stamp.skinId;
 
@@ -792,15 +809,13 @@ export function compileKenneyMapFromTable(
             for (let dy = 0; dy < h; dy++) {
                 const tx = sx + dx;
                 const ty = sy + dy;
-                const spriteIdTop =
-                    resolveSemanticSprite(skinIdToUse, slot) ||
-                    resolveTileSpriteId({
-                        slot: "floor",
-                        dir: undefined,
-                        mapSkin: resolvedMapSkin,
-                        mapSkinId: skinIdToUse,
-                        mapDefaults: mapSkinDefaults,
-                    });
+                const semanticSprite = resolveSemanticSprite(skinIdToUse, slot);
+                const spriteIdTop = semanticSprite || resolveTileSpriteId({
+                    slot: "floor",
+                    mapSkin: resolvedMapSkin,
+                    mapSkinId: skinIdToUse,
+                    mapDefaults: mapSkinDefaults,
+                });
                 addSurface({
                     id: `stamp_${stamp.type}_${tx}_${ty}_${zBase}`,
                     kind: "TILE_TOP",
@@ -904,195 +919,39 @@ export function compileKenneyMapFromTable(
     };
     if (def.stamps && def.stamps.length > 0) {
         for (let i = 0; i < def.stamps.length; i++) {
-            compileStamp(def.stamps[i], i);
+            const s = def.stamps[i];
+            compileStamp(s, i);
         }
     }
 
-    function oppositeDir(dir: WallDir): WallDir {
-        switch (dir) {
-            case "N": return "S";
-            case "S": return "N";
-            case "E": return "W";
-            case "W": return "E";
+    const surfacesInView = new Set<Surface>();
+    const addSurfacesInView = (view: ViewRect) => {
+        for (let tx = view.minTx; tx <= view.maxTx; tx++) {
+            for (let ty = view.minTy; ty <= view.maxTy; ty++) {
+                const key = `${tx},${ty}`;
+                const list = surfacesByKey.get(key);
+                if (list) {
+                    for (let i = 0; i < list.length; i++) {
+                        surfacesInView.add(list[i]);
+                    }
+                }
+            }
         }
-    }
-
-    function canonicalizeEdge(tx: number, ty: number, dir: WallDir): { tx: number; ty: number; dir: WallDir } {
-        if (dir === "N") return { tx, ty: ty - 1, dir: "S" };
-        if (dir === "W") return { tx: tx - 1, ty, dir: "E" };
-        return { tx, ty, dir };
-    }
-
-    function addSolidFace(tx: number, ty: number, zLogical: number, dir: WallDir) {
-        const canonical = canonicalizeEdge(tx, ty, dir);
-        const key = `${canonical.tx},${canonical.ty},${zLogical | 0},${canonical.dir}`;
-        if (wallFaces.has(key)) return;
-        wallFaces.add(key);
-        wallFaceList.push({
-            tx: canonical.tx,
-            ty: canonical.ty,
-            zLogical: zLogical | 0,
-            dir: canonical.dir,
-        });
-    }
-
-    const DIRS: Array<{ dir: WallDir; dx: number; dy: number }> = [
-        { dir: "N", dx: 0, dy: -1 },
-        { dir: "E", dx: 1, dy: 0 },
-        { dir: "S", dx: 0, dy: 1 },
-        { dir: "W", dx: -1, dy: 0 },
-    ];
-
-    function highestSurfaceAt(tx: number, ty: number): Surface | null {
-        const surfaces = surfacesAtXY(tx, ty);
-        if (surfaces.length === 0) return null;
-        let best = surfaces[0];
-        for (let i = 1; i < surfaces.length; i++) {
-            if (surfaces[i].zBase > best.zBase) best = surfaces[i];
-        }
-        return best;
-    }
-
-    const emittedFaces = new Set<string>();
-    let faceId = 0;
-
-    for (const [key, list] of surfacesByKey.entries()) {
-        if (!list || list.length === 0) continue;
-        const [txStr, tyStr] = key.split(",");
-        const tx = parseInt(txStr, 10);
-        const ty = parseInt(tyStr, 10);
-        if (!Number.isFinite(tx) || !Number.isFinite(ty)) continue;
-
-        const zHere = maxSurfaceZAt(tx, ty);
-        if (zHere === null) continue;
-
-        for (let d = 0; d < DIRS.length; d++) {
-            const { dir, dx, dy } = DIRS[d];
-            const nTx = tx + dx;
-            const nTy = ty + dy;
-
-            const zNeighbor = maxSurfaceZAt(nTx, nTy);
-            const neighborZ = zNeighbor === null ? apronBaseZ : zNeighbor;
-            const zA = zHere;
-            const zB = neighborZ;
-            if (zA === zB) continue;
-
-            const ownerIsHere = zA > zB;
-            const ownerTx = ownerIsHere ? tx : nTx;
-            const ownerTy = ownerIsHere ? ty : nTy;
-            const ownerDir = ownerIsHere ? dir : oppositeDir(dir);
-            const canonical = canonicalizeEdge(ownerTx, ownerTy, ownerDir);
-
-            const zFrom = Math.min(zA, zB);
-            const zTo = Math.max(zA, zB);
-            const dedupKey = `${canonical.tx},${canonical.ty},${canonical.dir},${zFrom},${zTo}`;
-            if (emittedFaces.has(dedupKey)) continue;
-            emittedFaces.add(dedupKey);
-
-            const ownerSurface = highestSurfaceAt(ownerTx, ownerTy);
-            const renderTopKind = ownerSurface?.renderTopKind ?? "FLOOR";
-            const renderDir = ownerSurface?.renderDir ?? "N";
-            const renderAnchorY = ownerSurface?.renderAnchorY ?? floorAnchorY;
-            const renderDyOffset = ownerSurface?.renderDyOffset ?? 0;
-            const zLogical = ownerSurface?.zLogical ?? Math.floor(zTo);
-            const spriteId = resolveTileSpriteId({
-                slot: renderTopKind === "STAIR" ? "stairApron" : "apron",
-                dir: canonical.dir,
-                mapSkin: resolvedMapSkin,
-                mapSkinId: skinIdToUse,
-                mapDefaults: mapSkinDefaults,
-            });
-
-            addFace({
-                id: `face_${canonical.tx}_${canonical.ty}_${canonical.dir}_${zFrom}_${zTo}_${faceId++}`,
-                cls: "FACE",
-                kind: renderTopKind === "STAIR" ? "STAIR_APRON" : "FLOOR_APRON",
-                tx: canonical.tx,
-                ty: canonical.ty,
-                zFrom,
-                zTo,
-                zLogical,
-                edgeDir: canonical.dir,
-                apronKind: canonical.dir === "E" || canonical.dir === "W" ? "E" : "S",
-                apronDyOffset: 0,
-                flipX: false,
-                renderTopKind,
-                renderDir,
-                renderAnchorY,
-                renderDyOffset,
-                spriteId,
-            });
-        }
-    }
-
-    for (let i = 0; i < wallTokens.length; i++) {
-        const w = wallTokens[i];
-        const canonical = canonicalizeEdge(w.x, w.y, w.dir);
-        const tx = canonical.tx;
-        const ty = canonical.ty;
-        const height = Math.max(0, w.height | 0);
-        if (height <= 0) continue;
-
-        const flipX = false;
-        const segmentHeight = 2;
-        const zFrom = 0;
-        const zTo = height;
-        const wallSlot: "wall" | "apron" | "stairApron" = w.slot ?? "wall";
-        const wallAxis = canonical.dir === "E" || canonical.dir === "W" ? "E" : "S";
-        const wallSpriteDir = wallSlot === "stairApron" ? "N" : wallAxis;
-        const wallSkin = w.skin;
-        const spriteId = resolveTileSpriteId({
-            slot: wallSlot,
-            dir: wallSpriteDir,
-            mapSkin: resolvedMapSkin,
-            mapSkinId: skinIdToUse,
-            mapDefaults: mapSkinDefaults,
-        });
-
-        for (let z = zFrom; z < zTo; z += segmentHeight) {
-            const segFrom = z;
-            const segTo = Math.min(z + segmentHeight, zTo);
-            const zLogical = Math.floor(segFrom + 1e-6);
-            addFace({
-                id: `wall_${tx}_${ty}_${w.dir}_${segFrom}_${segTo}`,
-                cls: "FACE",
-                kind: "WALL",
-                tx,
-                ty,
-                zFrom: segFrom,
-                zTo: segTo,
-                zLogical,
-                wallDir: canonical.dir,
-                wallSkin,
-                apronDyOffset: 0,
-                flipX,
-                renderTopKind: "FLOOR",
-                renderDir: "N",
-                renderAnchorY: floorAnchorY,
-                renderDyOffset: 0,
-                spriteId,
-            });
-        }
-    }
+    };
 
     function occludersForLayer(layer: number): RenderPiece[] {
         return occludersByLayer.get(layer) ?? [];
     }
 
-    function pieceInView(piece: RenderPiece, view: ViewRect): boolean {
-        return piece.tx >= view.minTx
-            && piece.tx <= view.maxTx
-            && piece.ty >= view.minTy
-            && piece.ty <= view.maxTy;
-    }
-
     function occludersInViewForLayer(layer: number, view: ViewRect): RenderPiece[] {
-        const list = occludersByLayer.get(layer);
-        if (!list || list.length === 0) return [];
+        const list = occludersForLayer(layer);
+        if (list.length === 0) return [];
         const out: RenderPiece[] = [];
         for (let i = 0; i < list.length; i++) {
-            const c = list[i];
-            if (pieceInView(c, view)) out.push(c);
+            const p = list[i];
+            if (p.tx < view.minTx || p.tx > view.maxTx) continue;
+            if (p.ty < view.minTy || p.ty > view.maxTy) continue;
+            out.push(p);
         }
         return out;
     }
@@ -1101,70 +960,46 @@ export function compileKenneyMapFromTable(
         const out: StampOverlay[] = [];
         for (let i = 0; i < overlays.length; i++) {
             const o = overlays[i];
-            if (o.tx > view.maxTx || o.ty > view.maxTy) continue;
-            if (o.tx + o.w - 1 < view.minTx || o.ty + o.h - 1 < view.minTy) continue;
+            const minTx = o.tx;
+            const minTy = o.ty;
+            const maxTx = o.tx + o.w - 1;
+            const maxTy = o.ty + o.h - 1;
+            if (maxTx < view.minTx || minTx > view.maxTx) continue;
+            if (maxTy < view.minTy || minTy > view.maxTy) continue;
             out.push(o);
         }
         return out;
     }
 
     function solidFace(tx: number, ty: number, zLogical: number, dir: WallDir): boolean {
-        const canonical = canonicalizeEdge(tx, ty, dir);
-        const key = `${canonical.tx},${canonical.ty},${zLogical | 0},${canonical.dir}`;
-        return wallFaces.has(key);
+        return wallFaces.has(`${tx},${ty},${zLogical},${dir}`);
     }
 
     function solidFacesInView(view: ViewRect): SolidFaceRec[] {
         const out: SolidFaceRec[] = [];
         for (let i = 0; i < wallFaceList.length; i++) {
-            const rec = wallFaceList[i];
-            if (rec.tx < view.minTx || rec.tx > view.maxTx) continue;
-            if (rec.ty < view.minTy || rec.ty > view.maxTy) continue;
-            out.push(rec);
+            const f = wallFaceList[i];
+            if (f.tx < view.minTx || f.tx > view.maxTx) continue;
+            if (f.ty < view.minTy || f.ty > view.maxTy) continue;
+            out.push(f);
         }
         return out;
     }
 
-    // Convert authored spawn table coords -> tile coords.
-    // Fallback: bounds center.
-    const fallbackSpawnTx = Math.floor(boundsCenterTx);
-    const fallbackSpawnTy = Math.floor(boundsCenterTy);
-    const spawnTx = (spawnTableX ?? fallbackSpawnTx) + originTx;
-    const spawnTy = (spawnTableY ?? fallbackSpawnTy) + originTy;
-
-    // Convert authored goal table coords -> tile coords.
-    // Goal may be null if not defined in map.
-    const goalTx = goalTableX !== null ? goalTableX + originTx : null;
-    const goalTy = goalTableY !== null ? goalTableY + originTy : null;
-
-    const triggerDefs: TriggerDef[] = [];
-    for (const c of def.cells) {
-        if (!c.triggerId || !c.triggerType) continue;
-        const fx = c.x | 0;
-        const fy = c.y | 0;
-        triggerDefs.push({
-            id: c.triggerId,
-            type: c.triggerType,
-            tx: fx + originTx,
-            ty: fy + originTy,
-            radius: c.radius,
-        });
-    }
-
-    return {
+    const compiled: CompiledKenneyMap = {
         id: def.id,
         originTx,
         originTy,
         width: def.w,
         height: def.h,
 
-        spawnTx,
-        spawnTy,
-        spawnH,
+        spawnTx: (spawnTableX ?? 0) + originTx,
+        spawnTy: (spawnTableY ?? 0) + originTy,
+        spawnH: spawnH | 0,
 
-        goalTx,
-        goalTy,
-        goalH,
+        goalTx: goalTableX === null ? null : goalTableX + originTx,
+        goalTy: goalTableY === null ? null : goalTableY + originTy,
+        goalH: goalH | 0,
 
         triggerDefs,
 
@@ -1172,7 +1007,6 @@ export function compileKenneyMapFromTable(
         surfacesByKey,
         surfacesAtXY,
         topsByLayer,
-        debugApronStats: undefined,
         occludersByLayer,
         occludersForLayer,
         occludersInViewForLayer,
@@ -1182,4 +1016,12 @@ export function compileKenneyMapFromTable(
         overlaysInView,
         blockedTiles,
     };
+
+    const getTileWithRunResolver = (tx: number, ty: number): IsoTile => {
+        return getTile(tx, ty);
+    };
+
+    (compiled as any).getTileWithRunResolver = getTileWithRunResolver;
+
+    return compiled;
 }

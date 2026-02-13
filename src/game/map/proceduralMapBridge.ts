@@ -18,18 +18,14 @@ import {
     type MazeMapConfig,
     type RoomGraph,
 } from "./generators/mazeMap";
-import {
-    compileKenneyMapFromTable,
-    type CompiledKenneyMap,
-    type IsoTile,
-} from "./compile/kenneyMapLoader";
+import { type CompiledKenneyMap, type IsoTile } from "./compile/kenneyMapLoader";
 import type { TableMapDef } from "./formats/table/tableMapTypes";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { PLANE_TILE_Z_OFFSET, setActiveMap as setKenneyActiveMap } from "./compile/kenneyMap";
+import { setActiveMapSkinId } from "../../engine/render/sprites/renderSprites";
 import { initializeRoomChallenges } from "../systems/progression/roomChallenge";
 import type { World } from "../../engine/world/world";
 import { setObjectives } from "../systems/progression/objective";
-import type { MapSkinId } from "../content/mapSkins";
 
 
 // ─────────────────────────────────────────────────────────────
@@ -72,19 +68,19 @@ export function generateAndActivateFloorMap(
     seed: number,
     floorIndex: number,
     isBoss: boolean = false,
-    world?: World,
-    mapSkinId?: MapSkinId
+    world?: World
 ): CompiledKenneyMap {
     // Generate map with room data for challenges
     const { mapDef, rooms } = generateFloorMapWithRooms(seed, floorIndex, isBoss);
     
     // CRITICAL: Update the global kenneyMap state so all game systems use the new map
-    const compiled = setKenneyActiveMap(mapDef, mapSkinId);
-    
+    const compiled = setKenneyActiveMap(mapDef);
+
     _activeMapDef = mapDef;
     _activeMap = compiled;
     _activeRoomData = rooms;
-    
+    setActiveMapSkinId(_activeMapDef?.mapSkinId);
+
     // Initialize room challenges if world is provided
     if (world) {
         initializeRoomChallenges(world, rooms);
@@ -123,7 +119,8 @@ export function generateAndActivateCustomMap(config: ProceduralMapConfig, world?
     _activeMapDef = mapDef;
     _activeMap = compiled;
     _activeRoomData = rooms;
-    
+    setActiveMapSkinId(_activeMapDef?.mapSkinId);
+
     // Initialize room challenges if world is provided
     if (world) {
         initializeRoomChallenges(world, rooms);
@@ -136,54 +133,55 @@ export function generateAndActivateCustomMap(config: ProceduralMapConfig, world?
  * Generate and activate a maze-style map with custom configuration.
  */
 export function generateAndActivateMazeMap(
-    config: MazeMapConfig,
-    mapSkinId?: MapSkinId
-): { compiled: CompiledKenneyMap; graph: RoomGraph } {
-    const { mapDef, graph } = generateMazeMapDef(config);
+    config: MazeMapConfig
+ ): { compiled: CompiledKenneyMap; graph: RoomGraph } {
+     const { mapDef, graph } = generateMazeMapDef(config);
 
-    // CRITICAL: Update the global kenneyMap state so all game systems use the new map
-    const compiled = setKenneyActiveMap(mapDef, mapSkinId);
+     // CRITICAL: Update the global kenneyMap state so all game systems use the new map
+     const compiled = setKenneyActiveMap(mapDef);
 
-    _activeMapDef = mapDef;
-    _activeMap = compiled;
-    _activeRoomData = null;
+     _activeMapDef = mapDef;
+     _activeMap = compiled;
+     _activeRoomData = null;
+     setActiveMapSkinId(_activeMapDef?.mapSkinId);
 
-    return { compiled, graph };
+     return { compiled, graph };
 }
 
 /**
  * Generate and activate a maze-style map for a given floor.
  */
 export function generateAndActivateMazeFloorMap(
-    seed: number,
-    floorIndex: number,
-    isBoss: boolean = false,
-    mapSkinId?: MapSkinId
-): { compiled: CompiledKenneyMap; graph: RoomGraph } {
-    const { mapDef, graph } = generateMazeFloorMap(seed, floorIndex, isBoss);
+     seed: number,
+     floorIndex: number,
+     isBoss: boolean = false
+ ): { compiled: CompiledKenneyMap; graph: RoomGraph } {
+     const { mapDef, graph } = generateMazeFloorMap(seed, floorIndex, isBoss);
 
-    // CRITICAL: Update the global kenneyMap state so all game systems use the new map
-    const compiled = setKenneyActiveMap(mapDef, mapSkinId);
+     // CRITICAL: Update the global kenneyMap state so all game systems use the new map
+     const compiled = setKenneyActiveMap(mapDef);
 
-    _activeMapDef = mapDef;
-    _activeMap = compiled;
-    _activeRoomData = null;
+     _activeMapDef = mapDef;
+     _activeMap = compiled;
+     _activeRoomData = null;
+     setActiveMapSkinId(_activeMapDef?.mapSkinId);
 
-    return { compiled, graph };
+     return { compiled, graph };
 }
 
 /**
  * Activate a pre-existing map definition (e.g., hand-crafted maps).
  */
-export function activateMapDef(mapDef: TableMapDef, mapSkinId?: MapSkinId): CompiledKenneyMap {
-    // CRITICAL: Update the global kenneyMap state so all game systems use the new map
-    const compiled = setKenneyActiveMap(mapDef, mapSkinId);
-    
-    _activeMapDef = mapDef;
-    _activeMap = compiled;
-    _activeRoomData = null;
-    
-    return compiled;
+export function activateMapDef(mapDef: TableMapDef): CompiledKenneyMap {
+     // CRITICAL: Update the global kenneyMap state so all game systems use the new map
+     const compiled = setKenneyActiveMap(mapDef);
+
+     _activeMapDef = mapDef;
+     _activeMap = compiled;
+     _activeRoomData = null;
+     setActiveMapSkinId(_activeMapDef?.mapSkinId);
+
+     return compiled;
 }
 
 /** Apply objectives from the active map definition to the world. */

@@ -137,6 +137,62 @@ canvas { display:block; }
 #mapMenu .mapMenuActions { display: flex; gap: 10px; margin-top: 14px; }
 #mapMenu .mapMenuActions button { flex: 1; padding: 12px 14px; border-radius: 12px; border: 0; cursor: pointer; font-weight: 800; background: rgba(255,255,255,0.16); color: #fff; }
 
+/* Character Select Menu */
+#characterSelect { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.75); z-index: 4; }
+#characterSelect .panel { width: min(820px, 94vw); padding: 24px; border-radius: 20px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
+#characterSelect .title { font-size: 26px; font-weight: 900; margin-bottom: 6px; text-align: center; }
+#characterSelect .subline { opacity: 0.85; margin-bottom: 16px; font-size: 14px; text-align: center; }
+#characterChoices { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+@media (max-width: 720px) { #characterChoices { flex-direction: column; align-items: center; } }
+
+.characterCard {
+  width: 180px;
+  text-align: center;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.08);
+  cursor: pointer;
+  color: #fff;
+  transition: transform 80ms ease, background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+.characterCard:hover { transform: translateY(-1px); background: rgba(255,255,255,0.11); border-color: rgba(255,255,255,0.18); }
+.characterCard[aria-pressed="true"] {
+  border-color: rgba(255,255,255,0.5);
+  background: rgba(255,255,255,0.14);
+  box-shadow: 0 0 18px rgba(255,255,255,0.18);
+}
+
+.characterSpriteWrap {
+  display: grid;
+  place-items: center;
+  height: 140px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.22);
+  margin-bottom: 10px;
+}
+.characterSprite {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.characterName { font-weight: 900; font-size: 15px; margin-bottom: 4px; }
+.characterWeapon { opacity: 0.9; font-size: 12px; line-height: 1.35; }
+
+#characterSelect .characterActions { display: flex; gap: 10px; margin-top: 16px; }
+#characterSelect .characterActions button {
+  flex: 1;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 0;
+  cursor: pointer;
+  font-weight: 800;
+  background: rgba(255,255,255,0.16);
+  color: #fff;
+}
+#characterSelect .characterActions button:disabled { opacity: 0.45; cursor: not-allowed; }
+
 /* Innkeeper & Settings Menus */
 #innkeeperMenu, #settingsMenu { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.75); z-index: 4; }
 #innkeeperMenu .panel, #settingsMenu .panel { width: min(560px, 92vw); padding: 30px; border-radius: 20px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }

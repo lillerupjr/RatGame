@@ -1,11 +1,13 @@
-import { WEAPONS, type WeaponId } from "../game/content/weapons";
+import { WEAPONS } from "../game/content/weapons";
 import type { TableMapDef } from "../game/map/formats/table/tableMapTypes";
 import { AUTHORED_MAP_DEFS } from "../game/map/authored/authoredMapRegistry";
 import type { DomRefs } from "./domRefs";
+import { PLAYABLE_CHARACTERS, type PlayableCharacterId } from "../game/content/playableCharacters";
+import { getPlayerIdleSpriteUrl } from "../engine/render/sprites/playerSprites";
 
 type GameApi = {
     previewMap: (mapId?: string) => void;
-    startRun: (starterWeapon?: WeaponId, mapId?: string) => void;
+    startRun: (characterId: PlayableCharacterId) => void;
 };
 
 type MapChoice = {
@@ -68,15 +70,11 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     applyBackground(refs.menuEl, backgroundImageUrl);
     applyBackground(refs.innkeeperMenuEl, backgroundImageUrl);
     applyBackground(refs.settingsMenuEl, backgroundImageUrl);
-
-    const weaponIds = Object.keys(WEAPONS) as WeaponId[];
-
-    let selectedWeapon: WeaponId =
-        (refs.startBtn.dataset.weapon as WeaponId) ||
-        (weaponIds.includes("KNIFE" as WeaponId) ? ("KNIFE" as WeaponId) : weaponIds[0]);
+    applyBackground(refs.characterSelectEl, backgroundImageUrl);
 
     // Start with undefined (Delve mode) by default, not PROC_ROOMS
     let selectedMapId: string | undefined = refs.startBtn.dataset.map || undefined;
+    let selectedCharacterId: PlayableCharacterId | undefined = undefined;
 
     function getSelectedMapLabel(): string {
         if (!selectedMapId) return "Delve (random route)";
@@ -84,95 +82,48 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     }
 
     function updateMenuSubline() {
-        const title = WEAPONS[selectedWeapon]?.title ?? selectedWeapon;
         const mapLabel = getSelectedMapLabel();
         refs.menuSublineEl.textContent =
-            `Slice v0.5 - 3 floors (20 sec -> boss). Map: ${mapLabel}. Starter weapon: ${title}.`;
+            `Slice v0.5 - 3 floors (20 sec -> boss). Map: ${mapLabel}.`;
     }
 
-    function setSelectedWeapon(id: WeaponId) {
-        selectedWeapon = id;
-        refs.startBtn.dataset.weapon = id;
+    function setSelectedCharacter(id: PlayableCharacterId) {
+        selectedCharacterId = id;
+        refs.characterContinueBtn.disabled = false;
 
-        const buttons = refs.weaponChoicesEl.querySelectorAll("button[data-weapon]");
+        const buttons = refs.characterChoicesEl.querySelectorAll("button[data-character]");
         buttons.forEach((b) => {
-            const wid = (b as HTMLButtonElement).dataset.weapon as WeaponId;
-            b.setAttribute("aria-pressed", wid === selectedWeapon ? "true" : "false");
+            const cid = (b as HTMLButtonElement).dataset.character as PlayableCharacterId;
+            b.setAttribute("aria-pressed", cid === selectedCharacterId ? "true" : "false");
         });
-
-        updateMenuSubline();
     }
 
-    function weaponDesc(id: WeaponId): string {
-        switch (id) {
-            case "KNIFE":
-                return "Throws multiple knives forward.";
-            case "KNIFE_EVOLVED_RING":
-                return "Evolution: knives in all directions.";
-            case "PISTOL":
-                return "Accurate single shots.";
-            case "PISTOL_EVOLVED_SPIRAL":
-                return "Evolution: spiral shots.";
-            case "SYRINGE":
-                return "Poison shots. Poisoned kills cause an explosion (non-chaining).";
-            case "SYRINGE_EVOLVED_CHAIN":
-                return "Evolution: explosions apply poison and can chain.";
-            case "SWORD":
-                return "Melee slash in a cone.";
-            case "KNUCKLES":
-                return "Orbiting projectiles around you.";
-            case "AURA":
-                return "Damaging aura around you.";
-            case "MOLOTOV":
-                return "Burning ground effect.";
-            case "BOUNCER":
-                return "Bouncing projectiles";
-            case "BOUNCER_EVOLVED_BANKSHOT":
-                return "EXTREME BOUNCES!!";
-            case "BAZOOKA":
-                return "Shoots a slow moving missile";
-            case "BAZOOKA_EVOLVED":
-                return "kaboom.";
-            default:
-                return "Starter weapon.";
-        }
-    }
+    function buildCharacterPicker() {
+        refs.characterChoicesEl.innerHTML = "";
 
-    function isEvolutionStarter(id: WeaponId): boolean {
-        return (
-            id === "KNIFE_EVOLVED_RING" ||
-            id === "PISTOL_EVOLVED_SPIRAL" ||
-            id === "SYRINGE_EVOLVED_CHAIN" ||
-            id === "BAZOOKA_EVOLVED" ||
-            id === "BOUNCER_EVOLVED_BANKSHOT"
-        );
-    }
-
-    function buildWeaponPicker() {
-        refs.weaponChoicesEl.innerHTML = "";
-
-        for (const id of weaponIds) {
-            const def = WEAPONS[id];
+        for (const character of PLAYABLE_CHARACTERS) {
+            const weaponTitle = WEAPONS[character.startingWeaponId]?.title ?? character.startingWeaponId;
             const btn = document.createElement("button");
-            btn.className = "wpnBtn";
+            btn.className = "characterCard";
             btn.type = "button";
-            btn.dataset.weapon = id;
+            btn.dataset.character = character.id;
             btn.setAttribute("aria-pressed", "false");
 
-            const evoTag = isEvolutionStarter(id)
-                ? `<div style="display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;border:1px solid rgba(255,255,255,0.25);font-size:11px;font-weight:900;opacity:0.95;">EVOLUTION</div>`
-                : "";
+            const spriteUrl = getPlayerIdleSpriteUrl(character.idleSpriteKey);
 
             btn.innerHTML = `
-      <div class="wpnTitle">${def.title}${evoTag}</div>
-      <div class="wpnDesc">${weaponDesc(id)}</div>
+      <div class="characterSpriteWrap">
+        ${spriteUrl ? `<img class="characterSprite" src="${spriteUrl}" alt="${character.displayName}" />` : ""}
+      </div>
+      <div class="characterName">${character.displayName}</div>
+      <div class="characterWeapon">Starting Weapon: ${weaponTitle}</div>
     `;
 
-            btn.addEventListener("click", () => setSelectedWeapon(id));
-            refs.weaponChoicesEl.appendChild(btn);
+            btn.addEventListener("click", () => setSelectedCharacter(character.id));
+            refs.characterChoicesEl.appendChild(btn);
         }
 
-        setSelectedWeapon(selectedWeapon);
+        refs.characterContinueBtn.disabled = true;
     }
 
     function setSelectedMap(id: string) {
@@ -217,7 +168,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         }
     }
 
-    buildWeaponPicker();
+    buildCharacterPicker();
     buildMapPicker();
 
     // Welcome screen -> Main menu
@@ -226,16 +177,30 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         refs.mainMenuEl.hidden = false;
     });
 
-    // Main menu -> Weapon selection
+    // Main menu -> Character selection
     refs.startRunBtn.addEventListener("click", () => {
-        // Clear map selection for delve mode
         selectedMapId = undefined;
         delete refs.startBtn.dataset.map;
         updateMenuSubline();
 
         refs.mainMenuEl.hidden = true;
-        refs.menuEl.hidden = false;
-        game.previewMap(selectedMapId);
+        refs.characterSelectEl.hidden = false;
+    });
+
+    // Character selection -> Main menu
+    refs.characterBackBtn.addEventListener("click", () => {
+        refs.characterSelectEl.hidden = true;
+        refs.mainMenuEl.hidden = false;
+    });
+
+    // Character selection -> Delve map start
+    refs.characterContinueBtn.addEventListener("click", () => {
+        if (!selectedCharacterId) return;
+
+        refs.characterSelectEl.hidden = true;
+        refs.mainMenuEl.hidden = true;
+        refs.menuEl.hidden = true;
+        game.startRun(selectedCharacterId);
     });
 
     // Main menu -> Map selection
@@ -251,7 +216,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
 
     refs.mapContinueBtn.addEventListener("click", () => {
         refs.mapMenuEl.hidden = true;
-        refs.menuEl.hidden = false;
+        refs.characterSelectEl.hidden = false;
         game.previewMap(selectedMapId);
     });
 

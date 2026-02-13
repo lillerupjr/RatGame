@@ -14,7 +14,6 @@ import type { ObjectiveSpec } from "../../game/systems/progression/objectiveSpec
 import type { FloorArchetype } from "../../game/map/floorArchetype";
 import type { FloorIntent } from "../../game/map/floorIntent";
 import type { TriggerDef } from "../../game/triggers/triggerTypes";
-import type { MapSkinId } from "../../game/content/mapSkins";
 
 import type { WeaponId } from "../../game/content/weapons";
 
@@ -77,7 +76,6 @@ export type World = {
   floorIndex: number;
   floorArchetype: FloorArchetype;
   currentFloorIntent: FloorIntent | null;
-  chosenMapSkinId: MapSkinId;
   floorDuration: number; // seconds until boss for this stage
   phaseTime: number; // seconds since current phase began
   transitionTime: number; // seconds remaining in TRANSITION
@@ -418,7 +416,6 @@ export function createWorld(args: CreateWorldArgs): World {
     floorIndex: 0,
     floorArchetype: "SURVIVE",
     currentFloorIntent: null,
-    chosenMapSkinId: "default",
     floorDuration: stage.duration,
     phaseTime: 0,
     transitionTime: 0,

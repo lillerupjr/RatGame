@@ -27,7 +27,6 @@ import { getUpgradePool, UpgradeDef } from "./content/upgrades";
 import { formatTimeMMSS } from "./util/time";
 import type { WeaponId } from "./content/weapons";
 import { registry } from "./content/registry";
-import { DEFAULT_MAP_SKIN_ID, pickMapSkinId } from "./content/mapSkins";
 import { spawnEnemyGrid, ENEMY_TYPE } from "./factories/enemyFactory";
 import { gridToWorld, worldToGrid } from "./coords/grid";
 import { anchorFromWorld } from "./coords/anchor";
@@ -53,7 +52,7 @@ import {
 } from "./map/delveMap";
 import type { FloorArchetype } from "./map/floorArchetype";
 import type { FloorIntent } from "./map/floorIntent";
-import { preloadPlayerSprites } from "../engine/render/sprites/playerSprites";
+import { preloadPlayerSprites, setPlayerSkin } from "../engine/render/sprites/playerSprites";
 import { preloadBackgrounds } from "./render/background";
 import { getProjectileSpriteByKind, preloadProjectileSprites } from "../engine/render/sprites/projectileSprites";
 import { setMusicStage, stopMusic } from "../engine/audio/music";
@@ -75,6 +74,7 @@ import { generateVendorOffers } from "./events/vendor";
 import { RNG } from "./util/rng";
 import { applyObjective } from "./map/objectiveTransforms";
 import { objectiveIdFromArchetype } from "./map/objectivePlan";
+import { getPlayableCharacter, PLAYABLE_CHARACTERS, type PlayableCharacterId } from "./content/playableCharacters";
 
 
 type HudRefs = {
@@ -183,8 +183,10 @@ export function createGame(args: CreateGameArgs) {
 
   setMusicStage("DOCKS");
 
-
-
+  const defaultCharacter = PLAYABLE_CHARACTERS[0];
+  if (defaultCharacter) {
+    setPlayerSkin(defaultCharacter.idleSpriteKey);
+  }
 
   preloadBackgrounds();
   preloadPlayerSprites();
@@ -353,16 +355,6 @@ export function createGame(args: CreateGameArgs) {
       console.error("[enterFloor] delve floor intent missing mapId");
       return;
     }
-    const mapSkinId = (() => {
-      const nodeId = floorIntent.nodeId ?? "LEGACY_FLOOR";
-      const delve = w.delveMap as DelveMap | null;
-      const pool = delve?.nodes?.get?.(nodeId)?.skinPool;
-      const chosen = pickMapSkinId(pool, w.runSeed ?? 0, nodeId);
-      console.log(`[enterFloor] nodeId: ${nodeId}, pool: [${pool?.join(", ") ?? "none"}], chosenSkin: ${chosen}`);
-      return chosen;
-    })();
-
-    w.chosenMapSkinId = mapSkinId;
     w.floorIndex = floorIntent.floorIndex;
     w.floorArchetype = floorIntent.archetype;
     w.currentFloorIntent = floorIntent;
@@ -398,19 +390,19 @@ export function createGame(args: CreateGameArgs) {
       }
       const rng = new RNG(floorIntent.variantSeed);
       const finalMap = applyObjective(baseMap, floorIntent.objectiveId, rng);
-      activateMapDef(finalMap, mapSkinId);
+      activateMapDef(finalMap);
     } else {
       const mapSource = mapSourceFromFloorIntent(floorIntent);
       if (mapSource.type === "PROCEDURAL_ROOMS") {
         const mapSeed = w.rng.int(0, 0x7fffffff);
-        generateAndActivateFloorMap(mapSeed, floorIntent.floorIndex, false, w, mapSkinId);
+        generateAndActivateFloorMap(mapSeed, floorIntent.floorIndex, false, w);
       } else if (mapSource.type === "PROCEDURAL_MAZE") {
         const mapSeed = w.rng.int(0, 0x7fffffff);
-        generateAndActivateMazeFloorMap(mapSeed, floorIntent.floorIndex, false, mapSkinId);
+        generateAndActivateMazeFloorMap(mapSeed, floorIntent.floorIndex, false);
       } else {
         const staticDef = getStaticMapById(mapSource.mapId) ?? getDefaultStaticMap();
         if (staticDef) {
-          activateMapDef(staticDef, mapSkinId);
+          activateMapDef(staticDef);
         }
       }
     }
@@ -537,17 +529,17 @@ export function createGame(args: CreateGameArgs) {
 
   function applyMapSelection(mapId: string | undefined, seed: number) {
     if (mapId === "PROC_ROOMS") {
-      generateAndActivateFloorMap(seed, 0, false, undefined, DEFAULT_MAP_SKIN_ID);
+      generateAndActivateFloorMap(seed, 0, false, undefined);
       return;
     }
     if (mapId === "PROC_MAZE") {
-      generateAndActivateMazeFloorMap(seed, 0, false, DEFAULT_MAP_SKIN_ID);
+      generateAndActivateMazeFloorMap(seed, 0, false);
       return;
     }
 
     const staticDef = getStaticMapById(mapId) ?? getDefaultStaticMap();
     if (staticDef) {
-      activateMapDef(staticDef, DEFAULT_MAP_SKIN_ID);
+      activateMapDef(staticDef);
     }
   }
 
@@ -582,47 +574,38 @@ export function createGame(args: CreateGameArgs) {
     hideLevelUp();
   }
 
+  function startRun(characterId: PlayableCharacterId) {
+    const character = getPlayableCharacter(characterId);
+    if (!character) return;
 
-  function startRun(starterWeapon?: WeaponId, mapId?: string) {
-    resetRun(mapId);
+    setPlayerSkin(character.idleSpriteKey);
+    preloadPlayerSprites();
 
-    if (starterWeapon) {
-      world.weapons = [{ id: starterWeapon, level: 1, cdLeft: 0 }];
+    resetRun(undefined);
+
+    world.weapons = [{ id: character.startingWeaponId, level: 1, cdLeft: 0 }];
+
+    // Initialize room challenges from the current map
+    const roomData = getActiveRoomData();
+    if (roomData && roomData.length > 0) {
+      initializeRoomChallenges(world, roomData);
     }
 
-    if (!(world as any).mapMode) {
-      // Initialize room challenges from the current map
-      const roomData = getActiveRoomData();
-      if (roomData && roomData.length > 0) {
-        initializeRoomChallenges(world, roomData);
-      }
+    // Create infinite delve map
+    const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
+    const delve = createDelveMap(seed);
+    world.delveMap = delve;
+    world.delveDepth = 1;
+    world.delveScaling = getDepthScaling(1);
 
-      // Create infinite delve map
-      const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
-      const delve = createDelveMap(seed);
-      world.delveMap = delve;
-      world.delveDepth = 1;
-      world.delveScaling = getDepthScaling(1);
+    // Also keep legacy map for compatibility (will be phased out)
+    const g = buildStaticRunMap() as RunMap;
+    (world as any).runMap = g;
+    (world as any).mapCurrentNodeId = null;
+    (world as any).mapPendingNextFloorIndex = 0;
 
-      // Also keep legacy map for compatibility (will be phased out)
-      const g = buildStaticRunMap() as RunMap;
-      (world as any).runMap = g;
-      (world as any).mapCurrentNodeId = null;
-      (world as any).mapPendingNextFloorIndex = 0;
-
-      // Pick starting node
-      showDelveMap("Choose your starting location.\nGo deeper for greater challenge and rewards.");
-    } else {
-      world.delveMap = null;
-      world.delveDepth = 0;
-      world.delveScaling = {
-        hpMult: 1,
-        damageMult: 1,
-        spawnRateMult: 1,
-        xpMult: 1,
-      };
-      world.state = "RUN";
-    }
+    // Pick starting node
+    showDelveMap("Choose your starting location.\nGo deeper for greater challenge and rewards.");
   }
 
 
@@ -1354,22 +1337,6 @@ export function createGame(args: CreateGameArgs) {
     renderSystem(world, args.ctx, args.canvas);
   }
 
-  // Menu click starts
-  args.ui.menuEl.addEventListener("click", (e) => {
-    const t = e.target as HTMLElement;
-    const btn = t?.closest("button") as HTMLButtonElement | null;
-    if (!btn) return;
-
-    if (btn.id === "startBtn") {
-      const starter = btn.dataset.weapon as WeaponId | undefined;
-      const mapId = btn.dataset.map;
-
-      args.ui.menuEl.hidden = true;
-      args.ui.endEl.root.hidden = true;
-      args.hud.root.hidden = false;
-      startRun(starter, mapId);
-    }
-  });
 
   // End screen button -> back to menu
   args.ui.endEl.root.addEventListener("click", (e) => {

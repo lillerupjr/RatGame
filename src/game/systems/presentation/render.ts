@@ -44,8 +44,7 @@ import {
 import {
   preloadRenderSprites,
   getTileSpriteById,
-  getVoidTop,
-  setActiveMapSkinId
+  getVoidTop
 } from "../../../engine/render/sprites/renderSprites";
 import {
   drawOccluderOverlay,
@@ -91,7 +90,6 @@ function compareRenderKeys(a: RenderKey, b: RenderKey): number {
 /** Render tiles, entities, overlays, and debug layers. */
 export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
   const ww = canvas.clientWidth;
-  setActiveMapSkinId(w.chosenMapSkinId);
   const hh = canvas.clientHeight;
 
   // Camera zoom ("distance"):
