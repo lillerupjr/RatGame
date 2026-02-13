@@ -18,7 +18,7 @@ export type BuildingSkin = {
 
   // Existing tuning
   isFlippable: boolean;
-  defaultFacing?: "E" | "S";
+  defaultFacing?: "S" | "S";
   flipMode?: "H";
   anchorLiftUnits: number;
   wallLiftUnits?: number;
@@ -51,7 +51,7 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
     h: 2,
     heightUnits: 32,
     isFlippable: true,
-    defaultFacing: "E",
+    defaultFacing: "S",
     flipMode: "H",
     anchorLiftUnits: -2,
 
@@ -65,7 +65,7 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
     h: 2,
     heightUnits: 16,
     isFlippable: true,
-    defaultFacing: "E",
+    defaultFacing: "S",
     flipMode: "H",
     anchorLiftUnits: -2,
 
@@ -79,7 +79,7 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
     h: 2,
     heightUnits: 16,
     isFlippable: true,
-    defaultFacing: "E",
+    defaultFacing: "S",
     flipMode: "H",
     anchorLiftUnits: -2,
 
@@ -93,7 +93,7 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
     h: 2,
     heightUnits: 32,
     isFlippable: true,
-    defaultFacing: "E",
+    defaultFacing: "S",
     flipMode: "H",
     anchorLiftUnits: -2,
 
@@ -107,7 +107,7 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
     h: 2,
     heightUnits: 32,
     isFlippable: true,
-    defaultFacing: "E",
+    defaultFacing: "S",
     flipMode: "H",
     anchorLiftUnits: -2,
 
@@ -121,7 +121,7 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
     h: 2,
     heightUnits: 16,
     isFlippable: true,
-    defaultFacing: "E",
+    defaultFacing: "S",
     flipMode: "H",
     anchorLiftUnits: -2,
 
@@ -135,7 +135,7 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
     h: 2,
     heightUnits: 16,
     isFlippable: true,
-    defaultFacing: "E",
+    defaultFacing: "S",
     flipMode: "H",
     anchorLiftUnits: -2,
 
@@ -149,7 +149,7 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
     h: 2,
     heightUnits: 32,
     isFlippable: true,
-    defaultFacing: "E",
+    defaultFacing: "S",
     flipMode: "H",
     anchorLiftUnits: -2,
 
@@ -163,7 +163,7 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
     h: 2,
     heightUnits: 20,
     isFlippable: true,
-    defaultFacing: "E",
+    defaultFacing: "S",
     flipMode: "H",
     anchorLiftUnits: -1,
 
@@ -177,7 +177,7 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
     h: 2,
     heightUnits: 24,
     isFlippable: true,
-    defaultFacing: "E",
+    defaultFacing: "S",
     flipMode: "H",
     anchorLiftUnits: -1,
     wallLiftUnits: 0,
@@ -192,7 +192,7 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
     h: 2,
     heightUnits: 20,
     isFlippable: true,
-    defaultFacing: "E",
+    defaultFacing: "S",
     flipMode: "H",
     anchorLiftUnits: -1,
 

@@ -1,4 +1,5 @@
 import { getSpriteMeta } from "./spriteMeta";
+import { orientedDims, ownerTileForBandFromSE, seAnchorFromTopLeft } from "./structureFootprintOwnership";
 
 export const DEFAULT_STRUCTURE_BAND_PX = 64;
 export const DEFAULT_STRUCTURE_SLICE_STRIDE = 1;
@@ -21,6 +22,8 @@ export type RuntimeStructureBandInput = {
   spriteId: string;
   tx: number;
   ty: number;
+  anchorTx?: number;
+  anchorTy?: number;
   baseZ: number;
   baseDx: number;
   baseDy: number;
@@ -28,6 +31,7 @@ export type RuntimeStructureBandInput = {
   spriteHeight: number;
   footprintW?: number;
   footprintH?: number;
+  flipped?: boolean;
   sliceOffsetX?: number;
   sliceOffsetY?: number;
   scale?: number;
@@ -59,30 +63,6 @@ function hashString32(s: string): number {
 
 function bandStableId(structureInstanceId: string, bandIndex: number): number {
   return hashString32(`${structureInstanceId}:${bandIndex}`);
-}
-
-export function getStructureBandOwnerTile(
-  tx: number,
-  ty: number,
-  w: number,
-  h: number,
-  bandIndex: number,
-): { tx: number; ty: number } {
-  const tw = Math.max(1, w | 0);
-  const th = Math.max(1, h | 0);
-  const bandCount = tw + th;
-  const i = Math.max(0, Math.min(bandCount - 1, bandIndex | 0));
-  if (i < tw) {
-    return {
-      tx: tx + i,
-      ty: ty + (th - 1),
-    };
-  }
-  const j = i - tw;
-  return {
-    tx: tx + (tw - 1),
-    ty: ty + (th - 1) - j,
-  };
 }
 
 export function getVerticalBandLayout(
@@ -150,6 +130,7 @@ export function buildRuntimeStructureBandPieces(
 ): RuntimeStructureBandRenderPiece[] {
   const scale = input.scale ?? 1;
   const bandPx = input.bandPx ?? DEFAULT_STRUCTURE_BAND_PX;
+  const flipped = !!input.flipped;
   // Keep slice offset in authored screen pixels (same convention as drawDxOffset).
   const sliceOffsetX = input.sliceOffsetX ?? 0;
   const sliceOffsetY = input.sliceOffsetY ?? 0;
@@ -162,8 +143,14 @@ export function buildRuntimeStructureBandPieces(
     input.footprintH,
   );
   const meta = getSpriteMeta(input.spriteId);
-  const tileW = Math.max(1, (input.footprintW ?? meta.tileWidth) | 0);
-  const tileH = Math.max(1, (input.footprintH ?? meta.tileHeight) | 0);
+  const baseTileW = Math.max(1, (input.footprintW ?? meta.tileWidth) | 0);
+  const baseTileH = Math.max(1, (input.footprintH ?? meta.tileHeight) | 0);
+  const oriented = orientedDims(baseTileW, baseTileH, flipped);
+  const tileW = oriented.w;
+  const tileH = oriented.h;
+  const seAnchor = seAnchorFromTopLeft(input.tx, input.ty, tileW, tileH);
+  const anchorTx = (input.anchorTx ?? seAnchor.anchorTx) | 0;
+  const anchorTy = (input.anchorTy ?? seAnchor.anchorTy) | 0;
   const coreCount = tileW + tileH;
 
   const out: RuntimeStructureBandRenderPiece[] = new Array(layout.length);
@@ -174,7 +161,8 @@ export function buildRuntimeStructureBandPieces(
       : band.index === coreCount + 1
         ? coreCount - 1
         : band.index - 1;
-    const owner = getStructureBandOwnerTile(input.tx, input.ty, tileW, tileH, coreIndex);
+    const owner = ownerTileForBandFromSE(anchorTx, anchorTy, tileW, tileH, coreIndex);
+
     out[i] = {
       index: band.index,
       srcRect: { ...band.srcRect },

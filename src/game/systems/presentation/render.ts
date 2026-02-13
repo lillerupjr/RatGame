@@ -49,8 +49,8 @@ import {
 } from "../../../engine/render/sprites/renderSprites";
 import {
   buildRuntimeStructureBandPieces,
-  getStructureBandOwnerTile,
 } from "../../../engine/render/sprites/runtimeStructureSlicing";
+import { orientedDims, seAnchorFromTopLeft } from "../../../engine/render/sprites/structureFootprintOwnership";
 import {
   drawOccluderOverlay,
   drawProjectileFaceOverlay,
@@ -91,6 +91,23 @@ function compareRenderKeys(a: RenderKey, b: RenderKey): number {
   if (a.baseZ !== b.baseZ) return a.baseZ - b.baseZ;
   if (a.kindOrder !== b.kindOrder) return a.kindOrder - b.kindOrder;
   return a.stableId - b.stableId;
+}
+
+const flippedOverlayImageCache = new WeakMap<HTMLImageElement, HTMLCanvasElement>();
+
+function getFlippedOverlayImage(img: HTMLImageElement): HTMLCanvasElement {
+  const cached = flippedOverlayImageCache.get(img);
+  if (cached) return cached;
+  const canvas = document.createElement("canvas");
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const c2d = canvas.getContext("2d");
+  if (!c2d) return canvas;
+  c2d.translate(canvas.width, 0);
+  c2d.scale(-1, 1);
+  c2d.drawImage(img, 0, 0);
+  flippedOverlayImageCache.set(img, canvas);
+  return canvas;
 }
 
 /** Render tiles, entities, overlays, and debug layers. */
@@ -215,7 +232,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // Render all heights by default.
   const RENDER_ALL_HEIGHTS: boolean = (w as any).renderAllHeights ?? true;
   const LOG_STRUCTURE_ANCHOR_DEBUG = (w as any).structureAnchorDebug ?? false;
+  const LOG_STRUCTURE_OWNERSHIP_DEBUG = (w as any).structureOwnershipDebug ?? false;
   const loggedStructureAnchorDebugIds = new Set<string>();
+  const loggedStructureOwnershipDebugIds = new Set<string>();
 
   const floorFromZ = (z: number) => Math.ceil(z - 1e-6);
 
@@ -233,7 +252,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   };
 
   const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  const ENABLE_BUILDING_SOUTH_CULL = false;
   const shouldCullBuildingAt = (tx: number, ty: number, w: number = 1, h: number = 1) => {
+    if (!ENABLE_BUILDING_SOUTH_CULL) return false;
     const nx = clamp(playerTx, tx, tx + w - 1);
     const ny = clamp(playerTy, ty, ty + h - 1);
     const dx = Math.abs(playerTx - nx);
@@ -464,10 +485,11 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       o.layerRole === "STRUCTURE" || ((o.kind ?? "ROOF") === "PROP" && (footprintW > 1 || (o.h | 0) > 1));
     const tileWidth = 2 * T * ISO_X;
     const halfTileW = tileWidth * 0.5;
-  // Compensates for engine-wide half-tile X projection bias.
-  // Do NOT remove unless tile projection baseline is normalized.
-
-    const footprintAnchorAdjustX = -32;
+    // Derived footprint skew correction in screen X:
+    // 3x2 => -32, 2x3 => +32 (with T=64, ISO_X=1), scales with (h-w).
+    const footprintAnchorAdjustX = isFootprintOverlay
+      ? ((o.h - o.w) * halfTileW) * 0.5
+      : 0;
     const wx = (anchorTx + 0.5) * T;
     const wy = (anchorTy + 0.5) * T;
     const p = worldToScreen(wx, wy);
@@ -520,7 +542,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const SHOW_TRIGGER_ZONES = false;
   const SHOW_STRUCTURE_HEIGHTS = false;
   const SHOW_STRUCTURE_COLLISION_DEBUG = (w as any).structureCollisionDebug ?? false;
-  const ENABLE_RUNTIME_STRUCTURE_SLICING = (w as any).runtimeStructureSlicingEnabled ?? false;
   const SHOW_STRUCTURE_SLICE_DEBUG = (w as any).runtimeStructureSliceDebug ?? false;
 
   // Enemy Z buffer (optional visual override)
@@ -1135,8 +1156,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         const draw = buildOverlayDraw(o);
         if (!draw) continue;
         const useRuntimeStructureSlicing =
-          ENABLE_RUNTIME_STRUCTURE_SLICING &&
-          (o.kind === "PROP" || o.layerRole === "STRUCTURE");
+          o.kind === "PROP" || o.layerRole === "STRUCTURE";
 
         if (useRuntimeStructureSlicing) {
           const bandPieces = buildRuntimeStructureBandPieces({
@@ -1144,8 +1164,11 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
             spriteId: o.spriteId,
             tx: o.tx,
             ty: o.ty,
+            anchorTx: o.anchorTx,
+            anchorTy: o.anchorTy,
             footprintW: o.w,
             footprintH: o.h,
+            flipped: !!o.flipX,
             sliceOffsetX: o.sliceOffsetPx?.x  ?? 0,
             sliceOffsetY: o.sliceOffsetPx?.y ?? 0,
             baseZ: o.z,
@@ -1155,6 +1178,28 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
             spriteHeight: draw.dh,
             scale: draw.scale ?? 1,
           });
+
+          if (LOG_STRUCTURE_OWNERSHIP_DEBUG && !loggedStructureOwnershipDebugIds.has(o.id)) {
+            loggedStructureOwnershipDebugIds.add(o.id);
+            const oriented = orientedDims(Math.max(1, o.w | 0), Math.max(1, o.h | 0), !!o.flipX);
+            const seAnchor = seAnchorFromTopLeft(o.tx, o.ty, oriented.w, oriented.h);
+            const anchorTx = (o.anchorTx ?? seAnchor.anchorTx) | 0;
+            const anchorTy = (o.anchorTy ?? seAnchor.anchorTy) | 0;
+            const owners = bandPieces.map((piece) => ({
+              tx: piece.renderKey.within,
+              ty: piece.renderKey.slice - piece.renderKey.within,
+            }));
+            console.log("[structure-ownership]", {
+              structureId: o.id,
+              flipped: !!o.flipX,
+              w: oriented.w,
+              h: oriented.h,
+              anchorTx,
+              anchorTy,
+              first3: owners.slice(0, 3),
+              last3: owners.slice(Math.max(0, owners.length - 3)),
+            });
+          }
 
           for (let bi = 0; bi < bandPieces.length; bi++) {
             const band = bandPieces[bi];
@@ -1167,38 +1212,24 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
             };
             addToSlice(band.renderKey.slice, overlayKey, () => {
               const img = draw.img;
-              if (!img || img.width <= 0 || img.height <= 0) return;
-              if (draw.flipX) {
-                ctx.save();
-                ctx.translate(band.dstRect.x + band.dstRect.w, band.dstRect.y);
-                ctx.scale(-1, 1);
-                ctx.drawImage(
-                  img,
-                  band.srcRect.x,
-                  band.srcRect.y,
-                  band.srcRect.w,
-                  band.srcRect.h,
-                  0,
-                  0,
-                  band.dstRect.w,
-                  band.dstRect.h,
-                );
-                ctx.restore();
-              } else {
-                ctx.drawImage(
-                  img,
-                  band.srcRect.x,
-                  band.srcRect.y,
-                  band.srcRect.w,
-                  band.srcRect.h,
-                  band.dstRect.x,
-                  band.dstRect.y,
-                  band.dstRect.w,
-                  band.dstRect.h,
-                );
-              }
+              if (!img) return;
+              const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(img) : img;
+              ctx.drawImage(
+                sourceImg,
+                band.srcRect.x,
+                band.srcRect.y,
+                band.srcRect.w,
+                band.srcRect.h,
+                band.dstRect.x,
+                band.dstRect.y,
+                band.dstRect.w,
+                band.dstRect.h,
+              );
               if (SHOW_STRUCTURE_SLICE_DEBUG) {
-                const ownerTile = getStructureBandOwnerTile(o.tx, o.ty, o.w, o.h, band.index);
+                const ownerTile = {
+                  tx: band.renderKey.within,
+                  ty: band.renderKey.slice - band.renderKey.within,
+                };
                 deferredStructureSliceDebugDraws.push(() => {
                   ctx.save();
                   ctx.strokeStyle = "#00ffd5";

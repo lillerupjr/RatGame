@@ -16,6 +16,7 @@ import { CONTAINER_PACKS, CONTAINER_SKINS, CONTAINER_PACK_ID } from "../../conte
 import { requireProp } from "../../content/props";
 import { RNG } from "../../util/rng";
 import {getSpriteMeta} from "../../../engine/render/sprites/spriteMeta";
+import { seAnchorFromTopLeft } from "../../../engine/render/sprites/structureFootprintOwnership";
 
 export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL";
 export type StairDir = "N" | "E" | "S" | "W";
@@ -678,11 +679,29 @@ export function compileKenneyMapFromTable(
                 const candidates = candidateIds
                     .map((id) => BUILDING_SKINS[id])
                     .filter((skin): skin is BuildingSkin => !!skin)
-                    .map((skin) => {
-                        const oriented = resolveFlippedFootprint(skin.w, skin.h, skin.isFlippable, !!stamp.flipped);
-                        return { skin, oriented };
+                    .flatMap((skin) => {
+                        if (typeof stamp.flipped === "boolean") {
+                            const oriented = resolveFlippedFootprint(skin.w, skin.h, skin.isFlippable, stamp.flipped);
+                            if (oriented.w <= w && oriented.h <= h) return [{ skin, oriented }];
+                            return [];
+                        }
+
+                        const fitsNormal =
+                            skin.w <= w &&
+                            skin.h <= h;
+                        const fitsFlipped =
+                            skin.isFlippable &&
+                            skin.h <= w &&
+                            skin.w <= h;
+
+                        if (fitsNormal) {
+                            return [{ skin, oriented: { w: skin.w, h: skin.h, flipped: false } }];
+                        }
+                        if (fitsFlipped) {
+                            return [{ skin, oriented: { w: skin.h, h: skin.w, flipped: true } }];
+                        }
+                        return [];
                     })
-                    .filter(({ oriented }) => oriented.w <= w && oriented.h <= h)
                     .filter(({ skin }) => stamp.heightUnitsMin === undefined || skin.heightUnits >= stamp.heightUnitsMin)
                     .filter(({ skin }) => stamp.heightUnitsMax === undefined || skin.heightUnits <= stamp.heightUnitsMax);
 
@@ -817,14 +836,15 @@ export function compileKenneyMapFromTable(
                 skin.wallEast.every((id) => id === skin.roof);
 
             if (isMonolithicSkin) {
+                const seAnchor = seAnchorFromTopLeft(sx, sy, placeW, placeH);
                 overlays.push({
                     id: `building_${skin.id}_${sx}_${sy}_${w}x${h}`,
                     tx: sx,
                     ty: sy,
                     w: placeW,
                     h: placeH,
-                    anchorTx: sx + (placeW - 1),
-                    anchorTy: sy + (placeH - 1),
+                    anchorTx: seAnchor.anchorTx,
+                    anchorTy: seAnchor.anchorTy,
                     z: zBase,
                     spriteId: skin.roof,
                     drawDxOffset: offsetPx.x + anchorOffsetPx.x,
@@ -887,12 +907,15 @@ export function compileKenneyMapFromTable(
                 );
             }
 
+            const roofAnchor = seAnchorFromTopLeft(sx, sy, placeW, placeH);
             overlays.push({
                 id: `roof_${sx}_${sy}_${placeW}x${placeH}`,
                 tx: sx,
                 ty: sy,
                 w: placeW,
                 h: placeH,
+                anchorTx: roofAnchor.anchorTx,
+                anchorTy: roofAnchor.anchorTy,
                 z: zBase + heightUnits,
                 spriteId: skin.roof,
                 drawDyOffset: anchorLiftPx + roofLiftPx + offsetPx.y + anchorOffsetPx.y,
@@ -969,11 +992,27 @@ export function compileKenneyMapFromTable(
             const w = stamp.w ?? 2;
             const h = stamp.h ?? 3;
             const pool = stamp.pool ?? [CONTAINER_PACK_ID];
+            const flippedRequested = typeof stamp.flipped === "boolean" ? stamp.flipped : undefined;
             let chosen: BuildingSkin;
+            let chosenFlipped = false;
             if (stamp.skinId) {
                 const forced = CONTAINER_SKINS[stamp.skinId];
                 if (!forced) {
                     throw new Error(`Container selection: unknown skinId "${stamp.skinId}".`);
+                }
+                if (flippedRequested !== undefined) {
+                    const oriented = resolveFlippedFootprint(forced.w, forced.h, forced.isFlippable, flippedRequested);
+                    if (oriented.w !== w || oriented.h !== h) {
+                        throw new Error(`Container selection: forced skin "${forced.id}" with flipped=${flippedRequested} does not match stamp ${w}x${h}.`);
+                    }
+                    chosenFlipped = oriented.flipped;
+                } else {
+                    const fitsNormal = forced.w === w && forced.h === h;
+                    const fitsFlipped = forced.isFlippable && forced.h === w && forced.w === h;
+                    if (!fitsNormal && !fitsFlipped) {
+                        throw new Error(`Container selection: forced skin "${forced.id}" does not match stamp ${w}x${h} in either orientation.`);
+                    }
+                    chosenFlipped = !fitsNormal && fitsFlipped;
                 }
                 chosen = forced;
             } else {
@@ -989,19 +1028,31 @@ export function compileKenneyMapFromTable(
                     }
                 }
                 const candidates = Array.from(candidatesById.values())
-                    .filter((skin) => {
-                        const oriented = resolveFlippedFootprint(skin.w, skin.h, skin.isFlippable, !!stamp.flipped);
-                        return oriented.w === w && oriented.h === h;
+                    .flatMap((skin) => {
+                        if (flippedRequested !== undefined) {
+                            const oriented = resolveFlippedFootprint(skin.w, skin.h, skin.isFlippable, flippedRequested);
+                            if (oriented.w === w && oriented.h === h) {
+                                return [{ skin, flipped: oriented.flipped }];
+                            }
+                            return [];
+                        }
+                        const fitsNormal = skin.w === w && skin.h === h;
+                        const fitsFlipped = skin.isFlippable && skin.h === w && skin.w === h;
+                        if (fitsNormal) return [{ skin, flipped: false }];
+                        if (fitsFlipped) return [{ skin, flipped: true }];
+                        return [];
                     })
-                    .filter((skin) => stamp.heightUnitsMin === undefined || skin.heightUnits >= stamp.heightUnitsMin)
-                    .filter((skin) => stamp.heightUnitsMax === undefined || skin.heightUnits <= stamp.heightUnitsMax)
-                    .sort((a, b) => a.id.localeCompare(b.id));
+                    .filter(({ skin }) => stamp.heightUnitsMin === undefined || skin.heightUnits >= stamp.heightUnitsMin)
+                    .filter(({ skin }) => stamp.heightUnitsMax === undefined || skin.heightUnits <= stamp.heightUnitsMax)
+                    .sort((a, b) => a.skin.id.localeCompare(b.skin.id));
                 if (candidates.length === 0) {
                     throw new Error(`Container selection: no candidates for stamp ${w}x${h} with pool [${pool.join(", ")}].`);
                 }
                 const seed = hashString(`${runSeed}:${mapId}:${stampIndex}:container:${stamp.x},${stamp.y}:${w}x${h}`);
                 const rng = new RNG(seed);
-                chosen = candidates[rng.int(0, candidates.length - 1)] ?? candidates[0];
+                const picked = candidates[rng.int(0, candidates.length - 1)] ?? candidates[0];
+                chosen = picked.skin;
+                chosenFlipped = picked.flipped;
             }
 
             const stackLevel = Math.max(0, Math.trunc(stamp.stackLevel ?? 0));
@@ -1014,6 +1065,7 @@ export function compileKenneyMapFromTable(
                 z: (stamp.z ?? 0) + zStackUnits,
                 pool,
                 skinId: chosen.id,
+                flipped: chosenFlipped,
             };
             compileBuildingStamp(baseStamp, stampIndex, chosen.id);
 
@@ -1039,8 +1091,9 @@ export function compileKenneyMapFromTable(
             const propOriented = resolveFlippedFootprint(propBaseW, propBaseH, prop.isFlippable, !!stamp.flipped);
             const w = propOriented.w;
             const h = propOriented.h;
-            const anchorTx = (stamp.x | 0) + (w - 1);
-            const anchorTy = (stamp.y | 0) + (h - 1);
+            const seAnchor = seAnchorFromTopLeft(stamp.x | 0, stamp.y | 0, w, h);
+            const anchorTx = seAnchor.anchorTx;
+            const anchorTy = seAnchor.anchorTy;
             const zBase = stamp.z ?? 0;
             const anchorLiftPx = (prop.anchorLiftUnits ?? 0) * HEIGHT_UNIT_PX;
             const offset = prop.anchorOffsetPx ?? { x: 0, y: 0 };

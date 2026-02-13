@@ -27,7 +27,7 @@ function monolithicContainerSkin(
 }
 
 export const CONTAINER_SKINS: Record<BuildingSkinId, BuildingSkin> = {
-    container1: monolithicContainerSkin("container1", "structures/containers/container_base", 2, 3),
+    container1: monolithicContainerSkin("container1", "structures/containers/container_base", 3, 2),
     container_dark_blue: monolithicContainerSkin("container_dark_blue", "structures/containers/container_dark_blue", 2, 3),
     container_dark_blue_flipped: monolithicContainerSkin("container_dark_blue_flipped", "structures/containers/container_dark_blue_flipped", 3, 2),
     container_green: monolithicContainerSkin("container_green", "structures/containers/container_green", 2, 3),
@@ -42,13 +42,5 @@ export const CONTAINER_SKINS: Record<BuildingSkinId, BuildingSkin> = {
 export const CONTAINER_PACKS: Record<BuildingPackId, BuildingSkinId[]> = {
     [CONTAINER_PACK_ID]: [
         "container1",
-        "container_dark_blue",
-        "container_dark_blue_flipped",
-        "container_green",
-        "container_green_flipped",
-        "container_light_blue",
-        "container_light_blue_flipped",
-        "container_red",
-        "container_red_flipped",
     ],
 };

@@ -3,21 +3,51 @@ import {
   buildRuntimeStructureBandPieces,
   clearRuntimeStructureSliceCache,
   DEFAULT_STRUCTURE_BAND_PX,
-  getStructureBandOwnerTile,
   getVerticalBandLayout,
 } from "../../../../engine/render/sprites/runtimeStructureSlicing";
 import { registerSpriteMeta } from "../../../../engine/render/sprites/spriteMeta";
+import { ownerTileForBandFromSE } from "../../../../engine/render/sprites/structureFootprintOwnership";
 
 describe("runtimeStructureSlicing", () => {
-  it("maps ownership tiles along south edge then east edge with duplicated SE corner", () => {
-    const owners = Array.from({ length: 5 }, (_, i) => getStructureBandOwnerTile(0, 0, 3, 2, i));
+  it("maps ownership tiles from SE anchor by walking west then north with duplicated SE corner", () => {
+    const owners = Array.from({ length: 5 }, (_, i) => ownerTileForBandFromSE(2, 1, 3, 2, i));
     expect(owners).toEqual([
-      { tx: 0, ty: 1 },
-      { tx: 1, ty: 1 },
       { tx: 2, ty: 1 },
+      { tx: 1, ty: 1 },
+      { tx: 0, ty: 1 },
       { tx: 2, ty: 1 },
       { tx: 2, ty: 0 },
     ]);
+  });
+
+  it("uses provided SE anchorTx/anchorTy for ownership keys", () => {
+    clearRuntimeStructureSliceCache();
+    registerSpriteMeta("structures/buildings/test/runtime_explicit_anchor", {
+      tileWidth: 3,
+      tileHeight: 2,
+      zHeight: 1,
+    });
+    const pieces = buildRuntimeStructureBandPieces({
+      structureInstanceId: "runtime_explicit_anchor",
+      spriteId: "structures/buildings/test/runtime_explicit_anchor",
+      tx: 10,
+      ty: 10,
+      anchorTx: 3,
+      anchorTy: 4,
+      footprintW: 3,
+      footprintH: 2,
+      baseZ: 0,
+      baseDx: 0,
+      baseDy: 0,
+      spriteWidth: 320,
+      spriteHeight: 128,
+      bandPx: 64,
+      scale: 1,
+    });
+    const owners = pieces.map((p) => ({ tx: p.renderKey.within, ty: p.renderKey.slice - p.renderKey.within }));
+    expect(owners).toContainEqual({ tx: 3, ty: 4 });
+    expect(owners).toContainEqual({ tx: 1, ty: 4 });
+    expect(owners).toContainEqual({ tx: 3, ty: 3 });
   });
 
   it("uses side padding bands (+2) when sprite width exceeds core width", () => {
@@ -189,5 +219,84 @@ describe("runtimeStructureSlicing", () => {
     for (let i = 0; i < withOffset.length; i++) {
       expect(withOffset[i].dstRect.x - withoutOffset[i].dstRect.x).toBe(13);
     }
+  });
+
+  it("uses the same south-then-east ownership rule for flipped footprints", () => {
+    clearRuntimeStructureSliceCache();
+    registerSpriteMeta("structures/buildings/test/runtime_flip_owner", {
+      tileWidth: 3,
+      tileHeight: 2,
+      zHeight: 1,
+    });
+    const common = {
+      structureInstanceId: "flip_owner",
+      spriteId: "structures/buildings/test/runtime_flip_owner",
+      tx: 0,
+      ty: 0,
+      baseZ: 0,
+      baseDx: 0,
+      baseDy: 0,
+      spriteWidth: 420,
+      spriteHeight: 128,
+      bandPx: 64,
+      scale: 1,
+    };
+    const normal = buildRuntimeStructureBandPieces({
+      ...common,
+      flipped: false,
+    });
+    const flipped = buildRuntimeStructureBandPieces({
+      ...common,
+      flipped: true,
+    });
+
+    const normalOwners = normal.map((p) => ({ tx: p.renderKey.within, ty: p.renderKey.slice - p.renderKey.within }));
+    const flippedOwners = flipped.map((p) => ({ tx: p.renderKey.within, ty: p.renderKey.slice - p.renderKey.within }));
+
+    expect(normalOwners).toEqual([
+      { tx: 2, ty: 1 },
+      { tx: 2, ty: 1 },
+      { tx: 1, ty: 1 },
+      { tx: 0, ty: 1 },
+      { tx: 2, ty: 1 },
+      { tx: 2, ty: 0 },
+      { tx: 2, ty: 0 },
+    ]);
+    expect(flippedOwners).toEqual([
+      { tx: 1, ty: 2 },
+      { tx: 1, ty: 2 },
+      { tx: 0, ty: 2 },
+      { tx: 1, ty: 2 },
+      { tx: 1, ty: 1 },
+      { tx: 1, ty: 0 },
+      { tx: 1, ty: 0 },
+    ]);
+  });
+
+  it("covers the full flipped south edge before walking north on east edge", () => {
+    clearRuntimeStructureSliceCache();
+    registerSpriteMeta("structures/buildings/test/runtime_flip_south_edge", {
+      tileWidth: 3,
+      tileHeight: 2,
+      zHeight: 1,
+    });
+    const pieces = buildRuntimeStructureBandPieces({
+      structureInstanceId: "flip_south_edge",
+      spriteId: "structures/buildings/test/runtime_flip_south_edge",
+      tx: 0,
+      ty: 0,
+      baseZ: 0,
+      baseDx: 0,
+      baseDy: 0,
+      spriteWidth: 420,
+      spriteHeight: 128,
+      bandPx: 64,
+      scale: 1,
+      flipped: true,
+    });
+    const owners = pieces.map((p) => ({ tx: p.renderKey.within, ty: p.renderKey.slice - p.renderKey.within }));
+    const southEdgeOwners = owners.filter((o) => o.ty === 2);
+    expect(southEdgeOwners).toContainEqual({ tx: 1, ty: 2 });
+    expect(southEdgeOwners).toContainEqual({ tx: 0, ty: 2 });
   });
 });

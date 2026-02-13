@@ -4,6 +4,7 @@ import { compileKenneyMapFromTable } from "../../../../game/map/compile/kenneyMa
 import { BUILDING_PACKS, BUILDING_SKINS } from "../../../../game/content/buildings";
 import type { TableMapDef } from "../../../../game/map/formats/table/tableMapTypes";
 import { CONTAINER_SKINS } from "../../../../game/content/containers";
+import { seAnchorFromTopLeft } from "../../../../engine/render/sprites/structureFootprintOwnership";
 
 describe("structure legacy transition", () => {
   it("uses monolithic flat container assets during runtime-slicing", () => {
@@ -61,6 +62,24 @@ describe("structure legacy transition", () => {
     expect(structureRoofs.length).toBeGreaterThan(0);
     expect(structureRoofs.some((o) => o.spriteId.includes("structures/buildings/china_town/"))).toBe(true);
     expect(structureRoofs.some((o) => o.spriteId.includes("structures/buildings/avenue/"))).toBe(false);
+  });
+
+  it("auto-rotates flippable buildings when only flipped orientation fits the field", () => {
+    const mapDef: TableMapDef = {
+      id: "auto_rotate_field_fit",
+      w: 4,
+      h: 10,
+      buildingPackId: "avenue_buildings",
+      cells: [{ x: 0, y: 0, z: 0, type: "floor" }],
+      stamps: [{ x: 0, y: 0, z: 0, type: "building", w: 2, h: 8 }],
+    };
+
+    const compiled = compileKenneyMapFromTable(mapDef);
+    const structureOverlays = compiled.overlays.filter(
+      (o) => o.layerRole === "STRUCTURE" && o.spriteId.includes("structures/buildings/"),
+    );
+    expect(structureOverlays.length).toBeGreaterThan(0);
+    expect(structureOverlays.some((o) => !!o.flipX)).toBe(true);
   });
 
   it("bakes collision strictly from logical building footprint tiles", () => {
@@ -123,5 +142,43 @@ describe("structure legacy transition", () => {
     const structure = compiled.overlays.find((o) => o.layerRole === "STRUCTURE" && o.spriteId.includes("structures/containers/"));
     expect(structure).toBeTruthy();
     expect(structure!.z).toBeGreaterThanOrEqual(container.heightUnits);
+  });
+
+  it("auto-flips container skin when only flipped orientation matches stamp dimensions", () => {
+    const mapDef: TableMapDef = {
+      id: "container_auto_flip_fit",
+      w: 8,
+      h: 8,
+      cells: [{ x: 0, y: 0, z: 0, type: "floor" }],
+      stamps: [{ x: 1, y: 1, z: 0, type: "container", w: 2, h: 3, pool: ["containers"] }],
+    };
+    const compiled = compileKenneyMapFromTable(mapDef);
+    const structure = compiled.overlays.find((o) => o.layerRole === "STRUCTURE" && o.spriteId.includes("structures/containers/"));
+    expect(structure).toBeTruthy();
+    expect(structure!.w).toBe(2);
+    expect(structure!.h).toBe(3);
+    expect(!!structure!.flipX).toBe(true);
+  });
+
+  it("emits SE anchor tiles for oriented structure overlays", () => {
+    const mapDef: TableMapDef = {
+      id: "structure_overlay_se_anchor",
+      w: 8,
+      h: 8,
+      cells: [{ x: 0, y: 0, z: 0, type: "floor" }],
+      stamps: [
+        { x: 2, y: 1, z: 0, type: "building", skinId: "building1", w: 3, h: 2 },
+        { x: 1, y: 4, z: 0, type: "building", skinId: "building1", w: 3, h: 2, flipped: true },
+      ],
+    };
+    const compiled = compileKenneyMapFromTable(mapDef);
+    const structures = compiled.overlays.filter((o) => o.layerRole === "STRUCTURE");
+    expect(structures.length).toBeGreaterThanOrEqual(2);
+
+    for (const s of structures) {
+      const seAnchor = seAnchorFromTopLeft(s.tx, s.ty, s.w, s.h);
+      expect(s.anchorTx).toBe(seAnchor.anchorTx);
+      expect(s.anchorTy).toBe(seAnchor.anchorTy);
+    }
   });
 });
