@@ -460,8 +460,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       o.layerRole === "STRUCTURE" || ((o.kind ?? "ROOF") === "PROP" && (footprintW > 1 || (o.h | 0) > 1));
     const tileWidth = 2 * T * ISO_X;
     const halfTileW = tileWidth * 0.5;
-    // Footprint overlays anchor at the south-edge midpoint; keep SE tile anchor for sorting, then apply derived X correction.
-    const footprintAnchorAdjustX = -32;
+  // Compensates for engine-wide half-tile X projection bias.
+  // Do NOT remove unless tile projection baseline is normalized.
+    const footprintAnchorAdjustX = -halfTileW / 2;
     const wx = (anchorTx + 0.5) * T;
     const wy = (anchorTy + 0.5) * T;
     const p = worldToScreen(wx, wy);
