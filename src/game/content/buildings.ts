@@ -18,7 +18,7 @@ export type BuildingSkin = {
 
   // Existing tuning
   isFlippable: boolean;
-  defaultFacing?: "S" | "S";
+  defaultFacing?: "E" | "S";
   flipMode?: "H";
   anchorLiftUnits: number;
   wallLiftUnits?: number;

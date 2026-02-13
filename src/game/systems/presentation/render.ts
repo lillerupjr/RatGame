@@ -1162,10 +1162,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           const bandPieces = buildRuntimeStructureBandPieces({
             structureInstanceId: o.id,
             spriteId: o.spriteId,
-            tx: o.tx,
-            ty: o.ty,
-            anchorTx: o.anchorTx,
-            anchorTy: o.anchorTy,
+            seTx: o.seTx,
+            seTy: o.seTy,
             footprintW: o.w,
             footprintH: o.h,
             flipped: !!o.flipX,
@@ -1181,10 +1179,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
           if (LOG_STRUCTURE_OWNERSHIP_DEBUG && !loggedStructureOwnershipDebugIds.has(o.id)) {
             loggedStructureOwnershipDebugIds.add(o.id);
-            const oriented = orientedDims(Math.max(1, o.w | 0), Math.max(1, o.h | 0), !!o.flipX);
-            const seAnchor = seAnchorFromTopLeft(o.tx, o.ty, oriented.w, oriented.h);
-            const anchorTx = (o.anchorTx ?? seAnchor.anchorTx) | 0;
-            const anchorTy = (o.anchorTy ?? seAnchor.anchorTy) | 0;
+            const oriented = { w: Math.max(1, o.w | 0), h: Math.max(1, o.h | 0) };
+            const expectedSE = seAnchorFromTopLeft(o.tx, o.ty, oriented.w, oriented.h);
             const owners = bandPieces.map((piece) => ({
               tx: piece.renderKey.within,
               ty: piece.renderKey.slice - piece.renderKey.within,
@@ -1194,8 +1190,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
               flipped: !!o.flipX,
               w: oriented.w,
               h: oriented.h,
-              anchorTx,
-              anchorTy,
+              anchorTx: o.seTx,
+              anchorTy: o.seTy,
+              seMatchesTopLeft: o.seTx === expectedSE.anchorTx && o.seTy === expectedSE.anchorTy,
               first3: owners.slice(0, 3),
               last3: owners.slice(Math.max(0, owners.length - 3)),
             });

@@ -99,6 +99,10 @@ export type StampOverlay = {
     ty: number;
     w: number;
     h: number;
+    /** Canonical SE anchor tile for slice ownership. */
+    seTx: number;
+    /** Canonical SE anchor tile for slice ownership. */
+    seTy: number;
     anchorTx?: number;
     anchorTy?: number;
     z: number;
@@ -843,6 +847,8 @@ export function compileKenneyMapFromTable(
                     ty: sy,
                     w: placeW,
                     h: placeH,
+                    seTx: seAnchor.anchorTx,
+                    seTy: seAnchor.anchorTy,
                     anchorTx: seAnchor.anchorTx,
                     anchorTy: seAnchor.anchorTy,
                     z: zBase,
@@ -914,6 +920,8 @@ export function compileKenneyMapFromTable(
                 ty: sy,
                 w: placeW,
                 h: placeH,
+                seTx: roofAnchor.anchorTx,
+                seTy: roofAnchor.anchorTy,
                 anchorTx: roofAnchor.anchorTx,
                 anchorTy: roofAnchor.anchorTy,
                 z: zBase + heightUnits,
@@ -1104,6 +1112,8 @@ export function compileKenneyMapFromTable(
                 ty: stamp.y | 0,
                 w,
                 h,
+                seTx: anchorTx,
+                seTy: anchorTy,
                 anchorTx,
                 anchorTy,
                 z: zBase,
