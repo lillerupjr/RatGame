@@ -10,6 +10,7 @@ import type {
   SemanticStamp,
 } from "../table/tableMapTypes";
 import type { MapSkinBundle, MapSkinId } from "../../../content/mapSkins";
+import type { BuildingPackId } from "../../../content/buildings";
 
 const RAW_CHUNK_MAPS = import.meta.glob("../../authored/maps/jsonMaps/chunks/*.json", {
   eager: true,
@@ -88,6 +89,7 @@ type JsonMapDef = {
     propId?: string;
   }[];
   mapSkinId?: MapSkinId;
+  buildingPackId?: BuildingPackId;
   mapSkinDefaults?: MapSkinBundle;
   centerOnZero?: boolean;
   apronBaseMode?: ApronBaseMode;
@@ -573,6 +575,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
   };
 
   const mapSkinId = optionalStringField(data, "mapSkinId");
+  const buildingPackId = optionalStringField(data, "buildingPackId");
   const mapSkinDefaults = optionalMapSkinDefaultsField(data, "mapSkinDefaults");
   const centerOnZero = optionalBooleanField(data, "centerOnZero");
   const apronBaseMode = optionalApronBaseModeField(data, "apronBaseMode");
@@ -626,6 +629,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
       w: chunkDef.w * chunkGrid.cols,
       h: chunkDef.h * chunkGrid.rows,
       mapSkinId,
+      buildingPackId,
       mapSkinDefaults,
       centerOnZero,
       apronBaseMode,
@@ -655,6 +659,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     cells,
     stamps,
     mapSkinId,
+    buildingPackId,
     mapSkinDefaults,
     centerOnZero,
     apronBaseMode,
@@ -698,6 +703,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     w: (jsonDef.width ?? bounds.w) | 0,
     h: (jsonDef.height ?? bounds.h) | 0,
     mapSkinId: jsonDef.mapSkinId,
+    buildingPackId: jsonDef.buildingPackId,
     mapSkinDefaults: jsonDef.mapSkinDefaults,
     centerOnZero: jsonDef.centerOnZero,
     apronBaseMode: jsonDef.apronBaseMode,

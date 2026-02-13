@@ -1,5 +1,6 @@
 // src/game/map/tableMapTypes.ts
 import type { MapSkinBundle, MapSkinId } from "../../../content/mapSkins";
+import type { BuildingPackId } from "../../../content/buildings";
 
 export type TableMapCell = {
     x: number;  // column index in the Excel selection (tile +x / east)
@@ -65,6 +66,8 @@ export type TableMapDef = {
 
     // Optional: map skin ID from MAP_SKINS registry
     mapSkinId?: MapSkinId;
+    // Optional: building pack used by semantic building areas
+    buildingPackId?: BuildingPackId;
     // Optional: map-level sprite defaults for the tile skin pipeline
     mapSkinDefaults?: MapSkinBundle;
     // Optional: place the selection so its center ends up at tile (0,0)

@@ -34,13 +34,3 @@ export function getSpriteMeta(id: string): SpriteMeta {
 export function hasSpriteMeta(id: string): boolean {
     return id in REGISTRY;
 }
-
-// ── Test sprites ────────────────────────────────────────────────────
-registerSpriteMeta("structures/buildings/test/test1", {
-    tileWidth: 3,
-    tileHeight: 2,
-    zHeight: 5,
-    sliceAlignAdjustPx: 0,
-});
-registerSpriteMeta("structures/buildings/test/test2", { tileWidth: 3, tileHeight: 2, zHeight: 8 });
-registerSpriteMeta("structures/buildings/test/test3", { tileWidth: 3, tileHeight: 2, zHeight: 6 });

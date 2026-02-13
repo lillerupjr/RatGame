@@ -4,8 +4,15 @@ import { KENNEY_TILE_ANCHOR_Y } from "../../../engine/render/kenneyTiles";
 import type { TriggerDef } from "../../triggers/triggerTypes";
 import { resolveMapSkin, resolveSemanticSprite, type MapSkinId, MapSkinBundle } from "../../content/mapSkins";
 import { resolveTileSpriteId } from "../skins/tileSpriteResolver";
-import { HEIGHT_UNIT_PX, pickBuildingSkin, resolveBuildingCandidates } from "../../content/buildings";
-import type { BuildingSkin } from "../../content/structureSkins";
+import {
+    BUILDING_SKINS,
+    DEFAULT_BUILDING_PACK_ID,
+    HEIGHT_UNIT_PX,
+    resolveBuildingCandidates,
+    type BuildingSkin,
+    type BuildingSkinId,
+} from "../../content/buildings";
+import { CONTAINER_PACKS, CONTAINER_SKINS, CONTAINER_PACK_ID } from "../../content/containers";
 import { requireProp } from "../../content/props";
 import { RNG } from "../../util/rng";
 import {getSpriteMeta} from "../../../engine/render/sprites/spriteMeta";
@@ -175,6 +182,7 @@ export function compileKenneyMapFromTable(
     const skinIdToUse = def.mapSkinId;
     const resolvedMapSkin = resolveMapSkin(skinIdToUse);
     const mapSkinDefaults = def.mapSkinDefaults;
+    const buildingPackId = (def.buildingPackId ?? DEFAULT_BUILDING_PACK_ID).trim() || DEFAULT_BUILDING_PACK_ID;
     const runSeed = options?.runSeed ?? 0;
     const mapId = options?.mapId ?? def.id;
 
@@ -631,12 +639,13 @@ export function compileKenneyMapFromTable(
             const forcedSkinId = skinOverride ?? stamp.skinId;
 
             if (!forcedSkinId) {
-                const candidates = resolveBuildingCandidates({
-                    pool: stamp.pool,
-                    mapSkinPool: resolvedMapSkin.buildingPool,
-                    heightUnitsMin: stamp.heightUnitsMin,
-                    heightUnitsMax: stamp.heightUnitsMax,
-                }).filter((skin) => skin.w <= w && skin.h <= h);
+                const candidateIds = resolveBuildingCandidates(buildingPackId);
+                const candidates = candidateIds
+                    .map((id) => BUILDING_SKINS[id])
+                    .filter((skin): skin is BuildingSkin => !!skin)
+                    .filter((skin) => skin.w <= w && skin.h <= h)
+                    .filter((skin) => stamp.heightUnitsMin === undefined || skin.heightUnits >= stamp.heightUnitsMin)
+                    .filter((skin) => stamp.heightUnitsMax === undefined || skin.heightUnits <= stamp.heightUnitsMax);
 
                 const occupied = new Array(w * h).fill(false);
                 const placements: Array<{ x: number; y: number; w: number; h: number; skinId: string }> = [];
@@ -723,22 +732,19 @@ export function compileKenneyMapFromTable(
                 }
                 return;
             }
-            const skin = pickBuildingSkin({
-                skinId: forcedSkinId,
-                pool: stamp.pool,
-                heightUnitsMin: stamp.heightUnitsMin,
-                heightUnitsMax: stamp.heightUnitsMax,
-                mapSkinPool: resolvedMapSkin.buildingPool,
-                context: {
-                    runSeed,
-                    mapId,
-                    stampIndex,
-                    stampX: stamp.x | 0,
-                    stampY: stamp.y | 0,
-                    stampW: w,
-                    stampH: h,
-                },
-            });
+            const skin = BUILDING_SKINS[forcedSkinId] ?? CONTAINER_SKINS[forcedSkinId];
+            if (!skin) {
+                throw new Error(`[buildings] Missing skin entry for id=${forcedSkinId} (stamp (${stamp.x},${stamp.y}))`);
+            }
+            if (skin.w !== w || skin.h !== h) {
+                throw new Error(`Building skin "${skin.id}" footprint ${skin.w}x${skin.h} does not match stamp ${w}x${h}.`);
+            }
+            if (stamp.heightUnitsMin !== undefined && skin.heightUnits < stamp.heightUnitsMin) {
+                throw new Error(`Building skin "${skin.id}" heightUnits ${skin.heightUnits} is below minimum ${stamp.heightUnitsMin}.`);
+            }
+            if (stamp.heightUnitsMax !== undefined && skin.heightUnits > stamp.heightUnitsMax) {
+                throw new Error(`Building skin "${skin.id}" heightUnits ${skin.heightUnits} is above maximum ${stamp.heightUnitsMax}.`);
+            }
 
             const heightUnits = skin.heightUnits | 0;
             const anchorLiftPx = (skin.anchorLiftUnits | 0) * HEIGHT_UNIT_PX;
@@ -856,23 +862,38 @@ export function compileKenneyMapFromTable(
         if (stamp.type === "container") {
             const w = stamp.w ?? 2;
             const h = stamp.h ?? 3;
-            const pool = stamp.pool ?? ["containers"];
-            const chosen = pickBuildingSkin({
-                skinId: stamp.skinId,
-                pool,
-                heightUnitsMin: stamp.heightUnitsMin,
-                heightUnitsMax: stamp.heightUnitsMax,
-                mapSkinPool: resolvedMapSkin.buildingPool,
-                context: {
-                    runSeed,
-                    mapId,
-                    stampIndex,
-                    stampX: stamp.x | 0,
-                    stampY: stamp.y | 0,
-                    stampW: w,
-                    stampH: h,
-                },
-            });
+            const pool = stamp.pool ?? [CONTAINER_PACK_ID];
+            let chosen: BuildingSkin;
+            if (stamp.skinId) {
+                const forced = CONTAINER_SKINS[stamp.skinId];
+                if (!forced) {
+                    throw new Error(`Container selection: unknown skinId "${stamp.skinId}".`);
+                }
+                chosen = forced;
+            } else {
+                const poolIds = pool.map((id) => id.trim()).filter(Boolean);
+                const candidatesById = new Map<BuildingSkinId, BuildingSkin>();
+                for (let i = 0; i < poolIds.length; i++) {
+                    const pack = CONTAINER_PACKS[poolIds[i]];
+                    if (!pack) continue;
+                    for (let j = 0; j < pack.length; j++) {
+                        const containerId = pack[j];
+                        const skin = CONTAINER_SKINS[containerId];
+                        if (skin) candidatesById.set(containerId, skin);
+                    }
+                }
+                const candidates = Array.from(candidatesById.values())
+                    .filter((skin) => skin.w === w && skin.h === h)
+                    .filter((skin) => stamp.heightUnitsMin === undefined || skin.heightUnits >= stamp.heightUnitsMin)
+                    .filter((skin) => stamp.heightUnitsMax === undefined || skin.heightUnits <= stamp.heightUnitsMax)
+                    .sort((a, b) => a.id.localeCompare(b.id));
+                if (candidates.length === 0) {
+                    throw new Error(`Container selection: no candidates for stamp ${w}x${h} with pool [${pool.join(", ")}].`);
+                }
+                const seed = hashString(`${runSeed}:${mapId}:${stampIndex}:container:${stamp.x},${stamp.y}:${w}x${h}`);
+                const rng = new RNG(seed);
+                chosen = candidates[rng.int(0, candidates.length - 1)] ?? candidates[0];
+            }
 
             const baseStamp: SemanticStamp = {
                 ...stamp,

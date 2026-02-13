@@ -1,5 +1,6 @@
 {
   "id": "Downtown",
+  "buildingPackId": "avenue_buildings",
   "width": 24,
   "height": 14,
   "centerOnZero": false,

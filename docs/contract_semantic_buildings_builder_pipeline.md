@@ -221,12 +221,12 @@ Rules:
 ---
 
 # Achievements
-- [ ] Semantic building areas trigger building placement through the building builder pipeline.
-- [ ] Each map uses a per‑map building pack (`avenue_buildings` vs `china_town_buildings`).
-- [ ] `buildings.ts` is the only place containing building size/height + all tuning (offset and slicing).
-- [ ] Test buildings are no longer props; they are structures/buildings selected via packs.
-- [ ] Old sliced‑building pipeline is fully removed (assets + code paths).
-- [ ] No module hardcodes building dimensions/offsets/slice values (all read from `buildings.ts`).
+- [x] Semantic building areas trigger building placement through the building builder pipeline.
+- [x] Each map uses a per‑map building pack (`avenue_buildings` vs `china_town_buildings`).
+- [x] `buildings.ts` is the only place containing building size/height + all tuning (offset and slicing).
+- [x] Test buildings are no longer props; they are structures/buildings selected via packs.
+- [x] Old sliced‑building pipeline is fully removed (assets + code paths).
+- [x] No module hardcodes building dimensions/offsets/slice values (all read from `buildings.ts`).
 
 ---
 

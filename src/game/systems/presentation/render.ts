@@ -493,7 +493,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const SHOW_STRUCTURE_HEIGHTS = false;
   const ENABLE_RUNTIME_STRUCTURE_SLICING = (w as any).runtimeStructureSlicingEnabled ?? false;
   const SHOW_STRUCTURE_SLICE_DEBUG = (w as any).runtimeStructureSliceDebug ?? false;
-  const RUNTIME_SLICED_STRUCTURE_ID = "structures/buildings/test/test1";
 
   // Enemy Z buffer (optional visual override)
   const ez = w.ezVisual;
@@ -1118,6 +1117,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
             spriteId: o.spriteId,
             tx: o.tx,
             ty: o.ty,
+            footprintW: o.w,
+            footprintH: o.h,
             baseZ: o.z,
             baseDx: draw.dx,
             baseDy: draw.dy,

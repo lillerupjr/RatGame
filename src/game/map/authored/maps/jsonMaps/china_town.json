@@ -1,9 +1,9 @@
 {
   "id": "CHINATOWN",
+  "buildingPackId": "china_town_buildings",
   "chunkGrid": {
     "id": "china_town",
     "cols": 1,
     "rows": 6
   }
 }
-

@@ -1,5 +1,6 @@
 {
   "id": "TEST_BUILDINGS",
+  "buildingPackId": "avenue_buildings",
   "chunkGrid": {
     "id": "test_buildings",
     "cols": 2,
