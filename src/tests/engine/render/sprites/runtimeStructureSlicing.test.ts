@@ -26,7 +26,6 @@ describe("runtimeStructureSlicing", () => {
       tileWidth: 2,
       tileHeight: 3,
       zHeight: 1,
-      sliceAlignAdjustPx: 0,
     });
     const spriteW = 420;
     const coreCount = 5;
@@ -53,7 +52,7 @@ describe("runtimeStructureSlicing", () => {
       scale: 1,
     });
     expect(pieces).toHaveLength(7);
-    expect(pieces.map((p) => p.dstRect.x)).toEqual([50, 100, 164, 228, 292, 356, 420]);
+    expect(pieces.map((p) => p.dstRect.x)).toEqual([100, 150, 214, 278, 342, 406, 470]);
   });
 
   it("maps padding bands to first/last core owner tiles", () => {
@@ -62,7 +61,6 @@ describe("runtimeStructureSlicing", () => {
       tileWidth: 2,
       tileHeight: 3,
       zHeight: 1,
-      sliceAlignAdjustPx: 0,
     });
     const pieces = buildRuntimeStructureBandPieces({
       structureInstanceId: "building_A",
@@ -101,7 +99,6 @@ describe("runtimeStructureSlicing", () => {
       tileWidth: 2,
       tileHeight: 3,
       zHeight: 1,
-      sliceAlignAdjustPx: 0,
     });
     const tx = 5;
     const ty = 5;

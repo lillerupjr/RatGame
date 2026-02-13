@@ -15,8 +15,6 @@ export type SpriteMeta = {
     tileHeight: number;
     /** Number of Z-levels this sprite covers vertically (default 1). */
     zHeight: number;
-    /** Optional manual distribution adjustment for runtime slice extra width. */
-    sliceAlignAdjustPx?: number;
 };
 
 const DEFAULT_META: SpriteMeta = { tileWidth: 1, tileHeight: 1, zHeight: 1 };

@@ -100,9 +100,7 @@ export function getVerticalBandLayout(
   const coreCount = tileW + tileH;
   const coreExpectedW = coreCount * band;
   const extraW = Math.max(0, w - coreExpectedW);
-  const alignAdjust = Math.trunc(meta.sliceAlignAdjustPx ?? 0);
-  const unclampedExtraLeftW = Math.floor(extraW / 2) + alignAdjust;
-  const extraLeftW = Math.max(0, Math.min(extraW, unclampedExtraLeftW));
+  const extraLeftW = Math.floor(extraW / 2);
   const extraRightW = extraW - extraLeftW;
   const cacheKey = `${spriteId}|${w}x${h}|${band}|${coreCount}|${extraLeftW}`;
   const cached = layoutCache.get(cacheKey);
@@ -176,7 +174,13 @@ export function buildRuntimeStructureBandPieces(
       index: band.index,
       srcRect: { ...band.srcRect },
       dstRect: {
-        x: input.baseDx + band.offsetX * scale,
+        x: (() => {
+          const anchorXFull = input.spriteWidth * 0.5;
+          const anchorXSliceInFull = band.srcRect.x + band.srcRect.w * 0.5;
+          const computedSliceAlignAdjustPx = anchorXFull - anchorXSliceInFull;
+          // Align cropped slice to the same world pivot as the full sprite (bottom-center anchor).
+          return input.baseDx + (anchorXFull - band.srcRect.w * 0.5 - computedSliceAlignAdjustPx) * scale;
+        })(),
         y: input.baseDy,
         w: band.srcRect.w * scale,
         h: band.srcRect.h * scale,

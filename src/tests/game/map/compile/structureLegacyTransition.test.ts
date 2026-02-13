@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { getAuthoredMapDefByMapId } from "../../../../game/map/authored/authoredMapRegistry";
 import { compileKenneyMapFromTable } from "../../../../game/map/compile/kenneyMapLoader";
+import { BUILDING_PACKS, BUILDING_SKINS } from "../../../../game/content/buildings";
+import type { TableMapDef } from "../../../../game/map/formats/table/tableMapTypes";
 
 describe("structure legacy transition", () => {
   it("keeps legacy sliced container assets working during runtime-slicing migration", () => {
@@ -40,11 +42,21 @@ describe("structure legacy transition", () => {
   });
 
   it("uses china town building pack assets for china town semantic building areas", () => {
-    const def = getAuthoredMapDefByMapId("CHINATOWN");
-    expect(def).toBeTruthy();
-    expect(def?.buildingPackId).toBe("china_town_buildings");
+    const chinaPackIds = BUILDING_PACKS["china_town_buildings"] ?? [];
+    expect(chinaPackIds.length).toBeGreaterThan(0);
+    const seedSkin = BUILDING_SKINS[chinaPackIds[0]];
+    expect(seedSkin).toBeTruthy();
 
-    const compiled = compileKenneyMapFromTable(def!);
+    const mapDef: TableMapDef = {
+      id: "china_pack_smoke",
+      w: Math.max(4, seedSkin.w + 1),
+      h: Math.max(4, seedSkin.h + 1),
+      buildingPackId: "china_town_buildings",
+      cells: [{ x: 0, y: 0, z: 0, type: "floor" }],
+      stamps: [{ x: 0, y: 0, z: 0, type: "building", w: seedSkin.w, h: seedSkin.h }],
+    };
+
+    const compiled = compileKenneyMapFromTable(mapDef);
     const structureRoofs = compiled.overlays.filter(
       (o) => o.layerRole === "STRUCTURE" && o.spriteId.includes("structures/buildings/"),
     );

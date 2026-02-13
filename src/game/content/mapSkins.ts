@@ -68,15 +68,15 @@ export const MAP_SKINS: Record<MapSkinId, MapSkinBundle> = {
     building1: {
         semantic: {
             BUILDING_WALL_SOUTH: [
-                "structures/buildings/avenue/1/s_1",
-                "structures/buildings/avenue/1/s_2",
-                "structures/buildings/avenue/1/s_3",
+                "structures/buildings/avenue/1",
+                "structures/buildings/avenue/1",
+                "structures/buildings/avenue/1",
             ],
             BUILDING_WALL_EAST: [
-                "structures/buildings/avenue/1/e_1",
-                "structures/buildings/avenue/1/e_2",
+                "structures/buildings/avenue/1",
+                "structures/buildings/avenue/1",
             ],
-            BUILDING_ROOF_3x2: "structures/buildings/avenue/1/top",
+            BUILDING_ROOF_3x2: "structures/buildings/avenue/1",
         },
     },
 

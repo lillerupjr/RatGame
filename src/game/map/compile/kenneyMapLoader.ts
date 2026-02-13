@@ -751,9 +751,54 @@ export function compileKenneyMapFromTable(
             const wallLiftPx = ((skin.wallLiftUnits ?? 0) | 0) * HEIGHT_UNIT_PX;
             const scale = skin.spriteScale ?? 1;
             const roofLiftPx = (skin.roofLiftPx ?? (((skin.roofLiftUnits ?? 0) | 0) * HEIGHT_UNIT_PX)) * scale;
+            const offsetPx = skin.offsetPx ?? { x: 0, y: 0 };
+            const anchorOffsetPx = skin.anchorOffsetPx ?? { x: 0, y: 0 };
 
             if (skin.wallSouth.length === 0 || skin.wallEast.length === 0 || !skin.roof) {
                 throw new Error(`Building skin "${skin.id}" is missing required sprites.`);
+            }
+
+            const isMonolithicSkin =
+                skin.wallSouth.every((id) => id === skin.roof) &&
+                skin.wallEast.every((id) => id === skin.roof);
+
+            if (isMonolithicSkin) {
+                overlays.push({
+                    id: `building_${skin.id}_${sx}_${sy}_${w}x${h}`,
+                    tx: sx,
+                    ty: sy,
+                    w,
+                    h,
+                    anchorTx: sx + (w - 1),
+                    anchorTy: sy + (h - 1),
+                    z: zBase,
+                    spriteId: skin.roof,
+                    drawDxOffset: offsetPx.x + anchorOffsetPx.x,
+                    drawDyOffset: anchorLiftPx + offsetPx.y + anchorOffsetPx.y,
+                    scale,
+                    kind: "ROOF",
+                    layerRole: "STRUCTURE",
+                });
+
+                for (let dx = 0; dx < w; dx++) {
+                    for (let dy = 0; dy < h; dy++) {
+                        addSurface({
+                            id: `building_floor_${sx + dx}_${sy + dy}_${zBase}`,
+                            kind: "TILE_TOP",
+                            tx: sx + dx,
+                            ty: sy + dy,
+                            zBase,
+                            zLogical: zBase | 0,
+                            tile: { kind: "FLOOR", h: zBase } as IsoTile,
+                            renderTopKind: "FLOOR",
+                            renderDir: "N",
+                            renderAnchorY: floorAnchorY,
+                            renderDyOffset: 0,
+                            spriteIdTop: buildingFloorSprite,
+                        });
+                    }
+                }
+                return;
             }
 
             // South edge (bottom row)
@@ -793,7 +838,8 @@ export function compileKenneyMapFromTable(
                 h,
                 z: zBase + heightUnits,
                 spriteId: skin.roof,
-                drawDyOffset: anchorLiftPx + roofLiftPx,
+                drawDyOffset: anchorLiftPx + roofLiftPx + offsetPx.y + anchorOffsetPx.y,
+                drawDxOffset: offsetPx.x + anchorOffsetPx.x,
                 scale,
                 kind: "ROOF",
                 layerRole: "STRUCTURE",
