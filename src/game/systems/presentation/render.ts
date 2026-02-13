@@ -513,7 +513,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     toScreenAtZ,
   };
 
-  const SHOW_WALK_MASK = true;
+  const SHOW_WALK_MASK = false;
   const SHOW_RAMPS = false;
   const SHOW_OCCLUDER_DEBUG = false;
   const SHOW_PROJECTILE_FACES = false;
