@@ -8,6 +8,7 @@ import { HEIGHT_UNIT_PX, pickBuildingSkin, resolveBuildingCandidates } from "../
 import type { BuildingSkin } from "../../content/structureSkins";
 import { requireProp } from "../../content/props";
 import { RNG } from "../../util/rng";
+import {getSpriteMeta} from "../../../engine/render/sprites/spriteMeta";
 
 export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL";
 export type StairDir = "N" | "E" | "S" | "W";
@@ -74,6 +75,12 @@ export type RenderPiece = {
     renderAnchorY: number;
     renderDyOffset: number;
     spriteId: string;
+    /** Tile-width span for multi-tile sprites (undefined = 1). */
+    tw?: number;
+    /** Tile-height span for multi-tile sprites (undefined = 1). */
+    th?: number;
+    /** Z-levels the sprite image covers (undefined = 1). */
+    zSpan?: number;
 };
 
 export type StampOverlay = {
@@ -812,6 +819,7 @@ export function compileKenneyMapFromTable(
                 const semanticSprite = resolveSemanticSprite(skinIdToUse, slot);
                 const spriteIdTop = semanticSprite || resolveTileSpriteId({
                     slot: "floor",
+                    dir: undefined,
                     mapSkin: resolvedMapSkin,
                     mapSkinId: skinIdToUse,
                     mapDefaults: mapSkinDefaults,
@@ -922,6 +930,40 @@ export function compileKenneyMapFromTable(
             const s = def.stamps[i];
             compileStamp(s, i);
         }
+    }
+
+    function oppositeDir(dir: WallDir): WallDir {
+        switch (dir) {
+            case "N": return "S";
+            case "S": return "N";
+            case "E": return "W";
+            case "W": return "E";
+        }
+    }
+
+    function canonicalizeEdge(tx: number, ty: number, dir: WallDir): { tx: number; ty: number; dir: WallDir } {
+        if (dir === "N") return { tx, ty: ty - 1, dir: "S" };
+        if (dir === "W") return { tx: tx - 1, ty, dir: "E" };
+        return { tx, ty, dir };
+    }
+
+
+
+    const DIRS: Array<{ dir: WallDir; dx: number; dy: number }> = [
+        { dir: "N", dx: 0, dy: -1 },
+        { dir: "E", dx: 1, dy: 0 },
+        { dir: "S", dx: 0, dy: 1 },
+        { dir: "W", dx: -1, dy: 0 },
+    ];
+
+    function highestSurfaceAt(tx: number, ty: number): Surface | null {
+        const surfaces = surfacesAtXY(tx, ty);
+        if (surfaces.length === 0) return null;
+        let best = surfaces[0];
+        for (let i = 1; i < surfaces.length; i++) {
+            if (surfaces[i].zBase > best.zBase) best = surfaces[i];
+        }
+        return best;
     }
 
     const emittedFaces = new Set<string>();
