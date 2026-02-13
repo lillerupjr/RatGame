@@ -81,6 +81,8 @@ export type RenderPiece = {
     th?: number;
     /** Z-levels the sprite image covers (undefined = 1). */
     zSpan?: number;
+    /** Semantic render routing for face pieces. */
+    layerRole?: "STRUCTURE" | "OCCLUDER";
 };
 
 export type StampOverlay = {
@@ -97,6 +99,8 @@ export type StampOverlay = {
     drawDxOffset?: number;
     scale?: number;
     kind?: "ROOF" | "PROP";
+    /** Semantic render routing for overlay pieces. */
+    layerRole?: "STRUCTURE" | "OVERLAY";
 };
 
 export type WallToken = {
@@ -593,6 +597,7 @@ export function compileKenneyMapFromTable(
             spriteId,
             apronDyOffset: 0,
             flipX: false,
+            layerRole: "STRUCTURE",
         });
     };
 
@@ -780,6 +785,7 @@ export function compileKenneyMapFromTable(
                 drawDyOffset: anchorLiftPx + roofLiftPx,
                 scale,
                 kind: "ROOF",
+                layerRole: "STRUCTURE",
             });
 
             for (let dx = 0; dx < w; dx++) {
@@ -1092,6 +1098,7 @@ export function compileKenneyMapFromTable(
                 tw: wallMeta.tileWidth > 1 ? wallMeta.tileWidth : undefined,
                 th: wallMeta.tileHeight > 1 ? wallMeta.tileHeight : undefined,
                 zSpan: wallMeta.zHeight > 1 ? wallMeta.zHeight : undefined,
+                layerRole: "OCCLUDER",
             });
         }
     }

@@ -210,11 +210,11 @@ This contract does NOT:
 
 \[x\] STRUCTURE exists in KindOrder\
 \[ \] STRUCTURE layer order is correct\
-\[ \] Buildings render with STRUCTURE\
+\[x\] Buildings render with STRUCTURE\
 \[ \] OCCLUDER used only for walls\
 \[ \] One building renders correctly using single sprite + runtime
 slicing\
-\[ \] Debug overlay works\
+\[x\] Debug overlay works\
 \[ \] Legacy sliced assets still function during transition\
 \[ \] Full sprite pipeline removable
 

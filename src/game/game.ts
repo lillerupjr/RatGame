@@ -608,6 +608,21 @@ export function createGame(args: CreateGameArgs) {
     showDelveMap("Choose your starting location.\nGo deeper for greater challenge and rewards.");
   }
 
+  function startSandboxRun(characterId: PlayableCharacterId, mapId?: string) {
+    const character = getPlayableCharacter(characterId);
+    if (!character) return;
+
+    setPlayerSkin(character.idleSpriteKey);
+    preloadPlayerSprites();
+
+    resetRun(mapId);
+
+    world.weapons = [{ id: character.startingWeaponId, level: 1, cdLeft: 0 }];
+    world.delveMap = null;
+    world.delveDepth = 1;
+    world.delveScaling = getDepthScaling(1);
+  }
+
 
   function showLevelUp() {
     world.state = "LEVELUP";
@@ -1448,6 +1463,5 @@ export function createGame(args: CreateGameArgs) {
     world.state = "RUN";
   });
 
-  return { update, render, startRun, previewMap };
+  return { update, render, startRun, startSandboxRun, previewMap };
 }
-

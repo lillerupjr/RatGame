@@ -46,6 +46,7 @@ import {
   getTileSpriteById,
   getVoidTop
 } from "../../../engine/render/sprites/renderSprites";
+import { buildRuntimeStructureBandPieces } from "../../../engine/render/sprites/runtimeStructureSlicing";
 import {
   drawOccluderOverlay,
   drawProjectileFaceOverlay,
@@ -65,8 +66,9 @@ enum KindOrder {
   FLOOR = 0,
   ENTITY = 1,
   VFX = 2,
-  OCCLUDER = 3,
-  OVERLAY = 4,
+  STRUCTURE = 3,
+  OCCLUDER = 4,
+  OVERLAY = 5,
 }
 
 /** Canonical render key for deterministic ordering. */
@@ -483,9 +485,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const SHOW_WALK_MASK = false;
   const SHOW_RAMPS = false;
   const SHOW_OCCLUDER_DEBUG = false;
-  const SHOW_PROJECTILE_FACES = true;
+  const SHOW_PROJECTILE_FACES = false;
   const SHOW_TRIGGER_ZONES = false;
   const SHOW_STRUCTURE_HEIGHTS = false;
+  const ENABLE_RUNTIME_STRUCTURE_SLICING = (w as any).runtimeStructureSlicingEnabled ?? false;
+  const SHOW_STRUCTURE_SLICE_DEBUG = (w as any).runtimeStructureSliceDebug ?? false;
+  const RUNTIME_SLICED_STRUCTURE_ID = "structures/buildings/test/test1";
 
   // Enemy Z buffer (optional visual override)
   const ez = w.ezVisual;
@@ -1047,11 +1052,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         const draw = buildWallDraw(occ, occluderId++);
         if (!draw) continue;
         const isContainerWall = occ.spriteId?.includes("structures/containers/");
+        const wallKindOrder = occ.layerRole === "STRUCTURE" ? KindOrder.STRUCTURE : KindOrder.OCCLUDER;
         const renderKey: RenderKey = {
           slice: occ.tx + occ.ty,
           within: occ.tx,
           baseZ: occ.zFrom + (isContainerWall ? CONTAINER_WALL_SORT_BIAS : 0),
-          kindOrder: KindOrder.OCCLUDER,
+          kindOrder: wallKindOrder,
           stableId: occStableId,
         };
 
@@ -1066,11 +1072,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const draws = buildFaceDraws(occ);
       for (let di = 0; di < draws.length; di++) {
         const d = draws[di];
+        const faceKindOrder = occ.layerRole === "STRUCTURE" ? KindOrder.STRUCTURE : KindOrder.OCCLUDER;
         const renderKey: RenderKey = {
           slice: occ.tx + occ.ty,
           within: occ.tx,
           baseZ: occ.zFrom ?? occ.zTo ?? 0,
-          kindOrder: KindOrder.OCCLUDER,
+          kindOrder: faceKindOrder,
           stableId: occStableId + di * 0.001,
         };
 
@@ -1092,17 +1099,76 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         if ((o.kind ?? "ROOF") === "ROOF" && shouldCullBuildingAt(o.tx, o.ty, o.w, o.h)) continue;
         const draw = buildOverlayDraw(o);
         if (!draw) continue;
-        const slice = (o.anchorTx ?? (o.tx + o.w - 1)) + (o.anchorTy ?? (o.ty + o.h - 1));
-        const within = o.anchorTx ?? (o.tx + o.w - 1);
-        const kindOrder = (o.kind ?? "ROOF") === "PROP" ? KindOrder.ENTITY : KindOrder.OVERLAY;
-        const overlayKey: RenderKey = {
-          slice,
-          within,
-          baseZ: o.z,
-          kindOrder,
-          stableId: 200000 + i,
-        };
-        addToSlice(slice, overlayKey, () => drawRenderPiece(draw));
+        const useRuntimeStructureSlicing = ENABLE_RUNTIME_STRUCTURE_SLICING
+          && o.layerRole === "STRUCTURE"
+          && o.spriteId === RUNTIME_SLICED_STRUCTURE_ID;
+
+        if (useRuntimeStructureSlicing) {
+          const bandPieces = buildRuntimeStructureBandPieces({
+            structureInstanceId: o.id,
+            spriteId: o.spriteId,
+            tx: o.tx,
+            ty: o.ty,
+            baseZ: o.z,
+            baseDx: draw.dx,
+            baseDy: draw.dy,
+            spriteWidth: draw.dw,
+            spriteHeight: draw.dh,
+            scale: draw.scale ?? 1,
+          });
+
+          for (let bi = 0; bi < bandPieces.length; bi++) {
+            const band = bandPieces[bi];
+            const overlayKey: RenderKey = {
+              slice: band.renderKey.slice,
+              within: band.renderKey.within,
+              baseZ: band.renderKey.baseZ,
+              kindOrder: KindOrder.STRUCTURE,
+              stableId: band.renderKey.stableId,
+            };
+            addToSlice(band.renderKey.slice, overlayKey, () => {
+              const img = draw.img;
+              if (!img || img.width <= 0 || img.height <= 0) return;
+              ctx.drawImage(
+                img,
+                band.srcRect.x,
+                band.srcRect.y,
+                band.srcRect.w,
+                band.srcRect.h,
+                band.dstRect.x,
+                band.dstRect.y,
+                band.dstRect.w,
+                band.dstRect.h,
+              );
+              if (SHOW_STRUCTURE_SLICE_DEBUG) {
+                ctx.save();
+                ctx.strokeStyle = "#00ffd5";
+                ctx.lineWidth = 1;
+                ctx.strokeRect(band.dstRect.x, band.dstRect.y, band.dstRect.w, band.dstRect.h);
+                ctx.fillStyle = "#00ffd5";
+                ctx.font = "10px monospace";
+                ctx.fillText(`#${band.index}`, band.dstRect.x + 2, band.dstRect.y + 12);
+                ctx.restore();
+              }
+            });
+          }
+        } else {
+          const slice = (o.anchorTx ?? (o.tx + o.w - 1)) + (o.anchorTy ?? (o.ty + o.h - 1));
+          const within = o.anchorTx ?? (o.tx + o.w - 1);
+          const kindOrder = o.layerRole === "STRUCTURE"
+            ? KindOrder.STRUCTURE
+            : (o.kind ?? "ROOF") === "PROP"
+              ? KindOrder.ENTITY
+              : KindOrder.OVERLAY;
+          const overlayKey: RenderKey = {
+            slice,
+            within,
+            baseZ: o.z,
+            kindOrder,
+            stableId: 200000 + i,
+          };
+          addToSlice(slice, overlayKey, () => drawRenderPiece(draw));
+        }
       }
     }
   }
