@@ -15,6 +15,8 @@ export type SpriteMeta = {
     tileHeight: number;
     /** Number of Z-levels this sprite covers vertically (default 1). */
     zHeight: number;
+    /** Optional manual distribution adjustment for runtime slice extra width. */
+    sliceAlignAdjustPx?: number;
 };
 
 const DEFAULT_META: SpriteMeta = { tileWidth: 1, tileHeight: 1, zHeight: 1 };
@@ -34,6 +36,11 @@ export function hasSpriteMeta(id: string): boolean {
 }
 
 // ── Test sprites ────────────────────────────────────────────────────
-registerSpriteMeta("structures/buildings/test/test1", { tileWidth: 3, tileHeight: 2, zHeight: 5 });
+registerSpriteMeta("structures/buildings/test/test1", {
+    tileWidth: 3,
+    tileHeight: 2,
+    zHeight: 5,
+    sliceAlignAdjustPx: 0,
+});
 registerSpriteMeta("structures/buildings/test/test2", { tileWidth: 3, tileHeight: 2, zHeight: 8 });
 registerSpriteMeta("structures/buildings/test/test3", { tileWidth: 3, tileHeight: 2, zHeight: 6 });

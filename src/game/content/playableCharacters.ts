@@ -1,6 +1,6 @@
 import type { WeaponId } from "./weapons";
 
-export type PlayableCharacterId = "HOBO" | "JACK" | "JAMAL" | "JOEY";
+export type PlayableCharacterId = "HOBO" | "JACK" | "JAMAL" | "JOEY" | "TOMMY";
 
 export type CharacterDef = {
     id: PlayableCharacterId;
@@ -34,9 +34,14 @@ export const PLAYABLE_CHARACTERS: CharacterDef[] = [
         idleSpriteKey: "joey",
         startingWeaponId: "BAZOOKA",
     },
+    {
+        id: "TOMMY",
+        displayName: "Tommy",
+        idleSpriteKey: "tommy",
+        startingWeaponId: "PISTOL_EVOLVED_SPIRAL",
+    },
 ];
 
 export function getPlayableCharacter(id: PlayableCharacterId): CharacterDef | undefined {
     return PLAYABLE_CHARACTERS.find((character) => character.id === id);
 }
-

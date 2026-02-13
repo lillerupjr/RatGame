@@ -242,6 +242,16 @@ export function occludersInViewForLayer(layer: number, view: ViewRect): RenderPi
     return _compiled.occludersInViewForLayer(layer, view);
 }
 
+/** Return non-wall face pieces for a logical layer. */
+export function facePiecesForLayer(layer: number): RenderPiece[] {
+    return _compiled.facePiecesForLayer(layer);
+}
+
+/** Return non-wall face pieces within a tile-bounds view for a logical layer. */
+export function facePiecesInViewForLayer(layer: number, view: ViewRect): RenderPiece[] {
+    return _compiled.facePiecesInViewForLayer(layer, view);
+}
+
 /** Return overlays within a tile-bounds view. */
 export function overlaysInView(view: ViewRect) {
     return _compiled.overlaysInView(view);
@@ -254,10 +264,18 @@ export function occluderLayers(): number[] {
     return ks;
 }
 
-/** Return logical layers relevant for rendering (tops + occluders). */
+/** Return every logical layer index that has at least one non-wall face piece. */
+export function facePieceLayers(): number[] {
+    const ks = Array.from(_compiled.facePiecesByLayer.keys());
+    ks.sort((a, b) => a - b);
+    return ks;
+}
+
+/** Return logical layers relevant for rendering (tops + faces + occluders). */
 export function renderLayers(): number[] {
     const layerSet = new Set<number>();
     for (const h of topLayers()) layerSet.add(h);
+    for (const h of facePieceLayers()) layerSet.add(h);
     for (const h of occluderLayers()) layerSet.add(h);
     const layers = Array.from(layerSet);
     layers.sort((a, b) => a - b);
@@ -1176,4 +1194,3 @@ export function getWalkOutlineLocalPx(tx: number, ty: number): WalkOutlineLocal 
     const pts = base.map((p) => ({ x: p.x + ox, y: p.y + oy }));
     return { blocked: false, shape, pts };
 }
-

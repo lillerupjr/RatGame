@@ -1,4 +1,5 @@
 import { resolveMapSkin, resolveSemanticSprite, type MapSkinId } from "../../../game/content/mapSkins";
+import { isKnownRenderableSpriteId } from "./spriteIdRegistry";
 
 export type LoadedImg = {
     img: HTMLImageElement;
@@ -25,20 +26,21 @@ const cache: Record<string, LoadedImg> = Object.create(null);
 function resolveUrl(spriteId: string): string | null {
     const trimmed = spriteId.trim();
     if (!trimmed) return null;
-    const file = trimmed.toLowerCase().endsWith(".png") ? trimmed : `${trimmed}.png`;
-    const findIn = (modules: Record<string, string>) => {
-        for (const [path, url] of Object.entries(modules)) {
-            const normalized = path.replace(/\\/g, "/");
-            if (normalized.endsWith(`/assets/${file}`)) return url;
-        }
-        return null;
-    };
-    const tileHit = findIn(TILE_MODULES);
-    if (tileHit) return tileHit;
-    const structureHit = findIn(STRUCTURE_MODULES);
-    if (structureHit) return structureHit;
-    const propHit = findIn(PROP_MODULES);
-    if (propHit) return propHit;
+    const id = trimmed.toLowerCase().endsWith(".png") ? trimmed.slice(0, -4) : trimmed;
+    if (!isKnownRenderableSpriteId(id)) return null;
+
+    if (id.startsWith("tiles/")) {
+        const key = `../../../assets/${id}.png`;
+        return TILE_MODULES[key] ?? null;
+    }
+    if (id.startsWith("structures/")) {
+        const key = `../../../assets/${id}.png`;
+        return STRUCTURE_MODULES[key] ?? null;
+    }
+    if (id.startsWith("props/")) {
+        const key = `../../../assets/${id}.png`;
+        return PROP_MODULES[key] ?? null;
+    }
     return null;
 }
 

@@ -157,6 +157,9 @@ export type CompiledKenneyMap = {
     occludersByLayer: Map<number, RenderPiece[]>;
     occludersForLayer(layer: number): RenderPiece[];
     occludersInViewForLayer(layer: number, view: ViewRect): RenderPiece[];
+    facePiecesByLayer: Map<number, RenderPiece[]>;
+    facePiecesForLayer(layer: number): RenderPiece[];
+    facePiecesInViewForLayer(layer: number, view: ViewRect): RenderPiece[];
     solidFace(tx: number, ty: number, zLogical: number, dir: WallDir): boolean;
     solidFacesInView(view: ViewRect): SolidFaceRec[];
     overlays: StampOverlay[];
@@ -517,6 +520,7 @@ export function compileKenneyMapFromTable(
 
 
     const occludersByLayer = new Map<number, RenderPiece[]>();
+    const facePiecesByLayer = new Map<number, RenderPiece[]>();
     const overlays: StampOverlay[] = [];
     const blockedTiles = new Set<string>();
     const wallFaces = new Set<string>();
@@ -545,7 +549,8 @@ export function compileKenneyMapFromTable(
     }
 
     function addFace(piece: RenderPiece) {
-        addPieceToLayerMap(occludersByLayer, piece);
+        if (piece.kind === "WALL") addPieceToLayerMap(occludersByLayer, piece);
+        else addPieceToLayerMap(facePiecesByLayer, piece);
         if ((piece.kind === "FLOOR_APRON" || piece.kind === "STAIR_APRON") && piece.edgeDir) {
             addSolidFaceSpan(piece.tx, piece.ty, piece.zFrom, piece.zTo, piece.edgeDir);
         }
@@ -1129,6 +1134,23 @@ export function compileKenneyMapFromTable(
         return out;
     }
 
+    function facePiecesForLayer(layer: number): RenderPiece[] {
+        return facePiecesByLayer.get(layer) ?? [];
+    }
+
+    function facePiecesInViewForLayer(layer: number, view: ViewRect): RenderPiece[] {
+        const list = facePiecesForLayer(layer);
+        if (list.length === 0) return [];
+        const out: RenderPiece[] = [];
+        for (let i = 0; i < list.length; i++) {
+            const p = list[i];
+            if (p.tx < view.minTx || p.tx > view.maxTx) continue;
+            if (p.ty < view.minTy || p.ty > view.maxTy) continue;
+            out.push(p);
+        }
+        return out;
+    }
+
     function overlaysInView(view: ViewRect): StampOverlay[] {
         const out: StampOverlay[] = [];
         for (let i = 0; i < overlays.length; i++) {
@@ -1183,6 +1205,9 @@ export function compileKenneyMapFromTable(
         occludersByLayer,
         occludersForLayer,
         occludersInViewForLayer,
+        facePiecesByLayer,
+        facePiecesForLayer,
+        facePiecesInViewForLayer,
         solidFace,
         solidFacesInView,
         overlays,

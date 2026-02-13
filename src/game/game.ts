@@ -130,6 +130,7 @@ type CreateGameArgs = {
 
 /** Create a game instance and return update/render/start handlers. */
 export function createGame(args: CreateGameArgs) {
+  const RUNTIME_SLICING_SANDBOX_MAP_ID = "test_buildings";
 
   // ------------------------------------------------------------
   // DEBUG: optional spawn override (OFF by default)
@@ -561,6 +562,8 @@ export function createGame(args: CreateGameArgs) {
     });
     const mapMode = isMapMode(mapId);
     (world as any).mapMode = mapMode;
+    (world as any).runtimeStructureSlicingEnabled = true;
+    (world as any).runtimeStructureSliceDebug = true;
     if (mapMode) {
       setObjectives(world, []);
     } else {
@@ -621,8 +624,22 @@ export function createGame(args: CreateGameArgs) {
     world.delveMap = null;
     world.delveDepth = 1;
     world.delveScaling = getDepthScaling(1);
-  }
+    if (mapId === RUNTIME_SLICING_SANDBOX_MAP_ID) {
+      (world as any).runtimeStructureSlicingEnabled = true;
+      (world as any).runtimeStructureSliceDebug = true;
+    }
 
+    // IMPORTANT: sandbox must still run the sim.
+    world.runState = "FLOOR";
+    world.state = "RUN";
+
+    // UI: ensure we’re not stuck in menus/overlays.
+    args.ui.menuEl.hidden = true;
+    args.ui.mapEl.root.hidden = true;
+    args.ui.endEl.root.hidden = true;
+    args.hud.root.hidden = false;
+    hideLevelUp();
+  }
 
   function showLevelUp() {
     world.state = "LEVELUP";

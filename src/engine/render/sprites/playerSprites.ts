@@ -33,6 +33,7 @@ const PLAYER_SKIN_SCALE: Record<string, number> = {
     hobo: 1.5,
     jamal: 1.5,
     joey: 1.2,
+    tommy: 1.2,
 };
 
 let playerSkin = "jamal";

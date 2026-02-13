@@ -47,8 +47,8 @@ export const PROPS: Record<PropId, PropDef> = {
         w: 3,
         h: 2,
         sprite: "structures/buildings/test/test1",
-        anchorLiftUnits: 0,
-        anchorOffsetPx: { x: 0, y: 0 },
+        anchorLiftUnits: -2,
+        anchorOffsetPx: { x: -3, y: 0 },
     },
     testBuilding2: {
         id: "testBuilding2",
