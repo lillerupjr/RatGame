@@ -18,6 +18,7 @@ import {
   occludersInViewForLayer,
   viewRectFromWorldCenter,
   overlaysInView,
+  blockedTilesInView,
   type RenderPiece,
   type StampOverlay,
   type ViewRect,
@@ -213,6 +214,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   // Render all heights by default.
   const RENDER_ALL_HEIGHTS: boolean = (w as any).renderAllHeights ?? true;
+  const LOG_STRUCTURE_ANCHOR_DEBUG = (w as any).structureAnchorDebug ?? false;
+  const loggedStructureAnchorDebugIds = new Set<string>();
 
   const floorFromZ = (z: number) => Math.ceil(z - 1e-6);
 
@@ -450,19 +453,38 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const ow = rec.img.width;
     const oh = rec.img.height;
     const scale = o.scale ?? 1;
-    const anchorTx = o.anchorTx ?? (o.tx + o.w * 0.5);
-    const anchorTy = o.anchorTy ?? (o.ty + o.h * 0.5);
+    const anchorTx = o.anchorTx ?? (o.tx + o.w - 1);
+    const anchorTy = o.anchorTy ?? (o.ty + o.h - 1);
+    const footprintW = Math.max(1, o.w | 0);
+    const isFootprintOverlay =
+      o.layerRole === "STRUCTURE" || ((o.kind ?? "ROOF") === "PROP" && (footprintW > 1 || (o.h | 0) > 1));
+    const tileWidth = 2 * T * ISO_X;
+    const halfTileW = tileWidth * 0.5;
+    // Footprint overlays anchor at the south-edge midpoint; keep SE tile anchor for sorting, then apply derived X correction.
+    const footprintAnchorAdjustX = -32;
     const wx = (anchorTx + 0.5) * T;
     const wy = (anchorTy + 0.5) * T;
     const p = worldToScreen(wx, wy);
-    const dx = p.x + camX - ow * scale * 0.5 + (o.drawDxOffset ?? 0);
+    const dx = p.x + camX - ow * scale * 0.5 + (o.drawDxOffset ?? 0) + footprintAnchorAdjustX;
     const dy = p.y + camY - oh * scale - o.z * ELEV_PX - (o.drawDyOffset ?? 0);
+    if (LOG_STRUCTURE_ANCHOR_DEBUG && isFootprintOverlay && !loggedStructureAnchorDebugIds.has(o.id)) {
+      loggedStructureAnchorDebugIds.add(o.id);
+      console.log("[structure-anchor-debug]", {
+        id: o.id,
+        anchorTx,
+        anchorTy,
+        tileW: footprintW,
+        xAdjustPx: footprintAnchorAdjustX,
+        screenX: dx,
+      });
+    }
     return {
       img: rec.img,
       dx,
       dy,
       dw: ow,
       dh: oh,
+      flipX: !!o.flipX,
       scale,
     };
   };
@@ -491,6 +513,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const SHOW_PROJECTILE_FACES = false;
   const SHOW_TRIGGER_ZONES = false;
   const SHOW_STRUCTURE_HEIGHTS = false;
+  const SHOW_STRUCTURE_COLLISION_DEBUG = (w as any).structureCollisionDebug ?? false;
   const ENABLE_RUNTIME_STRUCTURE_SLICING = (w as any).runtimeStructureSlicingEnabled ?? false;
   const SHOW_STRUCTURE_SLICE_DEBUG = (w as any).runtimeStructureSliceDebug ?? false;
 
@@ -1110,8 +1133,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           (o.kind === "PROP" || o.layerRole === "STRUCTURE");
 
         if (useRuntimeStructureSlicing) {
-          const anchorTx = o.anchorTx ?? (o.tx + o.w - 1);
-          const anchorTy = o.anchorTy ?? (o.ty + o.h - 1);
           const bandPieces = buildRuntimeStructureBandPieces({
             structureInstanceId: o.id,
             spriteId: o.spriteId,
@@ -1119,6 +1140,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
             ty: o.ty,
             footprintW: o.w,
             footprintH: o.h,
+            sliceOffsetX: o.sliceOffsetPx?.x  ?? 0,
+            sliceOffsetY: o.sliceOffsetPx?.y ?? 0,
             baseZ: o.z,
             baseDx: draw.dx,
             baseDy: draw.dy,
@@ -1139,17 +1162,35 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
             addToSlice(band.renderKey.slice, overlayKey, () => {
               const img = draw.img;
               if (!img || img.width <= 0 || img.height <= 0) return;
-              ctx.drawImage(
-                img,
-                band.srcRect.x,
-                band.srcRect.y,
-                band.srcRect.w,
-                band.srcRect.h,
-                band.dstRect.x,
-                band.dstRect.y,
-                band.dstRect.w,
-                band.dstRect.h,
-              );
+              if (draw.flipX) {
+                ctx.save();
+                ctx.translate(band.dstRect.x + band.dstRect.w, band.dstRect.y);
+                ctx.scale(-1, 1);
+                ctx.drawImage(
+                  img,
+                  band.srcRect.x,
+                  band.srcRect.y,
+                  band.srcRect.w,
+                  band.srcRect.h,
+                  0,
+                  0,
+                  band.dstRect.w,
+                  band.dstRect.h,
+                );
+                ctx.restore();
+              } else {
+                ctx.drawImage(
+                  img,
+                  band.srcRect.x,
+                  band.srcRect.y,
+                  band.srcRect.w,
+                  band.srcRect.h,
+                  band.dstRect.x,
+                  band.dstRect.y,
+                  band.dstRect.w,
+                  band.dstRect.h,
+                );
+              }
               if (SHOW_STRUCTURE_SLICE_DEBUG) {
                 const ownerTile = getStructureBandOwnerTile(o.tx, o.ty, o.w, o.h, band.index);
                 deferredStructureSliceDebugDraws.push(() => {
@@ -1229,6 +1270,31 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   drawProjectileFaceOverlay(debugContext, SHOW_PROJECTILE_FACES, viewRect);
   drawStructureHeightOverlay(debugContext, SHOW_STRUCTURE_HEIGHTS, viewRect);
   drawTriggerOverlay(debugContext, SHOW_TRIGGER_ZONES);
+  if (SHOW_STRUCTURE_COLLISION_DEBUG) {
+    const blocked = blockedTilesInView(viewRect);
+    if (blocked.length > 0) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(255, 80, 80, 0.95)";
+      ctx.fillStyle = "rgba(255, 80, 80, 0.12)";
+      ctx.lineWidth = 1;
+      for (let i = 0; i < blocked.length; i++) {
+        const t = blocked[i];
+        const p0 = toScreen(t.tx * T, t.ty * T);
+        const p1 = toScreen((t.tx + 1) * T, t.ty * T);
+        const p2 = toScreen((t.tx + 1) * T, (t.ty + 1) * T);
+        const p3 = toScreen(t.tx * T, (t.ty + 1) * T);
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.lineTo(p3.x, p3.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
   for (let i = 0; i < deferredStructureSliceDebugDraws.length; i++) {
     deferredStructureSliceDebugDraws[i]();
   }

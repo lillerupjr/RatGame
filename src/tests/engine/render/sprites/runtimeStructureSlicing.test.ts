@@ -128,4 +128,66 @@ describe("runtimeStructureSlicing", () => {
       expect(ownerTy).toBeLessThanOrEqual(ty + h - 1);
     }
   });
+
+  it("places each band at baseDx + srcX*scale when sliceOffsetX is zero", () => {
+    clearRuntimeStructureSliceCache();
+    registerSpriteMeta("structures/buildings/test/runtime_dst_x_base", {
+      tileWidth: 2,
+      tileHeight: 3,
+      zHeight: 1,
+    });
+    const pieces = buildRuntimeStructureBandPieces({
+      structureInstanceId: "dst_x_base",
+      spriteId: "structures/buildings/test/runtime_dst_x_base",
+      tx: 0,
+      ty: 0,
+      baseZ: 0,
+      baseDx: 10,
+      baseDy: 0,
+      spriteWidth: 420,
+      spriteHeight: 128,
+      bandPx: 64,
+      scale: 2,
+      sliceOffsetX: 0,
+    });
+
+    for (const piece of pieces) {
+      expect(piece.dstRect.x).toBe(10 + piece.srcRect.x * 2);
+    }
+  });
+
+  it("applies sliceOffsetX as a uniform unscaled shift to all bands", () => {
+    clearRuntimeStructureSliceCache();
+    registerSpriteMeta("structures/buildings/test/runtime_dst_x_offset", {
+      tileWidth: 2,
+      tileHeight: 3,
+      zHeight: 1,
+    });
+    const input = {
+      structureInstanceId: "dst_x_offset",
+      spriteId: "structures/buildings/test/runtime_dst_x_offset",
+      tx: 0,
+      ty: 0,
+      baseZ: 0,
+      baseDx: 10,
+      baseDy: 0,
+      spriteWidth: 420,
+      spriteHeight: 128,
+      bandPx: 64,
+      scale: 2,
+    };
+    const withoutOffset = buildRuntimeStructureBandPieces({
+      ...input,
+      sliceOffsetX: 0,
+    });
+    const withOffset = buildRuntimeStructureBandPieces({
+      ...input,
+      sliceOffsetX: 13,
+    });
+
+    expect(withOffset).toHaveLength(withoutOffset.length);
+    for (let i = 0; i < withOffset.length; i++) {
+      expect(withOffset[i].dstRect.x - withoutOffset[i].dstRect.x).toBe(13);
+    }
+  });
 });

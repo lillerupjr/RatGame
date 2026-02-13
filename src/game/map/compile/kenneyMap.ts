@@ -944,6 +944,20 @@ export function tileWalkShape(tx: number, ty: number): TileWalkShape {
     return tileWalkShapeFromTile(t);
 }
 
+export function blockedTilesInView(view: ViewRect): Array<{ tx: number; ty: number }> {
+    const out: Array<{ tx: number; ty: number }> = [];
+    if (!_compiled.blockedTiles || _compiled.blockedTiles.size === 0) return out;
+    for (const key of _compiled.blockedTiles) {
+        const parts = key.split(",");
+        const tx = Number(parts[0]);
+        const ty = Number(parts[1]);
+        if (!Number.isFinite(tx) || !Number.isFinite(ty)) continue;
+        if (tx < view.minTx || tx > view.maxTx || ty < view.minTy || ty > view.maxTy) continue;
+        out.push({ tx, ty });
+    }
+    return out;
+}
+
 // ─────────────────────────────────────────────────────────────
 // Milestone B Map API
 // ─────────────────────────────────────────────────────────────

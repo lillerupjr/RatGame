@@ -34,6 +34,11 @@ export type SemanticStamp = {
     heightUnitsMax?: number;
     stackChance?: number;
     propId?: string;
+    collision?: "BLOCK" | "PASS";
+    blocksMovement?: boolean;
+    flipped?: boolean;
+    stackLevel?: number;
+    zStackUnits?: number;
 };
 
 export type TableObjectiveRule =

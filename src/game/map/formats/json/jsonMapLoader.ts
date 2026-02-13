@@ -87,6 +87,11 @@ type JsonMapDef = {
     heightUnitsMax?: number;
     stackChance?: number;
     propId?: string;
+    collision?: "BLOCK" | "PASS";
+    blocksMovement?: boolean;
+    flipped?: boolean;
+    stackLevel?: number;
+    zStackUnits?: number;
   }[];
   mapSkinId?: MapSkinId;
   buildingPackId?: BuildingPackId;
@@ -462,6 +467,18 @@ function optionalFieldsField(obj: Record<string, unknown>, source?: string): { c
     const radius = optionalNumberField(field, "radius") ?? undefined;
     const dir = optionalDirField(field, "dir");
     const height = optionalNumberField(field, "height");
+    const collisionRaw = optionalStringField(field, "collision");
+    const collision = collisionRaw === undefined
+      ? undefined
+      : (() => {
+          const up = collisionRaw.toUpperCase();
+          if (up === "BLOCK" || up === "PASS") return up as "BLOCK" | "PASS";
+          throw new Error(`JSON map loader${formatSource(source)}: fields[${index}].collision must be "BLOCK" or "PASS".`);
+        })();
+    const blocksMovement = optionalBooleanField(field, "blocksMovement");
+    const flipped = optionalBooleanField(field, "flipped");
+    const stackLevel = optionalNumberField(field, "stackLevel");
+    const zStackUnits = optionalNumberField(field, "zStackUnits");
     const resolvedTypeRaw = (type ?? "floor").toLowerCase();
     const resolvedZ = z ?? 0;
 
@@ -473,6 +490,11 @@ function optionalFieldsField(obj: Record<string, unknown>, source?: string): { c
         type: "building",
         w: iw,
         h: ih,
+        collision,
+        blocksMovement,
+        flipped,
+        stackLevel,
+        zStackUnits,
       });
       continue;
     }
@@ -545,7 +567,39 @@ function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): S
     const heightUnitsMax = optionalNumberField(entry, "heightUnitsMax");
     const stackChance = optionalNumberField(entry, "stackChance");
     const propId = optionalStringField(entry, "propId");
-    return { x, y, z, type, w, h, skinId, pool, heightUnitsMin, heightUnitsMax, stackChance, propId };
+    const collisionRaw = optionalStringField(entry, "collision");
+    const collision = collisionRaw === undefined
+      ? undefined
+      : (() => {
+          const up = collisionRaw.toUpperCase();
+          if (up === "BLOCK" || up === "PASS") return up as "BLOCK" | "PASS";
+          throw new Error(
+            `JSON map loader${formatSource(source)}: stamps[${index}].collision must be "BLOCK" or "PASS".`
+          );
+        })();
+    const blocksMovement = optionalBooleanField(entry, "blocksMovement");
+    const flipped = optionalBooleanField(entry, "flipped");
+    const stackLevel = optionalNumberField(entry, "stackLevel");
+    const zStackUnits = optionalNumberField(entry, "zStackUnits");
+    return {
+      x,
+      y,
+      z,
+      type,
+      w,
+      h,
+      skinId,
+      pool,
+      heightUnitsMin,
+      heightUnitsMax,
+      stackChance,
+      propId,
+      collision,
+      blocksMovement,
+      flipped,
+      stackLevel,
+      zStackUnits,
+    };
   });
 }
 

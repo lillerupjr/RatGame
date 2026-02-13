@@ -28,6 +28,8 @@ export type RuntimeStructureBandInput = {
   spriteHeight: number;
   footprintW?: number;
   footprintH?: number;
+  sliceOffsetX?: number;
+  sliceOffsetY?: number;
   scale?: number;
   bandPx?: number;
   sliceStride?: number;
@@ -148,6 +150,9 @@ export function buildRuntimeStructureBandPieces(
 ): RuntimeStructureBandRenderPiece[] {
   const scale = input.scale ?? 1;
   const bandPx = input.bandPx ?? DEFAULT_STRUCTURE_BAND_PX;
+  // Keep slice offset in authored screen pixels (same convention as drawDxOffset).
+  const sliceOffsetX = input.sliceOffsetX ?? 0;
+  const sliceOffsetY = input.sliceOffsetY ?? 0;
   const layout = getVerticalBandLayout(
     input.spriteId,
     input.spriteWidth,
@@ -174,14 +179,9 @@ export function buildRuntimeStructureBandPieces(
       index: band.index,
       srcRect: { ...band.srcRect },
       dstRect: {
-        x: (() => {
-          const anchorXFull = input.spriteWidth * 0.5;
-          const anchorXSliceInFull = band.srcRect.x + band.srcRect.w * 0.5;
-          const computedSliceAlignAdjustPx = anchorXFull - anchorXSliceInFull;
-          // Align cropped slice to the same world pivot as the full sprite (bottom-center anchor).
-          return input.baseDx + (anchorXFull - band.srcRect.w * 0.5 - computedSliceAlignAdjustPx) * scale;
-        })(),
-        y: input.baseDy,
+        // baseDx is the full sprite draw-left; band.srcRect.x keeps the slice positioned exactly where it was in the full sprite.
+        x: input.baseDx + band.srcRect.x * scale + sliceOffsetX,
+        y: input.baseDy + sliceOffsetY,
         w: band.srcRect.w * scale,
         h: band.srcRect.h * scale,
       },

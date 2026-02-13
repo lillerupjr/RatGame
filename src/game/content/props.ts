@@ -4,6 +4,9 @@ export type PropDef = {
     id: PropId;
     w: number;
     h: number;
+    isFlippable: boolean;
+    defaultFacing?: "E" | "S";
+    flipMode?: "H";
     sprite: string;
     anchorLiftUnits?: number;
     anchorOffsetPx?: { x: number; y: number };
@@ -14,6 +17,9 @@ export const PROPS: Record<PropId, PropDef> = {
         id: "boat1",
         w: 3,
         h: 2,
+        isFlippable: true,
+        defaultFacing: "E",
+        flipMode: "H",
         sprite: "props/boats/boat1_e",
         anchorLiftUnits: 0,
         anchorOffsetPx: { x: 0, y: 0 },
@@ -22,6 +28,9 @@ export const PROPS: Record<PropId, PropDef> = {
         id: "boat2",
         w: 3,
         h: 2,
+        isFlippable: true,
+        defaultFacing: "E",
+        flipMode: "H",
         sprite: "props/boats/boat2_e",
         anchorLiftUnits: 0,
         anchorOffsetPx: { x: 0, y: 0 },
@@ -30,6 +39,9 @@ export const PROPS: Record<PropId, PropDef> = {
         id: "boat3",
         w: 2,
         h: 3,
+        isFlippable: true,
+        defaultFacing: "S",
+        flipMode: "H",
         sprite: "props/boats/boat1_s",
         anchorLiftUnits: 0,
         anchorOffsetPx: { x: 0, y: 0 },
@@ -38,6 +50,9 @@ export const PROPS: Record<PropId, PropDef> = {
         id: "boat4",
         w: 2,
         h: 3,
+        isFlippable: true,
+        defaultFacing: "S",
+        flipMode: "H",
         sprite: "props/boats/boat2_s",
         anchorLiftUnits: 0,
         anchorOffsetPx: { x: 0, y: 0 },

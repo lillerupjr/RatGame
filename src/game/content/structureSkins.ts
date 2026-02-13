@@ -8,6 +8,9 @@ export type BuildingSkin = {
     w: number;
     h: number;
     heightUnits: number;
+    isFlippable: boolean;
+    defaultFacing?: "E" | "S";
+    flipMode?: "H";
     anchorLiftUnits: number;
     wallLiftUnits?: number;
     roofLiftUnits?: number;

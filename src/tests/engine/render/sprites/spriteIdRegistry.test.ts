@@ -6,8 +6,8 @@ describe("spriteIdRegistry", () => {
     const ids = getRenderableSpriteIds();
 
     expect(ids.has("tiles/floor/top/stone")).toBe(true);
-    expect(ids.has("structures/buildings/avenue/1/top")).toBe(true);
-    expect(ids.has("structures/containers/1/s_1")).toBe(true);
+    expect(ids.has("structures/buildings/avenue/1")).toBe(true);
+    expect(ids.has("structures/containers/container_base")).toBe(true);
     expect(ids.has("props/boats/boat1_e")).toBe(true);
   });
 

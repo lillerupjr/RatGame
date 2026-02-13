@@ -104,8 +104,10 @@ export type StampOverlay = {
     spriteId: string;
     drawDyOffset?: number;
     drawDxOffset?: number;
+    sliceOffsetPx?: { x: number; y: number };
     scale?: number;
     kind?: "ROOF" | "PROP";
+    flipX?: boolean;
     /** Semantic render routing for overlay pieces. */
     layerRole?: "STRUCTURE" | "OVERLAY";
 };
@@ -531,6 +533,7 @@ export function compileKenneyMapFromTable(
     const facePiecesByLayer = new Map<number, RenderPiece[]>();
     const overlays: StampOverlay[] = [];
     const blockedTiles = new Set<string>();
+    const nonFlippableWarned = new Set<string>();
     const wallFaces = new Set<string>();
     const wallFaceList: SolidFaceRec[] = [];
 
@@ -614,6 +617,38 @@ export function compileKenneyMapFromTable(
         });
     };
 
+    const stampBlocksMovement = (stamp: SemanticStamp, defaultValue: boolean): boolean => {
+        if (stamp.blocksMovement !== undefined) return !!stamp.blocksMovement;
+        if (stamp.collision === "BLOCK") return true;
+        if (stamp.collision === "PASS") return false;
+        return defaultValue;
+    };
+
+    const bakeBlockedFootprint = (tx: number, ty: number, w: number, h: number): void => {
+        for (let dx = 0; dx < w; dx++) {
+            for (let dy = 0; dy < h; dy++) {
+                blockedTiles.add(`${tx + dx},${ty + dy}`);
+            }
+        }
+    };
+
+    const resolveFlippedFootprint = (w: number, h: number, isFlippable: boolean, flippedRequested: boolean) => {
+        if (flippedRequested && !isFlippable) {
+            const key = `${w}x${h}`;
+            if (!nonFlippableWarned.has(key)) {
+                nonFlippableWarned.add(key);
+                // eslint-disable-next-line no-console
+                console.warn(`[map] flipped=true ignored for non-flippable footprint ${key}`);
+            }
+        }
+        const useFlipped = !!(flippedRequested && isFlippable);
+        return {
+            flipped: useFlipped,
+            w: useFlipped ? h : w,
+            h: useFlipped ? w : h,
+        };
+    };
+
     const compileBuildingStamp = (
         stamp: SemanticStamp,
         stampIndex: number,
@@ -643,31 +678,39 @@ export function compileKenneyMapFromTable(
                 const candidates = candidateIds
                     .map((id) => BUILDING_SKINS[id])
                     .filter((skin): skin is BuildingSkin => !!skin)
-                    .filter((skin) => skin.w <= w && skin.h <= h)
-                    .filter((skin) => stamp.heightUnitsMin === undefined || skin.heightUnits >= stamp.heightUnitsMin)
-                    .filter((skin) => stamp.heightUnitsMax === undefined || skin.heightUnits <= stamp.heightUnitsMax);
+                    .map((skin) => {
+                        const oriented = resolveFlippedFootprint(skin.w, skin.h, skin.isFlippable, !!stamp.flipped);
+                        return { skin, oriented };
+                    })
+                    .filter(({ oriented }) => oriented.w <= w && oriented.h <= h)
+                    .filter(({ skin }) => stamp.heightUnitsMin === undefined || skin.heightUnits >= stamp.heightUnitsMin)
+                    .filter(({ skin }) => stamp.heightUnitsMax === undefined || skin.heightUnits <= stamp.heightUnitsMax);
 
                 const occupied = new Array(w * h).fill(false);
-                const placements: Array<{ x: number; y: number; w: number; h: number; skinId: string }> = [];
+                const placements: Array<{ x: number; y: number; w: number; h: number; skinId: string; flipped: boolean }> = [];
                 const gaps: Array<{ x: number; y: number }> = [];
 
                 if (candidates.length > 0) {
                     const seed = hashString(`${runSeed}:${mapId}:${stampIndex}:${stamp.x},${stamp.y}:${w}x${h}`);
                     const rng = new RNG(seed);
 
-                    const fitsAt = (x0: number, y0: number, skin: BuildingSkin) => {
-                        if (x0 + skin.w > w || y0 + skin.h > h) return false;
-                        for (let dy = 0; dy < skin.h; dy++) {
-                            for (let dx = 0; dx < skin.w; dx++) {
+                    const fitsAt = (x0: number, y0: number, candidate: { skin: BuildingSkin; oriented: { w: number; h: number; flipped: boolean } }) => {
+                        const cw = candidate.oriented.w;
+                        const ch = candidate.oriented.h;
+                        if (x0 + cw > w || y0 + ch > h) return false;
+                        for (let dy = 0; dy < ch; dy++) {
+                            for (let dx = 0; dx < cw; dx++) {
                                 if (occupied[(y0 + dy) * w + (x0 + dx)]) return false;
                             }
                         }
                         return true;
                     };
 
-                    const occupy = (x0: number, y0: number, skin: BuildingSkin) => {
-                        for (let dy = 0; dy < skin.h; dy++) {
-                            for (let dx = 0; dx < skin.w; dx++) {
+                    const occupy = (x0: number, y0: number, candidate: { skin: BuildingSkin; oriented: { w: number; h: number; flipped: boolean } }) => {
+                        const cw = candidate.oriented.w;
+                        const ch = candidate.oriented.h;
+                        for (let dy = 0; dy < ch; dy++) {
+                            for (let dx = 0; dx < cw; dx++) {
                                 occupied[(y0 + dy) * w + (x0 + dx)] = true;
                             }
                         }
@@ -678,7 +721,7 @@ export function compileKenneyMapFromTable(
                             const idx = y * w + x;
                             if (occupied[idx]) continue;
 
-                            const fitList = candidates.filter((skin) => fitsAt(x, y, skin));
+                            const fitList = candidates.filter((candidate) => fitsAt(x, y, candidate));
                             if (fitList.length === 0) {
                                 occupied[idx] = true;
                                 gaps.push({ x, y });
@@ -686,7 +729,14 @@ export function compileKenneyMapFromTable(
                             }
 
                             const chosen = fitList[rng.int(0, fitList.length - 1)];
-                            placements.push({ x, y, w: chosen.w, h: chosen.h, skinId: chosen.id });
+                            placements.push({
+                                x,
+                                y,
+                                w: chosen.oriented.w,
+                                h: chosen.oriented.h,
+                                skinId: chosen.skin.id,
+                                flipped: chosen.oriented.flipped,
+                            });
                             occupy(x, y, chosen);
                         }
                     }
@@ -708,6 +758,9 @@ export function compileKenneyMapFromTable(
                         w: p.w,
                         h: p.h,
                         skinId: p.skinId,
+                        flipped: p.flipped,
+                        collision: stamp.collision,
+                        blocksMovement: stamp.blocksMovement,
                     }, stampIndex);
                 }
 
@@ -736,9 +789,9 @@ export function compileKenneyMapFromTable(
             if (!skin) {
                 throw new Error(`[buildings] Missing skin entry for id=${forcedSkinId} (stamp (${stamp.x},${stamp.y}))`);
             }
-            if (skin.w !== w || skin.h !== h) {
-                throw new Error(`Building skin "${skin.id}" footprint ${skin.w}x${skin.h} does not match stamp ${w}x${h}.`);
-            }
+            const oriented = resolveFlippedFootprint(skin.w, skin.h, skin.isFlippable, !!stamp.flipped);
+            const placeW = oriented.w;
+            const placeH = oriented.h;
             if (stamp.heightUnitsMin !== undefined && skin.heightUnits < stamp.heightUnitsMin) {
                 throw new Error(`Building skin "${skin.id}" heightUnits ${skin.heightUnits} is below minimum ${stamp.heightUnitsMin}.`);
             }
@@ -753,6 +806,7 @@ export function compileKenneyMapFromTable(
             const roofLiftPx = (skin.roofLiftPx ?? (((skin.roofLiftUnits ?? 0) | 0) * HEIGHT_UNIT_PX)) * scale;
             const offsetPx = skin.offsetPx ?? { x: 0, y: 0 };
             const anchorOffsetPx = skin.anchorOffsetPx ?? { x: 0, y: 0 };
+            const sliceOffsetPx = skin.slice?.offsetPx ?? { x: 0, y: 0 };
 
             if (skin.wallSouth.length === 0 || skin.wallEast.length === 0 || !skin.roof) {
                 throw new Error(`Building skin "${skin.id}" is missing required sprites.`);
@@ -767,21 +821,23 @@ export function compileKenneyMapFromTable(
                     id: `building_${skin.id}_${sx}_${sy}_${w}x${h}`,
                     tx: sx,
                     ty: sy,
-                    w,
-                    h,
-                    anchorTx: sx + (w - 1),
-                    anchorTy: sy + (h - 1),
+                    w: placeW,
+                    h: placeH,
+                    anchorTx: sx + (placeW - 1),
+                    anchorTy: sy + (placeH - 1),
                     z: zBase,
                     spriteId: skin.roof,
                     drawDxOffset: offsetPx.x + anchorOffsetPx.x,
                     drawDyOffset: anchorLiftPx + offsetPx.y + anchorOffsetPx.y,
+                    sliceOffsetPx,
+                    flipX: oriented.flipped,
                     scale,
                     kind: "ROOF",
                     layerRole: "STRUCTURE",
                 });
 
-                for (let dx = 0; dx < w; dx++) {
-                    for (let dy = 0; dy < h; dy++) {
+                for (let dx = 0; dx < placeW; dx++) {
+                    for (let dy = 0; dy < placeH; dy++) {
                         addSurface({
                             id: `building_floor_${sx + dx}_${sy + dy}_${zBase}`,
                             kind: "TILE_TOP",
@@ -798,15 +854,16 @@ export function compileKenneyMapFromTable(
                         });
                     }
                 }
+                if (stampBlocksMovement(stamp, true)) bakeBlockedFootprint(sx, sy, placeW, placeH);
                 return;
             }
 
             // South edge (bottom row)
-            for (let i = 0; i < w; i++) {
+            for (let i = 0; i < placeW; i++) {
                 const spriteId = skin.wallSouth[Math.min(i, skin.wallSouth.length - 1)];
                 addStampWall(
                     sx + i,
-                    sy + h - 1,
+                    sy + placeH - 1,
                     "S",
                     spriteId,
                     zBase,
@@ -816,10 +873,10 @@ export function compileKenneyMapFromTable(
                 );
             }
             // East edge (right column)
-            for (let j = 0; j < h; j++) {
+            for (let j = 0; j < placeH; j++) {
                 const spriteId = skin.wallEast[Math.min(j, skin.wallEast.length - 1)];
                 addStampWall(
-                    sx + w - 1,
+                    sx + placeW - 1,
                     sy + j,
                     "E",
                     spriteId,
@@ -831,22 +888,24 @@ export function compileKenneyMapFromTable(
             }
 
             overlays.push({
-                id: `roof_${sx}_${sy}_${w}x${h}`,
+                id: `roof_${sx}_${sy}_${placeW}x${placeH}`,
                 tx: sx,
                 ty: sy,
-                w,
-                h,
+                w: placeW,
+                h: placeH,
                 z: zBase + heightUnits,
                 spriteId: skin.roof,
                 drawDyOffset: anchorLiftPx + roofLiftPx + offsetPx.y + anchorOffsetPx.y,
                 drawDxOffset: offsetPx.x + anchorOffsetPx.x,
+                sliceOffsetPx,
+                flipX: oriented.flipped,
                 scale,
                 kind: "ROOF",
                 layerRole: "STRUCTURE",
             });
 
-            for (let dx = 0; dx < w; dx++) {
-                for (let dy = 0; dy < h; dy++) {
+            for (let dx = 0; dx < placeW; dx++) {
+                for (let dy = 0; dy < placeH; dy++) {
                     addSurface({
                         id: `building_floor_${sx + dx}_${sy + dy}_${zBase}`,
                         kind: "TILE_TOP",
@@ -863,6 +922,7 @@ export function compileKenneyMapFromTable(
                     });
                 }
             }
+            if (stampBlocksMovement(stamp, true)) bakeBlockedFootprint(sx, sy, placeW, placeH);
             return;
         }
 
@@ -929,7 +989,10 @@ export function compileKenneyMapFromTable(
                     }
                 }
                 const candidates = Array.from(candidatesById.values())
-                    .filter((skin) => skin.w === w && skin.h === h)
+                    .filter((skin) => {
+                        const oriented = resolveFlippedFootprint(skin.w, skin.h, skin.isFlippable, !!stamp.flipped);
+                        return oriented.w === w && oriented.h === h;
+                    })
                     .filter((skin) => stamp.heightUnitsMin === undefined || skin.heightUnits >= stamp.heightUnitsMin)
                     .filter((skin) => stamp.heightUnitsMax === undefined || skin.heightUnits <= stamp.heightUnitsMax)
                     .sort((a, b) => a.id.localeCompare(b.id));
@@ -941,11 +1004,14 @@ export function compileKenneyMapFromTable(
                 chosen = candidates[rng.int(0, candidates.length - 1)] ?? candidates[0];
             }
 
+            const stackLevel = Math.max(0, Math.trunc(stamp.stackLevel ?? 0));
+            const zStackUnits = Math.trunc(stamp.zStackUnits ?? (stackLevel * chosen.heightUnits));
             const baseStamp: SemanticStamp = {
                 ...stamp,
                 type: "building",
                 w,
                 h,
+                z: (stamp.z ?? 0) + zStackUnits,
                 pool,
                 skinId: chosen.id,
             };
@@ -968,8 +1034,11 @@ export function compileKenneyMapFromTable(
         if (stamp.type === "prop") {
             const propId = stamp.propId ?? "";
             const prop = requireProp(propId, "prop stamp");
-            const w = stamp.w ?? prop.w;
-            const h = stamp.h ?? prop.h;
+            const propBaseW = stamp.w ?? prop.w;
+            const propBaseH = stamp.h ?? prop.h;
+            const propOriented = resolveFlippedFootprint(propBaseW, propBaseH, prop.isFlippable, !!stamp.flipped);
+            const w = propOriented.w;
+            const h = propOriented.h;
             const anchorTx = (stamp.x | 0) + (w - 1);
             const anchorTy = (stamp.y | 0) + (h - 1);
             const zBase = stamp.z ?? 0;
@@ -988,17 +1057,25 @@ export function compileKenneyMapFromTable(
                 spriteId: prop.sprite,
                 drawDyOffset: anchorLiftPx + offset.y,
                 drawDxOffset: offset.x,
+                flipX: propOriented.flipped,
                 scale: 1,
                 kind: "PROP",
             });
 
-            for (let dx = 0; dx < w; dx++) {
-                for (let dy = 0; dy < h; dy++) {
-                    const bx = (stamp.x | 0) + dx + originTx;
-                    const by = (stamp.y | 0) + dy + originTy;
-                    blockedTiles.add(`${bx},${by}`);
-                }
+            if (stampBlocksMovement(stamp, true)) {
+                bakeBlockedFootprint((stamp.x | 0) + originTx, (stamp.y | 0) + originTy, w, h);
             }
+            return;
+        }
+        if (stamp.type === "building") {
+            const zStackUnits = Math.trunc(stamp.zStackUnits ?? 0);
+            compileBuildingStamp(
+                {
+                    ...stamp,
+                    z: (stamp.z ?? 0) + zStackUnits,
+                },
+                stampIndex
+            );
             return;
         }
         compileBuildingStamp(stamp, stampIndex);
