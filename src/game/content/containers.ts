@@ -16,7 +16,7 @@ function monolithicContainerSkin(
         isFlippable: true,
         defaultFacing: "E",
         flipMode: "H",
-        anchorLiftUnits: 0,
+        anchorLiftUnits: -2,
         wallLiftUnits: 0,
         roofLiftPx: 0,
         spriteScale: 1.02,
