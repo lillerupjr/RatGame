@@ -34,7 +34,8 @@ export type IsoTile = {
 export type SurfaceKind = "TILE_TOP";
 export type RenderTopKind = "FLOOR" | "STAIR";
 export type RuntimeFloorTop = {
-    kind: "SIDEWALK_SQUARE_128";
+    kind: "SQUARE_128_RUNTIME";
+    family: "sidewalk" | "asphalt" | "park";
     spriteId: string;
     variantIndex: number;
     rotationQuarterTurns: 0 | 1 | 2 | 3;
@@ -207,15 +208,18 @@ export function compileKenneyMapFromTable(
         }
         return hash >>> 0;
     };
-    const RUNTIME_SIDEWALK_TILE_SKIN = "__RUNTIME_SIDEWALK_SQUARE_128__";
+    const RUNTIME_TILE_SKIN_PREFIX = "__RUNTIME_SQUARE_128__";
+    const runtimeTileSkin = (family: RuntimeFloorTop["family"]) => `${RUNTIME_TILE_SKIN_PREFIX}${family}`;
 
-    const pickRuntimeSidewalkTop = (tx: number, ty: number): RuntimeFloorTop => {
-        const variantSeed = hashString(`${runSeed}:${mapId}:${tx},${ty}:sidewalk:variant`);
-        const variantIndex = (variantSeed % 6) + 1;
+    const pickRuntimeSquareTop = (family: RuntimeFloorTop["family"], tx: number, ty: number): RuntimeFloorTop => {
+        const variantCount = family === "sidewalk" ? 6 : 1;
+        const variantSeed = hashString(`${runSeed}:${mapId}:${tx},${ty}:${family}:variant`);
+        const variantIndex = (variantSeed % variantCount) + 1;
         const rotationQuarterTurns: 0 = 0;
         return {
-            kind: "SIDEWALK_SQUARE_128",
-            spriteId: `tiles/floor/sidewalk/${variantIndex}`,
+            kind: "SQUARE_128_RUNTIME",
+            family,
+            spriteId: `tiles/floor/${family}/${variantIndex}`,
             variantIndex,
             rotationQuarterTurns,
         };
@@ -276,24 +280,30 @@ export function compileKenneyMapFromTable(
                 return undefined;
             })();
 
-            const semanticFloorSlot = (() => {
+            const runtimeSquareFamily = (() => {
                 switch (type) {
-                    case "road": return "ROAD_FLOOR";
-                    case "park": return "PARK_FLOOR";
-                    case "sea": return "SEA_FLOOR";
+                    case "sidewalk": return "sidewalk" as const;
+                    case "road": return "asphalt" as const;
+                    case "park": return "park" as const;
                     default: return undefined;
                 }
             })();
-            if (type === "sidewalk") {
+            if (runtimeSquareFamily) {
                 return {
                     tile: {
                         kind: "FLOOR" as const,
                         h: z,
-                        skin: RUNTIME_SIDEWALK_TILE_SKIN,
+                        skin: runtimeTileSkin(runtimeSquareFamily),
                     },
                     walls: [] as WallToken[],
                 };
             }
+            const semanticFloorSlot = (() => {
+                switch (type) {
+                    case "sea": return "SEA_FLOOR";
+                    default: return undefined;
+                }
+            })();
             if (type === "floor" || semanticFloorSlot) {
                 const semanticSprite = semanticFloorSlot ? resolveSemanticSprite(skinIdToUse, semanticFloorSlot) : "";
                 const fallbackFloor = resolveTileSpriteId({
@@ -512,9 +522,16 @@ export function compileKenneyMapFromTable(
         const renderDyOffset = renderTopKind === "STAIR" ? (stairDyByDir[renderDir] ?? 16) : 0;
 
         const zLogical = renderTopKind === "STAIR" ? Math.max(0, zBase - 1) : zBase;
-        const isRuntimeSidewalkTop = renderTopKind === "FLOOR" && tile.skin === RUNTIME_SIDEWALK_TILE_SKIN;
-        const runtimeTop = isRuntimeSidewalkTop ? pickRuntimeSidewalkTop(tx, ty) : undefined;
-        const tileOverride: MapSkinBundle | undefined = tile.skin && !isRuntimeSidewalkTop
+        const runtimeFamilyFromTileSkin = (() => {
+            if (renderTopKind !== "FLOOR") return undefined;
+            const skin = tile.skin ?? "";
+            if (!skin.startsWith(RUNTIME_TILE_SKIN_PREFIX)) return undefined;
+            const family = skin.slice(RUNTIME_TILE_SKIN_PREFIX.length);
+            if (family === "sidewalk" || family === "asphalt" || family === "park") return family;
+            return undefined;
+        })();
+        const runtimeTop = runtimeFamilyFromTileSkin ? pickRuntimeSquareTop(runtimeFamilyFromTileSkin, tx, ty) : undefined;
+        const tileOverride: MapSkinBundle | undefined = tile.skin && !runtimeTop
             ? (renderTopKind === "STAIR" ? { stair: tile.skin } : { floor: tile.skin })
             : undefined;
         const spriteIdTop = runtimeTop
@@ -992,18 +1009,22 @@ export function compileKenneyMapFromTable(
         }
 
         const slotForType: Record<string, string> = {
-            road: "ROAD_FLOOR",
-            park: "PARK_FLOOR",
             sea: "SEA_FLOOR",
         };
-        if (stamp.type === "sidewalk") {
+        const runtimeFamilyForStamp = (() => {
+            if (stamp.type === "sidewalk") return "sidewalk" as const;
+            if (stamp.type === "road") return "asphalt" as const;
+            if (stamp.type === "park") return "park" as const;
+            return undefined;
+        })();
+        if (runtimeFamilyForStamp) {
             for (let dx = 0; dx < w; dx++) {
                 for (let dy = 0; dy < h; dy++) {
                     const tx = sx + dx;
                     const ty = sy + dy;
-                    const runtimeTop = pickRuntimeSidewalkTop(tx, ty);
+                    const runtimeTop = pickRuntimeSquareTop(runtimeFamilyForStamp, tx, ty);
                     addSurface({
-                        id: `stamp_sidewalk_${tx}_${ty}_${zBase}`,
+                        id: `stamp_${runtimeFamilyForStamp}_${tx}_${ty}_${zBase}`,
                         kind: "TILE_TOP",
                         tx,
                         ty,

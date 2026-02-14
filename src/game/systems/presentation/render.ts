@@ -46,7 +46,6 @@ import {
   preloadRenderSprites,
   getTileSpriteById,
   getVoidTop,
-  getSidewalkSquareSprite,
 } from "../../../engine/render/sprites/renderSprites";
 import {
   buildRuntimeStructureBandPieces,
@@ -325,10 +324,11 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       ty: number,
       zBase: number,
       renderAnchorY: number,
+      family: "sidewalk" | "asphalt" | "park",
       variantIndex: number,
       rotationQuarterTurns: 0 | 1 | 2 | 3,
     ) => {
-      const src = getSidewalkSquareSprite(variantIndex);
+      const src = getTileSpriteById(`tiles/floor/${family}/${variantIndex}`);
       if (!src.ready || !src.img || src.img.width <= 0 || src.img.height <= 0) return;
 
       const wx = (tx + 0.5) * T;
@@ -713,7 +713,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           }
 
           if (surface.id.startsWith("building_floor_") && shouldCullBuildingAt(tx, ty)) continue;
-          if (surface.runtimeTop?.kind === "SIDEWALK_SQUARE_128") {
+          if (surface.runtimeTop?.kind === "SQUARE_128_RUNTIME") {
             const runtimeTop = surface.runtimeTop;
             const renderKey: RenderKey = {
               slice: tx + ty,
@@ -728,6 +728,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
                 ty,
                 surface.zBase,
                 surface.renderAnchorY ?? ANCHOR_Y,
+                runtimeTop.family,
                 runtimeTop.variantIndex,
                 runtimeTop.rotationQuarterTurns,
               );

@@ -202,14 +202,15 @@ describe("structure legacy transition", () => {
       [2, 3],
     ];
     const sampleAt = (compiled: ReturnType<typeof compileKenneyMapFromTable>) =>
-      sampleCoords.map(([tx, ty]) => compiled.surfacesAtXY(tx, ty).find((s) => s.id.startsWith("stamp_sidewalk_"))?.runtimeTop ?? null);
+      sampleCoords.map(([tx, ty]) => compiled.surfacesAtXY(tx, ty).find((s) => s.id.startsWith("stamp_sidewalk_") || s.id.startsWith("stamp_asphalt_") || s.id.startsWith("stamp_park_"))?.runtimeTop ?? null);
 
     const sampleA = sampleAt(a);
     const sampleB = sampleAt(b);
     const sampleC = sampleAt(c);
     const sa = sampleA[0];
 
-    expect(sa?.kind).toBe("SIDEWALK_SQUARE_128");
+    expect(sa?.kind).toBe("SQUARE_128_RUNTIME");
+    expect(sa?.family).toBe("sidewalk");
     expect(sa?.variantIndex).toBeGreaterThanOrEqual(1);
     expect(sa?.variantIndex).toBeLessThanOrEqual(6);
     expect(sa?.rotationQuarterTurns).toBeGreaterThanOrEqual(0);
@@ -217,5 +218,29 @@ describe("structure legacy transition", () => {
 
     expect(sampleA).toEqual(sampleB);
     expect(sampleA.some((top, i) => JSON.stringify(top) !== JSON.stringify(sampleC[i]))).toBe(true);
+  });
+
+  it("routes road/park semantics to asphalt/park runtime square floor families", () => {
+    const mapDef: TableMapDef = {
+      id: "runtime_floor_families",
+      w: 6,
+      h: 6,
+      cells: [],
+      stamps: [
+        { x: 0, y: 0, z: 0, type: "road", w: 1, h: 1 },
+        { x: 1, y: 0, z: 0, type: "park", w: 1, h: 1 },
+      ],
+    };
+    const compiled = compileKenneyMapFromTable(mapDef, { runSeed: 555, mapId: mapDef.id });
+    const roadTop = compiled.surfacesAtXY(0, 0).find((s) => s.id.startsWith("stamp_asphalt_"))?.runtimeTop;
+    const parkTop = compiled.surfacesAtXY(1, 0).find((s) => s.id.startsWith("stamp_park_"))?.runtimeTop;
+
+    expect(roadTop?.kind).toBe("SQUARE_128_RUNTIME");
+    expect(roadTop?.family).toBe("asphalt");
+    expect(roadTop?.spriteId).toBe("tiles/floor/asphalt/1");
+
+    expect(parkTop?.kind).toBe("SQUARE_128_RUNTIME");
+    expect(parkTop?.family).toBe("park");
+    expect(parkTop?.spriteId).toBe("tiles/floor/park/1");
   });
 });
