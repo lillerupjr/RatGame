@@ -30,10 +30,10 @@ const PLAYER_ANCHOR_X = 0.5;
 const PLAYER_ANCHOR_Y = 0.75;
 const PLAYER_SKIN_SCALE: Record<string, number> = {
     jack: 1,
-    hobo: 1.5,
-    jamal: 1.5,
-    joey: 1.2,
-    tommy: 1.2,
+    hobo: 1,
+    jamal: 1,
+    joey: 1,
+    tommy: 1,
 };
 
 let playerSkin = "jamal";

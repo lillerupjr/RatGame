@@ -60,6 +60,7 @@ import {
   drawWalkMaskOverlay,
   type DebugOverlayContext,
 } from "../../../engine/render/debug/renderDebug";
+import { configurePixelPerfect, snapPx, snapZoom } from "../../../engine/render/pixelPerfect";
 
 // ============================================
 // RenderKey & KindOrder (Isometric Painter Model)
@@ -103,6 +104,7 @@ function getFlippedOverlayImage(img: HTMLImageElement): HTMLCanvasElement {
   canvas.height = img.height;
   const c2d = canvas.getContext("2d");
   if (!c2d) return canvas;
+  configurePixelPerfect(c2d);
   c2d.translate(canvas.width, 0);
   c2d.scale(-1, 1);
   c2d.drawImage(img, 0, 0);
@@ -112,13 +114,17 @@ function getFlippedOverlayImage(img: HTMLImageElement): HTMLCanvasElement {
 
 /** Render tiles, entities, overlays, and debug layers. */
 export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
-  const ww = canvas.clientWidth;
-  const hh = canvas.clientHeight;
+  const screenW = canvas.clientWidth;
+  const screenH = canvas.clientHeight;
+  const pixelScale = Math.max(1, Math.floor(Number(canvas.dataset.pixelScale ?? 1) || 1));
+  const ww = Math.max(1, Math.floor(screenW / pixelScale));
+  const hh = Math.max(1, Math.floor(screenH / pixelScale));
+  configurePixelPerfect(ctx);
 
   // Camera zoom ("distance"):
   //   > 1 = closer (zoom in)
   //   < 1 = farther (zoom out)
-  const camZoom = Math.max(0.5, Math.min(2.5, (w as any).cameraZoom ?? 1.5));
+  const camZoom = snapZoom((w as any).cameraZoom ?? 1);
 
   // Many systems use viewW/viewH as "world view extents".
   // Make them zoom-aware so "screen-relative" ranges track what you actually see.
@@ -127,14 +133,17 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   const PLAYER_R = w.playerR;
 
-  ctx.clearRect(0, 0, ww, hh);
+  ctx.clearRect(0, 0, screenW, screenH);
 
   // Apply zoom around screen center for WORLD rendering only.
   // We'll ctx.restore() before FPS/HUD/UI so UI stays crisp and unscaled.
   ctx.save();
-  ctx.translate(ww * 0.5, hh * 0.5);
+  ctx.scale(pixelScale, pixelScale);
+  const viewCenterX = snapPx(ww * 0.5);
+  const viewCenterY = snapPx(hh * 0.5);
+  ctx.translate(viewCenterX, viewCenterY);
   ctx.scale(camZoom, camZoom);
-  ctx.translate(-ww * 0.5, -hh * 0.5);
+  ctx.translate(-viewCenterX, -viewCenterY);
 
 
   const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
@@ -161,8 +170,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   // Isometric camera: project world coords into screen space, then keep player centered
   const p0 = worldToScreen(px, py);
-  const camX = ww * 0.5 - p0.x;
-  const camY = hh * 0.5 - p0.y;
+  const camX = (viewCenterX - p0.x);
+  const camY = (viewCenterY - p0.y);
+
 
   // World-units per tile step (keep in sync with kenneyTiles constants)
   const T = KENNEY_TILE_WORLD;
@@ -296,7 +306,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const scale = c.scale ?? 1;
 
       ctx.save();
-      ctx.translate(c.dx, c.dy);
+      ctx.translate(snapPx(c.dx), snapPx(c.dy));
       ctx.scale(scale, scale);
       if (c.flipX) {
         ctx.translate(c.dw, 0);
@@ -595,7 +605,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
             let dy = p.y + camY - topH * anchorY;
             dy += 2 * ELEV_PX;
 
-            ctx.drawImage(topImg, dx, dy, topW, topH);
+            ctx.drawImage(topImg, snapPx(dx), snapPx(dy), topW, topH);
         }
       }
     }
@@ -698,7 +708,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           };
 
           const drawClosure = () => {
-            ctx.drawImage(topImg, dx, dy, topW, topH);
+            ctx.drawImage(topImg, snapPx(dx), snapPx(dy), topW, topH);
           };
 
           addToSlice(tx + ty, renderKey, drawClosure);
@@ -881,7 +891,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           const dx = p.x - dw * fr.anchorX;
           const dy = p.y - dh * fr.anchorY;
 
-          ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, dx, dy, dw, dh);
+          ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, snapPx(dx), snapPx(dy), dw, dh);
         } else {
           ctx.globalAlpha = 1;
           ctx.fillStyle = baseColor;
@@ -1006,9 +1016,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           const dh = ih * scale;
 
           ctx.save();
-          ctx.translate(px, py);
+          ctx.translate(snapPx(px), snapPx(py));
           ctx.rotate(ang);
-          ctx.drawImage(spr.img, -dw * 0.5, -dh * 0.5, dw, dh);
+          ctx.drawImage(spr.img, snapPx(-dw * 0.5), snapPx(-dh * 0.5), dw, dh);
           ctx.restore();
         } else {
           const src = registry.projectileSourceFromKind(w.prjKind[i]);
@@ -1066,10 +1076,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         const dw = fr.sw * fr.scale;
         const dh = fr.sh * fr.scale;
 
-        const x = pp.x - dw * fr.anchorX;
-        const y = pp.y - dh * fr.anchorY;
+        const dx = Math.round(pp.x - fr.anchorX * fr.sw * fr.scale);
+        const dy = Math.round(pp.y - fr.anchorY * fr.sh * fr.scale);
 
-        ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, x, y, dw, dh);
+        ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, dx, dy, dw, dh);
       } else {
         ctx.fillStyle = "#eaeaf2";
         ctx.beginPath();
@@ -1217,8 +1227,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
                 band.srcRect.y,
                 band.srcRect.w,
                 band.srcRect.h,
-                band.dstRect.x,
-                band.dstRect.y,
+                snapPx(band.dstRect.x),
+                snapPx(band.dstRect.y),
                 band.dstRect.w,
                 band.dstRect.h,
               );
@@ -1345,12 +1355,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   ctx.restore();
 
   // --- UI ---
-  renderTileGridCompass(w, ctx, ww, hh); // tile-grid N/E/S/W (matches in-game tests)
+  renderTileGridCompass(w, ctx, screenW, screenH); // tile-grid N/E/S/W (matches in-game tests)
 
-  renderHealthOrb(w, ctx, ww, hh);
-  renderExperienceBar(w, ctx, ww, hh);
-  renderBossHealthBar(w, ctx, ww, hh);
-  renderDPSMeter(w, ctx, ww, hh);
+  renderHealthOrb(w, ctx, screenW, screenH);
+  renderExperienceBar(w, ctx, screenW, screenH);
+  renderBossHealthBar(w, ctx, screenW, screenH);
+  renderDPSMeter(w, ctx, screenW, screenH);
   renderFloatingText(w, ctx, toScreen);
 
 }

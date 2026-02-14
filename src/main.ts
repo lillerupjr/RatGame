@@ -1,21 +1,21 @@
 // src/main.ts
 import { createGame } from "./game/game";
+import { resizeCanvasPixelPerfect } from "./engine/render/pixelPerfect";
 import { getDomRefs } from "./ui/domRefs";
 import { wireMenus } from "./ui/menuWiring";
 
 const refs = getDomRefs();
 const canvas = refs.canvas;
-const ctx = canvas.getContext("2d");
-if (!ctx) throw new Error("Canvas 2D context not available");
+const rawCtx = canvas.getContext("2d");
+if (!rawCtx) throw new Error("Canvas 2D context not available");
+const ctx = rawCtx;
+
+// This adjusts the world to screen pixel ratio
+const pixelScale = 2;
 
 function resize() {
-  const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-  canvas.width = Math.floor(window.innerWidth * dpr);
-  canvas.height = Math.floor(window.innerHeight * dpr);
-  canvas.style.width = `${window.innerWidth}px`;
-  canvas.style.height = `${window.innerHeight}px`;
-  // @ts-ignore
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  resizeCanvasPixelPerfect(canvas, ctx, window.innerWidth, window.innerHeight,pixelScale);
 }
 window.addEventListener("resize", resize);
 resize();
