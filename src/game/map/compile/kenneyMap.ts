@@ -1075,7 +1075,7 @@ export function walkInfo(wx: number, wy: number, tileWorld: number, hintZ?: numb
     const t = selectedSurface?.tile ?? getTile(tx, ty);
     const kind = t.kind;
 
-    const shape = tileWalkShapeFromTile(t);
+    const shape = tileWalkShape(tx, ty);
     const blocked = shape === "BLOCKED" || kind === "VOID";
 
     // Integer floor level (gating)

@@ -30,3 +30,6 @@ repo_dump*.txt
 
 # Contracts
 **/contracts/**
+
+# all files in the .claude directory
+.claude/*
