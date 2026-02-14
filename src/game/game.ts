@@ -63,6 +63,7 @@ import {
   generateAndActivateFloorMap,
   generateAndActivateMazeFloorMap,
   getActiveRoomData,
+  getActiveMapDef,
   applyObjectivesFromActiveMap,
   getSpawnWorldFromActive,
 } from "./map/proceduralMapBridge";
@@ -157,6 +158,18 @@ export function createGame(args: CreateGameArgs) {
     w.lastAimY = 0;
   }
 
+  function syncMapLighting(w: World) {
+    const mapDef = getActiveMapDef();
+    const staticLights = (mapDef?.lights ?? []).map((light) => ({
+      worldX: (light.x + 0.5) * KENNEY_TILE_WORLD,
+      worldY: (light.y + 0.5) * KENNEY_TILE_WORLD,
+      heightUnits: light.heightUnits ?? 0,
+      radiusPx: light.radiusPx,
+      intensity: light.intensity,
+    }));
+    w.lighting.lights = staticLights;
+  }
+
   const input: InputState = createInputState();
 
   const staticMaps: TableMapDef[] = AUTHORED_MAP_DEFS;
@@ -177,6 +190,7 @@ export function createGame(args: CreateGameArgs) {
   }
 
   let world: World = createWorld({ seed: 1337, stage: cloneStage("DOCKS") });
+  syncMapLighting(world);
   applyObjectivesFromActiveMap(world);
   applyDebugSpawn(world);
 
@@ -406,6 +420,7 @@ export function createGame(args: CreateGameArgs) {
         }
       }
     }
+    syncMapLighting(w);
 
     const spawn = getSpawnWorldFromActive();
     const anchor = anchorFromWorld(spawn.x, spawn.y, KENNEY_TILE_WORLD);
@@ -559,6 +574,7 @@ export function createGame(args: CreateGameArgs) {
       seed,
       stage: cloneStage("DOCKS"),
     });
+    syncMapLighting(world);
     const mapMode = isMapMode(mapId);
     (world as any).mapMode = mapMode;
     (world as any).runtimeStructureSlicingEnabled = false;

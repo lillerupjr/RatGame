@@ -11,8 +11,9 @@
   "cells": [
     { "x": 0, "y": 5, "type": "spawn" }
   ],
+  "lights": [
+    { "x": 3, "y": 3, "heightUnits": 2, "radiusPx": 140, "intensity": 0.7 }
+  ],
   "stamps": [
-    { "x": 5, "y": 5, "z": 0, "type": "building", "w": 3, "h": 3, "skinId": "avenue_4" }
-
   ]
 }

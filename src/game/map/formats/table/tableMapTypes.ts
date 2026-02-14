@@ -61,6 +61,13 @@ export type TableObjectiveDef = {
 };
 
 export type ApronBaseMode = "PLATEAU" | "ISLANDS";
+export type TableMapLight = {
+    x: number;
+    y: number;
+    heightUnits?: number;
+    radiusPx: number;
+    intensity: number;
+};
 
 export type TableMapDef = {
     id: string;
@@ -85,6 +92,8 @@ export type TableMapDef = {
 
     // Optional semantic stamps (v2 pipeline)
     stamps?: SemanticStamp[];
+    // Optional map-authored static lights (tile-space anchors).
+    lights?: TableMapLight[];
 
     // Optional data-driven objectives attached to this map.
     objectiveDefs?: TableObjectiveDef[];

@@ -61,6 +61,7 @@ import {
   type DebugOverlayContext,
 } from "../../../engine/render/debug/renderDebug";
 import { configurePixelPerfect, snapPx, snapZoom } from "../../../engine/render/pixelPerfect";
+import { renderLighting } from "./renderLighting";
 
 // ============================================
 // RenderKey & KindOrder (Isometric Painter Model)
@@ -1363,7 +1364,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     ctx.globalAlpha = 1;
   }
 
-  const GLOBAL_SCREEN_TINT_ALPHA = 0.3;
+  const GLOBAL_SCREEN_TINT_ALPHA = (w.lighting.darknessAlpha ?? 0) > 0 ? 0 : 0.3;
   if (GLOBAL_SCREEN_TINT_ALPHA > 0) {
     ctx.globalAlpha = GLOBAL_SCREEN_TINT_ALPHA;
     ctx.fillStyle = "#000";
@@ -1408,6 +1409,27 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   // Restore (undo camera zoom) before drawing screen-space overlays / HUD
   ctx.restore();
+
+  const frameLights = [...w.lighting.lights];
+  frameLights.push({
+    worldX: px,
+    worldY: py,
+    heightUnits: w.pzVisual ?? w.pz ?? 0,
+    radiusPx: 160,
+    intensity: 0.75,
+  });
+  // PASS 8: final screen-space lighting
+  renderLighting(ctx, { darknessAlpha: w.lighting.darknessAlpha, lights: frameLights }, {
+    screenW,
+    screenH,
+    projectWorldToScreen: (worldX: number, worldY: number, heightUnits: number) => {
+      const p = worldToScreen(worldX, worldY);
+      return {
+        x: (p.x + camX) * pixelScale,
+        y: (p.y + camY - heightUnits * ELEV_PX) * pixelScale,
+      };
+    },
+  });
 
   // FPS
   ctx.save();

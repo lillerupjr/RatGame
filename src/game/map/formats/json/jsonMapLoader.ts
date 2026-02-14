@@ -6,6 +6,7 @@ import type {
   TableObjectiveDef,
   TableObjectiveRule,
   TableOutcomeDef,
+  TableMapLight,
   SemanticStampType,
   SemanticStamp,
 } from "../table/tableMapTypes";
@@ -93,6 +94,7 @@ type JsonMapDef = {
     stackLevel?: number;
     zStackUnits?: number;
   }[];
+  lights?: TableMapLight[];
   mapSkinId?: MapSkinId;
   buildingPackId?: BuildingPackId;
   mapSkinDefaults?: MapSkinBundle;
@@ -603,6 +605,25 @@ function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): S
   });
 }
 
+function optionalMapLightsField(obj: Record<string, unknown>, source?: string): TableMapLight[] | undefined {
+  const arr = obj.lights;
+  if (arr === undefined) return undefined;
+  if (!Array.isArray(arr)) {
+    throw new Error(`JSON map loader${formatSource(source)}: optional field "lights" must be an array.`);
+  }
+  return arr.map((entry, index) => {
+    if (!isRecord(entry)) {
+      throw new Error(`JSON map loader${formatSource(source)}: lights[${index}] must be an object.`);
+    }
+    const x = requireNumberField(entry, "x", source);
+    const y = requireNumberField(entry, "y", source);
+    const heightUnits = optionalNumberField(entry, "heightUnits");
+    const radiusPx = requireNumberField(entry, "radiusPx", source);
+    const intensity = requireNumberField(entry, "intensity", source);
+    return { x, y, heightUnits, radiusPx, intensity };
+  });
+}
+
 export function loadTableMapDefFromJson(data: unknown, source?: string): TableMapDef {
   if (!isRecord(data)) {
     throw new Error(`JSON map loader${formatSource(source)}: root must be an object.`);
@@ -634,6 +655,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
   const centerOnZero = optionalBooleanField(data, "centerOnZero");
   const apronBaseMode = optionalApronBaseModeField(data, "apronBaseMode");
   const objectiveDefs = parseObjectiveDefs(data, source);
+  const mapLights = optionalMapLightsField(data, source);
 
   if (chunkGrid) {
     const chunkData = CHUNK_BY_ID.get(chunkGrid.id);
@@ -650,6 +672,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     }
     const expandedCells: TableMapCell[] = [];
     const expandedStamps: SemanticStamp[] = [];
+    const expandedLights: TableMapLight[] = [];
 
     for (let cy = 0; cy < chunkGrid.rows; cy++) {
       for (let cx = 0; cx < chunkGrid.cols; cx++) {
@@ -665,6 +688,12 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
             expandedStamps.push({ ...s, x: s.x + ox, y: s.y + oy });
           }
         }
+        if (chunkDef.lights) {
+          for (let i = 0; i < chunkDef.lights.length; i++) {
+            const l = chunkDef.lights[i];
+            expandedLights.push({ ...l, x: l.x + ox, y: l.y + oy });
+          }
+        }
       }
     }
 
@@ -675,6 +704,10 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     const stampsRaw = optionalSemanticStamp(data, source);
     const stamps = (() => {
       const merged = [...expandedStamps, ...fieldParsed.stamps, ...(stampsRaw ?? [])];
+      return merged.length > 0 ? merged : undefined;
+    })();
+    const lights = (() => {
+      const merged = [...expandedLights, ...(mapLights ?? [])];
       return merged.length > 0 ? merged : undefined;
     })();
 
@@ -689,6 +722,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
       apronBaseMode,
       cells: merged,
       stamps,
+      lights,
       objectiveDefs,
     };
   }
@@ -705,6 +739,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     const merged = [...fieldParsed.stamps, ...(stampsRaw ?? [])];
     return merged.length > 0 ? merged : undefined;
   })();
+  const lights = mapLights;
 
   const jsonDef: JsonMapDef = {
     id,
@@ -712,6 +747,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     height,
     cells,
     stamps,
+    lights,
     mapSkinId,
     buildingPackId,
     mapSkinDefaults,
@@ -763,6 +799,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     apronBaseMode: jsonDef.apronBaseMode,
     cells: jsonDef.cells ?? [],
     stamps,
+    lights: jsonDef.lights,
     objectiveDefs: jsonDef.objectiveDefs,
   };
 }

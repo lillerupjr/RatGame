@@ -26,4 +26,18 @@ describe("jsonMapLoader", () => {
       ],
     });
   });
+
+  it("parses optional map-authored lights", () => {
+    const mapDef = loadTableMapDefFromJson({
+      id: "LIGHTS_TEST",
+      width: 2,
+      height: 2,
+      cells: [{ x: 0, y: 0, type: "floor", z: 0 }],
+      lights: [{ x: 3, y: 4, heightUnits: 2, radiusPx: 120, intensity: 0.65 }],
+    }, "inline");
+
+    expect(mapDef.lights).toEqual([
+      { x: 3, y: 4, heightUnits: 2, radiusPx: 120, intensity: 0.65 },
+    ]);
+  });
 });
