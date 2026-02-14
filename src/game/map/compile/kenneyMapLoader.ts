@@ -439,6 +439,29 @@ export function compileKenneyMapFromTable(
             cone: { dirRad: Math.PI * 0.5, angleRad: 0.9, lengthPx: 260 },
         };
     };
+    const lampPostPreset = () => {
+        return {
+            spriteId: "light/lamp_post",
+            drawDxOffset: 0,
+            drawDyOffset: 0,
+            groundPool: {
+                shape: "RADIAL" as const,
+                color: "#FFFB74",
+                tintStrength: 0.32,
+                radiusPx: 108,
+                intensity: 0.58,
+                heightUnits: 0,
+            },
+            topGlow: {
+                shape: "RADIAL" as const,
+                color: "#FFFB74",
+                tintStrength: 0.46,
+                radiusPx: 34,
+                intensity: 0.95,
+                heightUnits: 10,
+            },
+        };
+    };
     const neonPreset = (semanticType: "neon_sign_pink" | "neon_sign_blue" | "neon_sign_green") => {
         const byType: Record<typeof semanticType, { color: string; radiusPx: number; intensity: number; tintStrength: number }> = {
             neon_sign_pink: { color: "#FF4FD8", radiusPx: 220, intensity: 0.75, tintStrength: 0.70 },
@@ -1156,6 +1179,58 @@ export function compileKenneyMapFromTable(
         }
     };
     const compileStamp = (stamp: SemanticStamp, stampIndex: number) => {
+        if (stamp.type === "lamp_post") {
+            const w = Math.max(1, (stamp.w ?? 1) | 0);
+            const h = Math.max(1, (stamp.h ?? 1) | 0);
+            const sx = (stamp.x | 0) + originTx;
+            const sy = (stamp.y | 0) + originTy;
+            const zBase = stamp.z ?? 0;
+            const seAnchor = seAnchorFromTopLeft(sx, sy, w, h);
+            const preset = lampPostPreset();
+            overlays.push({
+                id: `lamp_post_${sx}_${sy}_${zBase}`,
+                tx: sx,
+                ty: sy,
+                w,
+                h,
+                seTx: seAnchor.anchorTx,
+                seTy: seAnchor.anchorTy,
+                anchorTx: seAnchor.anchorTx,
+                anchorTy: seAnchor.anchorTy,
+                z: zBase,
+                spriteId: preset.spriteId,
+                drawDxOffset: preset.drawDxOffset,
+                drawDyOffset: preset.drawDyOffset,
+                scale: 1,
+                kind: "PROP",
+            });
+            lightDefs.push({
+                worldX: sx * KENNEY_TILE_WORLD,
+                worldY: sy * KENNEY_TILE_WORLD,
+                heightUnits: preset.groundPool.heightUnits,
+                intensity: preset.groundPool.intensity,
+                radiusPx: preset.groundPool.radiusPx,
+                color: preset.groundPool.color,
+                tintStrength: preset.groundPool.tintStrength,
+                shape: preset.groundPool.shape,
+                flicker: { kind: "NONE" },
+            });
+            lightDefs.push({
+                worldX: sx * KENNEY_TILE_WORLD,
+                worldY: sy * KENNEY_TILE_WORLD,
+                heightUnits: preset.topGlow.heightUnits,
+                intensity: preset.topGlow.intensity,
+                radiusPx: preset.topGlow.radiusPx,
+                color: preset.topGlow.color,
+                tintStrength: preset.topGlow.tintStrength,
+                shape: preset.topGlow.shape,
+                flicker: { kind: "NONE" },
+            });
+            if (stampBlocksMovement(stamp, false)) {
+                bakeBlockedFootprint(sx, sy, w, h);
+            }
+            return;
+        }
         if (stamp.type === "container") {
             const w = stamp.w ?? 2;
             const h = stamp.h ?? 3;

@@ -552,12 +552,13 @@ function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): S
         lowered === "park" ||
         lowered === "sea" ||
         lowered === "boss_room" ||
-        lowered === "fence"
+        lowered === "fence" ||
+        lowered === "lamp_post"
       ) {
         return lowered as SemanticStampType;
       }
       throw new Error(
-        `JSON map loader${formatSource(source)}: stamps[${index}].type must be one of building|container|prop|road|sidewalk|park|sea|boss_room|fence.`
+        `JSON map loader${formatSource(source)}: stamps[${index}].type must be one of building|container|prop|road|sidewalk|park|sea|boss_room|fence|lamp_post.`
       );
     })();
     const z = optionalNumberField(entry, "z") ?? 0;

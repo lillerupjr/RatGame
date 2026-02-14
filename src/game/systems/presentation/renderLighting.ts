@@ -88,6 +88,42 @@ function drawRadialCutout(
   ctx.fill();
 }
 
+function withGroundPlane(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  sy: number,
+  groundYScale: number,
+  fn: () => void,
+): void {
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.scale(1, groundYScale);
+  ctx.translate(-sx, -sy);
+  fn();
+  ctx.restore();
+}
+
+function conePath(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  sy: number,
+  dir: number,
+  ang: number,
+  len: number,
+): void {
+  const a0 = dir - ang * 0.5;
+  const a1 = dir + ang * 0.5;
+  const x0 = sx + Math.cos(a0) * len;
+  const y0 = sy + Math.sin(a0) * len;
+  const x1 = sx + Math.cos(a1) * len;
+  const y1 = sy + Math.sin(a1) * len;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.lineTo(x0, y0);
+  ctx.lineTo(x1, y1);
+  ctx.closePath();
+}
+
 function drawStreetLampCutout(
   ctx: CanvasRenderingContext2D,
   light: ProjectedLight,
@@ -99,54 +135,27 @@ function drawStreetLampCutout(
   const poolSy = Number.isFinite(light.poolSy) ? (light.poolSy as number) : light.sy;
   const poolRadiusPx = Math.max(1, pool.radiusPx);
   const coneLengthPx = Math.max(1, cone.lengthPx);
-  const hotspotR = Math.max(12, coneLengthPx * 0.08);
-  const a0 = cone.dirRad - cone.angleRad * 0.5;
-  const a1 = cone.dirRad + cone.angleRad * 0.5;
-  const x0 = light.sx + Math.cos(a0) * coneLengthPx;
-  const y0 = light.sy + Math.sin(a0) * coneLengthPx;
-  const x1 = light.sx + Math.cos(a1) * coneLengthPx;
-  const y1 = light.sy + Math.sin(a1) * coneLengthPx;
-  const ex = light.sx + Math.cos(cone.dirRad) * coneLengthPx;
-  const ey = light.sy + Math.sin(cone.dirRad) * coneLengthPx;
-
-  ctx.save();
-  ctx.translate(light.sx, poolSy);
-  ctx.scale(1, groundYScale);
-  ctx.translate(-light.sx, -poolSy);
-
-  const poolGradient = ctx.createRadialGradient(light.sx, poolSy, 0, light.sx, poolSy, poolRadiusPx);
-  poolGradient.addColorStop(0, `rgba(0,0,0,${Math.max(0, intensity)})`);
-  poolGradient.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = poolGradient;
-  ctx.beginPath();
-  ctx.arc(light.sx, poolSy, poolRadiusPx, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-
-  ctx.save();
-  ctx.translate(light.sx, light.sy);
-  ctx.scale(1, groundYScale);
-  ctx.translate(-light.sx, -light.sy);
-  const hotGradient = ctx.createRadialGradient(light.sx, light.sy, 0, light.sx, light.sy, hotspotR);
-  hotGradient.addColorStop(0, `rgba(0,0,0,${Math.max(0, intensity * 0.9)})`);
-  hotGradient.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = hotGradient;
-  ctx.beginPath();
-  ctx.arc(light.sx, light.sy, hotspotR, 0, Math.PI * 2);
-  ctx.fill();
-
-  const coneGradient = ctx.createLinearGradient(light.sx, light.sy, ex, ey);
-  coneGradient.addColorStop(0, `rgba(0,0,0,${Math.max(0, intensity * 0.65)})`);
-  coneGradient.addColorStop(0.25, `rgba(0,0,0,${Math.max(0, intensity * 0.35)})`);
-  coneGradient.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = coneGradient;
-  ctx.beginPath();
-  ctx.moveTo(light.sx, light.sy);
-  ctx.lineTo(x0, y0);
-  ctx.lineTo(x1, y1);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
+  withGroundPlane(ctx, light.sx, poolSy, groundYScale, () => {
+    const poolGradient = ctx.createRadialGradient(light.sx, poolSy, 0, light.sx, poolSy, poolRadiusPx);
+    poolGradient.addColorStop(0, `rgba(0,0,0,${Math.max(0, intensity)})`);
+    poolGradient.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = poolGradient;
+    ctx.beginPath();
+    ctx.arc(light.sx, poolSy, poolRadiusPx, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  withGroundPlane(ctx, light.sx, light.sy, groundYScale, () => {
+    const ex = light.sx + Math.cos(cone.dirRad) * coneLengthPx;
+    const ey = light.sy + Math.sin(cone.dirRad) * coneLengthPx;
+    const coneGradient = ctx.createLinearGradient(light.sx, light.sy, ex, ey);
+    coneGradient.addColorStop(0, "rgba(0,0,0,0)");
+    coneGradient.addColorStop(0.18, `rgba(0,0,0,${Math.max(0, intensity * 0.85)})`);
+    coneGradient.addColorStop(0.45, `rgba(0,0,0,${Math.max(0, intensity * 0.28)})`);
+    coneGradient.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = coneGradient;
+    conePath(ctx, light.sx, light.sy, cone.dirRad, cone.angleRad, coneLengthPx);
+    ctx.fill();
+  });
 }
 
 function drawRadialTint(
@@ -180,53 +189,27 @@ function drawStreetLampTint(
   const poolSy = Number.isFinite(light.poolSy) ? (light.poolSy as number) : light.sy;
   const poolRadiusPx = Math.max(1, pool.radiusPx);
   const coneLengthPx = Math.max(1, cone.lengthPx);
-  const hotspotR = Math.max(12, coneLengthPx * 0.08);
-  const a0 = cone.dirRad - cone.angleRad * 0.5;
-  const a1 = cone.dirRad + cone.angleRad * 0.5;
-  const x0 = light.sx + Math.cos(a0) * coneLengthPx;
-  const y0 = light.sy + Math.sin(a0) * coneLengthPx;
-  const x1 = light.sx + Math.cos(a1) * coneLengthPx;
-  const y1 = light.sy + Math.sin(a1) * coneLengthPx;
-  const ex = light.sx + Math.cos(cone.dirRad) * coneLengthPx;
-  const ey = light.sy + Math.sin(cone.dirRad) * coneLengthPx;
-  ctx.save();
-  ctx.translate(light.sx, poolSy);
-  ctx.scale(1, groundYScale);
-  ctx.translate(-light.sx, -poolSy);
-
-  const poolGradient = ctx.createRadialGradient(light.sx, poolSy, 0, light.sx, poolSy, poolRadiusPx);
-  poolGradient.addColorStop(0, hexToRgba(color, alpha));
-  poolGradient.addColorStop(1, hexToRgba(color, 0));
-  ctx.fillStyle = poolGradient;
-  ctx.beginPath();
-  ctx.arc(light.sx, poolSy, poolRadiusPx, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-
-  ctx.save();
-  ctx.translate(light.sx, light.sy);
-  ctx.scale(1, groundYScale);
-  ctx.translate(-light.sx, -light.sy);
-  const hotGradient = ctx.createRadialGradient(light.sx, light.sy, 0, light.sx, light.sy, hotspotR);
-  hotGradient.addColorStop(0, hexToRgba(color, 0.45 * alpha));
-  hotGradient.addColorStop(1, hexToRgba(color, 0));
-  ctx.fillStyle = hotGradient;
-  ctx.beginPath();
-  ctx.arc(light.sx, light.sy, hotspotR, 0, Math.PI * 2);
-  ctx.fill();
-
-  const coneGradient = ctx.createLinearGradient(light.sx, light.sy, ex, ey);
-  coneGradient.addColorStop(0, hexToRgba(color, 0.18 * alpha));
-  coneGradient.addColorStop(0.35, hexToRgba(color, 0.08 * alpha));
-  coneGradient.addColorStop(1, hexToRgba(color, 0));
-  ctx.fillStyle = coneGradient;
-  ctx.beginPath();
-  ctx.moveTo(light.sx, light.sy);
-  ctx.lineTo(x0, y0);
-  ctx.lineTo(x1, y1);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
+  withGroundPlane(ctx, light.sx, poolSy, groundYScale, () => {
+    const poolGradient = ctx.createRadialGradient(light.sx, poolSy, 0, light.sx, poolSy, poolRadiusPx);
+    poolGradient.addColorStop(0, hexToRgba(color, alpha));
+    poolGradient.addColorStop(1, hexToRgba(color, 0));
+    ctx.fillStyle = poolGradient;
+    ctx.beginPath();
+    ctx.arc(light.sx, poolSy, poolRadiusPx, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  withGroundPlane(ctx, light.sx, light.sy, groundYScale, () => {
+    const ex = light.sx + Math.cos(cone.dirRad) * coneLengthPx;
+    const ey = light.sy + Math.sin(cone.dirRad) * coneLengthPx;
+    const coneGradient = ctx.createLinearGradient(light.sx, light.sy, ex, ey);
+    coneGradient.addColorStop(0, hexToRgba(color, 0));
+    coneGradient.addColorStop(0.18, hexToRgba(color, 0.24 * alpha));
+    coneGradient.addColorStop(0.45, hexToRgba(color, 0.07 * alpha));
+    coneGradient.addColorStop(1, hexToRgba(color, 0));
+    ctx.fillStyle = coneGradient;
+    conePath(ctx, light.sx, light.sy, cone.dirRad, cone.angleRad, coneLengthPx);
+    ctx.fill();
+  });
 }
 
 export function renderLighting(

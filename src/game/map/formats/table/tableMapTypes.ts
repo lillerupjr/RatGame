@@ -19,7 +19,17 @@ export type TableMapCell = {
     radius?: number;
 };
 
-export type SemanticStampType = "building" | "container" | "prop" | "road" | "sidewalk" | "park" | "sea" | "boss_room" | "fence";
+export type SemanticStampType =
+    | "building"
+    | "container"
+    | "prop"
+    | "road"
+    | "sidewalk"
+    | "park"
+    | "sea"
+    | "boss_room"
+    | "fence"
+    | "lamp_post";
 
 export type SemanticStamp = {
     x: number;
