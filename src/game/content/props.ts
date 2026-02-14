@@ -9,6 +9,8 @@ export type PropDef = {
     flipMode?: "H";
     sprite: string;
     anchorLiftUnits?: number;
+    lightHeightOffsetUnits?: number;
+    lightScreenOffsetPx?: { x: number; y: number };
     anchorOffsetPx?: { x: number; y: number };
 };
 
@@ -56,6 +58,50 @@ export const PROPS: Record<PropId, PropDef> = {
         sprite: "props/boats/boat2_s",
         anchorLiftUnits: 0,
         anchorOffsetPx: { x: 0, y: 0 },
+    },
+    street_lamp_e: {
+        id: "street_lamp_e",
+        w: 1,
+        h: 1,
+        isFlippable: false,
+        sprite: "props/lights/street_lamp_e",
+        anchorLiftUnits: -2,
+        lightHeightOffsetUnits: 12,
+        lightScreenOffsetPx: { x: 24, y: 32 },
+        anchorOffsetPx: { x: 16, y: 64 },
+    },
+    street_lamp_s: {
+        id: "street_lamp_s",
+        w: 1,
+        h: 1,
+        isFlippable: false,
+        sprite: "props/lights/street_lamp_s",
+        anchorLiftUnits: -2,
+        lightHeightOffsetUnits: 12,
+        lightScreenOffsetPx: { x: -24, y: 16 },
+        anchorOffsetPx: { x: -16, y: 64 },
+    },
+    street_lamp_w: {
+        id: "street_lamp_w",
+        w: 1,
+        h: 1,
+        isFlippable: false,
+        sprite: "props/lights/street_lamp_w",
+        anchorLiftUnits: -2,
+        lightHeightOffsetUnits: 12,
+        lightScreenOffsetPx: { x: -32, y: 0 },
+        anchorOffsetPx: { x: -16, y: 64 },
+    },
+    street_lamp_n: {
+        id: "street_lamp_n",
+        w: 1,
+        h: 1,
+        isFlippable: false,
+        sprite: "props/lights/street_lamp_n",
+        anchorLiftUnits: -2,
+        lightHeightOffsetUnits: 12,
+        lightScreenOffsetPx: { x: 32, y: 0 },
+        anchorOffsetPx: { x: 16, y: 64 },
     },
 };
 

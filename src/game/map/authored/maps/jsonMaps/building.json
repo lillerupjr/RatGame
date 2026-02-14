@@ -11,21 +11,13 @@
   "cells": [
     { "x": 0, "y": 5, "type": "spawn" }
   ],
-  "lights": [
-    {
-      "x": 0,
-      "y": 0,
-      "heightUnits": 12,
-      "shape": "STREET_LAMP",
-      "radiusPx": 140,
-      "intensity": 0.85,
-      "color": "#FFD6A1",
-      "tintStrength": 0.4,
-      "pool": { "radiusPx": 120, "yScale": 0.65 },
-      "cone": { "dirRad": 1.5708, "angleRad": 0.9, "lengthPx": 260 },
-      "flicker": { "kind": "NONE" }
-    }
-  ],
   "stamps": [
+    { "x": 0, "y": 0, "z": 0, "type": "prop", "propId": "street_lamp_e", "w": 1, "h": 1 },
+    { "x": 1, "y": 0, "z": 0, "type": "prop", "propId": "street_lamp_w", "w": 1, "h": 1 },
+    { "x": 2, "y": 0, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 3, "y": 0, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 }
+
+  ],
+  "lights": [
   ]
 }

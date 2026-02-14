@@ -1416,10 +1416,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   for (let i = 0; i < lightDefs.length; i++) {
     const ld = lightDefs[i];
     const p = worldToScreen(ld.worldX, ld.worldY);
+    const screenOffsetX = (ld.screenOffsetPx?.x ?? 0) * pixelScale;
+    const screenOffsetY = (ld.screenOffsetPx?.y ?? 0) * pixelScale;
     const flickerPhase = (Math.sin(ld.worldX * 0.013 + ld.worldY * 0.007) * 43758.5453) % (Math.PI * 2);
     projectedLights[i] = {
-      sx: (p.x + camX) * pixelScale,
-      sy: (p.y + camY - ld.heightUnits * ELEV_PX) * pixelScale,
+      sx: (p.x + camX) * pixelScale + screenOffsetX,
+      sy: (p.y + camY - ld.heightUnits * ELEV_PX) * pixelScale + screenOffsetY,
       radiusPx: ld.radiusPx * pixelScale,
       intensity: ld.intensity,
       shape: ld.shape ?? "RADIAL",

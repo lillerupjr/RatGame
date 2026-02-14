@@ -281,6 +281,7 @@ describe("structure legacy transition", () => {
     expect(light.cone?.dirRad).toBe(0);
     expect(light.cone?.angleRad).toBe(0.9);
     expect(light.cone?.lengthPx).toBe(260);
+    expect(light.color).toBe("#FFFB74");
   });
 
   it("builds neon semantic presets as colored RADIAL lightDefs", () => {
@@ -300,5 +301,18 @@ describe("structure legacy transition", () => {
     expect(light.radiusPx).toBe(220);
     expect(light.intensity).toBe(0.75);
     expect(light.flicker).toEqual({ kind: "NOISE", speed: 9, amount: 0.25 });
+  });
+
+  it("street lamp props emit their own lightDef and do not block movement", () => {
+    const mapDef: TableMapDef = {
+      id: "street_lamp_prop_semantic",
+      w: 6,
+      h: 6,
+      cells: [{ x: 0, y: 0, z: 0, type: "floor" }],
+      stamps: [{ x: 3, y: 2, z: 0, type: "prop", propId: "street_lamp_e", w: 1, h: 1 }],
+    };
+    const compiled = compileKenneyMapFromTable(mapDef, { runSeed: 77, mapId: mapDef.id });
+    expect(compiled.lightDefs.some((l) => l.shape === "STREET_LAMP")).toBe(true);
+    expect(compiled.blockedTiles.has("3,2")).toBe(false);
   });
 });

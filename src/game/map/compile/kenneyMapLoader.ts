@@ -49,6 +49,7 @@ export type LightDef = {
     worldX: number;
     worldY: number;
     heightUnits: number;
+    screenOffsetPx?: { x: number; y: number };
     intensity: number;
     radiusPx: number;
     color?: string;
@@ -428,19 +429,13 @@ export function compileKenneyMapFromTable(
         ty: t.ty + originTy,
         radius: t.radius,
     }));
-    const streetLampPreset = (semanticType: "street_lamp_n" | "street_lamp_e" | "street_lamp_s" | "street_lamp_w") => {
-        const dirByType: Record<typeof semanticType, number> = {
-            street_lamp_n: -Math.PI * 0.5,
-            street_lamp_e: 0,
-            street_lamp_s: Math.PI * 0.5,
-            street_lamp_w: Math.PI,
-        };
+    const streetLampPreset = (_semanticType: "street_lamp_n" | "street_lamp_e" | "street_lamp_s" | "street_lamp_w") => {
         return {
             shape: "STREET_LAMP" as const,
-            color: "#FFD6A1",
+            color: "#FFFB74",
             tintStrength: 0.40,
             pool: { radiusPx: 120, yScale: 0.65 },
-            cone: { dirRad: dirByType[semanticType], angleRad: 0.9, lengthPx: 260 },
+            cone: { dirRad: Math.PI * 0.5, angleRad: 0.9, lengthPx: 260 },
         };
     };
     const neonPreset = (semanticType: "neon_sign_pink" | "neon_sign_blue" | "neon_sign_green") => {
@@ -467,9 +462,14 @@ export function compileKenneyMapFromTable(
             }
             return {};
         })();
+        const isStreetLampSemantic =
+            light.semanticType === "street_lamp_n"
+            || light.semanticType === "street_lamp_e"
+            || light.semanticType === "street_lamp_s"
+            || light.semanticType === "street_lamp_w";
         return {
-            worldX: (light.x + originTx + 0.5) * KENNEY_TILE_WORLD,
-            worldY: (light.y + originTy + 0.5) * KENNEY_TILE_WORLD,
+            worldX: (light.x + originTx + (isStreetLampSemantic ? 0 : 0.5)) * KENNEY_TILE_WORLD,
+            worldY: (light.y + originTy + (isStreetLampSemantic ? 0 : 0.5)) * KENNEY_TILE_WORLD,
             heightUnits: light.heightUnits ?? 0,
             intensity: semanticPreset?.intensity ?? light.intensity,
             radiusPx: semanticPreset?.radiusPx ?? light.radiusPx,
@@ -1263,6 +1263,7 @@ export function compileKenneyMapFromTable(
             const zBase = stamp.z ?? 0;
             const anchorLiftPx = (prop.anchorLiftUnits ?? 0) * HEIGHT_UNIT_PX;
             const offset = prop.anchorOffsetPx ?? { x: 0, y: 0 };
+            const isStreetLampProp = prop.id.startsWith("street_lamp_");
 
             overlays.push({
                 id: `prop_${prop.id}_${anchorTx}_${anchorTy}_${zBase}`,
@@ -1283,7 +1284,26 @@ export function compileKenneyMapFromTable(
                 kind: "PROP",
             });
 
-            if (stampBlocksMovement(stamp, true)) {
+            if (isStreetLampProp) {
+                const semanticType = prop.id as "street_lamp_n" | "street_lamp_e" | "street_lamp_s" | "street_lamp_w";
+                const preset = streetLampPreset(semanticType);
+                lightDefs.push({
+                    worldX: ((stamp.x | 0) + originTx) * KENNEY_TILE_WORLD,
+                    worldY: ((stamp.y | 0) + originTy) * KENNEY_TILE_WORLD,
+                    heightUnits: (prop.anchorLiftUnits ?? 0) + (prop.lightHeightOffsetUnits ?? 0),
+                    screenOffsetPx: prop.lightScreenOffsetPx ?? { x: 0, y: 0 },
+                    intensity: 0.85,
+                    radiusPx: 140,
+                    color: preset.color,
+                    tintStrength: preset.tintStrength,
+                    shape: preset.shape,
+                    pool: preset.pool,
+                    cone: preset.cone,
+                    flicker: { kind: "NONE" },
+                });
+            }
+
+            if (stampBlocksMovement(stamp, !isStreetLampProp)) {
                 bakeBlockedFootprint((stamp.x | 0) + originTx, (stamp.y | 0) + originTy, w, h);
             }
             return;
