@@ -620,7 +620,71 @@ function optionalMapLightsField(obj: Record<string, unknown>, source?: string): 
     const heightUnits = optionalNumberField(entry, "heightUnits");
     const radiusPx = requireNumberField(entry, "radiusPx", source);
     const intensity = requireNumberField(entry, "intensity", source);
-    return { x, y, heightUnits, radiusPx, intensity };
+    const color = optionalStringField(entry, "color");
+    const tintStrength = optionalNumberField(entry, "tintStrength");
+    const shapeRaw = optionalStringField(entry, "shape");
+    const shape = shapeRaw
+      ? (() => {
+          const up = shapeRaw.toUpperCase();
+          if (up === "RADIAL" || up === "STREET_LAMP") return up as "RADIAL" | "STREET_LAMP";
+          throw new Error(`JSON map loader${formatSource(source)}: lights[${index}].shape must be RADIAL or STREET_LAMP.`);
+        })()
+      : undefined;
+    const semanticTypeRaw = optionalStringField(entry, "semanticType");
+    const semanticType = semanticTypeRaw
+      ? (() => {
+          const low = semanticTypeRaw.toLowerCase();
+          if (low === "street_lamp_n" || low === "street_lamp_e" || low === "street_lamp_s" || low === "street_lamp_w") {
+            return low as "street_lamp_n" | "street_lamp_e" | "street_lamp_s" | "street_lamp_w";
+          }
+          if (low === "neon_sign_pink" || low === "neon_sign_blue" || low === "neon_sign_green") {
+            return low as "neon_sign_pink" | "neon_sign_blue" | "neon_sign_green";
+          }
+          throw new Error(`JSON map loader${formatSource(source)}: lights[${index}].semanticType is invalid.`);
+        })()
+      : undefined;
+    const pool = (() => {
+      const raw = entry.pool;
+      if (raw === undefined) return undefined;
+      if (!isRecord(raw)) throw new Error(`JSON map loader${formatSource(source)}: lights[${index}].pool must be an object.`);
+      return {
+        radiusPx: requireNumberField(raw, "radiusPx", source),
+        yScale: optionalNumberField(raw, "yScale"),
+      };
+    })();
+    const cone = (() => {
+      const raw = entry.cone;
+      if (raw === undefined) return undefined;
+      if (!isRecord(raw)) throw new Error(`JSON map loader${formatSource(source)}: lights[${index}].cone must be an object.`);
+      return {
+        dirRad: requireNumberField(raw, "dirRad", source),
+        angleRad: requireNumberField(raw, "angleRad", source),
+        lengthPx: requireNumberField(raw, "lengthPx", source),
+      };
+    })();
+    const flicker = (() => {
+      const raw = entry.flicker;
+      if (raw === undefined) return undefined;
+      if (!isRecord(raw)) throw new Error(`JSON map loader${formatSource(source)}: lights[${index}].flicker must be an object.`);
+      const kindRaw = requireStringField(raw, "kind", source).toUpperCase();
+      if (kindRaw === "NONE") return { kind: "NONE" as const };
+      if (kindRaw === "NOISE") {
+        return {
+          kind: "NOISE" as const,
+          speed: optionalNumberField(raw, "speed"),
+          amount: optionalNumberField(raw, "amount"),
+        };
+      }
+      if (kindRaw === "PULSE") {
+        return {
+          kind: "PULSE" as const,
+          speed: optionalNumberField(raw, "speed"),
+          amount: optionalNumberField(raw, "amount"),
+        };
+      }
+      throw new Error(`JSON map loader${formatSource(source)}: lights[${index}].flicker.kind must be NONE|NOISE|PULSE.`);
+    })();
+    return { x, y, heightUnits, radiusPx, intensity, color, tintStrength, shape, semanticType, flicker, pool, cone };
   });
 }
 

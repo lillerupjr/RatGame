@@ -19,6 +19,7 @@ import {
   viewRectFromWorldCenter,
   overlaysInView,
   blockedTilesInView,
+  getActiveMap as getActiveCompiledMap,
   type RenderPiece,
   type StampOverlay,
   type ViewRect,
@@ -1410,26 +1411,32 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // Restore (undo camera zoom) before drawing screen-space overlays / HUD
   ctx.restore();
 
-  const frameLights = [...w.lighting.lights];
-  frameLights.push({
-    worldX: px,
-    worldY: py,
-    heightUnits: w.pzVisual ?? w.pz ?? 0,
-    radiusPx: 160,
-    intensity: 0.75,
-  });
+  const lightDefs = getActiveCompiledMap().lightDefs;
+  const projectedLights = new Array(lightDefs.length);
+  for (let i = 0; i < lightDefs.length; i++) {
+    const ld = lightDefs[i];
+    const p = worldToScreen(ld.worldX, ld.worldY);
+    const flickerPhase = (Math.sin(ld.worldX * 0.013 + ld.worldY * 0.007) * 43758.5453) % (Math.PI * 2);
+    projectedLights[i] = {
+      sx: (p.x + camX) * pixelScale,
+      sy: (p.y + camY - ld.heightUnits * ELEV_PX) * pixelScale,
+      radiusPx: ld.radiusPx * pixelScale,
+      intensity: ld.intensity,
+      shape: ld.shape ?? "RADIAL",
+      color: ld.color ?? "#FFFFFF",
+      tintStrength: ld.tintStrength ?? 0.35,
+      flicker: ld.flicker ?? { kind: "NONE" },
+      flickerPhase,
+      pool: ld.pool
+        ? { radiusPx: ld.pool.radiusPx * pixelScale, yScale: ld.pool.yScale ?? 1 }
+        : undefined,
+      cone: ld.cone
+        ? { dirRad: ld.cone.dirRad, angleRad: ld.cone.angleRad, lengthPx: ld.cone.lengthPx * pixelScale }
+        : undefined,
+    };
+  }
   // PASS 8: final screen-space lighting
-  renderLighting(ctx, { darknessAlpha: w.lighting.darknessAlpha, lights: frameLights }, {
-    screenW,
-    screenH,
-    projectWorldToScreen: (worldX: number, worldY: number, heightUnits: number) => {
-      const p = worldToScreen(worldX, worldY);
-      return {
-        x: (p.x + camX) * pixelScale,
-        y: (p.y + camY - heightUnits * ELEV_PX) * pixelScale,
-      };
-    },
-  });
+  renderLighting(ctx, w.lighting, projectedLights, screenW, screenH, w.time ?? 0);
 
   // FPS
   ctx.save();

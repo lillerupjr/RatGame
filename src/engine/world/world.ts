@@ -38,16 +38,10 @@ export type GameState =
 export type RunState = "FLOOR" | "BOSS" | "TRANSITION" | "RUN_COMPLETE"  | "GAME_OVER";
 
 export type StageId = "DOCKS" | "SEWERS" | "CHINATOWN";
-export type WorldLight = {
-  worldX: number;
-  worldY: number;
-  heightUnits: number;
-  radiusPx: number;
-  intensity: number;
-};
 export type WorldLightingState = {
   darknessAlpha: number;
-  lights: WorldLight[];
+  ambientTint?: string;
+  ambientTintStrength?: number;
 };
 
 export type World = {
@@ -435,7 +429,8 @@ export function createWorld(args: CreateWorldArgs): World {
     time: 0,
     lighting: {
       darknessAlpha: 0.5,
-      lights: [],
+      ambientTint: undefined,
+      ambientTintStrength: 0,
     },
 
     // Delve / route

@@ -12,7 +12,19 @@
     { "x": 0, "y": 5, "type": "spawn" }
   ],
   "lights": [
-    { "x": 3, "y": 3, "heightUnits": 2, "radiusPx": 140, "intensity": 0.7 }
+    {
+      "x": 0,
+      "y": 0,
+      "heightUnits": 12,
+      "shape": "STREET_LAMP",
+      "radiusPx": 140,
+      "intensity": 0.85,
+      "color": "#FFD6A1",
+      "tintStrength": 0.4,
+      "pool": { "radiusPx": 120, "yScale": 0.65 },
+      "cone": { "dirRad": 1.5708, "angleRad": 0.9, "lengthPx": 260 },
+      "flicker": { "kind": "NONE" }
+    }
   ],
   "stamps": [
   ]

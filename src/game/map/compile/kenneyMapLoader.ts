@@ -1,6 +1,6 @@
 // src/game/map/kenneyMapLoader.ts
 import type { SemanticStamp, TableMapDef } from "../formats/table/tableMapTypes";
-import { KENNEY_TILE_ANCHOR_Y } from "../../../engine/render/kenneyTiles";
+import { KENNEY_TILE_ANCHOR_Y, KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import type { TriggerDef } from "../../triggers/triggerTypes";
 import { resolveMapSkin, resolveSemanticSprite, type MapSkinId, MapSkinBundle } from "../../content/mapSkins";
 import { resolveTileSpriteId } from "../skins/tileSpriteResolver";
@@ -39,6 +39,31 @@ export type RuntimeFloorTop = {
     spriteId: string;
     variantIndex: number;
     rotationQuarterTurns: 0 | 1 | 2 | 3;
+};
+export type LightShape = "RADIAL" | "STREET_LAMP";
+export type LightFlicker =
+    | { kind: "NONE" }
+    | { kind: "NOISE"; speed?: number; amount?: number }
+    | { kind: "PULSE"; speed?: number; amount?: number };
+export type LightDef = {
+    worldX: number;
+    worldY: number;
+    heightUnits: number;
+    intensity: number;
+    radiusPx: number;
+    color?: string;
+    tintStrength?: number;
+    shape?: LightShape;
+    pool?: {
+        radiusPx: number;
+        yScale?: number;
+    };
+    cone?: {
+        dirRad: number;
+        angleRad: number;
+        lengthPx: number;
+    };
+    flicker?: LightFlicker;
 };
 
 export type RenderRole = "SURFACE" | "FACE";
@@ -157,6 +182,7 @@ export type CompiledKenneyMap = {
     goalTx: number | null;
     goalTy: number | null;
     goalH: number;
+    lightDefs: LightDef[];
 
     triggerDefs: TriggerDef[];
 
@@ -402,6 +428,59 @@ export function compileKenneyMapFromTable(
         ty: t.ty + originTy,
         radius: t.radius,
     }));
+    const streetLampPreset = (semanticType: "street_lamp_n" | "street_lamp_e" | "street_lamp_s" | "street_lamp_w") => {
+        const dirByType: Record<typeof semanticType, number> = {
+            street_lamp_n: -Math.PI * 0.5,
+            street_lamp_e: 0,
+            street_lamp_s: Math.PI * 0.5,
+            street_lamp_w: Math.PI,
+        };
+        return {
+            shape: "STREET_LAMP" as const,
+            color: "#FFD6A1",
+            tintStrength: 0.40,
+            pool: { radiusPx: 120, yScale: 0.65 },
+            cone: { dirRad: dirByType[semanticType], angleRad: 0.9, lengthPx: 260 },
+        };
+    };
+    const neonPreset = (semanticType: "neon_sign_pink" | "neon_sign_blue" | "neon_sign_green") => {
+        const byType: Record<typeof semanticType, { color: string; radiusPx: number; intensity: number; tintStrength: number }> = {
+            neon_sign_pink: { color: "#FF4FD8", radiusPx: 220, intensity: 0.75, tintStrength: 0.70 },
+            neon_sign_blue: { color: "#4FA8FF", radiusPx: 210, intensity: 0.72, tintStrength: 0.68 },
+            neon_sign_green: { color: "#55FF8C", radiusPx: 200, intensity: 0.70, tintStrength: 0.66 },
+        };
+        return {
+            shape: "RADIAL" as const,
+            flicker: { kind: "NOISE" as const, speed: 9, amount: 0.25 },
+            ...byType[semanticType],
+        };
+    };
+    const lightDefs: LightDef[] = (def.lights ?? []).map((light) => {
+        const semanticPreset: Partial<Pick<LightDef, "shape" | "color" | "tintStrength" | "pool" | "cone" | "radiusPx" | "intensity" | "flicker">> = (() => {
+            const t = light.semanticType;
+            if (!t) return {};
+            if (t === "street_lamp_n" || t === "street_lamp_e" || t === "street_lamp_s" || t === "street_lamp_w") {
+                return streetLampPreset(t);
+            }
+            if (t === "neon_sign_pink" || t === "neon_sign_blue" || t === "neon_sign_green") {
+                return neonPreset(t);
+            }
+            return {};
+        })();
+        return {
+            worldX: (light.x + originTx + 0.5) * KENNEY_TILE_WORLD,
+            worldY: (light.y + originTy + 0.5) * KENNEY_TILE_WORLD,
+            heightUnits: light.heightUnits ?? 0,
+            intensity: semanticPreset?.intensity ?? light.intensity,
+            radiusPx: semanticPreset?.radiusPx ?? light.radiusPx,
+            color: light.color ?? semanticPreset?.color,
+            tintStrength: light.tintStrength ?? semanticPreset?.tintStrength,
+            shape: light.shape ?? semanticPreset?.shape ?? "RADIAL",
+            pool: light.pool ?? semanticPreset?.pool,
+            cone: light.cone ?? semanticPreset?.cone,
+            flicker: light.flicker ?? semanticPreset?.flicker ?? { kind: "NONE" },
+        };
+    });
 
     const placed = new Map<string, IsoTile>();
 
@@ -1481,6 +1560,7 @@ export function compileKenneyMapFromTable(
         goalTx: goalTableX === null ? null : goalTableX + originTx,
         goalTy: goalTableY === null ? null : goalTableY + originTy,
         goalH: goalH | 0,
+        lightDefs,
 
         triggerDefs,
 

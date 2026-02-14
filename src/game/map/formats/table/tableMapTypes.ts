@@ -61,12 +61,39 @@ export type TableObjectiveDef = {
 };
 
 export type ApronBaseMode = "PLATEAU" | "ISLANDS";
+export type TableMapLightShape = "RADIAL" | "STREET_LAMP";
+export type TableMapLightSemanticType =
+    | "street_lamp_n"
+    | "street_lamp_e"
+    | "street_lamp_s"
+    | "street_lamp_w"
+    | "neon_sign_pink"
+    | "neon_sign_blue"
+    | "neon_sign_green";
+export type TableMapLightFlicker =
+    | { kind: "NONE" }
+    | { kind: "NOISE"; speed?: number; amount?: number }
+    | { kind: "PULSE"; speed?: number; amount?: number };
 export type TableMapLight = {
     x: number;
     y: number;
     heightUnits?: number;
     radiusPx: number;
     intensity: number;
+    color?: string;
+    tintStrength?: number;
+    shape?: TableMapLightShape;
+    semanticType?: TableMapLightSemanticType;
+    flicker?: TableMapLightFlicker;
+    pool?: {
+        radiusPx: number;
+        yScale?: number;
+    };
+    cone?: {
+        dirRad: number;
+        angleRad: number;
+        lengthPx: number;
+    };
 };
 
 export type TableMapDef = {
