@@ -75,8 +75,8 @@ let _compiled: CompiledKenneyMap = compileKenneyMapFromTable({
  * Set the active map dynamically (e.g., for procedural generation).
  */
 /** Compile and activate a new map definition. */
-export function setActiveMap(mapDef: TableMapDef): CompiledKenneyMap {
-    _compiled = compileKenneyMapFromTable(mapDef);
+export function setActiveMap(mapDef: TableMapDef, options?: { runSeed?: number; mapId?: string }): CompiledKenneyMap {
+    _compiled = compileKenneyMapFromTable(mapDef, options);
     _rampCache.clear();
     return _compiled;
 }
@@ -86,7 +86,8 @@ export function setActiveMap(mapDef: TableMapDef): CompiledKenneyMap {
  */
 /** Generate and activate a new procedural map with a fresh seed. */
 export function regenerateProceduralMap(): CompiledKenneyMap {
-    return setActiveMap(generateFloorMap(Date.now(), 0));
+    const seed = Date.now() >>> 0;
+    return setActiveMap(generateFloorMap(seed, 0), { runSeed: seed });
 }
 
 /**

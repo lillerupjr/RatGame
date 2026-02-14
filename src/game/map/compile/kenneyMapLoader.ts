@@ -33,6 +33,12 @@ export type IsoTile = {
 
 export type SurfaceKind = "TILE_TOP";
 export type RenderTopKind = "FLOOR" | "STAIR";
+export type RuntimeFloorTop = {
+    kind: "SIDEWALK_SQUARE_128";
+    spriteId: string;
+    variantIndex: number;
+    rotationQuarterTurns: 0 | 1 | 2 | 3;
+};
 
 export type RenderRole = "SURFACE" | "FACE";
 export type ViewRect = {
@@ -54,6 +60,7 @@ export type Surface = {
     renderAnchorY: number;
     renderDyOffset: number;
     spriteIdTop: string;
+    runtimeTop?: RuntimeFloorTop;
 };
 
 export type RenderPieceKind = "FLOOR_APRON" | "STAIR_APRON" | "WALL";
@@ -200,6 +207,19 @@ export function compileKenneyMapFromTable(
         }
         return hash >>> 0;
     };
+    const RUNTIME_SIDEWALK_TILE_SKIN = "__RUNTIME_SIDEWALK_SQUARE_128__";
+
+    const pickRuntimeSidewalkTop = (tx: number, ty: number): RuntimeFloorTop => {
+        const variantSeed = hashString(`${runSeed}:${mapId}:${tx},${ty}:sidewalk:variant`);
+        const variantIndex = (variantSeed % 6) + 1;
+        const rotationQuarterTurns: 0 = 0;
+        return {
+            kind: "SIDEWALK_SQUARE_128",
+            spriteId: `tiles/floor/sidewalk/${variantIndex}`,
+            variantIndex,
+            rotationQuarterTurns,
+        };
+    };
 
     // Excel/table coords are tile coords (identity mapping).
 
@@ -259,12 +279,21 @@ export function compileKenneyMapFromTable(
             const semanticFloorSlot = (() => {
                 switch (type) {
                     case "road": return "ROAD_FLOOR";
-                    case "sidewalk": return "SIDEWALK_FLOOR";
                     case "park": return "PARK_FLOOR";
                     case "sea": return "SEA_FLOOR";
                     default: return undefined;
                 }
             })();
+            if (type === "sidewalk") {
+                return {
+                    tile: {
+                        kind: "FLOOR" as const,
+                        h: z,
+                        skin: RUNTIME_SIDEWALK_TILE_SKIN,
+                    },
+                    walls: [] as WallToken[],
+                };
+            }
             if (type === "floor" || semanticFloorSlot) {
                 const semanticSprite = semanticFloorSlot ? resolveSemanticSprite(skinIdToUse, semanticFloorSlot) : "";
                 const fallbackFloor = resolveTileSpriteId({
@@ -483,17 +512,21 @@ export function compileKenneyMapFromTable(
         const renderDyOffset = renderTopKind === "STAIR" ? (stairDyByDir[renderDir] ?? 16) : 0;
 
         const zLogical = renderTopKind === "STAIR" ? Math.max(0, zBase - 1) : zBase;
-        const tileOverride: MapSkinBundle | undefined = tile.skin
+        const isRuntimeSidewalkTop = renderTopKind === "FLOOR" && tile.skin === RUNTIME_SIDEWALK_TILE_SKIN;
+        const runtimeTop = isRuntimeSidewalkTop ? pickRuntimeSidewalkTop(tx, ty) : undefined;
+        const tileOverride: MapSkinBundle | undefined = tile.skin && !isRuntimeSidewalkTop
             ? (renderTopKind === "STAIR" ? { stair: tile.skin } : { floor: tile.skin })
             : undefined;
-        const spriteIdTop = resolveTileSpriteId({
-            slot: renderTopKind === "STAIR" ? "stair" : "floor",
-            dir: renderTopKind === "STAIR" ? renderDir : undefined,
-            mapSkin: resolvedMapSkin,
-            mapSkinId: skinIdToUse,
-            mapDefaults: mapSkinDefaults,
-            tileOverride,
-        });
+        const spriteIdTop = runtimeTop
+            ? runtimeTop.spriteId
+            : resolveTileSpriteId({
+                slot: renderTopKind === "STAIR" ? "stair" : "floor",
+                dir: renderTopKind === "STAIR" ? renderDir : undefined,
+                mapSkin: resolvedMapSkin,
+                mapSkinId: skinIdToUse,
+                mapDefaults: mapSkinDefaults,
+                tileOverride,
+            });
 
         addSurface({
             id: `tile_${tx}_${ty}_${tile.kind}_${zBase}`,
@@ -508,6 +541,7 @@ export function compileKenneyMapFromTable(
             renderAnchorY,
             renderDyOffset,
             spriteIdTop,
+            runtimeTop,
         });
     }
 
@@ -959,10 +993,34 @@ export function compileKenneyMapFromTable(
 
         const slotForType: Record<string, string> = {
             road: "ROAD_FLOOR",
-            sidewalk: "SIDEWALK_FLOOR",
             park: "PARK_FLOOR",
             sea: "SEA_FLOOR",
         };
+        if (stamp.type === "sidewalk") {
+            for (let dx = 0; dx < w; dx++) {
+                for (let dy = 0; dy < h; dy++) {
+                    const tx = sx + dx;
+                    const ty = sy + dy;
+                    const runtimeTop = pickRuntimeSidewalkTop(tx, ty);
+                    addSurface({
+                        id: `stamp_sidewalk_${tx}_${ty}_${zBase}`,
+                        kind: "TILE_TOP",
+                        tx,
+                        ty,
+                        zBase,
+                        zLogical: zBase | 0,
+                        tile: { kind: "FLOOR", h: zBase } as IsoTile,
+                        renderTopKind: "FLOOR",
+                        renderDir: "N",
+                        renderAnchorY: floorAnchorY,
+                        renderDyOffset: 0,
+                        spriteIdTop: runtimeTop.spriteId,
+                        runtimeTop,
+                    });
+                }
+            }
+            return;
+        }
         const slot = slotForType[stamp.type];
         if (!slot) return;
 

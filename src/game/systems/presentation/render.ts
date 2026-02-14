@@ -45,7 +45,8 @@ import {
 import {
   preloadRenderSprites,
   getTileSpriteById,
-  getVoidTop
+  getVoidTop,
+  getSidewalkSquareSprite,
 } from "../../../engine/render/sprites/renderSprites";
 import {
   buildRuntimeStructureBandPieces,
@@ -201,6 +202,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // Positive moves DOWN on screen; negative moves UP.
   // These do NOT affect layer/sort; they only shift draw Y.
   const STAIR_TOP_DY = (w as any).stairTopDy ?? 8;
+  const SHOW_SIDEWALK_VARIANT_DEBUG = (w as any).sidewalkVariantDebug ?? false;
+  const SIDEWALK_SRC_SIZE = 128;
+  const SIDEWALK_ISO_HEIGHT = 64;
 
   const tileHAtWorld = (x: number, y: number) => heightAtWorld(x, y, KENNEY_TILE_WORLD);
 
@@ -313,6 +317,42 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         ctx.scale(-1, 1);
       }
       ctx.drawImage(img, 0, 0, c.dw, c.dh);
+      ctx.restore();
+    };
+
+    const drawRuntimeSidewalkTop = (
+      tx: number,
+      ty: number,
+      zBase: number,
+      renderAnchorY: number,
+      variantIndex: number,
+      rotationQuarterTurns: 0 | 1 | 2 | 3,
+    ) => {
+      const src = getSidewalkSquareSprite(variantIndex);
+      if (!src.ready || !src.img || src.img.width <= 0 || src.img.height <= 0) return;
+
+      const wx = (tx + 0.5) * T;
+      const wy = (ty + 0.5) * T;
+      const p = worldToScreen(wx, wy);
+      const centerX = snapPx(p.x + camX);
+      const centerY = snapPx(
+        p.y + camY - zBase * ELEV_PX - SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5),
+      );
+
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      // 2:1 iso projection from square space (128x128 source => 128x64 footprint).
+      ctx.transform(0.5, 0.25, -0.5, 0.25, 0, 0);
+      ctx.rotate(rotationQuarterTurns * (Math.PI * 0.5));
+      ctx.translate(-(SIDEWALK_SRC_SIZE * 0.5), -(SIDEWALK_SRC_SIZE * 0.5));
+      ctx.drawImage(src.img, 0, 0, SIDEWALK_SRC_SIZE, SIDEWALK_SRC_SIZE);
+
+      if (SHOW_SIDEWALK_VARIANT_DEBUG) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.fillStyle = "#00ffd5";
+        ctx.font = "9px monospace";
+        ctx.fillText(`${variantIndex} r${rotationQuarterTurns}`, centerX + 4, centerY - 4);
+      }
       ctx.restore();
     };
 
@@ -673,6 +713,28 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           }
 
           if (surface.id.startsWith("building_floor_") && shouldCullBuildingAt(tx, ty)) continue;
+          if (surface.runtimeTop?.kind === "SIDEWALK_SQUARE_128") {
+            const runtimeTop = surface.runtimeTop;
+            const renderKey: RenderKey = {
+              slice: tx + ty,
+              within: tx,
+              baseZ: surface.zBase,
+              kindOrder: KindOrder.FLOOR,
+              stableId: (tx * 73856093 ^ ty * 19349663 ^ (surface.zBase * 100 | 0) * 83492791) + 17,
+            };
+            const drawClosure = () => {
+              drawRuntimeSidewalkTop(
+                tx,
+                ty,
+                surface.zBase,
+                surface.renderAnchorY ?? ANCHOR_Y,
+                runtimeTop.variantIndex,
+                runtimeTop.rotationQuarterTurns,
+              );
+            };
+            addToSlice(tx + ty, renderKey, drawClosure);
+            continue;
+          }
           const topRec = surface.spriteIdTop ? getTileSpriteById(surface.spriteIdTop) : null;
           if (!topRec?.ready || !topRec.img || topRec.img.width <= 0 || topRec.img.height <= 0) continue;
 

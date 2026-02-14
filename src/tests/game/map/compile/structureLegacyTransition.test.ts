@@ -181,4 +181,41 @@ describe("structure legacy transition", () => {
       expect(s.anchorTy).toBe(seAnchor.anchorTy);
     }
   });
+
+  it("renders sidewalk semantics through runtime variant+rotation metadata deterministically", () => {
+    const mapDef: TableMapDef = {
+      id: "runtime_sidewalk_semantic",
+      w: 6,
+      h: 6,
+      cells: [],
+      stamps: [{ x: 1, y: 2, z: 0, type: "sidewalk", w: 2, h: 2 }],
+    };
+
+    const a = compileKenneyMapFromTable(mapDef, { runSeed: 1234, mapId: mapDef.id });
+    const b = compileKenneyMapFromTable(mapDef, { runSeed: 1234, mapId: mapDef.id });
+    const c = compileKenneyMapFromTable(mapDef, { runSeed: 9876, mapId: mapDef.id });
+
+    const sampleCoords: Array<[number, number]> = [
+      [1, 2],
+      [2, 2],
+      [1, 3],
+      [2, 3],
+    ];
+    const sampleAt = (compiled: ReturnType<typeof compileKenneyMapFromTable>) =>
+      sampleCoords.map(([tx, ty]) => compiled.surfacesAtXY(tx, ty).find((s) => s.id.startsWith("stamp_sidewalk_"))?.runtimeTop ?? null);
+
+    const sampleA = sampleAt(a);
+    const sampleB = sampleAt(b);
+    const sampleC = sampleAt(c);
+    const sa = sampleA[0];
+
+    expect(sa?.kind).toBe("SIDEWALK_SQUARE_128");
+    expect(sa?.variantIndex).toBeGreaterThanOrEqual(1);
+    expect(sa?.variantIndex).toBeLessThanOrEqual(6);
+    expect(sa?.rotationQuarterTurns).toBeGreaterThanOrEqual(0);
+    expect(sa?.rotationQuarterTurns).toBeLessThanOrEqual(3);
+
+    expect(sampleA).toEqual(sampleB);
+    expect(sampleA.some((top, i) => JSON.stringify(top) !== JSON.stringify(sampleC[i]))).toBe(true);
+  });
 });

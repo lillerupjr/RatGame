@@ -173,7 +173,7 @@ export function createGame(args: CreateGameArgs) {
   // Ensure a map is compiled before we create the World (spawn uses the active map).
   const initialMap = getDefaultStaticMap();
   if (initialMap) {
-    activateMapDef(initialMap);
+    activateMapDef(initialMap, 1337);
   }
 
   let world: World = createWorld({ seed: 1337, stage: cloneStage("DOCKS") });
@@ -390,7 +390,7 @@ export function createGame(args: CreateGameArgs) {
       }
       const rng = new RNG(floorIntent.variantSeed);
       const finalMap = applyObjective(baseMap, floorIntent.objectiveId, rng);
-      activateMapDef(finalMap);
+      activateMapDef(finalMap, floorIntent.variantSeed);
     } else {
       const mapSource = mapSourceFromFloorIntent(floorIntent);
       if (mapSource.type === "PROCEDURAL_ROOMS") {
@@ -402,7 +402,7 @@ export function createGame(args: CreateGameArgs) {
       } else {
         const staticDef = getStaticMapById(mapSource.mapId) ?? getDefaultStaticMap();
         if (staticDef) {
-          activateMapDef(staticDef);
+          activateMapDef(staticDef, w.rng.int(0, 0x7fffffff));
         }
       }
     }
@@ -539,7 +539,7 @@ export function createGame(args: CreateGameArgs) {
 
     const staticDef = getStaticMapById(mapId) ?? getDefaultStaticMap();
     if (staticDef) {
-      activateMapDef(staticDef);
+      activateMapDef(staticDef, seed);
     }
   }
 

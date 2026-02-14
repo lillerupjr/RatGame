@@ -72,6 +72,11 @@ export function getTileSpriteById(spriteId: string): LoadedImg {
     return loadById(spriteId);
 }
 
+export function getSidewalkSquareSprite(variantIndex: number): LoadedImg {
+    const idx = Math.max(1, Math.min(6, Math.floor(variantIndex)));
+    return loadById(`tiles/floor/sidewalk/${idx}`);
+}
+
 let _activeMapSkinId: MapSkinId | undefined = undefined;
 
 export function setActiveMapSkinId(id?: MapSkinId): void {
@@ -87,4 +92,5 @@ export function getVoidTop(): LoadedImg {
 // IMPORTANT: this must be a named export (your render.ts imports it by name)
 export function preloadRenderSprites(): void {
     void getVoidTop();
+    for (let i = 1; i <= 6; i++) void getSidewalkSquareSprite(i);
 }

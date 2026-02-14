@@ -23,6 +23,10 @@ function addSemanticValue(set: Set<string>, value: string | string[] | undefined
 function collectRenderableSpriteIds(): ReadonlySet<string> {
   const ids = new Set<string>();
 
+  for (let i = 1; i <= 6; i++) {
+    addId(ids, `tiles/floor/sidewalk/${i}`);
+  }
+
   addId(ids, DEFAULT_MAP_SKIN.floor);
   addId(ids, DEFAULT_MAP_SKIN.apron);
   addId(ids, DEFAULT_MAP_SKIN.wall);

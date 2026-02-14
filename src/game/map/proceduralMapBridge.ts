@@ -74,7 +74,7 @@ export function generateAndActivateFloorMap(
     const { mapDef, rooms } = generateFloorMapWithRooms(seed, floorIndex, isBoss);
     
     // CRITICAL: Update the global kenneyMap state so all game systems use the new map
-    const compiled = setKenneyActiveMap(mapDef);
+    const compiled = setKenneyActiveMap(mapDef, { runSeed: seed, mapId: mapDef.id });
 
     _activeMapDef = mapDef;
     _activeMap = compiled;
@@ -114,7 +114,7 @@ export function generateAndActivateCustomMap(config: ProceduralMapConfig, world?
     const { mapDef, rooms } = generateProceduralMapWithRooms(config);
     
     // CRITICAL: Update the global kenneyMap state so all game systems use the new map
-    const compiled = setKenneyActiveMap(mapDef);
+    const compiled = setKenneyActiveMap(mapDef, { runSeed: config.seed, mapId: mapDef.id });
     
     _activeMapDef = mapDef;
     _activeMap = compiled;
@@ -138,7 +138,7 @@ export function generateAndActivateMazeMap(
      const { mapDef, graph } = generateMazeMapDef(config);
 
      // CRITICAL: Update the global kenneyMap state so all game systems use the new map
-     const compiled = setKenneyActiveMap(mapDef);
+     const compiled = setKenneyActiveMap(mapDef, { runSeed: config.seed, mapId: mapDef.id });
 
      _activeMapDef = mapDef;
      _activeMap = compiled;
@@ -159,7 +159,7 @@ export function generateAndActivateMazeFloorMap(
      const { mapDef, graph } = generateMazeFloorMap(seed, floorIndex, isBoss);
 
      // CRITICAL: Update the global kenneyMap state so all game systems use the new map
-     const compiled = setKenneyActiveMap(mapDef);
+     const compiled = setKenneyActiveMap(mapDef, { runSeed: seed, mapId: mapDef.id });
 
      _activeMapDef = mapDef;
      _activeMap = compiled;
@@ -172,9 +172,9 @@ export function generateAndActivateMazeFloorMap(
 /**
  * Activate a pre-existing map definition (e.g., hand-crafted maps).
  */
-export function activateMapDef(mapDef: TableMapDef): CompiledKenneyMap {
+export function activateMapDef(mapDef: TableMapDef, seed: number = 0): CompiledKenneyMap {
      // CRITICAL: Update the global kenneyMap state so all game systems use the new map
-     const compiled = setKenneyActiveMap(mapDef);
+     const compiled = setKenneyActiveMap(mapDef, { runSeed: seed, mapId: mapDef.id });
 
      _activeMapDef = mapDef;
      _activeMap = compiled;
