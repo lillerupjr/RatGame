@@ -618,6 +618,7 @@ function optionalMapLightsField(obj: Record<string, unknown>, source?: string): 
     const x = requireNumberField(entry, "x", source);
     const y = requireNumberField(entry, "y", source);
     const heightUnits = optionalNumberField(entry, "heightUnits");
+    const poolHeightOffsetUnits = optionalNumberField(entry, "poolHeightOffsetUnits");
     const radiusPx = requireNumberField(entry, "radiusPx", source);
     const intensity = requireNumberField(entry, "intensity", source);
     const color = optionalStringField(entry, "color");
@@ -684,7 +685,21 @@ function optionalMapLightsField(obj: Record<string, unknown>, source?: string): 
       }
       throw new Error(`JSON map loader${formatSource(source)}: lights[${index}].flicker.kind must be NONE|NOISE|PULSE.`);
     })();
-    return { x, y, heightUnits, radiusPx, intensity, color, tintStrength, shape, semanticType, flicker, pool, cone };
+    return {
+      x,
+      y,
+      heightUnits,
+      poolHeightOffsetUnits,
+      radiusPx,
+      intensity,
+      color,
+      tintStrength,
+      shape,
+      semanticType,
+      flicker,
+      pool,
+      cone,
+    };
   });
 }
 

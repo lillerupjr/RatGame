@@ -78,6 +78,7 @@ export type TableMapLight = {
     x: number;
     y: number;
     heightUnits?: number;
+    poolHeightOffsetUnits?: number;
     radiusPx: number;
     intensity: number;
     color?: string;

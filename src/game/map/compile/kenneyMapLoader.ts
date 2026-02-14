@@ -49,6 +49,7 @@ export type LightDef = {
     worldX: number;
     worldY: number;
     heightUnits: number;
+    poolHeightOffsetUnits?: number;
     screenOffsetPx?: { x: number; y: number };
     intensity: number;
     radiusPx: number;
@@ -471,6 +472,7 @@ export function compileKenneyMapFromTable(
             worldX: (light.x + originTx + (isStreetLampSemantic ? 0 : 0.5)) * KENNEY_TILE_WORLD,
             worldY: (light.y + originTy + (isStreetLampSemantic ? 0 : 0.5)) * KENNEY_TILE_WORLD,
             heightUnits: light.heightUnits ?? 0,
+            poolHeightOffsetUnits: light.poolHeightOffsetUnits ?? 0,
             intensity: semanticPreset?.intensity ?? light.intensity,
             radiusPx: semanticPreset?.radiusPx ?? light.radiusPx,
             color: light.color ?? semanticPreset?.color,
@@ -1287,10 +1289,12 @@ export function compileKenneyMapFromTable(
             if (isStreetLampProp) {
                 const semanticType = prop.id as "street_lamp_n" | "street_lamp_e" | "street_lamp_s" | "street_lamp_w";
                 const preset = streetLampPreset(semanticType);
+                const lightHeightOffsetUnits = prop.lightHeightOffsetUnits ?? 0;
                 lightDefs.push({
                     worldX: ((stamp.x | 0) + originTx) * KENNEY_TILE_WORLD,
                     worldY: ((stamp.y | 0) + originTy) * KENNEY_TILE_WORLD,
-                    heightUnits: (prop.anchorLiftUnits ?? 0) + (prop.lightHeightOffsetUnits ?? 0),
+                    heightUnits: (prop.anchorLiftUnits ?? 0) + lightHeightOffsetUnits,
+                    poolHeightOffsetUnits: prop.lightPoolHeightOffsetUnits ?? -lightHeightOffsetUnits,
                     screenOffsetPx: prop.lightScreenOffsetPx ?? { x: 0, y: 0 },
                     intensity: 0.85,
                     radiusPx: 140,

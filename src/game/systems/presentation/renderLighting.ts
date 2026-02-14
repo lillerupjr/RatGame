@@ -4,6 +4,7 @@ import { configurePixelPerfect } from "../../../engine/render/pixelPerfect";
 export type ProjectedLight = {
   sx: number;
   sy: number;
+  poolSy?: number;
   intensity: number;
   radiusPx: number;
   shape: "RADIAL" | "STREET_LAMP";
@@ -18,6 +19,27 @@ export type ProjectedLight = {
 function clamp01(v: number): number {
   if (!Number.isFinite(v)) return 0;
   return Math.max(0, Math.min(1, v));
+}
+
+function clampGroundYScale(v: number | undefined): number {
+  if (!Number.isFinite(v)) return 0.65;
+  return Math.max(0.1, Math.min(1, v!));
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const a = clamp01(alpha);
+  const normalized = hex.trim().replace(/^#/, "");
+  const valid = /^[0-9a-fA-F]+$/.test(normalized);
+  if (!valid || (normalized.length !== 3 && normalized.length !== 6)) {
+    return `rgba(255,255,255,${a})`;
+  }
+  const full = normalized.length === 3
+    ? `${normalized[0]}${normalized[0]}${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}`
+    : normalized;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${a})`;
 }
 
 let lightingLayer: HTMLCanvasElement | null = null;
@@ -70,27 +92,61 @@ function drawStreetLampCutout(
   ctx: CanvasRenderingContext2D,
   light: ProjectedLight,
   intensity: number,
+  groundYScale: number,
 ): void {
-  const pool = light.pool ?? { radiusPx: Math.max(1, light.radiusPx * 0.7), yScale: 0.65 };
+  const pool = light.pool ?? { radiusPx: Math.max(1, light.radiusPx * 0.7), yScale: 1 };
   const cone = light.cone ?? { dirRad: Math.PI * 0.5, angleRad: 0.9, lengthPx: Math.max(light.radiusPx, 160) };
+  const poolSy = Number.isFinite(light.poolSy) ? (light.poolSy as number) : light.sy;
+  const poolRadiusPx = Math.max(1, pool.radiusPx);
+  const coneLengthPx = Math.max(1, cone.lengthPx);
+  const hotspotR = Math.max(12, coneLengthPx * 0.08);
+  const a0 = cone.dirRad - cone.angleRad * 0.5;
+  const a1 = cone.dirRad + cone.angleRad * 0.5;
+  const x0 = light.sx + Math.cos(a0) * coneLengthPx;
+  const y0 = light.sy + Math.sin(a0) * coneLengthPx;
+  const x1 = light.sx + Math.cos(a1) * coneLengthPx;
+  const y1 = light.sy + Math.sin(a1) * coneLengthPx;
+  const ex = light.sx + Math.cos(cone.dirRad) * coneLengthPx;
+  const ey = light.sy + Math.sin(cone.dirRad) * coneLengthPx;
+
+  ctx.save();
+  ctx.translate(light.sx, poolSy);
+  ctx.scale(1, groundYScale);
+  ctx.translate(-light.sx, -poolSy);
+
+  const poolGradient = ctx.createRadialGradient(light.sx, poolSy, 0, light.sx, poolSy, poolRadiusPx);
+  poolGradient.addColorStop(0, `rgba(0,0,0,${Math.max(0, intensity)})`);
+  poolGradient.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = poolGradient;
+  ctx.beginPath();
+  ctx.arc(light.sx, poolSy, poolRadiusPx, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 
   ctx.save();
   ctx.translate(light.sx, light.sy);
-  ctx.scale(1, Math.max(0.1, pool.yScale));
-  drawRadialCutout(ctx, 0, 0, Math.max(1, pool.radiusPx), intensity);
-  ctx.restore();
+  ctx.scale(1, groundYScale);
+  ctx.translate(-light.sx, -light.sy);
+  const hotGradient = ctx.createRadialGradient(light.sx, light.sy, 0, light.sx, light.sy, hotspotR);
+  hotGradient.addColorStop(0, `rgba(0,0,0,${Math.max(0, intensity * 0.9)})`);
+  hotGradient.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = hotGradient;
+  ctx.beginPath();
+  ctx.arc(light.sx, light.sy, hotspotR, 0, Math.PI * 2);
+  ctx.fill();
 
-  const start = cone.dirRad - cone.angleRad * 0.5;
-  const end = cone.dirRad + cone.angleRad * 0.5;
-  const coneGradient = ctx.createRadialGradient(light.sx, light.sy, 0, light.sx, light.sy, cone.lengthPx);
-  coneGradient.addColorStop(0, `rgba(0,0,0,${Math.max(0, intensity * 0.85)})`);
+  const coneGradient = ctx.createLinearGradient(light.sx, light.sy, ex, ey);
+  coneGradient.addColorStop(0, `rgba(0,0,0,${Math.max(0, intensity * 0.65)})`);
+  coneGradient.addColorStop(0.25, `rgba(0,0,0,${Math.max(0, intensity * 0.35)})`);
   coneGradient.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = coneGradient;
   ctx.beginPath();
   ctx.moveTo(light.sx, light.sy);
-  ctx.arc(light.sx, light.sy, Math.max(1, cone.lengthPx), start, end);
+  ctx.lineTo(x0, y0);
+  ctx.lineTo(x1, y1);
   ctx.closePath();
   ctx.fill();
+  ctx.restore();
 }
 
 function drawRadialTint(
@@ -117,29 +173,60 @@ function drawStreetLampTint(
   light: ProjectedLight,
   color: string,
   alpha: number,
+  groundYScale: number,
 ): void {
-  const pool = light.pool ?? { radiusPx: Math.max(1, light.radiusPx * 0.7), yScale: 0.65 };
+  const pool = light.pool ?? { radiusPx: Math.max(1, light.radiusPx * 0.7), yScale: 1 };
   const cone = light.cone ?? { dirRad: Math.PI * 0.5, angleRad: 0.9, lengthPx: Math.max(light.radiusPx, 160) };
+  const poolSy = Number.isFinite(light.poolSy) ? (light.poolSy as number) : light.sy;
+  const poolRadiusPx = Math.max(1, pool.radiusPx);
+  const coneLengthPx = Math.max(1, cone.lengthPx);
+  const hotspotR = Math.max(12, coneLengthPx * 0.08);
+  const a0 = cone.dirRad - cone.angleRad * 0.5;
+  const a1 = cone.dirRad + cone.angleRad * 0.5;
+  const x0 = light.sx + Math.cos(a0) * coneLengthPx;
+  const y0 = light.sy + Math.sin(a0) * coneLengthPx;
+  const x1 = light.sx + Math.cos(a1) * coneLengthPx;
+  const y1 = light.sy + Math.sin(a1) * coneLengthPx;
+  const ex = light.sx + Math.cos(cone.dirRad) * coneLengthPx;
+  const ey = light.sy + Math.sin(cone.dirRad) * coneLengthPx;
+  ctx.save();
+  ctx.translate(light.sx, poolSy);
+  ctx.scale(1, groundYScale);
+  ctx.translate(-light.sx, -poolSy);
+
+  const poolGradient = ctx.createRadialGradient(light.sx, poolSy, 0, light.sx, poolSy, poolRadiusPx);
+  poolGradient.addColorStop(0, hexToRgba(color, alpha));
+  poolGradient.addColorStop(1, hexToRgba(color, 0));
+  ctx.fillStyle = poolGradient;
+  ctx.beginPath();
+  ctx.arc(light.sx, poolSy, poolRadiusPx, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 
   ctx.save();
   ctx.translate(light.sx, light.sy);
-  ctx.scale(1, Math.max(0.1, pool.yScale));
-  drawRadialTint(ctx, 0, 0, Math.max(1, pool.radiusPx), color, alpha);
-  ctx.restore();
+  ctx.scale(1, groundYScale);
+  ctx.translate(-light.sx, -light.sy);
+  const hotGradient = ctx.createRadialGradient(light.sx, light.sy, 0, light.sx, light.sy, hotspotR);
+  hotGradient.addColorStop(0, hexToRgba(color, 0.45 * alpha));
+  hotGradient.addColorStop(1, hexToRgba(color, 0));
+  ctx.fillStyle = hotGradient;
+  ctx.beginPath();
+  ctx.arc(light.sx, light.sy, hotspotR, 0, Math.PI * 2);
+  ctx.fill();
 
-  const start = cone.dirRad - cone.angleRad * 0.5;
-  const end = cone.dirRad + cone.angleRad * 0.5;
-  const coneGradient = ctx.createRadialGradient(light.sx, light.sy, 0, light.sx, light.sy, cone.lengthPx);
-  coneGradient.addColorStop(0, color);
-  coneGradient.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.globalAlpha = alpha * 0.85;
+  const coneGradient = ctx.createLinearGradient(light.sx, light.sy, ex, ey);
+  coneGradient.addColorStop(0, hexToRgba(color, 0.18 * alpha));
+  coneGradient.addColorStop(0.35, hexToRgba(color, 0.08 * alpha));
+  coneGradient.addColorStop(1, hexToRgba(color, 0));
   ctx.fillStyle = coneGradient;
   ctx.beginPath();
   ctx.moveTo(light.sx, light.sy);
-  ctx.arc(light.sx, light.sy, Math.max(1, cone.lengthPx), start, end);
+  ctx.lineTo(x0, y0);
+  ctx.lineTo(x1, y1);
   ctx.closePath();
   ctx.fill();
-  ctx.globalAlpha = 1;
+  ctx.restore();
 }
 
 export function renderLighting(
@@ -177,6 +264,7 @@ export function renderLighting(
   }
 
   if (projectedLights.length > 0) {
+    const groundYScale = clampGroundYScale(state.groundYScale ?? 0.65);
     lctx.globalCompositeOperation = "destination-out";
     for (let i = 0; i < projectedLights.length; i++) {
       const light = projectedLights[i];
@@ -184,7 +272,7 @@ export function renderLighting(
       const intensity = clamp01(light.intensity * flickerMultiplier(light, timeSec));
       if (intensity <= 0) continue;
       if (light.shape === "STREET_LAMP") {
-        drawStreetLampCutout(lctx, light, intensity);
+        drawStreetLampCutout(lctx, light, intensity, groundYScale);
       } else {
         drawRadialCutout(lctx, light.sx, light.sy, radiusPx, intensity);
       }
@@ -197,6 +285,7 @@ export function renderLighting(
   ctx.globalCompositeOperation = "source-over";
   ctx.drawImage(layer.canvas, 0, 0);
   if (projectedLights.length > 0) {
+    const groundYScale = clampGroundYScale(state.groundYScale ?? 0.65);
     ctx.globalCompositeOperation = "lighter";
     for (let i = 0; i < projectedLights.length; i++) {
       const light = projectedLights[i];
@@ -205,7 +294,7 @@ export function renderLighting(
       const alpha = clamp01(light.intensity * flickerMultiplier(light, timeSec)) * tintStrength;
       if (alpha <= 0) continue;
       if (light.shape === "STREET_LAMP") {
-        drawStreetLampTint(ctx, light, light.color, alpha);
+        drawStreetLampTint(ctx, light, light.color, alpha, groundYScale);
       } else {
         drawRadialTint(ctx, light.sx, light.sy, Math.max(1, light.radiusPx), light.color, alpha);
       }

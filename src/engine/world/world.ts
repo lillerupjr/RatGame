@@ -42,6 +42,7 @@ export type WorldLightingState = {
   darknessAlpha: number;
   ambientTint?: string;
   ambientTintStrength?: number;
+  groundYScale?: number;
 };
 
 export type World = {
@@ -431,6 +432,7 @@ export function createWorld(args: CreateWorldArgs): World {
       darknessAlpha: 0.5,
       ambientTint: undefined,
       ambientTintStrength: 0,
+      groundYScale: 0.65,
     },
 
     // Delve / route

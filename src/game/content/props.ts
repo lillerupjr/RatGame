@@ -10,6 +10,7 @@ export type PropDef = {
     sprite: string;
     anchorLiftUnits?: number;
     lightHeightOffsetUnits?: number;
+    lightPoolHeightOffsetUnits?: number;
     lightScreenOffsetPx?: { x: number; y: number };
     anchorOffsetPx?: { x: number; y: number };
 };
@@ -67,6 +68,7 @@ export const PROPS: Record<PropId, PropDef> = {
         sprite: "props/lights/street_lamp_e",
         anchorLiftUnits: -2,
         lightHeightOffsetUnits: 12,
+        lightPoolHeightOffsetUnits: -12,
         lightScreenOffsetPx: { x: 24, y: 32 },
         anchorOffsetPx: { x: 16, y: 64 },
     },
@@ -78,6 +80,7 @@ export const PROPS: Record<PropId, PropDef> = {
         sprite: "props/lights/street_lamp_s",
         anchorLiftUnits: -2,
         lightHeightOffsetUnits: 12,
+        lightPoolHeightOffsetUnits: -12,
         lightScreenOffsetPx: { x: -24, y: 16 },
         anchorOffsetPx: { x: -16, y: 64 },
     },
@@ -89,6 +92,7 @@ export const PROPS: Record<PropId, PropDef> = {
         sprite: "props/lights/street_lamp_w",
         anchorLiftUnits: -2,
         lightHeightOffsetUnits: 12,
+        lightPoolHeightOffsetUnits: -12,
         lightScreenOffsetPx: { x: -32, y: 0 },
         anchorOffsetPx: { x: -16, y: 64 },
     },
@@ -100,6 +104,7 @@ export const PROPS: Record<PropId, PropDef> = {
         sprite: "props/lights/street_lamp_n",
         anchorLiftUnits: -2,
         lightHeightOffsetUnits: 12,
+        lightPoolHeightOffsetUnits: -12,
         lightScreenOffsetPx: { x: 32, y: 0 },
         anchorOffsetPx: { x: 16, y: 64 },
     },
