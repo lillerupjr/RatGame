@@ -38,6 +38,11 @@ export type GameState =
 export type RunState = "FLOOR" | "BOSS" | "TRANSITION" | "RUN_COMPLETE"  | "GAME_OVER";
 
 export type StageId = "DOCKS" | "SEWERS" | "CHINATOWN";
+export type WorldLightingState = {
+  darknessAlpha: number;
+  ambientTint?: string;
+  ambientTintStrength?: number;
+};
 
 export type World = {
   // -------------------------
@@ -82,6 +87,7 @@ export type World = {
 
   // Total run time
   time: number;
+  lighting: WorldLightingState;
 
   // -------------------------
   // Delve / route (kept loose to avoid circular deps)
@@ -421,6 +427,11 @@ export function createWorld(args: CreateWorldArgs): World {
     transitionTime: 0,
 
     time: 0,
+    lighting: {
+      darknessAlpha: 0.5,
+      ambientTint: undefined,
+      ambientTintStrength: 0,
+    },
 
     // Delve / route
     delveMap: null,

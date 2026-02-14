@@ -6,6 +6,7 @@ import type {
   TableObjectiveDef,
   TableObjectiveRule,
   TableOutcomeDef,
+  TableMapLight,
   SemanticStampType,
   SemanticStamp,
 } from "../table/tableMapTypes";
@@ -93,6 +94,7 @@ type JsonMapDef = {
     stackLevel?: number;
     zStackUnits?: number;
   }[];
+  lights?: TableMapLight[];
   mapSkinId?: MapSkinId;
   buildingPackId?: BuildingPackId;
   mapSkinDefaults?: MapSkinBundle;
@@ -603,6 +605,89 @@ function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): S
   });
 }
 
+function optionalMapLightsField(obj: Record<string, unknown>, source?: string): TableMapLight[] | undefined {
+  const arr = obj.lights;
+  if (arr === undefined) return undefined;
+  if (!Array.isArray(arr)) {
+    throw new Error(`JSON map loader${formatSource(source)}: optional field "lights" must be an array.`);
+  }
+  return arr.map((entry, index) => {
+    if (!isRecord(entry)) {
+      throw new Error(`JSON map loader${formatSource(source)}: lights[${index}] must be an object.`);
+    }
+    const x = requireNumberField(entry, "x", source);
+    const y = requireNumberField(entry, "y", source);
+    const heightUnits = optionalNumberField(entry, "heightUnits");
+    const radiusPx = requireNumberField(entry, "radiusPx", source);
+    const intensity = requireNumberField(entry, "intensity", source);
+    const color = optionalStringField(entry, "color");
+    const tintStrength = optionalNumberField(entry, "tintStrength");
+    const shapeRaw = optionalStringField(entry, "shape");
+    const shape = shapeRaw
+      ? (() => {
+          const up = shapeRaw.toUpperCase();
+          if (up === "RADIAL" || up === "STREET_LAMP") return up as "RADIAL" | "STREET_LAMP";
+          throw new Error(`JSON map loader${formatSource(source)}: lights[${index}].shape must be RADIAL or STREET_LAMP.`);
+        })()
+      : undefined;
+    const semanticTypeRaw = optionalStringField(entry, "semanticType");
+    const semanticType = semanticTypeRaw
+      ? (() => {
+          const low = semanticTypeRaw.toLowerCase();
+          if (low === "street_lamp_n" || low === "street_lamp_e" || low === "street_lamp_s" || low === "street_lamp_w") {
+            return low as "street_lamp_n" | "street_lamp_e" | "street_lamp_s" | "street_lamp_w";
+          }
+          if (low === "neon_sign_pink" || low === "neon_sign_blue" || low === "neon_sign_green") {
+            return low as "neon_sign_pink" | "neon_sign_blue" | "neon_sign_green";
+          }
+          throw new Error(`JSON map loader${formatSource(source)}: lights[${index}].semanticType is invalid.`);
+        })()
+      : undefined;
+    const pool = (() => {
+      const raw = entry.pool;
+      if (raw === undefined) return undefined;
+      if (!isRecord(raw)) throw new Error(`JSON map loader${formatSource(source)}: lights[${index}].pool must be an object.`);
+      return {
+        radiusPx: requireNumberField(raw, "radiusPx", source),
+        yScale: optionalNumberField(raw, "yScale"),
+      };
+    })();
+    const cone = (() => {
+      const raw = entry.cone;
+      if (raw === undefined) return undefined;
+      if (!isRecord(raw)) throw new Error(`JSON map loader${formatSource(source)}: lights[${index}].cone must be an object.`);
+      return {
+        dirRad: requireNumberField(raw, "dirRad", source),
+        angleRad: requireNumberField(raw, "angleRad", source),
+        lengthPx: requireNumberField(raw, "lengthPx", source),
+      };
+    })();
+    const flicker = (() => {
+      const raw = entry.flicker;
+      if (raw === undefined) return undefined;
+      if (!isRecord(raw)) throw new Error(`JSON map loader${formatSource(source)}: lights[${index}].flicker must be an object.`);
+      const kindRaw = requireStringField(raw, "kind", source).toUpperCase();
+      if (kindRaw === "NONE") return { kind: "NONE" as const };
+      if (kindRaw === "NOISE") {
+        return {
+          kind: "NOISE" as const,
+          speed: optionalNumberField(raw, "speed"),
+          amount: optionalNumberField(raw, "amount"),
+        };
+      }
+      if (kindRaw === "PULSE") {
+        return {
+          kind: "PULSE" as const,
+          speed: optionalNumberField(raw, "speed"),
+          amount: optionalNumberField(raw, "amount"),
+        };
+      }
+      throw new Error(`JSON map loader${formatSource(source)}: lights[${index}].flicker.kind must be NONE|NOISE|PULSE.`);
+    })();
+    return { x, y, heightUnits, radiusPx, intensity, color, tintStrength, shape, semanticType, flicker, pool, cone };
+  });
+}
+
 export function loadTableMapDefFromJson(data: unknown, source?: string): TableMapDef {
   if (!isRecord(data)) {
     throw new Error(`JSON map loader${formatSource(source)}: root must be an object.`);
@@ -634,6 +719,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
   const centerOnZero = optionalBooleanField(data, "centerOnZero");
   const apronBaseMode = optionalApronBaseModeField(data, "apronBaseMode");
   const objectiveDefs = parseObjectiveDefs(data, source);
+  const mapLights = optionalMapLightsField(data, source);
 
   if (chunkGrid) {
     const chunkData = CHUNK_BY_ID.get(chunkGrid.id);
@@ -650,6 +736,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     }
     const expandedCells: TableMapCell[] = [];
     const expandedStamps: SemanticStamp[] = [];
+    const expandedLights: TableMapLight[] = [];
 
     for (let cy = 0; cy < chunkGrid.rows; cy++) {
       for (let cx = 0; cx < chunkGrid.cols; cx++) {
@@ -665,6 +752,12 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
             expandedStamps.push({ ...s, x: s.x + ox, y: s.y + oy });
           }
         }
+        if (chunkDef.lights) {
+          for (let i = 0; i < chunkDef.lights.length; i++) {
+            const l = chunkDef.lights[i];
+            expandedLights.push({ ...l, x: l.x + ox, y: l.y + oy });
+          }
+        }
       }
     }
 
@@ -675,6 +768,10 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     const stampsRaw = optionalSemanticStamp(data, source);
     const stamps = (() => {
       const merged = [...expandedStamps, ...fieldParsed.stamps, ...(stampsRaw ?? [])];
+      return merged.length > 0 ? merged : undefined;
+    })();
+    const lights = (() => {
+      const merged = [...expandedLights, ...(mapLights ?? [])];
       return merged.length > 0 ? merged : undefined;
     })();
 
@@ -689,6 +786,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
       apronBaseMode,
       cells: merged,
       stamps,
+      lights,
       objectiveDefs,
     };
   }
@@ -705,6 +803,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     const merged = [...fieldParsed.stamps, ...(stampsRaw ?? [])];
     return merged.length > 0 ? merged : undefined;
   })();
+  const lights = mapLights;
 
   const jsonDef: JsonMapDef = {
     id,
@@ -712,6 +811,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     height,
     cells,
     stamps,
+    lights,
     mapSkinId,
     buildingPackId,
     mapSkinDefaults,
@@ -763,6 +863,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     apronBaseMode: jsonDef.apronBaseMode,
     cells: jsonDef.cells ?? [],
     stamps,
+    lights: jsonDef.lights,
     objectiveDefs: jsonDef.objectiveDefs,
   };
 }

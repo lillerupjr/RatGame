@@ -243,4 +243,62 @@ describe("structure legacy transition", () => {
     expect(parkTop?.family).toBe("park");
     expect(parkTop?.spriteId).toBe("tiles/floor/park/1");
   });
+
+  it("emits compiled lightDefs from map lights in world-space anchors", () => {
+    const mapDef: TableMapDef = {
+      id: "compiled_light_defs",
+      w: 4,
+      h: 4,
+      cells: [{ x: 0, y: 0, z: 0, type: "floor" }],
+      lights: [{ x: 2, y: 1, heightUnits: 3, radiusPx: 140, intensity: 0.8 }],
+    };
+    const compiled = compileKenneyMapFromTable(mapDef, { runSeed: 101, mapId: mapDef.id });
+    expect(compiled.lightDefs.length).toBe(1);
+    expect(compiled.lightDefs[0]).toMatchObject({
+      worldX: (2 + 0.5) * 64,
+      worldY: (1 + 0.5) * 64,
+      heightUnits: 3,
+      radiusPx: 140,
+      intensity: 0.8,
+      shape: "RADIAL",
+    });
+  });
+
+  it("builds STREET_LAMP lightDefs from semantic street lamp variants", () => {
+    const mapDef: TableMapDef = {
+      id: "street_lamp_semantic_compile",
+      w: 4,
+      h: 4,
+      cells: [{ x: 0, y: 0, z: 0, type: "floor" }],
+      lights: [{ x: 1, y: 1, radiusPx: 100, intensity: 0.9, semanticType: "street_lamp_e" }],
+    };
+    const compiled = compileKenneyMapFromTable(mapDef, { runSeed: 22, mapId: mapDef.id });
+    expect(compiled.lightDefs.length).toBe(1);
+    const light = compiled.lightDefs[0];
+    expect(light.shape).toBe("STREET_LAMP");
+    expect(light.pool?.radiusPx).toBe(120);
+    expect(light.pool?.yScale).toBe(0.65);
+    expect(light.cone?.dirRad).toBe(0);
+    expect(light.cone?.angleRad).toBe(0.9);
+    expect(light.cone?.lengthPx).toBe(260);
+  });
+
+  it("builds neon semantic presets as colored RADIAL lightDefs", () => {
+    const mapDef: TableMapDef = {
+      id: "neon_semantic_compile",
+      w: 4,
+      h: 4,
+      cells: [{ x: 0, y: 0, z: 0, type: "floor" }],
+      lights: [{ x: 1, y: 1, radiusPx: 80, intensity: 0.4, semanticType: "neon_sign_pink" }],
+    };
+    const compiled = compileKenneyMapFromTable(mapDef, { runSeed: 33, mapId: mapDef.id });
+    expect(compiled.lightDefs.length).toBe(1);
+    const light = compiled.lightDefs[0];
+    expect(light.shape).toBe("RADIAL");
+    expect(light.color).toBe("#FF4FD8");
+    expect(light.tintStrength).toBe(0.70);
+    expect(light.radiusPx).toBe(220);
+    expect(light.intensity).toBe(0.75);
+    expect(light.flicker).toEqual({ kind: "NOISE", speed: 9, amount: 0.25 });
+  });
 });

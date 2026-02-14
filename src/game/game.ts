@@ -406,7 +406,6 @@ export function createGame(args: CreateGameArgs) {
         }
       }
     }
-
     const spawn = getSpawnWorldFromActive();
     const anchor = anchorFromWorld(spawn.x, spawn.y, KENNEY_TILE_WORLD);
     w.pgxi = anchor.gxi;
