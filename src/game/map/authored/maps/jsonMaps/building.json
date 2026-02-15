@@ -12,12 +12,6 @@
     { "x": 0, "y": 5, "type": "spawn" }
   ],
   "stamps": [
-    { "x": 0, "y": 0, "z": 0, "type": "prop", "propId": "street_lamp_e", "w": 1, "h": 1 },
-    { "x": 1, "y": 0, "z": 0, "type": "prop", "propId": "street_lamp_w", "w": 1, "h": 1 },
-    { "x": 2, "y": 0, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
-    { "x": 3, "y": 0, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 }
-
-  ],
-  "lights": [
+    { "x": 0, "y": 0, "z": 0, "type": "prop", "propId": "street_lamp_e", "w": 1, "h": 1 }
   ]
 }

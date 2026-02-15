@@ -180,6 +180,13 @@ export function createGame(args: CreateGameArgs) {
   applyObjectivesFromActiveMap(world);
   applyDebugSpawn(world);
 
+  window.addEventListener("keydown", (e) => {
+    if (e.repeat) return;
+    if (e.key !== "o" && e.key !== "O" && e.key !== "0") return;
+    world.lighting.occlusionEnabled = !world.lighting.occlusionEnabled;
+    console.info(`[lighting] occlusionEnabled=${world.lighting.occlusionEnabled}`);
+  });
+
 
   setMusicStage("DOCKS");
 

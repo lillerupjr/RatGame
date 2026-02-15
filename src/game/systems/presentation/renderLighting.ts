@@ -6,6 +6,7 @@ export type ProjectedLight = {
   sy: number;
   poolSy?: number;
   intensity: number;
+  occlusion: number;
   radiusPx: number;
   shape: "RADIAL" | "STREET_LAMP";
   color: string;
@@ -43,15 +44,22 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 let lightingLayer: HTMLCanvasElement | null = null;
+let streetLampCutoutLayer: HTMLCanvasElement | null = null;
+let tintLayer: HTMLCanvasElement | null = null;
+let streetLampTintLayer: HTMLCanvasElement | null = null;
 
-function getLightingLayer(width: number, height: number): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null {
-  if (!lightingLayer) lightingLayer = document.createElement("canvas");
-  if (lightingLayer.width !== width) lightingLayer.width = width;
-  if (lightingLayer.height !== height) lightingLayer.height = height;
-  const layerCtx = lightingLayer.getContext("2d");
+function getLayer(
+  layer: HTMLCanvasElement | null,
+  width: number,
+  height: number,
+): { layer: HTMLCanvasElement; canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null {
+  const resolved = layer ?? document.createElement("canvas");
+  if (resolved.width !== width) resolved.width = width;
+  if (resolved.height !== height) resolved.height = height;
+  const layerCtx = resolved.getContext("2d");
   if (!layerCtx) return null;
   configurePixelPerfect(layerCtx);
-  return { canvas: lightingLayer, ctx: layerCtx };
+  return { layer: resolved, canvas: resolved, ctx: layerCtx };
 }
 
 function flickerMultiplier(
@@ -212,6 +220,33 @@ function drawStreetLampTint(
   });
 }
 
+function drawStreetLampFootprintMask(
+  ctx: CanvasRenderingContext2D,
+  light: ProjectedLight,
+  alpha: number,
+  groundYScale: number,
+): void {
+  const maskAlpha = clamp01(alpha);
+  if (maskAlpha <= 0) return;
+  const pool = light.pool ?? { radiusPx: Math.max(1, light.radiusPx * 0.7), yScale: 1 };
+  const cone = light.cone ?? { dirRad: Math.PI * 0.5, angleRad: 0.9, lengthPx: Math.max(light.radiusPx, 160) };
+  const poolSy = Number.isFinite(light.poolSy) ? (light.poolSy as number) : light.sy;
+  const poolRadiusPx = Math.max(1, pool.radiusPx);
+  const coneLengthPx = Math.max(1, cone.lengthPx);
+  const fill = `rgba(0,0,0,${maskAlpha})`;
+  withGroundPlane(ctx, light.sx, poolSy, groundYScale, () => {
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.arc(light.sx, poolSy, poolRadiusPx, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  withGroundPlane(ctx, light.sx, light.sy, groundYScale, () => {
+    ctx.fillStyle = fill;
+    conePath(ctx, light.sx, light.sy, cone.dirRad, cone.angleRad, coneLengthPx);
+    ctx.fill();
+  });
+}
+
 export function renderLighting(
   ctx: CanvasRenderingContext2D,
   state: WorldLightingState,
@@ -223,9 +258,22 @@ export function renderLighting(
   const darknessAlpha = clamp01(state.darknessAlpha);
   if (darknessAlpha <= 0 && projectedLights.length === 0) return;
 
-  const layer = getLightingLayer(viewW, viewH);
-  if (!layer) return;
-  const lctx = layer.ctx;
+  const baseLayer = getLayer(lightingLayer, viewW, viewH);
+  const lampCutout = getLayer(streetLampCutoutLayer, viewW, viewH);
+  const tintBase = getLayer(tintLayer, viewW, viewH);
+  const lampTint = getLayer(streetLampTintLayer, viewW, viewH);
+  if (!baseLayer || !lampCutout || !tintBase || !lampTint) return;
+  lightingLayer = baseLayer.layer;
+  streetLampCutoutLayer = lampCutout.layer;
+  tintLayer = tintBase.layer;
+  streetLampTintLayer = lampTint.layer;
+
+  const lctx = baseLayer.ctx;
+  const lampCutCtx = lampCutout.ctx;
+  const tintCtx = tintBase.ctx;
+  const lampTintCtx = lampTint.ctx;
+  const groundYScale = clampGroundYScale(state.groundYScale ?? 0.65);
+
   lctx.save();
   lctx.globalCompositeOperation = "source-over";
   lctx.clearRect(0, 0, viewW, viewH);
@@ -247,29 +295,49 @@ export function renderLighting(
   }
 
   if (projectedLights.length > 0) {
-    const groundYScale = clampGroundYScale(state.groundYScale ?? 0.65);
+    lampCutCtx.save();
+    lampCutCtx.globalCompositeOperation = "source-over";
+    lampCutCtx.clearRect(0, 0, viewW, viewH);
+
     lctx.globalCompositeOperation = "destination-out";
+    let hasStreetLampCutouts = false;
     for (let i = 0; i < projectedLights.length; i++) {
       const light = projectedLights[i];
       const radiusPx = Math.max(1, light.radiusPx);
       const intensity = clamp01(light.intensity * flickerMultiplier(light, timeSec));
       if (intensity <= 0) continue;
       if (light.shape === "STREET_LAMP") {
-        drawStreetLampCutout(lctx, light, intensity, groundYScale);
+        drawStreetLampCutout(lampCutCtx, light, intensity, groundYScale);
+        hasStreetLampCutouts = true;
       } else {
         drawRadialCutout(lctx, light.sx, light.sy, radiusPx, intensity);
       }
     }
+    if (hasStreetLampCutouts) {
+      lampCutCtx.globalCompositeOperation = "destination-out";
+      for (let i = 0; i < projectedLights.length; i++) {
+        const light = projectedLights[i];
+        if (light.shape !== "STREET_LAMP") continue;
+        const maskAlpha = clamp01(light.occlusion);
+        if (maskAlpha <= 0) continue;
+        drawStreetLampFootprintMask(lampCutCtx, light, maskAlpha, groundYScale);
+      }
+      lampCutCtx.globalCompositeOperation = "source-over";
+      lctx.drawImage(lampCutout.canvas, 0, 0);
+    }
+    lampCutCtx.restore();
   }
   lctx.restore();
 
-  ctx.save();
-  configurePixelPerfect(ctx);
-  ctx.globalCompositeOperation = "source-over";
-  ctx.drawImage(layer.canvas, 0, 0);
+  tintCtx.save();
+  tintCtx.globalCompositeOperation = "source-over";
+  tintCtx.clearRect(0, 0, viewW, viewH);
+  lampTintCtx.save();
+  lampTintCtx.globalCompositeOperation = "source-over";
+  lampTintCtx.clearRect(0, 0, viewW, viewH);
+
   if (projectedLights.length > 0) {
-    const groundYScale = clampGroundYScale(state.groundYScale ?? 0.65);
-    ctx.globalCompositeOperation = "lighter";
+    let hasStreetLampTints = false;
     for (let i = 0; i < projectedLights.length; i++) {
       const light = projectedLights[i];
       const tintStrength = clamp01(light.tintStrength);
@@ -277,11 +345,56 @@ export function renderLighting(
       const alpha = clamp01(light.intensity * flickerMultiplier(light, timeSec)) * tintStrength;
       if (alpha <= 0) continue;
       if (light.shape === "STREET_LAMP") {
-        drawStreetLampTint(ctx, light, light.color, alpha, groundYScale);
+        drawStreetLampTint(lampTintCtx, light, light.color, alpha, groundYScale);
+        hasStreetLampTints = true;
       } else {
-        drawRadialTint(ctx, light.sx, light.sy, Math.max(1, light.radiusPx), light.color, alpha);
+        drawRadialTint(tintCtx, light.sx, light.sy, Math.max(1, light.radiusPx), light.color, alpha);
       }
     }
+    if (hasStreetLampTints) {
+      lampTintCtx.globalCompositeOperation = "destination-out";
+      for (let i = 0; i < projectedLights.length; i++) {
+        const light = projectedLights[i];
+        if (light.shape !== "STREET_LAMP") continue;
+        const maskAlpha = clamp01(light.occlusion);
+        if (maskAlpha <= 0) continue;
+        drawStreetLampFootprintMask(lampTintCtx, light, maskAlpha, groundYScale);
+      }
+      lampTintCtx.globalCompositeOperation = "source-over";
+      tintCtx.globalCompositeOperation = "lighter";
+      tintCtx.drawImage(lampTint.canvas, 0, 0);
+    }
+  }
+  lampTintCtx.restore();
+  tintCtx.restore();
+
+  ctx.save();
+  configurePixelPerfect(ctx);
+  ctx.globalCompositeOperation = "source-over";
+  ctx.drawImage(baseLayer.canvas, 0, 0);
+  ctx.globalCompositeOperation = "lighter";
+  ctx.drawImage(tintBase.canvas, 0, 0);
+  ctx.restore();
+}
+
+export function renderStreetLampMaskDebugOverlay(
+  ctx: CanvasRenderingContext2D,
+  state: WorldLightingState,
+  projectedLights: ProjectedLight[],
+  timeSec: number = 0,
+): void {
+  if (!state.occlusionEnabled) return;
+  const groundYScale = clampGroundYScale(state.groundYScale ?? 0.65);
+  ctx.save();
+  configurePixelPerfect(ctx);
+  ctx.globalCompositeOperation = "source-over";
+  for (let i = 0; i < projectedLights.length; i++) {
+    const light = projectedLights[i];
+    if (light.shape !== "STREET_LAMP") continue;
+    const maskAlpha = clamp01(light.occlusion);
+    if (maskAlpha <= 0) continue;
+    const pulse = 0.28 + 0.14 * (0.5 + 0.5 * Math.sin(timeSec * 5 + light.flickerPhase));
+    drawStreetLampTint(ctx, light, "#00F5FF", clamp01(maskAlpha * pulse), groundYScale);
   }
   ctx.restore();
 }

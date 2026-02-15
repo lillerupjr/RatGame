@@ -62,7 +62,7 @@ import {
   type DebugOverlayContext,
 } from "../../../engine/render/debug/renderDebug";
 import { configurePixelPerfect, snapPx, snapZoom } from "../../../engine/render/pixelPerfect";
-import { renderLighting } from "./renderLighting";
+import { renderLighting, type ProjectedLight } from "./renderLighting";
 
 // ============================================
 // RenderKey & KindOrder (Isometric Painter Model)
@@ -1412,9 +1412,11 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   ctx.restore();
 
   const lightDefs = getActiveCompiledMap().lightDefs;
-  const projectedLights = new Array(lightDefs.length);
+  const projectedLights: ProjectedLight[] = [];
   for (let i = 0; i < lightDefs.length; i++) {
     const ld = lightDefs[i];
+    const isStreetLamp = (ld.shape ?? "RADIAL") === "STREET_LAMP";
+    const occlusion = isStreetLamp ? (w.lighting.occlusionEnabled ? 1 : 0) : 0;
     const p = worldToScreen(ld.worldX, ld.worldY);
     const screenOffsetX = (ld.screenOffsetPx?.x ?? 0) * pixelScale;
     const screenOffsetY = (ld.screenOffsetPx?.y ?? 0) * pixelScale;
@@ -1422,12 +1424,13 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const sy = (p.y + camY - ld.heightUnits * ELEV_PX) * pixelScale + screenOffsetY;
     const poolSy = sy - (ld.poolHeightOffsetUnits ?? 0) * ELEV_PX * pixelScale;
     const flickerPhase = (Math.sin(ld.worldX * 0.013 + ld.worldY * 0.007) * 43758.5453) % (Math.PI * 2);
-    projectedLights[i] = {
+    projectedLights.push({
       sx,
       sy,
       poolSy,
       radiusPx: ld.radiusPx * pixelScale,
       intensity: ld.intensity,
+      occlusion,
       shape: ld.shape ?? "RADIAL",
       color: ld.color ?? "#FFFFFF",
       tintStrength: ld.tintStrength ?? 0.35,
@@ -1439,10 +1442,30 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       cone: ld.cone
         ? { dirRad: ld.cone.dirRad, angleRad: ld.cone.angleRad, lengthPx: ld.cone.lengthPx * pixelScale }
         : undefined,
-    };
+    });
   }
   // PASS 8: final screen-space lighting
   renderLighting(ctx, w.lighting, projectedLights, screenW, screenH, w.time ?? 0);
+
+  const projectedStreetLamps = projectedLights.filter((l) => l.shape === "STREET_LAMP");
+  if (projectedStreetLamps.length > 0) {
+    const occLabel = w.lighting.occlusionEnabled ? "MASK" : "OFF";
+    ctx.save();
+    ctx.font = "11px monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    for (let i = 0; i < projectedStreetLamps.length; i++) {
+      const light = projectedStreetLamps[i];
+      const sx = light.sx;
+      const sy = light.sy;
+      const text = `Lamp Occ: ${occLabel}`;
+      ctx.fillStyle = "rgba(0,0,0,0.75)";
+      ctx.fillRect(sx - 50, sy - 68, 100, 14);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(text, sx, sy - 56);
+    }
+    ctx.restore();
+  }
 
   // FPS
   ctx.save();
