@@ -18,6 +18,11 @@ import { RNG } from "../../util/rng";
 import {getSpriteMeta} from "../../../engine/render/sprites/spriteMeta";
 import { seAnchorFromTopLeft } from "../../../engine/render/sprites/structureFootprintOwnership";
 import { getFloorVariantCount } from "../../content/runtimeFloorConfig";
+import {
+    getDecalSpriteId,
+    getDecalVariantCount,
+    type RuntimeDecalSetId,
+} from "../../content/runtimeDecalConfig";
 
 export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL";
 export type StairDir = "N" | "E" | "S" | "W";
@@ -39,6 +44,19 @@ export type RuntimeFloorTop = {
     family: "sidewalk" | "asphalt" | "park";
     spriteId: string;
     variantIndex: number;
+    rotationQuarterTurns: 0 | 1 | 2 | 3;
+};
+export type DecalPiece = {
+    id: string;
+    tx: number;
+    ty: number;
+    zBase: number;
+    zLogical: number;
+    setId: RuntimeDecalSetId;
+    spriteId: string;
+    variantIndex: number;
+    semanticType: "sidewalk" | "road" | "asphalt";
+    renderAnchorY: number;
     rotationQuarterTurns: 0 | 1 | 2 | 3;
 };
 export type LightShape = "RADIAL" | "STREET_LAMP";
@@ -215,6 +233,8 @@ export type CompiledKenneyMap = {
     solidFacesInView(view: ViewRect): SolidFaceRec[];
     overlays: StampOverlay[];
     overlaysInView(view: ViewRect): StampOverlay[];
+    decals: DecalPiece[];
+    decalsInView(view: ViewRect): DecalPiece[];
     blockedTiles: Set<string>;
 };
 
@@ -244,7 +264,9 @@ export function compileKenneyMapFromTable(
         const variantCount = getFloorVariantCount(family);
         const variantSeed = hashString(`${runSeed}:${mapId}:${tx},${ty}:${family}:variant`);
         const variantIndex = (variantSeed % variantCount) + 1;
-        const rotationQuarterTurns: 0 = 0;
+        const rotationQuarterTurns: 0 | 1 | 2 | 3 = family === "asphalt"
+            ? ((hashString(`${runSeed}:${mapId}:${tx},${ty}:${family}:rot`) % 4) as 0 | 1 | 2 | 3)
+            : 0;
         return {
             kind: "SQUARE_128_RUNTIME",
             family,
@@ -313,6 +335,7 @@ export function compileKenneyMapFromTable(
                 switch (type) {
                     case "sidewalk": return "sidewalk" as const;
                     case "road": return "asphalt" as const;
+                    case "asphalt": return "asphalt" as const;
                     case "park": return "park" as const;
                     default: return undefined;
                 }
@@ -621,6 +644,56 @@ export function compileKenneyMapFromTable(
         else topsByLayer.set(surface.zLogical, [surface]);
     }
 
+    const decals: DecalPiece[] = [];
+    const decalTileKeys = new Set<string>();
+    const semanticDecalConfig: Record<"sidewalk" | "road" | "asphalt", { chance: number; setId: RuntimeDecalSetId }> = {
+        sidewalk: { chance: 0.10, setId: "sidewalk" },
+        road: { chance: 0.02, setId: "asphalt" },
+        asphalt: { chance: 0.02, setId: "asphalt" },
+    };
+    const maybeAddSemanticDecal = (
+        tx: number,
+        ty: number,
+        zBase: number,
+        zLogical: number,
+        semanticType: "sidewalk" | "road" | "asphalt",
+        renderAnchorY: number,
+    ) => {
+        const cfg = semanticDecalConfig[semanticType];
+        if (!cfg) return;
+        const variantCount = getDecalVariantCount(cfg.setId);
+        if (variantCount <= 0) return;
+
+        const dedupKey = `${tx},${ty},${zLogical}`;
+        if (decalTileKeys.has(dedupKey)) return;
+
+        const spawnHash = hashString(`${runSeed}:${mapId}:${tx},${ty}:${semanticType}:decal:spawn`);
+        const roll = (spawnHash % 10000) / 10000;
+        if (roll >= cfg.chance) return;
+
+        const pickHash = hashString(`${runSeed}:${mapId}:${tx},${ty}:${semanticType}:decal:pick`);
+        const variantIndex = (pickHash % variantCount) + 1;
+        const spriteId = getDecalSpriteId(cfg.setId, variantIndex);
+        if (!spriteId) return;
+        const rotationHash = hashString(`${runSeed}:${mapId}:${tx},${ty}:${semanticType}:decal:rot`);
+        const rotationQuarterTurns = (rotationHash % 4) as 0 | 1 | 2 | 3;
+
+        decalTileKeys.add(dedupKey);
+        decals.push({
+            id: `decal_${semanticType}_${tx}_${ty}_${zLogical}`,
+            tx,
+            ty,
+            zBase,
+            zLogical,
+            setId: cfg.setId,
+            spriteId,
+            variantIndex,
+            semanticType,
+            renderAnchorY,
+            rotationQuarterTurns,
+        });
+    };
+
     for (const [key, tile] of placed.entries()) {
         if (tile.kind === "VOID") continue;
         // SPAWN tiles don't get their own surface - they use the semantic field's floor (e.g., road, sidewalk, park)
@@ -645,6 +718,11 @@ export function compileKenneyMapFromTable(
             return undefined;
         })();
         const runtimeTop = runtimeFamilyFromTileSkin ? pickRuntimeSquareTop(runtimeFamilyFromTileSkin, tx, ty) : undefined;
+        if (runtimeFamilyFromTileSkin === "sidewalk") {
+            maybeAddSemanticDecal(tx, ty, zBase, zLogical, "sidewalk", renderAnchorY);
+        } else if (runtimeFamilyFromTileSkin === "asphalt") {
+            maybeAddSemanticDecal(tx, ty, zBase, zLogical, "asphalt", renderAnchorY);
+        }
         const tileOverride: MapSkinBundle | undefined = tile.skin && !runtimeTop
             ? (renderTopKind === "STAIR" ? { stair: tile.skin } : { floor: tile.skin })
             : undefined;
@@ -1128,6 +1206,7 @@ export function compileKenneyMapFromTable(
         const runtimeFamilyForStamp = (() => {
             if (stamp.type === "sidewalk") return "sidewalk" as const;
             if (stamp.type === "road") return "asphalt" as const;
+            if (stamp.type === "asphalt") return "asphalt" as const;
             if (stamp.type === "park") return "park" as const;
             return undefined;
         })();
@@ -1137,6 +1216,11 @@ export function compileKenneyMapFromTable(
                     const tx = sx + dx;
                     const ty = sy + dy;
                     const runtimeTop = pickRuntimeSquareTop(runtimeFamilyForStamp, tx, ty);
+                    if (runtimeFamilyForStamp === "sidewalk") {
+                        maybeAddSemanticDecal(tx, ty, zBase, zBase | 0, "sidewalk", floorAnchorY);
+                    } else if (runtimeFamilyForStamp === "asphalt") {
+                        maybeAddSemanticDecal(tx, ty, zBase, zBase | 0, "asphalt", floorAnchorY);
+                    }
                     addSurface({
                         id: `stamp_${runtimeFamilyForStamp}_${tx}_${ty}_${zBase}`,
                         kind: "TILE_TOP",
@@ -1640,6 +1724,18 @@ export function compileKenneyMapFromTable(
         return out;
     }
 
+    function decalsInView(view: ViewRect): DecalPiece[] {
+        if (decals.length === 0) return [];
+        const out: DecalPiece[] = [];
+        for (let i = 0; i < decals.length; i++) {
+            const d = decals[i];
+            if (d.tx < view.minTx || d.tx > view.maxTx) continue;
+            if (d.ty < view.minTy || d.ty > view.maxTy) continue;
+            out.push(d);
+        }
+        return out;
+    }
+
     function solidFace(tx: number, ty: number, zLogical: number, dir: WallDir): boolean {
         return wallFaces.has(`${tx},${ty},${zLogical},${dir}`);
     }
@@ -1687,6 +1783,8 @@ export function compileKenneyMapFromTable(
         solidFacesInView,
         overlays,
         overlaysInView,
+        decals,
+        decalsInView,
         blockedTiles,
     };
 

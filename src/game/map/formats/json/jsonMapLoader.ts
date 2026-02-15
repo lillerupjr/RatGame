@@ -548,6 +548,7 @@ function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): S
         lowered === "container" ||
         lowered === "prop" ||
         lowered === "road" ||
+        lowered === "asphalt" ||
         lowered === "sidewalk" ||
         lowered === "park" ||
         lowered === "sea" ||

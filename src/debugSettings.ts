@@ -8,6 +8,7 @@ export type DebugSettings = {
   colliders: boolean;
   slices: boolean;
   occluders: boolean;
+  decals: boolean;
   structureHeights: boolean;
   spriteBounds: boolean;
   projectileFaces: boolean;
@@ -42,6 +43,7 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "colliders", label: "colliders" },
   { key: "slices", label: "slices" },
   { key: "occluders", label: "occluders" },
+  { key: "decals", label: "decals" },
   { key: "structureHeights", label: "structureHeights" },
   { key: "spriteBounds", label: "spriteBounds" },
   { key: "projectileFaces", label: "projectileFaces" },
@@ -61,6 +63,7 @@ export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   colliders: false,
   slices: false,
   occluders: false,
+  decals: false,
   structureHeights: false,
   spriteBounds: false,
   projectileFaces: false,
@@ -83,6 +86,7 @@ export type ResolvedDebugFlags = {
   showRamps: boolean;
   showOccluders: boolean;
   showProjectileFaces: boolean;
+  showDecals: boolean;
   showTriggers: boolean;
   showStructureHeights: boolean;
   showStructureCollision: boolean;
@@ -102,6 +106,7 @@ export function resolveDebugFlags(debug: DebugSettings): ResolvedDebugFlags {
     showWalkMask: debug.walkMask,
     showRamps: debug.ramps || debug.rampFaces,
     showOccluders: debug.occluders,
+    showDecals: debug.decals,
     showProjectileFaces: debug.projectileFaces,
     showTriggers: debug.triggers,
     showStructureHeights: debug.structureHeights,

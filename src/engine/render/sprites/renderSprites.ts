@@ -1,6 +1,11 @@
 import { resolveMapSkin, resolveSemanticSprite, type MapSkinId } from "../../../game/content/mapSkins";
 import { isKnownRenderableSpriteId } from "./spriteIdRegistry";
 import { getFloorVariantCount, RUNTIME_FLOOR_VARIANT_COUNTS, type RuntimeFloorFamily } from "../../../game/content/runtimeFloorConfig";
+import {
+    getDecalSpriteId,
+    RUNTIME_DECAL_SPRITE_IDS,
+    type RuntimeDecalSetId,
+} from "../../../game/content/runtimeDecalConfig";
 
 export type LoadedImg = {
     img: HTMLImageElement;
@@ -18,6 +23,11 @@ const STRUCTURE_MODULES = import.meta.glob("../../../assets/structures/**/*.png"
 }) as Record<string, string>;
 
 const PROP_MODULES = import.meta.glob("../../../assets/props/**/*.png", {
+    eager: true,
+    import: "default",
+}) as Record<string, string>;
+
+const DECAL_MODULES = import.meta.glob("../../../assets/tiles/floor/decals/*.png", {
     eager: true,
     import: "default",
 }) as Record<string, string>;
@@ -69,6 +79,26 @@ function loadById(spriteId: string): LoadedImg {
     return rec;
 }
 
+function loadByUrl(cacheKey: string, url: string | null): LoadedImg {
+    const key = cacheKey.trim();
+    if (!key) return { img: new Image(), ready: false };
+    if (cache[key]) return cache[key];
+
+    if (!url) {
+        const rec = { img: new Image(), ready: false };
+        cache[key] = rec;
+        return rec;
+    }
+
+    const img = new Image();
+    const rec: LoadedImg = { img, ready: false };
+    cache[key] = rec;
+    img.onload = () => (rec.ready = true);
+    img.onerror = () => (rec.ready = false);
+    img.src = url;
+    return rec;
+}
+
 export function getTileSpriteById(spriteId: string): LoadedImg {
     return loadById(spriteId);
 }
@@ -80,6 +110,17 @@ export function getRuntimeSquareFloorSprite(
     const max = family === "sidewalk" ? 6 : family === "park" ? 7 : 1;
     const idx = Math.max(1, Math.min(max, Math.floor(variantIndex)));
     return loadById(`tiles/floor/${family}/${idx}`);
+}
+
+export function getRuntimeDecalSprite(
+    setId: RuntimeDecalSetId,
+    variantIndex: number,
+): LoadedImg {
+    const spriteId = getDecalSpriteId(setId, variantIndex);
+    if (!spriteId) return { img: new Image(), ready: false };
+    const key = `../../../assets/${spriteId}.png`;
+    const url = DECAL_MODULES[key] ?? null;
+    return loadByUrl(spriteId, url);
 }
 
 let _activeMapSkinId: MapSkinId | undefined = undefined;
@@ -99,5 +140,10 @@ export function preloadRenderSprites(): void {
     void getVoidTop();
     for (const [family, count] of Object.entries(RUNTIME_FLOOR_VARIANT_COUNTS) as [RuntimeFloorFamily, number][]) {
         for (let i = 1; i <= count; i++) void getRuntimeSquareFloorSprite(family, i);
+    }
+    for (const [setId, spriteIds] of Object.entries(RUNTIME_DECAL_SPRITE_IDS) as [RuntimeDecalSetId, string[]][]) {
+        for (let i = 0; i < spriteIds.length; i++) {
+            void getRuntimeDecalSprite(setId, i + 1);
+        }
     }
 }

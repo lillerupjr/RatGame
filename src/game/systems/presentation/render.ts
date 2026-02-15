@@ -19,6 +19,7 @@ import {
   viewRectFromWorldCenter,
   overlaysInView,
   blockedTilesInView,
+  decalsInView,
   getActiveMap as getActiveCompiledMap,
   type RenderPiece,
   type StampOverlay,
@@ -45,6 +46,7 @@ import {
 
 import {
   preloadRenderSprites,
+  getRuntimeDecalSprite,
   getTileSpriteById,
   getVoidTop,
 } from "../../../engine/render/sprites/renderSprites";
@@ -73,11 +75,12 @@ import { getUserSettings } from "../../../userSettings";
 /** Semantic layer ordering (used as tie-breaker in slice ordering). */
 enum KindOrder {
   FLOOR = 0,
-  ENTITY = 1,
-  VFX = 2,
-  STRUCTURE = 3,
-  OCCLUDER = 4,
-  OVERLAY = 5,
+  DECAL = 1,
+  ENTITY = 2,
+  VFX = 3,
+  STRUCTURE = 4,
+  OCCLUDER = 5,
+  OVERLAY = 6,
 }
 
 /** Canonical render key for deterministic ordering. */
@@ -510,6 +513,35 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       ctx.restore();
     };
 
+    const drawRuntimeDecalTop = (
+      tx: number,
+      ty: number,
+      zBase: number,
+      renderAnchorY: number,
+      setId: "sidewalk" | "asphalt",
+      variantIndex: number,
+      rotationQuarterTurns: 0 | 1 | 2 | 3,
+    ) => {
+      const src = getRuntimeDecalSprite(setId, variantIndex);
+      if (!src.ready || !src.img || src.img.width <= 0 || src.img.height <= 0) return;
+
+      const wx = (tx + 0.5) * T;
+      const wy = (ty + 0.5) * T;
+      const p = worldToScreen(wx, wy);
+      const centerX = snapPx(p.x + camX);
+      const centerY = snapPx(
+        p.y + camY - zBase * ELEV_PX - SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5),
+      );
+
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.transform(0.5, 0.25, -0.5, 0.25, 0, 0);
+      ctx.rotate(rotationQuarterTurns * (Math.PI * 0.5));
+      ctx.translate(-(SIDEWALK_SRC_SIZE * 0.5), -(SIDEWALK_SRC_SIZE * 0.5));
+      ctx.drawImage(src.img, 0, 0, SIDEWALK_SRC_SIZE, SIDEWALK_SRC_SIZE);
+      ctx.restore();
+    };
+
     const dirToDelta = (dir: "N" | "E" | "S" | "W") => {
       switch (dir) {
         case "N": return { dx: 0, dy: -1 };
@@ -744,6 +776,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const SHOW_WALK_MASK = debugFlags.showWalkMask;
   const SHOW_RAMPS = debugFlags.showRamps;
   const SHOW_OCCLUDER_DEBUG = debugFlags.showOccluders;
+  const SHOW_DECAL_DEBUG = debugFlags.showDecals;
   const SHOW_PROJECTILE_FACES = debugFlags.showProjectileFaces;
   const SHOW_TRIGGER_ZONES = debugFlags.showTriggers;
   const SHOW_STRUCTURE_HEIGHTS = debugFlags.showStructureHeights;
@@ -935,6 +968,38 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           addToSlice(tx + ty, renderKey, drawClosure);
         }
       }
+    }
+  }
+
+  // ----------------------------
+  // Collect DECALS into slices (after floor, before entities)
+  // ----------------------------
+  {
+    const decals = decalsInView(viewRect);
+    for (let i = 0; i < decals.length; i++) {
+      const decal = decals[i];
+      if (!RENDER_ALL_HEIGHTS && decal.zLogical !== activeH) continue;
+
+      const renderKey: RenderKey = {
+        slice: decal.tx + decal.ty,
+        within: decal.tx,
+        baseZ: decal.zBase,
+        kindOrder: KindOrder.DECAL,
+        stableId: (decal.tx * 73856093 ^ decal.ty * 19349663 ^ (decal.zBase * 100 | 0) * 83492791) + 19,
+      };
+
+      const drawClosure = () => {
+        drawRuntimeDecalTop(
+          decal.tx,
+          decal.ty,
+          decal.zBase,
+          decal.renderAnchorY,
+          decal.setId,
+          decal.variantIndex,
+          decal.rotationQuarterTurns,
+        );
+      };
+      addToSlice(decal.tx + decal.ty, renderKey, drawClosure);
     }
   }
 
@@ -1558,6 +1623,33 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   drawWalkMaskOverlay(debugContext, SHOW_WALK_MASK);
   drawRampOverlay(debugContext, SHOW_RAMPS);
   drawOccluderOverlay(debugContext, SHOW_OCCLUDER_DEBUG, viewRect);
+  if (SHOW_DECAL_DEBUG) {
+    const decals = decalsInView(viewRect);
+    if (decals.length > 0) {
+      ctx.save();
+      ctx.lineWidth = 1;
+      ctx.font = "10px monospace";
+      for (let i = 0; i < decals.length; i++) {
+        const d = decals[i];
+        const p0 = toScreen(d.tx * T, d.ty * T);
+        const p1 = toScreen((d.tx + 1) * T, d.ty * T);
+        const p2 = toScreen((d.tx + 1) * T, (d.ty + 1) * T);
+        const p3 = toScreen(d.tx * T, (d.ty + 1) * T);
+        const color = d.setId === "sidewalk" ? "rgba(40,220,255,0.95)" : "rgba(255,170,40,0.95)";
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.lineTo(p3.x, p3.y);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.fillText(d.setId, p0.x + 4, p0.y + 10);
+      }
+      ctx.restore();
+    }
+  }
   drawProjectileFaceOverlay(debugContext, SHOW_PROJECTILE_FACES, viewRect);
   drawStructureHeightOverlay(debugContext, SHOW_STRUCTURE_HEIGHTS, viewRect);
   drawTriggerOverlay(debugContext, SHOW_TRIGGER_ZONES);

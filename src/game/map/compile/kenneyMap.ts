@@ -15,6 +15,7 @@ import {
     type ViewRect,
     type Surface,
     type CompiledKenneyMap,
+    type DecalPiece,
 } from "./kenneyMapLoader";
 import type { TableMapDef } from "../formats/table/tableMapTypes";
 import { worldDeltaToScreen } from "../../../engine/math/iso";
@@ -32,6 +33,7 @@ export type {
     RenderRole,
     ViewRect,
     StampOverlay,
+    DecalPiece,
 } from "./kenneyMapLoader";
 export { worldToTile, tileToWorldCenter };
 
@@ -256,6 +258,11 @@ export function facePiecesInViewForLayer(layer: number, view: ViewRect): RenderP
 /** Return overlays within a tile-bounds view. */
 export function overlaysInView(view: ViewRect) {
     return _compiled.overlaysInView(view);
+}
+
+/** Return semantic decal pieces within a tile-bounds view. */
+export function decalsInView(view: ViewRect): DecalPiece[] {
+    return _compiled.decalsInView(view);
 }
 
 /** Return every logical layer index that has at least one occluder. */
