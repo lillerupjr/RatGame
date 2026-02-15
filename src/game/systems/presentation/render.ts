@@ -137,6 +137,114 @@ function ensureBuildingMaskCanvas(
   return { canvas, ctx: c2d };
 }
 
+function ensureLightingMaskCanvas(
+  lighting: World["lighting"],
+  kind: "SOURCE_OCC" | "INVERSE_BUILDING" | "COMBINED_OCC",
+  screenW: number,
+  screenH: number,
+): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null {
+  let canvas: HTMLCanvasElement | null = null;
+  let c2d: CanvasRenderingContext2D | null = null;
+  if (kind === "SOURCE_OCC") {
+    canvas = lighting.occlusionMaskCanvas ?? null;
+    c2d = lighting.occlusionMaskCtx ?? null;
+  } else if (kind === "INVERSE_BUILDING") {
+    canvas = lighting.inverseBuildingSliceMaskCanvas ?? null;
+    c2d = lighting.inverseBuildingSliceMaskCtx ?? null;
+  } else {
+    canvas = lighting.combinedOcclusionMaskCanvas ?? null;
+    c2d = lighting.combinedOcclusionMaskCtx ?? null;
+  }
+  if (!canvas) {
+    canvas = document.createElement("canvas");
+    if (kind === "SOURCE_OCC") lighting.occlusionMaskCanvas = canvas;
+    else if (kind === "INVERSE_BUILDING") lighting.inverseBuildingSliceMaskCanvas = canvas;
+    else lighting.combinedOcclusionMaskCanvas = canvas;
+    c2d = null;
+  }
+  if (canvas.width !== screenW) canvas.width = screenW;
+  if (canvas.height !== screenH) canvas.height = screenH;
+  if (!c2d || c2d.canvas !== canvas) {
+    c2d = canvas.getContext("2d");
+    if (!c2d) return null;
+    if (kind === "SOURCE_OCC") lighting.occlusionMaskCtx = c2d;
+    else if (kind === "INVERSE_BUILDING") lighting.inverseBuildingSliceMaskCtx = c2d;
+    else lighting.combinedOcclusionMaskCtx = c2d;
+  }
+  configurePixelPerfect(c2d);
+  return { canvas, ctx: c2d };
+}
+
+function withGroundPlaneScreen(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  sy: number,
+  groundYScale: number,
+  fn: () => void,
+): void {
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.scale(1, groundYScale);
+  ctx.translate(-sx, -sy);
+  fn();
+  ctx.restore();
+}
+
+function drawStreetLampFootprintMaskScreen(
+  ctx: CanvasRenderingContext2D,
+  light: ProjectedLight,
+  alpha: number,
+  groundYScale: number,
+): void {
+  const a = Math.max(0, Math.min(1, alpha));
+  if (a <= 0) return;
+  const pool = light.pool ?? { radiusPx: Math.max(1, light.radiusPx * 0.7), yScale: 1 };
+  const cone = light.cone ?? { dirRad: Math.PI * 0.5, angleRad: 0.9, lengthPx: Math.max(light.radiusPx, 160) };
+  const poolSy = Number.isFinite(light.poolSy) ? (light.poolSy as number) : light.sy;
+  const poolRadiusPx = Math.max(1, pool.radiusPx);
+  const coneLengthPx = Math.max(1, cone.lengthPx);
+  const fill = `rgba(0,0,0,${a})`;
+  withGroundPlaneScreen(ctx, light.sx, poolSy, groundYScale, () => {
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.arc(light.sx, poolSy, poolRadiusPx, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  withGroundPlaneScreen(ctx, light.sx, light.sy, groundYScale, () => {
+    const a0 = cone.dirRad - cone.angleRad * 0.5;
+    const a1 = cone.dirRad + cone.angleRad * 0.5;
+    const x0 = light.sx + Math.cos(a0) * coneLengthPx;
+    const y0 = light.sy + Math.sin(a0) * coneLengthPx;
+    const x1 = light.sx + Math.cos(a1) * coneLengthPx;
+    const y1 = light.sy + Math.sin(a1) * coneLengthPx;
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.moveTo(light.sx, light.sy);
+    ctx.lineTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.closePath();
+    ctx.fill();
+  });
+}
+
+function buildCombinedOcclusionMask(
+  lighting: World["lighting"],
+  sourceOccMaskCanvas: HTMLCanvasElement,
+  inverseBuildingMaskCanvas: HTMLCanvasElement,
+  screenW: number,
+  screenH: number,
+): void {
+  const combined = ensureLightingMaskCanvas(lighting, "COMBINED_OCC", screenW, screenH);
+  if (!combined) return;
+  const cctx = combined.ctx;
+  cctx.globalCompositeOperation = "source-over";
+  cctx.clearRect(0, 0, screenW, screenH);
+  cctx.drawImage(sourceOccMaskCanvas, 0, 0);
+  cctx.globalCompositeOperation = "destination-in";
+  cctx.drawImage(inverseBuildingMaskCanvas, 0, 0);
+  cctx.globalCompositeOperation = "source-over";
+}
+
 /** Render tiles, entities, overlays, and debug layers. */
 export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
   const screenW = canvas.clientWidth;
@@ -637,7 +745,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const SHOW_STRUCTURE_HEIGHTS = false;
   const SHOW_STRUCTURE_COLLISION_DEBUG = (w as any).structureCollisionDebug ?? false;
   const SHOW_STRUCTURE_SLICE_DEBUG = (w as any).runtimeStructureSliceDebug ?? false;
-  const SHOW_BUILDING_MASK_DEBUG = w.lighting.showBuildingMaskDebug ?? false;
+  const buildingMaskDebugView = w.lighting.buildingMaskDebugView ?? "OFF";
+  const SHOW_BUILDING_MASK_DEBUG = buildingMaskDebugView !== "OFF";
 
   // Enemy Z buffer (optional visual override)
   const ez = w.ezVisual;
@@ -1477,26 +1586,27 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     deferredStructureSliceDebugDraws[i]();
   }
 
-  if (SHOW_BUILDING_MASK_DEBUG) {
-    const maskLayer = ensureBuildingMaskCanvas(w.lighting, screenW, screenH);
-    if (maskLayer) {
-      const maskCtx = maskLayer.ctx;
-      maskCtx.setTransform(1, 0, 0, 1, 0, 0);
-      maskCtx.clearRect(0, 0, screenW, screenH);
-      maskCtx.fillStyle = "rgba(0,0,0,1)";
-      maskCtx.fillRect(0, 0, screenW, screenH);
-      maskCtx.save();
-      configurePixelPerfect(maskCtx);
-      maskCtx.scale(pixelScale, pixelScale);
-      maskCtx.translate(viewCenterX, viewCenterY);
-      maskCtx.scale(camZoom, camZoom);
-      maskCtx.translate(-viewCenterX, -viewCenterY);
-      maskCtx.globalCompositeOperation = "destination-in";
-      for (let i = 0; i < buildingMaskDraws.length; i++) {
-        buildingMaskDraws[i](maskCtx);
-      }
-      maskCtx.restore();
+  const inverseMaskLayer = ensureLightingMaskCanvas(w.lighting, "INVERSE_BUILDING", screenW, screenH);
+  const sourceMaskLayer = ensureLightingMaskCanvas(w.lighting, "SOURCE_OCC", screenW, screenH);
+  if (inverseMaskLayer) {
+    const inverseCtx = inverseMaskLayer.ctx;
+    inverseCtx.setTransform(1, 0, 0, 1, 0, 0);
+    inverseCtx.clearRect(0, 0, screenW, screenH);
+    inverseCtx.save();
+    configurePixelPerfect(inverseCtx);
+    inverseCtx.scale(pixelScale, pixelScale);
+    inverseCtx.translate(viewCenterX, viewCenterY);
+    inverseCtx.scale(camZoom, camZoom);
+    inverseCtx.translate(-viewCenterX, -viewCenterY);
+    inverseCtx.globalCompositeOperation = "source-over";
+    for (let i = 0; i < buildingMaskDraws.length; i++) {
+      buildingMaskDraws[i](inverseCtx);
     }
+    inverseCtx.restore();
+    inverseCtx.globalCompositeOperation = "source-in";
+    inverseCtx.fillStyle = "rgba(0,0,0,1)";
+    inverseCtx.fillRect(0, 0, screenW, screenH);
+    inverseCtx.globalCompositeOperation = "source-over";
   }
 
   // Restore (undo camera zoom) before drawing screen-space overlays / HUD
@@ -1535,12 +1645,41 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         : undefined,
     });
   }
+
+  if (sourceMaskLayer) {
+    const groundYScale = Math.max(0.1, Math.min(1, w.lighting.groundYScale ?? 0.65));
+    const sourceCtx = sourceMaskLayer.ctx;
+    sourceCtx.setTransform(1, 0, 0, 1, 0, 0);
+    sourceCtx.clearRect(0, 0, screenW, screenH);
+    sourceCtx.globalCompositeOperation = "source-over";
+    for (let i = 0; i < projectedLights.length; i++) {
+      const light = projectedLights[i];
+      if (light.shape !== "STREET_LAMP") continue;
+      const maskAlpha = Math.max(0, Math.min(1, light.occlusion));
+      if (maskAlpha <= 0) continue;
+      drawStreetLampFootprintMaskScreen(sourceCtx, light, maskAlpha, groundYScale);
+    }
+  }
+  if (sourceMaskLayer && inverseMaskLayer) {
+    buildCombinedOcclusionMask(
+      w.lighting,
+      sourceMaskLayer.canvas,
+      inverseMaskLayer.canvas,
+      screenW,
+      screenH,
+    );
+  }
+
   // PASS 8: final screen-space lighting
   renderLighting(ctx, w.lighting, projectedLights, screenW, screenH, w.time ?? 0);
   if (SHOW_BUILDING_MASK_DEBUG) {
+    let debugMask: HTMLCanvasElement | null = null;
+    if (buildingMaskDebugView === "SOURCE") debugMask = w.lighting.occlusionMaskCanvas ?? null;
+    else if (buildingMaskDebugView === "INVERSE") debugMask = w.lighting.inverseBuildingSliceMaskCanvas ?? null;
+    else if (buildingMaskDebugView === "COMBINED") debugMask = w.lighting.combinedOcclusionMaskCanvas ?? null;
     ctx.save();
     ctx.globalAlpha = 1;
-    if (w.lighting.debugBuildingMaskCanvas) ctx.drawImage(w.lighting.debugBuildingMaskCanvas, 0, 0);
+    if (debugMask) ctx.drawImage(debugMask, 0, 0);
     ctx.restore();
   }
 

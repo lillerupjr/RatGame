@@ -45,6 +45,13 @@ export type WorldLightingState = {
   groundYScale?: number;
   occlusionEnabled: boolean;
   showBuildingMaskDebug: boolean;
+  buildingMaskDebugView: "OFF" | "SOURCE" | "INVERSE" | "COMBINED";
+  occlusionMaskCanvas?: HTMLCanvasElement | null;
+  occlusionMaskCtx?: CanvasRenderingContext2D | null;
+  inverseBuildingSliceMaskCanvas?: HTMLCanvasElement | null;
+  inverseBuildingSliceMaskCtx?: CanvasRenderingContext2D | null;
+  combinedOcclusionMaskCanvas?: HTMLCanvasElement | null;
+  combinedOcclusionMaskCtx?: CanvasRenderingContext2D | null;
   debugBuildingMaskCanvas?: HTMLCanvasElement | null;
   debugBuildingMaskCtx?: CanvasRenderingContext2D | null;
 };
@@ -439,6 +446,13 @@ export function createWorld(args: CreateWorldArgs): World {
       groundYScale: 0.65,
       occlusionEnabled: false,
       showBuildingMaskDebug: false,
+      buildingMaskDebugView: "OFF",
+      occlusionMaskCanvas: null,
+      occlusionMaskCtx: null,
+      inverseBuildingSliceMaskCanvas: null,
+      inverseBuildingSliceMaskCtx: null,
+      combinedOcclusionMaskCanvas: null,
+      combinedOcclusionMaskCtx: null,
       debugBuildingMaskCanvas: null,
       debugBuildingMaskCtx: null,
     },

@@ -315,12 +315,16 @@ export function renderLighting(
     }
     if (hasStreetLampCutouts) {
       lampCutCtx.globalCompositeOperation = "destination-out";
-      for (let i = 0; i < projectedLights.length; i++) {
-        const light = projectedLights[i];
-        if (light.shape !== "STREET_LAMP") continue;
-        const maskAlpha = clamp01(light.occlusion);
-        if (maskAlpha <= 0) continue;
-        drawStreetLampFootprintMask(lampCutCtx, light, maskAlpha, groundYScale);
+      if (state.combinedOcclusionMaskCanvas) {
+        lampCutCtx.drawImage(state.combinedOcclusionMaskCanvas, 0, 0);
+      } else {
+        for (let i = 0; i < projectedLights.length; i++) {
+          const light = projectedLights[i];
+          if (light.shape !== "STREET_LAMP") continue;
+          const maskAlpha = clamp01(light.occlusion);
+          if (maskAlpha <= 0) continue;
+          drawStreetLampFootprintMask(lampCutCtx, light, maskAlpha, groundYScale);
+        }
       }
       lampCutCtx.globalCompositeOperation = "source-over";
       lctx.drawImage(lampCutout.canvas, 0, 0);
@@ -353,12 +357,16 @@ export function renderLighting(
     }
     if (hasStreetLampTints) {
       lampTintCtx.globalCompositeOperation = "destination-out";
-      for (let i = 0; i < projectedLights.length; i++) {
-        const light = projectedLights[i];
-        if (light.shape !== "STREET_LAMP") continue;
-        const maskAlpha = clamp01(light.occlusion);
-        if (maskAlpha <= 0) continue;
-        drawStreetLampFootprintMask(lampTintCtx, light, maskAlpha, groundYScale);
+      if (state.combinedOcclusionMaskCanvas) {
+        lampTintCtx.drawImage(state.combinedOcclusionMaskCanvas, 0, 0);
+      } else {
+        for (let i = 0; i < projectedLights.length; i++) {
+          const light = projectedLights[i];
+          if (light.shape !== "STREET_LAMP") continue;
+          const maskAlpha = clamp01(light.occlusion);
+          if (maskAlpha <= 0) continue;
+          drawStreetLampFootprintMask(lampTintCtx, light, maskAlpha, groundYScale);
+        }
       }
       lampTintCtx.globalCompositeOperation = "source-over";
       tintCtx.globalCompositeOperation = "lighter";

@@ -188,8 +188,13 @@ export function createGame(args: CreateGameArgs) {
       return;
     }
     if (e.key === "p" || e.key === "P") {
-      world.lighting.showBuildingMaskDebug = !world.lighting.showBuildingMaskDebug;
-      console.info(`[lighting] showBuildingMaskDebug=${world.lighting.showBuildingMaskDebug}`);
+      const order: Array<"OFF" | "SOURCE" | "INVERSE" | "COMBINED"> = ["OFF", "SOURCE", "INVERSE", "COMBINED"];
+      const current = world.lighting.buildingMaskDebugView ?? "OFF";
+      const idx = order.indexOf(current);
+      const next = order[(idx + 1) % order.length];
+      world.lighting.buildingMaskDebugView = next;
+      world.lighting.showBuildingMaskDebug = next !== "OFF";
+      console.info(`[lighting] buildingMaskDebugView=${next}`);
     }
   });
 
