@@ -345,7 +345,14 @@ export function compileKenneyMapFromTable(
                 return { tile: { kind: "FLOOR" as const, h: z, skin: floorSprite }, walls: [] as WallToken[] };
             }
             if (type === "spawn") {
-                return { tile: { kind: "SPAWN" as const, h: z, skin: sprite }, walls: [] as WallToken[] };
+                const fallbackFloor = resolveTileSpriteId({
+                    slot: "floor",
+                    mapSkin: resolvedMapSkin,
+                    mapSkinId: skinIdToUse,
+                    mapDefaults: mapSkinDefaults,
+                });
+                const spawnSprite = sprite ?? fallbackFloor;
+                return { tile: { kind: "SPAWN" as const, h: z, skin: spawnSprite }, walls: [] as WallToken[] };
             }
             if (type === "goal") {
                 return { tile: { kind: "GOAL" as const, h: z, skin: sprite }, walls: [] as WallToken[] };
@@ -616,6 +623,8 @@ export function compileKenneyMapFromTable(
 
     for (const [key, tile] of placed.entries()) {
         if (tile.kind === "VOID") continue;
+        // SPAWN tiles don't get their own surface - they use the semantic field's floor (e.g., road, sidewalk, park)
+        if (tile.kind === "SPAWN") continue;
         const parts = key.split(",");
         const tx = parseInt(parts[0], 10);
         const ty = parseInt(parts[1], 10);
