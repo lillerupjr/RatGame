@@ -114,6 +114,29 @@ function getFlippedOverlayImage(img: HTMLImageElement): HTMLCanvasElement {
   return canvas;
 }
 
+function ensureBuildingMaskCanvas(
+  lighting: World["lighting"],
+  screenW: number,
+  screenH: number,
+): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null {
+  let canvas = lighting.debugBuildingMaskCanvas ?? null;
+  if (!canvas) {
+    canvas = document.createElement("canvas");
+    lighting.debugBuildingMaskCanvas = canvas;
+    lighting.debugBuildingMaskCtx = null;
+  }
+  if (canvas.width !== screenW) canvas.width = screenW;
+  if (canvas.height !== screenH) canvas.height = screenH;
+  let c2d = lighting.debugBuildingMaskCtx ?? null;
+  if (!c2d || c2d.canvas !== canvas) {
+    c2d = canvas.getContext("2d");
+    if (!c2d) return null;
+    lighting.debugBuildingMaskCtx = c2d;
+  }
+  configurePixelPerfect(c2d);
+  return { canvas, ctx: c2d };
+}
+
 /** Render tiles, entities, overlays, and debug layers. */
 export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
   const screenW = canvas.clientWidth;
@@ -304,6 +327,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     scale?: number;
   };
 
+  type MaskDraw = (maskCtx: CanvasRenderingContext2D) => void;
+  const buildingMaskDraws: MaskDraw[] = [];
 
     const drawRenderPiece = (c: RenderPieceDraw) => {
       const img = c.img;
@@ -319,6 +344,23 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       }
       ctx.drawImage(img, 0, 0, c.dw, c.dh);
       ctx.restore();
+    };
+
+    const addRenderPieceMask = (c: RenderPieceDraw) => {
+      buildingMaskDraws.push((maskCtx) => {
+        const img = c.img;
+        if (!img || img.width <= 0 || img.height <= 0) return;
+        const scale = c.scale ?? 1;
+        maskCtx.save();
+        maskCtx.translate(snapPx(c.dx), snapPx(c.dy));
+        maskCtx.scale(scale, scale);
+        if (c.flipX) {
+          maskCtx.translate(c.dw, 0);
+          maskCtx.scale(-1, 1);
+        }
+        maskCtx.drawImage(img, 0, 0, c.dw, c.dh);
+        maskCtx.restore();
+      });
     };
 
     const drawRuntimeSidewalkTop = (
@@ -595,6 +637,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const SHOW_STRUCTURE_HEIGHTS = false;
   const SHOW_STRUCTURE_COLLISION_DEBUG = (w as any).structureCollisionDebug ?? false;
   const SHOW_STRUCTURE_SLICE_DEBUG = (w as any).runtimeStructureSliceDebug ?? false;
+  const SHOW_BUILDING_MASK_DEBUG = w.lighting.showBuildingMaskDebug ?? false;
 
   // Enemy Z buffer (optional visual override)
   const ez = w.ezVisual;
@@ -1183,6 +1226,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           stableId: faceStableId + di * 0.001,
         };
         addToSlice(face.tx + face.ty, renderKey, () => drawRenderPiece(d));
+        if (face.layerRole === "STRUCTURE") addRenderPieceMask(d);
       }
     }
   }
@@ -1217,6 +1261,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         stableId: occStableId,
       };
       addToSlice(occ.tx + occ.ty, renderKey, () => drawRenderPiece(draw));
+      addRenderPieceMask(draw);
     }
   }
 
@@ -1317,6 +1362,29 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
                 });
               }
             });
+            if (o.layerRole === "STRUCTURE" || (o.kind ?? "ROOF") === "ROOF") {
+              buildingMaskDraws.push((maskCtx) => {
+                const img = draw.img;
+                if (!img) return;
+                const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(img) : img;
+                const maskX = snapPx(band.dstRect.x);
+                const maskY = snapPx(band.dstRect.y);
+                maskCtx.save();
+                maskCtx.globalCompositeOperation = "source-over";
+                maskCtx.drawImage(
+                  sourceImg,
+                  band.srcRect.x,
+                  band.srcRect.y,
+                  band.srcRect.w,
+                  band.srcRect.h,
+                  maskX,
+                  maskY,
+                  band.dstRect.w,
+                  band.dstRect.h,
+                );
+                maskCtx.restore();
+              });
+            }
           }
         } else {
           const slice = (o.anchorTx ?? (o.tx + o.w - 1)) + (o.anchorTy ?? (o.ty + o.h - 1));
@@ -1334,6 +1402,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
             stableId: 200000 + i,
           };
           addToSlice(slice, overlayKey, () => drawRenderPiece(draw));
+          if (o.layerRole === "STRUCTURE" || (o.kind ?? "ROOF") === "ROOF") addRenderPieceMask(draw);
         }
       }
     }
@@ -1408,6 +1477,28 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     deferredStructureSliceDebugDraws[i]();
   }
 
+  if (SHOW_BUILDING_MASK_DEBUG) {
+    const maskLayer = ensureBuildingMaskCanvas(w.lighting, screenW, screenH);
+    if (maskLayer) {
+      const maskCtx = maskLayer.ctx;
+      maskCtx.setTransform(1, 0, 0, 1, 0, 0);
+      maskCtx.clearRect(0, 0, screenW, screenH);
+      maskCtx.fillStyle = "rgba(0,0,0,1)";
+      maskCtx.fillRect(0, 0, screenW, screenH);
+      maskCtx.save();
+      configurePixelPerfect(maskCtx);
+      maskCtx.scale(pixelScale, pixelScale);
+      maskCtx.translate(viewCenterX, viewCenterY);
+      maskCtx.scale(camZoom, camZoom);
+      maskCtx.translate(-viewCenterX, -viewCenterY);
+      maskCtx.globalCompositeOperation = "destination-in";
+      for (let i = 0; i < buildingMaskDraws.length; i++) {
+        buildingMaskDraws[i](maskCtx);
+      }
+      maskCtx.restore();
+    }
+  }
+
   // Restore (undo camera zoom) before drawing screen-space overlays / HUD
   ctx.restore();
 
@@ -1446,6 +1537,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   }
   // PASS 8: final screen-space lighting
   renderLighting(ctx, w.lighting, projectedLights, screenW, screenH, w.time ?? 0);
+  if (SHOW_BUILDING_MASK_DEBUG) {
+    ctx.save();
+    ctx.globalAlpha = 1;
+    if (w.lighting.debugBuildingMaskCanvas) ctx.drawImage(w.lighting.debugBuildingMaskCanvas, 0, 0);
+    ctx.restore();
+  }
 
   const projectedStreetLamps = projectedLights.filter((l) => l.shape === "STREET_LAMP");
   if (projectedStreetLamps.length > 0) {

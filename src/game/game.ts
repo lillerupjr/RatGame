@@ -182,9 +182,15 @@ export function createGame(args: CreateGameArgs) {
 
   window.addEventListener("keydown", (e) => {
     if (e.repeat) return;
-    if (e.key !== "o" && e.key !== "O" && e.key !== "0") return;
-    world.lighting.occlusionEnabled = !world.lighting.occlusionEnabled;
-    console.info(`[lighting] occlusionEnabled=${world.lighting.occlusionEnabled}`);
+    if (e.key === "o" || e.key === "O" || e.key === "0") {
+      world.lighting.occlusionEnabled = !world.lighting.occlusionEnabled;
+      console.info(`[lighting] occlusionEnabled=${world.lighting.occlusionEnabled}`);
+      return;
+    }
+    if (e.key === "p" || e.key === "P") {
+      world.lighting.showBuildingMaskDebug = !world.lighting.showBuildingMaskDebug;
+      console.info(`[lighting] showBuildingMaskDebug=${world.lighting.showBuildingMaskDebug}`);
+    }
   });
 
 

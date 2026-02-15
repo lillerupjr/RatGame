@@ -44,6 +44,9 @@ export type WorldLightingState = {
   ambientTintStrength?: number;
   groundYScale?: number;
   occlusionEnabled: boolean;
+  showBuildingMaskDebug: boolean;
+  debugBuildingMaskCanvas?: HTMLCanvasElement | null;
+  debugBuildingMaskCtx?: CanvasRenderingContext2D | null;
 };
 
 export type World = {
@@ -435,6 +438,9 @@ export function createWorld(args: CreateWorldArgs): World {
       ambientTintStrength: 0,
       groundYScale: 0.65,
       occlusionEnabled: false,
+      showBuildingMaskDebug: false,
+      debugBuildingMaskCanvas: null,
+      debugBuildingMaskCtx: null,
     },
 
     // Delve / route
