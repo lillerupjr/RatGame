@@ -75,6 +75,7 @@ import { RNG } from "./util/rng";
 import { applyObjective } from "./map/objectiveTransforms";
 import { objectiveIdFromArchetype } from "./map/objectivePlan";
 import { getPlayableCharacter, PLAYABLE_CHARACTERS, type PlayableCharacterId } from "./content/playableCharacters";
+import { getUserSettings } from "../userSettings";
 
 
 type HudRefs = {
@@ -134,11 +135,11 @@ export function createGame(args: CreateGameArgs) {
   // ------------------------------------------------------------
   // DEBUG: optional spawn override (OFF by default)
   // ------------------------------------------------------------
-  const DEBUG_FORCE_SPAWN = false;
   const DEBUG_SPAWN_OFF_X = 0;   // world-space offset from map spawn
   const DEBUG_SPAWN_OFF_Y = 0;
 
   function applyDebugSpawn(w: World) {
+    const DEBUG_FORCE_SPAWN = getUserSettings().debug.forceSpawnOverride;
     if (!DEBUG_FORCE_SPAWN) return;
 
     const pg = gridAtPlayer(w);
@@ -179,25 +180,6 @@ export function createGame(args: CreateGameArgs) {
   let world: World = createWorld({ seed: 1337, stage: cloneStage("DOCKS") });
   applyObjectivesFromActiveMap(world);
   applyDebugSpawn(world);
-
-  window.addEventListener("keydown", (e) => {
-    if (e.repeat) return;
-    if (e.key === "o" || e.key === "O" || e.key === "0") {
-      world.lighting.occlusionEnabled = !world.lighting.occlusionEnabled;
-      console.info(`[lighting] occlusionEnabled=${world.lighting.occlusionEnabled}`);
-      return;
-    }
-    if (e.key === "p" || e.key === "P") {
-      const order: Array<"OFF" | "SOURCE" | "INVERSE" | "COMBINED"> = ["OFF", "SOURCE", "INVERSE", "COMBINED"];
-      const current = world.lighting.buildingMaskDebugView ?? "OFF";
-      const idx = order.indexOf(current);
-      const next = order[(idx + 1) % order.length];
-      world.lighting.buildingMaskDebugView = next;
-      world.lighting.showBuildingMaskDebug = next !== "OFF";
-      console.info(`[lighting] buildingMaskDebugView=${next}`);
-    }
-  });
-
 
   setMusicStage("DOCKS");
 

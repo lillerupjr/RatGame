@@ -63,6 +63,8 @@ import {
 } from "../../../engine/render/debug/renderDebug";
 import { configurePixelPerfect, snapPx, snapZoom } from "../../../engine/render/pixelPerfect";
 import { renderLighting, type ProjectedLight } from "./renderLighting";
+import { resolveDebugFlags } from "../../../debugSettings";
+import { getUserSettings } from "../../../userSettings";
 
 // ============================================
 // RenderKey & KindOrder (Isometric Painter Model)
@@ -737,16 +739,18 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     toScreenAtZ,
   };
 
-  const SHOW_WALK_MASK = false;
-  const SHOW_RAMPS = false;
-  const SHOW_OCCLUDER_DEBUG = false;
-  const SHOW_PROJECTILE_FACES = false;
-  const SHOW_TRIGGER_ZONES = false;
-  const SHOW_STRUCTURE_HEIGHTS = false;
-  const SHOW_STRUCTURE_COLLISION_DEBUG = (w as any).structureCollisionDebug ?? false;
-  const SHOW_STRUCTURE_SLICE_DEBUG = (w as any).runtimeStructureSliceDebug ?? false;
-  const buildingMaskDebugView = w.lighting.buildingMaskDebugView ?? "OFF";
-  const SHOW_BUILDING_MASK_DEBUG = buildingMaskDebugView !== "OFF";
+  const debug = getUserSettings().debug;
+  const debugFlags = resolveDebugFlags(debug);
+  const SHOW_WALK_MASK = debugFlags.showWalkMask;
+  const SHOW_RAMPS = debugFlags.showRamps;
+  const SHOW_OCCLUDER_DEBUG = debugFlags.showOccluders;
+  const SHOW_PROJECTILE_FACES = debugFlags.showProjectileFaces;
+  const SHOW_TRIGGER_ZONES = debugFlags.showTriggers;
+  const SHOW_STRUCTURE_HEIGHTS = debugFlags.showStructureHeights;
+  const SHOW_STRUCTURE_COLLISION_DEBUG = debugFlags.showStructureCollision;
+  const SHOW_STRUCTURE_SLICE_DEBUG = debugFlags.showStructureSlices;
+  const buildingMaskDebugView = debugFlags.buildingMaskDebugView;
+  const SHOW_BUILDING_MASK_DEBUG = debugFlags.showBuildingMaskDebug;
 
   // Enemy Z buffer (optional visual override)
   const ez = w.ezVisual;
@@ -1377,7 +1381,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     // ----------------------------
     // Collect OVERLAYS (roofs + props) into slices
     // ----------------------------
-    {
+    if (debugFlags.showMapOverlays) {
       const ovs = overlaysInView(viewRect);
       for (let i = 0; i < ovs.length; i++) {
         const o = ovs[i];
@@ -1617,7 +1621,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   for (let i = 0; i < lightDefs.length; i++) {
     const ld = lightDefs[i];
     const isStreetLamp = (ld.shape ?? "RADIAL") === "STREET_LAMP";
-    const occlusion = isStreetLamp ? (w.lighting.occlusionEnabled ? 1 : 0) : 0;
+    const occlusion = isStreetLamp
+      ? ((debugFlags.lightingOcclusionEnabled && w.lighting.occlusionEnabled) ? 1 : 0)
+      : 0;
     const p = worldToScreen(ld.worldX, ld.worldY);
     const screenOffsetX = (ld.screenOffsetPx?.x ?? 0) * pixelScale;
     const screenOffsetY = (ld.screenOffsetPx?.y ?? 0) * pixelScale;
@@ -1712,7 +1718,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   ctx.restore();
 
   // --- UI ---
-  renderTileGridCompass(w, ctx, screenW, screenH); // tile-grid N/E/S/W (matches in-game tests)
+  if (debugFlags.showGrid) renderTileGridCompass(w, ctx, screenW, screenH); // tile-grid N/E/S/W (matches in-game tests)
 
   renderHealthOrb(w, ctx, screenW, screenH);
   renderExperienceBar(w, ctx, screenW, screenH);

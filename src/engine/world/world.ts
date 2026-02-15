@@ -444,7 +444,7 @@ export function createWorld(args: CreateWorldArgs): World {
       ambientTint: undefined,
       ambientTintStrength: 0,
       groundYScale: 0.65,
-      occlusionEnabled: false,
+      occlusionEnabled: true,
       showBuildingMaskDebug: false,
       buildingMaskDebugView: "OFF",
       occlusionMaskCanvas: null,
