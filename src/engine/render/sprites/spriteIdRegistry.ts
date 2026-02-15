@@ -26,8 +26,12 @@ function collectRenderableSpriteIds(): ReadonlySet<string> {
   for (let i = 1; i <= 6; i++) {
     addId(ids, `tiles/floor/sidewalk/${i}`);
   }
-  addId(ids, "tiles/floor/asphalt/1");
-  addId(ids, "tiles/floor/park/1");
+  for (let i = 1; i <= 1; i++) {
+    addId(ids, `tiles/floor/asphalt/${i}`);
+  }
+  for (let i = 1; i <= 7; i++) {
+    addId(ids, `tiles/floor/park/${i}`);
+  }
 
   addId(ids, DEFAULT_MAP_SKIN.floor);
   addId(ids, DEFAULT_MAP_SKIN.apron);

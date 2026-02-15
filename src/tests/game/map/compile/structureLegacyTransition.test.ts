@@ -241,7 +241,8 @@ describe("structure legacy transition", () => {
 
     expect(parkTop?.kind).toBe("SQUARE_128_RUNTIME");
     expect(parkTop?.family).toBe("park");
-    expect(parkTop?.spriteId).toBe("tiles/floor/park/1");
+    expect(parkTop?.variantIndex).toBeGreaterThanOrEqual(1);
+    expect(parkTop?.variantIndex).toBeLessThanOrEqual(7);
   });
 
   it("emits compiled lightDefs from map lights in world-space anchors", () => {

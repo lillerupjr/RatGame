@@ -240,7 +240,7 @@ export function compileKenneyMapFromTable(
     const runtimeTileSkin = (family: RuntimeFloorTop["family"]) => `${RUNTIME_TILE_SKIN_PREFIX}${family}`;
 
     const pickRuntimeSquareTop = (family: RuntimeFloorTop["family"], tx: number, ty: number): RuntimeFloorTop => {
-        const variantCount = family === "sidewalk" ? 6 : 1;
+        const variantCount = family === "sidewalk" ? 6 : family === "park" ? 7 : 1;
         const variantSeed = hashString(`${runSeed}:${mapId}:${tx},${ty}:${family}:variant`);
         const variantIndex = (variantSeed % variantCount) + 1;
         const rotationQuarterTurns: 0 = 0;

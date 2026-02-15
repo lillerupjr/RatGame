@@ -76,7 +76,7 @@ export function getRuntimeSquareFloorSprite(
     family: "sidewalk" | "asphalt" | "park",
     variantIndex: number,
 ): LoadedImg {
-    const max = family === "sidewalk" ? 6 : 1;
+    const max = family === "sidewalk" ? 6 : family === "park" ? 7 : 1;
     const idx = Math.max(1, Math.min(max, Math.floor(variantIndex)));
     return loadById(`tiles/floor/${family}/${idx}`);
 }
@@ -98,5 +98,5 @@ export function preloadRenderSprites(): void {
     void getVoidTop();
     for (let i = 1; i <= 6; i++) void getRuntimeSquareFloorSprite("sidewalk", i);
     void getRuntimeSquareFloorSprite("asphalt", 1);
-    void getRuntimeSquareFloorSprite("park", 1);
+    for (let i = 1; i <= 7; i++) void getRuntimeSquareFloorSprite("park", i);
 }
