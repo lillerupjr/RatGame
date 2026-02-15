@@ -2,6 +2,7 @@ import { BUILDING_SKINS } from "../../../game/content/buildings";
 import { CONTAINER_SKINS } from "../../../game/content/containers";
 import { MAP_SKINS, DEFAULT_MAP_SKIN } from "../../../game/content/mapSkins";
 import { PROPS } from "../../../game/content/props";
+import { RUNTIME_FLOOR_VARIANT_COUNTS, type RuntimeFloorFamily } from "../../../game/content/runtimeFloorConfig";
 
 function addId(set: Set<string>, id: string | undefined): void {
   if (!id) return;
@@ -23,14 +24,10 @@ function addSemanticValue(set: Set<string>, value: string | string[] | undefined
 function collectRenderableSpriteIds(): ReadonlySet<string> {
   const ids = new Set<string>();
 
-  for (let i = 1; i <= 6; i++) {
-    addId(ids, `tiles/floor/sidewalk/${i}`);
-  }
-  for (let i = 1; i <= 1; i++) {
-    addId(ids, `tiles/floor/asphalt/${i}`);
-  }
-  for (let i = 1; i <= 7; i++) {
-    addId(ids, `tiles/floor/park/${i}`);
+  for (const [family, count] of Object.entries(RUNTIME_FLOOR_VARIANT_COUNTS) as [RuntimeFloorFamily, number][]) {
+    for (let i = 1; i <= count; i++) {
+      addId(ids, `tiles/floor/${family}/${i}`);
+    }
   }
 
   addId(ids, DEFAULT_MAP_SKIN.floor);

@@ -17,6 +17,7 @@ import { requireProp } from "../../content/props";
 import { RNG } from "../../util/rng";
 import {getSpriteMeta} from "../../../engine/render/sprites/spriteMeta";
 import { seAnchorFromTopLeft } from "../../../engine/render/sprites/structureFootprintOwnership";
+import { getFloorVariantCount } from "../../content/runtimeFloorConfig";
 
 export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL";
 export type StairDir = "N" | "E" | "S" | "W";
@@ -240,7 +241,7 @@ export function compileKenneyMapFromTable(
     const runtimeTileSkin = (family: RuntimeFloorTop["family"]) => `${RUNTIME_TILE_SKIN_PREFIX}${family}`;
 
     const pickRuntimeSquareTop = (family: RuntimeFloorTop["family"], tx: number, ty: number): RuntimeFloorTop => {
-        const variantCount = family === "sidewalk" ? 6 : family === "park" ? 7 : 1;
+        const variantCount = getFloorVariantCount(family);
         const variantSeed = hashString(`${runSeed}:${mapId}:${tx},${ty}:${family}:variant`);
         const variantIndex = (variantSeed % variantCount) + 1;
         const rotationQuarterTurns: 0 = 0;

@@ -5,6 +5,7 @@ import { BUILDING_PACKS, BUILDING_SKINS } from "../../../../game/content/buildin
 import type { TableMapDef } from "../../../../game/map/formats/table/tableMapTypes";
 import { CONTAINER_SKINS } from "../../../../game/content/containers";
 import { seAnchorFromTopLeft } from "../../../../engine/render/sprites/structureFootprintOwnership";
+import { RUNTIME_FLOOR_VARIANT_COUNTS } from "../../../../game/content/runtimeFloorConfig";
 
 describe("structure legacy transition", () => {
   it("uses monolithic flat container assets during runtime-slicing", () => {
@@ -242,7 +243,7 @@ describe("structure legacy transition", () => {
     expect(parkTop?.kind).toBe("SQUARE_128_RUNTIME");
     expect(parkTop?.family).toBe("park");
     expect(parkTop?.variantIndex).toBeGreaterThanOrEqual(1);
-    expect(parkTop?.variantIndex).toBeLessThanOrEqual(7);
+    expect(parkTop?.variantIndex).toBeLessThanOrEqual(RUNTIME_FLOOR_VARIANT_COUNTS.park);
   });
 
   it("emits compiled lightDefs from map lights in world-space anchors", () => {

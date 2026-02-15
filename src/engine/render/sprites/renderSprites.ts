@@ -1,5 +1,6 @@
 import { resolveMapSkin, resolveSemanticSprite, type MapSkinId } from "../../../game/content/mapSkins";
 import { isKnownRenderableSpriteId } from "./spriteIdRegistry";
+import { getFloorVariantCount, RUNTIME_FLOOR_VARIANT_COUNTS, type RuntimeFloorFamily } from "../../../game/content/runtimeFloorConfig";
 
 export type LoadedImg = {
     img: HTMLImageElement;
@@ -96,7 +97,7 @@ export function getVoidTop(): LoadedImg {
 // IMPORTANT: this must be a named export (your render.ts imports it by name)
 export function preloadRenderSprites(): void {
     void getVoidTop();
-    for (let i = 1; i <= 6; i++) void getRuntimeSquareFloorSprite("sidewalk", i);
-    void getRuntimeSquareFloorSprite("asphalt", 1);
-    for (let i = 1; i <= 7; i++) void getRuntimeSquareFloorSprite("park", i);
+    for (const [family, count] of Object.entries(RUNTIME_FLOOR_VARIANT_COUNTS) as [RuntimeFloorFamily, number][]) {
+        for (let i = 1; i <= count; i++) void getRuntimeSquareFloorSprite(family, i);
+    }
 }
