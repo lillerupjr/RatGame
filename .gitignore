@@ -33,5 +33,3 @@ repo_dump*.txt
 
 # all files in the .claude directory
 .claude/*
-src/userSettings.local.ts
-src/userSettings.local.js
