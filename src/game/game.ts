@@ -1689,7 +1689,9 @@ export function createGame(args: CreateGameArgs) {
       }
     }
 
-    movementSystem(world, input, dt);
+    if (!activeDialog) {
+      movementSystem(world, input, dt);
+    }
     roomChallengeSystem(world, dt);  // Track room challenges and lock exits
     spawnSystem(world, dt);
     const isNeutralObjectiveFloor = world.floorArchetype === "VENDOR" || world.floorArchetype === "HEAL";
