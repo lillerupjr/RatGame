@@ -1689,25 +1689,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     ctx.restore();
   }
 
-  const projectedStreetLamps = projectedLights.filter((l) => l.shape === "STREET_LAMP");
-  if (projectedStreetLamps.length > 0) {
-    const occLabel = w.lighting.occlusionEnabled ? "MASK" : "OFF";
-    ctx.save();
-    ctx.font = "11px monospace";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "bottom";
-    for (let i = 0; i < projectedStreetLamps.length; i++) {
-      const light = projectedStreetLamps[i];
-      const sx = light.sx;
-      const sy = light.sy;
-      const text = `Lamp Occ: ${occLabel}`;
-      ctx.fillStyle = "rgba(0,0,0,0.75)";
-      ctx.fillRect(sx - 50, sy - 68, 100, 14);
-      ctx.fillStyle = "#ffffff";
-      ctx.fillText(text, sx, sy - 56);
-    }
-    ctx.restore();
-  }
 
   // FPS
   ctx.save();
