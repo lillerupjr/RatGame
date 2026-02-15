@@ -587,6 +587,7 @@ export function createGame(args: CreateGameArgs) {
     w.ePoisonT = [];
     w.ePoisonDps = [];
     w.ePoisonedOnDeath = [];
+    w.eSpawnTriggerId = [];
 
     w.zAlive = [];
     w.zKind = [];

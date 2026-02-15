@@ -259,6 +259,7 @@ export type World = {
   ePoisonT: number[];
   ePoisonDps: number[];
   ePoisonedOnDeath: boolean[];
+  eSpawnTriggerId: (string | undefined)[];
 
   // Enemy spatial hash (perf)
   enemySpatialHash: SpatialHash;
@@ -519,7 +520,7 @@ export function createWorld(args: CreateWorldArgs): World {
     areaMult: 1,
     durationMult: 1,
 
-    baseCritChance: 0.25,
+    baseCritChance: 0.05,
     critChanceBonus: 0,
     critMultiplier: 2.0,
 
@@ -570,6 +571,7 @@ export function createWorld(args: CreateWorldArgs): World {
     ePoisonT: [],
     ePoisonDps: [],
     ePoisonedOnDeath: [],
+    eSpawnTriggerId: [],
 
     enemySpatialHash: createSpatialHash(128),
 

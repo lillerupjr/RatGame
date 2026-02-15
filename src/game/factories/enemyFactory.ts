@@ -55,6 +55,7 @@ export function spawnEnemyGrid(
     w.ePoisonT.push(0);
     w.ePoisonDps.push(0);
     w.ePoisonedOnDeath.push(false);
+    w.eSpawnTriggerId.push(undefined);
     w.ezVisual.push(0);
     w.ezLogical.push(0);
 

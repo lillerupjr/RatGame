@@ -19,7 +19,8 @@ export function bossZoneSpawnSystem(world: World): void {
     const wx = (def.tx + 0.5) * KENNEY_TILE_WORLD;
     const wy = (def.ty + 0.5) * KENNEY_TILE_WORLD;
     const gp = worldToGrid(wx, wy, KENNEY_TILE_WORLD);
-    spawnEnemyGrid(world, ENEMY_TYPE.BOSS, gp.gx, gp.gy, KENNEY_TILE_WORLD);
+    const e = spawnEnemyGrid(world, ENEMY_TYPE.BOSS, gp.gx, gp.gy, KENNEY_TILE_WORLD);
+    world.eSpawnTriggerId[e] = signal.triggerId;
 
     world.bossZoneSpawned.push(signal.triggerId);
   }

@@ -104,7 +104,13 @@ function updateKillSignals(world: World, trigger: TriggerInstance) {
     for (let i = 0; i < world.events.length; i++) {
         const ev = world.events[i];
         if (ev.type !== "ENEMY_KILLED") continue;
-        if (requireBoss && world.eType[ev.enemyIndex] !== ENEMY_TYPE.BOSS) continue;
+        if (requireBoss) {
+            if (world.eType[ev.enemyIndex] !== ENEMY_TYPE.BOSS) continue;
+            const spawnTriggerId = world.eSpawnTriggerId[ev.enemyIndex];
+            if (spawnTriggerId !== trigger.id) continue;
+            emitTriggerSignal(world, { type: "KILL", entityId: ev.enemyIndex, triggerId: trigger.id });
+            continue;
+        }
         if (!isInsideRadius(trigger, ev.x, ev.y, KENNEY_TILE_WORLD)) continue;
         emitTriggerSignal(world, { type: "KILL", entityId: ev.enemyIndex, triggerId: trigger.id });
     }

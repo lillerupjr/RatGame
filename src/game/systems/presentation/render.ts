@@ -1550,16 +1550,24 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
               const img = draw.img;
               if (!img) return;
               const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(img) : img;
+              const x0 = Math.round(band.dstRect.x);
+              const y0 = Math.round(band.dstRect.y);
+              const x1 = Math.round(band.dstRect.x + band.dstRect.w);
+              const y1 = Math.round(band.dstRect.y + band.dstRect.h);
+              const snappedW = Math.max(0, x1 - x0);
+              const snappedH = Math.max(0, y1 - y0);
+              if (snappedW <= 0 || snappedH <= 0) return;
+              ctx.imageSmoothingEnabled = false;
               ctx.drawImage(
                 sourceImg,
                 band.srcRect.x,
                 band.srcRect.y,
                 band.srcRect.w,
                 band.srcRect.h,
-                snapPx(band.dstRect.x),
-                snapPx(band.dstRect.y),
-                band.dstRect.w,
-                band.dstRect.h,
+                x0,
+                y0,
+                snappedW,
+                snappedH,
               );
               if (SHOW_STRUCTURE_SLICE_DEBUG) {
                 const ownerTile = {
@@ -1586,20 +1594,26 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
                 const img = draw.img;
                 if (!img) return;
                 const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(img) : img;
-                const maskX = snapPx(band.dstRect.x);
-                const maskY = snapPx(band.dstRect.y);
+                const x0 = Math.round(band.dstRect.x);
+                const y0 = Math.round(band.dstRect.y);
+                const x1 = Math.round(band.dstRect.x + band.dstRect.w);
+                const y1 = Math.round(band.dstRect.y + band.dstRect.h);
+                const snappedW = Math.max(0, x1 - x0);
+                const snappedH = Math.max(0, y1 - y0);
+                if (snappedW <= 0 || snappedH <= 0) return;
                 maskCtx.save();
                 maskCtx.globalCompositeOperation = "source-over";
+                maskCtx.imageSmoothingEnabled = false;
                 maskCtx.drawImage(
                   sourceImg,
                   band.srcRect.x,
                   band.srcRect.y,
                   band.srcRect.w,
                   band.srcRect.h,
-                  maskX,
-                  maskY,
-                  band.dstRect.w,
-                  band.dstRect.h,
+                  x0,
+                  y0,
+                  snappedW,
+                  snappedH,
                 );
                 maskCtx.restore();
               });
@@ -1746,6 +1760,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     inverseCtx.globalCompositeOperation = "source-over";
   }
 
+  // Floating combat text: world pass (same camera transform as world content)
+  renderFloatingText(w, ctx, toScreen);
+
   // Restore (undo camera zoom) before drawing screen-space overlays / HUD
   ctx.restore();
 
@@ -1838,8 +1855,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   renderExperienceBar(w, ctx, screenW, screenH);
   renderBossHealthBar(w, ctx, screenW, screenH);
   renderDPSMeter(w, ctx, screenW, screenH);
-  renderFloatingText(w, ctx, toScreen);
-
 }
 
 
@@ -1973,12 +1988,14 @@ function renderTileGridCompass(w: World, ctx: CanvasRenderingContext2D, ww: numb
 function renderFloatingText(
     w: World,
     ctx: CanvasRenderingContext2D,
-    toScreen: (x: number, y: number) => { x: number; y: number }
+    toScreen: (x: number, y: number) => { x: number; y: number },
 ) {
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  for (let i = 0; i < w.floatTextX.length; i++) {
+  for (let i = w.floatTextX.length - 1; i >= 0; i--) {
     const ttl = w.floatTextTtl[i];
     if (ttl <= 0) continue;
 
@@ -1993,18 +2010,17 @@ function renderFloatingText(
     const maxTtl = 0.8;
     const progress = 1 - ttl / maxTtl;
 
-    const floatOffset = progress * 30;
+    const rise = progress * 0.35;
     const alpha = progress > 0.6 ? 1 - (progress - 0.6) / 0.4 : 1;
 
     const baseSize = isCrit ? 16 : 12;
 
-    ctx.save();
     ctx.globalAlpha = alpha;
     ctx.fillStyle = color;
     ctx.font = `${baseSize}px monospace`;
-    ctx.fillText(`${value}`, x, y - floatOffset);
-    ctx.restore();
+    ctx.fillText(`${value}`, x, y - rise);
   }
+  ctx.restore();
 }
 
 /* =======================================================================
