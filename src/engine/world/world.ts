@@ -14,6 +14,7 @@ import type { ObjectiveSpec } from "../../game/systems/progression/objectiveSpec
 import type { FloorArchetype } from "../../game/map/floorArchetype";
 import type { FloorIntent } from "../../game/map/floorIntent";
 import type { TriggerDef } from "../../game/triggers/triggerTypes";
+import type { Dir8 } from "../render/sprites/dir8";
 
 import type { WeaponId } from "../../game/content/weapons";
 
@@ -54,6 +55,18 @@ export type WorldLightingState = {
   combinedOcclusionMaskCtx?: CanvasRenderingContext2D | null;
   debugBuildingMaskCanvas?: HTMLCanvasElement | null;
   debugBuildingMaskCtx?: CanvasRenderingContext2D | null;
+};
+
+export type NpcActor = {
+  id: string;
+  kind: "vendor" | "healer";
+  tx: number;
+  ty: number;
+  wx: number;
+  wy: number;
+  dirBase: Dir8;
+  dirCurrent: Dir8;
+  faceRestoreAtMs: number | null;
 };
 
 export type World = {
@@ -200,6 +213,7 @@ export type World = {
   vendorPurchases: string[];
   relics: string[];
   relicEffects: { xpMult: number; hpBonus: number };
+  npcs: NpcActor[];
 
   // -------------------------
   // Weapons + items
@@ -518,6 +532,7 @@ export function createWorld(args: CreateWorldArgs): World {
       xpMult: 1,
       hpBonus: 0,
     },
+    npcs: [],
 
     // Weapons + items
     weapons: [],

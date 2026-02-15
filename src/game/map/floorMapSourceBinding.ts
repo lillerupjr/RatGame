@@ -11,9 +11,9 @@ export function mapSourceFromFloorIntent(intent: FloorIntent): MapSource {
   }
   switch (intent.archetype) {
     case "VENDOR":
-      return { type: "AUTHORED_JSON", mapId: "VENDOR_01" };
+      return { type: "AUTHORED_JSON", mapId: "SHOP" };
     case "HEAL":
-      return { type: "AUTHORED_JSON", mapId: "HEAL_01" };
+      return { type: "AUTHORED_JSON", mapId: "REST" };
     case "SURVIVE":
       return { type: "PROCEDURAL_ROOMS" };
     case "TIME_TRIAL":

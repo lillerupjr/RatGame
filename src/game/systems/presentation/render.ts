@@ -7,6 +7,7 @@ import { ENEMY_TYPE } from "../../content/enemies";
 import { getPlayerSpriteFrame, playerSpritesReady } from "../../../engine/render/sprites/playerSprites";
 import { type Dir8 } from "../../../engine/render/sprites/dir8";
 import { getEnemySpriteFrame, preloadEnemySprites } from "../../../engine/render/sprites/enemySprites";
+import { getVendorNpcSpriteFrame, preloadVendorNpcSprites, vendorNpcSpritesReady } from "../../../engine/render/sprites/vendorSprites";
 import {
   heightAtWorld,
   walkInfo,
@@ -292,6 +293,11 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   if (!(w as any)._enemySpritesPreloaded) {
     (w as any)._enemySpritesPreloaded = true;
     preloadEnemySprites();
+  }
+
+  if (!(w as any)._vendorSpritesPreloaded) {
+    (w as any)._vendorSpritesPreloaded = true;
+    preloadVendorNpcSprites();
   }
 
   // one-time projectile sprite preload
@@ -1224,6 +1230,41 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       };
 
       addToSlice(etx + ety, renderKey, drawClosure);
+    }
+  }
+
+  // ----------------------------
+  // Collect NPCS into slices
+  // ----------------------------
+  {
+    for (let i = 0; i < w.npcs.length; i++) {
+      const npc = w.npcs[i];
+      const ntx = npc.tx | 0;
+      const nty = npc.ty | 0;
+      const zAbs = tileHAtWorld(npc.wx, npc.wy);
+
+      const renderKey: RenderKey = {
+        slice: ntx + nty,
+        within: ntx,
+        baseZ: zAbs,
+        kindOrder: KindOrder.ENTITY,
+        stableId: 125000 + i,
+      };
+
+      const p = toScreen(npc.wx, npc.wy);
+      const drawClosure = () => {
+        const fr = vendorNpcSpritesReady()
+          ? getVendorNpcSpriteFrame({ dir: npc.dirCurrent, time: w.time ?? 0 })
+          : null;
+        if (!fr) return;
+        const dw = fr.sw * fr.scale;
+        const dh = fr.sh * fr.scale;
+        const dx = p.x - dw * fr.anchorX;
+        const dy = p.y - dh * fr.anchorY;
+        ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, snapPx(dx), snapPx(dy), dw, dh);
+      };
+
+      addToSlice(ntx + nty, renderKey, drawClosure);
     }
   }
 

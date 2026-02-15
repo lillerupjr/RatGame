@@ -36,7 +36,7 @@ export function createInputState(): InputState {
       if (!s.jump) s.jumpPressed = true;
       s.jump = true;
     }
-    if (e.key === "e" || e.key === "Enter") {
+    if (e.key === "e" || e.key === "E") {
       if (!s.interact) s.interactPressed = true;
       s.interact = true;
     }
@@ -48,7 +48,7 @@ export function createInputState(): InputState {
     if (e.key === "a" || e.key === "ArrowLeft") s.left = false;
     if (e.key === "d" || e.key === "ArrowRight") s.right = false;
     if (e.key === " ") s.jump = false;
-    if (e.key === "e" || e.key === "Enter") s.interact = false;
+    if (e.key === "e" || e.key === "E") s.interact = false;
   });
 
   return s;

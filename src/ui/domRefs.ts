@@ -18,6 +18,12 @@ type MapRefs = {
     hit: HTMLDivElement;
 };
 
+type DialogRefs = {
+    root: HTMLDivElement;
+    text: HTMLDivElement;
+    choices: HTMLDivElement;
+};
+
 export type HudRefs = {
     root: HTMLDivElement;
     timePill: HTMLSpanElement;
@@ -27,6 +33,7 @@ export type HudRefs = {
     objectiveOverlay: HTMLDivElement;
     objectiveTitle: HTMLDivElement;
     objectiveStatus: HTMLDivElement;
+    interactPrompt: HTMLDivElement;
     weaponSlots: HTMLDivElement;
     itemSlots: HTMLDivElement;
 };
@@ -36,6 +43,7 @@ export type UiRefs = {
     endEl: EndRefs;
     levelupEl: LevelupRefs;
     mapEl: MapRefs;
+    dialogEl: DialogRefs;
 };
 
 export type DomRefs = {
@@ -44,6 +52,7 @@ export type DomRefs = {
     continueBtn: HTMLButtonElement;
     mainMenuEl: HTMLDivElement;
     startRunBtn: HTMLButtonElement;
+    deterministicRunBtn: HTMLButtonElement;
     mapsBtn: HTMLButtonElement;
     innkeeperBtn: HTMLButtonElement;
     settingsBtn: HTMLButtonElement;
@@ -81,8 +90,12 @@ export type DomRefs = {
     killsPill: HTMLSpanElement;
     hpPill: HTMLSpanElement;
     lvlPill: HTMLSpanElement;
+    interactPrompt: HTMLDivElement;
     weaponSlots: HTMLDivElement;
     itemSlots: HTMLDivElement;
+    dialogRoot: HTMLDivElement;
+    dialogText: HTMLDivElement;
+    dialogChoices: HTMLDivElement;
     hud: HudRefs;
     ui: UiRefs;
 };
@@ -106,6 +119,7 @@ export function getDomRefs(): DomRefs {
 
     const mainMenuEl = getEl<HTMLDivElement>("mainMenu");
     const startRunBtn = getEl<HTMLButtonElement>("startRunBtn");
+    const deterministicRunBtn = getEl<HTMLButtonElement>("deterministicRunBtn");
     const mapsBtn = getEl<HTMLButtonElement>("mapsBtn");
     const innkeeperBtn = getEl<HTMLButtonElement>("innkeeperBtn");
     const settingsBtn = getEl<HTMLButtonElement>("settingsBtn");
@@ -141,8 +155,12 @@ export function getDomRefs(): DomRefs {
     const objectiveOverlay = getEl<HTMLDivElement>("objectiveOverlay");
     const objectiveTitle = getEl<HTMLDivElement>("objectiveTitle");
     const objectiveStatus = getEl<HTMLDivElement>("objectiveStatus");
+    const interactPrompt = getEl<HTMLDivElement>("interactPrompt");
     const weaponSlots = getEl<HTMLDivElement>("weaponSlots");
     const itemSlots = getEl<HTMLDivElement>("itemSlots");
+    const dialogRoot = getEl<HTMLDivElement>("dialogBar");
+    const dialogText = getEl<HTMLDivElement>("dialogText");
+    const dialogChoices = getEl<HTMLDivElement>("dialogChoices");
 
     const endRoot = getEl<HTMLDivElement>("end");
     const endTitle = getEl<HTMLDivElement>("endTitle");
@@ -167,6 +185,7 @@ export function getDomRefs(): DomRefs {
         objectiveOverlay,
         objectiveTitle,
         objectiveStatus,
+        interactPrompt,
         weaponSlots,
         itemSlots,
     };
@@ -190,6 +209,11 @@ export function getDomRefs(): DomRefs {
             svg: mapSvg,
             hit: mapHit,
         },
+        dialogEl: {
+            root: dialogRoot,
+            text: dialogText,
+            choices: dialogChoices,
+        },
     };
 
     return {
@@ -198,6 +222,7 @@ export function getDomRefs(): DomRefs {
         continueBtn,
         mainMenuEl,
         startRunBtn,
+        deterministicRunBtn,
         mapsBtn,
         innkeeperBtn,
         settingsBtn,
@@ -235,8 +260,12 @@ export function getDomRefs(): DomRefs {
         killsPill,
         hpPill,
         lvlPill,
+        interactPrompt,
         weaponSlots,
         itemSlots,
+        dialogRoot,
+        dialogText,
+        dialogChoices,
         hud,
         ui,
     };

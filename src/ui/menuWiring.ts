@@ -8,6 +8,7 @@ import { getPlayerIdleSpriteUrl } from "../engine/render/sprites/playerSprites";
 type GameApi = {
     previewMap: (mapId?: string) => void;
     startRun: (characterId: PlayableCharacterId) => void;
+    startDeterministicRun: (characterId: PlayableCharacterId) => void;
     startSandboxRun: (characterId: PlayableCharacterId, mapId?: string) => void;
 };
 
@@ -76,7 +77,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     // Start with undefined (Delve mode) by default, not PROC_ROOMS
     let selectedMapId: string | undefined = refs.startBtn.dataset.map || undefined;
     let selectedCharacterId: PlayableCharacterId | undefined = undefined;
-    let pendingStartMode: "DELVE" | "SANDBOX" = "DELVE";
+    let pendingStartMode: "DELVE" | "DETERMINISTIC" | "SANDBOX" = "DELVE";
 
     function getSelectedMapLabel(): string {
         if (!selectedMapId) return "Delve (random route)";
@@ -190,6 +191,16 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         refs.characterSelectEl.hidden = false;
     });
 
+    refs.deterministicRunBtn.addEventListener("click", () => {
+        selectedMapId = undefined;
+        pendingStartMode = "DETERMINISTIC";
+        delete refs.startBtn.dataset.map;
+        updateMenuSubline();
+
+        refs.mainMenuEl.hidden = true;
+        refs.characterSelectEl.hidden = false;
+    });
+
     // Character selection -> Main menu
     refs.characterBackBtn.addEventListener("click", () => {
         refs.characterSelectEl.hidden = true;
@@ -205,6 +216,8 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         refs.menuEl.hidden = true;
         if (pendingStartMode === "SANDBOX") {
             game.startSandboxRun(selectedCharacterId, selectedMapId);
+        } else if (pendingStartMode === "DETERMINISTIC") {
+            game.startDeterministicRun(selectedCharacterId);
         } else {
             game.startRun(selectedCharacterId);
         }

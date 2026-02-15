@@ -257,6 +257,7 @@ export function compileKenneyMapFromTable(
         }
         return hash >>> 0;
     };
+    const INHERIT_DOMINANT_FLOOR_SKIN = "__INHERIT_DOMINANT_FLOOR__";
     const RUNTIME_TILE_SKIN_PREFIX = "__RUNTIME_SQUARE_128__";
     const runtimeTileSkin = (family: RuntimeFloorTop["family"]) => `${RUNTIME_TILE_SKIN_PREFIX}${family}`;
 
@@ -346,6 +347,16 @@ export function compileKenneyMapFromTable(
                         kind: "FLOOR" as const,
                         h: z,
                         skin: runtimeTileSkin(runtimeSquareFamily),
+                    },
+                    walls: [] as WallToken[],
+                };
+            }
+            if (type === "interact_shop" || type === "interact_rest" || type === "npc_vendor" || type === "npc_healer") {
+                return {
+                    tile: {
+                        kind: "FLOOR" as const,
+                        h: z,
+                        skin: INHERIT_DOMINANT_FLOOR_SKIN,
                     },
                     walls: [] as WallToken[],
                 };
@@ -644,6 +655,73 @@ export function compileKenneyMapFromTable(
         else topsByLayer.set(surface.zLogical, [surface]);
     }
 
+    function resolveSpawnSurfaceTop(tx: number, ty: number): {
+        runtimeTop?: RuntimeFloorTop;
+        spriteIdTop: string;
+    } {
+        const runtimeCounts = new Map<RuntimeFloorTop["family"], number>();
+        const skinCounts = new Map<string, number>();
+        const neighborOffsets = [
+            { dx: 0, dy: 0 },
+            { dx: 1, dy: 0 },
+            { dx: -1, dy: 0 },
+            { dx: 0, dy: 1 },
+            { dx: 0, dy: -1 },
+            { dx: 1, dy: 1 },
+            { dx: 1, dy: -1 },
+            { dx: -1, dy: 1 },
+            { dx: -1, dy: -1 },
+        ];
+        for (let i = 0; i < neighborOffsets.length; i++) {
+            const nt = placed.get(`${tx + neighborOffsets[i].dx},${ty + neighborOffsets[i].dy}`);
+            if (!nt || nt.kind === "VOID" || nt.kind === "SPAWN") continue;
+            const skin = nt.skin ?? "";
+            if (!skin || skin === INHERIT_DOMINANT_FLOOR_SKIN) continue;
+            if (skin.startsWith(RUNTIME_TILE_SKIN_PREFIX)) {
+                const family = skin.slice(RUNTIME_TILE_SKIN_PREFIX.length);
+                if (family === "sidewalk" || family === "asphalt" || family === "park") {
+                    runtimeCounts.set(family, (runtimeCounts.get(family) ?? 0) + 1);
+                    continue;
+                }
+            }
+            if (skin) skinCounts.set(skin, (skinCounts.get(skin) ?? 0) + 1);
+        }
+
+        let bestRuntimeFamily: RuntimeFloorTop["family"] | null = null;
+        let bestRuntimeCount = -1;
+        for (const [family, count] of runtimeCounts.entries()) {
+            if (count > bestRuntimeCount) {
+                bestRuntimeCount = count;
+                bestRuntimeFamily = family;
+            }
+        }
+        if (bestRuntimeFamily) {
+            const runtimeTop = pickRuntimeSquareTop(bestRuntimeFamily, tx, ty);
+            return { runtimeTop, spriteIdTop: runtimeTop.spriteId };
+        }
+
+        let bestSkin = "";
+        let bestSkinCount = -1;
+        for (const [skin, count] of skinCounts.entries()) {
+            if (count > bestSkinCount) {
+                bestSkinCount = count;
+                bestSkin = skin;
+            }
+        }
+        if (bestSkin) {
+            return { spriteIdTop: bestSkin };
+        }
+
+        return {
+            spriteIdTop: resolveTileSpriteId({
+                slot: "floor",
+                mapSkin: resolvedMapSkin,
+                mapSkinId: skinIdToUse,
+                mapDefaults: mapSkinDefaults,
+            }),
+        };
+    }
+
     const decals: DecalPiece[] = [];
     const decalTileKeys = new Set<string>();
     const semanticDecalConfig: Record<"sidewalk" | "road" | "asphalt", { chance: number; setId: RuntimeDecalSetId }> = {
@@ -696,8 +774,6 @@ export function compileKenneyMapFromTable(
 
     for (const [key, tile] of placed.entries()) {
         if (tile.kind === "VOID") continue;
-        // SPAWN tiles don't get their own surface - they use the semantic field's floor (e.g., road, sidewalk, park)
-        if (tile.kind === "SPAWN") continue;
         const parts = key.split(",");
         const tx = parseInt(parts[0], 10);
         const ty = parseInt(parts[1], 10);
@@ -726,7 +802,11 @@ export function compileKenneyMapFromTable(
         const tileOverride: MapSkinBundle | undefined = tile.skin && !runtimeTop
             ? (renderTopKind === "STAIR" ? { stair: tile.skin } : { floor: tile.skin })
             : undefined;
-        const spriteIdTop = runtimeTop
+        const useDominantFloorTop = tile.kind === "SPAWN" || tile.skin === INHERIT_DOMINANT_FLOOR_SKIN;
+        const spawnResolvedTop = useDominantFloorTop ? resolveSpawnSurfaceTop(tx, ty) : null;
+        const spriteIdTop = spawnResolvedTop
+            ? spawnResolvedTop.spriteIdTop
+            : runtimeTop
             ? runtimeTop.spriteId
             : resolveTileSpriteId({
                 slot: renderTopKind === "STAIR" ? "stair" : "floor",
@@ -736,6 +816,7 @@ export function compileKenneyMapFromTable(
                 mapDefaults: mapSkinDefaults,
                 tileOverride,
             });
+        const finalRuntimeTop = spawnResolvedTop?.runtimeTop ?? runtimeTop;
 
         addSurface({
             id: `tile_${tx}_${ty}_${tile.kind}_${zBase}`,
@@ -750,7 +831,7 @@ export function compileKenneyMapFromTable(
             renderAnchorY,
             renderDyOffset,
             spriteIdTop,
-            runtimeTop,
+            runtimeTop: finalRuntimeTop,
         });
     }
 

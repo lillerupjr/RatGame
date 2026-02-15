@@ -78,9 +78,14 @@ function pickMapId(rng: RNG): MapId {
 }
 
 function buildNodePlan(rng: RNG, depth: number, archetype: FloorArchetype): NodePlan {
+  const mapId = (() => {
+    if (archetype === "VENDOR") return "SHOP" as MapId;
+    if (archetype === "HEAL") return "REST" as MapId;
+    return pickMapId(rng);
+  })();
   return {
     depth,
-    mapId: pickMapId(rng),
+    mapId,
     objectiveId: objectiveIdFromArchetype(archetype),
     variantSeed: rng.int(0, 0x7fffffff),
   };

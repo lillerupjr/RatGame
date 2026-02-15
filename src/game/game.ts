@@ -35,6 +35,8 @@ import { fissionSystem } from "./systems/sim/fission";
 import { recomputeDerivedStats } from "./stats/derivedStats";
 import {buildStaticRunMap, getReachable, type RunMap, type MapNode} from "./map/runMap";
 import { KENNEY_TILE_WORLD, preloadKenneyTiles } from "../engine/render/kenneyTiles";
+import type { Dir8 } from "../engine/render/sprites/dir8";
+import { dir8FromVector } from "../engine/render/sprites/dir8";
 
 import { initializeRoomChallenges } from "./systems/progression/roomChallenge";
 
@@ -53,15 +55,18 @@ import {
 import type { FloorArchetype } from "./map/floorArchetype";
 import type { FloorIntent } from "./map/floorIntent";
 import { preloadPlayerSprites, setPlayerSkin } from "../engine/render/sprites/playerSprites";
+import { preloadVendorNpcSprites } from "../engine/render/sprites/vendorSprites";
 import { preloadBackgrounds } from "./render/background";
 import { getProjectileSpriteByKind, preloadProjectileSprites } from "../engine/render/sprites/projectileSprites";
 import { setMusicStage, stopMusic } from "../engine/audio/music";
-import type { TableMapDef } from "./map/formats/table/tableMapTypes";
+import type { TableMapCell, TableMapDef } from "./map/formats/table/tableMapTypes";
 import { AUTHORED_MAP_DEFS, getAuthoredMapDefByMapId } from "./map/authored/authoredMapRegistry";
 import {
   activateMapDef,
   generateAndActivateFloorMap,
   generateAndActivateMazeFloorMap,
+  getActiveMap,
+  getActiveMapDef,
   getActiveRoomData,
   applyObjectivesFromActiveMap,
   getSpawnWorldFromActive,
@@ -74,6 +79,8 @@ import { generateVendorOffers } from "./events/vendor";
 import { RNG } from "./util/rng";
 import { applyObjective } from "./map/objectiveTransforms";
 import { objectiveIdFromArchetype } from "./map/objectivePlan";
+import { DEFAULT_MAP_POOL } from "./map/mapIds";
+import { OBJECTIVE_TRIGGER_IDS } from "./systems/progression/objectiveSpec";
 import { getPlayableCharacter, PLAYABLE_CHARACTERS, type PlayableCharacterId } from "./content/playableCharacters";
 import { getUserSettings } from "../userSettings";
 
@@ -87,6 +94,7 @@ type HudRefs = {
   objectiveOverlay: HTMLDivElement;
   objectiveTitle: HTMLDivElement;
   objectiveStatus: HTMLDivElement;
+  interactPrompt: HTMLDivElement;
 
   // NEW: inventory HUD
   weaponSlots: HTMLDivElement;
@@ -125,6 +133,11 @@ type CreateGameArgs = {
       svg: SVGSVGElement;
       hit: HTMLDivElement;
     };
+    dialogEl: {
+      root: HTMLDivElement;
+      text: HTMLDivElement;
+      choices: HTMLDivElement;
+    };
   };
 };
 
@@ -159,6 +172,36 @@ export function createGame(args: CreateGameArgs) {
   }
 
   const input: InputState = createInputState();
+  type InteractableKind = "SHOP" | "REST";
+  type Interactable = {
+    id: string;
+    kind: InteractableKind;
+    tx: number;
+    ty: number;
+    wx: number;
+    wy: number;
+    rangeMode: "RADIUS" | "NEIGHBOR_8";
+    radiusWorld: number;
+    prompt: string;
+  };
+  type DialogChoice = {
+    label: string;
+    onSelect: () => void;
+  };
+  type DialogState = {
+    text: string;
+    choices: DialogChoice[];
+    selectedIndex: number;
+  };
+  const dialogInputQueue = {
+    move: 0,
+    confirm: false,
+    cancel: false,
+  };
+  let interactables: Interactable[] = [];
+  let activeInteractableId: string | null = null;
+  let activeDialog: DialogState | null = null;
+  let pendingNpcFaceRestoreId: string | null = null;
 
   const staticMaps: TableMapDef[] = AUTHORED_MAP_DEFS;
 
@@ -171,6 +214,281 @@ export function createGame(args: CreateGameArgs) {
     return staticMaps[0];
   }
 
+  function setDialog(dialog: DialogState | null) {
+    activeDialog = dialog;
+    if (!dialog) {
+      if (pendingNpcFaceRestoreId) {
+        const npc = world.npcs.find((n) => n.id === pendingNpcFaceRestoreId);
+        if (npc) npc.faceRestoreAtMs = performance.now() + 3000;
+        pendingNpcFaceRestoreId = null;
+      }
+      args.ui.dialogEl.root.hidden = true;
+      args.ui.dialogEl.text.textContent = "";
+      args.ui.dialogEl.choices.innerHTML = "";
+      return;
+    }
+    args.ui.dialogEl.root.hidden = false;
+    args.ui.dialogEl.text.textContent = dialog.text;
+    args.ui.dialogEl.choices.innerHTML = "";
+    for (let i = 0; i < dialog.choices.length; i++) {
+      const row = document.createElement("div");
+      row.className = i === dialog.selectedIndex ? "dialogChoice active" : "dialogChoice";
+      row.textContent = dialog.choices[i].label;
+      args.ui.dialogEl.choices.appendChild(row);
+    }
+  }
+
+  function showInfoDialog(text: string) {
+    setDialog({
+      text,
+      selectedIndex: 0,
+      choices: [
+        {
+          label: "OK",
+          onSelect: () => setDialog(null),
+        },
+      ],
+    });
+  }
+
+  function completeObjectiveById(objectiveId: string) {
+    for (let i = 0; i < world.objectiveDefs.length; i++) {
+      const def = world.objectiveDefs[i];
+      if (def.id !== objectiveId) continue;
+      const st = world.objectiveStates[i];
+      if (!st || st.status === "COMPLETED") continue;
+      st.status = "COMPLETED";
+      st.progress.signalCount = Math.max(1, st.progress.signalCount);
+    }
+  }
+
+  function openInteractDialog(interactable: Interactable) {
+    if (activeDialog) return;
+    const npc = world.npcs.find((n) => n.tx === interactable.tx && n.ty === interactable.ty);
+    if (npc) {
+      const { playerTx, playerTy } = getPlayerTileAtCurrentPosition();
+      const dx = playerTx - npc.tx;
+      const dy = playerTy - npc.ty;
+      if (!(dx === 0 && dy === 0)) {
+        npc.dirCurrent = dir8FromTileDelta(dx, dy);
+      }
+      npc.faceRestoreAtMs = null;
+      pendingNpcFaceRestoreId = npc.id;
+    }
+    if (interactable.kind === "SHOP") {
+      setDialog({
+        text: "Open shop?",
+        selectedIndex: 0,
+        choices: [
+          {
+            label: "Yes",
+            onSelect: () => {
+              world.pendingLevelUps += 1;
+              completeObjectiveById(OBJECTIVE_TRIGGER_IDS.vendor);
+              showInfoDialog("You have been granted a free level! (shop coming soon...)");
+            },
+          },
+          {
+            label: "No",
+            onSelect: () => setDialog(null),
+          },
+        ],
+      });
+      return;
+    }
+    setDialog({
+      text: "Heal to full?",
+      selectedIndex: 0,
+      choices: [
+        {
+          label: "Yes",
+          onSelect: () => {
+            world.playerHp = world.playerHpMax;
+            completeObjectiveById(OBJECTIVE_TRIGGER_IDS.heal);
+            showInfoDialog("You have been healed to full HP!");
+          },
+        },
+        {
+          label: "No",
+          onSelect: () => setDialog(null),
+        },
+      ],
+    });
+  }
+
+  function applyMapFeaturesFromCells(w: World) {
+    interactables = [];
+    activeInteractableId = null;
+    w.npcs = [];
+    args.hud.interactPrompt.hidden = true;
+    const mapDef = getActiveMapDef();
+    const compiled = getActiveMap();
+    if (!mapDef || !compiled) return;
+    const originTx = compiled.originTx | 0;
+    const originTy = compiled.originTy | 0;
+    const cells = mapDef.cells ?? [];
+    for (let i = 0; i < cells.length; i++) {
+      const cell = cells[i] as TableMapCell;
+      const type = cell.type ?? "";
+      if (type !== "interact_shop" && type !== "interact_rest" && type !== "npc_vendor" && type !== "npc_healer") continue;
+      const tx = (cell.x | 0) + originTx;
+      const ty = (cell.y | 0) + originTy;
+      if (type === "npc_vendor" || type === "npc_healer") {
+        const dirBase = ((cell.dir ?? "S").toUpperCase()) as Dir8;
+        w.npcs.push({
+          id: `${type}_${tx}_${ty}`,
+          kind: type === "npc_vendor" ? "vendor" : "healer",
+          tx,
+          ty,
+          wx: (tx + 0.5) * KENNEY_TILE_WORLD,
+          wy: (ty + 0.5) * KENNEY_TILE_WORLD,
+          dirBase,
+          dirCurrent: dirBase,
+          faceRestoreAtMs: null,
+        });
+        interactables.push({
+          id: `${type}_interact_${tx}_${ty}`,
+          kind: type === "npc_vendor" ? "SHOP" : "REST",
+          tx,
+          ty,
+          wx: (tx + 0.5) * KENNEY_TILE_WORLD,
+          wy: (ty + 0.5) * KENNEY_TILE_WORLD,
+          rangeMode: "NEIGHBOR_8",
+          radiusWorld: 0,
+          prompt: "Interact: Press E",
+        });
+        continue;
+      }
+      interactables.push({
+        id: `${type}_${tx}_${ty}`,
+        kind: type === "interact_shop" ? "SHOP" : "REST",
+        tx,
+        ty,
+        wx: (tx + 0.5) * KENNEY_TILE_WORLD,
+        wy: (ty + 0.5) * KENNEY_TILE_WORLD,
+        rangeMode: "RADIUS",
+        radiusWorld: 1.25 * KENNEY_TILE_WORLD,
+        prompt: "Interact: Press E",
+      });
+    }
+  }
+
+  function updateActiveInteractablePrompt() {
+    if (world.state !== "RUN") {
+      activeInteractableId = null;
+      args.hud.interactPrompt.hidden = true;
+      return;
+    }
+    if (activeDialog) {
+      activeInteractableId = null;
+      args.hud.interactPrompt.textContent = "Press E to choose";
+      args.hud.interactPrompt.hidden = false;
+      return;
+    }
+    const pg = gridAtPlayer(world);
+    const pw = gridToWorld(pg.gx, pg.gy, KENNEY_TILE_WORLD);
+    const { playerTx, playerTy } = getPlayerTileAtCurrentPosition();
+    let best: Interactable | null = null;
+    let bestDistSq = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < interactables.length; i++) {
+      const it = interactables[i];
+      let distSq = 0;
+      if (it.rangeMode === "NEIGHBOR_8") {
+        const cheb = Math.max(Math.abs(playerTx - it.tx), Math.abs(playerTy - it.ty));
+        if (cheb > 1) continue;
+        const dx = pw.wx - it.wx;
+        const dy = pw.wy - it.wy;
+        distSq = dx * dx + dy * dy;
+      } else {
+        const dx = pw.wx - it.wx;
+        const dy = pw.wy - it.wy;
+        distSq = dx * dx + dy * dy;
+        if (distSq > it.radiusWorld * it.radiusWorld) continue;
+      }
+      if (!best || distSq < bestDistSq || (distSq === bestDistSq && it.id < best.id)) {
+        best = it;
+        bestDistSq = distSq;
+      }
+    }
+    activeInteractableId = best?.id ?? null;
+    if (best) {
+      args.hud.interactPrompt.textContent = best.prompt;
+      args.hud.interactPrompt.hidden = false;
+    } else {
+      args.hud.interactPrompt.hidden = true;
+    }
+  }
+
+  function getPlayerTileAtCurrentPosition(): { playerTx: number; playerTy: number } {
+    const pg = gridAtPlayer(world);
+    const pw = gridToWorld(pg.gx, pg.gy, KENNEY_TILE_WORLD);
+    return {
+      playerTx: Math.floor(pw.wx / KENNEY_TILE_WORLD),
+      playerTy: Math.floor(pw.wy / KENNEY_TILE_WORLD),
+    };
+  }
+
+  function dir8FromTileDelta(dxTile: number, dyTile: number): Dir8 {
+    // Convert tile-grid delta into screen-space vector under iso projection.
+    // screenX ~ (tx - ty), screenY(down) ~ (tx + ty); convert Y to "up" for dir8FromVector.
+    const screenX = dxTile - dyTile;
+    const screenYUp = -(dxTile + dyTile);
+    return dir8FromVector(screenX, screenYUp);
+  }
+
+  function updateNpcFacingRestore(nowMs: number) {
+    for (let i = 0; i < world.npcs.length; i++) {
+      const npc = world.npcs[i];
+      if (npc.faceRestoreAtMs === null) continue;
+      if (nowMs < npc.faceRestoreAtMs) continue;
+      npc.dirCurrent = npc.dirBase;
+      npc.faceRestoreAtMs = null;
+    }
+  }
+
+  function handleDialogInput() {
+    if (!activeDialog) return;
+    if (dialogInputQueue.move !== 0) {
+      const len = activeDialog.choices.length;
+      activeDialog.selectedIndex = (activeDialog.selectedIndex + dialogInputQueue.move + len) % len;
+      setDialog(activeDialog);
+    }
+    if (dialogInputQueue.cancel) {
+      setDialog(null);
+    } else if (dialogInputQueue.confirm) {
+      const choice = activeDialog.choices[activeDialog.selectedIndex];
+      choice?.onSelect();
+      if (activeDialog) setDialog(activeDialog);
+    }
+    dialogInputQueue.move = 0;
+    dialogInputQueue.confirm = false;
+    dialogInputQueue.cancel = false;
+  }
+
+  window.addEventListener("keydown", (e) => {
+    if (!activeDialog) return;
+    if (e.repeat) return;
+    if (e.key === "ArrowUp" || e.key === "w" || e.key === "W") {
+      dialogInputQueue.move = -1;
+      e.preventDefault();
+      return;
+    }
+    if (e.key === "ArrowDown" || e.key === "s" || e.key === "S") {
+      dialogInputQueue.move = 1;
+      e.preventDefault();
+      return;
+    }
+    if (e.key === "Enter" || e.key === "e" || e.key === "E") {
+      dialogInputQueue.confirm = true;
+      e.preventDefault();
+      return;
+    }
+    if (e.key === "Escape") {
+      dialogInputQueue.cancel = true;
+      e.preventDefault();
+    }
+  });
+
   // Ensure a map is compiled before we create the World (spawn uses the active map).
   const initialMap = getDefaultStaticMap();
   if (initialMap) {
@@ -179,6 +497,7 @@ export function createGame(args: CreateGameArgs) {
 
   let world: World = createWorld({ seed: 1337, stage: cloneStage("DOCKS") });
   applyObjectivesFromActiveMap(world);
+  applyMapFeaturesFromCells(world);
   applyDebugSpawn(world);
 
   setMusicStage("DOCKS");
@@ -190,6 +509,7 @@ export function createGame(args: CreateGameArgs) {
 
   preloadBackgrounds();
   preloadPlayerSprites();
+  preloadVendorNpcSprites();
   preloadProjectileSprites();
   preloadSfx();
   preloadKenneyTiles();
@@ -215,6 +535,28 @@ export function createGame(args: CreateGameArgs) {
 
   const FLOORS_PER_RUN = 3;
   const TRANSITION_SECS = 0;
+  const DETERMINISTIC_ARCHETYPES: FloorArchetype[] = [
+    "SURVIVE",
+    "TIME_TRIAL",
+    "VENDOR",
+    "HEAL",
+    "BOSS_TRIPLE",
+  ];
+  const DETERMINISTIC_ZONES = ["DOCKS", "SEWERS", "CHINATOWN"] as const;
+
+  type DeterministicChoice = {
+    archetype: FloorArchetype;
+    floorIndex: number;
+    depth: number;
+  };
+
+  const hashString = (s: string): number => {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+    return h >>> 0;
+  };
+
+  const isDeterministicDelveMode = () => !!(world as any).deterministicDelveMode;
 
   function cloneStage(stageId: "DOCKS" | "SEWERS" | "CHINATOWN") {
     // IMPORTANT: stage spawns are mutated (t is set to Infinity) at runtime.
@@ -340,6 +682,7 @@ export function createGame(args: CreateGameArgs) {
     w.floatTextColor = [];
     w.floatTextTtl = [];
     w.floatTextIsCrit = [];
+    w.npcs = [];
   }
 
   function bossAlive(w: World): boolean {
@@ -351,6 +694,7 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function enterFloor(w: World, floorIntent: FloorIntent) {
+    setDialog(null);
     if (w.delveMap && !floorIntent.mapId) {
       console.error("[enterFloor] delve floor intent missing mapId");
       return;
@@ -393,16 +737,17 @@ export function createGame(args: CreateGameArgs) {
       activateMapDef(finalMap, floorIntent.variantSeed);
     } else {
       const mapSource = mapSourceFromFloorIntent(floorIntent);
+      const variantSeed = floorIntent.variantSeed;
       if (mapSource.type === "PROCEDURAL_ROOMS") {
-        const mapSeed = w.rng.int(0, 0x7fffffff);
+        const mapSeed = variantSeed ?? w.rng.int(0, 0x7fffffff);
         generateAndActivateFloorMap(mapSeed, floorIntent.floorIndex, false, w);
       } else if (mapSource.type === "PROCEDURAL_MAZE") {
-        const mapSeed = w.rng.int(0, 0x7fffffff);
+        const mapSeed = variantSeed ?? w.rng.int(0, 0x7fffffff);
         generateAndActivateMazeFloorMap(mapSeed, floorIntent.floorIndex, false);
       } else {
         const staticDef = getStaticMapById(mapSource.mapId) ?? getDefaultStaticMap();
         if (staticDef) {
-          activateMapDef(staticDef, w.rng.int(0, 0x7fffffff));
+          activateMapDef(staticDef, variantSeed ?? w.rng.int(0, 0x7fffffff));
         }
       }
     }
@@ -420,6 +765,7 @@ export function createGame(args: CreateGameArgs) {
     applyFloorOverlays(w, floorIntent);
 
     clearFloorEntities(w);
+    applyMapFeaturesFromCells(w);
 
     const objectiveSpec = objectiveSpecFromFloorIntent(floorIntent);
     w.currentObjectiveSpec = objectiveSpec;
@@ -471,6 +817,46 @@ export function createGame(args: CreateGameArgs) {
       floorIndex,
       archetype: w.floorArchetype ?? "SURVIVE",
       objectiveId: objectiveIdFromArchetype(w.floorArchetype ?? "SURVIVE"),
+    };
+  }
+
+  function deterministicVariantSeed(
+    runSeed: number,
+    floorIndex: number,
+    depth: number,
+    archetype: FloorArchetype,
+    mapId?: string,
+  ): number {
+    return hashString(`${runSeed}:${floorIndex}:${depth}:${archetype}:${mapId ?? "AUTO"}`);
+  }
+
+  function buildDeterministicFloorIntent(choice: DeterministicChoice): FloorIntent {
+    const mapId =
+      choice.archetype === "VENDOR"
+        ? "SHOP"
+        : choice.archetype === "HEAL"
+          ? "REST"
+          : DEFAULT_MAP_POOL[
+              hashString(
+                `${world.runSeed}:${choice.floorIndex}:${choice.depth}:${choice.archetype}:mapPick`,
+              ) % DEFAULT_MAP_POOL.length
+            ];
+    const zoneId = DETERMINISTIC_ZONES[choice.floorIndex % DETERMINISTIC_ZONES.length];
+    return {
+      nodeId: `DET_${choice.floorIndex}_${choice.depth}_${choice.archetype}`,
+      zoneId,
+      depth: choice.depth,
+      floorIndex: choice.floorIndex,
+      archetype: choice.archetype,
+      mapId,
+      objectiveId: objectiveIdFromArchetype(choice.archetype),
+      variantSeed: deterministicVariantSeed(
+        world.runSeed,
+        choice.floorIndex,
+        choice.depth,
+        choice.archetype,
+        mapId,
+      ),
     };
   }
 
@@ -549,15 +935,18 @@ export function createGame(args: CreateGameArgs) {
   function previewMap(mapId?: string) {
     const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
     applyMapSelection(mapId, seed);
+    applyMapFeaturesFromCells(world);
   }
 
   function resetRun(mapId?: string) {
+    setDialog(null);
     const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
     applyMapSelection(mapId, seed);
     world = createWorld({
       seed,
       stage: cloneStage("DOCKS"),
     });
+    (world as any).deterministicDelveMode = false;
     const mapMode = isMapMode(mapId);
     (world as any).mapMode = mapMode;
     (world as any).runtimeStructureSlicingEnabled = false;
@@ -567,6 +956,7 @@ export function createGame(args: CreateGameArgs) {
     } else {
       applyObjectivesFromActiveMap(world);
     }
+    applyMapFeaturesFromCells(world);
 
     // DEBUG: spawn offset
     applyDebugSpawn(world);
@@ -607,6 +997,36 @@ export function createGame(args: CreateGameArgs) {
 
     // Pick starting node
     showDelveMap("Choose your starting location.\nGo deeper for greater challenge and rewards.");
+  }
+
+  function startDeterministicRun(characterId: PlayableCharacterId) {
+    const character = getPlayableCharacter(characterId);
+    if (!character) return;
+
+    setPlayerSkin(character.idleSpriteKey);
+    preloadPlayerSprites();
+
+    resetRun(undefined);
+
+    world.weapons = [{ id: character.startingWeaponId, level: 1, cdLeft: 0 }];
+    world.delveMap = null;
+    world.delveDepth = 1;
+    world.delveScaling = getDepthScaling(1);
+    world.runState = "FLOOR";
+    world.state = "RUN";
+    (world as any).deterministicDelveMode = true;
+
+    args.ui.menuEl.hidden = true;
+    args.ui.mapEl.root.hidden = false;
+    args.ui.endEl.root.hidden = true;
+    args.hud.root.hidden = false;
+    hideLevelUp();
+
+    showDeterministicFloorPicker(
+      "Path Select mode: choose any floor type.",
+      0,
+      1,
+    );
   }
 
   function startSandboxRun(characterId: PlayableCharacterId, mapId?: string) {
@@ -750,6 +1170,41 @@ export function createGame(args: CreateGameArgs) {
       <div class="mapHitDesc">${btn.disabled ? "Locked" : "Select"} · Boss at end</div>
     `;
 
+      hit.appendChild(btn);
+    }
+  }
+
+  function showDeterministicFloorPicker(subText: string, floorIndex: number, depth: number) {
+    world.state = "MAP";
+    args.ui.mapEl.root.hidden = false;
+    args.hud.root.hidden = true;
+    args.ui.mapEl.sub.textContent = subText;
+    args.ui.mapEl.svg.innerHTML =
+      `<rect x="0" y="0" width="1000" height="520" fill="rgba(0,0,0,0)" />`;
+    const hit = args.ui.mapEl.hit;
+    hit.innerHTML = "";
+    for (let i = 0; i < DETERMINISTIC_ARCHETYPES.length; i++) {
+      const archetype = DETERMINISTIC_ARCHETYPES[i];
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "mapHitBtn";
+      btn.dataset.detFloorArchetype = archetype;
+      btn.dataset.detFloorIndex = String(floorIndex);
+      btn.dataset.detDepth = String(depth);
+      const col = i % 2;
+      const row = Math.floor(i / 2);
+      btn.style.left = `${24 + col * 36}%`;
+      btn.style.top = `${18 + row * 26}%`;
+      const desc =
+        archetype === "VENDOR"
+          ? "SHOP map"
+          : archetype === "HEAL"
+            ? "REST map"
+            : "Procedural";
+      btn.innerHTML = `
+        <div class="mapHitTitle">${archetype}</div>
+        <div class="mapHitDesc">${desc} · Depth ${depth}</div>
+      `;
       hit.appendChild(btn);
     }
   }
@@ -1140,6 +1595,12 @@ export function createGame(args: CreateGameArgs) {
 
     // Always poll input (so movement is responsive immediately after closing menus)
     inputSystem(input, args.canvas);
+    updateNpcFacingRestore(performance.now());
+    updateActiveInteractablePrompt();
+
+    if (activeDialog) {
+      handleDialogInput();
+    }
 
     // Handle pause states
     if (world.state === "LEVELUP" || world.state === "CHEST" || world.state === "MAP") {
@@ -1164,6 +1625,15 @@ export function createGame(args: CreateGameArgs) {
     }
     if (world.state !== "RUN") return;
 
+    if (!activeDialog && input.interactPressed && activeInteractableId) {
+      const target = interactables.find((it) => it.id === activeInteractableId);
+      if (target) {
+        openInteractDialog(target);
+        clearInputEdges(input);
+        return;
+      }
+    }
+
     // total run time (optional for future meta / analytics)
     world.time += dt;
 
@@ -1183,6 +1653,14 @@ export function createGame(args: CreateGameArgs) {
           if (pending) {
             // Do nothing; chest must be picked up first
           } else {
+            if (isDeterministicDelveMode()) {
+              showDeterministicFloorPicker(
+                `Floor ${world.floorIndex + 1} cleared.\nChoose next floor type.`,
+                (world.floorIndex ?? 0) + 1,
+                (world.delveDepth ?? 1) + 1,
+              );
+              return;
+            }
             // Delve mode: always show map after boss defeat (infinite progression)
             const delve = world.delveMap as DelveMap;
             if (delve) {
@@ -1214,7 +1692,10 @@ export function createGame(args: CreateGameArgs) {
     movementSystem(world, input, dt);
     roomChallengeSystem(world, dt);  // Track room challenges and lock exits
     spawnSystem(world, dt);
-    combatSystem(world, dt);
+    const isNeutralObjectiveFloor = world.floorArchetype === "VENDOR" || world.floorArchetype === "HEAL";
+    if (!isNeutralObjectiveFloor) {
+      combatSystem(world, dt);
+    }
     projectilesSystem(world, dt);
     collisionsSystem(world, dt);
     fissionSystem(world, dt);  // Nuclear fission: projectile-projectile collisions
@@ -1307,6 +1788,14 @@ export function createGame(args: CreateGameArgs) {
     };
 
     if (world.runState === "FLOOR" && isFloorObjectiveCompleted() && !world.bossRewardPending) {
+      if (isDeterministicDelveMode()) {
+        showDeterministicFloorPicker(
+          `Objective complete.\nChoose next floor type.`,
+          (world.floorIndex ?? 0) + 1,
+          (world.delveDepth ?? 1) + 1,
+        );
+        return;
+      }
       const delve = world.delveMap as DelveMap;
       if (delve) {
         showDelveMap(`Depth ${world.delveDepth} cleared!\nChoose your next destination.`);
@@ -1382,6 +1871,25 @@ export function createGame(args: CreateGameArgs) {
     const el = e.target as HTMLElement;
     const btn = el.closest("button") as HTMLButtonElement | null;
     if (!btn) return;
+
+    const detArchetype = btn.dataset.detFloorArchetype as FloorArchetype | undefined;
+    if (detArchetype) {
+      const floorIndex = Number.parseInt(btn.dataset.detFloorIndex ?? "0", 10) || 0;
+      const depth = Number.parseInt(btn.dataset.detDepth ?? "1", 10) || 1;
+      world.delveDepth = depth;
+      world.delveScaling = getDepthScaling(depth);
+      hideMap();
+      world.state = "RUN";
+      enterFloor(
+        world,
+        buildDeterministicFloorIntent({
+          archetype: detArchetype,
+          floorIndex,
+          depth,
+        }),
+      );
+      return;
+    }
 
     // Handle delve node clicks
     const delveNodeId = btn.dataset.delveNodeId;
@@ -1473,5 +1981,5 @@ export function createGame(args: CreateGameArgs) {
     world.state = "RUN";
   });
 
-  return { update, render, startRun, startSandboxRun, previewMap };
+  return { update, render, startRun, startDeterministicRun, startSandboxRun, previewMap };
 }
