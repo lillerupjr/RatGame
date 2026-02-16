@@ -58,6 +58,7 @@ export type SemanticStamp = {
     heightUnitsMax?: number;
     stackChance?: number;
     propId?: string;
+    dir?: string;
     collision?: "BLOCK" | "PASS";
     blocksMovement?: boolean;
     flipped?: boolean;

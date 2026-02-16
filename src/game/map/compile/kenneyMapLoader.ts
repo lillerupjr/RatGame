@@ -13,7 +13,7 @@ import {
     type BuildingSkinId,
 } from "../../content/buildings";
 import { CONTAINER_PACKS, CONTAINER_SKINS, CONTAINER_PACK_ID } from "../../content/containers";
-import { requireProp } from "../../content/props";
+import { requireProp, resolvePropSprite } from "../../content/props";
 import { RNG } from "../../util/rng";
 import {getSpriteMeta} from "../../../engine/render/sprites/spriteMeta";
 import { seAnchorFromTopLeft } from "../../../engine/render/sprites/structureFootprintOwnership";
@@ -1516,6 +1516,8 @@ export function compileKenneyMapFromTable(
             const anchorLiftPx = (prop.anchorLiftUnits ?? 0) * HEIGHT_UNIT_PX;
             const offset = prop.anchorOffsetPx ?? { x: 0, y: 0 };
             const isStreetLampProp = prop.id.startsWith("street_lamp_");
+            const propDir = stamp.dir as import("../../../engine/render/sprites/dir8").Dir8 | undefined;
+            const resolvedSpriteId = resolvePropSprite(prop, propDir);
 
             overlays.push({
                 id: `prop_${prop.id}_${anchorTx}_${anchorTy}_${zBase}`,
@@ -1528,7 +1530,7 @@ export function compileKenneyMapFromTable(
                 anchorTx,
                 anchorTy,
                 z: zBase,
-                spriteId: prop.sprite,
+                spriteId: resolvedSpriteId,
                 drawDyOffset: anchorLiftPx + offset.y,
                 drawDxOffset: offset.x,
                 flipX: propOriented.flipped,

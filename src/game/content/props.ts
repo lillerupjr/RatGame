@@ -1,3 +1,5 @@
+import { type Dir8 } from "../../engine/render/sprites/dir8";
+
 export type PropId = string;
 
 export type PropDef = {
@@ -8,6 +10,9 @@ export type PropDef = {
     defaultFacing?: "E" | "S";
     flipMode?: "H";
     sprite: string;
+    /** Base path for 8-directional sprites. Direction suffix (_N, _NE, etc.) will be appended. */
+    spriteDir8?: string;
+    defaultDir8?: Dir8;
     anchorLiftUnits?: number;
     lightHeightOffsetUnits?: number;
     lightPoolHeightOffsetUnits?: number;
@@ -119,6 +124,39 @@ export const PROPS: Record<PropId, PropDef> = {
         anchorLiftUnits: 0,
         anchorOffsetPx: { x: 0, y: 0 },
     },
+    hooker1: {
+        id: "hooker1",
+        w: 1,
+        h: 1,
+        isFlippable: false,
+        sprite: "props/hooker/1/crimson_lace_corset_on_a_bed_S",
+        spriteDir8: "props/hooker/1/crimson_lace_corset_on_a_bed",
+        defaultDir8: "S",
+        anchorLiftUnits: 0,
+        anchorOffsetPx: { x: 0, y: 0 },
+    },
+    hooker2: {
+        id: "hooker2",
+        w: 1,
+        h: 1,
+        isFlippable: false,
+        sprite: "props/hooker/2/edge_of_elegance_S",
+        spriteDir8: "props/hooker/2/edge_of_elegance",
+        defaultDir8: "S",
+        anchorLiftUnits: 0,
+        anchorOffsetPx: { x: 0, y: 0 },
+    },
+    hooker3: {
+        id: "hooker3",
+        w: 1,
+        h: 1,
+        isFlippable: false,
+        sprite: "props/hooker/3/midnight_officer_S",
+        spriteDir8: "props/hooker/3/midnight_officer",
+        defaultDir8: "S",
+        anchorLiftUnits: 0,
+        anchorOffsetPx: { x: 0, y: 0 },
+    },
 };
 
 export function requireProp(id: PropId, context: string): PropDef {
@@ -128,3 +166,15 @@ export function requireProp(id: PropId, context: string): PropDef {
     }
     return prop;
 }
+
+/** Resolves the sprite path for a prop, considering direction if spriteDir8 is defined */
+export function resolvePropSprite(prop: PropDef, dir?: Dir8): string {
+    if (prop.spriteDir8 && dir) {
+        return `${prop.spriteDir8}_${dir}`;
+    }
+    if (prop.spriteDir8 && prop.defaultDir8) {
+        return `${prop.spriteDir8}_${prop.defaultDir8}`;
+    }
+    return prop.sprite;
+}
+

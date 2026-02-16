@@ -21,7 +21,7 @@
     { "x": 1, "y": 5, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
     { "x": 6, "y": 5, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
     { "x": 11, "y": 5, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
-
+    { "x": 5, "y": 5, "z": 0, "type": "prop", "propId": "hooker1", "w": 1, "dir": "SE", "h": 1 },
     { "x": 1, "y": 10, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
     { "x": 6, "y": 10, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
     { "x": 11, "y": 10, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 }
