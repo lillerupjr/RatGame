@@ -88,6 +88,7 @@ type JsonMapDef = {
     heightUnitsMax?: number;
     stackChance?: number;
     propId?: string;
+    dir?: string;
     collision?: "BLOCK" | "PASS";
     blocksMovement?: boolean;
     flipped?: boolean;
@@ -548,6 +549,7 @@ function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): S
         lowered === "container" ||
         lowered === "prop" ||
         lowered === "road" ||
+        lowered === "asphalt" ||
         lowered === "sidewalk" ||
         lowered === "park" ||
         lowered === "sea" ||
@@ -570,6 +572,7 @@ function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): S
     const heightUnitsMax = optionalNumberField(entry, "heightUnitsMax");
     const stackChance = optionalNumberField(entry, "stackChance");
     const propId = optionalStringField(entry, "propId");
+    const dir = optionalStringField(entry, "dir");
     const collisionRaw = optionalStringField(entry, "collision");
     const collision = collisionRaw === undefined
       ? undefined
@@ -597,6 +600,7 @@ function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): S
       heightUnitsMax,
       stackChance,
       propId,
+      dir,
       collision,
       blocksMovement,
       flipped,

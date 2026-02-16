@@ -6,7 +6,20 @@ export type TableMapCell = {
     x: number;  // column index in the Excel selection (tile +x / east)
     y: number;  // row index in the Excel selection (tile +y / south)
     z?: number;
-    type?: "floor" | "stairs" | "spawn" | "goal" | "wall" | "void" | "road" | "sidewalk";
+    type?:
+      | "floor"
+      | "stairs"
+      | "spawn"
+      | "goal"
+      | "wall"
+      | "void"
+      | "road"
+      | "sidewalk"
+      | "asphalt"
+      | "interact_shop"
+      | "interact_rest"
+      | "npc_vendor"
+      | "npc_healer";
     sprite?: string;
     blocksMove?: boolean;
     blocksSight?: boolean;
@@ -24,6 +37,7 @@ export type SemanticStampType =
     | "container"
     | "prop"
     | "road"
+    | "asphalt"
     | "sidewalk"
     | "park"
     | "sea"
@@ -44,6 +58,7 @@ export type SemanticStamp = {
     heightUnitsMax?: number;
     stackChance?: number;
     propId?: string;
+    dir?: string;
     collision?: "BLOCK" | "PASS";
     blocksMovement?: boolean;
     flipped?: boolean;

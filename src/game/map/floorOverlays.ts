@@ -39,6 +39,7 @@ type WalkNode = {
 };
 
 const DEFAULT_ZONE_RADIUS = 2;
+const DEFAULT_BOSS_ZONE_RADIUS = 7;
 const DEFAULT_ZONE_MIN_SEPARATION = 6;
 
 function hashString(s: string): number {
@@ -322,6 +323,22 @@ function pickSpawnZonesLongestPath(
   return picks.length > 0 ? picks : candidates.slice(0, count);
 }
 
+function normalizeZoneCenters(
+  centers: TilePoint[],
+  count: number,
+  fallback: TilePoint
+): TilePoint[] {
+  if (count <= 0) return [];
+  const out = centers.slice(0, count);
+  if (out.length === 0) out.push(fallback);
+  while (out.length < count) {
+    const idx = (out.length - 1) % out.length;
+    const seed = out[idx] ?? fallback;
+    out.push({ tx: seed.tx, ty: seed.ty });
+  }
+  return out;
+}
+
 export function overlaySpecFromFloorIntent(intent: FloorIntent): OverlaySpec {
   const objectiveId = intent.objectiveId ?? objectiveIdFromArchetype(intent.archetype);
   switch (objectiveId) {
@@ -340,7 +357,7 @@ export function overlaySpecFromFloorIntent(intent: FloorIntent): OverlaySpec {
         {
           type: "PLACE_BOSS_SPAWN_ZONES",
           count: intent.spawnZoneCount ?? 3,
-          radiusTiles: intent.spawnZoneRadiusTiles ?? DEFAULT_ZONE_RADIUS,
+          radiusTiles: intent.spawnZoneRadiusTiles ?? DEFAULT_BOSS_ZONE_RADIUS,
           minSeparationTiles: intent.spawnZoneMinSeparationTiles ?? DEFAULT_ZONE_MIN_SEPARATION,
           placementPolicy: intent.placementPolicy ?? "LONGEST_PATH",
         },
@@ -415,7 +432,7 @@ export function applyFloorOverlays(world: World, intent: FloorIntent): void {
         break;
       }
       case "PLACE_BOSS_SPAWN_ZONES": {
-        const centers =
+        const rawCenters =
           action.placementPolicy === "LONGEST_PATH"
             ? pickSpawnZonesLongestPath(
                 candidates,
@@ -434,6 +451,7 @@ export function applyFloorOverlays(world: World, intent: FloorIntent): void {
                 rng,
                 spawnTile
               );
+        const centers = normalizeZoneCenters(rawCenters, action.count, spawnTile);
         for (let i = 0; i < centers.length; i++) {
           overlayTriggers.push({
             id: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}${i + 1}`,

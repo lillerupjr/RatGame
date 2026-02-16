@@ -7,6 +7,8 @@ import { ENEMY_TYPE } from "../../content/enemies";
 import { getPlayerSpriteFrame, playerSpritesReady } from "../../../engine/render/sprites/playerSprites";
 import { type Dir8 } from "../../../engine/render/sprites/dir8";
 import { getEnemySpriteFrame, preloadEnemySprites } from "../../../engine/render/sprites/enemySprites";
+import { getVendorNpcSpriteFrame, preloadVendorNpcSprites, vendorNpcSpritesReady } from "../../../engine/render/sprites/vendorSprites";
+import { preloadNeutralMobSprites } from "../../../engine/render/sprites/neutralSprites";
 import {
   heightAtWorld,
   walkInfo,
@@ -19,6 +21,7 @@ import {
   viewRectFromWorldCenter,
   overlaysInView,
   blockedTilesInView,
+  decalsInView,
   getActiveMap as getActiveCompiledMap,
   type RenderPiece,
   type StampOverlay,
@@ -45,6 +48,7 @@ import {
 
 import {
   preloadRenderSprites,
+  getRuntimeDecalSprite,
   getTileSpriteById,
   getVoidTop,
 } from "../../../engine/render/sprites/renderSprites";
@@ -73,11 +77,12 @@ import { getUserSettings } from "../../../userSettings";
 /** Semantic layer ordering (used as tie-breaker in slice ordering). */
 enum KindOrder {
   FLOOR = 0,
-  ENTITY = 1,
-  VFX = 2,
-  STRUCTURE = 3,
-  OCCLUDER = 4,
-  OVERLAY = 5,
+  DECAL = 1,
+  ENTITY = 2,
+  VFX = 3,
+  STRUCTURE = 4,
+  OCCLUDER = 5,
+  OVERLAY = 6,
 }
 
 /** Canonical render key for deterministic ordering. */
@@ -289,6 +294,16 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   if (!(w as any)._enemySpritesPreloaded) {
     (w as any)._enemySpritesPreloaded = true;
     preloadEnemySprites();
+  }
+
+  if (!(w as any)._vendorSpritesPreloaded) {
+    (w as any)._vendorSpritesPreloaded = true;
+    preloadVendorNpcSprites();
+  }
+
+  if (!(w as any)._neutralMobSpritesPreloaded) {
+    (w as any)._neutralMobSpritesPreloaded = true;
+    preloadNeutralMobSprites();
   }
 
   // one-time projectile sprite preload
@@ -507,6 +522,35 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         ctx.font = "9px monospace";
         ctx.fillText(`${variantIndex} r${rotationQuarterTurns}`, centerX + 4, centerY - 4);
       }
+      ctx.restore();
+    };
+
+    const drawRuntimeDecalTop = (
+      tx: number,
+      ty: number,
+      zBase: number,
+      renderAnchorY: number,
+      setId: "sidewalk" | "asphalt",
+      variantIndex: number,
+      rotationQuarterTurns: 0 | 1 | 2 | 3,
+    ) => {
+      const src = getRuntimeDecalSprite(setId, variantIndex);
+      if (!src.ready || !src.img || src.img.width <= 0 || src.img.height <= 0) return;
+
+      const wx = (tx + 0.5) * T;
+      const wy = (ty + 0.5) * T;
+      const p = worldToScreen(wx, wy);
+      const centerX = snapPx(p.x + camX);
+      const centerY = snapPx(
+        p.y + camY - zBase * ELEV_PX - SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5),
+      );
+
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.transform(0.5, 0.25, -0.5, 0.25, 0, 0);
+      ctx.rotate(rotationQuarterTurns * (Math.PI * 0.5));
+      ctx.translate(-(SIDEWALK_SRC_SIZE * 0.5), -(SIDEWALK_SRC_SIZE * 0.5));
+      ctx.drawImage(src.img, 0, 0, SIDEWALK_SRC_SIZE, SIDEWALK_SRC_SIZE);
       ctx.restore();
     };
 
@@ -744,6 +788,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const SHOW_WALK_MASK = debugFlags.showWalkMask;
   const SHOW_RAMPS = debugFlags.showRamps;
   const SHOW_OCCLUDER_DEBUG = debugFlags.showOccluders;
+  const SHOW_DECAL_DEBUG = debugFlags.showDecals;
   const SHOW_PROJECTILE_FACES = debugFlags.showProjectileFaces;
   const SHOW_TRIGGER_ZONES = debugFlags.showTriggers;
   const SHOW_STRUCTURE_HEIGHTS = debugFlags.showStructureHeights;
@@ -935,6 +980,38 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           addToSlice(tx + ty, renderKey, drawClosure);
         }
       }
+    }
+  }
+
+  // ----------------------------
+  // Collect DECALS into slices (after floor, before entities)
+  // ----------------------------
+  {
+    const decals = decalsInView(viewRect);
+    for (let i = 0; i < decals.length; i++) {
+      const decal = decals[i];
+      if (!RENDER_ALL_HEIGHTS && decal.zLogical !== activeH) continue;
+
+      const renderKey: RenderKey = {
+        slice: decal.tx + decal.ty,
+        within: decal.tx,
+        baseZ: decal.zBase,
+        kindOrder: KindOrder.DECAL,
+        stableId: (decal.tx * 73856093 ^ decal.ty * 19349663 ^ (decal.zBase * 100 | 0) * 83492791) + 19,
+      };
+
+      const drawClosure = () => {
+        drawRuntimeDecalTop(
+          decal.tx,
+          decal.ty,
+          decal.zBase,
+          decal.renderAnchorY,
+          decal.setId,
+          decal.variantIndex,
+          decal.rotationQuarterTurns,
+        );
+      };
+      addToSlice(decal.tx + decal.ty, renderKey, drawClosure);
     }
   }
 
@@ -1159,6 +1236,137 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       };
 
       addToSlice(etx + ety, renderKey, drawClosure);
+    }
+  }
+
+  // ----------------------------
+  // Collect NPCS into slices
+  // ----------------------------
+  {
+    for (let i = 0; i < w.npcs.length; i++) {
+      const npc = w.npcs[i];
+      const ntx = npc.tx | 0;
+      const nty = npc.ty | 0;
+      const zAbs = tileHAtWorld(npc.wx, npc.wy);
+
+      const renderKey: RenderKey = {
+        slice: ntx + nty,
+        within: ntx,
+        baseZ: zAbs,
+        kindOrder: KindOrder.ENTITY,
+        stableId: 125000 + i,
+      };
+
+      const p = toScreen(npc.wx, npc.wy);
+      const drawClosure = () => {
+        const fr = vendorNpcSpritesReady()
+          ? getVendorNpcSpriteFrame({ dir: npc.dirCurrent, time: w.time ?? 0 })
+          : null;
+        if (!fr) return;
+        const dw = fr.sw * fr.scale;
+        const dh = fr.sh * fr.scale;
+        const dx = p.x - dw * fr.anchorX;
+        const dy = p.y - dh * fr.anchorY;
+        ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, snapPx(dx), snapPx(dy), dw, dh);
+      };
+
+      addToSlice(ntx + nty, renderKey, drawClosure);
+    }
+  }
+
+  // ----------------------------
+  // Collect NEUTRAL MOBS into slices
+  // ----------------------------
+  {
+    for (let i = 0; i < w.neutralMobs.length; i++) {
+      const mob = w.neutralMobs[i];
+      const mtx = Math.floor(mob.pos.wx / T);
+      const mty = Math.floor(mob.pos.wy / T);
+      const zGround = tileHAtWorld(mob.pos.wx, mob.pos.wy);
+      const zAbs = zGround + (mob.pos.wzOffset ?? 0);
+
+      const renderKey: RenderKey = {
+        slice: mtx + mty,
+        within: mtx,
+        baseZ: zAbs,
+        kindOrder: KindOrder.ENTITY,
+        stableId: 127000 + i,
+      };
+
+      const p = toScreenAtZ(mob.pos.wx, mob.pos.wy, zAbs);
+      const drawClosure = () => {
+        const frameCount = mob.spriteFrames.length;
+        if (frameCount <= 0) return;
+        const frame = mob.spriteFrames[mob.anim.frameIndex % frameCount];
+        if (!frame || frame.width <= 0 || frame.height <= 0) return;
+
+        const dw = frame.width * mob.render.scale;
+        const dh = frame.height * mob.render.scale;
+        const dx = p.x - dw * mob.render.anchorX;
+        const dy = p.y - dh * mob.render.anchorY;
+        if (mob.render.flipX) {
+          ctx.save();
+          ctx.translate(snapPx(dx + dw), snapPx(dy));
+          ctx.scale(-1, 1);
+          ctx.drawImage(frame, 0, 0, dw, dh);
+          ctx.restore();
+        } else {
+          ctx.drawImage(frame, snapPx(dx), snapPx(dy), dw, dh);
+        }
+
+        if (!mob.debug.renderLogged) {
+          mob.debug.renderLogged = true;
+        }
+
+        if (debug.neutralBirdAI.drawDebug) {
+          const targetWx = (mob.behavior.targetTileX + 0.5) * T;
+          const targetWy = (mob.behavior.targetTileY + 0.5) * T;
+          const targetZ = tileHAtWorld(targetWx, targetWy);
+          const targetP = toScreenAtZ(targetWx, targetWy, targetZ);
+          const dPlayerTiles = Math.sqrt(Math.max(0, mob.behavior.lastPlayerDist2));
+          const dTargetTiles = Math.sqrt(Math.max(0, mob.behavior.lastTargetDist2));
+          const lines = [
+            "PIGEON",
+            `STATE: ${mob.behavior.state}`,
+            `dPlayer: ${dPlayerTiles.toFixed(1)}`,
+            `target: (${mob.behavior.targetTileX},${mob.behavior.targetTileY})`,
+            `dTarget: ${dTargetTiles.toFixed(1)}`,
+          ];
+          ctx.save();
+          ctx.font = "10px monospace";
+          ctx.textAlign = "left";
+          ctx.textBaseline = "bottom";
+          const tx = snapPx(dx);
+          const ty = snapPx(dy - 4);
+          const pad = 2;
+          let tw = 0;
+          for (let li = 0; li < lines.length; li++) {
+            tw = Math.max(tw, ctx.measureText(lines[li]).width);
+          }
+          const lineH = 11;
+          const th = lineH * lines.length;
+          ctx.fillStyle = "rgba(0,0,0,0.7)";
+          ctx.fillRect(tx - pad, ty - th - pad, tw + pad * 2, th + pad * 2);
+          ctx.fillStyle = "#8fffb0";
+          for (let li = 0; li < lines.length; li++) {
+            const ly = ty - lineH * (lines.length - 1 - li);
+            ctx.fillText(lines[li], tx, ly);
+          }
+
+          ctx.strokeStyle = "#8fffb0";
+          ctx.lineWidth = 1;
+          const r = 5;
+          ctx.beginPath();
+          ctx.moveTo(targetP.x - r, targetP.y);
+          ctx.lineTo(targetP.x + r, targetP.y);
+          ctx.moveTo(targetP.x, targetP.y - r);
+          ctx.lineTo(targetP.x, targetP.y + r);
+          ctx.stroke();
+          ctx.restore();
+        }
+      };
+
+      addToSlice(mtx + mty, renderKey, drawClosure);
     }
   }
 
@@ -1444,16 +1652,24 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
               const img = draw.img;
               if (!img) return;
               const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(img) : img;
+              const x0 = Math.round(band.dstRect.x);
+              const y0 = Math.round(band.dstRect.y);
+              const x1 = Math.round(band.dstRect.x + band.dstRect.w);
+              const y1 = Math.round(band.dstRect.y + band.dstRect.h);
+              const snappedW = Math.max(0, x1 - x0);
+              const snappedH = Math.max(0, y1 - y0);
+              if (snappedW <= 0 || snappedH <= 0) return;
+              ctx.imageSmoothingEnabled = false;
               ctx.drawImage(
                 sourceImg,
                 band.srcRect.x,
                 band.srcRect.y,
                 band.srcRect.w,
                 band.srcRect.h,
-                snapPx(band.dstRect.x),
-                snapPx(band.dstRect.y),
-                band.dstRect.w,
-                band.dstRect.h,
+                x0,
+                y0,
+                snappedW,
+                snappedH,
               );
               if (SHOW_STRUCTURE_SLICE_DEBUG) {
                 const ownerTile = {
@@ -1480,20 +1696,26 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
                 const img = draw.img;
                 if (!img) return;
                 const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(img) : img;
-                const maskX = snapPx(band.dstRect.x);
-                const maskY = snapPx(band.dstRect.y);
+                const x0 = Math.round(band.dstRect.x);
+                const y0 = Math.round(band.dstRect.y);
+                const x1 = Math.round(band.dstRect.x + band.dstRect.w);
+                const y1 = Math.round(band.dstRect.y + band.dstRect.h);
+                const snappedW = Math.max(0, x1 - x0);
+                const snappedH = Math.max(0, y1 - y0);
+                if (snappedW <= 0 || snappedH <= 0) return;
                 maskCtx.save();
                 maskCtx.globalCompositeOperation = "source-over";
+                maskCtx.imageSmoothingEnabled = false;
                 maskCtx.drawImage(
                   sourceImg,
                   band.srcRect.x,
                   band.srcRect.y,
                   band.srcRect.w,
                   band.srcRect.h,
-                  maskX,
-                  maskY,
-                  band.dstRect.w,
-                  band.dstRect.h,
+                  x0,
+                  y0,
+                  snappedW,
+                  snappedH,
                 );
                 maskCtx.restore();
               });
@@ -1558,6 +1780,33 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   drawWalkMaskOverlay(debugContext, SHOW_WALK_MASK);
   drawRampOverlay(debugContext, SHOW_RAMPS);
   drawOccluderOverlay(debugContext, SHOW_OCCLUDER_DEBUG, viewRect);
+  if (SHOW_DECAL_DEBUG) {
+    const decals = decalsInView(viewRect);
+    if (decals.length > 0) {
+      ctx.save();
+      ctx.lineWidth = 1;
+      ctx.font = "10px monospace";
+      for (let i = 0; i < decals.length; i++) {
+        const d = decals[i];
+        const p0 = toScreen(d.tx * T, d.ty * T);
+        const p1 = toScreen((d.tx + 1) * T, d.ty * T);
+        const p2 = toScreen((d.tx + 1) * T, (d.ty + 1) * T);
+        const p3 = toScreen(d.tx * T, (d.ty + 1) * T);
+        const color = d.setId === "sidewalk" ? "rgba(40,220,255,0.95)" : "rgba(255,170,40,0.95)";
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.lineTo(p3.x, p3.y);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.fillText(d.setId, p0.x + 4, p0.y + 10);
+      }
+      ctx.restore();
+    }
+  }
   drawProjectileFaceOverlay(debugContext, SHOW_PROJECTILE_FACES, viewRect);
   drawStructureHeightOverlay(debugContext, SHOW_STRUCTURE_HEIGHTS, viewRect);
   drawTriggerOverlay(debugContext, SHOW_TRIGGER_ZONES);
@@ -1612,6 +1861,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     inverseCtx.fillRect(0, 0, screenW, screenH);
     inverseCtx.globalCompositeOperation = "source-over";
   }
+
+  // Floating combat text: world pass (same camera transform as world content)
+  renderFloatingText(w, ctx, toScreen);
 
   // Restore (undo camera zoom) before drawing screen-space overlays / HUD
   ctx.restore();
@@ -1705,8 +1957,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   renderExperienceBar(w, ctx, screenW, screenH);
   renderBossHealthBar(w, ctx, screenW, screenH);
   renderDPSMeter(w, ctx, screenW, screenH);
-  renderFloatingText(w, ctx, toScreen);
-
 }
 
 
@@ -1840,12 +2090,14 @@ function renderTileGridCompass(w: World, ctx: CanvasRenderingContext2D, ww: numb
 function renderFloatingText(
     w: World,
     ctx: CanvasRenderingContext2D,
-    toScreen: (x: number, y: number) => { x: number; y: number }
+    toScreen: (x: number, y: number) => { x: number; y: number },
 ) {
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  for (let i = 0; i < w.floatTextX.length; i++) {
+  for (let i = w.floatTextX.length - 1; i >= 0; i--) {
     const ttl = w.floatTextTtl[i];
     if (ttl <= 0) continue;
 
@@ -1860,18 +2112,17 @@ function renderFloatingText(
     const maxTtl = 0.8;
     const progress = 1 - ttl / maxTtl;
 
-    const floatOffset = progress * 30;
+    const rise = progress * 0.35;
     const alpha = progress > 0.6 ? 1 - (progress - 0.6) / 0.4 : 1;
 
     const baseSize = isCrit ? 16 : 12;
 
-    ctx.save();
     ctx.globalAlpha = alpha;
     ctx.fillStyle = color;
     ctx.font = `${baseSize}px monospace`;
-    ctx.fillText(`${value}`, x, y - floatOffset);
-    ctx.restore();
+    ctx.fillText(`${value}`, x, y - rise);
   }
+  ctx.restore();
 }
 
 /* =======================================================================

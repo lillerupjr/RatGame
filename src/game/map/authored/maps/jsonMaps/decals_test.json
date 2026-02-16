@@ -1,0 +1,14 @@
+{
+  "id": "DecalsTest",
+  "width": 10,
+  "height": 8,
+  "centerOnZero": false,
+  "mapSkinId": "building1",
+  "fields": [
+    { "x": 0, "y": 0, "w": 5, "h": 8, "type": "sidewalk" },
+    { "x": 5, "y": 0, "w": 5, "h": 8, "type": "road" }
+  ],
+  "cells": [
+    { "x": 1, "y": 1, "type": "spawn" }
+  ]
+}

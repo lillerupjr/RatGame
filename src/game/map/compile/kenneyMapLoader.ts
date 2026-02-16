@@ -13,11 +13,16 @@ import {
     type BuildingSkinId,
 } from "../../content/buildings";
 import { CONTAINER_PACKS, CONTAINER_SKINS, CONTAINER_PACK_ID } from "../../content/containers";
-import { requireProp } from "../../content/props";
+import { requireProp, resolvePropSprite } from "../../content/props";
 import { RNG } from "../../util/rng";
 import {getSpriteMeta} from "../../../engine/render/sprites/spriteMeta";
 import { seAnchorFromTopLeft } from "../../../engine/render/sprites/structureFootprintOwnership";
 import { getFloorVariantCount } from "../../content/runtimeFloorConfig";
+import {
+    getDecalSpriteId,
+    getDecalVariantCount,
+    type RuntimeDecalSetId,
+} from "../../content/runtimeDecalConfig";
 
 export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL";
 export type StairDir = "N" | "E" | "S" | "W";
@@ -39,6 +44,19 @@ export type RuntimeFloorTop = {
     family: "sidewalk" | "asphalt" | "park";
     spriteId: string;
     variantIndex: number;
+    rotationQuarterTurns: 0 | 1 | 2 | 3;
+};
+export type DecalPiece = {
+    id: string;
+    tx: number;
+    ty: number;
+    zBase: number;
+    zLogical: number;
+    setId: RuntimeDecalSetId;
+    spriteId: string;
+    variantIndex: number;
+    semanticType: "sidewalk" | "road" | "asphalt";
+    renderAnchorY: number;
     rotationQuarterTurns: 0 | 1 | 2 | 3;
 };
 export type LightShape = "RADIAL" | "STREET_LAMP";
@@ -215,6 +233,8 @@ export type CompiledKenneyMap = {
     solidFacesInView(view: ViewRect): SolidFaceRec[];
     overlays: StampOverlay[];
     overlaysInView(view: ViewRect): StampOverlay[];
+    decals: DecalPiece[];
+    decalsInView(view: ViewRect): DecalPiece[];
     blockedTiles: Set<string>;
 };
 
@@ -237,6 +257,7 @@ export function compileKenneyMapFromTable(
         }
         return hash >>> 0;
     };
+    const INHERIT_DOMINANT_FLOOR_SKIN = "__INHERIT_DOMINANT_FLOOR__";
     const RUNTIME_TILE_SKIN_PREFIX = "__RUNTIME_SQUARE_128__";
     const runtimeTileSkin = (family: RuntimeFloorTop["family"]) => `${RUNTIME_TILE_SKIN_PREFIX}${family}`;
 
@@ -244,7 +265,9 @@ export function compileKenneyMapFromTable(
         const variantCount = getFloorVariantCount(family);
         const variantSeed = hashString(`${runSeed}:${mapId}:${tx},${ty}:${family}:variant`);
         const variantIndex = (variantSeed % variantCount) + 1;
-        const rotationQuarterTurns: 0 = 0;
+        const rotationQuarterTurns: 0 | 1 | 2 | 3 = family === "asphalt"
+            ? ((hashString(`${runSeed}:${mapId}:${tx},${ty}:${family}:rot`) % 4) as 0 | 1 | 2 | 3)
+            : 0;
         return {
             kind: "SQUARE_128_RUNTIME",
             family,
@@ -313,6 +336,7 @@ export function compileKenneyMapFromTable(
                 switch (type) {
                     case "sidewalk": return "sidewalk" as const;
                     case "road": return "asphalt" as const;
+                    case "asphalt": return "asphalt" as const;
                     case "park": return "park" as const;
                     default: return undefined;
                 }
@@ -323,6 +347,16 @@ export function compileKenneyMapFromTable(
                         kind: "FLOOR" as const,
                         h: z,
                         skin: runtimeTileSkin(runtimeSquareFamily),
+                    },
+                    walls: [] as WallToken[],
+                };
+            }
+            if (type === "interact_shop" || type === "interact_rest" || type === "npc_vendor" || type === "npc_healer") {
+                return {
+                    tile: {
+                        kind: "FLOOR" as const,
+                        h: z,
+                        skin: INHERIT_DOMINANT_FLOOR_SKIN,
                     },
                     walls: [] as WallToken[],
                 };
@@ -621,10 +655,125 @@ export function compileKenneyMapFromTable(
         else topsByLayer.set(surface.zLogical, [surface]);
     }
 
+    function resolveSpawnSurfaceTop(tx: number, ty: number): {
+        runtimeTop?: RuntimeFloorTop;
+        spriteIdTop: string;
+    } {
+        const runtimeCounts = new Map<RuntimeFloorTop["family"], number>();
+        const skinCounts = new Map<string, number>();
+        const neighborOffsets = [
+            { dx: 0, dy: 0 },
+            { dx: 1, dy: 0 },
+            { dx: -1, dy: 0 },
+            { dx: 0, dy: 1 },
+            { dx: 0, dy: -1 },
+            { dx: 1, dy: 1 },
+            { dx: 1, dy: -1 },
+            { dx: -1, dy: 1 },
+            { dx: -1, dy: -1 },
+        ];
+        for (let i = 0; i < neighborOffsets.length; i++) {
+            const nt = placed.get(`${tx + neighborOffsets[i].dx},${ty + neighborOffsets[i].dy}`);
+            if (!nt || nt.kind === "VOID" || nt.kind === "SPAWN") continue;
+            const skin = nt.skin ?? "";
+            if (!skin || skin === INHERIT_DOMINANT_FLOOR_SKIN) continue;
+            if (skin.startsWith(RUNTIME_TILE_SKIN_PREFIX)) {
+                const family = skin.slice(RUNTIME_TILE_SKIN_PREFIX.length);
+                if (family === "sidewalk" || family === "asphalt" || family === "park") {
+                    runtimeCounts.set(family, (runtimeCounts.get(family) ?? 0) + 1);
+                    continue;
+                }
+            }
+            if (skin) skinCounts.set(skin, (skinCounts.get(skin) ?? 0) + 1);
+        }
+
+        let bestRuntimeFamily: RuntimeFloorTop["family"] | null = null;
+        let bestRuntimeCount = -1;
+        for (const [family, count] of runtimeCounts.entries()) {
+            if (count > bestRuntimeCount) {
+                bestRuntimeCount = count;
+                bestRuntimeFamily = family;
+            }
+        }
+        if (bestRuntimeFamily) {
+            const runtimeTop = pickRuntimeSquareTop(bestRuntimeFamily, tx, ty);
+            return { runtimeTop, spriteIdTop: runtimeTop.spriteId };
+        }
+
+        let bestSkin = "";
+        let bestSkinCount = -1;
+        for (const [skin, count] of skinCounts.entries()) {
+            if (count > bestSkinCount) {
+                bestSkinCount = count;
+                bestSkin = skin;
+            }
+        }
+        if (bestSkin) {
+            return { spriteIdTop: bestSkin };
+        }
+
+        return {
+            spriteIdTop: resolveTileSpriteId({
+                slot: "floor",
+                mapSkin: resolvedMapSkin,
+                mapSkinId: skinIdToUse,
+                mapDefaults: mapSkinDefaults,
+            }),
+        };
+    }
+
+    const decals: DecalPiece[] = [];
+    const decalTileKeys = new Set<string>();
+    const semanticDecalConfig: Record<"sidewalk" | "road" | "asphalt", { chance: number; setId: RuntimeDecalSetId }> = {
+        sidewalk: { chance: 0.10, setId: "sidewalk" },
+        road: { chance: 0.02, setId: "asphalt" },
+        asphalt: { chance: 0.02, setId: "asphalt" },
+    };
+    const maybeAddSemanticDecal = (
+        tx: number,
+        ty: number,
+        zBase: number,
+        zLogical: number,
+        semanticType: "sidewalk" | "road" | "asphalt",
+        renderAnchorY: number,
+    ) => {
+        const cfg = semanticDecalConfig[semanticType];
+        if (!cfg) return;
+        const variantCount = getDecalVariantCount(cfg.setId);
+        if (variantCount <= 0) return;
+
+        const dedupKey = `${tx},${ty},${zLogical}`;
+        if (decalTileKeys.has(dedupKey)) return;
+
+        const spawnHash = hashString(`${runSeed}:${mapId}:${tx},${ty}:${semanticType}:decal:spawn`);
+        const roll = (spawnHash % 10000) / 10000;
+        if (roll >= cfg.chance) return;
+
+        const pickHash = hashString(`${runSeed}:${mapId}:${tx},${ty}:${semanticType}:decal:pick`);
+        const variantIndex = (pickHash % variantCount) + 1;
+        const spriteId = getDecalSpriteId(cfg.setId, variantIndex);
+        if (!spriteId) return;
+        const rotationHash = hashString(`${runSeed}:${mapId}:${tx},${ty}:${semanticType}:decal:rot`);
+        const rotationQuarterTurns = (rotationHash % 4) as 0 | 1 | 2 | 3;
+
+        decalTileKeys.add(dedupKey);
+        decals.push({
+            id: `decal_${semanticType}_${tx}_${ty}_${zLogical}`,
+            tx,
+            ty,
+            zBase,
+            zLogical,
+            setId: cfg.setId,
+            spriteId,
+            variantIndex,
+            semanticType,
+            renderAnchorY,
+            rotationQuarterTurns,
+        });
+    };
+
     for (const [key, tile] of placed.entries()) {
         if (tile.kind === "VOID") continue;
-        // SPAWN tiles don't get their own surface - they use the semantic field's floor (e.g., road, sidewalk, park)
-        if (tile.kind === "SPAWN") continue;
         const parts = key.split(",");
         const tx = parseInt(parts[0], 10);
         const ty = parseInt(parts[1], 10);
@@ -645,10 +794,19 @@ export function compileKenneyMapFromTable(
             return undefined;
         })();
         const runtimeTop = runtimeFamilyFromTileSkin ? pickRuntimeSquareTop(runtimeFamilyFromTileSkin, tx, ty) : undefined;
+        if (runtimeFamilyFromTileSkin === "sidewalk") {
+            maybeAddSemanticDecal(tx, ty, zBase, zLogical, "sidewalk", renderAnchorY);
+        } else if (runtimeFamilyFromTileSkin === "asphalt") {
+            maybeAddSemanticDecal(tx, ty, zBase, zLogical, "asphalt", renderAnchorY);
+        }
         const tileOverride: MapSkinBundle | undefined = tile.skin && !runtimeTop
             ? (renderTopKind === "STAIR" ? { stair: tile.skin } : { floor: tile.skin })
             : undefined;
-        const spriteIdTop = runtimeTop
+        const useDominantFloorTop = tile.kind === "SPAWN" || tile.skin === INHERIT_DOMINANT_FLOOR_SKIN;
+        const spawnResolvedTop = useDominantFloorTop ? resolveSpawnSurfaceTop(tx, ty) : null;
+        const spriteIdTop = spawnResolvedTop
+            ? spawnResolvedTop.spriteIdTop
+            : runtimeTop
             ? runtimeTop.spriteId
             : resolveTileSpriteId({
                 slot: renderTopKind === "STAIR" ? "stair" : "floor",
@@ -658,6 +816,7 @@ export function compileKenneyMapFromTable(
                 mapDefaults: mapSkinDefaults,
                 tileOverride,
             });
+        const finalRuntimeTop = spawnResolvedTop?.runtimeTop ?? runtimeTop;
 
         addSurface({
             id: `tile_${tx}_${ty}_${tile.kind}_${zBase}`,
@@ -672,7 +831,7 @@ export function compileKenneyMapFromTable(
             renderAnchorY,
             renderDyOffset,
             spriteIdTop,
-            runtimeTop,
+            runtimeTop: finalRuntimeTop,
         });
     }
 
@@ -1128,6 +1287,7 @@ export function compileKenneyMapFromTable(
         const runtimeFamilyForStamp = (() => {
             if (stamp.type === "sidewalk") return "sidewalk" as const;
             if (stamp.type === "road") return "asphalt" as const;
+            if (stamp.type === "asphalt") return "asphalt" as const;
             if (stamp.type === "park") return "park" as const;
             return undefined;
         })();
@@ -1137,6 +1297,11 @@ export function compileKenneyMapFromTable(
                     const tx = sx + dx;
                     const ty = sy + dy;
                     const runtimeTop = pickRuntimeSquareTop(runtimeFamilyForStamp, tx, ty);
+                    if (runtimeFamilyForStamp === "sidewalk") {
+                        maybeAddSemanticDecal(tx, ty, zBase, zBase | 0, "sidewalk", floorAnchorY);
+                    } else if (runtimeFamilyForStamp === "asphalt") {
+                        maybeAddSemanticDecal(tx, ty, zBase, zBase | 0, "asphalt", floorAnchorY);
+                    }
                     addSurface({
                         id: `stamp_${runtimeFamilyForStamp}_${tx}_${ty}_${zBase}`,
                         kind: "TILE_TOP",
@@ -1351,6 +1516,8 @@ export function compileKenneyMapFromTable(
             const anchorLiftPx = (prop.anchorLiftUnits ?? 0) * HEIGHT_UNIT_PX;
             const offset = prop.anchorOffsetPx ?? { x: 0, y: 0 };
             const isStreetLampProp = prop.id.startsWith("street_lamp_");
+            const propDir = stamp.dir as import("../../../engine/render/sprites/dir8").Dir8 | undefined;
+            const resolvedSpriteId = resolvePropSprite(prop, propDir);
 
             overlays.push({
                 id: `prop_${prop.id}_${anchorTx}_${anchorTy}_${zBase}`,
@@ -1363,7 +1530,7 @@ export function compileKenneyMapFromTable(
                 anchorTx,
                 anchorTy,
                 z: zBase,
-                spriteId: prop.sprite,
+                spriteId: resolvedSpriteId,
                 drawDyOffset: anchorLiftPx + offset.y,
                 drawDxOffset: offset.x,
                 flipX: propOriented.flipped,
@@ -1640,6 +1807,18 @@ export function compileKenneyMapFromTable(
         return out;
     }
 
+    function decalsInView(view: ViewRect): DecalPiece[] {
+        if (decals.length === 0) return [];
+        const out: DecalPiece[] = [];
+        for (let i = 0; i < decals.length; i++) {
+            const d = decals[i];
+            if (d.tx < view.minTx || d.tx > view.maxTx) continue;
+            if (d.ty < view.minTy || d.ty > view.maxTy) continue;
+            out.push(d);
+        }
+        return out;
+    }
+
     function solidFace(tx: number, ty: number, zLogical: number, dir: WallDir): boolean {
         return wallFaces.has(`${tx},${ty},${zLogical},${dir}`);
     }
@@ -1687,6 +1866,8 @@ export function compileKenneyMapFromTable(
         solidFacesInView,
         overlays,
         overlaysInView,
+        decals,
+        decalsInView,
         blockedTiles,
     };
 

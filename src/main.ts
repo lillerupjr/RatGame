@@ -6,6 +6,7 @@ import { wireMenus } from "./ui/menuWiring";
 import {
   DEBUG_TOGGLE_DEFINITIONS,
   LIGHTING_MASK_DEBUG_MODES,
+  NEUTRAL_BIRD_FORCE_STATES,
   makeAllDebugOffSettings,
   type BooleanDebugSettingKey,
 } from "./debugSettings";
@@ -116,6 +117,142 @@ function installDevSettingsUi(): void {
   modeRow.appendChild(modeSelect);
   panel.appendChild(modeRow);
 
+  const birdTitle = document.createElement("div");
+  birdTitle.textContent = "neutralBirdAI";
+  birdTitle.style.fontWeight = "700";
+  birdTitle.style.marginTop = "10px";
+  birdTitle.style.marginBottom = "4px";
+  panel.appendChild(birdTitle);
+
+  const birdEnabledRow = document.createElement("label");
+  birdEnabledRow.style.display = "flex";
+  birdEnabledRow.style.alignItems = "center";
+  birdEnabledRow.style.justifyContent = "space-between";
+  birdEnabledRow.style.gap = "10px";
+  birdEnabledRow.style.padding = "4px 0";
+  const birdEnabledText = document.createElement("span");
+  birdEnabledText.textContent = "enabled";
+  const birdEnabledInput = document.createElement("input");
+  birdEnabledInput.type = "checkbox";
+  birdEnabledInput.addEventListener("change", () => {
+    updateUserSettings({
+      debug: {
+        neutralBirdAI: {
+          ...getUserSettings().debug.neutralBirdAI,
+          enabled: birdEnabledInput.checked,
+        },
+      },
+    });
+  });
+  birdEnabledRow.appendChild(birdEnabledText);
+  birdEnabledRow.appendChild(birdEnabledInput);
+  panel.appendChild(birdEnabledRow);
+
+  const birdDisableTransitionsRow = document.createElement("label");
+  birdDisableTransitionsRow.style.display = "flex";
+  birdDisableTransitionsRow.style.alignItems = "center";
+  birdDisableTransitionsRow.style.justifyContent = "space-between";
+  birdDisableTransitionsRow.style.gap = "10px";
+  birdDisableTransitionsRow.style.padding = "4px 0";
+  const birdDisableTransitionsText = document.createElement("span");
+  birdDisableTransitionsText.textContent = "disableTransitions";
+  const birdDisableTransitionsInput = document.createElement("input");
+  birdDisableTransitionsInput.type = "checkbox";
+  birdDisableTransitionsInput.addEventListener("change", () => {
+    updateUserSettings({
+      debug: {
+        neutralBirdAI: {
+          ...getUserSettings().debug.neutralBirdAI,
+          disableTransitions: birdDisableTransitionsInput.checked,
+        },
+      },
+    });
+  });
+  birdDisableTransitionsRow.appendChild(birdDisableTransitionsText);
+  birdDisableTransitionsRow.appendChild(birdDisableTransitionsInput);
+  panel.appendChild(birdDisableTransitionsRow);
+
+  const birdDrawDebugRow = document.createElement("label");
+  birdDrawDebugRow.style.display = "flex";
+  birdDrawDebugRow.style.alignItems = "center";
+  birdDrawDebugRow.style.justifyContent = "space-between";
+  birdDrawDebugRow.style.gap = "10px";
+  birdDrawDebugRow.style.padding = "4px 0";
+  const birdDrawDebugText = document.createElement("span");
+  birdDrawDebugText.textContent = "drawDebug";
+  const birdDrawDebugInput = document.createElement("input");
+  birdDrawDebugInput.type = "checkbox";
+  birdDrawDebugInput.addEventListener("change", () => {
+    updateUserSettings({
+      debug: {
+        neutralBirdAI: {
+          ...getUserSettings().debug.neutralBirdAI,
+          drawDebug: birdDrawDebugInput.checked,
+        },
+      },
+    });
+  });
+  birdDrawDebugRow.appendChild(birdDrawDebugText);
+  birdDrawDebugRow.appendChild(birdDrawDebugInput);
+  panel.appendChild(birdDrawDebugRow);
+
+  const birdForceStateRow = document.createElement("label");
+  birdForceStateRow.style.display = "flex";
+  birdForceStateRow.style.alignItems = "center";
+  birdForceStateRow.style.justifyContent = "space-between";
+  birdForceStateRow.style.gap = "10px";
+  birdForceStateRow.style.padding = "4px 0";
+  const birdForceStateText = document.createElement("span");
+  birdForceStateText.textContent = "forceState";
+  const birdForceStateSelect = document.createElement("select");
+  birdForceStateSelect.style.background = "rgba(20,20,20,0.9)";
+  birdForceStateSelect.style.color = "#fff";
+  birdForceStateSelect.style.border = "1px solid rgba(255,255,255,0.25)";
+  birdForceStateSelect.style.borderRadius = "4px";
+  for (let i = 0; i < NEUTRAL_BIRD_FORCE_STATES.length; i++) {
+    const opt = document.createElement("option");
+    opt.value = NEUTRAL_BIRD_FORCE_STATES[i];
+    opt.textContent = NEUTRAL_BIRD_FORCE_STATES[i];
+    birdForceStateSelect.appendChild(opt);
+  }
+  birdForceStateSelect.addEventListener("change", () => {
+    updateUserSettings({
+      debug: {
+        neutralBirdAI: {
+          ...getUserSettings().debug.neutralBirdAI,
+          forceState: birdForceStateSelect.value as SettingsDebug["neutralBirdAI"]["forceState"],
+        },
+      },
+    });
+  });
+  birdForceStateRow.appendChild(birdForceStateText);
+  birdForceStateRow.appendChild(birdForceStateSelect);
+  panel.appendChild(birdForceStateRow);
+
+  const birdRepickTargetRow = document.createElement("label");
+  birdRepickTargetRow.style.display = "flex";
+  birdRepickTargetRow.style.alignItems = "center";
+  birdRepickTargetRow.style.justifyContent = "space-between";
+  birdRepickTargetRow.style.gap = "10px";
+  birdRepickTargetRow.style.padding = "4px 0";
+  const birdRepickTargetText = document.createElement("span");
+  birdRepickTargetText.textContent = "debugRepickTarget";
+  const birdRepickTargetInput = document.createElement("input");
+  birdRepickTargetInput.type = "checkbox";
+  birdRepickTargetInput.addEventListener("change", () => {
+    updateUserSettings({
+      debug: {
+        neutralBirdAI: {
+          ...getUserSettings().debug.neutralBirdAI,
+          debugRepickTarget: birdRepickTargetInput.checked,
+        },
+      },
+    });
+  });
+  birdRepickTargetRow.appendChild(birdRepickTargetText);
+  birdRepickTargetRow.appendChild(birdRepickTargetInput);
+  panel.appendChild(birdRepickTargetRow);
+
   const offAllBtn = document.createElement("button");
   offAllBtn.type = "button";
   offAllBtn.textContent = "Turn Off All";
@@ -142,6 +279,11 @@ function installDevSettingsUi(): void {
       checks.get(def.key)!.checked = s.debug[def.key];
     }
     modeSelect.value = s.debug.lightingMaskDebugMode;
+    birdEnabledInput.checked = s.debug.neutralBirdAI.enabled;
+    birdDisableTransitionsInput.checked = s.debug.neutralBirdAI.disableTransitions;
+    birdDrawDebugInput.checked = s.debug.neutralBirdAI.drawDebug;
+    birdForceStateSelect.value = s.debug.neutralBirdAI.forceState;
+    birdRepickTargetInput.checked = s.debug.neutralBirdAI.debugRepickTarget;
   };
 
   const setOpen = (open: boolean) => {

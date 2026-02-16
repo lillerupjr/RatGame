@@ -1,15 +1,15 @@
 {
   "id": "Building",
-  "width": 6,
-  "height": 6,
+  "width": 40,
+  "height": 40,
   "centerOnZero": false,
   "mapSkinId": "building1",
   "buildingPackId": "avenue_buildings",
   "fields": [
-    { "x": 0, "y": 0, "w": 10, "h": 10, "type": "floor" }
+    { "x": 0, "y": 0, "w": 40, "h": 40, "type": "sidewalk" }
   ],
   "cells": [
-    { "x": 0, "y": 5, "type": "spawn" }
+    { "x": 20, "y": 20, "type": "spawn" }
   ],
   "stamps": [
     { "x": 0, "y": 0, "z": 0, "type": "prop", "propId": "street_lamp_e", "w": 1, "h": 1 }

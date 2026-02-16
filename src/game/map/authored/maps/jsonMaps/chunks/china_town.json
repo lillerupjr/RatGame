@@ -5,12 +5,7 @@
   "height": 24,
 
 
-  "cells": [
-    { "x": 7, "y": 7, "type": "spawn" }
-  ],
-
   "fields": [
-    { "x": 0, "y": 0, "w": 24, "h": 24, "type": "road" },
     { "x": 0, "y": 0, "w": 2, "h": 24, "type": "building" },
     { "x": 14, "y": 0, "w": 2, "h": 24, "type": "building" },
     { "x": 2, "y": 0, "w": 4, "h": 24, "type": "sidewalk" },

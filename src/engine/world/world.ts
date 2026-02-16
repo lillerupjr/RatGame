@@ -14,6 +14,7 @@ import type { ObjectiveSpec } from "../../game/systems/progression/objectiveSpec
 import type { FloorArchetype } from "../../game/map/floorArchetype";
 import type { FloorIntent } from "../../game/map/floorIntent";
 import type { TriggerDef } from "../../game/triggers/triggerTypes";
+import type { Dir8 } from "../render/sprites/dir8";
 
 import type { WeaponId } from "../../game/content/weapons";
 
@@ -54,6 +55,65 @@ export type WorldLightingState = {
   combinedOcclusionMaskCtx?: CanvasRenderingContext2D | null;
   debugBuildingMaskCanvas?: HTMLCanvasElement | null;
   debugBuildingMaskCtx?: CanvasRenderingContext2D | null;
+};
+
+export type NpcActor = {
+  id: string;
+  kind: "vendor" | "healer";
+  tx: number;
+  ty: number;
+  wx: number;
+  wy: number;
+  dirBase: Dir8;
+  dirCurrent: Dir8;
+  faceRestoreAtMs: number | null;
+};
+
+export type NeutralAnimatedMob = {
+  id: string;
+  kind: "PIGEON";
+  pos: { wx: number; wy: number; wzOffset: number };
+  anim: {
+    frameIndex: number;
+    fps: number;
+    loop: boolean;
+    elapsed: number;
+    clip: "IDLE" | "TAKEOFF" | "FLY_TO_TARGET" | "LAND";
+  };
+  behavior: {
+    state: "IDLE" | "TAKEOFF" | "FLY_TO_TARGET" | "LAND";
+    stateTimerSec: number;
+    targetTileX: number;
+    targetTileY: number;
+    lastPlayerDist2: number;
+    lastTargetDist2: number;
+    rngState?: number;
+  };
+  params: {
+    walkTriggerTiles: number;
+    safeDistanceTiles: number;
+    targetMinDistanceTiles: number;
+    targetMaxDistanceTiles: number;
+    targetAngleJitterDeg: number;
+    flySpeedTilesPerSec: number;
+    targetReachedThresholdTiles: number;
+    flyHeight: number;
+    takeoffTimeSec: number;
+    landTimeSec: number;
+    epsilon: number;
+  };
+  spriteFrames: HTMLImageElement[];
+  render: {
+    anchorX: number;
+    anchorY: number;
+    scale: number;
+    flipX: boolean;
+    screenDir: Dir8;
+  };
+  debug: {
+    frameLogsRemaining: number;
+    renderLogged: boolean;
+  };
 };
 
 export type World = {
@@ -200,6 +260,8 @@ export type World = {
   vendorPurchases: string[];
   relics: string[];
   relicEffects: { xpMult: number; hpBonus: number };
+  npcs: NpcActor[];
+  neutralMobs: NeutralAnimatedMob[];
 
   // -------------------------
   // Weapons + items
@@ -245,6 +307,7 @@ export type World = {
   ePoisonT: number[];
   ePoisonDps: number[];
   ePoisonedOnDeath: boolean[];
+  eSpawnTriggerId: (string | undefined)[];
 
   // Enemy spatial hash (perf)
   enemySpatialHash: SpatialHash;
@@ -505,7 +568,7 @@ export function createWorld(args: CreateWorldArgs): World {
     areaMult: 1,
     durationMult: 1,
 
-    baseCritChance: 0.25,
+    baseCritChance: 0.05,
     critChanceBonus: 0,
     critMultiplier: 2.0,
 
@@ -518,6 +581,8 @@ export function createWorld(args: CreateWorldArgs): World {
       xpMult: 1,
       hpBonus: 0,
     },
+    npcs: [],
+    neutralMobs: [],
 
     // Weapons + items
     weapons: [],
@@ -555,6 +620,7 @@ export function createWorld(args: CreateWorldArgs): World {
     ePoisonT: [],
     ePoisonDps: [],
     ePoisonedOnDeath: [],
+    eSpawnTriggerId: [],
 
     enemySpatialHash: createSpatialHash(128),
 
