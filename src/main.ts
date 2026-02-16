@@ -117,6 +117,41 @@ function installDevSettingsUi(): void {
   modeRow.appendChild(modeSelect);
   panel.appendChild(modeRow);
 
+  const waterFlowRow = document.createElement("div");
+  waterFlowRow.style.display = "flex";
+  waterFlowRow.style.flexDirection = "column";
+  waterFlowRow.style.gap = "4px";
+  waterFlowRow.style.padding = "6px 0";
+  const waterFlowTop = document.createElement("div");
+  waterFlowTop.style.display = "flex";
+  waterFlowTop.style.alignItems = "center";
+  waterFlowTop.style.justifyContent = "space-between";
+  waterFlowTop.style.gap = "10px";
+  const waterFlowText = document.createElement("span");
+  waterFlowText.textContent = "waterFlowRate";
+  const waterFlowValue = document.createElement("span");
+  waterFlowValue.textContent = "1.00x";
+  const waterFlowInput = document.createElement("input");
+  waterFlowInput.type = "range";
+  waterFlowInput.min = "0.25";
+  waterFlowInput.max = "4";
+  waterFlowInput.step = "0.05";
+  waterFlowInput.value = "1";
+  waterFlowInput.addEventListener("input", () => {
+    const value = Number.parseFloat(waterFlowInput.value) || 1;
+    waterFlowValue.textContent = `${value.toFixed(2)}x`;
+    updateUserSettings({
+      debug: {
+        waterFlowRate: value,
+      },
+    });
+  });
+  waterFlowTop.appendChild(waterFlowText);
+  waterFlowTop.appendChild(waterFlowValue);
+  waterFlowRow.appendChild(waterFlowTop);
+  waterFlowRow.appendChild(waterFlowInput);
+  panel.appendChild(waterFlowRow);
+
   const birdTitle = document.createElement("div");
   birdTitle.textContent = "neutralBirdAI";
   birdTitle.style.fontWeight = "700";
@@ -284,6 +319,8 @@ function installDevSettingsUi(): void {
     birdDrawDebugInput.checked = s.debug.neutralBirdAI.drawDebug;
     birdForceStateSelect.value = s.debug.neutralBirdAI.forceState;
     birdRepickTargetInput.checked = s.debug.neutralBirdAI.debugRepickTarget;
+    waterFlowInput.value = `${s.debug.waterFlowRate}`;
+    waterFlowValue.textContent = `${s.debug.waterFlowRate.toFixed(2)}x`;
   };
 
   const setOpen = (open: boolean) => {

@@ -33,10 +33,11 @@ export type DebugSettings = {
   mapOverlaysDisabled: boolean;
   rampFaces: boolean;
   forceSpawnOverride: boolean;
+  waterFlowRate: number;
   neutralBirdAI: NeutralBirdAIDebugSettings;
 };
 
-export type BooleanDebugSettingKey = Exclude<keyof DebugSettings, "lightingMaskDebugMode" | "neutralBirdAI">;
+export type BooleanDebugSettingKey = Exclude<keyof DebugSettings, "lightingMaskDebugMode" | "waterFlowRate" | "neutralBirdAI">;
 
 export type DebugToggleDefinition = {
   key: BooleanDebugSettingKey;
@@ -97,6 +98,7 @@ export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   mapOverlaysDisabled: false,
   rampFaces: false,
   forceSpawnOverride: false,
+  waterFlowRate: 1,
   neutralBirdAI: {
     enabled: false,
     forceState: "NONE",

@@ -33,6 +33,20 @@ const DECAL_MODULES = import.meta.glob("../../../assets/tiles/floor/decals/*.png
 }) as Record<string, string>;
 
 const cache: Record<string, LoadedImg> = Object.create(null);
+const WATER_FRAME_COUNT = 6;
+const WATER_FRAME_MS = 150;
+
+function normalizeSpriteId(spriteId: string): string {
+    const trimmed = spriteId.trim();
+    return trimmed.toLowerCase().endsWith(".png") ? trimmed.slice(0, -4) : trimmed;
+}
+
+function isWaterBackgroundId(spriteId: string): boolean {
+    const normalized = normalizeSpriteId(spriteId);
+    return normalized.startsWith("tiles/backgrounds/water")
+        || normalized.startsWith("tiles/animated/water")
+        || normalized.endsWith("green_water");
+}
 
 function resolveUrl(spriteId: string): string | null {
     const trimmed = spriteId.trim();
@@ -129,15 +143,27 @@ export function setActiveMapSkinId(id?: MapSkinId): void {
     _activeMapSkinId = id;
 }
 
-export function getVoidTop(): LoadedImg {
+export function getVoidTop(nowMs: number = performance.now(), flowRate: number = 1): LoadedImg {
     const semantic = resolveSemanticSprite(_activeMapSkinId, "VOID_TOP");
     const skin = resolveMapSkin(_activeMapSkinId);
     const bg = semantic || skin.background;
+    if (isWaterBackgroundId(bg)) {
+        return getAnimatedWaterSprite(nowMs, flowRate);
+    }
     return loadById(bg);
+}
+
+export function getAnimatedWaterSprite(nowMs: number, flowRate: number): LoadedImg {
+    const rate = Number.isFinite(flowRate) ? Math.max(0.05, flowRate) : 1;
+    const frame = (Math.floor(nowMs / (WATER_FRAME_MS / rate)) % WATER_FRAME_COUNT) + 1;
+    return loadById(`tiles/animated/water2/${frame}`);
 }
 // IMPORTANT: this must be a named export (your render.ts imports it by name)
 export function preloadRenderSprites(): void {
     void getVoidTop();
+    for (let i = 1; i <= WATER_FRAME_COUNT; i++) {
+        void loadById(`tiles/animated/water2/${i}`);
+    }
     for (const [family, count] of Object.entries(RUNTIME_FLOOR_VARIANT_COUNTS) as [RuntimeFloorFamily, number][]) {
         for (let i = 1; i <= count; i++) void getRuntimeSquareFloorSprite(family, i);
     }

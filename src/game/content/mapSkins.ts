@@ -30,7 +30,7 @@ export const DEFAULT_MAP_SKIN: ResolvedMapSkin = {
     stair: "tiles/stairs/top/stone",
     stairApron: "tiles/floor/curtain/stone",
 
-    background: "tiles/backgrounds/water3",
+    background: "tiles/animated/water2/1",
 };
 
 
@@ -42,7 +42,7 @@ export const MAP_SKINS: Record<MapSkinId, MapSkinBundle> = {
             ROAD_FLOOR: "tiles/floor/top/road",
             PARK_FLOOR: "tiles/floor/top/park",
             SEA_FLOOR: "tiles/floor/top/stone",
-            VOID_TOP: "tiles/backgrounds/water3",
+            VOID_TOP: "tiles/animated/water2/1",
         },
     },
 
@@ -50,13 +50,13 @@ export const MAP_SKINS: Record<MapSkinId, MapSkinBundle> = {
         floor: "tiles/floor/top/asphalt",
         apron: "tiles/floor/curtain/asphalt",
         wall: "tiles/walls/asphalt",
-        background: "tiles/backgrounds/water1",
+        background: "tiles/animated/water2/1",
         semantic: {
             ROAD_FLOOR: "tiles/floor/top/road",
             SIDEWALK_FLOOR: "tiles/floor/top/sidewalk",
             PARK_FLOOR: "tiles/floor/top/park",
             SEA_FLOOR: "",
-            VOID_TOP: "tiles/backgrounds/water1",
+            VOID_TOP: "tiles/animated/water2/1",
         },
     },
     green: {

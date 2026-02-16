@@ -554,6 +554,32 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       ctx.restore();
     };
 
+    const drawProjectedVoidTop = (
+      img: HTMLImageElement,
+      tx: number,
+      ty: number,
+      renderAnchorY: number,
+    ) => {
+      const wx = (tx + 0.5) * T;
+      const wy = (ty + 0.5) * T;
+      const p = worldToScreen(wx, wy);
+      const centerX = snapPx(p.x + camX);
+      const centerY = snapPx(
+        p.y + camY + 2 * ELEV_PX - SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5),
+      );
+
+      const srcW = img.width * VOID_TOP_SCALE;
+      const srcH = img.height * VOID_TOP_SCALE;
+      // Slightly overdraw each projected tile to hide subpixel seam cracks between neighbors.
+      const bleed = 1;
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.transform(0.5, 0.25, -0.5, 0.25, 0, 0);
+      ctx.translate(-(srcW * 0.5) - bleed, -(srcH * 0.5) - bleed);
+      ctx.drawImage(img, 0, 0, srcW + bleed * 2, srcH + bleed * 2);
+      ctx.restore();
+    };
+
     const dirToDelta = (dir: "N" | "E" | "S" | "W") => {
       switch (dir) {
         case "N": return { dx: 0, dy: -1 };
@@ -784,6 +810,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   };
 
   const debug = getUserSettings().debug;
+  const WATER_FLOW_RATE = debug.waterFlowRate;
   const debugFlags = resolveDebugFlags(debug);
   const SHOW_WALK_MASK = debugFlags.showWalkMask;
   const SHOW_RAMPS = debugFlags.showRamps;
@@ -822,9 +849,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // Void green_water.png (draw once per frame)
   // ----------------------------
   {
-    const voidRec = getVoidTop();
+    const voidRec = getVoidTop(performance.now(), WATER_FLOW_RATE);
     if (voidRec?.ready && voidRec.img && voidRec.img.width > 0 && voidRec.img.height > 0) {
       const topImg = voidRec.img;
+      const useProjectedTop = topImg.width === topImg.height;
       const topW = topImg.width * VOID_TOP_SCALE;
       const topH = topImg.height * VOID_TOP_SCALE;
 
@@ -837,18 +865,17 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           const tile = getTile(tx, ty);
           if (tile.kind !== "VOID") continue;
 
-          const wx = (tx + 0.5) * T;
-          const wy = (ty + 0.5) * T;
-
-          const p = worldToScreen(wx, wy);
-          const dx = p.x + camX - topW * 0.5;
-
-          const anchorY = ANCHOR_Y;
-
-            let dy = p.y + camY - topH * anchorY;
+          if (useProjectedTop) {
+            drawProjectedVoidTop(topImg, tx, ty, ANCHOR_Y);
+          } else {
+            const wx = (tx + 0.5) * T;
+            const wy = (ty + 0.5) * T;
+            const p = worldToScreen(wx, wy);
+            const dx = p.x + camX - topW * 0.5;
+            let dy = p.y + camY - topH * ANCHOR_Y;
             dy += 2 * ELEV_PX;
-
             ctx.drawImage(topImg, snapPx(dx), snapPx(dy), topW, topH);
+          }
         }
       }
     }
