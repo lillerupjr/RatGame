@@ -229,6 +229,30 @@ function installDevSettingsUi(): void {
   birdForceStateRow.appendChild(birdForceStateSelect);
   panel.appendChild(birdForceStateRow);
 
+  const birdRepickTargetRow = document.createElement("label");
+  birdRepickTargetRow.style.display = "flex";
+  birdRepickTargetRow.style.alignItems = "center";
+  birdRepickTargetRow.style.justifyContent = "space-between";
+  birdRepickTargetRow.style.gap = "10px";
+  birdRepickTargetRow.style.padding = "4px 0";
+  const birdRepickTargetText = document.createElement("span");
+  birdRepickTargetText.textContent = "debugRepickTarget";
+  const birdRepickTargetInput = document.createElement("input");
+  birdRepickTargetInput.type = "checkbox";
+  birdRepickTargetInput.addEventListener("change", () => {
+    updateUserSettings({
+      debug: {
+        neutralBirdAI: {
+          ...getUserSettings().debug.neutralBirdAI,
+          debugRepickTarget: birdRepickTargetInput.checked,
+        },
+      },
+    });
+  });
+  birdRepickTargetRow.appendChild(birdRepickTargetText);
+  birdRepickTargetRow.appendChild(birdRepickTargetInput);
+  panel.appendChild(birdRepickTargetRow);
+
   const offAllBtn = document.createElement("button");
   offAllBtn.type = "button";
   offAllBtn.textContent = "Turn Off All";
@@ -259,6 +283,7 @@ function installDevSettingsUi(): void {
     birdDisableTransitionsInput.checked = s.debug.neutralBirdAI.disableTransitions;
     birdDrawDebugInput.checked = s.debug.neutralBirdAI.drawDebug;
     birdForceStateSelect.value = s.debug.neutralBirdAI.forceState;
+    birdRepickTargetInput.checked = s.debug.neutralBirdAI.debugRepickTarget;
   };
 
   const setOpen = (open: boolean) => {

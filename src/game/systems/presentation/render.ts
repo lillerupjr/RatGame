@@ -1316,14 +1316,22 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
         if (!mob.debug.renderLogged) {
           mob.debug.renderLogged = true;
-          console.log(
-            `[neutralMobs] Rendered ${mob.id} at tile (${mtx}, ${mty}) frame=${mob.anim.frameIndex}`,
-          );
         }
 
         if (debug.neutralBirdAI.drawDebug) {
-          const distTiles = Math.sqrt(Math.max(0, mob.behavior.lastPlayerDist2));
-          const label = `PIGEON: ${mob.behavior.state} d=${distTiles.toFixed(1)} t=${mob.behavior.t.toFixed(2)}`;
+          const targetWx = (mob.behavior.targetTileX + 0.5) * T;
+          const targetWy = (mob.behavior.targetTileY + 0.5) * T;
+          const targetZ = tileHAtWorld(targetWx, targetWy);
+          const targetP = toScreenAtZ(targetWx, targetWy, targetZ);
+          const dPlayerTiles = Math.sqrt(Math.max(0, mob.behavior.lastPlayerDist2));
+          const dTargetTiles = Math.sqrt(Math.max(0, mob.behavior.lastTargetDist2));
+          const lines = [
+            "PIGEON",
+            `STATE: ${mob.behavior.state}`,
+            `dPlayer: ${dPlayerTiles.toFixed(1)}`,
+            `target: (${mob.behavior.targetTileX},${mob.behavior.targetTileY})`,
+            `dTarget: ${dTargetTiles.toFixed(1)}`,
+          ];
           ctx.save();
           ctx.font = "10px monospace";
           ctx.textAlign = "left";
@@ -1331,11 +1339,29 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           const tx = snapPx(dx);
           const ty = snapPx(dy - 4);
           const pad = 2;
-          const tw = ctx.measureText(label).width;
+          let tw = 0;
+          for (let li = 0; li < lines.length; li++) {
+            tw = Math.max(tw, ctx.measureText(lines[li]).width);
+          }
+          const lineH = 11;
+          const th = lineH * lines.length;
           ctx.fillStyle = "rgba(0,0,0,0.7)";
-          ctx.fillRect(tx - pad, ty - 11 - pad, tw + pad * 2, 11 + pad * 2);
+          ctx.fillRect(tx - pad, ty - th - pad, tw + pad * 2, th + pad * 2);
           ctx.fillStyle = "#8fffb0";
-          ctx.fillText(label, tx, ty);
+          for (let li = 0; li < lines.length; li++) {
+            const ly = ty - lineH * (lines.length - 1 - li);
+            ctx.fillText(lines[li], tx, ly);
+          }
+
+          ctx.strokeStyle = "#8fffb0";
+          ctx.lineWidth = 1;
+          const r = 5;
+          ctx.beginPath();
+          ctx.moveTo(targetP.x - r, targetP.y);
+          ctx.lineTo(targetP.x + r, targetP.y);
+          ctx.moveTo(targetP.x, targetP.y - r);
+          ctx.lineTo(targetP.x, targetP.y + r);
+          ctx.stroke();
           ctx.restore();
         }
       };

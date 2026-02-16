@@ -2,9 +2,8 @@ export type LightingMaskDebugMode = "OFF" | "SOURCE" | "INVERSE" | "COMBINED";
 export type NeutralBirdForceState =
   | "NONE"
   | "IDLE"
-  | "WALK_AWAY"
   | "TAKEOFF"
-  | "FLY_AWAY"
+  | "FLY_TO_TARGET"
   | "LAND";
 
 export type NeutralBirdAIDebugSettings = {
@@ -12,6 +11,7 @@ export type NeutralBirdAIDebugSettings = {
   forceState: NeutralBirdForceState;
   disableTransitions: boolean;
   drawDebug: boolean;
+  debugRepickTarget: boolean;
 };
 
 export type DebugSettings = {
@@ -53,9 +53,8 @@ export const LIGHTING_MASK_DEBUG_MODES: readonly LightingMaskDebugMode[] = [
 export const NEUTRAL_BIRD_FORCE_STATES: readonly NeutralBirdForceState[] = [
   "NONE",
   "IDLE",
-  "WALK_AWAY",
   "TAKEOFF",
-  "FLY_AWAY",
+  "FLY_TO_TARGET",
   "LAND",
 ] as const;
 
@@ -103,6 +102,7 @@ export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
     forceState: "NONE",
     disableTransitions: false,
     drawDebug: true,
+    debugRepickTarget: false,
   },
 };
 

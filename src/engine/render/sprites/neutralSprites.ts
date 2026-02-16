@@ -1,21 +1,56 @@
-const PIGEON_FLYING_EAST_FRAME_MODULES = import.meta.glob(
-  "../../../assets/animals/pigeon/animations/flying/east/frame_*.png",
+import type { Dir8 } from "./dir8";
+
+const PIGEON_FLYING_FRAME_MODULES = import.meta.glob(
+  "../../../assets/animals/pigeon/animations/flying/**/*.png",
   {
     eager: true,
     import: "default",
   },
 ) as Record<string, string>;
 
-const PIGEON_IDLE_EAST_FRAME_MODULES = import.meta.glob(
-  "../../../assets/animals/pigeon/rotations/east/frame_*.png",
+const PIGEON_IDLE_FRAME_MODULES = import.meta.glob(
+  "../../../assets/animals/pigeon/rotations/**/*.png",
   {
     eager: true,
     import: "default",
   },
 ) as Record<string, string>;
 
-const pigeonFlyingEastFrames: HTMLImageElement[] = [];
-const pigeonIdleEastFrames: HTMLImageElement[] = [];
+const DIR_TO_PATH: Record<Dir8, string> = {
+  N: "north",
+  NE: "north-east",
+  E: "east",
+  SE: "south-east",
+  S: "south",
+  SW: "south-west",
+  W: "west",
+  NW: "north-west",
+};
+
+const DIRS: Dir8[] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+
+const pigeonFlyingFramesByDir: Record<Dir8, HTMLImageElement[]> = {
+  N: [],
+  NE: [],
+  E: [],
+  SE: [],
+  S: [],
+  SW: [],
+  W: [],
+  NW: [],
+};
+
+const pigeonIdleFramesByDir: Record<Dir8, HTMLImageElement[]> = {
+  N: [],
+  NE: [],
+  E: [],
+  SE: [],
+  S: [],
+  SW: [],
+  W: [],
+  NW: [],
+};
+
 let preloadStarted = false;
 
 function loadImage(url: string): Promise<HTMLImageElement> {
@@ -27,56 +62,58 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   });
 }
 
-export function getPigeonFlyingEastFrames(): HTMLImageElement[] {
-  return pigeonFlyingEastFrames;
+function sortedEntriesForDir(modules: Record<string, string>, basePath: string): Array<[string, string]> {
+  return Object.entries(modules)
+    .filter(([k]) => k.includes(basePath))
+    .sort((a, b) => a[0].localeCompare(b[0]));
 }
 
-export function getPigeonIdleEastFrames(): HTMLImageElement[] {
-  return pigeonIdleEastFrames;
+export function getPigeonFramesForClipAndScreenDir(
+  clip: "IDLE" | "TAKEOFF" | "FLY_TO_TARGET" | "LAND",
+  dir: Dir8,
+): HTMLImageElement[] {
+  if (clip === "IDLE" || clip === "LAND") {
+    return pigeonIdleFramesByDir[dir].length > 0 ? pigeonIdleFramesByDir[dir] : pigeonIdleFramesByDir.E;
+  }
+  return pigeonFlyingFramesByDir[dir].length > 0 ? pigeonFlyingFramesByDir[dir] : pigeonFlyingFramesByDir.E;
 }
 
 export function getPigeonFramesForClip(
-  clip: "IDLE" | "WALK_AWAY" | "TAKEOFF" | "FLY_AWAY" | "LAND",
+  clip: "IDLE" | "TAKEOFF" | "FLY_TO_TARGET" | "LAND",
 ): HTMLImageElement[] {
-  if (clip === "IDLE" || clip === "LAND") return pigeonIdleEastFrames;
-  return pigeonFlyingEastFrames;
+  return getPigeonFramesForClipAndScreenDir(clip, "E");
 }
 
 export async function preloadNeutralMobSprites(): Promise<void> {
   if (preloadStarted) return;
   preloadStarted = true;
 
-  const flyingEntries = Object.entries(PIGEON_FLYING_EAST_FRAME_MODULES).sort((a, b) =>
-    a[0].localeCompare(b[0]),
-  );
-  const idleEntries = Object.entries(PIGEON_IDLE_EAST_FRAME_MODULES).sort((a, b) =>
-    a[0].localeCompare(b[0]),
-  );
-
-  if (flyingEntries.length === 0) {
-    console.warn("[neutralSprites] No pigeon flying east frames found in animations/flying/east.");
-    return;
-  }
-  if (idleEntries.length === 0) {
-    console.warn("[neutralSprites] No pigeon idle east frames found in rotations/east.");
-    return;
-  }
-
   try {
-    for (let i = 0; i < flyingEntries.length; i++) {
-      const img = await loadImage(flyingEntries[i][1]);
-      if (img.decode) await img.decode();
-      pigeonFlyingEastFrames.push(img);
+    for (let i = 0; i < DIRS.length; i++) {
+      const dir = DIRS[i];
+      const dirPath = DIR_TO_PATH[dir];
+      const flyingEntries = sortedEntriesForDir(
+        PIGEON_FLYING_FRAME_MODULES,
+        `/animations/flying/${dirPath}/`,
+      );
+      const idleEntries = sortedEntriesForDir(
+        PIGEON_IDLE_FRAME_MODULES,
+        `/rotations/${dirPath}/`,
+      );
+
+      for (let fi = 0; fi < flyingEntries.length; fi++) {
+        const img = await loadImage(flyingEntries[fi][1]);
+        if (img.decode) await img.decode();
+        pigeonFlyingFramesByDir[dir].push(img);
+      }
+      for (let ii = 0; ii < idleEntries.length; ii++) {
+        const img = await loadImage(idleEntries[ii][1]);
+        if (img.decode) await img.decode();
+        pigeonIdleFramesByDir[dir].push(img);
+      }
     }
-    for (let i = 0; i < idleEntries.length; i++) {
-      const img = await loadImage(idleEntries[i][1]);
-      if (img.decode) await img.decode();
-      pigeonIdleEastFrames.push(img);
-    }
-    console.log(
-      `[neutralSprites] Loaded pigeon frames: flying=${pigeonFlyingEastFrames.length} idle=${pigeonIdleEastFrames.length}`,
-    );
+
   } catch (err) {
-    console.warn("[neutralSprites] Failed to preload pigeon frames", err);
+    void err;
   }
 }

@@ -27,8 +27,6 @@ export function neutralAnimatedMobsSystem(w: World, dt: number): void {
 
     if (mob.debug.frameLogsRemaining > 0) {
       mob.debug.frameLogsRemaining -= 1;
-      console.log(`[neutralMobs] ${mob.id} frame=${mob.anim.frameIndex}`);
     }
   }
 }
-

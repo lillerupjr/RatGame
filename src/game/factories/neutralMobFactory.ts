@@ -5,16 +5,16 @@ import { gridAtPlayer } from "../../engine/world/world";
 import { getPigeonFramesForClip } from "../../engine/render/sprites/neutralSprites";
 
 const DEFAULT_BIRD_PARAMS = {
-  walkTriggerTiles: 2.0,
-  takeoffTriggerTiles: 1.0,
-  safeDistanceTiles: 4.0,
-  walkSpeedTilesPerSec: 1.0,
-  flySpeedTilesPerSec: 2.0,
+  walkTriggerTiles: 3.0,
+  safeDistanceTiles: 2.0,
+  targetMinDistanceTiles: 3,
+  targetMaxDistanceTiles: 7,
+  targetAngleJitterDeg: 20,
+  flySpeedTilesPerSec: 3.0,
+  targetReachedThresholdTiles: 0.2,
   flyHeight: 8.0,
   takeoffTimeSec: 0.25,
   landTimeSec: 0.25,
-  maxFlyTimeSec: 3.0,
-  dirLockSec: 0.3,
   epsilon: 1e-4,
 } as const;
 
@@ -35,19 +35,20 @@ export function spawnNeutralPigeonAtGrid(w: World, gx: number, gy: number): void
     },
     behavior: {
       state: "IDLE",
-      t: 0,
-      dirX: 1,
-      dirY: 0,
-      dirLockT: 0,
+      stateTimerSec: 0,
+      targetTileX: gx,
+      targetTileY: gy,
       lastPlayerDist2: Number.POSITIVE_INFINITY,
+      lastTargetDist2: Number.POSITIVE_INFINITY,
     },
     params: { ...DEFAULT_BIRD_PARAMS },
     spriteFrames,
     render: {
       anchorX: 0.5,
       anchorY: 0.72,
-      scale: 1.2,
+      scale: 0.8,
       flipX: false,
+      screenDir: "E",
     },
     debug: {
       frameLogsRemaining: 6,
@@ -55,22 +56,21 @@ export function spawnNeutralPigeonAtGrid(w: World, gx: number, gy: number): void
     },
   });
 
-  console.log(`[neutralMobs] Spawned pigeon at tile (${gx}, ${gy})`);
 }
 
 export function spawnMilestonePigeonNearPlayer(w: World): void {
   const pg = gridAtPlayer(w);
   const offsets: Array<{ dx: number; dy: number }> = [
-    { dx: 2, dy: 1 },
-    { dx: 3, dy: 1 },
-    { dx: 1, dy: 2 },
-    { dx: -1, dy: 2 },
-    { dx: -2, dy: 1 },
-    { dx: -3, dy: 0 },
-    { dx: -2, dy: -1 },
-    { dx: 0, dy: -2 },
-    { dx: 2, dy: -2 },
-    { dx: 3, dy: -1 },
+    { dx: 4, dy: 2 },
+    { dx: 5, dy: 2 },
+    { dx: 2, dy: 4 },
+    { dx: -2, dy: 4 },
+    { dx: -4, dy: 2 },
+    { dx: -5, dy: 0 },
+    { dx: -4, dy: -2 },
+    { dx: 0, dy: -4 },
+    { dx: 3, dy: -3 },
+    { dx: 5, dy: -2 },
   ];
 
   for (let i = 0; i < offsets.length; i++) {

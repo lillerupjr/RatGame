@@ -78,27 +78,28 @@ export type NeutralAnimatedMob = {
     fps: number;
     loop: boolean;
     elapsed: number;
-    clip: "IDLE" | "WALK_AWAY" | "TAKEOFF" | "FLY_AWAY" | "LAND";
+    clip: "IDLE" | "TAKEOFF" | "FLY_TO_TARGET" | "LAND";
   };
   behavior: {
-    state: "IDLE" | "WALK_AWAY" | "TAKEOFF" | "FLY_AWAY" | "LAND";
-    t: number;
-    dirX: number;
-    dirY: number;
-    dirLockT: number;
+    state: "IDLE" | "TAKEOFF" | "FLY_TO_TARGET" | "LAND";
+    stateTimerSec: number;
+    targetTileX: number;
+    targetTileY: number;
     lastPlayerDist2: number;
+    lastTargetDist2: number;
+    rngState?: number;
   };
   params: {
     walkTriggerTiles: number;
-    takeoffTriggerTiles: number;
     safeDistanceTiles: number;
-    walkSpeedTilesPerSec: number;
+    targetMinDistanceTiles: number;
+    targetMaxDistanceTiles: number;
+    targetAngleJitterDeg: number;
     flySpeedTilesPerSec: number;
+    targetReachedThresholdTiles: number;
     flyHeight: number;
     takeoffTimeSec: number;
     landTimeSec: number;
-    maxFlyTimeSec: number;
-    dirLockSec: number;
     epsilon: number;
   };
   spriteFrames: HTMLImageElement[];
@@ -107,6 +108,7 @@ export type NeutralAnimatedMob = {
     anchorY: number;
     scale: number;
     flipX: boolean;
+    screenDir: Dir8;
   };
   debug: {
     frameLogsRemaining: number;
