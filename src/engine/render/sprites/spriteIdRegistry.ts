@@ -4,6 +4,8 @@ import { MAP_SKINS, DEFAULT_MAP_SKIN } from "../../../game/content/mapSkins";
 import { PROPS } from "../../../game/content/props";
 import { RUNTIME_FLOOR_VARIANT_COUNTS, type RuntimeFloorFamily } from "../../../game/content/runtimeFloorConfig";
 
+import { DIR8_ORDER } from "./dir8";
+
 function addId(set: Set<string>, id: string | undefined): void {
   if (!id) return;
   const trimmed = id.trim();
@@ -65,6 +67,11 @@ function collectRenderableSpriteIds(): ReadonlySet<string> {
 
   for (const prop of Object.values(PROPS)) {
     addId(ids, prop.sprite);
+    if (prop.spriteDir8) {
+      for (const dir of DIR8_ORDER) {
+        addId(ids, `${prop.spriteDir8}_${dir}`);
+      }
+    }
   }
 
   return ids;
