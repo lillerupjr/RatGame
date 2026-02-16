@@ -1,4 +1,18 @@
 export type LightingMaskDebugMode = "OFF" | "SOURCE" | "INVERSE" | "COMBINED";
+export type NeutralBirdForceState =
+  | "NONE"
+  | "IDLE"
+  | "WALK_AWAY"
+  | "TAKEOFF"
+  | "FLY_AWAY"
+  | "LAND";
+
+export type NeutralBirdAIDebugSettings = {
+  enabled: boolean;
+  forceState: NeutralBirdForceState;
+  disableTransitions: boolean;
+  drawDebug: boolean;
+};
 
 export type DebugSettings = {
   grid: boolean;
@@ -19,9 +33,10 @@ export type DebugSettings = {
   mapOverlaysDisabled: boolean;
   rampFaces: boolean;
   forceSpawnOverride: boolean;
+  neutralBirdAI: NeutralBirdAIDebugSettings;
 };
 
-export type BooleanDebugSettingKey = Exclude<keyof DebugSettings, "lightingMaskDebugMode">;
+export type BooleanDebugSettingKey = Exclude<keyof DebugSettings, "lightingMaskDebugMode" | "neutralBirdAI">;
 
 export type DebugToggleDefinition = {
   key: BooleanDebugSettingKey;
@@ -33,6 +48,15 @@ export const LIGHTING_MASK_DEBUG_MODES: readonly LightingMaskDebugMode[] = [
   "SOURCE",
   "INVERSE",
   "COMBINED",
+] as const;
+
+export const NEUTRAL_BIRD_FORCE_STATES: readonly NeutralBirdForceState[] = [
+  "NONE",
+  "IDLE",
+  "WALK_AWAY",
+  "TAKEOFF",
+  "FLY_AWAY",
+  "LAND",
 ] as const;
 
 export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
@@ -74,6 +98,12 @@ export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   mapOverlaysDisabled: false,
   rampFaces: false,
   forceSpawnOverride: false,
+  neutralBirdAI: {
+    enabled: false,
+    forceState: "NONE",
+    disableTransitions: false,
+    drawDebug: true,
+  },
 };
 
 export function makeAllDebugOffSettings(): DebugSettings {

@@ -83,6 +83,10 @@ import { DEFAULT_MAP_POOL } from "./map/mapIds";
 import { OBJECTIVE_TRIGGER_IDS } from "./systems/progression/objectiveSpec";
 import { getPlayableCharacter, PLAYABLE_CHARACTERS, type PlayableCharacterId } from "./content/playableCharacters";
 import { getUserSettings } from "../userSettings";
+import { preloadNeutralMobSprites } from "../engine/render/sprites/neutralSprites";
+import { spawnMilestonePigeonNearPlayer } from "./factories/neutralMobFactory";
+import { neutralAnimatedMobsSystem } from "./systems/sim/neutralAnimatedMobs";
+import { neutralBirdAISystem } from "./systems/sim/neutralBirdAI";
 
 
 type HudRefs = {
@@ -499,6 +503,7 @@ export function createGame(args: CreateGameArgs) {
   applyObjectivesFromActiveMap(world);
   applyMapFeaturesFromCells(world);
   applyDebugSpawn(world);
+  spawnMilestonePigeonNearPlayer(world);
 
   setMusicStage("DOCKS");
 
@@ -511,6 +516,7 @@ export function createGame(args: CreateGameArgs) {
   preloadPlayerSprites();
   preloadVendorNpcSprites();
   preloadProjectileSprites();
+  preloadNeutralMobSprites();
   preloadSfx();
   preloadKenneyTiles();
 
@@ -684,6 +690,7 @@ export function createGame(args: CreateGameArgs) {
     w.floatTextTtl = [];
     w.floatTextIsCrit = [];
     w.npcs = [];
+    w.neutralMobs = [];
   }
 
   function bossAlive(w: World): boolean {
@@ -767,6 +774,7 @@ export function createGame(args: CreateGameArgs) {
 
     clearFloorEntities(w);
     applyMapFeaturesFromCells(w);
+    spawnMilestonePigeonNearPlayer(w);
 
     const objectiveSpec = objectiveSpecFromFloorIntent(floorIntent);
     w.currentObjectiveSpec = objectiveSpec;
@@ -961,6 +969,7 @@ export function createGame(args: CreateGameArgs) {
 
     // DEBUG: spawn offset
     applyDebugSpawn(world);
+    spawnMilestonePigeonNearPlayer(world);
 
     currentChoices = [];
     hideLevelUp();
@@ -1693,6 +1702,8 @@ export function createGame(args: CreateGameArgs) {
     if (!activeDialog) {
       movementSystem(world, input, dt);
     }
+    neutralBirdAISystem(world, dt);
+    neutralAnimatedMobsSystem(world, dt);
     roomChallengeSystem(world, dt);  // Track room challenges and lock exits
     spawnSystem(world, dt);
     const isNeutralObjectiveFloor = world.floorArchetype === "VENDOR" || world.floorArchetype === "HEAL";

@@ -69,6 +69,51 @@ export type NpcActor = {
   faceRestoreAtMs: number | null;
 };
 
+export type NeutralAnimatedMob = {
+  id: string;
+  kind: "PIGEON";
+  pos: { wx: number; wy: number; wzOffset: number };
+  anim: {
+    frameIndex: number;
+    fps: number;
+    loop: boolean;
+    elapsed: number;
+    clip: "IDLE" | "WALK_AWAY" | "TAKEOFF" | "FLY_AWAY" | "LAND";
+  };
+  behavior: {
+    state: "IDLE" | "WALK_AWAY" | "TAKEOFF" | "FLY_AWAY" | "LAND";
+    t: number;
+    dirX: number;
+    dirY: number;
+    dirLockT: number;
+    lastPlayerDist2: number;
+  };
+  params: {
+    walkTriggerTiles: number;
+    takeoffTriggerTiles: number;
+    safeDistanceTiles: number;
+    walkSpeedTilesPerSec: number;
+    flySpeedTilesPerSec: number;
+    flyHeight: number;
+    takeoffTimeSec: number;
+    landTimeSec: number;
+    maxFlyTimeSec: number;
+    dirLockSec: number;
+    epsilon: number;
+  };
+  spriteFrames: HTMLImageElement[];
+  render: {
+    anchorX: number;
+    anchorY: number;
+    scale: number;
+    flipX: boolean;
+  };
+  debug: {
+    frameLogsRemaining: number;
+    renderLogged: boolean;
+  };
+};
+
 export type World = {
   // -------------------------
   // Core
@@ -214,6 +259,7 @@ export type World = {
   relics: string[];
   relicEffects: { xpMult: number; hpBonus: number };
   npcs: NpcActor[];
+  neutralMobs: NeutralAnimatedMob[];
 
   // -------------------------
   // Weapons + items
@@ -534,6 +580,7 @@ export function createWorld(args: CreateWorldArgs): World {
       hpBonus: 0,
     },
     npcs: [],
+    neutralMobs: [],
 
     // Weapons + items
     weapons: [],

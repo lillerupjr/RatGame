@@ -8,6 +8,7 @@ import { getPlayerSpriteFrame, playerSpritesReady } from "../../../engine/render
 import { type Dir8 } from "../../../engine/render/sprites/dir8";
 import { getEnemySpriteFrame, preloadEnemySprites } from "../../../engine/render/sprites/enemySprites";
 import { getVendorNpcSpriteFrame, preloadVendorNpcSprites, vendorNpcSpritesReady } from "../../../engine/render/sprites/vendorSprites";
+import { preloadNeutralMobSprites } from "../../../engine/render/sprites/neutralSprites";
 import {
   heightAtWorld,
   walkInfo,
@@ -298,6 +299,11 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   if (!(w as any)._vendorSpritesPreloaded) {
     (w as any)._vendorSpritesPreloaded = true;
     preloadVendorNpcSprites();
+  }
+
+  if (!(w as any)._neutralMobSpritesPreloaded) {
+    (w as any)._neutralMobSpritesPreloaded = true;
+    preloadNeutralMobSprites();
   }
 
   // one-time projectile sprite preload
@@ -1265,6 +1271,76 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       };
 
       addToSlice(ntx + nty, renderKey, drawClosure);
+    }
+  }
+
+  // ----------------------------
+  // Collect NEUTRAL MOBS into slices
+  // ----------------------------
+  {
+    for (let i = 0; i < w.neutralMobs.length; i++) {
+      const mob = w.neutralMobs[i];
+      const mtx = Math.floor(mob.pos.wx / T);
+      const mty = Math.floor(mob.pos.wy / T);
+      const zGround = tileHAtWorld(mob.pos.wx, mob.pos.wy);
+      const zAbs = zGround + (mob.pos.wzOffset ?? 0);
+
+      const renderKey: RenderKey = {
+        slice: mtx + mty,
+        within: mtx,
+        baseZ: zAbs,
+        kindOrder: KindOrder.ENTITY,
+        stableId: 127000 + i,
+      };
+
+      const p = toScreenAtZ(mob.pos.wx, mob.pos.wy, zAbs);
+      const drawClosure = () => {
+        const frameCount = mob.spriteFrames.length;
+        if (frameCount <= 0) return;
+        const frame = mob.spriteFrames[mob.anim.frameIndex % frameCount];
+        if (!frame || frame.width <= 0 || frame.height <= 0) return;
+
+        const dw = frame.width * mob.render.scale;
+        const dh = frame.height * mob.render.scale;
+        const dx = p.x - dw * mob.render.anchorX;
+        const dy = p.y - dh * mob.render.anchorY;
+        if (mob.render.flipX) {
+          ctx.save();
+          ctx.translate(snapPx(dx + dw), snapPx(dy));
+          ctx.scale(-1, 1);
+          ctx.drawImage(frame, 0, 0, dw, dh);
+          ctx.restore();
+        } else {
+          ctx.drawImage(frame, snapPx(dx), snapPx(dy), dw, dh);
+        }
+
+        if (!mob.debug.renderLogged) {
+          mob.debug.renderLogged = true;
+          console.log(
+            `[neutralMobs] Rendered ${mob.id} at tile (${mtx}, ${mty}) frame=${mob.anim.frameIndex}`,
+          );
+        }
+
+        if (debug.neutralBirdAI.drawDebug) {
+          const distTiles = Math.sqrt(Math.max(0, mob.behavior.lastPlayerDist2));
+          const label = `PIGEON: ${mob.behavior.state} d=${distTiles.toFixed(1)} t=${mob.behavior.t.toFixed(2)}`;
+          ctx.save();
+          ctx.font = "10px monospace";
+          ctx.textAlign = "left";
+          ctx.textBaseline = "bottom";
+          const tx = snapPx(dx);
+          const ty = snapPx(dy - 4);
+          const pad = 2;
+          const tw = ctx.measureText(label).width;
+          ctx.fillStyle = "rgba(0,0,0,0.7)";
+          ctx.fillRect(tx - pad, ty - 11 - pad, tw + pad * 2, 11 + pad * 2);
+          ctx.fillStyle = "#8fffb0";
+          ctx.fillText(label, tx, ty);
+          ctx.restore();
+        }
+      };
+
+      addToSlice(mtx + mty, renderKey, drawClosure);
     }
   }
 
