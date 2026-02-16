@@ -108,6 +108,17 @@ export const PROPS: Record<PropId, PropDef> = {
         lightScreenOffsetPx: { x: 32, y: 0 },
         anchorOffsetPx: { x: 16, y: 64 },
     },
+    midnight_officer: {
+        id: "midnight_officer",
+        w: 1,
+        h: 1,
+        isFlippable: true,
+        defaultFacing: "S",
+        flipMode: "H",
+        sprite: "props/hooker/midnight_officer_SE",
+        anchorLiftUnits: 0,
+        anchorOffsetPx: { x: 0, y: 0 },
+    },
 };
 
 export function requireProp(id: PropId, context: string): PropDef {
