@@ -864,8 +864,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const wx = (anchorTx + 0.5) * T;
     const wy = (anchorTy + 0.5) * T;
     const p = worldToScreen(wx, wy);
+    const zVisual = o.z + (o.zVisualOffsetUnits ?? 0);
     const dx = p.x + camX - ow * scale * 0.5 + (o.drawDxOffset ?? 0) + footprintAnchorAdjustX;
-    const dy = p.y + camY - oh * scale - o.z * ELEV_PX - (o.drawDyOffset ?? 0);
+    const dy = p.y + camY - oh * scale - zVisual * ELEV_PX - (o.drawDyOffset ?? 0);
     if (LOG_STRUCTURE_ANCHOR_DEBUG && isFootprintOverlay && !loggedStructureAnchorDebugIds.has(o.id)) {
       loggedStructureAnchorDebugIds.add(o.id);
       console.log("[structure-anchor-debug]", {
@@ -1857,12 +1858,15 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const pty = Math.floor(pp.wy / T);
       const baseH = tileHAtWorld(pp.wx, pp.wy);
       const pzAbs = (w.prZVisual?.[i] ?? w.prZ?.[i] ?? baseH) || 0;
+      const support = getSupportSurfaceAt(pp.wx, pp.wy, compiledMap);
+      const feet = getEntityFeetPos(pp.wx, pp.wy, pzAbs);
 
       const renderKey: RenderKey = {
         slice: ptx + pty,
         within: ptx,
-        baseZ: pzAbs,
-        kindOrder: KindOrder.VFX,  // Projectiles are now VFX, not hidden under platforms
+        baseZ: support.worldZ,
+        feetSortY: feet.screenY,
+        kindOrder: KindOrder.VFX,
         stableId: 130000 + i,
       };
 

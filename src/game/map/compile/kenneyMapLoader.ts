@@ -160,6 +160,7 @@ export type StampOverlay = {
     anchorTx?: number;
     anchorTy?: number;
     z: number;
+    zVisualOffsetUnits?: number;
     spriteId: string;
     drawDyOffset?: number;
     drawDxOffset?: number;
@@ -1536,6 +1537,7 @@ export function compileKenneyMapFromTable(
                 anchorTx,
                 anchorTy,
                 z: zBase,
+                zVisualOffsetUnits: stamp.zVisualOffsetUnits,
                 spriteId: resolvedSpriteId,
                 drawDyOffset: anchorLiftPx + offset.y,
                 drawDxOffset: offset.x,

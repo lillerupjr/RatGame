@@ -49,6 +49,7 @@ export type SemanticStamp = {
     x: number;
     y: number;
     z?: number;
+    zVisualOffsetUnits?: number;
     type: SemanticStampType;
     w?: number;
     h?: number;

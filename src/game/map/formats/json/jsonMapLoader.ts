@@ -79,6 +79,7 @@ type JsonMapDef = {
     x: number;
     y: number;
     z?: number;
+    zVisualOffsetUnits?: number;
     type: SemanticStampType;
     w?: number;
     h?: number;
@@ -564,6 +565,7 @@ function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): S
       );
     })();
     const z = optionalNumberField(entry, "z") ?? 0;
+    const zVisualOffsetUnits = optionalNumberField(entry, "zVisualOffsetUnits");
     const w = optionalNumberField(entry, "w");
     const h = optionalNumberField(entry, "h");
     const skinId = optionalStringField(entry, "skinId");
@@ -591,6 +593,7 @@ function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): S
       x,
       y,
       z,
+      zVisualOffsetUnits,
       type,
       w,
       h,
