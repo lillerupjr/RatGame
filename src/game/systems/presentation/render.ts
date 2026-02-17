@@ -1958,20 +1958,50 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     }
 
   // ============================================
-  // FINAL RENDER PASS: Execute all slices in order
+  // FINAL RENDER PASS: Execute by zBand with ground/depth phases
   // ============================================
   const sliceKeys = Array.from(sliceDrawables.keys());
   sliceKeys.sort((a, b) => a - b);
 
-  for (const slice of sliceKeys) {
-    const drawables = sliceDrawables.get(slice)!;
-
-    // Sort drawables within this slice lexicographically by RenderKey
+  // Sort once per slice and collect all zBands.
+  const zBands = new Set<number>();
+  for (let i = 0; i < sliceKeys.length; i++) {
+    const drawables = sliceDrawables.get(sliceKeys[i])!;
     drawables.sort((a, b) => compareRenderKeys(a.key, b.key));
+    for (let j = 0; j < drawables.length; j++) {
+      zBands.add(Math.floor(drawables[j].key.baseZ));
+    }
+  }
 
-    // Execute all draws for this slice
-    for (const drawable of drawables) {
-      drawable.draw();
+  const zBandKeys = Array.from(zBands);
+  zBandKeys.sort((a, b) => a - b);
+
+  const isGroundKind = (kind: KindOrder) =>
+    kind === KindOrder.FLOOR || kind === KindOrder.DECAL;
+
+  for (let zi = 0; zi < zBandKeys.length; zi++) {
+    const zb = zBandKeys[zi];
+
+    // Ground phase: FLOOR + DECAL only.
+    for (let si = 0; si < sliceKeys.length; si++) {
+      const drawables = sliceDrawables.get(sliceKeys[si])!;
+      for (let di = 0; di < drawables.length; di++) {
+        const drawable = drawables[di];
+        if (Math.floor(drawable.key.baseZ) !== zb) continue;
+        if (!isGroundKind(drawable.key.kindOrder)) continue;
+        drawable.draw();
+      }
+    }
+
+    // Depth phase: everything else.
+    for (let si = 0; si < sliceKeys.length; si++) {
+      const drawables = sliceDrawables.get(sliceKeys[si])!;
+      for (let di = 0; di < drawables.length; di++) {
+        const drawable = drawables[di];
+        if (Math.floor(drawable.key.baseZ) !== zb) continue;
+        if (isGroundKind(drawable.key.kindOrder)) continue;
+        drawable.draw();
+      }
     }
   }
 
