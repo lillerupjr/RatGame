@@ -299,8 +299,6 @@ export function renderLighting(
     lampCutCtx.globalCompositeOperation = "source-over";
     lampCutCtx.clearRect(0, 0, viewW, viewH);
 
-    lctx.globalCompositeOperation = "destination-out";
-    let hasStreetLampCutouts = false;
     for (let i = 0; i < projectedLights.length; i++) {
       const light = projectedLights[i];
       const radiusPx = Math.max(1, light.radiusPx);
@@ -308,27 +306,17 @@ export function renderLighting(
       if (intensity <= 0) continue;
       if (light.shape === "STREET_LAMP") {
         drawStreetLampCutout(lampCutCtx, light, intensity, groundYScale);
-        hasStreetLampCutouts = true;
       } else {
-        drawRadialCutout(lctx, light.sx, light.sy, radiusPx, intensity);
+        drawRadialCutout(lampCutCtx, light.sx, light.sy, radiusPx, intensity);
       }
     }
-    if (hasStreetLampCutouts) {
-      lampCutCtx.globalCompositeOperation = "destination-out";
-      if (state.combinedOcclusionMaskCanvas) {
-        lampCutCtx.drawImage(state.combinedOcclusionMaskCanvas, 0, 0);
-      } else {
-        for (let i = 0; i < projectedLights.length; i++) {
-          const light = projectedLights[i];
-          if (light.shape !== "STREET_LAMP") continue;
-          const maskAlpha = clamp01(light.occlusion);
-          if (maskAlpha <= 0) continue;
-          drawStreetLampFootprintMask(lampCutCtx, light, maskAlpha, groundYScale);
-        }
-      }
+    if (state.combinedOcclusionMaskCanvas) {
+      lampCutCtx.globalCompositeOperation = "destination-in";
+      lampCutCtx.drawImage(state.combinedOcclusionMaskCanvas, 0, 0);
       lampCutCtx.globalCompositeOperation = "source-over";
-      lctx.drawImage(lampCutout.canvas, 0, 0);
     }
+    lctx.globalCompositeOperation = "destination-out";
+    lctx.drawImage(lampCutout.canvas, 0, 0);
     lampCutCtx.restore();
   }
   lctx.restore();
@@ -355,22 +343,18 @@ export function renderLighting(
         drawRadialTint(tintCtx, light.sx, light.sy, Math.max(1, light.radiusPx), light.color, alpha);
       }
     }
-    if (hasStreetLampTints) {
-      lampTintCtx.globalCompositeOperation = "destination-out";
-      if (state.combinedOcclusionMaskCanvas) {
-        lampTintCtx.drawImage(state.combinedOcclusionMaskCanvas, 0, 0);
-      } else {
-        for (let i = 0; i < projectedLights.length; i++) {
-          const light = projectedLights[i];
-          if (light.shape !== "STREET_LAMP") continue;
-          const maskAlpha = clamp01(light.occlusion);
-          if (maskAlpha <= 0) continue;
-          drawStreetLampFootprintMask(lampTintCtx, light, maskAlpha, groundYScale);
-        }
-      }
+    if (state.combinedOcclusionMaskCanvas) {
+      tintCtx.globalCompositeOperation = "destination-in";
+      tintCtx.drawImage(state.combinedOcclusionMaskCanvas, 0, 0);
+      tintCtx.globalCompositeOperation = "source-over";
+      lampTintCtx.globalCompositeOperation = "destination-in";
+      lampTintCtx.drawImage(state.combinedOcclusionMaskCanvas, 0, 0);
       lampTintCtx.globalCompositeOperation = "source-over";
+    }
+    if (hasStreetLampTints) {
       tintCtx.globalCompositeOperation = "lighter";
       tintCtx.drawImage(lampTint.canvas, 0, 0);
+      tintCtx.globalCompositeOperation = "source-over";
     }
   }
   lampTintCtx.restore();

@@ -272,19 +272,23 @@ function drawStreetLampFootprintMaskScreen(
 
 function buildCombinedOcclusionMask(
   lighting: World["lighting"],
-  sourceOccMaskCanvas: HTMLCanvasElement,
-  inverseBuildingMaskCanvas: HTMLCanvasElement,
+  blockerMaskCanvas: HTMLCanvasElement,
   screenW: number,
   screenH: number,
+  occlusionEnabled: boolean,
 ): void {
   const combined = ensureLightingMaskCanvas(lighting, "COMBINED_OCC", screenW, screenH);
   if (!combined) return;
   const cctx = combined.ctx;
+  cctx.setTransform(1, 0, 0, 1, 0, 0);
   cctx.globalCompositeOperation = "source-over";
   cctx.clearRect(0, 0, screenW, screenH);
-  cctx.drawImage(sourceOccMaskCanvas, 0, 0);
-  cctx.globalCompositeOperation = "destination-in";
-  cctx.drawImage(inverseBuildingMaskCanvas, 0, 0);
+  cctx.fillStyle = "#ffffff";
+  cctx.fillRect(0, 0, screenW, screenH);
+  if (occlusionEnabled) {
+    cctx.globalCompositeOperation = "destination-out";
+    cctx.drawImage(blockerMaskCanvas, 0, 0);
+  }
   cctx.globalCompositeOperation = "source-over";
 }
 
@@ -2438,27 +2442,25 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     });
   }
 
-  if (sourceMaskLayer) {
-    const groundYScale = Math.max(0.1, Math.min(1, w.lighting.groundYScale ?? 0.65));
+  if (sourceMaskLayer && inverseMaskLayer) {
+    const occlusionEnabled = debugFlags.lightingOcclusionEnabled && w.lighting.occlusionEnabled;
     const sourceCtx = sourceMaskLayer.ctx;
     sourceCtx.setTransform(1, 0, 0, 1, 0, 0);
-    sourceCtx.clearRect(0, 0, screenW, screenH);
     sourceCtx.globalCompositeOperation = "source-over";
-    for (let i = 0; i < projectedLights.length; i++) {
-      const light = projectedLights[i];
-      if (light.shape !== "STREET_LAMP") continue;
-      const maskAlpha = Math.max(0, Math.min(1, light.occlusion));
-      if (maskAlpha <= 0) continue;
-      drawStreetLampFootprintMaskScreen(sourceCtx, light, maskAlpha, groundYScale);
+    sourceCtx.clearRect(0, 0, screenW, screenH);
+    sourceCtx.fillStyle = "#ffffff";
+    sourceCtx.fillRect(0, 0, screenW, screenH);
+    if (occlusionEnabled) {
+      sourceCtx.globalCompositeOperation = "destination-out";
+      sourceCtx.drawImage(inverseMaskLayer.canvas, 0, 0);
+      sourceCtx.globalCompositeOperation = "source-over";
     }
-  }
-  if (sourceMaskLayer && inverseMaskLayer) {
     buildCombinedOcclusionMask(
       w.lighting,
-      sourceMaskLayer.canvas,
       inverseMaskLayer.canvas,
       screenW,
       screenH,
+      occlusionEnabled,
     );
   }
 
