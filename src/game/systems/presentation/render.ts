@@ -78,18 +78,20 @@ import { getUserSettings } from "../../../userSettings";
 enum KindOrder {
   FLOOR = 0,
   DECAL = 1,
-  ENTITY = 2,
-  VFX = 3,
-  STRUCTURE = 4,
-  OCCLUDER = 5,
-  OVERLAY = 6,
+  SHADOW = 2,
+  ENTITY = 3,
+  VFX = 4,
+  STRUCTURE = 5,
+  OCCLUDER = 6,
+  OVERLAY = 7,
 }
 
 /** Canonical render key for deterministic ordering. */
 interface RenderKey {
-  slice: number;      // tx + ty (primary: slice ordering, NW → SE)
+  slice: number;      // tx + ty (primary: slice ordering, NW -> SE)
   within: number;     // tx (secondary: within-slice ordering)
   baseZ: number;      // surface height (tertiary: occlusion)
+  feetSortY?: number; // optional feet-Y sort key for entities
   kindOrder: KindOrder; // semantic layer (quaternary: kind bias)
   stableId: number;   // deterministic tie-breaker (quinary)
 }
@@ -99,6 +101,9 @@ function compareRenderKeys(a: RenderKey, b: RenderKey): number {
   if (a.slice !== b.slice) return a.slice - b.slice;
   if (a.within !== b.within) return a.within - b.within;
   if (a.baseZ !== b.baseZ) return a.baseZ - b.baseZ;
+  const ay = a.feetSortY ?? 0;
+  const by = b.feetSortY ?? 0;
+  if (ay !== by) return ay - by;
   if (a.kindOrder !== b.kindOrder) return a.kindOrder - b.kindOrder;
   return a.stableId - b.stableId;
 }
@@ -412,6 +417,73 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const p = worldToScreen(x, y);
     const elev = zVisual * ELEV_PX;
     return { x: p.x + camX, y: p.y + camY - elev };
+  };
+
+  const ENTITY_ANCHOR_X01_DEFAULT = 0.5;
+  const ENTITY_ANCHOR_Y01_DEFAULT = 0.92;
+  const ENTITY_SHADOW_ALPHA = 0.35;
+  const ENTITY_SHADOW_OFFSET_PX = 2;
+
+  const resolveAnchor01 = (
+    overrideValue: number | undefined,
+    baseValue: number | undefined,
+    defaultValue: number,
+  ): number => {
+    const raw = Number.isFinite(overrideValue)
+      ? (overrideValue as number)
+      : Number.isFinite(baseValue)
+        ? (baseValue as number)
+        : defaultValue;
+    return Math.max(0, Math.min(1, raw));
+  };
+
+  const getEntityFeetPos = (wx: number, wy: number, zVisual: number) => {
+    const tx = Math.floor(wx / T);
+    const ty = Math.floor(wy / T);
+    const screen = toScreenAtZ(wx, wy, zVisual);
+    return {
+      tx,
+      ty,
+      slice: tx + ty,
+      within: tx,
+      screenX: screen.x,
+      screenY: screen.y,
+    };
+  };
+
+  const drawEntityShadow = (feetX: number, feetY: number, spriteRenderW: number) => {
+    const width = Math.max(8, Math.min(56, spriteRenderW * 0.5));
+    const height = width * 0.5;
+    ctx.save();
+    ctx.globalAlpha = ENTITY_SHADOW_ALPHA;
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.ellipse(feetX, feetY + ENTITY_SHADOW_OFFSET_PX, width * 0.5, height * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  };
+
+  const drawEntityAnchorOverlay = (
+    feetX: number,
+    feetY: number,
+    drawX: number,
+    drawY: number,
+    drawW: number,
+    drawH: number,
+  ) => {
+    if (!SHOW_ENTITY_ANCHOR_OVERLAY) return;
+    ctx.save();
+    ctx.strokeStyle = "rgba(255, 80, 80, 0.95)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(Math.round(drawX), Math.round(drawY), Math.round(drawW), Math.round(drawH));
+    ctx.strokeStyle = "rgba(80, 255, 220, 0.95)";
+    ctx.beginPath();
+    ctx.moveTo(Math.round(feetX - 4), Math.round(feetY));
+    ctx.lineTo(Math.round(feetX + 4), Math.round(feetY));
+    ctx.moveTo(Math.round(feetX), Math.round(feetY - 4));
+    ctx.lineTo(Math.round(feetX), Math.round(feetY + 4));
+    ctx.stroke();
+    ctx.restore();
   };
 
   const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -809,7 +881,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     toScreenAtZ,
   };
 
-  const debug = getUserSettings().debug;
+  const settings = getUserSettings();
+  const debug = settings.debug;
+  const renderSettings = settings.render;
+  const RENDER_ENTITY_SHADOWS = renderSettings.entityShadowsEnabled;
+  const RENDER_ENTITY_ANCHORS = renderSettings.entityAnchorsEnabled;
+  const SHOW_ENTITY_ANCHOR_OVERLAY = debug.entityAnchorOverlay;
   const WATER_FLOW_RATE = debug.waterFlowRate;
   const debugFlags = resolveDebugFlags(debug);
   const SHOW_WALK_MASK = debugFlags.showWalkMask;
@@ -1043,6 +1120,90 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   }
 
   // ----------------------------
+  // Collect ENTITY SHADOWS into slices (after floor/decals, before entities)
+  // ----------------------------
+  if (RENDER_ENTITY_SHADOWS) {
+    for (let i = 0; i < w.eAlive.length; i++) {
+      if (!w.eAlive[i]) continue;
+      const ew = getEnemyWorld(w, i, KENNEY_TILE_WORLD);
+      const zAbs = ez?.[i] ?? tileHAtWorld(ew.wx, ew.wy);
+      const feet = getEntityFeetPos(ew.wx, ew.wy, zAbs);
+      const faceDx = w.eFaceX?.[i] ?? 0;
+      const faceDy = w.eFaceY?.[i] ?? -1;
+      const moving = Math.hypot(w.evx?.[i] ?? 0, w.evy?.[i] ?? 0) > 1e-4;
+      const fr = getEnemySpriteFrame({ type: w.eType[i] as any, time: w.time ?? 0, faceDx, faceDy, moving });
+      const spriteW = fr ? fr.sw * fr.scale : Math.max(16, (w.eR[i] ?? 10) * 2.4);
+      const renderKey: RenderKey = {
+        slice: feet.slice,
+        within: feet.within,
+        baseZ: zAbs,
+        feetSortY: feet.screenY,
+        kindOrder: KindOrder.SHADOW,
+        stableId: 220000 + i,
+      };
+      addToSlice(feet.slice, renderKey, () => drawEntityShadow(feet.screenX, feet.screenY, spriteW));
+    }
+
+    for (let i = 0; i < w.npcs.length; i++) {
+      const npc = w.npcs[i];
+      const zAbs = tileHAtWorld(npc.wx, npc.wy);
+      const feet = getEntityFeetPos(npc.wx, npc.wy, zAbs);
+      const fr = vendorNpcSpritesReady()
+        ? getVendorNpcSpriteFrame({ dir: npc.dirCurrent, time: w.time ?? 0 })
+        : null;
+      const spriteW = fr ? fr.sw * fr.scale : 24;
+      const renderKey: RenderKey = {
+        slice: feet.slice,
+        within: feet.within,
+        baseZ: zAbs,
+        feetSortY: feet.screenY,
+        kindOrder: KindOrder.SHADOW,
+        stableId: 225000 + i,
+      };
+      addToSlice(feet.slice, renderKey, () => drawEntityShadow(feet.screenX, feet.screenY, spriteW));
+    }
+
+    for (let i = 0; i < w.neutralMobs.length; i++) {
+      const mob = w.neutralMobs[i];
+      const zGround = tileHAtWorld(mob.pos.wx, mob.pos.wy);
+      const zAbs = zGround + (mob.pos.wzOffset ?? 0);
+      const feet = getEntityFeetPos(mob.pos.wx, mob.pos.wy, zAbs);
+      const frameCount = mob.spriteFrames.length;
+      const frame = frameCount > 0 ? mob.spriteFrames[mob.anim.frameIndex % frameCount] : null;
+      const spriteW = frame ? frame.width * mob.render.scale : 24;
+      const renderKey: RenderKey = {
+        slice: feet.slice,
+        within: feet.within,
+        baseZ: zAbs,
+        feetSortY: feet.screenY,
+        kindOrder: KindOrder.SHADOW,
+        stableId: 226000 + i,
+      };
+      addToSlice(feet.slice, renderKey, () => drawEntityShadow(feet.screenX, feet.screenY, spriteW));
+    }
+
+    {
+      const pzAbs = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
+      const feet = getEntityFeetPos(px, py, pzAbs);
+      const dir = ((w as any)._plDir ?? "N") as Dir8;
+      const moving = (w as any)._plMoving ?? false;
+      const fr = playerSpritesReady()
+        ? getPlayerSpriteFrame({ dir, moving, time: w.time ?? 0 })
+        : null;
+      const spriteW = fr ? fr.sw * fr.scale : Math.max(16, PLAYER_R * 2.4);
+      const renderKey: RenderKey = {
+        slice: feet.slice,
+        within: feet.within,
+        baseZ: pzAbs,
+        feetSortY: feet.screenY,
+        kindOrder: KindOrder.SHADOW,
+        stableId: 200001,
+      };
+      addToSlice(feet.slice, renderKey, () => drawEntityShadow(feet.screenX, feet.screenY, spriteW));
+    }
+  }
+
+  // ----------------------------
   // Collect ZONES into slices
   // ----------------------------
   {
@@ -1176,14 +1337,14 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       if (!w.eAlive[i]) continue;
 
       const ew = getEnemyWorld(w, i, KENNEY_TILE_WORLD);
-      const etx = Math.floor(ew.wx / T);
-      const ety = Math.floor(ew.wy / T);
       const zAbs = ez?.[i] ?? tileHAtWorld(ew.wx, ew.wy);
+      const feet = getEntityFeetPos(ew.wx, ew.wy, zAbs);
 
       const renderKey: RenderKey = {
-        slice: etx + ety,
-        within: etx,
+        slice: feet.slice,
+        within: feet.within,
         baseZ: zAbs,
+        feetSortY: feet.screenY,
         kindOrder: KindOrder.ENTITY,
         stableId: 120000 + i,
       };
@@ -1193,8 +1354,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
       const isBoss = w.eType[i] === ENEMY_TYPE.BOSS;
       if (isBoss) baseColor = getBossAccent(w) ?? baseColor;
-
-      const p = toScreen(ew.wx, ew.wy);
 
       const drawClosure = () => {
         const faceDx = w.eFaceX?.[i] ?? 0;
@@ -1212,17 +1371,26 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         if (fr) {
           const dw = fr.sw * fr.scale;
           const dh = fr.sh * fr.scale;
+          const frAny = fr as any;
+          const anchorX = RENDER_ENTITY_ANCHORS
+            ? resolveAnchor01((w as any).eAnchorX01?.[i], frAny.anchorX01 ?? fr.anchorX, ENTITY_ANCHOR_X01_DEFAULT)
+            : (fr.anchorX ?? ENTITY_ANCHOR_X01_DEFAULT);
+          const anchorY = RENDER_ENTITY_ANCHORS
+            ? resolveAnchor01((w as any).eAnchorY01?.[i], frAny.anchorY01 ?? fr.anchorY, ENTITY_ANCHOR_Y01_DEFAULT)
+            : (fr.anchorY ?? ENTITY_ANCHOR_Y01_DEFAULT);
 
-          const dx = p.x - dw * fr.anchorX;
-          const dy = p.y - dh * fr.anchorY;
+          const dx = feet.screenX - dw * anchorX;
+          const dy = feet.screenY - dh * anchorY;
 
-          ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, snapPx(dx), snapPx(dy), dw, dh);
+          ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, Math.round(dx), Math.round(dy), dw, dh);
+          drawEntityAnchorOverlay(feet.screenX, feet.screenY, dx, dy, dw, dh);
         } else {
           ctx.globalAlpha = 1;
           ctx.fillStyle = baseColor;
           ctx.beginPath();
-          ctx.ellipse(p.x, p.y, (w.eR[i] ?? 10) * ISO_X, (w.eR[i] ?? 10) * ISO_Y, 0, 0, Math.PI * 2);
+          ctx.ellipse(feet.screenX, feet.screenY, (w.eR[i] ?? 10) * ISO_X, (w.eR[i] ?? 10) * ISO_Y, 0, 0, Math.PI * 2);
           ctx.fill();
+          drawEntityAnchorOverlay(feet.screenX, feet.screenY, feet.screenX - 8, feet.screenY - 8, 16, 16);
         }
 
         if (isBoss) {
@@ -1233,8 +1401,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           ctx.lineWidth = 3;
           ctx.beginPath();
           ctx.ellipse(
-              p.x,
-              p.y,
+              feet.screenX,
+              feet.screenY,
               (w.eR[i] ?? 10) * (1.25 + pulse * 0.05) * ISO_X,
               (w.eR[i] ?? 10) * (1.25 + pulse * 0.05) * ISO_Y,
               0,
@@ -1246,7 +1414,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           ctx.globalAlpha = 0.28;
           ctx.lineWidth = 1.5;
           ctx.beginPath();
-          ctx.ellipse(p.x, p.y, (w.eR[i] ?? 10) * 1.55 * ISO_X, (w.eR[i] ?? 10) * 1.55 * ISO_Y, 0, 0, Math.PI * 2);
+          ctx.ellipse(feet.screenX, feet.screenY, (w.eR[i] ?? 10) * 1.55 * ISO_X, (w.eR[i] ?? 10) * 1.55 * ISO_Y, 0, 0, Math.PI * 2);
           ctx.stroke();
 
           ctx.globalAlpha = 1;
@@ -1256,13 +1424,13 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           ctx.globalAlpha = 0.35;
           ctx.fillStyle = "#3dff7a";
           ctx.beginPath();
-          ctx.ellipse(p.x, p.y, (w.eR[i] ?? 10) * 1.05 * ISO_X, (w.eR[i] ?? 10) * 1.05 * ISO_Y, 0, 0, Math.PI * 2);
+          ctx.ellipse(feet.screenX, feet.screenY, (w.eR[i] ?? 10) * 1.05 * ISO_X, (w.eR[i] ?? 10) * 1.05 * ISO_Y, 0, 0, Math.PI * 2);
           ctx.fill();
           ctx.globalAlpha = 1;
         }
       };
 
-      addToSlice(etx + ety, renderKey, drawClosure);
+      addToSlice(feet.slice, renderKey, drawClosure);
     }
   }
 
@@ -1272,19 +1440,18 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   {
     for (let i = 0; i < w.npcs.length; i++) {
       const npc = w.npcs[i];
-      const ntx = npc.tx | 0;
-      const nty = npc.ty | 0;
       const zAbs = tileHAtWorld(npc.wx, npc.wy);
+      const feet = getEntityFeetPos(npc.wx, npc.wy, zAbs);
 
       const renderKey: RenderKey = {
-        slice: ntx + nty,
-        within: ntx,
+        slice: feet.slice,
+        within: feet.within,
         baseZ: zAbs,
+        feetSortY: feet.screenY,
         kindOrder: KindOrder.ENTITY,
         stableId: 125000 + i,
       };
 
-      const p = toScreen(npc.wx, npc.wy);
       const drawClosure = () => {
         const fr = vendorNpcSpritesReady()
           ? getVendorNpcSpriteFrame({ dir: npc.dirCurrent, time: w.time ?? 0 })
@@ -1292,12 +1459,20 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         if (!fr) return;
         const dw = fr.sw * fr.scale;
         const dh = fr.sh * fr.scale;
-        const dx = p.x - dw * fr.anchorX;
-        const dy = p.y - dh * fr.anchorY;
-        ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, snapPx(dx), snapPx(dy), dw, dh);
+        const frAny = fr as any;
+        const anchorX = RENDER_ENTITY_ANCHORS
+          ? resolveAnchor01((npc as any).anchorX01, frAny.anchorX01 ?? fr.anchorX, ENTITY_ANCHOR_X01_DEFAULT)
+          : (fr.anchorX ?? ENTITY_ANCHOR_X01_DEFAULT);
+        const anchorY = RENDER_ENTITY_ANCHORS
+          ? resolveAnchor01((npc as any).anchorY01, frAny.anchorY01 ?? fr.anchorY, ENTITY_ANCHOR_Y01_DEFAULT)
+          : (fr.anchorY ?? ENTITY_ANCHOR_Y01_DEFAULT);
+        const dx = feet.screenX - dw * anchorX;
+        const dy = feet.screenY - dh * anchorY;
+        ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, Math.round(dx), Math.round(dy), dw, dh);
+        drawEntityAnchorOverlay(feet.screenX, feet.screenY, dx, dy, dw, dh);
       };
 
-      addToSlice(ntx + nty, renderKey, drawClosure);
+      addToSlice(feet.slice, renderKey, drawClosure);
     }
   }
 
@@ -1307,20 +1482,18 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   {
     for (let i = 0; i < w.neutralMobs.length; i++) {
       const mob = w.neutralMobs[i];
-      const mtx = Math.floor(mob.pos.wx / T);
-      const mty = Math.floor(mob.pos.wy / T);
       const zGround = tileHAtWorld(mob.pos.wx, mob.pos.wy);
       const zAbs = zGround + (mob.pos.wzOffset ?? 0);
+      const feet = getEntityFeetPos(mob.pos.wx, mob.pos.wy, zAbs);
 
       const renderKey: RenderKey = {
-        slice: mtx + mty,
-        within: mtx,
+        slice: feet.slice,
+        within: feet.within,
         baseZ: zAbs,
+        feetSortY: feet.screenY,
         kindOrder: KindOrder.ENTITY,
         stableId: 127000 + i,
       };
-
-      const p = toScreenAtZ(mob.pos.wx, mob.pos.wy, zAbs);
       const drawClosure = () => {
         const frameCount = mob.spriteFrames.length;
         if (frameCount <= 0) return;
@@ -1329,8 +1502,14 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
         const dw = frame.width * mob.render.scale;
         const dh = frame.height * mob.render.scale;
-        const dx = p.x - dw * mob.render.anchorX;
-        const dy = p.y - dh * mob.render.anchorY;
+        const anchorX = RENDER_ENTITY_ANCHORS
+          ? resolveAnchor01((mob.render as any).anchorX01, mob.render.anchorX, ENTITY_ANCHOR_X01_DEFAULT)
+          : (mob.render.anchorX ?? ENTITY_ANCHOR_X01_DEFAULT);
+        const anchorY = RENDER_ENTITY_ANCHORS
+          ? resolveAnchor01((mob.render as any).anchorY01, mob.render.anchorY, ENTITY_ANCHOR_Y01_DEFAULT)
+          : (mob.render.anchorY ?? ENTITY_ANCHOR_Y01_DEFAULT);
+        const dx = feet.screenX - dw * anchorX;
+        const dy = feet.screenY - dh * anchorY;
         if (mob.render.flipX) {
           ctx.save();
           ctx.translate(snapPx(dx + dw), snapPx(dy));
@@ -1340,6 +1519,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         } else {
           ctx.drawImage(frame, snapPx(dx), snapPx(dy), dw, dh);
         }
+
+        drawEntityAnchorOverlay(feet.screenX, feet.screenY, dx, dy, dw, dh);
 
         if (!mob.debug.renderLogged) {
           mob.debug.renderLogged = true;
@@ -1393,7 +1574,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         }
       };
 
-      addToSlice(mtx + mty, renderKey, drawClosure);
+      addToSlice(feet.slice, renderKey, drawClosure);
     }
   }
 
@@ -1506,18 +1687,16 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // ----------------------------
   {
     const pzAbs2 = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
-    const ptx = Math.floor(px / T);
-    const pty = Math.floor(py / T);
+    const feet = getEntityFeetPos(px, py, pzAbs2);
 
     const renderKey: RenderKey = {
-      slice: ptx + pty,
-      within: ptx,
+      slice: feet.slice,
+      within: feet.within,
       baseZ: pzAbs2,
+      feetSortY: feet.screenY,
       kindOrder: KindOrder.ENTITY,
       stableId: 0,
     };
-
-    const pp = toScreen(px, py);
 
     const drawClosure = () => {
       ctx.globalAlpha = 1;
@@ -1531,20 +1710,29 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       if (fr) {
         const dw = fr.sw * fr.scale;
         const dh = fr.sh * fr.scale;
+        const frAny = fr as any;
+        const anchorX = RENDER_ENTITY_ANCHORS
+          ? resolveAnchor01((w as any)._plAnchorX01, frAny.anchorX01 ?? fr.anchorX, ENTITY_ANCHOR_X01_DEFAULT)
+          : (fr.anchorX ?? ENTITY_ANCHOR_X01_DEFAULT);
+        const anchorY = RENDER_ENTITY_ANCHORS
+          ? resolveAnchor01((w as any)._plAnchorY01, frAny.anchorY01 ?? fr.anchorY, ENTITY_ANCHOR_Y01_DEFAULT)
+          : (fr.anchorY ?? ENTITY_ANCHOR_Y01_DEFAULT);
 
-        const dx = Math.round(pp.x - fr.anchorX * fr.sw * fr.scale);
-        const dy = Math.round(pp.y - fr.anchorY * fr.sh * fr.scale);
+        const dx = Math.round(feet.screenX - dw * anchorX);
+        const dy = Math.round(feet.screenY - dh * anchorY);
 
         ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, dx, dy, dw, dh);
+        drawEntityAnchorOverlay(feet.screenX, feet.screenY, dx, dy, dw, dh);
       } else {
         ctx.fillStyle = "#eaeaf2";
         ctx.beginPath();
-        ctx.ellipse(pp.x, pp.y, PLAYER_R * ISO_X, PLAYER_R * ISO_Y, 0, 0, Math.PI * 2);
+        ctx.ellipse(feet.screenX, feet.screenY, PLAYER_R * ISO_X, PLAYER_R * ISO_Y, 0, 0, Math.PI * 2);
         ctx.fill();
+        drawEntityAnchorOverlay(feet.screenX, feet.screenY, feet.screenX - 8, feet.screenY - 8, 16, 16);
       }
     };
 
-    addToSlice(ptx + pty, renderKey, drawClosure);
+    addToSlice(feet.slice, renderKey, drawClosure);
   }
 
   // ----------------------------

@@ -33,6 +33,7 @@ export type DebugSettings = {
   mapOverlaysDisabled: boolean;
   rampFaces: boolean;
   forceSpawnOverride: boolean;
+  entityAnchorOverlay: boolean;
   waterFlowRate: number;
   neutralBirdAI: NeutralBirdAIDebugSettings;
 };
@@ -77,6 +78,7 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "mapOverlaysDisabled", label: "mapOverlaysDisabled" },
   { key: "rampFaces", label: "rampFaces" },
   { key: "forceSpawnOverride", label: "forceSpawnOverride" },
+  { key: "entityAnchorOverlay", label: "entityAnchorOverlay" },
 ] as const;
 
 export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
@@ -98,6 +100,7 @@ export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   mapOverlaysDisabled: false,
   rampFaces: false,
   forceSpawnOverride: false,
+  entityAnchorOverlay: false,
   waterFlowRate: 1,
   neutralBirdAI: {
     enabled: false,

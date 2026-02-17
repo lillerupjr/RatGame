@@ -86,6 +86,55 @@ function installDevSettingsUi(): void {
     addToggle(DEBUG_TOGGLE_DEFINITIONS[i].key, DEBUG_TOGGLE_DEFINITIONS[i].label);
   }
 
+  const renderTitle = document.createElement("div");
+  renderTitle.textContent = "Render";
+  renderTitle.style.fontWeight = "700";
+  renderTitle.style.marginTop = "10px";
+  renderTitle.style.marginBottom = "4px";
+  panel.appendChild(renderTitle);
+
+  const entityShadowsRow = document.createElement("label");
+  entityShadowsRow.style.display = "flex";
+  entityShadowsRow.style.alignItems = "center";
+  entityShadowsRow.style.justifyContent = "space-between";
+  entityShadowsRow.style.gap = "10px";
+  entityShadowsRow.style.padding = "4px 0";
+  const entityShadowsText = document.createElement("span");
+  entityShadowsText.textContent = "entityShadowsEnabled";
+  const entityShadowsInput = document.createElement("input");
+  entityShadowsInput.type = "checkbox";
+  entityShadowsInput.addEventListener("change", () => {
+    updateUserSettings({
+      render: {
+        entityShadowsEnabled: entityShadowsInput.checked,
+      },
+    });
+  });
+  entityShadowsRow.appendChild(entityShadowsText);
+  entityShadowsRow.appendChild(entityShadowsInput);
+  panel.appendChild(entityShadowsRow);
+
+  const entityAnchorsRow = document.createElement("label");
+  entityAnchorsRow.style.display = "flex";
+  entityAnchorsRow.style.alignItems = "center";
+  entityAnchorsRow.style.justifyContent = "space-between";
+  entityAnchorsRow.style.gap = "10px";
+  entityAnchorsRow.style.padding = "4px 0";
+  const entityAnchorsText = document.createElement("span");
+  entityAnchorsText.textContent = "entityAnchorsEnabled";
+  const entityAnchorsInput = document.createElement("input");
+  entityAnchorsInput.type = "checkbox";
+  entityAnchorsInput.addEventListener("change", () => {
+    updateUserSettings({
+      render: {
+        entityAnchorsEnabled: entityAnchorsInput.checked,
+      },
+    });
+  });
+  entityAnchorsRow.appendChild(entityAnchorsText);
+  entityAnchorsRow.appendChild(entityAnchorsInput);
+  panel.appendChild(entityAnchorsRow);
+
   const modeRow = document.createElement("label");
   modeRow.style.display = "flex";
   modeRow.style.alignItems = "center";
@@ -321,6 +370,8 @@ function installDevSettingsUi(): void {
     birdRepickTargetInput.checked = s.debug.neutralBirdAI.debugRepickTarget;
     waterFlowInput.value = `${s.debug.waterFlowRate}`;
     waterFlowValue.textContent = `${s.debug.waterFlowRate.toFixed(2)}x`;
+    entityShadowsInput.checked = s.render.entityShadowsEnabled;
+    entityAnchorsInput.checked = s.render.entityAnchorsEnabled;
   };
 
   const setOpen = (open: boolean) => {
@@ -360,6 +411,28 @@ async function bootstrap() {
   });
 
   wireMenus(refs, game);
+
+  // Runtime render/debug toggles (works outside dev panel too).
+  window.addEventListener("keydown", (ev) => {
+    if (ev.repeat) return;
+
+    if (ev.code === "F8") {
+      const next = !getUserSettings().debug.entityAnchorOverlay;
+      updateUserSettings({ debug: { entityAnchorOverlay: next } });
+      return;
+    }
+
+    if (ev.code === "F7") {
+      const next = !getUserSettings().render.entityAnchorsEnabled;
+      updateUserSettings({ render: { entityAnchorsEnabled: next } });
+      return;
+    }
+
+    if (ev.code === "F6") {
+      const next = !getUserSettings().render.entityShadowsEnabled;
+      updateUserSettings({ render: { entityShadowsEnabled: next } });
+    }
+  });
 
   let last = performance.now();
   function frame(now: number) {

@@ -1,15 +1,26 @@
 import { DEFAULT_DEBUG_SETTINGS, type DebugSettings } from "./debugSettings";
 
+export type RenderSettings = {
+  entityShadowsEnabled: boolean;
+  entityAnchorsEnabled: boolean;
+};
+
 export type UserSettings = {
   debug: DebugSettings;
+  render: RenderSettings;
 };
 
 export type UserSettingsPatch = {
   debug?: Partial<UserSettings["debug"]>;
+  render?: Partial<UserSettings["render"]>;
 };
 
 export const DEFAULT_SETTINGS: UserSettings = {
   debug: { ...DEFAULT_DEBUG_SETTINGS },
+  render: {
+    entityShadowsEnabled: true,
+    entityAnchorsEnabled: true,
+  },
 };
 
 const LS_KEY = "ratgame:userSettings";
@@ -27,6 +38,10 @@ function mergeSettings(
     debug: {
       ...base.debug,
       ...(patch.debug ?? {}),
+    },
+    render: {
+      ...base.render,
+      ...(patch.render ?? {}),
     },
   };
 }
