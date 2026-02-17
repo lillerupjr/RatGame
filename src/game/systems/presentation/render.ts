@@ -4,7 +4,7 @@ import { registry } from "../../content/registry";
 import { ZONE_KIND } from "../../factories/zoneFactory";
 import { getBossAccent, getFloorVisual } from "../../content/floors";
 import { ENEMY_TYPE } from "../../content/enemies";
-import { getPlayerSpriteFrame, playerSpritesReady } from "../../../engine/render/sprites/playerSprites";
+import { getPlayerSkin, getPlayerSpriteFrame, playerSpritesReady } from "../../../engine/render/sprites/playerSprites";
 import { type Dir8 } from "../../../engine/render/sprites/dir8";
 import { getEnemySpriteFrame, preloadEnemySprites } from "../../../engine/render/sprites/enemySprites";
 import { getVendorNpcSpriteFrame, preloadVendorNpcSprites, vendorNpcSpritesReady } from "../../../engine/render/sprites/vendorSprites";
@@ -23,6 +23,7 @@ import {
   blockedTilesInView,
   decalsInView,
   getActiveMap as getActiveCompiledMap,
+  getSupportSurfaceAt,
   type RenderPiece,
   type StampOverlay,
   type ViewRect,
@@ -67,6 +68,14 @@ import {
 } from "../../../engine/render/debug/renderDebug";
 import { configurePixelPerfect, snapPx, snapZoom } from "../../../engine/render/pixelPerfect";
 import { renderLighting, type ProjectedLight } from "./renderLighting";
+import { renderEntityShadow } from "./renderShadow";
+import {
+  resolveEnemyShadowFootOffset,
+  resolveNeutralShadowFootOffset,
+  resolvePlayerShadowFootOffset,
+  resolveProjectileShadowFootOffset,
+  resolveVendorShadowFootOffset,
+} from "./shadowFootOffsets";
 import { resolveDebugFlags } from "../../../debugSettings";
 import { getUserSettings } from "../../../userSettings";
 
@@ -421,8 +430,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   const ENTITY_ANCHOR_X01_DEFAULT = 0.5;
   const ENTITY_ANCHOR_Y01_DEFAULT = 0.92;
-  const ENTITY_SHADOW_ALPHA = 0.35;
-  const ENTITY_SHADOW_OFFSET_PX = 2;
 
   const resolveAnchor01 = (
     overrideValue: number | undefined,
@@ -449,18 +456,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       screenX: screen.x,
       screenY: screen.y,
     };
-  };
-
-  const drawEntityShadow = (feetX: number, feetY: number, spriteRenderW: number) => {
-    const width = Math.max(8, Math.min(56, spriteRenderW * 0.5));
-    const height = width * 0.5;
-    ctx.save();
-    ctx.globalAlpha = ENTITY_SHADOW_ALPHA;
-    ctx.fillStyle = "#000";
-    ctx.beginPath();
-    ctx.ellipse(feetX, feetY + ENTITY_SHADOW_OFFSET_PX, width * 0.5, height * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
   };
 
   const drawEntityAnchorOverlay = (
@@ -921,6 +916,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   const viewRect = viewRectFromWorldCenter(px, py, T, radius);
   const activeH = w.activeFloorH ?? 0;
+  const compiledMap = getActiveCompiledMap();
 
   // ----------------------------
   // Void
@@ -1127,79 +1123,133 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       if (!w.eAlive[i]) continue;
       const ew = getEnemyWorld(w, i, KENNEY_TILE_WORLD);
       const zAbs = ez?.[i] ?? tileHAtWorld(ew.wx, ew.wy);
-      const feet = getEntityFeetPos(ew.wx, ew.wy, zAbs);
+      const support = getSupportSurfaceAt(ew.wx, ew.wy, compiledMap);
+      const tx = Math.floor(ew.wx / T);
+      const ty = Math.floor(ew.wy / T);
       const faceDx = w.eFaceX?.[i] ?? 0;
       const faceDy = w.eFaceY?.[i] ?? -1;
       const moving = Math.hypot(w.evx?.[i] ?? 0, w.evy?.[i] ?? 0) > 1e-4;
       const fr = getEnemySpriteFrame({ type: w.eType[i] as any, time: w.time ?? 0, faceDx, faceDy, moving });
       const spriteW = fr ? fr.sw * fr.scale : Math.max(16, (w.eR[i] ?? 10) * 2.4);
+      const enemyShadowOffset = resolveEnemyShadowFootOffset(w.eType[i] as any);
       const renderKey: RenderKey = {
-        slice: feet.slice,
-        within: feet.within,
-        baseZ: zAbs,
-        feetSortY: feet.screenY,
+        slice: tx + ty,
+        within: tx,
+        baseZ: support.worldZ,
+        feetSortY: support.screenY + camY,
         kindOrder: KindOrder.SHADOW,
         stableId: 220000 + i,
       };
-      addToSlice(feet.slice, renderKey, () => drawEntityShadow(feet.screenX, feet.screenY, spriteW));
+      addToSlice(tx + ty, renderKey, () => renderEntityShadow(ctx, {
+        worldX: ew.wx,
+        worldY: ew.wy,
+        worldZ: zAbs,
+        spriteWidth: spriteW,
+        shadowFootOffsetX: enemyShadowOffset.x,
+        shadowFootOffsetY: enemyShadowOffset.y,
+        screenOffsetX: camX,
+        screenOffsetY: camY,
+      }, compiledMap));
     }
 
     for (let i = 0; i < w.npcs.length; i++) {
       const npc = w.npcs[i];
       const zAbs = tileHAtWorld(npc.wx, npc.wy);
-      const feet = getEntityFeetPos(npc.wx, npc.wy, zAbs);
+      const support = getSupportSurfaceAt(npc.wx, npc.wy, compiledMap);
+      const tx = Math.floor(npc.wx / T);
+      const ty = Math.floor(npc.wy / T);
       const fr = vendorNpcSpritesReady()
         ? getVendorNpcSpriteFrame({ dir: npc.dirCurrent, time: w.time ?? 0 })
         : null;
       const spriteW = fr ? fr.sw * fr.scale : 24;
+      const vendorShadowOffset = resolveVendorShadowFootOffset(npc.kind);
       const renderKey: RenderKey = {
-        slice: feet.slice,
-        within: feet.within,
-        baseZ: zAbs,
-        feetSortY: feet.screenY,
+        slice: tx + ty,
+        within: tx,
+        baseZ: support.worldZ,
+        feetSortY: support.screenY + camY,
         kindOrder: KindOrder.SHADOW,
         stableId: 225000 + i,
       };
-      addToSlice(feet.slice, renderKey, () => drawEntityShadow(feet.screenX, feet.screenY, spriteW));
+      addToSlice(tx + ty, renderKey, () => renderEntityShadow(ctx, {
+        worldX: npc.wx,
+        worldY: npc.wy,
+        worldZ: zAbs,
+        spriteWidth: spriteW,
+        shadowRadiusX: npc.shadowRadiusX,
+        shadowRadiusY: npc.shadowRadiusY,
+        castsShadow: npc.castsShadow,
+        shadowFootOffsetX: vendorShadowOffset.x,
+        shadowFootOffsetY: vendorShadowOffset.y,
+        screenOffsetX: camX,
+        screenOffsetY: camY,
+      }, compiledMap));
     }
 
     for (let i = 0; i < w.neutralMobs.length; i++) {
       const mob = w.neutralMobs[i];
       const zGround = tileHAtWorld(mob.pos.wx, mob.pos.wy);
       const zAbs = zGround + (mob.pos.wzOffset ?? 0);
-      const feet = getEntityFeetPos(mob.pos.wx, mob.pos.wy, zAbs);
+      const support = getSupportSurfaceAt(mob.pos.wx, mob.pos.wy, compiledMap);
+      const tx = Math.floor(mob.pos.wx / T);
+      const ty = Math.floor(mob.pos.wy / T);
       const frameCount = mob.spriteFrames.length;
       const frame = frameCount > 0 ? mob.spriteFrames[mob.anim.frameIndex % frameCount] : null;
       const spriteW = frame ? frame.width * mob.render.scale : 24;
+      const neutralShadowOffset = resolveNeutralShadowFootOffset(mob.kind);
       const renderKey: RenderKey = {
-        slice: feet.slice,
-        within: feet.within,
-        baseZ: zAbs,
-        feetSortY: feet.screenY,
+        slice: tx + ty,
+        within: tx,
+        baseZ: support.worldZ,
+        feetSortY: support.screenY + camY,
         kindOrder: KindOrder.SHADOW,
         stableId: 226000 + i,
       };
-      addToSlice(feet.slice, renderKey, () => drawEntityShadow(feet.screenX, feet.screenY, spriteW));
+      addToSlice(tx + ty, renderKey, () => renderEntityShadow(ctx, {
+        worldX: mob.pos.wx,
+        worldY: mob.pos.wy,
+        worldZ: zAbs,
+        spriteWidth: spriteW,
+        shadowRadiusX: mob.shadowRadiusX,
+        shadowRadiusY: mob.shadowRadiusY,
+        castsShadow: mob.castsShadow,
+        shadowFootOffsetX: neutralShadowOffset.x,
+        shadowFootOffsetY: neutralShadowOffset.y,
+        screenOffsetX: camX,
+        screenOffsetY: camY,
+      }, compiledMap));
     }
 
     {
       const pzAbs = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
-      const feet = getEntityFeetPos(px, py, pzAbs);
+      const support = getSupportSurfaceAt(px, py, compiledMap);
+      const tx = Math.floor(px / T);
+      const ty = Math.floor(py / T);
       const dir = ((w as any)._plDir ?? "N") as Dir8;
       const moving = (w as any)._plMoving ?? false;
       const fr = playerSpritesReady()
         ? getPlayerSpriteFrame({ dir, moving, time: w.time ?? 0 })
         : null;
       const spriteW = fr ? fr.sw * fr.scale : Math.max(16, PLAYER_R * 2.4);
+      const playerShadowOffset = resolvePlayerShadowFootOffset(getPlayerSkin());
       const renderKey: RenderKey = {
-        slice: feet.slice,
-        within: feet.within,
-        baseZ: pzAbs,
-        feetSortY: feet.screenY,
+        slice: tx + ty,
+        within: tx,
+        baseZ: support.worldZ,
+        feetSortY: support.screenY + camY,
         kindOrder: KindOrder.SHADOW,
         stableId: 200001,
       };
-      addToSlice(feet.slice, renderKey, () => drawEntityShadow(feet.screenX, feet.screenY, spriteW));
+      addToSlice(tx + ty, renderKey, () => renderEntityShadow(ctx, {
+        worldX: px,
+        worldY: py,
+        worldZ: pzAbs,
+        spriteWidth: spriteW,
+        shadowFootOffsetX: playerShadowOffset.x,
+        shadowFootOffsetY: playerShadowOffset.y,
+        screenOffsetX: camX,
+        screenOffsetY: camY,
+      }, compiledMap));
     }
   }
 
@@ -1620,6 +1670,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           const sy = sn.y;
 
           const sp = toScreen(sx, sy);
+          const projectileShadowOffset = resolveProjectileShadowFootOffset(w.prjKind[i]);
 
           const lift = Math.max(0, zLift || 0);
           const t = Math.max(0, Math.min(1, 1 - lift / 70));
@@ -1631,7 +1682,15 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           ctx.globalAlpha = 0.18 * t;
           ctx.fillStyle = "#000";
           ctx.beginPath();
-          ctx.ellipse(sp.x, sp.y, rx, ry, 0, 0, Math.PI * 2);
+          ctx.ellipse(
+            sp.x + projectileShadowOffset.x,
+            sp.y + projectileShadowOffset.y,
+            rx,
+            ry,
+            0,
+            0,
+            Math.PI * 2,
+          );
           ctx.fill();
           ctx.restore();
         }
@@ -2113,7 +2172,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // Restore (undo camera zoom) before drawing screen-space overlays / HUD
   ctx.restore();
 
-  const lightDefs = getActiveCompiledMap().lightDefs;
+  const lightDefs = compiledMap.lightDefs;
   const projectedLights: ProjectedLight[] = [];
   for (let i = 0; i < lightDefs.length; i++) {
     const ld = lightDefs[i];

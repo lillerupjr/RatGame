@@ -37,6 +37,10 @@ const PLAYER_SKIN_SCALE: Record<string, number> = {
 };
 
 let playerSkin = "jamal";
+
+export function getPlayerSkin(): string {
+    return playerSkin;
+}
 let playerPack: SpritePack | null = null;
 let _ready = false;
 

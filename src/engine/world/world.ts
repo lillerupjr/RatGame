@@ -67,6 +67,9 @@ export type NpcActor = {
   dirBase: Dir8;
   dirCurrent: Dir8;
   faceRestoreAtMs: number | null;
+  shadowRadiusX?: number;
+  shadowRadiusY?: number;
+  castsShadow?: boolean;
 };
 
 export type NeutralAnimatedMob = {
@@ -114,6 +117,9 @@ export type NeutralAnimatedMob = {
     frameLogsRemaining: number;
     renderLogged: boolean;
   };
+  shadowRadiusX?: number;
+  shadowRadiusY?: number;
+  castsShadow?: boolean;
 };
 
 export type World = {

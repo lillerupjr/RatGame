@@ -18,7 +18,8 @@ import {
     type DecalPiece,
 } from "./kenneyMapLoader";
 import type { TableMapDef } from "../formats/table/tableMapTypes";
-import { worldDeltaToScreen } from "../../../engine/math/iso";
+import { worldDeltaToScreen, worldToScreen } from "../../../engine/math/iso";
+import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { gridToWorld, worldToGrid } from "../../coords/grid";
 import { worldToTile, tileToWorldCenter } from "../../coords/tile";
 import { generateFloorMap } from "../generators/proceduralMap";
@@ -33,6 +34,7 @@ export type {
     RenderRole,
     ViewRect,
     StampOverlay,
+    CompiledKenneyMap,
     DecalPiece,
 } from "./kenneyMapLoader";
 export { worldToTile, tileToWorldCenter };
@@ -62,6 +64,14 @@ export type SurfaceHit = {
     zLogical: number;
     isRamp: boolean;
 };
+
+export interface SupportSurface {
+    worldX: number;
+    worldY: number;
+    worldZ: number;
+    screenX: number;
+    screenY: number;
+}
 
 
 // NOTE: We intentionally do NOT import any authored maps here.
@@ -221,6 +231,42 @@ export function heightAtGrid(gx: number, gy: number, tileWorld: number): number 
 /** Return all authored surfaces at a tile coordinate. */
 export function surfacesAtXY(tx: number, ty: number): Surface[] {
     return _compiled.surfacesAtXY(tx, ty);
+}
+
+/**
+ * Highest walkable support surface at a world position.
+ * Walkable order: authored/synthetic walkable tops first, then base terrain, then z=0 fallback.
+ */
+export function getSupportSurfaceAt(
+    worldX: number,
+    worldY: number,
+    compiledMap: CompiledKenneyMap,
+): SupportSurface {
+    const tx = Math.floor(worldX / KENNEY_TILE_WORLD);
+    const ty = Math.floor(worldY / KENNEY_TILE_WORLD);
+
+    const surfaces = compiledMap.surfacesAtXY(tx, ty);
+    let worldZ = Number.NEGATIVE_INFINITY;
+    for (let i = 0; i < surfaces.length; i++) {
+        const s = surfaces[i];
+        if (s.tile.kind === "VOID") continue;
+        if (s.zBase > worldZ) worldZ = s.zBase;
+    }
+
+    if (!Number.isFinite(worldZ)) {
+        const tile = compiledMap.getTile(tx, ty);
+        worldZ = tile.kind === "VOID" ? 0 : (tile.h | 0);
+    }
+
+    const p = worldToScreen(worldX, worldY);
+    const ELEV_PX = 16;
+    return {
+        worldX,
+        worldY,
+        worldZ,
+        screenX: p.x,
+        screenY: p.y - worldZ * ELEV_PX,
+    };
 }
 
 /** Return top surfaces for a logical layer. */
