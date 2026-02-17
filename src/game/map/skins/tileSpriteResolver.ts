@@ -15,7 +15,12 @@ export type TileSpriteRequest = {
 function normalizeId(id?: string): string | undefined {
     if (!id) return undefined;
     const trimmed = id.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
+    if (trimmed.length === 0) return undefined;
+    const lowered = trimmed.toLowerCase();
+    if (lowered === "none" || lowered === "void" || lowered === "null" || lowered === "off") {
+        return undefined;
+    }
+    return trimmed;
 }
 
 function stripPng(id: string): string {
@@ -35,6 +40,27 @@ function apronSuffix(dir?: TileSpriteDir): string | null {
 function stairSuffix(dir?: TileSpriteDir): string | null {
     if (!dir) return null;
     return dir.toLowerCase();
+}
+
+function remapLegacyTileId(base: string): string {
+    const directMap: Record<string, string> = {
+        "tiles/floor/top/sidewalk": "tiles/floor/sidewalk/1",
+        "tiles/floor/top/road": "tiles/floor/asphalt/1",
+        "tiles/floor/top/asphalt": "tiles/floor/asphalt/1",
+        "tiles/floor/top/park": "tiles/floor/park/1",
+        "tiles/floor/top/stone": "tiles/floor/asphalt/1",
+        "tiles/floor/top/green": "tiles/floor/park/1",
+
+        "tiles/floor/curtain/sidewalk": "tiles/walls/sidewalk",
+        "tiles/floor/curtain/asphalt": "tiles/walls/asphalt",
+        "tiles/floor/curtain/park": "tiles/walls/green",
+        "tiles/floor/curtain/stone": "tiles/walls/stone",
+        "tiles/floor/curtain/green": "tiles/walls/green",
+        "tiles/floor/curtain/docks": "tiles/walls/docks",
+
+        "tiles/stairs/top/stone": "tiles/stairs/stone/stone",
+    };
+    return directMap[base] ?? base;
 }
 
 export function resolveTileSpriteId(request: TileSpriteRequest): string {
@@ -58,7 +84,7 @@ export function resolveTileSpriteId(request: TileSpriteRequest): string {
     const base = normalizeId(semanticId) ?? overrideId ?? skinId ?? mapDefaultId ?? fallbackId;
     if (!base) return "";
 
-    const stripped = stripPng(base);
+    const stripped = remapLegacyTileId(stripPng(base));
 
     if (slot === "floor") return stripped;
 

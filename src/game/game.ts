@@ -229,6 +229,9 @@ export function createGame(args: CreateGameArgs) {
       args.ui.dialogEl.root.hidden = true;
       args.ui.dialogEl.text.textContent = "";
       args.ui.dialogEl.choices.innerHTML = "";
+      if (world.pendingAdvanceToNextFloor && tryAdvanceAfterObjectiveCompletion()) {
+        world.pendingAdvanceToNextFloor = false;
+      }
       return;
     }
     args.ui.dialogEl.root.hidden = false;
@@ -289,6 +292,7 @@ export function createGame(args: CreateGameArgs) {
             onSelect: () => {
               world.pendingLevelUps += 1;
               completeObjectiveById(OBJECTIVE_TRIGGER_IDS.vendor);
+              world.pendingAdvanceToNextFloor = true;
               showInfoDialog("You have been granted a free level! (shop coming soon...)");
             },
           },
@@ -309,6 +313,7 @@ export function createGame(args: CreateGameArgs) {
           onSelect: () => {
             world.playerHp = world.playerHpMax;
             completeObjectiveById(OBJECTIVE_TRIGGER_IDS.heal);
+            world.pendingAdvanceToNextFloor = true;
             showInfoDialog("You have been healed to full HP!");
           },
         },
@@ -448,6 +453,39 @@ export function createGame(args: CreateGameArgs) {
       npc.dirCurrent = npc.dirBase;
       npc.faceRestoreAtMs = null;
     }
+  }
+
+  function hasCompletedFloorObjective(): boolean {
+    for (let i = 0; i < world.objectiveStates.length; i++) {
+      if (world.objectiveStates[i]?.status === "COMPLETED") return true;
+    }
+    return false;
+  }
+
+  function tryAdvanceAfterObjectiveCompletion(): boolean {
+    if (activeDialog) return false;
+    if (!(world.runState === "FLOOR" && hasCompletedFloorObjective() && !world.bossRewardPending)) {
+      return false;
+    }
+
+    if (isDeterministicDelveMode()) {
+      showDeterministicFloorPicker(
+        "Objective complete.\nChoose next floor type.",
+        (world.floorIndex ?? 0) + 1,
+        (world.delveDepth ?? 1) + 1,
+      );
+      return true;
+    }
+
+    const delve = world.delveMap as DelveMap;
+    if (delve) {
+      showDelveMap(`Depth ${world.delveDepth} cleared!\nChoose your next destination.`);
+      return true;
+    }
+
+    (world as any).mapPendingNextFloorIndex = (world.floorIndex ?? 0) + 1;
+    showMap("Choose your next zone.\n(There is a boss at the end of every floor.)");
+    return true;
   }
 
   function handleDialogInput() {
@@ -1793,31 +1831,7 @@ export function createGame(args: CreateGameArgs) {
 
     // Clear events AFTER all consumers ran this frame
     clearEvents(world);
-
-    const isFloorObjectiveCompleted = () => {
-      for (let i = 0; i < world.objectiveStates.length; i++) {
-        if (world.objectiveStates[i]?.status === "COMPLETED") return true;
-      }
-      return false;
-    };
-
-    if (world.runState === "FLOOR" && isFloorObjectiveCompleted() && !world.bossRewardPending) {
-      if (isDeterministicDelveMode()) {
-        showDeterministicFloorPicker(
-          `Objective complete.\nChoose next floor type.`,
-          (world.floorIndex ?? 0) + 1,
-          (world.delveDepth ?? 1) + 1,
-        );
-        return;
-      }
-      const delve = world.delveMap as DelveMap;
-      if (delve) {
-        showDelveMap(`Depth ${world.delveDepth} cleared!\nChoose your next destination.`);
-        return;
-      }
-
-      (world as any).mapPendingNextFloorIndex = (world.floorIndex ?? 0) + 1;
-      showMap("Choose your next zone.\n(There is a boss at the end of every floor.)");
+    if (tryAdvanceAfterObjectiveCompletion()) {
       return;
     }
 

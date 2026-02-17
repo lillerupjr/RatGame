@@ -978,6 +978,8 @@ export function compileKenneyMapFromTable(
         };
     };
 
+    const EMIT_STRUCTURE_SUPPORT_TOPS = false;
+
     const compileBuildingStamp = (
         stamp: SemanticStamp,
         stampIndex: number,
@@ -1111,7 +1113,7 @@ export function compileKenneyMapFromTable(
                     }, stampIndex);
                 }
 
-                if (gaps.length > 0) {
+                if (EMIT_STRUCTURE_SUPPORT_TOPS && gaps.length > 0) {
                     for (let i = 0; i < gaps.length; i++) {
                         const g = gaps[i];
                         addSurface({
@@ -1186,22 +1188,24 @@ export function compileKenneyMapFromTable(
                     layerRole: "STRUCTURE",
                 });
 
-                for (let dx = 0; dx < placeW; dx++) {
-                    for (let dy = 0; dy < placeH; dy++) {
-                        addSurface({
-                            id: `building_floor_${sx + dx}_${sy + dy}_${zBase}`,
-                            kind: "TILE_TOP",
-                            tx: sx + dx,
-                            ty: sy + dy,
-                            zBase,
-                            zLogical: zBase | 0,
-                            tile: { kind: "FLOOR", h: zBase } as IsoTile,
-                            renderTopKind: "FLOOR",
-                            renderDir: "N",
-                            renderAnchorY: floorAnchorY,
-                            renderDyOffset: 0,
-                            spriteIdTop: buildingFloorSprite,
-                        });
+                if (EMIT_STRUCTURE_SUPPORT_TOPS) {
+                    for (let dx = 0; dx < placeW; dx++) {
+                        for (let dy = 0; dy < placeH; dy++) {
+                            addSurface({
+                                id: `building_floor_${sx + dx}_${sy + dy}_${zBase}`,
+                                kind: "TILE_TOP",
+                                tx: sx + dx,
+                                ty: sy + dy,
+                                zBase,
+                                zLogical: zBase | 0,
+                                tile: { kind: "FLOOR", h: zBase } as IsoTile,
+                                renderTopKind: "FLOOR",
+                                renderDir: "N",
+                                renderAnchorY: floorAnchorY,
+                                renderDyOffset: 0,
+                                spriteIdTop: buildingFloorSprite,
+                            });
+                        }
                     }
                 }
                 if (stampBlocksMovement(stamp, true)) bakeBlockedFootprint(sx, sy, placeW, placeH);
@@ -1259,22 +1263,24 @@ export function compileKenneyMapFromTable(
                 layerRole: "STRUCTURE",
             });
 
-            for (let dx = 0; dx < placeW; dx++) {
-                for (let dy = 0; dy < placeH; dy++) {
-                    addSurface({
-                        id: `building_floor_${sx + dx}_${sy + dy}_${zBase}`,
-                        kind: "TILE_TOP",
-                        tx: sx + dx,
-                        ty: sy + dy,
-                        zBase,
-                        zLogical: zBase | 0,
-                        tile: { kind: "FLOOR", h: zBase } as IsoTile,
-                        renderTopKind: "FLOOR",
-                        renderDir: "N",
-                        renderAnchorY: floorAnchorY,
-                        renderDyOffset: 0,
-                        spriteIdTop: buildingFloorSprite,
-                    });
+            if (EMIT_STRUCTURE_SUPPORT_TOPS) {
+                for (let dx = 0; dx < placeW; dx++) {
+                    for (let dy = 0; dy < placeH; dy++) {
+                        addSurface({
+                            id: `building_floor_${sx + dx}_${sy + dy}_${zBase}`,
+                            kind: "TILE_TOP",
+                            tx: sx + dx,
+                            ty: sy + dy,
+                            zBase,
+                            zLogical: zBase | 0,
+                            tile: { kind: "FLOOR", h: zBase } as IsoTile,
+                            renderTopKind: "FLOOR",
+                            renderDir: "N",
+                            renderAnchorY: floorAnchorY,
+                            renderDyOffset: 0,
+                            spriteIdTop: buildingFloorSprite,
+                        });
+                    }
                 }
             }
             if (stampBlocksMovement(stamp, true)) bakeBlockedFootprint(sx, sy, placeW, placeH);

@@ -21,6 +21,33 @@ function normalizeSpriteId(spriteId: string): string {
     return trimmed.toLowerCase().endsWith(".png") ? trimmed.slice(0, -4) : trimmed;
 }
 
+function remapLegacySpriteId(id: string): string {
+    const directMap: Record<string, string> = {
+        "tiles/floor/top/sidewalk": "tiles/floor/sidewalk/1",
+        "tiles/floor/top/road": "tiles/floor/asphalt/1",
+        "tiles/floor/top/asphalt": "tiles/floor/asphalt/1",
+        "tiles/floor/top/park": "tiles/floor/park/1",
+        "tiles/floor/top/stone": "tiles/floor/asphalt/1",
+        "tiles/floor/top/green": "tiles/floor/park/1",
+
+        "tiles/floor/curtain/sidewalk": "tiles/walls/sidewalk",
+        "tiles/floor/curtain/asphalt": "tiles/walls/asphalt",
+        "tiles/floor/curtain/park": "tiles/walls/green",
+        "tiles/floor/curtain/stone": "tiles/walls/stone",
+        "tiles/floor/curtain/green": "tiles/walls/green",
+        "tiles/floor/curtain/docks": "tiles/walls/docks",
+
+        "tiles/stairs/top/stone": "tiles/stairs/stone/stone",
+
+        "tiles/backgrounds/green_water": "tiles/animated/water2/1",
+        "tiles/backgrounds/water": "tiles/animated/water2/1",
+        "tiles/backgrounds/water1": "tiles/animated/water1/1",
+        "tiles/backgrounds/water2": "tiles/animated/water2/1",
+        "tiles/backgrounds/water3": "tiles/animated/water2/1",
+    };
+    return directMap[id] ?? id;
+}
+
 function isWaterBackgroundId(spriteId: string): boolean {
     const normalized = normalizeSpriteId(spriteId);
     return normalized.startsWith("tiles/backgrounds/water")
@@ -31,7 +58,8 @@ function isWaterBackgroundId(spriteId: string): boolean {
 function resolveUrl(spriteId: string): string | null {
     const trimmed = spriteId.trim();
     if (!trimmed) return null;
-    const id = trimmed.toLowerCase().endsWith(".png") ? trimmed.slice(0, -4) : trimmed;
+    const normalized = trimmed.toLowerCase().endsWith(".png") ? trimmed.slice(0, -4) : trimmed;
+    const id = remapLegacySpriteId(normalized);
     if (!isKnownRenderableSpriteId(id)) return null;
 
     if (id.startsWith("tiles/") || id.startsWith("structures/") || id.startsWith("props/")) {

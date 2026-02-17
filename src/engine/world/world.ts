@@ -258,6 +258,7 @@ export type World = {
   // Vendor economy (scaffold)
   vendorOffers: { kind: "RELIC" | "UPGRADE" | "HEAL" | "REROLL"; id: string; cost: number }[];
   vendorPurchases: string[];
+  pendingAdvanceToNextFloor: boolean;
   relics: string[];
   relicEffects: { xpMult: number; hpBonus: number };
   npcs: NpcActor[];
@@ -576,6 +577,7 @@ export function createWorld(args: CreateWorldArgs): World {
     gold: 0,
     vendorOffers: [],
     vendorPurchases: [],
+    pendingAdvanceToNextFloor: false,
     relics: [],
     relicEffects: {
       xpMult: 1,

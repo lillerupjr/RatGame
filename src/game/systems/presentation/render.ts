@@ -923,7 +923,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const activeH = w.activeFloorH ?? 0;
 
   // ----------------------------
-  // Void green_water.png (draw once per frame)
+  // Void
   // ----------------------------
   {
     const voidRec = getVoidTop(performance.now(), WATER_FLOW_RATE);

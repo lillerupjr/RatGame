@@ -5,7 +5,7 @@ describe("spriteIdRegistry", () => {
   it("contains sprite IDs sourced from map skins, structure skins, and props", () => {
     const ids = getRenderableSpriteIds();
 
-    expect(ids.has("tiles/floor/top/stone")).toBe(true);
+    expect(ids.has("tiles/floor/sidewalk/1")).toBe(true);
     expect(ids.has("structures/buildings/avenue/1")).toBe(true);
     expect(ids.has("structures/containers/container_base")).toBe(true);
     expect(ids.has("props/boats/boat1_e")).toBe(true);

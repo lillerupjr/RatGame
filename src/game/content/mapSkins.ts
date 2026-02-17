@@ -24,11 +24,11 @@ export type ResolvedMapSkin = {
 export const DEFAULT_MAP_SKIN_ID: MapSkinId = "default";
 
 export const DEFAULT_MAP_SKIN: ResolvedMapSkin = {
-    floor: "tiles/floor/top/stone",
-    apron: "tiles/floor/curtain/stone",
-    wall: "tiles/walls/stone",
-    stair: "tiles/stairs/top/stone",
-    stairApron: "tiles/floor/curtain/stone",
+    floor: "tiles/floor/sidewalk/1",
+    apron: "none",
+    wall: "none",
+    stair: "tiles/stairs/stone/stone",
+    stairApron: "none",
 
     background: "tiles/animated/water2/1",
 };
@@ -38,32 +38,32 @@ export const DEFAULT_MAP_SKIN: ResolvedMapSkin = {
 export const MAP_SKINS: Record<MapSkinId, MapSkinBundle> = {
     [DEFAULT_MAP_SKIN_ID]: {
         semantic: {
-            SIDEWALK_FLOOR: "tiles/floor/top/sidewalk",
-            ROAD_FLOOR: "tiles/floor/top/road",
-            PARK_FLOOR: "tiles/floor/top/park",
-            SEA_FLOOR: "tiles/floor/top/stone",
+            SIDEWALK_FLOOR: "tiles/floor/sidewalk/1",
+            ROAD_FLOOR: "tiles/floor/asphalt/1",
+            PARK_FLOOR: "tiles/floor/park/1",
+            SEA_FLOOR: "tiles/floor/asphalt/1",
             VOID_TOP: "tiles/animated/water2/1",
         },
     },
 
     docks: {
-        floor: "tiles/floor/top/asphalt",
-        apron: "tiles/floor/curtain/asphalt",
+        floor: "tiles/floor/asphalt/1",
+        apron: "tiles/walls/asphalt",
         wall: "tiles/walls/asphalt",
         background: "tiles/animated/water2/1",
         semantic: {
-            ROAD_FLOOR: "tiles/floor/top/road",
-            SIDEWALK_FLOOR: "tiles/floor/top/sidewalk",
-            PARK_FLOOR: "tiles/floor/top/park",
-            SEA_FLOOR: "",
+            ROAD_FLOOR: "tiles/floor/asphalt/1",
+            SIDEWALK_FLOOR: "tiles/floor/sidewalk/1",
+            PARK_FLOOR: "tiles/floor/park/1",
+            SEA_FLOOR: "tiles/floor/asphalt/1",
             VOID_TOP: "tiles/animated/water2/1",
         },
     },
     green: {
-        floor: "tiles/floor/top/green",
-        apron: "tiles/floor/curtain/green",
+        floor: "tiles/floor/park/1",
+        apron: "tiles/walls/green",
         wall: "tiles/walls/green",
-        background: "tiles/backgrounds/green_water",
+        background: "tiles/animated/water2/1",
     },
     building1: {
         semantic: {

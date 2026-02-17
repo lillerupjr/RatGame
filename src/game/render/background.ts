@@ -1,4 +1,4 @@
-// src/game/visual/green_water.png.ts
+
 import type { World } from "../../engine/world/world";
 
 export type BgAsset = {
