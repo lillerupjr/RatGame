@@ -68,7 +68,7 @@ import {
 } from "../../../engine/render/debug/renderDebug";
 import { configurePixelPerfect, snapPx, snapZoom } from "../../../engine/render/pixelPerfect";
 import { renderLighting, type ProjectedLight } from "./renderLighting";
-import { renderEntityShadow } from "./renderShadow";
+import { renderEntityShadow, renderEntityShadowMask, type ShadowParams } from "./renderShadow";
 import {
   resolveEnemyShadowFootOffset,
   resolveNeutralShadowFootOffset,
@@ -118,6 +118,10 @@ function compareRenderKeys(a: RenderKey, b: RenderKey): number {
 }
 
 const flippedOverlayImageCache = new WeakMap<HTMLImageElement, HTMLCanvasElement>();
+let entityShadowMaskScratchCanvas: HTMLCanvasElement | null = null;
+let entityShadowMaskScratchCtx: CanvasRenderingContext2D | null = null;
+let entitySilhouetteMaskScratchCanvas: HTMLCanvasElement | null = null;
+let entitySilhouetteMaskScratchCtx: CanvasRenderingContext2D | null = null;
 
 function getFlippedOverlayImage(img: HTMLImageElement): HTMLCanvasElement {
   const cached = flippedOverlayImageCache.get(img);
@@ -194,6 +198,24 @@ function ensureLightingMaskCanvas(
   }
   configurePixelPerfect(c2d);
   return { canvas, ctx: c2d };
+}
+
+function ensureScratchMaskCanvas(
+  canvas: HTMLCanvasElement | null,
+  c2d: CanvasRenderingContext2D | null,
+  screenW: number,
+  screenH: number,
+): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null {
+  const resolvedCanvas = canvas ?? document.createElement("canvas");
+  if (resolvedCanvas.width !== screenW) resolvedCanvas.width = screenW;
+  if (resolvedCanvas.height !== screenH) resolvedCanvas.height = screenH;
+  let resolvedCtx = c2d;
+  if (!resolvedCtx || resolvedCtx.canvas !== resolvedCanvas) {
+    resolvedCtx = resolvedCanvas.getContext("2d");
+    if (!resolvedCtx) return null;
+  }
+  configurePixelPerfect(resolvedCtx);
+  return { canvas: resolvedCanvas, ctx: resolvedCtx };
 }
 
 function withGroundPlaneScreen(
@@ -521,6 +543,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   type MaskDraw = (maskCtx: CanvasRenderingContext2D) => void;
   const buildingMaskDraws: MaskDraw[] = [];
+  const entitySilhouetteMaskDraws: MaskDraw[] = [];
 
     const drawRenderPiece = (c: RenderPieceDraw) => {
       const img = c.img;
@@ -1118,6 +1141,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // ----------------------------
   // Collect ENTITY SHADOWS into slices (after floor/decals, before entities)
   // ----------------------------
+  const entityShadowMaskParams: ShadowParams[] = [];
   if (RENDER_ENTITY_SHADOWS) {
     for (let i = 0; i < w.eAlive.length; i++) {
       if (!w.eAlive[i]) continue;
@@ -1140,7 +1164,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         kindOrder: KindOrder.SHADOW,
         stableId: 220000 + i,
       };
-      addToSlice(tx + ty, renderKey, () => renderEntityShadow(ctx, {
+      const shadowParams: ShadowParams = {
         worldX: ew.wx,
         worldY: ew.wy,
         worldZ: zAbs,
@@ -1149,7 +1173,56 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         shadowFootOffsetY: enemyShadowOffset.y,
         screenOffsetX: camX,
         screenOffsetY: camY,
-      }, compiledMap));
+      };
+      addToSlice(tx + ty, renderKey, () => renderEntityShadow(ctx, shadowParams, compiledMap));
+      entityShadowMaskParams.push(shadowParams);
+      const feet = getEntityFeetPos(ew.wx, ew.wy, zAbs);
+      entitySilhouetteMaskDraws.push((maskCtx) => {
+        const frSilhouette = getEnemySpriteFrame({
+          type: w.eType[i] as any,
+          time: w.time ?? 0,
+          faceDx,
+          faceDy,
+          moving,
+        });
+        if (frSilhouette) {
+          const dw = frSilhouette.sw * frSilhouette.scale;
+          const dh = frSilhouette.sh * frSilhouette.scale;
+          const frAny = frSilhouette as any;
+          const anchorX = RENDER_ENTITY_ANCHORS
+            ? resolveAnchor01((w as any).eAnchorX01?.[i], frAny.anchorX01 ?? frSilhouette.anchorX, ENTITY_ANCHOR_X01_DEFAULT)
+            : (frSilhouette.anchorX ?? ENTITY_ANCHOR_X01_DEFAULT);
+          const anchorY = RENDER_ENTITY_ANCHORS
+            ? resolveAnchor01((w as any).eAnchorY01?.[i], frAny.anchorY01 ?? frSilhouette.anchorY, ENTITY_ANCHOR_Y01_DEFAULT)
+            : (frSilhouette.anchorY ?? ENTITY_ANCHOR_Y01_DEFAULT);
+          const dx = feet.screenX - dw * anchorX;
+          const dy = feet.screenY - dh * anchorY;
+          maskCtx.drawImage(
+            frSilhouette.img,
+            frSilhouette.sx,
+            frSilhouette.sy,
+            frSilhouette.sw,
+            frSilhouette.sh,
+            Math.round(dx),
+            Math.round(dy),
+            dw,
+            dh,
+          );
+          return;
+        }
+        maskCtx.fillStyle = "rgba(255,255,255,1)";
+        maskCtx.beginPath();
+        maskCtx.ellipse(
+          feet.screenX,
+          feet.screenY,
+          (w.eR[i] ?? 10) * ISO_X,
+          (w.eR[i] ?? 10) * ISO_Y,
+          0,
+          0,
+          Math.PI * 2,
+        );
+        maskCtx.fill();
+      });
     }
 
     for (let i = 0; i < w.npcs.length; i++) {
@@ -1171,7 +1244,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         kindOrder: KindOrder.SHADOW,
         stableId: 225000 + i,
       };
-      addToSlice(tx + ty, renderKey, () => renderEntityShadow(ctx, {
+      const shadowParams: ShadowParams = {
         worldX: npc.wx,
         worldY: npc.wy,
         worldZ: zAbs,
@@ -1183,7 +1256,38 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         shadowFootOffsetY: vendorShadowOffset.y,
         screenOffsetX: camX,
         screenOffsetY: camY,
-      }, compiledMap));
+      };
+      addToSlice(tx + ty, renderKey, () => renderEntityShadow(ctx, shadowParams, compiledMap));
+      entityShadowMaskParams.push(shadowParams);
+      const feet = getEntityFeetPos(npc.wx, npc.wy, zAbs);
+      entitySilhouetteMaskDraws.push((maskCtx) => {
+        const frSilhouette = vendorNpcSpritesReady()
+          ? getVendorNpcSpriteFrame({ dir: npc.dirCurrent, time: w.time ?? 0 })
+          : null;
+        if (!frSilhouette) return;
+        const dw = frSilhouette.sw * frSilhouette.scale;
+        const dh = frSilhouette.sh * frSilhouette.scale;
+        const frAny = frSilhouette as any;
+        const anchorX = RENDER_ENTITY_ANCHORS
+          ? resolveAnchor01((npc as any).anchorX01, frAny.anchorX01 ?? frSilhouette.anchorX, ENTITY_ANCHOR_X01_DEFAULT)
+          : (frSilhouette.anchorX ?? ENTITY_ANCHOR_X01_DEFAULT);
+        const anchorY = RENDER_ENTITY_ANCHORS
+          ? resolveAnchor01((npc as any).anchorY01, frAny.anchorY01 ?? frSilhouette.anchorY, ENTITY_ANCHOR_Y01_DEFAULT)
+          : (frSilhouette.anchorY ?? ENTITY_ANCHOR_Y01_DEFAULT);
+        const dx = feet.screenX - dw * anchorX;
+        const dy = feet.screenY - dh * anchorY;
+        maskCtx.drawImage(
+          frSilhouette.img,
+          frSilhouette.sx,
+          frSilhouette.sy,
+          frSilhouette.sw,
+          frSilhouette.sh,
+          Math.round(dx),
+          Math.round(dy),
+          dw,
+          dh,
+        );
+      });
     }
 
     for (let i = 0; i < w.neutralMobs.length; i++) {
@@ -1205,7 +1309,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         kindOrder: KindOrder.SHADOW,
         stableId: 226000 + i,
       };
-      addToSlice(tx + ty, renderKey, () => renderEntityShadow(ctx, {
+      const shadowParams: ShadowParams = {
         worldX: mob.pos.wx,
         worldY: mob.pos.wy,
         worldZ: zAbs,
@@ -1217,7 +1321,35 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         shadowFootOffsetY: neutralShadowOffset.y,
         screenOffsetX: camX,
         screenOffsetY: camY,
-      }, compiledMap));
+      };
+      addToSlice(tx + ty, renderKey, () => renderEntityShadow(ctx, shadowParams, compiledMap));
+      entityShadowMaskParams.push(shadowParams);
+      const feet = getEntityFeetPos(mob.pos.wx, mob.pos.wy, zAbs);
+      entitySilhouetteMaskDraws.push((maskCtx) => {
+        const frameCountSilhouette = mob.spriteFrames.length;
+        if (frameCountSilhouette <= 0) return;
+        const frameSilhouette = mob.spriteFrames[mob.anim.frameIndex % frameCountSilhouette];
+        if (!frameSilhouette || frameSilhouette.width <= 0 || frameSilhouette.height <= 0) return;
+        const dw = frameSilhouette.width * mob.render.scale;
+        const dh = frameSilhouette.height * mob.render.scale;
+        const anchorX = RENDER_ENTITY_ANCHORS
+          ? resolveAnchor01((mob.render as any).anchorX01, mob.render.anchorX, ENTITY_ANCHOR_X01_DEFAULT)
+          : (mob.render.anchorX ?? ENTITY_ANCHOR_X01_DEFAULT);
+        const anchorY = RENDER_ENTITY_ANCHORS
+          ? resolveAnchor01((mob.render as any).anchorY01, mob.render.anchorY, ENTITY_ANCHOR_Y01_DEFAULT)
+          : (mob.render.anchorY ?? ENTITY_ANCHOR_Y01_DEFAULT);
+        const dx = feet.screenX - dw * anchorX;
+        const dy = feet.screenY - dh * anchorY;
+        if (mob.render.flipX) {
+          maskCtx.save();
+          maskCtx.translate(snapPx(dx + dw), snapPx(dy));
+          maskCtx.scale(-1, 1);
+          maskCtx.drawImage(frameSilhouette, 0, 0, dw, dh);
+          maskCtx.restore();
+          return;
+        }
+        maskCtx.drawImage(frameSilhouette, snapPx(dx), snapPx(dy), dw, dh);
+      });
     }
 
     {
@@ -1240,7 +1372,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         kindOrder: KindOrder.SHADOW,
         stableId: 200001,
       };
-      addToSlice(tx + ty, renderKey, () => renderEntityShadow(ctx, {
+      const shadowParams: ShadowParams = {
         worldX: px,
         worldY: py,
         worldZ: pzAbs,
@@ -1249,7 +1381,46 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         shadowFootOffsetY: playerShadowOffset.y,
         screenOffsetX: camX,
         screenOffsetY: camY,
-      }, compiledMap));
+      };
+      addToSlice(tx + ty, renderKey, () => renderEntityShadow(ctx, shadowParams, compiledMap));
+      entityShadowMaskParams.push(shadowParams);
+      const feet = getEntityFeetPos(px, py, pzAbs);
+      entitySilhouetteMaskDraws.push((maskCtx) => {
+        const dirSilhouette = ((w as any)._plDir ?? "N") as Dir8;
+        const movingSilhouette = (w as any)._plMoving ?? false;
+        const frSilhouette = playerSpritesReady()
+          ? getPlayerSpriteFrame({ dir: dirSilhouette, moving: movingSilhouette, time: w.time ?? 0 })
+          : null;
+        if (frSilhouette) {
+          const dw = frSilhouette.sw * frSilhouette.scale;
+          const dh = frSilhouette.sh * frSilhouette.scale;
+          const frAny = frSilhouette as any;
+          const anchorX = RENDER_ENTITY_ANCHORS
+            ? resolveAnchor01((w as any)._plAnchorX01, frAny.anchorX01 ?? frSilhouette.anchorX, ENTITY_ANCHOR_X01_DEFAULT)
+            : (frSilhouette.anchorX ?? ENTITY_ANCHOR_X01_DEFAULT);
+          const anchorY = RENDER_ENTITY_ANCHORS
+            ? resolveAnchor01((w as any)._plAnchorY01, frAny.anchorY01 ?? frSilhouette.anchorY, ENTITY_ANCHOR_Y01_DEFAULT)
+            : (frSilhouette.anchorY ?? ENTITY_ANCHOR_Y01_DEFAULT);
+          const dx = Math.round(feet.screenX - dw * anchorX);
+          const dy = Math.round(feet.screenY - dh * anchorY);
+          maskCtx.drawImage(
+            frSilhouette.img,
+            frSilhouette.sx,
+            frSilhouette.sy,
+            frSilhouette.sw,
+            frSilhouette.sh,
+            dx,
+            dy,
+            dw,
+            dh,
+          );
+          return;
+        }
+        maskCtx.fillStyle = "rgba(255,255,255,1)";
+        maskCtx.beginPath();
+        maskCtx.ellipse(feet.screenX, feet.screenY, PLAYER_R * ISO_X, PLAYER_R * ISO_Y, 0, 0, Math.PI * 2);
+        maskCtx.fill();
+      });
     }
   }
 
@@ -2147,6 +2318,26 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const sourceMaskLayer = ensureLightingMaskCanvas(w.lighting, "SOURCE_OCC", screenW, screenH);
   if (inverseMaskLayer) {
     const inverseCtx = inverseMaskLayer.ctx;
+    const shadowMaskLayer = ensureScratchMaskCanvas(
+      entityShadowMaskScratchCanvas,
+      entityShadowMaskScratchCtx,
+      screenW,
+      screenH,
+    );
+    if (shadowMaskLayer) {
+      entityShadowMaskScratchCanvas = shadowMaskLayer.canvas;
+      entityShadowMaskScratchCtx = shadowMaskLayer.ctx;
+    }
+    const silhouetteMaskLayer = ensureScratchMaskCanvas(
+      entitySilhouetteMaskScratchCanvas,
+      entitySilhouetteMaskScratchCtx,
+      screenW,
+      screenH,
+    );
+    if (silhouetteMaskLayer) {
+      entitySilhouetteMaskScratchCanvas = silhouetteMaskLayer.canvas;
+      entitySilhouetteMaskScratchCtx = silhouetteMaskLayer.ctx;
+    }
     inverseCtx.setTransform(1, 0, 0, 1, 0, 0);
     inverseCtx.clearRect(0, 0, screenW, screenH);
     inverseCtx.save();
@@ -2160,6 +2351,45 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       buildingMaskDraws[i](inverseCtx);
     }
     inverseCtx.restore();
+
+    if (shadowMaskLayer && silhouetteMaskLayer) {
+      const shadowCtx = shadowMaskLayer.ctx;
+      const silhouetteCtx = silhouetteMaskLayer.ctx;
+
+      shadowCtx.setTransform(1, 0, 0, 1, 0, 0);
+      shadowCtx.clearRect(0, 0, screenW, screenH);
+      silhouetteCtx.setTransform(1, 0, 0, 1, 0, 0);
+      silhouetteCtx.clearRect(0, 0, screenW, screenH);
+
+      shadowCtx.save();
+      configurePixelPerfect(shadowCtx);
+      shadowCtx.scale(pixelScale, pixelScale);
+      shadowCtx.translate(viewCenterX, viewCenterY);
+      shadowCtx.scale(camZoom, camZoom);
+      shadowCtx.translate(-viewCenterX, -viewCenterY);
+      for (let i = 0; i < entityShadowMaskParams.length; i++) {
+        renderEntityShadowMask(shadowCtx, entityShadowMaskParams[i], compiledMap);
+      }
+      shadowCtx.restore();
+
+      silhouetteCtx.save();
+      configurePixelPerfect(silhouetteCtx);
+      silhouetteCtx.scale(pixelScale, pixelScale);
+      silhouetteCtx.translate(viewCenterX, viewCenterY);
+      silhouetteCtx.scale(camZoom, camZoom);
+      silhouetteCtx.translate(-viewCenterX, -viewCenterY);
+      for (let i = 0; i < entitySilhouetteMaskDraws.length; i++) {
+        entitySilhouetteMaskDraws[i](silhouetteCtx);
+      }
+      silhouetteCtx.restore();
+
+      shadowCtx.globalCompositeOperation = "destination-out";
+      shadowCtx.drawImage(silhouetteMaskLayer.canvas, 0, 0);
+      shadowCtx.globalCompositeOperation = "source-over";
+
+      inverseCtx.globalCompositeOperation = "source-over";
+      inverseCtx.drawImage(shadowMaskLayer.canvas, 0, 0);
+    }
     inverseCtx.globalCompositeOperation = "source-in";
     inverseCtx.fillStyle = "rgba(0,0,0,1)";
     inverseCtx.fillRect(0, 0, screenW, screenH);
