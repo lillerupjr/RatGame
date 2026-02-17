@@ -78,6 +78,8 @@ import {
 } from "./shadowFootOffsets";
 import { resolveDebugFlags } from "../../../debugSettings";
 import { getUserSettings } from "../../../userSettings";
+import { getZoneTrialObjectiveState } from "../../objectives/zoneObjectiveSystem";
+import { renderZoneObjectives } from "../../render/renderZoneObjectives";
 
 // ============================================
 // RenderKey & KindOrder (Isometric Painter Model)
@@ -87,12 +89,13 @@ import { getUserSettings } from "../../../userSettings";
 enum KindOrder {
   FLOOR = 0,
   DECAL = 1,
-  SHADOW = 2,
-  ENTITY = 3,
-  VFX = 4,
-  STRUCTURE = 5,
-  OCCLUDER = 6,
-  OVERLAY = 7,
+  ZONE_OBJECTIVE = 2,
+  SHADOW = 3,
+  ENTITY = 4,
+  VFX = 5,
+  STRUCTURE = 6,
+  OCCLUDER = 7,
+  OVERLAY = 8,
 }
 
 /** Canonical render key for deterministic ordering. */
@@ -922,6 +925,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const SHOW_STRUCTURE_SLICE_DEBUG = debugFlags.showStructureSlices;
   const buildingMaskDebugView = debugFlags.buildingMaskDebugView;
   const SHOW_BUILDING_MASK_DEBUG = debugFlags.showBuildingMaskDebug;
+  const SHOW_ZONE_OBJECTIVE_BOUNDS = !!debug.objectives?.showZoneBounds;
 
   // Enemy Z buffer (optional visual override)
   const ez = w.ezVisual;
@@ -1139,6 +1143,43 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         );
       };
       addToSlice(decal.tx + decal.ty, renderKey, drawClosure);
+    }
+  }
+
+  // ----------------------------
+  // Collect ZONE OBJECTIVES into slices (after floor/decals, before entities)
+  // ----------------------------
+  {
+    const zoneTrial = getZoneTrialObjectiveState(w);
+    if (zoneTrial && zoneTrial.zones.length > 0) {
+      for (let i = 0; i < zoneTrial.zones.length; i++) {
+        const zone = zoneTrial.zones[i];
+        const absZoneX = compiledMap.originTx + zone.tileX;
+        const absZoneY = compiledMap.originTy + zone.tileY;
+        const centerTx = absZoneX + Math.floor(zone.tileW * 0.5);
+        const centerTy = absZoneY + Math.floor(zone.tileH * 0.5);
+        const centerWx = (centerTx + 0.5) * T;
+        const centerWy = (centerTy + 0.5) * T;
+        const centerZ = tileHAtWorld(centerWx, centerWy);
+        const renderKey: RenderKey = {
+          slice: centerTx + centerTy,
+          within: centerTx,
+          baseZ: centerZ,
+          kindOrder: KindOrder.ZONE_OBJECTIVE,
+          stableId: 210000 + zone.id,
+        };
+
+        addToSlice(centerTx + centerTy, renderKey, () => {
+          renderZoneObjectives(ctx, w, {
+            zone,
+            mapOriginTx: compiledMap.originTx,
+            mapOriginTy: compiledMap.originTy,
+            tileWorld: T,
+            toScreen,
+            showZoneBounds: SHOW_ZONE_OBJECTIVE_BOUNDS,
+          });
+        });
+      }
     }
   }
 

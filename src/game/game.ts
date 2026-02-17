@@ -87,6 +87,7 @@ import { preloadNeutralMobSprites } from "../engine/render/sprites/neutralSprite
 import { spawnMilestonePigeonNearPlayer } from "./factories/neutralMobFactory";
 import { neutralAnimatedMobsSystem } from "./systems/sim/neutralAnimatedMobs";
 import { neutralBirdAISystem } from "./systems/sim/neutralBirdAI";
+import { getZoneTrialObjectiveState, startZoneTrial, updateZoneTrialObjective } from "./objectives/zoneObjectiveSystem";
 
 
 type HudRefs = {
@@ -594,6 +595,21 @@ export function createGame(args: CreateGameArgs) {
     depth: number;
   };
 
+  const floorArchetypeLabel = (archetype: FloorArchetype): string => {
+    switch (archetype) {
+      case "SURVIVE":
+        return "Survive";
+      case "TIME_TRIAL":
+        return "Zone Trial";
+      case "VENDOR":
+        return "Vendor";
+      case "HEAL":
+        return "Heal";
+      case "BOSS_TRIPLE":
+        return "Boss Triple";
+    }
+  };
+
   const hashString = (s: string): number => {
     let h = 0;
     for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
@@ -817,9 +833,8 @@ export function createGame(args: CreateGameArgs) {
     const objectiveSpec = objectiveSpecFromFloorIntent(floorIntent);
     w.currentObjectiveSpec = objectiveSpec;
     setObjectivesFromSpec(w, objectiveSpec);
+    startZoneTrial(w);
     if (objectiveSpec.objectiveType === "SURVIVE_TIMER") {
-      w.floorDuration = objectiveSpec.params.timeLimitSec;
-    } else if (objectiveSpec.objectiveType === "TIME_TRIAL_ZONES") {
       w.floorDuration = objectiveSpec.params.timeLimitSec;
     }
 
@@ -1250,7 +1265,7 @@ export function createGame(args: CreateGameArgs) {
             ? "REST map"
             : "Procedural";
       btn.innerHTML = `
-        <div class="mapHitTitle">${archetype}</div>
+        <div class="mapHitTitle">${floorArchetypeLabel(archetype)}</div>
         <div class="mapHitDesc">${desc} · Depth ${depth}</div>
       `;
       hit.appendChild(btn);
@@ -1281,21 +1296,6 @@ export function createGame(args: CreateGameArgs) {
       const visibleNodes = getVisibleNodes(delve, 4);
       const visibleEdges = getVisibleEdges(delve, visibleNodes);
       const reachable = new Set(getReachableNodes(delve).map(n => n.id));
-
-      const archetypeLabel = (archetype: FloorArchetype) => {
-        switch (archetype) {
-          case "SURVIVE":
-            return "Survive";
-          case "TIME_TRIAL":
-            return "Time Trial";
-          case "VENDOR":
-            return "Vendor";
-          case "HEAL":
-            return "Heal";
-          case "BOSS_TRIPLE":
-            return "Boss Triple";
-        }
-      };
 
       const archetypeColor = (archetype: FloorArchetype, alpha: number) => {
         const palette: Record<FloorArchetype, { r: number; g: number; b: number }> = {
@@ -1365,7 +1365,7 @@ export function createGame(args: CreateGameArgs) {
             n.floorArchetype,
             isCurrent ? 0.95 : isReach ? 0.65 : isCompleted ? 0.45 : 0.25
           );
-          const label = archetypeLabel(n.floorArchetype);
+          const label = floorArchetypeLabel(n.floorArchetype);
 
           return `
             <circle cx="${p.x}" cy="${p.y}" r="22" fill="${fill}" stroke="${stroke}" stroke-width="4" />
@@ -1402,7 +1402,7 @@ export function createGame(args: CreateGameArgs) {
       btn.disabled = !isReach || isCurrent;
 
       const statusText = isCurrent ? "Current" : n.completed ? "Completed" : isReach ? "Select" : "Locked";
-      const label = archetypeLabel(n.floorArchetype);
+      const label = floorArchetypeLabel(n.floorArchetype);
 
       btn.innerHTML = `
         <div class="mapHitTitle">${label}</div>
@@ -1611,10 +1611,11 @@ export function createGame(args: CreateGameArgs) {
         detail = `Time Remaining: ${formatTimeMMSS(remaining)} · ${status}`;
         break;
       }
-      case "TIME_TRIAL_ZONES": {
-        const remaining = Math.max(0, spec.params.timeLimitSec - world.phaseTime);
-        title = "Time Trial";
-        detail = `Time Remaining: ${formatTimeMMSS(remaining)} · ${status}`;
+      case "ZONE_TRIAL": {
+        const zoneState = getZoneTrialObjectiveState(world);
+        const target = zoneState?.zones[0]?.killTarget ?? spec.params.killTargetPerZone;
+        title = "Slay enemies inside the marked zones.";
+        detail = `Defeat ${target} enemies in each zone · ${status}`;
         break;
       }
       case "VENDOR_VISIT":
@@ -1760,6 +1761,7 @@ export function createGame(args: CreateGameArgs) {
     xpSystem(world, dt);
     vendorSystem(world);
     triggerSystem(world, dt, input);
+    updateZoneTrialObjective(world);
     bossZoneSpawnSystem(world);
     objectiveSystem(world);
     outcomeSystem(world);

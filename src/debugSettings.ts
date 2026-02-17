@@ -14,6 +14,10 @@ export type NeutralBirdAIDebugSettings = {
   debugRepickTarget: boolean;
 };
 
+export type ObjectiveDebugSettings = {
+  showZoneBounds: boolean;
+};
+
 export type DebugSettings = {
   grid: boolean;
   walkMask: boolean;
@@ -36,9 +40,10 @@ export type DebugSettings = {
   entityAnchorOverlay: boolean;
   waterFlowRate: number;
   neutralBirdAI: NeutralBirdAIDebugSettings;
+  objectives: ObjectiveDebugSettings;
 };
 
-export type BooleanDebugSettingKey = Exclude<keyof DebugSettings, "lightingMaskDebugMode" | "waterFlowRate" | "neutralBirdAI">;
+export type BooleanDebugSettingKey = Exclude<keyof DebugSettings, "lightingMaskDebugMode" | "waterFlowRate" | "neutralBirdAI" | "objectives">;
 
 export type DebugToggleDefinition = {
   key: BooleanDebugSettingKey;
@@ -108,6 +113,9 @@ export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
     disableTransitions: false,
     drawDebug: true,
     debugRepickTarget: false,
+  },
+  objectives: {
+    showZoneBounds: false,
   },
 };
 

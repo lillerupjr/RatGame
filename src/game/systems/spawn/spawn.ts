@@ -51,9 +51,7 @@ export function spawnSystem(w: World, dt: number) {
   if (w.floorArchetype === "VENDOR" || w.floorArchetype === "HEAL") {
     return;
   }
-  if (w.floorArchetype === "TIME_TRIAL") {
-    spawnBases = overlayZones(OBJECTIVE_TRIGGER_IDS.zonePrefix);
-  } else if (w.floorArchetype === "BOSS_TRIPLE") {
+  if (w.floorArchetype === "BOSS_TRIPLE") {
     if (isObjectiveCompleted("OBJ_BOSS_RARES")) return;
     spawnBases = overlayZones(OBJECTIVE_TRIGGER_IDS.bossZonePrefix);
   }
@@ -61,7 +59,6 @@ export function spawnSystem(w: World, dt: number) {
 
   const pickBase = () => spawnBases[w.rng.int(0, spawnBases.length - 1)];
 
-  const isTimeTrial = w.floorArchetype === "TIME_TRIAL";
   const isBossTriple = w.floorArchetype === "BOSS_TRIPLE";
 
   if (w.floorArchetype === "SURVIVE") {
@@ -215,7 +212,7 @@ export function spawnSystem(w: World, dt: number) {
     if ((s as any).t === Infinity) continue;
 
     if (w.phaseTime >= s.t) {
-      const count = isTimeTrial ? Math.max(1, Math.ceil(s.count * 0.5)) : s.count;
+      const count = s.count;
       for (let k = 0; k < count; k++) {
         const origin = pickBase();
         const angle = w.rng.range(0, Math.PI * 2);
@@ -245,9 +242,7 @@ export function spawnSystem(w: World, dt: number) {
   while ((w as any)._spawnAcc >= cadence) {
     (w as any)._spawnAcc -= cadence;
 
-    const perTickMax = isTimeTrial
-      ? Math.max(floor.spawns.perTickMin, Math.floor(floor.spawns.perTickMax * 0.5))
-      : floor.spawns.perTickMax;
+    const perTickMax = floor.spawns.perTickMax;
     const n = w.rng.int(floor.spawns.perTickMin, perTickMax);
 
     for (let i = 0; i < n; i++) {

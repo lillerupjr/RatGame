@@ -3,8 +3,8 @@ import type { ObjectiveDef } from "./objective";
 export type ObjectiveSpec =
   | { objectiveType: "SURVIVE_TIMER"; params: { timeLimitSec: number } }
   | {
-      objectiveType: "TIME_TRIAL_ZONES";
-      params: { timeLimitSec: number; zoneCount: number };
+      objectiveType: "ZONE_TRIAL";
+      params: { zoneCount: number; zoneSize: number; killTargetPerZone: number };
     }
   | { objectiveType: "VENDOR_VISIT"; params: Record<string, never> }
   | { objectiveType: "HEAL_VISIT"; params: Record<string, never> }
@@ -17,6 +17,7 @@ export const OBJECTIVE_TRIGGER_IDS = {
   timer: "OBJ_TIMER",
   zonePrefix: "OBJ_ZONE_",
   bossZonePrefix: "OBJ_BOSS_ZONE_",
+  zoneTrialComplete: "OBJ_ZONE_TRIAL_COMPLETE",
   vendor: "OBJ_VENDOR",
   heal: "OBJ_HEAL",
 };
@@ -44,15 +45,15 @@ export function objectiveSpecToObjectiveDefs(spec: ObjectiveSpec): ObjectiveDef[
           outcomes: [],
         },
       ];
-    case "TIME_TRIAL_ZONES": {
+    case "ZONE_TRIAL": {
       return [
         {
-          id: "OBJ_TIME_TRIAL",
-          listensTo: [OBJECTIVE_TRIGGER_IDS.timer],
+          id: "OBJ_ZONE_TRIAL",
+          listensTo: [OBJECTIVE_TRIGGER_IDS.zoneTrialComplete],
           completionRule: {
             type: "SIGNAL_COUNT",
-            count: spec.params.timeLimitSec,
-            signalType: "TICK",
+            count: 1,
+            signalType: "KILL",
           },
           outcomes: [],
         },

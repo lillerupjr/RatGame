@@ -15,6 +15,7 @@ import type { FloorArchetype } from "../../game/map/floorArchetype";
 import type { FloorIntent } from "../../game/map/floorIntent";
 import type { TriggerDef } from "../../game/triggers/triggerTypes";
 import type { Dir8 } from "../render/sprites/dir8";
+import type { ZoneTrialObjectiveState } from "../../game/objectives/zoneObjectiveTypes";
 
 import type { WeaponId } from "../../game/content/weapons";
 
@@ -146,6 +147,7 @@ export type World = {
   objectiveStates: ObjectiveState[];
   objectiveEvents: ObjectiveEvent[];
   currentObjectiveSpec: ObjectiveSpec | null;
+  zoneTrialObjective: ZoneTrialObjectiveState | null;
 
   // -------------------------
   // Stage / floor
@@ -494,6 +496,7 @@ export function createWorld(args: CreateWorldArgs): World {
     objectiveStates: [],
     objectiveEvents: [],
     currentObjectiveSpec: null,
+    zoneTrialObjective: null,
 
     // Stage / floor
     stage,

@@ -3,6 +3,7 @@ import type { ObjectiveSpec } from "../systems/progression/objectiveSpec";
 
 export type ObjectiveId =
   | "SURVIVE_TIMER"
+  | "ZONE_TRIAL"
   | "TIME_TRIAL_ZONES"
   | "VENDOR_VISIT"
   | "HEAL_VISIT"
@@ -10,6 +11,7 @@ export type ObjectiveId =
 
 export const OBJECTIVE_IDS: ObjectiveId[] = [
   "SURVIVE_TIMER",
+  "ZONE_TRIAL",
   "TIME_TRIAL_ZONES",
   "VENDOR_VISIT",
   "HEAL_VISIT",
@@ -21,7 +23,7 @@ export function objectiveIdFromArchetype(archetype: FloorArchetype): ObjectiveId
     case "SURVIVE":
       return "SURVIVE_TIMER";
     case "TIME_TRIAL":
-      return "TIME_TRIAL_ZONES";
+      return "ZONE_TRIAL";
     case "VENDOR":
       return "VENDOR_VISIT";
     case "HEAL":
@@ -47,12 +49,22 @@ export function objectiveSpecFromObjectiveId(
           timeLimitSec: params?.timeLimitSec ?? 120,
         },
       };
+    case "ZONE_TRIAL":
+      return {
+        objectiveType: "ZONE_TRIAL",
+        params: {
+          zoneCount: params?.zoneCount ?? 2,
+          zoneSize: 4,
+          killTargetPerZone: 8,
+        },
+      };
     case "TIME_TRIAL_ZONES":
       return {
-        objectiveType: "TIME_TRIAL_ZONES",
+        objectiveType: "ZONE_TRIAL",
         params: {
-          timeLimitSec: params?.timeLimitSec ?? 120,
-          zoneCount: params?.zoneCount ?? 3,
+          zoneCount: params?.zoneCount ?? 2,
+          zoneSize: 4,
+          killTargetPerZone: 8,
         },
       };
     case "VENDOR_VISIT":

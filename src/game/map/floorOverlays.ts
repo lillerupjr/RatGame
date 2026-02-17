@@ -342,16 +342,9 @@ function normalizeZoneCenters(
 export function overlaySpecFromFloorIntent(intent: FloorIntent): OverlaySpec {
   const objectiveId = intent.objectiveId ?? objectiveIdFromArchetype(intent.archetype);
   switch (objectiveId) {
+    case "ZONE_TRIAL":
     case "TIME_TRIAL_ZONES":
-      return [
-        {
-          type: "PLACE_SPAWN_ZONES",
-          count: intent.spawnZoneCount ?? 3,
-          radiusTiles: intent.spawnZoneRadiusTiles ?? DEFAULT_ZONE_RADIUS,
-          minSeparationTiles: intent.spawnZoneMinSeparationTiles ?? DEFAULT_ZONE_MIN_SEPARATION,
-          placementPolicy: intent.placementPolicy ?? "LONGEST_PATH",
-        },
-      ];
+      return [];
     case "KILL_RARES_IN_ZONES":
       return [
         {
@@ -388,7 +381,7 @@ export function applyFloorOverlays(world: World, intent: FloorIntent): void {
 
   const overlayTriggers: TriggerDef[] = [];
 
-  if (objectiveId === "SURVIVE_TIMER" || objectiveId === "TIME_TRIAL_ZONES") {
+  if (objectiveId === "SURVIVE_TIMER") {
     overlayTriggers.push({
       id: OBJECTIVE_TRIGGER_IDS.timer,
       type: "timer",
