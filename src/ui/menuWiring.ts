@@ -18,19 +18,10 @@ type MapChoice = {
     desc: string;
 };
 
-// Load green_water.png image using Vite's import.meta.glob
-const backgroundAssets = import.meta.glob("../assets/backgrounds/*.png", {
-    eager: true,
-    import: "default",
-}) as Record<string, string>;
+const MENU_BACKGROUND_URL = "/assets-runtime/tiles/backgrounds/green_water.png";
 
 function getBackgroundUrl(): string {
-    for (const [path, url] of Object.entries(backgroundAssets)) {
-        if (path.endsWith("/green_water.png.png")) {
-            return url;
-        }
-    }
-    return "";
+    return MENU_BACKGROUND_URL;
 }
 
 function applyBackground(el: HTMLDivElement, url: string): void {

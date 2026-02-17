@@ -33,3 +33,9 @@ repo_dump*.txt
 
 # all files in the .claude directory
 .claude/*
+_local/
+.codex/
+.claude/
+*.zip
+*.dump
+coverage/

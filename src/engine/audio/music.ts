@@ -2,11 +2,6 @@
 
 type StageId = "DOCKS" | "SEWERS" | "CHINATOWN";
 
-const modules = import.meta.glob("../../assets/music/*.{mp3,ogg,wav}", {
-    eager: true,
-    import: "default",
-}) as Record<string, string>;
-
 const FILES: Record<StageId, string> = {
     DOCKS: "test2.ogg",
     SEWERS: "test1.ogg",
@@ -70,7 +65,7 @@ function wireUnlock() {
             try {
                 await cur.play();
             } catch {
-                // still blocked — ignore
+                // still blocked - ignore
             }
         }
     };
@@ -84,10 +79,8 @@ function wireUnlock() {
 // -----------------------------
 
 function findUrl(filename: string): string | null {
-    for (const [k, url] of Object.entries(modules)) {
-        if (k.endsWith("/" + filename)) return url;
-    }
-    return null;
+    if (!filename) return null;
+    return `/assets-runtime/music/${filename}`;
 }
 
 // -----------------------------
@@ -103,7 +96,7 @@ export function setMusicStage(stage: StageId) {
     const file = FILES[stage];
     const url = findUrl(file);
     if (!url) {
-        console.warn("[music] Missing file:", file, "Known keys:", Object.keys(modules));
+        console.warn("[music] Missing file:", file);
         return;
     }
 

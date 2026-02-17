@@ -13,7 +13,7 @@
     "test:coverage": "vitest run --coverage",
     "precommit": "npm run typecheck && npm run test",
     "prepare": "husky",
-    "dump:txt": "node tools/dump-repo.mjs --out repo_dump.txt"
+    "dump:txt": "node tools/dump-repo.mjs --out _local/repo_dump.txt"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.0.18",

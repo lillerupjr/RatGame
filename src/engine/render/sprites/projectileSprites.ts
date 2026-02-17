@@ -1,16 +1,11 @@
 // src/game/visual/projectileSprites.ts
-// Loads projectile sprites from: src/assets/projectiles/
+// Loads projectile sprites from: /assets-runtime/projectiles/
 // Notes:
-// - Vite import.meta.glob eager URLs
+// - Explicit static URLs served from public/
 // - Centralized per-weapon scaling via PROJECTILE_SCALE_BY_KIND
 // - Exposes getProjectileDrawScale(kind) so render.ts stays simple
 
 export type Loaded = { img: HTMLImageElement; ready: boolean; src?: string };
-
-const modules = import.meta.glob("../../../assets/projectiles/*.png", {
-    eager: true,
-    import: "default",
-}) as Record<string, string>;
 
 export const PROJECTILE_BASE_DRAW_PX = 36;
 
@@ -26,9 +21,18 @@ const FILES = {
 
 const cache: Record<string, Loaded> = Object.create(null);
 
+const PROJECTILE_URLS = {
+    KNIFE: "/assets-runtime/projectiles/knife.png",
+    PISTOL: "/assets-runtime/projectiles/pistol.png",
+    SYRINGE: "/assets-runtime/projectiles/syringe.png",
+    BOUNCER: "/assets-runtime/projectiles/bouncer.png",
+    SWORD: "/assets-runtime/projectiles/sword.png",
+    KNUCKLES: "/assets-runtime/projectiles/knuckles.png",
+} as const;
+
 function resolveUrl(file: string): string | null {
-    for (const [path, url] of Object.entries(modules)) {
-        if (path.endsWith(`/projectiles/${file}`)) return url;
+    for (const [kind, filename] of Object.entries(FILES)) {
+        if (filename === file) return PROJECTILE_URLS[kind as keyof typeof PROJECTILE_URLS];
     }
     return null;
 }
@@ -39,7 +43,7 @@ function loadByFile(file: string): Loaded {
 
     const url = resolveUrl(file);
     if (!url) {
-        console.warn(`[projectileSprites] Missing ${file} in src/assets/projectiles/`);
+        console.warn(`[projectileSprites] Missing ${file} in /assets-runtime/projectiles/`);
         cache[key] = { img: new Image(), ready: false };
         return cache[key];
     }

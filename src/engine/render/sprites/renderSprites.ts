@@ -12,26 +12,6 @@ export type LoadedImg = {
     ready: boolean;
 };
 
-const TILE_MODULES = import.meta.glob("../../../assets/tiles/**/*.png", {
-    eager: true,
-    import: "default",
-}) as Record<string, string>;
-
-const STRUCTURE_MODULES = import.meta.glob("../../../assets/structures/**/*.png", {
-    eager: true,
-    import: "default",
-}) as Record<string, string>;
-
-const PROP_MODULES = import.meta.glob("../../../assets/props/**/*.png", {
-    eager: true,
-    import: "default",
-}) as Record<string, string>;
-
-const DECAL_MODULES = import.meta.glob("../../../assets/tiles/floor/decals/*.png", {
-    eager: true,
-    import: "default",
-}) as Record<string, string>;
-
 const cache: Record<string, LoadedImg> = Object.create(null);
 const WATER_FRAME_COUNT = 6;
 const WATER_FRAME_MS = 150;
@@ -54,17 +34,8 @@ function resolveUrl(spriteId: string): string | null {
     const id = trimmed.toLowerCase().endsWith(".png") ? trimmed.slice(0, -4) : trimmed;
     if (!isKnownRenderableSpriteId(id)) return null;
 
-    if (id.startsWith("tiles/")) {
-        const key = `../../../assets/${id}.png`;
-        return TILE_MODULES[key] ?? null;
-    }
-    if (id.startsWith("structures/")) {
-        const key = `../../../assets/${id}.png`;
-        return STRUCTURE_MODULES[key] ?? null;
-    }
-    if (id.startsWith("props/")) {
-        const key = `../../../assets/${id}.png`;
-        return PROP_MODULES[key] ?? null;
+    if (id.startsWith("tiles/") || id.startsWith("structures/") || id.startsWith("props/")) {
+        return `/assets-runtime/${id}.png`;
     }
     return null;
 }
@@ -121,7 +92,7 @@ export function getRuntimeSquareFloorSprite(
     family: "sidewalk" | "asphalt" | "park",
     variantIndex: number,
 ): LoadedImg {
-    const max = family === "sidewalk" ? 6 : family === "park" ? 7 : 1;
+    const max = getFloorVariantCount(family);
     const idx = Math.max(1, Math.min(max, Math.floor(variantIndex)));
     return loadById(`tiles/floor/${family}/${idx}`);
 }
@@ -132,8 +103,7 @@ export function getRuntimeDecalSprite(
 ): LoadedImg {
     const spriteId = getDecalSpriteId(setId, variantIndex);
     if (!spriteId) return { img: new Image(), ready: false };
-    const key = `../../../assets/${spriteId}.png`;
-    const url = DECAL_MODULES[key] ?? null;
+    const url = `/assets-runtime/${spriteId}.png`;
     return loadByUrl(spriteId, url);
 }
 

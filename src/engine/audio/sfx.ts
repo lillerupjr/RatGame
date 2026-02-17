@@ -6,11 +6,6 @@ import { clamp01 } from "../util/clamp";
 
 type BufferRec = { buf: AudioBuffer | null; ready: boolean; url?: string };
 
-const modules = import.meta.glob("../../assets/sfx/*.{wav,mp3,ogg}", {
-    eager: true,
-    import: "default",
-}) as Record<string, string>;
-
 /* ============================================================
    🔊 VOLUME CONTROLS (EDIT THESE)
    ============================================================ */
@@ -83,10 +78,8 @@ const FILES: Record<SfxId, string> = {
 };
 
 function resolveUrl(file: string): string | null {
-    for (const [path, url] of Object.entries(modules)) {
-        if (path.endsWith(`/sfx/${file}`)) return url;
-    }
-    return null;
+    if (!file) return null;
+    return `/assets-runtime/sfx/${file}`;
 }
 
 let _ctx: AudioContext | null = null;

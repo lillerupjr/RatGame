@@ -7,17 +7,8 @@ export type BgAsset = {
     src?: string;
 };
 
-// green_water.png.ts is in src/game/visual
-// assets are in src/assets/backgrounds
-const modules = import.meta.glob("../../assets/backgrounds/*.png", {
-    eager: true,
-    import: "default",
-}) as Record<string, string>;
-
-// ─────────────────────────────────────────────────────────────
-// FloorIndex (0-based) → green_water.png file mapping
+// FloorIndex (0-based) -> background file mapping
 // floorIndex: 0=Floor1, 1=Floor2, 2=Floor3
-// ─────────────────────────────────────────────────────────────
 export const BG_BY_FLOOR_INDEX: Record<number, string> = {
     0: "sewer_background.png", // DOCKS
     1: "sewer_background.png", // SEWERS
@@ -30,10 +21,8 @@ const DEFAULT_BG_FILE = "sewer_background.png";
 const cache: Record<number, BgAsset> = {};
 
 function resolveBgUrl(file: string): string | null {
-    for (const [path, url] of Object.entries(modules)) {
-        if (path.endsWith(`/backgrounds/${file}`)) return url;
-    }
-    return null;
+    if (!file) return null;
+    return `/assets-runtime/backgrounds/${file}`;
 }
 
 function ensureLoadedForIndex(floorIndex: number): BgAsset {
@@ -43,7 +32,7 @@ function ensureLoadedForIndex(floorIndex: number): BgAsset {
     const url = resolveBgUrl(file);
 
     if (!url) {
-        console.warn(`[background] ${file} not found in src/assets/backgrounds/`);
+        console.warn(`[background] ${file} not found in /assets-runtime/backgrounds/`);
         cache[floorIndex] = { img: null, ready: false };
         return cache[floorIndex];
     }
