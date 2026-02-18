@@ -546,9 +546,14 @@ export function createGame(args: CreateGameArgs) {
 
   setMusicStage("DOCKS");
 
+  const applyPlayerSkinSelection = (skin: string) => {
+    setPlayerSkin(skin);
+    (world as any)._playerSkin = skin;
+  };
+
   const defaultCharacter = PLAYABLE_CHARACTERS[0];
   if (defaultCharacter) {
-    setPlayerSkin(defaultCharacter.idleSpriteKey);
+    applyPlayerSkinSelection(defaultCharacter.idleSpriteKey);
   }
 
   preloadBackgrounds();
@@ -1032,7 +1037,7 @@ export function createGame(args: CreateGameArgs) {
     const character = getPlayableCharacter(characterId);
     if (!character) return;
 
-    setPlayerSkin(character.idleSpriteKey);
+    applyPlayerSkinSelection(character.idleSpriteKey);
     preloadPlayerSprites();
 
     resetRun(undefined);
@@ -1066,7 +1071,7 @@ export function createGame(args: CreateGameArgs) {
     const character = getPlayableCharacter(characterId);
     if (!character) return;
 
-    setPlayerSkin(character.idleSpriteKey);
+    applyPlayerSkinSelection(character.idleSpriteKey);
     preloadPlayerSprites();
 
     resetRun(undefined);
@@ -1096,7 +1101,7 @@ export function createGame(args: CreateGameArgs) {
     const character = getPlayableCharacter(characterId);
     if (!character) return;
 
-    setPlayerSkin(character.idleSpriteKey);
+    applyPlayerSkinSelection(character.idleSpriteKey);
     preloadPlayerSprites();
 
     resetRun(mapId);

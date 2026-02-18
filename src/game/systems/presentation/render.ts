@@ -4,7 +4,7 @@ import { registry } from "../../content/registry";
 import { ZONE_KIND } from "../../factories/zoneFactory";
 import { getBossAccent, getFloorVisual } from "../../content/floors";
 import { ENEMY_TYPE } from "../../content/enemies";
-import { getPlayerSkin, getPlayerSpriteFrame, playerSpritesReady } from "../../../engine/render/sprites/playerSprites";
+import { getPlayerSpriteFrame, playerSpritesReady } from "../../../engine/render/sprites/playerSprites";
 import { type Dir8 } from "../../../engine/render/sprites/dir8";
 import { getEnemySpriteFrame, preloadEnemySprites } from "../../../engine/render/sprites/enemySprites";
 import { getVendorNpcSpriteFrame, preloadVendorNpcSprites, vendorNpcSpritesReady } from "../../../engine/render/sprites/vendorSprites";
@@ -1409,7 +1409,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         ? getPlayerSpriteFrame({ dir, moving, time: w.time ?? 0 })
         : null;
       const spriteW = fr ? fr.sw * fr.scale : Math.max(16, PLAYER_R * 2.4);
-      const playerShadowOffset = resolvePlayerShadowFootOffset(getPlayerSkin());
+      const playerSkin = ((w as any)._playerSkin ?? "jamal") as string;
+      const playerShadowOffset = resolvePlayerShadowFootOffset(playerSkin);
       const renderKey: RenderKey = {
         slice: tx + ty,
         within: tx,
