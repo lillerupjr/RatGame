@@ -18,6 +18,7 @@ export const RUNTIME_DECAL_SPRITE_IDS: Record<RuntimeDecalSetId, string[]> = {
         "tiles/floor/decals/road_line",
         "tiles/floor/decals/road_crossing",
         "tiles/floor/decals/road_line",
+        "tiles/floor/decals/road_crossing_full",
     ],
 };
 

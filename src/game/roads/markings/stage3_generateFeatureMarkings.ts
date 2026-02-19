@@ -1,4 +1,8 @@
-import { ROAD_CROSSING_VARIANT_INDEX, ROAD_STOP_CROSSING_OFFSET_TILES } from "../roadMarkings";
+import {
+  ROAD_CROSSING_FULL_VARIANT_INDEX,
+  ROAD_CROSSING_VARIANT_INDEX,
+  ROAD_STOP_CROSSING_OFFSET_TILES,
+} from "../roadMarkings";
 import type { MarkingPiece, RoadContext, RoadMarkingInputs } from "./types";
 
 const ROAD_DIR_N = 1;
@@ -21,9 +25,6 @@ function dirToDelta(dir: number): { dx: number; dy: number } {
 }
 
 export function generateFeatureMarkings(_context: RoadContext, inputs: RoadMarkingInputs): MarkingPiece[] {
-  if (!inputs.emitStopbarCrossingOverlay) return [];
-  if (!inputs.roadStopMaskWorld || !inputs.roadStopDirWorld) return [];
-
   const out: MarkingPiece[] = [];
   const dedupe = new Set<string>();
   const inBounds = (tx: number, ty: number): boolean => {
@@ -62,23 +63,37 @@ export function generateFeatureMarkings(_context: RoadContext, inputs: RoadMarki
     for (let tx = inputs.originTx; tx < inputs.originTx + inputs.w; tx++) {
       if (!inBounds(tx, ty)) continue;
       const i = idx(tx, ty);
-      if (inputs.roadStopMaskWorld[i] !== 1) continue;
-      const dir = inputs.roadStopDirWorld[i] | 0;
-      const stopRot = stopbarRotationFromDir(dir);
-      const v = dirToDelta(dir);
-      const baseTx = tx + 0.5;
-      const baseTy = ty + 0.5;
-      const emitTx = baseTx + (v.dx * ROAD_STOP_CROSSING_OFFSET_TILES);
-      const emitTy = baseTy + (v.dy * ROAD_STOP_CROSSING_OFFSET_TILES);
-      push(
-        emitTx,
-        emitTy,
-        tx,
-        ty,
-        ROAD_CROSSING_VARIANT_INDEX,
-        stopRot,
-        `stop_crossing_${tx}_${ty}`,
-      );
+
+      if (inputs.roadCrossingMaskWorld[i] === 1) {
+        push(
+          tx + 0.5,
+          ty + 0.5,
+          tx,
+          ty,
+          ROAD_CROSSING_FULL_VARIANT_INDEX,
+          0,
+          `crossing_full_${tx}_${ty}`,
+        );
+      }
+
+      if (inputs.emitStopbarCrossingOverlay && inputs.roadStopMaskWorld && inputs.roadStopDirWorld && inputs.roadStopMaskWorld[i] === 1) {
+        const dir = inputs.roadStopDirWorld[i] | 0;
+        const stopRot = stopbarRotationFromDir(dir);
+        const v = dirToDelta(dir);
+        const baseTx = tx + 0.5;
+        const baseTy = ty + 0.5;
+        const emitTx = baseTx + (v.dx * ROAD_STOP_CROSSING_OFFSET_TILES);
+        const emitTy = baseTy + (v.dy * ROAD_STOP_CROSSING_OFFSET_TILES);
+        push(
+          emitTx,
+          emitTy,
+          tx,
+          ty,
+          ROAD_CROSSING_VARIANT_INDEX,
+          stopRot,
+          `stop_crossing_${tx}_${ty}`,
+        );
+      }
     }
   }
 
