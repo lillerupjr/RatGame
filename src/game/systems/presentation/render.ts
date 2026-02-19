@@ -129,6 +129,9 @@ let entityShadowMaskScratchCanvas: HTMLCanvasElement | null = null;
 let entityShadowMaskScratchCtx: CanvasRenderingContext2D | null = null;
 let entitySilhouetteMaskScratchCanvas: HTMLCanvasElement | null = null;
 let entitySilhouetteMaskScratchCtx: CanvasRenderingContext2D | null = null;
+// NEW: structures layer scratch (used for player cutout)
+let structureLayerScratchCanvas: HTMLCanvasElement | null = null;
+let structureLayerScratchCtx: CanvasRenderingContext2D | null = null;
 
 function getFlippedOverlayImage(img: HTMLImageElement): HTMLCanvasElement {
   const cached = flippedOverlayImageCache.get(img);
@@ -556,21 +559,23 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const buildingMaskDraws: MaskDraw[] = [];
   const entitySilhouetteMaskDraws: MaskDraw[] = [];
 
-    const drawRenderPiece = (c: RenderPieceDraw) => {
+    const drawRenderPieceTo = (target: CanvasRenderingContext2D, c: RenderPieceDraw) => {
       const img = c.img;
       if (!img || img.width <= 0 || img.height <= 0) return;
       const scale = c.scale ?? 1;
 
-      ctx.save();
-      ctx.translate(snapPx(c.dx), snapPx(c.dy));
-      ctx.scale(scale, scale);
+      target.save();
+      target.translate(snapPx(c.dx), snapPx(c.dy));
+      target.scale(scale, scale);
       if (c.flipX) {
-        ctx.translate(c.dw, 0);
-        ctx.scale(-1, 1);
+        target.translate(c.dw, 0);
+        target.scale(-1, 1);
       }
-      ctx.drawImage(img, 0, 0, c.dw, c.dh);
-      ctx.restore();
+      target.drawImage(img, 0, 0, c.dw, c.dh);
+      target.restore();
     };
+    // Default draw to main ctx (unchanged behavior for most pieces)
+    const drawRenderPiece = (c: RenderPieceDraw) => drawRenderPieceTo(ctx, c);
 
     const addRenderPieceMask = (c: RenderPieceDraw) => {
       buildingMaskDraws.push((maskCtx) => {
@@ -2050,7 +2055,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           kindOrder: faceKindOrder,
           stableId: faceStableId + di * 0.001,
         };
-        addToSlice(face.tx + face.ty, renderKey, () => drawRenderPiece(d));
+        addToSlice(face.tx + face.ty, renderKey, () => {
+          const sctx = structureLayerScratchCtx;
+          const isStructureish = renderKey.kindOrder === KindOrder.STRUCTURE || renderKey.kindOrder === KindOrder.OVERLAY;
+          if (isStructureish && sctx) drawRenderPieceTo(sctx, d);
+          else drawRenderPiece(d);
+        });
         if (face.layerRole === "STRUCTURE") addRenderPieceMask(d);
       }
     }
@@ -2085,7 +2095,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         kindOrder: wallKindOrder,
         stableId: occStableId,
       };
-      addToSlice(occ.tx + occ.ty, renderKey, () => drawRenderPiece(draw));
+      addToSlice(occ.tx + occ.ty, renderKey, () => {
+        const sctx = structureLayerScratchCtx;
+        const isStructureish = renderKey.kindOrder === KindOrder.STRUCTURE || renderKey.kindOrder === KindOrder.OVERLAY;
+        if (isStructureish && sctx) drawRenderPieceTo(sctx, draw);
+        else drawRenderPiece(draw);
+      });
       addRenderPieceMask(draw);
     }
   }
@@ -2153,6 +2168,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
               stableId: band.renderKey.stableId,
             };
             addToSlice(band.renderKey.slice, overlayKey, () => {
+              const sctx = structureLayerScratchCtx;
+              const target = (overlayKey.kindOrder === KindOrder.STRUCTURE || overlayKey.kindOrder === KindOrder.OVERLAY) && sctx
+                ? sctx
+                : ctx;
               const img = draw.img;
               if (!img) return;
               const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(img) : img;
@@ -2163,8 +2182,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
               const snappedW = Math.max(0, x1 - x0);
               const snappedH = Math.max(0, y1 - y0);
               if (snappedW <= 0 || snappedH <= 0) return;
-              ctx.imageSmoothingEnabled = false;
-              ctx.drawImage(
+              target.imageSmoothingEnabled = false;
+              target.drawImage(
                 sourceImg,
                 band.srcRect.x,
                 band.srcRect.y,
@@ -2240,7 +2259,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
             kindOrder,
             stableId: 200000 + i,
           };
-          addToSlice(slice, overlayKey, () => drawRenderPiece(draw));
+          addToSlice(slice, overlayKey, () => {
+            const sctx = structureLayerScratchCtx;
+            const isStructureish = overlayKey.kindOrder === KindOrder.STRUCTURE || overlayKey.kindOrder === KindOrder.OVERLAY;
+            if (isStructureish && sctx) drawRenderPieceTo(sctx, draw);
+            else drawRenderPiece(draw);
+          });
           if (o.layerRole === "STRUCTURE" || (o.kind ?? "ROOF") === "ROOF") addRenderPieceMask(draw);
         }
       }
@@ -2268,6 +2292,37 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const isGroundKind = (kind: KindOrder) =>
     kind === KindOrder.FLOOR || kind === KindOrder.DECAL;
 
+  // ============================================
+  // STRUCTURE LAYER (for player cutout) — Milestone 1: hard hole
+  // ============================================
+  const structureLayer = ensureScratchMaskCanvas(
+    structureLayerScratchCanvas,
+    structureLayerScratchCtx,
+    screenW,
+    screenH,
+  );
+  if (structureLayer) {
+    structureLayerScratchCanvas = structureLayer.canvas;
+    structureLayerScratchCtx = structureLayer.ctx;
+
+    const sctx = structureLayer.ctx;
+    // Clear in screen space
+    sctx.setTransform(1, 0, 0, 1, 0, 0);
+    sctx.globalCompositeOperation = "source-over";
+    sctx.clearRect(0, 0, screenW, screenH);
+
+    // IMPORTANT: match the WORLD camera transform (exactly like lighting masks)
+    sctx.save();
+    configurePixelPerfect(sctx);
+    sctx.scale(pixelScale, pixelScale);
+    sctx.translate(viewCenterX, viewCenterY);
+    sctx.scale(camZoom, camZoom);
+    sctx.translate(-viewCenterX, -viewCenterY);
+  } else {
+    structureLayerScratchCanvas = null;
+    structureLayerScratchCtx = null;
+  }
+
   for (let zi = 0; zi < zBandKeys.length; zi++) {
     const zb = zBandKeys[zi];
 
@@ -2292,6 +2347,59 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         drawable.draw();
       }
     }
+  }
+
+  // ============================================
+  // STRUCTURE CUTOUT COMPOSITE (Milestone 1: hard circle)
+  // ============================================
+  if (structureLayerScratchCanvas && structureLayerScratchCtx) {
+    const sctx = structureLayerScratchCtx;
+
+    // End the structure-layer world transform so we can punch hole in screen-space
+    sctx.restore();
+
+    const worldToScreenPx = (xWorld: number, yWorld: number) => {
+      const xZoom = (xWorld - viewCenterX) * camZoom + viewCenterX;
+      const yZoom = (yWorld - viewCenterY) * camZoom + viewCenterY;
+      return { x: xZoom * pixelScale, y: yZoom * pixelScale };
+    };
+    const pzAbs = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
+    const feet = getEntityFeetPos(px, py, pzAbs);
+    const sp = worldToScreenPx(feet.screenX, feet.screenY);
+    const playerSx = sp.x;
+    const playerSy = sp.y;
+    const radiusWorld = 150;
+    const radiusPx = radiusWorld * camZoom * pixelScale;
+
+    // Soft edge hole using destination-out + radial gradient.
+    // Center is fully erased; edge fades to no erase.
+    sctx.save();
+    sctx.globalCompositeOperation = "destination-out";
+
+    // Bigger radius (tune these defaults)
+    const outerR = radiusPx * 1.35;
+    const innerR = Math.max(1, outerR * 0.72);
+
+    // Radial gradient: alpha=1 in center (erase), alpha=0 at edge (no erase)
+    const g = sctx.createRadialGradient(playerSx, playerSy, innerR, playerSx, playerSy, outerR);
+    g.addColorStop(0.0, "rgba(0,0,0,1)");
+    g.addColorStop(1.0, "rgba(0,0,0,0)");
+
+    sctx.fillStyle = g;
+    sctx.beginPath();
+    sctx.arc(playerSx, playerSy, outerR, 0, Math.PI * 2);
+    sctx.fill();
+
+    sctx.restore();
+    sctx.globalCompositeOperation = "source-over";
+
+    // Composite structures over the already-rendered scene.
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    configurePixelPerfect(ctx);
+    ctx.globalCompositeOperation = "source-over";
+    ctx.drawImage(structureLayerScratchCanvas, 0, 0);
+    ctx.restore();
   }
 
   // Optional floor tint overlay
@@ -2449,6 +2557,59 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
       inverseCtx.globalCompositeOperation = "source-over";
       inverseCtx.drawImage(shadowMaskLayer.canvas, 0, 0);
+    }
+    // ------------------------------------------------------------
+    // Player structure cutout should also remove building occlusion,
+    // so lights can shine "behind" removed buildings.
+    // ------------------------------------------------------------
+
+    // Helper: convert world-render coords (ww/hh space) -> screen pixels (screenW/screenH space)
+    const worldToScreenPx = (xWorld: number, yWorld: number) => {
+      const xZoom = (xWorld - viewCenterX) * camZoom + viewCenterX;
+      const yZoom = (yWorld - viewCenterY) * camZoom + viewCenterY;
+      return { x: xZoom * pixelScale, y: yZoom * pixelScale };
+    };
+
+    {
+      // Use player feet position (world-render coords)
+      const pzAbs = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
+      const feet = getEntityFeetPos(px, py, pzAbs);
+      const sp = worldToScreenPx(feet.screenX, feet.screenY);
+      const playerSx = sp.x;
+      const playerSy = sp.y;
+
+      // Keep this consistent with your visual structure cutout
+      const radiusWorld = 150; // match your current cutout baseline
+      const radiusPx = radiusWorld * camZoom * pixelScale;
+
+      // Full-radius cutout for lighting mask (no south-only clipping).
+      const SOUTH_ONLY = false;
+
+      inverseCtx.save();
+      inverseCtx.setTransform(1, 0, 0, 1, 0, 0); // screen-space ops
+      inverseCtx.globalCompositeOperation = "destination-out";
+
+      if (SOUTH_ONLY) {
+        const SOUTH_OFFSET_PX = 12 * pixelScale; // tune
+        inverseCtx.beginPath();
+        inverseCtx.rect(0, playerSy + SOUTH_OFFSET_PX, screenW, screenH - (playerSy + SOUTH_OFFSET_PX));
+        inverseCtx.clip();
+      }
+
+      // Soft edge erase (same as visuals)
+      const outerR = radiusPx * 1.35;
+      const innerR = Math.max(1, outerR * 0.72);
+      const g = inverseCtx.createRadialGradient(playerSx, playerSy, innerR, playerSx, playerSy, outerR);
+      g.addColorStop(0.0, "rgba(0,0,0,1)");
+      g.addColorStop(1.0, "rgba(0,0,0,0)");
+
+      inverseCtx.fillStyle = g;
+      inverseCtx.beginPath();
+      inverseCtx.arc(playerSx, playerSy, outerR, 0, Math.PI * 2);
+      inverseCtx.fill();
+
+      inverseCtx.restore();
+      inverseCtx.globalCompositeOperation = "source-over";
     }
     inverseCtx.globalCompositeOperation = "source-in";
     inverseCtx.fillStyle = "rgba(0,0,0,1)";
