@@ -55,6 +55,7 @@ import {
   getVoidTop,
 } from "../../../engine/render/sprites/renderSprites";
 import type { RuntimeDecalSetId } from "../../content/runtimeDecalConfig";
+import { roadMarkingDecalScale, shouldPixelSnapRoadMarking } from "../../roads/roadMarkingRender";
 import {
   buildRuntimeStructureBandPieces,
 } from "../../../engine/render/sprites/runtimeStructureSlicing";
@@ -636,7 +637,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     ) => {
       const src = getRuntimeDecalSprite(setId, variantIndex);
       if (!src.ready || !src.img || src.img.width <= 0 || src.img.height <= 0) return;
-      const decalScale = setId === "road_markings" && variantIndex === 1 ? 2 : 1;
+      const decalScale = roadMarkingDecalScale(setId, variantIndex);
       const srcW = src.img.width * decalScale;
       const srcH = src.img.height * decalScale;
 
@@ -645,7 +646,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const p = worldToScreen(wx, wy);
       const rawCenterX = p.x + camX;
       const rawCenterY = p.y + camY - zBase * ELEV_PX - SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5);
-      const shouldSnapRoadMarking = setId === "road_markings" || variantIndex === 1;
+      const shouldSnapRoadMarking = shouldPixelSnapRoadMarking(setId, variantIndex);
       const centerX = shouldSnapRoadMarking ? Math.round(rawCenterX) : snapPx(rawCenterX);
       const centerY = shouldSnapRoadMarking ? Math.round(rawCenterY) : snapPx(rawCenterY);
 
