@@ -76,8 +76,8 @@ describe("canonical road semantic world masks", () => {
 
     expect(center(4, 11)).toBe(true);
     expect(center(8, 11)).toBe(true);
-    expect(center(6, 9)).toBe(true);
-    expect(center(6, 13)).toBe(true);
+    expect(center(6, 9)).toBe(false);
+    expect(center(6, 13)).toBe(false);
     expect(center(5, 10)).toBe(false);
     expect(width(6, 11)).toBe(5);
 
