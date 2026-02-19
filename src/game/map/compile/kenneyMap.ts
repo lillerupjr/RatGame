@@ -1039,6 +1039,25 @@ export function roadCenterWidthAt(tx: number, ty: number): number {
     return _compiled.roadCenterWidthWorld[idx] | 0;
 }
 
+/** Return true if tile is part of the semantic road intersection mask. */
+export function isRoadIntersectionTile(tx: number, ty: number): boolean {
+    const lx = tx - _compiled.originTx;
+    const ly = ty - _compiled.originTy;
+    if (lx < 0 || ly < 0 || lx >= _compiled.width || ly >= _compiled.height) return false;
+    const idx = ly * _compiled.width + lx;
+    return _compiled.roadIntersectionMaskWorld[idx] === 1;
+}
+
+/** Return representative intersection seeds used by compile-time intersection stamping. */
+export function roadIntersectionSeedsDebug(): Array<{ tx: number; ty: number }> {
+    return _compiled.roadIntersectionSeedsWorld ?? [];
+}
+
+/** Return overlap-cluster bbox centers for intersection seeds (world-space). */
+export function roadIntersectionClusterCentersDebug(): Array<{ worldX: number; worldY: number }> {
+    return _compiled.roadIntersectionClusterCentersWorld ?? [];
+}
+
 /** Return semantic road width for any road area tile (0 for non-road tiles). */
 export function roadAreaWidthAt(tx: number, ty: number): number {
     const lx = tx - _compiled.originTx;

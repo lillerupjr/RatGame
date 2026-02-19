@@ -239,8 +239,15 @@ export type CompiledKenneyMap = {
     blockedTiles: Set<string>;
     roadAreaMaskWorld: Uint8Array;
     roadAreaWidthWorld: Uint8Array;
+    roadCenterMaskHWorld: Uint8Array;
+    roadCenterWidthHWorld: Uint8Array;
+    roadCenterMaskVWorld: Uint8Array;
+    roadCenterWidthVWorld: Uint8Array;
     roadCenterMaskWorld: Uint8Array;
     roadCenterWidthWorld: Uint8Array;
+    roadIntersectionMaskWorld: Uint8Array;
+    roadIntersectionSeedsWorld: Array<{ tx: number; ty: number }>;
+    roadIntersectionClusterCentersWorld: Array<{ worldX: number; worldY: number }>;
     isRoadWorld(x: number, y: number): boolean;
 };
 
@@ -683,8 +690,15 @@ export function compileKenneyMapFromTable(
     const worldH = def.h | 0;
     const roadAreaMaskWorld = new Uint8Array(worldW * worldH);
     const roadAreaWidthWorld = new Uint8Array(worldW * worldH);
+    const roadCenterMaskHWorld = new Uint8Array(worldW * worldH);
+    const roadCenterWidthHWorld = new Uint8Array(worldW * worldH);
+    const roadCenterMaskVWorld = new Uint8Array(worldW * worldH);
+    const roadCenterWidthVWorld = new Uint8Array(worldW * worldH);
     const roadCenterMaskWorld = new Uint8Array(worldW * worldH);
     const roadCenterWidthWorld = new Uint8Array(worldW * worldH);
+    const roadIntersectionMaskWorld = new Uint8Array(worldW * worldH);
+    const roadIntersectionSeedsWorld: Array<{ tx: number; ty: number }> = [];
+    const roadIntersectionClusterCentersWorld: Array<{ worldX: number; worldY: number }> = [];
     const worldMaxTx = originTx + worldW - 1;
     const worldMaxTy = originTy + worldH - 1;
     const worldIndex = (txWorld: number, tyWorld: number): number => {
@@ -719,13 +733,27 @@ export function compileKenneyMapFromTable(
         const w = Math.max(0, Math.min(255, width | 0));
         if (w > roadAreaWidthWorld[idx]) roadAreaWidthWorld[idx] = w;
     };
-    const markRoadCenterWorld = (txWorld: number, tyWorld: number, width: number) => {
+    const markRoadCenterHWorld = (txWorld: number, tyWorld: number, width: number) => {
         if (!worldInBounds(txWorld, tyWorld)) return;
         const idx = worldIndex(txWorld, tyWorld);
         if (roadAreaMaskWorld[idx] !== 1) return;
-        roadCenterMaskWorld[idx] = 1;
+        roadCenterMaskHWorld[idx] = 1;
         const w = Math.max(0, Math.min(255, width | 0));
-        if (w > roadCenterWidthWorld[idx]) roadCenterWidthWorld[idx] = w;
+        if (w > roadCenterWidthHWorld[idx]) roadCenterWidthHWorld[idx] = w;
+        roadCenterMaskWorld[idx] = (roadCenterMaskHWorld[idx] | roadCenterMaskVWorld[idx]) as 0 | 1;
+        const mergedW = Math.max(roadCenterWidthHWorld[idx], roadCenterWidthVWorld[idx]) | 0;
+        roadCenterWidthWorld[idx] = mergedW;
+    };
+    const markRoadCenterVWorld = (txWorld: number, tyWorld: number, width: number) => {
+        if (!worldInBounds(txWorld, tyWorld)) return;
+        const idx = worldIndex(txWorld, tyWorld);
+        if (roadAreaMaskWorld[idx] !== 1) return;
+        roadCenterMaskVWorld[idx] = 1;
+        const w = Math.max(0, Math.min(255, width | 0));
+        if (w > roadCenterWidthVWorld[idx]) roadCenterWidthVWorld[idx] = w;
+        roadCenterMaskWorld[idx] = (roadCenterMaskHWorld[idx] | roadCenterMaskVWorld[idx]) as 0 | 1;
+        const mergedW = Math.max(roadCenterWidthHWorld[idx], roadCenterWidthVWorld[idx]) | 0;
+        roadCenterWidthWorld[idx] = mergedW;
     };
     for (let i = 0; i < mergedWorldRoadRects.length; i++) {
         const r = mergedWorldRoadRects[i];
@@ -742,7 +770,7 @@ export function compileKenneyMapFromTable(
             const y1 = sy + Math.floor(rh / 2);
             for (let yy = y0; yy <= y1; yy++) {
                 for (let xx = sx; xx < sx + rw; xx++) {
-                    markRoadCenterWorld(xx, yy, rh);
+                    markRoadCenterHWorld(xx, yy, rh);
                 }
             }
             if (rw === rh) {
@@ -750,7 +778,7 @@ export function compileKenneyMapFromTable(
                 const x1 = sx + Math.floor(rw / 2);
                 for (let xx = x0; xx <= x1; xx++) {
                     for (let yy = sy; yy < sy + rh; yy++) {
-                        markRoadCenterWorld(xx, yy, rw);
+                        markRoadCenterVWorld(xx, yy, rw);
                     }
                 }
             }
@@ -759,8 +787,121 @@ export function compileKenneyMapFromTable(
             const x1 = sx + Math.floor(rw / 2);
             for (let xx = x0; xx <= x1; xx++) {
                 for (let yy = sy; yy < sy + rh; yy++) {
-                    markRoadCenterWorld(xx, yy, rw);
+                    markRoadCenterVWorld(xx, yy, rw);
                 }
+            }
+        }
+    }
+    const isOverlapAt = (x: number, y: number): boolean => {
+        if (!worldInBounds(x, y)) return false;
+        const i = worldIndex(x, y);
+        return roadCenterMaskHWorld[i] === 1 && roadCenterMaskVWorld[i] === 1;
+    };
+    {
+        const visitedOverlap = new Uint8Array(worldW * worldH);
+        const qx: number[] = [];
+        const qy: number[] = [];
+        const neighbors4 = [
+            { dx: -1, dy: 0 },
+            { dx: 1, dy: 0 },
+            { dx: 0, dy: -1 },
+            { dx: 0, dy: 1 },
+        ];
+
+        for (let tyWorld = originTy; tyWorld <= worldMaxTy; tyWorld++) {
+            for (let txWorld = originTx; txWorld <= worldMaxTx; txWorld++) {
+                const startIdx = worldIndex(txWorld, tyWorld);
+                if (!isOverlapAt(txWorld, tyWorld)) continue;
+                if (visitedOverlap[startIdx] === 1) continue;
+
+                visitedOverlap[startIdx] = 1;
+                qx.length = 0;
+                qy.length = 0;
+                qx.push(txWorld);
+                qy.push(tyWorld);
+                let qHead = 0;
+
+                let minX = txWorld;
+                let maxX = txWorld;
+                let minY = tyWorld;
+                let maxY = tyWorld;
+                let wH = 0;
+                let wV = 0;
+
+                while (qHead < qx.length) {
+                    const cx = qx[qHead];
+                    const cy = qy[qHead];
+                    qHead++;
+                    const ci = worldIndex(cx, cy);
+
+                    if (cx < minX) minX = cx;
+                    if (cx > maxX) maxX = cx;
+                    if (cy < minY) minY = cy;
+                    if (cy > maxY) maxY = cy;
+
+                    // Footprint axis widths:
+                    // X span (wH) comes from vertical-road band width.
+                    if (roadCenterMaskVWorld[ci] === 1) {
+                        const w = roadCenterWidthVWorld[ci] | 0;
+                        if (w > wH) wH = w;
+                    }
+                    // Y span (wV) comes from horizontal-road band width.
+                    if (roadCenterMaskHWorld[ci] === 1) {
+                        const w = roadCenterWidthHWorld[ci] | 0;
+                        if (w > wV) wV = w;
+                    }
+
+                    for (let ni = 0; ni < neighbors4.length; ni++) {
+                        const nx = cx + neighbors4[ni].dx;
+                        const ny = cy + neighbors4[ni].dy;
+                        if (!isOverlapAt(nx, ny)) continue;
+                        const niIdx = worldIndex(nx, ny);
+                        if (visitedOverlap[niIdx] === 1) continue;
+                        visitedOverlap[niIdx] = 1;
+                        qx.push(nx);
+                        qy.push(ny);
+                    }
+                }
+
+                wH = Math.max(1, wH | 0);
+                wV = Math.max(1, wV | 0);
+
+                // Half-tile anchor in tile-center space (x2 units).
+                const anchor2X = minX + maxX + 1;
+                const anchor2Y = minY + maxY + 1;
+
+                const rectBoundsFromCenter2 = (c2: number, w: number): { a: number; b: number } => {
+                    // Convert half-tile center (2x units) into inclusive tile bounds.
+                    const a = Math.floor((c2 - w) / 2);
+                    return { a, b: a + w - 1 };
+                };
+
+                const xb = rectBoundsFromCenter2(anchor2X, wH);
+                const yb = rectBoundsFromCenter2(anchor2Y, wV);
+
+                const x0 = xb.a;
+                const x1 = xb.b;
+                const y0 = yb.a;
+                const y1 = yb.b;
+
+                for (let yy = y0; yy <= y1; yy++) {
+                    for (let xx = x0; xx <= x1; xx++) {
+                        if (!worldInBounds(xx, yy)) continue;
+                        const ii = worldIndex(xx, yy);
+                        if (roadAreaMaskWorld[ii] !== 1) continue;
+                        roadIntersectionMaskWorld[ii] = 1;
+                    }
+                }
+
+                // Debug markers consumed by overlay.
+                roadIntersectionSeedsWorld.push({
+                    tx: Math.floor((anchor2X - 1) / 2),
+                    ty: Math.floor((anchor2Y - 1) / 2),
+                });
+                roadIntersectionClusterCentersWorld.push({
+                    worldX: (anchor2X * 0.5) * KENNEY_TILE_WORLD,
+                    worldY: (anchor2Y * 0.5) * KENNEY_TILE_WORLD,
+                });
             }
         }
     }
@@ -2015,8 +2156,15 @@ export function compileKenneyMapFromTable(
         blockedTiles,
         roadAreaMaskWorld,
         roadAreaWidthWorld,
+        roadCenterMaskHWorld,
+        roadCenterWidthHWorld,
+        roadCenterMaskVWorld,
+        roadCenterWidthVWorld,
         roadCenterMaskWorld,
         roadCenterWidthWorld,
+        roadIntersectionMaskWorld,
+        roadIntersectionSeedsWorld,
+        roadIntersectionClusterCentersWorld,
         isRoadWorld,
     };
 

@@ -177,4 +177,113 @@ describe("canonical road semantic world masks", () => {
     expect(compiled.roadCenterWidthWorld[idx(10, 11)]).toBe(2);
     expect(compiled.roadCenterWidthWorld[idx(39, 11)]).toBe(2);
   });
+
+  it("builds width-aware roadIntersectionMaskWorld for mixed-width crossings", () => {
+    const mapDef: TableMapDef = {
+      id: "road_intersection_mixed_width",
+      w: 40,
+      h: 40,
+      cells: [],
+      roadSemanticRects: [
+        { x: 5, y: 15, w: 30, h: 5 }, // horizontal width 5
+        { x: 20, y: 8, w: 2, h: 24 }, // vertical width 2
+      ],
+      stamps: [
+        { x: 5, y: 15, w: 30, h: 5, type: "road", z: 0 },
+        { x: 20, y: 8, w: 2, h: 24, type: "road", z: 0 },
+      ],
+    };
+    const compiled = compileKenneyMapFromTable(mapDef, { runSeed: 9, mapId: mapDef.id });
+    const idx = (tx: number, ty: number) => (tx - compiled.originTx) + (ty - compiled.originTy) * compiled.width;
+
+    // Straight-only centerline segment away from crossing should not be intersection.
+    expect(compiled.roadCenterMaskWorld[idx(8, 17)]).toBe(1);
+    expect(compiled.roadIntersectionMaskWorld[idx(8, 17)]).toBe(0);
+
+    // Intersection mask must stay inside road area.
+    for (let ty = compiled.originTy; ty < compiled.originTy + compiled.height; ty++) {
+      for (let tx = compiled.originTx; tx < compiled.originTx + compiled.width; tx++) {
+        const i = idx(tx, ty);
+        if (compiled.roadIntersectionMaskWorld[i] === 1) {
+          expect(compiled.roadAreaMaskWorld[i]).toBe(1);
+        }
+      }
+    }
+
+    // Mandatory metric: 5x2 crossing produces exactly 10 intersection tiles.
+    let intersectionCount = 0;
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+    for (let i = 0; i < compiled.roadIntersectionMaskWorld.length; i++) {
+      if (compiled.roadIntersectionMaskWorld[i] !== 1) continue;
+      intersectionCount++;
+      const ty = Math.floor(i / compiled.width) + compiled.originTy;
+      const tx = (i % compiled.width) + compiled.originTx;
+      if (tx < minX) minX = tx;
+      if (tx > maxX) maxX = tx;
+      if (ty < minY) minY = ty;
+      if (ty > maxY) maxY = ty;
+    }
+    expect(intersectionCount).toBe(10);
+    const bboxW = maxX - minX + 1;
+    const bboxH = maxY - minY + 1;
+    expect(bboxW * bboxH).toBe(10);
+    const dims = [bboxW, bboxH].sort((a, b) => a - b);
+    expect(dims).toEqual([2, 5]);
+
+    // Placement invariant: cyan bbox center must match overlap-component bbox center (half-tile space).
+    let oMinX = Number.POSITIVE_INFINITY;
+    let oMinY = Number.POSITIVE_INFINITY;
+    let oMaxX = Number.NEGATIVE_INFINITY;
+    let oMaxY = Number.NEGATIVE_INFINITY;
+    for (let ty = compiled.originTy; ty < compiled.originTy + compiled.height; ty++) {
+      for (let tx = compiled.originTx; tx < compiled.originTx + compiled.width; tx++) {
+        const i = idx(tx, ty);
+        const overlap = compiled.roadCenterMaskHWorld[i] === 1 && compiled.roadCenterMaskVWorld[i] === 1;
+        if (!overlap) continue;
+        if (tx < oMinX) oMinX = tx;
+        if (tx > oMaxX) oMaxX = tx;
+        if (ty < oMinY) oMinY = ty;
+        if (ty > oMaxY) oMaxY = ty;
+      }
+    }
+    const overlapAnchor2X = oMinX + oMaxX + 1;
+    const overlapAnchor2Y = oMinY + oMaxY + 1;
+    const cyanAnchor2X = minX + maxX + 1;
+    const cyanAnchor2Y = minY + maxY + 1;
+    expect(cyanAnchor2X).toBe(overlapAnchor2X);
+    expect(cyanAnchor2Y).toBe(overlapAnchor2Y);
+
+    // Placement must align to overlap-component anchor with exact wH x wV footprint.
+    let wH = 0;
+    let wV = 0;
+    for (let ty = compiled.originTy; ty < compiled.originTy + compiled.height; ty++) {
+      for (let tx = compiled.originTx; tx < compiled.originTx + compiled.width; tx++) {
+        const i = idx(tx, ty);
+        if (compiled.roadCenterMaskHWorld[i] === 1 && compiled.roadCenterMaskVWorld[i] === 1) {
+          // Match runtime footprint-axis convention:
+          // X span width from V band, Y span width from H band.
+          wH = Math.max(wH, compiled.roadCenterWidthVWorld[i] | 0);
+          wV = Math.max(wV, compiled.roadCenterWidthHWorld[i] | 0);
+        }
+      }
+    }
+    const rectBoundsFromCenter2 = (c2: number, w: number): { a: number; b: number } => {
+      const a = Math.floor((c2 - w) / 2);
+      return { a, b: a + w - 1 };
+    };
+    const xb = rectBoundsFromCenter2(overlapAnchor2X, wH);
+    const yb = rectBoundsFromCenter2(overlapAnchor2Y, wV);
+    const expectedX0 = xb.a;
+    const expectedX1 = xb.b;
+    const expectedY0 = yb.a;
+    const expectedY1 = yb.b;
+    for (let yy = expectedY0; yy <= expectedY1; yy++) {
+      for (let xx = expectedX0; xx <= expectedX1; xx++) {
+        expect(compiled.roadIntersectionMaskWorld[idx(xx, yy)]).toBe(1);
+      }
+    }
+  });
 });

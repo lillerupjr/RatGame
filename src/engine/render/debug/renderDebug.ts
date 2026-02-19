@@ -7,6 +7,9 @@ import {
   getRampFacesForDebug,
   isRoadAreaTile,
   isRoadCenterTile,
+  roadIntersectionClusterCentersDebug,
+  roadIntersectionSeedsDebug,
+  isRoadIntersectionTile,
   getTile,
   getWalkOutlineLocalPx,
   isHoleTile,
@@ -246,7 +249,8 @@ export function drawRoadSemanticOverlay(ctx: DebugOverlayContext, show: boolean,
     for (let tx = viewRect.minTx; tx <= viewRect.maxTx; tx++) {
       const isArea = isRoadAreaTile(tx, ty);
       const isCenter = isRoadCenterTile(tx, ty);
-      if (!isArea && !isCenter) continue;
+      const isIntersection = isRoadIntersectionTile(tx, ty);
+      if (!isArea && !isCenter && !isIntersection) continue;
 
       const wx0 = tx * T;
       const wy0 = ty * T;
@@ -293,6 +297,60 @@ export function drawRoadSemanticOverlay(ctx: DebugOverlayContext, show: boolean,
         c.closePath();
         c.fill();
       }
+
+      if (isIntersection) {
+        c.fillStyle = "rgba(0,255,255,0.55)";
+        c.beginPath();
+        c.moveTo(pNW.x, pNW.y);
+        c.lineTo(pNE.x, pNE.y);
+        c.lineTo(pSE.x, pSE.y);
+        c.lineTo(pSW.x, pSW.y);
+        c.closePath();
+        c.fill();
+      }
+    }
+  }
+
+  const seeds = roadIntersectionSeedsDebug();
+  if (seeds.length > 0) {
+    c.fillStyle = "rgba(255,0,255,0.95)";
+    for (let i = 0; i < seeds.length; i++) {
+      const s = seeds[i];
+      if (s.tx < viewRect.minTx || s.tx > viewRect.maxTx || s.ty < viewRect.minTy || s.ty > viewRect.maxTy) continue;
+      const wx = (s.tx + 0.5) * T;
+      const wy = (s.ty + 0.5) * T;
+      const z = ctx.tileHAtWorld(wx, wy);
+      const pN = ctx.toScreenAtZ(wx, s.ty * T, z);
+      const pE = ctx.toScreenAtZ((s.tx + 1) * T, wy, z);
+      const pS = ctx.toScreenAtZ(wx, (s.ty + 1) * T, z);
+      const pW = ctx.toScreenAtZ(s.tx * T, wy, z);
+      const pC = ctx.toScreenAtZ(wx, wy, z);
+      const t = 0.7;
+      const lerp = (a: number, b: number) => a + (b - a) * t;
+      c.beginPath();
+      c.moveTo(lerp(pN.x, pC.x), lerp(pN.y, pC.y));
+      c.lineTo(lerp(pE.x, pC.x), lerp(pE.y, pC.y));
+      c.lineTo(lerp(pS.x, pC.x), lerp(pS.y, pC.y));
+      c.lineTo(lerp(pW.x, pC.x), lerp(pW.y, pC.y));
+      c.closePath();
+      c.fill();
+    }
+  }
+
+  const centers = roadIntersectionClusterCentersDebug();
+  if (centers.length > 0) {
+    c.fillStyle = "rgba(255,255,255,0.95)";
+    for (let i = 0; i < centers.length; i++) {
+      const cc = centers[i];
+      const txf = cc.worldX / T;
+      const tyf = cc.worldY / T;
+      if (txf < viewRect.minTx || txf > viewRect.maxTx + 1) continue;
+      if (tyf < viewRect.minTy || tyf > viewRect.maxTy + 1) continue;
+      const z = ctx.tileHAtWorld(cc.worldX, cc.worldY);
+      const p = ctx.toScreenAtZ(cc.worldX, cc.worldY, z);
+      c.beginPath();
+      c.arc(p.x, p.y, 2, 0, Math.PI * 2);
+      c.fill();
     }
   }
 
