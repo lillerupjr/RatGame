@@ -48,6 +48,7 @@ export interface RoadMarkingInputs {
   roadBands: RoadBand[];
   roadIntersectionMaskWorld: Uint8Array;
   roadCrossingMaskWorld: Uint8Array;
+  roadCrossingDirWorld: Uint8Array;
   roadStopMaskWorld?: Uint8Array;
   roadStopDirWorld?: Uint8Array;
   emitStopbarCrossingOverlay?: boolean;

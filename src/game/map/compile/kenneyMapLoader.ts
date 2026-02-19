@@ -1224,6 +1224,7 @@ export function compileKenneyMapFromTable(
         roadBands,
         roadIntersectionMaskWorld,
         roadCrossingMaskWorld,
+        roadCrossingDirWorld,
         roadStopMaskWorld,
         roadStopDirWorld,
         emitStopbarCrossingOverlay: true,

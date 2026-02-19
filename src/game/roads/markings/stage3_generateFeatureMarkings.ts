@@ -3,7 +3,7 @@ import {
   ROAD_CROSSING_VARIANT_INDEX,
   ROAD_STOP_CROSSING_OFFSET_TILES,
 } from "../roadMarkings";
-import type { MarkingPiece, RoadContext, RoadMarkingInputs } from "./types";
+import { ROAD_AXIS_EW, ROAD_AXIS_NS, type MarkingPiece, type RoadContext, type RoadMarkingInputs } from "./types";
 
 const ROAD_DIR_N = 1;
 const ROAD_DIR_E = 2;
@@ -24,7 +24,7 @@ function dirToDelta(dir: number): { dx: number; dy: number } {
   return { dx: 0, dy: 0 };
 }
 
-export function generateFeatureMarkings(_context: RoadContext, inputs: RoadMarkingInputs): MarkingPiece[] {
+export function generateFeatureMarkings(context: RoadContext, inputs: RoadMarkingInputs): MarkingPiece[] {
   const out: MarkingPiece[] = [];
   const dedupe = new Set<string>();
   const inBounds = (tx: number, ty: number): boolean => {
@@ -34,6 +34,13 @@ export function generateFeatureMarkings(_context: RoadContext, inputs: RoadMarki
       && ty < inputs.originTy + inputs.h;
   };
   const idx = (tx: number, ty: number): number => (tx - inputs.originTx) + (ty - inputs.originTy) * inputs.w;
+  const crossingRotationAt = (tx: number, ty: number, dir: number): 0 | 1 => {
+    const axis = context.axis[idx(tx, ty)] | 0;
+    if (axis === ROAD_AXIS_EW) return 0;
+    if (axis === ROAD_AXIS_NS) return 1;
+    if (dir === ROAD_DIR_N || dir === ROAD_DIR_S) return 1;
+    return 0;
+  };
   const push = (
     anchorTx: number,
     anchorTy: number,
@@ -65,13 +72,15 @@ export function generateFeatureMarkings(_context: RoadContext, inputs: RoadMarki
       const i = idx(tx, ty);
 
       if (inputs.roadCrossingMaskWorld[i] === 1) {
+        const dir = inputs.roadCrossingDirWorld[i] | 0;
+        const rot = crossingRotationAt(tx, ty, dir);
         push(
           tx + 0.5,
           ty + 0.5,
           tx,
           ty,
           ROAD_CROSSING_FULL_VARIANT_INDEX,
-          0,
+          rot,
           `crossing_full_${tx}_${ty}`,
         );
       }
