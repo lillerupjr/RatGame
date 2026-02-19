@@ -1,5 +1,5 @@
 {
-  "id": "avenue",
+  "id": "avenue3",
   "buildingPackId": "avenue_buildings",
   "width": 24,
   "height": 24,
@@ -10,7 +10,10 @@
 
     { "x": 0, "y": 0, "w": 24, "h": 24, "type": "sidewalk" },
 
-    { "x": 12, "y": 10, "w": 8, "h": 4, "type": "park" },
+    { "x": 2, "y": 9, "w": 8, "h": 6, "type": "building" },
+    { "x": 14, "y": 9, "w": 8, "h": 6, "type": "building" },
+
+    { "x": 11, "y": 9, "w": 2, "h": 10, "type": "road" },
 
     { "x": 0, "y": 3, "w": 24, "h": 5, "type": "road" },
     { "x": 0, "y": 16, "w": 24, "h": 5, "type": "road" },

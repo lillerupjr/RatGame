@@ -4,7 +4,7 @@
   "chunkGrid": {
     "id": "china_town",
     "cols": 1,
-    "rows": 12
+    "rows": 9
   },
   "cells": [
     { "x": 5, "y": 256, "type": "spawn" }

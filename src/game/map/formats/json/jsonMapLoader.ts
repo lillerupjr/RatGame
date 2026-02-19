@@ -13,23 +13,73 @@ import type {
 import type { MapSkinBundle, MapSkinId } from "../../../content/mapSkins";
 import type { BuildingPackId } from "../../../content/buildings";
 
-const RAW_CHUNK_MAPS = import.meta.glob("../../authored/maps/jsonMaps/chunks/*.json", {
+const RAW_CHUNK_MAPS = import.meta.glob("../../authored/maps/jsonMaps/chunks/**/*.json", {
   eager: true,
   import: "default",
 }) as Record<string, unknown>;
 
-const CHUNK_BY_ID: Map<string, Record<string, unknown>> = (() => {
-  const out = new Map<string, Record<string, unknown>>();
-  for (const json of Object.values(RAW_CHUNK_MAPS)) {
-    if (!isRecord(json)) continue;
-    const id = json.id;
+type ChunkSource = { json: Record<string, unknown>; path: string };
+
+const CHUNK_REGISTRY: {
+  byId: Map<string, ChunkSource>;
+  pools: Map<string, ChunkSource[]>;
+} = (() => {
+  const byId = new Map<string, ChunkSource>();
+  const pools = new Map<string, ChunkSource[]>();
+  const addPool = (keyRaw: string, src: ChunkSource) => {
+    const key = keyRaw.trim();
+    if (!key) return;
+    const list = pools.get(key);
+    if (list) list.push(src);
+    else pools.set(key, [src]);
+  };
+
+  for (const [path, value] of Object.entries(RAW_CHUNK_MAPS)) {
+    if (!isRecord(value)) continue;
+    const src: ChunkSource = { json: value, path };
+    const id = value.id;
     if (typeof id === "string" && id.trim()) {
-      out.set(id.trim(), json);
+      byId.set(id.trim(), src);
+      addPool(id.trim(), src);
+      addPool(id.trim().toLowerCase(), src);
+    }
+
+    // Pool key by folder name: chunks/<folder>/*.json
+    const normalized = path.replace(/\\/g, "/");
+    const folderMatch = normalized.match(/\/chunks\/([^/]+)\/[^/]+\.json$/);
+    if (folderMatch && folderMatch[1]) {
+      addPool(folderMatch[1], src);
+      addPool(folderMatch[1].toLowerCase(), src);
+    }
+
+    // Pool key by top-level file name: chunks/<name>.json
+    const topLevelMatch = normalized.match(/\/chunks\/([^/]+)\.json$/);
+    if (topLevelMatch && topLevelMatch[1]) {
+      addPool(topLevelMatch[1], src);
+      addPool(topLevelMatch[1].toLowerCase(), src);
     }
   }
-  return out;
+
+  return { byId, pools };
 })();
 const CHUNK_SIZE = 24;
+
+function pickChunkSource(chunkId: string): ChunkSource | null {
+  const pool = CHUNK_REGISTRY.pools.get(chunkId) ?? CHUNK_REGISTRY.pools.get(chunkId.toLowerCase());
+  if (pool && pool.length > 0) {
+    // Keep random selection to avoid wiring each new chunk manually.
+    const idx = Math.floor(Math.random() * pool.length);
+    const candidate = pool[idx];
+    // Avoid recursive chunk-grid chunk definitions as leaf chunks.
+    if (!("chunkGrid" in candidate.json)) return candidate;
+    const leafPool = pool.filter((p) => !("chunkGrid" in p.json));
+    if (leafPool.length > 0) return leafPool[Math.floor(Math.random() * leafPool.length)];
+  }
+
+  const byId = CHUNK_REGISTRY.byId.get(chunkId) ?? CHUNK_REGISTRY.byId.get(chunkId.toLowerCase());
+  if (byId && !("chunkGrid" in byId.json)) return byId;
+  return byId ?? null;
+}
 
 type JsonMapCell = {
   x: number;
@@ -754,16 +804,10 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
   const mapLights = optionalMapLightsField(data, source);
 
   if (chunkGrid) {
-    const chunkData = CHUNK_BY_ID.get(chunkGrid.id);
-    if (!chunkData) {
+    const sampleChunkSource = pickChunkSource(chunkGrid.id);
+    if (!sampleChunkSource) {
       throw new Error(
         `JSON map loader${formatSource(source)}: unknown chunk id "${chunkGrid.id}".`
-      );
-    }
-    const chunkDef = loadTableMapDefFromJson(chunkData, `chunk ${chunkGrid.id}`);
-    if (chunkDef.w !== CHUNK_SIZE || chunkDef.h !== CHUNK_SIZE) {
-      throw new Error(
-        `JSON map loader${formatSource(source)}: chunk "${chunkGrid.id}" must be ${CHUNK_SIZE}x${CHUNK_SIZE}.`
       );
     }
     const expandedCells: TableMapCell[] = [];
@@ -773,6 +817,18 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
 
     for (let cy = 0; cy < chunkGrid.rows; cy++) {
       for (let cx = 0; cx < chunkGrid.cols; cx++) {
+        const chunkSource = pickChunkSource(chunkGrid.id);
+        if (!chunkSource) {
+          throw new Error(
+            `JSON map loader${formatSource(source)}: unknown chunk id "${chunkGrid.id}".`
+          );
+        }
+        const chunkDef = loadTableMapDefFromJson(chunkSource.json, `chunk ${chunkGrid.id}`);
+        if (chunkDef.w !== CHUNK_SIZE || chunkDef.h !== CHUNK_SIZE) {
+          throw new Error(
+            `JSON map loader${formatSource(source)}: chunk "${chunkGrid.id}" candidate "${chunkDef.id}" must be ${CHUNK_SIZE}x${CHUNK_SIZE}.`
+          );
+        }
         const ox = cx * chunkDef.w;
         const oy = cy * chunkDef.h;
         for (let i = 0; i < chunkDef.cells.length; i++) {
@@ -823,8 +879,8 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
 
     return {
       id,
-      w: chunkDef.w * chunkGrid.cols,
-      h: chunkDef.h * chunkGrid.rows,
+      w: CHUNK_SIZE * chunkGrid.cols,
+      h: CHUNK_SIZE * chunkGrid.rows,
       mapSkinId,
       buildingPackId,
       mapSkinDefaults,

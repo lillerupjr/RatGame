@@ -8,7 +8,7 @@
     { "x": 0, "y": 2, "w": 24, "h": 2, "type": "sidewalk" },
     { "x": 0, "y": 20, "w": 24, "h": 2, "type": "sidewalk" },
 
-    { "x": 2, "y": 4,  "w": 20, "h": 16, "type": "road" },
+    { "x": 2, "y": 4,  "w": 20, "h": 16, "type": "asphalt" },
 
     { "x": 22, "y": 0,  "w": 2, "h": 24, "type": "road" },
     { "x": 0, "y": 0,  "w": 2, "h": 24, "type": "road" }
@@ -34,8 +34,6 @@
     { "x": 17, "y": 14, "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
     { "x": 15, "y": 17, "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
     { "x": 17, "y": 17, "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
-
-    { "x": 21, "y": 0, "z": 0, "zVisualOffsetUnits": -3, "type": "prop", "propId": "boat2", "w": 1, "h": 1 },
 
     { "x": 15, "y": 23, "z": 0, "zVisualOffsetUnits": -3, "type": "prop", "propId": "boat3", "w": 1, "h": 1 },
     { "x": 8, "y": 1, "z": 0, "zVisualOffsetUnits": -3, "type": "prop", "propId": "boat4", "w": 1, "h": 1 },
