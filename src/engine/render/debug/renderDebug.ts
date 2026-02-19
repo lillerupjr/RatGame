@@ -9,7 +9,10 @@ import {
   isRoadCenterTile,
   isRoadCrossingTile,
   isRoadStopTile,
-  roadIntersectionClusterCentersDebug,
+  roadIntersectionBoundsDebug,
+  roadCrossingDirAt,
+  roadIntersectionCentersDebug,
+  roadStopDirAt,
   roadIntersectionSeedsDebug,
   isRoadIntersectionTile,
   getTile,
@@ -238,11 +241,32 @@ export function drawTriggerOverlay(ctx: DebugOverlayContext, show: boolean) {
 }
 
 function roadDebugTagAt(tx: number, ty: number): string | null {
+  const dirToCardinal = (dir: number): "N" | "E" | "S" | "W" | null => {
+    if (dir === 1) return "N";
+    if (dir === 2) return "E";
+    if (dir === 3) return "S";
+    if (dir === 4) return "W";
+    return null;
+  };
   if (!isRoadAreaTile(tx, ty)) return null;
   if (isRoadIntersectionTile(tx, ty)) return "INTERSECT";
-  if (isRoadCrossingTile(tx, ty)) return "CROSSING";
-  if (isRoadStopTile(tx, ty)) return "STOP_BAR";
+  if (isRoadCrossingTile(tx, ty)) {
+    const dir = dirToCardinal(roadCrossingDirAt(tx, ty));
+    return dir ? `CROSSING:${dir}` : "CROSSING";
+  }
+  if (isRoadStopTile(tx, ty)) {
+    const dir = dirToCardinal(roadStopDirAt(tx, ty));
+    return dir ? `STOP_BAR:${dir}` : "STOP_BAR";
+  }
   return null;
+}
+
+function roadDirTint(dir: number): string {
+  if (dir === 1) return "rgba(255,80,80,0.45)"; // N
+  if (dir === 2) return "rgba(80,200,255,0.45)"; // E
+  if (dir === 3) return "rgba(80,255,120,0.45)"; // S
+  if (dir === 4) return "rgba(255,210,80,0.45)"; // W
+  return "rgba(255,255,255,0.35)";
 }
 
 export function drawRoadSemanticOverlay(ctx: DebugOverlayContext, show: boolean, viewRect: ViewRect) {
@@ -319,6 +343,30 @@ export function drawRoadSemanticOverlay(ctx: DebugOverlayContext, show: boolean,
         c.fill();
       }
 
+      const crossingDir = isRoadCrossingTile(tx, ty) ? roadCrossingDirAt(tx, ty) : 0;
+      const stopDir = isRoadStopTile(tx, ty) ? roadStopDirAt(tx, ty) : 0;
+      const dir = crossingDir || stopDir;
+      if (dir !== 0) {
+        const inset = 0.2;
+        const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+        const qNWx = lerp(pNW.x, pC.x, inset);
+        const qNWy = lerp(pNW.y, pC.y, inset);
+        const qNEx = lerp(pNE.x, pC.x, inset);
+        const qNEy = lerp(pNE.y, pC.y, inset);
+        const qSEx = lerp(pSE.x, pC.x, inset);
+        const qSEy = lerp(pSE.y, pC.y, inset);
+        const qSWx = lerp(pSW.x, pC.x, inset);
+        const qSWy = lerp(pSW.y, pC.y, inset);
+        c.fillStyle = roadDirTint(dir);
+        c.beginPath();
+        c.moveTo(qNWx, qNWy);
+        c.lineTo(qNEx, qNEy);
+        c.lineTo(qSEx, qSEy);
+        c.lineTo(qSWx, qSWy);
+        c.closePath();
+        c.fill();
+      }
+
       const tag = roadDebugTagAt(tx, ty);
       if (!tag) continue;
       c.save();
@@ -360,20 +408,45 @@ export function drawRoadSemanticOverlay(ctx: DebugOverlayContext, show: boolean,
     }
   }
 
-  const centers = roadIntersectionClusterCentersDebug();
+  const centers = roadIntersectionCentersDebug();
   if (centers.length > 0) {
-    c.fillStyle = "rgba(255,255,255,0.95)";
+    c.fillStyle = "rgba(255,0,255,0.95)";
     for (let i = 0; i < centers.length; i++) {
       const cc = centers[i];
-      const txf = cc.worldX / T;
-      const tyf = cc.worldY / T;
-      if (txf < viewRect.minTx || txf > viewRect.maxTx + 1) continue;
-      if (tyf < viewRect.minTy || tyf > viewRect.maxTy + 1) continue;
-      const z = ctx.tileHAtWorld(cc.worldX, cc.worldY);
-      const p = ctx.toScreenAtZ(cc.worldX, cc.worldY, z);
+      if (cc.tx < viewRect.minTx || cc.tx > viewRect.maxTx || cc.ty < viewRect.minTy || cc.ty > viewRect.maxTy) continue;
+      const wx = (cc.tx + 0.5) * T;
+      const wy = (cc.ty + 0.5) * T;
+      const z = ctx.tileHAtWorld(wx, wy);
+      const p = ctx.toScreenAtZ(wx, wy, z);
+      c.fillRect(p.x - 3, p.y - 3, 6, 6);
+    }
+  }
+
+  const bounds = roadIntersectionBoundsDebug();
+  if (bounds.length > 0) {
+    c.strokeStyle = "rgba(255,0,255,0.95)";
+    c.lineWidth = 1.5;
+    for (let i = 0; i < bounds.length; i++) {
+      const b = bounds[i];
+      if (b.maxX < viewRect.minTx || b.minX > viewRect.maxTx || b.maxY < viewRect.minTy || b.minY > viewRect.maxTy) continue;
+      const wx0 = b.minX * T;
+      const wy0 = b.minY * T;
+      const wx1 = (b.maxX + 1) * T;
+      const wy1 = (b.maxY + 1) * T;
+      const cx = (b.minX + b.maxX + 1) * 0.5 * T;
+      const cy = (b.minY + b.maxY + 1) * 0.5 * T;
+      const z = ctx.tileHAtWorld(cx, cy);
+      const pNW = ctx.toScreenAtZ(wx0, wy0, z);
+      const pNE = ctx.toScreenAtZ(wx1, wy0, z);
+      const pSE = ctx.toScreenAtZ(wx1, wy1, z);
+      const pSW = ctx.toScreenAtZ(wx0, wy1, z);
       c.beginPath();
-      c.arc(p.x, p.y, 2, 0, Math.PI * 2);
-      c.fill();
+      c.moveTo(pNW.x, pNW.y);
+      c.lineTo(pNE.x, pNE.y);
+      c.lineTo(pSE.x, pSE.y);
+      c.lineTo(pSW.x, pSW.y);
+      c.closePath();
+      c.stroke();
     }
   }
 

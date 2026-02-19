@@ -247,7 +247,11 @@ export type CompiledKenneyMap = {
     roadCenterWidthWorld: Uint8Array;
     roadIntersectionMaskWorld: Uint8Array;
     roadCrossingMaskWorld: Uint8Array;
+    roadCrossingDirWorld: Uint8Array;
     roadStopMaskWorld: Uint8Array;
+    roadStopDirWorld: Uint8Array;
+    roadIntersectionCenterTilesWorld: Array<{ tx: number; ty: number }>;
+    roadIntersectionBoundsWorld: Array<{ minX: number; maxX: number; minY: number; maxY: number }>;
     roadIntersectionSeedsWorld: Array<{ tx: number; ty: number }>;
     roadIntersectionClusterCentersWorld: Array<{ worldX: number; worldY: number }>;
     isRoadWorld(x: number, y: number): boolean;
@@ -700,9 +704,18 @@ export function compileKenneyMapFromTable(
     const roadCenterWidthWorld = new Uint8Array(worldW * worldH);
     const roadIntersectionMaskWorld = new Uint8Array(worldW * worldH);
     const roadCrossingMaskWorld = new Uint8Array(worldW * worldH);
+    const roadCrossingDirWorld = new Uint8Array(worldW * worldH);
     const roadStopMaskWorld = new Uint8Array(worldW * worldH);
+    const roadStopDirWorld = new Uint8Array(worldW * worldH);
+    const roadIntersectionCenterTilesWorld: Array<{ tx: number; ty: number }> = [];
+    const roadIntersectionBoundsWorld: Array<{ minX: number; maxX: number; minY: number; maxY: number }> = [];
     const roadIntersectionSeedsWorld: Array<{ tx: number; ty: number }> = [];
     const roadIntersectionClusterCentersWorld: Array<{ worldX: number; worldY: number }> = [];
+    const ROAD_DIR_NONE = 0;
+    const ROAD_DIR_N = 1;
+    const ROAD_DIR_E = 2;
+    const ROAD_DIR_S = 3;
+    const ROAD_DIR_W = 4;
     const worldMaxTx = originTx + worldW - 1;
     const worldMaxTy = originTy + worldH - 1;
     const worldIndex = (txWorld: number, tyWorld: number): number => {
@@ -910,65 +923,123 @@ export function compileKenneyMapFromTable(
         }
     }
 
-    // Build crossing halo: road tiles (non-intersection) touching intersection in 8-neighborhood.
-    for (let tyWorld = originTy; tyWorld <= worldMaxTy; tyWorld++) {
-        for (let txWorld = originTx; txWorld <= worldMaxTx; txWorld++) {
-            const i = worldIndex(txWorld, tyWorld);
-            if (roadAreaMaskWorld[i] !== 1) continue;
-            if (roadIntersectionMaskWorld[i] === 1) continue;
-            let touchesIntersection = false;
-            for (let dy = -1; dy <= 1 && !touchesIntersection; dy++) {
-                for (let dx = -1; dx <= 1; dx++) {
-                    if (dx === 0 && dy === 0) continue;
-                    const nx = txWorld + dx;
-                    const ny = tyWorld + dy;
-                    if (!worldInBounds(nx, ny)) continue;
-                    if (roadIntersectionMaskWorld[worldIndex(nx, ny)] === 1) {
-                        touchesIntersection = true;
-                        break;
+    // Build intersection-component bounds (AABB) from the final intersection mask.
+    {
+        const visitedIntersection = new Uint8Array(worldW * worldH);
+        const qx: number[] = [];
+        const qy: number[] = [];
+        const tilesX: number[] = [];
+        const tilesY: number[] = [];
+        const neighbors4 = [
+            { dx: -1, dy: 0 },
+            { dx: 1, dy: 0 },
+            { dx: 0, dy: -1 },
+            { dx: 0, dy: 1 },
+        ];
+
+        for (let tyWorld = originTy; tyWorld <= worldMaxTy; tyWorld++) {
+            for (let txWorld = originTx; txWorld <= worldMaxTx; txWorld++) {
+                const startIdx = worldIndex(txWorld, tyWorld);
+                if (roadIntersectionMaskWorld[startIdx] !== 1) continue;
+                if (visitedIntersection[startIdx] === 1) continue;
+                visitedIntersection[startIdx] = 1;
+                qx.length = 0;
+                qy.length = 0;
+                tilesX.length = 0;
+                tilesY.length = 0;
+                qx.push(txWorld);
+                qy.push(tyWorld);
+                let qHead = 0;
+                let minX = txWorld;
+                let maxX = txWorld;
+                let minY = tyWorld;
+                let maxY = tyWorld;
+                while (qHead < qx.length) {
+                    const cx = qx[qHead];
+                    const cy = qy[qHead];
+                    qHead++;
+                    tilesX.push(cx);
+                    tilesY.push(cy);
+                    if (cx < minX) minX = cx;
+                    if (cx > maxX) maxX = cx;
+                    if (cy < minY) minY = cy;
+                    if (cy > maxY) maxY = cy;
+                    for (let ni = 0; ni < neighbors4.length; ni++) {
+                        const nx = cx + neighbors4[ni].dx;
+                        const ny = cy + neighbors4[ni].dy;
+                        if (!worldInBounds(nx, ny)) continue;
+                        const niIdx = worldIndex(nx, ny);
+                        if (roadIntersectionMaskWorld[niIdx] !== 1) continue;
+                        if (visitedIntersection[niIdx] === 1) continue;
+                        visitedIntersection[niIdx] = 1;
+                        qx.push(nx);
+                        qy.push(ny);
                     }
                 }
+                const targetX = Math.floor((minX + maxX) / 2);
+                const targetY = Math.floor((minY + maxY) / 2);
+                let best = 0;
+                let bestDist = Number.POSITIVE_INFINITY;
+                for (let ti = 0; ti < tilesX.length; ti++) {
+                    const tx = tilesX[ti];
+                    const ty = tilesY[ti];
+                    const d = Math.abs(tx - targetX) + Math.abs(ty - targetY);
+                    const bestX = tilesX[best];
+                    const bestY = tilesY[best];
+                    if (d < bestDist || (d === bestDist && (ty < bestY || (ty === bestY && tx < bestX)))) {
+                        best = ti;
+                        bestDist = d;
+                    }
+                }
+                const center = { cx: tilesX[best], cy: tilesY[best] };
+                roadIntersectionBoundsWorld.push({ minX, maxX, minY, maxY });
+                roadIntersectionCenterTilesWorld.push({ tx: center.cx, ty: center.cy });
             }
-            if (touchesIntersection) roadCrossingMaskWorld[i] = 1;
         }
     }
 
-    // Build stop bars: approach tiles adjacent (4-neighbor) to crossing/intersection on matching axis.
-    for (let tyWorld = originTy; tyWorld <= worldMaxTy; tyWorld++) {
-        for (let txWorld = originTx; txWorld <= worldMaxTx; txWorld++) {
-            const i = worldIndex(txWorld, tyWorld);
-            if (roadAreaMaskWorld[i] !== 1) continue;
-            if (roadIntersectionMaskWorld[i] === 1) continue;
-            if (roadCrossingMaskWorld[i] === 1) continue;
+    const writeCrossing = (txWorld: number, tyWorld: number, dir: number) => {
+        if (!worldInBounds(txWorld, tyWorld)) return;
+        const i = worldIndex(txWorld, tyWorld);
+        if (roadAreaMaskWorld[i] !== 1) return;
+        if (roadIntersectionMaskWorld[i] === 1) return;
+        if (roadCrossingMaskWorld[i] === 1) return;
+        roadCrossingMaskWorld[i] = 1;
+        roadCrossingDirWorld[i] = dir;
+    };
+    const writeStop = (txWorld: number, tyWorld: number, dir: number) => {
+        if (!worldInBounds(txWorld, tyWorld)) return;
+        const i = worldIndex(txWorld, tyWorld);
+        if (roadAreaMaskWorld[i] !== 1) return;
+        if (roadIntersectionMaskWorld[i] === 1) return;
+        if (roadCrossingMaskWorld[i] === 1) return;
+        if (roadStopMaskWorld[i] === 1) return;
+        roadStopMaskWorld[i] = 1;
+        roadStopDirWorld[i] = dir;
+    };
 
-            const isH = roadCenterMaskHWorld[i] === 1;
-            const isV = roadCenterMaskVWorld[i] === 1;
-            if (!isH && !isV) continue;
+    // Build directional halos from bounds; direction is assigned only here.
+    for (let bi = 0; bi < roadIntersectionBoundsWorld.length; bi++) {
+        const b = roadIntersectionBoundsWorld[bi];
 
-            const leftOrRightTagged = (
-                (worldInBounds(txWorld - 1, tyWorld) && (
-                    roadIntersectionMaskWorld[worldIndex(txWorld - 1, tyWorld)] === 1 ||
-                    roadCrossingMaskWorld[worldIndex(txWorld - 1, tyWorld)] === 1
-                )) ||
-                (worldInBounds(txWorld + 1, tyWorld) && (
-                    roadIntersectionMaskWorld[worldIndex(txWorld + 1, tyWorld)] === 1 ||
-                    roadCrossingMaskWorld[worldIndex(txWorld + 1, tyWorld)] === 1
-                ))
-            );
-            const upOrDownTagged = (
-                (worldInBounds(txWorld, tyWorld - 1) && (
-                    roadIntersectionMaskWorld[worldIndex(txWorld, tyWorld - 1)] === 1 ||
-                    roadCrossingMaskWorld[worldIndex(txWorld, tyWorld - 1)] === 1
-                )) ||
-                (worldInBounds(txWorld, tyWorld + 1) && (
-                    roadIntersectionMaskWorld[worldIndex(txWorld, tyWorld + 1)] === 1 ||
-                    roadCrossingMaskWorld[worldIndex(txWorld, tyWorld + 1)] === 1
-                ))
-            );
+        // Crossing ring (distance 1).
+        for (let x = b.minX; x <= b.maxX; x++) {
+            writeCrossing(x, b.minY - 1, ROAD_DIR_N);
+            writeCrossing(x, b.maxY + 1, ROAD_DIR_S);
+        }
+        for (let y = b.minY; y <= b.maxY; y++) {
+            writeCrossing(b.minX - 1, y, ROAD_DIR_W);
+            writeCrossing(b.maxX + 1, y, ROAD_DIR_E);
+        }
 
-            if ((leftOrRightTagged && isH) || (upOrDownTagged && isV)) {
-                roadStopMaskWorld[i] = 1;
-            }
+        // Stop-bar ring (distance 2).
+        for (let x = b.minX; x <= b.maxX; x++) {
+            writeStop(x, b.minY - 2, ROAD_DIR_N);
+            writeStop(x, b.maxY + 2, ROAD_DIR_S);
+        }
+        for (let y = b.minY; y <= b.maxY; y++) {
+            writeStop(b.minX - 2, y, ROAD_DIR_W);
+            writeStop(b.maxX + 2, y, ROAD_DIR_E);
         }
     }
 
@@ -2231,7 +2302,11 @@ export function compileKenneyMapFromTable(
         roadCenterWidthWorld,
         roadIntersectionMaskWorld,
         roadCrossingMaskWorld,
+        roadCrossingDirWorld,
         roadStopMaskWorld,
+        roadStopDirWorld,
+        roadIntersectionCenterTilesWorld,
+        roadIntersectionBoundsWorld,
         roadIntersectionSeedsWorld,
         roadIntersectionClusterCentersWorld,
         isRoadWorld,

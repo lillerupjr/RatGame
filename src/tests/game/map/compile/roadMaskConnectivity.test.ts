@@ -243,6 +243,33 @@ describe("canonical road semantic world masks", () => {
     expect(stopCount).toBeGreaterThan(0);
     expect(overlapIntersectionCrossing).toBe(0);
     expect(overlapStopWithIntersectionOrCrossing).toBe(0);
+    let hasDirectionalCrossing = false;
+    let hasDirectionalStop = false;
+    let hasWideStopSpan = false;
+    for (let i = 0; i < compiled.roadAreaMaskWorld.length; i++) {
+      if (compiled.roadCrossingMaskWorld[i] === 1) {
+        const d = compiled.roadCrossingDirWorld[i] | 0;
+        expect(d).toBeGreaterThanOrEqual(1);
+        expect(d).toBeLessThanOrEqual(4);
+        hasDirectionalCrossing = true;
+      }
+      if (compiled.roadStopMaskWorld[i] === 1) {
+        const d = compiled.roadStopDirWorld[i] | 0;
+        expect(d).toBeGreaterThanOrEqual(1);
+        expect(d).toBeLessThanOrEqual(4);
+        hasDirectionalStop = true;
+        const ty = Math.floor(i / compiled.width) + compiled.originTy;
+        const tx = (i % compiled.width) + compiled.originTx;
+        const left = tx - 1 >= compiled.originTx && compiled.roadStopMaskWorld[idx(tx - 1, ty)] === 1;
+        const right = tx + 1 < compiled.originTx + compiled.width && compiled.roadStopMaskWorld[idx(tx + 1, ty)] === 1;
+        const up = ty - 1 >= compiled.originTy && compiled.roadStopMaskWorld[idx(tx, ty - 1)] === 1;
+        const down = ty + 1 < compiled.originTy + compiled.height && compiled.roadStopMaskWorld[idx(tx, ty + 1)] === 1;
+        if (left || right || up || down) hasWideStopSpan = true;
+      }
+    }
+    expect(hasDirectionalCrossing).toBe(true);
+    expect(hasDirectionalStop).toBe(true);
+    expect(hasWideStopSpan).toBe(true);
     const bboxW = maxX - minX + 1;
     const bboxH = maxY - minY + 1;
     expect(bboxW * bboxH).toBe(10);

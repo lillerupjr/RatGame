@@ -1066,9 +1066,37 @@ export function isRoadStopTile(tx: number, ty: number): boolean {
     return (_compiled.roadStopMaskWorld?.[idx] ?? 0) === 1;
 }
 
+/** Return crossing direction (0=NONE, 1=N, 2=E, 3=S, 4=W). */
+export function roadCrossingDirAt(tx: number, ty: number): number {
+    const lx = tx - _compiled.originTx;
+    const ly = ty - _compiled.originTy;
+    if (lx < 0 || ly < 0 || lx >= _compiled.width || ly >= _compiled.height) return 0;
+    const idx = ly * _compiled.width + lx;
+    return _compiled.roadCrossingDirWorld?.[idx] ?? 0;
+}
+
+/** Return stop-bar direction (0=NONE, 1=N, 2=E, 3=S, 4=W). */
+export function roadStopDirAt(tx: number, ty: number): number {
+    const lx = tx - _compiled.originTx;
+    const ly = ty - _compiled.originTy;
+    if (lx < 0 || ly < 0 || lx >= _compiled.width || ly >= _compiled.height) return 0;
+    const idx = ly * _compiled.width + lx;
+    return _compiled.roadStopDirWorld?.[idx] ?? 0;
+}
+
 /** Return representative intersection seeds used by compile-time intersection stamping. */
 export function roadIntersectionSeedsDebug(): Array<{ tx: number; ty: number }> {
     return _compiled.roadIntersectionSeedsWorld ?? [];
+}
+
+/** Return one deterministic center tile per intersection component. */
+export function roadIntersectionCentersDebug(): Array<{ tx: number; ty: number }> {
+    return _compiled.roadIntersectionCenterTilesWorld ?? [];
+}
+
+/** Return intersection component bounds in world tile coordinates. */
+export function roadIntersectionBoundsDebug(): Array<{ minX: number; maxX: number; minY: number; maxY: number }> {
+    return _compiled.roadIntersectionBoundsWorld ?? [];
 }
 
 /** Return overlap-cluster bbox centers for intersection seeds (world-space). */
