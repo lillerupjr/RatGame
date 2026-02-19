@@ -237,7 +237,53 @@ export type CompiledKenneyMap = {
     decals: DecalPiece[];
     decalsInView(view: ViewRect): DecalPiece[];
     blockedTiles: Set<string>;
+    roadAreaMaskWorld: Uint8Array;
+    roadAreaWidthWorld: Uint8Array;
+    roadCenterMaskWorld: Uint8Array;
+    roadCenterWidthWorld: Uint8Array;
+    isRoadWorld(x: number, y: number): boolean;
 };
+
+type RoadRect = { x: number; y: number; w: number; h: number };
+
+function mergeRoadRectsLongEdge(rects: RoadRect[]): RoadRect[] {
+    const out = rects
+        .map((r) => ({ x: r.x | 0, y: r.y | 0, w: Math.max(1, r.w | 0), h: Math.max(1, r.h | 0) }));
+    let changed = true;
+    while (changed) {
+        changed = false;
+        outer: for (let i = 0; i < out.length; i++) {
+            for (let j = i + 1; j < out.length; j++) {
+                const a = out[i];
+                const b = out[j];
+                const aHorizontal = a.w >= a.h;
+                const bHorizontal = b.w >= b.h;
+                if (aHorizontal !== bHorizontal) continue;
+
+                if (aHorizontal) {
+                    // Same long-axis span (x..x+w-1), adjacent along short axis (y)
+                    if (a.x !== b.x || a.w !== b.w) continue;
+                    if (a.y + a.h !== b.y && b.y + b.h !== a.y) continue;
+                    const y0 = Math.min(a.y, b.y);
+                    out[i] = { x: a.x, y: y0, w: a.w, h: a.h + b.h };
+                    out.splice(j, 1);
+                    changed = true;
+                    break outer;
+                }
+
+                // Vertical: same long-axis span (y..y+h-1), adjacent along short axis (x)
+                if (a.y !== b.y || a.h !== b.h) continue;
+                if (a.x + a.w !== b.x && b.x + b.w !== a.x) continue;
+                const x0 = Math.min(a.x, b.x);
+                out[i] = { x: x0, y: a.y, w: a.w + b.w, h: a.h };
+                out.splice(j, 1);
+                changed = true;
+                break outer;
+            }
+        }
+    }
+    return out;
+}
 
 /** Compile a table-based map definition into a render/query-friendly map. */
 export function compileKenneyMapFromTable(
@@ -632,6 +678,96 @@ export function compileKenneyMapFromTable(
     function getTile(tx: number, ty: number): IsoTile {
         return placed.get(`${tx},${ty}`) ?? { kind: "VOID", h: 0 };
     }
+
+    const worldW = def.w | 0;
+    const worldH = def.h | 0;
+    const roadAreaMaskWorld = new Uint8Array(worldW * worldH);
+    const roadAreaWidthWorld = new Uint8Array(worldW * worldH);
+    const roadCenterMaskWorld = new Uint8Array(worldW * worldH);
+    const roadCenterWidthWorld = new Uint8Array(worldW * worldH);
+    const worldMaxTx = originTx + worldW - 1;
+    const worldMaxTy = originTy + worldH - 1;
+    const worldIndex = (txWorld: number, tyWorld: number): number => {
+        const lx = txWorld - originTx;
+        const ly = tyWorld - originTy;
+        return ly * worldW + lx;
+    };
+    const worldInBounds = (txWorld: number, tyWorld: number): boolean => {
+        return txWorld >= originTx && txWorld <= worldMaxTx && tyWorld >= originTy && tyWorld <= worldMaxTy;
+    };
+    const worldRoadRects = (() => {
+        if (def.roadSemanticRects && def.roadSemanticRects.length > 0) return def.roadSemanticRects;
+        if (!def.stamps || def.stamps.length === 0) return [];
+        const out: Array<{ x: number; y: number; w: number; h: number }> = [];
+        for (let i = 0; i < def.stamps.length; i++) {
+            const s = def.stamps[i];
+            if (s.type !== "road") continue;
+            out.push({
+                x: s.x | 0,
+                y: s.y | 0,
+                w: Math.max(1, (s.w ?? 1) | 0),
+                h: Math.max(1, (s.h ?? 1) | 0),
+            });
+        }
+        return out;
+    })();
+    const mergedWorldRoadRects = mergeRoadRectsLongEdge(worldRoadRects);
+    const markRoadAreaWorld = (txWorld: number, tyWorld: number, width: number) => {
+        if (!worldInBounds(txWorld, tyWorld)) return;
+        const idx = worldIndex(txWorld, tyWorld);
+        roadAreaMaskWorld[idx] = 1;
+        const w = Math.max(0, Math.min(255, width | 0));
+        if (w > roadAreaWidthWorld[idx]) roadAreaWidthWorld[idx] = w;
+    };
+    const markRoadCenterWorld = (txWorld: number, tyWorld: number, width: number) => {
+        if (!worldInBounds(txWorld, tyWorld)) return;
+        const idx = worldIndex(txWorld, tyWorld);
+        if (roadAreaMaskWorld[idx] !== 1) return;
+        roadCenterMaskWorld[idx] = 1;
+        const w = Math.max(0, Math.min(255, width | 0));
+        if (w > roadCenterWidthWorld[idx]) roadCenterWidthWorld[idx] = w;
+    };
+    for (let i = 0; i < mergedWorldRoadRects.length; i++) {
+        const r = mergedWorldRoadRects[i];
+        const sx = (r.x | 0) + originTx;
+        const sy = (r.y | 0) + originTy;
+        const rw = Math.max(1, (r.w ?? 1) | 0);
+        const rh = Math.max(1, (r.h ?? 1) | 0);
+        const areaWidth = rw === rh ? rw : (rw >= rh ? rh : rw);
+        for (let dx = 0; dx < rw; dx++) {
+            for (let dy = 0; dy < rh; dy++) markRoadAreaWorld(sx + dx, sy + dy, areaWidth);
+        }
+        if (rw >= rh) {
+            const y0 = sy + Math.floor((rh - 1) / 2);
+            const y1 = sy + Math.floor(rh / 2);
+            for (let yy = y0; yy <= y1; yy++) {
+                for (let xx = sx; xx < sx + rw; xx++) {
+                    markRoadCenterWorld(xx, yy, rh);
+                }
+            }
+            if (rw === rh) {
+                const x0 = sx + Math.floor((rw - 1) / 2);
+                const x1 = sx + Math.floor(rw / 2);
+                for (let xx = x0; xx <= x1; xx++) {
+                    for (let yy = sy; yy < sy + rh; yy++) {
+                        markRoadCenterWorld(xx, yy, rw);
+                    }
+                }
+            }
+        } else {
+            const x0 = sx + Math.floor((rw - 1) / 2);
+            const x1 = sx + Math.floor(rw / 2);
+            for (let xx = x0; xx <= x1; xx++) {
+                for (let yy = sy; yy < sy + rh; yy++) {
+                    markRoadCenterWorld(xx, yy, rw);
+                }
+            }
+        }
+    }
+    const isRoadWorld = (txWorld: number, tyWorld: number): boolean => {
+        if (!worldInBounds(txWorld, tyWorld)) return false;
+        return roadAreaMaskWorld[worldIndex(txWorld, tyWorld)] === 1;
+    };
 
     const surfacesByKey = new Map<string, Surface[]>();
     const topsByLayer = new Map<number, Surface[]>();
@@ -1877,6 +2013,11 @@ export function compileKenneyMapFromTable(
         decals,
         decalsInView,
         blockedTiles,
+        roadAreaMaskWorld,
+        roadAreaWidthWorld,
+        roadCenterMaskWorld,
+        roadCenterWidthWorld,
+        isRoadWorld,
     };
 
     const getTileWithRunResolver = (tx: number, ty: number): IsoTile => {

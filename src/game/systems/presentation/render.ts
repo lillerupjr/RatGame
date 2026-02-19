@@ -24,6 +24,7 @@ import {
   decalsInView,
   getActiveMap as getActiveCompiledMap,
   getSupportSurfaceAt,
+  roadAreaWidthAt,
   type RenderPiece,
   type StampOverlay,
   type ViewRect,
@@ -53,6 +54,7 @@ import {
   getTileSpriteById,
   getVoidTop,
 } from "../../../engine/render/sprites/renderSprites";
+import type { RuntimeDecalSetId } from "../../content/runtimeDecalConfig";
 import {
   buildRuntimeStructureBandPieces,
 } from "../../../engine/render/sprites/runtimeStructureSlicing";
@@ -61,6 +63,7 @@ import {
   drawOccluderOverlay,
   drawProjectileFaceOverlay,
   drawRampOverlay,
+  drawRoadSemanticOverlay,
   drawStructureHeightOverlay,
   drawTriggerOverlay,
   drawWalkMaskOverlay,
@@ -627,7 +630,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       ty: number,
       zBase: number,
       renderAnchorY: number,
-      setId: "sidewalk" | "asphalt",
+      setId: RuntimeDecalSetId,
       variantIndex: number,
       rotationQuarterTurns: 0 | 1 | 2 | 3,
     ) => {
@@ -921,6 +924,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const SHOW_DECAL_DEBUG = debugFlags.showDecals;
   const SHOW_PROJECTILE_FACES = debugFlags.showProjectileFaces;
   const SHOW_TRIGGER_ZONES = debugFlags.showTriggers;
+  const SHOW_ROAD_SEMANTIC = debugFlags.showRoadSemantic;
   const SHOW_STRUCTURE_HEIGHTS = debugFlags.showStructureHeights;
   const SHOW_STRUCTURE_COLLISION_DEBUG = debugFlags.showStructureCollision;
   const SHOW_STRUCTURE_SLICE_DEBUG = debugFlags.showStructureSlices;
@@ -2335,6 +2339,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   drawProjectileFaceOverlay(debugContext, SHOW_PROJECTILE_FACES, viewRect);
   drawStructureHeightOverlay(debugContext, SHOW_STRUCTURE_HEIGHTS, viewRect);
   drawTriggerOverlay(debugContext, SHOW_TRIGGER_ZONES);
+  drawRoadSemanticOverlay(debugContext, SHOW_ROAD_SEMANTIC, viewRect);
   if (SHOW_STRUCTURE_COLLISION_DEBUG) {
     const blocked = blockedTilesInView(viewRect);
     if (blocked.length > 0) {
@@ -2530,6 +2535,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   ctx.fillStyle = "#fff";
   const fps = Math.round((w as any).fps ?? 0);
   ctx.fillText(`FPS: ${fps}`, 8, 14);
+  if (SHOW_ROAD_SEMANTIC) {
+    const roadWPlayer = roadAreaWidthAt(playerTx, playerTy);
+    ctx.fillText(`roadW(player): ${roadWPlayer}`, 8, 30);
+  }
   ctx.restore();
 
   // --- UI ---
@@ -2657,12 +2666,17 @@ function renderTileGridCompass(w: World, ctx: CanvasRenderingContext2D, ww: numb
 
   // Optional: show player grid coords for sanity (tiny)
   const g = gridAtPlayer(w);
+  const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
+  const ptx = Math.floor(pWorld.wx / KENNEY_TILE_WORLD);
+  const pty = Math.floor(pWorld.wy / KENNEY_TILE_WORLD);
+  const roadW = roadAreaWidthAt(ptx, pty);
   ctx.globalAlpha = 0.9;
   ctx.fillStyle = "rgba(255,255,255,0.55)";
   ctx.font = "10px monospace";
   ctx.textAlign = "left";
   ctx.textBaseline = "bottom";
   ctx.fillText(`gx:${g.gx.toFixed(2)} gy:${g.gy.toFixed(2)}`, x0 + 8, y0 + size - 8);
+  ctx.fillText(`roadW:${roadW}`, x0 + 8, y0 + size - 20);
 
   ctx.restore();
 }

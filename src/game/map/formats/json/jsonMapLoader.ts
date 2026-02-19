@@ -96,6 +96,7 @@ type JsonMapDef = {
     stackLevel?: number;
     zStackUnits?: number;
   }[];
+  roadSemanticRects?: Array<{ x: number; y: number; w: number; h: number }>;
   lights?: TableMapLight[];
   mapSkinId?: MapSkinId;
   buildingPackId?: BuildingPackId;
@@ -414,15 +415,19 @@ function requireCellsField(
   });
 }
 
-function optionalFieldsField(obj: Record<string, unknown>, source?: string): { cells: TableMapCell[]; stamps: SemanticStamp[] } {
+function optionalFieldsField(
+  obj: Record<string, unknown>,
+  source?: string
+): { cells: TableMapCell[]; stamps: SemanticStamp[]; roadRects: Array<{ x: number; y: number; w: number; h: number }> } {
   const value = obj.fields;
-  if (value === undefined) return { cells: [], stamps: [] };
+  if (value === undefined) return { cells: [], stamps: [], roadRects: [] };
   if (!Array.isArray(value)) {
     throw new Error(`JSON map loader${formatSource(source)}: optional field "fields" must be an array if present.`);
   }
 
   const out: TableMapCell[] = [];
   const stamps: SemanticStamp[] = [];
+  const roadRects: Array<{ x: number; y: number; w: number; h: number }> = [];
 
   for (let index = 0; index < value.length; index++) {
     const field = value[index];
@@ -486,6 +491,10 @@ function optionalFieldsField(obj: Record<string, unknown>, source?: string): { c
     const resolvedTypeRaw = (type ?? "floor").toLowerCase();
     const resolvedZ = z ?? 0;
 
+    if (resolvedTypeRaw === "road") {
+      roadRects.push({ x: x0, y: y0, w: iw, h: ih });
+    }
+
     if (resolvedTypeRaw === "building") {
       stamps.push({
         x: x0,
@@ -527,7 +536,7 @@ function optionalFieldsField(obj: Record<string, unknown>, source?: string): { c
     }
   }
 
-  return { cells: out, stamps };
+  return { cells: out, stamps, roadRects };
 }
 
 function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): SemanticStamp[] | undefined {
@@ -760,6 +769,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     const expandedCells: TableMapCell[] = [];
     const expandedStamps: SemanticStamp[] = [];
     const expandedLights: TableMapLight[] = [];
+    const expandedRoadRects: Array<{ x: number; y: number; w: number; h: number }> = [];
 
     for (let cy = 0; cy < chunkGrid.rows; cy++) {
       for (let cx = 0; cx < chunkGrid.cols; cx++) {
@@ -781,6 +791,12 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
             expandedLights.push({ ...l, x: l.x + ox, y: l.y + oy });
           }
         }
+        if (chunkDef.roadSemanticRects) {
+          for (let i = 0; i < chunkDef.roadSemanticRects.length; i++) {
+            const r = chunkDef.roadSemanticRects[i];
+            expandedRoadRects.push({ x: r.x + ox, y: r.y + oy, w: r.w, h: r.h });
+          }
+        }
       }
     }
 
@@ -797,6 +813,13 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
       const merged = [...expandedLights, ...(mapLights ?? [])];
       return merged.length > 0 ? merged : undefined;
     })();
+    const roadRects = (() => {
+      const stampRoadRects = (stamps ?? [])
+        .filter((s) => s.type === "road")
+        .map((s) => ({ x: s.x, y: s.y, w: Math.max(1, (s.w ?? 1) | 0), h: Math.max(1, (s.h ?? 1) | 0) }));
+      const merged = [...expandedRoadRects, ...fieldParsed.roadRects, ...stampRoadRects];
+      return merged.length > 0 ? merged : undefined;
+    })();
 
     return {
       id,
@@ -809,6 +832,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
       apronBaseMode,
       cells: merged,
       stamps,
+      roadSemanticRects: roadRects,
       lights,
       objectiveDefs,
     };
@@ -826,6 +850,13 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     const merged = [...fieldParsed.stamps, ...(stampsRaw ?? [])];
     return merged.length > 0 ? merged : undefined;
   })();
+  const roadRects = (() => {
+    const stampRoadRects = (stamps ?? [])
+      .filter((s) => s.type === "road")
+      .map((s) => ({ x: s.x, y: s.y, w: Math.max(1, (s.w ?? 1) | 0), h: Math.max(1, (s.h ?? 1) | 0) }));
+    const merged = [...fieldParsed.roadRects, ...stampRoadRects];
+    return merged.length > 0 ? merged : undefined;
+  })();
   const lights = mapLights;
 
   const jsonDef: JsonMapDef = {
@@ -834,6 +865,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     height,
     cells,
     stamps,
+    roadSemanticRects: roadRects,
     lights,
     mapSkinId,
     buildingPackId,
@@ -886,6 +918,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     apronBaseMode: jsonDef.apronBaseMode,
     cells: jsonDef.cells ?? [],
     stamps,
+    roadSemanticRects: jsonDef.roadSemanticRects,
     lights: jsonDef.lights,
     objectiveDefs: jsonDef.objectiveDefs,
   };

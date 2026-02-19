@@ -1012,6 +1012,42 @@ export function blockedTilesInView(view: ViewRect): Array<{ tx: number; ty: numb
     return out;
 }
 
+/** Return true if the compiled semantic road area mask marks this tile as road. */
+export function isRoadAreaTile(tx: number, ty: number): boolean {
+    const lx = tx - _compiled.originTx;
+    const ly = ty - _compiled.originTy;
+    if (lx < 0 || ly < 0 || lx >= _compiled.width || ly >= _compiled.height) return false;
+    const idx = ly * _compiled.width + lx;
+    return _compiled.roadAreaMaskWorld[idx] === 1;
+}
+
+/** Return true if tile is part of the semantic road centerline mask. */
+export function isRoadCenterTile(tx: number, ty: number): boolean {
+    const lx = tx - _compiled.originTx;
+    const ly = ty - _compiled.originTy;
+    if (lx < 0 || ly < 0 || lx >= _compiled.width || ly >= _compiled.height) return false;
+    const idx = ly * _compiled.width + lx;
+    return _compiled.roadCenterMaskWorld[idx] === 1;
+}
+
+/** Return semantic road width for centerline tiles (0 for non-center tiles). */
+export function roadCenterWidthAt(tx: number, ty: number): number {
+    const lx = tx - _compiled.originTx;
+    const ly = ty - _compiled.originTy;
+    if (lx < 0 || ly < 0 || lx >= _compiled.width || ly >= _compiled.height) return 0;
+    const idx = ly * _compiled.width + lx;
+    return _compiled.roadCenterWidthWorld[idx] | 0;
+}
+
+/** Return semantic road width for any road area tile (0 for non-road tiles). */
+export function roadAreaWidthAt(tx: number, ty: number): number {
+    const lx = tx - _compiled.originTx;
+    const ly = ty - _compiled.originTy;
+    if (lx < 0 || ly < 0 || lx >= _compiled.width || ly >= _compiled.height) return 0;
+    const idx = ly * _compiled.width + lx;
+    return _compiled.roadAreaWidthWorld[idx] | 0;
+}
+
 // ─────────────────────────────────────────────────────────────
 // Milestone B Map API
 // ─────────────────────────────────────────────────────────────

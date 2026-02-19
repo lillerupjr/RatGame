@@ -146,6 +146,8 @@ export type TableMapDef = {
 
     // Optional semantic stamps (v2 pipeline)
     stamps?: SemanticStamp[];
+    // Optional semantic road rectangles preserved from authored fields/stamps for compile-time debug derivations.
+    roadSemanticRects?: Array<{ x: number; y: number; w: number; h: number }>;
     // Optional map-authored static lights (tile-space anchors).
     lights?: TableMapLight[];
 

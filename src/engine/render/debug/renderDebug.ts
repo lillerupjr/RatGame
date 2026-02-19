@@ -5,6 +5,8 @@ import { getTileSpriteById } from "../sprites/renderSprites";
 import {
   getApronDebugStats,
   getRampFacesForDebug,
+  isRoadAreaTile,
+  isRoadCenterTile,
   getTile,
   getWalkOutlineLocalPx,
   isHoleTile,
@@ -225,6 +227,73 @@ export function drawTriggerOverlay(ctx: DebugOverlayContext, show: boolean) {
     c.beginPath();
     c.arc(pC.x, pC.y, 3, 0, Math.PI * 2);
     c.fill();
+  }
+
+  c.restore();
+}
+
+export function drawRoadSemanticOverlay(ctx: DebugOverlayContext, show: boolean, viewRect: ViewRect) {
+  if (!show) return;
+
+  const c = ctx.ctx;
+  const T = ctx.T;
+
+  c.save();
+  c.globalAlpha = 1;
+  c.lineWidth = 1;
+
+  for (let ty = viewRect.minTy; ty <= viewRect.maxTy; ty++) {
+    for (let tx = viewRect.minTx; tx <= viewRect.maxTx; tx++) {
+      const isArea = isRoadAreaTile(tx, ty);
+      const isCenter = isRoadCenterTile(tx, ty);
+      if (!isArea && !isCenter) continue;
+
+      const wx0 = tx * T;
+      const wy0 = ty * T;
+      const wx1 = (tx + 1) * T;
+      const wy1 = (ty + 1) * T;
+      const wxc = (tx + 0.5) * T;
+      const wyc = (ty + 0.5) * T;
+      const z = ctx.tileHAtWorld(wxc, wyc);
+
+      const pNW = ctx.toScreenAtZ(wx0, wy0, z);
+      const pNE = ctx.toScreenAtZ(wx1, wy0, z);
+      const pSE = ctx.toScreenAtZ(wx1, wy1, z);
+      const pSW = ctx.toScreenAtZ(wx0, wy1, z);
+      const pC = ctx.toScreenAtZ(wxc, wyc, z);
+
+      if (isArea) {
+        c.fillStyle = "rgba(255,140,0,0.25)";
+        c.beginPath();
+        c.moveTo(pNW.x, pNW.y);
+        c.lineTo(pNE.x, pNE.y);
+        c.lineTo(pSE.x, pSE.y);
+        c.lineTo(pSW.x, pSW.y);
+        c.closePath();
+        c.fill();
+      }
+
+      if (isCenter) {
+        const inset = 0.08;
+        const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+        const cNWx = lerp(pNW.x, pC.x, inset);
+        const cNWy = lerp(pNW.y, pC.y, inset);
+        const cNEx = lerp(pNE.x, pC.x, inset);
+        const cNEy = lerp(pNE.y, pC.y, inset);
+        const cSEx = lerp(pSE.x, pC.x, inset);
+        const cSEy = lerp(pSE.y, pC.y, inset);
+        const cSWx = lerp(pSW.x, pC.x, inset);
+        const cSWy = lerp(pSW.y, pC.y, inset);
+        c.fillStyle = "rgba(255,255,0,0.9)";
+        c.beginPath();
+        c.moveTo(cNWx, cNWy);
+        c.lineTo(cNEx, cNEy);
+        c.lineTo(cSEx, cSEy);
+        c.lineTo(cSWx, cSWy);
+        c.closePath();
+        c.fill();
+      }
+    }
   }
 
   c.restore();

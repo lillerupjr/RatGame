@@ -31,6 +31,7 @@ export type DebugSettings = {
   spriteBounds: boolean;
   projectileFaces: boolean;
   triggers: boolean;
+  debugRoadSemantic: boolean;
   disableLightingOcclusion: boolean;
   lightingMasks: boolean;
   lightingMaskDebugMode: LightingMaskDebugMode;
@@ -78,6 +79,7 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "spriteBounds", label: "spriteBounds" },
   { key: "projectileFaces", label: "projectileFaces" },
   { key: "triggers", label: "triggers" },
+  { key: "debugRoadSemantic", label: "debugRoadSemantic" },
   { key: "disableLightingOcclusion", label: "disableLightingOcclusion" },
   { key: "lightingMasks", label: "lightingMasks" },
   { key: "mapOverlaysDisabled", label: "mapOverlaysDisabled" },
@@ -99,6 +101,7 @@ export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   spriteBounds: false,
   projectileFaces: false,
   triggers: false,
+  debugRoadSemantic: false,
   disableLightingOcclusion: false,
   lightingMasks: false,
   lightingMaskDebugMode: "OFF",
@@ -131,6 +134,7 @@ export type ResolvedDebugFlags = {
   showProjectileFaces: boolean;
   showDecals: boolean;
   showTriggers: boolean;
+  showRoadSemantic: boolean;
   showStructureHeights: boolean;
   showStructureCollision: boolean;
   showStructureSlices: boolean;
@@ -152,6 +156,7 @@ export function resolveDebugFlags(debug: DebugSettings): ResolvedDebugFlags {
     showDecals: debug.decals,
     showProjectileFaces: debug.projectileFaces,
     showTriggers: debug.triggers,
+    showRoadSemantic: debug.debugRoadSemantic,
     showStructureHeights: debug.structureHeights,
     showStructureCollision: debug.blockedTiles || debug.colliders,
     showStructureSlices: debug.slices || debug.spriteBounds,

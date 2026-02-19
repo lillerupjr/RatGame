@@ -4,6 +4,7 @@ const localSettings: UserSettingsPatch = {
   debug: {
     grid: true,
     slices: true,
+    debugRoadSemantic: true,
   },
 };
 
