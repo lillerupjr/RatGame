@@ -1,0 +1,60 @@
+{
+  "id": "docks2",
+  "width": 24,
+  "height": 24,
+  "fields": [
+
+
+    { "x": 0, "y": 2, "w": 24, "h": 2, "type": "sidewalk" },
+    { "x": 0, "y": 20, "w": 24, "h": 2, "type": "sidewalk" },
+
+    { "x": 2, "y": 4,  "w": 20, "h": 16, "type": "road" },
+
+    { "x": 22, "y": 0,  "w": 2, "h": 24, "type": "road" },
+    { "x": 0, "y": 0,  "w": 2, "h": 24, "type": "road" }
+
+  ],
+  "stamps": [
+    { "x": 5,  "y": 6,  "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 7,  "y": 6,  "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 5,  "y": 9,  "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 7,  "y": 9,  "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+
+    { "x": 15, "y": 6,  "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 17, "y": 6,  "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 15, "y": 9,  "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 17, "y": 9,  "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+
+    { "x": 5,  "y": 14, "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 7,  "y": 14, "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 5,  "y": 17, "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 7,  "y": 17, "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+
+    { "x": 15, "y": 14, "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 17, "y": 14, "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 15, "y": 17, "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+    { "x": 17, "y": 17, "type": "container", "w": 2, "h": 3, "pool": ["containers"] },
+
+    { "x": 21, "y": 0, "z": 0, "zVisualOffsetUnits": -3, "type": "prop", "propId": "boat2", "w": 1, "h": 1 },
+
+    { "x": 15, "y": 23, "z": 0, "zVisualOffsetUnits": -3, "type": "prop", "propId": "boat3", "w": 1, "h": 1 },
+    { "x": 8, "y": 1, "z": 0, "zVisualOffsetUnits": -3, "type": "prop", "propId": "boat4", "w": 1, "h": 1 },
+
+    { "x": 3, "y": 2, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 6, "y": 2, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 9, "y": 2, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 12, "y": 2, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 15, "y": 2, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 18, "y": 2, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 21, "y": 2, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+
+    { "x": 3, "y": 22, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 6, "y": 22, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 9, "y": 22, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 12, "y": 22, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 15, "y": 22, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 18, "y": 22, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 21, "y": 22, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 }
+
+  ]
+}

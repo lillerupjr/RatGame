@@ -1,0 +1,46 @@
+{
+  "id": "docks3",
+  "width": 24,
+  "height": 24,
+  "fields": [
+
+
+    { "x": 2, "y": 0, "w": 2, "h": 8, "type": "sidewalk" },
+    { "x": 2, "y": 16, "w": 2, "h": 8, "type": "sidewalk" },
+    { "x": 20, "y": 0, "w": 2, "h": 8, "type": "sidewalk" },
+    { "x": 20, "y": 16, "w": 2, "h": 8, "type": "sidewalk" },
+
+    { "x": 0, "y": 8, "w": 24, "h": 2, "type": "sidewalk" },
+    { "x": 0, "y": 14, "w": 24, "h": 2, "type": "sidewalk" },
+
+    { "x": 0, "y": 10,  "w": 24, "h": 4, "type": "road" },
+
+    { "x": 22, "y": 0,  "w": 2, "h": 24, "type": "road" },
+    { "x": 0, "y": 0,  "w": 2, "h": 24, "type": "road" }
+
+  ],
+  "stamps": [
+
+    { "x": 21, "y": 0, "z": 0, "zVisualOffsetUnits": -3, "type": "prop", "propId": "boat2", "w": 1, "h": 1 },
+
+    { "x": 15, "y": 23, "z": 0, "zVisualOffsetUnits": -3, "type": "prop", "propId": "boat3", "w": 1, "h": 1 },
+    { "x": 8, "y": 1, "z": 0, "zVisualOffsetUnits": -3, "type": "prop", "propId": "boat4", "w": 1, "h": 1 },
+
+    { "x": 3, "y": 8, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 6, "y": 8, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 9, "y": 8, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 12, "y": 8, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 15, "y": 8, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 18, "y": 8, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 21, "y": 8, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+
+    { "x": 3, "y": 16, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 6, "y": 16, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 9, "y": 16, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 12, "y": 16, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 15, "y": 16, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 18, "y": 16, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 21, "y": 16, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 }
+
+  ]
+}
