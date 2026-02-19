@@ -15,6 +15,8 @@ import {
   roadStopDirAt,
   roadIntersectionSeedsDebug,
   isRoadIntersectionTile,
+  roadContextAxisAt,
+  roadContextIsRoadAt,
   getTile,
   getWalkOutlineLocalPx,
   isHoleTile,
@@ -368,17 +370,33 @@ export function drawRoadSemanticOverlay(ctx: DebugOverlayContext, show: boolean,
       }
 
       const tag = roadDebugTagAt(tx, ty);
-      if (!tag) continue;
-      c.save();
-      c.font = "9px monospace";
-      c.textAlign = "center";
-      c.textBaseline = "middle";
-      c.lineWidth = 2;
-      c.strokeStyle = "rgba(0,0,0,0.9)";
-      c.fillStyle = "rgba(255,255,255,0.95)";
-      c.strokeText(tag, pC.x, pC.y);
-      c.fillText(tag, pC.x, pC.y);
-      c.restore();
+      const contextRoad = roadContextIsRoadAt(tx, ty) === 1;
+      const axisCode = roadContextAxisAt(tx, ty);
+      const axisLabel = axisCode === 1 ? "EW" : axisCode === 2 ? "NS" : "--";
+      if (tag) {
+        c.save();
+        c.font = "9px monospace";
+        c.textAlign = "center";
+        c.textBaseline = "middle";
+        c.lineWidth = 2;
+        c.strokeStyle = "rgba(0,0,0,0.9)";
+        c.fillStyle = "rgba(255,255,255,0.95)";
+        c.strokeText(tag, pC.x, pC.y);
+        c.fillText(tag, pC.x, pC.y);
+        c.restore();
+      }
+      if (contextRoad) {
+        c.save();
+        c.font = "8px monospace";
+        c.textAlign = "center";
+        c.textBaseline = "top";
+        c.lineWidth = 2;
+        c.strokeStyle = "rgba(0,0,0,0.8)";
+        c.fillStyle = "rgba(255,255,255,0.9)";
+        c.strokeText(axisLabel, pC.x, pC.y + 7);
+        c.fillText(axisLabel, pC.x, pC.y + 7);
+        c.restore();
+      }
     }
   }
 

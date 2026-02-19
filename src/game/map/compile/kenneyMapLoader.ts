@@ -23,10 +23,9 @@ import {
     getDecalVariantCount,
     type RuntimeDecalSetId,
 } from "../../content/runtimeDecalConfig";
-import {
-    DOUBLE_LINE_OFFSET_TILES,
-    ROAD_CENTER_MARKING_VARIANT_INDEX,
-} from "../../roads/roadMarkings";
+import { buildRoadMarkingsPipeline } from "../../roads/markings/roadMarkingsPipeline";
+import { resolveMarkingSprite } from "../../roads/markings/markingSpriteResolver";
+import type { MarkingPiece, RoadBand, RoadContext } from "../../roads/markings/types";
 
 export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL";
 export type StairDir = "N" | "E" | "S" | "W";
@@ -99,8 +98,6 @@ export type ViewRect = {
     maxTy: number;
 };
 
-const EDGE_LINE_INSET_PX = 12;
-const EDGE_LINE_INSET_TILES = EDGE_LINE_INSET_PX / KENNEY_TILE_WORLD;
 export type Surface = {
     id: string;
     kind: SurfaceKind;
@@ -244,6 +241,8 @@ export type CompiledKenneyMap = {
     decals: DecalPiece[];
     decalsInView(view: ViewRect): DecalPiece[];
     blockedTiles: Set<string>;
+    roadMarkingContext: RoadContext;
+    roadMarkings: MarkingPiece[];
     roadAreaMaskWorld: Uint8Array;
     roadAreaWidthWorld: Uint8Array;
     roadCenterMaskHWorld: Uint8Array;
@@ -266,15 +265,6 @@ export type CompiledKenneyMap = {
 
 type RoadRect = { x: number; y: number; w: number; h: number };
 type AuthRoadRect = RoadRect & { orient: "H" | "V" };
-type RoadBand = {
-    x0: number;
-    y0: number;
-    x1: number;
-    y1: number;
-    orient: "H" | "V";
-    roadW: number;
-    roadL: number;
-};
 
 function mergeRoadRectsPreserveOrient(rects: AuthRoadRect[]): AuthRoadRect[] {
     const out = rects.map((r) => ({
@@ -1178,7 +1168,6 @@ export function compileKenneyMapFromTable(
 
     const decals: DecalPiece[] = [];
     const decalTileKeys = new Set<string>();
-    const edgeEmitSeen = new Set<string>();
     const semanticDecalConfig: Record<"sidewalk" | "road" | "asphalt", { chance: number; setId: RuntimeDecalSetId }> = {
         sidewalk: { chance: 0.10, setId: "sidewalk" },
         road: { chance: 0.02, setId: "asphalt" },
@@ -1226,116 +1215,46 @@ export function compileKenneyMapFromTable(
             rotationQuarterTurns,
         });
     };
-    const pushRoadMarkingDecal = (
-        idPrefix: "edge" | "decal_road_center",
-        tx: number,
-        ty: number,
-        zBase: number,
-        zLogical: number,
-        renderAnchorY: number,
-        variantIndex: number,
-        rotationQuarterTurns: 0 | 1,
-        idSuffix: string,
-    ) => {
-        const spriteId = getDecalSpriteId("road_markings", variantIndex);
-        if (!spriteId) return;
-        const key = `${variantIndex}:${Math.round(tx * 1024)}:${Math.round(ty * 1024)}:${zLogical}:${rotationQuarterTurns}`;
-        if (decalTileKeys.has(key)) return;
-        decalTileKeys.add(key);
+    const roadMarkingPipeline = buildRoadMarkingsPipeline({
+        w: worldW,
+        h: worldH,
+        originTx,
+        originTy,
+        isRoadFromSemantics: (x, y) => isRoadWorld(x, y),
+        roadBands,
+        roadIntersectionMaskWorld,
+        roadCrossingMaskWorld,
+        roadStopMaskWorld,
+        roadStopDirWorld,
+        emitStopbarCrossingOverlay: true,
+        getTileZAt: (x, y) => {
+            const tile = getTile(x, y);
+            return tile.kind === "VOID" ? 0 : (tile.h | 0);
+        },
+    });
+    for (let i = 0; i < roadMarkingPipeline.markings.length; i++) {
+        const m = roadMarkingPipeline.markings[i];
+        const sprite = resolveMarkingSprite(m.variant);
+        if (!sprite) continue;
+        const zBase = m.zBase ?? 0;
+        const zLogical = m.zLogical ?? zBase;
+        const dedupeKey = `${sprite.variantIndex}:${Math.round(m.tx * 1024)}:${Math.round(m.ty * 1024)}:${zLogical}:${m.rot}`;
+        if (decalTileKeys.has(dedupeKey)) continue;
+        decalTileKeys.add(dedupeKey);
         decals.push({
-            id: `${idPrefix}_${idSuffix}`,
-            tx,
-            ty,
+            id: m.key ? `marking_${m.key}` : `marking_${i}`,
+            tx: m.tx,
+            ty: m.ty,
             zBase,
             zLogical,
-            setId: "road_markings",
-            spriteId,
-            variantIndex,
+            setId: sprite.setId,
+            spriteId: sprite.spriteId,
+            variantIndex: sprite.variantIndex,
             semanticType: "road",
-            renderAnchorY,
-            rotationQuarterTurns,
+            renderAnchorY: floorAnchorY,
+            rotationQuarterTurns: m.rot,
         });
-    };
-    const emitRoadBandMarkings = () => {
-        const centerVariant = ROAD_CENTER_MARKING_VARIANT_INDEX;
-        const edgeVariant = 2;
-        for (let bi = 0; bi < roadBands.length; bi++) {
-            const band = roadBands[bi];
-            const rotationQuarterTurns: 0 | 1 = band.orient === "H" ? 0 : 1;
-            const perpX = band.orient === "H" ? 0 : 1;
-            const perpY = band.orient === "H" ? 1 : 0;
-            const edgeOffset = (band.roadW * 0.5) - EDGE_LINE_INSET_TILES;
-
-            for (let i = 0; i < band.roadL; i++) {
-                const sliceCenterX = band.orient === "H"
-                    ? (band.x0 + i + 0.5)
-                    : ((band.x0 + band.x1 + 1) * 0.5);
-                const sliceCenterY = band.orient === "H"
-                    ? ((band.y0 + band.y1 + 1) * 0.5)
-                    : (band.y0 + i + 0.5);
-                const sampleTx = band.orient === "H" ? (band.x0 + i) : (band.x0 + Math.floor((band.x1 - band.x0) * 0.5));
-                const sampleTy = band.orient === "H" ? (band.y0 + Math.floor((band.y1 - band.y0) * 0.5)) : (band.y0 + i);
-                if (!worldInBounds(sampleTx, sampleTy)) continue;
-                const sampleTile = getTile(sampleTx, sampleTy);
-                const zBase = sampleTile.kind === "VOID" ? 0 : (sampleTile.h | 0);
-                const zLogical = zBase;
-                const renderAnchorY = floorAnchorY;
-
-                pushRoadMarkingDecal(
-                    "decal_road_center",
-                    sliceCenterX - DOUBLE_LINE_OFFSET_TILES * perpX,
-                    sliceCenterY - DOUBLE_LINE_OFFSET_TILES * perpY,
-                    zBase,
-                    zLogical,
-                    renderAnchorY,
-                    centerVariant,
-                    rotationQuarterTurns,
-                    `${bi}_${i}_0`,
-                );
-                pushRoadMarkingDecal(
-                    "decal_road_center",
-                    sliceCenterX + DOUBLE_LINE_OFFSET_TILES * perpX,
-                    sliceCenterY + DOUBLE_LINE_OFFSET_TILES * perpY,
-                    zBase,
-                    zLogical,
-                    renderAnchorY,
-                    centerVariant,
-                    rotationQuarterTurns,
-                    `${bi}_${i}_1`,
-                );
-
-                const emitEdge = (offset: number, edgeIndex: number) => {
-                    const tx = sliceCenterX + (perpX * offset);
-                    const ty = sliceCenterY + (perpY * offset);
-                    const qx = Math.round(tx * 1024);
-                    const qy = Math.round(ty * 1024);
-                    const dbgKey = `${zLogical}:${qx}:${qy}:${rotationQuarterTurns}`;
-                    if (edgeEmitSeen.has(dbgKey)) {
-                        if (import.meta.env.DEV) {
-                            // eslint-disable-next-line no-console
-                            console.warn(`[road] duplicate edge emission at tx=${tx}, ty=${ty}, z=${zLogical}, rot=${rotationQuarterTurns}`);
-                        }
-                        return;
-                    }
-                    edgeEmitSeen.add(dbgKey);
-                    pushRoadMarkingDecal(
-                        "edge",
-                        tx,
-                        ty,
-                        zBase,
-                        zLogical,
-                        renderAnchorY,
-                        edgeVariant,
-                        rotationQuarterTurns,
-                        `${bi}_${i}_${edgeIndex}`,
-                    );
-                };
-                emitEdge(edgeOffset, 0);
-                emitEdge(-edgeOffset, 1);
-            }
-        }
-    };
-    emitRoadBandMarkings();
+    }
 
     for (const [key, tile] of placed.entries()) {
         if (tile.kind === "VOID") continue;
@@ -2441,6 +2360,8 @@ export function compileKenneyMapFromTable(
         decals,
         decalsInView,
         blockedTiles,
+        roadMarkingContext: roadMarkingPipeline.context,
+        roadMarkings: roadMarkingPipeline.markings,
         roadAreaMaskWorld,
         roadAreaWidthWorld,
         roadCenterMaskHWorld,

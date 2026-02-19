@@ -1021,6 +1021,24 @@ export function isRoadAreaTile(tx: number, ty: number): boolean {
     return _compiled.roadAreaMaskWorld[idx] === 1;
 }
 
+/** Return Stage-1 road context road mask at tile (0/1). */
+export function roadContextIsRoadAt(tx: number, ty: number): number {
+    const lx = tx - _compiled.originTx;
+    const ly = ty - _compiled.originTy;
+    if (lx < 0 || ly < 0 || lx >= _compiled.width || ly >= _compiled.height) return 0;
+    const idx = ly * _compiled.width + lx;
+    return _compiled.roadMarkingContext.isRoad[idx] | 0;
+}
+
+/** Return Stage-1 road context axis code (0=NONE, 1=EW, 2=NS). */
+export function roadContextAxisAt(tx: number, ty: number): number {
+    const lx = tx - _compiled.originTx;
+    const ly = ty - _compiled.originTy;
+    if (lx < 0 || ly < 0 || lx >= _compiled.width || ly >= _compiled.height) return 0;
+    const idx = ly * _compiled.width + lx;
+    return _compiled.roadMarkingContext.axis[idx] | 0;
+}
+
 /** Return true if tile is part of the semantic road centerline mask. */
 export function isRoadCenterTile(tx: number, ty: number): boolean {
     const lx = tx - _compiled.originTx;
