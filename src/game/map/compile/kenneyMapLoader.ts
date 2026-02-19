@@ -246,6 +246,8 @@ export type CompiledKenneyMap = {
     roadCenterMaskWorld: Uint8Array;
     roadCenterWidthWorld: Uint8Array;
     roadIntersectionMaskWorld: Uint8Array;
+    roadCrossingMaskWorld: Uint8Array;
+    roadStopMaskWorld: Uint8Array;
     roadIntersectionSeedsWorld: Array<{ tx: number; ty: number }>;
     roadIntersectionClusterCentersWorld: Array<{ worldX: number; worldY: number }>;
     isRoadWorld(x: number, y: number): boolean;
@@ -697,6 +699,8 @@ export function compileKenneyMapFromTable(
     const roadCenterMaskWorld = new Uint8Array(worldW * worldH);
     const roadCenterWidthWorld = new Uint8Array(worldW * worldH);
     const roadIntersectionMaskWorld = new Uint8Array(worldW * worldH);
+    const roadCrossingMaskWorld = new Uint8Array(worldW * worldH);
+    const roadStopMaskWorld = new Uint8Array(worldW * worldH);
     const roadIntersectionSeedsWorld: Array<{ tx: number; ty: number }> = [];
     const roadIntersectionClusterCentersWorld: Array<{ worldX: number; worldY: number }> = [];
     const worldMaxTx = originTx + worldW - 1;
@@ -905,6 +909,69 @@ export function compileKenneyMapFromTable(
             }
         }
     }
+
+    // Build crossing halo: road tiles (non-intersection) touching intersection in 8-neighborhood.
+    for (let tyWorld = originTy; tyWorld <= worldMaxTy; tyWorld++) {
+        for (let txWorld = originTx; txWorld <= worldMaxTx; txWorld++) {
+            const i = worldIndex(txWorld, tyWorld);
+            if (roadAreaMaskWorld[i] !== 1) continue;
+            if (roadIntersectionMaskWorld[i] === 1) continue;
+            let touchesIntersection = false;
+            for (let dy = -1; dy <= 1 && !touchesIntersection; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    if (dx === 0 && dy === 0) continue;
+                    const nx = txWorld + dx;
+                    const ny = tyWorld + dy;
+                    if (!worldInBounds(nx, ny)) continue;
+                    if (roadIntersectionMaskWorld[worldIndex(nx, ny)] === 1) {
+                        touchesIntersection = true;
+                        break;
+                    }
+                }
+            }
+            if (touchesIntersection) roadCrossingMaskWorld[i] = 1;
+        }
+    }
+
+    // Build stop bars: approach tiles adjacent (4-neighbor) to crossing/intersection on matching axis.
+    for (let tyWorld = originTy; tyWorld <= worldMaxTy; tyWorld++) {
+        for (let txWorld = originTx; txWorld <= worldMaxTx; txWorld++) {
+            const i = worldIndex(txWorld, tyWorld);
+            if (roadAreaMaskWorld[i] !== 1) continue;
+            if (roadIntersectionMaskWorld[i] === 1) continue;
+            if (roadCrossingMaskWorld[i] === 1) continue;
+
+            const isH = roadCenterMaskHWorld[i] === 1;
+            const isV = roadCenterMaskVWorld[i] === 1;
+            if (!isH && !isV) continue;
+
+            const leftOrRightTagged = (
+                (worldInBounds(txWorld - 1, tyWorld) && (
+                    roadIntersectionMaskWorld[worldIndex(txWorld - 1, tyWorld)] === 1 ||
+                    roadCrossingMaskWorld[worldIndex(txWorld - 1, tyWorld)] === 1
+                )) ||
+                (worldInBounds(txWorld + 1, tyWorld) && (
+                    roadIntersectionMaskWorld[worldIndex(txWorld + 1, tyWorld)] === 1 ||
+                    roadCrossingMaskWorld[worldIndex(txWorld + 1, tyWorld)] === 1
+                ))
+            );
+            const upOrDownTagged = (
+                (worldInBounds(txWorld, tyWorld - 1) && (
+                    roadIntersectionMaskWorld[worldIndex(txWorld, tyWorld - 1)] === 1 ||
+                    roadCrossingMaskWorld[worldIndex(txWorld, tyWorld - 1)] === 1
+                )) ||
+                (worldInBounds(txWorld, tyWorld + 1) && (
+                    roadIntersectionMaskWorld[worldIndex(txWorld, tyWorld + 1)] === 1 ||
+                    roadCrossingMaskWorld[worldIndex(txWorld, tyWorld + 1)] === 1
+                ))
+            );
+
+            if ((leftOrRightTagged && isH) || (upOrDownTagged && isV)) {
+                roadStopMaskWorld[i] = 1;
+            }
+        }
+    }
+
     const isRoadWorld = (txWorld: number, tyWorld: number): boolean => {
         if (!worldInBounds(txWorld, tyWorld)) return false;
         return roadAreaMaskWorld[worldIndex(txWorld, tyWorld)] === 1;
@@ -2163,6 +2230,8 @@ export function compileKenneyMapFromTable(
         roadCenterMaskWorld,
         roadCenterWidthWorld,
         roadIntersectionMaskWorld,
+        roadCrossingMaskWorld,
+        roadStopMaskWorld,
         roadIntersectionSeedsWorld,
         roadIntersectionClusterCentersWorld,
         isRoadWorld,

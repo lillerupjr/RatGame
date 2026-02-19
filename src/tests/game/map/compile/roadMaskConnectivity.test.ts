@@ -212,21 +212,37 @@ describe("canonical road semantic world masks", () => {
 
     // Mandatory metric: 5x2 crossing produces exactly 10 intersection tiles.
     let intersectionCount = 0;
+    let crossingCount = 0;
+    let stopCount = 0;
+    let overlapIntersectionCrossing = 0;
+    let overlapStopWithIntersectionOrCrossing = 0;
     let minX = Number.POSITIVE_INFINITY;
     let minY = Number.POSITIVE_INFINITY;
     let maxX = Number.NEGATIVE_INFINITY;
     let maxY = Number.NEGATIVE_INFINITY;
-    for (let i = 0; i < compiled.roadIntersectionMaskWorld.length; i++) {
-      if (compiled.roadIntersectionMaskWorld[i] !== 1) continue;
-      intersectionCount++;
-      const ty = Math.floor(i / compiled.width) + compiled.originTy;
-      const tx = (i % compiled.width) + compiled.originTx;
-      if (tx < minX) minX = tx;
-      if (tx > maxX) maxX = tx;
-      if (ty < minY) minY = ty;
-      if (ty > maxY) maxY = ty;
+    for (let i = 0; i < compiled.roadAreaMaskWorld.length; i++) {
+      const isIntersection = compiled.roadIntersectionMaskWorld[i] === 1;
+      const isCrossing = compiled.roadCrossingMaskWorld[i] === 1;
+      const isStop = compiled.roadStopMaskWorld[i] === 1;
+      if (isIntersection) {
+        intersectionCount++;
+        const ty = Math.floor(i / compiled.width) + compiled.originTy;
+        const tx = (i % compiled.width) + compiled.originTx;
+        if (tx < minX) minX = tx;
+        if (tx > maxX) maxX = tx;
+        if (ty < minY) minY = ty;
+        if (ty > maxY) maxY = ty;
+      }
+      if (isCrossing) crossingCount++;
+      if (isStop) stopCount++;
+      if (isIntersection && isCrossing) overlapIntersectionCrossing++;
+      if (isStop && (isIntersection || isCrossing)) overlapStopWithIntersectionOrCrossing++;
     }
     expect(intersectionCount).toBe(10);
+    expect(crossingCount).toBeGreaterThan(0);
+    expect(stopCount).toBeGreaterThan(0);
+    expect(overlapIntersectionCrossing).toBe(0);
+    expect(overlapStopWithIntersectionOrCrossing).toBe(0);
     const bboxW = maxX - minX + 1;
     const bboxH = maxY - minY + 1;
     expect(bboxW * bboxH).toBe(10);

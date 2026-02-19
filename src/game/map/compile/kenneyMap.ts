@@ -1048,6 +1048,24 @@ export function isRoadIntersectionTile(tx: number, ty: number): boolean {
     return _compiled.roadIntersectionMaskWorld[idx] === 1;
 }
 
+/** Return true if tile is part of the semantic road crossing-halo mask. */
+export function isRoadCrossingTile(tx: number, ty: number): boolean {
+    const lx = tx - _compiled.originTx;
+    const ly = ty - _compiled.originTy;
+    if (lx < 0 || ly < 0 || lx >= _compiled.width || ly >= _compiled.height) return false;
+    const idx = ly * _compiled.width + lx;
+    return (_compiled.roadCrossingMaskWorld?.[idx] ?? 0) === 1;
+}
+
+/** Return true if tile is part of the semantic road stop-bar mask. */
+export function isRoadStopTile(tx: number, ty: number): boolean {
+    const lx = tx - _compiled.originTx;
+    const ly = ty - _compiled.originTy;
+    if (lx < 0 || ly < 0 || lx >= _compiled.width || ly >= _compiled.height) return false;
+    const idx = ly * _compiled.width + lx;
+    return (_compiled.roadStopMaskWorld?.[idx] ?? 0) === 1;
+}
+
 /** Return representative intersection seeds used by compile-time intersection stamping. */
 export function roadIntersectionSeedsDebug(): Array<{ tx: number; ty: number }> {
     return _compiled.roadIntersectionSeedsWorld ?? [];

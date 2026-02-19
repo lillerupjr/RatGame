@@ -7,6 +7,8 @@ import {
   getRampFacesForDebug,
   isRoadAreaTile,
   isRoadCenterTile,
+  isRoadCrossingTile,
+  isRoadStopTile,
   roadIntersectionClusterCentersDebug,
   roadIntersectionSeedsDebug,
   isRoadIntersectionTile,
@@ -235,6 +237,14 @@ export function drawTriggerOverlay(ctx: DebugOverlayContext, show: boolean) {
   c.restore();
 }
 
+function roadDebugTagAt(tx: number, ty: number): string | null {
+  if (!isRoadAreaTile(tx, ty)) return null;
+  if (isRoadIntersectionTile(tx, ty)) return "INTERSECT";
+  if (isRoadCrossingTile(tx, ty)) return "CROSSING";
+  if (isRoadStopTile(tx, ty)) return "STOP_BAR";
+  return null;
+}
+
 export function drawRoadSemanticOverlay(ctx: DebugOverlayContext, show: boolean, viewRect: ViewRect) {
   if (!show) return;
 
@@ -308,6 +318,19 @@ export function drawRoadSemanticOverlay(ctx: DebugOverlayContext, show: boolean,
         c.closePath();
         c.fill();
       }
+
+      const tag = roadDebugTagAt(tx, ty);
+      if (!tag) continue;
+      c.save();
+      c.font = "9px monospace";
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.lineWidth = 2;
+      c.strokeStyle = "rgba(0,0,0,0.9)";
+      c.fillStyle = "rgba(255,255,255,0.95)";
+      c.strokeText(tag, pC.x, pC.y);
+      c.fillText(tag, pC.x, pC.y);
+      c.restore();
     }
   }
 
