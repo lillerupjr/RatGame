@@ -3,6 +3,7 @@ import {
   DOUBLE_LINE_OFFSET_TILES,
   ROAD_CENTER_MARKING_VARIANT_INDEX,
 } from "../roadMarkings";
+import { resolveMarkingPresetForWidth } from "./markingRegistry";
 import type { MarkingPiece, RoadContext, RoadMarkingInputs } from "./types";
 
 const EDGE_LINE_INSET_PX = 12;
@@ -57,6 +58,8 @@ export function generatePrimaryMarkings(context: RoadContext, inputs: RoadMarkin
 
   for (let bi = 0; bi < inputs.roadBands.length; bi++) {
     const band = inputs.roadBands[bi];
+    const preset = resolveMarkingPresetForWidth(band.roadW);
+    if (!preset.center && !preset.edge && !preset.divider) continue;
     const rot: 0 | 1 = band.orient === "H" ? 0 : 1;
     const perpX = band.orient === "H" ? 0 : 1;
     const perpY = band.orient === "H" ? 1 : 0;
@@ -75,24 +78,26 @@ export function generatePrimaryMarkings(context: RoadContext, inputs: RoadMarkin
       const sampleTy = band.orient === "H" ? (band.y0 + Math.floor((band.y1 - band.y0) * 0.5)) : (band.y0 + i);
       if (!inBounds(sampleTx, sampleTy)) continue;
 
-      push(
-        sliceCenterX - yellowOffset * perpX,
-        sliceCenterY - yellowOffset * perpY,
-        ROAD_CENTER_MARKING_VARIANT_INDEX,
-        rot,
-        `center_${bi}_${i}_0`,
-        sampleTx,
-        sampleTy,
-      );
-      push(
-        sliceCenterX + yellowOffset * perpX,
-        sliceCenterY + yellowOffset * perpY,
-        ROAD_CENTER_MARKING_VARIANT_INDEX,
-        rot,
-        `center_${bi}_${i}_1`,
-        sampleTx,
-        sampleTy,
-      );
+      if (preset.center) {
+        push(
+          sliceCenterX - yellowOffset * perpX,
+          sliceCenterY - yellowOffset * perpY,
+          ROAD_CENTER_MARKING_VARIANT_INDEX,
+          rot,
+          `center_${bi}_${i}_0`,
+          sampleTx,
+          sampleTy,
+        );
+        push(
+          sliceCenterX + yellowOffset * perpX,
+          sliceCenterY + yellowOffset * perpY,
+          ROAD_CENTER_MARKING_VARIANT_INDEX,
+          rot,
+          `center_${bi}_${i}_1`,
+          sampleTx,
+          sampleTy,
+        );
+      }
 
       const emitEdge = (offset: number, edgeIndex: number) => {
         const tx = sliceCenterX + (perpX * offset);
@@ -103,10 +108,12 @@ export function generatePrimaryMarkings(context: RoadContext, inputs: RoadMarkin
         edgeSeen.add(dbgKey);
         push(tx, ty, edgeVariant, rot, `edge_${bi}_${i}_${edgeIndex}`, sampleTx, sampleTy);
       };
-      emitEdge(edgeOffset, 0);
-      emitEdge(-edgeOffset, 1);
+      if (preset.edge) {
+        emitEdge(edgeOffset, 0);
+        emitEdge(-edgeOffset, 1);
+      }
 
-      if (band.roadW >= 4) {
+      if (preset.divider) {
         push(
           sliceCenterX + (perpX * dividerOffset),
           sliceCenterY + (perpY * dividerOffset),
