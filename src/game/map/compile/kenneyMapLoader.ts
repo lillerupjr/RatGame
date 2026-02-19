@@ -94,6 +94,11 @@ export type ViewRect = {
     minTy: number;
     maxTy: number;
 };
+
+const DOUBLE_LINE_GAP_PX = 0;
+const LINE_WIDTH_PX = 12;
+const DOUBLE_LINE_OFFSET_TILES =
+    (DOUBLE_LINE_GAP_PX * 0.5 + LINE_WIDTH_PX * 0.5) / KENNEY_TILE_WORLD;
 export type Surface = {
     id: string;
     kind: SurfaceKind;
@@ -1175,8 +1180,8 @@ export function compileKenneyMapFromTable(
         decalTileKeys.add(dedupKey);
         decals.push({
             id: `decal_${semanticType}_${tx}_${ty}_${zLogical}`,
-            tx,
-            ty,
+            tx: tx + 0.5,
+            ty: ty + 0.5,
             zBase,
             zLogical,
             setId: cfg.setId,
@@ -1186,6 +1191,109 @@ export function compileKenneyMapFromTable(
             renderAnchorY,
             rotationQuarterTurns,
         });
+    };
+    const maybeAddRoadCenterDecal = (
+        tx: number,
+        ty: number,
+        zBase: number,
+        zLogical: number,
+        renderAnchorY: number,
+    ) => {
+        if (!worldInBounds(tx, ty)) return;
+        const wi = worldIndex(tx, ty);
+        if (roadCenterMaskWorld[wi] !== 1) return;
+
+        const setId: RuntimeDecalSetId = "road_markings";
+        const variantIndex = 1; // tiles/floor/decals/road_line_yellow2
+        const spriteId = getDecalSpriteId(setId, variantIndex);
+        if (!spriteId) return;
+        const isCenterH = (x: number, y: number): boolean => {
+            if (!worldInBounds(x, y)) return false;
+            return roadCenterMaskHWorld[worldIndex(x, y)] === 1;
+        };
+        const isCenterV = (x: number, y: number): boolean => {
+            if (!worldInBounds(x, y)) return false;
+            return roadCenterMaskVWorld[worldIndex(x, y)] === 1;
+        };
+
+        const hasH = roadCenterMaskHWorld[wi] === 1;
+        const hasV = roadCenterMaskVWorld[wi] === 1;
+        // Invariant: decal anchor is always tileCenter + tileOffset in tile space.
+        const baseCenterX = tx + 0.5;
+        const baseCenterY = ty + 0.5;
+        let offsetX = 0;
+        let offsetY = 0;
+        let rotationQuarterTurns: 0 | 1 | 2 | 3 = 0;
+
+        if (hasH && !hasV) {
+            const south = isCenterH(tx, ty + 1);
+            const north = isCenterH(tx, ty - 1);
+            if (south) {
+                // Even-width horizontal road: midpoint between dual center rows.
+                offsetY = 0.5;
+            } else if (north) {
+                // Lower tile of the pair; upper tile already emitted midpoint.
+                return;
+            }
+        } else if (hasV && !hasH) {
+            const east = isCenterV(tx + 1, ty);
+            const west = isCenterV(tx - 1, ty);
+            if (east) {
+                // Even-width vertical road: midpoint between dual center columns.
+                offsetX = 0.5;
+            } else if (west) {
+                // Right tile of the pair; left tile already emitted midpoint.
+                return;
+            }
+            rotationQuarterTurns = 1;
+        } else if (hasH && hasV) {
+            // Deterministic tie-break on mixed/junction center tiles.
+            const hSpan =
+                (worldInBounds(tx - 1, ty) && roadCenterMaskHWorld[worldIndex(tx - 1, ty)] === 1 ? 1 : 0) +
+                (worldInBounds(tx + 1, ty) && roadCenterMaskHWorld[worldIndex(tx + 1, ty)] === 1 ? 1 : 0);
+            const vSpan =
+                (worldInBounds(tx, ty - 1) && roadCenterMaskVWorld[worldIndex(tx, ty - 1)] === 1 ? 1 : 0) +
+                (worldInBounds(tx, ty + 1) && roadCenterMaskVWorld[worldIndex(tx, ty + 1)] === 1 ? 1 : 0);
+            if (vSpan > hSpan) rotationQuarterTurns = 1;
+        }
+
+        const anchorX = baseCenterX + offsetX;
+        const anchorY = baseCenterY + offsetY;
+        const emitTx = anchorX;
+        const emitTy = anchorY;
+
+        const offsets = rotationQuarterTurns === 1
+            ? [
+                { dx: -DOUBLE_LINE_OFFSET_TILES, dy: 0 },
+                { dx: DOUBLE_LINE_OFFSET_TILES, dy: 0 },
+            ]
+            : [
+                { dx: 0, dy: -DOUBLE_LINE_OFFSET_TILES },
+                { dx: 0, dy: DOUBLE_LINE_OFFSET_TILES },
+            ];
+
+        for (let i = 0; i < offsets.length; i++) {
+            const tx2 = emitTx + offsets[i].dx;
+            const ty2 = emitTy + offsets[i].dy;
+
+            const key2 = `${tx2},${ty2},${zLogical}`;
+            if (decalTileKeys.has(key2)) continue;
+            decalTileKeys.add(key2);
+
+            decals.push({
+                id: `decal_road_center_${tx2}_${ty2}_${zLogical}_${i}`,
+                tx: tx2,
+                ty: ty2,
+                zBase,
+                zLogical,
+                setId,
+                spriteId,
+                variantIndex,
+                semanticType: "road",
+                renderAnchorY,
+                rotationQuarterTurns,
+            });
+        }
     };
 
     for (const [key, tile] of placed.entries()) {
@@ -1210,6 +1318,7 @@ export function compileKenneyMapFromTable(
             return undefined;
         })();
         const runtimeTop = runtimeFamilyFromTileSkin ? pickRuntimeSquareTop(runtimeFamilyFromTileSkin, tx, ty) : undefined;
+        maybeAddRoadCenterDecal(tx, ty, zBase, zLogical, renderAnchorY);
         if (runtimeFamilyFromTileSkin === "sidewalk") {
             maybeAddSemanticDecal(tx, ty, zBase, zLogical, "sidewalk", renderAnchorY);
         } else if (runtimeFamilyFromTileSkin === "asphalt") {

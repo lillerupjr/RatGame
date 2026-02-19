@@ -386,14 +386,6 @@ function installDevSettingsUi(): void {
 
 async function bootstrap() {
   await initUserSettings();
-  if (import.meta.env.DEV) {
-    updateUserSettings({
-      debug: {
-        grid: true,
-        debugRoadSemantic: true,
-      },
-    });
-  }
   installDevSettingsUi();
 
   const refs = getDomRefs();

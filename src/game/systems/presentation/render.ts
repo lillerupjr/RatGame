@@ -636,21 +636,25 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     ) => {
       const src = getRuntimeDecalSprite(setId, variantIndex);
       if (!src.ready || !src.img || src.img.width <= 0 || src.img.height <= 0) return;
+      const decalScale = setId === "road_markings" && variantIndex === 1 ? 2 : 1;
+      const srcW = src.img.width * decalScale;
+      const srcH = src.img.height * decalScale;
 
-      const wx = (tx + 0.5) * T;
-      const wy = (ty + 0.5) * T;
+      const wx = tx * T;
+      const wy = ty * T;
       const p = worldToScreen(wx, wy);
-      const centerX = snapPx(p.x + camX);
-      const centerY = snapPx(
-        p.y + camY - zBase * ELEV_PX - SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5),
-      );
+      const rawCenterX = p.x + camX;
+      const rawCenterY = p.y + camY - zBase * ELEV_PX - SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5);
+      const shouldSnapRoadMarking = setId === "road_markings" || variantIndex === 1;
+      const centerX = shouldSnapRoadMarking ? Math.round(rawCenterX) : snapPx(rawCenterX);
+      const centerY = shouldSnapRoadMarking ? Math.round(rawCenterY) : snapPx(rawCenterY);
 
       ctx.save();
       ctx.translate(centerX, centerY);
       ctx.transform(0.5, 0.25, -0.5, 0.25, 0, 0);
       ctx.rotate(rotationQuarterTurns * (Math.PI * 0.5));
-      ctx.translate(-(SIDEWALK_SRC_SIZE * 0.5), -(SIDEWALK_SRC_SIZE * 0.5));
-      ctx.drawImage(src.img, 0, 0, SIDEWALK_SRC_SIZE, SIDEWALK_SRC_SIZE);
+      ctx.translate(-(srcW * 0.5), -(srcH * 0.5));
+      ctx.drawImage(src.img, 0, 0, srcW, srcH);
       ctx.restore();
     };
 
