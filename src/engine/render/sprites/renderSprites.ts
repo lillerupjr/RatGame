@@ -75,7 +75,12 @@ function resolveUrl(spriteId: string): string | null {
     const id = remapLegacySpriteId(normalized);
     if (!isKnownRenderableSpriteId(id)) return null;
 
-    if (id.startsWith("tiles/") || id.startsWith("structures/") || id.startsWith("props/")) {
+    if (
+        id.startsWith("tiles/")
+        || id.startsWith("structures/")
+        || id.startsWith("props/")
+        || id.startsWith("entities/")
+    ) {
         return `/assets-runtime/base_db32/${id}.png`;
     }
     return null;
@@ -159,6 +164,14 @@ function loadByUrl(cacheKey: string, url: string | null): LoadedImg {
 
 export function getTileSpriteById(spriteId: string): LoadedImg {
     return loadById(spriteId);
+}
+
+export function getSpriteById(spriteId: string): LoadedImg {
+    return loadById(spriteId);
+}
+
+export function getSpriteByIdForPalette(spriteId: string, paletteId: string): LoadedImg {
+    return loadByIdInternal(spriteId, paletteId);
 }
 
 export function getRuntimeSquareFloorSprite(

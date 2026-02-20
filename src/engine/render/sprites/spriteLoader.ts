@@ -1,9 +1,10 @@
 import { type Dir8 } from "./dir8";
+import { resolveActivePaletteId } from "../../../game/render/activePalette";
+import { getSpriteByIdForPalette } from "./renderSprites";
 
 export type AnimKey = string;
 export type SpriteLoaderSource = {
     packRoot: string;
-    modules: Record<string, string>;
 };
 
 export type SpritePack = {
@@ -42,11 +43,7 @@ const DIR_FALLBACK_PRIORITY: Dir8[] = ["S", "SE", "E", "NE", "N", "NW", "W", "SW
 const DEFAULT_FRAME_COUNT = 4;
 const DEFAULT_FPS = 10;
 
-const ENEMY_ASSET_MODULES = import.meta.glob("../../../assets/enemies/**/*", {
-    eager: true,
-    import: "default",
-}) as Record<string, string>;
-const ENEMY_SOURCE: SpriteLoaderSource = { packRoot: "/enemies", modules: ENEMY_ASSET_MODULES };
+const ENEMY_SOURCE: SpriteLoaderSource = { packRoot: "entities/enemies" };
 
 const imageCache = new Map<string, Promise<HTMLImageElement>>();
 const packCache = new Map<string, Promise<SpritePack>>();
@@ -61,58 +58,49 @@ function dirKeyToDir8(key: string): Dir8 {
     return mapped;
 }
 
-function resolveUrlBySuffix(suffix: string, modules: Record<string, string>): string | null {
-    for (const [path, url] of Object.entries(modules)) {
-        if (normalizePath(path).endsWith(suffix)) return url;
-    }
-    return null;
-}
-
-function requireUrl(suffix: string, modules: Record<string, string>): string {
-    const url = resolveUrlBySuffix(suffix, modules);
-    if (!url) throw new Error(`[spriteLoader] Missing asset: ${suffix}`);
-    return url;
-}
-
 function packSuffix(packRoot: string, skin: string, relative: string): string {
     return `${packRoot}/${skin}/${relative}`;
 }
 
-function discoverAnimKeys(skin: string, source: SpriteLoaderSource): AnimKey[] {
-    const marker = `${source.packRoot}/${skin}/animations/`;
-    const keys = new Set<AnimKey>();
-    for (const path of Object.keys(source.modules)) {
-        const normalized = normalizePath(path);
-        const idx = normalized.indexOf(marker);
-        if (idx === -1) continue;
-        const rest = normalized.slice(idx + marker.length);
-        const parts = rest.split("/");
-        if (parts.length < 3) continue;
-        const animKey = parts[0];
-        if (animKey) keys.add(animKey);
-    }
-    return Array.from(keys).sort();
+function asSpriteId(assetPath: string): string {
+    const normalized = normalizePath(assetPath).replace(/^\/+/, "");
+    return normalized.toLowerCase().endsWith(".png") ? normalized.slice(0, -4) : normalized;
 }
 
-async function loadImage(url: string): Promise<HTMLImageElement> {
-    const existing = imageCache.get(url);
+async function loadImage(spriteId: string, paletteId: string): Promise<HTMLImageElement> {
+    const id = asSpriteId(spriteId);
+    const cacheId = `${id}@@pal:${paletteId}`;
+    const existing = imageCache.get(cacheId);
     if (existing) return existing;
 
     const job = new Promise<HTMLImageElement>((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error(`[spriteLoader] Failed to load: ${url}`));
-        img.src = url;
+        const started = performance.now();
+        const MAX_WAIT_MS = 1500;
+
+        const tick = () => {
+            const rec = getSpriteByIdForPalette(id, paletteId);
+            if (rec.ready) {
+                resolve(rec.img);
+                return;
+            }
+            if (performance.now() - started >= MAX_WAIT_MS) {
+                reject(new Error(`[spriteLoader] Failed to load: ${id}`));
+                return;
+            }
+            requestAnimationFrame(tick);
+        };
+
+        tick();
     });
 
-    imageCache.set(url, job);
+    imageCache.set(cacheId, job);
 
     try {
         const img = await job;
         if (img.decode) await img.decode();
         return img;
     } catch (err) {
-        imageCache.delete(url);
+        imageCache.delete(cacheId);
         throw err;
     }
 }
@@ -145,10 +133,12 @@ function packCacheKey(
     source: SpriteLoaderSource,
     animKeys?: AnimKey[],
     frameCount?: number,
+    paletteId?: string,
 ) {
     const animKey = animKeys ? animKeys.join(",") : "*";
     const frames = frameCount ?? DEFAULT_FRAME_COUNT;
-    return `${source.packRoot}:${skin}:${animKey}:${frames}`;
+    const pal = paletteId ?? "db32";
+    return `${source.packRoot}:${skin}:${animKey}:${frames}:@@pal:${pal}`;
 }
 
 export async function preloadSpritePack(
@@ -162,18 +152,18 @@ export async function preloadSpritePack(
     const source = options?.source ?? ENEMY_SOURCE;
     const animKeys = options?.animKeys;
     const frameCount = options?.frameCount ?? DEFAULT_FRAME_COUNT;
-    const cacheKey = packCacheKey(skin, source, animKeys, frameCount);
+    const paletteId = resolveActivePaletteId();
+    const cacheKey = packCacheKey(skin, source, animKeys, frameCount, paletteId);
     const cached = packCache.get(cacheKey);
     if (cached) return cached;
 
     const job = (async () => {
         const rotations: Partial<Record<Dir8, HTMLImageElement>> = {};
         const rotationJobs = DIR_KEYS.map(async (dirKey) => {
-            const url = requireUrl(
+            const img = await loadImage(
                 packSuffix(source.packRoot, skin, `rotations/${dirKey}.png`),
-                source.modules,
+                paletteId,
             );
-            const img = await loadImage(url);
             rotations[dirKeyToDir8(dirKey)] = img;
         });
         await Promise.all(rotationJobs);
@@ -183,7 +173,7 @@ export async function preloadSpritePack(
         const size = { w: south.width, h: south.height };
 
         const animations: Record<AnimKey, Partial<Record<Dir8, HTMLImageElement[]>>> = {};
-        const keys = animKeys ?? discoverAnimKeys(skin, source);
+        const keys = animKeys ?? [];
 
         for (const animKey of keys) {
             const perDir: Partial<Record<Dir8, HTMLImageElement[]>> = {};
@@ -193,12 +183,11 @@ export async function preloadSpritePack(
                 const frames: HTMLImageElement[] = new Array(frameCount);
                 for (let i = 0; i < frameCount; i++) {
                     const frameName = `frame_${String(i).padStart(3, "0")}.png`;
-                    const url = requireUrl(
-                        packSuffix(source.packRoot, skin, `animations/${animKey}/${dirKey}/${frameName}`),
-                        source.modules,
-                    );
                     animJobs.push(
-                        loadImage(url).then((img) => {
+                        loadImage(
+                            packSuffix(source.packRoot, skin, `animations/${animKey}/${dirKey}/${frameName}`),
+                            paletteId,
+                        ).then((img) => {
                             frames[i] = img;
                         }),
                     );

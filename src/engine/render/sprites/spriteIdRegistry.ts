@@ -7,6 +7,11 @@ import { RUNTIME_FLOOR_VARIANT_COUNTS } from "../../../game/content/runtimeFloor
 
 import { DIR8_ORDER } from "./dir8";
 
+const ENTITY_ASSET_MODULES = import.meta.glob("../../../assets/**/*.{png,PNG}", {
+  eager: true,
+  import: "default",
+}) as Record<string, string>;
+
 function addId(set: Set<string>, id: string | undefined): void {
   if (!id) return;
   const trimmed = id.trim();
@@ -43,10 +48,22 @@ function addRuntimeFloorAndDecalSpriteIds(out: Set<string>) {
   }
 }
 
+function addEntitySpriteIds(out: Set<string>): void {
+  for (const fullPath of Object.keys(ENTITY_ASSET_MODULES)) {
+    const marker = "/assets/";
+    const idx = fullPath.indexOf(marker);
+    if (idx === -1) continue;
+    const rel = fullPath.slice(idx + marker.length).replace(/\\/g, "/");
+    const noExt = rel.toLowerCase().endsWith(".png") ? rel.slice(0, -4) : rel;
+    out.add(`entities/${noExt}`);
+  }
+}
+
 function collectRenderableSpriteIds(): ReadonlySet<string> {
   const ids = new Set<string>();
 
   addRuntimeFloorAndDecalSpriteIds(ids);
+  addEntitySpriteIds(ids);
   for (let i = 1; i <= 6; i++) {
     addId(ids, `tiles/animated/water2/${i}`);
   }

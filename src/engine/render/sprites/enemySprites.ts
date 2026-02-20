@@ -1,4 +1,5 @@
 import { ENEMY_TYPE, type EnemyType } from "../../../game/content/enemies";
+import { resolveActivePaletteId } from "../../../game/render/activePalette";
 import { dir8FromVector } from "./dir8";
 import {
     getSpriteFrame,
@@ -16,12 +17,6 @@ type EnemySpriteDef = {
     source?: SpriteLoaderSource;
     frameCount?: number;
 };
-
-const PLAYER_ASSET_MODULES = import.meta.glob("../../../assets/player/**/*", {
-    eager: true,
-    import: "default",
-}) as Record<string, string>;
-const PLAYER_SOURCE: SpriteLoaderSource = { packRoot: "/player", modules: PLAYER_ASSET_MODULES };
 
 const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
     [ENEMY_TYPE.CHASER]: {
@@ -56,8 +51,18 @@ const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
 };
 
 const loadedPacks = new Map<string, SpritePack>();
+let loadedPaletteId = "";
+
+function refreshPaletteState(): void {
+    const paletteId = resolveActivePaletteId();
+    if (paletteId !== loadedPaletteId) {
+        loadedPaletteId = paletteId;
+        loadedPacks.clear();
+    }
+}
 
 export function preloadEnemySprites() {
+    refreshPaletteState();
     const skins = new Set<string>();
     for (const def of Object.values(ENEMY_SPRITES)) {
         if (def?.skin) skins.add(def.skin);
@@ -100,6 +105,7 @@ export function getEnemySpriteFrame(args: {
     | null {
     const def = ENEMY_SPRITES[args.type];
     if (!def) return null;
+    refreshPaletteState();
 
     const pack = loadedPacks.get(def.skin);
     if (!pack) return null;

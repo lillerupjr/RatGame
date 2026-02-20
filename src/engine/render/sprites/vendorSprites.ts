@@ -1,4 +1,6 @@
 import { type Dir8 } from "./dir8";
+import { resolveActivePaletteId } from "../../../game/render/activePalette";
+import { getSpriteById } from "./renderSprites";
 
 type SpriteFrame = {
   img: HTMLImageElement;
@@ -10,11 +12,6 @@ type SpriteFrame = {
   anchorX: number;
   anchorY: number;
 };
-
-const NPC_MODULES = import.meta.glob("../../../assets/npc/vendor/breathing-idle/**/*.png", {
-  eager: true,
-  import: "default",
-}) as Record<string, string>;
 
 const DIR_TO_PATH: Record<Dir8, string> = {
   N: "north",
@@ -37,36 +34,60 @@ let ready = false;
 let warned = false;
 let sizeW = 0;
 let sizeH = 0;
+let loadedPaletteId = "";
 
-async function loadImage(url: string): Promise<HTMLImageElement> {
+function clearFrames(): void {
+  for (const dir of Object.keys(DIR_TO_PATH) as Dir8[]) {
+    delete frameCache[dir];
+  }
+}
+
+function refreshPaletteState(): void {
+  const paletteId = resolveActivePaletteId();
+  if (paletteId !== loadedPaletteId) {
+    loadedPaletteId = paletteId;
+    ready = false;
+    warned = false;
+    sizeW = 0;
+    sizeH = 0;
+    clearFrames();
+  }
+}
+
+async function loadImage(spriteId: string): Promise<HTMLImageElement> {
   return await new Promise<HTMLImageElement>((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`[vendorSprites] Failed to load ${url}`));
-    img.src = url;
+    const started = performance.now();
+    const MAX_WAIT_MS = 1500;
+    const tick = () => {
+      const rec = getSpriteById(spriteId);
+      if (rec.ready) {
+        resolve(rec.img);
+        return;
+      }
+      if (performance.now() - started >= MAX_WAIT_MS) {
+        reject(new Error(`[vendorSprites] Failed to load ${spriteId}`));
+        return;
+      }
+      requestAnimationFrame(tick);
+    };
+    tick();
   });
 }
 
-function resolveFrameUrl(dir: Dir8, frameIndex: number): string | null {
+function resolveFrameId(dir: Dir8, frameIndex: number): string {
   const dirPath = DIR_TO_PATH[dir];
   const file = `frame_${String(frameIndex).padStart(3, "0")}.png`;
-  const key = `../../../assets/npc/vendor/breathing-idle/${dirPath}/${file}`;
-  return NPC_MODULES[key] ?? null;
+  return `entities/npc/vendor/breathing-idle/${dirPath}/${file.slice(0, -4)}`;
 }
 
 export async function preloadVendorNpcSprites(): Promise<void> {
+  refreshPaletteState();
   if (ready) return;
   try {
     for (const [dir, dirPath] of Object.entries(DIR_TO_PATH) as [Dir8, string][]) {
       const frames: HTMLImageElement[] = [];
       for (let i = 0; i < FRAME_COUNT; i++) {
-        const url = resolveFrameUrl(dir, i);
-        if (!url) {
-          throw new Error(
-            `[vendorSprites] Missing frame file for ${dirPath}/frame_${String(i).padStart(3, "0")}.png`,
-          );
-        }
-        const img = await loadImage(url);
+        const img = await loadImage(resolveFrameId(dir, i));
         if (img.decode) await img.decode();
         frames.push(img);
       }
@@ -84,10 +105,12 @@ export async function preloadVendorNpcSprites(): Promise<void> {
 }
 
 export function vendorNpcSpritesReady(): boolean {
+  refreshPaletteState();
   return ready;
 }
 
 export function getVendorNpcSpriteFrame(args: { dir: Dir8; time: number }): SpriteFrame | null {
+  refreshPaletteState();
   if (!ready) return null;
   const frames = frameCache[args.dir] ?? frameCache.S;
   if (!frames || frames.length === 0) {

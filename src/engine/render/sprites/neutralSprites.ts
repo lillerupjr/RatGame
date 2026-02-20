@@ -1,20 +1,6 @@
 import type { Dir8 } from "./dir8";
-
-const PIGEON_FLYING_FRAME_MODULES = import.meta.glob(
-  "../../../assets/animals/pigeon/animations/flying/**/*.png",
-  {
-    eager: true,
-    import: "default",
-  },
-) as Record<string, string>;
-
-const PIGEON_IDLE_FRAME_MODULES = import.meta.glob(
-  "../../../assets/animals/pigeon/rotations/**/*.png",
-  {
-    eager: true,
-    import: "default",
-  },
-) as Record<string, string>;
+import { resolveActivePaletteId } from "../../../game/render/activePalette";
+import { getSpriteById } from "./renderSprites";
 
 const DIR_TO_PATH: Record<Dir8, string> = {
   N: "north",
@@ -52,26 +38,49 @@ const pigeonIdleFramesByDir: Record<Dir8, HTMLImageElement[]> = {
 };
 
 let preloadStarted = false;
+let loadedPaletteId = "";
 
-function loadImage(url: string): Promise<HTMLImageElement> {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`[neutralSprites] Failed to load ${url}`));
-    img.src = url;
-  });
+function clearFrames(): void {
+  for (const dir of DIRS) {
+    pigeonFlyingFramesByDir[dir].length = 0;
+    pigeonIdleFramesByDir[dir].length = 0;
+  }
 }
 
-function sortedEntriesForDir(modules: Record<string, string>, basePath: string): Array<[string, string]> {
-  return Object.entries(modules)
-    .filter(([k]) => k.includes(basePath))
-    .sort((a, b) => a[0].localeCompare(b[0]));
+function refreshPaletteState(): void {
+  const paletteId = resolveActivePaletteId();
+  if (paletteId !== loadedPaletteId) {
+    loadedPaletteId = paletteId;
+    preloadStarted = false;
+    clearFrames();
+  }
+}
+
+function loadImage(spriteId: string): Promise<HTMLImageElement> {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const started = performance.now();
+    const MAX_WAIT_MS = 1500;
+    const tick = () => {
+      const rec = getSpriteById(spriteId);
+      if (rec.ready) {
+        resolve(rec.img);
+        return;
+      }
+      if (performance.now() - started >= MAX_WAIT_MS) {
+        reject(new Error(`[neutralSprites] Failed to load ${spriteId}`));
+        return;
+      }
+      requestAnimationFrame(tick);
+    };
+    tick();
+  });
 }
 
 export function getPigeonFramesForClipAndScreenDir(
   clip: "IDLE" | "TAKEOFF" | "FLY_TO_TARGET" | "LAND",
   dir: Dir8,
 ): HTMLImageElement[] {
+  refreshPaletteState();
   if (clip === "IDLE" || clip === "LAND") {
     return pigeonIdleFramesByDir[dir].length > 0 ? pigeonIdleFramesByDir[dir] : pigeonIdleFramesByDir.E;
   }
@@ -85,6 +94,7 @@ export function getPigeonFramesForClip(
 }
 
 export async function preloadNeutralMobSprites(): Promise<void> {
+  refreshPaletteState();
   if (preloadStarted) return;
   preloadStarted = true;
 
@@ -92,22 +102,15 @@ export async function preloadNeutralMobSprites(): Promise<void> {
     for (let i = 0; i < DIRS.length; i++) {
       const dir = DIRS[i];
       const dirPath = DIR_TO_PATH[dir];
-      const flyingEntries = sortedEntriesForDir(
-        PIGEON_FLYING_FRAME_MODULES,
-        `/animations/flying/${dirPath}/`,
-      );
-      const idleEntries = sortedEntriesForDir(
-        PIGEON_IDLE_FRAME_MODULES,
-        `/rotations/${dirPath}/`,
-      );
-
-      for (let fi = 0; fi < flyingEntries.length; fi++) {
-        const img = await loadImage(flyingEntries[fi][1]);
+      for (let fi = 0; fi < 10; fi++) {
+        const flyingId = `entities/animals/pigeon/animations/flying/${dirPath}/frame_${String(fi).padStart(3, "0")}`;
+        const img = await loadImage(flyingId);
         if (img.decode) await img.decode();
         pigeonFlyingFramesByDir[dir].push(img);
       }
-      for (let ii = 0; ii < idleEntries.length; ii++) {
-        const img = await loadImage(idleEntries[ii][1]);
+      for (let ii = 0; ii < 10; ii++) {
+        const idleId = `entities/animals/pigeon/rotations/${dirPath}/frame_${String(ii).padStart(3, "0")}`;
+        const img = await loadImage(idleId);
         if (img.decode) await img.decode();
         pigeonIdleFramesByDir[dir].push(img);
       }

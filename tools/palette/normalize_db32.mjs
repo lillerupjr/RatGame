@@ -9,14 +9,18 @@ const OUT_ROOT = path.join(ROOT, "public", "assets-runtime", "base_db32");
 
 const DB32_PATH = path.join(ROOT, "tools", "palettes", "db32.json");
 
-// Phase 0: normalize only these folders (small proof subset).
-// You can expand later once visuals look good.
+// Phase 0: normalize a conservative runtime subset used by current maps.
 const SUBSET_DIRS = [
-  "tiles",
+  "tiles/floor/decals",
+  "tiles/floor/road",
+  "tiles/animated",
+  "tiles/walls",
+  "tiles/stairs",
   "structures/buildings/avenue",
   "structures/buildings/china_town",
   "structures/containers",
   "props",
+  "entities",
 ];
 
 function readJson(filePath) {
@@ -107,6 +111,40 @@ function relFromAssetsRuntime(absFile) {
   return rel.replace(/\\/g, "/");
 }
 
+function countPngFiles(rootDir) {
+  if (!fs.existsSync(rootDir)) return 0;
+  return walkPngFiles(rootDir).length;
+}
+
+function reportCoverage() {
+  const totalOut = countPngFiles(OUT_ROOT);
+  console.log(`[assets:db32] Output PNGs total: ${totalOut}`);
+
+  const checks = [
+    {
+      name: "decals",
+      dir: path.join(OUT_ROOT, "tiles", "floor", "decals"),
+    },
+    {
+      name: "avenue buildings",
+      dir: path.join(OUT_ROOT, "structures", "buildings", "avenue"),
+    },
+    {
+      name: "china_town buildings",
+      dir: path.join(OUT_ROOT, "structures", "buildings", "china_town"),
+    },
+  ];
+
+  for (const check of checks) {
+    const hasPng = countPngFiles(check.dir) > 0;
+    if (!hasPng) {
+      console.warn(
+        `[assets:db32] Coverage warning: ${check.name} missing or empty at ${path.relative(ROOT, check.dir)}`,
+      );
+    }
+  }
+}
+
 function main() {
   if (!fs.existsSync(IN_ROOT)) {
     console.error(`[assets:db32] Missing input folder: ${IN_ROOT}`);
@@ -157,6 +195,7 @@ function main() {
   console.log(`[assets:db32] Files skipped: ${failed}`);
   console.log(`[assets:db32] Pixels mapped: ${pixels}`);
   console.log(`[assets:db32] Time: ${ms}ms`);
+  reportCoverage();
 }
 
 main();

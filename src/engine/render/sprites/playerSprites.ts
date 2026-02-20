@@ -1,4 +1,5 @@
 import { type Dir8 } from "./dir8";
+import { resolveActivePaletteId } from "../../../game/render/activePalette";
 import {
     getSpriteFrame,
     preloadSpritePack,
@@ -19,12 +20,7 @@ type SpriteFrame = {
     anchorY: number;
 };
 
-const PLAYER_ASSET_MODULES = import.meta.glob("../../../assets/player/**/*", {
-    eager: true,
-    import: "default",
-}) as Record<string, string>;
-
-const PLAYER_SOURCE: SpriteLoaderSource = { packRoot: "/player", modules: PLAYER_ASSET_MODULES };
+const PLAYER_SOURCE: SpriteLoaderSource = { packRoot: "entities/player" };
 const PLAYER_WALK_ANIM = "walk";
 const PLAYER_ANCHOR_X = 0.5;
 const PLAYER_ANCHOR_Y = 0.75;
@@ -43,6 +39,17 @@ export function getPlayerSkin(): string {
 }
 let playerPack: SpritePack | null = null;
 let _ready = false;
+let loadedPaletteId = "";
+
+function refreshPaletteState(): string {
+    const paletteId = resolveActivePaletteId();
+    if (paletteId !== loadedPaletteId) {
+        loadedPaletteId = paletteId;
+        playerPack = null;
+        _ready = false;
+    }
+    return paletteId;
+}
 
 export function setPlayerSkin(skin: string) {
     if (skin === playerSkin) return;
@@ -52,14 +59,11 @@ export function setPlayerSkin(skin: string) {
 }
 
 export function getPlayerIdleSpriteUrl(skin: string): string {
-    const suffix = `/player/${skin}/rotations/south.png`;
-    for (const [path, url] of Object.entries(PLAYER_ASSET_MODULES)) {
-        if (path.endsWith(suffix)) return url;
-    }
-    return "";
+    return `/assets-runtime/base_db32/entities/player/${skin}/rotations/south.png`;
 }
 
 export async function preloadPlayerSprites() {
+    refreshPaletteState();
     if (_ready) return;
 
     try {
@@ -76,6 +80,7 @@ export async function preloadPlayerSprites() {
 }
 
 export function playerSpritesReady() {
+    refreshPaletteState();
     return _ready;
 }
 
@@ -84,7 +89,11 @@ export function getPlayerSpriteFrame(args: {
     moving: boolean;
     time: number;
 }): SpriteFrame | null {
-    if (!_ready || !playerPack) return null;
+    refreshPaletteState();
+    if (!_ready || !playerPack) {
+        void preloadPlayerSprites();
+        return null;
+    }
 
     try {
         const img = getSpriteFrame(playerPack, {
