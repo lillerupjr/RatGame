@@ -1,10 +1,11 @@
 export const enum LoadingStage {
-  NONE = 0,
-  COMPILE_MAP = 1,
-  PREWARM_SPRITES = 2,
-  SPAWN_ENTITIES = 3,
-  FINALIZE = 4,
-  DONE = 5,
+  COMPILE_MAP = 0,
+  PRECOMPUTE_STATIC_MAP = 1,
+  PREWARM_DEPENDENCIES = 2,
+  PRIME_AUDIO = 3,
+  SPAWN_ENTITIES = 4,
+  FINALIZE = 5,
+  DONE = 6,
 }
 
 export interface LoadingController {
@@ -19,23 +20,27 @@ export interface LoadingController {
 
 type LoadingHooks = {
   compileMap: (mapId: string) => void | Promise<void>;
-  prewarmSprites: () => void | Promise<void>;
+  precomputeStaticMap: () => void | Promise<void>;
+  prewarmDependencies: () => boolean | Promise<boolean>;
+  primeAudio: () => void | Promise<void>;
   spawnEntities: () => void | Promise<void>;
   finalize: () => void | Promise<void>;
 };
 
 function stageProgress(stage: LoadingStage): number {
   switch (stage) {
-    case LoadingStage.NONE:
-      return 0;
     case LoadingStage.COMPILE_MAP:
-      return 0.2;
-    case LoadingStage.PREWARM_SPRITES:
-      return 0.45;
-    case LoadingStage.SPAWN_ENTITIES:
+      return 0.15;
+    case LoadingStage.PRECOMPUTE_STATIC_MAP:
+      return 0.35;
+    case LoadingStage.PREWARM_DEPENDENCIES:
+      return 0.6;
+    case LoadingStage.PRIME_AUDIO:
       return 0.75;
+    case LoadingStage.SPAWN_ENTITIES:
+      return 0.9;
     case LoadingStage.FINALIZE:
-      return 0.92;
+      return 0.98;
     case LoadingStage.DONE:
       return 1;
     default:
@@ -45,60 +50,99 @@ function stageProgress(stage: LoadingStage): number {
 
 export function createLoadingController(hooks: LoadingHooks): LoadingController {
   let currentMapId = "";
-  let activeJob: Promise<void> | null = null;
   let stageRunning = false;
+  let prewarmInitialized = false;
+  let audioPrimed = false;
+  let stageIndex = 0;
+  let stageDone = false;
+
+  const stageOrder: LoadingStage[] = [
+    LoadingStage.COMPILE_MAP,
+    LoadingStage.PRECOMPUTE_STATIC_MAP,
+    LoadingStage.PREWARM_DEPENDENCIES,
+    LoadingStage.PRIME_AUDIO,
+    LoadingStage.SPAWN_ENTITIES,
+    LoadingStage.FINALIZE,
+  ];
+
+  const runCurrentStage = async (stage: LoadingStage): Promise<void> => {
+    switch (stage) {
+      case LoadingStage.COMPILE_MAP:
+        await hooks.compileMap(currentMapId);
+        stageDone = true;
+        break;
+      case LoadingStage.PRECOMPUTE_STATIC_MAP:
+        await hooks.precomputeStaticMap();
+        stageDone = true;
+        break;
+      case LoadingStage.PREWARM_DEPENDENCIES:
+        if (!prewarmInitialized) prewarmInitialized = true;
+        stageDone = await hooks.prewarmDependencies();
+        break;
+      case LoadingStage.PRIME_AUDIO:
+        if (!audioPrimed) {
+          await hooks.primeAudio();
+          audioPrimed = true;
+        }
+        stageDone = true;
+        break;
+      case LoadingStage.SPAWN_ENTITIES:
+        await hooks.spawnEntities();
+        stageDone = true;
+        break;
+      case LoadingStage.FINALIZE:
+        await hooks.finalize();
+        stageDone = true;
+        break;
+      default:
+        stageDone = true;
+        break;
+    }
+  };
 
   const controller: LoadingController = {
-    stage: LoadingStage.NONE,
+    stage: LoadingStage.COMPILE_MAP,
     progress: 0,
     beginMapLoad(mapId: string) {
       currentMapId = mapId;
-      activeJob = null;
       stageRunning = false;
-      controller.stage = LoadingStage.COMPILE_MAP;
+      prewarmInitialized = false;
+      audioPrimed = false;
+      stageIndex = 0;
+      stageDone = false;
+      controller.stage = stageOrder[0];
       controller.progress = stageProgress(LoadingStage.COMPILE_MAP);
     },
     tick() {
-      if (controller.stage === LoadingStage.NONE || controller.stage === LoadingStage.DONE) return;
+      if (stageIndex >= stageOrder.length) {
+        controller.stage = LoadingStage.DONE;
+        controller.progress = 1;
+        return;
+      }
       if (stageRunning) return;
 
-      const runStage = async () => {
-        switch (controller.stage) {
-          case LoadingStage.COMPILE_MAP:
-            await hooks.compileMap(currentMapId);
-            controller.stage = LoadingStage.PREWARM_SPRITES;
-            break;
-          case LoadingStage.PREWARM_SPRITES:
-            await hooks.prewarmSprites();
-            controller.stage = LoadingStage.SPAWN_ENTITIES;
-            break;
-          case LoadingStage.SPAWN_ENTITIES:
-            await hooks.spawnEntities();
-            controller.stage = LoadingStage.FINALIZE;
-            break;
-          case LoadingStage.FINALIZE:
-            await hooks.finalize();
-            controller.stage = LoadingStage.DONE;
-            break;
-          default:
-            controller.stage = LoadingStage.DONE;
-            break;
-        }
-      };
+      const stage = stageOrder[stageIndex];
+      controller.stage = stage;
 
       stageRunning = true;
-      activeJob = runStage()
-        .catch(() => {
-          controller.stage = LoadingStage.DONE;
-        })
+      void runCurrentStage(stage)
         .finally(() => {
           stageRunning = false;
-          controller.progress = Math.max(controller.progress, stageProgress(controller.stage));
-          activeJob = null;
+          if (stageDone) {
+            stageIndex++;
+            stageDone = false;
+          }
+          if (stageIndex >= stageOrder.length) {
+            controller.stage = LoadingStage.DONE;
+            controller.progress = 1;
+          } else {
+            controller.stage = stageOrder[stageIndex];
+            controller.progress = Math.max(controller.progress, stageProgress(controller.stage));
+          }
         });
     },
     isDone() {
-      return controller.stage === LoadingStage.DONE && !activeJob && !stageRunning;
+      return stageIndex >= stageOrder.length;
     },
   };
 

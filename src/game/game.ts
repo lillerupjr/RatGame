@@ -163,6 +163,22 @@ type FloorLoadContext = {
   floorIntent: FloorIntent;
 };
 
+export function precomputeStaticMapData(): void {
+  const map = getActiveMapDef() as any;
+  if (!map) return;
+
+  // Place all expensive O(mapTiles) stable computations here.
+  if (!map.walkableMaskComputed && typeof map.computeWalkableMask === "function") {
+    map.computeWalkableMask();
+    map.walkableMaskComputed = true;
+  }
+
+  if (!map.roadContextComputed && typeof map.computeRoadContext === "function") {
+    map.computeRoadContext();
+    map.roadContextComputed = true;
+  }
+}
+
 
 /** Create a game instance and return update/render/start handlers. */
 export function createGame(args: CreateGameArgs) {

@@ -1,8 +1,12 @@
 // src/main.ts
-import { createGame } from "./game/game";
+import { createGame, precomputeStaticMapData } from "./game/game";
 import { AppState, RunState, createAppStateController } from "./game/app/appState";
 import { createLoadingController } from "./game/app/loadingFlow";
 import { renderLoadingScreen } from "./game/app/loadingScreen";
+import { collectFloorDependencies } from "./game/loading/dependencyCollector";
+import { primeAudio } from "./game/audio/audioManager";
+import { resolveActivePaletteId } from "./game/render/activePalette";
+import { enqueueSpritePrewarm, tickSpritePrewarm } from "./engine/render/sprites/renderSprites";
 import { resizeCanvasPixelPerfect } from "./engine/render/pixelPerfect";
 import { getDomRefs } from "./ui/domRefs";
 import { wireMenus } from "./ui/menuWiring";
@@ -441,6 +445,26 @@ function installDevSettingsUi(): void {
 }
 
 async function bootstrap() {
+  // Prevent any menu screen flash before the BOOT loading loop takes over.
+  const prebootHideIds = [
+    "welcomeScreen",
+    "mainMenu",
+    "characterSelect",
+    "mapMenu",
+    "innkeeperMenu",
+    "settingsMenu",
+    "menu",
+    "hud",
+    "map",
+    "levelup",
+    "end",
+    "dialogBar",
+  ];
+  for (let i = 0; i < prebootHideIds.length; i++) {
+    const el = document.getElementById(prebootHideIds[i]) as HTMLElement | null;
+    if (el) el.hidden = true;
+  }
+
   await initUserSettings();
   installDevSettingsUi();
 
@@ -468,6 +492,64 @@ async function bootstrap() {
 
   wireMenus(refs, game);
 
+  function syncUiForAppState(appState: AppState): void {
+    if (appState === AppState.BOOT || appState === AppState.LOADING) {
+      refs.welcomeScreen.hidden = true;
+      refs.mainMenuEl.hidden = true;
+      refs.characterSelectEl.hidden = true;
+      refs.mapMenuEl.hidden = true;
+      refs.innkeeperMenuEl.hidden = true;
+      refs.settingsMenuEl.hidden = true;
+      refs.ui.menuEl.hidden = true;
+      refs.hud.root.hidden = true;
+      refs.ui.mapEl.root.hidden = true;
+      refs.ui.levelupEl.root.hidden = true;
+      refs.ui.endEl.root.hidden = true;
+      refs.ui.dialogEl.root.hidden = true;
+      return;
+    }
+    if (appState === AppState.MENU) {
+      refs.ui.menuEl.hidden = true;
+      refs.hud.root.hidden = true;
+      refs.ui.levelupEl.root.hidden = true;
+      refs.ui.endEl.root.hidden = true;
+      refs.ui.dialogEl.root.hidden = true;
+
+      if (!refs.ui.mapEl.root.hidden) {
+        refs.welcomeScreen.hidden = true;
+        refs.mainMenuEl.hidden = true;
+        refs.characterSelectEl.hidden = true;
+        refs.mapMenuEl.hidden = true;
+        refs.innkeeperMenuEl.hidden = true;
+        refs.settingsMenuEl.hidden = true;
+        return;
+      }
+
+      const hasVisibleMenuScreen =
+        !refs.welcomeScreen.hidden
+        || !refs.mainMenuEl.hidden
+        || !refs.characterSelectEl.hidden
+        || !refs.mapMenuEl.hidden
+        || !refs.innkeeperMenuEl.hidden
+        || !refs.settingsMenuEl.hidden
+        || !refs.ui.mapEl.root.hidden;
+
+      if (!hasVisibleMenuScreen) {
+        refs.welcomeScreen.hidden = false;
+      }
+      return;
+    }
+    if (appState === AppState.RUN) {
+      refs.welcomeScreen.hidden = true;
+      refs.mainMenuEl.hidden = true;
+      refs.characterSelectEl.hidden = true;
+      refs.mapMenuEl.hidden = true;
+      refs.innkeeperMenuEl.hidden = true;
+      refs.settingsMenuEl.hidden = true;
+      refs.ui.menuEl.hidden = true;
+    }
+  }
+
   const appStateController = createAppStateController();
   let bootProgress = 0;
   let activeStartIntent: ReturnType<typeof game.consumePendingStartIntent> = null;
@@ -476,9 +558,13 @@ async function bootstrap() {
   const LOADING_SCREEN_EXTRA_MS = 3000;
   let bootScreenStartedAt = performance.now();
   let loadingScreenStartedAt = 0;
+  let prewarmQueued = false;
+  let cachedDeps: ReturnType<typeof collectFloorDependencies> | null = null;
 
   const loadingController = createLoadingController({
     compileMap: async () => {
+      prewarmQueued = false;
+      cachedDeps = null;
       if (activeStartIntent) {
         game.prepareStartMap(activeStartIntent);
         return;
@@ -487,14 +573,21 @@ async function bootstrap() {
         game.beginFloorLoad(activeFloorIntent);
       }
     },
-    prewarmSprites: async () => {
-      if (activeStartIntent) {
-        await game.prewarmActiveMapSpritesForCurrentPalette();
-        return;
+    precomputeStaticMap: async () => {
+      precomputeStaticMapData();
+    },
+    prewarmDependencies: async () => {
+      if (!cachedDeps) cachedDeps = collectFloorDependencies();
+      if (!cachedDeps.spriteIds.length) return true;
+      if (!prewarmQueued) {
+        enqueueSpritePrewarm(cachedDeps.spriteIds, resolveActivePaletteId());
+        prewarmQueued = true;
       }
-      if (activeFloorIntent) {
-        await game.prewarmFloorLoadSprites();
-      }
+      return tickSpritePrewarm(8);
+    },
+    primeAudio: async () => {
+      const deps = cachedDeps ?? collectFloorDependencies();
+      await primeAudio(deps.audioIds);
     },
     spawnEntities: async () => {
       if (activeStartIntent) {
@@ -572,6 +665,7 @@ async function bootstrap() {
   function frame(now: number) {
     const dt = Math.min(0.033, (now - last) / 1000);
     last = now;
+    syncUiForAppState(appStateController.appState);
 
     switch (appStateController.appState) {
       case AppState.BOOT:

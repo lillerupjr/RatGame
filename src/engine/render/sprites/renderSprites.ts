@@ -19,10 +19,13 @@ export type LoadedImg = {
     img: HTMLImageElement;
     ready: boolean;
 };
+export type PaletteId = ReturnType<typeof resolveActivePaletteId>;
 
 const cache: Record<string, LoadedImg> = Object.create(null);
 const WATER_FRAME_COUNT = 6;
 const WATER_FRAME_MS = 150;
+const prewarmQueue: { spriteId: string; paletteId: PaletteId }[] = [];
+let prewarmActive = false;
 
 function effectivePaletteId(forcedPaletteId?: string): string {
     if (forcedPaletteId) return forcedPaletteId;
@@ -272,4 +275,31 @@ export async function prewarmPaletteSprites(
 
         tick();
     });
+}
+
+export function enqueueSpritePrewarm(
+    spriteIds: string[],
+    paletteId: PaletteId,
+): void {
+    const ids = Array.from(new Set(spriteIds.map((s) => s.trim()).filter(Boolean)));
+    for (const id of ids) {
+        prewarmQueue.push({ spriteId: id, paletteId });
+    }
+    prewarmActive = prewarmQueue.length > 0;
+}
+
+export function tickSpritePrewarm(budgetMs: number): boolean {
+    if (!prewarmActive) return true;
+
+    const start = performance.now();
+    while (prewarmQueue.length > 0) {
+        const item = prewarmQueue.shift()!;
+        void loadByIdInternal(item.spriteId, item.paletteId);
+        if (performance.now() - start >= budgetMs) {
+            return false;
+        }
+    }
+
+    prewarmActive = false;
+    return true;
 }
