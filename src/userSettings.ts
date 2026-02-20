@@ -9,16 +9,21 @@ export type RenderSettings = {
     | "db32"
     | "divination"
     | "cyberpunk"
-    | "sunset_8"
-    | "s_sunset7"
     | "moonlight_15"
     | "st8_moonlight"
-    | "noire_truth"
     | "chroma_noir"
-    | "sunny_swamp"
     | "swamp_kin"
-    | "cobalt_desert_7"
-    | "lost_in_the_desert";
+    | "lost_in_the_desert"
+    | "endesga_16"
+    | "sweetie_16"
+    | "dawnbringer_16"
+    | "night_16"
+    | "fun_16"
+    | "reha_16"
+    | "arne_16"
+    | "lush_sunset"
+    | "vaporhaze_16"
+    | "sunset_cave_extended";
 };
 
 export type UserSettings = {

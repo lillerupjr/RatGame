@@ -24,16 +24,21 @@ export type PaletteId =
   | "db32"
   | "divination"
   | "cyberpunk"
-  | "sunset_8"
-  | "s_sunset7"
   | "moonlight_15"
   | "st8_moonlight"
-  | "noire_truth"
   | "chroma_noir"
-  | "sunny_swamp"
   | "swamp_kin"
-  | "cobalt_desert_7"
-  | "lost_in_the_desert";
+  | "lost_in_the_desert"
+  | "endesga_16"
+  | "sweetie_16"
+  | "dawnbringer_16"
+  | "night_16"
+  | "fun_16"
+  | "reha_16"
+  | "arne_16"
+  | "lush_sunset"
+  | "vaporhaze_16"
+  | "sunset_cave_extended";
 
 export type MapSkinBundle = {
   paletteId?: PaletteId;
@@ -115,7 +120,7 @@ export const MAP_SKINS: Record<string, MapSkinBundle> = {
 
   green: {
     // “green” is a park-ish feel: swamp pool for now
-    palettePool: ["sunny_swamp", "swamp_kin"],
+    palettePool: ["swamp_kin", "fun_16"],
     floor: "tiles/floor/park/1",
     apron: "tiles/walls/green",
     wall: "tiles/walls/green",
@@ -124,7 +129,7 @@ export const MAP_SKINS: Record<string, MapSkinBundle> = {
 
   avenue: {
     // Avenue: sunset pool (warm city evening)
-    palettePool: ["sunset_8", "s_sunset7"],
+    palettePool: ["lush_sunset", "sunset_cave_extended"],
   },
 
   china_town: {
@@ -154,16 +159,16 @@ export const MAP_SKINS: Record<string, MapSkinBundle> = {
   // ----------------------------
 
   downtown: {
-    palettePool: ["noire_truth", "chroma_noir"],
+    palettePool: ["night_16", "chroma_noir"],
   },
 
   beach: {
     // Beach: sunset + desert contrast (lets us reuse existing pool ideas)
-    palettePool: ["sunset_8", "lost_in_the_desert"],
+    palettePool: ["lush_sunset", "lost_in_the_desert"],
   },
 
   park: {
-    palettePool: ["sunny_swamp", "swamp_kin"],
+    palettePool: ["fun_16", "swamp_kin"],
   },
 
   industrial: {
@@ -175,7 +180,7 @@ export const MAP_SKINS: Record<string, MapSkinBundle> = {
   },
 
   subway: {
-    palettePool: ["st8_moonlight", "noire_truth"],
+    palettePool: ["st8_moonlight", "night_16"],
   },
 
   rooftops: {
@@ -183,7 +188,7 @@ export const MAP_SKINS: Record<string, MapSkinBundle> = {
   },
 
   countryside: {
-    palettePool: ["sunset_8", "sunny_swamp"],
+    palettePool: ["lush_sunset", "fun_16"],
   },
 
   snow: {
@@ -191,7 +196,7 @@ export const MAP_SKINS: Record<string, MapSkinBundle> = {
   },
 
   desert: {
-    palettePool: ["cobalt_desert_7", "lost_in_the_desert"],
+    palettePool: ["sunset_cave_extended", "lost_in_the_desert"],
   },
 };
 
