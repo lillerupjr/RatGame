@@ -135,6 +135,57 @@ function installDevSettingsUi(): void {
   entityAnchorsRow.appendChild(entityAnchorsInput);
   panel.appendChild(entityAnchorsRow);
 
+  const paletteSwapRow = document.createElement("label");
+  paletteSwapRow.style.display = "flex";
+  paletteSwapRow.style.alignItems = "center";
+  paletteSwapRow.style.justifyContent = "space-between";
+  paletteSwapRow.style.gap = "10px";
+  paletteSwapRow.style.padding = "4px 0";
+  const paletteSwapText = document.createElement("span");
+  paletteSwapText.textContent = "paletteSwapEnabled";
+  const paletteSwapInput = document.createElement("input");
+  paletteSwapInput.type = "checkbox";
+  paletteSwapInput.addEventListener("change", () => {
+    updateUserSettings({
+      render: {
+        paletteSwapEnabled: paletteSwapInput.checked,
+      },
+    });
+  });
+  paletteSwapRow.appendChild(paletteSwapText);
+  paletteSwapRow.appendChild(paletteSwapInput);
+  panel.appendChild(paletteSwapRow);
+
+  const paletteIdRow = document.createElement("label");
+  paletteIdRow.style.display = "flex";
+  paletteIdRow.style.alignItems = "center";
+  paletteIdRow.style.justifyContent = "space-between";
+  paletteIdRow.style.gap = "10px";
+  paletteIdRow.style.padding = "4px 0";
+  const paletteIdText = document.createElement("span");
+  paletteIdText.textContent = "paletteId";
+  const paletteIdSelect = document.createElement("select");
+  paletteIdSelect.style.background = "rgba(20,20,20,0.9)";
+  paletteIdSelect.style.color = "#fff";
+  paletteIdSelect.style.border = "1px solid rgba(255,255,255,0.25)";
+  paletteIdSelect.style.borderRadius = "4px";
+  for (const id of ["db32", "divination"] as const) {
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = id;
+    paletteIdSelect.appendChild(opt);
+  }
+  paletteIdSelect.addEventListener("change", () => {
+    updateUserSettings({
+      render: {
+        paletteId: paletteIdSelect.value as "db32" | "divination",
+      },
+    });
+  });
+  paletteIdRow.appendChild(paletteIdText);
+  paletteIdRow.appendChild(paletteIdSelect);
+  panel.appendChild(paletteIdRow);
+
   const modeRow = document.createElement("label");
   modeRow.style.display = "flex";
   modeRow.style.alignItems = "center";
@@ -372,6 +423,8 @@ function installDevSettingsUi(): void {
     waterFlowValue.textContent = `${s.debug.waterFlowRate.toFixed(2)}x`;
     entityShadowsInput.checked = s.render.entityShadowsEnabled;
     entityAnchorsInput.checked = s.render.entityAnchorsEnabled;
+    paletteSwapInput.checked = s.render.paletteSwapEnabled;
+    paletteIdSelect.value = s.render.paletteId;
   };
 
   const setOpen = (open: boolean) => {
@@ -415,6 +468,19 @@ async function bootstrap() {
   // Runtime render/debug toggles (works outside dev panel too).
   window.addEventListener("keydown", (ev) => {
     if (ev.repeat) return;
+
+    if (ev.code === "F5") {
+      ev.preventDefault();
+      const current = getUserSettings().render;
+      if (!current.paletteSwapEnabled) {
+        updateUserSettings({ render: { paletteSwapEnabled: true, paletteId: "divination" } });
+      } else if (current.paletteId === "divination") {
+        updateUserSettings({ render: { paletteSwapEnabled: true, paletteId: "db32" } });
+      } else {
+        updateUserSettings({ render: { paletteSwapEnabled: false } });
+      }
+      return;
+    }
 
     if (ev.code === "F8") {
       const next = !getUserSettings().debug.entityAnchorOverlay;

@@ -3,6 +3,9 @@ import { DEFAULT_DEBUG_SETTINGS, type DebugSettings } from "./debugSettings";
 export type RenderSettings = {
   entityShadowsEnabled: boolean;
   entityAnchorsEnabled: boolean;
+  // Palette swap (Phase 1): apply at sprite load time, cached.
+  paletteSwapEnabled: boolean;
+  paletteId: "db32" | "divination";
 };
 
 export type UserSettings = {
@@ -20,6 +23,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
   render: {
     entityShadowsEnabled: true,
     entityAnchorsEnabled: true,
+    paletteSwapEnabled: false,
+    paletteId: "db32",
   },
 };
 

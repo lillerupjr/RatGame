@@ -1,6 +1,8 @@
 import { resolveMapSkin, resolveSemanticSprite, type MapSkinId } from "../../../game/content/mapSkins";
 import { isKnownRenderableSpriteId } from "./spriteIdRegistry";
 import { getFloorVariantCount, RUNTIME_FLOOR_VARIANT_COUNTS, type RuntimeFloorFamily } from "../../../game/content/runtimeFloorConfig";
+import { getUserSettings } from "../../../userSettings";
+import { applyPaletteSwapToCanvas } from "../palette/paletteSwap";
 import {
     getDecalSpriteId,
     RUNTIME_DECAL_SPRITE_IDS,
@@ -63,17 +65,23 @@ function resolveUrl(spriteId: string): string | null {
     if (!isKnownRenderableSpriteId(id)) return null;
 
     if (id.startsWith("tiles/") || id.startsWith("structures/") || id.startsWith("props/")) {
-        return `/assets-runtime/${id}.png`;
+        return `/assets-runtime/base_db32/${id}.png`;
     }
     return null;
 }
 
 function loadById(spriteId: string): LoadedImg {
-    const key = spriteId.trim();
-    if (!key) return { img: new Image(), ready: false };
+    const rawId = spriteId.trim();
+    const s = getUserSettings();
+    const paletteKey =
+        s.render.paletteSwapEnabled && s.render.paletteId !== "db32"
+            ? `@@pal:${s.render.paletteId}`
+            : "@@pal:db32";
+    const key = `${rawId}${paletteKey}`;
+    if (!rawId) return { img: new Image(), ready: false };
     if (cache[key]) return cache[key];
 
-    const url = resolveUrl(key);
+    const url = resolveUrl(rawId);
     if (!url) {
         console.warn(`[renderSprites] Missing tile sprite: ${spriteId}`);
         const rec = { img: new Image(), ready: false };
@@ -85,7 +93,32 @@ function loadById(spriteId: string): LoadedImg {
     const rec: LoadedImg = { img, ready: false };
     cache[key] = rec;
 
-    img.onload = () => (rec.ready = true);
+    img.onload = () => {
+        const s2 = getUserSettings();
+        const enabled = s2.render.paletteSwapEnabled && s2.render.paletteId !== "db32";
+
+        if (!enabled) {
+            rec.ready = true;
+            return;
+        }
+
+        // Swap into a canvas, then convert to an Image so downstream types remain unchanged.
+        try {
+            const swappedCanvas = applyPaletteSwapToCanvas(img, s2.render.paletteId);
+
+            const swappedImg = new Image();
+            swappedImg.onload = () => {
+                rec.img = swappedImg;
+                rec.ready = true;
+            };
+            swappedImg.onerror = () => {
+                rec.ready = true; // fallback to original image if conversion fails
+            };
+            swappedImg.src = swappedCanvas.toDataURL("image/png");
+        } catch {
+            rec.ready = true;
+        }
+    };
     img.onerror = () => (rec.ready = false);
     img.src = url;
 
@@ -131,8 +164,7 @@ export function getRuntimeDecalSprite(
 ): LoadedImg {
     const spriteId = getDecalSpriteId(setId, variantIndex);
     if (!spriteId) return { img: new Image(), ready: false };
-    const url = `/assets-runtime/${spriteId}.png`;
-    return loadByUrl(spriteId, url);
+    return loadById(spriteId);
 }
 
 let _activeMapSkinId: MapSkinId | undefined = undefined;
