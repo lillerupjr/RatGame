@@ -58,6 +58,7 @@ import { preloadPlayerSprites, setPlayerSkin } from "../engine/render/sprites/pl
 import { preloadVendorNpcSprites } from "../engine/render/sprites/vendorSprites";
 import { preloadBackgrounds } from "./render/background";
 import { getProjectileSpriteByKind, preloadProjectileSprites } from "../engine/render/sprites/projectileSprites";
+import { prewarmPaletteSprites } from "../engine/render/sprites/renderSprites";
 import { setMusicStage, stopMusic } from "../engine/audio/music";
 import type { TableMapCell, TableMapDef } from "./map/formats/table/tableMapTypes";
 import { AUTHORED_MAP_DEFS, getAuthoredMapDefByMapId } from "./map/authored/authoredMapRegistry";
@@ -88,6 +89,7 @@ import { spawnMilestonePigeonNearPlayer } from "./factories/neutralMobFactory";
 import { neutralAnimatedMobsSystem } from "./systems/sim/neutralAnimatedMobs";
 import { neutralBirdAISystem } from "./systems/sim/neutralBirdAI";
 import { getZoneTrialObjectiveState, startZoneTrial, updateZoneTrialObjective } from "./objectives/zoneObjectiveSystem";
+import { collectRuntimeSpriteIdsToPrewarm } from "./render/prewarmSprites";
 
 
 type HudRefs = {
@@ -760,7 +762,7 @@ export function createGame(args: CreateGameArgs) {
     return false;
   }
 
-  function enterFloor(w: World, floorIntent: FloorIntent) {
+  async function enterFloor(w: World, floorIntent: FloorIntent): Promise<void> {
     setDialog(null);
     if (w.delveMap && !floorIntent.mapId) {
       console.error("[enterFloor] delve floor intent missing mapId");
@@ -769,9 +771,6 @@ export function createGame(args: CreateGameArgs) {
     w.floorIndex = floorIntent.floorIndex;
     w.floorArchetype = floorIntent.archetype;
     w.currentFloorIntent = floorIntent;
-    w.runState = "FLOOR";
-    w.phaseTime = 0;
-    w.transitionTime = 0;
 
     const sid = floorIntent.zoneId;
 
@@ -818,6 +817,13 @@ export function createGame(args: CreateGameArgs) {
         }
       }
     }
+
+    const s = getUserSettings();
+    if (s.render.paletteSwapEnabled && s.render.paletteId && s.render.paletteId !== "db32") {
+      const spriteIds = collectRuntimeSpriteIdsToPrewarm(w);
+      await prewarmPaletteSprites(s.render.paletteId, spriteIds);
+    }
+
     const spawn = getSpawnWorldFromActive();
     const anchor = anchorFromWorld(spawn.x, spawn.y, KENNEY_TILE_WORLD);
     w.pgxi = anchor.gxi;
@@ -847,6 +853,9 @@ export function createGame(args: CreateGameArgs) {
       floorIntent.archetype === "VENDOR" ? generateVendorOffers(floorIntent) : [];
     (w as any)._surviveBossSpawned = false;
     w.bossZoneSpawned = [];
+    w.runState = "FLOOR";
+    w.phaseTime = 0;
+    w.transitionTime = 0;
 
     emitEvent(w, { type: "SFX", id: "FLOOR_START", vol: 0.9, rate: 1 });
   }
@@ -1738,7 +1747,7 @@ export function createGame(args: CreateGameArgs) {
         world.transitionTime = Math.max(0, world.transitionTime - dt);
         if (world.transitionTime <= 0) {
           const nextFloorIndex = (world.floorIndex ?? 0) + 1;
-          enterFloor(world, buildFallbackFloorIntent(world, nextFloorIndex));
+          void enterFloor(world, buildFallbackFloorIntent(world, nextFloorIndex));
         }
       }
     }
@@ -1902,7 +1911,7 @@ export function createGame(args: CreateGameArgs) {
     hideLevelUp();
   });
 
-  args.ui.mapEl.root.addEventListener("click", (e) => {
+  args.ui.mapEl.root.addEventListener("click", async (e) => {
     const el = e.target as HTMLElement;
     const btn = el.closest("button") as HTMLButtonElement | null;
     if (!btn) return;
@@ -1914,8 +1923,7 @@ export function createGame(args: CreateGameArgs) {
       world.delveDepth = depth;
       world.delveScaling = getDepthScaling(depth);
       hideMap();
-      world.state = "RUN";
-      enterFloor(
+      await enterFloor(
         world,
         buildDeterministicFloorIntent({
           archetype: detArchetype,
@@ -1923,6 +1931,7 @@ export function createGame(args: CreateGameArgs) {
           depth,
         }),
       );
+      world.state = "RUN";
       return;
     }
 
@@ -1945,12 +1954,12 @@ export function createGame(args: CreateGameArgs) {
       ensureAdjacentNodes(delve, delveNodeId, seed);
 
       hideMap();
-      world.state = "RUN";
 
       // Enter the chosen zone with depth-scaled difficulty
       // floorIndex is used for enemy type weights, zoneId for visuals/music
       const floorIndex = Math.min(2, Math.floor((depth - 1) / 3));
-      enterFloor(world, buildFloorIntentFromDelveNode(node, floorIndex));
+      await enterFloor(world, buildFloorIntentFromDelveNode(node, floorIndex));
+      world.state = "RUN";
       return;
     }
 
@@ -1968,10 +1977,10 @@ export function createGame(args: CreateGameArgs) {
     const nextFloor = (world as any).mapPendingNextFloorIndex as number;
 
     hideMap();
-    world.state = "RUN";
 
     // Enter chosen floor/zone (boss is still at end of the floor like today)
-    enterFloor(world, buildFloorIntentFromRunNode(node, nextFloor));
+    await enterFloor(world, buildFloorIntentFromRunNode(node, nextFloor));
+    world.state = "RUN";
   });
 
   // Level-up choice click

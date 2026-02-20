@@ -18,6 +18,15 @@ const cache: Record<string, LoadedImg> = Object.create(null);
 const WATER_FRAME_COUNT = 6;
 const WATER_FRAME_MS = 150;
 
+function effectivePaletteId(forcedPaletteId?: string): string {
+    if (forcedPaletteId && forcedPaletteId !== "db32") return forcedPaletteId;
+    const s = getUserSettings();
+    if (s.render.paletteSwapEnabled && s.render.paletteId !== "db32") {
+        return s.render.paletteId;
+    }
+    return "db32";
+}
+
 function normalizeSpriteId(spriteId: string): string {
     const trimmed = spriteId.trim();
     return trimmed.toLowerCase().endsWith(".png") ? trimmed.slice(0, -4) : trimmed;
@@ -70,13 +79,12 @@ function resolveUrl(spriteId: string): string | null {
     return null;
 }
 
-function loadById(spriteId: string): LoadedImg {
+function loadByIdInternal(spriteId: string, forcedPaletteId?: string): LoadedImg {
     const rawId = spriteId.trim();
-    const s = getUserSettings();
-    const paletteKey =
-        s.render.paletteSwapEnabled && s.render.paletteId !== "db32"
-            ? `@@pal:${s.render.paletteId}`
-            : "@@pal:db32";
+    const activePaletteId = effectivePaletteId(forcedPaletteId);
+    const paletteKey = activePaletteId !== "db32"
+        ? `@@pal:${activePaletteId}`
+        : "@@pal:db32";
     const key = `${rawId}${paletteKey}`;
     if (!rawId) return { img: new Image(), ready: false };
     if (cache[key]) return cache[key];
@@ -94,8 +102,7 @@ function loadById(spriteId: string): LoadedImg {
     cache[key] = rec;
 
     img.onload = () => {
-        const s2 = getUserSettings();
-        const enabled = s2.render.paletteSwapEnabled && s2.render.paletteId !== "db32";
+        const enabled = activePaletteId !== "db32";
 
         if (!enabled) {
             rec.ready = true;
@@ -104,7 +111,7 @@ function loadById(spriteId: string): LoadedImg {
 
         // Swap into a canvas, then convert to an Image so downstream types remain unchanged.
         try {
-            const swappedCanvas = applyPaletteSwapToCanvas(img, s2.render.paletteId);
+            const swappedCanvas = applyPaletteSwapToCanvas(img, activePaletteId);
 
             const swappedImg = new Image();
             swappedImg.onload = () => {
@@ -123,6 +130,10 @@ function loadById(spriteId: string): LoadedImg {
     img.src = url;
 
     return rec;
+}
+
+function loadById(spriteId: string): LoadedImg {
+    return loadByIdInternal(spriteId);
 }
 
 function loadByUrl(cacheKey: string, url: string | null): LoadedImg {
@@ -202,4 +213,50 @@ export function preloadRenderSprites(): void {
             void getRuntimeDecalSprite(setId, i + 1);
         }
     }
+}
+
+/**
+ * Prewarm remapped runtime sprites for a given palette.
+ * This is a best-effort helper to reduce first-frame palette hitching.
+ *
+ * Notes:
+ * - In-memory only (cache resets on reload).
+ * - Safe to call multiple times; cache prevents duplicate work.
+ * - Intended to be called during loading/transition screens.
+ */
+export async function prewarmPaletteSprites(
+    paletteId: string,
+    spriteIds: string[],
+): Promise<void> {
+    const ids = Array.from(new Set(spriteIds.map((s) => s.trim()).filter(Boolean)));
+    if (ids.length === 0) return;
+
+    // Kick all loads; allow browser to schedule decode work.
+    for (const id of ids) {
+        void loadByIdInternal(id, paletteId);
+    }
+
+    // Wait until all are either ready or failed (bounded wait per sprite).
+    // This keeps the API deterministic and avoids hanging forever on a bad URL.
+    const start = performance.now();
+    const MAX_WAIT_MS = 1500;
+
+    await new Promise<void>((resolve) => {
+        const tick = () => {
+            const allDone = ids.every((id) => {
+                const rec = loadByIdInternal(id, paletteId);
+                return rec.ready;
+            });
+
+            const elapsed = performance.now() - start;
+            if (allDone || elapsed >= MAX_WAIT_MS) {
+                resolve();
+                return;
+            }
+
+            requestAnimationFrame(tick);
+        };
+
+        tick();
+    });
 }
