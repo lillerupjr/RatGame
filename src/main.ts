@@ -477,6 +477,17 @@ async function bootstrap() {
   function resize() {
     const pixelScale = defaultPixelScaleForViewport(window.innerWidth, window.innerHeight);
     resizeCanvasPixelPerfect(canvas, ctx, window.innerWidth, window.innerHeight, pixelScale);
+
+    const debugCanvas = document.querySelector("canvas");
+    console.log("viewport", {
+      innerW: window.innerWidth,
+      innerH: window.innerHeight,
+      dpr: window.devicePixelRatio,
+      canvasW: debugCanvas?.width,
+      canvasH: debugCanvas?.height,
+      clientW: debugCanvas?.clientWidth,
+      clientH: debugCanvas?.clientHeight,
+    });
   }
   window.addEventListener("resize", resize);
   resize();
