@@ -69,7 +69,7 @@ import {
   drawWalkMaskOverlay,
   type DebugOverlayContext,
 } from "../../../engine/render/debug/renderDebug";
-import { configurePixelPerfect, snapPx, snapZoom } from "../../../engine/render/pixelPerfect";
+import { configurePixelPerfect, snapPx } from "../../../engine/render/pixelPerfect";
 import { renderLighting, type ProjectedLight } from "./renderLighting";
 import { renderEntityShadow, renderEntityShadowMask, type ShadowParams } from "./renderShadow";
 import {
@@ -349,37 +349,24 @@ function isTileInPlayerSouthWedge(
 
 /** Render tiles, entities, overlays, and debug layers. */
 export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
-  const screenW = canvas.clientWidth;
-  const screenH = canvas.clientHeight;
+  const cssW = Math.max(1, canvas.clientWidth);
+  const cssH = Math.max(1, canvas.clientHeight);
+  const screenW = cssW;
+  const screenH = cssH;
+  const devW = Math.max(1, canvas.width);
+  const devH = Math.max(1, canvas.height);
+  const dpr = Math.max(1, devW / cssW);
   const pixelScale = Math.max(1, Math.floor(Number(canvas.dataset.pixelScale ?? 1) || 1));
-  const ww = Math.max(1, Math.floor(screenW / pixelScale));
-  const hh = Math.max(1, Math.floor(screenH / pixelScale));
+  const ww = Math.max(1, Math.floor(cssW / pixelScale));
+  const hh = Math.max(1, Math.floor(cssH / pixelScale));
   configurePixelPerfect(ctx);
-
-  // Camera zoom ("distance"):
-  //   > 1 = closer (zoom in)
-  //   < 1 = farther (zoom out)
-  const camZoom = snapZoom((w as any).cameraZoom ?? 1);
-
-  // Many systems use viewW/viewH as "world view extents".
-  // Make them zoom-aware so "screen-relative" ranges track what you actually see.
-  (w as any).viewW = ww / camZoom;
-  (w as any).viewH = hh / camZoom;
+  (w as any).viewW = ww;
+  (w as any).viewH = hh;
 
   const PLAYER_R = w.playerR;
 
-  ctx.clearRect(0, 0, screenW, screenH);
-
-  // Apply zoom around screen center for WORLD rendering only.
-  // We'll ctx.restore() before FPS/HUD/UI so UI stays crisp and unscaled.
-  ctx.save();
-  ctx.scale(pixelScale, pixelScale);
-  const viewCenterX = snapPx(ww * 0.5);
-  const viewCenterY = snapPx(hh * 0.5);
-  ctx.translate(viewCenterX, viewCenterY);
-  ctx.scale(camZoom, camZoom);
-  ctx.translate(-viewCenterX, -viewCenterY);
-
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, devW, devH);
 
   const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
   const px = pWorld.wx;
@@ -415,8 +402,30 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   // Isometric camera: project world coords into screen space, then keep player centered
   const p0 = worldToScreen(px, py);
-  const camX = (viewCenterX - p0.x);
-  const camY = (viewCenterY - p0.y);
+  (w as any).cameraX = p0.x;
+  (w as any).cameraY = p0.y;
+
+  const s = dpr * pixelScale;
+  const viewCenterX = snapPx(ww * 0.5);
+  const viewCenterY = snapPx(hh * 0.5);
+  const camXRaw = viewCenterX - p0.x;
+  const camYRaw = viewCenterY - p0.y;
+  const camTx = Math.round(camXRaw);
+  const camTy = Math.round(camYRaw);
+  const camX = 0;
+  const camY = 0;
+  const worldToScreenPx = (xWorld: number, yWorld: number) => ({ x: (xWorld + camTx) * s, y: (yWorld + camTy) * s });
+  const drawAlignmentDot = (target: CanvasRenderingContext2D, color: string) => {
+    target.save();
+    target.fillStyle = color;
+    target.fillRect(Math.round(p0.x) - 1, Math.round(p0.y) - 1, 3, 3);
+    target.restore();
+  };
+
+  ctx.save();
+  ctx.setTransform(s, 0, 0, s, 0, 0);
+  ctx.translate(camTx, camTy);
+  drawAlignmentDot(ctx, "rgba(255,0,255,0.9)"); // world
 
 
   // World-units per tile step (keep in sync with kenneyTiles constants)
@@ -1057,9 +1066,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const ez = w.ezVisual;
 
   // ----------------------------
-  // Tile range / diagonals (zoom-aware)
+  // Tile range / diagonals
   // ----------------------------
-  const radius = Math.max(12, Math.ceil(Math.max(ww / camZoom, hh / camZoom) / (T * 0.9)));
+  const radius = Math.max(12, Math.ceil(Math.max(ww, hh) / (T * 0.9)));
   const cx = Math.floor(px / T);
   const cy = Math.floor(py / T);
 
@@ -2504,8 +2513,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const structureLayer = ensureScratchMaskCanvas(
     structureLayerScratchCanvas,
     structureLayerScratchCtx,
-    screenW,
-    screenH,
+    devW,
+    devH,
   );
   if (structureLayer) {
     structureLayerScratchCanvas = structureLayer.canvas;
@@ -2515,15 +2524,14 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     // Clear in screen space
     sctx.setTransform(1, 0, 0, 1, 0, 0);
     sctx.globalCompositeOperation = "source-over";
-    sctx.clearRect(0, 0, screenW, screenH);
+    sctx.clearRect(0, 0, devW, devH);
 
     // IMPORTANT: match the WORLD camera transform (exactly like lighting masks)
     sctx.save();
     configurePixelPerfect(sctx);
-    sctx.scale(pixelScale, pixelScale);
-    sctx.translate(viewCenterX, viewCenterY);
-    sctx.scale(camZoom, camZoom);
-    sctx.translate(-viewCenterX, -viewCenterY);
+    sctx.setTransform(s, 0, 0, s, 0, 0);
+    sctx.translate(camTx, camTy);
+    drawAlignmentDot(sctx, "rgba(255,128,0,0.9)"); // structure
   } else {
     structureLayerScratchCanvas = null;
     structureLayerScratchCtx = null;
@@ -2534,14 +2542,14 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const southMaskLayer = ensureScratchMaskCanvas(
       southBuildingMaskScratchCanvas,
       southBuildingMaskScratchCtx,
-      screenW,
-      screenH,
+      devW,
+      devH,
     );
     const voidLayer = ensureScratchMaskCanvas(
       cutoutVoidScratchCanvas,
       cutoutVoidScratchCtx,
-      screenW,
-      screenH,
+      devW,
+      devH,
     );
     if (southMaskLayer && voidLayer) {
       southBuildingMaskScratchCanvas = southMaskLayer.canvas;
@@ -2553,31 +2561,25 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const vctx = voidLayer.ctx;
 
       southCtx.setTransform(1, 0, 0, 1, 0, 0);
-      southCtx.clearRect(0, 0, screenW, screenH);
+      southCtx.clearRect(0, 0, devW, devH);
       southCtx.save();
       configurePixelPerfect(southCtx);
-      southCtx.scale(pixelScale, pixelScale);
-      southCtx.translate(viewCenterX, viewCenterY);
-      southCtx.scale(camZoom, camZoom);
-      southCtx.translate(-viewCenterX, -viewCenterY);
+      southCtx.setTransform(s, 0, 0, s, 0, 0);
+      southCtx.translate(camTx, camTy);
+      drawAlignmentDot(southCtx, "rgba(0,255,255,0.9)"); // south base mask
       southCtx.globalCompositeOperation = "source-over";
       for (let i = 0; i < southBuildingBaseMaskDraws.length; i++) {
         southBuildingBaseMaskDraws[i](southCtx);
       }
       southCtx.restore();
 
-      const worldToScreenPx = (xWorld: number, yWorld: number) => {
-        const xZoom = (xWorld - viewCenterX) * camZoom + viewCenterX;
-        const yZoom = (yWorld - viewCenterY) * camZoom + viewCenterY;
-        return { x: xZoom * pixelScale, y: yZoom * pixelScale };
-      };
       const pzAbs = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
       const feet = getEntityFeetPos(px, py, pzAbs);
       const sp = worldToScreenPx(feet.screenX, feet.screenY);
       const playerSx = sp.x;
       const playerSy = sp.y;
       const radiusWorld = 150;
-      const radiusPx = radiusWorld * camZoom * pixelScale;
+      const radiusPx = radiusWorld * s;
       const outerR = radiusPx * 1.35;
       const innerR = Math.max(1, outerR * 0.72);
 
@@ -2595,7 +2597,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
       vctx.setTransform(1, 0, 0, 1, 0, 0);
       vctx.globalCompositeOperation = "source-over";
-      vctx.clearRect(0, 0, screenW, screenH);
+      vctx.clearRect(0, 0, devW, devH);
+      vctx.save();
+      configurePixelPerfect(vctx);
+      vctx.setTransform(s, 0, 0, s, 0, 0);
+      vctx.translate(camTx, camTy);
+      drawAlignmentDot(vctx, "rgba(255,255,0,0.9)"); // void tiles
 
       const voidRec = getHardcodedVoidTop();
       if (voidRec?.ready && voidRec.img && voidRec.img.width > 0 && voidRec.img.height > 0) {
@@ -2603,21 +2610,22 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         const topW = topImg.width * VOID_TOP_SCALE;
         const topH = topImg.height * VOID_TOP_SCALE;
 
-        for (let s = minSum; s <= maxSum; s++) {
-          const ty0 = Math.max(minTy, s - maxTx);
-          const ty1 = Math.min(maxTy, s - minTx);
+        for (let sum = minSum; sum <= maxSum; sum++) {
+          const ty0 = Math.max(minTy, sum - maxTx);
+          const ty1 = Math.min(maxTy, sum - minTx);
           for (let ty = ty0; ty <= ty1; ty++) {
-            const tx = s - ty;
+            const tx = sum - ty;
             const wx = (tx + 0.5) * T;
             const wy = (ty + 0.5) * T;
             const p = worldToScreen(wx, wy);
-            const dx = p.x + camX - topW * 0.5;
+            const dx = p.x - topW * 0.5;
             const anchorY = KENNEY_TILE_ANCHOR_Y;
-            const dy = p.y + camY - topH * anchorY;
+            const dy = p.y - topH * anchorY;
             vctx.drawImage(topImg, snapPx(dx), snapPx(dy), topW, topH);
           }
         }
       }
+      vctx.restore();
 
       vctx.globalCompositeOperation = "destination-in";
       vctx.drawImage(southMaskLayer.canvas, 0, 0);
@@ -2641,15 +2649,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       }
     }
 
-    // Reveal VOID only inside the player cutout.
-    // This visually "turns the floor into void" only where the cutout mask is active.
-    if (zi === 0 && typeof cutoutVoidCanvas !== "undefined" && cutoutVoidCanvas) {
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.globalCompositeOperation = "source-over";
-      ctx.drawImage(cutoutVoidCanvas, 0, 0);
-      ctx.restore();
-    }
+    // NOTE: void cutout composite disabled for now; this pass was overlaying
+    // an unexpected canvas-shaped artifact over world content.
 
     // Depth phase: everything else.
     for (let si = 0; si < sliceKeys.length; si++) {
@@ -2672,18 +2673,13 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     // End the structure-layer world transform so we can punch hole in screen-space
     sctx.restore();
 
-    const worldToScreenPx = (xWorld: number, yWorld: number) => {
-      const xZoom = (xWorld - viewCenterX) * camZoom + viewCenterX;
-      const yZoom = (yWorld - viewCenterY) * camZoom + viewCenterY;
-      return { x: xZoom * pixelScale, y: yZoom * pixelScale };
-    };
     const pzAbs = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
     const feet = getEntityFeetPos(px, py, pzAbs);
     const sp = worldToScreenPx(feet.screenX, feet.screenY);
     const playerSx = sp.x;
     const playerSy = sp.y;
     const radiusWorld = 150;
-    const radiusPx = radiusWorld * camZoom * pixelScale;
+    const radiusPx = radiusWorld * s;
 
     // Soft edge hole using destination-out + radial gradient.
     // Center is fully erased; edge fades to no erase.
@@ -2796,15 +2792,15 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     deferredStructureSliceDebugDraws[i]();
   }
 
-  const inverseMaskLayer = ensureLightingMaskCanvas(w.lighting, "INVERSE_BUILDING", screenW, screenH);
-  const sourceMaskLayer = ensureLightingMaskCanvas(w.lighting, "SOURCE_OCC", screenW, screenH);
+  const inverseMaskLayer = ensureLightingMaskCanvas(w.lighting, "INVERSE_BUILDING", devW, devH);
+  const sourceMaskLayer = ensureLightingMaskCanvas(w.lighting, "SOURCE_OCC", devW, devH);
   if (inverseMaskLayer) {
     const inverseCtx = inverseMaskLayer.ctx;
     const southBuildingMaskLayer = ensureScratchMaskCanvas(
       southBuildingMaskScratchCanvas,
       southBuildingMaskScratchCtx,
-      screenW,
-      screenH,
+      devW,
+      devH,
     );
     if (southBuildingMaskLayer) {
       southBuildingMaskScratchCanvas = southBuildingMaskLayer.canvas;
@@ -2813,8 +2809,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const shadowMaskLayer = ensureScratchMaskCanvas(
       entityShadowMaskScratchCanvas,
       entityShadowMaskScratchCtx,
-      screenW,
-      screenH,
+      devW,
+      devH,
     );
     if (shadowMaskLayer) {
       entityShadowMaskScratchCanvas = shadowMaskLayer.canvas;
@@ -2823,21 +2819,20 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const silhouetteMaskLayer = ensureScratchMaskCanvas(
       entitySilhouetteMaskScratchCanvas,
       entitySilhouetteMaskScratchCtx,
-      screenW,
-      screenH,
+      devW,
+      devH,
     );
     if (silhouetteMaskLayer) {
       entitySilhouetteMaskScratchCanvas = silhouetteMaskLayer.canvas;
       entitySilhouetteMaskScratchCtx = silhouetteMaskLayer.ctx;
     }
     inverseCtx.setTransform(1, 0, 0, 1, 0, 0);
-    inverseCtx.clearRect(0, 0, screenW, screenH);
+    inverseCtx.clearRect(0, 0, devW, devH);
     inverseCtx.save();
     configurePixelPerfect(inverseCtx);
-    inverseCtx.scale(pixelScale, pixelScale);
-    inverseCtx.translate(viewCenterX, viewCenterY);
-    inverseCtx.scale(camZoom, camZoom);
-    inverseCtx.translate(-viewCenterX, -viewCenterY);
+    inverseCtx.setTransform(s, 0, 0, s, 0, 0);
+    inverseCtx.translate(camTx, camTy);
+    drawAlignmentDot(inverseCtx, "rgba(0,255,0,0.9)"); // inverse mask
     inverseCtx.globalCompositeOperation = "source-over";
     for (let i = 0; i < buildingMaskDraws.length; i++) {
       buildingMaskDraws[i](inverseCtx);
@@ -2849,16 +2844,15 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const silhouetteCtx = silhouetteMaskLayer.ctx;
 
       shadowCtx.setTransform(1, 0, 0, 1, 0, 0);
-      shadowCtx.clearRect(0, 0, screenW, screenH);
+      shadowCtx.clearRect(0, 0, devW, devH);
       silhouetteCtx.setTransform(1, 0, 0, 1, 0, 0);
-      silhouetteCtx.clearRect(0, 0, screenW, screenH);
+      silhouetteCtx.clearRect(0, 0, devW, devH);
 
       shadowCtx.save();
       configurePixelPerfect(shadowCtx);
-      shadowCtx.scale(pixelScale, pixelScale);
-      shadowCtx.translate(viewCenterX, viewCenterY);
-      shadowCtx.scale(camZoom, camZoom);
-      shadowCtx.translate(-viewCenterX, -viewCenterY);
+      shadowCtx.setTransform(s, 0, 0, s, 0, 0);
+      shadowCtx.translate(camTx, camTy);
+      drawAlignmentDot(shadowCtx, "rgba(255,64,64,0.9)"); // shadow mask
       for (let i = 0; i < entityShadowMaskParams.length; i++) {
         renderEntityShadowMask(shadowCtx, entityShadowMaskParams[i], compiledMap);
       }
@@ -2866,10 +2860,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
       silhouetteCtx.save();
       configurePixelPerfect(silhouetteCtx);
-      silhouetteCtx.scale(pixelScale, pixelScale);
-      silhouetteCtx.translate(viewCenterX, viewCenterY);
-      silhouetteCtx.scale(camZoom, camZoom);
-      silhouetteCtx.translate(-viewCenterX, -viewCenterY);
+      silhouetteCtx.setTransform(s, 0, 0, s, 0, 0);
+      silhouetteCtx.translate(camTx, camTy);
+      drawAlignmentDot(silhouetteCtx, "rgba(64,128,255,0.9)"); // silhouette mask
       for (let i = 0; i < entitySilhouetteMaskDraws.length; i++) {
         entitySilhouetteMaskDraws[i](silhouetteCtx);
       }
@@ -2887,25 +2880,17 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     if (southBuildingMaskLayer) {
       const southCtx = southBuildingMaskLayer.ctx;
       southCtx.setTransform(1, 0, 0, 1, 0, 0);
-      southCtx.clearRect(0, 0, screenW, screenH);
+      southCtx.clearRect(0, 0, devW, devH);
       southCtx.save();
       configurePixelPerfect(southCtx);
-      southCtx.scale(pixelScale, pixelScale);
-      southCtx.translate(viewCenterX, viewCenterY);
-      southCtx.scale(camZoom, camZoom);
-      southCtx.translate(-viewCenterX, -viewCenterY);
+      southCtx.setTransform(s, 0, 0, s, 0, 0);
+      southCtx.translate(camTx, camTy);
+      drawAlignmentDot(southCtx, "rgba(255,255,255,0.9)"); // south occlusion mask
       southCtx.globalCompositeOperation = "source-over";
       for (let i = 0; i < southBuildingMaskDraws.length; i++) {
         southBuildingMaskDraws[i](southCtx);
       }
       southCtx.restore();
-
-      // Helper: convert world-render coords (ww/hh space) -> screen pixels (screenW/screenH space)
-      const worldToScreenPx = (xWorld: number, yWorld: number) => {
-        const xZoom = (xWorld - viewCenterX) * camZoom + viewCenterX;
-        const yZoom = (yWorld - viewCenterY) * camZoom + viewCenterY;
-        return { x: xZoom * pixelScale, y: yZoom * pixelScale };
-      };
 
       // Use player feet position (world-render coords)
       const pzAbs = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
@@ -2916,7 +2901,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
       // Keep this consistent with your visual structure cutout
       const radiusWorld = 150;
-      const radiusPx = radiusWorld * camZoom * pixelScale;
+      const radiusPx = radiusWorld * s;
       const outerR = radiusPx * 1.35;
       const innerR = Math.max(1, outerR * 0.72);
 
@@ -2943,14 +2928,14 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     }
     inverseCtx.globalCompositeOperation = "source-in";
     inverseCtx.fillStyle = "rgba(0,0,0,1)";
-    inverseCtx.fillRect(0, 0, screenW, screenH);
+    inverseCtx.fillRect(0, 0, devW, devH);
     inverseCtx.globalCompositeOperation = "source-over";
   }
 
   // Floating combat text: world pass (same camera transform as world content)
   renderFloatingText(w, ctx, toScreen);
 
-  // Restore (undo camera zoom) before drawing screen-space overlays / HUD
+  // Restore camera transform before drawing screen-space overlays / HUD.
   ctx.restore();
 
   const lightDefs = compiledMap.lightDefs;
@@ -2962,17 +2947,17 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       ? ((debugFlags.lightingOcclusionEnabled && w.lighting.occlusionEnabled) ? 1 : 0)
       : 0;
     const p = worldToScreen(ld.worldX, ld.worldY);
-    const screenOffsetX = (ld.screenOffsetPx?.x ?? 0) * pixelScale;
-    const screenOffsetY = (ld.screenOffsetPx?.y ?? 0) * pixelScale;
-    const sx = (p.x + camX) * pixelScale + screenOffsetX;
-    const sy = (p.y + camY - ld.heightUnits * ELEV_PX) * pixelScale + screenOffsetY;
-    const poolSy = sy - (ld.poolHeightOffsetUnits ?? 0) * ELEV_PX * pixelScale;
+    const screenOffsetX = (ld.screenOffsetPx?.x ?? 0) * s;
+    const screenOffsetY = (ld.screenOffsetPx?.y ?? 0) * s;
+    const sx = (p.x + camTx) * s + screenOffsetX;
+    const sy = (p.y + camTy - ld.heightUnits * ELEV_PX) * s + screenOffsetY;
+    const poolSy = sy - (ld.poolHeightOffsetUnits ?? 0) * ELEV_PX * s;
     const flickerPhase = (Math.sin(ld.worldX * 0.013 + ld.worldY * 0.007) * 43758.5453) % (Math.PI * 2);
     projectedLights.push({
       sx,
       sy,
       poolSy,
-      radiusPx: ld.radiusPx * pixelScale,
+      radiusPx: ld.radiusPx * s,
       intensity: ld.intensity,
       occlusion,
       shape: ld.shape ?? "RADIAL",
@@ -2981,10 +2966,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       flicker: ld.flicker ?? { kind: "NONE" },
       flickerPhase,
       pool: ld.pool
-        ? { radiusPx: ld.pool.radiusPx * pixelScale, yScale: ld.pool.yScale ?? 1 }
+        ? { radiusPx: ld.pool.radiusPx * s, yScale: ld.pool.yScale ?? 1 }
         : undefined,
       cone: ld.cone
-        ? { dirRad: ld.cone.dirRad, angleRad: ld.cone.angleRad, lengthPx: ld.cone.lengthPx * pixelScale }
+        ? { dirRad: ld.cone.dirRad, angleRad: ld.cone.angleRad, lengthPx: ld.cone.lengthPx * s }
         : undefined,
     });
   }
@@ -2994,9 +2979,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const sourceCtx = sourceMaskLayer.ctx;
     sourceCtx.setTransform(1, 0, 0, 1, 0, 0);
     sourceCtx.globalCompositeOperation = "source-over";
-    sourceCtx.clearRect(0, 0, screenW, screenH);
+    sourceCtx.clearRect(0, 0, devW, devH);
     sourceCtx.fillStyle = "#ffffff";
-    sourceCtx.fillRect(0, 0, screenW, screenH);
+    sourceCtx.fillRect(0, 0, devW, devH);
     if (occlusionEnabled) {
       sourceCtx.globalCompositeOperation = "destination-out";
       sourceCtx.drawImage(inverseMaskLayer.canvas, 0, 0);
@@ -3005,28 +2990,20 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     buildCombinedOcclusionMask(
       w.lighting,
       inverseMaskLayer.canvas,
-      screenW,
-      screenH,
+      devW,
+      devH,
       occlusionEnabled,
     );
   }
 
   // PASS 8: final screen-space lighting
-  renderLighting(ctx, w.lighting, projectedLights, screenW, screenH, w.time ?? 0);
-  if (SHOW_BUILDING_MASK_DEBUG) {
-    let debugMask: HTMLCanvasElement | null = null;
-    if (buildingMaskDebugView === "SOURCE") debugMask = w.lighting.occlusionMaskCanvas ?? null;
-    else if (buildingMaskDebugView === "INVERSE") debugMask = w.lighting.inverseBuildingSliceMaskCanvas ?? null;
-    else if (buildingMaskDebugView === "COMBINED") debugMask = w.lighting.combinedOcclusionMaskCanvas ?? null;
-    ctx.save();
-    ctx.globalAlpha = 1;
-    if (debugMask) ctx.drawImage(debugMask, 0, 0);
-    ctx.restore();
-  }
+  renderLighting(ctx, w.lighting, projectedLights, devW, devH, w.time ?? 0);
+  // Building-mask debug overlay draw disabled to avoid full-canvas mask artifacts.
 
 
   // FPS
   ctx.save();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.font = "12px monospace";
   ctx.fillStyle = "#fff";
   const fps = Math.round((w as any).fps ?? 0);
@@ -3038,21 +3015,17 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   ctx.restore();
 
   if (DEBUG_PLAYER_WEDGE) {
-    const worldToScreenPx = (xWorld: number, yWorld: number) => {
-      const xZoom = (xWorld - viewCenterX) * camZoom + viewCenterX;
-      const yZoom = (yWorld - viewCenterY) * camZoom + viewCenterY;
-      return { x: xZoom * pixelScale, y: yZoom * pixelScale };
-    };
     const playerPos = { x: px, y: py };
     const playerTile = worldToTile(playerPos.x, playerPos.y);
     ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalCompositeOperation = "source-over";
     ctx.fillStyle = "rgba(255, 0, 0, 0.18)";
-    for (let s = minSum; s <= maxSum; s++) {
-      const ty0 = Math.max(minTy, s - maxTx);
-      const ty1 = Math.min(maxTy, s - minTx);
+    for (let sum = minSum; sum <= maxSum; sum++) {
+      const ty0 = Math.max(minTy, sum - maxTx);
+      const ty1 = Math.min(maxTy, sum - minTx);
       for (let ty = ty1; ty >= ty0; ty--) {
-        const tx = s - ty;
+        const tx = sum - ty;
         if (!isTileInPlayerSouthWedge(tx, ty, playerTile.tx, playerTile.ty)) continue;
         const wx = (tx + 0.5) * T;
         const wy = (ty + 0.5) * T;
@@ -3062,8 +3035,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         ctx.fillRect(
           Math.floor(p.x),
           Math.floor(p.y),
-          KENNEY_TILE_WORLD * camZoom * pixelScale,
-          (KENNEY_TILE_WORLD / 2) * camZoom * pixelScale
+          KENNEY_TILE_WORLD * s,
+          (KENNEY_TILE_WORLD / 2) * s
         );
       }
     }
@@ -3071,6 +3044,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   }
 
   // --- UI ---
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (debugFlags.showGrid) renderTileGridCompass(w, ctx, screenW, screenH); // tile-grid N/E/S/W (matches in-game tests)
 
   renderHealthOrb(w, ctx, screenW, screenH);

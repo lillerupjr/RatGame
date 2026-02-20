@@ -7,7 +7,7 @@ import { collectFloorDependencies } from "./game/loading/dependencyCollector";
 import { primeAudio } from "./game/audio/audioManager";
 import { resolveActivePaletteId } from "./game/render/activePalette";
 import { getSpriteByIdForPalette } from "./engine/render/sprites/renderSprites";
-import { resizeCanvasPixelPerfect } from "./engine/render/pixelPerfect";
+import { defaultPixelScaleForViewport, resizeCanvasPixelPerfect } from "./engine/render/pixelPerfect";
 import { getDomRefs } from "./ui/domRefs";
 import { wireMenus } from "./ui/menuWiring";
 import {
@@ -474,10 +474,8 @@ async function bootstrap() {
   if (!rawCtx) throw new Error("Canvas 2D context not available");
   const ctx = rawCtx;
 
-  // This adjusts the world to screen pixel ratio
-  const pixelScale = 2;
-
   function resize() {
+    const pixelScale = defaultPixelScaleForViewport(window.innerWidth, window.innerHeight);
     resizeCanvasPixelPerfect(canvas, ctx, window.innerWidth, window.innerHeight, pixelScale);
   }
   window.addEventListener("resize", resize);
