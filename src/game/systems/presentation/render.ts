@@ -132,6 +132,8 @@ let entitySilhouetteMaskScratchCtx: CanvasRenderingContext2D | null = null;
 // NEW: structures layer scratch (used for player cutout)
 let structureLayerScratchCanvas: HTMLCanvasElement | null = null;
 let structureLayerScratchCtx: CanvasRenderingContext2D | null = null;
+let southBuildingMaskScratchCanvas: HTMLCanvasElement | null = null;
+let southBuildingMaskScratchCtx: CanvasRenderingContext2D | null = null;
 
 function getFlippedOverlayImage(img: HTMLImageElement): HTMLCanvasElement {
   const cached = flippedOverlayImageCache.get(img);
@@ -518,6 +520,15 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   };
 
   const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+  // ------------------------------------------------------------
+  // South-only structure masking
+  // Rule: only include structure pieces whose OWNER tile ty is
+  // strictly south of the player tile ty.
+  // ------------------------------------------------------------
+  const isOwnerTileSouthOfPlayer = (ownerTy: number) => ownerTy > playerTy;
+
+  // Existing optional cull (kept, but unrelated to masking)
   const ENABLE_BUILDING_SOUTH_CULL = false;
   const shouldCullBuildingAt = (tx: number, ty: number, w: number = 1, h: number = 1) => {
     if (!ENABLE_BUILDING_SOUTH_CULL) return false;
@@ -557,6 +568,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   type MaskDraw = (maskCtx: CanvasRenderingContext2D) => void;
   const buildingMaskDraws: MaskDraw[] = [];
+  const southBuildingMaskDraws: MaskDraw[] = [];
   const entitySilhouetteMaskDraws: MaskDraw[] = [];
 
     const drawRenderPieceTo = (target: CanvasRenderingContext2D, c: RenderPieceDraw) => {
@@ -579,6 +591,22 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
     const addRenderPieceMask = (c: RenderPieceDraw) => {
       buildingMaskDraws.push((maskCtx) => {
+        const img = c.img;
+        if (!img || img.width <= 0 || img.height <= 0) return;
+        const scale = c.scale ?? 1;
+        maskCtx.save();
+        maskCtx.translate(snapPx(c.dx), snapPx(c.dy));
+        maskCtx.scale(scale, scale);
+        if (c.flipX) {
+          maskCtx.translate(c.dw, 0);
+          maskCtx.scale(-1, 1);
+        }
+        maskCtx.drawImage(img, 0, 0, c.dw, c.dh);
+        maskCtx.restore();
+      });
+    };
+    const addSouthRenderPieceMask = (c: RenderPieceDraw) => {
+      southBuildingMaskDraws.push((maskCtx) => {
         const img = c.img;
         if (!img || img.width <= 0 || img.height <= 0) return;
         const scale = c.scale ?? 1;
@@ -2058,10 +2086,19 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         addToSlice(face.tx + face.ty, renderKey, () => {
           const sctx = structureLayerScratchCtx;
           const isStructureish = renderKey.kindOrder === KindOrder.STRUCTURE || renderKey.kindOrder === KindOrder.OVERLAY;
-          if (isStructureish && sctx) drawRenderPieceTo(sctx, d);
+
+          // Owner tile for face pieces is (face.tx, face.ty)
+          const ownerSouth = isOwnerTileSouthOfPlayer(face.ty);
+
+          if (isStructureish && sctx && ownerSouth) drawRenderPieceTo(sctx, d);
           else drawRenderPiece(d);
         });
-        if (face.layerRole === "STRUCTURE") addRenderPieceMask(d);
+
+        // Full building mask stays intact for lighting occlusion.
+        if (face.layerRole === "STRUCTURE") {
+          addRenderPieceMask(d);
+          if (isOwnerTileSouthOfPlayer(face.ty)) addSouthRenderPieceMask(d);
+        }
       }
     }
   }
@@ -2098,10 +2135,17 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       addToSlice(occ.tx + occ.ty, renderKey, () => {
         const sctx = structureLayerScratchCtx;
         const isStructureish = renderKey.kindOrder === KindOrder.STRUCTURE || renderKey.kindOrder === KindOrder.OVERLAY;
-        if (isStructureish && sctx) drawRenderPieceTo(sctx, draw);
+
+        // Owner tile for walls is (occ.tx, occ.ty)
+        const ownerSouth = isOwnerTileSouthOfPlayer(occ.ty);
+
+        if (isStructureish && sctx && ownerSouth) drawRenderPieceTo(sctx, draw);
         else drawRenderPiece(draw);
       });
+
+      // Full building mask stays intact for lighting occlusion.
       addRenderPieceMask(draw);
+      if (isOwnerTileSouthOfPlayer(occ.ty)) addSouthRenderPieceMask(draw);
     }
   }
 
@@ -2169,9 +2213,16 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
             };
             addToSlice(band.renderKey.slice, overlayKey, () => {
               const sctx = structureLayerScratchCtx;
-              const target = (overlayKey.kindOrder === KindOrder.STRUCTURE || overlayKey.kindOrder === KindOrder.OVERLAY) && sctx
-                ? sctx
-                : ctx;
+
+              // Owner tile for a band piece is derived from its renderKey.
+              const ownerTy = band.renderKey.slice - band.renderKey.within;
+              const ownerSouth = isOwnerTileSouthOfPlayer(ownerTy);
+
+              const wantsStructureTarget =
+                (overlayKey.kindOrder === KindOrder.STRUCTURE || overlayKey.kindOrder === KindOrder.OVERLAY);
+
+              // Route to structure scratch ONLY if south-owned; otherwise draw to main ctx.
+              const target = wantsStructureTarget && sctx && ownerSouth ? sctx : ctx;
               const img = draw.img;
               if (!img) return;
               const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(img) : img;
@@ -2197,7 +2248,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
               if (SHOW_STRUCTURE_SLICE_DEBUG) {
                 const ownerTile = {
                   tx: band.renderKey.within,
-                  ty: band.renderKey.slice - band.renderKey.within,
+                  ty: ownerTy,
                 };
                 deferredStructureSliceDebugDraws.push(() => {
                   ctx.save();
@@ -2214,7 +2265,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
                 });
               }
             });
+
+            // Full building mask stays intact for lighting occlusion.
             if (o.layerRole === "STRUCTURE" || (o.kind ?? "ROOF") === "ROOF") {
+              const ownerTy = band.renderKey.slice - band.renderKey.within;
               buildingMaskDraws.push((maskCtx) => {
                 const img = draw.img;
                 if (!img) return;
@@ -2242,6 +2296,35 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
                 );
                 maskCtx.restore();
               });
+              if (isOwnerTileSouthOfPlayer(ownerTy)) {
+                southBuildingMaskDraws.push((maskCtx) => {
+                  const img = draw.img;
+                  if (!img) return;
+                  const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(img) : img;
+                  const x0 = Math.round(band.dstRect.x);
+                  const y0 = Math.round(band.dstRect.y);
+                  const x1 = Math.round(band.dstRect.x + band.dstRect.w);
+                  const y1 = Math.round(band.dstRect.y + band.dstRect.h);
+                  const snappedW = Math.max(0, x1 - x0);
+                  const snappedH = Math.max(0, y1 - y0);
+                  if (snappedW <= 0 || snappedH <= 0) return;
+                  maskCtx.save();
+                  maskCtx.globalCompositeOperation = "source-over";
+                  maskCtx.imageSmoothingEnabled = false;
+                  maskCtx.drawImage(
+                    sourceImg,
+                    band.srcRect.x,
+                    band.srcRect.y,
+                    band.srcRect.w,
+                    band.srcRect.h,
+                    x0,
+                    y0,
+                    snappedW,
+                    snappedH,
+                  );
+                  maskCtx.restore();
+                });
+              }
             }
           }
         } else {
@@ -2262,10 +2345,23 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           addToSlice(slice, overlayKey, () => {
             const sctx = structureLayerScratchCtx;
             const isStructureish = overlayKey.kindOrder === KindOrder.STRUCTURE || overlayKey.kindOrder === KindOrder.OVERLAY;
-            if (isStructureish && sctx) drawRenderPieceTo(sctx, draw);
+
+            // Owner tile for overlays is their anchorTy (already used for slice/placement)
+            const ownerTy = (o.anchorTy ?? (o.ty + o.h - 1));
+            const ownerSouth = isOwnerTileSouthOfPlayer(ownerTy);
+
+            if (isStructureish && sctx && ownerSouth) drawRenderPieceTo(sctx, draw);
             else drawRenderPiece(draw);
           });
-          if (o.layerRole === "STRUCTURE" || (o.kind ?? "ROOF") === "ROOF") addRenderPieceMask(draw);
+
+          // Full building mask stays intact for lighting occlusion.
+          {
+            const ownerTy = (o.anchorTy ?? (o.ty + o.h - 1));
+            if (o.layerRole === "STRUCTURE" || (o.kind ?? "ROOF") === "ROOF") {
+              addRenderPieceMask(draw);
+              if (isOwnerTileSouthOfPlayer(ownerTy)) addSouthRenderPieceMask(draw);
+            }
+          }
         }
       }
     }
@@ -2486,6 +2582,16 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const sourceMaskLayer = ensureLightingMaskCanvas(w.lighting, "SOURCE_OCC", screenW, screenH);
   if (inverseMaskLayer) {
     const inverseCtx = inverseMaskLayer.ctx;
+    const southBuildingMaskLayer = ensureScratchMaskCanvas(
+      southBuildingMaskScratchCanvas,
+      southBuildingMaskScratchCtx,
+      screenW,
+      screenH,
+    );
+    if (southBuildingMaskLayer) {
+      southBuildingMaskScratchCanvas = southBuildingMaskLayer.canvas;
+      southBuildingMaskScratchCtx = southBuildingMaskLayer.ctx;
+    }
     const shadowMaskLayer = ensureScratchMaskCanvas(
       entityShadowMaskScratchCanvas,
       entityShadowMaskScratchCtx,
@@ -2558,19 +2664,31 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       inverseCtx.globalCompositeOperation = "source-over";
       inverseCtx.drawImage(shadowMaskLayer.canvas, 0, 0);
     }
-    // ------------------------------------------------------------
-    // Player structure cutout should also remove building occlusion,
-    // so lights can shine "behind" removed buildings.
-    // ------------------------------------------------------------
+    // Keep lighting occlusion based on full building mask.
+    // Apply player hole as: fullBuildingMask - (southBuildingMask ∩ playerCircleGradient).
+    if (southBuildingMaskLayer) {
+      const southCtx = southBuildingMaskLayer.ctx;
+      southCtx.setTransform(1, 0, 0, 1, 0, 0);
+      southCtx.clearRect(0, 0, screenW, screenH);
+      southCtx.save();
+      configurePixelPerfect(southCtx);
+      southCtx.scale(pixelScale, pixelScale);
+      southCtx.translate(viewCenterX, viewCenterY);
+      southCtx.scale(camZoom, camZoom);
+      southCtx.translate(-viewCenterX, -viewCenterY);
+      southCtx.globalCompositeOperation = "source-over";
+      for (let i = 0; i < southBuildingMaskDraws.length; i++) {
+        southBuildingMaskDraws[i](southCtx);
+      }
+      southCtx.restore();
 
-    // Helper: convert world-render coords (ww/hh space) -> screen pixels (screenW/screenH space)
-    const worldToScreenPx = (xWorld: number, yWorld: number) => {
-      const xZoom = (xWorld - viewCenterX) * camZoom + viewCenterX;
-      const yZoom = (yWorld - viewCenterY) * camZoom + viewCenterY;
-      return { x: xZoom * pixelScale, y: yZoom * pixelScale };
-    };
+      // Helper: convert world-render coords (ww/hh space) -> screen pixels (screenW/screenH space)
+      const worldToScreenPx = (xWorld: number, yWorld: number) => {
+        const xZoom = (xWorld - viewCenterX) * camZoom + viewCenterX;
+        const yZoom = (yWorld - viewCenterY) * camZoom + viewCenterY;
+        return { x: xZoom * pixelScale, y: yZoom * pixelScale };
+      };
 
-    {
       // Use player feet position (world-render coords)
       const pzAbs = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
       const feet = getEntityFeetPos(px, py, pzAbs);
@@ -2579,35 +2697,29 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const playerSy = sp.y;
 
       // Keep this consistent with your visual structure cutout
-      const radiusWorld = 150; // match your current cutout baseline
+      const radiusWorld = 150;
       const radiusPx = radiusWorld * camZoom * pixelScale;
-
-      // Full-radius cutout for lighting mask (no south-only clipping).
-      const SOUTH_ONLY = false;
-
-      inverseCtx.save();
-      inverseCtx.setTransform(1, 0, 0, 1, 0, 0); // screen-space ops
-      inverseCtx.globalCompositeOperation = "destination-out";
-
-      if (SOUTH_ONLY) {
-        const SOUTH_OFFSET_PX = 12 * pixelScale; // tune
-        inverseCtx.beginPath();
-        inverseCtx.rect(0, playerSy + SOUTH_OFFSET_PX, screenW, screenH - (playerSy + SOUTH_OFFSET_PX));
-        inverseCtx.clip();
-      }
-
-      // Soft edge erase (same as visuals)
       const outerR = radiusPx * 1.35;
       const innerR = Math.max(1, outerR * 0.72);
-      const g = inverseCtx.createRadialGradient(playerSx, playerSy, innerR, playerSx, playerSy, outerR);
+
+      // southBuildingMask ∩ playerCircleGradient
+      southCtx.save();
+      southCtx.setTransform(1, 0, 0, 1, 0, 0);
+      southCtx.globalCompositeOperation = "destination-in";
+      const g = southCtx.createRadialGradient(playerSx, playerSy, innerR, playerSx, playerSy, outerR);
       g.addColorStop(0.0, "rgba(0,0,0,1)");
       g.addColorStop(1.0, "rgba(0,0,0,0)");
+      southCtx.fillStyle = g;
+      southCtx.beginPath();
+      southCtx.arc(playerSx, playerSy, outerR, 0, Math.PI * 2);
+      southCtx.fill();
+      southCtx.restore();
 
-      inverseCtx.fillStyle = g;
-      inverseCtx.beginPath();
-      inverseCtx.arc(playerSx, playerSy, outerR, 0, Math.PI * 2);
-      inverseCtx.fill();
-
+      // fullBuildingMask - (southBuildingMask ∩ playerCircleGradient)
+      inverseCtx.save();
+      inverseCtx.setTransform(1, 0, 0, 1, 0, 0);
+      inverseCtx.globalCompositeOperation = "destination-out";
+      inverseCtx.drawImage(southBuildingMaskLayer.canvas, 0, 0);
       inverseCtx.restore();
       inverseCtx.globalCompositeOperation = "source-over";
     }
