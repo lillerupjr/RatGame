@@ -2,18 +2,28 @@ export function snapPx(n: number): number {
   return Math.floor(n);
 }
 
-export const MIN_GAME_WIDTH = 640;
-export const MIN_GAME_HEIGHT = 360;
+// Base (design) resolution for pixelScale selection.
+// Option B: view expands within a bucket; this only chooses 1..4 sensibly across devices.
+export const BASE_GAME_WIDTH = 960;
+export const BASE_GAME_HEIGHT = 540;
+
+// Hard limits to keep assets/UI sane
+export const MIN_PIXEL_SCALE = 1;
+export const MAX_PIXEL_SCALE = 4;
 
 export function normalizePixelScale(pixelScale: number): number {
   if (!Number.isFinite(pixelScale)) return 1;
-  return Math.max(1, Math.floor(pixelScale));
+  return Math.max(MIN_PIXEL_SCALE, Math.min(MAX_PIXEL_SCALE, Math.floor(pixelScale)));
 }
 
 export function defaultPixelScaleForViewport(cssW: number, cssH: number): number {
-  const scaleByWidth = Math.floor(cssW / MIN_GAME_WIDTH);
-  const scaleByHeight = Math.floor(cssH / MIN_GAME_HEIGHT);
-  return normalizePixelScale(Math.max(1, Math.min(scaleByWidth, scaleByHeight)));
+  const scaleByWidth = Math.floor(cssW / BASE_GAME_WIDTH);
+  const scaleByHeight = Math.floor(cssH / BASE_GAME_HEIGHT);
+
+  const raw = Math.max(1, Math.min(scaleByWidth, scaleByHeight));
+  const snapped = normalizePixelScale(raw);
+
+  return Math.max(MIN_PIXEL_SCALE, Math.min(MAX_PIXEL_SCALE, snapped));
 }
 
 export function configurePixelPerfect(ctx: CanvasRenderingContext2D): void {
@@ -37,7 +47,7 @@ export function resizeCanvasPixelPerfect(
   cssH: number,
   pixelScale: number = defaultPixelScaleForViewport(cssW, cssH),
 ): number {
-  // Pixel-perfect uses integer pixelScale >= 1; default keeps game resolution >= 640x360.
+  // Pixel-perfect uses integer pixelScale in the configured clamp range.
   const resolvedPixelScale = normalizePixelScale(pixelScale);
   const dpr = Math.max(1, window.devicePixelRatio || 1);
   canvas.width = snapPx(cssW * dpr);
