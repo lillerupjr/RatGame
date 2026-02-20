@@ -35,6 +35,25 @@ export type WeaponId =
 
 export const MAX_WEAPON_LEVEL = 10;
 
+// ---------------------------
+// GLOBAL BALANCE TUNING
+// ---------------------------
+
+// Halve projectile speed across the entire game.
+// IMPORTANT: applied in weapon stats (not projectileFactory) so TTL math stays consistent.
+const GLOBAL_PROJECTILE_SPEED_MULT = 0.5;
+
+// Reduce evolved weapon damage by 75% (keep behavior same, just less DPS).
+const EVOLVED_DAMAGE_MULT = 0.25;
+
+function scaleProjSpeed(v: number): number {
+    return v * GLOBAL_PROJECTILE_SPEED_MULT;
+}
+
+function scaleEvolvedDamage(v: number): number {
+    return v * EVOLVED_DAMAGE_MULT;
+}
+
 // Aim is expressed in grid space (screen-aligned).
 export type Aim = { x: number; y: number };
 
@@ -108,7 +127,8 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
         getStats: (level, w) => {
             const lv = clampLevel(level);
 
-            const cooldownBase = 0.75;
+            // Halve fire rate => double cooldown
+            const cooldownBase = 1.5;
             const damageBase = 20;
             const damagePer = 1.2;
 
@@ -119,7 +139,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             return {
                 cooldown: cooldownBase / w.fireRateMult,
-                projectileSpeed: 460,
+                projectileSpeed: scaleProjSpeed(460),
                 projectileRadius: 5,
                 damage: (damageBase + (lv - 1) * damagePer) * w.dmgMult,
                 projectileCount: lv,
@@ -198,9 +218,9 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             return {
                 cooldown: cooldownBase / w.fireRateMult,
-                projectileSpeed: 700,
+                projectileSpeed: scaleProjSpeed(700),
                 projectileRadius: 5,
-                damage: (damageBase + (lv - 1) * damagePer) * w.dmgMult,
+                damage: scaleEvolvedDamage((damageBase + (lv - 1) * damagePer) * w.dmgMult),
                 projectileCount: 24,
                 pierce: 0,
             };
@@ -243,7 +263,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             return {
                 cooldown: cooldownBase / w.fireRateMult,
-                projectileSpeed: 520,
+                projectileSpeed: scaleProjSpeed(520),
                 projectileRadius: 5,
                 damage: dmg,
                 pierce: 0,
@@ -281,9 +301,9 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             return {
                 cooldown: cooldownBase / w.fireRateMult,
-                projectileSpeed: 520,
+                projectileSpeed: scaleProjSpeed(520),
                 projectileRadius: 5,
-                damage: dmg,
+                damage: scaleEvolvedDamage(dmg),
                 // ONLY evolved pistol bullets pierce (your choice)
                 pierce: 999,
             };
@@ -406,7 +426,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             // We keep WeaponStats unchanged and stash poison fields as escape-hatch.
             return {
                 cooldown: cooldownBase / w.fireRateMult,
-                projectileSpeed: needleSpeed,
+                projectileSpeed: scaleProjSpeed(needleSpeed),
                 projectileRadius: 4,
                 damage: hitDamage,
                 pierce: 0,
@@ -506,9 +526,9 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             // We keep WeaponStats unchanged and stash poison fields as escape-hatch.
             return {
                 cooldown: cooldownBase / w.fireRateMult,
-                projectileSpeed: needleSpeed,
+                projectileSpeed: scaleProjSpeed(needleSpeed),
                 projectileRadius: 4,
-                damage: hitDamage,
+                damage: scaleEvolvedDamage(hitDamage),
                 pierce: 0,
 
                 ...( { poisonDps, poisonDur } as any ),
@@ -566,7 +586,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             return {
                 cooldown: cooldownBase / w.fireRateMult,
-                projectileSpeed: 560,
+                projectileSpeed: scaleProjSpeed(560),
                 projectileRadius: 6,
                 damage: (dmgBase + (lv - 1) * dmgPer) * w.dmgMult,
 
@@ -626,9 +646,9 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             return {
                 cooldown: cooldownBase / w.fireRateMult,
-                projectileSpeed: 620,
+                projectileSpeed: scaleProjSpeed(620),
                 projectileRadius: 7,
-                damage: 5 * w.dmgMult,
+                damage: scaleEvolvedDamage(5 * w.dmgMult),
                 projectileCount: 2,
                 fanArc: 0.35,
                 pierce: 999,
@@ -719,9 +739,9 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             return {
                 cooldown: cooldownBase / w.fireRateMult,
-                projectileSpeed: 480,
+                projectileSpeed: scaleProjSpeed(480),
                 projectileRadius: 8,
-                damage: (dmgBase + (lv - 1) * dmgPer) * w.dmgMult,
+                damage: scaleEvolvedDamage((dmgBase + (lv - 1) * dmgPer) * w.dmgMult),
                 pierce: 999,
 
                 // Fission balls bounce off walls and enemies
@@ -799,7 +819,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             return {
                 cooldown: cooldownBase / (w.fireRateMult ?? 1),
-                projectileSpeed: rocketSpeedBase + (lv - 1) * rocketSpeedPer,
+                projectileSpeed: scaleProjSpeed(rocketSpeedBase + (lv - 1) * rocketSpeedPer),
 
                 // IMPORTANT:
                 // We keep projectileRadius = blast radius for convenience (your original pattern),
@@ -902,7 +922,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             // Explosion damage (scales with DMG)
             const dmgBase = 34;
             const dmgPer = 3.1;
-            const dmg = (dmgBase + (lv - 1) * dmgPer) * (w.dmgMult ?? 1);
+            const dmg = scaleEvolvedDamage((dmgBase + (lv - 1) * dmgPer) * (w.dmgMult ?? 1));
 
             // Targeting radius around player (acquisition range)
             const targetRadiusBase = 420;
@@ -914,7 +934,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             return {
                 cooldown: cooldownBase / (w.fireRateMult ?? 1),
-                projectileSpeed: rocketSpeedBase + (lv - 1) * rocketSpeedPer,
+                projectileSpeed: scaleProjSpeed(rocketSpeedBase + (lv - 1) * rocketSpeedPer),
 
                 // IMPORTANT:
                 // We keep projectileRadius = blast radius for convenience (your original pattern),
