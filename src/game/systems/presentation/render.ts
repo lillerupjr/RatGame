@@ -124,6 +124,8 @@ function compareRenderKeys(a: RenderKey, b: RenderKey): number {
   return a.stableId - b.stableId;
 }
 
+const DEBUG_PLAYER_WEDGE = false;
+
 const flippedOverlayImageCache = new WeakMap<HTMLImageElement, HTMLCanvasElement>();
 let entityShadowMaskScratchCanvas: HTMLCanvasElement | null = null;
 let entityShadowMaskScratchCtx: CanvasRenderingContext2D | null = null;
@@ -304,6 +306,25 @@ function buildCombinedOcclusionMask(
   cctx.globalCompositeOperation = "source-over";
 }
 
+function isTileInPlayerSouthWedge(
+  tx: number,
+  ty: number,
+  playerTx: number,
+  playerTy: number
+): boolean {
+  const dx = tx - playerTx;
+  const dy = ty - playerTy;
+
+  if (dx === 0 && dy === 0) return false;
+
+  const sum = dx + dy;
+  if (sum <= 0) return false;
+
+  const diff = Math.abs(dx - dy);
+
+  return diff <= sum;
+}
+
 /** Render tiles, entities, overlays, and debug layers. */
 export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
   const screenW = canvas.clientWidth;
@@ -380,6 +401,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const T = KENNEY_TILE_WORLD;
   const playerTx = Math.floor(px / T);
   const playerTy = Math.floor(py / T);
+  const worldToTile = (x: number, y: number) => ({ tx: Math.floor(x / T), ty: Math.floor(y / T) });
 
   // Anchor: tile sprites are usually taller than their footprint.
   const ANCHOR_Y = KENNEY_TILE_ANCHOR_Y;
@@ -466,6 +488,13 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     return { x: p.x + camX, y: p.y + camY - elev };
   };
 
+  const tileToScreen = (tx: number, ty: number, zVisual: number) => {
+    const wx = (tx + 0.5) * T;
+    const wy = (ty + 0.5) * T;
+    const p = worldToScreen(wx, wy);
+    return { x: p.x + camX - T * 0.5, y: p.y + camY - zVisual * ELEV_PX - T * 0.5 };
+  };
+
   const ENTITY_ANCHOR_X01_DEFAULT = 0.5;
   const ENTITY_ANCHOR_Y01_DEFAULT = 0.92;
 
@@ -522,11 +551,24 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
   // ------------------------------------------------------------
-  // South-only structure masking
-  // Rule: only include structure pieces whose OWNER tile ty is
-  // strictly south of the player tile ty.
+  // Wedge-only structure masking (tile-space)
+  // Rule: include a slice iff its OWNER/ANCHOR tile is inside the
+  // SE→SW wedge (25% region) relative to the player tile.
+  // Pure tile coordinates, no screen math.
   // ------------------------------------------------------------
-  const isOwnerTileSouthOfPlayer = (ownerTy: number) => ownerTy > playerTy;
+  const isOwnerTileInPlayerWedge = (ownerTx: number, ownerTy: number) => {
+    const dx = ownerTx - playerTx;
+    const dy = ownerTy - playerTy;
+
+    // Exclude the player tile itself (optional, keeps behavior stable)
+    if (dx === 0 && dy === 0) return false;
+
+    const sum = dx + dy;
+    if (sum <= 0) return false;
+
+    const diff = Math.abs(dx - dy);
+    return diff <= sum;
+  };
 
   // Existing optional cull (kept, but unrelated to masking)
   const ENABLE_BUILDING_SOUTH_CULL = false;
@@ -2088,16 +2130,16 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           const isStructureish = renderKey.kindOrder === KindOrder.STRUCTURE || renderKey.kindOrder === KindOrder.OVERLAY;
 
           // Owner tile for face pieces is (face.tx, face.ty)
-          const ownerSouth = isOwnerTileSouthOfPlayer(face.ty);
+          const ownerInWedge = isOwnerTileInPlayerWedge(face.tx, face.ty);
 
-          if (isStructureish && sctx && ownerSouth) drawRenderPieceTo(sctx, d);
+          if (isStructureish && sctx && ownerInWedge) drawRenderPieceTo(sctx, d);
           else drawRenderPiece(d);
         });
 
         // Full building mask stays intact for lighting occlusion.
         if (face.layerRole === "STRUCTURE") {
           addRenderPieceMask(d);
-          if (isOwnerTileSouthOfPlayer(face.ty)) addSouthRenderPieceMask(d);
+          if (isOwnerTileInPlayerWedge(face.tx, face.ty)) addSouthRenderPieceMask(d);
         }
       }
     }
@@ -2137,15 +2179,15 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         const isStructureish = renderKey.kindOrder === KindOrder.STRUCTURE || renderKey.kindOrder === KindOrder.OVERLAY;
 
         // Owner tile for walls is (occ.tx, occ.ty)
-        const ownerSouth = isOwnerTileSouthOfPlayer(occ.ty);
+        const ownerInWedge = isOwnerTileInPlayerWedge(occ.tx, occ.ty);
 
-        if (isStructureish && sctx && ownerSouth) drawRenderPieceTo(sctx, draw);
+        if (isStructureish && sctx && ownerInWedge) drawRenderPieceTo(sctx, draw);
         else drawRenderPiece(draw);
       });
 
       // Full building mask stays intact for lighting occlusion.
       addRenderPieceMask(draw);
-      if (isOwnerTileSouthOfPlayer(occ.ty)) addSouthRenderPieceMask(draw);
+      if (isOwnerTileInPlayerWedge(occ.tx, occ.ty)) addSouthRenderPieceMask(draw);
     }
   }
 
@@ -2215,14 +2257,15 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
               const sctx = structureLayerScratchCtx;
 
               // Owner tile for a band piece is derived from its renderKey.
+              const ownerTx = band.renderKey.within;
               const ownerTy = band.renderKey.slice - band.renderKey.within;
-              const ownerSouth = isOwnerTileSouthOfPlayer(ownerTy);
+              const ownerInWedge = isOwnerTileInPlayerWedge(ownerTx, ownerTy);
 
               const wantsStructureTarget =
                 (overlayKey.kindOrder === KindOrder.STRUCTURE || overlayKey.kindOrder === KindOrder.OVERLAY);
 
-              // Route to structure scratch ONLY if south-owned; otherwise draw to main ctx.
-              const target = wantsStructureTarget && sctx && ownerSouth ? sctx : ctx;
+              // Route to structure scratch ONLY if wedge-owned; otherwise draw to main ctx.
+              const target = wantsStructureTarget && sctx && ownerInWedge ? sctx : ctx;
               const img = draw.img;
               if (!img) return;
               const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(img) : img;
@@ -2296,7 +2339,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
                 );
                 maskCtx.restore();
               });
-              if (isOwnerTileSouthOfPlayer(ownerTy)) {
+              if (isOwnerTileInPlayerWedge(band.renderKey.within, ownerTy)) {
                 southBuildingMaskDraws.push((maskCtx) => {
                   const img = draw.img;
                   if (!img) return;
@@ -2346,20 +2389,22 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
             const sctx = structureLayerScratchCtx;
             const isStructureish = overlayKey.kindOrder === KindOrder.STRUCTURE || overlayKey.kindOrder === KindOrder.OVERLAY;
 
-            // Owner tile for overlays is their anchorTy (already used for slice/placement)
+            // Owner tile for overlays is their anchor tile (used for slice/placement)
+            const ownerTx = (o.anchorTx ?? (o.tx + o.w - 1));
             const ownerTy = (o.anchorTy ?? (o.ty + o.h - 1));
-            const ownerSouth = isOwnerTileSouthOfPlayer(ownerTy);
+            const ownerInWedge = isOwnerTileInPlayerWedge(ownerTx, ownerTy);
 
-            if (isStructureish && sctx && ownerSouth) drawRenderPieceTo(sctx, draw);
+            if (isStructureish && sctx && ownerInWedge) drawRenderPieceTo(sctx, draw);
             else drawRenderPiece(draw);
           });
 
           // Full building mask stays intact for lighting occlusion.
           {
+            const ownerTx = (o.anchorTx ?? (o.tx + o.w - 1));
             const ownerTy = (o.anchorTy ?? (o.ty + o.h - 1));
             if (o.layerRole === "STRUCTURE" || (o.kind ?? "ROOF") === "ROOF") {
               addRenderPieceMask(draw);
-              if (isOwnerTileSouthOfPlayer(ownerTy)) addSouthRenderPieceMask(draw);
+              if (isOwnerTileInPlayerWedge(ownerTx, ownerTy)) addSouthRenderPieceMask(draw);
             }
           }
         }
@@ -2818,6 +2863,39 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     ctx.fillText(`roadW(player): ${roadWPlayer}`, 8, 30);
   }
   ctx.restore();
+
+  if (DEBUG_PLAYER_WEDGE) {
+    const worldToScreenPx = (xWorld: number, yWorld: number) => {
+      const xZoom = (xWorld - viewCenterX) * camZoom + viewCenterX;
+      const yZoom = (yWorld - viewCenterY) * camZoom + viewCenterY;
+      return { x: xZoom * pixelScale, y: yZoom * pixelScale };
+    };
+    const playerPos = { x: px, y: py };
+    const playerTile = worldToTile(playerPos.x, playerPos.y);
+    ctx.save();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "rgba(255, 0, 0, 0.18)";
+    for (let s = minSum; s <= maxSum; s++) {
+      const ty0 = Math.max(minTy, s - maxTx);
+      const ty1 = Math.min(maxTy, s - minTx);
+      for (let ty = ty1; ty >= ty0; ty--) {
+        const tx = s - ty;
+        if (!isTileInPlayerSouthWedge(tx, ty, playerTile.tx, playerTile.ty)) continue;
+        const wx = (tx + 0.5) * T;
+        const wy = (ty + 0.5) * T;
+        const z = tileHAtWorld(wx, wy);
+        const screen = tileToScreen(tx, ty, z);
+        const p = worldToScreenPx(screen.x, screen.y);
+        ctx.fillRect(
+          Math.floor(p.x),
+          Math.floor(p.y),
+          KENNEY_TILE_WORLD * camZoom * pixelScale,
+          (KENNEY_TILE_WORLD / 2) * camZoom * pixelScale
+        );
+      }
+    }
+    ctx.restore();
+  }
 
   // --- UI ---
   if (debugFlags.showGrid) renderTileGridCompass(w, ctx, screenW, screenH); // tile-grid N/E/S/W (matches in-game tests)
