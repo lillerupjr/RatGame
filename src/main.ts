@@ -556,6 +556,7 @@ async function bootstrap() {
       refs.innkeeperMenuEl.hidden = true;
       refs.settingsMenuEl.hidden = true;
       refs.ui.menuEl.hidden = true;
+      refs.hud.root.hidden = false;
     }
   }
 
@@ -623,6 +624,22 @@ async function bootstrap() {
   };
 
   // Runtime render/debug toggles (works outside dev panel too).
+  const F5_PALETTE_CYCLE: ReadonlyArray<ReturnType<typeof getUserSettings>["render"]["paletteId"]> = [
+    "divination",
+    "cyberpunk",
+    "sunset_8",
+    "s_sunset7",
+    "moonlight_15",
+    "st8_moonlight",
+    "noire_truth",
+    "chroma_noir",
+    "sunny_swamp",
+    "swamp_kin",
+    "cobalt_desert_7",
+    "lost_in_the_desert",
+    "db32",
+  ];
+
   window.addEventListener("keydown", (ev) => {
     if (ev.repeat) return;
 
@@ -630,11 +647,14 @@ async function bootstrap() {
       ev.preventDefault();
       const current = getUserSettings().render;
       if (!current.paletteSwapEnabled) {
-        updateUserSettings({ render: { paletteSwapEnabled: true, paletteId: "divination" } });
-      } else if (current.paletteId === "divination") {
-        updateUserSettings({ render: { paletteSwapEnabled: true, paletteId: "db32" } });
+        updateUserSettings({ render: { paletteSwapEnabled: true, paletteId: F5_PALETTE_CYCLE[0] } });
       } else {
-        updateUserSettings({ render: { paletteSwapEnabled: false } });
+        const idx = F5_PALETTE_CYCLE.indexOf(current.paletteId);
+        if (idx >= 0 && idx < F5_PALETTE_CYCLE.length - 1) {
+          updateUserSettings({ render: { paletteSwapEnabled: true, paletteId: F5_PALETTE_CYCLE[idx + 1] } });
+        } else {
+          updateUserSettings({ render: { paletteSwapEnabled: false } });
+        }
       }
       return;
     }

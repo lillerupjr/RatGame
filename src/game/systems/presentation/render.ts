@@ -83,6 +83,7 @@ import { resolveDebugFlags } from "../../../debugSettings";
 import { getUserSettings } from "../../../userSettings";
 import { getZoneTrialObjectiveState } from "../../objectives/zoneObjectiveSystem";
 import { renderZoneObjectives } from "../../render/renderZoneObjectives";
+import { resolveActivePaletteId } from "../../render/activePalette";
 
 // ============================================
 // RenderKey & KindOrder (Isometric Painter Model)
@@ -3019,6 +3020,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   ctx.fillStyle = "#fff";
   const fps = Math.round((w as any).fps ?? 0);
   ctx.fillText(`FPS: ${fps}`, 8, 14);
+  ctx.fillText(`Palette: ${resolveActivePaletteId()}`, 8, 46);
   if (SHOW_ROAD_SEMANTIC) {
     const roadWPlayer = roadAreaWidthAt(playerTx, playerTy);
     ctx.fillText(`roadW(player): ${roadWPlayer}`, 8, 30);

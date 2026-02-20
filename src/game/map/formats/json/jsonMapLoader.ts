@@ -795,7 +795,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     }
   };
 
-  const mapSkinId = optionalStringField(data, "mapSkinId");
+  const mapSkinId = optionalStringField(data, "mapSkinId") as MapSkinId | undefined;
   const buildingPackId = optionalStringField(data, "buildingPackId");
   const mapSkinDefaults = optionalMapSkinDefaultsField(data, "mapSkinDefaults");
   const centerOnZero = optionalBooleanField(data, "centerOnZero");
