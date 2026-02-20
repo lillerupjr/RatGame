@@ -1,5 +1,8 @@
 // src/main.ts
 import { createGame } from "./game/game";
+import { AppState, RunState, createAppStateController } from "./game/app/appState";
+import { createLoadingController } from "./game/app/loadingFlow";
+import { renderLoadingScreen } from "./game/app/loadingScreen";
 import { resizeCanvasPixelPerfect } from "./engine/render/pixelPerfect";
 import { getDomRefs } from "./ui/domRefs";
 import { wireMenus } from "./ui/menuWiring";
@@ -465,6 +468,63 @@ async function bootstrap() {
 
   wireMenus(refs, game);
 
+  const appStateController = createAppStateController();
+  let bootProgress = 0;
+  let activeStartIntent: ReturnType<typeof game.consumePendingStartIntent> = null;
+  let activeFloorIntent: ReturnType<typeof game.consumePendingFloorLoadIntent> = null;
+  let loadingDoneNextState: AppState = AppState.RUN;
+  const LOADING_SCREEN_EXTRA_MS = 3000;
+  let bootScreenStartedAt = performance.now();
+  let loadingScreenStartedAt = 0;
+
+  const loadingController = createLoadingController({
+    compileMap: async () => {
+      if (activeStartIntent) {
+        game.prepareStartMap(activeStartIntent);
+        return;
+      }
+      if (activeFloorIntent) {
+        game.beginFloorLoad(activeFloorIntent);
+      }
+    },
+    prewarmSprites: async () => {
+      if (activeStartIntent) {
+        await game.prewarmActiveMapSpritesForCurrentPalette();
+        return;
+      }
+      if (activeFloorIntent) {
+        await game.prewarmFloorLoadSprites();
+      }
+    },
+    spawnEntities: async () => {
+      if (activeStartIntent) {
+        game.performPreparedStartIntent(activeStartIntent);
+        return;
+      }
+      if (activeFloorIntent) {
+        game.finalizeFloorLoad();
+      }
+    },
+    finalize: async () => {
+      activeStartIntent = null;
+      activeFloorIntent = null;
+    },
+  });
+
+  const bootTick = () => {
+    if (bootProgress < 0.5) {
+      game.preloadBootAssets();
+      bootProgress = 0.5;
+      return;
+    }
+    if (performance.now() - bootScreenStartedAt < LOADING_SCREEN_EXTRA_MS) {
+      bootProgress = Math.max(bootProgress, 0.95);
+      return;
+    }
+    bootProgress = 1;
+    appStateController.setAppState(AppState.MENU);
+  };
+
   // Runtime render/debug toggles (works outside dev panel too).
   window.addEventListener("keydown", (ev) => {
     if (ev.repeat) return;
@@ -497,6 +557,14 @@ async function bootstrap() {
     if (ev.code === "F6") {
       const next = !getUserSettings().render.entityShadowsEnabled;
       updateUserSettings({ render: { entityShadowsEnabled: next } });
+      return;
+    }
+
+    if (ev.code === "Escape" && appStateController.appState === AppState.RUN) {
+      ev.preventDefault();
+      appStateController.setRunState(
+        appStateController.runState === RunState.PAUSED ? RunState.PLAYING : RunState.PAUSED,
+      );
     }
   });
 
@@ -504,8 +572,84 @@ async function bootstrap() {
   function frame(now: number) {
     const dt = Math.min(0.033, (now - last) / 1000);
     last = now;
-    game.update(dt);
-    game.render();
+
+    switch (appStateController.appState) {
+      case AppState.BOOT:
+        bootTick();
+        renderLoadingScreen(ctx, bootProgress);
+        break;
+      case AppState.MENU: {
+        const pendingFloorIntent = game.consumePendingFloorLoadIntent();
+        if (pendingFloorIntent) {
+          activeFloorIntent = pendingFloorIntent;
+          loadingDoneNextState = AppState.RUN;
+          loadingScreenStartedAt = performance.now();
+          loadingController.beginMapLoad(pendingFloorIntent.mapId ?? "");
+          appStateController.setAppState(AppState.LOADING);
+          break;
+        }
+
+        const pending = game.consumePendingStartIntent();
+        if (pending) {
+          if (pending.mode === "SANDBOX") {
+            activeStartIntent = pending;
+            loadingDoneNextState = AppState.RUN;
+            loadingScreenStartedAt = performance.now();
+            loadingController.beginMapLoad(pending.mapId ?? "");
+            appStateController.setAppState(AppState.LOADING);
+          } else {
+            // DELVE / DETERMINISTIC: do not enter LOADING at character pick.
+            game.prepareStartMap(pending);
+            game.performPreparedStartIntent(pending);
+          }
+        } else {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+        break;
+      }
+      case AppState.LOADING:
+        loadingController.tick();
+        renderLoadingScreen(ctx, loadingController.progress);
+        if (
+          loadingController.isDone()
+          && performance.now() - loadingScreenStartedAt >= LOADING_SCREEN_EXTRA_MS
+        ) {
+          appStateController.setAppState(loadingDoneNextState);
+          if (loadingDoneNextState === AppState.RUN) {
+            appStateController.setRunState(RunState.PLAYING);
+          }
+        }
+        break;
+      case AppState.RUN:
+        if (appStateController.runState === RunState.PLAYING) {
+          const pendingFloorIntent = game.consumePendingFloorLoadIntent();
+          if (pendingFloorIntent) {
+            activeFloorIntent = pendingFloorIntent;
+            loadingController.beginMapLoad(pendingFloorIntent.mapId ?? "");
+            appStateController.setAppState(AppState.LOADING);
+            renderLoadingScreen(ctx, loadingController.progress);
+            break;
+          }
+        }
+        if (appStateController.runState === RunState.PLAYING) {
+          game.update(dt);
+        }
+        game.render();
+        if (appStateController.runState === RunState.PAUSED) {
+          ctx.save();
+          ctx.fillStyle = "rgba(0,0,0,0.45)";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#ffffff";
+          ctx.font = "16px monospace";
+          ctx.textAlign = "center";
+          ctx.fillText("PAUSED", Math.floor(canvas.width * 0.5), Math.floor(canvas.height * 0.5));
+          ctx.restore();
+        }
+        break;
+      default:
+        break;
+    }
+
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

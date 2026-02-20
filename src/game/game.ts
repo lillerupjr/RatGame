@@ -149,6 +149,20 @@ type CreateGameArgs = {
   };
 };
 
+type StartIntent =
+  | { mode: "DELVE"; characterId: PlayableCharacterId }
+  | { mode: "DETERMINISTIC"; characterId: PlayableCharacterId }
+  | { mode: "SANDBOX"; characterId: PlayableCharacterId; mapId?: string };
+
+type PreparedStart = {
+  seed: number;
+  mapId?: string;
+};
+
+type FloorLoadContext = {
+  floorIntent: FloorIntent;
+};
+
 
 /** Create a game instance and return update/render/start handlers. */
 export function createGame(args: CreateGameArgs) {
@@ -535,19 +549,15 @@ export function createGame(args: CreateGameArgs) {
     }
   });
 
-  // Ensure a map is compiled before we create the World (spawn uses the active map).
-  const initialMap = getDefaultStaticMap();
-  if (initialMap) {
-    activateMapDef(initialMap, 1337);
-  }
-
   let world: World = createWorld({ seed: 1337, stage: cloneStage("DOCKS") });
   applyObjectivesFromActiveMap(world);
   applyMapFeaturesFromCells(world);
   applyDebugSpawn(world);
-  spawnMilestonePigeonNearPlayer(world);
-
-  setMusicStage("DOCKS");
+  let pendingStartIntent: StartIntent | null = null;
+  let pendingFloorIntent: FloorIntent | null = null;
+  let preparedStart: PreparedStart | null = null;
+  let bootAssetsPreloaded = false;
+  let floorLoadContext: FloorLoadContext | null = null;
 
   const applyPlayerSkinSelection = (skin: string) => {
     setPlayerSkin(skin);
@@ -559,13 +569,17 @@ export function createGame(args: CreateGameArgs) {
     applyPlayerSkinSelection(defaultCharacter.idleSpriteKey);
   }
 
-  preloadBackgrounds();
-  preloadPlayerSprites();
-  preloadVendorNpcSprites();
-  preloadProjectileSprites();
-  preloadNeutralMobSprites();
-  preloadSfx();
-  preloadKenneyTiles();
+  function preloadBootAssets() {
+    if (bootAssetsPreloaded) return;
+    bootAssetsPreloaded = true;
+    preloadBackgrounds();
+    preloadPlayerSprites();
+    preloadVendorNpcSprites();
+    preloadProjectileSprites();
+    preloadNeutralMobSprites();
+    preloadSfx();
+    preloadKenneyTiles();
+  }
 
   // NEW: Kenney iso tile (placeholder for Milestone A)
   // Uses the default map skin sprite set.
@@ -763,11 +777,12 @@ export function createGame(args: CreateGameArgs) {
     return false;
   }
 
-  async function enterFloor(w: World, floorIntent: FloorIntent): Promise<void> {
+  function beginFloorLoad(floorIntent: FloorIntent): boolean {
+    const w = world;
     setDialog(null);
     if (w.delveMap && !floorIntent.mapId) {
       console.error("[enterFloor] delve floor intent missing mapId");
-      return;
+      return false;
     }
     w.floorIndex = floorIntent.floorIndex;
     w.floorArchetype = floorIntent.archetype;
@@ -788,16 +803,16 @@ export function createGame(args: CreateGameArgs) {
     if (floorIntent.mapId) {
       if (!floorIntent.objectiveId) {
         console.error("[enterFloor] missing objectiveId for planned floor");
-        return;
+        return false;
       }
       const baseMap = getStaticMapById(floorIntent.mapId);
       if (!baseMap) {
         console.error(`[enterFloor] missing authored map for mapId="${floorIntent.mapId}"`);
-        return;
+        return false;
       }
       if (floorIntent.variantSeed === undefined) {
         console.error("[enterFloor] missing variantSeed for planned floor");
-        return;
+        return false;
       }
       const rng = new RNG(floorIntent.variantSeed);
       const finalMap = applyObjective(baseMap, floorIntent.objectiveId, rng);
@@ -819,11 +834,24 @@ export function createGame(args: CreateGameArgs) {
       }
     }
 
+    floorLoadContext = { floorIntent };
+    return true;
+  }
+
+  async function prewarmFloorLoadSprites(): Promise<void> {
+    const w = world;
     const paletteId = resolveActivePaletteId();
     if (paletteId !== "db32") {
       const spriteIds = collectRuntimeSpriteIdsToPrewarm(w);
       await prewarmPaletteSprites(paletteId, spriteIds);
     }
+  }
+
+  function finalizeFloorLoad(): void {
+    const w = world;
+    const ctx = floorLoadContext;
+    if (!ctx) return;
+    const floorIntent = ctx.floorIntent;
 
     const spawn = getSpawnWorldFromActive();
     const anchor = anchorFromWorld(spawn.x, spawn.y, KENNEY_TILE_WORLD);
@@ -842,7 +870,7 @@ export function createGame(args: CreateGameArgs) {
     applyMapFeaturesFromCells(w);
     spawnMilestonePigeonNearPlayer(w);
 
-    const objectiveSpec = objectiveSpecFromFloorIntent(floorIntent);
+    const objectiveSpec = objectiveSpecFromFloorIntent(ctx.floorIntent);
     w.currentObjectiveSpec = objectiveSpec;
     setObjectivesFromSpec(w, objectiveSpec);
     startZoneTrial(w);
@@ -859,6 +887,22 @@ export function createGame(args: CreateGameArgs) {
     w.transitionTime = 0;
 
     emitEvent(w, { type: "SFX", id: "FLOOR_START", vol: 0.9, rate: 1 });
+    floorLoadContext = null;
+
+    // Enter gameplay state (delve picker leaves us in MAP; floor load must resume RUN).
+    w.state = "RUN";
+
+    // UI: hide map overlay, show HUD.
+    args.ui.mapEl.root.hidden = true;
+    args.hud.root.hidden = false;
+    hideLevelUp();
+  }
+
+  async function enterFloor(w: World, floorIntent: FloorIntent): Promise<void> {
+    void w;
+    if (!beginFloorLoad(floorIntent)) return;
+    await prewarmFloorLoadSprites();
+    finalizeFloorLoad();
   }
 
   function buildFloorIntentFromDelveNode(node: DelveNode, floorIndex: number): FloorIntent {
@@ -1010,15 +1054,15 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function previewMap(mapId?: string) {
-    const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
-    applyMapSelection(mapId, seed);
-    applyMapFeaturesFromCells(world);
+    void mapId;
   }
 
-  function resetRun(mapId?: string) {
+  function resetRun(mapId?: string, options?: { skipMapSelection?: boolean; seedOverride?: number }) {
     setDialog(null);
-    const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
-    applyMapSelection(mapId, seed);
+    const seed = options?.seedOverride ?? ((Date.now() ^ (Math.random() * 1e9)) >>> 0);
+    if (!options?.skipMapSelection) {
+      applyMapSelection(mapId, seed);
+    }
     world = createWorld({
       seed,
       stage: cloneStage("DOCKS"),
@@ -1043,14 +1087,14 @@ export function createGame(args: CreateGameArgs) {
     hideLevelUp();
   }
 
-  function startRun(characterId: PlayableCharacterId) {
+  function executeStartRun(characterId: PlayableCharacterId) {
     const character = getPlayableCharacter(characterId);
     if (!character) return;
 
     applyPlayerSkinSelection(character.idleSpriteKey);
     preloadPlayerSprites();
 
-    resetRun(undefined);
+    resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
 
     world.weapons = [{ id: character.startingWeaponId, level: 1, cdLeft: 0 }];
 
@@ -1077,14 +1121,14 @@ export function createGame(args: CreateGameArgs) {
     showDelveMap("Choose your starting location.\nGo deeper for greater challenge and rewards.");
   }
 
-  function startDeterministicRun(characterId: PlayableCharacterId) {
+  function executeStartDeterministicRun(characterId: PlayableCharacterId) {
     const character = getPlayableCharacter(characterId);
     if (!character) return;
 
     applyPlayerSkinSelection(character.idleSpriteKey);
     preloadPlayerSprites();
 
-    resetRun(undefined);
+    resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
 
     world.weapons = [{ id: character.startingWeaponId, level: 1, cdLeft: 0 }];
     world.delveMap = null;
@@ -1107,14 +1151,14 @@ export function createGame(args: CreateGameArgs) {
     );
   }
 
-  function startSandboxRun(characterId: PlayableCharacterId, mapId?: string) {
+  function executeStartSandboxRun(characterId: PlayableCharacterId, mapId?: string) {
     const character = getPlayableCharacter(characterId);
     if (!character) return;
 
     applyPlayerSkinSelection(character.idleSpriteKey);
     preloadPlayerSprites();
 
-    resetRun(mapId);
+    resetRun(mapId, { skipMapSelection: true, seedOverride: preparedStart?.seed });
 
     world.weapons = [{ id: character.startingWeaponId, level: 1, cdLeft: 0 }];
     world.delveMap = null;
@@ -1130,6 +1174,73 @@ export function createGame(args: CreateGameArgs) {
     args.ui.endEl.root.hidden = true;
     args.hud.root.hidden = false;
     hideLevelUp();
+  }
+
+  function prepareStartMap(intent: StartIntent): void {
+    const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
+ 
+    // Only sandbox preloads/activates a map at start.
+    // DELVE/DETERMINISTIC should NOT compile or activate any map until a floor is chosen.
+    const mapId = intent.mode === "SANDBOX" ? intent.mapId : undefined;
+
+    if (intent.mode === "SANDBOX") {
+      applyMapSelection(mapId, seed);
+    }
+
+    preparedStart = { seed, mapId };
+  }
+
+  async function prewarmActiveMapSpritesForCurrentPalette(): Promise<void> {
+    const paletteId = resolveActivePaletteId();
+    if (paletteId === "db32") return;
+    const spriteIds = collectRuntimeSpriteIdsToPrewarm(world);
+    await prewarmPaletteSprites(paletteId, spriteIds);
+  }
+
+  function performPreparedStartIntent(intent: StartIntent): void {
+    if (!preparedStart) {
+      prepareStartMap(intent);
+    }
+    if (intent.mode === "SANDBOX") {
+      executeStartSandboxRun(intent.characterId, intent.mapId);
+    } else if (intent.mode === "DETERMINISTIC") {
+      executeStartDeterministicRun(intent.characterId);
+    } else {
+      executeStartRun(intent.characterId);
+    }
+    preparedStart = null;
+  }
+
+  function queueStartIntent(intent: StartIntent): void {
+    pendingStartIntent = intent;
+  }
+
+  function consumePendingStartIntent(): StartIntent | null {
+    const out = pendingStartIntent;
+    pendingStartIntent = null;
+    return out;
+  }
+
+  function queueFloorLoadIntent(intent: FloorIntent): void {
+    pendingFloorIntent = intent;
+  }
+
+  function consumePendingFloorLoadIntent(): FloorIntent | null {
+    const out = pendingFloorIntent;
+    pendingFloorIntent = null;
+    return out;
+  }
+
+  function startRun(characterId: PlayableCharacterId) {
+    queueStartIntent({ mode: "DELVE", characterId });
+  }
+
+  function startDeterministicRun(characterId: PlayableCharacterId) {
+    queueStartIntent({ mode: "DETERMINISTIC", characterId });
+  }
+
+  function startSandboxRun(characterId: PlayableCharacterId, mapId?: string) {
+    queueStartIntent({ mode: "SANDBOX", characterId, mapId });
   }
 
   function showLevelUp() {
@@ -1912,7 +2023,7 @@ export function createGame(args: CreateGameArgs) {
     hideLevelUp();
   });
 
-  args.ui.mapEl.root.addEventListener("click", async (e) => {
+  args.ui.mapEl.root.addEventListener("click", (e) => {
     const el = e.target as HTMLElement;
     const btn = el.closest("button") as HTMLButtonElement | null;
     if (!btn) return;
@@ -1924,15 +2035,13 @@ export function createGame(args: CreateGameArgs) {
       world.delveDepth = depth;
       world.delveScaling = getDepthScaling(depth);
       hideMap();
-      await enterFloor(
-        world,
+      queueFloorLoadIntent(
         buildDeterministicFloorIntent({
           archetype: detArchetype,
           floorIndex,
           depth,
         }),
       );
-      world.state = "RUN";
       return;
     }
 
@@ -1959,8 +2068,7 @@ export function createGame(args: CreateGameArgs) {
       // Enter the chosen zone with depth-scaled difficulty
       // floorIndex is used for enemy type weights, zoneId for visuals/music
       const floorIndex = Math.min(2, Math.floor((depth - 1) / 3));
-      await enterFloor(world, buildFloorIntentFromDelveNode(node, floorIndex));
-      world.state = "RUN";
+      queueFloorLoadIntent(buildFloorIntentFromDelveNode(node, floorIndex));
       return;
     }
 
@@ -1980,8 +2088,7 @@ export function createGame(args: CreateGameArgs) {
     hideMap();
 
     // Enter chosen floor/zone (boss is still at end of the floor like today)
-    await enterFloor(world, buildFloorIntentFromRunNode(node, nextFloor));
-    world.state = "RUN";
+    queueFloorLoadIntent(buildFloorIntentFromRunNode(node, nextFloor));
   });
 
   // Level-up choice click
@@ -2026,5 +2133,22 @@ export function createGame(args: CreateGameArgs) {
     world.state = "RUN";
   });
 
-  return { update, render, startRun, startDeterministicRun, startSandboxRun, previewMap };
+  return {
+    update,
+    render,
+    startRun,
+    startDeterministicRun,
+    startSandboxRun,
+    previewMap,
+    preloadBootAssets,
+    prepareStartMap,
+    prewarmActiveMapSpritesForCurrentPalette,
+    performPreparedStartIntent,
+    consumePendingStartIntent,
+    beginFloorLoad,
+    prewarmFloorLoadSprites,
+    finalizeFloorLoad,
+    queueFloorLoadIntent,
+    consumePendingFloorLoadIntent,
+  };
 }
