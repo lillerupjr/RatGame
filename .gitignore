@@ -1,41 +1,55 @@
-# dependencies
-node_modules/
+# Local dev and cache
 
-# builds
-dist/
-build/
-
-# vite / caches
+_local/
+_local/**
 .cache/
-*.tsbuildinfo
+.cache/**
+tmp/
+tmp/**
+temp/
+temp/**
+.codex/
+.claude/
+coverage/
 
-# OS / editor noise
-.DS_Store
-Thumbs.db
-*.log
-RatGame.zip
-workspace.xml
-
-# junk files sometimes created when zips are made on mac
-._*
-**/.DS_Store
-
+# Repo dump files
+repo_dump.txt
+_local/repo_dump.txt
 repo_dump*.txt
 *_dump*.txt
 
-# JetBrains / WebStorm
-.idea/
-!.idea/codeStyles/
-!.idea/runConfigurations/
+# Build outputs
+
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# OS / editor junk
+
+.DS_Store
+Thumbs.db
+._*
+*.log
+*.zip
+*.dump
+RatGame.zip
+workspace.xml
+
+# VSCode / JetBrains local settings
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/*
+*.iml
+
+# Node modules
+
+node_modules/
+
+# Optional: palette debug output (if added later)
+
+public/assets-runtime/_generated/
 
 # Contracts
 **/contracts/**
-
-# all files in the .claude directory
-.claude/*
-_local/
-.codex/
-.claude/
-*.zip
-*.dump
-coverage/
