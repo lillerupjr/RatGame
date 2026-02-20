@@ -52,7 +52,6 @@ import {
   preloadRenderSprites,
   getRuntimeDecalSprite,
   getTileSpriteById,
-  getVoidTop,
 } from "../../../engine/render/sprites/renderSprites";
 import type { RuntimeDecalSetId } from "../../content/runtimeDecalConfig";
 import { roadMarkingDecalScale, shouldPixelSnapRoadMarking } from "../../roads/roadMarkingRender";
@@ -125,8 +124,12 @@ function compareRenderKeys(a: RenderKey, b: RenderKey): number {
 }
 
 const DEBUG_PLAYER_WEDGE = false;
+const HARDCODED_VOID_TOP_SRC = "/assets-runtime/tiles/floor/void.png";
 
 const flippedOverlayImageCache = new WeakMap<HTMLImageElement, HTMLCanvasElement>();
+let hardcodedVoidTopImage: HTMLImageElement | null = null;
+let hardcodedVoidTopReady = false;
+let hardcodedVoidTopFailed = false;
 let entityShadowMaskScratchCanvas: HTMLCanvasElement | null = null;
 let entityShadowMaskScratchCtx: CanvasRenderingContext2D | null = null;
 let entitySilhouetteMaskScratchCanvas: HTMLCanvasElement | null = null;
@@ -136,6 +139,25 @@ let structureLayerScratchCanvas: HTMLCanvasElement | null = null;
 let structureLayerScratchCtx: CanvasRenderingContext2D | null = null;
 let southBuildingMaskScratchCanvas: HTMLCanvasElement | null = null;
 let southBuildingMaskScratchCtx: CanvasRenderingContext2D | null = null;
+let cutoutVoidScratchCanvas: HTMLCanvasElement | null = null;
+let cutoutVoidScratchCtx: CanvasRenderingContext2D | null = null;
+
+function getHardcodedVoidTop(): { ready: boolean; img: HTMLImageElement | null } {
+  if (hardcodedVoidTopReady && hardcodedVoidTopImage) {
+    return { ready: true, img: hardcodedVoidTopImage };
+  }
+  if (hardcodedVoidTopFailed) {
+    return { ready: false, img: null };
+  }
+  if (!hardcodedVoidTopImage) {
+    const img = new Image();
+    img.src = HARDCODED_VOID_TOP_SRC;
+    img.onload = () => { hardcodedVoidTopReady = true; };
+    img.onerror = () => { hardcodedVoidTopFailed = true; };
+    hardcodedVoidTopImage = img;
+  }
+  return { ready: false, img: hardcodedVoidTopImage };
+}
 
 function getFlippedOverlayImage(img: HTMLImageElement): HTMLCanvasElement {
   const cached = flippedOverlayImageCache.get(img);
@@ -611,6 +633,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   type MaskDraw = (maskCtx: CanvasRenderingContext2D) => void;
   const buildingMaskDraws: MaskDraw[] = [];
   const southBuildingMaskDraws: MaskDraw[] = [];
+  const southBuildingBaseMaskDraws: MaskDraw[] = [];
   const entitySilhouetteMaskDraws: MaskDraw[] = [];
 
     const drawRenderPieceTo = (target: CanvasRenderingContext2D, c: RenderPieceDraw) => {
@@ -660,6 +683,25 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           maskCtx.scale(-1, 1);
         }
         maskCtx.drawImage(img, 0, 0, c.dw, c.dh);
+        maskCtx.restore();
+      });
+    };
+    const addGroundTileMask = (target: MaskDraw[], tx: number, ty: number) => {
+      target.push((maskCtx) => {
+        const p0 = worldToScreen(tx * T, ty * T);
+        const p1 = worldToScreen((tx + 1) * T, ty * T);
+        const p2 = worldToScreen((tx + 1) * T, (ty + 1) * T);
+        const p3 = worldToScreen(tx * T, (ty + 1) * T);
+        maskCtx.save();
+        maskCtx.globalCompositeOperation = "source-over";
+        maskCtx.fillStyle = "rgba(255,255,255,1)";
+        maskCtx.beginPath();
+        maskCtx.moveTo(p0.x + camX, p0.y + camY);
+        maskCtx.lineTo(p1.x + camX, p1.y + camY);
+        maskCtx.lineTo(p2.x + camX, p2.y + camY);
+        maskCtx.lineTo(p3.x + camX, p3.y + camY);
+        maskCtx.closePath();
+        maskCtx.fill();
         maskCtx.restore();
       });
     };
@@ -996,7 +1038,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const RENDER_ENTITY_SHADOWS = renderSettings.entityShadowsEnabled;
   const RENDER_ENTITY_ANCHORS = renderSettings.entityAnchorsEnabled;
   const SHOW_ENTITY_ANCHOR_OVERLAY = debug.entityAnchorOverlay;
-  const WATER_FLOW_RATE = debug.waterFlowRate;
   const debugFlags = resolveDebugFlags(debug);
   const SHOW_WALK_MASK = debugFlags.showWalkMask;
   const SHOW_RAMPS = debugFlags.showRamps;
@@ -1038,7 +1079,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // Void
   // ----------------------------
   {
-    const voidRec = getVoidTop(performance.now(), WATER_FLOW_RATE);
+    const voidRec = getHardcodedVoidTop();
     if (voidRec?.ready && voidRec.img && voidRec.img.width > 0 && voidRec.img.height > 0) {
       const topImg = voidRec.img;
       const useProjectedTop = topImg.width === topImg.height;
@@ -2139,7 +2180,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         // Full building mask stays intact for lighting occlusion.
         if (face.layerRole === "STRUCTURE") {
           addRenderPieceMask(d);
-          if (isOwnerTileInPlayerWedge(face.tx, face.ty)) addSouthRenderPieceMask(d);
+          if (isOwnerTileInPlayerWedge(face.tx, face.ty)) {
+            addSouthRenderPieceMask(d);
+            addGroundTileMask(southBuildingBaseMaskDraws, face.tx, face.ty);
+          }
         }
       }
     }
@@ -2187,7 +2231,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
       // Full building mask stays intact for lighting occlusion.
       addRenderPieceMask(draw);
-      if (isOwnerTileInPlayerWedge(occ.tx, occ.ty)) addSouthRenderPieceMask(draw);
+      if (isOwnerTileInPlayerWedge(occ.tx, occ.ty)) {
+        addSouthRenderPieceMask(draw);
+        addGroundTileMask(southBuildingBaseMaskDraws, occ.tx, occ.ty);
+      }
     }
   }
 
@@ -2204,7 +2251,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         const useRuntimeStructureSlicing =
           o.kind === "PROP" || o.layerRole === "STRUCTURE";
 
-        if (useRuntimeStructureSlicing) {
+          if (useRuntimeStructureSlicing) {
           const bandPieces = buildRuntimeStructureBandPieces({
             structureInstanceId: o.id,
             spriteId: o.spriteId,
@@ -2370,6 +2417,17 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
               }
             }
           }
+          {
+            const ownerTx = (o.anchorTx ?? (o.tx + o.w - 1));
+            const ownerTy = (o.anchorTy ?? (o.ty + o.h - 1));
+            if ((o.layerRole === "STRUCTURE" || (o.kind ?? "ROOF") === "ROOF") && isOwnerTileInPlayerWedge(ownerTx, ownerTy)) {
+              for (let fy = 0; fy < o.h; fy++) {
+                for (let fx = 0; fx < o.w; fx++) {
+                  addGroundTileMask(southBuildingBaseMaskDraws, o.tx + fx, o.ty + fy);
+                }
+              }
+            }
+          }
         } else {
           const slice = (o.anchorTx ?? (o.tx + o.w - 1)) + (o.anchorTy ?? (o.ty + o.h - 1));
           const within = o.anchorTx ?? (o.tx + o.w - 1);
@@ -2404,7 +2462,14 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
             const ownerTy = (o.anchorTy ?? (o.ty + o.h - 1));
             if (o.layerRole === "STRUCTURE" || (o.kind ?? "ROOF") === "ROOF") {
               addRenderPieceMask(draw);
-              if (isOwnerTileInPlayerWedge(ownerTx, ownerTy)) addSouthRenderPieceMask(draw);
+              if (isOwnerTileInPlayerWedge(ownerTx, ownerTy)) {
+                addSouthRenderPieceMask(draw);
+                for (let fy = 0; fy < o.h; fy++) {
+                  for (let fx = 0; fx < o.w; fx++) {
+                    addGroundTileMask(southBuildingBaseMaskDraws, o.tx + fx, o.ty + fy);
+                  }
+                }
+              }
             }
           }
         }
@@ -2464,6 +2529,104 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     structureLayerScratchCtx = null;
   }
 
+  let cutoutVoidCanvas: HTMLCanvasElement | null = null;
+  {
+    const southMaskLayer = ensureScratchMaskCanvas(
+      southBuildingMaskScratchCanvas,
+      southBuildingMaskScratchCtx,
+      screenW,
+      screenH,
+    );
+    const voidLayer = ensureScratchMaskCanvas(
+      cutoutVoidScratchCanvas,
+      cutoutVoidScratchCtx,
+      screenW,
+      screenH,
+    );
+    if (southMaskLayer && voidLayer) {
+      southBuildingMaskScratchCanvas = southMaskLayer.canvas;
+      southBuildingMaskScratchCtx = southMaskLayer.ctx;
+      cutoutVoidScratchCanvas = voidLayer.canvas;
+      cutoutVoidScratchCtx = voidLayer.ctx;
+
+      const southCtx = southMaskLayer.ctx;
+      const vctx = voidLayer.ctx;
+
+      southCtx.setTransform(1, 0, 0, 1, 0, 0);
+      southCtx.clearRect(0, 0, screenW, screenH);
+      southCtx.save();
+      configurePixelPerfect(southCtx);
+      southCtx.scale(pixelScale, pixelScale);
+      southCtx.translate(viewCenterX, viewCenterY);
+      southCtx.scale(camZoom, camZoom);
+      southCtx.translate(-viewCenterX, -viewCenterY);
+      southCtx.globalCompositeOperation = "source-over";
+      for (let i = 0; i < southBuildingBaseMaskDraws.length; i++) {
+        southBuildingBaseMaskDraws[i](southCtx);
+      }
+      southCtx.restore();
+
+      const worldToScreenPx = (xWorld: number, yWorld: number) => {
+        const xZoom = (xWorld - viewCenterX) * camZoom + viewCenterX;
+        const yZoom = (yWorld - viewCenterY) * camZoom + viewCenterY;
+        return { x: xZoom * pixelScale, y: yZoom * pixelScale };
+      };
+      const pzAbs = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
+      const feet = getEntityFeetPos(px, py, pzAbs);
+      const sp = worldToScreenPx(feet.screenX, feet.screenY);
+      const playerSx = sp.x;
+      const playerSy = sp.y;
+      const radiusWorld = 150;
+      const radiusPx = radiusWorld * camZoom * pixelScale;
+      const outerR = radiusPx * 1.35;
+      const innerR = Math.max(1, outerR * 0.72);
+
+      southCtx.save();
+      southCtx.setTransform(1, 0, 0, 1, 0, 0);
+      southCtx.globalCompositeOperation = "destination-in";
+      const g = southCtx.createRadialGradient(playerSx, playerSy, innerR, playerSx, playerSy, outerR);
+      g.addColorStop(0.0, "rgba(0,0,0,1)");
+      g.addColorStop(1.0, "rgba(0,0,0,0)");
+      southCtx.fillStyle = g;
+      southCtx.beginPath();
+      southCtx.arc(playerSx, playerSy, outerR, 0, Math.PI * 2);
+      southCtx.fill();
+      southCtx.restore();
+
+      vctx.setTransform(1, 0, 0, 1, 0, 0);
+      vctx.globalCompositeOperation = "source-over";
+      vctx.clearRect(0, 0, screenW, screenH);
+
+      const voidRec = getHardcodedVoidTop();
+      if (voidRec?.ready && voidRec.img && voidRec.img.width > 0 && voidRec.img.height > 0) {
+        const topImg = voidRec.img;
+        const topW = topImg.width * VOID_TOP_SCALE;
+        const topH = topImg.height * VOID_TOP_SCALE;
+
+        for (let s = minSum; s <= maxSum; s++) {
+          const ty0 = Math.max(minTy, s - maxTx);
+          const ty1 = Math.min(maxTy, s - minTx);
+          for (let ty = ty0; ty <= ty1; ty++) {
+            const tx = s - ty;
+            const wx = (tx + 0.5) * T;
+            const wy = (ty + 0.5) * T;
+            const p = worldToScreen(wx, wy);
+            const dx = p.x + camX - topW * 0.5;
+            const anchorY = KENNEY_TILE_ANCHOR_Y;
+            const dy = p.y + camY - topH * anchorY;
+            vctx.drawImage(topImg, snapPx(dx), snapPx(dy), topW, topH);
+          }
+        }
+      }
+
+      vctx.globalCompositeOperation = "destination-in";
+      vctx.drawImage(southMaskLayer.canvas, 0, 0);
+      vctx.globalCompositeOperation = "source-over";
+
+      cutoutVoidCanvas = voidLayer.canvas;
+    }
+  }
+
   for (let zi = 0; zi < zBandKeys.length; zi++) {
     const zb = zBandKeys[zi];
 
@@ -2476,6 +2639,16 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         if (!isGroundKind(drawable.key.kindOrder)) continue;
         drawable.draw();
       }
+    }
+
+    // Reveal VOID only inside the player cutout.
+    // This visually "turns the floor into void" only where the cutout mask is active.
+    if (zi === 0 && typeof cutoutVoidCanvas !== "undefined" && cutoutVoidCanvas) {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalCompositeOperation = "source-over";
+      ctx.drawImage(cutoutVoidCanvas, 0, 0);
+      ctx.restore();
     }
 
     // Depth phase: everything else.
