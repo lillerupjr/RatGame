@@ -121,7 +121,7 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
 
 export const BUILDING_PACKS: Record<BuildingPackId, BuildingSkinId[]> = {
   avenue_buildings: ["avenue_1", "avenue_2", "avenue_3", "avenue_4", "avenue_5", "avenue_6", "avenue_7"],
-  china_town_buildings: ["china_town_5", "china_town_6"], //["china_town_1", "china_town_2", "china_town_3","china_town_4", "china_town_5", "china_town_6"],
+  china_town_buildings: ["china_town_1", "china_town_2", "china_town_3","china_town_4", "china_town_5", "china_town_6"],
   [DEFAULT_BUILDING_PACK_ID]: [
     "avenue_1",
     "avenue_2",

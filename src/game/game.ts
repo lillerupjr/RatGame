@@ -90,6 +90,7 @@ import { neutralAnimatedMobsSystem } from "./systems/sim/neutralAnimatedMobs";
 import { neutralBirdAISystem } from "./systems/sim/neutralBirdAI";
 import { getZoneTrialObjectiveState, startZoneTrial, updateZoneTrialObjective } from "./objectives/zoneObjectiveSystem";
 import { collectRuntimeSpriteIdsToPrewarm } from "./render/prewarmSprites";
+import { resolveActivePaletteId } from "./render/activePalette";
 
 
 type HudRefs = {
@@ -818,10 +819,10 @@ export function createGame(args: CreateGameArgs) {
       }
     }
 
-    const s = getUserSettings();
-    if (s.render.paletteSwapEnabled && s.render.paletteId && s.render.paletteId !== "db32") {
+    const paletteId = resolveActivePaletteId();
+    if (paletteId !== "db32") {
       const spriteIds = collectRuntimeSpriteIdsToPrewarm(w);
-      await prewarmPaletteSprites(s.render.paletteId, spriteIds);
+      await prewarmPaletteSprites(paletteId, spriteIds);
     }
 
     const spawn = getSpawnWorldFromActive();

@@ -1,8 +1,14 @@
-import { resolveMapSkin, resolveSemanticSprite, type MapSkinId } from "../../../game/content/mapSkins";
+import {
+    getActiveMapSkinId,
+    resolveMapSkin,
+    resolveSemanticSprite,
+    setActiveMapSkinId as setActiveMapSkinIdInContent,
+    type MapSkinId,
+} from "../../../game/content/mapSkins";
 import { isKnownRenderableSpriteId } from "./spriteIdRegistry";
 import { getFloorVariantCount, RUNTIME_FLOOR_VARIANT_COUNTS, type RuntimeFloorFamily } from "../../../game/content/runtimeFloorConfig";
-import { getUserSettings } from "../../../userSettings";
 import { applyPaletteSwapToCanvas } from "../palette/paletteSwap";
+import { resolveActivePaletteId } from "../../../game/render/activePalette";
 import {
     getDecalSpriteId,
     RUNTIME_DECAL_SPRITE_IDS,
@@ -19,12 +25,8 @@ const WATER_FRAME_COUNT = 6;
 const WATER_FRAME_MS = 150;
 
 function effectivePaletteId(forcedPaletteId?: string): string {
-    if (forcedPaletteId && forcedPaletteId !== "db32") return forcedPaletteId;
-    const s = getUserSettings();
-    if (s.render.paletteSwapEnabled && s.render.paletteId !== "db32") {
-        return s.render.paletteId;
-    }
-    return "db32";
+    if (forcedPaletteId) return forcedPaletteId;
+    return resolveActivePaletteId();
 }
 
 function normalizeSpriteId(spriteId: string): string {
@@ -81,10 +83,8 @@ function resolveUrl(spriteId: string): string | null {
 
 function loadByIdInternal(spriteId: string, forcedPaletteId?: string): LoadedImg {
     const rawId = spriteId.trim();
-    const activePaletteId = effectivePaletteId(forcedPaletteId);
-    const paletteKey = activePaletteId !== "db32"
-        ? `@@pal:${activePaletteId}`
-        : "@@pal:db32";
+    const paletteId = effectivePaletteId(forcedPaletteId);
+    const paletteKey = `@@pal:${paletteId}`;
     const key = `${rawId}${paletteKey}`;
     if (!rawId) return { img: new Image(), ready: false };
     if (cache[key]) return cache[key];
@@ -102,7 +102,8 @@ function loadByIdInternal(spriteId: string, forcedPaletteId?: string): LoadedImg
     cache[key] = rec;
 
     img.onload = () => {
-        const enabled = activePaletteId !== "db32";
+        const paletteId2 = effectivePaletteId(forcedPaletteId);
+        const enabled = paletteId2 !== "db32";
 
         if (!enabled) {
             rec.ready = true;
@@ -111,7 +112,7 @@ function loadByIdInternal(spriteId: string, forcedPaletteId?: string): LoadedImg
 
         // Swap into a canvas, then convert to an Image so downstream types remain unchanged.
         try {
-            const swappedCanvas = applyPaletteSwapToCanvas(img, activePaletteId);
+            const swappedCanvas = applyPaletteSwapToCanvas(img, paletteId2);
 
             const swappedImg = new Image();
             swappedImg.onload = () => {
@@ -178,15 +179,14 @@ export function getRuntimeDecalSprite(
     return loadById(spriteId);
 }
 
-let _activeMapSkinId: MapSkinId | undefined = undefined;
-
 export function setActiveMapSkinId(id?: MapSkinId): void {
-    _activeMapSkinId = id;
+    setActiveMapSkinIdInContent(id);
 }
 
 export function getVoidTop(nowMs: number = performance.now(), flowRate: number = 1): LoadedImg {
-    const semantic = resolveSemanticSprite(_activeMapSkinId, "VOID_TOP");
-    const skin = resolveMapSkin(_activeMapSkinId);
+    const skinId = getActiveMapSkinId();
+    const semantic = resolveSemanticSprite(skinId, "VOID_TOP");
+    const skin = resolveMapSkin(skinId);
     const bg = semantic || skin.background;
     if (isWaterBackgroundId(bg)) {
         return getAnimatedWaterSprite(nowMs, flowRate);

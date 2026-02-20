@@ -1,0 +1,10 @@
+{
+  "id": "CHINATOWN",
+  "buildingPackId": "china_town_buildings",
+  "mapSkinId": "china_town",
+  "chunkGrid": {
+    "id": "china_town",
+    "cols": 1,
+    "rows": 9
+  }
+}

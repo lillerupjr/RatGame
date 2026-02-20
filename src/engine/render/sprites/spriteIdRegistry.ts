@@ -2,7 +2,8 @@ import { BUILDING_SKINS } from "../../../game/content/buildings";
 import { CONTAINER_SKINS } from "../../../game/content/containers";
 import { MAP_SKINS, DEFAULT_MAP_SKIN } from "../../../game/content/mapSkins";
 import { PROPS } from "../../../game/content/props";
-import { RUNTIME_FLOOR_VARIANT_COUNTS, type RuntimeFloorFamily } from "../../../game/content/runtimeFloorConfig";
+import { RUNTIME_DECAL_SPRITE_IDS } from "../../../game/content/runtimeDecalConfig";
+import { RUNTIME_FLOOR_VARIANT_COUNTS } from "../../../game/content/runtimeFloorConfig";
 
 import { DIR8_ORDER } from "./dir8";
 
@@ -23,14 +24,29 @@ function addSemanticValue(set: Set<string>, value: string | string[] | undefined
   addId(set, value);
 }
 
+/**
+ * Register runtime-generated (non-authored) floor + decal sprite IDs so URL resolution
+ * and caching work consistently with the rest of the render sprite pipeline.
+ */
+function addRuntimeFloorAndDecalSpriteIds(out: Set<string>) {
+  // Floors: tiles/floor/<family>/<variantIndex>
+  for (const [family, count] of Object.entries(RUNTIME_FLOOR_VARIANT_COUNTS)) {
+    const n = Math.max(0, count | 0);
+    for (let i = 1; i <= n; i++) {
+      out.add(`tiles/floor/${family}/${i}`);
+    }
+  }
+
+  // Decals: explicit IDs from config
+  for (const ids of Object.values(RUNTIME_DECAL_SPRITE_IDS)) {
+    for (let i = 0; i < ids.length; i++) out.add(ids[i]);
+  }
+}
+
 function collectRenderableSpriteIds(): ReadonlySet<string> {
   const ids = new Set<string>();
 
-  for (const [family, count] of Object.entries(RUNTIME_FLOOR_VARIANT_COUNTS) as [RuntimeFloorFamily, number][]) {
-    for (let i = 1; i <= count; i++) {
-      addId(ids, `tiles/floor/${family}/${i}`);
-    }
-  }
+  addRuntimeFloorAndDecalSpriteIds(ids);
   for (let i = 1; i <= 6; i++) {
     addId(ids, `tiles/animated/water2/${i}`);
   }

@@ -6,6 +6,7 @@ export type MapSkinBundle = {
     wall?: string;
     stair?: string;
     stairApron?: string;
+    paletteId?: "db32" | "divination" | "cyberpunk";
 
     background?: string;
     semantic?: Record<string, string | string[]>;
@@ -17,6 +18,7 @@ export type ResolvedMapSkin = {
     wall: string;
     stair: string;
     stairApron: string;
+    paletteId?: "db32" | "divination" | "cyberpunk";
 
 
     background: string;
@@ -29,6 +31,7 @@ export const DEFAULT_MAP_SKIN: ResolvedMapSkin = {
     wall: "none",
     stair: "tiles/stairs/stone/stone",
     stairApron: "none",
+    paletteId: "db32",
 
     background: "tiles/animated/water2/1",
 };
@@ -47,6 +50,7 @@ export const MAP_SKINS: Record<MapSkinId, MapSkinBundle> = {
     },
 
     docks: {
+        paletteId: "divination",
         floor: "tiles/floor/asphalt/1",
         apron: "tiles/walls/asphalt",
         wall: "tiles/walls/asphalt",
@@ -65,7 +69,14 @@ export const MAP_SKINS: Record<MapSkinId, MapSkinBundle> = {
         wall: "tiles/walls/green",
         background: "tiles/animated/water2/1",
     },
+    avenue: {
+        paletteId: "db32",
+    },
+    china_town: {
+        paletteId: "cyberpunk",
+    },
     building1: {
+        paletteId: "db32",
         semantic: {
             BUILDING_WALL_SOUTH: [
                 "structures/buildings/avenue/1",
@@ -82,6 +93,8 @@ export const MAP_SKINS: Record<MapSkinId, MapSkinBundle> = {
 
 };
 
+let activeMapSkinId: MapSkinId | undefined = undefined;
+
 export function resolveMapSkin(id?: MapSkinId): ResolvedMapSkin {
      const bundle = MAP_SKINS[id ?? ""] ?? {};
      return {
@@ -90,10 +103,19 @@ export function resolveMapSkin(id?: MapSkinId): ResolvedMapSkin {
          wall: bundle.wall ?? DEFAULT_MAP_SKIN.wall,
          stair: bundle.stair ?? DEFAULT_MAP_SKIN.stair,
          stairApron: bundle.stairApron ?? DEFAULT_MAP_SKIN.stairApron,
+         paletteId: bundle.paletteId ?? DEFAULT_MAP_SKIN.paletteId,
 
          background: bundle.background ?? DEFAULT_MAP_SKIN.background,
      };
  }
+
+export function setActiveMapSkinId(id?: MapSkinId): void {
+    activeMapSkinId = id;
+}
+
+export function getActiveMapSkinId(): MapSkinId | undefined {
+    return activeMapSkinId;
+}
 
 
 export function resolveSemanticSprite(mapSkinId: MapSkinId | undefined, slot: string, index?: number): string {

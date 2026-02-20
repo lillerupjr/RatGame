@@ -14,6 +14,7 @@ const DB32_PATH = path.join(ROOT, "tools", "palettes", "db32.json");
 const SUBSET_DIRS = [
   "tiles",
   "structures/buildings/avenue",
+  "structures/buildings/china_town",
   "structures/containers",
   "props",
 ];

@@ -32,7 +32,37 @@ export const DIVINATION: PaletteDef = {
   ] as const,
 };
 
-export const PALETTES: readonly PaletteDef[] = [DB32, DIVINATION] as const;
+export const CYBERPUNK: PaletteDef = {
+  id: "cyberpunk",
+  name: "Cyberpunk Neon",
+  // Carefully selected cyberpunk palette optimized for neon urban readability.
+  // Strong magenta, cyan, and deep shadow range.
+  colors: [
+    "#0b0f1a", // deep shadow
+    "#1a1c2c",
+    "#5d275d",
+    "#b13e53",
+    "#ef7d57",
+    "#ffcd75",
+
+    "#a7f070",
+    "#38b764",
+    "#257179",
+
+    "#29366f",
+    "#3b5dc9",
+    "#41a6f6",
+    "#73eff7",
+
+    "#f4f4f4", // highlight
+  ] as const,
+};
+
+export const PALETTES: readonly PaletteDef[] = [
+  DB32,
+  DIVINATION,
+  CYBERPUNK,
+] as const;
 
 export function getPaletteById(id: string): PaletteDef {
   const found = PALETTES.find((p) => p.id === id);

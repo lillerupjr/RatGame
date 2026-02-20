@@ -1,6 +1,7 @@
 {
   "id": "avenue",
   "buildingPackId": "avenue_buildings",
+  "mapSkinId": "avenue",
   "chunkGrid": {
     "id": "avenue",
     "cols": 3,

@@ -142,7 +142,7 @@ function installDevSettingsUi(): void {
   paletteSwapRow.style.gap = "10px";
   paletteSwapRow.style.padding = "4px 0";
   const paletteSwapText = document.createElement("span");
-  paletteSwapText.textContent = "paletteSwapEnabled";
+  paletteSwapText.textContent = "Palette Override";
   const paletteSwapInput = document.createElement("input");
   paletteSwapInput.type = "checkbox";
   paletteSwapInput.addEventListener("change", () => {
@@ -169,16 +169,16 @@ function installDevSettingsUi(): void {
   paletteIdSelect.style.color = "#fff";
   paletteIdSelect.style.border = "1px solid rgba(255,255,255,0.25)";
   paletteIdSelect.style.borderRadius = "4px";
-  for (const id of ["db32", "divination"] as const) {
+  for (const id of ["db32", "divination", "cyberpunk"] as const) {
     const opt = document.createElement("option");
     opt.value = id;
     opt.textContent = id;
     paletteIdSelect.appendChild(opt);
   }
   paletteIdSelect.addEventListener("change", () => {
-    updateUserSettings({
+        updateUserSettings({
       render: {
-        paletteId: paletteIdSelect.value as "db32" | "divination",
+        paletteId: paletteIdSelect.value as "db32" | "divination" | "cyberpunk",
       },
     });
   });

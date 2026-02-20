@@ -5,7 +5,7 @@ export type RenderSettings = {
   entityAnchorsEnabled: boolean;
   // Palette swap (Phase 1): apply at sprite load time, cached.
   paletteSwapEnabled: boolean;
-  paletteId: "db32" | "divination";
+  paletteId: "db32" | "divination" | "cyberpunk";
 };
 
 export type UserSettings = {
