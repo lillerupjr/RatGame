@@ -1,6 +1,11 @@
 import { type Dir8 } from "./dir8";
 import { resolveActivePaletteId } from "../../../game/render/activePalette";
-import { getSpriteById } from "./renderSprites";
+import { getSpriteByIdForPalette } from "./renderSprites";
+import {
+  createPaletteSwapState,
+  notePaletteReady,
+  notePaletteRequested,
+} from "./paletteSwapState";
 
 type SpriteFrame = {
   img: HTMLImageElement;
@@ -29,37 +34,37 @@ const SCALE = 1.2;
 const ANCHOR_X = 0.5;
 const ANCHOR_Y = 0.72;
 
-const frameCache: Partial<Record<Dir8, HTMLImageElement[]>> = {};
-let ready = false;
 let warned = false;
-let sizeW = 0;
-let sizeH = 0;
-let loadedPaletteId = "";
+const paletteState = createPaletteSwapState(resolveActivePaletteId());
+const framesByPalette = new Map<string, Partial<Record<Dir8, HTMLImageElement[]>>>();
+const sizeByPalette = new Map<string, { w: number; h: number }>();
+const preloadByPalette = new Map<string, Promise<void>>();
 
-function clearFrames(): void {
+function getFrameMap(paletteId: string): Partial<Record<Dir8, HTMLImageElement[]>> {
+  const existing = framesByPalette.get(paletteId);
+  if (existing) return existing;
+  const created: Partial<Record<Dir8, HTMLImageElement[]>> = {};
+  framesByPalette.set(paletteId, created);
+  return created;
+}
+
+function isPaletteReady(paletteId: string): boolean {
+  const frameMap = framesByPalette.get(paletteId);
+  const size = sizeByPalette.get(paletteId);
+  if (!frameMap || !size) return false;
   for (const dir of Object.keys(DIR_TO_PATH) as Dir8[]) {
-    delete frameCache[dir];
+    const frames = frameMap[dir];
+    if (!frames || frames.length < FRAME_COUNT) return false;
   }
+  return true;
 }
 
-function refreshPaletteState(): void {
-  const paletteId = resolveActivePaletteId();
-  if (paletteId !== loadedPaletteId) {
-    loadedPaletteId = paletteId;
-    ready = false;
-    warned = false;
-    sizeW = 0;
-    sizeH = 0;
-    clearFrames();
-  }
-}
-
-async function loadImage(spriteId: string): Promise<HTMLImageElement> {
+async function loadImage(spriteId: string, paletteId: string): Promise<HTMLImageElement> {
   return await new Promise<HTMLImageElement>((resolve, reject) => {
     const started = performance.now();
     const MAX_WAIT_MS = 1500;
     const tick = () => {
-      const rec = getSpriteById(spriteId);
+      const rec = getSpriteByIdForPalette(spriteId, paletteId);
       if (rec.ready) {
         resolve(rec.img);
         return;
@@ -81,38 +86,61 @@ function resolveFrameId(dir: Dir8, frameIndex: number): string {
 }
 
 export async function preloadVendorNpcSprites(): Promise<void> {
-  refreshPaletteState();
-  if (ready) return;
+  const paletteId = resolveActivePaletteId();
+  notePaletteRequested(paletteState, paletteId);
+  if (isPaletteReady(paletteId)) {
+    notePaletteReady(paletteState, paletteId);
+    return;
+  }
+  const inFlight = preloadByPalette.get(paletteId);
+  if (inFlight) {
+    await inFlight;
+    return;
+  }
+
+  const frameMap = getFrameMap(paletteId);
+  const job = (async () => {
   try {
-    for (const [dir, dirPath] of Object.entries(DIR_TO_PATH) as [Dir8, string][]) {
+    for (const [dir] of Object.entries(DIR_TO_PATH) as [Dir8, string][]) {
       const frames: HTMLImageElement[] = [];
       for (let i = 0; i < FRAME_COUNT; i++) {
-        const img = await loadImage(resolveFrameId(dir, i));
+        const img = await loadImage(resolveFrameId(dir, i), paletteId);
         if (img.decode) await img.decode();
         frames.push(img);
       }
-      frameCache[dir] = frames;
+      frameMap[dir] = frames;
     }
 
-    const south = frameCache.S?.[0];
-    sizeW = south?.width ?? 0;
-    sizeH = south?.height ?? 0;
-    ready = true;
+    const south = frameMap.S?.[0];
+    sizeByPalette.set(paletteId, { w: south?.width ?? 0, h: south?.height ?? 0 });
+    notePaletteReady(paletteState, paletteId);
   } catch (err) {
     console.warn("[vendorSprites] Failed to preload vendor breathing-idle sprites", err);
-    ready = false;
   }
+  })().finally(() => {
+    preloadByPalette.delete(paletteId);
+  });
+  preloadByPalette.set(paletteId, job);
+  await job;
 }
 
 export function vendorNpcSpritesReady(): boolean {
-  refreshPaletteState();
-  return ready;
+  const paletteId = resolveActivePaletteId();
+  notePaletteRequested(paletteState, paletteId);
+  if (isPaletteReady(paletteId)) return true;
+  return isPaletteReady(paletteState.lastReadyPaletteId);
 }
 
 export function getVendorNpcSpriteFrame(args: { dir: Dir8; time: number }): SpriteFrame | null {
-  refreshPaletteState();
-  if (!ready) return null;
-  const frames = frameCache[args.dir] ?? frameCache.S;
+  const paletteId = resolveActivePaletteId();
+  notePaletteRequested(paletteState, paletteId);
+  if (!isPaletteReady(paletteId)) {
+    void preloadVendorNpcSprites();
+  }
+  const activePalette = isPaletteReady(paletteId) ? paletteId : paletteState.lastReadyPaletteId;
+  const frameMap = getFrameMap(activePalette);
+  const size = sizeByPalette.get(activePalette);
+  const frames = frameMap[args.dir] ?? frameMap.S;
   if (!frames || frames.length === 0) {
     if (!warned) {
       warned = true;
@@ -126,8 +154,8 @@ export function getVendorNpcSpriteFrame(args: { dir: Dir8; time: number }): Spri
     img,
     sx: 0,
     sy: 0,
-    sw: sizeW || img.width,
-    sh: sizeH || img.height,
+    sw: size?.w || img.width,
+    sh: size?.h || img.height,
     scale: SCALE,
     anchorX: ANCHOR_X,
     anchorY: ANCHOR_Y,

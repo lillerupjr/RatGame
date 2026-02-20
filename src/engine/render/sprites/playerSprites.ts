@@ -1,6 +1,11 @@
 import { type Dir8 } from "./dir8";
 import { resolveActivePaletteId } from "../../../game/render/activePalette";
 import {
+    createPaletteSwapState,
+    notePaletteReady,
+    notePaletteRequested,
+} from "./paletteSwapState";
+import {
     getSpriteFrame,
     preloadSpritePack,
     type SpriteLoaderSource,
@@ -33,29 +38,26 @@ const PLAYER_SKIN_SCALE: Record<string, number> = {
 };
 
 let playerSkin = "jamal";
+const paletteState = createPaletteSwapState(resolveActivePaletteId());
+const packsByPalette = new Map<string, Map<string, SpritePack>>();
+const preloadByPaletteSkin = new Map<string, Promise<void>>();
 
 export function getPlayerSkin(): string {
     return playerSkin;
 }
-let playerPack: SpritePack | null = null;
-let _ready = false;
-let loadedPaletteId = "";
 
-function refreshPaletteState(): string {
-    const paletteId = resolveActivePaletteId();
-    if (paletteId !== loadedPaletteId) {
-        loadedPaletteId = paletteId;
-        playerPack = null;
-        _ready = false;
-    }
-    return paletteId;
+function getPaletteMap(paletteId: string): Map<string, SpritePack> {
+    const existing = packsByPalette.get(paletteId);
+    if (existing) return existing;
+    const created = new Map<string, SpritePack>();
+    packsByPalette.set(paletteId, created);
+    return created;
 }
 
 export function setPlayerSkin(skin: string) {
     if (skin === playerSkin) return;
     playerSkin = skin;
-    playerPack = null;
-    _ready = false;
+    void preloadPlayerSprites();
 }
 
 export function getPlayerIdleSpriteUrl(skin: string): string {
@@ -63,25 +65,50 @@ export function getPlayerIdleSpriteUrl(skin: string): string {
 }
 
 export async function preloadPlayerSprites() {
-    refreshPaletteState();
-    if (_ready) return;
+    const paletteId = resolveActivePaletteId();
+    notePaletteRequested(paletteState, paletteId);
+    const map = getPaletteMap(paletteId);
+    if (map.has(playerSkin)) {
+        notePaletteReady(paletteState, paletteId);
+        return;
+    }
 
-    try {
-        playerPack = await preloadSpritePack(playerSkin, {
+    const key = `${paletteId}:${playerSkin}`;
+    const inFlight = preloadByPaletteSkin.get(key);
+    if (inFlight) {
+        await inFlight;
+        return;
+    }
+
+    const job = preloadSpritePack(playerSkin, {
             source: PLAYER_SOURCE,
             animKeys: [PLAYER_WALK_ANIM],
             frameCount: 6,
+        })
+        .then((pack) => {
+            map.set(playerSkin, pack);
+            notePaletteReady(paletteState, paletteId);
+        })
+        .catch((err) => {
+            console.warn("[playerSprites] Failed to preload player pack", err);
+        })
+        .finally(() => {
+            preloadByPaletteSkin.delete(key);
         });
-        _ready = true;
-    } catch (err) {
-        console.warn("[playerSprites] Failed to preload player pack", err);
-        _ready = false;
-    }
+    preloadByPaletteSkin.set(key, job);
+    await job;
 }
 
 export function playerSpritesReady() {
-    refreshPaletteState();
-    return _ready;
+    const paletteId = resolveActivePaletteId();
+    notePaletteRequested(paletteState, paletteId);
+    const current = getPaletteMap(paletteId).get(playerSkin);
+    if (!current) {
+        void preloadPlayerSprites();
+    }
+    if (current) return true;
+    const fallback = getPaletteMap(paletteState.lastReadyPaletteId).get(playerSkin);
+    return !!fallback;
 }
 
 export function getPlayerSpriteFrame(args: {
@@ -89,9 +116,14 @@ export function getPlayerSpriteFrame(args: {
     moving: boolean;
     time: number;
 }): SpriteFrame | null {
-    refreshPaletteState();
-    if (!_ready || !playerPack) {
+    const paletteId = resolveActivePaletteId();
+    notePaletteRequested(paletteState, paletteId);
+    const currentPack = getPaletteMap(paletteId).get(playerSkin);
+    if (!currentPack) {
         void preloadPlayerSprites();
+    }
+    const playerPack = currentPack ?? getPaletteMap(paletteState.lastReadyPaletteId).get(playerSkin);
+    if (!playerPack) {
         return null;
     }
 

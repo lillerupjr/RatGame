@@ -46,3 +46,10 @@ Keyboard shortcut:
 
 - Divination has 7 colors, so many DB32 midtones collapse into fewer bands.
 - This is expected and part of the look for this palette.
+
+## Entity sprite behavior (no-flash swap)
+
+- Entity sprite modules keep per-palette caches and do not hard-invalidate on palette change.
+- While the requested palette is still loading, entities continue rendering the last-ready palette frames.
+- After the new palette frames are ready, entity rendering switches to those frames.
+- This mirrors the building/tile approach where palette identity is part of cache selection.
