@@ -2649,8 +2649,15 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       }
     }
 
-    // NOTE: void cutout composite disabled for now; this pass was overlaying
-    // an unexpected canvas-shaped artifact over world content.
+    // Reveal VOID only inside the player cutout.
+    // This visually "turns the floor into void" only where the cutout mask is active.
+    if (zi === 0 && typeof cutoutVoidCanvas !== "undefined" && cutoutVoidCanvas) {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalCompositeOperation = "source-over";
+      ctx.drawImage(cutoutVoidCanvas, 0, 0);
+      ctx.restore();
+    }
 
     // Depth phase: everything else.
     for (let si = 0; si < sliceKeys.length; si++) {
@@ -2715,18 +2722,22 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // Optional floor tint overlay
   const floorVis = getFloorVisual(w);
   if (floorVis) {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = floorVis.tintAlpha;
     ctx.fillStyle = floorVis.tint;
-    ctx.fillRect(0, 0, ww, hh);
-    ctx.globalAlpha = 1;
+    ctx.fillRect(0, 0, devW, devH);
+    ctx.restore();
   }
 
   const GLOBAL_SCREEN_TINT_ALPHA = (w.lighting.darknessAlpha ?? 0) > 0 ? 0 : 0.3;
   if (GLOBAL_SCREEN_TINT_ALPHA > 0) {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = GLOBAL_SCREEN_TINT_ALPHA;
     ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, ww, hh);
-    ctx.globalAlpha = 1;
+    ctx.fillRect(0, 0, devW, devH);
+    ctx.restore();
   }
 
   drawWalkMaskOverlay(debugContext, SHOW_WALK_MASK);
