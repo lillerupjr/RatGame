@@ -6,7 +6,7 @@ import { renderLoadingScreen } from "./game/app/loadingScreen";
 import { collectFloorDependencies } from "./game/loading/dependencyCollector";
 import { primeAudio } from "./game/audio/audioManager";
 import { resolveActivePaletteId } from "./game/render/activePalette";
-import { enqueueSpritePrewarm, tickSpritePrewarm } from "./engine/render/sprites/renderSprites";
+import { getSpriteByIdForPalette } from "./engine/render/sprites/renderSprites";
 import { resizeCanvasPixelPerfect } from "./engine/render/pixelPerfect";
 import { getDomRefs } from "./ui/domRefs";
 import { wireMenus } from "./ui/menuWiring";
@@ -555,15 +555,12 @@ async function bootstrap() {
   let activeStartIntent: ReturnType<typeof game.consumePendingStartIntent> = null;
   let activeFloorIntent: ReturnType<typeof game.consumePendingFloorLoadIntent> = null;
   let loadingDoneNextState: AppState = AppState.RUN;
-  const LOADING_SCREEN_EXTRA_MS = 3000;
-  let bootScreenStartedAt = performance.now();
-  let loadingScreenStartedAt = 0;
-  let prewarmQueued = false;
+  let loadingDoneFramePending = false;
   let cachedDeps: ReturnType<typeof collectFloorDependencies> | null = null;
+  let firstRunDiagPending = false;
 
   const loadingController = createLoadingController({
     compileMap: async () => {
-      prewarmQueued = false;
       cachedDeps = null;
       if (activeStartIntent) {
         game.prepareStartMap(activeStartIntent);
@@ -577,13 +574,15 @@ async function bootstrap() {
       precomputeStaticMapData();
     },
     prewarmDependencies: async () => {
-      if (!cachedDeps) cachedDeps = collectFloorDependencies();
-      if (!cachedDeps.spriteIds.length) return true;
-      if (!prewarmQueued) {
-        enqueueSpritePrewarm(cachedDeps.spriteIds, resolveActivePaletteId());
-        prewarmQueued = true;
+      if (activeStartIntent) {
+        await game.prewarmActiveMapSpritesForCurrentPalette();
+        return true;
       }
-      return tickSpritePrewarm(8);
+      if (activeFloorIntent) {
+        await game.prewarmFloorLoadSprites();
+        return true;
+      }
+      return true;
     },
     primeAudio: async () => {
       const deps = cachedDeps ?? collectFloorDependencies();
@@ -608,10 +607,6 @@ async function bootstrap() {
     if (bootProgress < 0.5) {
       game.preloadBootAssets();
       bootProgress = 0.5;
-      return;
-    }
-    if (performance.now() - bootScreenStartedAt < LOADING_SCREEN_EXTRA_MS) {
-      bootProgress = Math.max(bootProgress, 0.95);
       return;
     }
     bootProgress = 1;
@@ -677,7 +672,7 @@ async function bootstrap() {
         if (pendingFloorIntent) {
           activeFloorIntent = pendingFloorIntent;
           loadingDoneNextState = AppState.RUN;
-          loadingScreenStartedAt = performance.now();
+          loadingDoneFramePending = false;
           loadingController.beginMapLoad(pendingFloorIntent.mapId ?? "");
           appStateController.setAppState(AppState.LOADING);
           break;
@@ -688,7 +683,7 @@ async function bootstrap() {
           if (pending.mode === "SANDBOX") {
             activeStartIntent = pending;
             loadingDoneNextState = AppState.RUN;
-            loadingScreenStartedAt = performance.now();
+            loadingDoneFramePending = false;
             loadingController.beginMapLoad(pending.mapId ?? "");
             appStateController.setAppState(AppState.LOADING);
           } else {
@@ -704,13 +699,17 @@ async function bootstrap() {
       case AppState.LOADING:
         loadingController.tick();
         renderLoadingScreen(ctx, loadingController.progress);
-        if (
-          loadingController.isDone()
-          && performance.now() - loadingScreenStartedAt >= LOADING_SCREEN_EXTRA_MS
-        ) {
-          appStateController.setAppState(loadingDoneNextState);
-          if (loadingDoneNextState === AppState.RUN) {
-            appStateController.setRunState(RunState.PLAYING);
+        if (loadingController.isDone()) {
+          if (!loadingDoneFramePending) {
+            // Hold one additional rendered loading frame before transition.
+            loadingDoneFramePending = true;
+          } else {
+            appStateController.setAppState(loadingDoneNextState);
+            if (loadingDoneNextState === AppState.RUN) {
+              appStateController.setRunState(RunState.PLAYING);
+              firstRunDiagPending = true;
+            }
+            loadingDoneFramePending = false;
           }
         }
         break;
@@ -729,6 +728,18 @@ async function bootstrap() {
           game.update(dt);
         }
         game.render();
+        if (firstRunDiagPending) {
+          firstRunDiagPending = false;
+          const deps = collectFloorDependencies();
+          const paletteId = resolveActivePaletteId();
+          const notReady = deps.spriteIds.filter((id) => !getSpriteByIdForPalette(id, paletteId).ready);
+          if (notReady.length > 0) {
+            console.warn(
+              `[loading] First RUN frame had ${notReady.length} not-ready sprites (showing up to 20):`,
+              notReady.slice(0, 20),
+            );
+          }
+        }
         if (appStateController.runState === RunState.PAUSED) {
           ctx.save();
           ctx.fillStyle = "rgba(0,0,0,0.45)";

@@ -81,6 +81,12 @@ function markPaletteReadyIfComplete(paletteId: string): void {
     if (allLoaded) notePaletteReady(paletteState, paletteId);
 }
 
+export function enemySpritesReady(): boolean {
+    const paletteId = resolveActivePaletteId();
+    const map = getPaletteMap(paletteId);
+    return getRequiredSkins().every((skin) => map.has(skin));
+}
+
 export function preloadEnemySprites() {
     const paletteId = resolveActivePaletteId();
     notePaletteRequested(paletteState, paletteId);

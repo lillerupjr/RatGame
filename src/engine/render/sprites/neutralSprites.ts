@@ -64,6 +64,10 @@ function isPaletteReady(paletteId: string): boolean {
   return true;
 }
 
+export function neutralMobSpritesReady(): boolean {
+  return isPaletteReady(resolveActivePaletteId());
+}
+
 function loadImage(spriteId: string, paletteId: string): Promise<HTMLImageElement> {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const started = performance.now();

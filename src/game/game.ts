@@ -54,11 +54,16 @@ import {
 } from "./map/delveMap";
 import type { FloorArchetype } from "./map/floorArchetype";
 import type { FloorIntent } from "./map/floorIntent";
-import { preloadPlayerSprites, setPlayerSkin } from "../engine/render/sprites/playerSprites";
-import { preloadVendorNpcSprites } from "../engine/render/sprites/vendorSprites";
+import { playerSpritesReady, preloadPlayerSprites, setPlayerSkin } from "../engine/render/sprites/playerSprites";
+import { preloadVendorNpcSprites, vendorNpcSpritesReady } from "../engine/render/sprites/vendorSprites";
 import { preloadBackgrounds } from "./render/background";
 import { getProjectileSpriteByKind, preloadProjectileSprites } from "../engine/render/sprites/projectileSprites";
-import { prewarmPaletteSprites } from "../engine/render/sprites/renderSprites";
+import { enemySpritesReady, preloadEnemySprites } from "../engine/render/sprites/enemySprites";
+import {
+  getSpriteByIdForPalette,
+  prewarmPaletteSprites,
+  preloadRenderSprites,
+} from "../engine/render/sprites/renderSprites";
 import { setMusicStage, stopMusic } from "../engine/audio/music";
 import type { TableMapCell, TableMapDef } from "./map/formats/table/tableMapTypes";
 import { AUTHORED_MAP_DEFS, getAuthoredMapDefByMapId } from "./map/authored/authoredMapRegistry";
@@ -84,7 +89,7 @@ import { DEFAULT_MAP_POOL } from "./map/mapIds";
 import { OBJECTIVE_TRIGGER_IDS } from "./systems/progression/objectiveSpec";
 import { getPlayableCharacter, PLAYABLE_CHARACTERS, type PlayableCharacterId } from "./content/playableCharacters";
 import { getUserSettings } from "../userSettings";
-import { preloadNeutralMobSprites } from "../engine/render/sprites/neutralSprites";
+import { neutralMobSpritesReady, preloadNeutralMobSprites } from "../engine/render/sprites/neutralSprites";
 import { spawnMilestonePigeonNearPlayer } from "./factories/neutralMobFactory";
 import { neutralAnimatedMobsSystem } from "./systems/sim/neutralAnimatedMobs";
 import { neutralBirdAISystem } from "./systems/sim/neutralBirdAI";
@@ -857,10 +862,14 @@ export function createGame(args: CreateGameArgs) {
   async function prewarmFloorLoadSprites(): Promise<void> {
     const w = world;
     const paletteId = resolveActivePaletteId();
-    if (paletteId !== "db32") {
-      const spriteIds = collectRuntimeSpriteIdsToPrewarm(w);
-      await prewarmPaletteSprites(paletteId, spriteIds);
-    }
+    const spriteIds = collectRuntimeSpriteIdsToPrewarm(w);
+    await prewarmPaletteSprites(paletteId, spriteIds);
+
+    // 1) Always warm entity/core sprite modules.
+    await awaitCoreSpriteReadiness(spriteIds, 1500);
+
+    // 2) One more short wait to ensure swapped images are installed.
+    await awaitCoreSpriteReadiness(spriteIds, 300);
   }
 
   function finalizeFloorLoad(): void {
@@ -1206,11 +1215,62 @@ export function createGame(args: CreateGameArgs) {
     preparedStart = { seed, mapId };
   }
 
+  async function awaitCoreSpriteReadiness(
+    runtimeSpriteIds: string[],
+    maxWaitMs: number = 1500,
+  ): Promise<void> {
+    // Kick idempotent loads.
+    preloadPlayerSprites();
+    preloadEnemySprites();
+    preloadVendorNpcSprites();
+    preloadNeutralMobSprites();
+    preloadProjectileSprites();
+    preloadRenderSprites();
+
+    const start = performance.now();
+
+    await new Promise<void>((resolve) => {
+      const tick = () => {
+        const elapsed = performance.now() - start;
+        const paletteId = resolveActivePaletteId();
+        const projectileKinds = [1, 2, 3, 4, 5, 6];
+        const projectilesReady = projectileKinds.every((kind) => {
+          const rec = getProjectileSpriteByKind(kind);
+          return !!rec?.ready;
+        });
+        const runtimeReady = runtimeSpriteIds.every((id) => {
+          const rec = getSpriteByIdForPalette(id, paletteId);
+          return rec.ready;
+        });
+
+        const ready =
+          playerSpritesReady()
+          && vendorNpcSpritesReady()
+          && enemySpritesReady()
+          && neutralMobSpritesReady()
+          && projectilesReady
+          && runtimeReady;
+
+        if (ready || elapsed >= maxWaitMs) {
+          resolve();
+          return;
+        }
+        requestAnimationFrame(tick);
+      };
+      tick();
+    });
+  }
+
   async function prewarmActiveMapSpritesForCurrentPalette(): Promise<void> {
     const paletteId = resolveActivePaletteId();
-    if (paletteId === "db32") return;
     const spriteIds = collectRuntimeSpriteIdsToPrewarm(world);
     await prewarmPaletteSprites(paletteId, spriteIds);
+
+    // Always warm entity/core sprite modules.
+    await awaitCoreSpriteReadiness(spriteIds, 1500);
+
+    // Ensure swapped images have landed before leaving LOADING.
+    await awaitCoreSpriteReadiness(spriteIds, 300);
   }
 
   function performPreparedStartIntent(intent: StartIntent): void {

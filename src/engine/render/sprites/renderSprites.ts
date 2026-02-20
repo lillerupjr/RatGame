@@ -27,6 +27,14 @@ const WATER_FRAME_MS = 150;
 const prewarmQueue: { spriteId: string; paletteId: PaletteId }[] = [];
 let prewarmActive = false;
 
+function makeTransparent1x1(): HTMLImageElement {
+    const img = new Image();
+    img.src =
+        "data:image/png;base64," +
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/ax2nZkAAAAASUVORK5CYII=";
+    return img;
+}
+
 function effectivePaletteId(forcedPaletteId?: string): string {
     if (forcedPaletteId) return forcedPaletteId;
     return resolveActivePaletteId();
@@ -105,22 +113,30 @@ function loadByIdInternal(spriteId: string, forcedPaletteId?: string): LoadedImg
         return rec;
     }
 
-    const img = new Image();
-    const rec: LoadedImg = { img, ready: false };
+    // IMPORTANT:
+    // If palette swap is active, never expose the db32 image to rendering.
+    // Keep a transparent placeholder until the swapped image is ready.
+    const enabledNow = paletteId !== "db32";
+    const rec: LoadedImg = {
+        img: enabledNow ? makeTransparent1x1() : new Image(),
+        ready: false,
+    };
     cache[key] = rec;
 
-    img.onload = () => {
+    const baseImg = new Image();
+    baseImg.onload = () => {
         const paletteId2 = effectivePaletteId(forcedPaletteId);
         const enabled = paletteId2 !== "db32";
 
         if (!enabled) {
+            // db32 path: expose base immediately
+            rec.img = baseImg;
             rec.ready = true;
             return;
         }
 
-        // Swap into a canvas, then convert to an Image so downstream types remain unchanged.
         try {
-            const swappedCanvas = applyPaletteSwapToCanvas(img, paletteId2);
+            const swappedCanvas = applyPaletteSwapToCanvas(baseImg, paletteId2);
 
             const swappedImg = new Image();
             swappedImg.onload = () => {
@@ -128,15 +144,19 @@ function loadByIdInternal(spriteId: string, forcedPaletteId?: string): LoadedImg
                 rec.ready = true;
             };
             swappedImg.onerror = () => {
-                rec.ready = true; // fallback to original image if conversion fails
+                rec.img = baseImg;
+                rec.ready = true;
             };
             swappedImg.src = swappedCanvas.toDataURL("image/png");
         } catch {
+            rec.img = baseImg;
             rec.ready = true;
         }
     };
-    img.onerror = () => (rec.ready = false);
-    img.src = url;
+    baseImg.onerror = () => {
+        rec.ready = false;
+    };
+    baseImg.src = url;
 
     return rec;
 }
