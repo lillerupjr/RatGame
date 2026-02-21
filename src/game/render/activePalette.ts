@@ -31,7 +31,7 @@ export function resolveActivePaletteId():
 {
   const s = getUserSettings();
 
-  // Dev override: keep current toggle, but treat it as an override switch.
+  // Dev override
   if (s.render.paletteSwapEnabled && s.render.paletteId) {
     return s.render.paletteId;
   }
