@@ -97,7 +97,11 @@ import { collectRuntimeSpriteIdsToPrewarm } from "./render/prewarmSprites";
 import { resolveActivePaletteId } from "./render/activePalette";
 import { applySfxSettingsToWorld } from "./audio/audioSettings";
 import { chooseCardReward, ensureCardRewardState } from "./combat_mods/rewards/cardRewardFlow";
-import { processChestOpenRequested, processObjectiveCompletionReward } from "./combat_mods/rewards/rewardTriggers";
+import {
+  processChestOpenRequested,
+  processObjectiveCompletionReward,
+  processZoneClearedReward,
+} from "./combat_mods/rewards/rewardTriggers";
 import { mountCardRewardMenu } from "../ui/rewards/cardRewardMenu";
 import { tickSpawnDirector } from "./balance/spawnDirector";
 import { buildSurviveSpawnOverrides, SURVIVE_RAMP_CONFIG } from "./balance/surviveRamp";
@@ -538,9 +542,23 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function maybeBeginObjectiveCardReward(): boolean {
-    if (activeDialog) return false;
+    if (world.state !== "RUN") return false;
     if (world.runState !== "FLOOR") return false;
+    const hasCompletedObjective =
+      world.objectiveStates.some((s) => s?.status === "COMPLETED") ||
+      !!(world as any).zoneTrialObjective?.completed;
+    if (!hasCompletedObjective) return false;
+    if (activeDialog) setDialog(null);
     if (!processObjectiveCompletionReward(world, 3)) return false;
+    renderRewardMenuIfNeeded();
+    return true;
+  }
+
+  function maybeBeginZoneClearedCardReward(): boolean {
+    if (world.state !== "RUN") return false;
+    if (world.runState !== "FLOOR") return false;
+    if (activeDialog) setDialog(null);
+    if (!processZoneClearedReward(world, 3)) return false;
     renderRewardMenuIfNeeded();
     return true;
   }
@@ -1977,6 +1995,14 @@ export function createGame(args: CreateGameArgs) {
     updateZoneTrialObjective(world);
     bossZoneSpawnSystem(world);
     objectiveSystem(world);
+    if (maybeBeginZoneClearedCardReward()) {
+      clearEvents(world);
+      return;
+    }
+    if (maybeBeginObjectiveCardReward()) {
+      clearEvents(world);
+      return;
+    }
     outcomeSystem(world);
 
     // SFX consumes events before any early-return branches
@@ -1991,11 +2017,6 @@ export function createGame(args: CreateGameArgs) {
     // Boss chest pickup triggers a deterministic card reward.
     if (processChestOpenRequested(world, 3)) {
       renderRewardMenuIfNeeded();
-      clearEvents(world);
-      return;
-    }
-
-    if (maybeBeginObjectiveCardReward()) {
       clearEvents(world);
       return;
     }

@@ -510,6 +510,9 @@ export type World = {
     actualDps: number;
     actualDpsInstant: number;
     aheadFactor: number;
+    basePressure: number;
+    globalPressureMult: number;
+    effectivePressure: number;
     pressure: number;
     waveMult: number;
     powerPerSecond: number;
@@ -840,6 +843,7 @@ export function createWorld(args: CreateWorldArgs): World {
     spawnDirectorState: createSpawnDirectorState(),
     spawnDirectorConfig: {
       enabled: true,
+      globalPressureMult: 1,
       pressureBase: 0.7,
       pressurePerDepth: 0.05,
       pressureMin: 0.6,

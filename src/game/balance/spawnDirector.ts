@@ -8,6 +8,7 @@ import {
 
 export interface SpawnDirectorConfig {
   enabled: boolean;
+  globalPressureMult?: number;
   pressureBase: number;
   pressurePerDepth: number;
   pressureMin: number;
@@ -131,7 +132,9 @@ export function tickSpawnDirector(
   const trashPowerCost = Math.max(1e-6, w.enemyPowerConfig?.costs?.trash ?? 1.0);
 
   const expectedDps = expectedDpsAtProgress(expectedCfg, now, depth);
-  let pressure = pressureAtDepth(cfg, depth);
+  const globalPressureMult = clamp(cfg.globalPressureMult ?? 1, 0, 3);
+  const basePressure = pressureAtDepth(cfg, depth);
+  let pressure = basePressure * globalPressureMult;
   if (callbacks.isBossActive()) pressure *= cfg.bossTrashPressureMult;
   const waveMult = waveMultiplier(cfg, now);
 
@@ -222,6 +225,9 @@ export function tickSpawnDirector(
     actualDps,
     actualDpsInstant: w.metrics?.dps?.dpsInstant ?? 0,
     aheadFactor,
+    basePressure,
+    globalPressureMult,
+    effectivePressure: pressure,
     pressure,
     waveMult,
     powerPerSecond,

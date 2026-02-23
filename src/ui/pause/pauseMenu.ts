@@ -135,9 +135,29 @@ export function mountPauseMenu(args: {
   sfxRow.appendChild(sfxSlider);
   sfxRow.appendChild(sfxMuteBtn);
 
+  const pressureRow = document.createElement("label");
+  pressureRow.className = "audioRow";
+  const pressureLabel = document.createElement("span");
+  pressureLabel.textContent = "Pressure";
+  const pressureSlider = document.createElement("input");
+  pressureSlider.type = "range";
+  pressureSlider.min = "0.25";
+  pressureSlider.max = "3";
+  pressureSlider.step = "0.05";
+  pressureSlider.value = "1";
+  setDataAttr(pressureSlider, "spawn-pressure-slider");
+  const pressureValue = document.createElement("span");
+  pressureValue.textContent = "1.00x";
+  pressureValue.className = "pauseMeta";
+  setDataAttr(pressureValue, "spawn-pressure-value");
+  pressureRow.appendChild(pressureLabel);
+  pressureRow.appendChild(pressureSlider);
+  pressureRow.appendChild(pressureValue);
+
   audioSection.appendChild(audioTitle);
   audioSection.appendChild(musicRow);
   audioSection.appendChild(sfxRow);
+  audioSection.appendChild(pressureRow);
 
   const paletteTitle = document.createElement("h4");
   paletteTitle.textContent = "Palette";
@@ -363,10 +383,23 @@ export function mountPauseMenu(args: {
     sfxMuteBtn.textContent = audio.sfxMuted ? "Unmute" : "Mute";
     if (audio.sfxMuted) sfxMuteBtn.classList.add("muted");
     else sfxMuteBtn.classList.remove("muted");
+
+    const pressureMult = latestWorld?.spawnDirectorConfig?.globalPressureMult ?? 1;
+    const clampedPressure = Math.max(0.25, Math.min(3, pressureMult));
+    pressureSlider.value = `${clampedPressure}`;
+    pressureValue.textContent = `${num(clampedPressure)}x`;
   };
 
   const applySfxToLatestWorld = () => {
     if (latestWorld) applySfxSettingsToWorld(latestWorld);
+  };
+
+  const applyPressureToLatestWorld = () => {
+    if (!latestWorld) return;
+    const v = Number.parseFloat(pressureSlider.value);
+    const clamped = Math.max(0.25, Math.min(3, Number.isFinite(v) ? v : 1));
+    latestWorld.spawnDirectorConfig.globalPressureMult = clamped;
+    pressureValue.textContent = `${num(clamped)}x`;
   };
 
   const renderStats = (world: World | null) => {
@@ -404,6 +437,9 @@ export function mountPauseMenu(args: {
         ["Actual DPS (smooth)", num(safeNum(dbg.actualDps), 2)],
         ["Expected DPS", num(safeNum(dbg.expectedDps), 2)],
         ["Ahead/Behind", `${num(safeNum(dbg.aheadFactor), 2)}x`],
+        ["Global Pressure", `${num(safeNum(dbg.globalPressureMult, 1), 2)}x`],
+        ["Base Pressure", num(safeNum(dbg.basePressure), 3)],
+        ["Effective Pressure", num(safeNum(dbg.effectivePressure, safeNum(dbg.pressure)), 3)],
         ["Pressure", num(safeNum(dbg.pressure), 3)],
         ["Wave Mult", num(safeNum(dbg.waveMult, 1), 3)],
         ["Queued/sec", num(safeNum(dbg.queuedPerSecond), 2)],
@@ -555,6 +591,10 @@ export function mountPauseMenu(args: {
     syncAudioControls();
   };
 
+  const onPressureSlider = () => {
+    applyPressureToLatestWorld();
+  };
+
   const syncPaletteControls = () => {
     const settings = getUserSettings().render;
     (paletteToggle as HTMLInputElement).checked = !!settings.paletteSwapEnabled;
@@ -568,6 +608,7 @@ export function mountPauseMenu(args: {
   musicMuteBtn.addEventListener("click", onMusicMute);
   sfxSlider.addEventListener("input", onSfxSlider);
   sfxMuteBtn.addEventListener("click", onSfxMute);
+  pressureSlider.addEventListener("input", onPressureSlider);
   paletteToggle.addEventListener("change", () => {
     const enabled = !!(paletteToggle as HTMLInputElement).checked;
     updateUserSettings({ render: { paletteSwapEnabled: enabled } });
@@ -624,6 +665,7 @@ export function mountPauseMenu(args: {
       musicMuteBtn.removeEventListener("click", onMusicMute);
       sfxSlider.removeEventListener("input", onSfxSlider);
       sfxMuteBtn.removeEventListener("click", onSfxMute);
+      pressureSlider.removeEventListener("input", onPressureSlider);
       host.remove();
       for (const el of preservedChildren) {
         el.hidden = false;
