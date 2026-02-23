@@ -1,0 +1,79 @@
+import { describe, expect, test } from "vitest";
+import { createWorld, type World } from "../../../engine/world/world";
+import { stageDocks } from "../../content/stages";
+import { combatSystem } from "./combat";
+import { projectilesSystem } from "./projectiles";
+import { collisionsSystem } from "./collisions";
+import { anchorFromWorld } from "../../coords/anchor";
+import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
+
+function setPlayerWorld(w: World, wx: number, wy: number): void {
+  const a = anchorFromWorld(wx, wy, KENNEY_TILE_WORLD);
+  w.pgxi = a.gxi;
+  w.pgyi = a.gyi;
+  w.pgox = a.gox;
+  w.pgoy = a.goy;
+}
+
+describe("combatSystem pistol integration", () => {
+  test("autofire spawns projectile and deals typed damage", () => {
+    const w = createWorld({ seed: 1337, stage: stageDocks });
+
+    w.events.length = 0;
+    w.combatCardIds = [];
+    w.primaryWeaponCdLeft = 0;
+
+    setPlayerWorld(w, 0, 0);
+
+    const enemyAnchor = anchorFromWorld(90, 0, KENNEY_TILE_WORLD);
+    w.eAlive.push(true);
+    w.eType.push(1);
+    w.egxi.push(enemyAnchor.gxi);
+    w.egyi.push(enemyAnchor.gyi);
+    w.egox.push(enemyAnchor.gox);
+    w.egoy.push(enemyAnchor.goy);
+    w.evx.push(0);
+    w.evy.push(0);
+    w.eFaceX.push(-1);
+    w.eFaceY.push(0);
+    w.eHp.push(100);
+    w.eHpMax.push(100);
+    w.eR.push(10);
+    w.eSpeed.push(0);
+    w.eDamage.push(0);
+    w.ezVisual.push(w.pzVisual);
+    w.ezLogical.push(w.pzLogical);
+    w.ePoisonT.push(0);
+    w.ePoisonDps.push(0);
+    w.ePoisonedOnDeath.push(false);
+    w.eSpawnTriggerId.push(undefined);
+
+    const hpStart = w.eHp[0];
+    let spawned = false;
+    let damageDealt = 0;
+
+    for (let i = 0; i < 90; i++) {
+      combatSystem(w, 1 / 60);
+      if (w.pAlive.some(Boolean)) spawned = true;
+
+      projectilesSystem(w, 1 / 60);
+
+      for (let p = 0; p < w.pAlive.length; p++) {
+        if (!w.pAlive[p]) continue;
+        w.prCritChance[p] = 0;
+      }
+
+      const before = w.eHp[0];
+      collisionsSystem(w, 1 / 60);
+      if (w.eHp[0] < before) {
+        damageDealt = before - w.eHp[0];
+        break;
+      }
+    }
+
+    expect(spawned).toBe(true);
+    expect(w.pAlive.length).toBeGreaterThan(0);
+    expect(hpStart - w.eHp[0]).toBeGreaterThan(0);
+    expect(damageDealt).toBeCloseTo(8);
+  });
+});

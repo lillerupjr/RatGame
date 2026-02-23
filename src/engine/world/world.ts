@@ -277,6 +277,8 @@ export type World = {
   // -------------------------
   weapons: { id: WeaponId; level: number; cdLeft: number }[];
   items: { id: any; level: number }[];
+  combatCardIds: string[];
+  primaryWeaponCdLeft: number;
 
   // -------------------------
   // XP / Level
@@ -362,6 +364,11 @@ export type World = {
   prvx: number[];
   prvy: number[];
   prDamage: number[];
+  prDmgPhys: number[];
+  prDmgFire: number[];
+  prDmgChaos: number[];
+  prCritChance: number[];
+  prCritMulti: number[];
   prR: number[];
   prPierce: number[];
   prIsmelee: boolean[];
@@ -598,6 +605,8 @@ export function createWorld(args: CreateWorldArgs): World {
     // Weapons + items
     weapons: [],
     items: [],
+    combatCardIds: [],
+    primaryWeaponCdLeft: 0,
 
     // XP / Level
     level: 1,
@@ -666,6 +675,11 @@ export function createWorld(args: CreateWorldArgs): World {
     prvx: [],
     prvy: [],
     prDamage: [],
+    prDmgPhys: [],
+    prDmgFire: [],
+    prDmgChaos: [],
+    prCritChance: [],
+    prCritMulti: [],
     prR: [],
     prPierce: [],
     prIsmelee: [],

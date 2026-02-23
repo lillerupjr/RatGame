@@ -10,6 +10,7 @@ import type { ProjectileSource } from "../../factories/projectileFactory";
 import { onEnemyKilledForChallenge } from "../progression/roomChallenge";
 import { anchorFromWorld, writeAnchor } from "../../coords/anchor";
 import { enqueueDelayedExplosion } from "./delayedExplosions";
+import { resolveProjectileDamagePacket } from "../../combat_mods/runtime/critDamagePacket";
 import {
   getEnemyWorld,
   getPlayerWorld,
@@ -193,11 +194,18 @@ export function collisionsSystem(w: World, dt: number) {
       // HIT
       hitSomething = true;
 
-      // Calculate crit chance and apply crit damage
-      const totalCritChance = Math.min(1, w.baseCritChance + w.critChanceBonus);
-      const isCrit = w.rng.range(0, 1) < totalCritChance;
-      const baseDmg = w.prDamage[p];
-      const dmg = isCrit ? baseDmg * w.critMultiplier : baseDmg;
+      const resolvedDamage = resolveProjectileDamagePacket(
+        {
+          physical: w.prDmgPhys[p] ?? 0,
+          fire: w.prDmgFire[p] ?? 0,
+          chaos: w.prDmgChaos[p] ?? 0,
+          critChance: w.prCritChance[p] ?? 0,
+          critMulti: w.prCritMulti[p] ?? 1,
+        },
+        w.rng.range(0, 1)
+      );
+      const isCrit = resolvedDamage.isCrit;
+      const dmg = resolvedDamage.total;
       
       w.eHp[e] -= dmg;
 

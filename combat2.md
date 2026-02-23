@@ -367,3 +367,79 @@ add reload (weapon-specific) while keeping VS-like core
 add fork/chain/bounce + additional projectiles
 
 add enemy resist variety and armor formula later
+
+Progress Snapshot
+
+Phase A status: complete
+
+Completed deliverables:
+
+combat_mods/content/cards/starterCards.ts
+
+combat_mods/content/weapons/jackPistol.ts
+
+combat_mods/stats/statKeys.ts
+
+combat_mods/stats/modifierTypes.ts
+
+combat_mods/stats/combatStatsResolver.ts
+
+combat_mods/damage/conversion.ts
+
+combat_mods/index.ts
+
+Phase A validation completed:
+
+typecheck passes
+
+conversion tests pass
+
+combatStatsResolver tests pass
+
+starterCards invariant tests pass
+
+dev debug hook implemented for card grant + resolved pistol stat print
+
+Phase B status: complete
+
+Phase B deliverables completed:
+
+typed projectile payload fields added to world and spawn path:
+
+prDmgPhys
+
+prDmgFire
+
+prDmgChaos
+
+prCritChance
+
+prCritMulti
+
+combatSystem now resolves Jack pistol stats from combat_mods resolver and uses:
+
+shotsPerSecond-driven cooldown
+
+deterministic spread
+
+typed projectile damage payloads
+
+projectile-side crit payloads
+
+collision damage now consumes typed payload + projectile crit fields
+
+legacy world crit fields are no longer used for pistol projectile hit resolution
+
+Phase B tests added:
+
+combat_mods/runtime/spread.test.ts
+
+combat_mods/runtime/critDamagePacket.test.ts
+
+systems/sim/combat.integration_pistol.test.ts
+
+Phase B validation completed:
+
+typecheck passes
+
+all tests pass

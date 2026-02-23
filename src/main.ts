@@ -18,6 +18,7 @@ import {
   type BooleanDebugSettingKey,
 } from "./debugSettings";
 import { getUserSettings, initUserSettings, updateUserSettings } from "./userSettings";
+import { handleDevCombatModsKeys } from "./game/combat_mods/debug/devCombatModsDebug";
 
 function installDevSettingsUi(): void {
   if (!import.meta.env.DEV) return;
@@ -642,6 +643,7 @@ async function bootstrap() {
 
   window.addEventListener("keydown", (ev) => {
     if (ev.repeat) return;
+    if (import.meta.env.DEV && handleDevCombatModsKeys(ev)) return;
 
     if (ev.code === "F5") {
       ev.preventDefault();

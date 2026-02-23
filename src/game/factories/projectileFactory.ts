@@ -35,6 +35,11 @@ export type SpawnProjectileArgs = {
 
     speed: number;
     damage: number;
+    dmgPhys?: number;
+    dmgFire?: number;
+    dmgChaos?: number;
+    critChance?: number;
+    critMulti?: number;
     radius: number;
     pierce: number;
 
@@ -145,7 +150,18 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     w.prvx.push(vx);
     w.prvy.push(vy);
 
-    w.prDamage.push(a.damage);
+    const dmgPhys = Number.isFinite(a.dmgPhys as any) ? Math.max(0, a.dmgPhys as number) : Math.max(0, a.damage);
+    const dmgFire = Number.isFinite(a.dmgFire as any) ? Math.max(0, a.dmgFire as number) : 0;
+    const dmgChaos = Number.isFinite(a.dmgChaos as any) ? Math.max(0, a.dmgChaos as number) : 0;
+    const totalDamage = Number.isFinite(a.damage as any)
+      ? Math.max(0, a.damage)
+      : (dmgPhys + dmgFire + dmgChaos);
+    w.prDamage.push(totalDamage);
+    w.prDmgPhys.push(dmgPhys);
+    w.prDmgFire.push(dmgFire);
+    w.prDmgChaos.push(dmgChaos);
+    w.prCritChance.push(Number.isFinite(a.critChance as any) ? (a.critChance as number) : 0);
+    w.prCritMulti.push(Number.isFinite(a.critMulti as any) ? (a.critMulti as number) : 1);
     w.prR.push(a.radius);
     w.prPierce.push(a.pierce);
 
