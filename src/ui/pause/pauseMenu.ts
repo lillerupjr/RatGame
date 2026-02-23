@@ -418,6 +418,15 @@ export function mountPauseMenu(args: {
         ["Power Budget", num(safeNum(dbg.powerBudget), 2)],
         ["Spawns/sec", num(safeNum(dbg.spawnsPerSecond), 2)],
       ];
+      if (dbg.survive && typeof dbg.survive === "object") {
+        metricsRows.push(
+          ["Survive Progress", pct(safeNum(dbg.survive.progress))],
+          ["Survive Ramp", num(safeNum(dbg.survive.ramp), 2)],
+          ["Survive Power/sec", num(safeNum(dbg.survive.powerPerSecond), 2)],
+          ["Survive Chunk Size", safeNum(dbg.survive.chunkSize, 0).toFixed(0)],
+          ["Survive Chunk Delay", num(safeNum(dbg.survive.chunkDelay), 2)]
+        );
+      }
       for (const [k, v] of metricsRows) {
         const tr = document.createElement("tr");
         const th = document.createElement("th");

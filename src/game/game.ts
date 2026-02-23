@@ -100,6 +100,7 @@ import { chooseCardReward, ensureCardRewardState } from "./combat_mods/rewards/c
 import { processChestOpenRequested, processObjectiveCompletionReward } from "./combat_mods/rewards/rewardTriggers";
 import { mountCardRewardMenu } from "../ui/rewards/cardRewardMenu";
 import { tickSpawnDirector } from "./balance/spawnDirector";
+import { buildSurviveSpawnOverrides, SURVIVE_RAMP_CONFIG } from "./balance/surviveRamp";
 
 
 type HudRefs = {
@@ -843,6 +844,24 @@ export function createGame(args: CreateGameArgs) {
       if (w.eType[i] === ENEMY_TYPE.BOSS) return true;
     }
     return false;
+  }
+
+  function spawnSurviveBossIfNeeded(w: World): void {
+    if (w.floorArchetype !== "SURVIVE") return;
+    if (w.runState !== "FLOOR") return;
+    if ((w as any)._surviveBossSpawned) return;
+    const remaining = (w.floorDuration ?? 0) - (w.phaseTime ?? 0);
+    if (remaining > 30) return;
+
+    const pg = gridAtPlayer(w);
+    const pw = gridToWorld(pg.gx, pg.gy, KENNEY_TILE_WORLD);
+    const angle = w.rng.range(0, Math.PI * 2);
+    const radius = w.rng.range(320, 520);
+    const wx = pw.wx + Math.cos(angle) * radius;
+    const wy = pw.wy + Math.sin(angle) * radius;
+    const gp = worldToGrid(wx, wy, KENNEY_TILE_WORLD);
+    spawnEnemyGrid(w, ENEMY_TYPE.BOSS, gp.gx, gp.gy, KENNEY_TILE_WORLD);
+    (w as any)._surviveBossSpawned = true;
   }
 
   function beginFloorLoad(floorIntent: FloorIntent): boolean {
@@ -1902,6 +1921,12 @@ export function createGame(args: CreateGameArgs) {
     neutralBirdAISystem(world, dt);
     neutralAnimatedMobsSystem(world, dt);
     roomChallengeSystem(world, dt);  // Track room challenges and lock exits
+    spawnSurviveBossIfNeeded(world);
+    if (world.floorArchetype === "SURVIVE") {
+      world.spawnDirectorOverrides = buildSurviveSpawnOverrides(world.timeSec ?? world.phaseTime ?? 0);
+    } else {
+      world.spawnDirectorOverrides = undefined;
+    }
     world.spawnDirectorConfig.enabled = !!world.balance.spawnDirectorEnabled;
     if (world.balance.spawnDirectorEnabled) {
       tickSpawnDirector(
@@ -1919,7 +1944,10 @@ export function createGame(args: CreateGameArgs) {
           isBossActive: () => world.runState === "BOSS" || bossAlive(world),
           canSpawnNow: () => world.runState === "FLOOR" && world.phaseTime >= 2,
           spawnTrash: () => {
-            return spawnOneTrashEnemy(world);
+            let tier: "trash" | "elite" = "trash";
+            const eliteChance = world.spawnDirectorOverrides?.eliteChanceOverride ?? 0;
+            if (eliteChance > 0 && world.rng.next() < eliteChance) tier = "elite";
+            return spawnOneTrashEnemy(world, undefined, undefined, tier);
           },
         }
       );
@@ -1953,6 +1981,12 @@ export function createGame(args: CreateGameArgs) {
 
     // SFX consumes events before any early-return branches
     audioSystem(world, dt);
+
+    if (world.floorArchetype === "SURVIVE" && (world.timeSec ?? 0) >= SURVIVE_RAMP_CONFIG.durationSec) {
+      completeRun(world);
+      clearEvents(world);
+      return;
+    }
 
     // Boss chest pickup triggers a deterministic card reward.
     if (processChestOpenRequested(world, 3)) {

@@ -136,7 +136,10 @@ export function tickSpawnDirector(
   const waveMult = waveMultiplier(cfg, now);
 
   const basePowerPerSecond = powerPerSecondAtProgress(powerBudgetCfg, now);
-  const powerPerSecond = basePowerPerSecond * pressure * waveMult;
+  let powerPerSecond = basePowerPerSecond * pressure * waveMult;
+  if (w.spawnDirectorOverrides?.powerPerSecondOverride !== undefined) {
+    powerPerSecond = w.spawnDirectorOverrides.powerPerSecondOverride;
+  }
   state.powerBudget += powerPerSecond * dtSec;
 
   let extraQueue = 0;
@@ -183,8 +186,12 @@ export function tickSpawnDirector(
 
   state.lastChunkSize = 0;
   if (canSpawn && state.waveRemaining > 0 && state.chunkCooldownSec <= 0) {
+    let chunkBase = Math.max(1, cfg.waveChunk);
+    if (w.spawnDirectorOverrides?.waveChunkOverride !== undefined) {
+      chunkBase = Math.max(1, Math.floor(w.spawnDirectorOverrides.waveChunkOverride));
+    }
     const chunkTarget = Math.min(
-      Math.max(1, cfg.waveChunk),
+      chunkBase,
       state.waveRemaining,
       Math.max(0, cfg.maxSpawnsPerTick - spawned)
     );
@@ -197,7 +204,8 @@ export function tickSpawnDirector(
     }
     state.waveRemaining = Math.max(0, state.waveRemaining - chunkSpawned);
     state.lastChunkSize = chunkSpawned;
-    state.chunkCooldownSec = Math.max(0.01, cfg.waveChunkDelaySec);
+    const delayOverride = w.spawnDirectorOverrides?.waveDelayOverride;
+    state.chunkCooldownSec = Math.max(0.01, delayOverride ?? cfg.waveChunkDelaySec);
     if (state.waveRemaining <= 0) {
       state.waveCooldownSecLeft = Math.max(0, cfg.waveCooldownSec);
     }
@@ -227,5 +235,22 @@ export function tickSpawnDirector(
     queuedPerSecond: state.queuedPerSecond,
     pendingThresholdToStartWave: threshold,
     spawnsPerSecond: state.spawnsPerSecond,
+    survive:
+      w.spawnDirectorOverrides?.progress !== undefined &&
+      w.spawnDirectorOverrides?.ramp !== undefined
+        ? {
+            progress: w.spawnDirectorOverrides.progress,
+            ramp: w.spawnDirectorOverrides.ramp,
+            powerPerSecond,
+            chunkSize:
+              w.spawnDirectorOverrides.waveChunkOverride !== undefined
+                ? Math.max(1, Math.floor(w.spawnDirectorOverrides.waveChunkOverride))
+                : Math.max(1, cfg.waveChunk),
+            chunkDelay:
+              w.spawnDirectorOverrides.waveDelayOverride !== undefined
+                ? Math.max(0.01, w.spawnDirectorOverrides.waveDelayOverride)
+                : Math.max(0.01, cfg.waveChunkDelaySec),
+          }
+        : undefined,
   };
 }

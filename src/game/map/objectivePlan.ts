@@ -46,7 +46,7 @@ export function objectiveSpecFromObjectiveId(
       return {
         objectiveType: "SURVIVE_TIMER",
         params: {
-          timeLimitSec: params?.timeLimitSec ?? 60,
+          timeLimitSec: params?.timeLimitSec ?? 120,
         },
       };
     case "ZONE_TRIAL":

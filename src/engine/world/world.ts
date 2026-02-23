@@ -495,6 +495,14 @@ export type World = {
   expectedPowerConfig: ExpectedPowerConfig;
   expectedPowerBudgetConfig: ExpectedPowerBudgetConfig;
   enemyPowerConfig: EnemyPowerCostConfig;
+  spawnDirectorOverrides?: {
+    powerPerSecondOverride?: number;
+    waveChunkOverride?: number;
+    waveDelayOverride?: number;
+    eliteChanceOverride?: number;
+    progress?: number;
+    ramp?: number;
+  };
   spawnDirectorDebug?: {
     depth: number;
     timeSec: number;
@@ -515,6 +523,13 @@ export type World = {
     queuedPerSecond: number;
     pendingThresholdToStartWave: number;
     spawnsPerSecond: number;
+    survive?: {
+      progress: number;
+      ramp: number;
+      powerPerSecond: number;
+      chunkSize: number;
+      chunkDelay: number;
+    };
   };
 };
 

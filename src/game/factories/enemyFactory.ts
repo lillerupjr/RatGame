@@ -20,7 +20,8 @@ export function spawnEnemyGrid(
     type: EnemyType,
     gx: number,
     gy: number,
-    _tileWorld: number = KENNEY_TILE_WORLD
+    _tileWorld: number = KENNEY_TILE_WORLD,
+    hpOverride?: number
 ) {
     const s = registry.enemy(type);
 
@@ -31,7 +32,7 @@ export function spawnEnemyGrid(
     const hpWeight = s.hpScaleWeight ?? 1.0;
     const adjustedHpMult = Math.pow(scaling.hpMult, hpWeight);
 
-    const scaledHp = Math.round(s.hp * adjustedHpMult);
+    const scaledHp = hpOverride !== undefined ? Math.max(1, Math.round(hpOverride)) : Math.round(s.hp * adjustedHpMult);
     const scaledDamage = Math.round(s.damage * scaling.damageMult);
 
     const i = w.eAlive.length;

@@ -8,6 +8,7 @@ import { worldToGrid } from "../../coords/grid";
 import { getPlayerWorld } from "../../coords/worldViews";
 import { OBJECTIVE_TRIGGER_IDS } from "../progression/objectiveSpec";
 import { computeSpawnHpFromPower } from "../../balance/spawnHp";
+import type { EnemyPowerTier } from "../../balance/enemyPower";
 
 /**
  * Spawning system:
@@ -257,7 +258,12 @@ export function spawnSystem(w: World, dt: number) {
  * Spawn one floor-appropriate trash enemy around an origin point.
  * Returns true if an enemy was spawned.
  */
-export function spawnOneTrashEnemy(w: World, originX?: number, originY?: number): boolean {
+export function spawnOneTrashEnemy(
+  w: World,
+  originX?: number,
+  originY?: number,
+  powerTier: EnemyPowerTier = "trash"
+): boolean {
   if (w.runState !== "FLOOR") return false;
   if (w.floorArchetype === "VENDOR" || w.floorArchetype === "HEAL") return false;
 
@@ -288,7 +294,7 @@ export function spawnOneTrashEnemy(w: World, originX?: number, originY?: number)
       w.enemyPowerConfig,
       w.timeSec ?? w.phaseTime ?? 0,
       depth,
-      "trash"
+      powerTier
     );
     spawnEnemyGrid(w, type, gp.gx, gp.gy, KENNEY_TILE_WORLD, hp);
     return true;
