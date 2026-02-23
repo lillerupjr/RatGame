@@ -19,6 +19,8 @@ import {
 } from "./debugSettings";
 import { getUserSettings, initUserSettings, updateUserSettings } from "./userSettings";
 import { handleDevCombatModsKeys } from "./game/combat_mods/debug/devCombatModsDebug";
+import { mountPauseMenu } from "./ui/pause/pauseMenu";
+import { togglePause } from "./game/app/pauseController";
 
 function installDevSettingsUi(): void {
   if (!import.meta.env.DEV) return;
@@ -570,6 +572,26 @@ async function bootstrap() {
   let cachedDeps: ReturnType<typeof collectFloorDependencies> | null = null;
   let firstRunDiagPending = false;
 
+  const pauseMenu = mountPauseMenu({
+    root: refs.ui.menuEl,
+    actions: {
+      onResume: () => {
+        appStateController.setRunState(RunState.PLAYING);
+        pauseMenu.setVisible(false);
+      },
+      onQuitRun: () => {
+        appStateController.setRunState(RunState.PLAYING);
+        appStateController.setAppState(AppState.MENU);
+        activeStartIntent = null;
+        activeFloorIntent = null;
+        loadingDoneFramePending = false;
+        syncUiForAppState(AppState.MENU);
+        pauseMenu.setVisible(false);
+        game.quitRunToMenu();
+      },
+    },
+  });
+
   const loadingController = createLoadingController({
     compileMap: async () => {
       cachedDeps = null;
@@ -681,9 +703,7 @@ async function bootstrap() {
 
     if (ev.code === "Escape" && appStateController.appState === AppState.RUN) {
       ev.preventDefault();
-      appStateController.setRunState(
-        appStateController.runState === RunState.PAUSED ? RunState.PLAYING : RunState.PAUSED,
-      );
+      togglePause(appStateController, appStateController.appState, pauseMenu);
     }
   });
 
@@ -759,6 +779,12 @@ async function bootstrap() {
           game.update(dt);
         }
         game.render();
+        if (appStateController.runState === RunState.PAUSED) {
+          pauseMenu.setVisible(true);
+          pauseMenu.render(game.getWorld());
+        } else {
+          pauseMenu.setVisible(false);
+        }
         if (firstRunDiagPending) {
           firstRunDiagPending = false;
           const deps = collectFloorDependencies();
@@ -770,16 +796,6 @@ async function bootstrap() {
               notReady.slice(0, 20),
             );
           }
-        }
-        if (appStateController.runState === RunState.PAUSED) {
-          ctx.save();
-          ctx.fillStyle = "rgba(0,0,0,0.45)";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.fillStyle = "#ffffff";
-          ctx.font = "16px monospace";
-          ctx.textAlign = "center";
-          ctx.fillText("PAUSED", Math.floor(canvas.width * 0.5), Math.floor(canvas.height * 0.5));
-          ctx.restore();
         }
         break;
       default:

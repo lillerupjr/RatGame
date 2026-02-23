@@ -3,3 +3,4 @@ export * from "./content/cards/starterCards";
 export * from "./stats/combatStatsResolver";
 export * from "./stats/modifierTypes";
 export * from "./stats/statKeys";
+export * from "./debug/combatModsSnapshot";

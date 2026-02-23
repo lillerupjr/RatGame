@@ -443,3 +443,9 @@ Phase B validation completed:
 typecheck passes
 
 all tests pass
+
+Progress update:
+
+[x] Pause Build panel wired to Combat Mods snapshot
+
+[x] Pause menu expanded layout

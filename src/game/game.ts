@@ -96,6 +96,7 @@ import { neutralBirdAISystem } from "./systems/sim/neutralBirdAI";
 import { getZoneTrialObjectiveState, startZoneTrial, updateZoneTrialObjective } from "./objectives/zoneObjectiveSystem";
 import { collectRuntimeSpriteIdsToPrewarm } from "./render/prewarmSprites";
 import { resolveActivePaletteId } from "./render/activePalette";
+import { applySfxSettingsToWorld } from "./audio/audioSettings";
 
 
 type HudRefs = {
@@ -724,6 +725,11 @@ export function createGame(args: CreateGameArgs) {
     w.prvx = [];
     w.prvy = [];
     w.prDamage = [];
+    w.prDmgPhys = [];
+    w.prDmgFire = [];
+    w.prDmgChaos = [];
+    w.prCritChance = [];
+    w.prCritMulti = [];
     w.prR = [];
     w.prPierce = [];
     w.prIsmelee = [];
@@ -1092,6 +1098,7 @@ export function createGame(args: CreateGameArgs) {
       seed,
       stage: cloneStage("DOCKS"),
     });
+    applySfxSettingsToWorld(world);
     (world as any).deterministicDelveMode = false;
     const mapMode = isMapMode(mapId);
     (world as any).mapMode = mapMode;
@@ -1120,6 +1127,7 @@ export function createGame(args: CreateGameArgs) {
     preloadPlayerSprites();
 
     resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
+    (world as any).currentCharacterId = character.id;
 
     world.weapons = [{ id: character.startingWeaponId, level: 1, cdLeft: 0 }];
 
@@ -1154,6 +1162,7 @@ export function createGame(args: CreateGameArgs) {
     preloadPlayerSprites();
 
     resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
+    (world as any).currentCharacterId = character.id;
 
     world.weapons = [{ id: character.startingWeaponId, level: 1, cdLeft: 0 }];
     world.delveMap = null;
@@ -1184,6 +1193,7 @@ export function createGame(args: CreateGameArgs) {
     preloadPlayerSprites();
 
     resetRun(mapId, { skipMapSelection: true, seedOverride: preparedStart?.seed });
+    (world as any).currentCharacterId = character.id;
 
     world.weapons = [{ id: character.startingWeaponId, level: 1, cdLeft: 0 }];
     world.delveMap = null;
@@ -1317,6 +1327,27 @@ export function createGame(args: CreateGameArgs) {
 
   function startSandboxRun(characterId: PlayableCharacterId, mapId?: string) {
     queueStartIntent({ mode: "SANDBOX", characterId, mapId });
+  }
+
+  function quitRunToMenu() {
+    pendingStartIntent = null;
+    pendingFloorIntent = null;
+    preparedStart = null;
+    floorLoadContext = null;
+    setDialog(null);
+    clearFloorEntities(world);
+    clearEvents(world);
+    world.state = "MENU";
+    world.runState = "FLOOR";
+    world.currentFloorIntent = null;
+    (world as any).deterministicDelveMode = false;
+    args.ui.mapEl.root.hidden = true;
+    args.ui.levelupEl.root.hidden = true;
+    args.ui.endEl.root.hidden = true;
+    args.ui.dialogEl.root.hidden = true;
+    args.hud.root.hidden = true;
+    args.ui.menuEl.hidden = true;
+    stopMusic();
   }
 
   function showLevelUp() {
@@ -2226,5 +2257,7 @@ export function createGame(args: CreateGameArgs) {
     finalizeFloorLoad,
     queueFloorLoadIntent,
     consumePendingFloorLoadIntent,
+    quitRunToMenu,
+    getWorld: () => world,
   };
 }
