@@ -192,8 +192,8 @@ function getItemStatsDiff(w: World, id: ItemId): StatDiff[] {
             break;
         }
         case "MOVE_SPEED": {
-            const currBonus = 18 * currLevel;
-            const nextBonus = 18 * nextLevel;
+            const currBonus = 10 + currLevel;
+            const nextBonus = 10 + nextLevel;
             diffs.push({
                 label: "Speed",
                 oldVal: "+" + formatStatValue(currBonus),
@@ -255,7 +255,7 @@ function getItemStatsDiff(w: World, id: ItemId): StatDiff[] {
 function buildAllUpgrades(): UpgradeDef[] {
     const defs: UpgradeDef[] = [];
     // NEW: evolution unlock level
-    const EVOLVE_WPN_LEVEL = 5;
+    const EVOLVE_WPN_LEVEL = 10;
     const MAX_WPN = registry.maxWeaponLevel();
     const MAX_ITEM = registry.maxItemLevel();
 

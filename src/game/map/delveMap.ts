@@ -353,7 +353,8 @@ export function getDepthScaling(depth: number): {
   const d = Math.max(1, depth);
 
   return {
-    hpMult: Math.pow(1.1, d - 1),           // +10% per depth
+    // Doubled HP scaling: +20% per depth (was +10%)
+    hpMult: Math.pow(1.2, d - 1),
     damageMult: Math.pow(1.05, d - 1),      // +5% per depth
     spawnRateMult: 1 + (d - 1) * 0.05,      // +5% spawn rate per depth (linear)
     xpMult: 1 + (d - 1) * 0.1,              // +10% XP per depth

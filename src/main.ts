@@ -178,16 +178,39 @@ function installDevSettingsUi(): void {
   paletteIdSelect.style.color = "#fff";
   paletteIdSelect.style.border = "1px solid rgba(255,255,255,0.25)";
   paletteIdSelect.style.borderRadius = "4px";
-  for (const id of ["db32", "divination", "cyberpunk"] as const) {
+  const PALETTE_IDS = [
+    "db32",
+    "divination",
+    "cyberpunk",
+    "moonlight_15",
+    "st8_moonlight",
+    "chroma_noir",
+    "swamp_kin",
+    "lost_in_the_desert",
+    "endesga_16",
+    "sweetie_16",
+    "dawnbringer_16",
+    "night_16",
+    "fun_16",
+    "reha_16",
+    "arne_16",
+    "lush_sunset",
+    "vaporhaze_16",
+    "sunset_cave_extended",
+  ] as const;
+
+  type PaletteId = (typeof PALETTE_IDS)[number];
+
+  for (const id of PALETTE_IDS) {
     const opt = document.createElement("option");
     opt.value = id;
     opt.textContent = id;
     paletteIdSelect.appendChild(opt);
   }
   paletteIdSelect.addEventListener("change", () => {
-        updateUserSettings({
+    updateUserSettings({
       render: {
-        paletteId: paletteIdSelect.value as "db32" | "divination" | "cyberpunk",
+        paletteId: paletteIdSelect.value as PaletteId,
       },
     });
   });
@@ -645,38 +668,50 @@ async function bootstrap() {
   };
 
   // Runtime render/debug toggles (works outside dev panel too).
-  const F5_PALETTE_CYCLE: ReadonlyArray<ReturnType<typeof getUserSettings>["render"]["paletteId"]> = [
-    "divination",
-    "cyberpunk",
-    "sunset_8",
-    "s_sunset7",
-    "moonlight_15",
-    "st8_moonlight",
-    "noire_truth",
-    "chroma_noir",
-    "sunny_swamp",
-    "swamp_kin",
-    "cobalt_desert_7",
-    "lost_in_the_desert",
-    "db32",
-  ];
-
   window.addEventListener("keydown", (ev) => {
     if (ev.repeat) return;
 
     if (ev.code === "F5") {
       ev.preventDefault();
+      const PALETTE_CYCLE = [
+        "db32",
+        "divination",
+        "cyberpunk",
+        "moonlight_15",
+        "st8_moonlight",
+        "chroma_noir",
+        "swamp_kin",
+        "lost_in_the_desert",
+        "endesga_16",
+        "sweetie_16",
+        "dawnbringer_16",
+        "night_16",
+        "fun_16",
+        "reha_16",
+        "arne_16",
+        "lush_sunset",
+        "vaporhaze_16",
+        "sunset_cave_extended",
+      ] as const;
+
+      type PaletteId = (typeof PALETTE_CYCLE)[number];
+
       const current = getUserSettings().render;
+
       if (!current.paletteSwapEnabled) {
-        updateUserSettings({ render: { paletteSwapEnabled: true, paletteId: F5_PALETTE_CYCLE[0] } });
-      } else {
-        const idx = F5_PALETTE_CYCLE.indexOf(current.paletteId);
-        if (idx >= 0 && idx < F5_PALETTE_CYCLE.length - 1) {
-          updateUserSettings({ render: { paletteSwapEnabled: true, paletteId: F5_PALETTE_CYCLE[idx + 1] } });
-        } else {
-          updateUserSettings({ render: { paletteSwapEnabled: false } });
-        }
+        updateUserSettings({ render: { paletteSwapEnabled: true, paletteId: PALETTE_CYCLE[0] as PaletteId } });
+        return;
       }
+
+      const idx = Math.max(0, PALETTE_CYCLE.indexOf(current.paletteId as PaletteId));
+      const nextIdx = idx + 1;
+
+      if (nextIdx >= PALETTE_CYCLE.length) {
+        updateUserSettings({ render: { paletteSwapEnabled: false } });
+        return;
+      }
+
+      updateUserSettings({ render: { paletteSwapEnabled: true, paletteId: PALETTE_CYCLE[nextIdx] as PaletteId } });
       return;
     }
 

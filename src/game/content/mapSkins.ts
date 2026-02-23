@@ -10,30 +10,37 @@ export type MapSkinId =
 
   // Future/non-existing map skins (predeclare now)
   | "downtown"
-  | "beach"
-  | "park"
   | "industrial"
+  | "slums"
+  | "park"
   | "sewers"
   | "subway"
   | "rooftops"
-  | "countryside"
   | "snow"
-  | "desert";
+  | "countryside"
+  | "beach"
+  | "desert"
+  | "boss_arena";
 
 export type PaletteId =
   | "db32"
   | "divination"
   | "cyberpunk"
-  | "sunset_8"
-  | "s_sunset7"
   | "moonlight_15"
   | "st8_moonlight"
-  | "noire_truth"
   | "chroma_noir"
-  | "sunny_swamp"
   | "swamp_kin"
-  | "cobalt_desert_7"
-  | "lost_in_the_desert";
+  | "lost_in_the_desert"
+  | "endesga_16"
+  | "sweetie_16"
+  | "dawnbringer_16"
+  | "night_16"
+  | "fun_16"
+  | "reha_16"
+  | "arne_16"
+  | "lush_sunset"
+  | "vaporhaze_16"
+  | "sunset_cave_extended";
 
 export type MapSkinBundle = {
   paletteId?: PaletteId;
@@ -97,9 +104,13 @@ export const MAP_SKINS: Record<string, MapSkinBundle> = {
     },
   },
 
+  // ─────────────────────────────────────────────────────────────
+  // Existing authored skins
+  // ─────────────────────────────────────────────────────────────
+
   docks: {
-    // Docks: moonlight pool (cool, wet, night-friendly)
-    palettePool: ["moonlight_15", "st8_moonlight"],
+    // Wet/cold night. Keeps divination, but adds fuller night palettes.
+    palettePool: ["divination", "moonlight_15", "night_16", "reha_16"],
     floor: "tiles/floor/asphalt/1",
     apron: "tiles/walls/asphalt",
     wall: "tiles/walls/asphalt",
@@ -114,8 +125,8 @@ export const MAP_SKINS: Record<string, MapSkinBundle> = {
   },
 
   green: {
-    // “green” is a park-ish feel: swamp pool for now
-    palettePool: ["sunny_swamp", "swamp_kin"],
+    // Park-ish / nature vibe.
+    palettePool: ["swamp_kin", "dawnbringer_16", "arne_16"],
     floor: "tiles/floor/park/1",
     apron: "tiles/walls/green",
     wall: "tiles/walls/green",
@@ -123,13 +134,13 @@ export const MAP_SKINS: Record<string, MapSkinBundle> = {
   },
 
   avenue: {
-    // Avenue: sunset pool (warm city evening)
-    palettePool: ["sunset_8", "s_sunset7"],
+    // Baseline gritty city. DB32 + two strong 16-color “general urban” palettes.
+    palettePool: ["db32", "sweetie_16", "endesga_16"],
   },
 
   china_town: {
-    // Chinatown: neon/noir pool (keeps your existing cyberpunk vibe but adds noir alt)
-    palettePool: ["cyberpunk", "chroma_noir"],
+    // Neon + noir. Cyberpunk stays, chroma adds harsh noir, vaporhaze adds stylized neon dusk.
+    palettePool: ["cyberpunk", "chroma_noir", "vaporhaze_16"],
   },
 
   building1: {
@@ -148,52 +159,62 @@ export const MAP_SKINS: Record<string, MapSkinBundle> = {
     },
   },
 
-  // ----------------------------
-  // Future/non-existing skins
-  // (implemented now for later use)
-  // ----------------------------
+  // ─────────────────────────────────────────────────────────────
+  // Future skins (implemented now for later use)
+  // ─────────────────────────────────────────────────────────────
 
   downtown: {
-    palettePool: ["noire_truth", "chroma_noir"],
-  },
-
-  beach: {
-    // Beach: sunset + desert contrast (lets us reuse existing pool ideas)
-    palettePool: ["sunset_8", "lost_in_the_desert"],
-  },
-
-  park: {
-    palettePool: ["sunny_swamp", "swamp_kin"],
+    palettePool: ["chroma_noir", "night_16"],
   },
 
   industrial: {
-    palettePool: ["st8_moonlight", "chroma_noir"],
+    palettePool: ["reha_16", "night_16", "endesga_16"],
+  },
+
+  slums: {
+    palettePool: ["endesga_16", "chroma_noir"],
+  },
+
+  park: {
+    palettePool: ["arne_16", "dawnbringer_16", "lush_sunset"],
   },
 
   sewers: {
-    palettePool: ["swamp_kin", "moonlight_15"],
+    palettePool: ["swamp_kin", "reha_16"],
   },
 
   subway: {
-    palettePool: ["st8_moonlight", "noire_truth"],
+    palettePool: ["st8_moonlight", "night_16"],
   },
 
   rooftops: {
-    palettePool: ["moonlight_15", "chroma_noir"],
-  },
-
-  countryside: {
-    palettePool: ["sunset_8", "sunny_swamp"],
+    palettePool: ["moonlight_15", "st8_moonlight"],
   },
 
   snow: {
-    palettePool: ["st8_moonlight", "moonlight_15"],
+    palettePool: ["st8_moonlight", "moonlight_15", "sweetie_16"],
+  },
+
+  countryside: {
+    palettePool: ["lush_sunset", "arne_16"],
+  },
+
+  beach: {
+    palettePool: ["lush_sunset", "lost_in_the_desert"],
   },
 
   desert: {
-    palettePool: ["cobalt_desert_7", "lost_in_the_desert"],
+    palettePool: ["lost_in_the_desert", "sunset_cave_extended"],
+  },
+
+  boss_arena: {
+    palettePool: ["night_16", "cyberpunk", "chroma_noir"],
   },
 };
+
+// ─────────────────────────────────────────────────────────────
+// Active skin + locked palette
+// ─────────────────────────────────────────────────────────────
 
 let activeMapSkinId: MapSkinId | undefined = undefined;
 
@@ -221,7 +242,7 @@ export function resolveMapSkin(id?: MapSkinId): ResolvedMapSkin {
     wall: bundle.wall ?? DEFAULT_MAP_SKIN.wall,
     stair: bundle.stair ?? DEFAULT_MAP_SKIN.stair,
     stairApron: bundle.stairApron ?? DEFAULT_MAP_SKIN.stairApron,
-    // NOTE: This is the “static” palette definition on the bundle. The *active* palette is stored separately.
+    // NOTE: This is the skin's *static* palette config. The active palette is stored separately.
     paletteId: bundle.paletteId ?? DEFAULT_MAP_SKIN.paletteId,
     background: bundle.background ?? DEFAULT_MAP_SKIN.background,
   };
