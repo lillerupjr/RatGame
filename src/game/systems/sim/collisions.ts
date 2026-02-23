@@ -11,6 +11,7 @@ import { onEnemyKilledForChallenge } from "../progression/roomChallenge";
 import { anchorFromWorld, writeAnchor } from "../../coords/anchor";
 import { enqueueDelayedExplosion } from "./delayedExplosions";
 import { resolveProjectileDamagePacket } from "../../combat_mods/runtime/critDamagePacket";
+import { assertValidCrit, assertValidDamageBundle } from "../../combat_mods/debug/combatRuntimeAssert";
 import {
   getEnemyWorld,
   getPlayerWorld,
@@ -194,13 +195,31 @@ export function collisionsSystem(w: World, dt: number) {
       // HIT
       hitSomething = true;
 
+      const physBefore = w.prDmgPhys[p] ?? 0;
+      const fireBefore = w.prDmgFire[p] ?? 0;
+      const chaosBefore = w.prDmgChaos[p] ?? 0;
+      const critChance = w.prCritChance[p] ?? 0;
+      const critMulti = w.prCritMulti[p] ?? 1;
+
+      // Phase B.5 verification layer: typed bundle safety + crit parameter bounds.
+      // Phase B mitigation is identity, so before/after bundle should match exactly.
+      assertValidDamageBundle(
+        physBefore,
+        fireBefore,
+        chaosBefore,
+        physBefore,
+        fireBefore,
+        chaosBefore
+      );
+      assertValidCrit(critChance, critMulti);
+
       const resolvedDamage = resolveProjectileDamagePacket(
         {
-          physical: w.prDmgPhys[p] ?? 0,
-          fire: w.prDmgFire[p] ?? 0,
-          chaos: w.prDmgChaos[p] ?? 0,
-          critChance: w.prCritChance[p] ?? 0,
-          critMulti: w.prCritMulti[p] ?? 1,
+          physical: physBefore,
+          fire: fireBefore,
+          chaos: chaosBefore,
+          critChance,
+          critMulti,
         },
         w.rng.range(0, 1)
       );

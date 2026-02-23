@@ -449,3 +449,9 @@ Progress update:
 [x] Pause Build panel wired to Combat Mods snapshot
 
 [x] Pause menu expanded layout
+
+[x] Phase B.5 Runtime Verification Layer
+    - deterministic snapshot tests
+    - damage conservation validation
+    - crit parameter validation
+    - runtime assertion system
