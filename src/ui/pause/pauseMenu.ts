@@ -237,9 +237,16 @@ export function mountPauseMenu(args: {
   const statTable = document.createElement("table");
   statTable.className = "pauseStatTable";
   setDataAttr(statTable, "stat-table");
+  const debugMetricsTitle = document.createElement("h4");
+  debugMetricsTitle.textContent = "Debug Metrics";
+  const debugMetricsTable = document.createElement("table");
+  debugMetricsTable.className = "pauseStatTable";
+  setDataAttr(debugMetricsTable, "debug-metrics-table");
   statsSection.appendChild(statsTitle);
   statsSection.appendChild(statsScroll);
   statsScroll.appendChild(statTable);
+  statsScroll.appendChild(debugMetricsTitle);
+  statsScroll.appendChild(debugMetricsTable);
 
   grid.appendChild(audioSection);
   grid.appendChild(buildSection);
@@ -364,6 +371,7 @@ export function mountPauseMenu(args: {
 
   const renderStats = (world: World | null) => {
     clearChildren(statTable);
+    clearChildren(debugMetricsTable);
     if (!world) return;
 
     const critChance = safeNum(world.baseCritChance) + safeNum(world.critChanceBonus);
@@ -387,6 +395,48 @@ export function mountPauseMenu(args: {
       tr.appendChild(th);
       tr.appendChild(td);
       statTable.appendChild(tr);
+    }
+
+    const dbg = (world as any).spawnDirectorDebug;
+    if (dbg && typeof dbg === "object") {
+      const metricsRows: Array<[string, string]> = [
+        ["Actual DPS (inst)", num(safeNum(dbg.actualDpsInstant), 2)],
+        ["Actual DPS (smooth)", num(safeNum(dbg.actualDps), 2)],
+        ["Expected DPS", num(safeNum(dbg.expectedDps), 2)],
+        ["Ahead/Behind", `${num(safeNum(dbg.aheadFactor), 2)}x`],
+        ["Pressure", num(safeNum(dbg.pressure), 3)],
+        ["Wave Mult", num(safeNum(dbg.waveMult, 1), 3)],
+        ["Queued/sec", num(safeNum(dbg.queuedPerSecond), 2)],
+        ["Pending", safeNum(dbg.pendingSpawns, 0).toFixed(0)],
+        ["Wave Remaining", safeNum(dbg.waveRemaining, 0).toFixed(0)],
+        ["Chunk CD", num(safeNum(dbg.chunkCooldownSec), 2)],
+        ["Wave CD", num(safeNum(dbg.waveCooldownSecLeft), 2)],
+        ["Last Chunk", safeNum(dbg.lastChunkSize, 0).toFixed(0)],
+        ["Wave Threshold", safeNum(dbg.pendingThresholdToStartWave, 0).toFixed(0)],
+        ["Power/sec", num(safeNum(dbg.powerPerSecond), 2)],
+        ["Trash Power Cost", num(safeNum(dbg.trashPowerCost), 2)],
+        ["Power Budget", num(safeNum(dbg.powerBudget), 2)],
+        ["Spawns/sec", num(safeNum(dbg.spawnsPerSecond), 2)],
+      ];
+      for (const [k, v] of metricsRows) {
+        const tr = document.createElement("tr");
+        const th = document.createElement("th");
+        const td = document.createElement("td");
+        th.textContent = k;
+        td.textContent = v;
+        tr.appendChild(th);
+        tr.appendChild(td);
+        debugMetricsTable.appendChild(tr);
+      }
+    } else {
+      const tr = document.createElement("tr");
+      const th = document.createElement("th");
+      const td = document.createElement("td");
+      th.textContent = "Spawn Director";
+      td.textContent = "No debug data";
+      tr.appendChild(th);
+      tr.appendChild(td);
+      debugMetricsTable.appendChild(tr);
     }
   };
 

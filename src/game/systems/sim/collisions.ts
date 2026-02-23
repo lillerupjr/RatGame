@@ -13,6 +13,7 @@ import { enqueueDelayedExplosion } from "./delayedExplosions";
 import { resolveProjectileDamagePacket } from "../../combat_mods/runtime/critDamagePacket";
 import { assertValidCrit, assertValidDamageBundle } from "../../combat_mods/debug/combatRuntimeAssert";
 import { applyAilmentsFromHit, ensureEnemyAilmentsAt } from "../../combat_mods/ailments/applyAilmentsFromHit";
+import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
 import {
   getEnemyWorld,
   getPlayerWorld,
@@ -248,6 +249,9 @@ export function collisionsSystem(w: World, dt: number) {
       );
       
       w.eHp[e] -= dmg;
+      if (!(w as any).metrics) (w as any).metrics = {};
+      if (!(w as any).metrics.dps) (w as any).metrics.dps = createDpsMetrics();
+      recordDamage((w as any).metrics.dps, (w as any).timeSec ?? (w as any).time ?? 0, dmg);
 
       // Track damage for DPS meter
       if (w.dpsEnabled) {

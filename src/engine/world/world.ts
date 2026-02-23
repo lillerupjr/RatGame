@@ -18,6 +18,14 @@ import type { Dir8 } from "../render/sprites/dir8";
 import type { ZoneTrialObjectiveState } from "../../game/objectives/zoneObjectiveTypes";
 import type { EnemyAilmentsState } from "../../game/combat_mods/ailments/enemyAilments";
 import type { CardRewardState } from "../../game/combat_mods/rewards/cardRewardFlow";
+import { createDpsMetrics, type DpsMetricsState } from "../../game/balance/dpsMetrics";
+import {
+  createSpawnDirectorState,
+  type SpawnDirectorConfig,
+  type SpawnDirectorState,
+} from "../../game/balance/spawnDirector";
+import type { ExpectedPowerBudgetConfig, ExpectedPowerConfig } from "../../game/balance/expectedPower";
+import { defaultEnemyPowerCostConfig, type EnemyPowerCostConfig } from "../../game/balance/enemyPower";
 
 import type { WeaponId } from "../../game/content/weapons";
 
@@ -168,6 +176,7 @@ export type World = {
 
   // Total run time
   time: number;
+  timeSec: number;
   lighting: WorldLightingState;
 
   // -------------------------
@@ -474,6 +483,39 @@ export type World = {
   dpsStartTime: number;
   dpsRecentDamage: number[];
   dpsRecentTimes: number[];
+
+  metrics: {
+    dps: DpsMetricsState;
+  };
+  balance: {
+    spawnDirectorEnabled: boolean;
+  };
+  spawnDirectorState: SpawnDirectorState;
+  spawnDirectorConfig: SpawnDirectorConfig;
+  expectedPowerConfig: ExpectedPowerConfig;
+  expectedPowerBudgetConfig: ExpectedPowerBudgetConfig;
+  enemyPowerConfig: EnemyPowerCostConfig;
+  spawnDirectorDebug?: {
+    depth: number;
+    timeSec: number;
+    expectedDps: number;
+    actualDps: number;
+    actualDpsInstant: number;
+    aheadFactor: number;
+    pressure: number;
+    waveMult: number;
+    powerPerSecond: number;
+    trashPowerCost: number;
+    powerBudget: number;
+    pendingSpawns: number;
+    waveRemaining: number;
+    chunkCooldownSec: number;
+    waveCooldownSecLeft: number;
+    lastChunkSize: number;
+    queuedPerSecond: number;
+    pendingThresholdToStartWave: number;
+    spawnsPerSecond: number;
+  };
 };
 
 export type CreateWorldArgs = {
@@ -526,6 +568,7 @@ export function createWorld(args: CreateWorldArgs): World {
     transitionTime: 0,
 
     time: 0,
+    timeSec: 0,
     lighting: {
       darknessAlpha: 0.5,
       ambientTint: undefined,
@@ -773,6 +816,52 @@ export function createWorld(args: CreateWorldArgs): World {
     dpsStartTime: 0,
     dpsRecentDamage: [],
     dpsRecentTimes: [],
+    metrics: {
+      dps: createDpsMetrics(),
+    },
+    balance: {
+      spawnDirectorEnabled: true,
+    },
+    spawnDirectorState: createSpawnDirectorState(),
+    spawnDirectorConfig: {
+      enabled: true,
+      pressureBase: 0.7,
+      pressurePerDepth: 0.05,
+      pressureMin: 0.6,
+      pressureMax: 1.3,
+      minFillPerTick: 0,
+      waveEnabled: false,
+      waveTotal: 10,
+      waveChunk: 3,
+      waveChunkDelaySec: 1.0,
+      waveCooldownSec: 0.5,
+      pendingThresholdToStartWave: 6,
+      wavePeriodSec: 12,
+      waveLowMult: 0.7,
+      waveHighMult: 1.3,
+      waveHighFrac: 0.35,
+      bossTrashPressureMult: 0.5,
+      maxSpawnsPerTick: 200,
+    },
+    expectedPowerConfig: {
+      timeCurve: [
+        { tSec: 0, dps: 24 },
+        { tSec: 120, dps: 14 },
+        { tSec: 300, dps: 28 },
+        { tSec: 480, dps: 45 },
+        { tSec: 720, dps: 70 },
+      ],
+      depthMultBase: 1.0,
+      depthMultPerDepth: 0.05,
+      depthMultMin: 1.0,
+      depthMultMax: 1.8,
+    },
+    expectedPowerBudgetConfig: {
+      basePowerPerSecond: 1.0,
+      powerRampPerMinute: 0.0,
+      powerRampMax: 2.0,
+    },
+    enemyPowerConfig: defaultEnemyPowerCostConfig(),
   };
 
   // Map-authored player spawn (SPAWN/P<number> tile)

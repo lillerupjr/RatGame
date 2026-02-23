@@ -2,6 +2,7 @@ import {
   createEnemyAilmentsState,
   tickEnemyAilments,
 } from "../ailments/enemyAilments";
+import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
 
 function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
@@ -61,6 +62,9 @@ export function ailmentTickSystem(w: any, dt: number): void {
     const total = poisonFinal + bleedFinal + igniteFinal;
     if (total > 0) {
       w.eHp[e] -= total;
+      w.metrics = w.metrics ?? {};
+      w.metrics.dps = w.metrics.dps ?? createDpsMetrics();
+      recordDamage(w.metrics.dps, w.timeSec ?? w.time ?? 0, total);
 
       // Optional: emit a DOT event for debug UI (only if event queue exists).
       // Keep minimal; do not add triggers.

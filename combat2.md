@@ -482,3 +482,9 @@ Progress update:
 [x] Added tier 3 mechanics cards: +1 pierce, +1 projectile
 [x] Tier-weighted reward generator (66/33/0/0/0) with deterministic tests
 [x] Runtime supports multi-projectile and pierce
+[x] Phase 0 Metrics (DPS window + smoothing) implemented (debug only)
+[x] Phase 1 Expected power curve implemented (time + depth)
+[x] Phase 2 Spawn Director budget spawning implemented (trash only, expected-driven)
+[x] Boss trash pressure reduction implemented
+[x] Pause debug readout implemented (actual vs expected + budget stats)
+[x] Tests implemented (metrics + expected curve + director)

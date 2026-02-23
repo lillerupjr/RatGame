@@ -3,7 +3,7 @@ import { World, createWorld, clearEvents, emitEvent, gridAtPlayer } from "../eng
 
 import { InputState, createInputState, inputSystem, clearInputEdges } from "./systems/sim/input";
 import { movementSystem } from "./systems/sim/movement";
-import { spawnSystem } from "./systems/spawn/spawn";
+import { spawnSystem, spawnOneTrashEnemy } from "./systems/spawn/spawn";
 import { combatSystem } from "./systems/sim/combat";
 import { ailmentTickSystem } from "./combat_mods/systems/ailmentTickSystem";
 import { collisionsSystem } from "./systems/sim/collisions";
@@ -99,6 +99,7 @@ import { applySfxSettingsToWorld } from "./audio/audioSettings";
 import { chooseCardReward, ensureCardRewardState } from "./combat_mods/rewards/cardRewardFlow";
 import { processChestOpenRequested, processObjectiveCompletionReward } from "./combat_mods/rewards/rewardTriggers";
 import { mountCardRewardMenu } from "../ui/rewards/cardRewardMenu";
+import { tickSpawnDirector } from "./balance/spawnDirector";
 
 
 type HudRefs = {
@@ -1843,6 +1844,8 @@ export function createGame(args: CreateGameArgs) {
 
     // phase time (drives FLOOR/BOSS/TRANSITION)
     world.phaseTime += dt;
+    // Spawn pacing uses the same clock as floor progression/spawn cadence.
+    world.timeSec = world.phaseTime;
 
     const mapMode = !!(world as any).mapMode;
 
@@ -1899,7 +1902,30 @@ export function createGame(args: CreateGameArgs) {
     neutralBirdAISystem(world, dt);
     neutralAnimatedMobsSystem(world, dt);
     roomChallengeSystem(world, dt);  // Track room challenges and lock exits
-    spawnSystem(world, dt);
+    world.spawnDirectorConfig.enabled = !!world.balance.spawnDirectorEnabled;
+    if (world.balance.spawnDirectorEnabled) {
+      tickSpawnDirector(
+        world,
+        dt,
+        world.spawnDirectorConfig,
+        world.expectedPowerConfig,
+        world.expectedPowerBudgetConfig,
+        world.spawnDirectorState,
+        {
+          getDepth: () => {
+            if (Number.isFinite(world.delveDepth) && world.delveDepth > 0) return world.delveDepth;
+            return (world.floorIndex ?? 0) + 1;
+          },
+          isBossActive: () => world.runState === "BOSS" || bossAlive(world),
+          canSpawnNow: () => world.runState === "FLOOR" && world.phaseTime >= 2,
+          spawnTrash: () => {
+            return spawnOneTrashEnemy(world);
+          },
+        }
+      );
+    } else {
+      spawnSystem(world, dt);
+    }
     const isNeutralObjectiveFloor = world.floorArchetype === "VENDOR" || world.floorArchetype === "HEAL";
     if (!isNeutralObjectiveFloor) {
       combatSystem(world, dt);

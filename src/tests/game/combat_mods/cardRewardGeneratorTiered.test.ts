@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import { RNG } from "../../../game/util/rng";
 import { generateCardRewardOptions } from "../../../game/combat_mods/rewards/cardRewardGenerator";
 import { getCardById } from "../../../game/combat_mods/content/cards/cardPool";
+import { CARD_TIER_WEIGHTS } from "../../../game/combat_mods/rewards/cardTierWeights";
 
 function runWithSeed(seed: number, count: number): string[] {
   const rng = new RNG(seed);
@@ -18,7 +19,7 @@ describe("cardRewardGenerator tiered", () => {
     expect(new Set(out).size).toBe(out.length);
   });
 
-  test("distribution follows configured 66/33/0 weights", () => {
+  test("distribution follows configured tier weights", () => {
     const rng = new RNG(2026);
     const totals = { t1: 0, t2: 0, t3: 0 };
     const trials = 10_000;
@@ -39,11 +40,19 @@ describe("cardRewardGenerator tiered", () => {
     const totalPicks = totals.t1 + totals.t2 + totals.t3;
     const t1Rate = totals.t1 / totalPicks;
     const t2Rate = totals.t2 / totalPicks;
+    const t3Rate = totals.t3 / totalPicks;
 
-    expect(t1Rate).toBeGreaterThanOrEqual(0.60);
-    expect(t1Rate).toBeLessThanOrEqual(0.72);
-    expect(t2Rate).toBeGreaterThanOrEqual(0.28);
-    expect(t2Rate).toBeLessThanOrEqual(0.40);
-    expect(totals.t3).toBe(0);
+    const w1 = CARD_TIER_WEIGHTS[1];
+    const w2 = CARD_TIER_WEIGHTS[2];
+    const w3 = CARD_TIER_WEIGHTS[3];
+    const sum = Math.max(1, w1 + w2 + w3);
+    const e1 = w1 / sum;
+    const e2 = w2 / sum;
+    const e3 = w3 / sum;
+    const tol = 0.10;
+
+    expect(Math.abs(t1Rate - e1)).toBeLessThanOrEqual(tol);
+    expect(Math.abs(t2Rate - e2)).toBeLessThanOrEqual(tol);
+    expect(Math.abs(t3Rate - e3)).toBeLessThanOrEqual(tol);
   });
 });
