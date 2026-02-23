@@ -21,6 +21,7 @@ describe("resolveWeaponStats", () => {
     expect(out.critMulti).toBeCloseTo(1.5);
 
     expect(out.spreadBaseDeg).toBeCloseTo(3.0);
+    expect(out.projectiles).toBe(1);
     expect(out.pierce).toBe(0);
 
     expect(out.chanceToBleed).toBeCloseTo(0);
@@ -104,6 +105,16 @@ describe("resolveWeaponStats", () => {
     const c2 = mkCard("T_PIERCE_NEG", [{ key: STAT_KEYS.PIERCE_ADD, op: "add", value: -999 }]);
     const out2 = resolveWeaponStats(JACK_PISTOL_V1, { cards: [c2] });
     expect(out2.pierce).toBe(0);
+  });
+
+  test("projectiles is integer and clamps at minimum 1", () => {
+    const c1 = mkCard("T_PROJECTILES_PLUS", [{ key: STAT_KEYS.PROJECTILES_ADD, op: "add", value: 1.9 }]);
+    const out1 = resolveWeaponStats(JACK_PISTOL_V1, { cards: [c1] });
+    expect(out1.projectiles).toBe(2);
+
+    const c2 = mkCard("T_PROJECTILES_NEG", [{ key: STAT_KEYS.PROJECTILES_ADD, op: "add", value: -999 }]);
+    const out2 = resolveWeaponStats(JACK_PISTOL_V1, { cards: [c2] });
+    expect(out2.projectiles).toBe(1);
   });
 
   test("ailment chances clamp to [0,1]", () => {

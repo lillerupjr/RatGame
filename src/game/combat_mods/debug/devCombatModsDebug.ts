@@ -1,24 +1,24 @@
-import { STARTER_CARDS_V1, getStarterCardById } from "../content/cards/starterCards";
+import { CARD_POOL_V1, getCardById } from "../content/cards/cardPool";
 import { JACK_PISTOL_V1 } from "../content/weapons/jackPistol";
 import { resolveWeaponStats } from "../stats/combatStatsResolver";
 
 const devGrantedCardIds: string[] = [];
 
 function grantCard(id: string): void {
-  if (!getStarterCardById(id)) return;
+  if (!getCardById(id)) return;
   devGrantedCardIds.push(id);
   console.info("[combat_mods][dev] granted", id, "cards=", [...devGrantedCardIds]);
 }
 
 function printResolvedStats(): void {
   const cards = devGrantedCardIds
-    .map((id) => getStarterCardById(id))
+    .map((id) => getCardById(id))
     .filter((c): c is NonNullable<typeof c> => Boolean(c));
   const resolved = resolveWeaponStats(JACK_PISTOL_V1, { cards });
   console.info("[combat_mods][dev] pistol stats", {
     grantedCardIds: [...devGrantedCardIds],
     grantedCards: cards.map((c) => c.id),
-    availableCardCount: STARTER_CARDS_V1.length,
+    availableCardCount: CARD_POOL_V1.length,
     resolved,
   });
 }

@@ -1,5 +1,5 @@
 import { JACK_PISTOL_V1 } from "../content/weapons/jackPistol";
-import { getStarterCardById } from "../content/cards/starterCards";
+import { getCardById } from "../content/cards/cardPool";
 import { resolveWeaponStats, type ResolvedWeaponStats } from "../stats/combatStatsResolver";
 import type { CardDef } from "../stats/modifierTypes";
 
@@ -31,7 +31,7 @@ export function aggregateCardCounts(cardIds: string[]): CardCountEntry[] {
 
   const entries: CardCountEntry[] = [];
   for (const [id, count] of counts.entries()) {
-    const def = getStarterCardById(id);
+    const def = getCardById(id);
     entries.push({
       id,
       name: def?.displayName ?? id,
@@ -58,7 +58,7 @@ export function aggregateCardCounts(cardIds: string[]): CardCountEntry[] {
 function cardDefsFromIds(cardIds: string[]): CardDef[] {
   const defs: CardDef[] = [];
   for (const id of cardIds) {
-    const d = getStarterCardById(id);
+    const d = getCardById(id);
     if (d) defs.push(d);
   }
   return defs;

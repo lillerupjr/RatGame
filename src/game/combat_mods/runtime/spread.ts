@@ -34,3 +34,23 @@ export function applySpreadToDirection(
     offsetRad,
   };
 }
+
+/**
+ * Compute projectile angular offsets (radians) centered around 0.
+ * For n > 1, offsets are evenly spaced in [-spread/2, +spread/2].
+ */
+export function computeProjectileAngles(spreadDeg: number, count: number): number[] {
+  const n = Math.max(1, Math.floor(count));
+  if (n === 1) return [0];
+
+  const spreadRad = Math.max(0, spreadDeg) * (Math.PI / 180);
+  if (spreadRad <= 0) return new Array(n).fill(0);
+
+  const half = spreadRad * 0.5;
+  const step = spreadRad / (n - 1);
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    out.push(-half + step * i);
+  }
+  return out;
+}

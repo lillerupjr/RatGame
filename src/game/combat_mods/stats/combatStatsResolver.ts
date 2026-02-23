@@ -15,6 +15,7 @@ export interface ResolvedWeaponStats {
   projectileSpeedPxPerSec: number;
   rangePx: number;
   radiusPx: number;
+  projectiles: number;
   pierce: number;
 
   // Ailment chances (0..1)
@@ -117,6 +118,7 @@ export function resolveWeaponStats(weapon: WeaponDef, loadout: CombatModsLoadout
     getAcc(STAT_KEYS.PROJECTILE_SPEED_INCREASED)
   );
 
+  const projectiles = Math.max(1, Math.floor(1 + getAcc(STAT_KEYS.PROJECTILES_ADD).add));
   const pierce = Math.max(0, Math.floor(weapon.projectile.pierce + getAcc(STAT_KEYS.PIERCE_ADD).add));
 
   const conv = {
@@ -156,6 +158,7 @@ export function resolveWeaponStats(weapon: WeaponDef, loadout: CombatModsLoadout
     projectileSpeedPxPerSec,
     rangePx: weapon.projectile.rangePx,
     radiusPx: weapon.projectile.radiusPx,
+    projectiles,
     pierce,
     chanceToBleed,
     chanceToIgnite,

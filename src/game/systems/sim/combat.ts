@@ -2,9 +2,9 @@ import { World, emitEvent } from "../../../engine/world/world";
 import { findClosestTarget } from "../../util/targeting";
 import { PRJ_KIND, spawnProjectileGrid } from "../../factories/projectileFactory";
 import { JACK_PISTOL_V1 } from "../../combat_mods/content/weapons/jackPistol";
-import { getStarterCardById } from "../../combat_mods/content/cards/starterCards";
+import { getCardById } from "../../combat_mods/content/cards/cardPool";
 import { resolveWeaponStats } from "../../combat_mods/stats/combatStatsResolver";
-import { applySpreadToDirection } from "../../combat_mods/runtime/spread";
+import { applySpreadToDirection, computeProjectileAngles } from "../../combat_mods/runtime/spread";
 import { getDevGrantedCardIds } from "../../combat_mods/debug/devCombatModsDebug";
 
 /** Handle weapon cooldowns, targeting, and firing events. */
@@ -39,7 +39,7 @@ export function combatSystem(w: World, dt: number) {
     cardIds.push(...getDevGrantedCardIds());
   }
   const cards = cardIds
-    .map((id) => getStarterCardById(id))
+    .map((id) => getCardById(id))
     .filter((card): card is NonNullable<typeof card> => Boolean(card));
 
   const resolved = resolveWeaponStats(JACK_PISTOL_V1, { cards });
@@ -49,31 +49,58 @@ export function combatSystem(w: World, dt: number) {
 
   while (w.primaryWeaponCdLeft <= 0) {
     w.primaryWeaponCdLeft += cooldown;
-
-    const spread = applySpreadToDirection(defaultAimX, defaultAimY, resolved.spreadBaseDeg, w.rng);
+    const projectileCount = Math.max(1, resolved.projectiles | 0);
     const pgx = w.pgxi + w.pgox;
     const pgy = w.pgyi + w.pgoy;
-
-    spawnProjectileGrid(w, {
-      kind: PRJ_KIND.PISTOL,
-      gx: pgx,
-      gy: pgy,
-      dirGx: spread.dirX,
-      dirGy: spread.dirY,
-      speed: resolved.projectileSpeedPxPerSec,
-      damage: resolved.baseDamage.physical + resolved.baseDamage.fire + resolved.baseDamage.chaos,
-      dmgPhys: resolved.baseDamage.physical,
-      dmgFire: resolved.baseDamage.fire,
-      dmgChaos: resolved.baseDamage.chaos,
-      critChance: resolved.critChance,
-      critMulti: resolved.critMulti,
-      chanceBleed: resolved.chanceToBleed,
-      chanceIgnite: resolved.chanceToIgnite,
-      chancePoison: resolved.chanceToPoison,
-      radius: 5,
-      pierce: resolved.pierce,
-      ttl: 2.2,
-    });
+    if (projectileCount === 1) {
+      const spread = applySpreadToDirection(defaultAimX, defaultAimY, resolved.spreadBaseDeg, w.rng);
+      spawnProjectileGrid(w, {
+        kind: PRJ_KIND.PISTOL,
+        gx: pgx,
+        gy: pgy,
+        dirGx: spread.dirX,
+        dirGy: spread.dirY,
+        speed: resolved.projectileSpeedPxPerSec,
+        damage: resolved.baseDamage.physical + resolved.baseDamage.fire + resolved.baseDamage.chaos,
+        dmgPhys: resolved.baseDamage.physical,
+        dmgFire: resolved.baseDamage.fire,
+        dmgChaos: resolved.baseDamage.chaos,
+        critChance: resolved.critChance,
+        critMulti: resolved.critMulti,
+        chanceBleed: resolved.chanceToBleed,
+        chanceIgnite: resolved.chanceToIgnite,
+        chancePoison: resolved.chanceToPoison,
+        radius: 5,
+        pierce: resolved.pierce,
+        ttl: 2.2,
+      });
+    } else {
+      const aimAngle = Math.atan2(defaultAimY, defaultAimX);
+      const offsets = computeProjectileAngles(resolved.spreadBaseDeg, projectileCount);
+      for (let i = 0; i < offsets.length; i++) {
+        const angle = aimAngle + offsets[i];
+        spawnProjectileGrid(w, {
+          kind: PRJ_KIND.PISTOL,
+          gx: pgx,
+          gy: pgy,
+          dirGx: Math.cos(angle),
+          dirGy: Math.sin(angle),
+          speed: resolved.projectileSpeedPxPerSec,
+          damage: resolved.baseDamage.physical + resolved.baseDamage.fire + resolved.baseDamage.chaos,
+          dmgPhys: resolved.baseDamage.physical,
+          dmgFire: resolved.baseDamage.fire,
+          dmgChaos: resolved.baseDamage.chaos,
+          critChance: resolved.critChance,
+          critMulti: resolved.critMulti,
+          chanceBleed: resolved.chanceToBleed,
+          chanceIgnite: resolved.chanceToIgnite,
+          chancePoison: resolved.chanceToPoison,
+          radius: 5,
+          pierce: resolved.pierce,
+          ttl: 2.2,
+        });
+      }
+    }
 
     emitEvent(w, {
       type: "SFX",

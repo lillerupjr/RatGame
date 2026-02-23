@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { RNG } from "../../util/rng";
-import { applySpreadToDirection } from "./spread";
+import { applySpreadToDirection, computeProjectileAngles } from "./spread";
 
 describe("applySpreadToDirection", () => {
   test("uses deterministic seeded offsets", () => {
@@ -28,5 +28,24 @@ describe("applySpreadToDirection", () => {
       expect(out.offsetRad).toBeLessThanOrEqual(halfSpread);
       expect(Math.hypot(out.dirX, out.dirY)).toBeCloseTo(1, 6);
     }
+  });
+});
+
+describe("computeProjectileAngles", () => {
+  test("n=1 returns centered single projectile", () => {
+    expect(computeProjectileAngles(6, 1)).toEqual([0]);
+  });
+
+  test("n=2 returns symmetric offsets", () => {
+    const out = computeProjectileAngles(10, 2);
+    expect(out.length).toBe(2);
+    expect(out[0]).toBeCloseTo(-out[1], 8);
+  });
+
+  test("n=3 includes center and symmetric sides", () => {
+    const out = computeProjectileAngles(12, 3);
+    expect(out.length).toBe(3);
+    expect(out[1]).toBeCloseTo(0, 8);
+    expect(out[0]).toBeCloseTo(-out[2], 8);
   });
 });

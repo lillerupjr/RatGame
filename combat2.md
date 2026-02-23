@@ -478,3 +478,7 @@ Progress update:
 [x] Boss chest grants card reward (3 options, pick 1)
 [x] Objective completion grants card reward (3 options, pick 1)
 [x] Reward UI implemented + tests
+[x] Retier cards: merge tiers 1+2 -> new tier 1, old tier 3 -> new tier 2
+[x] Added tier 3 mechanics cards: +1 pierce, +1 projectile
+[x] Tier-weighted reward generator (66/33/0/0/0) with deterministic tests
+[x] Runtime supports multi-projectile and pierce

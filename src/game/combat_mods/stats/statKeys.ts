@@ -20,6 +20,7 @@ export const STAT_KEYS = {
   SPREAD_BASE_DEG_ADD: "spreadBaseDeg.add",
 
   // Projectile
+  PROJECTILES_ADD: "projectiles.add",
   PROJECTILE_SPEED_INCREASED: "projectileSpeed.increased",
   PIERCE_ADD: "pierce.add",
 
