@@ -34,7 +34,7 @@ export function combatSystem(w: World, dt: number) {
   w.lastAimX = defaultAimX;
   w.lastAimY = defaultAimY;
 
-  const cardIds = [...w.combatCardIds];
+  const cardIds = [...(w.cards ?? []), ...(w.combatCardIds ?? [])];
   if (import.meta.env.DEV) {
     cardIds.push(...getDevGrantedCardIds());
   }
@@ -67,6 +67,9 @@ export function combatSystem(w: World, dt: number) {
       dmgChaos: resolved.baseDamage.chaos,
       critChance: resolved.critChance,
       critMulti: resolved.critMulti,
+      chanceBleed: resolved.chanceToBleed,
+      chanceIgnite: resolved.chanceToIgnite,
+      chancePoison: resolved.chanceToPoison,
       radius: 5,
       pierce: resolved.pierce,
       ttl: 2.2,

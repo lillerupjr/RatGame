@@ -27,6 +27,12 @@ describe("STARTER_CARDS_V1 invariants", () => {
     }
   });
 
+  test("powerTier is limited to 1..3 for starter cards", () => {
+    for (const c of STARTER_CARDS_V1) {
+      expect([1, 2, 3]).toContain(c.powerTier);
+    }
+  });
+
   test("card ids are unique", () => {
     const seen = new Set<string>();
     for (const c of STARTER_CARDS_V1) {

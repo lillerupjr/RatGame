@@ -18,7 +18,6 @@ import {
   type BooleanDebugSettingKey,
 } from "./debugSettings";
 import { getUserSettings, initUserSettings, updateUserSettings } from "./userSettings";
-import { handleDevCombatModsKeys } from "./game/combat_mods/debug/devCombatModsDebug";
 import { mountPauseMenu } from "./ui/pause/pauseMenu";
 import { togglePause } from "./game/app/pauseController";
 
@@ -591,7 +590,6 @@ async function bootstrap() {
       },
     },
   });
-
   const loadingController = createLoadingController({
     compileMap: async () => {
       cachedDeps = null;
@@ -665,7 +663,6 @@ async function bootstrap() {
 
   window.addEventListener("keydown", (ev) => {
     if (ev.repeat) return;
-    if (import.meta.env.DEV && handleDevCombatModsKeys(ev)) return;
 
     if (ev.code === "F5") {
       ev.preventDefault();
@@ -680,24 +677,6 @@ async function bootstrap() {
           updateUserSettings({ render: { paletteSwapEnabled: false } });
         }
       }
-      return;
-    }
-
-    if (ev.code === "F8") {
-      const next = !getUserSettings().debug.entityAnchorOverlay;
-      updateUserSettings({ debug: { entityAnchorOverlay: next } });
-      return;
-    }
-
-    if (ev.code === "F7") {
-      const next = !getUserSettings().render.entityAnchorsEnabled;
-      updateUserSettings({ render: { entityAnchorsEnabled: next } });
-      return;
-    }
-
-    if (ev.code === "F6") {
-      const next = !getUserSettings().render.entityShadowsEnabled;
-      updateUserSettings({ render: { entityShadowsEnabled: next } });
       return;
     }
 

@@ -40,6 +40,9 @@ export type SpawnProjectileArgs = {
     dmgChaos?: number;
     critChance?: number;
     critMulti?: number;
+    chanceBleed?: number;
+    chanceIgnite?: number;
+    chancePoison?: number;
     radius: number;
     pierce: number;
 
@@ -162,6 +165,9 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     w.prDmgChaos.push(dmgChaos);
     w.prCritChance.push(Number.isFinite(a.critChance as any) ? (a.critChance as number) : 0);
     w.prCritMulti.push(Number.isFinite(a.critMulti as any) ? (a.critMulti as number) : 1);
+    w.prChanceBleed.push(Number.isFinite(a.chanceBleed as any) ? (a.chanceBleed as number) : 0);
+    w.prChanceIgnite.push(Number.isFinite(a.chanceIgnite as any) ? (a.chanceIgnite as number) : 0);
+    w.prChancePoison.push(Number.isFinite(a.chancePoison as any) ? (a.chancePoison as number) : 0);
     w.prR.push(a.radius);
     w.prPierce.push(a.pierce);
 

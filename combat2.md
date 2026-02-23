@@ -455,3 +455,26 @@ Progress update:
     - damage conservation validation
     - crit parameter validation
     - runtime assertion system
+
+[x] Phase C Ailments V1
+  - apply on hit (typed dealt damage)
+  - per-enemy stacks and ignite strongest-only
+  - per-frame ticking
+  - extensive tests
+
+[x] Phase D Card Reward Plumbing
+  - world.cards storage
+  - deterministic card reward generation
+  - card reward UI
+  - card application integration
+  - tests implemented
+
+[x] Debug: Pause card editor gated by debug dropdown
+    - removed F-key debug overrides
+    - added +/– card editing inside pause
+    - tests added
+
+[x] Legacy level-up/upgrades removed from runtime loop
+[x] Boss chest grants card reward (3 options, pick 1)
+[x] Objective completion grants card reward (3 options, pick 1)
+[x] Reward UI implemented + tests

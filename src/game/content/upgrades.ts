@@ -1,4 +1,5 @@
 // src/game/content/upgrades.ts
+// LEGACY (unused in runtime). TODO: remove this file after full cleanup.
 import type { World } from "../../engine/world/world";
 import { registry } from "./registry";
 import type { WeaponId, WeaponStats } from "./weapons";

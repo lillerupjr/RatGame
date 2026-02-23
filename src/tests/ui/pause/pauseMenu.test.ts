@@ -27,6 +27,8 @@ class FakeElement {
   max = "";
   step = "";
   value = "";
+  checked = false;
+  disabled = false;
 
   private _text = "";
   private listeners = new Map<string, Listener[]>();
@@ -95,6 +97,11 @@ class FakeElement {
   }
 
   querySelector(selector: string): FakeElement | null {
+    const mv = selector.match(/^\[data-([a-z0-9-]+)=\"([^\"]+)\"\]$/i);
+    if (mv) {
+      const raw = mv[1].replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+      return this.find((node) => node.dataset[raw] === mv[2]);
+    }
     const m = selector.match(/^\[data-([a-z0-9-]+)\]$/i);
     if (m) {
       const raw = m[1].replace(/-([a-z])/g, (_, c) => c.toUpperCase());
@@ -134,6 +141,22 @@ const audioMockState = vi.hoisted(() => ({
   sfxMuted: false,
 }));
 
+const debugFlags = vi.hoisted(() => ({
+  pauseDebugCards: false,
+}));
+
+const userSettingsState = vi.hoisted(() => ({
+  settings: {
+    debug: {
+      pauseDebugCards: false,
+    },
+    render: {
+      paletteSwapEnabled: false,
+      paletteId: "db32",
+    },
+  },
+}));
+
 vi.mock("../../../game/audio/audioSettings", () => ({
   getAudioSettings: vi.fn(() => ({ ...audioMockState })),
   setMusicVolume: vi.fn((v: number) => {
@@ -154,8 +177,29 @@ vi.mock("../../../game/audio/audioSettings", () => ({
   }),
 }));
 
+vi.mock("../../../userSettings", () => ({
+  isPauseDebugCardsEnabled: vi.fn(() => debugFlags.pauseDebugCards),
+  getUserSettings: vi.fn(() => userSettingsState.settings),
+  updateUserSettings: vi.fn((patch: any) => {
+    userSettingsState.settings = {
+      ...userSettingsState.settings,
+      ...patch,
+      render: {
+        ...userSettingsState.settings.render,
+        ...(patch.render ?? {}),
+      },
+      debug: {
+        ...userSettingsState.settings.debug,
+        ...(patch.debug ?? {}),
+      },
+    };
+    return userSettingsState.settings;
+  }),
+}));
+
 import { mountPauseMenu } from "../../../ui/pause/pauseMenu";
 import * as audioSettingsMock from "../../../game/audio/audioSettings";
+import * as userSettingsMock from "../../../userSettings";
 
 function makeWorld(overrides: Record<string, unknown> = {}) {
   return {
@@ -191,6 +235,12 @@ describe("pauseMenu", () => {
     vi.mocked(audioSettingsMock.setSfxVolume).mockClear();
     vi.mocked(audioSettingsMock.setSfxMuted).mockClear();
     vi.mocked(audioSettingsMock.applySfxSettingsToWorld).mockClear();
+    vi.mocked(userSettingsMock.updateUserSettings).mockClear();
+    debugFlags.pauseDebugCards = false;
+    userSettingsState.settings = {
+      debug: { pauseDebugCards: false },
+      render: { paletteSwapEnabled: false, paletteId: "db32" },
+    };
   });
 
   test("renders pause panel structure", () => {
@@ -218,6 +268,21 @@ describe("pauseMenu", () => {
 
     expect(onResume).toHaveBeenCalledTimes(1);
     expect(onQuitRun).toHaveBeenCalledTimes(1);
+  });
+
+  test("setVisible(true) reapplies visibility if root gets hidden externally", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+
+    menu.setVisible(true);
+    expect((root as any).hidden).toBe(false);
+
+    // Simulate syncUiForAppState forcing menu hidden between frames.
+    (root as any).hidden = true;
+    menu.setVisible(true);
+
+    expect((root as any).hidden).toBe(false);
   });
 
   test("audio controls call setter functions", () => {
@@ -275,5 +340,97 @@ describe("pauseMenu", () => {
     const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
 
     expect(() => menu.render(null as any)).not.toThrow();
+  });
+
+  test("debug cards section is hidden while debug flag is off", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+    menu.setVisible(true);
+
+    menu.render(makeWorld({ cards: ["CARD_DAMAGE_FLAT_1"] }));
+    const debugSection = root.querySelector("[data-debug-cards-section]") as any;
+    expect(debugSection).toBeTruthy();
+    expect(debugSection.hidden).toBe(true);
+  });
+
+  test("debug cards section is visible while debug flag is on", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+    menu.setVisible(true);
+
+    debugFlags.pauseDebugCards = true;
+    menu.render(makeWorld({ cards: ["CARD_DAMAGE_FLAT_1"] }));
+
+    const debugSection = root.querySelector("[data-debug-cards-section]") as any;
+    expect(debugSection).toBeTruthy();
+    expect(debugSection.hidden).toBe(false);
+    expect(root.textContent).toContain("Open Debug Cards Editor");
+  });
+
+  test("debug cards apply immediately in editor layer", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+    menu.setVisible(true);
+
+    debugFlags.pauseDebugCards = true;
+    const world = makeWorld({ cards: [] });
+    menu.render(world);
+
+    const openBtn = root.querySelector("[data-debug-cards-open]") as any;
+    expect(openBtn).toBeTruthy();
+    openBtn.click();
+
+    const layer = root.querySelector("[data-debug-layer]") as any;
+    expect(layer).toBeTruthy();
+    expect(layer.hidden).toBe(false);
+    expect(root.textContent).toContain("Debug Cards Editor");
+    expect(root.querySelector("[data-debug-cards-cancel]")).toBeTruthy();
+
+    const plus = root.querySelector('[data-debug-card-add="CARD_DAMAGE_FLAT_1"]') as any;
+    const minus = root.querySelector('[data-debug-card-remove="CARD_DAMAGE_FLAT_1"]') as any;
+    expect(plus).toBeTruthy();
+    expect(minus).toBeTruthy();
+
+    plus.click();
+    expect(world.cards.includes("CARD_DAMAGE_FLAT_1")).toBe(true);
+    expect(root.textContent).toContain("x1");
+
+    plus.click();
+    plus.click();
+    expect(root.textContent).toContain("x3");
+
+    minus.click();
+    expect(root.textContent).toContain("x2");
+
+    minus.click();
+    minus.click();
+    minus.click();
+    expect(root.textContent).toContain("x0");
+    expect(() => minus.click()).not.toThrow();
+  });
+
+  test("palette section renders and updates user settings", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+    menu.setVisible(true);
+    menu.render(makeWorld());
+
+    expect(root.textContent).toContain("Palette");
+    const toggle = root.querySelector("[data-palette-swap-toggle]") as any;
+    const select = root.querySelector("[data-palette-id-select]") as any;
+    expect(toggle).toBeTruthy();
+    expect(select).toBeTruthy();
+
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event("change") as any);
+    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({ render: { paletteSwapEnabled: true } });
+
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event("change") as any);
+    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({ render: { paletteSwapEnabled: false } });
   });
 });

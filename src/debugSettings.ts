@@ -39,6 +39,7 @@ export type DebugSettings = {
   rampFaces: boolean;
   forceSpawnOverride: boolean;
   entityAnchorOverlay: boolean;
+  pauseDebugCards: boolean;
   waterFlowRate: number;
   neutralBirdAI: NeutralBirdAIDebugSettings;
   objectives: ObjectiveDebugSettings;
@@ -86,6 +87,7 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "rampFaces", label: "rampFaces" },
   { key: "forceSpawnOverride", label: "forceSpawnOverride" },
   { key: "entityAnchorOverlay", label: "entityAnchorOverlay" },
+  { key: "pauseDebugCards", label: "Enable Pause Debug Cards" },
 ] as const;
 
 export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
@@ -109,6 +111,7 @@ export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   rampFaces: false,
   forceSpawnOverride: false,
   entityAnchorOverlay: false,
+  pauseDebugCards: false,
   waterFlowRate: 1,
   neutralBirdAI: {
     enabled: false,

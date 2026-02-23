@@ -8,6 +8,8 @@ import {
   setSfxMuted,
   setSfxVolume,
 } from "../../game/audio/audioSettings";
+import { getUserSettings, isPauseDebugCardsEnabled, updateUserSettings } from "../../userSettings";
+import { getAllCardIds } from "../../game/combat_mods/content/cards/cardPool";
 
 export type PauseMenuActions = {
   onResume(): void;
@@ -38,6 +40,15 @@ function pct(x: number): string {
 
 function num(x: number, digits = 2): string {
   return x.toFixed(digits);
+}
+
+function countInstances(arr: unknown, id: string): number {
+  if (!Array.isArray(arr)) return 0;
+  let count = 0;
+  for (let i = 0; i < arr.length; i++) {
+    if (arr[i] === id) count += 1;
+  }
+  return count;
 }
 
 export function mountPauseMenu(args: {
@@ -128,6 +139,44 @@ export function mountPauseMenu(args: {
   audioSection.appendChild(musicRow);
   audioSection.appendChild(sfxRow);
 
+  const paletteTitle = document.createElement("h4");
+  paletteTitle.textContent = "Palette";
+  const paletteToggleRow = document.createElement("label");
+  paletteToggleRow.className = "audioRow";
+  const paletteToggleLabel = document.createElement("span");
+  paletteToggleLabel.textContent = "Swap";
+  const paletteToggle = document.createElement("input");
+  paletteToggle.type = "checkbox";
+  setDataAttr(paletteToggle, "palette-swap-toggle");
+  const paletteSelect = document.createElement("select");
+  setDataAttr(paletteSelect, "palette-id-select");
+  const paletteIds = [
+    "db32",
+    "divination",
+    "cyberpunk",
+    "sunset_8",
+    "s_sunset7",
+    "moonlight_15",
+    "st8_moonlight",
+    "noire_truth",
+    "chroma_noir",
+    "sunny_swamp",
+    "swamp_kin",
+    "cobalt_desert_7",
+    "lost_in_the_desert",
+  ] as const;
+  for (let i = 0; i < paletteIds.length; i++) {
+    const option = document.createElement("option");
+    option.value = paletteIds[i];
+    option.textContent = paletteIds[i];
+    paletteSelect.appendChild(option);
+  }
+  paletteToggleRow.appendChild(paletteToggleLabel);
+  paletteToggleRow.appendChild(paletteToggle);
+  paletteToggleRow.appendChild(paletteSelect);
+  audioSection.appendChild(paletteTitle);
+  audioSection.appendChild(paletteToggleRow);
+
   const buildSection = document.createElement("section");
   buildSection.className = "pauseSection pauseBuild";
   const buildTitle = document.createElement("h3");
@@ -156,6 +205,17 @@ export function mountPauseMenu(args: {
   relicList.className = "relicList";
   setDataAttr(relicList, "relic-list");
 
+  const debugCardsSection = document.createElement("div");
+  debugCardsSection.className = "pauseDebugCardsSection";
+  debugCardsSection.hidden = true;
+  setDataAttr(debugCardsSection, "debug-cards-section");
+
+  const debugCardsOpenBtn = document.createElement("button");
+  debugCardsOpenBtn.type = "button";
+  debugCardsOpenBtn.className = "pauseDebugOpenBtn";
+  debugCardsOpenBtn.textContent = "Open Debug Cards Editor";
+  setDataAttr(debugCardsOpenBtn, "debug-cards-open");
+
   buildSection.appendChild(buildTitle);
   buildSection.appendChild(characterLine);
   buildSection.appendChild(weaponSummaryLine);
@@ -165,6 +225,8 @@ export function mountPauseMenu(args: {
   buildScroll.appendChild(weaponStatsTable);
   buildScroll.appendChild(relicsTitle);
   buildScroll.appendChild(relicList);
+  buildScroll.appendChild(debugCardsSection);
+  debugCardsSection.appendChild(debugCardsOpenBtn);
 
   const statsSection = document.createElement("section");
   statsSection.className = "pauseSection pauseStats";
@@ -185,10 +247,103 @@ export function mountPauseMenu(args: {
 
   panel.appendChild(header);
   panel.appendChild(grid);
+
+  const debugLayer = document.createElement("div");
+  debugLayer.className = "pauseDebugLayer";
+  debugLayer.hidden = true;
+  setDataAttr(debugLayer, "debug-layer");
+
+  const debugLayerPanel = document.createElement("div");
+  debugLayerPanel.className = "pauseDebugLayerPanel";
+
+  const debugLayerHeader = document.createElement("div");
+  debugLayerHeader.className = "pauseDebugLayerHeader";
+  const debugLayerTitle = document.createElement("h3");
+  debugLayerTitle.textContent = "Debug Cards Editor";
+  const debugLayerActions = document.createElement("div");
+  debugLayerActions.className = "pauseDebugLayerActions";
+  const debugCancelBtn = document.createElement("button");
+  debugCancelBtn.type = "button";
+  debugCancelBtn.className = "pauseBtn";
+  debugCancelBtn.textContent = "Close";
+  setDataAttr(debugCancelBtn, "debug-cards-cancel");
+  debugLayerActions.appendChild(debugCancelBtn);
+  debugLayerHeader.appendChild(debugLayerTitle);
+  debugLayerHeader.appendChild(debugLayerActions);
+
+  const debugLayerBody = document.createElement("div");
+  debugLayerBody.className = "pauseDebugLayerBody pauseScroll";
+  setDataAttr(debugLayerBody, "debug-cards-list");
+
+  debugLayerPanel.appendChild(debugLayerHeader);
+  debugLayerPanel.appendChild(debugLayerBody);
+  debugLayer.appendChild(debugLayerPanel);
+  panel.appendChild(debugLayer);
   host.appendChild(panel);
   root.appendChild(host);
 
   let latestWorld: World | null = null;
+  let debugLayerOpen = false;
+  const debugCardIds = getAllCardIds();
+  let visible = false;
+  let needsFullRender = true;
+  let lastRenderedWorld: World | null = null;
+
+  const renderDebugLayer = () => {
+    const debugEnabled = isPauseDebugCardsEnabled();
+    debugLayer.hidden = !debugEnabled || !debugLayerOpen;
+    if (debugLayer.hidden) return;
+
+    clearChildren(debugLayerBody);
+    for (let i = 0; i < debugCardIds.length; i++) {
+      const id = debugCardIds[i];
+      const row = document.createElement("div");
+      row.className = "pauseDebugCardRow";
+
+      const label = document.createElement("span");
+      label.className = "pauseDebugCardId";
+      label.textContent = id;
+
+      const countSpan = document.createElement("span");
+      countSpan.className = "pauseCardCount";
+      countSpan.textContent = `x${countInstances((latestWorld as any)?.cards, id)}`;
+      countSpan.setAttribute("data-debug-card-count", id);
+
+      const addBtn = document.createElement("button");
+      addBtn.type = "button";
+      addBtn.className = "pauseDebugCardBtn";
+      addBtn.textContent = "+";
+      addBtn.setAttribute("data-debug-card-add", id);
+      addBtn.addEventListener("click", () => {
+        const w = latestWorld as any;
+        if (!w || typeof w !== "object") return;
+        if (!Array.isArray(w.cards)) w.cards = [];
+        w.cards.push(id);
+        countSpan.textContent = `x${countInstances(w.cards, id)}`;
+        renderBuildPanel(latestWorld);
+      });
+
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "pauseDebugCardBtn";
+      removeBtn.textContent = "-";
+      removeBtn.setAttribute("data-debug-card-remove", id);
+      removeBtn.addEventListener("click", () => {
+        const w = latestWorld as any;
+        if (!w || typeof w !== "object" || !Array.isArray(w.cards)) return;
+        const idx = w.cards.indexOf(id);
+        if (idx >= 0) w.cards.splice(idx, 1);
+        countSpan.textContent = `x${countInstances(w.cards, id)}`;
+        renderBuildPanel(latestWorld);
+      });
+
+      row.appendChild(label);
+      row.appendChild(countSpan);
+      row.appendChild(addBtn);
+      row.appendChild(removeBtn);
+      debugLayerBody.appendChild(row);
+    }
+  };
 
   const syncAudioControls = () => {
     const audio = getAudioSettings();
@@ -235,7 +390,7 @@ export function mountPauseMenu(args: {
     }
   };
 
-  const renderCardsAndRelicsAndWeapon = (world: World | null) => {
+  const renderBuildPanel = (world: World | null) => {
     clearChildren(cardGrid);
     clearChildren(weaponStatsTable);
     clearChildren(relicList);
@@ -258,7 +413,8 @@ export function mountPauseMenu(args: {
 
         const name = document.createElement("div");
         name.className = "pauseCardName";
-        name.textContent = card.name;
+        const tierText = card.powerTier ? ` (T${card.powerTier})` : "";
+        name.textContent = `${card.name}${tierText}`;
 
         const count = document.createElement("div");
         count.className = "pauseCardCount";
@@ -307,6 +463,15 @@ export function mountPauseMenu(args: {
     relicList.textContent = relics.length === 0 ? "No relics" : relics.join(", ");
   };
 
+  const renderCardsAndRelicsAndWeapon = (world: World | null) => {
+    renderBuildPanel(world);
+    const debugEnabled = isPauseDebugCardsEnabled();
+    debugCardsSection.hidden = !debugEnabled;
+    debugCardsOpenBtn.hidden = !debugEnabled;
+    if (!debugEnabled) debugLayerOpen = false;
+    renderDebugLayer();
+  };
+
   const onMusicSlider = () => {
     setMusicVolume(Number.parseFloat(musicSlider.value));
     syncAudioControls();
@@ -331,29 +496,67 @@ export function mountPauseMenu(args: {
     syncAudioControls();
   };
 
+  const syncPaletteControls = () => {
+    const settings = getUserSettings().render;
+    (paletteToggle as HTMLInputElement).checked = !!settings.paletteSwapEnabled;
+    paletteSelect.value = settings.paletteId;
+    paletteSelect.disabled = !settings.paletteSwapEnabled;
+  };
+
   resumeBtn.addEventListener("click", args.actions.onResume);
   quitBtn.addEventListener("click", args.actions.onQuitRun);
   musicSlider.addEventListener("input", onMusicSlider);
   musicMuteBtn.addEventListener("click", onMusicMute);
   sfxSlider.addEventListener("input", onSfxSlider);
   sfxMuteBtn.addEventListener("click", onSfxMute);
-
+  paletteToggle.addEventListener("change", () => {
+    const enabled = !!(paletteToggle as HTMLInputElement).checked;
+    updateUserSettings({ render: { paletteSwapEnabled: enabled } });
+    paletteSelect.disabled = !enabled;
+  });
+  paletteSelect.addEventListener("change", () => {
+    updateUserSettings({
+      render: {
+        paletteId: paletteSelect.value as ReturnType<typeof getUserSettings>["render"]["paletteId"],
+      },
+    });
+  });
+  debugCardsOpenBtn.addEventListener("click", () => {
+    debugLayerOpen = true;
+    renderDebugLayer();
+  });
+  debugCancelBtn.addEventListener("click", () => {
+    debugLayerOpen = false;
+    renderDebugLayer();
+  });
   syncAudioControls();
+  syncPaletteControls();
 
   return {
     setVisible(v: boolean): void {
+      const changed = visible !== v;
+      visible = v;
       host.hidden = !v;
       root.hidden = !v;
       for (const el of preservedChildren) {
         el.hidden = v;
       }
+      if (changed && v) needsFullRender = true;
     },
     render(world: World | null): void {
       latestWorld = world;
+      if (!visible) return;
+
+      const worldChanged = lastRenderedWorld !== world;
+      if (!needsFullRender && !worldChanged) return;
+
       applySfxToLatestWorld();
       syncAudioControls();
+      syncPaletteControls();
       renderStats(world);
       renderCardsAndRelicsAndWeapon(world);
+      lastRenderedWorld = world;
+      needsFullRender = false;
     },
     destroy(): void {
       resumeBtn.removeEventListener("click", args.actions.onResume);

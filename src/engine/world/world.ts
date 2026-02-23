@@ -16,6 +16,8 @@ import type { FloorIntent } from "../../game/map/floorIntent";
 import type { TriggerDef } from "../../game/triggers/triggerTypes";
 import type { Dir8 } from "../render/sprites/dir8";
 import type { ZoneTrialObjectiveState } from "../../game/objectives/zoneObjectiveTypes";
+import type { EnemyAilmentsState } from "../../game/combat_mods/ailments/enemyAilments";
+import type { CardRewardState } from "../../game/combat_mods/rewards/cardRewardFlow";
 
 import type { WeaponId } from "../../game/content/weapons";
 
@@ -27,8 +29,7 @@ export type GameState =
     | "MENU"
     | "RUN"
     | "MAP"
-    | "CHEST"
-    | "LEVELUP"
+    | "REWARD"
     | "PAUSED"
     | "LOSE"
     | "WIN";
@@ -277,7 +278,10 @@ export type World = {
   // -------------------------
   weapons: { id: WeaponId; level: number; cdLeft: number }[];
   items: { id: any; level: number }[];
+  cards: string[];
   combatCardIds: string[];
+  cardReward: CardRewardState;
+  objectiveRewardClaimedKey: string | null;
   primaryWeaponCdLeft: number;
 
   // -------------------------
@@ -286,7 +290,6 @@ export type World = {
   level: number;
   xp: number;
   xpToNext: number;
-  pendingLevelUps: number;
 
   // Aim cache (used for melee cone / fallback aim)
   lastAimX: number;
@@ -319,6 +322,7 @@ export type World = {
   ePoisonDps: number[];
   ePoisonedOnDeath: boolean[];
   eSpawnTriggerId: (string | undefined)[];
+  eAilments: (EnemyAilmentsState | undefined)[];
 
   // Enemy spatial hash (perf)
   enemySpatialHash: SpatialHash;
@@ -369,6 +373,9 @@ export type World = {
   prDmgChaos: number[];
   prCritChance: number[];
   prCritMulti: number[];
+  prChanceBleed: number[];
+  prChanceIgnite: number[];
+  prChancePoison: number[];
   prR: number[];
   prPierce: number[];
   prIsmelee: boolean[];
@@ -605,14 +612,20 @@ export function createWorld(args: CreateWorldArgs): World {
     // Weapons + items
     weapons: [],
     items: [],
+    cards: [],
     combatCardIds: [],
+    cardReward: {
+      active: false,
+      source: "ZONE_TRIAL",
+      options: [],
+    },
+    objectiveRewardClaimedKey: null,
     primaryWeaponCdLeft: 0,
 
     // XP / Level
     level: 1,
     xp: 0,
     xpToNext: 6,
-    pendingLevelUps: 0,
 
     // Aim
     lastAimX: 1,
@@ -641,6 +654,7 @@ export function createWorld(args: CreateWorldArgs): World {
     ePoisonDps: [],
     ePoisonedOnDeath: [],
     eSpawnTriggerId: [],
+    eAilments: [],
 
     enemySpatialHash: createSpatialHash(128),
 
@@ -680,6 +694,9 @@ export function createWorld(args: CreateWorldArgs): World {
     prDmgChaos: [],
     prCritChance: [],
     prCritMulti: [],
+    prChanceBleed: [],
+    prChanceIgnite: [],
+    prChancePoison: [],
     prR: [],
     prPierce: [],
     prIsmelee: [],

@@ -5,3 +5,4 @@ export * from "./stats/modifierTypes";
 export * from "./stats/statKeys";
 export * from "./debug/combatModsSnapshot";
 export * from "./debug/combatRuntimeAssert";
+export * from "./rewards/cardRewardFlow";

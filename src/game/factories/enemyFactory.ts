@@ -5,6 +5,7 @@ import { ENEMY_TYPE, type EnemyType } from "../content/enemies";
 import { gridToWorld, worldToGrid } from "../coords/grid";
 import { anchorFromWorld } from "../coords/anchor";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
+import { createEnemyAilmentsState } from "../combat_mods/ailments/enemyAilments";
 
 export { ENEMY_TYPE };
 export type { EnemyType };
@@ -56,6 +57,7 @@ export function spawnEnemyGrid(
     w.ePoisonDps.push(0);
     w.ePoisonedOnDeath.push(false);
     w.eSpawnTriggerId.push(undefined);
+    w.eAilments.push(createEnemyAilmentsState());
     w.ezVisual.push(0);
     w.ezLogical.push(0);
 

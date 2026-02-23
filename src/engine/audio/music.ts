@@ -26,7 +26,7 @@ let musicMuted = false;
  * Per-track base mix volume (before master volume).
  * Useful if some tracks are louder than others.
  */
-const BASE_TRACK_VOLUME = 0;
+const BASE_TRACK_VOLUME = 1;
 
 function applyVolume() {
     if (!cur) return;

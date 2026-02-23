@@ -12,6 +12,7 @@ import { anchorFromWorld, writeAnchor } from "../../coords/anchor";
 import { enqueueDelayedExplosion } from "./delayedExplosions";
 import { resolveProjectileDamagePacket } from "../../combat_mods/runtime/critDamagePacket";
 import { assertValidCrit, assertValidDamageBundle } from "../../combat_mods/debug/combatRuntimeAssert";
+import { applyAilmentsFromHit, ensureEnemyAilmentsAt } from "../../combat_mods/ailments/applyAilmentsFromHit";
 import {
   getEnemyWorld,
   getPlayerWorld,
@@ -223,8 +224,28 @@ export function collisionsSystem(w: World, dt: number) {
         },
         w.rng.range(0, 1)
       );
+      const finalPhysDealt = resolvedDamage.physical;
+      const finalFireDealt = resolvedDamage.fire;
+      const finalChaosDealt = resolvedDamage.chaos;
       const isCrit = resolvedDamage.isCrit;
       const dmg = resolvedDamage.total;
+
+      if (!w.eAilments) w.eAilments = [];
+      const ailmentState = ensureEnemyAilmentsAt(w.eAilments, e);
+      applyAilmentsFromHit(
+        ailmentState,
+        { physical: finalPhysDealt, fire: finalFireDealt, chaos: finalChaosDealt },
+        {
+          bleed: w.prChanceBleed[p] ?? 0,
+          ignite: w.prChanceIgnite[p] ?? 0,
+          poison: w.prChancePoison[p] ?? 0,
+        },
+        {
+          bleed: w.rng.range(0, 1),
+          ignite: w.rng.range(0, 1),
+          poison: w.rng.range(0, 1),
+        }
+      );
       
       w.eHp[e] -= dmg;
 

@@ -20,6 +20,7 @@ export interface CardDef {
   id: string; // generic for now
   displayName: string; // generic for now
   rarity: 1 | 2 | 3 | 4;
+  powerTier: 1 | 2 | 3 | 4 | 5;
   mods: StatMod[];
 }
 

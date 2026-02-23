@@ -8,6 +8,7 @@ export interface CardCountEntry {
   name: string;
   count: number;
   rarity?: 1 | 2 | 3 | 4;
+  powerTier?: 1 | 2 | 3 | 4 | 5;
 }
 
 export interface CombatModsSnapshot {
@@ -36,6 +37,7 @@ export function aggregateCardCounts(cardIds: string[]): CardCountEntry[] {
       name: def?.displayName ?? id,
       count,
       rarity: def?.rarity,
+      powerTier: def?.powerTier,
     });
   }
 

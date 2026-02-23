@@ -116,3 +116,7 @@ export function updateUserSettings(
 
   return currentSettings;
 }
+
+export function isPauseDebugCardsEnabled(): boolean {
+  return !!currentSettings.debug.pauseDebugCards;
+}

@@ -63,7 +63,6 @@ export function xpSystem(w: World, _dt: number) {
         w.xp -= w.xpToNext;
         w.level++;
         w.xpToNext = Math.floor(w.xpToNext * 1.15 + 3);
-        w.pendingLevelUps++;
 
         // SFX: level up
         emitEvent(w, { type: "SFX", id: "LEVEL_UP", vol: 0.9, rate: 1 });
