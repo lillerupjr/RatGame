@@ -666,11 +666,43 @@ canvas { display:block; }
 #end .subline { opacity: 0.92; margin-bottom: 14px; white-space: pre-wrap; }
 #end button#endBtn { margin-top: 14px; width: 100%; padding: 12px 14px; border-radius: 12px; border: 0; cursor: pointer; font-weight: 900; background: rgba(255,255,255,0.16); color: #fff; }
 
-/* Level-up overlay */
-#levelup { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.62); z-index: 5; }
-#levelup .panel { width: min(720px, 94vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
-#levelup .title { font-size: 22px; font-weight: 900; margin-bottom: 6px; }
-#levelup .sub { opacity: 0.9; margin-bottom: 14px; }
+/* Deck overlays (reward + vendor) */
+.deckOverlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(120% 120% at 50% 5%, rgba(255, 245, 210, 0.08), transparent 46%),
+    rgba(6, 8, 14, 0.8);
+  z-index: 8;
+  backdrop-filter: blur(3px);
+}
+
+.deckOverlay .panel {
+  width: min(980px, 95vw);
+  padding: 20px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background:
+    linear-gradient(150deg, rgba(22, 26, 40, 0.96), rgba(13, 16, 26, 0.95));
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.55);
+  color: #edf0ff;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
+}
+
+.deckOverlay .title {
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  margin-bottom: 4px;
+}
+
+.deckOverlay .sub {
+  opacity: 0.92;
+  margin-bottom: 14px;
+  font-size: 14px;
+}
 
 /* Map overlay (shown between floors) */
 #map { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.62); z-index: 6; }
@@ -719,20 +751,135 @@ canvas { display:block; }
 .mapHitTitle { font-weight: 900; font-size: 14px; margin-bottom: 4px; }
 .mapHitDesc { opacity: 0.9; font-size: 12px; line-height: 1.25; }
 
-#luChoices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.choiceBtn {
+.deckCardGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.deckCardButton {
   text-align: left;
-  padding: 14px 14px;
+  padding: 14px;
   border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.14);
+  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
   cursor: pointer;
   color: #fff;
-  transition: transform 80ms ease, background 120ms ease, border-color 120ms ease;
+  transition: transform 80ms ease, background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
-.choiceBtn:hover { transform: translateY(-1px); background: rgba(255,255,255,0.11); border-color: rgba(255,255,255,0.18); }
-.choiceTitle { font-weight: 900; font-size: 16px; margin-bottom: 4px; }
-.choiceDesc { opacity: 0.9; font-size: 13px; line-height: 1.35; }
+
+.deckCardButton:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255,255,255,0.28);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.36);
+}
+
+.deckCardButton.selected,
+.deckCardButton:focus-visible {
+  outline: none;
+  border-color: rgba(125, 210, 255, 0.95);
+  box-shadow: 0 0 0 2px rgba(125, 210, 255, 0.35), 0 10px 24px rgba(0,0,0,0.42);
+}
+
+.deckCardTopRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.deckCardTier,
+.deckCardRarity {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.88;
+}
+
+.deckCardTitle {
+  font-size: 17px;
+  font-weight: 900;
+  margin-bottom: 6px;
+  line-height: 1.2;
+}
+
+.deckCardDesc {
+  font-size: 13px;
+  opacity: 0.95;
+  line-height: 1.35;
+  display: grid;
+  gap: 3px;
+}
+
+.deckCardButton.rarity-1 { border-left: 4px solid rgba(198, 207, 224, 0.75); }
+.deckCardButton.rarity-2 { border-left: 4px solid rgba(115, 196, 255, 0.9); }
+.deckCardButton.rarity-3 { border-left: 4px solid rgba(188, 129, 255, 0.9); }
+.deckCardButton.rarity-4 { border-left: 4px solid rgba(255, 188, 84, 0.95); }
+
+.vendorOverlay .panel { width: min(1040px, 95vw); }
+
+.vendorTopBar {
+  display: flex;
+  justify-content: flex-end;
+  font-size: 14px;
+  font-weight: 800;
+  opacity: 0.95;
+  margin-bottom: 6px;
+}
+
+.vendorPriceBadge {
+  border-radius: 999px;
+  padding: 3px 9px;
+  border: 1px solid rgba(255,255,255,0.22);
+  background: rgba(255,255,255,0.1);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.vendorCard .vendorStateText {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  opacity: 0.92;
+}
+
+.vendorCard.sold,
+.vendorCard:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+}
+
+.vendorCard.locked .vendorStateText { color: #ffb7b7; }
+.vendorCard.sold .vendorStateText { color: #ffd6a2; }
+.vendorCard.available .vendorStateText { color: #abffcb; }
+
+.vendorActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.vendorLeaveButton {
+  min-width: 160px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+
+.vendorLeaveButton:hover { background: rgba(255,255,255,0.14); }
+.vendorLeaveButton.selected,
+.vendorLeaveButton:focus-visible {
+  outline: none;
+  border-color: rgba(125, 210, 255, 0.95);
+  box-shadow: 0 0 0 2px rgba(125, 210, 255, 0.35);
+}
 
 /* Stat diff display for upgrades */
 .choiceStats {
@@ -774,5 +921,12 @@ canvas { display:block; }
 .statNew.statDown { color: #f87171; }
 
 @media (max-width: 720px) {
-  #luChoices { grid-template-columns: 1fr; }
+  .deckCardGrid { grid-template-columns: 1fr; }
+  .deckOverlay .title { font-size: 24px; }
+  .vendorActions { justify-content: stretch; }
+  .vendorLeaveButton { width: 100%; }
+}
+
+@media (min-width: 721px) and (max-width: 960px) {
+  .deckCardGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

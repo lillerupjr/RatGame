@@ -105,6 +105,7 @@ import { generateVendorCards } from "./vendor/generateVendorCards";
 import { createVendorState } from "./vendor/vendorState";
 import { tryPurchaseVendorCard } from "./vendor/vendorPurchase";
 import { mountCardRewardMenu } from "../ui/rewards/cardRewardMenu";
+import { mountVendorShopMenu } from "../ui/vendor/vendorShopMenu";
 import { tickSpawnDirector } from "./balance/spawnDirector";
 import { buildSurviveSpawnOverrides, SURVIVE_RAMP_CONFIG } from "./balance/surviveRamp";
 import { createFloorRewardBudget, type ObjectiveMode } from "./rewards/floorRewardBudget";
@@ -259,6 +260,7 @@ export function createGame(args: CreateGameArgs) {
   let activeInteractableId: string | null = null;
   let activeDialog: DialogState | null = null;
   let pendingNpcFaceRestoreId: string | null = null;
+  let vendorShopOpen = false;
 
   const staticMaps: TableMapDef[] = AUTHORED_MAP_DEFS;
 
@@ -271,26 +273,32 @@ export function createGame(args: CreateGameArgs) {
     return staticMaps[0];
   }
 
+  function restorePendingNpcFacing(): void {
+    if (!pendingNpcFaceRestoreId) return;
+    const npc = world.npcs.find((n) => n.id === pendingNpcFaceRestoreId);
+    if (npc) npc.faceRestoreAtMs = performance.now() + 3000;
+    pendingNpcFaceRestoreId = null;
+  }
+
+  function resolvePendingAdvanceAfterInteractionClose(): void {
+    if (!world.pendingAdvanceToNextFloor) return;
+    if (maybeHandleObjectiveCompletionReward()) {
+      world.pendingAdvanceToNextFloor = false;
+      return;
+    }
+    if (tryAdvanceAfterObjectiveCompletion()) {
+      world.pendingAdvanceToNextFloor = false;
+    }
+  }
+
   function setDialog(dialog: DialogState | null) {
     activeDialog = dialog;
     if (!dialog) {
-      if (pendingNpcFaceRestoreId) {
-        const npc = world.npcs.find((n) => n.id === pendingNpcFaceRestoreId);
-        if (npc) npc.faceRestoreAtMs = performance.now() + 3000;
-        pendingNpcFaceRestoreId = null;
-      }
+      restorePendingNpcFacing();
       args.ui.dialogEl.root.hidden = true;
       args.ui.dialogEl.text.textContent = "";
       args.ui.dialogEl.choices.innerHTML = "";
-      if (world.pendingAdvanceToNextFloor) {
-        if (maybeHandleObjectiveCompletionReward()) {
-          world.pendingAdvanceToNextFloor = false;
-          return;
-        }
-        if (tryAdvanceAfterObjectiveCompletion()) {
-          world.pendingAdvanceToNextFloor = false;
-        }
-      }
+      resolvePendingAdvanceAfterInteractionClose();
       return;
     }
     args.ui.dialogEl.root.hidden = false;
@@ -329,7 +337,7 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function openInteractDialog(interactable: Interactable) {
-    if (activeDialog) return;
+    if (activeDialog || vendorShopOpen) return;
     const npc = world.npcs.find((n) => n.tx === interactable.tx && n.ty === interactable.ty);
     if (npc) {
       const { playerTx, playerTy } = getPlayerTileAtCurrentPosition();
@@ -342,63 +350,7 @@ export function createGame(args: CreateGameArgs) {
       pendingNpcFaceRestoreId = npc.id;
     }
     if (interactable.kind === "SHOP") {
-      const openVendorCardShop = () => {
-        const vendor = world.vendor;
-        if (!vendor) {
-          setDialog(null);
-          return;
-        }
-
-        const choices: DialogChoice[] = [];
-        const price = 100;
-        for (let i = 0; i < vendor.cards.length; i++) {
-          const cardId = vendor.cards[i];
-          const cardName = getCardById(cardId)?.displayName ?? cardId;
-          const sold = !!vendor.purchased[i];
-          const canAfford = getGold(world) >= price;
-
-          if (sold) {
-            choices.push({
-              label: `${cardName} - SOLD`,
-              onSelect: () => openVendorCardShop(),
-            });
-            continue;
-          }
-
-          if (!canAfford) {
-            choices.push({
-              label: `${cardName} - 100 gold (Not enough gold)`,
-              onSelect: () => openVendorCardShop(),
-            });
-            continue;
-          }
-
-          choices.push({
-            label: `${cardName} - 100 gold`,
-            onSelect: () => {
-              tryPurchaseVendorCard(world, i);
-              openVendorCardShop();
-            },
-          });
-        }
-
-        choices.push({
-          label: "Leave",
-          onSelect: () => {
-            completeObjectiveById(OBJECTIVE_TRIGGER_IDS.vendor);
-            world.pendingAdvanceToNextFloor = true;
-            setDialog(null);
-          },
-        });
-
-        setDialog({
-          text: "Vendor - choose a card to buy",
-          selectedIndex: 0,
-          choices,
-        });
-      };
-
-      openVendorCardShop();
+      openVendorShop();
       return;
     }
     setDialog({
@@ -488,6 +440,12 @@ export function createGame(args: CreateGameArgs) {
     if (activeDialog) {
       activeInteractableId = null;
       args.hud.interactPrompt.textContent = "Press E to choose";
+      args.hud.interactPrompt.hidden = false;
+      return;
+    }
+    if (vendorShopOpen) {
+      activeInteractableId = null;
+      args.hud.interactPrompt.textContent = "Shop open";
       args.hud.interactPrompt.hidden = false;
       return;
     }
@@ -623,7 +581,8 @@ export function createGame(args: CreateGameArgs) {
   function applyRewardOutcome(outcome: RewardOutcome, cardSource: "ZONE_TRIAL" | "BOSS_CHEST"): boolean {
     syncRewardDebugFieldsFromBudget(world);
     if (outcome.type === "GRANT_CARD") {
-      if (activeDialog) setDialog(null);
+    if (activeDialog) setDialog(null);
+    if (vendorShopOpen) closeVendorShop(false);
       beginCardReward(world, cardSource, 3);
       world.state = "REWARD";
       world.lastCardRewardClaimKey = outcome.reason;
@@ -748,6 +707,26 @@ export function createGame(args: CreateGameArgs) {
       world.state = "RUN";
     },
   });
+  const vendorRoot = document.createElement("div");
+  vendorRoot.id = "vendorShop";
+  vendorRoot.hidden = true;
+  document.body.appendChild(vendorRoot);
+  const vendorPrice = 100;
+  const vendorShopMenu = mountVendorShopMenu({
+    root: vendorRoot,
+    onBuy: (index: number) => {
+      if (tryPurchaseVendorCard(world, index)) {
+        renderVendorShopIfNeeded();
+      }
+    },
+    onLeave: () => {
+      completeObjectiveById(OBJECTIVE_TRIGGER_IDS.vendor);
+      world.pendingAdvanceToNextFloor = true;
+      closeVendorShop(true);
+    },
+    onClose: () => closeVendorShop(false),
+  });
+  let lastVendorRenderKey = "";
   let lastRewardRenderKey = "";
 
   const renderRewardMenuIfNeeded = (): void => {
@@ -757,6 +736,49 @@ export function createGame(args: CreateGameArgs) {
     cardRewardMenu.render(reward.active ? reward : null);
     lastRewardRenderKey = key;
   };
+
+  function renderVendorShopIfNeeded(): void {
+    if (!vendorShopOpen) {
+      vendorShopMenu.render(null);
+      lastVendorRenderKey = "";
+      return;
+    }
+    const vendor = world.vendor;
+    if (!vendor) {
+      closeVendorShop(false);
+      return;
+    }
+    const key = `${getGold(world)}|${vendor.cards.join(",")}|${vendor.purchased.map((p) => (p ? "1" : "0")).join("")}`;
+    if (key === lastVendorRenderKey) return;
+    vendorShopMenu.render({
+      active: true,
+      gold: getGold(world),
+      price: vendorPrice,
+      cards: vendor.cards.map((cardId, index) => ({
+        cardId,
+        purchased: !!vendor.purchased[index],
+      })),
+    });
+    lastVendorRenderKey = key;
+  }
+
+  function openVendorShop(): void {
+    vendorShopOpen = true;
+    activeDialog = null;
+    args.ui.dialogEl.root.hidden = true;
+    args.ui.dialogEl.text.textContent = "";
+    args.ui.dialogEl.choices.innerHTML = "";
+    renderVendorShopIfNeeded();
+  }
+
+  function closeVendorShop(resolvePendingAdvance: boolean): void {
+    if (!vendorShopOpen) return;
+    vendorShopOpen = false;
+    vendorShopMenu.render(null);
+    lastVendorRenderKey = "";
+    restorePendingNpcFacing();
+    if (resolvePendingAdvance) resolvePendingAdvanceAfterInteractionClose();
+  }
   let pendingStartIntent: StartIntent | null = null;
   let pendingFloorIntent: FloorIntent | null = null;
   let preparedStart: PreparedStart | null = null;
@@ -1063,6 +1085,7 @@ export function createGame(args: CreateGameArgs) {
   function beginFloorLoad(floorIntent: FloorIntent): boolean {
     const w = world;
     setDialog(null);
+    closeVendorShop(false);
     if (w.delveMap && !floorIntent.mapId) {
       console.error("[enterFloor] delve floor intent missing mapId");
       return false;
@@ -1363,6 +1386,7 @@ export function createGame(args: CreateGameArgs) {
 
   function resetRun(mapId?: string, options?: { skipMapSelection?: boolean; seedOverride?: number }) {
     setDialog(null);
+    closeVendorShop(false);
     const seed = options?.seedOverride ?? ((Date.now() ^ (Math.random() * 1e9)) >>> 0);
     if (!options?.skipMapSelection) {
       applyMapSelection(mapId, seed);
@@ -1617,6 +1641,7 @@ export function createGame(args: CreateGameArgs) {
     (world as any).deterministicDelveMode = false;
     args.ui.mapEl.root.hidden = true;
     hideCardRewardMenu();
+    closeVendorShop(false);
     args.ui.endEl.root.hidden = true;
     args.ui.dialogEl.root.hidden = true;
     args.hud.root.hidden = true;
@@ -2050,6 +2075,7 @@ export function createGame(args: CreateGameArgs) {
     if (activeDialog) {
       handleDialogInput();
     }
+    renderVendorShopIfNeeded();
 
     // Handle pause states
     if (world.state === "REWARD" || world.state === "MAP") {
@@ -2082,7 +2108,7 @@ export function createGame(args: CreateGameArgs) {
     }
     if (world.state !== "RUN") return;
 
-    if (!activeDialog && input.interactPressed && activeInteractableId) {
+    if (!activeDialog && !vendorShopOpen && input.interactPressed && activeInteractableId) {
       const target = interactables.find((it) => it.id === activeInteractableId);
       if (target) {
         openInteractDialog(target);
@@ -2116,7 +2142,7 @@ export function createGame(args: CreateGameArgs) {
       }
     }
 
-    if (!activeDialog) {
+    if (!activeDialog && !vendorShopOpen) {
       movementSystem(world, input, dt);
     }
     neutralBirdAISystem(world, dt);
