@@ -130,14 +130,6 @@ export function mountVendorShopMenu(args: {
       btn.appendChild(name);
       btn.appendChild(desc);
       btn.appendChild(foot);
-      btn.addEventListener("mouseenter", () => {
-        selectedIndex = i;
-        renderCards();
-      });
-      btn.addEventListener("focus", () => {
-        selectedIndex = i;
-        renderCards();
-      });
       btn.addEventListener("click", () => args.onBuy(i));
       cards.appendChild(btn);
     }
@@ -146,14 +138,6 @@ export function mountVendorShopMenu(args: {
     leaveBtn.type = "button";
     leaveBtn.className = `vendorLeaveButton${selectedIndex === currentState.cards.length ? " selected" : ""}`;
     leaveBtn.textContent = "Leave";
-    leaveBtn.addEventListener("mouseenter", () => {
-      selectedIndex = currentState ? currentState.cards.length : 0;
-      renderCards();
-    });
-    leaveBtn.addEventListener("focus", () => {
-      selectedIndex = currentState ? currentState.cards.length : 0;
-      renderCards();
-    });
     leaveBtn.addEventListener("click", args.onLeave);
     actions.appendChild(leaveBtn);
   };
@@ -168,53 +152,12 @@ export function mountVendorShopMenu(args: {
     root.hidden = false;
   };
 
-  const onKeydown = (e: KeyboardEvent): void => {
-    if (!currentState || !currentState.active || root.hidden) return;
-    const slotCount = currentState.cards.length + 1; // + leave
-    if (slotCount <= 0) return;
-
-    if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A" || e.key === "ArrowUp" || e.key === "w" || e.key === "W") {
-      selectedIndex = (selectedIndex - 1 + slotCount) % slotCount;
-      renderCards();
-      e.preventDefault();
-      return;
-    }
-    if (e.key === "ArrowRight" || e.key === "d" || e.key === "D" || e.key === "ArrowDown" || e.key === "s" || e.key === "S") {
-      selectedIndex = (selectedIndex + 1) % slotCount;
-      renderCards();
-      e.preventDefault();
-      return;
-    }
-    if (e.key === "Enter") {
-      if (selectedIndex === currentState.cards.length) {
-        args.onLeave();
-      } else {
-        const card = currentState.cards[selectedIndex];
-        const canAfford = currentState.gold >= currentState.price;
-        if (!card?.purchased && canAfford) args.onBuy(selectedIndex);
-      }
-      e.preventDefault();
-      return;
-    }
-    if (e.key === "Escape") {
-      args.onClose();
-      e.preventDefault();
-    }
-  };
-
-  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-    window.addEventListener("keydown", onKeydown);
-  }
-
   return {
     render,
     destroy: () => {
       root.hidden = true;
       root.innerHTML = "";
       currentState = null;
-      if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
-        window.removeEventListener("keydown", onKeydown);
-      }
     },
   };
 }

@@ -96,14 +96,6 @@ export function mountCardRewardMenu(args: {
       btn.appendChild(tierRow);
       btn.appendChild(titleRow);
       btn.appendChild(desc);
-      btn.addEventListener("mouseenter", () => {
-        selectedIndex = i;
-        renderCards();
-      });
-      btn.addEventListener("focus", () => {
-        selectedIndex = i;
-        renderCards();
-      });
       btn.addEventListener("click", () => args.onPick(cardId));
       choices.appendChild(btn);
     }
@@ -120,40 +112,12 @@ export function mountCardRewardMenu(args: {
     root.hidden = false;
   };
 
-  const onKeydown = (e: KeyboardEvent): void => {
-    if (!currentState || !currentState.active || root.hidden) return;
-    if (currentState.options.length === 0) return;
-    if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A" || e.key === "ArrowUp" || e.key === "w" || e.key === "W") {
-      selectedIndex = (selectedIndex - 1 + currentState.options.length) % currentState.options.length;
-      renderCards();
-      e.preventDefault();
-      return;
-    }
-    if (e.key === "ArrowRight" || e.key === "d" || e.key === "D" || e.key === "ArrowDown" || e.key === "s" || e.key === "S") {
-      selectedIndex = (selectedIndex + 1) % currentState.options.length;
-      renderCards();
-      e.preventDefault();
-      return;
-    }
-    if (e.key === "Enter") {
-      const cardId = currentState.options[selectedIndex];
-      if (cardId) args.onPick(cardId);
-      e.preventDefault();
-    }
-  };
-  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-    window.addEventListener("keydown", onKeydown);
-  }
-
   return {
     render,
     destroy: () => {
       root.hidden = true;
       root.innerHTML = "";
       currentState = null;
-      if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
-        window.removeEventListener("keydown", onKeydown);
-      }
     },
   };
 }
