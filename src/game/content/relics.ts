@@ -8,7 +8,7 @@ export const RELICS: RelicDef[] = [
   {
     id: "RELIC_TRAINING",
     title: "Training Emblem",
-    desc: "Gain 5% more experience.",
+    desc: "No additional effect.",
   },
   {
     id: "RELIC_STURDY",

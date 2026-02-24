@@ -2,6 +2,7 @@ import type { World } from "../../engine/world/world";
 import type { FloorIntent } from "../map/floorIntent";
 import { RNG } from "../util/rng";
 import { RELICS } from "../content/relics";
+import { addGold, getGold } from "../economy/gold";
 
 export type VendorOffer = {
   kind: "RELIC" | "UPGRADE" | "HEAL" | "REROLL";
@@ -40,8 +41,8 @@ export function generateVendorOffers(intent: FloorIntent): VendorOffer[] {
 }
 
 export function applyVendorPurchase(world: World, offer: VendorOffer): boolean {
-  if (world.gold < offer.cost) return false;
-  world.gold -= offer.cost;
+  if (getGold(world) < offer.cost) return false;
+  addGold(world, -offer.cost);
   world.vendorPurchases = [...(world.vendorPurchases ?? []), offer.id];
   return true;
 }

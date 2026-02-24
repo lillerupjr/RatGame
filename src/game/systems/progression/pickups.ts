@@ -7,7 +7,7 @@ import { getPickupWorld, getPlayerWorld } from "../../coords/worldViews";
 import { handleChestPickup } from "../sim/pickupHandlers";
 
 export const PICKUP_KIND = {
-  XP: 1,
+  GOLD: 1,
   CHEST: 2,
 } as const;
 
@@ -37,7 +37,7 @@ export function pickupsSystem(w: World, dt: number) {
   }
 
   // Pickups drift toward player when close (classic vacuum feel)
-  // OR when magnet is active (pulls ALL XP from anywhere)
+  // OR when magnet is active (pulls all gold orbs from anywhere)
   const pw = getPlayerWorld(w, KENNEY_TILE_WORLD);
   const px = pw.wx;
   const py = pw.wy;
@@ -52,13 +52,13 @@ export function pickupsSystem(w: World, dt: number) {
     const dy = py - wy;
     const d = Math.hypot(dx, dy);
     
-    // Magnet pulls all XP pickups regardless of distance
-    const isXp = (w.xKind[i] ?? PICKUP_KIND.XP) === PICKUP_KIND.XP;
-    const shouldPull = d < w.pickupRadius || (w.magnetActive && isXp);
+    // Magnet pulls all gold pickups regardless of distance
+    const isGold = (w.xKind[i] ?? PICKUP_KIND.GOLD) === PICKUP_KIND.GOLD;
+    const shouldPull = d < w.pickupRadius || (w.magnetActive && isGold);
     
     if (shouldPull) {
       // Magnet pulls faster and from further away
-      const pull = w.magnetActive && isXp ? 800 : 420; // px/s
+      const pull = w.magnetActive && isGold ? 800 : 420; // px/s
       const ux = dx / (d || 1);
       const uy = dy / (d || 1);
       wx += ux * pull * dt;
@@ -68,12 +68,12 @@ export function pickupsSystem(w: World, dt: number) {
   }
 }
 
-/** Spawn an XP pickup at world coordinates. */
-export function spawnXp(w: World, x: number, y: number, value: number) {
+/** Spawn a gold pickup at world coordinates. */
+export function spawnGold(w: World, x: number, y: number, value: number = 1) {
   const i = w.xAlive.length;
 
   w.xAlive.push(true);
-  w.xKind.push(PICKUP_KIND.XP);
+  w.xKind.push(PICKUP_KIND.GOLD);
   const anchor = anchorFromWorld(x, y, KENNEY_TILE_WORLD);
   w.xgxi.push(anchor.gxi);
   w.xgyi.push(anchor.gyi);
@@ -85,16 +85,16 @@ export function spawnXp(w: World, x: number, y: number, value: number) {
   return i;
 }
 
-/** Spawn an XP pickup at grid coordinates. */
-export function spawnXpGrid(
+/** Spawn a gold pickup at grid coordinates. */
+export function spawnGoldGrid(
   w: World,
   gx: number,
   gy: number,
-  value: number,
+  value: number = 1,
   tileWorld: number = KENNEY_TILE_WORLD
 ) {
   const pos = gridToWorld(gx, gy, tileWorld);
-  return spawnXp(w, pos.wx, pos.wy, value);
+  return spawnGold(w, pos.wx, pos.wy, value);
 }
 
 /** Spawn a chest pickup at world coordinates. */

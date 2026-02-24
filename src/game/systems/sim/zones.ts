@@ -6,9 +6,11 @@ import { onEnemyKilledForChallenge } from "../progression/roomChallenge";
 import { anchorFromWorld, writeAnchor } from "../../coords/anchor";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getEnemyWorld, getPlayerWorld, getZoneWorld } from "../../coords/worldViews";
+import { getUserSettings } from "../../../userSettings";
 
 /** Update zones, apply periodic damage, and process delayed explosions. */
 export function zonesSystem(w: World, dt: number) {
+    const godMode = !!getUserSettings().debug.godMode;
     const PLAYER_R = w.playerR;
     const T = KENNEY_TILE_WORLD;
     const pw = getPlayerWorld(w, T);
@@ -80,7 +82,7 @@ export function zonesSystem(w: World, dt: number) {
                 const dy = py - zy;
                 const rr = zr + PLAYER_R;
                 if (dx * dx + dy * dy <= rr * rr) {
-                    w.playerHp -= pdmg;
+                    if (!godMode) w.playerHp -= pdmg;
                     emitEvent(w, { type: "PLAYER_HIT", damage: pdmg, x: px, y: py });
                 }
             }
@@ -132,7 +134,6 @@ export function zonesSystem(w: World, dt: number) {
                     enemyIndex: e,
                     x: ew.wx,
                     y: ew.wy,
-                    xpValue: 1,
                     source: "OTHER",
                 });
             }

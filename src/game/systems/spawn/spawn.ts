@@ -21,6 +21,8 @@ import type { EnemyPowerTier } from "../../balance/enemyPower";
  */
 /** Handle stage timeline spawns and floor trickle spawns. */
 export function spawnSystem(w: World, dt: number) {
+  if (w.floorEndCountdownActive) return;
+  if (w.state !== "RUN") return;
   // Floors only (no spawns during boss/transition)
   if (w.runState !== "FLOOR") return;
   const pw = getPlayerWorld(w, KENNEY_TILE_WORLD);

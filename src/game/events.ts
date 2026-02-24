@@ -16,8 +16,6 @@ export type SfxId =
     | "ENEMY_HIT"
     | "ENEMY_KILL"
     | "PLAYER_HIT"
-    | "XP_PICKUP"
-    | "LEVEL_UP"
     | "CHEST_PICKUP"
     | "FLOOR_START"
     | "BOSS_START"
@@ -47,7 +45,6 @@ export type GameEvent =
     enemyIndex: number;
     x: number;
     y: number;
-    xpValue: number;
     source:
         | "KNIFE"
         | "PISTOL"

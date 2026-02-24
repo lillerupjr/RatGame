@@ -42,8 +42,6 @@ export function audioSystem(w: World, dt: number) {
             PLAYER_HIT: 1.0,
 
             // progression
-            XP_PICKUP: 1.0,
-            LEVEL_UP: 1.0,
             CHEST_PICKUP: 1.0,
 
             // structure
@@ -95,7 +93,6 @@ export function audioSystem(w: World, dt: number) {
     anyW._sfxKillCd = Math.max(0, (anyW._sfxKillCd ?? 0) - dt);
     anyW._sfxExplodeCd = Math.max(0, (anyW._sfxExplodeCd ?? 0) - dt);
     anyW._sfxFireCd = Math.max(0, (anyW._sfxFireCd ?? 0) - dt);
-    anyW._sfxXpCd = Math.max(0, (anyW._sfxXpCd ?? 0) - dt);
 
     // -------------------------
     // Consume events
@@ -135,16 +132,6 @@ export function audioSystem(w: World, dt: number) {
 
                 const base = ev.vol ?? 0.75;
                 void playSfx(ev.id as any, { vol: volFor(ev.id, base), rate: ev.rate ?? 1 });
-                continue;
-            }
-
-            // XP pickup (throttled)
-            if (ev.id === "XP_PICKUP") {
-                if (anyW._sfxXpCd > 0) continue;
-                anyW._sfxXpCd = 0.04;
-
-                const base = ev.vol ?? 0.35;
-                void playSfx("XP_PICKUP", { vol: volFor("XP_PICKUP", base), rate: ev.rate ?? 1 });
                 continue;
             }
 

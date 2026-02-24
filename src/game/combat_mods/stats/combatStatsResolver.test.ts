@@ -5,7 +5,7 @@ import { STAT_KEYS } from "./statKeys";
 import type { CardDef, StatMod } from "./modifierTypes";
 
 function mkCard(id: string, mods: StatMod[]): CardDef {
-  return { id, displayName: id, rarity: 1, powerTier: 1, mods };
+  return { id, isEnabled: true, displayName: id, rarity: 1, powerTier: 1, mods };
 }
 
 describe("resolveWeaponStats", () => {

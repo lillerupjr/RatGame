@@ -1,3 +1,5 @@
+import { cardViewModel, rarityClass } from "../cards/cardUi";
+
 export function mountCardRewardMenu(args: {
   root: HTMLElement;
   onPick: (cardId: string) => void;
@@ -7,7 +9,12 @@ export function mountCardRewardMenu(args: {
 } {
   const root = args.root;
 
+  let currentState: { active: boolean; source: string; options: string[] } | null = null;
+  let selectedIndex = 0;
+
   const ensureStructure = () => {
+    const existing = root.className ? `${root.className} ` : "";
+    root.className = `${existing}deckOverlay rewardOverlay`.trim();
     let panel = root.querySelector(".panel") as HTMLElement | null;
     if (!panel) {
       panel = document.createElement("div");
@@ -29,12 +36,13 @@ export function mountCardRewardMenu(args: {
       panel.appendChild(sub);
     }
 
-    let choices = panel.querySelector("#luChoices") as HTMLElement | null;
+    let choices = (panel.querySelector(".deckCardGrid") as HTMLElement | null)
+      ?? (panel.querySelector("#luChoices") as HTMLElement | null);
     if (!choices) {
       choices = document.createElement("div");
-      choices.id = "luChoices";
       panel.appendChild(choices);
     }
+    choices.className = "deckCardGrid";
 
     return { title, sub, choices };
   };
@@ -44,38 +52,63 @@ export function mountCardRewardMenu(args: {
     return "Zone Trial";
   };
 
-  const render = (state: { active: boolean; source: string; options: string[] } | null): void => {
-    if (!state || !state.active) {
-      root.hidden = true;
-      return;
-    }
-
+  const renderCards = (): void => {
+    if (!currentState || !currentState.active) return;
     const { title, sub, choices } = ensureStructure();
-    title.textContent = "Reward";
-    sub.textContent = `Choose 1 card (${sourceLabel(state.source)})`;
+    title.textContent = "Choose a Card";
+    sub.textContent = `Pick 1 reward (${sourceLabel(currentState.source)})`;
     choices.innerHTML = "";
+    if (selectedIndex >= currentState.options.length) selectedIndex = 0;
 
-    for (let i = 0; i < state.options.length; i++) {
-      const cardId = state.options[i];
+    for (let i = 0; i < currentState.options.length; i++) {
+      const cardId = currentState.options[i];
+      const card = cardViewModel(cardId);
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "choiceBtn";
+      btn.className = `deckCardButton ${rarityClass(card.rarity)}${i === selectedIndex ? " selected" : ""}`;
       btn.dataset.cardId = cardId;
+      btn.dataset.index = String(i);
+      btn.dataset.selected = i === selectedIndex ? "true" : "false";
+
+      const tierRow = document.createElement("div");
+      tierRow.className = "deckCardTopRow";
+      const tier = document.createElement("span");
+      tier.className = "deckCardTier";
+      tier.textContent = card.tier ? `Tier ${card.tier}` : "Tier ?";
+      const rarity = document.createElement("span");
+      rarity.className = "deckCardRarity";
+      rarity.textContent = card.rarity ? `R${card.rarity}` : "R?";
+      tierRow.appendChild(tier);
+      tierRow.appendChild(rarity);
 
       const titleRow = document.createElement("div");
-      titleRow.className = "choiceTitle";
-      titleRow.textContent = cardId;
+      titleRow.className = "deckCardTitle";
+      titleRow.textContent = card.name;
 
       const desc = document.createElement("div");
-      desc.className = "choiceDesc";
-      desc.textContent = "Pick this card";
+      desc.className = "deckCardDesc";
+      for (let lineIdx = 0; lineIdx < card.lines.length; lineIdx++) {
+        const line = document.createElement("div");
+        line.textContent = card.lines[lineIdx];
+        desc.appendChild(line);
+      }
 
+      btn.appendChild(tierRow);
       btn.appendChild(titleRow);
       btn.appendChild(desc);
       btn.addEventListener("click", () => args.onPick(cardId));
       choices.appendChild(btn);
     }
+  };
 
+  const render = (state: { active: boolean; source: string; options: string[] } | null): void => {
+    currentState = state;
+    if (!currentState || !currentState.active) {
+      root.hidden = true;
+      return;
+    }
+    if (selectedIndex >= currentState.options.length) selectedIndex = 0;
+    renderCards();
     root.hidden = false;
   };
 
@@ -84,6 +117,7 @@ export function mountCardRewardMenu(args: {
     destroy: () => {
       root.hidden = true;
       root.innerHTML = "";
+      currentState = null;
     },
   };
 }

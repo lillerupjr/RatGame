@@ -38,6 +38,9 @@ export type DebugSettings = {
   mapOverlaysDisabled: boolean;
   rampFaces: boolean;
   forceSpawnOverride: boolean;
+  godMode: boolean;
+  dmgMult: number;
+  fireRateMult: number;
   entityAnchorOverlay: boolean;
   pauseDebugCards: boolean;
   waterFlowRate: number;
@@ -45,7 +48,10 @@ export type DebugSettings = {
   objectives: ObjectiveDebugSettings;
 };
 
-export type BooleanDebugSettingKey = Exclude<keyof DebugSettings, "lightingMaskDebugMode" | "waterFlowRate" | "neutralBirdAI" | "objectives">;
+export type BooleanDebugSettingKey = Exclude<
+  keyof DebugSettings,
+  "lightingMaskDebugMode" | "waterFlowRate" | "dmgMult" | "fireRateMult" | "neutralBirdAI" | "objectives"
+>;
 
 export type DebugToggleDefinition = {
   key: BooleanDebugSettingKey;
@@ -86,6 +92,7 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "mapOverlaysDisabled", label: "mapOverlaysDisabled" },
   { key: "rampFaces", label: "rampFaces" },
   { key: "forceSpawnOverride", label: "forceSpawnOverride" },
+  { key: "godMode", label: "godMode" },
   { key: "entityAnchorOverlay", label: "entityAnchorOverlay" },
   { key: "pauseDebugCards", label: "Enable Pause Debug Cards" },
 ] as const;
@@ -110,6 +117,9 @@ export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   mapOverlaysDisabled: false,
   rampFaces: false,
   forceSpawnOverride: false,
+  godMode: false,
+  dmgMult: 1,
+  fireRateMult: 1,
   entityAnchorOverlay: false,
   pauseDebugCards: false,
   waterFlowRate: 1,

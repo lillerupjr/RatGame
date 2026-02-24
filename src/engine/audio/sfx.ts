@@ -31,8 +31,6 @@ export const SFX_VOL: Record<SfxId, number> = {
     ENEMY_KILL: 0.2,
     PLAYER_HIT: 1.0,
 
-    XP_PICKUP: 1.0,
-    LEVEL_UP: 1.0,
     CHEST_PICKUP: 1.0,
 
     FLOOR_START: 1.0,
@@ -64,8 +62,6 @@ const FILES: Record<SfxId, string> = {
     ENEMY_KILL: "enemy_kill.wav",
     PLAYER_HIT: "player_hit.wav",
 
-    XP_PICKUP: "xp_pickup.wav",
-    LEVEL_UP: "level_up.wav",
     CHEST_PICKUP: "chest_pickup.wav",
 
     FLOOR_START: "floor_start.wav",

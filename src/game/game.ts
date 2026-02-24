@@ -9,7 +9,7 @@ import { ailmentTickSystem } from "./combat_mods/systems/ailmentTickSystem";
 import { collisionsSystem } from "./systems/sim/collisions";
 import { projectilesSystem } from "./systems/sim/projectiles";
 import { pickupsSystem } from "./systems/progression/pickups";
-import { xpSystem } from "./systems/progression/xp";
+import { dropsSystem } from "./systems/progression/drops";
 import { renderSystem } from "./systems/presentation/render";
 import { zonesSystem } from "./systems/sim/zones";
 import { onKillExplodeSystem } from "./systems/sim/onKillExplode";
@@ -18,10 +18,13 @@ import { audioSystem } from "./systems/presentation/audio";
 import { preloadSfx } from "../engine/audio/sfx";
 import { roomChallengeSystem } from "./systems/progression/roomChallenge";
 import { triggerSystem } from "./systems/progression/triggerSystem";
-import { objectiveSystem } from "./systems/progression/objective";
+import {
+  isFloorEndCountdownDone,
+  maybeStartFloorEndCountdown,
+  tickFloorEndCountdown,
+} from "./systems/progression/floorEndCountdown";
+import { hasCompletedAnyObjective, objectiveSystem } from "./systems/progression/objective";
 import { outcomeSystem } from "./systems/progression/outcomeSystem";
-import { goldSystem } from "./systems/progression/gold";
-import { vendorSystem } from "./systems/progression/vendorSystem";
 import { bossZoneSpawnSystem } from "./systems/progression/bossZoneSpawn";
 
 import { formatTimeMMSS } from "./util/time";
@@ -80,7 +83,6 @@ import { objectiveSpecFromFloorIntent } from "./map/floorObjectiveBinding";
 import { mapSourceFromFloorIntent } from "./map/floorMapSourceBinding";
 import { applyFloorOverlays } from "./map/floorOverlays";
 import { setObjectives, setObjectivesFromSpec } from "./systems/progression/objective";
-import { generateVendorOffers } from "./events/vendor";
 import { RNG } from "./util/rng";
 import { applyObjective } from "./map/objectiveTransforms";
 import { objectiveIdFromArchetype } from "./map/objectivePlan";
@@ -96,18 +98,18 @@ import { getZoneTrialObjectiveState, startZoneTrial, updateZoneTrialObjective } 
 import { collectRuntimeSpriteIdsToPrewarm } from "./render/prewarmSprites";
 import { resolveActivePaletteId } from "./render/activePalette";
 import { applySfxSettingsToWorld } from "./audio/audioSettings";
-import { chooseCardReward, ensureCardRewardState } from "./combat_mods/rewards/cardRewardFlow";
-import {
-  processBossMilestoneRewards,
-  processChestOpenRequested,
-  processObjectiveCompletionReward,
-  processSurviveMilestoneRewards,
-  processZoneClearedReward,
-  resetFloorCardRewardBudget,
-} from "./combat_mods/rewards/rewardTriggers";
+import { beginCardReward, chooseCardReward, ensureCardRewardState } from "./combat_mods/rewards/cardRewardFlow";
+import { addGold, getGold } from "./economy/gold";
+import { getCardById } from "./combat_mods/content/cards/cardPool";
+import { generateVendorCards } from "./vendor/generateVendorCards";
+import { createVendorState } from "./vendor/vendorState";
+import { tryPurchaseVendorCard } from "./vendor/vendorPurchase";
 import { mountCardRewardMenu } from "../ui/rewards/cardRewardMenu";
+import { mountVendorShopMenu } from "../ui/vendor/vendorShopMenu";
 import { tickSpawnDirector } from "./balance/spawnDirector";
 import { buildSurviveSpawnOverrides, SURVIVE_RAMP_CONFIG } from "./balance/surviveRamp";
+import { createFloorRewardBudget, type ObjectiveMode } from "./rewards/floorRewardBudget";
+import { handleRewardEvent, type RewardOutcome } from "./rewards/rewardDirector";
 
 
 type HudRefs = {
@@ -199,6 +201,7 @@ export function precomputeStaticMapData(): void {
 
 /** Create a game instance and return update/render/start handlers. */
 export function createGame(args: CreateGameArgs) {
+  args.hud.lvlPill.hidden = false;
 
   // ------------------------------------------------------------
   // DEBUG: optional spawn override (OFF by default)
@@ -257,6 +260,7 @@ export function createGame(args: CreateGameArgs) {
   let activeInteractableId: string | null = null;
   let activeDialog: DialogState | null = null;
   let pendingNpcFaceRestoreId: string | null = null;
+  let vendorShopOpen = false;
 
   const staticMaps: TableMapDef[] = AUTHORED_MAP_DEFS;
 
@@ -269,26 +273,32 @@ export function createGame(args: CreateGameArgs) {
     return staticMaps[0];
   }
 
+  function restorePendingNpcFacing(): void {
+    if (!pendingNpcFaceRestoreId) return;
+    const npc = world.npcs.find((n) => n.id === pendingNpcFaceRestoreId);
+    if (npc) npc.faceRestoreAtMs = performance.now() + 3000;
+    pendingNpcFaceRestoreId = null;
+  }
+
+  function resolvePendingAdvanceAfterInteractionClose(): void {
+    if (!world.pendingAdvanceToNextFloor) return;
+    if (maybeHandleObjectiveCompletionReward()) {
+      world.pendingAdvanceToNextFloor = false;
+      return;
+    }
+    if (tryAdvanceAfterObjectiveCompletion()) {
+      world.pendingAdvanceToNextFloor = false;
+    }
+  }
+
   function setDialog(dialog: DialogState | null) {
     activeDialog = dialog;
     if (!dialog) {
-      if (pendingNpcFaceRestoreId) {
-        const npc = world.npcs.find((n) => n.id === pendingNpcFaceRestoreId);
-        if (npc) npc.faceRestoreAtMs = performance.now() + 3000;
-        pendingNpcFaceRestoreId = null;
-      }
+      restorePendingNpcFacing();
       args.ui.dialogEl.root.hidden = true;
       args.ui.dialogEl.text.textContent = "";
       args.ui.dialogEl.choices.innerHTML = "";
-      if (world.pendingAdvanceToNextFloor) {
-        if (maybeBeginObjectiveCardReward()) {
-          world.pendingAdvanceToNextFloor = false;
-          return;
-        }
-        if (tryAdvanceAfterObjectiveCompletion()) {
-          world.pendingAdvanceToNextFloor = false;
-        }
-      }
+      resolvePendingAdvanceAfterInteractionClose();
       return;
     }
     args.ui.dialogEl.root.hidden = false;
@@ -327,7 +337,7 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function openInteractDialog(interactable: Interactable) {
-    if (activeDialog) return;
+    if (activeDialog || vendorShopOpen) return;
     const npc = world.npcs.find((n) => n.tx === interactable.tx && n.ty === interactable.ty);
     if (npc) {
       const { playerTx, playerTy } = getPlayerTileAtCurrentPosition();
@@ -340,24 +350,7 @@ export function createGame(args: CreateGameArgs) {
       pendingNpcFaceRestoreId = npc.id;
     }
     if (interactable.kind === "SHOP") {
-      setDialog({
-        text: "Open shop?",
-        selectedIndex: 0,
-        choices: [
-          {
-            label: "Yes",
-            onSelect: () => {
-              completeObjectiveById(OBJECTIVE_TRIGGER_IDS.vendor);
-              world.pendingAdvanceToNextFloor = true;
-              showInfoDialog("Objective completed. Proceed when ready.");
-            },
-          },
-          {
-            label: "No",
-            onSelect: () => setDialog(null),
-          },
-        ],
-      });
+      openVendorShop();
       return;
     }
     setDialog({
@@ -450,6 +443,12 @@ export function createGame(args: CreateGameArgs) {
       args.hud.interactPrompt.hidden = false;
       return;
     }
+    if (vendorShopOpen) {
+      activeInteractableId = null;
+      args.hud.interactPrompt.textContent = "Shop open";
+      args.hud.interactPrompt.hidden = false;
+      return;
+    }
     const pg = gridAtPlayer(world);
     const pw = gridToWorld(pg.gx, pg.gy, KENNEY_TILE_WORLD);
     const { playerTx, playerTy } = getPlayerTileAtCurrentPosition();
@@ -511,18 +510,20 @@ export function createGame(args: CreateGameArgs) {
     }
   }
 
-  function hasCompletedFloorObjective(): boolean {
-    for (let i = 0; i < world.objectiveStates.length; i++) {
-      if (world.objectiveStates[i]?.status === "COMPLETED") return true;
-    }
-    return false;
-  }
-
   function tryAdvanceAfterObjectiveCompletion(): boolean {
-    if (activeDialog) return false;
-    if (!(world.runState === "FLOOR" && hasCompletedFloorObjective() && !world.bossRewardPending)) {
-      return false;
+    if (!hasCompletedAnyObjective(world)) return false;
+    const isLegacyFinalFloor =
+      !isDeterministicDelveMode() &&
+      !world.delveMap &&
+      (world.floorIndex ?? 0) >= FLOORS_PER_RUN - 1 &&
+      world.runState !== "TRANSITION";
+    if (isLegacyFinalFloor) {
+      completeRun(world);
+      return true;
     }
+    if (world.runState === "TRANSITION") return false;
+    if (world.state === "REWARD" && world.cardReward?.active) return false;
+    if (world.floorEndCountdownActive && world.floorEndCountdownSec > 0) return false;
 
     if (isDeterministicDelveMode()) {
       showDeterministicFloorPicker(
@@ -544,44 +545,104 @@ export function createGame(args: CreateGameArgs) {
     return true;
   }
 
-  function maybeBeginObjectiveCardReward(): boolean {
-    if (world.state !== "RUN") return false;
-    if (world.runState !== "FLOOR") return false;
-    const hasCompletedObjective =
-      world.objectiveStates.some((s) => s?.status === "COMPLETED") ||
-      !!(world as any).zoneTrialObjective?.completed;
-    if (!hasCompletedObjective) return false;
-    if (activeDialog) setDialog(null);
-    if (!processObjectiveCompletionReward(world, 3)) return false;
-    renderRewardMenuIfNeeded();
-    return true;
+  function objectiveModeForFloor(w: World): ObjectiveMode {
+    if (w.floorArchetype === "SURVIVE") return "SURVIVE_TRIAL";
+    if (w.floorArchetype === "TIME_TRIAL") return "ZONE_TRIAL";
+    return "NORMAL";
   }
 
-  function maybeBeginZoneClearedCardReward(): boolean {
-    if (world.state !== "RUN") return false;
-    if (world.runState !== "FLOOR") return false;
-    if (activeDialog) setDialog(null);
-    if (!processZoneClearedReward(world, 3)) return false;
-    renderRewardMenuIfNeeded();
-    return true;
+  function floorDepthForRewards(w: World): number {
+    if (Number.isFinite(w.delveDepth) && w.delveDepth > 0) return w.delveDepth;
+    return (w.floorIndex ?? 0) + 1;
   }
 
-  function maybeBeginBossMilestoneCardReward(): boolean {
-    if (world.state !== "RUN") return false;
-    if (world.runState !== "FLOOR") return false;
-    if (activeDialog) setDialog(null);
-    if (!processBossMilestoneRewards(world, 3)) return false;
-    renderRewardMenuIfNeeded();
-    return true;
+  function consumeFirstZoneClearedSignal(w: World): (1 | 2) | null {
+    const signals = w.triggerSignals;
+    for (let i = 0; i < signals.length; i++) {
+      const id = signals[i]?.triggerId;
+      if (typeof id !== "string" || !id.startsWith(OBJECTIVE_TRIGGER_IDS.zoneClearedPrefix)) continue;
+      signals.splice(i, 1);
+      const raw = Number.parseInt(id.slice(OBJECTIVE_TRIGGER_IDS.zoneClearedPrefix.length), 10);
+      if (raw === 1 || raw === 2) return raw;
+      return null;
+    }
+    return null;
   }
 
-  function maybeBeginSurviveMilestoneCardReward(): boolean {
-    if (world.state !== "RUN") return false;
-    if (world.runState !== "FLOOR") return false;
+  function syncRewardDebugFieldsFromBudget(w: World): void {
+    const budget = w.floorRewardBudget;
+    const nonObjectiveUsed = 2 - budget.nonObjectiveCardsRemaining;
+    const objectiveUsed = budget.objectiveCardAvailable ? 0 : 1;
+    w.cardRewardBudgetTotal = 3;
+    w.cardRewardBudgetUsed = nonObjectiveUsed + objectiveUsed;
+    w.cardRewardClaimKeys = Object.keys(budget.fired);
+  }
+
+  function applyRewardOutcome(outcome: RewardOutcome, cardSource: "ZONE_TRIAL" | "BOSS_CHEST"): boolean {
+    syncRewardDebugFieldsFromBudget(world);
+    if (outcome.type === "GRANT_CARD") {
     if (activeDialog) setDialog(null);
-    if (!processSurviveMilestoneRewards(world, 3)) return false;
-    renderRewardMenuIfNeeded();
-    return true;
+    if (vendorShopOpen) closeVendorShop(false);
+      beginCardReward(world, cardSource, 3);
+      world.state = "REWARD";
+      world.lastCardRewardClaimKey = outcome.reason;
+      renderRewardMenuIfNeeded();
+      return true;
+    }
+    if (outcome.type === "GRANT_GOLD") {
+      addGold(world, outcome.amount);
+      world.lastCardRewardClaimKey = outcome.reason;
+      return false;
+    }
+    world.lastCardRewardClaimKey = outcome.reason;
+    return false;
+  }
+
+  function maybeHandleZoneTrialMilestoneReward(): boolean {
+    if (world.state !== "RUN" || world.runState !== "FLOOR") return false;
+    if (world.floorRewardBudget.mode !== "ZONE_TRIAL") return false;
+    const zoneIndex = consumeFirstZoneClearedSignal(world);
+    if (!zoneIndex) return false;
+    const outcome = handleRewardEvent(
+      world.floorRewardBudget,
+      { type: "ZONE_COMPLETED", zoneIndex },
+      { depth: floorDepthForRewards(world) }
+    );
+    return applyRewardOutcome(outcome, "ZONE_TRIAL");
+  }
+
+  function maybeHandleSurviveOneMinuteReward(): boolean {
+    if (world.state !== "RUN" || world.runState !== "FLOOR") return false;
+    if (world.floorRewardBudget.mode !== "SURVIVE_TRIAL") return false;
+    if ((world.timeSec ?? 0) < 60) return false;
+    const outcome = handleRewardEvent(
+      world.floorRewardBudget,
+      { type: "SURVIVE_1MIN_REWARD" },
+      { depth: floorDepthForRewards(world) }
+    );
+    return applyRewardOutcome(outcome, "ZONE_TRIAL");
+  }
+
+  function maybeHandleObjectiveCompletionReward(): boolean {
+    if (world.state !== "RUN" || world.runState !== "FLOOR") return false;
+    if (!hasCompletedAnyObjective(world)) return false;
+    const outcome = handleRewardEvent(
+      world.floorRewardBudget,
+      { type: "OBJECTIVE_COMPLETED" },
+      { depth: floorDepthForRewards(world) }
+    );
+    return applyRewardOutcome(outcome, "ZONE_TRIAL");
+  }
+
+  function maybeHandleChestOpenedReward(): boolean {
+    if (!world.chestOpenRequested) return false;
+    world.chestOpenRequested = false;
+    const outcome = handleRewardEvent(
+      world.floorRewardBudget,
+      { type: "CHEST_OPENED", chestKind: "BOSS" },
+      { depth: floorDepthForRewards(world) }
+    );
+    return applyRewardOutcome(outcome, "BOSS_CHEST");
   }
 
   function handleDialogInput() {
@@ -646,6 +707,26 @@ export function createGame(args: CreateGameArgs) {
       world.state = "RUN";
     },
   });
+  const vendorRoot = document.createElement("div");
+  vendorRoot.id = "vendorShop";
+  vendorRoot.hidden = true;
+  document.body.appendChild(vendorRoot);
+  const vendorPrice = 100;
+  const vendorShopMenu = mountVendorShopMenu({
+    root: vendorRoot,
+    onBuy: (index: number) => {
+      if (tryPurchaseVendorCard(world, index)) {
+        renderVendorShopIfNeeded();
+      }
+    },
+    onLeave: () => {
+      completeObjectiveById(OBJECTIVE_TRIGGER_IDS.vendor);
+      world.pendingAdvanceToNextFloor = true;
+      closeVendorShop(true);
+    },
+    onClose: () => closeVendorShop(false),
+  });
+  let lastVendorRenderKey = "";
   let lastRewardRenderKey = "";
 
   const renderRewardMenuIfNeeded = (): void => {
@@ -655,6 +736,49 @@ export function createGame(args: CreateGameArgs) {
     cardRewardMenu.render(reward.active ? reward : null);
     lastRewardRenderKey = key;
   };
+
+  function renderVendorShopIfNeeded(): void {
+    if (!vendorShopOpen) {
+      vendorShopMenu.render(null);
+      lastVendorRenderKey = "";
+      return;
+    }
+    const vendor = world.vendor;
+    if (!vendor) {
+      closeVendorShop(false);
+      return;
+    }
+    const key = `${getGold(world)}|${vendor.cards.join(",")}|${vendor.purchased.map((p) => (p ? "1" : "0")).join("")}`;
+    if (key === lastVendorRenderKey) return;
+    vendorShopMenu.render({
+      active: true,
+      gold: getGold(world),
+      price: vendorPrice,
+      cards: vendor.cards.map((cardId, index) => ({
+        cardId,
+        purchased: !!vendor.purchased[index],
+      })),
+    });
+    lastVendorRenderKey = key;
+  }
+
+  function openVendorShop(): void {
+    vendorShopOpen = true;
+    activeDialog = null;
+    args.ui.dialogEl.root.hidden = true;
+    args.ui.dialogEl.text.textContent = "";
+    args.ui.dialogEl.choices.innerHTML = "";
+    renderVendorShopIfNeeded();
+  }
+
+  function closeVendorShop(resolvePendingAdvance: boolean): void {
+    if (!vendorShopOpen) return;
+    vendorShopOpen = false;
+    vendorShopMenu.render(null);
+    lastVendorRenderKey = "";
+    restorePendingNpcFacing();
+    if (resolvePendingAdvance) resolvePendingAdvanceAfterInteractionClose();
+  }
   let pendingStartIntent: StartIntent | null = null;
   let pendingFloorIntent: FloorIntent | null = null;
   let preparedStart: PreparedStart | null = null;
@@ -747,7 +871,7 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function clearFloorEntities(w: World) {
-    // Keep player stats/items/weapons/xp/level; wipe transient entities.
+    // Keep player stats/items/weapons; wipe transient entities.
     w.eAlive = [];
     w.eType = [];
     w.egxi = [];
@@ -903,9 +1027,65 @@ export function createGame(args: CreateGameArgs) {
     (w as any)._surviveBossSpawned = true;
   }
 
+  function syncBossTripleNavState(w: World): void {
+    if (w.floorArchetype !== "BOSS_TRIPLE") {
+      w.bossTriple = undefined;
+      return;
+    }
+    const defs = (w.overlayTriggerDefs ?? []).filter((d) =>
+      typeof d.id === "string" && d.id.startsWith(OBJECTIVE_TRIGGER_IDS.bossZonePrefix)
+    );
+    defs.sort((a, b) => a.id.localeCompare(b.id));
+    const spawnPointsWorld = defs.map((d) => ({
+      x: (d.tx + 0.5) * KENNEY_TILE_WORLD,
+      y: (d.ty + 0.5) * KENNEY_TILE_WORLD,
+    }));
+    const completed =
+      w.bossTriple?.completed && w.bossTriple.completed.length === spawnPointsWorld.length
+        ? w.bossTriple.completed.slice()
+        : spawnPointsWorld.map(() => false);
+    w.bossTriple = { spawnPointsWorld, completed };
+  }
+
+  function syncZoneTrialNavState(w: World): void {
+    const state = getZoneTrialObjectiveState(w);
+    const map = getActiveMap();
+    if (!state || !Array.isArray(state.zones)) {
+      w.zoneTrial = undefined;
+      return;
+    }
+    w.zoneTrial = {
+      originTx: map?.originTx ?? 0,
+      originTy: map?.originTy ?? 0,
+      zones: state.zones.map((z: any) => ({
+        tx: z.tileX,
+        ty: z.tileY,
+        w: z.tileW,
+        h: z.tileH,
+        completed: !!z.completed,
+      })),
+    };
+  }
+
+  function markBossClearCompletionFromSignals(w: World): void {
+    const bt = w.bossTriple;
+    if (!bt || !Array.isArray(bt.completed)) return;
+    const signals = w.triggerSignals;
+    if (!Array.isArray(signals) || signals.length === 0) return;
+    for (let i = 0; i < signals.length; i++) {
+      const id = signals[i]?.triggerId;
+      if (typeof id !== "string" || !id.startsWith(OBJECTIVE_TRIGGER_IDS.bossZonePrefix)) continue;
+      const raw = id.slice(OBJECTIVE_TRIGGER_IDS.bossZonePrefix.length);
+      const idx = Number.parseInt(raw, 10) - 1;
+      if (!Number.isFinite(idx) || idx < 0 || idx >= bt.completed.length) continue;
+      bt.completed[idx] = true;
+    }
+  }
+
   function beginFloorLoad(floorIntent: FloorIntent): boolean {
     const w = world;
     setDialog(null);
+    closeVendorShop(false);
     if (w.delveMap && !floorIntent.mapId) {
       console.error("[enterFloor] delve floor intent missing mapId");
       return false;
@@ -1003,19 +1183,31 @@ export function createGame(args: CreateGameArgs) {
     const objectiveSpec = objectiveSpecFromFloorIntent(ctx.floorIntent);
     w.currentObjectiveSpec = objectiveSpec;
     setObjectivesFromSpec(w, objectiveSpec);
+    w.floorRewardBudget = createFloorRewardBudget(objectiveModeForFloor(w));
     w.objectiveRewardClaimedKey = null;
     (w as any).zoneRewardClaimedKey = null;
     (w as any).zoneRewardClaimedKeys = [];
-    resetFloorCardRewardBudget(w);
+    w.cardRewardBudgetTotal = 3;
+    w.cardRewardBudgetUsed = 0;
+    w.cardRewardClaimKeys = [];
+    w.lastCardRewardClaimKey = null;
+    w.floorEndCountdownSec = 0;
+    w.floorEndCountdownActive = false;
+    w.floorEndCountdownStartedKey = null;
+    syncRewardDebugFieldsFromBudget(w);
     w.cardReward.active = false;
     w.cardReward.options = [];
     startZoneTrial(w);
+    syncZoneTrialNavState(w);
+    syncBossTripleNavState(w);
     if (objectiveSpec.objectiveType === "SURVIVE_TIMER") {
       w.floorDuration = objectiveSpec.params.timeLimitSec;
     }
 
-    w.vendorOffers =
-      floorIntent.archetype === "VENDOR" ? generateVendorOffers(floorIntent) : [];
+    w.vendor = floorIntent.archetype === "VENDOR"
+      ? createVendorState(generateVendorCards(5))
+      : null;
+    w.vendorOffers = [];
     (w as any)._surviveBossSpawned = false;
     w.bossZoneSpawned = [];
     w.runState = "FLOOR";
@@ -1124,8 +1316,7 @@ export function createGame(args: CreateGameArgs) {
 
     emitEvent(w, { type: "SFX", id: "BOSS_START", vol: 1.0, rate: 1 });
 
-    // Ensure boss reward gate is reset for this encounter (if present on World)
-    (w as any).bossRewardPending = false;
+    // Reset chest handshake state for this encounter.
     (w as any).chestOpenRequested = false;
     w.magnetActive = false;
     w.magnetTimer = 0;
@@ -1153,13 +1344,13 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function completeRun(w: World) {
-    // WIN CONDITION: beat floor 3 boss (i.e., floorIndex 2) AFTER boss chest is collected.
+    // WIN CONDITION: final-floor objective completion.
     w.runState = "RUN_COMPLETE";
     w.state = "WIN";
 
     args.ui.endEl.title.textContent = "Run Complete";
     args.ui.endEl.sub.textContent =
-        `You beat the floor 3 boss.\n` +
+        `Final floor objective completed.\n` +
         `Time: ${formatTimeMMSS(w.time)} · Kills: ${w.kills}`;
 
     args.ui.endEl.root.hidden = false;
@@ -1195,6 +1386,7 @@ export function createGame(args: CreateGameArgs) {
 
   function resetRun(mapId?: string, options?: { skipMapSelection?: boolean; seedOverride?: number }) {
     setDialog(null);
+    closeVendorShop(false);
     const seed = options?.seedOverride ?? ((Date.now() ^ (Math.random() * 1e9)) >>> 0);
     if (!options?.skipMapSelection) {
       applyMapSelection(mapId, seed);
@@ -1449,6 +1641,7 @@ export function createGame(args: CreateGameArgs) {
     (world as any).deterministicDelveMode = false;
     args.ui.mapEl.root.hidden = true;
     hideCardRewardMenu();
+    closeVendorShop(false);
     args.ui.endEl.root.hidden = true;
     args.ui.dialogEl.root.hidden = true;
     args.hud.root.hidden = true;
@@ -1802,9 +1995,7 @@ export function createGame(args: CreateGameArgs) {
     args.hud.killsPill.textContent = `Kills: ${world.kills}`;
     args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
     
-    // Show depth in delve mode
-    const depthText = world.delveMap ? ` · Depth ${world.delveDepth}` : "";
-    args.hud.lvlPill.textContent = `Lv: ${world.level}${depthText}`;
+    args.hud.lvlPill.textContent = `Gold: ${getGold(world)}`;
 
     // 4 weapon slots + 4 item slots, order = array order
     renderSlots(args.hud.weaponSlots, world.weapons as any, (id) => registry.weapon(id as any).title);
@@ -1850,11 +2041,29 @@ export function createGame(args: CreateGameArgs) {
       }
     }
 
+    if (world.floorEndCountdownActive) {
+      const secs = Math.max(0, Math.ceil(world.floorEndCountdownSec));
+      detail = `Leaving in ${secs}...`;
+    }
+
     args.hud.objectiveTitle.textContent = title;
     args.hud.objectiveStatus.textContent = detail;
     args.hud.objectiveOverlay.hidden = false;
   }
   // ---------------------------------
+
+  function finishFloorEndCountdown(): boolean {
+    world.state = "RUN";
+    if (world.cardReward) world.cardReward.active = false;
+    hideCardRewardMenu();
+    world.floorEndCountdownActive = false;
+    if (tryAdvanceAfterObjectiveCompletion()) {
+      clearEvents(world);
+      return true;
+    }
+    clearEvents(world);
+    return false;
+  }
 
   function update(dt: number) {
 
@@ -1866,14 +2075,22 @@ export function createGame(args: CreateGameArgs) {
     if (activeDialog) {
       handleDialogInput();
     }
+    renderVendorShopIfNeeded();
 
     // Handle pause states
     if (world.state === "REWARD" || world.state === "MAP") {
+      if (world.state === "REWARD") {
+        tickFloorEndCountdown(world, dt);
+        if (isFloorEndCountdownDone(world)) {
+          finishFloorEndCountdown();
+          return;
+        }
+      }
       // HUD still updates while paused
       args.hud.timePill.textContent = hudTimeText(world);
       args.hud.killsPill.textContent = `Kills: ${world.kills}`;
       args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
-      args.hud.lvlPill.textContent = `Lv: ${world.level}`;
+      args.hud.lvlPill.textContent = `Gold: ${getGold(world)}`;
       renderRewardMenuIfNeeded();
       updateHud();
       return;
@@ -1891,7 +2108,7 @@ export function createGame(args: CreateGameArgs) {
     }
     if (world.state !== "RUN") return;
 
-    if (!activeDialog && input.interactPressed && activeInteractableId) {
+    if (!activeDialog && !vendorShopOpen && input.interactPressed && activeInteractableId) {
       const target = interactables.find((it) => it.id === activeInteractableId);
       if (target) {
         openInteractDialog(target);
@@ -1907,6 +2124,7 @@ export function createGame(args: CreateGameArgs) {
     world.phaseTime += dt;
     // Spawn pacing uses the same clock as floor progression/spawn cadence.
     world.timeSec = world.phaseTime;
+    world.level = 1;
 
     const mapMode = !!(world as any).mapMode;
 
@@ -1914,50 +2132,17 @@ export function createGame(args: CreateGameArgs) {
     if (!mapMode) {
       if (world.runState === "FLOOR" && world.objectiveDefs.length === 0 && world.phaseTime >= world.floorDuration) {
         enterBoss(world);
-      } else if (world.runState === "BOSS") {
-        // If boss was killed, advance (but wait for the boss chest to be collected)
-        if (!bossAlive(world)) {
-          const pending = (world as any).bossRewardPending as boolean | undefined;
-          if (pending) {
-            // Do nothing; chest must be picked up first
-          } else {
-            if (isDeterministicDelveMode()) {
-              showDeterministicFloorPicker(
-                `Floor ${world.floorIndex + 1} cleared.\nChoose next floor type.`,
-                (world.floorIndex ?? 0) + 1,
-                (world.delveDepth ?? 1) + 1,
-              );
-              return;
-            }
-            // Delve mode: always show map after boss defeat (infinite progression)
-            const delve = world.delveMap as DelveMap;
-            if (delve) {
-              showDelveMap(`Depth ${world.delveDepth} cleared!\nChoose your next destination.`);
-              return;
-            }
-
-            // Legacy mode: end after 3 floors
-            if (world.floorIndex >= FLOORS_PER_RUN - 1) {
-              completeRun(world);
-              return;
-            }
-            // Between floors: show route map selection
-            (world as any).mapPendingNextFloorIndex = (world.floorIndex ?? 0) + 1;
-
-            showMap("Choose your next zone.\n(There is a boss at the end of every floor.)");
-            return;
-          }
-        }
-      } else if (world.runState === "TRANSITION") {
-        world.transitionTime = Math.max(0, world.transitionTime - dt);
-        if (world.transitionTime <= 0) {
-          const nextFloorIndex = (world.floorIndex ?? 0) + 1;
-          void enterFloor(world, buildFallbackFloorIntent(world, nextFloorIndex));
-        }
+      }
+    }
+    if (world.runState === "TRANSITION") {
+      world.transitionTime = Math.max(0, world.transitionTime - dt);
+      if (world.transitionTime <= 0) {
+        const nextFloorIndex = (world.floorIndex ?? 0) + 1;
+        void enterFloor(world, buildFallbackFloorIntent(world, nextFloorIndex));
       }
     }
 
-    if (!activeDialog) {
+    if (!activeDialog && !vendorShopOpen) {
       movementSystem(world, input, dt);
     }
     neutralBirdAISystem(world, dt);
@@ -1971,30 +2156,34 @@ export function createGame(args: CreateGameArgs) {
     }
     world.spawnDirectorConfig.enabled = !!world.balance.spawnDirectorEnabled;
     if (world.balance.spawnDirectorEnabled) {
-      tickSpawnDirector(
-        world,
-        dt,
-        world.spawnDirectorConfig,
-        world.expectedPowerConfig,
-        world.expectedPowerBudgetConfig,
-        world.spawnDirectorState,
-        {
-          getDepth: () => {
-            if (Number.isFinite(world.delveDepth) && world.delveDepth > 0) return world.delveDepth;
-            return (world.floorIndex ?? 0) + 1;
-          },
-          isBossActive: () => world.runState === "BOSS" || bossAlive(world),
-          canSpawnNow: () => world.runState === "FLOOR" && world.phaseTime >= 2,
-          spawnTrash: () => {
-            let tier: "trash" | "elite" = "trash";
-            const eliteChance = world.spawnDirectorOverrides?.eliteChanceOverride ?? 0;
-            if (eliteChance > 0 && world.rng.next() < eliteChance) tier = "elite";
-            return spawnOneTrashEnemy(world, undefined, undefined, tier);
-          },
-        }
-      );
+      if (!world.floorEndCountdownActive) {
+        tickSpawnDirector(
+          world,
+          dt,
+          world.spawnDirectorConfig,
+          world.expectedPowerConfig,
+          world.expectedPowerBudgetConfig,
+          world.spawnDirectorState,
+          {
+            getDepth: () => {
+              if (Number.isFinite(world.delveDepth) && world.delveDepth > 0) return world.delveDepth;
+              return (world.floorIndex ?? 0) + 1;
+            },
+            isBossActive: () => world.runState === "BOSS" || bossAlive(world),
+            canSpawnNow: () => world.runState === "FLOOR" && world.phaseTime >= 2,
+            spawnTrash: () => {
+              let tier: "trash" | "elite" = "trash";
+              const eliteChance = world.spawnDirectorOverrides?.eliteChanceOverride ?? 0;
+              if (eliteChance > 0 && world.rng.next() < eliteChance) tier = "elite";
+              return spawnOneTrashEnemy(world, undefined, undefined, tier);
+            },
+          }
+        );
+      }
     } else {
-      spawnSystem(world, dt);
+      if (!world.floorEndCountdownActive) {
+        spawnSystem(world, dt);
+      }
     }
     const isNeutralObjectiveFloor = world.floorArchetype === "VENDOR" || world.floorArchetype === "HEAL";
     if (!isNeutralObjectiveFloor) {
@@ -2011,28 +2200,32 @@ export function createGame(args: CreateGameArgs) {
     onKillExplodeSystem(world, dt); // NEW: explode on kill (can add more kills)
     bossSystem(world, dt);          // NEW: boss mechanics (telegraphs/hazards/dash)
     zonesSystem(world, dt);
-    goldSystem(world);
     pickupsSystem(world, dt);
-    xpSystem(world, dt);
-    vendorSystem(world);
+    dropsSystem(world, dt);
     triggerSystem(world, dt, input);
     updateZoneTrialObjective(world);
+    syncZoneTrialNavState(world);
+    markBossClearCompletionFromSignals(world);
     bossZoneSpawnSystem(world);
     objectiveSystem(world);
-    if (maybeBeginZoneClearedCardReward()) {
+    if (maybeHandleZoneTrialMilestoneReward()) {
       clearEvents(world);
       return;
     }
-    if (maybeBeginBossMilestoneCardReward()) {
+    if (maybeHandleSurviveOneMinuteReward()) {
       clearEvents(world);
       return;
     }
-    if (maybeBeginSurviveMilestoneCardReward()) {
+    if (maybeHandleObjectiveCompletionReward()) {
       clearEvents(world);
       return;
     }
-    if (maybeBeginObjectiveCardReward()) {
-      clearEvents(world);
+    if (!world.cardReward?.active) {
+      maybeStartFloorEndCountdown(world);
+    }
+    tickFloorEndCountdown(world, dt);
+    if (isFloorEndCountdownDone(world)) {
+      finishFloorEndCountdown();
       return;
     }
     outcomeSystem(world);
@@ -2040,15 +2233,8 @@ export function createGame(args: CreateGameArgs) {
     // SFX consumes events before any early-return branches
     audioSystem(world, dt);
 
-    if (world.floorArchetype === "SURVIVE" && (world.timeSec ?? 0) >= SURVIVE_RAMP_CONFIG.durationSec) {
-      completeRun(world);
-      clearEvents(world);
-      return;
-    }
-
-    // Boss chest pickup triggers a deterministic card reward.
-    if (processChestOpenRequested(world, 3)) {
-      renderRewardMenuIfNeeded();
+    // Chest open reward outcome (card while budget remains, else gold fallback).
+    if (maybeHandleChestOpenedReward()) {
       clearEvents(world);
       return;
     }
@@ -2086,7 +2272,7 @@ export function createGame(args: CreateGameArgs) {
     args.hud.timePill.textContent = hudTimeText(world);
     args.hud.killsPill.textContent = `Kills: ${world.kills}`;
     args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
-    args.hud.lvlPill.textContent = `Lv: ${world.level}`;
+    args.hud.lvlPill.textContent = `Gold: ${getGold(world)}`;
     updateHud();
 
     // Clear per-frame edge-triggered inputs (must be at END of update)

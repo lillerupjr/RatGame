@@ -10,6 +10,7 @@ import {
 } from "../../game/audio/audioSettings";
 import { getUserSettings, isPauseDebugCardsEnabled, updateUserSettings } from "../../userSettings";
 import { getAllCardIds } from "../../game/combat_mods/content/cards/cardPool";
+import { getGold } from "../../game/economy/gold";
 
 export type PauseMenuActions = {
   onResume(): void;
@@ -415,7 +416,7 @@ export function mountPauseMenu(args: {
       ["Fire Rate Mult", safeNum(world.fireRateMult, 1).toFixed(2)],
       ["Crit Chance", `${(Math.max(0, Math.min(1, critChance)) * 100).toFixed(1)}%`],
       ["Crit Multi", `${safeNum(world.critMultiplier, 1).toFixed(2)}x`],
-      ["Gold", `${safeNum(world.gold).toFixed(0)}`],
+      ["Gold", `${safeNum(getGold(world)).toFixed(0)}`],
       ["Kills", `${safeNum(world.kills).toFixed(0)}`],
     ];
 

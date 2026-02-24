@@ -342,7 +342,6 @@ export function getDepthScaling(depth: number): {
   hpMult: number;
   damageMult: number;
   spawnRateMult: number;
-  xpMult: number;
 } {
   // Exponential scaling that feels fair early but gets scary deep
   // Depth 1 = baseline (1.0x)
@@ -357,6 +356,5 @@ export function getDepthScaling(depth: number): {
     hpMult: Math.pow(1.2, d - 1),
     damageMult: Math.pow(1.05, d - 1),      // +5% per depth
     spawnRateMult: 1 + (d - 1) * 0.05,      // +5% spawn rate per depth (linear)
-    xpMult: 1 + (d - 1) * 0.1,              // +10% XP per depth
   };
 }

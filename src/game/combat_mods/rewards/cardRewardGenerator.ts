@@ -1,4 +1,4 @@
-import { getAllCards } from "../content/cards/cardPool";
+import { getEligibleCardPool } from "./cardPool";
 import type { CardDef } from "../stats/modifierTypes";
 import { CARD_TIER_WEIGHTS } from "./cardTierWeights";
 
@@ -11,7 +11,7 @@ export function generateCardRewardOptions(
   rng: () => number,
   count: number
 ): string[] {
-  const cards = getAllCards();
+  const cards = getEligibleCardPool();
   const byTier = buildTierMap(cards);
   const picked = new Set<string>();
   const out: string[] = [];

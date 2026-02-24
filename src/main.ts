@@ -284,6 +284,56 @@ function installDevSettingsUi(): void {
   waterFlowRow.appendChild(waterFlowInput);
   panel.appendChild(waterFlowRow);
 
+  const dmgMultRow = document.createElement("div");
+  dmgMultRow.style.display = "flex";
+  dmgMultRow.style.alignItems = "center";
+  dmgMultRow.style.justifyContent = "space-between";
+  dmgMultRow.style.gap = "10px";
+  dmgMultRow.style.padding = "4px 0";
+  const dmgMultText = document.createElement("span");
+  dmgMultText.textContent = "dmgMult";
+  const dmgMultBtn = document.createElement("button");
+  dmgMultBtn.type = "button";
+  dmgMultBtn.style.border = "1px solid rgba(255,255,255,0.25)";
+  dmgMultBtn.style.borderRadius = "6px";
+  dmgMultBtn.style.background = "rgba(28,28,28,0.95)";
+  dmgMultBtn.style.color = "#fff";
+  dmgMultBtn.style.cursor = "pointer";
+  dmgMultBtn.addEventListener("click", () => {
+    const s = getUserSettings().debug;
+    const next = s.dmgMult === 10 ? 1 : 10;
+    updateUserSettings({ debug: { dmgMult: next } });
+    dmgMultBtn.textContent = `${next}x`;
+  });
+  dmgMultRow.appendChild(dmgMultText);
+  dmgMultRow.appendChild(dmgMultBtn);
+  panel.appendChild(dmgMultRow);
+
+  const fireRateMultRow = document.createElement("div");
+  fireRateMultRow.style.display = "flex";
+  fireRateMultRow.style.alignItems = "center";
+  fireRateMultRow.style.justifyContent = "space-between";
+  fireRateMultRow.style.gap = "10px";
+  fireRateMultRow.style.padding = "4px 0";
+  const fireRateMultText = document.createElement("span");
+  fireRateMultText.textContent = "fireRateMult";
+  const fireRateMultBtn = document.createElement("button");
+  fireRateMultBtn.type = "button";
+  fireRateMultBtn.style.border = "1px solid rgba(255,255,255,0.25)";
+  fireRateMultBtn.style.borderRadius = "6px";
+  fireRateMultBtn.style.background = "rgba(28,28,28,0.95)";
+  fireRateMultBtn.style.color = "#fff";
+  fireRateMultBtn.style.cursor = "pointer";
+  fireRateMultBtn.addEventListener("click", () => {
+    const s = getUserSettings().debug;
+    const next = s.fireRateMult === 10 ? 1 : 10;
+    updateUserSettings({ debug: { fireRateMult: next } });
+    fireRateMultBtn.textContent = `${next}x`;
+  });
+  fireRateMultRow.appendChild(fireRateMultText);
+  fireRateMultRow.appendChild(fireRateMultBtn);
+  panel.appendChild(fireRateMultRow);
+
   const birdTitle = document.createElement("div");
   birdTitle.textContent = "neutralBirdAI";
   birdTitle.style.fontWeight = "700";
@@ -453,6 +503,8 @@ function installDevSettingsUi(): void {
     birdRepickTargetInput.checked = s.debug.neutralBirdAI.debugRepickTarget;
     waterFlowInput.value = `${s.debug.waterFlowRate}`;
     waterFlowValue.textContent = `${s.debug.waterFlowRate.toFixed(2)}x`;
+    dmgMultBtn.textContent = `${s.debug.dmgMult}x`;
+    fireRateMultBtn.textContent = `${s.debug.fireRateMult}x`;
     entityShadowsInput.checked = s.render.entityShadowsEnabled;
     entityAnchorsInput.checked = s.render.entityAnchorsEnabled;
     paletteSwapInput.checked = s.render.paletteSwapEnabled;

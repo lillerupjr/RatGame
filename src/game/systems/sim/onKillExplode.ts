@@ -143,7 +143,6 @@ export function onKillExplodeSystem(w: World, _dt: number) {
                     enemyIndex: e,
                     x: ew.wx,
                     y: ew.wy,
-                    xpValue: 1,
                     source: "OTHER",
                 });
             }

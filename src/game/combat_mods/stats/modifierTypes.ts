@@ -18,6 +18,7 @@ export interface StatMod {
 
 export interface CardDef {
   id: string; // generic for now
+  isEnabled: boolean;
   displayName: string; // generic for now
   rarity: 1 | 2 | 3 | 4;
   powerTier: 1 | 2 | 3 | 4 | 5;

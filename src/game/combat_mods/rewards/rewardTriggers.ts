@@ -33,7 +33,6 @@ function firstCompletedObjectiveId(world: any): string | null {
       }
     }
   }
-  if (world?.zoneTrialObjective?.completed) return "OBJ_ZONE_TRIAL";
   return null;
 }
 
@@ -89,7 +88,7 @@ function parseBossZoneIndex(triggerId: string): number {
 }
 
 function hasSurviveBossSignals(world: any): boolean {
-  return !!world?._surviveBossSpawned || !!world?.bossRewardPending || !!world?.chestOpenRequested;
+  return !!world?._surviveBossSpawned || !!world?.chestOpenRequested;
 }
 
 export function floorRewardPolicy(world: any): FloorRewardPolicy {
