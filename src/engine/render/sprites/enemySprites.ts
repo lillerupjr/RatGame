@@ -46,6 +46,30 @@ const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
         runAnim: "walk-4-frames",
 
     },
+    [ENEMY_TYPE.MINOTAUR]: {
+        skin: "minotaur",
+        scale: 2,
+        anchorX: 0.5,
+        anchorY: 0.65,
+        runAnim: "walk-8-frames",
+        frameCount: 8,
+    },
+    [ENEMY_TYPE.ABOMINATION]: {
+        skin: "abomination",
+        scale: 2,
+        anchorX: 0.5,
+        anchorY: 0.65,
+        runAnim: "walk-6-frames",
+        frameCount: 6,
+    },
+    [ENEMY_TYPE.RATCHEMIST]: {
+        skin: "ratchemist",
+        scale: 1.5,
+        anchorX: 0.5,
+        anchorY: 0.65,
+        runAnim: "walk",
+        frameCount: 6,
+    },
     [ENEMY_TYPE.BOSS]: {
         skin: "infested",
         scale: 2,

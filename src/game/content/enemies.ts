@@ -4,6 +4,9 @@ export const ENEMY_TYPE = {
     CHASER: 1,
     RUNNER: 2,
     BRUISER: 3,
+    MINOTAUR: 4,
+    ABOMINATION: 5,
+    RATCHEMIST: 6,
     BOSS: 99,
 } as const;
 
@@ -55,6 +58,36 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
         damage: 16,
         hpScaleWeight: 1.5, // Heavy scaling (true tank)
         color: "#f8b",
+    },
+    [ENEMY_TYPE.MINOTAUR]: {
+        id: ENEMY_TYPE.MINOTAUR,
+        name: "Minotaur",
+        hp: 90,
+        radius: 20,
+        speed: 60,
+        damage: 20,
+        hpScaleWeight: 1.6, // Heavy scaling (elite tank)
+        color: "#a66",
+    },
+    [ENEMY_TYPE.ABOMINATION]: {
+        id: ENEMY_TYPE.ABOMINATION,
+        name: "Abomination",
+        hp: 120,
+        radius: 22,
+        speed: 50,
+        damage: 18,
+        hpScaleWeight: 1.7, // Very heavy scaling (hulking brute)
+        color: "#6a8",
+    },
+    [ENEMY_TYPE.RATCHEMIST]: {
+        id: ENEMY_TYPE.RATCHEMIST,
+        name: "Ratchemist",
+        hp: 35,
+        radius: 14,
+        speed: 80,
+        damage: 12,
+        hpScaleWeight: 1.3, // Moderate scaling (tricky support)
+        color: "#8bf",
     },
     [ENEMY_TYPE.BOSS]: {
         id: ENEMY_TYPE.BOSS,

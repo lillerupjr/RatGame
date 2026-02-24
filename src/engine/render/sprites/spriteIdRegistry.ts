@@ -7,10 +7,56 @@ import { RUNTIME_FLOOR_VARIANT_COUNTS } from "../../../game/content/runtimeFloor
 
 import { DIR8_ORDER } from "./dir8";
 
-const ENTITY_ASSET_MODULES = import.meta.glob("../../../assets/**/*.{png,PNG}", {
-  eager: true,
-  import: "default",
-}) as Record<string, string>;
+/* ── Entity sprite manifest ──────────────────────────────────────────────
+ * Declares every entity skin that lives under public/assets-runtime/entities/.
+ * This replaces the old import.meta.glob on src/assets/ so the runtime
+ * asset directory is the single source of truth.
+ *
+ * nested = true  → files live under animations/{key}/{dir}/frame_NNN.png
+ * nested = false → files live under {key}/{dir}/frame_NNN.png
+ */
+type AnimEntry = { key: string; frames: number; nested?: boolean };
+type SkinEntry = { path: string; rotations?: boolean; anims?: AnimEntry[] };
+
+const DIR_NAMES = [
+  "north", "north-east", "east", "south-east",
+  "south", "south-west", "west", "north-west",
+] as const;
+
+const ENTITY_MANIFEST: SkinEntry[] = [
+  // animals
+  { path: "animals/pigeon", rotations: true, anims: [{ key: "flying", frames: 10 }] },
+  // enemies
+  { path: "enemies/rat1", rotations: true, anims: [{ key: "running-4-frames", frames: 4 }] },
+  { path: "enemies/rat2", rotations: true, anims: [{ key: "walk-4-frames", frames: 4 }] },
+  { path: "enemies/rat3", rotations: true, anims: [{ key: "walk-4-frames", frames: 4 }] },
+  { path: "enemies/rat4", rotations: true, anims: [{ key: "walk-4-frames", frames: 4 }] },
+  { path: "enemies/bruiser", rotations: true, anims: [{ key: "walk-6-frames", frames: 6 }] },
+  { path: "enemies/infested", rotations: true, anims: [{ key: "walk", frames: 6 }] },
+  { path: "enemies/abomination", rotations: true, anims: [{ key: "walk-6-frames", frames: 6 }] },
+  { path: "enemies/minotaur", rotations: true, anims: [
+    { key: "walk-8-frames", frames: 8 },
+    { key: "block", frames: 2 },
+    { key: "hit_die", frames: 6 },
+    { key: "idle", frames: 4 },
+    { key: "swing", frames: 4 },
+  ] },
+  { path: "enemies/ratchemist", rotations: true, anims: [{ key: "walk", frames: 6 }] },
+  // npc
+  { path: "npc/vendor", rotations: true, anims: [{ key: "breathing-idle", frames: 4, nested: false }] },
+  // player
+  { path: "player/hobo", rotations: true, anims: [{ key: "walk", frames: 6 }] },
+  { path: "player/jack", rotations: true, anims: [
+    { key: "walk", frames: 6 },
+    { key: "crouched-walking", frames: 6 },
+  ] },
+  { path: "player/jamal", rotations: true, anims: [{ key: "walk", frames: 6 }] },
+  { path: "player/joey", rotations: true, anims: [
+    { key: "walk", frames: 6 },
+    { key: "running-4-frames", frames: 4 },
+  ] },
+  { path: "player/tommy", rotations: true, anims: [{ key: "walk", frames: 6 }] },
+];
 
 function addId(set: Set<string>, id: string | undefined): void {
   if (!id) return;
@@ -49,13 +95,25 @@ function addRuntimeFloorAndDecalSpriteIds(out: Set<string>) {
 }
 
 function addEntitySpriteIds(out: Set<string>): void {
-  for (const fullPath of Object.keys(ENTITY_ASSET_MODULES)) {
-    const marker = "/assets/";
-    const idx = fullPath.indexOf(marker);
-    if (idx === -1) continue;
-    const rel = fullPath.slice(idx + marker.length).replace(/\\/g, "/");
-    const noExt = rel.toLowerCase().endsWith(".png") ? rel.slice(0, -4) : rel;
-    out.add(`entities/${noExt}`);
+  for (const skin of ENTITY_MANIFEST) {
+    if (skin.rotations) {
+      for (const dir of DIR_NAMES) {
+        out.add(`entities/${skin.path}/rotations/${dir}`);
+      }
+    }
+    if (skin.anims) {
+      for (const anim of skin.anims) {
+        const nested = anim.nested !== false;
+        const base = nested
+          ? `entities/${skin.path}/animations/${anim.key}`
+          : `entities/${skin.path}/${anim.key}`;
+        for (const dir of DIR_NAMES) {
+          for (let i = 0; i < anim.frames; i++) {
+            out.add(`${base}/${dir}/frame_${String(i).padStart(3, "0")}`);
+          }
+        }
+      }
+    }
   }
 }
 

@@ -86,11 +86,13 @@ function resolveUrl(spriteId: string): string | null {
     const id = remapLegacySpriteId(normalized);
     if (!isKnownRenderableSpriteId(id)) return null;
 
+    if (id.startsWith("entities/")) {
+        return `/assets-runtime/${id}.png`;
+    }
     if (
         id.startsWith("tiles/")
         || id.startsWith("structures/")
         || id.startsWith("props/")
-        || id.startsWith("entities/")
     ) {
         return `/assets-runtime/base_db32/${id}.png`;
     }
