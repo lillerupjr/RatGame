@@ -1,6 +1,7 @@
 import type { World } from "../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { worldToTile } from "../coords/tile";
+import { getPlayerWorld } from "../coords/worldViews";
 import { getActiveMap, surfacesAtXY, walkInfo } from "../map/compile/kenneyMap";
 import { buildZoneClearedTriggerId, OBJECTIVE_TRIGGER_IDS } from "../systems/progression/objectiveSpec";
 import {
@@ -280,19 +281,20 @@ export function updateZoneTrialObjective(world: World): void {
 
   const originTx = map.originTx;
   const originTy = map.originTy;
+  const playerWorld = getPlayerWorld(world, KENNEY_TILE_WORLD);
+  const playerTile = worldToTile(playerWorld.wx, playerWorld.wy, KENNEY_TILE_WORLD);
+  const localPX = playerTile.tx - originTx;
+  const localPY = playerTile.ty - originTy;
   let progressChanged = false;
 
   for (let i = 0; i < world.events.length; i++) {
     const ev = world.events[i];
     if (ev.type !== "ENEMY_KILLED") continue;
-    const deathTile = worldToTile(ev.x, ev.y, KENNEY_TILE_WORLD);
-    const localX = deathTile.tx - originTx;
-    const localY = deathTile.ty - originTy;
 
     for (let z = 0; z < state.zones.length; z++) {
       const zone = state.zones[z];
       if (zone.completed) continue;
-      if (!isTileInsideZone(localX, localY, zone)) continue;
+      if (!isTileInsideZone(localPX, localPY, zone)) continue;
 
       zone.killCount++;
       progressChanged = true;
