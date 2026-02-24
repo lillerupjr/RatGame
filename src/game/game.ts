@@ -3,8 +3,9 @@ import { World, createWorld, clearEvents, emitEvent, gridAtPlayer } from "../eng
 
 import { InputState, createInputState, inputSystem, clearInputEdges } from "./systems/sim/input";
 import { movementSystem } from "./systems/sim/movement";
-import { spawnSystem } from "./systems/spawn/spawn";
+import { spawnSystem, spawnOneTrashEnemy } from "./systems/spawn/spawn";
 import { combatSystem } from "./systems/sim/combat";
+import { ailmentTickSystem } from "./combat_mods/systems/ailmentTickSystem";
 import { collisionsSystem } from "./systems/sim/collisions";
 import { projectilesSystem } from "./systems/sim/projectiles";
 import { pickupsSystem } from "./systems/progression/pickups";
@@ -23,7 +24,6 @@ import { goldSystem } from "./systems/progression/gold";
 import { vendorSystem } from "./systems/progression/vendorSystem";
 import { bossZoneSpawnSystem } from "./systems/progression/bossZoneSpawn";
 
-import { getUpgradePool, UpgradeDef } from "./content/upgrades";
 import { formatTimeMMSS } from "./util/time";
 import type { WeaponId } from "./content/weapons";
 import { registry } from "./content/registry";
@@ -32,7 +32,6 @@ import { gridToWorld, worldToGrid } from "./coords/grid";
 import { anchorFromWorld } from "./coords/anchor";
 import { poisonSystem } from "./systems/sim/poison";
 import { fissionSystem } from "./systems/sim/fission";
-import { recomputeDerivedStats } from "./stats/derivedStats";
 import {buildStaticRunMap, getReachable, type RunMap, type MapNode} from "./map/runMap";
 import { KENNEY_TILE_WORLD, preloadKenneyTiles } from "../engine/render/kenneyTiles";
 import type { Dir8 } from "../engine/render/sprites/dir8";
@@ -96,6 +95,19 @@ import { neutralBirdAISystem } from "./systems/sim/neutralBirdAI";
 import { getZoneTrialObjectiveState, startZoneTrial, updateZoneTrialObjective } from "./objectives/zoneObjectiveSystem";
 import { collectRuntimeSpriteIdsToPrewarm } from "./render/prewarmSprites";
 import { resolveActivePaletteId } from "./render/activePalette";
+import { applySfxSettingsToWorld } from "./audio/audioSettings";
+import { chooseCardReward, ensureCardRewardState } from "./combat_mods/rewards/cardRewardFlow";
+import {
+  processBossMilestoneRewards,
+  processChestOpenRequested,
+  processObjectiveCompletionReward,
+  processSurviveMilestoneRewards,
+  processZoneClearedReward,
+  resetFloorCardRewardBudget,
+} from "./combat_mods/rewards/rewardTriggers";
+import { mountCardRewardMenu } from "../ui/rewards/cardRewardMenu";
+import { tickSpawnDirector } from "./balance/spawnDirector";
+import { buildSurviveSpawnOverrides, SURVIVE_RAMP_CONFIG } from "./balance/surviveRamp";
 
 
 type HudRefs = {
@@ -268,8 +280,14 @@ export function createGame(args: CreateGameArgs) {
       args.ui.dialogEl.root.hidden = true;
       args.ui.dialogEl.text.textContent = "";
       args.ui.dialogEl.choices.innerHTML = "";
-      if (world.pendingAdvanceToNextFloor && tryAdvanceAfterObjectiveCompletion()) {
-        world.pendingAdvanceToNextFloor = false;
+      if (world.pendingAdvanceToNextFloor) {
+        if (maybeBeginObjectiveCardReward()) {
+          world.pendingAdvanceToNextFloor = false;
+          return;
+        }
+        if (tryAdvanceAfterObjectiveCompletion()) {
+          world.pendingAdvanceToNextFloor = false;
+        }
       }
       return;
     }
@@ -329,10 +347,9 @@ export function createGame(args: CreateGameArgs) {
           {
             label: "Yes",
             onSelect: () => {
-              world.pendingLevelUps += 1;
               completeObjectiveById(OBJECTIVE_TRIGGER_IDS.vendor);
               world.pendingAdvanceToNextFloor = true;
-              showInfoDialog("You have been granted a free level! (shop coming soon...)");
+              showInfoDialog("Objective completed. Proceed when ready.");
             },
           },
           {
@@ -527,6 +544,46 @@ export function createGame(args: CreateGameArgs) {
     return true;
   }
 
+  function maybeBeginObjectiveCardReward(): boolean {
+    if (world.state !== "RUN") return false;
+    if (world.runState !== "FLOOR") return false;
+    const hasCompletedObjective =
+      world.objectiveStates.some((s) => s?.status === "COMPLETED") ||
+      !!(world as any).zoneTrialObjective?.completed;
+    if (!hasCompletedObjective) return false;
+    if (activeDialog) setDialog(null);
+    if (!processObjectiveCompletionReward(world, 3)) return false;
+    renderRewardMenuIfNeeded();
+    return true;
+  }
+
+  function maybeBeginZoneClearedCardReward(): boolean {
+    if (world.state !== "RUN") return false;
+    if (world.runState !== "FLOOR") return false;
+    if (activeDialog) setDialog(null);
+    if (!processZoneClearedReward(world, 3)) return false;
+    renderRewardMenuIfNeeded();
+    return true;
+  }
+
+  function maybeBeginBossMilestoneCardReward(): boolean {
+    if (world.state !== "RUN") return false;
+    if (world.runState !== "FLOOR") return false;
+    if (activeDialog) setDialog(null);
+    if (!processBossMilestoneRewards(world, 3)) return false;
+    renderRewardMenuIfNeeded();
+    return true;
+  }
+
+  function maybeBeginSurviveMilestoneCardReward(): boolean {
+    if (world.state !== "RUN") return false;
+    if (world.runState !== "FLOOR") return false;
+    if (activeDialog) setDialog(null);
+    if (!processSurviveMilestoneRewards(world, 3)) return false;
+    renderRewardMenuIfNeeded();
+    return true;
+  }
+
   function handleDialogInput() {
     if (!activeDialog) return;
     if (dialogInputQueue.move !== 0) {
@@ -574,6 +631,30 @@ export function createGame(args: CreateGameArgs) {
   applyObjectivesFromActiveMap(world);
   applyMapFeaturesFromCells(world);
   applyDebugSpawn(world);
+  const cardRewardMenu = mountCardRewardMenu({
+    root: args.ui.levelupEl.root,
+    onPick: (cardId: string) => {
+      const reward = ensureCardRewardState(world);
+      if (!reward.active) return;
+      const source = reward.source;
+      chooseCardReward(world, cardId);
+      renderRewardMenuIfNeeded();
+
+      if (source === "ZONE_TRIAL" && tryAdvanceAfterObjectiveCompletion()) {
+        return;
+      }
+      world.state = "RUN";
+    },
+  });
+  let lastRewardRenderKey = "";
+
+  const renderRewardMenuIfNeeded = (): void => {
+    const reward = ensureCardRewardState(world);
+    const key = `${world.state}|${reward.active ? 1 : 0}|${reward.source}|${reward.options.join(",")}`;
+    if (key === lastRewardRenderKey) return;
+    cardRewardMenu.render(reward.active ? reward : null);
+    lastRewardRenderKey = key;
+  };
   let pendingStartIntent: StartIntent | null = null;
   let pendingFloorIntent: FloorIntent | null = null;
   let preparedStart: PreparedStart | null = null;
@@ -617,9 +698,6 @@ export function createGame(args: CreateGameArgs) {
   let fpsLastTime = performance.now();
   let fpsValue = 0;
   // FPS tracking
-
-
-  let currentChoices: UpgradeDef[] = [];
 
   const FLOORS_PER_RUN = 3;
   const TRANSITION_SECS = 0;
@@ -691,6 +769,7 @@ export function createGame(args: CreateGameArgs) {
     w.ePoisonDps = [];
     w.ePoisonedOnDeath = [];
     w.eSpawnTriggerId = [];
+    w.eAilments = [];
 
     w.zAlive = [];
     w.zKind = [];
@@ -724,6 +803,14 @@ export function createGame(args: CreateGameArgs) {
     w.prvx = [];
     w.prvy = [];
     w.prDamage = [];
+    w.prDmgPhys = [];
+    w.prDmgFire = [];
+    w.prDmgChaos = [];
+    w.prCritChance = [];
+    w.prCritMulti = [];
+    w.prChanceBleed = [];
+    w.prChanceIgnite = [];
+    w.prChancePoison = [];
     w.prR = [];
     w.prPierce = [];
     w.prIsmelee = [];
@@ -796,6 +883,24 @@ export function createGame(args: CreateGameArgs) {
       if (w.eType[i] === ENEMY_TYPE.BOSS) return true;
     }
     return false;
+  }
+
+  function spawnSurviveBossIfNeeded(w: World): void {
+    if (w.floorArchetype !== "SURVIVE") return;
+    if (w.runState !== "FLOOR") return;
+    if ((w as any)._surviveBossSpawned) return;
+    const remaining = (w.floorDuration ?? 0) - (w.phaseTime ?? 0);
+    if (remaining > 30) return;
+
+    const pg = gridAtPlayer(w);
+    const pw = gridToWorld(pg.gx, pg.gy, KENNEY_TILE_WORLD);
+    const angle = w.rng.range(0, Math.PI * 2);
+    const radius = w.rng.range(320, 520);
+    const wx = pw.wx + Math.cos(angle) * radius;
+    const wy = pw.wy + Math.sin(angle) * radius;
+    const gp = worldToGrid(wx, wy, KENNEY_TILE_WORLD);
+    spawnEnemyGrid(w, ENEMY_TYPE.BOSS, gp.gx, gp.gy, KENNEY_TILE_WORLD);
+    (w as any)._surviveBossSpawned = true;
   }
 
   function beginFloorLoad(floorIntent: FloorIntent): boolean {
@@ -898,6 +1003,12 @@ export function createGame(args: CreateGameArgs) {
     const objectiveSpec = objectiveSpecFromFloorIntent(ctx.floorIntent);
     w.currentObjectiveSpec = objectiveSpec;
     setObjectivesFromSpec(w, objectiveSpec);
+    w.objectiveRewardClaimedKey = null;
+    (w as any).zoneRewardClaimedKey = null;
+    (w as any).zoneRewardClaimedKeys = [];
+    resetFloorCardRewardBudget(w);
+    w.cardReward.active = false;
+    w.cardReward.options = [];
     startZoneTrial(w);
     if (objectiveSpec.objectiveType === "SURVIVE_TIMER") {
       w.floorDuration = objectiveSpec.params.timeLimitSec;
@@ -920,7 +1031,7 @@ export function createGame(args: CreateGameArgs) {
     // UI: hide map overlay, show HUD.
     args.ui.mapEl.root.hidden = true;
     args.hud.root.hidden = false;
-    hideLevelUp();
+    hideCardRewardMenu();
   }
 
   async function enterFloor(w: World, floorIntent: FloorIntent): Promise<void> {
@@ -1054,7 +1165,7 @@ export function createGame(args: CreateGameArgs) {
     args.ui.endEl.root.hidden = false;
     args.ui.menuEl.hidden = true;
     args.hud.root.hidden = true;
-    hideLevelUp();
+    hideCardRewardMenu();
   }
 
 
@@ -1092,7 +1203,9 @@ export function createGame(args: CreateGameArgs) {
       seed,
       stage: cloneStage("DOCKS"),
     });
+    applySfxSettingsToWorld(world);
     (world as any).deterministicDelveMode = false;
+    (world as any).combatMode = "mods";
     const mapMode = isMapMode(mapId);
     (world as any).mapMode = mapMode;
     (world as any).runtimeStructureSlicingEnabled = false;
@@ -1108,8 +1221,7 @@ export function createGame(args: CreateGameArgs) {
     applyDebugSpawn(world);
     spawnMilestonePigeonNearPlayer(world);
 
-    currentChoices = [];
-    hideLevelUp();
+    hideCardRewardMenu();
   }
 
   function executeStartRun(characterId: PlayableCharacterId) {
@@ -1120,6 +1232,7 @@ export function createGame(args: CreateGameArgs) {
     preloadPlayerSprites();
 
     resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
+    (world as any).currentCharacterId = character.id;
 
     world.weapons = [{ id: character.startingWeaponId, level: 1, cdLeft: 0 }];
 
@@ -1154,6 +1267,7 @@ export function createGame(args: CreateGameArgs) {
     preloadPlayerSprites();
 
     resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
+    (world as any).currentCharacterId = character.id;
 
     world.weapons = [{ id: character.startingWeaponId, level: 1, cdLeft: 0 }];
     world.delveMap = null;
@@ -1167,7 +1281,7 @@ export function createGame(args: CreateGameArgs) {
     args.ui.mapEl.root.hidden = false;
     args.ui.endEl.root.hidden = true;
     args.hud.root.hidden = false;
-    hideLevelUp();
+    hideCardRewardMenu();
 
     showDeterministicFloorPicker(
       "Path Select mode: choose any floor type.",
@@ -1184,6 +1298,7 @@ export function createGame(args: CreateGameArgs) {
     preloadPlayerSprites();
 
     resetRun(mapId, { skipMapSelection: true, seedOverride: preparedStart?.seed });
+    (world as any).currentCharacterId = character.id;
 
     world.weapons = [{ id: character.startingWeaponId, level: 1, cdLeft: 0 }];
     world.delveMap = null;
@@ -1198,7 +1313,7 @@ export function createGame(args: CreateGameArgs) {
     args.ui.mapEl.root.hidden = true;
     args.ui.endEl.root.hidden = true;
     args.hud.root.hidden = false;
-    hideLevelUp();
+    hideCardRewardMenu();
   }
 
   function prepareStartMap(intent: StartIntent): void {
@@ -1319,13 +1434,26 @@ export function createGame(args: CreateGameArgs) {
     queueStartIntent({ mode: "SANDBOX", characterId, mapId });
   }
 
-  function showLevelUp() {
-    world.state = "LEVELUP";
-    args.ui.levelupEl.root.hidden = false;
-    (args.ui.levelupEl.root.querySelector(".title") as HTMLElement).textContent = "Level Up";
-    args.ui.levelupEl.sub.textContent = `Choose an upgrade (${world.pendingLevelUps} pending)`;
-    rollChoices();
-    renderChoices();
+  function quitRunToMenu() {
+    pendingStartIntent = null;
+    pendingFloorIntent = null;
+    preparedStart = null;
+    floorLoadContext = null;
+    setDialog(null);
+    clearFloorEntities(world);
+    clearEvents(world);
+    world.state = "MENU";
+    world.runState = "FLOOR";
+    world.currentFloorIntent = null;
+    world.objectiveRewardClaimedKey = null;
+    (world as any).deterministicDelveMode = false;
+    args.ui.mapEl.root.hidden = true;
+    hideCardRewardMenu();
+    args.ui.endEl.root.hidden = true;
+    args.ui.dialogEl.root.hidden = true;
+    args.hud.root.hidden = true;
+    args.ui.menuEl.hidden = true;
+    stopMusic();
   }
 
   function showMap(subText: string) {
@@ -1437,6 +1565,11 @@ export function createGame(args: CreateGameArgs) {
 
       hit.appendChild(btn);
     }
+  }
+
+  function hideCardRewardMenu(): void {
+    cardRewardMenu.render(null);
+    lastRewardRenderKey = "";
   }
 
   function showDeterministicFloorPicker(subText: string, floorIndex: number, depth: number) {
@@ -1621,119 +1754,6 @@ export function createGame(args: CreateGameArgs) {
   }
 
 
-  function showChestPopup(message: string) {
-    world.state = "CHEST";
-    args.ui.levelupEl.root.hidden = false;
-    (args.ui.levelupEl.root.querySelector(".title") as HTMLElement).textContent = "Boss Chest";
-    args.ui.levelupEl.sub.textContent = message;
-
-    const container = args.ui.levelupEl.choices;
-    container.innerHTML = "";
-
-    const btn = document.createElement("button");
-    btn.className = "choiceBtn";
-    btn.dataset.chestContinue = "1";
-
-    const titleRow = document.createElement("div");
-    titleRow.className = "choiceTitle";
-    titleRow.textContent = "Continue";
-
-    const d = document.createElement("div");
-    d.className = "choiceDesc";
-    d.textContent = "Resume the run.";
-
-    btn.appendChild(titleRow);
-    btn.appendChild(d);
-    container.appendChild(btn);
-  }
-
-  function hideLevelUp() {
-    args.ui.levelupEl.root.hidden = true;
-    (args.ui.levelupEl.root.querySelector(".title") as HTMLElement).textContent = "Level Up";
-  }
-
-  function rollChoices() {
-    const pool = getUpgradePool(world).slice();
-    currentChoices = [];
-
-    // Pick 3 unique upgrades
-    while (currentChoices.length < 3 && pool.length > 0) {
-      const idx = world.rng.int(0, pool.length - 1);
-      currentChoices.push(pool[idx]);
-      pool.splice(idx, 1);
-    }
-  }
-
-  function renderChoices() {
-    const container = args.ui.levelupEl.choices;
-    container.innerHTML = "";
-
-    for (const def of currentChoices) {
-      const btn = document.createElement("button");
-      btn.className = "choiceBtn";
-      btn.dataset.upgrade = def.id;
-
-      const titleRow = document.createElement("div");
-      titleRow.className = "choiceTitle";
-      const prefix = def.isEvolution ? "EVOLUTION — " : "";
-      titleRow.textContent = def.getRankText
-          ? `${prefix}${def.title} (${def.getRankText(world)})`
-          : `${prefix}${def.title}`;
-
-      const d = document.createElement("div");
-      d.className = "choiceDesc";
-      d.textContent = def.desc;
-
-      btn.appendChild(titleRow);
-      btn.appendChild(d);
-
-      // Add stat diffs if available
-      if (def.getStatsDiff) {
-        const diffs = def.getStatsDiff(world);
-        if (diffs.length > 0) {
-          const diffContainer = document.createElement("div");
-          diffContainer.className = "choiceStats";
-
-          for (const diff of diffs) {
-            const row = document.createElement("div");
-            row.className = "statRow";
-
-            const label = document.createElement("span");
-            label.className = "statLabel";
-            label.textContent = diff.label;
-
-            const values = document.createElement("span");
-            values.className = "statValues";
-
-            const oldSpan = document.createElement("span");
-            oldSpan.className = "statOld";
-            oldSpan.textContent = diff.oldVal;
-
-            const arrow = document.createElement("span");
-            arrow.className = diff.isIncrease ? "statArrow statUp" : "statArrow statDown";
-            arrow.textContent = diff.isIncrease ? "▲" : "▼";
-
-            const newSpan = document.createElement("span");
-            newSpan.className = diff.isIncrease ? "statNew statUp" : "statNew statDown";
-            newSpan.textContent = diff.newVal;
-
-            values.appendChild(oldSpan);
-            values.appendChild(arrow);
-            values.appendChild(newSpan);
-
-            row.appendChild(label);
-            row.appendChild(values);
-            diffContainer.appendChild(row);
-          }
-
-          btn.appendChild(diffContainer);
-        }
-      }
-
-      container.appendChild(btn);
-    }
-  }
-
   function hudTimeText(w: World): string {
     const floor = `F${(w.floorIndex ?? 0) + 1}/3`;
     switch (w.runState) {
@@ -1746,12 +1766,6 @@ export function createGame(args: CreateGameArgs) {
       default:
         return `${floor} ${formatTimeMMSS(w.phaseTime)}`;
     }
-  }
-
-  function applyUpgrade(def: UpgradeDef) {
-    def.apply(world);
-    // If an upgrade changed items/stats, ensure derived stats are up to date.
-    // recomputeDerivedStats is already called by item upgrades, but keeping this is future-proof.
   }
 
   // ----- HUD inventory helpers -----
@@ -1854,12 +1868,13 @@ export function createGame(args: CreateGameArgs) {
     }
 
     // Handle pause states
-    if (world.state === "LEVELUP" || world.state === "CHEST" || world.state === "MAP") {
+    if (world.state === "REWARD" || world.state === "MAP") {
       // HUD still updates while paused
       args.hud.timePill.textContent = hudTimeText(world);
       args.hud.killsPill.textContent = `Kills: ${world.kills}`;
       args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
       args.hud.lvlPill.textContent = `Lv: ${world.level}`;
+      renderRewardMenuIfNeeded();
       updateHud();
       return;
     }
@@ -1890,6 +1905,8 @@ export function createGame(args: CreateGameArgs) {
 
     // phase time (drives FLOOR/BOSS/TRANSITION)
     world.phaseTime += dt;
+    // Spawn pacing uses the same clock as floor progression/spawn cadence.
+    world.timeSec = world.phaseTime;
 
     const mapMode = !!(world as any).mapMode;
 
@@ -1946,13 +1963,49 @@ export function createGame(args: CreateGameArgs) {
     neutralBirdAISystem(world, dt);
     neutralAnimatedMobsSystem(world, dt);
     roomChallengeSystem(world, dt);  // Track room challenges and lock exits
-    spawnSystem(world, dt);
+    spawnSurviveBossIfNeeded(world);
+    if (world.floorArchetype === "SURVIVE") {
+      world.spawnDirectorOverrides = buildSurviveSpawnOverrides(world.timeSec ?? world.phaseTime ?? 0);
+    } else {
+      world.spawnDirectorOverrides = undefined;
+    }
+    world.spawnDirectorConfig.enabled = !!world.balance.spawnDirectorEnabled;
+    if (world.balance.spawnDirectorEnabled) {
+      tickSpawnDirector(
+        world,
+        dt,
+        world.spawnDirectorConfig,
+        world.expectedPowerConfig,
+        world.expectedPowerBudgetConfig,
+        world.spawnDirectorState,
+        {
+          getDepth: () => {
+            if (Number.isFinite(world.delveDepth) && world.delveDepth > 0) return world.delveDepth;
+            return (world.floorIndex ?? 0) + 1;
+          },
+          isBossActive: () => world.runState === "BOSS" || bossAlive(world),
+          canSpawnNow: () => world.runState === "FLOOR" && world.phaseTime >= 2,
+          spawnTrash: () => {
+            let tier: "trash" | "elite" = "trash";
+            const eliteChance = world.spawnDirectorOverrides?.eliteChanceOverride ?? 0;
+            if (eliteChance > 0 && world.rng.next() < eliteChance) tier = "elite";
+            return spawnOneTrashEnemy(world, undefined, undefined, tier);
+          },
+        }
+      );
+    } else {
+      spawnSystem(world, dt);
+    }
     const isNeutralObjectiveFloor = world.floorArchetype === "VENDOR" || world.floorArchetype === "HEAL";
     if (!isNeutralObjectiveFloor) {
       combatSystem(world, dt);
     }
     projectilesSystem(world, dt);
     collisionsSystem(world, dt);
+    const combatMode = (world as any).combatMode ?? "mods";
+    if (combatMode === "mods") {
+      ailmentTickSystem(world, dt);
+    }
     fissionSystem(world, dt);  // Nuclear fission: projectile-projectile collisions
     poisonSystem(world, dt);
     onKillExplodeSystem(world, dt); // NEW: explode on kill (can add more kills)
@@ -1966,69 +2019,36 @@ export function createGame(args: CreateGameArgs) {
     updateZoneTrialObjective(world);
     bossZoneSpawnSystem(world);
     objectiveSystem(world);
+    if (maybeBeginZoneClearedCardReward()) {
+      clearEvents(world);
+      return;
+    }
+    if (maybeBeginBossMilestoneCardReward()) {
+      clearEvents(world);
+      return;
+    }
+    if (maybeBeginSurviveMilestoneCardReward()) {
+      clearEvents(world);
+      return;
+    }
+    if (maybeBeginObjectiveCardReward()) {
+      clearEvents(world);
+      return;
+    }
     outcomeSystem(world);
 
     // SFX consumes events before any early-return branches
     audioSystem(world, dt);
 
-    // If a chest was opened this frame, roll/apply reward and pause with a popup
-    if ((world as any).chestOpenRequested) {
+    if (world.floorArchetype === "SURVIVE" && (world.timeSec ?? 0) >= SURVIVE_RAMP_CONFIG.durationSec) {
+      completeRun(world);
+      clearEvents(world);
+      return;
+    }
 
-      (world as any).chestOpenRequested = false;
-
-      const pool = getUpgradePool(world);
-
-      // 1) EVOLUTION ALWAYS WINS
-      const evoChoices = pool.filter((u) => u.isEvolution && u.isAvailable(world));
-      if (evoChoices.length > 0) {
-        const evo = evoChoices[world.rng.int(0, evoChoices.length - 1)];
-        applyUpgrade(evo);
-        showChestPopup(`EVOLUTION — ${evo.title}\n${evo.desc}`);
-        clearEvents(world);
-        return;
-      }
-
-      // 2) Otherwise: upgrade an already-owned weapon or item directly
-      type Candidate = { kind: "weapon"; index: number } | { kind: "item"; index: number };
-      const candidates: Candidate[] = [];
-
-      const MAX_WPN_LV = registry.maxWeaponLevel();
-      const MAX_ITEM_LV = registry.maxItemLevel();
-
-      for (let i = 0; i < world.weapons.length; i++) {
-        const wpn = world.weapons[i];
-        if (wpn.level < MAX_WPN_LV) candidates.push({ kind: "weapon", index: i });
-      }
-
-      for (let i = 0; i < world.items.length; i++) {
-        const it = world.items[i];
-        if (it.level < MAX_ITEM_LV) candidates.push({ kind: "item", index: i });
-      }
-
-      if (candidates.length === 0) {
-        showChestPopup("Nothing happened. (All owned upgrades are maxed.)");
-        clearEvents(world);
-        return;
-      }
-
-      const pick = candidates[world.rng.int(0, candidates.length - 1)];
-
-      if (pick.kind === "weapon") {
-        const inst = world.weapons[pick.index];
-        inst.level = Math.min(MAX_WPN_LV, inst.level + 1);
-
-        const def = registry.weapon(inst.id);
-        showChestPopup(`Upgrade — ${def.title}\nLevel ${inst.level}/${MAX_WPN_LV}`);
-      } else {
-        const inst = world.items[pick.index];
-        inst.level = Math.min(MAX_ITEM_LV, inst.level + 1);
-
-        recomputeDerivedStats(world);
-
-        const def = registry.item(inst.id);
-        showChestPopup(`Upgrade — ${def.title}\nLevel ${inst.level}/${MAX_ITEM_LV}`);
-      }
-
+    // Boss chest pickup triggers a deterministic card reward.
+    if (processChestOpenRequested(world, 3)) {
+      renderRewardMenuIfNeeded();
       clearEvents(world);
       return;
     }
@@ -2036,12 +2056,6 @@ export function createGame(args: CreateGameArgs) {
     // Clear events AFTER all consumers ran this frame
     clearEvents(world);
     if (tryAdvanceAfterObjectiveCompletion()) {
-      return;
-    }
-
-    // Enter level-up state if needed
-    if (world.pendingLevelUps > 0) {
-      showLevelUp();
       return;
     }
 
@@ -2063,7 +2077,7 @@ export function createGame(args: CreateGameArgs) {
       args.ui.endEl.root.hidden = false;
       args.ui.menuEl.hidden = true;
       args.hud.root.hidden = true;
-      hideLevelUp();
+      hideCardRewardMenu();
       return;
     }
 
@@ -2096,7 +2110,7 @@ export function createGame(args: CreateGameArgs) {
 
     // Back to menu (weapon select is already there)
     args.ui.menuEl.hidden = false;
-    hideLevelUp();
+    hideCardRewardMenu();
   });
 
   args.ui.mapEl.root.addEventListener("click", (e) => {
@@ -2167,48 +2181,6 @@ export function createGame(args: CreateGameArgs) {
     queueFloorLoadIntent(buildFloorIntentFromRunNode(node, nextFloor));
   });
 
-  // Level-up choice click
-  args.ui.levelupEl.root.addEventListener("click", (e) => {
-    const el = e.target as HTMLElement;
-    const btn = el.closest("button") as HTMLButtonElement | null;
-    if (!btn) return;
-
-    // Chest popup: single "Continue"
-    if (btn.dataset.chestContinue === "1") {
-      hideLevelUp();
-
-      // If map overlay is up, do NOT resume gameplay yet.
-      if (!args.ui.mapEl.root.hidden) {
-        // Stay in MAP state (player must pick next node)
-        world.state = "MAP";
-        return;
-      }
-
-      world.state = "RUN";
-      return;
-    }
-
-    // Normal level-up choice
-    const id = btn.dataset.upgrade;
-    if (!id) return;
-
-    const def = currentChoices.find((c) => c.id === id);
-    if (!def) return;
-
-    applyUpgrade(def);
-    world.pendingLevelUps = Math.max(0, world.pendingLevelUps - 1);
-
-    if (world.pendingLevelUps > 0) {
-      args.ui.levelupEl.sub.textContent = `Choose an upgrade (${world.pendingLevelUps} pending)`;
-      rollChoices();
-      renderChoices();
-      return;
-    }
-
-    hideLevelUp();
-    world.state = "RUN";
-  });
-
   return {
     update,
     render,
@@ -2226,5 +2198,7 @@ export function createGame(args: CreateGameArgs) {
     finalizeFloorLoad,
     queueFloorLoadIntent,
     consumePendingFloorLoadIntent,
+    quitRunToMenu,
+    getWorld: () => world,
   };
 }

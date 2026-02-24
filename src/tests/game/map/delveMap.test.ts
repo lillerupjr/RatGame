@@ -107,10 +107,10 @@ describe("delveMap", () => {
       expect(scaling10.xpMult).toBeGreaterThan(scaling1.xpMult);
     });
 
-    it("should calculate correct HP scaling (+10% per depth)", () => {
+    it("should calculate correct HP scaling (+20% per depth)", () => {
       const scaling5 = getDepthScaling(5);
-      // 1.1^4 = 1.4641
-      expect(scaling5.hpMult).toBeCloseTo(Math.pow(1.1, 4), 5);
+      // 1.2^4 = 2.0736
+      expect(scaling5.hpMult).toBeCloseTo(Math.pow(1.2, 4), 5);
     });
 
     it("should handle depth < 1 by clamping to 1", () => {

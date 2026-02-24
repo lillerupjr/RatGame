@@ -20,16 +20,17 @@ let curStage: StageId | null = null;
  * This should usually be driven by settings / UI.
  */
 let musicMasterVolume = 0.6;
+let musicMuted = false;
 
 /**
  * Per-track base mix volume (before master volume).
  * Useful if some tracks are louder than others.
  */
-const BASE_TRACK_VOLUME = 0;
+const BASE_TRACK_VOLUME = 1;
 
 function applyVolume() {
     if (!cur) return;
-    cur.volume = BASE_TRACK_VOLUME * musicMasterVolume;
+    cur.volume = (musicMuted ? 0 : BASE_TRACK_VOLUME) * musicMasterVolume;
 }
 
 /**
@@ -40,11 +41,28 @@ export function setMusicMasterVolume(v: number) {
     applyVolume();
 }
 
+export function setMusicVolume(v: number) {
+    setMusicMasterVolume(v);
+}
+
 /**
  * Optional getter (useful for UI sliders)
  */
 export function getMusicMasterVolume() {
     return musicMasterVolume;
+}
+
+export function getMusicVolume() {
+    return musicMasterVolume;
+}
+
+export function setMusicMuted(muted: boolean) {
+    musicMuted = !!muted;
+    applyVolume();
+}
+
+export function getMusicMuted() {
+    return musicMuted;
 }
 
 // -----------------------------

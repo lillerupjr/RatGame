@@ -10,6 +10,10 @@ import type { ProjectileSource } from "../../factories/projectileFactory";
 import { onEnemyKilledForChallenge } from "../progression/roomChallenge";
 import { anchorFromWorld, writeAnchor } from "../../coords/anchor";
 import { enqueueDelayedExplosion } from "./delayedExplosions";
+import { resolveProjectileDamagePacket } from "../../combat_mods/runtime/critDamagePacket";
+import { assertValidCrit, assertValidDamageBundle } from "../../combat_mods/debug/combatRuntimeAssert";
+import { applyAilmentsFromHit, ensureEnemyAilmentsAt } from "../../combat_mods/ailments/applyAilmentsFromHit";
+import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
 import {
   getEnemyWorld,
   getPlayerWorld,
@@ -193,13 +197,61 @@ export function collisionsSystem(w: World, dt: number) {
       // HIT
       hitSomething = true;
 
-      // Calculate crit chance and apply crit damage
-      const totalCritChance = Math.min(1, w.baseCritChance + w.critChanceBonus);
-      const isCrit = w.rng.range(0, 1) < totalCritChance;
-      const baseDmg = w.prDamage[p];
-      const dmg = isCrit ? baseDmg * w.critMultiplier : baseDmg;
+      const physBefore = w.prDmgPhys[p] ?? 0;
+      const fireBefore = w.prDmgFire[p] ?? 0;
+      const chaosBefore = w.prDmgChaos[p] ?? 0;
+      const critChance = w.prCritChance[p] ?? 0;
+      const critMulti = w.prCritMulti[p] ?? 1;
+
+      // Phase B.5 verification layer: typed bundle safety + crit parameter bounds.
+      // Phase B mitigation is identity, so before/after bundle should match exactly.
+      assertValidDamageBundle(
+        physBefore,
+        fireBefore,
+        chaosBefore,
+        physBefore,
+        fireBefore,
+        chaosBefore
+      );
+      assertValidCrit(critChance, critMulti);
+
+      const resolvedDamage = resolveProjectileDamagePacket(
+        {
+          physical: physBefore,
+          fire: fireBefore,
+          chaos: chaosBefore,
+          critChance,
+          critMulti,
+        },
+        w.rng.range(0, 1)
+      );
+      const finalPhysDealt = resolvedDamage.physical;
+      const finalFireDealt = resolvedDamage.fire;
+      const finalChaosDealt = resolvedDamage.chaos;
+      const isCrit = resolvedDamage.isCrit;
+      const dmg = resolvedDamage.total;
+
+      if (!w.eAilments) w.eAilments = [];
+      const ailmentState = ensureEnemyAilmentsAt(w.eAilments, e);
+      applyAilmentsFromHit(
+        ailmentState,
+        { physical: finalPhysDealt, fire: finalFireDealt, chaos: finalChaosDealt },
+        {
+          bleed: w.prChanceBleed[p] ?? 0,
+          ignite: w.prChanceIgnite[p] ?? 0,
+          poison: w.prChancePoison[p] ?? 0,
+        },
+        {
+          bleed: w.rng.range(0, 1),
+          ignite: w.rng.range(0, 1),
+          poison: w.rng.range(0, 1),
+        }
+      );
       
       w.eHp[e] -= dmg;
+      if (!(w as any).metrics) (w as any).metrics = {};
+      if (!(w as any).metrics.dps) (w as any).metrics.dps = createDpsMetrics();
+      recordDamage((w as any).metrics.dps, (w as any).timeSec ?? (w as any).time ?? 0, dmg);
 
       // Track damage for DPS meter
       if (w.dpsEnabled) {

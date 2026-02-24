@@ -36,7 +36,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
         radius: 14,
         speed: 90,
         damage: 10,
-        hpScaleWeight: 1.2, // Moderate scaling
+        hpScaleWeight: 1.0, // Moderate scaling
         color: "#f66",
     },
     [ENEMY_TYPE.RUNNER]: {
@@ -46,7 +46,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
         radius: 12,
         speed: 130,
         damage: 8,
-        hpScaleWeight: 1.0, // Lightest scaling (still squishy)
+        hpScaleWeight: 1.2, // Lightest scaling (still squishy)
         color: "#fb8",
     },
     [ENEMY_TYPE.BRUISER]: {
@@ -92,7 +92,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     [ENEMY_TYPE.BOSS]: {
         id: ENEMY_TYPE.BOSS,
         name: "Boss",
-        hp: 800,
+        hp: 400,
         radius: 34,
         speed: 55,
         damage: 22,

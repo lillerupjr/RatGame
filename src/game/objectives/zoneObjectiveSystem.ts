@@ -2,7 +2,7 @@ import type { World } from "../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { worldToTile } from "../coords/tile";
 import { getActiveMap, walkInfo } from "../map/compile/kenneyMap";
-import { OBJECTIVE_TRIGGER_IDS } from "../systems/progression/objectiveSpec";
+import { buildZoneClearedTriggerId, OBJECTIVE_TRIGGER_IDS } from "../systems/progression/objectiveSpec";
 import {
   DEFAULT_ZONE_TRIAL_CONFIG,
   isTileInsideZone,
@@ -217,6 +217,14 @@ export function startZoneTrial(world: World, config: Partial<ZoneTrialConfig> = 
     completed: zones.length === 0,
     completionSignalEmitted: zones.length === 0,
   };
+
+  if (zones.length === 0) {
+    world.triggerSignals.push({
+      type: "KILL",
+      entityId: -1,
+      triggerId: OBJECTIVE_TRIGGER_IDS.zoneTrialComplete,
+    });
+  }
 }
 
 export function updateZoneTrialObjective(world: World): void {
@@ -247,6 +255,11 @@ export function updateZoneTrialObjective(world: World): void {
         zone.killCount = zone.killTarget;
         zone.completed = true;
         state.completedZones++;
+        world.triggerSignals.push({
+          type: "KILL",
+          entityId: -1,
+          triggerId: buildZoneClearedTriggerId(z + 1),
+        });
       }
       break;
     }

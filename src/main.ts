@@ -18,6 +18,8 @@ import {
   type BooleanDebugSettingKey,
 } from "./debugSettings";
 import { getUserSettings, initUserSettings, updateUserSettings } from "./userSettings";
+import { mountPauseMenu } from "./ui/pause/pauseMenu";
+import { togglePause } from "./game/app/pauseController";
 
 function installDevSettingsUi(): void {
   if (!import.meta.env.DEV) return;
@@ -176,16 +178,39 @@ function installDevSettingsUi(): void {
   paletteIdSelect.style.color = "#fff";
   paletteIdSelect.style.border = "1px solid rgba(255,255,255,0.25)";
   paletteIdSelect.style.borderRadius = "4px";
-  for (const id of ["db32", "divination", "cyberpunk"] as const) {
+  const PALETTE_IDS = [
+    "db32",
+    "divination",
+    "cyberpunk",
+    "moonlight_15",
+    "st8_moonlight",
+    "chroma_noir",
+    "swamp_kin",
+    "lost_in_the_desert",
+    "endesga_16",
+    "sweetie_16",
+    "dawnbringer_16",
+    "night_16",
+    "fun_16",
+    "reha_16",
+    "arne_16",
+    "lush_sunset",
+    "vaporhaze_16",
+    "sunset_cave_extended",
+  ] as const;
+
+  type PaletteId = (typeof PALETTE_IDS)[number];
+
+  for (const id of PALETTE_IDS) {
     const opt = document.createElement("option");
     opt.value = id;
     opt.textContent = id;
     paletteIdSelect.appendChild(opt);
   }
   paletteIdSelect.addEventListener("change", () => {
-        updateUserSettings({
+    updateUserSettings({
       render: {
-        paletteId: paletteIdSelect.value as "db32" | "divination" | "cyberpunk",
+        paletteId: paletteIdSelect.value as PaletteId,
       },
     });
   });
@@ -569,6 +594,25 @@ async function bootstrap() {
   let cachedDeps: ReturnType<typeof collectFloorDependencies> | null = null;
   let firstRunDiagPending = false;
 
+  const pauseMenu = mountPauseMenu({
+    root: refs.ui.menuEl,
+    actions: {
+      onResume: () => {
+        appStateController.setRunState(RunState.PLAYING);
+        pauseMenu.setVisible(false);
+      },
+      onQuitRun: () => {
+        appStateController.setRunState(RunState.PLAYING);
+        appStateController.setAppState(AppState.MENU);
+        activeStartIntent = null;
+        activeFloorIntent = null;
+        loadingDoneFramePending = false;
+        syncUiForAppState(AppState.MENU);
+        pauseMenu.setVisible(false);
+        game.quitRunToMenu();
+      },
+    },
+  });
   const loadingController = createLoadingController({
     compileMap: async () => {
       cachedDeps = null;
@@ -624,64 +668,56 @@ async function bootstrap() {
   };
 
   // Runtime render/debug toggles (works outside dev panel too).
-  const F5_PALETTE_CYCLE: ReadonlyArray<ReturnType<typeof getUserSettings>["render"]["paletteId"]> = [
-    "divination",
-    "cyberpunk",
-    "sunset_8",
-    "s_sunset7",
-    "moonlight_15",
-    "st8_moonlight",
-    "noire_truth",
-    "chroma_noir",
-    "sunny_swamp",
-    "swamp_kin",
-    "cobalt_desert_7",
-    "lost_in_the_desert",
-    "db32",
-  ];
-
   window.addEventListener("keydown", (ev) => {
     if (ev.repeat) return;
 
     if (ev.code === "F5") {
       ev.preventDefault();
+      const PALETTE_CYCLE = [
+        "db32",
+        "divination",
+        "cyberpunk",
+        "moonlight_15",
+        "st8_moonlight",
+        "chroma_noir",
+        "swamp_kin",
+        "lost_in_the_desert",
+        "endesga_16",
+        "sweetie_16",
+        "dawnbringer_16",
+        "night_16",
+        "fun_16",
+        "reha_16",
+        "arne_16",
+        "lush_sunset",
+        "vaporhaze_16",
+        "sunset_cave_extended",
+      ] as const;
+
+      type PaletteId = (typeof PALETTE_CYCLE)[number];
+
       const current = getUserSettings().render;
+
       if (!current.paletteSwapEnabled) {
-        updateUserSettings({ render: { paletteSwapEnabled: true, paletteId: F5_PALETTE_CYCLE[0] } });
-      } else {
-        const idx = F5_PALETTE_CYCLE.indexOf(current.paletteId);
-        if (idx >= 0 && idx < F5_PALETTE_CYCLE.length - 1) {
-          updateUserSettings({ render: { paletteSwapEnabled: true, paletteId: F5_PALETTE_CYCLE[idx + 1] } });
-        } else {
-          updateUserSettings({ render: { paletteSwapEnabled: false } });
-        }
+        updateUserSettings({ render: { paletteSwapEnabled: true, paletteId: PALETTE_CYCLE[0] as PaletteId } });
+        return;
       }
-      return;
-    }
 
-    if (ev.code === "F8") {
-      const next = !getUserSettings().debug.entityAnchorOverlay;
-      updateUserSettings({ debug: { entityAnchorOverlay: next } });
-      return;
-    }
+      const idx = Math.max(0, PALETTE_CYCLE.indexOf(current.paletteId as PaletteId));
+      const nextIdx = idx + 1;
 
-    if (ev.code === "F7") {
-      const next = !getUserSettings().render.entityAnchorsEnabled;
-      updateUserSettings({ render: { entityAnchorsEnabled: next } });
-      return;
-    }
+      if (nextIdx >= PALETTE_CYCLE.length) {
+        updateUserSettings({ render: { paletteSwapEnabled: false } });
+        return;
+      }
 
-    if (ev.code === "F6") {
-      const next = !getUserSettings().render.entityShadowsEnabled;
-      updateUserSettings({ render: { entityShadowsEnabled: next } });
+      updateUserSettings({ render: { paletteSwapEnabled: true, paletteId: PALETTE_CYCLE[nextIdx] as PaletteId } });
       return;
     }
 
     if (ev.code === "Escape" && appStateController.appState === AppState.RUN) {
       ev.preventDefault();
-      appStateController.setRunState(
-        appStateController.runState === RunState.PAUSED ? RunState.PLAYING : RunState.PAUSED,
-      );
+      togglePause(appStateController, appStateController.appState, pauseMenu);
     }
   });
 
@@ -757,6 +793,12 @@ async function bootstrap() {
           game.update(dt);
         }
         game.render();
+        if (appStateController.runState === RunState.PAUSED) {
+          pauseMenu.setVisible(true);
+          pauseMenu.render(game.getWorld());
+        } else {
+          pauseMenu.setVisible(false);
+        }
         if (firstRunDiagPending) {
           firstRunDiagPending = false;
           const deps = collectFloorDependencies();
@@ -768,16 +810,6 @@ async function bootstrap() {
               notReady.slice(0, 20),
             );
           }
-        }
-        if (appStateController.runState === RunState.PAUSED) {
-          ctx.save();
-          ctx.fillStyle = "rgba(0,0,0,0.45)";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.fillStyle = "#ffffff";
-          ctx.font = "16px monospace";
-          ctx.textAlign = "center";
-          ctx.fillText("PAUSED", Math.floor(canvas.width * 0.5), Math.floor(canvas.height * 0.5));
-          ctx.restore();
         }
         break;
       default:
