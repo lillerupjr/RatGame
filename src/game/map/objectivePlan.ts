@@ -53,7 +53,7 @@ export function objectiveSpecFromObjectiveId(
       return {
         objectiveType: "ZONE_TRIAL",
         params: {
-          zoneCount: params?.zoneCount ?? 2,
+          zoneCount: params?.zoneCount ?? 3,
           zoneSize: 4,
           killTargetPerZone: 8,
         },
@@ -62,7 +62,7 @@ export function objectiveSpecFromObjectiveId(
       return {
         objectiveType: "ZONE_TRIAL",
         params: {
-          zoneCount: params?.zoneCount ?? 2,
+          zoneCount: params?.zoneCount ?? 3,
           zoneSize: 4,
           killTargetPerZone: 8,
         },

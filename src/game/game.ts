@@ -96,18 +96,12 @@ import { getZoneTrialObjectiveState, startZoneTrial, updateZoneTrialObjective } 
 import { collectRuntimeSpriteIdsToPrewarm } from "./render/prewarmSprites";
 import { resolveActivePaletteId } from "./render/activePalette";
 import { applySfxSettingsToWorld } from "./audio/audioSettings";
-import { chooseCardReward, ensureCardRewardState } from "./combat_mods/rewards/cardRewardFlow";
-import {
-  processBossMilestoneRewards,
-  processChestOpenRequested,
-  processObjectiveCompletionReward,
-  processSurviveMilestoneRewards,
-  processZoneClearedReward,
-  resetFloorCardRewardBudget,
-} from "./combat_mods/rewards/rewardTriggers";
+import { beginCardReward, chooseCardReward, ensureCardRewardState } from "./combat_mods/rewards/cardRewardFlow";
 import { mountCardRewardMenu } from "../ui/rewards/cardRewardMenu";
 import { tickSpawnDirector } from "./balance/spawnDirector";
 import { buildSurviveSpawnOverrides, SURVIVE_RAMP_CONFIG } from "./balance/surviveRamp";
+import { createFloorRewardBudget, type ObjectiveMode } from "./rewards/floorRewardBudget";
+import { handleRewardEvent, type RewardOutcome } from "./rewards/rewardDirector";
 
 
 type HudRefs = {
@@ -281,7 +275,7 @@ export function createGame(args: CreateGameArgs) {
       args.ui.dialogEl.text.textContent = "";
       args.ui.dialogEl.choices.innerHTML = "";
       if (world.pendingAdvanceToNextFloor) {
-        if (maybeBeginObjectiveCardReward()) {
+        if (maybeHandleObjectiveCompletionReward()) {
           world.pendingAdvanceToNextFloor = false;
           return;
         }
@@ -544,44 +538,106 @@ export function createGame(args: CreateGameArgs) {
     return true;
   }
 
-  function maybeBeginObjectiveCardReward(): boolean {
-    if (world.state !== "RUN") return false;
-    if (world.runState !== "FLOOR") return false;
+  function objectiveModeForFloor(w: World): ObjectiveMode {
+    if (w.floorArchetype === "SURVIVE") return "SURVIVE_TRIAL";
+    if (w.floorArchetype === "TIME_TRIAL") return "ZONE_TRIAL";
+    return "NORMAL";
+  }
+
+  function floorDepthForRewards(w: World): number {
+    if (Number.isFinite(w.delveDepth) && w.delveDepth > 0) return w.delveDepth;
+    return (w.floorIndex ?? 0) + 1;
+  }
+
+  function consumeFirstZoneClearedSignal(w: World): (1 | 2) | null {
+    const signals = w.triggerSignals;
+    for (let i = 0; i < signals.length; i++) {
+      const id = signals[i]?.triggerId;
+      if (typeof id !== "string" || !id.startsWith(OBJECTIVE_TRIGGER_IDS.zoneClearedPrefix)) continue;
+      signals.splice(i, 1);
+      const raw = Number.parseInt(id.slice(OBJECTIVE_TRIGGER_IDS.zoneClearedPrefix.length), 10);
+      if (raw === 1 || raw === 2) return raw;
+      return null;
+    }
+    return null;
+  }
+
+  function syncRewardDebugFieldsFromBudget(w: World): void {
+    const budget = w.floorRewardBudget;
+    const nonObjectiveUsed = 2 - budget.nonObjectiveCardsRemaining;
+    const objectiveUsed = budget.objectiveCardAvailable ? 0 : 1;
+    w.cardRewardBudgetTotal = 3;
+    w.cardRewardBudgetUsed = nonObjectiveUsed + objectiveUsed;
+    w.cardRewardClaimKeys = Object.keys(budget.fired);
+  }
+
+  function applyRewardOutcome(outcome: RewardOutcome, cardSource: "ZONE_TRIAL" | "BOSS_CHEST"): boolean {
+    syncRewardDebugFieldsFromBudget(world);
+    if (outcome.type === "GRANT_CARD") {
+      if (activeDialog) setDialog(null);
+      beginCardReward(world, cardSource, 3);
+      world.state = "REWARD";
+      world.lastCardRewardClaimKey = outcome.reason;
+      renderRewardMenuIfNeeded();
+      return true;
+    }
+    if (outcome.type === "GRANT_GOLD") {
+      world.gold += outcome.amount;
+      world.lastCardRewardClaimKey = outcome.reason;
+      return false;
+    }
+    world.lastCardRewardClaimKey = outcome.reason;
+    return false;
+  }
+
+  function maybeHandleZoneTrialMilestoneReward(): boolean {
+    if (world.state !== "RUN" || world.runState !== "FLOOR") return false;
+    if (world.floorRewardBudget.mode !== "ZONE_TRIAL") return false;
+    const zoneIndex = consumeFirstZoneClearedSignal(world);
+    if (!zoneIndex) return false;
+    const outcome = handleRewardEvent(
+      world.floorRewardBudget,
+      { type: "ZONE_COMPLETED", zoneIndex },
+      { depth: floorDepthForRewards(world) }
+    );
+    return applyRewardOutcome(outcome, "ZONE_TRIAL");
+  }
+
+  function maybeHandleSurviveOneMinuteReward(): boolean {
+    if (world.state !== "RUN" || world.runState !== "FLOOR") return false;
+    if (world.floorRewardBudget.mode !== "SURVIVE_TRIAL") return false;
+    if ((world.timeSec ?? 0) < 60) return false;
+    const outcome = handleRewardEvent(
+      world.floorRewardBudget,
+      { type: "SURVIVE_1MIN_REWARD" },
+      { depth: floorDepthForRewards(world) }
+    );
+    return applyRewardOutcome(outcome, "ZONE_TRIAL");
+  }
+
+  function maybeHandleObjectiveCompletionReward(): boolean {
+    if (world.state !== "RUN" || world.runState !== "FLOOR") return false;
     const hasCompletedObjective =
       world.objectiveStates.some((s) => s?.status === "COMPLETED") ||
       !!(world as any).zoneTrialObjective?.completed;
     if (!hasCompletedObjective) return false;
-    if (activeDialog) setDialog(null);
-    if (!processObjectiveCompletionReward(world, 3)) return false;
-    renderRewardMenuIfNeeded();
-    return true;
+    const outcome = handleRewardEvent(
+      world.floorRewardBudget,
+      { type: "OBJECTIVE_COMPLETED" },
+      { depth: floorDepthForRewards(world) }
+    );
+    return applyRewardOutcome(outcome, "ZONE_TRIAL");
   }
 
-  function maybeBeginZoneClearedCardReward(): boolean {
-    if (world.state !== "RUN") return false;
-    if (world.runState !== "FLOOR") return false;
-    if (activeDialog) setDialog(null);
-    if (!processZoneClearedReward(world, 3)) return false;
-    renderRewardMenuIfNeeded();
-    return true;
-  }
-
-  function maybeBeginBossMilestoneCardReward(): boolean {
-    if (world.state !== "RUN") return false;
-    if (world.runState !== "FLOOR") return false;
-    if (activeDialog) setDialog(null);
-    if (!processBossMilestoneRewards(world, 3)) return false;
-    renderRewardMenuIfNeeded();
-    return true;
-  }
-
-  function maybeBeginSurviveMilestoneCardReward(): boolean {
-    if (world.state !== "RUN") return false;
-    if (world.runState !== "FLOOR") return false;
-    if (activeDialog) setDialog(null);
-    if (!processSurviveMilestoneRewards(world, 3)) return false;
-    renderRewardMenuIfNeeded();
-    return true;
+  function maybeHandleChestOpenedReward(): boolean {
+    if (!world.chestOpenRequested) return false;
+    world.chestOpenRequested = false;
+    const outcome = handleRewardEvent(
+      world.floorRewardBudget,
+      { type: "CHEST_OPENED", chestKind: "BOSS" },
+      { depth: floorDepthForRewards(world) }
+    );
+    return applyRewardOutcome(outcome, "BOSS_CHEST");
   }
 
   function handleDialogInput() {
@@ -903,6 +959,61 @@ export function createGame(args: CreateGameArgs) {
     (w as any)._surviveBossSpawned = true;
   }
 
+  function syncBossTripleNavState(w: World): void {
+    if (w.floorArchetype !== "BOSS_TRIPLE") {
+      w.bossTriple = undefined;
+      return;
+    }
+    const defs = (w.overlayTriggerDefs ?? []).filter((d) =>
+      typeof d.id === "string" && d.id.startsWith(OBJECTIVE_TRIGGER_IDS.bossZonePrefix)
+    );
+    defs.sort((a, b) => a.id.localeCompare(b.id));
+    const spawnPointsWorld = defs.map((d) => ({
+      x: (d.tx + 0.5) * KENNEY_TILE_WORLD,
+      y: (d.ty + 0.5) * KENNEY_TILE_WORLD,
+    }));
+    const completed =
+      w.bossTriple?.completed && w.bossTriple.completed.length === spawnPointsWorld.length
+        ? w.bossTriple.completed.slice()
+        : spawnPointsWorld.map(() => false);
+    w.bossTriple = { spawnPointsWorld, completed };
+  }
+
+  function syncZoneTrialNavState(w: World): void {
+    const state = (w as any).zoneTrialObjective;
+    const map = getActiveMap();
+    if (!state || !Array.isArray(state.zones)) {
+      w.zoneTrial = undefined;
+      return;
+    }
+    w.zoneTrial = {
+      originTx: map?.originTx ?? 0,
+      originTy: map?.originTy ?? 0,
+      zones: state.zones.map((z: any) => ({
+        tx: z.tileX,
+        ty: z.tileY,
+        w: z.tileW,
+        h: z.tileH,
+        completed: !!z.completed,
+      })),
+    };
+  }
+
+  function markBossClearCompletionFromSignals(w: World): void {
+    const bt = w.bossTriple;
+    if (!bt || !Array.isArray(bt.completed)) return;
+    const signals = w.triggerSignals;
+    if (!Array.isArray(signals) || signals.length === 0) return;
+    for (let i = 0; i < signals.length; i++) {
+      const id = signals[i]?.triggerId;
+      if (typeof id !== "string" || !id.startsWith(OBJECTIVE_TRIGGER_IDS.bossZonePrefix)) continue;
+      const raw = id.slice(OBJECTIVE_TRIGGER_IDS.bossZonePrefix.length);
+      const idx = Number.parseInt(raw, 10) - 1;
+      if (!Number.isFinite(idx) || idx < 0 || idx >= bt.completed.length) continue;
+      bt.completed[idx] = true;
+    }
+  }
+
   function beginFloorLoad(floorIntent: FloorIntent): boolean {
     const w = world;
     setDialog(null);
@@ -1003,13 +1114,20 @@ export function createGame(args: CreateGameArgs) {
     const objectiveSpec = objectiveSpecFromFloorIntent(ctx.floorIntent);
     w.currentObjectiveSpec = objectiveSpec;
     setObjectivesFromSpec(w, objectiveSpec);
+    w.floorRewardBudget = createFloorRewardBudget(objectiveModeForFloor(w));
     w.objectiveRewardClaimedKey = null;
     (w as any).zoneRewardClaimedKey = null;
     (w as any).zoneRewardClaimedKeys = [];
-    resetFloorCardRewardBudget(w);
+    w.cardRewardBudgetTotal = 3;
+    w.cardRewardBudgetUsed = 0;
+    w.cardRewardClaimKeys = [];
+    w.lastCardRewardClaimKey = null;
+    syncRewardDebugFieldsFromBudget(w);
     w.cardReward.active = false;
     w.cardReward.options = [];
     startZoneTrial(w);
+    syncZoneTrialNavState(w);
+    syncBossTripleNavState(w);
     if (objectiveSpec.objectiveType === "SURVIVE_TIMER") {
       w.floorDuration = objectiveSpec.params.timeLimitSec;
     }
@@ -2017,21 +2135,19 @@ export function createGame(args: CreateGameArgs) {
     vendorSystem(world);
     triggerSystem(world, dt, input);
     updateZoneTrialObjective(world);
+    syncZoneTrialNavState(world);
+    markBossClearCompletionFromSignals(world);
     bossZoneSpawnSystem(world);
     objectiveSystem(world);
-    if (maybeBeginZoneClearedCardReward()) {
+    if (maybeHandleZoneTrialMilestoneReward()) {
       clearEvents(world);
       return;
     }
-    if (maybeBeginBossMilestoneCardReward()) {
+    if (maybeHandleSurviveOneMinuteReward()) {
       clearEvents(world);
       return;
     }
-    if (maybeBeginSurviveMilestoneCardReward()) {
-      clearEvents(world);
-      return;
-    }
-    if (maybeBeginObjectiveCardReward()) {
+    if (maybeHandleObjectiveCompletionReward()) {
       clearEvents(world);
       return;
     }
@@ -2046,9 +2162,8 @@ export function createGame(args: CreateGameArgs) {
       return;
     }
 
-    // Boss chest pickup triggers a deterministic card reward.
-    if (processChestOpenRequested(world, 3)) {
-      renderRewardMenuIfNeeded();
+    // Chest open reward outcome (card while budget remains, else gold fallback).
+    if (maybeHandleChestOpenedReward()) {
       clearEvents(world);
       return;
     }

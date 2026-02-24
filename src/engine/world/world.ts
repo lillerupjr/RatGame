@@ -18,6 +18,7 @@ import type { Dir8 } from "../render/sprites/dir8";
 import type { ZoneTrialObjectiveState } from "../../game/objectives/zoneObjectiveTypes";
 import type { EnemyAilmentsState } from "../../game/combat_mods/ailments/enemyAilments";
 import type { CardRewardState } from "../../game/combat_mods/rewards/cardRewardFlow";
+import type { FloorRewardBudget } from "../../game/rewards/floorRewardBudget";
 import { createDpsMetrics, type DpsMetricsState } from "../../game/balance/dpsMetrics";
 import {
   createSpawnDirectorState,
@@ -157,6 +158,15 @@ export type World = {
   objectiveEvents: ObjectiveEvent[];
   currentObjectiveSpec: ObjectiveSpec | null;
   zoneTrialObjective: ZoneTrialObjectiveState | null;
+  zoneTrial?: {
+    originTx?: number;
+    originTy?: number;
+    zones: Array<{ tx: number; ty: number; w: number; h: number; completed: boolean }>;
+  };
+  bossTriple?: {
+    spawnPointsWorld: Array<{ x: number; y: number }>;
+    completed: boolean[];
+  };
 
   // -------------------------
   // Stage / floor
@@ -290,6 +300,7 @@ export type World = {
   cards: string[];
   combatCardIds: string[];
   cardReward: CardRewardState;
+  floorRewardBudget: FloorRewardBudget;
   cardRewardBudgetTotal: number;
   cardRewardBudgetUsed: number;
   cardRewardClaimKeys: string[];
@@ -685,6 +696,12 @@ export function createWorld(args: CreateWorldArgs): World {
       active: false,
       source: "ZONE_TRIAL",
       options: [],
+    },
+    floorRewardBudget: {
+      mode: "NORMAL",
+      nonObjectiveCardsRemaining: 2,
+      objectiveCardAvailable: true,
+      fired: Object.create(null),
     },
     cardRewardBudgetTotal: 3,
     cardRewardBudgetUsed: 0,

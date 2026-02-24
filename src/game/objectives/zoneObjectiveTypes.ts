@@ -26,7 +26,7 @@ export type ZoneTrialConfig = {
 };
 
 export const DEFAULT_ZONE_TRIAL_CONFIG: ZoneTrialConfig = {
-  zoneCount: 2,
+  zoneCount: 3,
   zoneSize: 4,
   killTargetPerZone: 8,
   killTargetMin: 4,

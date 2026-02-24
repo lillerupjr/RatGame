@@ -84,6 +84,8 @@ import { getUserSettings } from "../../../userSettings";
 import { getZoneTrialObjectiveState } from "../../objectives/zoneObjectiveSystem";
 import { renderZoneObjectives } from "../../render/renderZoneObjectives";
 import { resolveActivePaletteId } from "../../render/activePalette";
+import { resolveNavArrowTarget } from "../../ui/navArrowTarget";
+import { renderNavArrow } from "../../ui/navArrowRender";
 
 // ============================================
 // RenderKey & KindOrder (Isometric Painter Model)
@@ -3058,6 +3060,18 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   // --- UI ---
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (w.state === "RUN" && w.runState === "FLOOR") {
+    const target = resolveNavArrowTarget(w);
+    renderNavArrow(
+      ctx,
+      target,
+      { w: screenW, h: screenH },
+      (wx, wy) => {
+        const p = worldToScreen(wx, wy);
+        return { x: p.x + camTx, y: p.y + camTy };
+      }
+    );
+  }
   if (debugFlags.showGrid) renderTileGridCompass(w, ctx, screenW, screenH); // tile-grid N/E/S/W (matches in-game tests)
 
   renderHealthOrb(w, ctx, screenW, screenH);
