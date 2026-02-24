@@ -3,8 +3,6 @@ import { emitEvent, type World } from "../../../engine/world/world";
 export function handleChestPickup(w: World, pickupIndex: number): void {
     w.xAlive[pickupIndex] = false;
 
-    // Unblock boss progression once chest is taken
-    w.bossRewardPending = false;
     // Boss beat reward: heal to full
     w.playerHp = w.playerHpMax;
 

@@ -553,11 +553,19 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function tryAdvanceAfterObjectiveCompletion(): boolean {
-    if (activeDialog) return false;
-    if (world.floorEndCountdownActive && world.floorEndCountdownSec > 0) return false;
-    if (!(world.runState === "FLOOR" && hasCompletedAnyObjective(world) && !world.bossRewardPending)) {
-      return false;
+    if (!hasCompletedAnyObjective(world)) return false;
+    const isLegacyFinalFloor =
+      !isDeterministicDelveMode() &&
+      !world.delveMap &&
+      (world.floorIndex ?? 0) >= FLOORS_PER_RUN - 1 &&
+      world.runState !== "TRANSITION";
+    if (isLegacyFinalFloor) {
+      completeRun(world);
+      return true;
     }
+    if (world.runState === "TRANSITION") return false;
+    if (world.state === "REWARD" && world.cardReward?.active) return false;
+    if (world.floorEndCountdownActive && world.floorEndCountdownSec > 0) return false;
 
     if (isDeterministicDelveMode()) {
       showDeterministicFloorPicker(
@@ -1018,7 +1026,7 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function syncZoneTrialNavState(w: World): void {
-    const state = (w as any).zoneTrialObjective;
+    const state = getZoneTrialObjectiveState(w);
     const map = getActiveMap();
     if (!state || !Array.isArray(state.zones)) {
       w.zoneTrial = undefined;
@@ -1285,8 +1293,7 @@ export function createGame(args: CreateGameArgs) {
 
     emitEvent(w, { type: "SFX", id: "BOSS_START", vol: 1.0, rate: 1 });
 
-    // Ensure boss reward gate is reset for this encounter (if present on World)
-    (w as any).bossRewardPending = false;
+    // Reset chest handshake state for this encounter.
     (w as any).chestOpenRequested = false;
     w.magnetActive = false;
     w.magnetTimer = 0;
@@ -1314,13 +1321,13 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function completeRun(w: World) {
-    // WIN CONDITION: beat floor 3 boss (i.e., floorIndex 2) AFTER boss chest is collected.
+    // WIN CONDITION: final-floor objective completion.
     w.runState = "RUN_COMPLETE";
     w.state = "WIN";
 
     args.ui.endEl.title.textContent = "Run Complete";
     args.ui.endEl.sub.textContent =
-        `You beat the floor 3 boss.\n` +
+        `Final floor objective completed.\n` +
         `Time: ${formatTimeMMSS(w.time)} · Kills: ${w.kills}`;
 
     args.ui.endEl.root.hidden = false;
@@ -2029,9 +2036,8 @@ export function createGame(args: CreateGameArgs) {
       clearEvents(world);
       return true;
     }
-    enterTransition(world);
     clearEvents(world);
-    return true;
+    return false;
   }
 
   function update(dt: number) {
@@ -2100,40 +2106,6 @@ export function createGame(args: CreateGameArgs) {
     if (!mapMode) {
       if (world.runState === "FLOOR" && world.objectiveDefs.length === 0 && world.phaseTime >= world.floorDuration) {
         enterBoss(world);
-      } else if (world.runState === "BOSS") {
-        // If boss was killed, advance (but wait for the boss chest to be collected)
-        if (!bossAlive(world)) {
-          const pending = (world as any).bossRewardPending as boolean | undefined;
-          if (pending) {
-            // Do nothing; chest must be picked up first
-          } else {
-            if (isDeterministicDelveMode()) {
-              showDeterministicFloorPicker(
-                `Floor ${world.floorIndex + 1} cleared.\nChoose next floor type.`,
-                (world.floorIndex ?? 0) + 1,
-                (world.delveDepth ?? 1) + 1,
-              );
-              return;
-            }
-            // Delve mode: always show map after boss defeat (infinite progression)
-            const delve = world.delveMap as DelveMap;
-            if (delve) {
-              showDelveMap(`Depth ${world.delveDepth} cleared!\nChoose your next destination.`);
-              return;
-            }
-
-            // Legacy mode: end after 3 floors
-            if (world.floorIndex >= FLOORS_PER_RUN - 1) {
-              completeRun(world);
-              return;
-            }
-            // Between floors: show route map selection
-            (world as any).mapPendingNextFloorIndex = (world.floorIndex ?? 0) + 1;
-
-            showMap("Choose your next zone.\n(There is a boss at the end of every floor.)");
-            return;
-          }
-        }
       }
     }
     if (world.runState === "TRANSITION") {

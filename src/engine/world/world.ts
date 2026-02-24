@@ -15,7 +15,6 @@ import type { FloorArchetype } from "../../game/map/floorArchetype";
 import type { FloorIntent } from "../../game/map/floorIntent";
 import type { TriggerDef } from "../../game/triggers/triggerTypes";
 import type { Dir8 } from "../render/sprites/dir8";
-import type { ZoneTrialObjectiveState } from "../../game/objectives/zoneObjectiveTypes";
 import type { EnemyAilmentsState } from "../../game/combat_mods/ailments/enemyAilments";
 import type { CardRewardState } from "../../game/combat_mods/rewards/cardRewardFlow";
 import type { FloorRewardBudget } from "../../game/rewards/floorRewardBudget";
@@ -158,7 +157,6 @@ export type World = {
   objectiveStates: ObjectiveState[];
   objectiveEvents: ObjectiveEvent[];
   currentObjectiveSpec: ObjectiveSpec | null;
-  zoneTrialObjective: ZoneTrialObjectiveState | null;
   zoneTrial?: {
     originTx?: number;
     originTy?: number;
@@ -474,8 +472,7 @@ export type World = {
   xValue: number[];
   xDropId: string[];
 
-  // Boss reward gating
-  bossRewardPending: boolean;
+  // Boss reward bookkeeping
   bossZoneSpawned: string[];
 
   // Magnet effect (pull XP to player)
@@ -591,7 +588,6 @@ export function createWorld(args: CreateWorldArgs): World {
     objectiveStates: [],
     objectiveEvents: [],
     currentObjectiveSpec: null,
-    zoneTrialObjective: null,
 
     // Stage / floor
     stage,
@@ -848,7 +844,6 @@ export function createWorld(args: CreateWorldArgs): World {
     xDropId: [],
 
     // Boss / chest / magnet
-    bossRewardPending: false,
     bossZoneSpawned: [],
     magnetActive: false,
     magnetTimer: 0,

@@ -1,7 +1,7 @@
 import type { World } from "../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { worldToTile } from "../coords/tile";
-import { getActiveMap, walkInfo } from "../map/compile/kenneyMap";
+import { getActiveMap, surfacesAtXY, walkInfo } from "../map/compile/kenneyMap";
 import { buildZoneClearedTriggerId, OBJECTIVE_TRIGGER_IDS } from "../systems/progression/objectiveSpec";
 import {
   DEFAULT_ZONE_TRIAL_CONFIG,
@@ -12,6 +12,8 @@ import {
 } from "./zoneObjectiveTypes";
 
 type TilePoint = { x: number; y: number };
+const zoneTrialStateByWorld = new WeakMap<World, ZoneTrialObjectiveState>();
+type ZoneTileRejectReason = "BLOCKED_TILE" | "NO_SURFACE" | "VOID_OR_STAIRS" | "NOT_WALKABLE";
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
@@ -35,40 +37,29 @@ function shuffleInPlace<T>(arr: T[], world: World): void {
   }
 }
 
-function buildOccluderTileSet(map: ReturnType<typeof getActiveMap>): Set<string> {
-  const out = new Set<string>();
-  if (!map) return out;
-  for (const pieces of map.occludersByLayer.values()) {
-    for (let i = 0; i < pieces.length; i++) {
-      out.add(`${pieces[i].tx},${pieces[i].ty}`);
-    }
-  }
-  return out;
-}
-
 function isWalkableZoneTile(
   localX: number,
   localY: number,
   originTx: number,
   originTy: number,
   blockedTiles: Set<string>,
-  occluderTiles: Set<string>,
   tileWorld: number,
-): boolean {
+): { ok: true } | { ok: false; reason: ZoneTileRejectReason } {
   const tx = originTx + localX;
   const ty = originTy + localY;
   const key = `${tx},${ty}`;
-  if (blockedTiles.has(key)) return false;
-  if (occluderTiles.has(key)) return false;
+  if (blockedTiles.has(key)) return { ok: false, reason: "BLOCKED_TILE" };
 
   const map = getActiveMap();
-  if (!map) return false;
+  if (!map) return { ok: false, reason: "NO_SURFACE" };
+  if (surfacesAtXY(tx, ty).length === 0) return { ok: false, reason: "NO_SURFACE" };
   const tile = map.getTile(tx, ty);
-  if (tile.kind === "VOID" || tile.kind === "STAIRS") return false;
+  if (tile.kind === "VOID" || tile.kind === "STAIRS") return { ok: false, reason: "VOID_OR_STAIRS" };
 
   const wx = (tx + 0.5) * tileWorld;
   const wy = (ty + 0.5) * tileWorld;
-  return walkInfo(wx, wy, tileWorld).walkable;
+  if (!walkInfo(wx, wy, tileWorld).walkable) return { ok: false, reason: "NOT_WALKABLE" };
+  return { ok: true };
 }
 
 function buildReachableMask(
@@ -135,16 +126,42 @@ function makeZoneCandidates(
   return out;
 }
 
+function findNearestWalkableLocal(
+  width: number,
+  height: number,
+  start: TilePoint,
+  walkableMask: boolean[],
+): TilePoint | null {
+  const inBounds = (x: number, y: number) => x >= 0 && y >= 0 && x < width && y < height;
+  const idx = (x: number, y: number) => y * width + x;
+  if (!inBounds(start.x, start.y)) return null;
+  if (walkableMask[idx(start.x, start.y)]) return start;
+
+  const maxR = Math.max(width, height);
+  for (let r = 1; r <= maxR; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        const nx = start.x + dx;
+        const ny = start.y + dy;
+        if (!inBounds(nx, ny)) continue;
+        if (!walkableMask[idx(nx, ny)]) continue;
+        return { x: nx, y: ny };
+      }
+    }
+  }
+  return null;
+}
+
 export function startZoneTrial(world: World, config: Partial<ZoneTrialConfig> = {}): void {
   const spec = world.currentObjectiveSpec;
   if (!spec || spec.objectiveType !== "ZONE_TRIAL") {
-    world.zoneTrialObjective = null;
+    zoneTrialStateByWorld.delete(world);
     return;
   }
 
   const map = getActiveMap();
   if (!map) {
-    world.zoneTrialObjective = null;
+    zoneTrialStateByWorld.delete(world);
     return;
   }
 
@@ -161,30 +178,58 @@ export function startZoneTrial(world: World, config: Partial<ZoneTrialConfig> = 
   const originTx = map.originTx;
   const originTy = map.originTy;
   const blockedTiles = map.blockedTiles ?? new Set<string>();
-  const occluderTiles = buildOccluderTileSet(map);
   const idx = (x: number, y: number) => y * width + x;
   const walkableMask = new Array<boolean>(width * height).fill(false);
+  const rejectionCounts: Record<ZoneTileRejectReason, number> = {
+    BLOCKED_TILE: 0,
+    NO_SURFACE: 0,
+    VOID_OR_STAIRS: 0,
+    NOT_WALKABLE: 0,
+  };
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      walkableMask[idx(x, y)] = isWalkableZoneTile(
+      const eligibility = isWalkableZoneTile(
         x,
         y,
         originTx,
         originTy,
         blockedTiles,
-        occluderTiles,
         KENNEY_TILE_WORLD,
       );
+      walkableMask[idx(x, y)] = eligibility.ok;
+      if (!eligibility.ok) rejectionCounts[eligibility.reason] += 1;
     }
   }
 
-  const spawnLocal = {
+  const spawnLocalRaw = {
     x: clamp(map.spawnTx - originTx, 0, width - 1),
     y: clamp(map.spawnTy - originTy, 0, height - 1),
   };
+  const spawnLocal = findNearestWalkableLocal(width, height, spawnLocalRaw, walkableMask) ?? spawnLocalRaw;
   const reachableMask = buildReachableMask(width, height, spawnLocal, walkableMask);
+  let reachableCount = 0;
+  for (let i = 0; i < reachableMask.length; i++) {
+    if (reachableMask[i]) reachableCount += 1;
+  }
   const candidates = makeZoneCandidates(width, height, zoneSize, reachableMask, walkableMask);
+  if (import.meta.env.DEV && candidates.length === 0) {
+    console.debug("[zonePlacement] rejected", {
+      tx: spawnLocal.x,
+      ty: spawnLocal.y,
+      w: zoneSize,
+      h: zoneSize,
+      reason: "NO_VALID_CANDIDATES",
+      mapSkin: (map as any).mapSkinId ?? "default",
+      mapId: (map as any).mapId,
+      mapWidth: width,
+      mapHeight: height,
+      spawnTile: spawnLocalRaw,
+      spawnUsed: spawnLocal,
+      reachableTiles: reachableCount,
+      rejections: rejectionCounts,
+    });
+  }
   shuffleInPlace(candidates, world);
 
   const zones: ZoneObjective[] = [];
@@ -210,13 +255,13 @@ export function startZoneTrial(world: World, config: Partial<ZoneTrialConfig> = 
     if (!overlaps) zones.push(next);
   }
 
-  world.zoneTrialObjective = {
+  zoneTrialStateByWorld.set(world, {
     zones,
     totalZones: zones.length,
     completedZones: 0,
     completed: zones.length === 0,
     completionSignalEmitted: zones.length === 0,
-  };
+  });
 
   if (zones.length === 0) {
     world.triggerSignals.push({
@@ -228,7 +273,7 @@ export function startZoneTrial(world: World, config: Partial<ZoneTrialConfig> = 
 }
 
 export function updateZoneTrialObjective(world: World): void {
-  const state = world.zoneTrialObjective;
+  const state = zoneTrialStateByWorld.get(world);
   if (!state || state.completed) return;
   const map = getActiveMap();
   if (!map) return;
@@ -282,5 +327,5 @@ export function updateZoneTrialObjective(world: World): void {
 }
 
 export function getZoneTrialObjectiveState(world: World): ZoneTrialObjectiveState | null {
-  return world.zoneTrialObjective;
+  return zoneTrialStateByWorld.get(world) ?? null;
 }

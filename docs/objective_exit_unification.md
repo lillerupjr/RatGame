@@ -47,11 +47,11 @@ Phase 0 is predicate definition only.
 
 Achievements
 
-Completion predicate exists
+- [x] Completion predicate exists
 
-Completion predicate references only objectiveStates
+- [x] Completion predicate references only objectiveStates
 
-Completion predicate has no side effects
+- [x] Completion predicate has no side effects
 
 Stop after completion
 Phase 1 — Remove zoneTrialObjective
@@ -93,13 +93,13 @@ Do not modify chest behavior yet.
 
 Achievements
 
-zoneTrialObjective removed from world
+- [x] zoneTrialObjective removed from world
 
-No reads of zoneTrialObjective remain
+- [x] No reads of zoneTrialObjective remain
 
-No writes of zoneTrialObjective remain
+- [x] No writes of zoneTrialObjective remain
 
-Zone trials resolve through objectiveStates only
+- [x] Zone trials resolve through objectiveStates only
 
 Invariants now true
 
@@ -148,13 +148,13 @@ Do not remove chest entity.
 
 Achievements
 
-bossRewardPending removed from world
+- [x] bossRewardPending removed from world
 
-No reads of bossRewardPending remain
+- [x] No reads of bossRewardPending remain
 
-No writes of bossRewardPending remain
+- [x] No writes of bossRewardPending remain
 
-Floor exit no longer blocked by chest state
+- [x] Floor exit no longer blocked by chest state
 
 Invariants now true
 
@@ -202,11 +202,11 @@ reward pending flags
 
 Achievements
 
-All exit logic uses completion predicate
+- [x] All exit logic uses completion predicate
 
-No exit logic references chest state
+- [x] No exit logic references chest state
 
-No exit logic references reward pending flags
+- [x] No exit logic references reward pending flags
 
 Invariants now true
 
@@ -240,9 +240,9 @@ Chest reward remains optional.
 
 Achievements
 
-Run completion independent of chest pickup
+- [x] Run completion independent of chest pickup
 
-Run completion independent of reward pending flags
+- [x] Run completion independent of reward pending flags
 
 Invariants now true
 
@@ -284,11 +284,11 @@ Exit flow must not depend on chest system.
 
 Achievements
 
-No cross-ownership violations
+- [x] No cross-ownership violations
 
-No alternate completion flags exist
+- [x] No alternate completion flags exist
 
-No chest-based progression gating exists
+- [x] No chest-based progression gating exists
 
 Final invariants
 

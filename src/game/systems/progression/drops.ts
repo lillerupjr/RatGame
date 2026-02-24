@@ -19,7 +19,6 @@ export function dropsSystem(w: World, _dt: number) {
     // Boss chest drop (no magnet)
     if (w.eType[e.enemyIndex] === ENEMY_TYPE.BOSS) {
       spawnChestGrid(w, egx, egy, "BOSS_CHEST");
-      w.bossRewardPending = true;
     }
   }
 

@@ -64,16 +64,15 @@ describe("rewardTriggers", () => {
     expect(w.objectiveRewardClaimedKey).toBe("0:TRIAL_COMPLETE");
   });
 
-  test("zone trial runtime completion fallback starts reward and marks objective completed", () => {
+  test("does not start objective reward without completed objective state", () => {
     const w = createWorld(9);
     w.objectiveStates = [{ id: "OBJ_ZONE_TRIAL", status: "ACTIVE", progress: { signalCount: 0 } }];
-    w.zoneTrialObjective = { completed: true };
 
     const started = processObjectiveCompletionReward(w, 3);
 
-    expect(started).toBe(true);
-    expect(w.state).toBe("REWARD");
-    expect(w.cardReward.active).toBe(true);
-    expect(w.objectiveStates[0].status).toBe("COMPLETED");
+    expect(started).toBe(false);
+    expect(w.state).toBe("RUN");
+    expect(w.cardReward.active).toBe(false);
+    expect(w.objectiveStates[0].status).toBe("ACTIVE");
   });
 });
