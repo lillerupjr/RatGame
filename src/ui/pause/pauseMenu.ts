@@ -433,6 +433,15 @@ export function mountPauseMenu(args: {
     const dbg = (world as any).spawnDirectorDebug;
     if (dbg && typeof dbg === "object") {
       const metricsRows: Array<[string, string]> = [
+        [
+          "Card Rewards",
+          `${safeNum((world as any).cardRewardBudgetUsed, 0).toFixed(0)}/${safeNum((world as any).cardRewardBudgetTotal, 3).toFixed(0)}`,
+        ],
+        [
+          "Reward Claim Keys",
+          `${Array.isArray((world as any).cardRewardClaimKeys) ? (world as any).cardRewardClaimKeys.length : 0}`,
+        ],
+        ["Last Reward Key", `${(world as any).lastCardRewardClaimKey ?? "-"}`],
         ["Actual DPS (inst)", num(safeNum(dbg.actualDpsInstant), 2)],
         ["Actual DPS (smooth)", num(safeNum(dbg.actualDps), 2)],
         ["Expected DPS", num(safeNum(dbg.expectedDps), 2)],

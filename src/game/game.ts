@@ -98,9 +98,12 @@ import { resolveActivePaletteId } from "./render/activePalette";
 import { applySfxSettingsToWorld } from "./audio/audioSettings";
 import { chooseCardReward, ensureCardRewardState } from "./combat_mods/rewards/cardRewardFlow";
 import {
+  processBossMilestoneRewards,
   processChestOpenRequested,
   processObjectiveCompletionReward,
+  processSurviveMilestoneRewards,
   processZoneClearedReward,
+  resetFloorCardRewardBudget,
 } from "./combat_mods/rewards/rewardTriggers";
 import { mountCardRewardMenu } from "../ui/rewards/cardRewardMenu";
 import { tickSpawnDirector } from "./balance/spawnDirector";
@@ -563,6 +566,24 @@ export function createGame(args: CreateGameArgs) {
     return true;
   }
 
+  function maybeBeginBossMilestoneCardReward(): boolean {
+    if (world.state !== "RUN") return false;
+    if (world.runState !== "FLOOR") return false;
+    if (activeDialog) setDialog(null);
+    if (!processBossMilestoneRewards(world, 3)) return false;
+    renderRewardMenuIfNeeded();
+    return true;
+  }
+
+  function maybeBeginSurviveMilestoneCardReward(): boolean {
+    if (world.state !== "RUN") return false;
+    if (world.runState !== "FLOOR") return false;
+    if (activeDialog) setDialog(null);
+    if (!processSurviveMilestoneRewards(world, 3)) return false;
+    renderRewardMenuIfNeeded();
+    return true;
+  }
+
   function handleDialogInput() {
     if (!activeDialog) return;
     if (dialogInputQueue.move !== 0) {
@@ -983,6 +1004,9 @@ export function createGame(args: CreateGameArgs) {
     w.currentObjectiveSpec = objectiveSpec;
     setObjectivesFromSpec(w, objectiveSpec);
     w.objectiveRewardClaimedKey = null;
+    (w as any).zoneRewardClaimedKey = null;
+    (w as any).zoneRewardClaimedKeys = [];
+    resetFloorCardRewardBudget(w);
     w.cardReward.active = false;
     w.cardReward.options = [];
     startZoneTrial(w);
@@ -1996,6 +2020,14 @@ export function createGame(args: CreateGameArgs) {
     bossZoneSpawnSystem(world);
     objectiveSystem(world);
     if (maybeBeginZoneClearedCardReward()) {
+      clearEvents(world);
+      return;
+    }
+    if (maybeBeginBossMilestoneCardReward()) {
+      clearEvents(world);
+      return;
+    }
+    if (maybeBeginSurviveMilestoneCardReward()) {
       clearEvents(world);
       return;
     }

@@ -488,3 +488,6 @@ Progress update:
 [x] Boss trash pressure reduction implemented
 [x] Pause debug readout implemented (actual vs expected + budget stats)
 [x] Tests implemented (metrics + expected curve + director)
+[x] Card reward budget normalized to 3 per floor (shared gate across sources)
+[x] Reward policy wiring added: zone trial / boss / survive / survive+boss
+[x] Zone clear + objective + boss milestone + chest rewards now consume unified floor budget

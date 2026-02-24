@@ -14,11 +14,17 @@ function createWorld(seed = 1): any {
   return {
     rng: { next },
     state: "RUN",
+    runState: "FLOOR",
+    floorArchetype: "TIME_TRIAL",
     floorIndex: 0,
+    timeSec: 0,
     cards: [],
     chestOpenRequested: false,
     objectiveStates: [],
     objectiveRewardClaimedKey: null,
+    cardRewardBudgetTotal: 3,
+    cardRewardBudgetUsed: 0,
+    cardRewardClaimKeys: [],
     cardReward: {
       active: false,
       source: "ZONE_TRIAL",
@@ -39,6 +45,7 @@ describe("rewardTriggers", () => {
     expect(w.cardReward.active).toBe(true);
     expect(w.cardReward.source).toBe("BOSS_CHEST");
     expect(w.cardReward.options.length).toBe(3);
+    expect(w.cardRewardBudgetUsed).toBe(1);
   });
 
   test("objective completion starts reward once and edge-gates repeats", () => {
@@ -54,6 +61,7 @@ describe("rewardTriggers", () => {
     expect(w.cardReward.active).toBe(true);
     expect(w.cardReward.source).toBe("ZONE_TRIAL");
     expect(w.cardReward.options.length).toBe(3);
+    expect(w.objectiveRewardClaimedKey).toBe("0:TRIAL_COMPLETE");
   });
 
   test("zone trial runtime completion fallback starts reward and marks objective completed", () => {

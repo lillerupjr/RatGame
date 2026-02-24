@@ -290,7 +290,13 @@ export type World = {
   cards: string[];
   combatCardIds: string[];
   cardReward: CardRewardState;
+  cardRewardBudgetTotal: number;
+  cardRewardBudgetUsed: number;
+  cardRewardClaimKeys: string[];
+  lastCardRewardClaimKey: string | null;
   objectiveRewardClaimedKey: string | null;
+  zoneRewardClaimedKey?: string | null;
+  zoneRewardClaimedKeys?: string[];
   primaryWeaponCdLeft: number;
 
   // -------------------------
@@ -680,7 +686,13 @@ export function createWorld(args: CreateWorldArgs): World {
       source: "ZONE_TRIAL",
       options: [],
     },
+    cardRewardBudgetTotal: 3,
+    cardRewardBudgetUsed: 0,
+    cardRewardClaimKeys: [],
+    lastCardRewardClaimKey: null,
     objectiveRewardClaimedKey: null,
+    zoneRewardClaimedKey: null,
+    zoneRewardClaimedKeys: [],
     primaryWeaponCdLeft: 0,
 
     // XP / Level

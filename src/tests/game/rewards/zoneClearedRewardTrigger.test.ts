@@ -19,7 +19,9 @@ function createWorld(seed = 1): any {
     rng: { next },
     state: "RUN",
     runState: "FLOOR",
+    floorArchetype: "TIME_TRIAL",
     floorIndex: 0,
+    timeSec: 0,
     cards: [],
     chestOpenRequested: false,
     triggerSignals: [],
@@ -27,6 +29,9 @@ function createWorld(seed = 1): any {
     objectiveRewardClaimedKey: null,
     zoneRewardClaimedKey: null,
     zoneRewardClaimedKeys: [],
+    cardRewardBudgetTotal: 3,
+    cardRewardBudgetUsed: 0,
+    cardRewardClaimKeys: [],
     cardReward: {
       active: false,
       source: "ZONE_TRIAL",
@@ -49,7 +54,7 @@ describe("zoneCleared reward trigger", () => {
     expect(started1).toBe(true);
     expect(w.state).toBe("REWARD");
     expect(w.cardReward.active).toBe(true);
-    expect(w.zoneRewardClaimedKey).toBe("0:OBJ_ZONE_CLEARED_1");
+    expect(w.zoneRewardClaimedKey).toBe("0:ZONE_CLEAR:1");
 
     w.state = "RUN";
     w.cardReward.active = false;
@@ -73,7 +78,7 @@ describe("zoneCleared reward trigger", () => {
     });
     const startedZone2 = processZoneClearedReward(w, 3);
     expect(startedZone2).toBe(true);
-    expect(w.zoneRewardClaimedKey).toBe("0:OBJ_ZONE_CLEARED_2");
+    expect(w.zoneRewardClaimedKey).toBe("0:ZONE_CLEAR:2");
   });
 
   test("objective completion reward still works", () => {
@@ -81,7 +86,7 @@ describe("zoneCleared reward trigger", () => {
     w.objectiveStates = [{ id: "OBJ_ZONE_TRIAL", status: "COMPLETED" }];
     const started = processObjectiveCompletionReward(w, 3);
     expect(started).toBe(true);
-    expect(w.objectiveRewardClaimedKey).toBe("0:OBJ_ZONE_TRIAL");
+    expect(w.objectiveRewardClaimedKey).toBe("0:TRIAL_COMPLETE");
     expect(w.cardReward.active).toBe(true);
   });
 });

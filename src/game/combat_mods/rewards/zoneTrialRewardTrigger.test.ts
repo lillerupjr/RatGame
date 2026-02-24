@@ -15,10 +15,16 @@ function createWorld(seed = 123): any {
   return {
     rng: { next },
     state: "RUN",
+    runState: "FLOOR",
+    floorArchetype: "TIME_TRIAL",
     floorIndex: 0,
+    timeSec: 0,
     cards: [] as string[],
     objectiveStates: [{ id: "OBJ_ZONE_TRIAL", status: "COMPLETED" }],
     objectiveRewardClaimedKey: null,
+    cardRewardBudgetTotal: 3,
+    cardRewardBudgetUsed: 0,
+    cardRewardClaimKeys: [],
     cardReward: {
       active: false,
       source: "ZONE_TRIAL",
