@@ -44,7 +44,6 @@ export function poisonSystem(w: World, dt: number) {
                 enemyIndex: e,
                 x: ew.wx,
                 y: ew.wy,
-                xpValue: 1,
                 source: "OTHER",
             });
 

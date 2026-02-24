@@ -4,6 +4,7 @@ import type { CardDef } from "../../stats/modifierTypes";
 export const MECHANICS_CARDS_V1: CardDef[] = [
   {
     id: "CARD_PIERCE_1",
+    isEnabled: true,
     displayName: "CARD_PIERCE_1",
     rarity: 4,
     powerTier: 3,
@@ -11,6 +12,7 @@ export const MECHANICS_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_PROJECTILE_1",
+    isEnabled: true,
     displayName: "CARD_PROJECTILE_1",
     rarity: 4,
     powerTier: 3,

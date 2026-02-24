@@ -6,6 +6,7 @@ import { getCardById } from "../../combat_mods/content/cards/cardPool";
 import { resolveWeaponStats } from "../../combat_mods/stats/combatStatsResolver";
 import { applySpreadToDirection, computeProjectileAngles } from "../../combat_mods/runtime/spread";
 import { getDevGrantedCardIds } from "../../combat_mods/debug/devCombatModsDebug";
+import { getUserSettings } from "../../../userSettings";
 
 /** Handle weapon cooldowns, targeting, and firing events. */
 export function combatSystem(w: World, dt: number) {
@@ -43,8 +44,15 @@ export function combatSystem(w: World, dt: number) {
     .filter((card): card is NonNullable<typeof card> => Boolean(card));
 
   const resolved = resolveWeaponStats(JACK_PISTOL_V1, { cards });
-  const shotsPerSecond = Math.max(0.001, resolved.shotsPerSecond);
+  const debug = getUserSettings().debug;
+  const debugDamageMult = Math.max(0, debug.dmgMult || 1);
+  const debugFireRateMult = Math.max(0.001, debug.fireRateMult || 1);
+  const shotsPerSecond = Math.max(0.001, resolved.shotsPerSecond * debugFireRateMult);
   const cooldown = 1 / shotsPerSecond;
+  const dmgPhys = resolved.baseDamage.physical * debugDamageMult;
+  const dmgFire = resolved.baseDamage.fire * debugDamageMult;
+  const dmgChaos = resolved.baseDamage.chaos * debugDamageMult;
+  const totalDamage = dmgPhys + dmgFire + dmgChaos;
   w.primaryWeaponCdLeft -= dt;
 
   while (w.primaryWeaponCdLeft <= 0) {
@@ -61,10 +69,10 @@ export function combatSystem(w: World, dt: number) {
         dirGx: spread.dirX,
         dirGy: spread.dirY,
         speed: resolved.projectileSpeedPxPerSec,
-        damage: resolved.baseDamage.physical + resolved.baseDamage.fire + resolved.baseDamage.chaos,
-        dmgPhys: resolved.baseDamage.physical,
-        dmgFire: resolved.baseDamage.fire,
-        dmgChaos: resolved.baseDamage.chaos,
+        damage: totalDamage,
+        dmgPhys,
+        dmgFire,
+        dmgChaos,
         critChance: resolved.critChance,
         critMulti: resolved.critMulti,
         chanceBleed: resolved.chanceToBleed,
@@ -86,10 +94,10 @@ export function combatSystem(w: World, dt: number) {
           dirGx: Math.cos(angle),
           dirGy: Math.sin(angle),
           speed: resolved.projectileSpeedPxPerSec,
-          damage: resolved.baseDamage.physical + resolved.baseDamage.fire + resolved.baseDamage.chaos,
-          dmgPhys: resolved.baseDamage.physical,
-          dmgFire: resolved.baseDamage.fire,
-          dmgChaos: resolved.baseDamage.chaos,
+          damage: totalDamage,
+          dmgPhys,
+          dmgFire,
+          dmgChaos,
           critChance: resolved.critChance,
           critMulti: resolved.critMulti,
           chanceBleed: resolved.chanceToBleed,

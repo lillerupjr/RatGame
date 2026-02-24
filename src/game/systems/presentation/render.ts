@@ -1689,10 +1689,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     for (let i = 0; i < w.xAlive.length; i++) {
       if (!w.xAlive[i]) continue;
 
-      const xp = getPickupWorld(w, i, KENNEY_TILE_WORLD);
-      const xtx = Math.floor(xp.wx / T);
-      const xty = Math.floor(xp.wy / T);
-      const zAbs = tileHAtWorld(xp.wx, xp.wy);
+      const pickup = getPickupWorld(w, i, KENNEY_TILE_WORLD);
+      const xtx = Math.floor(pickup.wx / T);
+      const xty = Math.floor(pickup.wy / T);
+      const zAbs = tileHAtWorld(pickup.wx, pickup.wy);
 
       const renderKey: RenderKey = {
         slice: xtx + xty,
@@ -1703,12 +1703,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       };
 
       const kind = w.xKind?.[i] ?? 1;
-      const p = toScreen(xp.wx, xp.wy);
+      const p = toScreen(pickup.wx, pickup.wy);
 
       const drawClosure = () => {
         if (kind === 1) {
           ctx.globalAlpha = 1;
-          ctx.fillStyle = "#7df";
+          ctx.fillStyle = "#ffd84a";
           ctx.beginPath();
           ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
           ctx.fill();
@@ -3075,7 +3075,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   if (debugFlags.showGrid) renderTileGridCompass(w, ctx, screenW, screenH); // tile-grid N/E/S/W (matches in-game tests)
 
   renderHealthOrb(w, ctx, screenW, screenH);
-  renderExperienceBar(w, ctx, screenW, screenH);
   renderBossHealthBar(w, ctx, screenW, screenH);
   renderDPSMeter(w, ctx, screenW, screenH);
 }
@@ -3287,42 +3286,6 @@ function renderHealthOrb(w: World, ctx: CanvasRenderingContext2D, ww: number, hh
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(`${Math.ceil(w.playerHp)} / ${Math.ceil(w.playerHpMax)}`, x, y);
-
-  ctx.restore();
-}
-
-function renderExperienceBar(w: World, ctx: CanvasRenderingContext2D, ww: number, hh: number) {
-  const pad = 18;
-  const barH = 14;
-  const x = pad;
-  const y = hh - pad - barH;
-  const wBar = ww - pad * 2;
-
-  const xp = w.xp ?? 0;
-  const need = w.xpToNext ?? 1;
-  const t = Math.max(0, Math.min(1, xp / need));
-
-  ctx.save();
-
-  ctx.globalAlpha = 0.8;
-  ctx.fillStyle = "#111";
-  ctx.fillRect(x, y, wBar, barH);
-
-  ctx.globalAlpha = 0.9;
-  ctx.fillStyle = "#48f";
-  ctx.fillRect(x, y, wBar * t, barH);
-
-  ctx.globalAlpha = 1;
-  ctx.strokeStyle = "rgba(255,255,255,0.25)";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(x, y, wBar, barH);
-
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = "#fff";
-  ctx.font = "12px monospace";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(`XP ${xp} / ${need}`, x + wBar * 0.5, y + barH * 0.5);
 
   ctx.restore();
 }

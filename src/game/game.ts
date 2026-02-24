@@ -9,7 +9,7 @@ import { ailmentTickSystem } from "./combat_mods/systems/ailmentTickSystem";
 import { collisionsSystem } from "./systems/sim/collisions";
 import { projectilesSystem } from "./systems/sim/projectiles";
 import { pickupsSystem } from "./systems/progression/pickups";
-import { xpSystem } from "./systems/progression/xp";
+import { dropsSystem } from "./systems/progression/drops";
 import { renderSystem } from "./systems/presentation/render";
 import { zonesSystem } from "./systems/sim/zones";
 import { onKillExplodeSystem } from "./systems/sim/onKillExplode";
@@ -18,10 +18,13 @@ import { audioSystem } from "./systems/presentation/audio";
 import { preloadSfx } from "../engine/audio/sfx";
 import { roomChallengeSystem } from "./systems/progression/roomChallenge";
 import { triggerSystem } from "./systems/progression/triggerSystem";
-import { objectiveSystem } from "./systems/progression/objective";
+import {
+  isFloorEndCountdownDone,
+  maybeStartFloorEndCountdown,
+  tickFloorEndCountdown,
+} from "./systems/progression/floorEndCountdown";
+import { hasCompletedAnyObjective, objectiveSystem } from "./systems/progression/objective";
 import { outcomeSystem } from "./systems/progression/outcomeSystem";
-import { goldSystem } from "./systems/progression/gold";
-import { vendorSystem } from "./systems/progression/vendorSystem";
 import { bossZoneSpawnSystem } from "./systems/progression/bossZoneSpawn";
 
 import { formatTimeMMSS } from "./util/time";
@@ -80,7 +83,6 @@ import { objectiveSpecFromFloorIntent } from "./map/floorObjectiveBinding";
 import { mapSourceFromFloorIntent } from "./map/floorMapSourceBinding";
 import { applyFloorOverlays } from "./map/floorOverlays";
 import { setObjectives, setObjectivesFromSpec } from "./systems/progression/objective";
-import { generateVendorOffers } from "./events/vendor";
 import { RNG } from "./util/rng";
 import { applyObjective } from "./map/objectiveTransforms";
 import { objectiveIdFromArchetype } from "./map/objectivePlan";
@@ -97,6 +99,11 @@ import { collectRuntimeSpriteIdsToPrewarm } from "./render/prewarmSprites";
 import { resolveActivePaletteId } from "./render/activePalette";
 import { applySfxSettingsToWorld } from "./audio/audioSettings";
 import { beginCardReward, chooseCardReward, ensureCardRewardState } from "./combat_mods/rewards/cardRewardFlow";
+import { addGold, getGold } from "./economy/gold";
+import { getCardById } from "./combat_mods/content/cards/cardPool";
+import { generateVendorCards } from "./vendor/generateVendorCards";
+import { createVendorState } from "./vendor/vendorState";
+import { tryPurchaseVendorCard } from "./vendor/vendorPurchase";
 import { mountCardRewardMenu } from "../ui/rewards/cardRewardMenu";
 import { tickSpawnDirector } from "./balance/spawnDirector";
 import { buildSurviveSpawnOverrides, SURVIVE_RAMP_CONFIG } from "./balance/surviveRamp";
@@ -193,6 +200,7 @@ export function precomputeStaticMapData(): void {
 
 /** Create a game instance and return update/render/start handlers. */
 export function createGame(args: CreateGameArgs) {
+  args.hud.lvlPill.hidden = false;
 
   // ------------------------------------------------------------
   // DEBUG: optional spawn override (OFF by default)
@@ -334,24 +342,63 @@ export function createGame(args: CreateGameArgs) {
       pendingNpcFaceRestoreId = npc.id;
     }
     if (interactable.kind === "SHOP") {
-      setDialog({
-        text: "Open shop?",
-        selectedIndex: 0,
-        choices: [
-          {
-            label: "Yes",
+      const openVendorCardShop = () => {
+        const vendor = world.vendor;
+        if (!vendor) {
+          setDialog(null);
+          return;
+        }
+
+        const choices: DialogChoice[] = [];
+        const price = 100;
+        for (let i = 0; i < vendor.cards.length; i++) {
+          const cardId = vendor.cards[i];
+          const cardName = getCardById(cardId)?.displayName ?? cardId;
+          const sold = !!vendor.purchased[i];
+          const canAfford = getGold(world) >= price;
+
+          if (sold) {
+            choices.push({
+              label: `${cardName} - SOLD`,
+              onSelect: () => openVendorCardShop(),
+            });
+            continue;
+          }
+
+          if (!canAfford) {
+            choices.push({
+              label: `${cardName} - 100 gold (Not enough gold)`,
+              onSelect: () => openVendorCardShop(),
+            });
+            continue;
+          }
+
+          choices.push({
+            label: `${cardName} - 100 gold`,
             onSelect: () => {
-              completeObjectiveById(OBJECTIVE_TRIGGER_IDS.vendor);
-              world.pendingAdvanceToNextFloor = true;
-              showInfoDialog("Objective completed. Proceed when ready.");
+              tryPurchaseVendorCard(world, i);
+              openVendorCardShop();
             },
+          });
+        }
+
+        choices.push({
+          label: "Leave",
+          onSelect: () => {
+            completeObjectiveById(OBJECTIVE_TRIGGER_IDS.vendor);
+            world.pendingAdvanceToNextFloor = true;
+            setDialog(null);
           },
-          {
-            label: "No",
-            onSelect: () => setDialog(null),
-          },
-        ],
-      });
+        });
+
+        setDialog({
+          text: "Vendor - choose a card to buy",
+          selectedIndex: 0,
+          choices,
+        });
+      };
+
+      openVendorCardShop();
       return;
     }
     setDialog({
@@ -505,16 +552,10 @@ export function createGame(args: CreateGameArgs) {
     }
   }
 
-  function hasCompletedFloorObjective(): boolean {
-    for (let i = 0; i < world.objectiveStates.length; i++) {
-      if (world.objectiveStates[i]?.status === "COMPLETED") return true;
-    }
-    return false;
-  }
-
   function tryAdvanceAfterObjectiveCompletion(): boolean {
     if (activeDialog) return false;
-    if (!(world.runState === "FLOOR" && hasCompletedFloorObjective() && !world.bossRewardPending)) {
+    if (world.floorEndCountdownActive && world.floorEndCountdownSec > 0) return false;
+    if (!(world.runState === "FLOOR" && hasCompletedAnyObjective(world) && !world.bossRewardPending)) {
       return false;
     }
 
@@ -582,7 +623,7 @@ export function createGame(args: CreateGameArgs) {
       return true;
     }
     if (outcome.type === "GRANT_GOLD") {
-      world.gold += outcome.amount;
+      addGold(world, outcome.amount);
       world.lastCardRewardClaimKey = outcome.reason;
       return false;
     }
@@ -617,10 +658,7 @@ export function createGame(args: CreateGameArgs) {
 
   function maybeHandleObjectiveCompletionReward(): boolean {
     if (world.state !== "RUN" || world.runState !== "FLOOR") return false;
-    const hasCompletedObjective =
-      world.objectiveStates.some((s) => s?.status === "COMPLETED") ||
-      !!(world as any).zoneTrialObjective?.completed;
-    if (!hasCompletedObjective) return false;
+    if (!hasCompletedAnyObjective(world)) return false;
     const outcome = handleRewardEvent(
       world.floorRewardBudget,
       { type: "OBJECTIVE_COMPLETED" },
@@ -803,7 +841,7 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function clearFloorEntities(w: World) {
-    // Keep player stats/items/weapons/xp/level; wipe transient entities.
+    // Keep player stats/items/weapons; wipe transient entities.
     w.eAlive = [];
     w.eType = [];
     w.egxi = [];
@@ -1122,6 +1160,9 @@ export function createGame(args: CreateGameArgs) {
     w.cardRewardBudgetUsed = 0;
     w.cardRewardClaimKeys = [];
     w.lastCardRewardClaimKey = null;
+    w.floorEndCountdownSec = 0;
+    w.floorEndCountdownActive = false;
+    w.floorEndCountdownStartedKey = null;
     syncRewardDebugFieldsFromBudget(w);
     w.cardReward.active = false;
     w.cardReward.options = [];
@@ -1132,8 +1173,10 @@ export function createGame(args: CreateGameArgs) {
       w.floorDuration = objectiveSpec.params.timeLimitSec;
     }
 
-    w.vendorOffers =
-      floorIntent.archetype === "VENDOR" ? generateVendorOffers(floorIntent) : [];
+    w.vendor = floorIntent.archetype === "VENDOR"
+      ? createVendorState(generateVendorCards(5))
+      : null;
+    w.vendorOffers = [];
     (w as any)._surviveBossSpawned = false;
     w.bossZoneSpawned = [];
     w.runState = "FLOOR";
@@ -1920,9 +1963,7 @@ export function createGame(args: CreateGameArgs) {
     args.hud.killsPill.textContent = `Kills: ${world.kills}`;
     args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
     
-    // Show depth in delve mode
-    const depthText = world.delveMap ? ` · Depth ${world.delveDepth}` : "";
-    args.hud.lvlPill.textContent = `Lv: ${world.level}${depthText}`;
+    args.hud.lvlPill.textContent = `Gold: ${getGold(world)}`;
 
     // 4 weapon slots + 4 item slots, order = array order
     renderSlots(args.hud.weaponSlots, world.weapons as any, (id) => registry.weapon(id as any).title);
@@ -1968,11 +2009,30 @@ export function createGame(args: CreateGameArgs) {
       }
     }
 
+    if (world.floorEndCountdownActive) {
+      const secs = Math.max(0, Math.ceil(world.floorEndCountdownSec));
+      detail = `Leaving in ${secs}...`;
+    }
+
     args.hud.objectiveTitle.textContent = title;
     args.hud.objectiveStatus.textContent = detail;
     args.hud.objectiveOverlay.hidden = false;
   }
   // ---------------------------------
+
+  function finishFloorEndCountdown(): boolean {
+    world.state = "RUN";
+    if (world.cardReward) world.cardReward.active = false;
+    hideCardRewardMenu();
+    world.floorEndCountdownActive = false;
+    if (tryAdvanceAfterObjectiveCompletion()) {
+      clearEvents(world);
+      return true;
+    }
+    enterTransition(world);
+    clearEvents(world);
+    return true;
+  }
 
   function update(dt: number) {
 
@@ -1987,11 +2047,18 @@ export function createGame(args: CreateGameArgs) {
 
     // Handle pause states
     if (world.state === "REWARD" || world.state === "MAP") {
+      if (world.state === "REWARD") {
+        tickFloorEndCountdown(world, dt);
+        if (isFloorEndCountdownDone(world)) {
+          finishFloorEndCountdown();
+          return;
+        }
+      }
       // HUD still updates while paused
       args.hud.timePill.textContent = hudTimeText(world);
       args.hud.killsPill.textContent = `Kills: ${world.kills}`;
       args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
-      args.hud.lvlPill.textContent = `Lv: ${world.level}`;
+      args.hud.lvlPill.textContent = `Gold: ${getGold(world)}`;
       renderRewardMenuIfNeeded();
       updateHud();
       return;
@@ -2025,6 +2092,7 @@ export function createGame(args: CreateGameArgs) {
     world.phaseTime += dt;
     // Spawn pacing uses the same clock as floor progression/spawn cadence.
     world.timeSec = world.phaseTime;
+    world.level = 1;
 
     const mapMode = !!(world as any).mapMode;
 
@@ -2066,12 +2134,13 @@ export function createGame(args: CreateGameArgs) {
             return;
           }
         }
-      } else if (world.runState === "TRANSITION") {
-        world.transitionTime = Math.max(0, world.transitionTime - dt);
-        if (world.transitionTime <= 0) {
-          const nextFloorIndex = (world.floorIndex ?? 0) + 1;
-          void enterFloor(world, buildFallbackFloorIntent(world, nextFloorIndex));
-        }
+      }
+    }
+    if (world.runState === "TRANSITION") {
+      world.transitionTime = Math.max(0, world.transitionTime - dt);
+      if (world.transitionTime <= 0) {
+        const nextFloorIndex = (world.floorIndex ?? 0) + 1;
+        void enterFloor(world, buildFallbackFloorIntent(world, nextFloorIndex));
       }
     }
 
@@ -2089,30 +2158,34 @@ export function createGame(args: CreateGameArgs) {
     }
     world.spawnDirectorConfig.enabled = !!world.balance.spawnDirectorEnabled;
     if (world.balance.spawnDirectorEnabled) {
-      tickSpawnDirector(
-        world,
-        dt,
-        world.spawnDirectorConfig,
-        world.expectedPowerConfig,
-        world.expectedPowerBudgetConfig,
-        world.spawnDirectorState,
-        {
-          getDepth: () => {
-            if (Number.isFinite(world.delveDepth) && world.delveDepth > 0) return world.delveDepth;
-            return (world.floorIndex ?? 0) + 1;
-          },
-          isBossActive: () => world.runState === "BOSS" || bossAlive(world),
-          canSpawnNow: () => world.runState === "FLOOR" && world.phaseTime >= 2,
-          spawnTrash: () => {
-            let tier: "trash" | "elite" = "trash";
-            const eliteChance = world.spawnDirectorOverrides?.eliteChanceOverride ?? 0;
-            if (eliteChance > 0 && world.rng.next() < eliteChance) tier = "elite";
-            return spawnOneTrashEnemy(world, undefined, undefined, tier);
-          },
-        }
-      );
+      if (!world.floorEndCountdownActive) {
+        tickSpawnDirector(
+          world,
+          dt,
+          world.spawnDirectorConfig,
+          world.expectedPowerConfig,
+          world.expectedPowerBudgetConfig,
+          world.spawnDirectorState,
+          {
+            getDepth: () => {
+              if (Number.isFinite(world.delveDepth) && world.delveDepth > 0) return world.delveDepth;
+              return (world.floorIndex ?? 0) + 1;
+            },
+            isBossActive: () => world.runState === "BOSS" || bossAlive(world),
+            canSpawnNow: () => world.runState === "FLOOR" && world.phaseTime >= 2,
+            spawnTrash: () => {
+              let tier: "trash" | "elite" = "trash";
+              const eliteChance = world.spawnDirectorOverrides?.eliteChanceOverride ?? 0;
+              if (eliteChance > 0 && world.rng.next() < eliteChance) tier = "elite";
+              return spawnOneTrashEnemy(world, undefined, undefined, tier);
+            },
+          }
+        );
+      }
     } else {
-      spawnSystem(world, dt);
+      if (!world.floorEndCountdownActive) {
+        spawnSystem(world, dt);
+      }
     }
     const isNeutralObjectiveFloor = world.floorArchetype === "VENDOR" || world.floorArchetype === "HEAL";
     if (!isNeutralObjectiveFloor) {
@@ -2129,10 +2202,8 @@ export function createGame(args: CreateGameArgs) {
     onKillExplodeSystem(world, dt); // NEW: explode on kill (can add more kills)
     bossSystem(world, dt);          // NEW: boss mechanics (telegraphs/hazards/dash)
     zonesSystem(world, dt);
-    goldSystem(world);
     pickupsSystem(world, dt);
-    xpSystem(world, dt);
-    vendorSystem(world);
+    dropsSystem(world, dt);
     triggerSystem(world, dt, input);
     updateZoneTrialObjective(world);
     syncZoneTrialNavState(world);
@@ -2151,16 +2222,18 @@ export function createGame(args: CreateGameArgs) {
       clearEvents(world);
       return;
     }
+    if (!world.cardReward?.active) {
+      maybeStartFloorEndCountdown(world);
+    }
+    tickFloorEndCountdown(world, dt);
+    if (isFloorEndCountdownDone(world)) {
+      finishFloorEndCountdown();
+      return;
+    }
     outcomeSystem(world);
 
     // SFX consumes events before any early-return branches
     audioSystem(world, dt);
-
-    if (world.floorArchetype === "SURVIVE" && (world.timeSec ?? 0) >= SURVIVE_RAMP_CONFIG.durationSec) {
-      completeRun(world);
-      clearEvents(world);
-      return;
-    }
 
     // Chest open reward outcome (card while budget remains, else gold fallback).
     if (maybeHandleChestOpenedReward()) {
@@ -2201,7 +2274,7 @@ export function createGame(args: CreateGameArgs) {
     args.hud.timePill.textContent = hudTimeText(world);
     args.hud.killsPill.textContent = `Kills: ${world.kills}`;
     args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
-    args.hud.lvlPill.textContent = `Lv: ${world.level}`;
+    args.hud.lvlPill.textContent = `Gold: ${getGold(world)}`;
     updateHud();
 
     // Clear per-frame edge-triggered inputs (must be at END of update)

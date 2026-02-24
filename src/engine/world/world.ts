@@ -19,6 +19,7 @@ import type { ZoneTrialObjectiveState } from "../../game/objectives/zoneObjectiv
 import type { EnemyAilmentsState } from "../../game/combat_mods/ailments/enemyAilments";
 import type { CardRewardState } from "../../game/combat_mods/rewards/cardRewardFlow";
 import type { FloorRewardBudget } from "../../game/rewards/floorRewardBudget";
+import type { VendorState } from "../../game/vendor/vendorState";
 import { createDpsMetrics, type DpsMetricsState } from "../../game/balance/dpsMetrics";
 import {
   createSpawnDirectorState,
@@ -187,6 +188,9 @@ export type World = {
   // Total run time
   time: number;
   timeSec: number;
+  run: {
+    runGold: number;
+  };
   lighting: WorldLightingState;
 
   // -------------------------
@@ -198,7 +202,6 @@ export type World = {
     hpMult: number;
     damageMult: number;
     spawnRateMult: number;
-    xpMult: number;
   };
 
   // Legacy map compatibility (if you still use it)
@@ -281,14 +284,14 @@ export type World = {
 
   // Run stats
   kills: number;
-  gold: number;
 
   // Vendor economy (scaffold)
   vendorOffers: { kind: "RELIC" | "UPGRADE" | "HEAL" | "REROLL"; id: string; cost: number }[];
   vendorPurchases: string[];
+  vendor: VendorState | null;
   pendingAdvanceToNextFloor: boolean;
   relics: string[];
-  relicEffects: { xpMult: number; hpBonus: number };
+  relicEffects: { hpBonus: number };
   npcs: NpcActor[];
   neutralMobs: NeutralAnimatedMob[];
 
@@ -305,17 +308,18 @@ export type World = {
   cardRewardBudgetUsed: number;
   cardRewardClaimKeys: string[];
   lastCardRewardClaimKey: string | null;
+  floorEndCountdownSec: number;
+  floorEndCountdownActive: boolean;
+  floorEndCountdownStartedKey: string | null;
   objectiveRewardClaimedKey: string | null;
   zoneRewardClaimedKey?: string | null;
   zoneRewardClaimedKeys?: string[];
   primaryWeaponCdLeft: number;
 
   // -------------------------
-  // XP / Level
+  // Level (frozen)
   // -------------------------
   level: number;
-  xp: number;
-  xpToNext: number;
 
   // Aim cache (used for melee cone / fallback aim)
   lastAimX: number;
@@ -604,6 +608,9 @@ export function createWorld(args: CreateWorldArgs): World {
 
     time: 0,
     timeSec: 0,
+    run: {
+      runGold: 0,
+    },
     lighting: {
       darknessAlpha: 0.5,
       ambientTint: undefined,
@@ -629,7 +636,6 @@ export function createWorld(args: CreateWorldArgs): World {
       hpMult: 1,
       damageMult: 1,
       spawnRateMult: 1,
-      xpMult: 1,
     },
 
     // Room Challenges
@@ -675,13 +681,12 @@ export function createWorld(args: CreateWorldArgs): World {
     critMultiplier: 2.0,
 
     kills: 0,
-    gold: 0,
     vendorOffers: [],
     vendorPurchases: [],
+    vendor: null,
     pendingAdvanceToNextFloor: false,
     relics: [],
     relicEffects: {
-      xpMult: 1,
       hpBonus: 0,
     },
     npcs: [],
@@ -707,15 +712,16 @@ export function createWorld(args: CreateWorldArgs): World {
     cardRewardBudgetUsed: 0,
     cardRewardClaimKeys: [],
     lastCardRewardClaimKey: null,
+    floorEndCountdownSec: 0,
+    floorEndCountdownActive: false,
+    floorEndCountdownStartedKey: null,
     objectiveRewardClaimedKey: null,
     zoneRewardClaimedKey: null,
     zoneRewardClaimedKeys: [],
     primaryWeaponCdLeft: 0,
 
-    // XP / Level
+    // Level
     level: 1,
-    xp: 0,
-    xpToNext: 6,
 
     // Aim
     lastAimX: 1,

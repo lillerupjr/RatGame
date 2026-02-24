@@ -13,6 +13,7 @@ import type { CardDef } from "../../stats/modifierTypes";
 export const STARTER_CARDS_V1: CardDef[] = [
   {
     id: "CARD_DAMAGE_FLAT_1",
+    isEnabled: true,
     displayName: "CARD_DAMAGE_FLAT_1",
     rarity: 1,
     powerTier: 1,
@@ -20,6 +21,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_DAMAGE_INC_1",
+    isEnabled: true,
     displayName: "CARD_DAMAGE_INC_1",
     rarity: 1,
     powerTier: 1,
@@ -27,6 +29,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_FIRE_RATE_1",
+    isEnabled: true,
     displayName: "CARD_FIRE_RATE_1",
     rarity: 1,
     powerTier: 1,
@@ -34,6 +37,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_CRIT_CHANCE_1",
+    isEnabled: true,
     displayName: "CARD_CRIT_CHANCE_1",
     rarity: 1,
     powerTier: 1,
@@ -41,6 +45,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_CRIT_MULTI_1",
+    isEnabled: true,
     displayName: "CARD_CRIT_MULTI_1",
     rarity: 1,
     powerTier: 1,
@@ -48,6 +53,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_ACCURACY_1",
+    isEnabled: true,
     displayName: "CARD_ACCURACY_1",
     rarity: 1,
     powerTier: 1,
@@ -55,6 +61,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_CONVERT_FIRE_1",
+    isEnabled: true,
     displayName: "CARD_CONVERT_FIRE_1",
     rarity: 2,
     powerTier: 2,
@@ -62,6 +69,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_CONVERT_CHAOS_1",
+    isEnabled: true,
     displayName: "CARD_CONVERT_CHAOS_1",
     rarity: 2,
     powerTier: 2,
@@ -69,6 +77,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_DAMAGE_FIRE_FLAT_1",
+    isEnabled: true,
     displayName: "CARD_DAMAGE_FIRE_FLAT_1",
     rarity: 2,
     powerTier: 1,
@@ -76,6 +85,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_DAMAGE_CHAOS_FLAT_1",
+    isEnabled: true,
     displayName: "CARD_DAMAGE_CHAOS_FLAT_1",
     rarity: 2,
     powerTier: 1,
@@ -83,6 +93,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_BLEED_CHANCE_1",
+    isEnabled: true,
     displayName: "CARD_BLEED_CHANCE_1",
     rarity: 2,
     powerTier: 1,
@@ -90,6 +101,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_IGNITE_CHANCE_1",
+    isEnabled: true,
     displayName: "CARD_IGNITE_CHANCE_1",
     rarity: 2,
     powerTier: 1,
@@ -97,6 +109,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_POISON_CHANCE_1",
+    isEnabled: true,
     displayName: "CARD_POISON_CHANCE_1",
     rarity: 2,
     powerTier: 1,
@@ -104,6 +117,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_CRIT_DAMAGE_1",
+    isEnabled: true,
     displayName: "CARD_CRIT_DAMAGE_1",
     rarity: 3,
     powerTier: 1,
@@ -114,6 +128,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_FIRE_RATE_ACCURACY_TRADE_1",
+    isEnabled: true,
     displayName: "CARD_FIRE_RATE_ACCURACY_TRADE_1",
     rarity: 3,
     powerTier: 1,
@@ -124,6 +139,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_ACCURACY_CRIT_1",
+    isEnabled: true,
     displayName: "CARD_ACCURACY_CRIT_1",
     rarity: 3,
     powerTier: 1,
@@ -134,6 +150,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_CONVERT_FIRE_2",
+    isEnabled: true,
     displayName: "CARD_CONVERT_FIRE_2",
     rarity: 4,
     powerTier: 2,
@@ -144,6 +161,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_CONVERT_CHAOS_2",
+    isEnabled: true,
     displayName: "CARD_CONVERT_CHAOS_2",
     rarity: 4,
     powerTier: 2,
@@ -154,6 +172,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_LIFE_1",
+    isEnabled: true,
     displayName: "CARD_LIFE_1",
     rarity: 1,
     powerTier: 1,
@@ -161,6 +180,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_DAMAGE_REDUCTION_1",
+    isEnabled: true,
     displayName: "CARD_DAMAGE_REDUCTION_1",
     rarity: 2,
     powerTier: 1,

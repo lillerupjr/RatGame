@@ -7,7 +7,7 @@ export function applyRelic(world: World, relicId: string): void {
 
   switch (relicId) {
     case "RELIC_TRAINING":
-      world.relicEffects.xpMult *= 1.05;
+      // XP removed
       break;
     case "RELIC_STURDY":
       world.relicEffects.hpBonus += 5;

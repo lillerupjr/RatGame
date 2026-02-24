@@ -104,7 +104,7 @@ export function roomChallengeSystem(w: World, dt: number): void {
         // Emit completion event for UI/audio feedback
         emitEvent(w, {
             type: "SFX",
-            id: "LEVEL_UP", // Reuse level up sound for challenge completion
+            id: "UI_CLICK",
             vol: 0.6,
         });
     }

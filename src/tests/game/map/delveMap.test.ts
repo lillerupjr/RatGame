@@ -94,7 +94,6 @@ describe("delveMap", () => {
       expect(scaling.hpMult).toBe(1);
       expect(scaling.damageMult).toBe(1);
       expect(scaling.spawnRateMult).toBe(1);
-      expect(scaling.xpMult).toBe(1);
     });
 
     it("should increase multipliers with depth", () => {
@@ -104,7 +103,6 @@ describe("delveMap", () => {
       expect(scaling10.hpMult).toBeGreaterThan(scaling1.hpMult);
       expect(scaling10.damageMult).toBeGreaterThan(scaling1.damageMult);
       expect(scaling10.spawnRateMult).toBeGreaterThan(scaling1.spawnRateMult);
-      expect(scaling10.xpMult).toBeGreaterThan(scaling1.xpMult);
     });
 
     it("should calculate correct HP scaling (+20% per depth)", () => {

@@ -14,6 +14,7 @@ import { resolveProjectileDamagePacket } from "../../combat_mods/runtime/critDam
 import { assertValidCrit, assertValidDamageBundle } from "../../combat_mods/debug/combatRuntimeAssert";
 import { applyAilmentsFromHit, ensureEnemyAilmentsAt } from "../../combat_mods/ailments/applyAilmentsFromHit";
 import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
+import { getUserSettings } from "../../../userSettings";
 import {
   getEnemyWorld,
   getPlayerWorld,
@@ -68,6 +69,7 @@ function spawnFloatText(
  */
 /** Handle projectile/enemy and player/enemy collision resolution. */
 export function collisionsSystem(w: World, dt: number) {
+  const godMode = !!getUserSettings().debug.godMode;
   const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
   let px = pWorld.wx;
   let py = pWorld.wy;
@@ -427,7 +429,6 @@ export function collisionsSystem(w: World, dt: number) {
           enemyIndex: e,
           x: ew.wx,
           y: ew.wy,
-          xpValue: 1,
           source: registry.projectileSourceFromKind(w.prjKind[p]),
         });
       }
@@ -466,7 +467,7 @@ export function collisionsSystem(w: World, dt: number) {
       if (!isPlayerProjectileHit(w, p, PLAYER_R)) continue;
 
       const dmg = w.prDamage[p] || 1;
-      w.playerHp -= dmg;
+      if (!godMode) w.playerHp -= dmg;
 
       emitEvent(w, {
         type: "PLAYER_HIT",
@@ -503,8 +504,7 @@ export function collisionsSystem(w: World, dt: number) {
 
       // CONTACT HIT
       const dmg = w.eDamage[e] || 1;
-
-      w.playerHp -= dmg;
+      if (!godMode) w.playerHp -= dmg;
 
       emitEvent(w, {
         type: "PLAYER_HIT",

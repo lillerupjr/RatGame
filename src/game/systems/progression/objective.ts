@@ -102,6 +102,13 @@ export function setObjectivesFromSpec(world: World, spec: ObjectiveSpec): void {
     setObjectives(world, objectiveSpecToObjectiveDefs(spec));
 }
 
+export function hasCompletedAnyObjective(world: World): boolean {
+    for (let i = 0; i < world.objectiveStates.length; i++) {
+        if (world.objectiveStates[i]?.status === "COMPLETED") return true;
+    }
+    return false;
+}
+
 /** Process trigger signals and emit objective resolution events. */
 export function objectiveSystem(world: World): void {
     if (world.objectiveDefs.length === 0) return;
