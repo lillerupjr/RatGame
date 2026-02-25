@@ -22,9 +22,12 @@ export const SURVIVE_RAMP_CONFIG: SurviveRampConfig = {
   eliteChance: 0.10,
 };
 
+const SURVIVE_PRESSURE_CAP_MULT = 2.0;
+
 export function buildSurviveSpawnOverrides(nowSec: number, cfg: SurviveRampConfig = SURVIVE_RAMP_CONFIG) {
   const progress = Math.min(1, Math.max(0, nowSec / cfg.durationSec));
-  const ramp = 1 + progress * progress * cfg.rampStrength;
+  const rampUncapped = 1 + progress * progress * cfg.rampStrength;
+  const ramp = Math.min(SURVIVE_PRESSURE_CAP_MULT, rampUncapped);
   const powerPerSecondOverride = cfg.basePowerPerSecond * ramp;
   const waveChunkOverride = Math.floor(
     cfg.waveChunkStart + (cfg.waveChunkEnd - cfg.waveChunkStart) * progress
@@ -42,4 +45,3 @@ export function buildSurviveSpawnOverrides(nowSec: number, cfg: SurviveRampConfi
     eliteChanceOverride,
   };
 }
-

@@ -18,6 +18,7 @@ import { getUserSettings } from "../../../userSettings";
 import { resolveCritRoll01 } from "../../combat_mods/runtime/critDamagePacket";
 import { normalizeRelicIdList } from "../../content/relics";
 import { getRelicMods } from "../progression/relics";
+import { applyPlayerIncomingDamage } from "./playerArmor";
 import {
   getEnemyWorld,
   getPlayerWorld,
@@ -496,11 +497,12 @@ export function collisionsSystem(w: World, dt: number) {
       if (!isPlayerProjectileHit(w, p, PLAYER_R)) continue;
 
       const dmg = w.prDamage[p] || 1;
-      if (!godMode) w.playerHp -= dmg;
+      const lifeDamage = godMode ? 0 : applyPlayerIncomingDamage(w, dmg);
+      if (!godMode) w.playerHp -= lifeDamage;
 
       emitEvent(w, {
         type: "PLAYER_HIT",
-        damage: dmg,
+        damage: lifeDamage,
         x: px,
         y: py,
       });
@@ -533,11 +535,12 @@ export function collisionsSystem(w: World, dt: number) {
 
       // CONTACT HIT
       const dmg = w.eDamage[e] || 1;
-      if (!godMode) w.playerHp -= dmg;
+      const lifeDamage = godMode ? 0 : applyPlayerIncomingDamage(w, dmg);
+      if (!godMode) w.playerHp -= lifeDamage;
 
       emitEvent(w, {
         type: "PLAYER_HIT",
-        damage: dmg,
+        damage: lifeDamage,
         x: px,
         y: py,
       });

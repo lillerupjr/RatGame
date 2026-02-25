@@ -17,6 +17,7 @@ import type { TriggerDef } from "../../game/triggers/triggerTypes";
 import type { Dir8 } from "../render/sprites/dir8";
 import type { EnemyAilmentsState } from "../../game/combat_mods/ailments/enemyAilments";
 import type { CardRewardState } from "../../game/combat_mods/rewards/cardRewardFlow";
+import type { RelicRewardState } from "../../game/combat_mods/rewards/relicRewardFlow";
 import type { FloorRewardBudget } from "../../game/rewards/floorRewardBudget";
 import type { VendorState } from "../../game/vendor/vendorState";
 import { createDpsMetrics, type DpsMetricsState } from "../../game/balance/dpsMetrics";
@@ -305,6 +306,7 @@ export type World = {
   cards: string[];
   combatCardIds: string[];
   cardReward: CardRewardState;
+  relicReward: RelicRewardState;
   floorRewardBudget: FloorRewardBudget;
   cardRewardBudgetTotal: number;
   cardRewardBudgetUsed: number;
@@ -670,7 +672,7 @@ export function createWorld(args: CreateWorldArgs): World {
 
     playerHp: 100,
     playerHpMax: 100,
-    maxArmor: 0,
+    maxArmor: 50,
     currentArmor: 0,
 
     dmgMult: 1,
@@ -704,6 +706,11 @@ export function createWorld(args: CreateWorldArgs): World {
     cardReward: {
       active: false,
       source: "ZONE_TRIAL",
+      options: [],
+    },
+    relicReward: {
+      active: false,
+      source: "OBJECTIVE_COMPLETION",
       options: [],
     },
     floorRewardBudget: {

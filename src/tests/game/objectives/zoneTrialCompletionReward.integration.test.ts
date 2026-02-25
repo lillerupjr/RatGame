@@ -32,8 +32,8 @@ describe("zone trial completion reward chain", () => {
 
     expect(started).toBe(true);
     expect(world.state).toBe("REWARD");
-    expect(world.cardReward.active).toBe(true);
-    expect(world.cardReward.source).toBe("ZONE_TRIAL");
-    expect(world.cardReward.options).toHaveLength(3);
+    expect(world.relicReward.active).toBe(true);
+    expect(world.relicReward.source).toBe("OBJECTIVE_COMPLETION");
+    expect(world.relicReward.options).toHaveLength(3);
   });
 });

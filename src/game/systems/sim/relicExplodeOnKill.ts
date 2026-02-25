@@ -18,7 +18,8 @@ export function relicExplodeOnKillSystem(w: World, _dt: number): void {
   const hasOnKillRelic =
     w.relics.includes("ACT_EXPLODE_ON_KILL")
     || w.relics.includes("ACT_DAGGER_ON_KILL_50")
-    || w.relics.includes("ACT_IGNITE_SPREAD_ON_DEATH");
+    || w.relics.includes("ACT_IGNITE_SPREAD_ON_DEATH")
+    || w.relics.includes("ARMOR_RESTORE_ON_KILL_10");
   if (!hasOnKillRelic) return;
   if (!Array.isArray(w.events) || w.events.length === 0) return;
   const hasTriggerEcho = w.relics.includes("ACT_TRIGGERS_DOUBLE");

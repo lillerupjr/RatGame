@@ -12,9 +12,12 @@ const BASE_DAMAGE_REFERENCE = 100;
 
 
 export function recomputeDerivedStats(w: World) {
+    const prevCurrentArmor = Number.isFinite(w.currentArmor) ? w.currentArmor : 0;
+
     // Reset derived stats to base
     w.pSpeed = w.baseMoveSpeed;
     w.pickupRadius = w.basePickupRadius;
+    w.maxArmor = 50;
 
     // Reset multipliers
     w.dmgMult = 1;
@@ -38,4 +41,11 @@ export function recomputeDerivedStats(w: World) {
         const bonus = w.playerHpMax * 0.2;
         w.dmgMult *= 1 + bonus / BASE_DAMAGE_REFERENCE;
     }
+    if (w.relics.includes("ARMOR_MAX_50")) w.maxArmor += 50;
+    const hasArmorDoubleMax = w.relics.includes("ARMOR_DOUBLE_MAX");
+    if (hasArmorDoubleMax) w.maxArmor *= 2;
+
+    w.currentArmor = prevCurrentArmor;
+    w.maxArmor = Math.max(0, w.maxArmor);
+    w.currentArmor = Math.max(0, Math.min(w.maxArmor, w.currentArmor));
 }

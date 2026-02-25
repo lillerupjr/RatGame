@@ -27,6 +27,7 @@ function createWorld(seed = 1): any {
     floorIndex: 0,
     timeSec: 0,
     cards: [],
+    relics: [] as string[],
     chestOpenRequested: false,
     triggerSignals: [],
     objectiveStates: [],
@@ -38,6 +39,11 @@ function createWorld(seed = 1): any {
       source: "ZONE_TRIAL",
       options: [],
     },
+    relicReward: {
+      active: false,
+      source: "OBJECTIVE_COMPLETION",
+      options: [],
+    },
   };
   resetFloorCardRewardBudget(world);
   return world;
@@ -47,6 +53,8 @@ function resolveReward(world: any): void {
   world.state = "RUN";
   world.cardReward.active = false;
   world.cardReward.options = [];
+  world.relicReward.active = false;
+  world.relicReward.options = [];
 }
 
 describe("floor reward budget policies", () => {

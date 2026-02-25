@@ -1,4 +1,5 @@
 import { cardViewModel, rarityClass } from "../cards/cardUi";
+import { getRelicById } from "../../game/content/relics";
 
 export type VendorShopCard = {
   cardId: string;
@@ -10,11 +11,13 @@ export type VendorShopState = {
   gold: number;
   price: number;
   cards: VendorShopCard[];
+  relicOffers: Array<{ relicId: string; priceG: number; isSold: boolean }>;
 };
 
 export function mountVendorShopMenu(args: {
   root: HTMLElement;
   onBuy: (index: number) => void;
+  onBuyRelic: (index: number) => void;
   onLeave: () => void;
   onClose: () => void;
 }): {
@@ -62,6 +65,20 @@ export function mountVendorShopMenu(args: {
       panel.appendChild(cards);
     }
 
+    let relicTitle = panel.querySelector(".vendorRelicTitle") as HTMLElement | null;
+    if (!relicTitle) {
+      relicTitle = document.createElement("div");
+      relicTitle.className = "vendorRelicTitle";
+      panel.appendChild(relicTitle);
+    }
+
+    let relics = panel.querySelector(".vendorRelicGrid") as HTMLElement | null;
+    if (!relics) {
+      relics = document.createElement("div");
+      relics.className = "deckCardGrid vendorRelicGrid";
+      panel.appendChild(relics);
+    }
+
     let actions = panel.querySelector(".vendorActions") as HTMLElement | null;
     if (!actions) {
       actions = document.createElement("div");
@@ -69,18 +86,20 @@ export function mountVendorShopMenu(args: {
       panel.appendChild(actions);
     }
 
-    return { top, title, sub, cards, actions };
+    return { top, title, sub, cards, relicTitle, relics, actions };
   };
 
   const renderCards = (): void => {
     if (!currentState || !currentState.active) return;
-    const { top, title, sub, cards, actions } = ensureStructure();
+    const { top, title, sub, cards, relicTitle, relics, actions } = ensureStructure();
     top.textContent = `Gold: ${currentState.gold}`;
     title.textContent = "Vendor";
-    sub.textContent = "Choose one card to buy";
+    sub.textContent = "Choose cards and relics to buy";
     cards.innerHTML = "";
+    relics.innerHTML = "";
     actions.innerHTML = "";
-    const totalSlots = currentState.cards.length + 1; // + Leave button
+    relicTitle.textContent = "Relics";
+    const totalSlots = currentState.cards.length + currentState.relicOffers.length + 1; // + Leave button
     if (selectedIndex >= totalSlots) selectedIndex = 0;
 
     for (let i = 0; i < currentState.cards.length; i++) {
@@ -134,9 +153,59 @@ export function mountVendorShopMenu(args: {
       cards.appendChild(btn);
     }
 
+    for (let i = 0; i < currentState.relicOffers.length; i++) {
+      const offer = currentState.relicOffers[i];
+      const relic = getRelicById(offer.relicId);
+      const canAfford = currentState.gold >= offer.priceG;
+      const disabled = offer.isSold || !canAfford;
+      const stateClass = offer.isSold ? "sold" : !canAfford ? "locked" : "available";
+      const idx = currentState.cards.length + i;
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `deckCardButton vendorCard ${stateClass}${idx === selectedIndex ? " selected" : ""}`;
+      btn.disabled = disabled;
+      btn.dataset.relicIndex = String(i);
+
+      const topRow = document.createElement("div");
+      topRow.className = "deckCardTopRow";
+      const tier = document.createElement("span");
+      tier.className = "deckCardTier";
+      tier.textContent = relic?.kind ?? "RELIC";
+      const price = document.createElement("span");
+      price.className = "vendorPriceBadge";
+      price.textContent = offer.isSold ? "SOLD" : `${offer.priceG}g`;
+      topRow.appendChild(tier);
+      topRow.appendChild(price);
+
+      const name = document.createElement("div");
+      name.className = "deckCardTitle";
+      name.textContent = relic?.displayName ?? offer.relicId;
+
+      const desc = document.createElement("div");
+      desc.className = "deckCardDesc";
+      const line = document.createElement("div");
+      const d = relic?.desc?.[0];
+      line.textContent = d && d.length > 0 ? d : "(No description)";
+      desc.appendChild(line);
+
+      const foot = document.createElement("div");
+      foot.className = "vendorStateText";
+      if (offer.isSold) foot.textContent = "Sold";
+      else if (!canAfford) foot.textContent = `Need ${offer.priceG}g`;
+      else foot.textContent = "Available";
+
+      btn.appendChild(topRow);
+      btn.appendChild(name);
+      btn.appendChild(desc);
+      btn.appendChild(foot);
+      btn.addEventListener("click", () => args.onBuyRelic(i));
+      relics.appendChild(btn);
+    }
+
     const leaveBtn = document.createElement("button");
     leaveBtn.type = "button";
-    leaveBtn.className = `vendorLeaveButton${selectedIndex === currentState.cards.length ? " selected" : ""}`;
+    leaveBtn.className = `vendorLeaveButton${selectedIndex === currentState.cards.length + currentState.relicOffers.length ? " selected" : ""}`;
     leaveBtn.textContent = "Leave";
     leaveBtn.addEventListener("click", args.onLeave);
     actions.appendChild(leaveBtn);

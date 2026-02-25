@@ -7,6 +7,7 @@ import { anchorFromWorld, writeAnchor } from "../../coords/anchor";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getEnemyWorld, getPlayerWorld, getZoneWorld } from "../../coords/worldViews";
 import { getUserSettings } from "../../../userSettings";
+import { applyPlayerIncomingDamage } from "./playerArmor";
 
 /** Update zones, apply periodic damage, and process delayed explosions. */
 export function zonesSystem(w: World, dt: number) {
@@ -82,8 +83,9 @@ export function zonesSystem(w: World, dt: number) {
                 const dy = py - zy;
                 const rr = zr + PLAYER_R;
                 if (dx * dx + dy * dy <= rr * rr) {
-                    if (!godMode) w.playerHp -= pdmg;
-                    emitEvent(w, { type: "PLAYER_HIT", damage: pdmg, x: px, y: py });
+                    const lifeDamage = godMode ? 0 : applyPlayerIncomingDamage(w, pdmg);
+                    if (!godMode) w.playerHp -= lifeDamage;
+                    emitEvent(w, { type: "PLAYER_HIT", damage: lifeDamage, x: px, y: py });
                 }
             }
         }

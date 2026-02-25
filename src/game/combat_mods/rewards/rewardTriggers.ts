@@ -1,5 +1,6 @@
 import { OBJECTIVE_TRIGGER_IDS } from "../../systems/progression/objectiveSpec";
 import { beginCardReward } from "./cardRewardFlow";
+import { beginRelicReward } from "./relicRewardFlow";
 
 const DEFAULT_FLOOR_REWARD_BUDGET = 3;
 
@@ -135,6 +136,20 @@ export function tryBeginCardReward(world: any, claimKey: string, source: "ZONE_T
   return true;
 }
 
+export function tryBeginObjectiveRelicReward(world: any, claimKey: string, optionCount: number): boolean {
+  if (world?.state !== "RUN") return false;
+  if (!canGrantFloorCardReward(world)) return false;
+  if (hasClaimKey(world, claimKey)) return false;
+
+  addClaimKey(world, claimKey);
+  consumeFloorCardReward(world);
+  world.lastCardRewardClaimKey = claimKey;
+
+  beginRelicReward(world, "OBJECTIVE_COMPLETION", optionCount);
+  world.state = "REWARD";
+  return true;
+}
+
 export function processChestOpenRequested(world: any, optionCount: number): boolean {
   if (!world?.chestOpenRequested) return false;
   world.chestOpenRequested = false;
@@ -145,6 +160,7 @@ export function processChestOpenRequested(world: any, optionCount: number): bool
 }
 
 export function processObjectiveCompletionReward(world: any, optionCount: number): boolean {
+  if (world?.floorArchetype === "VENDOR" || world?.floorArchetype === "HEAL") return false;
   const policy = floorRewardPolicy(world);
   if (policy === "BOSS") return false;
 
@@ -158,7 +174,7 @@ export function processObjectiveCompletionReward(world: any, optionCount: number
       ? `${floorIndex}:TRIAL_COMPLETE`
       : `${floorIndex}:OBJ_COMPLETE:${objectiveId}`;
 
-  if (tryBeginCardReward(world, claimKey, "ZONE_TRIAL", optionCount)) {
+  if (tryBeginObjectiveRelicReward(world, claimKey, optionCount)) {
     world.objectiveRewardClaimedKey = claimKey;
     return true;
   }
@@ -169,6 +185,8 @@ export function processObjectiveCompletionReward(world: any, optionCount: number
 export function processZoneClearedReward(world: any, optionCount: number): boolean {
   const policy = floorRewardPolicy(world);
   if (policy !== "ZONE_TRIAL") return false;
+  // If objective is already complete, completion reward should control flow.
+  if (firstCompletedObjectiveId(world)) return false;
 
   const triggerId = consumeFirstZoneClearedSignal(world);
   if (!triggerId) return false;

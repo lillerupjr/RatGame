@@ -114,6 +114,36 @@ export const RELICS: RelicDef[] = [
     displayName: "Heal 2 life on hit",
     kind: "PASSIVE",
   },
+  {
+    id: "ARMOR_MAX_50",
+    isEnabled: true,
+    displayName: "+50 max armor",
+    kind: "PASSIVE",
+  },
+  {
+    id: "ARMOR_RESTORE_ON_KILL_10",
+    isEnabled: true,
+    displayName: "Restore 10 armor on kill",
+    kind: "ACTIVE",
+  },
+  {
+    id: "ARMOR_RESTORE_ON_HIT_1",
+    isEnabled: true,
+    displayName: "Restore 1 armor on hit",
+    kind: "ACTIVE",
+  },
+  {
+    id: "ARMOR_RESTORE_ON_CRIT_5",
+    isEnabled: true,
+    displayName: "Restore 5 armor on crit",
+    kind: "ACTIVE",
+  },
+  {
+    id: "ARMOR_DOUBLE_MAX",
+    isEnabled: true,
+    displayName: "Double max armor",
+    kind: "PASSIVE",
+  },
 ];
 
 function mapLegacyRelicSuffixToCanonical(suffix: string): string {
@@ -166,7 +196,18 @@ function mapLegacyRelicSuffixToCanonical(suffix: string): string {
     case "PASS_LIFE_ON_HIT_2":
       return "PASS_LIFE_ON_HIT_2";
     case "V3_ARMOR_MAX":
-      return "PASS_ARMOR_MAX_50";
+    case "PASS_ARMOR_MAX_50":
+      return "ARMOR_MAX_50";
+    case "ARMOR_MAX_50":
+      return "ARMOR_MAX_50";
+    case "ARMOR_RESTORE_ON_KILL_10":
+      return "ARMOR_RESTORE_ON_KILL_10";
+    case "ARMOR_RESTORE_ON_HIT_1":
+      return "ARMOR_RESTORE_ON_HIT_1";
+    case "ARMOR_RESTORE_ON_CRIT_5":
+      return "ARMOR_RESTORE_ON_CRIT_5";
+    case "ARMOR_DOUBLE_MAX":
+      return "ARMOR_DOUBLE_MAX";
     default:
       return suffix;
   }

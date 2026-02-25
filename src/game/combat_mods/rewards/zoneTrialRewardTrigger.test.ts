@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { chooseCardReward } from "./cardRewardFlow";
+import { chooseRelicReward } from "./relicRewardFlow";
 import { processObjectiveCompletionReward } from "./rewardTriggers";
 
 function createWorld(seed = 123): any {
@@ -20,6 +20,7 @@ function createWorld(seed = 123): any {
     floorIndex: 0,
     timeSec: 0,
     cards: [] as string[],
+    relics: [] as string[],
     objectiveStates: [{ id: "OBJ_ZONE_TRIAL", status: "COMPLETED" }],
     objectiveRewardClaimedKey: null,
     cardRewardBudgetTotal: 3,
@@ -30,11 +31,16 @@ function createWorld(seed = 123): any {
       source: "ZONE_TRIAL",
       options: [],
     },
+    relicReward: {
+      active: false,
+      source: "OBJECTIVE_COMPLETION",
+      options: [],
+    },
   };
 }
 
 function canAdvance(world: any): boolean {
-  return world.state === "RUN" && !world.cardReward.active;
+  return world.state === "RUN" && !world.cardReward.active && !world.relicReward.active;
 }
 
 describe("zoneTrial reward trigger", () => {
@@ -46,8 +52,8 @@ describe("zoneTrial reward trigger", () => {
 
     expect(startedFirst).toBe(true);
     expect(startedSecond).toBe(false);
-    expect(world.cardReward.active).toBe(true);
-    expect(world.cardReward.options.length).toBe(3);
+    expect(world.relicReward.active).toBe(true);
+    expect(world.relicReward.options.length).toBe(3);
     expect(canAdvance(world)).toBe(false);
   });
 
@@ -55,12 +61,12 @@ describe("zoneTrial reward trigger", () => {
     const world = createWorld(9);
     processObjectiveCompletionReward(world, 3);
 
-    const picked = world.cardReward.options[0];
-    chooseCardReward(world, picked);
+    const picked = world.relicReward.options[0];
+    chooseRelicReward(world, picked);
     world.state = "RUN";
 
-    expect(world.cards.includes(picked)).toBe(true);
-    expect(world.cardReward.active).toBe(false);
+    expect(world.relics.includes(picked)).toBe(true);
+    expect(world.relicReward.active).toBe(false);
     expect(canAdvance(world)).toBe(true);
   });
 });

@@ -8,4 +8,5 @@ export * from "./stats/statKeys";
 export * from "./debug/combatModsSnapshot";
 export * from "./debug/combatRuntimeAssert";
 export * from "./rewards/cardRewardFlow";
+export * from "./rewards/relicRewardFlow";
 export * from "./rewards/cardTierWeights";

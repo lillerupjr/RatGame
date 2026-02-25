@@ -11,10 +11,14 @@ import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getUserSettings } from "../../../userSettings";
 import type { RelicTriggerEvent } from "../../events";
 import { applyIgniteStrongestFromSnapshot, createEnemyAilmentsState } from "../../combat_mods/ailments/enemyAilments";
+import { restoreArmor } from "../sim/playerArmor";
 
 const RELIC_MISSILE_EXPLODE_RADIUS = 80;
 const RELIC_ALL_HITS_EXPLODE_RADIUS = 80;
 const RELIC_LIFE_ON_HIT_HEAL = 2;
+const ARMOR_RESTORE_ON_HIT_AMOUNT = 1;
+const ARMOR_RESTORE_ON_CRIT_AMOUNT = 5;
+const ARMOR_RESTORE_ON_KILL_AMOUNT = 10;
 const RELIC_EXPLODE_ON_KILL_RADIUS = 140;
 const RELIC_V2_SPARK_PROC_CHANCE = 0.2;
 const RELIC_V2_SPARK_RANGE = 220;
@@ -376,12 +380,16 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
   const hasNovaOnCrit = world.relics.includes("ACT_NOVA_ON_CRIT_FIRE");
   const hasDaggerOnKill = world.relics.includes("ACT_DAGGER_ON_KILL_50");
   const hasIgniteSpreadOnDeath = world.relics.includes("ACT_IGNITE_SPREAD_ON_DEATH");
+  const hasArmorOnHit = world.relics.includes("ARMOR_RESTORE_ON_HIT_1");
+  const hasArmorOnCrit = world.relics.includes("ARMOR_RESTORE_ON_CRIT_5");
+  const hasArmorOnKill = world.relics.includes("ARMOR_RESTORE_ON_KILL_10");
   const hasRetryFailedProcs = world.relics.includes("ACT_RETRY_FAILED_PROCS_ONCE");
-  if (!hasExplodeOnKill && !hasBazookaOnHit && !hasAllHitsExplode && !hasLifeOnHit && !hasSparkOnHit && !hasNovaOnCrit && !hasDaggerOnKill && !hasIgniteSpreadOnDeath) return;
+  if (!hasExplodeOnKill && !hasBazookaOnHit && !hasAllHitsExplode && !hasLifeOnHit && !hasSparkOnHit && !hasNovaOnCrit && !hasDaggerOnKill && !hasIgniteSpreadOnDeath && !hasArmorOnHit && !hasArmorOnCrit && !hasArmorOnKill) return;
 
   if (ev.type === "ENEMY_KILLED") {
     if (hasExplodeOnKill) applyExplodeOnKill(world, ev);
     if (hasIgniteSpreadOnDeath) applyIgniteSpreadOnDeath(world, ev);
+    if (hasArmorOnKill) restoreArmor(world, ARMOR_RESTORE_ON_KILL_AMOUNT);
     if (hasDaggerOnKill) {
       const didProc = rollProcChance(world, ACT_DAGGER_ON_KILL_50_PROC_CHANCE, hasRetryFailedProcs);
       if (didProc) {
@@ -460,6 +468,12 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
     if (debugRelicLogs) {
       console.debug("[Relic] Healed 2 life");
     }
+  }
+  if (hasArmorOnHit) {
+    restoreArmor(world, ARMOR_RESTORE_ON_HIT_AMOUNT);
+  }
+  if (hasArmorOnCrit && ev.isCrit) {
+    restoreArmor(world, ARMOR_RESTORE_ON_CRIT_AMOUNT);
   }
 
   if (hasSparkOnHit) {

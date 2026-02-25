@@ -15,6 +15,8 @@ describe("surviveRamp", () => {
   test("reaches end-of-run chunk and delay targets at 120s", () => {
     const out = buildSurviveSpawnOverrides(120);
     expect(out.progress).toBeCloseTo(1);
+    expect(out.ramp).toBeLessThanOrEqual(2.0);
+    expect(out.ramp).toBeCloseTo(2.0);
     expect(out.waveChunkOverride).toBe(6);
     expect(out.waveDelayOverride).toBeCloseTo(0.55);
     expect(out.eliteChanceOverride).toBeCloseTo(0.10);
@@ -25,5 +27,11 @@ describe("surviveRamp", () => {
     const at = buildSurviveSpawnOverrides(60);
     expect(before.eliteChanceOverride).toBeCloseTo(0);
     expect(at.eliteChanceOverride).toBeCloseTo(0.10);
+  });
+
+  test("pressure cap stays at 2.0x after ramp duration", () => {
+    const out = buildSurviveSpawnOverrides(999);
+    expect(out.ramp).toBeCloseTo(2.0);
+    expect(out.powerPerSecondOverride).toBeCloseTo(SURVIVE_RAMP_CONFIG.basePowerPerSecond * 2.0);
   });
 });

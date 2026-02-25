@@ -472,6 +472,7 @@ export function mountPauseMenu(args: {
     const critChance = safeNum(world.baseCritChance) + safeNum(world.critChanceBonus);
     const rows: Array<[string, string]> = [
       ["HP", `${safeNum(world.playerHp).toFixed(0)} / ${safeNum(world.playerHpMax).toFixed(0)}`],
+      ["Armor", `${safeNum((world as any).currentArmor).toFixed(0)} / ${safeNum((world as any).maxArmor).toFixed(0)}`],
       ["Move Speed", safeNum((world as any).pSpeed).toFixed(2)],
       ["Damage Mult", safeNum(world.dmgMult, 1).toFixed(2)],
       ["Fire Rate Mult", safeNum(world.fireRateMult, 1).toFixed(2)],

@@ -1,6 +1,21 @@
 html, body { margin: 0; height: 100%; background: #0b0b0f; overflow: hidden; }
 #hud { position: fixed; left: 12px; top: 12px; color: #eaeaf2; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto; font-size: 14px; line-height: 1.4; user-select: none; z-index: 3; transform: scale(0.75); transform-origin: top left; }
 #hud .pill { display: inline-block; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,0.08); margin-right: 8px; }
+#hud .armorPill {
+  border: 1px solid rgba(120, 190, 255, 0.6);
+  background: rgba(85, 155, 230, 0.22);
+}
+#hud .armorPill::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+  background: radial-gradient(circle at 30% 30%, #d9efff 0%, #9dcbff 45%, #4f85c8 100%);
+  box-shadow: 0 0 6px rgba(141, 195, 255, 0.8);
+  vertical-align: -1px;
+}
 
 /* HUD inventory (weapons + items) */
 #hudTop { display: inline-block; }
@@ -818,7 +833,20 @@ canvas { display:block; }
 .deckCardButton.rarity-3 { border-left: 4px solid rgba(188, 129, 255, 0.9); }
 .deckCardButton.rarity-4 { border-left: 4px solid rgba(255, 188, 84, 0.95); }
 
-.vendorOverlay .panel { width: min(1040px, 95vw); }
+.vendorOverlay .panel {
+  width: min(1040px, 95vw);
+  transform: scale(0.8);
+  transform-origin: top center;
+}
+.vendorRelicTitle {
+  margin-top: 12px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
 
 .vendorTopBar {
   display: flex;

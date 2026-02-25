@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
-  processObjectiveCompletionReward,
   processZoneClearedReward,
+  processObjectiveCompletionReward,
 } from "../../../game/combat_mods/rewards/rewardTriggers";
 import { OBJECTIVE_TRIGGER_IDS } from "../../../game/systems/progression/objectiveSpec";
 
@@ -23,6 +23,7 @@ function createWorld(seed = 1): any {
     floorIndex: 0,
     timeSec: 0,
     cards: [],
+    relics: [] as string[],
     chestOpenRequested: false,
     triggerSignals: [],
     objectiveStates: [],
@@ -35,6 +36,11 @@ function createWorld(seed = 1): any {
     cardReward: {
       active: false,
       source: "ZONE_TRIAL",
+      options: [],
+    },
+    relicReward: {
+      active: false,
+      source: "OBJECTIVE_COMPLETION",
       options: [],
     },
   };
@@ -87,6 +93,60 @@ describe("zoneCleared reward trigger", () => {
     const started = processObjectiveCompletionReward(w, 3);
     expect(started).toBe(true);
     expect(w.objectiveRewardClaimedKey).toBe("0:TRIAL_COMPLETE");
+    expect(w.relicReward.active).toBe(true);
+  });
+
+  test("zone cleared reward is skipped once objective is completed", () => {
+    const w = createWorld(13);
+    w.objectiveStates = [{ id: "OBJ_ZONE_TRIAL", status: "COMPLETED" }];
+    w.triggerSignals.push({
+      type: "KILL",
+      entityId: -1,
+      triggerId: `${OBJECTIVE_TRIGGER_IDS.zoneClearedPrefix}2`,
+    });
+
+    const startedZone = processZoneClearedReward(w, 3);
+    expect(startedZone).toBe(false);
+    expect(w.cardReward.active).toBe(false);
+  });
+
+  test("zone trial sequence: zone1 card, zone2 card, zone3 no reward, objective completion relic", () => {
+    const w = createWorld(21);
+    w.objectiveStates = [{ id: "OBJ_ZONE_TRIAL", status: "ACTIVE" }];
+
+    w.triggerSignals.push({
+      type: "KILL",
+      entityId: -1,
+      triggerId: `${OBJECTIVE_TRIGGER_IDS.zoneClearedPrefix}1`,
+    });
+    expect(processZoneClearedReward(w, 3)).toBe(true);
     expect(w.cardReward.active).toBe(true);
+    w.state = "RUN";
+    w.cardReward.active = false;
+    w.cardReward.options = [];
+
+    w.triggerSignals.push({
+      type: "KILL",
+      entityId: -1,
+      triggerId: `${OBJECTIVE_TRIGGER_IDS.zoneClearedPrefix}2`,
+    });
+    expect(processZoneClearedReward(w, 3)).toBe(true);
+    expect(w.cardReward.active).toBe(true);
+    w.state = "RUN";
+    w.cardReward.active = false;
+    w.cardReward.options = [];
+
+    w.triggerSignals.push({
+      type: "KILL",
+      entityId: -1,
+      triggerId: `${OBJECTIVE_TRIGGER_IDS.zoneClearedPrefix}3`,
+    });
+    expect(processZoneClearedReward(w, 3)).toBe(false);
+    expect(w.cardReward.active).toBe(false);
+
+    w.objectiveStates[0].status = "COMPLETED";
+    expect(processObjectiveCompletionReward(w, 3)).toBe(true);
+    expect(w.relicReward.active).toBe(true);
+    expect(w.relicReward.options.length).toBe(3);
   });
 });

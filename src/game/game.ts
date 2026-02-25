@@ -101,12 +101,15 @@ import { collectRuntimeSpriteIdsToPrewarm } from "./render/prewarmSprites";
 import { resolveActivePaletteId } from "./render/activePalette";
 import { applySfxSettingsToWorld } from "./audio/audioSettings";
 import { beginCardReward, chooseCardReward, ensureCardRewardState } from "./combat_mods/rewards/cardRewardFlow";
+import { beginRelicReward, chooseRelicReward, ensureRelicRewardState } from "./combat_mods/rewards/relicRewardFlow";
 import { addGold, getGold } from "./economy/gold";
 import { getCardById } from "./combat_mods/content/cards/cardPool";
 import { generateVendorCards } from "./vendor/generateVendorCards";
+import { generateVendorRelicOffers } from "./vendor/generateVendorRelics";
 import { createVendorState } from "./vendor/vendorState";
-import { tryPurchaseVendorCard } from "./vendor/vendorPurchase";
+import { tryPurchaseVendorCard, tryPurchaseVendorRelic } from "./vendor/vendorPurchase";
 import { mountCardRewardMenu } from "../ui/rewards/cardRewardMenu";
+import { mountRelicRewardMenu } from "../ui/rewards/relicRewardMenu";
 import { mountVendorShopMenu } from "../ui/vendor/vendorShopMenu";
 import { tickSpawnDirector } from "./balance/spawnDirector";
 import { buildSurviveSpawnOverrides, SURVIVE_RAMP_CONFIG } from "./balance/surviveRamp";
@@ -119,6 +122,7 @@ type HudRefs = {
   timePill: HTMLSpanElement;
   killsPill: HTMLSpanElement;
   hpPill: HTMLSpanElement;
+  armorPill: HTMLSpanElement;
   lvlPill: HTMLSpanElement;
   objectiveOverlay: HTMLDivElement;
   objectiveTitle: HTMLDivElement;
@@ -525,6 +529,7 @@ export function createGame(args: CreateGameArgs) {
     }
     if (world.runState === "TRANSITION") return false;
     if (world.state === "REWARD" && world.cardReward?.active) return false;
+    if (world.state === "REWARD" && world.relicReward?.active) return false;
     if (world.floorEndCountdownActive && world.floorEndCountdownSec > 0) return false;
 
     if (isDeterministicDelveMode()) {
@@ -580,12 +585,26 @@ export function createGame(args: CreateGameArgs) {
     w.cardRewardClaimKeys = Object.keys(budget.fired);
   }
 
-  function applyRewardOutcome(outcome: RewardOutcome, cardSource: "ZONE_TRIAL" | "BOSS_CHEST"): boolean {
+  function applyRewardOutcome(
+    outcome: RewardOutcome,
+    cardSource: "ZONE_TRIAL" | "BOSS_CHEST",
+    mode: "CARD" | "RELIC" = "CARD",
+  ): boolean {
     syncRewardDebugFieldsFromBudget(world);
     if (outcome.type === "GRANT_CARD") {
     if (activeDialog) setDialog(null);
     if (vendorShopOpen) closeVendorShop(false);
-      beginCardReward(world, cardSource, 3);
+      if (mode === "RELIC") {
+        const cardReward = ensureCardRewardState(world);
+        cardReward.active = false;
+        cardReward.options = [];
+        beginRelicReward(world, "OBJECTIVE_COMPLETION", 3);
+      } else {
+        const relicReward = ensureRelicRewardState(world);
+        relicReward.active = false;
+        relicReward.options = [];
+        beginCardReward(world, cardSource, 3);
+      }
       world.state = "REWARD";
       world.lastCardRewardClaimKey = outcome.reason;
       renderRewardMenuIfNeeded();
@@ -603,6 +622,9 @@ export function createGame(args: CreateGameArgs) {
   function maybeHandleZoneTrialMilestoneReward(): boolean {
     if (world.state !== "RUN" || world.runState !== "FLOOR") return false;
     if (world.floorRewardBudget.mode !== "ZONE_TRIAL") return false;
+    // Final zone clear should resolve through objective completion (relic reward),
+    // not through zone milestone card rewards.
+    if (hasCompletedAnyObjective(world)) return false;
     const zoneIndex = consumeFirstZoneClearedSignal(world);
     if (!zoneIndex) return false;
     const outcome = handleRewardEvent(
@@ -627,13 +649,14 @@ export function createGame(args: CreateGameArgs) {
 
   function maybeHandleObjectiveCompletionReward(): boolean {
     if (world.state !== "RUN" || world.runState !== "FLOOR") return false;
+    if (world.floorArchetype === "VENDOR" || world.floorArchetype === "HEAL") return false;
     if (!hasCompletedAnyObjective(world)) return false;
     const outcome = handleRewardEvent(
       world.floorRewardBudget,
       { type: "OBJECTIVE_COMPLETED" },
       { depth: floorDepthForRewards(world) }
     );
-    return applyRewardOutcome(outcome, "ZONE_TRIAL");
+    return applyRewardOutcome(outcome, "ZONE_TRIAL", "RELIC");
   }
 
   function maybeHandleChestOpenedReward(): boolean {
@@ -709,6 +732,21 @@ export function createGame(args: CreateGameArgs) {
       world.state = "RUN";
     },
   });
+  const relicRewardRoot = document.createElement("div");
+  relicRewardRoot.id = "relicReward";
+  relicRewardRoot.hidden = true;
+  document.body.appendChild(relicRewardRoot);
+  const relicRewardMenu = mountRelicRewardMenu({
+    root: relicRewardRoot,
+    onPick: (relicId: string) => {
+      const reward = ensureRelicRewardState(world);
+      if (!reward.active) return;
+      chooseRelicReward(world, relicId);
+      renderRewardMenuIfNeeded();
+      if (tryAdvanceAfterObjectiveCompletion()) return;
+      world.state = "RUN";
+    },
+  });
   const vendorRoot = document.createElement("div");
   vendorRoot.id = "vendorShop";
   vendorRoot.hidden = true;
@@ -718,6 +756,11 @@ export function createGame(args: CreateGameArgs) {
     root: vendorRoot,
     onBuy: (index: number) => {
       if (tryPurchaseVendorCard(world, index)) {
+        renderVendorShopIfNeeded();
+      }
+    },
+    onBuyRelic: (index: number) => {
+      if (tryPurchaseVendorRelic(world, index)) {
         renderVendorShopIfNeeded();
       }
     },
@@ -733,9 +776,11 @@ export function createGame(args: CreateGameArgs) {
 
   const renderRewardMenuIfNeeded = (): void => {
     const reward = ensureCardRewardState(world);
-    const key = `${world.state}|${reward.active ? 1 : 0}|${reward.source}|${reward.options.join(",")}`;
+    const relicReward = ensureRelicRewardState(world);
+    const key = `${world.state}|c:${reward.active ? 1 : 0}|${reward.source}|${reward.options.join(",")}|r:${relicReward.active ? 1 : 0}|${relicReward.source}|${relicReward.options.join(",")}`;
     if (key === lastRewardRenderKey) return;
     cardRewardMenu.render(reward.active ? reward : null);
+    relicRewardMenu.render(relicReward.active ? relicReward : null);
     lastRewardRenderKey = key;
   };
 
@@ -750,7 +795,7 @@ export function createGame(args: CreateGameArgs) {
       closeVendorShop(false);
       return;
     }
-    const key = `${getGold(world)}|${vendor.cards.join(",")}|${vendor.purchased.map((p) => (p ? "1" : "0")).join("")}`;
+    const key = `${getGold(world)}|${vendor.cards.join(",")}|${vendor.purchased.map((p) => (p ? "1" : "0")).join("")}|${(vendor.relicOffers ?? []).map((o) => `${o.relicId}:${o.priceG}:${o.isSold ? 1 : 0}`).join(",")}`;
     if (key === lastVendorRenderKey) return;
     vendorShopMenu.render({
       active: true,
@@ -759,6 +804,11 @@ export function createGame(args: CreateGameArgs) {
       cards: vendor.cards.map((cardId, index) => ({
         cardId,
         purchased: !!vendor.purchased[index],
+      })),
+      relicOffers: (vendor.relicOffers ?? []).map((offer) => ({
+        relicId: offer.relicId,
+        priceG: offer.priceG,
+        isSold: offer.isSold,
       })),
     });
     lastVendorRenderKey = key;
@@ -1199,6 +1249,8 @@ export function createGame(args: CreateGameArgs) {
     syncRewardDebugFieldsFromBudget(w);
     w.cardReward.active = false;
     w.cardReward.options = [];
+    w.relicReward.active = false;
+    w.relicReward.options = [];
     startZoneTrial(w);
     syncZoneTrialNavState(w);
     syncBossTripleNavState(w);
@@ -1207,7 +1259,10 @@ export function createGame(args: CreateGameArgs) {
     }
 
     w.vendor = floorIntent.archetype === "VENDOR"
-      ? createVendorState(generateVendorCards(5))
+      ? createVendorState(
+        generateVendorCards(5),
+        generateVendorRelicOffers(w, 5, 500),
+      )
       : null;
     w.vendorOffers = [];
     (w as any)._surviveBossSpawned = false;
@@ -1764,6 +1819,7 @@ export function createGame(args: CreateGameArgs) {
 
   function hideCardRewardMenu(): void {
     cardRewardMenu.render(null);
+    relicRewardMenu.render(null);
     lastRewardRenderKey = "";
   }
 
@@ -1996,6 +2052,7 @@ export function createGame(args: CreateGameArgs) {
     args.hud.timePill.textContent = formatTimeMMSS(world.time);
     args.hud.killsPill.textContent = `Kills: ${world.kills}`;
     args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
+    args.hud.armorPill.textContent = `Armor: ${Math.max(0, Math.ceil(world.currentArmor))}/${world.maxArmor}`;
     
     args.hud.lvlPill.textContent = `Gold: ${getGold(world)}`;
 
@@ -2056,7 +2113,14 @@ export function createGame(args: CreateGameArgs) {
 
   function finishFloorEndCountdown(): boolean {
     world.state = "RUN";
-    if (world.cardReward) world.cardReward.active = false;
+    if (world.cardReward) {
+      world.cardReward.active = false;
+      world.cardReward.options = [];
+    }
+    if (world.relicReward) {
+      world.relicReward.active = false;
+      world.relicReward.options = [];
+    }
     hideCardRewardMenu();
     world.floorEndCountdownActive = false;
     if (tryAdvanceAfterObjectiveCompletion()) {
@@ -2092,6 +2156,7 @@ export function createGame(args: CreateGameArgs) {
       args.hud.timePill.textContent = hudTimeText(world);
       args.hud.killsPill.textContent = `Kills: ${world.kills}`;
       args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
+      args.hud.armorPill.textContent = `Armor: ${Math.max(0, Math.ceil(world.currentArmor))}/${world.maxArmor}`;
       args.hud.lvlPill.textContent = `Gold: ${getGold(world)}`;
       renderRewardMenuIfNeeded();
       updateHud();
@@ -2224,7 +2289,7 @@ export function createGame(args: CreateGameArgs) {
       clearEvents(world);
       return;
     }
-    if (!world.cardReward?.active) {
+    if (!world.cardReward?.active && !world.relicReward?.active) {
       maybeStartFloorEndCountdown(world);
     }
     tickFloorEndCountdown(world, dt);
@@ -2276,6 +2341,7 @@ export function createGame(args: CreateGameArgs) {
     args.hud.timePill.textContent = hudTimeText(world);
     args.hud.killsPill.textContent = `Kills: ${world.kills}`;
     args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
+    args.hud.armorPill.textContent = `Armor: ${Math.max(0, Math.ceil(world.currentArmor))}/${world.maxArmor}`;
     args.hud.lvlPill.textContent = `Gold: ${getGold(world)}`;
     updateHud();
 
