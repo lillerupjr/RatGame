@@ -42,4 +42,44 @@ describe("ailmentTickSystem", () => {
     expect(w.eAilments[0].bleed.length).toBe(0);
     expect(w.eAilments[0].ignite).toBeNull();
   });
+
+  test("poison/ignite only apply on 0.5s discrete ticks", () => {
+    const st = createEnemyAilmentsState();
+    addPoison(st, 20); // dps 10
+    applyIgniteStrongestOnly(st, 16); // dps 4
+
+    const w: any = {
+      eAlive: [true],
+      eHp: [100],
+      eAilments: [st],
+      events: [],
+    };
+
+    ailmentTickSystem(w, 0.25);
+    // no poison/ignite tick yet
+    expect(w.eHp[0]).toBeCloseTo(100);
+
+    ailmentTickSystem(w, 0.25);
+    // one 0.5s tick: (10 + 4) * 0.5 = 7
+    expect(w.eHp[0]).toBeCloseTo(93);
+  });
+
+  test("bleed also applies on 0.5s discrete ticks", () => {
+    const st = createEnemyAilmentsState();
+    addBleed(st, 12); // dps 2
+
+    const w: any = {
+      eAlive: [true],
+      eHp: [100],
+      eAilments: [st],
+      events: [],
+    };
+
+    ailmentTickSystem(w, 0.25);
+    expect(w.eHp[0]).toBeCloseTo(100);
+
+    ailmentTickSystem(w, 0.25);
+    // one 0.5s tick: 2 * 0.5 = 1
+    expect(w.eHp[0]).toBeCloseTo(99);
+  });
 });

@@ -80,9 +80,17 @@ export type GameEvent =
 
 export type RelicTriggerEvent = Extract<GameEvent, { type: "ENEMY_HIT" | "ENEMY_KILLED" }> & {
   isRetrigger?: boolean;
+  killDamage?: number;
 };
 
 export type PendingRelicRetrigger = {
   fireAt: number;
   event: RelicTriggerEvent;
+};
+
+export type PendingRelicDaggerShot = {
+  fireAt: number;
+  projectileIndex: number;
+  excludeEnemyIndex: number;
+  range: number;
 };

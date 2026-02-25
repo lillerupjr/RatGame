@@ -1,9 +1,53 @@
 import { describe, expect, test } from "vitest";
 import { createWorld } from "../../../../engine/world/world";
 import { stageDocks } from "../../../../game/content/stages";
-import { relicTriggerSystem } from "../../../../game/systems/progression/relicTriggerSystem";
+import {
+  computeEffectiveRelicProcChance,
+  relicTriggerSystem,
+} from "../../../../game/systems/progression/relicTriggerSystem";
 import { relicRetriggerSystem } from "../../../../game/systems/progression/relicRetriggerSystem";
 import { PRJ_KIND } from "../../../../game/factories/projectileFactory";
+import { ENEMY_TYPE, spawnEnemyGrid } from "../../../../game/factories/enemyFactory";
+import { getEnemyWorld } from "../../../../game/coords/worldViews";
+import { KENNEY_TILE_WORLD } from "../../../../engine/render/kenneyTiles";
+import { clearSpatialHash, insertEntity } from "../../../../game/util/spatialHash";
+import { RNG } from "../../../../game/util/rng";
+import { zonesSystem } from "../../../../game/systems/sim/zones";
+
+function rebuildEnemyHash(world: ReturnType<typeof createWorld>): void {
+  clearSpatialHash(world.enemySpatialHash);
+  for (let i = 0; i < world.eAlive.length; i++) {
+    if (!world.eAlive[i]) continue;
+    const ew = getEnemyWorld(world, i, KENNEY_TILE_WORLD);
+    insertEntity(world.enemySpatialHash, i, ew.wx, ew.wy, world.eR[i] ?? 0);
+  }
+}
+
+function runSparkProcCount(
+  world: ReturnType<typeof createWorld>,
+  hitEnemy: number,
+  wx: number,
+  wy: number,
+  hits: number,
+  damage: number,
+): number {
+  let procCount = 0;
+  for (let i = 0; i < hits; i++) {
+    world.events.push({
+      type: "ENEMY_HIT",
+      enemyIndex: hitEnemy,
+      damage,
+      x: wx,
+      y: wy,
+      isCrit: false,
+      source: "PISTOL",
+    });
+    relicTriggerSystem(world);
+    procCount += world.events.filter((ev) => ev.type === "ENEMY_HIT" && ev.source === "OTHER").length;
+    world.events = [];
+  }
+  return procCount;
+}
 
 describe("relicTriggerSystem", () => {
   test("ACT_BAZOOKA_ON_HIT_20 fires bazooka on hit with 20% explosion scaling", () => {
@@ -142,5 +186,271 @@ describe("relicTriggerSystem", () => {
     relicTriggerSystem(world);
 
     expect(world.zAlive.length).toBe(1);
+  });
+
+  test("ACT_SPARK_ON_HIT_20 proc count matches seeded expectation over 100 hits", () => {
+    const seed = 123456;
+    const world = createWorld({ seed, stage: stageDocks });
+    world.rng = new RNG(seed);
+    world.relics.push("ACT_SPARK_ON_HIT_20");
+
+    const a = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 5, 5);
+    const b = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 6, 5);
+    world.eHp[a] = 1_000_000;
+    world.eHpMax[a] = 1_000_000;
+    world.eHp[b] = 1_000_000;
+    world.eHpMax[b] = 1_000_000;
+    rebuildEnemyHash(world);
+    const aw = getEnemyWorld(world, a, KENNEY_TILE_WORLD);
+
+    let procCount = 0;
+    for (let i = 0; i < 100; i++) {
+      world.events.push({
+        type: "ENEMY_HIT",
+        enemyIndex: a,
+        damage: 100,
+        x: aw.wx,
+        y: aw.wy,
+        isCrit: false,
+        source: "PISTOL",
+      });
+      relicTriggerSystem(world);
+      procCount += world.events.filter((ev) => ev.type === "ENEMY_HIT" && ev.source === "OTHER").length;
+      world.events = [];
+    }
+
+    const expectedRng = new RNG(seed);
+    let expectedCount = 0;
+    for (let i = 0; i < 100; i++) {
+      if (expectedRng.next() < 0.2) expectedCount++;
+    }
+    expect(procCount).toBe(expectedCount);
+  });
+
+  test("ACT_RETRY_FAILED_PROCS_ONCE increases Spark proc count deterministically", () => {
+    const seed = 777;
+    const world = createWorld({ seed, stage: stageDocks });
+    world.rng = new RNG(seed);
+    world.relics.push("ACT_SPARK_ON_HIT_20", "ACT_RETRY_FAILED_PROCS_ONCE");
+
+    const a = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 7, 7);
+    const b = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 8, 7);
+    world.eHp[a] = 1_000_000;
+    world.eHpMax[a] = 1_000_000;
+    world.eHp[b] = 1_000_000;
+    world.eHpMax[b] = 1_000_000;
+    rebuildEnemyHash(world);
+    const aw = getEnemyWorld(world, a, KENNEY_TILE_WORLD);
+
+    let procCount = 0;
+    for (let i = 0; i < 100; i++) {
+      world.events.push({
+        type: "ENEMY_HIT",
+        enemyIndex: a,
+        damage: 80,
+        x: aw.wx,
+        y: aw.wy,
+        isCrit: false,
+        source: "PISTOL",
+      });
+      relicTriggerSystem(world);
+      procCount += world.events.filter((ev) => ev.type === "ENEMY_HIT" && ev.source === "OTHER").length;
+      world.events = [];
+    }
+
+    const expectedRng = new RNG(seed);
+    let expectedCount = 0;
+    for (let i = 0; i < 100; i++) {
+      const first = expectedRng.next();
+      if (first < 0.2) {
+        expectedCount++;
+      } else {
+        const retry = expectedRng.next();
+        if (retry < 0.2) expectedCount++;
+      }
+    }
+    expect(procCount).toBe(expectedCount);
+  });
+
+  test("ACT_TRIGGERS_DOUBLE retrigger affects Spark proc count", () => {
+    const world = createWorld({ seed: 9, stage: stageDocks });
+    world.relics.push("ACT_SPARK_ON_HIT_20", "ACT_TRIGGERS_DOUBLE");
+    const rolls = [0.1, 0.1];
+    (world.rng as any).next = () => (rolls.length ? rolls.shift() : 0.99);
+
+    const a = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 10, 10);
+    const b = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 11, 10);
+    world.eHp[a] = 1_000_000;
+    world.eHpMax[a] = 1_000_000;
+    world.eHp[b] = 1_000_000;
+    world.eHpMax[b] = 1_000_000;
+    rebuildEnemyHash(world);
+    const aw = getEnemyWorld(world, a, KENNEY_TILE_WORLD);
+
+    world.events.push({
+      type: "ENEMY_HIT",
+      enemyIndex: a,
+      damage: 100,
+      x: aw.wx,
+      y: aw.wy,
+      isCrit: false,
+      source: "PISTOL",
+    });
+    relicTriggerSystem(world);
+    const immediateProcs = world.events.filter((ev) => ev.type === "ENEMY_HIT" && ev.source === "OTHER").length;
+    expect(immediateProcs).toBe(1);
+    expect(world.relicRetriggerQueue.length).toBe(1);
+
+    world.events = [];
+    world.time += 0.5;
+    relicRetriggerSystem(world);
+    const retriggerProcs = world.events.filter((ev) => ev.type === "ENEMY_HIT" && ev.source === "OTHER").length;
+    expect(retriggerProcs).toBe(1);
+  });
+
+  test("ACT_PROC_CHANCE_PERCENT_50 increases Spark procs deterministically", () => {
+    const seed = 2026;
+    const hits = 100;
+    const aTx = 14;
+    const aTy = 14;
+
+    const base = createWorld({ seed, stage: stageDocks });
+    base.rng = new RNG(seed);
+    base.relics.push("ACT_SPARK_ON_HIT_20");
+    const aBase = spawnEnemyGrid(base, ENEMY_TYPE.CHASER, aTx, aTy);
+    spawnEnemyGrid(base, ENEMY_TYPE.CHASER, aTx + 1, aTy);
+    base.eHp[aBase] = 1_000_000;
+    base.eHpMax[aBase] = 1_000_000;
+    rebuildEnemyHash(base);
+    const awBase = getEnemyWorld(base, aBase, KENNEY_TILE_WORLD);
+    const baseProcCount = runSparkProcCount(base, aBase, awBase.wx, awBase.wy, hits, 100);
+
+    const overclock = createWorld({ seed, stage: stageDocks });
+    overclock.rng = new RNG(seed);
+    overclock.relics.push("ACT_SPARK_ON_HIT_20", "ACT_PROC_CHANCE_PERCENT_50");
+    const aOver = spawnEnemyGrid(overclock, ENEMY_TYPE.CHASER, aTx, aTy);
+    spawnEnemyGrid(overclock, ENEMY_TYPE.CHASER, aTx + 1, aTy);
+    overclock.eHp[aOver] = 1_000_000;
+    overclock.eHpMax[aOver] = 1_000_000;
+    rebuildEnemyHash(overclock);
+    const awOver = getEnemyWorld(overclock, aOver, KENNEY_TILE_WORLD);
+    const overclockProcCount = runSparkProcCount(overclock, aOver, awOver.wx, awOver.wy, hits, 100);
+
+    expect(overclockProcCount).toBeGreaterThan(baseProcCount);
+
+    const expectedRng = new RNG(seed);
+    let expectedBase = 0;
+    let expectedOverclock = 0;
+    for (let i = 0; i < hits; i++) {
+      if (expectedRng.next() < 0.2) expectedBase++;
+    }
+    const expectedRngOver = new RNG(seed);
+    for (let i = 0; i < hits; i++) {
+      if (expectedRngOver.next() < 0.3) expectedOverclock++;
+    }
+    expect(baseProcCount).toBe(expectedBase);
+    expect(overclockProcCount).toBe(expectedOverclock);
+  });
+
+  test("ACT_PROC_CHANCE_PERCENT_50 + retry uses boosted chance on retry", () => {
+    const seed = 2031;
+    const hits = 100;
+    const world = createWorld({ seed, stage: stageDocks });
+    world.rng = new RNG(seed);
+    world.relics.push(
+      "ACT_SPARK_ON_HIT_20",
+      "ACT_PROC_CHANCE_PERCENT_50",
+      "ACT_RETRY_FAILED_PROCS_ONCE",
+    );
+    const a = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 16, 16);
+    spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 17, 16);
+    world.eHp[a] = 1_000_000;
+    world.eHpMax[a] = 1_000_000;
+    rebuildEnemyHash(world);
+    const aw = getEnemyWorld(world, a, KENNEY_TILE_WORLD);
+    const procCount = runSparkProcCount(world, a, aw.wx, aw.wy, hits, 100);
+
+    const expectedRng = new RNG(seed);
+    let expected = 0;
+    for (let i = 0; i < hits; i++) {
+      const r1 = expectedRng.next();
+      if (r1 < 0.3) {
+        expected++;
+      } else {
+        const r2 = expectedRng.next();
+        if (r2 < 0.3) expected++;
+      }
+    }
+    expect(procCount).toBe(expected);
+  });
+
+  test("computeEffectiveRelicProcChance clamps overclocked chance to 1.0", () => {
+    expect(computeEffectiveRelicProcChance(0.9, 1)).toBe(1);
+    expect(computeEffectiveRelicProcChance(0.2, 1)).toBeCloseTo(0.3, 6);
+    expect(computeEffectiveRelicProcChance(0.2, 2)).toBeCloseTo(0.45, 6);
+  });
+
+  test("ACT_NOVA_ON_CRIT_FIRE spawns a fire zone on each crit with expected tick damage", () => {
+    const world = createWorld({ seed: 44, stage: stageDocks });
+    world.relics.push("ACT_NOVA_ON_CRIT_FIRE");
+    const a = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 20, 20);
+    rebuildEnemyHash(world);
+    const aw = getEnemyWorld(world, a, KENNEY_TILE_WORLD);
+    const critHitDamage = 100;
+
+    for (let i = 0; i < 3; i++) {
+      world.events.push({
+        type: "ENEMY_HIT",
+        enemyIndex: a,
+        damage: critHitDamage,
+        dmgPhys: 100,
+        dmgFire: 0,
+        dmgChaos: 0,
+        x: aw.wx,
+        y: aw.wy,
+        isCrit: true,
+        source: "PISTOL",
+      });
+    }
+
+    relicTriggerSystem(world);
+    expect(world.zAlive.length).toBe(3);
+    for (let i = 0; i < 3; i++) {
+      expect(world.zDamage[i]).toBeCloseTo(6, 6);
+      expect(world.zTickEvery[i]).toBeCloseTo(0.5, 6);
+      expect(world.zTtl[i]).toBeCloseTo(5.0, 6);
+    }
+  });
+
+  test("ACT_NOVA_ON_CRIT_FIRE zone ticks are source OTHER and do not retrigger relic procs", () => {
+    const world = createWorld({ seed: 45, stage: stageDocks });
+    world.relics.push("ACT_NOVA_ON_CRIT_FIRE");
+    const a = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 22, 22);
+    world.eHp[a] = 1_000_000;
+    world.eHpMax[a] = 1_000_000;
+    rebuildEnemyHash(world);
+    const aw = getEnemyWorld(world, a, KENNEY_TILE_WORLD);
+
+    world.events.push({
+      type: "ENEMY_HIT",
+      enemyIndex: a,
+      damage: 100,
+      x: aw.wx,
+      y: aw.wy,
+      isCrit: true,
+      source: "PISTOL",
+    });
+    relicTriggerSystem(world);
+    expect(world.zAlive.length).toBe(1);
+
+    world.events = [];
+    zonesSystem(world, 0.5);
+    const zoneHitEvents = world.events.filter((ev) => ev.type === "ENEMY_HIT");
+    expect(zoneHitEvents.length).toBeGreaterThan(0);
+    expect(zoneHitEvents.every((ev) => ev.source === "OTHER")).toBe(true);
+
+    const zonesBefore = world.zAlive.length;
+    relicTriggerSystem(world);
+    expect(world.zAlive.length).toBe(zonesBefore);
   });
 });

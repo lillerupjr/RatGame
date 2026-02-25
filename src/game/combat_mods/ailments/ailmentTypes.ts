@@ -8,6 +8,7 @@ export interface AilmentInstance {
 
 /** V1 caps */
 export const AILMENT_STACK_CAP = 20;
+export const AILMENT_TICK_INTERVAL_SEC = 0.5;
 
 export const AILMENT_DURATIONS: Record<AilmentKind, number> = {
   ignite: 4,

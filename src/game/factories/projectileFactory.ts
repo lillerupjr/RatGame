@@ -24,6 +24,7 @@ export const PRJ_KIND = {
     SYRINGE: 5,
     BOUNCER: 6,
     MISSILE: 7,
+    DAGGER: 8,
 } as const;
 
 

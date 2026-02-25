@@ -101,7 +101,7 @@ export function projectilesSystem(w: World, dt: number) {
             // Restore previous "double integration" feel (pre-fix behavior) without reintroducing the bug.
             const PROJECTILE_SPEED_MULT = 2;
 
-            const hasMissileTarget = w.prjKind[i] === PRJ_KIND.MISSILE && !!w.prHasTarget[i];
+            const hasMissileTarget = (w.prjKind[i] === PRJ_KIND.MISSILE || w.prjKind[i] === PRJ_KIND.DAGGER) && !!w.prHasTarget[i];
             const vx = w.prvx[i] * moveSpeedMult * PROJECTILE_SPEED_MULT;
             const vy = w.prvy[i] * moveSpeedMult * PROJECTILE_SPEED_MULT;
 
@@ -287,7 +287,7 @@ export function projectilesSystem(w: World, dt: number) {
         // -------------------------
         // Explode-on-target (non-missile targeted projectiles)
         // -------------------------
-        if (w.prHasTarget[i] && w.prjKind[i] !== PRJ_KIND.MISSILE) {
+        if (w.prHasTarget[i] && w.prjKind[i] !== PRJ_KIND.MISSILE && w.prjKind[i] !== PRJ_KIND.DAGGER) {
             const tx = w.prTargetX[i];
             const ty = w.prTargetY[i];
 

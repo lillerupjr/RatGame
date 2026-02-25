@@ -2,7 +2,7 @@
 import { RNG } from "../../game/util/rng";
 import { createSpatialHash, type SpatialHash } from "../../game/util/spatialHash";
 import type { StageDef } from "../../game/content/stages";
-import type { GameEvent, PendingRelicRetrigger } from "../../game/events";
+import type { GameEvent, PendingRelicDaggerShot, PendingRelicRetrigger } from "../../game/events";
 import { KENNEY_TILE_WORLD } from "../render/kenneyTiles";
 import { getSpawnWorld } from "../../game/map/compile/kenneyMap";
 import { recomputeDerivedStats } from "../../game/stats/derivedStats";
@@ -269,6 +269,8 @@ export type World = {
   // Player combat stats
   playerHp: number;
   playerHpMax: number;
+  maxArmor: number;
+  currentArmor: number;
 
   dmgMult: number;
   fireRateMult: number;
@@ -290,6 +292,7 @@ export type World = {
   pendingAdvanceToNextFloor: boolean;
   relics: string[];
   relicRetriggerQueue: PendingRelicRetrigger[];
+  relicDaggerQueue: PendingRelicDaggerShot[];
   relicEffects: { hpBonus: number };
   npcs: NpcActor[];
   neutralMobs: NeutralAnimatedMob[];
@@ -667,6 +670,8 @@ export function createWorld(args: CreateWorldArgs): World {
 
     playerHp: 100,
     playerHpMax: 100,
+    maxArmor: 0,
+    currentArmor: 0,
 
     dmgMult: 1,
     fireRateMult: 1,
@@ -684,6 +689,7 @@ export function createWorld(args: CreateWorldArgs): World {
     pendingAdvanceToNextFloor: false,
     relics: [],
     relicRetriggerQueue: [],
+    relicDaggerQueue: [],
     relicEffects: {
       hpBonus: 0,
     },

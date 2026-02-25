@@ -82,6 +82,8 @@ export function getProjectileSpriteByKind(kind: number): Loaded | null {
             return loadByFile(FILES.SYRINGE);
         case 6: // BOUNCER
             return loadByFile(FILES.BOUNCER);
+        case 8: // DAGGER
+            return loadByFile(FILES.KNIFE);
         default:
             return null;
     }
@@ -97,6 +99,7 @@ const PROJECTILE_SCALE_BY_KIND: Record<number, number> = {
     4: 1.0, // KNUCKLES
     5: 1, // SYRINGE
     6: 1.0, // BOUNCER
+    8: 0.9, // DAGGER
 };
 
 export function getProjectileDrawScale(kind: number): number {

@@ -55,6 +55,48 @@ export const RELICS: RelicDef[] = [
     kind: "ACTIVE",
   },
   {
+    id: "ACT_SPARK_ON_HIT_20",
+    isEnabled: true,
+    displayName: "On hit: 20% chance to spark nearest enemy",
+    kind: "ACTIVE",
+    desc: ["On hit: 20% chance to spark nearest enemy for 30% damage"],
+  },
+  {
+    id: "ACT_RETRY_FAILED_PROCS_ONCE",
+    isEnabled: true,
+    displayName: "Failed procs retry once",
+    kind: "ACTIVE",
+    desc: ["Failed proc rolls retry once"],
+  },
+  {
+    id: "ACT_PROC_CHANCE_PERCENT_50",
+    isEnabled: true,
+    displayName: "+50% relic proc chance",
+    kind: "ACTIVE",
+    desc: ["+50% relic proc chance"],
+  },
+  {
+    id: "ACT_NOVA_ON_CRIT_FIRE",
+    isEnabled: true,
+    displayName: "On crit: spawn a fire damage zone",
+    kind: "ACTIVE",
+    desc: ["On crit: chance to spawn a fire damage zone"],
+  },
+  {
+    id: "ACT_DAGGER_ON_KILL_50",
+    isEnabled: true,
+    displayName: "On kill: 50% chance to fire a homing dagger",
+    kind: "ACTIVE",
+    desc: ["On kill: chance to fire a homing dagger"],
+  },
+  {
+    id: "ACT_IGNITE_SPREAD_ON_DEATH",
+    isEnabled: true,
+    displayName: "Ignite spreads to all nearby enemies on death",
+    kind: "ACTIVE",
+    desc: ["When an ignited enemy dies, ignite spreads to all nearby enemies"],
+  },
+  {
     id: "PASS_CRIT_ROLLS_TWICE",
     isEnabled: true,
     displayName: "Crit rolls twice",
@@ -90,6 +132,30 @@ function mapLegacyRelicSuffixToCanonical(suffix: string): string {
     case "ACT_TRIGGERS_HAPPEN_TWICE":
     case "ACT_TRIGGERS_DOUBLE":
       return "ACT_TRIGGERS_DOUBLE";
+    case "V2_SPARK_ON_HIT":
+      return "ACT_SPARK_ON_HIT_20";
+    case "ACT_SPARK_ON_HIT_20":
+      return "ACT_SPARK_ON_HIT_20";
+    case "V2_RETRY_FAILED_PROCS":
+      return "ACT_RETRY_FAILED_PROCS_ONCE";
+    case "ACT_RETRY_FAILED_PROCS_ONCE":
+      return "ACT_RETRY_FAILED_PROCS_ONCE";
+    case "V2_PROC_CHANCE_PERCENT":
+      return "ACT_PROC_CHANCE_PERCENT_50";
+    case "ACT_PROC_CHANCE_PERCENT_50":
+      return "ACT_PROC_CHANCE_PERCENT_50";
+    case "V2_NOVA_ON_CRIT":
+      return "ACT_NOVA_ON_CRIT_FIRE";
+    case "ACT_NOVA_ON_CRIT_FIRE":
+      return "ACT_NOVA_ON_CRIT_FIRE";
+    case "V2_DAGGER_ON_KILL":
+      return "ACT_DAGGER_ON_KILL_50";
+    case "ACT_DAGGER_ON_KILL_50":
+      return "ACT_DAGGER_ON_KILL_50";
+    case "V2_IGNITE_SPREAD":
+      return "ACT_IGNITE_SPREAD_ON_DEATH";
+    case "ACT_IGNITE_SPREAD_ON_DEATH":
+      return "ACT_IGNITE_SPREAD_ON_DEATH";
     case "PASS_LUCKY_CRIT":
     case "PASS_CRIT_ROLLS_TWICE":
       return "PASS_CRIT_ROLLS_TWICE";
@@ -109,7 +175,9 @@ function mapLegacyRelicSuffixToCanonical(suffix: string): string {
 export function toCanonicalRelicId(id: string): string {
   if (!id) return id;
   if (id.startsWith("RELIC_")) {
-    return mapLegacyRelicSuffixToCanonical(id.slice("RELIC_".length));
+    const suffix = id.slice("RELIC_".length);
+    const mapped = mapLegacyRelicSuffixToCanonical(suffix);
+    return mapped === suffix ? id : mapped;
   }
   return id;
 }

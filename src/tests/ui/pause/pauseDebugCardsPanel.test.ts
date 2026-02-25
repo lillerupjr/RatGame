@@ -126,7 +126,7 @@ describe("pauseDebugCardsPanel", () => {
     const panel = mountPauseDebugCardsPanel({ root, getWorld: () => world, onChange: vi.fn() });
     panel.render();
 
-    expect(root.textContent).not.toContain("CARD_DAMAGE_FLAT_1");
+    expect(root.textContent).not.toContain("+3 physical damage");
     expect((root as any).hidden).toBe(true);
   });
 
@@ -147,7 +147,7 @@ describe("pauseDebugCardsPanel", () => {
     const toggle = root.querySelector("[data-debug-cards-toggle=\"1\"]") as any;
     expect(toggle).toBeTruthy();
     toggle.click();
-    expect(root.textContent).toContain("CARD_DAMAGE_FLAT_1");
+    expect(root.textContent).toContain("+3 physical damage");
 
     const plus = root.querySelector('[data-debug-card-add="CARD_DAMAGE_FLAT_1"]') as any;
     const minus = root.querySelector('[data-debug-card-remove="CARD_DAMAGE_FLAT_1"]') as any;

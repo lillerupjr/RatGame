@@ -8,6 +8,10 @@ import { clearSpatialHash, insertEntity } from "../../util/spatialHash";
 import { relicExplodeOnKillSystem } from "./relicExplodeOnKill";
 import { applyRelic } from "../progression/relics";
 import { relicRetriggerSystem } from "../progression/relicRetriggerSystem";
+import { relicTriggerSystem } from "../progression/relicTriggerSystem";
+import { PRJ_KIND } from "../../factories/projectileFactory";
+import { RNG } from "../../util/rng";
+import { createEnemyAilmentsState } from "../../combat_mods/ailments/enemyAilments";
 
 function rebuildEnemyHash(world: ReturnType<typeof createWorld>): void {
   clearSpatialHash(world.enemySpatialHash);
@@ -117,5 +121,199 @@ describe("relicExplodeOnKillSystem", () => {
     applyRelic(w, "ACT_EXPLODE_ON_KILL");
     applyRelic(w, "ACT_EXPLODE_ON_KILL");
     expect(w.relics).toEqual(["ACT_EXPLODE_ON_KILL"]);
+  });
+
+  test("ACT_DAGGER_ON_KILL_50 selects target when delay elapses", () => {
+    const w = createWorld({ seed: 15, stage: stageDocks });
+    w.relics = ["ACT_DAGGER_ON_KILL_50"];
+    (w.rng as any).next = () => 0.1; // force proc success
+
+    const dead = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 5);
+    const near = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 6, 5);
+    const far = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 8, 5);
+    w.eAlive[dead] = false;
+    w.eHp[near] = 1_000_000;
+    w.eHpMax[near] = 1_000_000;
+    rebuildEnemyHash(w);
+
+    const dw = getEnemyWorld(w, dead, KENNEY_TILE_WORLD);
+    w.events.push({
+      type: "ENEMY_HIT",
+      enemyIndex: dead,
+      damage: 120,
+      x: dw.wx,
+      y: dw.wy,
+      isCrit: false,
+      source: "PISTOL",
+    });
+    w.events.push({
+      type: "ENEMY_KILLED",
+      enemyIndex: dead,
+      x: dw.wx,
+      y: dw.wy,
+      source: "PISTOL",
+    });
+
+    relicExplodeOnKillSystem(w, 1 / 60);
+    expect(w.relicDaggerQueue.length).toBe(1);
+    expect(w.relicDaggerQueue[0].excludeEnemyIndex).toBe(dead);
+    expect(w.pAlive.length).toBe(1);
+    expect(w.prjKind[0]).toBe(PRJ_KIND.DAGGER);
+    expect(w.prNoCollide[0]).toBe(true);
+    expect(w.prvx[0]).toBe(0);
+    expect(w.prvy[0]).toBe(0);
+    expect(w.prDamage[0]).toBeCloseTo(60, 6);
+
+    w.time += 1.99;
+    relicTriggerSystem(w);
+    expect(w.prNoCollide[0]).toBe(true);
+    expect(w.prvx[0]).toBe(0);
+    // Remove the nearest target before activation; selection should happen now, not at proc-time.
+    w.eAlive[near] = false;
+    w.time += 0.01;
+    relicTriggerSystem(w);
+    expect(w.prNoCollide[0]).toBe(false);
+    expect(Math.hypot(w.prvx[0], w.prvy[0])).toBeGreaterThan(0);
+    const fw = getEnemyWorld(w, far, KENNEY_TILE_WORLD);
+    expect(w.prTargetX[0]).toBeCloseTo(fw.wx, 6);
+    expect(w.prTargetY[0]).toBeCloseTo(fw.wy, 6);
+  });
+
+  test("ACT_DAGGER_ON_KILL_50 deterministic proc count for seeded kill events", () => {
+    const seed = 19;
+    const w = createWorld({ seed, stage: stageDocks });
+    w.relics = ["ACT_DAGGER_ON_KILL_50"];
+
+    const dead = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 9, 9);
+    spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 10, 9);
+    w.eAlive[dead] = false;
+    rebuildEnemyHash(w);
+    const dw = getEnemyWorld(w, dead, KENNEY_TILE_WORLD);
+
+    for (let i = 0; i < 10; i++) {
+      w.events.push({
+        type: "ENEMY_HIT",
+        enemyIndex: dead,
+        damage: 100,
+        x: dw.wx,
+        y: dw.wy,
+        isCrit: false,
+        source: "PISTOL",
+      });
+      w.events.push({
+        type: "ENEMY_KILLED",
+        enemyIndex: dead,
+        x: dw.wx,
+        y: dw.wy,
+        source: "PISTOL",
+      });
+    }
+
+    relicExplodeOnKillSystem(w, 1 / 60);
+    const expectedRng = new RNG(seed);
+    let expected = 0;
+    for (let i = 0; i < 10; i++) {
+      if (expectedRng.next() < 0.5) expected++;
+    }
+    expect(w.relicDaggerQueue.length).toBe(expected);
+  });
+
+  test("dagger kill source OTHER does not retrigger Soul Shards", () => {
+    const w = createWorld({ seed: 16, stage: stageDocks });
+    w.relics = ["ACT_DAGGER_ON_KILL_50"];
+    const dead = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 5);
+    const dw = getEnemyWorld(w, dead, KENNEY_TILE_WORLD);
+    w.events.push({
+      type: "ENEMY_KILLED",
+      enemyIndex: dead,
+      x: dw.wx,
+      y: dw.wy,
+      source: "OTHER",
+    });
+
+    relicExplodeOnKillSystem(w, 1 / 60);
+    expect(w.relicDaggerQueue.length).toBe(0);
+  });
+
+  test("ACT_IGNITE_SPREAD_ON_DEATH spreads ignite to all nearby enemies", () => {
+    const w = createWorld({ seed: 31, stage: stageDocks });
+    w.relics = ["ACT_IGNITE_SPREAD_ON_DEATH"];
+
+    const dead = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 5);
+    const a = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 6, 5);
+    const b = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 6);
+    const c = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 6, 6);
+    w.eAlive[dead] = false;
+    w.eAilments[dead] = createEnemyAilmentsState();
+    w.eAilments[dead]!.ignite = { kind: "ignite", dps: 12, tLeft: 3 };
+    rebuildEnemyHash(w);
+
+    const dw = getEnemyWorld(w, dead, KENNEY_TILE_WORLD);
+    w.events.push({ type: "ENEMY_KILLED", enemyIndex: dead, x: dw.wx, y: dw.wy, source: "PISTOL" });
+
+    relicExplodeOnKillSystem(w, 1 / 60);
+
+    expect(w.eAilments[a]?.ignite).toBeTruthy();
+    expect(w.eAilments[b]?.ignite).toBeTruthy();
+    expect(w.eAilments[c]?.ignite).toBeTruthy();
+  });
+
+  test("ACT_IGNITE_SPREAD_ON_DEATH does not spread when dead enemy has no ignite", () => {
+    const w = createWorld({ seed: 32, stage: stageDocks });
+    w.relics = ["ACT_IGNITE_SPREAD_ON_DEATH"];
+
+    const dead = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 5);
+    const a = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 6, 5);
+    w.eAlive[dead] = false;
+    w.eAilments[dead] = createEnemyAilmentsState();
+    rebuildEnemyHash(w);
+
+    const dw = getEnemyWorld(w, dead, KENNEY_TILE_WORLD);
+    w.events.push({ type: "ENEMY_KILLED", enemyIndex: dead, x: dw.wx, y: dw.wy, source: "PISTOL" });
+
+    relicExplodeOnKillSystem(w, 1 / 60);
+
+    expect(w.eAilments[a]?.ignite ?? null).toBeNull();
+  });
+
+  test("ACT_IGNITE_SPREAD_ON_DEATH target set and strength are deterministic", () => {
+    const run = () => {
+      const w = createWorld({ seed: 33, stage: stageDocks });
+      w.relics = ["ACT_IGNITE_SPREAD_ON_DEATH"];
+      const dead = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 10, 10);
+      const t1 = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 11, 10);
+      const t2 = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 10, 11);
+      w.eAlive[dead] = false;
+      w.eAilments[dead] = createEnemyAilmentsState();
+      w.eAilments[dead]!.ignite = { kind: "ignite", dps: 9, tLeft: 2 };
+      rebuildEnemyHash(w);
+      const dw = getEnemyWorld(w, dead, KENNEY_TILE_WORLD);
+      w.events.push({ type: "ENEMY_KILLED", enemyIndex: dead, x: dw.wx, y: dw.wy, source: "PISTOL" });
+      relicExplodeOnKillSystem(w, 1 / 60);
+      return [w.eAilments[t1]?.ignite, w.eAilments[t2]?.ignite];
+    };
+
+    const [a1, a2] = run();
+    const [b1, b2] = run();
+    expect(a1?.dps).toBeCloseTo(b1?.dps ?? 0, 6);
+    expect(a1?.tLeft).toBeCloseTo(b1?.tLeft ?? 0, 6);
+    expect(a2?.dps).toBeCloseTo(b2?.dps ?? 0, 6);
+    expect(a2?.tLeft).toBeCloseTo(b2?.tLeft ?? 0, 6);
+  });
+
+  test("ACT_IGNITE_SPREAD_ON_DEATH does not trigger on OTHER kill events", () => {
+    const w = createWorld({ seed: 34, stage: stageDocks });
+    w.relics = ["ACT_IGNITE_SPREAD_ON_DEATH"];
+    const dead = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 12, 12);
+    const a = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 13, 12);
+    w.eAlive[dead] = false;
+    w.eAilments[dead] = createEnemyAilmentsState();
+    w.eAilments[dead]!.ignite = { kind: "ignite", dps: 20, tLeft: 3 };
+    rebuildEnemyHash(w);
+    const dw = getEnemyWorld(w, dead, KENNEY_TILE_WORLD);
+    w.events.push({ type: "ENEMY_KILLED", enemyIndex: dead, x: dw.wx, y: dw.wy, source: "OTHER" });
+
+    relicExplodeOnKillSystem(w, 1 / 60);
+    expect(w.eAilments[a]?.ignite ?? null).toBeNull();
   });
 });

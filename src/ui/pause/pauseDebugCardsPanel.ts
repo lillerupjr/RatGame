@@ -1,4 +1,5 @@
 import { getAllCardIds } from "../../game/combat_mods/content/cards/cardPool";
+import { getCardById } from "../../game/combat_mods/content/cards/cardPool";
 import { isPauseDebugCardsEnabled } from "../../userSettings";
 
 export type PauseDebugCardsPanelController = {
@@ -20,6 +21,11 @@ function getCardCountFromArray(cards: string[], cardId: string): number {
 
 function readWorldCards(world: any): string[] {
   return Array.isArray(world?.cards) ? [...world.cards] : [];
+}
+
+function getCardLabel(cardId: string): string {
+  const card = getCardById(cardId);
+  return card?.displayName ?? cardId;
 }
 
 export function mountPauseDebugCardsPanel(args: {
@@ -114,7 +120,7 @@ export function mountPauseDebugCardsPanel(args: {
 
       const label = document.createElement("span");
       label.className = "pauseDebugCardId";
-      label.textContent = cardId;
+      label.textContent = getCardLabel(cardId);
 
       const count = document.createElement("span");
       count.className = "pauseCardCount";

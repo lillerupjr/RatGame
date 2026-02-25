@@ -1703,6 +1703,30 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           ctx.stroke();
 
           ctx.globalAlpha = 1;
+        } else if (kind === ZONE_KIND.FIRE) {
+          const pulse = 0.85 + 0.15 * Math.sin((w.time ?? 0) * 7 + i * 0.37);
+
+          ctx.globalAlpha = 0.26 * pulse;
+          ctx.fillStyle = "#ff3a2e";
+          ctx.beginPath();
+          ctx.ellipse(p.x, p.y, rx, ry, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.globalAlpha = 0.42 * pulse;
+          ctx.strokeStyle = "#ff7f45";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.ellipse(p.x, p.y, rx * 0.96, ry * 0.96, 0, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.globalAlpha = 0.62 * pulse;
+          ctx.strokeStyle = "#ffd27a";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.ellipse(p.x, p.y, rx * 0.74, ry * 0.74, 0, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.globalAlpha = 1;
         } else if (kind === ZONE_KIND.EXPLOSION) {
           ctx.globalAlpha = 0.22;
           ctx.fillStyle = "#ff7a18";

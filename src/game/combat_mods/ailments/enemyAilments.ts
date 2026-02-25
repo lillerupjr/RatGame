@@ -1,4 +1,9 @@
-import { AILMENT_DURATIONS, AILMENT_STACK_CAP, type AilmentInstance } from "./ailmentTypes";
+import {
+  AILMENT_DURATIONS,
+  AILMENT_STACK_CAP,
+  AILMENT_TICK_INTERVAL_SEC,
+  type AilmentInstance,
+} from "./ailmentTypes";
 
 export interface EnemyAilmentsState {
   poison: AilmentInstance[]; // stacked
@@ -10,6 +15,12 @@ export function createEnemyAilmentsState(): EnemyAilmentsState {
   return { poison: [], bleed: [], ignite: null };
 }
 
+function dpsFromDamageBudget(totalDamage: number, durationSec: number): number {
+  const ticks = Math.max(1, Math.floor((durationSec + 1e-9) / AILMENT_TICK_INTERVAL_SEC));
+  const appliedDuration = ticks * AILMENT_TICK_INTERVAL_SEC;
+  return totalDamage / appliedDuration;
+}
+
 export function addPoison(state: EnemyAilmentsState, totalDamage: number): void {
   if (totalDamage <= 0) return;
   if (state.poison.length >= AILMENT_STACK_CAP) return;
@@ -17,7 +28,7 @@ export function addPoison(state: EnemyAilmentsState, totalDamage: number): void 
   const dur = AILMENT_DURATIONS.poison;
   state.poison.push({
     kind: "poison",
-    dps: totalDamage / dur,
+    dps: dpsFromDamageBudget(totalDamage, dur),
     tLeft: dur,
   });
 }
@@ -29,7 +40,7 @@ export function addBleed(state: EnemyAilmentsState, totalDamage: number): void {
   const dur = AILMENT_DURATIONS.bleed;
   state.bleed.push({
     kind: "bleed",
-    dps: totalDamage / dur,
+    dps: dpsFromDamageBudget(totalDamage, dur),
     tLeft: dur,
   });
 }
@@ -43,10 +54,23 @@ export function addBleed(state: EnemyAilmentsState, totalDamage: number): void {
 export function applyIgniteStrongestOnly(state: EnemyAilmentsState, totalDamage: number): void {
   if (totalDamage <= 0) return;
   const dur = AILMENT_DURATIONS.ignite;
-  const dps = totalDamage / dur;
+  const dps = dpsFromDamageBudget(totalDamage, dur);
 
   if (!state.ignite || dps > state.ignite.dps) {
     state.ignite = { kind: "ignite", dps, tLeft: dur };
+  }
+}
+
+/** Ignite strongest-only using explicit ignite snapshot values. */
+export function applyIgniteStrongestFromSnapshot(
+  state: EnemyAilmentsState,
+  ignite: AilmentInstance,
+): void {
+  const dps = Math.max(0, ignite.dps ?? 0);
+  const tLeft = Math.max(0, ignite.tLeft ?? 0);
+  if (!(dps > 0) || !(tLeft > 0)) return;
+  if (!state.ignite || dps > state.ignite.dps) {
+    state.ignite = { kind: "ignite", dps, tLeft };
   }
 }
 

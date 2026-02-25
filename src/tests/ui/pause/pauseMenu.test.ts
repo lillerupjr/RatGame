@@ -334,7 +334,7 @@ describe("pauseMenu", () => {
       })
     );
 
-    expect(root.textContent).toContain("CARD_DAMAGE_FLAT_1");
+    expect(root.textContent).toContain("+3 physical damage");
     expect(root.textContent).toContain("x2");
     expect(root.textContent).toContain("+20% movement speed");
     expect(root.querySelector(".pauseCardTile")).toBeTruthy();

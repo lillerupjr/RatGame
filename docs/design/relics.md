@@ -83,6 +83,17 @@ Examples:
 * `ACT_TRIGGERS_DOUBLE` -> `All triggers happen twice`
 * `PASS_LIFE_ON_HIT_2` -> `Heal 2 life on hit`
 
+Cards follow the same display naming intent:
+
+* Internal card IDs remain stable uppercase snake case (`CARD_*`) for save and logic stability.
+* Card `displayName` must be descriptive effect text.
+* Card UI should prefer `displayName` over raw IDs.
+
+Examples:
+
+* `CARD_DAMAGE_FLAT_1` -> `+3 physical damage`
+* `CARD_CONVERT_FIRE_1` -> `Convert 40% physical to fire`
+
 ---
 
 # 2. Power Budget Rule
@@ -155,7 +166,7 @@ These relics are mandatory for system validation.
 
 ## 4.1 Active / Trigger Relics
 
-### RELIC_ACT_MISSILE_ON_HIT
+### ACT_MISSILE_ON_HIT_20
 
 ```
 OnHit:
@@ -171,7 +182,7 @@ Validates:
 
 ---
 
-### RELIC_ACT_EXPLODE_ON_KILL
+### ACT_EXPLODE_ON_KILL
 
 ```
 OnEnemyKilled:
@@ -226,7 +237,7 @@ Critical long-term relic archetype.
 
 ## 4.2 Passive Relics
 
-### RELIC_PASS_DAMAGE_PERCENT
+### PASS_DAMAGE_PERCENT_20
 
 ```
 Deal 20% more damage
@@ -234,7 +245,7 @@ Deal 20% more damage
 
 ---
 
-### RELIC_PASS_MOVE_SPEED
+### PASS_MOVE_SPEED_20
 
 ```
 +20% movement speed
@@ -242,7 +253,7 @@ Deal 20% more damage
 
 ---
 
-### RELIC_PASS_LIFE_TO_DAMAGE
+### PASS_LIFE_TO_DAMAGE_2P
 
 ```
 Gain 1–3% of max life as damage
@@ -298,7 +309,95 @@ Examples:
 * Trigger-on-damage effects
 
 This expands interaction density.
+## 5.1 Proc Calibration Relic (New Mandatory System Anchor)
 
+Before introducing proc chance amplification relics, the system must include at least one stable, deterministic proc chance relic used as a calibration anchor.
+
+This relic serves as the reference implementation for:
+
+- proc chance calculation correctness
+- proc retry relic validation
+- proc chance amplification relic validation
+- trigger amplification interaction validation
+- proc determinism validation
+- proc performance and scaling validation
+
+This relic MUST exist before introducing relics that modify proc chance.
+
+---
+
+### ACT_SPARK_ON_HIT_20 (On hit: 20% chance to spark nearest enemy)
+
+Type: Proc Relic  
+Trigger: OnHit  
+Proc Chance: 20%  
+Effect:
+
+
+OnHit:
+20% chance to fire a spark at a nearby enemy
+
+Spark damage = 30% of hit damage
+Spark targets nearest enemy within range
+Spark excludes original hit target
+
+
+Properties:
+
+- Spark damage is attributed as source OTHER.
+- Spark must NOT trigger relic proc events.
+- Spark target selection must be deterministic:
+  - nearest enemy by distance
+  - tie-break by lowest enemy id
+- Spark must use the generic damage pipeline.
+
+---
+
+### Purpose of Spark Core
+
+Spark Core is the system’s proc calibration relic.
+
+It exists specifically to validate and enable:
+
+- ACT_RETRY_FAILED_PROCS_ONCE (proc retry logic)
+- ACT_PROC_CHANCE_PERCENT_50 (proc chance amplification)
+- ACT_TRIGGERS_DOUBLE interaction correctness
+- proc determinism under seeded RNG
+- proc chance scaling balance
+
+All proc chance amplification relics must be validated against Spark Core.
+
+---
+
+### Calibration Reference Values (Locked)
+
+Spark Core baseline:
+
+
+Base proc chance: 20%
+Spark damage: 30% of hit damage
+
+
+Expected outcomes for validation:
+
+| Configuration | Expected Proc Chance |
+|--------------|----------------------|
+| Spark Core only | 20% |
+| Spark Core + retry relic | 36% |
+| Spark Core + +50% proc chance | 30% |
+| Spark Core + retry + +50% | 51% |
+
+These values serve as validation targets.
+
+---
+
+### Contract Requirement
+
+The proc chance amplification system must operate on Spark Core correctly before introducing additional proc chance relics.
+
+Failure to maintain Spark Core determinism invalidates proc scaling correctness.
+
+Spark Core must remain part of the permanent relic pool.
 ---
 
 # 6. V3 Core System — Armor
@@ -557,6 +656,23 @@ Completed and shipped in code:
 * Bazooka weapon content removed:
   * Removed `BAZOOKA` and `BAZOOKA_EVOLVED` weapon defs and related upgrade/starter references.
 
+Achievement update (February 25, 2026):
+
+* V2 proc relic IDs migrated to contract naming (`ACT_*`) with backward-compatible legacy normalization for older save data.
+* Proc calibration and amplification stack validated:
+  * `ACT_SPARK_ON_HIT_20`
+  * `ACT_RETRY_FAILED_PROCS_ONCE`
+  * `ACT_PROC_CHANCE_PERCENT_50`
+  * deterministic seeded tests for baseline/retry/overclock/retrigger interactions.
+* Critical-trigger zone relic shipped and validated:
+  * `ACT_NOVA_ON_CRIT_FIRE`
+  * crit-only fire zone spawn with `OTHER` source safety.
+* Kill-trigger dagger relic shipped and validated:
+  * `ACT_DAGGER_ON_KILL_50`
+  * immediate spawn, 2s non-colliding idle, target acquisition at activation time, homing launch.
+* Trigger loop safety preserved:
+  * `source: OTHER` events remain non-proc sources across relic-generated damage and kills.
+
 ---
 
 # V1 — Proof of Concept Relics (Core Pipeline Validation)
@@ -565,17 +681,16 @@ These relics validate the fundamental relic system.
 
 | Relic ID                        | Name             | Type       | Effect                                | Purpose                        |
 | ------------------------------- | ---------------- | ---------- | ------------------------------------- | ------------------------------ |
-| RELIC_ACT_MISSILE_ON_HIT        | Missile Battery  | Proc       | 20% OnHit → homing missile (100% dmg) | Validate trigger spawning      |
-| RELIC_ACT_EXPLODE_ON_KILL       | Volatile Corpses | Proc       | OnKill → explosion (50% max HP)       | Validate kill triggers         |
-| ACT_ALL_HITS_EXPLODE_20         | Impact Detonator | Behavior   | All hits explode (20% dmg)            | Validate behavior modification |
-| ACT_LIFE_TO_DAMAGE_2P           | Blood Converter  | Conversion | Gain damage = 2% max life             | Validate stat conversion       |
-| ACT_TRIGGERS_DOUBLE             | Echo Engine      | Amplifier  | All triggers execute twice            | Validate trigger amplification |
-| RELIC_PASS_DAMAGE_PERCENT       | Sharpened Edge   | Passive    | +20% damage                           | Validate stat modifiers        |
-| RELIC_PASS_MOVE_SPEED           | Light Frame      | Passive    | +20% movement speed                   | Validate movement scaling      |
-| RELIC_PASS_LIFE_TO_DAMAGE       | Giant’s Blood    | Conversion | Gain damage from max life             | Validate derived stats         |
-| PASS_CRIT_ROLLS_TWICE           | Lucky Charm      | Amplifier  | Crit rolls twice                      | Validate crit pipeline         |
-| PASS_DAMAGE_TO_POISON_ALL       | Toxic Catalyst   | Conversion | All damage contributes to poison      | Validate status conversion     |
-| PASS_LIFE_ON_HIT_2              | Vampiric Strike  | Sustain    | Heal 2 life on hit                    | Validate sustain pipeline      |
+| ACT_MISSILE_ON_HIT_20           | On hit: 20% chance to fire missile | Proc       | 20% OnHit → homing missile (100% dmg) | Validate trigger spawning      |
+| ACT_EXPLODE_ON_KILL             | On kill: enemies explode | Proc       | OnKill → explosion (50% max HP)       | Validate kill triggers         |
+| ACT_ALL_HITS_EXPLODE_20         | All hits explode for 20% damage | Behavior   | All hits explode (20% dmg)            | Validate behavior modification |
+| PASS_LIFE_TO_DAMAGE_2P          | Gain damage equal to 20% max life | Conversion | Gain damage from max life             | Validate derived stats         |
+| ACT_TRIGGERS_DOUBLE             | All triggers happen twice | Amplifier  | All triggers execute twice            | Validate trigger amplification |
+| PASS_DAMAGE_PERCENT_20          | +20% damage      | Passive    | +20% damage                           | Validate stat modifiers        |
+| PASS_MOVE_SPEED_20              | +20% movement speed | Passive    | +20% movement speed                   | Validate movement scaling      |
+| PASS_CRIT_ROLLS_TWICE           | Crit rolls twice | Amplifier  | Crit rolls twice                      | Validate crit pipeline         |
+| PASS_DAMAGE_TO_POISON_ALL       | All damage contributes to poison | Conversion | All damage contributes to poison      | Validate status conversion     |
+| PASS_LIFE_ON_HIT_2              | Heal 2 life on hit | Sustain    | Heal 2 life on hit                    | Validate sustain pipeline      |
 
 ---
 
@@ -585,14 +700,14 @@ These relics expand trigger interaction density.
 
 | Relic ID                     | Name             | Type      | Effect                  | Enables            |
 | ---------------------------- | ---------------- | --------- | ----------------------- | ------------------ |
-| RELIC_V2_CHAIN_LIGHTNING     | Tesla Coil       | Proc      | OnHit → chain lightning | Proc builds        |
-| RELIC_V2_DAGGER_ON_KILL      | Soul Shards      | Proc      | OnKill → homing dagger  | Kill chains        |
-| RELIC_V2_NOVA_ON_CRIT        | Critical Surge   | Proc      | OnCrit → nova explosion | Crit builds        |
-| RELIC_V2_RETRY_FAILED_PROCS  | Fate Engine      | Amplifier | Failed procs retry once | Proc amplification |
-| RELIC_V2_PROC_CHANCE_PERCENT | Overclock Module | Amplifier | +50% proc chance        | Proc scaling       |
-| RELIC_V2_POISON_EXPLODE      | Plague Reactor   | Behavior  | Poison kills explode    | Status builds      |
-| RELIC_V2_IGNITE_SPREAD       | Wildfire Core    | Behavior  | Ignite spreads on death | Status builds      |
-
+| ACT_SPARK_ON_HIT_20           | On hit: 20% chance to spark nearest enemy | Proc      | 20% OnHit → spark to nearby enemy | Proc calibration |
+| ACT_CHAIN_LIGHTNING_ON_HIT    | On hit: chain lightning | Proc      | OnHit → chain lightning           | Proc builds      |
+| ACT_DAGGER_ON_KILL_50         | On kill: 50% chance to fire a homing dagger | Proc      | OnKill → homing dagger            | Kill chains      |
+| ACT_NOVA_ON_CRIT_FIRE         | On crit: spawn a fire damage zone | Proc      | OnCrit → fire zone                | Crit builds      |
+| ACT_RETRY_FAILED_PROCS_ONCE   | Failed procs retry once | Amplifier | Failed procs retry once           | Proc amplification |
+| ACT_PROC_CHANCE_PERCENT_50    | +50% relic proc chance | Amplifier | +50% proc chance                  | Proc scaling     |
+| ACT_POISON_KILLS_EXPLODE      | Poison kills explode | Behavior  | Poison kills explode              | Status builds    |
+| ACT_IGNITE_SPREAD_ON_DEATH    | Ignite spreads on death | Behavior  | Ignite spreads on death           | Status builds    |
 ---
 
 # V3 — Armor and Momentum Systems
@@ -690,14 +805,14 @@ Expands unique playstyles.
 # Summary
 
 | Version | Relics | Purpose                      |
-| ------- | ------ | ---------------------------- |
+| ------- |--------| ---------------------------- |
 | V1      | 11     | Validate relic system        |
-| V2      | 7      | Expand proc ecosystem        |
+| V2      | 8      | Expand proc ecosystem        |
 | V3      | 8      | Introduce Armor and Momentum |
 | V4      | 4      | Introduce specialization     |
 | V5      | 4      | Introduce relic scaling      |
 | V6      | 7      | Expand archetypes            |
-| TOTAL   | 41     | Full relic roadmap           |
+| TOTAL   | 42     | Full relic roadmap           |
 
 ---
 
