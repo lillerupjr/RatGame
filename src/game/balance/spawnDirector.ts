@@ -2,9 +2,11 @@ import { tickDpsMetrics } from "./dpsMetrics";
 import {
   expectedDpsAtProgress,
   powerPerSecondAtProgress,
+  timePressureMult,
   type ExpectedPowerBudgetConfig,
   type ExpectedPowerConfig,
 } from "./expectedPower";
+import { computeSpawnHpFromPower } from "./spawnHp";
 
 export interface SpawnDirectorConfig {
   enabled: boolean;
@@ -26,6 +28,8 @@ export interface SpawnDirectorConfig {
   waveHighFrac: number;
   bossTrashPressureMult: number;
   maxSpawnsPerTick: number;
+  pendingSoftCap?: number;
+  pendingHardCap?: number;
 }
 
 export interface SpawnDirectorState {
@@ -62,6 +66,17 @@ export function createSpawnDirectorState(): SpawnDirectorState {
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
+}
+
+function safeNum(v: any, fallback: number): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function depthMult(basePerDepth: number, depth: number): number {
+  const d = Math.max(0, Math.floor(depth) - 1);
+  const b = Math.max(0.0001, basePerDepth);
+  return Math.pow(b, d);
 }
 
 export function pressureAtDepth(cfg: SpawnDirectorConfig, depth: number): number {
@@ -128,22 +143,64 @@ export function tickSpawnDirector(
   if (w.metrics?.dps) tickDpsMetrics(w.metrics.dps, w.timeSec ?? 0, dtSec);
 
   const now = w.timeSec ?? 0;
-  const depth = callbacks.getDepth();
+  const depth = Math.max(1, Math.floor(callbacks.getDepth() || 1));
   const trashPowerCost = Math.max(1e-6, w.enemyPowerConfig?.costs?.trash ?? 1.0);
+  const tInFloorSec = safeNum((w as any).phaseTime, safeNum((w as any).timeSec, 0));
 
   const expectedDps = expectedDpsAtProgress(expectedCfg, now, depth);
-  const globalPressureMult = clamp(cfg.globalPressureMult ?? 1, 0, 3);
   const basePressure = pressureAtDepth(cfg, depth);
-  let pressure = basePressure * globalPressureMult;
+  let pressure = basePressure;
   if (callbacks.isBossActive()) pressure *= cfg.bossTrashPressureMult;
   const waveMult = waveMultiplier(cfg, now);
 
-  const basePowerPerSecond = powerPerSecondAtProgress(powerBudgetCfg, now);
-  let powerPerSecond = basePowerPerSecond * pressure * waveMult;
+  // Tuning knobs (safe defaults)
+  const tuning = w.balance?.spawnTuning ?? {};
+  const p0 = typeof tuning.pressureAt0Sec === "number" ? tuning.pressureAt0Sec : 1.0;
+  const p1 = typeof tuning.pressureAt60Sec === "number" ? tuning.pressureAt60Sec : 1.5;
+  const p2 = typeof tuning.pressureAt120Sec === "number" ? tuning.pressureAt120Sec : 2.0;
+  const spawnRateOrbBase = typeof tuning.spawnRateOrbBasePerDepth === "number"
+    ? tuning.spawnRateOrbBasePerDepth
+    : 1.0;
+  const spawnRateOrbMult = depthMult(spawnRateOrbBase, depth);
+
+  const timePressure = timePressureMult(now, p0, p1, p2);
+
+  // Base power/sec from config, shaped by time curve (warm-up + exponential)
+  let powerPerSecond = powerPerSecondAtProgress(powerBudgetCfg, now, p0, p1, p2);
+
+  // Apply spawn rate orb (depth multiplicative)
+  powerPerSecond *= spawnRateOrbMult;
+
+  const globalPressureMult = cfg.globalPressureMult ?? 1;
+  powerPerSecond *= globalPressureMult;
+
+  if (!Number.isFinite(powerPerSecond)) {
+    powerPerSecond = powerBudgetCfg.basePowerPerSecond * timePressureMult(now, p0, p1, p2);
+  }
+
   if (w.spawnDirectorOverrides?.powerPerSecondOverride !== undefined) {
     powerPerSecond = w.spawnDirectorOverrides.powerPerSecondOverride;
   }
-  state.powerBudget += powerPerSecond * dtSec;
+
+  // --- Pending soft/hard cap throttling ---
+  // If pendingSpawns is huge, pressure should not keep minting infinite backlog.
+  const pendingSoftCap = safeNum(cfg.pendingSoftCap, 200);
+  const pendingHardCap = safeNum(cfg.pendingHardCap, 600);
+  const pending = safeNum(state.pendingSpawns, 0);
+
+  // throttleScale:
+  // - 1.0 when pending <= soft cap
+  // - softCap/pending when pending > soft cap
+  // - 0.0 when pending >= hard cap
+  let throttleScale = 1.0;
+  if (pendingHardCap > 0 && pending >= pendingHardCap) {
+    throttleScale = 0.0;
+  } else if (pendingSoftCap > 0 && pending > pendingSoftCap) {
+    throttleScale = clamp(pendingSoftCap / Math.max(1, pending), 0.0, 1.0);
+  }
+
+  const effectivePowerPerSecond = powerPerSecond * throttleScale;
+  state.powerBudget += effectivePowerPerSecond * dtSec;
 
   let extraQueue = 0;
   while (state.powerBudget >= trashPowerCost && extraQueue < cfg.maxSpawnsPerTick) {
@@ -208,7 +265,7 @@ export function tickSpawnDirector(
     state.waveRemaining = Math.max(0, state.waveRemaining - chunkSpawned);
     state.lastChunkSize = chunkSpawned;
     const delayOverride = w.spawnDirectorOverrides?.waveDelayOverride;
-    state.chunkCooldownSec = Math.max(0.01, delayOverride ?? cfg.waveChunkDelaySec);
+    state.chunkCooldownSec = Math.max(0.01, safeNum(delayOverride ?? cfg.waveChunkDelaySec, 1.0));
     if (state.waveRemaining <= 0) {
       state.waveCooldownSecLeft = Math.max(0, cfg.waveCooldownSec);
     }
@@ -217,6 +274,34 @@ export function tickSpawnDirector(
 
   const actualDps = w.metrics?.dps?.dpsSmoothed ?? 0;
   const aheadFactor = expectedDps > 0 ? actualDps / expectedDps : 0;
+  const spawnPressureMult =
+    powerBudgetCfg.basePowerPerSecond > 0 ? powerPerSecond / powerBudgetCfg.basePowerPerSecond : 0;
+  const powerCfg = {
+    costs: {
+      trash: safeNum(w.enemyPowerConfig?.costs?.trash, 1),
+      elite: safeNum(w.enemyPowerConfig?.costs?.elite, 2),
+      boss: safeNum(w.enemyPowerConfig?.costs?.boss, 10),
+      tank: safeNum(w.enemyPowerConfig?.costs?.tank, 3),
+      ranged: safeNum(w.enemyPowerConfig?.costs?.ranged, 1.25),
+      swarm: safeNum(w.enemyPowerConfig?.costs?.swarm, 0.6),
+    },
+    hpWeight: {
+      trash: safeNum(w.enemyPowerConfig?.hpWeight?.trash, 1),
+      elite: safeNum(w.enemyPowerConfig?.hpWeight?.elite, 1),
+      boss: safeNum(w.enemyPowerConfig?.hpWeight?.boss, 1),
+      tank: safeNum(w.enemyPowerConfig?.hpWeight?.tank, 1.35),
+      ranged: safeNum(w.enemyPowerConfig?.hpWeight?.ranged, 0.85),
+      swarm: safeNum(w.enemyPowerConfig?.hpWeight?.swarm, 0.55),
+    },
+  };
+  const hpPerTrash = computeSpawnHpFromPower(
+    expectedCfg,
+    powerCfg,
+    now,
+    depth,
+    "trash"
+  );
+  const spawnHpPerSecond = (effectivePowerPerSecond / trashPowerCost) * hpPerTrash;
 
   w.spawnDirectorDebug = {
     depth,
@@ -230,7 +315,14 @@ export function tickSpawnDirector(
     effectivePressure: pressure,
     pressure,
     waveMult,
+    timePressure,
+    spawnPressureMult,
     powerPerSecond,
+    effectivePowerPerSecond,
+    throttleScale,
+    tInFloorSec,
+    inFrontload: false,
+    spawnHpPerSecond,
     trashPowerCost,
     powerBudget: state.powerBudget,
     pendingSpawns: state.pendingSpawns,

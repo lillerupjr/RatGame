@@ -112,6 +112,7 @@ import { mountCardRewardMenu } from "../ui/rewards/cardRewardMenu";
 import { mountRelicRewardMenu } from "../ui/rewards/relicRewardMenu";
 import { mountVendorShopMenu } from "../ui/vendor/vendorShopMenu";
 import { tickSpawnDirector } from "./balance/spawnDirector";
+import { tickBalanceCsvLogger } from "./balance/balanceCsvLogger";
 import { buildSurviveSpawnOverrides, SURVIVE_RAMP_CONFIG } from "./balance/surviveRamp";
 import { createFloorRewardBudget, type ObjectiveMode } from "./rewards/floorRewardBudget";
 import { handleRewardEvent, type RewardOutcome } from "./rewards/rewardDirector";
@@ -916,10 +917,8 @@ export function createGame(args: CreateGameArgs) {
   const isDeterministicDelveMode = () => !!(world as any).deterministicDelveMode;
 
   function cloneStage(stageId: "DOCKS" | "SEWERS" | "CHINATOWN") {
-    // IMPORTANT: stage spawns are mutated (t is set to Infinity) at runtime.
-    // So each floor needs a fresh cloned stage definition.
-    const base = registry.stage(stageId);
-    return { ...base, spawns: base.spawns.map((s) => ({ ...s })) };
+    // Stage defs are immutable now (no timeline spawns).
+    return { ...registry.stage(stageId) };
   }
 
   function clearFloorEntities(w: World) {
@@ -1270,6 +1269,36 @@ export function createGame(args: CreateGameArgs) {
     w.runState = "FLOOR";
     w.phaseTime = 0;
     w.transitionTime = 0;
+
+    // Reset Spawn Director per-floor.
+    if (w.spawnDirectorState) {
+      w.spawnDirectorState.powerBudget = 0;
+      w.spawnDirectorState.pendingSpawns = 0;
+      w.spawnDirectorState.waveRemaining = 0;
+      w.spawnDirectorState.chunkCooldownSec = 0;
+      w.spawnDirectorState.waveCooldownSecLeft = 0;
+      w.spawnDirectorState.lastChunkSize = 0;
+      w.spawnDirectorState.queueEvents = [];
+      w.spawnDirectorState.queuedPerSecond = 0;
+      w.spawnDirectorState.spawnEvents = [];
+      w.spawnDirectorState.spawnsPerSecond = 0;
+    }
+
+    const tuning = (w as any).balance?.spawnTuning ?? {};
+    const depth = Math.max(1, Math.floor((w.currentFloorIntent?.depth ?? (w.floorIndex ?? 0) + 1) as number));
+
+    const frontloadBase =
+      typeof tuning.frontloadOrbBasePerDepth === "number" ? Math.max(0.0001, tuning.frontloadOrbBasePerDepth) : 1.0;
+    const frontloadMult = Math.pow(frontloadBase, Math.max(0, depth - 1));
+
+    const seedBase =
+      typeof tuning.initialPendingSpawns === "number" ? Math.max(0, Math.floor(tuning.initialPendingSpawns)) : 10;
+
+    const seed = Math.max(0, Math.floor(seedBase * frontloadMult));
+
+    if (w.spawnDirectorState) {
+      w.spawnDirectorState.pendingSpawns += seed;
+    }
 
     emitEvent(w, { type: "SFX", id: "FLOOR_START", vol: 0.9, rate: 1 });
     floorLoadContext = null;
@@ -2252,6 +2281,7 @@ export function createGame(args: CreateGameArgs) {
         spawnSystem(world, dt);
       }
     }
+    tickBalanceCsvLogger(world as any, dt);
     const isNeutralObjectiveFloor = world.floorArchetype === "VENDOR" || world.floorArchetype === "HEAL";
     if (!isNeutralObjectiveFloor) {
       combatSystem(world, dt);

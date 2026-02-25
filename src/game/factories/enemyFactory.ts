@@ -6,9 +6,14 @@ import { gridToWorld, worldToGrid } from "../coords/grid";
 import { anchorFromWorld } from "../coords/anchor";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { createEnemyAilmentsState } from "../combat_mods/ailments/enemyAilments";
+import { recordEnemySpawnedHp } from "../balance/balanceCsvLogger";
 
 export { ENEMY_TYPE };
 export type { EnemyType };
+
+export type SpawnEnemyGridOptions = {
+  hpSeedFromDirector?: number;
+};
 
 /**
  * Factory: creates one enemy with standardized stats (from registry).
@@ -21,19 +26,41 @@ export function spawnEnemyGrid(
     gx: number,
     gy: number,
     _tileWorld: number = KENNEY_TILE_WORLD,
-    hpOverride?: number
+    options?: SpawnEnemyGridOptions
 ) {
     const s = registry.enemy(type);
 
     // Apply delve depth scaling
     const scaling = w.delveScaling ?? { hpMult: 1, damageMult: 1 };
 
+    // Depth (1-based)
+    const depth = Math.max(
+      1,
+      Math.floor((w.currentFloorIntent?.depth ?? (w.floorIndex ?? 0) + 1) as number)
+    );
+
+    // Orb A: Monster Health (depth-multiplicative)
+    const tuning = (w as any).balance?.spawnTuning ?? {};
+    const hpOrbBasePerDepth =
+      typeof tuning.monsterHealthOrbBasePerDepth === "number" ? tuning.monsterHealthOrbBasePerDepth : 1.0;
+    const hpBaseMult =
+      typeof tuning.monsterHealthBaseMult === "number" ? Math.max(0, tuning.monsterHealthBaseMult) : 1.0;
+
+    const hpOrbMult = Math.pow(Math.max(0.0001, hpOrbBasePerDepth), Math.max(0, depth - 1));
+    const effectiveHpMult = scaling.hpMult * hpBaseMult * hpOrbMult;
+
     // Apply per-enemy HP scale weight (default 1.0 if not specified)
     const hpWeight = s.hpScaleWeight ?? 1.0;
-    const adjustedHpMult = Math.pow(scaling.hpMult, hpWeight);
+    const adjustedHpMult = Math.pow(effectiveHpMult, hpWeight);
 
-    const scaledHp = hpOverride !== undefined ? Math.max(1, Math.round(hpOverride)) : Math.round(s.hp * adjustedHpMult);
+    const hpSeed =
+      typeof options?.hpSeedFromDirector === "number" ? options.hpSeedFromDirector : s.hp;
+    const scaledHp = Math.max(1, Math.round(hpSeed * adjustedHpMult));
     const scaledDamage = Math.round(s.damage * scaling.damageMult);
+
+    // Balance telemetry: record how much HP just entered the world.
+    const logger = (w as any).balanceCsvLogger;
+    if (logger) recordEnemySpawnedHp(logger, scaledHp);
 
     const i = w.eAlive.length;
     w.eAlive.push(true);

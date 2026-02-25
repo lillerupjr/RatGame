@@ -13,6 +13,7 @@ import { getAllCardIds } from "../../game/combat_mods/content/cards/cardPool";
 import { getGold } from "../../game/economy/gold";
 import { getAllRelicIds, getRelicById, normalizeRelicIdList } from "../../game/content/relics";
 import { recomputeDerivedStats } from "../../game/stats/derivedStats";
+import { clearBalanceCsv, downloadBalanceCsv, setBalanceCsvEnabled } from "../../game/balance/balanceCsvLogger";
 
 export type PauseMenuActions = {
   onResume(): void;
@@ -54,6 +55,18 @@ function countInstances(arr: unknown, id: string): number {
   return count;
 }
 
+function sumAliveEnemyHp(world: any): number {
+  const alive = Array.isArray(world?.eAlive) ? world.eAlive : [];
+  const hp = Array.isArray(world?.eHp) ? world.eHp : [];
+  const n = Math.min(alive.length, hp.length);
+  let total = 0;
+  for (let i = 0; i < n; i++) {
+    if (!alive[i]) continue;
+    total += safeNum(hp[i], 0);
+  }
+  return total;
+}
+
 export function mountPauseMenu(args: {
   root: HTMLDivElement;
   actions: PauseMenuActions;
@@ -93,6 +106,28 @@ export function mountPauseMenu(args: {
 
   actionsRow.appendChild(resumeBtn);
   actionsRow.appendChild(quitBtn);
+
+  const balanceCsvToggleBtn = document.createElement("button");
+  balanceCsvToggleBtn.type = "button";
+  balanceCsvToggleBtn.className = "pauseBtn";
+  setDataAttr(balanceCsvToggleBtn, "balance-csv-toggle");
+  balanceCsvToggleBtn.textContent = "Start CSV";
+
+  const balanceCsvClearBtn = document.createElement("button");
+  balanceCsvClearBtn.type = "button";
+  balanceCsvClearBtn.className = "pauseBtn";
+  setDataAttr(balanceCsvClearBtn, "balance-csv-clear");
+  balanceCsvClearBtn.textContent = "Clear CSV";
+
+  const balanceCsvDownloadBtn = document.createElement("button");
+  balanceCsvDownloadBtn.type = "button";
+  balanceCsvDownloadBtn.className = "pauseBtn";
+  setDataAttr(balanceCsvDownloadBtn, "balance-csv-download");
+  balanceCsvDownloadBtn.textContent = "Download CSV";
+
+  actionsRow.appendChild(balanceCsvToggleBtn);
+  actionsRow.appendChild(balanceCsvClearBtn);
+  actionsRow.appendChild(balanceCsvDownloadBtn);
   header.appendChild(title);
   header.appendChild(actionsRow);
 
@@ -157,10 +192,93 @@ export function mountPauseMenu(args: {
   pressureRow.appendChild(pressureSlider);
   pressureRow.appendChild(pressureValue);
 
+  const spawnRateOrbRow = document.createElement("label");
+  spawnRateOrbRow.className = "audioRow";
+  const spawnRateOrbLabel = document.createElement("span");
+  spawnRateOrbLabel.textContent = "Spawn Orb";
+  const spawnRateOrbSlider = document.createElement("input");
+  spawnRateOrbSlider.type = "range";
+  spawnRateOrbSlider.min = "0.80";
+  spawnRateOrbSlider.max = "1.50";
+  spawnRateOrbSlider.step = "0.01";
+  setDataAttr(spawnRateOrbSlider, "spawn-rate-orb-slider");
+  const spawnRateOrbValue = document.createElement("span");
+  spawnRateOrbValue.textContent = "1.12";
+  spawnRateOrbValue.className = "pauseMeta";
+  setDataAttr(spawnRateOrbValue, "spawn-rate-orb-value");
+  spawnRateOrbRow.appendChild(spawnRateOrbLabel);
+  spawnRateOrbRow.appendChild(spawnRateOrbSlider);
+  spawnRateOrbRow.appendChild(spawnRateOrbValue);
+
+  const monsterHealthOrbRow = document.createElement("label");
+  monsterHealthOrbRow.className = "audioRow";
+  const monsterHealthOrbLabel = document.createElement("span");
+  monsterHealthOrbLabel.textContent = "Health Orb";
+  const monsterHealthOrbSlider = document.createElement("input");
+  monsterHealthOrbSlider.type = "range";
+  monsterHealthOrbSlider.min = "0.80";
+  monsterHealthOrbSlider.max = "1.50";
+  monsterHealthOrbSlider.step = "0.01";
+  setDataAttr(monsterHealthOrbSlider, "monster-health-orb-slider");
+  const monsterHealthOrbValue = document.createElement("span");
+  monsterHealthOrbValue.textContent = "1.18";
+  monsterHealthOrbValue.className = "pauseMeta";
+  setDataAttr(monsterHealthOrbValue, "monster-health-orb-value");
+  monsterHealthOrbRow.appendChild(monsterHealthOrbLabel);
+  monsterHealthOrbRow.appendChild(monsterHealthOrbSlider);
+  monsterHealthOrbRow.appendChild(monsterHealthOrbValue);
+
+  const spawnBaseRow = document.createElement("label");
+  spawnBaseRow.className = "audioRow";
+  const spawnBaseLabel = document.createElement("span");
+  spawnBaseLabel.textContent = "Spawn Base";
+  const spawnBaseSlider = document.createElement("input");
+  spawnBaseSlider.type = "range";
+  spawnBaseSlider.min = "0.20";
+  spawnBaseSlider.max = "4.00";
+  spawnBaseSlider.step = "0.05";
+  setDataAttr(spawnBaseSlider, "spawn-base-slider");
+  const spawnBaseValue = document.createElement("span");
+  spawnBaseValue.textContent = "1.00";
+  spawnBaseValue.className = "pauseMeta";
+  setDataAttr(spawnBaseValue, "spawn-base-value");
+  spawnBaseRow.appendChild(spawnBaseLabel);
+  spawnBaseRow.appendChild(spawnBaseSlider);
+  spawnBaseRow.appendChild(spawnBaseValue);
+
+  const monsterHealthBaseRow = document.createElement("label");
+  monsterHealthBaseRow.className = "audioRow";
+  const monsterHealthBaseLabel = document.createElement("span");
+  monsterHealthBaseLabel.textContent = "HP Base";
+  const monsterHealthBaseSlider = document.createElement("input");
+  monsterHealthBaseSlider.type = "range";
+  monsterHealthBaseSlider.min = "0.20";
+  monsterHealthBaseSlider.max = "4.00";
+  monsterHealthBaseSlider.step = "0.05";
+  setDataAttr(monsterHealthBaseSlider, "monster-health-base-slider");
+  const monsterHealthBaseValue = document.createElement("span");
+  monsterHealthBaseValue.textContent = "1.00";
+  monsterHealthBaseValue.className = "pauseMeta";
+  setDataAttr(monsterHealthBaseValue, "monster-health-base-value");
+  monsterHealthBaseRow.appendChild(monsterHealthBaseLabel);
+  monsterHealthBaseRow.appendChild(monsterHealthBaseSlider);
+  monsterHealthBaseRow.appendChild(monsterHealthBaseValue);
+
+  const spawnTuningResetBtn = document.createElement("button");
+  spawnTuningResetBtn.type = "button";
+  spawnTuningResetBtn.className = "pauseDebugOpenBtn";
+  spawnTuningResetBtn.textContent = "Reset Spawn Tuning";
+  setDataAttr(spawnTuningResetBtn, "spawn-tuning-reset");
+
   audioSection.appendChild(audioTitle);
   audioSection.appendChild(musicRow);
   audioSection.appendChild(sfxRow);
   audioSection.appendChild(pressureRow);
+  audioSection.appendChild(spawnRateOrbRow);
+  audioSection.appendChild(monsterHealthOrbRow);
+  audioSection.appendChild(spawnBaseRow);
+  audioSection.appendChild(monsterHealthBaseRow);
+  audioSection.appendChild(spawnTuningResetBtn);
 
   const paletteTitle = document.createElement("h4");
   paletteTitle.textContent = "Palette";
@@ -264,19 +382,36 @@ export function mountPauseMenu(args: {
   statsTitle.textContent = "Stats";
   const statsScroll = document.createElement("div");
   statsScroll.className = "pauseScroll";
+  const mainStatsHeader = document.createElement("button");
+  mainStatsHeader.type = "button";
+  mainStatsHeader.className = "pauseDebugOpenBtn";
+  setDataAttr(mainStatsHeader, "stats-main-toggle");
+  const mainStatsBody = document.createElement("div");
+  setDataAttr(mainStatsBody, "stats-main-body");
   const statTable = document.createElement("table");
   statTable.className = "pauseStatTable";
   setDataAttr(statTable, "stat-table");
-  const debugMetricsTitle = document.createElement("h4");
-  debugMetricsTitle.textContent = "Debug Metrics";
+  const debugMetricsHeader = document.createElement("button");
+  debugMetricsHeader.type = "button";
+  debugMetricsHeader.className = "pauseDebugOpenBtn";
+  setDataAttr(debugMetricsHeader, "stats-debug-toggle");
+  const debugMetricsTabs = document.createElement("div");
+  debugMetricsTabs.className = "pauseStatsTabs";
+  setDataAttr(debugMetricsTabs, "stats-debug-tabs");
+  const debugMetricsBody = document.createElement("div");
+  setDataAttr(debugMetricsBody, "stats-debug-body");
   const debugMetricsTable = document.createElement("table");
   debugMetricsTable.className = "pauseStatTable";
   setDataAttr(debugMetricsTable, "debug-metrics-table");
   statsSection.appendChild(statsTitle);
   statsSection.appendChild(statsScroll);
-  statsScroll.appendChild(statTable);
-  statsScroll.appendChild(debugMetricsTitle);
-  statsScroll.appendChild(debugMetricsTable);
+  statsScroll.appendChild(mainStatsHeader);
+  mainStatsBody.appendChild(statTable);
+  statsScroll.appendChild(mainStatsBody);
+  statsScroll.appendChild(debugMetricsHeader);
+  statsScroll.appendChild(debugMetricsTabs);
+  debugMetricsBody.appendChild(debugMetricsTable);
+  statsScroll.appendChild(debugMetricsBody);
 
   grid.appendChild(audioSection);
   grid.appendChild(buildSection);
@@ -328,6 +463,40 @@ export function mountPauseMenu(args: {
   let visible = false;
   let needsFullRender = true;
   let lastRenderedWorld: World | null = null;
+  let mainStatsCollapsed = false;
+  let debugStatsCollapsed = false;
+  let debugStatsTab: "SPAWN" | "COMBAT" | "FLOW" = "SPAWN";
+
+  const syncStatsCollapseUi = () => {
+    mainStatsHeader.textContent = `${mainStatsCollapsed ? "Show" : "Hide"} Stats`;
+    mainStatsBody.hidden = mainStatsCollapsed;
+    debugMetricsHeader.textContent = `${debugStatsCollapsed ? "Show" : "Hide"} Debug Metrics`;
+    debugMetricsTabs.hidden = debugStatsCollapsed;
+    debugMetricsBody.hidden = debugStatsCollapsed;
+  };
+
+  const renderDebugMetricsTabs = () => {
+    clearChildren(debugMetricsTabs);
+    const tabs: Array<{ id: "SPAWN" | "COMBAT" | "FLOW"; label: string }> = [
+      { id: "SPAWN", label: "Spawn" },
+      { id: "COMBAT", label: "Combat" },
+      { id: "FLOW", label: "Flow" },
+    ];
+    for (const tab of tabs) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "pauseDebugOpenBtn pauseStatsTabBtn";
+      setDataAttr(btn, "stats-debug-tab");
+      btn.setAttribute("data-stats-debug-tab-id", tab.id);
+      btn.textContent = tab.label;
+      if (debugStatsTab === tab.id) btn.classList.add("active");
+      btn.addEventListener("click", () => {
+        debugStatsTab = tab.id;
+        renderStats(latestWorld);
+      });
+      debugMetricsTabs.appendChild(btn);
+    }
+  };
 
   const resetRelicDraft = () => {
     const relics = normalizeRelicIdList((latestWorld as any)?.relics);
@@ -464,9 +633,42 @@ export function mountPauseMenu(args: {
     pressureValue.textContent = `${num(clamped)}x`;
   };
 
+  const applySpawnTuningSettingsToLatestWorld = () => {
+    if (!latestWorld) return;
+    const spawnV = Number.parseFloat(spawnRateOrbSlider.value);
+    const hpOrbV = Number.parseFloat(monsterHealthOrbSlider.value);
+    const spawnBaseV = Number.parseFloat(spawnBaseSlider.value);
+    const hpBaseV = Number.parseFloat(monsterHealthBaseSlider.value);
+    const spawnClamped = Math.max(0.8, Math.min(1.5, Number.isFinite(spawnV) ? spawnV : 1.12));
+    const hpOrbClamped = Math.max(0.8, Math.min(1.5, Number.isFinite(hpOrbV) ? hpOrbV : 1.18));
+    const spawnBaseClamped = Math.max(0.2, Math.min(4.0, Number.isFinite(spawnBaseV) ? spawnBaseV : 1.0));
+    const hpBaseClamped = Math.max(0.2, Math.min(4.0, Number.isFinite(hpBaseV) ? hpBaseV : 1.0));
+    spawnRateOrbValue.textContent = num(spawnClamped, 2);
+    monsterHealthOrbValue.textContent = num(hpOrbClamped, 2);
+    spawnBaseValue.textContent = num(spawnBaseClamped, 2);
+    monsterHealthBaseValue.textContent = num(hpBaseClamped, 2);
+
+    const wAny = latestWorld as any;
+    if (!wAny.balance) wAny.balance = {};
+    if (!wAny.balance.spawnTuning) wAny.balance.spawnTuning = {};
+    wAny.balance.spawnTuning.spawnRateOrbBasePerDepth = spawnClamped;
+    wAny.balance.spawnTuning.monsterHealthOrbBasePerDepth = hpOrbClamped;
+    wAny.balance.spawnTuning.monsterHealthBaseMult = hpBaseClamped;
+    if (!wAny.expectedPowerBudgetConfig) wAny.expectedPowerBudgetConfig = {};
+    wAny.expectedPowerBudgetConfig.basePowerPerSecond = spawnBaseClamped;
+  };
+
+  const getBalanceCsvLogger = (w: any) => (w ? (w as any).balanceCsvLogger : null);
+
+  const syncBalanceCsvControls = (w: World | null) => {
+    const logger = getBalanceCsvLogger(w);
+    balanceCsvToggleBtn.textContent = logger?.enabled ? "Stop CSV" : "Start CSV";
+  };
+
   const renderStats = (world: World | null) => {
     clearChildren(statTable);
     clearChildren(debugMetricsTable);
+    renderDebugMetricsTabs();
     if (!world) return;
 
     const critChance = safeNum(world.baseCritChance) + safeNum(world.critChanceBonus);
@@ -494,8 +696,38 @@ export function mountPauseMenu(args: {
     }
 
     const dbg = (world as any).spawnDirectorDebug;
+    const liveEnemyHp = sumAliveEnemyHp(world as any);
     if (dbg && typeof dbg === "object") {
-      const metricsRows: Array<[string, string]> = [
+      const spawnRows: Array<[string, string]> = [
+        ["Pressure", num(safeNum(dbg.spawnPressureMult, safeNum(dbg.pressure)), 2)],
+        ["Global Pressure", `${num(safeNum(dbg.globalPressureMult, 1), 2)}x`],
+        ["Base Pressure", num(safeNum(dbg.basePressure), 3)],
+        ["Effective Pressure", num(safeNum(dbg.effectivePressure, safeNum(dbg.pressure)), 3)],
+        ["Wave Mult", num(safeNum(dbg.waveMult, 1), 3)],
+        ["Spawn power/sec", num(safeNum(dbg.powerPerSecond), 2)],
+        ["Spawn HP/sec", num(safeNum(dbg.spawnHpPerSecond), 0)],
+        ["On-screen Enemy HP", num(liveEnemyHp, 0)],
+        ["Queued/sec", num(safeNum(dbg.queuedPerSecond), 2)],
+        ["Spawns/sec", num(safeNum(dbg.spawnsPerSecond), 2)],
+      ];
+      if (dbg.survive && typeof dbg.survive === "object") {
+        spawnRows.push(
+          ["Survive Progress", pct(safeNum(dbg.survive.progress))],
+          ["Survive Ramp", num(safeNum(dbg.survive.ramp), 2)],
+          ["Survive Power/sec", num(safeNum(dbg.survive.powerPerSecond), 2)],
+          ["Survive Chunk Size", safeNum(dbg.survive.chunkSize, 0).toFixed(0)],
+          ["Survive Chunk Delay", num(safeNum(dbg.survive.chunkDelay), 2)]
+        );
+      }
+
+      const combatRows: Array<[string, string]> = [
+        ["Actual DPS (inst)", num(safeNum(dbg.actualDpsInstant), 2)],
+        ["Actual DPS (smooth)", num(safeNum(dbg.actualDps), 2)],
+        ["Expected DPS", num(safeNum(dbg.expectedDps), 2)],
+        ["Ahead/Behind", `${num(safeNum(dbg.aheadFactor), 2)}x`],
+      ];
+
+      const flowRows: Array<[string, string]> = [
         [
           "Card Rewards",
           `${safeNum((world as any).cardRewardBudgetUsed, 0).toFixed(0)}/${safeNum((world as any).cardRewardBudgetTotal, 3).toFixed(0)}`,
@@ -505,36 +737,16 @@ export function mountPauseMenu(args: {
           `${Array.isArray((world as any).cardRewardClaimKeys) ? (world as any).cardRewardClaimKeys.length : 0}`,
         ],
         ["Last Reward Key", `${(world as any).lastCardRewardClaimKey ?? "-"}`],
-        ["Actual DPS (inst)", num(safeNum(dbg.actualDpsInstant), 2)],
-        ["Actual DPS (smooth)", num(safeNum(dbg.actualDps), 2)],
-        ["Expected DPS", num(safeNum(dbg.expectedDps), 2)],
-        ["Ahead/Behind", `${num(safeNum(dbg.aheadFactor), 2)}x`],
-        ["Global Pressure", `${num(safeNum(dbg.globalPressureMult, 1), 2)}x`],
-        ["Base Pressure", num(safeNum(dbg.basePressure), 3)],
-        ["Effective Pressure", num(safeNum(dbg.effectivePressure, safeNum(dbg.pressure)), 3)],
-        ["Pressure", num(safeNum(dbg.pressure), 3)],
-        ["Wave Mult", num(safeNum(dbg.waveMult, 1), 3)],
-        ["Queued/sec", num(safeNum(dbg.queuedPerSecond), 2)],
         ["Pending", safeNum(dbg.pendingSpawns, 0).toFixed(0)],
         ["Wave Remaining", safeNum(dbg.waveRemaining, 0).toFixed(0)],
         ["Chunk CD", num(safeNum(dbg.chunkCooldownSec), 2)],
         ["Wave CD", num(safeNum(dbg.waveCooldownSecLeft), 2)],
         ["Last Chunk", safeNum(dbg.lastChunkSize, 0).toFixed(0)],
         ["Wave Threshold", safeNum(dbg.pendingThresholdToStartWave, 0).toFixed(0)],
-        ["Power/sec", num(safeNum(dbg.powerPerSecond), 2)],
         ["Trash Power Cost", num(safeNum(dbg.trashPowerCost), 2)],
         ["Power Budget", num(safeNum(dbg.powerBudget), 2)],
-        ["Spawns/sec", num(safeNum(dbg.spawnsPerSecond), 2)],
       ];
-      if (dbg.survive && typeof dbg.survive === "object") {
-        metricsRows.push(
-          ["Survive Progress", pct(safeNum(dbg.survive.progress))],
-          ["Survive Ramp", num(safeNum(dbg.survive.ramp), 2)],
-          ["Survive Power/sec", num(safeNum(dbg.survive.powerPerSecond), 2)],
-          ["Survive Chunk Size", safeNum(dbg.survive.chunkSize, 0).toFixed(0)],
-          ["Survive Chunk Delay", num(safeNum(dbg.survive.chunkDelay), 2)]
-        );
-      }
+      const metricsRows = debugStatsTab === "COMBAT" ? combatRows : debugStatsTab === "FLOW" ? flowRows : spawnRows;
       for (const [k, v] of metricsRows) {
         const tr = document.createElement("tr");
         const th = document.createElement("th");
@@ -554,6 +766,15 @@ export function mountPauseMenu(args: {
       tr.appendChild(th);
       tr.appendChild(td);
       debugMetricsTable.appendChild(tr);
+
+      const hpTr = document.createElement("tr");
+      const hpTh = document.createElement("th");
+      const hpTd = document.createElement("td");
+      hpTh.textContent = "On-screen Enemy HP";
+      hpTd.textContent = num(liveEnemyHp, 0);
+      hpTr.appendChild(hpTh);
+      hpTr.appendChild(hpTd);
+      debugMetricsTable.appendChild(hpTr);
     }
   };
 
@@ -672,11 +893,48 @@ export function mountPauseMenu(args: {
     applyPressureToLatestWorld();
   };
 
+  const onSpawnTuningSlider = () => {
+    const spawnV = Number.parseFloat(spawnRateOrbSlider.value);
+    const hpOrbV = Number.parseFloat(monsterHealthOrbSlider.value);
+    const spawnBaseV = Number.parseFloat(spawnBaseSlider.value);
+    const hpBaseV = Number.parseFloat(monsterHealthBaseSlider.value);
+    const spawnClamped = Math.max(0.8, Math.min(1.5, Number.isFinite(spawnV) ? spawnV : 1.12));
+    const hpOrbClamped = Math.max(0.8, Math.min(1.5, Number.isFinite(hpOrbV) ? hpOrbV : 1.18));
+    const spawnBaseClamped = Math.max(0.2, Math.min(4.0, Number.isFinite(spawnBaseV) ? spawnBaseV : 1.0));
+    const hpBaseClamped = Math.max(0.2, Math.min(4.0, Number.isFinite(hpBaseV) ? hpBaseV : 1.0));
+    updateUserSettings({
+      render: {
+        spawnBasePowerPerSecond: spawnBaseClamped,
+        spawnRateOrbBasePerDepth: spawnClamped,
+        monsterHealthBaseMult: hpBaseClamped,
+        monsterHealthOrbBasePerDepth: hpOrbClamped,
+      },
+    });
+    syncSpawnTuningControls();
+    applySpawnTuningSettingsToLatestWorld();
+  };
+
   const syncPaletteControls = () => {
     const settings = getUserSettings().render;
     (paletteToggle as HTMLInputElement).checked = !!settings.paletteSwapEnabled;
     paletteSelect.value = settings.paletteId;
     paletteSelect.disabled = !settings.paletteSwapEnabled;
+  };
+
+  const syncSpawnTuningControls = () => {
+    const settings = getUserSettings().render;
+    const spawnOrb = Math.max(0.8, Math.min(1.5, safeNum(settings.spawnRateOrbBasePerDepth, 1.12)));
+    const healthOrb = Math.max(0.8, Math.min(1.5, safeNum(settings.monsterHealthOrbBasePerDepth, 1.18)));
+    const spawnBase = Math.max(0.2, Math.min(4.0, safeNum(settings.spawnBasePowerPerSecond, 1.0)));
+    const healthBase = Math.max(0.2, Math.min(4.0, safeNum(settings.monsterHealthBaseMult, 1.0)));
+    spawnRateOrbSlider.value = `${spawnOrb}`;
+    monsterHealthOrbSlider.value = `${healthOrb}`;
+    spawnBaseSlider.value = `${spawnBase}`;
+    monsterHealthBaseSlider.value = `${healthBase}`;
+    spawnRateOrbValue.textContent = num(spawnOrb, 2);
+    monsterHealthOrbValue.textContent = num(healthOrb, 2);
+    spawnBaseValue.textContent = num(spawnBase, 2);
+    monsterHealthBaseValue.textContent = num(healthBase, 2);
   };
 
   resumeBtn.addEventListener("click", args.actions.onResume);
@@ -686,6 +944,10 @@ export function mountPauseMenu(args: {
   sfxSlider.addEventListener("input", onSfxSlider);
   sfxMuteBtn.addEventListener("click", onSfxMute);
   pressureSlider.addEventListener("input", onPressureSlider);
+  spawnRateOrbSlider.addEventListener("input", onSpawnTuningSlider);
+  monsterHealthOrbSlider.addEventListener("input", onSpawnTuningSlider);
+  spawnBaseSlider.addEventListener("input", onSpawnTuningSlider);
+  monsterHealthBaseSlider.addEventListener("input", onSpawnTuningSlider);
   paletteToggle.addEventListener("change", () => {
     const enabled = !!(paletteToggle as HTMLInputElement).checked;
     updateUserSettings({ render: { paletteSwapEnabled: enabled } });
@@ -713,8 +975,54 @@ export function mountPauseMenu(args: {
     debugLayerOpen = false;
     renderDebugLayer();
   });
+  balanceCsvToggleBtn.addEventListener("click", () => {
+    const w = latestWorld as any;
+    const logger = getBalanceCsvLogger(w);
+    if (!w || !logger) return;
+
+    const next = !logger.enabled;
+    setBalanceCsvEnabled(logger, next, Number(w.timeSec ?? 0));
+    syncBalanceCsvControls(latestWorld);
+  });
+  balanceCsvClearBtn.addEventListener("click", () => {
+    const logger = getBalanceCsvLogger(latestWorld as any);
+    if (!logger) return;
+    clearBalanceCsv(logger);
+  });
+  balanceCsvDownloadBtn.addEventListener("click", () => {
+    const w = latestWorld as any;
+    const logger = getBalanceCsvLogger(w);
+    if (!logger || !w) return;
+    const depth = Math.max(0, Math.floor(Number((w as any).floorIndex ?? 0)));
+    const fname = `ratgame_balance_depth${depth}_${new Date().toISOString().replace(/[:.]/g, "-")}.csv`;
+    downloadBalanceCsv(logger, fname);
+  });
+  spawnTuningResetBtn.addEventListener("click", () => {
+    updateUserSettings({
+      render: {
+        spawnBasePowerPerSecond: 1.0,
+        spawnRateOrbBasePerDepth: 1.12,
+        monsterHealthBaseMult: 1.0,
+        monsterHealthOrbBasePerDepth: 1.18,
+      },
+    });
+    syncSpawnTuningControls();
+    applySpawnTuningSettingsToLatestWorld();
+  });
+  mainStatsHeader.addEventListener("click", () => {
+    mainStatsCollapsed = !mainStatsCollapsed;
+    syncStatsCollapseUi();
+  });
+  debugMetricsHeader.addEventListener("click", () => {
+    debugStatsCollapsed = !debugStatsCollapsed;
+    syncStatsCollapseUi();
+  });
   syncAudioControls();
   syncPaletteControls();
+  syncSpawnTuningControls();
+  applySpawnTuningSettingsToLatestWorld();
+  syncStatsCollapseUi();
+  syncBalanceCsvControls(latestWorld);
 
   return {
     setVisible(v: boolean): void {
@@ -737,6 +1045,9 @@ export function mountPauseMenu(args: {
       applySfxToLatestWorld();
       syncAudioControls();
       syncPaletteControls();
+      syncSpawnTuningControls();
+      applySpawnTuningSettingsToLatestWorld();
+      syncBalanceCsvControls(world);
       renderStats(world);
       renderCardsAndRelicsAndWeapon(world);
       lastRenderedWorld = world;
@@ -750,6 +1061,10 @@ export function mountPauseMenu(args: {
       sfxSlider.removeEventListener("input", onSfxSlider);
       sfxMuteBtn.removeEventListener("click", onSfxMute);
       pressureSlider.removeEventListener("input", onPressureSlider);
+      spawnRateOrbSlider.removeEventListener("input", onSpawnTuningSlider);
+      monsterHealthOrbSlider.removeEventListener("input", onSpawnTuningSlider);
+      spawnBaseSlider.removeEventListener("input", onSpawnTuningSlider);
+      monsterHealthBaseSlider.removeEventListener("input", onSpawnTuningSlider);
       host.remove();
       for (const el of preservedChildren) {
         el.hidden = false;

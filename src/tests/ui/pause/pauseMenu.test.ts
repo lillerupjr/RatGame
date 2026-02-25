@@ -153,6 +153,10 @@ const userSettingsState = vi.hoisted(() => ({
     render: {
       paletteSwapEnabled: false,
       paletteId: "db32",
+      spawnBasePowerPerSecond: 1.0,
+      spawnRateOrbBasePerDepth: 1.12,
+      monsterHealthBaseMult: 1.0,
+      monsterHealthOrbBasePerDepth: 1.18,
     },
   },
 }));
@@ -245,7 +249,14 @@ describe("pauseMenu", () => {
     debugFlags.pauseDebugCards = false;
     userSettingsState.settings = {
       debug: { pauseDebugCards: false },
-      render: { paletteSwapEnabled: false, paletteId: "db32" },
+      render: {
+        paletteSwapEnabled: false,
+        paletteId: "db32",
+        spawnBasePowerPerSecond: 1.0,
+        spawnRateOrbBasePerDepth: 1.12,
+        monsterHealthBaseMult: 1.0,
+        monsterHealthOrbBasePerDepth: 1.18,
+      },
     };
   });
 
@@ -496,5 +507,224 @@ describe("pauseMenu", () => {
     toggle.checked = false;
     toggle.dispatchEvent(new Event("change") as any);
     expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({ render: { paletteSwapEnabled: false } });
+  });
+
+  test("stats categories collapse and persist across pause/unpause", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+    menu.setVisible(true);
+    menu.render(makeWorld());
+
+    const mainToggle = root.querySelector("[data-stats-main-toggle]") as any;
+    const debugToggle = root.querySelector("[data-stats-debug-toggle]") as any;
+    const mainBody = root.querySelector("[data-stats-main-body]") as any;
+    const debugBody = root.querySelector("[data-stats-debug-body]") as any;
+
+    expect(mainToggle.textContent).toContain("Hide Stats");
+    expect(debugToggle.textContent).toContain("Hide Debug Metrics");
+    expect(mainBody.hidden).toBe(false);
+    expect(debugBody.hidden).toBe(false);
+
+    mainToggle.click();
+    debugToggle.click();
+
+    expect(mainToggle.textContent).toContain("Show Stats");
+    expect(debugToggle.textContent).toContain("Show Debug Metrics");
+    expect(mainBody.hidden).toBe(true);
+    expect(debugBody.hidden).toBe(true);
+
+    menu.setVisible(false);
+    menu.setVisible(true);
+    menu.render(makeWorld());
+
+    expect(mainToggle.textContent).toContain("Show Stats");
+    expect(debugToggle.textContent).toContain("Show Debug Metrics");
+    expect(mainBody.hidden).toBe(true);
+    expect(debugBody.hidden).toBe(true);
+  });
+
+  test("shows on-screen enemy HP in debug metrics", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+    menu.setVisible(true);
+
+    menu.render(
+      makeWorld({
+        spawnDirectorDebug: {
+          actualDpsInstant: 0,
+          actualDps: 0,
+          expectedDps: 0,
+          aheadFactor: 0,
+          globalPressureMult: 1,
+          basePressure: 1,
+          effectivePressure: 1,
+          pressure: 1,
+          waveMult: 1,
+          queuedPerSecond: 0,
+          pendingSpawns: 0,
+          waveRemaining: 0,
+          chunkCooldownSec: 0,
+          waveCooldownSecLeft: 0,
+          lastChunkSize: 0,
+          pendingThresholdToStartWave: 0,
+          powerPerSecond: 0,
+          spawnHpPerSecond: 0,
+          trashPowerCost: 1,
+          powerBudget: 0,
+          spawnsPerSecond: 0,
+        },
+        eAlive: [true, false, true],
+        eHp: [10, 999, 5],
+      })
+    );
+
+    expect(root.textContent).toContain("On-screen Enemy HP15");
+  });
+
+  test("debug metrics tabs switch visible metric groups", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+    menu.setVisible(true);
+
+    menu.render(
+      makeWorld({
+        spawnDirectorDebug: {
+          actualDpsInstant: 1,
+          actualDps: 2,
+          expectedDps: 3,
+          aheadFactor: 0.7,
+          globalPressureMult: 1,
+          basePressure: 1,
+          effectivePressure: 1,
+          pressure: 1,
+          waveMult: 1,
+          queuedPerSecond: 0,
+          pendingSpawns: 4,
+          waveRemaining: 5,
+          chunkCooldownSec: 0.1,
+          waveCooldownSecLeft: 0.2,
+          lastChunkSize: 2,
+          pendingThresholdToStartWave: 6,
+          powerPerSecond: 7,
+          spawnHpPerSecond: 80,
+          trashPowerCost: 1,
+          powerBudget: 2,
+          spawnsPerSecond: 1.2,
+        },
+      })
+    );
+
+    // Default tab: Spawn
+    expect(root.textContent).toContain("Spawn HP/sec80");
+    expect(root.textContent).not.toContain("Actual DPS (inst)1.00");
+
+    const combatTab = root.querySelector('[data-stats-debug-tab-id="COMBAT"]') as any;
+    expect(combatTab).toBeTruthy();
+    combatTab.click();
+    expect(root.textContent).toContain("Actual DPS (inst)1.00");
+
+    const flowTab = root.querySelector('[data-stats-debug-tab-id="FLOW"]') as any;
+    expect(flowTab).toBeTruthy();
+    flowTab.click();
+    expect(root.textContent).toContain("Pending4");
+  });
+
+  test("balance csv buttons exist and toggle updates label", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+    menu.setVisible(true);
+
+    const w = makeWorld({
+      timeSec: 12,
+      balanceCsvLogger: { enabled: false },
+    });
+    menu.render(w);
+
+    const toggle = root.querySelector("[data-balance-csv-toggle]") as any;
+    const clear = root.querySelector("[data-balance-csv-clear]") as any;
+    const download = root.querySelector("[data-balance-csv-download]") as any;
+
+    expect(toggle).toBeTruthy();
+    expect(clear).toBeTruthy();
+    expect(download).toBeTruthy();
+    expect(root.textContent).toContain("Start CSV");
+
+    toggle.click();
+    expect(root.textContent).toContain("Stop CSV");
+  });
+
+  test("spawn tuning orb sliders persist to local settings and apply to world", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+    menu.setVisible(true);
+
+    const world = makeWorld({
+      expectedPowerBudgetConfig: { basePowerPerSecond: 1.0 },
+      balance: { spawnTuning: {} },
+    });
+    menu.render(world);
+
+    const spawnSlider = root.querySelector("[data-spawn-rate-orb-slider]") as any;
+    const healthOrbSlider = root.querySelector("[data-monster-health-orb-slider]") as any;
+    const spawnBaseSlider = root.querySelector("[data-spawn-base-slider]") as any;
+    const healthBaseSlider = root.querySelector("[data-monster-health-base-slider]") as any;
+    expect(spawnSlider).toBeTruthy();
+    expect(healthOrbSlider).toBeTruthy();
+    expect(spawnBaseSlider).toBeTruthy();
+    expect(healthBaseSlider).toBeTruthy();
+
+    spawnSlider.value = "1.25";
+    spawnSlider.dispatchEvent(new Event("input") as any);
+    healthOrbSlider.value = "1.30";
+    healthOrbSlider.dispatchEvent(new Event("input") as any);
+    spawnBaseSlider.value = "1.40";
+    spawnBaseSlider.dispatchEvent(new Event("input") as any);
+    healthBaseSlider.value = "1.15";
+    healthBaseSlider.dispatchEvent(new Event("input") as any);
+
+    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({
+      render: {
+        spawnBasePowerPerSecond: 1.0,
+        spawnRateOrbBasePerDepth: 1.25,
+        monsterHealthBaseMult: 1.0,
+        monsterHealthOrbBasePerDepth: 1.18,
+      },
+    });
+    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({
+      render: {
+        spawnBasePowerPerSecond: 1.0,
+        spawnRateOrbBasePerDepth: 1.25,
+        monsterHealthBaseMult: 1.0,
+        monsterHealthOrbBasePerDepth: 1.3,
+      },
+    });
+    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({
+      render: {
+        spawnBasePowerPerSecond: 1.4,
+        spawnRateOrbBasePerDepth: 1.25,
+        monsterHealthBaseMult: 1.0,
+        monsterHealthOrbBasePerDepth: 1.3,
+      },
+    });
+    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({
+      render: {
+        spawnBasePowerPerSecond: 1.4,
+        spawnRateOrbBasePerDepth: 1.25,
+        monsterHealthBaseMult: 1.15,
+        monsterHealthOrbBasePerDepth: 1.3,
+      },
+    });
+
+    expect((world as any).balance.spawnTuning.spawnRateOrbBasePerDepth).toBeCloseTo(1.25, 3);
+    expect((world as any).balance.spawnTuning.monsterHealthOrbBasePerDepth).toBeCloseTo(1.3, 3);
+    expect((world as any).expectedPowerBudgetConfig.basePowerPerSecond).toBeCloseTo(1.4, 3);
+    expect((world as any).balance.spawnTuning.monsterHealthBaseMult).toBeCloseTo(1.15, 3);
   });
 });

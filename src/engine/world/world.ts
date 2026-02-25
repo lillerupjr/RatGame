@@ -28,6 +28,7 @@ import {
 } from "../../game/balance/spawnDirector";
 import type { ExpectedPowerBudgetConfig, ExpectedPowerConfig } from "../../game/balance/expectedPower";
 import { defaultEnemyPowerCostConfig, type EnemyPowerCostConfig } from "../../game/balance/enemyPower";
+import { createBalanceCsvLogger, type BalanceCsvLogger } from "../../game/balance/balanceCsvLogger";
 
 import type { WeaponId } from "../../game/content/weapons";
 
@@ -513,12 +514,30 @@ export type World = {
   };
   balance: {
     spawnDirectorEnabled: boolean;
+    spawnTuning?: {
+      // Orb A: Monster Health (per-depth multiplicative)
+      monsterHealthOrbBasePerDepth?: number;
+      // HP baseline multiplier at depth 1 (before depth orb exponent)
+      monsterHealthBaseMult?: number;
+      // Orb B: Spawn Rate (power income per-depth multiplicative)
+      spawnRateOrbBasePerDepth?: number;
+      // Orb C: Early presence (per-depth multiplicative)
+      // Used ONLY to scale initialPendingSpawns at floor start.
+      frontloadOrbBasePerDepth?: number;
+      // Time pressure curve knobs (designer-controlled)
+      pressureAt0Sec?: number;
+      pressureAt60Sec?: number;
+      pressureAt120Sec?: number;
+      // NEW: seed pending spawns at floor start (“~10 mobs”)
+      initialPendingSpawns?: number;
+    };
   };
   spawnDirectorState: SpawnDirectorState;
   spawnDirectorConfig: SpawnDirectorConfig;
   expectedPowerConfig: ExpectedPowerConfig;
   expectedPowerBudgetConfig: ExpectedPowerBudgetConfig;
   enemyPowerConfig: EnemyPowerCostConfig;
+  balanceCsvLogger: BalanceCsvLogger;
   spawnDirectorOverrides?: {
     powerPerSecondOverride?: number;
     waveChunkOverride?: number;
@@ -539,7 +558,14 @@ export type World = {
     effectivePressure: number;
     pressure: number;
     waveMult: number;
+    timePressure?: number;
+    spawnPressureMult?: number;
     powerPerSecond: number;
+    effectivePowerPerSecond?: number;
+    throttleScale?: number;
+    tInFloorSec?: number;
+    inFrontload?: boolean;
+    spawnHpPerSecond?: number;
     trashPowerCost: number;
     powerBudget: number;
     pendingSpawns: number;
@@ -566,8 +592,7 @@ export type CreateWorldArgs = {
 };
 
 function cloneStage(stage: StageDef): StageDef {
-  // IMPORTANT: stage spawns are mutated at runtime (t -> Infinity), so clone them.
-  return { ...stage, spawns: stage.spawns.map((s) => ({ ...s })) };
+  return { ...stage };
 }
 
 /** Initialize a new World with seeded RNG and stage state. */
@@ -884,6 +909,25 @@ export function createWorld(args: CreateWorldArgs): World {
     },
     balance: {
       spawnDirectorEnabled: true,
+      // Tuning Orbs (authoritative knobs)
+      // All three scale multiplicatively with depth:
+      // mult(depth) = basePerDepth ^ max(0, depth - 1)
+      spawnTuning: {
+        // Orb A: Monster Health
+        monsterHealthOrbBasePerDepth: 1.18,
+        // HP baseline multiplier at depth 1
+        monsterHealthBaseMult: 1.0,
+        // Orb B: Spawn Rate (power income)
+        spawnRateOrbBasePerDepth: 1.12,
+        // Orb C: Front-load bias (early floor presence)
+        frontloadOrbBasePerDepth: 1.05,
+        // Time pressure curve knobs (designer-controlled)
+        pressureAt0Sec: 1.0,
+        pressureAt60Sec: 1.5,
+        pressureAt120Sec: 2.0,
+        // Seed pending spawns at floor start (“~10 mobs”)
+        initialPendingSpawns: 10,
+      },
     },
     spawnDirectorState: createSpawnDirectorState(),
     spawnDirectorConfig: {
@@ -906,6 +950,9 @@ export function createWorld(args: CreateWorldArgs): World {
       waveHighFrac: 0.35,
       bossTrashPressureMult: 0.5,
       maxSpawnsPerTick: 200,
+      // Queue control (prevents “pending poisoning”)
+      pendingSoftCap: 200,
+      pendingHardCap: 600,
     },
     expectedPowerConfig: {
       timeCurve: [
@@ -926,6 +973,8 @@ export function createWorld(args: CreateWorldArgs): World {
       powerRampMax: 2.0,
     },
     enemyPowerConfig: defaultEnemyPowerCostConfig(),
+    // Balance CSV telemetry (pause-menu controlled)
+    balanceCsvLogger: createBalanceCsvLogger(),
   };
 
   // Map-authored player spawn (SPAWN/P<number> tile)

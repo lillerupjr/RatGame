@@ -60,9 +60,8 @@ describe("spawnDirector power budget", () => {
 
     expect(state.pendingSpawns).toBe(10);
     expect(spawned).toBe(0);
-    expect(w.spawnDirectorDebug.powerPerSecond).toBeCloseTo(1);
-    expect(w.spawnDirectorDebug.powerBudget).toBeCloseTo(0);
+    expect(w.spawnDirectorDebug.powerPerSecond).toBeCloseTo(1.0833333333);
+    expect(w.spawnDirectorDebug.powerBudget).toBeCloseTo(0.8333333333);
     expect(w.spawnDirectorDebug.trashPowerCost).toBeCloseTo(1);
   });
 });
-

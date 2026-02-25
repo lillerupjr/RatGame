@@ -55,9 +55,44 @@ export function expectedDpsAtProgress(cfg: ExpectedPowerConfig, tSec: number, de
 
 export function powerPerSecondAtProgress(
   cfg: ExpectedPowerBudgetConfig,
-  tSec: number
+  tSec: number,
+  p0: number,
+  p1: number,
+  p2: number
 ): number {
-  const minutes = tSec / 60;
-  const mult = Math.min(cfg.powerRampMax, 1 + cfg.powerRampPerMinute * minutes);
-  return cfg.basePowerPerSecond * mult;
+  return cfg.basePowerPerSecond * timePressureMult(tSec, p0, p1, p2);
+}
+
+function clamp01(x: number): number {
+  return Math.max(0, Math.min(1, x));
+}
+
+/**
+ * Time pressure multiplier:
+ * - t=0   -> p0
+ * - t=60  -> p1
+ * - t=120 -> p2
+ * - then doubles each minute after 120:
+ *   t=180 -> p2*2, t=240 -> p2*4, ...
+ */
+export function timePressureMult(
+  tSec: number,
+  p0: number,
+  p1: number,
+  p2: number
+): number {
+  const P0 = Math.max(0, p0);
+  const P1 = Math.max(0, p1);
+  const P2 = Math.max(0, p2);
+
+  if (tSec <= 60) {
+    const u = clamp01(tSec / 60);
+    return lerp(P0, P1, u);
+  }
+  if (tSec <= 120) {
+    const u = clamp01((tSec - 60) / 60);
+    return lerp(P1, P2, u);
+  }
+  const minutesAfter = (tSec - 120) / 60;
+  return P2 * Math.pow(2, minutesAfter);
 }

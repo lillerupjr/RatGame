@@ -499,6 +499,24 @@ canvas { display:block; }
   background: rgba(255, 255, 255, 0.2);
 }
 
+.pauseStatsTabs {
+  display: flex;
+  gap: 8px;
+  margin: 6px 0 8px 0;
+  flex-wrap: wrap;
+}
+
+.pauseStatsTabBtn {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.pauseStatsTabBtn.active {
+  background: rgba(255, 255, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.34);
+}
+
 .pauseDebugLayer {
   position: absolute;
   inset: 0;
