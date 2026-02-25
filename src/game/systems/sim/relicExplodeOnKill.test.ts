@@ -7,6 +7,7 @@ import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { clearSpatialHash, insertEntity } from "../../util/spatialHash";
 import { relicExplodeOnKillSystem } from "./relicExplodeOnKill";
 import { applyRelic } from "../progression/relics";
+import { relicRetriggerSystem } from "../progression/relicRetriggerSystem";
 
 function rebuildEnemyHash(world: ReturnType<typeof createWorld>): void {
   clearSpatialHash(world.enemySpatialHash);
@@ -75,6 +76,40 @@ describe("relicExplodeOnKillSystem", () => {
 
     expect(w.zAlive.length).toBe(0);
     expect(w.eHp[b]).toBe(40);
+  });
+
+  test("ACT_TRIGGERS_DOUBLE retriggers explosion after delay", () => {
+    const w = createWorld({ seed: 14, stage: stageDocks });
+    w.relics = ["ACT_EXPLODE_ON_KILL", "ACT_TRIGGERS_DOUBLE"];
+
+    const a = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 5);
+    w.eHpMax[a] = 100;
+    w.eHp[a] = 0;
+    w.eAlive[a] = false;
+
+    rebuildEnemyHash(w);
+    const aw = getEnemyWorld(w, a, KENNEY_TILE_WORLD);
+    w.events.push({
+      type: "ENEMY_KILLED",
+      enemyIndex: a,
+      x: aw.wx,
+      y: aw.wy,
+      source: "PISTOL",
+    });
+
+    relicExplodeOnKillSystem(w, 1 / 60);
+    expect(w.zAlive.length).toBe(1);
+    expect(w.relicRetriggerQueue.length).toBe(1);
+
+    w.time += 0.49;
+    relicRetriggerSystem(w);
+    expect(w.zAlive.length).toBe(1);
+    expect(w.relicRetriggerQueue.length).toBe(1);
+
+    w.time += 0.01;
+    relicRetriggerSystem(w);
+    expect(w.zAlive.length).toBe(2);
+    expect(w.relicRetriggerQueue.length).toBe(0);
   });
 
   test("applyRelic dedupes ACT_EXPLODE_ON_KILL", () => {

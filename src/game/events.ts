@@ -77,3 +77,12 @@ export type GameEvent =
     type: "VENDOR_PURCHASE";
     offer: VendorOffer;
 };
+
+export type RelicTriggerEvent = Extract<GameEvent, { type: "ENEMY_HIT" | "ENEMY_KILLED" }> & {
+  isRetrigger?: boolean;
+};
+
+export type PendingRelicRetrigger = {
+  fireAt: number;
+  event: RelicTriggerEvent;
+};

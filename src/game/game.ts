@@ -19,6 +19,7 @@ import { preloadSfx } from "../engine/audio/sfx";
 import { roomChallengeSystem } from "./systems/progression/roomChallenge";
 import { triggerSystem } from "./systems/progression/triggerSystem";
 import { relicTriggerSystem } from "./systems/progression/relicTriggerSystem";
+import { relicRetriggerSystem } from "./systems/progression/relicRetriggerSystem";
 import {
   isFloorEndCountdownDone,
   maybeStartFloorEndCountdown,
@@ -2205,6 +2206,7 @@ export function createGame(args: CreateGameArgs) {
     dropsSystem(world, dt);
     triggerSystem(world, dt, input);
     relicTriggerSystem(world);
+    relicRetriggerSystem(world);
     updateZoneTrialObjective(world);
     syncZoneTrialNavState(world);
     markBossClearCompletionFromSignals(world);

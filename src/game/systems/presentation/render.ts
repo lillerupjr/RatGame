@@ -239,6 +239,49 @@ function ensureLightingMaskCanvas(
   return { canvas, ctx: c2d };
 }
 
+function drawAilmentPips(
+  ctx: CanvasRenderingContext2D,
+  w: World,
+  e: number,
+  sx: number,
+  sy: number,
+): void {
+  const st = w.eAilments?.[e];
+  if (!st) return;
+
+  const poisonStacks = st.poison?.length ?? 0;
+  const hasPoison = poisonStacks > 0;
+  const hasIgnite = !!st.ignite;
+  if (!hasPoison && !hasIgnite) return;
+
+  const baseX = Math.round(sx);
+  const baseY = Math.round(sy - 24);
+  const pipSize = 16;
+  const spacing = 8;
+  const poisonPips = hasPoison ? Math.min(3, 1 + Math.floor((poisonStacks - 1) / 5)) : 0;
+
+  ctx.save();
+  ctx.globalAlpha = 0.9;
+
+  if (poisonPips > 0) {
+    const totalWidth = (poisonPips - 1) * spacing + pipSize;
+    const startX = baseX - Math.floor(totalWidth / 2);
+    ctx.fillStyle = "#45d26a";
+    for (let i = 0; i < poisonPips; i++) {
+      const x = startX + i * spacing;
+      ctx.fillRect(x, baseY, pipSize, pipSize);
+    }
+  }
+
+  if (hasIgnite) {
+    ctx.fillStyle = "#ff9b2f";
+    const igniteY = baseY - 9;
+    ctx.fillRect(baseX - Math.floor(pipSize / 2), igniteY, pipSize, pipSize);
+  }
+
+  ctx.restore();
+}
+
 function ensureScratchMaskCanvas(
   canvas: HTMLCanvasElement | null,
   c2d: CanvasRenderingContext2D | null,
@@ -1833,6 +1876,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           ctx.fill();
           ctx.globalAlpha = 1;
         }
+
+        drawAilmentPips(ctx, w, i, feet.screenX, feet.screenY);
       };
 
       addToSlice(feet.slice, renderKey, drawClosure);

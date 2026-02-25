@@ -15,6 +15,9 @@ import { assertValidCrit, assertValidDamageBundle } from "../../combat_mods/debu
 import { applyAilmentsFromHit, ensureEnemyAilmentsAt } from "../../combat_mods/ailments/applyAilmentsFromHit";
 import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
 import { getUserSettings } from "../../../userSettings";
+import { resolveCritRoll01 } from "../../combat_mods/runtime/critDamagePacket";
+import { normalizeRelicIdList } from "../../content/relics";
+import { getRelicMods } from "../progression/relics";
 import {
   getEnemyWorld,
   getPlayerWorld,
@@ -69,7 +72,16 @@ function spawnFloatText(
  */
 /** Handle projectile/enemy and player/enemy collision resolution. */
 export function collisionsSystem(w: World, dt: number) {
-  const godMode = !!getUserSettings().debug.godMode;
+  const debugSettings = getUserSettings().debug;
+  const godMode = !!debugSettings.godMode;
+  const debugRelicLogs = import.meta.env.DEV && !!debugSettings.triggers;
+  const normalizedRelics = normalizeRelicIdList(w.relics);
+  if (normalizedRelics.length !== w.relics.length || normalizedRelics.some((id, i) => id !== w.relics[i])) {
+    w.relics = normalizedRelics;
+  }
+  const hasDamageToPoison = w.relics.includes("PASS_DAMAGE_TO_POISON_ALL");
+  const poisonConversionFactor = 0.2;
+  const critRolls = getRelicMods(w).critRolls ?? 1;
   const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
   let px = pWorld.wx;
   let py = pWorld.wy;
@@ -217,6 +229,14 @@ export function collisionsSystem(w: World, dt: number) {
       );
       assertValidCrit(critChance, critMulti);
 
+      const critRoll = resolveCritRoll01(
+        critChance,
+        () => w.rng.range(0, 1),
+        critRolls
+      );
+      if (critRoll.secondUsed && debugRelicLogs) {
+        console.debug("[Relic] Lucky Crit second roll used");
+      }
       const resolvedDamage = resolveProjectileDamagePacket(
         {
           physical: physBefore,
@@ -225,7 +245,7 @@ export function collisionsSystem(w: World, dt: number) {
           critChance,
           critMulti,
         },
-        w.rng.range(0, 1)
+        critRoll.roll01
       );
       const finalPhysDealt = resolvedDamage.physical;
       const finalFireDealt = resolvedDamage.fire;
@@ -247,8 +267,14 @@ export function collisionsSystem(w: World, dt: number) {
           bleed: w.rng.range(0, 1),
           ignite: w.rng.range(0, 1),
           poison: w.rng.range(0, 1),
+        },
+        {
+          poisonFromDamage: hasDamageToPoison ? dmg * poisonConversionFactor : 0,
         }
       );
+      if (hasDamageToPoison && dmg > 0 && debugRelicLogs) {
+        console.debug("[Relic] Applied poison from damage conversion");
+      }
       
       w.eHp[e] -= dmg;
       if (!(w as any).metrics) (w as any).metrics = {};

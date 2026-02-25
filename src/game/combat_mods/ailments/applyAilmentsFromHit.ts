@@ -40,7 +40,8 @@ export function applyAilmentsFromHit(
   state: EnemyAilmentsState,
   dealt: ApplyAilmentsDamage,
   chances: ApplyAilmentsChances,
-  rolls: ApplyAilmentsRolls
+  rolls: ApplyAilmentsRolls,
+  extra?: { poisonFromDamage?: number }
 ): void {
   const chanceBleed = clamp01(chances.bleed);
   const chanceIgnite = clamp01(chances.ignite);
@@ -56,5 +57,10 @@ export function applyAilmentsFromHit(
 
   if (dealt.fire > 0 && rolls.ignite < chanceIgnite) {
     applyIgniteStrongestOnly(state, dealt.fire);
+  }
+
+  const extraPoison = Math.max(0, extra?.poisonFromDamage ?? 0);
+  if (extraPoison > 0) {
+    addPoison(state, extraPoison);
   }
 }

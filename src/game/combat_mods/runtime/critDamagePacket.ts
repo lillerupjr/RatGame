@@ -18,6 +18,20 @@ function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
 }
 
+export function resolveCritRoll01(
+  critChanceInput: number,
+  roll01: () => number,
+  critRolls: 1 | 2 = 1
+): { roll01: number; secondUsed: boolean } {
+  const critChance = clamp01(critChanceInput);
+  const first = roll01();
+  if (critRolls !== 2 || first < critChance) {
+    return { roll01: first, secondUsed: false };
+  }
+  const second = roll01();
+  return { roll01: Math.min(first, second), secondUsed: true };
+}
+
 /**
  * Resolve crit and total damage for a typed projectile packet.
  */

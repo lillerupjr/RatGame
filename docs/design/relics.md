@@ -64,6 +64,27 @@ Examples of playstyle-defining mechanics:
 
 ---
 
+## 1.3 Naming Contract (Internal ID + Display Name)
+
+All relics must follow these naming rules:
+
+* Internal IDs:
+  * Uppercase snake case.
+  * Category prefixes only (`PASS_`, `ACT_`, `MOM_`, `SPEC_`, `ARMOR_`).
+  * Include numeric qualifiers when the effect has a fixed value (`_20`, `_2P`, `_2`, etc.).
+* Display names:
+  * Must be descriptive effect text.
+  * Must not use flavor-only names.
+  * Must describe what the relic does at runtime.
+
+Examples:
+
+* `ACT_ALL_HITS_EXPLODE_20` -> `All hits explode for 20% damage`
+* `ACT_TRIGGERS_DOUBLE` -> `All triggers happen twice`
+* `PASS_LIFE_ON_HIT_2` -> `Heal 2 life on hit`
+
+---
+
 # 2. Power Budget Rule
 
 Baseline relic power budget:
@@ -165,7 +186,7 @@ Validates:
 
 ---
 
-### RELIC_ACT_ALL_HITS_EXPLODE
+### ACT_ALL_HITS_EXPLODE_20
 
 ```
 Every hit causes explosion dealing 20% damage
@@ -177,7 +198,7 @@ Validates:
 
 ---
 
-### RELIC_ACT_LIFE_TO_DAMAGE
+### ACT_LIFE_TO_DAMAGE_2P
 
 ```
 Gain damage equal to 2% of max life
@@ -189,7 +210,7 @@ Validates:
 
 ---
 
-### RELIC_ACT_TRIGGERS_HAPPEN_TWICE
+### ACT_TRIGGERS_DOUBLE
 
 ```
 All triggers execute twice
@@ -229,7 +250,7 @@ Gain 1–3% of max life as damage
 
 ---
 
-### RELIC_PASS_LUCKY_CRIT
+### PASS_CRIT_ROLLS_TWICE
 
 ```
 Crit rolls twice
@@ -237,7 +258,7 @@ Crit rolls twice
 
 ---
 
-### RELIC_PASS_DAMAGE_TO_POISON
+### PASS_DAMAGE_TO_POISON_ALL
 
 ```
 All damage contributes to poison
@@ -245,7 +266,7 @@ All damage contributes to poison
 
 ---
 
-### RELIC_PASS_LIFE_ON_HIT
+### PASS_LIFE_ON_HIT_2
 
 ```
 Heal 2 life on hit
@@ -514,6 +535,30 @@ Relics are grouped by version and system purpose.
 
 ---
 
+# Implementation Progress (as of February 25, 2026)
+
+Completed and shipped in code:
+
+* ID migration from legacy `RELIC_*` to internal category IDs (`PASS_*`, `ACT_*`) with runtime backward-compat normalization.
+* Debug Relics Editor in Pause menu (add/remove relics live, deduped).
+* Passive relics:
+  * `PASS_MOVE_SPEED_20`
+  * `PASS_DAMAGE_PERCENT_20`
+  * `PASS_LIFE_TO_DAMAGE_2P` (currently tuned to 20% max-life conversion in code).
+* Active relics:
+  * `ACT_MISSILE_ON_HIT_20`
+  * `ACT_BAZOOKA_ON_HIT_20`
+  * `ACT_EXPLODE_ON_KILL`
+* Relic trigger loop safety:
+  * Trigger events with source `OTHER` are ignored for proc relic triggering.
+* Projectile modernization:
+  * `PRJ_KIND.BAZOOKA` replaced by `PRJ_KIND.MISSILE` (same numeric slot).
+  * Targeted missile arrival is overshoot-safe and explodes reliably.
+* Bazooka weapon content removed:
+  * Removed `BAZOOKA` and `BAZOOKA_EVOLVED` weapon defs and related upgrade/starter references.
+
+---
+
 # V1 — Proof of Concept Relics (Core Pipeline Validation)
 
 These relics validate the fundamental relic system.
@@ -522,15 +567,15 @@ These relics validate the fundamental relic system.
 | ------------------------------- | ---------------- | ---------- | ------------------------------------- | ------------------------------ |
 | RELIC_ACT_MISSILE_ON_HIT        | Missile Battery  | Proc       | 20% OnHit → homing missile (100% dmg) | Validate trigger spawning      |
 | RELIC_ACT_EXPLODE_ON_KILL       | Volatile Corpses | Proc       | OnKill → explosion (50% max HP)       | Validate kill triggers         |
-| RELIC_ACT_ALL_HITS_EXPLODE      | Impact Detonator | Behavior   | All hits explode (20% dmg)            | Validate behavior modification |
-| RELIC_ACT_LIFE_TO_DAMAGE        | Blood Converter  | Conversion | Gain damage = 2% max life             | Validate stat conversion       |
-| RELIC_ACT_TRIGGERS_HAPPEN_TWICE | Echo Engine      | Amplifier  | All triggers execute twice            | Validate trigger amplification |
+| ACT_ALL_HITS_EXPLODE_20         | Impact Detonator | Behavior   | All hits explode (20% dmg)            | Validate behavior modification |
+| ACT_LIFE_TO_DAMAGE_2P           | Blood Converter  | Conversion | Gain damage = 2% max life             | Validate stat conversion       |
+| ACT_TRIGGERS_DOUBLE             | Echo Engine      | Amplifier  | All triggers execute twice            | Validate trigger amplification |
 | RELIC_PASS_DAMAGE_PERCENT       | Sharpened Edge   | Passive    | +20% damage                           | Validate stat modifiers        |
 | RELIC_PASS_MOVE_SPEED           | Light Frame      | Passive    | +20% movement speed                   | Validate movement scaling      |
 | RELIC_PASS_LIFE_TO_DAMAGE       | Giant’s Blood    | Conversion | Gain damage from max life             | Validate derived stats         |
-| RELIC_PASS_LUCKY_CRIT           | Lucky Charm      | Amplifier  | Crit rolls twice                      | Validate crit pipeline         |
-| RELIC_PASS_DAMAGE_TO_POISON     | Toxic Catalyst   | Conversion | All damage contributes to poison      | Validate status conversion     |
-| RELIC_PASS_LIFE_ON_HIT          | Vampiric Strike  | Sustain    | Heal 2 life on hit                    | Validate sustain pipeline      |
+| PASS_CRIT_ROLLS_TWICE           | Lucky Charm      | Amplifier  | Crit rolls twice                      | Validate crit pipeline         |
+| PASS_DAMAGE_TO_POISON_ALL       | Toxic Catalyst   | Conversion | All damage contributes to poison      | Validate status conversion     |
+| PASS_LIFE_ON_HIT_2              | Vampiric Strike  | Sustain    | Heal 2 life on hit                    | Validate sustain pipeline      |
 
 ---
 
@@ -671,4 +716,3 @@ Recommended implementation sequence:
 ---
 
 END OF RELIC ROADMAP
-

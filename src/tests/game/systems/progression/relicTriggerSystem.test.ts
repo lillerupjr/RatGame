@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import { createWorld } from "../../../../engine/world/world";
 import { stageDocks } from "../../../../game/content/stages";
 import { relicTriggerSystem } from "../../../../game/systems/progression/relicTriggerSystem";
+import { relicRetriggerSystem } from "../../../../game/systems/progression/relicRetriggerSystem";
 import { PRJ_KIND } from "../../../../game/factories/projectileFactory";
 
 describe("relicTriggerSystem", () => {
@@ -74,5 +75,72 @@ describe("relicTriggerSystem", () => {
 
     expect(world.pAlive.length).toBe(1);
     expect(world.prExplodeDmg[0]).toBeCloseTo(50, 6);
+  });
+
+  test("ACT_TRIGGERS_DOUBLE schedules delayed retrigger execution", () => {
+    const world = createWorld({ seed: 4, stage: stageDocks });
+    world.relics.push("ACT_BAZOOKA_ON_HIT_20", "ACT_TRIGGERS_DOUBLE");
+    world.events.push({
+      type: "ENEMY_HIT",
+      enemyIndex: 0,
+      damage: 100,
+      x: 200,
+      y: 150,
+      isCrit: false,
+      source: "PISTOL",
+    } as any);
+
+    relicTriggerSystem(world);
+
+    expect(world.pAlive.length).toBe(1);
+    expect(world.relicRetriggerQueue.length).toBe(1);
+
+    world.time += 0.49;
+    relicRetriggerSystem(world);
+    expect(world.pAlive.length).toBe(1);
+    expect(world.relicRetriggerQueue.length).toBe(1);
+
+    world.time += 0.01;
+    relicRetriggerSystem(world);
+    expect(world.pAlive.length).toBe(2);
+    expect(world.relicRetriggerQueue.length).toBe(0);
+  });
+
+  test("PASS_LIFE_ON_HIT_2 heals and clamps to max life", () => {
+    const world = createWorld({ seed: 5, stage: stageDocks });
+    world.relics.push("PASS_LIFE_ON_HIT_2");
+    world.playerHpMax = 100;
+    world.playerHp = 99;
+    world.events.push({
+      type: "ENEMY_HIT",
+      enemyIndex: 0,
+      damage: 10,
+      x: 200,
+      y: 150,
+      isCrit: false,
+      source: "PISTOL",
+    });
+
+    relicTriggerSystem(world);
+
+    expect(world.playerHp).toBe(100);
+  });
+
+  test("ACT_ALL_HITS_EXPLODE_20 creates explosion on hit", () => {
+    const world = createWorld({ seed: 6, stage: stageDocks });
+    world.relics.push("ACT_ALL_HITS_EXPLODE_20");
+    world.events.push({
+      type: "ENEMY_HIT",
+      enemyIndex: 0,
+      damage: 100,
+      x: 210,
+      y: 140,
+      isCrit: false,
+      source: "PISTOL",
+    });
+
+    relicTriggerSystem(world);
+
+    expect(world.zAlive.length).toBe(1);
   });
 });

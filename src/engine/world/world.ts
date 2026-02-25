@@ -2,7 +2,7 @@
 import { RNG } from "../../game/util/rng";
 import { createSpatialHash, type SpatialHash } from "../../game/util/spatialHash";
 import type { StageDef } from "../../game/content/stages";
-import type { GameEvent } from "../../game/events";
+import type { GameEvent, PendingRelicRetrigger } from "../../game/events";
 import { KENNEY_TILE_WORLD } from "../render/kenneyTiles";
 import { getSpawnWorld } from "../../game/map/compile/kenneyMap";
 import { recomputeDerivedStats } from "../../game/stats/derivedStats";
@@ -289,6 +289,7 @@ export type World = {
   vendor: VendorState | null;
   pendingAdvanceToNextFloor: boolean;
   relics: string[];
+  relicRetriggerQueue: PendingRelicRetrigger[];
   relicEffects: { hpBonus: number };
   npcs: NpcActor[];
   neutralMobs: NeutralAnimatedMob[];
@@ -682,6 +683,7 @@ export function createWorld(args: CreateWorldArgs): World {
     vendor: null,
     pendingAdvanceToNextFloor: false,
     relics: [],
+    relicRetriggerQueue: [],
     relicEffects: {
       hpBonus: 0,
     },

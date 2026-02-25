@@ -11,7 +11,7 @@ describe("PASS_LIFE_TO_DAMAGE_2P", () => {
 
     applyRelic(world, "PASS_LIFE_TO_DAMAGE_2P");
 
-    expect(world.dmgMult).toBeCloseTo(1.02, 6);
+    expect(world.dmgMult).toBeCloseTo(1.2, 6);
   });
 
   test("higher scaling at 500 max life", () => {
@@ -21,7 +21,7 @@ describe("PASS_LIFE_TO_DAMAGE_2P", () => {
 
     applyRelic(world, "PASS_LIFE_TO_DAMAGE_2P");
 
-    expect(world.dmgMult).toBeCloseTo(1.1, 6);
+    expect(world.dmgMult).toBeCloseTo(2.0, 6);
   });
 
   test("relic is deduped and does not stack", () => {

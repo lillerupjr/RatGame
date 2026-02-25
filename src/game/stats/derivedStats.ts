@@ -35,7 +35,7 @@ export function recomputeDerivedStats(w: World) {
     w.pSpeed += relicMods.moveSpeedBonus ?? 0;
     if (w.relics.includes("PASS_DAMAGE_PERCENT_20")) w.dmgMult *= 1.2;
     if (w.relics.includes("PASS_LIFE_TO_DAMAGE_2P")) {
-        const bonus = w.playerHpMax * 0.02;
+        const bonus = w.playerHpMax * 0.2;
         w.dmgMult *= 1 + bonus / BASE_DAMAGE_REFERENCE;
     }
 }

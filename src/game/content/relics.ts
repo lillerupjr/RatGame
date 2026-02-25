@@ -25,15 +25,8 @@ export const RELICS: RelicDef[] = [
   {
     id: "PASS_LIFE_TO_DAMAGE_2P",
     isEnabled: true,
-    displayName: "Gain damage equal to 2% max life",
+    displayName: "Gain damage equal to 20% max life",
     kind: "PASSIVE",
-  },
-  {
-    id: "ACT_MISSILE_ON_HIT_20",
-    isEnabled: true,
-    displayName: "On hit: 20% chance to fire missile",
-    kind: "ACTIVE",
-    desc: ["On hit: 20% chance to fire a homing missile"],
   },
   {
     id: "ACT_BAZOOKA_ON_HIT_20",
@@ -49,6 +42,36 @@ export const RELICS: RelicDef[] = [
     kind: "ACTIVE",
     desc: ["On kill: enemies explode"],
   },
+  {
+    id: "ACT_ALL_HITS_EXPLODE_20",
+    isEnabled: true,
+    displayName: "All hits explode for 20% damage",
+    kind: "ACTIVE",
+  },
+  {
+    id: "ACT_TRIGGERS_DOUBLE",
+    isEnabled: true,
+    displayName: "All triggers happen twice",
+    kind: "ACTIVE",
+  },
+  {
+    id: "PASS_CRIT_ROLLS_TWICE",
+    isEnabled: true,
+    displayName: "Crit rolls twice",
+    kind: "PASSIVE",
+  },
+  {
+    id: "PASS_DAMAGE_TO_POISON_ALL",
+    isEnabled: true,
+    displayName: "All damage contributes to poison",
+    kind: "PASSIVE",
+  },
+  {
+    id: "PASS_LIFE_ON_HIT_2",
+    isEnabled: true,
+    displayName: "Heal 2 life on hit",
+    kind: "PASSIVE",
+  },
 ];
 
 function mapLegacyRelicSuffixToCanonical(suffix: string): string {
@@ -57,14 +80,25 @@ function mapLegacyRelicSuffixToCanonical(suffix: string): string {
       return "PASS_MOVE_SPEED_20";
     case "PASS_DAMAGE_PERCENT":
       return "PASS_DAMAGE_PERCENT_20";
-    case "ACT_MISSILE_ON_HIT":
-      return "ACT_MISSILE_ON_HIT_20";
     case "ACT_BAZOOKA_ON_HIT_20":
       return "ACT_BAZOOKA_ON_HIT_20";
     case "ACT_EXPLODE_ON_KILL":
       return "ACT_EXPLODE_ON_KILL";
+    case "ACT_ALL_HITS_EXPLODE":
+    case "ACT_ALL_HITS_EXPLODE_20":
+      return "ACT_ALL_HITS_EXPLODE_20";
     case "ACT_TRIGGERS_HAPPEN_TWICE":
+    case "ACT_TRIGGERS_DOUBLE":
       return "ACT_TRIGGERS_DOUBLE";
+    case "PASS_LUCKY_CRIT":
+    case "PASS_CRIT_ROLLS_TWICE":
+      return "PASS_CRIT_ROLLS_TWICE";
+    case "PASS_DAMAGE_TO_POISON":
+    case "PASS_DAMAGE_TO_POISON_ALL":
+      return "PASS_DAMAGE_TO_POISON_ALL";
+    case "PASS_LIFE_ON_HIT":
+    case "PASS_LIFE_ON_HIT_2":
+      return "PASS_LIFE_ON_HIT_2";
     case "V3_ARMOR_MAX":
       return "PASS_ARMOR_MAX_50";
     default:

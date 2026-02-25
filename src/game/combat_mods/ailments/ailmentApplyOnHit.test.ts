@@ -95,4 +95,17 @@ describe("applyAilmentsFromHit", () => {
     );
     expect((st.ignite?.dps ?? 0)).toBeGreaterThan(dps1);
   });
+
+  test("damage-to-poison conversion adds poison without chaos damage", () => {
+    const st = createEnemyAilmentsState();
+    applyAilmentsFromHit(
+      st,
+      { physical: 10, fire: 0, chaos: 0 },
+      { bleed: 0, ignite: 0, poison: 0 },
+      { bleed: 1, ignite: 1, poison: 1 },
+      { poisonFromDamage: 6 }
+    );
+    expect(st.poison.length).toBe(1);
+    expect(st.poison[0]?.dps ?? 0).toBeGreaterThan(0);
+  });
 });

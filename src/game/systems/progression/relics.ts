@@ -33,9 +33,10 @@ export type RelicMods = {
 export function getRelicMods(world: World): RelicMods {
   normalizeWorldRelics(world);
   const hasMoveRelic = world.relics.includes("PASS_MOVE_SPEED_20");
+  const hasLuckyCrit = world.relics.includes("PASS_CRIT_ROLLS_TWICE");
   return {
     moveSpeedBonus: hasMoveRelic ? world.baseMoveSpeed * 0.2 : 0,
     dmgMult: 1,
-    critRolls: 1,
+    critRolls: hasLuckyCrit ? 2 : 1,
   };
 }
