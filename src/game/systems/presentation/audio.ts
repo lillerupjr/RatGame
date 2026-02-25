@@ -118,7 +118,7 @@ export function audioSystem(w: World, dt: number) {
                 else if (kind === PRJ_KIND.PISTOL) sfx = "FIRE_PISTOL";
                 else if (kind === PRJ_KIND.SYRINGE) sfx = "FIRE_SYRINGE";
                 else if (kind === PRJ_KIND.BOUNCER) sfx = "FIRE_BOUNCER";
-                else if (kind === PRJ_KIND.BAZOOKA) sfx = "FIRE_BAZOOKA";
+                else if (kind === PRJ_KIND.MISSILE) sfx = "FIRE_BAZOOKA";
 
                 const base = ev.vol ?? 0.55;
                 void playSfx(sfx, { vol: volFor(sfx, base), rate: ev.rate ?? 1 });

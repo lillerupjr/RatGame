@@ -32,7 +32,7 @@ export const PLAYABLE_CHARACTERS: CharacterDef[] = [
         id: "JOEY",
         displayName: "Joey",
         idleSpriteKey: "joey",
-        startingWeaponId: "BAZOOKA",
+        startingWeaponId: "BOUNCER",
     },
     {
         id: "TOMMY",

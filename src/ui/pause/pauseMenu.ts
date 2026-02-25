@@ -11,6 +11,8 @@ import {
 import { getUserSettings, isPauseDebugCardsEnabled, updateUserSettings } from "../../userSettings";
 import { getAllCardIds } from "../../game/combat_mods/content/cards/cardPool";
 import { getGold } from "../../game/economy/gold";
+import { getAllRelicIds, getRelicById, normalizeRelicIdList } from "../../game/content/relics";
+import { recomputeDerivedStats } from "../../game/stats/derivedStats";
 
 export type PauseMenuActions = {
   onResume(): void;
@@ -236,6 +238,11 @@ export function mountPauseMenu(args: {
   debugCardsOpenBtn.className = "pauseDebugOpenBtn";
   debugCardsOpenBtn.textContent = "Open Debug Cards Editor";
   setDataAttr(debugCardsOpenBtn, "debug-cards-open");
+  const debugRelicsOpenBtn = document.createElement("button");
+  debugRelicsOpenBtn.type = "button";
+  debugRelicsOpenBtn.className = "pauseDebugOpenBtn";
+  debugRelicsOpenBtn.textContent = "Open Debug Relics Editor";
+  setDataAttr(debugRelicsOpenBtn, "debug-relics-open");
 
   buildSection.appendChild(buildTitle);
   buildSection.appendChild(characterLine);
@@ -246,8 +253,10 @@ export function mountPauseMenu(args: {
   buildScroll.appendChild(weaponStatsTable);
   buildScroll.appendChild(relicsTitle);
   buildScroll.appendChild(relicList);
-  buildScroll.appendChild(debugCardsSection);
+
   debugCardsSection.appendChild(debugCardsOpenBtn);
+  debugCardsSection.appendChild(debugRelicsOpenBtn);
+  audioSection.appendChild(debugCardsSection);
 
   const statsSection = document.createElement("section");
   statsSection.className = "pauseSection pauseStats";
@@ -312,10 +321,21 @@ export function mountPauseMenu(args: {
 
   let latestWorld: World | null = null;
   let debugLayerOpen = false;
+  let debugMode: "CARDS" | "RELICS" = "CARDS";
   const debugCardIds = getAllCardIds();
+  const debugRelicIds = getAllRelicIds();
+  let draftRelics = new Set<string>();
   let visible = false;
   let needsFullRender = true;
   let lastRenderedWorld: World | null = null;
+
+  const resetRelicDraft = () => {
+    const relics = normalizeRelicIdList((latestWorld as any)?.relics);
+    if (latestWorld && Array.isArray((latestWorld as any).relics)) {
+      (latestWorld as any).relics = relics;
+    }
+    draftRelics = new Set(relics);
+  };
 
   const renderDebugLayer = () => {
     const debugEnabled = isPauseDebugCardsEnabled();
@@ -323,52 +343,93 @@ export function mountPauseMenu(args: {
     if (debugLayer.hidden) return;
 
     clearChildren(debugLayerBody);
-    for (let i = 0; i < debugCardIds.length; i++) {
-      const id = debugCardIds[i];
+    debugLayerTitle.textContent = debugMode === "CARDS" ? "Debug Cards Editor" : "Debug Relics Editor";
+
+    if (debugMode === "CARDS") {
+      for (let i = 0; i < debugCardIds.length; i++) {
+        const id = debugCardIds[i];
+        const row = document.createElement("div");
+        row.className = "pauseDebugCardRow";
+
+        const label = document.createElement("span");
+        label.className = "pauseDebugCardId";
+        label.textContent = id;
+
+        const countSpan = document.createElement("span");
+        countSpan.className = "pauseCardCount";
+        countSpan.textContent = `x${countInstances((latestWorld as any)?.cards, id)}`;
+        countSpan.setAttribute("data-debug-card-count", id);
+
+        const addBtn = document.createElement("button");
+        addBtn.type = "button";
+        addBtn.className = "pauseDebugCardBtn";
+        addBtn.textContent = "+";
+        addBtn.setAttribute("data-debug-card-add", id);
+        addBtn.addEventListener("click", () => {
+          const w = latestWorld as any;
+          if (!w || typeof w !== "object") return;
+          if (!Array.isArray(w.cards)) w.cards = [];
+          w.cards.push(id);
+          countSpan.textContent = `x${countInstances(w.cards, id)}`;
+          renderBuildPanel(latestWorld);
+        });
+
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "pauseDebugCardBtn";
+        removeBtn.textContent = "-";
+        removeBtn.setAttribute("data-debug-card-remove", id);
+        removeBtn.addEventListener("click", () => {
+          const w = latestWorld as any;
+          if (!w || typeof w !== "object" || !Array.isArray(w.cards)) return;
+          const idx = w.cards.indexOf(id);
+          if (idx >= 0) w.cards.splice(idx, 1);
+          countSpan.textContent = `x${countInstances(w.cards, id)}`;
+          renderBuildPanel(latestWorld);
+        });
+
+        row.appendChild(label);
+        row.appendChild(countSpan);
+        row.appendChild(addBtn);
+        row.appendChild(removeBtn);
+        debugLayerBody.appendChild(row);
+      }
+      return;
+    }
+
+    for (let i = 0; i < debugRelicIds.length; i++) {
+      const id = debugRelicIds[i];
+      const relic = getRelicById(id);
+      if (!relic || !relic.isEnabled) continue;
+
       const row = document.createElement("div");
       row.className = "pauseDebugCardRow";
 
       const label = document.createElement("span");
       label.className = "pauseDebugCardId";
-      label.textContent = id;
+      label.textContent = relic.displayName;
 
-      const countSpan = document.createElement("span");
-      countSpan.className = "pauseCardCount";
-      countSpan.textContent = `x${countInstances((latestWorld as any)?.cards, id)}`;
-      countSpan.setAttribute("data-debug-card-count", id);
-
-      const addBtn = document.createElement("button");
-      addBtn.type = "button";
-      addBtn.className = "pauseDebugCardBtn";
-      addBtn.textContent = "+";
-      addBtn.setAttribute("data-debug-card-add", id);
-      addBtn.addEventListener("click", () => {
+      const toggleBtn = document.createElement("button");
+      toggleBtn.type = "button";
+      toggleBtn.className = "pauseDebugCardBtn";
+      const isOwned = draftRelics.has(id);
+      toggleBtn.textContent = isOwned ? "Remove" : "Add";
+      toggleBtn.setAttribute(isOwned ? "data-debug-relic-remove" : "data-debug-relic-add", id);
+      toggleBtn.addEventListener("click", () => {
+        if (draftRelics.has(id)) draftRelics.delete(id);
+        else draftRelics.add(id);
         const w = latestWorld as any;
-        if (!w || typeof w !== "object") return;
-        if (!Array.isArray(w.cards)) w.cards = [];
-        w.cards.push(id);
-        countSpan.textContent = `x${countInstances(w.cards, id)}`;
-        renderBuildPanel(latestWorld);
-      });
-
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.className = "pauseDebugCardBtn";
-      removeBtn.textContent = "-";
-      removeBtn.setAttribute("data-debug-card-remove", id);
-      removeBtn.addEventListener("click", () => {
-        const w = latestWorld as any;
-        if (!w || typeof w !== "object" || !Array.isArray(w.cards)) return;
-        const idx = w.cards.indexOf(id);
-        if (idx >= 0) w.cards.splice(idx, 1);
-        countSpan.textContent = `x${countInstances(w.cards, id)}`;
-        renderBuildPanel(latestWorld);
+        if (w && typeof w === "object") {
+          w.relics = Array.from(draftRelics);
+          recomputeDerivedStats(w);
+          renderBuildPanel(latestWorld);
+          renderStats(latestWorld);
+        }
+        renderDebugLayer();
       });
 
       row.appendChild(label);
-      row.appendChild(countSpan);
-      row.appendChild(addBtn);
-      row.appendChild(removeBtn);
+      row.appendChild(toggleBtn);
       debugLayerBody.appendChild(row);
     }
   };
@@ -564,8 +625,12 @@ export function mountPauseMenu(args: {
       weaponStatsTable.appendChild(tr);
     }
 
-    const relics = Array.isArray((world as any)?.relics) ? ((world as any).relics as string[]) : [];
-    relicList.textContent = relics.length === 0 ? "No relics" : relics.join(", ");
+    const relicIds = normalizeRelicIdList((world as any)?.relics);
+    if (world && Array.isArray((world as any).relics)) {
+      (world as any).relics = relicIds;
+    }
+    const relicNames = relicIds.map((id) => getRelicById(id)?.displayName ?? id);
+    relicList.textContent = relicNames.length === 0 ? "No relics" : relicNames.join(", ");
   };
 
   const renderCardsAndRelicsAndWeapon = (world: World | null) => {
@@ -573,6 +638,7 @@ export function mountPauseMenu(args: {
     const debugEnabled = isPauseDebugCardsEnabled();
     debugCardsSection.hidden = !debugEnabled;
     debugCardsOpenBtn.hidden = !debugEnabled;
+    debugRelicsOpenBtn.hidden = !debugEnabled;
     if (!debugEnabled) debugLayerOpen = false;
     renderDebugLayer();
   };
@@ -632,6 +698,13 @@ export function mountPauseMenu(args: {
     });
   });
   debugCardsOpenBtn.addEventListener("click", () => {
+    debugMode = "CARDS";
+    debugLayerOpen = true;
+    renderDebugLayer();
+  });
+  debugRelicsOpenBtn.addEventListener("click", () => {
+    debugMode = "RELICS";
+    resetRelicDraft();
     debugLayerOpen = true;
     renderDebugLayer();
   });

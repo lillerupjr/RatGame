@@ -29,7 +29,7 @@ export function generateVendorOffers(intent: FloorIntent): VendorOffer[] {
   const kinds: VendorOffer["kind"][] = ["RELIC", "UPGRADE", "HEAL", "REROLL"];
   for (let i = 0; i < 4; i++) {
     const kind = kinds[i];
-    const relic = RELICS.length > 0 ? RELICS[rng.int(0, RELICS.length - 1)].id : "RELIC_UNKNOWN";
+    const relic = RELICS.length > 0 ? RELICS[rng.int(0, RELICS.length - 1)].id : "UNKNOWN_RELIC";
     offers.push({
       kind,
       id: kind === "RELIC" ? relic : `${kind}_${intent.depth}_${i + 1}`,

@@ -205,15 +205,21 @@ function makeWorld(overrides: Record<string, unknown> = {}) {
   return {
     playerHp: 80,
     playerHpMax: 100,
+    baseMoveSpeed: 300,
     pSpeed: 260,
+    basePickupRadius: 0,
+    pickupRadius: 0,
     dmgMult: 1,
     fireRateMult: 1,
+    areaMult: 1,
+    durationMult: 1,
     baseCritChance: 0.05,
     critChanceBonus: 0,
     critMultiplier: 1.5,
     gold: 10,
     kills: 2,
     relics: [],
+    items: [],
     combatCardIds: [],
     ...overrides,
   } as any;
@@ -324,13 +330,13 @@ describe("pauseMenu", () => {
     menu.render(
       makeWorld({
         cards: ["CARD_DAMAGE_FLAT_1", "CARD_DAMAGE_FLAT_1"],
-        relics: ["RELIC_ALPHA"],
+        relics: ["PASS_MOVE_SPEED_20"],
       })
     );
 
     expect(root.textContent).toContain("CARD_DAMAGE_FLAT_1");
     expect(root.textContent).toContain("x2");
-    expect(root.textContent).toContain("RELIC_ALPHA");
+    expect(root.textContent).toContain("+20% movement speed");
     expect(root.querySelector(".pauseCardTile")).toBeTruthy();
   });
 
@@ -367,6 +373,7 @@ describe("pauseMenu", () => {
     expect(debugSection).toBeTruthy();
     expect(debugSection.hidden).toBe(false);
     expect(root.textContent).toContain("Open Debug Cards Editor");
+    expect(root.textContent).toContain("Open Debug Relics Editor");
   });
 
   test("debug cards apply immediately in editor layer", () => {
@@ -410,6 +417,63 @@ describe("pauseMenu", () => {
     minus.click();
     expect(root.textContent).toContain("x0");
     expect(() => minus.click()).not.toThrow();
+  });
+
+  test("debug relic editor saves add/remove to world.relics", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+    menu.setVisible(true);
+
+    debugFlags.pauseDebugCards = true;
+    const world = makeWorld({ relics: [] });
+    menu.render(world);
+
+    const openBtn = root.querySelector("[data-debug-relics-open]") as any;
+    expect(openBtn).toBeTruthy();
+    openBtn.click();
+
+    expect(root.textContent).toContain("Debug Relics Editor");
+
+    const addBtn = root.querySelector('[data-debug-relic-add="PASS_MOVE_SPEED_20"]') as any;
+    expect(addBtn).toBeTruthy();
+    addBtn.click();
+    expect(world.relics).toContain("PASS_MOVE_SPEED_20");
+
+    const removeBtn = root.querySelector('[data-debug-relic-remove="PASS_MOVE_SPEED_20"]') as any;
+    expect(removeBtn).toBeTruthy();
+    removeBtn.click();
+    expect(world.relics).not.toContain("PASS_MOVE_SPEED_20");
+  });
+
+  test("debug relic editor recomputes move speed immediately", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+    menu.setVisible(true);
+
+    debugFlags.pauseDebugCards = true;
+    const world = makeWorld({
+      pSpeed: 300,
+      baseMoveSpeed: 300,
+      relics: [],
+      items: [],
+    });
+    menu.render(world);
+    expect(root.textContent).toContain("Move Speed300.00");
+
+    const openBtn = root.querySelector("[data-debug-relics-open]") as any;
+    openBtn.click();
+
+    const addBtn = root.querySelector('[data-debug-relic-add="PASS_MOVE_SPEED_20"]') as any;
+    addBtn.click();
+    expect(world.pSpeed).toBeCloseTo(360, 3);
+    expect(root.textContent).toContain("Move Speed360.00");
+
+    const removeBtn = root.querySelector('[data-debug-relic-remove="PASS_MOVE_SPEED_20"]') as any;
+    removeBtn.click();
+    expect(world.pSpeed).toBeCloseTo(300, 3);
+    expect(root.textContent).toContain("Move Speed300.00");
   });
 
   test("palette section renders and updates user settings", () => {

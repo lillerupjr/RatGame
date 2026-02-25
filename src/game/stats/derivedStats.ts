@@ -1,7 +1,9 @@
 // src/game/stats/derivedStats.ts
 import type { World } from "../../engine/world/world";
 import { registry } from "../content/registry";
+import { getRelicMods } from "../systems/progression/relics";
 
+const BASE_DAMAGE_REFERENCE = 100;
 
 /**
  * Recompute all derived stats from base stats + current items.
@@ -27,5 +29,13 @@ export function recomputeDerivedStats(w: World) {
     for (const inst of w.items) {
         const def = registry.item(inst.id);
         def.apply(w, inst.level);
+    }
+
+    const relicMods = getRelicMods(w);
+    w.pSpeed += relicMods.moveSpeedBonus ?? 0;
+    if (w.relics.includes("PASS_DAMAGE_PERCENT_20")) w.dmgMult *= 1.2;
+    if (w.relics.includes("PASS_LIFE_TO_DAMAGE_2P")) {
+        const bonus = w.playerHpMax * 0.02;
+        w.dmgMult *= 1 + bonus / BASE_DAMAGE_REFERENCE;
     }
 }

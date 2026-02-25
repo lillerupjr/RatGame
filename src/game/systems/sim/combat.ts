@@ -7,6 +7,7 @@ import { resolveWeaponStats } from "../../combat_mods/stats/combatStatsResolver"
 import { applySpreadToDirection, computeProjectileAngles } from "../../combat_mods/runtime/spread";
 import { getDevGrantedCardIds } from "../../combat_mods/debug/devCombatModsDebug";
 import { getUserSettings } from "../../../userSettings";
+import { getRelicMods } from "../progression/relics";
 
 /** Handle weapon cooldowns, targeting, and firing events. */
 export function combatSystem(w: World, dt: number) {
@@ -45,13 +46,15 @@ export function combatSystem(w: World, dt: number) {
 
   const resolved = resolveWeaponStats(JACK_PISTOL_V1, { cards });
   const debug = getUserSettings().debug;
+  const relicMods = getRelicMods(w);
   const debugDamageMult = Math.max(0, debug.dmgMult || 1);
   const debugFireRateMult = Math.max(0.001, debug.fireRateMult || 1);
+  const relicDamageMult = Math.max(0, relicMods.dmgMult ?? 1);
   const shotsPerSecond = Math.max(0.001, resolved.shotsPerSecond * debugFireRateMult);
   const cooldown = 1 / shotsPerSecond;
-  const dmgPhys = resolved.baseDamage.physical * debugDamageMult;
-  const dmgFire = resolved.baseDamage.fire * debugDamageMult;
-  const dmgChaos = resolved.baseDamage.chaos * debugDamageMult;
+  const dmgPhys = resolved.baseDamage.physical * debugDamageMult * relicDamageMult;
+  const dmgFire = resolved.baseDamage.fire * debugDamageMult * relicDamageMult;
+  const dmgChaos = resolved.baseDamage.chaos * debugDamageMult * relicDamageMult;
   const totalDamage = dmgPhys + dmgFire + dmgChaos;
   w.primaryWeaponCdLeft -= dt;
 

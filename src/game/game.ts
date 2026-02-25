@@ -12,12 +12,13 @@ import { pickupsSystem } from "./systems/progression/pickups";
 import { dropsSystem } from "./systems/progression/drops";
 import { renderSystem } from "./systems/presentation/render";
 import { zonesSystem } from "./systems/sim/zones";
-import { onKillExplodeSystem } from "./systems/sim/onKillExplode";
+import { relicExplodeOnKillSystem } from "./systems/sim/relicExplodeOnKill";
 import { bossSystem } from "./systems/progression/boss";
 import { audioSystem } from "./systems/presentation/audio";
 import { preloadSfx } from "../engine/audio/sfx";
 import { roomChallengeSystem } from "./systems/progression/roomChallenge";
 import { triggerSystem } from "./systems/progression/triggerSystem";
+import { relicTriggerSystem } from "./systems/progression/relicTriggerSystem";
 import {
   isFloorEndCountdownDone,
   maybeStartFloorEndCountdown,
@@ -2197,12 +2198,13 @@ export function createGame(args: CreateGameArgs) {
     }
     fissionSystem(world, dt);  // Nuclear fission: projectile-projectile collisions
     poisonSystem(world, dt);
-    onKillExplodeSystem(world, dt); // NEW: explode on kill (can add more kills)
+    relicExplodeOnKillSystem(world, dt);
     bossSystem(world, dt);          // NEW: boss mechanics (telegraphs/hazards/dash)
     zonesSystem(world, dt);
     pickupsSystem(world, dt);
     dropsSystem(world, dt);
     triggerSystem(world, dt, input);
+    relicTriggerSystem(world);
     updateZoneTrialObjective(world);
     syncZoneTrialNavState(world);
     markBossClearCompletionFromSignals(world);

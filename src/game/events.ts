@@ -28,6 +28,9 @@ export type GameEvent =
     type: "ENEMY_HIT";
     enemyIndex: number;
     damage: number;
+    dmgPhys?: number;
+    dmgFire?: number;
+    dmgChaos?: number;
     x: number;
     y: number;
     isCrit: boolean;

@@ -348,28 +348,6 @@ function buildAllUpgrades(): UpgradeDef[] {
             w.weapons[idx] = { id: "BOUNCER_EVOLVED_BANKSHOT", level: 1, cdLeft: 0 };
         },
     });
-    // EVOLUTION: Bazooka -> Aftershock
-    // Requires: Bazooka Lv 10 + Area owned
-    defs.push({
-        id: "EVOLVE_BAZOOKA_AFTERSHOCK",
-        title: "Aftershock",
-        desc:
-            "EVOLUTION: Bazooka gains delayed ring aftershocks on impact. (Requires Bazooka Lv 10 + Area.)",
-        isEvolution: true,
-        isAvailable: (w) => {
-            const bazooka = getWeaponInst(w, "BAZOOKA");
-            const area = getItemInst(w, "AREA");
-            return !!bazooka && bazooka.level >= EVOLVE_WPN_LEVEL && !!area;
-        },
-        apply: (w) => {
-            const idx = w.weapons.findIndex((x) => x.id === "BAZOOKA");
-            if (idx < 0) return;
-
-            w.weapons[idx] = { id: "BAZOOKA_EVOLVED", level: 1, cdLeft: 0 };
-        },
-        getRankText: () => "EVOLUTION",
-    });
-
     // -----------------------
     // Weapons: Add + Level-up
     // -----------------------

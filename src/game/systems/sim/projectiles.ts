@@ -5,6 +5,7 @@ import { solidFace, worldToTile } from "../../map/compile/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { anchorFromWorld, writeAnchor } from "../../coords/anchor";
 import { getPlayerWorld, getProjectileWorld } from "../../coords/worldViews";
+import { PRJ_KIND } from "../../factories/projectileFactory";
 
 // --- Movement substepping (prevents "one whole tile per frame") ---
 export let PROJECTILE_MAX_MOVE_FRAC_PER_STEP = 0.5;   // fraction of tile per move substep
@@ -100,6 +101,7 @@ export function projectilesSystem(w: World, dt: number) {
             // Restore previous "double integration" feel (pre-fix behavior) without reintroducing the bug.
             const PROJECTILE_SPEED_MULT = 2;
 
+            const hasMissileTarget = w.prjKind[i] === PRJ_KIND.MISSILE && !!w.prHasTarget[i];
             const vx = w.prvx[i] * moveSpeedMult * PROJECTILE_SPEED_MULT;
             const vy = w.prvy[i] * moveSpeedMult * PROJECTILE_SPEED_MULT;
 
@@ -108,14 +110,56 @@ export function projectilesSystem(w: World, dt: number) {
 
 
             const maxStepDist = Math.max(1e-6, T * Math.max(0.05, PROJECTILE_MAX_MOVE_FRAC_PER_STEP));
-            const totalDist = Math.hypot(vx * dt, vy * dt);
+            const speed = hasMissileTarget ? Math.hypot(vx, vy) : 0;
+            const totalDist = hasMissileTarget ? speed * dt : Math.hypot(vx * dt, vy * dt);
             const moveSteps = Math.min(PROJECTILE_MAX_MOVE_STEPS, Math.max(1, Math.ceil(totalDist / maxStepDist)));
 
             for (let m = 0; m < moveSteps; m++) {
                 const subDt = dt / moveSteps;
 
-                const nx = ox + vx * subDt;
-                const ny = oy + vy * subDt;
+                let nx = ox + vx * subDt;
+                let ny = oy + vy * subDt;
+
+                if (hasMissileTarget) {
+                    const tx = w.prTargetX[i];
+                    const ty = w.prTargetY[i];
+                    const dx = tx - ox;
+                    const dy = ty - oy;
+                    const dist = Math.hypot(dx, dy);
+                    const step = speed * subDt;
+                    if (dist <= step) {
+                        nx = tx;
+                        ny = ty;
+                        ox = nx;
+                        oy = ny;
+                        w.prDirX[i] = dist > 0.0001 ? dx / dist : w.prDirX[i];
+                        w.prDirY[i] = dist > 0.0001 ? dy / dist : w.prDirY[i];
+                        w.pAlive[i] = false;
+                        const blastR = Math.max(0, w.prExplodeR[i] ?? 0);
+                        const blastDmg = Math.max(0, w.prExplodeDmg[i] ?? 0);
+                        if (blastR > 0 && blastDmg > 0) {
+                            const z = spawnZone(w, {
+                                kind: ZONE_KIND.EXPLOSION,
+                                x: tx,
+                                y: ty,
+                                radius: blastR,
+                                damage: blastDmg,
+                                tickEvery: 0.2,
+                                ttl: Math.max(0.12, w.prExplodeTtl[i] ?? 0.25),
+                                followPlayer: false,
+                            });
+                            w.zTickLeft[z] = 0;
+                        }
+                        break;
+                    }
+                    const inv = dist > 0.0001 ? 1 / dist : 0;
+                    const dirX = dx * inv;
+                    const dirY = dy * inv;
+                    nx = ox + dirX * step;
+                    ny = oy + dirY * step;
+                    w.prDirX[i] = dirX;
+                    w.prDirY[i] = dirY;
+                }
 
                 const t0 = worldToTile(ox, oy, T);
                 const t1 = worldToTile(nx, ny, T);
@@ -241,9 +285,9 @@ export function projectilesSystem(w: World, dt: number) {
         }
 
         // -------------------------
-        // Explode-on-target (bazooka)
+        // Explode-on-target (non-missile targeted projectiles)
         // -------------------------
-        if (w.prHasTarget[i]) {
+        if (w.prHasTarget[i] && w.prjKind[i] !== PRJ_KIND.MISSILE) {
             const tx = w.prTargetX[i];
             const ty = w.prTargetY[i];
 
@@ -257,15 +301,16 @@ export function projectilesSystem(w: World, dt: number) {
                 oy = ty;
 
                 const blastR = Math.max(0, w.prExplodeR[i] ?? 0);
-                if (blastR > 0) {
+                const blastDmg = Math.max(0, w.prExplodeDmg[i] ?? 0);
+                if (blastR > 0 && blastDmg > 0) {
                     const z = spawnZone(w, {
                         kind: ZONE_KIND.EXPLOSION,
                         x: tx,
                         y: ty,
                         radius: blastR,
-                        damage: w.prDamage[i],
-                        tickEvery: 0.05,
-                        ttl: 0.12,
+                        damage: blastDmg,
+                        tickEvery: 0.2,
+                        ttl: Math.max(0.12, w.prExplodeTtl[i] ?? 0.25),
                         followPlayer: false,
                     });
 

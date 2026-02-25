@@ -28,9 +28,7 @@ export type WeaponId =
     | "MOLOTOV"
     | "BOUNCER"
     | "BOUNCER_EVOLVED_BANKSHOT"
-    | "BOUNCER_EVOLVED_FISSION"
-    | "BAZOOKA"
-    | "BAZOOKA_EVOLVED";
+    | "BOUNCER_EVOLVED_FISSION";
 
 
 export const MAX_WEAPON_LEVEL = 10;
@@ -263,7 +261,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 
             return {
                 cooldown: cooldownBase / w.fireRateMult,
-                projectileSpeed: scaleProjSpeed(520),
+                projectileSpeed: scaleProjSpeed(300),
                 projectileRadius: 5,
                 damage: dmg,
                 pierce: 0,
@@ -400,29 +398,6 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const poisonDurPer = 0.18;
             const poisonDur = (poisonDurBase + (lv - 1) * poisonDurPer) * (w.durationMult ?? 1);
 
-            // ---- Poison-gated explode-on-kill (handled by onKillExplodeSystem) ----
-            // Explosions ONLY occur when a poisoned enemy dies.
-            const pctBase = 0.2;
-            const pctPer = 0.02;
-            const pct = pctBase + (lv - 1) * pctPer;
-
-            // Base radius before areaMult (system multiplies by areaMult)
-            const radiusBase = 100;
-            const radiusPer = 5.0;
-            const baseRadius = radiusBase + (lv - 1) * radiusPer;
-
-            (w as any)._explodeOnKill = {
-                enabled: true,
-                pct,
-                baseRadius,
-                maxPerFrame: 80,
-
-                // Base syringe: explosions DO NOT apply poison (no free chains).
-                applyPoison: false,
-                poisonDur: poisonDur,
-                poisonDps: poisonDps,
-            };
-
             // We keep WeaponStats unchanged and stash poison fields as escape-hatch.
             return {
                 cooldown: cooldownBase / w.fireRateMult,
@@ -499,29 +474,6 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             const poisonDurBase = 5;
             const poisonDurPer = 0.18;
             const poisonDur = (poisonDurBase + (lv - 1) * poisonDurPer) * (w.durationMult ?? 1);
-
-            // ---- Poison-gated explode-on-kill (handled by onKillExplodeSystem) ----
-            // Explosions ONLY occur when a poisoned enemy dies.
-            const pctBase = 0.20;
-            const pctPer = 0.02;
-            const pct = pctBase + (lv - 1) * pctPer;
-
-            // Base radius before areaMult (system multiplies by areaMult)
-            const radiusBase = 200;
-            const radiusPer = 5.0;
-            const baseRadius = radiusBase + (lv - 1) * radiusPer;
-
-            (w as any)._explodeOnKill = {
-                enabled: true,
-                pct,
-                baseRadius,
-                maxPerFrame: 80,
-
-                // Base syringe: explosions DO NOT apply poison (no free chains).
-                applyPoison: true,
-                poisonDur: poisonDur,
-                poisonDps: poisonDps,
-            };
 
             // We keep WeaponStats unchanged and stash poison fields as escape-hatch.
             return {
@@ -785,243 +737,6 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
             }
         },
     },
-
-    BAZOOKA: {
-        id: "BAZOOKA",
-        title: "Bazooka",
-
-        getStats: (level: number, w: World) => {
-            const lv = clampLevel(level);
-
-            const cooldownBase = 1;
-
-            // Rocket travel speed (world units/sec)
-            const rocketSpeedBase = 150;
-            const rocketSpeedPer = 18;
-
-            // Explosion radius (scales with AREA)
-            const blastBase = 86;
-            const blastPer = 6.5;
-            const blastR = (blastBase + (lv - 1) * blastPer) * (w.areaMult ?? 1);
-
-            // Explosion damage (scales with DMG)
-            const dmgBase = 34;
-            const dmgPer = 3.1;
-            const dmg = (dmgBase + (lv - 1) * dmgPer) * (w.dmgMult ?? 1);
-
-            // Targeting radius around player (acquisition range)
-            const targetRadiusBase = 420;
-            const targetRadiusPer = 12;
-            const targetRadius = targetRadiusBase + (lv - 1) * targetRadiusPer;
-
-            // Rocket collision radius (visual/feel)
-            const rocketR = 7;
-
-            return {
-                cooldown: cooldownBase / (w.fireRateMult ?? 1),
-                projectileSpeed: scaleProjSpeed(rocketSpeedBase + (lv - 1) * rocketSpeedPer),
-
-                // IMPORTANT:
-                // We keep projectileRadius = blast radius for convenience (your original pattern),
-                // and use rocketR as the actual rocket collision radius.
-                projectileRadius: blastR,
-                damage: dmg,
-
-                // Bazooka uses CLUSTER targeting to hit groups of enemies
-                targeting: "CLUSTER" as TargetingStrategy,
-                targetingRange: targetRadius,
-                clusterRadius: blastR, // cluster radius matches blast radius
-
-                // escape hatch fields for fire()
-                ...({ targetRadius, rocketR } as any),
-            } as any;
-        },
-
-        fire: (w: World, s: any, aim: Aim): void => {
-            const pg = gridAtPlayer(w);
-            const pw = worldPosFromGrid(pg.gx, pg.gy);
-            const targetRadius = (s as any).targetRadius ?? 420;
-            const rocketR = (s as any).rocketR ?? 7;
-            const blastR = s.projectileRadius ?? 86;
-
-            // Use the targeting system to find the best cluster
-            const target = findTarget(w, "CLUSTER", targetRadius, blastR);
-
-            // Pick a target point
-            let tgx: number;
-            let tgy: number;
-
-            if (target.enemyIndex !== -1) {
-                // Use the cluster centroid (not just the enemy position)
-                const tg = gridPosFromWorld(target.x, target.y);
-                tgx = tg.gx;
-                tgy = tg.gy;
-            } else {
-                // fallback: fire forward
-                const delta = gridDeltaFromWorldDist(aim.x, aim.y, targetRadius);
-                tgx = pg.gx + delta.dx;
-                tgy = pg.gy + delta.dy;
-            }
-
-            // Direction toward target point
-            const dxg = tgx - pg.gx;
-            const dyg = tgy - pg.gy;
-            const gdir = gridDir(dxg, dyg);
-
-            const speed = s.projectileSpeed;
-
-            // TTL long enough to cross acquisition radius + buffer
-            const tw = worldPosFromGrid(tgx, tgy);
-            const dist = Math.hypot(tw.x - pw.x, tw.y - pw.y);
-            const ttl = Math.max(0.35, dist / Math.max(1, speed) + 0.45);
-
-            // Optional: keep impact damage smaller so explosion is the identity (prevents double-dipping)
-            const impactDmg = Math.max(1, (s.damage ?? 0) * 0.25);
-
-            // Spawn rocket (collides normally). Explosion is triggered by collisionsSystem using payload arrays.
-            const p = spawnProjectileGrid(w, {
-                kind: PRJ_KIND.BAZOOKA, // keep your bazooka visual kind if it exists in your project
-                gx: pg.gx,
-                gy: pg.gy,
-                dirGx: gdir.dx,
-                dirGy: gdir.dy,
-                speed,
-                damage: impactDmg,
-                radius: rocketR,
-                pierce: 999, // we kill it ourselves on first hit when explosion triggers
-                ttl,
-                maxDist: (w as any).viewW ? (w as any).viewW * 2 : undefined,
-            });
-
-            // Attach explode-on-hit payload
-            (w as any).prExplodeR[p] = Math.max(1, s.projectileRadius ?? 0); // blast radius
-            (w as any).prExplodeDmg[p] = Math.max(0, s.damage ?? 0);         // explosion damage
-            (w as any).prExplodeTtl[p] = 0.30;                               // VFX ring duration
-        },
-    },
-    BAZOOKA_EVOLVED: {
-        id: "BAZOOKA_EVOLVED",
-        title: "Bazooka evolved",
-        hiddenFromPools: true,
-        evolvedFrom: "BAZOOKA",
-
-        getStats: (level: number, w: World) => {
-            const lv = clampLevel(level);
-
-            const cooldownBase = 5;
-
-            // Rocket travel speed (world units/sec)
-            const rocketSpeedBase = 150;
-            const rocketSpeedPer = 18;
-
-            // Explosion radius (scales with AREA)
-            const blastBase = 100;
-            const blastPer = 6.5;
-            const blastR = (blastBase + (lv - 1) * blastPer) * (w.areaMult ?? 1);
-
-            // Explosion damage (scales with DMG)
-            const dmgBase = 34;
-            const dmgPer = 3.1;
-            const dmg = scaleEvolvedDamage((dmgBase + (lv - 1) * dmgPer) * (w.dmgMult ?? 1));
-
-            // Targeting radius around player (acquisition range)
-            const targetRadiusBase = 420;
-            const targetRadiusPer = 12;
-            const targetRadius = targetRadiusBase + (lv - 1) * targetRadiusPer;
-
-            // Rocket collision radius (visual/feel)
-            const rocketR = 7;
-
-            return {
-                cooldown: cooldownBase / (w.fireRateMult ?? 1),
-                projectileSpeed: scaleProjSpeed(rocketSpeedBase + (lv - 1) * rocketSpeedPer),
-
-                // IMPORTANT:
-                // We keep projectileRadius = blast radius for convenience (your original pattern),
-                // and use rocketR as the actual rocket collision radius.
-                projectileRadius: blastR,
-                damage: dmg,
-
-                // Bazooka evolved also uses CLUSTER targeting
-                targeting: "CLUSTER" as TargetingStrategy,
-                targetingRange: targetRadius,
-                clusterRadius: blastR,
-
-                // escape hatch fields for fire()
-                ...({ targetRadius, rocketR } as any),
-            } as any;
-        },
-
-        fire: (w: World, s: any, aim: Aim): void => {
-            const pg = gridAtPlayer(w);
-            const pw = worldPosFromGrid(pg.gx, pg.gy);
-            const targetRadius = (s as any).targetRadius ?? 420;
-            const rocketR = (s as any).rocketR ?? 7;
-            const blastR = s.projectileRadius ?? 100;
-
-            // Use the targeting system to find the best cluster
-            const target = findTarget(w, "CLUSTER", targetRadius, blastR);
-
-            // Pick a target point
-            let tgx: number;
-            let tgy: number;
-
-            if (target.enemyIndex !== -1) {
-                // Use the cluster centroid (not just the enemy position)
-                const tg = gridPosFromWorld(target.x, target.y);
-                tgx = tg.gx;
-                tgy = tg.gy;
-            } else {
-                // fallback: fire forward
-                const delta = gridDeltaFromWorldDist(aim.x, aim.y, targetRadius);
-                tgx = pg.gx + delta.dx;
-                tgy = pg.gy + delta.dy;
-            }
-
-            // Direction toward target point
-            const dxg = tgx - pg.gx;
-            const dyg = tgy - pg.gy;
-            const gdir = gridDir(dxg, dyg);
-
-            const speed = s.projectileSpeed;
-
-            // TTL long enough to cross acquisition radius + buffer
-            const tw = worldPosFromGrid(tgx, tgy);
-            const dist = Math.hypot(tw.x - pw.x, tw.y - pw.y);
-            const ttl = Math.max(0.35, dist / Math.max(1, speed) + 0.45);
-
-            // Optional: keep impact damage smaller so explosion is the identity (prevents double-dipping)
-            const impactDmg = Math.max(1, (s.damage ?? 0) * 0.25);
-
-            // Spawn rocket (collides normally). Explosion is triggered by collisionsSystem using payload arrays.
-            const p = spawnProjectileGrid(w, {
-                kind: PRJ_KIND.BAZOOKA, // keep your bazooka visual kind if it exists in your project
-                gx: pg.gx,
-                gy: pg.gy,
-                dirGx: gdir.dx,
-                dirGy: gdir.dy,
-                speed,
-                damage: impactDmg,
-                radius: rocketR,
-                pierce: 999, // we kill it ourselves on first hit when explosion triggers
-                ttl,
-                maxDist: (w as any).viewW ? (w as any).viewW * 2 : undefined,
-            });
-
-            // Attach explode-on-hit payload
-            (w as any).prExplodeR[p] = Math.max(1, s.projectileRadius ?? 0); // blast radius
-            (w as any).prExplodeDmg[p] = Math.max(0, s.damage ?? 0);         // explosion damage
-            (w as any).prExplodeTtl[p] = 0.25;                               // VFX ring duration
-
-            // NEW: evolution aftershocks (N delayed explosions in a ring)
-            (w as any).prAftershockN[p] = 3;               // N (tune)
-            (w as any).prAftershockDelay[p] = 0.85 * (w.durationMult ?? 1);        // seconds after initial explosion
-            (w as any).prAftershockRingR[p] = 200 * (w.areaMult ?? 1); // ring radius scales w/ area
-            (w as any).prAftershockWaves[p] = 3; // Wave count tune
-            (w as any).prAftershockRingStep[p] = 60 * (w.areaMult ?? 1);   // ring spacing
-        },
-    },
-
 
     SWORD: {
         id: "SWORD",

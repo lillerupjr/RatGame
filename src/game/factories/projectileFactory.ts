@@ -4,6 +4,8 @@ import { gridToWorld } from "../coords/grid";
 import { anchorFromWorld } from "../coords/anchor";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 
+const GLOBAL_PROJECTILE_SPEED_MULT = 1;
+
 export type ProjectileSource =
     | "KNIFE"
     | "PISTOL"
@@ -21,7 +23,7 @@ export const PRJ_KIND = {
     KNUCKLES: 4,
     SYRINGE: 5,
     BOUNCER: 6,
-    BAZOOKA: 7,
+    MISSILE: 7,
 } as const;
 
 
@@ -67,10 +69,10 @@ export type SpawnProjectileArgs = {
     orbBaseRadius?: number;
     orbBaseAngVel?: number;
 
-    // NEW: “no-collide” projectile (used by Bazooka rocket)
+    // Optional no-collide projectile flag.
     noCollide?: boolean;
 
-    // NEW: static target coordinate (rocket explodes when it reaches this point)
+    // Optional static target coordinate (targeted missile explodes on arrival).
     targetX?: number;
     targetY?: number;
 
@@ -113,8 +115,9 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
 
     const isOrbital = !!a.orbital;
 
-    const vx = isOrbital ? 0 : dx * a.speed;
-    const vy = isOrbital ? 0 : dy * a.speed;
+    const speed = a.speed * GLOBAL_PROJECTILE_SPEED_MULT;
+    const vx = isOrbital ? 0 : dx * speed;
+    const vy = isOrbital ? 0 : dy * speed;
 
     const i = w.pAlive.length;
 

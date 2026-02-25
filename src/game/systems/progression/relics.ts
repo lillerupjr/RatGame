@@ -1,18 +1,41 @@
 import type { World } from "../../../engine/world/world";
+import { normalizeRelicIdList, toCanonicalRelicId } from "../../content/relics";
+import { recomputeDerivedStats } from "../../stats/derivedStats";
+
+export function normalizeWorldRelics(world: World): void {
+  const normalized = normalizeRelicIdList(world.relics);
+  if (normalized.length !== world.relics.length) {
+    world.relics = normalized;
+    return;
+  }
+  for (let i = 0; i < normalized.length; i++) {
+    if (normalized[i] !== world.relics[i]) {
+      world.relics = normalized;
+      return;
+    }
+  }
+}
 
 export function applyRelic(world: World, relicId: string): void {
-  if (world.relics.includes(relicId)) return;
+  normalizeWorldRelics(world);
+  const canonical = toCanonicalRelicId(relicId);
+  if (world.relics.includes(canonical)) return;
+  world.relics = [...world.relics, canonical];
+  recomputeDerivedStats(world);
+}
 
-  world.relics = [...world.relics, relicId];
+export type RelicMods = {
+  moveSpeedBonus?: number;
+  dmgMult?: number;
+  critRolls?: 1 | 2;
+};
 
-  switch (relicId) {
-    case "RELIC_TRAINING":
-      // XP removed
-      break;
-    case "RELIC_STURDY":
-      world.relicEffects.hpBonus += 5;
-      world.playerHpMax += 5;
-      world.playerHp += 5;
-      break;
-  }
+export function getRelicMods(world: World): RelicMods {
+  normalizeWorldRelics(world);
+  const hasMoveRelic = world.relics.includes("PASS_MOVE_SPEED_20");
+  return {
+    moveSpeedBonus: hasMoveRelic ? world.baseMoveSpeed * 0.2 : 0,
+    dmgMult: 1,
+    critRolls: 1,
+  };
 }
