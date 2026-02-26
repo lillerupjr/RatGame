@@ -33,7 +33,7 @@ import { formatTimeMMSS } from "./util/time";
 import type { WeaponId } from "./content/weapons";
 import { registry } from "./content/registry";
 import { spawnEnemyGrid, ENEMY_TYPE } from "./factories/enemyFactory";
-import { gridToWorld, worldToGrid } from "./coords/grid";
+import { gridToWorld } from "./coords/grid";
 import { anchorFromWorld } from "./coords/anchor";
 import { poisonSystem } from "./systems/sim/poison";
 import { fissionSystem } from "./systems/sim/fission";
@@ -88,6 +88,7 @@ import { setObjectives, setObjectivesFromSpec } from "./systems/progression/obje
 import { RNG } from "./util/rng";
 import { applyObjective } from "./map/objectiveTransforms";
 import { objectiveIdFromArchetype } from "./map/objectivePlan";
+import { findNearestWalkableSpawnGrid } from "./systems/spawn/findWalkableSpawn";
 import { DEFAULT_MAP_POOL } from "./map/mapIds";
 import { OBJECTIVE_TRIGGER_IDS } from "./systems/progression/objectiveSpec";
 import { getPlayableCharacter, PLAYABLE_CHARACTERS, type PlayableCharacterId } from "./content/playableCharacters";
@@ -1074,7 +1075,7 @@ export function createGame(args: CreateGameArgs) {
     const radius = w.rng.range(320, 520);
     const wx = pw.wx + Math.cos(angle) * radius;
     const wy = pw.wy + Math.sin(angle) * radius;
-    const gp = worldToGrid(wx, wy, KENNEY_TILE_WORLD);
+    const gp = findNearestWalkableSpawnGrid(w, wx, wy);
     spawnEnemyGrid(w, ENEMY_TYPE.BOSS, gp.gx, gp.gy, KENNEY_TILE_WORLD);
     (w as any)._surviveBossSpawned = true;
   }
@@ -1426,7 +1427,7 @@ export function createGame(args: CreateGameArgs) {
     const pw = gridToWorld(pg.gx, pg.gy, KENNEY_TILE_WORLD);
     const sx = pw.wx + Math.cos(a) * r;
     const sy = pw.wy + Math.sin(a) * r;
-    const gp = worldToGrid(sx, sy, KENNEY_TILE_WORLD);
+    const gp = findNearestWalkableSpawnGrid(w, sx, sy);
     spawnEnemyGrid(w, ENEMY_TYPE.BOSS, gp.gx, gp.gy, KENNEY_TILE_WORLD);
   }
 

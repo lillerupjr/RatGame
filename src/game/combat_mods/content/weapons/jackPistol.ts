@@ -14,14 +14,14 @@ export const JACK_PISTOL_V1: WeaponDef = {
 
   projectile: {
     speedPxPerSec: 520,
-    rangePx: 900,
+    rangePx: 420,
     radiusPx: 6,
     spreadBaseDeg: 3.0,
     pierce: 0,
   },
 
   autoAim: {
-    maxRangePx: 900,
+    maxRangePx: 420,
     mode: "nearest",
   },
 };

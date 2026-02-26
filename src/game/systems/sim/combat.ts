@@ -15,21 +15,13 @@ export function combatSystem(w: World, dt: number) {
   let defaultAimX = w.lastAimX;
   let defaultAimY = w.lastAimY;
 
-  // Find default target (closest enemy) for weapons that don't specify targeting
-  const defaultTarget = findClosestTarget(w, 0);
-  
-  if (defaultTarget.enemyIndex !== -1) {
-    defaultAimX = defaultTarget.dirX;
-    defaultAimY = defaultTarget.dirY;
+  const len = Math.hypot(defaultAimX, defaultAimY);
+  if (len < 0.0001) {
+    defaultAimX = 1;
+    defaultAimY = 0;
   } else {
-    const len = Math.hypot(defaultAimX, defaultAimY);
-    if (len < 0.0001) {
-      defaultAimX = 1;
-      defaultAimY = 0;
-    } else {
-      defaultAimX /= len;
-      defaultAimY /= len;
-    }
+    defaultAimX /= len;
+    defaultAimY /= len;
   }
 
   // Keep melee cone aim in sync with the direction we're firing (not just movement).
@@ -51,12 +43,27 @@ export function combatSystem(w: World, dt: number) {
   const debugFireRateMult = Math.max(0.001, debug.fireRateMult || 1);
   const relicDamageMult = Math.max(0, relicMods.dmgMult ?? 1);
   const shotsPerSecond = Math.max(0.001, resolved.shotsPerSecond * debugFireRateMult);
+  const fireRangePx = Math.max(0, resolved.rangePx || 0);
   const cooldown = 1 / shotsPerSecond;
   const dmgPhys = resolved.baseDamage.physical * debugDamageMult * relicDamageMult;
   const dmgFire = resolved.baseDamage.fire * debugDamageMult * relicDamageMult;
   const dmgChaos = resolved.baseDamage.chaos * debugDamageMult * relicDamageMult;
   const totalDamage = dmgPhys + dmgFire + dmgChaos;
+
+  const target = findClosestTarget(w, fireRangePx);
+  const hasTargetInRange = target.enemyIndex !== -1;
+  if (hasTargetInRange) {
+    defaultAimX = target.dirX;
+    defaultAimY = target.dirY;
+    w.lastAimX = defaultAimX;
+    w.lastAimY = defaultAimY;
+  }
+
   w.primaryWeaponCdLeft -= dt;
+  if (!hasTargetInRange) {
+    if (w.primaryWeaponCdLeft < 0) w.primaryWeaponCdLeft = 0;
+    return;
+  }
 
   while (w.primaryWeaponCdLeft <= 0) {
     w.primaryWeaponCdLeft += cooldown;
@@ -84,6 +91,7 @@ export function combatSystem(w: World, dt: number) {
         radius: 5,
         pierce: resolved.pierce,
         ttl: 2.2,
+        maxDist: fireRangePx > 0 ? fireRangePx : undefined,
       });
     } else {
       const aimAngle = Math.atan2(defaultAimY, defaultAimX);
@@ -109,6 +117,7 @@ export function combatSystem(w: World, dt: number) {
           radius: 5,
           pierce: resolved.pierce,
           ttl: 2.2,
+          maxDist: fireRangePx > 0 ? fireRangePx : undefined,
         });
       }
     }

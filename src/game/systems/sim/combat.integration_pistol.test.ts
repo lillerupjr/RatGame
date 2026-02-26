@@ -76,4 +76,41 @@ describe("combatSystem pistol integration", () => {
     expect(hpStart - w.eHp[0]).toBeGreaterThan(0);
     expect(damageDealt).toBeCloseTo(8);
   });
+
+  test("does not fire when no enemy is within weapon range", () => {
+    const w = createWorld({ seed: 42, stage: stageDocks });
+    w.events.length = 0;
+    w.combatCardIds = [];
+    w.primaryWeaponCdLeft = 0;
+    setPlayerWorld(w, 0, 0);
+
+    // Pistol range is 420; keep target safely outside.
+    const enemyAnchor = anchorFromWorld(700, 0, KENNEY_TILE_WORLD);
+    w.eAlive.push(true);
+    w.eType.push(1);
+    w.egxi.push(enemyAnchor.gxi);
+    w.egyi.push(enemyAnchor.gyi);
+    w.egox.push(enemyAnchor.gox);
+    w.egoy.push(enemyAnchor.goy);
+    w.evx.push(0);
+    w.evy.push(0);
+    w.eFaceX.push(-1);
+    w.eFaceY.push(0);
+    w.eHp.push(100);
+    w.eHpMax.push(100);
+    w.eR.push(10);
+    w.eSpeed.push(0);
+    w.eDamage.push(0);
+    w.ezVisual.push(w.pzVisual);
+    w.ezLogical.push(w.pzLogical);
+    w.ePoisonT.push(0);
+    w.ePoisonDps.push(0);
+    w.ePoisonedOnDeath.push(false);
+    w.eSpawnTriggerId.push(undefined);
+
+    for (let i = 0; i < 120; i++) combatSystem(w, 1 / 60);
+
+    expect(w.pAlive.some(Boolean)).toBe(false);
+    expect(w.events.some((ev) => ev.type === "SFX" && (ev as any).id === "FIRE_OTHER")).toBe(false);
+  });
 });
