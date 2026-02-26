@@ -1,5 +1,6 @@
 import type { World } from "../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
+import { DEFAULT_SPAWN_TUNING } from "../balance/spawnTuningDefaults";
 import { worldToTile } from "../coords/tile";
 import { getPlayerWorld } from "../coords/worldViews";
 import { getActiveMap, surfacesAtXY, walkInfo } from "../map/compile/kenneyMap";
@@ -18,6 +19,11 @@ type ZoneTileRejectReason = "BLOCKED_TILE" | "NO_SURFACE" | "VOID_OR_STAIRS" | "
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
+}
+
+function effectiveDepth(world: any): number {
+  if (Number.isFinite(world.delveDepth) && world.delveDepth > 0) return world.delveDepth;
+  return (world.floorIndex ?? 0) + 1;
 }
 
 function zoneOverlaps(a: ZoneObjective, b: ZoneObjective): boolean {
@@ -168,11 +174,28 @@ export function startZoneTrial(world: World, config: Partial<ZoneTrialConfig> = 
 
   const zoneCount = Math.max(1, config.zoneCount ?? spec.params.zoneCount ?? DEFAULT_ZONE_TRIAL_CONFIG.zoneCount);
   const zoneSize = Math.max(1, config.zoneSize ?? spec.params.zoneSize ?? DEFAULT_ZONE_TRIAL_CONFIG.zoneSize);
+  const baseKillTargetPerZone =
+    config.killTargetPerZone ?? spec.params.killTargetPerZone ?? DEFAULT_ZONE_TRIAL_CONFIG.killTargetPerZone;
+
+  const d = Math.max(1, effectiveDepth(world));
+  const spawnDepthMult = Math.pow(DEFAULT_SPAWN_TUNING.spawnPerDepth, d - 1);
+  const hpDepthMult = Math.pow(DEFAULT_SPAWN_TUNING.hpPerDepth, d - 1);
+  const scaledKillTargetRaw = Math.round(baseKillTargetPerZone * spawnDepthMult * hpDepthMult);
+
   const killTargetPerZone = clamp(
-    config.killTargetPerZone ?? spec.params.killTargetPerZone ?? DEFAULT_ZONE_TRIAL_CONFIG.killTargetPerZone,
+    scaledKillTargetRaw,
     config.killTargetMin ?? DEFAULT_ZONE_TRIAL_CONFIG.killTargetMin,
     config.killTargetMax ?? DEFAULT_ZONE_TRIAL_CONFIG.killTargetMax,
   );
+  if (import.meta.env.DEV) {
+    console.debug("[zoneTrial] killTarget scaling", {
+      baseKillTargetPerZone,
+      depth: d,
+      spawnDepthMult,
+      hpDepthMult,
+      killTargetPerZone,
+    });
+  }
 
   const width = map.width;
   const height = map.height;

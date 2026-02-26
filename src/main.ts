@@ -48,7 +48,9 @@ function installDevSettingsUi(): void {
   const panel = document.createElement("div");
   panel.hidden = true;
   panel.style.marginTop = "8px";
-  panel.style.minWidth = "220px";
+  panel.style.width = "420px";
+  panel.style.maxHeight = "82vh";
+  panel.style.overflowY = "auto";
   panel.style.padding = "10px";
   panel.style.border = "1px solid rgba(255,255,255,0.18)";
   panel.style.borderRadius = "10px";
@@ -59,13 +61,43 @@ function installDevSettingsUi(): void {
   root.appendChild(panel);
 
   const title = document.createElement("div");
-  title.textContent = "Debug Settings";
+  title.textContent = "Debug Tools";
   title.style.fontWeight = "700";
   title.style.marginBottom = "8px";
   panel.appendChild(title);
 
   type SettingsDebug = ReturnType<typeof getUserSettings>["debug"];
   const checks = new Map<BooleanDebugSettingKey, HTMLInputElement>();
+  const debugToggleGrid = document.createElement("div");
+  debugToggleGrid.style.display = "grid";
+  debugToggleGrid.style.gridTemplateColumns = "1fr 1fr";
+  debugToggleGrid.style.columnGap = "14px";
+  debugToggleGrid.style.rowGap = "2px";
+  panel.appendChild(debugToggleGrid);
+
+  const prettyLabelByKey: Partial<Record<BooleanDebugSettingKey, string>> = {
+    grid: "Show Grid",
+    walkMask: "Show Walk Mask",
+    blockedTiles: "Show Blocked Tiles",
+    ramps: "Show Ramps",
+    colliders: "Show Colliders",
+    slices: "Show Slices",
+    occluders: "Show Occluders",
+    decals: "Show Decals",
+    structureHeights: "Show Structure Heights",
+    spriteBounds: "Show Sprite Bounds",
+    projectileFaces: "Show Projectile Faces",
+    triggers: "Show Trigger Zones",
+    debugRoadSemantic: "Show Road Semantics",
+    disableLightingOcclusion: "Disable Lighting Occlusion",
+    lightingMasks: "Show Lighting Masks",
+    mapOverlaysDisabled: "Disable Map Overlays",
+    rampFaces: "Show Ramp Faces",
+    forceSpawnOverride: "Force Spawn Override",
+    godMode: "God Mode",
+    entityAnchorOverlay: "Show Entity Anchors",
+    pauseDebugCards: "Pause Debug Cards",
+  };
 
   const addToggle = (key: BooleanDebugSettingKey, label: string) => {
     const row = document.createElement("label");
@@ -77,7 +109,7 @@ function installDevSettingsUi(): void {
     row.style.cursor = "pointer";
 
     const text = document.createElement("span");
-    text.textContent = label;
+    text.textContent = prettyLabelByKey[key] ?? label;
 
     const input = document.createElement("input");
     input.type = "checkbox";
@@ -87,7 +119,7 @@ function installDevSettingsUi(): void {
 
     row.appendChild(text);
     row.appendChild(input);
-    panel.appendChild(row);
+    debugToggleGrid.appendChild(row);
     checks.set(key, input);
   };
 
@@ -109,13 +141,13 @@ function installDevSettingsUi(): void {
   entityShadowsRow.style.gap = "10px";
   entityShadowsRow.style.padding = "4px 0";
   const entityShadowsText = document.createElement("span");
-  entityShadowsText.textContent = "entityShadowsEnabled";
+  entityShadowsText.textContent = "Disable Entity Shadows";
   const entityShadowsInput = document.createElement("input");
   entityShadowsInput.type = "checkbox";
   entityShadowsInput.addEventListener("change", () => {
     updateUserSettings({
       render: {
-        entityShadowsEnabled: entityShadowsInput.checked,
+        entityShadowsDisable: entityShadowsInput.checked,
       },
     });
   });
@@ -130,7 +162,7 @@ function installDevSettingsUi(): void {
   entityAnchorsRow.style.gap = "10px";
   entityAnchorsRow.style.padding = "4px 0";
   const entityAnchorsText = document.createElement("span");
-  entityAnchorsText.textContent = "entityAnchorsEnabled";
+  entityAnchorsText.textContent = "Entity Anchors";
   const entityAnchorsInput = document.createElement("input");
   entityAnchorsInput.type = "checkbox";
   entityAnchorsInput.addEventListener("change", () => {
@@ -151,7 +183,7 @@ function installDevSettingsUi(): void {
   renderPerfCountersRow.style.gap = "10px";
   renderPerfCountersRow.style.padding = "4px 0";
   const renderPerfCountersText = document.createElement("span");
-  renderPerfCountersText.textContent = "renderPerfCountersEnabled";
+  renderPerfCountersText.textContent = "Render Perf Counters";
   const renderPerfCountersInput = document.createElement("input");
   renderPerfCountersInput.type = "checkbox";
   renderPerfCountersInput.addEventListener("change", () => {
@@ -193,7 +225,7 @@ function installDevSettingsUi(): void {
   paletteIdRow.style.gap = "10px";
   paletteIdRow.style.padding = "4px 0";
   const paletteIdText = document.createElement("span");
-  paletteIdText.textContent = "paletteId";
+  paletteIdText.textContent = "Palette";
   const paletteIdSelect = document.createElement("select");
   paletteIdSelect.style.background = "rgba(20,20,20,0.9)";
   paletteIdSelect.style.color = "#fff";
@@ -246,7 +278,7 @@ function installDevSettingsUi(): void {
   modeRow.style.gap = "10px";
   modeRow.style.padding = "4px 0";
   const modeText = document.createElement("span");
-  modeText.textContent = "lightingMaskDebugMode";
+  modeText.textContent = "Lighting Mask Mode";
   const modeSelect = document.createElement("select");
   modeSelect.style.background = "rgba(20,20,20,0.9)";
   modeSelect.style.color = "#fff";
@@ -281,7 +313,7 @@ function installDevSettingsUi(): void {
   waterFlowTop.style.justifyContent = "space-between";
   waterFlowTop.style.gap = "10px";
   const waterFlowText = document.createElement("span");
-  waterFlowText.textContent = "waterFlowRate";
+  waterFlowText.textContent = "Water Flow";
   const waterFlowValue = document.createElement("span");
   waterFlowValue.textContent = "1.00x";
   const waterFlowInput = document.createElement("input");
@@ -312,7 +344,7 @@ function installDevSettingsUi(): void {
   dmgMultRow.style.gap = "10px";
   dmgMultRow.style.padding = "4px 0";
   const dmgMultText = document.createElement("span");
-  dmgMultText.textContent = "dmgMult";
+  dmgMultText.textContent = "Damage Mult";
   const dmgMultBtn = document.createElement("button");
   dmgMultBtn.type = "button";
   dmgMultBtn.style.border = "1px solid rgba(255,255,255,0.25)";
@@ -337,7 +369,7 @@ function installDevSettingsUi(): void {
   fireRateMultRow.style.gap = "10px";
   fireRateMultRow.style.padding = "4px 0";
   const fireRateMultText = document.createElement("span");
-  fireRateMultText.textContent = "fireRateMult";
+  fireRateMultText.textContent = "Fire Rate Mult";
   const fireRateMultBtn = document.createElement("button");
   fireRateMultBtn.type = "button";
   fireRateMultBtn.style.border = "1px solid rgba(255,255,255,0.25)";
@@ -356,7 +388,7 @@ function installDevSettingsUi(): void {
   panel.appendChild(fireRateMultRow);
 
   const birdTitle = document.createElement("div");
-  birdTitle.textContent = "neutralBirdAI";
+  birdTitle.textContent = "Neutral Bird AI";
   birdTitle.style.fontWeight = "700";
   birdTitle.style.marginTop = "10px";
   birdTitle.style.marginBottom = "4px";
@@ -393,7 +425,7 @@ function installDevSettingsUi(): void {
   birdDisableTransitionsRow.style.gap = "10px";
   birdDisableTransitionsRow.style.padding = "4px 0";
   const birdDisableTransitionsText = document.createElement("span");
-  birdDisableTransitionsText.textContent = "disableTransitions";
+  birdDisableTransitionsText.textContent = "Disable Transitions";
   const birdDisableTransitionsInput = document.createElement("input");
   birdDisableTransitionsInput.type = "checkbox";
   birdDisableTransitionsInput.addEventListener("change", () => {
@@ -417,7 +449,7 @@ function installDevSettingsUi(): void {
   birdDrawDebugRow.style.gap = "10px";
   birdDrawDebugRow.style.padding = "4px 0";
   const birdDrawDebugText = document.createElement("span");
-  birdDrawDebugText.textContent = "drawDebug";
+  birdDrawDebugText.textContent = "Draw Debug";
   const birdDrawDebugInput = document.createElement("input");
   birdDrawDebugInput.type = "checkbox";
   birdDrawDebugInput.addEventListener("change", () => {
@@ -441,7 +473,7 @@ function installDevSettingsUi(): void {
   birdForceStateRow.style.gap = "10px";
   birdForceStateRow.style.padding = "4px 0";
   const birdForceStateText = document.createElement("span");
-  birdForceStateText.textContent = "forceState";
+  birdForceStateText.textContent = "Force State";
   const birdForceStateSelect = document.createElement("select");
   birdForceStateSelect.style.background = "rgba(20,20,20,0.9)";
   birdForceStateSelect.style.color = "#fff";
@@ -474,7 +506,7 @@ function installDevSettingsUi(): void {
   birdRepickTargetRow.style.gap = "10px";
   birdRepickTargetRow.style.padding = "4px 0";
   const birdRepickTargetText = document.createElement("span");
-  birdRepickTargetText.textContent = "debugRepickTarget";
+  birdRepickTargetText.textContent = "Repick Target Debug";
   const birdRepickTargetInput = document.createElement("input");
   birdRepickTargetInput.type = "checkbox";
   birdRepickTargetInput.addEventListener("change", () => {
@@ -505,6 +537,12 @@ function installDevSettingsUi(): void {
   offAllBtn.addEventListener("click", () => {
     updateUserSettings({
       debug: makeAllDebugOffSettings(),
+      render: {
+        entityShadowsDisable: true,
+        entityAnchorsEnabled: false,
+        renderPerfCountersEnabled: false,
+        paletteSwapEnabled: false,
+      },
     });
     syncFromSettings();
   });
@@ -526,7 +564,7 @@ function installDevSettingsUi(): void {
     waterFlowValue.textContent = `${s.debug.waterFlowRate.toFixed(2)}x`;
     dmgMultBtn.textContent = `${s.debug.dmgMult}x`;
     fireRateMultBtn.textContent = `${s.debug.fireRateMult}x`;
-    entityShadowsInput.checked = s.render.entityShadowsEnabled;
+    entityShadowsInput.checked = s.render.entityShadowsDisable;
     entityAnchorsInput.checked = s.render.entityAnchorsEnabled;
     renderPerfCountersInput.checked = s.render.renderPerfCountersEnabled;
     paletteSwapInput.checked = s.render.paletteSwapEnabled;

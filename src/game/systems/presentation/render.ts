@@ -4,7 +4,7 @@ import { registry } from "../../content/registry";
 import { ZONE_KIND } from "../../factories/zoneFactory";
 import { getBossAccent, getFloorVisual } from "../../content/floors";
 import { ENEMY_TYPE } from "../../content/enemies";
-import { getPlayerSpriteFrame, playerSpritesReady } from "../../../engine/render/sprites/playerSprites";
+import { getPlayerSkin, getPlayerSpriteFrame, playerSpritesReady } from "../../../engine/render/sprites/playerSprites";
 import { type Dir8 } from "../../../engine/render/sprites/dir8";
 import { getEnemySpriteFrame, preloadEnemySprites } from "../../../engine/render/sprites/enemySprites";
 import { getVendorNpcSpriteFrame, preloadVendorNpcSprites, vendorNpcSpritesReady } from "../../../engine/render/sprites/vendorSprites";
@@ -272,7 +272,7 @@ function getHardcodedVoidTop(): { ready: boolean; img: HTMLImageElement | null }
   if (hardcodedVoidTopFailed) {
     return { ready: false, img: null };
   }
-  if (!hardcodedVoidTopImage) {
+    if (!hardcodedVoidTopImage) {
     const img = new Image();
     img.src = HARDCODED_VOID_TOP_SRC;
     img.onload = () => { hardcodedVoidTopReady = true; };
@@ -585,7 +585,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const ww = Math.max(1, Math.floor(cssW / pixelScale));
   const hh = Math.max(1, Math.floor(cssH / pixelScale));
   configurePixelPerfect(ctx);
-  setRenderPerfCountersEnabled(getUserSettings().render.renderPerfCountersEnabled);
+  const renderPerfCountersEnabled = getUserSettings().render.renderPerfCountersEnabled;
+  setRenderPerfCountersEnabled(renderPerfCountersEnabled);
   beginRenderPerfFrame(devW, devH);
   (w as any).viewW = ww;
   (w as any).viewH = hh;
@@ -1290,7 +1291,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const settings = getUserSettings();
   const debug = settings.debug;
   const renderSettings = settings.render;
-  const RENDER_ENTITY_SHADOWS = renderSettings.entityShadowsEnabled;
+  const RENDER_ENTITY_SHADOWS = !renderSettings.entityShadowsDisable;
   const RENDER_ENTITY_ANCHORS = renderSettings.entityAnchorsEnabled;
   const SHOW_ENTITY_ANCHOR_OVERLAY = debug.entityAnchorOverlay;
   const debugFlags = resolveDebugFlags(debug);
@@ -1324,6 +1325,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const dx = tx - cx;
     const dy = ty - cy;
     return dx * dx + dy * dy <= radiusSq;
+  };
+  const isTileInRenderRadiusPadded = (tx: number, ty: number, padTiles: number): boolean => {
+    const r = Math.max(0, radius + padTiles);
+    const dx = tx - cx;
+    const dy = ty - cy;
+    return dx * dx + dy * dy <= r * r;
   };
   const tileRectIntersectsRenderRadius = (
     minRectTx: number,
@@ -1864,7 +1871,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         ? getPlayerSpriteFrame({ dir, moving, time: w.time ?? 0 })
         : null;
       const spriteW = fr ? fr.sw * fr.scale : Math.max(16, PLAYER_R * 2.4);
-      const playerSkin = ((w as any)._playerSkin ?? "jamal") as string;
+      const playerSkin = getPlayerSkin();
       const playerShadowOffset = resolvePlayerShadowFootOffset(playerSkin);
       const renderKey: RenderKey = {
         slice: tx + ty,
@@ -2349,7 +2356,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const pp = getProjectileWorld(w, i, KENNEY_TILE_WORLD);
       const ptx = Math.floor(pp.wx / T);
       const pty = Math.floor(pp.wy / T);
-      if (!isTileInRenderRadius(ptx, pty)) continue;
+      // Projectiles visually pop early at strict radius due to fast motion and sprite footprint.
+      // Keep a small pad so projectile draw distance matches the tile field better.
+      if (!isTileInRenderRadiusPadded(ptx, pty, 2)) continue;
       const baseH = tileHAtWorld(pp.wx, pp.wy);
       const pzAbs = (w.prZVisual?.[i] ?? w.prZ?.[i] ?? baseH) || 0;
       const support = getSupportSurfaceAt(pp.wx, pp.wy, compiledMap);
@@ -3411,33 +3420,35 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const perf = getRenderPerfSnapshot();
   ctx.fillText(`FPS: ${fps}`, 8, 14);
   ctx.fillText(`Palette: ${resolveActivePaletteId()}`, 8, 46);
-  const tag = perf.drawImageByTagPerFrame;
-  const saveTag = perf.saveByTagPerFrame;
-  const restoreTag = perf.restoreByTagPerFrame;
-  const perfLines = [
-    `drawImage/frame: ${perf.drawImageCallsPerFrame.toFixed(1)}`,
-    `tag void:${tag.void.toFixed(1)} floors:${tag.floors.toFixed(1)} decals:${tag.decals.toFixed(1)} ent:${tag.entities.toFixed(1)}`,
-    `tag struct:${tag.structures.toFixed(1)} m:bld:${tag["mask:building"].toFixed(1)} m:sh:${tag["mask:shadow"].toFixed(1)} m:s:${tag["mask:south"].toFixed(1)}`,
-    `tag cutoutVoid:${tag.cutoutVoid.toFixed(1)} lighting:${tag.lighting.toFixed(1)} untagged:${tag.untagged.toFixed(1)}`,
-    `gradientCreate/frame: ${perf.gradientCreateCallsPerFrame.toFixed(1)} addColorStop/frame: ${perf.addColorStopCallsPerFrame.toFixed(1)}`,
-    `save/frame: ${perf.saveCallsPerFrame.toFixed(1)} restore/frame: ${perf.restoreCallsPerFrame.toFixed(1)}`,
-    `saveTag fl:${saveTag.floors.toFixed(1)} de:${saveTag.decals.toFixed(1)} li:${saveTag.lighting.toFixed(1)} un:${saveTag.untagged.toFixed(1)}`,
-    `saveTag m:bld:${saveTag["mask:building"].toFixed(1)} m:sh:${saveTag["mask:shadow"].toFixed(1)} m:s:${saveTag["mask:south"].toFixed(1)} struct:${saveTag.structures.toFixed(1)}`,
-    `restoreTag fl:${restoreTag.floors.toFixed(1)} de:${restoreTag.decals.toFixed(1)} li:${restoreTag.lighting.toFixed(1)} un:${restoreTag.untagged.toFixed(1)}`,
-    `restoreTag m:bld:${restoreTag["mask:building"].toFixed(1)} m:sh:${restoreTag["mask:shadow"].toFixed(1)} m:s:${restoreTag["mask:south"].toFixed(1)} struct:${restoreTag.structures.toFixed(1)}`,
-    `closures/frame: ${perf.closuresCreatedPerFrame.toFixed(1)}`,
-    `sliceSorts/frame: ${perf.sliceKeySortsPerFrame.toFixed(1)} drawableSorts/frame: ${perf.drawableSortsPerFrame.toFixed(1)}`,
-    `fullCanvasBlits/frame: ${perf.fullCanvasBlitsPerFrame.toFixed(1)}`,
-    `tileRadius: ${perf.tileLoopRadius.toFixed(0)} tileLoopIters/frame: ${perf.tileLoopIterationsPerFrame.toFixed(1)}`,
-  ];
-  ctx.textAlign = "right";
-  const perfX = cssW - 8;
-  const perfLineH = 16;
-  const perfY0 = cssH - 8 - perfLineH * (perfLines.length - 1);
-  for (let i = 0; i < perfLines.length; i++) {
-    ctx.fillText(perfLines[i], perfX, perfY0 + i * perfLineH);
+  if (renderPerfCountersEnabled) {
+    const tag = perf.drawImageByTagPerFrame;
+    const saveTag = perf.saveByTagPerFrame;
+    const restoreTag = perf.restoreByTagPerFrame;
+    const perfLines = [
+      `drawImage/frame: ${perf.drawImageCallsPerFrame.toFixed(1)}`,
+      `tag void:${tag.void.toFixed(1)} floors:${tag.floors.toFixed(1)} decals:${tag.decals.toFixed(1)} ent:${tag.entities.toFixed(1)}`,
+      `tag struct:${tag.structures.toFixed(1)} m:bld:${tag["mask:building"].toFixed(1)} m:sh:${tag["mask:shadow"].toFixed(1)} m:s:${tag["mask:south"].toFixed(1)}`,
+      `tag cutoutVoid:${tag.cutoutVoid.toFixed(1)} lighting:${tag.lighting.toFixed(1)} untagged:${tag.untagged.toFixed(1)}`,
+      `gradientCreate/frame: ${perf.gradientCreateCallsPerFrame.toFixed(1)} addColorStop/frame: ${perf.addColorStopCallsPerFrame.toFixed(1)}`,
+      `save/frame: ${perf.saveCallsPerFrame.toFixed(1)} restore/frame: ${perf.restoreCallsPerFrame.toFixed(1)}`,
+      `saveTag fl:${saveTag.floors.toFixed(1)} de:${saveTag.decals.toFixed(1)} li:${saveTag.lighting.toFixed(1)} un:${saveTag.untagged.toFixed(1)}`,
+      `saveTag m:bld:${saveTag["mask:building"].toFixed(1)} m:sh:${saveTag["mask:shadow"].toFixed(1)} m:s:${saveTag["mask:south"].toFixed(1)} struct:${saveTag.structures.toFixed(1)}`,
+      `restoreTag fl:${restoreTag.floors.toFixed(1)} de:${restoreTag.decals.toFixed(1)} li:${restoreTag.lighting.toFixed(1)} un:${restoreTag.untagged.toFixed(1)}`,
+      `restoreTag m:bld:${restoreTag["mask:building"].toFixed(1)} m:sh:${restoreTag["mask:shadow"].toFixed(1)} m:s:${restoreTag["mask:south"].toFixed(1)} struct:${restoreTag.structures.toFixed(1)}`,
+      `closures/frame: ${perf.closuresCreatedPerFrame.toFixed(1)}`,
+      `sliceSorts/frame: ${perf.sliceKeySortsPerFrame.toFixed(1)} drawableSorts/frame: ${perf.drawableSortsPerFrame.toFixed(1)}`,
+      `fullCanvasBlits/frame: ${perf.fullCanvasBlitsPerFrame.toFixed(1)}`,
+      `tileRadius: ${perf.tileLoopRadius.toFixed(0)} tileLoopIters/frame: ${perf.tileLoopIterationsPerFrame.toFixed(1)}`,
+    ];
+    ctx.textAlign = "right";
+    const perfX = cssW - 8;
+    const perfLineH = 16;
+    const perfY0 = cssH - 8 - perfLineH * (perfLines.length - 1);
+    for (let i = 0; i < perfLines.length; i++) {
+      ctx.fillText(perfLines[i], perfX, perfY0 + i * perfLineH);
+    }
+    ctx.textAlign = "left";
   }
-  ctx.textAlign = "left";
   if (SHOW_ROAD_SEMANTIC) {
     const roadWPlayer = roadAreaWidthAt(playerTx, playerTy);
     ctx.fillText(`roadW(player): ${roadWPlayer}`, 8, 30);

@@ -2,7 +2,7 @@ import { DEFAULT_DEBUG_SETTINGS, type DebugSettings } from "./debugSettings";
 import { DEFAULT_SPAWN_TUNING } from "./game/balance/spawnTuningDefaults";
 
 export type RenderSettings = {
-  entityShadowsEnabled: boolean;
+  entityShadowsDisable: boolean;
   entityAnchorsEnabled: boolean;
   renderPerfCountersEnabled: boolean;
   tileRenderRadius: number;
@@ -48,9 +48,9 @@ export type UserSettingsPatch = {
 export const DEFAULT_SETTINGS: UserSettings = {
   debug: { ...DEFAULT_DEBUG_SETTINGS },
   render: {
-    entityShadowsEnabled: true,
-    entityAnchorsEnabled: true,
-    renderPerfCountersEnabled: true,
+    entityShadowsDisable: true,
+    entityAnchorsEnabled: false,
+    renderPerfCountersEnabled: false,
     tileRenderRadius: 12,
     paletteSwapEnabled: false,
     paletteId: "db32",
@@ -68,6 +68,15 @@ function mergeSettings(
 ): UserSettings {
   if (!patch) return base;
 
+  const patchAny = patch as any;
+  const renderPatch: Record<string, unknown> = { ...(patchAny.render ?? {}) };
+  if (
+    typeof renderPatch.entityShadowsDisable !== "boolean"
+    && typeof renderPatch.entityShadowsEnabled === "boolean"
+  ) {
+    renderPatch.entityShadowsDisable = !renderPatch.entityShadowsEnabled;
+  }
+
   return {
     ...base,
     debug: {
@@ -76,7 +85,7 @@ function mergeSettings(
     },
     render: {
       ...base.render,
-      ...(patch.render ?? {}),
+      ...(renderPatch as Partial<UserSettings["render"]>),
     },
   };
 }
