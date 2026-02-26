@@ -11,13 +11,9 @@ import { recordEnemySpawnedHp } from "../balance/balanceCsvLogger";
 export { ENEMY_TYPE };
 export type { EnemyType };
 
-export type SpawnEnemyGridOptions = {
-  hpSeedFromDirector?: number;
-};
-
 /**
  * Factory: creates one enemy with standardized stats (from registry).
- * Applies delve depth scaling to HP and damage, with per-enemy HP weight.
+ * HP scaling is controlled only by spawn tuning HP knobs.
  */
 /** Spawn an enemy at grid coordinates with scaled stats. */
 export function spawnEnemyGrid(
@@ -25,12 +21,11 @@ export function spawnEnemyGrid(
     type: EnemyType,
     gx: number,
     gy: number,
-    _tileWorld: number = KENNEY_TILE_WORLD,
-    options?: SpawnEnemyGridOptions
+    _tileWorld: number = KENNEY_TILE_WORLD
 ) {
     const s = registry.enemy(type);
 
-    // Apply delve depth scaling
+    // Apply delve scaling (damage only)
     const scaling = w.delveScaling ?? { hpMult: 1, damageMult: 1 };
 
     // Depth (1-based)
@@ -39,23 +34,13 @@ export function spawnEnemyGrid(
       Math.floor((w.currentFloorIntent?.depth ?? (w.floorIndex ?? 0) + 1) as number)
     );
 
-    // Orb A: Monster Health (depth-multiplicative)
+    // Authoritative HP scaling: hpBase * hpPerDepth^(depth-1)
     const tuning = (w as any).balance?.spawnTuning ?? {};
-    const hpOrbBasePerDepth =
-      typeof tuning.monsterHealthOrbBasePerDepth === "number" ? tuning.monsterHealthOrbBasePerDepth : 1.0;
-    const hpBaseMult =
-      typeof tuning.monsterHealthBaseMult === "number" ? Math.max(0, tuning.monsterHealthBaseMult) : 1.0;
+    const hpBase = typeof tuning.hpBase === "number" ? Math.max(0, tuning.hpBase) : 1.0;
+    const hpPerDepth = typeof tuning.hpPerDepth === "number" ? Math.max(0.0001, tuning.hpPerDepth) : 1.0;
+    const effectiveHpMult = hpBase * Math.pow(hpPerDepth, Math.max(0, depth - 1));
 
-    const hpOrbMult = Math.pow(Math.max(0.0001, hpOrbBasePerDepth), Math.max(0, depth - 1));
-    const effectiveHpMult = scaling.hpMult * hpBaseMult * hpOrbMult;
-
-    // Apply per-enemy HP scale weight (default 1.0 if not specified)
-    const hpWeight = s.hpScaleWeight ?? 1.0;
-    const adjustedHpMult = Math.pow(effectiveHpMult, hpWeight);
-
-    const hpSeed =
-      typeof options?.hpSeedFromDirector === "number" ? options.hpSeedFromDirector : s.hp;
-    const scaledHp = Math.max(1, Math.round(hpSeed * adjustedHpMult));
+    const scaledHp = Math.max(1, Math.round(s.hp * effectiveHpMult));
     const scaledDamage = Math.round(s.damage * scaling.damageMult);
 
     // Balance telemetry: record how much HP just entered the world.

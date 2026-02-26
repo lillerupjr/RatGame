@@ -14,6 +14,7 @@ import { getGold } from "../../game/economy/gold";
 import { getAllRelicIds, getRelicById, normalizeRelicIdList } from "../../game/content/relics";
 import { recomputeDerivedStats } from "../../game/stats/derivedStats";
 import { clearBalanceCsv, downloadBalanceCsv, setBalanceCsvEnabled } from "../../game/balance/balanceCsvLogger";
+import { DEFAULT_SPAWN_TUNING } from "../../game/balance/spawnTuningDefaults";
 
 export type PauseMenuActions = {
   onResume(): void;
@@ -173,29 +174,10 @@ export function mountPauseMenu(args: {
   sfxRow.appendChild(sfxSlider);
   sfxRow.appendChild(sfxMuteBtn);
 
-  const pressureRow = document.createElement("label");
-  pressureRow.className = "audioRow";
-  const pressureLabel = document.createElement("span");
-  pressureLabel.textContent = "Pressure";
-  const pressureSlider = document.createElement("input");
-  pressureSlider.type = "range";
-  pressureSlider.min = "0.25";
-  pressureSlider.max = "3";
-  pressureSlider.step = "0.05";
-  pressureSlider.value = "1";
-  setDataAttr(pressureSlider, "spawn-pressure-slider");
-  const pressureValue = document.createElement("span");
-  pressureValue.textContent = "1.00x";
-  pressureValue.className = "pauseMeta";
-  setDataAttr(pressureValue, "spawn-pressure-value");
-  pressureRow.appendChild(pressureLabel);
-  pressureRow.appendChild(pressureSlider);
-  pressureRow.appendChild(pressureValue);
-
   const spawnRateOrbRow = document.createElement("label");
   spawnRateOrbRow.className = "audioRow";
   const spawnRateOrbLabel = document.createElement("span");
-  spawnRateOrbLabel.textContent = "Spawn Orb";
+  spawnRateOrbLabel.textContent = "Spawn/Depth";
   const spawnRateOrbSlider = document.createElement("input");
   spawnRateOrbSlider.type = "range";
   spawnRateOrbSlider.min = "0.80";
@@ -203,7 +185,7 @@ export function mountPauseMenu(args: {
   spawnRateOrbSlider.step = "0.01";
   setDataAttr(spawnRateOrbSlider, "spawn-rate-orb-slider");
   const spawnRateOrbValue = document.createElement("span");
-  spawnRateOrbValue.textContent = "1.12";
+  spawnRateOrbValue.textContent = num(DEFAULT_SPAWN_TUNING.spawnPerDepth, 2);
   spawnRateOrbValue.className = "pauseMeta";
   setDataAttr(spawnRateOrbValue, "spawn-rate-orb-value");
   spawnRateOrbRow.appendChild(spawnRateOrbLabel);
@@ -213,7 +195,7 @@ export function mountPauseMenu(args: {
   const monsterHealthOrbRow = document.createElement("label");
   monsterHealthOrbRow.className = "audioRow";
   const monsterHealthOrbLabel = document.createElement("span");
-  monsterHealthOrbLabel.textContent = "Health Orb";
+  monsterHealthOrbLabel.textContent = "HP/Depth";
   const monsterHealthOrbSlider = document.createElement("input");
   monsterHealthOrbSlider.type = "range";
   monsterHealthOrbSlider.min = "0.80";
@@ -221,7 +203,7 @@ export function mountPauseMenu(args: {
   monsterHealthOrbSlider.step = "0.01";
   setDataAttr(monsterHealthOrbSlider, "monster-health-orb-slider");
   const monsterHealthOrbValue = document.createElement("span");
-  monsterHealthOrbValue.textContent = "1.18";
+  monsterHealthOrbValue.textContent = num(DEFAULT_SPAWN_TUNING.hpPerDepth, 2);
   monsterHealthOrbValue.className = "pauseMeta";
   setDataAttr(monsterHealthOrbValue, "monster-health-orb-value");
   monsterHealthOrbRow.appendChild(monsterHealthOrbLabel);
@@ -239,7 +221,7 @@ export function mountPauseMenu(args: {
   spawnBaseSlider.step = "0.05";
   setDataAttr(spawnBaseSlider, "spawn-base-slider");
   const spawnBaseValue = document.createElement("span");
-  spawnBaseValue.textContent = "1.00";
+  spawnBaseValue.textContent = num(DEFAULT_SPAWN_TUNING.spawnBase, 2);
   spawnBaseValue.className = "pauseMeta";
   setDataAttr(spawnBaseValue, "spawn-base-value");
   spawnBaseRow.appendChild(spawnBaseLabel);
@@ -257,12 +239,48 @@ export function mountPauseMenu(args: {
   monsterHealthBaseSlider.step = "0.05";
   setDataAttr(monsterHealthBaseSlider, "monster-health-base-slider");
   const monsterHealthBaseValue = document.createElement("span");
-  monsterHealthBaseValue.textContent = "1.00";
+  monsterHealthBaseValue.textContent = num(DEFAULT_SPAWN_TUNING.hpBase, 2);
   monsterHealthBaseValue.className = "pauseMeta";
   setDataAttr(monsterHealthBaseValue, "monster-health-base-value");
   monsterHealthBaseRow.appendChild(monsterHealthBaseLabel);
   monsterHealthBaseRow.appendChild(monsterHealthBaseSlider);
   monsterHealthBaseRow.appendChild(monsterHealthBaseValue);
+
+  const pressureT0Row = document.createElement("label");
+  pressureT0Row.className = "audioRow";
+  const pressureT0Label = document.createElement("span");
+  pressureT0Label.textContent = "Pressure T0";
+  const pressureT0Slider = document.createElement("input");
+  pressureT0Slider.type = "range";
+  pressureT0Slider.min = "0.10";
+  pressureT0Slider.max = "3.00";
+  pressureT0Slider.step = "0.05";
+  setDataAttr(pressureT0Slider, "pressure-t0-slider");
+  const pressureT0Value = document.createElement("span");
+  pressureT0Value.textContent = num(DEFAULT_SPAWN_TUNING.pressureAt0Sec, 2);
+  pressureT0Value.className = "pauseMeta";
+  setDataAttr(pressureT0Value, "pressure-t0-value");
+  pressureT0Row.appendChild(pressureT0Label);
+  pressureT0Row.appendChild(pressureT0Slider);
+  pressureT0Row.appendChild(pressureT0Value);
+
+  const pressureT120Row = document.createElement("label");
+  pressureT120Row.className = "audioRow";
+  const pressureT120Label = document.createElement("span");
+  pressureT120Label.textContent = "Pressure T120";
+  const pressureT120Slider = document.createElement("input");
+  pressureT120Slider.type = "range";
+  pressureT120Slider.min = "0.10";
+  pressureT120Slider.max = "3.00";
+  pressureT120Slider.step = "0.05";
+  setDataAttr(pressureT120Slider, "pressure-t120-slider");
+  const pressureT120Value = document.createElement("span");
+  pressureT120Value.textContent = num(DEFAULT_SPAWN_TUNING.pressureAt120Sec, 2);
+  pressureT120Value.className = "pauseMeta";
+  setDataAttr(pressureT120Value, "pressure-t120-value");
+  pressureT120Row.appendChild(pressureT120Label);
+  pressureT120Row.appendChild(pressureT120Slider);
+  pressureT120Row.appendChild(pressureT120Value);
 
   const spawnTuningResetBtn = document.createElement("button");
   spawnTuningResetBtn.type = "button";
@@ -273,11 +291,12 @@ export function mountPauseMenu(args: {
   audioSection.appendChild(audioTitle);
   audioSection.appendChild(musicRow);
   audioSection.appendChild(sfxRow);
-  audioSection.appendChild(pressureRow);
   audioSection.appendChild(spawnRateOrbRow);
   audioSection.appendChild(monsterHealthOrbRow);
   audioSection.appendChild(spawnBaseRow);
   audioSection.appendChild(monsterHealthBaseRow);
+  audioSection.appendChild(pressureT0Row);
+  audioSection.appendChild(pressureT120Row);
   audioSection.appendChild(spawnTuningResetBtn);
 
   const paletteTitle = document.createElement("h4");
@@ -615,22 +634,10 @@ export function mountPauseMenu(args: {
     if (audio.sfxMuted) sfxMuteBtn.classList.add("muted");
     else sfxMuteBtn.classList.remove("muted");
 
-    const pressureMult = latestWorld?.spawnDirectorConfig?.globalPressureMult ?? 1;
-    const clampedPressure = Math.max(0.25, Math.min(3, pressureMult));
-    pressureSlider.value = `${clampedPressure}`;
-    pressureValue.textContent = `${num(clampedPressure)}x`;
   };
 
   const applySfxToLatestWorld = () => {
     if (latestWorld) applySfxSettingsToWorld(latestWorld);
-  };
-
-  const applyPressureToLatestWorld = () => {
-    if (!latestWorld) return;
-    const v = Number.parseFloat(pressureSlider.value);
-    const clamped = Math.max(0.25, Math.min(3, Number.isFinite(v) ? v : 1));
-    latestWorld.spawnDirectorConfig.globalPressureMult = clamped;
-    pressureValue.textContent = `${num(clamped)}x`;
   };
 
   const applySpawnTuningSettingsToLatestWorld = () => {
@@ -639,23 +646,30 @@ export function mountPauseMenu(args: {
     const hpOrbV = Number.parseFloat(monsterHealthOrbSlider.value);
     const spawnBaseV = Number.parseFloat(spawnBaseSlider.value);
     const hpBaseV = Number.parseFloat(monsterHealthBaseSlider.value);
-    const spawnClamped = Math.max(0.8, Math.min(1.5, Number.isFinite(spawnV) ? spawnV : 1.12));
-    const hpOrbClamped = Math.max(0.8, Math.min(1.5, Number.isFinite(hpOrbV) ? hpOrbV : 1.18));
-    const spawnBaseClamped = Math.max(0.2, Math.min(4.0, Number.isFinite(spawnBaseV) ? spawnBaseV : 1.0));
-    const hpBaseClamped = Math.max(0.2, Math.min(4.0, Number.isFinite(hpBaseV) ? hpBaseV : 1.0));
+    const pressureT0V = Number.parseFloat(pressureT0Slider.value);
+    const pressureT120V = Number.parseFloat(pressureT120Slider.value);
+    const spawnClamped = Math.max(0.8, Math.min(1.5, Number.isFinite(spawnV) ? spawnV : DEFAULT_SPAWN_TUNING.spawnPerDepth));
+    const hpOrbClamped = Math.max(0.8, Math.min(1.5, Number.isFinite(hpOrbV) ? hpOrbV : DEFAULT_SPAWN_TUNING.hpPerDepth));
+    const spawnBaseClamped = Math.max(0.2, Math.min(4.0, Number.isFinite(spawnBaseV) ? spawnBaseV : DEFAULT_SPAWN_TUNING.spawnBase));
+    const hpBaseClamped = Math.max(0.2, Math.min(4.0, Number.isFinite(hpBaseV) ? hpBaseV : DEFAULT_SPAWN_TUNING.hpBase));
+    const pressureT0Clamped = Math.max(0.1, Math.min(3.0, Number.isFinite(pressureT0V) ? pressureT0V : DEFAULT_SPAWN_TUNING.pressureAt0Sec));
+    const pressureT120Clamped = Math.max(0.1, Math.min(3.0, Number.isFinite(pressureT120V) ? pressureT120V : DEFAULT_SPAWN_TUNING.pressureAt120Sec));
     spawnRateOrbValue.textContent = num(spawnClamped, 2);
     monsterHealthOrbValue.textContent = num(hpOrbClamped, 2);
     spawnBaseValue.textContent = num(spawnBaseClamped, 2);
     monsterHealthBaseValue.textContent = num(hpBaseClamped, 2);
+    pressureT0Value.textContent = num(pressureT0Clamped, 2);
+    pressureT120Value.textContent = num(pressureT120Clamped, 2);
 
     const wAny = latestWorld as any;
     if (!wAny.balance) wAny.balance = {};
     if (!wAny.balance.spawnTuning) wAny.balance.spawnTuning = {};
-    wAny.balance.spawnTuning.spawnRateOrbBasePerDepth = spawnClamped;
-    wAny.balance.spawnTuning.monsterHealthOrbBasePerDepth = hpOrbClamped;
-    wAny.balance.spawnTuning.monsterHealthBaseMult = hpBaseClamped;
-    if (!wAny.expectedPowerBudgetConfig) wAny.expectedPowerBudgetConfig = {};
-    wAny.expectedPowerBudgetConfig.basePowerPerSecond = spawnBaseClamped;
+    wAny.balance.spawnTuning.spawnBase = spawnBaseClamped;
+    wAny.balance.spawnTuning.spawnPerDepth = spawnClamped;
+    wAny.balance.spawnTuning.hpBase = hpBaseClamped;
+    wAny.balance.spawnTuning.hpPerDepth = hpOrbClamped;
+    wAny.balance.spawnTuning.pressureAt0Sec = pressureT0Clamped;
+    wAny.balance.spawnTuning.pressureAt120Sec = pressureT120Clamped;
   };
 
   const getBalanceCsvLogger = (w: any) => (w ? (w as any).balanceCsvLogger : null);
@@ -699,26 +713,16 @@ export function mountPauseMenu(args: {
     const liveEnemyHp = sumAliveEnemyHp(world as any);
     if (dbg && typeof dbg === "object") {
       const spawnRows: Array<[string, string]> = [
-        ["Pressure", num(safeNum(dbg.spawnPressureMult, safeNum(dbg.pressure)), 2)],
-        ["Global Pressure", `${num(safeNum(dbg.globalPressureMult, 1), 2)}x`],
-        ["Base Pressure", num(safeNum(dbg.basePressure), 3)],
-        ["Effective Pressure", num(safeNum(dbg.effectivePressure, safeNum(dbg.pressure)), 3)],
-        ["Wave Mult", num(safeNum(dbg.waveMult, 1), 3)],
-        ["Spawn power/sec", num(safeNum(dbg.powerPerSecond), 2)],
-        ["Spawn HP/sec", num(safeNum(dbg.spawnHpPerSecond), 0)],
+        ["Spawn Depth Mult (cum.)", `${num(safeNum(dbg.spawnPressureMult, 1), 2)}x`],
+        ["Enemy HP Depth Mult (cum.)", `${num(safeNum(dbg.spawnHpMult, 1), 2)}x`],
+        ["Time Pressure (base)", num(safeNum(dbg.basePressure), 3)],
+        ["Time Pressure (effective)", num(safeNum(dbg.effectivePressure, safeNum(dbg.pressure)), 3)],
+        ["Wave Intensity Mult", num(safeNum(dbg.waveMult, 1), 3)],
+        ["Spawn HP Budget/sec", num(safeNum(dbg.spawnHpPerSecond), 0)],
         ["On-screen Enemy HP", num(liveEnemyHp, 0)],
-        ["Queued/sec", num(safeNum(dbg.queuedPerSecond), 2)],
-        ["Spawns/sec", num(safeNum(dbg.spawnsPerSecond), 2)],
+        ["Queued Enemies/sec", num(safeNum(dbg.queuedPerSecond), 2)],
+        ["Spawned Enemies/sec", num(safeNum(dbg.spawnsPerSecond), 2)],
       ];
-      if (dbg.survive && typeof dbg.survive === "object") {
-        spawnRows.push(
-          ["Survive Progress", pct(safeNum(dbg.survive.progress))],
-          ["Survive Ramp", num(safeNum(dbg.survive.ramp), 2)],
-          ["Survive Power/sec", num(safeNum(dbg.survive.powerPerSecond), 2)],
-          ["Survive Chunk Size", safeNum(dbg.survive.chunkSize, 0).toFixed(0)],
-          ["Survive Chunk Delay", num(safeNum(dbg.survive.chunkDelay), 2)]
-        );
-      }
 
       const combatRows: Array<[string, string]> = [
         ["Actual DPS (inst)", num(safeNum(dbg.actualDpsInstant), 2)],
@@ -889,25 +893,27 @@ export function mountPauseMenu(args: {
     syncAudioControls();
   };
 
-  const onPressureSlider = () => {
-    applyPressureToLatestWorld();
-  };
-
   const onSpawnTuningSlider = () => {
     const spawnV = Number.parseFloat(spawnRateOrbSlider.value);
     const hpOrbV = Number.parseFloat(monsterHealthOrbSlider.value);
     const spawnBaseV = Number.parseFloat(spawnBaseSlider.value);
     const hpBaseV = Number.parseFloat(monsterHealthBaseSlider.value);
-    const spawnClamped = Math.max(0.8, Math.min(1.5, Number.isFinite(spawnV) ? spawnV : 1.12));
-    const hpOrbClamped = Math.max(0.8, Math.min(1.5, Number.isFinite(hpOrbV) ? hpOrbV : 1.18));
-    const spawnBaseClamped = Math.max(0.2, Math.min(4.0, Number.isFinite(spawnBaseV) ? spawnBaseV : 1.0));
-    const hpBaseClamped = Math.max(0.2, Math.min(4.0, Number.isFinite(hpBaseV) ? hpBaseV : 1.0));
+    const pressureT0V = Number.parseFloat(pressureT0Slider.value);
+    const pressureT120V = Number.parseFloat(pressureT120Slider.value);
+    const spawnClamped = Math.max(0.8, Math.min(1.5, Number.isFinite(spawnV) ? spawnV : DEFAULT_SPAWN_TUNING.spawnPerDepth));
+    const hpOrbClamped = Math.max(0.8, Math.min(1.5, Number.isFinite(hpOrbV) ? hpOrbV : DEFAULT_SPAWN_TUNING.hpPerDepth));
+    const spawnBaseClamped = Math.max(0.2, Math.min(4.0, Number.isFinite(spawnBaseV) ? spawnBaseV : DEFAULT_SPAWN_TUNING.spawnBase));
+    const hpBaseClamped = Math.max(0.2, Math.min(4.0, Number.isFinite(hpBaseV) ? hpBaseV : DEFAULT_SPAWN_TUNING.hpBase));
+    const pressureT0Clamped = Math.max(0.1, Math.min(3.0, Number.isFinite(pressureT0V) ? pressureT0V : DEFAULT_SPAWN_TUNING.pressureAt0Sec));
+    const pressureT120Clamped = Math.max(0.1, Math.min(3.0, Number.isFinite(pressureT120V) ? pressureT120V : DEFAULT_SPAWN_TUNING.pressureAt120Sec));
     updateUserSettings({
       render: {
-        spawnBasePowerPerSecond: spawnBaseClamped,
-        spawnRateOrbBasePerDepth: spawnClamped,
-        monsterHealthBaseMult: hpBaseClamped,
-        monsterHealthOrbBasePerDepth: hpOrbClamped,
+        spawnBase: spawnBaseClamped,
+        spawnPerDepth: spawnClamped,
+        hpBase: hpBaseClamped,
+        hpPerDepth: hpOrbClamped,
+        pressureAt0Sec: pressureT0Clamped,
+        pressureAt120Sec: pressureT120Clamped,
       },
     });
     syncSpawnTuningControls();
@@ -923,18 +929,24 @@ export function mountPauseMenu(args: {
 
   const syncSpawnTuningControls = () => {
     const settings = getUserSettings().render;
-    const spawnOrb = Math.max(0.8, Math.min(1.5, safeNum(settings.spawnRateOrbBasePerDepth, 1.12)));
-    const healthOrb = Math.max(0.8, Math.min(1.5, safeNum(settings.monsterHealthOrbBasePerDepth, 1.18)));
-    const spawnBase = Math.max(0.2, Math.min(4.0, safeNum(settings.spawnBasePowerPerSecond, 1.0)));
-    const healthBase = Math.max(0.2, Math.min(4.0, safeNum(settings.monsterHealthBaseMult, 1.0)));
+    const spawnOrb = Math.max(0.8, Math.min(1.5, safeNum(settings.spawnPerDepth, DEFAULT_SPAWN_TUNING.spawnPerDepth)));
+    const healthOrb = Math.max(0.8, Math.min(1.5, safeNum(settings.hpPerDepth, DEFAULT_SPAWN_TUNING.hpPerDepth)));
+    const spawnBase = Math.max(0.2, Math.min(4.0, safeNum(settings.spawnBase, DEFAULT_SPAWN_TUNING.spawnBase)));
+    const healthBase = Math.max(0.2, Math.min(4.0, safeNum(settings.hpBase, DEFAULT_SPAWN_TUNING.hpBase)));
+    const pressureT0 = Math.max(0.1, Math.min(3.0, safeNum(settings.pressureAt0Sec, DEFAULT_SPAWN_TUNING.pressureAt0Sec)));
+    const pressureT120 = Math.max(0.1, Math.min(3.0, safeNum(settings.pressureAt120Sec, DEFAULT_SPAWN_TUNING.pressureAt120Sec)));
     spawnRateOrbSlider.value = `${spawnOrb}`;
     monsterHealthOrbSlider.value = `${healthOrb}`;
     spawnBaseSlider.value = `${spawnBase}`;
     monsterHealthBaseSlider.value = `${healthBase}`;
+    pressureT0Slider.value = `${pressureT0}`;
+    pressureT120Slider.value = `${pressureT120}`;
     spawnRateOrbValue.textContent = num(spawnOrb, 2);
     monsterHealthOrbValue.textContent = num(healthOrb, 2);
     spawnBaseValue.textContent = num(spawnBase, 2);
     monsterHealthBaseValue.textContent = num(healthBase, 2);
+    pressureT0Value.textContent = num(pressureT0, 2);
+    pressureT120Value.textContent = num(pressureT120, 2);
   };
 
   resumeBtn.addEventListener("click", args.actions.onResume);
@@ -943,11 +955,12 @@ export function mountPauseMenu(args: {
   musicMuteBtn.addEventListener("click", onMusicMute);
   sfxSlider.addEventListener("input", onSfxSlider);
   sfxMuteBtn.addEventListener("click", onSfxMute);
-  pressureSlider.addEventListener("input", onPressureSlider);
   spawnRateOrbSlider.addEventListener("input", onSpawnTuningSlider);
   monsterHealthOrbSlider.addEventListener("input", onSpawnTuningSlider);
   spawnBaseSlider.addEventListener("input", onSpawnTuningSlider);
   monsterHealthBaseSlider.addEventListener("input", onSpawnTuningSlider);
+  pressureT0Slider.addEventListener("input", onSpawnTuningSlider);
+  pressureT120Slider.addEventListener("input", onSpawnTuningSlider);
   paletteToggle.addEventListener("change", () => {
     const enabled = !!(paletteToggle as HTMLInputElement).checked;
     updateUserSettings({ render: { paletteSwapEnabled: enabled } });
@@ -1000,10 +1013,7 @@ export function mountPauseMenu(args: {
   spawnTuningResetBtn.addEventListener("click", () => {
     updateUserSettings({
       render: {
-        spawnBasePowerPerSecond: 1.0,
-        spawnRateOrbBasePerDepth: 1.12,
-        monsterHealthBaseMult: 1.0,
-        monsterHealthOrbBasePerDepth: 1.18,
+        ...DEFAULT_SPAWN_TUNING,
       },
     });
     syncSpawnTuningControls();
@@ -1060,11 +1070,12 @@ export function mountPauseMenu(args: {
       musicMuteBtn.removeEventListener("click", onMusicMute);
       sfxSlider.removeEventListener("input", onSfxSlider);
       sfxMuteBtn.removeEventListener("click", onSfxMute);
-      pressureSlider.removeEventListener("input", onPressureSlider);
       spawnRateOrbSlider.removeEventListener("input", onSpawnTuningSlider);
       monsterHealthOrbSlider.removeEventListener("input", onSpawnTuningSlider);
       spawnBaseSlider.removeEventListener("input", onSpawnTuningSlider);
       monsterHealthBaseSlider.removeEventListener("input", onSpawnTuningSlider);
+      pressureT0Slider.removeEventListener("input", onSpawnTuningSlider);
+      pressureT120Slider.removeEventListener("input", onSpawnTuningSlider);
       host.remove();
       for (const el of preservedChildren) {
         el.hidden = false;

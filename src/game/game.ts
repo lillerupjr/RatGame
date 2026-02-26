@@ -113,7 +113,8 @@ import { mountRelicRewardMenu } from "../ui/rewards/relicRewardMenu";
 import { mountVendorShopMenu } from "../ui/vendor/vendorShopMenu";
 import { tickSpawnDirector } from "./balance/spawnDirector";
 import { tickBalanceCsvLogger } from "./balance/balanceCsvLogger";
-import { buildSurviveSpawnOverrides, SURVIVE_RAMP_CONFIG } from "./balance/surviveRamp";
+import { BASELINE_PLAYER_DPS, computePressure } from "./balance/pressureModel";
+import { DEFAULT_SPAWN_TUNING } from "./balance/spawnTuningDefaults";
 import { createFloorRewardBudget, type ObjectiveMode } from "./rewards/floorRewardBudget";
 import { handleRewardEvent, type RewardOutcome } from "./rewards/rewardDirector";
 
@@ -1273,6 +1274,7 @@ export function createGame(args: CreateGameArgs) {
     // Reset Spawn Director per-floor.
     if (w.spawnDirectorState) {
       w.spawnDirectorState.powerBudget = 0;
+      w.spawnDirectorState.pendingHpCommitted = 0;
       w.spawnDirectorState.pendingSpawns = 0;
       w.spawnDirectorState.waveRemaining = 0;
       w.spawnDirectorState.chunkCooldownSec = 0;
@@ -1284,20 +1286,28 @@ export function createGame(args: CreateGameArgs) {
       w.spawnDirectorState.spawnsPerSecond = 0;
     }
 
-    const tuning = (w as any).balance?.spawnTuning ?? {};
     const depth = Math.max(1, Math.floor((w.currentFloorIntent?.depth ?? (w.floorIndex ?? 0) + 1) as number));
-
-    const frontloadBase =
-      typeof tuning.frontloadOrbBasePerDepth === "number" ? Math.max(0.0001, tuning.frontloadOrbBasePerDepth) : 1.0;
-    const frontloadMult = Math.pow(frontloadBase, Math.max(0, depth - 1));
-
-    const seedBase =
-      typeof tuning.initialPendingSpawns === "number" ? Math.max(0, Math.floor(tuning.initialPendingSpawns)) : 10;
-
-    const seed = Math.max(0, Math.floor(seedBase * frontloadMult));
+    const seed = 10;
 
     if (w.spawnDirectorState) {
       w.spawnDirectorState.pendingSpawns += seed;
+    }
+
+    if ((w as any).debug?.verboseSpawnLogs) {
+      const tuning = (w as any).balance?.spawnTuning ?? {};
+      const spawnBase = typeof tuning.spawnBase === "number" ? tuning.spawnBase : DEFAULT_SPAWN_TUNING.spawnBase;
+      const spawnPerDepth = typeof tuning.spawnPerDepth === "number" ? tuning.spawnPerDepth : DEFAULT_SPAWN_TUNING.spawnPerDepth;
+      const pressureAt0Sec = typeof tuning.pressureAt0Sec === "number" ? tuning.pressureAt0Sec : DEFAULT_SPAWN_TUNING.pressureAt0Sec;
+      const pressureAt120Sec = typeof tuning.pressureAt120Sec === "number" ? tuning.pressureAt120Sec : DEFAULT_SPAWN_TUNING.pressureAt120Sec;
+      const spawnMult = spawnBase * Math.pow(Math.max(0.0001, spawnPerDepth), Math.max(0, depth - 1));
+      const pressure = computePressure(0, pressureAt0Sec, pressureAt120Sec);
+      const spawnHPPerSecond = BASELINE_PLAYER_DPS * pressure * spawnMult;
+      console.log(
+        "[SpawnModel]",
+        "depth=", depth,
+        "pressure=", pressure.toFixed(2),
+        "spawnHPPerSec=", spawnHPPerSecond.toFixed(2)
+      );
     }
 
     emitEvent(w, { type: "SFX", id: "FLOOR_START", vol: 0.9, rate: 1 });
@@ -2245,11 +2255,6 @@ export function createGame(args: CreateGameArgs) {
     neutralAnimatedMobsSystem(world, dt);
     roomChallengeSystem(world, dt);  // Track room challenges and lock exits
     spawnSurviveBossIfNeeded(world);
-    if (world.floorArchetype === "SURVIVE") {
-      world.spawnDirectorOverrides = buildSurviveSpawnOverrides(world.timeSec ?? world.phaseTime ?? 0);
-    } else {
-      world.spawnDirectorOverrides = undefined;
-    }
     world.spawnDirectorConfig.enabled = !!world.balance.spawnDirectorEnabled;
     if (world.balance.spawnDirectorEnabled) {
       if (!world.floorEndCountdownActive) {
@@ -2268,10 +2273,7 @@ export function createGame(args: CreateGameArgs) {
             isBossActive: () => world.runState === "BOSS" || bossAlive(world),
             canSpawnNow: () => world.runState === "FLOOR" && world.phaseTime >= 2,
             spawnTrash: () => {
-              let tier: "trash" | "elite" = "trash";
-              const eliteChance = world.spawnDirectorOverrides?.eliteChanceOverride ?? 0;
-              if (eliteChance > 0 && world.rng.next() < eliteChance) tier = "elite";
-              return spawnOneTrashEnemy(world, undefined, undefined, tier);
+              return spawnOneTrashEnemy(world, undefined, undefined, "trash");
             },
           }
         );

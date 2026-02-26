@@ -153,10 +153,12 @@ const userSettingsState = vi.hoisted(() => ({
     render: {
       paletteSwapEnabled: false,
       paletteId: "db32",
-      spawnBasePowerPerSecond: 1.0,
-      spawnRateOrbBasePerDepth: 1.12,
-      monsterHealthBaseMult: 1.0,
-      monsterHealthOrbBasePerDepth: 1.18,
+      spawnBase: 1.0,
+      spawnPerDepth: 1.12,
+      hpBase: 1.0,
+      hpPerDepth: 1.18,
+      pressureAt0Sec: 0.8,
+      pressureAt120Sec: 1.4,
     },
   },
 }));
@@ -252,10 +254,12 @@ describe("pauseMenu", () => {
       render: {
         paletteSwapEnabled: false,
         paletteId: "db32",
-        spawnBasePowerPerSecond: 1.0,
-        spawnRateOrbBasePerDepth: 1.12,
-        monsterHealthBaseMult: 1.0,
-        monsterHealthOrbBasePerDepth: 1.18,
+        spawnBase: 1.0,
+        spawnPerDepth: 1.12,
+        hpBase: 1.0,
+        hpPerDepth: 1.18,
+        pressureAt0Sec: 0.8,
+        pressureAt120Sec: 1.4,
       },
     };
   });
@@ -557,7 +561,6 @@ describe("pauseMenu", () => {
           actualDps: 0,
           expectedDps: 0,
           aheadFactor: 0,
-          globalPressureMult: 1,
           basePressure: 1,
           effectivePressure: 1,
           pressure: 1,
@@ -596,7 +599,6 @@ describe("pauseMenu", () => {
           actualDps: 2,
           expectedDps: 3,
           aheadFactor: 0.7,
-          globalPressureMult: 1,
           basePressure: 1,
           effectivePressure: 1,
           pressure: 1,
@@ -618,7 +620,7 @@ describe("pauseMenu", () => {
     );
 
     // Default tab: Spawn
-    expect(root.textContent).toContain("Spawn HP/sec80");
+    expect(root.textContent).toContain("Spawn HP Budget/sec80");
     expect(root.textContent).not.toContain("Actual DPS (inst)1.00");
 
     const combatTab = root.querySelector('[data-stats-debug-tab-id="COMBAT"]') as any;
@@ -675,10 +677,14 @@ describe("pauseMenu", () => {
     const healthOrbSlider = root.querySelector("[data-monster-health-orb-slider]") as any;
     const spawnBaseSlider = root.querySelector("[data-spawn-base-slider]") as any;
     const healthBaseSlider = root.querySelector("[data-monster-health-base-slider]") as any;
+    const pressureT0Slider = root.querySelector("[data-pressure-t0-slider]") as any;
+    const pressureT120Slider = root.querySelector("[data-pressure-t120-slider]") as any;
     expect(spawnSlider).toBeTruthy();
     expect(healthOrbSlider).toBeTruthy();
     expect(spawnBaseSlider).toBeTruthy();
     expect(healthBaseSlider).toBeTruthy();
+    expect(pressureT0Slider).toBeTruthy();
+    expect(pressureT120Slider).toBeTruthy();
 
     spawnSlider.value = "1.25";
     spawnSlider.dispatchEvent(new Event("input") as any);
@@ -688,43 +694,77 @@ describe("pauseMenu", () => {
     spawnBaseSlider.dispatchEvent(new Event("input") as any);
     healthBaseSlider.value = "1.15";
     healthBaseSlider.dispatchEvent(new Event("input") as any);
+    pressureT0Slider.value = "0.90";
+    pressureT0Slider.dispatchEvent(new Event("input") as any);
+    pressureT120Slider.value = "1.80";
+    pressureT120Slider.dispatchEvent(new Event("input") as any);
 
     expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({
       render: {
-        spawnBasePowerPerSecond: 1.0,
-        spawnRateOrbBasePerDepth: 1.25,
-        monsterHealthBaseMult: 1.0,
-        monsterHealthOrbBasePerDepth: 1.18,
+        spawnBase: 1.0,
+        spawnPerDepth: 1.25,
+        hpBase: 1.0,
+        hpPerDepth: 1.18,
+        pressureAt0Sec: 0.8,
+        pressureAt120Sec: 1.4,
       },
     });
     expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({
       render: {
-        spawnBasePowerPerSecond: 1.0,
-        spawnRateOrbBasePerDepth: 1.25,
-        monsterHealthBaseMult: 1.0,
-        monsterHealthOrbBasePerDepth: 1.3,
+        spawnBase: 1.0,
+        spawnPerDepth: 1.25,
+        hpBase: 1.0,
+        hpPerDepth: 1.3,
+        pressureAt0Sec: 0.8,
+        pressureAt120Sec: 1.4,
       },
     });
     expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({
       render: {
-        spawnBasePowerPerSecond: 1.4,
-        spawnRateOrbBasePerDepth: 1.25,
-        monsterHealthBaseMult: 1.0,
-        monsterHealthOrbBasePerDepth: 1.3,
+        spawnBase: 1.4,
+        spawnPerDepth: 1.25,
+        hpBase: 1.0,
+        hpPerDepth: 1.3,
+        pressureAt0Sec: 0.8,
+        pressureAt120Sec: 1.4,
       },
     });
     expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({
       render: {
-        spawnBasePowerPerSecond: 1.4,
-        spawnRateOrbBasePerDepth: 1.25,
-        monsterHealthBaseMult: 1.15,
-        monsterHealthOrbBasePerDepth: 1.3,
+        spawnBase: 1.4,
+        spawnPerDepth: 1.25,
+        hpBase: 1.15,
+        hpPerDepth: 1.3,
+        pressureAt0Sec: 0.8,
+        pressureAt120Sec: 1.4,
+      },
+    });
+    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({
+      render: {
+        spawnBase: 1.4,
+        spawnPerDepth: 1.25,
+        hpBase: 1.15,
+        hpPerDepth: 1.3,
+        pressureAt0Sec: 0.9,
+        pressureAt120Sec: 1.4,
+      },
+    });
+    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({
+      render: {
+        spawnBase: 1.4,
+        spawnPerDepth: 1.25,
+        hpBase: 1.15,
+        hpPerDepth: 1.3,
+        pressureAt0Sec: 0.9,
+        pressureAt120Sec: 1.8,
       },
     });
 
-    expect((world as any).balance.spawnTuning.spawnRateOrbBasePerDepth).toBeCloseTo(1.25, 3);
-    expect((world as any).balance.spawnTuning.monsterHealthOrbBasePerDepth).toBeCloseTo(1.3, 3);
-    expect((world as any).expectedPowerBudgetConfig.basePowerPerSecond).toBeCloseTo(1.4, 3);
-    expect((world as any).balance.spawnTuning.monsterHealthBaseMult).toBeCloseTo(1.15, 3);
+    expect((world as any).balance.spawnTuning.spawnPerDepth).toBeCloseTo(1.25, 3);
+    expect((world as any).balance.spawnTuning.hpPerDepth).toBeCloseTo(1.3, 3);
+    expect((world as any).balance.spawnTuning.spawnBase).toBeCloseTo(1.4, 3);
+    expect((world as any).balance.spawnTuning.hpBase).toBeCloseTo(1.15, 3);
+    expect((world as any).balance.spawnTuning.pressureAt0Sec).toBeCloseTo(0.9, 3);
+    expect((world as any).balance.spawnTuning.pressureAt120Sec).toBeCloseTo(1.8, 3);
   });
 });

@@ -5,7 +5,6 @@ import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { worldToGrid } from "../../coords/grid";
 import { getPlayerWorld } from "../../coords/worldViews";
 import { spawnEnemyGrid } from "../../factories/enemyFactory";
-import { computeSpawnHpFromPower } from "../../balance/spawnHp";
 import type { EnemyPowerTier } from "../../balance/enemyPower";
 
 export function spawnSystem(w: World, dt: number) {
@@ -18,16 +17,16 @@ export function spawnSystem(w: World, dt: number) {
 
 /**
  * Spawn one floor-appropriate trash enemy around an origin point.
- * Returns true if an enemy was spawned.
+ * Returns scaled HP of spawned enemy, or 0 if none spawned.
  */
 export function spawnOneTrashEnemy(
   w: World,
   originX?: number,
   originY?: number,
   powerTier: EnemyPowerTier = "trash"
-): boolean {
-  if (w.runState !== "FLOOR") return false;
-  if (w.floorArchetype === "VENDOR" || w.floorArchetype === "HEAL") return false;
+): number {
+  if (w.runState !== "FLOOR") return 0;
+  if (w.floorArchetype === "VENDOR" || w.floorArchetype === "HEAL") return 0;
 
   const pw = getPlayerWorld(w, KENNEY_TILE_WORLD);
   const ox = originX ?? pw.wx;
@@ -50,17 +49,11 @@ export function spawnOneTrashEnemy(
     if (!floorOk) continue;
 
     const gp = worldToGrid(wx, wy, KENNEY_TILE_WORLD);
-    const depth = Number.isFinite(w.delveDepth) && w.delveDepth > 0 ? w.delveDepth : (w.floorIndex ?? 0) + 1;
-    const hp = computeSpawnHpFromPower(
-      w.expectedPowerConfig,
-      w.enemyPowerConfig,
-      w.timeSec ?? w.phaseTime ?? 0,
-      depth,
-      powerTier
-    );
-    spawnEnemyGrid(w, type, gp.gx, gp.gy, KENNEY_TILE_WORLD, { hpSeedFromDirector: hp });
-    return true;
+    void powerTier;
+    const enemyIndex = spawnEnemyGrid(w, type, gp.gx, gp.gy, KENNEY_TILE_WORLD);
+    const hp = Number(w.eHp?.[enemyIndex] ?? 0);
+    return Number.isFinite(hp) && hp > 0 ? hp : 0;
   }
 
-  return false;
+  return 0;
 }

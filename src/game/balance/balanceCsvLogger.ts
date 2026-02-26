@@ -11,7 +11,6 @@ export type BalanceCsvRow = {
 
   // Spawn director signals (best-effort; "-" if missing)
   pressure: number;
-  globalPressure: number;
   basePressure: number;
   effectivePressure: number;
 
@@ -131,7 +130,6 @@ export function tickBalanceCsvLogger(w: any, dtSec: number): void {
     aliveEnemyHp,
 
     pressure: safeNum(dbg?.spawnPressureMult ?? dbg?.pressure, 0),
-    globalPressure: safeNum(dbg?.globalPressureMult, 0),
     basePressure: safeNum(dbg?.basePressure, 0),
     effectivePressure: safeNum(dbg?.effectivePressure ?? dbg?.pressure, 0),
 
@@ -156,7 +154,6 @@ export function buildBalanceCsv(logger: BalanceCsvLogger): string {
     "spawnedHpTotal",
     "aliveEnemyHp",
     "pressure",
-    "globalPressure",
     "basePressure",
     "effectivePressure",
     "powerPerSecond",
@@ -176,7 +173,6 @@ export function buildBalanceCsv(logger: BalanceCsvLogger): string {
       r.spawnedHpTotal,
       r.aliveEnemyHp,
       r.pressure,
-      r.globalPressure,
       r.basePressure,
       r.effectivePressure,
       r.powerPerSecond,

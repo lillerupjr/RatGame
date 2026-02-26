@@ -38,8 +38,8 @@ const powerBudgetCfg: ExpectedPowerBudgetConfig = {
   powerRampMax: 2,
 };
 
-describe("spawnDirector power budget", () => {
-  test("power budget converts to pending count by trash power cost", () => {
+describe("spawnDirector interval queue", () => {
+  test("spawn interval converts elapsed time into pending count", () => {
     const state = createSpawnDirectorState();
     const w: any = {
       timeSec: 10,
@@ -60,8 +60,31 @@ describe("spawnDirector power budget", () => {
 
     expect(state.pendingSpawns).toBe(10);
     expect(spawned).toBe(0);
-    expect(w.spawnDirectorDebug.powerPerSecond).toBeCloseTo(1.0833333333);
-    expect(w.spawnDirectorDebug.powerBudget).toBeCloseTo(0.8333333333);
+    expect(w.spawnDirectorDebug.powerPerSecond).toBeCloseTo(20.8);
+    expect(w.spawnDirectorDebug.powerBudget).toBeCloseTo(208);
+    expect((w.spawnDirectorDebug as any).pendingHpCommitted).toBeCloseTo(200);
     expect(w.spawnDirectorDebug.trashPowerCost).toBeCloseTo(1);
+  });
+
+  test("subtracts actual spawned scaled HP from budget accumulator", () => {
+    const state = createSpawnDirectorState();
+    const w: any = {
+      timeSec: 10,
+      metrics: { dps: createDpsMetrics() },
+      enemyPowerConfig: { costs: { trash: 1 } },
+    };
+
+    tickSpawnDirector(w, 10, cfg, expectedCfg, powerBudgetCfg, state, {
+      getDepth: () => 0,
+      isBossActive: () => false,
+      canSpawnNow: () => true,
+      // Spend more than representative HP (20) per spawn: 40 HP each.
+      spawnTrash: () => 40,
+    });
+
+    // 208 HP budget generated, 10 pending reserved (200), first chunk spawns 3 => 120 HP consumed.
+    expect(w.spawnDirectorDebug.powerBudget).toBeCloseTo(88);
+    expect((w.spawnDirectorDebug as any).pendingHpCommitted).toBeCloseTo(140);
+    expect(state.waveRemaining).toBe(7);
   });
 });

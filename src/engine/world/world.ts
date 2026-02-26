@@ -29,6 +29,7 @@ import {
 import type { ExpectedPowerBudgetConfig, ExpectedPowerConfig } from "../../game/balance/expectedPower";
 import { defaultEnemyPowerCostConfig, type EnemyPowerCostConfig } from "../../game/balance/enemyPower";
 import { createBalanceCsvLogger, type BalanceCsvLogger } from "../../game/balance/balanceCsvLogger";
+import { DEFAULT_SPAWN_TUNING } from "../../game/balance/spawnTuningDefaults";
 
 import type { WeaponId } from "../../game/content/weapons";
 
@@ -515,21 +516,12 @@ export type World = {
   balance: {
     spawnDirectorEnabled: boolean;
     spawnTuning?: {
-      // Orb A: Monster Health (per-depth multiplicative)
-      monsterHealthOrbBasePerDepth?: number;
-      // HP baseline multiplier at depth 1 (before depth orb exponent)
-      monsterHealthBaseMult?: number;
-      // Orb B: Spawn Rate (power income per-depth multiplicative)
-      spawnRateOrbBasePerDepth?: number;
-      // Orb C: Early presence (per-depth multiplicative)
-      // Used ONLY to scale initialPendingSpawns at floor start.
-      frontloadOrbBasePerDepth?: number;
-      // Time pressure curve knobs (designer-controlled)
+      spawnBase?: number;
+      spawnPerDepth?: number;
+      hpBase?: number;
+      hpPerDepth?: number;
       pressureAt0Sec?: number;
-      pressureAt60Sec?: number;
       pressureAt120Sec?: number;
-      // NEW: seed pending spawns at floor start (“~10 mobs”)
-      initialPendingSpawns?: number;
     };
   };
   spawnDirectorState: SpawnDirectorState;
@@ -538,14 +530,6 @@ export type World = {
   expectedPowerBudgetConfig: ExpectedPowerBudgetConfig;
   enemyPowerConfig: EnemyPowerCostConfig;
   balanceCsvLogger: BalanceCsvLogger;
-  spawnDirectorOverrides?: {
-    powerPerSecondOverride?: number;
-    waveChunkOverride?: number;
-    waveDelayOverride?: number;
-    eliteChanceOverride?: number;
-    progress?: number;
-    ramp?: number;
-  };
   spawnDirectorDebug?: {
     depth: number;
     timeSec: number;
@@ -554,12 +538,12 @@ export type World = {
     actualDpsInstant: number;
     aheadFactor: number;
     basePressure: number;
-    globalPressureMult: number;
     effectivePressure: number;
     pressure: number;
     waveMult: number;
     timePressure?: number;
     spawnPressureMult?: number;
+    spawnHpMult?: number;
     powerPerSecond: number;
     effectivePowerPerSecond?: number;
     throttleScale?: number;
@@ -568,6 +552,7 @@ export type World = {
     spawnHpPerSecond?: number;
     trashPowerCost: number;
     powerBudget: number;
+    pendingHpCommitted?: number;
     pendingSpawns: number;
     waveRemaining: number;
     chunkCooldownSec: number;
@@ -576,13 +561,6 @@ export type World = {
     queuedPerSecond: number;
     pendingThresholdToStartWave: number;
     spawnsPerSecond: number;
-    survive?: {
-      progress: number;
-      ramp: number;
-      powerPerSecond: number;
-      chunkSize: number;
-      chunkDelay: number;
-    };
   };
 };
 
@@ -913,26 +891,12 @@ export function createWorld(args: CreateWorldArgs): World {
       // All three scale multiplicatively with depth:
       // mult(depth) = basePerDepth ^ max(0, depth - 1)
       spawnTuning: {
-        // Orb A: Monster Health
-        monsterHealthOrbBasePerDepth: 1.18,
-        // HP baseline multiplier at depth 1
-        monsterHealthBaseMult: 1.0,
-        // Orb B: Spawn Rate (power income)
-        spawnRateOrbBasePerDepth: 1.12,
-        // Orb C: Front-load bias (early floor presence)
-        frontloadOrbBasePerDepth: 1.05,
-        // Time pressure curve knobs (designer-controlled)
-        pressureAt0Sec: 1.0,
-        pressureAt60Sec: 1.5,
-        pressureAt120Sec: 2.0,
-        // Seed pending spawns at floor start (“~10 mobs”)
-        initialPendingSpawns: 10,
+        ...DEFAULT_SPAWN_TUNING,
       },
     },
     spawnDirectorState: createSpawnDirectorState(),
     spawnDirectorConfig: {
       enabled: true,
-      globalPressureMult: 1,
       pressureBase: 0.7,
       pressurePerDepth: 0.05,
       pressureMin: 0.6,
@@ -953,6 +917,7 @@ export function createWorld(args: CreateWorldArgs): World {
       // Queue control (prevents “pending poisoning”)
       pendingSoftCap: 200,
       pendingHardCap: 600,
+      baseSpawnIntervalSec: 1.0,
     },
     expectedPowerConfig: {
       timeCurve: [

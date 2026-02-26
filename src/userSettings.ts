@@ -1,4 +1,5 @@
 import { DEFAULT_DEBUG_SETTINGS, type DebugSettings } from "./debugSettings";
+import { DEFAULT_SPAWN_TUNING } from "./game/balance/spawnTuningDefaults";
 
 export type RenderSettings = {
   entityShadowsEnabled: boolean;
@@ -24,10 +25,12 @@ export type RenderSettings = {
     | "lush_sunset"
     | "vaporhaze_16"
     | "sunset_cave_extended";
-  spawnBasePowerPerSecond: number;
-  spawnRateOrbBasePerDepth: number;
-  monsterHealthBaseMult: number;
-  monsterHealthOrbBasePerDepth: number;
+  spawnBase: number;
+  spawnPerDepth: number;
+  hpBase: number;
+  hpPerDepth: number;
+  pressureAt0Sec: number;
+  pressureAt120Sec: number;
 };
 
 export type UserSettings = {
@@ -47,10 +50,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
     entityAnchorsEnabled: true,
     paletteSwapEnabled: false,
     paletteId: "db32",
-    spawnBasePowerPerSecond: 1.0,
-    spawnRateOrbBasePerDepth: 1.12,
-    monsterHealthBaseMult: 1.0,
-    monsterHealthOrbBasePerDepth: 1.18,
+    ...DEFAULT_SPAWN_TUNING,
   },
 };
 

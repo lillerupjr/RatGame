@@ -132,7 +132,7 @@ describe("spawnDirector wave scheduler", () => {
       },
     });
 
-    expect(state.pendingSpawns).toBe(5);
+    expect(state.pendingSpawns).toBe(4);
     expect(spawns).toBe(0);
     expect(state.queuedPerSecond).toBeGreaterThan(0);
   });
