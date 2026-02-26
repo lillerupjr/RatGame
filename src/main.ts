@@ -144,6 +144,27 @@ function installDevSettingsUi(): void {
   entityAnchorsRow.appendChild(entityAnchorsInput);
   panel.appendChild(entityAnchorsRow);
 
+  const renderPerfCountersRow = document.createElement("label");
+  renderPerfCountersRow.style.display = "flex";
+  renderPerfCountersRow.style.alignItems = "center";
+  renderPerfCountersRow.style.justifyContent = "space-between";
+  renderPerfCountersRow.style.gap = "10px";
+  renderPerfCountersRow.style.padding = "4px 0";
+  const renderPerfCountersText = document.createElement("span");
+  renderPerfCountersText.textContent = "renderPerfCountersEnabled";
+  const renderPerfCountersInput = document.createElement("input");
+  renderPerfCountersInput.type = "checkbox";
+  renderPerfCountersInput.addEventListener("change", () => {
+    updateUserSettings({
+      render: {
+        renderPerfCountersEnabled: renderPerfCountersInput.checked,
+      },
+    });
+  });
+  renderPerfCountersRow.appendChild(renderPerfCountersText);
+  renderPerfCountersRow.appendChild(renderPerfCountersInput);
+  panel.appendChild(renderPerfCountersRow);
+
   const paletteSwapRow = document.createElement("label");
   paletteSwapRow.style.display = "flex";
   paletteSwapRow.style.alignItems = "center";
@@ -507,6 +528,7 @@ function installDevSettingsUi(): void {
     fireRateMultBtn.textContent = `${s.debug.fireRateMult}x`;
     entityShadowsInput.checked = s.render.entityShadowsEnabled;
     entityAnchorsInput.checked = s.render.entityAnchorsEnabled;
+    renderPerfCountersInput.checked = s.render.renderPerfCountersEnabled;
     paletteSwapInput.checked = s.render.paletteSwapEnabled;
     paletteIdSelect.value = s.render.paletteId;
   };

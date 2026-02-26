@@ -12,7 +12,6 @@ import { preloadNeutralMobSprites } from "../../../engine/render/sprites/neutral
 import {
   heightAtWorld,
   walkInfo,
-  getTile,
   surfacesAtXY,
   facePieceLayers,
   facePiecesInViewForLayer,
@@ -86,6 +85,18 @@ import { renderZoneObjectives } from "../../render/renderZoneObjectives";
 import { resolveActivePaletteId } from "../../render/activePalette";
 import { resolveNavArrowTarget } from "../../ui/navArrowTarget";
 import { renderNavArrow } from "../../ui/navArrowRender";
+import {
+  beginRenderPerfFrame,
+  countRenderTileLoopIteration,
+  countRenderClosureCreated,
+  countRenderDrawableSort,
+  countRenderSliceKeySort,
+  endRenderPerfFrame,
+  getRenderPerfSnapshot,
+  setRenderPerfCountersEnabled,
+  setRenderPerfDrawTag,
+  setRenderTileLoopRadius,
+} from "./renderPerfCounters";
 
 // ============================================
 // RenderKey & KindOrder (Isometric Painter Model)
@@ -129,7 +140,116 @@ function compareRenderKeys(a: RenderKey, b: RenderKey): number {
 const DEBUG_PLAYER_WEDGE = false;
 const HARDCODED_VOID_TOP_SRC = "/assets-runtime/tiles/floor/void.png";
 
+// Background mode:
+// - "SOLID" = fastest, clean black void
+// - "PATTERN" = repeats void tile as canvas pattern (still fast, looks textured)
+const VOID_BG_MODE: "SOLID" | "PATTERN" = "SOLID";
+
+let voidBgPattern: CanvasPattern | null = null;
+let voidBgPatternImgRef: HTMLImageElement | null = null;
+
 const flippedOverlayImageCache = new WeakMap<HTMLImageElement, HTMLCanvasElement>();
+
+// ROI #3: prebaked iso runtime tops (sidewalk/asphalt/park)
+// Keyed by the *actual* loaded image object (palette-specific) + rotation.
+const runtimeIsoTopCache = new WeakMap<HTMLImageElement, Map<0 | 1 | 2 | 3, HTMLCanvasElement>>();
+const runtimeIsoDecalCache = new WeakMap<HTMLImageElement, Map<string, HTMLCanvasElement>>();
+
+function getRuntimeIsoTopCanvas(
+  srcImg: HTMLImageElement,
+  rotationQuarterTurns: 0 | 1 | 2 | 3,
+): HTMLCanvasElement | null {
+  if (!srcImg || srcImg.width <= 0 || srcImg.height <= 0) return null;
+
+  let byRot = runtimeIsoTopCache.get(srcImg);
+  if (!byRot) {
+    byRot = new Map();
+    runtimeIsoTopCache.set(srcImg, byRot);
+  }
+
+  const cached = byRot.get(rotationQuarterTurns);
+  if (cached) return cached;
+
+  // 128x128 square -> 128x64 iso diamond
+  const outW = 128;
+  const outH = 64;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = outW;
+  canvas.height = outH;
+
+  const c2d = canvas.getContext("2d");
+  if (!c2d) return null;
+  configurePixelPerfect(c2d);
+
+  // Bake so that the diamond is centered at (outW/2, outH/2).
+  // This matches the runtime path that translated to (centerX, centerY).
+  c2d.save();
+  c2d.translate(outW * 0.5, outH * 0.5);
+
+  // Apply 2:1 iso projection from square space into diamond space.
+  c2d.transform(0.5, 0.25, -0.5, 0.25, 0, 0);
+
+  // Apply rotation in square space (as before).
+  c2d.rotate(rotationQuarterTurns * (Math.PI * 0.5));
+
+  // Draw source square centered.
+  c2d.translate(-(128 * 0.5), -(128 * 0.5));
+  c2d.drawImage(srcImg, 0, 0, 128, 128);
+  c2d.restore();
+
+  byRot.set(rotationQuarterTurns, canvas);
+  return canvas;
+}
+
+function getRuntimeIsoDecalCanvas(
+  srcImg: HTMLImageElement,
+  rotationQuarterTurns: 0 | 1 | 2 | 3,
+  scale: number,
+): HTMLCanvasElement | null {
+  if (!srcImg || srcImg.width <= 0 || srcImg.height <= 0) return null;
+  if (!(scale > 0)) return null;
+
+  let byKey = runtimeIsoDecalCache.get(srcImg);
+  if (!byKey) {
+    byKey = new Map();
+    runtimeIsoDecalCache.set(srcImg, byKey);
+  }
+
+  const scaleQ = Math.round(scale * 1000) / 1000;
+  const key = `${rotationQuarterTurns}|${scaleQ}`;
+  const cached = byKey.get(key);
+  if (cached) return cached;
+
+  const srcW = srcImg.width * scaleQ;
+  const srcH = srcImg.height * scaleQ;
+  const rotOdd = (rotationQuarterTurns & 1) === 1;
+  const rotW = rotOdd ? srcH : srcW;
+  const rotH = rotOdd ? srcW : srcH;
+  const span = rotW + rotH;
+  const outW = Math.max(1, Math.ceil(span * 0.5));
+  const outH = Math.max(1, Math.ceil(span * 0.25));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = outW;
+  canvas.height = outH;
+
+  const c2d = canvas.getContext("2d");
+  if (!c2d) return null;
+  configurePixelPerfect(c2d);
+
+  c2d.save();
+  c2d.translate(outW * 0.5, outH * 0.5);
+  c2d.transform(0.5, 0.25, -0.5, 0.25, 0, 0);
+  c2d.rotate(rotationQuarterTurns * (Math.PI * 0.5));
+  c2d.translate(-(srcW * 0.5), -(srcH * 0.5));
+  c2d.drawImage(srcImg, 0, 0, srcW, srcH);
+  c2d.restore();
+
+  byKey.set(key, canvas);
+  return canvas;
+}
+
 let hardcodedVoidTopImage: HTMLImageElement | null = null;
 let hardcodedVoidTopReady = false;
 let hardcodedVoidTopFailed = false;
@@ -160,6 +280,65 @@ function getHardcodedVoidTop(): { ready: boolean; img: HTMLImageElement | null }
     hardcodedVoidTopImage = img;
   }
   return { ready: false, img: hardcodedVoidTopImage };
+}
+
+function drawVoidBackgroundOnce(
+  ctx: CanvasRenderingContext2D,
+  devW: number,
+  devH: number,
+  camTx: number,
+  camTy: number,
+  s: number,
+): void {
+  // Always reset to screen space for background
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalCompositeOperation = "source-over";
+
+  if (VOID_BG_MODE === "SOLID") {
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, devW, devH);
+    ctx.restore();
+    return;
+  }
+
+  // PATTERN mode: use the void tile image as a repeating pattern
+  const rec = getHardcodedVoidTop();
+  const img = rec.ready ? rec.img : null;
+  if (!img || img.width <= 0 || img.height <= 0) {
+    // Fallback while loading
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, devW, devH);
+    ctx.restore();
+    return;
+  }
+
+  // Rebuild pattern only if image changes (or first time)
+  if (!voidBgPattern || voidBgPatternImgRef !== img) {
+    voidBgPatternImgRef = img;
+    voidBgPattern = ctx.createPattern(img, "repeat");
+  }
+
+  if (voidBgPattern) {
+    // World-locked: pattern origin follows the same camera translation as world rendering.
+    // We are in screen space here, so convert world-space translate (camTx/camTy)
+    // into device pixels by multiplying with s.
+    const ox = Math.round(camTx * s);
+    const oy = Math.round(camTy * s);
+
+    // Force context-translate path; CanvasPattern.setTransform can trigger
+    // slow paths on some browser/GPU combinations.
+    ctx.save();
+    ctx.translate(ox, oy);
+    ctx.fillStyle = voidBgPattern;
+    ctx.fillRect(-ox, -oy, devW, devH);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, devW, devH);
+  }
+
+  ctx.restore();
 }
 
 function getFlippedOverlayImage(img: HTMLImageElement): HTMLCanvasElement {
@@ -406,6 +585,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const ww = Math.max(1, Math.floor(cssW / pixelScale));
   const hh = Math.max(1, Math.floor(cssH / pixelScale));
   configurePixelPerfect(ctx);
+  setRenderPerfCountersEnabled(getUserSettings().render.renderPerfCountersEnabled);
+  beginRenderPerfFrame(devW, devH);
   (w as any).viewW = ww;
   (w as any).viewH = hh;
 
@@ -458,6 +639,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const camYRaw = viewCenterY - p0.y;
   const camTx = Math.round(camXRaw);
   const camTy = Math.round(camYRaw);
+  // NEW: draw background once, world-locked to the camera
+  drawVoidBackgroundOnce(ctx, devW, devH, camTx, camTy, s);
   const camX = 0;
   const camY = 0;
   const worldToScreenPx = (xWorld: number, yWorld: number) => ({ x: (xWorld + camTx) * s, y: (yWorld + camTy) * s });
@@ -660,8 +843,23 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     return within3 && south;
   };
 
+  // Frame-local cache: render paths query the same surface tile coordinates many times.
+  const surfacesCache = new Map<number, Map<number, ReturnType<typeof surfacesAtXY>>>();
+  const surfacesAtXYCached = (tx: number, ty: number) => {
+    let byTy = surfacesCache.get(tx);
+    if (!byTy) {
+      byTy = new Map<number, ReturnType<typeof surfacesAtXY>>();
+      surfacesCache.set(tx, byTy);
+    }
+    const cached = byTy.get(ty);
+    if (cached) return cached;
+    const resolved = surfacesAtXY(tx, ty);
+    byTy.set(ty, resolved);
+    return resolved;
+  };
+
   const maxNonStairSurfaceZ = (tx: number, ty: number): number | null => {
-    const surfaces = surfacesAtXY(tx, ty);
+    const surfaces = surfacesAtXYCached(tx, ty);
     if (surfaces.length === 0) return null;
     let best: number | null = null;
     for (let i = 0; i < surfaces.length; i++) {
@@ -691,54 +889,55 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const southBuildingBaseMaskDraws: MaskDraw[] = [];
   const entitySilhouetteMaskDraws: MaskDraw[] = [];
 
-    const drawRenderPieceTo = (target: CanvasRenderingContext2D, c: RenderPieceDraw) => {
-      const img = c.img;
-      if (!img || img.width <= 0 || img.height <= 0) return;
-      const scale = c.scale ?? 1;
+    // --- Hot path: avoid save/restore per draw ---
+    // We rely on setTransform to restore to identity quickly.
+    // IMPORTANT: caller must not depend on ctx state persisting across calls.
+    const drawRenderPieceTo = (() => {
+      // Track last applied transform per target context to avoid stale cross-canvas state.
+      const lastKeyByTarget = new WeakMap<CanvasRenderingContext2D, string>();
+      return (target: CanvasRenderingContext2D, c: RenderPieceDraw) => {
+        const img = c.img;
+        if (!img || img.width <= 0 || img.height <= 0) return;
 
-      target.save();
-      target.translate(snapPx(c.dx), snapPx(c.dy));
-      target.scale(scale, scale);
-      if (c.flipX) {
-        target.translate(c.dw, 0);
-        target.scale(-1, 1);
-      }
-      target.drawImage(img, 0, 0, c.dw, c.dh);
-      target.restore();
-    };
+        const scale = c.scale ?? 1;
+
+        // Build transform: translate(dx,dy) * scale(scale) * optional flipX
+        // We draw at (0,0) in local space.
+        const dx = snapPx(c.dx);
+        const dy = snapPx(c.dy);
+
+        // Base: [a c e; b d f] in Canvas setTransform(a,b,c,d,e,f)
+        // scale => a=d=scale
+        let a = scale, b = 0, cc = 0, d = scale, e = dx, f = dy;
+
+        // flipX: multiply by translate(dw,0) then scale(-1,1) in local space
+        // Equivalent local transform: x' = -scale*x + (dx + scale*dw)
+        if (c.flipX) {
+          a = -scale;
+          e = dx + scale * c.dw;
+        }
+
+        const key = `${a},${d},${e},${f}`;
+        const lastKey = lastKeyByTarget.get(target) ?? "";
+        if (key !== lastKey) {
+          target.setTransform(a, b, cc, d, e, f);
+          lastKeyByTarget.set(target, key);
+        }
+
+        target.drawImage(img, 0, 0, c.dw, c.dh);
+      };
+    })();
     // Default draw to main ctx (unchanged behavior for most pieces)
     const drawRenderPiece = (c: RenderPieceDraw) => drawRenderPieceTo(ctx, c);
 
     const addRenderPieceMask = (c: RenderPieceDraw) => {
       buildingMaskDraws.push((maskCtx) => {
-        const img = c.img;
-        if (!img || img.width <= 0 || img.height <= 0) return;
-        const scale = c.scale ?? 1;
-        maskCtx.save();
-        maskCtx.translate(snapPx(c.dx), snapPx(c.dy));
-        maskCtx.scale(scale, scale);
-        if (c.flipX) {
-          maskCtx.translate(c.dw, 0);
-          maskCtx.scale(-1, 1);
-        }
-        maskCtx.drawImage(img, 0, 0, c.dw, c.dh);
-        maskCtx.restore();
+        drawRenderPieceTo(maskCtx, c);
       });
     };
     const addSouthRenderPieceMask = (c: RenderPieceDraw) => {
       southBuildingMaskDraws.push((maskCtx) => {
-        const img = c.img;
-        if (!img || img.width <= 0 || img.height <= 0) return;
-        const scale = c.scale ?? 1;
-        maskCtx.save();
-        maskCtx.translate(snapPx(c.dx), snapPx(c.dy));
-        maskCtx.scale(scale, scale);
-        if (c.flipX) {
-          maskCtx.translate(c.dw, 0);
-          maskCtx.scale(-1, 1);
-        }
-        maskCtx.drawImage(img, 0, 0, c.dw, c.dh);
-        maskCtx.restore();
+        drawRenderPieceTo(maskCtx, c);
       });
     };
     const addGroundTileMask = (target: MaskDraw[], tx: number, ty: number) => {
@@ -773,29 +972,32 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const src = getTileSpriteById(`tiles/floor/${family}/${variantIndex}`);
       if (!src.ready || !src.img || src.img.width <= 0 || src.img.height <= 0) return;
 
+      const baked = getRuntimeIsoTopCanvas(src.img, rotationQuarterTurns);
+      if (!baked) return;
+
       const wx = (tx + 0.5) * T;
       const wy = (ty + 0.5) * T;
       const p = worldToScreen(wx, wy);
+
+      // This matches the old "centerX/centerY" placement, but now we draw the prebaked 128x64.
       const centerX = snapPx(p.x + camX);
       const centerY = snapPx(
         p.y + camY - zBase * ELEV_PX - SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5),
       );
 
-      ctx.save();
-      ctx.translate(centerX, centerY);
-      // 2:1 iso projection from square space (128x128 source => 128x64 footprint).
-      ctx.transform(0.5, 0.25, -0.5, 0.25, 0, 0);
-      ctx.rotate(rotationQuarterTurns * (Math.PI * 0.5));
-      ctx.translate(-(SIDEWALK_SRC_SIZE * 0.5), -(SIDEWALK_SRC_SIZE * 0.5));
-      ctx.drawImage(src.img, 0, 0, SIDEWALK_SRC_SIZE, SIDEWALK_SRC_SIZE);
+      const dx = centerX - SIDEWALK_SRC_SIZE * 0.5;
+      const dy = centerY - SIDEWALK_ISO_HEIGHT * 0.5;
+
+      ctx.drawImage(baked, snapPx(dx), snapPx(dy));
 
       if (SHOW_SIDEWALK_VARIANT_DEBUG) {
+        ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.fillStyle = "#00ffd5";
         ctx.font = "9px monospace";
         ctx.fillText(`${variantIndex} r${rotationQuarterTurns}`, centerX + 4, centerY - 4);
+        ctx.restore();
       }
-      ctx.restore();
     };
 
     const drawRuntimeDecalTop = (
@@ -810,8 +1012,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const src = getRuntimeDecalSprite(setId, variantIndex);
       if (!src.ready || !src.img || src.img.width <= 0 || src.img.height <= 0) return;
       const decalScale = roadMarkingDecalScale(setId, variantIndex);
-      const srcW = src.img.width * decalScale;
-      const srcH = src.img.height * decalScale;
+      const baked = getRuntimeIsoDecalCanvas(src.img, rotationQuarterTurns, decalScale);
+      if (!baked) return;
 
       const wx = tx * T;
       const wy = ty * T;
@@ -822,13 +1024,11 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const centerX = shouldSnapRoadMarking ? Math.round(rawCenterX) : snapPx(rawCenterX);
       const centerY = shouldSnapRoadMarking ? Math.round(rawCenterY) : snapPx(rawCenterY);
 
-      ctx.save();
-      ctx.translate(centerX, centerY);
-      ctx.transform(0.5, 0.25, -0.5, 0.25, 0, 0);
-      ctx.rotate(rotationQuarterTurns * (Math.PI * 0.5));
-      ctx.translate(-(srcW * 0.5), -(srcH * 0.5));
-      ctx.drawImage(src.img, 0, 0, srcW, srcH);
-      ctx.restore();
+      const dx = centerX - baked.width * 0.5;
+      const dy = centerY - baked.height * 0.5;
+      const drawX = shouldSnapRoadMarking ? Math.round(dx) : snapPx(dx);
+      const drawY = shouldSnapRoadMarking ? Math.round(dy) : snapPx(dy);
+      ctx.drawImage(baked, drawX, drawY);
     };
 
     const drawProjectedVoidTop = (
@@ -952,7 +1152,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       else if (edgeDir === "W") dx = -1;
       const nTx = c.tx + dx;
       const nTy = c.ty + dy;
-      const surfaces = surfacesAtXY(nTx, nTy);
+      const surfaces = surfacesAtXYCached(nTx, nTy);
       if (surfaces.length === 0) return false;
       let maxZ = surfaces[0].zBase;
       for (let i = 1; i < surfaces.length; i++) {
@@ -1114,7 +1314,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // ----------------------------
   // Tile range / diagonals
   // ----------------------------
-  const radius = Math.max(12, Math.ceil(Math.max(ww, hh) / (T * 0.9)));
+  const configuredRadius = Number(renderSettings.tileRenderRadius);
+  const radius = Math.max(1, Math.min(32, Number.isFinite(configuredRadius) ? Math.round(configuredRadius) : 12));
+  setRenderTileLoopRadius(radius);
   const cx = Math.floor(px / T);
   const cy = Math.floor(py / T);
 
@@ -1133,58 +1335,116 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // ----------------------------
   // Void
   // ----------------------------
+  // Disabled: VOID is now drawn once as a screen background (see drawVoidBackgroundOnce).
+  // This avoids thousands of drawImage calls per frame.
   {
-    const voidRec = getHardcodedVoidTop();
-    if (voidRec?.ready && voidRec.img && voidRec.img.width > 0 && voidRec.img.height > 0) {
-      const topImg = voidRec.img;
-      const useProjectedTop = topImg.width === topImg.height;
-      const topW = topImg.width * VOID_TOP_SCALE;
-      const topH = topImg.height * VOID_TOP_SCALE;
-
-      for (let s = minSum; s <= maxSum; s++) {
-        const ty0 = Math.max(minTy, s - maxTx);
-        const ty1 = Math.min(maxTy, s - minTx);
-
-        for (let ty = ty1; ty >= ty0; ty--) {
-          const tx = s - ty;
-          const tile = getTile(tx, ty);
-          if (tile.kind !== "VOID") continue;
-
-          if (useProjectedTop) {
-            drawProjectedVoidTop(topImg, tx, ty, ANCHOR_Y);
-          } else {
-            const wx = (tx + 0.5) * T;
-            const wy = (ty + 0.5) * T;
-            const p = worldToScreen(wx, wy);
-            const dx = p.x + camX - topW * 0.5;
-            let dy = p.y + camY - topH * ANCHOR_Y;
-            dy += 2 * ELEV_PX;
-            ctx.drawImage(topImg, snapPx(dx), snapPx(dy), topW, topH);
-          }
-        }
-      }
-    }
+    // noop
   }
   // ============================================
   // SLICE-BUCKETED COLLECTION AND DRAWING
   // ============================================
   // Drawable descriptor for any render element
+  type SliceDrawFn = (payload: unknown) => void;
   type SliceDrawable = {
     key: RenderKey;
-    draw: () => void;  // closure that executes the draw
+    drawFn: SliceDrawFn;
+    payload: unknown;
   };
 
   // Map from slice -> array of drawables for that slice
   const sliceDrawables = new Map<number, SliceDrawable[]>();
   const deferredStructureSliceDebugDraws: Array<() => void> = [];
 
-  const addToSlice = (slice: number, key: RenderKey, draw: () => void) => {
+  const drawClosureFn: SliceDrawFn = (payload) => {
+    (payload as (() => void))();
+  };
+
+  const drawRuntimeSidewalkTopFn: SliceDrawFn = (payload) => {
+    const p = payload as {
+      tx: number;
+      ty: number;
+      zBase: number;
+      anchorY: number;
+      family: RuntimeDecalSetId;
+      variantIndex: number;
+      rotationQuarterTurns: number;
+    };
+    drawRuntimeSidewalkTop(
+      p.tx,
+      p.ty,
+      p.zBase,
+      p.anchorY,
+      p.family as any,
+      p.variantIndex,
+      p.rotationQuarterTurns as any,
+    );
+  };
+
+  const drawImageTopFn: SliceDrawFn = (payload) => {
+    const p = payload as {
+      img: HTMLImageElement;
+      dx: number;
+      dy: number;
+      dw: number;
+      dh: number;
+    };
+    ctx.drawImage(p.img, snapPx(p.dx), snapPx(p.dy), p.dw, p.dh);
+  };
+
+  const drawRuntimeDecalTopFn: SliceDrawFn = (payload) => {
+    const p = payload as {
+      tx: number;
+      ty: number;
+      zBase: number;
+      renderAnchorY: number;
+      setId: RuntimeDecalSetId;
+      variantIndex: number;
+      rotationQuarterTurns: number;
+    };
+    drawRuntimeDecalTop(
+      p.tx,
+      p.ty,
+      p.zBase,
+      p.renderAnchorY,
+      p.setId,
+      p.variantIndex,
+      p.rotationQuarterTurns as any,
+    );
+  };
+
+  const drawZoneObjectiveFn: SliceDrawFn = (payload) => {
+    const p = payload as { zone: any };
+    renderZoneObjectives(ctx, w, {
+      zone: p.zone,
+      mapOriginTx: compiledMap.originTx,
+      mapOriginTy: compiledMap.originTy,
+      tileWorld: T,
+      toScreen,
+      showZoneBounds: SHOW_ZONE_OBJECTIVE_BOUNDS,
+    });
+  };
+
+  const drawEntityShadowFn: SliceDrawFn = (payload) => {
+    renderEntityShadow(ctx, payload as ShadowParams, compiledMap);
+  };
+
+  const addToSlice = (
+    slice: number,
+    key: RenderKey,
+    drawOrFn: (() => void) | SliceDrawFn,
+    payload?: unknown,
+  ) => {
     let bucket = sliceDrawables.get(slice);
     if (!bucket) {
       bucket = [];
       sliceDrawables.set(slice, bucket);
     }
-    bucket.push({ key, draw });
+    if (typeof payload === "undefined") {
+      countRenderClosureCreated();
+      bucket.push({ key, drawFn: drawClosureFn, payload: drawOrFn as (() => void) });
+      return;
+    }
+    bucket.push({ key, drawFn: drawOrFn as SliceDrawFn, payload });
   };
 
   // ----------------------------
@@ -1205,14 +1465,17 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
       for (let ty = ty1; ty >= ty0; ty--) {
         const tx = s - ty;
+        countRenderTileLoopIteration();
 
-        const surfaces = surfacesAtXY(tx, ty);
+        const surfaces = surfacesAtXYCached(tx, ty);
         if (surfaces.length === 0) continue;
 
         for (let si = 0; si < surfaces.length; si++) {
           const surface = surfaces[si];
           const tdef = surface.tile;
           const isStairTop = surface.renderTopKind === "STAIR";
+          // Skip VOID surfaces entirely (VOID is background now)
+          if (tdef.kind === "VOID") continue;
 
           // Height filtering
           if (RENDER_ALL_HEIGHTS) {
@@ -1237,18 +1500,15 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
               kindOrder: KindOrder.FLOOR,
               stableId: (tx * 73856093 ^ ty * 19349663 ^ (surface.zBase * 100 | 0) * 83492791) + 17,
             };
-            const drawClosure = () => {
-              drawRuntimeSidewalkTop(
-                tx,
-                ty,
-                surface.zBase,
-                surface.renderAnchorY ?? ANCHOR_Y,
-                runtimeTop.family,
-                runtimeTop.variantIndex,
-                runtimeTop.rotationQuarterTurns,
-              );
-            };
-            addToSlice(tx + ty, renderKey, drawClosure);
+            addToSlice(tx + ty, renderKey, drawRuntimeSidewalkTopFn, {
+              tx,
+              ty,
+              zBase: surface.zBase,
+              anchorY: surface.renderAnchorY ?? ANCHOR_Y,
+              family: runtimeTop.family,
+              variantIndex: runtimeTop.variantIndex,
+              rotationQuarterTurns: runtimeTop.rotationQuarterTurns,
+            });
             continue;
           }
           const topRec = surface.spriteIdTop ? getTileSpriteById(surface.spriteIdTop) : null;
@@ -1285,11 +1545,13 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
             stableId: topStableId,
           };
 
-          const drawClosure = () => {
-            ctx.drawImage(topImg, snapPx(dx), snapPx(dy), topW, topH);
-          };
-
-          addToSlice(tx + ty, renderKey, drawClosure);
+          addToSlice(tx + ty, renderKey, drawImageTopFn, {
+            img: topImg,
+            dx,
+            dy,
+            dw: topW,
+            dh: topH,
+          });
         }
       }
     }
@@ -1312,18 +1574,15 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         stableId: (decal.tx * 73856093 ^ decal.ty * 19349663 ^ (decal.zBase * 100 | 0) * 83492791) + 19,
       };
 
-      const drawClosure = () => {
-        drawRuntimeDecalTop(
-          decal.tx,
-          decal.ty,
-          decal.zBase,
-          decal.renderAnchorY,
-          decal.setId,
-          decal.variantIndex,
-          decal.rotationQuarterTurns,
-        );
-      };
-      addToSlice(decal.tx + decal.ty, renderKey, drawClosure);
+      addToSlice(decal.tx + decal.ty, renderKey, drawRuntimeDecalTopFn, {
+        tx: decal.tx,
+        ty: decal.ty,
+        zBase: decal.zBase,
+        renderAnchorY: decal.renderAnchorY,
+        setId: decal.setId,
+        variantIndex: decal.variantIndex,
+        rotationQuarterTurns: decal.rotationQuarterTurns,
+      });
     }
   }
 
@@ -1350,16 +1609,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           stableId: 210000 + zone.id,
         };
 
-        addToSlice(centerTx + centerTy, renderKey, () => {
-          renderZoneObjectives(ctx, w, {
-            zone,
-            mapOriginTx: compiledMap.originTx,
-            mapOriginTy: compiledMap.originTy,
-            tileWorld: T,
-            toScreen,
-            showZoneBounds: SHOW_ZONE_OBJECTIVE_BOUNDS,
-          });
-        });
+        addToSlice(centerTx + centerTy, renderKey, drawZoneObjectiveFn, { zone });
       }
     }
   }
@@ -1400,7 +1650,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         screenOffsetX: camX,
         screenOffsetY: camY,
       };
-      addToSlice(tx + ty, renderKey, () => renderEntityShadow(ctx, shadowParams, compiledMap));
+      addToSlice(tx + ty, renderKey, drawEntityShadowFn, shadowParams);
       entityShadowMaskParams.push(shadowParams);
       const feet = getEntityFeetPos(ew.wx, ew.wy, zAbs);
       entitySilhouetteMaskDraws.push((maskCtx) => {
@@ -1483,7 +1733,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         screenOffsetX: camX,
         screenOffsetY: camY,
       };
-      addToSlice(tx + ty, renderKey, () => renderEntityShadow(ctx, shadowParams, compiledMap));
+      addToSlice(tx + ty, renderKey, drawEntityShadowFn, shadowParams);
       entityShadowMaskParams.push(shadowParams);
       const feet = getEntityFeetPos(npc.wx, npc.wy, zAbs);
       entitySilhouetteMaskDraws.push((maskCtx) => {
@@ -1548,7 +1798,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         screenOffsetX: camX,
         screenOffsetY: camY,
       };
-      addToSlice(tx + ty, renderKey, () => renderEntityShadow(ctx, shadowParams, compiledMap));
+      addToSlice(tx + ty, renderKey, drawEntityShadowFn, shadowParams);
       entityShadowMaskParams.push(shadowParams);
       const feet = getEntityFeetPos(mob.pos.wx, mob.pos.wy, zAbs);
       entitySilhouetteMaskDraws.push((maskCtx) => {
@@ -1609,7 +1859,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         screenOffsetX: camX,
         screenOffsetY: camY,
       };
-      addToSlice(tx + ty, renderKey, () => renderEntityShadow(ctx, shadowParams, compiledMap));
+      addToSlice(tx + ty, renderKey, drawEntityShadowFn, shadowParams);
       entityShadowMaskParams.push(shadowParams);
       const feet = getEntityFeetPos(px, py, pzAbs);
       entitySilhouetteMaskDraws.push((maskCtx) => {
@@ -2451,7 +2701,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
                 const snappedW = Math.max(0, x1 - x0);
                 const snappedH = Math.max(0, y1 - y0);
                 if (snappedW <= 0 || snappedH <= 0) return;
-                maskCtx.save();
+                const prevOp = maskCtx.globalCompositeOperation;
+                const prevSmoothing = maskCtx.imageSmoothingEnabled;
                 maskCtx.globalCompositeOperation = "source-over";
                 maskCtx.imageSmoothingEnabled = false;
                 maskCtx.drawImage(
@@ -2465,7 +2716,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
                   snappedW,
                   snappedH,
                 );
-                maskCtx.restore();
+                maskCtx.globalCompositeOperation = prevOp;
+                maskCtx.imageSmoothingEnabled = prevSmoothing;
               });
               if (isOwnerTileInPlayerWedge(band.renderKey.within, ownerTy)) {
                 southBuildingMaskDraws.push((maskCtx) => {
@@ -2479,7 +2731,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
                   const snappedW = Math.max(0, x1 - x0);
                   const snappedH = Math.max(0, y1 - y0);
                   if (snappedW <= 0 || snappedH <= 0) return;
-                  maskCtx.save();
+                  const prevOp = maskCtx.globalCompositeOperation;
+                  const prevSmoothing = maskCtx.imageSmoothingEnabled;
                   maskCtx.globalCompositeOperation = "source-over";
                   maskCtx.imageSmoothingEnabled = false;
                   maskCtx.drawImage(
@@ -2493,7 +2746,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
                     snappedW,
                     snappedH,
                   );
-                  maskCtx.restore();
+                  maskCtx.globalCompositeOperation = prevOp;
+                  maskCtx.imageSmoothingEnabled = prevSmoothing;
                 });
               }
             }
@@ -2561,12 +2815,14 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // FINAL RENDER PASS: Execute by zBand with ground/depth phases
   // ============================================
   const sliceKeys = Array.from(sliceDrawables.keys());
+  countRenderSliceKeySort();
   sliceKeys.sort((a, b) => a - b);
 
   // Sort once per slice and collect all zBands.
   const zBands = new Set<number>();
   for (let i = 0; i < sliceKeys.length; i++) {
     const drawables = sliceDrawables.get(sliceKeys[i])!;
+    countRenderDrawableSort();
     drawables.sort((a, b) => compareRenderKeys(a.key, b.key));
     for (let j = 0; j < drawables.length; j++) {
       zBands.add(Math.floor(drawables[j].key.baseZ));
@@ -2578,6 +2834,17 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   const isGroundKind = (kind: KindOrder) =>
     kind === KindOrder.FLOOR || kind === KindOrder.DECAL;
+  const kindToDrawTag = (kind: KindOrder): "floors" | "decals" | "entities" | "structures" => {
+    if (kind === KindOrder.FLOOR) return "floors";
+    if (kind === KindOrder.DECAL) return "decals";
+    if (
+      kind === KindOrder.ENTITY
+      || kind === KindOrder.VFX
+      || kind === KindOrder.ZONE_OBJECTIVE
+      || kind === KindOrder.SHADOW
+    ) return "entities";
+    return "structures";
+  };
 
   // ============================================
   // STRUCTURE LAYER (for player cutout) — Milestone 1: hard hole
@@ -2670,37 +2937,14 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       vctx.setTransform(1, 0, 0, 1, 0, 0);
       vctx.globalCompositeOperation = "source-over";
       vctx.clearRect(0, 0, devW, devH);
-      vctx.save();
-      configurePixelPerfect(vctx);
-      vctx.setTransform(s, 0, 0, s, 0, 0);
-      vctx.translate(camTx, camTy);
-      drawAlignmentDot(vctx, "rgba(255,255,0,0.9)"); // void tiles
-
-      const voidRec = getHardcodedVoidTop();
-      if (voidRec?.ready && voidRec.img && voidRec.img.width > 0 && voidRec.img.height > 0) {
-        const topImg = voidRec.img;
-        const topW = topImg.width * VOID_TOP_SCALE;
-        const topH = topImg.height * VOID_TOP_SCALE;
-
-        for (let sum = minSum; sum <= maxSum; sum++) {
-          const ty0 = Math.max(minTy, sum - maxTx);
-          const ty1 = Math.min(maxTy, sum - minTx);
-          for (let ty = ty0; ty <= ty1; ty++) {
-            const tx = sum - ty;
-            const wx = (tx + 0.5) * T;
-            const wy = (ty + 0.5) * T;
-            const p = worldToScreen(wx, wy);
-            const dx = p.x - topW * 0.5;
-            const anchorY = KENNEY_TILE_ANCHOR_Y;
-            const dy = p.y - topH * anchorY;
-            vctx.drawImage(topImg, snapPx(dx), snapPx(dy), topW, topH);
-          }
-        }
-      }
-      vctx.restore();
+      setRenderPerfDrawTag("cutoutVoid");
+      drawVoidBackgroundOnce(vctx, devW, devH, camTx, camTy, s);
+      setRenderPerfDrawTag(null);
 
       vctx.globalCompositeOperation = "destination-in";
+      setRenderPerfDrawTag("cutoutVoid");
       vctx.drawImage(southMaskLayer.canvas, 0, 0);
+      setRenderPerfDrawTag(null);
       vctx.globalCompositeOperation = "source-over";
 
       cutoutVoidCanvas = voidLayer.canvas;
@@ -2717,7 +2961,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         const drawable = drawables[di];
         if (Math.floor(drawable.key.baseZ) !== zb) continue;
         if (!isGroundKind(drawable.key.kindOrder)) continue;
-        drawable.draw();
+        setRenderPerfDrawTag(kindToDrawTag(drawable.key.kindOrder));
+        drawable.drawFn(drawable.payload);
       }
     }
 
@@ -2727,7 +2972,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalCompositeOperation = "source-over";
+      setRenderPerfDrawTag("cutoutVoid");
       ctx.drawImage(cutoutVoidCanvas, 0, 0);
+      setRenderPerfDrawTag(null);
       ctx.restore();
     }
 
@@ -2738,10 +2985,12 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         const drawable = drawables[di];
         if (Math.floor(drawable.key.baseZ) !== zb) continue;
         if (isGroundKind(drawable.key.kindOrder)) continue;
-        drawable.draw();
+        setRenderPerfDrawTag(kindToDrawTag(drawable.key.kindOrder));
+        drawable.drawFn(drawable.payload);
       }
     }
   }
+  setRenderPerfDrawTag(null);
 
   // ============================================
   // STRUCTURE CUTOUT COMPOSITE (Milestone 1: hard circle)
@@ -2787,7 +3036,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     configurePixelPerfect(ctx);
     ctx.globalCompositeOperation = "source-over";
+    setRenderPerfDrawTag("structures");
     ctx.drawImage(structureLayerScratchCanvas, 0, 0);
+    setRenderPerfDrawTag(null);
     ctx.restore();
   }
 
@@ -2917,9 +3168,11 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     inverseCtx.translate(camTx, camTy);
     drawAlignmentDot(inverseCtx, "rgba(0,255,0,0.9)"); // inverse mask
     inverseCtx.globalCompositeOperation = "source-over";
+    setRenderPerfDrawTag("mask:building");
     for (let i = 0; i < buildingMaskDraws.length; i++) {
       buildingMaskDraws[i](inverseCtx);
     }
+    setRenderPerfDrawTag(null);
     inverseCtx.restore();
 
     if (shadowMaskLayer && silhouetteMaskLayer) {
@@ -2936,9 +3189,11 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       shadowCtx.setTransform(s, 0, 0, s, 0, 0);
       shadowCtx.translate(camTx, camTy);
       drawAlignmentDot(shadowCtx, "rgba(255,64,64,0.9)"); // shadow mask
+      setRenderPerfDrawTag("mask:shadow");
       for (let i = 0; i < entityShadowMaskParams.length; i++) {
         renderEntityShadowMask(shadowCtx, entityShadowMaskParams[i], compiledMap);
       }
+      setRenderPerfDrawTag(null);
       shadowCtx.restore();
 
       silhouetteCtx.save();
@@ -2952,11 +3207,13 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       silhouetteCtx.restore();
 
       shadowCtx.globalCompositeOperation = "destination-out";
+      setRenderPerfDrawTag("mask:shadow");
       shadowCtx.drawImage(silhouetteMaskLayer.canvas, 0, 0);
       shadowCtx.globalCompositeOperation = "source-over";
 
       inverseCtx.globalCompositeOperation = "source-over";
       inverseCtx.drawImage(shadowMaskLayer.canvas, 0, 0);
+      setRenderPerfDrawTag(null);
     }
     // Keep lighting occlusion based on full building mask.
     // Apply player hole as: fullBuildingMask - (southBuildingMask ∩ playerCircleGradient).
@@ -2970,9 +3227,11 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       southCtx.translate(camTx, camTy);
       drawAlignmentDot(southCtx, "rgba(255,255,255,0.9)"); // south occlusion mask
       southCtx.globalCompositeOperation = "source-over";
+      setRenderPerfDrawTag("mask:south");
       for (let i = 0; i < southBuildingMaskDraws.length; i++) {
         southBuildingMaskDraws[i](southCtx);
       }
+      setRenderPerfDrawTag(null);
       southCtx.restore();
 
       // Use player feet position (world-render coords)
@@ -3005,9 +3264,11 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       inverseCtx.save();
       inverseCtx.setTransform(1, 0, 0, 1, 0, 0);
       inverseCtx.globalCompositeOperation = "destination-out";
+      setRenderPerfDrawTag("mask:south");
       inverseCtx.drawImage(southBuildingMaskLayer.canvas, 0, 0);
       inverseCtx.restore();
       inverseCtx.globalCompositeOperation = "source-over";
+      setRenderPerfDrawTag(null);
     }
     inverseCtx.globalCompositeOperation = "source-in";
     inverseCtx.fillStyle = "rgba(0,0,0,1)";
@@ -3025,6 +3286,11 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const projectedLights: ProjectedLight[] = [];
   for (let i = 0; i < lightDefs.length; i++) {
     const ld = lightDefs[i];
+    // Exact match with tile render coverage (no padding).
+    const ltx = Math.floor(ld.worldX / T);
+    const lty = Math.floor(ld.worldY / T);
+    if (ltx < minTx || ltx > maxTx || lty < minTy || lty > maxTy) continue;
+
     const isStreetLamp = (ld.shape ?? "RADIAL") === "STREET_LAMP";
     const occlusion = isStreetLamp
       ? ((debugFlags.lightingOcclusionEnabled && w.lighting.occlusionEnabled) ? 1 : 0)
@@ -3059,28 +3325,35 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   if (sourceMaskLayer && inverseMaskLayer) {
     const occlusionEnabled = debugFlags.lightingOcclusionEnabled && w.lighting.occlusionEnabled;
-    const sourceCtx = sourceMaskLayer.ctx;
-    sourceCtx.setTransform(1, 0, 0, 1, 0, 0);
-    sourceCtx.globalCompositeOperation = "source-over";
-    sourceCtx.clearRect(0, 0, devW, devH);
-    sourceCtx.fillStyle = "#ffffff";
-    sourceCtx.fillRect(0, 0, devW, devH);
     if (occlusionEnabled) {
+      const sourceCtx = sourceMaskLayer.ctx;
+      sourceCtx.setTransform(1, 0, 0, 1, 0, 0);
+      sourceCtx.globalCompositeOperation = "source-over";
+      sourceCtx.clearRect(0, 0, devW, devH);
+      sourceCtx.fillStyle = "#ffffff";
+      sourceCtx.fillRect(0, 0, devW, devH);
       sourceCtx.globalCompositeOperation = "destination-out";
+      setRenderPerfDrawTag("mask:building");
       sourceCtx.drawImage(inverseMaskLayer.canvas, 0, 0);
       sourceCtx.globalCompositeOperation = "source-over";
+      setRenderPerfDrawTag(null);
+      buildCombinedOcclusionMask(
+        w.lighting,
+        inverseMaskLayer.canvas,
+        devW,
+        devH,
+        true,
+      );
+    } else {
+      w.lighting.combinedOcclusionMaskCanvas = null;
+      w.lighting.combinedOcclusionMaskCtx = null;
     }
-    buildCombinedOcclusionMask(
-      w.lighting,
-      inverseMaskLayer.canvas,
-      devW,
-      devH,
-      occlusionEnabled,
-    );
   }
 
   // PASS 8: final screen-space lighting
+  setRenderPerfDrawTag("lighting");
   renderLighting(ctx, w.lighting, projectedLights, devW, devH, w.time ?? 0);
+  setRenderPerfDrawTag(null);
   // Building-mask debug overlay draw disabled to avoid full-canvas mask artifacts.
 
 
@@ -3090,13 +3363,42 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   ctx.font = "12px monospace";
   ctx.fillStyle = "#fff";
   const fps = Math.round((w as any).fps ?? 0);
+  const perf = getRenderPerfSnapshot();
   ctx.fillText(`FPS: ${fps}`, 8, 14);
   ctx.fillText(`Palette: ${resolveActivePaletteId()}`, 8, 46);
+  const tag = perf.drawImageByTagPerFrame;
+  const saveTag = perf.saveByTagPerFrame;
+  const restoreTag = perf.restoreByTagPerFrame;
+  const perfLines = [
+    `drawImage/frame: ${perf.drawImageCallsPerFrame.toFixed(1)}`,
+    `tag void:${tag.void.toFixed(1)} floors:${tag.floors.toFixed(1)} decals:${tag.decals.toFixed(1)} ent:${tag.entities.toFixed(1)}`,
+    `tag struct:${tag.structures.toFixed(1)} m:bld:${tag["mask:building"].toFixed(1)} m:sh:${tag["mask:shadow"].toFixed(1)} m:s:${tag["mask:south"].toFixed(1)}`,
+    `tag cutoutVoid:${tag.cutoutVoid.toFixed(1)} lighting:${tag.lighting.toFixed(1)} untagged:${tag.untagged.toFixed(1)}`,
+    `gradientCreate/frame: ${perf.gradientCreateCallsPerFrame.toFixed(1)} addColorStop/frame: ${perf.addColorStopCallsPerFrame.toFixed(1)}`,
+    `save/frame: ${perf.saveCallsPerFrame.toFixed(1)} restore/frame: ${perf.restoreCallsPerFrame.toFixed(1)}`,
+    `saveTag fl:${saveTag.floors.toFixed(1)} de:${saveTag.decals.toFixed(1)} li:${saveTag.lighting.toFixed(1)} un:${saveTag.untagged.toFixed(1)}`,
+    `saveTag m:bld:${saveTag["mask:building"].toFixed(1)} m:sh:${saveTag["mask:shadow"].toFixed(1)} m:s:${saveTag["mask:south"].toFixed(1)} struct:${saveTag.structures.toFixed(1)}`,
+    `restoreTag fl:${restoreTag.floors.toFixed(1)} de:${restoreTag.decals.toFixed(1)} li:${restoreTag.lighting.toFixed(1)} un:${restoreTag.untagged.toFixed(1)}`,
+    `restoreTag m:bld:${restoreTag["mask:building"].toFixed(1)} m:sh:${restoreTag["mask:shadow"].toFixed(1)} m:s:${restoreTag["mask:south"].toFixed(1)} struct:${restoreTag.structures.toFixed(1)}`,
+    `closures/frame: ${perf.closuresCreatedPerFrame.toFixed(1)}`,
+    `sliceSorts/frame: ${perf.sliceKeySortsPerFrame.toFixed(1)} drawableSorts/frame: ${perf.drawableSortsPerFrame.toFixed(1)}`,
+    `fullCanvasBlits/frame: ${perf.fullCanvasBlitsPerFrame.toFixed(1)}`,
+    `tileRadius: ${perf.tileLoopRadius.toFixed(0)} tileLoopIters/frame: ${perf.tileLoopIterationsPerFrame.toFixed(1)}`,
+  ];
+  ctx.textAlign = "right";
+  const perfX = cssW - 8;
+  const perfLineH = 16;
+  const perfY0 = cssH - 8 - perfLineH * (perfLines.length - 1);
+  for (let i = 0; i < perfLines.length; i++) {
+    ctx.fillText(perfLines[i], perfX, perfY0 + i * perfLineH);
+  }
+  ctx.textAlign = "left";
   if (SHOW_ROAD_SEMANTIC) {
     const roadWPlayer = roadAreaWidthAt(playerTx, playerTy);
     ctx.fillText(`roadW(player): ${roadWPlayer}`, 8, 30);
   }
   ctx.restore();
+  endRenderPerfFrame(w.timeSec ?? 0);
 
   if (DEBUG_PLAYER_WEDGE) {
     const playerPos = { x: px, y: py };

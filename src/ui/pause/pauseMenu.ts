@@ -282,6 +282,24 @@ export function mountPauseMenu(args: {
   pressureT120Row.appendChild(pressureT120Slider);
   pressureT120Row.appendChild(pressureT120Value);
 
+  const tileRenderRadiusRow = document.createElement("label");
+  tileRenderRadiusRow.className = "audioRow";
+  const tileRenderRadiusLabel = document.createElement("span");
+  tileRenderRadiusLabel.textContent = "Tile Radius";
+  const tileRenderRadiusSlider = document.createElement("input");
+  tileRenderRadiusSlider.type = "range";
+  tileRenderRadiusSlider.min = "1";
+  tileRenderRadiusSlider.max = "32";
+  tileRenderRadiusSlider.step = "1";
+  setDataAttr(tileRenderRadiusSlider, "tile-render-radius-slider");
+  const tileRenderRadiusValue = document.createElement("span");
+  tileRenderRadiusValue.textContent = "12";
+  tileRenderRadiusValue.className = "pauseMeta";
+  setDataAttr(tileRenderRadiusValue, "tile-render-radius-value");
+  tileRenderRadiusRow.appendChild(tileRenderRadiusLabel);
+  tileRenderRadiusRow.appendChild(tileRenderRadiusSlider);
+  tileRenderRadiusRow.appendChild(tileRenderRadiusValue);
+
   const spawnTuningResetBtn = document.createElement("button");
   spawnTuningResetBtn.type = "button";
   spawnTuningResetBtn.className = "pauseDebugOpenBtn";
@@ -297,6 +315,7 @@ export function mountPauseMenu(args: {
   audioSection.appendChild(monsterHealthBaseRow);
   audioSection.appendChild(pressureT0Row);
   audioSection.appendChild(pressureT120Row);
+  audioSection.appendChild(tileRenderRadiusRow);
   audioSection.appendChild(spawnTuningResetBtn);
 
   const paletteTitle = document.createElement("h4");
@@ -920,6 +939,17 @@ export function mountPauseMenu(args: {
     applySpawnTuningSettingsToLatestWorld();
   };
 
+  const onTileRenderRadiusSlider = () => {
+    const v = Number.parseFloat(tileRenderRadiusSlider.value);
+    const clamped = Math.max(1, Math.min(32, Number.isFinite(v) ? Math.round(v) : 12));
+    updateUserSettings({
+      render: {
+        tileRenderRadius: clamped,
+      },
+    });
+    syncTileRenderRadiusControl();
+  };
+
   const syncPaletteControls = () => {
     const settings = getUserSettings().render;
     (paletteToggle as HTMLInputElement).checked = !!settings.paletteSwapEnabled;
@@ -949,6 +979,13 @@ export function mountPauseMenu(args: {
     pressureT120Value.textContent = num(pressureT120, 2);
   };
 
+  const syncTileRenderRadiusControl = () => {
+    const settings = getUserSettings().render;
+    const radius = Math.max(1, Math.min(32, Number.isFinite(settings.tileRenderRadius) ? Math.round(settings.tileRenderRadius) : 12));
+    tileRenderRadiusSlider.value = `${radius}`;
+    tileRenderRadiusValue.textContent = `${radius}`;
+  };
+
   resumeBtn.addEventListener("click", args.actions.onResume);
   quitBtn.addEventListener("click", args.actions.onQuitRun);
   musicSlider.addEventListener("input", onMusicSlider);
@@ -961,6 +998,7 @@ export function mountPauseMenu(args: {
   monsterHealthBaseSlider.addEventListener("input", onSpawnTuningSlider);
   pressureT0Slider.addEventListener("input", onSpawnTuningSlider);
   pressureT120Slider.addEventListener("input", onSpawnTuningSlider);
+  tileRenderRadiusSlider.addEventListener("input", onTileRenderRadiusSlider);
   paletteToggle.addEventListener("change", () => {
     const enabled = !!(paletteToggle as HTMLInputElement).checked;
     updateUserSettings({ render: { paletteSwapEnabled: enabled } });
@@ -1030,6 +1068,7 @@ export function mountPauseMenu(args: {
   syncAudioControls();
   syncPaletteControls();
   syncSpawnTuningControls();
+  syncTileRenderRadiusControl();
   applySpawnTuningSettingsToLatestWorld();
   syncStatsCollapseUi();
   syncBalanceCsvControls(latestWorld);
@@ -1056,6 +1095,7 @@ export function mountPauseMenu(args: {
       syncAudioControls();
       syncPaletteControls();
       syncSpawnTuningControls();
+      syncTileRenderRadiusControl();
       applySpawnTuningSettingsToLatestWorld();
       syncBalanceCsvControls(world);
       renderStats(world);

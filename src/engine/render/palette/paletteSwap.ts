@@ -1,6 +1,13 @@
 import { DB32, type HexColor, getPaletteById } from "./palettes";
 
 type RGB = { r: number; g: number; b: number };
+const db32IndexByRgb = new Map<number, number>();
+const db32ToTargetLutCache = new Map<string, Uint8Array>();
+
+for (let i = 0; i < DB32.colors.length; i++) {
+  const c = hexToRgb(DB32.colors[i]);
+  db32IndexByRgb.set(rgbKey(c.r, c.g, c.b), i);
+}
 
 function hexToRgb(hex: HexColor): RGB {
   const h = hex.slice(1);
@@ -27,6 +34,8 @@ function distSq(a: RGB, b: RGB): number {
  * Target palette can be any length >= 1 (Divination is 7).
  */
 export function buildDb32ToTargetIndexLut(targetPaletteId: string): Uint8Array {
+  const cached = db32ToTargetLutCache.get(targetPaletteId);
+  if (cached) return cached;
   const target = getPaletteById(targetPaletteId);
   const srcRgb = DB32.colors.map(hexToRgb);
   const tgtRgb = target.colors.map(hexToRgb);
@@ -44,6 +53,7 @@ export function buildDb32ToTargetIndexLut(targetPaletteId: string): Uint8Array {
     }
     lut[i] = bestJ;
   }
+  db32ToTargetLutCache.set(targetPaletteId, lut);
   return lut;
 }
 
@@ -54,20 +64,14 @@ export function applyPaletteSwapToCanvas(
   const target = getPaletteById(targetPaletteId);
   const targetRgb = target.colors.map(hexToRgb);
 
-  // Map exact DB32 RGB -> db32 index
-  const db32IndexByRgb = new Map<number, number>();
-  for (let i = 0; i < DB32.colors.length; i++) {
-    const c = hexToRgb(DB32.colors[i]);
-    db32IndexByRgb.set(rgbKey(c.r, c.g, c.b), i);
-  }
-
   const db32ToTarget = buildDb32ToTargetIndexLut(targetPaletteId);
 
   const canvas = document.createElement("canvas");
   canvas.width = srcImg.naturalWidth || srcImg.width;
   canvas.height = srcImg.naturalHeight || srcImg.height;
 
-  const ctx = canvas.getContext("2d");
+  // `willReadFrequently` reduces GPU readback stalls for getImageData-heavy paths.
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) return canvas;
 
   ctx.imageSmoothingEnabled = false;

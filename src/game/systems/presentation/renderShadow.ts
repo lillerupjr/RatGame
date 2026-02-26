@@ -39,7 +39,6 @@ export function renderEntityShadow(
 ): void {
   if (params.castsShadow === false) return;
   const { shadowX, shadowY, radiusX, radiusY, alpha } = computeShadowGeometry(params, compiledMap);
-
   ctx.save();
   ctx.translate(shadowX, shadowY);
   ctx.scale(radiusX, radiusY);
@@ -47,7 +46,7 @@ export function renderEntityShadow(
   const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
   g.addColorStop(0.0, `rgba(0,0,0,${alpha})`);
   g.addColorStop(0.5, `rgba(0,0,0,${alpha})`);
-  g.addColorStop(1.0, `rgba(0,0,0,0)`);
+  g.addColorStop(1.0, "rgba(0,0,0,0)");
 
   ctx.fillStyle = g;
   ctx.beginPath();

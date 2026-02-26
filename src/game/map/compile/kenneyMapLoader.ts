@@ -1077,6 +1077,8 @@ export function compileKenneyMapFromTable(
     };
 
     const surfacesByKey = new Map<string, Surface[]>();
+    const surfacesByCoord = new Map<number, Map<number, Surface[]>>();
+    const surfaceCoords: Array<{ tx: number; ty: number }> = [];
     const topsByLayer = new Map<number, Surface[]>();
 
     const floorAnchorY = KENNEY_TILE_ANCHOR_Y;
@@ -1091,8 +1093,21 @@ export function compileKenneyMapFromTable(
     function addSurface(surface: Surface) {
         const k = `${surface.tx},${surface.ty}`;
         const list = surfacesByKey.get(k);
-        if (list) list.push(surface);
-        else surfacesByKey.set(k, [surface]);
+        if (list) {
+            list.push(surface);
+        } else {
+            surfacesByKey.set(k, [surface]);
+            surfaceCoords.push({ tx: surface.tx, ty: surface.ty });
+        }
+
+        let byTy = surfacesByCoord.get(surface.tx);
+        if (!byTy) {
+            byTy = new Map<number, Surface[]>();
+            surfacesByCoord.set(surface.tx, byTy);
+        }
+        const byTyList = byTy.get(surface.ty);
+        if (byTyList) byTyList.push(surface);
+        else byTy.set(surface.ty, [surface]);
 
         const layerList = topsByLayer.get(surface.zLogical);
         if (layerList) layerList.push(surface);
@@ -1322,7 +1337,7 @@ export function compileKenneyMapFromTable(
 
 
     function surfacesAtXY(tx: number, ty: number): Surface[] {
-        return surfacesByKey.get(`${tx},${ty}`) ?? [];
+        return surfacesByCoord.get(tx)?.get(ty) ?? [];
     }
 
     const apronBaseMode = def.apronBaseMode ?? "ISLANDS";
@@ -2113,12 +2128,11 @@ export function compileKenneyMapFromTable(
     const emittedFaces = new Set<string>();
     let faceId = 0;
 
-    for (const [key, list] of surfacesByKey.entries()) {
-        if (!list || list.length === 0) continue;
-        const [txStr, tyStr] = key.split(",");
-        const tx = parseInt(txStr, 10);
-        const ty = parseInt(tyStr, 10);
-        if (!Number.isFinite(tx) || !Number.isFinite(ty)) continue;
+    for (let coordI = 0; coordI < surfaceCoords.length; coordI++) {
+        const tx = surfaceCoords[coordI].tx;
+        const ty = surfaceCoords[coordI].ty;
+        const list = surfacesAtXY(tx, ty);
+        if (list.length === 0) continue;
 
         const zHere = maxSurfaceZAt(tx, ty);
         if (zHere === null) continue;
