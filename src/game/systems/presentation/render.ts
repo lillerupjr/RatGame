@@ -1319,6 +1319,24 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   setRenderTileLoopRadius(radius);
   const cx = Math.floor(px / T);
   const cy = Math.floor(py / T);
+  const radiusSq = radius * radius;
+  const isTileInRenderRadius = (tx: number, ty: number): boolean => {
+    const dx = tx - cx;
+    const dy = ty - cy;
+    return dx * dx + dy * dy <= radiusSq;
+  };
+  const tileRectIntersectsRenderRadius = (
+    minRectTx: number,
+    maxRectTx: number,
+    minRectTy: number,
+    maxRectTy: number,
+  ): boolean => {
+    const nx = Math.max(minRectTx, Math.min(cx, maxRectTx));
+    const ny = Math.max(minRectTy, Math.min(cy, maxRectTy));
+    const dx = nx - cx;
+    const dy = ny - cy;
+    return dx * dx + dy * dy <= radiusSq;
+  };
 
   const minTx = cx - radius;
   const maxTx = cx + radius;
@@ -1354,6 +1372,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // Map from slice -> array of drawables for that slice
   const sliceDrawables = new Map<number, SliceDrawable[]>();
   const deferredStructureSliceDebugDraws: Array<() => void> = [];
+  let hasStructureLayerDraw = false;
 
   const drawClosureFn: SliceDrawFn = (payload) => {
     (payload as (() => void))();
@@ -1465,6 +1484,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
       for (let ty = ty1; ty >= ty0; ty--) {
         const tx = s - ty;
+        if (!isTileInRenderRadius(tx, ty)) continue;
         countRenderTileLoopIteration();
 
         const surfaces = surfacesAtXYCached(tx, ty);
@@ -1564,6 +1584,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const decals = decalsInView(viewRect);
     for (let i = 0; i < decals.length; i++) {
       const decal = decals[i];
+      if (!isTileInRenderRadius(decal.tx, decal.ty)) continue;
       if (!RENDER_ALL_HEIGHTS && decal.zLogical !== activeH) continue;
 
       const renderKey: RenderKey = {
@@ -1598,6 +1619,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         const absZoneY = compiledMap.originTy + zone.tileY;
         const centerTx = absZoneX + Math.floor(zone.tileW * 0.5);
         const centerTy = absZoneY + Math.floor(zone.tileH * 0.5);
+        if (!isTileInRenderRadius(centerTx, centerTy)) continue;
         const centerWx = (centerTx + 0.5) * T;
         const centerWy = (centerTy + 0.5) * T;
         const centerZ = tileHAtWorld(centerWx, centerWy);
@@ -1626,6 +1648,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const support = getSupportSurfaceAt(ew.wx, ew.wy, compiledMap);
       const tx = Math.floor(ew.wx / T);
       const ty = Math.floor(ew.wy / T);
+      if (!isTileInRenderRadius(tx, ty)) continue;
       const faceDx = w.eFaceX?.[i] ?? 0;
       const faceDy = w.eFaceY?.[i] ?? -1;
       const moving = Math.hypot(w.evx?.[i] ?? 0, w.evy?.[i] ?? 0) > 1e-4;
@@ -1707,6 +1730,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const support = getSupportSurfaceAt(npc.wx, npc.wy, compiledMap);
       const tx = Math.floor(npc.wx / T);
       const ty = Math.floor(npc.wy / T);
+      if (!isTileInRenderRadius(tx, ty)) continue;
       const fr = vendorNpcSpritesReady()
         ? getVendorNpcSpriteFrame({ dir: npc.dirCurrent, time: w.time ?? 0 })
         : null;
@@ -1773,6 +1797,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const support = getSupportSurfaceAt(mob.pos.wx, mob.pos.wy, compiledMap);
       const tx = Math.floor(mob.pos.wx / T);
       const ty = Math.floor(mob.pos.wy / T);
+      if (!isTileInRenderRadius(tx, ty)) continue;
       const frameCount = mob.spriteFrames.length;
       const frame = frameCount > 0 ? mob.spriteFrames[mob.anim.frameIndex % frameCount] : null;
       const spriteW = frame ? frame.width * mob.render.scale : 24;
@@ -1920,6 +1945,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       // Determine zone's anchor tile
       const ztx = Math.floor(zx / T);
       const zty = Math.floor(zy / T);
+      if (!isTileInRenderRadius(ztx, zty)) continue;
       const zSlice = ztx + zty;
 
       const renderKey: RenderKey = {
@@ -2009,6 +2035,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const pickup = getPickupWorld(w, i, KENNEY_TILE_WORLD);
       const xtx = Math.floor(pickup.wx / T);
       const xty = Math.floor(pickup.wy / T);
+      if (!isTileInRenderRadius(xtx, xty)) continue;
       const zAbs = tileHAtWorld(pickup.wx, pickup.wy);
 
       const renderKey: RenderKey = {
@@ -2059,6 +2086,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       if (!w.eAlive[i]) continue;
 
       const ew = getEnemyWorld(w, i, KENNEY_TILE_WORLD);
+      const etx = Math.floor(ew.wx / T);
+      const ety = Math.floor(ew.wy / T);
+      if (!isTileInRenderRadius(etx, ety)) continue;
       const zAbs = ez?.[i] ?? tileHAtWorld(ew.wx, ew.wy);
       const feet = getEntityFeetPos(ew.wx, ew.wy, zAbs);
 
@@ -2164,6 +2194,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   {
     for (let i = 0; i < w.npcs.length; i++) {
       const npc = w.npcs[i];
+      const ntx = Math.floor(npc.wx / T);
+      const nty = Math.floor(npc.wy / T);
+      if (!isTileInRenderRadius(ntx, nty)) continue;
       const zAbs = tileHAtWorld(npc.wx, npc.wy);
       const feet = getEntityFeetPos(npc.wx, npc.wy, zAbs);
 
@@ -2206,6 +2239,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   {
     for (let i = 0; i < w.neutralMobs.length; i++) {
       const mob = w.neutralMobs[i];
+      const mtx = Math.floor(mob.pos.wx / T);
+      const mty = Math.floor(mob.pos.wy / T);
+      if (!isTileInRenderRadius(mtx, mty)) continue;
       const zGround = tileHAtWorld(mob.pos.wx, mob.pos.wy);
       const zAbs = zGround + (mob.pos.wzOffset ?? 0);
       const feet = getEntityFeetPos(mob.pos.wx, mob.pos.wy, zAbs);
@@ -2313,6 +2349,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const pp = getProjectileWorld(w, i, KENNEY_TILE_WORLD);
       const ptx = Math.floor(pp.wx / T);
       const pty = Math.floor(pp.wy / T);
+      if (!isTileInRenderRadius(ptx, pty)) continue;
       const baseH = tileHAtWorld(pp.wx, pp.wy);
       const pzAbs = (w.prZVisual?.[i] ?? w.prZ?.[i] ?? baseH) || 0;
       const support = getSupportSurfaceAt(pp.wx, pp.wy, compiledMap);
@@ -2485,6 +2522,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
     for (let fi = 0; fi < allFaces.length; fi++) {
       const face = allFaces[fi];
+      if (!isTileInRenderRadius(face.tx, face.ty)) continue;
       const faceStableId = face.tx * 73856093 ^ face.ty * 19349663 ^ (face.zFrom * 100 | 0) * 83492791;
       const draws = buildFaceDraws(face);
       for (let di = 0; di < draws.length; di++) {
@@ -2504,8 +2542,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
           // Owner tile for face pieces is (face.tx, face.ty)
           const ownerInWedge = isOwnerTileInPlayerWedge(face.tx, face.ty);
 
-          if (isStructureish && sctx && ownerInWedge) drawRenderPieceTo(sctx, d);
-          else drawRenderPiece(d);
+          if (isStructureish && sctx && ownerInWedge) {
+            hasStructureLayerDraw = true;
+            drawRenderPieceTo(sctx, d);
+          } else drawRenderPiece(d);
         });
 
         // Full building mask stays intact for lighting occlusion.
@@ -2535,6 +2575,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
     for (let oi = 0; oi < allOccluders.length; oi++) {
       const occ = allOccluders[oi];
+      if (!isTileInRenderRadius(occ.tx, occ.ty)) continue;
       if (occ.kind !== "WALL") continue;
       const occStableId = occ.tx * 73856093 ^ occ.ty * 19349663 ^ (occ.zFrom * 100 | 0) * 83492791;
       if (occ.id.startsWith("stamp_wall_") && shouldCullBuildingAt(occ.tx, occ.ty)) continue;
@@ -2556,8 +2597,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         // Owner tile for walls is (occ.tx, occ.ty)
         const ownerInWedge = isOwnerTileInPlayerWedge(occ.tx, occ.ty);
 
-        if (isStructureish && sctx && ownerInWedge) drawRenderPieceTo(sctx, draw);
-        else drawRenderPiece(draw);
+        if (isStructureish && sctx && ownerInWedge) {
+          hasStructureLayerDraw = true;
+          drawRenderPieceTo(sctx, draw);
+        } else drawRenderPiece(draw);
       });
 
       // Full building mask stays intact for lighting occlusion.
@@ -2576,6 +2619,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       const ovs = overlaysInView(viewRect);
       for (let i = 0; i < ovs.length; i++) {
         const o = ovs[i];
+        if (!tileRectIntersectsRenderRadius(o.tx, o.tx + o.w - 1, o.ty, o.ty + o.h - 1)) continue;
         if ((o.kind ?? "ROOF") === "ROOF" && shouldCullBuildingAt(o.tx, o.ty, o.w, o.h)) continue;
         const draw = buildOverlayDraw(o);
         if (!draw) continue;
@@ -2624,6 +2668,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
           for (let bi = 0; bi < bandPieces.length; bi++) {
             const band = bandPieces[bi];
+            const ownerTx = band.renderKey.within;
+            const ownerTy = band.renderKey.slice - band.renderKey.within;
+            if (!isTileInRenderRadius(ownerTx, ownerTy)) continue;
             const overlayKey: RenderKey = {
               slice: band.renderKey.slice,
               within: band.renderKey.within,
@@ -2635,8 +2682,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
               const sctx = structureLayerScratchCtx;
 
               // Owner tile for a band piece is derived from its renderKey.
-              const ownerTx = band.renderKey.within;
-              const ownerTy = band.renderKey.slice - band.renderKey.within;
               const ownerInWedge = isOwnerTileInPlayerWedge(ownerTx, ownerTy);
 
               const wantsStructureTarget =
@@ -2644,6 +2689,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
               // Route to structure scratch ONLY if wedge-owned; otherwise draw to main ctx.
               const target = wantsStructureTarget && sctx && ownerInWedge ? sctx : ctx;
+              if (target === sctx) hasStructureLayerDraw = true;
               const img = draw.img;
               if (!img) return;
               const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(img) : img;
@@ -2689,7 +2735,6 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
             // Full building mask stays intact for lighting occlusion.
             if (o.layerRole === "STRUCTURE" || (o.kind ?? "ROOF") === "ROOF") {
-              const ownerTy = band.renderKey.slice - band.renderKey.within;
               buildingMaskDraws.push((maskCtx) => {
                 const img = draw.img;
                 if (!img) return;
@@ -2758,7 +2803,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
             if ((o.layerRole === "STRUCTURE" || (o.kind ?? "ROOF") === "ROOF") && isOwnerTileInPlayerWedge(ownerTx, ownerTy)) {
               for (let fy = 0; fy < o.h; fy++) {
                 for (let fx = 0; fx < o.w; fx++) {
-                  addGroundTileMask(southBuildingBaseMaskDraws, o.tx + fx, o.ty + fy);
+                  const tx = o.tx + fx;
+                  const ty = o.ty + fy;
+                  if (!isTileInRenderRadius(tx, ty)) continue;
+                  addGroundTileMask(southBuildingBaseMaskDraws, tx, ty);
                 }
               }
             }
@@ -2787,8 +2835,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
             const ownerTy = (o.anchorTy ?? (o.ty + o.h - 1));
             const ownerInWedge = isOwnerTileInPlayerWedge(ownerTx, ownerTy);
 
-            if (isStructureish && sctx && ownerInWedge) drawRenderPieceTo(sctx, draw);
-            else drawRenderPiece(draw);
+            if (isStructureish && sctx && ownerInWedge) {
+              hasStructureLayerDraw = true;
+              drawRenderPieceTo(sctx, draw);
+            } else drawRenderPiece(draw);
           });
 
           // Full building mask stays intact for lighting occlusion.
@@ -2877,7 +2927,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   }
 
   let cutoutVoidCanvas: HTMLCanvasElement | null = null;
-  {
+  if (southBuildingBaseMaskDraws.length > 0) {
     const southMaskLayer = ensureScratchMaskCanvas(
       southBuildingMaskScratchCanvas,
       southBuildingMaskScratchCtx,
@@ -2995,7 +3045,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // ============================================
   // STRUCTURE CUTOUT COMPOSITE (Milestone 1: hard circle)
   // ============================================
-  if (structureLayerScratchCanvas && structureLayerScratchCtx) {
+  if (hasStructureLayerDraw && structureLayerScratchCanvas && structureLayerScratchCtx) {
     const sctx = structureLayerScratchCtx;
 
     // End the structure-layer world transform so we can punch hole in screen-space
@@ -3074,6 +3124,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       ctx.font = "10px monospace";
       for (let i = 0; i < decals.length; i++) {
         const d = decals[i];
+        if (!isTileInRenderRadius(d.tx, d.ty)) continue;
         const p0 = toScreen(d.tx * T, d.ty * T);
         const p1 = toScreen((d.tx + 1) * T, d.ty * T);
         const p2 = toScreen((d.tx + 1) * T, (d.ty + 1) * T);
@@ -3126,9 +3177,16 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     deferredStructureSliceDebugDraws[i]();
   }
 
-  const inverseMaskLayer = ensureLightingMaskCanvas(w.lighting, "INVERSE_BUILDING", devW, devH);
-  const sourceMaskLayer = ensureLightingMaskCanvas(w.lighting, "SOURCE_OCC", devW, devH);
-  if (inverseMaskLayer) {
+  const occlusionEnabled = debugFlags.lightingOcclusionEnabled && w.lighting.occlusionEnabled;
+  const occlusionHasContent = (
+    buildingMaskDraws.length > 0
+    || entityShadowMaskParams.length > 0
+    || southBuildingMaskDraws.length > 0
+  );
+  const inverseMaskLayer = occlusionEnabled
+    ? (occlusionHasContent ? ensureLightingMaskCanvas(w.lighting, "INVERSE_BUILDING", devW, devH) : null)
+    : null;
+  if (inverseMaskLayer && occlusionEnabled) {
     const inverseCtx = inverseMaskLayer.ctx;
     const southBuildingMaskLayer = ensureScratchMaskCanvas(
       southBuildingMaskScratchCanvas,
@@ -3175,7 +3233,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     setRenderPerfDrawTag(null);
     inverseCtx.restore();
 
-    if (shadowMaskLayer && silhouetteMaskLayer) {
+    if (shadowMaskLayer && silhouetteMaskLayer && entityShadowMaskParams.length > 0) {
       const shadowCtx = shadowMaskLayer.ctx;
       const silhouetteCtx = silhouetteMaskLayer.ctx;
 
@@ -3196,20 +3254,22 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       setRenderPerfDrawTag(null);
       shadowCtx.restore();
 
-      silhouetteCtx.save();
-      configurePixelPerfect(silhouetteCtx);
-      silhouetteCtx.setTransform(s, 0, 0, s, 0, 0);
-      silhouetteCtx.translate(camTx, camTy);
-      drawAlignmentDot(silhouetteCtx, "rgba(64,128,255,0.9)"); // silhouette mask
-      for (let i = 0; i < entitySilhouetteMaskDraws.length; i++) {
-        entitySilhouetteMaskDraws[i](silhouetteCtx);
-      }
-      silhouetteCtx.restore();
+      if (entitySilhouetteMaskDraws.length > 0) {
+        silhouetteCtx.save();
+        configurePixelPerfect(silhouetteCtx);
+        silhouetteCtx.setTransform(s, 0, 0, s, 0, 0);
+        silhouetteCtx.translate(camTx, camTy);
+        drawAlignmentDot(silhouetteCtx, "rgba(64,128,255,0.9)"); // silhouette mask
+        for (let i = 0; i < entitySilhouetteMaskDraws.length; i++) {
+          entitySilhouetteMaskDraws[i](silhouetteCtx);
+        }
+        silhouetteCtx.restore();
 
-      shadowCtx.globalCompositeOperation = "destination-out";
-      setRenderPerfDrawTag("mask:shadow");
-      shadowCtx.drawImage(silhouetteMaskLayer.canvas, 0, 0);
-      shadowCtx.globalCompositeOperation = "source-over";
+        shadowCtx.globalCompositeOperation = "destination-out";
+        setRenderPerfDrawTag("mask:shadow");
+        shadowCtx.drawImage(silhouetteMaskLayer.canvas, 0, 0);
+        shadowCtx.globalCompositeOperation = "source-over";
+      }
 
       inverseCtx.globalCompositeOperation = "source-over";
       inverseCtx.drawImage(shadowMaskLayer.canvas, 0, 0);
@@ -3217,7 +3277,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     }
     // Keep lighting occlusion based on full building mask.
     // Apply player hole as: fullBuildingMask - (southBuildingMask ∩ playerCircleGradient).
-    if (southBuildingMaskLayer) {
+    if (southBuildingMaskLayer && southBuildingMaskDraws.length > 0) {
       const southCtx = southBuildingMaskLayer.ctx;
       southCtx.setTransform(1, 0, 0, 1, 0, 0);
       southCtx.clearRect(0, 0, devW, devH);
@@ -3286,10 +3346,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const projectedLights: ProjectedLight[] = [];
   for (let i = 0; i < lightDefs.length; i++) {
     const ld = lightDefs[i];
-    // Exact match with tile render coverage (no padding).
     const ltx = Math.floor(ld.worldX / T);
     const lty = Math.floor(ld.worldY / T);
-    if (ltx < minTx || ltx > maxTx || lty < minTy || lty > maxTy) continue;
+    if (!isTileInRenderRadius(ltx, lty)) continue;
 
     const isStreetLamp = (ld.shape ?? "RADIAL") === "STREET_LAMP";
     const occlusion = isStreetLamp
@@ -3323,20 +3382,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     });
   }
 
-  if (sourceMaskLayer && inverseMaskLayer) {
-    const occlusionEnabled = debugFlags.lightingOcclusionEnabled && w.lighting.occlusionEnabled;
-    if (occlusionEnabled) {
-      const sourceCtx = sourceMaskLayer.ctx;
-      sourceCtx.setTransform(1, 0, 0, 1, 0, 0);
-      sourceCtx.globalCompositeOperation = "source-over";
-      sourceCtx.clearRect(0, 0, devW, devH);
-      sourceCtx.fillStyle = "#ffffff";
-      sourceCtx.fillRect(0, 0, devW, devH);
-      sourceCtx.globalCompositeOperation = "destination-out";
-      setRenderPerfDrawTag("mask:building");
-      sourceCtx.drawImage(inverseMaskLayer.canvas, 0, 0);
-      sourceCtx.globalCompositeOperation = "source-over";
-      setRenderPerfDrawTag(null);
+  if (inverseMaskLayer && occlusionEnabled && occlusionHasContent) {
       buildCombinedOcclusionMask(
         w.lighting,
         inverseMaskLayer.canvas,
@@ -3344,10 +3390,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
         devH,
         true,
       );
-    } else {
-      w.lighting.combinedOcclusionMaskCanvas = null;
-      w.lighting.combinedOcclusionMaskCtx = null;
-    }
+  } else {
+    w.lighting.combinedOcclusionMaskCanvas = null;
+    w.lighting.combinedOcclusionMaskCtx = null;
   }
 
   // PASS 8: final screen-space lighting
