@@ -2768,7 +2768,15 @@ export function compileKenneyMapFromTable(
         for (let i = 0; i < surfaces.length; i++) {
             const s = surfaces[i];
             if ((s.zBase | 0) <= 0) continue;
-            addOcclusionRect(s.zBase | 0, "SURFACE", s.tx, s.ty, s.tx + 1, s.ty + 1);
+            const isBuildingSurface = s.id.startsWith("building_floor_");
+            addOcclusionRect(
+                s.zBase | 0,
+                isBuildingSurface ? "VOLUMETRIC" : "SURFACE",
+                s.tx,
+                s.ty,
+                s.tx + 1,
+                s.ty + 1,
+            );
         }
     }
     for (let i = 0; i < decals.length; i++) {

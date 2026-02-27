@@ -166,8 +166,7 @@ const runtimeIsoDecalCache = new WeakMap<HTMLImageElement, Map<string, HTMLCanva
 const runtimeDiamondCanvasCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
 const occlusionMaskByHeightCache = new Map<number, { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D }>();
 const lightingAbovePlayerMaskByHeightCache = new Map<number, { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D }>();
-const lightingMaskBuildKeyByHeight = new Map<number, string>();
-const lightingAboveMaskBuildKeyByHeight = new Map<number, string>();
+const lightingSameBandPlayerMaskByHeightCache = new Map<number, { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D }>();
 type CompiledChunkMaskRaster = { canvas: HTMLCanvasElement; minX: number; minY: number };
 const compiledChunkMaskRasterCache = new Map<string, CompiledChunkMaskRaster>();
 const LIT_HEIGHTS_DEFAULT: readonly number[] = [0, 8];
@@ -345,6 +344,8 @@ let southBuildingMaskScratchCanvas: HTMLCanvasElement | null = null;
 let southBuildingMaskScratchCtx: CanvasRenderingContext2D | null = null;
 let cutoutVoidScratchCanvas: HTMLCanvasElement | null = null;
 let cutoutVoidScratchCtx: CanvasRenderingContext2D | null = null;
+let structureCutoutDeltaScratchCanvas: HTMLCanvasElement | null = null;
+let structureCutoutDeltaScratchCtx: CanvasRenderingContext2D | null = null;
 
 function getHardcodedVoidTop(): { ready: boolean; img: HTMLImageElement | null } {
   if (hardcodedVoidTopReady && hardcodedVoidTopImage) {
@@ -1107,6 +1108,8 @@ export async function renderSystem(
   const shouldRouteToStructureScratch = (pieceBand: number, ownerTx: number, ownerTy: number): boolean => {
     if (pieceBand > playerRenderBand) return true;
     if (pieceBand < playerRenderBand) return false;
+    const topSurface = maxNonStairSurfaceZ(ownerTx, ownerTy);
+    if (topSurface !== null && Math.floor(topSurface + 1e-3) > pieceBand) return false;
     return isOwnerTileInPlayerWedge(ownerTx, ownerTy);
   };
 
@@ -1180,7 +1183,12 @@ export async function renderSystem(
         maskCtx.restore();
       });
     };
-    const addSurfaceOccluderTileMaskAtZ = (tx: number, ty: number, zVisual: number) => {
+    const addSurfaceOccluderTileMaskAtZ = (
+      tx: number,
+      ty: number,
+      zVisual: number,
+      cls: OccluderClass = "SURFACE",
+    ) => {
       const draw = (maskCtx: CanvasRenderingContext2D) => {
         const p0 = worldToScreen(tx * T, ty * T);
         const p1 = worldToScreen((tx + 1) * T, ty * T);
@@ -1199,7 +1207,7 @@ export async function renderSystem(
         maskCtx.fill();
         maskCtx.restore();
       };
-      occluderEntries.push({ minZ: zVisual, class: "SURFACE", draw });
+      occluderEntries.push({ minZ: zVisual, class: cls, draw });
     };
 
     const srcUvNW: ScreenPt = { x: 64, y: 0 };
@@ -1974,7 +1982,14 @@ export async function renderSystem(
           if (surface.id.startsWith("building_floor_") && shouldCullBuildingAt(tx, ty)) continue;
           if (surface.runtimeTop?.kind === "SQUARE_128_RUNTIME") {
             const runtimeTop = surface.runtimeTop;
-            if (surface.zBase > 0) addSurfaceOccluderTileMaskAtZ(tx, ty, surface.zBase);
+            if (surface.zBase > 0) {
+              addSurfaceOccluderTileMaskAtZ(
+                tx,
+                ty,
+                surface.zBase,
+                surface.id.startsWith("building_floor_") ? "VOLUMETRIC" : "SURFACE",
+              );
+            }
             const renderKey: RenderKey = {
               slice: tx + ty,
               within: tx,
@@ -2026,7 +2041,14 @@ export async function renderSystem(
             kindOrder: KindOrder.FLOOR,
             stableId: topStableId,
           };
-          if (surface.zBase > 0) addSurfaceOccluderTileMaskAtZ(tx, ty, surface.zBase);
+          if (surface.zBase > 0) {
+            addSurfaceOccluderTileMaskAtZ(
+              tx,
+              ty,
+              surface.zBase,
+              surface.id.startsWith("building_floor_") ? "VOLUMETRIC" : "SURFACE",
+            );
+          }
 
           addToSlice(tx + ty, renderKey, drawImageTopFn, {
             img: topImg,
@@ -3452,19 +3474,13 @@ export async function renderSystem(
     devW,
     devH,
   );
-  const groundRestoreLayer = ensureScratchMaskCanvas(
-    cutoutVoidScratchCanvas,
-    cutoutVoidScratchCtx,
-    devW,
-    devH,
-  );
   if (surfaceCutoutMaskLayer) {
     southBuildingMaskScratchCanvas = surfaceCutoutMaskLayer.canvas;
     southBuildingMaskScratchCtx = surfaceCutoutMaskLayer.ctx;
   }
-  if (groundRestoreLayer) {
-    cutoutVoidScratchCanvas = groundRestoreLayer.canvas;
-    cutoutVoidScratchCtx = groundRestoreLayer.ctx;
+  if (!cutoutVoidScratchCanvas) cutoutVoidScratchCanvas = document.createElement("canvas");
+  if (!cutoutVoidScratchCtx || cutoutVoidScratchCtx.canvas !== cutoutVoidScratchCanvas) {
+    cutoutVoidScratchCtx = cutoutVoidScratchCanvas.getContext("2d");
   }
 
   const pzAbs = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
@@ -3502,21 +3518,31 @@ export async function renderSystem(
     }
     const useGroundCutout = !!(
       surfaceCutoutMaskLayer
-      && groundRestoreLayer
+      && cutoutVoidScratchCtx
       && (
         (bandSurfaceEntries && bandSurfaceEntries.length > 0)
         || hasCompiledCutEntries
       )
     );
+    const cutPad = 4;
+    const cutX0 = Math.max(0, Math.floor(playerSx - outerR - cutPad));
+    const cutY0 = Math.max(0, Math.floor(playerSy - outerR - cutPad));
+    const cutX1 = Math.min(devW, Math.ceil(playerSx + outerR + cutPad));
+    const cutY1 = Math.min(devH, Math.ceil(playerSy + outerR + cutPad));
+    const cutW = Math.max(0, cutX1 - cutX0);
+    const cutH = Math.max(0, cutY1 - cutY0);
 
-    // Snapshot frame before drawing this ground band so we can restore lower layers in cutout area.
-    if (useGroundCutout) {
-      const restoreCtx = groundRestoreLayer.ctx;
+    // Snapshot only the player-cut region before drawing this band.
+    if (useGroundCutout && cutW > 0 && cutH > 0 && cutoutVoidScratchCanvas && cutoutVoidScratchCtx) {
+      if (cutoutVoidScratchCanvas.width !== cutW) cutoutVoidScratchCanvas.width = cutW;
+      if (cutoutVoidScratchCanvas.height !== cutH) cutoutVoidScratchCanvas.height = cutH;
+      const restoreCtx = cutoutVoidScratchCtx;
+      configurePixelPerfect(restoreCtx);
       restoreCtx.setTransform(1, 0, 0, 1, 0, 0);
       restoreCtx.globalCompositeOperation = "source-over";
-      restoreCtx.clearRect(0, 0, devW, devH);
+      restoreCtx.clearRect(0, 0, cutW, cutH);
       setRenderPerfDrawTag("cutoutVoid");
-      restoreCtx.drawImage(canvas, 0, 0);
+      restoreCtx.drawImage(canvas, cutX0, cutY0, cutW, cutH, 0, 0, cutW, cutH);
       setRenderPerfDrawTag(null);
     }
 
@@ -3534,9 +3560,9 @@ export async function renderSystem(
 
     // Reveal VOID only inside the player cutout.
     // This visually "turns the floor into void" only where the cutout mask is active.
-    if (useGroundCutout && groundRestoreLayer) {
+    if (useGroundCutout && cutW > 0 && cutH > 0 && cutoutVoidScratchCanvas && cutoutVoidScratchCtx) {
         const southCtx = surfaceCutoutMaskLayer.ctx;
-        const restoreCtx = groundRestoreLayer.ctx;
+        const restoreCtx = cutoutVoidScratchCtx;
 
         southCtx.setTransform(1, 0, 0, 1, 0, 0);
         southCtx.globalCompositeOperation = "source-over";
@@ -3592,7 +3618,7 @@ export async function renderSystem(
         restoreCtx.setTransform(1, 0, 0, 1, 0, 0);
         restoreCtx.globalCompositeOperation = "destination-in";
         setRenderPerfDrawTag("cutoutVoid");
-        restoreCtx.drawImage(surfaceCutoutMaskLayer.canvas, 0, 0);
+        restoreCtx.drawImage(surfaceCutoutMaskLayer.canvas, cutX0, cutY0, cutW, cutH, 0, 0, cutW, cutH);
         setRenderPerfDrawTag(null);
         restoreCtx.globalCompositeOperation = "source-over";
 
@@ -3600,7 +3626,7 @@ export async function renderSystem(
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.globalCompositeOperation = "source-over";
         setRenderPerfDrawTag("cutoutVoid");
-        ctx.drawImage(groundRestoreLayer.canvas, 0, 0);
+        ctx.drawImage(cutoutVoidScratchCanvas, cutX0, cutY0);
         setRenderPerfDrawTag(null);
         ctx.restore();
     }
@@ -3622,8 +3648,25 @@ export async function renderSystem(
   // ============================================
   // STRUCTURE CUTOUT COMPOSITE (Milestone 1: hard circle)
   // ============================================
+  let structureLightingCutMaskCanvas: HTMLCanvasElement | null = null;
   if (hasStructureLayerDraw && structureLayerScratchCanvas && structureLayerScratchCtx) {
     const sctx = structureLayerScratchCtx;
+    const structureCutDeltaLayer = ensureScratchMaskCanvas(
+      structureCutoutDeltaScratchCanvas,
+      structureCutoutDeltaScratchCtx,
+      devW,
+      devH,
+    );
+    if (structureCutDeltaLayer) {
+      structureCutoutDeltaScratchCanvas = structureCutDeltaLayer.canvas;
+      structureCutoutDeltaScratchCtx = structureCutDeltaLayer.ctx;
+      const deltaCtx = structureCutDeltaLayer.ctx;
+      deltaCtx.setTransform(1, 0, 0, 1, 0, 0);
+      deltaCtx.globalCompositeOperation = "source-over";
+      deltaCtx.clearRect(0, 0, devW, devH);
+      // Snapshot pre-cut structure alpha so we can build an exact cut delta mask.
+      deltaCtx.drawImage(structureLayerScratchCanvas, 0, 0);
+    }
 
     // End the structure-layer world transform so we can punch hole in screen-space
     sctx.restore();
@@ -3657,6 +3700,14 @@ export async function renderSystem(
 
     sctx.restore();
     sctx.globalCompositeOperation = "source-over";
+    if (structureCutDeltaLayer) {
+      const deltaCtx = structureCutDeltaLayer.ctx;
+      // Keep only removed pixels: pre-cut minus post-cut.
+      deltaCtx.globalCompositeOperation = "destination-out";
+      deltaCtx.drawImage(structureLayerScratchCanvas, 0, 0);
+      deltaCtx.globalCompositeOperation = "source-over";
+      structureLightingCutMaskCanvas = structureCutDeltaLayer.canvas;
+    }
 
     // Composite structures over the already-rendered scene.
     ctx.save();
@@ -4010,7 +4061,6 @@ export async function renderSystem(
     const chunkY0 = Math.floor(minTy / chunkSize);
     const chunkX1 = Math.floor(maxTx / chunkSize);
     const chunkY1 = Math.floor(maxTy / chunkSize);
-    const compiledMaskScopeKey = `cmp:${compiledMap.id}:${devW}x${devH}:${chunkX0},${chunkY0},${chunkX1},${chunkY1}:pb=${playerBand}`;
     const drawCompiledLightingBandToCtx = (
       targetCtx: CanvasRenderingContext2D,
       zBand: number,
@@ -4088,10 +4138,10 @@ export async function renderSystem(
         targetCtx.imageSmoothingEnabled = false;
         targetCtx.drawImage(
           raster.canvas,
-          Math.round(dx),
-          Math.round(dy),
-          Math.max(1, Math.round(dw)),
-          Math.max(1, Math.round(dh)),
+          dx,
+          dy,
+          Math.max(1, dw),
+          Math.max(1, dh),
         );
         countRenderMaskRasterChunk();
         return true;
@@ -4161,13 +4211,43 @@ export async function renderSystem(
       drew = drewLowVol || drewHighSurface || drewHighVol;
       return drew;
     };
+    const sameBandVolumetricSilhouettes = new Map<number, OccluderEntry[]>();
+    for (let oi = 0; oi < occluderEntries.length; oi++) {
+      const entry = occluderEntries[oi];
+      if (entry.class !== "VOLUMETRIC") continue;
+      const zBand = Math.floor(entry.minZ + 1e-3);
+      let list = sameBandVolumetricSilhouettes.get(zBand);
+      if (!list) {
+        list = [];
+        sameBandVolumetricSilhouettes.set(zBand, list);
+      }
+      list.push(entry);
+    }
+    const drawSameBandVolumetricSilhouettes = (
+      targetCtx: CanvasRenderingContext2D,
+      L: number,
+      onlyAbovePlayer: boolean,
+    ): boolean => {
+      if (onlyAbovePlayer && L <= playerBand) return false;
+      const entries = sameBandVolumetricSilhouettes.get(L);
+      if (!entries || entries.length === 0) return false;
+      targetCtx.save();
+      targetCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
+      targetCtx.translate(camTx, camTy);
+      for (let ei = 0; ei < entries.length; ei++) {
+        countRenderMaskRasterChunk();
+        countRenderMaskDrawEntry();
+        entries[ei].draw(targetCtx);
+      }
+      targetCtx.restore();
+      return true;
+    };
 
     for (let hi = 0; hi < activeLitHeights.length; hi++) {
       const L = activeLitHeights[hi];
       const hasAbovePlayerContributors = playerBand < 8 && L <= 8;
-      const baseBuildKey = `${compiledMaskScopeKey}:L=${L}:above=${hasAbovePlayerContributors ? 1 : 0}`;
+      const hasSameBandPlayerContributors = L === playerBand && !!sameBandVolumetricSilhouettes.get(L)?.length;
       let rec = occlusionMaskByHeightCache.get(L);
-      const hadRecBefore = !!rec;
       if (!rec) {
         const canvas = document.createElement("canvas");
         const c2d = canvas.getContext("2d");
@@ -4176,25 +4256,14 @@ export async function renderSystem(
         occlusionMaskByHeightCache.set(L, rec);
         if (occlusionMaskByHeightCache.size > 16) {
           const firstKey = occlusionMaskByHeightCache.keys().next().value as number | undefined;
-          if (firstKey !== undefined) {
-            occlusionMaskByHeightCache.delete(firstKey);
-            lightingMaskBuildKeyByHeight.delete(firstKey);
-          }
+          if (firstKey !== undefined) occlusionMaskByHeightCache.delete(firstKey);
         }
       }
-      const resizedBase = rec.canvas.width !== devW || rec.canvas.height !== devH;
-      if (resizedBase) {
+      if (rec.canvas.width !== devW || rec.canvas.height !== devH) {
         rec.canvas.width = devW;
         rec.canvas.height = devH;
       }
-      const prevBaseKey = lightingMaskBuildKeyByHeight.get(L);
-      if (hadRecBefore && !resizedBase && prevBaseKey === baseBuildKey) {
-        countRenderMaskCacheHit();
-        heightOcclusionMasks.set(L, rec.canvas);
-        continue;
-      }
-      if (hadRecBefore) countRenderMaskCacheMiss();
-      else countRenderMaskCacheMiss();
+      countRenderMaskCacheHit();
       countRenderMaskBuild();
       const maskCtx = rec.ctx;
       configurePixelPerfect(maskCtx);
@@ -4203,10 +4272,9 @@ export async function renderSystem(
       maskCtx.clearRect(0, 0, devW, devH);
       if (useCompiledLightingMaskCache) {
         drawCompiledLightingMaskToCtx(maskCtx, L, false);
+        drawSameBandVolumetricSilhouettes(maskCtx, L, false);
         if (hasAbovePlayerContributors) {
-          const aboveBuildKey = `${compiledMaskScopeKey}:L=${L}:aboveOnly=1`;
           let aboveRec = lightingAbovePlayerMaskByHeightCache.get(L);
-          const hadAboveRecBefore = !!aboveRec;
           if (!aboveRec) {
             const canvas = document.createElement("canvas");
             const c2d = canvas.getContext("2d");
@@ -4218,38 +4286,24 @@ export async function renderSystem(
             lightingAbovePlayerMaskByHeightCache.set(L, aboveRec);
             if (lightingAbovePlayerMaskByHeightCache.size > 16) {
               const firstKey = lightingAbovePlayerMaskByHeightCache.keys().next().value as number | undefined;
-              if (firstKey !== undefined) {
-                lightingAbovePlayerMaskByHeightCache.delete(firstKey);
-                lightingAboveMaskBuildKeyByHeight.delete(firstKey);
-              }
+              if (firstKey !== undefined) lightingAbovePlayerMaskByHeightCache.delete(firstKey);
             }
           }
-          const resizedAbove = aboveRec.canvas.width !== devW || aboveRec.canvas.height !== devH;
-          if (resizedAbove) {
+          if (aboveRec.canvas.width !== devW || aboveRec.canvas.height !== devH) {
             aboveRec.canvas.width = devW;
             aboveRec.canvas.height = devH;
           }
-          const prevAboveKey = lightingAboveMaskBuildKeyByHeight.get(L);
-          const needsAboveRebuild = !(hadAboveRecBefore && !resizedAbove && prevAboveKey === aboveBuildKey);
-          if (needsAboveRebuild) {
-            countRenderMaskCacheMiss();
-            countRenderMaskBuild();
-          } else {
-            countRenderMaskCacheHit();
-          }
+          countRenderMaskCacheHit();
+          countRenderMaskBuild();
           const aboveCtx = aboveRec.ctx;
-          if (needsAboveRebuild) {
-            configurePixelPerfect(aboveCtx);
-            aboveCtx.setTransform(1, 0, 0, 1, 0, 0);
-            aboveCtx.globalCompositeOperation = "source-over";
-            aboveCtx.clearRect(0, 0, devW, devH);
-            const drewAbove = drawCompiledLightingMaskToCtx(aboveCtx, L, true);
-            if (!drewAbove) {
-              lightingAboveMaskBuildKeyByHeight.delete(L);
-              lightingMaskBuildKeyByHeight.set(L, baseBuildKey);
-              heightOcclusionMasks.set(L, rec.canvas);
-              continue;
-            }
+          configurePixelPerfect(aboveCtx);
+          aboveCtx.setTransform(1, 0, 0, 1, 0, 0);
+          aboveCtx.globalCompositeOperation = "source-over";
+          aboveCtx.clearRect(0, 0, devW, devH);
+          const drewAboveCompiled = drawCompiledLightingMaskToCtx(aboveCtx, L, true);
+          const drewAboveSameBand = drawSameBandVolumetricSilhouettes(aboveCtx, L, true);
+          const drewAbove = drewAboveCompiled || drewAboveSameBand;
+          if (drewAbove) {
             aboveCtx.globalCompositeOperation = "destination-in";
             const g = aboveCtx.createRadialGradient(playerSx, playerSy, innerR, playerSx, playerSy, outerR);
             g.addColorStop(0.0, "rgba(0,0,0,1)");
@@ -4259,15 +4313,54 @@ export async function renderSystem(
             aboveCtx.arc(playerSx, playerSy, outerR, 0, Math.PI * 2);
             aboveCtx.fill();
             aboveCtx.globalCompositeOperation = "source-over";
-            lightingAboveMaskBuildKeyByHeight.set(L, aboveBuildKey);
+            maskCtx.globalCompositeOperation = "destination-out";
+            maskCtx.drawImage(aboveRec.canvas, 0, 0);
+            maskCtx.globalCompositeOperation = "source-over";
           }
-          maskCtx.globalCompositeOperation = "destination-out";
-          maskCtx.drawImage(aboveRec.canvas, 0, 0);
-          maskCtx.globalCompositeOperation = "source-over";
-        } else {
-          lightingAboveMaskBuildKeyByHeight.delete(L);
         }
-        lightingMaskBuildKeyByHeight.set(L, baseBuildKey);
+        if (hasSameBandPlayerContributors) {
+          let sameRec = lightingSameBandPlayerMaskByHeightCache.get(L);
+          if (!sameRec) {
+            const canvas = document.createElement("canvas");
+            const c2d = canvas.getContext("2d");
+            if (!c2d) {
+              heightOcclusionMasks.set(L, rec.canvas);
+              continue;
+            }
+            sameRec = { canvas, ctx: c2d };
+            lightingSameBandPlayerMaskByHeightCache.set(L, sameRec);
+            if (lightingSameBandPlayerMaskByHeightCache.size > 16) {
+              const firstKey = lightingSameBandPlayerMaskByHeightCache.keys().next().value as number | undefined;
+              if (firstKey !== undefined) lightingSameBandPlayerMaskByHeightCache.delete(firstKey);
+            }
+          }
+          if (sameRec.canvas.width !== devW || sameRec.canvas.height !== devH) {
+            sameRec.canvas.width = devW;
+            sameRec.canvas.height = devH;
+          }
+          countRenderMaskCacheHit();
+          countRenderMaskBuild();
+          const sameCtx = sameRec.ctx;
+          configurePixelPerfect(sameCtx);
+          sameCtx.setTransform(1, 0, 0, 1, 0, 0);
+          sameCtx.globalCompositeOperation = "source-over";
+          sameCtx.clearRect(0, 0, devW, devH);
+          const drewSameBand = drawSameBandVolumetricSilhouettes(sameCtx, L, false);
+          if (drewSameBand) {
+            sameCtx.globalCompositeOperation = "destination-in";
+            const g = sameCtx.createRadialGradient(playerSx, playerSy, innerR, playerSx, playerSy, outerR);
+            g.addColorStop(0.0, "rgba(0,0,0,1)");
+            g.addColorStop(1.0, "rgba(0,0,0,0)");
+            sameCtx.fillStyle = g;
+            sameCtx.beginPath();
+            sameCtx.arc(playerSx, playerSy, outerR, 0, Math.PI * 2);
+            sameCtx.fill();
+            sameCtx.globalCompositeOperation = "source-over";
+            maskCtx.globalCompositeOperation = "destination-out";
+            maskCtx.drawImage(sameRec.canvas, 0, 0);
+            maskCtx.globalCompositeOperation = "source-over";
+          }
+        }
       } else {
         const groupEntries = buildLightingOccluderGroups([L], occluderEntries).get(L) ?? [];
         maskCtx.save();
@@ -4333,6 +4426,69 @@ export async function renderSystem(
           maskCtx.drawImage(aboveRec.canvas, 0, 0);
           maskCtx.globalCompositeOperation = "source-over";
         }
+        if (L === playerBand) {
+          let hasSameBandVolumetricContributors = false;
+          for (let oi = 0; oi < groupEntries.length; oi++) {
+            if (groupEntries[oi].class !== "VOLUMETRIC") continue;
+            if (Math.floor(groupEntries[oi].minZ + 1e-3) !== playerBand) continue;
+            hasSameBandVolumetricContributors = true;
+            break;
+          }
+          if (hasSameBandVolumetricContributors) {
+            let sameRec = lightingSameBandPlayerMaskByHeightCache.get(L);
+            if (!sameRec) {
+              countRenderMaskCacheMiss();
+              const canvas = document.createElement("canvas");
+              const c2d = canvas.getContext("2d");
+              if (!c2d) {
+                heightOcclusionMasks.set(L, rec.canvas);
+                continue;
+              }
+              sameRec = { canvas, ctx: c2d };
+              lightingSameBandPlayerMaskByHeightCache.set(L, sameRec);
+            } else {
+              countRenderMaskCacheHit();
+            }
+            countRenderMaskBuild();
+            if (sameRec.canvas.width !== devW) sameRec.canvas.width = devW;
+            if (sameRec.canvas.height !== devH) sameRec.canvas.height = devH;
+            const sameCtx = sameRec.ctx;
+            configurePixelPerfect(sameCtx);
+            sameCtx.setTransform(1, 0, 0, 1, 0, 0);
+            sameCtx.globalCompositeOperation = "source-over";
+            sameCtx.clearRect(0, 0, devW, devH);
+            sameCtx.save();
+            sameCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
+            sameCtx.translate(camTx, camTy);
+            for (let oi = 0; oi < groupEntries.length; oi++) {
+              if (groupEntries[oi].class !== "VOLUMETRIC") continue;
+              if (Math.floor(groupEntries[oi].minZ + 1e-3) !== playerBand) continue;
+              countRenderMaskRasterChunk();
+              countRenderMaskDrawEntry();
+              groupEntries[oi].draw(sameCtx);
+            }
+            sameCtx.restore();
+            sameCtx.globalCompositeOperation = "destination-in";
+            const g = sameCtx.createRadialGradient(playerSx, playerSy, innerR, playerSx, playerSy, outerR);
+            g.addColorStop(0.0, "rgba(0,0,0,1)");
+            g.addColorStop(1.0, "rgba(0,0,0,0)");
+            sameCtx.fillStyle = g;
+            sameCtx.beginPath();
+            sameCtx.arc(playerSx, playerSy, outerR, 0, Math.PI * 2);
+            sameCtx.fill();
+            sameCtx.globalCompositeOperation = "source-over";
+            maskCtx.globalCompositeOperation = "destination-out";
+            maskCtx.drawImage(sameRec.canvas, 0, 0);
+            maskCtx.globalCompositeOperation = "source-over";
+          }
+        }
+      }
+      if (structureLightingCutMaskCanvas) {
+        // Mirror visual structure cutout in lighting occlusion: anything visually cut out
+        // should not continue blocking light in that same revealed region.
+        maskCtx.globalCompositeOperation = "destination-out";
+        maskCtx.drawImage(structureLightingCutMaskCanvas, 0, 0);
+        maskCtx.globalCompositeOperation = "source-over";
       }
       heightOcclusionMasks.set(L, rec.canvas);
     }

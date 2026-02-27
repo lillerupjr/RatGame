@@ -1,5 +1,5 @@
 {
-  "id": "highway1",
+  "id": "highway3",
   "width": 24,
   "height": 24,
   "fields": [
@@ -21,14 +21,7 @@
     { "x": 22, "y": 0, "z": 8,  "w": 2, "h": 24, "type": "road" },
     { "x": 24, "y": 0, "z": 8, "w": 1, "h": 24, "type": "sidewalk" },
 
-
-    { "x": 1, "y": 1, "z": 8,  "w": 23, "h": 5, "type": "road" },
-
-    { "x": 4, "y": 6, "z": 8,  "w": 18, "h": 12, "type": "sidewalk" },
-    { "x": 5, "y": 8, "z": 8,  "w": 8, "h": 2, "type": "building" },
-
-
-    { "x": 1, "y": 18, "z": 8,  "w": 23, "h": 5, "type": "road" }
+    { "x": 1, "y": 11, "z": 8,  "w": 23, "h": 4, "type": "road" }
   ],
   "stamps": [
     { "x": 1, "y": 2, "z": 8, "type": "prop", "propId": "street_lamp_e", "w": 1, "h": 1 },
