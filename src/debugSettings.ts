@@ -7,7 +7,7 @@ export type NeutralBirdForceState =
   | "LAND";
 
 export type NeutralBirdAIDebugSettings = {
-  enabled: boolean;
+  disabled: boolean;
   forceState: NeutralBirdForceState;
   disableTransitions: boolean;
   drawDebug: boolean;
@@ -124,10 +124,10 @@ export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   pauseDebugCards: false,
   waterFlowRate: 1,
   neutralBirdAI: {
-    enabled: false,
+    disabled: false,
     forceState: "NONE",
     disableTransitions: false,
-    drawDebug: true,
+    drawDebug: false,
     debugRepickTarget: false,
   },
   objectives: {

@@ -69,7 +69,18 @@ function mergeSettings(
   if (!patch) return base;
 
   const patchAny = patch as any;
+  const debugPatch: Record<string, unknown> = { ...(patchAny.debug ?? {}) };
   const renderPatch: Record<string, unknown> = { ...(patchAny.render ?? {}) };
+  const neutralBirdPatch = (debugPatch.neutralBirdAI as Record<string, unknown> | undefined) ?? undefined;
+  if (
+    neutralBirdPatch
+    && typeof neutralBirdPatch.disabled !== "boolean"
+    && typeof neutralBirdPatch.enabled === "boolean"
+  ) {
+    neutralBirdPatch.disabled = !neutralBirdPatch.enabled;
+    delete neutralBirdPatch.enabled;
+    debugPatch.neutralBirdAI = neutralBirdPatch;
+  }
   if (
     typeof renderPatch.entityShadowsDisable !== "boolean"
     && typeof renderPatch.entityShadowsEnabled === "boolean"
@@ -81,7 +92,7 @@ function mergeSettings(
     ...base,
     debug: {
       ...base.debug,
-      ...(patch.debug ?? {}),
+      ...(debugPatch as Partial<UserSettings["debug"]>),
     },
     render: {
       ...base.render,

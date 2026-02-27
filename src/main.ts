@@ -399,7 +399,7 @@ function installDevSettingsUi(): void {
   birdEnabledRow.style.gap = "10px";
   birdEnabledRow.style.padding = "4px 0";
   const birdEnabledText = document.createElement("span");
-  birdEnabledText.textContent = "enabled";
+  birdEnabledText.textContent = "Disable Neutral Bird AI";
   const birdEnabledInput = document.createElement("input");
   birdEnabledInput.type = "checkbox";
   birdEnabledInput.addEventListener("change", () => {
@@ -407,7 +407,7 @@ function installDevSettingsUi(): void {
       debug: {
         neutralBirdAI: {
           ...getUserSettings().debug.neutralBirdAI,
-          enabled: birdEnabledInput.checked,
+          disabled: birdEnabledInput.checked,
         },
       },
     });
@@ -553,7 +553,7 @@ function installDevSettingsUi(): void {
       checks.get(def.key)!.checked = s.debug[def.key];
     }
     modeSelect.value = s.debug.lightingMaskDebugMode;
-    birdEnabledInput.checked = s.debug.neutralBirdAI.enabled;
+    birdEnabledInput.checked = s.debug.neutralBirdAI.disabled;
     birdDisableTransitionsInput.checked = s.debug.neutralBirdAI.disableTransitions;
     birdDrawDebugInput.checked = s.debug.neutralBirdAI.drawDebug;
     birdForceStateSelect.value = s.debug.neutralBirdAI.forceState;

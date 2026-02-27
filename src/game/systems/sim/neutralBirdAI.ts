@@ -95,10 +95,10 @@ export function neutralBirdAISystem(w: World, dt: number): void {
   const player = getPlayerWorld(w, KENNEY_TILE_WORLD);
   const settings = getUserSettings();
   const debug = {
-    enabled: settings.debug.neutralBirdAI?.enabled ?? false,
+    disabled: settings.debug.neutralBirdAI?.disabled ?? false,
     forceState: settings.debug.neutralBirdAI?.forceState ?? "NONE",
     disableTransitions: settings.debug.neutralBirdAI?.disableTransitions ?? false,
-    drawDebug: settings.debug.neutralBirdAI?.drawDebug ?? true,
+    drawDebug: settings.debug.neutralBirdAI?.drawDebug ?? false,
     debugRepickTarget: settings.debug.neutralBirdAI?.debugRepickTarget ?? false,
   };
 
@@ -128,7 +128,7 @@ export function neutralBirdAISystem(w: World, dt: number): void {
 
     if (shouldRepickAllTargets) pickTargetTile(w, i, player.wx, player.wy);
 
-    if (!debug.enabled) {
+    if (debug.disabled) {
       setBirdState(w, i, "IDLE");
       bird.pos.wzOffset = 0;
       bird.render.flipX = false;
