@@ -503,8 +503,11 @@ export type World = {
   floatTextY: number[];
   floatTextValue: number[];
   floatTextColor: string[];
+  floatTextSize: number[];
   floatTextTtl: number[];
   floatTextIsCrit: boolean[];
+  floatTextIsPlayer: boolean[];
+  uiFloatTextSeed: number;
 
   // -------------------------
   // DPS tracking (render.ts expects these)
@@ -884,8 +887,11 @@ export function createWorld(args: CreateWorldArgs): World {
     floatTextY: [],
     floatTextValue: [],
     floatTextColor: [],
+    floatTextSize: [],
     floatTextTtl: [],
     floatTextIsCrit: [],
+    floatTextIsPlayer: [],
+    uiFloatTextSeed: 0,
 
     // DPS tracking
     dpsEnabled: true,

@@ -6,7 +6,6 @@ import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { registry } from "../../content/registry";
 import { spawnZone, ZONE_KIND } from "../../factories/zoneFactory";
 import { clearSpatialHash, insertEntity, queryCircle } from "../../util/spatialHash";
-import type { ProjectileSource } from "../../factories/projectileFactory";
 import { onEnemyKilledForChallenge } from "../progression/roomChallenge";
 import { anchorFromWorld, writeAnchor } from "../../coords/anchor";
 import { enqueueDelayedExplosion } from "./delayedExplosions";
@@ -29,41 +28,82 @@ import {
   getPlayerWorld,
   getProjectileWorld,
 } from "../../coords/worldViews";
+const DMG_COLOR_PHYSICAL = "#ffffff";
+const DMG_COLOR_FIRE = "#ff9f3a";
+const DMG_COLOR_CHAOS = "#b57bff";
+const DMG_COLOR_PLAYER = "#ff4b4b";
 
-// Weapon type -> damage text color mapping
-const WEAPON_COLORS: Record<ProjectileSource, string> = {
-  KNIFE: "#ffffff",    // white
-  PISTOL: "#9fff9f",   // green
-  SWORD: "#ff9f9f",    // red
-  KNUCKLES: "#ffcc66", // orange
-  SYRINGE: "#7df7ff",  // cyan
-  BOUNCER: "#ffdcdc",  // pink
-  OTHER: "#cccccc",    // gray
-};
+type EnemyHitEvent = Extract<import("../../events").GameEvent, { type: "ENEMY_HIT" }>;
+type PlayerHitEvent = Extract<import("../../events").GameEvent, { type: "PLAYER_HIT" }>;
 
-/**
- * Spawn floating combat text at position (x, y).
- */
-function spawnFloatText(
-  w: World,
-  x: number,
-  y: number,
-  value: number,
-  source: ProjectileSource,
-  isCrit: boolean
-) {
-  const color = WEAPON_COLORS[source] ?? "#ffffff";
-  
-  // Add slight random offset so numbers don't stack perfectly
-  const offsetX = w.rng.range(-8, 8);
-  const offsetY = w.rng.range(-4, 4);
+function nextFloatJitter(seed: number): { nextSeed: number; offsetX: number; offsetY: number } {
+  let s = (seed + 0x9e3779b9) | 0;
+  s ^= s << 13;
+  s ^= s >>> 17;
+  s ^= s << 5;
+  const u1 = (s >>> 0);
+  const x = ((u1 % 17) - 8);
+  s = (s + 0x85ebca6b) | 0;
+  s ^= s << 13;
+  s ^= s >>> 17;
+  s ^= s << 5;
+  const u2 = (s >>> 0);
+  const y = ((u2 % 9) - 4);
+  return { nextSeed: s | 0, offsetX: x, offsetY: y };
+}
 
-  w.floatTextX.push(x + offsetX);
-  w.floatTextY.push(y + offsetY);
+function baseSizeFromMagnitude(value: number): number {
+  const mag = Math.max(1, Math.abs(value));
+  const tier = Math.max(0, Math.min(6, Math.floor(Math.log10(mag))));
+  return 12 + tier * 2;
+}
+
+function resolveDominantDamageColor(ev: EnemyHitEvent): string {
+  const phys = Number.isFinite(ev.dmgPhys) ? Math.max(0, ev.dmgPhys as number) : 0;
+  const fire = Number.isFinite(ev.dmgFire) ? Math.max(0, ev.dmgFire as number) : 0;
+  const chaos = Number.isFinite(ev.dmgChaos) ? Math.max(0, ev.dmgChaos as number) : 0;
+  if (phys <= 0 && fire <= 0 && chaos <= 0) return DMG_COLOR_PHYSICAL;
+  if (fire >= chaos && fire >= phys) return DMG_COLOR_FIRE;
+  if (chaos >= fire && chaos >= phys) return DMG_COLOR_CHAOS;
+  return DMG_COLOR_PHYSICAL;
+}
+
+function spawnDamageTextFromEvent(w: World, ev: EnemyHitEvent | PlayerHitEvent): void {
+  const value = Math.max(1, Math.round(ev.damage ?? 0));
+  if (!(value > 0)) return;
+  let isCrit = false;
+  let isPlayer = false;
+  let color = DMG_COLOR_PHYSICAL;
+  let size = baseSizeFromMagnitude(value);
+  if (ev.type === "ENEMY_HIT") {
+    isCrit = !!ev.isCrit;
+    color = resolveDominantDamageColor(ev);
+    if (isCrit) {
+      const cm = Math.max(
+        1,
+        Number.isFinite((ev as any).critMult)
+          ? ((ev as any).critMult as number)
+          : (Number.isFinite(w.critMultiplier) ? w.critMultiplier : 2),
+      );
+      const critScale = Math.pow(cm, 0.35);
+      size = Math.round(size * critScale);
+    }
+  } else {
+    isPlayer = true;
+    color = DMG_COLOR_PLAYER;
+  }
+  size = Math.max(12, Math.min(32, size));
+  const jitter = nextFloatJitter(w.uiFloatTextSeed | 0);
+  w.uiFloatTextSeed = jitter.nextSeed;
+
+  w.floatTextX.push(ev.x + jitter.offsetX);
+  w.floatTextY.push(ev.y + jitter.offsetY);
   w.floatTextValue.push(value);
   w.floatTextColor.push(color);
-  w.floatTextTtl.push(0.8); // float for 0.8 seconds
+  w.floatTextSize.push(size);
+  w.floatTextTtl.push(0.8);
   w.floatTextIsCrit.push(isCrit);
+  w.floatTextIsPlayer.push(isPlayer);
 }
 
 
@@ -303,9 +343,6 @@ export function collisionsSystem(w: World, dt: number) {
         w.dpsRecentTimes.push(w.time);
       }
 
-      // Spawn floating combat text
-      spawnFloatText(w, ew.wx, ew.wy, Math.round(dmg), source, isCrit);
-
       // Poison payload (applied once per hit)
       const pdps = w.prPoisonDps[p];
       const pdur = w.prPoisonDur[p];
@@ -328,6 +365,7 @@ export function collisionsSystem(w: World, dt: number) {
         x: ew.wx,
         y: ew.wy,
         isCrit,
+        critMult: critMulti,
         source,
       });
 
@@ -598,10 +636,7 @@ export function collisionsSystem(w: World, dt: number) {
     updateDPSTracking(w);
   }
 
-  // -------------------------
-  // Update floating combat text
-  // -------------------------
-  updateFloatText(w, dt);
+  // Floating combat text is spawned from events once per tick in processCombatTextFromEvents().
 }
 
 /**
@@ -642,15 +677,28 @@ function updateFloatText(w: World, dt: number) {
         w.floatTextY[i] = w.floatTextY[last];
         w.floatTextValue[i] = w.floatTextValue[last];
         w.floatTextColor[i] = w.floatTextColor[last];
+        w.floatTextSize[i] = w.floatTextSize[last];
         w.floatTextTtl[i] = w.floatTextTtl[last];
         w.floatTextIsCrit[i] = w.floatTextIsCrit[last];
+        w.floatTextIsPlayer[i] = w.floatTextIsPlayer[last];
       }
       w.floatTextX.pop();
       w.floatTextY.pop();
       w.floatTextValue.pop();
       w.floatTextColor.pop();
+      w.floatTextSize.pop();
       w.floatTextTtl.pop();
       w.floatTextIsCrit.pop();
+      w.floatTextIsPlayer.pop();
     }
   }
+}
+
+export function processCombatTextFromEvents(w: World, dt: number): void {
+  for (let i = 0; i < w.events.length; i++) {
+    const ev = w.events[i];
+    if (ev.type !== "ENEMY_HIT" && ev.type !== "PLAYER_HIT") continue;
+    spawnDamageTextFromEvent(w, ev);
+  }
+  updateFloatText(w, dt);
 }

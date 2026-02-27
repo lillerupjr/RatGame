@@ -9,6 +9,7 @@ import { getEnemyWorld, getPlayerWorld, getZoneWorld } from "../../coords/worldV
 import { getUserSettings } from "../../../userSettings";
 import { applyPlayerIncomingDamage } from "./playerArmor";
 import { breakMomentumOnLifeDamage } from "./momentum";
+import { ZONE_KIND } from "../../factories/zoneFactory";
 
 /** Update zones, apply periodic damage, and process delayed explosions. */
 export function zonesSystem(w: World, dt: number) {
@@ -124,6 +125,9 @@ export function zonesSystem(w: World, dt: number) {
                 type: "ENEMY_HIT",
                 enemyIndex: e,
                 damage: dmg,
+                dmgPhys: w.zKind[z] === ZONE_KIND.FIRE ? 0 : dmg,
+                dmgFire: w.zKind[z] === ZONE_KIND.FIRE ? dmg : 0,
+                dmgChaos: 0,
                 x: ew.wx,
                 y: ew.wy,
                 isCrit: false,

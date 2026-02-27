@@ -31,6 +31,7 @@ export type GameEvent =
     dmgPhys?: number;
     dmgFire?: number;
     dmgChaos?: number;
+    critMult?: number;
     x: number;
     y: number;
     isCrit: boolean;

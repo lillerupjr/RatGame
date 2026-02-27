@@ -26,6 +26,9 @@ export function poisonSystem(w: World, dt: number) {
             type: "ENEMY_HIT",
             enemyIndex: e,
             damage: dmg,
+            dmgPhys: 0,
+            dmgFire: 0,
+            dmgChaos: dmg,
             x: ew.wx,
             y: ew.wy,
             isCrit: false, // Poison damage doesn't crit

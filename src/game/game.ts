@@ -6,7 +6,7 @@ import { movementSystem } from "./systems/sim/movement";
 import { spawnSystem, spawnOneEnemyOfType, spawnOneTrashEnemy } from "./systems/spawn/spawn";
 import { combatSystem } from "./systems/sim/combat";
 import { ailmentTickSystem } from "./combat_mods/systems/ailmentTickSystem";
-import { collisionsSystem } from "./systems/sim/collisions";
+import { collisionsSystem, processCombatTextFromEvents } from "./systems/sim/collisions";
 import { projectilesSystem } from "./systems/sim/projectiles";
 import { pickupsSystem } from "./systems/progression/pickups";
 import { dropsSystem } from "./systems/progression/drops";
@@ -1110,8 +1110,11 @@ export function createGame(args: CreateGameArgs) {
     w.floatTextY = [];
     w.floatTextValue = [];
     w.floatTextColor = [];
+    w.floatTextSize = [];
     w.floatTextTtl = [];
     w.floatTextIsCrit = [];
+    w.floatTextIsPlayer = [];
+    w.uiFloatTextSeed = 0;
     w.npcs = [];
     w.neutralMobs = [];
   }
@@ -2412,6 +2415,7 @@ export function createGame(args: CreateGameArgs) {
     triggerSystem(world, dt, input);
     relicTriggerSystem(world);
     relicRetriggerSystem(world);
+    processCombatTextFromEvents(world, dt);
     updateZoneTrialObjective(world);
     syncZoneTrialNavState(world);
     markBossClearCompletionFromSignals(world);

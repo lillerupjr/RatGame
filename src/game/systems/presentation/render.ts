@@ -3822,7 +3822,8 @@ function renderFloatingText(
 
     const value = w.floatTextValue[i];
     const color = w.floatTextColor[i];
-    const isCrit = w.floatTextIsCrit[i];
+    const size = w.floatTextSize[i] ?? (w.floatTextIsCrit[i] ? 16 : 12);
+    const isPlayer = w.floatTextIsPlayer[i] ?? false;
 
     const maxTtl = 0.8;
     const progress = 1 - ttl / maxTtl;
@@ -3830,12 +3831,10 @@ function renderFloatingText(
     const rise = progress * 0.35;
     const alpha = progress > 0.6 ? 1 - (progress - 0.6) / 0.4 : 1;
 
-    const baseSize = isCrit ? 16 : 12;
-
     ctx.globalAlpha = alpha;
     ctx.fillStyle = color;
-    ctx.font = `${baseSize}px monospace`;
-    ctx.fillText(`${value}`, x, y - rise);
+    ctx.font = `${size}px monospace`;
+    ctx.fillText(isPlayer ? `-${value}` : `${value}`, x, y - rise);
   }
   ctx.restore();
 }

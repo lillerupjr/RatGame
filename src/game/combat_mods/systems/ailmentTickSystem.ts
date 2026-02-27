@@ -28,24 +28,6 @@ function applyDotMitigation(raw: number, resist: number, damageReduction: number
   return out;
 }
 
-function pushDotFloatText(w: World, x: number, y: number, value: number, color: string): void {
-  if (!(value > 0)) return;
-  const offsetX = w.rng?.range ? w.rng.range(-6, 6) : 0;
-  const offsetY = w.rng?.range ? w.rng.range(-3, 3) : 0;
-  w.floatTextX ??= [];
-  w.floatTextY ??= [];
-  w.floatTextValue ??= [];
-  w.floatTextColor ??= [];
-  w.floatTextTtl ??= [];
-  w.floatTextIsCrit ??= [];
-  w.floatTextX.push(x + offsetX);
-  w.floatTextY.push(y + offsetY);
-  w.floatTextValue.push(Math.max(1, Math.round(value)));
-  w.floatTextColor.push(color);
-  w.floatTextTtl.push(0.8);
-  w.floatTextIsCrit.push(false);
-}
-
 function getEnemyEventPos(w: any, e: number): { x: number; y: number } {
   const hasEnemyAnchor =
     Array.isArray(w.egxi) &&
@@ -132,9 +114,6 @@ export function ailmentTickSystem(w: any, dt: number): void {
         isCrit: false,
         source: "OTHER",
       });
-      // Distinct DOT feedback channels.
-      if (poisonFinal > 0) pushDotFloatText(w, pos.x, pos.y, poisonFinal, "#3dff7a");
-      if (igniteFinal > 0) pushDotFloatText(w, pos.x, pos.y, igniteFinal, "#ff8b2f");
 
       if (w.eHp[e] <= 0) {
         w.eAlive[e] = false;
