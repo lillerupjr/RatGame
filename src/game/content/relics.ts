@@ -7,6 +7,8 @@ export type RelicDef = {
   desc?: string[];
 };
 
+export const MOMENTUM_RELIC_TAG = "MOMENTUM";
+
 export const RELICS: RelicDef[] = [
   {
     id: "PASS_MOVE_SPEED_20",
@@ -34,6 +36,7 @@ export const RELICS: RelicDef[] = [
     isEnabled: true,
     displayName: "+3% more Damage per Momentum",
     kind: "PASSIVE",
+    tags: [MOMENTUM_RELIC_TAG],
     desc: ["+3% more Damage per Momentum"],
   },
   {
@@ -41,6 +44,7 @@ export const RELICS: RelicDef[] = [
     isEnabled: true,
     displayName: "+2% increased Move Speed per Momentum",
     kind: "PASSIVE",
+    tags: [MOMENTUM_RELIC_TAG],
     desc: ["+2% increased Move Speed per Momentum"],
   },
   {
@@ -48,6 +52,7 @@ export const RELICS: RelicDef[] = [
     isEnabled: true,
     displayName: "+10 Maximum Momentum",
     kind: "PASSIVE",
+    tags: [MOMENTUM_RELIC_TAG],
     desc: ["+10 Maximum Momentum"],
   },
   {
@@ -55,6 +60,7 @@ export const RELICS: RelicDef[] = [
     isEnabled: true,
     displayName: "Trigger effects deal 2% more damage per Momentum",
     kind: "PASSIVE",
+    tags: [MOMENTUM_RELIC_TAG],
     desc: ["Trigger effects deal 2% more damage per Momentum"],
   },
   {
@@ -62,6 +68,7 @@ export const RELICS: RelicDef[] = [
     isEnabled: true,
     displayName: "When full Momentum breaks, gain 20 Armor",
     kind: "PASSIVE",
+    tags: [MOMENTUM_RELIC_TAG],
     desc: ["When full Momentum breaks, gain 20 Armor"],
   },
   {
@@ -69,6 +76,7 @@ export const RELICS: RelicDef[] = [
     isEnabled: true,
     displayName: "At full Momentum, Crit Chance is doubled",
     kind: "PASSIVE",
+    tags: [MOMENTUM_RELIC_TAG],
     desc: ["At full Momentum, Crit Chance is doubled"],
   },
   {
@@ -76,6 +84,7 @@ export const RELICS: RelicDef[] = [
     isEnabled: true,
     displayName: "Momentum decays 1s later",
     kind: "PASSIVE",
+    tags: [MOMENTUM_RELIC_TAG],
     desc: ["Momentum decays 1s later"],
   },
   {
@@ -351,4 +360,17 @@ export function getRelicById(id: string): RelicDef | null {
 
 export function getRelicDef(id: string): RelicDef | undefined {
   return getRelicById(id) ?? undefined;
+}
+
+export function relicHasTag(id: string, tag: string): boolean {
+  const relic = getRelicById(id);
+  if (!relic?.tags?.length) return false;
+  return relic.tags.includes(tag);
+}
+
+export function hasAnyRelicWithTag(ids: readonly string[], tag: string): boolean {
+  for (let i = 0; i < ids.length; i++) {
+    if (relicHasTag(ids[i], tag)) return true;
+  }
+  return false;
 }

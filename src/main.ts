@@ -925,6 +925,12 @@ async function bootstrap() {
         }
         break;
       case AppState.RUN:
+        // Game world state is authoritative for run -> menu exits (end screen, quit, etc.).
+        if (game.getWorld().state === "MENU") {
+          appStateController.setRunState(RunState.PLAYING);
+          appStateController.setAppState(AppState.MENU);
+          break;
+        }
         if (appStateController.runState === RunState.PLAYING) {
           const pendingFloorIntent = game.consumePendingFloorLoadIntent();
           if (pendingFloorIntent) {

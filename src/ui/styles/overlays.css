@@ -7,19 +7,31 @@ html, body { margin: 0; height: 100%; background: #0b0b0f; overflow: hidden; }
 #hudTop { display: inline-block; }
 
 #vitalsOrbRoot {
+  --orb-core-d: 92px;
+  --mom-thickness: 3px;
+  --armor-thickness: 6px;
+  --ring-gap: 2px;
+  --armor-outer-d: calc(var(--orb-core-d) + 2 * (var(--ring-gap) + var(--armor-thickness)));
+  --orb-stage-d: calc(var(--orb-core-d) + 2 * (var(--ring-gap) + var(--mom-thickness) + var(--ring-gap) + var(--armor-thickness)));
   position: fixed;
   left: 16px;
   bottom: 16px;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 16px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.12);
+  gap: 6px;
+  width: var(--orb-stage-d);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
   z-index: 7;
   transform: scale(1.5);
   transform-origin: bottom left;
+}
+
+#vitalsOrbRoot.hasMomentum {
+  --armor-outer-d: calc(var(--orb-core-d) + 2 * (var(--ring-gap) + var(--mom-thickness) + var(--ring-gap) + var(--armor-thickness)));
 }
 
 #vitalsOrb {
@@ -27,15 +39,9 @@ html, body { margin: 0; height: 100%; background: #0b0b0f; overflow: hidden; }
   --armorFrac: 0;
   --momFrac: 0;
   position: relative;
-  width: 92px;
-  height: 92px;
+  width: var(--orb-stage-d);
+  height: var(--orb-stage-d);
   border-radius: 9999px;
-  background: radial-gradient(circle at 50% 50%, rgba(34, 10, 10, 0.96) 0%, rgba(18, 6, 6, 0.98) 100%);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18);
-}
-
-/* If no secondary resources are unlocked, render pure HP disk (no dark shell). */
-#vitalsOrbRoot:not(.hasArmor):not(.hasMomentum) #vitalsOrb {
   background: transparent;
   box-shadow: none;
 }
@@ -44,7 +50,8 @@ html, body { margin: 0; height: 100%; background: #0b0b0f; overflow: hidden; }
 #vitalsOrb::after {
   content: none;
   position: absolute;
-  inset: 0;
+  left: 50%;
+  top: 50%;
   border-radius: inherit;
   pointer-events: none;
   z-index: 2;
@@ -52,17 +59,16 @@ html, body { margin: 0; height: 100%; background: #0b0b0f; overflow: hidden; }
 
 #vitalsOrb .vitalsOrbLife {
   position: absolute;
-  inset: 14px;
+  left: 50%;
+  top: 50%;
+  width: var(--orb-core-d);
+  height: var(--orb-core-d);
+  transform: translate(-50%, -50%);
   border-radius: 9999px;
   background: rgba(26, 8, 8, 0.96);
   overflow: hidden;
   z-index: 1;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
-}
-
-#vitalsOrbRoot:not(.hasArmor):not(.hasMomentum) #vitalsOrb .vitalsOrbLife {
-  inset: 0;
-  box-shadow: none;
 }
 
 #vitalsOrb .vitalsOrbLife::before {
@@ -75,81 +81,176 @@ html, body { margin: 0; height: 100%; background: #0b0b0f; overflow: hidden; }
   background: linear-gradient(to top, rgba(235, 48, 48, 0.95) 0%, rgba(255, 104, 104, 0.98) 100%);
 }
 
-/* Momentum outer ring */
-#vitalsOrb::before {
-  background: conic-gradient(
-    from -90deg,
-    rgba(255,136,136,0.95) calc(var(--momFrac) * 1turn),
-    rgba(255,136,136,0.2) 0
-  );
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 0);
-  mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 0);
+/* Subtle top highlight for HP core depth */
+#vitalsOrb .vitalsOrbLife::after {
+  content: "";
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  top: 0%;
+  height: 24%;
+  border-radius: 9999px;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.25), rgba(255,255,255,0));
+  pointer-events: none;
 }
-#vitalsOrbRoot.hasMomentum #vitalsOrb::before { content: ""; }
 
-/* Armor middle ring */
-#vitalsOrb::after {
-  inset: 7px;
+/* Armor outer ring */
+#vitalsOrb::before {
+  width: var(--armor-outer-d);
+  height: var(--armor-outer-d);
+  transform: translate(-50%, -50%);
   background: conic-gradient(
     from -90deg,
     rgba(120,190,255,0.95) calc(var(--armorFrac) * 1turn),
     rgba(120,190,255,0.2) 0
   );
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 0);
-  mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--armor-thickness)), #000 0);
+  mask: radial-gradient(farthest-side, transparent calc(100% - var(--armor-thickness)), #000 0);
 }
-#vitalsOrbRoot.hasArmor #vitalsOrb::after { content: ""; }
+#vitalsOrbRoot.hasArmor #vitalsOrb::before { content: ""; }
+
+/* Momentum thin inner ring */
+#vitalsOrb::after {
+  width: calc(var(--orb-core-d) + 2 * (var(--ring-gap) + var(--mom-thickness)));
+  height: calc(var(--orb-core-d) + 2 * (var(--ring-gap) + var(--mom-thickness)));
+  transform: translate(-50%, -50%);
+  background: conic-gradient(
+    from -90deg,
+    rgba(255,212,90,0.98) calc(var(--momFrac) * 1turn),
+    rgba(255,212,90,0.22) 0
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--mom-thickness)), #000 0);
+  mask: radial-gradient(farthest-side, transparent calc(100% - var(--mom-thickness)), #000 0);
+}
+#vitalsOrbRoot.hasMomentum #vitalsOrb::after { content: ""; }
 
 #vitalsOrbText {
   position: absolute;
-  inset: 0;
+  left: 50%;
+  top: 50%;
+  width: var(--orb-core-d);
+  height: var(--orb-core-d);
+  transform: translate(-50%, calc(-50% - 2px));
   display: grid;
   place-items: center;
   font-size: 14px;
   font-weight: 900;
   color: #fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.9);
-  letter-spacing: 0.01em;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.72);
+  letter-spacing: 0.03em;
   z-index: 3;
 }
 
 #vitalsOrbRoot .vitalsOrbMeta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 13px;
-  font-weight: 700;
-  color: rgba(255,255,255,0.9);
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  align-items: stretch;
 }
 
-#vitalsOrbRoot.isFullMomentum #vitalsOrb {
-  box-shadow:
-    0 0 0 1px rgba(255,255,255,0.22),
-    0 0 10px rgba(255,120,120,0.45),
-    inset 0 0 0 1px rgba(255,255,255,0.18);
+#vitalsOrbRoot .vitalsStat {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 3px 6px;
+  border-radius: 9999px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  min-width: 0;
+  white-space: nowrap;
+  color: #e8f2ff;
+  border: 1px solid rgba(255,255,255,0.22);
+  backdrop-filter: blur(1px);
+}
+
+#vitalsOrbRoot .vitalsStat::before {
+  content: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  flex: 0 0 auto;
+}
+
+#vitalsOrbRoot .vitalsStatArmor {
+  background: rgba(25, 55, 90, 0.55);
+  border-color: rgba(112, 186, 255, 0.75);
+}
+
+#vitalsOrbRoot .vitalsStatArmor::before {
+  background: radial-gradient(circle at 30% 30%, #d9f1ff 0%, #8fd4ff 45%, #4f96d2 100%);
+  box-shadow: 0 0 8px rgba(134, 210, 255, 0.75);
+}
+
+#vitalsOrbRoot .vitalsStatMomentum {
+  background: rgba(98, 78, 22, 0.52);
+  border-color: rgba(255, 212, 90, 0.86);
+  color: #fff3bf;
+}
+
+#vitalsOrbRoot .vitalsStatMomentum::before {
+  background: radial-gradient(circle at 30% 30%, #ffdede 0%, #ff8f8f 45%, #c74b4b 100%);
+  box-shadow: 0 0 8px rgba(255, 123, 123, 0.75);
 }
 
 #vitalsOrbRoot.isFullArmor:not(.isFullMomentum) {
-  background: rgba(72, 145, 255, 0.22);
-  border-color: rgba(120, 190, 255, 0.55);
+  background: transparent;
+  border-color: transparent;
 }
 
-#vitalsOrbRoot.isFullMomentum {
-  animation: vitalsFullMomentumPulse 0.9s ease-in-out infinite;
+#vitalsOrbRoot.isFullArmor.hasArmor:not(.isFullMomentum) #vitalsOrb::before {
+  background: conic-gradient(
+    from -90deg,
+    rgba(54, 118, 212, 0.98) calc(var(--armorFrac) * 1turn),
+    rgba(54, 118, 212, 0.26) 0
+  );
 }
 
-@keyframes vitalsFullMomentumPulse {
+#vitalsOrbRoot.isFullMomentum.hasArmor #vitalsOrb::before {
+  background: conic-gradient(
+    from -90deg,
+    rgba(54, 118, 212, 0.98) calc(var(--armorFrac) * 1turn),
+    rgba(54, 118, 212, 0.26) 0
+  );
+}
+
+#vitalsOrbRoot.isFullMomentum.hasMomentum #vitalsOrb::after {
+  animation: vitalsMomentumRingPulse 0.7s ease-in-out infinite;
+}
+
+#vitalsOrbRoot.isFullMomentum.hasMomentum .vitalsStatMomentum {
+  animation: vitalsMomentumBadgePulse 0.7s ease-in-out infinite;
+}
+
+@keyframes vitalsMomentumRingPulse {
   0% {
-    box-shadow: 0 0 0 rgba(255, 72, 72, 0);
-    background: rgba(255, 64, 64, 0.08);
+    opacity: 0.75;
+    filter: drop-shadow(0 0 0 rgba(255, 228, 120, 0));
   }
   50% {
-    box-shadow: 0 0 18px rgba(255, 72, 72, 0.55);
-    background: rgba(255, 64, 64, 0.22);
+    opacity: 1;
+    filter: drop-shadow(0 0 10px rgba(255, 228, 120, 0.95));
   }
   100% {
-    box-shadow: 0 0 0 rgba(255, 72, 72, 0);
-    background: rgba(255, 64, 64, 0.08);
+    opacity: 0.75;
+    filter: drop-shadow(0 0 0 rgba(255, 228, 120, 0));
+  }
+}
+
+@keyframes vitalsMomentumBadgePulse {
+  0% {
+    background: rgba(98, 78, 22, 0.52);
+    box-shadow: 0 0 0 rgba(255, 212, 90, 0);
+  }
+  50% {
+    background: rgba(158, 128, 30, 0.8);
+    box-shadow: 0 0 8px rgba(255, 212, 90, 0.9);
+  }
+  100% {
+    background: rgba(98, 78, 22, 0.52);
+    box-shadow: 0 0 0 rgba(255, 212, 90, 0);
   }
 }
 
@@ -862,7 +963,39 @@ html, body { margin: 0; height: 100%; background: #0b0b0f; overflow: hidden; }
 #end .panel { width: min(560px, 92vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
 #end .title { font-size: 26px; font-weight: 900; margin-bottom: 6px; }
 #end .subline { opacity: 0.92; margin-bottom: 14px; white-space: pre-wrap; }
-#end button#endBtn { margin-top: 14px; width: 100%; padding: 12px 14px; border-radius: 12px; border: 0; cursor: pointer; font-weight: 900; background: rgba(255,255,255,0.16); color: #fff; }
+#end .endStats {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.2);
+}
+#end .endStatRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+#end .endStatRow span {
+  opacity: 0.85;
+}
+#end .endStatRow strong {
+  font-variant-numeric: tabular-nums;
+}
+#end button#endBtn {
+  margin-top: 14px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 0;
+  cursor: pointer;
+  font-weight: 900;
+  color: #fff;
+}
+#end button#endBtn {
+  background: rgba(255,255,255,0.16);
+}
 
 /* Deck overlays (reward + vendor) */
 .deckOverlay {

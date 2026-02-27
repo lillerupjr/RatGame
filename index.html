@@ -15,8 +15,8 @@
     <span class="pill" id="timePill">00:00</span>
     <span class="pill" id="killsPill">Kills: 0</span>
     <span class="pill" id="hpPill">HP: 0/0</span>
-    <span class="pill armorPill" id="armorPill">Armor: 0/0</span>
-    <span class="pill momentumPill" id="momentumPill">Momentum: 0/20</span>
+    <span class="pill armorPill" id="armorPill" hidden>Armor: 0/0</span>
+    <span class="pill momentumPill" id="momentumPill" hidden>Momentum: 0/20</span>
     <span class="pill" id="lvlPill" hidden>Lv: 1</span>
   </div>
   <div id="objectiveOverlay" hidden>
@@ -53,8 +53,8 @@
     <div id="vitalsOrbText" class="vitalsOrbText">0/0</div>
   </div>
   <div class="vitalsOrbMeta">
-    <span id="vitalsArmorText">Armor: 0/0</span>
-    <span id="vitalsMomentumText">Mom: 0/0</span>
+    <span id="vitalsArmorText" class="vitalsStat vitalsStatArmor">Armor: 0/0</span>
+    <span id="vitalsMomentumText" class="vitalsStat vitalsStatMomentum">Momentum: 0/0</span>
   </div>
 </div>
 
@@ -90,9 +90,17 @@
 
 <div id="end" hidden>
   <div class="panel">
-    <div class="title" id="endTitle">Run complete!</div>
+    <div class="title" id="endTitle">Run ended</div>
     <div class="subline" id="endSubline"></div>
-    <button id="endBtn" type="button">Back to Menu</button>
+    <div class="endStats">
+      <div class="endStatRow"><span>Time</span><strong id="endStatTime">00:00</strong></div>
+      <div class="endStatRow"><span>Depth</span><strong id="endStatDepth">1</strong></div>
+      <div class="endStatRow"><span>Kills</span><strong id="endStatKills">0</strong></div>
+      <div class="endStatRow"><span>Gold</span><strong id="endStatGold">0</strong></div>
+      <div class="endStatRow"><span>Relics</span><strong id="endStatRelics">0</strong></div>
+      <div class="endStatRow"><span>Cards</span><strong id="endStatCards">0</strong></div>
+    </div>
+    <button id="endBtn" type="button">Main Menu</button>
   </div>
 </div>
 

@@ -120,6 +120,7 @@ import { DEFAULT_SPAWN_TUNING } from "./balance/spawnTuningDefaults";
 import { createFloorRewardBudget, type ObjectiveMode } from "./rewards/floorRewardBudget";
 import { handleRewardEvent, type RewardOutcome } from "./rewards/rewardDirector";
 import { recomputeDerivedStats } from "./stats/derivedStats";
+import { hasAnyRelicWithTag, MOMENTUM_RELIC_TAG } from "./content/relics";
 
 
 type HudRefs = {
@@ -166,6 +167,12 @@ type CreateGameArgs = {
       title: HTMLDivElement;
       sub: HTMLDivElement;
       btn: HTMLButtonElement;
+      time: HTMLElement;
+      depth: HTMLElement;
+      kills: HTMLElement;
+      gold: HTMLElement;
+      relics: HTMLElement;
+      cards: HTMLElement;
     };
 
     levelupEl: {
@@ -200,6 +207,11 @@ type PreparedStart = {
 type FloorLoadContext = {
   floorIntent: FloorIntent;
 };
+
+function clampNonNegativeFinite(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, value);
+}
 
 export function precomputeStaticMapData(): void {
   const map = getActiveMapDef() as any;
@@ -854,6 +866,42 @@ export function createGame(args: CreateGameArgs) {
   let bootAssetsPreloaded = false;
   let floorLoadContext: FloorLoadContext | null = null;
 
+  function getEndStatsTimeSec(w: World): number {
+    return clampNonNegativeFinite((w.timeSec ?? w.time ?? 0) as number);
+  }
+
+  function getEndStatsDepth(w: World): number {
+    if (Number.isFinite(w.delveDepth) && w.delveDepth > 0) return Math.floor(w.delveDepth);
+    return Math.max(1, Math.floor((w.floorIndex ?? 0) + 1));
+  }
+
+  function getEndStatsCardCount(w: World): number {
+    const cards = Array.isArray(w.cards) ? w.cards.length : 0;
+    if (cards > 0) return cards;
+    return Array.isArray(w.combatCardIds) ? w.combatCardIds.length : 0;
+  }
+
+  function populateEndStats(w: World): void {
+    args.ui.endEl.time.textContent = formatTimeMMSS(getEndStatsTimeSec(w));
+    args.ui.endEl.depth.textContent = String(getEndStatsDepth(w));
+    args.ui.endEl.kills.textContent = String(Math.max(0, Math.floor(w.kills ?? 0)));
+    args.ui.endEl.gold.textContent = String(Math.max(0, Math.floor(getGold(w))));
+    args.ui.endEl.relics.textContent = String(Array.isArray(w.relics) ? w.relics.length : 0);
+    args.ui.endEl.cards.textContent = String(getEndStatsCardCount(w));
+  }
+
+  function showEndScreen(w: World, title: string, subtitle: string): void {
+    updateHud();
+    args.ui.endEl.title.textContent = title;
+    args.ui.endEl.sub.textContent = subtitle;
+    populateEndStats(w);
+    args.ui.endEl.root.hidden = false;
+    args.ui.menuEl.hidden = true;
+    setHudHidden(true);
+    hideCardRewardMenu();
+    closeVendorShop(false);
+  }
+
   const applyPlayerSkinSelection = (skin: string) => {
     setPlayerSkin(skin);
     (world as any)._playerSkin = skin;
@@ -1456,16 +1504,7 @@ export function createGame(args: CreateGameArgs) {
     // WIN CONDITION: final-floor objective completion.
     w.runState = "RUN_COMPLETE";
     w.state = "WIN";
-
-    args.ui.endEl.title.textContent = "Run Complete";
-    args.ui.endEl.sub.textContent =
-        `Final floor objective completed.\n` +
-        `Time: ${formatTimeMMSS(w.time)} · Kills: ${w.kills}`;
-
-    args.ui.endEl.root.hidden = false;
-    args.ui.menuEl.hidden = true;
-    setHudHidden(true);
-    hideCardRewardMenu();
+    showEndScreen(w, "Run Ended", "Final floor objective completed.");
   }
 
 
@@ -1756,6 +1795,21 @@ export function createGame(args: CreateGameArgs) {
     setHudHidden(true);
     args.ui.menuEl.hidden = true;
     stopMusic();
+  }
+
+  function showMainMenuScreenFromEndOverlay(): void {
+    const welcomeScreen = document.getElementById("welcomeScreen") as HTMLDivElement | null;
+    const mainMenu = document.getElementById("mainMenu") as HTMLDivElement | null;
+    const characterSelect = document.getElementById("characterSelect") as HTMLDivElement | null;
+    const mapMenu = document.getElementById("mapMenu") as HTMLDivElement | null;
+    const innkeeperMenu = document.getElementById("innkeeperMenu") as HTMLDivElement | null;
+    const settingsMenu = document.getElementById("settingsMenu") as HTMLDivElement | null;
+    if (welcomeScreen) welcomeScreen.hidden = true;
+    if (mainMenu) mainMenu.hidden = false;
+    if (characterSelect) characterSelect.hidden = true;
+    if (mapMenu) mapMenu.hidden = true;
+    if (innkeeperMenu) innkeeperMenu.hidden = true;
+    if (settingsMenu) settingsMenu.hidden = true;
   }
 
   function showMap(subText: string) {
@@ -2129,23 +2183,22 @@ export function createGame(args: CreateGameArgs) {
     args.hud.vitalsOrbRoot.classList.toggle("hasMomentum", hasMomentumRing);
     args.hud.vitalsOrbRoot.classList.toggle("isFullArmor", hasArmorRing && armorMax > 0 && armorNow >= armorMax);
     args.hud.vitalsOrbRoot.classList.toggle("isFullMomentum", hasMomentumRing && momMax > 0 && momNow >= momMax);
+    args.hud.vitalsArmorText.hidden = !hasArmorRing;
+    args.hud.vitalsMomentumText.hidden = !hasMomentumRing;
 
     args.hud.vitalsOrbText.textContent = `${Math.ceil(hpNow)}/${Math.ceil(hpMax)}`;
-    args.hud.vitalsArmorText.textContent = hasArmorRing
-      ? `Armor: ${Math.ceil(armorNow)}/${Math.ceil(armorMax)}`
-      : "Armor: 0/0";
-    args.hud.vitalsMomentumText.textContent = hasMomentumRing
-      ? `Mom: ${Math.ceil(momNow)}/${Math.ceil(momMax)}`
-      : "Mom: 0/0";
+    args.hud.vitalsArmorText.textContent = `Armor: ${Math.ceil(armorNow)}/${Math.ceil(armorMax)}`;
+    args.hud.vitalsMomentumText.textContent = `Mom: ${Math.ceil(momNow)}/${Math.ceil(momMax)}`;
   }
 
   function updateHud() {
     args.hud.timePill.textContent = formatTimeMMSS(world.time);
     args.hud.killsPill.textContent = `Kills: ${world.kills}`;
     args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
+    args.hud.armorPill.hidden = true;
     args.hud.armorPill.textContent = `Armor: ${Math.max(0, Math.ceil(world.currentArmor))}/${world.maxArmor}`;
-    const hasMomentumRelic = world.relics.some((id) => typeof id === "string" && id.startsWith("MOM_"));
-    args.hud.momentumPill.hidden = !hasMomentumRelic;
+    const hasMomentumRelic = hasAnyRelicWithTag(world.relics, MOMENTUM_RELIC_TAG);
+    args.hud.momentumPill.hidden = true;
     if (hasMomentumRelic) {
       args.hud.momentumPill.textContent = `Momentum: ${Math.max(0, Math.ceil(world.momentumValue))}/${Math.max(0, Math.ceil(world.momentumMax))}`;
     }
@@ -2411,16 +2464,8 @@ export function createGame(args: CreateGameArgs) {
       audioSystem(world, dt);
       clearEvents(world);
 
-      // Show proper Game Over screen
-      args.ui.endEl.title.textContent = "Game Over";
-      args.ui.endEl.sub.textContent =
-          `You died on floor ${Math.max(1, (world.floorIndex ?? 0) + 1)}.\n` +
-          `Time: ${formatTimeMMSS(world.time)} · Kills: ${world.kills}`;
-
-      args.ui.endEl.root.hidden = false;
-      args.ui.menuEl.hidden = true;
-      setHudHidden(true);
-      hideCardRewardMenu();
+      const depth = getEndStatsDepth(world);
+      showEndScreen(world, "Run Ended", `You died on depth ${depth}.`);
       return;
     }
 
@@ -2444,12 +2489,8 @@ export function createGame(args: CreateGameArgs) {
     if (!btn) return;
     if (btn.id !== "endBtn") return;
 
-    args.ui.endEl.root.hidden = true;
-    setHudHidden(true);
-
-    // Back to menu (weapon select is already there)
-    args.ui.menuEl.hidden = false;
-    hideCardRewardMenu();
+    quitRunToMenu();
+    showMainMenuScreenFromEndOverlay();
   });
 
   args.ui.mapEl.root.addEventListener("click", (e) => {

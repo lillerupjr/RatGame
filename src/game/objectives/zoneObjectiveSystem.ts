@@ -16,6 +16,14 @@ import {
 type TilePoint = { x: number; y: number };
 const zoneTrialStateByWorld = new WeakMap<World, ZoneTrialObjectiveState>();
 type ZoneTileRejectReason = "BLOCKED_TILE" | "NO_SURFACE" | "VOID_OR_STAIRS" | "NOT_WALKABLE";
+type RandomIntSource = { int(min: number, max: number): number };
+
+export type ZonePlacementRect = {
+  tileX: number;
+  tileY: number;
+  tileW: number;
+  tileH: number;
+};
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
@@ -35,9 +43,9 @@ function zoneOverlaps(a: ZoneObjective, b: ZoneObjective): boolean {
   );
 }
 
-function shuffleInPlace<T>(arr: T[], world: World): void {
+function shuffleInPlace<T>(arr: T[], rng: RandomIntSource): void {
   for (let i = arr.length - 1; i > 0; i--) {
-    const j = world.rng.int(0, i);
+    const j = rng.int(0, i);
     const tmp = arr[i];
     arr[i] = arr[j];
     arr[j] = tmp;
@@ -159,6 +167,71 @@ function findNearestWalkableLocal(
   return null;
 }
 
+export function pickZoneTrialLikePlacements(
+  world: World,
+  zoneCount: number,
+  zoneSize: number,
+  rng: RandomIntSource = world.rng,
+): ZonePlacementRect[] {
+  const map = getActiveMap();
+  if (!map) return [];
+
+  const width = map.width;
+  const height = map.height;
+  const originTx = map.originTx;
+  const originTy = map.originTy;
+  const blockedTiles = map.blockedTiles ?? new Set<string>();
+  const idx = (x: number, y: number) => y * width + x;
+  const walkableMask = new Array<boolean>(width * height).fill(false);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const eligibility = isWalkableZoneTile(
+        x,
+        y,
+        originTx,
+        originTy,
+        blockedTiles,
+        KENNEY_TILE_WORLD,
+      );
+      walkableMask[idx(x, y)] = eligibility.ok;
+    }
+  }
+
+  const spawnLocalRaw = {
+    x: clamp(map.spawnTx - originTx, 0, width - 1),
+    y: clamp(map.spawnTy - originTy, 0, height - 1),
+  };
+  const spawnLocal = findNearestWalkableLocal(width, height, spawnLocalRaw, walkableMask) ?? spawnLocalRaw;
+  const reachableMask = buildReachableMask(width, height, spawnLocal, walkableMask);
+  const candidates = makeZoneCandidates(width, height, zoneSize, reachableMask, walkableMask);
+  shuffleInPlace(candidates, rng);
+
+  const zones: ZonePlacementRect[] = [];
+  for (let i = 0; i < candidates.length && zones.length < zoneCount; i++) {
+    const c = candidates[i];
+    const next = {
+      tileX: c.x,
+      tileY: c.y,
+      tileW: zoneSize,
+      tileH: zoneSize,
+    };
+    let overlaps = false;
+    for (let j = 0; j < zones.length; j++) {
+      if (zoneOverlaps(
+        { ...next, id: 0, killTarget: 0, killCount: 0, completed: false },
+        { ...zones[j], id: 0, killTarget: 0, killCount: 0, completed: false },
+      )) {
+        overlaps = true;
+        break;
+      }
+    }
+    if (!overlaps) zones.push(next);
+  }
+
+  return zones;
+}
+
 export function startZoneTrial(world: World, config: Partial<ZoneTrialConfig> = {}): void {
   const spec = world.currentObjectiveSpec;
   if (!spec || spec.objectiveType !== "ZONE_TRIAL") {
@@ -197,87 +270,17 @@ export function startZoneTrial(world: World, config: Partial<ZoneTrialConfig> = 
     });
   }
 
-  const width = map.width;
-  const height = map.height;
-  const originTx = map.originTx;
-  const originTy = map.originTy;
-  const blockedTiles = map.blockedTiles ?? new Set<string>();
-  const idx = (x: number, y: number) => y * width + x;
-  const walkableMask = new Array<boolean>(width * height).fill(false);
-  const rejectionCounts: Record<ZoneTileRejectReason, number> = {
-    BLOCKED_TILE: 0,
-    NO_SURFACE: 0,
-    VOID_OR_STAIRS: 0,
-    NOT_WALKABLE: 0,
-  };
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const eligibility = isWalkableZoneTile(
-        x,
-        y,
-        originTx,
-        originTy,
-        blockedTiles,
-        KENNEY_TILE_WORLD,
-      );
-      walkableMask[idx(x, y)] = eligibility.ok;
-      if (!eligibility.ok) rejectionCounts[eligibility.reason] += 1;
-    }
-  }
-
-  const spawnLocalRaw = {
-    x: clamp(map.spawnTx - originTx, 0, width - 1),
-    y: clamp(map.spawnTy - originTy, 0, height - 1),
-  };
-  const spawnLocal = findNearestWalkableLocal(width, height, spawnLocalRaw, walkableMask) ?? spawnLocalRaw;
-  const reachableMask = buildReachableMask(width, height, spawnLocal, walkableMask);
-  let reachableCount = 0;
-  for (let i = 0; i < reachableMask.length; i++) {
-    if (reachableMask[i]) reachableCount += 1;
-  }
-  const candidates = makeZoneCandidates(width, height, zoneSize, reachableMask, walkableMask);
-  if (import.meta.env.DEV && candidates.length === 0) {
-    console.debug("[zonePlacement] rejected", {
-      tx: spawnLocal.x,
-      ty: spawnLocal.y,
-      w: zoneSize,
-      h: zoneSize,
-      reason: "NO_VALID_CANDIDATES",
-      mapSkin: (map as any).mapSkinId ?? "default",
-      mapId: (map as any).mapId,
-      mapWidth: width,
-      mapHeight: height,
-      spawnTile: spawnLocalRaw,
-      spawnUsed: spawnLocal,
-      reachableTiles: reachableCount,
-      rejections: rejectionCounts,
-    });
-  }
-  shuffleInPlace(candidates, world);
-
-  const zones: ZoneObjective[] = [];
-  for (let i = 0; i < candidates.length && zones.length < zoneCount; i++) {
-    const c = candidates[i];
-    const next: ZoneObjective = {
-      id: zones.length + 1,
-      tileX: c.x,
-      tileY: c.y,
-      tileW: zoneSize,
-      tileH: zoneSize,
-      killTarget: killTargetPerZone,
-      killCount: 0,
-      completed: false,
-    };
-    let overlaps = false;
-    for (let j = 0; j < zones.length; j++) {
-      if (zoneOverlaps(next, zones[j])) {
-        overlaps = true;
-        break;
-      }
-    }
-    if (!overlaps) zones.push(next);
-  }
+  const placements = pickZoneTrialLikePlacements(world, zoneCount, zoneSize, world.rng);
+  const zones: ZoneObjective[] = placements.map((p, i) => ({
+    id: i + 1,
+    tileX: p.tileX,
+    tileY: p.tileY,
+    tileW: p.tileW,
+    tileH: p.tileH,
+    killTarget: killTargetPerZone,
+    killCount: 0,
+    completed: false,
+  }));
 
   zoneTrialStateByWorld.set(world, {
     zones,

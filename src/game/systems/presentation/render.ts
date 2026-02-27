@@ -590,6 +590,7 @@ export async function renderSystem(
   const devH = Math.max(1, canvas.height);
   const storedDpr = Number(canvas.dataset.effectiveDpr ?? "");
   const dpr = Number.isFinite(storedDpr) && storedDpr >= 1 ? storedDpr : Math.max(1, devW / cssW);
+  const hasUiOverlay = !!uiCtx && !!uiCanvas;
   const overlayCtx = uiCtx ?? ctx;
   const overlayCanvas = uiCanvas ?? canvas;
   const overlayDevW = Math.max(1, overlayCanvas.width);
@@ -3643,19 +3644,23 @@ export async function renderSystem(
   }
 
   // --- UI ---
-  overlayCtx.setTransform(overlayDpr, 0, 0, overlayDpr, safeOffsetX * overlayDpr, safeOffsetY * overlayDpr);
-  if (w.state === "RUN" && w.runState === "FLOOR") {
+  overlayCtx.setTransform(overlayDpr, 0, 0, overlayDpr, 0, 0);
+  if (hasUiOverlay && w.state === "RUN" && w.runState === "FLOOR") {
     const target = resolveNavArrowTarget(w);
     renderNavArrow(
       overlayCtx,
       target,
-      { w: scaledW, h: scaledH },
+      { x: 0, y: 0, w: cssW, h: cssH },
       (wx, wy) => {
         const p = worldToScreen(wx, wy);
-        return { x: p.x + camTx, y: p.y + camTy };
+        return {
+          x: safeOffsetX + (p.x + camTx) * zoom,
+          y: safeOffsetY + (p.y + camTy) * zoom,
+        };
       }
     );
   }
+  overlayCtx.setTransform(overlayDpr, 0, 0, overlayDpr, safeOffsetX * overlayDpr, safeOffsetY * overlayDpr);
   if (debugFlags.showGrid) renderTileGridCompass(w, overlayCtx, scaledW, scaledH); // tile-grid N/E/S/W (matches in-game tests)
 
   // HUD widgets are intentionally screen-anchored (same space as perf/fps text).

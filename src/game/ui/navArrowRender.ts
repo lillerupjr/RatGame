@@ -1,6 +1,8 @@
 import type { NavArrowTarget } from "./navArrowTarget";
 
 export interface ViewportInfo {
+  x?: number;
+  y?: number;
   w: number;
   h: number;
 }
@@ -11,7 +13,14 @@ export interface ScreenPoint {
 }
 
 export function isOnScreen(pt: ScreenPoint, vp: ViewportInfo, padPx = 28): boolean {
-  return pt.x >= padPx && pt.x <= vp.w - padPx && pt.y >= padPx && pt.y <= vp.h - padPx;
+  const ox = vp.x ?? 0;
+  const oy = vp.y ?? 0;
+  return (
+    pt.x >= ox + padPx
+    && pt.x <= ox + vp.w - padPx
+    && pt.y >= oy + padPx
+    && pt.y <= oy + vp.h - padPx
+  );
 }
 
 export function clampArrowToViewportEdge(
@@ -19,18 +28,20 @@ export function clampArrowToViewportEdge(
   vp: ViewportInfo,
   padPx = 28
 ): { x: number; y: number; angleRad: number } {
-  const cx = vp.w * 0.5;
-  const cy = vp.h * 0.5;
+  const ox = vp.x ?? 0;
+  const oy = vp.y ?? 0;
+  const cx = ox + vp.w * 0.5;
+  const cy = oy + vp.h * 0.5;
 
   const dx = targetScreen.x - cx;
   const dy = targetScreen.y - cy;
 
   const angle = Math.atan2(dy, dx);
 
-  const minX = padPx;
-  const maxX = vp.w - padPx;
-  const minY = padPx;
-  const maxY = vp.h - padPx;
+  const minX = ox + padPx;
+  const maxX = ox + vp.w - padPx;
+  const minY = oy + padPx;
+  const maxY = oy + vp.h - padPx;
 
   const ax = Math.abs(dx) < 1e-6 ? (dx >= 0 ? 1e-6 : -1e-6) : dx;
   const ay = Math.abs(dy) < 1e-6 ? (dy >= 0 ? 1e-6 : -1e-6) : dy;

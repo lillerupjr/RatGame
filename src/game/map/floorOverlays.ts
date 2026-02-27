@@ -7,6 +7,8 @@ import type { FloorIntent, PlacementPolicy } from "./floorIntent";
 import { OBJECTIVE_TRIGGER_IDS } from "../systems/progression/objectiveSpec";
 import { RNG } from "../util/rng";
 import { objectiveIdFromArchetype, type ObjectiveId } from "./objectivePlan";
+import { pickZoneTrialLikePlacements } from "../objectives/zoneObjectiveSystem";
+import { DEFAULT_ZONE_TRIAL_CONFIG } from "../objectives/zoneObjectiveTypes";
 
 export type OverlayAction =
   | {
@@ -425,7 +427,17 @@ export function applyFloorOverlays(world: World, intent: FloorIntent): void {
         break;
       }
       case "PLACE_BOSS_SPAWN_ZONES": {
-        const rawCenters =
+        const zoneLikePlacements = pickZoneTrialLikePlacements(
+          world,
+          action.count,
+          DEFAULT_ZONE_TRIAL_CONFIG.zoneSize,
+          rng,
+        );
+        const zoneLikeCenters = zoneLikePlacements.map((z) => ({
+          tx: map.originTx + z.tileX + z.tileW * 0.5 - 0.5,
+          ty: map.originTy + z.tileY + z.tileH * 0.5 - 0.5,
+        }));
+        const fallbackCenters =
           action.placementPolicy === "LONGEST_PATH"
             ? pickSpawnZonesLongestPath(
                 candidates,
@@ -444,7 +456,11 @@ export function applyFloorOverlays(world: World, intent: FloorIntent): void {
                 rng,
                 spawnTile
               );
-        const centers = normalizeZoneCenters(rawCenters, action.count, spawnTile);
+        const centers = normalizeZoneCenters(
+          zoneLikeCenters.length > 0 ? zoneLikeCenters : fallbackCenters,
+          action.count,
+          spawnTile,
+        );
         for (let i = 0; i < centers.length; i++) {
           overlayTriggers.push({
             id: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}${i + 1}`,

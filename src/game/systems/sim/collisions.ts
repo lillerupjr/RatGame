@@ -20,7 +20,6 @@ import { normalizeRelicIdList } from "../../content/relics";
 import { getRelicMods } from "../progression/relics";
 import { applyPlayerIncomingDamage } from "./playerArmor";
 import {
-  addMomentumFromDamage,
   addMomentumOnKill,
   breakMomentumOnLifeDamage,
   relicTriggerMomentumDamageMultiplier,
@@ -305,9 +304,6 @@ export function collisionsSystem(w: World, dt: number) {
       }
 
       // Spawn floating combat text
-      if (source !== "OTHER") {
-        addMomentumFromDamage(w, dmg, w.eHpMax[e] ?? 1, w.timeSec ?? w.time ?? 0);
-      }
       spawnFloatText(w, ew.wx, ew.wy, Math.round(dmg), source, isCrit);
 
       // Poison payload (applied once per hit)

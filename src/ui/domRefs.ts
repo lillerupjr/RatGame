@@ -3,6 +3,12 @@ type EndRefs = {
     title: HTMLDivElement;
     sub: HTMLDivElement;
     btn: HTMLButtonElement;
+    time: HTMLElement;
+    depth: HTMLElement;
+    kills: HTMLElement;
+    gold: HTMLElement;
+    relics: HTMLElement;
+    cards: HTMLElement;
 };
 
 type LevelupRefs = {
@@ -87,6 +93,12 @@ export type DomRefs = {
     endTitle: HTMLDivElement;
     endSubline: HTMLDivElement;
     endBtn: HTMLButtonElement;
+    endStatTime: HTMLElement;
+    endStatDepth: HTMLElement;
+    endStatKills: HTMLElement;
+    endStatGold: HTMLElement;
+    endStatRelics: HTMLElement;
+    endStatCards: HTMLElement;
     levelupRoot: HTMLDivElement;
     levelupChoices: HTMLDivElement;
     levelupSub: HTMLDivElement;
@@ -189,6 +201,12 @@ export function getDomRefs(): DomRefs {
     const endTitle = getEl<HTMLDivElement>("endTitle");
     const endSubline = getEl<HTMLDivElement>("endSubline");
     const endBtn = getEl<HTMLButtonElement>("endBtn");
+    const endStatTime = getEl<HTMLElement>("endStatTime");
+    const endStatDepth = getEl<HTMLElement>("endStatDepth");
+    const endStatKills = getEl<HTMLElement>("endStatKills");
+    const endStatGold = getEl<HTMLElement>("endStatGold");
+    const endStatRelics = getEl<HTMLElement>("endStatRelics");
+    const endStatCards = getEl<HTMLElement>("endStatCards");
 
     const levelupRoot = getEl<HTMLDivElement>("levelup");
     const levelupChoices = getEl<HTMLDivElement>("luChoices");
@@ -227,6 +245,12 @@ export function getDomRefs(): DomRefs {
             title: endTitle,
             sub: endSubline,
             btn: endBtn,
+            time: endStatTime,
+            depth: endStatDepth,
+            kills: endStatKills,
+            gold: endStatGold,
+            relics: endStatRelics,
+            cards: endStatCards,
         },
         levelupEl: {
             root: levelupRoot,
@@ -280,6 +304,12 @@ export function getDomRefs(): DomRefs {
         endTitle,
         endSubline,
         endBtn,
+        endStatTime,
+        endStatDepth,
+        endStatKills,
+        endStatGold,
+        endStatRelics,
+        endStatCards,
         levelupRoot,
         levelupChoices,
         levelupSub,

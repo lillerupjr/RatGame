@@ -1,6 +1,7 @@
 import type { World } from "../../../engine/world/world";
 import { restoreArmor } from "./playerArmor";
 import type { GameEvent } from "../../events";
+import { hasAnyRelicWithTag, MOMENTUM_RELIC_TAG } from "../../content/relics";
 
 export const MOMENTUM_IDLE_RESET_DELAY = 2.0;
 export const MOMENTUM_DECAY_PER_SEC = 3.0;
@@ -19,6 +20,10 @@ function finiteOr(v: number | undefined, fallback: number): number {
 
 function momentumCap(world: World): number {
   return Math.max(0, finiteOr(world.momentumMax, MOMENTUM_GLOBAL_CAP));
+}
+
+function momentumEnabled(world: World): boolean {
+  return hasAnyRelicWithTag(world.relics ?? [], MOMENTUM_RELIC_TAG);
 }
 
 function pushMomentumEvent(world: World, event: GameEvent): void {
@@ -47,6 +52,7 @@ export function getMomentumIdleResetDelay(world: World): number {
 }
 
 export function addMomentumFromDamage(world: World, damageDealt: number, enemyMaxLife: number, now: number): void {
+  if (!momentumEnabled(world)) return;
   const dealt = Math.max(0, finiteOr(damageDealt, 0));
   const maxLife = Math.max(1, finiteOr(enemyMaxLife, 1));
   const gain = clamp(dealt / maxLife, 0, MOMENTUM_GAIN_CAP_PER_HIT);
@@ -60,6 +66,7 @@ export function addMomentumFromDamage(world: World, damageDealt: number, enemyMa
 }
 
 export function addMomentumOnKill(world: World, now: number): void {
+  if (!momentumEnabled(world)) return;
   const current = Math.max(0, finiteOr(world.momentumValue, 0));
   const next = Math.min(momentumCap(world), current + MOMENTUM_KILL_BONUS);
   if (next === current) return;
@@ -91,6 +98,13 @@ export function relicTriggerMomentumDamageMultiplier(world: World): number {
 }
 
 export function tickMomentumDecay(world: World, dt: number, now: number): void {
+  if (!momentumEnabled(world)) {
+    if ((world.momentumValue ?? 0) !== 0 || world.momentumWasFull) {
+      world.momentumValue = 0;
+      world.momentumWasFull = false;
+    }
+    return;
+  }
   const delta = Math.max(0, finiteOr(dt, 0));
   if (delta <= 0) return;
   const tNow = finiteOr(now, 0);
