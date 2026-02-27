@@ -138,6 +138,7 @@ function compareRenderKeys(a: RenderKey, b: RenderKey): number {
 
 const DEBUG_PLAYER_WEDGE = false;
 const DISABLE_WALLS_AND_CURTAINS = true;
+const VISIBLE_VERTICAL_TILES = 12;
 const HARDCODED_VOID_TOP_SRC = `${import.meta.env.BASE_URL}assets-runtime/tiles/floor/void.png`;
 
 // Background mode:
@@ -582,9 +583,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const devH = Math.max(1, canvas.height);
   const storedDpr = Number(canvas.dataset.effectiveDpr ?? "");
   const dpr = Number.isFinite(storedDpr) && storedDpr >= 1 ? storedDpr : Math.max(1, devW / cssW);
-  const pixelScale = Math.max(1, Math.floor(Number(canvas.dataset.pixelScale ?? 1) || 1));
-  const ww = Math.max(1, Math.floor(cssW / pixelScale));
-  const hh = Math.max(1, Math.floor(cssH / pixelScale));
+  const visibleWorldHeight = VISIBLE_VERTICAL_TILES * KENNEY_TILE_WORLD;
+  const zoom = Math.max(1, Math.floor(cssH / visibleWorldHeight));
+  const ww = Math.max(1, Math.floor(cssW / zoom));
+  const hh = Math.max(1, Math.floor(cssH / zoom));
   configurePixelPerfect(ctx);
   const renderPerfCountersEnabled = getUserSettings().render.renderPerfCountersEnabled;
   setRenderPerfCountersEnabled(renderPerfCountersEnabled);
@@ -634,7 +636,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   (w as any).cameraX = p0.x;
   (w as any).cameraY = p0.y;
 
-  const s = dpr * pixelScale;
+  const s = dpr * zoom;
   const viewCenterX = snapPx(ww * 0.5);
   const viewCenterY = snapPx(hh * 0.5);
   const camXRaw = viewCenterX - p0.x;
@@ -1295,8 +1297,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // Tile range / diagonals
   // ----------------------------
   const configuredRadius = Number(renderSettings.tileRenderRadius);
-  const paddingTiles = Math.max(-12, Math.min(12, Number.isFinite(configuredRadius) ? Math.round(configuredRadius) : 0));
-  setRenderTileLoopRadius(paddingTiles);
+  const sliderPadding = Math.max(-12, Math.min(12, Number.isFinite(configuredRadius) ? Math.round(configuredRadius) : 0));
+  const renderPaddingFactor = Math.max(-0.9, Math.min(0.9, sliderPadding / 12));
+  setRenderTileLoopRadius(sliderPadding);
   type ScreenRect = { minX: number; maxX: number; minY: number; maxY: number };
   type TileBounds = { minTx: number; maxTx: number; minTy: number; maxTy: number };
   type CullingView = { screenRect: ScreenRect; tileBounds: TileBounds };
@@ -1395,13 +1398,24 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const cached = cullingCache.get(p);
     if (cached) return cached;
 
-    const totalPadTiles = paddingTiles + p;
-    const padX = totalPadTiles * T * ISO_X;
-    const padY = totalPadTiles * T * ISO_Y;
-    const sx0 = -camTx - padX;
-    const sx1 = -camTx + devW / s + padX;
-    const sy0 = -camTy - padY;
-    const sy1 = -camTy + devH / s + padY;
+    const baseMinX = -camTx;
+    const baseMaxX = -camTx + devW / s;
+    const baseMinY = -camTy;
+    const baseMaxY = -camTy + devH / s;
+    const centerX = (baseMinX + baseMaxX) * 0.5;
+    const centerY = (baseMinY + baseMaxY) * 0.5;
+    const baseHalfW = (baseMaxX - baseMinX) * 0.5;
+    const baseHalfH = (baseMaxY - baseMinY) * 0.5;
+    const padFactorExtra = p / 12;
+    const scale = Math.max(0.1, 1 + renderPaddingFactor + padFactorExtra);
+    const minHalfW = T * ISO_X;
+    const minHalfH = T * ISO_Y;
+    const halfW = Math.max(minHalfW, baseHalfW * scale);
+    const halfH = Math.max(minHalfH, baseHalfH * scale);
+    const sx0 = centerX - halfW;
+    const sx1 = centerX + halfW;
+    const sy0 = centerY - halfH;
+    const sy1 = centerY + halfH;
     const screenRect: ScreenRect = {
       minX: Math.min(sx0, sx1),
       maxX: Math.max(sx0, sx1),
