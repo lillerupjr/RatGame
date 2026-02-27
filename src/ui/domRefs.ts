@@ -31,6 +31,11 @@ export type HudRefs = {
     hpPill: HTMLSpanElement;
     armorPill: HTMLSpanElement;
     momentumPill: HTMLSpanElement;
+    vitalsOrbRoot: HTMLDivElement;
+    vitalsOrb: HTMLDivElement;
+    vitalsOrbText: HTMLDivElement;
+    vitalsArmorText: HTMLSpanElement;
+    vitalsMomentumText: HTMLSpanElement;
     lvlPill: HTMLSpanElement;
     objectiveOverlay: HTMLDivElement;
     objectiveTitle: HTMLDivElement;
@@ -50,6 +55,7 @@ export type UiRefs = {
 
 export type DomRefs = {
     canvas: HTMLCanvasElement;
+    uiCanvas: HTMLCanvasElement;
     welcomeScreen: HTMLDivElement;
     continueBtn: HTMLButtonElement;
     mainMenuEl: HTMLDivElement;
@@ -93,6 +99,11 @@ export type DomRefs = {
     hpPill: HTMLSpanElement;
     armorPill: HTMLSpanElement;
     momentumPill: HTMLSpanElement;
+    vitalsOrbRoot: HTMLDivElement;
+    vitalsOrb: HTMLDivElement;
+    vitalsOrbText: HTMLDivElement;
+    vitalsArmorText: HTMLSpanElement;
+    vitalsMomentumText: HTMLSpanElement;
     lvlPill: HTMLSpanElement;
     interactPrompt: HTMLDivElement;
     weaponSlots: HTMLDivElement;
@@ -118,6 +129,7 @@ function getSvg(selector: string): SVGSVGElement {
 
 export function getDomRefs(): DomRefs {
     const canvas = getEl<HTMLCanvasElement>("c");
+    const uiCanvas = getEl<HTMLCanvasElement>("ui");
     const welcomeScreen = getEl<HTMLDivElement>("welcomeScreen");
     const continueBtn = getEl<HTMLButtonElement>("continueBtn");
 
@@ -157,6 +169,11 @@ export function getDomRefs(): DomRefs {
     const hpPill = getEl<HTMLSpanElement>("hpPill");
     const armorPill = getEl<HTMLSpanElement>("armorPill");
     const momentumPill = getEl<HTMLSpanElement>("momentumPill");
+    const vitalsOrbRoot = getEl<HTMLDivElement>("vitalsOrbRoot");
+    const vitalsOrb = getEl<HTMLDivElement>("vitalsOrb");
+    const vitalsOrbText = getEl<HTMLDivElement>("vitalsOrbText");
+    const vitalsArmorText = getEl<HTMLSpanElement>("vitalsArmorText");
+    const vitalsMomentumText = getEl<HTMLSpanElement>("vitalsMomentumText");
     const lvlPill = getEl<HTMLSpanElement>("lvlPill");
     const objectiveOverlay = getEl<HTMLDivElement>("objectiveOverlay");
     const objectiveTitle = getEl<HTMLDivElement>("objectiveTitle");
@@ -189,6 +206,11 @@ export function getDomRefs(): DomRefs {
         hpPill,
         armorPill,
         momentumPill,
+        vitalsOrbRoot,
+        vitalsOrb,
+        vitalsOrbText,
+        vitalsArmorText,
+        vitalsMomentumText,
         lvlPill,
         objectiveOverlay,
         objectiveTitle,
@@ -226,6 +248,7 @@ export function getDomRefs(): DomRefs {
 
     return {
         canvas,
+        uiCanvas,
         welcomeScreen,
         continueBtn,
         mainMenuEl,
@@ -269,6 +292,11 @@ export function getDomRefs(): DomRefs {
         hpPill,
         armorPill,
         momentumPill,
+        vitalsOrbRoot,
+        vitalsOrb,
+        vitalsOrbText,
+        vitalsArmorText,
+        vitalsMomentumText,
         lvlPill,
         interactPrompt,
         weaponSlots,

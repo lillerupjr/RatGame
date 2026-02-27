@@ -591,6 +591,7 @@ async function bootstrap() {
     "settingsMenu",
     "menu",
     "hud",
+    "vitalsOrbRoot",
     "map",
     "levelup",
     "end",
@@ -606,15 +607,38 @@ async function bootstrap() {
 
   const refs = getDomRefs();
   const canvas = refs.canvas;
+  const uiCanvas = refs.uiCanvas;
   const rawCtx = canvas.getContext("2d");
   if (!rawCtx) throw new Error("Canvas 2D context not available");
   const ctx = rawCtx;
+  const uiRawCtx = uiCanvas.getContext("2d");
+  if (!uiRawCtx) throw new Error("UI canvas 2D context not available");
+  const uiCtx = uiRawCtx;
+  const rootStyle = document.documentElement.style;
+
+  const syncUiSafeRect = () => {
+    const world = game.getWorld() as any;
+    const safe = world?.cameraSafeRect as
+      | { x: number; y: number; width: number; height: number }
+      | undefined;
+    const x = Math.floor(safe?.x ?? 0);
+    const y = Math.floor(safe?.y ?? 0);
+    const w = Math.max(1, Math.floor(safe?.width ?? window.innerWidth));
+    const h = Math.max(1, Math.floor(safe?.height ?? window.innerHeight));
+    rootStyle.setProperty("--safe-x", `${x}px`);
+    rootStyle.setProperty("--safe-y", `${y}px`);
+    rootStyle.setProperty("--safe-w", `${w}px`);
+    rootStyle.setProperty("--safe-h", `${h}px`);
+  };
 
   function resize() {
     const settings = getUserSettings();
     const pixelScale = defaultPixelScaleForViewport(window.innerWidth, window.innerHeight);
     const maxDpr = settings.render.performanceMode ? 1 : 4;
     resizeCanvasPixelPerfect(canvas, ctx, window.innerWidth, window.innerHeight, pixelScale, maxDpr);
+    resizeCanvasPixelPerfect(uiCanvas, uiCtx, window.innerWidth, window.innerHeight, pixelScale, maxDpr);
+    uiCanvas.dataset.effectiveDpr = canvas.dataset.effectiveDpr;
+    uiCanvas.dataset.pixelScale = canvas.dataset.pixelScale;
 
     const debugCanvas = document.querySelector("canvas");
     console.log("viewport", {
@@ -633,9 +657,13 @@ async function bootstrap() {
   const game = createGame({
     canvas,
     ctx,
+    uiCanvas,
+    uiCtx,
     hud: refs.hud,
     ui: refs.ui,
   });
+
+  syncUiSafeRect();
 
   wireMenus(refs, game);
 
@@ -649,6 +677,7 @@ async function bootstrap() {
       refs.settingsMenuEl.hidden = true;
       refs.ui.menuEl.hidden = true;
       refs.hud.root.hidden = true;
+      refs.hud.vitalsOrbRoot.hidden = true;
       refs.ui.mapEl.root.hidden = true;
       refs.ui.levelupEl.root.hidden = true;
       refs.ui.endEl.root.hidden = true;
@@ -658,6 +687,7 @@ async function bootstrap() {
     if (appState === AppState.MENU) {
       refs.ui.menuEl.hidden = true;
       refs.hud.root.hidden = true;
+      refs.hud.vitalsOrbRoot.hidden = true;
       refs.ui.levelupEl.root.hidden = true;
       refs.ui.endEl.root.hidden = true;
       refs.ui.dialogEl.root.hidden = true;
@@ -695,6 +725,7 @@ async function bootstrap() {
       refs.settingsMenuEl.hidden = true;
       refs.ui.menuEl.hidden = true;
       refs.hud.root.hidden = false;
+      refs.hud.vitalsOrbRoot.hidden = false;
     }
   }
 
@@ -839,6 +870,8 @@ async function bootstrap() {
     const dt = Math.min(0.033, (now - last) / 1000);
     last = now;
     syncUiForAppState(appStateController.appState);
+    uiCtx.setTransform(1, 0, 0, 1, 0, 0);
+    uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
 
     switch (appStateController.appState) {
       case AppState.BOOT:
@@ -906,10 +939,13 @@ async function bootstrap() {
           game.update(dt);
         }
         game.render();
+        syncUiSafeRect();
         if (appStateController.runState === RunState.PAUSED) {
+          refs.hud.vitalsOrbRoot.hidden = true;
           pauseMenu.setVisible(true);
           pauseMenu.render(game.getWorld());
         } else {
+          refs.hud.vitalsOrbRoot.hidden = false;
           pauseMenu.setVisible(false);
         }
         if (firstRunDiagPending) {
@@ -929,6 +965,7 @@ async function bootstrap() {
         break;
     }
 
+    syncUiSafeRect();
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

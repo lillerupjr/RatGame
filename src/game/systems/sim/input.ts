@@ -13,6 +13,34 @@ export type InputState = {
   interactPressed: boolean;
 };
 
+export type CameraSafeRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  zoom: number;
+};
+
+export function screenToCameraLocal(
+  screenX: number,
+  screenY: number,
+  safeRect: CameraSafeRect,
+): { x: number; y: number; inside: boolean } {
+  const x = screenX - safeRect.x;
+  const y = screenY - safeRect.y;
+  const inside = x >= 0 && y >= 0 && x <= safeRect.width && y <= safeRect.height;
+  return { x, y, inside };
+}
+
+export function cameraLocalToWorld(
+  localX: number,
+  localY: number,
+  safeRect: CameraSafeRect,
+): { x: number; y: number } {
+  const z = Math.max(1, Math.floor(safeRect.zoom));
+  return { x: localX / z, y: localY / z };
+}
+
 /** Create a fresh input state and register key listeners. */
 export function createInputState(): InputState {
   const s: InputState = {

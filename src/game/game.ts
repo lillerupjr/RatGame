@@ -129,6 +129,11 @@ type HudRefs = {
   hpPill: HTMLSpanElement;
   armorPill: HTMLSpanElement;
   momentumPill: HTMLSpanElement;
+  vitalsOrbRoot: HTMLDivElement;
+  vitalsOrb: HTMLDivElement;
+  vitalsOrbText: HTMLDivElement;
+  vitalsArmorText: HTMLSpanElement;
+  vitalsMomentumText: HTMLSpanElement;
   lvlPill: HTMLSpanElement;
   objectiveOverlay: HTMLDivElement;
   objectiveTitle: HTMLDivElement;
@@ -149,6 +154,8 @@ type LevelUpRefs = {
 type CreateGameArgs = {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
+  uiCanvas: HTMLCanvasElement;
+  uiCtx: CanvasRenderingContext2D;
   hud: HudRefs;
   ui: {
     menuEl: HTMLDivElement;
@@ -214,6 +221,10 @@ export function precomputeStaticMapData(): void {
 /** Create a game instance and return update/render/start handlers. */
 export function createGame(args: CreateGameArgs) {
   args.hud.lvlPill.hidden = false;
+  const setHudHidden = (hidden: boolean) => {
+    args.hud.root.hidden = hidden;
+    args.hud.vitalsOrbRoot.hidden = hidden;
+  };
 
   // ------------------------------------------------------------
   // DEBUG: optional spawn override (OFF by default)
@@ -1321,7 +1332,7 @@ export function createGame(args: CreateGameArgs) {
 
     // UI: hide map overlay, show HUD.
     args.ui.mapEl.root.hidden = true;
-    args.hud.root.hidden = false;
+    setHudHidden(false);
     hideCardRewardMenu();
   }
 
@@ -1453,7 +1464,7 @@ export function createGame(args: CreateGameArgs) {
 
     args.ui.endEl.root.hidden = false;
     args.ui.menuEl.hidden = true;
-    args.hud.root.hidden = true;
+    setHudHidden(true);
     hideCardRewardMenu();
   }
 
@@ -1570,7 +1581,7 @@ export function createGame(args: CreateGameArgs) {
     args.ui.menuEl.hidden = true;
     args.ui.mapEl.root.hidden = false;
     args.ui.endEl.root.hidden = true;
-    args.hud.root.hidden = false;
+    setHudHidden(false);
     hideCardRewardMenu();
 
     showDeterministicFloorPicker(
@@ -1602,7 +1613,7 @@ export function createGame(args: CreateGameArgs) {
     args.ui.menuEl.hidden = true;
     args.ui.mapEl.root.hidden = true;
     args.ui.endEl.root.hidden = true;
-    args.hud.root.hidden = false;
+    setHudHidden(false);
     hideCardRewardMenu();
   }
 
@@ -1742,7 +1753,7 @@ export function createGame(args: CreateGameArgs) {
     closeVendorShop(false);
     args.ui.endEl.root.hidden = true;
     args.ui.dialogEl.root.hidden = true;
-    args.hud.root.hidden = true;
+    setHudHidden(true);
     args.ui.menuEl.hidden = true;
     stopMusic();
   }
@@ -1750,7 +1761,7 @@ export function createGame(args: CreateGameArgs) {
   function showMap(subText: string) {
     world.state = "MAP";
     args.ui.mapEl.root.hidden = false;
-    args.hud.root.hidden = true;
+    setHudHidden(true);
 
     args.ui.mapEl.sub.textContent = subText;
 
@@ -1867,7 +1878,7 @@ export function createGame(args: CreateGameArgs) {
   function showDeterministicFloorPicker(subText: string, floorIndex: number, depth: number) {
     world.state = "MAP";
     args.ui.mapEl.root.hidden = false;
-    args.hud.root.hidden = true;
+    setHudHidden(true);
     args.ui.mapEl.sub.textContent = subText;
     args.ui.mapEl.svg.innerHTML =
       `<rect x="0" y="0" width="1000" height="520" fill="rgba(0,0,0,0)" />`;
@@ -1902,7 +1913,7 @@ export function createGame(args: CreateGameArgs) {
   function showDelveMap(subText: string) {
     world.state = "MAP";
     args.ui.mapEl.root.hidden = false;
-    args.hud.root.hidden = true;
+    setHudHidden(true);
     args.ui.mapEl.sub.textContent = subText;
 
     const delve = world.delveMap as DelveMap;
@@ -2042,7 +2053,7 @@ export function createGame(args: CreateGameArgs) {
 
   function hideMap() {
     args.ui.mapEl.root.hidden = true;
-    args.hud.root.hidden = false;
+    setHudHidden(false);
   }
 
 
@@ -2089,6 +2100,45 @@ export function createGame(args: CreateGameArgs) {
     }
   }
 
+  const clamp01 = (v: number): number => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
+
+  function updateVitalsOrb(hasMomentumRelic: boolean) {
+    const hpNow = Math.max(0, world.playerHp);
+    const hpMax = Math.max(1, world.playerHpMax);
+    const armorNow = Math.max(0, world.currentArmor);
+    const armorMax = Math.max(0, world.maxArmor);
+    const momNow = Math.max(0, world.momentumValue);
+    const momMax = Math.max(0, world.momentumMax);
+    const vitalsState = world as World & {
+      _vitalsArmorUnlocked?: boolean;
+      _vitalsMomentumUnlocked?: boolean;
+    };
+    if (armorNow > 0) vitalsState._vitalsArmorUnlocked = true;
+    if (hasMomentumRelic && momNow > 0) vitalsState._vitalsMomentumUnlocked = true;
+    const hasArmorRing = !!vitalsState._vitalsArmorUnlocked;
+    const hasMomentumRing = hasMomentumRelic && !!vitalsState._vitalsMomentumUnlocked;
+
+    const hpFrac = clamp01(hpNow / hpMax);
+    const armorFrac = hasArmorRing && armorMax > 0 ? clamp01(armorNow / armorMax) : 0;
+    const momFrac = hasMomentumRing && momMax > 0 ? clamp01(momNow / momMax) : 0;
+
+    args.hud.vitalsOrb.style.setProperty("--hpFrac", hpFrac.toFixed(4));
+    args.hud.vitalsOrb.style.setProperty("--armorFrac", armorFrac.toFixed(4));
+    args.hud.vitalsOrb.style.setProperty("--momFrac", momFrac.toFixed(4));
+    args.hud.vitalsOrbRoot.classList.toggle("hasArmor", hasArmorRing);
+    args.hud.vitalsOrbRoot.classList.toggle("hasMomentum", hasMomentumRing);
+    args.hud.vitalsOrbRoot.classList.toggle("isFullArmor", hasArmorRing && armorMax > 0 && armorNow >= armorMax);
+    args.hud.vitalsOrbRoot.classList.toggle("isFullMomentum", hasMomentumRing && momMax > 0 && momNow >= momMax);
+
+    args.hud.vitalsOrbText.textContent = `${Math.ceil(hpNow)}/${Math.ceil(hpMax)}`;
+    args.hud.vitalsArmorText.textContent = hasArmorRing
+      ? `Armor: ${Math.ceil(armorNow)}/${Math.ceil(armorMax)}`
+      : "Armor: 0/0";
+    args.hud.vitalsMomentumText.textContent = hasMomentumRing
+      ? `Mom: ${Math.ceil(momNow)}/${Math.ceil(momMax)}`
+      : "Mom: 0/0";
+  }
+
   function updateHud() {
     args.hud.timePill.textContent = formatTimeMMSS(world.time);
     args.hud.killsPill.textContent = `Kills: ${world.kills}`;
@@ -2099,6 +2149,7 @@ export function createGame(args: CreateGameArgs) {
     if (hasMomentumRelic) {
       args.hud.momentumPill.textContent = `Momentum: ${Math.max(0, Math.ceil(world.momentumValue))}/${Math.max(0, Math.ceil(world.momentumMax))}`;
     }
+    updateVitalsOrb(hasMomentumRelic);
 
     args.hud.lvlPill.textContent = `Gold: ${getGold(world)}`;
 
@@ -2199,12 +2250,6 @@ export function createGame(args: CreateGameArgs) {
         }
       }
       // HUD still updates while paused
-      args.hud.timePill.textContent = hudTimeText(world);
-      args.hud.killsPill.textContent = `Kills: ${world.kills}`;
-      args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
-      args.hud.armorPill.textContent = `Armor: ${Math.max(0, Math.ceil(world.currentArmor))}/${world.maxArmor}`;
-      args.hud.momentumPill.textContent = `Momentum: ${Math.max(0, Math.ceil(world.momentumValue))}/${Math.max(0, Math.ceil(world.momentumMax))}`;
-      args.hud.lvlPill.textContent = `Gold: ${getGold(world)}`;
       renderRewardMenuIfNeeded();
       updateHud();
       return;
@@ -2374,19 +2419,13 @@ export function createGame(args: CreateGameArgs) {
 
       args.ui.endEl.root.hidden = false;
       args.ui.menuEl.hidden = true;
-      args.hud.root.hidden = true;
+      setHudHidden(true);
       hideCardRewardMenu();
       return;
     }
 
 
     // HUD
-    args.hud.timePill.textContent = hudTimeText(world);
-    args.hud.killsPill.textContent = `Kills: ${world.kills}`;
-    args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
-    args.hud.armorPill.textContent = `Armor: ${Math.max(0, Math.ceil(world.currentArmor))}/${world.maxArmor}`;
-    args.hud.momentumPill.textContent = `Momentum: ${Math.max(0, Math.ceil(world.momentumValue))}/${Math.max(0, Math.ceil(world.momentumMax))}`;
-    args.hud.lvlPill.textContent = `Gold: ${getGold(world)}`;
     updateHud();
 
     // Clear per-frame edge-triggered inputs (must be at END of update)
@@ -2394,7 +2433,7 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function render() {
-    renderSystem(world, args.ctx, args.canvas);
+    renderSystem(world, args.ctx, args.canvas, args.uiCtx, args.uiCanvas);
   }
 
 
@@ -2406,7 +2445,7 @@ export function createGame(args: CreateGameArgs) {
     if (btn.id !== "endBtn") return;
 
     args.ui.endEl.root.hidden = true;
-    args.hud.root.hidden = true;
+    setHudHidden(true);
 
     // Back to menu (weapon select is already there)
     args.ui.menuEl.hidden = false;

@@ -8,6 +8,7 @@
 </head>
 <body>
 <canvas id="c"></canvas>
+<canvas id="ui"></canvas>
 
 <div id="hud" hidden>
   <div id="hudTop">
@@ -43,6 +44,17 @@
         <div class="slot empty"><div class="slotTitle">—</div><div class="slotSub"></div></div>
       </div>
     </div>
+  </div>
+</div>
+
+<div id="vitalsOrbRoot" class="vitalsOrbRoot" aria-label="Vitals Orb" hidden>
+  <div id="vitalsOrb" class="vitalsOrb" style="--hpFrac: 1; --armorFrac: 0; --momFrac: 0;">
+    <div id="vitalsOrbLife" class="vitalsOrbLife"></div>
+    <div id="vitalsOrbText" class="vitalsOrbText">0/0</div>
+  </div>
+  <div class="vitalsOrbMeta">
+    <span id="vitalsArmorText">Armor: 0/0</span>
+    <span id="vitalsMomentumText">Mom: 0/0</span>
   </div>
 </div>
 

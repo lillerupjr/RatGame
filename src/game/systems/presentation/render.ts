@@ -139,6 +139,7 @@ function compareRenderKeys(a: RenderKey, b: RenderKey): number {
 const DEBUG_PLAYER_WEDGE = false;
 const DISABLE_WALLS_AND_CURTAINS = true;
 const VISIBLE_VERTICAL_TILES = 12;
+const LOGICAL_ASPECT = 16 / 9;
 const HARDCODED_VOID_TOP_SRC = `${import.meta.env.BASE_URL}assets-runtime/tiles/floor/void.png`;
 
 // Background mode:
@@ -574,7 +575,13 @@ function isTileInPlayerSouthWedge(
 }
 
 /** Render tiles, entities, overlays, and debug layers. */
-export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
+export async function renderSystem(
+  w: World,
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  uiCtx?: CanvasRenderingContext2D,
+  uiCanvas?: HTMLCanvasElement,
+) {
   const cssW = Math.max(1, canvas.clientWidth);
   const cssH = Math.max(1, canvas.clientHeight);
   const screenW = cssW;
@@ -583,21 +590,45 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const devH = Math.max(1, canvas.height);
   const storedDpr = Number(canvas.dataset.effectiveDpr ?? "");
   const dpr = Number.isFinite(storedDpr) && storedDpr >= 1 ? storedDpr : Math.max(1, devW / cssW);
-  const visibleWorldHeight = VISIBLE_VERTICAL_TILES * KENNEY_TILE_WORLD;
-  const zoom = Math.max(1, Math.floor(cssH / visibleWorldHeight));
-  const ww = Math.max(1, Math.floor(cssW / zoom));
-  const hh = Math.max(1, Math.floor(cssH / zoom));
+  const overlayCtx = uiCtx ?? ctx;
+  const overlayCanvas = uiCanvas ?? canvas;
+  const overlayDevW = Math.max(1, overlayCanvas.width);
+  const overlayDevH = Math.max(1, overlayCanvas.height);
+  const overlayStoredDpr = Number(overlayCanvas.dataset.effectiveDpr ?? "");
+  const overlayDpr = Number.isFinite(overlayStoredDpr) && overlayStoredDpr >= 1
+    ? overlayStoredDpr
+    : dpr;
+  const logicalWorldHeight = Math.max(1, VISIBLE_VERTICAL_TILES * KENNEY_TILE_WORLD);
+  const logicalWorldWidth = Math.max(1, Math.round(logicalWorldHeight * LOGICAL_ASPECT));
+  const zoom = Math.max(1, Math.floor(cssH / logicalWorldHeight));
+  const ww = logicalWorldWidth;
+  const hh = logicalWorldHeight;
+  const scaledW = logicalWorldWidth * zoom;
+  const scaledH = logicalWorldHeight * zoom;
+  const safeOffsetX = Math.floor((cssW - scaledW) * 0.5);
+  const safeOffsetY = Math.floor((cssH - scaledH) * 0.5);
   configurePixelPerfect(ctx);
   const renderPerfCountersEnabled = getUserSettings().render.renderPerfCountersEnabled;
   setRenderPerfCountersEnabled(renderPerfCountersEnabled);
   beginRenderPerfFrame(devW, devH);
   (w as any).viewW = ww;
   (w as any).viewH = hh;
+  (w as any).cameraSafeRect = {
+    x: safeOffsetX,
+    y: safeOffsetY,
+    width: scaledW,
+    height: scaledH,
+    zoom,
+    logicalWidth: logicalWorldWidth,
+    logicalHeight: logicalWorldHeight,
+  };
 
   const PLAYER_R = w.playerR;
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, devW, devH);
+  overlayCtx.setTransform(1, 0, 0, 1, 0, 0);
+  overlayCtx.clearRect(0, 0, overlayDevW, overlayDevH);
 
   const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
   const px = pWorld.wx;
@@ -644,10 +675,13 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const camTx = Math.round(camXRaw);
   const camTy = Math.round(camYRaw);
   // NEW: draw background once, world-locked to the camera
-  drawVoidBackgroundOnce(ctx, devW, devH, camTx, camTy, s);
+  drawVoidBackgroundOnce(ctx, devW, devH, camTx + safeOffsetX / Math.max(1, zoom), camTy + safeOffsetY / Math.max(1, zoom), s);
   const camX = 0;
   const camY = 0;
-  const worldToScreenPx = (xWorld: number, yWorld: number) => ({ x: (xWorld + camTx) * s, y: (yWorld + camTy) * s });
+  const worldToScreenPx = (xWorld: number, yWorld: number) => ({
+    x: (xWorld + camTx + safeOffsetX / Math.max(1, zoom)) * s,
+    y: (yWorld + camTy + safeOffsetY / Math.max(1, zoom)) * s,
+  });
   const drawAlignmentDot = (target: CanvasRenderingContext2D, color: string) => {
     target.save();
     target.fillStyle = color;
@@ -656,7 +690,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   };
 
   ctx.save();
-  ctx.setTransform(s, 0, 0, s, 0, 0);
+  ctx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
   ctx.translate(camTx, camTy);
   drawAlignmentDot(ctx, "rgba(255,0,255,0.9)"); // world
 
@@ -1399,9 +1433,9 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     if (cached) return cached;
 
     const baseMinX = -camTx;
-    const baseMaxX = -camTx + devW / s;
+    const baseMaxX = -camTx + ww;
     const baseMinY = -camTy;
-    const baseMaxY = -camTy + devH / s;
+    const baseMaxY = -camTy + hh;
     const centerX = (baseMinX + baseMaxX) * 0.5;
     const centerY = (baseMinY + baseMaxY) * 0.5;
     const baseHalfW = (baseMaxX - baseMinX) * 0.5;
@@ -3048,7 +3082,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     // IMPORTANT: match the WORLD camera transform (exactly like lighting masks)
     sctx.save();
     configurePixelPerfect(sctx);
-    sctx.setTransform(s, 0, 0, s, 0, 0);
+    sctx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
     sctx.translate(camTx, camTy);
     drawAlignmentDot(sctx, "rgba(255,128,0,0.9)"); // structure
   } else {
@@ -3083,7 +3117,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       southCtx.clearRect(0, 0, devW, devH);
       southCtx.save();
       configurePixelPerfect(southCtx);
-      southCtx.setTransform(s, 0, 0, s, 0, 0);
+      southCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
       southCtx.translate(camTx, camTy);
       drawAlignmentDot(southCtx, "rgba(0,255,255,0.9)"); // south base mask
       southCtx.globalCompositeOperation = "source-over";
@@ -3352,7 +3386,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     inverseCtx.clearRect(0, 0, devW, devH);
     inverseCtx.save();
     configurePixelPerfect(inverseCtx);
-    inverseCtx.setTransform(s, 0, 0, s, 0, 0);
+    inverseCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
     inverseCtx.translate(camTx, camTy);
     drawAlignmentDot(inverseCtx, "rgba(0,255,0,0.9)"); // inverse mask
     inverseCtx.globalCompositeOperation = "source-over";
@@ -3374,7 +3408,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
       shadowCtx.save();
       configurePixelPerfect(shadowCtx);
-      shadowCtx.setTransform(s, 0, 0, s, 0, 0);
+      shadowCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
       shadowCtx.translate(camTx, camTy);
       drawAlignmentDot(shadowCtx, "rgba(255,64,64,0.9)"); // shadow mask
       setRenderPerfDrawTag("mask:shadow");
@@ -3387,7 +3421,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       if (entitySilhouetteMaskDraws.length > 0) {
         silhouetteCtx.save();
         configurePixelPerfect(silhouetteCtx);
-        silhouetteCtx.setTransform(s, 0, 0, s, 0, 0);
+        silhouetteCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
         silhouetteCtx.translate(camTx, camTy);
         drawAlignmentDot(silhouetteCtx, "rgba(64,128,255,0.9)"); // silhouette mask
         for (let i = 0; i < entitySilhouetteMaskDraws.length; i++) {
@@ -3413,7 +3447,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
       southCtx.clearRect(0, 0, devW, devH);
       southCtx.save();
       configurePixelPerfect(southCtx);
-      southCtx.setTransform(s, 0, 0, s, 0, 0);
+      southCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
       southCtx.translate(camTx, camTy);
       drawAlignmentDot(southCtx, "rgba(255,255,255,0.9)"); // south occlusion mask
       southCtx.globalCompositeOperation = "source-over";
@@ -3474,6 +3508,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
   const lightDefs = compiledMap.lightDefs;
   const projectedLights: ProjectedLight[] = [];
+  const lightSafeOffsetX = safeOffsetX * dpr;
+  const lightSafeOffsetY = safeOffsetY * dpr;
   for (let i = 0; i < lightDefs.length; i++) {
     const ld = lightDefs[i];
     const ltx = Math.floor(ld.worldX / T);
@@ -3487,8 +3523,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     const p = worldToScreen(ld.worldX, ld.worldY);
     const screenOffsetX = (ld.screenOffsetPx?.x ?? 0) * s;
     const screenOffsetY = (ld.screenOffsetPx?.y ?? 0) * s;
-    const sx = (p.x + camTx) * s + screenOffsetX;
-    const sy = (p.y + camTy - ld.heightUnits * ELEV_PX) * s + screenOffsetY;
+    const sx = (p.x + camTx) * s + screenOffsetX + lightSafeOffsetX;
+    const sy = (p.y + camTy - ld.heightUnits * ELEV_PX) * s + screenOffsetY + lightSafeOffsetY;
     const poolSy = sy - (ld.poolHeightOffsetUnits ?? 0) * ELEV_PX * s;
     const flickerPhase = (Math.sin(ld.worldX * 0.013 + ld.worldY * 0.007) * 43758.5453) % (Math.PI * 2);
     projectedLights.push({
@@ -3607,24 +3643,25 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   }
 
   // --- UI ---
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  overlayCtx.setTransform(overlayDpr, 0, 0, overlayDpr, safeOffsetX * overlayDpr, safeOffsetY * overlayDpr);
   if (w.state === "RUN" && w.runState === "FLOOR") {
     const target = resolveNavArrowTarget(w);
     renderNavArrow(
-      ctx,
+      overlayCtx,
       target,
-      { w: screenW, h: screenH },
+      { w: scaledW, h: scaledH },
       (wx, wy) => {
         const p = worldToScreen(wx, wy);
         return { x: p.x + camTx, y: p.y + camTy };
       }
     );
   }
-  if (debugFlags.showGrid) renderTileGridCompass(w, ctx, screenW, screenH); // tile-grid N/E/S/W (matches in-game tests)
+  if (debugFlags.showGrid) renderTileGridCompass(w, overlayCtx, scaledW, scaledH); // tile-grid N/E/S/W (matches in-game tests)
 
-  renderHealthOrb(w, ctx, screenW, screenH);
-  renderBossHealthBar(w, ctx, screenW, screenH);
-  renderDPSMeter(w, ctx, screenW, screenH);
+  // HUD widgets are intentionally screen-anchored (same space as perf/fps text).
+  overlayCtx.setTransform(overlayDpr, 0, 0, overlayDpr, 0, 0);
+  renderBossHealthBar(w, overlayCtx, screenW, screenH);
+  renderDPSMeter(w, overlayCtx, screenW, screenH);
 }
 
 
