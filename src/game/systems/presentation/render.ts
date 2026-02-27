@@ -157,9 +157,6 @@ const flippedOverlayImageCache = new WeakMap<HTMLImageElement, HTMLCanvasElement
 const runtimeIsoTopCache = new WeakMap<HTMLImageElement, Map<0 | 1 | 2 | 3, HTMLCanvasElement>>();
 const runtimeIsoDecalCache = new WeakMap<HTMLImageElement, Map<string, HTMLCanvasElement>>();
 const runtimeDiamondCanvasCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
-const occlusionMaskByHeightCache = new Map<number, { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D }>();
-const LIT_HEIGHTS_DEFAULT: readonly number[] = [0, 8];
-const MAX_LIT_HEIGHTS = 4;
 
 type ScreenPt = { x: number; y: number };
 
@@ -331,8 +328,6 @@ let structureLayerScratchCanvas: HTMLCanvasElement | null = null;
 let structureLayerScratchCtx: CanvasRenderingContext2D | null = null;
 let southBuildingMaskScratchCanvas: HTMLCanvasElement | null = null;
 let southBuildingMaskScratchCtx: CanvasRenderingContext2D | null = null;
-let lightingOccluderHoleScratchCanvas: HTMLCanvasElement | null = null;
-let lightingOccluderHoleScratchCtx: CanvasRenderingContext2D | null = null;
 let cutoutVoidScratchCanvas: HTMLCanvasElement | null = null;
 let cutoutVoidScratchCtx: CanvasRenderingContext2D | null = null;
 
@@ -622,11 +617,6 @@ function buildCombinedOcclusionMask(
     cctx.drawImage(blockerMaskCanvas, 0, 0);
   }
   cctx.globalCompositeOperation = "source-over";
-}
-
-function occludesHeight(entryMinZ: number, L: number): boolean {
-  // Tie-break: same-height surfaces should not self-occlude same-height lights.
-  return entryMinZ > L;
 }
 
 function isTileInPlayerSouthWedge(
@@ -997,9 +987,7 @@ export async function renderSystem(
   };
 
   type MaskDraw = (maskCtx: CanvasRenderingContext2D) => void;
-  type OccluderEntry = { minZ: number; draw: MaskDraw };
   const buildingMaskDraws: MaskDraw[] = [];
-  const occluderEntries: OccluderEntry[] = [];
   const southBuildingMaskDraws: MaskDraw[] = [];
   const southBuildingBaseMaskDraws: MaskDraw[] = [];
   const entitySilhouetteMaskDraws: MaskDraw[] = [];
@@ -1021,17 +1009,12 @@ export async function renderSystem(
       target.restore();
     };
     // Default draw to main ctx (unchanged behavior for most pieces)
-  const drawRenderPiece = (c: RenderPieceDraw) => drawRenderPieceTo(ctx, c);
-  const playerOcclusionZ = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
-  const playerWalkInfo = walkInfo(px, py, T, playerOcclusionZ);
-  const playerOnRamp = !!(playerWalkInfo as any).isRamp;
+    const drawRenderPiece = (c: RenderPieceDraw) => drawRenderPieceTo(ctx, c);
 
-  const addRenderPieceMask = (c: RenderPieceDraw, minZ: number) => {
-      const draw: MaskDraw = (maskCtx) => {
+    const addRenderPieceMask = (c: RenderPieceDraw) => {
+      buildingMaskDraws.push((maskCtx) => {
         drawRenderPieceTo(maskCtx, c);
-      };
-      buildingMaskDraws.push(draw);
-      occluderEntries.push({ minZ, draw });
+      });
     };
     const addSouthRenderPieceMask = (c: RenderPieceDraw) => {
       southBuildingMaskDraws.push((maskCtx) => {
@@ -1056,48 +1039,6 @@ export async function renderSystem(
         maskCtx.fill();
         maskCtx.restore();
       });
-    };
-    const addGroundTileMaskAtZ = (target: MaskDraw[], tx: number, ty: number, zVisual: number) => {
-      target.push((maskCtx) => {
-        const p0 = worldToScreen(tx * T, ty * T);
-        const p1 = worldToScreen((tx + 1) * T, ty * T);
-        const p2 = worldToScreen((tx + 1) * T, (ty + 1) * T);
-        const p3 = worldToScreen(tx * T, (ty + 1) * T);
-        const zPx = zVisual * ELEV_PX;
-        maskCtx.save();
-        maskCtx.globalCompositeOperation = "source-over";
-        maskCtx.fillStyle = "rgba(255,255,255,1)";
-        maskCtx.beginPath();
-        maskCtx.moveTo(p0.x + camX, p0.y + camY - zPx);
-        maskCtx.lineTo(p1.x + camX, p1.y + camY - zPx);
-        maskCtx.lineTo(p2.x + camX, p2.y + camY - zPx);
-        maskCtx.lineTo(p3.x + camX, p3.y + camY - zPx);
-        maskCtx.closePath();
-        maskCtx.fill();
-        maskCtx.restore();
-      });
-    };
-    const addOccludingGroundTileMaskAtZ = (tx: number, ty: number, zVisual: number) => {
-      const draw: MaskDraw = (maskCtx) => {
-        const p0 = worldToScreen(tx * T, ty * T);
-        const p1 = worldToScreen((tx + 1) * T, ty * T);
-        const p2 = worldToScreen((tx + 1) * T, (ty + 1) * T);
-        const p3 = worldToScreen(tx * T, (ty + 1) * T);
-        const zPx = zVisual * ELEV_PX;
-        maskCtx.save();
-        maskCtx.globalCompositeOperation = "source-over";
-        maskCtx.fillStyle = "rgba(255,255,255,1)";
-        maskCtx.beginPath();
-        maskCtx.moveTo(p0.x + camX, p0.y + camY - zPx);
-        maskCtx.lineTo(p1.x + camX, p1.y + camY - zPx);
-        maskCtx.lineTo(p2.x + camX, p2.y + camY - zPx);
-        maskCtx.lineTo(p3.x + camX, p3.y + camY - zPx);
-        maskCtx.closePath();
-        maskCtx.fill();
-        maskCtx.restore();
-      };
-      buildingMaskDraws.push(draw);
-      occluderEntries.push({ minZ: zVisual, draw });
     };
 
     const srcUvNW: ScreenPt = { x: 64, y: 0 };
@@ -1124,15 +1065,14 @@ export async function renderSystem(
       };
     };
     const drawDiamondOnRampQuad = (
-      targetCtx: CanvasRenderingContext2D,
       srcDiamond: HTMLCanvasElement,
       tx: number,
       ty: number,
       renderAnchorY: number,
     ) => {
       const q = getRampQuadPoints(tx, ty, renderAnchorY);
-      drawTexturedTriangle(targetCtx, srcDiamond, 128, 64, srcUvNW, srcUvNE, srcUvSE, q.nw, q.ne, q.se);
-      drawTexturedTriangle(targetCtx, srcDiamond, 128, 64, srcUvNW, srcUvSE, srcUvSW, q.nw, q.se, q.sw);
+      drawTexturedTriangle(ctx, srcDiamond, 128, 64, srcUvNW, srcUvNE, srcUvSE, q.nw, q.ne, q.se);
+      drawTexturedTriangle(ctx, srcDiamond, 128, 64, srcUvNW, srcUvSE, srcUvSW, q.nw, q.se, q.sw);
     };
 
     const drawRuntimeSidewalkTop = (
@@ -1149,18 +1089,9 @@ export async function renderSystem(
 
       const baseBaked = getRuntimeIsoTopCanvas(src.img, rotationQuarterTurns);
       if (!baseBaked) return;
-      const isRampTile = rampRoadTiles.has(`${tx},${ty}`);
-      const sameRampAsPlayer = playerOnRamp && family === "asphalt" && isRampTile;
-      const elevatedTopAbovePlayer =
-        zBase > playerOcclusionZ + 0.01
-        && isOwnerTileInPlayerWedge(tx, ty)
-        && !(tx === playerTx && ty === playerTy)
-        && !sameRampAsPlayer;
-      const roadTargetCtx = elevatedTopAbovePlayer && structureLayerScratchCtx ? structureLayerScratchCtx : ctx;
-      if (roadTargetCtx === structureLayerScratchCtx) hasStructureLayerDraw = true;
-      const isRampRoadTile = family === "asphalt" && isRampTile;
+      const isRampRoadTile = family === "asphalt" && rampRoadTiles.has(`${tx},${ty}`);
       if (isRampRoadTile) {
-        drawDiamondOnRampQuad(roadTargetCtx, baseBaked, tx, ty, renderAnchorY);
+        drawDiamondOnRampQuad(baseBaked, tx, ty, renderAnchorY);
       } else {
         const wx = (tx + 0.5) * T;
         const wy = (ty + 0.5) * T;
@@ -1175,7 +1106,7 @@ export async function renderSystem(
         const dx = centerX - SIDEWALK_SRC_SIZE * 0.5;
         const dy = centerY - SIDEWALK_ISO_HEIGHT * 0.5;
 
-        roadTargetCtx.drawImage(baseBaked, snapPx(dx), snapPx(dy));
+        ctx.drawImage(baseBaked, snapPx(dx), snapPx(dy));
       }
 
       const wx = (tx + 0.5) * T;
@@ -1193,19 +1124,6 @@ export async function renderSystem(
         ctx.font = "9px monospace";
         ctx.fillText(`${variantIndex} r${rotationQuarterTurns}`, centerX + 4, centerY - 4);
         ctx.restore();
-      }
-
-      // Elevated tops act as overhead occluders (light + player cutout).
-      if (zBase > 0) {
-        addOccludingGroundTileMaskAtZ(tx, ty, zBase);
-        if (isOwnerTileInPlayerWedge(tx, ty) && zBase > playerOcclusionZ + 0.01) {
-          if (tx === playerTx && ty === playerTy) {
-            // Do not treat the tile the player stands on as overhead cutout geometry.
-          } else if (!sameRampAsPlayer) {
-          addGroundTileMaskAtZ(southBuildingMaskDraws, tx, ty, zBase);
-          addGroundTileMaskAtZ(southBuildingBaseMaskDraws, tx, ty, zBase);
-          }
-        }
       }
     };
 
@@ -1232,26 +1150,16 @@ export async function renderSystem(
       const shouldSnapRoadMarking = shouldPixelSnapRoadMarking(setId, variantIndex);
       const centerX = shouldSnapRoadMarking ? Math.round(rawCenterX) : snapPx(rawCenterX);
       const centerY = shouldSnapRoadMarking ? Math.round(rawCenterY) : snapPx(rawCenterY);
-      const isRampTile = rampRoadTiles.has(`${tx},${ty}`);
-      const sameRampAsPlayer = playerOnRamp && isRampTile;
 
-      const elevatedDecalAbovePlayer =
-        zBase > playerOcclusionZ + 0.01
-        && isOwnerTileInPlayerWedge(tx, ty)
-        && !(tx === playerTx && ty === playerTy)
-        && !sameRampAsPlayer;
-      const decalTargetCtx = elevatedDecalAbovePlayer && structureLayerScratchCtx ? structureLayerScratchCtx : ctx;
-      if (decalTargetCtx === structureLayerScratchCtx) hasStructureLayerDraw = true;
-
-      if (isRampTile) {
+      if (rampRoadTiles.has(`${tx},${ty}`)) {
         const diamond = getDiamondFitCanvas(baked);
-        drawDiamondOnRampQuad(decalTargetCtx, diamond, tx, ty, renderAnchorY);
+        drawDiamondOnRampQuad(diamond, tx, ty, renderAnchorY);
       } else {
         const dx = centerX - baked.width * 0.5;
         const dy = centerY - baked.height * 0.5;
         const drawX = shouldSnapRoadMarking ? Math.round(dx) : snapPx(dx);
         const drawY = shouldSnapRoadMarking ? Math.round(dy) : snapPx(dy);
-        decalTargetCtx.drawImage(baked, drawX, drawY);
+        ctx.drawImage(baked, drawX, drawY);
       }
     };
 
@@ -1740,15 +1648,6 @@ export async function renderSystem(
       }
     }
   }
-  const rampTileDepthZ = (tx: number, ty: number): number => {
-    const x0 = tx * T;
-    const y0 = ty * T;
-    const z0 = tileHAtWorld(x0, y0);
-    const z1 = tileHAtWorld(x0 + T, y0);
-    const z2 = tileHAtWorld(x0 + T, y0 + T);
-    const z3 = tileHAtWorld(x0, y0 + T);
-    return Math.min(z0, z1, z2, z3);
-  };
 
   // ----------------------------
   // Void
@@ -1913,20 +1812,17 @@ export async function renderSystem(
           if (surface.id.startsWith("building_floor_") && shouldCullBuildingAt(tx, ty)) continue;
           if (surface.runtimeTop?.kind === "SQUARE_128_RUNTIME") {
             const runtimeTop = surface.runtimeTop;
-            const rampDepthZ = runtimeTop.family === "asphalt" && rampRoadTiles.has(`${tx},${ty}`)
-              ? rampTileDepthZ(tx, ty)
-              : surface.zBase;
             const renderKey: RenderKey = {
               slice: tx + ty,
               within: tx,
-              baseZ: rampDepthZ,
+              baseZ: surface.zBase,
               kindOrder: KindOrder.FLOOR,
               stableId: (tx * 73856093 ^ ty * 19349663 ^ (surface.zBase * 100 | 0) * 83492791) + 17,
             };
             addToSlice(tx + ty, renderKey, drawRuntimeSidewalkTopFn, {
               tx,
               ty,
-              zBase: rampDepthZ,
+              zBase: surface.zBase,
               anchorY: surface.renderAnchorY ?? ANCHOR_Y,
               family: runtimeTop.family,
               variantIndex: runtimeTop.variantIndex,
@@ -1990,12 +1886,10 @@ export async function renderSystem(
       if (!isTileInRenderRadius(decal.tx, decal.ty)) continue;
       if (!RENDER_ALL_HEIGHTS && decal.zLogical !== activeH) continue;
 
-      const isRampTile = rampRoadTiles.has(`${decal.tx},${decal.ty}`);
-      const depthZ = isRampTile ? rampTileDepthZ(decal.tx, decal.ty) : decal.zBase;
       const renderKey: RenderKey = {
         slice: decal.tx + decal.ty,
         within: decal.tx,
-        baseZ: depthZ,
+        baseZ: decal.zBase,
         kindOrder: KindOrder.DECAL,
         stableId: (decal.tx * 73856093 ^ decal.ty * 19349663 ^ (decal.zBase * 100 | 0) * 83492791) + 19,
       };
@@ -2003,7 +1897,7 @@ export async function renderSystem(
       addToSlice(decal.tx + decal.ty, renderKey, drawRuntimeDecalTopFn, {
         tx: decal.tx,
         ty: decal.ty,
-        zBase: depthZ,
+        zBase: decal.zBase,
         renderAnchorY: decal.renderAnchorY,
         setId: decal.setId,
         variantIndex: decal.variantIndex,
@@ -2956,21 +2850,21 @@ export async function renderSystem(
         };
         addToSlice(face.tx + face.ty, renderKey, () => {
           const sctx = structureLayerScratchCtx;
-        const abovePlayer = (face.zTo ?? face.zFrom) > playerOcclusionZ + 0.01;
+          const isStructureish = renderKey.kindOrder === KindOrder.STRUCTURE || renderKey.kindOrder === KindOrder.OVERLAY;
 
-        // Owner tile for face pieces is (face.tx, face.ty)
-        const ownerInWedge = isOwnerTileInPlayerWedge(face.tx, face.ty);
+          // Owner tile for face pieces is (face.tx, face.ty)
+          const ownerInWedge = isOwnerTileInPlayerWedge(face.tx, face.ty);
 
-        if (sctx && ownerInWedge && abovePlayer) {
-          hasStructureLayerDraw = true;
-          drawRenderPieceTo(sctx, d);
-        } else drawRenderPiece(d);
+          if (isStructureish && sctx && ownerInWedge) {
+            hasStructureLayerDraw = true;
+            drawRenderPieceTo(sctx, d);
+          } else drawRenderPiece(d);
         });
 
         // Full building mask stays intact for lighting occlusion.
-          if (face.layerRole === "STRUCTURE") {
-            addRenderPieceMask(d, face.zTo ?? face.zFrom ?? 0);
-          if (isOwnerTileInPlayerWedge(face.tx, face.ty) && (face.zTo ?? face.zFrom) > playerOcclusionZ + 0.01) {
+        if (face.layerRole === "STRUCTURE") {
+          addRenderPieceMask(d);
+          if (isOwnerTileInPlayerWedge(face.tx, face.ty)) {
             addSouthRenderPieceMask(d);
             addGroundTileMask(southBuildingBaseMaskDraws, face.tx, face.ty);
           }
@@ -3012,20 +2906,20 @@ export async function renderSystem(
       };
       addToSlice(occ.tx + occ.ty, renderKey, () => {
         const sctx = structureLayerScratchCtx;
-        const abovePlayer = occ.zTo > playerOcclusionZ + 0.01;
+        const isStructureish = renderKey.kindOrder === KindOrder.STRUCTURE || renderKey.kindOrder === KindOrder.OVERLAY;
 
         // Owner tile for walls is (occ.tx, occ.ty)
         const ownerInWedge = isOwnerTileInPlayerWedge(occ.tx, occ.ty);
 
-        if (sctx && ownerInWedge && abovePlayer) {
+        if (isStructureish && sctx && ownerInWedge) {
           hasStructureLayerDraw = true;
           drawRenderPieceTo(sctx, draw);
         } else drawRenderPiece(draw);
       });
 
       // Full building mask stays intact for lighting occlusion.
-      addRenderPieceMask(draw, occ.zTo ?? occ.zFrom ?? 0);
-      if (isOwnerTileInPlayerWedge(occ.tx, occ.ty) && occ.zTo > playerOcclusionZ + 0.01) {
+      addRenderPieceMask(draw);
+      if (isOwnerTileInPlayerWedge(occ.tx, occ.ty)) {
         addSouthRenderPieceMask(draw);
         addGroundTileMask(southBuildingBaseMaskDraws, occ.tx, occ.ty);
       }
@@ -3104,11 +2998,11 @@ export async function renderSystem(
               // Owner tile for a band piece is derived from its renderKey.
               const ownerInWedge = isOwnerTileInPlayerWedge(ownerTx, ownerTy);
 
-              const abovePlayer = band.renderKey.baseZ > playerOcclusionZ + 0.01;
-              const wantsStructureTarget = abovePlayer;
+              const wantsStructureTarget =
+                (overlayKey.kindOrder === KindOrder.STRUCTURE || overlayKey.kindOrder === KindOrder.OVERLAY);
 
               // Route to structure scratch ONLY if wedge-owned; otherwise draw to main ctx.
-              const target = wantsStructureTarget && sctx && ownerInWedge && abovePlayer ? sctx : ctx;
+              const target = wantsStructureTarget && sctx && ownerInWedge ? sctx : ctx;
               if (target === sctx) hasStructureLayerDraw = true;
               const img = draw.img;
               if (!img) return;
@@ -3155,7 +3049,7 @@ export async function renderSystem(
 
             // Full building mask stays intact for lighting occlusion.
             if (o.layerRole === "STRUCTURE" || (o.kind ?? "ROOF") === "ROOF") {
-              const drawMask: MaskDraw = (maskCtx) => {
+              buildingMaskDraws.push((maskCtx) => {
                 const img = draw.img;
                 if (!img) return;
                 const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(img) : img;
@@ -3183,10 +3077,8 @@ export async function renderSystem(
                 );
                 maskCtx.globalCompositeOperation = prevOp;
                 maskCtx.imageSmoothingEnabled = prevSmoothing;
-              };
-              buildingMaskDraws.push(drawMask);
-              occluderEntries.push({ minZ: band.renderKey.baseZ, draw: drawMask });
-              if (isOwnerTileInPlayerWedge(band.renderKey.within, ownerTy) && band.renderKey.baseZ > playerOcclusionZ + 0.01) {
+              });
+              if (isOwnerTileInPlayerWedge(band.renderKey.within, ownerTy)) {
                 southBuildingMaskDraws.push((maskCtx) => {
                   const img = draw.img;
                   if (!img) return;
@@ -3222,11 +3114,7 @@ export async function renderSystem(
           {
             const ownerTx = (o.anchorTx ?? (o.tx + o.w - 1));
             const ownerTy = (o.anchorTy ?? (o.ty + o.h - 1));
-            if (
-              (o.layerRole === "STRUCTURE" || (o.kind ?? "ROOF") === "ROOF")
-              && isOwnerTileInPlayerWedge(ownerTx, ownerTy)
-              && o.z > playerOcclusionZ + 0.01
-            ) {
+            if ((o.layerRole === "STRUCTURE" || (o.kind ?? "ROOF") === "ROOF") && isOwnerTileInPlayerWedge(ownerTx, ownerTy)) {
               for (let fy = 0; fy < o.h; fy++) {
                 for (let fx = 0; fx < o.w; fx++) {
                   const tx = o.tx + fx;
@@ -3254,13 +3142,14 @@ export async function renderSystem(
           };
           addToSlice(slice, overlayKey, () => {
             const sctx = structureLayerScratchCtx;
+            const isStructureish = overlayKey.kindOrder === KindOrder.STRUCTURE || overlayKey.kindOrder === KindOrder.OVERLAY;
+
             // Owner tile for overlays is their anchor tile (used for slice/placement)
             const ownerTx = (o.anchorTx ?? (o.tx + o.w - 1));
             const ownerTy = (o.anchorTy ?? (o.ty + o.h - 1));
             const ownerInWedge = isOwnerTileInPlayerWedge(ownerTx, ownerTy);
-            const abovePlayer = o.z > playerOcclusionZ + 0.01;
 
-            if (sctx && ownerInWedge && abovePlayer) {
+            if (isStructureish && sctx && ownerInWedge) {
               hasStructureLayerDraw = true;
               drawRenderPieceTo(sctx, draw);
             } else drawRenderPiece(draw);
@@ -3271,8 +3160,8 @@ export async function renderSystem(
             const ownerTx = (o.anchorTx ?? (o.tx + o.w - 1));
             const ownerTy = (o.anchorTy ?? (o.ty + o.h - 1));
             if (o.layerRole === "STRUCTURE" || (o.kind ?? "ROOF") === "ROOF") {
-              addRenderPieceMask(draw, o.z);
-              if (isOwnerTileInPlayerWedge(ownerTx, ownerTy) && o.z > playerOcclusionZ + 0.01) {
+              addRenderPieceMask(draw);
+              if (isOwnerTileInPlayerWedge(ownerTx, ownerTy)) {
                 addSouthRenderPieceMask(draw);
                 for (let fy = 0; fy < o.h; fy++) {
                   for (let fx = 0; fx < o.w; fx++) {
@@ -3603,19 +3492,15 @@ export async function renderSystem(
   }
 
   const occlusionEnabled = debugFlags.lightingOcclusionEnabled && w.lighting.occlusionEnabled;
-  const useHeightBandedLightingOcclusion = occlusionEnabled
-    && debugFlags.lightingHeightBandedOcclusion
-    && !debugFlags.lightingUseLegacyGlobalOcclusion;
-  const useLegacyGlobalLightingOcclusion = occlusionEnabled && !useHeightBandedLightingOcclusion;
   const occlusionHasContent = (
     buildingMaskDraws.length > 0
     || entityShadowMaskParams.length > 0
     || southBuildingMaskDraws.length > 0
   );
-  const inverseMaskLayer = (useLegacyGlobalLightingOcclusion || debugFlags.showBuildingMaskDebug)
+  const inverseMaskLayer = occlusionEnabled
     ? (occlusionHasContent ? ensureLightingMaskCanvas(w.lighting, "INVERSE_BUILDING", devW, devH) : null)
     : null;
-  if (inverseMaskLayer && (useLegacyGlobalLightingOcclusion || debugFlags.showBuildingMaskDebug)) {
+  if (inverseMaskLayer && occlusionEnabled) {
     const inverseCtx = inverseMaskLayer.ctx;
     const southBuildingMaskLayer = ensureScratchMaskCanvas(
       southBuildingMaskScratchCanvas,
@@ -3773,7 +3658,6 @@ export async function renderSystem(
 
   const lightDefs = compiledMap.lightDefs;
   const projectedLights: ProjectedLight[] = [];
-  const lightsByHeight = new Map<number, number>();
   const lightSafeOffsetX = safeOffsetX * dpr;
   const lightSafeOffsetY = safeOffsetY * dpr;
   for (let i = 0; i < lightDefs.length; i++) {
@@ -3783,12 +3667,6 @@ export async function renderSystem(
     if (!isTileInRenderRadius(ltx, lty)) continue;
 
     const isStreetLamp = (ld.shape ?? "RADIAL") === "STREET_LAMP";
-    const supportZ = ld.supportHeightUnits ?? tileHAtWorld(ld.worldX, ld.worldY);
-    // Occlusion band is based on the light's support surface (gameplay height),
-    // while screen projection still uses visual heightUnits (head offset, etc).
-    const lightZ = isStreetLamp
-      ? Math.floor(supportZ + 1e-3)
-      : Math.floor(ld.heightUnits + 1e-3);
     const occlusion = isStreetLamp
       ? ((debugFlags.lightingOcclusionEnabled && w.lighting.occlusionEnabled) ? 1 : 0)
       : 0;
@@ -3803,7 +3681,6 @@ export async function renderSystem(
       sx,
       sy,
       poolSy,
-      lightZ,
       radiusPx: ld.radiusPx * s,
       intensity: ld.intensity,
       occlusion,
@@ -3819,104 +3696,9 @@ export async function renderSystem(
         ? { dirRad: ld.cone.dirRad, angleRad: ld.cone.angleRad, lengthPx: ld.cone.lengthPx * s }
         : undefined,
     });
-    lightsByHeight.set(lightZ, (lightsByHeight.get(lightZ) ?? 0) + 1);
   }
 
-  const activeHeightsRaw = Array.from(lightsByHeight.keys()).sort((a, b) => a - b);
-  const preferredHeights = LIT_HEIGHTS_DEFAULT.filter((h) => lightsByHeight.has(h));
-  const activeLitHeights = (
-    preferredHeights.length > 0 ? preferredHeights : activeHeightsRaw
-  ).slice(0, MAX_LIT_HEIGHTS);
-
-  const heightOcclusionMasks = new Map<number, HTMLCanvasElement>();
-  if (useHeightBandedLightingOcclusion && occlusionHasContent && activeLitHeights.length > 0) {
-    for (let hi = 0; hi < activeLitHeights.length; hi++) {
-      const L = activeLitHeights[hi];
-      let rec = occlusionMaskByHeightCache.get(L);
-      if (!rec) {
-        const canvas = document.createElement("canvas");
-        const c2d = canvas.getContext("2d");
-        if (!c2d) continue;
-        rec = { canvas, ctx: c2d };
-        occlusionMaskByHeightCache.set(L, rec);
-        if (occlusionMaskByHeightCache.size > 16) {
-          const firstKey = occlusionMaskByHeightCache.keys().next().value as number | undefined;
-          if (firstKey !== undefined) occlusionMaskByHeightCache.delete(firstKey);
-        }
-      }
-      if (rec.canvas.width !== devW) rec.canvas.width = devW;
-      if (rec.canvas.height !== devH) rec.canvas.height = devH;
-      const maskCtx = rec.ctx;
-      configurePixelPerfect(maskCtx);
-      maskCtx.setTransform(1, 0, 0, 1, 0, 0);
-      maskCtx.globalCompositeOperation = "source-over";
-      maskCtx.clearRect(0, 0, devW, devH);
-      maskCtx.save();
-      maskCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
-      maskCtx.translate(camTx, camTy);
-      for (let oi = 0; oi < occluderEntries.length; oi++) {
-        const entry = occluderEntries[oi];
-        if (!occludesHeight(entry.minZ, L)) continue;
-        entry.draw(maskCtx);
-      }
-      maskCtx.restore();
-      heightOcclusionMasks.set(L, rec.canvas);
-    }
-    if (southBuildingMaskDraws.length > 0) {
-      const holeLayer = ensureScratchMaskCanvas(
-        lightingOccluderHoleScratchCanvas,
-        lightingOccluderHoleScratchCtx,
-        devW,
-        devH,
-      );
-      if (holeLayer) {
-        lightingOccluderHoleScratchCanvas = holeLayer.canvas;
-        lightingOccluderHoleScratchCtx = holeLayer.ctx;
-        const holeCtx = holeLayer.ctx;
-        holeCtx.setTransform(1, 0, 0, 1, 0, 0);
-        holeCtx.globalCompositeOperation = "source-over";
-        holeCtx.clearRect(0, 0, devW, devH);
-        holeCtx.save();
-        configurePixelPerfect(holeCtx);
-        holeCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
-        holeCtx.translate(camTx, camTy);
-        for (let i = 0; i < southBuildingMaskDraws.length; i++) southBuildingMaskDraws[i](holeCtx);
-        holeCtx.restore();
-
-        const pzAbs = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
-        const feet = getEntityFeetPos(px, py, pzAbs);
-        const sp = worldToScreenPx(feet.screenX, feet.screenY);
-        const playerSx = sp.x;
-        const playerSy = sp.y;
-        const radiusWorld = 150;
-        const radiusPx = radiusWorld * s;
-        const outerR = radiusPx * 1.35;
-        const innerR = Math.max(1, outerR * 0.72);
-        holeCtx.globalCompositeOperation = "destination-in";
-        const g = holeCtx.createRadialGradient(playerSx, playerSy, innerR, playerSx, playerSy, outerR);
-        g.addColorStop(0.0, "rgba(0,0,0,1)");
-        g.addColorStop(1.0, "rgba(0,0,0,0)");
-        holeCtx.fillStyle = g;
-        holeCtx.beginPath();
-        holeCtx.arc(playerSx, playerSy, outerR, 0, Math.PI * 2);
-        holeCtx.fill();
-        holeCtx.globalCompositeOperation = "source-over";
-
-        for (let hi = 0; hi < activeLitHeights.length; hi++) {
-          const L = activeLitHeights[hi];
-          if (L <= playerOcclusionZ + 0.01) continue;
-          const occlCtx = occlusionMaskByHeightCache.get(L)?.ctx;
-          if (!occlCtx) continue;
-          occlCtx.setTransform(1, 0, 0, 1, 0, 0);
-          occlCtx.globalCompositeOperation = "destination-out";
-          occlCtx.drawImage(holeLayer.canvas, 0, 0);
-          occlCtx.globalCompositeOperation = "source-over";
-        }
-      }
-    }
-  }
-
-  if (inverseMaskLayer && useLegacyGlobalLightingOcclusion && occlusionHasContent) {
+  if (inverseMaskLayer && occlusionEnabled && occlusionHasContent) {
       buildCombinedOcclusionMask(
         w.lighting,
         inverseMaskLayer.canvas,
@@ -3931,15 +3713,7 @@ export async function renderSystem(
 
   // PASS 8: final screen-space lighting
   setRenderPerfDrawTag("lighting");
-  renderLighting(
-    ctx,
-    w.lighting,
-    projectedLights,
-    devW,
-    devH,
-    w.time ?? 0,
-    useHeightBandedLightingOcclusion ? heightOcclusionMasks : null,
-  );
+  renderLighting(ctx, w.lighting, projectedLights, devW, devH, w.time ?? 0);
   setRenderPerfDrawTag(null);
   // Building-mask debug overlay draw disabled to avoid full-canvas mask artifacts.
 
