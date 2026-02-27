@@ -1066,6 +1066,8 @@ export function createGame(args: CreateGameArgs) {
 
     w.prStartX = [];
     w.prStartY = [];
+    w.prPlayerFireX = [];
+    w.prPlayerFireY = [];
     w.prMaxDist = [];
     w.prLastHitEnemy = [];
     w.prLastHitCd = [];

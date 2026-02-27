@@ -1505,6 +1505,15 @@ export async function renderSystem(
 
   const minSum = minTx + minTy;
   const maxSum = maxTx + maxTy;
+  const playerTxForProjectileCull = Math.floor(px / KENNEY_TILE_WORLD);
+  const playerTyForProjectileCull = Math.floor(py / KENNEY_TILE_WORLD);
+  const projectileTileRenderRadius =
+    Math.max(
+      Math.abs(baseCulling.tileBounds.minTx - playerTxForProjectileCull),
+      Math.abs(baseCulling.tileBounds.maxTx - playerTxForProjectileCull),
+      Math.abs(baseCulling.tileBounds.minTy - playerTyForProjectileCull),
+      Math.abs(baseCulling.tileBounds.maxTy - playerTyForProjectileCull),
+    ) + 2;
   const activeH = w.activeFloorH ?? 0;
   const compiledMap = getActiveCompiledMap();
 
@@ -2507,9 +2516,17 @@ export async function renderSystem(
       const pp = getProjectileWorld(w, i, KENNEY_TILE_WORLD);
       const ptx = Math.floor(pp.wx / T);
       const pty = Math.floor(pp.wy / T);
-      // Projectiles visually pop early at strict radius due to fast motion and sprite footprint.
-      // Keep a small pad so projectile draw distance matches the tile field better.
-      if (!isTileInRenderRadiusPadded(ptx, pty, 2)) continue;
+      const firePlayerX = w.prPlayerFireX?.[i] ?? px;
+      const firePlayerY = w.prPlayerFireY?.[i] ?? py;
+      const firePlayerTx = Math.floor(firePlayerX / T);
+      const firePlayerTy = Math.floor(firePlayerY / T);
+      const inCurrentPlayerRange =
+        Math.abs(ptx - playerTxForProjectileCull) <= projectileTileRenderRadius
+        && Math.abs(pty - playerTyForProjectileCull) <= projectileTileRenderRadius;
+      const inFirePlayerRange =
+        Math.abs(ptx - firePlayerTx) <= projectileTileRenderRadius
+        && Math.abs(pty - firePlayerTy) <= projectileTileRenderRadius;
+      if (!inCurrentPlayerRange && !inFirePlayerRange) continue;
       const baseH = tileHAtWorld(pp.wx, pp.wy);
       const pzAbs = (w.prZVisual?.[i] ?? w.prZ?.[i] ?? baseH) || 0;
       const support = getSupportSurfaceAt(pp.wx, pp.wy, compiledMap);

@@ -186,6 +186,10 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
 
     w.prStartX.push(wx);
     w.prStartY.push(wy);
+    const firePlayerX = (w.pgxi + w.pgox) * KENNEY_TILE_WORLD;
+    const firePlayerY = (w.pgyi + w.pgoy) * KENNEY_TILE_WORLD;
+    w.prPlayerFireX.push(firePlayerX);
+    w.prPlayerFireY.push(firePlayerY);
     w.prMaxDist.push(a.maxDist ?? 0);
 
     // static target + explosion config

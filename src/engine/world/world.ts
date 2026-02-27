@@ -441,6 +441,8 @@ export type World = {
 
   prStartX: number[];
   prStartY: number[];
+  prPlayerFireX: number[];
+  prPlayerFireY: number[];
   prMaxDist: number[];
 
   // Anti-multi-hit guard
@@ -840,6 +842,8 @@ export function createWorld(args: CreateWorldArgs): World {
 
     prStartX: [],
     prStartY: [],
+    prPlayerFireX: [],
+    prPlayerFireY: [],
     prMaxDist: [],
 
     prLastHitEnemy: [],
