@@ -14,7 +14,7 @@ const settings: AudioSettings = {
   musicVolume: 0.6,
   musicMuted: false,
   sfxVolume: 1,
-  sfxMuted: true,
+  sfxMuted: false,
 };
 
 function clamp01(v: number): number {
@@ -74,6 +74,6 @@ export function resetAudioSettingsForTests(): void {
   settings.musicVolume = 0.6;
   settings.musicMuted = false;
   settings.sfxVolume = 1;
-  settings.sfxMuted = true;
+  settings.sfxMuted = false;
   applyMusic();
 }

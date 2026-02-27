@@ -22,8 +22,6 @@ import { mountPauseMenu } from "./ui/pause/pauseMenu";
 import { togglePause } from "./game/app/pauseController";
 
 function installDevSettingsUi(): void {
-  if (!import.meta.env.DEV) return;
-
   const root = document.createElement("div");
   root.style.position = "fixed";
   root.style.top = "12px";
