@@ -70,6 +70,7 @@ export type LightFlicker =
 export type LightDef = {
     worldX: number;
     worldY: number;
+    supportHeightUnits?: number;
     heightUnits: number;
     poolHeightOffsetUnits?: number;
     screenOffsetPx?: { x: number; y: number };
@@ -676,6 +677,7 @@ export function compileKenneyMapFromTable(
         return {
             worldX: (light.x + originTx + (isStreetLampSemantic ? 0 : 0.5)) * KENNEY_TILE_WORLD,
             worldY: (light.y + originTy + (isStreetLampSemantic ? 0 : 0.5)) * KENNEY_TILE_WORLD,
+            supportHeightUnits: light.heightUnits ?? 0,
             heightUnits: light.heightUnits ?? 0,
             poolHeightOffsetUnits: light.poolHeightOffsetUnits ?? 0,
             intensity: semanticPreset?.intensity ?? light.intensity,
@@ -2386,7 +2388,8 @@ export function compileKenneyMapFromTable(
                 lightDefs.push({
                     worldX: ((stamp.x | 0) + originTx) * KENNEY_TILE_WORLD,
                     worldY: ((stamp.y | 0) + originTy) * KENNEY_TILE_WORLD,
-                    heightUnits: (prop.anchorLiftUnits ?? 0) + lightHeightOffsetUnits,
+                    supportHeightUnits: zBase,
+                    heightUnits: zBase + (prop.anchorLiftUnits ?? 0) + lightHeightOffsetUnits,
                     poolHeightOffsetUnits: prop.lightPoolHeightOffsetUnits ?? -lightHeightOffsetUnits,
                     screenOffsetPx: prop.lightScreenOffsetPx ?? { x: 0, y: 0 },
                     intensity: 0.85,

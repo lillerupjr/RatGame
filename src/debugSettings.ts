@@ -33,6 +33,8 @@ export type DebugSettings = {
   triggers: boolean;
   debugRoadSemantic: boolean;
   disableLightingOcclusion: boolean;
+  lightingHeightBandedOcclusion: boolean;
+  lightingUseLegacyGlobalOcclusion: boolean;
   lightingMasks: boolean;
   lightingMaskDebugMode: LightingMaskDebugMode;
   mapOverlaysDisabled: boolean;
@@ -88,6 +90,8 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "triggers", label: "triggers" },
   { key: "debugRoadSemantic", label: "debugRoadSemantic" },
   { key: "disableLightingOcclusion", label: "disableLightingOcclusion" },
+  { key: "lightingHeightBandedOcclusion", label: "lightingHeightBandedOcclusion" },
+  { key: "lightingUseLegacyGlobalOcclusion", label: "lightingUseLegacyGlobalOcclusion" },
   { key: "lightingMasks", label: "lightingMasks" },
   { key: "mapOverlaysDisabled", label: "mapOverlaysDisabled" },
   { key: "rampFaces", label: "rampFaces" },
@@ -112,6 +116,8 @@ export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   triggers: false,
   debugRoadSemantic: false,
   disableLightingOcclusion: false,
+  lightingHeightBandedOcclusion: true,
+  lightingUseLegacyGlobalOcclusion: false,
   lightingMasks: false,
   lightingMaskDebugMode: "OFF",
   mapOverlaysDisabled: false,
@@ -153,6 +159,8 @@ export type ResolvedDebugFlags = {
   showStructureSlices: boolean;
   showMapOverlays: boolean;
   lightingOcclusionEnabled: boolean;
+  lightingHeightBandedOcclusion: boolean;
+  lightingUseLegacyGlobalOcclusion: boolean;
   buildingMaskDebugView: LightingMaskDebugMode;
   showBuildingMaskDebug: boolean;
 };
@@ -175,6 +183,8 @@ export function resolveDebugFlags(debug: DebugSettings): ResolvedDebugFlags {
     showStructureSlices: debug.slices || debug.spriteBounds,
     showMapOverlays: !debug.mapOverlaysDisabled,
     lightingOcclusionEnabled: !debug.disableLightingOcclusion,
+    lightingHeightBandedOcclusion: debug.lightingHeightBandedOcclusion,
+    lightingUseLegacyGlobalOcclusion: debug.lightingUseLegacyGlobalOcclusion,
     buildingMaskDebugView,
     showBuildingMaskDebug: buildingMaskDebugView !== "OFF",
   };
