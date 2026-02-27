@@ -8,6 +8,8 @@ import type { MarkingPiece, RoadContext, RoadMarkingInputs } from "./types";
 
 const EDGE_LINE_INSET_PX = 12;
 const EDGE_LINE_INSET_TILES = EDGE_LINE_INSET_PX / KENNEY_TILE_WORLD;
+const ONE_WAY_HIGHWAY_WIDTH_TILES = 7;
+const ONE_WAY_HIGHWAY_LANES = 6;
 
 export function generatePrimaryMarkings(context: RoadContext, inputs: RoadMarkingInputs): MarkingPiece[] {
   const out: MarkingPiece[] = [];
@@ -108,6 +110,28 @@ export function generatePrimaryMarkings(context: RoadContext, inputs: RoadMarkin
         edgeSeen.add(dbgKey);
         push(tx, ty, edgeVariant, rot, `edge_${bi}_${i}_${edgeIndex}`, sampleTx, sampleTy);
       };
+      if (band.roadW === ONE_WAY_HIGHWAY_WIDTH_TILES) {
+        // 7-wide one-way highway treatment: 6 lanes in one direction.
+        // Draw two edge lines and 5 internal separators, no center opposing divider.
+        emitEdge(edgeOffset, 0);
+        emitEdge(-edgeOffset, 1);
+        const interiorSpan = edgeOffset * 2;
+        const laneStep = interiorSpan / ONE_WAY_HIGHWAY_LANES;
+        let separatorOffset = -edgeOffset + laneStep;
+        for (let lane = 1; lane < ONE_WAY_HIGHWAY_LANES; lane++) {
+          push(
+            sliceCenterX + (perpX * separatorOffset),
+            sliceCenterY + (perpY * separatorOffset),
+            dividerVariant,
+            rot,
+            `hwy8_sep_${bi}_${i}_${lane}`,
+            sampleTx,
+            sampleTy,
+          );
+          separatorOffset += laneStep;
+        }
+        continue;
+      }
       if (preset.edge) {
         emitEdge(edgeOffset, 0);
         emitEdge(-edgeOffset, 1);

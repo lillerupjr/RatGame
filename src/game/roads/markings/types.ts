@@ -12,6 +12,11 @@ export type RoadBand = {
   orient: "H" | "V";
   roadW: number;
   roadL: number;
+  roadZ?: number;
+  roadDir?: "N" | "E" | "S" | "W";
+  semantic?: string;
+  startHeight?: number;
+  targetHeight?: number;
 };
 
 export interface RoadContext {

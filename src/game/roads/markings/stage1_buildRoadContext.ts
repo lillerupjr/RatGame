@@ -7,7 +7,7 @@ import {
 } from "./types";
 
 export function buildRoadContext(inputs: RoadMarkingInputs): RoadContext {
-  const { w, h, originTx, originTy, isRoadFromSemantics, roadBands } = inputs;
+  const { w, h, originTx, originTy, isRoadFromSemantics, roadBands, getTileZAt } = inputs;
   const total = w * h;
   const isRoad = new Uint8Array(total);
   const axis = new Uint8Array(total);
@@ -32,10 +32,17 @@ export function buildRoadContext(inputs: RoadMarkingInputs): RoadContext {
     for (let tx = originTx; tx < originTx + w; tx++) {
       const i = indexOf(tx, ty);
       if (isRoad[i] !== 1) continue;
-      const n = inBounds(tx, ty - 1) && isRoad[indexOf(tx, ty - 1)] === 1;
-      const e = inBounds(tx + 1, ty) && isRoad[indexOf(tx + 1, ty)] === 1;
-      const s = inBounds(tx, ty + 1) && isRoad[indexOf(tx, ty + 1)] === 1;
-      const wv = inBounds(tx - 1, ty) && isRoad[indexOf(tx - 1, ty)] === 1;
+      const z = getTileZAt(tx, ty) | 0;
+      const sameHeightRoadAt = (nx: number, ny: number): boolean => {
+        if (!inBounds(nx, ny)) return false;
+        const ni = indexOf(nx, ny);
+        if (isRoad[ni] !== 1) return false;
+        return (getTileZAt(nx, ny) | 0) === z;
+      };
+      const n = sameHeightRoadAt(tx, ty - 1);
+      const e = sameHeightRoadAt(tx + 1, ty);
+      const s = sameHeightRoadAt(tx, ty + 1);
+      const wv = sameHeightRoadAt(tx - 1, ty);
       neighborsMask[i] = (n ? 1 : 0) | (e ? 2 : 0) | (s ? 4 : 0) | (wv ? 8 : 0);
 
       const ew = (e ? 1 : 0) + (wv ? 1 : 0);

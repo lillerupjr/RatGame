@@ -260,19 +260,63 @@ export type CompiledKenneyMap = {
     roadIntersectionBoundsWorld: Array<{ minX: number; maxX: number; minY: number; maxY: number }>;
     roadIntersectionSeedsWorld: Array<{ tx: number; ty: number }>;
     roadIntersectionClusterCentersWorld: Array<{ worldX: number; worldY: number }>;
+    roadSemanticRects: Array<{
+        x: number;
+        y: number;
+        z: number;
+        w: number;
+        h: number;
+        semantic?: string;
+        dir?: "N" | "E" | "S" | "W";
+        startHeight?: number;
+        targetHeight?: number;
+    }>;
     isRoadWorld(x: number, y: number): boolean;
 };
 
-type RoadRect = { x: number; y: number; w: number; h: number };
-type AuthRoadRect = RoadRect & { orient: "H" | "V" };
+type RoadRect = {
+    x: number;
+    y: number;
+    z: number;
+    w: number;
+    h: number;
+    semantic?: string;
+    dir?: "N" | "E" | "S" | "W";
+    startHeight?: number;
+    targetHeight?: number;
+};
+type AuthRoadRect = RoadRect & { orient: "H" | "V"; roadDir?: "N" | "E" | "S" | "W" };
+
+function resolveRoadDirFromSemantic(semantic?: string, dir?: "N" | "E" | "S" | "W"): "N" | "E" | "S" | "W" | undefined {
+    const fromDir = dir?.toUpperCase();
+    if (fromDir === "N" || fromDir === "E" || fromDir === "S" || fromDir === "W") return fromDir;
+    if (!semantic) return undefined;
+    const s = semantic.trim().toLowerCase();
+    if (!s) return undefined;
+    if (s === "n" || s.includes("north")) return "N";
+    if (s === "e" || s.includes("east")) return "E";
+    if (s === "s" || s.includes("south")) return "S";
+    if (s === "w" || s.includes("west")) return "W";
+    if (s.endsWith("_n") || s.endsWith(":n")) return "N";
+    if (s.endsWith("_e") || s.endsWith(":e")) return "E";
+    if (s.endsWith("_s") || s.endsWith(":s")) return "S";
+    if (s.endsWith("_w") || s.endsWith(":w")) return "W";
+    return undefined;
+}
 
 function mergeRoadRectsPreserveOrient(rects: AuthRoadRect[]): AuthRoadRect[] {
     const out = rects.map((r) => ({
         x: r.x | 0,
         y: r.y | 0,
+        z: r.z | 0,
         w: Math.max(1, r.w | 0),
         h: Math.max(1, r.h | 0),
         orient: r.orient,
+        semantic: r.semantic,
+        dir: r.dir,
+        roadDir: r.roadDir,
+        startHeight: r.startHeight,
+        targetHeight: r.targetHeight,
     }));
     let changed = true;
     while (changed) {
@@ -282,11 +326,28 @@ function mergeRoadRectsPreserveOrient(rects: AuthRoadRect[]): AuthRoadRect[] {
                 const a = out[i];
                 const b = out[j];
                 if (a.orient !== b.orient) continue;
+                if ((a.roadDir ?? "") !== (b.roadDir ?? "")) continue;
+                if ((a.semantic ?? "") !== (b.semantic ?? "")) continue;
+                if ((a.z | 0) !== (b.z | 0)) continue;
+                if ((a.startHeight ?? 0) !== (b.startHeight ?? 0)) continue;
+                if ((a.targetHeight ?? 0) !== (b.targetHeight ?? 0)) continue;
                 if (a.orient === "H") {
                     if (a.x !== b.x || a.w !== b.w) continue;
                     if (a.y + a.h !== b.y && b.y + b.h !== a.y) continue;
                     const y0 = Math.min(a.y, b.y);
-                    out[i] = { x: a.x, y: y0, w: a.w, h: a.h + b.h, orient: "H" };
+                    out[i] = {
+                        x: a.x,
+                        y: y0,
+                        z: a.z | 0,
+                        w: a.w,
+                        h: a.h + b.h,
+                        orient: "H",
+                        semantic: a.semantic,
+                        dir: a.dir,
+                        roadDir: a.roadDir,
+                        startHeight: a.startHeight,
+                        targetHeight: a.targetHeight,
+                    };
                     out.splice(j, 1);
                     changed = true;
                     break outer;
@@ -294,7 +355,19 @@ function mergeRoadRectsPreserveOrient(rects: AuthRoadRect[]): AuthRoadRect[] {
                 if (a.y !== b.y || a.h !== b.h) continue;
                 if (a.x + a.w !== b.x && b.x + b.w !== a.x) continue;
                 const x0 = Math.min(a.x, b.x);
-                out[i] = { x: x0, y: a.y, w: a.w + b.w, h: a.h, orient: "V" };
+                out[i] = {
+                    x: x0,
+                    y: a.y,
+                    z: a.z | 0,
+                    w: a.w + b.w,
+                    h: a.h,
+                    orient: "V",
+                    semantic: a.semantic,
+                    dir: a.dir,
+                    roadDir: a.roadDir,
+                    startHeight: a.startHeight,
+                    targetHeight: a.targetHeight,
+                };
                 out.splice(j, 1);
                 changed = true;
                 break outer;
@@ -633,6 +706,55 @@ export function compileKenneyMapFromTable(
         }
     }
 
+    const isRampSemantic = (semantic?: string): boolean => {
+        if (!semantic) return false;
+        const s = semantic.trim().toLowerCase();
+        return s === "ramp" || s.startsWith("ramp_");
+    };
+    if (def.roadSemanticRects && def.roadSemanticRects.length > 0) {
+        for (let i = 0; i < def.roadSemanticRects.length; i++) {
+            const rect = def.roadSemanticRects[i];
+            if (!isRampSemantic(rect.semantic)) continue;
+            const dir = rect.dir;
+            if (dir !== "N" && dir !== "E" && dir !== "S" && dir !== "W") continue;
+            const minX = (rect.x | 0) + originTx;
+            const minY = (rect.y | 0) + originTy;
+            const w = Math.max(1, (rect.w ?? 1) | 0);
+            const h = Math.max(1, (rect.h ?? 1) | 0);
+            const maxX = minX + w - 1;
+            const maxY = minY + h - 1;
+            const axisLen = dir === "N" || dir === "S" ? h : w;
+            const sampleStartX = dir === "E" ? minX : dir === "W" ? maxX : minX;
+            const sampleStartY = dir === "S" ? minY : dir === "N" ? maxY : minY;
+            const sampledStart = placed.get(`${sampleStartX},${sampleStartY}`)?.h ?? 0;
+            const startH = Number.isFinite(rect.startHeight) ? (rect.startHeight as number) : sampledStart;
+            const targetH = Number.isFinite(rect.targetHeight) ? (rect.targetHeight as number) : startH;
+            const deltaH = targetH - startH;
+
+            for (let y = minY; y <= maxY; y++) {
+                for (let x = minX; x <= maxX; x++) {
+                    const tile = placed.get(`${x},${y}`);
+                    if (!tile || tile.kind === "VOID") continue;
+                    const axisIndex = (() => {
+                        if (dir === "N") return maxY - y;
+                        if (dir === "S") return y - minY;
+                        if (dir === "E") return x - minX;
+                        return maxX - x;
+                    })();
+                    const stepped = axisLen <= 0
+                        ? targetH
+                        : (() => {
+                            // Quantize monotonically across tile slots to avoid mid-ramp 2-step jumps.
+                            const numer = deltaH * (axisIndex + 1);
+                            if (deltaH >= 0) return startH + Math.floor(numer / axisLen);
+                            return startH + Math.ceil(numer / axisLen);
+                        })();
+                    tile.h = stepped;
+                }
+            }
+        }
+    }
+
     // Group contiguous stair tiles into staircase runs (for render ordering).
     // Group rule: 4-neighbor connected components with matching dir.
     // Step index is based on height within the group (low->high).
@@ -715,6 +837,7 @@ export function compileKenneyMapFromTable(
     const roadStopDirWorld = new Uint8Array(worldW * worldH);
     const roadIntersectionCenterTilesWorld: Array<{ tx: number; ty: number }> = [];
     const roadIntersectionBoundsWorld: Array<{ minX: number; maxX: number; minY: number; maxY: number }> = [];
+    const roadIntersectionHeightsWorld: number[] = [];
     const roadIntersectionSeedsWorld: Array<{ tx: number; ty: number }> = [];
     const roadIntersectionClusterCentersWorld: Array<{ worldX: number; worldY: number }> = [];
     const ROAD_DIR_NONE = 0;
@@ -732,6 +855,17 @@ export function compileKenneyMapFromTable(
     const worldInBounds = (txWorld: number, tyWorld: number): boolean => {
         return txWorld >= originTx && txWorld <= worldMaxTx && tyWorld >= originTy && tyWorld <= worldMaxTy;
     };
+    const centerHByZ = new Map<number, Uint8Array>();
+    const centerVByZ = new Map<number, Uint8Array>();
+    const roadAreaByZ = new Map<number, Uint8Array>();
+    const layerMask = (m: Map<number, Uint8Array>, z: number): Uint8Array => {
+        const key = z | 0;
+        const hit = m.get(key);
+        if (hit) return hit;
+        const created = new Uint8Array(worldW * worldH);
+        m.set(key, created);
+        return created;
+    };
     const authRoadRects = (() => {
         const authoredRects = def.roadSemanticRects && def.roadSemanticRects.length > 0
             ? def.roadSemanticRects
@@ -741,7 +875,19 @@ export function compileKenneyMapFromTable(
                 const w = Math.max(1, (r.w ?? 1) | 0);
                 const h = Math.max(1, (r.h ?? 1) | 0);
                 const orient: "H" | "V" = w >= h ? "H" : "V";
-                return { x: r.x | 0, y: r.y | 0, w, h, orient };
+                return {
+                    x: r.x | 0,
+                    y: r.y | 0,
+                    z: (r.z ?? 0) | 0,
+                    w,
+                    h,
+                    orient,
+                    semantic: r.semantic,
+                    dir: r.dir,
+                    roadDir: resolveRoadDirFromSemantic(r.semantic, r.dir),
+                    startHeight: r.startHeight,
+                    targetHeight: r.targetHeight,
+                };
             });
         }
         if (!def.stamps || def.stamps.length === 0) return [];
@@ -755,14 +901,33 @@ export function compileKenneyMapFromTable(
             out.push({
                 x: s.x | 0,
                 y: s.y | 0,
+                z: (s.z ?? 0) | 0,
                 w,
                 h,
                 orient,
+                semantic: s.semantic,
+                roadDir: resolveRoadDirFromSemantic(s.semantic, (() => {
+                    const d = s.dir?.toUpperCase();
+                    return d === "N" || d === "E" || d === "S" || d === "W" ? d : undefined;
+                })()),
+                startHeight: s.startHeight,
+                targetHeight: s.targetHeight,
             });
         }
         return out;
     })();
     const mergedRoadRects = mergeRoadRectsPreserveOrient(authRoadRects);
+    const roadSemanticRectsCompiled = (def.roadSemanticRects ?? []).map((r) => ({
+        x: (r.x | 0) + originTx,
+        y: (r.y | 0) + originTy,
+        z: (r.z ?? 0) | 0,
+        w: Math.max(1, (r.w ?? 1) | 0),
+        h: Math.max(1, (r.h ?? 1) | 0),
+        semantic: r.semantic,
+        dir: r.dir,
+        startHeight: r.startHeight,
+        targetHeight: r.targetHeight,
+    }));
     const roadBands: RoadBand[] = mergedRoadRects.map((r) => {
         const x0 = (r.x | 0) + originTx;
         const y0 = (r.y | 0) + originTy;
@@ -776,33 +941,71 @@ export function compileKenneyMapFromTable(
             orient: r.orient,
             roadW: r.orient === "H" ? h : w,
             roadL: r.orient === "H" ? w : h,
+            roadZ: (r.z ?? 0) | 0,
+            roadDir: r.roadDir,
+            semantic: r.semantic,
+            startHeight: r.startHeight,
+            targetHeight: r.targetHeight,
         };
     });
-    const markRoadAreaWorld = (txWorld: number, tyWorld: number, width: number) => {
+    const isRampBand = (band: RoadBand): boolean => {
+        const s = band.semantic?.trim().toLowerCase();
+        return !!s && (s === "ramp" || s.startsWith("ramp_"));
+    };
+    const roadBandHeightAt = (band: RoadBand, txWorld: number, tyWorld: number): number => {
+        if (!isRampBand(band)) return (band.roadZ ?? 0) | 0;
+        const dir = band.roadDir;
+        const rampStart = band.startHeight;
+        const rampTarget = band.targetHeight;
+        if (!Number.isFinite(rampStart) || !Number.isFinite(rampTarget)) return (band.roadZ ?? 0) | 0;
+        if (dir !== "N" && dir !== "E" && dir !== "S" && dir !== "W") return (band.roadZ ?? 0) | 0;
+        const startH = rampStart as number;
+        const targetH = rampTarget as number;
+        const axisLen = dir === "N" || dir === "S"
+            ? (band.y1 - band.y0 + 1)
+            : (band.x1 - band.x0 + 1);
+        if (axisLen <= 0) return startH | 0;
+        const axisIndex = (() => {
+            if (dir === "N") return band.y1 - tyWorld;
+            if (dir === "S") return tyWorld - band.y0;
+            if (dir === "E") return txWorld - band.x0;
+            return band.x1 - txWorld;
+        })();
+        const deltaH = targetH - startH;
+        const numer = deltaH * (axisIndex + 1);
+        const stepped = deltaH >= 0
+            ? startH + Math.floor(numer / axisLen)
+            : startH + Math.ceil(numer / axisLen);
+        return stepped | 0;
+    };
+    const markRoadAreaWorld = (txWorld: number, tyWorld: number, width: number, z: number) => {
         if (!worldInBounds(txWorld, tyWorld)) return;
         const idx = worldIndex(txWorld, tyWorld);
         roadAreaMaskWorld[idx] = 1;
         const w = Math.max(0, Math.min(255, width | 0));
         if (w > roadAreaWidthWorld[idx]) roadAreaWidthWorld[idx] = w;
+        layerMask(roadAreaByZ, z)[idx] = 1;
     };
-    const markRoadCenterHWorld = (txWorld: number, tyWorld: number, width: number) => {
+    const markRoadCenterHWorld = (txWorld: number, tyWorld: number, width: number, z: number) => {
         if (!worldInBounds(txWorld, tyWorld)) return;
         const idx = worldIndex(txWorld, tyWorld);
         if (roadAreaMaskWorld[idx] !== 1) return;
         roadCenterMaskHWorld[idx] = 1;
         const w = Math.max(0, Math.min(255, width | 0));
         if (w > roadCenterWidthHWorld[idx]) roadCenterWidthHWorld[idx] = w;
+        layerMask(centerHByZ, z)[idx] = 1;
         roadCenterMaskWorld[idx] = (roadCenterMaskHWorld[idx] | roadCenterMaskVWorld[idx]) as 0 | 1;
         const mergedW = Math.max(roadCenterWidthHWorld[idx], roadCenterWidthVWorld[idx]) | 0;
         roadCenterWidthWorld[idx] = mergedW;
     };
-    const markRoadCenterVWorld = (txWorld: number, tyWorld: number, width: number) => {
+    const markRoadCenterVWorld = (txWorld: number, tyWorld: number, width: number, z: number) => {
         if (!worldInBounds(txWorld, tyWorld)) return;
         const idx = worldIndex(txWorld, tyWorld);
         if (roadAreaMaskWorld[idx] !== 1) return;
         roadCenterMaskVWorld[idx] = 1;
         const w = Math.max(0, Math.min(255, width | 0));
         if (w > roadCenterWidthVWorld[idx]) roadCenterWidthVWorld[idx] = w;
+        layerMask(centerVByZ, z)[idx] = 1;
         roadCenterMaskWorld[idx] = (roadCenterMaskHWorld[idx] | roadCenterMaskVWorld[idx]) as 0 | 1;
         const mergedW = Math.max(roadCenterWidthHWorld[idx], roadCenterWidthVWorld[idx]) | 0;
         roadCenterWidthWorld[idx] = mergedW;
@@ -816,7 +1019,7 @@ export function compileKenneyMapFromTable(
         const areaWidth = band.roadW;
         for (let dx = 0; dx < rw; dx++) {
             for (let dy = 0; dy < rh; dy++) {
-                markRoadAreaWorld(sx + dx, sy + dy, areaWidth);
+                markRoadAreaWorld(sx + dx, sy + dy, areaWidth, roadBandHeightAt(band, sx + dx, sy + dy));
             }
         }
         if (band.orient === "H") {
@@ -824,7 +1027,7 @@ export function compileKenneyMapFromTable(
             const y1 = sy + Math.floor(rh / 2);
             for (let yy = y0; yy <= y1; yy++) {
                 for (let xx = sx; xx <= band.x1; xx++) {
-                    markRoadCenterHWorld(xx, yy, rh);
+                    markRoadCenterHWorld(xx, yy, rh, roadBandHeightAt(band, xx, yy));
                 }
             }
         } else {
@@ -832,33 +1035,41 @@ export function compileKenneyMapFromTable(
             const x1 = sx + Math.floor(rw / 2);
             for (let xx = x0; xx <= x1; xx++) {
                 for (let yy = sy; yy <= band.y1; yy++) {
-                    markRoadCenterVWorld(xx, yy, rw);
+                    markRoadCenterVWorld(xx, yy, rw, roadBandHeightAt(band, xx, yy));
                 }
             }
         }
     }
-    const isOverlapAt = (x: number, y: number): boolean => {
-        if (!worldInBounds(x, y)) return false;
-        const i = worldIndex(x, y);
-        return roadCenterMaskHWorld[i] === 1 && roadCenterMaskVWorld[i] === 1;
-    };
-    {
+    const roadIntersectionMaskByZ = new Map<number, Uint8Array>();
+    const roadCrossingMaskByZ = new Map<number, Uint8Array>();
+    const roadCrossingDirByZ = new Map<number, Uint8Array>();
+    const roadStopMaskByZ = new Map<number, Uint8Array>();
+    const roadStopDirByZ = new Map<number, Uint8Array>();
+
+    const neighbors4 = [
+        { dx: -1, dy: 0 },
+        { dx: 1, dy: 0 },
+        { dx: 0, dy: -1 },
+        { dx: 0, dy: 1 },
+    ];
+    const centerHKeys = Array.from(centerHByZ.keys());
+    for (let zi = 0; zi < centerHKeys.length; zi++) {
+        const z = centerHKeys[zi] | 0;
+        const hMask = centerHByZ.get(z);
+        const vMask = centerVByZ.get(z);
+        if (!hMask || !vMask) continue;
+        const areaMask = roadAreaByZ.get(z);
+        if (!areaMask) continue;
+        const interMask = layerMask(roadIntersectionMaskByZ, z);
         const visitedOverlap = new Uint8Array(worldW * worldH);
         const qx: number[] = [];
         const qy: number[] = [];
-        const neighbors4 = [
-            { dx: -1, dy: 0 },
-            { dx: 1, dy: 0 },
-            { dx: 0, dy: -1 },
-            { dx: 0, dy: 1 },
-        ];
 
         for (let tyWorld = originTy; tyWorld <= worldMaxTy; tyWorld++) {
             for (let txWorld = originTx; txWorld <= worldMaxTx; txWorld++) {
                 const startIdx = worldIndex(txWorld, tyWorld);
-                if (!isOverlapAt(txWorld, tyWorld)) continue;
+                if (hMask[startIdx] !== 1 || vMask[startIdx] !== 1) continue;
                 if (visitedOverlap[startIdx] === 1) continue;
-
                 visitedOverlap[startIdx] = 1;
                 qx.length = 0;
                 qy.length = 0;
@@ -884,14 +1095,11 @@ export function compileKenneyMapFromTable(
                     if (cy < minY) minY = cy;
                     if (cy > maxY) maxY = cy;
 
-                    // Footprint axis widths:
-                    // X span (wH) comes from vertical-road band width.
-                    if (roadCenterMaskVWorld[ci] === 1) {
+                    if (vMask[ci] === 1) {
                         const w = roadCenterWidthVWorld[ci] | 0;
                         if (w > wH) wH = w;
                     }
-                    // Y span (wV) comes from horizontal-road band width.
-                    if (roadCenterMaskHWorld[ci] === 1) {
+                    if (hMask[ci] === 1) {
                         const w = roadCenterWidthHWorld[ci] | 0;
                         if (w > wV) wV = w;
                     }
@@ -899,8 +1107,9 @@ export function compileKenneyMapFromTable(
                     for (let ni = 0; ni < neighbors4.length; ni++) {
                         const nx = cx + neighbors4[ni].dx;
                         const ny = cy + neighbors4[ni].dy;
-                        if (!isOverlapAt(nx, ny)) continue;
+                        if (!worldInBounds(nx, ny)) continue;
                         const niIdx = worldIndex(nx, ny);
+                        if (hMask[niIdx] !== 1 || vMask[niIdx] !== 1) continue;
                         if (visitedOverlap[niIdx] === 1) continue;
                         visitedOverlap[niIdx] = 1;
                         qx.push(nx);
@@ -910,35 +1119,22 @@ export function compileKenneyMapFromTable(
 
                 wH = Math.max(1, wH | 0);
                 wV = Math.max(1, wV | 0);
-
-                // Half-tile anchor in tile-center space (x2 units).
                 const anchor2X = minX + maxX + 1;
                 const anchor2Y = minY + maxY + 1;
-
                 const rectBoundsFromCenter2 = (c2: number, w: number): { a: number; b: number } => {
-                    // Convert half-tile center (2x units) into inclusive tile bounds.
                     const a = Math.floor((c2 - w) / 2);
                     return { a, b: a + w - 1 };
                 };
-
                 const xb = rectBoundsFromCenter2(anchor2X, wH);
                 const yb = rectBoundsFromCenter2(anchor2Y, wV);
-
-                const x0 = xb.a;
-                const x1 = xb.b;
-                const y0 = yb.a;
-                const y1 = yb.b;
-
-                for (let yy = y0; yy <= y1; yy++) {
-                    for (let xx = x0; xx <= x1; xx++) {
+                for (let yy = yb.a; yy <= yb.b; yy++) {
+                    for (let xx = xb.a; xx <= xb.b; xx++) {
                         if (!worldInBounds(xx, yy)) continue;
                         const ii = worldIndex(xx, yy);
-                        if (roadAreaMaskWorld[ii] !== 1) continue;
-                        roadIntersectionMaskWorld[ii] = 1;
+                        if (areaMask[ii] !== 1) continue;
+                        interMask[ii] = 1;
                     }
                 }
-
-                // Debug markers consumed by overlay.
                 roadIntersectionSeedsWorld.push({
                     tx: Math.floor((anchor2X - 1) / 2),
                     ty: Math.floor((anchor2Y - 1) / 2),
@@ -951,24 +1147,22 @@ export function compileKenneyMapFromTable(
         }
     }
 
-    // Build intersection-component bounds (AABB) from the final intersection mask.
-    {
+    // Build intersection-component bounds per height-layer.
+    const intersectionZKeys = Array.from(roadIntersectionMaskByZ.keys());
+    for (let zi = 0; zi < intersectionZKeys.length; zi++) {
+        const z = intersectionZKeys[zi] | 0;
+        const interMask = roadIntersectionMaskByZ.get(z);
+        if (!interMask) continue;
         const visitedIntersection = new Uint8Array(worldW * worldH);
         const qx: number[] = [];
         const qy: number[] = [];
         const tilesX: number[] = [];
         const tilesY: number[] = [];
-        const neighbors4 = [
-            { dx: -1, dy: 0 },
-            { dx: 1, dy: 0 },
-            { dx: 0, dy: -1 },
-            { dx: 0, dy: 1 },
-        ];
 
         for (let tyWorld = originTy; tyWorld <= worldMaxTy; tyWorld++) {
             for (let txWorld = originTx; txWorld <= worldMaxTx; txWorld++) {
                 const startIdx = worldIndex(txWorld, tyWorld);
-                if (roadIntersectionMaskWorld[startIdx] !== 1) continue;
+                if (interMask[startIdx] !== 1) continue;
                 if (visitedIntersection[startIdx] === 1) continue;
                 visitedIntersection[startIdx] = 1;
                 qx.length = 0;
@@ -997,7 +1191,7 @@ export function compileKenneyMapFromTable(
                         const ny = cy + neighbors4[ni].dy;
                         if (!worldInBounds(nx, ny)) continue;
                         const niIdx = worldIndex(nx, ny);
-                        if (roadIntersectionMaskWorld[niIdx] !== 1) continue;
+                        if (interMask[niIdx] !== 1) continue;
                         if (visitedIntersection[niIdx] === 1) continue;
                         visitedIntersection[niIdx] = 1;
                         qx.push(nx);
@@ -1022,52 +1216,79 @@ export function compileKenneyMapFromTable(
                 const center = { cx: tilesX[best], cy: tilesY[best] };
                 roadIntersectionBoundsWorld.push({ minX, maxX, minY, maxY });
                 roadIntersectionCenterTilesWorld.push({ tx: center.cx, ty: center.cy });
+                roadIntersectionHeightsWorld.push(z);
             }
         }
     }
 
-    const writeCrossing = (txWorld: number, tyWorld: number, dir: number) => {
+    const writeCrossing = (txWorld: number, tyWorld: number, dir: number, expectedZ: number) => {
         if (!worldInBounds(txWorld, tyWorld)) return;
         const i = worldIndex(txWorld, tyWorld);
-        if (roadAreaMaskWorld[i] !== 1) return;
-        if (roadIntersectionMaskWorld[i] === 1) return;
-        if (roadCrossingMaskWorld[i] === 1) return;
-        roadCrossingMaskWorld[i] = 1;
-        roadCrossingDirWorld[i] = dir;
+        const areaMask = roadAreaByZ.get(expectedZ | 0);
+        if (!areaMask || areaMask[i] !== 1) return;
+        const interMask = layerMask(roadIntersectionMaskByZ, expectedZ);
+        if (interMask[i] === 1) return;
+        const crossingMask = layerMask(roadCrossingMaskByZ, expectedZ);
+        if (crossingMask[i] === 1) return;
+        crossingMask[i] = 1;
+        layerMask(roadCrossingDirByZ, expectedZ)[i] = dir;
     };
-    const writeStop = (txWorld: number, tyWorld: number, dir: number) => {
+    const writeStop = (txWorld: number, tyWorld: number, dir: number, expectedZ: number) => {
         if (!worldInBounds(txWorld, tyWorld)) return;
         const i = worldIndex(txWorld, tyWorld);
-        if (roadAreaMaskWorld[i] !== 1) return;
-        if (roadIntersectionMaskWorld[i] === 1) return;
-        if (roadCrossingMaskWorld[i] === 1) return;
-        if (roadStopMaskWorld[i] === 1) return;
-        roadStopMaskWorld[i] = 1;
-        roadStopDirWorld[i] = dir;
+        const areaMask = roadAreaByZ.get(expectedZ | 0);
+        if (!areaMask || areaMask[i] !== 1) return;
+        const interMask = layerMask(roadIntersectionMaskByZ, expectedZ);
+        if (interMask[i] === 1) return;
+        const crossingMask = layerMask(roadCrossingMaskByZ, expectedZ);
+        if (crossingMask[i] === 1) return;
+        const stopMask = layerMask(roadStopMaskByZ, expectedZ);
+        if (stopMask[i] === 1) return;
+        stopMask[i] = 1;
+        layerMask(roadStopDirByZ, expectedZ)[i] = dir;
     };
 
     // Build directional halos from bounds; direction is assigned only here.
     for (let bi = 0; bi < roadIntersectionBoundsWorld.length; bi++) {
         const b = roadIntersectionBoundsWorld[bi];
+        const intersectionZ = roadIntersectionHeightsWorld[bi] | 0;
 
         // Crossing ring (distance 1).
         for (let x = b.minX; x <= b.maxX; x++) {
-            writeCrossing(x, b.minY - 1, ROAD_DIR_N);
-            writeCrossing(x, b.maxY + 1, ROAD_DIR_S);
+            writeCrossing(x, b.minY - 1, ROAD_DIR_N, intersectionZ);
+            writeCrossing(x, b.maxY + 1, ROAD_DIR_S, intersectionZ);
         }
         for (let y = b.minY; y <= b.maxY; y++) {
-            writeCrossing(b.minX - 1, y, ROAD_DIR_W);
-            writeCrossing(b.maxX + 1, y, ROAD_DIR_E);
+            writeCrossing(b.minX - 1, y, ROAD_DIR_W, intersectionZ);
+            writeCrossing(b.maxX + 1, y, ROAD_DIR_E, intersectionZ);
         }
 
         // Stop-bar ring (distance 2).
         for (let x = b.minX; x <= b.maxX; x++) {
-            writeStop(x, b.minY - 2, ROAD_DIR_N);
-            writeStop(x, b.maxY + 2, ROAD_DIR_S);
+            writeStop(x, b.minY - 2, ROAD_DIR_N, intersectionZ);
+            writeStop(x, b.maxY + 2, ROAD_DIR_S, intersectionZ);
         }
         for (let y = b.minY; y <= b.maxY; y++) {
-            writeStop(b.minX - 2, y, ROAD_DIR_W);
-            writeStop(b.maxX + 2, y, ROAD_DIR_E);
+            writeStop(b.minX - 2, y, ROAD_DIR_W, intersectionZ);
+            writeStop(b.maxX + 2, y, ROAD_DIR_E, intersectionZ);
+        }
+    }
+
+    // Project layered 3D road-network masks onto the active tile height layer for compatibility.
+    for (let tyWorld = originTy; tyWorld <= worldMaxTy; tyWorld++) {
+        for (let txWorld = originTx; txWorld <= worldMaxTx; txWorld++) {
+            const i = worldIndex(txWorld, tyWorld);
+            const z = getTile(txWorld, tyWorld).h | 0;
+            const inter = roadIntersectionMaskByZ.get(z);
+            const cross = roadCrossingMaskByZ.get(z);
+            const crossDir = roadCrossingDirByZ.get(z);
+            const stop = roadStopMaskByZ.get(z);
+            const stopDir = roadStopDirByZ.get(z);
+            roadIntersectionMaskWorld[i] = inter?.[i] === 1 ? 1 : 0;
+            roadCrossingMaskWorld[i] = cross?.[i] === 1 ? 1 : 0;
+            roadCrossingDirWorld[i] = crossDir?.[i] ?? 0;
+            roadStopMaskWorld[i] = stop?.[i] === 1 ? 1 : 0;
+            roadStopDirWorld[i] = stopDir?.[i] ?? 0;
         }
     }
 
@@ -2394,6 +2615,7 @@ export function compileKenneyMapFromTable(
         roadIntersectionBoundsWorld,
         roadIntersectionSeedsWorld,
         roadIntersectionClusterCentersWorld,
+        roadSemanticRects: roadSemanticRectsCompiled,
         isRoadWorld,
     };
 

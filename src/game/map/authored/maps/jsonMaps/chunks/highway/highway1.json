@@ -1,0 +1,32 @@
+{
+  "id": "highway1",
+  "width": 24,
+  "height": 24,
+  "fields": [
+    { "x": 0, "y": 0, "z": 8, "w": 1, "h": 24, "type": "sidewalk" },
+    { "x": 1, "y": 0, "z": 8,  "w": 2, "h": 24, "type": "road" },
+    { "x": 3, "y": 0, "z": 8, "w": 1, "h": 24, "type": "sidewalk" },
+
+    { "x": 4, "y": 0,  "w": 1, "h": 24, "type": "road" },
+    { "x": 4, "y": 3, "z": 0, "w": 1, "h": 8, "dir": "S", "type": "road", "semantic": "ramp" , "startHeight": 0, "targetHeight": 8},
+    { "x": 4, "y": 15, "z": 0, "w": 1, "h": 8, "dir": "N", "type": "road", "semantic": "ramp" , "startHeight": 0, "targetHeight": 8},
+
+    { "x": 5, "y": 0,  "w": 7, "h": 24, "type": "road", "semantic": "one_way_south" },
+
+    { "x": 12, "y": 0,  "w": 1, "h": 24, "type": "sidewalk" },
+
+    { "x": 13, "y": 0,  "w": 7, "h": 24, "type": "road", "semantic": "one_way_north" },
+
+    { "x": 20, "y": 0,  "w": 1, "h": 24, "type": "road" },
+    { "x": 20, "y": 3, "z": 0, "w": 1, "h": 8, "dir": "S", "type": "road", "semantic": "ramp" , "startHeight": 0, "targetHeight": 8},
+    { "x": 20, "y": 15, "z": 0, "w": 1, "h": 8, "dir": "N", "type": "road", "semantic": "ramp" , "startHeight": 0, "targetHeight": 8},
+
+    { "x": 21, "y": 0, "z": 8, "w": 1, "h": 24, "type": "sidewalk" },
+    { "x": 22, "y": 0, "z": 8,  "w": 2, "h": 24, "type": "road" },
+    { "x": 24, "y": 0, "z": 8, "w": 1, "h": 24, "type": "sidewalk" },
+
+    { "x": 1, "y": 11, "z": 8,  "w": 23, "h": 4, "type": "road" }
+  ],
+  "stamps": [
+  ]
+}

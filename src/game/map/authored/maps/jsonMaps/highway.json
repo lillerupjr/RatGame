@@ -1,0 +1,13 @@
+{
+  "id": "highway",
+  "buildingPackId": "china_town_buildings",
+  "mapSkinId": "china_town",
+  "chunkGrid": {
+    "id": "highway",
+    "cols": 1,
+    "rows": 9
+  },
+  "cells": [
+    { "x": 6, "y": 6, "type": "spawn" }
+  ]
+}

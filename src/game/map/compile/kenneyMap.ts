@@ -866,8 +866,53 @@ function buildStaircaseRamps(tileWorld: number): RampFace[] {
     return out;
 }
 
+function buildSemanticRamps(tileWorld: number): RampFace[] {
+    const out: RampFace[] = [];
+    const rects = _compiled.roadSemanticRects ?? [];
+    for (let i = 0; i < rects.length; i++) {
+        const r = rects[i];
+        const semantic = r.semantic?.trim().toLowerCase() ?? "";
+        if (!(semantic === "ramp" || semantic.startsWith("ramp_"))) continue;
+        const dir = r.dir;
+        if (dir !== "N" && dir !== "E" && dir !== "S" && dir !== "W") continue;
+        const w = Math.max(1, r.w | 0);
+        const h = Math.max(1, r.h | 0);
+        const minX = r.x | 0;
+        const minY = r.y | 0;
+        const maxX = minX + w - 1;
+        const maxY = minY + h - 1;
+        const startH = Number.isFinite(r.startHeight) ? (r.startHeight as number) : (_compiled.getTile(minX, minY).h | 0);
+        const targetH = Number.isFinite(r.targetHeight) ? (r.targetHeight as number) : startH;
+        const corners = {
+            SW: { x: minX * tileWorld, y: (maxY + 1) * tileWorld },
+            SE: { x: (maxX + 1) * tileWorld, y: (maxY + 1) * tileWorld },
+            NE: { x: (maxX + 1) * tileWorld, y: minY * tileWorld },
+            NW: { x: minX * tileWorld, y: minY * tileWorld },
+        } as const;
+        const wiringKey = stairDirToWiring(dir as StairDir);
+        const wiring = RAMP_WIRING_PRESET[wiringKey];
+        const [l0, l1] = wiring.lowEdge;
+        const [h0, h1] = wiring.highEdge;
+        const q0 = corners[l0];
+        const q1 = corners[l1];
+        const q3 = corners[h0];
+        const q2 = corners[h1];
+        out.push({
+            id: `semantic_ramp_${i}_${minX}_${minY}_${w}x${h}_${dir}_${startH}_${targetH}`,
+            tag: "semantic_ramp",
+            poly: [q0, q1, q2, q3],
+            z0: startH,
+            z1: targetH,
+        });
+    }
+    return out;
+}
+
 function buildAllRamps(tileWorld: number): RampFace[] {
     const out: RampFace[] = [];
+
+    // 1) Semantic ramps from authored map data.
+    out.push(...buildSemanticRamps(tileWorld));
 
     // 2) Auto staircases (one combined polygon per run)
     out.push(...buildStaircaseRamps(tileWorld));

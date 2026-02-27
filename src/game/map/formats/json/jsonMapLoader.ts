@@ -112,6 +112,9 @@ type JsonMapField = {
   triggerId?: string;
   triggerType?: string;
   radius?: number;
+  semantic?: string;
+  startHeight?: number;
+  targetHeight?: number;
 };
 
 type JsonMapDef = {
@@ -140,13 +143,26 @@ type JsonMapDef = {
     stackChance?: number;
     propId?: string;
     dir?: string;
+    semantic?: string;
+    startHeight?: number;
+    targetHeight?: number;
     collision?: "BLOCK" | "PASS";
     blocksMovement?: boolean;
     flipped?: boolean;
     stackLevel?: number;
     zStackUnits?: number;
   }[];
-  roadSemanticRects?: Array<{ x: number; y: number; w: number; h: number }>;
+  roadSemanticRects?: Array<{
+    x: number;
+    y: number;
+    z?: number;
+    w: number;
+    h: number;
+    semantic?: string;
+    dir?: "N" | "E" | "S" | "W";
+    startHeight?: number;
+    targetHeight?: number;
+  }>;
   lights?: TableMapLight[];
   mapSkinId?: MapSkinId;
   buildingPackId?: BuildingPackId;
@@ -216,6 +232,13 @@ function optionalDirField(obj: Record<string, unknown>, key: string): "N" | "E" 
   const up = value.toUpperCase();
   if (up === "N" || up === "E" || up === "S" || up === "W") return up as "N" | "E" | "S" | "W";
   throw new Error(`JSON map loader: optional field "${key}" must be one of N/E/S/W.`);
+}
+
+function normalizeCardinalDir(raw: string | undefined): "N" | "E" | "S" | "W" | undefined {
+  if (!raw) return undefined;
+  const up = raw.toUpperCase();
+  if (up === "N" || up === "E" || up === "S" || up === "W") return up;
+  return undefined;
 }
 
 function optionalNumberField(obj: Record<string, unknown>, key: string): number | undefined {
@@ -468,7 +491,21 @@ function requireCellsField(
 function optionalFieldsField(
   obj: Record<string, unknown>,
   source?: string
-): { cells: TableMapCell[]; stamps: SemanticStamp[]; roadRects: Array<{ x: number; y: number; w: number; h: number }> } {
+): {
+  cells: TableMapCell[];
+  stamps: SemanticStamp[];
+  roadRects: Array<{
+    x: number;
+    y: number;
+    z: number;
+    w: number;
+    h: number;
+    semantic?: string;
+    dir?: "N" | "E" | "S" | "W";
+    startHeight?: number;
+    targetHeight?: number;
+  }>;
+} {
   const value = obj.fields;
   if (value === undefined) return { cells: [], stamps: [], roadRects: [] };
   if (!Array.isArray(value)) {
@@ -477,7 +514,17 @@ function optionalFieldsField(
 
   const out: TableMapCell[] = [];
   const stamps: SemanticStamp[] = [];
-  const roadRects: Array<{ x: number; y: number; w: number; h: number }> = [];
+  const roadRects: Array<{
+    x: number;
+    y: number;
+    z: number;
+    w: number;
+    h: number;
+    semantic?: string;
+    dir?: "N" | "E" | "S" | "W";
+    startHeight?: number;
+    targetHeight?: number;
+  }> = [];
 
   for (let index = 0; index < value.length; index++) {
     const field = value[index];
@@ -525,6 +572,9 @@ function optionalFieldsField(
     const triggerType = optionalStringField(field, "triggerType") ?? undefined;
     const radius = optionalNumberField(field, "radius") ?? undefined;
     const dir = optionalDirField(field, "dir");
+    const semantic = optionalStringField(field, "semantic");
+    const startHeight = optionalNumberField(field, "startHeight");
+    const targetHeight = optionalNumberField(field, "targetHeight");
     const height = optionalNumberField(field, "height");
     const collisionRaw = optionalStringField(field, "collision");
     const collision = collisionRaw === undefined
@@ -542,7 +592,7 @@ function optionalFieldsField(
     const resolvedZ = z ?? 0;
 
     if (resolvedTypeRaw === "road") {
-      roadRects.push({ x: x0, y: y0, w: iw, h: ih });
+      roadRects.push({ x: x0, y: y0, z: resolvedZ, w: iw, h: ih, semantic, dir, startHeight, targetHeight });
     }
 
     if (resolvedTypeRaw === "building") {
@@ -634,6 +684,9 @@ function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): S
     const stackChance = optionalNumberField(entry, "stackChance");
     const propId = optionalStringField(entry, "propId");
     const dir = optionalStringField(entry, "dir");
+    const semantic = optionalStringField(entry, "semantic");
+    const startHeight = optionalNumberField(entry, "startHeight");
+    const targetHeight = optionalNumberField(entry, "targetHeight");
     const collisionRaw = optionalStringField(entry, "collision");
     const collision = collisionRaw === undefined
       ? undefined
@@ -663,6 +716,9 @@ function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): S
       stackChance,
       propId,
       dir,
+      semantic,
+      startHeight,
+      targetHeight,
       collision,
       blocksMovement,
       flipped,
@@ -813,7 +869,17 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     const expandedCells: TableMapCell[] = [];
     const expandedStamps: SemanticStamp[] = [];
     const expandedLights: TableMapLight[] = [];
-    const expandedRoadRects: Array<{ x: number; y: number; w: number; h: number }> = [];
+    const expandedRoadRects: Array<{
+      x: number;
+      y: number;
+      z: number;
+      w: number;
+      h: number;
+      semantic?: string;
+      dir?: "N" | "E" | "S" | "W";
+      startHeight?: number;
+      targetHeight?: number;
+    }> = [];
 
     for (let cy = 0; cy < chunkGrid.rows; cy++) {
       for (let cx = 0; cx < chunkGrid.cols; cx++) {
@@ -850,7 +916,17 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
         if (chunkDef.roadSemanticRects) {
           for (let i = 0; i < chunkDef.roadSemanticRects.length; i++) {
             const r = chunkDef.roadSemanticRects[i];
-            expandedRoadRects.push({ x: r.x + ox, y: r.y + oy, w: r.w, h: r.h });
+            expandedRoadRects.push({
+              x: r.x + ox,
+              y: r.y + oy,
+              z: r.z ?? 0,
+              w: r.w,
+              h: r.h,
+              semantic: r.semantic,
+              dir: r.dir,
+              startHeight: r.startHeight,
+              targetHeight: r.targetHeight,
+            });
           }
         }
       }
@@ -872,7 +948,17 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     const roadRects = (() => {
       const stampRoadRects = (stamps ?? [])
         .filter((s) => s.type === "road")
-        .map((s) => ({ x: s.x, y: s.y, w: Math.max(1, (s.w ?? 1) | 0), h: Math.max(1, (s.h ?? 1) | 0) }));
+        .map((s) => ({
+          x: s.x,
+          y: s.y,
+          z: s.z ?? 0,
+          w: Math.max(1, (s.w ?? 1) | 0),
+          h: Math.max(1, (s.h ?? 1) | 0),
+          semantic: s.semantic,
+          dir: normalizeCardinalDir(s.dir),
+          startHeight: s.startHeight,
+          targetHeight: s.targetHeight,
+        }));
       const merged = [...expandedRoadRects, ...fieldParsed.roadRects, ...stampRoadRects];
       return merged.length > 0 ? merged : undefined;
     })();
@@ -909,7 +995,17 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
   const roadRects = (() => {
     const stampRoadRects = (stamps ?? [])
       .filter((s) => s.type === "road")
-      .map((s) => ({ x: s.x, y: s.y, w: Math.max(1, (s.w ?? 1) | 0), h: Math.max(1, (s.h ?? 1) | 0) }));
+      .map((s) => ({
+        x: s.x,
+        y: s.y,
+        z: s.z ?? 0,
+        w: Math.max(1, (s.w ?? 1) | 0),
+        h: Math.max(1, (s.h ?? 1) | 0),
+        semantic: s.semantic,
+        dir: normalizeCardinalDir(s.dir),
+        startHeight: s.startHeight,
+        targetHeight: s.targetHeight,
+      }));
     const merged = [...fieldParsed.roadRects, ...stampRoadRects];
     return merged.length > 0 ? merged : undefined;
   })();
