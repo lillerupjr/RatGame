@@ -685,14 +685,20 @@ export function mountPauseMenu(args: {
     renderDebugMetricsTabs();
     if (!world) return;
 
-    const critChance = safeNum(world.baseCritChance) + safeNum(world.critChanceBonus);
+    const snapshot = getCombatModsSnapshot(world as any);
+    const baseCritChance = safeNum(snapshot.weaponStats.critChance);
+    const effectiveCritChance = Math.max(
+      0,
+      Math.min(1, baseCritChance * (world.fullMomentumActive ? 2 : 1)),
+    );
     const rows: Array<[string, string]> = [
       ["HP", `${safeNum(world.playerHp).toFixed(0)} / ${safeNum(world.playerHpMax).toFixed(0)}`],
       ["Armor", `${safeNum((world as any).currentArmor).toFixed(0)} / ${safeNum((world as any).maxArmor).toFixed(0)}`],
       ["Move Speed", safeNum((world as any).pSpeed).toFixed(2)],
       ["Damage Mult", safeNum(world.dmgMult, 1).toFixed(2)],
       ["Fire Rate Mult", safeNum(world.fireRateMult, 1).toFixed(2)],
-      ["Crit Chance", `${(Math.max(0, Math.min(1, critChance)) * 100).toFixed(1)}%`],
+      ["Crit Chance", `${(baseCritChance * 100).toFixed(1)}%`],
+      ["Crit Chance (effective)", `${(effectiveCritChance * 100).toFixed(1)}%`],
       ["Crit Multi", `${safeNum(world.critMultiplier, 1).toFixed(2)}x`],
       ["Gold", `${safeNum(getGold(world)).toFixed(0)}`],
       ["Kills", `${safeNum(world.kills).toFixed(0)}`],

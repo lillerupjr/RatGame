@@ -20,6 +20,12 @@ import { normalizeRelicIdList } from "../../content/relics";
 import { getRelicMods } from "../progression/relics";
 import { applyPlayerIncomingDamage } from "./playerArmor";
 import {
+  addMomentumFromDamage,
+  addMomentumOnKill,
+  breakMomentumOnLifeDamage,
+  relicTriggerMomentumDamageMultiplier,
+} from "./momentum";
+import {
   getEnemyWorld,
   getPlayerWorld,
   getProjectileWorld,
@@ -212,6 +218,7 @@ export function collisionsSystem(w: World, dt: number) {
       // HIT
       hitSomething = true;
 
+      const source = registry.projectileSourceFromKind(w.prjKind[p]);
       const physBefore = w.prDmgPhys[p] ?? 0;
       const fireBefore = w.prDmgFire[p] ?? 0;
       const chaosBefore = w.prDmgChaos[p] ?? 0;
@@ -248,11 +255,19 @@ export function collisionsSystem(w: World, dt: number) {
         },
         critRoll.roll01
       );
-      const finalPhysDealt = resolvedDamage.physical;
-      const finalFireDealt = resolvedDamage.fire;
-      const finalChaosDealt = resolvedDamage.chaos;
+      let finalPhysDealt = resolvedDamage.physical;
+      let finalFireDealt = resolvedDamage.fire;
+      let finalChaosDealt = resolvedDamage.chaos;
       const isCrit = resolvedDamage.isCrit;
-      const dmg = resolvedDamage.total;
+      if (source === "OTHER") {
+        const procMult = relicTriggerMomentumDamageMultiplier(w);
+        if (procMult !== 1) {
+          finalPhysDealt *= procMult;
+          finalFireDealt *= procMult;
+          finalChaosDealt *= procMult;
+        }
+      }
+      const dmg = finalPhysDealt + finalFireDealt + finalChaosDealt;
 
       if (!w.eAilments) w.eAilments = [];
       const ailmentState = ensureEnemyAilmentsAt(w.eAilments, e);
@@ -290,7 +305,9 @@ export function collisionsSystem(w: World, dt: number) {
       }
 
       // Spawn floating combat text
-      const source = registry.projectileSourceFromKind(w.prjKind[p]);
+      if (source !== "OTHER") {
+        addMomentumFromDamage(w, dmg, w.eHpMax[e] ?? 1, w.timeSec ?? w.time ?? 0);
+      }
       spawnFloatText(w, ew.wx, ew.wy, Math.round(dmg), source, isCrit);
 
       // Poison payload (applied once per hit)
@@ -449,6 +466,9 @@ export function collisionsSystem(w: World, dt: number) {
       if (w.eHp[e] <= 0) {
         w.eAlive[e] = false;
         w.kills++;
+        if (source !== "OTHER") {
+          addMomentumOnKill(w, w.timeSec ?? w.time ?? 0);
+        }
         onEnemyKilledForChallenge(w);
 
         // snapshot poison-at-death BEFORE any cleanup
@@ -499,6 +519,9 @@ export function collisionsSystem(w: World, dt: number) {
       const dmg = w.prDamage[p] || 1;
       const lifeDamage = godMode ? 0 : applyPlayerIncomingDamage(w, dmg);
       if (!godMode) w.playerHp -= lifeDamage;
+      if (lifeDamage > 0) {
+        breakMomentumOnLifeDamage(w, w.timeSec ?? w.time ?? 0);
+      }
 
       emitEvent(w, {
         type: "PLAYER_HIT",
@@ -537,6 +560,9 @@ export function collisionsSystem(w: World, dt: number) {
       const dmg = w.eDamage[e] || 1;
       const lifeDamage = godMode ? 0 : applyPlayerIncomingDamage(w, dmg);
       if (!godMode) w.playerHp -= lifeDamage;
+      if (lifeDamage > 0) {
+        breakMomentumOnLifeDamage(w, w.timeSec ?? w.time ?? 0);
+      }
 
       emitEvent(w, {
         type: "PLAYER_HIT",

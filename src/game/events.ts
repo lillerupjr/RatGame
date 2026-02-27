@@ -76,7 +76,11 @@ export type GameEvent =
     | {
     type: "VENDOR_PURCHASE";
     offer: VendorOffer;
-};
+}
+    | { type: "MOMENTUM_BREAK"; wasFull: boolean }
+    | { type: "MOMENTUM_DECAYED" }
+    | { type: "FULL_MOMENTUM_REACHED" }
+    | { type: "FULL_MOMENTUM_LOST" };
 
 export type RelicTriggerEvent = Extract<GameEvent, { type: "ENEMY_HIT" | "ENEMY_KILLED" }> & {
   isRetrigger?: boolean;

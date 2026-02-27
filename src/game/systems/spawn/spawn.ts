@@ -4,7 +4,7 @@ import { walkInfo } from "../../map/compile/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { worldToGrid } from "../../coords/grid";
 import { getPlayerWorld } from "../../coords/worldViews";
-import { spawnEnemyGrid } from "../../factories/enemyFactory";
+import { spawnEnemyGrid, type EnemyType } from "../../factories/enemyFactory";
 import type { EnemyPowerTier } from "../../balance/enemyPower";
 
 export function spawnSystem(w: World, dt: number) {
@@ -19,8 +19,9 @@ export function spawnSystem(w: World, dt: number) {
  * Spawn one floor-appropriate trash enemy around an origin point.
  * Returns scaled HP of spawned enemy, or 0 if none spawned.
  */
-export function spawnOneTrashEnemy(
+export function spawnOneEnemyOfType(
   w: World,
+  type: EnemyType,
   originX?: number,
   originY?: number,
   powerTier: EnemyPowerTier = "trash"
@@ -32,7 +33,6 @@ export function spawnOneTrashEnemy(
   const ox = originX ?? pw.wx;
   const oy = originY ?? pw.wy;
   const floor = floorForIndex(w.floorIndex ?? 0);
-  const type = pickFloorEnemyType(w);
 
   for (let i = 0; i < 20; i++) {
     const angle = w.rng.range(0, Math.PI * 2);
@@ -56,4 +56,18 @@ export function spawnOneTrashEnemy(
   }
 
   return 0;
+}
+
+/**
+ * Spawn one floor-appropriate trash enemy around an origin point.
+ * Returns scaled HP of spawned enemy, or 0 if none spawned.
+ */
+export function spawnOneTrashEnemy(
+  w: World,
+  originX?: number,
+  originY?: number,
+  powerTier: EnemyPowerTier = "trash"
+): number {
+  const type = pickFloorEnemyType(w);
+  return spawnOneEnemyOfType(w, type, originX, originY, powerTier);
 }

@@ -33,7 +33,8 @@ export function beginRelicReward(world: any, source: RelicRewardSource, optionCo
   if (state.active) return;
   state.active = true;
   state.source = source;
-  state.options = generateRelicRewardOptions(() => rngNext(world), optionCount);
+  const owned = normalizeRelicIdList(world.relics ?? []);
+  state.options = generateRelicRewardOptions(() => rngNext(world), optionCount, owned);
 }
 
 export function chooseRelicReward(world: any, relicId: string): void {

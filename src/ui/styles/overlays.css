@@ -17,6 +17,22 @@ html, body { margin: 0; height: 100%; background: #0b0b0f; overflow: hidden; }
   vertical-align: -1px;
 }
 
+#hud .momentumPill {
+  border: 1px solid rgba(255, 110, 110, 0.6);
+  background: rgba(200, 60, 60, 0.2);
+}
+#hud .momentumPill::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+  background: radial-gradient(circle at 30% 30%, #ffd7d7 0%, #ff8b8b 45%, #b33333 100%);
+  box-shadow: 0 0 6px rgba(255, 116, 116, 0.8);
+  vertical-align: -1px;
+}
+
 /* HUD inventory (weapons + items) */
 #hudTop { display: inline-block; }
 

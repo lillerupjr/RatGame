@@ -42,13 +42,16 @@ export function combatSystem(w: World, dt: number) {
   const debugDamageMult = Math.max(0, debug.dmgMult || 1);
   const debugFireRateMult = Math.max(0.001, debug.fireRateMult || 1);
   const relicDamageMult = Math.max(0, relicMods.dmgMult ?? 1);
-  const shotsPerSecond = Math.max(0.001, resolved.shotsPerSecond * debugFireRateMult);
+  const derivedDamageMult = Math.max(0, w.dmgMult ?? 1);
+  const derivedFireRateMult = Math.max(0.001, w.fireRateMult ?? 1);
+  const shotsPerSecond = Math.max(0.001, resolved.shotsPerSecond * derivedFireRateMult * debugFireRateMult);
   const fireRangePx = Math.max(0, resolved.rangePx || 0);
   const cooldown = 1 / shotsPerSecond;
-  const dmgPhys = resolved.baseDamage.physical * debugDamageMult * relicDamageMult;
-  const dmgFire = resolved.baseDamage.fire * debugDamageMult * relicDamageMult;
-  const dmgChaos = resolved.baseDamage.chaos * debugDamageMult * relicDamageMult;
+  const dmgPhys = resolved.baseDamage.physical * derivedDamageMult * debugDamageMult * relicDamageMult;
+  const dmgFire = resolved.baseDamage.fire * derivedDamageMult * debugDamageMult * relicDamageMult;
+  const dmgChaos = resolved.baseDamage.chaos * derivedDamageMult * debugDamageMult * relicDamageMult;
   const totalDamage = dmgPhys + dmgFire + dmgChaos;
+  const finalCritChance = Math.min(1, resolved.critChance * (w.fullMomentumActive ? 2 : 1));
 
   const target = findClosestTarget(w, fireRangePx);
   const hasTargetInRange = target.enemyIndex !== -1;
@@ -83,7 +86,7 @@ export function combatSystem(w: World, dt: number) {
         dmgPhys,
         dmgFire,
         dmgChaos,
-        critChance: resolved.critChance,
+        critChance: finalCritChance,
         critMulti: resolved.critMulti,
         chanceBleed: resolved.chanceToBleed,
         chanceIgnite: resolved.chanceToIgnite,
@@ -109,7 +112,7 @@ export function combatSystem(w: World, dt: number) {
           dmgPhys,
           dmgFire,
           dmgChaos,
-          critChance: resolved.critChance,
+          critChance: finalCritChance,
           critMulti: resolved.critMulti,
           chanceBleed: resolved.chanceToBleed,
           chanceIgnite: resolved.chanceToIgnite,

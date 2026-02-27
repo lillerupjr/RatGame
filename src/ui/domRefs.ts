@@ -30,6 +30,7 @@ export type HudRefs = {
     killsPill: HTMLSpanElement;
     hpPill: HTMLSpanElement;
     armorPill: HTMLSpanElement;
+    momentumPill: HTMLSpanElement;
     lvlPill: HTMLSpanElement;
     objectiveOverlay: HTMLDivElement;
     objectiveTitle: HTMLDivElement;
@@ -91,6 +92,7 @@ export type DomRefs = {
     killsPill: HTMLSpanElement;
     hpPill: HTMLSpanElement;
     armorPill: HTMLSpanElement;
+    momentumPill: HTMLSpanElement;
     lvlPill: HTMLSpanElement;
     interactPrompt: HTMLDivElement;
     weaponSlots: HTMLDivElement;
@@ -154,6 +156,7 @@ export function getDomRefs(): DomRefs {
     const killsPill = getEl<HTMLSpanElement>("killsPill");
     const hpPill = getEl<HTMLSpanElement>("hpPill");
     const armorPill = getEl<HTMLSpanElement>("armorPill");
+    const momentumPill = getEl<HTMLSpanElement>("momentumPill");
     const lvlPill = getEl<HTMLSpanElement>("lvlPill");
     const objectiveOverlay = getEl<HTMLDivElement>("objectiveOverlay");
     const objectiveTitle = getEl<HTMLDivElement>("objectiveTitle");
@@ -185,6 +188,7 @@ export function getDomRefs(): DomRefs {
         killsPill,
         hpPill,
         armorPill,
+        momentumPill,
         lvlPill,
         objectiveOverlay,
         objectiveTitle,
@@ -264,6 +268,7 @@ export function getDomRefs(): DomRefs {
         killsPill,
         hpPill,
         armorPill,
+        momentumPill,
         lvlPill,
         interactPrompt,
         weaponSlots,

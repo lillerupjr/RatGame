@@ -1,7 +1,14 @@
 import { getAllRelicIds, getRelicById } from "../../content/relics";
 
-export function generateRelicRewardOptions(rng: () => number, count: number): string[] {
-  const all = getAllRelicIds().filter((id) => getRelicById(id)?.isEnabled === true);
+export function generateRelicRewardOptions(
+  rng: () => number,
+  count: number,
+  excludeIds: readonly string[] = [],
+): string[] {
+  const excluded = new Set(excludeIds);
+  const all = getAllRelicIds().filter(
+    (id) => getRelicById(id)?.isEnabled === true && !excluded.has(id),
+  );
   if (all.length === 0 || count <= 0) return [];
 
   const picked = new Set<string>();

@@ -18,6 +18,7 @@ export function recomputeDerivedStats(w: World) {
     w.pSpeed = w.baseMoveSpeed;
     w.pickupRadius = w.basePickupRadius;
     w.maxArmor = 50;
+    w.momentumMax = 20;
 
     // Reset multipliers
     w.dmgMult = 1;
@@ -35,7 +36,7 @@ export function recomputeDerivedStats(w: World) {
     }
 
     const relicMods = getRelicMods(w);
-    w.pSpeed += relicMods.moveSpeedBonus ?? 0;
+    w.pSpeed *= relicMods.moveSpeedMult ?? 1;
     if (w.relics.includes("PASS_DAMAGE_PERCENT_20")) w.dmgMult *= 1.2;
     if (w.relics.includes("PASS_LIFE_TO_DAMAGE_2P")) {
         const bonus = w.playerHpMax * 0.2;
@@ -44,6 +45,17 @@ export function recomputeDerivedStats(w: World) {
     if (w.relics.includes("ARMOR_MAX_50")) w.maxArmor += 50;
     const hasArmorDoubleMax = w.relics.includes("ARMOR_DOUBLE_MAX");
     if (hasArmorDoubleMax) w.maxArmor *= 2;
+    if (w.relics.includes("MOM_MAX_MOMENTUM_PLUS_10")) w.momentumMax += 10;
+    w.momentumMax = Math.max(0, w.momentumMax);
+    w.momentumValue = Math.max(0, Math.min(w.momentumMax, Number.isFinite(w.momentumValue) ? w.momentumValue : 0));
+    if (w.relics.includes("MOM_DAMAGE_PER_MOMENTUM_5")) {
+        const m = Math.max(0, Math.min(w.momentumMax, Number.isFinite(w.momentumValue) ? w.momentumValue : 0));
+        w.dmgMult *= (1 + 0.03 * m);
+    }
+    if (w.relics.includes("MOM_MOVE_SPEED_PER_MOMENTUM_3")) {
+        const m = Math.max(0, Math.min(w.momentumMax, Number.isFinite(w.momentumValue) ? w.momentumValue : 0));
+        w.pSpeed += w.baseMoveSpeed * (0.02 * m);
+    }
 
     w.currentArmor = prevCurrentArmor;
     w.maxArmor = Math.max(0, w.maxArmor);

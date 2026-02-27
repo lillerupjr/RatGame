@@ -44,4 +44,13 @@ describe("relicRewardFlow", () => {
     expect(ensureRelicRewardState(w).active).toBe(false);
     expect(ensureRelicRewardState(w).options).toEqual([]);
   });
+
+  test("beginRelicReward excludes already-owned relics", () => {
+    const w = createWorld(42);
+    w.relics = ["relic_berserker", "relic_bigPockets"];
+    beginRelicReward(w, "OBJECTIVE_COMPLETION", 3);
+    const options = ensureRelicRewardState(w).options;
+    expect(options.includes("relic_berserker")).toBe(false);
+    expect(options.includes("relic_bigPockets")).toBe(false);
+  });
 });

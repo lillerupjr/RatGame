@@ -12,6 +12,7 @@ import { getUserSettings } from "../../../userSettings";
 import type { RelicTriggerEvent } from "../../events";
 import { applyIgniteStrongestFromSnapshot, createEnemyAilmentsState } from "../../combat_mods/ailments/enemyAilments";
 import { restoreArmor } from "../sim/playerArmor";
+import { relicTriggerMomentumDamageMultiplier } from "../sim/momentum";
 
 const RELIC_MISSILE_EXPLODE_RADIUS = 80;
 const RELIC_ALL_HITS_EXPLODE_RADIUS = 80;
@@ -57,7 +58,11 @@ function applyDamageAsOther(
   dmgFire: number,
   dmgChaos: number,
 ): void {
-  const dmgTotal = dmgPhys + dmgFire + dmgChaos;
+  const procMult = relicTriggerMomentumDamageMultiplier(world);
+  const scaledPhys = dmgPhys * procMult;
+  const scaledFire = dmgFire * procMult;
+  const scaledChaos = dmgChaos * procMult;
+  const dmgTotal = scaledPhys + scaledFire + scaledChaos;
   if (!(dmgTotal > 0)) return;
 
   world.eHp[enemyIndex] -= dmgTotal;
@@ -66,9 +71,9 @@ function applyDamageAsOther(
     type: "ENEMY_HIT",
     enemyIndex,
     damage: dmgTotal,
-    dmgPhys,
-    dmgFire,
-    dmgChaos,
+    dmgPhys: scaledPhys,
+    dmgFire: scaledFire,
+    dmgChaos: scaledChaos,
     x: ew.wx,
     y: ew.wy,
     isCrit: false,

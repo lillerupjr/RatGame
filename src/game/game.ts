@@ -3,7 +3,7 @@ import { World, createWorld, clearEvents, emitEvent, gridAtPlayer } from "../eng
 
 import { InputState, createInputState, inputSystem, clearInputEdges } from "./systems/sim/input";
 import { movementSystem } from "./systems/sim/movement";
-import { spawnSystem, spawnOneTrashEnemy } from "./systems/spawn/spawn";
+import { spawnSystem, spawnOneEnemyOfType, spawnOneTrashEnemy } from "./systems/spawn/spawn";
 import { combatSystem } from "./systems/sim/combat";
 import { ailmentTickSystem } from "./combat_mods/systems/ailmentTickSystem";
 import { collisionsSystem } from "./systems/sim/collisions";
@@ -37,6 +37,7 @@ import { gridToWorld } from "./coords/grid";
 import { anchorFromWorld } from "./coords/anchor";
 import { poisonSystem } from "./systems/sim/poison";
 import { fissionSystem } from "./systems/sim/fission";
+import { processMomentumEventQueue, tickMomentumDecay } from "./systems/sim/momentum";
 import {buildStaticRunMap, getReachable, type RunMap, type MapNode} from "./map/runMap";
 import { KENNEY_TILE_WORLD, preloadKenneyTiles } from "../engine/render/kenneyTiles";
 import type { Dir8 } from "../engine/render/sprites/dir8";
@@ -118,6 +119,7 @@ import { BASELINE_PLAYER_DPS, computePressure } from "./balance/pressureModel";
 import { DEFAULT_SPAWN_TUNING } from "./balance/spawnTuningDefaults";
 import { createFloorRewardBudget, type ObjectiveMode } from "./rewards/floorRewardBudget";
 import { handleRewardEvent, type RewardOutcome } from "./rewards/rewardDirector";
+import { recomputeDerivedStats } from "./stats/derivedStats";
 
 
 type HudRefs = {
@@ -126,6 +128,7 @@ type HudRefs = {
   killsPill: HTMLSpanElement;
   hpPill: HTMLSpanElement;
   armorPill: HTMLSpanElement;
+  momentumPill: HTMLSpanElement;
   lvlPill: HTMLSpanElement;
   objectiveOverlay: HTMLDivElement;
   objectiveTitle: HTMLDivElement;
@@ -1075,9 +1078,8 @@ export function createGame(args: CreateGameArgs) {
     const radius = w.rng.range(320, 520);
     const wx = pw.wx + Math.cos(angle) * radius;
     const wy = pw.wy + Math.sin(angle) * radius;
-    const gp = findNearestWalkableSpawnGrid(w, wx, wy);
-    spawnEnemyGrid(w, ENEMY_TYPE.BOSS, gp.gx, gp.gy, KENNEY_TILE_WORLD);
-    (w as any)._surviveBossSpawned = true;
+    const spawnedHp = spawnOneEnemyOfType(w, ENEMY_TYPE.BOSS, wx, wy, "elite");
+    if (spawnedHp > 0) (w as any)._surviveBossSpawned = true;
   }
 
   function syncBossTripleNavState(w: World): void {
@@ -1427,8 +1429,7 @@ export function createGame(args: CreateGameArgs) {
     const pw = gridToWorld(pg.gx, pg.gy, KENNEY_TILE_WORLD);
     const sx = pw.wx + Math.cos(a) * r;
     const sy = pw.wy + Math.sin(a) * r;
-    const gp = findNearestWalkableSpawnGrid(w, sx, sy);
-    spawnEnemyGrid(w, ENEMY_TYPE.BOSS, gp.gx, gp.gy, KENNEY_TILE_WORLD);
+    spawnOneEnemyOfType(w, ENEMY_TYPE.BOSS, sx, sy, "elite");
   }
 
   function enterTransition(w: World) {
@@ -2093,7 +2094,12 @@ export function createGame(args: CreateGameArgs) {
     args.hud.killsPill.textContent = `Kills: ${world.kills}`;
     args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
     args.hud.armorPill.textContent = `Armor: ${Math.max(0, Math.ceil(world.currentArmor))}/${world.maxArmor}`;
-    
+    const hasMomentumRelic = world.relics.some((id) => typeof id === "string" && id.startsWith("MOM_"));
+    args.hud.momentumPill.hidden = !hasMomentumRelic;
+    if (hasMomentumRelic) {
+      args.hud.momentumPill.textContent = `Momentum: ${Math.max(0, Math.ceil(world.momentumValue))}/${Math.max(0, Math.ceil(world.momentumMax))}`;
+    }
+
     args.hud.lvlPill.textContent = `Gold: ${getGold(world)}`;
 
     // 4 weapon slots + 4 item slots, order = array order
@@ -2197,6 +2203,7 @@ export function createGame(args: CreateGameArgs) {
       args.hud.killsPill.textContent = `Kills: ${world.kills}`;
       args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
       args.hud.armorPill.textContent = `Armor: ${Math.max(0, Math.ceil(world.currentArmor))}/${world.maxArmor}`;
+      args.hud.momentumPill.textContent = `Momentum: ${Math.max(0, Math.ceil(world.momentumValue))}/${Math.max(0, Math.ceil(world.momentumMax))}`;
       args.hud.lvlPill.textContent = `Gold: ${getGold(world)}`;
       renderRewardMenuIfNeeded();
       updateHud();
@@ -2232,6 +2239,8 @@ export function createGame(args: CreateGameArgs) {
     // Spawn pacing uses the same clock as floor progression/spawn cadence.
     world.timeSec = world.phaseTime;
     world.level = 1;
+    tickMomentumDecay(world, dt, world.timeSec);
+    recomputeDerivedStats(world);
 
     const mapMode = !!(world as any).mapMode;
 
@@ -2310,6 +2319,7 @@ export function createGame(args: CreateGameArgs) {
     markBossClearCompletionFromSignals(world);
     bossZoneSpawnSystem(world);
     objectiveSystem(world);
+    processMomentumEventQueue(world);
     if (maybeHandleZoneTrialMilestoneReward()) {
       clearEvents(world);
       return;
@@ -2375,6 +2385,7 @@ export function createGame(args: CreateGameArgs) {
     args.hud.killsPill.textContent = `Kills: ${world.kills}`;
     args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
     args.hud.armorPill.textContent = `Armor: ${Math.max(0, Math.ceil(world.currentArmor))}/${world.maxArmor}`;
+    args.hud.momentumPill.textContent = `Momentum: ${Math.max(0, Math.ceil(world.momentumValue))}/${Math.max(0, Math.ceil(world.momentumMax))}`;
     args.hud.lvlPill.textContent = `Gold: ${getGold(world)}`;
     updateHud();
 

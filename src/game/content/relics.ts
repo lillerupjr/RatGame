@@ -11,29 +11,79 @@ export const RELICS: RelicDef[] = [
   {
     id: "PASS_MOVE_SPEED_20",
     isEnabled: true,
-    displayName: "+20% movement speed",
+    displayName: "20% more movement speed",
     kind: "PASSIVE",
-    desc: ["+20% movement speed"],
+    desc: ["20% more movement speed"],
   },
   {
     id: "PASS_DAMAGE_PERCENT_20",
     isEnabled: true,
-    displayName: "+20% damage",
+    displayName: "20% more Damage",
     kind: "PASSIVE",
     desc: ["Deal 20% more damage"],
   },
   {
     id: "PASS_LIFE_TO_DAMAGE_2P",
     isEnabled: true,
-    displayName: "Gain damage equal to 20% max life",
+    displayName: "Gain more Damage equal to 20% of Maximum Life",
     kind: "PASSIVE",
+    desc: ["Gain more Damage equal to 20% of Maximum Life"],
+  },
+  {
+    id: "MOM_DAMAGE_PER_MOMENTUM_5",
+    isEnabled: true,
+    displayName: "+3% more Damage per Momentum",
+    kind: "PASSIVE",
+    desc: ["+3% more Damage per Momentum"],
+  },
+  {
+    id: "MOM_MOVE_SPEED_PER_MOMENTUM_3",
+    isEnabled: true,
+    displayName: "+2% increased Move Speed per Momentum",
+    kind: "PASSIVE",
+    desc: ["+2% increased Move Speed per Momentum"],
+  },
+  {
+    id: "MOM_MAX_MOMENTUM_PLUS_10",
+    isEnabled: true,
+    displayName: "+10 Maximum Momentum",
+    kind: "PASSIVE",
+    desc: ["+10 Maximum Momentum"],
+  },
+  {
+    id: "MOM_PROC_POWER_SCALING_2P",
+    isEnabled: true,
+    displayName: "Trigger effects deal 2% more damage per Momentum",
+    kind: "PASSIVE",
+    desc: ["Trigger effects deal 2% more damage per Momentum"],
+  },
+  {
+    id: "MOM_FULL_BREAK_GRANTS_ARMOR_20",
+    isEnabled: true,
+    displayName: "When full Momentum breaks, gain 20 Armor",
+    kind: "PASSIVE",
+    desc: ["When full Momentum breaks, gain 20 Armor"],
+  },
+  {
+    id: "MOM_FULL_CRIT_DOUBLE",
+    isEnabled: true,
+    displayName: "At full Momentum, Crit Chance is doubled",
+    kind: "PASSIVE",
+    desc: ["At full Momentum, Crit Chance is doubled"],
+  },
+  {
+    id: "MOM_DECAY_DELAY_PLUS_1",
+    isEnabled: true,
+    displayName: "Momentum decays 1s later",
+    kind: "PASSIVE",
+    desc: ["Momentum decays 1s later"],
   },
   {
     id: "ACT_BAZOOKA_ON_HIT_20",
     isEnabled: true,
-    displayName: "On hit: fire bazooka dealing 20% damage",
+    displayName: "On hit: fire a bazooka dealing 20% of hit damage",
     kind: "ACTIVE",
-    desc: ["On hit: fire bazooka dealing 20% damage"],
+    desc: ["On hit: fire a bazooka dealing 20% of hit damage"],
   },
   {
     id: "ACT_EXPLODE_ON_KILL",
@@ -45,8 +95,9 @@ export const RELICS: RelicDef[] = [
   {
     id: "ACT_ALL_HITS_EXPLODE_20",
     isEnabled: true,
-    displayName: "All hits explode for 20% damage",
+    displayName: "All hits explode for 20% of hit damage",
     kind: "ACTIVE",
+    desc: ["All hits explode for 20% of hit damage"],
   },
   {
     id: "ACT_TRIGGERS_DOUBLE",
@@ -71,9 +122,9 @@ export const RELICS: RelicDef[] = [
   {
     id: "ACT_PROC_CHANCE_PERCENT_50",
     isEnabled: true,
-    displayName: "+50% relic proc chance",
+    displayName: "+50% increased Relic Proc Chance",
     kind: "ACTIVE",
-    desc: ["+50% relic proc chance"],
+    desc: ["+50% increased Relic Proc Chance"],
   },
   {
     id: "ACT_NOVA_ON_CRIT_FIRE",
@@ -117,8 +168,9 @@ export const RELICS: RelicDef[] = [
   {
     id: "ARMOR_MAX_50",
     isEnabled: true,
-    displayName: "+50 max armor",
+    displayName: "+50 Maximum Armor",
     kind: "PASSIVE",
+    desc: ["+50 Maximum Armor"],
   },
   {
     id: "ARMOR_RESTORE_ON_KILL_10",
@@ -141,8 +193,9 @@ export const RELICS: RelicDef[] = [
   {
     id: "ARMOR_DOUBLE_MAX",
     isEnabled: true,
-    displayName: "Double max armor",
+    displayName: "100% more Maximum Armor",
     kind: "PASSIVE",
+    desc: ["100% more Maximum Armor"],
   },
 ];
 
@@ -152,6 +205,21 @@ function mapLegacyRelicSuffixToCanonical(suffix: string): string {
       return "PASS_MOVE_SPEED_20";
     case "PASS_DAMAGE_PERCENT":
       return "PASS_DAMAGE_PERCENT_20";
+    case "MOM_DAMAGE_PER_MOMENTUM_5":
+      return "MOM_DAMAGE_PER_MOMENTUM_5";
+    case "MOM_MOVE_SPEED_PER_MOMENTUM_3":
+      return "MOM_MOVE_SPEED_PER_MOMENTUM_3";
+    case "MOM_DECAY_DELAY_PLUS_1":
+      return "MOM_DECAY_DELAY_PLUS_1";
+    case "MOM_MAX_MOMENTUM_PLUS_10":
+      return "MOM_MAX_MOMENTUM_PLUS_10";
+    case "MOM_PROC_POWER_SCALING_2P":
+      return "MOM_PROC_POWER_SCALING_2P";
+    case "MOM_BREAK_GRANTS_ARMOR_20":
+    case "MOM_FULL_BREAK_GRANTS_ARMOR_20":
+      return "MOM_FULL_BREAK_GRANTS_ARMOR_20";
+    case "MOM_FULL_CRIT_DOUBLE":
+      return "MOM_FULL_CRIT_DOUBLE";
     case "ACT_BAZOOKA_ON_HIT_20":
       return "ACT_BAZOOKA_ON_HIT_20";
     case "ACT_EXPLODE_ON_KILL":

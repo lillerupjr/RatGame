@@ -146,6 +146,7 @@ export type World = {
 
   // Event queue (audio, hits, kills, pickups, etc.)
   events: GameEvent[];
+  eventQueue: GameEvent[];
 
   // Trigger registry and signal queue
   triggerMapId: string | null;
@@ -287,6 +288,11 @@ export type World = {
 
   // Run stats
   kills: number;
+  momentumValue: number;
+  momentumMax: number;
+  momentumWasFull: boolean;
+  fullMomentumActive: boolean;
+  momentumLastGainTime: number;
 
   // Vendor economy (scaffold)
   vendorOffers: { kind: "RELIC" | "UPGRADE" | "HEAL" | "REROLL"; id: string; cost: number }[];
@@ -585,6 +591,7 @@ export function createWorld(args: CreateWorldArgs): World {
     runState: "FLOOR",
     rng,
     events: [],
+    eventQueue: [],
 
     triggerMapId: null,
     triggerRegistry: [],
@@ -688,6 +695,11 @@ export function createWorld(args: CreateWorldArgs): World {
     critMultiplier: 2.0,
 
     kills: 0,
+    momentumValue: 0,
+    momentumMax: 20,
+    momentumWasFull: false,
+    fullMomentumActive: false,
+    momentumLastGainTime: 0,
     vendorOffers: [],
     vendorPurchases: [],
     vendor: null,
