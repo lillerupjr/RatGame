@@ -288,15 +288,15 @@ export function mountPauseMenu(args: {
   const tileRenderRadiusRow = document.createElement("label");
   tileRenderRadiusRow.className = "audioRow";
   const tileRenderRadiusLabel = document.createElement("span");
-  tileRenderRadiusLabel.textContent = "Tile Radius";
+  tileRenderRadiusLabel.textContent = "Render Padding";
   const tileRenderRadiusSlider = document.createElement("input");
   tileRenderRadiusSlider.type = "range";
-  tileRenderRadiusSlider.min = "1";
-  tileRenderRadiusSlider.max = "32";
+  tileRenderRadiusSlider.min = "-12";
+  tileRenderRadiusSlider.max = "12";
   tileRenderRadiusSlider.step = "1";
   setDataAttr(tileRenderRadiusSlider, "tile-render-radius-slider");
   const tileRenderRadiusValue = document.createElement("span");
-  tileRenderRadiusValue.textContent = "12";
+  tileRenderRadiusValue.textContent = "0";
   tileRenderRadiusValue.className = "pauseMeta";
   setDataAttr(tileRenderRadiusValue, "tile-render-radius-value");
   tileRenderRadiusRow.appendChild(tileRenderRadiusLabel);
@@ -930,7 +930,7 @@ export function mountPauseMenu(args: {
 
   const onTileRenderRadiusSlider = () => {
     const v = Number.parseFloat(tileRenderRadiusSlider.value);
-    const clamped = Math.max(1, Math.min(32, Number.isFinite(v) ? Math.round(v) : 12));
+    const clamped = Math.max(-12, Math.min(12, Number.isFinite(v) ? Math.round(v) : 0));
     updateUserSettings({
       render: {
         tileRenderRadius: clamped,
@@ -974,7 +974,7 @@ export function mountPauseMenu(args: {
 
   const syncTileRenderRadiusControl = () => {
     const settings = getUserSettings().render;
-    const radius = Math.max(1, Math.min(32, Number.isFinite(settings.tileRenderRadius) ? Math.round(settings.tileRenderRadius) : 12));
+    const radius = Math.max(-12, Math.min(12, Number.isFinite(settings.tileRenderRadius) ? Math.round(settings.tileRenderRadius) : 0));
     tileRenderRadiusSlider.value = `${radius}`;
     tileRenderRadiusValue.textContent = `${radius}`;
   };

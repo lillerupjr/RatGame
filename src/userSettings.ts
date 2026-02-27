@@ -53,7 +53,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
     entityAnchorsEnabled: false,
     renderPerfCountersEnabled: false,
     performanceMode: false,
-    tileRenderRadius: 12,
+    tileRenderRadius: 0,
     paletteSwapEnabled: false,
     paletteId: "db32",
     ...DEFAULT_SPAWN_TUNING,

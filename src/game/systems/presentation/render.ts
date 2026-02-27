@@ -17,7 +17,6 @@ import {
   facePiecesInViewForLayer,
   occluderLayers,
   occludersInViewForLayer,
-  viewRectFromWorldCenter,
   overlaysInView,
   blockedTilesInView,
   decalsInView,
@@ -36,7 +35,7 @@ import {
   PROJECTILE_BASE_DRAW_PX,
 } from "../../../engine/render/sprites/projectileSprites";
 
-import { worldDeltaToScreen, worldToScreen, ISO_X, ISO_Y } from "../../../engine/math/iso";
+import { screenToWorld, worldDeltaToScreen, worldToScreen, ISO_X, ISO_Y } from "../../../engine/math/iso";
 
 import { KENNEY_TILE_WORLD, KENNEY_TILE_ANCHOR_Y } from "../../../engine/render/kenneyTiles";
 import {
@@ -1296,21 +1295,155 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   // Tile range / diagonals
   // ----------------------------
   const configuredRadius = Number(renderSettings.tileRenderRadius);
-  const radius = Math.max(1, Math.min(32, Number.isFinite(configuredRadius) ? Math.round(configuredRadius) : 12));
-  setRenderTileLoopRadius(radius);
-  const cx = Math.floor(px / T);
-  const cy = Math.floor(py / T);
-  const radiusSq = radius * radius;
+  const paddingTiles = Math.max(-12, Math.min(12, Number.isFinite(configuredRadius) ? Math.round(configuredRadius) : 0));
+  setRenderTileLoopRadius(paddingTiles);
+  type ScreenRect = { minX: number; maxX: number; minY: number; maxY: number };
+  type TileBounds = { minTx: number; maxTx: number; minTy: number; maxTy: number };
+  type CullingView = { screenRect: ScreenRect; tileBounds: TileBounds };
+
+  const pointInRect = (px: number, py: number, r: ScreenRect): boolean => (
+    px >= r.minX && px <= r.maxX && py >= r.minY && py <= r.maxY
+  );
+  const cross = (ax: number, ay: number, bx: number, by: number, cx: number, cy: number): number => (
+    (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+  );
+  const pointInConvexQuad = (
+    px: number,
+    py: number,
+    x0: number, y0: number,
+    x1: number, y1: number,
+    x2: number, y2: number,
+    x3: number, y3: number,
+  ): boolean => {
+    const c0 = cross(x0, y0, x1, y1, px, py);
+    const c1 = cross(x1, y1, x2, y2, px, py);
+    const c2 = cross(x2, y2, x3, y3, px, py);
+    const c3 = cross(x3, y3, x0, y0, px, py);
+    const hasPos = c0 > 0 || c1 > 0 || c2 > 0 || c3 > 0;
+    const hasNeg = c0 < 0 || c1 < 0 || c2 < 0 || c3 < 0;
+    return !(hasPos && hasNeg);
+  };
+  const onSegment = (ax: number, ay: number, bx: number, by: number, px: number, py: number): boolean => (
+    px >= Math.min(ax, bx) && px <= Math.max(ax, bx) &&
+    py >= Math.min(ay, by) && py <= Math.max(ay, by)
+  );
+  const segmentsIntersect = (
+    ax: number, ay: number, bx: number, by: number,
+    cx: number, cy: number, dx: number, dy: number,
+  ): boolean => {
+    const o1 = cross(ax, ay, bx, by, cx, cy);
+    const o2 = cross(ax, ay, bx, by, dx, dy);
+    const o3 = cross(cx, cy, dx, dy, ax, ay);
+    const o4 = cross(cx, cy, dx, dy, bx, by);
+
+    if ((o1 > 0) !== (o2 > 0) && (o3 > 0) !== (o4 > 0)) return true;
+    if (o1 === 0 && onSegment(ax, ay, bx, by, cx, cy)) return true;
+    if (o2 === 0 && onSegment(ax, ay, bx, by, dx, dy)) return true;
+    if (o3 === 0 && onSegment(cx, cy, dx, dy, ax, ay)) return true;
+    if (o4 === 0 && onSegment(cx, cy, dx, dy, bx, by)) return true;
+    return false;
+  };
+  const tileDiamondIntersectsScreenRect = (tx: number, ty: number, rect: ScreenRect): boolean => {
+    const x0w = tx * T;
+    const y0w = ty * T;
+    const p0 = worldToScreen(x0w, y0w);
+    const p1 = worldToScreen(x0w + T, y0w);
+    const p2 = worldToScreen(x0w + T, y0w + T);
+    const p3 = worldToScreen(x0w, y0w + T);
+
+    if (pointInRect(p0.x, p0.y, rect) || pointInRect(p1.x, p1.y, rect) || pointInRect(p2.x, p2.y, rect) || pointInRect(p3.x, p3.y, rect)) return true;
+
+    const rx0 = rect.minX, ry0 = rect.minY;
+    const rx1 = rect.maxX, ry1 = rect.minY;
+    const rx2 = rect.maxX, ry2 = rect.maxY;
+    const rx3 = rect.minX, ry3 = rect.maxY;
+
+    if (
+      pointInConvexQuad(rx0, ry0, p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y) ||
+      pointInConvexQuad(rx1, ry1, p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y) ||
+      pointInConvexQuad(rx2, ry2, p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y) ||
+      pointInConvexQuad(rx3, ry3, p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y)
+    ) {
+      return true;
+    }
+
+    const quadEdges: Array<[number, number, number, number]> = [
+      [p0.x, p0.y, p1.x, p1.y],
+      [p1.x, p1.y, p2.x, p2.y],
+      [p2.x, p2.y, p3.x, p3.y],
+      [p3.x, p3.y, p0.x, p0.y],
+    ];
+    const rectEdges: Array<[number, number, number, number]> = [
+      [rx0, ry0, rx1, ry1],
+      [rx1, ry1, rx2, ry2],
+      [rx2, ry2, rx3, ry3],
+      [rx3, ry3, rx0, ry0],
+    ];
+    for (let i = 0; i < quadEdges.length; i++) {
+      const [ax, ay, bx, by] = quadEdges[i];
+      for (let j = 0; j < rectEdges.length; j++) {
+        const [cx, cy, dx, dy] = rectEdges[j];
+        if (segmentsIntersect(ax, ay, bx, by, cx, cy, dx, dy)) return true;
+      }
+    }
+    return false;
+  };
+
+  const cullingCache = new Map<number, CullingView>();
+  const getCullingView = (extraPadTiles: number): CullingView => {
+    const p = Math.floor(extraPadTiles);
+    const cached = cullingCache.get(p);
+    if (cached) return cached;
+
+    const totalPadTiles = paddingTiles + p;
+    const padX = totalPadTiles * T * ISO_X;
+    const padY = totalPadTiles * T * ISO_Y;
+    const sx0 = -camTx - padX;
+    const sx1 = -camTx + devW / s + padX;
+    const sy0 = -camTy - padY;
+    const sy1 = -camTy + devH / s + padY;
+    const screenRect: ScreenRect = {
+      minX: Math.min(sx0, sx1),
+      maxX: Math.max(sx0, sx1),
+      minY: Math.min(sy0, sy1),
+      maxY: Math.max(sy0, sy1),
+    };
+
+    const c0 = screenToWorld(screenRect.minX, screenRect.minY);
+    const c1 = screenToWorld(screenRect.maxX, screenRect.minY);
+    const c2 = screenToWorld(screenRect.minX, screenRect.maxY);
+    const c3 = screenToWorld(screenRect.maxX, screenRect.maxY);
+    const minWx = Math.min(c0.x, c1.x, c2.x, c3.x);
+    const maxWx = Math.max(c0.x, c1.x, c2.x, c3.x);
+    const minWy = Math.min(c0.y, c1.y, c2.y, c3.y);
+    const maxWy = Math.max(c0.y, c1.y, c2.y, c3.y);
+    const tileBounds: TileBounds = {
+      minTx: Math.floor(minWx / T),
+      maxTx: Math.floor(maxWx / T),
+      minTy: Math.floor(minWy / T),
+      maxTy: Math.floor(maxWy / T),
+    };
+    const view: CullingView = { screenRect, tileBounds };
+    cullingCache.set(p, view);
+    return view;
+  };
+
+  const baseCulling = getCullingView(0);
+  const viewRect = baseCulling.tileBounds;
+  const minTx = viewRect.minTx;
+  const maxTx = viewRect.maxTx;
+  const minTy = viewRect.minTy;
+  const maxTy = viewRect.maxTy;
+
   const isTileInRenderRadius = (tx: number, ty: number): boolean => {
-    const dx = tx - cx;
-    const dy = ty - cy;
-    return dx * dx + dy * dy <= radiusSq;
+    if (tx < minTx || tx > maxTx || ty < minTy || ty > maxTy) return false;
+    return tileDiamondIntersectsScreenRect(tx, ty, baseCulling.screenRect);
   };
   const isTileInRenderRadiusPadded = (tx: number, ty: number, padTiles: number): boolean => {
-    const r = Math.max(0, radius + padTiles);
-    const dx = tx - cx;
-    const dy = ty - cy;
-    return dx * dx + dy * dy <= r * r;
+    const culling = getCullingView(Math.max(0, Math.floor(padTiles)));
+    const bounds = culling.tileBounds;
+    if (tx < bounds.minTx || tx > bounds.maxTx || ty < bounds.minTy || ty > bounds.maxTy) return false;
+    return tileDiamondIntersectsScreenRect(tx, ty, culling.screenRect);
   };
   const tileRectIntersectsRenderRadius = (
     minRectTx: number,
@@ -1318,22 +1451,11 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
     minRectTy: number,
     maxRectTy: number,
   ): boolean => {
-    const nx = Math.max(minRectTx, Math.min(cx, maxRectTx));
-    const ny = Math.max(minRectTy, Math.min(cy, maxRectTy));
-    const dx = nx - cx;
-    const dy = ny - cy;
-    return dx * dx + dy * dy <= radiusSq;
+    return !(maxRectTx < minTx || minRectTx > maxTx || maxRectTy < minTy || minRectTy > maxTy);
   };
-
-  const minTx = cx - radius;
-  const maxTx = cx + radius;
-  const minTy = cy - radius;
-  const maxTy = cy + radius;
 
   const minSum = minTx + minTy;
   const maxSum = maxTx + maxTy;
-
-  const viewRect = viewRectFromWorldCenter(px, py, T, radius);
   const activeH = w.activeFloorH ?? 0;
   const compiledMap = getActiveCompiledMap();
 

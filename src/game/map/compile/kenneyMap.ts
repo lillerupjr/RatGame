@@ -351,16 +351,38 @@ export function viewRectFromWorldCenter(
     wx: number,
     wy: number,
     tileWorld: number,
-    radiusTiles: number
+    paddingTiles: number,
+    aspect?: number,
 ): ViewRect {
     const cx = Math.floor(wx / tileWorld);
     const cy = Math.floor(wy / tileWorld);
-    const r = Math.max(0, Math.floor(radiusTiles));
+    const pad = Math.max(0, Math.floor(paddingTiles));
+    const a = Number.isFinite(aspect as any) && (aspect as number) > 0 ? (aspect as number) : 0;
+
+    if (!a) {
+        return {
+            minTx: cx - pad,
+            maxTx: cx + pad,
+            minTy: cy - pad,
+            maxTy: cy + pad,
+        };
+    }
+
+    let halfW = pad;
+    let halfH = pad;
+    if (a >= 1) {
+        halfW = Math.max(1, Math.round(pad * a));
+        halfH = pad;
+    } else {
+        halfW = pad;
+        halfH = Math.max(1, Math.round(pad / a));
+    }
+
     return {
-        minTx: cx - r,
-        maxTx: cx + r,
-        minTy: cy - r,
-        maxTy: cy + r,
+        minTx: cx - halfW,
+        maxTx: cx + halfW,
+        minTy: cy - halfH,
+        maxTy: cy + halfH,
     };
 }
 type SurfaceHitOptions = {
