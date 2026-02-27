@@ -13,6 +13,13 @@ type FrameCounters = {
   fullCanvasBlits: number;
   tileLoopIterations: number;
   tileLoopRadius: number;
+  zBandCount: number;
+  lightBandCount: number;
+  maskBuilds: number;
+  maskCacheHits: number;
+  maskCacheMisses: number;
+  maskRasterChunks: number;
+  maskDrawEntries: number;
 };
 
 type Snapshot = {
@@ -30,6 +37,13 @@ type Snapshot = {
   fullCanvasBlitsPerFrame: number;
   tileLoopIterationsPerFrame: number;
   tileLoopRadius: number;
+  zBandCountPerFrame: number;
+  lightBandCountPerFrame: number;
+  maskBuildsPerFrame: number;
+  maskCacheHitsPerFrame: number;
+  maskCacheMissesPerFrame: number;
+  maskRasterChunksPerFrame: number;
+  maskDrawEntriesPerFrame: number;
 };
 
 export type DrawTag =
@@ -90,6 +104,13 @@ const ZERO_FRAME: FrameCounters = {
   fullCanvasBlits: 0,
   tileLoopIterations: 0,
   tileLoopRadius: 0,
+  zBandCount: 0,
+  lightBandCount: 0,
+  maskBuilds: 0,
+  maskCacheHits: 0,
+  maskCacheMisses: 0,
+  maskRasterChunks: 0,
+  maskDrawEntries: 0,
 };
 
 function makeZeroFrame(): FrameCounters {
@@ -125,6 +146,13 @@ let snapshot: Snapshot = {
   fullCanvasBlitsPerFrame: 0,
   tileLoopIterationsPerFrame: 0,
   tileLoopRadius: 0,
+  zBandCountPerFrame: 0,
+  lightBandCountPerFrame: 0,
+  maskBuildsPerFrame: 0,
+  maskCacheHitsPerFrame: 0,
+  maskCacheMissesPerFrame: 0,
+  maskRasterChunksPerFrame: 0,
+  maskDrawEntriesPerFrame: 0,
 };
 
 let currentDrawTag: DrawTag = "untagged";
@@ -226,6 +254,13 @@ function foldCurrentFrame(nowSec: number): void {
   accum.fullCanvasBlits += frame.fullCanvasBlits;
   accum.tileLoopIterations += frame.tileLoopIterations;
   accum.tileLoopRadius = frame.tileLoopRadius;
+  accum.zBandCount += frame.zBandCount;
+  accum.lightBandCount += frame.lightBandCount;
+  accum.maskBuilds += frame.maskBuilds;
+  accum.maskCacheHits += frame.maskCacheHits;
+  accum.maskCacheMisses += frame.maskCacheMisses;
+  accum.maskRasterChunks += frame.maskRasterChunks;
+  accum.maskDrawEntries += frame.maskDrawEntries;
   framesAccum += 1;
 
   if (lastReportSec < 0) lastReportSec = nowSec;
@@ -256,6 +291,13 @@ function foldCurrentFrame(nowSec: number): void {
       fullCanvasBlitsPerFrame: accum.fullCanvasBlits / denom,
       tileLoopIterationsPerFrame: accum.tileLoopIterations / denom,
       tileLoopRadius: accum.tileLoopRadius,
+      zBandCountPerFrame: accum.zBandCount / denom,
+      lightBandCountPerFrame: accum.lightBandCount / denom,
+      maskBuildsPerFrame: accum.maskBuilds / denom,
+      maskCacheHitsPerFrame: accum.maskCacheHits / denom,
+      maskCacheMissesPerFrame: accum.maskCacheMisses / denom,
+      maskRasterChunksPerFrame: accum.maskRasterChunks / denom,
+      maskDrawEntriesPerFrame: accum.maskDrawEntries / denom,
     };
     accum = makeZeroFrame();
     framesAccum = 0;
@@ -306,6 +348,41 @@ export function setRenderTileLoopRadius(radius: number): void {
   frame.tileLoopRadius = radius;
 }
 
+export function setRenderZBandCount(count: number): void {
+  if (!enabled) return;
+  frame.zBandCount = Math.max(0, count | 0);
+}
+
+export function setRenderLightBandCount(count: number): void {
+  if (!enabled) return;
+  frame.lightBandCount = Math.max(0, count | 0);
+}
+
+export function countRenderMaskBuild(n: number = 1): void {
+  if (!enabled) return;
+  frame.maskBuilds += n;
+}
+
+export function countRenderMaskCacheHit(n: number = 1): void {
+  if (!enabled) return;
+  frame.maskCacheHits += n;
+}
+
+export function countRenderMaskCacheMiss(n: number = 1): void {
+  if (!enabled) return;
+  frame.maskCacheMisses += n;
+}
+
+export function countRenderMaskRasterChunk(n: number = 1): void {
+  if (!enabled) return;
+  frame.maskRasterChunks += n;
+}
+
+export function countRenderMaskDrawEntry(n: number = 1): void {
+  if (!enabled) return;
+  frame.maskDrawEntries += n;
+}
+
 export function getRenderPerfSnapshot(): Snapshot {
   if (!enabled) {
     return {
@@ -323,6 +400,13 @@ export function getRenderPerfSnapshot(): Snapshot {
       fullCanvasBlitsPerFrame: 0,
       tileLoopIterationsPerFrame: 0,
       tileLoopRadius: 0,
+      zBandCountPerFrame: 0,
+      lightBandCountPerFrame: 0,
+      maskBuildsPerFrame: 0,
+      maskCacheHitsPerFrame: 0,
+      maskCacheMissesPerFrame: 0,
+      maskRasterChunksPerFrame: 0,
+      maskDrawEntriesPerFrame: 0,
     };
   }
   return snapshot;

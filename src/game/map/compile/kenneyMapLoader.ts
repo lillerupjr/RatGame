@@ -193,6 +193,30 @@ export type SolidFaceRec = {
     dir: WallDir;
 };
 
+export type OcclusionClass = "SURFACE" | "VOLUMETRIC";
+export type OcclusionChunkKey = string;
+export type OcclusionGeomRect = {
+    tx0: number;
+    ty0: number;
+    tx1: number;
+    ty1: number;
+    z: number;
+    cls: OcclusionClass;
+};
+export type OcclusionChunkBucket = {
+    chunkX: number;
+    chunkY: number;
+    entries: OcclusionGeomRect[];
+};
+export type CompiledOcclusionGeometry = {
+    chunkSize: number;
+    byBandAndClass: Map<number, {
+        surface: Map<OcclusionChunkKey, OcclusionChunkBucket>;
+        volumetric: Map<OcclusionChunkKey, OcclusionChunkBucket>;
+    }>;
+    availableBands: number[];
+};
+
 export type CompiledKenneyMap = {
     id: string;
     originTx: number;
@@ -273,6 +297,7 @@ export type CompiledKenneyMap = {
         startHeight?: number;
         targetHeight?: number;
     }>;
+    occlusionGeometry: CompiledOcclusionGeometry;
     isRoadWorld(x: number, y: number): boolean;
 };
 
@@ -2677,6 +2702,114 @@ export function compileKenneyMapFromTable(
         return out;
     }
 
+    const OCCLUSION_CHUNK_SIZE = 16;
+    const occlusionByBandAndClass = new Map<number, {
+        surface: Map<OcclusionChunkKey, OcclusionChunkBucket>;
+        volumetric: Map<OcclusionChunkKey, OcclusionChunkBucket>;
+    }>();
+    const ensureOcclusionBand = (z: number) => {
+        let band = occlusionByBandAndClass.get(z);
+        if (!band) {
+            band = { surface: new Map(), volumetric: new Map() };
+            occlusionByBandAndClass.set(z, band);
+        }
+        return band;
+    };
+    const addOcclusionRect = (
+        z: number,
+        cls: OcclusionClass,
+        tx0In: number,
+        ty0In: number,
+        tx1In: number,
+        ty1In: number,
+    ) => {
+        const tx0 = Math.floor(Math.min(tx0In, tx1In));
+        const ty0 = Math.floor(Math.min(ty0In, ty1In));
+        const tx1 = Math.ceil(Math.max(tx0In, tx1In));
+        const ty1 = Math.ceil(Math.max(ty0In, ty1In));
+        if (tx1 <= tx0 || ty1 <= ty0) return;
+
+        const band = ensureOcclusionBand(z);
+        const classMap = cls === "SURFACE" ? band.surface : band.volumetric;
+        const cx0 = Math.floor(tx0 / OCCLUSION_CHUNK_SIZE);
+        const cy0 = Math.floor(ty0 / OCCLUSION_CHUNK_SIZE);
+        const cx1 = Math.floor((tx1 - 1) / OCCLUSION_CHUNK_SIZE);
+        const cy1 = Math.floor((ty1 - 1) / OCCLUSION_CHUNK_SIZE);
+        for (let cy = cy0; cy <= cy1; cy++) {
+            for (let cx = cx0; cx <= cx1; cx++) {
+                const chunkTx0 = cx * OCCLUSION_CHUNK_SIZE;
+                const chunkTy0 = cy * OCCLUSION_CHUNK_SIZE;
+                const chunkTx1 = chunkTx0 + OCCLUSION_CHUNK_SIZE;
+                const chunkTy1 = chunkTy0 + OCCLUSION_CHUNK_SIZE;
+                const clipTx0 = Math.max(tx0, chunkTx0);
+                const clipTy0 = Math.max(ty0, chunkTy0);
+                const clipTx1 = Math.min(tx1, chunkTx1);
+                const clipTy1 = Math.min(ty1, chunkTy1);
+                if (clipTx1 <= clipTx0 || clipTy1 <= clipTy0) continue;
+                const key = `${cx},${cy}`;
+                let bucket = classMap.get(key);
+                if (!bucket) {
+                    bucket = { chunkX: cx, chunkY: cy, entries: [] };
+                    classMap.set(key, bucket);
+                }
+                bucket.entries.push({
+                    tx0: clipTx0,
+                    ty0: clipTy0,
+                    tx1: clipTx1,
+                    ty1: clipTy1,
+                    z,
+                    cls,
+                });
+            }
+        }
+    };
+
+    for (const surfaces of surfacesByKey.values()) {
+        for (let i = 0; i < surfaces.length; i++) {
+            const s = surfaces[i];
+            if ((s.zBase | 0) <= 0) continue;
+            addOcclusionRect(s.zBase | 0, "SURFACE", s.tx, s.ty, s.tx + 1, s.ty + 1);
+        }
+    }
+    for (let i = 0; i < decals.length; i++) {
+        const d = decals[i];
+        const z = d.zBase | 0;
+        if (z <= 0) continue;
+        const tx = Math.floor(d.tx);
+        const ty = Math.floor(d.ty);
+        addOcclusionRect(z, "SURFACE", tx, ty, tx + 1, ty + 1);
+    }
+    for (const list of occludersByLayer.values()) {
+        for (let i = 0; i < list.length; i++) {
+            const p = list[i];
+            const tw = p.tw ?? 1;
+            const th = p.th ?? 1;
+            const z = Math.floor((p.zTo ?? p.zFrom) + 1e-3);
+            addOcclusionRect(z, "VOLUMETRIC", p.tx, p.ty, p.tx + tw, p.ty + th);
+        }
+    }
+    for (const list of facePiecesByLayer.values()) {
+        for (let i = 0; i < list.length; i++) {
+            const p = list[i];
+            if (p.layerRole !== "STRUCTURE") continue;
+            const tw = p.tw ?? 1;
+            const th = p.th ?? 1;
+            const z = Math.floor((p.zTo ?? p.zFrom) + 1e-3);
+            addOcclusionRect(z, "VOLUMETRIC", p.tx, p.ty, p.tx + tw, p.ty + th);
+        }
+    }
+    for (let i = 0; i < overlays.length; i++) {
+        const o = overlays[i];
+        if (!(o.layerRole === "STRUCTURE" || (o.kind ?? "ROOF") === "ROOF")) continue;
+        const z = Math.floor(o.z + 1e-3);
+        addOcclusionRect(z, "VOLUMETRIC", o.tx, o.ty, o.tx + o.w, o.ty + o.h);
+    }
+    const occlusionGeometry: CompiledOcclusionGeometry = {
+        chunkSize: OCCLUSION_CHUNK_SIZE,
+        byBandAndClass: occlusionByBandAndClass,
+        availableBands: Array.from(occlusionByBandAndClass.keys()).sort((a, b) => a - b),
+    };
+
     const compiled: CompiledKenneyMap = {
         id: def.id,
         originTx,
@@ -2733,6 +2866,7 @@ export function compileKenneyMapFromTable(
         roadIntersectionSeedsWorld,
         roadIntersectionClusterCentersWorld,
         roadSemanticRects: roadSemanticRectsCompiled,
+        occlusionGeometry,
         isRoadWorld,
     };
 

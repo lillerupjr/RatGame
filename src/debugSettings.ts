@@ -33,8 +33,10 @@ export type DebugSettings = {
   triggers: boolean;
   debugRoadSemantic: boolean;
   disableLightingOcclusion: boolean;
-  lightingHeightBandedOcclusion: boolean;
+  disableLightingHeightBandedOcclusion: boolean;
   lightingUseLegacyGlobalOcclusion: boolean;
+  lightingCompiledMaskCache: boolean;
+  visualCompiledCutoutCache: boolean;
   lightingMasks: boolean;
   lightingMaskDebugMode: LightingMaskDebugMode;
   mapOverlaysDisabled: boolean;
@@ -90,8 +92,10 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "triggers", label: "triggers" },
   { key: "debugRoadSemantic", label: "debugRoadSemantic" },
   { key: "disableLightingOcclusion", label: "disableLightingOcclusion" },
-  { key: "lightingHeightBandedOcclusion", label: "lightingHeightBandedOcclusion" },
+  { key: "disableLightingHeightBandedOcclusion", label: "disableLightingHeightBandedOcclusion" },
   { key: "lightingUseLegacyGlobalOcclusion", label: "lightingUseLegacyGlobalOcclusion" },
+  { key: "lightingCompiledMaskCache", label: "lightingCompiledMaskCache" },
+  { key: "visualCompiledCutoutCache", label: "visualCompiledCutoutCache" },
   { key: "lightingMasks", label: "lightingMasks" },
   { key: "mapOverlaysDisabled", label: "mapOverlaysDisabled" },
   { key: "rampFaces", label: "rampFaces" },
@@ -116,8 +120,10 @@ export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   triggers: false,
   debugRoadSemantic: false,
   disableLightingOcclusion: false,
-  lightingHeightBandedOcclusion: true,
+  disableLightingHeightBandedOcclusion: false,
   lightingUseLegacyGlobalOcclusion: false,
+  lightingCompiledMaskCache: true,
+  visualCompiledCutoutCache: false,
   lightingMasks: false,
   lightingMaskDebugMode: "OFF",
   mapOverlaysDisabled: false,
@@ -161,6 +167,8 @@ export type ResolvedDebugFlags = {
   lightingOcclusionEnabled: boolean;
   lightingHeightBandedOcclusion: boolean;
   lightingUseLegacyGlobalOcclusion: boolean;
+  lightingCompiledMaskCache: boolean;
+  visualCompiledCutoutCache: boolean;
   buildingMaskDebugView: LightingMaskDebugMode;
   showBuildingMaskDebug: boolean;
 };
@@ -183,8 +191,10 @@ export function resolveDebugFlags(debug: DebugSettings): ResolvedDebugFlags {
     showStructureSlices: debug.slices || debug.spriteBounds,
     showMapOverlays: !debug.mapOverlaysDisabled,
     lightingOcclusionEnabled: !debug.disableLightingOcclusion,
-    lightingHeightBandedOcclusion: debug.lightingHeightBandedOcclusion,
+    lightingHeightBandedOcclusion: !debug.disableLightingHeightBandedOcclusion,
     lightingUseLegacyGlobalOcclusion: debug.lightingUseLegacyGlobalOcclusion,
+    lightingCompiledMaskCache: debug.lightingCompiledMaskCache,
+    visualCompiledCutoutCache: debug.visualCompiledCutoutCache,
     buildingMaskDebugView,
     showBuildingMaskDebug: buildingMaskDebugView !== "OFF",
   };

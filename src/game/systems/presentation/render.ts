@@ -90,8 +90,15 @@ import {
   countRenderClosureCreated,
   countRenderDrawableSort,
   countRenderSliceKeySort,
+  countRenderMaskBuild,
+  countRenderMaskCacheHit,
+  countRenderMaskCacheMiss,
+  countRenderMaskRasterChunk,
+  countRenderMaskDrawEntry,
   endRenderPerfFrame,
   getRenderPerfSnapshot,
+  setRenderZBandCount,
+  setRenderLightBandCount,
   setRenderPerfCountersEnabled,
   setRenderPerfDrawTag,
   setRenderTileLoopRadius,
@@ -654,6 +661,47 @@ function buildLightingOccluderGroups(
   return groups;
 }
 
+function drawOcclusionTileRectScreen(
+  maskCtx: CanvasRenderingContext2D,
+  tx0: number,
+  ty0: number,
+  tx1: number,
+  ty1: number,
+  z: number,
+  worldToScreenFn: (x: number, y: number) => { x: number; y: number },
+  tileWorld: number,
+  elevPx: number,
+  camTx: number,
+  camTy: number,
+  s: number,
+  safeOffsetX: number,
+  safeOffsetY: number,
+  dpr: number,
+): void {
+  const p0 = worldToScreenFn(tx0 * tileWorld, ty0 * tileWorld);
+  const p1 = worldToScreenFn(tx1 * tileWorld, ty0 * tileWorld);
+  const p2 = worldToScreenFn(tx1 * tileWorld, ty1 * tileWorld);
+  const p3 = worldToScreenFn(tx0 * tileWorld, ty1 * tileWorld);
+  const zPx = z * elevPx;
+  const ox = safeOffsetX * dpr;
+  const oy = safeOffsetY * dpr;
+  const sx0 = (p0.x + camTx) * s + ox;
+  const sy0 = (p0.y + camTy - zPx) * s + oy;
+  const sx1 = (p1.x + camTx) * s + ox;
+  const sy1 = (p1.y + camTy - zPx) * s + oy;
+  const sx2 = (p2.x + camTx) * s + ox;
+  const sy2 = (p2.y + camTy - zPx) * s + oy;
+  const sx3 = (p3.x + camTx) * s + ox;
+  const sy3 = (p3.y + camTy - zPx) * s + oy;
+  maskCtx.beginPath();
+  maskCtx.moveTo(sx0, sy0);
+  maskCtx.lineTo(sx1, sy1);
+  maskCtx.lineTo(sx2, sy2);
+  maskCtx.lineTo(sx3, sy3);
+  maskCtx.closePath();
+  maskCtx.fill();
+}
+
 function isTileInPlayerSouthWedge(
   tx: number,
   ty: number,
@@ -1023,6 +1071,7 @@ export async function renderSystem(
 
   type MaskDraw = (maskCtx: CanvasRenderingContext2D) => void;
   const playerOcclusionZ = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
+  const playerRenderBand = Math.floor(playerOcclusionZ + 1e-3);
   const buildingMaskDraws: MaskDraw[] = [];
   const occluderEntries: OccluderEntry[] = [];
   const southBuildingMaskDraws: MaskDraw[] = [];
@@ -1711,6 +1760,7 @@ export async function renderSystem(
     ) + 2;
   const activeH = w.activeFloorH ?? 0;
   const compiledMap = getActiveCompiledMap();
+  const compiledOcclusionGeom = compiledMap.occlusionGeometry;
   const rampRoadTiles = new Set<string>();
   if (compiledMap?.roadSemanticRects) {
     for (let i = 0; i < compiledMap.roadSemanticRects.length; i++) {
@@ -2936,9 +2986,9 @@ export async function renderSystem(
           const isStructureish = renderKey.kindOrder === KindOrder.STRUCTURE || renderKey.kindOrder === KindOrder.OVERLAY;
 
           // Owner tile for face pieces is (face.tx, face.ty)
-          const ownerInWedge = isOwnerTileInPlayerWedge(face.tx, face.ty);
+          const pieceBand = Math.floor(renderKey.baseZ + 1e-3);
 
-          if (isStructureish && sctx && ownerInWedge) {
+          if (isStructureish && sctx && pieceBand > playerRenderBand) {
             hasStructureLayerDraw = true;
             drawRenderPieceTo(sctx, d);
           } else drawRenderPiece(d);
@@ -2992,9 +3042,9 @@ export async function renderSystem(
         const isStructureish = renderKey.kindOrder === KindOrder.STRUCTURE || renderKey.kindOrder === KindOrder.OVERLAY;
 
         // Owner tile for walls is (occ.tx, occ.ty)
-        const ownerInWedge = isOwnerTileInPlayerWedge(occ.tx, occ.ty);
+        const pieceBand = Math.floor(renderKey.baseZ + 1e-3);
 
-        if (isStructureish && sctx && ownerInWedge) {
+        if (isStructureish && sctx && pieceBand > playerRenderBand) {
           hasStructureLayerDraw = true;
           drawRenderPieceTo(sctx, draw);
         } else drawRenderPiece(draw);
@@ -3079,13 +3129,13 @@ export async function renderSystem(
               const sctx = structureLayerScratchCtx;
 
               // Owner tile for a band piece is derived from its renderKey.
-              const ownerInWedge = isOwnerTileInPlayerWedge(ownerTx, ownerTy);
+              const pieceBand = Math.floor(overlayKey.baseZ + 1e-3);
 
               const wantsStructureTarget =
                 (overlayKey.kindOrder === KindOrder.STRUCTURE || overlayKey.kindOrder === KindOrder.OVERLAY);
 
               // Route to structure scratch ONLY if wedge-owned; otherwise draw to main ctx.
-              const target = wantsStructureTarget && sctx && ownerInWedge ? sctx : ctx;
+              const target = wantsStructureTarget && sctx && pieceBand > playerRenderBand ? sctx : ctx;
               if (target === sctx) hasStructureLayerDraw = true;
               const img = draw.img;
               if (!img) return;
@@ -3232,9 +3282,9 @@ export async function renderSystem(
             // Owner tile for overlays is their anchor tile (used for slice/placement)
             const ownerTx = (o.anchorTx ?? (o.tx + o.w - 1));
             const ownerTy = (o.anchorTy ?? (o.ty + o.h - 1));
-            const ownerInWedge = isOwnerTileInPlayerWedge(ownerTx, ownerTy);
+            const pieceBand = Math.floor(overlayKey.baseZ + 1e-3);
 
-            if (isStructureish && sctx && ownerInWedge) {
+            if (isStructureish && sctx && pieceBand > playerRenderBand) {
               hasStructureLayerDraw = true;
               drawRenderPieceTo(sctx, draw);
             } else drawRenderPiece(draw);
@@ -3274,15 +3324,32 @@ export async function renderSystem(
     countRenderDrawableSort();
     drawables.sort((a, b) => compareRenderKeys(a.key, b.key));
     for (let j = 0; j < drawables.length; j++) {
-      zBands.add(Math.floor(drawables[j].key.baseZ));
+      const key = drawables[j].key;
+      const baseBand = Math.floor(key.baseZ + 1e-3);
+      const tx = key.within | 0;
+      const ty = (key.slice - key.within) | 0;
+      const band = (rampRoadTiles.has(`${tx},${ty}`) && baseBand > 0 && baseBand < 8)
+        ? (baseBand >= 4 ? 8 : 0)
+        : baseBand;
+      zBands.add(band);
     }
   }
 
   const zBandKeys = Array.from(zBands);
   zBandKeys.sort((a, b) => a - b);
+  setRenderZBandCount(zBandKeys.length);
 
   const isGroundKind = (kind: KindOrder) =>
     kind === KindOrder.FLOOR || kind === KindOrder.DECAL;
+  const resolveDrawableBand = (key: RenderKey): number => {
+    const baseBand = Math.floor(key.baseZ + 1e-3);
+    const tx = key.within | 0;
+    const ty = (key.slice - key.within) | 0;
+    if (rampRoadTiles.has(`${tx},${ty}`) && baseBand > 0 && baseBand < 8) {
+      return baseBand >= 4 ? 8 : 0;
+    }
+    return baseBand;
+  };
   const kindToDrawTag = (kind: KindOrder): "floors" | "decals" | "entities" | "structures" => {
     if (kind === KindOrder.FLOOR) return "floors";
     if (kind === KindOrder.DECAL) return "decals";
@@ -3337,6 +3404,16 @@ export async function renderSystem(
     }
     if (entries.length > 0) surfaceCutoutEntriesByBand.set(zb, entries);
   }
+  const useCompiledVisualCutout = !!(
+    debugFlags.visualCompiledCutoutCache
+    && compiledOcclusionGeom
+    && compiledOcclusionGeom.availableBands.length > 0
+  );
+  const visualChunkSize = compiledOcclusionGeom?.chunkSize ?? 16;
+  const visualChunkX0 = Math.floor(minTx / visualChunkSize);
+  const visualChunkY0 = Math.floor(minTy / visualChunkSize);
+  const visualChunkX1 = Math.floor(maxTx / visualChunkSize);
+  const visualChunkY1 = Math.floor(maxTy / visualChunkSize);
   const surfaceCutoutMaskLayer = ensureScratchMaskCanvas(
     southBuildingMaskScratchCanvas,
     southBuildingMaskScratchCtx,
@@ -3371,12 +3448,33 @@ export async function renderSystem(
 
   for (let zi = 0; zi < zBandKeys.length; zi++) {
     const zb = zBandKeys[zi];
-    const bandSurfaceEntries = (zb > playerBand) ? surfaceCutoutEntriesByBand.get(zb) : undefined;
+    const bandSurfaceEntries = (zb > playerBand && !useCompiledVisualCutout)
+      ? surfaceCutoutEntriesByBand.get(zb)
+      : undefined;
+    let hasCompiledCutEntries = false;
+    if (zb > playerBand && useCompiledVisualCutout && compiledOcclusionGeom) {
+      const band = compiledOcclusionGeom.byBandAndClass.get(zb);
+      if (band) {
+        outer: for (let cy = visualChunkY0; cy <= visualChunkY1; cy++) {
+          for (let cx = visualChunkX0; cx <= visualChunkX1; cx++) {
+            const key = `${cx},${cy}`;
+            const surfaceBucket = band.surface.get(key);
+            const volumetricBucket = band.volumetric.get(key);
+            if ((surfaceBucket && surfaceBucket.entries.length > 0) || (volumetricBucket && volumetricBucket.entries.length > 0)) {
+              hasCompiledCutEntries = true;
+              break outer;
+            }
+          }
+        }
+      }
+    }
     const useGroundCutout = !!(
       surfaceCutoutMaskLayer
       && groundRestoreLayer
-      && bandSurfaceEntries
-      && bandSurfaceEntries.length > 0
+      && (
+        (bandSurfaceEntries && bandSurfaceEntries.length > 0)
+        || hasCompiledCutEntries
+      )
     );
 
     // Snapshot frame before drawing this ground band so we can restore lower layers in cutout area.
@@ -3395,7 +3493,7 @@ export async function renderSystem(
       const drawables = sliceDrawables.get(sliceKeys[si])!;
       for (let di = 0; di < drawables.length; di++) {
         const drawable = drawables[di];
-        if (Math.floor(drawable.key.baseZ) !== zb) continue;
+        if (resolveDrawableBand(drawable.key) !== zb) continue;
         if (!isGroundKind(drawable.key.kindOrder)) continue;
         setRenderPerfDrawTag(kindToDrawTag(drawable.key.kindOrder));
         drawable.drawFn(drawable.payload);
@@ -3404,21 +3502,49 @@ export async function renderSystem(
 
     // Reveal VOID only inside the player cutout.
     // This visually "turns the floor into void" only where the cutout mask is active.
-    if (useGroundCutout && bandSurfaceEntries && groundRestoreLayer) {
+    if (useGroundCutout && groundRestoreLayer) {
         const southCtx = surfaceCutoutMaskLayer.ctx;
         const restoreCtx = groundRestoreLayer.ctx;
 
         southCtx.setTransform(1, 0, 0, 1, 0, 0);
         southCtx.globalCompositeOperation = "source-over";
         southCtx.clearRect(0, 0, devW, devH);
-        southCtx.save();
-        configurePixelPerfect(southCtx);
-        southCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
-        southCtx.translate(camTx, camTy);
-        for (let i = 0; i < bandSurfaceEntries.length; i++) {
-          bandSurfaceEntries[i].draw(southCtx);
+        if (hasCompiledCutEntries && compiledOcclusionGeom) {
+          const band = compiledOcclusionGeom.byBandAndClass.get(zb);
+          if (band) {
+            southCtx.fillStyle = "rgba(255,255,255,1)";
+            for (let cy = visualChunkY0; cy <= visualChunkY1; cy++) {
+              for (let cx = visualChunkX0; cx <= visualChunkX1; cx++) {
+                const key = `${cx},${cy}`;
+                const surfaceBucket = band.surface.get(key);
+                const volumetricBucket = band.volumetric.get(key);
+                if (surfaceBucket) for (let i = 0; i < surfaceBucket.entries.length; i++) {
+                  const e = surfaceBucket.entries[i];
+                  drawOcclusionTileRectScreen(
+                    southCtx, e.tx0, e.ty0, e.tx1, e.ty1, e.z,
+                    worldToScreen, T, ELEV_PX, camTx, camTy, s, safeOffsetX, safeOffsetY, dpr,
+                  );
+                }
+                if (volumetricBucket) for (let i = 0; i < volumetricBucket.entries.length; i++) {
+                  const e = volumetricBucket.entries[i];
+                  drawOcclusionTileRectScreen(
+                    southCtx, e.tx0, e.ty0, e.tx1, e.ty1, e.z,
+                    worldToScreen, T, ELEV_PX, camTx, camTy, s, safeOffsetX, safeOffsetY, dpr,
+                  );
+                }
+              }
+            }
+          }
+        } else if (bandSurfaceEntries && bandSurfaceEntries.length > 0) {
+          southCtx.save();
+          configurePixelPerfect(southCtx);
+          southCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
+          southCtx.translate(camTx, camTy);
+          for (let i = 0; i < bandSurfaceEntries.length; i++) {
+            bandSurfaceEntries[i].draw(southCtx);
+          }
+          southCtx.restore();
         }
-        southCtx.restore();
 
         southCtx.setTransform(1, 0, 0, 1, 0, 0);
         southCtx.globalCompositeOperation = "destination-in";
@@ -3452,7 +3578,7 @@ export async function renderSystem(
       const drawables = sliceDrawables.get(sliceKeys[si])!;
       for (let di = 0; di < drawables.length; di++) {
         const drawable = drawables[di];
-        if (Math.floor(drawable.key.baseZ) !== zb) continue;
+        if (resolveDrawableBand(drawable.key) !== zb) continue;
         if (isGroundKind(drawable.key.kindOrder)) continue;
         setRenderPerfDrawTag(kindToDrawTag(drawable.key.kindOrder));
         drawable.drawFn(drawable.payload);
@@ -3819,11 +3945,15 @@ export async function renderSystem(
   const activeLitHeights = (
     preferredHeights.length > 0 ? preferredHeights : activeHeightsRaw
   ).slice(0, MAX_LIT_HEIGHTS);
-  const lightingOccluderGroups = buildLightingOccluderGroups(activeLitHeights, occluderEntries);
+  setRenderLightBandCount(activeLitHeights.length);
 
   const heightOcclusionMasks = new Map<number, HTMLCanvasElement>();
   let playerLightCut: PlayerLightCut | null = null;
-  if (useHeightBandedLightingOcclusion && occlusionHasContent && activeLitHeights.length > 0) {
+  const useCompiledLightingMaskCache = useHeightBandedLightingOcclusion
+    && debugFlags.lightingCompiledMaskCache
+    && !!compiledOcclusionGeom
+    && compiledOcclusionGeom.availableBands.length > 0;
+  if (useHeightBandedLightingOcclusion && activeLitHeights.length > 0) {
     // Player cutout should only remove occlusion contributed by geometry above player z.
     const pzAbs = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
     const feet = getEntityFeetPos(px, py, pzAbs);
@@ -3843,10 +3973,105 @@ export async function renderSystem(
       outerR,
     };
 
+    const chunkSize = compiledOcclusionGeom?.chunkSize ?? 16;
+    const chunkX0 = Math.floor(minTx / chunkSize);
+    const chunkY0 = Math.floor(minTy / chunkSize);
+    const chunkX1 = Math.floor(maxTx / chunkSize);
+    const chunkY1 = Math.floor(maxTy / chunkSize);
+    const drawCompiledLightingBandToCtx = (
+      targetCtx: CanvasRenderingContext2D,
+      zBand: number,
+      includeSurface: boolean,
+      includeVolumetric: boolean,
+      onlyAbovePlayer: boolean,
+    ): boolean => {
+      if (!compiledOcclusionGeom) return false;
+      if (onlyAbovePlayer && zBand <= playerBand) return false;
+      if (!includeSurface && !includeVolumetric) return false;
+      const band = compiledOcclusionGeom.byBandAndClass.get(zBand);
+      if (!band) return false;
+      let drew = false;
+      if (includeSurface) {
+        for (let cy = chunkY0; cy <= chunkY1; cy++) {
+          for (let cx = chunkX0; cx <= chunkX1; cx++) {
+            const surfBucket = band.surface.get(`${cx},${cy}`);
+            if (!surfBucket) continue;
+            countRenderMaskRasterChunk();
+            for (let ei = 0; ei < surfBucket.entries.length; ei++) {
+              const e = surfBucket.entries[ei];
+              countRenderMaskDrawEntry();
+              drawOcclusionTileRectScreen(
+                targetCtx, e.tx0, e.ty0, e.tx1, e.ty1, e.z,
+                worldToScreen, T, ELEV_PX, camTx, camTy, s, safeOffsetX, safeOffsetY, dpr,
+              );
+              drew = true;
+            }
+          }
+        }
+      }
+      if (includeVolumetric) {
+        for (let cy = chunkY0; cy <= chunkY1; cy++) {
+          for (let cx = chunkX0; cx <= chunkX1; cx++) {
+            const volBucket = band.volumetric.get(`${cx},${cy}`);
+            if (!volBucket) continue;
+            countRenderMaskRasterChunk();
+            for (let ei = 0; ei < volBucket.entries.length; ei++) {
+              const e = volBucket.entries[ei];
+              countRenderMaskDrawEntry();
+              drawOcclusionTileRectScreen(
+                targetCtx, e.tx0, e.ty0, e.tx1, e.ty1, e.z,
+                worldToScreen, T, ELEV_PX, camTx, camTy, s, safeOffsetX, safeOffsetY, dpr,
+              );
+              drew = true;
+            }
+          }
+        }
+      }
+      return drew;
+    };
+
+    const drawCompiledLightingMaskToCtx = (
+      targetCtx: CanvasRenderingContext2D,
+      L: number,
+      onlyAbovePlayer: boolean,
+    ): boolean => {
+      targetCtx.fillStyle = "rgba(255,255,255,1)";
+      // Fixed 3-group composition for highway-style dual-height worlds:
+      // - z0 volumetric
+      // - z8 surface
+      // - z8 volumetric
+      // This avoids iterating arbitrary bands in the hot path.
+      let drew = false;
+      const drewLowVol = drawCompiledLightingBandToCtx(
+        targetCtx,
+        0,
+        false,
+        L <= 0,
+        onlyAbovePlayer,
+      );
+      const drewHighSurface = drawCompiledLightingBandToCtx(
+        targetCtx,
+        8,
+        L < 8,
+        false,
+        onlyAbovePlayer,
+      );
+      const drewHighVol = drawCompiledLightingBandToCtx(
+        targetCtx,
+        8,
+        false,
+        L <= 8,
+        onlyAbovePlayer,
+      );
+      drew = drewLowVol || drewHighSurface || drewHighVol;
+      return drew;
+    };
+
     for (let hi = 0; hi < activeLitHeights.length; hi++) {
       const L = activeLitHeights[hi];
       let rec = occlusionMaskByHeightCache.get(L);
       if (!rec) {
+        countRenderMaskCacheMiss();
         const canvas = document.createElement("canvas");
         const c2d = canvas.getContext("2d");
         if (!c2d) continue;
@@ -3856,7 +4081,10 @@ export async function renderSystem(
           const firstKey = occlusionMaskByHeightCache.keys().next().value as number | undefined;
           if (firstKey !== undefined) occlusionMaskByHeightCache.delete(firstKey);
         }
+      } else {
+        countRenderMaskCacheHit();
       }
+      countRenderMaskBuild();
       if (rec.canvas.width !== devW) rec.canvas.width = devW;
       if (rec.canvas.height !== devH) rec.canvas.height = devH;
       const maskCtx = rec.ctx;
@@ -3864,69 +4092,119 @@ export async function renderSystem(
       maskCtx.setTransform(1, 0, 0, 1, 0, 0);
       maskCtx.globalCompositeOperation = "source-over";
       maskCtx.clearRect(0, 0, devW, devH);
-      maskCtx.save();
-      maskCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
-      maskCtx.translate(camTx, camTy);
-      const groupEntries = lightingOccluderGroups.get(L) ?? [];
-      for (let oi = 0; oi < groupEntries.length; oi++) {
-        const entry = groupEntries[oi];
-        entry.draw(maskCtx);
-      }
-      maskCtx.restore();
-
-      let hasAbovePlayerContributors = false;
-      for (let oi = 0; oi < groupEntries.length; oi++) {
-        if (groupEntries[oi].minZ > playerBand) {
-          hasAbovePlayerContributors = true;
-          break;
-        }
-      }
-      if (hasAbovePlayerContributors) {
-        let aboveRec = lightingAbovePlayerMaskByHeightCache.get(L);
-        if (!aboveRec) {
-          const canvas = document.createElement("canvas");
-          const c2d = canvas.getContext("2d");
-          if (!c2d) {
+      if (useCompiledLightingMaskCache) {
+        drawCompiledLightingMaskToCtx(maskCtx, L, false);
+        const hasAbovePlayerContributors = playerBand < 8 && L <= 8;
+        if (hasAbovePlayerContributors) {
+          let aboveRec = lightingAbovePlayerMaskByHeightCache.get(L);
+          if (!aboveRec) {
+            countRenderMaskCacheMiss();
+            const canvas = document.createElement("canvas");
+            const c2d = canvas.getContext("2d");
+            if (!c2d) {
+              heightOcclusionMasks.set(L, rec.canvas);
+              continue;
+            }
+            aboveRec = { canvas, ctx: c2d };
+            lightingAbovePlayerMaskByHeightCache.set(L, aboveRec);
+            if (lightingAbovePlayerMaskByHeightCache.size > 16) {
+              const firstKey = lightingAbovePlayerMaskByHeightCache.keys().next().value as number | undefined;
+              if (firstKey !== undefined) lightingAbovePlayerMaskByHeightCache.delete(firstKey);
+            }
+          } else {
+            countRenderMaskCacheHit();
+          }
+          countRenderMaskBuild();
+          if (aboveRec.canvas.width !== devW) aboveRec.canvas.width = devW;
+          if (aboveRec.canvas.height !== devH) aboveRec.canvas.height = devH;
+          const aboveCtx = aboveRec.ctx;
+          configurePixelPerfect(aboveCtx);
+          aboveCtx.setTransform(1, 0, 0, 1, 0, 0);
+          aboveCtx.globalCompositeOperation = "source-over";
+          aboveCtx.clearRect(0, 0, devW, devH);
+          const drewAbove = drawCompiledLightingMaskToCtx(aboveCtx, L, true);
+          if (!drewAbove) {
             heightOcclusionMasks.set(L, rec.canvas);
             continue;
           }
-          aboveRec = { canvas, ctx: c2d };
-          lightingAbovePlayerMaskByHeightCache.set(L, aboveRec);
-          if (lightingAbovePlayerMaskByHeightCache.size > 16) {
-            const firstKey = lightingAbovePlayerMaskByHeightCache.keys().next().value as number | undefined;
-            if (firstKey !== undefined) lightingAbovePlayerMaskByHeightCache.delete(firstKey);
+          aboveCtx.globalCompositeOperation = "destination-in";
+          const g = aboveCtx.createRadialGradient(playerSx, playerSy, innerR, playerSx, playerSy, outerR);
+          g.addColorStop(0.0, "rgba(0,0,0,1)");
+          g.addColorStop(1.0, "rgba(0,0,0,0)");
+          aboveCtx.fillStyle = g;
+          aboveCtx.beginPath();
+          aboveCtx.arc(playerSx, playerSy, outerR, 0, Math.PI * 2);
+          aboveCtx.fill();
+          aboveCtx.globalCompositeOperation = "source-over";
+          maskCtx.globalCompositeOperation = "destination-out";
+          maskCtx.drawImage(aboveRec.canvas, 0, 0);
+          maskCtx.globalCompositeOperation = "source-over";
+        }
+      } else {
+        const groupEntries = buildLightingOccluderGroups([L], occluderEntries).get(L) ?? [];
+        maskCtx.save();
+        maskCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
+        maskCtx.translate(camTx, camTy);
+        for (let oi = 0; oi < groupEntries.length; oi++) {
+          countRenderMaskRasterChunk();
+          countRenderMaskDrawEntry();
+          groupEntries[oi].draw(maskCtx);
+        }
+        maskCtx.restore();
+
+        let hasAbovePlayerContributors = false;
+        for (let oi = 0; oi < groupEntries.length; oi++) {
+          if (groupEntries[oi].minZ > playerBand) {
+            hasAbovePlayerContributors = true;
+            break;
           }
         }
-        if (aboveRec.canvas.width !== devW) aboveRec.canvas.width = devW;
-        if (aboveRec.canvas.height !== devH) aboveRec.canvas.height = devH;
-        const aboveCtx = aboveRec.ctx;
-        configurePixelPerfect(aboveCtx);
-        aboveCtx.setTransform(1, 0, 0, 1, 0, 0);
-        aboveCtx.globalCompositeOperation = "source-over";
-        aboveCtx.clearRect(0, 0, devW, devH);
-        aboveCtx.save();
-        aboveCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
-        aboveCtx.translate(camTx, camTy);
-        for (let oi = 0; oi < groupEntries.length; oi++) {
-          const entry = groupEntries[oi];
-          if (entry.minZ <= playerBand) continue;
-          entry.draw(aboveCtx);
+        if (hasAbovePlayerContributors) {
+          let aboveRec = lightingAbovePlayerMaskByHeightCache.get(L);
+          if (!aboveRec) {
+            countRenderMaskCacheMiss();
+            const canvas = document.createElement("canvas");
+            const c2d = canvas.getContext("2d");
+            if (!c2d) {
+              heightOcclusionMasks.set(L, rec.canvas);
+              continue;
+            }
+            aboveRec = { canvas, ctx: c2d };
+            lightingAbovePlayerMaskByHeightCache.set(L, aboveRec);
+          } else {
+            countRenderMaskCacheHit();
+          }
+          countRenderMaskBuild();
+          if (aboveRec.canvas.width !== devW) aboveRec.canvas.width = devW;
+          if (aboveRec.canvas.height !== devH) aboveRec.canvas.height = devH;
+          const aboveCtx = aboveRec.ctx;
+          configurePixelPerfect(aboveCtx);
+          aboveCtx.setTransform(1, 0, 0, 1, 0, 0);
+          aboveCtx.globalCompositeOperation = "source-over";
+          aboveCtx.clearRect(0, 0, devW, devH);
+          aboveCtx.save();
+          aboveCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
+          aboveCtx.translate(camTx, camTy);
+          for (let oi = 0; oi < groupEntries.length; oi++) {
+            if (groupEntries[oi].minZ <= playerBand) continue;
+            countRenderMaskRasterChunk();
+            countRenderMaskDrawEntry();
+            groupEntries[oi].draw(aboveCtx);
+          }
+          aboveCtx.restore();
+          aboveCtx.globalCompositeOperation = "destination-in";
+          const g = aboveCtx.createRadialGradient(playerSx, playerSy, innerR, playerSx, playerSy, outerR);
+          g.addColorStop(0.0, "rgba(0,0,0,1)");
+          g.addColorStop(1.0, "rgba(0,0,0,0)");
+          aboveCtx.fillStyle = g;
+          aboveCtx.beginPath();
+          aboveCtx.arc(playerSx, playerSy, outerR, 0, Math.PI * 2);
+          aboveCtx.fill();
+          aboveCtx.globalCompositeOperation = "source-over";
+          maskCtx.globalCompositeOperation = "destination-out";
+          maskCtx.drawImage(aboveRec.canvas, 0, 0);
+          maskCtx.globalCompositeOperation = "source-over";
         }
-        aboveCtx.restore();
-        aboveCtx.globalCompositeOperation = "destination-in";
-        const g = aboveCtx.createRadialGradient(playerSx, playerSy, innerR, playerSx, playerSy, outerR);
-        g.addColorStop(0.0, "rgba(0,0,0,1)");
-        g.addColorStop(1.0, "rgba(0,0,0,0)");
-        aboveCtx.fillStyle = g;
-        aboveCtx.beginPath();
-        aboveCtx.arc(playerSx, playerSy, outerR, 0, Math.PI * 2);
-        aboveCtx.fill();
-        aboveCtx.globalCompositeOperation = "source-over";
-
-        maskCtx.setTransform(1, 0, 0, 1, 0, 0);
-        maskCtx.globalCompositeOperation = "destination-out";
-        maskCtx.drawImage(aboveRec.canvas, 0, 0);
-        maskCtx.globalCompositeOperation = "source-over";
       }
       heightOcclusionMasks.set(L, rec.canvas);
     }
@@ -3955,7 +4233,7 @@ export async function renderSystem(
     devH,
     w.time ?? 0,
     useHeightBandedLightingOcclusion ? heightOcclusionMasks : null,
-    useHeightBandedLightingOcclusion ? playerLightCut : null,
+    playerLightCut,
   );
   setRenderPerfDrawTag(null);
   // Building-mask debug overlay draw disabled to avoid full-canvas mask artifacts.
@@ -3989,6 +4267,8 @@ export async function renderSystem(
       `sliceSorts/frame: ${perf.sliceKeySortsPerFrame.toFixed(1)} drawableSorts/frame: ${perf.drawableSortsPerFrame.toFixed(1)}`,
       `fullCanvasBlits/frame: ${perf.fullCanvasBlitsPerFrame.toFixed(1)}`,
       `tileRadius: ${perf.tileLoopRadius.toFixed(0)} tileLoopIters/frame: ${perf.tileLoopIterationsPerFrame.toFixed(1)}`,
+      `bands z:${perf.zBandCountPerFrame.toFixed(1)} light:${perf.lightBandCountPerFrame.toFixed(1)} masks build:${perf.maskBuildsPerFrame.toFixed(1)} hit:${perf.maskCacheHitsPerFrame.toFixed(1)} miss:${perf.maskCacheMissesPerFrame.toFixed(1)}`,
+      `masks rasterChunks/frame: ${perf.maskRasterChunksPerFrame.toFixed(1)} drawEntries/frame: ${perf.maskDrawEntriesPerFrame.toFixed(1)}`,
     ];
     ctx.textAlign = "right";
     const perfX = cssW - 8;
