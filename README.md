@@ -30,3 +30,7 @@ npm run test
 
 ## Agents
 See `docs/AGENTS.md`.
+
+## GitHub Pages (live)
+- Deployments trigger on pushes to the `live` branch via `.github/workflows/pages-live.yml`.
+- In GitHub Settings -> Pages, set **Build and deployment** source to **GitHub Actions**.

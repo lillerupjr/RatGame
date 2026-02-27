@@ -75,7 +75,7 @@ const FILES: Record<SfxId, string> = {
 
 function resolveUrl(file: string): string | null {
     if (!file) return null;
-    return `/assets-runtime/sfx/${file}`;
+    return `${import.meta.env.BASE_URL}assets-runtime/sfx/${file}`;
 }
 
 let _ctx: AudioContext | null = null;

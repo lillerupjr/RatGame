@@ -138,7 +138,7 @@ function compareRenderKeys(a: RenderKey, b: RenderKey): number {
 }
 
 const DEBUG_PLAYER_WEDGE = false;
-const HARDCODED_VOID_TOP_SRC = "/assets-runtime/tiles/floor/void.png";
+const HARDCODED_VOID_TOP_SRC = `${import.meta.env.BASE_URL}assets-runtime/tiles/floor/void.png`;
 
 // Background mode:
 // - "SOLID" = fastest, clean black void

@@ -61,7 +61,7 @@ export function setPlayerSkin(skin: string) {
 }
 
 export function getPlayerIdleSpriteUrl(skin: string): string {
-    return `/assets-runtime/base_db32/entities/player/${skin}/rotations/south.png`;
+    return `${import.meta.env.BASE_URL}assets-runtime/base_db32/entities/player/${skin}/rotations/south.png`;
 }
 
 export async function preloadPlayerSprites() {

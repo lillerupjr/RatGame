@@ -22,7 +22,7 @@ const cache: Record<number, BgAsset> = {};
 
 function resolveBgUrl(file: string): string | null {
     if (!file) return null;
-    return `/assets-runtime/backgrounds/${file}`;
+    return `${import.meta.env.BASE_URL}assets-runtime/backgrounds/${file}`;
 }
 
 function ensureLoadedForIndex(floorIndex: number): BgAsset {

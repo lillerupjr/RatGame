@@ -87,14 +87,14 @@ function resolveUrl(spriteId: string): string | null {
     if (!isKnownRenderableSpriteId(id)) return null;
 
     if (id.startsWith("entities/")) {
-        return `/assets-runtime/${id}.png`;
+        return `${import.meta.env.BASE_URL}assets-runtime/${id}.png`;
     }
     if (
         id.startsWith("tiles/")
         || id.startsWith("structures/")
         || id.startsWith("props/")
     ) {
-        return `/assets-runtime/base_db32/${id}.png`;
+        return `${import.meta.env.BASE_URL}assets-runtime/base_db32/${id}.png`;
     }
     return null;
 }

@@ -98,7 +98,7 @@ function wireUnlock() {
 
 function findUrl(filename: string): string | null {
     if (!filename) return null;
-    return `/assets-runtime/music/${filename}`;
+    return `${import.meta.env.BASE_URL}assets-runtime/music/${filename}`;
 }
 
 // -----------------------------

@@ -22,12 +22,12 @@ const FILES = {
 const cache: Record<string, Loaded> = Object.create(null);
 
 const PROJECTILE_URLS = {
-    KNIFE: "/assets-runtime/projectiles/knife.png",
-    PISTOL: "/assets-runtime/projectiles/pistol.png",
-    SYRINGE: "/assets-runtime/projectiles/syringe.png",
-    BOUNCER: "/assets-runtime/projectiles/bouncer.png",
-    SWORD: "/assets-runtime/projectiles/sword.png",
-    KNUCKLES: "/assets-runtime/projectiles/knuckles.png",
+    KNIFE: `${import.meta.env.BASE_URL}assets-runtime/projectiles/knife.png`,
+    PISTOL: `${import.meta.env.BASE_URL}assets-runtime/projectiles/pistol.png`,
+    SYRINGE: `${import.meta.env.BASE_URL}assets-runtime/projectiles/syringe.png`,
+    BOUNCER: `${import.meta.env.BASE_URL}assets-runtime/projectiles/bouncer.png`,
+    SWORD: `${import.meta.env.BASE_URL}assets-runtime/projectiles/sword.png`,
+    KNUCKLES: `${import.meta.env.BASE_URL}assets-runtime/projectiles/knuckles.png`,
 } as const;
 
 function resolveUrl(file: string): string | null {
