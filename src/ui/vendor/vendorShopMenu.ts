@@ -6,6 +6,7 @@ export type VendorShopCard = {
   purchased: boolean;
 };
 
+
 export type VendorShopState = {
   active: boolean;
   gold: number;
