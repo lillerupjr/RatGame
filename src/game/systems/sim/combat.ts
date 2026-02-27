@@ -44,6 +44,8 @@ export function combatSystem(w: World, dt: number) {
   const relicDamageMult = Math.max(0, relicMods.dmgMult ?? 1);
   const derivedDamageMult = Math.max(0, w.dmgMult ?? 1);
   const derivedFireRateMult = Math.max(0.001, w.fireRateMult ?? 1);
+  const hasFullCritRelic = w.relics.includes("MOM_FULL_CRIT_DOUBLE");
+  const isAtFullMomentum = hasFullCritRelic && w.momentumMax > 0 && w.momentumValue >= w.momentumMax;
   const shotsPerSecond = Math.max(0.001, resolved.shotsPerSecond * derivedFireRateMult * debugFireRateMult);
   const fireRangePx = Math.max(0, resolved.rangePx || 0);
   const cooldown = 1 / shotsPerSecond;
@@ -51,7 +53,7 @@ export function combatSystem(w: World, dt: number) {
   const dmgFire = resolved.baseDamage.fire * derivedDamageMult * debugDamageMult * relicDamageMult;
   const dmgChaos = resolved.baseDamage.chaos * derivedDamageMult * debugDamageMult * relicDamageMult;
   const totalDamage = dmgPhys + dmgFire + dmgChaos;
-  const finalCritChance = Math.min(1, resolved.critChance * (w.fullMomentumActive ? 2 : 1));
+  const finalCritChance = Math.min(1, resolved.critChance * (isAtFullMomentum ? 2 : 1));
 
   const target = findClosestTarget(w, fireRangePx);
   const hasTargetInRange = target.enemyIndex !== -1;

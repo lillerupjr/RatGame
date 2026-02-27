@@ -687,9 +687,11 @@ export function mountPauseMenu(args: {
 
     const snapshot = getCombatModsSnapshot(world as any);
     const baseCritChance = safeNum(snapshot.weaponStats.critChance);
+    const hasFullCritRelic = world.relics.includes("MOM_FULL_CRIT_DOUBLE");
+    const isAtFullMomentum = hasFullCritRelic && world.momentumMax > 0 && world.momentumValue >= world.momentumMax;
     const effectiveCritChance = Math.max(
       0,
-      Math.min(1, baseCritChance * (world.fullMomentumActive ? 2 : 1)),
+      Math.min(1, baseCritChance * (isAtFullMomentum ? 2 : 1)),
     );
     const rows: Array<[string, string]> = [
       ["HP", `${safeNum(world.playerHp).toFixed(0)} / ${safeNum(world.playerHpMax).toFixed(0)}`],
