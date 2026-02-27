@@ -35,8 +35,8 @@ export type DebugSettings = {
   disableLightingOcclusion: boolean;
   disableLightingHeightBandedOcclusion: boolean;
   lightingUseLegacyGlobalOcclusion: boolean;
-  lightingCompiledMaskCache: boolean;
-  visualCompiledCutoutCache: boolean;
+  disableLightingCompiledMaskCache: boolean;
+  disableVisualCompiledCutoutCache: boolean;
   lightingMasks: boolean;
   lightingMaskDebugMode: LightingMaskDebugMode;
   mapOverlaysDisabled: boolean;
@@ -94,8 +94,8 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "disableLightingOcclusion", label: "disableLightingOcclusion" },
   { key: "disableLightingHeightBandedOcclusion", label: "disableLightingHeightBandedOcclusion" },
   { key: "lightingUseLegacyGlobalOcclusion", label: "lightingUseLegacyGlobalOcclusion" },
-  { key: "lightingCompiledMaskCache", label: "lightingCompiledMaskCache" },
-  { key: "visualCompiledCutoutCache", label: "visualCompiledCutoutCache" },
+  { key: "disableLightingCompiledMaskCache", label: "disableLightingCompiledMaskCache" },
+  { key: "disableVisualCompiledCutoutCache", label: "disableVisualCompiledCutoutCache" },
   { key: "lightingMasks", label: "lightingMasks" },
   { key: "mapOverlaysDisabled", label: "mapOverlaysDisabled" },
   { key: "rampFaces", label: "rampFaces" },
@@ -122,8 +122,8 @@ export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   disableLightingOcclusion: false,
   disableLightingHeightBandedOcclusion: false,
   lightingUseLegacyGlobalOcclusion: false,
-  lightingCompiledMaskCache: true,
-  visualCompiledCutoutCache: false,
+  disableLightingCompiledMaskCache: false,
+  disableVisualCompiledCutoutCache: false,
   lightingMasks: false,
   lightingMaskDebugMode: "OFF",
   mapOverlaysDisabled: false,
@@ -193,8 +193,8 @@ export function resolveDebugFlags(debug: DebugSettings): ResolvedDebugFlags {
     lightingOcclusionEnabled: !debug.disableLightingOcclusion,
     lightingHeightBandedOcclusion: !debug.disableLightingHeightBandedOcclusion,
     lightingUseLegacyGlobalOcclusion: debug.lightingUseLegacyGlobalOcclusion,
-    lightingCompiledMaskCache: debug.lightingCompiledMaskCache,
-    visualCompiledCutoutCache: debug.visualCompiledCutoutCache,
+    lightingCompiledMaskCache: !debug.disableLightingCompiledMaskCache,
+    visualCompiledCutoutCache: !debug.disableVisualCompiledCutoutCache,
     buildingMaskDebugView,
     showBuildingMaskDebug: buildingMaskDebugView !== "OFF",
   };

@@ -166,6 +166,10 @@ const runtimeIsoDecalCache = new WeakMap<HTMLImageElement, Map<string, HTMLCanva
 const runtimeDiamondCanvasCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
 const occlusionMaskByHeightCache = new Map<number, { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D }>();
 const lightingAbovePlayerMaskByHeightCache = new Map<number, { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D }>();
+const lightingMaskBuildKeyByHeight = new Map<number, string>();
+const lightingAboveMaskBuildKeyByHeight = new Map<number, string>();
+type CompiledChunkMaskRaster = { canvas: HTMLCanvasElement; minX: number; minY: number };
+const compiledChunkMaskRasterCache = new Map<string, CompiledChunkMaskRaster>();
 const LIT_HEIGHTS_DEFAULT: readonly number[] = [0, 8];
 const MAX_LIT_HEIGHTS = 4;
 
@@ -702,6 +706,29 @@ function drawOcclusionTileRectScreen(
   maskCtx.fill();
 }
 
+function getOcclusionTileRectPts(
+  tx0: number,
+  ty0: number,
+  tx1: number,
+  ty1: number,
+  z: number,
+  worldToScreenFn: (x: number, y: number) => { x: number; y: number },
+  tileWorld: number,
+  elevPx: number,
+): [number, number, number, number, number, number, number, number] {
+  const p0 = worldToScreenFn(tx0 * tileWorld, ty0 * tileWorld);
+  const p1 = worldToScreenFn(tx1 * tileWorld, ty0 * tileWorld);
+  const p2 = worldToScreenFn(tx1 * tileWorld, ty1 * tileWorld);
+  const p3 = worldToScreenFn(tx0 * tileWorld, ty1 * tileWorld);
+  const zPx = z * elevPx;
+  return [
+    p0.x, p0.y - zPx,
+    p1.x, p1.y - zPx,
+    p2.x, p2.y - zPx,
+    p3.x, p3.y - zPx,
+  ];
+}
+
 function isTileInPlayerSouthWedge(
   tx: number,
   ty: number,
@@ -1077,6 +1104,11 @@ export async function renderSystem(
   const southBuildingMaskDraws: MaskDraw[] = [];
   const southBuildingBaseMaskDraws: MaskDraw[] = [];
   const entitySilhouetteMaskDraws: MaskDraw[] = [];
+  const shouldRouteToStructureScratch = (pieceBand: number, ownerTx: number, ownerTy: number): boolean => {
+    if (pieceBand > playerRenderBand) return true;
+    if (pieceBand < playerRenderBand) return false;
+    return isOwnerTileInPlayerWedge(ownerTx, ownerTy);
+  };
 
     // Preserve caller transform (world camera / mask camera) per piece.
     const drawRenderPieceTo = (target: CanvasRenderingContext2D, c: RenderPieceDraw) => {
@@ -2988,7 +3020,7 @@ export async function renderSystem(
           // Owner tile for face pieces is (face.tx, face.ty)
           const pieceBand = Math.floor(renderKey.baseZ + 1e-3);
 
-          if (isStructureish && sctx && pieceBand > playerRenderBand) {
+          if (isStructureish && sctx && shouldRouteToStructureScratch(pieceBand, face.tx, face.ty)) {
             hasStructureLayerDraw = true;
             drawRenderPieceTo(sctx, d);
           } else drawRenderPiece(d);
@@ -3044,7 +3076,7 @@ export async function renderSystem(
         // Owner tile for walls is (occ.tx, occ.ty)
         const pieceBand = Math.floor(renderKey.baseZ + 1e-3);
 
-        if (isStructureish && sctx && pieceBand > playerRenderBand) {
+        if (isStructureish && sctx && shouldRouteToStructureScratch(pieceBand, occ.tx, occ.ty)) {
           hasStructureLayerDraw = true;
           drawRenderPieceTo(sctx, draw);
         } else drawRenderPiece(draw);
@@ -3135,7 +3167,7 @@ export async function renderSystem(
                 (overlayKey.kindOrder === KindOrder.STRUCTURE || overlayKey.kindOrder === KindOrder.OVERLAY);
 
               // Route to structure scratch ONLY if wedge-owned; otherwise draw to main ctx.
-              const target = wantsStructureTarget && sctx && pieceBand > playerRenderBand ? sctx : ctx;
+              const target = wantsStructureTarget && sctx && shouldRouteToStructureScratch(pieceBand, ownerTx, ownerTy) ? sctx : ctx;
               if (target === sctx) hasStructureLayerDraw = true;
               const img = draw.img;
               if (!img) return;
@@ -3284,7 +3316,7 @@ export async function renderSystem(
             const ownerTy = (o.anchorTy ?? (o.ty + o.h - 1));
             const pieceBand = Math.floor(overlayKey.baseZ + 1e-3);
 
-            if (isStructureish && sctx && pieceBand > playerRenderBand) {
+            if (isStructureish && sctx && shouldRouteToStructureScratch(pieceBand, ownerTx, ownerTy)) {
               hasStructureLayerDraw = true;
               drawRenderPieceTo(sctx, draw);
             } else drawRenderPiece(draw);
@@ -3978,6 +4010,7 @@ export async function renderSystem(
     const chunkY0 = Math.floor(minTy / chunkSize);
     const chunkX1 = Math.floor(maxTx / chunkSize);
     const chunkY1 = Math.floor(maxTy / chunkSize);
+    const compiledMaskScopeKey = `cmp:${compiledMap.id}:${devW}x${devH}:${chunkX0},${chunkY0},${chunkX1},${chunkY1}:pb=${playerBand}`;
     const drawCompiledLightingBandToCtx = (
       targetCtx: CanvasRenderingContext2D,
       zBand: number,
@@ -3991,20 +4024,87 @@ export async function renderSystem(
       const band = compiledOcclusionGeom.byBandAndClass.get(zBand);
       if (!band) return false;
       let drew = false;
+      const drawChunkRaster = (
+        cacheKey: string,
+        entries: Array<{ tx0: number; ty0: number; tx1: number; ty1: number; z: number }>,
+      ): boolean => {
+        let raster = compiledChunkMaskRasterCache.get(cacheKey);
+        if (!raster) {
+          let minX = Number.POSITIVE_INFINITY;
+          let minY = Number.POSITIVE_INFINITY;
+          let maxX = Number.NEGATIVE_INFINITY;
+          let maxY = Number.NEGATIVE_INFINITY;
+          const pts: Array<[number, number, number, number, number, number, number, number]> = [];
+          for (let i = 0; i < entries.length; i++) {
+            const e = entries[i];
+            const p = getOcclusionTileRectPts(
+              e.tx0, e.ty0, e.tx1, e.ty1, e.z,
+              worldToScreen, T, ELEV_PX,
+            );
+            pts.push(p);
+            minX = Math.min(minX, p[0], p[2], p[4], p[6]);
+            minY = Math.min(minY, p[1], p[3], p[5], p[7]);
+            maxX = Math.max(maxX, p[0], p[2], p[4], p[6]);
+            maxY = Math.max(maxY, p[1], p[3], p[5], p[7]);
+          }
+          if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+            return false;
+          }
+          const pad = 2;
+          const ox = Math.floor(minX) - pad;
+          const oy = Math.floor(minY) - pad;
+          const wPx = Math.max(1, Math.ceil(maxX) - ox + pad);
+          const hPx = Math.max(1, Math.ceil(maxY) - oy + pad);
+          const canvas = document.createElement("canvas");
+          canvas.width = wPx;
+          canvas.height = hPx;
+          const c2d = canvas.getContext("2d");
+          if (!c2d) return false;
+          configurePixelPerfect(c2d);
+          c2d.setTransform(1, 0, 0, 1, 0, 0);
+          c2d.clearRect(0, 0, wPx, hPx);
+          c2d.fillStyle = "rgba(255,255,255,1)";
+          for (let i = 0; i < pts.length; i++) {
+            const p = pts[i];
+            c2d.beginPath();
+            c2d.moveTo(p[0] - ox, p[1] - oy);
+            c2d.lineTo(p[2] - ox, p[3] - oy);
+            c2d.lineTo(p[4] - ox, p[5] - oy);
+            c2d.lineTo(p[6] - ox, p[7] - oy);
+            c2d.closePath();
+            c2d.fill();
+          }
+          raster = { canvas, minX: ox, minY: oy };
+          compiledChunkMaskRasterCache.set(cacheKey, raster);
+          if (compiledChunkMaskRasterCache.size > 1024) {
+            const firstKey = compiledChunkMaskRasterCache.keys().next().value as string | undefined;
+            if (firstKey !== undefined) compiledChunkMaskRasterCache.delete(firstKey);
+          }
+        }
+        const dx = (raster.minX + camTx) * s + safeOffsetX * dpr;
+        const dy = (raster.minY + camTy) * s + safeOffsetY * dpr;
+        const dw = raster.canvas.width * s;
+        const dh = raster.canvas.height * s;
+        targetCtx.imageSmoothingEnabled = false;
+        targetCtx.drawImage(
+          raster.canvas,
+          Math.round(dx),
+          Math.round(dy),
+          Math.max(1, Math.round(dw)),
+          Math.max(1, Math.round(dh)),
+        );
+        countRenderMaskRasterChunk();
+        return true;
+      };
       if (includeSurface) {
         for (let cy = chunkY0; cy <= chunkY1; cy++) {
           for (let cx = chunkX0; cx <= chunkX1; cx++) {
             const surfBucket = band.surface.get(`${cx},${cy}`);
             if (!surfBucket) continue;
-            countRenderMaskRasterChunk();
-            for (let ei = 0; ei < surfBucket.entries.length; ei++) {
-              const e = surfBucket.entries[ei];
-              countRenderMaskDrawEntry();
-              drawOcclusionTileRectScreen(
-                targetCtx, e.tx0, e.ty0, e.tx1, e.ty1, e.z,
-                worldToScreen, T, ELEV_PX, camTx, camTy, s, safeOffsetX, safeOffsetY, dpr,
-              );
+            const cacheKey = `m:${compiledMap.id}:S:${zBand}:${cx},${cy}`;
+            if (drawChunkRaster(cacheKey, surfBucket.entries)) {
               drew = true;
+              countRenderMaskDrawEntry(surfBucket.entries.length);
             }
           }
         }
@@ -4014,15 +4114,10 @@ export async function renderSystem(
           for (let cx = chunkX0; cx <= chunkX1; cx++) {
             const volBucket = band.volumetric.get(`${cx},${cy}`);
             if (!volBucket) continue;
-            countRenderMaskRasterChunk();
-            for (let ei = 0; ei < volBucket.entries.length; ei++) {
-              const e = volBucket.entries[ei];
-              countRenderMaskDrawEntry();
-              drawOcclusionTileRectScreen(
-                targetCtx, e.tx0, e.ty0, e.tx1, e.ty1, e.z,
-                worldToScreen, T, ELEV_PX, camTx, camTy, s, safeOffsetX, safeOffsetY, dpr,
-              );
+            const cacheKey = `m:${compiledMap.id}:V:${zBand}:${cx},${cy}`;
+            if (drawChunkRaster(cacheKey, volBucket.entries)) {
               drew = true;
+              countRenderMaskDrawEntry(volBucket.entries.length);
             }
           }
         }
@@ -4069,9 +4164,11 @@ export async function renderSystem(
 
     for (let hi = 0; hi < activeLitHeights.length; hi++) {
       const L = activeLitHeights[hi];
+      const hasAbovePlayerContributors = playerBand < 8 && L <= 8;
+      const baseBuildKey = `${compiledMaskScopeKey}:L=${L}:above=${hasAbovePlayerContributors ? 1 : 0}`;
       let rec = occlusionMaskByHeightCache.get(L);
+      const hadRecBefore = !!rec;
       if (!rec) {
-        countRenderMaskCacheMiss();
         const canvas = document.createElement("canvas");
         const c2d = canvas.getContext("2d");
         if (!c2d) continue;
@@ -4079,14 +4176,26 @@ export async function renderSystem(
         occlusionMaskByHeightCache.set(L, rec);
         if (occlusionMaskByHeightCache.size > 16) {
           const firstKey = occlusionMaskByHeightCache.keys().next().value as number | undefined;
-          if (firstKey !== undefined) occlusionMaskByHeightCache.delete(firstKey);
+          if (firstKey !== undefined) {
+            occlusionMaskByHeightCache.delete(firstKey);
+            lightingMaskBuildKeyByHeight.delete(firstKey);
+          }
         }
-      } else {
-        countRenderMaskCacheHit();
       }
+      const resizedBase = rec.canvas.width !== devW || rec.canvas.height !== devH;
+      if (resizedBase) {
+        rec.canvas.width = devW;
+        rec.canvas.height = devH;
+      }
+      const prevBaseKey = lightingMaskBuildKeyByHeight.get(L);
+      if (hadRecBefore && !resizedBase && prevBaseKey === baseBuildKey) {
+        countRenderMaskCacheHit();
+        heightOcclusionMasks.set(L, rec.canvas);
+        continue;
+      }
+      if (hadRecBefore) countRenderMaskCacheMiss();
+      else countRenderMaskCacheMiss();
       countRenderMaskBuild();
-      if (rec.canvas.width !== devW) rec.canvas.width = devW;
-      if (rec.canvas.height !== devH) rec.canvas.height = devH;
       const maskCtx = rec.ctx;
       configurePixelPerfect(maskCtx);
       maskCtx.setTransform(1, 0, 0, 1, 0, 0);
@@ -4094,11 +4203,11 @@ export async function renderSystem(
       maskCtx.clearRect(0, 0, devW, devH);
       if (useCompiledLightingMaskCache) {
         drawCompiledLightingMaskToCtx(maskCtx, L, false);
-        const hasAbovePlayerContributors = playerBand < 8 && L <= 8;
         if (hasAbovePlayerContributors) {
+          const aboveBuildKey = `${compiledMaskScopeKey}:L=${L}:aboveOnly=1`;
           let aboveRec = lightingAbovePlayerMaskByHeightCache.get(L);
+          const hadAboveRecBefore = !!aboveRec;
           if (!aboveRec) {
-            countRenderMaskCacheMiss();
             const canvas = document.createElement("canvas");
             const c2d = canvas.getContext("2d");
             if (!c2d) {
@@ -4109,37 +4218,56 @@ export async function renderSystem(
             lightingAbovePlayerMaskByHeightCache.set(L, aboveRec);
             if (lightingAbovePlayerMaskByHeightCache.size > 16) {
               const firstKey = lightingAbovePlayerMaskByHeightCache.keys().next().value as number | undefined;
-              if (firstKey !== undefined) lightingAbovePlayerMaskByHeightCache.delete(firstKey);
+              if (firstKey !== undefined) {
+                lightingAbovePlayerMaskByHeightCache.delete(firstKey);
+                lightingAboveMaskBuildKeyByHeight.delete(firstKey);
+              }
             }
+          }
+          const resizedAbove = aboveRec.canvas.width !== devW || aboveRec.canvas.height !== devH;
+          if (resizedAbove) {
+            aboveRec.canvas.width = devW;
+            aboveRec.canvas.height = devH;
+          }
+          const prevAboveKey = lightingAboveMaskBuildKeyByHeight.get(L);
+          const needsAboveRebuild = !(hadAboveRecBefore && !resizedAbove && prevAboveKey === aboveBuildKey);
+          if (needsAboveRebuild) {
+            countRenderMaskCacheMiss();
+            countRenderMaskBuild();
           } else {
             countRenderMaskCacheHit();
           }
-          countRenderMaskBuild();
-          if (aboveRec.canvas.width !== devW) aboveRec.canvas.width = devW;
-          if (aboveRec.canvas.height !== devH) aboveRec.canvas.height = devH;
           const aboveCtx = aboveRec.ctx;
-          configurePixelPerfect(aboveCtx);
-          aboveCtx.setTransform(1, 0, 0, 1, 0, 0);
-          aboveCtx.globalCompositeOperation = "source-over";
-          aboveCtx.clearRect(0, 0, devW, devH);
-          const drewAbove = drawCompiledLightingMaskToCtx(aboveCtx, L, true);
-          if (!drewAbove) {
-            heightOcclusionMasks.set(L, rec.canvas);
-            continue;
+          if (needsAboveRebuild) {
+            configurePixelPerfect(aboveCtx);
+            aboveCtx.setTransform(1, 0, 0, 1, 0, 0);
+            aboveCtx.globalCompositeOperation = "source-over";
+            aboveCtx.clearRect(0, 0, devW, devH);
+            const drewAbove = drawCompiledLightingMaskToCtx(aboveCtx, L, true);
+            if (!drewAbove) {
+              lightingAboveMaskBuildKeyByHeight.delete(L);
+              lightingMaskBuildKeyByHeight.set(L, baseBuildKey);
+              heightOcclusionMasks.set(L, rec.canvas);
+              continue;
+            }
+            aboveCtx.globalCompositeOperation = "destination-in";
+            const g = aboveCtx.createRadialGradient(playerSx, playerSy, innerR, playerSx, playerSy, outerR);
+            g.addColorStop(0.0, "rgba(0,0,0,1)");
+            g.addColorStop(1.0, "rgba(0,0,0,0)");
+            aboveCtx.fillStyle = g;
+            aboveCtx.beginPath();
+            aboveCtx.arc(playerSx, playerSy, outerR, 0, Math.PI * 2);
+            aboveCtx.fill();
+            aboveCtx.globalCompositeOperation = "source-over";
+            lightingAboveMaskBuildKeyByHeight.set(L, aboveBuildKey);
           }
-          aboveCtx.globalCompositeOperation = "destination-in";
-          const g = aboveCtx.createRadialGradient(playerSx, playerSy, innerR, playerSx, playerSy, outerR);
-          g.addColorStop(0.0, "rgba(0,0,0,1)");
-          g.addColorStop(1.0, "rgba(0,0,0,0)");
-          aboveCtx.fillStyle = g;
-          aboveCtx.beginPath();
-          aboveCtx.arc(playerSx, playerSy, outerR, 0, Math.PI * 2);
-          aboveCtx.fill();
-          aboveCtx.globalCompositeOperation = "source-over";
           maskCtx.globalCompositeOperation = "destination-out";
           maskCtx.drawImage(aboveRec.canvas, 0, 0);
           maskCtx.globalCompositeOperation = "source-over";
+        } else {
+          lightingAboveMaskBuildKeyByHeight.delete(L);
         }
+        lightingMaskBuildKeyByHeight.set(L, baseBuildKey);
       } else {
         const groupEntries = buildLightingOccluderGroups([L], occluderEntries).get(L) ?? [];
         maskCtx.save();
