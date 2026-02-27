@@ -536,7 +536,7 @@ function installDevSettingsUi(): void {
     updateUserSettings({
       debug: makeAllDebugOffSettings(),
       render: {
-        entityShadowsDisable: true,
+        entityShadowsDisable: false,
         entityAnchorsEnabled: false,
         renderPerfCountersEnabled: false,
         paletteSwapEnabled: false,

@@ -6,7 +6,7 @@ const localSettings: UserSettingsPatch = {
     slices: false,
   },
   render: {
-    entityShadowsDisable: true,
+    entityShadowsDisable: false,
     entityAnchorsEnabled: false,
     renderPerfCountersEnabled: false,
   },

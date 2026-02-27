@@ -48,7 +48,7 @@ export type UserSettingsPatch = {
 export const DEFAULT_SETTINGS: UserSettings = {
   debug: { ...DEFAULT_DEBUG_SETTINGS },
   render: {
-    entityShadowsDisable: true,
+    entityShadowsDisable: false,
     entityAnchorsEnabled: false,
     renderPerfCountersEnabled: false,
     tileRenderRadius: 12,
