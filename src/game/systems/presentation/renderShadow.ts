@@ -77,7 +77,7 @@ export function renderEntityShadowMask(
 }
 
 function computeShadowGeometry(params: ShadowParams, compiledMap: CompiledKenneyMap) {
-  const support = getSupportSurfaceAt(params.worldX, params.worldY, compiledMap);
+  const support = getSupportSurfaceAt(params.worldX, params.worldY, compiledMap, params.worldZ);
   const hoverZ = Math.max(0, params.worldZ - support.worldZ);
   const t = clamp(hoverZ / SHADOW_FADE_HEIGHT, 0, 1);
 

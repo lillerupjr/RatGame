@@ -241,6 +241,7 @@ export type CompiledKenneyMap = {
     decals: DecalPiece[];
     decalsInView(view: ViewRect): DecalPiece[];
     blockedTiles: Set<string>;
+    blockedTileSpansByKey: Map<string, Array<{ zFrom: number; zTo: number }>>;
     roadMarkingContext: RoadContext;
     roadMarkings: MarkingPiece[];
     roadAreaMaskWorld: Uint8Array;
@@ -689,15 +690,32 @@ export function compileKenneyMapFromTable(
     });
 
     const placed = new Map<string, IsoTile>();
+    const placedStacks = new Map<string, IsoTile[]>();
+    const setPlacedTile = (tx: number, ty: number, tile: IsoTile) => {
+        const key = `${tx},${ty}`;
+        const stack = placedStacks.get(key);
+        if (stack) stack.push(tile);
+        else placedStacks.set(key, [tile]);
+        const current = placed.get(key);
+        if (!current) {
+            placed.set(key, tile);
+            return;
+        }
+        if (current.kind === "VOID" && tile.kind !== "VOID") {
+            placed.set(key, tile);
+            return;
+        }
+        if (tile.kind !== "VOID" && (tile.h | 0) >= (current.h | 0)) {
+            placed.set(key, tile);
+        }
+    };
 
     for (let i = 0; i < parsedCells.length; i++) {
         const cell = parsedCells[i];
         const tx = cell.tx + originTx;
         const ty = cell.ty + originTy;
         const tile = cell.tile;
-        if (tile) {
-            placed.set(`${tx},${ty}`, tile);
-        }
+        if (tile) setPlacedTile(tx, ty, tile);
 
         if (cell.walls.length > 0) {
             for (let j = 0; j < cell.walls.length; j++) {
@@ -733,8 +751,23 @@ export function compileKenneyMapFromTable(
 
             for (let y = minY; y <= maxY; y++) {
                 for (let x = minX; x <= maxX; x++) {
-                    const tile = placed.get(`${x},${y}`);
-                    if (!tile || tile.kind === "VOID") continue;
+                    const key = `${x},${y}`;
+                    const stack = placedStacks.get(key);
+                    const tile = stack && stack.length > 0
+                        ? (() => {
+                            const targetZ = Number.isFinite(rect.z) ? ((rect.z as number) | 0) : null;
+                            if (targetZ !== null) {
+                                for (let si = 0; si < stack.length; si++) {
+                                    const cand = stack[si];
+                                    if (cand.kind === "VOID") continue;
+                                    if ((cand.h | 0) === targetZ) return cand;
+                                }
+                            }
+                            const top = placed.get(key);
+                            return top && top.kind !== "VOID" ? top : null;
+                        })()
+                        : null;
+                    if (!tile) continue;
                     const axisIndex = (() => {
                         if (dir === "N") return maxY - y;
                         if (dir === "S") return y - minY;
@@ -1312,10 +1345,16 @@ export function compileKenneyMapFromTable(
     };
 
     function addSurface(surface: Surface) {
+        const byZAsc = (a: Surface, b: Surface) => {
+            if (a.zBase !== b.zBase) return a.zBase - b.zBase;
+            if (a.zLogical !== b.zLogical) return a.zLogical - b.zLogical;
+            return a.id.localeCompare(b.id);
+        };
         const k = `${surface.tx},${surface.ty}`;
         const list = surfacesByKey.get(k);
         if (list) {
             list.push(surface);
+            list.sort(byZAsc);
         } else {
             surfacesByKey.set(k, [surface]);
             surfaceCoords.push({ tx: surface.tx, ty: surface.ty });
@@ -1327,7 +1366,10 @@ export function compileKenneyMapFromTable(
             surfacesByCoord.set(surface.tx, byTy);
         }
         const byTyList = byTy.get(surface.ty);
-        if (byTyList) byTyList.push(surface);
+        if (byTyList) {
+            byTyList.push(surface);
+            byTyList.sort(byZAsc);
+        }
         else byTy.set(surface.ty, [surface]);
 
         const layerList = topsByLayer.get(surface.zLogical);
@@ -1451,26 +1493,74 @@ export function compileKenneyMapFromTable(
             rotationQuarterTurns,
         });
     };
-    const roadMarkingPipeline = buildRoadMarkingsPipeline({
+    const emptyMask = new Uint8Array(worldW * worldH);
+    const roadMarkingsAll: MarkingPiece[] = [];
+    const roadContextByZ = new Map<number, RoadContext>();
+    const roadZKeys = Array.from(roadAreaByZ.keys()).sort((a, b) => a - b);
+    const bandIntersectsZ = (band: RoadBand, z: number): boolean => {
+        if (!isRampBand(band)) return ((band.roadZ ?? 0) | 0) === (z | 0);
+        for (let ty = band.y0; ty <= band.y1; ty++) {
+            for (let tx = band.x0; tx <= band.x1; tx++) {
+                if (!worldInBounds(tx, ty)) continue;
+                if ((roadBandHeightAt(band, tx, ty) | 0) === (z | 0)) return true;
+            }
+        }
+        return false;
+    };
+    for (let zi = 0; zi < roadZKeys.length; zi++) {
+        const z = roadZKeys[zi] | 0;
+        const areaMask = roadAreaByZ.get(z);
+        if (!areaMask) continue;
+        const bandsForZ = roadBands.filter((b) => bandIntersectsZ(b, z));
+        if (bandsForZ.length === 0) continue;
+        const layerPipeline = buildRoadMarkingsPipeline({
+            w: worldW,
+            h: worldH,
+            originTx,
+            originTy,
+            isRoadFromSemantics: (x, y) => {
+                if (!worldInBounds(x, y)) return false;
+                return areaMask[worldIndex(x, y)] === 1;
+            },
+            roadBands: bandsForZ,
+            roadIntersectionMaskWorld: roadIntersectionMaskByZ.get(z) ?? emptyMask,
+            roadCrossingMaskWorld: roadCrossingMaskByZ.get(z) ?? emptyMask,
+            roadCrossingDirWorld: roadCrossingDirByZ.get(z) ?? emptyMask,
+            roadStopMaskWorld: roadStopMaskByZ.get(z) ?? emptyMask,
+            roadStopDirWorld: roadStopDirByZ.get(z) ?? emptyMask,
+            emitStopbarCrossingOverlay: true,
+            getTileZAt: () => z,
+        });
+        roadContextByZ.set(z, layerPipeline.context);
+        for (let mi = 0; mi < layerPipeline.markings.length; mi++) {
+            roadMarkingsAll.push(layerPipeline.markings[mi]);
+        }
+    }
+
+    // Compatibility context projection for UI/debug consumers expecting a single 2D context.
+    const roadContextCompatIsRoad = new Uint8Array(worldW * worldH);
+    const roadContextCompatAxis = new Uint8Array(worldW * worldH);
+    for (let tyWorld = originTy; tyWorld <= worldMaxTy; tyWorld++) {
+        for (let txWorld = originTx; txWorld <= worldMaxTx; txWorld++) {
+            const i = worldIndex(txWorld, tyWorld);
+            const z = getTile(txWorld, tyWorld).h | 0;
+            const ctxAtZ = roadContextByZ.get(z);
+            if (!ctxAtZ) continue;
+            roadContextCompatIsRoad[i] = ctxAtZ.isRoad[i] | 0;
+            roadContextCompatAxis[i] = ctxAtZ.axis[i] | 0;
+        }
+    }
+    const roadMarkingContextCompat: RoadContext = {
         w: worldW,
         h: worldH,
         originTx,
         originTy,
-        isRoadFromSemantics: (x, y) => isRoadWorld(x, y),
-        roadBands,
-        roadIntersectionMaskWorld,
-        roadCrossingMaskWorld,
-        roadCrossingDirWorld,
-        roadStopMaskWorld,
-        roadStopDirWorld,
-        emitStopbarCrossingOverlay: true,
-        getTileZAt: (x, y) => {
-            const tile = getTile(x, y);
-            return tile.kind === "VOID" ? 0 : (tile.h | 0);
-        },
-    });
-    for (let i = 0; i < roadMarkingPipeline.markings.length; i++) {
-        const m = roadMarkingPipeline.markings[i];
+        isRoad: roadContextCompatIsRoad,
+        axis: roadContextCompatAxis,
+    };
+
+    for (let i = 0; i < roadMarkingsAll.length; i++) {
+        const m = roadMarkingsAll[i];
         const sprite = resolveMarkingSprite(m.variant);
         if (!sprite) continue;
         const zBase = m.zBase ?? 0;
@@ -1493,67 +1583,71 @@ export function compileKenneyMapFromTable(
         });
     }
 
-    for (const [key, tile] of placed.entries()) {
-        if (tile.kind === "VOID") continue;
+    for (const [key, stack] of placedStacks.entries()) {
+        if (!stack || stack.length === 0) continue;
         const parts = key.split(",");
         const tx = parseInt(parts[0], 10);
         const ty = parseInt(parts[1], 10);
         if (!Number.isFinite(tx) || !Number.isFinite(ty)) continue;
-        const zBase = tile.h | 0;
-        const renderTopKind: RenderTopKind = tile.kind === "STAIRS" ? "STAIR" : "FLOOR";
-        const renderDir = (tile.dir ?? "N") as StairDir;
-        const renderAnchorY = renderTopKind === "STAIR" ? stairAnchorY : floorAnchorY;
-        const renderDyOffset = renderTopKind === "STAIR" ? (stairDyByDir[renderDir] ?? 16) : 0;
+        for (let si = 0; si < stack.length; si++) {
+            const tile = stack[si];
+            if (!tile || tile.kind === "VOID") continue;
+            const zBase = tile.h | 0;
+            const renderTopKind: RenderTopKind = tile.kind === "STAIRS" ? "STAIR" : "FLOOR";
+            const renderDir = (tile.dir ?? "N") as StairDir;
+            const renderAnchorY = renderTopKind === "STAIR" ? stairAnchorY : floorAnchorY;
+            const renderDyOffset = renderTopKind === "STAIR" ? (stairDyByDir[renderDir] ?? 16) : 0;
 
-        const zLogical = renderTopKind === "STAIR" ? Math.max(0, zBase - 1) : zBase;
-        const runtimeFamilyFromTileSkin = (() => {
-            if (renderTopKind !== "FLOOR") return undefined;
-            const skin = tile.skin ?? "";
-            if (!skin.startsWith(RUNTIME_TILE_SKIN_PREFIX)) return undefined;
-            const family = skin.slice(RUNTIME_TILE_SKIN_PREFIX.length);
-            if (family === "sidewalk" || family === "asphalt" || family === "park") return family;
-            return undefined;
-        })();
-        const runtimeTop = runtimeFamilyFromTileSkin ? pickRuntimeSquareTop(runtimeFamilyFromTileSkin, tx, ty) : undefined;
-        if (runtimeFamilyFromTileSkin === "sidewalk") {
-            maybeAddSemanticDecal(tx, ty, zBase, zLogical, "sidewalk", renderAnchorY);
-        } else if (runtimeFamilyFromTileSkin === "asphalt") {
-            maybeAddSemanticDecal(tx, ty, zBase, zLogical, "asphalt", renderAnchorY);
-        }
-        const tileOverride: MapSkinBundle | undefined = tile.skin && !runtimeTop
-            ? (renderTopKind === "STAIR" ? { stair: tile.skin } : { floor: tile.skin })
-            : undefined;
-        const useDominantFloorTop = tile.kind === "SPAWN" || tile.skin === INHERIT_DOMINANT_FLOOR_SKIN;
-        const spawnResolvedTop = useDominantFloorTop ? resolveSpawnSurfaceTop(tx, ty) : null;
-        const spriteIdTop = spawnResolvedTop
-            ? spawnResolvedTop.spriteIdTop
-            : runtimeTop
-            ? runtimeTop.spriteId
-            : resolveTileSpriteId({
-                slot: renderTopKind === "STAIR" ? "stair" : "floor",
-                dir: renderTopKind === "STAIR" ? renderDir : undefined,
-                mapSkin: resolvedMapSkin,
-                mapSkinId: skinIdToUse,
-                mapDefaults: mapSkinDefaults,
-                tileOverride,
+            const zLogical = renderTopKind === "STAIR" ? Math.max(0, zBase - 1) : zBase;
+            const runtimeFamilyFromTileSkin = (() => {
+                if (renderTopKind !== "FLOOR") return undefined;
+                const skin = tile.skin ?? "";
+                if (!skin.startsWith(RUNTIME_TILE_SKIN_PREFIX)) return undefined;
+                const family = skin.slice(RUNTIME_TILE_SKIN_PREFIX.length);
+                if (family === "sidewalk" || family === "asphalt" || family === "park") return family;
+                return undefined;
+            })();
+            const runtimeTop = runtimeFamilyFromTileSkin ? pickRuntimeSquareTop(runtimeFamilyFromTileSkin, tx, ty) : undefined;
+            if (runtimeFamilyFromTileSkin === "sidewalk") {
+                maybeAddSemanticDecal(tx, ty, zBase, zLogical, "sidewalk", renderAnchorY);
+            } else if (runtimeFamilyFromTileSkin === "asphalt") {
+                maybeAddSemanticDecal(tx, ty, zBase, zLogical, "asphalt", renderAnchorY);
+            }
+            const tileOverride: MapSkinBundle | undefined = tile.skin && !runtimeTop
+                ? (renderTopKind === "STAIR" ? { stair: tile.skin } : { floor: tile.skin })
+                : undefined;
+            const useDominantFloorTop = tile.kind === "SPAWN" || tile.skin === INHERIT_DOMINANT_FLOOR_SKIN;
+            const spawnResolvedTop = useDominantFloorTop ? resolveSpawnSurfaceTop(tx, ty) : null;
+            const spriteIdTop = spawnResolvedTop
+                ? spawnResolvedTop.spriteIdTop
+                : runtimeTop
+                ? runtimeTop.spriteId
+                : resolveTileSpriteId({
+                    slot: renderTopKind === "STAIR" ? "stair" : "floor",
+                    dir: renderTopKind === "STAIR" ? renderDir : undefined,
+                    mapSkin: resolvedMapSkin,
+                    mapSkinId: skinIdToUse,
+                    mapDefaults: mapSkinDefaults,
+                    tileOverride,
+                });
+            const finalRuntimeTop = spawnResolvedTop?.runtimeTop ?? runtimeTop;
+
+            addSurface({
+                id: `tile_${tx}_${ty}_${si}_${tile.kind}_${zBase}`,
+                kind: "TILE_TOP",
+                tx,
+                ty,
+                zBase,
+                zLogical,
+                tile,
+                renderTopKind,
+                renderDir,
+                renderAnchorY,
+                renderDyOffset,
+                spriteIdTop,
+                runtimeTop: finalRuntimeTop,
             });
-        const finalRuntimeTop = spawnResolvedTop?.runtimeTop ?? runtimeTop;
-
-        addSurface({
-            id: `tile_${tx}_${ty}_${tile.kind}_${zBase}`,
-            kind: "TILE_TOP",
-            tx,
-            ty,
-            zBase,
-            zLogical,
-            tile,
-            renderTopKind,
-            renderDir,
-            renderAnchorY,
-            renderDyOffset,
-            spriteIdTop,
-            runtimeTop: finalRuntimeTop,
-        });
+        }
     }
 
 
@@ -1583,6 +1677,7 @@ export function compileKenneyMapFromTable(
     const facePiecesByLayer = new Map<number, RenderPiece[]>();
     const overlays: StampOverlay[] = [];
     const blockedTiles = new Set<string>();
+    const blockedTileSpansByKey = new Map<string, Array<{ zFrom: number; zTo: number }>>();
     const nonFlippableWarned = new Set<string>();
     const wallFaces = new Set<string>();
     const wallFaceList: SolidFaceRec[] = [];
@@ -1674,10 +1769,24 @@ export function compileKenneyMapFromTable(
         return defaultValue;
     };
 
-    const bakeBlockedFootprint = (tx: number, ty: number, w: number, h: number): void => {
+    const addBlockedSpan = (tx: number, ty: number, zFrom: number, zTo: number): void => {
+        const key = `${tx},${ty}`;
+        const lo = Math.min(zFrom, zTo);
+        const hi = Math.max(zFrom, zTo);
+        const spans = blockedTileSpansByKey.get(key);
+        if (spans) spans.push({ zFrom: lo, zTo: hi });
+        else blockedTileSpansByKey.set(key, [{ zFrom: lo, zTo: hi }]);
+    };
+
+    const bakeBlockedFootprint = (tx: number, ty: number, w: number, h: number, zFrom?: number, zTo?: number): void => {
         for (let dx = 0; dx < w; dx++) {
             for (let dy = 0; dy < h; dy++) {
-                blockedTiles.add(`${tx + dx},${ty + dy}`);
+                const bx = tx + dx;
+                const by = ty + dy;
+                blockedTiles.add(`${bx},${by}`);
+                if (Number.isFinite(zFrom) && Number.isFinite(zTo)) {
+                    addBlockedSpan(bx, by, zFrom as number, zTo as number);
+                }
             }
         }
     };
@@ -1929,7 +2038,9 @@ export function compileKenneyMapFromTable(
                         }
                     }
                 }
-                if (stampBlocksMovement(stamp, true)) bakeBlockedFootprint(sx, sy, placeW, placeH);
+                if (stampBlocksMovement(stamp, true)) {
+                    bakeBlockedFootprint(sx, sy, placeW, placeH, zBase, zBase + Math.max(1, heightUnits));
+                }
                 return;
             }
 
@@ -2004,7 +2115,9 @@ export function compileKenneyMapFromTable(
                     }
                 }
             }
-            if (stampBlocksMovement(stamp, true)) bakeBlockedFootprint(sx, sy, placeW, placeH);
+            if (stampBlocksMovement(stamp, true)) {
+                bakeBlockedFootprint(sx, sy, placeW, placeH, zBase, zBase + Math.max(1, heightUnits));
+            }
             return;
         }
 
@@ -2129,7 +2242,7 @@ export function compileKenneyMapFromTable(
                 flicker: { kind: "NONE" },
             });
             if (stampBlocksMovement(stamp, false)) {
-                bakeBlockedFootprint(sx, sy, w, h);
+                bakeBlockedFootprint(sx, sy, w, h, zBase, zBase + 1);
             }
             return;
         }
@@ -2596,8 +2709,9 @@ export function compileKenneyMapFromTable(
         decals,
         decalsInView,
         blockedTiles,
-        roadMarkingContext: roadMarkingPipeline.context,
-        roadMarkings: roadMarkingPipeline.markings,
+        blockedTileSpansByKey,
+        roadMarkingContext: roadMarkingContextCompat,
+        roadMarkings: roadMarkingsAll,
         roadAreaMaskWorld,
         roadAreaWidthWorld,
         roadCenterMaskHWorld,

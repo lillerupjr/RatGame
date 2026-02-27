@@ -63,7 +63,10 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   w.pvx = worldDir.wx * w.pSpeed;
   w.pvy = worldDir.wy * w.pSpeed;
 
-  let curInfo = walkInfo(px, py, KENNEY_TILE_WORLD, w.pz);
+  const playerHintZ = Number.isFinite(w.pzVisual as any)
+    ? (w.pzVisual as number)
+    : (Number.isFinite(w.pz as any) ? (w.pz as number) : undefined);
+  let curInfo = walkInfo(px, py, KENNEY_TILE_WORLD, playerHintZ);
 
   w.pz = curInfo.z;
   w.pzVisual = curInfo.zVisual;
@@ -76,7 +79,19 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   const MAX_STEP_Z = 1.05;
 
   const tryMove = (wx: number, wy: number) => {
-    const nextInfo = walkInfo(wx, wy, KENNEY_TILE_WORLD, curInfo.z);
+    let nextInfo = walkInfo(wx, wy, KENNEY_TILE_WORLD, curInfo.z);
+    if (
+      nextInfo.walkable &&
+      !(curInfo as any).isRamp &&
+      !(nextInfo as any).isRamp &&
+      nextInfo.floorH === curInfo.floorH
+    ) {
+      const climbInfo = walkInfo(wx, wy, KENNEY_TILE_WORLD, curInfo.z + MAX_STEP_Z);
+      const climbDz = Math.abs(climbInfo.z - curInfo.z);
+      if (climbInfo.walkable && ((climbInfo as any).isRamp || climbInfo.floorH > curInfo.floorH) && climbDz <= MAX_STEP_Z) {
+        nextInfo = climbInfo;
+      }
+    }
     if (!nextInfo.walkable) return false;
 
     const stairsInvolved =
@@ -122,7 +137,7 @@ export function movementSystem(w: World, input: InputState, dt: number) {
 
   const ezVisual = w.ezVisual;
   const ezLogical = w.ezLogical;
-  const pInfo = walkInfo(px, py, KENNEY_TILE_WORLD, w.pzVisual);
+  const pInfo = walkInfo(px, py, KENNEY_TILE_WORLD, curInfo.z);
   const playerFloorH = pInfo.floorH;
 
   // Compute / refresh flow field for enemy pathfinding

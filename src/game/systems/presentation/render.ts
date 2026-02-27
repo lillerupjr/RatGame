@@ -156,6 +156,70 @@ const flippedOverlayImageCache = new WeakMap<HTMLImageElement, HTMLCanvasElement
 // Keyed by the *actual* loaded image object (palette-specific) + rotation.
 const runtimeIsoTopCache = new WeakMap<HTMLImageElement, Map<0 | 1 | 2 | 3, HTMLCanvasElement>>();
 const runtimeIsoDecalCache = new WeakMap<HTMLImageElement, Map<string, HTMLCanvasElement>>();
+const runtimeDiamondCanvasCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
+
+type ScreenPt = { x: number; y: number };
+
+function computeTriToTriAffine(
+  s0: ScreenPt, s1: ScreenPt, s2: ScreenPt,
+  d0: ScreenPt, d1: ScreenPt, d2: ScreenPt,
+): { a: number; b: number; c: number; d: number; e: number; f: number } | null {
+  const den = s0.x * (s1.y - s2.y) + s1.x * (s2.y - s0.y) + s2.x * (s0.y - s1.y);
+  if (Math.abs(den) < 1e-8) return null;
+  const a = (d0.x * (s1.y - s2.y) + d1.x * (s2.y - s0.y) + d2.x * (s0.y - s1.y)) / den;
+  const c = (d0.x * (s2.x - s1.x) + d1.x * (s0.x - s2.x) + d2.x * (s1.x - s0.x)) / den;
+  const e = (
+    d0.x * (s1.x * s2.y - s2.x * s1.y) +
+    d1.x * (s2.x * s0.y - s0.x * s2.y) +
+    d2.x * (s0.x * s1.y - s1.x * s0.y)
+  ) / den;
+  const b = (d0.y * (s1.y - s2.y) + d1.y * (s2.y - s0.y) + d2.y * (s0.y - s1.y)) / den;
+  const d = (d0.y * (s2.x - s1.x) + d1.y * (s0.x - s2.x) + d2.y * (s1.x - s0.x)) / den;
+  const f = (
+    d0.y * (s1.x * s2.y - s2.x * s1.y) +
+    d1.y * (s2.x * s0.y - s0.x * s2.y) +
+    d2.y * (s0.x * s1.y - s1.x * s0.y)
+  ) / den;
+  return { a, b, c, d, e, f };
+}
+
+function drawTexturedTriangle(
+  ctx: CanvasRenderingContext2D,
+  img: CanvasImageSource,
+  imgW: number,
+  imgH: number,
+  s0: ScreenPt, s1: ScreenPt, s2: ScreenPt,
+  d0: ScreenPt, d1: ScreenPt, d2: ScreenPt,
+): void {
+  const m = computeTriToTriAffine(s0, s1, s2, d0, d1, d2);
+  if (!m) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(d0.x, d0.y);
+  ctx.lineTo(d1.x, d1.y);
+  ctx.lineTo(d2.x, d2.y);
+  ctx.closePath();
+  ctx.clip();
+  ctx.transform(m.a, m.b, m.c, m.d, m.e, m.f);
+  ctx.drawImage(img, 0, 0, imgW, imgH);
+  ctx.restore();
+}
+
+function getDiamondFitCanvas(src: HTMLCanvasElement): HTMLCanvasElement {
+  const cached = runtimeDiamondCanvasCache.get(src);
+  if (cached) return cached;
+  const out = document.createElement("canvas");
+  out.width = 128;
+  out.height = 64;
+  const c2d = out.getContext("2d");
+  if (c2d) {
+    configurePixelPerfect(c2d);
+    c2d.imageSmoothingEnabled = false;
+    c2d.drawImage(src, Math.round((128 - src.width) * 0.5), Math.round((64 - src.height) * 0.5));
+  }
+  runtimeDiamondCanvasCache.set(src, out);
+  return out;
+}
 
 function getRuntimeIsoTopCanvas(
   srcImg: HTMLImageElement,
@@ -977,6 +1041,40 @@ export async function renderSystem(
       });
     };
 
+    const srcUvNW: ScreenPt = { x: 64, y: 0 };
+    const srcUvNE: ScreenPt = { x: 128, y: 32 };
+    const srcUvSE: ScreenPt = { x: 64, y: 64 };
+    const srcUvSW: ScreenPt = { x: 0, y: 32 };
+    const getRampQuadPoints = (tx: number, ty: number, renderAnchorY: number) => {
+      const anchorYOffset = SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5);
+      const sample = (wx: number, wy: number): ScreenPt => {
+        const p = worldToScreen(wx, wy);
+        const hz = tileHAtWorld(wx, wy);
+        return {
+          x: snapPx(p.x + camX),
+          y: snapPx(p.y + camY - hz * ELEV_PX - anchorYOffset),
+        };
+      };
+      const x0 = tx * T;
+      const y0 = ty * T;
+      return {
+        nw: sample(x0, y0),
+        ne: sample(x0 + T, y0),
+        se: sample(x0 + T, y0 + T),
+        sw: sample(x0, y0 + T),
+      };
+    };
+    const drawDiamondOnRampQuad = (
+      srcDiamond: HTMLCanvasElement,
+      tx: number,
+      ty: number,
+      renderAnchorY: number,
+    ) => {
+      const q = getRampQuadPoints(tx, ty, renderAnchorY);
+      drawTexturedTriangle(ctx, srcDiamond, 128, 64, srcUvNW, srcUvNE, srcUvSE, q.nw, q.ne, q.se);
+      drawTexturedTriangle(ctx, srcDiamond, 128, 64, srcUvNW, srcUvSE, srcUvSW, q.nw, q.se, q.sw);
+    };
+
     const drawRuntimeSidewalkTop = (
       tx: number,
       ty: number,
@@ -989,23 +1087,35 @@ export async function renderSystem(
       const src = getTileSpriteById(`tiles/floor/${family}/${variantIndex}`);
       if (!src.ready || !src.img || src.img.width <= 0 || src.img.height <= 0) return;
 
-      const baked = getRuntimeIsoTopCanvas(src.img, rotationQuarterTurns);
-      if (!baked) return;
+      const baseBaked = getRuntimeIsoTopCanvas(src.img, rotationQuarterTurns);
+      if (!baseBaked) return;
+      const isRampRoadTile = family === "asphalt" && rampRoadTiles.has(`${tx},${ty}`);
+      if (isRampRoadTile) {
+        drawDiamondOnRampQuad(baseBaked, tx, ty, renderAnchorY);
+      } else {
+        const wx = (tx + 0.5) * T;
+        const wy = (ty + 0.5) * T;
+        const p = worldToScreen(wx, wy);
+
+        // This matches the old "centerX/centerY" placement, but now we draw the prebaked 128x64.
+        const centerX = snapPx(p.x + camX);
+        const centerY = snapPx(
+          p.y + camY - zBase * ELEV_PX - SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5),
+        );
+
+        const dx = centerX - SIDEWALK_SRC_SIZE * 0.5;
+        const dy = centerY - SIDEWALK_ISO_HEIGHT * 0.5;
+
+        ctx.drawImage(baseBaked, snapPx(dx), snapPx(dy));
+      }
 
       const wx = (tx + 0.5) * T;
       const wy = (ty + 0.5) * T;
       const p = worldToScreen(wx, wy);
-
-      // This matches the old "centerX/centerY" placement, but now we draw the prebaked 128x64.
       const centerX = snapPx(p.x + camX);
       const centerY = snapPx(
         p.y + camY - zBase * ELEV_PX - SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5),
       );
-
-      const dx = centerX - SIDEWALK_SRC_SIZE * 0.5;
-      const dy = centerY - SIDEWALK_ISO_HEIGHT * 0.5;
-
-      ctx.drawImage(baked, snapPx(dx), snapPx(dy));
 
       if (SHOW_SIDEWALK_VARIANT_DEBUG) {
         ctx.save();
@@ -1041,11 +1151,16 @@ export async function renderSystem(
       const centerX = shouldSnapRoadMarking ? Math.round(rawCenterX) : snapPx(rawCenterX);
       const centerY = shouldSnapRoadMarking ? Math.round(rawCenterY) : snapPx(rawCenterY);
 
-      const dx = centerX - baked.width * 0.5;
-      const dy = centerY - baked.height * 0.5;
-      const drawX = shouldSnapRoadMarking ? Math.round(dx) : snapPx(dx);
-      const drawY = shouldSnapRoadMarking ? Math.round(dy) : snapPx(dy);
-      ctx.drawImage(baked, drawX, drawY);
+      if (rampRoadTiles.has(`${tx},${ty}`)) {
+        const diamond = getDiamondFitCanvas(baked);
+        drawDiamondOnRampQuad(diamond, tx, ty, renderAnchorY);
+      } else {
+        const dx = centerX - baked.width * 0.5;
+        const dy = centerY - baked.height * 0.5;
+        const drawX = shouldSnapRoadMarking ? Math.round(dx) : snapPx(dx);
+        const drawY = shouldSnapRoadMarking ? Math.round(dy) : snapPx(dy);
+        ctx.drawImage(baked, drawX, drawY);
+      }
     };
 
     const drawProjectedVoidTop = (
@@ -1516,6 +1631,23 @@ export async function renderSystem(
     ) + 2;
   const activeH = w.activeFloorH ?? 0;
   const compiledMap = getActiveCompiledMap();
+  const rampRoadTiles = new Set<string>();
+  if (compiledMap?.roadSemanticRects) {
+    for (let i = 0; i < compiledMap.roadSemanticRects.length; i++) {
+      const rr = compiledMap.roadSemanticRects[i];
+      const semantic = rr.semantic?.trim().toLowerCase() ?? "";
+      if (!(semantic === "ramp" || semantic.startsWith("ramp_"))) continue;
+      const minX = rr.x | 0;
+      const minY = rr.y | 0;
+      const maxX = minX + Math.max(1, rr.w | 0) - 1;
+      const maxY = minY + Math.max(1, rr.h | 0) - 1;
+      for (let ty = minY; ty <= maxY; ty++) {
+        for (let tx = minX; tx <= maxX; tx++) {
+          rampRoadTiles.add(`${tx},${ty}`);
+        }
+      }
+    }
+  }
 
   // ----------------------------
   // Void
@@ -1812,7 +1944,7 @@ export async function renderSystem(
       if (!w.eAlive[i]) continue;
       const ew = getEnemyWorld(w, i, KENNEY_TILE_WORLD);
       const zAbs = ez?.[i] ?? tileHAtWorld(ew.wx, ew.wy);
-      const support = getSupportSurfaceAt(ew.wx, ew.wy, compiledMap);
+      const support = getSupportSurfaceAt(ew.wx, ew.wy, compiledMap, zAbs);
       const tx = Math.floor(ew.wx / T);
       const ty = Math.floor(ew.wy / T);
       if (!isTileInRenderRadius(tx, ty)) continue;
@@ -1894,7 +2026,7 @@ export async function renderSystem(
     for (let i = 0; i < w.npcs.length; i++) {
       const npc = w.npcs[i];
       const zAbs = tileHAtWorld(npc.wx, npc.wy);
-      const support = getSupportSurfaceAt(npc.wx, npc.wy, compiledMap);
+      const support = getSupportSurfaceAt(npc.wx, npc.wy, compiledMap, zAbs);
       const tx = Math.floor(npc.wx / T);
       const ty = Math.floor(npc.wy / T);
       if (!isTileInRenderRadius(tx, ty)) continue;
@@ -1961,7 +2093,7 @@ export async function renderSystem(
       const mob = w.neutralMobs[i];
       const zGround = tileHAtWorld(mob.pos.wx, mob.pos.wy);
       const zAbs = zGround + (mob.pos.wzOffset ?? 0);
-      const support = getSupportSurfaceAt(mob.pos.wx, mob.pos.wy, compiledMap);
+      const support = getSupportSurfaceAt(mob.pos.wx, mob.pos.wy, compiledMap, zAbs);
       const tx = Math.floor(mob.pos.wx / T);
       const ty = Math.floor(mob.pos.wy / T);
       if (!isTileInRenderRadius(tx, ty)) continue;
@@ -2022,7 +2154,7 @@ export async function renderSystem(
 
     {
       const pzAbs = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
-      const support = getSupportSurfaceAt(px, py, compiledMap);
+      const support = getSupportSurfaceAt(px, py, compiledMap, pzAbs);
       const tx = Math.floor(px / T);
       const ty = Math.floor(py / T);
       const dir = ((w as any)._plDir ?? "N") as Dir8;
@@ -2529,7 +2661,7 @@ export async function renderSystem(
       if (!inCurrentPlayerRange && !inFirePlayerRange) continue;
       const baseH = tileHAtWorld(pp.wx, pp.wy);
       const pzAbs = (w.prZVisual?.[i] ?? w.prZ?.[i] ?? baseH) || 0;
-      const support = getSupportSurfaceAt(pp.wx, pp.wy, compiledMap);
+      const support = getSupportSurfaceAt(pp.wx, pp.wy, compiledMap, pzAbs);
       const feet = getEntityFeetPos(pp.wx, pp.wy, pzAbs);
 
       const renderKey: RenderKey = {

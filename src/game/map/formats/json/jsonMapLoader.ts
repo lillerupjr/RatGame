@@ -841,7 +841,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
   const indexByKey = new Map<string, number>();
 
   const add = (c: TableMapCell) => {
-    const key = `${c.x},${c.y}`;
+    const key = `${c.x},${c.y},${(c.z ?? 0) | 0}`;
     const existing = indexByKey.get(key);
     if (existing === undefined) {
       indexByKey.set(key, merged.length);

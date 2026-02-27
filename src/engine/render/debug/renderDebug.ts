@@ -26,6 +26,7 @@ import {
   pointInQuad,
   rampHeightAt,
   solidFacesInView,
+  surfacesAtCell,
   walkInfo,
   type RenderPiece,
   type ViewRect,
@@ -543,7 +544,7 @@ export function drawApronOwnershipStats(ctx: DebugOverlayContext, show: boolean)
 
 export function drawRampOverlay(ctx: DebugOverlayContext, show: boolean) {
   if (!show) return;
-  const { px, py, T } = ctx;
+  const { px, py, T, w } = ctx;
   const ramps = getRampFacesForDebug(T);
   if (!ramps || ramps.length === 0) return;
 
@@ -612,6 +613,17 @@ export function drawRampOverlay(ctx: DebugOverlayContext, show: boolean) {
 
   const hz = ctx.tileHAtWorld(px, py);
   c.fillText(`heightAtWorld(p): ${hz.toFixed(3)}`, pp.x + 10, pp.y - 4);
+  const pInfo = walkInfo(px, py, T, Number.isFinite((w as any).pzVisual) ? (w as any).pzVisual : (w as any).pz);
+  c.fillText(
+    `walkInfo z=${pInfo.z.toFixed(3)} floor=${pInfo.floorH} isRamp=${pInfo.isRamp ? 1 : 0}`,
+    pp.x + 10,
+    pp.y + 10,
+  );
+  const ptx = Math.floor(px / T);
+  const pty = Math.floor(py / T);
+  const stack = surfacesAtCell(ptx, pty);
+  const zs = stack.map((s) => `${s.zBase}`).join(",");
+  c.fillText(`stack@${ptx},${pty}: n=${stack.length} z=[${zs}]`, pp.x + 10, pp.y + 24);
 
   c.restore();
 }

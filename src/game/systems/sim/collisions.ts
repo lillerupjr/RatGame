@@ -154,11 +154,26 @@ export function collisionsSystem(w: World, dt: number) {
   };
 
   const tryPlayerDisplace = (dx: number, dy: number) => {
-    let curInfo = walkInfo(px, py, KENNEY_TILE_WORLD, w.pz);
+    const playerHintZ = Number.isFinite(w.pzVisual as any)
+      ? (w.pzVisual as number)
+      : (Number.isFinite(w.pz as any) ? (w.pz as number) : undefined);
+    let curInfo = walkInfo(px, py, KENNEY_TILE_WORLD, playerHintZ);
     const MAX_STEP_Z = 1.05;
 
     const tryMove = (wx: number, wy: number) => {
-      const nextInfo = walkInfo(wx, wy, KENNEY_TILE_WORLD, curInfo.z);
+      let nextInfo = walkInfo(wx, wy, KENNEY_TILE_WORLD, curInfo.z);
+      if (
+        nextInfo.walkable &&
+        !(curInfo as any).isRamp &&
+        !(nextInfo as any).isRamp &&
+        nextInfo.floorH === curInfo.floorH
+      ) {
+        const climbInfo = walkInfo(wx, wy, KENNEY_TILE_WORLD, curInfo.z + MAX_STEP_Z);
+        const climbDz = Math.abs(climbInfo.z - curInfo.z);
+        if (climbInfo.walkable && ((climbInfo as any).isRamp || climbInfo.floorH > curInfo.floorH) && climbDz <= MAX_STEP_Z) {
+          nextInfo = climbInfo;
+        }
+      }
       if (!nextInfo.walkable) return false;
 
       const stairsInvolved =

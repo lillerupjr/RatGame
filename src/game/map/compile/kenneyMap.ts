@@ -233,6 +233,53 @@ export function surfacesAtXY(tx: number, ty: number): Surface[] {
     return _compiled.surfacesAtXY(tx, ty);
 }
 
+/** Return stacked surfaces at a cell, sorted by z (low -> high). */
+export function surfacesAtCell(tx: number, ty: number): readonly Surface[] {
+    return _compiled.surfacesAtXY(tx, ty);
+}
+
+/** Return the surface at exact z for a cell, if present. */
+export function surfaceAtCellZ(tx: number, ty: number, z: number): Surface | null {
+    const surfaces = _compiled.surfacesAtXY(tx, ty);
+    for (let i = 0; i < surfaces.length; i++) {
+        const s = surfaces[i];
+        if ((s.zBase | 0) === (z | 0)) return s;
+    }
+    return null;
+}
+
+/**
+ * Compatibility selector for callers that still think in terms of one tile per cell.
+ * - with zHint: nearest surface by z (ties prefer higher z)
+ * - without zHint: highest non-void surface, else legacy getTile fallback
+ */
+export function getTileAtCellZ(tx: number, ty: number, zHint?: number): IsoTile {
+    const surfaces = _compiled.surfacesAtXY(tx, ty);
+    if (surfaces.length > 0) {
+        let best: Surface | null = null;
+        if (Number.isFinite(zHint)) {
+            let bestDist = Number.POSITIVE_INFINITY;
+            for (let i = 0; i < surfaces.length; i++) {
+                const s = surfaces[i];
+                const dist = Math.abs(s.zBase - (zHint as number));
+                if (!best || dist < bestDist || (dist === bestDist && s.zBase > best.zBase)) {
+                    best = s;
+                    bestDist = dist;
+                }
+            }
+        } else {
+            for (let i = 0; i < surfaces.length; i++) {
+                const s = surfaces[i];
+                if (s.tile.kind === "VOID") continue;
+                if (!best || s.zBase > best.zBase) best = s;
+            }
+            if (!best) best = surfaces[surfaces.length - 1];
+        }
+        if (best) return best.tile;
+    }
+    return _compiled.getTile(tx, ty);
+}
+
 /**
  * Highest walkable support surface at a world position.
  * Walkable order: authored/synthetic walkable tops first, then base terrain, then z=0 fallback.
@@ -241,20 +288,17 @@ export function getSupportSurfaceAt(
     worldX: number,
     worldY: number,
     compiledMap: CompiledKenneyMap,
+    hintZ?: number,
 ): SupportSurface {
+    const hit = surfaceHitAtWorld(worldX, worldY, KENNEY_TILE_WORLD, hintZ, {
+        includeBlocked: true,
+        requireInside: false,
+    });
     const tx = Math.floor(worldX / KENNEY_TILE_WORLD);
     const ty = Math.floor(worldY / KENNEY_TILE_WORLD);
-
-    const surfaces = compiledMap.surfacesAtXY(tx, ty);
-    let worldZ = Number.NEGATIVE_INFINITY;
-    for (let i = 0; i < surfaces.length; i++) {
-        const s = surfaces[i];
-        if (s.tile.kind === "VOID") continue;
-        if (s.zBase > worldZ) worldZ = s.zBase;
-    }
-
+    let worldZ = hit ? hit.zVisual : Number.NEGATIVE_INFINITY;
     if (!Number.isFinite(worldZ)) {
-        const tile = compiledMap.getTile(tx, ty);
+        const tile = getTileAtCellZ(tx, ty, hintZ);
         worldZ = tile.kind === "VOID" ? 0 : (tile.h | 0);
     }
 
@@ -416,7 +460,7 @@ function tileSurfaceHitAtWorld(
     const includeBlocked = options.includeBlocked ?? false;
     const requireInside = options.requireInside ?? true;
 
-    const shape = tileWalkShape(surface.tx, surface.ty);
+    const shape = tileWalkShape(surface.tx, surface.ty, surface.zBase);
     if (!includeBlocked && shape === "BLOCKED") return null;
     if (requireInside && shape === "BLOCKED") return null;
 
@@ -489,6 +533,32 @@ function collectSurfaceHitsAtWorld(
     return hits;
 }
 
+function selectSurfaceHitByHint(hits: SurfaceHit[], hintZ?: number): SurfaceHit | null {
+    if (hits.length === 0) return null;
+    if (!Number.isFinite(hintZ)) {
+        let best = hits[0];
+        for (let i = 1; i < hits.length; i++) {
+            const h = hits[i];
+            if (h.zVisual > best.zVisual) best = h;
+        }
+        return best;
+    }
+
+    const hz = hintZ as number;
+    let best = hits[0];
+    let bestDist = Math.abs(best.zVisual - hz);
+    for (let i = 1; i < hits.length; i++) {
+        const h = hits[i];
+        const dist = Math.abs(h.zVisual - hz);
+        // Tie-break toward lower z to avoid accidental upward snaps at exact ties.
+        if (dist < bestDist || (dist === bestDist && h.zVisual < best.zVisual)) {
+            best = h;
+            bestDist = dist;
+        }
+    }
+    return best;
+}
+
 /** Return the best surface hit at a world position. */
 export function surfaceHitAtWorld(
     wx: number,
@@ -498,28 +568,11 @@ export function surfaceHitAtWorld(
     options: SurfaceHitOptions = {}
 ): SurfaceHit | null {
     const hits = collectSurfaceHitsAtWorld(wx, wy, tileWorld, options);
-    if (hits.length === 0) return null;
-
-    if (Number.isFinite(hintZ)) {
-        let best = hits[0];
-        let bestDist = Math.abs(best.zVisual - (hintZ as number));
-        for (let i = 1; i < hits.length; i++) {
-            const h = hits[i];
-            const dist = Math.abs(h.zVisual - (hintZ as number));
-            if (dist < bestDist || (dist === bestDist && h.zVisual > best.zVisual)) {
-                best = h;
-                bestDist = dist;
-            }
-        }
-        return best;
-    }
-
-    let best = hits[0];
-    for (let i = 1; i < hits.length; i++) {
+    for (let i = 0; i < hits.length; i++) {
         const h = hits[i];
-        if (h.zVisual > best.zVisual) best = h;
+        if (h.isRamp) return h;
     }
-    return best;
+    return selectSurfaceHitByHint(hits, hintZ);
 }
 
 /** Return the surface at a world position (walkable surfaces only). */
@@ -1059,8 +1112,8 @@ function tileWalkShapeFromTile(t: IsoTile): TileWalkShape {
 }
 
 /** Return the walkable top-face shape for a tile. */
-export function tileWalkShape(tx: number, ty: number): TileWalkShape {
-    if (_compiled.blockedTiles?.has(`${tx},${ty}`)) return "BLOCKED";
+export function tileWalkShape(tx: number, ty: number, zHint?: number): TileWalkShape {
+    if (isBlockedTileAtZ(tx, ty, zHint)) return "BLOCKED";
     const t = getTile(tx, ty);
     return tileWalkShapeFromTile(t);
 }
@@ -1077,6 +1130,21 @@ export function blockedTilesInView(view: ViewRect): Array<{ tx: number; ty: numb
         out.push({ tx, ty });
     }
     return out;
+}
+
+/** Return whether tile is blocked at a specific z layer (if provided). */
+export function isBlockedTileAtZ(tx: number, ty: number, zHint?: number): boolean {
+    const key = `${tx},${ty}`;
+    const spans = _compiled.blockedTileSpansByKey?.get(key);
+    if (spans && spans.length > 0 && Number.isFinite(zHint)) {
+        const z = zHint as number;
+        for (let i = 0; i < spans.length; i++) {
+            const s = spans[i];
+            if (z >= s.zFrom - 1e-6 && z < s.zTo + 1e-6) return true;
+        }
+        return false;
+    }
+    return _compiled.blockedTiles?.has(key) ?? false;
 }
 
 /** Return true if the compiled semantic road area mask marks this tile as road. */
@@ -1252,74 +1320,77 @@ export type WalkInfo = {
 export function walkInfo(wx: number, wy: number, tileWorld: number, hintZ?: number): WalkInfo {
     const { tx, ty, lx, ly } = worldToTileTopLocalPx(wx, wy, tileWorld);
 
-    // 1) Ramp faces override tiles (walkable even over VOID)
-    const rh = rampHitAtWorld(wx, wy, tileWorld);
-    if (rh) {
-        const z = rh.z;
-        const floorH = logicalLayerFromZ(z);
+    const selectedHit = surfaceHitAtWorld(wx, wy, tileWorld, hintZ, {
+        includeBlocked: false,
+        requireInside: true,
+    });
+    if (selectedHit) {
+        if (selectedHit.isRamp) {
+            const z = selectedHit.zVisual;
+            const floorH = logicalLayerFromZ(z);
 
-        // Virtual "tile" record for downstream code that expects tile/kind.
-        const virtualTile: IsoTile = { kind: "FLOOR", h: floorH };
+            // Virtual "tile" record for downstream code that expects tile/kind.
+            const virtualTile: IsoTile = { kind: "FLOOR", h: floorH };
 
+            return {
+                wx,
+                wy,
+                tileWorld,
+                tx: NaN,
+                ty: NaN,
+                lx,
+                ly,
+                tile: virtualTile,
+                kind: "FLOOR",
+                shape: "FULL_TOP",
+                floorH,
+                h: floorH,
+                z,
+                zLogical: floorH,
+                zVisual: z,
+                isRamp: true,
+                blocked: false,
+                inside: true,
+                walkable: true,
+            };
+        }
+
+        const s = selectedHit.surface as Surface;
+        const t = s.tile;
+        const kind = t.kind;
+        const floorH = s.zBase;
+        const z = floorH;
         return {
             wx,
             wy,
             tileWorld,
-            tx: NaN,
-            ty: NaN,
+            tx,
+            ty,
             lx,
             ly,
-            tile: virtualTile,
-            kind: "FLOOR",
-            shape: "FULL_TOP",
+            isRamp: false,
+            tile: t,
+            kind,
+            shape: tileWalkShape(tx, ty, s.zBase),
             floorH,
             h: floorH,
             z,
             zLogical: floorH,
             zVisual: z,
-
-            // NEW: mark as ramp surface
-            isRamp: true,
-
             blocked: false,
             inside: true,
             walkable: true,
         };
-
     }
 
-    // 2) Normal tile-top walking (flat, discrete)
-    const surfaces = surfacesAtXY(tx, ty);
-    let selectedSurface: Surface | null = null;
-    if (surfaces.length > 0) {
-        let best = surfaces[0];
-        if (Number.isFinite(hintZ)) {
-            let bestDist = Math.abs(best.zBase - (hintZ as number));
-            for (let i = 1; i < surfaces.length; i++) {
-                const s = surfaces[i];
-                const dist = Math.abs(s.zBase - (hintZ as number));
-                if (dist < bestDist || (dist === bestDist && s.zBase > best.zBase)) {
-                    best = s;
-                    bestDist = dist;
-                }
-            }
-        } else {
-            for (let i = 1; i < surfaces.length; i++) {
-                const s = surfaces[i];
-                if (s.zBase > best.zBase) best = s;
-            }
-        }
-        selectedSurface = best;
-    }
-
-    const t = selectedSurface?.tile ?? getTile(tx, ty);
+    // Fallback for blocked/outside / non-hit cases.
+    const t = getTileAtCellZ(tx, ty, hintZ);
     const kind = t.kind;
-
-    const shape = tileWalkShape(tx, ty);
+    const shape = tileWalkShape(tx, ty, hintZ);
     const blocked = shape === "BLOCKED" || kind === "VOID";
 
     // Integer floor level (gating)
-    const floorH = selectedSurface ? selectedSurface.zBase : (t.h | 0);
+    const floorH = t.h | 0;
 
     // Continuous Z (flat tiles)
     const z = floorH;
@@ -1333,9 +1404,7 @@ export function walkInfo(wx: number, wy: number, tileWorld: number, hintZ?: numb
             ty,
             lx,
             ly,
-
             isRamp: false,
-
             tile: t,
             kind,
             shape,
@@ -1350,7 +1419,6 @@ export function walkInfo(wx: number, wy: number, tileWorld: number, hintZ?: numb
             reason: "BLOCKED",
         };
     }
-
 
     const { w, h: hh } = shapeDims(shape);
 
@@ -1375,9 +1443,7 @@ export function walkInfo(wx: number, wy: number, tileWorld: number, hintZ?: numb
         ty,
         lx,
         ly,
-
         isRamp: false,
-
         tile: t,
         kind,
         shape,
@@ -1391,7 +1457,6 @@ export function walkInfo(wx: number, wy: number, tileWorld: number, hintZ?: numb
         walkable,
         reason: !inside ? "OUTSIDE" : undefined,
     };
-
 }
 
 /** Return walkability info for a logical grid position. */
