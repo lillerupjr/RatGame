@@ -138,6 +138,7 @@ function compareRenderKeys(a: RenderKey, b: RenderKey): number {
 }
 
 const DEBUG_PLAYER_WEDGE = false;
+const DISABLE_WALLS_AND_CURTAINS = true;
 const HARDCODED_VOID_TOP_SRC = `${import.meta.env.BASE_URL}assets-runtime/tiles/floor/void.png`;
 
 // Background mode:
@@ -2510,6 +2511,10 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
     for (let fi = 0; fi < allFaces.length; fi++) {
       const face = allFaces[fi];
+      if (
+        DISABLE_WALLS_AND_CURTAINS
+        && (face.kind === "WALL" || face.kind === "FLOOR_APRON" || face.kind === "STAIR_APRON")
+      ) continue;
       if (!isTileInRenderRadius(face.tx, face.ty)) continue;
       const faceStableId = face.tx * 73856093 ^ face.ty * 19349663 ^ (face.zFrom * 100 | 0) * 83492791;
       const draws = buildFaceDraws(face);
@@ -2563,6 +2568,7 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
 
     for (let oi = 0; oi < allOccluders.length; oi++) {
       const occ = allOccluders[oi];
+      if (DISABLE_WALLS_AND_CURTAINS) continue;
       if (!isTileInRenderRadius(occ.tx, occ.ty)) continue;
       if (occ.kind !== "WALL") continue;
       const occStableId = occ.tx * 73856093 ^ occ.ty * 19349663 ^ (occ.zFrom * 100 | 0) * 83492791;
