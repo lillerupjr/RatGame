@@ -79,6 +79,34 @@ export const RELICS: RelicDef[] = [
     desc: ["Momentum decays 1s later"],
   },
   {
+    id: "SPEC_DAMAGE_MORE_100_ATTACK_SPEED_LESS_40",
+    isEnabled: true,
+    displayName: "100% more damage\n40% less attack speed",
+    kind: "PASSIVE",
+    desc: ["100% more damage", "40% less attack speed"],
+  },
+  {
+    id: "SPEC_ATTACK_SPEED_MORE_50_DAMAGE_LESS_30",
+    isEnabled: true,
+    displayName: "50% more attack speed\n30% less damage",
+    kind: "PASSIVE",
+    desc: ["50% more attack speed", "30% less damage"],
+  },
+  {
+    id: "SPEC_DAMAGE_MORE_200_MAX_LIFE_LESS_50",
+    isEnabled: true,
+    displayName: "200% more damage\n50% less maximum Life",
+    kind: "PASSIVE",
+    desc: ["200% more damage", "50% less maximum Life"],
+  },
+  {
+    id: "SPEC_FLAT_ARMOR_100_MOVE_SPEED_LESS_20",
+    isEnabled: true,
+    displayName: "+100 Armor\n20% less movement speed",
+    kind: "PASSIVE",
+    desc: ["+100 Armor", "20% less movement speed"],
+  },
+  {
     id: "ACT_BAZOOKA_ON_HIT_20",
     isEnabled: true,
     displayName: "On hit: fire a bazooka dealing 20% of hit damage",
@@ -220,6 +248,14 @@ function mapLegacyRelicSuffixToCanonical(suffix: string): string {
       return "MOM_FULL_BREAK_GRANTS_ARMOR_20";
     case "MOM_FULL_CRIT_DOUBLE":
       return "MOM_FULL_CRIT_DOUBLE";
+    case "SPEC_DAMAGE_MORE_100_ATTACK_SPEED_LESS_40":
+      return "SPEC_DAMAGE_MORE_100_ATTACK_SPEED_LESS_40";
+    case "SPEC_ATTACK_SPEED_MORE_50_DAMAGE_LESS_30":
+      return "SPEC_ATTACK_SPEED_MORE_50_DAMAGE_LESS_30";
+    case "SPEC_DAMAGE_MORE_200_MAX_LIFE_LESS_50":
+      return "SPEC_DAMAGE_MORE_200_MAX_LIFE_LESS_50";
+    case "SPEC_FLAT_ARMOR_100_MOVE_SPEED_LESS_20":
+      return "SPEC_FLAT_ARMOR_100_MOVE_SPEED_LESS_20";
     case "ACT_BAZOOKA_ON_HIT_20":
       return "ACT_BAZOOKA_ON_HIT_20";
     case "ACT_EXPLODE_ON_KILL":
