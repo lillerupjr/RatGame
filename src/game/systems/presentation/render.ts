@@ -580,7 +580,8 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const screenH = cssH;
   const devW = Math.max(1, canvas.width);
   const devH = Math.max(1, canvas.height);
-  const dpr = Math.max(1, devW / cssW);
+  const storedDpr = Number(canvas.dataset.effectiveDpr ?? "");
+  const dpr = Number.isFinite(storedDpr) && storedDpr >= 1 ? storedDpr : Math.max(1, devW / cssW);
   const pixelScale = Math.max(1, Math.floor(Number(canvas.dataset.pixelScale ?? 1) || 1));
   const ww = Math.max(1, Math.floor(cssW / pixelScale));
   const hh = Math.max(1, Math.floor(cssH / pixelScale));
@@ -890,44 +891,22 @@ export async function renderSystem(w: World, ctx: CanvasRenderingContext2D, canv
   const southBuildingBaseMaskDraws: MaskDraw[] = [];
   const entitySilhouetteMaskDraws: MaskDraw[] = [];
 
-    // --- Hot path: avoid save/restore per draw ---
-    // We rely on setTransform to restore to identity quickly.
-    // IMPORTANT: caller must not depend on ctx state persisting across calls.
-    const drawRenderPieceTo = (() => {
-      // Track last applied transform per target context to avoid stale cross-canvas state.
-      const lastKeyByTarget = new WeakMap<CanvasRenderingContext2D, string>();
-      return (target: CanvasRenderingContext2D, c: RenderPieceDraw) => {
-        const img = c.img;
-        if (!img || img.width <= 0 || img.height <= 0) return;
+    // Preserve caller transform (world camera / mask camera) per piece.
+    const drawRenderPieceTo = (target: CanvasRenderingContext2D, c: RenderPieceDraw) => {
+      const img = c.img;
+      if (!img || img.width <= 0 || img.height <= 0) return;
+      const scale = c.scale ?? 1;
 
-        const scale = c.scale ?? 1;
-
-        // Build transform: translate(dx,dy) * scale(scale) * optional flipX
-        // We draw at (0,0) in local space.
-        const dx = snapPx(c.dx);
-        const dy = snapPx(c.dy);
-
-        // Base: [a c e; b d f] in Canvas setTransform(a,b,c,d,e,f)
-        // scale => a=d=scale
-        let a = scale, b = 0, cc = 0, d = scale, e = dx, f = dy;
-
-        // flipX: multiply by translate(dw,0) then scale(-1,1) in local space
-        // Equivalent local transform: x' = -scale*x + (dx + scale*dw)
-        if (c.flipX) {
-          a = -scale;
-          e = dx + scale * c.dw;
-        }
-
-        const key = `${a},${d},${e},${f}`;
-        const lastKey = lastKeyByTarget.get(target) ?? "";
-        if (key !== lastKey) {
-          target.setTransform(a, b, cc, d, e, f);
-          lastKeyByTarget.set(target, key);
-        }
-
-        target.drawImage(img, 0, 0, c.dw, c.dh);
-      };
-    })();
+      target.save();
+      target.translate(snapPx(c.dx), snapPx(c.dy));
+      target.scale(scale, scale);
+      if (c.flipX) {
+        target.translate(c.dw, 0);
+        target.scale(-1, 1);
+      }
+      target.drawImage(img, 0, 0, c.dw, c.dh);
+      target.restore();
+    };
     // Default draw to main ctx (unchanged behavior for most pieces)
     const drawRenderPiece = (c: RenderPieceDraw) => drawRenderPieceTo(ctx, c);
 

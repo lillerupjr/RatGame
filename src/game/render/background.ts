@@ -10,19 +10,19 @@ export type BgAsset = {
 // FloorIndex (0-based) -> background file mapping
 // floorIndex: 0=Floor1, 1=Floor2, 2=Floor3
 export const BG_BY_FLOOR_INDEX: Record<number, string> = {
-    0: "sewer_background.png", // DOCKS
-    1: "sewer_background.png", // SEWERS
-    2: "sewer_background.png", // CHINATOWN
+    0: "tiles/animated/water2/1.png", // DOCKS
+    1: "tiles/animated/water2/1.png", // SEWERS
+    2: "tiles/animated/water2/1.png", // CHINATOWN
 };
 
-const DEFAULT_BG_FILE = "sewer_background.png";
+const DEFAULT_BG_FILE = "tiles/animated/water2/1.png";
 
 // Cache by floorIndex
 const cache: Record<number, BgAsset> = {};
 
 function resolveBgUrl(file: string): string | null {
     if (!file) return null;
-    return `${import.meta.env.BASE_URL}assets-runtime/backgrounds/${file}`;
+    return `${import.meta.env.BASE_URL}assets-runtime/${file}`;
 }
 
 function ensureLoadedForIndex(floorIndex: number): BgAsset {

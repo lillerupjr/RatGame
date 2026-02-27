@@ -51,24 +51,24 @@ const FILES: Record<SfxId, string> = {
     FIRE_SYRINGE: "fire_syringe.wav",
     FIRE_BOUNCER: "fire_bouncer.wav",
     FIRE_BAZOOKA: "fire_bazooka.wav",
-    FIRE_OTHER: "fire_other.wav",
+    FIRE_OTHER: "",
 
     WALK_STEP: "walk_step2.wav",
 
     EXPLOSION_BAZOOKA: "explosion_bazooka.wav",
     EXPLOSION_SYRINGE: "explosion_syringe.wav",
 
-    ENEMY_HIT: "enemy_hit.wav",
+    ENEMY_HIT: "",
     ENEMY_KILL: "enemy_kill.wav",
     PLAYER_HIT: "player_hit.wav",
 
-    CHEST_PICKUP: "chest_pickup.wav",
+    CHEST_PICKUP: "",
 
-    FLOOR_START: "floor_start.wav",
-    BOSS_START: "boss_start.wav",
+    FLOOR_START: "",
+    BOSS_START: "",
 
     RUN_WIN: "run_win.wav",
-    RUN_LOSE: "run_lose.wav",
+    RUN_LOSE: "",
 
     UI_CLICK: "ui_click.wav",
 };

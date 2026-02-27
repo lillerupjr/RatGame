@@ -14,9 +14,6 @@ const FILES = {
     KNIFE: "knife.png",
     PISTOL: "pistol.png",
     SYRINGE: "syringe.png",
-    BOUNCER: "bouncer.png",
-    SWORD: "sword.png",
-    KNUCKLES: "knuckles.png",
 } as const;
 
 const cache: Record<string, Loaded> = Object.create(null);
@@ -25,9 +22,6 @@ const PROJECTILE_URLS = {
     KNIFE: `${import.meta.env.BASE_URL}assets-runtime/projectiles/knife.png`,
     PISTOL: `${import.meta.env.BASE_URL}assets-runtime/projectiles/pistol.png`,
     SYRINGE: `${import.meta.env.BASE_URL}assets-runtime/projectiles/syringe.png`,
-    BOUNCER: `${import.meta.env.BASE_URL}assets-runtime/projectiles/bouncer.png`,
-    SWORD: `${import.meta.env.BASE_URL}assets-runtime/projectiles/sword.png`,
-    KNUCKLES: `${import.meta.env.BASE_URL}assets-runtime/projectiles/knuckles.png`,
 } as const;
 
 function resolveUrl(file: string): string | null {
@@ -38,6 +32,7 @@ function resolveUrl(file: string): string | null {
 }
 
 function loadByFile(file: string): Loaded {
+    if (!file) return { img: new Image(), ready: false };
     const key = file;
     if (cache[key]) return cache[key];
 
@@ -75,13 +70,13 @@ export function getProjectileSpriteByKind(kind: number): Loaded | null {
         case 2: // PISTOL
             return loadByFile(FILES.PISTOL);
         case 3: // SWORD
-            return loadByFile(FILES.SWORD);
+            return null;
         case 4: // KNUCKLES
-            return loadByFile(FILES.KNUCKLES);
+            return null;
         case 5: // SYRINGE
             return loadByFile(FILES.SYRINGE);
         case 6: // BOUNCER
-            return loadByFile(FILES.BOUNCER);
+            return null;
         case 8: // DAGGER
             return loadByFile(FILES.KNIFE);
         default:

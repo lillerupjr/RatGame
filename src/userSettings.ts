@@ -5,6 +5,7 @@ export type RenderSettings = {
   entityShadowsDisable: boolean;
   entityAnchorsEnabled: boolean;
   renderPerfCountersEnabled: boolean;
+  performanceMode: boolean;
   tileRenderRadius: number;
   // Palette swap (Phase 1): apply at sprite load time, cached.
   paletteSwapEnabled: boolean;
@@ -51,6 +52,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
     entityShadowsDisable: false,
     entityAnchorsEnabled: false,
     renderPerfCountersEnabled: false,
+    performanceMode: false,
     tileRenderRadius: 12,
     paletteSwapEnabled: false,
     paletteId: "db32",

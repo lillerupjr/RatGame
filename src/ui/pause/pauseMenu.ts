@@ -174,6 +174,9 @@ export function mountPauseMenu(args: {
   sfxRow.appendChild(sfxSlider);
   sfxRow.appendChild(sfxMuteBtn);
 
+  const tuningTitle = document.createElement("h4");
+  tuningTitle.textContent = "Spawn Tuning";
+
   const spawnRateOrbRow = document.createElement("label");
   spawnRateOrbRow.className = "audioRow";
   const spawnRateOrbLabel = document.createElement("span");
@@ -300,6 +303,19 @@ export function mountPauseMenu(args: {
   tileRenderRadiusRow.appendChild(tileRenderRadiusSlider);
   tileRenderRadiusRow.appendChild(tileRenderRadiusValue);
 
+  const renderTitle = document.createElement("h4");
+  renderTitle.textContent = "Render";
+
+  const performanceModeRow = document.createElement("label");
+  performanceModeRow.className = "audioRow";
+  const performanceModeLabel = document.createElement("span");
+  performanceModeLabel.textContent = "Performance Mode";
+  const performanceModeToggle = document.createElement("input");
+  performanceModeToggle.type = "checkbox";
+  setDataAttr(performanceModeToggle, "performance-mode-toggle");
+  performanceModeRow.appendChild(performanceModeLabel);
+  performanceModeRow.appendChild(performanceModeToggle);
+
   const spawnTuningResetBtn = document.createElement("button");
   spawnTuningResetBtn.type = "button";
   spawnTuningResetBtn.className = "pauseDebugOpenBtn";
@@ -309,52 +325,17 @@ export function mountPauseMenu(args: {
   audioSection.appendChild(audioTitle);
   audioSection.appendChild(musicRow);
   audioSection.appendChild(sfxRow);
+  audioSection.appendChild(tuningTitle);
   audioSection.appendChild(spawnRateOrbRow);
   audioSection.appendChild(monsterHealthOrbRow);
   audioSection.appendChild(spawnBaseRow);
   audioSection.appendChild(monsterHealthBaseRow);
   audioSection.appendChild(pressureT0Row);
   audioSection.appendChild(pressureT120Row);
+  audioSection.appendChild(renderTitle);
   audioSection.appendChild(tileRenderRadiusRow);
+  audioSection.appendChild(performanceModeRow);
   audioSection.appendChild(spawnTuningResetBtn);
-
-  const paletteTitle = document.createElement("h4");
-  paletteTitle.textContent = "Palette";
-  const paletteToggleRow = document.createElement("label");
-  paletteToggleRow.className = "audioRow";
-  const paletteToggleLabel = document.createElement("span");
-  paletteToggleLabel.textContent = "Swap";
-  const paletteToggle = document.createElement("input");
-  paletteToggle.type = "checkbox";
-  setDataAttr(paletteToggle, "palette-swap-toggle");
-  const paletteSelect = document.createElement("select");
-  setDataAttr(paletteSelect, "palette-id-select");
-  const paletteIds = [
-    "db32",
-    "divination",
-    "cyberpunk",
-    "sunset_8",
-    "s_sunset7",
-    "moonlight_15",
-    "st8_moonlight",
-    "noire_truth",
-    "chroma_noir",
-    "sunny_swamp",
-    "swamp_kin",
-    "cobalt_desert_7",
-    "lost_in_the_desert",
-  ] as const;
-  for (let i = 0; i < paletteIds.length; i++) {
-    const option = document.createElement("option");
-    option.value = paletteIds[i];
-    option.textContent = paletteIds[i];
-    paletteSelect.appendChild(option);
-  }
-  paletteToggleRow.appendChild(paletteToggleLabel);
-  paletteToggleRow.appendChild(paletteToggle);
-  paletteToggleRow.appendChild(paletteSelect);
-  audioSection.appendChild(paletteTitle);
-  audioSection.appendChild(paletteToggleRow);
 
   const buildSection = document.createElement("section");
   buildSection.className = "pauseSection pauseBuild";
@@ -950,11 +931,15 @@ export function mountPauseMenu(args: {
     syncTileRenderRadiusControl();
   };
 
-  const syncPaletteControls = () => {
-    const settings = getUserSettings().render;
-    (paletteToggle as HTMLInputElement).checked = !!settings.paletteSwapEnabled;
-    paletteSelect.value = settings.paletteId;
-    paletteSelect.disabled = !settings.paletteSwapEnabled;
+  const onPerformanceModeToggle = () => {
+    updateUserSettings({
+      render: {
+        performanceMode: !!performanceModeToggle.checked,
+      },
+    });
+    if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+      window.dispatchEvent(new Event("resize"));
+    }
   };
 
   const syncSpawnTuningControls = () => {
@@ -986,6 +971,11 @@ export function mountPauseMenu(args: {
     tileRenderRadiusValue.textContent = `${radius}`;
   };
 
+  const syncPerformanceModeControl = () => {
+    const settings = getUserSettings().render;
+    performanceModeToggle.checked = !!settings.performanceMode;
+  };
+
   resumeBtn.addEventListener("click", args.actions.onResume);
   quitBtn.addEventListener("click", args.actions.onQuitRun);
   musicSlider.addEventListener("input", onMusicSlider);
@@ -999,18 +989,7 @@ export function mountPauseMenu(args: {
   pressureT0Slider.addEventListener("input", onSpawnTuningSlider);
   pressureT120Slider.addEventListener("input", onSpawnTuningSlider);
   tileRenderRadiusSlider.addEventListener("input", onTileRenderRadiusSlider);
-  paletteToggle.addEventListener("change", () => {
-    const enabled = !!(paletteToggle as HTMLInputElement).checked;
-    updateUserSettings({ render: { paletteSwapEnabled: enabled } });
-    paletteSelect.disabled = !enabled;
-  });
-  paletteSelect.addEventListener("change", () => {
-    updateUserSettings({
-      render: {
-        paletteId: paletteSelect.value as ReturnType<typeof getUserSettings>["render"]["paletteId"],
-      },
-    });
-  });
+  performanceModeToggle.addEventListener("change", onPerformanceModeToggle);
   debugCardsOpenBtn.addEventListener("click", () => {
     debugMode = "CARDS";
     debugLayerOpen = true;
@@ -1066,9 +1045,9 @@ export function mountPauseMenu(args: {
     syncStatsCollapseUi();
   });
   syncAudioControls();
-  syncPaletteControls();
   syncSpawnTuningControls();
   syncTileRenderRadiusControl();
+  syncPerformanceModeControl();
   applySpawnTuningSettingsToLatestWorld();
   syncStatsCollapseUi();
   syncBalanceCsvControls(latestWorld);
@@ -1093,9 +1072,9 @@ export function mountPauseMenu(args: {
 
       applySfxToLatestWorld();
       syncAudioControls();
-      syncPaletteControls();
       syncSpawnTuningControls();
       syncTileRenderRadiusControl();
+      syncPerformanceModeControl();
       applySpawnTuningSettingsToLatestWorld();
       syncBalanceCsvControls(world);
       renderStats(world);

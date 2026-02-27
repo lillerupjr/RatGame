@@ -18,7 +18,7 @@ type MapChoice = {
     desc: string;
 };
 
-const MENU_BACKGROUND_URL = `${import.meta.env.BASE_URL}assets-runtime/tiles/backgrounds/green_water.png`;
+const MENU_BACKGROUND_URL = "";
 
 function getBackgroundUrl(): string {
     return MENU_BACKGROUND_URL;

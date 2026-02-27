@@ -46,15 +46,17 @@ export function resizeCanvasPixelPerfect(
   cssW: number,
   cssH: number,
   pixelScale: number = defaultPixelScaleForViewport(cssW, cssH),
+  maxDpr: number = 4,
 ): number {
   // Pixel-perfect uses integer pixelScale in the configured clamp range.
   const resolvedPixelScale = normalizePixelScale(pixelScale);
-  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const dpr = Math.min(Math.max(1, window.devicePixelRatio || 1), Math.max(1, maxDpr || 1));
   canvas.width = snapPx(cssW * dpr);
   canvas.height = snapPx(cssH * dpr);
   canvas.style.width = `${snapPx(cssW)}px`;
   canvas.style.height = `${snapPx(cssH)}px`;
   canvas.dataset.pixelScale = String(resolvedPixelScale);
+  canvas.dataset.effectiveDpr = String(dpr);
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   configurePixelPerfect(ctx);

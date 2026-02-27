@@ -539,6 +539,7 @@ function installDevSettingsUi(): void {
         entityShadowsDisable: false,
         entityAnchorsEnabled: false,
         renderPerfCountersEnabled: false,
+        performanceMode: false,
         paletteSwapEnabled: false,
       },
     });
@@ -610,8 +611,10 @@ async function bootstrap() {
   const ctx = rawCtx;
 
   function resize() {
+    const settings = getUserSettings();
     const pixelScale = defaultPixelScaleForViewport(window.innerWidth, window.innerHeight);
-    resizeCanvasPixelPerfect(canvas, ctx, window.innerWidth, window.innerHeight, pixelScale);
+    const maxDpr = settings.render.performanceMode ? 1 : 4;
+    resizeCanvasPixelPerfect(canvas, ctx, window.innerWidth, window.innerHeight, pixelScale, maxDpr);
 
     const debugCanvas = document.querySelector("canvas");
     console.log("viewport", {

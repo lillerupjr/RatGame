@@ -153,6 +153,7 @@ const userSettingsState = vi.hoisted(() => ({
     render: {
       paletteSwapEnabled: false,
       paletteId: "db32",
+      performanceMode: false,
       spawnBase: 1.0,
       spawnPerDepth: 1.12,
       hpBase: 1.0,
@@ -254,6 +255,7 @@ describe("pauseMenu", () => {
       render: {
         paletteSwapEnabled: false,
         paletteId: "db32",
+        performanceMode: false,
         spawnBase: 1.0,
         spawnPerDepth: 1.12,
         hpBase: 1.0,
@@ -491,26 +493,20 @@ describe("pauseMenu", () => {
     expect(root.textContent).toContain("Move Speed300.00");
   });
 
-  test("palette section renders and updates user settings", () => {
+  test("performance mode toggle updates user settings", () => {
     const root = document.createElement("div") as unknown as HTMLDivElement;
     document.body.appendChild(root as any);
     const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
     menu.setVisible(true);
     menu.render(makeWorld());
 
-    expect(root.textContent).toContain("Palette");
-    const toggle = root.querySelector("[data-palette-swap-toggle]") as any;
-    const select = root.querySelector("[data-palette-id-select]") as any;
+    expect(root.textContent).toContain("Render");
+    const toggle = root.querySelector("[data-performance-mode-toggle]") as any;
     expect(toggle).toBeTruthy();
-    expect(select).toBeTruthy();
 
     toggle.checked = true;
     toggle.dispatchEvent(new Event("change") as any);
-    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({ render: { paletteSwapEnabled: true } });
-
-    toggle.checked = false;
-    toggle.dispatchEvent(new Event("change") as any);
-    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({ render: { paletteSwapEnabled: false } });
+    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({ render: { performanceMode: true } });
   });
 
   test("stats categories collapse and persist across pause/unpause", () => {

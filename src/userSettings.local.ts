@@ -9,6 +9,7 @@ const localSettings: UserSettingsPatch = {
     entityShadowsDisable: false,
     entityAnchorsEnabled: false,
     renderPerfCountersEnabled: false,
+    performanceMode: false,
   },
 };
 

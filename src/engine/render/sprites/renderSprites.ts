@@ -46,6 +46,13 @@ function normalizeSpriteId(spriteId: string): string {
 }
 
 function remapLegacySpriteId(id: string): string {
+    if (id.startsWith("tiles/stairs/sidewalk_apron_")) {
+        return id.replace("tiles/stairs/sidewalk_apron_", "tiles/stairs/stone/stone_");
+    }
+    if (id.startsWith("tiles/stairs/sidewalk_")) {
+        return id.replace("tiles/stairs/sidewalk_", "tiles/stairs/stone/stone_");
+    }
+
     const directMap: Record<string, string> = {
         "tiles/floor/top/sidewalk": "tiles/floor/sidewalk/1",
         "tiles/floor/top/road": "tiles/floor/asphalt/1",
@@ -62,6 +69,8 @@ function remapLegacySpriteId(id: string): string {
         "tiles/floor/curtain/docks": "tiles/walls/docks",
 
         "tiles/stairs/top/stone": "tiles/stairs/stone/stone",
+        "tiles/stairs/sidewalk": "tiles/stairs/stone/stone",
+        "tiles/stairs/sidewalk_apron": "tiles/stairs/stone/stone",
 
         "tiles/backgrounds/green_water": "tiles/animated/water2/1",
         "tiles/backgrounds/water": "tiles/animated/water2/1",
@@ -84,7 +93,6 @@ function resolveUrl(spriteId: string): string | null {
     if (!trimmed) return null;
     const normalized = trimmed.toLowerCase().endsWith(".png") ? trimmed.slice(0, -4) : trimmed;
     const id = remapLegacySpriteId(normalized);
-    if (!isKnownRenderableSpriteId(id)) return null;
 
     if (id.startsWith("entities/")) {
         return `${import.meta.env.BASE_URL}assets-runtime/${id}.png`;
@@ -96,6 +104,7 @@ function resolveUrl(spriteId: string): string | null {
     ) {
         return `${import.meta.env.BASE_URL}assets-runtime/base_db32/${id}.png`;
     }
+    if (!isKnownRenderableSpriteId(id)) return null;
     return null;
 }
 
