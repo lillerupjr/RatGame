@@ -11,6 +11,7 @@ import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getUserSettings } from "../../../userSettings";
 import type { RelicTriggerEvent } from "../../events";
 import { applyIgniteStrongestFromSnapshot, createEnemyAilmentsState } from "../../combat_mods/ailments/enemyAilments";
+import { applyPoisonFromDamageConversion } from "../../combat_mods/ailments/damageToPoisonConversion";
 import { restoreArmor } from "../sim/playerArmor";
 import { relicTriggerMomentumDamageMultiplier } from "../sim/momentum";
 
@@ -66,6 +67,7 @@ function applyDamageAsOther(
   if (!(dmgTotal > 0)) return;
 
   world.eHp[enemyIndex] -= dmgTotal;
+  applyPoisonFromDamageConversion(world, enemyIndex, dmgTotal);
   const ew = getEnemyWorld(world, enemyIndex, KENNEY_TILE_WORLD);
   emitEvent(world, {
     type: "ENEMY_HIT",
@@ -226,6 +228,7 @@ function applyAllHitsExplosion(world: World, ev: EnemyHitEvent, debugRelicLogs: 
     const dmgChaos = explosionTotal * chaosRatio;
     const dmgTotal = dmgPhys + dmgFire + dmgChaos;
     world.eHp[e] -= dmgTotal;
+    applyPoisonFromDamageConversion(world, e, dmgTotal);
 
     const ew = getEnemyWorld(world, e, KENNEY_TILE_WORLD);
     emitEvent(world, {
@@ -288,6 +291,7 @@ function applyExplodeOnKill(world: World, ev: EnemyKilledEvent): void {
     if (!isEnemyInCircle(world, e, cx, cy, RELIC_EXPLODE_ON_KILL_RADIUS)) continue;
 
     world.eHp[e] -= dmg;
+    applyPoisonFromDamageConversion(world, e, dmg);
 
     const ew = getEnemyWorld(world, e, KENNEY_TILE_WORLD);
     emitEvent(world, {

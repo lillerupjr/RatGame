@@ -82,6 +82,36 @@ describe("relicExplodeOnKillSystem", () => {
     expect(w.eHp[b]).toBe(40);
   });
 
+  test("PASS_DAMAGE_TO_POISON_ALL converts ACT_EXPLODE_ON_KILL damage into poison", () => {
+    const w = createWorld({ seed: 44, stage: stageDocks });
+    w.relics = ["ACT_EXPLODE_ON_KILL", "PASS_DAMAGE_TO_POISON_ALL"];
+
+    const dead = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 5);
+    const target = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 6, 5);
+    w.eHpMax[dead] = 100;
+    w.eHp[dead] = 0;
+    w.eAlive[dead] = false;
+    w.eHpMax[target] = 400;
+    w.eHp[target] = 400;
+
+    rebuildEnemyHash(w);
+    const dw = getEnemyWorld(w, dead, KENNEY_TILE_WORLD);
+    w.events.push({
+      type: "ENEMY_KILLED",
+      enemyIndex: dead,
+      x: dw.wx,
+      y: dw.wy,
+      source: "PISTOL",
+    });
+
+    relicExplodeOnKillSystem(w, 1 / 60);
+
+    expect(w.eHp[target]).toBeCloseTo(350, 6);
+    const poisonStacks = w.eAilments[target]?.poison ?? [];
+    expect(poisonStacks.length).toBe(1);
+    expect(poisonStacks[0].dps).toBeCloseTo(5, 6);
+  });
+
   test("ACT_TRIGGERS_DOUBLE retriggers explosion after delay", () => {
     const w = createWorld({ seed: 14, stage: stageDocks });
     w.relics = ["ACT_EXPLODE_ON_KILL", "ACT_TRIGGERS_DOUBLE"];
@@ -114,6 +144,38 @@ describe("relicExplodeOnKillSystem", () => {
     relicRetriggerSystem(w);
     expect(w.zAlive.length).toBe(2);
     expect(w.relicRetriggerQueue.length).toBe(0);
+  });
+
+  test("PASS_DAMAGE_TO_POISON_ALL converts ACT_ALL_HITS_EXPLODE_20 damage into poison", () => {
+    const w = createWorld({ seed: 45, stage: stageDocks });
+    w.relics = ["ACT_ALL_HITS_EXPLODE_20", "PASS_DAMAGE_TO_POISON_ALL"];
+
+    const hitTarget = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 8, 8);
+    const splashTarget = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 9, 8);
+    w.eHpMax[splashTarget] = 500;
+    w.eHp[splashTarget] = 500;
+
+    rebuildEnemyHash(w);
+    const hw = getEnemyWorld(w, hitTarget, KENNEY_TILE_WORLD);
+    w.events.push({
+      type: "ENEMY_HIT",
+      enemyIndex: hitTarget,
+      damage: 100,
+      dmgPhys: 100,
+      dmgFire: 0,
+      dmgChaos: 0,
+      x: hw.wx,
+      y: hw.wy,
+      isCrit: false,
+      source: "PISTOL",
+    });
+
+    relicTriggerSystem(w);
+
+    expect(w.eHp[splashTarget]).toBeCloseTo(480, 6);
+    const poisonStacks = w.eAilments[splashTarget]?.poison ?? [];
+    expect(poisonStacks.length).toBe(1);
+    expect(poisonStacks[0].dps).toBeCloseTo(2, 6);
   });
 
   test("applyRelic dedupes ACT_EXPLODE_ON_KILL", () => {

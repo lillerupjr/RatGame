@@ -12,6 +12,7 @@ import { enqueueDelayedExplosion } from "./delayedExplosions";
 import { resolveProjectileDamagePacket } from "../../combat_mods/runtime/critDamagePacket";
 import { assertValidCrit, assertValidDamageBundle } from "../../combat_mods/debug/combatRuntimeAssert";
 import { applyAilmentsFromHit, ensureEnemyAilmentsAt } from "../../combat_mods/ailments/applyAilmentsFromHit";
+import { getPoisonFromDamageConversion } from "../../combat_mods/ailments/damageToPoisonConversion";
 import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
 import { getUserSettings } from "../../../userSettings";
 import { resolveCritRoll01 } from "../../combat_mods/runtime/critDamagePacket";
@@ -125,8 +126,6 @@ export function collisionsSystem(w: World, dt: number) {
   if (normalizedRelics.length !== w.relics.length || normalizedRelics.some((id, i) => id !== w.relics[i])) {
     w.relics = normalizedRelics;
   }
-  const hasDamageToPoison = w.relics.includes("PASS_DAMAGE_TO_POISON_ALL");
-  const poisonConversionFactor = 0.2;
   const critRolls = getRelicMods(w).critRolls ?? 1;
   const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
   let px = pWorld.wx;
@@ -325,6 +324,7 @@ export function collisionsSystem(w: World, dt: number) {
 
       if (!w.eAilments) w.eAilments = [];
       const ailmentState = ensureEnemyAilmentsAt(w.eAilments, e);
+      const poisonFromDamage = getPoisonFromDamageConversion(w.relics, dmg);
       applyAilmentsFromHit(
         ailmentState,
         { physical: finalPhysDealt, fire: finalFireDealt, chaos: finalChaosDealt },
@@ -339,10 +339,10 @@ export function collisionsSystem(w: World, dt: number) {
           poison: w.rng.range(0, 1),
         },
         {
-          poisonFromDamage: hasDamageToPoison ? dmg * poisonConversionFactor : 0,
+          poisonFromDamage,
         }
       );
-      if (hasDamageToPoison && dmg > 0 && debugRelicLogs) {
+      if (poisonFromDamage > 0 && debugRelicLogs) {
         console.debug("[Relic] Applied poison from damage conversion");
       }
       

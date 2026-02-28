@@ -10,6 +10,7 @@ import { getUserSettings } from "../../../userSettings";
 import { applyPlayerIncomingDamage } from "./playerArmor";
 import { breakMomentumOnLifeDamage } from "./momentum";
 import { ZONE_KIND } from "../../factories/zoneFactory";
+import { applyPoisonFromDamageConversion } from "../../combat_mods/ailments/damageToPoisonConversion";
 
 /** Update zones, apply periodic damage, and process delayed explosions. */
 export function zonesSystem(w: World, dt: number) {
@@ -119,6 +120,7 @@ export function zonesSystem(w: World, dt: number) {
             if (!isEnemyInCircle(w, e, zx, zy, zr)) continue;
 
             w.eHp[e] -= dmg;
+            applyPoisonFromDamageConversion(w, e, dmg);
 
             const ew = getEnemyWorld(w, e, T);
             emitEvent(w, {
