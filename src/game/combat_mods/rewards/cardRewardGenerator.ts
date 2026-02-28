@@ -9,9 +9,10 @@ import { CARD_TIER_WEIGHTS } from "./cardTierWeights";
  */
 export function generateCardRewardOptions(
   rng: () => number,
-  count: number
+  count: number,
+  characterId?: string,
 ): string[] {
-  const cards = getEligibleCardPool();
+  const cards = getEligibleCardPool(characterId);
   const byTier = buildTierMap(cards);
   const picked = new Set<string>();
   const out: string[] = [];

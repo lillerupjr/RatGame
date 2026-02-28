@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { beginCardReward, chooseCardReward, ensureCardRewardState } from "./cardRewardFlow";
 
-function createWorld(seed = 123): any {
+function createWorld(seed = 123, currentCharacterId?: string): any {
   let s = seed >>> 0;
   const next = () => {
     s ^= s << 13;
@@ -13,6 +13,7 @@ function createWorld(seed = 123): any {
   return {
     rng: { next },
     cards: [] as string[],
+    currentCharacterId,
   };
 }
 
@@ -46,5 +47,17 @@ describe("cardRewardFlow", () => {
     beginCardReward(w, "ZONE_TRIAL", 3);
 
     expect(() => chooseCardReward(w, "NOT_IN_OPTIONS")).toThrow();
+  });
+
+  test("HOBO reward options exclude ignite cards", () => {
+    const w = createWorld(91, "HOBO");
+    beginCardReward(w, "ZONE_TRIAL", 3);
+    expect(ensureCardRewardState(w).options.some((id) => id.includes("IGNITE"))).toBe(false);
+  });
+
+  test("JOEY reward options exclude poison cards", () => {
+    const w = createWorld(92, "JOEY");
+    beginCardReward(w, "ZONE_TRIAL", 3);
+    expect(ensureCardRewardState(w).options.some((id) => id.includes("POISON"))).toBe(false);
   });
 });

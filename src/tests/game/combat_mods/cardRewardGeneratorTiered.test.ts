@@ -55,4 +55,12 @@ describe("cardRewardGenerator tiered", () => {
     expect(Math.abs(t2Rate - e2)).toBeLessThanOrEqual(tol);
     expect(Math.abs(t3Rate - e3)).toBeLessThanOrEqual(tol);
   });
+
+  test("deterministic output remains stable when character filter is applied", () => {
+    const rng1 = new RNG(3001);
+    const rng2 = new RNG(3001);
+    const a = generateCardRewardOptions(() => rng1.next(), 3, "HOBO");
+    const b = generateCardRewardOptions(() => rng2.next(), 3, "HOBO");
+    expect(a).toEqual(b);
+  });
 });

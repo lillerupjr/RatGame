@@ -166,7 +166,7 @@ describe("combatSystem pistol integration", () => {
     expect(damageDealt).toBeCloseTo(4);
   });
 
-  test("JOEY uses rifle starter profile in combat-mods primary fire", () => {
+  test("JOEY uses laser starter profile in combat-mods primary fire", () => {
     const w = createWorld({ seed: 1234, stage: stageDocks });
     w.events.length = 0;
     w.combatCardIds = [];
@@ -215,6 +215,11 @@ describe("combatSystem pistol integration", () => {
     }
 
     expect(damageDealt).toBeCloseTo(24);
+    expect(w.prDmgPhys.length).toBeGreaterThan(0);
+    const firstProjectile = 0;
+    expect(w.prDmgPhys[firstProjectile]).toBeCloseTo(0);
+    expect(w.prDmgFire[firstProjectile]).toBeCloseTo(24);
+    expect(w.prChanceIgnite[firstProjectile]).toBeCloseTo(0.25);
   });
 
   test("HOBO uses syringe profile with split damage and innate pierce", () => {

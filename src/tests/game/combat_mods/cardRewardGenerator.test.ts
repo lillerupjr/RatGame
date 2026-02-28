@@ -18,4 +18,20 @@ describe("cardRewardGenerator", () => {
     const out = generateCardRewardOptions(() => rng.next(), 5);
     expect(new Set(out).size).toBe(out.length);
   });
+
+  test("HOBO reward options exclude ignite cards", () => {
+    const rng = new RNG(7);
+    for (let i = 0; i < 200; i++) {
+      const out = generateCardRewardOptions(() => rng.next(), 3, "HOBO");
+      expect(out.some((id) => id.includes("IGNITE"))).toBe(false);
+    }
+  });
+
+  test("JOEY reward options exclude poison cards", () => {
+    const rng = new RNG(8);
+    for (let i = 0; i < 200; i++) {
+      const out = generateCardRewardOptions(() => rng.next(), 3, "JOEY");
+      expect(out.some((id) => id.includes("POISON"))).toBe(false);
+    }
+  });
 });

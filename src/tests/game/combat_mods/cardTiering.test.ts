@@ -2,17 +2,17 @@ import { describe, expect, test } from "vitest";
 import { getEligibleCardPool } from "../../../game/combat_mods/rewards/cardPool";
 
 describe("card tiering", () => {
-  test("all cards are within tiers 1..3", () => {
+  test("all cards are within tiers 1..4", () => {
     for (const card of getEligibleCardPool()) {
-      expect([1, 2, 3]).toContain(card.powerTier);
+      expect([1, 2, 3, 4]).toContain(card.powerTier);
     }
   });
 
-  test("tier 3 cards are exactly mechanics cards", () => {
-    const tier3 = getEligibleCardPool()
-      .filter((card) => card.powerTier === 3)
-      .map((card) => card.id)
-      .sort();
-    expect(tier3).toEqual(["CARD_PIERCE_1", "CARD_PROJECTILE_1"]);
+  test("tier 4 includes top-end mechanics upgrades", () => {
+    const tier4 = getEligibleCardPool()
+      .filter((card) => card.powerTier === 4)
+      .map((card) => card.id);
+    expect(tier4).toContain("CARD_PIERCE_2");
+    expect(tier4).toContain("CARD_PROJECTILE_2");
   });
 });

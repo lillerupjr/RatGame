@@ -26,10 +26,12 @@ describe("combatModsSnapshot", () => {
     expect(snap.weaponStats.baseDamage.physical).toBeCloseTo(11);
   });
 
-  test("getCombatModsSnapshot resolves JOEY starter rifle profile", () => {
+  test("getCombatModsSnapshot resolves JOEY starter laser profile", () => {
     const snap = getCombatModsSnapshot({ currentCharacterId: "JOEY", cards: [] });
     expect(snap.weaponStats.shotsPerSecond).toBeCloseTo(1.0);
-    expect(snap.weaponStats.baseDamage.physical).toBeCloseTo(24);
+    expect(snap.weaponStats.baseDamage.physical).toBeCloseTo(0);
+    expect(snap.weaponStats.baseDamage.fire).toBeCloseTo(24);
+    expect(snap.weaponStats.chanceToIgnite).toBeCloseTo(0.25);
     expect(snap.weaponStats.rangePx).toBeGreaterThan(420);
   });
 

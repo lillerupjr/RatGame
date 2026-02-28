@@ -34,7 +34,7 @@ export function beginCardReward(world: any, source: CardRewardSource, optionCoun
 
   state.active = true;
   state.source = source;
-  state.options = generateCardRewardOptions(() => rngNext(world), optionCount);
+  state.options = generateCardRewardOptions(() => rngNext(world), optionCount, world?.currentCharacterId);
 }
 
 export function chooseCardReward(world: any, cardId: string): void {

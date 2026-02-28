@@ -39,15 +39,16 @@ describe("resolveWeaponStats", () => {
     expect(out.convert.fireToChaos).toBeCloseTo(0);
   });
 
-  test("baseline rifle resolves 1x24 dps profile and longer-range projectile", () => {
+  test("baseline laser resolves 1x24 fire profile and longer-range projectile", () => {
     const out = resolveWeaponStats(JOEY_RIFLE_V1, { cards: [] });
 
     expect(out.shotsPerSecond).toBeCloseTo(1.0);
-    expect(out.baseDamage.physical).toBeCloseTo(24);
-    expect(out.baseDamage.fire).toBeCloseTo(0);
+    expect(out.baseDamage.physical).toBeCloseTo(0);
+    expect(out.baseDamage.fire).toBeCloseTo(24);
     expect(out.baseDamage.chaos).toBeCloseTo(0);
     expect(out.critChance).toBeCloseTo(0.10);
     expect(out.critMulti).toBeCloseTo(1.75);
+    expect(out.chanceToIgnite).toBeCloseTo(0.25);
     expect(out.projectileSpeedPxPerSec).toBeGreaterThan(520);
     expect(out.rangePx).toBeGreaterThan(420);
     expect(out.projectiles).toBe(1);

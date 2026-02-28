@@ -357,7 +357,7 @@ describe("pauseMenu", () => {
     expect(root.querySelector(".pauseCardTile")).toBeTruthy();
   });
 
-  test("build panel shows rifle weapon summary for JOEY", () => {
+  test("build panel shows laser weapon summary for JOEY", () => {
     const root = document.createElement("div") as unknown as HTMLDivElement;
     document.body.appendChild(root as any);
 
@@ -365,7 +365,7 @@ describe("pauseMenu", () => {
     menu.setVisible(true);
     menu.render(makeWorld({ currentCharacterId: "JOEY" }));
 
-    expect(root.textContent).toContain("Weapon: Rifle");
+    expect(root.textContent).toContain("Weapon: Laser");
     expect(root.textContent).toContain("Crit Multi1.75x");
   });
 

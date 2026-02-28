@@ -1327,7 +1327,7 @@ export function createGame(args: CreateGameArgs) {
 
     w.vendor = floorIntent.archetype === "VENDOR"
       ? createVendorState(
-        generateVendorCards(5),
+        generateVendorCards(5, (w as any).currentCharacterId),
         generateVendorRelicOffers(w, 5, 500),
       )
       : null;
