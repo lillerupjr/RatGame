@@ -158,9 +158,9 @@ export function resolveWeaponStats(weapon: WeaponDef, loadout: CombatModsLoadout
     chaos: afterConv.chaos * damageScale,
   };
 
-  const chanceToBleed = clamp01(getAcc(STAT_KEYS.CHANCE_TO_BLEED_ADD).add);
-  const chanceToIgnite = clamp01(getAcc(STAT_KEYS.CHANCE_TO_IGNITE_ADD).add);
-  const chanceToPoison = clamp01(getAcc(STAT_KEYS.CHANCE_TO_POISON_ADD).add);
+  const chanceToBleed = clamp01((weapon.baseChanceToBleed ?? 0) + getAcc(STAT_KEYS.CHANCE_TO_BLEED_ADD).add);
+  const chanceToIgnite = clamp01((weapon.baseChanceToIgnite ?? 0) + getAcc(STAT_KEYS.CHANCE_TO_IGNITE_ADD).add);
+  const chanceToPoison = clamp01((weapon.baseChanceToPoison ?? 0) + getAcc(STAT_KEYS.CHANCE_TO_POISON_ADD).add);
 
   return {
     shotsPerSecond: sps,

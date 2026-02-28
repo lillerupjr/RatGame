@@ -8,6 +8,7 @@ import { getDevGrantedCardIds } from "../../combat_mods/debug/devCombatModsDebug
 import { getUserSettings } from "../../../userSettings";
 import { getRelicMods } from "../progression/relics";
 import { resolveCombatStarterWeaponId } from "../../combat_mods/content/weapons/characterStarterMap";
+import { resolveCombatStarterStatCards } from "../../combat_mods/content/weapons/characterStarterMods";
 import { getCombatStarterWeaponById } from "../../combat_mods/content/weapons/starterWeapons";
 
 /** Handle weapon cooldowns, targeting, and firing events. */
@@ -36,10 +37,11 @@ export function combatSystem(w: World, dt: number) {
   const cards = cardIds
     .map((id) => getCardById(id))
     .filter((card): card is NonNullable<typeof card> => Boolean(card));
+  const starterCards = resolveCombatStarterStatCards((w as any).currentCharacterId);
 
   const weaponId = resolveCombatStarterWeaponId((w as any).currentCharacterId);
   const selectedWeapon = getCombatStarterWeaponById(weaponId);
-  const resolved = resolveWeaponStats(selectedWeapon, { cards });
+  const resolved = resolveWeaponStats(selectedWeapon, { cards: [...cards, ...starterCards] });
   const debug = getUserSettings().debug;
   const relicMods = getRelicMods(w);
   const debugDamageMult = Math.max(0, debug.dmgMult || 1);
@@ -53,11 +55,55 @@ export function combatSystem(w: World, dt: number) {
   const shotsPerSecond = Math.max(0.001, resolved.shotsPerSecond * derivedFireRateMult * debugFireRateMult);
   const fireRangePx = Math.max(0, resolved.rangePx || 0);
   const cooldown = 1 / shotsPerSecond;
+  const burstShotIntervalSec = Math.max(0, selectedWeapon.projectile.burstShotIntervalSec ?? 0);
   const dmgPhys = resolved.baseDamage.physical * derivedDamageMult * debugDamageMult * relicDamageMult * hitDamageMoreMult;
   const dmgFire = resolved.baseDamage.fire * derivedDamageMult * debugDamageMult * relicDamageMult * hitDamageMoreMult;
   const dmgChaos = resolved.baseDamage.chaos * derivedDamageMult * debugDamageMult * relicDamageMult * hitDamageMoreMult;
   const totalDamage = dmgPhys + dmgFire + dmgChaos;
   const finalCritChance = Math.min(1, resolved.critChance * (isAtFullMomentum ? 2 : 1));
+  const projectileKind = selectedWeapon.projectile.kind ?? PRJ_KIND.PISTOL;
+  const runtime = w as any;
+
+  if (!Number.isFinite(runtime.primaryBurstRemaining)) runtime.primaryBurstRemaining = 0;
+  if (!Number.isFinite(runtime.primaryBurstIndex)) runtime.primaryBurstIndex = 0;
+  if (!Array.isArray(runtime.primaryBurstOffsets)) runtime.primaryBurstOffsets = [] as number[];
+  if (!Number.isFinite(runtime.primaryBurstAimX)) runtime.primaryBurstAimX = 1;
+  if (!Number.isFinite(runtime.primaryBurstAimY)) runtime.primaryBurstAimY = 0;
+  if (!Number.isFinite(runtime.primaryBurstTailCooldown)) runtime.primaryBurstTailCooldown = cooldown;
+
+  const spawnResolvedProjectile = (dirX: number, dirY: number): void => {
+    spawnProjectileGrid(w, {
+      kind: projectileKind,
+      gx: w.pgxi + w.pgox,
+      gy: w.pgyi + w.pgoy,
+      dirGx: dirX,
+      dirGy: dirY,
+      speed: resolved.projectileSpeedPxPerSec,
+      damage: totalDamage,
+      dmgPhys,
+      dmgFire,
+      dmgChaos,
+      critChance: finalCritChance,
+      critMulti: resolved.critMulti,
+      chanceBleed: resolved.chanceToBleed,
+      chanceIgnite: resolved.chanceToIgnite,
+      chancePoison: resolved.chanceToPoison,
+      radius: 5,
+      pierce: resolved.pierce,
+      ttl: 2.2,
+      maxDist: fireRangePx > 0 ? fireRangePx : undefined,
+    });
+  };
+
+  const emitFireSfx = (): void => {
+    emitEvent(w, {
+      type: "SFX",
+      id: "FIRE_OTHER",
+      weaponId: selectedWeapon.displayName.toUpperCase(),
+      vol: 0.55,
+      rate: 0.95 + w.rng.range(0, 0.1),
+    });
+  };
 
   const target = findClosestTarget(w, fireRangePx);
   const hasTargetInRange = target.enemyIndex !== -1;
@@ -69,74 +115,56 @@ export function combatSystem(w: World, dt: number) {
   }
 
   w.primaryWeaponCdLeft -= dt;
-  if (!hasTargetInRange) {
+  if (runtime.primaryBurstRemaining <= 0 && !hasTargetInRange) {
     if (w.primaryWeaponCdLeft < 0) w.primaryWeaponCdLeft = 0;
     return;
   }
 
   while (w.primaryWeaponCdLeft <= 0) {
-    w.primaryWeaponCdLeft += cooldown;
+    if (runtime.primaryBurstRemaining > 0) {
+      const burstAimAngle = Math.atan2(runtime.primaryBurstAimY, runtime.primaryBurstAimX);
+      const offset = runtime.primaryBurstOffsets[runtime.primaryBurstIndex] ?? 0;
+      const angle = burstAimAngle + offset;
+      spawnResolvedProjectile(Math.cos(angle), Math.sin(angle));
+      emitFireSfx();
+
+      runtime.primaryBurstIndex += 1;
+      runtime.primaryBurstRemaining -= 1;
+      w.primaryWeaponCdLeft += runtime.primaryBurstRemaining > 0 ? burstShotIntervalSec : runtime.primaryBurstTailCooldown;
+      continue;
+    }
+
+    if (!hasTargetInRange) {
+      if (w.primaryWeaponCdLeft < 0) w.primaryWeaponCdLeft = 0;
+      break;
+    }
+
     const projectileCount = Math.max(1, resolved.projectiles | 0);
-    const pgx = w.pgxi + w.pgox;
-    const pgy = w.pgyi + w.pgoy;
+    if (burstShotIntervalSec > 0 && projectileCount > 1) {
+      const aimAngle = Math.atan2(defaultAimY, defaultAimX);
+      const offsets = computeProjectileAngles(resolved.multiProjectileSpreadDeg, projectileCount);
+      const burstDuration = burstShotIntervalSec * Math.max(0, projectileCount - 1);
+      runtime.primaryBurstOffsets = offsets;
+      runtime.primaryBurstAimX = Math.cos(aimAngle);
+      runtime.primaryBurstAimY = Math.sin(aimAngle);
+      runtime.primaryBurstRemaining = projectileCount;
+      runtime.primaryBurstIndex = 0;
+      runtime.primaryBurstTailCooldown = Math.max(0, cooldown - burstDuration);
+      continue;
+    }
+
     if (projectileCount === 1) {
       const spread = applySpreadToDirection(defaultAimX, defaultAimY, resolved.spreadBaseDeg, w.rng);
-      spawnProjectileGrid(w, {
-        kind: PRJ_KIND.PISTOL,
-        gx: pgx,
-        gy: pgy,
-        dirGx: spread.dirX,
-        dirGy: spread.dirY,
-        speed: resolved.projectileSpeedPxPerSec,
-        damage: totalDamage,
-        dmgPhys,
-        dmgFire,
-        dmgChaos,
-        critChance: finalCritChance,
-        critMulti: resolved.critMulti,
-        chanceBleed: resolved.chanceToBleed,
-        chanceIgnite: resolved.chanceToIgnite,
-        chancePoison: resolved.chanceToPoison,
-        radius: 5,
-        pierce: resolved.pierce,
-        ttl: 2.2,
-        maxDist: fireRangePx > 0 ? fireRangePx : undefined,
-      });
+      spawnResolvedProjectile(spread.dirX, spread.dirY);
     } else {
       const aimAngle = Math.atan2(defaultAimY, defaultAimX);
       const offsets = computeProjectileAngles(resolved.multiProjectileSpreadDeg, projectileCount);
       for (let i = 0; i < offsets.length; i++) {
         const angle = aimAngle + offsets[i];
-        spawnProjectileGrid(w, {
-          kind: PRJ_KIND.PISTOL,
-          gx: pgx,
-          gy: pgy,
-          dirGx: Math.cos(angle),
-          dirGy: Math.sin(angle),
-          speed: resolved.projectileSpeedPxPerSec,
-          damage: totalDamage,
-          dmgPhys,
-          dmgFire,
-          dmgChaos,
-          critChance: finalCritChance,
-          critMulti: resolved.critMulti,
-          chanceBleed: resolved.chanceToBleed,
-          chanceIgnite: resolved.chanceToIgnite,
-          chancePoison: resolved.chanceToPoison,
-          radius: 5,
-          pierce: resolved.pierce,
-          ttl: 2.2,
-          maxDist: fireRangePx > 0 ? fireRangePx : undefined,
-        });
+        spawnResolvedProjectile(Math.cos(angle), Math.sin(angle));
       }
     }
-
-    emitEvent(w, {
-      type: "SFX",
-      id: "FIRE_OTHER",
-      weaponId: selectedWeapon.displayName.toUpperCase(),
-      vol: 0.55,
-      rate: 0.95 + w.rng.range(0, 0.1),
-    });
+    emitFireSfx();
+    w.primaryWeaponCdLeft += cooldown;
   }
 }

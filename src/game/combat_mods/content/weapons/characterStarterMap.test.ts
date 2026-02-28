@@ -11,8 +11,8 @@ describe("resolveCombatStarterWeaponId", () => {
   });
 
   test("falls back to pistol for non-pilot characters", () => {
-    expect(resolveCombatStarterWeaponId("HOBO")).toBe("JACK_PISTOL_V1");
-    expect(resolveCombatStarterWeaponId("JAMAL")).toBe("JACK_PISTOL_V1");
+    expect(resolveCombatStarterWeaponId("HOBO")).toBe("HOBO_SYRINGE_V1");
+    expect(resolveCombatStarterWeaponId("JAMAL")).toBe("JAMAL_THROWING_KNIFE_V1");
     expect(resolveCombatStarterWeaponId("TOMMY")).toBe("TOMMY_SHOTGUN_V1");
   });
 

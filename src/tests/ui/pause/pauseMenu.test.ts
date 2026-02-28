@@ -368,6 +368,17 @@ describe("pauseMenu", () => {
     expect(root.textContent).toContain("Weapon: Rifle");
   });
 
+  test("build panel shows syringe weapon summary for HOBO", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+    menu.setVisible(true);
+    menu.render(makeWorld({ currentCharacterId: "HOBO" }));
+
+    expect(root.textContent).toContain("Weapon: Syringe");
+  });
+
   test("build panel shows shotgun weapon summary for TOMMY", () => {
     const root = document.createElement("div") as unknown as HTMLDivElement;
     document.body.appendChild(root as any);
@@ -377,6 +388,17 @@ describe("pauseMenu", () => {
     menu.render(makeWorld({ currentCharacterId: "TOMMY" }));
 
     expect(root.textContent).toContain("Weapon: Shotgun");
+  });
+
+  test("build panel shows throwing knife weapon summary for JAMAL", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+    menu.setVisible(true);
+    menu.render(makeWorld({ currentCharacterId: "JAMAL" }));
+
+    expect(root.textContent).toContain("Weapon: Throwing Knife");
   });
 
   test("render does not throw when world is null", () => {

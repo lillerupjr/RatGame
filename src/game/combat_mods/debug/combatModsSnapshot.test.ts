@@ -33,11 +33,27 @@ describe("combatModsSnapshot", () => {
     expect(snap.weaponStats.rangePx).toBeGreaterThan(420);
   });
 
+  test("getCombatModsSnapshot resolves HOBO starter syringe profile", () => {
+    const snap = getCombatModsSnapshot({ currentCharacterId: "HOBO", cards: [] });
+    expect(snap.weaponStats.baseDamage.physical).toBeCloseTo(9);
+    expect(snap.weaponStats.baseDamage.chaos).toBeCloseTo(9);
+    expect(snap.weaponStats.pierce).toBe(1);
+    expect(snap.weaponStats.projectileSpeedPxPerSec).toBeCloseTo(180);
+    expect(snap.weaponStats.chanceToPoison).toBeCloseTo(0.25);
+  });
+
   test("getCombatModsSnapshot resolves TOMMY starter shotgun profile", () => {
     const snap = getCombatModsSnapshot({ currentCharacterId: "TOMMY", cards: [] });
     expect(snap.weaponStats.shotsPerSecond).toBeCloseTo(0.5);
     expect(snap.weaponStats.baseDamage.physical).toBeCloseTo(16);
-    expect(snap.weaponStats.projectiles).toBe(3);
+    expect(snap.weaponStats.projectiles).toBe(4);
     expect(snap.weaponStats.rangePx).toBeLessThan(420);
+  });
+
+  test("getCombatModsSnapshot resolves JAMAL starter throwing knife profile with hidden +1 projectile", () => {
+    const snap = getCombatModsSnapshot({ currentCharacterId: "JAMAL", cards: [] });
+    expect(snap.weaponStats.shotsPerSecond).toBeCloseTo(1.0);
+    expect(snap.weaponStats.baseDamage.physical).toBeCloseTo(12);
+    expect(snap.weaponStats.projectiles).toBe(2);
   });
 });

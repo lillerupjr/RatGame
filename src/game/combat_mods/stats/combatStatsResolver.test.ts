@@ -1,8 +1,11 @@
 import { describe, expect, test } from "vitest";
 import { resolveDotStats, resolveWeaponStats } from "./combatStatsResolver";
+import { HOBO_SYRINGE_V1 } from "../content/weapons/hoboSyringe";
 import { JACK_PISTOL_V1 } from "../content/weapons/jackPistol";
+import { JAMAL_THROWING_KNIFE_V1 } from "../content/weapons/jamalThrowingKnife";
 import { JOEY_RIFLE_V1 } from "../content/weapons/joeyRifle";
 import { TOMMY_SHOTGUN_V1 } from "../content/weapons/tommyShotgun";
+import { resolveCombatStarterStatCards } from "../content/weapons/characterStarterMods";
 import { STAT_KEYS } from "./statKeys";
 import type { CardDef, StatMod } from "./modifierTypes";
 
@@ -43,18 +46,47 @@ describe("resolveWeaponStats", () => {
     expect(out.baseDamage.physical).toBeCloseTo(24);
     expect(out.baseDamage.fire).toBeCloseTo(0);
     expect(out.baseDamage.chaos).toBeCloseTo(0);
+    expect(out.critChance).toBeCloseTo(0.10);
+    expect(out.critMulti).toBeCloseTo(1.75);
     expect(out.projectileSpeedPxPerSec).toBeGreaterThan(520);
     expect(out.rangePx).toBeGreaterThan(420);
     expect(out.projectiles).toBe(1);
   });
 
-  test("baseline shotgun resolves 0.5x16x3 profile and uses authored multi spread", () => {
+  test("baseline shotgun resolves 0.5x16x4 profile and uses authored multi spread", () => {
     const out = resolveWeaponStats(TOMMY_SHOTGUN_V1, { cards: [] });
     expect(out.shotsPerSecond).toBeCloseTo(0.5);
     expect(out.baseDamage.physical).toBeCloseTo(16);
-    expect(out.projectiles).toBe(3);
+    expect(out.projectiles).toBe(4);
     expect(out.rangePx).toBeLessThan(420);
     expect(out.multiProjectileSpreadDeg).toBeCloseTo(24);
+  });
+
+  test("baseline hobo syringe resolves split damage, innate pierce, slow projectile, and base poison chance", () => {
+    const out = resolveWeaponStats(HOBO_SYRINGE_V1, { cards: [] });
+    expect(out.shotsPerSecond).toBeCloseTo(1.0);
+    expect(out.baseDamage.physical).toBeCloseTo(9);
+    expect(out.baseDamage.chaos).toBeCloseTo(9);
+    expect(out.baseDamage.fire).toBeCloseTo(0);
+    expect(out.pierce).toBe(1);
+    expect(out.projectileSpeedPxPerSec).toBeCloseTo(180);
+    expect(out.chanceToPoison).toBeCloseTo(0.25);
+    expect(out.chanceToBleed).toBeCloseTo(0);
+    expect(out.chanceToIgnite).toBeCloseTo(0);
+  });
+
+  test("baseline jamal throwing knife resolves to 1 projectile before starter bonus", () => {
+    const out = resolveWeaponStats(JAMAL_THROWING_KNIFE_V1, { cards: [] });
+    expect(out.shotsPerSecond).toBeCloseTo(1.0);
+    expect(out.baseDamage.physical).toBeCloseTo(12);
+    expect(out.projectiles).toBe(1);
+    expect(out.rangePx).toBeCloseTo(380);
+  });
+
+  test("jamal hidden starter +1 projectile produces 2 knives per cadence", () => {
+    const starterCards = resolveCombatStarterStatCards("JAMAL");
+    const out = resolveWeaponStats(JAMAL_THROWING_KNIFE_V1, { cards: [...starterCards] });
+    expect(out.projectiles).toBe(2);
   });
 
   test("increased shotsPerSecond stacks additively", () => {
@@ -141,6 +173,12 @@ describe("resolveWeaponStats", () => {
     expect(out2.projectiles).toBe(1);
   });
 
+  test("shotgun +1 projectile card resolves to 5 projectiles from base 4", () => {
+    const c = mkCard("T_SHOTGUN_PROJECTILE_PLUS", [{ key: STAT_KEYS.PROJECTILES_ADD, op: "add", value: 1 }]);
+    const out = resolveWeaponStats(TOMMY_SHOTGUN_V1, { cards: [c] });
+    expect(out.projectiles).toBe(5);
+  });
+
   test("ailment chances clamp to [0,1]", () => {
     const c = mkCard("T_AIL", [
       { key: STAT_KEYS.CHANCE_TO_IGNITE_ADD, op: "add", value: 2 },
@@ -151,6 +189,18 @@ describe("resolveWeaponStats", () => {
     expect(out.chanceToIgnite).toBeCloseTo(1);
     expect(out.chanceToPoison).toBeCloseTo(0);
     expect(out.chanceToBleed).toBeCloseTo(0.5);
+  });
+
+  test("weapon base poison chance stacks additively with card poison chance", () => {
+    const c = mkCard("T_POISON", [{ key: STAT_KEYS.CHANCE_TO_POISON_ADD, op: "add", value: 0.25 }]);
+    const out = resolveWeaponStats(HOBO_SYRINGE_V1, { cards: [c] });
+    expect(out.chanceToPoison).toBeCloseTo(0.5);
+  });
+
+  test("weapon base poison chance still clamps to 1 with large added chance", () => {
+    const c = mkCard("T_POISON_OVER", [{ key: STAT_KEYS.CHANCE_TO_POISON_ADD, op: "add", value: 10 }]);
+    const out = resolveWeaponStats(HOBO_SYRINGE_V1, { cards: [c] });
+    expect(out.chanceToPoison).toBeCloseTo(1);
   });
 
   test("golden: combined mods produce expected resolved stats", () => {

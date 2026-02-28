@@ -5,7 +5,7 @@ export const TOMMY_SHOTGUN_V1: WeaponDef = {
   displayName: "Shotgun",
   tags: ["weapon", "gun", "projectile", "hit", "single_shot"],
 
-  // Target shape: 16 damage * 0.5 shots/sec * 3 pellets = 24 dps.
+  // Target shape: 16 damage * 0.5 shots/sec * 4 pellets = 32 dps.
   shotsPerSecond: 0.5,
 
   baseDamage: { physical: 16, fire: 0, chaos: 0 },
@@ -20,7 +20,7 @@ export const TOMMY_SHOTGUN_V1: WeaponDef = {
     // Explicit fan spread for multi-projectile separation.
     multiProjectileSpreadDeg: 24.0,
     pierce: 0,
-    baseProjectiles: 3,
+    baseProjectiles: 4,
   },
 
   autoAim: {

@@ -2,6 +2,7 @@ import { getCardById } from "../content/cards/cardPool";
 import { resolveWeaponStats, type ResolvedWeaponStats } from "../stats/combatStatsResolver";
 import type { CardDef } from "../stats/modifierTypes";
 import { resolveCombatStarterWeaponId } from "../content/weapons/characterStarterMap";
+import { resolveCombatStarterStatCards } from "../content/weapons/characterStarterMods";
 import { getCombatStarterWeaponById } from "../content/weapons/starterWeapons";
 
 export interface CardCountEntry {
@@ -69,10 +70,11 @@ export function getCombatModsSnapshot(world: any): CombatModsSnapshot {
   const cardIds = readCardIdsFromWorld(world);
   const cards = aggregateCardCounts(cardIds);
   const defs = cardDefsFromIds(cardIds);
+  const starterDefs = resolveCombatStarterStatCards(world?.currentCharacterId);
   const starterWeaponId = resolveCombatStarterWeaponId(world?.currentCharacterId);
   const starterWeapon = getCombatStarterWeaponById(starterWeaponId);
 
-  const weaponStats = resolveWeaponStats(starterWeapon, { cards: defs });
+  const weaponStats = resolveWeaponStats(starterWeapon, { cards: [...defs, ...starterDefs] });
 
   return { cards, weaponStats };
 }

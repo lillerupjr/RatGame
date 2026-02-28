@@ -6,6 +6,7 @@ import { projectilesSystem } from "./projectiles";
 import { collisionsSystem } from "./collisions";
 import { anchorFromWorld } from "../../coords/anchor";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
+import { PRJ_KIND } from "../../factories/projectileFactory";
 import { applyRelic } from "../progression/relics";
 
 function setPlayerWorld(w: World, wx: number, wy: number): void {
@@ -216,7 +217,51 @@ describe("combatSystem pistol integration", () => {
     expect(damageDealt).toBeCloseTo(24);
   });
 
-  test("TOMMY uses shotgun profile with 3 projectiles per shot", () => {
+  test("HOBO uses syringe profile with split damage and innate pierce", () => {
+    const w = createWorld({ seed: 3333, stage: stageDocks });
+    w.events.length = 0;
+    w.combatCardIds = [];
+    w.primaryWeaponCdLeft = 0;
+    (w as any).currentCharacterId = "HOBO";
+
+    setPlayerWorld(w, 0, 0);
+
+    const enemyAnchor = anchorFromWorld(90, 0, KENNEY_TILE_WORLD);
+    w.eAlive.push(true);
+    w.eType.push(1);
+    w.egxi.push(enemyAnchor.gxi);
+    w.egyi.push(enemyAnchor.gyi);
+    w.egox.push(enemyAnchor.gox);
+    w.egoy.push(enemyAnchor.goy);
+    w.evx.push(0);
+    w.evy.push(0);
+    w.eFaceX.push(-1);
+    w.eFaceY.push(0);
+    w.eHp.push(200);
+    w.eHpMax.push(200);
+    w.eR.push(10);
+    w.eSpeed.push(0);
+    w.eDamage.push(0);
+    w.ezVisual.push(w.pzVisual);
+    w.ezLogical.push(w.pzLogical);
+    w.ePoisonT.push(0);
+    w.ePoisonDps.push(0);
+    w.ePoisonedOnDeath.push(false);
+    w.eSpawnTriggerId.push(undefined);
+
+    // Prime enemy spatial hash so combat target acquisition can find the enemy.
+    collisionsSystem(w, 1 / 60);
+    combatSystem(w, 1 / 60);
+    const firstProjectile = w.pAlive.findIndex(Boolean);
+    expect(firstProjectile).toBeGreaterThanOrEqual(0);
+    expect(w.prjKind[firstProjectile]).toBe(PRJ_KIND.SYRINGE);
+    expect(w.prDmgPhys[firstProjectile]).toBeCloseTo(9);
+    expect(w.prDmgChaos[firstProjectile]).toBeCloseTo(9);
+    expect(w.prPierce[firstProjectile]).toBe(1);
+    expect(w.prChancePoison[firstProjectile]).toBeCloseTo(0.25);
+  });
+
+  test("TOMMY uses shotgun profile with 4 projectiles per shot", () => {
     const w = createWorld({ seed: 2222, stage: stageDocks });
     w.events.length = 0;
     w.combatCardIds = [];
@@ -251,6 +296,54 @@ describe("combatSystem pistol integration", () => {
     collisionsSystem(w, 1 / 60);
     combatSystem(w, 1 / 60);
     const aliveProjectileCount = w.pAlive.filter(Boolean).length;
-    expect(aliveProjectileCount).toBe(3);
+    expect(aliveProjectileCount).toBe(4);
+  });
+
+  test("JAMAL uses throwing knife profile with hidden +1 projectile as a sequential 2-knife burst", () => {
+    const w = createWorld({ seed: 7777, stage: stageDocks });
+    w.events.length = 0;
+    w.combatCardIds = [];
+    w.primaryWeaponCdLeft = 0;
+    (w as any).currentCharacterId = "JAMAL";
+    setPlayerWorld(w, 0, 0);
+
+    const enemyAnchor = anchorFromWorld(0, 0, KENNEY_TILE_WORLD);
+    w.eAlive.push(true);
+    w.eType.push(1);
+    w.egxi.push(enemyAnchor.gxi);
+    w.egyi.push(enemyAnchor.gyi);
+    w.egox.push(enemyAnchor.gox);
+    w.egoy.push(enemyAnchor.goy);
+    w.evx.push(0);
+    w.evy.push(0);
+    w.eFaceX.push(-1);
+    w.eFaceY.push(0);
+    w.eHp.push(300);
+    w.eHpMax.push(300);
+    w.eR.push(10);
+    w.eSpeed.push(0);
+    w.eDamage.push(0);
+    w.ezVisual.push(w.pzVisual);
+    w.ezLogical.push(w.pzLogical);
+    w.ePoisonT.push(0);
+    w.ePoisonDps.push(0);
+    w.ePoisonedOnDeath.push(false);
+    w.eSpawnTriggerId.push(undefined);
+
+    // Prime enemy spatial hash so combat target acquisition can find the enemy.
+    collisionsSystem(w, 1 / 60);
+    combatSystem(w, 1 / 60);
+    const firstProjectile = w.pAlive.findIndex(Boolean);
+    expect(firstProjectile).toBeGreaterThanOrEqual(0);
+    expect(w.prjKind[firstProjectile]).toBe(PRJ_KIND.KNIFE);
+    let aliveProjectileCount = w.pAlive.filter(Boolean).length;
+    expect(aliveProjectileCount).toBe(1);
+
+    for (let i = 0; i < 13; i++) combatSystem(w, 1 / 60);
+    aliveProjectileCount = w.pAlive.filter(Boolean).length;
+    expect(aliveProjectileCount).toBe(2);
+
+    const fireSfxEvents = w.events.filter((ev) => ev.type === "SFX" && (ev as any).id === "FIRE_OTHER");
+    expect(fireSfxEvents.length).toBe(2);
   });
 });

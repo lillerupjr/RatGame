@@ -45,8 +45,14 @@ export interface WeaponDef {
   baseDamage: DamageBundle;
   baseCritChance: number; // 0..1
   baseCritMulti: number; // e.g. 1.5
+  baseChanceToBleed?: number; // 0..1
+  baseChanceToIgnite?: number; // 0..1
+  baseChanceToPoison?: number; // 0..1
 
   projectile: {
+    // Projectile kind routed into the shared projectile/sprite/audio pipeline.
+    // Defaults to pistol when omitted.
+    kind?: number;
     speedPxPerSec: number;
     rangePx: number;
     radiusPx: number;
@@ -54,6 +60,8 @@ export interface WeaponDef {
     // Fan width for additional projectiles when count > 1.
     // Weapon-authored only in milestone 1.
     multiProjectileSpreadDeg?: number;
+    // Optional delay between burst shots for weapons that fire additional projectiles sequentially.
+    burstShotIntervalSec?: number;
     pierce: number;
     // Base projectile count before additive card modifiers.
     baseProjectiles?: number;

@@ -9,8 +9,8 @@ export const JOEY_RIFLE_V1: WeaponDef = {
   shotsPerSecond: 1.0,
 
   baseDamage: { physical: 24, fire: 0, chaos: 0 },
-  baseCritChance: 0.05,
-  baseCritMulti: 1.5,
+  baseCritChance: 0.10,
+  baseCritMulti: 1.75,
 
   projectile: {
     speedPxPerSec: 600,
