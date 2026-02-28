@@ -101,7 +101,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_IGNITE_CHANCE_1",
-    isEnabled: true,
+    isEnabled: false,
     displayName: "+25% ignite chance",
     rarity: 2,
     powerTier: 1,
@@ -109,7 +109,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_POISON_CHANCE_1",
-    isEnabled: true,
+    isEnabled: false,
     displayName: "+25% poison chance",
     rarity: 2,
     powerTier: 1,
@@ -180,7 +180,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_DAMAGE_REDUCTION_1",
-    isEnabled: true,
+    isEnabled: false,
     displayName: "+5% damage reduction",
     rarity: 2,
     powerTier: 1,
