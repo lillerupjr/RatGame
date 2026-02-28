@@ -327,6 +327,17 @@ export type World = {
   zoneRewardClaimedKey?: string | null;
   zoneRewardClaimedKeys?: string[];
   primaryWeaponCdLeft: number;
+  playerBeamActive: boolean;
+  playerBeamStartX: number;
+  playerBeamStartY: number;
+  playerBeamEndX: number;
+  playerBeamEndY: number;
+  playerBeamDirX: number;
+  playerBeamDirY: number;
+  playerBeamTickAccumulator: number;
+  playerBeamUvOffset: number;
+  playerBeamWidthPx: number;
+  playerBeamGlowIntensity: number;
 
   // -------------------------
   // Level (frozen)
@@ -750,6 +761,17 @@ export function createWorld(args: CreateWorldArgs): World {
     zoneRewardClaimedKey: null,
     zoneRewardClaimedKeys: [],
     primaryWeaponCdLeft: 0,
+    playerBeamActive: false,
+    playerBeamStartX: 0,
+    playerBeamStartY: 0,
+    playerBeamEndX: 0,
+    playerBeamEndY: 0,
+    playerBeamDirX: 1,
+    playerBeamDirY: 0,
+    playerBeamTickAccumulator: 0,
+    playerBeamUvOffset: 0,
+    playerBeamWidthPx: 0,
+    playerBeamGlowIntensity: 0,
 
     // Level
     level: 1,

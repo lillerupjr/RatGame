@@ -35,6 +35,15 @@ export interface DamageBundle {
 
 export type WeaponTag = "weapon" | "gun" | "projectile" | "hit" | "single_shot";
 
+export interface WeaponBeamDef {
+  maxRangePx: number;
+  dps: number;
+  tickIntervalSec: number;
+  widthPx: number;
+  glowIntensity: number;
+  uvScrollSpeed: number;
+}
+
 export interface WeaponDef {
   id: string;
   displayName: string;
@@ -48,6 +57,8 @@ export interface WeaponDef {
   baseChanceToBleed?: number; // 0..1
   baseChanceToIgnite?: number; // 0..1
   baseChanceToPoison?: number; // 0..1
+  fireMode?: "projectile" | "beam";
+  beam?: WeaponBeamDef;
 
   projectile: {
     // Projectile kind routed into the shared projectile/sprite/audio pipeline.

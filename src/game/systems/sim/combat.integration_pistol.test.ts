@@ -166,12 +166,13 @@ describe("combatSystem pistol integration", () => {
     expect(damageDealt).toBeCloseTo(4);
   });
 
-  test("JOEY uses laser starter profile in combat-mods primary fire", () => {
+  test("JOEY uses continuous laser beam profile in combat-mods primary fire", () => {
     const w = createWorld({ seed: 1234, stage: stageDocks });
     w.events.length = 0;
     w.combatCardIds = [];
     w.primaryWeaponCdLeft = 0;
     (w as any).currentCharacterId = "JOEY";
+    w.rng.range = (() => 0.99) as any;
 
     setPlayerWorld(w, 0, 0);
 
@@ -198,28 +199,39 @@ describe("combatSystem pistol integration", () => {
     w.ePoisonedOnDeath.push(false);
     w.eSpawnTriggerId.push(undefined);
 
-    let damageDealt = 0;
-    for (let i = 0; i < 120; i++) {
+    collisionsSystem(w, 1 / 60);
+
+    const hpStart = w.eHp[0];
+    for (let i = 0; i < 60; i++) {
       combatSystem(w, 1 / 60);
-      projectilesSystem(w, 1 / 60);
-      for (let p = 0; p < w.pAlive.length; p++) {
-        if (!w.pAlive[p]) continue;
-        w.prCritChance[p] = 0;
-      }
-      const before = w.eHp[0];
       collisionsSystem(w, 1 / 60);
-      if (w.eHp[0] < before) {
-        damageDealt = before - w.eHp[0];
-        break;
-      }
     }
 
-    expect(damageDealt).toBeCloseTo(24);
-    expect(w.prDmgPhys.length).toBeGreaterThan(0);
-    const firstProjectile = 0;
-    expect(w.prDmgPhys[firstProjectile]).toBeCloseTo(0);
-    expect(w.prDmgFire[firstProjectile]).toBeCloseTo(24);
-    expect(w.prChanceIgnite[firstProjectile]).toBeCloseTo(0.25);
+    expect(w.playerBeamActive).toBe(true);
+    expect(w.playerBeamEndX).toBeGreaterThan(w.playerBeamStartX);
+    expect(w.pAlive.some(Boolean)).toBe(false);
+    const dealt = hpStart - w.eHp[0];
+    expect(dealt).toBeGreaterThan(20);
+    expect(dealt).toBeLessThan(26);
+    expect(w.events.some((ev) => ev.type === "SFX" && (ev as any).id === "FIRE_OTHER")).toBe(true);
+  });
+
+  test("JOEY beam deactivates when no enemy is in range", () => {
+    const w = createWorld({ seed: 5678, stage: stageDocks });
+    w.events.length = 0;
+    w.combatCardIds = [];
+    w.primaryWeaponCdLeft = 0;
+    (w as any).currentCharacterId = "JOEY";
+    setPlayerWorld(w, 0, 0);
+
+    for (let i = 0; i < 90; i++) {
+      combatSystem(w, 1 / 60);
+      collisionsSystem(w, 1 / 60);
+    }
+
+    expect(w.playerBeamActive).toBe(false);
+    expect(w.pAlive.some(Boolean)).toBe(false);
+    expect(w.events.some((ev) => ev.type === "ENEMY_HIT")).toBe(false);
   });
 
   test("HOBO uses syringe profile with split damage and innate pierce", () => {

@@ -12,6 +12,15 @@ export const JOEY_RIFLE_V1: WeaponDef = {
   baseCritChance: 0.10,
   baseCritMulti: 1.75,
   baseChanceToIgnite: 0.25,
+  fireMode: "beam",
+  beam: {
+    maxRangePx: 520,
+    dps: 24,
+    tickIntervalSec: 0.1,
+    widthPx: 8,
+    glowIntensity: 0.95,
+    uvScrollSpeed: 1.75,
+  },
 
   projectile: {
     speedPxPerSec: 600,

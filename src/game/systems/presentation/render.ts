@@ -2952,6 +2952,72 @@ export async function renderSystem(
   }
 
   // ----------------------------
+  // Collect PLAYER BEAM into slices
+  // ----------------------------
+  if (w.playerBeamActive) {
+    const zBase = w.pzVisual ?? w.pz ?? tileHAtWorld(w.playerBeamStartX, w.playerBeamStartY);
+    const start = toScreenAtZ(w.playerBeamStartX, w.playerBeamStartY, zBase);
+    const end = toScreenAtZ(w.playerBeamEndX, w.playerBeamEndY, zBase);
+    const midX = (w.playerBeamStartX + w.playerBeamEndX) * 0.5;
+    const midY = (w.playerBeamStartY + w.playerBeamEndY) * 0.5;
+    const feet = getEntityFeetPos(midX, midY, zBase);
+
+    const renderKey: RenderKey = {
+      slice: feet.slice,
+      within: feet.within,
+      baseZ: zBase,
+      feetSortY: feet.screenY,
+      kindOrder: KindOrder.VFX,
+      stableId: 129500,
+    };
+
+    const drawClosure = () => {
+      const glow = Math.max(0, w.playerBeamGlowIntensity || 0);
+      const beamWidth = Math.max(1, w.playerBeamWidthPx || 6);
+      const ax = start.x;
+      const ay = start.y;
+      const bx = end.x;
+      const by = end.y;
+
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.lineCap = "round";
+
+      ctx.strokeStyle = `rgba(255, 90, 90, ${0.20 + 0.25 * glow})`;
+      ctx.lineWidth = beamWidth * 2.6;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+
+      ctx.strokeStyle = `rgba(255, 120, 120, ${0.40 + 0.35 * glow})`;
+      ctx.lineWidth = beamWidth * 1.5;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+
+      ctx.setLineDash([8, 6]);
+      ctx.lineDashOffset = -(w.playerBeamUvOffset * 20);
+      ctx.strokeStyle = "rgba(255, 220, 220, 0.95)";
+      ctx.lineWidth = beamWidth * 0.7;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = `rgba(255, 170, 170, ${0.40 + 0.30 * glow})`;
+      ctx.beginPath();
+      ctx.arc(bx, by, Math.max(2, beamWidth * 0.9), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    };
+
+    addToSlice(feet.slice, renderKey, drawClosure);
+  }
+
+  // ----------------------------
   // Collect PLAYER into slices
   // ----------------------------
   {
@@ -4021,6 +4087,40 @@ export async function renderSystem(
         : undefined,
     });
     lightsByHeight.set(lightZ, (lightsByHeight.get(lightZ) ?? 0) + 1);
+  }
+
+  if (w.playerBeamActive) {
+    const glow = Math.max(0, w.playerBeamGlowIntensity || 0);
+    const beamDx = w.playerBeamEndX - w.playerBeamStartX;
+    const beamDy = w.playerBeamEndY - w.playerBeamStartY;
+    const beamLen = Math.hypot(beamDx, beamDy);
+    if (beamLen > 1) {
+      const sampleCount = Math.max(3, Math.min(8, Math.ceil(beamLen / 100)));
+      const beamZ = Math.floor((w.pzVisual ?? w.pz ?? 0) + 1e-3);
+      const beamRadius = Math.max(18, (w.playerBeamWidthPx || 6) * 6 * s);
+      for (let i = 0; i < sampleCount; i++) {
+        const t = sampleCount <= 1 ? 0 : i / (sampleCount - 1);
+        const wx = w.playerBeamStartX + beamDx * t;
+        const wy = w.playerBeamStartY + beamDy * t;
+        const p = worldToScreen(wx, wy);
+        const sx = (p.x + camTx) * s + lightSafeOffsetX;
+        const sy = (p.y + camTy - (w.pzVisual ?? w.pz ?? 0) * ELEV_PX) * s + lightSafeOffsetY;
+        projectedLights.push({
+          sx,
+          sy,
+          lightZ: beamZ,
+          radiusPx: beamRadius,
+          intensity: Math.max(0.05, 0.12 * glow),
+          occlusion: 0,
+          shape: "RADIAL",
+          color: "#ff5f5f",
+          tintStrength: 0.20,
+          flicker: { kind: "PULSE", speed: 2.8, amount: 0.08 },
+          flickerPhase: t * Math.PI,
+        });
+      }
+      lightsByHeight.set(beamZ, (lightsByHeight.get(beamZ) ?? 0) + sampleCount);
+    }
   }
 
   const activeHeightsRaw = Array.from(lightsByHeight.keys()).sort((a, b) => a - b);

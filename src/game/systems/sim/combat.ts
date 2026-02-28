@@ -2,7 +2,7 @@ import { World, emitEvent } from "../../../engine/world/world";
 import { findClosestTarget } from "../../util/targeting";
 import { PRJ_KIND, spawnProjectileGrid } from "../../factories/projectileFactory";
 import { getCardById } from "../../combat_mods/content/cards/cardPool";
-import { resolveWeaponStats } from "../../combat_mods/stats/combatStatsResolver";
+import { resolveDotStats, resolveWeaponStats } from "../../combat_mods/stats/combatStatsResolver";
 import { applySpreadToDirection, computeProjectileAngles } from "../../combat_mods/runtime/spread";
 import { getDevGrantedCardIds } from "../../combat_mods/debug/devCombatModsDebug";
 import { getUserSettings } from "../../../userSettings";
@@ -10,6 +10,9 @@ import { getRelicMods } from "../progression/relics";
 import { resolveCombatStarterWeaponId } from "../../combat_mods/content/weapons/characterStarterMap";
 import { resolveCombatStarterStatCards } from "../../combat_mods/content/weapons/characterStarterMods";
 import { getCombatStarterWeaponById } from "../../combat_mods/content/weapons/starterWeapons";
+import { resetPlayerBeamState, updatePlayerBeamCombat } from "./beamCombat";
+import { getPlayerWorld } from "../../coords/worldViews";
+import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 
 /** Handle weapon cooldowns, targeting, and firing events. */
 export function combatSystem(w: World, dt: number) {
@@ -42,6 +45,7 @@ export function combatSystem(w: World, dt: number) {
   const weaponId = resolveCombatStarterWeaponId((w as any).currentCharacterId);
   const selectedWeapon = getCombatStarterWeaponById(weaponId);
   const resolved = resolveWeaponStats(selectedWeapon, { cards: [...cards, ...starterCards] });
+  const dotStats = resolveDotStats({ cards });
   const debug = getUserSettings().debug;
   const relicMods = getRelicMods(w);
   const debugDamageMult = Math.max(0, debug.dmgMult || 1);
@@ -62,6 +66,7 @@ export function combatSystem(w: World, dt: number) {
   const totalDamage = dmgPhys + dmgFire + dmgChaos;
   const finalCritChance = Math.min(1, resolved.critChance * (isAtFullMomentum ? 2 : 1));
   const projectileKind = selectedWeapon.projectile.kind ?? PRJ_KIND.PISTOL;
+  const weaponFireMode = selectedWeapon.fireMode ?? "projectile";
   const runtime = w as any;
 
   if (!Number.isFinite(runtime.primaryBurstRemaining)) runtime.primaryBurstRemaining = 0;
@@ -113,6 +118,57 @@ export function combatSystem(w: World, dt: number) {
     w.lastAimX = defaultAimX;
     w.lastAimY = defaultAimY;
   }
+
+  const wasBeamActive = w.playerBeamActive;
+  if (weaponFireMode === "beam" && selectedWeapon.beam) {
+    if (!hasTargetInRange) {
+      resetPlayerBeamState(w);
+      return;
+    }
+
+    const beam = selectedWeapon.beam;
+    const baseWeaponDamageTotal = Math.max(
+      0.001,
+      selectedWeapon.baseDamage.physical + selectedWeapon.baseDamage.fire + selectedWeapon.baseDamage.chaos,
+    );
+    const beamAuthoringScale = beam.dps / baseWeaponDamageTotal;
+    const fireRateScale = shotsPerSecond / Math.max(0.001, selectedWeapon.shotsPerSecond);
+    const dpsScale = Math.max(0, beamAuthoringScale * fireRateScale);
+
+    const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
+    const aimWorldDx = target.x - pWorld.wx;
+    const aimWorldDy = target.y - pWorld.wy;
+    const aimWorldLen = Math.hypot(aimWorldDx, aimWorldDy);
+    const beamDirX = aimWorldLen > 0.0001 ? aimWorldDx / aimWorldLen : defaultAimX;
+    const beamDirY = aimWorldLen > 0.0001 ? aimWorldDy / aimWorldLen : defaultAimY;
+
+    updatePlayerBeamCombat(w, dt, {
+      dirX: beamDirX,
+      dirY: beamDirY,
+      maxRangePx: Math.max(0, beam.maxRangePx),
+      tickIntervalSec: Math.max(0.01, beam.tickIntervalSec),
+      widthPx: Math.max(1, beam.widthPx),
+      glowIntensity: Math.max(0, beam.glowIntensity),
+      dpsPhys: dmgPhys * dpsScale,
+      dpsFire: dmgFire * dpsScale,
+      dpsChaos: dmgChaos * dpsScale,
+      critChance: finalCritChance,
+      critMulti: resolved.critMulti,
+      chanceBleed: resolved.chanceToBleed,
+      chanceIgnite: resolved.chanceToIgnite,
+      chancePoison: resolved.chanceToPoison,
+      pierce: resolved.pierce,
+      projectileKind,
+      critRolls: relicMods.critRolls ?? 1,
+      dotScalars: dotStats,
+      allDamageContributesToPoison: w.relics.includes("PASS_DAMAGE_TO_POISON_ALL"),
+    });
+    w.playerBeamUvOffset += dt * Math.max(0, beam.uvScrollSpeed);
+    if (!wasBeamActive && w.playerBeamActive) emitFireSfx();
+    return;
+  }
+
+  resetPlayerBeamState(w);
 
   w.primaryWeaponCdLeft -= dt;
   if (runtime.primaryBurstRemaining <= 0 && !hasTargetInRange) {
