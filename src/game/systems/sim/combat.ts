@@ -146,6 +146,7 @@ export function combatSystem(w: World, dt: number) {
       dirX: beamDirX,
       dirY: beamDirY,
       maxRangePx: Math.max(0, beam.maxRangePx),
+      targetDistancePx: Math.max(0, target.distance || 0),
       tickIntervalSec: Math.max(0.01, beam.tickIntervalSec),
       widthPx: Math.max(1, beam.widthPx),
       glowIntensity: Math.max(0, beam.glowIntensity),

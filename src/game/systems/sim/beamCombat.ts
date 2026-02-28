@@ -14,6 +14,7 @@ export type BeamDamageConfig = {
   dirX: number;
   dirY: number;
   maxRangePx: number;
+  targetDistancePx?: number;
   tickIntervalSec: number;
   widthPx: number;
   glowIntensity: number;
@@ -97,9 +98,13 @@ export function updatePlayerBeamCombat(w: World, dt: number, cfg: BeamDamageConf
     0,
     cfg.maxRangePx,
   );
-  const endDistance = ray.hit && ray.hitType === "TILE"
-    ? Math.max(0, Math.min(cfg.maxRangePx, ray.hitDistance))
+  const targetDistance = Number.isFinite(cfg.targetDistancePx)
+    ? Math.max(0, cfg.targetDistancePx as number)
     : cfg.maxRangePx;
+  const rangeCap = Math.max(0, Math.min(cfg.maxRangePx, targetDistance));
+  const endDistance = ray.hit && ray.hitType === "TILE"
+    ? Math.max(0, Math.min(rangeCap, ray.hitDistance))
+    : rangeCap;
 
   w.playerBeamActive = true;
   w.playerBeamStartX = originX;
