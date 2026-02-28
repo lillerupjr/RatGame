@@ -703,7 +703,7 @@ export function mountPauseMenu(args: {
       ["Fire Rate Mult", safeNum(world.fireRateMult, 1).toFixed(2)],
       ["Crit Chance", `${(baseCritChance * 100).toFixed(1)}%`],
       ["Crit Chance (effective)", `${(effectiveCritChance * 100).toFixed(1)}%`],
-      ["Crit Multi", `${safeNum(world.critMultiplier, 1).toFixed(2)}x`],
+      ["Crit Multi", `${safeNum(snapshot.weaponStats.critMulti, 1).toFixed(2)}x`],
       ["Gold", `${safeNum(getGold(world)).toFixed(0)}`],
       ["Kills", `${safeNum(world.kills).toFixed(0)}`],
     ];
