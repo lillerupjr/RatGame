@@ -6,6 +6,7 @@ import { projectilesSystem } from "./projectiles";
 import { collisionsSystem } from "./collisions";
 import { anchorFromWorld } from "../../coords/anchor";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
+import { applyRelic } from "../progression/relics";
 
 function setPlayerWorld(w: World, wx: number, wy: number): void {
   const a = anchorFromWorld(wx, wy, KENNEY_TILE_WORLD);
@@ -112,5 +113,55 @@ describe("combatSystem pistol integration", () => {
 
     expect(w.pAlive.some(Boolean)).toBe(false);
     expect(w.events.some((ev) => ev.type === "SFX" && (ev as any).id === "FIRE_OTHER")).toBe(false);
+  });
+
+  test("SPEC_DOT_SPECIALIST applies 50% less hit damage", () => {
+    const w = createWorld({ seed: 9001, stage: stageDocks });
+    w.events.length = 0;
+    w.combatCardIds = [];
+    w.primaryWeaponCdLeft = 0;
+    setPlayerWorld(w, 0, 0);
+    applyRelic(w, "SPEC_DOT_SPECIALIST");
+
+    const enemyAnchor = anchorFromWorld(90, 0, KENNEY_TILE_WORLD);
+    w.eAlive.push(true);
+    w.eType.push(1);
+    w.egxi.push(enemyAnchor.gxi);
+    w.egyi.push(enemyAnchor.gyi);
+    w.egox.push(enemyAnchor.gox);
+    w.egoy.push(enemyAnchor.goy);
+    w.evx.push(0);
+    w.evy.push(0);
+    w.eFaceX.push(-1);
+    w.eFaceY.push(0);
+    w.eHp.push(100);
+    w.eHpMax.push(100);
+    w.eR.push(10);
+    w.eSpeed.push(0);
+    w.eDamage.push(0);
+    w.ezVisual.push(w.pzVisual);
+    w.ezLogical.push(w.pzLogical);
+    w.ePoisonT.push(0);
+    w.ePoisonDps.push(0);
+    w.ePoisonedOnDeath.push(false);
+    w.eSpawnTriggerId.push(undefined);
+
+    let damageDealt = 0;
+    for (let i = 0; i < 90; i++) {
+      combatSystem(w, 1 / 60);
+      projectilesSystem(w, 1 / 60);
+      for (let p = 0; p < w.pAlive.length; p++) {
+        if (!w.pAlive[p]) continue;
+        w.prCritChance[p] = 0;
+      }
+      const before = w.eHp[0];
+      collisionsSystem(w, 1 / 60);
+      if (w.eHp[0] < before) {
+        damageDealt = before - w.eHp[0];
+        break;
+      }
+    }
+
+    expect(damageDealt).toBeCloseTo(4);
   });
 });

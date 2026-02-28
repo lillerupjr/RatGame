@@ -17,8 +17,8 @@ function rebuildEnemyHash(world: ReturnType<typeof createWorld>): void {
   }
 }
 
-describe("zonesSystem damage-to-poison conversion", () => {
-  test("PASS_DAMAGE_TO_POISON_ALL converts zone damage into poison", () => {
+describe("zonesSystem damage-to-poison behavior", () => {
+  test("PASS_DAMAGE_TO_POISON_ALL does not auto-apply poison from zone damage", () => {
     const w = createWorld({ seed: 46, stage: stageDocks });
     w.relics = ["PASS_DAMAGE_TO_POISON_ALL"];
     const enemy = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 8, 8);
@@ -41,8 +41,7 @@ describe("zonesSystem damage-to-poison conversion", () => {
     zonesSystem(w, 0.11);
 
     expect(w.eHp[enemy]).toBeCloseTo(180, 6);
-    const poisonStacks = w.eAilments[enemy]?.poison ?? [];
-    expect(poisonStacks.length).toBe(1);
-    expect(poisonStacks[0].dps).toBeCloseTo(2, 6);
+    const poisonStacks = w.eAilments?.[enemy]?.poison ?? [];
+    expect(poisonStacks.length).toBe(0);
   });
 });

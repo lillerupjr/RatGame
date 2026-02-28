@@ -31,7 +31,7 @@ describe("delveMap", () => {
       expect(startNode.x).toBe(0);
       expect(startNode.y).toBe(0);
       expect(startNode.plan.depth).toBe(1);
-      expect(["docks", "avenue", "china_town"]).toContain(startNode.plan.mapId);
+      expect(["docks", "avenue", "china_town", "highway"]).toContain(startNode.plan.mapId);
       expect(startNode.plan.objectiveId).toBeTruthy();
       expect(startNode.plan.variantSeed).toBeGreaterThanOrEqual(0);
     });

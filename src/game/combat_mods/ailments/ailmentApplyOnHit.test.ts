@@ -26,6 +26,31 @@ describe("applyAilmentsFromHit", () => {
     expect(st.poison.length).toBe(0);
   });
 
+  test("PASS_DAMAGE_TO_POISON_ALL mode lets non-chaos hit damage feed poison", () => {
+    const st = createEnemyAilmentsState();
+    applyAilmentsFromHit(
+      st,
+      { physical: 10, fire: 10, chaos: 0 },
+      { bleed: 0, ignite: 0, poison: 1 },
+      { bleed: 0, ignite: 0, poison: 0 },
+      { allDamageContributesToPoison: true }
+    );
+    expect(st.poison.length).toBe(1);
+    expect(st.poison[0]?.dps ?? 0).toBeGreaterThan(0);
+  });
+
+  test("PASS_DAMAGE_TO_POISON_ALL still requires poison chance to apply poison", () => {
+    const st = createEnemyAilmentsState();
+    applyAilmentsFromHit(
+      st,
+      { physical: 10, fire: 10, chaos: 10 },
+      { bleed: 0, ignite: 0, poison: 0 },
+      { bleed: 0, ignite: 0, poison: 0 },
+      { allDamageContributesToPoison: true }
+    );
+    expect(st.poison.length).toBe(0);
+  });
+
   test("chance=1 applies and chance=0 does not apply", () => {
     const st = createEnemyAilmentsState();
 
@@ -107,5 +132,42 @@ describe("applyAilmentsFromHit", () => {
     );
     expect(st.poison.length).toBe(1);
     expect(st.poison[0]?.dps ?? 0).toBeGreaterThan(0);
+  });
+
+  test("dot specialist math: -50% hit base then 200% more dot => 150% final dot", () => {
+    const base = createEnemyAilmentsState();
+    applyAilmentsFromHit(
+      base,
+      { physical: 0, fire: 100, chaos: 0 },
+      { bleed: 0, ignite: 1, poison: 0 },
+      { bleed: 0, ignite: 0, poison: 0 },
+    );
+    const baseIgniteDps = base.ignite?.dps ?? 0;
+    expect(baseIgniteDps).toBeGreaterThan(0);
+
+    const specialist = createEnemyAilmentsState();
+    applyAilmentsFromHit(
+      specialist,
+      { physical: 0, fire: 50, chaos: 0 },
+      { bleed: 0, ignite: 1, poison: 0 },
+      { bleed: 0, ignite: 0, poison: 0 },
+      { igniteDamageMult: 3.0 },
+    );
+
+    const specialistIgniteDps = specialist.ignite?.dps ?? 0;
+    expect(specialistIgniteDps).toBeCloseTo(baseIgniteDps * 1.5, 6);
+  });
+
+  test("dot duration multiplier increases poison and ignite duration", () => {
+    const st = createEnemyAilmentsState();
+    applyAilmentsFromHit(
+      st,
+      { physical: 0, fire: 10, chaos: 10 },
+      { bleed: 0, ignite: 1, poison: 1 },
+      { bleed: 0, ignite: 0, poison: 0 },
+      { poisonDurationMult: 1.25, igniteDurationMult: 1.25 },
+    );
+    expect(st.poison[0]?.tLeft ?? 0).toBeCloseTo(2.5, 6);
+    expect(st.ignite?.tLeft ?? 0).toBeCloseTo(5, 6);
   });
 });

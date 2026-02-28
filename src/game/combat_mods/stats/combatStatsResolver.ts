@@ -36,6 +36,13 @@ export interface CombatModsLoadout {
   // later: relics, buffs, debuffs
 }
 
+export interface DotStatsScalars {
+  poisonDamageMult: number;
+  igniteDamageMult: number;
+  dotDurationMult: number;
+  tickRateMult: number;
+}
+
 /**
  * Collect mods from a loadout. (Phase A: cards only)
  */
@@ -164,5 +171,38 @@ export function resolveWeaponStats(weapon: WeaponDef, loadout: CombatModsLoadout
     chanceToIgnite,
     chanceToPoison,
     convert: conv,
+  };
+}
+
+export function resolveDotStats(loadout: CombatModsLoadout): DotStatsScalars {
+  const mods = collectStatMods(loadout);
+  const accByKey = new Map<StatKey, Acc>();
+  const getAcc = (k: StatKey): Acc => {
+    let a = accByKey.get(k);
+    if (!a) {
+      a = newAcc();
+      accByKey.set(k, a);
+    }
+    return a;
+  };
+  for (const m of mods) {
+    applyMod(getAcc(m.key), m);
+  }
+
+  const poisonAcc = getAcc(STAT_KEYS.DOT_POISON_DAMAGE_INCREASED);
+  const igniteAcc = getAcc(STAT_KEYS.DOT_IGNITE_DAMAGE_INCREASED);
+  const durationAcc = getAcc(STAT_KEYS.DOT_DURATION_INCREASED);
+  const tickRateAcc = getAcc(STAT_KEYS.DOT_TICK_RATE_MORE);
+
+  const poisonDamageMult = Math.max(0, (1 + poisonAcc.inc) * poisonAcc.more);
+  const igniteDamageMult = Math.max(0, (1 + igniteAcc.inc) * igniteAcc.more);
+  const dotDurationMult = Math.max(0, (1 + durationAcc.inc) * durationAcc.more);
+  const tickRateMult = Math.max(0.0001, (1 + tickRateAcc.inc) * tickRateAcc.more);
+
+  return {
+    poisonDamageMult,
+    igniteDamageMult,
+    dotDurationMult,
+    tickRateMult,
   };
 }

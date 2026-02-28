@@ -9,6 +9,8 @@ import { emitEvent } from "../../../engine/world/world";
 import { onEnemyKilledForChallenge } from "../../systems/progression/roomChallenge";
 import { getEnemyWorld } from "../../coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
+import { getCardById } from "../content/cards/cardPool";
+import { resolveDotStats } from "../stats/combatStatsResolver";
 
 const EPS = 1e-9;
 
@@ -43,6 +45,17 @@ export function ailmentTickSystem(w: any, dt: number): void {
   const n = w.eHp?.length ?? 0;
   if (!w.eAlive || !w.eHp) return;
   w.eDotTickAcc ??= [];
+  const cardIds = [...(w.cards ?? []), ...(w.combatCardIds ?? [])];
+  const cards = cardIds
+    .map((id: string) => getCardById(id))
+    .filter((card): card is NonNullable<typeof card> => Boolean(card));
+  const dotStats = resolveDotStats({ cards });
+  const relicIds: string[] = Array.isArray(w.relics) ? w.relics : [];
+  const relicDotMoreMult =
+    (relicIds.includes("PASS_DOT_MORE_50") ? 1.5 : 1) *
+    (relicIds.includes("SPEC_DOT_SPECIALIST") ? 3.0 : 1);
+  const tickRateMult = Math.max(0.0001, dotStats.tickRateMult);
+  const tickIntervalSec = AILMENT_TICK_INTERVAL_SEC / tickRateMult;
 
   for (let e = 0; e < n; e++) {
     if (!w.eAlive[e]) continue;
@@ -58,7 +71,7 @@ export function ailmentTickSystem(w: any, dt: number): void {
     let remaining = Math.max(0, dt);
     let acc = Math.max(0, w.eDotTickAcc[e] ?? 0);
     while (remaining > EPS) {
-      const stepToTick = AILMENT_TICK_INTERVAL_SEC - acc;
+      const stepToTick = tickIntervalSec - acc;
       const step = Math.min(remaining, Math.max(EPS, stepToTick));
 
       let poisonDps = 0;
@@ -73,8 +86,8 @@ export function ailmentTickSystem(w: any, dt: number): void {
       remaining -= step;
       acc += step;
 
-      // Apply DoT only at discrete 0.5s boundaries.
-      if (acc + EPS >= AILMENT_TICK_INTERVAL_SEC) {
+      // Tick-rate scaling: more frequency means more full-size tick payouts.
+      if (acc + EPS >= tickIntervalSec) {
         bleedRaw += bleedDps * AILMENT_TICK_INTERVAL_SEC;
         poisonRaw += poisonDps * AILMENT_TICK_INTERVAL_SEC;
         igniteRaw += igniteDps * AILMENT_TICK_INTERVAL_SEC;
@@ -91,9 +104,9 @@ export function ailmentTickSystem(w: any, dt: number): void {
 
     const damageReduction = w.eDamageReduction?.[e] ?? 0;
 
-    const poisonFinal = applyDotMitigation(poisonRaw, resistChaos, damageReduction);
-    const bleedFinal = applyDotMitigation(bleedRaw, resistPhysical, damageReduction);
-    const igniteFinal = applyDotMitigation(igniteRaw, resistFire, damageReduction);
+    const poisonFinal = applyDotMitigation(poisonRaw * relicDotMoreMult, resistChaos, damageReduction);
+    const bleedFinal = applyDotMitigation(bleedRaw * relicDotMoreMult, resistPhysical, damageReduction);
+    const igniteFinal = applyDotMitigation(igniteRaw * relicDotMoreMult, resistFire, damageReduction);
 
     const total = poisonFinal + bleedFinal + igniteFinal;
     if (total > 0) {

@@ -82,4 +82,40 @@ describe("ailmentTickSystem", () => {
     // one 0.5s tick: 2 * 0.5 = 1
     expect(w.eHp[0]).toBeCloseTo(99);
   });
+
+  test("CARD_DOT_TICK_RATE_MORE_20 causes faster tick cadence without changing duration", () => {
+    const st = createEnemyAilmentsState();
+    addPoison(st, 10); // dps 5 over 2s
+
+    const w: any = {
+      eAlive: [true],
+      eHp: [100],
+      eAilments: [st],
+      cards: ["CARD_DOT_TICK_RATE_MORE_20"],
+      events: [],
+    };
+
+    ailmentTickSystem(w, 0.25);
+    expect(w.eHp[0]).toBeCloseTo(100);
+
+    ailmentTickSystem(w, 0.20);
+    // Tick interval becomes ~0.4167s, so one full tick should have fired by now.
+    expect(w.eHp[0]).toBeCloseTo(97.5);
+  });
+
+  test("SPEC_DOT_SPECIALIST multiplies dot damage by 3x in tick pipeline", () => {
+    const st = createEnemyAilmentsState();
+    addPoison(st, 10); // dps 5 -> base first tick damage 2.5
+
+    const w: any = {
+      eAlive: [true],
+      eHp: [100],
+      eAilments: [st],
+      relics: ["SPEC_DOT_SPECIALIST"],
+      events: [],
+    };
+
+    ailmentTickSystem(w, 0.5);
+    expect(w.eHp[0]).toBeCloseTo(92.5);
+  });
 });

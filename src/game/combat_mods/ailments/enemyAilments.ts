@@ -11,6 +11,10 @@ export interface EnemyAilmentsState {
   ignite: AilmentInstance | null; // strongest only
 }
 
+export interface AilmentApplyOptions {
+  durationMult?: number;
+}
+
 export function createEnemyAilmentsState(): EnemyAilmentsState {
   return { poison: [], bleed: [], ignite: null };
 }
@@ -21,11 +25,12 @@ function dpsFromDamageBudget(totalDamage: number, durationSec: number): number {
   return totalDamage / appliedDuration;
 }
 
-export function addPoison(state: EnemyAilmentsState, totalDamage: number): void {
+export function addPoison(state: EnemyAilmentsState, totalDamage: number, options?: AilmentApplyOptions): void {
   if (totalDamage <= 0) return;
   if (state.poison.length >= AILMENT_STACK_CAP) return;
 
-  const dur = AILMENT_DURATIONS.poison;
+  const durationMult = Math.max(0, options?.durationMult ?? 1);
+  const dur = AILMENT_DURATIONS.poison * durationMult;
   state.poison.push({
     kind: "poison",
     dps: dpsFromDamageBudget(totalDamage, dur),
@@ -51,9 +56,10 @@ export function addBleed(state: EnemyAilmentsState, totalDamage: number): void {
  * - If new ignite DPS is greater => replace
  * - Else ignore
  */
-export function applyIgniteStrongestOnly(state: EnemyAilmentsState, totalDamage: number): void {
+export function applyIgniteStrongestOnly(state: EnemyAilmentsState, totalDamage: number, options?: AilmentApplyOptions): void {
   if (totalDamage <= 0) return;
-  const dur = AILMENT_DURATIONS.ignite;
+  const durationMult = Math.max(0, options?.durationMult ?? 1);
+  const dur = AILMENT_DURATIONS.ignite * durationMult;
   const dps = dpsFromDamageBudget(totalDamage, dur);
 
   if (!state.ignite || dps > state.ignite.dps) {

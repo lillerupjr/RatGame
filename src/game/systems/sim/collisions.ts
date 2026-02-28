@@ -12,12 +12,13 @@ import { enqueueDelayedExplosion } from "./delayedExplosions";
 import { resolveProjectileDamagePacket } from "../../combat_mods/runtime/critDamagePacket";
 import { assertValidCrit, assertValidDamageBundle } from "../../combat_mods/debug/combatRuntimeAssert";
 import { applyAilmentsFromHit, ensureEnemyAilmentsAt } from "../../combat_mods/ailments/applyAilmentsFromHit";
-import { getPoisonFromDamageConversion } from "../../combat_mods/ailments/damageToPoisonConversion";
 import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
 import { getUserSettings } from "../../../userSettings";
 import { resolveCritRoll01 } from "../../combat_mods/runtime/critDamagePacket";
 import { normalizeRelicIdList } from "../../content/relics";
 import { getRelicMods } from "../progression/relics";
+import { getCardById } from "../../combat_mods/content/cards/cardPool";
+import { resolveDotStats } from "../../combat_mods/stats/combatStatsResolver";
 import { applyPlayerIncomingDamage } from "./playerArmor";
 import {
   addMomentumOnKill,
@@ -32,6 +33,7 @@ import {
 const DMG_COLOR_PHYSICAL = "#ffffff";
 const DMG_COLOR_FIRE = "#ff9f3a";
 const DMG_COLOR_CHAOS = "#b57bff";
+const DMG_COLOR_POISON = "#6fe36f";
 const DMG_COLOR_PLAYER = "#ff4b4b";
 
 type EnemyHitEvent = Extract<import("../../events").GameEvent, { type: "ENEMY_HIT" }>;
@@ -63,9 +65,10 @@ function resolveDominantDamageColor(ev: EnemyHitEvent): string {
   const phys = Number.isFinite(ev.dmgPhys) ? Math.max(0, ev.dmgPhys as number) : 0;
   const fire = Number.isFinite(ev.dmgFire) ? Math.max(0, ev.dmgFire as number) : 0;
   const chaos = Number.isFinite(ev.dmgChaos) ? Math.max(0, ev.dmgChaos as number) : 0;
+  const isPoisonLike = ev.source === "OTHER";
   if (phys <= 0 && fire <= 0 && chaos <= 0) return DMG_COLOR_PHYSICAL;
   if (fire >= chaos && fire >= phys) return DMG_COLOR_FIRE;
-  if (chaos >= fire && chaos >= phys) return DMG_COLOR_CHAOS;
+  if (chaos >= fire && chaos >= phys) return isPoisonLike ? DMG_COLOR_POISON : DMG_COLOR_CHAOS;
   return DMG_COLOR_PHYSICAL;
 }
 
@@ -126,7 +129,18 @@ export function collisionsSystem(w: World, dt: number) {
   if (normalizedRelics.length !== w.relics.length || normalizedRelics.some((id, i) => id !== w.relics[i])) {
     w.relics = normalizedRelics;
   }
-  const critRolls = getRelicMods(w).critRolls ?? 1;
+  const relicMods = getRelicMods(w);
+  const critRolls = relicMods.critRolls ?? 1;
+  const allDamageContributesToPoison = w.relics.includes("PASS_DAMAGE_TO_POISON_ALL");
+  const cardIds = [...(w.cards ?? []), ...(w.combatCardIds ?? [])];
+  const cards = cardIds
+    .map((id: string) => getCardById(id))
+    .filter((card): card is NonNullable<typeof card> => Boolean(card));
+  const dotStats = resolveDotStats({ cards });
+  const poisonDamageMult = Math.max(0, dotStats.poisonDamageMult);
+  const igniteDamageMult = Math.max(0, dotStats.igniteDamageMult);
+  const poisonDurationMult = Math.max(0, dotStats.dotDurationMult);
+  const igniteDurationMult = Math.max(0, dotStats.dotDurationMult);
   const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
   let px = pWorld.wx;
   let py = pWorld.wy;
@@ -324,7 +338,6 @@ export function collisionsSystem(w: World, dt: number) {
 
       if (!w.eAilments) w.eAilments = [];
       const ailmentState = ensureEnemyAilmentsAt(w.eAilments, e);
-      const poisonFromDamage = getPoisonFromDamageConversion(w.relics, dmg);
       applyAilmentsFromHit(
         ailmentState,
         { physical: finalPhysDealt, fire: finalFireDealt, chaos: finalChaosDealt },
@@ -339,12 +352,13 @@ export function collisionsSystem(w: World, dt: number) {
           poison: w.rng.range(0, 1),
         },
         {
-          poisonFromDamage,
+          poisonDamageMult,
+          igniteDamageMult,
+          poisonDurationMult,
+          igniteDurationMult,
+          allDamageContributesToPoison,
         }
       );
-      if (poisonFromDamage > 0 && debugRelicLogs) {
-        console.debug("[Relic] Applied poison from damage conversion");
-      }
       
       w.eHp[e] -= dmg;
       if (!(w as any).metrics) (w as any).metrics = {};

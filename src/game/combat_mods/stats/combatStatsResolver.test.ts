@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { resolveWeaponStats } from "./combatStatsResolver";
+import { resolveDotStats, resolveWeaponStats } from "./combatStatsResolver";
 import { JACK_PISTOL_V1 } from "../content/weapons/jackPistol";
 import { STAT_KEYS } from "./statKeys";
 import type { CardDef, StatMod } from "./modifierTypes";
@@ -148,5 +148,29 @@ describe("resolveWeaponStats", () => {
 
     expect(out.critChance).toBeCloseTo(0.05 + 0.05);
     expect(out.spreadBaseDeg).toBeCloseTo(2.0);
+  });
+});
+
+describe("resolveDotStats", () => {
+  test("baseline DOT stats resolve to identity multipliers", () => {
+    const out = resolveDotStats({ cards: [] });
+    expect(out.poisonDamageMult).toBeCloseTo(1);
+    expect(out.igniteDamageMult).toBeCloseTo(1);
+    expect(out.dotDurationMult).toBeCloseTo(1);
+    expect(out.tickRateMult).toBeCloseTo(1);
+  });
+
+  test("DOT scaling cards resolve as expected", () => {
+    const cards: CardDef[] = [
+      mkCard("DOT_POISON", [{ key: STAT_KEYS.DOT_POISON_DAMAGE_INCREASED, op: "increased", value: 0.3 }]),
+      mkCard("DOT_IGNITE", [{ key: STAT_KEYS.DOT_IGNITE_DAMAGE_INCREASED, op: "increased", value: 0.3 }]),
+      mkCard("DOT_DUR", [{ key: STAT_KEYS.DOT_DURATION_INCREASED, op: "increased", value: 0.25 }]),
+      mkCard("DOT_TICK", [{ key: STAT_KEYS.DOT_TICK_RATE_MORE, op: "more", value: 0.2 }]),
+    ];
+    const out = resolveDotStats({ cards });
+    expect(out.poisonDamageMult).toBeCloseTo(1.3);
+    expect(out.igniteDamageMult).toBeCloseTo(1.3);
+    expect(out.dotDurationMult).toBeCloseTo(1.25);
+    expect(out.tickRateMult).toBeCloseTo(1.2);
   });
 });

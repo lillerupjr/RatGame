@@ -82,7 +82,7 @@ describe("relicExplodeOnKillSystem", () => {
     expect(w.eHp[b]).toBe(40);
   });
 
-  test("PASS_DAMAGE_TO_POISON_ALL converts ACT_EXPLODE_ON_KILL damage into poison", () => {
+  test("PASS_DAMAGE_TO_POISON_ALL does not auto-apply poison from ACT_EXPLODE_ON_KILL", () => {
     const w = createWorld({ seed: 44, stage: stageDocks });
     w.relics = ["ACT_EXPLODE_ON_KILL", "PASS_DAMAGE_TO_POISON_ALL"];
 
@@ -107,9 +107,8 @@ describe("relicExplodeOnKillSystem", () => {
     relicExplodeOnKillSystem(w, 1 / 60);
 
     expect(w.eHp[target]).toBeCloseTo(350, 6);
-    const poisonStacks = w.eAilments[target]?.poison ?? [];
-    expect(poisonStacks.length).toBe(1);
-    expect(poisonStacks[0].dps).toBeCloseTo(5, 6);
+    const poisonStacks = w.eAilments?.[target]?.poison ?? [];
+    expect(poisonStacks.length).toBe(0);
   });
 
   test("ACT_TRIGGERS_DOUBLE retriggers explosion after delay", () => {
@@ -146,7 +145,7 @@ describe("relicExplodeOnKillSystem", () => {
     expect(w.relicRetriggerQueue.length).toBe(0);
   });
 
-  test("PASS_DAMAGE_TO_POISON_ALL converts ACT_ALL_HITS_EXPLODE_20 damage into poison", () => {
+  test("PASS_DAMAGE_TO_POISON_ALL does not auto-apply poison from ACT_ALL_HITS_EXPLODE_20", () => {
     const w = createWorld({ seed: 45, stage: stageDocks });
     w.relics = ["ACT_ALL_HITS_EXPLODE_20", "PASS_DAMAGE_TO_POISON_ALL"];
 
@@ -173,9 +172,8 @@ describe("relicExplodeOnKillSystem", () => {
     relicTriggerSystem(w);
 
     expect(w.eHp[splashTarget]).toBeCloseTo(480, 6);
-    const poisonStacks = w.eAilments[splashTarget]?.poison ?? [];
-    expect(poisonStacks.length).toBe(1);
-    expect(poisonStacks[0].dps).toBeCloseTo(2, 6);
+    const poisonStacks = w.eAilments?.[splashTarget]?.poison ?? [];
+    expect(poisonStacks.length).toBe(0);
   });
 
   test("applyRelic dedupes ACT_EXPLODE_ON_KILL", () => {

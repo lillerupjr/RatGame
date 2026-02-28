@@ -29,6 +29,12 @@ export const STAT_KEYS = {
   CHANCE_TO_IGNITE_ADD: "chanceToIgnite.add",
   CHANCE_TO_POISON_ADD: "chanceToPoison.add",
 
+  // Damage over time (phase 1)
+  DOT_POISON_DAMAGE_INCREASED: "dot.poisonDamage.increased",
+  DOT_IGNITE_DAMAGE_INCREASED: "dot.igniteDamage.increased",
+  DOT_DURATION_INCREASED: "dot.duration.increased",
+  DOT_TICK_RATE_MORE: "dot.tickRate.more",
+
   // Conversion (priority-fill order is enforced elsewhere)
   CONVERT_PHYS_TO_FIRE: "convert.physicalToFire",
   CONVERT_PHYS_TO_CHAOS: "convert.physicalToChaos",

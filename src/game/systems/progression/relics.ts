@@ -27,6 +27,8 @@ export function applyRelic(world: World, relicId: string): void {
 export type RelicMods = {
   moveSpeedMult?: number;
   dmgMult?: number;
+  hitDamageMoreMult?: number;
+  dotDamageMoreMult?: number;
   critRolls?: 1 | 2;
   moreDamage?: number;
   lessDamage?: number;
@@ -45,9 +47,13 @@ export function getRelicMods(world: World): RelicMods {
   const hasSpecAttackMore50DamageLess30 = world.relics.includes("SPEC_ATTACK_SPEED_MORE_50_DAMAGE_LESS_30");
   const hasSpecDamageMore200LifeLess50 = world.relics.includes("SPEC_DAMAGE_MORE_200_MAX_LIFE_LESS_50");
   const hasSpecArmor100MoveLess20 = world.relics.includes("SPEC_FLAT_ARMOR_100_MOVE_SPEED_LESS_20");
+  const hasPassDotMore50 = world.relics.includes("PASS_DOT_MORE_50");
+  const hasSpecDotSpecialist = world.relics.includes("SPEC_DOT_SPECIALIST");
   return {
     moveSpeedMult: hasMoveRelic ? 1.2 : 1,
     dmgMult: 1,
+    hitDamageMoreMult: hasSpecDotSpecialist ? 0.5 : 1,
+    dotDamageMoreMult: (hasPassDotMore50 ? 1.5 : 1) * (hasSpecDotSpecialist ? 3.0 : 1),
     critRolls: hasLuckyCrit ? 2 : 1,
     moreDamage:
       (hasSpecDamageMore100AttackLess40 ? 1.0 : 0) +

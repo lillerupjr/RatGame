@@ -115,4 +115,13 @@ describe("relic scaffold phase 0", () => {
     expect(world.maxArmor).toBe(baseMaxArmor + 100);
     expect(world.pSpeed).toBeCloseTo(baseMoveSpeed * 0.8, 6);
   });
+
+  test("SPEC_DOT_SPECIALIST does not alter generic derived damage multiplier", () => {
+    const world = createWorld({ seed: 11, stage: stageDocks });
+    const baseDamageMult = world.dmgMult;
+
+    applyRelic(world, "SPEC_DOT_SPECIALIST");
+
+    expect(world.dmgMult).toBeCloseTo(baseDamageMult, 6);
+  });
 });

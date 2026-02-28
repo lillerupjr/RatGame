@@ -93,7 +93,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_BLEED_CHANCE_1",
-    isEnabled: true,
+    isEnabled: false,
     displayName: "+25% bleed chance",
     rarity: 2,
     powerTier: 1,

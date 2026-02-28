@@ -203,6 +203,20 @@ export const RELICS: RelicDef[] = [
     kind: "PASSIVE",
   },
   {
+    id: "PASS_DOT_MORE_50",
+    isEnabled: true,
+    displayName: "Damage over time deals 50% more damage",
+    kind: "PASSIVE",
+    desc: ["Damage over time deals 50% more damage"],
+  },
+  {
+    id: "SPEC_DOT_SPECIALIST",
+    isEnabled: true,
+    displayName: "-50% hit damage\nDamage over time deals 200% more damage",
+    kind: "PASSIVE",
+    desc: ["-50% hit damage", "Damage over time deals 200% more damage"],
+  },
+  {
     id: "ARMOR_MAX_50",
     isEnabled: true,
     displayName: "+50 Maximum Armor",
@@ -308,6 +322,10 @@ function mapLegacyRelicSuffixToCanonical(suffix: string): string {
     case "PASS_LIFE_ON_HIT":
     case "PASS_LIFE_ON_HIT_2":
       return "PASS_LIFE_ON_HIT_2";
+    case "PASS_DOT_MORE_50":
+      return "PASS_DOT_MORE_50";
+    case "SPEC_DOT_SPECIALIST":
+      return "SPEC_DOT_SPECIALIST";
     case "V3_ARMOR_MAX":
     case "PASS_ARMOR_MAX_50":
       return "ARMOR_MAX_50";
