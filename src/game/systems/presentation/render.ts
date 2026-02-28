@@ -2956,7 +2956,8 @@ export async function renderSystem(
   // ----------------------------
   if (w.playerBeamActive) {
     const zBase = w.pzVisual ?? w.pz ?? tileHAtWorld(w.playerBeamStartX, w.playerBeamStartY);
-    const start = toScreenAtZ(w.playerBeamStartX, w.playerBeamStartY, zBase);
+    const BEAM_HEAD_LIFT_Z = 0.9;
+    const start = toScreenAtZ(w.playerBeamStartX, w.playerBeamStartY, zBase + BEAM_HEAD_LIFT_Z);
     const end = toScreenAtZ(w.playerBeamEndX, w.playerBeamEndY, zBase);
     const midX = (w.playerBeamStartX + w.playerBeamEndX) * 0.5;
     const midY = (w.playerBeamStartY + w.playerBeamEndY) * 0.5;
