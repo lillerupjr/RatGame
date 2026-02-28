@@ -10,6 +10,8 @@ import {
 } from "../../game/audio/audioSettings";
 import { getUserSettings, isPauseDebugCardsEnabled, updateUserSettings } from "../../userSettings";
 import { getAllCardIds } from "../../game/combat_mods/content/cards/cardPool";
+import { resolveCombatStarterWeaponId } from "../../game/combat_mods/content/weapons/characterStarterMap";
+import { getCombatStarterWeaponById } from "../../game/combat_mods/content/weapons/starterWeapons";
 import { getGold } from "../../game/economy/gold";
 import { getAllRelicIds, getRelicById, normalizeRelicIdList } from "../../game/content/relics";
 import { recomputeDerivedStats } from "../../game/stats/derivedStats";
@@ -827,8 +829,10 @@ export function mountPauseMenu(args: {
     }
 
     const resolved = snapshot.weaponStats;
+    const starterWeaponId = resolveCombatStarterWeaponId((world as any)?.currentCharacterId);
+    const starterWeaponName = getCombatStarterWeaponById(starterWeaponId).displayName;
     weaponSummaryLine.textContent =
-      `Weapon: Pistol | SPS ${num(resolved.shotsPerSecond)} | ` +
+      `Weapon: ${starterWeaponName} | SPS ${num(resolved.shotsPerSecond)} | ` +
       `Damage ${(
         resolved.baseDamage.physical + resolved.baseDamage.fire + resolved.baseDamage.chaos
       ).toFixed(1)}`;

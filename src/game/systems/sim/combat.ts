@@ -1,13 +1,14 @@
 import { World, emitEvent } from "../../../engine/world/world";
 import { findClosestTarget } from "../../util/targeting";
 import { PRJ_KIND, spawnProjectileGrid } from "../../factories/projectileFactory";
-import { JACK_PISTOL_V1 } from "../../combat_mods/content/weapons/jackPistol";
 import { getCardById } from "../../combat_mods/content/cards/cardPool";
 import { resolveWeaponStats } from "../../combat_mods/stats/combatStatsResolver";
 import { applySpreadToDirection, computeProjectileAngles } from "../../combat_mods/runtime/spread";
 import { getDevGrantedCardIds } from "../../combat_mods/debug/devCombatModsDebug";
 import { getUserSettings } from "../../../userSettings";
 import { getRelicMods } from "../progression/relics";
+import { resolveCombatStarterWeaponId } from "../../combat_mods/content/weapons/characterStarterMap";
+import { getCombatStarterWeaponById } from "../../combat_mods/content/weapons/starterWeapons";
 
 /** Handle weapon cooldowns, targeting, and firing events. */
 export function combatSystem(w: World, dt: number) {
@@ -36,7 +37,9 @@ export function combatSystem(w: World, dt: number) {
     .map((id) => getCardById(id))
     .filter((card): card is NonNullable<typeof card> => Boolean(card));
 
-  const resolved = resolveWeaponStats(JACK_PISTOL_V1, { cards });
+  const weaponId = resolveCombatStarterWeaponId((w as any).currentCharacterId);
+  const selectedWeapon = getCombatStarterWeaponById(weaponId);
+  const resolved = resolveWeaponStats(selectedWeapon, { cards });
   const debug = getUserSettings().debug;
   const relicMods = getRelicMods(w);
   const debugDamageMult = Math.max(0, debug.dmgMult || 1);
@@ -101,7 +104,7 @@ export function combatSystem(w: World, dt: number) {
       });
     } else {
       const aimAngle = Math.atan2(defaultAimY, defaultAimX);
-      const offsets = computeProjectileAngles(resolved.spreadBaseDeg, projectileCount);
+      const offsets = computeProjectileAngles(resolved.multiProjectileSpreadDeg, projectileCount);
       for (let i = 0; i < offsets.length; i++) {
         const angle = aimAngle + offsets[i];
         spawnProjectileGrid(w, {
@@ -131,7 +134,7 @@ export function combatSystem(w: World, dt: number) {
     emitEvent(w, {
       type: "SFX",
       id: "FIRE_OTHER",
-      weaponId: "PISTOL",
+      weaponId: selectedWeapon.displayName.toUpperCase(),
       vol: 0.55,
       rate: 0.95 + w.rng.range(0, 0.1),
     });

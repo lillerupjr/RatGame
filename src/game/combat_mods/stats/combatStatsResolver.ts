@@ -11,6 +11,7 @@ export interface ResolvedWeaponStats {
   critMulti: number; // e.g. 1.5
 
   spreadBaseDeg: number;
+  multiProjectileSpreadDeg: number;
 
   projectileSpeedPxPerSec: number;
   rangePx: number;
@@ -119,13 +120,18 @@ export function resolveWeaponStats(weapon: WeaponDef, loadout: CombatModsLoadout
   const critMulti = Math.max(1, weapon.baseCritMulti + getAcc(STAT_KEYS.CRIT_MULTI_ADD).add);
 
   const spreadBaseDeg = Math.max(0, weapon.projectile.spreadBaseDeg + getAcc(STAT_KEYS.SPREAD_BASE_DEG_ADD).add);
+  const multiProjectileSpreadDeg = Math.max(
+    0,
+    weapon.projectile.multiProjectileSpreadDeg ?? weapon.projectile.spreadBaseDeg,
+  );
 
   const projectileSpeedPxPerSec = resolveScalar(
     weapon.projectile.speedPxPerSec,
     getAcc(STAT_KEYS.PROJECTILE_SPEED_INCREASED)
   );
 
-  const projectiles = Math.max(1, Math.floor(1 + getAcc(STAT_KEYS.PROJECTILES_ADD).add));
+  const baseProjectiles = Math.max(1, Math.floor(weapon.projectile.baseProjectiles ?? 1));
+  const projectiles = Math.max(1, Math.floor(baseProjectiles + getAcc(STAT_KEYS.PROJECTILES_ADD).add));
   const pierce = Math.max(0, Math.floor(weapon.projectile.pierce + getAcc(STAT_KEYS.PIERCE_ADD).add));
 
   const conv = {
@@ -162,6 +168,7 @@ export function resolveWeaponStats(weapon: WeaponDef, loadout: CombatModsLoadout
     critChance,
     critMulti,
     spreadBaseDeg,
+    multiProjectileSpreadDeg,
     projectileSpeedPxPerSec,
     rangePx: weapon.projectile.rangePx,
     radiusPx: weapon.projectile.radiusPx,

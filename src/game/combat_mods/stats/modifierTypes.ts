@@ -51,7 +51,12 @@ export interface WeaponDef {
     rangePx: number;
     radiusPx: number;
     spreadBaseDeg: number;
+    // Fan width for additional projectiles when count > 1.
+    // Weapon-authored only in milestone 1.
+    multiProjectileSpreadDeg?: number;
     pierce: number;
+    // Base projectile count before additive card modifiers.
+    baseProjectiles?: number;
   };
 
   autoAim: {

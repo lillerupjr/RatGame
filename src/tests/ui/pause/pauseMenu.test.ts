@@ -353,8 +353,30 @@ describe("pauseMenu", () => {
 
     expect(root.textContent).toContain("+3 physical damage");
     expect(root.textContent).toContain("x2");
-    expect(root.textContent).toContain("+20% movement speed");
+    expect(root.textContent).toContain("20% more movement speed");
     expect(root.querySelector(".pauseCardTile")).toBeTruthy();
+  });
+
+  test("build panel shows rifle weapon summary for JOEY", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+    menu.setVisible(true);
+    menu.render(makeWorld({ currentCharacterId: "JOEY" }));
+
+    expect(root.textContent).toContain("Weapon: Rifle");
+  });
+
+  test("build panel shows shotgun weapon summary for TOMMY", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+    menu.setVisible(true);
+    menu.render(makeWorld({ currentCharacterId: "TOMMY" }));
+
+    expect(root.textContent).toContain("Weapon: Shotgun");
   });
 
   test("render does not throw when world is null", () => {

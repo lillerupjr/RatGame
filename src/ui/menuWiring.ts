@@ -1,9 +1,10 @@
-import { WEAPONS } from "../game/content/weapons";
 import type { TableMapDef } from "../game/map/formats/table/tableMapTypes";
 import { AUTHORED_MAP_DEFS } from "../game/map/authored/authoredMapRegistry";
 import type { DomRefs } from "./domRefs";
 import { PLAYABLE_CHARACTERS, type PlayableCharacterId } from "../game/content/playableCharacters";
 import { getPlayerIdleSpriteUrl } from "../engine/render/sprites/playerSprites";
+import { resolveCombatStarterWeaponId } from "../game/combat_mods/content/weapons/characterStarterMap";
+import { getCombatStarterWeaponById } from "../game/combat_mods/content/weapons/starterWeapons";
 
 type GameApi = {
     previewMap: (mapId?: string) => void;
@@ -96,7 +97,8 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         refs.characterChoicesEl.innerHTML = "";
 
         for (const character of PLAYABLE_CHARACTERS) {
-            const weaponTitle = WEAPONS[character.startingWeaponId]?.title ?? character.startingWeaponId;
+            const starterWeaponId = resolveCombatStarterWeaponId(character.id);
+            const weaponTitle = getCombatStarterWeaponById(starterWeaponId).displayName;
             const btn = document.createElement("button");
             btn.className = "characterCard";
             btn.type = "button";

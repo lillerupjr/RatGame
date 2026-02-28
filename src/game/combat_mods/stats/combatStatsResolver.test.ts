@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 import { resolveDotStats, resolveWeaponStats } from "./combatStatsResolver";
 import { JACK_PISTOL_V1 } from "../content/weapons/jackPistol";
+import { JOEY_RIFLE_V1 } from "../content/weapons/joeyRifle";
+import { TOMMY_SHOTGUN_V1 } from "../content/weapons/tommyShotgun";
 import { STAT_KEYS } from "./statKeys";
 import type { CardDef, StatMod } from "./modifierTypes";
 
@@ -21,6 +23,7 @@ describe("resolveWeaponStats", () => {
     expect(out.critMulti).toBeCloseTo(1.5);
 
     expect(out.spreadBaseDeg).toBeCloseTo(3.0);
+    expect(out.multiProjectileSpreadDeg).toBeCloseTo(3.0);
     expect(out.projectiles).toBe(1);
     expect(out.pierce).toBe(0);
 
@@ -31,6 +34,27 @@ describe("resolveWeaponStats", () => {
     expect(out.convert.physToFire).toBeCloseTo(0);
     expect(out.convert.physToChaos).toBeCloseTo(0);
     expect(out.convert.fireToChaos).toBeCloseTo(0);
+  });
+
+  test("baseline rifle resolves 1x24 dps profile and longer-range projectile", () => {
+    const out = resolveWeaponStats(JOEY_RIFLE_V1, { cards: [] });
+
+    expect(out.shotsPerSecond).toBeCloseTo(1.0);
+    expect(out.baseDamage.physical).toBeCloseTo(24);
+    expect(out.baseDamage.fire).toBeCloseTo(0);
+    expect(out.baseDamage.chaos).toBeCloseTo(0);
+    expect(out.projectileSpeedPxPerSec).toBeGreaterThan(520);
+    expect(out.rangePx).toBeGreaterThan(420);
+    expect(out.projectiles).toBe(1);
+  });
+
+  test("baseline shotgun resolves 0.5x16x3 profile and uses authored multi spread", () => {
+    const out = resolveWeaponStats(TOMMY_SHOTGUN_V1, { cards: [] });
+    expect(out.shotsPerSecond).toBeCloseTo(0.5);
+    expect(out.baseDamage.physical).toBeCloseTo(16);
+    expect(out.projectiles).toBe(3);
+    expect(out.rangePx).toBeLessThan(420);
+    expect(out.multiProjectileSpreadDeg).toBeCloseTo(24);
   });
 
   test("increased shotsPerSecond stacks additively", () => {

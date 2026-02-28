@@ -164,4 +164,93 @@ describe("combatSystem pistol integration", () => {
 
     expect(damageDealt).toBeCloseTo(4);
   });
+
+  test("JOEY uses rifle starter profile in combat-mods primary fire", () => {
+    const w = createWorld({ seed: 1234, stage: stageDocks });
+    w.events.length = 0;
+    w.combatCardIds = [];
+    w.primaryWeaponCdLeft = 0;
+    (w as any).currentCharacterId = "JOEY";
+
+    setPlayerWorld(w, 0, 0);
+
+    const enemyAnchor = anchorFromWorld(90, 0, KENNEY_TILE_WORLD);
+    w.eAlive.push(true);
+    w.eType.push(1);
+    w.egxi.push(enemyAnchor.gxi);
+    w.egyi.push(enemyAnchor.gyi);
+    w.egox.push(enemyAnchor.gox);
+    w.egoy.push(enemyAnchor.goy);
+    w.evx.push(0);
+    w.evy.push(0);
+    w.eFaceX.push(-1);
+    w.eFaceY.push(0);
+    w.eHp.push(200);
+    w.eHpMax.push(200);
+    w.eR.push(10);
+    w.eSpeed.push(0);
+    w.eDamage.push(0);
+    w.ezVisual.push(w.pzVisual);
+    w.ezLogical.push(w.pzLogical);
+    w.ePoisonT.push(0);
+    w.ePoisonDps.push(0);
+    w.ePoisonedOnDeath.push(false);
+    w.eSpawnTriggerId.push(undefined);
+
+    let damageDealt = 0;
+    for (let i = 0; i < 120; i++) {
+      combatSystem(w, 1 / 60);
+      projectilesSystem(w, 1 / 60);
+      for (let p = 0; p < w.pAlive.length; p++) {
+        if (!w.pAlive[p]) continue;
+        w.prCritChance[p] = 0;
+      }
+      const before = w.eHp[0];
+      collisionsSystem(w, 1 / 60);
+      if (w.eHp[0] < before) {
+        damageDealt = before - w.eHp[0];
+        break;
+      }
+    }
+
+    expect(damageDealt).toBeCloseTo(24);
+  });
+
+  test("TOMMY uses shotgun profile with 3 projectiles per shot", () => {
+    const w = createWorld({ seed: 2222, stage: stageDocks });
+    w.events.length = 0;
+    w.combatCardIds = [];
+    w.primaryWeaponCdLeft = 0;
+    (w as any).currentCharacterId = "TOMMY";
+    setPlayerWorld(w, 0, 0);
+
+    const enemyAnchor = anchorFromWorld(0, 0, KENNEY_TILE_WORLD);
+    w.eAlive.push(true);
+    w.eType.push(1);
+    w.egxi.push(enemyAnchor.gxi);
+    w.egyi.push(enemyAnchor.gyi);
+    w.egox.push(enemyAnchor.gox);
+    w.egoy.push(enemyAnchor.goy);
+    w.evx.push(0);
+    w.evy.push(0);
+    w.eFaceX.push(-1);
+    w.eFaceY.push(0);
+    w.eHp.push(300);
+    w.eHpMax.push(300);
+    w.eR.push(10);
+    w.eSpeed.push(0);
+    w.eDamage.push(0);
+    w.ezVisual.push(w.pzVisual);
+    w.ezLogical.push(w.pzLogical);
+    w.ePoisonT.push(0);
+    w.ePoisonDps.push(0);
+    w.ePoisonedOnDeath.push(false);
+    w.eSpawnTriggerId.push(undefined);
+
+    // Prime enemy spatial hash so combat target acquisition can find the enemy.
+    collisionsSystem(w, 1 / 60);
+    combatSystem(w, 1 / 60);
+    const aliveProjectileCount = w.pAlive.filter(Boolean).length;
+    expect(aliveProjectileCount).toBe(3);
+  });
 });

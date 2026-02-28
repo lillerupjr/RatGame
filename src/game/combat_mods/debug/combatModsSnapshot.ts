@@ -1,7 +1,8 @@
-import { JACK_PISTOL_V1 } from "../content/weapons/jackPistol";
 import { getCardById } from "../content/cards/cardPool";
 import { resolveWeaponStats, type ResolvedWeaponStats } from "../stats/combatStatsResolver";
 import type { CardDef } from "../stats/modifierTypes";
+import { resolveCombatStarterWeaponId } from "../content/weapons/characterStarterMap";
+import { getCombatStarterWeaponById } from "../content/weapons/starterWeapons";
 
 export interface CardCountEntry {
   id: string;
@@ -68,8 +69,10 @@ export function getCombatModsSnapshot(world: any): CombatModsSnapshot {
   const cardIds = readCardIdsFromWorld(world);
   const cards = aggregateCardCounts(cardIds);
   const defs = cardDefsFromIds(cardIds);
+  const starterWeaponId = resolveCombatStarterWeaponId(world?.currentCharacterId);
+  const starterWeapon = getCombatStarterWeaponById(starterWeaponId);
 
-  const weaponStats = resolveWeaponStats(JACK_PISTOL_V1, { cards: defs });
+  const weaponStats = resolveWeaponStats(starterWeapon, { cards: defs });
 
   return { cards, weaponStats };
 }

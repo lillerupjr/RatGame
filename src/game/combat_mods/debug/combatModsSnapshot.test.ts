@@ -25,4 +25,19 @@ describe("combatModsSnapshot", () => {
     // Base pistol phys 8 + 3 = 11 (no other scaling)
     expect(snap.weaponStats.baseDamage.physical).toBeCloseTo(11);
   });
+
+  test("getCombatModsSnapshot resolves JOEY starter rifle profile", () => {
+    const snap = getCombatModsSnapshot({ currentCharacterId: "JOEY", cards: [] });
+    expect(snap.weaponStats.shotsPerSecond).toBeCloseTo(1.0);
+    expect(snap.weaponStats.baseDamage.physical).toBeCloseTo(24);
+    expect(snap.weaponStats.rangePx).toBeGreaterThan(420);
+  });
+
+  test("getCombatModsSnapshot resolves TOMMY starter shotgun profile", () => {
+    const snap = getCombatModsSnapshot({ currentCharacterId: "TOMMY", cards: [] });
+    expect(snap.weaponStats.shotsPerSecond).toBeCloseTo(0.5);
+    expect(snap.weaponStats.baseDamage.physical).toBeCloseTo(16);
+    expect(snap.weaponStats.projectiles).toBe(3);
+    expect(snap.weaponStats.rangePx).toBeLessThan(420);
+  });
 });

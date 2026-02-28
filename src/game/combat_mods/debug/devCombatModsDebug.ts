@@ -1,5 +1,5 @@
 import { CARD_POOL_V1, getCardById } from "../content/cards/cardPool";
-import { JACK_PISTOL_V1 } from "../content/weapons/jackPistol";
+import { getCombatStarterWeaponById } from "../content/weapons/starterWeapons";
 import { resolveWeaponStats } from "../stats/combatStatsResolver";
 
 const devGrantedCardIds: string[] = [];
@@ -14,8 +14,9 @@ function printResolvedStats(): void {
   const cards = devGrantedCardIds
     .map((id) => getCardById(id))
     .filter((c): c is NonNullable<typeof c> => Boolean(c));
-  const resolved = resolveWeaponStats(JACK_PISTOL_V1, { cards });
-  console.info("[combat_mods][dev] pistol stats", {
+  const weapon = getCombatStarterWeaponById("JACK_PISTOL_V1");
+  const resolved = resolveWeaponStats(weapon, { cards });
+  console.info("[combat_mods][dev] starter weapon stats", {
     grantedCardIds: [...devGrantedCardIds],
     grantedCards: cards.map((c) => c.id),
     availableCardCount: CARD_POOL_V1.length,
