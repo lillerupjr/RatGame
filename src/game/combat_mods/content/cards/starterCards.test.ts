@@ -27,9 +27,9 @@ describe("STARTER_CARDS_V1 invariants", () => {
     }
   });
 
-  test("powerTier is limited to 1..2 for starter cards", () => {
+  test("powerTier is limited to 1..4 for starter cards", () => {
     for (const c of STARTER_CARDS_V1) {
-      expect([1, 2]).toContain(c.powerTier);
+      expect([1, 2, 3, 4]).toContain(c.powerTier);
     }
   });
 

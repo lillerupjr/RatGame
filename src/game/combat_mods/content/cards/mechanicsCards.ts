@@ -11,12 +11,28 @@ export const MECHANICS_CARDS_V1: CardDef[] = [
     mods: [{ key: STAT_KEYS.PIERCE_ADD, op: "add", value: 1 }],
   },
   {
+    id: "CARD_PIERCE_2",
+    isEnabled: true,
+    displayName: "+2 pierce",
+    rarity: 4,
+    powerTier: 4,
+    mods: [{ key: STAT_KEYS.PIERCE_ADD, op: "add", value: 2 }],
+  },
+  {
     id: "CARD_PROJECTILE_1",
     isEnabled: true,
     displayName: "+1 projectile",
     rarity: 4,
     powerTier: 3,
     mods: [{ key: STAT_KEYS.PROJECTILES_ADD, op: "add", value: 1 }],
+  },
+  {
+    id: "CARD_PROJECTILE_2",
+    isEnabled: true,
+    displayName: "+2 projectile",
+    rarity: 4,
+    powerTier: 4,
+    mods: [{ key: STAT_KEYS.PROJECTILES_ADD, op: "add", value: 2 }],
   },
   {
     id: "CARD_POISON_INCREASED_30",
