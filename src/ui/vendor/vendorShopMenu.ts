@@ -28,6 +28,7 @@ export function mountVendorShopMenu(args: {
   const root = args.root;
   let currentState: VendorShopState | null = null;
   let selectedIndex = 0;
+  let activeTab: "cards" | "relics" = "cards";
 
   const ensureStructure = () => {
     root.className = "deckOverlay vendorOverlay";
@@ -59,6 +60,13 @@ export function mountVendorShopMenu(args: {
       panel.appendChild(sub);
     }
 
+    let tabs = panel.querySelector(".vendorTabs") as HTMLElement | null;
+    if (!tabs) {
+      tabs = document.createElement("div");
+      tabs.className = "vendorTabs";
+      panel.appendChild(tabs);
+    }
+
     let cards = panel.querySelector(".deckCardGrid") as HTMLElement | null;
     if (!cards) {
       cards = document.createElement("div");
@@ -87,26 +95,67 @@ export function mountVendorShopMenu(args: {
       panel.appendChild(actions);
     }
 
-    return { top, title, sub, cards, relicTitle, relics, actions };
+    return { top, title, sub, tabs, cards, relicTitle, relics, actions };
   };
 
   const renderCards = (): void => {
     if (!currentState || !currentState.active) return;
-    const { top, title, sub, cards, relicTitle, relics, actions } = ensureStructure();
-    top.textContent = `Gold: ${currentState.gold}`;
+    const state = currentState;
+    const { top, title, sub, tabs, cards, relicTitle, relics, actions } = ensureStructure();
+    top.textContent = `Gold: ${state.gold}`;
     title.textContent = "Vendor";
     sub.textContent = "Choose cards and relics to buy";
+    tabs.innerHTML = "";
     cards.innerHTML = "";
     relics.innerHTML = "";
     actions.innerHTML = "";
     relicTitle.textContent = "Relics";
-    const totalSlots = currentState.cards.length + currentState.relicOffers.length + 1; // + Leave button
-    if (selectedIndex >= totalSlots) selectedIndex = 0;
+    const hasCards = state.cards.length > 0;
+    const hasRelics = state.relicOffers.length > 0;
+    if (!hasCards && hasRelics) activeTab = "relics";
+    if (!hasRelics && hasCards) activeTab = "cards";
+    if (!hasCards && !hasRelics) activeTab = "cards";
 
-    for (let i = 0; i < currentState.cards.length; i++) {
-      const item = currentState.cards[i];
+    const cardsTab = document.createElement("button");
+    cardsTab.type = "button";
+    cardsTab.className = `vendorTabBtn${activeTab === "cards" ? " active" : ""}`;
+    cardsTab.textContent = `Cards (${state.cards.length})`;
+    cardsTab.disabled = !hasCards;
+    cardsTab.addEventListener("click", () => {
+      if (activeTab === "cards" || !hasCards) return;
+      activeTab = "cards";
+      selectedIndex = 0;
+      renderCards();
+    });
+    tabs.appendChild(cardsTab);
+
+    const relicsTab = document.createElement("button");
+    relicsTab.type = "button";
+    relicsTab.className = `vendorTabBtn${activeTab === "relics" ? " active" : ""}`;
+    relicsTab.textContent = `Relics (${state.relicOffers.length})`;
+    relicsTab.disabled = !hasRelics;
+    relicsTab.addEventListener("click", () => {
+      if (activeTab === "relics" || !hasRelics) return;
+      activeTab = "relics";
+      selectedIndex = state.cards.length;
+      renderCards();
+    });
+    tabs.appendChild(relicsTab);
+
+    const totalSlots = state.cards.length + state.relicOffers.length + 1; // + Leave button
+    if (selectedIndex >= totalSlots) selectedIndex = 0;
+    if (activeTab === "cards" && !hasCards && hasRelics) selectedIndex = state.cards.length;
+    if (activeTab === "relics" && !hasRelics && hasCards) selectedIndex = 0;
+
+    cards.hidden = activeTab !== "cards";
+    relicTitle.hidden = activeTab !== "relics";
+    relics.hidden = activeTab !== "relics";
+
+    if (activeTab === "cards") {
+      for (let i = 0; i < state.cards.length; i++) {
+      const item = state.cards[i];
       const vm = cardViewModel(item.cardId);
-      const canAfford = currentState.gold >= item.priceG;
+      const canAfford = state.gold >= item.priceG;
       const disabled = item.purchased || !canAfford;
       const stateClass = item.purchased ? "sold" : !canAfford ? "locked" : "available";
 
@@ -153,14 +202,16 @@ export function mountVendorShopMenu(args: {
       btn.addEventListener("click", () => args.onBuy(i));
       cards.appendChild(btn);
     }
+    }
 
-    for (let i = 0; i < currentState.relicOffers.length; i++) {
-      const offer = currentState.relicOffers[i];
+    if (activeTab === "relics") {
+      for (let i = 0; i < state.relicOffers.length; i++) {
+      const offer = state.relicOffers[i];
       const relic = getRelicById(offer.relicId);
-      const canAfford = currentState.gold >= offer.priceG;
+      const canAfford = state.gold >= offer.priceG;
       const disabled = offer.isSold || !canAfford;
       const stateClass = offer.isSold ? "sold" : !canAfford ? "locked" : "available";
-      const idx = currentState.cards.length + i;
+      const idx = state.cards.length + i;
 
       const btn = document.createElement("button");
       btn.type = "button";
@@ -203,10 +254,11 @@ export function mountVendorShopMenu(args: {
       btn.addEventListener("click", () => args.onBuyRelic(i));
       relics.appendChild(btn);
     }
+    }
 
     const leaveBtn = document.createElement("button");
     leaveBtn.type = "button";
-    leaveBtn.className = `vendorLeaveButton${selectedIndex === currentState.cards.length + currentState.relicOffers.length ? " selected" : ""}`;
+    leaveBtn.className = `vendorLeaveButton${selectedIndex === state.cards.length + state.relicOffers.length ? " selected" : ""}`;
     leaveBtn.textContent = "Leave";
     leaveBtn.addEventListener("click", args.onLeave);
     actions.appendChild(leaveBtn);

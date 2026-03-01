@@ -58,6 +58,12 @@ class FakeElement {
     this.listeners.set(type, arr);
   }
 
+  dispatchEvent(ev: FakeEvent): boolean {
+    const arr = this.listeners.get(ev.type) ?? [];
+    for (const fn of arr) fn(ev);
+    return true;
+  }
+
   querySelector(selector: string): FakeElement | null {
     if (selector.startsWith(".")) {
       const cls = selector.slice(1);
@@ -135,9 +141,46 @@ describe("vendorShopMenu", () => {
     });
 
     const buttons = (root as any).querySelectorAll("button") as any[];
-    expect(buttons[0].className).toContain("tier-1");
-    expect(buttons[1].className).toContain("tier-2");
-    expect(buttons[2].className).toContain("tier-3");
-    expect(buttons[3].className).toContain("tier-4");
+    const cardButtons = buttons.filter((b) => b.className.includes("vendorCard"));
+    expect(cardButtons[0].className).toContain("tier-1");
+    expect(cardButtons[1].className).toContain("tier-2");
+    expect(cardButtons[2].className).toContain("tier-3");
+    expect(cardButtons[3].className).toContain("tier-4");
+  });
+
+  test("switches to relic tab and keeps actions functional", () => {
+    const onBuyRelic = vi.fn();
+    const onLeave = vi.fn();
+    const root = document.createElement("div") as unknown as HTMLElement;
+    const menu = mountVendorShopMenu({
+      root,
+      onBuy: vi.fn(),
+      onBuyRelic,
+      onLeave,
+      onClose: vi.fn(),
+    });
+
+    menu.render({
+      active: true,
+      gold: 999,
+      cards: [{ cardId: "CARD_DAMAGE_FLAT_1", priceG: 50, purchased: false }],
+      relicOffers: [{ relicId: "PASS_DOT_MORE_50", priceG: 300, isSold: false }],
+    });
+
+    const initialButtons = (root as any).querySelectorAll("button") as any[];
+    const relicTab = initialButtons.find((b) => b.textContent === "Relics (1)");
+    expect(relicTab).toBeTruthy();
+    relicTab.dispatchEvent(new FakeEvent("click"));
+
+    const afterTabButtons = (root as any).querySelectorAll("button") as any[];
+    const relicBuyBtn = afterTabButtons.find((b) => b.dataset.relicIndex === "0");
+    expect(relicBuyBtn).toBeTruthy();
+    relicBuyBtn.dispatchEvent(new FakeEvent("click"));
+    expect(onBuyRelic).toHaveBeenCalledWith(0);
+
+    const leaveBtn = afterTabButtons.find((b) => b.textContent === "Leave");
+    expect(leaveBtn).toBeTruthy();
+    leaveBtn.dispatchEvent(new FakeEvent("click"));
+    expect(onLeave).toHaveBeenCalledTimes(1);
   });
 });

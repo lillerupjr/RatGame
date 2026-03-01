@@ -68,6 +68,7 @@ import {
   type DelveMap,
   type DelveNode,
 } from "./map/delveMap";
+import { clampPan, computePanBounds, hasDragExceededThreshold, type PanBounds } from "./map/delveMapPan";
 import type { FloorArchetype } from "./map/floorArchetype";
 import type { FloorIntent } from "./map/floorIntent";
 import { playerSpritesReady, preloadPlayerSprites, setPlayerSkin } from "../engine/render/sprites/playerSprites";
@@ -134,6 +135,7 @@ import { handleRewardEvent, type RewardOutcome } from "./rewards/rewardDirector"
 import { recomputeDerivedStats } from "./stats/derivedStats";
 import { hasAnyRelicWithTag, MOMENTUM_RELIC_TAG } from "./content/relics";
 import { createMobileControls } from "../ui/mobile/mobileControls";
+import { renderDialogChoices } from "../ui/dialog/renderDialogChoices";
 
 
 type HudRefs = {
@@ -198,6 +200,8 @@ type CreateGameArgs = {
     mapEl: {
       root: HTMLDivElement;
       sub: HTMLDivElement;
+      graphWrap: HTMLDivElement;
+      graphContent: HTMLDivElement;
       svg: SVGSVGElement;
       hit: HTMLDivElement;
     };
@@ -377,13 +381,17 @@ export function createGame(args: CreateGameArgs) {
     }
     args.ui.dialogEl.root.hidden = false;
     args.ui.dialogEl.text.textContent = dialog.text;
-    args.ui.dialogEl.choices.innerHTML = "";
-    for (let i = 0; i < dialog.choices.length; i++) {
-      const row = document.createElement("div");
-      row.className = i === dialog.selectedIndex ? "dialogChoice active" : "dialogChoice";
-      row.textContent = dialog.choices[i].label;
-      args.ui.dialogEl.choices.appendChild(row);
-    }
+    renderDialogChoices(
+      args.ui.dialogEl.choices,
+      dialog.choices.map((choice, i) => ({
+        label: choice.label,
+        active: i === dialog.selectedIndex,
+        onSelect: () => {
+          choice.onSelect();
+          if (activeDialog) setDialog(activeDialog);
+        },
+      })),
+    );
   }
 
   function showInfoDialog(text: string) {
@@ -1840,7 +1848,95 @@ export function createGame(args: CreateGameArgs) {
     if (settingsMenu) settingsMenu.hidden = true;
   }
 
+  const MAP_VIEW_WIDTH = 1000;
+  const MAP_VIEW_HEIGHT = 520;
+
+  const mapPanState: {
+    enabled: boolean;
+    bounds: PanBounds;
+    panX: number;
+    panY: number;
+    pointerId: number | null;
+    pointerStartX: number;
+    pointerStartY: number;
+    panStartX: number;
+    panStartY: number;
+    dragging: boolean;
+    didDrag: boolean;
+    suppressNextClick: boolean;
+  } = {
+    enabled: false,
+    bounds: { minX: 0, maxX: 0, minY: 0, maxY: 0 },
+    panX: 0,
+    panY: 0,
+    pointerId: null,
+    pointerStartX: 0,
+    pointerStartY: 0,
+    panStartX: 0,
+    panStartY: 0,
+    dragging: false,
+    didDrag: false,
+    suppressNextClick: false,
+  };
+
+  const MAP_DRAG_THRESHOLD_PX = 7;
+
+  function setMapGraphFillLayout(): void {
+    args.ui.mapEl.graphContent.style.width = "100%";
+    args.ui.mapEl.graphContent.style.height = "100%";
+    args.ui.mapEl.graphContent.style.transform = "translate3d(0px, 0px, 0px)";
+    args.ui.mapEl.svg.setAttribute("viewBox", `0 0 ${MAP_VIEW_WIDTH} ${MAP_VIEW_HEIGHT}`);
+  }
+
+  function setMapGraphPixelLayout(width: number, height: number): void {
+    const w = Math.max(1, Math.floor(width));
+    const h = Math.max(1, Math.floor(height));
+    args.ui.mapEl.graphContent.style.width = `${w}px`;
+    args.ui.mapEl.graphContent.style.height = `${h}px`;
+    args.ui.mapEl.svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  }
+
+  function applyMapPanTransform(): void {
+    args.ui.mapEl.graphContent.style.transform = `translate3d(${mapPanState.panX}px, ${mapPanState.panY}px, 0px)`;
+    args.ui.mapEl.graphWrap.classList.toggle("isDragging", mapPanState.dragging);
+  }
+
+  function disableMapPan(): void {
+    mapPanState.enabled = false;
+    mapPanState.pointerId = null;
+    mapPanState.dragging = false;
+    mapPanState.didDrag = false;
+    mapPanState.suppressNextClick = false;
+    mapPanState.panX = 0;
+    mapPanState.panY = 0;
+    args.ui.mapEl.graphWrap.classList.remove("isPannable");
+    applyMapPanTransform();
+  }
+
+  function configureDelvePan(contentWidth: number, contentHeight: number, focusPoint?: { x: number; y: number }): void {
+    setMapGraphPixelLayout(contentWidth, contentHeight);
+    const viewportWidth = Math.max(1, Math.floor(args.ui.mapEl.graphWrap.clientWidth || MAP_VIEW_WIDTH));
+    const viewportHeight = Math.max(1, Math.floor(args.ui.mapEl.graphWrap.clientHeight || MAP_VIEW_HEIGHT));
+    mapPanState.bounds = computePanBounds(contentWidth, contentHeight, viewportWidth, viewportHeight);
+    mapPanState.enabled = true;
+    args.ui.mapEl.graphWrap.classList.add("isPannable");
+    if (focusPoint) {
+      mapPanState.panX = viewportWidth * 0.5 - focusPoint.x;
+      mapPanState.panY = viewportHeight * 0.5 - focusPoint.y;
+    } else {
+      mapPanState.panX = 0;
+      mapPanState.panY = 0;
+    }
+    const clamped = clampPan({ x: mapPanState.panX, y: mapPanState.panY }, mapPanState.bounds);
+    mapPanState.panX = clamped.x;
+    mapPanState.panY = clamped.y;
+    applyMapPanTransform();
+  }
+
   function showMap(subText: string) {
+    disableMapPan();
+    setMapGraphFillLayout();
+    args.ui.mapEl.root.classList.remove("delveFull");
     world.state = "MAP";
     args.ui.mapEl.root.hidden = false;
     setHudHidden(true);
@@ -1864,7 +1960,7 @@ export function createGame(args: CreateGameArgs) {
 
     // Visual margins in SVG coords (1000x520)
     const x0 = 140, x1 = 860;
-    const y0 = 90,  y1 = 430;
+    const y0 = 90, y1 = 430;
 
     const pos = new Map<string, { x: number; y: number }>();
     for (const n of g.nodes) {
@@ -1880,43 +1976,42 @@ export function createGame(args: CreateGameArgs) {
       pos.set(n.id, { x, y });
     }
 
-
     // --- Draw SVG edges + nodes (visuals) ---
     const svg = args.ui.mapEl.svg;
     const edgeLines = g.edges
-        .map((e) => {
-          const a = pos.get(e.from);
-          const b = pos.get(e.to);
-          if (!a || !b) return "";
-          return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="rgba(255,255,255,0.22)" stroke-width="6" stroke-linecap="round" />`;
-        })
-        .join("");
+      .map((e) => {
+        const a = pos.get(e.from);
+        const b = pos.get(e.to);
+        if (!a || !b) return "";
+        return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="rgba(255,255,255,0.22)" stroke-width="6" stroke-linecap="round" />`;
+      })
+      .join("");
 
     const nodeCircles = g.nodes
-        .map((n) => {
-          const p = pos.get(n.id)!;
-          const isReach = reachable.has(n.id);
-          const isChosen = (world as any).mapCurrentNodeId === n.id;
+      .map((n) => {
+        const p = pos.get(n.id)!;
+        const isReach = reachable.has(n.id);
+        const isChosen = (world as any).mapCurrentNodeId === n.id;
 
-          const fill = isChosen
-              ? "rgba(255,255,255,0.32)"
-              : isReach
-                  ? "rgba(255,255,255,0.18)"
-                  : "rgba(255,255,255,0.10)";
+        const fill = isChosen
+          ? "rgba(255,255,255,0.32)"
+          : isReach
+            ? "rgba(255,255,255,0.18)"
+            : "rgba(255,255,255,0.10)";
 
-          const stroke = isReach
-              ? "rgba(255,255,255,0.42)"
-              : "rgba(255,255,255,0.18)";
+        const stroke = isReach
+          ? "rgba(255,255,255,0.42)"
+          : "rgba(255,255,255,0.18)";
 
-          return `
+        return `
         <circle cx="${p.x}" cy="${p.y}" r="22" fill="${fill}" stroke="${stroke}" stroke-width="4" />
         <text x="${p.x}" y="${p.y + 52}" text-anchor="middle" font-size="18" fill="rgba(255,255,255,0.92)" font-weight="800">${n.title}</text>
       `;
-        })
-        .join("");
+      })
+      .join("");
 
     svg.innerHTML = `
-    <rect x="0" y="0" width="1000" height="520" fill="rgba(0,0,0,0)" />
+    <rect x="0" y="0" width="${MAP_VIEW_WIDTH}" height="${MAP_VIEW_HEIGHT}" fill="rgba(0,0,0,0)" />
     ${edgeLines}
     ${nodeCircles}
   `;
@@ -1926,7 +2021,7 @@ export function createGame(args: CreateGameArgs) {
     hit.innerHTML = "";
 
     // Convert SVG coords to % so it scales with the container.
-    const toPct = (x: number, y: number) => ({ left: (x / 1000) * 100, top: (y / 520) * 100 });
+    const toPct = (x: number, y: number) => ({ left: (x / MAP_VIEW_WIDTH) * 100, top: (y / MAP_VIEW_HEIGHT) * 100 });
 
     for (const n of g.nodes) {
       const p = pos.get(n.id)!;
@@ -1958,12 +2053,15 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function showDeterministicFloorPicker(subText: string, floorIndex: number, depth: number) {
+    disableMapPan();
+    setMapGraphFillLayout();
+    args.ui.mapEl.root.classList.remove("delveFull");
     world.state = "MAP";
     args.ui.mapEl.root.hidden = false;
     setHudHidden(true);
     args.ui.mapEl.sub.textContent = subText;
     args.ui.mapEl.svg.innerHTML =
-      `<rect x="0" y="0" width="1000" height="520" fill="rgba(0,0,0,0)" />`;
+      `<rect x="0" y="0" width="${MAP_VIEW_WIDTH}" height="${MAP_VIEW_HEIGHT}" fill="rgba(0,0,0,0)" />`;
     const hit = args.ui.mapEl.hit;
     hit.innerHTML = "";
     for (let i = 0; i < DETERMINISTIC_ARCHETYPES.length; i++) {
@@ -1993,6 +2091,7 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function showDelveMap(subText: string) {
+    args.ui.mapEl.root.classList.add("delveFull");
     world.state = "MAP";
     args.ui.mapEl.root.hidden = false;
     setHudHidden(true);
@@ -2013,21 +2112,28 @@ export function createGame(args: CreateGameArgs) {
     }
 
     // Get visible nodes and edges
-      const visibleNodes = getVisibleNodes(delve, 4);
-      const visibleEdges = getVisibleEdges(delve, visibleNodes);
-      const reachable = new Set(getReachableNodes(delve).map(n => n.id));
+    const visibleNodes = getVisibleNodes(delve, 4);
+    const visibleEdges = getVisibleEdges(delve, visibleNodes);
+    const reachable = new Set(getReachableNodes(delve).map((n) => n.id));
+    if (visibleNodes.length === 0) {
+      disableMapPan();
+      setMapGraphFillLayout();
+      args.ui.mapEl.svg.innerHTML = `<rect x="0" y="0" width="${MAP_VIEW_WIDTH}" height="${MAP_VIEW_HEIGHT}" fill="rgba(0,0,0,0)" />`;
+      args.ui.mapEl.hit.innerHTML = "";
+      return;
+    }
 
-      const archetypeColor = (archetype: FloorArchetype, alpha: number) => {
-        const palette: Record<FloorArchetype, { r: number; g: number; b: number }> = {
-          SURVIVE: { r: 96, g: 210, b: 120 },
-          TIME_TRIAL: { r: 255, g: 165, b: 64 },
-          VENDOR: { r: 240, g: 210, b: 90 },
-          HEAL: { r: 90, g: 200, b: 200 },
-          BOSS_TRIPLE: { r: 235, g: 95, b: 95 },
-        };
-        const c = palette[archetype];
-        return `rgba(${c.r},${c.g},${c.b},${alpha})`;
+    const archetypeColor = (archetype: FloorArchetype, alpha: number) => {
+      const palette: Record<FloorArchetype, { r: number; g: number; b: number }> = {
+        SURVIVE: { r: 96, g: 210, b: 120 },
+        TIME_TRIAL: { r: 255, g: 165, b: 64 },
+        VENDOR: { r: 240, g: 210, b: 90 },
+        HEAL: { r: 90, g: 200, b: 200 },
+        BOSS_TRIPLE: { r: 235, g: 95, b: 95 },
       };
+      const c = palette[archetype];
+      return `rgba(${c.r},${c.g},${c.b},${alpha})`;
+    };
 
     // Calculate bounds for positioning
     let minX = Infinity, maxX = -Infinity;
@@ -2039,22 +2145,20 @@ export function createGame(args: CreateGameArgs) {
       maxY = Math.max(maxY, n.y);
     }
 
-    // Visual margins in SVG coords (1000x520)
-    const x0 = 140, x1 = 860;
-    const y0 = 90, y1 = 430;
-
-    const rangeX = Math.max(1, maxX - minX);
-    const rangeY = Math.max(1, maxY - minY);
+    const rangeX = Math.max(0, maxX - minX);
+    const rangeY = Math.max(0, maxY - minY);
+    const spacingX = 200;
+    const spacingY = 150;
+    const paddingX = 220;
+    const paddingY = 120;
+    const contentWidth = Math.max(MAP_VIEW_WIDTH, paddingX * 2 + rangeX * spacingX);
+    const contentHeight = Math.max(MAP_VIEW_HEIGHT, paddingY * 2 + rangeY * spacingY);
+    setMapGraphPixelLayout(contentWidth, contentHeight);
 
     const pos = new Map<string, { x: number; y: number }>();
     for (const n of visibleNodes) {
-      const tx = rangeX > 0 ? (n.x - minX) / rangeX : 0.5;
-      // Invert Y so deeper nodes are at the bottom
-      const ty = rangeY > 0 ? (n.y - minY) / rangeY : 0.5;
-
-      const x = x0 + (x1 - x0) * tx;
-      const y = y0 + (y1 - y0) * ty;
-
+      const x = paddingX + (n.x - minX) * spacingX;
+      const y = paddingY + (n.y - minY) * spacingY;
       pos.set(n.id, { x, y });
     }
 
@@ -2077,17 +2181,17 @@ export function createGame(args: CreateGameArgs) {
         const isCurrent = delve.currentNodeId === n.id;
         const isCompleted = n.completed;
 
-          const fill = archetypeColor(
-            n.floorArchetype,
-            isCurrent ? 0.55 : isCompleted ? 0.22 : isReach ? 0.32 : 0.12
-          );
-          const stroke = archetypeColor(
-            n.floorArchetype,
-            isCurrent ? 0.95 : isReach ? 0.65 : isCompleted ? 0.45 : 0.25
-          );
-          const label = floorArchetypeLabel(n.floorArchetype);
+        const fill = archetypeColor(
+          n.floorArchetype,
+          isCurrent ? 0.55 : isCompleted ? 0.22 : isReach ? 0.32 : 0.12
+        );
+        const stroke = archetypeColor(
+          n.floorArchetype,
+          isCurrent ? 0.95 : isReach ? 0.65 : isCompleted ? 0.45 : 0.25
+        );
+        const label = floorArchetypeLabel(n.floorArchetype);
 
-          return `
+        return `
             <circle cx="${p.x}" cy="${p.y}" r="22" fill="${fill}" stroke="${stroke}" stroke-width="4" />
             <text x="${p.x}" y="${p.y + 44}" text-anchor="middle" font-size="12" fill="rgba(255,255,255,0.92)" font-weight="800">${label}</text>
           `;
@@ -2095,7 +2199,7 @@ export function createGame(args: CreateGameArgs) {
       .join("");
 
     svg.innerHTML = `
-      <rect x="0" y="0" width="1000" height="520" fill="rgba(0,0,0,0)" />
+      <rect x="0" y="0" width="${contentWidth}" height="${contentHeight}" fill="rgba(0,0,0,0)" />
       ${edgeLines}
       ${nodeCircles}
     `;
@@ -2104,18 +2208,15 @@ export function createGame(args: CreateGameArgs) {
     const hit = args.ui.mapEl.hit;
     hit.innerHTML = "";
 
-    const toPct = (x: number, y: number) => ({ left: (x / 1000) * 100, top: (y / 520) * 100 });
-
     for (const n of visibleNodes) {
       const p = pos.get(n.id)!;
-      const { left, top } = toPct(p.x, p.y);
 
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "mapHitBtn";
       btn.dataset.delveNodeId = n.id;
-      btn.style.left = `${left}%`;
-      btn.style.top = `${top}%`;
+      btn.style.left = `${p.x}px`;
+      btn.style.top = `${p.y}px`;
 
       const isReach = reachable.has(n.id);
       const isCurrent = delve.currentNodeId === n.id;
@@ -2131,9 +2232,16 @@ export function createGame(args: CreateGameArgs) {
 
       hit.appendChild(btn);
     }
+
+    const focusNodeId = delve.currentNodeId ?? (reachable.values().next().value as string | undefined) ?? visibleNodes[0]?.id;
+    const focusPoint = focusNodeId ? pos.get(focusNodeId) : undefined;
+    configureDelvePan(contentWidth, contentHeight, focusPoint);
   }
 
   function hideMap() {
+    disableMapPan();
+    setMapGraphFillLayout();
+    args.ui.mapEl.root.classList.remove("delveFull");
     args.ui.mapEl.root.hidden = true;
     setHudHidden(false);
   }
@@ -2492,7 +2600,77 @@ export function createGame(args: CreateGameArgs) {
     showMainMenuScreenFromEndOverlay();
   });
 
+  args.ui.mapEl.graphWrap.addEventListener("pointerdown", (e) => {
+    if (!mapPanState.enabled) return;
+    if (e.button !== 0) return;
+    mapPanState.pointerId = e.pointerId;
+    mapPanState.pointerStartX = e.clientX;
+    mapPanState.pointerStartY = e.clientY;
+    mapPanState.panStartX = mapPanState.panX;
+    mapPanState.panStartY = mapPanState.panY;
+    mapPanState.dragging = false;
+    mapPanState.didDrag = false;
+  });
+
+  args.ui.mapEl.graphWrap.addEventListener("pointermove", (e) => {
+    if (!mapPanState.enabled) return;
+    if (mapPanState.pointerId !== e.pointerId) return;
+
+    if (!mapPanState.dragging) {
+      mapPanState.dragging = hasDragExceededThreshold(
+        mapPanState.pointerStartX,
+        mapPanState.pointerStartY,
+        e.clientX,
+        e.clientY,
+        MAP_DRAG_THRESHOLD_PX,
+      );
+      if (!mapPanState.dragging) return;
+      mapPanState.didDrag = true;
+      args.ui.mapEl.graphWrap.setPointerCapture(e.pointerId);
+    }
+
+    const dx = e.clientX - mapPanState.pointerStartX;
+    const dy = e.clientY - mapPanState.pointerStartY;
+    const clamped = clampPan(
+      { x: mapPanState.panStartX + dx, y: mapPanState.panStartY + dy },
+      mapPanState.bounds,
+    );
+    mapPanState.panX = clamped.x;
+    mapPanState.panY = clamped.y;
+    applyMapPanTransform();
+  });
+
+  const endMapDrag = (pointerId: number) => {
+    if (mapPanState.pointerId !== pointerId) return;
+    mapPanState.pointerId = null;
+    mapPanState.suppressNextClick = mapPanState.didDrag;
+    mapPanState.didDrag = false;
+    mapPanState.dragging = false;
+    applyMapPanTransform();
+  };
+
+  args.ui.mapEl.graphWrap.addEventListener("pointerup", (e) => {
+    endMapDrag(e.pointerId);
+    if (args.ui.mapEl.graphWrap.hasPointerCapture(e.pointerId)) {
+      args.ui.mapEl.graphWrap.releasePointerCapture(e.pointerId);
+    }
+  });
+  args.ui.mapEl.graphWrap.addEventListener("pointercancel", (e) => {
+    endMapDrag(e.pointerId);
+    if (args.ui.mapEl.graphWrap.hasPointerCapture(e.pointerId)) {
+      args.ui.mapEl.graphWrap.releasePointerCapture(e.pointerId);
+    }
+  });
+  args.ui.mapEl.graphWrap.addEventListener("lostpointercapture", (e) => {
+    endMapDrag(e.pointerId);
+  });
+
   args.ui.mapEl.root.addEventListener("click", (e) => {
+    if (mapPanState.suppressNextClick) {
+      mapPanState.suppressNextClick = false;
+      e.preventDefault();
+      return;
+    }
     const el = e.target as HTMLElement;
     const btn = el.closest("button") as HTMLButtonElement | null;
     if (!btn) return;

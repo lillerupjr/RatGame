@@ -20,6 +20,8 @@ type LevelupRefs = {
 type MapRefs = {
     root: HTMLDivElement;
     sub: HTMLDivElement;
+    graphWrap: HTMLDivElement;
+    graphContent: HTMLDivElement;
     svg: SVGSVGElement;
     hit: HTMLDivElement;
 };
@@ -108,6 +110,8 @@ export type DomRefs = {
     levelupSub: HTMLDivElement;
     mapRoot: HTMLDivElement;
     mapSub: HTMLDivElement;
+    mapGraphWrap: HTMLDivElement;
+    mapGraphContent: HTMLDivElement;
     mapSvg: SVGSVGElement;
     mapHit: HTMLDivElement;
     fpsPill: HTMLSpanElement;
@@ -226,6 +230,8 @@ export function getDomRefs(): DomRefs {
 
     const mapRoot = getEl<HTMLDivElement>("map");
     const mapSub = getEl<HTMLDivElement>("mapSub");
+    const mapGraphWrap = getEl<HTMLDivElement>("mapGraphWrap");
+    const mapGraphContent = getEl<HTMLDivElement>("mapGraphContent");
     const mapSvg = getSvg("#mapSvg");
     const mapHit = getEl<HTMLDivElement>("mapHit");
 
@@ -276,6 +282,8 @@ export function getDomRefs(): DomRefs {
         mapEl: {
             root: mapRoot,
             sub: mapSub,
+            graphWrap: mapGraphWrap,
+            graphContent: mapGraphContent,
             svg: mapSvg,
             hit: mapHit,
         },
@@ -331,6 +339,8 @@ export function getDomRefs(): DomRefs {
         levelupSub,
         mapRoot,
         mapSub,
+        mapGraphWrap,
+        mapGraphContent,
         mapSvg,
         mapHit,
         fpsPill,
