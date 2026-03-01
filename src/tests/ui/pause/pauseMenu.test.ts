@@ -288,11 +288,20 @@ describe("pauseMenu", () => {
     const onResume = vi.fn();
     const onQuitRun = vi.fn();
     const onOpenDevTools = vi.fn();
+    userSettingsState.settings = {
+      ...userSettingsState.settings,
+      game: {
+        userModeEnabled: false,
+      },
+    } as any;
+
     const menu = mountPauseMenu({ root, actions: { onResume, onQuitRun, onOpenDevTools } });
     menu.setVisible(true);
 
     (root.querySelector("[data-pause-resume]") as any).click();
     (root.querySelector("[data-pause-quit]") as any).click();
+    expect(onQuitRun).toHaveBeenCalledTimes(0);
+    (root.querySelector("[data-pause-quit-confirm]") as any).click();
     (root.querySelector("[data-pause-dev-tools]") as any).click();
 
     expect(onResume).toHaveBeenCalledTimes(1);

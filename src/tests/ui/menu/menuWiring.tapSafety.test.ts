@@ -178,8 +178,6 @@ function createDomRefs(): DomRefs {
     continueBtn: mkBtn(),
     mainMenuEl: mkDiv(),
     startRunBtn: mkBtn(),
-    deterministicRunBtn: mkBtn(),
-    mapsBtn: mkBtn(),
     innkeeperBtn: mkBtn(),
     settingsBtn: mkBtn(),
     likeSubBtn: mkBtn(),
@@ -195,7 +193,10 @@ function createDomRefs(): DomRefs {
     innkeeperMenuEl: mkDiv(),
     innkeeperBackBtn: mkBtn(),
     settingsMenuEl: mkDiv(),
+    mainSettingsHostEl: mkDiv(),
     settingsBackBtn: mkBtn(),
+    creditsMenuEl: mkDiv(),
+    creditsBackBtn: mkBtn(),
     menuEl: mkDiv(),
     startBtn: mkBtn(),
     weaponChoicesEl: mkDiv(),
@@ -279,31 +280,6 @@ describe("menuWiring tap safety", () => {
 
     expect(refs.mainMenuEl.hidden).toBe(false);
     expect(refs.characterSelectEl.hidden).toBe(true);
-  });
-
-  test("map choice selection also requires its own completed tap", () => {
-    const refs = createDomRefs();
-    wireMenus(refs, {
-      previewMap: vi.fn(),
-      startRun: vi.fn(),
-      startDeterministicRun: vi.fn(),
-      startSandboxRun: vi.fn(),
-    });
-
-    const mapsBtn = refs.mapsBtn as unknown as FakeElement;
-    tapElement(mapsBtn, 11, 180, 280);
-    expect(refs.mapMenuEl.hidden).toBe(false);
-
-    const mapButtons = (refs.mapChoicesEl as unknown as FakeElement).querySelectorAll("button[data-map]");
-    expect(mapButtons.length).toBeGreaterThan(0);
-    const firstMapBtn = mapButtons[0];
-    const firstMapId = firstMapBtn.dataset.map;
-
-    firstMapBtn.dispatchEvent(new FakeMouseEvent("click", { clientX: 180, clientY: 280, target: firstMapBtn }));
-    expect(refs.startBtn.dataset.map).toBeUndefined();
-
-    tapElement(firstMapBtn, 12, 220, 320);
-    expect(refs.startBtn.dataset.map).toBe(firstMapId);
   });
 
   test("mouse click still triggers action once without pointer events", () => {

@@ -27,11 +27,6 @@
     { "x": 1, "y": 10, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
     { "x": 6, "y": 10, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
     { "x": 11, "y": 10, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
-    { "x": 4, "y": 4, "z": 0, "type": "prop", "propId": "hooker1", "w": 1, "dir": "SE", "h": 1 },
-    { "x": 4, "y": 5, "z": 0, "type": "prop", "propId": "hooker2", "w": 1, "dir": "SE", "h": 1 },
-    { "x": 4, "y": 6, "z": 0, "type": "prop", "propId": "hooker3", "w": 1, "dir": "SE", "h": 1 },
-    { "x": 4, "y": 7, "z": 0, "type": "prop", "propId": "hooker1", "w": 1, "dir": "SE", "h": 1 },
-    { "x": 4, "y": 8, "z": 0, "type": "prop", "propId": "hooker2", "w": 1, "dir": "SE", "h": 1 },
-    { "x": 4, "y": 9, "z": 0, "type": "prop", "propId": "hooker3", "w": 1, "dir": "SE", "h": 1 }
+    { "x": 4, "y": 4, "z": 0, "type": "prop", "propId": "hooker1", "w": 1, "dir": "SE", "h": 1 }
   ]
 }

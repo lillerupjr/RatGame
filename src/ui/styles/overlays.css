@@ -5,11 +5,271 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
 }
+
+/* Pause menu overhaul layout */
+.pausePanel.pausePanelNav {
+  padding: 0;
+}
+
+.pauseNavLayout {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 0;
+}
+
+.pauseModeNav {
+  border-right: 1px solid var(--border-subtle);
+  background: rgba(5, 5, 9, 0.45);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.pauseNavBtn {
+  width: 100%;
+  min-height: 42px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--hover-bg);
+  color: var(--text-primary);
+  font-weight: 800;
+  text-align: left;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.pauseNavBtn.active {
+  background: rgba(110, 180, 255, 0.22);
+  border-color: rgba(160, 220, 255, 0.74);
+}
+
+.pauseModeContent {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pauseModePanel {
+  height: 100%;
+  overflow-y: auto;
+  padding: 14px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.pauseSectionTitle {
+  margin: 0 0 10px 0;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.pauseSettingsHost {
+  max-width: 960px;
+  padding: 8px;
+}
+
+.pauseOwnedCardsList {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pauseOwnedCardRow {
+  width: 100%;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  padding: 10px;
+  cursor: pointer;
+}
+
+.pauseOwnedCardRow.active {
+  border-color: rgba(170, 230, 255, 0.85);
+  background: rgba(80, 140, 210, 0.22);
+}
+
+.pauseOwnedCardMain {
+  min-width: 0;
+}
+
+.pauseOwnedCardName {
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.pauseOwnedCardSummary {
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: 0.86;
+  line-height: 1.3;
+}
+
+.pauseOwnedCardMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pauseOwnedTier,
+.pauseOwnedStack {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 900;
+  border: 1px solid var(--border-default);
+  background: var(--hover-bg);
+}
+
+.pauseOwnedCardDetail {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 12px;
+}
+
+.pauseOwnedCardDetail h4 {
+  margin: 0 0 6px 0;
+  font-size: 18px;
+}
+
+.pauseMetaHeader {
+  margin-top: 8px;
+  font-weight: 800;
+}
+
+.pauseOwnedModList {
+  margin: 6px 0 0 16px;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.pauseSectionScroll {
+  display: grid;
+  gap: 8px;
+}
+
+.pauseInlineTabs {
+  display: inline-flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pauseInlineTabBtn {
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--hover-bg);
+  color: var(--text-primary);
+  font-weight: 800;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.pauseInlineTabBtn.active {
+  border-color: rgba(160, 220, 255, 0.78);
+  background: rgba(80, 140, 210, 0.24);
+}
+
+.pauseTuningRow {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) 52px;
+  gap: 10px;
+  align-items: center;
+}
+
+.pauseTuningRow span:first-child {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pauseTuningValue {
+  font-size: 12px;
+  font-weight: 900;
+  text-align: right;
+  opacity: 0.9;
+}
+
+.pauseInlineAction {
+  width: fit-content;
+  min-width: 200px;
+  margin-top: 4px;
+}
+
+@media (max-width: 920px) {
+  .pauseNavLayout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .pauseModeNav {
+    border-right: 0;
+    border-bottom: 1px solid var(--border-subtle);
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    padding: 10px;
+  }
+
+  .pauseNavBtn {
+    min-width: 150px;
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 768px) {
+  .pauseSectionTitle {
+    font-size: 20px;
+  }
+
+  .pauseModePanel {
+    padding: 10px;
+  }
+
+  .pauseOwnedCardRow {
+    padding: 9px;
+  }
+
+  .pauseOwnedCardName {
+    font-size: 14px;
+  }
+
+  .pauseOwnedCardSummary {
+    font-size: 11px;
+  }
+
+  .pauseOwnedCardMeta {
+    gap: 6px;
+  }
+
+  .pauseTuningRow {
+    grid-template-columns: 90px minmax(0, 1fr) 44px;
+    gap: 8px;
+  }
+
+  .pauseInlineAction {
+    width: 100%;
+  }
+}
 #c, #ui { position: fixed; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; }
 #c { z-index: 0; }
 #ui { z-index: 1; pointer-events: none; }
-#hud { position: fixed; left: calc(12px + var(--safe-left)); top: calc(12px + var(--safe-top)); color: #eaeaf2; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto; font-size: 14px; line-height: 1.4; user-select: none; z-index: 3; transform: scale(1.125); transform-origin: top left; }
-#hud .pill { display: inline-block; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,0.08); margin-right: 8px; }
+#hud { position: fixed; left: calc(12px + var(--safe-left)); top: calc(12px + var(--safe-top)); color: var(--text-primary); font-family: var(--font-mono); font-size: 14px; line-height: 1.4; user-select: none; z-index: 3; transform: scale(1.125); transform-origin: top left; }
+#hud .pill { display: inline-block; padding: 6px 10px; border-radius: var(--radius-pill); background: var(--hover-bg); margin-right: 8px; }
 #hudTop { display: inline-block; }
 
 #vitalsOrbRoot {
@@ -34,6 +294,12 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   z-index: 7;
   transform: scale(1.5);
   transform-origin: bottom left;
+}
+
+#vitalsOrbRoot.isRight {
+  left: auto;
+  right: calc(16px + var(--safe-right));
+  transform-origin: bottom right;
 }
 
 #vitalsOrbRoot.hasMomentum {
@@ -295,9 +561,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 #objectiveOverlay {
   margin-top: 8px;
   padding: 8px 10px;
-  border-radius: 12px;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--radius-md);
+  background: var(--hover-bg);
+  border: 1px solid var(--border-subtle);
   max-width: min(520px, calc(100vw - 24px));
 }
 
@@ -321,12 +587,12 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   top: calc(var(--safe-y, 0px) + var(--safe-h, 100vh) * 0.666667);
   transform: translate(-50%, -50%);
   z-index: 5;
-  color: #fff;
+  color: var(--text-primary);
   background: rgba(0, 0, 0, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
   padding: 8px 12px;
-  font: 700 13px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
+  font: 700 13px var(--font-mono);
   letter-spacing: 0.02em;
 }
 
@@ -352,7 +618,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   bottom: calc(16px + var(--safe-bottom));
   width: 136px;
   height: 136px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 2px solid rgba(255, 255, 255, 0.22);
   background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.2) 0%, rgba(20, 20, 24, 0.44) 70%);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 8px 20px rgba(0, 0, 0, 0.35);
@@ -378,7 +644,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   transform: translate(-50%, -50%);
   border-radius: 999px;
   background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.92) 0%, rgba(218, 224, 240, 0.92) 38%, rgba(132, 145, 176, 0.92) 100%);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-subtle);
   pointer-events: none;
 }
 
@@ -388,11 +654,11 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   bottom: calc(168px + var(--safe-bottom));
   width: 92px;
   height: 54px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
   background: rgba(16, 16, 22, 0.68);
-  color: #fff;
-  font: 900 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
+  color: var(--text-primary);
+  font: 900 16px var(--font-mono);
   letter-spacing: 0.02em;
   display: grid;
   place-items: center;
@@ -418,9 +684,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   #interactPrompt {
     min-height: 44px;
     padding: 10px 14px;
-    font: 800 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
+    font: 800 14px var(--font-mono);
     touch-action: manipulation;
-    border-color: rgba(255, 255, 255, 0.34);
+    border-color: var(--border-strong);
     background: rgba(8, 8, 12, 0.82);
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
     z-index: 9;
@@ -474,11 +740,11 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   pointer-events: auto;
   margin: 0;
   background: rgba(10, 10, 14, 0.9);
-  border-top: 2px solid rgba(255, 255, 255, 0.24);
+  border-top: 2px solid var(--border-default);
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.45);
   padding: 14px 18px;
-  color: #eaf0ff;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
 }
 
 #dialogText {
@@ -497,13 +763,13 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   appearance: none;
   width: 100%;
   text-align: left;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--border-default);
   background: rgba(255, 255, 255, 0.06);
   font-size: 14px;
   font-weight: 800;
-  color: #eaf0ff;
+  color: var(--text-primary);
   cursor: pointer;
 }
 
@@ -513,7 +779,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 .dialogChoice:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--hover-bg);
 }
 
 
@@ -521,28 +787,28 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 [hidden] { display: none !important; }
 
 /* Welcome Screen */
-#welcomeScreen { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.85); z-index: 5; }
-#welcomeScreen .panel { width: min(520px, 90vw); padding: 60px 40px; border-radius: 20px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; text-align: center; }
+#welcomeScreen { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 5; }
+#welcomeScreen .panel { width: min(520px, 90vw); padding: 60px 40px; border-radius: 20px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); text-align: center; }
 #welcomeScreen .welcomeTitle { font-size: 48px; font-weight: 900; margin-bottom: 60px; line-height: 1.2; }
-#welcomeScreen button { width: 100%; padding: 18px 24px; border-radius: 14px; border: 0; cursor: pointer; font-weight: 900; font-size: 20px; background: rgba(255,255,255,0.20); color: #fff; transition: background 120ms ease, transform 80ms ease; }
-#welcomeScreen button:hover { background: rgba(255,255,255,0.28); transform: translateY(-2px); }
+#welcomeScreen button { width: 100%; padding: 18px 24px; border-radius: var(--radius-md); border: 0; cursor: pointer; font-weight: 900; font-size: 20px; background: var(--primary-btn-bg); color: var(--text-primary); transition: background var(--transition-standard), transform var(--transition-fast); }
+#welcomeScreen button:hover { background: var(--primary-btn-hover-bg); transform: translateY(-2px); }
 
 /* Main Menu (submenu after welcome) */
-#mainMenu { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.75); z-index: 4; }
-#mainMenu .panel { width: min(440px, 88vw); padding: 40px 30px; border-radius: 20px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; text-align: center; }
+#mainMenu { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 4; }
+#mainMenu .panel { width: min(440px, 88vw); padding: 40px 30px; border-radius: 20px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); text-align: center; }
 #mainMenu .title { font-size: 32px; font-weight: 900; margin-bottom: 30px; }
 #mainMenu .menuButtons { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
-#mainMenu .menuButtons button { width: 100%; padding: 16px 20px; border-radius: 14px; border: 0; cursor: pointer; font-weight: 900; font-size: 18px; background: rgba(255,255,255,0.18); color: #fff; transition: background 120ms ease, transform 80ms ease; }
-#mainMenu .menuButtons button:hover { background: rgba(255,255,255,0.24); transform: translateY(-1px); }
-#mainMenu .menuButtons button#startRunBtn { background: rgba(255,255,255,0.24); font-size: 20px; }
-#mainMenu .menuButtons button#startRunBtn:hover { background: rgba(255,255,255,0.30); }
-#mainMenu .menuFooter { padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.08); }
-#mainMenu .menuFooter button { padding: 10px 16px; border-radius: 10px; border: 0; cursor: pointer; font-weight: 700; font-size: 14px; background: rgba(255,100,100,0.15); color: #fff; transition: background 120ms ease, transform 80ms ease; }
+#mainMenu .menuButtons button { width: 100%; padding: 16px 20px; border-radius: var(--radius-md); border: 0; cursor: pointer; font-weight: 900; font-size: 18px; background: var(--primary-btn-bg); color: var(--text-primary); transition: background var(--transition-standard), transform var(--transition-fast); }
+#mainMenu .menuButtons button:hover { background: var(--primary-btn-hover-bg); transform: translateY(-1px); }
+#mainMenu .menuButtons button#startRunBtn { background: var(--primary-btn-hover-bg); font-size: 20px; }
+#mainMenu .menuButtons button#startRunBtn:hover { background: rgba(118, 232, 255, 0.28); }
+#mainMenu .menuFooter { padding-top: 20px; border-top: 1px solid var(--border-subtle); }
+#mainMenu .menuFooter button { padding: 10px 16px; border-radius: var(--radius-sm); border: 0; cursor: pointer; font-weight: 700; font-size: 14px; background: rgba(255,100,100,0.15); color: var(--text-primary); transition: background var(--transition-standard), transform var(--transition-fast); }
 #mainMenu .menuFooter button:hover { background: rgba(255,100,100,0.25); transform: scale(1.05); }
 
 /* Map Selection Menu */
-#mapMenu { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.75); z-index: 4; }
-#mapMenu .panel { width: min(680px, 92vw); padding: 24px; border-radius: 20px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
+#mapMenu { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 4; }
+#mapMenu .panel { width: min(680px, 92vw); padding: 24px; border-radius: 20px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); }
 #mapMenu .title { font-size: 26px; font-weight: 900; margin-bottom: 6px; text-align: center; }
 #mapMenu .subline { opacity: 0.85; margin-bottom: 16px; font-size: 14px; text-align: center; }
 #mapChoices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
@@ -550,22 +816,22 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .mapChoiceBtn {
   text-align: left;
   padding: 12px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.08);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--hover-bg);
   cursor: pointer;
-  color: #fff;
-  transition: transform 80ms ease, background 120ms ease, border-color 120ms ease;
+  color: var(--text-primary);
+  transition: transform var(--transition-fast), background var(--transition-standard), border-color var(--transition-standard);
 }
-.mapChoiceBtn:hover { transform: translateY(-1px); background: rgba(255,255,255,0.11); border-color: rgba(255,255,255,0.18); }
-.mapChoiceBtn[aria-pressed="true"] { border-color: rgba(255,255,255,0.36); background: rgba(255,255,255,0.14); }
+.mapChoiceBtn:hover { transform: translateY(-1px); background: var(--hover-bg); border-color: var(--border-default); }
+.mapChoiceBtn[aria-pressed="true"] { border-color: var(--border-strong); background: var(--active-bg); }
 .mapChoiceTitle { font-weight: 900; font-size: 14px; margin-bottom: 4px; }
 .mapChoiceDesc { opacity: 0.9; font-size: 12px; line-height: 1.35; }
 #mapMenu .mapMenuActions { display: flex; gap: 10px; margin-top: 14px; }
-#mapMenu .mapMenuActions button { flex: 1; padding: 12px 14px; border-radius: 12px; border: 0; cursor: pointer; font-weight: 800; background: rgba(255,255,255,0.16); color: #fff; }
+#mapMenu .mapMenuActions button { flex: 1; padding: 12px 14px; border-radius: var(--radius-md); border: 0; cursor: pointer; font-weight: 800; background: var(--active-bg); color: var(--text-primary); }
 
 /* Character Select Menu */
-#characterSelect { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.75); z-index: 4; }
+#characterSelect { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 4; }
 #characterSelect .panel {
   width: min(820px, 94vw);
   max-height: calc(100dvh - 24px);
@@ -573,8 +839,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   padding: 24px;
   border-radius: 20px;
   background: rgba(255,255,255,0.06);
-  color: #eaeaf2;
-  font-family: ui-sans-serif, system-ui;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
 }
 #characterSelect .title { font-size: 26px; font-weight: 900; margin-bottom: 6px; text-align: center; }
 #characterSelect .subline { opacity: 0.85; margin-bottom: 16px; font-size: 14px; text-align: center; }
@@ -586,24 +852,24 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   text-align: center;
   padding: 12px;
   border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.08);
+  border: 1px solid var(--border-subtle);
+  background: var(--hover-bg);
   cursor: pointer;
-  color: #fff;
-  transition: transform 80ms ease, background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+  color: var(--text-primary);
+  transition: transform var(--transition-fast), background var(--transition-standard), border-color var(--transition-standard), box-shadow var(--transition-standard);
 }
-.characterCard:hover { transform: translateY(-1px); background: rgba(255,255,255,0.11); border-color: rgba(255,255,255,0.18); }
+.characterCard:hover { transform: translateY(-1px); background: var(--hover-bg); border-color: var(--border-default); }
 .characterCard[aria-pressed="true"] {
-  border-color: rgba(255,255,255,0.5);
-  background: rgba(255,255,255,0.14);
-  box-shadow: 0 0 18px rgba(255,255,255,0.18);
+  border-color: var(--border-strong);
+  background: var(--active-bg);
+  box-shadow: var(--shadow-glow);
 }
 
 .characterSpriteWrap {
   display: grid;
   place-items: center;
   height: 140px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: rgba(0,0,0,0.22);
   margin-bottom: 10px;
 }
@@ -620,21 +886,173 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 #characterSelect .characterActions button {
   flex: 1;
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   border: 0;
   cursor: pointer;
   font-weight: 800;
-  background: rgba(255,255,255,0.16);
-  color: #fff;
+  background: var(--active-bg);
+  color: var(--text-primary);
 }
 #characterSelect .characterActions button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* Innkeeper & Settings Menus */
-#innkeeperMenu, #settingsMenu { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.75); z-index: 4; }
-#innkeeperMenu .panel, #settingsMenu .panel { width: min(560px, 92vw); padding: 30px; border-radius: 20px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
+#innkeeperMenu, #settingsMenu { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 4; }
+#innkeeperMenu .panel, #settingsMenu .panel { width: min(560px, 92vw); padding: 30px; border-radius: 20px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); }
 #innkeeperMenu .title, #settingsMenu .title { font-size: 28px; font-weight: 900; margin-bottom: 8px; text-align: center; }
 #innkeeperMenu .subline, #settingsMenu .subline { opacity: 0.85; margin-bottom: 20px; font-size: 14px; text-align: center; }
-#innkeeperMenu button, #settingsMenu button { margin-top: 14px; width: 100%; padding: 12px 14px; border-radius: 12px; border: 0; cursor: pointer; font-weight: 800; background: rgba(255,255,255,0.16); color: #fff; }
+#innkeeperMenu > .panel > button, #settingsMenu > .panel > button {
+  margin-top: 14px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 0;
+  cursor: pointer;
+  font-weight: 800;
+  background: var(--active-bg);
+  color: var(--text-primary);
+}
+
+#creditsMenu { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 4; }
+#creditsMenu .panel { width: min(560px, 92vw); padding: 30px; border-radius: 20px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); }
+#creditsMenu .title { font-size: 28px; font-weight: 900; margin-bottom: 8px; text-align: center; }
+#creditsMenu .subline { opacity: 0.85; margin-bottom: 18px; font-size: 14px; text-align: center; }
+#creditsMenu .creditsBody { padding: 14px 12px; border-radius: var(--radius-md); background: rgba(0,0,0,0.25); border: 1px solid var(--border-subtle); line-height: 1.45; text-align: center; }
+#creditsMenu button { margin-top: 14px; width: 100%; padding: 12px 14px; border-radius: var(--radius-md); border: 0; cursor: pointer; font-weight: 800; background: var(--active-bg); color: var(--text-primary); }
+
+#mainSettingsHost {
+  margin-bottom: 16px;
+  padding: 8px 4px;
+}
+
+.settingsPanelRoot {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settingsTabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.settingsTabBtn {
+  min-height: 40px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--hover-bg);
+  color: var(--text-primary);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.settingsTabBtn.active {
+  background: rgba(110,180,255,0.24);
+  border-color: rgba(160,220,255,0.72);
+}
+
+.settingsBody {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: rgba(0,0,0,0.2);
+  padding: 16px;
+}
+
+.settingsCategoryPanel {
+  display: grid;
+  gap: 10px;
+}
+
+.settingsCategoryTitle {
+  margin: 0 0 2px 0;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.settingsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settingsRowLabelWrap {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.settingsRowLabel {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.settingsRowHelper {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--text-muted);
+}
+
+.settingsSelect {
+  min-width: 120px;
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid var(--border-default);
+  background: rgba(18,18,24,0.95);
+  color: var(--text-primary);
+  padding: 0 8px;
+}
+
+.settingsToggle {
+  width: 20px;
+  height: 20px;
+}
+
+.settingsSegment {
+  display: inline-flex;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.settingsSegmentBtn {
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-weight: 800;
+  min-width: 72px;
+  height: 34px;
+  cursor: pointer;
+}
+
+.settingsSegmentBtn.active {
+  background: var(--primary-btn-hover-bg);
+}
+
+.settingsSliderRow {
+  align-items: center;
+}
+
+.settingsSliderWrap {
+  min-width: 170px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settingsSlider {
+  flex: 1 1 auto;
+}
+
+.settingsSliderValue {
+  min-width: 48px;
+  text-align: right;
+  font-weight: 800;
+  font-size: 12px;
+  color: var(--text-muted);
+}
 
 #welcomeScreen button,
 #mainMenu button,
@@ -647,8 +1065,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 /* Weapon Selection Menu */
-#menu { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.55); z-index: 4; }
-#menu .panel { width: min(560px, 92vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
+#menu { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 4; }
+#menu .panel { width: min(560px, 92vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); }
 #menu .title { font-size: 24px; font-weight: 800; margin-bottom: 6px; }
 #menu .subline { opacity: 0.9; margin-bottom: 14px; }
 
@@ -660,19 +1078,19 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .wpnBtn {
   text-align: left;
   padding: 12px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.08);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--hover-bg);
   cursor: pointer;
-  color: #fff;
-  transition: transform 80ms ease, background 120ms ease, border-color 120ms ease;
+  color: var(--text-primary);
+  transition: transform var(--transition-fast), background var(--transition-standard), border-color var(--transition-standard);
 }
-.wpnBtn:hover { transform: translateY(-1px); background: rgba(255,255,255,0.11); border-color: rgba(255,255,255,0.18); }
-.wpnBtn[aria-pressed="true"] { border-color: rgba(255,255,255,0.36); background: rgba(255,255,255,0.14); }
+.wpnBtn:hover { transform: translateY(-1px); background: var(--hover-bg); border-color: var(--border-default); }
+.wpnBtn[aria-pressed="true"] { border-color: var(--border-strong); background: var(--active-bg); }
 .wpnTitle { font-weight: 900; font-size: 14px; margin-bottom: 2px; }
 .wpnDesc { opacity: 0.9; font-size: 12px; line-height: 1.35; }
 
-#menu button#startBtn { margin-top: 14px; width: 100%; padding: 12px 14px; border-radius: 12px; border: 0; cursor: pointer; font-weight: 800; background: rgba(255,255,255,0.16); color: #fff; }
+#menu button#startBtn { margin-top: 14px; width: 100%; padding: 12px 14px; border-radius: var(--radius-md); border: 0; cursor: pointer; font-weight: 800; background: var(--active-bg); color: var(--text-primary); }
 
 /* Full-screen dim + center */
 .pauseOverlay {
@@ -683,7 +1101,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   justify-content: center;
   pointer-events: auto;
   background: rgba(0, 0, 0, 0.35);
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--text-primary);
   overflow: hidden;
 }
 
@@ -699,7 +1117,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--text-primary);
 }
 
 /* Header */
@@ -709,6 +1127,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .pauseTitle {
@@ -717,6 +1136,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   letter-spacing: 0.2px;
 }
 
+.pauseHeaderActions,
 .pauseHeaderButtons {
   display: flex;
   gap: 12px;
@@ -727,21 +1147,97 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   height: 40px;
   min-width: 140px;
   padding: 0 14px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.10);
-  color: rgba(255, 255, 255, 0.92);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--focus-bg);
+  color: var(--text-primary);
   font-weight: 700;
   cursor: pointer;
 }
 
-.pauseBtn:hover { background: rgba(255, 255, 255, 0.16); }
+.pauseBtn:hover { background: var(--active-bg); }
+
+.pauseActionResume {
+  background: rgba(42, 148, 79, 0.3);
+  border-color: rgba(80, 200, 120, 0.58);
+}
+.pauseActionResume:hover {
+  background: rgba(56, 168, 94, 0.4);
+}
+
+.pauseActionQuit {
+  background: rgba(195, 45, 45, 0.32);
+  border-color: rgba(235, 95, 95, 0.62);
+}
+.pauseActionQuit:hover {
+  background: rgba(220, 60, 60, 0.42);
+}
+
+.pauseActionDev {
+  background: rgba(80, 124, 224, 0.28);
+  border-color: rgba(120, 170, 255, 0.56);
+}
+.pauseActionDev:hover {
+  background: rgba(98, 146, 255, 0.4);
+}
 
 .pauseQuit {
   background: rgba(220, 60, 60, 0.25);
   border-color: rgba(220, 60, 60, 0.35);
 }
 .pauseQuit:hover { background: rgba(220, 60, 60, 0.32); }
+
+.pauseConfirmOverlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 5;
+  padding: 16px;
+}
+
+.pauseConfirmDialog {
+  width: min(440px, 92vw);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: rgba(18, 18, 24, 0.98);
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.pauseConfirmDialog h4 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.pauseConfirmDialog p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.pauseConfirmActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pauseConfirmCancel {
+  background: var(--focus-bg);
+}
+
+.pauseConfirmAccept {
+  background: rgba(195, 45, 45, 0.35);
+  border-color: rgba(235, 95, 95, 0.62);
+}
+
+.pauseConfirmAccept:hover {
+  background: rgba(220, 60, 60, 0.46);
+}
 
 /* Main grid */
 .pauseGrid {
@@ -757,8 +1253,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 /* Sections */
 .pauseSection {
   background: rgba(0, 0, 0, 0.28);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -771,14 +1267,14 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   font-size: 16px;
   font-weight: 800;
   opacity: 1;
-  color: rgba(255, 255, 255, 0.98);
+  color: var(--text-primary);
 }
 
 .pauseSection h4 {
   margin: 10px 0 6px;
   font-size: 13px;
   opacity: 1;
-  color: rgba(255, 255, 255, 0.96);
+  color: var(--text-primary);
 }
 
 .audioRow {
@@ -791,10 +1287,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .audioRow button {
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   padding: 6px 8px;
-  background: rgba(255,255,255,0.16);
-  color: #fff;
+  background: var(--active-bg);
+  color: var(--text-primary);
   cursor: pointer;
 }
 
@@ -836,8 +1332,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
   padding: 10px 10px;
   background: rgba(255,255,255,0.05);
 }
@@ -864,17 +1360,17 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .pauseDebugOpenBtn {
   height: 34px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--primary-btn-bg);
+  color: var(--text-primary);
   font-weight: 700;
   cursor: pointer;
   padding: 0 12px;
 }
 
 .pauseDebugOpenBtn:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--primary-btn-hover-bg);
 }
 
 .pauseStatsTabs {
@@ -891,8 +1387,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 .pauseStatsTabBtn.active {
-  background: rgba(255, 255, 255, 0.28);
-  border-color: rgba(255, 255, 255, 0.34);
+  background: var(--active-bg);
+  border-color: var(--border-strong);
 }
 
 .pauseDebugLayer {
@@ -908,8 +1404,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .pauseDebugLayerPanel {
   width: min(1100px, 92vw);
   height: min(760px, 84vh);
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
   background: rgba(15, 15, 15, 0.92);
   padding: 14px;
   display: flex;
@@ -927,7 +1423,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .pauseDebugLayerHeader h3 {
   margin: 0;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .pauseDebugLayerActions {
@@ -957,10 +1453,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .pauseDebugCardToggleBtn,
 .pauseDebugCardSaveBtn {
   height: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--focus-bg);
+  color: var(--text-primary);
   font-weight: 700;
   cursor: pointer;
   padding: 0 10px;
@@ -968,7 +1464,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .pauseDebugCardToggleBtn:hover,
 .pauseDebugCardSaveBtn:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--primary-btn-hover-bg);
 }
 
 .pauseDebugCardControls {
@@ -987,8 +1483,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   grid-template-columns: minmax(0, 1fr) auto auto auto;
   gap: 8px;
   align-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
   padding: 8px;
 }
 
@@ -1006,22 +1502,22 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .pauseDebugCardId {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--text-primary);
 }
 
 .pauseDebugCardBtn {
   width: 26px;
   height: 26px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--focus-bg);
+  color: var(--text-primary);
   font-weight: 800;
   cursor: pointer;
 }
 
 .pauseDebugCardBtn:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--primary-btn-hover-bg);
 }
 
 .pauseStatTable {
@@ -1034,7 +1530,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .pauseStatTable td {
   text-align: left;
   padding: 6px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .pauseStatTable td:last-child {
@@ -1062,6 +1558,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
     flex-direction: column;
     align-items: stretch;
   }
+  .pauseHeaderActions,
   .pauseHeaderButtons {
     justify-content: stretch;
   }
@@ -1071,8 +1568,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 /* Run end overlay (WIN / LOSE) */
-#end { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.62); z-index: 7; }
-#end .panel { width: min(560px, 92vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
+#end { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 7; }
+#end .panel { width: min(560px, 92vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); }
 #end .title { font-size: 26px; font-weight: 900; margin-bottom: 6px; }
 #end .subline { opacity: 0.92; margin-bottom: 14px; white-space: pre-wrap; }
 #end .endStats {
@@ -1080,7 +1577,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   gap: 6px;
   margin-bottom: 14px;
   padding: 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: rgba(0, 0, 0, 0.2);
 }
 #end .endStatRow {
@@ -1099,14 +1596,14 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   margin-top: 14px;
   width: 100%;
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   border: 0;
   cursor: pointer;
   font-weight: 900;
-  color: #fff;
+  color: var(--text-primary);
 }
 #end button#endBtn {
-  background: rgba(255,255,255,0.16);
+  background: var(--active-bg);
 }
 
 /* Deck overlays (reward + vendor) */
@@ -1126,12 +1623,12 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   width: min(980px, 95vw);
   padding: 20px;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--border-subtle);
   background:
     linear-gradient(150deg, rgba(22, 26, 40, 0.96), rgba(13, 16, 26, 0.95));
-  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.55);
-  color: #edf0ff;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
+  box-shadow: var(--shadow-medium);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
 }
 
 .deckOverlay .title {
@@ -1148,8 +1645,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 /* Map overlay (shown between floors) */
-#map { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.62); z-index: 6; }
-#map .panel { width: min(860px, 96vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
+#map { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 6; }
+#map .panel { width: min(860px, 96vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); }
 #map .title { font-size: 22px; font-weight: 900; margin-bottom: 6px; }
 #map .sub { opacity: 0.9; margin-bottom: 14px; white-space: pre-wrap; }
 
@@ -1187,7 +1684,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   width: 100%;
   aspect-ratio: 1000 / 520;
   border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.10);
+  border: 1px solid var(--border-subtle);
   background: rgba(0,0,0,0.22);
   overflow: hidden;
 }
@@ -1229,15 +1726,15 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   width: 150px;
   height: 70px;
   border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.07);
-  color: #fff;
+  border: 1px solid var(--border-subtle);
+  background: var(--hover-bg);
+  color: var(--text-primary);
   cursor: pointer;
   text-align: left;
   padding: 10px 12px;
 }
 
-.mapHitBtn:hover { border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.10); }
+.mapHitBtn:hover { border-color: var(--border-default); background: var(--focus-bg); }
 .mapHitBtn[disabled] { cursor: not-allowed; opacity: 0.45; }
 .mapHitTitle { font-weight: 900; font-size: 14px; margin-bottom: 4px; }
 .mapHitDesc { opacity: 0.9; font-size: 12px; line-height: 1.25; }
@@ -1251,17 +1748,17 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .deckCardButton {
   text-align: left;
   padding: 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: linear-gradient(180deg, var(--hover-bg), rgba(118, 232, 255, 0.04));
   cursor: pointer;
-  color: #fff;
-  transition: transform 80ms ease, background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+  color: var(--text-primary);
+  transition: transform var(--transition-fast), background var(--transition-standard), border-color var(--transition-standard), box-shadow var(--transition-standard);
 }
 
 .deckCardButton:hover {
   transform: translateY(-1px);
-  border-color: rgba(255,255,255,0.28);
+  border-color: var(--border-default);
   box-shadow: 0 10px 24px rgba(0,0,0,0.36);
 }
 
@@ -1335,10 +1832,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 .vendorTabBtn {
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.24);
-  background: rgba(255,255,255,0.08);
-  color: #fff;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-default);
+  background: var(--hover-bg);
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 800;
   padding: 8px 14px;
@@ -1346,7 +1843,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 .vendorTabBtn:hover {
-  background: rgba(255,255,255,0.14);
+  background: var(--active-bg);
 }
 
 .vendorTabBtn.active,
@@ -1380,10 +1877,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 .vendorPriceBadge {
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 3px 9px;
-  border: 1px solid rgba(255,255,255,0.22);
-  background: rgba(255,255,255,0.1);
+  border: 1px solid var(--border-default);
+  background: var(--focus-bg);
   font-size: 11px;
   font-weight: 900;
 }
@@ -1413,17 +1910,17 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .vendorLeaveButton {
   min-width: 160px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.18);
-  background: rgba(255,255,255,0.08);
-  color: #fff;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--hover-bg);
+  color: var(--text-primary);
   font-size: 14px;
   font-weight: 900;
   padding: 10px 16px;
   cursor: pointer;
 }
 
-.vendorLeaveButton:hover { background: rgba(255,255,255,0.14); }
+.vendorLeaveButton:hover { background: var(--active-bg); }
 .vendorLeaveButton.selected,
 .vendorLeaveButton:focus-visible {
   outline: none;
@@ -1435,7 +1932,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .choiceStats {
   margin-top: 10px;
   padding-top: 8px;
-  border-top: 1px solid rgba(255,255,255,0.1);
+  border-top: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -1464,11 +1961,11 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   font-size: 9px;
   margin: 0 2px;
 }
-.statArrow.statUp { color: #4ade80; }
-.statArrow.statDown { color: #f87171; }
+.statArrow.statUp { color: var(--positive); }
+.statArrow.statDown { color: var(--negative); }
 .statNew { font-weight: 700; }
-.statNew.statUp { color: #4ade80; }
-.statNew.statDown { color: #f87171; }
+.statNew.statUp { color: var(--positive); }
+.statNew.statDown { color: var(--negative); }
 
 @media (max-width: 720px) {
   .deckCardGrid { grid-template-columns: 1fr; }
@@ -1500,6 +1997,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   #characterSelect .panel,
   #mapMenu .panel,
   #innkeeperMenu .panel,
+  #creditsMenu .panel,
   #settingsMenu .panel,
   #menu .panel {
     width: min(96vw, 560px);
@@ -1519,8 +2017,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   #mainMenu .menuFooter button,
   #mapMenu .mapMenuActions button,
   #characterSelect .characterActions button,
-  #innkeeperMenu button,
-  #settingsMenu button,
+  #innkeeperMenu > .panel > button,
+  #settingsMenu > .panel > button,
   #menu button#startBtn {
     min-height: 44px;
     padding: 10px 14px;
@@ -1530,6 +2028,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   #characterSelect .title,
   #mapMenu .title,
   #innkeeperMenu .title,
+  #creditsMenu .title,
   #settingsMenu .title {
     font-size: 24px;
     margin-bottom: 10px;
@@ -1558,6 +2057,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   #mapMenu .subline,
   #characterSelect .subline,
   #innkeeperMenu .subline,
+  #creditsMenu .subline,
   #settingsMenu .subline,
   #menu .subline {
     font-size: 13px;
@@ -1618,6 +2118,34 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
     margin: 10px 0 6px;
     font-size: 14px;
   }
+
+  .settingsTabs {
+    gap: 6px;
+  }
+
+  .settingsTabBtn {
+    min-height: 42px;
+    font-size: 13px;
+  }
+
+  .settingsBody {
+    padding: 14px;
+  }
+
+  .settingsRow {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .settingsSliderWrap {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .settingsSelect {
+    width: 100%;
+  }
 }
 
 @media (max-width: 390px) {
@@ -1661,17 +2189,17 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 @media (hover: none) and (pointer: coarse) {
   #welcomeScreen button:hover {
-    background: rgba(255,255,255,0.20);
+    background: var(--primary-btn-bg);
     transform: none;
   }
 
   #mainMenu .menuButtons button:hover {
-    background: rgba(255,255,255,0.18);
+    background: var(--primary-btn-bg);
     transform: none;
   }
 
   #mainMenu .menuButtons button#startRunBtn:hover {
-    background: rgba(255,255,255,0.24);
+    background: var(--primary-btn-hover-bg);
   }
 
   #mainMenu .menuFooter button:hover {
@@ -1681,14 +2209,14 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
   .mapChoiceBtn:hover {
     transform: none;
-    background: rgba(255,255,255,0.08);
-    border-color: rgba(255,255,255,0.10);
+    background: var(--hover-bg);
+    border-color: var(--border-subtle);
   }
 
   .characterCard:hover {
     transform: none;
-    background: rgba(255,255,255,0.08);
-    border-color: rgba(255,255,255,0.10);
+    background: var(--hover-bg);
+    border-color: var(--border-subtle);
   }
 }
 
@@ -1757,8 +2285,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
   #dialogBar .panel {
     width: min(440px, 94vw);
-    border: 1px solid rgba(255, 255, 255, 0.26);
-    border-radius: 14px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
     border-top-width: 1px;
     padding: 14px 14px;
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
@@ -1790,6 +2318,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   #characterSelect .panel,
   #mapMenu .panel,
   #innkeeperMenu .panel,
+  #creditsMenu .panel,
   #settingsMenu .panel,
   #menu .panel,
   #map .panel {
@@ -1846,6 +2375,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   #characterSelect .title,
   #mapMenu .title,
   #innkeeperMenu .title,
+  #creditsMenu .title,
   #settingsMenu .title,
   #menu .title {
     font-size: 22px;
@@ -1855,6 +2385,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   #mapMenu .subline,
   #characterSelect .subline,
   #innkeeperMenu .subline,
+  #creditsMenu .subline,
   #settingsMenu .subline,
   #menu .subline {
     font-size: 12px;
@@ -1942,6 +2473,12 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
     transform: scale(1.1);
   }
 
+  #vitalsOrbRoot.isRight {
+    left: auto;
+    right: calc(8px + var(--safe-right));
+    bottom: calc(132px + var(--safe-bottom));
+  }
+
   #interactPrompt {
     max-width: calc(100vw - 24px);
     font-size: 12px;
@@ -2003,12 +2540,14 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
     min-width: 0;
   }
 
+  .pauseHeaderActions,
   .pauseHeaderButtons {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
 
+  .pauseHeaderActions .pauseBtn,
   .pauseHeaderButtons .pauseBtn {
     width: 100%;
   }
@@ -2095,6 +2634,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
     font-size: 19px;
   }
 
+  .pauseHeaderActions,
   .pauseHeaderButtons {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
@@ -2151,5 +2691,534 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
   .pauseDebugLayerBody {
     gap: 6px;
+  }
+}
+
+/* Route map shell (StS-style) */
+#map.routeMode {
+  padding: 0;
+  background:
+    radial-gradient(120% 90% at 50% -20%, rgba(80, 108, 168, 0.22), transparent 52%),
+    rgba(5, 8, 14, 0.9);
+}
+
+#map.routeMode .panel {
+  width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  border-radius: 0;
+  border: 0;
+  padding: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  background:
+    linear-gradient(180deg, rgba(18, 22, 36, 0.98), rgba(8, 11, 20, 0.98));
+  box-shadow: none;
+  overflow: hidden;
+}
+
+#map.routeMode #mapTopBar {
+  padding: calc(12px + var(--safe-top)) 16px 10px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(12, 16, 28, 0.94);
+}
+
+#map.routeMode .mapTopBarRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#map.routeMode .routeBackBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 36px;
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--hover-bg);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 100ms ease, border-color 100ms ease;
+  flex-shrink: 0;
+}
+
+#map.routeMode .routeBackBtn:hover {
+  background: var(--active-bg);
+  border-color: var(--border-default);
+}
+
+#map.routeMode .routeBackBtn:active {
+  background: var(--primary-btn-hover-bg);
+}
+
+#map.routeMode .title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+}
+
+#map.routeMode .sub {
+  margin: 4px 0 6px;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+
+#map.routeMode #mapDepthLabel {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+  background: rgba(10, 14, 24, 0.72);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+#map.routeMode #mapGraphWrap,
+#map.routeMode.delveFull #mapGraphWrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  aspect-ratio: auto;
+  border-radius: 0;
+  border: 0;
+  background: rgba(6, 10, 20, 0.85);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+#map.routeMode #mapGraphWrap.routeScrollable {
+  cursor: auto;
+}
+
+#map.routeMode #mapGraphContent {
+  position: relative;
+  left: 0;
+  top: 0;
+  transform: none;
+  will-change: auto;
+}
+
+#map.routeMode #mapSvg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#map.routeMode #mapHit {
+  position: absolute;
+  inset: 0;
+}
+
+#map.routeMode .routeEdge {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+#map.routeMode .routeEdge--locked {
+  stroke: rgba(158, 168, 194, 0.24);
+}
+
+#map.routeMode .routeEdge--active {
+  stroke: rgba(187, 211, 255, 0.52);
+}
+
+#map.routeMode .routeNode {
+  --route-accent: rgba(184, 198, 225, 0.68);
+  min-width: 100px;
+  height: auto;
+  min-height: 44px;
+  padding: 6px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--route-accent);
+  background:
+    radial-gradient(110% 110% at 30% 20%, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04) 56%),
+    rgba(12, 18, 32, 0.9);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: rgba(235, 241, 255, 0.97);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+  transition: transform 100ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+
+#map.routeMode .routeNode:hover:not([disabled]),
+#map.routeMode .routeNode:focus-visible:not([disabled]) {
+  transform: translate(-50%, -50%) scale(1.04);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.42);
+}
+
+
+#map.routeMode .routeNode--survive { --route-accent: rgba(74, 212, 148, 0.78); }
+#map.routeMode .routeNode--time-trial { --route-accent: rgba(255, 184, 79, 0.8); }
+#map.routeMode .routeNode--vendor { --route-accent: rgba(255, 218, 97, 0.84); }
+#map.routeMode .routeNode--heal { --route-accent: rgba(90, 214, 241, 0.82); }
+#map.routeMode .routeNode--boss-triple { --route-accent: rgba(255, 95, 95, 0.84); }
+
+#map.routeMode .routeNode--locked {
+  opacity: 0.42;
+  filter: saturate(0.55);
+}
+
+#map.routeMode .routeNode--reachable {
+  box-shadow: 0 0 0 2px rgba(190, 220, 255, 0.18), 0 10px 24px rgba(0, 0, 0, 0.34);
+}
+
+#map.routeMode .routeNode--current {
+  box-shadow: 0 0 0 3px rgba(255, 221, 122, 0.34), 0 14px 28px rgba(0, 0, 0, 0.4);
+}
+
+#map.routeMode .routeNode--completed {
+  opacity: 0.76;
+}
+
+#map.routeMode #mapInfoPanel {
+  min-height: 54px;
+  padding: 8px 14px calc(10px + var(--safe-bottom));
+  border-top: 1px solid var(--border-subtle);
+  background: rgba(10, 14, 24, 0.9);
+  color: var(--text-primary);
+}
+
+#map.routeMode .routeInfoTitle {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+#map.routeMode .routeInfoMeta {
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: 0.84;
+}
+
+@media (max-width: 768px), (max-height: 500px) {
+  #map.routeMode #mapTopBar {
+    padding: calc(8px + var(--safe-top)) 10px 6px 10px;
+  }
+
+  #map.routeMode .mapTopBarRow {
+    gap: 8px;
+  }
+
+  #map.routeMode .routeBackBtn {
+    min-width: 40px;
+    min-height: 34px;
+    padding: 3px 10px;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+
+  #map.routeMode .title {
+    font-size: 20px;
+  }
+
+  #map.routeMode .sub {
+    margin: 3px 0 4px;
+    font-size: 12px;
+  }
+
+  #map.routeMode #mapDepthLabel {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  #map.routeMode .routeNode {
+    min-width: 88px;
+    min-height: 44px;
+    padding: 5px 10px;
+    border-radius: 12px;
+    font-size: 0.78rem;
+  }
+
+  #map.routeMode #mapInfoPanel {
+    min-height: 50px;
+    padding: 7px 10px calc(8px + var(--safe-bottom));
+  }
+}
+
+/* -------------------------------------------------------------------------
+   MAIN MENU OVERHAUL: SURVEILLANCE TERMINAL
+---------------------------------------------------------------------------*/
+#mainMenu.terminalMenu {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(140% 130% at 50% 0%, rgba(23, 58, 84, 0.22), transparent 60%),
+    linear-gradient(160deg, var(--bg-base), var(--bg-surface));
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+  overflow: hidden;
+}
+
+#mainMenu.terminalMenu::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--texture-grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--texture-grid-color) 1px, transparent 1px);
+  background-size: var(--texture-grid-size) var(--texture-grid-size);
+}
+
+#mainMenu.terminalMenu::after {
+  content: "";
+  position: absolute;
+  inset: -40% 0 0;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(118, 232, 255, 0) 0%,
+    var(--texture-scan-color) 48%,
+    rgba(118, 232, 255, 0) 100%
+  );
+  transform: translateY(-60%);
+  animation: terminalScanDrift 8s linear infinite;
+}
+
+#mainMenu.terminalMenu .terminalVignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--texture-vignette);
+}
+
+#mainMenu.terminalMenu .terminalHeader,
+#mainMenu.terminalMenu .terminalBody,
+#mainMenu.terminalMenu .terminalFooter {
+  position: relative;
+  z-index: 1;
+}
+
+#mainMenu.terminalMenu .terminalHeader {
+  min-height: clamp(48px, 12dvh, 96px);
+  padding: calc(clamp(10px, 3dvh, 26px) + var(--safe-top)) clamp(20px, 4vw, 56px) clamp(6px, 2dvh, 16px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+#mainMenu.terminalMenu .terminalBrand h1 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: clamp(24px, min(4vw, 6dvh), 48px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.08em;
+}
+
+#mainMenu.terminalMenu .terminalSubtitle {
+  margin-top: clamp(4px, 1dvh, 9px);
+  font-size: clamp(10px, min(1.2vw, 1.5dvh), 14px);
+  color: var(--text-muted);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+
+#mainMenu.terminalMenu .terminalAccentLine {
+  margin-top: clamp(6px, 1.5dvh, 12px);
+  width: min(240px, 45vw);
+  height: 1px;
+  background: linear-gradient(90deg, var(--accent), transparent 85%);
+  opacity: 0.88;
+  animation: terminalAccentPulse 4.8s ease-in-out infinite;
+}
+
+#mainMenu.terminalMenu .terminalSignal {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  opacity: 0.78;
+}
+
+#mainMenu.terminalMenu .terminalSignalDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: var(--shadow-glow);
+  animation: terminalDotPulse 2.2s ease-in-out infinite;
+}
+
+#mainMenu.terminalMenu .terminalSignalBars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 14px;
+}
+
+#mainMenu.terminalMenu .terminalSignalBars i {
+  display: block;
+  width: 2px;
+  background: var(--border-strong);
+  transform-origin: bottom center;
+}
+
+#mainMenu.terminalMenu .terminalSignalBars i:nth-child(1) { height: 7px; animation: terminalBars 1.3s ease-in-out infinite; }
+#mainMenu.terminalMenu .terminalSignalBars i:nth-child(2) { height: 11px; animation: terminalBars 1.3s ease-in-out 0.15s infinite; }
+#mainMenu.terminalMenu .terminalSignalBars i:nth-child(3) { height: 5px; animation: terminalBars 1.3s ease-in-out 0.3s infinite; }
+
+#mainMenu.terminalMenu .terminalBody {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: clamp(4px, 1.5dvh, 18px) clamp(12px, 2vw, 16px);
+}
+
+#mainMenu.terminalMenu .terminalPanel {
+  width: min(560px, calc(100vw - clamp(0px, 5vw, 64px)));
+  border: 1px solid var(--accent-soft);
+  background: linear-gradient(180deg, var(--bg-elevated), rgba(5, 12, 24, 0.92));
+  padding: clamp(8px, 2dvh, 24px);
+  transform: translateY(clamp(-40px, -5dvh, 0px));
+  box-shadow:
+    inset 0 0 0 1px var(--border-subtle),
+    var(--shadow-medium);
+}
+
+#mainMenu.terminalMenu .terminalAction {
+  position: relative;
+  width: 100%;
+  min-height: clamp(44px, 9dvh, 72px);
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  padding: 0 clamp(10px, 2vw, 24px);
+  font-family: inherit;
+  font-size: clamp(15px, min(2.2dvh, 1.8vw), 18px);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color var(--transition-standard), border-color var(--transition-standard), color var(--transition-standard), transform var(--transition-standard);
+}
+
+#mainMenu.terminalMenu .terminalAction::before,
+#mainMenu.terminalMenu .terminalAction::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  border-color: var(--border-strong);
+  opacity: 0;
+  transition: opacity var(--transition-standard), transform var(--transition-standard);
+}
+
+#mainMenu.terminalMenu .terminalAction::before {
+  top: 10px;
+  left: 7px;
+  border-top: 1px solid;
+  border-left: 1px solid;
+  transform: translate(5px, 5px);
+}
+
+#mainMenu.terminalMenu .terminalAction::after {
+  right: 7px;
+  bottom: 10px;
+  border-right: 1px solid;
+  border-bottom: 1px solid;
+  transform: translate(-5px, -5px);
+}
+
+#mainMenu.terminalMenu .terminalAction:hover {
+  background: var(--hover-bg);
+  border-bottom-color: rgba(118, 232, 255, 0.56);
+}
+
+#mainMenu.terminalMenu .terminalAction:hover::before,
+#mainMenu.terminalMenu .terminalAction:hover::after,
+#mainMenu.terminalMenu .terminalAction:focus-visible::before,
+#mainMenu.terminalMenu .terminalAction:focus-visible::after {
+  opacity: 1;
+  transform: translate(0, 0);
+}
+
+#mainMenu.terminalMenu .terminalAction:focus-visible {
+  outline: none;
+  background: var(--focus-bg);
+}
+
+#mainMenu.terminalMenu .terminalAction:active {
+  transform: translateY(1px);
+  background: var(--active-bg);
+}
+
+#mainMenu.terminalMenu .terminalActionPrimary {
+  background: var(--primary-btn-bg);
+  border-bottom-color: rgba(118, 232, 255, 0.44);
+  font-weight: 700;
+}
+
+#mainMenu.terminalMenu .terminalActionPrimary:hover {
+  background: var(--primary-btn-hover-bg);
+}
+
+#mainMenu.terminalMenu .terminalFooter {
+  min-height: clamp(28px, 5dvh, 44px);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 clamp(20px, 4vw, 56px) calc(clamp(6px, 1.5dvh, 14px) + var(--safe-bottom));
+}
+
+#mainMenu.terminalMenu .terminalVersion {
+  font-size: clamp(10px, 1.5dvh, 12px);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+@keyframes terminalScanDrift {
+  0% { transform: translateY(-62%); }
+  100% { transform: translateY(150%); }
+}
+
+@keyframes terminalAccentPulse {
+  0%, 100% { opacity: 0.72; }
+  50% { opacity: 1; }
+}
+
+@keyframes terminalDotPulse {
+  0%, 100% { opacity: 0.46; transform: scale(1); }
+  45% { opacity: 1; transform: scale(1.15); }
+}
+
+@keyframes terminalBars {
+  0%, 100% { opacity: 0.44; transform: scaleY(0.78); }
+  50% { opacity: 1; transform: scaleY(1); }
+}
+
+@media (max-width: 600px) {
+  #mainMenu.terminalMenu .terminalPanel {
+    width: 100%;
+    border-left: 0;
+    border-right: 0;
   }
 }

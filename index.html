@@ -8,6 +8,7 @@
   <meta name="apple-mobile-web-app-title" content="RatGame" />
   <title>Rat Noir Survivors — Prototype</title>
   <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="/src/ui/styles/theme.css" />
   <link rel="stylesheet" href="/src/ui/styles/overlays.css" />
 </head>
 <body>
@@ -52,16 +53,16 @@
 </div>
 
 <div id="dialogBar" hidden>
-  <div class="panel">
+  <div class="panel DialogPanel">
     <div id="dialogText"></div>
     <div id="dialogChoices"></div>
   </div>
 </div>
 
 
-<div id="levelup" hidden data-disabled="true">
+<div id="levelup" class="OverlayContainer" hidden data-disabled="true">
   <div class="panel">
-    <div class="title">Level Up</div>
+    <div class="title SectionHeader">Level Up</div>
     <div class="sub" id="luSub">Choose an upgrade</div>
     <div id="luChoices"></div>
   </div>
@@ -69,8 +70,14 @@
 
 <div id="map" hidden>
   <div class="panel">
-    <div class="title">Choose your route</div>
-    <div class="sub" id="mapSub">Pick a starting location.</div>
+    <div id="mapTopBar">
+      <div class="mapTopBarRow">
+        <button id="routeBackBtn" class="routeBackBtn" type="button" aria-label="Back to menu">← Back</button>
+        <div class="title">Choose your route</div>
+      </div>
+      <div class="sub" id="mapSub">Pick a starting location.</div>
+    </div>
+    <div id="mapDepthLabel" aria-live="polite"></div>
 
     <div id="mapGraphWrap">
       <div id="mapGraphContent">
@@ -78,91 +85,130 @@
         <div id="mapHit"></div>
       </div>
     </div>
+    <div id="mapInfoPanel" aria-live="polite"></div>
   </div>
 </div>
 
-<div id="end" hidden>
+<div id="end" class="OverlayContainer" hidden>
   <div class="panel">
-    <div class="title" id="endTitle">Run ended</div>
+    <div class="title SectionHeader" id="endTitle">Run ended</div>
     <div class="subline" id="endSubline"></div>
     <div class="endStats">
-      <div class="endStatRow"><span>Time</span><strong id="endStatTime">00:00</strong></div>
-      <div class="endStatRow"><span>Depth</span><strong id="endStatDepth">1</strong></div>
-      <div class="endStatRow"><span>Kills</span><strong id="endStatKills">0</strong></div>
-      <div class="endStatRow"><span>Gold</span><strong id="endStatGold">0</strong></div>
-      <div class="endStatRow"><span>Relics</span><strong id="endStatRelics">0</strong></div>
-      <div class="endStatRow"><span>Cards</span><strong id="endStatCards">0</strong></div>
+      <div class="endStatRow StatRow"><span class="StatRowLabel">Time</span><strong class="StatRowValue" id="endStatTime">00:00</strong></div>
+      <div class="endStatRow StatRow"><span class="StatRowLabel">Depth</span><strong class="StatRowValue" id="endStatDepth">1</strong></div>
+      <div class="endStatRow StatRow"><span class="StatRowLabel">Kills</span><strong class="StatRowValue" id="endStatKills">0</strong></div>
+      <div class="endStatRow StatRow"><span class="StatRowLabel">Gold</span><strong class="StatRowValue" id="endStatGold">0</strong></div>
+      <div class="endStatRow StatRow"><span class="StatRowLabel">Relics</span><strong class="StatRowValue" id="endStatRelics">0</strong></div>
+      <div class="endStatRow StatRow"><span class="StatRowLabel">Cards</span><strong class="StatRowValue" id="endStatCards">0</strong></div>
     </div>
-    <button id="endBtn" type="button">Main Menu</button>
+    <button id="endBtn" class="PrimaryButton" type="button">Main Menu</button>
   </div>
 </div>
 
-<div id="welcomeScreen" hidden>
+<div id="welcomeScreen" class="TerminalContainer" hidden>
   <div class="panel">
-    <div class="welcomeTitle">Good Rat - Gone Bad</div>
-    <button id="continueBtn" type="button">Continue</button>
+    <div class="welcomeTitle SectionHeader">Good Rat - Gone Bad</div>
+    <button id="continueBtn" class="PrimaryButton" type="button">Continue</button>
   </div>
 </div>
 
-<div id="mainMenu" hidden>
-  <div class="panel">
-    <div class="title">Main Menu</div>
-    <div class="menuButtons">
-      <button id="startRunBtn" type="button">Start Run</button>
-      <button id="deterministicRunBtn" type="button">Path Select</button>
-      <button id="mapsBtn" type="button">Maps</button>
-      <button id="innkeeperBtn" type="button">Innkeeper</button>
-      <button id="settingsBtn" type="button">Settings</button>
+<div id="mainMenu" class="terminalMenu TerminalContainer" hidden>
+  <div class="terminalVignette" aria-hidden="true"></div>
+  <header class="terminalHeader">
+    <div class="terminalBrand">
+      <h1>RATGAME</h1>
+      <div class="terminalSubtitle">SURVEILLANCE TERMINAL</div>
+      <div class="terminalAccentLine" aria-hidden="true"></div>
     </div>
-    <div class="menuFooter">
-      <button id="likeSubBtn" type="button">❤️ Like & Subscribe</button>
+    <div class="terminalSignal" aria-hidden="true">
+      <span class="terminalSignalDot"></span>
+      <span class="terminalSignalBars">
+        <i></i><i></i><i></i>
+      </span>
     </div>
-  </div>
+  </header>
+
+  <main class="terminalBody">
+    <section class="terminalPanel VerticalNavList" aria-label="Primary Terminal Panel">
+      <button id="startRunBtn" class="terminalAction terminalActionPrimary PrimaryButton" type="button">INITIATE RUN</button>
+      <button id="innkeeperBtn" class="terminalAction SecondaryButton" type="button">INNKEEPER</button>
+      <button id="settingsBtn" class="terminalAction SecondaryButton" type="button">SETTINGS</button>
+      <button id="creditsBtn" class="terminalAction SecondaryButton" type="button">CREDITS</button>
+
+    </section>
+  </main>
+
+  <footer class="terminalFooter">
+    <div class="terminalVersion">0.1.0 - Alpha</div>
+  </footer>
+
+  <button id="likeSubBtn" type="button" hidden aria-hidden="true" tabindex="-1"></button>
 </div>
 
-<div id="characterSelect" hidden>
+<div id="characterSelect" class="TerminalContainer" hidden>
   <div class="panel">
-    <div class="title">Select Your Rat</div>
+    <div class="title SectionHeader">Select Your Rat</div>
     <div class="subline">Choose a character to begin your run.</div>
     <div id="characterChoices"></div>
+    <div id="characterDetail" class="DetailPanel" hidden>
+      <div class="SectionHeader">Character Detail</div>
+      <div class="StatRow">
+        <span class="StatRowLabel">Character</span>
+        <span id="characterDetailName" class="StatRowValue">-</span>
+      </div>
+      <div class="StatRow">
+        <span class="StatRowLabel">Starter Weapon</span>
+        <span id="characterDetailWeapon" class="StatRowValue">-</span>
+      </div>
+      <div id="characterDetailDesc" class="detailPanelDesc"></div>
+    </div>
     <div class="characterActions">
-      <button id="characterBackBtn" type="button">Back</button>
-      <button id="characterContinueBtn" type="button" disabled>Continue</button>
+      <button id="characterBackBtn" class="SecondaryButton" type="button">Back</button>
+      <button id="characterContinueBtn" class="PrimaryButton" type="button" disabled>Continue</button>
     </div>
   </div>
 </div>
 
-<div id="mapMenu" hidden>
+<div id="mapMenu" class="TerminalContainer" hidden>
   <div class="panel">
-    <div class="title">Choose Map</div>
+    <div class="title SectionHeader">Choose Map</div>
     <div class="subline" id="mapMenuSubline">Pick a map for this run.</div>
     <div id="mapChoices"></div>
     <div class="mapMenuActions">
-      <button id="mapBackBtn" type="button">Back</button>
-      <button id="mapContinueBtn" type="button">Continue</button>
+      <button id="mapBackBtn" class="SecondaryButton" type="button">Back</button>
+      <button id="mapContinueBtn" class="PrimaryButton" type="button">Continue</button>
     </div>
   </div>
 </div>
 
-<div id="innkeeperMenu" hidden>
+<div id="innkeeperMenu" class="TerminalContainer" hidden>
   <div class="panel">
-    <div class="title">Innkeeper</div>
+    <div class="title SectionHeader">Innkeeper</div>
     <div class="subline">Permanent upgrades and unlocks</div>
     <div style="padding: 20px; text-align: center; opacity: 0.7;">
       Coming soon...
     </div>
-    <button id="innkeeperBackBtn" type="button">Back to Menu</button>
+    <button id="innkeeperBackBtn" class="SecondaryButton" type="button">Back to Menu</button>
   </div>
 </div>
 
-<div id="settingsMenu" hidden>
+<div id="settingsMenu" class="TerminalContainer" hidden>
   <div class="panel">
-    <div class="title">Settings</div>
-    <div class="subline">Game configuration</div>
-    <div style="padding: 20px; text-align: center; opacity: 0.7;">
-      Coming soon...
+    <div class="title SectionHeader">Settings</div>
+    <div class="subline">Game, graphics, and audio.</div>
+    <div id="mainSettingsHost"></div>
+    <button id="settingsBackBtn" class="SecondaryButton" type="button">Back to Menu</button>
+  </div>
+</div>
+
+<div id="creditsMenu" class="TerminalContainer" hidden>
+  <div class="panel">
+    <div class="title SectionHeader">Credits</div>
+    <div class="subline">RatGame Team</div>
+    <div class="creditsBody">
+      Design, code, and gameplay by RatGame Team.
     </div>
-    <button id="settingsBackBtn" type="button">Back to Menu</button>
+    <button id="creditsBackBtn" class="SecondaryButton" type="button">Back to Menu</button>
   </div>
 </div>
 

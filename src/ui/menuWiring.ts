@@ -5,6 +5,7 @@ import { PLAYABLE_CHARACTERS, type PlayableCharacterId } from "../game/content/p
 import { getPlayerIdleSpriteUrl } from "../engine/render/sprites/playerSprites";
 import { resolveCombatStarterWeaponId } from "../game/combat_mods/content/weapons/characterStarterMap";
 import { getCombatStarterWeaponById } from "../game/combat_mods/content/weapons/starterWeapons";
+import { isUserModeEnabled } from "../userSettings";
 
 type GameApi = {
     previewMap: (mapId?: string) => void;
@@ -64,6 +65,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     applyBackground(refs.menuEl, backgroundImageUrl);
     applyBackground(refs.innkeeperMenuEl, backgroundImageUrl);
     applyBackground(refs.settingsMenuEl, backgroundImageUrl);
+    applyBackground(refs.creditsMenuEl, backgroundImageUrl);
     applyBackground(refs.characterSelectEl, backgroundImageUrl);
 
     // Start with undefined (Delve mode) by default, not PROC_ROOMS
@@ -149,6 +151,22 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
             }
             action();
         });
+    };
+
+    const applyUserModeMenuGating = () => {
+        const isUserMode = isUserModeEnabled();
+
+        if (isUserMode && pendingStartMode !== "DELVE") {
+            pendingStartMode = "DELVE";
+            selectedMapId = undefined;
+            delete refs.startBtn.dataset.map;
+            updateMenuSubline();
+        }
+
+        if (isUserMode && !refs.mapMenuEl.hidden) {
+            refs.mapMenuEl.hidden = true;
+            refs.mainMenuEl.hidden = false;
+        }
     };
 
     function getSelectedMapLabel(): string {
@@ -246,10 +264,15 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
 
     buildCharacterPicker();
     buildMapPicker();
+    applyUserModeMenuGating();
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+        window.addEventListener("ratgame:settings-changed", applyUserModeMenuGating as EventListener);
+    }
 
     // Welcome screen -> Main menu
     bindActivate(refs.continueBtn, () => {
         refs.welcomeScreen.hidden = true;
+        applyUserModeMenuGating();
         refs.mainMenuEl.hidden = false;
     });
 
@@ -264,19 +287,10 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         refs.characterSelectEl.hidden = false;
     });
 
-    bindActivate(refs.deterministicRunBtn, () => {
-        selectedMapId = undefined;
-        pendingStartMode = "DETERMINISTIC";
-        delete refs.startBtn.dataset.map;
-        updateMenuSubline();
-
-        refs.mainMenuEl.hidden = true;
-        refs.characterSelectEl.hidden = false;
-    });
-
     // Character selection -> Main menu
     bindActivate(refs.characterBackBtn, () => {
         refs.characterSelectEl.hidden = true;
+        applyUserModeMenuGating();
         refs.mainMenuEl.hidden = false;
     });
 
@@ -296,14 +310,9 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         }
     });
 
-    // Main menu -> Map selection
-    bindActivate(refs.mapsBtn, () => {
-        refs.mainMenuEl.hidden = true;
-        refs.mapMenuEl.hidden = false;
-    });
-
     bindActivate(refs.mapBackBtn, () => {
         refs.mapMenuEl.hidden = true;
+        applyUserModeMenuGating();
         refs.mainMenuEl.hidden = false;
     });
 
@@ -323,6 +332,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     // Innkeeper -> Main menu
     bindActivate(refs.innkeeperBackBtn, () => {
         refs.innkeeperMenuEl.hidden = true;
+        applyUserModeMenuGating();
         refs.mainMenuEl.hidden = false;
     });
 
@@ -332,14 +342,26 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         refs.settingsMenuEl.hidden = false;
     });
 
+    // Main menu -> Credits
+    if (refs.creditsBtn) {
+        bindActivate(refs.creditsBtn, () => {
+            refs.mainMenuEl.hidden = true;
+            refs.creditsMenuEl.hidden = false;
+        });
+    }
+
     // Settings -> Main menu
     bindActivate(refs.settingsBackBtn, () => {
         refs.settingsMenuEl.hidden = true;
+        applyUserModeMenuGating();
         refs.mainMenuEl.hidden = false;
     });
 
-    // Like & Subscribe button
-    bindActivate(refs.likeSubBtn, () => {
-        window.open("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "_blank");
+    // Credits -> Main menu
+    bindActivate(refs.creditsBackBtn, () => {
+        refs.creditsMenuEl.hidden = true;
+        applyUserModeMenuGating();
+        refs.mainMenuEl.hidden = false;
     });
+
 }
