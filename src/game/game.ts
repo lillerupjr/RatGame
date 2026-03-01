@@ -955,6 +955,7 @@ export function createGame(args: CreateGameArgs) {
     setHudHidden(true);
     hideCardRewardMenu();
     closeVendorShop(false);
+    setDialog(null);
   }
 
   const applyPlayerSkinSelection = (skin: string) => {

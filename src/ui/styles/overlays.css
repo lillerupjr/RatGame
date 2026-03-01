@@ -811,8 +811,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 #mapMenu .panel { width: min(680px, 92vw); padding: 24px; border-radius: 20px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); }
 #mapMenu .title { font-size: 26px; font-weight: 900; margin-bottom: 6px; text-align: center; }
 #mapMenu .subline { opacity: 0.85; margin-bottom: 16px; font-size: 14px; text-align: center; }
-#mapChoices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-@media (max-width: 640px) { #mapChoices { grid-template-columns: 1fr; } }
+#mapChoices { display: flex; flex-wrap: nowrap; gap: 10px; }
+.mapChoiceBtn { flex: 1 1 0; min-width: 0; }
+@media (max-width: 640px) { #mapChoices { gap: 8px; } }
 .mapChoiceBtn {
   text-align: left;
   padding: 12px 12px;
@@ -844,11 +845,12 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 #characterSelect .title { font-size: 26px; font-weight: 900; margin-bottom: 6px; text-align: center; }
 #characterSelect .subline { opacity: 0.85; margin-bottom: 16px; font-size: 14px; text-align: center; }
-#characterChoices { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
-@media (max-width: 720px) { #characterChoices { flex-direction: column; align-items: center; } }
+#characterChoices { display: flex; flex-wrap: nowrap; gap: 12px; justify-content: center; }
+@media (max-width: 720px) { #characterChoices { gap: 8px; } }
 
 .characterCard {
-  width: 180px;
+  flex: 1 1 0;
+  min-width: 0;
   text-align: center;
   padding: 12px;
   border-radius: 16px;
@@ -1072,8 +1074,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 /* Weapon picker */
 #weaponPickerLabel { font-weight: 800; margin: 12px 0 8px; }
-#weaponChoices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-@media (max-width: 520px) { #weaponChoices { grid-template-columns: 1fr; } }
+#weaponChoices { display: flex; flex-wrap: nowrap; gap: 10px; }
+.wpnBtn { flex: 1 1 0; min-width: 0; }
+@media (max-width: 520px) { #weaponChoices { gap: 8px; } }
 
 .wpnBtn {
   text-align: left;
@@ -1740,9 +1743,14 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .mapHitDesc { opacity: 0.9; font-size: 12px; line-height: 1.25; }
 
 .deckCardGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: nowrap;
   gap: 12px;
+}
+
+.deckCardGrid > * {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .deckCardButton {
@@ -1968,7 +1976,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .statNew.statDown { color: var(--negative); }
 
 @media (max-width: 720px) {
-  .deckCardGrid { grid-template-columns: 1fr; }
+  .deckCardGrid { gap: 8px; }
   .deckOverlay .title { font-size: 24px; }
   .vendorActions { justify-content: stretch; }
   .vendorLeaveButton { width: 100%; }
@@ -1977,7 +1985,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 @media (min-width: 721px) and (max-width: 960px) {
-  .deckCardGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .deckCardGrid { gap: 10px; }
 }
 
 /* Mobile-first responsive pass for pre-run menu flow */
@@ -2089,13 +2097,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   }
 
   #characterChoices {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
+    gap: 8px;
   }
 
   .characterCard {
-    width: 100%;
     padding: 10px;
     border-radius: 14px;
   }
@@ -2110,7 +2115,6 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   }
 
   #weaponChoices {
-    grid-template-columns: 1fr;
     gap: 8px;
   }
 
@@ -2393,14 +2397,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   }
 
   #characterChoices {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    align-items: stretch;
+    gap: 6px;
   }
 
   .characterCard {
-    width: 100%;
     padding: 8px;
     border-radius: 12px;
   }
@@ -2435,8 +2435,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   }
 
   #mapChoices {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
+    gap: 6px;
   }
 }
 

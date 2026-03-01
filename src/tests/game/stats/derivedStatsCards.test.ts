@@ -24,6 +24,7 @@ function stubWorld(overrides: Record<string, unknown> = {}): any {
     relics: [],
     cards: [],
     playerHpMax: 100,
+    basePlayerHpMax: 100,
     playerHp: 100,
     ...overrides,
   };

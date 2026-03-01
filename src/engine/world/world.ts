@@ -273,6 +273,7 @@ export type World = {
   // Player combat stats
   playerHp: number;
   playerHpMax: number;
+  basePlayerHpMax: number;
   maxArmor: number;
   currentArmor: number;
 
@@ -698,6 +699,7 @@ export function createWorld(args: CreateWorldArgs): World {
 
     playerHp: 100,
     playerHpMax: 100,
+    basePlayerHpMax: 100,
     maxArmor: 50,
     currentArmor: 0,
 

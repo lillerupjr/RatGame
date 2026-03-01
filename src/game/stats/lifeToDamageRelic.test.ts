@@ -6,6 +6,7 @@ import { applyRelic } from "../systems/progression/relics";
 describe("PASS_LIFE_TO_DAMAGE_2P", () => {
   test("baseline scaling at 100 max life", () => {
     const world = createWorld({ seed: 201, stage: stageDocks });
+    world.basePlayerHpMax = 100;
     world.playerHpMax = 100;
     world.dmgMult = 1;
 
@@ -16,6 +17,7 @@ describe("PASS_LIFE_TO_DAMAGE_2P", () => {
 
   test("higher scaling at 500 max life", () => {
     const world = createWorld({ seed: 202, stage: stageDocks });
+    world.basePlayerHpMax = 500;
     world.playerHpMax = 500;
     world.dmgMult = 1;
 
@@ -26,6 +28,7 @@ describe("PASS_LIFE_TO_DAMAGE_2P", () => {
 
   test("relic is deduped and does not stack", () => {
     const world = createWorld({ seed: 203, stage: stageDocks });
+    world.basePlayerHpMax = 500;
     world.playerHpMax = 500;
 
     applyRelic(world, "PASS_LIFE_TO_DAMAGE_2P");

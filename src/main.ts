@@ -1089,7 +1089,8 @@ async function bootstrap() {
             wasPausedVisible = true;
           }
         } else {
-          refs.hud.vitalsOrbRoot.hidden = false;
+          const st = game.getWorld().state;
+          refs.hud.vitalsOrbRoot.hidden = st === "MAP" || st === "MENU";
           if (wasPausedVisible) {
             pauseMenu.setVisible(false);
             wasPausedVisible = false;
