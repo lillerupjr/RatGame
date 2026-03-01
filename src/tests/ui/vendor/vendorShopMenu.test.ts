@@ -18,6 +18,8 @@ class FakeElement {
   text = "";
   children: FakeElement[] = [];
   parentNode: FakeElement | null = null;
+  type = "";
+  disabled = false;
   private listeners = new Map<string, Listener[]>();
 
   constructor(tagName: string) {
@@ -54,11 +56,6 @@ class FakeElement {
     const arr = this.listeners.get(type) ?? [];
     arr.push(listener);
     this.listeners.set(type, arr);
-  }
-
-  click(): void {
-    const arr = this.listeners.get("click") ?? [];
-    for (const listener of arr) listener(new FakeEvent("click"));
   }
 
   querySelector(selector: string): FakeElement | null {
@@ -105,9 +102,9 @@ class FakeDocument {
   }
 }
 
-import { mountCardRewardMenu } from "../../../ui/rewards/cardRewardMenu";
+import { mountVendorShopMenu } from "../../../ui/vendor/vendorShopMenu";
 
-describe("cardRewardMenu", () => {
+describe("vendorShopMenu", () => {
   beforeEach(() => {
     const doc = new FakeDocument();
     (globalThis as any).document = doc;
@@ -115,41 +112,27 @@ describe("cardRewardMenu", () => {
     (globalThis as any).HTMLElement = FakeElement;
   });
 
-  test("render inactive hides root", () => {
+  test("vendor card buttons include tier classes", () => {
     const root = document.createElement("div") as unknown as HTMLElement;
-    const menu = mountCardRewardMenu({ root, onPick: vi.fn() });
-
-    menu.render({ active: false, source: "ZONE_TRIAL", options: [] });
-    expect((root as any).hidden).toBe(true);
-  });
-
-  test("render active shows options and click calls onPick", () => {
-    const root = document.createElement("div") as unknown as HTMLElement;
-    const onPick = vi.fn();
-    const menu = mountCardRewardMenu({ root, onPick });
-
-    menu.render({
-      active: true,
-      source: "BOSS_CHEST",
-      options: ["CARD_DAMAGE_FLAT_1", "CARD_CONVERT_FIRE_1", "CARD_IGNITE_CHANCE_1"],
+    const menu = mountVendorShopMenu({
+      root,
+      onBuy: vi.fn(),
+      onBuyRelic: vi.fn(),
+      onLeave: vi.fn(),
+      onClose: vi.fn(),
     });
 
-    expect((root as any).hidden).toBe(false);
-    const buttons = (root as any).querySelectorAll("button") as any[];
-    expect(buttons.length).toBe(3);
-
-    buttons[1].click();
-    expect(onPick).toHaveBeenCalledWith("CARD_CONVERT_FIRE_1");
-  });
-
-  test("reward cards include Hearthstone tier classes", () => {
-    const root = document.createElement("div") as unknown as HTMLElement;
-    const menu = mountCardRewardMenu({ root, onPick: vi.fn() });
-
     menu.render({
       active: true,
-      source: "BOSS_CHEST",
-      options: ["CARD_DAMAGE_FLAT_1", "CARD_DAMAGE_FLAT_2", "CARD_DAMAGE_FLAT_3", "CARD_FIRE_RATE_4"],
+      gold: 999,
+      price: 10,
+      cards: [
+        { cardId: "CARD_DAMAGE_FLAT_1", purchased: false },
+        { cardId: "CARD_DAMAGE_FLAT_2", purchased: false },
+        { cardId: "CARD_DAMAGE_FLAT_3", purchased: false },
+        { cardId: "CARD_FIRE_RATE_4", purchased: false },
+      ],
+      relicOffers: [],
     });
 
     const buttons = (root as any).querySelectorAll("button") as any[];

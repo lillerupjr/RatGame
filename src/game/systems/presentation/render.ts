@@ -84,6 +84,7 @@ import { renderZoneObjectives } from "../../render/renderZoneObjectives";
 import { resolveActivePaletteId } from "../../render/activePalette";
 import { resolveNavArrowTarget } from "../../ui/navArrowTarget";
 import { renderNavArrow } from "../../ui/navArrowRender";
+import { coinColorFromValue } from "../../economy/coins";
 import {
   beginRenderPerfFrame,
   countRenderTileLoopIteration,
@@ -2537,11 +2538,20 @@ export async function renderSystem(
 
       const drawClosure = () => {
         if (kind === 1) {
+          const value = Math.max(1, Math.floor(w.xValue?.[i] ?? 1));
+          const fill = coinColorFromValue(value);
           ctx.globalAlpha = 1;
-          ctx.fillStyle = "#ffd84a";
+          ctx.fillStyle = fill;
           ctx.beginPath();
           ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
           ctx.fill();
+          ctx.globalAlpha = 0.5;
+          ctx.strokeStyle = "#101010";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
         } else {
           ctx.globalAlpha = 1;
           ctx.fillStyle = "#fdc";

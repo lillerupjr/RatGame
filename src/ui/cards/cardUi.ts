@@ -89,6 +89,16 @@ export function rarityClass(rarity: number | null | undefined): string {
   return "rarity-1";
 }
 
+export function tierClass(tier: number | null | undefined): string {
+  if (tier === 4) return "tier-4";
+  if (tier === 3) return "tier-3";
+  if (tier === 2) return "tier-2";
+  if (tier === 1) return "tier-1";
+  // Future-proof fallback: default unknown/high tiers to legendary color.
+  if (typeof tier === "number" && tier > 4) return "tier-4";
+  return "tier-1";
+}
+
 export function cardViewModel(cardId: string): CardViewModel {
   const card = getCardById(cardId);
   if (!card) {

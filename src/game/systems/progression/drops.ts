@@ -1,6 +1,7 @@
 import type { World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { addGold } from "../../economy/gold";
+import { goldValueFromEnemyMaxHp } from "../../economy/coins";
 import { spawnChestGrid, spawnGoldGrid, PICKUP_KIND, handlePickupSpecialCase } from "./pickups";
 import { ENEMY_TYPE } from "../../factories/enemyFactory";
 import { getPickupWorld, getPlayerWorld } from "../../coords/worldViews";
@@ -14,7 +15,9 @@ export function dropsSystem(w: World, _dt: number) {
 
     const egx = w.egxi[e.enemyIndex] + w.egox[e.enemyIndex];
     const egy = w.egyi[e.enemyIndex] + w.egoy[e.enemyIndex];
-    spawnGoldGrid(w, egx, egy, 1);
+    const enemyMaxHp = Math.max(1, w.eHpMax[e.enemyIndex] ?? 1);
+    const goldValue = goldValueFromEnemyMaxHp(enemyMaxHp);
+    spawnGoldGrid(w, egx, egy, goldValue);
 
     // Boss chest drop (no magnet)
     if (w.eType[e.enemyIndex] === ENEMY_TYPE.BOSS) {
@@ -40,7 +43,7 @@ export function dropsSystem(w: World, _dt: number) {
 
     if (kind === PICKUP_KIND.GOLD) {
       w.xAlive[i] = false;
-      addGold(w, 1);
+      addGold(w, Math.max(1, Math.floor(w.xValue[i] ?? 1)));
       continue;
     }
 

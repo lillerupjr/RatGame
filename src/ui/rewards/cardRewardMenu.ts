@@ -1,4 +1,4 @@
-import { cardViewModel, rarityClass } from "../cards/cardUi";
+import { cardViewModel, rarityClass, tierClass } from "../cards/cardUi";
 
 export function mountCardRewardMenu(args: {
   root: HTMLElement;
@@ -65,7 +65,7 @@ export function mountCardRewardMenu(args: {
       const card = cardViewModel(cardId);
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = `deckCardButton ${rarityClass(card.rarity)}${i === selectedIndex ? " selected" : ""}`;
+      btn.className = `deckCardButton ${tierClass(card.tier)} ${rarityClass(card.rarity)}${i === selectedIndex ? " selected" : ""}`;
       btn.dataset.cardId = cardId;
       btn.dataset.index = String(i);
       btn.dataset.selected = i === selectedIndex ? "true" : "false";

@@ -1,4 +1,4 @@
-import { cardViewModel, rarityClass } from "../cards/cardUi";
+import { cardViewModel, rarityClass, tierClass } from "../cards/cardUi";
 import { getRelicById } from "../../game/content/relics";
 
 export type VendorShopCard = {
@@ -113,7 +113,7 @@ export function mountVendorShopMenu(args: {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className =
-        `deckCardButton vendorCard ${rarityClass(vm.rarity)} ${stateClass}${i === selectedIndex ? " selected" : ""}`;
+        `deckCardButton vendorCard ${tierClass(vm.tier)} ${rarityClass(vm.rarity)} ${stateClass}${i === selectedIndex ? " selected" : ""}`;
       btn.disabled = disabled;
       btn.dataset.index = String(i);
 

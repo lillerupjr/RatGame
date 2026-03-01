@@ -22,7 +22,7 @@ export const SFX_VOL: Record<SfxId, number> = {
     FIRE_BAZOOKA: 1.0,
     FIRE_OTHER: 1.0,
 
-    WALK_STEP: 0.5,
+    WALK_STEP: 0.2,
 
     EXPLOSION_BAZOOKA: 1.0,
     EXPLOSION_SYRINGE: 1.0,
