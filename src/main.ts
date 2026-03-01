@@ -774,7 +774,8 @@ async function bootstrap() {
       return;
     }
     if (appState === AppState.RUN) {
-      game.setMobileControlsEnabled(runState === RunState.PLAYING);
+      const isMapOpen = game.getWorld().state === "MAP";
+      game.setMobileControlsEnabled(runState === RunState.PLAYING && !isMapOpen);
       refs.welcomeScreen.hidden = true;
       refs.mainMenuEl.hidden = true;
       refs.characterSelectEl.hidden = true;
@@ -782,9 +783,9 @@ async function bootstrap() {
       refs.innkeeperMenuEl.hidden = true;
       refs.settingsMenuEl.hidden = true;
       refs.ui.menuEl.hidden = runState !== RunState.PAUSED;
-      refs.hud.root.hidden = false;
-      refs.hud.vitalsOrbRoot.hidden = runState === RunState.PAUSED;
-      if (pauseCogBtn) pauseCogBtn.hidden = false;
+      refs.hud.root.hidden = isMapOpen;
+      refs.hud.vitalsOrbRoot.hidden = runState === RunState.PAUSED || isMapOpen;
+      if (pauseCogBtn) pauseCogBtn.hidden = isMapOpen;
     }
   }
 
