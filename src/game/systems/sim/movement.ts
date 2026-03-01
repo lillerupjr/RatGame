@@ -37,31 +37,43 @@ function gridDirToWorldDir(tileWorld: number, dx: number, dy: number): WorldPos 
 
 let _cachedField: FlowField | null = null;
 
-/** Update player/enemy movement, steering, and facing. */
-export function movementSystem(w: World, input: InputState, dt: number) {
-  const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
-  let px = pWorld.wx;
-  let py = pWorld.wy;
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
 
-  // Screen-aligned input: north = +gy, east = +gx.
+export function resolvePlayerMoveIntent(input: InputState): { gdx: number; gdy: number; gmag: number } {
+  const mx = Number.isFinite(input.moveX) ? input.moveX : 0;
+  const my = Number.isFinite(input.moveY) ? input.moveY : 0;
+  const vecLen = Math.hypot(mx, my);
+  const mag = clamp01(Number.isFinite(input.moveMag) ? input.moveMag : vecLen);
+  if (vecLen > 1e-6 && mag > 1e-6) {
+    return { gdx: mx / vecLen, gdy: my / vecLen, gmag: mag };
+  }
+
+  // Defensive fallback for legacy callers/tests that only set booleans.
   let gx = 0;
   let gy = 0;
   if (input.left) gx -= 1;
   if (input.right) gx += 1;
   if (input.up) gy += 1;
   if (input.down) gy -= 1;
+  const glen = Math.hypot(gx, gy);
+  if (glen <= 1e-6) return { gdx: 0, gdy: 0, gmag: 0 };
+  return { gdx: gx / glen, gdy: gy / glen, gmag: 1 };
+}
 
-  let gdx = gx;
-  let gdy = gy;
-  const glen = Math.hypot(gdx, gdy);
-  if (glen > 1e-6) {
-    gdx /= glen;
-    gdy /= glen;
-  }
+/** Update player/enemy movement, steering, and facing. */
+export function movementSystem(w: World, input: InputState, dt: number) {
+  const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
+  let px = pWorld.wx;
+  let py = pWorld.wy;
+
+  const { gdx, gdy, gmag } = resolvePlayerMoveIntent(input);
 
   const worldDir = gridDirToWorldDir(KENNEY_TILE_WORLD, gdx, gdy);
-  w.pvx = worldDir.wx * w.pSpeed;
-  w.pvy = worldDir.wy * w.pSpeed;
+  w.pvx = worldDir.wx * w.pSpeed * gmag;
+  w.pvy = worldDir.wy * w.pSpeed * gmag;
 
   const playerHintZ = Number.isFinite(w.pzVisual as any)
     ? (w.pzVisual as number)
@@ -237,7 +249,7 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     w.lastAimY = gdy / mag;
   }
 
-  const moving = glen > 0.0001;
+  const moving = gmag > 0.0001;
   if (!moving) {
     const aimX = w.lastAimX ?? 0;
     const aimY = w.lastAimY ?? 0;
@@ -247,6 +259,6 @@ export function movementSystem(w: World, input: InputState, dt: number) {
   } else {
     (w as any)._plDir = dir8FromVector(gdx, gdy);
     (w as any)._plMoving = true;
-    (w as any)._plAnimT = ((w as any)._plAnimT ?? 0) + dt;
+    (w as any)._plAnimT = ((w as any)._plAnimT ?? 0) + dt * gmag;
   }
 }

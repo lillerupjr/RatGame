@@ -70,6 +70,86 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     let selectedMapId: string | undefined = refs.startBtn.dataset.map || undefined;
     let selectedCharacterId: PlayableCharacterId | undefined = undefined;
     let pendingStartMode: "DELVE" | "DETERMINISTIC" | "SANDBOX" = "DELVE";
+    const SUPPRESS_CLICK_WINDOW_MS = 450;
+    const SUPPRESS_CLICK_RADIUS_PX = 40;
+    let suppressClickUntilMs = 0;
+    let suppressClickX = 0;
+    let suppressClickY = 0;
+
+    const armCrossControlClickSuppression = (ev: PointerEvent) => {
+        suppressClickUntilMs = Date.now() + SUPPRESS_CLICK_WINDOW_MS;
+        suppressClickX = Number.isFinite(ev.clientX) ? ev.clientX : 0;
+        suppressClickY = Number.isFinite(ev.clientY) ? ev.clientY : 0;
+    };
+
+    const shouldSuppressSyntheticClick = (ev: Event): boolean => {
+        if (Date.now() > suppressClickUntilMs) return false;
+        const mev = ev as MouseEvent;
+        const hasCoords = Number.isFinite(mev.clientX) && Number.isFinite(mev.clientY);
+        if (hasCoords) {
+            const dx = mev.clientX - suppressClickX;
+            const dy = mev.clientY - suppressClickY;
+            if (dx * dx + dy * dy > SUPPRESS_CLICK_RADIUS_PX * SUPPRESS_CLICK_RADIUS_PX) return false;
+        }
+        suppressClickUntilMs = 0;
+        return true;
+    };
+
+    const clearActiveUiFocus = () => {
+        const active = document.activeElement as HTMLElement | null;
+        if (active && typeof active.blur === "function") active.blur();
+    };
+
+    const bindActivate = (el: HTMLElement, action: () => void) => {
+        let activePointerId: number | null = null;
+        let downTarget: EventTarget | null = null;
+
+        el.addEventListener("pointerdown", (ev) => {
+            const pev = ev as PointerEvent;
+            const btn = typeof pev.button === "number" ? pev.button : 0;
+            if (btn !== 0 && btn !== -1) return;
+            activePointerId = pev.pointerId;
+            downTarget = pev.target;
+        });
+
+        el.addEventListener("pointerup", (ev) => {
+            const pev = ev as PointerEvent;
+            if (activePointerId !== pev.pointerId) return;
+            const target = pev.target as Node | null;
+            const sameElementInteraction = !!target && el.contains(target);
+            const validDownTarget = downTarget ? el.contains(downTarget as Node) : true;
+            activePointerId = null;
+            downTarget = null;
+            if (!sameElementInteraction || !validDownTarget) return;
+            ev.preventDefault();
+            action();
+            armCrossControlClickSuppression(pev);
+        });
+
+        el.addEventListener("pointercancel", (ev) => {
+            const pev = ev as PointerEvent;
+            if (activePointerId !== pev.pointerId) return;
+            activePointerId = null;
+            downTarget = null;
+        });
+
+        el.addEventListener("lostpointercapture", (ev) => {
+            const pev = ev as PointerEvent;
+            if (activePointerId !== pev.pointerId) return;
+            activePointerId = null;
+            downTarget = null;
+        });
+
+        el.addEventListener("click", (ev) => {
+            if (shouldSuppressSyntheticClick(ev)) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                clearActiveUiFocus();
+                return;
+            }
+            action();
+        });
+    };
 
     function getSelectedMapLabel(): string {
         if (!selectedMapId) return "Delve (random route)";
@@ -115,7 +195,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
       <div class="characterWeapon">Starting Weapon: ${weaponTitle}</div>
     `;
 
-            btn.addEventListener("click", () => setSelectedCharacter(character.id));
+            bindActivate(btn, () => setSelectedCharacter(character.id));
             refs.characterChoicesEl.appendChild(btn);
         }
 
@@ -155,7 +235,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
       <div class="mapChoiceDesc">${choice.desc}</div>
     `;
 
-            btn.addEventListener("click", () => setSelectedMap(choice.id));
+            bindActivate(btn, () => setSelectedMap(choice.id));
             refs.mapChoicesEl.appendChild(btn);
         }
 
@@ -168,13 +248,13 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     buildMapPicker();
 
     // Welcome screen -> Main menu
-    refs.continueBtn.addEventListener("click", () => {
+    bindActivate(refs.continueBtn, () => {
         refs.welcomeScreen.hidden = true;
         refs.mainMenuEl.hidden = false;
     });
 
     // Main menu -> Character selection
-    refs.startRunBtn.addEventListener("click", () => {
+    bindActivate(refs.startRunBtn, () => {
         selectedMapId = undefined;
         pendingStartMode = "DELVE";
         delete refs.startBtn.dataset.map;
@@ -184,7 +264,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         refs.characterSelectEl.hidden = false;
     });
 
-    refs.deterministicRunBtn.addEventListener("click", () => {
+    bindActivate(refs.deterministicRunBtn, () => {
         selectedMapId = undefined;
         pendingStartMode = "DETERMINISTIC";
         delete refs.startBtn.dataset.map;
@@ -195,13 +275,13 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     });
 
     // Character selection -> Main menu
-    refs.characterBackBtn.addEventListener("click", () => {
+    bindActivate(refs.characterBackBtn, () => {
         refs.characterSelectEl.hidden = true;
         refs.mainMenuEl.hidden = false;
     });
 
     // Character selection -> Delve map start
-    refs.characterContinueBtn.addEventListener("click", () => {
+    bindActivate(refs.characterContinueBtn, () => {
         if (!selectedCharacterId) return;
 
         refs.characterSelectEl.hidden = true;
@@ -217,17 +297,17 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     });
 
     // Main menu -> Map selection
-    refs.mapsBtn.addEventListener("click", () => {
+    bindActivate(refs.mapsBtn, () => {
         refs.mainMenuEl.hidden = true;
         refs.mapMenuEl.hidden = false;
     });
 
-    refs.mapBackBtn.addEventListener("click", () => {
+    bindActivate(refs.mapBackBtn, () => {
         refs.mapMenuEl.hidden = true;
         refs.mainMenuEl.hidden = false;
     });
 
-    refs.mapContinueBtn.addEventListener("click", () => {
+    bindActivate(refs.mapContinueBtn, () => {
         pendingStartMode = "SANDBOX";
         refs.mapMenuEl.hidden = true;
         refs.characterSelectEl.hidden = false;
@@ -235,31 +315,31 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     });
 
     // Main menu -> Innkeeper
-    refs.innkeeperBtn.addEventListener("click", () => {
+    bindActivate(refs.innkeeperBtn, () => {
         refs.mainMenuEl.hidden = true;
         refs.innkeeperMenuEl.hidden = false;
     });
 
     // Innkeeper -> Main menu
-    refs.innkeeperBackBtn.addEventListener("click", () => {
+    bindActivate(refs.innkeeperBackBtn, () => {
         refs.innkeeperMenuEl.hidden = true;
         refs.mainMenuEl.hidden = false;
     });
 
     // Main menu -> Settings
-    refs.settingsBtn.addEventListener("click", () => {
+    bindActivate(refs.settingsBtn, () => {
         refs.mainMenuEl.hidden = true;
         refs.settingsMenuEl.hidden = false;
     });
 
     // Settings -> Main menu
-    refs.settingsBackBtn.addEventListener("click", () => {
+    bindActivate(refs.settingsBackBtn, () => {
         refs.settingsMenuEl.hidden = true;
         refs.mainMenuEl.hidden = false;
     });
 
     // Like & Subscribe button
-    refs.likeSubBtn.addEventListener("click", () => {
+    bindActivate(refs.likeSubBtn, () => {
         window.open("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "_blank");
     });
 }

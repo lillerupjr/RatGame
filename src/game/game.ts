@@ -258,7 +258,7 @@ export function createGame(args: CreateGameArgs) {
     root: args.hud.mobileControlsRoot,
     stickBase: args.hud.mobileMoveStick,
     stickKnob: args.hud.mobileMoveKnob,
-    interactBtn: args.hud.mobileInteractBtn,
+    interactBtn: args.hud.interactPrompt,
     onMove: (x, y, active) => {
       setVirtualMoveAxes(input, x, y, active);
     },
@@ -514,6 +514,7 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function updateActiveInteractablePrompt() {
+    const usePhonePrompt = mobileControlsEnabled;
     if (world.state !== "RUN") {
       activeInteractableId = null;
       args.hud.interactPrompt.hidden = true;
@@ -521,7 +522,7 @@ export function createGame(args: CreateGameArgs) {
     }
     if (activeDialog) {
       activeInteractableId = null;
-      args.hud.interactPrompt.textContent = "Press E to choose";
+      args.hud.interactPrompt.textContent = usePhonePrompt ? "Click to choose" : "Press E to choose";
       args.hud.interactPrompt.hidden = false;
       return;
     }
@@ -558,7 +559,7 @@ export function createGame(args: CreateGameArgs) {
     }
     activeInteractableId = best?.id ?? null;
     if (best) {
-      args.hud.interactPrompt.textContent = best.prompt;
+      args.hud.interactPrompt.textContent = usePhonePrompt ? "Click to interact" : best.prompt;
       args.hud.interactPrompt.hidden = false;
     } else {
       args.hud.interactPrompt.hidden = true;
@@ -1864,6 +1865,7 @@ export function createGame(args: CreateGameArgs) {
     dragging: boolean;
     didDrag: boolean;
     suppressNextClick: boolean;
+    rafPending: boolean;
   } = {
     enabled: false,
     bounds: { minX: 0, maxX: 0, minY: 0, maxY: 0 },
@@ -1877,6 +1879,7 @@ export function createGame(args: CreateGameArgs) {
     dragging: false,
     didDrag: false,
     suppressNextClick: false,
+    rafPending: false,
   };
 
   const MAP_DRAG_THRESHOLD_PX = 7;
@@ -1896,9 +1899,18 @@ export function createGame(args: CreateGameArgs) {
     args.ui.mapEl.svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
   }
 
-  function applyMapPanTransform(): void {
+  function applyMapPanTransformImmediate(): void {
     args.ui.mapEl.graphContent.style.transform = `translate3d(${mapPanState.panX}px, ${mapPanState.panY}px, 0px)`;
     args.ui.mapEl.graphWrap.classList.toggle("isDragging", mapPanState.dragging);
+  }
+
+  function applyMapPanTransform(): void {
+    if (mapPanState.rafPending) return;
+    mapPanState.rafPending = true;
+    requestAnimationFrame(() => {
+      mapPanState.rafPending = false;
+      applyMapPanTransformImmediate();
+    });
   }
 
   function disableMapPan(): void {
@@ -1907,10 +1919,11 @@ export function createGame(args: CreateGameArgs) {
     mapPanState.dragging = false;
     mapPanState.didDrag = false;
     mapPanState.suppressNextClick = false;
+    mapPanState.rafPending = false;
     mapPanState.panX = 0;
     mapPanState.panY = 0;
     args.ui.mapEl.graphWrap.classList.remove("isPannable");
-    applyMapPanTransform();
+    applyMapPanTransformImmediate();
   }
 
   function configureDelvePan(contentWidth: number, contentHeight: number, focusPoint?: { x: number; y: number }): void {
@@ -2628,6 +2641,7 @@ export function createGame(args: CreateGameArgs) {
       mapPanState.didDrag = true;
       args.ui.mapEl.graphWrap.setPointerCapture(e.pointerId);
     }
+    e.preventDefault();
 
     const dx = e.clientX - mapPanState.pointerStartX;
     const dy = e.clientY - mapPanState.pointerStartY;

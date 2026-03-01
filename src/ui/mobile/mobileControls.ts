@@ -31,9 +31,55 @@ export function createMobileControls(args: CreateMobileControlsArgs): MobileCont
   let enabled = false;
   let stickPointerId: number | null = null;
   let interactPointerId: number | null = null;
+  let stickBaseCx = 0;
+  let stickBaseCy = 0;
+
+  const resetStickVisualAnchor = () => {
+    args.stickBase.style.left = "";
+    args.stickBase.style.top = "";
+    args.stickBase.style.right = "";
+    args.stickBase.style.bottom = "";
+    args.stickBase.classList.remove("isFloating");
+  };
+
+  const clampStickCenterToViewport = (cx: number, cy: number): { cx: number; cy: number } => {
+    const baseRect = args.stickBase.getBoundingClientRect();
+    const halfW = Math.max(1, baseRect.width * 0.5);
+    const halfH = Math.max(1, baseRect.height * 0.5);
+    const viewportW =
+      typeof window !== "undefined" && Number.isFinite(window.innerWidth)
+        ? window.innerWidth
+        : baseRect.width;
+    const viewportH =
+      typeof window !== "undefined" && Number.isFinite(window.innerHeight)
+        ? window.innerHeight
+        : baseRect.height;
+    const minX = halfW;
+    const maxX = Math.max(minX, viewportW - halfW);
+    const minY = halfH;
+    const maxY = Math.max(minY, viewportH - halfH);
+    const nx = Math.max(minX, Math.min(maxX, cx));
+    const ny = Math.max(minY, Math.min(maxY, cy));
+    return { cx: nx, cy: ny };
+  };
+
+  const setFloatingStickCenter = (cx: number, cy: number) => {
+    const clamped = clampStickCenterToViewport(cx, cy);
+    stickBaseCx = clamped.cx;
+    stickBaseCy = clamped.cy;
+    const baseRect = args.stickBase.getBoundingClientRect();
+    const left = Math.round(stickBaseCx - baseRect.width * 0.5);
+    const top = Math.round(stickBaseCy - baseRect.height * 0.5);
+    args.stickBase.style.left = `${left}px`;
+    args.stickBase.style.top = `${top}px`;
+    args.stickBase.style.right = "auto";
+    args.stickBase.style.bottom = "auto";
+    args.stickBase.classList.add("isFloating");
+  };
 
   const resetStick = () => {
     args.stickBase.classList.remove("isActive");
+    resetStickVisualAnchor();
     args.stickKnob.style.transform = "translate(-50%, -50%)";
     args.onMove(0, 0, false);
   };
@@ -51,11 +97,8 @@ export function createMobileControls(args: CreateMobileControlsArgs): MobileCont
   };
 
   const updateStickFromPointer = (ev: PointerEvent) => {
-    const baseRect = args.stickBase.getBoundingClientRect();
-    const centerX = baseRect.left + baseRect.width * 0.5;
-    const centerY = baseRect.top + baseRect.height * 0.5;
-    const rawDx = ev.clientX - centerX;
-    const rawDy = ev.clientY - centerY;
+    const rawDx = ev.clientX - stickBaseCx;
+    const rawDy = ev.clientY - stickBaseCy;
     const radius = stickRadiusPx();
     const dist = Math.hypot(rawDx, rawDy);
     const clampedDist = Math.min(radius, dist);
@@ -71,9 +114,10 @@ export function createMobileControls(args: CreateMobileControlsArgs): MobileCont
     if (!enabled) return;
     if (stickPointerId !== null) return;
     stickPointerId = ev.pointerId;
+    setFloatingStickCenter(ev.clientX, ev.clientY);
     args.stickBase.classList.add("isActive");
     ev.preventDefault();
-    safeSetPointerCapture(args.stickBase, ev.pointerId);
+    safeSetPointerCapture(args.root, ev.pointerId);
     updateStickFromPointer(ev);
   };
 
@@ -86,7 +130,7 @@ export function createMobileControls(args: CreateMobileControlsArgs): MobileCont
 
   const onStickPointerEnd = (ev: PointerEvent) => {
     if (stickPointerId !== ev.pointerId) return;
-    safeReleasePointerCapture(args.stickBase, ev.pointerId);
+    safeReleasePointerCapture(args.root, ev.pointerId);
     stickPointerId = null;
     resetStick();
   };
@@ -108,11 +152,11 @@ export function createMobileControls(args: CreateMobileControlsArgs): MobileCont
     resetInteract();
   };
 
-  args.stickBase.addEventListener("pointerdown", onStickPointerDown as EventListener);
-  args.stickBase.addEventListener("pointermove", onStickPointerMove as EventListener);
-  args.stickBase.addEventListener("pointerup", onStickPointerEnd as EventListener);
-  args.stickBase.addEventListener("pointercancel", onStickPointerEnd as EventListener);
-  args.stickBase.addEventListener("lostpointercapture", onStickPointerEnd as EventListener);
+  args.root.addEventListener("pointerdown", onStickPointerDown as EventListener);
+  args.root.addEventListener("pointermove", onStickPointerMove as EventListener);
+  args.root.addEventListener("pointerup", onStickPointerEnd as EventListener);
+  args.root.addEventListener("pointercancel", onStickPointerEnd as EventListener);
+  args.root.addEventListener("lostpointercapture", onStickPointerEnd as EventListener);
   args.interactBtn.addEventListener("pointerdown", onInteractPointerDown as EventListener);
   args.interactBtn.addEventListener("pointerup", onInteractPointerEnd as EventListener);
   args.interactBtn.addEventListener("pointercancel", onInteractPointerEnd as EventListener);
@@ -126,6 +170,7 @@ export function createMobileControls(args: CreateMobileControlsArgs): MobileCont
     setEnabled(nextEnabled: boolean): void {
       enabled = nextEnabled;
       args.root.hidden = !enabled;
+      args.root.style.pointerEvents = enabled ? "auto" : "none";
       if (!enabled) {
         stickPointerId = null;
         interactPointerId = null;
@@ -134,11 +179,11 @@ export function createMobileControls(args: CreateMobileControlsArgs): MobileCont
       }
     },
     destroy(): void {
-      args.stickBase.removeEventListener("pointerdown", onStickPointerDown as EventListener);
-      args.stickBase.removeEventListener("pointermove", onStickPointerMove as EventListener);
-      args.stickBase.removeEventListener("pointerup", onStickPointerEnd as EventListener);
-      args.stickBase.removeEventListener("pointercancel", onStickPointerEnd as EventListener);
-      args.stickBase.removeEventListener("lostpointercapture", onStickPointerEnd as EventListener);
+      args.root.removeEventListener("pointerdown", onStickPointerDown as EventListener);
+      args.root.removeEventListener("pointermove", onStickPointerMove as EventListener);
+      args.root.removeEventListener("pointerup", onStickPointerEnd as EventListener);
+      args.root.removeEventListener("pointercancel", onStickPointerEnd as EventListener);
+      args.root.removeEventListener("lostpointercapture", onStickPointerEnd as EventListener);
       args.interactBtn.removeEventListener("pointerdown", onInteractPointerDown as EventListener);
       args.interactBtn.removeEventListener("pointerup", onInteractPointerEnd as EventListener);
       args.interactBtn.removeEventListener("pointercancel", onInteractPointerEnd as EventListener);
@@ -148,6 +193,7 @@ export function createMobileControls(args: CreateMobileControlsArgs): MobileCont
       resetStick();
       resetInteract();
       args.root.hidden = true;
+      args.root.style.pointerEvents = "none";
     },
   };
 }

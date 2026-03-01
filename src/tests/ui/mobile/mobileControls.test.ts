@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { createMobileControls } from "../../../ui/mobile/mobileControls";
 
 type Listener = (ev: any) => void;
@@ -78,6 +78,10 @@ function buildFixture() {
 }
 
 describe("mobile controls", () => {
+  beforeEach(() => {
+    (globalThis as any).window = { innerWidth: 1000, innerHeight: 800 };
+  });
+
   test("stick drag emits movement and resets on release", () => {
     const { root, stick, knob, interact } = buildFixture();
     const onMove = vi.fn();
@@ -92,16 +96,22 @@ describe("mobile controls", () => {
     });
     controls.setEnabled(true);
 
-    stick.dispatchEvent(pointer("pointerdown", 1, 190, 160));
+    root.dispatchEvent(pointer("pointerdown", 1, 190, 160));
+    expect(stick.classList.contains("isFloating")).toBe(true);
+    expect(stick.style.left).toBe("130px");
+    expect(stick.style.top).toBe("100px");
     expect(onMove).toHaveBeenLastCalledWith(expect.any(Number), expect.any(Number), true);
     expect(knob.style.transform).toContain("calc(-50%");
 
-    stick.dispatchEvent(pointer("pointermove", 1, 120, 120));
+    root.dispatchEvent(pointer("pointermove", 1, 120, 120));
     expect(onMove).toHaveBeenLastCalledWith(expect.any(Number), expect.any(Number), true);
 
-    stick.dispatchEvent(pointer("pointerup", 1, 120, 120));
+    root.dispatchEvent(pointer("pointerup", 1, 120, 120));
     expect(onMove).toHaveBeenLastCalledWith(0, 0, false);
     expect(knob.style.transform).toBe("translate(-50%, -50%)");
+    expect(stick.classList.contains("isFloating")).toBe(false);
+    expect(stick.style.left).toBe("");
+    expect(stick.style.top).toBe("");
   });
 
   test("interact button emits down/up state", () => {
@@ -140,7 +150,7 @@ describe("mobile controls", () => {
       onInteractDown,
     });
     controls.setEnabled(true);
-    stick.dispatchEvent(pointer("pointerdown", 1, 190, 160));
+    root.dispatchEvent(pointer("pointerdown", 1, 190, 160));
     interact.dispatchEvent(pointer("pointerdown", 2, 20, 20));
 
     onMove.mockClear();
@@ -151,6 +161,29 @@ describe("mobile controls", () => {
     expect(onMove).toHaveBeenCalledWith(0, 0, false);
     expect(onInteractDown).toHaveBeenCalledWith(false);
     expect(knob.style.transform).toBe("translate(-50%, -50%)");
+    expect(stick.classList.contains("isFloating")).toBe(false);
+    expect(stick.style.left).toBe("");
+    expect(stick.style.top).toBe("");
     expect(interact.classList.contains("isPressed")).toBe(false);
+  });
+
+  test("stick spawn clamps inside viewport bounds", () => {
+    const { root, stick, knob, interact } = buildFixture();
+    const onMove = vi.fn();
+    const onInteractDown = vi.fn();
+    const controls = createMobileControls({
+      root: root as any,
+      stickBase: stick as any,
+      stickKnob: knob as any,
+      interactBtn: interact as any,
+      onMove,
+      onInteractDown,
+    });
+    controls.setEnabled(true);
+
+    (globalThis as any).window = { innerWidth: 220, innerHeight: 200 };
+    root.dispatchEvent(pointer("pointerdown", 3, 5, 6));
+    expect(stick.style.left).toBe("0px");
+    expect(stick.style.top).toBe("0px");
   });
 });

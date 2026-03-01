@@ -38,6 +38,9 @@ describe("virtual controls input composition", () => {
     setVirtualMoveAxes(input, 1, 0, true);
     inputSystem(input, {} as HTMLCanvasElement);
 
+    expect(input.moveX).toBeCloseTo(1, 4);
+    expect(input.moveY).toBeCloseTo(0, 4);
+    expect(input.moveMag).toBeCloseTo(1, 4);
     expect(input.right).toBe(true);
     expect(input.left).toBe(false);
     expect(input.up).toBe(false);
@@ -49,6 +52,9 @@ describe("virtual controls input composition", () => {
     setVirtualMoveAxes(input, 0.1, -0.1, true);
     inputSystem(input, {} as HTMLCanvasElement);
 
+    expect(input.moveX).toBe(0);
+    expect(input.moveY).toBe(0);
+    expect(input.moveMag).toBe(0);
     expect(input.left).toBe(false);
     expect(input.right).toBe(false);
     expect(input.up).toBe(false);
@@ -65,6 +71,30 @@ describe("virtual controls input composition", () => {
     expect(input.right).toBe(true);
 
     dispatchKey("keyup", "a");
+  });
+
+  test("radial deadzone remaps movement magnitude above threshold", () => {
+    const input = createInputState();
+    setVirtualMoveAxes(input, 0.3, 0, true);
+    inputSystem(input, {} as HTMLCanvasElement);
+
+    expect(input.moveX).toBeGreaterThan(0);
+    expect(input.moveX).toBeLessThan(0.3);
+    expect(input.moveY).toBe(0);
+    expect(input.moveMag).toBeGreaterThan(0);
+    expect(input.moveMag).toBeLessThan(0.3);
+  });
+
+  test("keyboard-only movement keeps digital full magnitude", () => {
+    const input = createInputState();
+    dispatchKey("keydown", "d");
+    inputSystem(input, {} as HTMLCanvasElement);
+
+    expect(input.moveX).toBe(1);
+    expect(input.moveY).toBe(0);
+    expect(input.moveMag).toBe(1);
+
+    dispatchKey("keyup", "d");
   });
 
   test("virtual interact down emits one edge then holds", () => {

@@ -649,6 +649,12 @@ async function bootstrap() {
   }
 
   await initUserSettings();
+  const hasPersistedSettings = !!localStorage.getItem("ratgame:userSettings");
+  const isPhoneLikeViewport = window.matchMedia("(pointer: coarse)").matches
+    && (window.matchMedia("(max-width: 768px)").matches || window.matchMedia("(max-height: 500px)").matches);
+  if (!hasPersistedSettings && isPhoneLikeViewport && !getUserSettings().render.performanceMode) {
+    updateUserSettings({ render: { performanceMode: true } });
+  }
   const devSettingsUi = installDevSettingsUi();
 
   const refs = getDomRefs();

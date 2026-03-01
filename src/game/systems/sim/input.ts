@@ -1,4 +1,10 @@
 export type InputState = {
+  /** Composed movement x-axis in screen-grid space, -1..1 */
+  moveX: number;
+  /** Composed movement y-axis in screen-grid space, -1..1 */
+  moveY: number;
+  /** Composed movement magnitude, 0..1 */
+  moveMag: number;
   up: boolean;
   down: boolean;
   left: boolean;
@@ -52,8 +58,12 @@ export function cameraLocalToWorld(
 }
 
 const VIRTUAL_MOVE_DEADZONE = 0.22;
+const VIRTUAL_MOVE_DEADZONE_RADIAL = 0.18;
 
 function ensureInternalState(input: InputState): void {
+  if (!Number.isFinite(input.moveX)) input.moveX = 0;
+  if (!Number.isFinite(input.moveY)) input.moveY = 0;
+  if (!Number.isFinite(input.moveMag)) input.moveMag = 0;
   if (typeof input._keyUp !== "boolean") input._keyUp = false;
   if (typeof input._keyDown !== "boolean") input._keyDown = false;
   if (typeof input._keyLeft !== "boolean") input._keyLeft = false;
@@ -71,15 +81,58 @@ function clampUnit(value: number): number {
   return Math.max(-1, Math.min(1, value));
 }
 
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
+function composeVirtualAnalogMove(input: InputState): { x: number; y: number; mag: number } {
+  if (!input._virtualMoveActive) return { x: 0, y: 0, mag: 0 };
+  const rawX = clampUnit(input._virtualMoveX as number);
+  const rawY = clampUnit(input._virtualMoveY as number);
+  const rawMag = Math.hypot(rawX, rawY);
+  if (rawMag <= VIRTUAL_MOVE_DEADZONE_RADIAL) return { x: 0, y: 0, mag: 0 };
+  const dirX = rawMag > 1e-6 ? rawX / rawMag : 0;
+  const dirY = rawMag > 1e-6 ? rawY / rawMag : 0;
+  const remappedMag = clamp01((Math.min(1, rawMag) - VIRTUAL_MOVE_DEADZONE_RADIAL) / (1 - VIRTUAL_MOVE_DEADZONE_RADIAL));
+  return {
+    x: dirX * remappedMag,
+    y: dirY * remappedMag,
+    mag: remappedMag,
+  };
+}
+
+function composeKeyboardDigitalMove(input: InputState): { x: number; y: number; mag: number } {
+  let x = 0;
+  let y = 0;
+  if (input._keyLeft) x -= 1;
+  if (input._keyRight) x += 1;
+  if (input._keyUp) y += 1;
+  if (input._keyDown) y -= 1;
+  const len = Math.hypot(x, y);
+  if (len <= 1e-6) return { x: 0, y: 0, mag: 0 };
+  return { x: x / len, y: y / len, mag: 1 };
+}
+
 function recomputeDirectionalFromSources(input: InputState): void {
   ensureInternalState(input);
-  const moveActive = !!input._virtualMoveActive;
-  const vx = moveActive ? (input._virtualMoveX as number) : 0;
-  const vy = moveActive ? (input._virtualMoveY as number) : 0;
-  const virtualLeft = vx <= -VIRTUAL_MOVE_DEADZONE;
-  const virtualRight = vx >= VIRTUAL_MOVE_DEADZONE;
-  const virtualUp = vy >= VIRTUAL_MOVE_DEADZONE;
-  const virtualDown = vy <= -VIRTUAL_MOVE_DEADZONE;
+  const virtual = composeVirtualAnalogMove(input);
+  const keyboard = composeKeyboardDigitalMove(input);
+
+  if (input._virtualMoveActive) {
+    input.moveX = virtual.x;
+    input.moveY = virtual.y;
+    input.moveMag = virtual.mag;
+  } else {
+    input.moveX = keyboard.x;
+    input.moveY = keyboard.y;
+    input.moveMag = keyboard.mag;
+  }
+
+  const virtualLeft = virtual.x <= -VIRTUAL_MOVE_DEADZONE;
+  const virtualRight = virtual.x >= VIRTUAL_MOVE_DEADZONE;
+  const virtualUp = virtual.y >= VIRTUAL_MOVE_DEADZONE;
+  const virtualDown = virtual.y <= -VIRTUAL_MOVE_DEADZONE;
   input.left = !!input._keyLeft || virtualLeft;
   input.right = !!input._keyRight || virtualRight;
   input.up = !!input._keyUp || virtualUp;
@@ -120,6 +173,9 @@ export function setVirtualInteractDown(input: InputState, down: boolean): void {
 /** Create a fresh input state and register key listeners. */
 export function createInputState(): InputState {
   const s: InputState = {
+    moveX: 0,
+    moveY: 0,
+    moveMag: 0,
     up: false,
     down: false,
     left: false,
