@@ -165,7 +165,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_CONVERT_FIRE_1",
-    isEnabled: false,
+    isEnabled: true,
     displayName: "Convert 40% physical to fire",
     rarity: 2,
     powerTier: 2,
@@ -173,7 +173,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_CONVERT_CHAOS_1",
-    isEnabled: false,
+    isEnabled: true,
     displayName: "Convert 40% physical to chaos",
     rarity: 2,
     powerTier: 2,
@@ -197,7 +197,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_BLEED_CHANCE_1",
-    isEnabled: false,
+    isEnabled: true,
     displayName: "+25% bleed chance",
     rarity: 2,
     powerTier: 1,
@@ -205,7 +205,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_IGNITE_CHANCE_1",
-    isEnabled: false,
+    isEnabled: true,
     displayName: "+25% ignite chance",
     rarity: 2,
     powerTier: 1,
@@ -213,7 +213,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_POISON_CHANCE_1",
-    isEnabled: false,
+    isEnabled: true,
     displayName: "+25% poison chance",
     rarity: 2,
     powerTier: 1,
