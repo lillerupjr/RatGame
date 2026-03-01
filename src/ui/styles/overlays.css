@@ -1,8 +1,14 @@
-html, body { margin: 0; height: 100%; background: #0b0b0f; overflow: hidden; }
-#c, #ui { position: fixed; inset: 0; display: block; }
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+#c, #ui { position: fixed; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; }
 #c { z-index: 0; }
 #ui { z-index: 1; pointer-events: none; }
-#hud { position: fixed; left: 12px; top: 12px; color: #eaeaf2; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto; font-size: 14px; line-height: 1.4; user-select: none; z-index: 3; transform: scale(0.75); transform-origin: top left; }
+#hud { position: fixed; left: calc(12px + var(--safe-left)); top: calc(12px + var(--safe-top)); color: #eaeaf2; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto; font-size: 14px; line-height: 1.4; user-select: none; z-index: 3; transform: scale(1.125); transform-origin: top left; }
 #hud .pill { display: inline-block; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,0.08); margin-right: 8px; }
 #hudTop { display: inline-block; }
 
@@ -14,8 +20,8 @@ html, body { margin: 0; height: 100%; background: #0b0b0f; overflow: hidden; }
   --armor-outer-d: calc(var(--orb-core-d) + 2 * (var(--ring-gap) + var(--armor-thickness)));
   --orb-stage-d: calc(var(--orb-core-d) + 2 * (var(--ring-gap) + var(--mom-thickness) + var(--ring-gap) + var(--armor-thickness)));
   position: fixed;
-  left: 16px;
-  bottom: 16px;
+  left: calc(16px + var(--safe-left));
+  bottom: calc(16px + var(--safe-bottom));
   display: inline-flex;
   flex-direction: column;
   align-items: center;
@@ -286,8 +292,6 @@ html, body { margin: 0; height: 100%; background: #0b0b0f; overflow: hidden; }
   vertical-align: -1px;
 }
 
-/* HUD inventory (weapons + items) */
-
 #objectiveOverlay {
   margin-top: 8px;
   padding: 8px 10px;
@@ -311,65 +315,6 @@ html, body { margin: 0; height: 100%; background: #0b0b0f; overflow: hidden; }
   opacity: 0.9;
 }
 
-#hud .hudInv {
-  margin-top: 8px;
-  display: flex;
-  flex-direction: column; /* NEW: stack vertically */
-  gap: 10px;
-  align-items: stretch;
-  max-width: min(860px, calc(100vw - 24px));
-}
-
-#hud .invCol {
-  padding: 8px;
-  border-radius: 14px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.10);
-  width: 100%;          /* NEW */
-  min-width: 0;         /* NEW: prevents forcing side-by-side */
-  box-sizing: border-box;
-}
-
-
-#hud .invLabel {
-  font-size: 12px;
-  font-weight: 900;
-  opacity: 0.9;
-  margin-bottom: 6px;
-}
-
-#hud .invGrid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(78px, 1fr));
-  gap: 8px;
-}
-
-#hud .slot {
-  padding: 6px 8px;
-  border-radius: 12px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.10);
-  min-height: 34px;
-}
-
-#hud .slot.empty { opacity: 0.45; }
-
-#hud .slotTitle {
-  font-weight: 900;
-  font-size: 12px;
-  line-height: 1.1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
-
-#hud .slotSub {
-  font-size: 11px;
-  opacity: 0.85;
-  margin-top: 2px;
-}
-
 #interactPrompt {
   position: fixed;
   left: calc(var(--safe-x, 0px) + var(--safe-w, 100vw) * 0.5);
@@ -383,6 +328,105 @@ html, body { margin: 0; height: 100%; background: #0b0b0f; overflow: hidden; }
   padding: 8px 12px;
   font: 700 13px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
   letter-spacing: 0.02em;
+}
+
+#mobileControls {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  display: none;
+}
+
+#mobileMoveStick {
+  position: fixed;
+  right: calc(16px + var(--safe-right));
+  bottom: calc(16px + var(--safe-bottom));
+  width: 136px;
+  height: 136px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.2) 0%, rgba(20, 20, 24, 0.44) 70%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 8px 20px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+#mobileMoveStick.isActive {
+  border-color: rgba(255, 255, 255, 0.38);
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.27) 0%, rgba(28, 28, 34, 0.58) 72%);
+}
+
+#mobileMoveKnob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 56px;
+  height: 56px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.92) 0%, rgba(218, 224, 240, 0.92) 38%, rgba(132, 145, 176, 0.92) 100%);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+#mobileInteractBtn {
+  position: fixed;
+  right: calc(38px + var(--safe-right));
+  bottom: calc(168px + var(--safe-bottom));
+  width: 92px;
+  height: 54px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(16, 16, 22, 0.68);
+  color: #fff;
+  font: 900 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
+  letter-spacing: 0.02em;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+  touch-action: manipulation;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+}
+
+#mobileInteractBtn.isPressed {
+  background: rgba(86, 92, 128, 0.86);
+  border-color: rgba(255, 255, 255, 0.55);
+}
+
+@media (max-width: 768px) and (pointer: coarse) {
+  #mobileControls {
+    display: block;
+  }
+}
+
+@media (max-height: 500px) and (pointer: coarse) {
+  #mobileControls {
+    display: block;
+  }
+
+  #mobileMoveStick {
+    right: calc(10px + var(--safe-right));
+    bottom: calc(10px + var(--safe-bottom));
+    width: 110px;
+    height: 110px;
+  }
+
+  #mobileMoveKnob {
+    width: 46px;
+    height: 46px;
+  }
+
+  #mobileInteractBtn {
+    right: calc(24px + var(--safe-right));
+    bottom: calc(128px + var(--safe-bottom));
+    width: 82px;
+    height: 48px;
+    font-size: 14px;
+  }
 }
 
 #dialogBar {
@@ -485,7 +529,16 @@ html, body { margin: 0; height: 100%; background: #0b0b0f; overflow: hidden; }
 
 /* Character Select Menu */
 #characterSelect { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.75); z-index: 4; }
-#characterSelect .panel { width: min(820px, 94vw); padding: 24px; border-radius: 20px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
+#characterSelect .panel {
+  width: min(820px, 94vw);
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  padding: 24px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.06);
+  color: #eaeaf2;
+  font-family: ui-sans-serif, system-ui;
+}
 #characterSelect .title { font-size: 26px; font-weight: 900; margin-bottom: 6px; text-align: center; }
 #characterSelect .subline { opacity: 0.85; margin-bottom: 16px; font-size: 14px; text-align: center; }
 #characterChoices { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
@@ -576,7 +629,7 @@ html, body { margin: 0; height: 100%; background: #0b0b0f; overflow: hidden; }
 
 /* Full-screen dim + center */
 .pauseOverlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
   display: flex;
   align-items: center;
@@ -584,6 +637,7 @@ html, body { margin: 0; height: 100%; background: #0b0b0f; overflow: hidden; }
   pointer-events: auto;
   background: rgba(0, 0, 0, 0.35);
   color: rgba(255, 255, 255, 0.95);
+  overflow: hidden;
 }
 
 /* Big panel: uses most of screen */
@@ -650,6 +704,7 @@ html, body { margin: 0; height: 100%; background: #0b0b0f; overflow: hidden; }
   grid-template-columns: 1.1fr 1.7fr 1.1fr;
   gap: 14px;
   min-height: 0;
+  overflow: visible;
 }
 
 /* Sections */
@@ -661,6 +716,7 @@ html, body { margin: 0; height: 100%; background: #0b0b0f; overflow: hidden; }
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
 }
 
 .pauseSection h3 {
@@ -701,9 +757,18 @@ html, body { margin: 0; height: 100%; background: #0b0b0f; overflow: hidden; }
 
 /* Scrollable content inside a section */
 .pauseScroll {
+  flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   padding-right: 6px;
+}
+
+.audioRow input[type="range"] {
+  touch-action: pan-x;
 }
 
 .pauseMeta {
@@ -1284,4 +1349,604 @@ html, body { margin: 0; height: 100%; background: #0b0b0f; overflow: hidden; }
 
 @media (min-width: 721px) and (max-width: 960px) {
   .deckCardGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Mobile-first responsive pass for pre-run menu flow */
+@media (max-width: 768px) {
+  #welcomeScreen,
+  #mainMenu,
+  #characterSelect,
+  #mapMenu,
+  #innkeeperMenu,
+  #settingsMenu,
+  #menu {
+    padding: 10px;
+  }
+
+  #welcomeScreen .panel,
+  #mainMenu .panel,
+  #characterSelect .panel,
+  #mapMenu .panel,
+  #innkeeperMenu .panel,
+  #settingsMenu .panel,
+  #menu .panel {
+    width: min(96vw, 560px);
+    max-height: calc(100dvh - 20px);
+    overflow-y: auto;
+    padding: 16px 14px;
+    border-radius: 14px;
+  }
+
+  #welcomeScreen .welcomeTitle {
+    font-size: 36px;
+    margin-bottom: 24px;
+  }
+
+  #welcomeScreen button,
+  #mainMenu .menuButtons button,
+  #mainMenu .menuFooter button,
+  #mapMenu .mapMenuActions button,
+  #characterSelect .characterActions button,
+  #innkeeperMenu button,
+  #settingsMenu button,
+  #menu button#startBtn {
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+
+  #mainMenu .title,
+  #characterSelect .title,
+  #mapMenu .title,
+  #innkeeperMenu .title,
+  #settingsMenu .title {
+    font-size: 24px;
+    margin-bottom: 10px;
+  }
+
+  #mainMenu .menuButtons {
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  #mainMenu .menuButtons button#startRunBtn {
+    font-size: 18px;
+  }
+
+  #mainMenu .menuButtons button,
+  #mapMenu .mapMenuActions button,
+  #characterSelect .characterActions button,
+  #menu button#startBtn {
+    font-size: 16px;
+  }
+
+  #mainMenu .menuFooter {
+    padding-top: 12px;
+  }
+
+  #mapMenu .subline,
+  #characterSelect .subline,
+  #innkeeperMenu .subline,
+  #settingsMenu .subline,
+  #menu .subline {
+    font-size: 13px;
+    margin-bottom: 10px;
+  }
+
+  #mapChoices {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .mapChoiceBtn {
+    padding: 10px 10px;
+  }
+
+  .mapChoiceTitle {
+    font-size: 13px;
+  }
+
+  .mapChoiceDesc {
+    font-size: 12px;
+  }
+
+  #mapMenu .mapMenuActions,
+  #characterSelect .characterActions {
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  #characterChoices {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .characterCard {
+    width: 100%;
+    padding: 10px;
+    border-radius: 14px;
+  }
+
+  .characterSpriteWrap {
+    height: 110px;
+    margin-bottom: 8px;
+  }
+
+  .characterName {
+    font-size: 14px;
+  }
+
+  #weaponChoices {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  #weaponPickerLabel {
+    margin: 10px 0 6px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 390px) {
+  #welcomeScreen .panel,
+  #mainMenu .panel,
+  #characterSelect .panel,
+  #mapMenu .panel,
+  #innkeeperMenu .panel,
+  #settingsMenu .panel,
+  #menu .panel {
+    width: 97vw;
+    max-height: calc(100dvh - 12px);
+    padding: 14px 12px;
+  }
+
+  #welcomeScreen .welcomeTitle {
+    font-size: 30px;
+    margin-bottom: 18px;
+  }
+
+  #mainMenu .title,
+  #characterSelect .title,
+  #mapMenu .title,
+  #innkeeperMenu .title,
+  #settingsMenu .title {
+    font-size: 21px;
+  }
+
+  #mainMenu .menuButtons button,
+  #mainMenu .menuButtons button#startRunBtn,
+  #mapMenu .mapMenuActions button,
+  #characterSelect .characterActions button,
+  #menu button#startBtn {
+    font-size: 15px;
+  }
+
+  .characterSpriteWrap {
+    height: 96px;
+  }
+}
+
+@media (max-width: 768px) {
+  #map {
+    padding: 10px;
+  }
+
+  #map .panel {
+    width: min(96vw, 640px);
+    max-height: calc(100dvh - 20px);
+    overflow-y: auto;
+    padding: 14px 12px;
+    border-radius: 14px;
+  }
+
+  #map .title {
+    font-size: 20px;
+    margin-bottom: 4px;
+  }
+
+  #map .sub {
+    font-size: 13px;
+    margin-bottom: 10px;
+  }
+
+  #mapGraphWrap {
+    border-radius: 12px;
+  }
+
+  .mapHitBtn {
+    width: 126px;
+    height: 62px;
+    border-radius: 12px;
+    padding: 8px 10px;
+  }
+
+  .mapHitTitle {
+    font-size: 13px;
+  }
+
+  .mapHitDesc {
+    font-size: 11px;
+  }
+}
+
+/* Landscape phone / short viewport safety */
+@media (max-height: 500px) {
+  #welcomeScreen,
+  #mainMenu,
+  #characterSelect,
+  #mapMenu,
+  #innkeeperMenu,
+  #settingsMenu,
+  #menu {
+    padding: 6px;
+  }
+
+  #welcomeScreen .panel,
+  #mainMenu .panel,
+  #characterSelect .panel,
+  #mapMenu .panel,
+  #innkeeperMenu .panel,
+  #settingsMenu .panel,
+  #menu .panel,
+  #map .panel {
+    width: min(97vw, 900px);
+    max-height: calc(100dvh - 12px);
+    overflow-y: auto;
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+
+  #welcomeScreen .welcomeTitle {
+    font-size: 28px;
+    margin-bottom: 12px;
+  }
+
+  #map {
+    padding: 6px;
+  }
+
+  #map .title {
+    font-size: 20px;
+    margin-bottom: 4px;
+  }
+
+  #map .sub {
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  #mapGraphWrap {
+    aspect-ratio: auto;
+    height: min(48dvh, 260px);
+    min-height: 180px;
+  }
+
+  .mapHitBtn {
+    width: 110px;
+    height: 52px;
+    border-radius: 10px;
+    padding: 6px 8px;
+  }
+
+  .mapHitTitle {
+    font-size: 12px;
+    margin-bottom: 2px;
+  }
+
+  .mapHitDesc {
+    font-size: 10px;
+    line-height: 1.15;
+  }
+
+  #mainMenu .title,
+  #characterSelect .title,
+  #mapMenu .title,
+  #innkeeperMenu .title,
+  #settingsMenu .title,
+  #menu .title {
+    font-size: 22px;
+    margin-bottom: 8px;
+  }
+
+  #mapMenu .subline,
+  #characterSelect .subline,
+  #innkeeperMenu .subline,
+  #settingsMenu .subline,
+  #menu .subline {
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  #characterChoices {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .characterCard {
+    width: 100%;
+    padding: 8px;
+    border-radius: 12px;
+  }
+
+  .characterSpriteWrap {
+    height: 72px;
+    margin-bottom: 6px;
+  }
+
+  .characterName {
+    font-size: 13px;
+    margin-bottom: 2px;
+  }
+
+  .characterWeapon {
+    font-size: 11px;
+    line-height: 1.2;
+  }
+
+  #characterSelect .characterActions {
+    margin-top: 10px;
+    gap: 8px;
+  }
+
+  #characterSelect .characterActions button,
+  #mapMenu .mapMenuActions button,
+  #mainMenu .menuButtons button,
+  #menu button#startBtn {
+    min-height: 40px;
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+
+  #mapChoices {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+}
+
+/* In-game HUD + pause responsive pass */
+@media (max-width: 768px) {
+  #hud {
+    left: calc(8px + var(--safe-left));
+    top: calc(8px + var(--safe-top));
+    transform: scale(0.93);
+  }
+
+  #hudTop {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-width: calc((100vw - 16px) / 0.93);
+  }
+
+  #hud .pill {
+    margin-right: 0;
+    padding: 5px 8px;
+    font-size: 12px;
+  }
+
+  #objectiveOverlay {
+    margin-top: 6px;
+    padding: 6px 8px;
+    max-width: min(460px, calc((100vw - 16px) / 0.93));
+  }
+
+  #vitalsOrbRoot {
+    left: calc(8px + var(--safe-left));
+    bottom: calc(8px + var(--safe-bottom));
+    transform: scale(1.1);
+  }
+
+  #interactPrompt {
+    max-width: calc(100vw - 24px);
+    font-size: 12px;
+    padding: 7px 10px;
+  }
+
+  .pausePanel {
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
+    backdrop-filter: none;
+  }
+
+  /* Mobile: use one primary scroll owner (like debug panel) to avoid nested scroll jank. */
+  .pauseGrid .pauseSection {
+    overflow: visible;
+  }
+
+  .pauseGrid .pauseScroll {
+    flex: initial;
+    min-height: auto;
+    overflow: visible;
+    -webkit-overflow-scrolling: auto;
+    overscroll-behavior: auto;
+    touch-action: auto;
+    padding-right: 0;
+  }
+
+  .pauseHeader {
+    padding: 12px 12px 8px 12px;
+    align-items: stretch;
+  }
+
+  .pauseTitle {
+    font-size: 22px;
+  }
+
+  .pauseGrid {
+    padding: 10px 12px 12px 12px;
+    gap: 10px;
+    min-height: auto;
+    flex: initial;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .pauseSection {
+    padding: 10px;
+  }
+
+  .pauseSection h3 {
+    margin-bottom: 8px;
+    font-size: 15px;
+  }
+
+  .pauseBtn {
+    min-height: 44px;
+    min-width: 0;
+  }
+
+  .pauseHeaderButtons {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .pauseHeaderButtons .pauseBtn {
+    width: 100%;
+  }
+
+  .audioRow {
+    grid-template-columns: 74px 1fr auto;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .pauseDebugLayerPanel {
+    width: min(980px, 96vw);
+    height: min(760px, 92vh);
+    padding: 10px;
+  }
+}
+
+@media (max-height: 500px) {
+  .pausePanel {
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
+    backdrop-filter: none;
+  }
+
+  .pauseGrid .pauseSection {
+    overflow: visible;
+  }
+
+  .pauseGrid .pauseScroll {
+    flex: initial;
+    min-height: auto;
+    overflow: visible;
+    -webkit-overflow-scrolling: auto;
+    overscroll-behavior: auto;
+    touch-action: auto;
+    padding-right: 0;
+  }
+
+  #hud {
+    transform: scale(0.84);
+    left: calc(6px + var(--safe-left));
+    top: calc(6px + var(--safe-top));
+  }
+
+  #hudTop {
+    max-width: calc((100vw - 12px) / 0.84);
+  }
+
+  #hud .pill {
+    padding: 4px 7px;
+    font-size: 11px;
+  }
+
+  #objectiveOverlay {
+    margin-top: 4px;
+    padding: 5px 7px;
+  }
+
+  #objectiveOverlay .objectiveTitle,
+  #objectiveOverlay .objectiveStatus {
+    font-size: 11px;
+  }
+
+  #vitalsOrbRoot {
+    transform: scale(0.9);
+    left: calc(4px + var(--safe-left));
+    bottom: calc(4px + var(--safe-bottom));
+  }
+
+  #interactPrompt {
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+
+  .pauseHeader {
+    padding: 8px 10px 6px 10px;
+    gap: 8px;
+  }
+
+  .pauseTitle {
+    font-size: 19px;
+  }
+
+  .pauseHeaderButtons {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .pauseBtn {
+    min-height: 34px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  .pauseGrid {
+    padding: 8px 10px 10px 10px;
+    gap: 8px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .pauseSection {
+    padding: 8px;
+  }
+
+  .pauseSection h3 {
+    font-size: 14px;
+    margin-bottom: 6px;
+  }
+
+  .audioRow {
+    grid-template-columns: 64px 1fr auto;
+    gap: 6px;
+    margin-bottom: 5px;
+  }
+
+  .audioRow span {
+    font-size: 11px;
+  }
+
+  .pauseMeta {
+    font-size: 11px;
+  }
+
+  .pauseDebugLayerPanel {
+    width: min(960px, 98vw);
+    height: min(700px, 95vh);
+    padding: 8px;
+  }
+
+  .pauseDebugLayerHeader {
+    margin-bottom: 6px;
+  }
+
+  .pauseDebugLayerActions {
+    gap: 6px;
+  }
+
+  .pauseDebugLayerBody {
+    gap: 6px;
+  }
 }

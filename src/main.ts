@@ -21,48 +21,82 @@ import { getUserSettings, initUserSettings, updateUserSettings } from "./userSet
 import { mountPauseMenu } from "./ui/pause/pauseMenu";
 import { togglePause } from "./game/app/pauseController";
 
-function installDevSettingsUi(): void {
-  const root = document.createElement("div");
-  root.style.position = "fixed";
-  root.style.top = "12px";
-  root.style.right = "12px";
-  root.style.zIndex = "9999";
-  root.style.pointerEvents = "auto";
-  document.body.appendChild(root);
+type DevSettingsUiController = {
+  open(): void;
+  close(): void;
+  toggle(): void;
+};
 
-  const cog = document.createElement("button");
-  cog.type = "button";
-  cog.textContent = "⚙";
-  cog.title = "Settings";
-  cog.style.width = "34px";
-  cog.style.height = "34px";
-  cog.style.border = "1px solid rgba(255,255,255,0.25)";
-  cog.style.borderRadius = "8px";
-  cog.style.background = "rgba(20,20,20,0.8)";
-  cog.style.color = "#fff";
-  cog.style.cursor = "pointer";
-  root.appendChild(cog);
+function installDevSettingsUi(): DevSettingsUiController {
+  const settingsMenu = document.getElementById("settingsMenu") as HTMLDivElement | null;
+  const settingsPanel = settingsMenu?.querySelector(".panel") as HTMLDivElement | null;
+  const settingsBackBtn = settingsPanel?.querySelector("#settingsBackBtn") as HTMLButtonElement | null;
+  const noopController: DevSettingsUiController = {
+    open() {},
+    close() {},
+    toggle() {},
+  };
+  if (!settingsPanel) return noopController;
+
+  const debugLayerToggleBtn = document.createElement("button");
+  debugLayerToggleBtn.type = "button";
+  debugLayerToggleBtn.textContent = "Dev Tools";
+  debugLayerToggleBtn.style.marginTop = "10px";
+  debugLayerToggleBtn.style.width = "100%";
+
+  const layer = document.createElement("div");
+  layer.hidden = true;
+  layer.style.position = "fixed";
+  layer.style.inset = "0";
+  layer.style.display = "grid";
+  layer.style.placeItems = "center";
+  layer.style.background = "rgba(0,0,0,0.62)";
+  layer.style.zIndex = "10000";
 
   const panel = document.createElement("div");
-  panel.hidden = true;
-  panel.style.marginTop = "8px";
-  panel.style.width = "420px";
-  panel.style.maxHeight = "82vh";
+  panel.style.width = "min(980px, 94vw)";
+  panel.style.maxHeight = "88vh";
   panel.style.overflowY = "auto";
-  panel.style.padding = "10px";
+  panel.style.padding = "12px";
   panel.style.border = "1px solid rgba(255,255,255,0.18)";
   panel.style.borderRadius = "10px";
   panel.style.background = "rgba(10,10,10,0.92)";
   panel.style.color = "#fff";
   panel.style.font = "12px monospace";
   panel.style.boxShadow = "0 8px 24px rgba(0,0,0,0.4)";
-  root.appendChild(panel);
+  panel.style.boxSizing = "border-box";
+  layer.appendChild(panel);
+  document.body.appendChild(layer);
+
+  if (settingsBackBtn) {
+    settingsPanel.insertBefore(debugLayerToggleBtn, settingsBackBtn);
+  } else {
+    settingsPanel.appendChild(debugLayerToggleBtn);
+  }
+
+  const headerRow = document.createElement("div");
+  headerRow.style.display = "flex";
+  headerRow.style.alignItems = "center";
+  headerRow.style.justifyContent = "space-between";
+  headerRow.style.gap = "10px";
+  headerRow.style.marginBottom = "8px";
+  panel.appendChild(headerRow);
 
   const title = document.createElement("div");
   title.textContent = "Debug Tools";
   title.style.fontWeight = "700";
-  title.style.marginBottom = "8px";
-  panel.appendChild(title);
+  headerRow.appendChild(title);
+
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.textContent = "Close";
+  closeBtn.style.border = "1px solid rgba(255,255,255,0.25)";
+  closeBtn.style.borderRadius = "6px";
+  closeBtn.style.background = "rgba(28,28,28,0.95)";
+  closeBtn.style.color = "#fff";
+  closeBtn.style.cursor = "pointer";
+  closeBtn.style.padding = "4px 10px";
+  headerRow.appendChild(closeBtn);
 
   type SettingsDebug = ReturnType<typeof getUserSettings>["debug"];
   const checks = new Map<BooleanDebugSettingKey, HTMLInputElement>();
@@ -95,6 +129,8 @@ function installDevSettingsUi(): void {
     godMode: "God Mode",
     entityAnchorOverlay: "Show Entity Anchors",
     pauseDebugCards: "Pause Debug Cards",
+    pauseCsvControls: "Pause CSV Controls",
+    dpsMeter: "DPS Meter",
   };
 
   const addToggle = (key: BooleanDebugSettingKey, label: string) => {
@@ -571,13 +607,23 @@ function installDevSettingsUi(): void {
   };
 
   const setOpen = (open: boolean) => {
-    panel.hidden = !open;
+    layer.hidden = !open;
     if (open) syncFromSettings();
   };
 
-  cog.addEventListener("click", () => {
-    setOpen(panel.hidden);
+  layer.addEventListener("click", (ev) => {
+    if (ev.target === layer) setOpen(false);
   });
+  closeBtn.addEventListener("click", () => setOpen(false));
+  debugLayerToggleBtn.addEventListener("click", () => {
+    setOpen(layer.hidden);
+  });
+
+  return {
+    open: () => setOpen(true),
+    close: () => setOpen(false),
+    toggle: () => setOpen(layer.hidden),
+  };
 }
 
 async function bootstrap() {
@@ -603,7 +649,7 @@ async function bootstrap() {
   }
 
   await initUserSettings();
-  installDevSettingsUi();
+  const devSettingsUi = installDevSettingsUi();
 
   const refs = getDomRefs();
   const canvas = refs.canvas;
@@ -666,9 +712,11 @@ async function bootstrap() {
   syncUiSafeRect();
 
   wireMenus(refs, game);
+  let pauseCogBtn: HTMLButtonElement | null = null;
 
-  function syncUiForAppState(appState: AppState): void {
+  function syncUiForAppState(appState: AppState, runState: RunState): void {
     if (appState === AppState.BOOT || appState === AppState.LOADING) {
+      game.setMobileControlsEnabled(false);
       refs.welcomeScreen.hidden = true;
       refs.mainMenuEl.hidden = true;
       refs.characterSelectEl.hidden = true;
@@ -682,15 +730,18 @@ async function bootstrap() {
       refs.ui.levelupEl.root.hidden = true;
       refs.ui.endEl.root.hidden = true;
       refs.ui.dialogEl.root.hidden = true;
+      if (pauseCogBtn) pauseCogBtn.hidden = true;
       return;
     }
     if (appState === AppState.MENU) {
+      game.setMobileControlsEnabled(false);
       refs.ui.menuEl.hidden = true;
       refs.hud.root.hidden = true;
       refs.hud.vitalsOrbRoot.hidden = true;
       refs.ui.levelupEl.root.hidden = true;
       refs.ui.endEl.root.hidden = true;
       refs.ui.dialogEl.root.hidden = true;
+      if (pauseCogBtn) pauseCogBtn.hidden = true;
 
       if (!refs.ui.mapEl.root.hidden) {
         refs.welcomeScreen.hidden = true;
@@ -717,15 +768,17 @@ async function bootstrap() {
       return;
     }
     if (appState === AppState.RUN) {
+      game.setMobileControlsEnabled(runState === RunState.PLAYING);
       refs.welcomeScreen.hidden = true;
       refs.mainMenuEl.hidden = true;
       refs.characterSelectEl.hidden = true;
       refs.mapMenuEl.hidden = true;
       refs.innkeeperMenuEl.hidden = true;
       refs.settingsMenuEl.hidden = true;
-      refs.ui.menuEl.hidden = true;
+      refs.ui.menuEl.hidden = runState !== RunState.PAUSED;
       refs.hud.root.hidden = false;
-      refs.hud.vitalsOrbRoot.hidden = false;
+      refs.hud.vitalsOrbRoot.hidden = runState === RunState.PAUSED;
+      if (pauseCogBtn) pauseCogBtn.hidden = false;
     }
   }
 
@@ -737,6 +790,7 @@ async function bootstrap() {
   let loadingDoneFramePending = false;
   let cachedDeps: ReturnType<typeof collectFloorDependencies> | null = null;
   let firstRunDiagPending = false;
+  let wasPausedVisible = false;
 
   const pauseMenu = mountPauseMenu({
     root: refs.ui.menuEl,
@@ -744,6 +798,7 @@ async function bootstrap() {
       onResume: () => {
         appStateController.setRunState(RunState.PLAYING);
         pauseMenu.setVisible(false);
+        wasPausedVisible = false;
       },
       onQuitRun: () => {
         appStateController.setRunState(RunState.PLAYING);
@@ -751,12 +806,40 @@ async function bootstrap() {
         activeStartIntent = null;
         activeFloorIntent = null;
         loadingDoneFramePending = false;
-        syncUiForAppState(AppState.MENU);
+        syncUiForAppState(AppState.MENU, appStateController.runState);
         pauseMenu.setVisible(false);
+        wasPausedVisible = false;
+        devSettingsUi.close();
         game.quitRunToMenu();
+      },
+      onOpenDevTools: () => {
+        devSettingsUi.open();
       },
     },
   });
+
+  pauseCogBtn = document.createElement("button");
+  pauseCogBtn.type = "button";
+  pauseCogBtn.textContent = "⚙";
+  pauseCogBtn.title = "Pause";
+  pauseCogBtn.style.position = "fixed";
+  pauseCogBtn.style.top = "12px";
+  pauseCogBtn.style.right = "12px";
+  pauseCogBtn.style.zIndex = "9999";
+  pauseCogBtn.style.width = "34px";
+  pauseCogBtn.style.height = "34px";
+  pauseCogBtn.style.border = "1px solid rgba(255,255,255,0.25)";
+  pauseCogBtn.style.borderRadius = "8px";
+  pauseCogBtn.style.background = "rgba(20,20,20,0.8)";
+  pauseCogBtn.style.color = "#fff";
+  pauseCogBtn.style.cursor = "pointer";
+  pauseCogBtn.style.pointerEvents = "auto";
+  pauseCogBtn.hidden = true;
+  pauseCogBtn.addEventListener("click", () => {
+    if (appStateController.appState !== AppState.RUN) return;
+    togglePause(appStateController, appStateController.appState);
+  });
+  document.body.appendChild(pauseCogBtn);
   const loadingController = createLoadingController({
     compileMap: async () => {
       cachedDeps = null;
@@ -861,7 +944,7 @@ async function bootstrap() {
 
     if (ev.code === "Escape" && appStateController.appState === AppState.RUN) {
       ev.preventDefault();
-      togglePause(appStateController, appStateController.appState, pauseMenu);
+      togglePause(appStateController, appStateController.appState);
     }
   });
 
@@ -869,7 +952,7 @@ async function bootstrap() {
   function frame(now: number) {
     const dt = Math.min(0.033, (now - last) / 1000);
     last = now;
-    syncUiForAppState(appStateController.appState);
+    syncUiForAppState(appStateController.appState, appStateController.runState);
     uiCtx.setTransform(1, 0, 0, 1, 0, 0);
     uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
 
@@ -927,6 +1010,7 @@ async function bootstrap() {
       case AppState.RUN:
         // Game world state is authoritative for run -> menu exits (end screen, quit, etc.).
         if (game.getWorld().state === "MENU") {
+          game.setMobileControlsEnabled(false);
           appStateController.setRunState(RunState.PLAYING);
           appStateController.setAppState(AppState.MENU);
           break;
@@ -948,11 +1032,17 @@ async function bootstrap() {
         syncUiSafeRect();
         if (appStateController.runState === RunState.PAUSED) {
           refs.hud.vitalsOrbRoot.hidden = true;
-          pauseMenu.setVisible(true);
-          pauseMenu.render(game.getWorld());
+          if (!wasPausedVisible) {
+            pauseMenu.setVisible(true);
+            pauseMenu.render(game.getWorld());
+            wasPausedVisible = true;
+          }
         } else {
           refs.hud.vitalsOrbRoot.hidden = false;
-          pauseMenu.setVisible(false);
+          if (wasPausedVisible) {
+            pauseMenu.setVisible(false);
+            wasPausedVisible = false;
+          }
         }
         if (firstRunDiagPending) {
           firstRunDiagPending = false;

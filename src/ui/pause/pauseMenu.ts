@@ -8,7 +8,12 @@ import {
   setSfxMuted,
   setSfxVolume,
 } from "../../game/audio/audioSettings";
-import { getUserSettings, isPauseDebugCardsEnabled, updateUserSettings } from "../../userSettings";
+import {
+  getUserSettings,
+  isPauseCsvControlsEnabled,
+  isPauseDebugCardsEnabled,
+  updateUserSettings,
+} from "../../userSettings";
 import { getAllCardIds } from "../../game/combat_mods/content/cards/cardPool";
 import { resolveCombatStarterWeaponId } from "../../game/combat_mods/content/weapons/characterStarterMap";
 import { getCombatStarterWeaponById } from "../../game/combat_mods/content/weapons/starterWeapons";
@@ -21,6 +26,7 @@ import { DEFAULT_SPAWN_TUNING } from "../../game/balance/spawnTuningDefaults";
 export type PauseMenuActions = {
   onResume(): void;
   onQuitRun(): void;
+  onOpenDevTools?(): void;
 };
 
 export type PauseMenuController = {
@@ -109,6 +115,14 @@ export function mountPauseMenu(args: {
 
   actionsRow.appendChild(resumeBtn);
   actionsRow.appendChild(quitBtn);
+
+  const devToolsBtn = document.createElement("button");
+  devToolsBtn.type = "button";
+  devToolsBtn.className = "pauseBtn";
+  setDataAttr(devToolsBtn, "pause-dev-tools");
+  devToolsBtn.textContent = "Dev Tools";
+  if (!args.actions.onOpenDevTools) devToolsBtn.hidden = true;
+  actionsRow.appendChild(devToolsBtn);
 
   const balanceCsvToggleBtn = document.createElement("button");
   balanceCsvToggleBtn.type = "button";
@@ -323,21 +337,24 @@ export function mountPauseMenu(args: {
   spawnTuningResetBtn.className = "pauseDebugOpenBtn";
   spawnTuningResetBtn.textContent = "Reset Spawn Tuning";
   setDataAttr(spawnTuningResetBtn, "spawn-tuning-reset");
+  const audioScroll = document.createElement("div");
+  audioScroll.className = "pauseScroll";
 
   audioSection.appendChild(audioTitle);
-  audioSection.appendChild(musicRow);
-  audioSection.appendChild(sfxRow);
-  audioSection.appendChild(tuningTitle);
-  audioSection.appendChild(spawnRateOrbRow);
-  audioSection.appendChild(monsterHealthOrbRow);
-  audioSection.appendChild(spawnBaseRow);
-  audioSection.appendChild(monsterHealthBaseRow);
-  audioSection.appendChild(pressureT0Row);
-  audioSection.appendChild(pressureT120Row);
-  audioSection.appendChild(renderTitle);
-  audioSection.appendChild(tileRenderRadiusRow);
-  audioSection.appendChild(performanceModeRow);
-  audioSection.appendChild(spawnTuningResetBtn);
+  audioSection.appendChild(audioScroll);
+  audioScroll.appendChild(musicRow);
+  audioScroll.appendChild(sfxRow);
+  audioScroll.appendChild(tuningTitle);
+  audioScroll.appendChild(spawnRateOrbRow);
+  audioScroll.appendChild(monsterHealthOrbRow);
+  audioScroll.appendChild(spawnBaseRow);
+  audioScroll.appendChild(monsterHealthBaseRow);
+  audioScroll.appendChild(pressureT0Row);
+  audioScroll.appendChild(pressureT120Row);
+  audioScroll.appendChild(renderTitle);
+  audioScroll.appendChild(tileRenderRadiusRow);
+  audioScroll.appendChild(performanceModeRow);
+  audioScroll.appendChild(spawnTuningResetBtn);
 
   const buildSection = document.createElement("section");
   buildSection.className = "pauseSection pauseBuild";
@@ -395,7 +412,7 @@ export function mountPauseMenu(args: {
 
   debugCardsSection.appendChild(debugCardsOpenBtn);
   debugCardsSection.appendChild(debugRelicsOpenBtn);
-  audioSection.appendChild(debugCardsSection);
+  audioScroll.appendChild(debugCardsSection);
 
   const statsSection = document.createElement("section");
   statsSection.className = "pauseSection pauseStats";
@@ -676,7 +693,15 @@ export function mountPauseMenu(args: {
 
   const getBalanceCsvLogger = (w: any) => (w ? (w as any).balanceCsvLogger : null);
 
+  const syncCsvButtonsVisibility = () => {
+    const show = isPauseCsvControlsEnabled();
+    balanceCsvToggleBtn.hidden = !show;
+    balanceCsvClearBtn.hidden = !show;
+    balanceCsvDownloadBtn.hidden = !show;
+  };
+
   const syncBalanceCsvControls = (w: World | null) => {
+    syncCsvButtonsVisibility();
     const logger = getBalanceCsvLogger(w);
     balanceCsvToggleBtn.textContent = logger?.enabled ? "Stop CSV" : "Start CSV";
   };
@@ -990,6 +1015,10 @@ export function mountPauseMenu(args: {
 
   resumeBtn.addEventListener("click", args.actions.onResume);
   quitBtn.addEventListener("click", args.actions.onQuitRun);
+  const onOpenDevTools = () => {
+    args.actions.onOpenDevTools?.();
+  };
+  devToolsBtn.addEventListener("click", onOpenDevTools);
   musicSlider.addEventListener("input", onMusicSlider);
   musicMuteBtn.addEventListener("click", onMusicMute);
   sfxSlider.addEventListener("input", onSfxSlider);
@@ -1097,6 +1126,7 @@ export function mountPauseMenu(args: {
     destroy(): void {
       resumeBtn.removeEventListener("click", args.actions.onResume);
       quitBtn.removeEventListener("click", args.actions.onQuitRun);
+      devToolsBtn.removeEventListener("click", onOpenDevTools);
       musicSlider.removeEventListener("input", onMusicSlider);
       musicMuteBtn.removeEventListener("click", onMusicMute);
       sfxSlider.removeEventListener("input", onSfxSlider);

@@ -143,12 +143,14 @@ const audioMockState = vi.hoisted(() => ({
 
 const debugFlags = vi.hoisted(() => ({
   pauseDebugCards: false,
+  pauseCsvControls: false,
 }));
 
 const userSettingsState = vi.hoisted(() => ({
   settings: {
     debug: {
       pauseDebugCards: false,
+      pauseCsvControls: false,
     },
     render: {
       paletteSwapEnabled: false,
@@ -186,6 +188,7 @@ vi.mock("../../../game/audio/audioSettings", () => ({
 
 vi.mock("../../../userSettings", () => ({
   isPauseDebugCardsEnabled: vi.fn(() => debugFlags.pauseDebugCards),
+  isPauseCsvControlsEnabled: vi.fn(() => debugFlags.pauseCsvControls),
   getUserSettings: vi.fn(() => userSettingsState.settings),
   updateUserSettings: vi.fn((patch: any) => {
     userSettingsState.settings = {
@@ -250,8 +253,9 @@ describe("pauseMenu", () => {
     vi.mocked(audioSettingsMock.applySfxSettingsToWorld).mockClear();
     vi.mocked(userSettingsMock.updateUserSettings).mockClear();
     debugFlags.pauseDebugCards = false;
+    debugFlags.pauseCsvControls = false;
     userSettingsState.settings = {
-      debug: { pauseDebugCards: false },
+      debug: { pauseDebugCards: false, pauseCsvControls: false },
       render: {
         paletteSwapEnabled: false,
         paletteId: "db32",
@@ -277,20 +281,23 @@ describe("pauseMenu", () => {
     expect(root.querySelector(".pauseGrid")).toBeTruthy();
   });
 
-  test("resume and quit buttons call actions", () => {
+  test("resume, quit, and dev tools buttons call actions", () => {
     const root = document.createElement("div") as unknown as HTMLDivElement;
     document.body.appendChild(root as any);
 
     const onResume = vi.fn();
     const onQuitRun = vi.fn();
-    const menu = mountPauseMenu({ root, actions: { onResume, onQuitRun } });
+    const onOpenDevTools = vi.fn();
+    const menu = mountPauseMenu({ root, actions: { onResume, onQuitRun, onOpenDevTools } });
     menu.setVisible(true);
 
     (root.querySelector("[data-pause-resume]") as any).click();
     (root.querySelector("[data-pause-quit]") as any).click();
+    (root.querySelector("[data-pause-dev-tools]") as any).click();
 
     expect(onResume).toHaveBeenCalledTimes(1);
     expect(onQuitRun).toHaveBeenCalledTimes(1);
+    expect(onOpenDevTools).toHaveBeenCalledTimes(1);
   });
 
   test("setVisible(true) reapplies visibility if root gets hidden externally", () => {
@@ -676,6 +683,7 @@ describe("pauseMenu", () => {
   });
 
   test("balance csv buttons exist and toggle updates label", () => {
+    debugFlags.pauseCsvControls = true;
     const root = document.createElement("div") as unknown as HTMLDivElement;
     document.body.appendChild(root as any);
 

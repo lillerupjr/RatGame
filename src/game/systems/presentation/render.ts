@@ -4634,15 +4634,12 @@ export async function renderSystem(
   // Building-mask debug overlay draw disabled to avoid full-canvas mask artifacts.
 
 
-  // FPS
+  // Screen-space debug text
   ctx.save();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.font = "12px monospace";
   ctx.fillStyle = "#fff";
-  const fps = Math.round((w as any).fps ?? 0);
   const perf = getRenderPerfSnapshot();
-  ctx.fillText(`FPS: ${fps}`, 8, 14);
-  ctx.fillText(`Palette: ${resolveActivePaletteId()}`, 8, 46);
   if (renderPerfCountersEnabled) {
     const tag = perf.drawImageByTagPerFrame;
     const saveTag = perf.saveByTagPerFrame;
@@ -4733,7 +4730,9 @@ export async function renderSystem(
   // HUD widgets are intentionally screen-anchored (same space as perf/fps text).
   overlayCtx.setTransform(overlayDpr, 0, 0, overlayDpr, 0, 0);
   renderBossHealthBar(w, overlayCtx, screenW, screenH);
-  renderDPSMeter(w, overlayCtx, screenW, screenH);
+  if (getUserSettings().debug.dpsMeter) {
+    renderDPSMeter(w, overlayCtx, screenW, screenH);
+  }
 }
 
 

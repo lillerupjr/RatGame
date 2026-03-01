@@ -16,31 +16,25 @@ function makeController(runState: RunState): AppStateController {
 describe("togglePause", () => {
   test("no-op when not in RUN", () => {
     const controller = makeController(RunState.PLAYING);
-    const ui = { setVisible: vi.fn() };
 
-    const changed = togglePause(controller, AppState.MENU, ui);
+    const changed = togglePause(controller, AppState.MENU);
     expect(changed).toBe(false);
     expect(controller.runState).toBe(RunState.PLAYING);
-    expect(ui.setVisible).not.toHaveBeenCalled();
   });
 
-  test("toggles PLAYING -> PAUSED and shows UI", () => {
+  test("toggles PLAYING -> PAUSED", () => {
     const controller = makeController(RunState.PLAYING);
-    const ui = { setVisible: vi.fn() };
 
-    const changed = togglePause(controller, AppState.RUN, ui);
+    const changed = togglePause(controller, AppState.RUN);
     expect(changed).toBe(true);
     expect(controller.runState).toBe(RunState.PAUSED);
-    expect(ui.setVisible).toHaveBeenCalledWith(true);
   });
 
-  test("toggles PAUSED -> PLAYING and hides UI", () => {
+  test("toggles PAUSED -> PLAYING", () => {
     const controller = makeController(RunState.PAUSED);
-    const ui = { setVisible: vi.fn() };
 
-    const changed = togglePause(controller, AppState.RUN, ui);
+    const changed = togglePause(controller, AppState.RUN);
     expect(changed).toBe(true);
     expect(controller.runState).toBe(RunState.PLAYING);
-    expect(ui.setVisible).toHaveBeenCalledWith(false);
   });
 });

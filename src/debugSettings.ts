@@ -47,6 +47,8 @@ export type DebugSettings = {
   fireRateMult: number;
   entityAnchorOverlay: boolean;
   pauseDebugCards: boolean;
+  pauseCsvControls: boolean;
+  dpsMeter: boolean;
   waterFlowRate: number;
   neutralBirdAI: NeutralBirdAIDebugSettings;
   objectives: ObjectiveDebugSettings;
@@ -103,6 +105,8 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "godMode", label: "godMode" },
   { key: "entityAnchorOverlay", label: "entityAnchorOverlay" },
   { key: "pauseDebugCards", label: "Enable Pause Debug Cards" },
+  { key: "pauseCsvControls", label: "Enable Pause CSV Controls" },
+  { key: "dpsMeter", label: "Show DPS Meter" },
 ] as const;
 
 export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
@@ -134,6 +138,8 @@ export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   fireRateMult: 1,
   entityAnchorOverlay: false,
   pauseDebugCards: false,
+  pauseCsvControls: false,
+  dpsMeter: false,
   waterFlowRate: 1,
   neutralBirdAI: {
     disabled: false,

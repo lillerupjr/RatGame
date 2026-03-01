@@ -159,3 +159,7 @@ export function updateUserSettings(
 export function isPauseDebugCardsEnabled(): boolean {
   return !!currentSettings.debug.pauseDebugCards;
 }
+
+export function isPauseCsvControlsEnabled(): boolean {
+  return !!currentSettings.debug.pauseCsvControls;
+}

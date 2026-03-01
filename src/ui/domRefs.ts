@@ -32,6 +32,8 @@ type DialogRefs = {
 
 export type HudRefs = {
     root: HTMLDivElement;
+    fpsPill: HTMLSpanElement;
+    palettePill: HTMLSpanElement;
     timePill: HTMLSpanElement;
     killsPill: HTMLSpanElement;
     hpPill: HTMLSpanElement;
@@ -47,8 +49,10 @@ export type HudRefs = {
     objectiveTitle: HTMLDivElement;
     objectiveStatus: HTMLDivElement;
     interactPrompt: HTMLDivElement;
-    weaponSlots: HTMLDivElement;
-    itemSlots: HTMLDivElement;
+    mobileControlsRoot: HTMLDivElement;
+    mobileMoveStick: HTMLDivElement;
+    mobileMoveKnob: HTMLDivElement;
+    mobileInteractBtn: HTMLDivElement;
 };
 
 export type UiRefs = {
@@ -106,6 +110,8 @@ export type DomRefs = {
     mapSub: HTMLDivElement;
     mapSvg: SVGSVGElement;
     mapHit: HTMLDivElement;
+    fpsPill: HTMLSpanElement;
+    palettePill: HTMLSpanElement;
     timePill: HTMLSpanElement;
     killsPill: HTMLSpanElement;
     hpPill: HTMLSpanElement;
@@ -118,8 +124,10 @@ export type DomRefs = {
     vitalsMomentumText: HTMLSpanElement;
     lvlPill: HTMLSpanElement;
     interactPrompt: HTMLDivElement;
-    weaponSlots: HTMLDivElement;
-    itemSlots: HTMLDivElement;
+    mobileControlsRoot: HTMLDivElement;
+    mobileMoveStick: HTMLDivElement;
+    mobileMoveKnob: HTMLDivElement;
+    mobileInteractBtn: HTMLDivElement;
     dialogRoot: HTMLDivElement;
     dialogText: HTMLDivElement;
     dialogChoices: HTMLDivElement;
@@ -176,6 +184,8 @@ export function getDomRefs(): DomRefs {
     const menuSublineEl = getEl<HTMLDivElement>("menuSubline");
 
     const hudEl = getEl<HTMLDivElement>("hud");
+    const fpsPill = getEl<HTMLSpanElement>("fpsPill");
+    const palettePill = getEl<HTMLSpanElement>("palettePill");
     const timePill = getEl<HTMLSpanElement>("timePill");
     const killsPill = getEl<HTMLSpanElement>("killsPill");
     const hpPill = getEl<HTMLSpanElement>("hpPill");
@@ -191,8 +201,10 @@ export function getDomRefs(): DomRefs {
     const objectiveTitle = getEl<HTMLDivElement>("objectiveTitle");
     const objectiveStatus = getEl<HTMLDivElement>("objectiveStatus");
     const interactPrompt = getEl<HTMLDivElement>("interactPrompt");
-    const weaponSlots = getEl<HTMLDivElement>("weaponSlots");
-    const itemSlots = getEl<HTMLDivElement>("itemSlots");
+    const mobileControlsRoot = getEl<HTMLDivElement>("mobileControls");
+    const mobileMoveStick = getEl<HTMLDivElement>("mobileMoveStick");
+    const mobileMoveKnob = getEl<HTMLDivElement>("mobileMoveKnob");
+    const mobileInteractBtn = getEl<HTMLDivElement>("mobileInteractBtn");
     const dialogRoot = getEl<HTMLDivElement>("dialogBar");
     const dialogText = getEl<HTMLDivElement>("dialogText");
     const dialogChoices = getEl<HTMLDivElement>("dialogChoices");
@@ -219,6 +231,8 @@ export function getDomRefs(): DomRefs {
 
     const hud: HudRefs = {
         root: hudEl,
+        fpsPill,
+        palettePill,
         timePill,
         killsPill,
         hpPill,
@@ -234,8 +248,10 @@ export function getDomRefs(): DomRefs {
         objectiveTitle,
         objectiveStatus,
         interactPrompt,
-        weaponSlots,
-        itemSlots,
+        mobileControlsRoot,
+        mobileMoveStick,
+        mobileMoveKnob,
+        mobileInteractBtn,
     };
 
     const ui: UiRefs = {
@@ -317,6 +333,8 @@ export function getDomRefs(): DomRefs {
         mapSub,
         mapSvg,
         mapHit,
+        fpsPill,
+        palettePill,
         timePill,
         killsPill,
         hpPill,
@@ -329,8 +347,10 @@ export function getDomRefs(): DomRefs {
         vitalsMomentumText,
         lvlPill,
         interactPrompt,
-        weaponSlots,
-        itemSlots,
+        mobileControlsRoot,
+        mobileMoveStick,
+        mobileMoveKnob,
+        mobileInteractBtn,
         dialogRoot,
         dialogText,
         dialogChoices,

@@ -114,7 +114,8 @@ async function loadBuffer(id: SfxId): Promise<BufferRec> {
     return rec;
 }
 
-// Unlock audio on first user gesture
+// iOS (including standalone/PWA mode) still requires a first user gesture
+// before WebAudio can reliably play. Keep this unlock path always active.
 let unlocked = false;
 function wireUnlock() {
     if (unlocked) return;

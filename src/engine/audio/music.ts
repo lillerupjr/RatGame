@@ -67,6 +67,7 @@ export function getMusicMuted() {
 
 // -----------------------------
 // Autoplay unlock handling
+// iOS Safari + iOS standalone/PWA still require an initial user gesture.
 // -----------------------------
 
 let _unlocked = false;

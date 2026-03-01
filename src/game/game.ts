@@ -1,7 +1,14 @@
 // src/game/game.ts
 import { World, createWorld, clearEvents, emitEvent, gridAtPlayer } from "../engine/world/world";
 
-import { InputState, createInputState, inputSystem, clearInputEdges } from "./systems/sim/input";
+import {
+  InputState,
+  createInputState,
+  inputSystem,
+  clearInputEdges,
+  setVirtualInteractDown,
+  setVirtualMoveAxes,
+} from "./systems/sim/input";
 import { movementSystem } from "./systems/sim/movement";
 import { spawnSystem, spawnOneEnemyOfType, spawnOneTrashEnemy } from "./systems/spawn/spawn";
 import { combatSystem } from "./systems/sim/combat";
@@ -126,10 +133,13 @@ import { createFloorRewardBudget, type ObjectiveMode } from "./rewards/floorRewa
 import { handleRewardEvent, type RewardOutcome } from "./rewards/rewardDirector";
 import { recomputeDerivedStats } from "./stats/derivedStats";
 import { hasAnyRelicWithTag, MOMENTUM_RELIC_TAG } from "./content/relics";
+import { createMobileControls } from "../ui/mobile/mobileControls";
 
 
 type HudRefs = {
   root: HTMLDivElement;
+  fpsPill: HTMLSpanElement;
+  palettePill: HTMLSpanElement;
   timePill: HTMLSpanElement;
   killsPill: HTMLSpanElement;
   hpPill: HTMLSpanElement;
@@ -145,10 +155,10 @@ type HudRefs = {
   objectiveTitle: HTMLDivElement;
   objectiveStatus: HTMLDivElement;
   interactPrompt: HTMLDivElement;
-
-  // NEW: inventory HUD
-  weaponSlots: HTMLDivElement;
-  itemSlots: HTMLDivElement;
+  mobileControlsRoot: HTMLDivElement;
+  mobileMoveStick: HTMLDivElement;
+  mobileMoveKnob: HTMLDivElement;
+  mobileInteractBtn: HTMLDivElement;
 };
 
 type LevelUpRefs = {
@@ -238,9 +248,34 @@ export function precomputeStaticMapData(): void {
 /** Create a game instance and return update/render/start handlers. */
 export function createGame(args: CreateGameArgs) {
   args.hud.lvlPill.hidden = false;
+  const input: InputState = createInputState();
+  let mobileControlsEnabled = false;
+  const mobileControls = createMobileControls({
+    root: args.hud.mobileControlsRoot,
+    stickBase: args.hud.mobileMoveStick,
+    stickKnob: args.hud.mobileMoveKnob,
+    interactBtn: args.hud.mobileInteractBtn,
+    onMove: (x, y, active) => {
+      setVirtualMoveAxes(input, x, y, active);
+    },
+    onInteractDown: (down) => {
+      setVirtualInteractDown(input, down);
+    },
+  });
+
+  const syncMobileControlsEnabled = () => {
+    mobileControls.setEnabled(!args.hud.root.hidden && mobileControlsEnabled);
+  };
+
   const setHudHidden = (hidden: boolean) => {
     args.hud.root.hidden = hidden;
     args.hud.vitalsOrbRoot.hidden = hidden;
+    syncMobileControlsEnabled();
+  };
+
+  const setMobileControlsEnabled = (enabled: boolean) => {
+    mobileControlsEnabled = enabled;
+    syncMobileControlsEnabled();
   };
 
   // ------------------------------------------------------------
@@ -269,7 +304,6 @@ export function createGame(args: CreateGameArgs) {
     w.lastAimY = 0;
   }
 
-  const input: InputState = createInputState();
   type InteractableKind = "SHOP" | "REST";
   type Interactable = {
     id: string;
@@ -2119,35 +2153,6 @@ export function createGame(args: CreateGameArgs) {
     }
   }
 
-  // ----- HUD inventory helpers -----
-  function renderSlots(
-      container: HTMLDivElement,
-      insts: Array<{ id: any; level: number }>,
-      getTitle: (id: any) => string
-  ) {
-    const slots = Array.from(container.querySelectorAll<HTMLElement>(".slot"));
-
-    for (let i = 0; i < 4; i++) {
-      const slot = slots[i];
-      if (!slot) continue;
-
-      const titleEl = slot.querySelector(".slotTitle") as HTMLElement | null;
-      const subEl = slot.querySelector(".slotSub") as HTMLElement | null;
-
-      const inst = insts[i];
-
-      if (inst) {
-        if (titleEl) titleEl.textContent = getTitle(inst.id);
-        if (subEl) subEl.textContent = `Lv ${inst.level}`;
-        slot.classList.remove("empty");
-      } else {
-        if (titleEl) titleEl.textContent = "—";
-        if (subEl) subEl.textContent = "";
-        slot.classList.add("empty");
-      }
-    }
-  }
-
   const clamp01 = (v: number): number => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
 
   function updateVitalsOrb(hasMomentumRelic: boolean) {
@@ -2186,6 +2191,8 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function updateHud() {
+    args.hud.fpsPill.textContent = `FPS: ${Math.round((world as any).fps ?? 0)}`;
+    args.hud.palettePill.textContent = `Palette: ${resolveActivePaletteId()}`;
     args.hud.timePill.textContent = formatTimeMMSS(world.time);
     args.hud.killsPill.textContent = `Kills: ${world.kills}`;
     args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
@@ -2199,10 +2206,6 @@ export function createGame(args: CreateGameArgs) {
     updateVitalsOrb(hasMomentumRelic);
 
     args.hud.lvlPill.textContent = `Gold: ${getGold(world)}`;
-
-    // 4 weapon slots + 4 item slots, order = array order
-    renderSlots(args.hud.weaponSlots, world.weapons as any, (id) => registry.weapon(id as any).title);
-    renderSlots(args.hud.itemSlots, world.items as any, (id) => registry.item(id as any).title);
 
     const spec = world.currentObjectiveSpec;
     if (!spec || world.runState !== "FLOOR") {
@@ -2575,6 +2578,7 @@ export function createGame(args: CreateGameArgs) {
     queueFloorLoadIntent,
     consumePendingFloorLoadIntent,
     quitRunToMenu,
+    setMobileControlsEnabled,
     getWorld: () => world,
   };
 }
