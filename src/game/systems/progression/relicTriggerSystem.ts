@@ -89,6 +89,7 @@ function applyDamageAsOther(
       enemyIndex,
       x: ew.wx,
       y: ew.wy,
+      spawnTriggerId: world.eSpawnTriggerId[enemyIndex],
       source: "OTHER",
     });
   }
@@ -250,6 +251,7 @@ function applyAllHitsExplosion(world: World, ev: EnemyHitEvent, debugRelicLogs: 
         enemyIndex: e,
         x: ew.wx,
         y: ew.wy,
+        spawnTriggerId: world.eSpawnTriggerId[e],
         source: "OTHER",
       });
     }
@@ -309,6 +311,7 @@ function applyExplodeOnKill(world: World, ev: EnemyKilledEvent): void {
         enemyIndex: e,
         x: ew.wx,
         y: ew.wy,
+        spawnTriggerId: world.eSpawnTriggerId[e],
         source: "OTHER",
       });
     }

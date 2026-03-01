@@ -96,7 +96,13 @@ function updateInteractSignals(
     emitTriggerSignal(world, { type: "INTERACT", entityId, triggerId: trigger.id });
 }
 
-export function isBossZoneKillForTrigger(world: Pick<World, "eSpawnTriggerId">, enemyIndex: number, triggerId: string): boolean {
+export function isBossZoneKillForTrigger(
+    world: Pick<World, "eSpawnTriggerId">,
+    enemyIndex: number,
+    triggerId: string,
+    eventSpawnTriggerId?: string,
+): boolean {
+    if (eventSpawnTriggerId === triggerId) return true;
     return world.eSpawnTriggerId[enemyIndex] === triggerId;
 }
 
@@ -108,7 +114,7 @@ function updateKillSignals(world: World, trigger: TriggerInstance) {
         const ev = world.events[i];
         if (ev.type !== "ENEMY_KILLED") continue;
         if (requireBoss) {
-            if (!isBossZoneKillForTrigger(world, ev.enemyIndex, trigger.id)) continue;
+            if (!isBossZoneKillForTrigger(world, ev.enemyIndex, trigger.id, ev.spawnTriggerId)) continue;
             emitTriggerSignal(world, { type: "KILL", entityId: ev.enemyIndex, triggerId: trigger.id });
             continue;
         }

@@ -575,6 +575,7 @@ export function collisionsSystem(w: World, dt: number) {
           enemyIndex: e,
           x: ew.wx,
           y: ew.wy,
+          spawnTriggerId: w.eSpawnTriggerId[e],
           source: registry.projectileSourceFromKind(w.prjKind[p]),
         });
       }

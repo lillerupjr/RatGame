@@ -49,6 +49,7 @@ export type GameEvent =
     enemyIndex: number;
     x: number;
     y: number;
+    spawnTriggerId?: string;
     source:
         | "KNIFE"
         | "PISTOL"

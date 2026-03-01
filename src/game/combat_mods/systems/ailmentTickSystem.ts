@@ -146,6 +146,7 @@ export function ailmentTickSystem(w: any, dt: number): void {
           enemyIndex: e,
           x: pos.x,
           y: pos.y,
+          spawnTriggerId: w.eSpawnTriggerId?.[e],
           source: "OTHER",
         });
       }

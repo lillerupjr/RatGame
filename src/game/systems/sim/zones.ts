@@ -144,6 +144,7 @@ export function zonesSystem(w: World, dt: number) {
                     enemyIndex: e,
                     x: ew.wx,
                     y: ew.wy,
+                    spawnTriggerId: w.eSpawnTriggerId[e],
                     source: "OTHER",
                 });
             }

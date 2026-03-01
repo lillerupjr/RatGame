@@ -28,6 +28,10 @@ import {
 import { hasCompletedAnyObjective, objectiveSystem } from "./systems/progression/objective";
 import { outcomeSystem } from "./systems/progression/outcomeSystem";
 import { bossZoneSpawnSystem } from "./systems/progression/bossZoneSpawn";
+import {
+  markBossTripleClearsFromSignalsAndEvents,
+  syncBossTripleObjectiveStateFromClears,
+} from "./systems/progression/bossTripleObjectiveSync";
 
 import { formatTimeMMSS } from "./util/time";
 import type { WeaponId } from "./content/weapons";
@@ -1184,21 +1188,6 @@ export function createGame(args: CreateGameArgs) {
         completed: !!z.completed,
       })),
     };
-  }
-
-  function markBossClearCompletionFromSignals(w: World): void {
-    const bt = w.bossTriple;
-    if (!bt || !Array.isArray(bt.completed)) return;
-    const signals = w.triggerSignals;
-    if (!Array.isArray(signals) || signals.length === 0) return;
-    for (let i = 0; i < signals.length; i++) {
-      const id = signals[i]?.triggerId;
-      if (typeof id !== "string" || !id.startsWith(OBJECTIVE_TRIGGER_IDS.bossZonePrefix)) continue;
-      const raw = id.slice(OBJECTIVE_TRIGGER_IDS.bossZonePrefix.length);
-      const idx = Number.parseInt(raw, 10) - 1;
-      if (!Number.isFinite(idx) || idx < 0 || idx >= bt.completed.length) continue;
-      bt.completed[idx] = true;
-    }
   }
 
   function beginFloorLoad(floorIntent: FloorIntent): boolean {
@@ -2420,9 +2409,10 @@ export function createGame(args: CreateGameArgs) {
     processCombatTextFromEvents(world, dt);
     updateZoneTrialObjective(world);
     syncZoneTrialNavState(world);
-    markBossClearCompletionFromSignals(world);
+    markBossTripleClearsFromSignalsAndEvents(world);
     bossZoneSpawnSystem(world);
     objectiveSystem(world);
+    syncBossTripleObjectiveStateFromClears(world);
     processMomentumEventQueue(world);
     if (maybeHandleZoneTrialMilestoneReward()) {
       clearEvents(world);

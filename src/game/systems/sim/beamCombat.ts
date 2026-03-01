@@ -225,6 +225,7 @@ export function updatePlayerBeamCombat(w: World, dt: number, cfg: BeamDamageConf
         enemyIndex: t.enemyIndex,
         x: t.wx,
         y: t.wy,
+        spawnTriggerId: w.eSpawnTriggerId[t.enemyIndex],
         source,
       });
     }
