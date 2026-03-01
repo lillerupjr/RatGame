@@ -204,7 +204,7 @@ type CreateGameArgs = {
     mapEl: {
       root: HTMLDivElement;
       topBar: HTMLDivElement;
-      legend: HTMLDivElement;
+      backBtn: HTMLButtonElement;
       infoPanel: HTMLDivElement;
       depthLabel: HTMLDivElement;
       sub: HTMLDivElement;
@@ -1023,7 +1023,7 @@ export function createGame(args: CreateGameArgs) {
       case "HEAL":
         return "Heal";
       case "BOSS_TRIPLE":
-        return "Boss Triple";
+        return "3 Bosses";
     }
   };
 
@@ -1881,20 +1881,12 @@ export function createGame(args: CreateGameArgs) {
   function resetRouteMapFrame(): void {
     args.ui.mapEl.graphWrap.scrollTop = 0;
     args.ui.mapEl.graphWrap.classList.remove("routeScrollable");
-    args.ui.mapEl.legend.innerHTML = "";
     args.ui.mapEl.depthLabel.textContent = "";
     args.ui.mapEl.infoPanel.textContent = "";
     args.ui.mapEl.svg.innerHTML = `<rect x="0" y="0" width="${MAP_VIEW_WIDTH}" height="${MAP_VIEW_HEIGHT}" fill="rgba(0,0,0,0)" />`;
     args.ui.mapEl.hit.innerHTML = "";
   }
 
-  const ROUTE_ARCHETYPE_ICON: Record<FloorArchetype, string> = {
-    SURVIVE: "SV",
-    TIME_TRIAL: "TT",
-    VENDOR: "$",
-    HEAL: "+",
-    BOSS_TRIPLE: "B3",
-  };
 
   const routeStatusLabel = (status: RouteNodeStatus): string => {
     switch (status) {
@@ -1952,18 +1944,6 @@ export function createGame(args: CreateGameArgs) {
     `;
   }
 
-  function renderRouteLegend(): void {
-    args.ui.mapEl.legend.innerHTML = "";
-    for (const archetype of DETERMINISTIC_ARCHETYPES) {
-      const item = document.createElement("div");
-      item.className = `routeLegendItem routeLegendItem--${routeArchetypeClass(archetype)}`;
-      item.innerHTML = `
-        <span class="routeLegendIcon">${ROUTE_ARCHETYPE_ICON[archetype]}</span>
-        <span class="routeLegendLabel">${floorArchetypeLabel(archetype)}</span>
-      `;
-      args.ui.mapEl.legend.appendChild(item);
-    }
-  }
 
   function renderRouteMap(vm: RouteMapVM, subText: string): void {
     args.ui.mapEl.root.classList.add("delveFull");
@@ -1974,7 +1954,6 @@ export function createGame(args: CreateGameArgs) {
     args.ui.mapEl.sub.textContent = subText;
     args.ui.mapEl.graphWrap.classList.add("routeScrollable");
     args.ui.mapEl.depthLabel.textContent = `Depth ${vm.currentDepth}`;
-    renderRouteLegend();
 
     const viewportWidth = Math.max(1, Math.floor(args.ui.mapEl.graphWrap.clientWidth || MAP_VIEW_WIDTH));
     const viewportHeight = Math.max(1, Math.floor(args.ui.mapEl.graphWrap.clientHeight || MAP_VIEW_HEIGHT));
@@ -2022,13 +2001,7 @@ export function createGame(args: CreateGameArgs) {
         btn.dataset.detFloorIndex = String(node.deterministicData.floorIndex);
         btn.dataset.detDepth = String(node.deterministicData.depth);
       }
-      btn.innerHTML = `
-        <span class="routeNodeIcon">${ROUTE_ARCHETYPE_ICON[node.archetype]}</span>
-        <span class="routeNodeText">
-          <span class="routeNodeTitle">${floorArchetypeLabel(node.archetype)}</span>
-          <span class="routeNodeStatus">${routeStatusLabel(node.status)}</span>
-        </span>
-      `;
+      btn.textContent = floorArchetypeLabel(node.archetype);
       btn.addEventListener("mouseenter", () => setRouteInfo(node));
       btn.addEventListener("focus", () => setRouteInfo(node));
       btn.addEventListener("pointerdown", () => setRouteInfo(node));
@@ -2560,6 +2533,12 @@ export function createGame(args: CreateGameArgs) {
     if (!btn) return;
     if (btn.id !== "endBtn") return;
 
+    quitRunToMenu();
+    showMainMenuScreenFromEndOverlay();
+  });
+
+  // Route map back button -> quit run and return to main menu
+  args.ui.mapEl.backBtn.addEventListener("click", () => {
     quitRunToMenu();
     showMainMenuScreenFromEndOverlay();
   });

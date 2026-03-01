@@ -20,7 +20,7 @@ type LevelupRefs = {
 type MapRefs = {
     root: HTMLDivElement;
     topBar: HTMLDivElement;
-    legend: HTMLDivElement;
+    backBtn: HTMLButtonElement;
     infoPanel: HTMLDivElement;
     depthLabel: HTMLDivElement;
     sub: HTMLDivElement;
@@ -76,13 +76,7 @@ export type DomRefs = {
     continueBtn: HTMLButtonElement;
     mainMenuEl: HTMLDivElement;
     startRunBtn: HTMLButtonElement;
-    deterministicRunBtn: HTMLButtonElement;
-    mapsBtn: HTMLButtonElement;
-    diagnosticsBtn: HTMLButtonElement | null;
     creditsBtn: HTMLButtonElement | null;
-    devTerminalSectionEl: HTMLDivElement | null;
-    devTerminalToggleBtn: HTMLButtonElement | null;
-    devTerminalItemsEl: HTMLDivElement | null;
     innkeeperBtn: HTMLButtonElement;
     settingsBtn: HTMLButtonElement;
     likeSubBtn: HTMLButtonElement;
@@ -126,7 +120,7 @@ export type DomRefs = {
     levelupSub: HTMLDivElement;
     mapRoot: HTMLDivElement;
     mapTopBar: HTMLDivElement;
-    mapLegend: HTMLDivElement;
+    mapRouteBackBtn: HTMLButtonElement;
     mapInfoPanel: HTMLDivElement;
     mapDepthLabel: HTMLDivElement;
     mapSub: HTMLDivElement;
@@ -179,13 +173,7 @@ export function getDomRefs(): DomRefs {
 
     const mainMenuEl = getEl<HTMLDivElement>("mainMenu");
     const startRunBtn = getEl<HTMLButtonElement>("startRunBtn");
-    const deterministicRunBtn = getEl<HTMLButtonElement>("deterministicRunBtn");
-    const mapsBtn = getEl<HTMLButtonElement>("mapsBtn");
-    const diagnosticsBtn = document.getElementById("diagnosticsBtn") as HTMLButtonElement | null;
     const creditsBtn = document.getElementById("creditsBtn") as HTMLButtonElement | null;
-    const devTerminalSectionEl = document.getElementById("devTerminalSection") as HTMLDivElement | null;
-    const devTerminalToggleBtn = document.getElementById("devTerminalToggleBtn") as HTMLButtonElement | null;
-    const devTerminalItemsEl = document.getElementById("devTerminalItems") as HTMLDivElement | null;
     const innkeeperBtn = getEl<HTMLButtonElement>("innkeeperBtn");
     const settingsBtn = getEl<HTMLButtonElement>("settingsBtn");
     const likeSubBtn = getEl<HTMLButtonElement>("likeSubBtn");
@@ -262,7 +250,7 @@ export function getDomRefs(): DomRefs {
 
     const mapRoot = getEl<HTMLDivElement>("map");
     const mapTopBar = getEl<HTMLDivElement>("mapTopBar");
-    const mapLegend = getEl<HTMLDivElement>("mapLegend");
+    const mapRouteBackBtn = getEl<HTMLButtonElement>("routeBackBtn");
     const mapInfoPanel = getEl<HTMLDivElement>("mapInfoPanel");
     const mapDepthLabel = getEl<HTMLDivElement>("mapDepthLabel");
     const mapSub = getEl<HTMLDivElement>("mapSub");
@@ -318,7 +306,7 @@ export function getDomRefs(): DomRefs {
         mapEl: {
             root: mapRoot,
             topBar: mapTopBar,
-            legend: mapLegend,
+            backBtn: mapRouteBackBtn,
             infoPanel: mapInfoPanel,
             depthLabel: mapDepthLabel,
             sub: mapSub,
@@ -341,13 +329,7 @@ export function getDomRefs(): DomRefs {
         continueBtn,
         mainMenuEl,
         startRunBtn,
-        deterministicRunBtn,
-        mapsBtn,
-        diagnosticsBtn,
         creditsBtn,
-        devTerminalSectionEl,
-        devTerminalToggleBtn,
-        devTerminalItemsEl,
         innkeeperBtn,
         settingsBtn,
         likeSubBtn,
@@ -391,7 +373,7 @@ export function getDomRefs(): DomRefs {
         levelupSub,
         mapRoot,
         mapTopBar,
-        mapLegend,
+        mapRouteBackBtn,
         mapInfoPanel,
         mapDepthLabel,
         mapSub,

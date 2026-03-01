@@ -20,7 +20,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 .pauseModeNav {
-  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-right: 1px solid var(--border-subtle);
   background: rgba(5, 5, 9, 0.45);
   padding: 12px;
   display: flex;
@@ -32,10 +32,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .pauseNavBtn {
   width: 100%;
   min-height: 42px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.95);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--hover-bg);
+  color: var(--text-primary);
   font-weight: 800;
   text-align: left;
   padding: 0 12px;
@@ -78,10 +78,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .pauseOwnedCardRow {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.06);
-  color: #fff;
+  color: var(--text-primary);
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
@@ -125,16 +125,16 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   justify-content: center;
   min-height: 22px;
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 11px;
   font-weight: 900;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-default);
+  background: var(--hover-bg);
 }
 
 .pauseOwnedCardDetail {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
   background: rgba(0, 0, 0, 0.2);
   padding: 12px;
 }
@@ -171,9 +171,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .pauseInlineTabBtn {
   height: 32px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  border: 1px solid var(--border-subtle);
+  background: var(--hover-bg);
+  color: var(--text-primary);
   font-weight: 800;
   padding: 0 12px;
   cursor: pointer;
@@ -217,7 +217,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
   .pauseModeNav {
     border-right: 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    border-bottom: 1px solid var(--border-subtle);
     flex-direction: row;
     overflow-x: auto;
     overflow-y: hidden;
@@ -268,8 +268,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 #c, #ui { position: fixed; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; }
 #c { z-index: 0; }
 #ui { z-index: 1; pointer-events: none; }
-#hud { position: fixed; left: calc(12px + var(--safe-left)); top: calc(12px + var(--safe-top)); color: #eaeaf2; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto; font-size: 14px; line-height: 1.4; user-select: none; z-index: 3; transform: scale(1.125); transform-origin: top left; }
-#hud .pill { display: inline-block; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,0.08); margin-right: 8px; }
+#hud { position: fixed; left: calc(12px + var(--safe-left)); top: calc(12px + var(--safe-top)); color: var(--text-primary); font-family: var(--font-mono); font-size: 14px; line-height: 1.4; user-select: none; z-index: 3; transform: scale(1.125); transform-origin: top left; }
+#hud .pill { display: inline-block; padding: 6px 10px; border-radius: var(--radius-pill); background: var(--hover-bg); margin-right: 8px; }
 #hudTop { display: inline-block; }
 
 #vitalsOrbRoot {
@@ -561,9 +561,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 #objectiveOverlay {
   margin-top: 8px;
   padding: 8px 10px;
-  border-radius: 12px;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--radius-md);
+  background: var(--hover-bg);
+  border: 1px solid var(--border-subtle);
   max-width: min(520px, calc(100vw - 24px));
 }
 
@@ -587,12 +587,12 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   top: calc(var(--safe-y, 0px) + var(--safe-h, 100vh) * 0.666667);
   transform: translate(-50%, -50%);
   z-index: 5;
-  color: #fff;
+  color: var(--text-primary);
   background: rgba(0, 0, 0, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
   padding: 8px 12px;
-  font: 700 13px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
+  font: 700 13px var(--font-mono);
   letter-spacing: 0.02em;
 }
 
@@ -618,7 +618,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   bottom: calc(16px + var(--safe-bottom));
   width: 136px;
   height: 136px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 2px solid rgba(255, 255, 255, 0.22);
   background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.2) 0%, rgba(20, 20, 24, 0.44) 70%);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 8px 20px rgba(0, 0, 0, 0.35);
@@ -644,7 +644,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   transform: translate(-50%, -50%);
   border-radius: 999px;
   background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.92) 0%, rgba(218, 224, 240, 0.92) 38%, rgba(132, 145, 176, 0.92) 100%);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-subtle);
   pointer-events: none;
 }
 
@@ -654,11 +654,11 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   bottom: calc(168px + var(--safe-bottom));
   width: 92px;
   height: 54px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
   background: rgba(16, 16, 22, 0.68);
-  color: #fff;
-  font: 900 16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
+  color: var(--text-primary);
+  font: 900 16px var(--font-mono);
   letter-spacing: 0.02em;
   display: grid;
   place-items: center;
@@ -684,9 +684,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   #interactPrompt {
     min-height: 44px;
     padding: 10px 14px;
-    font: 800 14px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
+    font: 800 14px var(--font-mono);
     touch-action: manipulation;
-    border-color: rgba(255, 255, 255, 0.34);
+    border-color: var(--border-strong);
     background: rgba(8, 8, 12, 0.82);
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
     z-index: 9;
@@ -740,11 +740,11 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   pointer-events: auto;
   margin: 0;
   background: rgba(10, 10, 14, 0.9);
-  border-top: 2px solid rgba(255, 255, 255, 0.24);
+  border-top: 2px solid var(--border-default);
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.45);
   padding: 14px 18px;
-  color: #eaf0ff;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
 }
 
 #dialogText {
@@ -763,13 +763,13 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   appearance: none;
   width: 100%;
   text-align: left;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--border-default);
   background: rgba(255, 255, 255, 0.06);
   font-size: 14px;
   font-weight: 800;
-  color: #eaf0ff;
+  color: var(--text-primary);
   cursor: pointer;
 }
 
@@ -779,7 +779,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 .dialogChoice:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--hover-bg);
 }
 
 
@@ -787,28 +787,28 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 [hidden] { display: none !important; }
 
 /* Welcome Screen */
-#welcomeScreen { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.85); z-index: 5; }
-#welcomeScreen .panel { width: min(520px, 90vw); padding: 60px 40px; border-radius: 20px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; text-align: center; }
+#welcomeScreen { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 5; }
+#welcomeScreen .panel { width: min(520px, 90vw); padding: 60px 40px; border-radius: 20px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); text-align: center; }
 #welcomeScreen .welcomeTitle { font-size: 48px; font-weight: 900; margin-bottom: 60px; line-height: 1.2; }
-#welcomeScreen button { width: 100%; padding: 18px 24px; border-radius: 14px; border: 0; cursor: pointer; font-weight: 900; font-size: 20px; background: rgba(255,255,255,0.20); color: #fff; transition: background 120ms ease, transform 80ms ease; }
-#welcomeScreen button:hover { background: rgba(255,255,255,0.28); transform: translateY(-2px); }
+#welcomeScreen button { width: 100%; padding: 18px 24px; border-radius: var(--radius-md); border: 0; cursor: pointer; font-weight: 900; font-size: 20px; background: var(--primary-btn-bg); color: var(--text-primary); transition: background var(--transition-standard), transform var(--transition-fast); }
+#welcomeScreen button:hover { background: var(--primary-btn-hover-bg); transform: translateY(-2px); }
 
 /* Main Menu (submenu after welcome) */
-#mainMenu { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.75); z-index: 4; }
-#mainMenu .panel { width: min(440px, 88vw); padding: 40px 30px; border-radius: 20px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; text-align: center; }
+#mainMenu { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 4; }
+#mainMenu .panel { width: min(440px, 88vw); padding: 40px 30px; border-radius: 20px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); text-align: center; }
 #mainMenu .title { font-size: 32px; font-weight: 900; margin-bottom: 30px; }
 #mainMenu .menuButtons { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
-#mainMenu .menuButtons button { width: 100%; padding: 16px 20px; border-radius: 14px; border: 0; cursor: pointer; font-weight: 900; font-size: 18px; background: rgba(255,255,255,0.18); color: #fff; transition: background 120ms ease, transform 80ms ease; }
-#mainMenu .menuButtons button:hover { background: rgba(255,255,255,0.24); transform: translateY(-1px); }
-#mainMenu .menuButtons button#startRunBtn { background: rgba(255,255,255,0.24); font-size: 20px; }
-#mainMenu .menuButtons button#startRunBtn:hover { background: rgba(255,255,255,0.30); }
-#mainMenu .menuFooter { padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.08); }
-#mainMenu .menuFooter button { padding: 10px 16px; border-radius: 10px; border: 0; cursor: pointer; font-weight: 700; font-size: 14px; background: rgba(255,100,100,0.15); color: #fff; transition: background 120ms ease, transform 80ms ease; }
+#mainMenu .menuButtons button { width: 100%; padding: 16px 20px; border-radius: var(--radius-md); border: 0; cursor: pointer; font-weight: 900; font-size: 18px; background: var(--primary-btn-bg); color: var(--text-primary); transition: background var(--transition-standard), transform var(--transition-fast); }
+#mainMenu .menuButtons button:hover { background: var(--primary-btn-hover-bg); transform: translateY(-1px); }
+#mainMenu .menuButtons button#startRunBtn { background: var(--primary-btn-hover-bg); font-size: 20px; }
+#mainMenu .menuButtons button#startRunBtn:hover { background: rgba(118, 232, 255, 0.28); }
+#mainMenu .menuFooter { padding-top: 20px; border-top: 1px solid var(--border-subtle); }
+#mainMenu .menuFooter button { padding: 10px 16px; border-radius: var(--radius-sm); border: 0; cursor: pointer; font-weight: 700; font-size: 14px; background: rgba(255,100,100,0.15); color: var(--text-primary); transition: background var(--transition-standard), transform var(--transition-fast); }
 #mainMenu .menuFooter button:hover { background: rgba(255,100,100,0.25); transform: scale(1.05); }
 
 /* Map Selection Menu */
-#mapMenu { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.75); z-index: 4; }
-#mapMenu .panel { width: min(680px, 92vw); padding: 24px; border-radius: 20px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
+#mapMenu { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 4; }
+#mapMenu .panel { width: min(680px, 92vw); padding: 24px; border-radius: 20px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); }
 #mapMenu .title { font-size: 26px; font-weight: 900; margin-bottom: 6px; text-align: center; }
 #mapMenu .subline { opacity: 0.85; margin-bottom: 16px; font-size: 14px; text-align: center; }
 #mapChoices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
@@ -816,22 +816,22 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .mapChoiceBtn {
   text-align: left;
   padding: 12px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.08);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--hover-bg);
   cursor: pointer;
-  color: #fff;
-  transition: transform 80ms ease, background 120ms ease, border-color 120ms ease;
+  color: var(--text-primary);
+  transition: transform var(--transition-fast), background var(--transition-standard), border-color var(--transition-standard);
 }
-.mapChoiceBtn:hover { transform: translateY(-1px); background: rgba(255,255,255,0.11); border-color: rgba(255,255,255,0.18); }
-.mapChoiceBtn[aria-pressed="true"] { border-color: rgba(255,255,255,0.36); background: rgba(255,255,255,0.14); }
+.mapChoiceBtn:hover { transform: translateY(-1px); background: var(--hover-bg); border-color: var(--border-default); }
+.mapChoiceBtn[aria-pressed="true"] { border-color: var(--border-strong); background: var(--active-bg); }
 .mapChoiceTitle { font-weight: 900; font-size: 14px; margin-bottom: 4px; }
 .mapChoiceDesc { opacity: 0.9; font-size: 12px; line-height: 1.35; }
 #mapMenu .mapMenuActions { display: flex; gap: 10px; margin-top: 14px; }
-#mapMenu .mapMenuActions button { flex: 1; padding: 12px 14px; border-radius: 12px; border: 0; cursor: pointer; font-weight: 800; background: rgba(255,255,255,0.16); color: #fff; }
+#mapMenu .mapMenuActions button { flex: 1; padding: 12px 14px; border-radius: var(--radius-md); border: 0; cursor: pointer; font-weight: 800; background: var(--active-bg); color: var(--text-primary); }
 
 /* Character Select Menu */
-#characterSelect { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.75); z-index: 4; }
+#characterSelect { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 4; }
 #characterSelect .panel {
   width: min(820px, 94vw);
   max-height: calc(100dvh - 24px);
@@ -839,8 +839,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   padding: 24px;
   border-radius: 20px;
   background: rgba(255,255,255,0.06);
-  color: #eaeaf2;
-  font-family: ui-sans-serif, system-ui;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
 }
 #characterSelect .title { font-size: 26px; font-weight: 900; margin-bottom: 6px; text-align: center; }
 #characterSelect .subline { opacity: 0.85; margin-bottom: 16px; font-size: 14px; text-align: center; }
@@ -852,24 +852,24 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   text-align: center;
   padding: 12px;
   border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.08);
+  border: 1px solid var(--border-subtle);
+  background: var(--hover-bg);
   cursor: pointer;
-  color: #fff;
-  transition: transform 80ms ease, background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+  color: var(--text-primary);
+  transition: transform var(--transition-fast), background var(--transition-standard), border-color var(--transition-standard), box-shadow var(--transition-standard);
 }
-.characterCard:hover { transform: translateY(-1px); background: rgba(255,255,255,0.11); border-color: rgba(255,255,255,0.18); }
+.characterCard:hover { transform: translateY(-1px); background: var(--hover-bg); border-color: var(--border-default); }
 .characterCard[aria-pressed="true"] {
-  border-color: rgba(255,255,255,0.5);
-  background: rgba(255,255,255,0.14);
-  box-shadow: 0 0 18px rgba(255,255,255,0.18);
+  border-color: var(--border-strong);
+  background: var(--active-bg);
+  box-shadow: var(--shadow-glow);
 }
 
 .characterSpriteWrap {
   display: grid;
   place-items: center;
   height: 140px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: rgba(0,0,0,0.22);
   margin-bottom: 10px;
 }
@@ -886,38 +886,38 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 #characterSelect .characterActions button {
   flex: 1;
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   border: 0;
   cursor: pointer;
   font-weight: 800;
-  background: rgba(255,255,255,0.16);
-  color: #fff;
+  background: var(--active-bg);
+  color: var(--text-primary);
 }
 #characterSelect .characterActions button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* Innkeeper & Settings Menus */
-#innkeeperMenu, #settingsMenu { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.75); z-index: 4; }
-#innkeeperMenu .panel, #settingsMenu .panel { width: min(560px, 92vw); padding: 30px; border-radius: 20px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
+#innkeeperMenu, #settingsMenu { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 4; }
+#innkeeperMenu .panel, #settingsMenu .panel { width: min(560px, 92vw); padding: 30px; border-radius: 20px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); }
 #innkeeperMenu .title, #settingsMenu .title { font-size: 28px; font-weight: 900; margin-bottom: 8px; text-align: center; }
 #innkeeperMenu .subline, #settingsMenu .subline { opacity: 0.85; margin-bottom: 20px; font-size: 14px; text-align: center; }
 #innkeeperMenu > .panel > button, #settingsMenu > .panel > button {
   margin-top: 14px;
   width: 100%;
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   border: 0;
   cursor: pointer;
   font-weight: 800;
-  background: rgba(255,255,255,0.16);
-  color: #fff;
+  background: var(--active-bg);
+  color: var(--text-primary);
 }
 
-#creditsMenu { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.75); z-index: 4; }
-#creditsMenu .panel { width: min(560px, 92vw); padding: 30px; border-radius: 20px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
+#creditsMenu { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 4; }
+#creditsMenu .panel { width: min(560px, 92vw); padding: 30px; border-radius: 20px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); }
 #creditsMenu .title { font-size: 28px; font-weight: 900; margin-bottom: 8px; text-align: center; }
 #creditsMenu .subline { opacity: 0.85; margin-bottom: 18px; font-size: 14px; text-align: center; }
-#creditsMenu .creditsBody { padding: 14px 12px; border-radius: 12px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.12); line-height: 1.45; text-align: center; }
-#creditsMenu button { margin-top: 14px; width: 100%; padding: 12px 14px; border-radius: 12px; border: 0; cursor: pointer; font-weight: 800; background: rgba(255,255,255,0.16); color: #fff; }
+#creditsMenu .creditsBody { padding: 14px 12px; border-radius: var(--radius-md); background: rgba(0,0,0,0.25); border: 1px solid var(--border-subtle); line-height: 1.45; text-align: center; }
+#creditsMenu button { margin-top: 14px; width: 100%; padding: 12px 14px; border-radius: var(--radius-md); border: 0; cursor: pointer; font-weight: 800; background: var(--active-bg); color: var(--text-primary); }
 
 #mainSettingsHost {
   margin-bottom: 16px;
@@ -938,10 +938,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .settingsTabBtn {
   min-height: 40px;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.09);
-  color: #fff;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--hover-bg);
+  color: var(--text-primary);
   font-weight: 800;
   cursor: pointer;
 }
@@ -952,8 +952,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 .settingsBody {
-  border: 1px solid rgba(255,255,255,0.14);
-  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
   background: rgba(0,0,0,0.2);
   padding: 16px;
 }
@@ -984,23 +984,23 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .settingsRowLabel {
   font-size: 14px;
   font-weight: 800;
-  color: rgba(255,255,255,0.95);
+  color: var(--text-primary);
 }
 
 .settingsRowHelper {
   margin-top: 3px;
   font-size: 12px;
   line-height: 1.3;
-  color: rgba(255,255,255,0.72);
+  color: var(--text-muted);
 }
 
 .settingsSelect {
   min-width: 120px;
   height: 34px;
   border-radius: 9px;
-  border: 1px solid rgba(255,255,255,0.2);
+  border: 1px solid var(--border-default);
   background: rgba(18,18,24,0.95);
-  color: #fff;
+  color: var(--text-primary);
   padding: 0 8px;
 }
 
@@ -1012,8 +1012,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .settingsSegment {
   display: inline-flex;
   background: rgba(0,0,0,0.35);
-  border: 1px solid rgba(255,255,255,0.18);
-  border-radius: 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
@@ -2718,9 +2718,42 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 #map.routeMode #mapTopBar {
-  padding: calc(10px + var(--safe-top)) 14px 8px 14px;
+  padding: calc(12px + var(--safe-top)) 16px 10px 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(12, 16, 28, 0.94);
+}
+
+#map.routeMode .mapTopBarRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#map.routeMode .routeBackBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 36px;
+  padding: 4px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(235, 241, 255, 0.92);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 100ms ease, border-color 100ms ease;
+  flex-shrink: 0;
+}
+
+#map.routeMode .routeBackBtn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+#map.routeMode .routeBackBtn:active {
+  background: rgba(255, 255, 255, 0.18);
 }
 
 #map.routeMode .title {
@@ -2731,48 +2764,11 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 #map.routeMode .sub {
-  margin: 4px 0 10px;
+  margin: 4px 0 6px;
   font-size: 14px;
   opacity: 0.9;
 }
 
-#map.routeMode #mapLegend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-#map.routeMode .routeLegendItem {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 30px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.95);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-#map.routeMode .routeLegendIcon {
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  font-size: 11px;
-  font-weight: 900;
-  color: #eaf2ff;
-  background: rgba(16, 20, 34, 0.85);
-}
-
-#map.routeMode .routeLegendItem--survive { border-color: rgba(74, 212, 148, 0.62); }
-#map.routeMode .routeLegendItem--time-trial { border-color: rgba(255, 184, 79, 0.64); }
-#map.routeMode .routeLegendItem--vendor { border-color: rgba(255, 218, 97, 0.66); }
-#map.routeMode .routeLegendItem--heal { border-color: rgba(90, 214, 241, 0.66); }
-#map.routeMode .routeLegendItem--boss-triple { border-color: rgba(255, 95, 95, 0.68); }
 
 #map.routeMode #mapDepthLabel {
   padding: 8px 14px;
@@ -2841,18 +2837,24 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 #map.routeMode .routeNode {
   --route-accent: rgba(184, 198, 225, 0.68);
-  width: 64px;
-  height: 64px;
+  min-width: 100px;
+  height: auto;
   min-height: 44px;
-  padding: 0;
-  border-radius: 18px;
+  padding: 6px 12px;
+  border-radius: 14px;
   border: 1px solid var(--route-accent);
   background:
     radial-gradient(110% 110% at 30% 20%, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04) 56%),
     rgba(12, 18, 32, 0.9);
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: rgba(235, 241, 255, 0.97);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
   transition: transform 100ms ease, box-shadow 120ms ease, border-color 120ms ease;
@@ -2864,15 +2866,6 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.42);
 }
 
-#map.routeMode .routeNodeIcon {
-  font-size: 20px;
-  font-weight: 900;
-  line-height: 1;
-}
-
-#map.routeMode .routeNodeText {
-  display: none;
-}
 
 #map.routeMode .routeNode--survive { --route-accent: rgba(74, 212, 148, 0.78); }
 #map.routeMode .routeNode--time-trial { --route-accent: rgba(255, 184, 79, 0.8); }
@@ -2921,23 +2914,25 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
     padding: calc(8px + var(--safe-top)) 10px 6px 10px;
   }
 
+  #map.routeMode .mapTopBarRow {
+    gap: 8px;
+  }
+
+  #map.routeMode .routeBackBtn {
+    min-width: 40px;
+    min-height: 34px;
+    padding: 3px 10px;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+
   #map.routeMode .title {
     font-size: 20px;
   }
 
   #map.routeMode .sub {
-    margin: 3px 0 8px;
+    margin: 3px 0 4px;
     font-size: 12px;
-  }
-
-  #map.routeMode #mapLegend {
-    gap: 6px;
-  }
-
-  #map.routeMode .routeLegendItem {
-    min-height: 26px;
-    padding: 3px 8px;
-    font-size: 11px;
   }
 
   #map.routeMode #mapDepthLabel {
@@ -2946,13 +2941,11 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   }
 
   #map.routeMode .routeNode {
-    width: 56px;
-    height: 56px;
-    border-radius: 14px;
-  }
-
-  #map.routeMode .routeNodeIcon {
-    font-size: 17px;
+    min-width: 88px;
+    min-height: 44px;
+    padding: 5px 10px;
+    border-radius: 12px;
+    font-size: 0.78rem;
   }
 
   #map.routeMode #mapInfoPanel {
@@ -2965,15 +2958,6 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
    MAIN MENU OVERHAUL: SURVEILLANCE TERMINAL
 ---------------------------------------------------------------------------*/
 #mainMenu.terminalMenu {
-  --terminal-bg: #07111e;
-  --terminal-bg-2: #0a1628;
-  --terminal-grid: rgba(136, 233, 255, 0.05);
-  --terminal-cyan: #76e8ff;
-  --terminal-cyan-soft: rgba(118, 232, 255, 0.34);
-  --terminal-text: #d9f6ff;
-  --terminal-muted: rgba(190, 226, 235, 0.65);
-  --terminal-dev: #b88bff;
-  --terminal-dev-soft: rgba(184, 139, 255, 0.36);
   position: fixed;
   inset: 0;
   z-index: 4;
@@ -2981,9 +2965,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   flex-direction: column;
   background:
     radial-gradient(140% 130% at 50% 0%, rgba(23, 58, 84, 0.22), transparent 60%),
-    linear-gradient(160deg, var(--terminal-bg), var(--terminal-bg-2));
-  color: var(--terminal-text);
-  font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    linear-gradient(160deg, var(--bg-base), var(--bg-surface));
+  color: var(--text-primary);
+  font-family: var(--font-mono);
   letter-spacing: 0.02em;
   overflow: hidden;
 }
@@ -2994,9 +2978,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(var(--terminal-grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--terminal-grid) 1px, transparent 1px);
-  background-size: 42px 42px;
+    linear-gradient(var(--texture-grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--texture-grid-color) 1px, transparent 1px);
+  background-size: var(--texture-grid-size) var(--texture-grid-size);
 }
 
 #mainMenu.terminalMenu::after {
@@ -3007,7 +2991,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   background: linear-gradient(
     180deg,
     rgba(118, 232, 255, 0) 0%,
-    rgba(118, 232, 255, 0.06) 48%,
+    var(--texture-scan-color) 48%,
     rgba(118, 232, 255, 0) 100%
   );
   transform: translateY(-60%);
@@ -3018,7 +3002,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(120% 95% at 50% 45%, transparent 56%, rgba(0, 0, 0, 0.45) 100%);
+  background: var(--texture-vignette);
 }
 
 #mainMenu.terminalMenu .terminalHeader,
@@ -3029,8 +3013,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 #mainMenu.terminalMenu .terminalHeader {
-  min-height: 96px;
-  padding: calc(26px + var(--safe-top)) 56px 16px;
+  min-height: clamp(48px, 12dvh, 96px);
+  padding: calc(clamp(10px, 3dvh, 26px) + var(--safe-top)) clamp(20px, 4vw, 56px) clamp(6px, 2dvh, 16px);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -3039,26 +3023,26 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 #mainMenu.terminalMenu .terminalBrand h1 {
   margin: 0;
-  color: var(--terminal-text);
-  font-size: clamp(34px, 4vw, 48px);
+  color: var(--text-primary);
+  font-size: clamp(24px, min(4vw, 6dvh), 48px);
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.08em;
 }
 
 #mainMenu.terminalMenu .terminalSubtitle {
-  margin-top: 9px;
-  font-size: clamp(12px, 1.2vw, 14px);
-  color: var(--terminal-muted);
+  margin-top: clamp(4px, 1dvh, 9px);
+  font-size: clamp(10px, min(1.2vw, 1.5dvh), 14px);
+  color: var(--text-muted);
   font-weight: 600;
   letter-spacing: 0.14em;
 }
 
 #mainMenu.terminalMenu .terminalAccentLine {
-  margin-top: 12px;
+  margin-top: clamp(6px, 1.5dvh, 12px);
   width: min(240px, 45vw);
   height: 1px;
-  background: linear-gradient(90deg, var(--terminal-cyan), transparent 85%);
+  background: linear-gradient(90deg, var(--accent), transparent 85%);
   opacity: 0.88;
   animation: terminalAccentPulse 4.8s ease-in-out infinite;
 }
@@ -3075,8 +3059,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: var(--terminal-cyan);
-  box-shadow: 0 0 10px rgba(118, 232, 255, 0.28);
+  background: var(--accent);
+  box-shadow: var(--shadow-glow);
   animation: terminalDotPulse 2.2s ease-in-out infinite;
 }
 
@@ -3090,7 +3074,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 #mainMenu.terminalMenu .terminalSignalBars i {
   display: block;
   width: 2px;
-  background: rgba(118, 232, 255, 0.7);
+  background: var(--border-strong);
   transform-origin: bottom center;
 }
 
@@ -3102,38 +3086,38 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   flex: 1;
   display: grid;
   place-items: center;
-  padding: 18px 16px;
+  padding: clamp(4px, 1.5dvh, 18px) clamp(12px, 2vw, 16px);
 }
 
 #mainMenu.terminalMenu .terminalPanel {
-  width: min(560px, calc(100vw - 64px));
-  border: 1px solid var(--terminal-cyan-soft);
-  background: linear-gradient(180deg, rgba(6, 16, 30, 0.9), rgba(5, 12, 24, 0.92));
-  padding: 24px;
-  transform: translateY(-40px);
+  width: min(560px, calc(100vw - clamp(0px, 5vw, 64px)));
+  border: 1px solid var(--accent-soft);
+  background: linear-gradient(180deg, var(--bg-elevated), rgba(5, 12, 24, 0.92));
+  padding: clamp(8px, 2dvh, 24px);
+  transform: translateY(clamp(-40px, -5dvh, 0px));
   box-shadow:
-    inset 0 0 0 1px rgba(118, 232, 255, 0.08),
-    0 26px 48px rgba(0, 0, 0, 0.42);
+    inset 0 0 0 1px var(--border-subtle),
+    var(--shadow-medium);
 }
 
 #mainMenu.terminalMenu .terminalAction {
   position: relative;
   width: 100%;
-  min-height: 60px;
+  min-height: clamp(44px, 9dvh, 72px);
   margin: 0;
   border: 0;
-  border-bottom: 1px solid rgba(118, 232, 255, 0.24);
+  border-bottom: 1px solid var(--border-default);
   background: transparent;
-  color: var(--terminal-text);
+  color: var(--text-primary);
   text-align: left;
-  padding: 0 10px;
+  padding: 0 clamp(10px, 2vw, 24px);
   font-family: inherit;
-  font-size: 18px;
+  font-size: clamp(15px, min(2.2dvh, 1.8vw), 18px);
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out, transform 120ms ease-out;
+  transition: background-color var(--transition-standard), border-color var(--transition-standard), color var(--transition-standard), transform var(--transition-standard);
 }
 
 #mainMenu.terminalMenu .terminalAction::before,
@@ -3142,9 +3126,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   position: absolute;
   width: 11px;
   height: 11px;
-  border-color: rgba(118, 232, 255, 0.72);
+  border-color: var(--border-strong);
   opacity: 0;
-  transition: opacity 120ms ease-out, transform 120ms ease-out;
+  transition: opacity var(--transition-standard), transform var(--transition-standard);
 }
 
 #mainMenu.terminalMenu .terminalAction::before {
@@ -3164,7 +3148,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 #mainMenu.terminalMenu .terminalAction:hover {
-  background: rgba(118, 232, 255, 0.07);
+  background: var(--hover-bg);
   border-bottom-color: rgba(118, 232, 255, 0.56);
 }
 
@@ -3178,93 +3162,37 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 #mainMenu.terminalMenu .terminalAction:focus-visible {
   outline: none;
-  background: rgba(118, 232, 255, 0.1);
+  background: var(--focus-bg);
 }
 
 #mainMenu.terminalMenu .terminalAction:active {
   transform: translateY(1px);
-  background: rgba(118, 232, 255, 0.16);
+  background: var(--active-bg);
 }
 
 #mainMenu.terminalMenu .terminalActionPrimary {
-  background: rgba(118, 232, 255, 0.12);
+  background: var(--primary-btn-bg);
   border-bottom-color: rgba(118, 232, 255, 0.44);
   font-weight: 700;
 }
 
 #mainMenu.terminalMenu .terminalActionPrimary:hover {
-  background: rgba(118, 232, 255, 0.2);
-}
-
-#mainMenu.terminalMenu .terminalDevSection {
-  margin-top: 14px;
-}
-
-#mainMenu.terminalMenu .terminalDevToggle {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  color: rgba(214, 189, 255, 0.92);
-  text-align: left;
-  padding: 0 10px 10px;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-#mainMenu.terminalMenu .terminalDevSeparator {
-  margin: 2px 0 8px;
-  padding: 0 10px;
-  color: rgba(214, 189, 255, 0.9);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-#mainMenu.terminalMenu .terminalDevSeparator::before,
-#mainMenu.terminalMenu .terminalDevSeparator::after {
-  content: "────────";
-  color: rgba(214, 189, 255, 0.52);
-  margin: 0 10px;
-}
-
-#mainMenu.terminalMenu .terminalActionDev {
-  min-height: 54px;
-  color: rgba(224, 200, 255, 0.92);
-  border-bottom-color: rgba(184, 139, 255, 0.25);
-  font-size: 15px;
-  letter-spacing: 0.08em;
-}
-
-#mainMenu.terminalMenu .terminalActionDev::before,
-#mainMenu.terminalMenu .terminalActionDev::after {
-  border-color: rgba(184, 139, 255, 0.8);
-}
-
-#mainMenu.terminalMenu .terminalActionDev:hover,
-#mainMenu.terminalMenu .terminalActionDev:focus-visible {
-  background: rgba(184, 139, 255, 0.12);
-  border-bottom-color: var(--terminal-dev-soft);
+  background: var(--primary-btn-hover-bg);
 }
 
 #mainMenu.terminalMenu .terminalFooter {
-  min-height: 44px;
+  min-height: clamp(28px, 5dvh, 44px);
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  padding: 0 56px calc(14px + var(--safe-bottom));
+  padding: 0 clamp(20px, 4vw, 56px) calc(clamp(6px, 1.5dvh, 14px) + var(--safe-bottom));
 }
 
 #mainMenu.terminalMenu .terminalVersion {
-  font-size: 12px;
+  font-size: clamp(10px, 1.5dvh, 12px);
   font-weight: 500;
   letter-spacing: 0.06em;
-  color: var(--terminal-muted);
+  color: var(--text-muted);
 }
 
 @keyframes terminalScanDrift {
@@ -3287,52 +3215,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   50% { opacity: 1; transform: scaleY(1); }
 }
 
-@media (max-width: 768px) {
-  #mainMenu.terminalMenu .terminalHeader {
-    min-height: 84px;
-    padding: calc(22px + var(--safe-top)) 24px 12px;
-  }
-
-  #mainMenu.terminalMenu .terminalSignal {
-    margin-top: 2px;
-  }
-
-  #mainMenu.terminalMenu .terminalBody {
-    padding: 10px 24px;
-    place-items: start center;
-  }
-
+@media (max-width: 600px) {
   #mainMenu.terminalMenu .terminalPanel {
     width: 100%;
-    max-width: none;
-    transform: translateY(0);
-    padding: 18px 0 4px;
     border-left: 0;
     border-right: 0;
-  }
-
-  #mainMenu.terminalMenu .terminalAction {
-    min-height: 72px;
-    font-size: 17px;
-    padding: 0 24px;
-  }
-
-  #mainMenu.terminalMenu .terminalDevSection.isPhoneLayout .terminalDevSeparator {
-    display: none;
-  }
-
-  #mainMenu.terminalMenu .terminalDevSection.isPhoneLayout .terminalDevToggle {
-    display: block;
-    padding: 10px 24px 12px;
-  }
-
-  #mainMenu.terminalMenu .terminalActionDev {
-    min-height: 66px;
-    padding: 0 24px;
-  }
-
-  #mainMenu.terminalMenu .terminalFooter {
-    justify-content: flex-start;
-    padding: 0 24px calc(12px + var(--safe-bottom));
   }
 }

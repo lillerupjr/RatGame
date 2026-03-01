@@ -72,7 +72,6 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     let selectedMapId: string | undefined = refs.startBtn.dataset.map || undefined;
     let selectedCharacterId: PlayableCharacterId | undefined = undefined;
     let pendingStartMode: "DELVE" | "DETERMINISTIC" | "SANDBOX" = "DELVE";
-    let devTerminalExpanded = false;
     const SUPPRESS_CLICK_WINDOW_MS = 450;
     const SUPPRESS_CLICK_RADIUS_PX = 40;
     let suppressClickUntilMs = 0;
@@ -154,50 +153,8 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         });
     };
 
-    const isPhoneLayout = (): boolean => {
-        if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
-        return window.matchMedia("(max-width: 720px)").matches;
-    };
-
-    const syncDevTerminalLayout = () => {
-        const devSection = refs.devTerminalSectionEl;
-        const devToggleBtn = refs.devTerminalToggleBtn;
-        const devItems = refs.devTerminalItemsEl;
-        if (!devSection || !devItems || !devToggleBtn) return;
-
-        const phoneLayout = isPhoneLayout();
-        devSection.classList.toggle("isPhoneLayout", phoneLayout);
-
-        if (!phoneLayout) {
-            devToggleBtn.hidden = true;
-            devItems.hidden = false;
-            devTerminalExpanded = false;
-            devToggleBtn.textContent = "DEV TERMINAL ▸";
-            devToggleBtn.setAttribute("aria-expanded", "false");
-            return;
-        }
-
-        devToggleBtn.hidden = false;
-        devItems.hidden = !devTerminalExpanded;
-        devToggleBtn.textContent = devTerminalExpanded ? "DEV TERMINAL ▾" : "DEV TERMINAL ▸";
-        devToggleBtn.setAttribute("aria-expanded", devTerminalExpanded ? "true" : "false");
-    };
-
     const applyUserModeMenuGating = () => {
         const isUserMode = isUserModeEnabled();
-        if (refs.devTerminalSectionEl) refs.devTerminalSectionEl.hidden = isUserMode;
-        refs.deterministicRunBtn.hidden = isUserMode;
-        refs.mapsBtn.hidden = isUserMode;
-        if (refs.diagnosticsBtn) refs.diagnosticsBtn.hidden = isUserMode;
-        if (!isUserMode) syncDevTerminalLayout();
-        if (isUserMode) {
-            devTerminalExpanded = false;
-            if (refs.devTerminalItemsEl) refs.devTerminalItemsEl.hidden = true;
-            if (refs.devTerminalToggleBtn) {
-                refs.devTerminalToggleBtn.textContent = "DEV TERMINAL ▸";
-                refs.devTerminalToggleBtn.setAttribute("aria-expanded", "false");
-            }
-        }
 
         if (isUserMode && pendingStartMode !== "DELVE") {
             pendingStartMode = "DELVE";
@@ -310,14 +267,6 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     applyUserModeMenuGating();
     if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
         window.addEventListener("ratgame:settings-changed", applyUserModeMenuGating as EventListener);
-        window.addEventListener("resize", syncDevTerminalLayout as EventListener);
-    }
-
-    if (refs.devTerminalToggleBtn) {
-        bindActivate(refs.devTerminalToggleBtn, () => {
-            devTerminalExpanded = !devTerminalExpanded;
-            syncDevTerminalLayout();
-        });
     }
 
     // Welcome screen -> Main menu
@@ -331,16 +280,6 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     bindActivate(refs.startRunBtn, () => {
         selectedMapId = undefined;
         pendingStartMode = "DELVE";
-        delete refs.startBtn.dataset.map;
-        updateMenuSubline();
-
-        refs.mainMenuEl.hidden = true;
-        refs.characterSelectEl.hidden = false;
-    });
-
-    bindActivate(refs.deterministicRunBtn, () => {
-        selectedMapId = undefined;
-        pendingStartMode = "DETERMINISTIC";
         delete refs.startBtn.dataset.map;
         updateMenuSubline();
 
@@ -369,12 +308,6 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         } else {
             game.startRun(selectedCharacterId);
         }
-    });
-
-    // Main menu -> Map selection
-    bindActivate(refs.mapsBtn, () => {
-        refs.mainMenuEl.hidden = true;
-        refs.mapMenuEl.hidden = false;
     });
 
     bindActivate(refs.mapBackBtn, () => {
@@ -431,14 +364,4 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         refs.mainMenuEl.hidden = false;
     });
 
-    // Dev terminal -> Diagnostics
-    if (refs.diagnosticsBtn) {
-        bindActivate(refs.diagnosticsBtn, () => {
-            refs.mainMenuEl.hidden = true;
-            refs.settingsMenuEl.hidden = false;
-            if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
-                window.dispatchEvent(new Event("ratgame:open-dev-tools"));
-            }
-        });
-    }
 }

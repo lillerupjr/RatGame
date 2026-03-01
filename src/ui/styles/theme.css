@@ -1,0 +1,60 @@
+/* theme.css — CSS-side fallbacks for the design-token system.
+   These mirror defaultTheme in src/ui/theme.ts so the UI renders
+   correctly even before JS executes. */
+
+:root {
+  /* Backgrounds */
+  --bg-base: #07111e;
+  --bg-surface: #0a1628;
+  --bg-elevated: rgba(6, 16, 30, 0.9);
+  --bg-overlay: rgba(0, 0, 0, 0.85);
+
+  /* Text */
+  --text-primary: #d9f6ff;
+  --text-muted: rgba(190, 226, 235, 0.65);
+  --text-accent: #76e8ff;
+
+  /* Accent */
+  --accent: #76e8ff;
+  --accent-soft: rgba(118, 232, 255, 0.34);
+  --accent-glow: rgba(118, 232, 255, 0.28);
+
+  /* Borders */
+  --border-subtle: rgba(118, 232, 255, 0.08);
+  --border-default: rgba(118, 232, 255, 0.24);
+  --border-strong: rgba(118, 232, 255, 0.72);
+
+  /* Interaction states */
+  --hover-bg: rgba(118, 232, 255, 0.07);
+  --active-bg: rgba(118, 232, 255, 0.16);
+  --focus-bg: rgba(118, 232, 255, 0.1);
+  --primary-btn-bg: rgba(118, 232, 255, 0.12);
+  --primary-btn-hover-bg: rgba(118, 232, 255, 0.2);
+
+  /* Semantic status */
+  --positive: #4ade80;
+  --negative: #f87171;
+
+  /* Font */
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
+  /* Shadows */
+  --shadow-subtle: 0 4px 14px rgba(0, 0, 0, 0.35);
+  --shadow-medium: 0 26px 48px rgba(0, 0, 0, 0.42);
+  --shadow-glow: 0 0 10px rgba(118, 232, 255, 0.28);
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-pill: 9999px;
+
+  /* Transitions */
+  --transition-fast: 80ms ease;
+  --transition-standard: 120ms ease-out;
+
+  /* Textures */
+  --texture-grid-color: rgba(136, 233, 255, 0.05);
+  --texture-grid-size: 42px;
+  --texture-scan-color: rgba(118, 232, 255, 0.06);
+  --texture-vignette: radial-gradient(120% 95% at 50% 45%, transparent 56%, rgba(0, 0, 0, 0.45) 100%);
+}

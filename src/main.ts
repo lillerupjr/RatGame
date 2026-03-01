@@ -10,6 +10,7 @@ import { resolveActivePaletteId } from "./game/render/activePalette";
 import { getSpriteByIdForPalette } from "./engine/render/sprites/renderSprites";
 import { defaultPixelScaleForViewport, resizeCanvasPixelPerfect } from "./engine/render/pixelPerfect";
 import { getDomRefs } from "./ui/domRefs";
+import { applyTheme } from "./ui/theme";
 import { wireMenus } from "./ui/menuWiring";
 import {
   DEBUG_TOGGLE_DEFINITIONS,
@@ -676,6 +677,7 @@ async function bootstrap() {
   const devSettingsUi = installDevSettingsUi();
 
   const refs = getDomRefs();
+  applyTheme();
   const mainSettingsPanel = mountSettingsPanel({
     host: refs.mainSettingsHostEl,
     initialTab: "GAME",
