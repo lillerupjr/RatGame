@@ -3,9 +3,6 @@ import { emitEvent, type World } from "../../../engine/world/world";
 export function handleChestPickup(w: World, pickupIndex: number): void {
     w.xAlive[pickupIndex] = false;
 
-    // Boss beat reward: heal to full
-    w.playerHp = w.playerHpMax;
-
     // SFX: chest pickup
     emitEvent(w, { type: "SFX", id: "CHEST_PICKUP", vol: 1.0, rate: 1 });
 

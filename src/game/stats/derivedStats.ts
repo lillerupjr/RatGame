@@ -2,6 +2,8 @@
 import type { World } from "../../engine/world/world";
 import { registry } from "../content/registry";
 import { getRelicMods } from "../systems/progression/relics";
+import { getCardById } from "../combat_mods/content/cards/cardPool";
+import { STAT_KEYS } from "../combat_mods/stats/statKeys";
 
 const BASE_DAMAGE_REFERENCE = 100;
 
@@ -58,6 +60,18 @@ export function recomputeDerivedStats(w: World) {
     }
     const basePlayerHpMax = Math.max(1, Number(wAny.__relicBasePlayerHpMax) || 100);
     w.playerHpMax = Math.max(1, basePlayerHpMax * Math.max(0, 1 - (relicMods.lessMaxLife ?? 0)));
+
+    // Apply card defense mods (LIFE_ADD)
+    let cardLifeAdd = 0;
+    for (const cardId of w.cards) {
+        const def = getCardById(cardId);
+        if (!def) continue;
+        for (const mod of def.mods) {
+            if (mod.key === STAT_KEYS.LIFE_ADD && mod.op === "add") cardLifeAdd += mod.value;
+        }
+    }
+    w.playerHpMax = Math.max(1, w.playerHpMax + cardLifeAdd);
+
     w.playerHp = Math.min(w.playerHp, w.playerHpMax);
     if (w.relics.includes("MOM_MAX_MOMENTUM_PLUS_10")) w.momentumMax += 10;
     w.momentumMax = Math.max(0, w.momentumMax);
