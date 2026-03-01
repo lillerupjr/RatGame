@@ -125,12 +125,11 @@ describe("vendorShopMenu", () => {
     menu.render({
       active: true,
       gold: 999,
-      price: 10,
       cards: [
-        { cardId: "CARD_DAMAGE_FLAT_1", purchased: false },
-        { cardId: "CARD_DAMAGE_FLAT_2", purchased: false },
-        { cardId: "CARD_DAMAGE_FLAT_3", purchased: false },
-        { cardId: "CARD_FIRE_RATE_4", purchased: false },
+        { cardId: "CARD_DAMAGE_FLAT_1", priceG: 50, purchased: false },
+        { cardId: "CARD_DAMAGE_FLAT_2", priceG: 100, purchased: false },
+        { cardId: "CARD_DAMAGE_FLAT_3", priceG: 150, purchased: false },
+        { cardId: "CARD_FIRE_RATE_4", priceG: 200, purchased: false },
       ],
       relicOffers: [],
     });

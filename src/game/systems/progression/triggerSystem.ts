@@ -8,7 +8,6 @@ import type { InputState } from "../sim/input";
 import { instantiateTriggers, type TriggerInstance } from "../../triggers/triggerTypes";
 import type { TriggerSignal } from "../../triggers/triggerSignals";
 import { OBJECTIVE_TRIGGER_IDS } from "./objectiveSpec";
-import { ENEMY_TYPE } from "../../content/enemies";
 
 const PLAYER_ENTITY_ID = 0;
 const DEFAULT_RADIUS_TILES = 0.5;
@@ -97,6 +96,10 @@ function updateInteractSignals(
     emitTriggerSignal(world, { type: "INTERACT", entityId, triggerId: trigger.id });
 }
 
+export function isBossZoneKillForTrigger(world: Pick<World, "eSpawnTriggerId">, enemyIndex: number, triggerId: string): boolean {
+    return world.eSpawnTriggerId[enemyIndex] === triggerId;
+}
+
 function updateKillSignals(world: World, trigger: TriggerInstance) {
     const requireBoss = trigger.id.startsWith(OBJECTIVE_TRIGGER_IDS.bossZonePrefix);
     if (trigger.type !== "kill" && !requireBoss) return;
@@ -105,9 +108,7 @@ function updateKillSignals(world: World, trigger: TriggerInstance) {
         const ev = world.events[i];
         if (ev.type !== "ENEMY_KILLED") continue;
         if (requireBoss) {
-            if (world.eType[ev.enemyIndex] !== ENEMY_TYPE.BOSS) continue;
-            const spawnTriggerId = world.eSpawnTriggerId[ev.enemyIndex];
-            if (spawnTriggerId !== trigger.id) continue;
+            if (!isBossZoneKillForTrigger(world, ev.enemyIndex, trigger.id)) continue;
             emitTriggerSignal(world, { type: "KILL", entityId: ev.enemyIndex, triggerId: trigger.id });
             continue;
         }

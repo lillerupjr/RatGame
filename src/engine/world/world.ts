@@ -691,10 +691,10 @@ export function createWorld(args: CreateWorldArgs): World {
     activeFloorH: 0,
 
     baseMoveSpeed: 300,
-    basePickupRadius: 90,
+    basePickupRadius: 180,
 
     pSpeed: 260,
-    pickupRadius: 90,
+    pickupRadius: 180,
 
     playerHp: 100,
     playerHpMax: 100,

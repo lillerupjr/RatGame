@@ -108,6 +108,7 @@ import { addGold, getGold } from "./economy/gold";
 import { getCardById } from "./combat_mods/content/cards/cardPool";
 import { generateVendorCards } from "./vendor/generateVendorCards";
 import { generateVendorRelicOffers } from "./vendor/generateVendorRelics";
+import { getVendorCardPriceG, VENDOR_RELIC_PRICE_G } from "./vendor/pricing";
 import { createVendorState } from "./vendor/vendorState";
 import { tryPurchaseVendorCard, tryPurchaseVendorRelic } from "./vendor/vendorPurchase";
 import { mountCardRewardMenu } from "../ui/rewards/cardRewardMenu";
@@ -780,7 +781,6 @@ export function createGame(args: CreateGameArgs) {
   vendorRoot.id = "vendorShop";
   vendorRoot.hidden = true;
   document.body.appendChild(vendorRoot);
-  const vendorPrice = 100;
   const vendorShopMenu = mountVendorShopMenu({
     root: vendorRoot,
     onBuy: (index: number) => {
@@ -829,9 +829,9 @@ export function createGame(args: CreateGameArgs) {
     vendorShopMenu.render({
       active: true,
       gold: getGold(world),
-      price: vendorPrice,
       cards: vendor.cards.map((cardId, index) => ({
         cardId,
+        priceG: getVendorCardPriceG(cardId),
         purchased: !!vendor.purchased[index],
       })),
       relicOffers: (vendor.relicOffers ?? []).map((offer) => ({
@@ -1328,7 +1328,7 @@ export function createGame(args: CreateGameArgs) {
     w.vendor = floorIntent.archetype === "VENDOR"
       ? createVendorState(
         generateVendorCards(5, (w as any).currentCharacterId),
-        generateVendorRelicOffers(w, 5, 500),
+        generateVendorRelicOffers(w, 5, VENDOR_RELIC_PRICE_G),
       )
       : null;
     w.vendorOffers = [];

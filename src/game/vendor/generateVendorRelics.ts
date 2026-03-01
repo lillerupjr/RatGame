@@ -1,7 +1,8 @@
 import { getAllRelicIds, getRelicById } from "../content/relics";
 import type { VendorRelicOffer } from "./vendorState";
+import { VENDOR_RELIC_PRICE_G } from "./pricing";
 
-export function generateVendorRelicOffers(world: any, count = 5, priceG = 500): VendorRelicOffer[] {
+export function generateVendorRelicOffers(world: any, count = 5, priceG = VENDOR_RELIC_PRICE_G): VendorRelicOffer[] {
   const owned = new Set<string>(Array.isArray(world?.relics) ? world.relics : []);
   const pool = getAllRelicIds().filter((id) => {
     const def = getRelicById(id);

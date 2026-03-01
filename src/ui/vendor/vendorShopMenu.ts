@@ -3,6 +3,7 @@ import { getRelicById } from "../../game/content/relics";
 
 export type VendorShopCard = {
   cardId: string;
+  priceG: number;
   purchased: boolean;
 };
 
@@ -10,7 +11,6 @@ export type VendorShopCard = {
 export type VendorShopState = {
   active: boolean;
   gold: number;
-  price: number;
   cards: VendorShopCard[];
   relicOffers: Array<{ relicId: string; priceG: number; isSold: boolean }>;
 };
@@ -106,7 +106,7 @@ export function mountVendorShopMenu(args: {
     for (let i = 0; i < currentState.cards.length; i++) {
       const item = currentState.cards[i];
       const vm = cardViewModel(item.cardId);
-      const canAfford = currentState.gold >= currentState.price;
+      const canAfford = currentState.gold >= item.priceG;
       const disabled = item.purchased || !canAfford;
       const stateClass = item.purchased ? "sold" : !canAfford ? "locked" : "available";
 
@@ -124,7 +124,7 @@ export function mountVendorShopMenu(args: {
       tier.textContent = vm.tier ? `Tier ${vm.tier}` : "Tier ?";
       const price = document.createElement("span");
       price.className = "vendorPriceBadge";
-      price.textContent = item.purchased ? "SOLD" : `${currentState.price}g`;
+      price.textContent = item.purchased ? "SOLD" : `${item.priceG}g`;
       topRow.appendChild(tier);
       topRow.appendChild(price);
 
