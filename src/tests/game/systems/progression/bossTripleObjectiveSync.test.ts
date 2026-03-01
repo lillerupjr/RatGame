@@ -30,6 +30,22 @@ function makeBossTripleWorld(): any {
 }
 
 describe("bossTripleObjectiveSync", () => {
+  test("does not mark boss zones from ENTER signals", () => {
+    const world = makeBossTripleWorld();
+    world.triggerSignals = [
+      { type: "ENTER", entityId: 0, triggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}1` },
+      { type: "ENTER", entityId: 0, triggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}2` },
+      { type: "ENTER", entityId: 0, triggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}3` },
+    ];
+
+    markBossTripleClearsFromSignalsAndEvents(world);
+    syncBossTripleObjectiveStateFromClears(world);
+
+    expect(world.bossTriple.completed).toEqual([false, false, false]);
+    expect(world.objectiveStates[0].status).toBe("ACTIVE");
+    expect(world.objectiveStates[0].progress.signalCount).toBe(0);
+  });
+
   test("records boss zone clears from kill events using ENEMY_KILLED.spawnTriggerId", () => {
     const world = makeBossTripleWorld();
     world.events.push({

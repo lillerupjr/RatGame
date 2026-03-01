@@ -21,7 +21,9 @@ export function markBossTripleClearsFromSignalsAndEvents(world: any): void {
 
   const signals = Array.isArray(world.triggerSignals) ? world.triggerSignals : [];
   for (let i = 0; i < signals.length; i++) {
-    const triggerId = signals[i]?.triggerId;
+    const signal = signals[i];
+    if (signal?.type !== "KILL") continue;
+    const triggerId = signal?.triggerId;
     if (typeof triggerId !== "string") continue;
     const idx = bossZoneIndexFromTriggerId(triggerId);
     if (idx === null) continue;
