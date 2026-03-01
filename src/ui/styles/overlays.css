@@ -1020,7 +1020,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .settingsSegmentBtn {
   border: 0;
   background: transparent;
-  color: rgba(255,255,255,0.92);
+  color: var(--text-primary);
   font-weight: 800;
   min-width: 72px;
   height: 34px;
@@ -1028,7 +1028,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 .settingsSegmentBtn.active {
-  background: rgba(255,255,255,0.2);
+  background: var(--primary-btn-hover-bg);
 }
 
 .settingsSliderRow {
@@ -1051,7 +1051,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   text-align: right;
   font-weight: 800;
   font-size: 12px;
-  color: rgba(255,255,255,0.85);
+  color: var(--text-muted);
 }
 
 #welcomeScreen button,
@@ -1065,8 +1065,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 /* Weapon Selection Menu */
-#menu { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.55); z-index: 4; }
-#menu .panel { width: min(560px, 92vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
+#menu { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 4; }
+#menu .panel { width: min(560px, 92vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); }
 #menu .title { font-size: 24px; font-weight: 800; margin-bottom: 6px; }
 #menu .subline { opacity: 0.9; margin-bottom: 14px; }
 
@@ -1078,19 +1078,19 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .wpnBtn {
   text-align: left;
   padding: 12px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.08);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--hover-bg);
   cursor: pointer;
-  color: #fff;
-  transition: transform 80ms ease, background 120ms ease, border-color 120ms ease;
+  color: var(--text-primary);
+  transition: transform var(--transition-fast), background var(--transition-standard), border-color var(--transition-standard);
 }
-.wpnBtn:hover { transform: translateY(-1px); background: rgba(255,255,255,0.11); border-color: rgba(255,255,255,0.18); }
-.wpnBtn[aria-pressed="true"] { border-color: rgba(255,255,255,0.36); background: rgba(255,255,255,0.14); }
+.wpnBtn:hover { transform: translateY(-1px); background: var(--hover-bg); border-color: var(--border-default); }
+.wpnBtn[aria-pressed="true"] { border-color: var(--border-strong); background: var(--active-bg); }
 .wpnTitle { font-weight: 900; font-size: 14px; margin-bottom: 2px; }
 .wpnDesc { opacity: 0.9; font-size: 12px; line-height: 1.35; }
 
-#menu button#startBtn { margin-top: 14px; width: 100%; padding: 12px 14px; border-radius: 12px; border: 0; cursor: pointer; font-weight: 800; background: rgba(255,255,255,0.16); color: #fff; }
+#menu button#startBtn { margin-top: 14px; width: 100%; padding: 12px 14px; border-radius: var(--radius-md); border: 0; cursor: pointer; font-weight: 800; background: var(--active-bg); color: var(--text-primary); }
 
 /* Full-screen dim + center */
 .pauseOverlay {
@@ -1101,7 +1101,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   justify-content: center;
   pointer-events: auto;
   background: rgba(0, 0, 0, 0.35);
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--text-primary);
   overflow: hidden;
 }
 
@@ -1117,7 +1117,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--text-primary);
 }
 
 /* Header */
@@ -1127,7 +1127,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .pauseTitle {
@@ -1147,15 +1147,15 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   height: 40px;
   min-width: 140px;
   padding: 0 14px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.10);
-  color: rgba(255, 255, 255, 0.92);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--focus-bg);
+  color: var(--text-primary);
   font-weight: 700;
   cursor: pointer;
 }
 
-.pauseBtn:hover { background: rgba(255, 255, 255, 0.16); }
+.pauseBtn:hover { background: var(--active-bg); }
 
 .pauseActionResume {
   background: rgba(42, 148, 79, 0.3);
@@ -1199,8 +1199,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .pauseConfirmDialog {
   width: min(440px, 92vw);
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
   background: rgba(18, 18, 24, 0.98);
   padding: 16px;
   display: grid;
@@ -1217,7 +1217,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   margin: 0;
   font-size: 14px;
   line-height: 1.4;
-  color: rgba(255, 255, 255, 0.84);
+  color: var(--text-muted);
 }
 
 .pauseConfirmActions {
@@ -1227,7 +1227,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 .pauseConfirmCancel {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--focus-bg);
 }
 
 .pauseConfirmAccept {
@@ -1253,8 +1253,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 /* Sections */
 .pauseSection {
   background: rgba(0, 0, 0, 0.28);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -1267,14 +1267,14 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   font-size: 16px;
   font-weight: 800;
   opacity: 1;
-  color: rgba(255, 255, 255, 0.98);
+  color: var(--text-primary);
 }
 
 .pauseSection h4 {
   margin: 10px 0 6px;
   font-size: 13px;
   opacity: 1;
-  color: rgba(255, 255, 255, 0.96);
+  color: var(--text-primary);
 }
 
 .audioRow {
@@ -1287,10 +1287,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .audioRow button {
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   padding: 6px 8px;
-  background: rgba(255,255,255,0.16);
-  color: #fff;
+  background: var(--active-bg);
+  color: var(--text-primary);
   cursor: pointer;
 }
 
@@ -1332,8 +1332,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
   padding: 10px 10px;
   background: rgba(255,255,255,0.05);
 }
@@ -1360,17 +1360,17 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .pauseDebugOpenBtn {
   height: 34px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--primary-btn-bg);
+  color: var(--text-primary);
   font-weight: 700;
   cursor: pointer;
   padding: 0 12px;
 }
 
 .pauseDebugOpenBtn:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--primary-btn-hover-bg);
 }
 
 .pauseStatsTabs {
@@ -1387,8 +1387,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 .pauseStatsTabBtn.active {
-  background: rgba(255, 255, 255, 0.28);
-  border-color: rgba(255, 255, 255, 0.34);
+  background: var(--active-bg);
+  border-color: var(--border-strong);
 }
 
 .pauseDebugLayer {
@@ -1404,8 +1404,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .pauseDebugLayerPanel {
   width: min(1100px, 92vw);
   height: min(760px, 84vh);
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
   background: rgba(15, 15, 15, 0.92);
   padding: 14px;
   display: flex;
@@ -1423,7 +1423,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .pauseDebugLayerHeader h3 {
   margin: 0;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .pauseDebugLayerActions {
@@ -1453,10 +1453,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .pauseDebugCardToggleBtn,
 .pauseDebugCardSaveBtn {
   height: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--focus-bg);
+  color: var(--text-primary);
   font-weight: 700;
   cursor: pointer;
   padding: 0 10px;
@@ -1464,7 +1464,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .pauseDebugCardToggleBtn:hover,
 .pauseDebugCardSaveBtn:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--primary-btn-hover-bg);
 }
 
 .pauseDebugCardControls {
@@ -1483,8 +1483,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   grid-template-columns: minmax(0, 1fr) auto auto auto;
   gap: 8px;
   align-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
   padding: 8px;
 }
 
@@ -1502,22 +1502,22 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .pauseDebugCardId {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--text-primary);
 }
 
 .pauseDebugCardBtn {
   width: 26px;
   height: 26px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--focus-bg);
+  color: var(--text-primary);
   font-weight: 800;
   cursor: pointer;
 }
 
 .pauseDebugCardBtn:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--primary-btn-hover-bg);
 }
 
 .pauseStatTable {
@@ -1530,7 +1530,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .pauseStatTable td {
   text-align: left;
   padding: 6px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .pauseStatTable td:last-child {
@@ -1568,8 +1568,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 /* Run end overlay (WIN / LOSE) */
-#end { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.62); z-index: 7; }
-#end .panel { width: min(560px, 92vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
+#end { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 7; }
+#end .panel { width: min(560px, 92vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); }
 #end .title { font-size: 26px; font-weight: 900; margin-bottom: 6px; }
 #end .subline { opacity: 0.92; margin-bottom: 14px; white-space: pre-wrap; }
 #end .endStats {
@@ -1577,7 +1577,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   gap: 6px;
   margin-bottom: 14px;
   padding: 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: rgba(0, 0, 0, 0.2);
 }
 #end .endStatRow {
@@ -1596,14 +1596,14 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   margin-top: 14px;
   width: 100%;
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   border: 0;
   cursor: pointer;
   font-weight: 900;
-  color: #fff;
+  color: var(--text-primary);
 }
 #end button#endBtn {
-  background: rgba(255,255,255,0.16);
+  background: var(--active-bg);
 }
 
 /* Deck overlays (reward + vendor) */
@@ -1623,12 +1623,12 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   width: min(980px, 95vw);
   padding: 20px;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--border-subtle);
   background:
     linear-gradient(150deg, rgba(22, 26, 40, 0.96), rgba(13, 16, 26, 0.95));
-  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.55);
-  color: #edf0ff;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
+  box-shadow: var(--shadow-medium);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
 }
 
 .deckOverlay .title {
@@ -1645,8 +1645,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 /* Map overlay (shown between floors) */
-#map { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.62); z-index: 6; }
-#map .panel { width: min(860px, 96vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
+#map { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 6; }
+#map .panel { width: min(860px, 96vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); }
 #map .title { font-size: 22px; font-weight: 900; margin-bottom: 6px; }
 #map .sub { opacity: 0.9; margin-bottom: 14px; white-space: pre-wrap; }
 
@@ -1684,7 +1684,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   width: 100%;
   aspect-ratio: 1000 / 520;
   border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.10);
+  border: 1px solid var(--border-subtle);
   background: rgba(0,0,0,0.22);
   overflow: hidden;
 }
@@ -1726,15 +1726,15 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   width: 150px;
   height: 70px;
   border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.07);
-  color: #fff;
+  border: 1px solid var(--border-subtle);
+  background: var(--hover-bg);
+  color: var(--text-primary);
   cursor: pointer;
   text-align: left;
   padding: 10px 12px;
 }
 
-.mapHitBtn:hover { border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.10); }
+.mapHitBtn:hover { border-color: var(--border-default); background: var(--focus-bg); }
 .mapHitBtn[disabled] { cursor: not-allowed; opacity: 0.45; }
 .mapHitTitle { font-weight: 900; font-size: 14px; margin-bottom: 4px; }
 .mapHitDesc { opacity: 0.9; font-size: 12px; line-height: 1.25; }
@@ -1748,17 +1748,17 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .deckCardButton {
   text-align: left;
   padding: 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: linear-gradient(180deg, var(--hover-bg), rgba(118, 232, 255, 0.04));
   cursor: pointer;
-  color: #fff;
-  transition: transform 80ms ease, background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+  color: var(--text-primary);
+  transition: transform var(--transition-fast), background var(--transition-standard), border-color var(--transition-standard), box-shadow var(--transition-standard);
 }
 
 .deckCardButton:hover {
   transform: translateY(-1px);
-  border-color: rgba(255,255,255,0.28);
+  border-color: var(--border-default);
   box-shadow: 0 10px 24px rgba(0,0,0,0.36);
 }
 
@@ -1832,10 +1832,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 .vendorTabBtn {
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.24);
-  background: rgba(255,255,255,0.08);
-  color: #fff;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-default);
+  background: var(--hover-bg);
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 800;
   padding: 8px 14px;
@@ -1843,7 +1843,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 .vendorTabBtn:hover {
-  background: rgba(255,255,255,0.14);
+  background: var(--active-bg);
 }
 
 .vendorTabBtn.active,
@@ -1877,10 +1877,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 .vendorPriceBadge {
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 3px 9px;
-  border: 1px solid rgba(255,255,255,0.22);
-  background: rgba(255,255,255,0.1);
+  border: 1px solid var(--border-default);
+  background: var(--focus-bg);
   font-size: 11px;
   font-weight: 900;
 }
@@ -1910,17 +1910,17 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .vendorLeaveButton {
   min-width: 160px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.18);
-  background: rgba(255,255,255,0.08);
-  color: #fff;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--hover-bg);
+  color: var(--text-primary);
   font-size: 14px;
   font-weight: 900;
   padding: 10px 16px;
   cursor: pointer;
 }
 
-.vendorLeaveButton:hover { background: rgba(255,255,255,0.14); }
+.vendorLeaveButton:hover { background: var(--active-bg); }
 .vendorLeaveButton.selected,
 .vendorLeaveButton:focus-visible {
   outline: none;
@@ -1932,7 +1932,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .choiceStats {
   margin-top: 10px;
   padding-top: 8px;
-  border-top: 1px solid rgba(255,255,255,0.1);
+  border-top: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -1961,11 +1961,11 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   font-size: 9px;
   margin: 0 2px;
 }
-.statArrow.statUp { color: #4ade80; }
-.statArrow.statDown { color: #f87171; }
+.statArrow.statUp { color: var(--positive); }
+.statArrow.statDown { color: var(--negative); }
 .statNew { font-weight: 700; }
-.statNew.statUp { color: #4ade80; }
-.statNew.statDown { color: #f87171; }
+.statNew.statUp { color: var(--positive); }
+.statNew.statDown { color: var(--negative); }
 
 @media (max-width: 720px) {
   .deckCardGrid { grid-template-columns: 1fr; }
@@ -2189,17 +2189,17 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 @media (hover: none) and (pointer: coarse) {
   #welcomeScreen button:hover {
-    background: rgba(255,255,255,0.20);
+    background: var(--primary-btn-bg);
     transform: none;
   }
 
   #mainMenu .menuButtons button:hover {
-    background: rgba(255,255,255,0.18);
+    background: var(--primary-btn-bg);
     transform: none;
   }
 
   #mainMenu .menuButtons button#startRunBtn:hover {
-    background: rgba(255,255,255,0.24);
+    background: var(--primary-btn-hover-bg);
   }
 
   #mainMenu .menuFooter button:hover {
@@ -2209,14 +2209,14 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
   .mapChoiceBtn:hover {
     transform: none;
-    background: rgba(255,255,255,0.08);
-    border-color: rgba(255,255,255,0.10);
+    background: var(--hover-bg);
+    border-color: var(--border-subtle);
   }
 
   .characterCard:hover {
     transform: none;
-    background: rgba(255,255,255,0.08);
-    border-color: rgba(255,255,255,0.10);
+    background: var(--hover-bg);
+    border-color: var(--border-subtle);
   }
 }
 
@@ -2285,8 +2285,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
   #dialogBar .panel {
     width: min(440px, 94vw);
-    border: 1px solid rgba(255, 255, 255, 0.26);
-    border-radius: 14px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
     border-top-width: 1px;
     padding: 14px 14px;
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
@@ -2719,7 +2719,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 #map.routeMode #mapTopBar {
   padding: calc(12px + var(--safe-top)) 16px 10px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--border-subtle);
   background: rgba(12, 16, 28, 0.94);
 }
 
@@ -2736,10 +2736,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   min-width: 44px;
   min-height: 36px;
   padding: 4px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(235, 241, 255, 0.92);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--hover-bg);
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -2748,12 +2748,12 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 #map.routeMode .routeBackBtn:hover {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.28);
+  background: var(--active-bg);
+  border-color: var(--border-default);
 }
 
 #map.routeMode .routeBackBtn:active {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--primary-btn-hover-bg);
 }
 
 #map.routeMode .title {
@@ -2775,9 +2775,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.02em;
-  color: rgba(218, 226, 248, 0.95);
+  color: var(--text-primary);
   background: rgba(10, 14, 24, 0.72);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 #map.routeMode #mapGraphWrap,
@@ -2893,9 +2893,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 #map.routeMode #mapInfoPanel {
   min-height: 54px;
   padding: 8px 14px calc(10px + var(--safe-bottom));
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--border-subtle);
   background: rgba(10, 14, 24, 0.9);
-  color: rgba(236, 242, 255, 0.96);
+  color: var(--text-primary);
 }
 
 #map.routeMode .routeInfoTitle {
