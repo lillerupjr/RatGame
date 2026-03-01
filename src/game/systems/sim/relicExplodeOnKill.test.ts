@@ -305,7 +305,10 @@ describe("relicExplodeOnKillSystem", () => {
     const c = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 6, 6);
     w.eAlive[dead] = false;
     w.eAilments[dead] = createEnemyAilmentsState();
-    w.eAilments[dead]!.ignite = { kind: "ignite", dps: 12, tLeft: 3 };
+    w.eAilments[dead]!.ignite = [
+      { kind: "ignite", dps: 12, tLeft: 3 },
+      { kind: "ignite", dps: 6, tLeft: 2 },
+    ];
     rebuildEnemyHash(w);
 
     const dw = getEnemyWorld(w, dead, KENNEY_TILE_WORLD);
@@ -313,9 +316,9 @@ describe("relicExplodeOnKillSystem", () => {
 
     relicExplodeOnKillSystem(w, 1 / 60);
 
-    expect(w.eAilments[a]?.ignite).toBeTruthy();
-    expect(w.eAilments[b]?.ignite).toBeTruthy();
-    expect(w.eAilments[c]?.ignite).toBeTruthy();
+    expect(w.eAilments[a]?.ignite.length).toBe(2);
+    expect(w.eAilments[b]?.ignite.length).toBe(2);
+    expect(w.eAilments[c]?.ignite.length).toBe(2);
   });
 
   test("ACT_IGNITE_SPREAD_ON_DEATH does not spread when dead enemy has no ignite", () => {
@@ -333,7 +336,7 @@ describe("relicExplodeOnKillSystem", () => {
 
     relicExplodeOnKillSystem(w, 1 / 60);
 
-    expect(w.eAilments[a]?.ignite ?? null).toBeNull();
+    expect(w.eAilments[a]?.ignite.length ?? 0).toBe(0);
   });
 
   test("ACT_IGNITE_SPREAD_ON_DEATH target set and strength are deterministic", () => {
@@ -345,7 +348,10 @@ describe("relicExplodeOnKillSystem", () => {
       const t2 = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 10, 11);
       w.eAlive[dead] = false;
       w.eAilments[dead] = createEnemyAilmentsState();
-      w.eAilments[dead]!.ignite = { kind: "ignite", dps: 9, tLeft: 2 };
+      w.eAilments[dead]!.ignite = [
+        { kind: "ignite", dps: 9, tLeft: 2 },
+        { kind: "ignite", dps: 5, tLeft: 1.5 },
+      ];
       rebuildEnemyHash(w);
       const dw = getEnemyWorld(w, dead, KENNEY_TILE_WORLD);
       w.events.push({ type: "ENEMY_KILLED", enemyIndex: dead, x: dw.wx, y: dw.wy, source: "PISTOL" });
@@ -355,10 +361,12 @@ describe("relicExplodeOnKillSystem", () => {
 
     const [a1, a2] = run();
     const [b1, b2] = run();
-    expect(a1?.dps).toBeCloseTo(b1?.dps ?? 0, 6);
-    expect(a1?.tLeft).toBeCloseTo(b1?.tLeft ?? 0, 6);
-    expect(a2?.dps).toBeCloseTo(b2?.dps ?? 0, 6);
-    expect(a2?.tLeft).toBeCloseTo(b2?.tLeft ?? 0, 6);
+    expect(a1?.length ?? 0).toBe(2);
+    expect(a2?.length ?? 0).toBe(2);
+    expect((a1 ?? [])[0]?.dps ?? 0).toBeCloseTo((b1 ?? [])[0]?.dps ?? 0, 6);
+    expect((a1 ?? [])[0]?.tLeft ?? 0).toBeCloseTo((b1 ?? [])[0]?.tLeft ?? 0, 6);
+    expect((a2 ?? [])[1]?.dps ?? 0).toBeCloseTo((b2 ?? [])[1]?.dps ?? 0, 6);
+    expect((a2 ?? [])[1]?.tLeft ?? 0).toBeCloseTo((b2 ?? [])[1]?.tLeft ?? 0, 6);
   });
 
   test("ACT_IGNITE_SPREAD_ON_DEATH does not trigger on OTHER kill events", () => {
@@ -368,12 +376,12 @@ describe("relicExplodeOnKillSystem", () => {
     const a = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 13, 12);
     w.eAlive[dead] = false;
     w.eAilments[dead] = createEnemyAilmentsState();
-    w.eAilments[dead]!.ignite = { kind: "ignite", dps: 20, tLeft: 3 };
+    w.eAilments[dead]!.ignite = [{ kind: "ignite", dps: 20, tLeft: 3 }];
     rebuildEnemyHash(w);
     const dw = getEnemyWorld(w, dead, KENNEY_TILE_WORLD);
     w.events.push({ type: "ENEMY_KILLED", enemyIndex: dead, x: dw.wx, y: dw.wy, source: "OTHER" });
 
     relicExplodeOnKillSystem(w, 1 / 60);
-    expect(w.eAilments[a]?.ignite ?? null).toBeNull();
+    expect(w.eAilments[a]?.ignite.length ?? 0).toBe(0);
   });
 });

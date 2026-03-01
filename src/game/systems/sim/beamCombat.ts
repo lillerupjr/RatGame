@@ -14,7 +14,6 @@ export type BeamDamageConfig = {
   dirX: number;
   dirY: number;
   maxRangePx: number;
-  targetDistancePx?: number;
   tickIntervalSec: number;
   widthPx: number;
   glowIntensity: number;
@@ -26,7 +25,6 @@ export type BeamDamageConfig = {
   chanceBleed: number;
   chanceIgnite: number;
   chancePoison: number;
-  pierce: number;
   projectileKind: number;
   critRolls: 1 | 2;
   dotScalars: DotStatsScalars;
@@ -48,7 +46,6 @@ function collectBeamTargets(
   dirY: number,
   maxDistance: number,
   widthPx: number,
-  maxHits: number,
 ): BeamTarget[] {
   const out: BeamTarget[] = [];
   const maxRadius = Math.max(0, widthPx * 0.5);
@@ -69,7 +66,6 @@ function collectBeamTargets(
   }
 
   out.sort((a, b) => a.distance - b.distance);
-  if (out.length > maxHits) out.length = maxHits;
   return out;
 }
 
@@ -98,13 +94,9 @@ export function updatePlayerBeamCombat(w: World, dt: number, cfg: BeamDamageConf
     0,
     cfg.maxRangePx,
   );
-  const targetDistance = Number.isFinite(cfg.targetDistancePx)
-    ? Math.max(0, cfg.targetDistancePx as number)
-    : cfg.maxRangePx;
-  const rangeCap = Math.max(0, Math.min(cfg.maxRangePx, targetDistance));
   const endDistance = ray.hit && ray.hitType === "TILE"
-    ? Math.max(0, Math.min(rangeCap, ray.hitDistance))
-    : rangeCap;
+    ? Math.max(0, Math.min(cfg.maxRangePx, ray.hitDistance))
+    : Math.max(0, cfg.maxRangePx);
 
   w.playerBeamActive = true;
   w.playerBeamStartX = originX;
@@ -121,7 +113,6 @@ export function updatePlayerBeamCombat(w: World, dt: number, cfg: BeamDamageConf
   if (w.playerBeamTickAccumulator < interval) return;
 
   const source = registry.projectileSourceFromKind(cfg.projectileKind);
-  const maxHits = Math.max(1, 1 + Math.max(0, cfg.pierce | 0));
   const targets = collectBeamTargets(
     w,
     originX,
@@ -130,7 +121,6 @@ export function updatePlayerBeamCombat(w: World, dt: number, cfg: BeamDamageConf
     dirY,
     endDistance,
     cfg.widthPx,
-    maxHits,
   );
 
   while (w.playerBeamTickAccumulator >= interval) {

@@ -10,7 +10,7 @@ import { onEnemyKilledForChallenge } from "./roomChallenge";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getUserSettings } from "../../../userSettings";
 import type { RelicTriggerEvent } from "../../events";
-import { applyIgniteStrongestFromSnapshot, createEnemyAilmentsState } from "../../combat_mods/ailments/enemyAilments";
+import { addIgniteStacksFromSnapshots, createEnemyAilmentsState } from "../../combat_mods/ailments/enemyAilments";
 import { restoreArmor } from "../sim/playerArmor";
 import { relicTriggerMomentumDamageMultiplier } from "../sim/momentum";
 
@@ -317,8 +317,11 @@ function applyExplodeOnKill(world: World, ev: EnemyKilledEvent): void {
 
 function applyIgniteSpreadOnDeath(world: World, ev: EnemyKilledEvent): void {
   const deadState = world.eAilments?.[ev.enemyIndex];
-  const deadIgnite = deadState?.ignite;
-  if (!deadIgnite) return;
+  const deadIgniteRaw = (deadState as any)?.ignite;
+  const deadIgniteStacks = Array.isArray(deadIgniteRaw)
+    ? deadIgniteRaw
+    : (deadIgniteRaw ? [deadIgniteRaw] : []);
+  if (deadIgniteStacks.length === 0) return;
 
   const nearby = queryCircle(world.enemySpatialHash, ev.x, ev.y, IGNITE_SPREAD_RADIUS_PX + 50);
   const seen = new Set<number>();
@@ -345,7 +348,7 @@ function applyIgniteSpreadOnDeath(world: World, ev: EnemyKilledEvent): void {
   for (let i = 0; i < candidates.length; i++) {
     const e = candidates[i].enemyIndex;
     if (!world.eAilments[e]) world.eAilments[e] = createEnemyAilmentsState();
-    applyIgniteStrongestFromSnapshot(world.eAilments[e]!, deadIgnite);
+    addIgniteStacksFromSnapshots(world.eAilments[e]!, deadIgniteStacks);
   }
 }
 

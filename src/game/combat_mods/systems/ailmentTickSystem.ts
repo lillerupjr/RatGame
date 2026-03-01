@@ -63,11 +63,15 @@ export function ailmentTickSystem(w: any, dt: number): void {
     if (!w.eAilments) w.eAilments = [];
     if (!w.eAilments[e]) w.eAilments[e] = createEnemyAilmentsState();
     const st = w.eAilments[e];
+    const igniteRaw = (st as any).ignite;
+    if (!Array.isArray(igniteRaw)) {
+      st.ignite = igniteRaw ? [igniteRaw] : [];
+    }
 
     // Poison/ignite/bleed now tick on a fixed cadence.
     let poisonRaw = 0;
     let bleedRaw = 0;
-    let igniteRaw = 0;
+    let igniteDamageRaw = 0;
     let remaining = Math.max(0, dt);
     let acc = Math.max(0, w.eDotTickAcc[e] ?? 0);
     while (remaining > EPS) {
@@ -78,7 +82,8 @@ export function ailmentTickSystem(w: any, dt: number): void {
       for (const s of st.poison) poisonDps += s.dps;
       let bleedDps = 0;
       for (const s of st.bleed) bleedDps += s.dps;
-      const igniteDps = st.ignite ? st.ignite.dps : 0;
+      let igniteDps = 0;
+      for (const s of st.ignite) igniteDps += s.dps;
 
       // Advance ailment timers for this slice.
       tickEnemyAilments(st, step);
@@ -90,11 +95,11 @@ export function ailmentTickSystem(w: any, dt: number): void {
       if (acc + EPS >= tickIntervalSec) {
         bleedRaw += bleedDps * AILMENT_TICK_INTERVAL_SEC;
         poisonRaw += poisonDps * AILMENT_TICK_INTERVAL_SEC;
-        igniteRaw += igniteDps * AILMENT_TICK_INTERVAL_SEC;
+        igniteDamageRaw += igniteDps * AILMENT_TICK_INTERVAL_SEC;
         acc = 0;
       }
     }
-    if (st.poison.length === 0 && st.bleed.length === 0 && !st.ignite) acc = 0;
+    if (st.poison.length === 0 && st.bleed.length === 0 && st.ignite.length === 0) acc = 0;
     w.eDotTickAcc[e] = acc;
 
     // Read enemy mitigation fields (default to 0)
@@ -106,7 +111,7 @@ export function ailmentTickSystem(w: any, dt: number): void {
 
     const poisonFinal = applyDotMitigation(poisonRaw * relicDotMoreMult, resistChaos, damageReduction);
     const bleedFinal = applyDotMitigation(bleedRaw * relicDotMoreMult, resistPhysical, damageReduction);
-    const igniteFinal = applyDotMitigation(igniteRaw * relicDotMoreMult, resistFire, damageReduction);
+    const igniteFinal = applyDotMitigation(igniteDamageRaw * relicDotMoreMult, resistFire, damageReduction);
 
     const total = poisonFinal + bleedFinal + igniteFinal;
     if (total > 0) {

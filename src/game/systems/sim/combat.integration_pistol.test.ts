@@ -17,6 +17,33 @@ function setPlayerWorld(w: World, wx: number, wy: number): void {
   w.pgoy = a.goy;
 }
 
+function spawnBasicEnemy(w: World, wx: number, wy: number, hp = 200): number {
+  const enemyAnchor = anchorFromWorld(wx, wy, KENNEY_TILE_WORLD);
+  const e = w.eAlive.length;
+  w.eAlive.push(true);
+  w.eType.push(1);
+  w.egxi.push(enemyAnchor.gxi);
+  w.egyi.push(enemyAnchor.gyi);
+  w.egox.push(enemyAnchor.gox);
+  w.egoy.push(enemyAnchor.goy);
+  w.evx.push(0);
+  w.evy.push(0);
+  w.eFaceX.push(-1);
+  w.eFaceY.push(0);
+  w.eHp.push(hp);
+  w.eHpMax.push(hp);
+  w.eR.push(10);
+  w.eSpeed.push(0);
+  w.eDamage.push(0);
+  w.ezVisual.push(w.pzVisual);
+  w.ezLogical.push(w.pzLogical);
+  w.ePoisonT.push(0);
+  w.ePoisonDps.push(0);
+  w.ePoisonedOnDeath.push(false);
+  w.eSpawnTriggerId.push(undefined);
+  return e;
+}
+
 describe("combatSystem pistol integration", () => {
   test("autofire spawns projectile and deals typed damage", () => {
     const w = createWorld({ seed: 1337, stage: stageDocks });
@@ -176,44 +203,81 @@ describe("combatSystem pistol integration", () => {
 
     setPlayerWorld(w, 0, 0);
 
-    const enemyAnchor = anchorFromWorld(90, 0, KENNEY_TILE_WORLD);
-    w.eAlive.push(true);
-    w.eType.push(1);
-    w.egxi.push(enemyAnchor.gxi);
-    w.egyi.push(enemyAnchor.gyi);
-    w.egox.push(enemyAnchor.gox);
-    w.egoy.push(enemyAnchor.goy);
-    w.evx.push(0);
-    w.evy.push(0);
-    w.eFaceX.push(-1);
-    w.eFaceY.push(0);
-    w.eHp.push(200);
-    w.eHpMax.push(200);
-    w.eR.push(10);
-    w.eSpeed.push(0);
-    w.eDamage.push(0);
-    w.ezVisual.push(w.pzVisual);
-    w.ezLogical.push(w.pzLogical);
-    w.ePoisonT.push(0);
-    w.ePoisonDps.push(0);
-    w.ePoisonedOnDeath.push(false);
-    w.eSpawnTriggerId.push(undefined);
+    const firstEnemy = spawnBasicEnemy(w, 90, 0, 200);
 
     collisionsSystem(w, 1 / 60);
 
-    const hpStart = w.eHp[0];
+    const hpStart = w.eHp[firstEnemy];
     for (let i = 0; i < 60; i++) {
       combatSystem(w, 1 / 60);
       collisionsSystem(w, 1 / 60);
     }
 
     expect(w.playerBeamActive).toBe(true);
-    expect(w.playerBeamEndX).toBeGreaterThan(w.playerBeamStartX);
+    expect(w.playerBeamEndX - w.playerBeamStartX).toBeGreaterThan(150);
     expect(w.pAlive.some(Boolean)).toBe(false);
-    const dealt = hpStart - w.eHp[0];
+    const dealt = hpStart - w.eHp[firstEnemy];
     expect(dealt).toBeGreaterThan(20);
     expect(dealt).toBeLessThan(26);
     expect(w.events.some((ev) => ev.type === "SFX" && (ev as any).id === "FIRE_OTHER")).toBe(true);
+  });
+
+  test("JOEY beam pierces through all enemies in the line (unlimited target hits)", () => {
+    const w = createWorld({ seed: 1900, stage: stageDocks });
+    w.events.length = 0;
+    w.combatCardIds = [];
+    w.primaryWeaponCdLeft = 0;
+    (w as any).currentCharacterId = "JOEY";
+    w.rng.range = (() => 0.99) as any;
+    setPlayerWorld(w, 0, 0);
+
+    const e1 = spawnBasicEnemy(w, 90, 0, 200);
+    const e2 = spawnBasicEnemy(w, 180, 0, 200);
+    const e3 = spawnBasicEnemy(w, 270, 0, 200);
+    collisionsSystem(w, 1 / 60);
+
+    const hp1 = w.eHp[e1];
+    const hp2 = w.eHp[e2];
+    const hp3 = w.eHp[e3];
+
+    for (let i = 0; i < 12; i++) {
+      combatSystem(w, 1 / 60);
+      collisionsSystem(w, 1 / 60);
+    }
+
+    expect(w.eHp[e1]).toBeLessThan(hp1);
+    expect(w.eHp[e2]).toBeLessThan(hp2);
+    expect(w.eHp[e3]).toBeLessThan(hp3);
+  });
+
+  test("JOEY beam ignores pierce stat for hit count", () => {
+    const mk = (withPierceCard: boolean) => {
+      const w = createWorld({ seed: 1901, stage: stageDocks });
+      w.events.length = 0;
+      w.combatCardIds = withPierceCard ? ["CARD_PIERCE_1"] : [];
+      w.primaryWeaponCdLeft = 0;
+      (w as any).currentCharacterId = "JOEY";
+      w.rng.range = (() => 0.99) as any;
+      setPlayerWorld(w, 0, 0);
+      const enemies = [
+        spawnBasicEnemy(w, 90, 0, 200),
+        spawnBasicEnemy(w, 180, 0, 200),
+        spawnBasicEnemy(w, 270, 0, 200),
+      ];
+      collisionsSystem(w, 1 / 60);
+      for (let i = 0; i < 12; i++) {
+        combatSystem(w, 1 / 60);
+        collisionsSystem(w, 1 / 60);
+      }
+      let hitCount = 0;
+      for (let i = 0; i < enemies.length; i++) {
+        if (w.eHp[enemies[i]] < 200) hitCount += 1;
+      }
+      return hitCount;
+    };
+
+    expect(mk(false)).toBe(3);
+    expect(mk(true)).toBe(3);
   });
 
   test("JOEY beam deactivates when no enemy is in range", () => {

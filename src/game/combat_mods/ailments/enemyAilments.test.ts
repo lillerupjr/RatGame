@@ -1,8 +1,9 @@
 import { describe, expect, test } from "vitest";
 import {
+  addIgniteFromSnapshot,
   addBleed,
   addPoison,
-  applyIgniteStrongestOnly,
+  applyIgniteStacked,
   createEnemyAilmentsState,
   tickEnemyAilments,
 } from "./enemyAilments";
@@ -25,37 +26,50 @@ describe("enemyAilments", () => {
     const st = createEnemyAilmentsState();
     addPoison(st, 20);
     addBleed(st, 24);
-    applyIgniteStrongestOnly(st, 16);
+    applyIgniteStacked(st, 16);
 
     expect(st.poison[0]?.tLeft).toBeCloseTo(AILMENT_DURATIONS.poison);
     expect(st.bleed[0]?.tLeft).toBeCloseTo(AILMENT_DURATIONS.bleed);
-    expect(st.ignite?.tLeft).toBeCloseTo(AILMENT_DURATIONS.ignite);
+    expect(st.ignite[0]?.tLeft).toBeCloseTo(AILMENT_DURATIONS.ignite);
   });
 
-  test("ignite strongest-only replacement", () => {
+  test("ignite stacks accumulate until cap", () => {
     const st = createEnemyAilmentsState();
+    for (let i = 0; i < AILMENT_STACK_CAP + 5; i++) {
+      applyIgniteStacked(st, 8);
+    }
+    expect(st.ignite.length).toBe(AILMENT_STACK_CAP);
+  });
 
-    applyIgniteStrongestOnly(st, 8); // dps = 2 over 4s
-    const first = st.ignite;
-    expect(first).not.toBeNull();
+  test("ignite cap replacement ignores weaker stack and replaces weakest with stronger", () => {
+    const st = createEnemyAilmentsState();
+    for (let i = 0; i < AILMENT_STACK_CAP; i++) {
+      addIgniteFromSnapshot(st, { kind: "ignite", dps: i + 1, tLeft: AILMENT_DURATIONS.ignite });
+    }
+    const minBefore = Math.min(...st.ignite.map((s) => s.dps));
+    expect(minBefore).toBe(1);
 
-    applyIgniteStrongestOnly(st, 4); // weaker, should not replace
-    expect(st.ignite?.dps).toBeCloseTo(first?.dps ?? 0);
+    applyIgniteStacked(st, 2); // 0.5 dps over 4s; weaker than weakest=1 => no replace
+    expect(st.ignite.length).toBe(AILMENT_STACK_CAP);
+    expect(Math.min(...st.ignite.map((s) => s.dps))).toBeCloseTo(1);
 
-    applyIgniteStrongestOnly(st, 20); // stronger, should replace
-    expect(st.ignite?.dps).toBeCloseTo(20 / AILMENT_DURATIONS.ignite);
+    applyIgniteStacked(st, 200); // 50 dps over 4s; should replace weakest
+    expect(st.ignite.length).toBe(AILMENT_STACK_CAP);
+    expect(Math.min(...st.ignite.map((s) => s.dps))).toBeGreaterThan(1);
+    expect(Math.max(...st.ignite.map((s) => s.dps))).toBeCloseTo(50);
   });
 
   test("tick removes expired stacks and ignite", () => {
     const st = createEnemyAilmentsState();
     addPoison(st, 10);
     addBleed(st, 10);
-    applyIgniteStrongestOnly(st, 10);
+    applyIgniteStacked(st, 10);
+    applyIgniteStacked(st, 5);
 
     tickEnemyAilments(st, 10);
 
     expect(st.poison.length).toBe(0);
     expect(st.bleed.length).toBe(0);
-    expect(st.ignite).toBeNull();
+    expect(st.ignite.length).toBe(0);
   });
 });

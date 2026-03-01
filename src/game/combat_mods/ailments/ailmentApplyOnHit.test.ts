@@ -12,7 +12,7 @@ describe("applyAilmentsFromHit", () => {
       { bleed: 0, ignite: 1, poison: 0 },
       { bleed: 0, ignite: 0, poison: 0 }
     );
-    expect(st.ignite).toBeNull();
+    expect(st.ignite.length).toBe(0);
   });
 
   test("0 chaos means no poison even with chance=1", () => {
@@ -63,7 +63,7 @@ describe("applyAilmentsFromHit", () => {
 
     expect(st.bleed.length).toBe(1);
     expect(st.poison.length).toBe(1);
-    expect(st.ignite).not.toBeNull();
+    expect(st.ignite.length).toBe(1);
 
     applyAilmentsFromHit(
       st,
@@ -74,7 +74,7 @@ describe("applyAilmentsFromHit", () => {
 
     expect(st.bleed.length).toBe(1);
     expect(st.poison.length).toBe(1);
-    expect(st.ignite).not.toBeNull();
+    expect(st.ignite.length).toBe(1);
   });
 
   test("stacking increments until cap", () => {
@@ -93,7 +93,7 @@ describe("applyAilmentsFromHit", () => {
     expect(st.poison.length).toBe(AILMENT_STACK_CAP);
   });
 
-  test("ignite replaces only when stronger", () => {
+  test("ignite stacks until cap and then replaces weakest with stronger", () => {
     const st = createEnemyAilmentsState();
 
     applyAilmentsFromHit(
@@ -102,7 +102,7 @@ describe("applyAilmentsFromHit", () => {
       { bleed: 0, ignite: 1, poison: 0 },
       { bleed: 1, ignite: 0, poison: 1 }
     );
-    const dps1 = st.ignite?.dps ?? 0;
+    const dps1 = st.ignite[0]?.dps ?? 0;
 
     applyAilmentsFromHit(
       st,
@@ -110,7 +110,19 @@ describe("applyAilmentsFromHit", () => {
       { bleed: 0, ignite: 1, poison: 0 },
       { bleed: 1, ignite: 0, poison: 1 }
     );
-    expect(st.ignite?.dps).toBeCloseTo(dps1);
+    expect(st.ignite.length).toBe(2);
+    expect(st.ignite[0]?.dps ?? 0).toBeCloseTo(dps1);
+
+    for (let i = st.ignite.length; i < AILMENT_STACK_CAP; i++) {
+      applyAilmentsFromHit(
+        st,
+        { physical: 0, fire: 4, chaos: 0 },
+        { bleed: 0, ignite: 1, poison: 0 },
+        { bleed: 1, ignite: 0, poison: 1 }
+      );
+    }
+    const minBefore = Math.min(...st.ignite.map((s) => s.dps));
+    expect(st.ignite.length).toBe(AILMENT_STACK_CAP);
 
     applyAilmentsFromHit(
       st,
@@ -118,7 +130,9 @@ describe("applyAilmentsFromHit", () => {
       { bleed: 0, ignite: 1, poison: 0 },
       { bleed: 1, ignite: 0, poison: 1 }
     );
-    expect((st.ignite?.dps ?? 0)).toBeGreaterThan(dps1);
+    expect(st.ignite.length).toBe(AILMENT_STACK_CAP);
+    expect(Math.min(...st.ignite.map((s) => s.dps))).toBeGreaterThanOrEqual(minBefore);
+    expect(Math.max(...st.ignite.map((s) => s.dps))).toBeGreaterThan(dps1);
   });
 
   test("damage-to-poison conversion adds poison without chaos damage", () => {
@@ -142,7 +156,7 @@ describe("applyAilmentsFromHit", () => {
       { bleed: 0, ignite: 1, poison: 0 },
       { bleed: 0, ignite: 0, poison: 0 },
     );
-    const baseIgniteDps = base.ignite?.dps ?? 0;
+    const baseIgniteDps = base.ignite[0]?.dps ?? 0;
     expect(baseIgniteDps).toBeGreaterThan(0);
 
     const specialist = createEnemyAilmentsState();
@@ -154,7 +168,7 @@ describe("applyAilmentsFromHit", () => {
       { igniteDamageMult: 3.0 },
     );
 
-    const specialistIgniteDps = specialist.ignite?.dps ?? 0;
+    const specialistIgniteDps = specialist.ignite[0]?.dps ?? 0;
     expect(specialistIgniteDps).toBeCloseTo(baseIgniteDps * 1.5, 6);
   });
 
@@ -168,6 +182,6 @@ describe("applyAilmentsFromHit", () => {
       { poisonDurationMult: 1.25, igniteDurationMult: 1.25 },
     );
     expect(st.poison[0]?.tLeft ?? 0).toBeCloseTo(2.5, 6);
-    expect(st.ignite?.tLeft ?? 0).toBeCloseTo(5, 6);
+    expect(st.ignite[0]?.tLeft ?? 0).toBeCloseTo(5, 6);
   });
 });

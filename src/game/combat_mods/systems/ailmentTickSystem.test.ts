@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { createEnemyAilmentsState, addPoison, addBleed, applyIgniteStrongestOnly } from "../ailments/enemyAilments";
+import { createEnemyAilmentsState, addPoison, addBleed, applyIgniteStacked } from "../ailments/enemyAilments";
 import { ailmentTickSystem } from "./ailmentTickSystem";
 
 describe("ailmentTickSystem", () => {
@@ -8,7 +8,7 @@ describe("ailmentTickSystem", () => {
     addPoison(st, 20); // dps 10
     addPoison(st, 10); // dps 5
     addBleed(st, 12); // dps 2
-    applyIgniteStrongestOnly(st, 16); // dps 4
+    applyIgniteStacked(st, 16); // dps 4
 
     const w: any = {
       eAlive: [true],
@@ -27,7 +27,7 @@ describe("ailmentTickSystem", () => {
     const st = createEnemyAilmentsState();
     addPoison(st, 20);
     addBleed(st, 12);
-    applyIgniteStrongestOnly(st, 16);
+    applyIgniteStacked(st, 16);
 
     const w: any = {
       eAlive: [true],
@@ -40,13 +40,13 @@ describe("ailmentTickSystem", () => {
 
     expect(w.eAilments[0].poison.length).toBe(0);
     expect(w.eAilments[0].bleed.length).toBe(0);
-    expect(w.eAilments[0].ignite).toBeNull();
+    expect(w.eAilments[0].ignite.length).toBe(0);
   });
 
   test("poison/ignite only apply on 0.5s discrete ticks", () => {
     const st = createEnemyAilmentsState();
     addPoison(st, 20); // dps 10
-    applyIgniteStrongestOnly(st, 16); // dps 4
+    applyIgniteStacked(st, 16); // dps 4
 
     const w: any = {
       eAlive: [true],

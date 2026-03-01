@@ -512,7 +512,7 @@ function drawAilmentPips(
 
   const poisonStacks = st.poison?.length ?? 0;
   const hasPoison = poisonStacks > 0;
-  const hasIgnite = !!st.ignite;
+  const hasIgnite = (st.ignite?.length ?? 0) > 0;
   if (!hasPoison && !hasIgnite) return;
 
   const baseX = Math.round(sx);
@@ -2956,7 +2956,7 @@ export async function renderSystem(
   // ----------------------------
   if (w.playerBeamActive) {
     const zBase = w.pzVisual ?? w.pz ?? tileHAtWorld(w.playerBeamStartX, w.playerBeamStartY);
-    const BEAM_HEAD_LIFT_Z = 0.9;
+    const BEAM_HEAD_LIFT_Z = 3;
     const start = toScreenAtZ(w.playerBeamStartX, w.playerBeamStartY, zBase + BEAM_HEAD_LIFT_Z);
     const end = toScreenAtZ(w.playerBeamEndX, w.playerBeamEndY, zBase);
     const midX = (w.playerBeamStartX + w.playerBeamEndX) * 0.5;

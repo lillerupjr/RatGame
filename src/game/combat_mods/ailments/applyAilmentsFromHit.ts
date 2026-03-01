@@ -1,7 +1,7 @@
 import {
   addBleed,
   addPoison,
-  applyIgniteStrongestOnly,
+  applyIgniteStacked,
   createEnemyAilmentsState,
   type EnemyAilmentsState,
 } from "./enemyAilments";
@@ -71,7 +71,7 @@ export function applyAilmentsFromHit(
   }
 
   if (dealt.fire > 0 && rolls.ignite < chanceIgnite) {
-    applyIgniteStrongestOnly(state, dealt.fire * igniteDamageMult, { durationMult: igniteDurationMult });
+    applyIgniteStacked(state, dealt.fire * igniteDamageMult, { durationMult: igniteDurationMult });
   }
 
   const extraPoison = Math.max(0, extra?.poisonFromDamage ?? 0) * poisonDamageMult;
