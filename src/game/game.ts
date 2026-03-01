@@ -61,16 +61,20 @@ import {
   ensureAdjacentNodes,
   getReachableNodes,
   moveToNode,
-  getVisibleNodes,
-  getVisibleEdges,
   getDepthScaling,
   getNodeDepth,
   type DelveMap,
   type DelveNode,
 } from "./map/delveMap";
-import { clampPan, computePanBounds, hasDragExceededThreshold, type PanBounds } from "./map/delveMapPan";
 import type { FloorArchetype } from "./map/floorArchetype";
 import type { FloorIntent } from "./map/floorIntent";
+import {
+  buildDelveRouteMapVM,
+  buildDeterministicRouteMapVM,
+  type RouteMapVM,
+  type RouteNodeStatus,
+} from "./map/routeMapView";
+import { buildRouteMapLayout, computeScrollTopForNode } from "./map/routeMapLayout";
 import { playerSpritesReady, preloadPlayerSprites, setPlayerSkin } from "../engine/render/sprites/playerSprites";
 import { preloadVendorNpcSprites, vendorNpcSpritesReady } from "../engine/render/sprites/vendorSprites";
 import { preloadBackgrounds } from "./render/background";
@@ -199,6 +203,10 @@ type CreateGameArgs = {
     };
     mapEl: {
       root: HTMLDivElement;
+      topBar: HTMLDivElement;
+      legend: HTMLDivElement;
+      infoPanel: HTMLDivElement;
+      depthLabel: HTMLDivElement;
       sub: HTMLDivElement;
       graphWrap: HTMLDivElement;
       graphContent: HTMLDivElement;
@@ -1851,43 +1859,14 @@ export function createGame(args: CreateGameArgs) {
 
   const MAP_VIEW_WIDTH = 1000;
   const MAP_VIEW_HEIGHT = 520;
-
-  const mapPanState: {
-    enabled: boolean;
-    bounds: PanBounds;
-    panX: number;
-    panY: number;
-    pointerId: number | null;
-    pointerStartX: number;
-    pointerStartY: number;
-    panStartX: number;
-    panStartY: number;
-    dragging: boolean;
-    didDrag: boolean;
-    suppressNextClick: boolean;
-    rafPending: boolean;
-  } = {
-    enabled: false,
-    bounds: { minX: 0, maxX: 0, minY: 0, maxY: 0 },
-    panX: 0,
-    panY: 0,
-    pointerId: null,
-    pointerStartX: 0,
-    pointerStartY: 0,
-    panStartX: 0,
-    panStartY: 0,
-    dragging: false,
-    didDrag: false,
-    suppressNextClick: false,
-    rafPending: false,
-  };
-
-  const MAP_DRAG_THRESHOLD_PX = 7;
+  const ROUTE_ROW_HEIGHT_PX = 132;
+  const ROUTE_TOP_PADDING_PX = 78;
+  const ROUTE_BOTTOM_PADDING_PX = 122;
 
   function setMapGraphFillLayout(): void {
     args.ui.mapEl.graphContent.style.width = "100%";
     args.ui.mapEl.graphContent.style.height = "100%";
-    args.ui.mapEl.graphContent.style.transform = "translate3d(0px, 0px, 0px)";
+    args.ui.mapEl.graphContent.style.transform = "none";
     args.ui.mapEl.svg.setAttribute("viewBox", `0 0 ${MAP_VIEW_WIDTH} ${MAP_VIEW_HEIGHT}`);
   }
 
@@ -1899,57 +1878,186 @@ export function createGame(args: CreateGameArgs) {
     args.ui.mapEl.svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
   }
 
-  function applyMapPanTransformImmediate(): void {
-    args.ui.mapEl.graphContent.style.transform = `translate3d(${mapPanState.panX}px, ${mapPanState.panY}px, 0px)`;
-    args.ui.mapEl.graphWrap.classList.toggle("isDragging", mapPanState.dragging);
+  function resetRouteMapFrame(): void {
+    args.ui.mapEl.graphWrap.scrollTop = 0;
+    args.ui.mapEl.graphWrap.classList.remove("routeScrollable");
+    args.ui.mapEl.legend.innerHTML = "";
+    args.ui.mapEl.depthLabel.textContent = "";
+    args.ui.mapEl.infoPanel.textContent = "";
+    args.ui.mapEl.svg.innerHTML = `<rect x="0" y="0" width="${MAP_VIEW_WIDTH}" height="${MAP_VIEW_HEIGHT}" fill="rgba(0,0,0,0)" />`;
+    args.ui.mapEl.hit.innerHTML = "";
   }
 
-  function applyMapPanTransform(): void {
-    if (mapPanState.rafPending) return;
-    mapPanState.rafPending = true;
-    requestAnimationFrame(() => {
-      mapPanState.rafPending = false;
-      applyMapPanTransformImmediate();
-    });
+  const ROUTE_ARCHETYPE_ICON: Record<FloorArchetype, string> = {
+    SURVIVE: "SV",
+    TIME_TRIAL: "TT",
+    VENDOR: "$",
+    HEAL: "+",
+    BOSS_TRIPLE: "B3",
+  };
+
+  const routeStatusLabel = (status: RouteNodeStatus): string => {
+    switch (status) {
+      case "CURRENT":
+        return "Current";
+      case "REACHABLE":
+        return "Reachable";
+      case "COMPLETED":
+        return "Completed";
+      case "LOCKED":
+      default:
+        return "Locked";
+    }
+  };
+
+  const routeArchetypeClass = (archetype: FloorArchetype): string => {
+    switch (archetype) {
+      case "SURVIVE":
+        return "survive";
+      case "TIME_TRIAL":
+        return "time-trial";
+      case "VENDOR":
+        return "vendor";
+      case "HEAL":
+        return "heal";
+      case "BOSS_TRIPLE":
+      default:
+        return "boss-triple";
+    }
+  };
+
+  const routeStatusClass = (status: RouteNodeStatus): string => {
+    switch (status) {
+      case "CURRENT":
+        return "current";
+      case "REACHABLE":
+        return "reachable";
+      case "COMPLETED":
+        return "completed";
+      case "LOCKED":
+      default:
+        return "locked";
+    }
+  };
+
+  function setRouteInfo(node: RouteMapVM["nodes"][number] | null): void {
+    if (!node) {
+      args.ui.mapEl.infoPanel.textContent = "";
+      return;
+    }
+    const zoneText = node.mode === "DETERMINISTIC" ? "Deterministic choice" : node.zoneId;
+    args.ui.mapEl.infoPanel.innerHTML = `
+      <div class="routeInfoTitle">${floorArchetypeLabel(node.archetype)} · Depth ${node.depth}</div>
+      <div class="routeInfoMeta">${zoneText} · ${routeStatusLabel(node.status)}</div>
+    `;
   }
 
-  function disableMapPan(): void {
-    mapPanState.enabled = false;
-    mapPanState.pointerId = null;
-    mapPanState.dragging = false;
-    mapPanState.didDrag = false;
-    mapPanState.suppressNextClick = false;
-    mapPanState.rafPending = false;
-    mapPanState.panX = 0;
-    mapPanState.panY = 0;
-    args.ui.mapEl.graphWrap.classList.remove("isPannable");
-    applyMapPanTransformImmediate();
+  function renderRouteLegend(): void {
+    args.ui.mapEl.legend.innerHTML = "";
+    for (const archetype of DETERMINISTIC_ARCHETYPES) {
+      const item = document.createElement("div");
+      item.className = `routeLegendItem routeLegendItem--${routeArchetypeClass(archetype)}`;
+      item.innerHTML = `
+        <span class="routeLegendIcon">${ROUTE_ARCHETYPE_ICON[archetype]}</span>
+        <span class="routeLegendLabel">${floorArchetypeLabel(archetype)}</span>
+      `;
+      args.ui.mapEl.legend.appendChild(item);
+    }
   }
 
-  function configureDelvePan(contentWidth: number, contentHeight: number, focusPoint?: { x: number; y: number }): void {
-    setMapGraphPixelLayout(contentWidth, contentHeight);
+  function renderRouteMap(vm: RouteMapVM, subText: string): void {
+    args.ui.mapEl.root.classList.add("delveFull");
+    args.ui.mapEl.root.classList.add("routeMode");
+    world.state = "MAP";
+    args.ui.mapEl.root.hidden = false;
+    setHudHidden(true);
+    args.ui.mapEl.sub.textContent = subText;
+    args.ui.mapEl.graphWrap.classList.add("routeScrollable");
+    args.ui.mapEl.depthLabel.textContent = `Depth ${vm.currentDepth}`;
+    renderRouteLegend();
+
     const viewportWidth = Math.max(1, Math.floor(args.ui.mapEl.graphWrap.clientWidth || MAP_VIEW_WIDTH));
     const viewportHeight = Math.max(1, Math.floor(args.ui.mapEl.graphWrap.clientHeight || MAP_VIEW_HEIGHT));
-    mapPanState.bounds = computePanBounds(contentWidth, contentHeight, viewportWidth, viewportHeight);
-    mapPanState.enabled = true;
-    args.ui.mapEl.graphWrap.classList.add("isPannable");
-    if (focusPoint) {
-      mapPanState.panX = viewportWidth * 0.5 - focusPoint.x;
-      mapPanState.panY = viewportHeight * 0.5 - focusPoint.y;
-    } else {
-      mapPanState.panX = 0;
-      mapPanState.panY = 0;
+    const layout = buildRouteMapLayout(vm, viewportWidth, {
+      rowHeight: ROUTE_ROW_HEIGHT_PX,
+      topPadding: ROUTE_TOP_PADDING_PX,
+      bottomPadding: ROUTE_BOTTOM_PADDING_PX,
+    });
+    setMapGraphPixelLayout(layout.contentWidth, layout.contentHeight);
+
+    const nodeById = new Map(vm.nodes.map((n) => [n.id, n]));
+    const edgeSvg = layout.edgeLayouts
+      .map((e) => {
+        const from = nodeById.get(e.fromId);
+        const to = nodeById.get(e.toId);
+        const active = !!from && !!to && (
+          from.status !== "LOCKED" || to.status !== "LOCKED"
+        );
+        return `<line class="routeEdge ${active ? "routeEdge--active" : "routeEdge--locked"}" x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" />`;
+      })
+      .join("");
+
+    args.ui.mapEl.svg.innerHTML = `
+      <rect x="0" y="0" width="${layout.contentWidth}" height="${layout.contentHeight}" fill="rgba(0,0,0,0)" />
+      ${edgeSvg}
+    `;
+
+    const hit = args.ui.mapEl.hit;
+    hit.innerHTML = "";
+    for (const node of vm.nodes) {
+      const pos = layout.nodeLayouts.get(node.id);
+      if (!pos) continue;
+      const archetypeClass = routeArchetypeClass(node.archetype);
+      const statusClass = routeStatusClass(node.status);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `mapHitBtn routeNode routeNode--${archetypeClass} routeNode--${statusClass}`;
+      btn.style.left = `${pos.x}px`;
+      btn.style.top = `${pos.y}px`;
+      btn.disabled = !node.reachable || node.current;
+      if (node.mode === "DELVE") {
+        btn.dataset.delveNodeId = node.id;
+      } else if (node.deterministicData) {
+        btn.dataset.detFloorArchetype = node.deterministicData.archetype;
+        btn.dataset.detFloorIndex = String(node.deterministicData.floorIndex);
+        btn.dataset.detDepth = String(node.deterministicData.depth);
+      }
+      btn.innerHTML = `
+        <span class="routeNodeIcon">${ROUTE_ARCHETYPE_ICON[node.archetype]}</span>
+        <span class="routeNodeText">
+          <span class="routeNodeTitle">${floorArchetypeLabel(node.archetype)}</span>
+          <span class="routeNodeStatus">${routeStatusLabel(node.status)}</span>
+        </span>
+      `;
+      btn.addEventListener("mouseenter", () => setRouteInfo(node));
+      btn.addEventListener("focus", () => setRouteInfo(node));
+      btn.addEventListener("pointerdown", () => setRouteInfo(node));
+      hit.appendChild(btn);
     }
-    const clamped = clampPan({ x: mapPanState.panX, y: mapPanState.panY }, mapPanState.bounds);
-    mapPanState.panX = clamped.x;
-    mapPanState.panY = clamped.y;
-    applyMapPanTransform();
+
+    const focusNode =
+      vm.nodes.find((n) => n.status === "CURRENT")
+      ?? vm.nodes.find((n) => n.status === "REACHABLE")
+      ?? vm.nodes[0]
+      ?? null;
+    setRouteInfo(focusNode);
+
+    if (focusNode) {
+      const focusLayout = layout.nodeLayouts.get(focusNode.id);
+      if (focusLayout) {
+        const scrollTop = computeScrollTopForNode(focusLayout.y, viewportHeight, layout.contentHeight);
+        requestAnimationFrame(() => {
+          args.ui.mapEl.graphWrap.scrollTop = scrollTop;
+        });
+      }
+    }
   }
 
   function showMap(subText: string) {
-    disableMapPan();
+    resetRouteMapFrame();
     setMapGraphFillLayout();
     args.ui.mapEl.root.classList.remove("delveFull");
+    args.ui.mapEl.root.classList.remove("routeMode");
     world.state = "MAP";
     args.ui.mapEl.root.hidden = false;
     setHudHidden(true);
@@ -2066,50 +2174,11 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function showDeterministicFloorPicker(subText: string, floorIndex: number, depth: number) {
-    disableMapPan();
-    setMapGraphFillLayout();
-    args.ui.mapEl.root.classList.remove("delveFull");
-    world.state = "MAP";
-    args.ui.mapEl.root.hidden = false;
-    setHudHidden(true);
-    args.ui.mapEl.sub.textContent = subText;
-    args.ui.mapEl.svg.innerHTML =
-      `<rect x="0" y="0" width="${MAP_VIEW_WIDTH}" height="${MAP_VIEW_HEIGHT}" fill="rgba(0,0,0,0)" />`;
-    const hit = args.ui.mapEl.hit;
-    hit.innerHTML = "";
-    for (let i = 0; i < DETERMINISTIC_ARCHETYPES.length; i++) {
-      const archetype = DETERMINISTIC_ARCHETYPES[i];
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "mapHitBtn";
-      btn.dataset.detFloorArchetype = archetype;
-      btn.dataset.detFloorIndex = String(floorIndex);
-      btn.dataset.detDepth = String(depth);
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      btn.style.left = `${24 + col * 36}%`;
-      btn.style.top = `${18 + row * 26}%`;
-      const desc =
-        archetype === "VENDOR"
-          ? "SHOP map"
-          : archetype === "HEAL"
-            ? "REST map"
-            : "Procedural";
-      btn.innerHTML = `
-        <div class="mapHitTitle">${floorArchetypeLabel(archetype)}</div>
-        <div class="mapHitDesc">${desc} · Depth ${depth}</div>
-      `;
-      hit.appendChild(btn);
-    }
+    const vm = buildDeterministicRouteMapVM(DETERMINISTIC_ARCHETYPES, floorIndex, depth);
+    renderRouteMap(vm, subText);
   }
 
   function showDelveMap(subText: string) {
-    args.ui.mapEl.root.classList.add("delveFull");
-    world.state = "MAP";
-    args.ui.mapEl.root.hidden = false;
-    setHudHidden(true);
-    args.ui.mapEl.sub.textContent = subText;
-
     const delve = world.delveMap as DelveMap;
     if (!delve) {
       // Fallback to old map system
@@ -2123,138 +2192,18 @@ export function createGame(args: CreateGameArgs) {
     if (delve.currentNodeId) {
       ensureAdjacentNodes(delve, delve.currentNodeId, seed);
     }
-
-    // Get visible nodes and edges
-    const visibleNodes = getVisibleNodes(delve, 4);
-    const visibleEdges = getVisibleEdges(delve, visibleNodes);
-    const reachable = new Set(getReachableNodes(delve).map((n) => n.id));
-    if (visibleNodes.length === 0) {
-      disableMapPan();
-      setMapGraphFillLayout();
-      args.ui.mapEl.svg.innerHTML = `<rect x="0" y="0" width="${MAP_VIEW_WIDTH}" height="${MAP_VIEW_HEIGHT}" fill="rgba(0,0,0,0)" />`;
-      args.ui.mapEl.hit.innerHTML = "";
-      return;
-    }
-
-    const archetypeColor = (archetype: FloorArchetype, alpha: number) => {
-      const palette: Record<FloorArchetype, { r: number; g: number; b: number }> = {
-        SURVIVE: { r: 96, g: 210, b: 120 },
-        TIME_TRIAL: { r: 255, g: 165, b: 64 },
-        VENDOR: { r: 240, g: 210, b: 90 },
-        HEAL: { r: 90, g: 200, b: 200 },
-        BOSS_TRIPLE: { r: 235, g: 95, b: 95 },
-      };
-      const c = palette[archetype];
-      return `rgba(${c.r},${c.g},${c.b},${alpha})`;
-    };
-
-    // Calculate bounds for positioning
-    let minX = Infinity, maxX = -Infinity;
-    let minY = Infinity, maxY = -Infinity;
-    for (const n of visibleNodes) {
-      minX = Math.min(minX, n.x);
-      maxX = Math.max(maxX, n.x);
-      minY = Math.min(minY, n.y);
-      maxY = Math.max(maxY, n.y);
-    }
-
-    const rangeX = Math.max(0, maxX - minX);
-    const rangeY = Math.max(0, maxY - minY);
-    const spacingX = 200;
-    const spacingY = 150;
-    const paddingX = 220;
-    const paddingY = 120;
-    const contentWidth = Math.max(MAP_VIEW_WIDTH, paddingX * 2 + rangeX * spacingX);
-    const contentHeight = Math.max(MAP_VIEW_HEIGHT, paddingY * 2 + rangeY * spacingY);
-    setMapGraphPixelLayout(contentWidth, contentHeight);
-
-    const pos = new Map<string, { x: number; y: number }>();
-    for (const n of visibleNodes) {
-      const x = paddingX + (n.x - minX) * spacingX;
-      const y = paddingY + (n.y - minY) * spacingY;
-      pos.set(n.id, { x, y });
-    }
-
-    // --- Draw SVG edges + nodes ---
-    const svg = args.ui.mapEl.svg;
-
-    const edgeLines = visibleEdges
-      .map((e) => {
-        const a = pos.get(e.from);
-        const b = pos.get(e.to);
-        if (!a || !b) return "";
-        return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="rgba(255,255,255,0.22)" stroke-width="6" stroke-linecap="round" />`;
-      })
-      .join("");
-
-    const nodeCircles = visibleNodes
-      .map((n) => {
-        const p = pos.get(n.id)!;
-        const isReach = reachable.has(n.id);
-        const isCurrent = delve.currentNodeId === n.id;
-        const isCompleted = n.completed;
-
-        const fill = archetypeColor(
-          n.floorArchetype,
-          isCurrent ? 0.55 : isCompleted ? 0.22 : isReach ? 0.32 : 0.12
-        );
-        const stroke = archetypeColor(
-          n.floorArchetype,
-          isCurrent ? 0.95 : isReach ? 0.65 : isCompleted ? 0.45 : 0.25
-        );
-        const label = floorArchetypeLabel(n.floorArchetype);
-
-        return `
-            <circle cx="${p.x}" cy="${p.y}" r="22" fill="${fill}" stroke="${stroke}" stroke-width="4" />
-            <text x="${p.x}" y="${p.y + 44}" text-anchor="middle" font-size="12" fill="rgba(255,255,255,0.92)" font-weight="800">${label}</text>
-          `;
-      })
-      .join("");
-
-    svg.innerHTML = `
-      <rect x="0" y="0" width="${contentWidth}" height="${contentHeight}" fill="rgba(0,0,0,0)" />
-      ${edgeLines}
-      ${nodeCircles}
-    `;
-
-    // --- Hit layer buttons ---
-    const hit = args.ui.mapEl.hit;
-    hit.innerHTML = "";
-
-    for (const n of visibleNodes) {
-      const p = pos.get(n.id)!;
-
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "mapHitBtn";
-      btn.dataset.delveNodeId = n.id;
-      btn.style.left = `${p.x}px`;
-      btn.style.top = `${p.y}px`;
-
-      const isReach = reachable.has(n.id);
-      const isCurrent = delve.currentNodeId === n.id;
-      btn.disabled = !isReach || isCurrent;
-
-      const statusText = isCurrent ? "Current" : n.completed ? "Completed" : isReach ? "Select" : "Locked";
-      const label = floorArchetypeLabel(n.floorArchetype);
-
-      btn.innerHTML = `
-        <div class="mapHitTitle">${label}</div>
-        <div class="mapHitDesc">${statusText}</div>
-      `;
-
-      hit.appendChild(btn);
-    }
-
-    const focusNodeId = delve.currentNodeId ?? (reachable.values().next().value as string | undefined) ?? visibleNodes[0]?.id;
-    const focusPoint = focusNodeId ? pos.get(focusNodeId) : undefined;
-    configureDelvePan(contentWidth, contentHeight, focusPoint);
+    const vm = buildDelveRouteMapVM(delve, {
+      windowBack: 2,
+      windowForward: 8,
+    });
+    renderRouteMap(vm, subText);
   }
 
   function hideMap() {
-    disableMapPan();
+    resetRouteMapFrame();
     setMapGraphFillLayout();
     args.ui.mapEl.root.classList.remove("delveFull");
+    args.ui.mapEl.root.classList.remove("routeMode");
     args.ui.mapEl.root.hidden = true;
     setHudHidden(false);
   }
@@ -2312,6 +2261,8 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function updateHud() {
+    const orbSide = ((getUserSettings() as any).game?.healthOrbSide ?? "left") as "left" | "right";
+    args.hud.vitalsOrbRoot.classList.toggle("isRight", orbSide === "right");
     args.hud.fpsPill.textContent = `FPS: ${Math.round((world as any).fps ?? 0)}`;
     args.hud.palettePill.textContent = `Palette: ${resolveActivePaletteId()}`;
     args.hud.timePill.textContent = formatTimeMMSS(world.time);
@@ -2613,78 +2564,7 @@ export function createGame(args: CreateGameArgs) {
     showMainMenuScreenFromEndOverlay();
   });
 
-  args.ui.mapEl.graphWrap.addEventListener("pointerdown", (e) => {
-    if (!mapPanState.enabled) return;
-    if (e.button !== 0) return;
-    mapPanState.pointerId = e.pointerId;
-    mapPanState.pointerStartX = e.clientX;
-    mapPanState.pointerStartY = e.clientY;
-    mapPanState.panStartX = mapPanState.panX;
-    mapPanState.panStartY = mapPanState.panY;
-    mapPanState.dragging = false;
-    mapPanState.didDrag = false;
-  });
-
-  args.ui.mapEl.graphWrap.addEventListener("pointermove", (e) => {
-    if (!mapPanState.enabled) return;
-    if (mapPanState.pointerId !== e.pointerId) return;
-
-    if (!mapPanState.dragging) {
-      mapPanState.dragging = hasDragExceededThreshold(
-        mapPanState.pointerStartX,
-        mapPanState.pointerStartY,
-        e.clientX,
-        e.clientY,
-        MAP_DRAG_THRESHOLD_PX,
-      );
-      if (!mapPanState.dragging) return;
-      mapPanState.didDrag = true;
-      args.ui.mapEl.graphWrap.setPointerCapture(e.pointerId);
-    }
-    e.preventDefault();
-
-    const dx = e.clientX - mapPanState.pointerStartX;
-    const dy = e.clientY - mapPanState.pointerStartY;
-    const clamped = clampPan(
-      { x: mapPanState.panStartX + dx, y: mapPanState.panStartY + dy },
-      mapPanState.bounds,
-    );
-    mapPanState.panX = clamped.x;
-    mapPanState.panY = clamped.y;
-    applyMapPanTransform();
-  });
-
-  const endMapDrag = (pointerId: number) => {
-    if (mapPanState.pointerId !== pointerId) return;
-    mapPanState.pointerId = null;
-    mapPanState.suppressNextClick = mapPanState.didDrag;
-    mapPanState.didDrag = false;
-    mapPanState.dragging = false;
-    applyMapPanTransform();
-  };
-
-  args.ui.mapEl.graphWrap.addEventListener("pointerup", (e) => {
-    endMapDrag(e.pointerId);
-    if (args.ui.mapEl.graphWrap.hasPointerCapture(e.pointerId)) {
-      args.ui.mapEl.graphWrap.releasePointerCapture(e.pointerId);
-    }
-  });
-  args.ui.mapEl.graphWrap.addEventListener("pointercancel", (e) => {
-    endMapDrag(e.pointerId);
-    if (args.ui.mapEl.graphWrap.hasPointerCapture(e.pointerId)) {
-      args.ui.mapEl.graphWrap.releasePointerCapture(e.pointerId);
-    }
-  });
-  args.ui.mapEl.graphWrap.addEventListener("lostpointercapture", (e) => {
-    endMapDrag(e.pointerId);
-  });
-
   args.ui.mapEl.root.addEventListener("click", (e) => {
-    if (mapPanState.suppressNextClick) {
-      mapPanState.suppressNextClick = false;
-      e.preventDefault();
-      return;
-    }
     const el = e.target as HTMLElement;
     const btn = el.closest("button") as HTMLButtonElement | null;
     if (!btn) return;

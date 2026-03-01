@@ -5,6 +5,7 @@ import { createLoadingController } from "./game/app/loadingFlow";
 import { renderLoadingScreen } from "./game/app/loadingScreen";
 import { collectFloorDependencies } from "./game/loading/dependencyCollector";
 import { primeAudio } from "./game/audio/audioManager";
+import { setMusicMuted, setMusicVolume, setSfxMuted, setSfxVolume } from "./game/audio/audioSettings";
 import { resolveActivePaletteId } from "./game/render/activePalette";
 import { getSpriteByIdForPalette } from "./engine/render/sprites/renderSprites";
 import { defaultPixelScaleForViewport, resizeCanvasPixelPerfect } from "./engine/render/pixelPerfect";
@@ -20,6 +21,7 @@ import {
 import { getUserSettings, initUserSettings, updateUserSettings } from "./userSettings";
 import { mountPauseMenu } from "./ui/pause/pauseMenu";
 import { togglePause } from "./game/app/pauseController";
+import { mountSettingsPanel } from "./ui/settings/settingsPanel";
 
 type DevSettingsUiController = {
   open(): void;
@@ -604,6 +606,9 @@ function installDevSettingsUi(): DevSettingsUiController {
     renderPerfCountersInput.checked = s.render.renderPerfCountersEnabled;
     paletteSwapInput.checked = s.render.paletteSwapEnabled;
     paletteIdSelect.value = s.render.paletteId;
+    const isUserMode = !!(s as any).game?.userModeEnabled;
+    debugLayerToggleBtn.hidden = isUserMode;
+    if (isUserMode) setOpen(false);
   };
 
   const setOpen = (open: boolean) => {
@@ -618,6 +623,10 @@ function installDevSettingsUi(): DevSettingsUiController {
   debugLayerToggleBtn.addEventListener("click", () => {
     setOpen(layer.hidden);
   });
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    window.addEventListener("ratgame:settings-changed", syncFromSettings as EventListener);
+  }
+  syncFromSettings();
 
   return {
     open: () => setOpen(true),
@@ -635,6 +644,7 @@ async function bootstrap() {
     "mapMenu",
     "innkeeperMenu",
     "settingsMenu",
+    "creditsMenu",
     "menu",
     "hud",
     "vitalsOrbRoot",
@@ -649,6 +659,14 @@ async function bootstrap() {
   }
 
   await initUserSettings();
+  const audioPrefs = getUserSettings().audio;
+  const master = Math.max(0, Math.min(1, Number.isFinite(audioPrefs.masterVolume) ? audioPrefs.masterVolume : 1));
+  const music = Math.max(0, Math.min(1, Number.isFinite(audioPrefs.musicVolume) ? audioPrefs.musicVolume : 0.6));
+  const sfx = Math.max(0, Math.min(1, Number.isFinite(audioPrefs.sfxVolume) ? audioPrefs.sfxVolume : 1));
+  setMusicMuted(!!audioPrefs.musicMuted);
+  setSfxMuted(!!audioPrefs.sfxMuted);
+  setMusicVolume(master * music);
+  setSfxVolume(master * sfx);
   const hasPersistedSettings = !!localStorage.getItem("ratgame:userSettings");
   const isPhoneLikeViewport = window.matchMedia("(pointer: coarse)").matches
     && (window.matchMedia("(max-width: 768px)").matches || window.matchMedia("(max-height: 500px)").matches);
@@ -658,6 +676,26 @@ async function bootstrap() {
   const devSettingsUi = installDevSettingsUi();
 
   const refs = getDomRefs();
+  const mainSettingsPanel = mountSettingsPanel({
+    host: refs.mainSettingsHostEl,
+    initialTab: "GAME",
+    onUserModeChanged: () => {
+      window.dispatchEvent(new Event("ratgame:settings-changed"));
+    },
+    onPerformanceModeChanged: () => {
+      window.dispatchEvent(new Event("resize"));
+    },
+  });
+  window.addEventListener("ratgame:settings-changed", () => {
+    mainSettingsPanel.refresh();
+  });
+  refs.settingsBtn.addEventListener("click", () => {
+    mainSettingsPanel.refresh();
+  });
+  window.addEventListener("ratgame:open-dev-tools", () => {
+    mainSettingsPanel.refresh();
+    devSettingsUi.open();
+  });
   const canvas = refs.canvas;
   const uiCanvas = refs.uiCanvas;
   const rawCtx = canvas.getContext("2d");
@@ -729,6 +767,7 @@ async function bootstrap() {
       refs.mapMenuEl.hidden = true;
       refs.innkeeperMenuEl.hidden = true;
       refs.settingsMenuEl.hidden = true;
+      refs.creditsMenuEl.hidden = true;
       refs.ui.menuEl.hidden = true;
       refs.hud.root.hidden = true;
       refs.hud.vitalsOrbRoot.hidden = true;
@@ -756,6 +795,7 @@ async function bootstrap() {
         refs.mapMenuEl.hidden = true;
         refs.innkeeperMenuEl.hidden = true;
         refs.settingsMenuEl.hidden = true;
+        refs.creditsMenuEl.hidden = true;
         return;
       }
 
@@ -766,6 +806,7 @@ async function bootstrap() {
         || !refs.mapMenuEl.hidden
         || !refs.innkeeperMenuEl.hidden
         || !refs.settingsMenuEl.hidden
+        || !refs.creditsMenuEl.hidden
         || !refs.ui.mapEl.root.hidden;
 
       if (!hasVisibleMenuScreen) {
@@ -781,6 +822,7 @@ async function bootstrap() {
       refs.mapMenuEl.hidden = true;
       refs.innkeeperMenuEl.hidden = true;
       refs.settingsMenuEl.hidden = true;
+      refs.creditsMenuEl.hidden = true;
       refs.ui.menuEl.hidden = runState !== RunState.PAUSED;
       refs.hud.root.hidden = false;
       refs.hud.vitalsOrbRoot.hidden = runState === RunState.PAUSED;

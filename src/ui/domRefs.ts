@@ -19,6 +19,10 @@ type LevelupRefs = {
 
 type MapRefs = {
     root: HTMLDivElement;
+    topBar: HTMLDivElement;
+    legend: HTMLDivElement;
+    infoPanel: HTMLDivElement;
+    depthLabel: HTMLDivElement;
     sub: HTMLDivElement;
     graphWrap: HTMLDivElement;
     graphContent: HTMLDivElement;
@@ -74,11 +78,20 @@ export type DomRefs = {
     startRunBtn: HTMLButtonElement;
     deterministicRunBtn: HTMLButtonElement;
     mapsBtn: HTMLButtonElement;
+    diagnosticsBtn: HTMLButtonElement | null;
+    creditsBtn: HTMLButtonElement | null;
+    devTerminalSectionEl: HTMLDivElement | null;
+    devTerminalToggleBtn: HTMLButtonElement | null;
+    devTerminalItemsEl: HTMLDivElement | null;
     innkeeperBtn: HTMLButtonElement;
     settingsBtn: HTMLButtonElement;
     likeSubBtn: HTMLButtonElement;
     characterSelectEl: HTMLDivElement;
     characterChoicesEl: HTMLDivElement;
+    characterDetailEl: HTMLDivElement | null;
+    characterDetailNameEl: HTMLElement | null;
+    characterDetailWeaponEl: HTMLElement | null;
+    characterDetailDescEl: HTMLDivElement | null;
     characterBackBtn: HTMLButtonElement;
     characterContinueBtn: HTMLButtonElement;
     mapMenuEl: HTMLDivElement;
@@ -89,7 +102,10 @@ export type DomRefs = {
     innkeeperMenuEl: HTMLDivElement;
     innkeeperBackBtn: HTMLButtonElement;
     settingsMenuEl: HTMLDivElement;
+    mainSettingsHostEl: HTMLDivElement;
     settingsBackBtn: HTMLButtonElement;
+    creditsMenuEl: HTMLDivElement;
+    creditsBackBtn: HTMLButtonElement;
     menuEl: HTMLDivElement;
     startBtn: HTMLButtonElement;
     weaponChoicesEl: HTMLDivElement;
@@ -109,6 +125,10 @@ export type DomRefs = {
     levelupChoices: HTMLDivElement;
     levelupSub: HTMLDivElement;
     mapRoot: HTMLDivElement;
+    mapTopBar: HTMLDivElement;
+    mapLegend: HTMLDivElement;
+    mapInfoPanel: HTMLDivElement;
+    mapDepthLabel: HTMLDivElement;
     mapSub: HTMLDivElement;
     mapGraphWrap: HTMLDivElement;
     mapGraphContent: HTMLDivElement;
@@ -161,12 +181,21 @@ export function getDomRefs(): DomRefs {
     const startRunBtn = getEl<HTMLButtonElement>("startRunBtn");
     const deterministicRunBtn = getEl<HTMLButtonElement>("deterministicRunBtn");
     const mapsBtn = getEl<HTMLButtonElement>("mapsBtn");
+    const diagnosticsBtn = document.getElementById("diagnosticsBtn") as HTMLButtonElement | null;
+    const creditsBtn = document.getElementById("creditsBtn") as HTMLButtonElement | null;
+    const devTerminalSectionEl = document.getElementById("devTerminalSection") as HTMLDivElement | null;
+    const devTerminalToggleBtn = document.getElementById("devTerminalToggleBtn") as HTMLButtonElement | null;
+    const devTerminalItemsEl = document.getElementById("devTerminalItems") as HTMLDivElement | null;
     const innkeeperBtn = getEl<HTMLButtonElement>("innkeeperBtn");
     const settingsBtn = getEl<HTMLButtonElement>("settingsBtn");
     const likeSubBtn = getEl<HTMLButtonElement>("likeSubBtn");
 
     const characterSelectEl = getEl<HTMLDivElement>("characterSelect");
     const characterChoicesEl = getEl<HTMLDivElement>("characterChoices");
+    const characterDetailEl = document.getElementById("characterDetail") as HTMLDivElement | null;
+    const characterDetailNameEl = document.getElementById("characterDetailName") as HTMLElement | null;
+    const characterDetailWeaponEl = document.getElementById("characterDetailWeapon") as HTMLElement | null;
+    const characterDetailDescEl = document.getElementById("characterDetailDesc") as HTMLDivElement | null;
     const characterBackBtn = getEl<HTMLButtonElement>("characterBackBtn");
     const characterContinueBtn = getEl<HTMLButtonElement>("characterContinueBtn");
 
@@ -180,7 +209,10 @@ export function getDomRefs(): DomRefs {
     const innkeeperBackBtn = getEl<HTMLButtonElement>("innkeeperBackBtn");
 
     const settingsMenuEl = getEl<HTMLDivElement>("settingsMenu");
+    const mainSettingsHostEl = getEl<HTMLDivElement>("mainSettingsHost");
     const settingsBackBtn = getEl<HTMLButtonElement>("settingsBackBtn");
+    const creditsMenuEl = getEl<HTMLDivElement>("creditsMenu");
+    const creditsBackBtn = getEl<HTMLButtonElement>("creditsBackBtn");
 
     const menuEl = getEl<HTMLDivElement>("menu");
     const startBtn = getEl<HTMLButtonElement>("startBtn");
@@ -229,6 +261,10 @@ export function getDomRefs(): DomRefs {
     const levelupSub = getEl<HTMLDivElement>("luSub");
 
     const mapRoot = getEl<HTMLDivElement>("map");
+    const mapTopBar = getEl<HTMLDivElement>("mapTopBar");
+    const mapLegend = getEl<HTMLDivElement>("mapLegend");
+    const mapInfoPanel = getEl<HTMLDivElement>("mapInfoPanel");
+    const mapDepthLabel = getEl<HTMLDivElement>("mapDepthLabel");
     const mapSub = getEl<HTMLDivElement>("mapSub");
     const mapGraphWrap = getEl<HTMLDivElement>("mapGraphWrap");
     const mapGraphContent = getEl<HTMLDivElement>("mapGraphContent");
@@ -281,6 +317,10 @@ export function getDomRefs(): DomRefs {
         },
         mapEl: {
             root: mapRoot,
+            topBar: mapTopBar,
+            legend: mapLegend,
+            infoPanel: mapInfoPanel,
+            depthLabel: mapDepthLabel,
             sub: mapSub,
             graphWrap: mapGraphWrap,
             graphContent: mapGraphContent,
@@ -303,11 +343,20 @@ export function getDomRefs(): DomRefs {
         startRunBtn,
         deterministicRunBtn,
         mapsBtn,
+        diagnosticsBtn,
+        creditsBtn,
+        devTerminalSectionEl,
+        devTerminalToggleBtn,
+        devTerminalItemsEl,
         innkeeperBtn,
         settingsBtn,
         likeSubBtn,
         characterSelectEl,
         characterChoicesEl,
+        characterDetailEl,
+        characterDetailNameEl,
+        characterDetailWeaponEl,
+        characterDetailDescEl,
         characterBackBtn,
         characterContinueBtn,
         mapMenuEl,
@@ -318,7 +367,10 @@ export function getDomRefs(): DomRefs {
         innkeeperMenuEl,
         innkeeperBackBtn,
         settingsMenuEl,
+        mainSettingsHostEl,
         settingsBackBtn,
+        creditsMenuEl,
+        creditsBackBtn,
         menuEl,
         startBtn,
         weaponChoicesEl,
@@ -338,6 +390,10 @@ export function getDomRefs(): DomRefs {
         levelupChoices,
         levelupSub,
         mapRoot,
+        mapTopBar,
+        mapLegend,
+        mapInfoPanel,
+        mapDepthLabel,
         mapSub,
         mapGraphWrap,
         mapGraphContent,

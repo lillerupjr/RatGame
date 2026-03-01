@@ -36,18 +36,39 @@ export type RenderSettings = {
   pressureAt120Sec: number;
 };
 
+export type GameSettings = {
+  userModeEnabled: boolean;
+  healthOrbSide: "left" | "right";
+};
+
+export type AudioPreferenceSettings = {
+  masterVolume: number;
+  musicVolume: number;
+  sfxVolume: number;
+  musicMuted: boolean;
+  sfxMuted: boolean;
+};
+
 export type UserSettings = {
   debug: DebugSettings;
+  game: GameSettings;
   render: RenderSettings;
+  audio: AudioPreferenceSettings;
 };
 
 export type UserSettingsPatch = {
   debug?: Partial<UserSettings["debug"]>;
+  game?: Partial<UserSettings["game"]>;
   render?: Partial<UserSettings["render"]>;
+  audio?: Partial<UserSettings["audio"]>;
 };
 
 export const DEFAULT_SETTINGS: UserSettings = {
   debug: { ...DEFAULT_DEBUG_SETTINGS },
+  game: {
+    userModeEnabled: true,
+    healthOrbSide: "left",
+  },
   render: {
     entityShadowsDisable: false,
     entityAnchorsEnabled: false,
@@ -57,6 +78,13 @@ export const DEFAULT_SETTINGS: UserSettings = {
     paletteSwapEnabled: false,
     paletteId: "db32",
     ...DEFAULT_SPAWN_TUNING,
+  },
+  audio: {
+    masterVolume: 1,
+    musicVolume: 0.6,
+    sfxVolume: 1,
+    musicMuted: false,
+    sfxMuted: false,
   },
 };
 
@@ -72,7 +100,9 @@ function mergeSettings(
 
   const patchAny = patch as any;
   const debugPatch: Record<string, unknown> = { ...(patchAny.debug ?? {}) };
+  const gamePatch: Record<string, unknown> = { ...(patchAny.game ?? {}) };
   const renderPatch: Record<string, unknown> = { ...(patchAny.render ?? {}) };
+  const audioPatch: Record<string, unknown> = { ...(patchAny.audio ?? {}) };
   const neutralBirdPatch = (debugPatch.neutralBirdAI as Record<string, unknown> | undefined) ?? undefined;
   if (
     neutralBirdPatch
@@ -96,9 +126,17 @@ function mergeSettings(
       ...base.debug,
       ...(debugPatch as Partial<UserSettings["debug"]>),
     },
+    game: {
+      ...base.game,
+      ...(gamePatch as Partial<UserSettings["game"]>),
+    },
     render: {
       ...base.render,
       ...(renderPatch as Partial<UserSettings["render"]>),
+    },
+    audio: {
+      ...base.audio,
+      ...(audioPatch as Partial<UserSettings["audio"]>),
     },
   };
 }
@@ -162,4 +200,8 @@ export function isPauseDebugCardsEnabled(): boolean {
 
 export function isPauseCsvControlsEnabled(): boolean {
   return !!currentSettings.debug.pauseCsvControls;
+}
+
+export function isUserModeEnabled(): boolean {
+  return !!currentSettings.game.userModeEnabled;
 }

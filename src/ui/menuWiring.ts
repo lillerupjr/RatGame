@@ -5,6 +5,7 @@ import { PLAYABLE_CHARACTERS, type PlayableCharacterId } from "../game/content/p
 import { getPlayerIdleSpriteUrl } from "../engine/render/sprites/playerSprites";
 import { resolveCombatStarterWeaponId } from "../game/combat_mods/content/weapons/characterStarterMap";
 import { getCombatStarterWeaponById } from "../game/combat_mods/content/weapons/starterWeapons";
+import { isUserModeEnabled } from "../userSettings";
 
 type GameApi = {
     previewMap: (mapId?: string) => void;
@@ -64,12 +65,14 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     applyBackground(refs.menuEl, backgroundImageUrl);
     applyBackground(refs.innkeeperMenuEl, backgroundImageUrl);
     applyBackground(refs.settingsMenuEl, backgroundImageUrl);
+    applyBackground(refs.creditsMenuEl, backgroundImageUrl);
     applyBackground(refs.characterSelectEl, backgroundImageUrl);
 
     // Start with undefined (Delve mode) by default, not PROC_ROOMS
     let selectedMapId: string | undefined = refs.startBtn.dataset.map || undefined;
     let selectedCharacterId: PlayableCharacterId | undefined = undefined;
     let pendingStartMode: "DELVE" | "DETERMINISTIC" | "SANDBOX" = "DELVE";
+    let devTerminalExpanded = false;
     const SUPPRESS_CLICK_WINDOW_MS = 450;
     const SUPPRESS_CLICK_RADIUS_PX = 40;
     let suppressClickUntilMs = 0;
@@ -149,6 +152,64 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
             }
             action();
         });
+    };
+
+    const isPhoneLayout = (): boolean => {
+        if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+        return window.matchMedia("(max-width: 720px)").matches;
+    };
+
+    const syncDevTerminalLayout = () => {
+        const devSection = refs.devTerminalSectionEl;
+        const devToggleBtn = refs.devTerminalToggleBtn;
+        const devItems = refs.devTerminalItemsEl;
+        if (!devSection || !devItems || !devToggleBtn) return;
+
+        const phoneLayout = isPhoneLayout();
+        devSection.classList.toggle("isPhoneLayout", phoneLayout);
+
+        if (!phoneLayout) {
+            devToggleBtn.hidden = true;
+            devItems.hidden = false;
+            devTerminalExpanded = false;
+            devToggleBtn.textContent = "DEV TERMINAL ▸";
+            devToggleBtn.setAttribute("aria-expanded", "false");
+            return;
+        }
+
+        devToggleBtn.hidden = false;
+        devItems.hidden = !devTerminalExpanded;
+        devToggleBtn.textContent = devTerminalExpanded ? "DEV TERMINAL ▾" : "DEV TERMINAL ▸";
+        devToggleBtn.setAttribute("aria-expanded", devTerminalExpanded ? "true" : "false");
+    };
+
+    const applyUserModeMenuGating = () => {
+        const isUserMode = isUserModeEnabled();
+        if (refs.devTerminalSectionEl) refs.devTerminalSectionEl.hidden = isUserMode;
+        refs.deterministicRunBtn.hidden = isUserMode;
+        refs.mapsBtn.hidden = isUserMode;
+        if (refs.diagnosticsBtn) refs.diagnosticsBtn.hidden = isUserMode;
+        if (!isUserMode) syncDevTerminalLayout();
+        if (isUserMode) {
+            devTerminalExpanded = false;
+            if (refs.devTerminalItemsEl) refs.devTerminalItemsEl.hidden = true;
+            if (refs.devTerminalToggleBtn) {
+                refs.devTerminalToggleBtn.textContent = "DEV TERMINAL ▸";
+                refs.devTerminalToggleBtn.setAttribute("aria-expanded", "false");
+            }
+        }
+
+        if (isUserMode && pendingStartMode !== "DELVE") {
+            pendingStartMode = "DELVE";
+            selectedMapId = undefined;
+            delete refs.startBtn.dataset.map;
+            updateMenuSubline();
+        }
+
+        if (isUserMode && !refs.mapMenuEl.hidden) {
+            refs.mapMenuEl.hidden = true;
+            refs.mainMenuEl.hidden = false;
+        }
     };
 
     function getSelectedMapLabel(): string {
@@ -246,10 +307,23 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
 
     buildCharacterPicker();
     buildMapPicker();
+    applyUserModeMenuGating();
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+        window.addEventListener("ratgame:settings-changed", applyUserModeMenuGating as EventListener);
+        window.addEventListener("resize", syncDevTerminalLayout as EventListener);
+    }
+
+    if (refs.devTerminalToggleBtn) {
+        bindActivate(refs.devTerminalToggleBtn, () => {
+            devTerminalExpanded = !devTerminalExpanded;
+            syncDevTerminalLayout();
+        });
+    }
 
     // Welcome screen -> Main menu
     bindActivate(refs.continueBtn, () => {
         refs.welcomeScreen.hidden = true;
+        applyUserModeMenuGating();
         refs.mainMenuEl.hidden = false;
     });
 
@@ -277,6 +351,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     // Character selection -> Main menu
     bindActivate(refs.characterBackBtn, () => {
         refs.characterSelectEl.hidden = true;
+        applyUserModeMenuGating();
         refs.mainMenuEl.hidden = false;
     });
 
@@ -304,6 +379,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
 
     bindActivate(refs.mapBackBtn, () => {
         refs.mapMenuEl.hidden = true;
+        applyUserModeMenuGating();
         refs.mainMenuEl.hidden = false;
     });
 
@@ -323,6 +399,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     // Innkeeper -> Main menu
     bindActivate(refs.innkeeperBackBtn, () => {
         refs.innkeeperMenuEl.hidden = true;
+        applyUserModeMenuGating();
         refs.mainMenuEl.hidden = false;
     });
 
@@ -332,14 +409,36 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         refs.settingsMenuEl.hidden = false;
     });
 
+    // Main menu -> Credits
+    if (refs.creditsBtn) {
+        bindActivate(refs.creditsBtn, () => {
+            refs.mainMenuEl.hidden = true;
+            refs.creditsMenuEl.hidden = false;
+        });
+    }
+
     // Settings -> Main menu
     bindActivate(refs.settingsBackBtn, () => {
         refs.settingsMenuEl.hidden = true;
+        applyUserModeMenuGating();
         refs.mainMenuEl.hidden = false;
     });
 
-    // Like & Subscribe button
-    bindActivate(refs.likeSubBtn, () => {
-        window.open("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "_blank");
+    // Credits -> Main menu
+    bindActivate(refs.creditsBackBtn, () => {
+        refs.creditsMenuEl.hidden = true;
+        applyUserModeMenuGating();
+        refs.mainMenuEl.hidden = false;
     });
+
+    // Dev terminal -> Diagnostics
+    if (refs.diagnosticsBtn) {
+        bindActivate(refs.diagnosticsBtn, () => {
+            refs.mainMenuEl.hidden = true;
+            refs.settingsMenuEl.hidden = false;
+            if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+                window.dispatchEvent(new Event("ratgame:open-dev-tools"));
+            }
+        });
+    }
 }

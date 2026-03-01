@@ -5,6 +5,266 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
 }
+
+/* Pause menu overhaul layout */
+.pausePanel.pausePanelNav {
+  padding: 0;
+}
+
+.pauseNavLayout {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 0;
+}
+
+.pauseModeNav {
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(5, 5, 9, 0.45);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.pauseNavBtn {
+  width: 100%;
+  min-height: 42px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 800;
+  text-align: left;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.pauseNavBtn.active {
+  background: rgba(110, 180, 255, 0.22);
+  border-color: rgba(160, 220, 255, 0.74);
+}
+
+.pauseModeContent {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pauseModePanel {
+  height: 100%;
+  overflow-y: auto;
+  padding: 14px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.pauseSectionTitle {
+  margin: 0 0 10px 0;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.pauseSettingsHost {
+  max-width: 960px;
+  padding: 8px;
+}
+
+.pauseOwnedCardsList {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pauseOwnedCardRow {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  padding: 10px;
+  cursor: pointer;
+}
+
+.pauseOwnedCardRow.active {
+  border-color: rgba(170, 230, 255, 0.85);
+  background: rgba(80, 140, 210, 0.22);
+}
+
+.pauseOwnedCardMain {
+  min-width: 0;
+}
+
+.pauseOwnedCardName {
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.pauseOwnedCardSummary {
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: 0.86;
+  line-height: 1.3;
+}
+
+.pauseOwnedCardMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pauseOwnedTier,
+.pauseOwnedStack {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.pauseOwnedCardDetail {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 12px;
+}
+
+.pauseOwnedCardDetail h4 {
+  margin: 0 0 6px 0;
+  font-size: 18px;
+}
+
+.pauseMetaHeader {
+  margin-top: 8px;
+  font-weight: 800;
+}
+
+.pauseOwnedModList {
+  margin: 6px 0 0 16px;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.pauseSectionScroll {
+  display: grid;
+  gap: 8px;
+}
+
+.pauseInlineTabs {
+  display: inline-flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pauseInlineTabBtn {
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-weight: 800;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.pauseInlineTabBtn.active {
+  border-color: rgba(160, 220, 255, 0.78);
+  background: rgba(80, 140, 210, 0.24);
+}
+
+.pauseTuningRow {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) 52px;
+  gap: 10px;
+  align-items: center;
+}
+
+.pauseTuningRow span:first-child {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pauseTuningValue {
+  font-size: 12px;
+  font-weight: 900;
+  text-align: right;
+  opacity: 0.9;
+}
+
+.pauseInlineAction {
+  width: fit-content;
+  min-width: 200px;
+  margin-top: 4px;
+}
+
+@media (max-width: 920px) {
+  .pauseNavLayout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .pauseModeNav {
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    padding: 10px;
+  }
+
+  .pauseNavBtn {
+    min-width: 150px;
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 768px) {
+  .pauseSectionTitle {
+    font-size: 20px;
+  }
+
+  .pauseModePanel {
+    padding: 10px;
+  }
+
+  .pauseOwnedCardRow {
+    padding: 9px;
+  }
+
+  .pauseOwnedCardName {
+    font-size: 14px;
+  }
+
+  .pauseOwnedCardSummary {
+    font-size: 11px;
+  }
+
+  .pauseOwnedCardMeta {
+    gap: 6px;
+  }
+
+  .pauseTuningRow {
+    grid-template-columns: 90px minmax(0, 1fr) 44px;
+    gap: 8px;
+  }
+
+  .pauseInlineAction {
+    width: 100%;
+  }
+}
 #c, #ui { position: fixed; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; }
 #c { z-index: 0; }
 #ui { z-index: 1; pointer-events: none; }
@@ -34,6 +294,12 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   z-index: 7;
   transform: scale(1.5);
   transform-origin: bottom left;
+}
+
+#vitalsOrbRoot.isRight {
+  left: auto;
+  right: calc(16px + var(--safe-right));
+  transform-origin: bottom right;
 }
 
 #vitalsOrbRoot.hasMomentum {
@@ -634,7 +900,159 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 #innkeeperMenu .panel, #settingsMenu .panel { width: min(560px, 92vw); padding: 30px; border-radius: 20px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
 #innkeeperMenu .title, #settingsMenu .title { font-size: 28px; font-weight: 900; margin-bottom: 8px; text-align: center; }
 #innkeeperMenu .subline, #settingsMenu .subline { opacity: 0.85; margin-bottom: 20px; font-size: 14px; text-align: center; }
-#innkeeperMenu button, #settingsMenu button { margin-top: 14px; width: 100%; padding: 12px 14px; border-radius: 12px; border: 0; cursor: pointer; font-weight: 800; background: rgba(255,255,255,0.16); color: #fff; }
+#innkeeperMenu > .panel > button, #settingsMenu > .panel > button {
+  margin-top: 14px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 0;
+  cursor: pointer;
+  font-weight: 800;
+  background: rgba(255,255,255,0.16);
+  color: #fff;
+}
+
+#creditsMenu { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.75); z-index: 4; }
+#creditsMenu .panel { width: min(560px, 92vw); padding: 30px; border-radius: 20px; background: rgba(255,255,255,0.06); color: #eaeaf2; font-family: ui-sans-serif, system-ui; }
+#creditsMenu .title { font-size: 28px; font-weight: 900; margin-bottom: 8px; text-align: center; }
+#creditsMenu .subline { opacity: 0.85; margin-bottom: 18px; font-size: 14px; text-align: center; }
+#creditsMenu .creditsBody { padding: 14px 12px; border-radius: 12px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.12); line-height: 1.45; text-align: center; }
+#creditsMenu button { margin-top: 14px; width: 100%; padding: 12px 14px; border-radius: 12px; border: 0; cursor: pointer; font-weight: 800; background: rgba(255,255,255,0.16); color: #fff; }
+
+#mainSettingsHost {
+  margin-bottom: 16px;
+  padding: 8px 4px;
+}
+
+.settingsPanelRoot {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settingsTabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.settingsTabBtn {
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.09);
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.settingsTabBtn.active {
+  background: rgba(110,180,255,0.24);
+  border-color: rgba(160,220,255,0.72);
+}
+
+.settingsBody {
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 12px;
+  background: rgba(0,0,0,0.2);
+  padding: 16px;
+}
+
+.settingsCategoryPanel {
+  display: grid;
+  gap: 10px;
+}
+
+.settingsCategoryTitle {
+  margin: 0 0 2px 0;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.settingsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settingsRowLabelWrap {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.settingsRowLabel {
+  font-size: 14px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.95);
+}
+
+.settingsRowHelper {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.3;
+  color: rgba(255,255,255,0.72);
+}
+
+.settingsSelect {
+  min-width: 120px;
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(18,18,24,0.95);
+  color: #fff;
+  padding: 0 8px;
+}
+
+.settingsToggle {
+  width: 20px;
+  height: 20px;
+}
+
+.settingsSegment {
+  display: inline-flex;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.settingsSegmentBtn {
+  border: 0;
+  background: transparent;
+  color: rgba(255,255,255,0.92);
+  font-weight: 800;
+  min-width: 72px;
+  height: 34px;
+  cursor: pointer;
+}
+
+.settingsSegmentBtn.active {
+  background: rgba(255,255,255,0.2);
+}
+
+.settingsSliderRow {
+  align-items: center;
+}
+
+.settingsSliderWrap {
+  min-width: 170px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settingsSlider {
+  flex: 1 1 auto;
+}
+
+.settingsSliderValue {
+  min-width: 48px;
+  text-align: right;
+  font-weight: 800;
+  font-size: 12px;
+  color: rgba(255,255,255,0.85);
+}
 
 #welcomeScreen button,
 #mainMenu button,
@@ -709,6 +1127,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .pauseTitle {
@@ -717,6 +1136,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   letter-spacing: 0.2px;
 }
 
+.pauseHeaderActions,
 .pauseHeaderButtons {
   display: flex;
   gap: 12px;
@@ -737,11 +1157,87 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .pauseBtn:hover { background: rgba(255, 255, 255, 0.16); }
 
+.pauseActionResume {
+  background: rgba(42, 148, 79, 0.3);
+  border-color: rgba(80, 200, 120, 0.58);
+}
+.pauseActionResume:hover {
+  background: rgba(56, 168, 94, 0.4);
+}
+
+.pauseActionQuit {
+  background: rgba(195, 45, 45, 0.32);
+  border-color: rgba(235, 95, 95, 0.62);
+}
+.pauseActionQuit:hover {
+  background: rgba(220, 60, 60, 0.42);
+}
+
+.pauseActionDev {
+  background: rgba(80, 124, 224, 0.28);
+  border-color: rgba(120, 170, 255, 0.56);
+}
+.pauseActionDev:hover {
+  background: rgba(98, 146, 255, 0.4);
+}
+
 .pauseQuit {
   background: rgba(220, 60, 60, 0.25);
   border-color: rgba(220, 60, 60, 0.35);
 }
 .pauseQuit:hover { background: rgba(220, 60, 60, 0.32); }
+
+.pauseConfirmOverlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 5;
+  padding: 16px;
+}
+
+.pauseConfirmDialog {
+  width: min(440px, 92vw);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(18, 18, 24, 0.98);
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.pauseConfirmDialog h4 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.pauseConfirmDialog p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.84);
+}
+
+.pauseConfirmActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pauseConfirmCancel {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.pauseConfirmAccept {
+  background: rgba(195, 45, 45, 0.35);
+  border-color: rgba(235, 95, 95, 0.62);
+}
+
+.pauseConfirmAccept:hover {
+  background: rgba(220, 60, 60, 0.46);
+}
 
 /* Main grid */
 .pauseGrid {
@@ -1062,6 +1558,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
     flex-direction: column;
     align-items: stretch;
   }
+  .pauseHeaderActions,
   .pauseHeaderButtons {
     justify-content: stretch;
   }
@@ -1500,6 +1997,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   #characterSelect .panel,
   #mapMenu .panel,
   #innkeeperMenu .panel,
+  #creditsMenu .panel,
   #settingsMenu .panel,
   #menu .panel {
     width: min(96vw, 560px);
@@ -1519,8 +2017,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   #mainMenu .menuFooter button,
   #mapMenu .mapMenuActions button,
   #characterSelect .characterActions button,
-  #innkeeperMenu button,
-  #settingsMenu button,
+  #innkeeperMenu > .panel > button,
+  #settingsMenu > .panel > button,
   #menu button#startBtn {
     min-height: 44px;
     padding: 10px 14px;
@@ -1530,6 +2028,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   #characterSelect .title,
   #mapMenu .title,
   #innkeeperMenu .title,
+  #creditsMenu .title,
   #settingsMenu .title {
     font-size: 24px;
     margin-bottom: 10px;
@@ -1558,6 +2057,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   #mapMenu .subline,
   #characterSelect .subline,
   #innkeeperMenu .subline,
+  #creditsMenu .subline,
   #settingsMenu .subline,
   #menu .subline {
     font-size: 13px;
@@ -1617,6 +2117,34 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   #weaponPickerLabel {
     margin: 10px 0 6px;
     font-size: 14px;
+  }
+
+  .settingsTabs {
+    gap: 6px;
+  }
+
+  .settingsTabBtn {
+    min-height: 42px;
+    font-size: 13px;
+  }
+
+  .settingsBody {
+    padding: 14px;
+  }
+
+  .settingsRow {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .settingsSliderWrap {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .settingsSelect {
+    width: 100%;
   }
 }
 
@@ -1790,6 +2318,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   #characterSelect .panel,
   #mapMenu .panel,
   #innkeeperMenu .panel,
+  #creditsMenu .panel,
   #settingsMenu .panel,
   #menu .panel,
   #map .panel {
@@ -1846,6 +2375,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   #characterSelect .title,
   #mapMenu .title,
   #innkeeperMenu .title,
+  #creditsMenu .title,
   #settingsMenu .title,
   #menu .title {
     font-size: 22px;
@@ -1855,6 +2385,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   #mapMenu .subline,
   #characterSelect .subline,
   #innkeeperMenu .subline,
+  #creditsMenu .subline,
   #settingsMenu .subline,
   #menu .subline {
     font-size: 12px;
@@ -1942,6 +2473,12 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
     transform: scale(1.1);
   }
 
+  #vitalsOrbRoot.isRight {
+    left: auto;
+    right: calc(8px + var(--safe-right));
+    bottom: calc(132px + var(--safe-bottom));
+  }
+
   #interactPrompt {
     max-width: calc(100vw - 24px);
     font-size: 12px;
@@ -2003,12 +2540,14 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
     min-width: 0;
   }
 
+  .pauseHeaderActions,
   .pauseHeaderButtons {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
 
+  .pauseHeaderActions .pauseBtn,
   .pauseHeaderButtons .pauseBtn {
     width: 100%;
   }
@@ -2095,6 +2634,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
     font-size: 19px;
   }
 
+  .pauseHeaderActions,
   .pauseHeaderButtons {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
@@ -2151,5 +2691,648 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
   .pauseDebugLayerBody {
     gap: 6px;
+  }
+}
+
+/* Route map shell (StS-style) */
+#map.routeMode {
+  padding: 0;
+  background:
+    radial-gradient(120% 90% at 50% -20%, rgba(80, 108, 168, 0.22), transparent 52%),
+    rgba(5, 8, 14, 0.9);
+}
+
+#map.routeMode .panel {
+  width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  border-radius: 0;
+  border: 0;
+  padding: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  background:
+    linear-gradient(180deg, rgba(18, 22, 36, 0.98), rgba(8, 11, 20, 0.98));
+  box-shadow: none;
+  overflow: hidden;
+}
+
+#map.routeMode #mapTopBar {
+  padding: calc(10px + var(--safe-top)) 14px 8px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(12, 16, 28, 0.94);
+}
+
+#map.routeMode .title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+}
+
+#map.routeMode .sub {
+  margin: 4px 0 10px;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+#map.routeMode #mapLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#map.routeMode .routeLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+#map.routeMode .routeLegendIcon {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 900;
+  color: #eaf2ff;
+  background: rgba(16, 20, 34, 0.85);
+}
+
+#map.routeMode .routeLegendItem--survive { border-color: rgba(74, 212, 148, 0.62); }
+#map.routeMode .routeLegendItem--time-trial { border-color: rgba(255, 184, 79, 0.64); }
+#map.routeMode .routeLegendItem--vendor { border-color: rgba(255, 218, 97, 0.66); }
+#map.routeMode .routeLegendItem--heal { border-color: rgba(90, 214, 241, 0.66); }
+#map.routeMode .routeLegendItem--boss-triple { border-color: rgba(255, 95, 95, 0.68); }
+
+#map.routeMode #mapDepthLabel {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: rgba(218, 226, 248, 0.95);
+  background: rgba(10, 14, 24, 0.72);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+#map.routeMode #mapGraphWrap,
+#map.routeMode.delveFull #mapGraphWrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  aspect-ratio: auto;
+  border-radius: 0;
+  border: 0;
+  background: rgba(6, 10, 20, 0.85);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+#map.routeMode #mapGraphWrap.routeScrollable {
+  cursor: auto;
+}
+
+#map.routeMode #mapGraphContent {
+  position: relative;
+  left: 0;
+  top: 0;
+  transform: none;
+  will-change: auto;
+}
+
+#map.routeMode #mapSvg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#map.routeMode #mapHit {
+  position: absolute;
+  inset: 0;
+}
+
+#map.routeMode .routeEdge {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+#map.routeMode .routeEdge--locked {
+  stroke: rgba(158, 168, 194, 0.24);
+}
+
+#map.routeMode .routeEdge--active {
+  stroke: rgba(187, 211, 255, 0.52);
+}
+
+#map.routeMode .routeNode {
+  --route-accent: rgba(184, 198, 225, 0.68);
+  width: 64px;
+  height: 64px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 18px;
+  border: 1px solid var(--route-accent);
+  background:
+    radial-gradient(110% 110% at 30% 20%, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04) 56%),
+    rgba(12, 18, 32, 0.9);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  color: rgba(235, 241, 255, 0.97);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+  transition: transform 100ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+
+#map.routeMode .routeNode:hover:not([disabled]),
+#map.routeMode .routeNode:focus-visible:not([disabled]) {
+  transform: translate(-50%, -50%) scale(1.04);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.42);
+}
+
+#map.routeMode .routeNodeIcon {
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+#map.routeMode .routeNodeText {
+  display: none;
+}
+
+#map.routeMode .routeNode--survive { --route-accent: rgba(74, 212, 148, 0.78); }
+#map.routeMode .routeNode--time-trial { --route-accent: rgba(255, 184, 79, 0.8); }
+#map.routeMode .routeNode--vendor { --route-accent: rgba(255, 218, 97, 0.84); }
+#map.routeMode .routeNode--heal { --route-accent: rgba(90, 214, 241, 0.82); }
+#map.routeMode .routeNode--boss-triple { --route-accent: rgba(255, 95, 95, 0.84); }
+
+#map.routeMode .routeNode--locked {
+  opacity: 0.42;
+  filter: saturate(0.55);
+}
+
+#map.routeMode .routeNode--reachable {
+  box-shadow: 0 0 0 2px rgba(190, 220, 255, 0.18), 0 10px 24px rgba(0, 0, 0, 0.34);
+}
+
+#map.routeMode .routeNode--current {
+  box-shadow: 0 0 0 3px rgba(255, 221, 122, 0.34), 0 14px 28px rgba(0, 0, 0, 0.4);
+}
+
+#map.routeMode .routeNode--completed {
+  opacity: 0.76;
+}
+
+#map.routeMode #mapInfoPanel {
+  min-height: 54px;
+  padding: 8px 14px calc(10px + var(--safe-bottom));
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(10, 14, 24, 0.9);
+  color: rgba(236, 242, 255, 0.96);
+}
+
+#map.routeMode .routeInfoTitle {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+#map.routeMode .routeInfoMeta {
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: 0.84;
+}
+
+@media (max-width: 768px), (max-height: 500px) {
+  #map.routeMode #mapTopBar {
+    padding: calc(8px + var(--safe-top)) 10px 6px 10px;
+  }
+
+  #map.routeMode .title {
+    font-size: 20px;
+  }
+
+  #map.routeMode .sub {
+    margin: 3px 0 8px;
+    font-size: 12px;
+  }
+
+  #map.routeMode #mapLegend {
+    gap: 6px;
+  }
+
+  #map.routeMode .routeLegendItem {
+    min-height: 26px;
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+
+  #map.routeMode #mapDepthLabel {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  #map.routeMode .routeNode {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+  }
+
+  #map.routeMode .routeNodeIcon {
+    font-size: 17px;
+  }
+
+  #map.routeMode #mapInfoPanel {
+    min-height: 50px;
+    padding: 7px 10px calc(8px + var(--safe-bottom));
+  }
+}
+
+/* -------------------------------------------------------------------------
+   MAIN MENU OVERHAUL: SURVEILLANCE TERMINAL
+---------------------------------------------------------------------------*/
+#mainMenu.terminalMenu {
+  --terminal-bg: #07111e;
+  --terminal-bg-2: #0a1628;
+  --terminal-grid: rgba(136, 233, 255, 0.05);
+  --terminal-cyan: #76e8ff;
+  --terminal-cyan-soft: rgba(118, 232, 255, 0.34);
+  --terminal-text: #d9f6ff;
+  --terminal-muted: rgba(190, 226, 235, 0.65);
+  --terminal-dev: #b88bff;
+  --terminal-dev-soft: rgba(184, 139, 255, 0.36);
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(140% 130% at 50% 0%, rgba(23, 58, 84, 0.22), transparent 60%),
+    linear-gradient(160deg, var(--terminal-bg), var(--terminal-bg-2));
+  color: var(--terminal-text);
+  font-family: "IBM Plex Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  letter-spacing: 0.02em;
+  overflow: hidden;
+}
+
+#mainMenu.terminalMenu::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--terminal-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--terminal-grid) 1px, transparent 1px);
+  background-size: 42px 42px;
+}
+
+#mainMenu.terminalMenu::after {
+  content: "";
+  position: absolute;
+  inset: -40% 0 0;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(118, 232, 255, 0) 0%,
+    rgba(118, 232, 255, 0.06) 48%,
+    rgba(118, 232, 255, 0) 100%
+  );
+  transform: translateY(-60%);
+  animation: terminalScanDrift 8s linear infinite;
+}
+
+#mainMenu.terminalMenu .terminalVignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(120% 95% at 50% 45%, transparent 56%, rgba(0, 0, 0, 0.45) 100%);
+}
+
+#mainMenu.terminalMenu .terminalHeader,
+#mainMenu.terminalMenu .terminalBody,
+#mainMenu.terminalMenu .terminalFooter {
+  position: relative;
+  z-index: 1;
+}
+
+#mainMenu.terminalMenu .terminalHeader {
+  min-height: 96px;
+  padding: calc(26px + var(--safe-top)) 56px 16px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+#mainMenu.terminalMenu .terminalBrand h1 {
+  margin: 0;
+  color: var(--terminal-text);
+  font-size: clamp(34px, 4vw, 48px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.08em;
+}
+
+#mainMenu.terminalMenu .terminalSubtitle {
+  margin-top: 9px;
+  font-size: clamp(12px, 1.2vw, 14px);
+  color: var(--terminal-muted);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+
+#mainMenu.terminalMenu .terminalAccentLine {
+  margin-top: 12px;
+  width: min(240px, 45vw);
+  height: 1px;
+  background: linear-gradient(90deg, var(--terminal-cyan), transparent 85%);
+  opacity: 0.88;
+  animation: terminalAccentPulse 4.8s ease-in-out infinite;
+}
+
+#mainMenu.terminalMenu .terminalSignal {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  opacity: 0.78;
+}
+
+#mainMenu.terminalMenu .terminalSignalDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--terminal-cyan);
+  box-shadow: 0 0 10px rgba(118, 232, 255, 0.28);
+  animation: terminalDotPulse 2.2s ease-in-out infinite;
+}
+
+#mainMenu.terminalMenu .terminalSignalBars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 14px;
+}
+
+#mainMenu.terminalMenu .terminalSignalBars i {
+  display: block;
+  width: 2px;
+  background: rgba(118, 232, 255, 0.7);
+  transform-origin: bottom center;
+}
+
+#mainMenu.terminalMenu .terminalSignalBars i:nth-child(1) { height: 7px; animation: terminalBars 1.3s ease-in-out infinite; }
+#mainMenu.terminalMenu .terminalSignalBars i:nth-child(2) { height: 11px; animation: terminalBars 1.3s ease-in-out 0.15s infinite; }
+#mainMenu.terminalMenu .terminalSignalBars i:nth-child(3) { height: 5px; animation: terminalBars 1.3s ease-in-out 0.3s infinite; }
+
+#mainMenu.terminalMenu .terminalBody {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 18px 16px;
+}
+
+#mainMenu.terminalMenu .terminalPanel {
+  width: min(560px, calc(100vw - 64px));
+  border: 1px solid var(--terminal-cyan-soft);
+  background: linear-gradient(180deg, rgba(6, 16, 30, 0.9), rgba(5, 12, 24, 0.92));
+  padding: 24px;
+  transform: translateY(-40px);
+  box-shadow:
+    inset 0 0 0 1px rgba(118, 232, 255, 0.08),
+    0 26px 48px rgba(0, 0, 0, 0.42);
+}
+
+#mainMenu.terminalMenu .terminalAction {
+  position: relative;
+  width: 100%;
+  min-height: 60px;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid rgba(118, 232, 255, 0.24);
+  background: transparent;
+  color: var(--terminal-text);
+  text-align: left;
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out, transform 120ms ease-out;
+}
+
+#mainMenu.terminalMenu .terminalAction::before,
+#mainMenu.terminalMenu .terminalAction::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  border-color: rgba(118, 232, 255, 0.72);
+  opacity: 0;
+  transition: opacity 120ms ease-out, transform 120ms ease-out;
+}
+
+#mainMenu.terminalMenu .terminalAction::before {
+  top: 10px;
+  left: 7px;
+  border-top: 1px solid;
+  border-left: 1px solid;
+  transform: translate(5px, 5px);
+}
+
+#mainMenu.terminalMenu .terminalAction::after {
+  right: 7px;
+  bottom: 10px;
+  border-right: 1px solid;
+  border-bottom: 1px solid;
+  transform: translate(-5px, -5px);
+}
+
+#mainMenu.terminalMenu .terminalAction:hover {
+  background: rgba(118, 232, 255, 0.07);
+  border-bottom-color: rgba(118, 232, 255, 0.56);
+}
+
+#mainMenu.terminalMenu .terminalAction:hover::before,
+#mainMenu.terminalMenu .terminalAction:hover::after,
+#mainMenu.terminalMenu .terminalAction:focus-visible::before,
+#mainMenu.terminalMenu .terminalAction:focus-visible::after {
+  opacity: 1;
+  transform: translate(0, 0);
+}
+
+#mainMenu.terminalMenu .terminalAction:focus-visible {
+  outline: none;
+  background: rgba(118, 232, 255, 0.1);
+}
+
+#mainMenu.terminalMenu .terminalAction:active {
+  transform: translateY(1px);
+  background: rgba(118, 232, 255, 0.16);
+}
+
+#mainMenu.terminalMenu .terminalActionPrimary {
+  background: rgba(118, 232, 255, 0.12);
+  border-bottom-color: rgba(118, 232, 255, 0.44);
+  font-weight: 700;
+}
+
+#mainMenu.terminalMenu .terminalActionPrimary:hover {
+  background: rgba(118, 232, 255, 0.2);
+}
+
+#mainMenu.terminalMenu .terminalDevSection {
+  margin-top: 14px;
+}
+
+#mainMenu.terminalMenu .terminalDevToggle {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: rgba(214, 189, 255, 0.92);
+  text-align: left;
+  padding: 0 10px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+#mainMenu.terminalMenu .terminalDevSeparator {
+  margin: 2px 0 8px;
+  padding: 0 10px;
+  color: rgba(214, 189, 255, 0.9);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+#mainMenu.terminalMenu .terminalDevSeparator::before,
+#mainMenu.terminalMenu .terminalDevSeparator::after {
+  content: "────────";
+  color: rgba(214, 189, 255, 0.52);
+  margin: 0 10px;
+}
+
+#mainMenu.terminalMenu .terminalActionDev {
+  min-height: 54px;
+  color: rgba(224, 200, 255, 0.92);
+  border-bottom-color: rgba(184, 139, 255, 0.25);
+  font-size: 15px;
+  letter-spacing: 0.08em;
+}
+
+#mainMenu.terminalMenu .terminalActionDev::before,
+#mainMenu.terminalMenu .terminalActionDev::after {
+  border-color: rgba(184, 139, 255, 0.8);
+}
+
+#mainMenu.terminalMenu .terminalActionDev:hover,
+#mainMenu.terminalMenu .terminalActionDev:focus-visible {
+  background: rgba(184, 139, 255, 0.12);
+  border-bottom-color: var(--terminal-dev-soft);
+}
+
+#mainMenu.terminalMenu .terminalFooter {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 56px calc(14px + var(--safe-bottom));
+}
+
+#mainMenu.terminalMenu .terminalVersion {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--terminal-muted);
+}
+
+@keyframes terminalScanDrift {
+  0% { transform: translateY(-62%); }
+  100% { transform: translateY(150%); }
+}
+
+@keyframes terminalAccentPulse {
+  0%, 100% { opacity: 0.72; }
+  50% { opacity: 1; }
+}
+
+@keyframes terminalDotPulse {
+  0%, 100% { opacity: 0.46; transform: scale(1); }
+  45% { opacity: 1; transform: scale(1.15); }
+}
+
+@keyframes terminalBars {
+  0%, 100% { opacity: 0.44; transform: scaleY(0.78); }
+  50% { opacity: 1; transform: scaleY(1); }
+}
+
+@media (max-width: 768px) {
+  #mainMenu.terminalMenu .terminalHeader {
+    min-height: 84px;
+    padding: calc(22px + var(--safe-top)) 24px 12px;
+  }
+
+  #mainMenu.terminalMenu .terminalSignal {
+    margin-top: 2px;
+  }
+
+  #mainMenu.terminalMenu .terminalBody {
+    padding: 10px 24px;
+    place-items: start center;
+  }
+
+  #mainMenu.terminalMenu .terminalPanel {
+    width: 100%;
+    max-width: none;
+    transform: translateY(0);
+    padding: 18px 0 4px;
+    border-left: 0;
+    border-right: 0;
+  }
+
+  #mainMenu.terminalMenu .terminalAction {
+    min-height: 72px;
+    font-size: 17px;
+    padding: 0 24px;
+  }
+
+  #mainMenu.terminalMenu .terminalDevSection.isPhoneLayout .terminalDevSeparator {
+    display: none;
+  }
+
+  #mainMenu.terminalMenu .terminalDevSection.isPhoneLayout .terminalDevToggle {
+    display: block;
+    padding: 10px 24px 12px;
+  }
+
+  #mainMenu.terminalMenu .terminalActionDev {
+    min-height: 66px;
+    padding: 0 24px;
+  }
+
+  #mainMenu.terminalMenu .terminalFooter {
+    justify-content: flex-start;
+    padding: 0 24px calc(12px + var(--safe-bottom));
   }
 }
