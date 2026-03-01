@@ -61,53 +61,86 @@ function baseSizeFromMagnitude(value: number): number {
   return 12 + tier * 2;
 }
 
-function resolveDominantDamageColor(ev: EnemyHitEvent): string {
-  const phys = Number.isFinite(ev.dmgPhys) ? Math.max(0, ev.dmgPhys as number) : 0;
-  const fire = Number.isFinite(ev.dmgFire) ? Math.max(0, ev.dmgFire as number) : 0;
-  const chaos = Number.isFinite(ev.dmgChaos) ? Math.max(0, ev.dmgChaos as number) : 0;
-  const isPoisonLike = ev.source === "OTHER";
-  if (phys <= 0 && fire <= 0 && chaos <= 0) return DMG_COLOR_PHYSICAL;
-  if (fire >= chaos && fire >= phys) return DMG_COLOR_FIRE;
-  if (chaos >= fire && chaos >= phys) return isPoisonLike ? DMG_COLOR_POISON : DMG_COLOR_CHAOS;
-  return DMG_COLOR_PHYSICAL;
-}
-
-function spawnDamageTextFromEvent(w: World, ev: EnemyHitEvent | PlayerHitEvent): void {
-  const value = Math.max(1, Math.round(ev.damage ?? 0));
-  if (!(value > 0)) return;
-  let isCrit = false;
-  let isPlayer = false;
-  let color = DMG_COLOR_PHYSICAL;
-  let size = baseSizeFromMagnitude(value);
-  if (ev.type === "ENEMY_HIT") {
-    isCrit = !!ev.isCrit;
-    color = resolveDominantDamageColor(ev);
-    if (isCrit) {
-      const cm = Math.max(
-        1,
-        Number.isFinite((ev as any).critMult)
-          ? ((ev as any).critMult as number)
-          : (Number.isFinite(w.critMultiplier) ? w.critMultiplier : 2),
-      );
-      const critScale = Math.pow(cm, 0.35);
-      size = Math.round(size * critScale);
-    }
-  } else {
-    isPlayer = true;
-    color = DMG_COLOR_PLAYER;
-  }
-  size = Math.max(12, Math.min(32, size));
-  const jitter = nextFloatJitter(w.uiFloatTextSeed | 0);
-  w.uiFloatTextSeed = jitter.nextSeed;
-
-  w.floatTextX.push(ev.x + jitter.offsetX);
-  w.floatTextY.push(ev.y + jitter.offsetY);
+function pushFloatText(
+  w: World,
+  x: number,
+  y: number,
+  value: number,
+  color: string,
+  size: number,
+  isCrit: boolean,
+  isPlayer: boolean,
+): void {
+  w.floatTextX.push(x);
+  w.floatTextY.push(y);
   w.floatTextValue.push(value);
   w.floatTextColor.push(color);
   w.floatTextSize.push(size);
   w.floatTextTtl.push(0.8);
   w.floatTextIsCrit.push(isCrit);
   w.floatTextIsPlayer.push(isPlayer);
+}
+
+function spawnEnemyDamageTextSplit(w: World, ev: EnemyHitEvent): void {
+  const phys = Number.isFinite(ev.dmgPhys) ? Math.max(0, ev.dmgPhys as number) : 0;
+  const fire = Number.isFinite(ev.dmgFire) ? Math.max(0, ev.dmgFire as number) : 0;
+  const chaos = Number.isFinite(ev.dmgChaos) ? Math.max(0, ev.dmgChaos as number) : 0;
+  const isPoisonLike = ev.source === "OTHER";
+
+  const entries: Array<{ value: number; color: string }> = [];
+  const physRounded = Math.round(phys);
+  const fireRounded = Math.round(fire);
+  const chaosRounded = Math.round(chaos);
+  if (physRounded > 0) entries.push({ value: physRounded, color: DMG_COLOR_PHYSICAL });
+  if (fireRounded > 0) entries.push({ value: fireRounded, color: DMG_COLOR_FIRE });
+  if (chaosRounded > 0) entries.push({ value: chaosRounded, color: isPoisonLike ? DMG_COLOR_POISON : DMG_COLOR_CHAOS });
+  if (entries.length === 0) return;
+
+  const isCrit = !!ev.isCrit;
+  const critMulti = Math.max(
+    1,
+    Number.isFinite((ev as any).critMult)
+      ? ((ev as any).critMult as number)
+      : (Number.isFinite(w.critMultiplier) ? w.critMultiplier : 2),
+  );
+  const critScale = isCrit ? Math.pow(critMulti, 0.35) : 1;
+
+  const baseJitter = nextFloatJitter(w.uiFloatTextSeed | 0);
+  w.uiFloatTextSeed = baseJitter.nextSeed;
+  const spacing = 10;
+  const mid = (entries.length - 1) * 0.5;
+
+  for (let i = 0; i < entries.length; i++) {
+    const ent = entries[i];
+    let size = baseSizeFromMagnitude(ent.value);
+    size = Math.round(size * critScale);
+    size = Math.max(12, Math.min(32, size));
+    const yOffset = (i - mid) * spacing;
+    pushFloatText(
+      w,
+      ev.x + baseJitter.offsetX,
+      ev.y + baseJitter.offsetY + yOffset,
+      ent.value,
+      ent.color,
+      size,
+      isCrit,
+      false,
+    );
+  }
+}
+
+function spawnDamageTextFromEvent(w: World, ev: EnemyHitEvent | PlayerHitEvent): void {
+  if (ev.type === "ENEMY_HIT") {
+    spawnEnemyDamageTextSplit(w, ev);
+    return;
+  }
+  const value = Math.max(1, Math.round(ev.damage ?? 0));
+  if (!(value > 0)) return;
+  let size = baseSizeFromMagnitude(value);
+  size = Math.max(12, Math.min(32, size));
+  const jitter = nextFloatJitter(w.uiFloatTextSeed | 0);
+  w.uiFloatTextSeed = jitter.nextSeed;
+  pushFloatText(w, ev.x + jitter.offsetX, ev.y + jitter.offsetY, value, DMG_COLOR_PLAYER, size, false, true);
 }
 
 
