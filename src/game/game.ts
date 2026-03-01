@@ -1308,6 +1308,28 @@ export function createGame(args: CreateGameArgs) {
     await awaitCoreSpriteReadiness(spriteIds, 300);
   }
 
+  /**
+   * Hard-reset all progression / objective signals so stale state from the
+   * previous floor can never cause "instant complete on load".
+   * Called at the start of every floor before objectives are wired up.
+   */
+  function resetFloorProgressionState(w: any): void {
+    if (!w) return;
+    w.triggerSignals = [];
+    w.objectiveEvents = [];
+    w.events = [];
+    w.chestOpenRequested = false;
+
+    w.floorEndCountdownActive = false;
+    w.floorEndCountdownSec = 0;
+    w.floorEndCountdownStartedKey = null;
+
+    w.pendingAdvanceToNextFloor = false;
+
+    // boss bookkeeping if present
+    if (Array.isArray(w.bossZoneSpawned)) w.bossZoneSpawned = [];
+  }
+
   function finalizeFloorLoad(): void {
     const w = world;
     const ctx = floorLoadContext;
@@ -1331,6 +1353,8 @@ export function createGame(args: CreateGameArgs) {
     applyMapFeaturesFromCells(w);
     spawnMilestonePigeonNearPlayer(w);
 
+    resetFloorProgressionState(w);
+
     const objectiveSpec = objectiveSpecFromFloorIntent(ctx.floorIntent);
     w.currentObjectiveSpec = objectiveSpec;
     setObjectivesFromSpec(w, objectiveSpec);
@@ -1342,9 +1366,6 @@ export function createGame(args: CreateGameArgs) {
     w.cardRewardBudgetUsed = 0;
     w.cardRewardClaimKeys = [];
     w.lastCardRewardClaimKey = null;
-    w.floorEndCountdownSec = 0;
-    w.floorEndCountdownActive = false;
-    w.floorEndCountdownStartedKey = null;
     syncRewardDebugFieldsFromBudget(w);
     w.cardReward.active = false;
     w.cardReward.options = [];
@@ -1365,7 +1386,6 @@ export function createGame(args: CreateGameArgs) {
       : null;
     w.vendorOffers = [];
     (w as any)._surviveBossSpawned = false;
-    w.bossZoneSpawned = [];
     w.runState = "FLOOR";
     w.phaseTime = 0;
     w.transitionTime = 0;
