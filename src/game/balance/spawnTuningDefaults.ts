@@ -9,9 +9,9 @@ export type SpawnTuningDefaults = {
 
 export const DEFAULT_SPAWN_TUNING: SpawnTuningDefaults = {
   spawnBase: 1.0,
-  spawnPerDepth: 1.12,
+  spawnPerDepth: 1.4,
   hpBase: 1.0,
-  hpPerDepth: 1.18,
+  hpPerDepth: 1.4,
   pressureAt0Sec: 0.8,
   pressureAt120Sec: 1.4,
 };

@@ -77,9 +77,9 @@ export function resetPlayerBeamState(w: World): void {
 }
 
 export function updatePlayerBeamCombat(w: World, dt: number, cfg: BeamDamageConfig): void {
-  const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
-  const originX = pWorld.wx;
-  const originY = pWorld.wy;
+  const playerWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
+  const originX = playerWorld.wx;
+  const originY = playerWorld.wy;
 
   const dirLen = Math.hypot(cfg.dirX, cfg.dirY);
   const dirX = dirLen > 0.0001 ? cfg.dirX / dirLen : 1;

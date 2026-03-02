@@ -2,6 +2,8 @@ import { describe, expect, test } from "vitest";
 import { createDpsMetrics } from "../../../game/balance/dpsMetrics";
 import { createSpawnDirectorState, tickSpawnDirector, type SpawnDirectorConfig } from "../../../game/balance/spawnDirector";
 import type { ExpectedPowerBudgetConfig, ExpectedPowerConfig } from "../../../game/balance/expectedPower";
+import { ENEMY_TYPE } from "../../../game/content/enemies";
+import { registry } from "../../../game/content/registry";
 
 const cfg: SpawnDirectorConfig = {
   enabled: true,
@@ -38,6 +40,9 @@ const powerBudgetCfg: ExpectedPowerBudgetConfig = {
   powerRampMax: 2,
 };
 
+const TARGET_REPRESENTATIVE_HP = 20;
+const hpBaseForRepresentativeHp = TARGET_REPRESENTATIVE_HP / Math.max(1, registry.enemy(ENEMY_TYPE.CHASER).hp);
+
 describe("spawnDirector interval queue", () => {
   test("spawn interval converts elapsed time into pending count", () => {
     const state = createSpawnDirectorState();
@@ -45,6 +50,16 @@ describe("spawnDirector interval queue", () => {
       timeSec: 10,
       metrics: { dps: createDpsMetrics() },
       enemyPowerConfig: { costs: { trash: 1 } },
+      balance: {
+        spawnTuning: {
+          spawnBase: 1.0,
+          spawnPerDepth: 1.12,
+          hpBase: hpBaseForRepresentativeHp,
+          hpPerDepth: 1.18,
+          pressureAt0Sec: 0.8,
+          pressureAt120Sec: 1.6,
+        },
+      },
     };
     let spawned = 0;
 
@@ -72,6 +87,16 @@ describe("spawnDirector interval queue", () => {
       timeSec: 10,
       metrics: { dps: createDpsMetrics() },
       enemyPowerConfig: { costs: { trash: 1 } },
+      balance: {
+        spawnTuning: {
+          spawnBase: 1.0,
+          spawnPerDepth: 1.12,
+          hpBase: hpBaseForRepresentativeHp,
+          hpPerDepth: 1.18,
+          pressureAt0Sec: 0.8,
+          pressureAt120Sec: 1.6,
+        },
+      },
     };
 
     tickSpawnDirector(w, 10, cfg, expectedCfg, powerBudgetCfg, state, {

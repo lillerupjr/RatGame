@@ -170,6 +170,8 @@ describe("mobile controls", () => {
     controls.setEnabled(false);
 
     expect(root.hidden).toBe(true);
+    expect(root.style.display).toBe("none");
+    expect(root.style.pointerEvents).toBe("none");
     expect(onMove).toHaveBeenCalledWith(0, 0, false);
     expect(onInteractDown).toHaveBeenCalledWith(false);
     expect(knob.style.transform).toBe("translate(-50%, -50%)");
@@ -177,6 +179,43 @@ describe("mobile controls", () => {
     expect(stick.style.left).toBe("");
     expect(stick.style.top).toBe("");
     expect(interact.classList.contains("isPressed")).toBe(false);
+    expect(interact.releasePointerCapture).toHaveBeenCalledWith(2);
+  });
+
+  test("setEnabled(true) restores root visibility for mobile css", () => {
+    const { root, stick, knob, interact } = buildFixture();
+    const controls = createMobileControls({
+      root: root as any,
+      stickBase: stick as any,
+      stickKnob: knob as any,
+      interactBtn: interact as any,
+      onMove: vi.fn(),
+      onInteractDown: vi.fn(),
+    });
+
+    controls.setEnabled(true);
+    expect(root.hidden).toBe(false);
+    expect(root.style.display).toBe("");
+    expect(root.style.pointerEvents).toBe("auto");
+  });
+
+  test("setEnabled(false) releases active stick pointer capture", () => {
+    const { root, stick, knob, interact } = buildFixture();
+    const controls = createMobileControls({
+      root: root as any,
+      stickBase: stick as any,
+      stickKnob: knob as any,
+      interactBtn: interact as any,
+      onMove: vi.fn(),
+      onInteractDown: vi.fn(),
+    });
+    controls.setEnabled(true);
+
+    root.dispatchEvent(pointer("pointerdown", 11, 190, 160));
+    expect(root.setPointerCapture).toHaveBeenCalledWith(11);
+
+    controls.setEnabled(false);
+    expect(root.releasePointerCapture).toHaveBeenCalledWith(11);
   });
 
   test("stick spawn clamps inside viewport bounds", () => {

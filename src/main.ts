@@ -23,6 +23,7 @@ import { getUserSettings, initUserSettings, updateUserSettings } from "./userSet
 import { mountPauseMenu } from "./ui/pause/pauseMenu";
 import { togglePause } from "./game/app/pauseController";
 import { mountSettingsPanel } from "./ui/settings/settingsPanel";
+import { STARTER_RELIC_BY_CHARACTER, validateStarterRelics } from "./game/content/starterRelics";
 
 type DevSettingsUiController = {
   open(): void;
@@ -660,6 +661,10 @@ async function bootstrap() {
   }
 
   await initUserSettings();
+  if (import.meta.env.DEV) {
+    validateStarterRelics();
+    console.debug("[starterRelics] mapping", STARTER_RELIC_BY_CHARACTER);
+  }
   const audioPrefs = getUserSettings().audio;
   const master = Math.max(0, Math.min(1, Number.isFinite(audioPrefs.masterVolume) ? audioPrefs.masterVolume : 1));
   const music = Math.max(0, Math.min(1, Number.isFinite(audioPrefs.musicVolume) ? audioPrefs.musicVolume : 0.6));
@@ -817,8 +822,15 @@ async function bootstrap() {
       return;
     }
     if (appState === AppState.RUN) {
-      const isMapOpen = game.getWorld().state === "MAP";
-      game.setMobileControlsEnabled(runState === RunState.PLAYING && !isMapOpen);
+      const w = game.getWorld();
+      const isMapOpen = w.state === "MAP" || !refs.ui.mapEl.root.hidden;
+      const isPauseOpen = runState === RunState.PAUSED || !refs.ui.menuEl.hidden;
+      const isEndOpen = !refs.ui.endEl.root.hidden;
+      const isLevelupOpen = !refs.ui.levelupEl.root.hidden;
+      const isDialogOpen = !refs.ui.dialogEl.root.hidden;
+      const isAnyBlockingOverlayOpen = isMapOpen || isPauseOpen || isEndOpen || isLevelupOpen || isDialogOpen;
+
+      game.setMobileControlsEnabled(runState === RunState.PLAYING && !isAnyBlockingOverlayOpen);
       refs.welcomeScreen.hidden = true;
       refs.mainMenuEl.hidden = true;
       refs.characterSelectEl.hidden = true;
@@ -829,6 +841,10 @@ async function bootstrap() {
       refs.ui.menuEl.hidden = runState !== RunState.PAUSED;
       refs.hud.root.hidden = isMapOpen;
       refs.hud.vitalsOrbRoot.hidden = runState === RunState.PAUSED || isMapOpen;
+      if (isEndOpen) {
+        refs.hud.root.hidden = true;
+        refs.hud.vitalsOrbRoot.hidden = true;
+      }
       if (pauseCogBtn) pauseCogBtn.hidden = isMapOpen;
     }
   }

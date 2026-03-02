@@ -1,5 +1,6 @@
 import { normalizeRelicIdList, toCanonicalRelicId } from "../../content/relics";
 import { generateRelicRewardOptions } from "./relicRewardGenerator";
+import { applyRelic, normalizeWorldRelics } from "../../systems/progression/relics";
 
 export type RelicRewardSource = "OBJECTIVE_COMPLETION";
 
@@ -29,6 +30,7 @@ function rngNext(world: any): number {
 }
 
 export function beginRelicReward(world: any, source: RelicRewardSource, optionCount: number): void {
+  normalizeWorldRelics(world);
   const state = ensureRelicRewardState(world);
   if (state.active) return;
   state.active = true;
@@ -38,13 +40,14 @@ export function beginRelicReward(world: any, source: RelicRewardSource, optionCo
 }
 
 export function chooseRelicReward(world: any, relicId: string): void {
+  normalizeWorldRelics(world);
   const state = ensureRelicRewardState(world);
   if (!state.active) return;
   const canonical = toCanonicalRelicId(relicId);
   if (!state.options.includes(canonical)) {
     throw new Error(`Invalid relic reward choice: ${relicId}`);
   }
-  world.relics = normalizeRelicIdList([...(world.relics ?? []), canonical]);
+  applyRelic(world, canonical, { source: "drop" });
   state.active = false;
   state.options = [];
 }

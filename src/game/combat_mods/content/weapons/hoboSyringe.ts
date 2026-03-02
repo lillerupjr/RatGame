@@ -12,7 +12,7 @@ export const HOBO_SYRINGE_V1: WeaponDef = {
   baseDamage: { physical: 9, fire: 0, chaos: 9 },
   baseCritChance: 0.05,
   baseCritMulti: 1.5,
-  baseChanceToPoison: 0.25,
+  baseChanceToPoison: 0.5,
 
   projectile: {
     kind: PRJ_KIND.SYRINGE,
@@ -22,7 +22,7 @@ export const HOBO_SYRINGE_V1: WeaponDef = {
     rangePx: 520,
     radiusPx: 6,
     spreadBaseDeg: 3.0,
-    pierce: 1,
+    pierce: 0,
   },
 
   autoAim: {

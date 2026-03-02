@@ -1,10 +1,24 @@
+import type { PlayableCharacterId } from "./playableCharacters";
+
+export type RelicSource = "starter" | "drop" | "shop" | "debug";
+
+export type RelicInstance = {
+  id: string;
+  source?: RelicSource;
+  isLocked?: boolean;
+};
+
 export type RelicDef = {
   id: string;
   isEnabled: boolean;
   displayName: string;
   kind: "PASSIVE" | "ACTIVE";
   tags?: string[];
+  shortDesc?: string;
+  longDesc?: string[];
   desc?: string[];
+  isStarter?: true;
+  starterFor?: PlayableCharacterId;
 };
 
 export const MOMENTUM_RELIC_TAG = "MOMENTUM";
@@ -242,6 +256,61 @@ export const RELICS: RelicDef[] = [
     kind: "ACTIVE",
   },
   {
+    id: "STARTER_STREET_REFLEX",
+    isEnabled: true,
+    displayName: "Street Reflex",
+    kind: "ACTIVE",
+    shortDesc: "On hit, 20% chance to throw an additional knife at a nearby enemy.",
+    desc: ["On hit, 20% chance to throw an additional knife at a nearby enemy."],
+    longDesc: ["On hit, 20% chance to throw an additional knife at a nearby enemy."],
+    isStarter: true,
+    starterFor: "JAMAL",
+  },
+  {
+    id: "STARTER_LUCKY_CHAMBER",
+    isEnabled: true,
+    displayName: "Lucky Chamber",
+    kind: "PASSIVE",
+    shortDesc: "Every 5th shot is guaranteed to crit.",
+    desc: ["Every 5th shot is guaranteed to crit."],
+    longDesc: ["Every 5th shot is guaranteed to crit."],
+    isStarter: true,
+    starterFor: "JACK",
+  },
+  {
+    id: "STARTER_CONTAMINATED_ROUNDS",
+    isEnabled: true,
+    displayName: "Contaminated Rounds",
+    kind: "PASSIVE",
+    shortDesc: "Projectiles pierce poisoned enemies. Poisoned enemies take +20% damage from piercing hits.",
+    desc: ["Projectiles pierce poisoned enemies. Poisoned enemies take +20% damage from piercing hits."],
+    longDesc: ["Projectiles pierce poisoned enemies. Poisoned enemies take +20% damage from piercing hits."],
+    isStarter: true,
+    starterFor: "HOBO",
+  },
+  {
+    id: "STARTER_POINT_BLANK_CARNAGE",
+    isEnabled: true,
+    displayName: "Point Blank Carnage",
+    kind: "PASSIVE",
+    shortDesc: "Deal up to +50% damage based on proximity. Very close hits knock enemies back.",
+    desc: ["Deal up to +50% damage based on proximity. Very close hits knock enemies back."],
+    longDesc: ["Deal up to +50% damage based on proximity. Enemies hit within very close range are knocked back."],
+    isStarter: true,
+    starterFor: "TOMMY",
+  },
+  {
+    id: "STARTER_THERMAL_STARTER",
+    isEnabled: true,
+    displayName: "Thermal Starter",
+    kind: "PASSIVE",
+    shortDesc: "Deal +15% damage to burning enemies.",
+    desc: ["Deal +15% damage to burning enemies."],
+    longDesc: ["Deal +15% damage to burning enemies."],
+    isStarter: true,
+    starterFor: "JOEY",
+  },
+  {
     id: "ARMOR_DOUBLE_MAX",
     isEnabled: true,
     displayName: "100% more Maximum Armor",
@@ -365,6 +434,44 @@ export function normalizeRelicIdList(ids: readonly string[] | null | undefined):
     out.push(canonical);
   }
   return out;
+}
+
+export function normalizeRelicInstanceList(
+  instances: readonly (string | RelicInstance)[] | null | undefined,
+  fallbackSource: RelicSource = "drop",
+): RelicInstance[] {
+  if (!Array.isArray(instances) || instances.length === 0) return [];
+  const out: RelicInstance[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < instances.length; i++) {
+    const raw = instances[i];
+    const canonical =
+      typeof raw === "string"
+        ? toCanonicalRelicId(raw)
+        : toCanonicalRelicId((raw as RelicInstance)?.id ?? "");
+    if (!canonical || seen.has(canonical)) continue;
+    const source =
+      typeof raw === "string"
+        ? fallbackSource
+        : (((raw as RelicInstance).source ?? fallbackSource) as RelicSource);
+    const isLocked =
+      (typeof raw === "object" && !!(raw as RelicInstance).isLocked)
+      || source === "starter";
+    seen.add(canonical);
+    out.push({
+      id: canonical,
+      source,
+      isLocked,
+    });
+  }
+  return out;
+}
+
+export function getRelicShortDesc(def: RelicDef | null | undefined): string {
+  if (!def) return "";
+  if (typeof def.shortDesc === "string" && def.shortDesc.trim().length > 0) return def.shortDesc.trim();
+  const first = def.desc?.[0] ?? def.longDesc?.[0] ?? "";
+  return typeof first === "string" ? first : "";
 }
 
 export function getAllRelicIds(): string[] {

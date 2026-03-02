@@ -5,6 +5,8 @@ import { PLAYABLE_CHARACTERS, type PlayableCharacterId } from "../game/content/p
 import { getPlayerIdleSpriteUrl } from "../engine/render/sprites/playerSprites";
 import { resolveCombatStarterWeaponId } from "../game/combat_mods/content/weapons/characterStarterMap";
 import { getCombatStarterWeaponById } from "../game/combat_mods/content/weapons/starterWeapons";
+import { getRelicById, getRelicShortDesc } from "../game/content/relics";
+import { STARTER_RELIC_BY_CHARACTER } from "../game/content/starterRelics";
 import { isUserModeEnabled } from "../userSettings";
 
 type GameApi = {
@@ -72,6 +74,12 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     let selectedMapId: string | undefined = refs.startBtn.dataset.map || undefined;
     let selectedCharacterId: PlayableCharacterId | undefined = undefined;
     let pendingStartMode: "DELVE" | "DETERMINISTIC" | "SANDBOX" = "DELVE";
+    let starterModalOverlay: HTMLDivElement | null = null;
+    let starterModalCharacterName: HTMLDivElement | null = null;
+    let starterModalSpriteWrap: HTMLDivElement | null = null;
+    let starterModalRelicName: HTMLDivElement | null = null;
+    let starterModalRelicDesc: HTMLDivElement | null = null;
+    let starterModalCharacterId: PlayableCharacterId | null = null;
     const SUPPRESS_CLICK_WINDOW_MS = 450;
     const SUPPRESS_CLICK_RADIUS_PX = 40;
     let suppressClickUntilMs = 0;
@@ -191,6 +199,149 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         });
     }
 
+    const launchRunForCharacter = (characterId: PlayableCharacterId) => {
+        closeStarterModal();
+        refs.characterSelectEl.hidden = true;
+        refs.mainMenuEl.hidden = true;
+        refs.menuEl.hidden = true;
+        if (pendingStartMode === "SANDBOX") {
+            game.startSandboxRun(characterId, selectedMapId);
+        } else if (pendingStartMode === "DETERMINISTIC") {
+            game.startDeterministicRun(characterId);
+        } else {
+            game.startRun(characterId);
+        }
+    };
+
+    const closeStarterModal = () => {
+        if (!starterModalOverlay) return;
+        starterModalOverlay.hidden = true;
+        starterModalCharacterId = null;
+    };
+
+    const ensureStarterModal = () => {
+        if (starterModalOverlay) return;
+
+        const overlay = document.createElement("div");
+        overlay.className = "characterStarterModalOverlay";
+        overlay.hidden = true;
+        overlay.setAttribute("data-character-starter-modal", "1");
+
+        const panel = document.createElement("div");
+        panel.className = "characterStarterModal";
+
+        const header = document.createElement("div");
+        header.className = "characterStarterModalHeader";
+
+        const headerTitle = document.createElement("div");
+        headerTitle.className = "characterStarterModalCharacterName";
+        header.setAttribute("data-character-starter-modal-header", "1");
+
+        const closeBtn = document.createElement("button");
+        closeBtn.type = "button";
+        closeBtn.className = "characterStarterModalClose";
+        closeBtn.textContent = "Close";
+        closeBtn.setAttribute("data-character-starter-close", "1");
+        closeBtn.addEventListener("click", () => {
+            closeStarterModal();
+        });
+
+        header.appendChild(headerTitle);
+        header.appendChild(closeBtn);
+
+        const body = document.createElement("div");
+        body.className = "characterStarterModalBody";
+
+        const spritePane = document.createElement("div");
+        spritePane.className = "characterStarterModalSpritePane";
+        const spriteWrap = document.createElement("div");
+        spriteWrap.className = "characterStarterModalSpriteWrap";
+        spritePane.appendChild(spriteWrap);
+
+        const infoPane = document.createElement("div");
+        infoPane.className = "characterStarterModalInfoPane";
+        const relicLabel = document.createElement("div");
+        relicLabel.className = "characterStarterModalRelicLabel";
+        relicLabel.textContent = "Starter Relic";
+        const relicName = document.createElement("div");
+        relicName.className = "characterStarterModalRelicName";
+        relicName.setAttribute("data-character-starter-relic-name", "1");
+        const relicDesc = document.createElement("div");
+        relicDesc.className = "characterStarterModalRelicDesc";
+        relicDesc.setAttribute("data-character-starter-relic-desc", "1");
+        const selectBtn = document.createElement("button");
+        selectBtn.type = "button";
+        selectBtn.className = "characterStarterModalSelectBtn";
+        selectBtn.textContent = "Select Rat";
+        selectBtn.setAttribute("data-character-starter-select", "1");
+        bindActivate(selectBtn, () => {
+            if (starterModalCharacterId) {
+                setSelectedCharacter(starterModalCharacterId);
+                launchRunForCharacter(starterModalCharacterId);
+            }
+        });
+        infoPane.appendChild(relicLabel);
+        infoPane.appendChild(relicName);
+        infoPane.appendChild(relicDesc);
+        infoPane.appendChild(selectBtn);
+
+        body.appendChild(spritePane);
+        body.appendChild(infoPane);
+
+        panel.appendChild(header);
+        panel.appendChild(body);
+        overlay.appendChild(panel);
+        refs.characterSelectEl.appendChild(overlay);
+
+        overlay.addEventListener("click", (ev) => {
+            if (ev.target !== overlay) return;
+            closeStarterModal();
+        });
+        overlay.addEventListener("contextmenu", (ev) => {
+            ev.preventDefault();
+        });
+
+        if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+            document.addEventListener("keydown", (ev) => {
+                const kev = ev as KeyboardEvent;
+                if (kev.key !== "Escape") return;
+                if (!starterModalOverlay || starterModalOverlay.hidden) return;
+                closeStarterModal();
+            });
+        }
+
+        starterModalOverlay = overlay;
+        starterModalCharacterName = headerTitle;
+        starterModalSpriteWrap = spriteWrap;
+        starterModalRelicName = relicName;
+        starterModalRelicDesc = relicDesc;
+    };
+
+    const openStarterModal = (characterId: PlayableCharacterId) => {
+        ensureStarterModal();
+        const character = PLAYABLE_CHARACTERS.find((it) => it.id === characterId);
+        if (!character || !starterModalOverlay || !starterModalCharacterName || !starterModalSpriteWrap || !starterModalRelicName || !starterModalRelicDesc) {
+            return;
+        }
+        starterModalCharacterName.textContent = character.displayName;
+        while (starterModalSpriteWrap.firstChild) starterModalSpriteWrap.removeChild(starterModalSpriteWrap.firstChild as Node);
+        const spriteUrl = getPlayerIdleSpriteUrl(character.idleSpriteKey);
+        if (spriteUrl) {
+            const sprite = document.createElement("img");
+            sprite.className = "characterStarterModalSprite";
+            sprite.src = spriteUrl;
+            sprite.alt = character.displayName;
+            starterModalSpriteWrap.appendChild(sprite);
+        }
+
+        const starterRelicId = STARTER_RELIC_BY_CHARACTER[character.id];
+        const starterRelic = getRelicById(starterRelicId);
+        starterModalRelicName.textContent = starterRelic?.displayName ?? starterRelicId ?? "Starter Relic";
+        starterModalRelicDesc.textContent = getRelicShortDesc(starterRelic) || starterRelic?.desc?.[0] || "No description.";
+        starterModalCharacterId = character.id;
+        starterModalOverlay.hidden = false;
+    };
+
     function buildCharacterPicker() {
         refs.characterChoicesEl.innerHTML = "";
 
@@ -204,16 +355,32 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
             btn.setAttribute("aria-pressed", "false");
 
             const spriteUrl = getPlayerIdleSpriteUrl(character.idleSpriteKey);
+            const spriteWrap = document.createElement("div");
+            spriteWrap.className = "characterSpriteWrap";
+            if (spriteUrl) {
+                const sprite = document.createElement("img");
+                sprite.className = "characterSprite";
+                sprite.src = spriteUrl;
+                sprite.alt = character.displayName;
+                spriteWrap.appendChild(sprite);
+            }
 
-            btn.innerHTML = `
-      <div class="characterSpriteWrap">
-        ${spriteUrl ? `<img class="characterSprite" src="${spriteUrl}" alt="${character.displayName}" />` : ""}
-      </div>
-      <div class="characterName">${character.displayName}</div>
-      <div class="characterWeapon">Starting Weapon: ${weaponTitle}</div>
-    `;
+            const name = document.createElement("div");
+            name.className = "characterName";
+            name.textContent = character.displayName;
 
-            bindActivate(btn, () => setSelectedCharacter(character.id));
+            const weapon = document.createElement("div");
+            weapon.className = "characterWeapon";
+            weapon.textContent = `Starting Weapon: ${weaponTitle}`;
+
+            btn.appendChild(spriteWrap);
+            btn.appendChild(name);
+            btn.appendChild(weapon);
+
+            bindActivate(btn, () => {
+                setSelectedCharacter(character.id);
+                openStarterModal(character.id);
+            });
             refs.characterChoicesEl.appendChild(btn);
         }
 
@@ -263,7 +430,9 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     }
 
     buildCharacterPicker();
+    ensureStarterModal();
     buildMapPicker();
+    refs.characterContinueBtn.hidden = true;
     applyUserModeMenuGating();
     if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
         window.addEventListener("ratgame:settings-changed", applyUserModeMenuGating as EventListener);
@@ -283,34 +452,27 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         delete refs.startBtn.dataset.map;
         updateMenuSubline();
 
+        closeStarterModal();
         refs.mainMenuEl.hidden = true;
         refs.characterSelectEl.hidden = false;
     });
 
     // Character selection -> Main menu
     bindActivate(refs.characterBackBtn, () => {
+        closeStarterModal();
         refs.characterSelectEl.hidden = true;
         applyUserModeMenuGating();
         refs.mainMenuEl.hidden = false;
     });
 
-    // Character selection -> Delve map start
+    // Character selection -> Delve map start (legacy hidden button path)
     bindActivate(refs.characterContinueBtn, () => {
         if (!selectedCharacterId) return;
-
-        refs.characterSelectEl.hidden = true;
-        refs.mainMenuEl.hidden = true;
-        refs.menuEl.hidden = true;
-        if (pendingStartMode === "SANDBOX") {
-            game.startSandboxRun(selectedCharacterId, selectedMapId);
-        } else if (pendingStartMode === "DETERMINISTIC") {
-            game.startDeterministicRun(selectedCharacterId);
-        } else {
-            game.startRun(selectedCharacterId);
-        }
+        launchRunForCharacter(selectedCharacterId);
     });
 
     bindActivate(refs.mapBackBtn, () => {
+        closeStarterModal();
         refs.mapMenuEl.hidden = true;
         applyUserModeMenuGating();
         refs.mainMenuEl.hidden = false;
@@ -318,6 +480,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
 
     bindActivate(refs.mapContinueBtn, () => {
         pendingStartMode = "SANDBOX";
+        closeStarterModal();
         refs.mapMenuEl.hidden = true;
         refs.characterSelectEl.hidden = false;
         game.previewMap(selectedMapId);
@@ -352,6 +515,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
 
     // Settings -> Main menu
     bindActivate(refs.settingsBackBtn, () => {
+        closeStarterModal();
         refs.settingsMenuEl.hidden = true;
         applyUserModeMenuGating();
         refs.mainMenuEl.hidden = false;
@@ -359,6 +523,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
 
     // Credits -> Main menu
     bindActivate(refs.creditsBackBtn, () => {
+        closeStarterModal();
         refs.creditsMenuEl.hidden = true;
         applyUserModeMenuGating();
         refs.mainMenuEl.hidden = false;

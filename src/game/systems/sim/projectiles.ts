@@ -4,8 +4,9 @@ import { spawnZone, ZONE_KIND } from "../../factories/zoneFactory";
 import { solidFace, worldToTile } from "../../map/compile/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { anchorFromWorld, writeAnchor } from "../../coords/anchor";
-import { getPlayerWorld, getProjectileWorld } from "../../coords/worldViews";
+import { getEnemyWorld, getPlayerWorld, getProjectileWorld } from "../../coords/worldViews";
 import { PRJ_KIND } from "../../factories/projectileFactory";
+import { getEnemyAimWorld } from "../../combat/aimPoints";
 
 // --- Movement substepping (prevents "one whole tile per frame") ---
 export let PROJECTILE_MAX_MOVE_FRAC_PER_STEP = 0.5;   // fraction of tile per move substep
@@ -72,6 +73,20 @@ export function projectilesSystem(w: World, dt: number) {
         // Phase 3: render-only hide should be evaluated continuously (not sticky)
         w.prHidden[i] = false;
 
+        // Spark: track live enemy or die if target is dead
+        if (w.prjKind[i] === PRJ_KIND.SPARK && w.prHasTarget[i]) {
+            const sparkTarget = w.prLastHitEnemy[i];
+            if (sparkTarget >= 0 && w.eAlive[sparkTarget]) {
+                const enemyAim = getEnemyAimWorld(w, sparkTarget);
+                w.prTargetX[i] = enemyAim.x;
+                w.prTargetY[i] = enemyAim.y;
+            } else {
+                // Target died — kill spark
+                w.pAlive[i] = false;
+                continue;
+            }
+        }
+
         // -------------------------
         // Move
         // -------------------------
@@ -101,9 +116,12 @@ export function projectilesSystem(w: World, dt: number) {
             // Restore previous "double integration" feel (pre-fix behavior) without reintroducing the bug.
             const PROJECTILE_SPEED_MULT = 2;
 
-            const hasMissileTarget = (w.prjKind[i] === PRJ_KIND.MISSILE || w.prjKind[i] === PRJ_KIND.DAGGER) && !!w.prHasTarget[i];
-            const vx = w.prvx[i] * moveSpeedMult * PROJECTILE_SPEED_MULT;
-            const vy = w.prvy[i] * moveSpeedMult * PROJECTILE_SPEED_MULT;
+            const isSpark = w.prjKind[i] === PRJ_KIND.SPARK;
+            const hasMissileTarget = (w.prjKind[i] === PRJ_KIND.MISSILE || w.prjKind[i] === PRJ_KIND.DAGGER || isSpark) && !!w.prHasTarget[i];
+            // Spark uses raw velocity (locked 300 px/sec), others get speed multipliers
+            const speedScale = isSpark ? 1 : moveSpeedMult * PROJECTILE_SPEED_MULT;
+            const vx = w.prvx[i] * speedScale;
+            const vy = w.prvy[i] * speedScale;
 
             // ox/oy already set from grid
 
@@ -135,6 +153,41 @@ export function projectilesSystem(w: World, dt: number) {
                         w.prDirX[i] = dist > 0.0001 ? dx / dist : w.prDirX[i];
                         w.prDirY[i] = dist > 0.0001 ? dy / dist : w.prDirY[i];
                         w.pAlive[i] = false;
+                        if (isSpark) {
+                            // Spark: apply damage + lightning hit VFX
+                            const sparkDmg = w.prDamage[i];
+                            const sparkTarget = w.prLastHitEnemy[i];
+                            if (sparkTarget >= 0 && w.eAlive[sparkTarget] && sparkDmg > 0) {
+                                w.eHp[sparkTarget] -= sparkDmg;
+                                const ew2 = getEnemyWorld(w, sparkTarget, T);
+                                emitEvent(w, {
+                                    type: "ENEMY_HIT",
+                                    enemyIndex: sparkTarget,
+                                    damage: sparkDmg,
+                                    dmgPhys: w.prDmgPhys[i],
+                                    dmgFire: w.prDmgFire[i],
+                                    dmgChaos: w.prDmgChaos[i],
+                                    x: ew2.wx,
+                                    y: ew2.wy,
+                                    isCrit: false,
+                                    source: "OTHER",
+                                });
+                                if (w.eHp[sparkTarget] <= 0) {
+                                    w.eAlive[sparkTarget] = false;
+                                    w.kills++;
+                                    emitEvent(w, {
+                                        type: "ENEMY_KILLED",
+                                        enemyIndex: sparkTarget,
+                                        x: ew2.wx,
+                                        y: ew2.wy,
+                                        spawnTriggerId: w.eSpawnTriggerId[sparkTarget],
+                                        source: "OTHER",
+                                    });
+                                }
+                            }
+                            emitEvent(w, { type: "VFX", id: "LIGHTNING_HIT", x: tx, y: ty, scale: 1 });
+                            break;
+                        }
                         const blastR = Math.max(0, w.prExplodeR[i] ?? 0);
                         const blastDmg = Math.max(0, w.prExplodeDmg[i] ?? 0);
                         if (blastR > 0 && blastDmg > 0) {
@@ -288,7 +341,7 @@ export function projectilesSystem(w: World, dt: number) {
         // -------------------------
         // Explode-on-target (non-missile targeted projectiles)
         // -------------------------
-        if (w.prHasTarget[i] && w.prjKind[i] !== PRJ_KIND.MISSILE && w.prjKind[i] !== PRJ_KIND.DAGGER) {
+        if (w.prHasTarget[i] && w.prjKind[i] !== PRJ_KIND.MISSILE && w.prjKind[i] !== PRJ_KIND.DAGGER && w.prjKind[i] !== PRJ_KIND.SPARK) {
             const tx = w.prTargetX[i];
             const ty = w.prTargetY[i];
 

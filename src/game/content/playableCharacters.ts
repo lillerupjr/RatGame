@@ -12,7 +12,7 @@ export type CharacterDef = {
 export const PLAYABLE_CHARACTERS: CharacterDef[] = [
     {
         id: "HOBO",
-        displayName: "Hobo",
+        displayName: "Scratchy",
         idleSpriteKey: "hobo",
         startingWeaponId: "SYRINGE",
     },

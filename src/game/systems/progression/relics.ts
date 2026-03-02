@@ -1,27 +1,224 @@
 import type { World } from "../../../engine/world/world";
-import { normalizeRelicIdList, toCanonicalRelicId } from "../../content/relics";
+import type { RelicInstance, RelicSource } from "../../content/relics";
+import {
+  normalizeRelicIdList,
+  normalizeRelicInstanceList,
+  toCanonicalRelicId,
+} from "../../content/relics";
 import { recomputeDerivedStats } from "../../stats/derivedStats";
 
-export function normalizeWorldRelics(world: World): void {
-  const normalized = normalizeRelicIdList(world.relics);
-  if (normalized.length !== world.relics.length) {
-    world.relics = normalized;
-    return;
+export type ApplyRelicOptions = {
+  source?: RelicSource;
+  isLocked?: boolean;
+};
+
+export type RemoveRelicResult = {
+  removed: boolean;
+  reason?: "NOT_FOUND" | "LOCKED";
+};
+
+function cloneInstances(instances: readonly RelicInstance[]): RelicInstance[] {
+  const out: RelicInstance[] = [];
+  for (let i = 0; i < instances.length; i++) {
+    const it = instances[i];
+    out.push({
+      id: it.id,
+      source: it.source,
+      isLocked: !!it.isLocked || it.source === "starter",
+    });
   }
-  for (let i = 0; i < normalized.length; i++) {
-    if (normalized[i] !== world.relics[i]) {
-      world.relics = normalized;
-      return;
-    }
+  return out;
+}
+
+function areRelicIdsEqual(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+function areRelicInstancesEqual(a: readonly RelicInstance[], b: readonly RelicInstance[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].id !== b[i].id) return false;
+    if ((a[i].source ?? "drop") !== (b[i].source ?? "drop")) return false;
+    if (!!a[i].isLocked !== !!b[i].isLocked) return false;
+  }
+  return true;
+}
+
+function buildNormalizedRelicInstances(world: World): RelicInstance[] {
+  const normalizedIds = normalizeRelicIdList(world.relics ?? []);
+  const normalizedInstances = normalizeRelicInstanceList(world.relicInstances ?? [], "drop");
+  const byId = new Map<string, RelicInstance>();
+
+  for (let i = 0; i < normalizedInstances.length; i++) {
+    const it = normalizedInstances[i];
+    byId.set(it.id, {
+      id: it.id,
+      source: it.source ?? "drop",
+      isLocked: !!it.isLocked || it.source === "starter",
+    });
+  }
+
+  for (let i = 0; i < normalizedIds.length; i++) {
+    const id = normalizedIds[i];
+    if (byId.has(id)) continue;
+    byId.set(id, { id, source: "drop", isLocked: false });
+  }
+
+  const out: RelicInstance[] = [];
+  const seen = new Set<string>();
+
+  for (let i = 0; i < normalizedInstances.length; i++) {
+    const id = normalizedInstances[i].id;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const it = byId.get(id);
+    if (!it) continue;
+    out.push({
+      id: it.id,
+      source: it.source ?? "drop",
+      isLocked: !!it.isLocked || it.source === "starter",
+    });
+  }
+
+  for (let i = 0; i < normalizedIds.length; i++) {
+    const id = normalizedIds[i];
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const it = byId.get(id);
+    if (!it) continue;
+    out.push({
+      id: it.id,
+      source: it.source ?? "drop",
+      isLocked: !!it.isLocked || it.source === "starter",
+    });
+  }
+
+  return out;
+}
+
+function canRecomputeDerivedStats(world: World): boolean {
+  const w = world as unknown as Record<string, unknown>;
+  return (
+    Array.isArray(w.items) &&
+    Array.isArray(w.cards) &&
+    typeof w.baseMoveSpeed === "number" &&
+    typeof w.basePickupRadius === "number" &&
+    typeof w.basePlayerHpMax === "number" &&
+    typeof w.playerHp === "number"
+  );
+}
+
+function primeDerivedStatsDefaults(world: World): void {
+  const w = world as unknown as Record<string, unknown>;
+  if (!Array.isArray(w.items)) w.items = [];
+  if (!Array.isArray(w.cards)) w.cards = [];
+  if (typeof w.baseMoveSpeed !== "number") {
+    w.baseMoveSpeed = typeof w.pSpeed === "number" ? (w.pSpeed as number) : 0;
+  }
+  if (typeof w.basePickupRadius !== "number") {
+    w.basePickupRadius = typeof w.pickupRadius === "number" ? (w.pickupRadius as number) : 0;
+  }
+  if (typeof w.basePlayerHpMax !== "number") {
+    w.basePlayerHpMax =
+      typeof w.playerHpMax === "number"
+        ? (w.playerHpMax as number)
+        : (typeof w.playerHp === "number" ? (w.playerHp as number) : 1);
+  }
+  if (typeof w.playerHpMax !== "number") {
+    w.playerHpMax = w.basePlayerHpMax as number;
+  }
+  if (typeof w.playerHp !== "number") {
+    w.playerHp = w.playerHpMax as number;
+  }
+  if (typeof w.currentArmor !== "number") w.currentArmor = 0;
+  if (typeof w.momentumValue !== "number") w.momentumValue = 0;
+}
+
+export function normalizeWorldRelics(world: World): void {
+  const normalizedInstances = buildNormalizedRelicInstances(world);
+  const normalizedIds = normalizedInstances.map((it) => it.id);
+  if (!areRelicInstancesEqual(normalizedInstances, world.relicInstances ?? [])) {
+    world.relicInstances = cloneInstances(normalizedInstances);
+  }
+  if (!areRelicIdsEqual(normalizedIds, world.relics ?? [])) {
+    world.relics = [...normalizedIds];
   }
 }
 
-export function applyRelic(world: World, relicId: string): void {
+export function getWorldRelicInstances(world: World): RelicInstance[] {
+  normalizeWorldRelics(world);
+  return cloneInstances(world.relicInstances ?? []);
+}
+
+export function setWorldRelicInstances(world: World, instances: readonly RelicInstance[]): void {
+  const normalized = normalizeRelicInstanceList(instances, "drop");
+  world.relicInstances = normalized;
+  world.relics = normalized.map((it) => it.id);
+  normalizeWorldRelics(world);
+  primeDerivedStatsDefaults(world);
+  if (canRecomputeDerivedStats(world)) {
+    recomputeDerivedStats(world);
+  }
+}
+
+export function applyRelic(world: World, relicId: string, options?: ApplyRelicOptions): boolean {
   normalizeWorldRelics(world);
   const canonical = toCanonicalRelicId(relicId);
-  if (world.relics.includes(canonical)) return;
-  world.relics = [...world.relics, canonical];
-  recomputeDerivedStats(world);
+  if (!canonical) return false;
+  if (world.relics.includes(canonical)) return false;
+  const source = options?.source ?? "drop";
+  const isLocked = options?.isLocked ?? source === "starter";
+  const nextInstances = getWorldRelicInstances(world);
+  nextInstances.push({
+    id: canonical,
+    source,
+    isLocked: !!isLocked || source === "starter",
+  });
+  setWorldRelicInstances(world, nextInstances);
+  return true;
+}
+
+export function setRelicMetadata(
+  world: World,
+  relicId: string,
+  options: ApplyRelicOptions,
+): boolean {
+  normalizeWorldRelics(world);
+  const canonical = toCanonicalRelicId(relicId);
+  if (!canonical) return false;
+  const nextInstances = getWorldRelicInstances(world);
+  const idx = nextInstances.findIndex((it) => it.id === canonical);
+  if (idx < 0) return false;
+  const prev = nextInstances[idx];
+  const source = options.source ?? prev.source ?? "drop";
+  const isLocked = options.isLocked ?? prev.isLocked ?? source === "starter";
+  nextInstances[idx] = {
+    id: prev.id,
+    source,
+    isLocked: !!isLocked || source === "starter",
+  };
+  setWorldRelicInstances(world, nextInstances);
+  return true;
+}
+
+export function removeRelic(world: World, relicId: string): RemoveRelicResult {
+  normalizeWorldRelics(world);
+  const canonical = toCanonicalRelicId(relicId);
+  if (!canonical) return { removed: false, reason: "NOT_FOUND" };
+  const nextInstances = getWorldRelicInstances(world);
+  const idx = nextInstances.findIndex((it) => it.id === canonical);
+  if (idx < 0) return { removed: false, reason: "NOT_FOUND" };
+  const instance = nextInstances[idx];
+  if (instance.source === "starter" || instance.isLocked) {
+    return { removed: false, reason: "LOCKED" };
+  }
+  nextInstances.splice(idx, 1);
+  setWorldRelicInstances(world, nextInstances);
+  return { removed: true };
 }
 
 export type RelicMods = {

@@ -4,19 +4,77 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
+  --overlay-pad-top: calc(var(--safe-top) + 4px);
+  --overlay-pad-right: calc(var(--safe-right) + 4px);
+  --overlay-pad-bottom: calc(var(--safe-bottom) + 4px);
+  --overlay-pad-left: calc(var(--safe-left) + 4px);
+}
+
+/* Mobile-only safe padding fallback for devices/reporting paths that expose zero env() insets. */
+@media (hover: none) and (pointer: coarse) and (max-width: 1024px), (hover: none) and (pointer: coarse) and (max-height: 600px) {
+  :root {
+    --overlay-pad-top: max(var(--safe-top), var(--safe-bottom), 16px);
+    --overlay-pad-right: max(var(--safe-left), var(--safe-right), 22px);
+    --overlay-pad-bottom: max(var(--safe-top), var(--safe-bottom), 16px);
+    --overlay-pad-left: max(var(--safe-left), var(--safe-right), 22px);
+  }
 }
 
 /* Pause menu overhaul layout */
 .pausePanel.pausePanelNav {
+  --pause-nav-rail-w: 240px;
   padding: 0;
+}
+
+.pausePanel.pausePanelNav .pauseHeader {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding:
+    max(8px, calc(var(--safe-top) + 8px))
+    max(10px, calc(var(--safe-right) + 12px))
+    8px
+    max(10px, calc(var(--safe-left) + 12px));
+}
+
+.pausePanel.pausePanelNav .pauseTitle {
+  font-size: clamp(20px, 2.2vw, 30px);
+  line-height: 1;
+}
+
+.pausePanel.pausePanelNav .pauseHeaderActions {
+  width: min(640px, 100%);
+  justify-self: end;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.pausePanel.pausePanelNav .pauseHeaderActions .pauseBtn {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 10px;
+  font-size: 14px;
+  line-height: 1.1;
 }
 
 .pauseNavLayout {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: var(--pause-nav-rail-w, 240px) minmax(0, 1fr);
   gap: 0;
+}
+
+.pausePanel.pausePanelNav .pauseNavLayout {
+  padding:
+    0
+    max(0px, var(--safe-right))
+    max(0px, var(--safe-bottom))
+    max(0px, var(--safe-left));
 }
 
 .pauseModeNav {
@@ -27,6 +85,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   flex-direction: column;
   gap: 8px;
   overflow-y: auto;
+  overflow-x: hidden;
+  white-space: normal;
 }
 
 .pauseNavBtn {
@@ -40,6 +100,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   text-align: left;
   padding: 0 12px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  line-height: 1.2;
 }
 
 .pauseNavBtn.active {
@@ -210,28 +273,52 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 @media (max-width: 920px) {
-  .pauseNavLayout {
+  .pausePanel.pausePanelNav {
+    --pause-nav-rail-w: clamp(120px, 34vw, 180px);
+  }
+
+  .pausePanel.pausePanelNav .pauseHeader {
     grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(0, 1fr);
+    align-items: stretch;
+    gap: 8px;
+    padding:
+      max(6px, calc(var(--safe-top) + 6px))
+      max(8px, calc(var(--safe-right) + 10px))
+      6px
+      max(8px, calc(var(--safe-left) + 10px));
+  }
+
+  .pausePanel.pausePanelNav .pauseHeaderActions {
+    width: 100%;
+    justify-self: stretch;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 6px;
+  }
+
+  .pausePanel.pausePanelNav .pauseHeaderActions .pauseBtn {
+    height: 34px;
+    min-height: 34px;
+    font-size: 13px;
+    padding: 0 8px;
   }
 
   .pauseModeNav {
-    border-right: 0;
-    border-bottom: 1px solid var(--border-subtle);
-    flex-direction: row;
-    overflow-x: auto;
-    overflow-y: hidden;
-    white-space: nowrap;
-    padding: 10px;
+    padding: 10px 8px;
+    gap: 6px;
   }
 
   .pauseNavBtn {
-    min-width: 150px;
     min-height: 40px;
+    padding: 8px 9px;
+    font-size: 13px;
   }
 }
 
 @media (max-width: 768px) {
+  .pausePanel.pausePanelNav {
+    --pause-nav-rail-w: clamp(112px, 35vw, 160px);
+  }
+
   .pauseSectionTitle {
     font-size: 20px;
   }
@@ -263,6 +350,47 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
   .pauseInlineAction {
     width: 100%;
+  }
+
+  .pausePanel.pausePanelNav .pauseTitle {
+    font-size: 18px;
+  }
+
+  .pausePanel.pausePanelNav .pauseHeaderActions {
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  }
+
+  .pausePanel.pausePanelNav .pauseHeaderActions .pauseBtn {
+    height: 32px;
+    min-height: 32px;
+    font-size: 12px;
+  }
+
+  .pauseNavBtn {
+    min-height: 36px;
+    font-size: 12px;
+    padding: 6px 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .pausePanel.pausePanelNav {
+    --pause-nav-rail-w: clamp(108px, 36vw, 148px);
+  }
+
+  .pausePanel.pausePanelNav .pauseHeaderActions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pausePanel.pausePanelNav .pauseHeaderActions .pauseBtn {
+    height: 30px;
+    min-height: 30px;
+    font-size: 11px;
+  }
+
+  .pauseNavBtn {
+    min-height: 34px;
+    font-size: 11px;
   }
 }
 #c, #ui { position: fixed; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; }
@@ -786,6 +914,25 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 /* IMPORTANT: ensure hidden attribute actually hides overlays (CSS IDs otherwise override it) */
 [hidden] { display: none !important; }
 
+/* Keep fullscreen menu shells clear of iPhone notch/home-indicator safe areas. */
+#levelup,
+#end,
+#welcomeScreen,
+#mainMenu,
+#characterSelect,
+#mapMenu,
+#innkeeperMenu,
+#settingsMenu,
+#creditsMenu,
+#menu {
+  box-sizing: border-box;
+  padding:
+    var(--overlay-pad-top)
+    var(--overlay-pad-right)
+    var(--overlay-pad-bottom)
+    var(--overlay-pad-left);
+}
+
 /* Welcome Screen */
 #welcomeScreen { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 5; }
 #welcomeScreen .panel { width: min(520px, 90vw); padding: 60px 40px; border-radius: 20px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); text-align: center; }
@@ -839,12 +986,14 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   overflow-y: auto;
   padding: 24px;
   border-radius: 20px;
-  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-medium);
   color: var(--text-primary);
   font-family: var(--font-mono);
 }
 #characterSelect .title { font-size: 26px; font-weight: 900; margin-bottom: 6px; text-align: center; }
-#characterSelect .subline { opacity: 0.85; margin-bottom: 16px; font-size: 14px; text-align: center; }
+#characterSelect .subline { color: var(--text-muted); margin-bottom: 16px; font-size: 14px; text-align: center; }
 #characterChoices { display: flex; flex-wrap: nowrap; gap: 12px; justify-content: center; }
 @media (max-width: 720px) { #characterChoices { gap: 8px; } }
 
@@ -853,18 +1002,24 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   min-width: 0;
   text-align: center;
   padding: 12px;
+  position: relative;
   border-radius: 16px;
-  border: 1px solid var(--border-subtle);
-  background: var(--hover-bg);
+  border: 1px solid var(--border-default);
+  background: linear-gradient(180deg, var(--bg-elevated), var(--focus-bg));
+  box-shadow: var(--shadow-subtle);
   cursor: pointer;
   color: var(--text-primary);
   transition: transform var(--transition-fast), background var(--transition-standard), border-color var(--transition-standard), box-shadow var(--transition-standard);
 }
-.characterCard:hover { transform: translateY(-1px); background: var(--hover-bg); border-color: var(--border-default); }
+.characterCard:hover {
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, var(--bg-elevated), var(--active-bg));
+  border-color: var(--border-strong);
+}
 .characterCard[aria-pressed="true"] {
   border-color: var(--border-strong);
-  background: var(--active-bg);
-  box-shadow: var(--shadow-glow);
+  background: linear-gradient(180deg, var(--bg-elevated), var(--active-bg));
+  box-shadow: var(--shadow-glow), var(--shadow-subtle);
 }
 
 .characterSpriteWrap {
@@ -872,17 +1027,166 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   place-items: center;
   height: 140px;
   border-radius: var(--radius-md);
-  background: rgba(0,0,0,0.22);
+  border: 1px solid var(--border-subtle);
+  background: var(--hover-bg);
   margin-bottom: 10px;
+  padding: 8px;
+  overflow: hidden;
 }
 .characterSprite {
-  max-width: 100%;
-  max-height: 100%;
+  --character-card-sprite-offset-y: -10px;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
+  object-position: center center;
+  display: block;
+  image-rendering: pixelated;
+  transform: translateY(var(--character-card-sprite-offset-y));
 }
 
 .characterName { font-weight: 900; font-size: 15px; margin-bottom: 4px; }
-.characterWeapon { opacity: 0.9; font-size: 12px; line-height: 1.35; }
+.characterWeapon { color: var(--text-muted); font-size: 12px; line-height: 1.35; }
+
+.characterStarterModalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding:
+    var(--overlay-pad-top)
+    var(--overlay-pad-right)
+    var(--overlay-pad-bottom)
+    var(--overlay-pad-left);
+  background: var(--bg-overlay);
+}
+
+.characterStarterModal {
+  width: min(1100px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  border-radius: 16px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-medium);
+  padding: 14px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+.characterStarterModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.characterStarterModalCharacterName {
+  font-size: 21px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.characterStarterModalClose {
+  min-height: 32px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--focus-bg);
+  color: var(--text-primary);
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 12px;
+}
+
+.characterStarterModalClose:hover {
+  background: var(--primary-btn-hover-bg);
+}
+
+.characterStarterModalBody {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.86fr) minmax(0, 1.14fr);
+  gap: clamp(10px, 2.2vw, 18px);
+  align-items: stretch;
+}
+
+.characterStarterModalSpritePane {
+  min-width: 0;
+}
+
+.characterStarterModalSpriteWrap {
+  height: clamp(180px, 40dvh, 420px);
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  background: var(--hover-bg);
+  display: grid;
+  place-items: end center;
+  padding: clamp(6px, 1.2vw, 12px);
+  overflow: hidden;
+}
+
+.characterStarterModalSprite {
+  --starter-modal-sprite-scale: 3;
+  --starter-modal-sprite-offset-y: 12px;
+  max-width: 34%;
+  max-height: 34%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  transform: translateY(var(--starter-modal-sprite-offset-y)) scale(var(--starter-modal-sprite-scale));
+  transform-origin: center bottom;
+}
+
+.characterStarterModalInfoPane {
+  min-width: 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--focus-bg);
+  padding: 12px;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.characterStarterModalRelicLabel {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.characterStarterModalRelicName {
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.characterStarterModalRelicDesc {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-primary);
+}
+
+.characterStarterModalSelectBtn {
+  justify-self: end;
+  align-self: end;
+  min-height: clamp(42px, 7dvh, 56px);
+  min-width: clamp(160px, 20vw, 240px);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--primary-btn-bg);
+  color: var(--text-primary);
+  font-weight: 800;
+  font-size: clamp(15px, 2vw, 22px);
+  cursor: pointer;
+  padding: 0 clamp(14px, 2vw, 22px);
+}
+
+.characterStarterModalSelectBtn:hover {
+  background: var(--primary-btn-hover-bg);
+}
 
 #characterSelect .characterActions { display: flex; gap: 10px; margin-top: 16px; }
 #characterSelect .characterActions button {
@@ -1125,7 +1429,11 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 /* Header */
 .pauseHeader {
-  padding: 18px 18px 12px 18px;
+  padding:
+    max(18px, var(--overlay-pad-top))
+    max(18px, var(--overlay-pad-right))
+    12px
+    max(18px, var(--overlay-pad-left));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1245,7 +1553,11 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 /* Main grid */
 .pauseGrid {
   flex: 1;
-  padding: 14px 18px 18px 18px;
+  padding:
+    14px
+    max(18px, var(--overlay-pad-right))
+    max(18px, var(--overlay-pad-bottom))
+    max(18px, var(--overlay-pad-left));
   display: grid;
   grid-template-columns: 1.1fr 1.7fr 1.1fr;
   gap: 14px;
@@ -1440,6 +1752,13 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .pauseDebugLayerActions {
   display: flex;
   gap: 10px;
+}
+
+.pauseDebugLayerNote {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  line-height: 1.35;
+  opacity: 0.9;
 }
 
 .pauseDebugLayerBody {
@@ -2022,9 +2341,17 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   #characterSelect,
   #mapMenu,
   #innkeeperMenu,
+  #creditsMenu,
   #settingsMenu,
+  #map,
+  #end,
+  #levelup,
   #menu {
-    padding: 10px;
+    padding:
+      max(10px, var(--overlay-pad-top))
+      max(10px, var(--overlay-pad-right))
+      max(10px, var(--overlay-pad-bottom))
+      max(10px, var(--overlay-pad-left));
   }
 
   #welcomeScreen .panel,
@@ -2034,9 +2361,11 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   #innkeeperMenu .panel,
   #creditsMenu .panel,
   #settingsMenu .panel,
+  #end .panel,
+  #levelup .panel,
   #menu .panel {
-    width: min(96vw, 560px);
-    max-height: calc(100dvh - 20px);
+    width: min(100%, 560px);
+    max-height: 100%;
     overflow-y: auto;
     padding: 16px 14px;
     border-radius: 14px;
@@ -2133,8 +2462,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   }
 
   .characterSpriteWrap {
-    height: 110px;
+    height: 120px;
     margin-bottom: 8px;
+    padding: 8px;
   }
 
   .characterName {
@@ -2214,7 +2544,41 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   }
 
   .characterSpriteWrap {
-    height: 96px;
+    height: 104px;
+    padding: 7px;
+  }
+}
+
+@media (max-width: 820px) {
+  .characterStarterModal {
+    width: min(920px, 100%);
+    padding: 12px 10px;
+  }
+
+  .characterStarterModalSpriteWrap {
+    height: clamp(210px, 40dvh, 340px);
+    padding: 6px;
+  }
+
+  .characterStarterModalSprite {
+    max-width: 40%;
+    max-height: 42%;
+    --starter-modal-sprite-scale: 3.2;
+  }
+
+  .characterStarterModalRelicName {
+    font-size: 18px;
+  }
+
+  .characterStarterModalRelicDesc {
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .characterStarterModalSelectBtn {
+    min-width: 150px;
+    min-height: 42px;
+    font-size: 16px;
   }
 }
 
@@ -2253,12 +2617,24 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 @media (max-width: 768px) {
   #map {
-    padding: 10px;
+    padding:
+      max(10px, var(--overlay-pad-top))
+      max(10px, var(--overlay-pad-right))
+      max(10px, var(--overlay-pad-bottom))
+      max(10px, var(--overlay-pad-left));
+  }
+
+  #map.delveFull {
+    padding:
+      max(10px, var(--overlay-pad-top))
+      max(10px, var(--overlay-pad-right))
+      max(10px, var(--overlay-pad-bottom))
+      max(10px, var(--overlay-pad-left));
   }
 
   #map .panel {
-    width: min(96vw, 640px);
-    max-height: calc(100dvh - 20px);
+    width: min(100%, 640px);
+    max-height: 100%;
     overflow-y: auto;
     padding: 14px 12px;
     border-radius: 14px;
@@ -2279,9 +2655,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   }
 
   #map.delveFull .panel {
-    width: 100vw;
-    height: 100dvh;
-    max-height: 100dvh;
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
     padding: 8px;
     overflow: hidden;
   }
@@ -2339,9 +2715,17 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   #characterSelect,
   #mapMenu,
   #innkeeperMenu,
+  #creditsMenu,
   #settingsMenu,
+  #map,
+  #end,
+  #levelup,
   #menu {
-    padding: 6px;
+    padding:
+      max(6px, var(--overlay-pad-top))
+      max(6px, var(--overlay-pad-right))
+      max(6px, var(--overlay-pad-bottom))
+      max(6px, var(--overlay-pad-left));
   }
 
   #welcomeScreen .panel,
@@ -2351,10 +2735,12 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   #innkeeperMenu .panel,
   #creditsMenu .panel,
   #settingsMenu .panel,
+  #end .panel,
+  #levelup .panel,
   #menu .panel,
   #map .panel {
-    width: min(97vw, 900px);
-    max-height: calc(100dvh - 12px);
+    width: min(100%, 900px);
+    max-height: 100%;
     overflow-y: auto;
     padding: 10px 12px;
     border-radius: 12px;
@@ -2366,7 +2752,25 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   }
 
   #map {
-    padding: 6px;
+    padding:
+      max(6px, var(--overlay-pad-top))
+      max(6px, var(--overlay-pad-right))
+      max(6px, var(--overlay-pad-bottom))
+      max(6px, var(--overlay-pad-left));
+  }
+
+  #map.delveFull {
+    padding:
+      max(6px, var(--overlay-pad-top))
+      max(6px, var(--overlay-pad-right))
+      max(6px, var(--overlay-pad-bottom))
+      max(6px, var(--overlay-pad-left));
+  }
+
+  #map.delveFull .panel {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
   }
 
   #map .title {
@@ -2433,8 +2837,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   }
 
   .characterSpriteWrap {
-    height: 72px;
+    height: 88px;
     margin-bottom: 6px;
+    padding: 6px;
   }
 
   .characterName {
@@ -2463,6 +2868,41 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
   #mapChoices {
     gap: 6px;
+  }
+
+  .characterStarterModal {
+    max-height: 100%;
+    padding: 10px;
+  }
+
+  .characterStarterModalHeader {
+    margin-bottom: 8px;
+  }
+
+  .characterStarterModalCharacterName {
+    font-size: 18px;
+  }
+
+  .characterStarterModalSpriteWrap {
+    height: clamp(170px, 42dvh, 250px);
+    padding: 6px;
+  }
+
+  .characterStarterModalSprite {
+    max-width: 42%;
+    max-height: 46%;
+    --starter-modal-sprite-scale: 3.15;
+  }
+
+  .characterStarterModalRelicDesc {
+    font-size: 13px;
+    line-height: 1.3;
+  }
+
+  .characterStarterModalSelectBtn {
+    min-width: 138px;
+    min-height: 38px;
+    font-size: 14px;
   }
 }
 

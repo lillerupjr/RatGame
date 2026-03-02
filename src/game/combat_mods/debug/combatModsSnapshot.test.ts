@@ -22,8 +22,8 @@ describe("combatModsSnapshot", () => {
 
   test("getCombatModsSnapshot reads world.cards and applies mods", () => {
     const snap = getCombatModsSnapshot({ cards: ["CARD_DAMAGE_FLAT_1"] });
-    // Base pistol phys 8 + 3 = 11 (no other scaling)
-    expect(snap.weaponStats.baseDamage.physical).toBeCloseTo(11);
+    // Base pistol phys 12 + 3 = 15 (no other scaling)
+    expect(snap.weaponStats.baseDamage.physical).toBeCloseTo(15);
   });
 
   test("getCombatModsSnapshot resolves JOEY starter laser profile", () => {
@@ -39,14 +39,14 @@ describe("combatModsSnapshot", () => {
     const snap = getCombatModsSnapshot({ currentCharacterId: "HOBO", cards: [] });
     expect(snap.weaponStats.baseDamage.physical).toBeCloseTo(9);
     expect(snap.weaponStats.baseDamage.chaos).toBeCloseTo(9);
-    expect(snap.weaponStats.pierce).toBe(1);
+    expect(snap.weaponStats.pierce).toBe(0);
     expect(snap.weaponStats.projectileSpeedPxPerSec).toBeCloseTo(180);
-    expect(snap.weaponStats.chanceToPoison).toBeCloseTo(0.25);
+    expect(snap.weaponStats.chanceToPoison).toBeCloseTo(0.5);
   });
 
   test("getCombatModsSnapshot resolves TOMMY starter shotgun profile", () => {
     const snap = getCombatModsSnapshot({ currentCharacterId: "TOMMY", cards: [] });
-    expect(snap.weaponStats.shotsPerSecond).toBeCloseTo(0.5);
+    expect(snap.weaponStats.shotsPerSecond).toBeCloseTo(2 / 3);
     expect(snap.weaponStats.baseDamage.physical).toBeCloseTo(16);
     expect(snap.weaponStats.projectiles).toBe(4);
     expect(snap.weaponStats.rangePx).toBeLessThan(420);

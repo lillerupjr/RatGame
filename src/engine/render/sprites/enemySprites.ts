@@ -18,6 +18,8 @@ type EnemySpriteDef = {
     scale: number;
     anchorX: number;
     anchorY: number;
+    frameW: number;
+    frameH: number;
     runAnim?: string;
     source?: SpriteLoaderSource;
     frameCount?: number;
@@ -29,6 +31,8 @@ const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
         scale: 1.5,
         anchorX: 0.5,
         anchorY: 0.65,
+        frameW: 32,
+        frameH: 32,
         runAnim: "running-4-frames",
     },
     [ENEMY_TYPE.RUNNER]: {
@@ -36,6 +40,8 @@ const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
         scale: 1.5,
         anchorX: 0.5,
         anchorY: 0.65,
+        frameW: 92,
+        frameH: 92,
         runAnim: "walk-4-frames",
     },
     [ENEMY_TYPE.BRUISER]: {
@@ -43,6 +49,8 @@ const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
         scale: 2,
         anchorX: 0.5,
         anchorY: 0.65,
+        frameW: 92,
+        frameH: 92,
         runAnim: "walk-4-frames",
 
     },
@@ -51,6 +59,8 @@ const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
         scale: 2,
         anchorX: 0.5,
         anchorY: 0.65,
+        frameW: 128,
+        frameH: 128,
         runAnim: "walk-8-frames",
         frameCount: 8,
     },
@@ -59,6 +69,8 @@ const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
         scale: 2,
         anchorX: 0.5,
         anchorY: 0.65,
+        frameW: 96,
+        frameH: 96,
         runAnim: "walk-6-frames",
         frameCount: 6,
     },
@@ -67,6 +79,8 @@ const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
         scale: 1.5,
         anchorX: 0.5,
         anchorY: 0.65,
+        frameW: 92,
+        frameH: 92,
         runAnim: "walk",
         frameCount: 6,
     },
@@ -75,9 +89,31 @@ const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
         scale: 2,
         anchorX: 0.5,
         anchorY: 0.65,
+        frameW: 92,
+        frameH: 92,
         runAnim: "walk",
     },
 };
+
+export type EnemySpriteFrameMeta = {
+    w: number;
+    h: number;
+    scale: number;
+    anchorX: number;
+    anchorY: number;
+};
+
+export function getEnemySpriteFrameMeta(type: EnemyType): EnemySpriteFrameMeta | null {
+    const def = ENEMY_SPRITES[type];
+    if (!def) return null;
+    return {
+        w: def.frameW,
+        h: def.frameH,
+        scale: def.scale,
+        anchorX: def.anchorX,
+        anchorY: def.anchorY,
+    };
+}
 
 const paletteState = createPaletteSwapState(resolveActivePaletteId());
 const packsByPalette = new Map<string, Map<string, SpritePack>>();
@@ -154,6 +190,9 @@ export function getEnemySpriteFrame(args: {
     sy: number;
     sw: number;
     sh: number;
+    path: string;
+    w: number;
+    h: number;
     scale: number;
     anchorX: number;
     anchorY: number;
@@ -184,6 +223,9 @@ export function getEnemySpriteFrame(args: {
         sy: 0,
         sw: pack.size.w,
         sh: pack.size.h,
+        path: def.skin,
+        w: pack.size.w,
+        h: pack.size.h,
         scale: def.scale,
         anchorX: def.anchorX,
         anchorY: def.anchorY,

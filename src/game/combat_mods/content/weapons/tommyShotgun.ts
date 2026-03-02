@@ -5,8 +5,8 @@ export const TOMMY_SHOTGUN_V1: WeaponDef = {
   displayName: "Shotgun",
   tags: ["weapon", "gun", "projectile", "hit", "single_shot"],
 
-  // Target shape: 16 damage * 0.5 shots/sec * 4 pellets = 32 dps.
-  shotsPerSecond: 0.5,
+  // Target shape: 16 damage * 0.666... shots/sec * 4 pellets ~= 42.7 dps.
+  shotsPerSecond: 2 / 3,
 
   baseDamage: { physical: 16, fire: 0, chaos: 0 },
   baseCritChance: 0.05,

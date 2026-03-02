@@ -101,6 +101,15 @@ export function createMobileControls(args: CreateMobileControlsArgs): MobileCont
     resetStick();
   };
 
+  const releaseActivePointerCaptures = () => {
+    if (stickPointerId !== null) {
+      safeReleasePointerCapture(args.root, stickPointerId);
+    }
+    if (interactPointerId !== null) {
+      safeReleasePointerCapture(args.interactBtn, interactPointerId);
+    }
+  };
+
   const pointerTargetsInteract = (ev: PointerEvent): boolean => {
     const pathFn = (ev as any).composedPath;
     if (typeof pathFn === "function") {
@@ -204,13 +213,17 @@ export function createMobileControls(args: CreateMobileControlsArgs): MobileCont
   resetStick();
   resetInteract();
   args.root.hidden = true;
+  args.root.style.display = "none";
+  args.root.style.pointerEvents = "none";
 
   return {
     setEnabled(nextEnabled: boolean): void {
       enabled = nextEnabled;
       args.root.hidden = !enabled;
+      args.root.style.display = enabled ? "" : "none";
       args.root.style.pointerEvents = enabled ? "auto" : "none";
       if (!enabled) {
+        releaseActivePointerCaptures();
         stickPointerId = null;
         interactPointerId = null;
         resetStick();
@@ -229,11 +242,13 @@ export function createMobileControls(args: CreateMobileControlsArgs): MobileCont
       args.interactBtn.removeEventListener("pointercancel", onInteractPointerEnd as EventListener);
       args.interactBtn.removeEventListener("lostpointercapture", onInteractPointerEnd as EventListener);
       args.interactBtn.removeEventListener("contextmenu", onContextMenu as EventListener);
+      releaseActivePointerCaptures();
       stickPointerId = null;
       interactPointerId = null;
       resetStick();
       resetInteract();
       args.root.hidden = true;
+      args.root.style.display = "none";
       args.root.style.pointerEvents = "none";
     },
   };

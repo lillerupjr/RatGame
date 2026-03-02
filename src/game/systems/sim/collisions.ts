@@ -15,8 +15,7 @@ import { applyAilmentsFromHit, ensureEnemyAilmentsAt } from "../../combat_mods/a
 import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
 import { getUserSettings } from "../../../userSettings";
 import { resolveCritRoll01 } from "../../combat_mods/runtime/critDamagePacket";
-import { normalizeRelicIdList } from "../../content/relics";
-import { getRelicMods } from "../progression/relics";
+import { getRelicMods, normalizeWorldRelics } from "../progression/relics";
 import { getCardById } from "../../combat_mods/content/cards/cardPool";
 import { resolveDotStats } from "../../combat_mods/stats/combatStatsResolver";
 import { applyPlayerIncomingDamage } from "./playerArmor";
@@ -30,11 +29,16 @@ import {
   getPlayerWorld,
   getProjectileWorld,
 } from "../../coords/worldViews";
+import { getEnemyAimWorld } from "../../combat/aimPoints";
+import { STARTER_RELIC_IDS } from "../../content/starterRelics";
 const DMG_COLOR_PHYSICAL = "#ffffff";
 const DMG_COLOR_FIRE = "#ff9f3a";
 const DMG_COLOR_CHAOS = "#b57bff";
 const DMG_COLOR_POISON = "#6fe36f";
 const DMG_COLOR_PLAYER = "#ff4b4b";
+const STARTER_POINT_BLANK_MAX_RANGE = 220;
+const STARTER_POINT_BLANK_KNOCKBACK_RANGE = 84;
+const STARTER_POINT_BLANK_KNOCKBACK_PX = 34;
 
 type EnemyHitEvent = Extract<import("../../events").GameEvent, { type: "ENEMY_HIT" }>;
 type PlayerHitEvent = Extract<import("../../events").GameEvent, { type: "PLAYER_HIT" }>;
@@ -158,13 +162,13 @@ export function collisionsSystem(w: World, dt: number) {
   const debugSettings = getUserSettings().debug;
   const godMode = !!debugSettings.godMode;
   const debugRelicLogs = import.meta.env.DEV && !!debugSettings.triggers;
-  const normalizedRelics = normalizeRelicIdList(w.relics);
-  if (normalizedRelics.length !== w.relics.length || normalizedRelics.some((id, i) => id !== w.relics[i])) {
-    w.relics = normalizedRelics;
-  }
+  normalizeWorldRelics(w);
   const relicMods = getRelicMods(w);
   const critRolls = relicMods.critRolls ?? 1;
   const allDamageContributesToPoison = w.relics.includes("PASS_DAMAGE_TO_POISON_ALL");
+  const hasStarterContaminatedRounds = w.relics.includes(STARTER_RELIC_IDS.CONTAMINATED_ROUNDS);
+  const hasStarterPointBlankCarnage = w.relics.includes(STARTER_RELIC_IDS.POINT_BLANK_CARNAGE);
+  const hasStarterThermalStarter = w.relics.includes(STARTER_RELIC_IDS.THERMAL_STARTER);
   const cardIds = [...(w.cards ?? []), ...(w.combatCardIds ?? [])];
   const cards = cardIds
     .map((id: string) => getCardById(id))
@@ -285,7 +289,7 @@ export function collisionsSystem(w: World, dt: number) {
 
     // Query only nearby enemies from spatial hash
     // Use a generous query radius to account for enemy radii
-    const maxEnemyRadius = 40; // Assume max enemy radius; could be tracked if needed
+    const maxEnemyRadius = 120; // Includes tallest sprite aim offsets from feet anchors.
     const queryRadius = pr + maxEnemyRadius;
     const nearbyEnemies = queryCircle(hash, px, py, queryRadius);
     
@@ -303,9 +307,9 @@ export function collisionsSystem(w: World, dt: number) {
       // Double-check alive (enemy may have died from another projectile this frame)
       if (!w.eAlive[e]) continue;
 
-      const ew = getEnemyWorld(w, e, KENNEY_TILE_WORLD);
-      const dx = ew.wx - px;
-      const dy = ew.wy - py;
+      const enemyAim = getEnemyAimWorld(w, e);
+      const dx = enemyAim.x - px;
+      const dy = enemyAim.y - py;
       const rr = w.eR[e] + pr;
 
       if (!isEnemyHit(w, p, e, dx, dy, rr)) continue;
@@ -359,6 +363,46 @@ export function collisionsSystem(w: World, dt: number) {
       let finalFireDealt = resolvedDamage.fire;
       let finalChaosDealt = resolvedDamage.chaos;
       const isCrit = resolvedDamage.isCrit;
+
+      const ailmentAtEnemy = w.eAilments?.[e] as any;
+      const poisonStacks = Array.isArray(ailmentAtEnemy?.poison)
+        ? ailmentAtEnemy.poison.length
+        : (ailmentAtEnemy?.poison ? 1 : 0);
+      const igniteStacks = Array.isArray(ailmentAtEnemy?.ignite)
+        ? ailmentAtEnemy.ignite.length
+        : (ailmentAtEnemy?.ignite ? 1 : 0);
+      const enemyPoisoned = (w.ePoisonT[e] ?? 0) > 0 || poisonStacks > 0;
+      const enemyBurning = igniteStacks > 0;
+
+      const bLeft = w.prBouncesLeft[p];
+      const contaminatedPierceHit =
+        bLeft < 0
+        && hasStarterContaminatedRounds
+        && enemyPoisoned
+        && source !== "OTHER";
+      const isPiercingHit = bLeft < 0 && (w.prPierce[p] > 0 || contaminatedPierceHit);
+      if (isPiercingHit && hasStarterContaminatedRounds && enemyPoisoned) {
+        finalPhysDealt *= 1.2;
+        finalFireDealt *= 1.2;
+        finalChaosDealt *= 1.2;
+      }
+
+      if (hasStarterThermalStarter && enemyBurning && source !== "OTHER") {
+        finalPhysDealt *= 1.15;
+        finalFireDealt *= 1.15;
+        finalChaosDealt *= 1.15;
+      }
+
+      if (hasStarterPointBlankCarnage && source !== "OTHER") {
+        const playerNow = getPlayerWorld(w, KENNEY_TILE_WORLD);
+        const distToPlayer = Math.hypot(enemyAim.x - playerNow.wx, enemyAim.y - playerNow.wy);
+        const nearFrac = Math.max(0, 1 - Math.min(1, distToPlayer / STARTER_POINT_BLANK_MAX_RANGE));
+        const pointBlankMult = 1 + nearFrac * 0.5;
+        finalPhysDealt *= pointBlankMult;
+        finalFireDealt *= pointBlankMult;
+        finalChaosDealt *= pointBlankMult;
+      }
+
       if (source === "OTHER") {
         const procMult = relicTriggerMomentumDamageMultiplier(w);
         if (procMult !== 1) {
@@ -424,8 +468,8 @@ export function collisionsSystem(w: World, dt: number) {
         dmgPhys: finalPhysDealt,
         dmgFire: finalFireDealt,
         dmgChaos: finalChaosDealt,
-        x: ew.wx,
-        y: ew.wy,
+        x: enemyAim.x,
+        y: enemyAim.y,
         isCrit,
         critMult: critMulti,
         source,
@@ -434,8 +478,6 @@ export function collisionsSystem(w: World, dt: number) {
       // Bounce / pierce handling
       // If prBouncesLeft[p] >= 0 => this projectile uses ricochet rules.
       // Otherwise, use normal pierce rules.
-      const bLeft = w.prBouncesLeft[p];
-
       if (bLeft >= 0) {
         // If no bounces left, it dies on this hit (after dealing damage).
         if (bLeft <= 0) {
@@ -443,8 +485,8 @@ export function collisionsSystem(w: World, dt: number) {
         } else {
           // Pool-style ricochet: reflect velocity about the collision normal.
           // Normal points from enemy center -> projectile center.
-          const ex = ew.wx;
-          const ey = ew.wy;
+          const ex = enemyAim.x;
+          const ey = enemyAim.y;
 
           let nx = px - ex;
           let ny = py - ey;
@@ -483,8 +525,24 @@ export function collisionsSystem(w: World, dt: number) {
         // Normal pierce behavior for non-bouncing projectiles
         if (w.prPierce[p] > 0) {
           w.prPierce[p] -= 1;
+        } else if (contaminatedPierceHit) {
+          // Starter Contaminated Rounds: poisoned targets are always pierced.
         } else {
           w.pAlive[p] = false;
+        }
+      }
+
+      if (hasStarterPointBlankCarnage && source !== "OTHER") {
+        const enemyFeet = getEnemyWorld(w, e, KENNEY_TILE_WORLD);
+        const playerNow = getPlayerWorld(w, KENNEY_TILE_WORLD);
+        const distToPlayerFeet = Math.hypot(enemyFeet.wx - playerNow.wx, enemyFeet.wy - playerNow.wy);
+        if (distToPlayerFeet <= STARTER_POINT_BLANK_KNOCKBACK_RANGE) {
+          const len = Math.max(0.0001, distToPlayerFeet);
+          const ux = (enemyFeet.wx - playerNow.wx) / len;
+          const uy = (enemyFeet.wy - playerNow.wy) / len;
+          const closeFrac = 1 - Math.min(1, distToPlayerFeet / STARTER_POINT_BLANK_KNOCKBACK_RANGE);
+          const push = 10 + STARTER_POINT_BLANK_KNOCKBACK_PX * closeFrac;
+          setEnemyAnchorFromWorld(e, enemyFeet.wx + ux * push, enemyFeet.wy + uy * push);
         }
       }
 
@@ -575,8 +633,8 @@ export function collisionsSystem(w: World, dt: number) {
         emitEvent(w, {
           type: "ENEMY_KILLED",
           enemyIndex: e,
-          x: ew.wx,
-          y: ew.wy,
+          x: enemyAim.x,
+          y: enemyAim.y,
           spawnTriggerId: w.eSpawnTriggerId[e],
           source: registry.projectileSourceFromKind(w.prjKind[p]),
         });

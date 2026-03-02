@@ -1,6 +1,6 @@
 import { World, emitEvent } from "../../../engine/world/world";
 import { findClosestTarget } from "../../util/targeting";
-import { PRJ_KIND, spawnProjectileGrid } from "../../factories/projectileFactory";
+import { PRJ_KIND, spawnProjectile } from "../../factories/projectileFactory";
 import { getCardById } from "../../combat_mods/content/cards/cardPool";
 import { resolveDotStats, resolveWeaponStats } from "../../combat_mods/stats/combatStatsResolver";
 import { applySpreadToDirection, computeProjectileAngles } from "../../combat_mods/runtime/spread";
@@ -11,8 +11,10 @@ import { resolveCombatStarterWeaponId } from "../../combat_mods/content/weapons/
 import { resolveCombatStarterStatCards } from "../../combat_mods/content/weapons/characterStarterMods";
 import { getCombatStarterWeaponById } from "../../combat_mods/content/weapons/starterWeapons";
 import { resetPlayerBeamState, updatePlayerBeamCombat } from "./beamCombat";
-import { getPlayerWorld } from "../../coords/worldViews";
+import { getPlayerAimWorld } from "../../combat/aimPoints";
+import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
+import { STARTER_RELIC_IDS } from "../../content/starterRelics";
 
 /** Handle weapon cooldowns, targeting, and firing events. */
 export function combatSystem(w: World, dt: number) {
@@ -65,6 +67,7 @@ export function combatSystem(w: World, dt: number) {
   const dmgChaos = resolved.baseDamage.chaos * derivedDamageMult * debugDamageMult * relicDamageMult * hitDamageMoreMult;
   const totalDamage = dmgPhys + dmgFire + dmgChaos;
   const finalCritChance = Math.min(1, resolved.critChance * (isAtFullMomentum ? 2 : 1));
+  const hasStarterLuckyChamber = w.relics.includes(STARTER_RELIC_IDS.LUCKY_CHAMBER);
   const projectileKind = selectedWeapon.projectile.kind ?? PRJ_KIND.PISTOL;
   const weaponFireMode = selectedWeapon.fireMode ?? "projectile";
   const runtime = w as any;
@@ -75,20 +78,30 @@ export function combatSystem(w: World, dt: number) {
   if (!Number.isFinite(runtime.primaryBurstAimX)) runtime.primaryBurstAimX = 1;
   if (!Number.isFinite(runtime.primaryBurstAimY)) runtime.primaryBurstAimY = 0;
   if (!Number.isFinite(runtime.primaryBurstTailCooldown)) runtime.primaryBurstTailCooldown = cooldown;
+  if (!Number.isFinite(w.starterLuckyChamberShotCounter as any)) w.starterLuckyChamberShotCounter = 0;
+
+  const nextShotCritChance = (): number => {
+    if (!hasStarterLuckyChamber) return finalCritChance;
+    w.starterLuckyChamberShotCounter = (w.starterLuckyChamberShotCounter ?? 0) + 1;
+    if ((w.starterLuckyChamberShotCounter % 5) === 0) return 1;
+    return finalCritChance;
+  };
 
   const spawnResolvedProjectile = (dirX: number, dirY: number): void => {
-    spawnProjectileGrid(w, {
+    const from = getPlayerAimWorld(w);
+    const shotCritChance = nextShotCritChance();
+    spawnProjectile(w, {
       kind: projectileKind,
-      gx: w.pgxi + w.pgox,
-      gy: w.pgyi + w.pgoy,
-      dirGx: dirX,
-      dirGy: dirY,
+      x: from.x,
+      y: from.y,
+      dirX,
+      dirY,
       speed: resolved.projectileSpeedPxPerSec,
       damage: totalDamage,
       dmgPhys,
       dmgFire,
       dmgChaos,
-      critChance: finalCritChance,
+      critChance: shotCritChance,
       critMulti: resolved.critMulti,
       chanceBleed: resolved.chanceToBleed,
       chanceIgnite: resolved.chanceToIgnite,
@@ -136,8 +149,12 @@ export function combatSystem(w: World, dt: number) {
     const dpsScale = Math.max(0, beamAuthoringScale * fireRateScale);
 
     const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
-    const aimWorldDx = target.x - pWorld.wx;
-    const aimWorldDy = target.y - pWorld.wy;
+    const targetEnemyWorld =
+      target.enemyIndex >= 0
+        ? getEnemyWorld(w, target.enemyIndex, KENNEY_TILE_WORLD)
+        : { wx: target.x, wy: target.y };
+    const aimWorldDx = targetEnemyWorld.wx - pWorld.wx;
+    const aimWorldDy = targetEnemyWorld.wy - pWorld.wy;
     const aimWorldLen = Math.hypot(aimWorldDx, aimWorldDy);
     const beamDirX = aimWorldLen > 0.0001 ? aimWorldDx / aimWorldLen : defaultAimX;
     const beamDirY = aimWorldLen > 0.0001 ? aimWorldDy / aimWorldLen : defaultAimY;

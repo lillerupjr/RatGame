@@ -5,6 +5,7 @@ import { gridAtPlayer } from "../../engine/world/world";
 import { gridToWorld, worldToGrid } from "../coords/grid";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { queryCircle, queryCircleUnique } from "./spatialHash";
+import { getEnemyAimWorld, getPlayerAimWorld } from "../combat/aimPoints";
 
 /**
  * Targeting strategies for weapons.
@@ -230,16 +231,19 @@ export function findClusterTarget(
   // Return the cluster centroid (not necessarily an enemy position)
   const dxg = bestCenterGx - pg.gx;
   const dyg = bestCenterGy - pg.gy;
-  const dist = worldDistFromGridDelta(dxg, dyg) || 0.0001;
   const wpos = worldPosFromGrid(bestCenterGx, bestCenterGy);
-  const gdir = gridDir(dxg, dyg);
+  const playerAim = getPlayerAimWorld(w);
+  const worldDx = wpos.x - playerAim.x;
+  const worldDy = wpos.y - playerAim.y;
+  const dist = Math.hypot(worldDx, worldDy) || 0.0001;
+  const invDist = 1 / dist;
 
   return {
     enemyIndex: bestCenter, // The enemy that anchors the cluster
     x: wpos.x,
     y: wpos.y,
-    dirX: gdir.dx,
-    dirY: gdir.dy,
+    dirX: worldDx * invDist,
+    dirY: worldDy * invDist,
     distance: dist,
   };
 }
@@ -384,20 +388,19 @@ export function findFarthestTarget(w: World, maxRange: number = 0): TargetResult
  * Helper to build a TargetResult from an enemy index.
  */
 function makeTargetResult(w: World, e: number): TargetResult {
-  const pg = gridAtPlayer(w);
-  const eg = enemyGrid(w, e);
-  const dxg = eg.gx - pg.gx;
-  const dyg = eg.gy - pg.gy;
-  const dist = worldDistFromGridDelta(dxg, dyg) || 0.0001;
-  const wpos = worldPosFromGrid(eg.gx, eg.gy);
-  const gdir = gridDir(dxg, dyg);
+  const from = getPlayerAimWorld(w);
+  const to = getEnemyAimWorld(w, e);
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const dist = Math.hypot(dx, dy) || 0.0001;
+  const invDist = 1 / dist;
 
   return {
     enemyIndex: e,
-    x: wpos.x,
-    y: wpos.y,
-    dirX: gdir.dx,
-    dirY: gdir.dy,
+    x: to.x,
+    y: to.y,
+    dirX: dx * invDist,
+    dirY: dy * invDist,
     distance: dist,
   };
 }

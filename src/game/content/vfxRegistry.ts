@@ -23,11 +23,19 @@ function frames16(root: string): string[] {
   return out;
 }
 
+function framesN(root: string, count: number): string[] {
+  const out: string[] = [];
+  for (let i = 1; i <= count; i++) out.push(`${root}/1_frame_${String(i).padStart(2, "0")}`);
+  return out;
+}
+
 export const VFX_CLIPS: VfxClipDef[] = [
   /* 0 = EXPLOSION          */ { spriteIds: explosionSpriteIds(), fps: 20, loop: false },
   /* 1 = STATUS_BLEED_LOOP  */ { spriteIds: frames16("vfx/status/bleed_1"), fps: 12, loop: true },
   /* 2 = STATUS_POISON_LOOP */ { spriteIds: frames16("vfx/status/poisoned_1"), fps: 12, loop: true },
   /* 3 = STATUS_BURNING_LOOP*/ { spriteIds: frames16("vfx/status/burning_1"), fps: 12, loop: true },
+  /* 4 = LIGHTNING_HIT      */ { spriteIds: framesN("vfx/lightning/hit", 5), fps: 20, loop: false },
+  /* 5 = LIGHTNING_PROJ     */ { spriteIds: framesN("vfx/lightning/projectile", 5), fps: 20, loop: true },
 ];
 
 export const VFX_CLIP_INDEX: Record<string, number> = {
@@ -35,6 +43,8 @@ export const VFX_CLIP_INDEX: Record<string, number> = {
   STATUS_BLEED_LOOP: 1,
   STATUS_POISON_LOOP: 2,
   STATUS_BURNING_LOOP: 3,
+  LIGHTNING_HIT: 4,
+  LIGHTNING_PROJ: 5,
 };
 
 export function preloadVfxSprites(): void {

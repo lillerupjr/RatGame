@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { DEFAULT_SPAWN_TUNING } from "../../../game/balance/spawnTuningDefaults";
 
 class FakeEvent {
   type: string;
@@ -14,6 +15,22 @@ class FakeClassList {
   add(name: string) { this.classes.add(name); }
   remove(name: string) { this.classes.delete(name); }
   contains(name: string) { return this.classes.has(name); }
+  toggle(name: string, force?: boolean): boolean {
+    if (force === true) {
+      this.classes.add(name);
+      return true;
+    }
+    if (force === false) {
+      this.classes.delete(name);
+      return false;
+    }
+    if (this.classes.has(name)) {
+      this.classes.delete(name);
+      return false;
+    }
+    this.classes.add(name);
+    return true;
+  }
 }
 
 class FakeElement {
@@ -32,17 +49,42 @@ class FakeElement {
 
   private _text = "";
   private listeners = new Map<string, Listener[]>();
+  private attrs = new Map<string, string>();
 
   children: FakeElement[] = [];
   parentNode: FakeElement | null = null;
+
+  get parentElement(): FakeElement | null {
+    return this.parentNode;
+  }
 
   constructor(tagName: string) {
     this.tagName = tagName.toUpperCase();
   }
 
   appendChild(child: FakeElement): FakeElement {
+    if (child.parentNode && child.parentNode !== this) {
+      child.parentNode.removeChild(child);
+    }
     child.parentNode = this;
     this.children.push(child);
+    return child;
+  }
+
+  insertBefore(child: FakeElement, reference: FakeElement | null): FakeElement {
+    if (!reference || !this.children.includes(reference)) {
+      return this.appendChild(child);
+    }
+    if (child.parentNode && child.parentNode !== this) {
+      child.parentNode.removeChild(child);
+    }
+    if (child.parentNode === this) {
+      const existingIndex = this.children.indexOf(child);
+      if (existingIndex >= 0) this.children.splice(existingIndex, 1);
+    }
+    const index = this.children.indexOf(reference);
+    child.parentNode = this;
+    this.children.splice(index, 0, child);
     return child;
   }
 
@@ -70,10 +112,15 @@ class FakeElement {
   }
 
   setAttribute(name: string, value: string): void {
+    this.attrs.set(name, value);
     if (name.startsWith("data-")) {
       const key = name.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
       this.dataset[key] = value;
     }
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attrs.get(name) ?? null;
   }
 
   addEventListener(type: string, listener: Listener): void {
@@ -93,11 +140,17 @@ class FakeElement {
   }
 
   click(): void {
+    if (this.tagName === "INPUT" && this.type === "checkbox") {
+      this.checked = !this.checked;
+    }
     this.dispatchEvent(new FakeEvent("click"));
+    if (this.tagName === "INPUT" && this.type === "checkbox") {
+      this.dispatchEvent(new FakeEvent("change"));
+    }
   }
 
   querySelector(selector: string): FakeElement | null {
-    const mv = selector.match(/^\[data-([a-z0-9-]+)=\"([^\"]+)\"\]$/i);
+    const mv = selector.match(/^\[data-([a-z0-9-]+)=['"]([^'"]+)['"]\]$/i);
     if (mv) {
       const raw = mv[1].replace(/-([a-z])/g, (_, c) => c.toUpperCase());
       return this.find((node) => node.dataset[raw] === mv[2]);
@@ -117,6 +170,27 @@ class FakeElement {
     return null;
   }
 
+  querySelectorAll(selector: string): FakeElement[] {
+    const mv = selector.match(/^\[data-([a-z0-9-]+)=['"]([^'"]+)['"]\]$/i);
+    if (mv) {
+      const raw = mv[1].replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+      return this.findAll((node) => node.dataset[raw] === mv[2]);
+    }
+    const m = selector.match(/^\[data-([a-z0-9-]+)\]$/i);
+    if (m) {
+      const raw = m[1].replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+      return this.findAll((node) => raw in node.dataset);
+    }
+    if (selector.startsWith(".")) {
+      const cls = selector.slice(1);
+      return this.findAll((node) => {
+        const byName = node.className.split(/\s+/).includes(cls);
+        return byName || node.classList.contains(cls);
+      });
+    }
+    return [];
+  }
+
   private find(pred: (node: FakeElement) => boolean): FakeElement | null {
     for (const child of this.children) {
       if (pred(child)) return child;
@@ -124,6 +198,16 @@ class FakeElement {
       if (inner) return inner;
     }
     return null;
+  }
+
+  private findAll(pred: (node: FakeElement) => boolean): FakeElement[] {
+    const out: FakeElement[] = [];
+    for (const child of this.children) {
+      if (pred(child)) out.push(child);
+      const inner = child.findAll(pred);
+      if (inner.length > 0) out.push(...inner);
+    }
+    return out;
   }
 }
 
@@ -157,15 +241,26 @@ const userSettingsState = vi.hoisted(() => ({
       healthOrbSide: "left",
     },
     render: {
+      entityShadowsDisable: false,
+      entityAnchorsEnabled: false,
+      renderPerfCountersEnabled: false,
       paletteSwapEnabled: false,
       paletteId: "db32",
       performanceMode: false,
+      tileRenderRadius: 0,
       spawnBase: 1.0,
       spawnPerDepth: 1.12,
       hpBase: 1.0,
       hpPerDepth: 1.18,
       pressureAt0Sec: 0.8,
       pressureAt120Sec: 1.4,
+    },
+    audio: {
+      masterVolume: 1,
+      musicVolume: 0.6,
+      sfxVolume: 1,
+      musicMuted: false,
+      sfxMuted: false,
     },
   },
 }));
@@ -191,6 +286,38 @@ vi.mock("../../../game/audio/audioSettings", () => ({
 }));
 
 vi.mock("../../../userSettings", () => ({
+  DEFAULT_SETTINGS: {
+    debug: {
+      pauseDebugCards: false,
+      pauseCsvControls: false,
+    },
+    game: {
+      userModeEnabled: true,
+      healthOrbSide: "left",
+    },
+    render: {
+      entityShadowsDisable: false,
+      entityAnchorsEnabled: false,
+      renderPerfCountersEnabled: false,
+      performanceMode: false,
+      tileRenderRadius: 0,
+      paletteSwapEnabled: false,
+      paletteId: "db32",
+      spawnBase: 1.0,
+      spawnPerDepth: 1.12,
+      hpBase: 1.0,
+      hpPerDepth: 1.18,
+      pressureAt0Sec: 0.8,
+      pressureAt120Sec: 1.4,
+    },
+    audio: {
+      masterVolume: 1,
+      musicVolume: 0.6,
+      sfxVolume: 1,
+      musicMuted: false,
+      sfxMuted: false,
+    },
+  },
   isPauseDebugCardsEnabled: vi.fn(() => debugFlags.pauseDebugCards),
   isPauseCsvControlsEnabled: vi.fn(() => debugFlags.pauseCsvControls),
   getUserSettings: vi.fn(() => userSettingsState.settings),
@@ -238,6 +365,7 @@ function makeWorld(overrides: Record<string, unknown> = {}) {
     kills: 2,
     relics: [],
     items: [],
+    cards: [],
     combatCardIds: [],
     ...overrides,
   } as any;
@@ -266,15 +394,26 @@ describe("pauseMenu", () => {
       debug: { pauseDebugCards: false, pauseCsvControls: false },
       game: { userModeEnabled: true, healthOrbSide: "left" },
       render: {
+        entityShadowsDisable: false,
+        entityAnchorsEnabled: false,
+        renderPerfCountersEnabled: false,
         paletteSwapEnabled: false,
         paletteId: "db32",
         performanceMode: false,
+        tileRenderRadius: 0,
         spawnBase: 1.0,
         spawnPerDepth: 1.12,
         hpBase: 1.0,
         hpPerDepth: 1.18,
         pressureAt0Sec: 0.8,
         pressureAt120Sec: 1.4,
+      },
+      audio: {
+        masterVolume: 1,
+        musicVolume: 0.6,
+        sfxVolume: 1,
+        musicMuted: false,
+        sfxMuted: false,
       },
     };
   });
@@ -287,7 +426,7 @@ describe("pauseMenu", () => {
     menu.setVisible(true);
 
     expect(root.querySelector(".pausePanel")).toBeTruthy();
-    expect(root.querySelector(".pauseGrid")).toBeTruthy();
+    expect(root.querySelector(".pauseNavLayout")).toBeTruthy();
   });
 
   test("resume, quit, and dev tools buttons call actions", () => {
@@ -339,6 +478,7 @@ describe("pauseMenu", () => {
 
     const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
     menu.setVisible(true);
+    (root.querySelector('[data-settings-tab="AUDIO"]') as any).click();
 
     const musicSlider = root.querySelector("[data-audio-music-slider]") as any;
     const musicMute = root.querySelector("[data-audio-music-mute]") as any;
@@ -367,7 +507,7 @@ describe("pauseMenu", () => {
     menu.setVisible(true);
 
     menu.render(makeWorld());
-    expect(root.textContent).toContain("No cards yet");
+    expect(root.textContent).toContain("No cards owned yet.");
 
     menu.render(
       makeWorld({
@@ -378,8 +518,7 @@ describe("pauseMenu", () => {
 
     expect(root.textContent).toContain("+3 physical damage");
     expect(root.textContent).toContain("x2");
-    expect(root.textContent).toContain("20% more movement speed");
-    expect(root.querySelector(".pauseCardTile")).toBeTruthy();
+    expect(root.querySelector(".pauseOwnedCardRow")).toBeTruthy();
   });
 
   test("build panel shows laser weapon summary for JOEY", () => {
@@ -563,7 +702,7 @@ describe("pauseMenu", () => {
       items: [],
     });
     menu.render(world);
-    expect(root.textContent).toContain("Move Speed300.00");
+    expect(world.pSpeed).toBeCloseTo(300, 3);
 
     const openBtn = root.querySelector("[data-debug-relics-open]") as any;
     openBtn.click();
@@ -571,12 +710,10 @@ describe("pauseMenu", () => {
     const addBtn = root.querySelector('[data-debug-relic-add="PASS_MOVE_SPEED_20"]') as any;
     addBtn.click();
     expect(world.pSpeed).toBeCloseTo(360, 3);
-    expect(root.textContent).toContain("Move Speed360.00");
 
     const removeBtn = root.querySelector('[data-debug-relic-remove="PASS_MOVE_SPEED_20"]') as any;
     removeBtn.click();
     expect(world.pSpeed).toBeCloseTo(300, 3);
-    expect(root.textContent).toContain("Move Speed300.00");
   });
 
   test("performance mode toggle updates user settings", () => {
@@ -586,7 +723,7 @@ describe("pauseMenu", () => {
     menu.setVisible(true);
     menu.render(makeWorld());
 
-    expect(root.textContent).toContain("Render");
+    (root.querySelector('[data-settings-tab="GRAPHICS"]') as any).click();
     const toggle = root.querySelector("[data-performance-mode-toggle]") as any;
     expect(toggle).toBeTruthy();
 
@@ -595,39 +732,36 @@ describe("pauseMenu", () => {
     expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({ render: { performanceMode: true } });
   });
 
-  test("stats categories collapse and persist across pause/unpause", () => {
+  test("settings tabs switch visible panels", () => {
     const root = document.createElement("div") as unknown as HTMLDivElement;
     document.body.appendChild(root as any);
     const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
     menu.setVisible(true);
     menu.render(makeWorld());
 
-    const mainToggle = root.querySelector("[data-stats-main-toggle]") as any;
-    const debugToggle = root.querySelector("[data-stats-debug-toggle]") as any;
-    const mainBody = root.querySelector("[data-stats-main-body]") as any;
-    const debugBody = root.querySelector("[data-stats-debug-body]") as any;
+    const gamePanel = root.querySelector('[data-settings-panel="GAME"]') as any;
+    const graphicsPanel = root.querySelector('[data-settings-panel="GRAPHICS"]') as any;
+    const audioPanel = root.querySelector('[data-settings-panel="AUDIO"]') as any;
+    const gameTab = root.querySelector('[data-settings-tab="GAME"]') as any;
+    const graphicsTab = root.querySelector('[data-settings-tab="GRAPHICS"]') as any;
+    const audioTab = root.querySelector('[data-settings-tab="AUDIO"]') as any;
 
-    expect(mainToggle.textContent).toContain("Hide Stats");
-    expect(debugToggle.textContent).toContain("Hide Debug Metrics");
-    expect(mainBody.hidden).toBe(false);
-    expect(debugBody.hidden).toBe(false);
+    expect(gamePanel.hidden).toBe(false);
+    expect(graphicsPanel.hidden).toBe(true);
+    expect(audioPanel.hidden).toBe(true);
 
-    mainToggle.click();
-    debugToggle.click();
+    graphicsTab.click();
+    expect(gamePanel.hidden).toBe(true);
+    expect(graphicsPanel.hidden).toBe(false);
+    expect(audioPanel.hidden).toBe(true);
 
-    expect(mainToggle.textContent).toContain("Show Stats");
-    expect(debugToggle.textContent).toContain("Show Debug Metrics");
-    expect(mainBody.hidden).toBe(true);
-    expect(debugBody.hidden).toBe(true);
+    audioTab.click();
+    expect(gamePanel.hidden).toBe(true);
+    expect(graphicsPanel.hidden).toBe(true);
+    expect(audioPanel.hidden).toBe(false);
 
-    menu.setVisible(false);
-    menu.setVisible(true);
-    menu.render(makeWorld());
-
-    expect(mainToggle.textContent).toContain("Show Stats");
-    expect(debugToggle.textContent).toContain("Show Debug Metrics");
-    expect(mainBody.hidden).toBe(true);
-    expect(debugBody.hidden).toBe(true);
+    gameTab.click();
+    expect(gamePanel.hidden).toBe(false);
   });
 
   test("shows on-screen enemy HP in debug metrics", () => {
@@ -716,31 +850,23 @@ describe("pauseMenu", () => {
     expect(root.textContent).toContain("Pending4");
   });
 
-  test("balance csv buttons exist and toggle updates label", () => {
-    debugFlags.pauseCsvControls = true;
+  test("spawn tuning reset button restores defaults", () => {
     const root = document.createElement("div") as unknown as HTMLDivElement;
     document.body.appendChild(root as any);
 
     const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
     menu.setVisible(true);
 
-    const w = makeWorld({
-      timeSec: 12,
-      balanceCsvLogger: { enabled: false },
-    });
-    menu.render(w);
+    menu.render(makeWorld());
+    const spawnSlider = root.querySelector("[data-spawn-rate-orb-slider]") as any;
+    expect(spawnSlider).toBeTruthy();
+    spawnSlider.value = "1.25";
+    spawnSlider.dispatchEvent(new Event("input") as any);
 
-    const toggle = root.querySelector("[data-balance-csv-toggle]") as any;
-    const clear = root.querySelector("[data-balance-csv-clear]") as any;
-    const download = root.querySelector("[data-balance-csv-download]") as any;
-
-    expect(toggle).toBeTruthy();
-    expect(clear).toBeTruthy();
-    expect(download).toBeTruthy();
-    expect(root.textContent).toContain("Start CSV");
-
-    toggle.click();
-    expect(root.textContent).toContain("Stop CSV");
+    const resetBtn = root.querySelector(".pauseInlineAction") as any;
+    expect(resetBtn).toBeTruthy();
+    resetBtn.click();
+    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({ render: { ...DEFAULT_SPAWN_TUNING } });
   });
 
   test("spawn tuning orb sliders persist to local settings and apply to world", () => {

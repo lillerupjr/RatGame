@@ -8,11 +8,12 @@ import {
 import { relicRetriggerSystem } from "../../../../game/systems/progression/relicRetriggerSystem";
 import { PRJ_KIND } from "../../../../game/factories/projectileFactory";
 import { ENEMY_TYPE, spawnEnemyGrid } from "../../../../game/factories/enemyFactory";
-import { getEnemyWorld } from "../../../../game/coords/worldViews";
+import { getEnemyWorld, getPlayerWorld } from "../../../../game/coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../../engine/render/kenneyTiles";
 import { clearSpatialHash, insertEntity } from "../../../../game/util/spatialHash";
 import { RNG } from "../../../../game/util/rng";
 import { zonesSystem } from "../../../../game/systems/sim/zones";
+import { STARTER_RELIC_IDS } from "../../../../game/content/starterRelics";
 
 function rebuildEnemyHash(world: ReturnType<typeof createWorld>): void {
   clearSpatialHash(world.enemySpatialHash);
@@ -32,6 +33,7 @@ function runSparkProcCount(
   damage: number,
 ): number {
   let procCount = 0;
+  const sparksBefore = world.prjKind.filter((k) => k === PRJ_KIND.SPARK).length;
   for (let i = 0; i < hits; i++) {
     world.events.push({
       type: "ENEMY_HIT",
@@ -43,9 +45,9 @@ function runSparkProcCount(
       source: "PISTOL",
     });
     relicTriggerSystem(world);
-    procCount += world.events.filter((ev) => ev.type === "ENEMY_HIT" && ev.source === "OTHER").length;
     world.events = [];
   }
+  procCount = world.prjKind.filter((k) => k === PRJ_KIND.SPARK).length - sparksBefore;
   return procCount;
 }
 
@@ -77,6 +79,33 @@ describe("relicTriggerSystem", () => {
     expect(world.prDmgFire[0]).toBe(0);
     expect(world.prDmgChaos[0]).toBe(0);
     expect(world.prExplodeDmg[0]).toBeCloseTo(20, 6);
+  });
+
+  test("ACT_BAZOOKA_ON_HIT_20 aims at enemy center and spawns from player aim point", () => {
+    const world = createWorld({ seed: 12, stage: stageDocks });
+    world.relics.push("ACT_BAZOOKA_ON_HIT_20");
+    const enemy = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 5, 5);
+    rebuildEnemyHash(world);
+    const enemyFeet = getEnemyWorld(world, enemy, KENNEY_TILE_WORLD);
+    const playerFeet = getPlayerWorld(world, KENNEY_TILE_WORLD);
+
+    world.events.push({
+      type: "ENEMY_HIT",
+      enemyIndex: enemy,
+      damage: 100,
+      x: enemyFeet.wx,
+      y: enemyFeet.wy,
+      isCrit: false,
+      source: "PISTOL",
+    } as any);
+
+    relicTriggerSystem(world);
+
+    expect(world.pAlive.length).toBe(1);
+    expect(world.prjKind[0]).toBe(PRJ_KIND.MISSILE);
+    expect(world.prTargetX[0]).toBeCloseTo(enemyFeet.wx, 6);
+    expect(world.prTargetY[0]).toBeLessThan(enemyFeet.wy);
+    expect(world.prStartY[0]).toBeLessThan(playerFeet.wy);
   });
 
   test("loop guard: source OTHER ENEMY_HIT does not spawn bazooka", () => {
@@ -203,7 +232,7 @@ describe("relicTriggerSystem", () => {
     rebuildEnemyHash(world);
     const aw = getEnemyWorld(world, a, KENNEY_TILE_WORLD);
 
-    let procCount = 0;
+    const sparksBefore = world.prjKind.filter((k) => k === PRJ_KIND.SPARK).length;
     for (let i = 0; i < 100; i++) {
       world.events.push({
         type: "ENEMY_HIT",
@@ -215,9 +244,9 @@ describe("relicTriggerSystem", () => {
         source: "PISTOL",
       });
       relicTriggerSystem(world);
-      procCount += world.events.filter((ev) => ev.type === "ENEMY_HIT" && ev.source === "OTHER").length;
       world.events = [];
     }
+    const procCount = world.prjKind.filter((k) => k === PRJ_KIND.SPARK).length - sparksBefore;
 
     const expectedRng = new RNG(seed);
     let expectedCount = 0;
@@ -225,6 +254,65 @@ describe("relicTriggerSystem", () => {
       if (expectedRng.next() < 0.2) expectedCount++;
     }
     expect(procCount).toBe(expectedCount);
+  });
+
+  test("ACT_SPARK_ON_HIT_20 targets enemy center-of-sprite aim point", () => {
+    const world = createWorld({ seed: 33, stage: stageDocks });
+    world.relics.push("ACT_SPARK_ON_HIT_20");
+    (world.rng as any).next = () => 0.0; // force proc
+    const a = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 9, 9);
+    const b = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 10, 9);
+    rebuildEnemyHash(world);
+    const aw = getEnemyWorld(world, a, KENNEY_TILE_WORLD);
+    const bw = getEnemyWorld(world, b, KENNEY_TILE_WORLD);
+
+    world.events.push({
+      type: "ENEMY_HIT",
+      enemyIndex: a,
+      damage: 100,
+      x: aw.wx,
+      y: aw.wy,
+      isCrit: false,
+      source: "PISTOL",
+    } as any);
+
+    relicTriggerSystem(world);
+
+    const spark = world.prjKind.findIndex((k) => k === PRJ_KIND.SPARK);
+    expect(spark).toBeGreaterThanOrEqual(0);
+    expect(world.prTargetX[spark]).toBeCloseTo(bw.wx, 6);
+    expect(world.prTargetY[spark]).toBeLessThan(bw.wy);
+  });
+
+  test("Street Reflex starter relic throws an extra knife at a nearby enemy", () => {
+    const world = createWorld({ seed: 333, stage: stageDocks });
+    world.relics.push(STARTER_RELIC_IDS.STREET_REFLEX);
+    (world.rng as any).next = () => 0.0; // force proc
+
+    const a = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 9, 9);
+    const b = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 10, 9);
+    rebuildEnemyHash(world);
+    const aw = getEnemyWorld(world, a, KENNEY_TILE_WORLD);
+    const bw = getEnemyWorld(world, b, KENNEY_TILE_WORLD);
+    const playerFeet = getPlayerWorld(world, KENNEY_TILE_WORLD);
+
+    world.events.push({
+      type: "ENEMY_HIT",
+      enemyIndex: a,
+      damage: 24,
+      x: aw.wx,
+      y: aw.wy,
+      isCrit: false,
+      source: "PISTOL",
+    } as any);
+
+    relicTriggerSystem(world);
+
+    const knife = world.prjKind.findIndex((k) => k === PRJ_KIND.KNIFE);
+    expect(knife).toBeGreaterThanOrEqual(0);
+    expect(world.prTargetX[knife]).toBeCloseTo(bw.wx, 6);
+    expect(world.prTargetY[knife]).toBeLessThan(bw.wy);
+    expect(world.prStartY[knife]).toBeLessThan(playerFeet.wy);
   });
 
   test("ACT_RETRY_FAILED_PROCS_ONCE increases Spark proc count deterministically", () => {
@@ -242,7 +330,7 @@ describe("relicTriggerSystem", () => {
     rebuildEnemyHash(world);
     const aw = getEnemyWorld(world, a, KENNEY_TILE_WORLD);
 
-    let procCount = 0;
+    const sparksBefore = world.prjKind.filter((k) => k === PRJ_KIND.SPARK).length;
     for (let i = 0; i < 100; i++) {
       world.events.push({
         type: "ENEMY_HIT",
@@ -254,9 +342,9 @@ describe("relicTriggerSystem", () => {
         source: "PISTOL",
       });
       relicTriggerSystem(world);
-      procCount += world.events.filter((ev) => ev.type === "ENEMY_HIT" && ev.source === "OTHER").length;
       world.events = [];
     }
+    const procCount = world.prjKind.filter((k) => k === PRJ_KIND.SPARK).length - sparksBefore;
 
     const expectedRng = new RNG(seed);
     let expectedCount = 0;
@@ -296,15 +384,17 @@ describe("relicTriggerSystem", () => {
       isCrit: false,
       source: "PISTOL",
     });
+    const sparksBefore = world.prjKind.filter((k) => k === PRJ_KIND.SPARK).length;
     relicTriggerSystem(world);
-    const immediateProcs = world.events.filter((ev) => ev.type === "ENEMY_HIT" && ev.source === "OTHER").length;
+    const immediateProcs = world.prjKind.filter((k) => k === PRJ_KIND.SPARK).length - sparksBefore;
     expect(immediateProcs).toBe(1);
     expect(world.relicRetriggerQueue.length).toBe(1);
 
     world.events = [];
     world.time += 0.5;
+    const sparksBeforeRetrigger = world.prjKind.filter((k) => k === PRJ_KIND.SPARK).length;
     relicRetriggerSystem(world);
-    const retriggerProcs = world.events.filter((ev) => ev.type === "ENEMY_HIT" && ev.source === "OTHER").length;
+    const retriggerProcs = world.prjKind.filter((k) => k === PRJ_KIND.SPARK).length - sparksBeforeRetrigger;
     expect(retriggerProcs).toBe(1);
   });
 

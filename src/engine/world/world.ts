@@ -32,6 +32,7 @@ import { createBalanceCsvLogger, type BalanceCsvLogger } from "../../game/balanc
 import { DEFAULT_SPAWN_TUNING } from "../../game/balance/spawnTuningDefaults";
 
 import type { WeaponId } from "../../game/content/weapons";
+import type { RelicInstance } from "../../game/content/relics";
 
 /**
  * NOTE:
@@ -301,6 +302,8 @@ export type World = {
   vendor: VendorState | null;
   pendingAdvanceToNextFloor: boolean;
   relics: string[];
+  relicInstances?: RelicInstance[];
+  starterLuckyChamberShotCounter?: number;
   relicRetriggerQueue: PendingRelicRetrigger[];
   relicDaggerQueue: PendingRelicDaggerShot[];
   relicEffects: { hpBonus: number };
@@ -738,6 +741,8 @@ export function createWorld(args: CreateWorldArgs): World {
     vendor: null,
     pendingAdvanceToNextFloor: false,
     relics: [],
+    relicInstances: [],
+    starterLuckyChamberShotCounter: 0,
     relicRetriggerQueue: [],
     relicDaggerQueue: [],
     relicEffects: {

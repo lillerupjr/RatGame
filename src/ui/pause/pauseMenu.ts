@@ -4,8 +4,13 @@ import { getAllCardIds, getCardById } from "../../game/combat_mods/content/cards
 import { resolveCombatStarterWeaponId } from "../../game/combat_mods/content/weapons/characterStarterMap";
 import { getCombatStarterWeaponById } from "../../game/combat_mods/content/weapons/starterWeapons";
 import { getGold } from "../../game/economy/gold";
-import { getAllRelicIds, getRelicById, normalizeRelicIdList } from "../../game/content/relics";
-import { recomputeDerivedStats } from "../../game/stats/derivedStats";
+import { getAllRelicIds, getRelicById } from "../../game/content/relics";
+import {
+  applyRelic,
+  getWorldRelicInstances,
+  normalizeWorldRelics,
+  removeRelic,
+} from "../../game/systems/progression/relics";
 import { DEFAULT_SETTINGS, getUserSettings, updateUserSettings } from "../../userSettings";
 import { DEFAULT_SPAWN_TUNING } from "../../game/balance/spawnTuningDefaults";
 import { mountSettingsPanel, type SettingsPanelController } from "../settings/settingsPanel";
@@ -388,8 +393,12 @@ export function mountPauseMenu(args: {
   const debugLayerBody = document.createElement("div");
   debugLayerBody.className = "pauseDebugLayerBody pauseSectionScroll";
   debugLayerBody.setAttribute("data-debug-cards-list", "1");
+  const debugLayerNote = document.createElement("div");
+  debugLayerNote.className = "pauseDebugLayerNote";
+  debugLayerNote.hidden = true;
 
   debugLayerPanel.appendChild(debugLayerHeader);
+  debugLayerPanel.appendChild(debugLayerNote);
   debugLayerPanel.appendChild(debugLayerBody);
   debugLayer.appendChild(debugLayerPanel);
   panel.appendChild(debugLayer);
@@ -405,7 +414,7 @@ export function mountPauseMenu(args: {
   let debugMetricTab: DebugMetricTab = "SPAWN";
   let debugLayerOpen = false;
   let debugMode: "CARDS" | "RELICS" = "CARDS";
-  let draftRelics = new Set<string>();
+  let debugRelicMessage = "";
   const debugCardIds = getAllCardIds();
   const debugRelicIds = getAllRelicIds();
 
@@ -430,36 +439,42 @@ export function mountPauseMenu(args: {
 
   const spawnRateSlider = document.createElement("input");
   spawnRateSlider.type = "range";
+  spawnRateSlider.setAttribute("data-spawn-rate-orb-slider", "1");
   spawnRateSlider.min = "0.80";
   spawnRateSlider.max = "1.50";
   spawnRateSlider.step = "0.01";
 
   const hpDepthSlider = document.createElement("input");
   hpDepthSlider.type = "range";
+  hpDepthSlider.setAttribute("data-monster-health-orb-slider", "1");
   hpDepthSlider.min = "0.80";
   hpDepthSlider.max = "1.50";
   hpDepthSlider.step = "0.01";
 
   const spawnBaseSlider = document.createElement("input");
   spawnBaseSlider.type = "range";
+  spawnBaseSlider.setAttribute("data-spawn-base-slider", "1");
   spawnBaseSlider.min = "0.20";
   spawnBaseSlider.max = "4.00";
   spawnBaseSlider.step = "0.05";
 
   const hpBaseSlider = document.createElement("input");
   hpBaseSlider.type = "range";
+  hpBaseSlider.setAttribute("data-monster-health-base-slider", "1");
   hpBaseSlider.min = "0.20";
   hpBaseSlider.max = "4.00";
   hpBaseSlider.step = "0.05";
 
   const pressureT0Slider = document.createElement("input");
   pressureT0Slider.type = "range";
+  pressureT0Slider.setAttribute("data-pressure-t0-slider", "1");
   pressureT0Slider.min = "0.10";
   pressureT0Slider.max = "3.00";
   pressureT0Slider.step = "0.05";
 
   const pressureT120Slider = document.createElement("input");
   pressureT120Slider.type = "range";
+  pressureT120Slider.setAttribute("data-pressure-t120-slider", "1");
   pressureT120Slider.min = "0.10";
   pressureT120Slider.max = "3.00";
   pressureT120Slider.step = "0.05";
@@ -515,7 +530,9 @@ export function mountPauseMenu(args: {
       }
     },
     onPerformanceModeChanged: () => {
-      window.dispatchEvent(new Event("resize"));
+      if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+        window.dispatchEvent(new Event("resize"));
+      }
     },
   });
 
@@ -635,6 +652,7 @@ export function mountPauseMenu(args: {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "pauseInlineTabBtn";
+      btn.setAttribute("data-stats-debug-tab-id", tab.id);
       btn.textContent = tab.label;
       btn.classList.toggle("active", tab.id === debugMetricTab);
       btn.addEventListener("click", () => {
@@ -647,12 +665,9 @@ export function mountPauseMenu(args: {
   };
 
   const resetRelicDraft = () => {
-    const relics = normalizeRelicIdList((latestWorld as any)?.relics);
-    draftRelics = new Set(relics);
     const w = latestWorld as any;
-    if (w && Array.isArray(w.relics)) {
-      w.relics = relics;
-    }
+    if (!w || typeof w !== "object") return;
+    normalizeWorldRelics(w);
   };
 
   const closeDebugLayer = () => {
@@ -667,6 +682,18 @@ export function mountPauseMenu(args: {
 
     clearChildren(debugLayerBody);
     debugLayerTitle.textContent = debugMode === "CARDS" ? "Debug Cards Editor" : "Debug Relics Editor";
+    if (debugMode === "RELICS") {
+      if (debugRelicMessage.length > 0) {
+        debugLayerNote.textContent = debugRelicMessage;
+        debugLayerNote.hidden = false;
+      } else {
+        debugLayerNote.textContent = "Starter relics are locked and cannot be removed.";
+        debugLayerNote.hidden = false;
+      }
+    } else {
+      debugLayerNote.textContent = "";
+      debugLayerNote.hidden = true;
+    }
 
     if (debugMode === "CARDS") {
       for (const cardId of debugCardIds) {
@@ -724,6 +751,10 @@ export function mountPauseMenu(args: {
       return;
     }
 
+    const w = latestWorld as any;
+    const instances = w && typeof w === "object" ? getWorldRelicInstances(w) : [];
+    const ownedById = new Set(instances.map((it) => it.id));
+
     for (const relicId of debugRelicIds) {
       const relic = getRelicById(relicId);
       if (!relic || !relic.isEnabled) continue;
@@ -738,17 +769,22 @@ export function mountPauseMenu(args: {
       const toggleBtn = document.createElement("button");
       toggleBtn.type = "button";
       toggleBtn.className = "pauseDebugCardBtn";
-      const isOwned = draftRelics.has(relicId);
+      const isOwned = ownedById.has(relicId);
       toggleBtn.textContent = isOwned ? "Remove" : "Add";
       toggleBtn.setAttribute(isOwned ? "data-debug-relic-remove" : "data-debug-relic-add", relicId);
       toggleBtn.addEventListener("click", () => {
-        if (draftRelics.has(relicId)) draftRelics.delete(relicId);
-        else draftRelics.add(relicId);
-
-        const w = latestWorld as any;
-        if (w && typeof w === "object") {
-          w.relics = Array.from(draftRelics);
-          recomputeDerivedStats(w);
+        const world = latestWorld as any;
+        if (!world || typeof world !== "object") return;
+        if (ownedById.has(relicId)) {
+          const result = removeRelic(world, relicId);
+          if (!result.removed && result.reason === "LOCKED") {
+            debugRelicMessage = "Starter relic can't be removed.";
+          } else {
+            debugRelicMessage = "";
+          }
+        } else {
+          applyRelic(world, relicId, { source: "debug" });
+          debugRelicMessage = "";
         }
 
         renderOwnedCards(latestWorld);
@@ -767,6 +803,7 @@ export function mountPauseMenu(args: {
   const openDebugCardsEditor = () => {
     if ((getUserSettings() as any)?.game?.userModeEnabled ?? true) return;
     debugMode = "CARDS";
+    debugRelicMessage = "";
     debugLayerOpen = true;
     renderDebugLayer();
   };
@@ -774,6 +811,7 @@ export function mountPauseMenu(args: {
   const openDebugRelicsEditor = () => {
     if ((getUserSettings() as any)?.game?.userModeEnabled ?? true) return;
     debugMode = "RELICS";
+    debugRelicMessage = "";
     resetRelicDraft();
     debugLayerOpen = true;
     renderDebugLayer();
@@ -966,6 +1004,7 @@ export function mountPauseMenu(args: {
     renderDebugMetricTabs();
     renderDebugMetrics(world);
     renderDebugLayer();
+    syncDevVisibility();
   };
 
   setActiveSection("OWNED_CARDS");

@@ -1,6 +1,6 @@
 import type { World } from "../../../engine/world/world";
 import { emitEvent } from "../../../engine/world/world";
-import { getEnemyWorld, getPlayerWorld, getProjectileWorld } from "../../coords/worldViews";
+import { getEnemyWorld, getProjectileWorld } from "../../coords/worldViews";
 import { PRJ_KIND, spawnProjectile } from "../../factories/projectileFactory";
 import { normalizeWorldRelics } from "./relics";
 import { queryCircle } from "../../util/spatialHash";
@@ -13,6 +13,8 @@ import type { RelicTriggerEvent } from "../../events";
 import { addIgniteStacksFromSnapshots, createEnemyAilmentsState } from "../../combat_mods/ailments/enemyAilments";
 import { restoreArmor } from "../sim/playerArmor";
 import { relicTriggerMomentumDamageMultiplier } from "../sim/momentum";
+import { aimDir, getEnemyAimWorld, getPlayerAimWorld } from "../../combat/aimPoints";
+import { STARTER_RELIC_IDS } from "../../content/starterRelics";
 
 const RELIC_MISSILE_EXPLODE_RADIUS = 64;
 const RELIC_ALL_HITS_EXPLODE_RADIUS = 64;
@@ -23,8 +25,8 @@ const ARMOR_RESTORE_ON_KILL_AMOUNT = 10;
 const RELIC_EXPLODE_ON_KILL_RADIUS = 128;
 const RELIC_V2_SPARK_PROC_CHANCE = 0.2;
 const RELIC_V2_SPARK_RANGE = 220;
-const RELIC_V2_SPARK_DAMAGE_SCALE = 0.3;
-const RELIC_V2_SPARK_VFX_RADIUS = 22;
+const RELIC_V2_SPARK_DAMAGE_SCALE = 1.0;
+const RELIC_V2_SPARK_SPEED = 300;
 const RELIC_V2_PROC_CHANCE_MULT = 1.5;
 const RELIC_V2_NOVA_PROC_CHANCE = 1.0;
 const RELIC_V2_NOVA_DURATION_SEC = 5.0;
@@ -35,6 +37,9 @@ const RELIC_V2_DAGGER_RANGE = 260;
 const RELIC_V2_DAGGER_DELAY_SEC = 2.0;
 const RELIC_V2_DAGGER_SPEED = 190;
 const IGNITE_SPREAD_RADIUS_PX = 96;
+const STARTER_STREET_REFLEX_PROC_CHANCE = 0.2;
+const STARTER_STREET_REFLEX_RANGE = 260;
+const STARTER_STREET_REFLEX_SPEED = 260;
 export const RELIC_RETRIGGER_DELAY_SEC = 0.5;
 
 type EnemyHitEvent = Extract<RelicTriggerEvent, { type: "ENEMY_HIT" }>;
@@ -130,9 +135,9 @@ function nearestEnemiesInRange(
     seen.add(e);
     if (!world.eAlive[e]) continue;
     if (!isEnemyInCircle(world, e, centerX, centerY, range)) continue;
-    const ew = getEnemyWorld(world, e, KENNEY_TILE_WORLD);
-    const dx = ew.wx - centerX;
-    const dy = ew.wy - centerY;
+    const enemyAim = getEnemyAimWorld(world, e);
+    const dx = enemyAim.x - centerX;
+    const dy = enemyAim.y - centerY;
     candidates.push({ enemyIndex: e, dist2: dx * dx + dy * dy });
   }
 
@@ -168,9 +173,9 @@ function processPendingDaggerShots(world: World): void {
       world.pAlive[p] = false;
       continue;
     }
-    const tw = getEnemyWorld(world, targets[0], KENNEY_TILE_WORLD);
-    const dirX = tw.wx - pw.wx;
-    const dirY = tw.wy - pw.wy;
+    const tw = getEnemyAimWorld(world, targets[0]);
+    const dirX = tw.x - pw.wx;
+    const dirY = tw.y - pw.wy;
     const len = Math.hypot(dirX, dirY) || 1;
     const ndx = dirX / len;
     const ndy = dirY / len;
@@ -179,8 +184,8 @@ function processPendingDaggerShots(world: World): void {
     world.prDirX[p] = ndx;
     world.prDirY[p] = ndy;
     world.prHasTarget[p] = true;
-    world.prTargetX[p] = tw.wx;
-    world.prTargetY[p] = tw.wy;
+    world.prTargetX[p] = tw.x;
+    world.prTargetY[p] = tw.y;
     world.prNoCollide[p] = false;
     emitEvent(world, { type: "SFX", id: "FIRE_OTHER", vol: 0.35 });
   }
@@ -393,11 +398,12 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
   const hasNovaOnCrit = world.relics.includes("ACT_NOVA_ON_CRIT_FIRE");
   const hasDaggerOnKill = world.relics.includes("ACT_DAGGER_ON_KILL_50");
   const hasIgniteSpreadOnDeath = world.relics.includes("ACT_IGNITE_SPREAD_ON_DEATH");
+  const hasStarterStreetReflex = world.relics.includes(STARTER_RELIC_IDS.STREET_REFLEX);
   const hasArmorOnHit = world.relics.includes("ARMOR_RESTORE_ON_HIT_1");
   const hasArmorOnCrit = world.relics.includes("ARMOR_RESTORE_ON_CRIT_5");
   const hasArmorOnKill = world.relics.includes("ARMOR_RESTORE_ON_KILL_10");
   const hasRetryFailedProcs = world.relics.includes("ACT_RETRY_FAILED_PROCS_ONCE");
-  if (!hasExplodeOnKill && !hasBazookaOnHit && !hasAllHitsExplode && !hasLifeOnHit && !hasSparkOnHit && !hasNovaOnCrit && !hasDaggerOnKill && !hasIgniteSpreadOnDeath && !hasArmorOnHit && !hasArmorOnCrit && !hasArmorOnKill) return;
+  if (!hasExplodeOnKill && !hasBazookaOnHit && !hasAllHitsExplode && !hasLifeOnHit && !hasSparkOnHit && !hasNovaOnCrit && !hasDaggerOnKill && !hasIgniteSpreadOnDeath && !hasStarterStreetReflex && !hasArmorOnHit && !hasArmorOnCrit && !hasArmorOnKill) return;
 
   if (ev.type === "ENEMY_KILLED") {
     if (hasExplodeOnKill) applyExplodeOnKill(world, ev);
@@ -438,18 +444,20 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
   }
 
   const debugRelicLogs = import.meta.env.DEV && !!getUserSettings().debug.triggers;
-  const pw = getPlayerWorld(world);
-  const dirX = ev.x - pw.wx;
-  const dirY = ev.y - pw.wy;
-
   if (hasBazookaOnHit) {
     const typed = eventTypedDamage(ev);
     const explodeDamage = typed.total * 0.2;
     if (explodeDamage > 0) {
+      const from = getPlayerAimWorld(world);
+      let to = { x: ev.x, y: ev.y };
+      if (ev.enemyIndex >= 0 && world.eAlive[ev.enemyIndex]) {
+        to = getEnemyAimWorld(world, ev.enemyIndex);
+      }
+      const { dx: dirX, dy: dirY } = aimDir(from, to);
       const p = spawnProjectile(world, {
         kind: PRJ_KIND.MISSILE,
-        x: pw.wx,
-        y: pw.wy,
+        x: from.x,
+        y: from.y,
         dirX,
         dirY,
         speed: 150,
@@ -461,8 +469,8 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
         pierce: 0,
         ttl: 2.0,
         critChance: 0,
-        targetX: ev.x,
-        targetY: ev.y,
+        targetX: to.x,
+        targetY: to.y,
         explodeRadius: RELIC_MISSILE_EXPLODE_RADIUS,
       });
       world.prExplodeR[p] = RELIC_MISSILE_EXPLODE_RADIUS;
@@ -489,13 +497,78 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
     restoreArmor(world, ARMOR_RESTORE_ON_CRIT_AMOUNT);
   }
 
+  if (hasStarterStreetReflex) {
+    const didProc = rollProcChance(world, STARTER_STREET_REFLEX_PROC_CHANCE, hasRetryFailedProcs);
+    if (didProc) {
+      const from = getPlayerAimWorld(world);
+      let targetEnemy = -1;
+      if (ev.enemyIndex >= 0 && world.eAlive[ev.enemyIndex]) {
+        const hitAim = getEnemyAimWorld(world, ev.enemyIndex);
+        const nearby = nearestEnemiesInRange(
+          world,
+          hitAim.x,
+          hitAim.y,
+          STARTER_STREET_REFLEX_RANGE,
+          1,
+          ev.enemyIndex,
+        );
+        targetEnemy = nearby.length > 0 ? nearby[0] : ev.enemyIndex;
+      } else {
+        const nearby = nearestEnemiesInRange(
+          world,
+          ev.x,
+          ev.y,
+          STARTER_STREET_REFLEX_RANGE,
+          1,
+          -1,
+        );
+        if (nearby.length > 0) targetEnemy = nearby[0];
+      }
+
+      if (targetEnemy >= 0 && world.eAlive[targetEnemy]) {
+        const to = getEnemyAimWorld(world, targetEnemy);
+        const typed = eventTypedDamage(ev);
+        const knifeTotal = Math.max(0, typed.total);
+        if (knifeTotal > 0) {
+          const physRatio = typed.total > 0 ? typed.phys / typed.total : 1;
+          const fireRatio = typed.total > 0 ? typed.fire / typed.total : 0;
+          const chaosRatio = typed.total > 0 ? typed.chaos / typed.total : 0;
+          const { dx: knifeDirX, dy: knifeDirY } = aimDir(from, to);
+          spawnProjectile(world, {
+            kind: PRJ_KIND.KNIFE,
+            x: from.x,
+            y: from.y,
+            dirX: knifeDirX,
+            dirY: knifeDirY,
+            speed: STARTER_STREET_REFLEX_SPEED,
+            damage: knifeTotal,
+            dmgPhys: knifeTotal * physRatio,
+            dmgFire: knifeTotal * fireRatio,
+            dmgChaos: knifeTotal * chaosRatio,
+            radius: 5,
+            pierce: 0,
+            ttl: 2.0,
+            critChance: 0,
+            targetX: to.x,
+            targetY: to.y,
+          });
+          emitEvent(world, { type: "SFX", id: "FIRE_OTHER", vol: 0.35 });
+        }
+      }
+    }
+  }
+
   if (hasSparkOnHit) {
     const didProc = rollProcChance(world, RELIC_V2_SPARK_PROC_CHANCE, hasRetryFailedProcs);
     if (didProc) {
+      let sparkSource = { x: ev.x, y: ev.y };
+      if (ev.enemyIndex >= 0 && world.eAlive[ev.enemyIndex]) {
+        sparkSource = getEnemyAimWorld(world, ev.enemyIndex);
+      }
       const targets = nearestEnemiesInRange(
         world,
-        ev.x,
-        ev.y,
+        sparkSource.x,
+        sparkSource.y,
         RELIC_V2_SPARK_RANGE,
         1,
         ev.enemyIndex,
@@ -507,25 +580,30 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
         const physRatio = typed.total > 0 ? typed.phys / typed.total : 1;
         const fireRatio = typed.total > 0 ? typed.fire / typed.total : 0;
         const chaosRatio = typed.total > 0 ? typed.chaos / typed.total : 0;
-        const tw = getEnemyWorld(world, sparkTarget, KENNEY_TILE_WORLD);
-        spawnZone(world, {
-          kind: ZONE_KIND.EXPLOSION,
-          x: tw.wx,
-          y: tw.wy,
-          radius: RELIC_V2_SPARK_VFX_RADIUS,
-          damage: 0,
-          tickEvery: 999,
-          ttl: 0.12,
-          followPlayer: false,
+        const tw = getEnemyAimWorld(world, sparkTarget);
+        const { dx: sparkDirX, dy: sparkDirY } = aimDir(sparkSource, tw);
+        const p = spawnProjectile(world, {
+          kind: PRJ_KIND.SPARK,
+          x: sparkSource.x,
+          y: sparkSource.y,
+          dirX: sparkDirX,
+          dirY: sparkDirY,
+          speed: RELIC_V2_SPARK_SPEED,
+          damage: sparkTotal,
+          dmgPhys: sparkTotal * physRatio,
+          dmgFire: sparkTotal * fireRatio,
+          dmgChaos: sparkTotal * chaosRatio,
+          radius: 6,
+          pierce: 0,
+          ttl: 3.0,
+          critChance: 0,
+          targetX: tw.x,
+          targetY: tw.y,
+          noCollide: true,
         });
+        // Store target enemy index for tracking + damage on arrival
+        world.prLastHitEnemy[p] = sparkTarget;
         emitEvent(world, { type: "SFX", id: "FIRE_OTHER", vol: 0.35 });
-        applyDamageAsOther(
-          world,
-          sparkTarget,
-          sparkTotal * physRatio,
-          sparkTotal * fireRatio,
-          sparkTotal * chaosRatio,
-        );
       }
     }
   }

@@ -146,6 +146,8 @@ import { recomputeDerivedStats } from "./stats/derivedStats";
 import { hasAnyRelicWithTag, MOMENTUM_RELIC_TAG } from "./content/relics";
 import { createMobileControls } from "../ui/mobile/mobileControls";
 import { renderDialogChoices } from "../ui/dialog/renderDialogChoices";
+import { ensureStarterRelicForCharacter } from "./systems/progression/starterRelics";
+import { getWorldRelicInstances } from "./systems/progression/relics";
 
 
 type HudRefs = {
@@ -1120,6 +1122,8 @@ export function createGame(args: CreateGameArgs) {
     // @ts-ignore
     if ("zDamagePlayer" in w) (w as any).zDamagePlayer = [];
 
+    (w as any)._fireZoneVfx = [];
+
     // VFX entities
     w.vfxAlive = [];
     w.vfxX = [];
@@ -1128,6 +1132,10 @@ export function createGame(args: CreateGameArgs) {
     w.vfxElapsed = [];
     w.vfxTtl = [];
     w.vfxClipId = [];
+    w.vfxLoop = [];
+    w.vfxFollowEnemy = [];
+    w.vfxOffsetYPx = [];
+    w.vfxScale = [];
 
     w.pAlive = [];
     w.prjKind = [];
@@ -1686,6 +1694,7 @@ export function createGame(args: CreateGameArgs) {
 
     resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
     (world as any).currentCharacterId = character.id;
+    ensureStarterRelicForCharacter(world, character.id);
 
     world.weapons = [{ id: character.startingWeaponId, level: 1, cdLeft: 0 }];
 
@@ -1709,6 +1718,10 @@ export function createGame(args: CreateGameArgs) {
     (world as any).mapPendingNextFloorIndex = 0;
 
     // Pick starting node
+    if (import.meta.env.DEV) {
+      const starter = getWorldRelicInstances(world).find((it) => it.source === "starter");
+      console.debug("[starterRelic] run-start", { characterId: character.id, starterRelicId: starter?.id ?? null });
+    }
     showDelveMap("Choose your starting location.\nGo deeper for greater challenge and rewards.");
   }
 
@@ -1721,6 +1734,7 @@ export function createGame(args: CreateGameArgs) {
 
     resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
     (world as any).currentCharacterId = character.id;
+    ensureStarterRelicForCharacter(world, character.id);
 
     world.weapons = [{ id: character.startingWeaponId, level: 1, cdLeft: 0 }];
     world.delveMap = null;
@@ -1735,6 +1749,11 @@ export function createGame(args: CreateGameArgs) {
     args.ui.endEl.root.hidden = true;
     setHudHidden(false);
     hideCardRewardMenu();
+
+    if (import.meta.env.DEV) {
+      const starter = getWorldRelicInstances(world).find((it) => it.source === "starter");
+      console.debug("[starterRelic] deterministic-start", { characterId: character.id, starterRelicId: starter?.id ?? null });
+    }
 
     showDeterministicFloorPicker(
       "Path Select mode: choose any floor type.",
@@ -1752,6 +1771,7 @@ export function createGame(args: CreateGameArgs) {
 
     resetRun(mapId, { skipMapSelection: true, seedOverride: preparedStart?.seed });
     (world as any).currentCharacterId = character.id;
+    ensureStarterRelicForCharacter(world, character.id);
 
     world.weapons = [{ id: character.startingWeaponId, level: 1, cdLeft: 0 }];
     world.delveMap = null;
@@ -1767,6 +1787,11 @@ export function createGame(args: CreateGameArgs) {
     args.ui.endEl.root.hidden = true;
     setHudHidden(false);
     hideCardRewardMenu();
+
+    if (import.meta.env.DEV) {
+      const starter = getWorldRelicInstances(world).find((it) => it.source === "starter");
+      console.debug("[starterRelic] sandbox-start", { characterId: character.id, starterRelicId: starter?.id ?? null });
+    }
   }
 
   function prepareStartMap(intent: StartIntent): void {

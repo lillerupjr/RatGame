@@ -7,7 +7,12 @@ export function generateRelicRewardOptions(
 ): string[] {
   const excluded = new Set(excludeIds);
   const all = getAllRelicIds().filter(
-    (id) => getRelicById(id)?.isEnabled === true && !excluded.has(id),
+    (id) => {
+      const relic = getRelicById(id);
+      if (!relic || !relic.isEnabled) return false;
+      if (relic.isStarter) return false;
+      return !excluded.has(id);
+    },
   );
   if (all.length === 0 || count <= 0) return [];
 

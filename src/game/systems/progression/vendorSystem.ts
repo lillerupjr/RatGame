@@ -5,7 +5,7 @@ import { applyRelic } from "./relics";
 function applyOfferEffect(world: World, offer: VendorOffer): void {
   switch (offer.kind) {
     case "RELIC":
-      applyRelic(world, offer.id);
+      applyRelic(world, offer.id, { source: "shop" });
       return;
     case "HEAL":
       world.playerHp = Math.min(world.playerHpMax, world.playerHp + 25);

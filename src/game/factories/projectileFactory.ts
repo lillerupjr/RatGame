@@ -25,6 +25,7 @@ export const PRJ_KIND = {
     BOUNCER: 6,
     MISSILE: 7,
     DAGGER: 8,
+    SPARK: 9,
 } as const;
 
 

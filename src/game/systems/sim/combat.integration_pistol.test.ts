@@ -103,7 +103,7 @@ describe("combatSystem pistol integration", () => {
     expect(spawned).toBe(true);
     expect(w.pAlive.length).toBeGreaterThan(0);
     expect(hpStart - w.eHp[0]).toBeGreaterThan(0);
-    expect(damageDealt).toBeCloseTo(8);
+    expect(damageDealt).toBeCloseTo(12);
   });
 
   test("does not fire when no enemy is within weapon range", () => {
@@ -190,7 +190,7 @@ describe("combatSystem pistol integration", () => {
       }
     }
 
-    expect(damageDealt).toBeCloseTo(4);
+    expect(damageDealt).toBeCloseTo(6);
   });
 
   test("JOEY uses continuous laser beam profile in combat-mods primary fire", () => {
@@ -298,7 +298,7 @@ describe("combatSystem pistol integration", () => {
     expect(w.events.some((ev) => ev.type === "ENEMY_HIT")).toBe(false);
   });
 
-  test("HOBO uses syringe profile with split damage and innate pierce", () => {
+  test("HOBO uses syringe profile with split damage, no innate pierce, and higher poison chance", () => {
     const w = createWorld({ seed: 3333, stage: stageDocks });
     w.events.length = 0;
     w.combatCardIds = [];
@@ -338,8 +338,8 @@ describe("combatSystem pistol integration", () => {
     expect(w.prjKind[firstProjectile]).toBe(PRJ_KIND.SYRINGE);
     expect(w.prDmgPhys[firstProjectile]).toBeCloseTo(9);
     expect(w.prDmgChaos[firstProjectile]).toBeCloseTo(9);
-    expect(w.prPierce[firstProjectile]).toBe(1);
-    expect(w.prChancePoison[firstProjectile]).toBeCloseTo(0.25);
+    expect(w.prPierce[firstProjectile]).toBe(0);
+    expect(w.prChancePoison[firstProjectile]).toBeCloseTo(0.5);
   });
 
   test("TOMMY uses shotgun profile with 4 projectiles per shot", () => {

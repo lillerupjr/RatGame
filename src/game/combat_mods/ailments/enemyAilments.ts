@@ -9,6 +9,9 @@ export interface EnemyAilmentsState {
   poison: AilmentInstance[]; // stacked
   bleed: AilmentInstance[]; // stacked
   ignite: AilmentInstance[]; // stacked
+  bleedVfxAlive?: boolean;
+  poisonVfxAlive?: boolean;
+  burningVfxAlive?: boolean;
 }
 
 export interface AilmentApplyOptions {

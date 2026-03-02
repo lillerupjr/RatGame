@@ -102,6 +102,33 @@ export function ailmentTickSystem(w: any, dt: number): void {
     if (st.poison.length === 0 && st.bleed.length === 0 && st.ignite.length === 0) acc = 0;
     w.eDotTickAcc[e] = acc;
 
+    // --- Status VFX transitions ---
+    const pos0 = getEnemyEventPos(w, e);
+    // Bleed
+    if (st.bleed.length > 0 && !st.bleedVfxAlive) {
+      st.bleedVfxAlive = true;
+      emitEvent(w, { type: "VFX", id: "STATUS_BLEED_LOOP", x: pos0.x, y: pos0.y, loop: true, scale: 1, followEnemyIndex: e, offsetYPx: -16 });
+    } else if (st.bleed.length === 0 && st.bleedVfxAlive) {
+      st.bleedVfxAlive = false;
+      emitEvent(w, { type: "VFX_STOP_FOLLOW", id: "STATUS_BLEED_LOOP", enemyIndex: e });
+    }
+    // Poison
+    if (st.poison.length > 0 && !st.poisonVfxAlive) {
+      st.poisonVfxAlive = true;
+      emitEvent(w, { type: "VFX", id: "STATUS_POISON_LOOP", x: pos0.x, y: pos0.y, loop: true, scale: 1, followEnemyIndex: e, offsetYPx: -16 });
+    } else if (st.poison.length === 0 && st.poisonVfxAlive) {
+      st.poisonVfxAlive = false;
+      emitEvent(w, { type: "VFX_STOP_FOLLOW", id: "STATUS_POISON_LOOP", enemyIndex: e });
+    }
+    // Burning (ignite)
+    if (st.ignite.length > 0 && !st.burningVfxAlive) {
+      st.burningVfxAlive = true;
+      emitEvent(w, { type: "VFX", id: "STATUS_BURNING_LOOP", x: pos0.x, y: pos0.y, loop: true, scale: 1, followEnemyIndex: e, offsetYPx: -16 });
+    } else if (st.ignite.length === 0 && st.burningVfxAlive) {
+      st.burningVfxAlive = false;
+      emitEvent(w, { type: "VFX_STOP_FOLLOW", id: "STATUS_BURNING_LOOP", enemyIndex: e });
+    }
+
     // Read enemy mitigation fields (default to 0)
     const resistChaos = w.eResistChaos?.[e] ?? 0;
     const resistPhysical = w.eResistPhysical?.[e] ?? 0;

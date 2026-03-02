@@ -18,7 +18,7 @@ describe("resolveWeaponStats", () => {
     const out = resolveWeaponStats(JACK_PISTOL_V1, { cards: [] });
 
     expect(out.shotsPerSecond).toBeCloseTo(3.0);
-    expect(out.baseDamage.physical).toBeCloseTo(8);
+    expect(out.baseDamage.physical).toBeCloseTo(12);
     expect(out.baseDamage.fire).toBeCloseTo(0);
     expect(out.baseDamage.chaos).toBeCloseTo(0);
 
@@ -54,24 +54,24 @@ describe("resolveWeaponStats", () => {
     expect(out.projectiles).toBe(1);
   });
 
-  test("baseline shotgun resolves 0.5x16x4 profile and uses authored multi spread", () => {
+  test("baseline shotgun resolves 0.666x16x4 profile and uses authored multi spread", () => {
     const out = resolveWeaponStats(TOMMY_SHOTGUN_V1, { cards: [] });
-    expect(out.shotsPerSecond).toBeCloseTo(0.5);
+    expect(out.shotsPerSecond).toBeCloseTo(2 / 3);
     expect(out.baseDamage.physical).toBeCloseTo(16);
     expect(out.projectiles).toBe(4);
     expect(out.rangePx).toBeLessThan(420);
     expect(out.multiProjectileSpreadDeg).toBeCloseTo(24);
   });
 
-  test("baseline hobo syringe resolves split damage, innate pierce, slow projectile, and base poison chance", () => {
+  test("baseline hobo syringe resolves split damage, no innate pierce, slow projectile, and base poison chance", () => {
     const out = resolveWeaponStats(HOBO_SYRINGE_V1, { cards: [] });
     expect(out.shotsPerSecond).toBeCloseTo(1.0);
     expect(out.baseDamage.physical).toBeCloseTo(9);
     expect(out.baseDamage.chaos).toBeCloseTo(9);
     expect(out.baseDamage.fire).toBeCloseTo(0);
-    expect(out.pierce).toBe(1);
+    expect(out.pierce).toBe(0);
     expect(out.projectileSpeedPxPerSec).toBeCloseTo(180);
-    expect(out.chanceToPoison).toBeCloseTo(0.25);
+    expect(out.chanceToPoison).toBeCloseTo(0.5);
     expect(out.chanceToBleed).toBeCloseTo(0);
     expect(out.chanceToIgnite).toBeCloseTo(0);
   });
@@ -111,14 +111,14 @@ describe("resolveWeaponStats", () => {
       { key: STAT_KEYS.DAMAGE_ADD_CHAOS, op: "add", value: 5 },
     ]);
     const out = resolveWeaponStats(JACK_PISTOL_V1, { cards: [c] });
-    expect(out.baseDamage.physical).toBeCloseTo(8 + 3);
+    expect(out.baseDamage.physical).toBeCloseTo(12 + 3);
     expect(out.baseDamage.fire).toBeCloseTo(0 + 4);
     expect(out.baseDamage.chaos).toBeCloseTo(0 + 5);
   });
 
   test("conversion uses priority-fill pool consumption (phys->fire blocks phys->chaos when 100%)", () => {
     const c = mkCard("T_CONV", [
-      { key: STAT_KEYS.DAMAGE_ADD_PHYSICAL, op: "add", value: 92 }, // make phys 100 total
+      { key: STAT_KEYS.DAMAGE_ADD_PHYSICAL, op: "add", value: 88 }, // make phys 100 total
       { key: STAT_KEYS.CONVERT_PHYS_TO_FIRE, op: "add", value: 1.0 },
       { key: STAT_KEYS.CONVERT_PHYS_TO_CHAOS, op: "add", value: 0.2 },
     ]);
@@ -131,7 +131,7 @@ describe("resolveWeaponStats", () => {
   test("generic damage increased scales all damage types equally", () => {
     const c = mkCard("T_INC", [{ key: STAT_KEYS.DAMAGE_INCREASED, op: "increased", value: 0.25 }]);
     const out = resolveWeaponStats(JACK_PISTOL_V1, { cards: [c] });
-    expect(out.baseDamage.physical).toBeCloseTo(8 * 1.25);
+    expect(out.baseDamage.physical).toBeCloseTo(12 * 1.25);
     expect(out.baseDamage.fire).toBeCloseTo(0);
     expect(out.baseDamage.chaos).toBeCloseTo(0);
   });
@@ -195,7 +195,7 @@ describe("resolveWeaponStats", () => {
   test("weapon base poison chance stacks additively with card poison chance", () => {
     const c = mkCard("T_POISON", [{ key: STAT_KEYS.CHANCE_TO_POISON_ADD, op: "add", value: 0.25 }]);
     const out = resolveWeaponStats(HOBO_SYRINGE_V1, { cards: [c] });
-    expect(out.chanceToPoison).toBeCloseTo(0.5);
+    expect(out.chanceToPoison).toBeCloseTo(0.75);
   });
 
   test("weapon base poison chance still clamps to 1 with large added chance", () => {
@@ -215,10 +215,10 @@ describe("resolveWeaponStats", () => {
 
     const out = resolveWeaponStats(JACK_PISTOL_V1, { cards });
 
-    // base phys = 8+2=10; convert 50% => phys 5 fire 5
-    // apply 10% increased => phys 5.5 fire 5.5
-    expect(out.baseDamage.physical).toBeCloseTo(5.5);
-    expect(out.baseDamage.fire).toBeCloseTo(5.5);
+    // base phys = 12+2=14; convert 50% => phys 7 fire 7
+    // apply 10% increased => phys 7.7 fire 7.7
+    expect(out.baseDamage.physical).toBeCloseTo(7.7);
+    expect(out.baseDamage.fire).toBeCloseTo(7.7);
     expect(out.baseDamage.chaos).toBeCloseTo(0);
 
     expect(out.critChance).toBeCloseTo(0.05 + 0.05);

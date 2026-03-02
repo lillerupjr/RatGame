@@ -7,6 +7,7 @@ export function generateVendorRelicOffers(world: any, count = 5, priceG = VENDOR
   const pool = getAllRelicIds().filter((id) => {
     const def = getRelicById(id);
     if (!def || !def.isEnabled) return false;
+    if (def.isStarter) return false;
     if (owned.has(id)) return false;
     return true;
   });

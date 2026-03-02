@@ -10,6 +10,7 @@ import { getUserSettings } from "../../../userSettings";
 import { applyPlayerIncomingDamage } from "./playerArmor";
 import { breakMomentumOnLifeDamage } from "./momentum";
 import { ZONE_KIND } from "../../factories/zoneFactory";
+import { type FireZoneVfx, spawnFireZoneVfx, updateFireZoneVfx } from "../../vfx/fireZoneVfx";
 
 /** Update zones, apply periodic damage, and process delayed explosions. */
 export function zonesSystem(w: World, dt: number) {
@@ -28,12 +29,29 @@ export function zonesSystem(w: World, dt: number) {
     tickDelayedExplosions(w, dt);
 
 
-    // Cache zone floor height so we don’t recompute every tick.
+    // Cache zone floor height so we don't recompute every tick.
     // Stored on world as a private field to avoid touching the World type.
     const zFloorH = ((w as any)._zFloorH ??= []) as number[];
+    const fireZoneVfx = ((w as any)._fireZoneVfx ??= []) as (FireZoneVfx | null)[];
 
     for (let z = 0; z < w.zAlive.length; z++) {
         if (!w.zAlive[z]) continue;
+
+        // Spawn fire zone VFX on first encounter
+        if (fireZoneVfx[z] === undefined) {
+            if (w.zKind[z] === ZONE_KIND.FIRE) {
+                const zp = getZoneWorld(w, z, T);
+                fireZoneVfx[z] = spawnFireZoneVfx({
+                    x: zp.wx,
+                    y: zp.wy,
+                    radius: w.zR[z],
+                    duration: w.zTtl[z],
+                    rand: () => w.rng.next(),
+                });
+            } else {
+                fireZoneVfx[z] = null;
+            }
+        }
 
         // TTL
         const ttl = w.zTtl[z];
@@ -41,7 +59,19 @@ export function zonesSystem(w: World, dt: number) {
             w.zTtl[z] = ttl - dt;
             if (w.zTtl[z] <= 0) {
                 w.zAlive[z] = false;
+                fireZoneVfx[z] = null;
                 continue;
+            }
+        }
+
+        // Update fire zone VFX
+        const fvfx = fireZoneVfx[z];
+        if (fvfx) {
+            updateFireZoneVfx(fvfx, dt);
+            if (w.zFollowPlayer[z]) {
+                const zp = getZoneWorld(w, z, T);
+                fvfx.x = zp.wx;
+                fvfx.y = zp.wy;
             }
         }
 

@@ -52,7 +52,8 @@ import {
   getTileSpriteById,
   getSpriteById,
 } from "../../../engine/render/sprites/renderSprites";
-import { VFX_CLIPS } from "../../content/vfxRegistry";
+import { VFX_CLIPS, VFX_CLIP_INDEX } from "../../content/vfxRegistry";
+import { PRJ_KIND } from "../../factories/projectileFactory";
 import type { RuntimeDecalSetId } from "../../content/runtimeDecalConfig";
 import { roadMarkingDecalScale, shouldPixelSnapRoadMarking } from "../../roads/roadMarkingRender";
 import {
@@ -81,6 +82,7 @@ import {
 } from "./shadowFootOffsets";
 import { resolveDebugFlags } from "../../../debugSettings";
 import { getUserSettings } from "../../../userSettings";
+import { type FireZoneVfx, renderFireZoneVfx } from "../../vfx/fireZoneVfx";
 import { getZoneTrialObjectiveState } from "../../objectives/zoneObjectiveSystem";
 import { renderZoneObjectives } from "../../render/renderZoneObjectives";
 import { resolveActivePaletteId } from "../../render/activePalette";
@@ -504,48 +506,6 @@ function ensureLightingMaskCanvas(
   return { canvas, ctx: c2d };
 }
 
-function drawAilmentPips(
-  ctx: CanvasRenderingContext2D,
-  w: World,
-  e: number,
-  sx: number,
-  sy: number,
-): void {
-  const st = w.eAilments?.[e];
-  if (!st) return;
-
-  const poisonStacks = st.poison?.length ?? 0;
-  const hasPoison = poisonStacks > 0;
-  const hasIgnite = (st.ignite?.length ?? 0) > 0;
-  if (!hasPoison && !hasIgnite) return;
-
-  const baseX = Math.round(sx);
-  const baseY = Math.round(sy - 24);
-  const pipSize = 16;
-  const spacing = 8;
-  const poisonPips = hasPoison ? Math.min(3, 1 + Math.floor((poisonStacks - 1) / 5)) : 0;
-
-  ctx.save();
-  ctx.globalAlpha = 0.9;
-
-  if (poisonPips > 0) {
-    const totalWidth = (poisonPips - 1) * spacing + pipSize;
-    const startX = baseX - Math.floor(totalWidth / 2);
-    ctx.fillStyle = "#45d26a";
-    for (let i = 0; i < poisonPips; i++) {
-      const x = startX + i * spacing;
-      ctx.fillRect(x, baseY, pipSize, pipSize);
-    }
-  }
-
-  if (hasIgnite) {
-    ctx.fillStyle = "#ff9b2f";
-    const igniteY = baseY - 9;
-    ctx.fillRect(baseX - Math.floor(pipSize / 2), igniteY, pipSize, pipSize);
-  }
-
-  ctx.restore();
-}
 
 function ensureScratchMaskCanvas(
   canvas: HTMLCanvasElement | null,
@@ -2470,29 +2430,20 @@ export async function renderSystem(
 
           ctx.globalAlpha = 1;
         } else if (kind === ZONE_KIND.FIRE) {
-          const pulse = 0.85 + 0.15 * Math.sin((w.time ?? 0) * 7 + i * 0.37);
-
-          ctx.globalAlpha = 0.26 * pulse;
-          ctx.fillStyle = "#ff3a2e";
-          ctx.beginPath();
-          ctx.ellipse(p.x, p.y, rx, ry, 0, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.globalAlpha = 0.42 * pulse;
-          ctx.strokeStyle = "#ff7f45";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.ellipse(p.x, p.y, rx * 0.96, ry * 0.96, 0, 0, Math.PI * 2);
-          ctx.stroke();
-
-          ctx.globalAlpha = 0.62 * pulse;
-          ctx.strokeStyle = "#ffd27a";
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.ellipse(p.x, p.y, rx * 0.74, ry * 0.74, 0, 0, Math.PI * 2);
-          ctx.stroke();
-
-          ctx.globalAlpha = 1;
+          const fvfxArr = ((w as any)._fireZoneVfx ?? []) as (FireZoneVfx | null)[];
+          const fvfx = fvfxArr[i];
+          if (fvfx) {
+            renderFireZoneVfx(ctx, fvfx, toScreen, getSpriteById, ISO_X, ISO_Y);
+          } else {
+            // Fallback: flat rendering if VFX data missing
+            const pulse = 0.85 + 0.15 * Math.sin((w.time ?? 0) * 7 + i * 0.37);
+            ctx.globalAlpha = 0.26 * pulse;
+            ctx.fillStyle = "#ff3a2e";
+            ctx.beginPath();
+            ctx.ellipse(p.x, p.y, rx, ry, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+          }
         }
       };
 
@@ -2524,18 +2475,18 @@ export async function renderSystem(
 
       const drawClosure = () => {
         const clip = VFX_CLIPS[w.vfxClipId[i]];
-        const frameIndex = Math.min(
-          clip.spriteIds.length - 1,
-          Math.floor(w.vfxElapsed[i] * clip.fps),
-        );
+        const rawFrame = Math.floor(w.vfxElapsed[i] * clip.fps);
+        const frameIndex = clip.loop
+          ? rawFrame % clip.spriteIds.length
+          : Math.min(clip.spriteIds.length - 1, rawFrame);
         const sprite = getSpriteById(clip.spriteIds[frameIndex]);
         if (!sprite.ready) return;
-        const scale = w.vfxRadius[i] / 32;
+        const scale = w.vfxRadius[i] > 0 ? w.vfxRadius[i] / 32 : w.vfxScale[i];
         const size = 64 * scale;
-        const p = toScreen(vx, vy);
+        const p = toScreen(w.vfxX[i], w.vfxY[i]);
         ctx.globalAlpha = 1;
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(sprite.img, p.x - size / 2, p.y - size / 2, size, size);
+        ctx.drawImage(sprite.img, p.x - size / 2, p.y - size / 2 + w.vfxOffsetYPx[i], size, size);
       };
 
       addToSlice(vtx + vty, renderKey, drawClosure);
@@ -2699,16 +2650,8 @@ export async function renderSystem(
           ctx.globalAlpha = 1;
         }
 
-        if ((w.ePoisonT?.[i] ?? 0) > 0) {
-          ctx.globalAlpha = 0.35;
-          ctx.fillStyle = "#3dff7a";
-          ctx.beginPath();
-          ctx.ellipse(feet.screenX, feet.screenY, (w.eR[i] ?? 10) * 1.05 * ISO_X, (w.eR[i] ?? 10) * 1.05 * ISO_Y, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.globalAlpha = 1;
-        }
 
-        drawAilmentPips(ctx, w, i, feet.screenX, feet.screenY);
+
       };
 
       addToSlice(feet.slice, renderKey, drawClosure);
@@ -2903,6 +2846,34 @@ export async function renderSystem(
 
       const zLift = (pzAbs - baseH) * ELEV_PX;
       const p = toScreen(pp.wx, pp.wy);
+
+      // Spark projectile: dedicated VFX clip rendering, skip generic path entirely
+      if (w.prjKind[i] === PRJ_KIND.SPARK) {
+        const drawSpark = () => {
+          const clip = VFX_CLIPS[VFX_CLIP_INDEX.LIGHTNING_PROJ];
+          if (!clip) return;
+          const elapsed = (3.0 - (w.prTtl[i] ?? 0));
+          const rawFrame = Math.floor(elapsed * clip.fps);
+          const frameIdx = rawFrame % clip.spriteIds.length;
+          const sprite = getSpriteById(clip.spriteIds[frameIdx]);
+          if (!sprite.ready) return;
+          const wdx = w.prDirX[i] ?? 1;
+          const wdy = w.prDirY[i] ?? 0;
+          const sd = worldDeltaToScreen(wdx, wdy);
+          const ang = Math.atan2(sd.dy, sd.dx);
+          const size = 32;
+          ctx.save();
+          ctx.globalAlpha = 1;
+          ctx.imageSmoothingEnabled = false;
+          ctx.translate(snapPx(p.x), snapPx(p.y - zLift));
+          ctx.rotate(ang);
+          ctx.drawImage(sprite.img, -size / 2, -size / 2, size, size);
+          ctx.restore();
+        };
+        addToSlice(ptx + pty, renderKey, drawSpark);
+        continue;
+      }
+
       const spr = getProjectileSpriteByKind(w.prjKind[i]);
 
       const drawClosure = () => {

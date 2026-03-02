@@ -5,10 +5,10 @@ export const JACK_PISTOL_V1: WeaponDef = {
   displayName: "Pistol",
   tags: ["weapon", "gun", "projectile", "hit", "single_shot"],
 
-  // Placeholder baseline (tune later)
+  // Crit burst baseline.
   shotsPerSecond: 3.0,
 
-  baseDamage: { physical: 8, fire: 0, chaos: 0 },
+  baseDamage: { physical: 12, fire: 0, chaos: 0 },
   baseCritChance: 0.05,
   baseCritMulti: 1.5,
 

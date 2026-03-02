@@ -62,6 +62,14 @@ class FakeMouseEvent extends FakeEvent {
   }
 }
 
+class FakeKeyboardEvent extends FakeEvent {
+  key: string;
+  constructor(type: string, opts: { key?: string; target?: FakeElement | null } = {}) {
+    super(type, opts.target ?? null);
+    this.key = opts.key ?? "";
+  }
+}
+
 class FakeElement {
   tagName: string;
   hidden = false;
@@ -108,6 +116,17 @@ class FakeElement {
     child.parentNode = this;
     this.children.push(child);
     return child;
+  }
+
+  removeChild(child: FakeElement): FakeElement {
+    const idx = this.children.indexOf(child);
+    if (idx >= 0) this.children.splice(idx, 1);
+    child.parentNode = null;
+    return child;
+  }
+
+  get firstChild(): FakeElement | null {
+    return this.children[0] ?? null;
   }
 
   addEventListener(type: string, listener: Listener): void {
@@ -165,8 +184,19 @@ class FakeElement {
 
 class FakeDocument {
   body = new FakeElement("body");
+  private listeners = new Map<string, Listener[]>();
   createElement(tagName: string): FakeElement {
     return new FakeElement(tagName);
+  }
+  addEventListener(type: string, listener: Listener): void {
+    const arr = this.listeners.get(type) ?? [];
+    arr.push(listener);
+    this.listeners.set(type, arr);
+  }
+  dispatchEvent(ev: FakeEvent): boolean {
+    const arr = this.listeners.get(ev.type) ?? [];
+    for (const listener of [...arr]) listener(ev);
+    return true;
   }
 }
 
@@ -216,6 +246,18 @@ function tapElement(el: FakeElement, pointerId: number, x: number, y: number): v
   el.dispatchEvent(new FakePointerEvent("pointerup", { pointerId, button: 0, clientX: x, clientY: y, target: el }));
 }
 
+function findByData(root: FakeElement, key: string, value?: string): FakeElement | null {
+  const match = value == null
+    ? (key in root.dataset)
+    : (root.dataset[key] === value);
+  if (match) return root;
+  for (const child of root.children) {
+    const found = findByData(child, key, value);
+    if (found) return found;
+  }
+  return null;
+}
+
 describe("menuWiring tap safety", () => {
   beforeEach(() => {
     const doc = new FakeDocument();
@@ -223,6 +265,7 @@ describe("menuWiring tap safety", () => {
     (globalThis as any).Event = FakeEvent;
     (globalThis as any).PointerEvent = FakePointerEvent;
     (globalThis as any).MouseEvent = FakeMouseEvent;
+    (globalThis as any).KeyboardEvent = FakeKeyboardEvent;
     (globalThis as any).HTMLElement = FakeElement;
     (globalThis as any).HTMLDivElement = FakeElement;
     (globalThis as any).HTMLButtonElement = FakeElement;
@@ -247,11 +290,76 @@ describe("menuWiring tap safety", () => {
     const characterButtons = (refs.characterChoicesEl as unknown as FakeElement).querySelectorAll("button[data-character]");
     expect(characterButtons.length).toBeGreaterThan(0);
     const firstCharacterBtn = characterButtons[0];
+    const starterModal = findByData(refs.characterSelectEl as unknown as FakeElement, "characterStarterModal");
+    expect(starterModal).toBeTruthy();
+    expect(starterModal?.hidden).toBe(true);
 
     firstCharacterBtn.dispatchEvent(new FakeMouseEvent("click", { clientX: 240, clientY: 420, target: firstCharacterBtn }));
     expect(refs.characterContinueBtn.disabled).toBe(true);
+    expect(starterModal?.hidden).toBe(true);
 
     tapElement(firstCharacterBtn, 2, 260, 440);
+    expect(refs.characterContinueBtn.disabled).toBe(false);
+    expect(starterModal?.hidden).toBe(false);
+  });
+
+  test("starter modal closes via close button and backdrop tap", () => {
+    const refs = createDomRefs();
+    wireMenus(refs, {
+      previewMap: vi.fn(),
+      startRun: vi.fn(),
+      startDeterministicRun: vi.fn(),
+      startSandboxRun: vi.fn(),
+    });
+
+    tapElement(refs.startRunBtn as unknown as FakeElement, 1, 240, 420);
+    const characterButtons = (refs.characterChoicesEl as unknown as FakeElement).querySelectorAll("button[data-character]");
+    const firstCharacterBtn = characterButtons[0];
+    tapElement(firstCharacterBtn, 2, 260, 440);
+
+    const modal = findByData(refs.characterSelectEl as unknown as FakeElement, "characterStarterModal");
+    expect(modal).toBeTruthy();
+    expect(modal?.hidden).toBe(false);
+
+    const selectBtn = findByData(refs.characterSelectEl as unknown as FakeElement, "characterStarterSelect");
+    expect(selectBtn).toBeTruthy();
+    selectBtn?.dispatchEvent(new FakeMouseEvent("click", { target: selectBtn }));
+    expect(modal?.hidden).toBe(true);
+    expect(refs.characterContinueBtn.disabled).toBe(false);
+
+    tapElement(firstCharacterBtn, 4, 280, 440);
+    expect(modal?.hidden).toBe(false);
+
+    const closeBtn = findByData(refs.characterSelectEl as unknown as FakeElement, "characterStarterClose");
+    expect(closeBtn).toBeTruthy();
+    closeBtn?.dispatchEvent(new FakeMouseEvent("click", { target: closeBtn }));
+    expect(modal?.hidden).toBe(true);
+
+    tapElement(firstCharacterBtn, 3, 280, 440);
+    expect(modal?.hidden).toBe(false);
+    modal?.dispatchEvent(new FakeMouseEvent("click", { target: modal }));
+    expect(modal?.hidden).toBe(true);
+  });
+
+  test("starter modal closes with Escape and keeps selection active", () => {
+    const refs = createDomRefs();
+    wireMenus(refs, {
+      previewMap: vi.fn(),
+      startRun: vi.fn(),
+      startDeterministicRun: vi.fn(),
+      startSandboxRun: vi.fn(),
+    });
+
+    tapElement(refs.startRunBtn as unknown as FakeElement, 1, 240, 420);
+    const characterButtons = (refs.characterChoicesEl as unknown as FakeElement).querySelectorAll("button[data-character]");
+    const firstCharacterBtn = characterButtons[0];
+    tapElement(firstCharacterBtn, 2, 260, 440);
+
+    const modal = findByData(refs.characterSelectEl as unknown as FakeElement, "characterStarterModal");
+    expect(modal?.hidden).toBe(false);
+
+    (globalThis as any).document.dispatchEvent(new FakeKeyboardEvent("keydown", { key: "Escape" }));
+    expect(modal?.hidden).toBe(true);
     expect(refs.characterContinueBtn.disabled).toBe(false);
   });
 

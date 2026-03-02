@@ -205,6 +205,7 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
   graphicsPanel.appendChild(graphicsHeader);
 
   const performanceModeRow = createToggleRow("Performance mode");
+  performanceModeRow.input.setAttribute("data-performance-mode-toggle", "1");
   graphicsPanel.appendChild(performanceModeRow.row);
 
   const audioHeader = document.createElement("h4");
@@ -214,13 +215,17 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
 
   const masterRow = createSliderRow("Master volume", 0, 1, 0.01);
   const musicRow = createSliderRow("Music volume", 0, 1, 0.01);
+  musicRow.slider.setAttribute("data-audio-music-slider", "1");
   const sfxRow = createSliderRow("SFX volume", 0, 1, 0.01);
+  sfxRow.slider.setAttribute("data-audio-sfx-slider", "1");
   audioPanel.appendChild(masterRow.row);
   audioPanel.appendChild(musicRow.row);
   audioPanel.appendChild(sfxRow.row);
 
   const musicMuteRow = createToggleRow("Mute music");
+  musicMuteRow.input.setAttribute("data-audio-music-mute", "1");
   const sfxMuteRow = createToggleRow("Mute SFX");
+  sfxMuteRow.input.setAttribute("data-audio-sfx-mute", "1");
   audioPanel.appendChild(musicMuteRow.row);
   audioPanel.appendChild(sfxMuteRow.row);
 

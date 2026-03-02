@@ -30,7 +30,7 @@ export function tryPurchaseVendorRelic(world: any, index: number): boolean {
   if (Array.isArray(world.relics) && world.relics.includes(offer.relicId)) return false;
 
   addGold(world, -offer.priceG);
-  applyRelic(world, offer.relicId);
+  applyRelic(world, offer.relicId, { source: "shop" });
   offer.isSold = true;
   return true;
 }
