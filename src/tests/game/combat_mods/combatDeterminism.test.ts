@@ -30,6 +30,7 @@ describe("Combat Mods determinism", () => {
   });
 
   test("card stacking is deterministic", () => {
+    const baseSnap = getCombatModsSnapshot(createMockWorld(1, []));
     const w = createMockWorld(1, [
       "CARD_DAMAGE_FLAT_1",
       "CARD_DAMAGE_FLAT_1",
@@ -42,6 +43,6 @@ describe("Combat Mods determinism", () => {
       .toBe(3);
 
     expect(snap.weaponStats.baseDamage.physical)
-      .toBeCloseTo(8 + 3 + 3 + 3);
+      .toBeCloseTo(baseSnap.weaponStats.baseDamage.physical + 9);
   });
 });

@@ -1,7 +1,10 @@
 import type { World } from "../../world/world";
 import { worldToScreen } from "../../math/iso";
-import { KENNEY_TILE_ANCHOR_Y } from "../kenneyTiles";
+import { KENNEY_TILE_ANCHOR_Y, KENNEY_TILE_WORLD } from "../kenneyTiles";
 import { getTileSpriteById } from "../sprites/renderSprites";
+import { getEnemyAimDebugInfo, getEnemyAimWorld } from "../../../game/combat/aimPoints";
+import { getEnemyWorld } from "../../../game/coords/worldViews";
+import { ENEMIES, type EnemyType } from "../../../game/content/enemies";
 import {
   getApronDebugStats,
   getRampFacesForDebug,
@@ -768,6 +771,84 @@ function faceEndpoints(tx: number, ty: number, dir: "N" | "E" | "S" | "W", T: nu
     default:
       return { ax: x1, ay: y0, bx: x1, by: y1 };
   }
+}
+
+export function drawEnemyAimOverlay(ctx: DebugOverlayContext, show: boolean) {
+  if (!show) return;
+
+  const c = ctx.ctx;
+  const margin = 96;
+  const isNearScreen = (x: number, y: number) => (
+    x >= -margin
+    && x <= ctx.ww + margin
+    && y >= -margin
+    && y <= ctx.hh + margin
+  );
+
+  c.save();
+  c.globalAlpha = 1;
+  c.lineWidth = 1.5;
+  c.font = "10px monospace";
+  c.textAlign = "left";
+  c.textBaseline = "top";
+
+  for (let enemyIndex = 0; enemyIndex < ctx.w.eAlive.length; enemyIndex++) {
+    if (!ctx.w.eAlive[enemyIndex]) continue;
+
+    const anchorWorld = getEnemyWorld(ctx.w, enemyIndex, KENNEY_TILE_WORLD);
+    const aimWorld = getEnemyAimWorld(ctx.w, enemyIndex);
+    const enemyZ = ctx.w.ezVisual?.[enemyIndex] ?? ctx.tileHAtWorld(anchorWorld.wx, anchorWorld.wy);
+    const anchorScreen = ctx.toScreenAtZ(anchorWorld.wx, anchorWorld.wy, enemyZ);
+    const aimScreen = ctx.toScreenAtZ(aimWorld.x, aimWorld.y, enemyZ);
+    if (!isNearScreen(anchorScreen.x, anchorScreen.y) && !isNearScreen(aimScreen.x, aimScreen.y)) continue;
+
+    c.strokeStyle = "rgba(255, 220, 120, 0.95)";
+    c.beginPath();
+    c.moveTo(anchorScreen.x, anchorScreen.y);
+    c.lineTo(aimScreen.x, aimScreen.y);
+    c.stroke();
+
+    c.fillStyle = "rgba(255, 110, 110, 0.95)";
+    c.beginPath();
+    c.arc(anchorScreen.x, anchorScreen.y, 3, 0, Math.PI * 2);
+    c.fill();
+
+    c.fillStyle = "rgba(80, 235, 255, 0.95)";
+    c.beginPath();
+    c.arc(aimScreen.x, aimScreen.y, 3, 0, Math.PI * 2);
+    c.fill();
+
+    const enemyType = ctx.w.eType[enemyIndex] as EnemyType;
+    const enemyName = ENEMIES[enemyType]?.name ?? `Enemy ${enemyType}`;
+    const info = getEnemyAimDebugInfo(ctx.w, enemyIndex);
+    const line1 = `${enemyName} t:${enemyType} skin:${info.skin ?? "unknown"}`;
+    const line2 = `screen=(${info.effectiveScreenOffset.x},${info.effectiveScreenOffset.y}) base=(${info.baseScreenOffset.x},${info.baseScreenOffset.y}) skin=(${info.skinScreenOffset.x},${info.skinScreenOffset.y})`;
+    const line3 = `worldD=(${info.effectiveWorldDelta.dx.toFixed(1)},${info.effectiveWorldDelta.dy.toFixed(1)}) h*scale=${info.spriteFrameHeightPx}*${info.spriteScale.toFixed(2)}=${info.spriteHeightWorld.toFixed(1)}`;
+    const lines = [line1, line2, line3];
+    const lineHeight = 12;
+    const padX = 5;
+    const padY = 4;
+    let boxWidth = 0;
+    for (let i = 0; i < lines.length; i++) {
+      boxWidth = Math.max(boxWidth, c.measureText(lines[i]).width);
+    }
+    const boxHeight = padY * 2 + lines.length * lineHeight;
+    const rawX = aimScreen.x + 10;
+    const rawY = aimScreen.y - boxHeight - 8;
+    const boxX = Math.min(Math.max(6, rawX), Math.max(6, ctx.ww - boxWidth - padX * 2 - 6));
+    const boxY = Math.min(Math.max(6, rawY), Math.max(6, ctx.hh - boxHeight - 6));
+
+    c.fillStyle = "rgba(0, 0, 0, 0.72)";
+    c.fillRect(boxX, boxY, boxWidth + padX * 2, boxHeight);
+    c.strokeStyle = "rgba(220, 245, 255, 0.28)";
+    c.strokeRect(boxX + 0.5, boxY + 0.5, boxWidth + padX * 2 - 1, boxHeight - 1);
+    c.fillStyle = "rgba(220, 245, 255, 0.95)";
+    for (let i = 0; i < lines.length; i++) {
+      c.fillText(lines[i], boxX + padX, boxY + padY + i * lineHeight);
+    }
+  }
+
+  c.restore();
 }
 
 export function drawProjectileFaceOverlay(ctx: DebugOverlayContext, show: boolean, viewRect: ViewRect) {

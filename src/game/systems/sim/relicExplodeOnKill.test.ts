@@ -237,8 +237,9 @@ describe("relicExplodeOnKillSystem", () => {
     expect(Math.hypot(w.prvx[0], w.prvy[0])).toBeGreaterThan(0);
     const fw = getEnemyWorld(w, far, KENNEY_TILE_WORLD);
     const farAim = getEnemyAimWorld(w, far);
-    expect(w.prTargetX[0]).toBeCloseTo(fw.wx, 6);
+    expect(w.prTargetX[0]).toBeCloseTo(farAim.x, 6);
     expect(w.prTargetY[0]).toBeCloseTo(farAim.y, 6);
+    expect(w.prTargetY[0]).toBeLessThan(fw.wy);
   });
 
   test("ACT_DAGGER_ON_KILL_50 deterministic proc count for seeded kill events", () => {

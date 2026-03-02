@@ -14,6 +14,7 @@ import { clearSpatialHash, insertEntity } from "../../../../game/util/spatialHas
 import { RNG } from "../../../../game/util/rng";
 import { zonesSystem } from "../../../../game/systems/sim/zones";
 import { STARTER_RELIC_IDS } from "../../../../game/content/starterRelics";
+import { getEnemyAimWorld } from "../../../../game/combat/aimPoints";
 
 function rebuildEnemyHash(world: ReturnType<typeof createWorld>): void {
   clearSpatialHash(world.enemySpatialHash);
@@ -87,6 +88,7 @@ describe("relicTriggerSystem", () => {
     const enemy = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 5, 5);
     rebuildEnemyHash(world);
     const enemyFeet = getEnemyWorld(world, enemy, KENNEY_TILE_WORLD);
+    const enemyAim = getEnemyAimWorld(world, enemy);
     const playerFeet = getPlayerWorld(world, KENNEY_TILE_WORLD);
 
     world.events.push({
@@ -103,7 +105,8 @@ describe("relicTriggerSystem", () => {
 
     expect(world.pAlive.length).toBe(1);
     expect(world.prjKind[0]).toBe(PRJ_KIND.MISSILE);
-    expect(world.prTargetX[0]).toBeCloseTo(enemyFeet.wx, 6);
+    expect(world.prTargetX[0]).toBeCloseTo(enemyAim.x, 6);
+    expect(world.prTargetY[0]).toBeCloseTo(enemyAim.y, 6);
     expect(world.prTargetY[0]).toBeLessThan(enemyFeet.wy);
     expect(world.prStartY[0]).toBeLessThan(playerFeet.wy);
   });
@@ -265,6 +268,7 @@ describe("relicTriggerSystem", () => {
     rebuildEnemyHash(world);
     const aw = getEnemyWorld(world, a, KENNEY_TILE_WORLD);
     const bw = getEnemyWorld(world, b, KENNEY_TILE_WORLD);
+    const bAim = getEnemyAimWorld(world, b);
 
     world.events.push({
       type: "ENEMY_HIT",
@@ -280,7 +284,8 @@ describe("relicTriggerSystem", () => {
 
     const spark = world.prjKind.findIndex((k) => k === PRJ_KIND.SPARK);
     expect(spark).toBeGreaterThanOrEqual(0);
-    expect(world.prTargetX[spark]).toBeCloseTo(bw.wx, 6);
+    expect(world.prTargetX[spark]).toBeCloseTo(bAim.x, 6);
+    expect(world.prTargetY[spark]).toBeCloseTo(bAim.y, 6);
     expect(world.prTargetY[spark]).toBeLessThan(bw.wy);
   });
 
@@ -294,6 +299,7 @@ describe("relicTriggerSystem", () => {
     rebuildEnemyHash(world);
     const aw = getEnemyWorld(world, a, KENNEY_TILE_WORLD);
     const bw = getEnemyWorld(world, b, KENNEY_TILE_WORLD);
+    const bAim = getEnemyAimWorld(world, b);
     const playerFeet = getPlayerWorld(world, KENNEY_TILE_WORLD);
 
     world.events.push({
@@ -310,7 +316,8 @@ describe("relicTriggerSystem", () => {
 
     const knife = world.prjKind.findIndex((k) => k === PRJ_KIND.KNIFE);
     expect(knife).toBeGreaterThanOrEqual(0);
-    expect(world.prTargetX[knife]).toBeCloseTo(bw.wx, 6);
+    expect(world.prTargetX[knife]).toBeCloseTo(bAim.x, 6);
+    expect(world.prTargetY[knife]).toBeCloseTo(bAim.y, 6);
     expect(world.prTargetY[knife]).toBeLessThan(bw.wy);
     expect(world.prStartY[knife]).toBeLessThan(playerFeet.wy);
   });

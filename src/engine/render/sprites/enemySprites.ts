@@ -96,6 +96,7 @@ const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
 };
 
 export type EnemySpriteFrameMeta = {
+    skin: string;
     w: number;
     h: number;
     scale: number;
@@ -107,6 +108,7 @@ export function getEnemySpriteFrameMeta(type: EnemyType): EnemySpriteFrameMeta |
     const def = ENEMY_SPRITES[type];
     if (!def) return null;
     return {
+        skin: def.skin,
         w: def.frameW,
         h: def.frameH,
         scale: def.scale,

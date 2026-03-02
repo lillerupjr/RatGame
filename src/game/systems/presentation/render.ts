@@ -61,6 +61,7 @@ import {
 } from "../../../engine/render/sprites/runtimeStructureSlicing";
 import { orientedDims, seAnchorFromTopLeft } from "../../../engine/render/sprites/structureFootprintOwnership";
 import {
+  drawEnemyAimOverlay,
   drawOccluderOverlay,
   drawProjectileFaceOverlay,
   drawRampOverlay,
@@ -1569,6 +1570,7 @@ export async function renderSystem(
   const SHOW_STRUCTURE_HEIGHTS = debugFlags.showStructureHeights;
   const SHOW_STRUCTURE_COLLISION_DEBUG = debugFlags.showStructureCollision;
   const SHOW_STRUCTURE_SLICE_DEBUG = debugFlags.showStructureSlices;
+  const SHOW_ENEMY_AIM_OVERLAY = debugFlags.showEnemyAimOverlay;
   const buildingMaskDebugView = debugFlags.buildingMaskDebugView;
   const SHOW_BUILDING_MASK_DEBUG = debugFlags.showBuildingMaskDebug;
   const SHOW_ZONE_OBJECTIVE_BOUNDS = !!debug.objectives?.showZoneBounds;
@@ -3855,6 +3857,7 @@ export async function renderSystem(
   drawStructureHeightOverlay(debugContext, SHOW_STRUCTURE_HEIGHTS, viewRect);
   drawTriggerOverlay(debugContext, SHOW_TRIGGER_ZONES);
   drawRoadSemanticOverlay(debugContext, SHOW_ROAD_SEMANTIC, viewRect);
+  drawEnemyAimOverlay(debugContext, SHOW_ENEMY_AIM_OVERLAY);
   if (SHOW_STRUCTURE_COLLISION_DEBUG) {
     const blocked = blockedTilesInView(viewRect);
     if (blocked.length > 0) {

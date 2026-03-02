@@ -132,6 +132,7 @@ function installDevSettingsUi(): DevSettingsUiController {
     forceSpawnOverride: "Force Spawn Override",
     godMode: "God Mode",
     entityAnchorOverlay: "Show Entity Anchors",
+    enemyAimOverlay: "Enemy Aim Overlay",
     pauseDebugCards: "Pause Debug Cards",
     pauseCsvControls: "Pause CSV Controls",
     dpsMeter: "DPS Meter",

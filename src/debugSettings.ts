@@ -46,6 +46,7 @@ export type DebugSettings = {
   dmgMult: number;
   fireRateMult: number;
   entityAnchorOverlay: boolean;
+  enemyAimOverlay: boolean;
   pauseDebugCards: boolean;
   pauseCsvControls: boolean;
   dpsMeter: boolean;
@@ -104,6 +105,7 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "forceSpawnOverride", label: "forceSpawnOverride" },
   { key: "godMode", label: "godMode" },
   { key: "entityAnchorOverlay", label: "entityAnchorOverlay" },
+  { key: "enemyAimOverlay", label: "enemyAimOverlay" },
   { key: "pauseDebugCards", label: "Enable Pause Debug Cards" },
   { key: "pauseCsvControls", label: "Enable Pause CSV Controls" },
   { key: "dpsMeter", label: "Show DPS Meter" },
@@ -137,6 +139,7 @@ export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   dmgMult: 1,
   fireRateMult: 1,
   entityAnchorOverlay: false,
+  enemyAimOverlay: false,
   pauseDebugCards: false,
   pauseCsvControls: false,
   dpsMeter: false,
@@ -170,6 +173,7 @@ export type ResolvedDebugFlags = {
   showStructureCollision: boolean;
   showStructureSlices: boolean;
   showMapOverlays: boolean;
+  showEnemyAimOverlay: boolean;
   lightingOcclusionEnabled: boolean;
   lightingHeightBandedOcclusion: boolean;
   lightingUseLegacyGlobalOcclusion: boolean;
@@ -196,6 +200,7 @@ export function resolveDebugFlags(debug: DebugSettings): ResolvedDebugFlags {
     showStructureCollision: debug.blockedTiles || debug.colliders,
     showStructureSlices: debug.slices || debug.spriteBounds,
     showMapOverlays: !debug.mapOverlaysDisabled,
+    showEnemyAimOverlay: debug.enemyAimOverlay,
     lightingOcclusionEnabled: !debug.disableLightingOcclusion,
     lightingHeightBandedOcclusion: !debug.disableLightingHeightBandedOcclusion,
     lightingUseLegacyGlobalOcclusion: debug.lightingUseLegacyGlobalOcclusion,
