@@ -3,7 +3,7 @@ import type { WeaponDef } from "../../stats/modifierTypes";
 export const TOMMY_SHOTGUN_V1: WeaponDef = {
   id: "tommy_shotgun_v1",
   displayName: "Shotgun",
-  tags: ["weapon", "gun", "projectile", "hit", "single_shot"],
+  tags: ["weapon", "gun", "projectile", "hit", "single_shot", "physical", "bleed"],
 
   // Target shape: 16 damage * 0.666... shots/sec * 4 pellets ~= 42.7 dps.
   shotsPerSecond: 2 / 3,

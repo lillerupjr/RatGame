@@ -3,7 +3,7 @@ import type { WeaponDef } from "../../stats/modifierTypes";
 export const JOEY_RIFLE_V1: WeaponDef = {
   id: "joey_rifle_v1",
   displayName: "Laser",
-  tags: ["weapon", "gun", "projectile", "hit", "single_shot"],
+  tags: ["weapon", "gun", "projectile", "hit", "single_shot", "fire", "ignite"],
 
   // Milestone 1 target shape: 1 shot/sec * 24 damage = 24 dps.
   shotsPerSecond: 1.0,

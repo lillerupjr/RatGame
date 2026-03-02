@@ -22,6 +22,7 @@ export interface CardDef {
   displayName: string; // generic for now
   rarity: 1 | 2 | 3 | 4;
   powerTier: 1 | 2 | 3 | 4 | 5;
+  tags: CardTag[];
   mods: StatMod[];
 }
 
@@ -33,7 +34,46 @@ export interface DamageBundle {
   chaos: number;
 }
 
-export type WeaponTag = "weapon" | "gun" | "projectile" | "hit" | "single_shot";
+export type WeaponTag =
+  | "weapon"
+  | "gun"
+  | "projectile"
+  | "hit"
+  | "single_shot"
+  // damage identity
+  | "physical"
+  | "fire"
+  | "chaos"
+  // ailment identity (used for card gating)
+  | "bleed"
+  | "ignite"
+  | "poison";
+
+export type CardTag =
+  // damage identity
+  | "damage_generic"
+  | "damage_physical"
+  | "damage_fire"
+  | "damage_chaos"
+  // elemental identity
+  | "fire"
+  // conversion identity
+  | "convert_fire"
+  | "convert_chaos"
+  // mechanics identity
+  | "fire_rate"
+  | "crit"
+  | "accuracy"
+  | "projectiles"
+  | "pierce"
+  // ailments / DOT identity
+  | "bleed"
+  | "ignite"
+  | "poison"
+  | "dot"
+  // survivability
+  | "life"
+  | "defense";
 
 export interface WeaponBeamDef {
   maxRangePx: number;

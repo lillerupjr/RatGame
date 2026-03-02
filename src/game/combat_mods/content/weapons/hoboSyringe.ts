@@ -4,7 +4,7 @@ import { PRJ_KIND } from "../../../factories/projectileFactory";
 export const HOBO_SYRINGE_V1: WeaponDef = {
   id: "hobo_syringe_v1",
   displayName: "Syringe",
-  tags: ["weapon", "gun", "projectile", "hit", "single_shot"],
+  tags: ["weapon", "gun", "projectile", "hit", "single_shot", "chaos", "poison"],
 
   // Rifle parity cadence.
   shotsPerSecond: 1.0,
