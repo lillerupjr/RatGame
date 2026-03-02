@@ -26,6 +26,7 @@ import { setActiveMapSkinId } from "../../engine/render/sprites/renderSprites";
 import { initializeRoomChallenges } from "../systems/progression/roomChallenge";
 import type { World } from "../../engine/world/world";
 import { setObjectives } from "../systems/progression/objective";
+import { getSemanticFieldDefForTileId } from "../world/semanticFields";
 
 
 // ─────────────────────────────────────────────────────────────
@@ -233,7 +234,7 @@ export function getSpawnWorldFromActive(): {
 }
 
 function isSpawnSafe(kind: IsoTile["kind"]): boolean {
-    return kind !== "VOID" && kind !== "STAIRS";
+    return getSemanticFieldDefForTileId(kind).isWalkable && kind !== "STAIRS";
 }
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -301,7 +302,7 @@ export function getGoalWorldFromActive(): {
  */
 export function isWalkable(tx: number, ty: number): boolean {
     const tile = getTileFromActive(tx, ty);
-    return tile.kind !== "VOID";
+    return getSemanticFieldDefForTileId(tile.kind).isWalkable;
 }
 
 /**

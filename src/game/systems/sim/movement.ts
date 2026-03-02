@@ -161,6 +161,10 @@ export function movementSystem(w: World, input: InputState, dt: number) {
 
   const playerGrid = gridAtPlayer(w);
 
+  const knockVx = ((w as any)._eKnockVx ??= []) as number[];
+  const knockVy = ((w as any)._eKnockVy ??= []) as number[];
+  const KNOCK_DECAY = 8; // exponential decay rate
+
   for (let i = 0; i < w.eAlive.length; i++) {
     if (!w.eAlive[i]) continue;
 
@@ -172,6 +176,11 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     let eCur = walkInfo(ex, ey, KENNEY_TILE_WORLD, ezVisual?.[i]);
     ezVisual[i] = eCur.zVisual;
     ezLogical[i] = eCur.zLogical;
+
+    // Apply and decay knockback velocity
+    let kvx = knockVx[i] ?? 0;
+    let kvy = knockVy[i] ?? 0;
+    const hasKnockback = Math.abs(kvx) > 1 || Math.abs(kvy) > 1;
 
     // Query flow field for optimal direction toward player
     const flowDir = queryFlowDirection(flowField, ex, ey, eCur.floorH, KENNEY_TILE_WORLD);
@@ -192,8 +201,19 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     }
 
     const eWorldDir = gridDirToWorldDir(KENNEY_TILE_WORLD, gux, guy);
-    const enx = ex + eWorldDir.wx * w.eSpeed[i] * dt;
-    const eny = ey + eWorldDir.wy * w.eSpeed[i] * dt;
+    let moveWx = eWorldDir.wx * w.eSpeed[i];
+    let moveWy = eWorldDir.wy * w.eSpeed[i];
+
+    if (hasKnockback) {
+      moveWx = kvx;
+      moveWy = kvy;
+      const decay = Math.exp(-KNOCK_DECAY * dt);
+      knockVx[i] = kvx * decay;
+      knockVy[i] = kvy * decay;
+    }
+
+    const enx = ex + moveWx * dt;
+    const eny = ey + moveWy * dt;
 
     const tryEnemyMove = (wx: number, wy: number) => {
       const next = walkInfo(wx, wy, KENNEY_TILE_WORLD, eCur.z);

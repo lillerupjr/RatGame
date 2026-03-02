@@ -541,8 +541,11 @@ export function collisionsSystem(w: World, dt: number) {
           const ux = (enemyFeet.wx - playerNow.wx) / len;
           const uy = (enemyFeet.wy - playerNow.wy) / len;
           const closeFrac = 1 - Math.min(1, distToPlayerFeet / STARTER_POINT_BLANK_KNOCKBACK_RANGE);
-          const push = 10 + STARTER_POINT_BLANK_KNOCKBACK_PX * closeFrac;
-          setEnemyAnchorFromWorld(e, enemyFeet.wx + ux * push, enemyFeet.wy + uy * push);
+          const speed = (120 + 300 * closeFrac);
+          const knockVx = ((w as any)._eKnockVx ??= []) as number[];
+          const knockVy = ((w as any)._eKnockVy ??= []) as number[];
+          knockVx[e] = ux * speed;
+          knockVy[e] = uy * speed;
         }
       }
 

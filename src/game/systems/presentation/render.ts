@@ -48,6 +48,7 @@ import {
 
 import {
   preloadRenderSprites,
+  getAnimatedTileFrame,
   getRuntimeDecalSprite,
   getTileSpriteById,
   getSpriteById,
@@ -85,6 +86,7 @@ import { resolveDebugFlags } from "../../../debugSettings";
 import { getUserSettings } from "../../../userSettings";
 import { type FireZoneVfx, renderFireZoneVfx } from "../../vfx/fireZoneVfx";
 import { BAZOOKA_EXHAUST_OFFSET, bazookaExhaustAssets } from "../../vfx/bazookaExhaustAssets";
+import { TILE_ID_OCEAN } from "../../world/semanticFields";
 import { getZoneTrialObjectiveState } from "../../objectives/zoneObjectiveSystem";
 import { renderZoneObjectives } from "../../render/renderZoneObjectives";
 import { resolveActivePaletteId } from "../../render/activePalette";
@@ -856,6 +858,9 @@ export async function renderSystem(
   const STAIR_APRON_SCALE = 1;
   const WALL_APRON_SCALE = 1;
   const VOID_TOP_SCALE = 1;
+  const OCEAN_TOP_SCALE = 4;
+  const OCEAN_ANIM_TIME_SCALE = 0.25;
+  const OCEAN_BASE_FRAME_PX = 32;
 
   // Small render-order bias so container walls can occlude stacked container roofs.
   const CONTAINER_WALL_SORT_BIAS = 0.001;
@@ -1837,7 +1842,7 @@ export async function renderSystem(
 
   const drawImageTopFn: SliceDrawFn = (payload) => {
     const p = payload as {
-      img: HTMLImageElement;
+      img: CanvasImageSource;
       dx: number;
       dy: number;
       dw: number;
@@ -1975,13 +1980,23 @@ export async function renderSystem(
             });
             continue;
           }
-          const topRec = surface.spriteIdTop ? getTileSpriteById(surface.spriteIdTop) : null;
+          const topRec = tdef.kind === TILE_ID_OCEAN
+            ? getAnimatedTileFrame("water1", (w.timeSec ?? w.time ?? 0) * OCEAN_ANIM_TIME_SCALE)
+            : (surface.spriteIdTop ? getTileSpriteById(surface.spriteIdTop) : null);
           if (!topRec?.ready || !topRec.img || topRec.img.width <= 0 || topRec.img.height <= 0) continue;
 
-          const topScale = isStairTop ? STAIR_TOP_SCALE : FLOOR_TOP_SCALE;
-          const topImg = topRec.img;
-          const topW = topImg.width * topScale;
-          const topH = topImg.height * topScale;
+          const topScale = tdef.kind === TILE_ID_OCEAN
+            ? OCEAN_TOP_SCALE
+            : (isStairTop ? STAIR_TOP_SCALE : FLOOR_TOP_SCALE);
+          const oceanProjectionScale = tdef.kind === TILE_ID_OCEAN
+            ? topScale * (OCEAN_BASE_FRAME_PX / Math.max(1, Math.max(topRec.img.width, topRec.img.height)))
+            : 1;
+          const projectedOceanTop = tdef.kind === TILE_ID_OCEAN
+            ? getRuntimeIsoDecalCanvas(topRec.img, 0, oceanProjectionScale)
+            : null;
+          const topImg = projectedOceanTop ?? topRec.img;
+          const topW = projectedOceanTop ? topImg.width : (topImg.width * topScale);
+          const topH = projectedOceanTop ? topImg.height : (topImg.height * topScale);
 
           const wx = (tx + 0.5) * T;
           const wy = (ty + 0.5) * T;

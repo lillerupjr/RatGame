@@ -125,6 +125,9 @@ function collectRenderableSpriteIds(): ReadonlySet<string> {
   for (let i = 1; i <= 6; i++) {
     addId(ids, `tiles/animated/water2/${i}`);
   }
+  for (let i = 1; i <= 4; i++) {
+    addId(ids, `tiles/animated/water1/${i}`);
+  }
 
   addId(ids, DEFAULT_MAP_SKIN.floor);
   addId(ids, DEFAULT_MAP_SKIN.apron);

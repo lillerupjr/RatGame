@@ -673,6 +673,9 @@ export function createLayeredMapFromTable(
                 return { kind: "GOAL", h: heightLevel };
             case "stairs":
                 return { kind: "STAIRS", h: heightLevel, dir: cell.dir as any };
+            case "water":
+            case "ocean":
+                return { kind: "OCEAN", h: heightLevel };
             case "void":
                 return { kind: "VOID", h: 0 };
             case "wall":

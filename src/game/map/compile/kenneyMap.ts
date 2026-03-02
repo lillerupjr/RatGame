@@ -24,6 +24,12 @@ import { gridToWorld, worldToGrid } from "../../coords/grid";
 import { worldToTile, tileToWorldCenter } from "../../coords/tile";
 import { generateFloorMap } from "../generators/proceduralMap";
 import { loadTableMapDefFromJson } from "../formats/json/jsonMapLoader";
+import {
+    getSemanticFieldDefForTileId,
+    tileIdToSemanticFieldId,
+    type SemanticFieldDef,
+    type SemanticFieldId,
+} from "../../world/semanticFields";
 
 export type {
     IsoTileKind,
@@ -169,7 +175,7 @@ export function getSpawnWorld(tileWorld: number): {
 }
 
 function isSpawnSafe(kind: IsoTileKind): boolean {
-    return kind !== "VOID" && kind !== "STAIRS";
+    return getSemanticFieldDefForTileId(kind).isWalkable && kind !== "STAIRS";
 }
 
 function clampSpawn(v: number, lo: number, hi: number): number {
@@ -213,6 +219,16 @@ export function isHoleTile(tx: number, ty: number): boolean {
 /** Return true if the tile is a stairs tile. */
 export function isStairsTile(tx: number, ty: number): boolean {
     return getTile(tx, ty).kind === "STAIRS";
+}
+
+/** Return semantic field id for a tile coordinate. */
+export function semanticFieldAtTile(tx: number, ty: number): SemanticFieldId {
+    return tileIdToSemanticFieldId(getTile(tx, ty).kind);
+}
+
+/** Return semantic field properties for a tile coordinate. */
+export function semanticFieldInfoAtTile(tx: number, ty: number): SemanticFieldDef {
+    return getSemanticFieldDefForTileId(getTile(tx, ty).kind);
 }
 
 /**
@@ -1099,6 +1115,8 @@ function shapeDims(shape: TileWalkShape): { w: number; h: number } {
 }
 
 function tileWalkShapeFromTile(t: IsoTile): TileWalkShape {
+    const sem = getSemanticFieldDefForTileId(t.kind);
+    if (!sem.isWalkable) return "BLOCKED";
     switch (t.kind) {
         case "VOID":
             return "BLOCKED";

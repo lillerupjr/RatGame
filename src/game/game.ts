@@ -1126,6 +1126,8 @@ export function createGame(args: CreateGameArgs) {
     if ("zDamagePlayer" in w) (w as any).zDamagePlayer = [];
 
     (w as any)._fireZoneVfx = [];
+    (w as any)._eKnockVx = [];
+    (w as any)._eKnockVy = [];
 
     // VFX entities
     w.vfxAlive = [];

@@ -13,6 +13,8 @@ export type TableMapCell = {
       | "goal"
       | "wall"
       | "void"
+      | "water"
+      | "ocean"
       | "road"
       | "sidewalk"
       | "asphalt"

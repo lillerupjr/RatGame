@@ -4,6 +4,7 @@ import { KENNEY_TILE_ANCHOR_Y, KENNEY_TILE_WORLD } from "../../../engine/render/
 import type { TriggerDef } from "../../triggers/triggerTypes";
 import { resolveMapSkin, resolveSemanticSprite, type MapSkinId, MapSkinBundle } from "../../content/mapSkins";
 import { resolveTileSpriteId } from "../skins/tileSpriteResolver";
+import { TILE_ID_OCEAN } from "../../world/semanticFields";
 import {
     BUILDING_SKINS,
     DEFAULT_BUILDING_PACK_ID,
@@ -27,7 +28,7 @@ import { buildRoadMarkingsPipeline } from "../../roads/markings/roadMarkingsPipe
 import { resolveMarkingSprite } from "../../roads/markings/markingSpriteResolver";
 import type { MarkingPiece, RoadBand, RoadContext } from "../../roads/markings/types";
 
-export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL";
+export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL" | typeof TILE_ID_OCEAN;
 export type StairDir = "N" | "E" | "S" | "W";
 export type WallDir = "N" | "E" | "S" | "W";
 
@@ -543,6 +544,16 @@ export function compileKenneyMapFromTable(
                 });
                 const floorSprite = sprite ?? semanticSprite ?? fallbackFloor;
                 return { tile: { kind: "FLOOR" as const, h: z, skin: floorSprite }, walls: [] as WallToken[] };
+            }
+            if (type === "water" || type === "ocean") {
+                return {
+                    tile: {
+                        kind: TILE_ID_OCEAN,
+                        h: z,
+                        skin: sprite ?? "tiles/animated/water1/1",
+                    },
+                    walls: [] as WallToken[],
+                };
             }
             if (type === "spawn") {
                 const fallbackFloor = resolveTileSpriteId({
@@ -1423,7 +1434,7 @@ export function compileKenneyMapFromTable(
         ];
         for (let i = 0; i < neighborOffsets.length; i++) {
             const nt = placed.get(`${tx + neighborOffsets[i].dx},${ty + neighborOffsets[i].dy}`);
-            if (!nt || nt.kind === "VOID" || nt.kind === "SPAWN") continue;
+            if (!nt || nt.kind === "VOID" || nt.kind === TILE_ID_OCEAN || nt.kind === "SPAWN") continue;
             const skin = nt.skin ?? "";
             if (!skin || skin === INHERIT_DOMINANT_FLOOR_SKIN) continue;
             if (skin.startsWith(RUNTIME_TILE_SKIN_PREFIX)) {

@@ -24,10 +24,28 @@ export type LoadedImg = {
 export type PaletteId = ReturnType<typeof resolveActivePaletteId>;
 
 const cache: Record<string, LoadedImg> = Object.create(null);
-const WATER_FRAME_COUNT = 6;
-const WATER_FRAME_MS = 150;
+const ANIMATED_TILE_SETS = {
+    water1: { fps: 6, frameCount: 4 },
+    water2: { fps: 6, frameCount: 6 },
+} as const;
+const animatedTileFramesBySet: Partial<Record<AnimatedTileSetId, LoadedImg[]>> = {};
 const prewarmQueue: { spriteId: string; paletteId: PaletteId }[] = [];
 let prewarmActive = false;
+
+export type AnimatedTileSetId = keyof typeof ANIMATED_TILE_SETS;
+
+function getAnimatedTileFrames(setId: AnimatedTileSetId): LoadedImg[] {
+    const cached = animatedTileFramesBySet[setId];
+    if (cached) return cached;
+
+    const spec = ANIMATED_TILE_SETS[setId];
+    const frames = new Array<LoadedImg>(spec.frameCount);
+    for (let i = 0; i < spec.frameCount; i++) {
+        frames[i] = loadById(`tiles/animated/${setId}/${i + 1}`);
+    }
+    animatedTileFramesBySet[setId] = frames;
+    return frames;
+}
 
 function makeTransparent1x1(): HTMLImageElement {
     const img = new Image();
@@ -245,15 +263,20 @@ export function getVoidTop(nowMs: number = performance.now(), flowRate: number =
 
 export function getAnimatedWaterSprite(nowMs: number, flowRate: number): LoadedImg {
     const rate = Number.isFinite(flowRate) ? Math.max(0.05, flowRate) : 1;
-    const frame = (Math.floor(nowMs / (WATER_FRAME_MS / rate)) % WATER_FRAME_COUNT) + 1;
-    return loadById(`tiles/animated/water2/${frame}`);
+    return getAnimatedTileFrame("water2", (nowMs / 1000) * rate);
+}
+
+export function getAnimatedTileFrame(setId: AnimatedTileSetId, timeSec: number): LoadedImg {
+    const set = ANIMATED_TILE_SETS[setId];
+    const t = Number.isFinite(timeSec) ? Math.max(0, timeSec) : 0;
+    const frameIdx = Math.floor(t * set.fps) % set.frameCount;
+    return getAnimatedTileFrames(setId)[frameIdx];
 }
 // IMPORTANT: this must be a named export (your render.ts imports it by name)
 export function preloadRenderSprites(): void {
     void getVoidTop();
-    for (let i = 1; i <= WATER_FRAME_COUNT; i++) {
-        void loadById(`tiles/animated/water2/${i}`);
-    }
+    void getAnimatedTileFrames("water1");
+    void getAnimatedTileFrames("water2");
     for (const [family, count] of Object.entries(RUNTIME_FLOOR_VARIANT_COUNTS) as [RuntimeFloorFamily, number][]) {
         for (let i = 1; i <= count; i++) void getRuntimeSquareFloorSprite(family, i);
     }

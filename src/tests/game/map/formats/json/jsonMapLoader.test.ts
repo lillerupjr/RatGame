@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { loadTableMapDefFromJson } from "../../../../../game/map/formats/json/jsonMapLoader";
 import jsonMinimalMap from "../../../../../game/map/authored/maps/jsonMaps/minimal.json";
+import jsonDocksMap from "../../../../../game/map/authored/maps/jsonMaps/docks.json";
 
 describe("jsonMapLoader", () => {
   it("converts a minimal JSON map into an equivalent TableMapDef", () => {
@@ -110,5 +111,33 @@ describe("jsonMapLoader", () => {
       }],
     }, "inline");
     expect(mapDef.lights?.[0].flicker).toEqual({ kind: "NOISE", speed: 9, amount: 0.25 });
+  });
+
+  it("surrounds DOCKS chunk-grid with one 24x24 ocean chunk border at z=-1", () => {
+    const mapDef = loadTableMapDefFromJson(jsonDocksMap, "authored/maps/jsonMaps/docks.json");
+
+    expect(mapDef.w).toBe(24 * (3 + 2));
+    expect(mapDef.h).toBe(24 * (3 + 2));
+
+    const hasOceanAt = (x: number, y: number) =>
+      mapDef.cells.some((c) => c.x === x && c.y === y && c.type === "ocean" && c.z === -1);
+
+    expect(hasOceanAt(0, 0)).toBe(true);
+    expect(hasOceanAt(24 * 5 - 1, 0)).toBe(true);
+    expect(hasOceanAt(0, 24 * 5 - 1)).toBe(true);
+    expect(hasOceanAt(24 * 5 - 1, 24 * 5 - 1)).toBe(true);
+    expect(hasOceanAt(0, 24 * 2)).toBe(true);
+    expect(hasOceanAt(24 * 5 - 1, 24 * 2)).toBe(true);
+    const interiorOceanCount = mapDef.cells.filter((c) =>
+      c.type === "ocean" && c.z === -1 && c.x >= 24 && c.x < (24 * 4) && c.y >= 24 && c.y < (24 * 4)
+    ).length;
+    expect(interiorOceanCount).toBeGreaterThan(0);
+
+    const covered = new Set<string>();
+    for (let i = 0; i < mapDef.cells.length; i++) {
+      const c = mapDef.cells[i];
+      covered.add(`${c.x},${c.y}`);
+    }
+    expect(covered.size).toBe(mapDef.w * mapDef.h);
   });
 });

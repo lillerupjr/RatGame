@@ -12,6 +12,7 @@ import type {
 } from "../table/tableMapTypes";
 import type { MapSkinBundle, MapSkinId } from "../../../content/mapSkins";
 import type { BuildingPackId } from "../../../content/buildings";
+import { makeOceanChunk24, OCEAN_CHUNK_SIZE } from "../../../content/maps/oceanChunk24";
 
 const RAW_CHUNK_MAPS = import.meta.glob("../../authored/maps/jsonMaps/chunks/**/*.json", {
   eager: true,
@@ -62,7 +63,85 @@ const CHUNK_REGISTRY: {
 
   return { byId, pools };
 })();
-const CHUNK_SIZE = 24;
+const CHUNK_SIZE = OCEAN_CHUNK_SIZE;
+
+type ChunkGridDef = TableMapDef[][];
+
+function fillEmptyWithOceanCells(cells: TableMapCell[], width: number, height: number): void {
+  if (!(width > 0) || !(height > 0)) return;
+
+  const keyOf = (x: number, y: number) => `${x},${y}`;
+  const byKey = new Map<string, number>();
+  for (let i = 0; i < cells.length; i++) {
+    const c = cells[i];
+    if (c.x < 0 || c.y < 0 || c.x >= width || c.y >= height) continue;
+    byKey.set(keyOf(c.x, c.y), i);
+  }
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const key = keyOf(x, y);
+      const idx = byKey.get(key);
+      if (idx == null) {
+        cells.push({ x, y, z: -1, type: "ocean" });
+        byKey.set(key, cells.length - 1);
+        continue;
+      }
+
+      const existing = cells[idx];
+      const type = (existing.type ?? "").toLowerCase();
+      if (!type || type === "none" || type === "void") {
+        cells[idx] = { ...existing, type: "ocean", z: -1 };
+      }
+    }
+  }
+}
+
+function makeOceanChunkDef(): TableMapDef {
+  const ocean = makeOceanChunk24();
+  const cells: TableMapCell[] = new Array<TableMapCell>(ocean.w * ocean.h);
+  for (let y = 0; y < ocean.h; y++) {
+    for (let x = 0; x < ocean.w; x++) {
+      const i = y * ocean.w + x;
+      cells[i] = {
+        x,
+        y,
+        z: -1,
+        type: "ocean",
+      };
+    }
+  }
+  return {
+    id: "OCEAN_CHUNK_24",
+    w: ocean.w,
+    h: ocean.h,
+    cells,
+  };
+}
+
+export function surroundWithOceanBorder(chunks: ChunkGridDef): ChunkGridDef {
+  const h = chunks.length;
+  const w = chunks[0]?.length ?? 0;
+  const out: ChunkGridDef = [];
+
+  const top: TableMapDef[] = [];
+  for (let x = 0; x < w + 2; x++) top.push(makeOceanChunkDef());
+  out.push(top);
+
+  for (let y = 0; y < h; y++) {
+    const row: TableMapDef[] = [];
+    row.push(makeOceanChunkDef());
+    for (let x = 0; x < w; x++) row.push(chunks[y][x]);
+    row.push(makeOceanChunkDef());
+    out.push(row);
+  }
+
+  const bot: TableMapDef[] = [];
+  for (let x = 0; x < w + 2; x++) bot.push(makeOceanChunkDef());
+  out.push(bot);
+
+  return out;
+}
 
 function pickChunkSource(chunkId: string): ChunkSource | null {
   const pool = CHUNK_REGISTRY.pools.get(chunkId) ?? CHUNK_REGISTRY.pools.get(chunkId.toLowerCase());
@@ -832,6 +911,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
   }
 
   const id = requireStringField(data, "id", source);
+  const isDocksMap = id.trim().toUpperCase() === "DOCKS";
   const chunkGrid = optionalChunkGridField(data, source);
   const fieldParsed = optionalFieldsField(data, source);
   const fieldCells = fieldParsed.cells;
@@ -881,7 +961,9 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
       targetHeight?: number;
     }> = [];
 
+    const chunkDefsBase: ChunkGridDef = [];
     for (let cy = 0; cy < chunkGrid.rows; cy++) {
+      const row: TableMapDef[] = [];
       for (let cx = 0; cx < chunkGrid.cols; cx++) {
         const chunkSource = pickChunkSource(chunkGrid.id);
         if (!chunkSource) {
@@ -893,6 +975,23 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
         if (chunkDef.w !== CHUNK_SIZE || chunkDef.h !== CHUNK_SIZE) {
           throw new Error(
             `JSON map loader${formatSource(source)}: chunk "${chunkGrid.id}" candidate "${chunkDef.id}" must be ${CHUNK_SIZE}x${CHUNK_SIZE}.`
+          );
+        }
+        row.push(chunkDef);
+      }
+      chunkDefsBase.push(row);
+    }
+
+    const applyOceanBorder = isDocksMap;
+    const chunkDefs = applyOceanBorder ? surroundWithOceanBorder(chunkDefsBase) : chunkDefsBase;
+    const borderOffset = applyOceanBorder ? CHUNK_SIZE : 0;
+
+    for (let cy = 0; cy < chunkDefs.length; cy++) {
+      for (let cx = 0; cx < chunkDefs[cy].length; cx++) {
+        const chunkDef = chunkDefs[cy][cx];
+        if (chunkDef.w !== CHUNK_SIZE || chunkDef.h !== CHUNK_SIZE) {
+          throw new Error(
+            `JSON map loader${formatSource(source)}: chunk "${chunkDef.id}" must be ${CHUNK_SIZE}x${CHUNK_SIZE}.`
           );
         }
         const ox = cx * chunkDef.w;
@@ -932,17 +1031,43 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
       }
     }
 
+    const shiftCell = (c: TableMapCell): TableMapCell => (
+      borderOffset === 0 ? c : { ...c, x: c.x + borderOffset, y: c.y + borderOffset }
+    );
+    const shiftStamp = (s: SemanticStamp): SemanticStamp => (
+      borderOffset === 0 ? s : { ...s, x: s.x + borderOffset, y: s.y + borderOffset }
+    );
+    const shiftLight = (l: TableMapLight): TableMapLight => (
+      borderOffset === 0 ? l : { ...l, x: l.x + borderOffset, y: l.y + borderOffset }
+    );
+    const shiftRoadRect = (r: {
+      x: number;
+      y: number;
+      z: number;
+      w: number;
+      h: number;
+      semantic?: string;
+      dir?: "N" | "E" | "S" | "W";
+      startHeight?: number;
+      targetHeight?: number;
+    }) => (
+      borderOffset === 0 ? r : { ...r, x: r.x + borderOffset, y: r.y + borderOffset }
+    );
+
     for (let i = 0; i < expandedCells.length; i++) add(expandedCells[i]);
-    for (let i = 0; i < fieldCells.length; i++) add(fieldCells[i]);
-    for (let i = 0; i < pointCells.length; i++) add(pointCells[i]);
+    for (let i = 0; i < fieldCells.length; i++) add(shiftCell(fieldCells[i]));
+    for (let i = 0; i < pointCells.length; i++) add(shiftCell(pointCells[i]));
 
     const stampsRaw = optionalSemanticStamp(data, source);
     const stamps = (() => {
-      const merged = [...expandedStamps, ...fieldParsed.stamps, ...(stampsRaw ?? [])];
+      const shiftedFieldStamps = fieldParsed.stamps.map(shiftStamp);
+      const shiftedAuthoredStamps = (stampsRaw ?? []).map(shiftStamp);
+      const merged = [...expandedStamps, ...shiftedFieldStamps, ...shiftedAuthoredStamps];
       return merged.length > 0 ? merged : undefined;
     })();
     const lights = (() => {
-      const merged = [...expandedLights, ...(mapLights ?? [])];
+      const shiftedMapLights = (mapLights ?? []).map(shiftLight);
+      const merged = [...expandedLights, ...shiftedMapLights];
       return merged.length > 0 ? merged : undefined;
     })();
     const roadRects = (() => {
@@ -959,14 +1084,19 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
           startHeight: s.startHeight,
           targetHeight: s.targetHeight,
         }));
-      const merged = [...expandedRoadRects, ...fieldParsed.roadRects, ...stampRoadRects];
+      const shiftedFieldRoadRects = fieldParsed.roadRects.map(shiftRoadRect);
+      const merged = [...expandedRoadRects, ...shiftedFieldRoadRects, ...stampRoadRects];
       return merged.length > 0 ? merged : undefined;
     })();
-
+    const chunkRows = chunkDefs.length;
+    const chunkCols = chunkDefs[0]?.length ?? 0;
+    if (isDocksMap) {
+      fillEmptyWithOceanCells(merged, CHUNK_SIZE * chunkCols, CHUNK_SIZE * chunkRows);
+    }
     return {
       id,
-      w: CHUNK_SIZE * chunkGrid.cols,
-      h: CHUNK_SIZE * chunkGrid.rows,
+      w: CHUNK_SIZE * chunkCols,
+      h: CHUNK_SIZE * chunkRows,
       mapSkinId,
       buildingPackId,
       mapSkinDefaults,
