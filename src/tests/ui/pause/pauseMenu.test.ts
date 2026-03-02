@@ -152,6 +152,10 @@ const userSettingsState = vi.hoisted(() => ({
       pauseDebugCards: false,
       pauseCsvControls: false,
     },
+    game: {
+      userModeEnabled: true,
+      healthOrbSide: "left",
+    },
     render: {
       paletteSwapEnabled: false,
       paletteId: "db32",
@@ -197,6 +201,10 @@ vi.mock("../../../userSettings", () => ({
       render: {
         ...userSettingsState.settings.render,
         ...(patch.render ?? {}),
+      },
+      game: {
+        ...(userSettingsState.settings as any).game,
+        ...(patch.game ?? {}),
       },
       debug: {
         ...userSettingsState.settings.debug,
@@ -256,6 +264,7 @@ describe("pauseMenu", () => {
     debugFlags.pauseCsvControls = false;
     userSettingsState.settings = {
       debug: { pauseDebugCards: false, pauseCsvControls: false },
+      game: { userModeEnabled: true, healthOrbSide: "left" },
       render: {
         paletteSwapEnabled: false,
         paletteId: "db32",
@@ -426,9 +435,13 @@ describe("pauseMenu", () => {
     expect(() => menu.render(null as any)).not.toThrow();
   });
 
-  test("debug cards section is hidden while debug flag is off", () => {
+  test("debug cards section is hidden while user mode is on", () => {
     const root = document.createElement("div") as unknown as HTMLDivElement;
     document.body.appendChild(root as any);
+    userSettingsState.settings = {
+      ...userSettingsState.settings,
+      game: { userModeEnabled: true, healthOrbSide: "left" },
+    } as any;
     const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
     menu.setVisible(true);
 
@@ -438,13 +451,16 @@ describe("pauseMenu", () => {
     expect(debugSection.hidden).toBe(true);
   });
 
-  test("debug cards section is visible while debug flag is on", () => {
+  test("debug cards section is visible while user mode is off", () => {
     const root = document.createElement("div") as unknown as HTMLDivElement;
     document.body.appendChild(root as any);
+    userSettingsState.settings = {
+      ...userSettingsState.settings,
+      game: { userModeEnabled: false, healthOrbSide: "left" },
+    } as any;
     const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
     menu.setVisible(true);
 
-    debugFlags.pauseDebugCards = true;
     menu.render(makeWorld({ cards: ["CARD_DAMAGE_FLAT_1"] }));
 
     const debugSection = root.querySelector("[data-debug-cards-section]") as any;
@@ -457,10 +473,13 @@ describe("pauseMenu", () => {
   test("debug cards apply immediately in editor layer", () => {
     const root = document.createElement("div") as unknown as HTMLDivElement;
     document.body.appendChild(root as any);
+    userSettingsState.settings = {
+      ...userSettingsState.settings,
+      game: { userModeEnabled: false, healthOrbSide: "left" },
+    } as any;
     const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
     menu.setVisible(true);
 
-    debugFlags.pauseDebugCards = true;
     const world = makeWorld({ cards: [] });
     menu.render(world);
 
@@ -500,10 +519,13 @@ describe("pauseMenu", () => {
   test("debug relic editor saves add/remove to world.relics", () => {
     const root = document.createElement("div") as unknown as HTMLDivElement;
     document.body.appendChild(root as any);
+    userSettingsState.settings = {
+      ...userSettingsState.settings,
+      game: { userModeEnabled: false, healthOrbSide: "left" },
+    } as any;
     const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
     menu.setVisible(true);
 
-    debugFlags.pauseDebugCards = true;
     const world = makeWorld({ relics: [] });
     menu.render(world);
 
@@ -527,10 +549,13 @@ describe("pauseMenu", () => {
   test("debug relic editor recomputes move speed immediately", () => {
     const root = document.createElement("div") as unknown as HTMLDivElement;
     document.body.appendChild(root as any);
+    userSettingsState.settings = {
+      ...userSettingsState.settings,
+      game: { userModeEnabled: false, healthOrbSide: "left" },
+    } as any;
     const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
     menu.setVisible(true);
 
-    debugFlags.pauseDebugCards = true;
     const world = makeWorld({
       pSpeed: 300,
       baseMoveSpeed: 300,

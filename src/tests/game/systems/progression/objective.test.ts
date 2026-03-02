@@ -4,6 +4,8 @@ import { describe, it, expect } from "vitest";
 import {
     applySignalsToObjective,
     createObjectiveState,
+    initObjectivesForFloor,
+    resetObjectiveRuntime,
     type ObjectiveDef,
 } from "../../../../game/systems/progression/objective";
 import type { TriggerSignal } from "../../../../game/triggers/triggerSignals";
@@ -51,5 +53,45 @@ describe("Objective applySignalsToObjective", () => {
 
         expect(state1.status).toBe("ACTIVE");
         expect(state1.progress.signalCount).toBe(0);
+    });
+
+    it("does not auto-complete count=0 objectives and enforces required >= 1", () => {
+        const def: ObjectiveDef = {
+            id: "bad_count",
+            listensTo: ["zone_a"],
+            completionRule: { type: "SIGNAL_COUNT", count: 0 },
+            outcomes: [],
+        };
+
+        const state0 = createObjectiveState(def);
+        const state1 = applySignalsToObjective(def, state0, []);
+        expect(state1.status).toBe("ACTIVE");
+        expect(state1.progress.signalCount).toBe(0);
+
+        const world = {
+            objectiveDefs: [],
+            objectiveStates: [],
+            objectiveEvents: [],
+            floorArchetype: "BOSS_TRIPLE",
+            floorIndex: 2,
+        } as any;
+        initObjectivesForFloor(world, {
+            floorId: "FLOOR_TEST",
+            objectiveDefs: [def],
+        });
+        expect(world.objectiveDefs[0].completionRule.count).toBe(1);
+        expect(world.objectiveStates[0].status).toBe("IDLE");
+        expect(world.objectiveStates[0].progress.signalCount).toBe(0);
+
+        world.objectiveEvents.push({
+            type: "OBJECTIVE_RESOLVED",
+            objectiveId: "bad_count",
+            status: "COMPLETED",
+            outcomes: [],
+        });
+        resetObjectiveRuntime(world);
+        expect(world.objectiveDefs).toEqual([]);
+        expect(world.objectiveStates).toEqual([]);
+        expect(world.objectiveEvents).toEqual([]);
     });
 });

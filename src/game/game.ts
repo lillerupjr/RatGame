@@ -33,7 +33,13 @@ import {
   maybeStartFloorEndCountdown,
   tickFloorEndCountdown,
 } from "./systems/progression/floorEndCountdown";
-import { hasCompletedAnyObjective, objectiveSystem } from "./systems/progression/objective";
+import {
+  hasCompletedAnyObjective,
+  initObjectivesForFloor,
+  objectiveSystem,
+  resetObjectiveRuntime,
+  setObjectives,
+} from "./systems/progression/objective";
 import { outcomeSystem } from "./systems/progression/outcomeSystem";
 import { bossZoneSpawnSystem } from "./systems/progression/bossZoneSpawn";
 import {
@@ -102,7 +108,6 @@ import {
 import { objectiveSpecFromFloorIntent } from "./map/floorObjectiveBinding";
 import { mapSourceFromFloorIntent } from "./map/floorMapSourceBinding";
 import { applyFloorOverlays } from "./map/floorOverlays";
-import { setObjectives, setObjectivesFromSpec } from "./systems/progression/objective";
 import { RNG } from "./util/rng";
 import { applyObjective } from "./map/objectiveTransforms";
 import { objectiveIdFromArchetype } from "./map/objectivePlan";
@@ -263,6 +268,7 @@ export function createGame(args: CreateGameArgs) {
   args.hud.lvlPill.hidden = false;
   const input: InputState = createInputState();
   let mobileControlsEnabled = false;
+  let nextPhoneDamageHapticAtMs = 0;
   const mobileControls = createMobileControls({
     root: args.hud.mobileControlsRoot,
     stickBase: args.hud.mobileMoveStick,
@@ -289,6 +295,35 @@ export function createGame(args: CreateGameArgs) {
   const setMobileControlsEnabled = (enabled: boolean) => {
     mobileControlsEnabled = enabled;
     syncMobileControlsEnabled();
+  };
+
+  const maybeTriggerPhoneDamageHaptic = (): void => {
+    if (!mobileControlsEnabled) return;
+    if (typeof navigator === "undefined") return;
+    if (!Array.isArray(world.events) || world.events.length === 0) return;
+    const vibrateFn = (navigator as Navigator & { vibrate?: (pattern: number | number[]) => boolean }).vibrate;
+    if (typeof vibrateFn !== "function") return;
+    let shouldVibrate = false;
+    for (let i = 0; i < world.events.length; i++) {
+      const ev = world.events[i];
+      if (ev.type !== "PLAYER_HIT") continue;
+      const damage = Number.isFinite(ev.damage) ? ev.damage : 0;
+      if (damage <= 0) continue;
+      shouldVibrate = true;
+      break;
+    }
+    if (!shouldVibrate) return;
+    const nowMs =
+      typeof performance !== "undefined" && typeof performance.now === "function"
+        ? performance.now()
+        : Date.now();
+    if (nowMs < nextPhoneDamageHapticAtMs) return;
+    nextPhoneDamageHapticAtMs = nowMs + 90;
+    try {
+      vibrateFn.call(navigator, [22]);
+    } catch {
+      // Ignore platform vibration errors.
+    }
   };
 
   // ------------------------------------------------------------
@@ -1225,10 +1260,7 @@ export function createGame(args: CreateGameArgs) {
       x: (d.tx + 0.5) * KENNEY_TILE_WORLD,
       y: (d.ty + 0.5) * KENNEY_TILE_WORLD,
     }));
-    const completed =
-      w.bossTriple?.completed && w.bossTriple.completed.length === spawnPointsWorld.length
-        ? w.bossTriple.completed.slice()
-        : spawnPointsWorld.map(() => false);
+    const completed = spawnPointsWorld.map(() => false);
     w.bossTriple = { spawnPointsWorld, completed };
   }
 
@@ -1376,7 +1408,12 @@ export function createGame(args: CreateGameArgs) {
 
     const objectiveSpec = objectiveSpecFromFloorIntent(ctx.floorIntent);
     w.currentObjectiveSpec = objectiveSpec;
-    setObjectivesFromSpec(w, objectiveSpec);
+    resetObjectiveRuntime(w);
+    initObjectivesForFloor(w, {
+      floorId: floorIntent.nodeId,
+      floorIndex: floorIntent.floorIndex,
+      objectiveSpec,
+    });
     w.floorRewardBudget = createFloorRewardBudget(objectiveModeForFloor(w));
     w.objectiveRewardClaimedKey = null;
     (w as any).zoneRewardClaimedKey = null;
@@ -2518,6 +2555,7 @@ export function createGame(args: CreateGameArgs) {
 
     // SFX consumes events before any early-return branches
     audioSystem(world, dt);
+    maybeTriggerPhoneDamageHaptic();
 
     // Chest open reward outcome (card while budget remains, else gold fallback).
     if (maybeHandleChestOpenedReward()) {

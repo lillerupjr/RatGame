@@ -27,6 +27,11 @@ function clampUnit(value: number): number {
   return Math.max(-1, Math.min(1, value));
 }
 
+function isPrimaryPointerDown(ev: PointerEvent): boolean {
+  const btn = typeof ev.button === "number" ? ev.button : 0;
+  return btn === 0;
+}
+
 export function createMobileControls(args: CreateMobileControlsArgs): MobileControlsController {
   let enabled = false;
   let stickPointerId: number | null = null;
@@ -89,6 +94,27 @@ export function createMobileControls(args: CreateMobileControlsArgs): MobileCont
     args.onInteractDown(false);
   };
 
+  const stopStickPointer = () => {
+    if (stickPointerId === null) return;
+    safeReleasePointerCapture(args.root, stickPointerId);
+    stickPointerId = null;
+    resetStick();
+  };
+
+  const pointerTargetsInteract = (ev: PointerEvent): boolean => {
+    const pathFn = (ev as any).composedPath;
+    if (typeof pathFn === "function") {
+      const path = pathFn.call(ev);
+      if (Array.isArray(path) && path.includes(args.interactBtn)) return true;
+    }
+    return ev.target === args.interactBtn;
+  };
+
+  const onContextMenu = (ev: MouseEvent) => {
+    if (!enabled) return;
+    ev.preventDefault();
+  };
+
   const stickRadiusPx = () => {
     const baseRect = args.stickBase.getBoundingClientRect();
     const knobRect = args.stickKnob.getBoundingClientRect();
@@ -112,6 +138,11 @@ export function createMobileControls(args: CreateMobileControlsArgs): MobileCont
 
   const onStickPointerDown = (ev: PointerEvent) => {
     if (!enabled) return;
+    if (!isPrimaryPointerDown(ev)) {
+      ev.preventDefault();
+      return;
+    }
+    if (pointerTargetsInteract(ev)) return;
     if (stickPointerId !== null) return;
     stickPointerId = ev.pointerId;
     setFloatingStickCenter(ev.clientX, ev.clientY);
@@ -137,9 +168,15 @@ export function createMobileControls(args: CreateMobileControlsArgs): MobileCont
 
   const onInteractPointerDown = (ev: PointerEvent) => {
     if (!enabled) return;
+    if (!isPrimaryPointerDown(ev)) {
+      ev.preventDefault();
+      return;
+    }
     if (interactPointerId !== null) return;
+    stopStickPointer();
     interactPointerId = ev.pointerId;
     ev.preventDefault();
+    ev.stopPropagation();
     safeSetPointerCapture(args.interactBtn, ev.pointerId);
     args.interactBtn.classList.add("isPressed");
     args.onInteractDown(true);
@@ -157,10 +194,12 @@ export function createMobileControls(args: CreateMobileControlsArgs): MobileCont
   args.root.addEventListener("pointerup", onStickPointerEnd as EventListener);
   args.root.addEventListener("pointercancel", onStickPointerEnd as EventListener);
   args.root.addEventListener("lostpointercapture", onStickPointerEnd as EventListener);
+  args.root.addEventListener("contextmenu", onContextMenu as EventListener);
   args.interactBtn.addEventListener("pointerdown", onInteractPointerDown as EventListener);
   args.interactBtn.addEventListener("pointerup", onInteractPointerEnd as EventListener);
   args.interactBtn.addEventListener("pointercancel", onInteractPointerEnd as EventListener);
   args.interactBtn.addEventListener("lostpointercapture", onInteractPointerEnd as EventListener);
+  args.interactBtn.addEventListener("contextmenu", onContextMenu as EventListener);
 
   resetStick();
   resetInteract();
@@ -184,10 +223,12 @@ export function createMobileControls(args: CreateMobileControlsArgs): MobileCont
       args.root.removeEventListener("pointerup", onStickPointerEnd as EventListener);
       args.root.removeEventListener("pointercancel", onStickPointerEnd as EventListener);
       args.root.removeEventListener("lostpointercapture", onStickPointerEnd as EventListener);
+      args.root.removeEventListener("contextmenu", onContextMenu as EventListener);
       args.interactBtn.removeEventListener("pointerdown", onInteractPointerDown as EventListener);
       args.interactBtn.removeEventListener("pointerup", onInteractPointerEnd as EventListener);
       args.interactBtn.removeEventListener("pointercancel", onInteractPointerEnd as EventListener);
       args.interactBtn.removeEventListener("lostpointercapture", onInteractPointerEnd as EventListener);
+      args.interactBtn.removeEventListener("contextmenu", onContextMenu as EventListener);
       stickPointerId = null;
       interactPointerId = null;
       resetStick();

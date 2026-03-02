@@ -5,6 +5,7 @@ import {
 } from "../../../../game/systems/progression/bossTripleObjectiveSync";
 import { OBJECTIVE_TRIGGER_IDS } from "../../../../game/systems/progression/objectiveSpec";
 import { maybeStartFloorEndCountdown } from "../../../../game/systems/progression/floorEndCountdown";
+import { ENEMY_TYPE } from "../../../../game/factories/enemyFactory";
 
 function makeBossTripleWorld(): any {
   return {
@@ -12,6 +13,7 @@ function makeBossTripleWorld(): any {
     bossTriple: { spawnPointsWorld: [{ x: 0, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 2 }], completed: [false, false, false] },
     triggerSignals: [],
     events: [],
+    eType: [],
     eSpawnTriggerId: [],
     objectiveDefs: [
       {
@@ -48,6 +50,7 @@ describe("bossTripleObjectiveSync", () => {
 
   test("records boss zone clears from kill events using ENEMY_KILLED.spawnTriggerId", () => {
     const world = makeBossTripleWorld();
+    world.eType[7] = ENEMY_TYPE.BOSS;
     world.events.push({
       type: "ENEMY_KILLED",
       enemyIndex: 7,
@@ -63,11 +66,22 @@ describe("bossTripleObjectiveSync", () => {
 
   test("records boss zone clears from kill events using spawn trigger ownership fallback", () => {
     const world = makeBossTripleWorld();
+    world.eType[7] = ENEMY_TYPE.BOSS;
     world.eSpawnTriggerId[7] = `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}3`;
     world.events.push({ type: "ENEMY_KILLED", enemyIndex: 7, x: 0, y: 0, source: "OTHER" });
 
     markBossTripleClearsFromSignalsAndEvents(world);
     expect(world.bossTriple.completed).toEqual([false, false, true]);
+  });
+
+  test("ignores non-boss kills even if trigger ownership matches", () => {
+    const world = makeBossTripleWorld();
+    world.eType[7] = ENEMY_TYPE.CHASER;
+    world.eSpawnTriggerId[7] = `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}3`;
+    world.events.push({ type: "ENEMY_KILLED", enemyIndex: 7, x: 0, y: 0, source: "OTHER" });
+
+    markBossTripleClearsFromSignalsAndEvents(world);
+    expect(world.bossTriple.completed).toEqual([false, false, false]);
   });
 
   test("completes objective once all three clears are observed (docks boss-triple regression)", () => {
@@ -81,6 +95,9 @@ describe("bossTripleObjectiveSync", () => {
 
   test("docks boss-triple flow can start floor end countdown after 3 attributed kills", () => {
     const world = makeBossTripleWorld();
+    world.eType[0] = ENEMY_TYPE.BOSS;
+    world.eType[1] = ENEMY_TYPE.BOSS;
+    world.eType[2] = ENEMY_TYPE.BOSS;
     world.floorIndex = 0;
     world.runState = "FLOOR";
     world.floorEndCountdownActive = false;

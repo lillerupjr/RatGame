@@ -57,12 +57,24 @@ class FakeElement {
   }
 }
 
-function pointer(type: string, pointerId: number, clientX: number, clientY: number) {
+function pointer(type: string, pointerId: number, clientX: number, clientY: number, target?: any, button = 0) {
   return {
     type,
     pointerId,
     clientX,
     clientY,
+    target,
+    button,
+    preventDefault: vi.fn(),
+    stopPropagation: vi.fn(),
+    composedPath: () => (target ? [target] : []),
+  };
+}
+
+function contextMenuEvent(target?: any) {
+  return {
+    type: "contextmenu",
+    target,
     preventDefault: vi.fn(),
   };
 }
@@ -185,5 +197,111 @@ describe("mobile controls", () => {
     root.dispatchEvent(pointer("pointerdown", 3, 5, 6));
     expect(stick.style.left).toBe("0px");
     expect(stick.style.top).toBe("0px");
+  });
+
+  test("interact press cancels active stick movement", () => {
+    const { root, stick, knob, interact } = buildFixture();
+    const onMove = vi.fn();
+    const onInteractDown = vi.fn();
+    const controls = createMobileControls({
+      root: root as any,
+      stickBase: stick as any,
+      stickKnob: knob as any,
+      interactBtn: interact as any,
+      onMove,
+      onInteractDown,
+    });
+    controls.setEnabled(true);
+    onMove.mockClear();
+    onInteractDown.mockClear();
+
+    root.dispatchEvent(pointer("pointerdown", 1, 190, 160));
+    expect(stick.classList.contains("isActive")).toBe(true);
+    onMove.mockClear();
+
+    const interactDown = pointer("pointerdown", 2, 10, 10, interact);
+    interact.dispatchEvent(interactDown);
+
+    expect(interactDown.stopPropagation).toHaveBeenCalled();
+    expect(root.releasePointerCapture).toHaveBeenCalledWith(1);
+    expect(onMove).toHaveBeenCalledWith(0, 0, false);
+    expect(onInteractDown).toHaveBeenLastCalledWith(true);
+    expect(stick.classList.contains("isActive")).toBe(false);
+    expect(stick.classList.contains("isFloating")).toBe(false);
+    expect(knob.style.transform).toBe("translate(-50%, -50%)");
+
+    onMove.mockClear();
+    root.dispatchEvent(pointer("pointermove", 1, 160, 160));
+    expect(onMove).not.toHaveBeenCalled();
+  });
+
+  test("stick handler ignores pointerdowns that originate from interact control", () => {
+    const { root, stick, knob, interact } = buildFixture();
+    const onMove = vi.fn();
+    const onInteractDown = vi.fn();
+    const controls = createMobileControls({
+      root: root as any,
+      stickBase: stick as any,
+      stickKnob: knob as any,
+      interactBtn: interact as any,
+      onMove,
+      onInteractDown,
+    });
+    controls.setEnabled(true);
+    onMove.mockClear();
+
+    root.dispatchEvent(pointer("pointerdown", 8, 40, 40, interact));
+    expect(onMove).not.toHaveBeenCalled();
+    expect(stick.classList.contains("isActive")).toBe(false);
+  });
+
+  test("secondary pointer button does not activate stick or interact", () => {
+    const { root, stick, knob, interact } = buildFixture();
+    const onMove = vi.fn();
+    const onInteractDown = vi.fn();
+    const controls = createMobileControls({
+      root: root as any,
+      stickBase: stick as any,
+      stickKnob: knob as any,
+      interactBtn: interact as any,
+      onMove,
+      onInteractDown,
+    });
+    controls.setEnabled(true);
+    onMove.mockClear();
+    onInteractDown.mockClear();
+
+    const stickDown = pointer("pointerdown", 9, 100, 100, undefined, 2);
+    root.dispatchEvent(stickDown);
+    expect(stickDown.preventDefault).toHaveBeenCalled();
+    expect(stick.classList.contains("isActive")).toBe(false);
+    expect(onMove).not.toHaveBeenCalled();
+
+    const interactDown = pointer("pointerdown", 10, 12, 12, interact, 2);
+    interact.dispatchEvent(interactDown);
+    expect(interactDown.preventDefault).toHaveBeenCalled();
+    expect(onInteractDown).not.toHaveBeenCalled();
+    expect(interact.classList.contains("isPressed")).toBe(false);
+  });
+
+  test("contextmenu is blocked while mobile controls are enabled", () => {
+    const { root, stick, knob, interact } = buildFixture();
+    const controls = createMobileControls({
+      root: root as any,
+      stickBase: stick as any,
+      stickKnob: knob as any,
+      interactBtn: interact as any,
+      onMove: vi.fn(),
+      onInteractDown: vi.fn(),
+    });
+    controls.setEnabled(true);
+
+    const rootMenu = contextMenuEvent(root);
+    root.dispatchEvent(rootMenu);
+    expect(rootMenu.preventDefault).toHaveBeenCalled();
+
+    const interactMenu = contextMenuEvent(interact);
+    interact.dispatchEvent(interactMenu);
+    expect(interactMenu.preventDefault).toHaveBeenCalled();
   });
 });

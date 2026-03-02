@@ -1,4 +1,5 @@
 import { OBJECTIVE_TRIGGER_IDS } from "./objectiveSpec";
+import { ENEMY_TYPE } from "../../factories/enemyFactory";
 
 function bossZoneIndexFromTriggerId(triggerId: string): number | null {
   if (!triggerId.startsWith(OBJECTIVE_TRIGGER_IDS.bossZonePrefix)) return null;
@@ -15,6 +16,11 @@ function markCompletedIndex(world: any, idx: number): void {
   bt.completed[idx] = true;
 }
 
+function isBossEnemy(world: any, enemyIndex: number): boolean {
+  if (!Number.isFinite(enemyIndex) || enemyIndex < 0) return false;
+  return Array.isArray(world?.eType) && world.eType[enemyIndex] === ENEMY_TYPE.BOSS;
+}
+
 export function markBossTripleClearsFromSignalsAndEvents(world: any): void {
   const bt = world?.bossTriple;
   if (!bt || !Array.isArray(bt.completed)) return;
@@ -23,6 +29,7 @@ export function markBossTripleClearsFromSignalsAndEvents(world: any): void {
   for (let i = 0; i < signals.length; i++) {
     const signal = signals[i];
     if (signal?.type !== "KILL") continue;
+    if (!isBossEnemy(world, Number(signal?.entityId))) continue;
     const triggerId = signal?.triggerId;
     if (typeof triggerId !== "string") continue;
     const idx = bossZoneIndexFromTriggerId(triggerId);
@@ -35,6 +42,7 @@ export function markBossTripleClearsFromSignalsAndEvents(world: any): void {
     const ev = events[i];
     if (ev?.type !== "ENEMY_KILLED") continue;
     const enemyIndex = Number.isFinite(ev.enemyIndex) ? (ev.enemyIndex as number) : -1;
+    if (!isBossEnemy(world, enemyIndex)) continue;
     const triggerIdFromEnemy =
       enemyIndex >= 0 && Array.isArray(world.eSpawnTriggerId) ? world.eSpawnTriggerId[enemyIndex] : undefined;
     const triggerId =
@@ -64,10 +72,18 @@ export function syncBossTripleObjectiveStateFromClears(world: any): void {
   const required =
     def?.completionRule?.type === "SIGNAL_COUNT" && Number.isFinite(def?.completionRule?.count)
       ? Math.max(1, Math.floor(def.completionRule.count))
-      : Math.max(1, bt.completed.length);
+      : 1;
 
   if (!st.progress) st.progress = { signalCount: 0 };
   st.progress.signalCount = Math.max(st.progress.signalCount ?? 0, completedCount);
   if (st.status === "IDLE" && st.progress.signalCount > 0) st.status = "ACTIVE";
+  const wasCompleted = st.status === "COMPLETED";
   if (completedCount >= required) st.status = "COMPLETED";
+  if (!wasCompleted && st.status === "COMPLETED") {
+    const floorId = world?.currentFloorIntent?.nodeId ?? `${world?.floorIndex ?? 0}:${world?.floorArchetype ?? "BOSS_TRIPLE"}`;
+    const frameNo = world?.__objectiveFrameNo ?? 0;
+    console.debug(
+      `[objectives:complete] floorId=${floorId} objectiveId=OBJ_BOSS_RARES required=${required} progress=${st.progress.signalCount ?? 0} frame=${frameNo}`,
+    );
+  }
 }
