@@ -14,6 +14,8 @@ import {
     RUNTIME_DECAL_SPRITE_IDS,
     type RuntimeDecalSetId,
 } from "../../../game/content/runtimeDecalConfig";
+import { preloadCurrencySprites } from "../../../game/content/loot/currencyVisual";
+import { preloadVfxSprites } from "../../../game/content/vfxRegistry";
 
 export type LoadedImg = {
     img: HTMLImageElement;
@@ -94,7 +96,7 @@ function resolveUrl(spriteId: string): string | null {
     const normalized = trimmed.toLowerCase().endsWith(".png") ? trimmed.slice(0, -4) : trimmed;
     const id = remapLegacySpriteId(normalized);
 
-    if (id.startsWith("entities/")) {
+    if (id.startsWith("entities/") || id.startsWith("loot/") || id.startsWith("vfx/")) {
         return `${import.meta.env.BASE_URL}assets-runtime/${id}.png`;
     }
     if (
@@ -260,6 +262,8 @@ export function preloadRenderSprites(): void {
             void getRuntimeDecalSprite(setId, i + 1);
         }
     }
+    preloadCurrencySprites();
+    preloadVfxSprites();
 }
 
 /**

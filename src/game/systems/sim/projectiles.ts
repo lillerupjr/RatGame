@@ -1,5 +1,5 @@
 // src/game/systems/projectiles.ts
-import { type World } from "../../../engine/world/world";
+import { type World, emitEvent } from "../../../engine/world/world";
 import { spawnZone, ZONE_KIND } from "../../factories/zoneFactory";
 import { solidFace, worldToTile } from "../../map/compile/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
@@ -149,6 +149,7 @@ export function projectilesSystem(w: World, dt: number) {
                                 followPlayer: false,
                             });
                             w.zTickLeft[z] = 0;
+                            emitEvent(w, { type: "VFX", id: "EXPLOSION", x: tx, y: ty, radius: blastR });
                         }
                         break;
                     }
@@ -316,6 +317,7 @@ export function projectilesSystem(w: World, dt: number) {
 
                     // Apply first tick immediately (instant explosion feel)
                     w.zTickLeft[z] = 0;
+                    emitEvent(w, { type: "VFX", id: "EXPLOSION", x: tx, y: ty, radius: blastR });
                 }
 
                 // Rocket is consumed by the explosion

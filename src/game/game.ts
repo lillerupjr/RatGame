@@ -27,6 +27,7 @@ import { roomChallengeSystem } from "./systems/progression/roomChallenge";
 import { triggerSystem } from "./systems/progression/triggerSystem";
 import { relicTriggerSystem } from "./systems/progression/relicTriggerSystem";
 import { relicRetriggerSystem } from "./systems/progression/relicRetriggerSystem";
+import { vfxSystem } from "./systems/vfxSystem";
 import {
   isFloorEndCountdownDone,
   maybeStartFloorEndCountdown,
@@ -1083,6 +1084,15 @@ export function createGame(args: CreateGameArgs) {
     // if your World has zDamagePlayer, keep this reset (safe even if unused)
     // @ts-ignore
     if ("zDamagePlayer" in w) (w as any).zDamagePlayer = [];
+
+    // VFX entities
+    w.vfxAlive = [];
+    w.vfxX = [];
+    w.vfxY = [];
+    w.vfxRadius = [];
+    w.vfxElapsed = [];
+    w.vfxTtl = [];
+    w.vfxClipId = [];
 
     w.pAlive = [];
     w.prjKind = [];
@@ -2474,6 +2484,7 @@ export function createGame(args: CreateGameArgs) {
     dropsSystem(world, dt);
     triggerSystem(world, dt, input);
     relicTriggerSystem(world);
+    vfxSystem(world, dt);
     relicRetriggerSystem(world);
     processCombatTextFromEvents(world, dt);
     updateZoneTrialObjective(world);

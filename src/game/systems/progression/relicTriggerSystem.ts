@@ -14,13 +14,13 @@ import { addIgniteStacksFromSnapshots, createEnemyAilmentsState } from "../../co
 import { restoreArmor } from "../sim/playerArmor";
 import { relicTriggerMomentumDamageMultiplier } from "../sim/momentum";
 
-const RELIC_MISSILE_EXPLODE_RADIUS = 80;
-const RELIC_ALL_HITS_EXPLODE_RADIUS = 80;
+const RELIC_MISSILE_EXPLODE_RADIUS = 64;
+const RELIC_ALL_HITS_EXPLODE_RADIUS = 64;
 const RELIC_LIFE_ON_HIT_HEAL = 2;
 const ARMOR_RESTORE_ON_HIT_AMOUNT = 1;
 const ARMOR_RESTORE_ON_CRIT_AMOUNT = 5;
 const ARMOR_RESTORE_ON_KILL_AMOUNT = 10;
-const RELIC_EXPLODE_ON_KILL_RADIUS = 140;
+const RELIC_EXPLODE_ON_KILL_RADIUS = 128;
 const RELIC_V2_SPARK_PROC_CHANCE = 0.2;
 const RELIC_V2_SPARK_RANGE = 220;
 const RELIC_V2_SPARK_DAMAGE_SCALE = 0.3;
@@ -204,6 +204,7 @@ function applyAllHitsExplosion(world: World, ev: EnemyHitEvent, debugRelicLogs: 
     ttl: 0.35,
     followPlayer: false,
   });
+  emitEvent(world, { type: "VFX", id: "EXPLOSION", x: cx, y: cy, radius: RELIC_ALL_HITS_EXPLODE_RADIUS });
   emitEvent(world, { type: "SFX", id: "EXPLOSION_SYRINGE", vol: 0.55 });
   if (debugRelicLogs) {
     console.debug("[Relic] Explosion triggered");
@@ -277,6 +278,7 @@ function applyExplodeOnKill(world: World, ev: EnemyKilledEvent): void {
     ttl: 0.35,
     followPlayer: false,
   });
+  emitEvent(world, { type: "VFX", id: "EXPLOSION", x: cx, y: cy, radius: RELIC_EXPLODE_ON_KILL_RADIUS });
   emitEvent(world, { type: "SFX", id: "EXPLOSION_SYRINGE", vol: 0.55 });
 
   const nearbyEnemies = queryCircle(world.enemySpatialHash, cx, cy, RELIC_EXPLODE_ON_KILL_RADIUS + 50);

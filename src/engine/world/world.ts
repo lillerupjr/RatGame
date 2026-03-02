@@ -500,6 +500,21 @@ export type World = {
   xValue: number[];
   xDropId: string[];
 
+  // -------------------------
+  // VFX entities
+  // -------------------------
+  vfxAlive: boolean[];
+  vfxX: number[];
+  vfxY: number[];
+  vfxRadius: number[];
+  vfxElapsed: number[];
+  vfxTtl: number[];
+  vfxClipId: number[];
+  vfxLoop: boolean[];
+  vfxFollowEnemy: number[];   // -1 = no follow
+  vfxOffsetYPx: number[];
+  vfxScale: number[];
+
   // Boss reward bookkeeping
   bossZoneSpawned: string[];
 
@@ -903,6 +918,19 @@ export function createWorld(args: CreateWorldArgs): World {
     xgoy: [],
     xValue: [],
     xDropId: [],
+
+    // VFX entities
+    vfxAlive: [],
+    vfxX: [],
+    vfxY: [],
+    vfxRadius: [],
+    vfxElapsed: [],
+    vfxTtl: [],
+    vfxClipId: [],
+    vfxLoop: [],
+    vfxFollowEnemy: [],
+    vfxOffsetYPx: [],
+    vfxScale: [],
 
     // Boss / chest / magnet
     bossZoneSpawned: [],

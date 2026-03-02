@@ -49,6 +49,8 @@ export function tickDelayedExplosions(w: World, dt: number): void {
         // Single-hit burst immediately
         w.zTickLeft[z] = 0;
 
+        emitEvent(w, { type: "VFX", id: "EXPLOSION", x: ex.x, y: ex.y, radius: ex.r });
+
         // NEW: aftershock sound (same identity as bazooka)
         emitEvent(w, { type: "SFX", id: "EXPLOSION_BAZOOKA", vol: 0.55 });
 

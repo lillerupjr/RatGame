@@ -50,7 +50,9 @@ import {
   preloadRenderSprites,
   getRuntimeDecalSprite,
   getTileSpriteById,
+  getSpriteById,
 } from "../../../engine/render/sprites/renderSprites";
+import { VFX_CLIPS } from "../../content/vfxRegistry";
 import type { RuntimeDecalSetId } from "../../content/runtimeDecalConfig";
 import { roadMarkingDecalScale, shouldPixelSnapRoadMarking } from "../../roads/roadMarkingRender";
 import {
@@ -85,6 +87,7 @@ import { resolveActivePaletteId } from "../../render/activePalette";
 import { resolveNavArrowTarget } from "../../ui/navArrowTarget";
 import { renderNavArrow } from "../../ui/navArrowRender";
 import { coinColorFromValue } from "../../economy/coins";
+import { getCurrencyFrame } from "../../content/loot/currencyVisual";
 import {
   beginRenderPerfFrame,
   countRenderTileLoopIteration,
@@ -2490,25 +2493,52 @@ export async function renderSystem(
           ctx.stroke();
 
           ctx.globalAlpha = 1;
-        } else if (kind === ZONE_KIND.EXPLOSION) {
-          ctx.globalAlpha = 0.22;
-          ctx.fillStyle = "#ff7a18";
-          ctx.beginPath();
-          ctx.ellipse(p.x, p.y, rx, ry, 0, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.globalAlpha = 0.45;
-          ctx.strokeStyle = "#ffcf9a";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.ellipse(p.x, p.y, rx * 0.98, ry * 0.98, 0, 0, Math.PI * 2);
-          ctx.stroke();
-
-          ctx.globalAlpha = 1;
         }
       };
 
       addToSlice(zSlice, renderKey, drawClosure);
+    }
+  }
+
+  // ----------------------------
+  // Collect VFX into slices
+  // ----------------------------
+  {
+    for (let i = 0; i < w.vfxAlive.length; i++) {
+      if (!w.vfxAlive[i]) continue;
+      const vx = w.vfxX[i];
+      const vy = w.vfxY[i];
+
+      const vtx = Math.floor(vx / T);
+      const vty = Math.floor(vy / T);
+      if (!isTileInRenderRadius(vtx, vty)) continue;
+      const vZ = tileHAtWorld(vx, vy);
+
+      const renderKey: RenderKey = {
+        slice: vtx + vty,
+        within: vtx,
+        baseZ: vZ,
+        kindOrder: KindOrder.VFX,
+        stableId: 200000 + i,
+      };
+
+      const drawClosure = () => {
+        const clip = VFX_CLIPS[w.vfxClipId[i]];
+        const frameIndex = Math.min(
+          clip.spriteIds.length - 1,
+          Math.floor(w.vfxElapsed[i] * clip.fps),
+        );
+        const sprite = getSpriteById(clip.spriteIds[frameIndex]);
+        if (!sprite.ready) return;
+        const scale = w.vfxRadius[i] / 32;
+        const size = 64 * scale;
+        const p = toScreen(vx, vy);
+        ctx.globalAlpha = 1;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(sprite.img, p.x - size / 2, p.y - size / 2, size, size);
+      };
+
+      addToSlice(vtx + vty, renderKey, drawClosure);
     }
   }
 
@@ -2539,19 +2569,20 @@ export async function renderSystem(
       const drawClosure = () => {
         if (kind === 1) {
           const value = Math.max(1, Math.floor(w.xValue?.[i] ?? 1));
-          const fill = coinColorFromValue(value);
-          ctx.globalAlpha = 1;
-          ctx.fillStyle = fill;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.globalAlpha = 0.5;
-          ctx.strokeStyle = "#101010";
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.globalAlpha = 1;
+          const sprite = getCurrencyFrame(value, w.time ?? 0);
+          if (sprite.ready) {
+            const S = 16;
+            ctx.globalAlpha = 1;
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(sprite.img, p.x - S / 2, p.y - S / 2, S, S);
+          } else {
+            const fill = coinColorFromValue(value);
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = fill;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+            ctx.fill();
+          }
         } else {
           ctx.globalAlpha = 1;
           ctx.fillStyle = "#fdc";
