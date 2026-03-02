@@ -15,6 +15,7 @@ import { restoreArmor } from "../sim/playerArmor";
 import { relicTriggerMomentumDamageMultiplier } from "../sim/momentum";
 import { aimDir, getEnemyAimWorld, getPlayerAimWorld } from "../../combat/aimPoints";
 import { STARTER_RELIC_IDS } from "../../content/starterRelics";
+import { makeBazookaExhaustFollower } from "../../components/exhaustFollower";
 
 const RELIC_MISSILE_EXPLODE_RADIUS = 64;
 const RELIC_ALL_HITS_EXPLODE_RADIUS = 64;
@@ -473,6 +474,13 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
         targetY: to.y,
         explodeRadius: RELIC_MISSILE_EXPLODE_RADIUS,
       });
+      // Spawn exhaust follower entity.
+      const worldAny = world as any;
+      worldAny.exhaustFollower ??= {};
+      worldAny.exhaustFollowerFrame ??= {};
+      if (!Number.isFinite(worldAny._nextExhaustFollowerId)) worldAny._nextExhaustFollowerId = 1;
+      const exhaustEid = worldAny._nextExhaustFollowerId++;
+      worldAny.exhaustFollower[exhaustEid] = makeBazookaExhaustFollower(p);
       world.prExplodeR[p] = RELIC_MISSILE_EXPLODE_RADIUS;
       world.prExplodeDmg[p] = explodeDamage;
       world.prExplodeTtl[p] = 0.25;

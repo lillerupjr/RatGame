@@ -14,6 +14,7 @@ const FILES = {
     KNIFE: "knife.png",
     PISTOL: "pistol.png",
     SYRINGE: "syringe.png",
+    BAZOOKA: "bazooka.png",
 } as const;
 
 const cache: Record<string, Loaded> = Object.create(null);
@@ -22,6 +23,7 @@ const PROJECTILE_URLS = {
     KNIFE: `${import.meta.env.BASE_URL}assets-runtime/projectiles/knife.png`,
     PISTOL: `${import.meta.env.BASE_URL}assets-runtime/projectiles/pistol.png`,
     SYRINGE: `${import.meta.env.BASE_URL}assets-runtime/projectiles/syringe.png`,
+    BAZOOKA: `${import.meta.env.BASE_URL}assets-runtime/projectiles/bazooka.png`,
 } as const;
 
 function resolveUrl(file: string): string | null {
@@ -79,6 +81,8 @@ export function getProjectileSpriteByKind(kind: number): Loaded | null {
             return null;
         case 8: // DAGGER
             return loadByFile(FILES.KNIFE);
+        case 7: // MISSILE
+            return loadByFile(FILES.BAZOOKA);
         default:
             return null;
     }
@@ -94,6 +98,7 @@ const PROJECTILE_SCALE_BY_KIND: Record<number, number> = {
     4: 1.0, // KNUCKLES
     5: 1, // SYRINGE
     6: 1.0, // BOUNCER
+    7: 1.0, // MISSILE
     8: 0.9, // DAGGER
 };
 

@@ -1,0 +1,7 @@
+{
+  "id": "bazooka",
+  "size": [36, 12],
+  "anchorExhaust": [0, 0],
+  "exhaustSetBase": "/assets-runtime/vfx/bazooka/exhaust_1",
+  "fps": 24
+}

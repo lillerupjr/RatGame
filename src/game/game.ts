@@ -148,6 +148,8 @@ import { createMobileControls } from "../ui/mobile/mobileControls";
 import { renderDialogChoices } from "../ui/dialog/renderDialogChoices";
 import { ensureStarterRelicForCharacter } from "./systems/progression/starterRelics";
 import { getWorldRelicInstances } from "./systems/progression/relics";
+import { bazookaExhaustAssets, bazookaExhaustAssetsReady, preloadBazookaExhaustAssets } from "./vfx/bazookaExhaustAssets";
+import { updateExhaustFollowers } from "./systems/exhaustFollowerSystem";
 
 
 type HudRefs = {
@@ -1013,6 +1015,7 @@ export function createGame(args: CreateGameArgs) {
     preloadPlayerSprites();
     preloadVendorNpcSprites();
     preloadProjectileSprites();
+    preloadBazookaExhaustAssets();
     preloadNeutralMobSprites();
     preloadSfx();
     preloadKenneyTiles();
@@ -1204,6 +1207,9 @@ export function createGame(args: CreateGameArgs) {
     // NEW: bouncer arrays must stay index-aligned with all projectile arrays
     (w as any).prBouncesLeft = [];
     (w as any).prWallBounce = [];
+    (w as any).exhaustFollower = {};
+    (w as any).exhaustFollowerFrame = {};
+    (w as any)._nextExhaustFollowerId = 1;
     // Milestone C: clear cached zone floor heights
     (w as any)._zFloorH = [];
 
@@ -1818,6 +1824,7 @@ export function createGame(args: CreateGameArgs) {
     preloadVendorNpcSprites();
     preloadNeutralMobSprites();
     preloadProjectileSprites();
+    preloadBazookaExhaustAssets();
     preloadRenderSprites();
 
     const start = performance.now();
@@ -1842,6 +1849,7 @@ export function createGame(args: CreateGameArgs) {
           && enemySpritesReady()
           && neutralMobSpritesReady()
           && projectilesReady
+          && bazookaExhaustAssetsReady()
           && runtimeReady;
 
         if (ready || elapsed >= maxWaitMs) {
@@ -2546,6 +2554,7 @@ export function createGame(args: CreateGameArgs) {
     dropsSystem(world, dt);
     triggerSystem(world, dt, input);
     relicTriggerSystem(world);
+    updateExhaustFollowers(world as any, dt, bazookaExhaustAssets);
     vfxSystem(world, dt);
     relicRetriggerSystem(world);
     processCombatTextFromEvents(world, dt);

@@ -84,6 +84,7 @@ import {
 import { resolveDebugFlags } from "../../../debugSettings";
 import { getUserSettings } from "../../../userSettings";
 import { type FireZoneVfx, renderFireZoneVfx } from "../../vfx/fireZoneVfx";
+import { BAZOOKA_EXHAUST_OFFSET, bazookaExhaustAssets } from "../../vfx/bazookaExhaustAssets";
 import { getZoneTrialObjectiveState } from "../../objectives/zoneObjectiveSystem";
 import { renderZoneObjectives } from "../../render/renderZoneObjectives";
 import { resolveActivePaletteId } from "../../render/activePalette";
@@ -2934,6 +2935,35 @@ export async function renderSystem(
           const scale = target / Math.max(iw, ih);
           const dw = iw * scale;
           const dh = ih * scale;
+
+          // Draw bazooka exhaust follower(s) before projectile so flame stays behind.
+          const followers = (w as any).exhaustFollower as Record<number, { kind: string; targetEntity: number }> | undefined;
+          const followerFrames = (w as any).exhaustFollowerFrame as Record<number, HTMLImageElement | null> | undefined;
+          if (followers && followerFrames) {
+            for (const eidKey of Object.keys(followers)) {
+              const eid = Number(eidKey);
+              const follower = followers[eid];
+              if (!follower || follower.kind !== "bazooka_exhaust" || follower.targetEntity !== i) continue;
+              const frame = followerFrames[eid];
+              if (!frame || !frame.complete || frame.naturalWidth <= 0 || frame.naturalHeight <= 0) continue;
+
+              const [anchorX, anchorY] = bazookaExhaustAssets.spec.anchorExhaust;
+              const ax = (anchorX + BAZOOKA_EXHAUST_OFFSET.x) * scale;
+              const ay = (anchorY + BAZOOKA_EXHAUST_OFFSET.y) * scale;
+              const exhaustScale = scale * 0.5;
+              const fw = frame.naturalWidth * exhaustScale;
+              const fh = frame.naturalHeight * exhaustScale;
+              const exhaustAng = ang + Math.PI * 0.5; // 90deg clockwise alignment fix
+
+              ctx.save();
+              ctx.globalCompositeOperation = "lighter";
+              ctx.globalAlpha = 0.95;
+              ctx.translate(snapPx(px), snapPx(py));
+              ctx.rotate(exhaustAng);
+              ctx.drawImage(frame, snapPx(ax - fw * 0.5), snapPx(ay - fh * 0.5), fw, fh);
+              ctx.restore();
+            }
+          }
 
           ctx.save();
           ctx.translate(snapPx(px), snapPx(py));
