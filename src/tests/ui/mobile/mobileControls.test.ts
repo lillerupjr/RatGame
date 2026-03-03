@@ -86,6 +86,7 @@ function buildFixture() {
   const interact = new FakeElement();
   stick.setRect(100, 100, 120, 120);
   knob.setRect(0, 0, 40, 40);
+  interact.setRect(320, 240, 220, 56);
   return { root, stick, knob, interact };
 }
 
@@ -292,6 +293,73 @@ describe("mobile controls", () => {
     root.dispatchEvent(pointer("pointerdown", 8, 40, 40, interact));
     expect(onMove).not.toHaveBeenCalled();
     expect(stick.classList.contains("isActive")).toBe(false);
+  });
+
+  test("root pointerdown inside interact bounds triggers interact and does not activate stick", () => {
+    const { root, stick, knob, interact } = buildFixture();
+    const onMove = vi.fn();
+    const onInteractDown = vi.fn();
+    const controls = createMobileControls({
+      root: root as any,
+      stickBase: stick as any,
+      stickKnob: knob as any,
+      interactBtn: interact as any,
+      onMove,
+      onInteractDown,
+    });
+    controls.setEnabled(true);
+    onMove.mockClear();
+    onInteractDown.mockClear();
+
+    root.dispatchEvent(pointer("pointerdown", 12, 330, 260, root));
+    expect(onInteractDown).toHaveBeenLastCalledWith(true);
+    expect(onMove).not.toHaveBeenCalledWith(expect.any(Number), expect.any(Number), true);
+    expect(stick.classList.contains("isActive")).toBe(false);
+  });
+
+  test("root pointerdown outside interact bounds still activates stick", () => {
+    const { root, stick, knob, interact } = buildFixture();
+    const onMove = vi.fn();
+    const onInteractDown = vi.fn();
+    const controls = createMobileControls({
+      root: root as any,
+      stickBase: stick as any,
+      stickKnob: knob as any,
+      interactBtn: interact as any,
+      onMove,
+      onInteractDown,
+    });
+    controls.setEnabled(true);
+    onMove.mockClear();
+    onInteractDown.mockClear();
+
+    root.dispatchEvent(pointer("pointerdown", 13, 180, 160, root));
+    expect(onInteractDown).not.toHaveBeenCalled();
+    expect(onMove).toHaveBeenLastCalledWith(expect.any(Number), expect.any(Number), true);
+    expect(stick.classList.contains("isActive")).toBe(true);
+  });
+
+  test("interact hidden disables bounds-based ownership and allows stick activation", () => {
+    const { root, stick, knob, interact } = buildFixture();
+    const onMove = vi.fn();
+    const onInteractDown = vi.fn();
+    const controls = createMobileControls({
+      root: root as any,
+      stickBase: stick as any,
+      stickKnob: knob as any,
+      interactBtn: interact as any,
+      onMove,
+      onInteractDown,
+    });
+    controls.setEnabled(true);
+    onMove.mockClear();
+    onInteractDown.mockClear();
+    interact.hidden = true;
+
+    root.dispatchEvent(pointer("pointerdown", 14, 330, 260, root));
+    expect(onInteractDown).not.toHaveBeenCalled();
+    expect(onMove).toHaveBeenLastCalledWith(expect.any(Number), expect.any(Number), true);
+    expect(stick.classList.contains("isActive")).toBe(true);
   });
 
   test("secondary pointer button does not activate stick or interact", () => {

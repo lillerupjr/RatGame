@@ -1,5 +1,8 @@
 import { cardViewModel, rarityClass, tierClass } from "../cards/cardUi";
 import { getRelicById } from "../../game/content/relics";
+import { createTapSafeActivator } from "../interaction/tapSafeActivate";
+
+const OVERLAY_ENTRY_SHIELD_MS = 300;
 
 export type VendorShopCard = {
   cardId: string;
@@ -29,6 +32,11 @@ export function mountVendorShopMenu(args: {
   let currentState: VendorShopState | null = null;
   let selectedIndex = 0;
   let activeTab: "cards" | "relics" = "cards";
+  let wasActive = false;
+  let entryShieldUntilMs = 0;
+  const tapSafe = createTapSafeActivator({
+    isBlockedNow: () => Date.now() < entryShieldUntilMs,
+  });
 
   const ensureStructure = () => {
     root.className = "deckOverlay vendorOverlay";
@@ -121,7 +129,7 @@ export function mountVendorShopMenu(args: {
     cardsTab.className = `vendorTabBtn${activeTab === "cards" ? " active" : ""}`;
     cardsTab.textContent = `Cards (${state.cards.length})`;
     cardsTab.disabled = !hasCards;
-    cardsTab.addEventListener("click", () => {
+    tapSafe.bindActivate(cardsTab, () => {
       if (activeTab === "cards" || !hasCards) return;
       activeTab = "cards";
       selectedIndex = 0;
@@ -134,7 +142,7 @@ export function mountVendorShopMenu(args: {
     relicsTab.className = `vendorTabBtn${activeTab === "relics" ? " active" : ""}`;
     relicsTab.textContent = `Relics (${state.relicOffers.length})`;
     relicsTab.disabled = !hasRelics;
-    relicsTab.addEventListener("click", () => {
+    tapSafe.bindActivate(relicsTab, () => {
       if (activeTab === "relics" || !hasRelics) return;
       activeTab = "relics";
       selectedIndex = state.cards.length;
@@ -199,7 +207,7 @@ export function mountVendorShopMenu(args: {
       btn.appendChild(name);
       btn.appendChild(desc);
       btn.appendChild(foot);
-      btn.addEventListener("click", () => args.onBuy(i));
+      tapSafe.bindActivate(btn, () => args.onBuy(i));
       cards.appendChild(btn);
     }
     }
@@ -251,7 +259,7 @@ export function mountVendorShopMenu(args: {
       btn.appendChild(name);
       btn.appendChild(desc);
       btn.appendChild(foot);
-      btn.addEventListener("click", () => args.onBuyRelic(i));
+      tapSafe.bindActivate(btn, () => args.onBuyRelic(i));
       relics.appendChild(btn);
     }
     }
@@ -260,7 +268,7 @@ export function mountVendorShopMenu(args: {
     leaveBtn.type = "button";
     leaveBtn.className = `vendorLeaveButton${selectedIndex === state.cards.length + state.relicOffers.length ? " selected" : ""}`;
     leaveBtn.textContent = "Leave";
-    leaveBtn.addEventListener("click", args.onLeave);
+    tapSafe.bindActivate(leaveBtn, args.onLeave);
     actions.appendChild(leaveBtn);
   };
 
@@ -268,10 +276,15 @@ export function mountVendorShopMenu(args: {
     currentState = state;
     if (!currentState || !currentState.active) {
       root.hidden = true;
+      wasActive = false;
       return;
+    }
+    if (!wasActive) {
+      entryShieldUntilMs = Date.now() + OVERLAY_ENTRY_SHIELD_MS;
     }
     renderCards();
     root.hidden = false;
+    wasActive = true;
   };
 
   return {
@@ -280,6 +293,7 @@ export function mountVendorShopMenu(args: {
       root.hidden = true;
       root.innerHTML = "";
       currentState = null;
+      wasActive = false;
     },
   };
 }

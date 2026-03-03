@@ -2,10 +2,24 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 class FakeEvent {
   type: string;
-  constructor(type: string) {
+  clientX: number;
+  clientY: number;
+  button: number;
+  pointerId: number;
+  target: any;
+  preventDefault = vi.fn();
+  stopPropagation = vi.fn();
+  constructor(type: string, init: Partial<FakeEvent> = {}) {
     this.type = type;
+    this.clientX = init.clientX ?? 0;
+    this.clientY = init.clientY ?? 0;
+    this.button = init.button ?? 0;
+    this.pointerId = init.pointerId ?? 0;
+    this.target = init.target ?? null;
   }
 }
+
+class FakePointerEvent extends FakeEvent {}
 
 type Listener = (ev: FakeEvent) => void;
 
@@ -58,6 +72,11 @@ class FakeElement {
     this.listeners.set(type, arr);
   }
 
+  removeEventListener(type: string, listener: Listener): void {
+    const arr = this.listeners.get(type) ?? [];
+    this.listeners.set(type, arr.filter((it) => it !== listener));
+  }
+
   dispatchEvent(ev: FakeEvent): boolean {
     const arr = this.listeners.get(ev.type) ?? [];
     for (const fn of arr) fn(ev);
@@ -82,6 +101,15 @@ class FakeElement {
       this.collect((node) => node.tagName === "BUTTON", out);
     }
     return out;
+  }
+
+  contains(node: any): boolean {
+    if (!node) return false;
+    if (node === this) return true;
+    for (const child of this.children) {
+      if (child.contains(node)) return true;
+    }
+    return false;
   }
 
   private find(pred: (node: FakeElement) => boolean): FakeElement | null {
@@ -115,7 +143,9 @@ describe("vendorShopMenu", () => {
     const doc = new FakeDocument();
     (globalThis as any).document = doc;
     (globalThis as any).Event = FakeEvent;
+    (globalThis as any).PointerEvent = FakePointerEvent;
     (globalThis as any).HTMLElement = FakeElement;
+    vi.restoreAllMocks();
   });
 
   test("vendor card buttons include tier classes", () => {
@@ -149,6 +179,7 @@ describe("vendorShopMenu", () => {
   });
 
   test("switches to relic tab and keeps actions functional", () => {
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1000);
     const onBuyRelic = vi.fn();
     const onLeave = vi.fn();
     const root = document.createElement("div") as unknown as HTMLElement;
@@ -170,17 +201,93 @@ describe("vendorShopMenu", () => {
     const initialButtons = (root as any).querySelectorAll("button") as any[];
     const relicTab = initialButtons.find((b) => b.textContent === "Relics (1)");
     expect(relicTab).toBeTruthy();
-    relicTab.dispatchEvent(new FakeEvent("click"));
+    nowSpy.mockReturnValue(1401);
+    relicTab.dispatchEvent(new FakeEvent("click", { clientX: 80, clientY: 60, target: relicTab }));
 
     const afterTabButtons = (root as any).querySelectorAll("button") as any[];
     const relicBuyBtn = afterTabButtons.find((b) => b.dataset.relicIndex === "0");
     expect(relicBuyBtn).toBeTruthy();
-    relicBuyBtn.dispatchEvent(new FakeEvent("click"));
+    nowSpy.mockReturnValue(1901);
+    relicBuyBtn.dispatchEvent(new FakeEvent("click", { clientX: 180, clientY: 140, target: relicBuyBtn }));
     expect(onBuyRelic).toHaveBeenCalledWith(0);
 
     const leaveBtn = afterTabButtons.find((b) => b.textContent === "Leave");
     expect(leaveBtn).toBeTruthy();
-    leaveBtn.dispatchEvent(new FakeEvent("click"));
+    nowSpy.mockReturnValue(2401);
+    leaveBtn.dispatchEvent(new FakeEvent("click", { clientX: 280, clientY: 240, target: leaveBtn }));
     expect(onLeave).toHaveBeenCalledTimes(1);
+  });
+
+  test("entry shield blocks immediate click and allows click after shield window", () => {
+    const onBuy = vi.fn();
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1000);
+    const root = document.createElement("div") as unknown as HTMLElement;
+    const menu = mountVendorShopMenu({
+      root,
+      onBuy,
+      onBuyRelic: vi.fn(),
+      onLeave: vi.fn(),
+      onClose: vi.fn(),
+    });
+
+    menu.render({
+      active: true,
+      gold: 999,
+      cards: [{ cardId: "CARD_DAMAGE_FLAT_1", priceG: 50, purchased: false }],
+      relicOffers: [],
+    });
+
+    const buttons = (root as any).querySelectorAll("button") as any[];
+    const buyBtn = buttons.find((b) => b.dataset.index === "0");
+    expect(buyBtn).toBeTruthy();
+
+    buyBtn.dispatchEvent(new FakeEvent("click", { clientX: 150, clientY: 120, target: buyBtn }));
+    expect(onBuy).not.toHaveBeenCalled();
+
+    nowSpy.mockReturnValue(1401);
+    buyBtn.dispatchEvent(new FakeEvent("click", { clientX: 150, clientY: 120, target: buyBtn }));
+    expect(onBuy).toHaveBeenCalledWith(0);
+  });
+
+  test("pointerdown/up activation works after shield window", () => {
+    const onBuy = vi.fn();
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(2000);
+    const root = document.createElement("div") as unknown as HTMLElement;
+    const menu = mountVendorShopMenu({
+      root,
+      onBuy,
+      onBuyRelic: vi.fn(),
+      onLeave: vi.fn(),
+      onClose: vi.fn(),
+    });
+
+    menu.render({
+      active: true,
+      gold: 999,
+      cards: [{ cardId: "CARD_DAMAGE_FLAT_1", priceG: 50, purchased: false }],
+      relicOffers: [],
+    });
+
+    const buttons = (root as any).querySelectorAll("button") as any[];
+    const buyBtn = buttons.find((b) => b.dataset.index === "0");
+    expect(buyBtn).toBeTruthy();
+
+    nowSpy.mockReturnValue(2401);
+    buyBtn.dispatchEvent(new FakePointerEvent("pointerdown", {
+      pointerId: 7,
+      button: 0,
+      clientX: 150,
+      clientY: 120,
+      target: buyBtn,
+    }));
+    buyBtn.dispatchEvent(new FakePointerEvent("pointerup", {
+      pointerId: 7,
+      button: 0,
+      clientX: 150,
+      clientY: 120,
+      target: buyBtn,
+    }));
+
+    expect(onBuy).toHaveBeenCalledWith(0);
   });
 });

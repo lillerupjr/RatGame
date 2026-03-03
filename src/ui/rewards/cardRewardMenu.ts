@@ -1,4 +1,7 @@
 import { cardViewModel, rarityClass, tierClass } from "../cards/cardUi";
+import { createTapSafeActivator } from "../interaction/tapSafeActivate";
+
+const OVERLAY_ENTRY_SHIELD_MS = 300;
 
 export function mountCardRewardMenu(args: {
   root: HTMLElement;
@@ -11,6 +14,11 @@ export function mountCardRewardMenu(args: {
 
   let currentState: { active: boolean; source: string; options: string[] } | null = null;
   let selectedIndex = 0;
+  let wasActive = false;
+  let entryShieldUntilMs = 0;
+  const tapSafe = createTapSafeActivator({
+    isBlockedNow: () => Date.now() < entryShieldUntilMs,
+  });
 
   const ensureStructure = () => {
     const existing = root.className ? `${root.className} ` : "";
@@ -96,7 +104,7 @@ export function mountCardRewardMenu(args: {
       btn.appendChild(tierRow);
       btn.appendChild(titleRow);
       btn.appendChild(desc);
-      btn.addEventListener("click", () => args.onPick(cardId));
+      tapSafe.bindActivate(btn, () => args.onPick(cardId));
       choices.appendChild(btn);
     }
   };
@@ -105,11 +113,16 @@ export function mountCardRewardMenu(args: {
     currentState = state;
     if (!currentState || !currentState.active) {
       root.hidden = true;
+      wasActive = false;
       return;
+    }
+    if (!wasActive) {
+      entryShieldUntilMs = Date.now() + OVERLAY_ENTRY_SHIELD_MS;
     }
     if (selectedIndex >= currentState.options.length) selectedIndex = 0;
     renderCards();
     root.hidden = false;
+    wasActive = true;
   };
 
   return {
@@ -118,6 +131,7 @@ export function mountCardRewardMenu(args: {
       root.hidden = true;
       root.innerHTML = "";
       currentState = null;
+      wasActive = false;
     },
   };
 }

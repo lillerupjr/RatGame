@@ -1,4 +1,7 @@
 import { getRelicById } from "../../game/content/relics";
+import { createTapSafeActivator } from "../interaction/tapSafeActivate";
+
+const OVERLAY_ENTRY_SHIELD_MS = 300;
 
 export function mountRelicRewardMenu(args: {
   root: HTMLElement;
@@ -9,6 +12,11 @@ export function mountRelicRewardMenu(args: {
 } {
   const root = args.root;
   let currentState: { active: boolean; source: string; options: string[] } | null = null;
+  let wasActive = false;
+  let entryShieldUntilMs = 0;
+  const tapSafe = createTapSafeActivator({
+    isBlockedNow: () => Date.now() < entryShieldUntilMs,
+  });
 
   const ensureStructure = () => {
     const existing = root.className ? `${root.className} ` : "";
@@ -44,7 +52,11 @@ export function mountRelicRewardMenu(args: {
     currentState = state;
     if (!currentState || !currentState.active) {
       root.hidden = true;
+      wasActive = false;
       return;
+    }
+    if (!wasActive) {
+      entryShieldUntilMs = Date.now() + OVERLAY_ENTRY_SHIELD_MS;
     }
 
     const { title, sub, choices } = ensureStructure();
@@ -84,11 +96,12 @@ export function mountRelicRewardMenu(args: {
       btn.appendChild(top);
       btn.appendChild(name);
       btn.appendChild(desc);
-      btn.addEventListener("click", () => args.onPick(relicId));
+      tapSafe.bindActivate(btn, () => args.onPick(relicId));
       choices.appendChild(btn);
     }
 
     root.hidden = false;
+    wasActive = true;
   };
 
   return {
@@ -97,6 +110,7 @@ export function mountRelicRewardMenu(args: {
       root.hidden = true;
       root.innerHTML = "";
       currentState = null;
+      wasActive = false;
     },
   };
 }

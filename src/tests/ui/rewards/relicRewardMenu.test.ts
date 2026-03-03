@@ -75,11 +75,6 @@ class FakeElement {
     return true;
   }
 
-  click(): void {
-    const arr = this.listeners.get("click") ?? [];
-    for (const listener of arr) listener(new FakeEvent("click", { target: this }));
-  }
-
   querySelector(selector: string): FakeElement | null {
     if (selector.startsWith(".")) {
       const cls = selector.slice(1);
@@ -133,9 +128,9 @@ class FakeDocument {
   }
 }
 
-import { mountCardRewardMenu } from "../../../ui/rewards/cardRewardMenu";
+import { mountRelicRewardMenu } from "../../../ui/rewards/relicRewardMenu";
 
-describe("cardRewardMenu", () => {
+describe("relicRewardMenu", () => {
   beforeEach(() => {
     const doc = new FakeDocument();
     (globalThis as any).document = doc;
@@ -144,72 +139,41 @@ describe("cardRewardMenu", () => {
     vi.restoreAllMocks();
   });
 
-  test("render inactive hides root", () => {
+  test("render active shows options", () => {
     const root = document.createElement("div") as unknown as HTMLElement;
-    const menu = mountCardRewardMenu({ root, onPick: vi.fn() });
-
-    menu.render({ active: false, source: "ZONE_TRIAL", options: [] });
-    expect((root as any).hidden).toBe(true);
-  });
-
-  test("render active shows options and click calls onPick", () => {
-    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1000);
-    const root = document.createElement("div") as unknown as HTMLElement;
-    const onPick = vi.fn();
-    const menu = mountCardRewardMenu({ root, onPick });
+    const menu = mountRelicRewardMenu({ root, onPick: vi.fn() });
 
     menu.render({
       active: true,
-      source: "BOSS_CHEST",
-      options: ["CARD_DAMAGE_FLAT_1", "CARD_CONVERT_FIRE_1", "CARD_IGNITE_CHANCE_1"],
+      source: "ZONE_TRIAL",
+      options: ["PASS_DOT_MORE_50", "PASS_MAX_HP_20"],
     });
 
     expect((root as any).hidden).toBe(false);
     const buttons = (root as any).querySelectorAll("button") as any[];
-    expect(buttons.length).toBe(3);
-
-    nowSpy.mockReturnValue(1401);
-    buttons[1].click();
-    expect(onPick).toHaveBeenCalledWith("CARD_CONVERT_FIRE_1");
+    expect(buttons.length).toBe(2);
   });
 
-  test("reward cards include Hearthstone tier classes", () => {
-    const root = document.createElement("div") as unknown as HTMLElement;
-    const menu = mountCardRewardMenu({ root, onPick: vi.fn() });
-
-    menu.render({
-      active: true,
-      source: "BOSS_CHEST",
-      options: ["CARD_DAMAGE_FLAT_1", "CARD_DAMAGE_FLAT_2", "CARD_DAMAGE_FLAT_3", "CARD_FIRE_RATE_4"],
-    });
-
-    const buttons = (root as any).querySelectorAll("button") as any[];
-    expect(buttons[0].className).toContain("tier-1");
-    expect(buttons[1].className).toContain("tier-2");
-    expect(buttons[2].className).toContain("tier-3");
-    expect(buttons[3].className).toContain("tier-4");
-  });
-
-  test("entry shield blocks immediate click and allows click after shield window", () => {
+  test("entry shield blocks immediate click and delayed click picks relic", () => {
     const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1000);
     const root = document.createElement("div") as unknown as HTMLElement;
     const onPick = vi.fn();
-    const menu = mountCardRewardMenu({ root, onPick });
+    const menu = mountRelicRewardMenu({ root, onPick });
 
     menu.render({
       active: true,
-      source: "BOSS_CHEST",
-      options: ["CARD_DAMAGE_FLAT_1", "CARD_CONVERT_FIRE_1"],
+      source: "ZONE_TRIAL",
+      options: ["PASS_DOT_MORE_50", "PASS_MAX_HP_20"],
     });
 
     const buttons = (root as any).querySelectorAll("button") as any[];
     expect(buttons.length).toBe(2);
 
-    buttons[0].dispatchEvent(new FakeEvent("click", { clientX: 100, clientY: 120, target: buttons[0] }));
+    buttons[0].dispatchEvent(new FakeEvent("click", { clientX: 110, clientY: 130, target: buttons[0] }));
     expect(onPick).not.toHaveBeenCalled();
 
     nowSpy.mockReturnValue(1401);
-    buttons[0].dispatchEvent(new FakeEvent("click", { clientX: 100, clientY: 120, target: buttons[0] }));
-    expect(onPick).toHaveBeenCalledWith("CARD_DAMAGE_FLAT_1");
+    buttons[0].dispatchEvent(new FakeEvent("click", { clientX: 110, clientY: 130, target: buttons[0] }));
+    expect(onPick).toHaveBeenCalledWith("PASS_DOT_MORE_50");
   });
 });

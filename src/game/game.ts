@@ -576,8 +576,7 @@ export function createGame(args: CreateGameArgs) {
     }
     if (vendorShopOpen) {
       activeInteractableId = null;
-      args.hud.interactPrompt.textContent = "Shop open";
-      args.hud.interactPrompt.hidden = false;
+      args.hud.interactPrompt.hidden = true;
       return;
     }
     const pg = gridAtPlayer(world);

@@ -119,6 +119,41 @@ export function createMobileControls(args: CreateMobileControlsArgs): MobileCont
     return ev.target === args.interactBtn;
   };
 
+  const isInteractSurfaceActive = (): boolean => {
+    if (args.interactBtn.hidden) return false;
+    const rect = args.interactBtn.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  };
+
+  const pointerInInteractBounds = (clientX: number, clientY: number): boolean => {
+    if (!isInteractSurfaceActive()) return false;
+    const rect = args.interactBtn.getBoundingClientRect();
+    return clientX >= rect.left
+      && clientX <= rect.right
+      && clientY >= rect.top
+      && clientY <= rect.bottom;
+  };
+
+  const startInteractPointer = (ev: PointerEvent): void => {
+    if (!enabled) return;
+    if (!isPrimaryPointerDown(ev)) {
+      ev.preventDefault();
+      return;
+    }
+    if (interactPointerId !== null) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      return;
+    }
+    stopStickPointer();
+    interactPointerId = ev.pointerId;
+    ev.preventDefault();
+    ev.stopPropagation();
+    safeSetPointerCapture(args.interactBtn, ev.pointerId);
+    args.interactBtn.classList.add("isPressed");
+    args.onInteractDown(true);
+  };
+
   const onContextMenu = (ev: MouseEvent) => {
     if (!enabled) return;
     ev.preventDefault();
@@ -151,7 +186,10 @@ export function createMobileControls(args: CreateMobileControlsArgs): MobileCont
       ev.preventDefault();
       return;
     }
-    if (pointerTargetsInteract(ev)) return;
+    if (pointerTargetsInteract(ev) || pointerInInteractBounds(ev.clientX, ev.clientY)) {
+      startInteractPointer(ev);
+      return;
+    }
     if (stickPointerId !== null) return;
     stickPointerId = ev.pointerId;
     setFloatingStickCenter(ev.clientX, ev.clientY);
@@ -176,19 +214,7 @@ export function createMobileControls(args: CreateMobileControlsArgs): MobileCont
   };
 
   const onInteractPointerDown = (ev: PointerEvent) => {
-    if (!enabled) return;
-    if (!isPrimaryPointerDown(ev)) {
-      ev.preventDefault();
-      return;
-    }
-    if (interactPointerId !== null) return;
-    stopStickPointer();
-    interactPointerId = ev.pointerId;
-    ev.preventDefault();
-    ev.stopPropagation();
-    safeSetPointerCapture(args.interactBtn, ev.pointerId);
-    args.interactBtn.classList.add("isPressed");
-    args.onInteractDown(true);
+    startInteractPointer(ev);
   };
 
   const onInteractPointerEnd = (ev: PointerEvent) => {

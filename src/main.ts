@@ -826,7 +826,18 @@ async function bootstrap() {
       const isEndOpen = !refs.ui.endEl.root.hidden;
       const isLevelupOpen = !refs.ui.levelupEl.root.hidden;
       const isDialogOpen = !refs.ui.dialogEl.root.hidden;
-      const isAnyBlockingOverlayOpen = isMapOpen || isPauseOpen || isEndOpen || isLevelupOpen || isDialogOpen;
+      const vendorRoot = document.getElementById("vendorShop");
+      const relicRewardRoot = document.getElementById("relicReward");
+      const isVendorOpen = !!vendorRoot && !vendorRoot.hidden;
+      const isRelicRewardOpen = !!relicRewardRoot && !relicRewardRoot.hidden;
+      const isAnyBlockingOverlayOpen =
+        isMapOpen
+        || isPauseOpen
+        || isEndOpen
+        || isLevelupOpen
+        || isDialogOpen
+        || isVendorOpen
+        || isRelicRewardOpen;
 
       game.setMobileControlsEnabled(runState === RunState.PLAYING && !isAnyBlockingOverlayOpen);
       refs.welcomeScreen.hidden = true;
