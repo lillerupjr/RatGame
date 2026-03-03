@@ -79,7 +79,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .pauseModeNav {
   border-right: 1px solid var(--border-subtle);
-  background: rgba(5, 5, 9, 0.45);
+  background: var(--bg-surface);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -106,8 +106,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 .pauseNavBtn.active {
-  background: rgba(110, 180, 255, 0.22);
-  border-color: rgba(160, 220, 255, 0.74);
+  background: var(--active-bg);
+  border-color: var(--border-strong);
 }
 
 .pauseModeContent {
@@ -141,9 +141,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .pauseOwnedCardRow {
   width: 100%;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.06);
+  background: linear-gradient(180deg, var(--bg-elevated), var(--focus-bg));
   color: var(--text-primary);
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -155,8 +155,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 .pauseOwnedCardRow.active {
-  border-color: rgba(170, 230, 255, 0.85);
-  background: rgba(80, 140, 210, 0.22);
+  border-color: var(--border-strong);
+  background: linear-gradient(180deg, var(--bg-elevated), var(--active-bg));
 }
 
 .pauseOwnedCardMain {
@@ -196,9 +196,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 .pauseOwnedCardDetail {
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--focus-bg);
   padding: 12px;
 }
 
@@ -243,8 +243,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 .pauseInlineTabBtn.active {
-  border-color: rgba(160, 220, 255, 0.78);
-  background: rgba(80, 140, 210, 0.24);
+  border-color: var(--border-strong);
+  background: var(--active-bg);
 }
 
 .pauseTuningRow {
@@ -397,7 +397,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 #c { z-index: 0; }
 #ui { z-index: 1; pointer-events: none; }
 #hud { position: fixed; left: calc(12px + var(--safe-left)); top: calc(12px + var(--safe-top)); color: var(--text-primary); font-family: var(--font-mono); font-size: 14px; line-height: 1.4; user-select: none; z-index: 3; transform: scale(1.125); transform-origin: top left; }
-#hud .pill { display: inline-block; padding: 6px 10px; border-radius: var(--radius-pill); background: var(--hover-bg); margin-right: 8px; }
+#hud .pill { display: inline-block; padding: 6px 10px; border-radius: var(--radius-pill); border: 1px solid var(--border-default); background: var(--focus-bg); margin-right: 8px; }
 #hudTop { display: inline-block; }
 
 #vitalsOrbRoot {
@@ -465,10 +465,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   height: var(--orb-core-d);
   transform: translate(-50%, -50%);
   border-radius: 9999px;
-  background: rgba(26, 8, 8, 0.96);
+  background: var(--bg-base);
   overflow: hidden;
   z-index: 1;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
 }
 
 #vitalsOrb .vitalsOrbLife::before {
@@ -535,7 +535,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   place-items: center;
   font-size: 14px;
   font-weight: 900;
-  color: #fff;
+  color: var(--text-primary);
   text-shadow: 0 1px 1px rgba(0,0,0,0.72);
   letter-spacing: 0.03em;
   z-index: 3;
@@ -561,8 +561,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   letter-spacing: 0.01em;
   min-width: 0;
   white-space: nowrap;
-  color: #e8f2ff;
-  border: 1px solid rgba(255,255,255,0.22);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
   backdrop-filter: blur(1px);
 }
 
@@ -690,8 +690,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   margin-top: 8px;
   padding: 8px 10px;
   border-radius: var(--radius-md);
-  background: var(--hover-bg);
-  border: 1px solid var(--border-subtle);
+  background: var(--focus-bg);
+  border: 1px solid var(--border-default);
   max-width: min(520px, calc(100vw - 24px));
 }
 
@@ -716,17 +716,18 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   transform: translate(-50%, -50%);
   z-index: 5;
   color: var(--text-primary);
-  background: rgba(0, 0, 0, 0.72);
+  background: var(--bg-elevated);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   padding: 8px 12px;
   font: 700 13px var(--font-mono);
   letter-spacing: 0.02em;
+  box-shadow: var(--shadow-subtle);
 }
 
 #interactPrompt.isPressed {
-  background: rgba(86, 92, 128, 0.86);
-  border-color: rgba(255, 255, 255, 0.55);
+  background: var(--active-bg);
+  border-color: var(--border-strong);
 }
 
 #mobileControls {
@@ -747,16 +748,16 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   width: 136px;
   height: 136px;
   border-radius: var(--radius-pill);
-  border: 2px solid rgba(255, 255, 255, 0.22);
-  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.2) 0%, rgba(20, 20, 24, 0.44) 70%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 8px 20px rgba(0, 0, 0, 0.35);
+  border: 2px solid var(--border-default);
+  background: radial-gradient(circle at 30% 30%, var(--active-bg) 0%, var(--bg-elevated) 72%);
+  box-shadow: inset 0 0 0 1px var(--border-subtle), 0 8px 20px rgba(0, 0, 0, 0.35);
   pointer-events: auto;
   touch-action: none;
 }
 
 #mobileMoveStick.isActive {
-  border-color: rgba(255, 255, 255, 0.38);
-  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.27) 0%, rgba(28, 28, 34, 0.58) 72%);
+  border-color: var(--border-strong);
+  background: radial-gradient(circle at 30% 30%, var(--primary-btn-hover-bg) 0%, var(--bg-elevated) 72%);
 }
 
 #mobileMoveStick.isFloating {
@@ -784,7 +785,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   height: 54px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
-  background: rgba(16, 16, 22, 0.68);
+  background: var(--primary-btn-bg);
   color: var(--text-primary);
   font: 900 16px var(--font-mono);
   letter-spacing: 0.02em;
@@ -796,8 +797,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 #mobileInteractBtn.isPressed {
-  background: rgba(86, 92, 128, 0.86);
-  border-color: rgba(255, 255, 255, 0.55);
+  background: var(--active-bg);
+  border-color: var(--border-strong);
 }
 
 @media (max-width: 768px) and (pointer: coarse) {
@@ -815,7 +816,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
     font: 800 14px var(--font-mono);
     touch-action: manipulation;
     border-color: var(--border-strong);
-    background: rgba(8, 8, 12, 0.82);
+    background: var(--bg-elevated);
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
     z-index: 9;
   }
@@ -867,8 +868,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 #dialogBar .panel {
   pointer-events: auto;
   margin: 0;
-  background: rgba(10, 10, 14, 0.9);
-  border-top: 2px solid var(--border-default);
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border-default);
+  border: 1px solid var(--border-default);
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.45);
   padding: 14px 18px;
   color: var(--text-primary);
@@ -894,7 +896,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   border-radius: var(--radius-sm);
   padding: 10px 12px;
   border: 1px solid var(--border-default);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--focus-bg);
   font-size: 14px;
   font-weight: 800;
   color: var(--text-primary);
@@ -902,8 +904,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 .dialogChoice.active {
-  border-color: rgba(140, 220, 255, 0.9);
-  background: rgba(90, 180, 255, 0.2);
+  border-color: var(--border-strong);
+  background: var(--active-bg);
 }
 
 .dialogChoice:hover {
@@ -933,29 +935,129 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
     var(--overlay-pad-left);
 }
 
+/* Character-select surface contract for fullscreen menus (theme-only pass). */
+#welcomeScreen .panel,
+#mainMenu .panel,
+#mapMenu .panel,
+#innkeeperMenu .panel,
+#settingsMenu .panel,
+#creditsMenu .panel,
+#menu .panel,
+#end .panel,
+#levelup .panel,
+#map .panel,
+.deckOverlay .panel {
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-medium);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
 /* Welcome Screen */
-#welcomeScreen { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 5; }
-#welcomeScreen .panel { width: min(520px, 90vw); padding: 60px 40px; border-radius: 20px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); text-align: center; }
-#welcomeScreen .welcomeTitle { font-size: 48px; font-weight: 900; margin-bottom: 60px; line-height: 1.2; }
-#welcomeScreen button { width: 100%; padding: 18px 24px; border-radius: var(--radius-md); border: 0; cursor: pointer; font-weight: 900; font-size: 20px; background: var(--primary-btn-bg); color: var(--text-primary); transition: background var(--transition-standard), transform var(--transition-fast); }
-#welcomeScreen button:hover { background: var(--primary-btn-hover-bg); transform: translateY(-2px); }
+#welcomeScreen {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(140% 130% at 50% 0%, var(--accent-glow), transparent 60%),
+    linear-gradient(160deg, var(--bg-base), var(--bg-surface));
+  z-index: 5;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+  overflow: hidden;
+}
+
+#welcomeScreen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--texture-grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--texture-grid-color) 1px, transparent 1px);
+  background-size: var(--texture-grid-size) var(--texture-grid-size);
+}
+
+#welcomeScreen::after {
+  content: "";
+  position: absolute;
+  inset: -40% 0 0;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(118, 232, 255, 0) 0%,
+    var(--texture-scan-color) 48%,
+    rgba(118, 232, 255, 0) 100%
+  );
+  transform: translateY(-60%);
+  animation: terminalScanDrift 8s linear infinite;
+}
+
+#welcomeScreen .panel {
+  width: min(620px, 92vw);
+  padding: clamp(28px, 5dvh, 52px) clamp(20px, 4vw, 46px);
+  border-radius: 20px;
+  border: 1px solid var(--border-default);
+  background: linear-gradient(180deg, var(--bg-elevated), var(--focus-bg));
+  box-shadow:
+    inset 0 0 0 1px var(--border-subtle),
+    var(--shadow-medium);
+  text-align: center;
+  position: relative;
+  z-index: 1;
+  transform: translateY(clamp(-20px, -3dvh, 0px));
+}
+
+#welcomeScreen .welcomeTitle {
+  font-size: clamp(34px, min(7.2vw, 7.4dvh), 64px);
+  font-weight: 900;
+  margin-bottom: clamp(28px, 4.4dvh, 56px);
+  line-height: 1.08;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-shadow: 0 0 18px var(--accent-glow);
+}
+
+#welcomeScreen button {
+  width: 100%;
+  min-height: clamp(48px, 7.5dvh, 64px);
+  padding: 14px 24px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  cursor: pointer;
+  font-weight: 900;
+  font-size: clamp(17px, min(2.1vw, 3dvh), 24px);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--primary-btn-bg);
+  color: var(--text-primary);
+  transition: background var(--transition-standard), transform var(--transition-fast), border-color var(--transition-standard);
+}
+#welcomeScreen button:hover {
+  background: var(--primary-btn-hover-bg);
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+}
 
 /* Main Menu (submenu after welcome) */
 #mainMenu { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 4; }
-#mainMenu .panel { width: min(440px, 88vw); padding: 40px 30px; border-radius: 20px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); text-align: center; }
+#mainMenu .panel { width: min(440px, 88vw); padding: 40px 30px; border-radius: 20px; text-align: center; }
 #mainMenu .title { font-size: 32px; font-weight: 900; margin-bottom: 30px; }
 #mainMenu .menuButtons { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
 #mainMenu .menuButtons button { width: 100%; padding: 16px 20px; border-radius: var(--radius-md); border: 0; cursor: pointer; font-weight: 900; font-size: 18px; background: var(--primary-btn-bg); color: var(--text-primary); transition: background var(--transition-standard), transform var(--transition-fast); }
 #mainMenu .menuButtons button:hover { background: var(--primary-btn-hover-bg); transform: translateY(-1px); }
 #mainMenu .menuButtons button#startRunBtn { background: var(--primary-btn-hover-bg); font-size: 20px; }
-#mainMenu .menuButtons button#startRunBtn:hover { background: rgba(118, 232, 255, 0.28); }
+#mainMenu .menuButtons button#startRunBtn:hover { background: var(--primary-btn-hover-bg); }
 #mainMenu .menuFooter { padding-top: 20px; border-top: 1px solid var(--border-subtle); }
-#mainMenu .menuFooter button { padding: 10px 16px; border-radius: var(--radius-sm); border: 0; cursor: pointer; font-weight: 700; font-size: 14px; background: rgba(255,100,100,0.15); color: var(--text-primary); transition: background var(--transition-standard), transform var(--transition-fast); }
-#mainMenu .menuFooter button:hover { background: rgba(255,100,100,0.25); transform: scale(1.05); }
+#mainMenu .menuFooter button { padding: 10px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border-default); cursor: pointer; font-weight: 700; font-size: 14px; background: var(--focus-bg); color: var(--text-primary); transition: background var(--transition-standard), transform var(--transition-fast); }
+#mainMenu .menuFooter button:hover { background: var(--active-bg); transform: scale(1.05); }
 
 /* Map Selection Menu */
 #mapMenu { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 4; }
-#mapMenu .panel { width: min(680px, 92vw); padding: 24px; border-radius: 20px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); }
+#mapMenu .panel { width: min(680px, 92vw); padding: 24px; border-radius: 20px; }
 #mapMenu .title { font-size: 26px; font-weight: 900; margin-bottom: 6px; text-align: center; }
 #mapMenu .subline { opacity: 0.85; margin-bottom: 16px; font-size: 14px; text-align: center; }
 #mapChoices { display: flex; flex-wrap: nowrap; gap: 10px; }
@@ -1203,7 +1305,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 /* Innkeeper & Settings Menus */
 #innkeeperMenu, #settingsMenu { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 4; }
-#innkeeperMenu .panel, #settingsMenu .panel { width: min(560px, 92vw); padding: 30px; border-radius: 20px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); }
+#innkeeperMenu .panel, #settingsMenu .panel { width: min(560px, 92vw); padding: 30px; border-radius: 20px; }
 #innkeeperMenu .title, #settingsMenu .title { font-size: 28px; font-weight: 900; margin-bottom: 8px; text-align: center; }
 #innkeeperMenu .subline, #settingsMenu .subline { opacity: 0.85; margin-bottom: 20px; font-size: 14px; text-align: center; }
 #innkeeperMenu > .panel > button, #settingsMenu > .panel > button {
@@ -1219,10 +1321,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 #creditsMenu { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 4; }
-#creditsMenu .panel { width: min(560px, 92vw); padding: 30px; border-radius: 20px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); }
+#creditsMenu .panel { width: min(560px, 92vw); padding: 30px; border-radius: 20px; }
 #creditsMenu .title { font-size: 28px; font-weight: 900; margin-bottom: 8px; text-align: center; }
 #creditsMenu .subline { opacity: 0.85; margin-bottom: 18px; font-size: 14px; text-align: center; }
-#creditsMenu .creditsBody { padding: 14px 12px; border-radius: var(--radius-md); background: rgba(0,0,0,0.25); border: 1px solid var(--border-subtle); line-height: 1.45; text-align: center; }
+#creditsMenu .creditsBody { padding: 14px 12px; border-radius: var(--radius-md); background: var(--focus-bg); border: 1px solid var(--border-default); line-height: 1.45; text-align: center; }
 #creditsMenu button { margin-top: 14px; width: 100%; padding: 12px 14px; border-radius: var(--radius-md); border: 0; cursor: pointer; font-weight: 800; background: var(--active-bg); color: var(--text-primary); }
 
 #mainSettingsHost {
@@ -1253,14 +1355,14 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 .settingsTabBtn.active {
-  background: rgba(110,180,255,0.24);
-  border-color: rgba(160,220,255,0.72);
+  background: var(--active-bg);
+  border-color: var(--border-strong);
 }
 
 .settingsBody {
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  background: rgba(0,0,0,0.2);
+  background: var(--focus-bg);
   padding: 16px;
 }
 
@@ -1305,7 +1407,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   height: 34px;
   border-radius: 9px;
   border: 1px solid var(--border-default);
-  background: rgba(18,18,24,0.95);
+  background: var(--focus-bg);
   color: var(--text-primary);
   padding: 0 8px;
 }
@@ -1317,7 +1419,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .settingsSegment {
   display: inline-flex;
-  background: rgba(0,0,0,0.35);
+  background: var(--bg-elevated);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   overflow: hidden;
@@ -1372,7 +1474,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 /* Weapon Selection Menu */
 #menu { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 4; }
-#menu .panel { width: min(560px, 92vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); }
+#menu .panel { width: min(560px, 92vw); padding: 20px; border-radius: 16px; }
 #menu .title { font-size: 24px; font-weight: 800; margin-bottom: 6px; }
 #menu .subline { opacity: 0.9; margin-bottom: 14px; }
 
@@ -1399,6 +1501,96 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 #menu button#startBtn { margin-top: 14px; width: 100%; padding: 12px 14px; border-radius: var(--radius-md); border: 0; cursor: pointer; font-weight: 800; background: var(--active-bg); color: var(--text-primary); }
 
+/* -------------------------------------------------------------------------
+   PRE-RUN TERMINAL TREATMENT (non-main-menu pre-game screens)
+---------------------------------------------------------------------------*/
+#characterSelect,
+#mapMenu,
+#innkeeperMenu,
+#settingsMenu,
+#creditsMenu,
+#menu {
+  background:
+    radial-gradient(140% 130% at 50% 0%, var(--accent-glow), transparent 60%),
+    linear-gradient(160deg, var(--bg-base), var(--bg-surface));
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+  overflow: hidden;
+}
+
+#characterSelect::before,
+#mapMenu::before,
+#innkeeperMenu::before,
+#settingsMenu::before,
+#creditsMenu::before,
+#menu::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--texture-grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--texture-grid-color) 1px, transparent 1px);
+  background-size: var(--texture-grid-size) var(--texture-grid-size);
+}
+
+#characterSelect::after,
+#mapMenu::after,
+#innkeeperMenu::after,
+#settingsMenu::after,
+#creditsMenu::after,
+#menu::after {
+  content: "";
+  position: absolute;
+  inset: -40% 0 0;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(118, 232, 255, 0) 0%,
+    var(--texture-scan-color) 48%,
+    rgba(118, 232, 255, 0) 100%
+  );
+  transform: translateY(-60%);
+  animation: terminalScanDrift 8s linear infinite;
+}
+
+#characterSelect .panel,
+#mapMenu .panel,
+#innkeeperMenu .panel,
+#settingsMenu .panel,
+#creditsMenu .panel,
+#menu .panel {
+  position: relative;
+  z-index: 1;
+  border-radius: 0;
+  background: linear-gradient(180deg, var(--bg-elevated), var(--focus-bg));
+  box-shadow:
+    inset 0 0 0 1px var(--border-subtle),
+    var(--shadow-medium);
+}
+
+#characterSelect .title,
+#mapMenu .title,
+#innkeeperMenu .title,
+#settingsMenu .title,
+#creditsMenu .title,
+#menu .title {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+#characterSelect .characterActions button,
+#mapMenu .mapMenuActions button,
+#innkeeperMenu > .panel > button,
+#settingsMenu > .panel > button,
+#creditsMenu button,
+#menu button#startBtn,
+.characterStarterModalClose,
+.characterStarterModalSelectBtn {
+  border-radius: 0;
+}
+
 /* Full-screen dim + center */
 .pauseOverlay {
   position: fixed;
@@ -1407,7 +1599,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   align-items: center;
   justify-content: center;
   pointer-events: auto;
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--bg-overlay);
   color: var(--text-primary);
   overflow: hidden;
 }
@@ -1416,7 +1608,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .pausePanel {
   width: 100vw;
   height: 100vh;
-  background: rgba(20, 20, 20, 0.55);
+  background: linear-gradient(180deg, var(--bg-elevated), var(--bg-surface));
   backdrop-filter: blur(6px);
   border: 0;
   border-radius: 0;
@@ -1459,7 +1651,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   min-width: 140px;
   padding: 0 14px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-default);
   background: var(--focus-bg);
   color: var(--text-primary);
   font-weight: 700;
@@ -1469,27 +1661,33 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .pauseBtn:hover { background: var(--active-bg); }
 
 .pauseActionResume {
-  background: rgba(42, 148, 79, 0.3);
-  border-color: rgba(80, 200, 120, 0.58);
+  background: linear-gradient(180deg, rgba(52, 148, 92, 0.28), rgba(24, 74, 48, 0.45));
+  border-color: rgba(118, 232, 173, 0.58);
+  box-shadow: inset 0 0 0 1px rgba(118, 232, 173, 0.12);
 }
 .pauseActionResume:hover {
-  background: rgba(56, 168, 94, 0.4);
+  background: linear-gradient(180deg, rgba(68, 182, 116, 0.34), rgba(32, 98, 64, 0.52));
+  border-color: rgba(147, 245, 194, 0.68);
 }
 
 .pauseActionQuit {
   background: rgba(195, 45, 45, 0.32);
   border-color: rgba(235, 95, 95, 0.62);
+  box-shadow: inset 0 0 0 1px rgba(255, 126, 126, 0.1);
 }
 .pauseActionQuit:hover {
-  background: rgba(220, 60, 60, 0.42);
+  background: rgba(228, 72, 72, 0.46);
+  border-color: rgba(255, 142, 142, 0.72);
 }
 
 .pauseActionDev {
-  background: rgba(80, 124, 224, 0.28);
-  border-color: rgba(120, 170, 255, 0.56);
+  background: linear-gradient(180deg, rgba(60, 112, 198, 0.28), rgba(36, 66, 126, 0.44));
+  border-color: rgba(136, 188, 255, 0.6);
+  box-shadow: inset 0 0 0 1px rgba(138, 192, 255, 0.12);
 }
 .pauseActionDev:hover {
-  background: rgba(98, 146, 255, 0.4);
+  background: linear-gradient(180deg, rgba(78, 136, 228, 0.34), rgba(46, 82, 158, 0.5));
+  border-color: rgba(166, 208, 255, 0.72);
 }
 
 .pauseQuit {
@@ -1512,7 +1710,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   width: min(440px, 92vw);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
-  background: rgba(18, 18, 24, 0.98);
+  background: var(--bg-elevated);
   padding: 16px;
   display: grid;
   gap: 10px;
@@ -1567,8 +1765,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 /* Sections */
 .pauseSection {
-  background: rgba(0, 0, 0, 0.28);
-  border: 1px solid var(--border-subtle);
+  background: var(--focus-bg);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   padding: 14px;
   display: flex;
@@ -1647,10 +1845,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   padding: 10px 10px;
-  background: rgba(255,255,255,0.05);
+  background: var(--hover-bg);
 }
 
 .pauseCardName {
@@ -1709,7 +1907,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .pauseDebugLayer {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1728,8 +1926,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   height: min(760px, 100%);
   max-height: 100%;
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-subtle);
-  background: rgba(15, 15, 15, 0.92);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -1917,8 +2115,11 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 /* Run end overlay (WIN / LOSE) */
+#levelup { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 8; }
+#levelup .panel { width: min(980px, 95vw); padding: 20px; border-radius: 18px; }
+
 #end { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 7; }
-#end .panel { width: min(560px, 92vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); }
+#end .panel { width: min(560px, 92vw); padding: 20px; border-radius: 16px; }
 #end .title { font-size: 26px; font-weight: 900; margin-bottom: 6px; }
 #end .subline { opacity: 0.92; margin-bottom: 14px; white-space: pre-wrap; }
 #end .endStats {
@@ -1927,7 +2128,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   margin-bottom: 14px;
   padding: 12px;
   border-radius: var(--radius-md);
-  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-default);
+  background: var(--focus-bg);
 }
 #end .endStatRow {
   display: flex;
@@ -1946,13 +2148,14 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   width: 100%;
   padding: 12px 14px;
   border-radius: var(--radius-md);
-  border: 0;
+  border: 1px solid var(--border-default);
   cursor: pointer;
   font-weight: 900;
   color: var(--text-primary);
+  background: var(--primary-btn-bg);
 }
-#end button#endBtn {
-  background: var(--active-bg);
+#end button#endBtn:hover {
+  background: var(--primary-btn-hover-bg);
 }
 
 /* Deck overlays (reward + vendor) */
@@ -1962,8 +2165,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   display: grid;
   place-items: center;
   background:
-    radial-gradient(120% 120% at 50% 5%, rgba(255, 245, 210, 0.08), transparent 46%),
-    rgba(6, 8, 14, 0.8);
+    radial-gradient(120% 120% at 50% 5%, var(--accent-glow), transparent 46%),
+    var(--bg-overlay);
   z-index: 8;
   backdrop-filter: blur(3px);
 }
@@ -1972,12 +2175,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   width: min(980px, 95vw);
   padding: 20px;
   border-radius: 18px;
-  border: 1px solid var(--border-subtle);
-  background:
-    linear-gradient(150deg, rgba(22, 26, 40, 0.96), rgba(13, 16, 26, 0.95));
-  box-shadow: var(--shadow-medium);
-  color: var(--text-primary);
-  font-family: var(--font-mono);
+  background: linear-gradient(180deg, var(--bg-elevated), var(--focus-bg));
 }
 
 .deckOverlay .title {
@@ -1995,7 +2193,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 /* Map overlay (shown between floors) */
 #map { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 6; }
-#map .panel { width: min(860px, 96vw); padding: 20px; border-radius: 16px; background: rgba(255,255,255,0.06); color: var(--text-primary); font-family: var(--font-mono); }
+#map .panel { width: min(860px, 96vw); padding: 20px; border-radius: 16px; }
 #map .title { font-size: 22px; font-weight: 900; margin-bottom: 6px; }
 #map .sub { opacity: 0.9; margin-bottom: 14px; white-space: pre-wrap; }
 
@@ -2008,9 +2206,12 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   height: 100dvh;
   max-height: 100dvh;
   border-radius: 0;
+  border: 0;
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
+  background: linear-gradient(180deg, var(--bg-elevated), var(--focus-bg));
+  box-shadow: none;
   overflow: hidden;
 }
 
@@ -2034,7 +2235,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   aspect-ratio: 1000 / 520;
   border-radius: 16px;
   border: 1px solid var(--border-subtle);
-  background: rgba(0,0,0,0.22);
+  background: var(--focus-bg);
   overflow: hidden;
 }
 
@@ -2103,8 +2304,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   text-align: left;
   padding: 14px;
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-subtle);
-  background: linear-gradient(180deg, var(--hover-bg), rgba(118, 232, 255, 0.04));
+  border: 1px solid var(--border-default);
+  background: linear-gradient(180deg, var(--bg-surface), var(--bg-elevated));
   cursor: pointer;
   color: var(--text-primary);
   transition: transform var(--transition-fast), background var(--transition-standard), border-color var(--transition-standard), box-shadow var(--transition-standard);
@@ -2112,15 +2313,17 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .deckCardButton:hover {
   transform: translateY(-1px);
-  border-color: var(--border-default);
-  box-shadow: 0 10px 24px rgba(0,0,0,0.36);
+  background: linear-gradient(180deg, var(--bg-elevated), var(--active-bg));
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 1px var(--border-default), 0 10px 24px rgba(0,0,0,0.38);
 }
 
 .deckCardButton.selected,
 .deckCardButton:focus-visible {
   outline: none;
-  border-color: rgba(125, 210, 255, 0.95);
-  box-shadow: 0 0 0 2px rgba(125, 210, 255, 0.35), 0 10px 24px rgba(0,0,0,0.42);
+  border-color: var(--border-strong);
+  background: linear-gradient(180deg, var(--bg-elevated), var(--primary-btn-bg));
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 10px 24px rgba(0,0,0,0.42);
 }
 
 .deckCardTopRow {
@@ -2137,7 +2340,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  opacity: 0.88;
+  opacity: 0.95;
 }
 
 .deckCardTitle {
@@ -2149,7 +2352,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .deckCardDesc {
   font-size: 13px;
-  opacity: 0.95;
+  color: var(--text-primary);
+  opacity: 0.98;
   line-height: 1.35;
   display: grid;
   gap: 3px;
@@ -2188,7 +2392,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .vendorTabBtn {
   border-radius: var(--radius-pill);
   border: 1px solid var(--border-default);
-  background: var(--hover-bg);
+  background: var(--focus-bg);
   color: var(--text-primary);
   font-size: 13px;
   font-weight: 800;
@@ -2198,13 +2402,15 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 .vendorTabBtn:hover {
   background: var(--active-bg);
+  border-color: var(--border-strong);
 }
 
 .vendorTabBtn.active,
 .vendorTabBtn:focus-visible {
   outline: none;
-  border-color: rgba(125, 210, 255, 0.95);
-  box-shadow: 0 0 0 2px rgba(125, 210, 255, 0.35);
+  border-color: var(--border-strong);
+  background: var(--primary-btn-bg);
+  box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
 .vendorTabBtn[disabled] {
@@ -2233,8 +2439,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .vendorPriceBadge {
   border-radius: var(--radius-pill);
   padding: 3px 9px;
-  border: 1px solid var(--border-default);
-  background: var(--focus-bg);
+  border: 1px solid var(--border-strong);
+  background: var(--primary-btn-bg);
   font-size: 11px;
   font-weight: 900;
 }
@@ -2266,7 +2472,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   min-width: 160px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
-  background: var(--hover-bg);
+  background: var(--primary-btn-bg);
   color: var(--text-primary);
   font-size: 14px;
   font-weight: 900;
@@ -2274,12 +2480,12 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   cursor: pointer;
 }
 
-.vendorLeaveButton:hover { background: var(--active-bg); }
+.vendorLeaveButton:hover { background: var(--primary-btn-hover-bg); border-color: var(--border-strong); }
 .vendorLeaveButton.selected,
 .vendorLeaveButton:focus-visible {
   outline: none;
-  border-color: rgba(125, 210, 255, 0.95);
-  box-shadow: 0 0 0 2px rgba(125, 210, 255, 0.35);
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
 /* Stat diff display for upgrades */
@@ -3168,8 +3374,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 #map.routeMode {
   padding: 0;
   background:
-    radial-gradient(120% 90% at 50% -20%, rgba(80, 108, 168, 0.22), transparent 52%),
-    rgba(5, 8, 14, 0.9);
+    radial-gradient(120% 90% at 50% -20%, var(--accent-glow), transparent 52%),
+    var(--bg-overlay);
 }
 
 #map.routeMode .panel {
@@ -3181,8 +3387,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   padding: 0;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
-  background:
-    linear-gradient(180deg, rgba(18, 22, 36, 0.98), rgba(8, 11, 20, 0.98));
+  background: linear-gradient(180deg, var(--bg-elevated), var(--bg-surface));
   box-shadow: none;
   overflow: hidden;
 }
@@ -3190,7 +3395,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 #map.routeMode #mapTopBar {
   padding: calc(12px + var(--safe-top)) 16px 10px 16px;
   border-bottom: 1px solid var(--border-subtle);
-  background: rgba(12, 16, 28, 0.94);
+  background: var(--bg-elevated);
 }
 
 #map.routeMode .mapTopBarRow {
@@ -3246,7 +3451,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   font-weight: 800;
   letter-spacing: 0.02em;
   color: var(--text-primary);
-  background: rgba(10, 14, 24, 0.72);
+  background: var(--focus-bg);
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -3259,7 +3464,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   aspect-ratio: auto;
   border-radius: 0;
   border: 0;
-  background: rgba(6, 10, 20, 0.85);
+  background: var(--bg-surface);
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
@@ -3315,7 +3520,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   border: 1px solid var(--route-accent);
   background:
     radial-gradient(110% 110% at 30% 20%, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04) 56%),
-    rgba(12, 18, 32, 0.9);
+    var(--bg-elevated);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3364,7 +3569,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   min-height: 54px;
   padding: 8px 14px calc(10px + var(--safe-bottom));
   border-top: 1px solid var(--border-subtle);
-  background: rgba(10, 14, 24, 0.9);
+  background: var(--bg-elevated);
   color: var(--text-primary);
 }
 
@@ -3434,7 +3639,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   display: flex;
   flex-direction: column;
   background:
-    radial-gradient(140% 130% at 50% 0%, rgba(23, 58, 84, 0.22), transparent 60%),
+    radial-gradient(140% 130% at 50% 0%, var(--accent-glow), transparent 60%),
     linear-gradient(160deg, var(--bg-base), var(--bg-surface));
   color: var(--text-primary);
   font-family: var(--font-mono);
@@ -3561,8 +3766,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 #mainMenu.terminalMenu .terminalPanel {
   width: min(560px, calc(100vw - clamp(0px, 5vw, 64px)));
-  border: 1px solid var(--accent-soft);
-  background: linear-gradient(180deg, var(--bg-elevated), rgba(5, 12, 24, 0.92));
+  border: 1px solid var(--border-default);
+  background: linear-gradient(180deg, var(--bg-elevated), var(--focus-bg));
   padding: clamp(8px, 2dvh, 24px);
   transform: translateY(clamp(-40px, -5dvh, 0px));
   box-shadow:
@@ -3619,7 +3824,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 #mainMenu.terminalMenu .terminalAction:hover {
   background: var(--hover-bg);
-  border-bottom-color: rgba(118, 232, 255, 0.56);
+  border-bottom-color: var(--border-strong);
 }
 
 #mainMenu.terminalMenu .terminalAction:hover::before,
@@ -3642,7 +3847,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 
 #mainMenu.terminalMenu .terminalActionPrimary {
   background: var(--primary-btn-bg);
-  border-bottom-color: rgba(118, 232, 255, 0.44);
+  border-bottom-color: var(--border-default);
   font-weight: 700;
 }
 
@@ -3691,4 +3896,52 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
     border-left: 0;
     border-right: 0;
   }
+}
+
+/* Keep welcome terminal corners consistent with the main menu terminal shell. */
+#welcomeScreen .panel,
+#welcomeScreen button {
+  border-radius: 0;
+}
+
+/* Keep the same hard-corner language across all pre-run terminal screens. */
+#characterSelect .panel,
+#mapMenu .panel,
+#innkeeperMenu .panel,
+#settingsMenu .panel,
+#creditsMenu .panel,
+#menu .panel {
+  border-radius: 0;
+}
+
+/* Global hard-edge pass for runtime UI surfaces and controls. */
+#levelup *,
+#end *,
+#map *,
+.deckOverlay *,
+.pauseOverlay *,
+#dialogBar *,
+#hud .pill,
+#objectiveOverlay,
+#interactPrompt,
+#mobileInteractBtn {
+  border-radius: 0 !important;
+}
+
+/* Keep analog stick circular by exception. */
+#mobileMoveStick,
+#mobileMoveKnob {
+  border-radius: 999px !important;
+}
+
+/* Character select + starter modal hard-edge enforcement. */
+#characterSelect .characterCard,
+#characterSelect .characterSpriteWrap,
+#characterSelect .characterActions button,
+.characterStarterModal,
+.characterStarterModalSpriteWrap,
+.characterStarterModalInfoPane,
+.characterStarterModalClose,
+.characterStarterModalSelectBtn {
+  border-radius: 0 !important;
 }

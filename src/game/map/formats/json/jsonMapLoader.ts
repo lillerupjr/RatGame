@@ -83,7 +83,7 @@ function fillEmptyWithOceanCells(cells: TableMapCell[], width: number, height: n
       const key = keyOf(x, y);
       const idx = byKey.get(key);
       if (idx == null) {
-        cells.push({ x, y, z: -1, type: "ocean" });
+        cells.push({ x, y, z: -2, type: "ocean" });
         byKey.set(key, cells.length - 1);
         continue;
       }
@@ -91,7 +91,7 @@ function fillEmptyWithOceanCells(cells: TableMapCell[], width: number, height: n
       const existing = cells[idx];
       const type = (existing.type ?? "").toLowerCase();
       if (!type || type === "none" || type === "void") {
-        cells[idx] = { ...existing, type: "ocean", z: -1 };
+        cells[idx] = { ...existing, type: "ocean", z: -2 };
       }
     }
   }
@@ -106,7 +106,7 @@ function makeOceanChunkDef(): TableMapDef {
       cells[i] = {
         x,
         y,
-        z: -1,
+        z: -2,
         type: "ocean",
       };
     }

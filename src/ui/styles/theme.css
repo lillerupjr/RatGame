@@ -44,9 +44,9 @@
   --shadow-glow: 0 0 10px rgba(118, 232, 255, 0.28);
 
   /* Radius */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-pill: 9999px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-pill: 0px;
 
   /* Transitions */
   --transition-fast: 80ms ease;

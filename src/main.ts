@@ -42,11 +42,31 @@ function installDevSettingsUi(): DevSettingsUiController {
   };
   if (!settingsPanel) return noopController;
 
+  const applyDevButtonStyle = (btn: HTMLButtonElement, variant: "primary" | "secondary" = "secondary") => {
+    btn.style.border = "1px solid var(--border-default)";
+    btn.style.borderRadius = "0";
+    btn.style.background = variant === "primary" ? "var(--primary-btn-bg)" : "var(--focus-bg)";
+    btn.style.color = "var(--text-primary)";
+    btn.style.fontFamily = "var(--font-mono)";
+    btn.style.fontWeight = "700";
+    btn.style.cursor = "pointer";
+  };
+
+  const applyDevSelectStyle = (select: HTMLSelectElement) => {
+    select.style.background = "var(--focus-bg)";
+    select.style.color = "var(--text-primary)";
+    select.style.border = "1px solid var(--border-default)";
+    select.style.borderRadius = "0";
+    select.style.fontFamily = "var(--font-mono)";
+  };
+
   const debugLayerToggleBtn = document.createElement("button");
   debugLayerToggleBtn.type = "button";
   debugLayerToggleBtn.textContent = "Dev Tools";
   debugLayerToggleBtn.style.marginTop = "10px";
   debugLayerToggleBtn.style.width = "100%";
+  debugLayerToggleBtn.style.minHeight = "36px";
+  applyDevButtonStyle(debugLayerToggleBtn, "primary");
 
   const layer = document.createElement("div");
   layer.hidden = true;
@@ -54,20 +74,22 @@ function installDevSettingsUi(): DevSettingsUiController {
   layer.style.inset = "0";
   layer.style.display = "grid";
   layer.style.placeItems = "center";
-  layer.style.background = "rgba(0,0,0,0.62)";
+  layer.style.background = "var(--bg-overlay)";
+  layer.style.boxSizing = "border-box";
+  layer.style.padding = "var(--overlay-pad-top) var(--overlay-pad-right) var(--overlay-pad-bottom) var(--overlay-pad-left)";
   layer.style.zIndex = "10000";
 
   const panel = document.createElement("div");
-  panel.style.width = "min(980px, 94vw)";
-  panel.style.maxHeight = "88vh";
+  panel.style.width = "min(980px, 100%)";
+  panel.style.maxHeight = "100%";
   panel.style.overflowY = "auto";
   panel.style.padding = "12px";
-  panel.style.border = "1px solid rgba(255,255,255,0.18)";
-  panel.style.borderRadius = "10px";
-  panel.style.background = "rgba(10,10,10,0.92)";
-  panel.style.color = "#fff";
-  panel.style.font = "12px monospace";
-  panel.style.boxShadow = "0 8px 24px rgba(0,0,0,0.4)";
+  panel.style.border = "1px solid var(--border-default)";
+  panel.style.borderRadius = "0";
+  panel.style.background = "linear-gradient(180deg, var(--bg-elevated), var(--focus-bg))";
+  panel.style.color = "var(--text-primary)";
+  panel.style.font = "12px var(--font-mono)";
+  panel.style.boxShadow = "inset 0 0 0 1px var(--border-subtle), var(--shadow-medium)";
   panel.style.boxSizing = "border-box";
   layer.appendChild(panel);
   document.body.appendChild(layer);
@@ -94,12 +116,8 @@ function installDevSettingsUi(): DevSettingsUiController {
   const closeBtn = document.createElement("button");
   closeBtn.type = "button";
   closeBtn.textContent = "Close";
-  closeBtn.style.border = "1px solid rgba(255,255,255,0.25)";
-  closeBtn.style.borderRadius = "6px";
-  closeBtn.style.background = "rgba(28,28,28,0.95)";
-  closeBtn.style.color = "#fff";
-  closeBtn.style.cursor = "pointer";
   closeBtn.style.padding = "4px 10px";
+  applyDevButtonStyle(closeBtn);
   headerRow.appendChild(closeBtn);
 
   type SettingsDebug = ReturnType<typeof getUserSettings>["debug"];
@@ -266,10 +284,7 @@ function installDevSettingsUi(): DevSettingsUiController {
   const paletteIdText = document.createElement("span");
   paletteIdText.textContent = "Palette";
   const paletteIdSelect = document.createElement("select");
-  paletteIdSelect.style.background = "rgba(20,20,20,0.9)";
-  paletteIdSelect.style.color = "#fff";
-  paletteIdSelect.style.border = "1px solid rgba(255,255,255,0.25)";
-  paletteIdSelect.style.borderRadius = "4px";
+  applyDevSelectStyle(paletteIdSelect);
   const PALETTE_IDS = [
     "db32",
     "divination",
@@ -319,10 +334,7 @@ function installDevSettingsUi(): DevSettingsUiController {
   const modeText = document.createElement("span");
   modeText.textContent = "Lighting Mask Mode";
   const modeSelect = document.createElement("select");
-  modeSelect.style.background = "rgba(20,20,20,0.9)";
-  modeSelect.style.color = "#fff";
-  modeSelect.style.border = "1px solid rgba(255,255,255,0.25)";
-  modeSelect.style.borderRadius = "4px";
+  applyDevSelectStyle(modeSelect);
   const modes = LIGHTING_MASK_DEBUG_MODES;
   for (let i = 0; i < modes.length; i++) {
     const opt = document.createElement("option");
@@ -386,11 +398,7 @@ function installDevSettingsUi(): DevSettingsUiController {
   dmgMultText.textContent = "Damage Mult";
   const dmgMultBtn = document.createElement("button");
   dmgMultBtn.type = "button";
-  dmgMultBtn.style.border = "1px solid rgba(255,255,255,0.25)";
-  dmgMultBtn.style.borderRadius = "6px";
-  dmgMultBtn.style.background = "rgba(28,28,28,0.95)";
-  dmgMultBtn.style.color = "#fff";
-  dmgMultBtn.style.cursor = "pointer";
+  applyDevButtonStyle(dmgMultBtn);
   dmgMultBtn.addEventListener("click", () => {
     const s = getUserSettings().debug;
     const next = s.dmgMult === 10 ? 1 : 10;
@@ -411,11 +419,7 @@ function installDevSettingsUi(): DevSettingsUiController {
   fireRateMultText.textContent = "Fire Rate Mult";
   const fireRateMultBtn = document.createElement("button");
   fireRateMultBtn.type = "button";
-  fireRateMultBtn.style.border = "1px solid rgba(255,255,255,0.25)";
-  fireRateMultBtn.style.borderRadius = "6px";
-  fireRateMultBtn.style.background = "rgba(28,28,28,0.95)";
-  fireRateMultBtn.style.color = "#fff";
-  fireRateMultBtn.style.cursor = "pointer";
+  applyDevButtonStyle(fireRateMultBtn);
   fireRateMultBtn.addEventListener("click", () => {
     const s = getUserSettings().debug;
     const next = s.fireRateMult === 10 ? 1 : 10;
@@ -514,10 +518,7 @@ function installDevSettingsUi(): DevSettingsUiController {
   const birdForceStateText = document.createElement("span");
   birdForceStateText.textContent = "Force State";
   const birdForceStateSelect = document.createElement("select");
-  birdForceStateSelect.style.background = "rgba(20,20,20,0.9)";
-  birdForceStateSelect.style.color = "#fff";
-  birdForceStateSelect.style.border = "1px solid rgba(255,255,255,0.25)";
-  birdForceStateSelect.style.borderRadius = "4px";
+  applyDevSelectStyle(birdForceStateSelect);
   for (let i = 0; i < NEUTRAL_BIRD_FORCE_STATES.length; i++) {
     const opt = document.createElement("option");
     opt.value = NEUTRAL_BIRD_FORCE_STATES[i];
@@ -568,11 +569,7 @@ function installDevSettingsUi(): DevSettingsUiController {
   offAllBtn.style.marginTop = "10px";
   offAllBtn.style.width = "100%";
   offAllBtn.style.height = "30px";
-  offAllBtn.style.border = "1px solid rgba(255,255,255,0.25)";
-  offAllBtn.style.borderRadius = "6px";
-  offAllBtn.style.background = "rgba(28,28,28,0.95)";
-  offAllBtn.style.color = "#fff";
-  offAllBtn.style.cursor = "pointer";
+  applyDevButtonStyle(offAllBtn);
   offAllBtn.addEventListener("click", () => {
     updateUserSettings({
       debug: makeAllDebugOffSettings(),

@@ -28,22 +28,24 @@ const ANIMATED_TILE_SETS = {
     water1: { fps: 6, frameCount: 4 },
     water2: { fps: 6, frameCount: 6 },
 } as const;
-const animatedTileFramesBySet: Partial<Record<AnimatedTileSetId, LoadedImg[]>> = {};
+const animatedTileFramesBySetAndPalette = new Map<string, LoadedImg[]>();
 const prewarmQueue: { spriteId: string; paletteId: PaletteId }[] = [];
 let prewarmActive = false;
 
 export type AnimatedTileSetId = keyof typeof ANIMATED_TILE_SETS;
 
 function getAnimatedTileFrames(setId: AnimatedTileSetId): LoadedImg[] {
-    const cached = animatedTileFramesBySet[setId];
+    const paletteId = effectivePaletteId();
+    const cacheKey = `${setId}@@pal:${paletteId}`;
+    const cached = animatedTileFramesBySetAndPalette.get(cacheKey);
     if (cached) return cached;
 
     const spec = ANIMATED_TILE_SETS[setId];
     const frames = new Array<LoadedImg>(spec.frameCount);
     for (let i = 0; i < spec.frameCount; i++) {
-        frames[i] = loadById(`tiles/animated/${setId}/${i + 1}`);
+        frames[i] = loadByIdInternal(`tiles/animated/${setId}/${i + 1}`, paletteId);
     }
-    animatedTileFramesBySet[setId] = frames;
+    animatedTileFramesBySetAndPalette.set(cacheKey, frames);
     return frames;
 }
 
