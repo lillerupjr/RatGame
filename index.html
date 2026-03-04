@@ -108,20 +108,22 @@
       </div>
     </section>
     <section id="endLeaderboardPanel" class="endTabPanel endLeaderboard" data-end-panel="leaderboard" role="tabpanel" hidden>
-      <div class="endLeaderboardHeader">Depth Leaderboard</div>
+      <div class="endLeaderboardTitleRow">
+        <div class="endLeaderboardHeader">Depth Leaderboard</div>
+        <span id="endLeaderboardTop10Badge" class="endLeaderboardTop10Badge" hidden>TOP 10</span>
+      </div>
       <div id="endLeaderboardStatus" class="endLeaderboardStatus" aria-live="polite">Loading leaderboard...</div>
       <button id="endLeaderboardRetryBtn" class="SecondaryButton endLeaderboardRetryBtn" type="button" hidden>Retry</button>
-      <div class="endRunBanner" role="status" aria-live="polite">
-        <div class="endRunBannerTitle">Your Run</div>
-        <div class="endRunBannerStats">
-          <span>Depth: <strong id="endRunBannerDepth">1</strong></span>
-          <span>Kills: <strong id="endRunBannerKills">0</strong></span>
-          <span>Rank: <strong id="endRunBannerRank">--</strong></span>
-          <span id="endRunTop10Badge" class="endRunTop10Badge" hidden>TOP 10</span>
-        </div>
+      <div class="endLeaderboardLegend" aria-hidden="true">
+        <span class="endLeaderboardLegendRank">Rank</span>
+        <span class="endLeaderboardLegendName">Name</span>
+        <span class="endLeaderboardLegendDepth">Depth</span>
+        <span class="endLeaderboardLegendKills">Kills</span>
+      </div>
+      <div id="endLeaderboardListWrap" class="endLeaderboardListWrap">
+        <ol id="endLeaderboardList" class="endLeaderboardList"></ol>
       </div>
       <div id="endLeaderboardSubmitWrap" class="endLeaderboardSubmit">
-        <label for="endLeaderboardName" class="endLeaderboardInputLabel">Enter Name</label>
         <div class="endLeaderboardSubmitRow">
           <input
             id="endLeaderboardName"
@@ -131,48 +133,12 @@
             inputmode="text"
             autocomplete="off"
             spellcheck="false"
-            placeholder="RAT"
+            placeholder="NAME"
           />
           <button id="endLeaderboardSubmitBtn" class="PrimaryButton" type="button">Submit</button>
+          <span id="endLeaderboardSubmitDone" class="endLeaderboardSubmitDone" hidden>Submitted</span>
         </div>
         <div id="endLeaderboardSubmitStatus" class="endLeaderboardSubmitStatus" aria-live="polite"></div>
-      </div>
-      <div id="endLeaderboardSubmittedAs" class="endLeaderboardSubmittedAs" hidden></div>
-      <div class="endLeaderboardGrid">
-        <div class="endLeaderboardSection">
-          <div class="endLeaderboardSectionTitle">Top</div>
-          <div class="endLeaderboardTableWrap">
-            <table class="endLeaderboardTable">
-              <colgroup>
-                <col class="endLeaderboardColRank" />
-                <col class="endLeaderboardColName" />
-                <col class="endLeaderboardColNum" />
-                <col class="endLeaderboardColNum" />
-              </colgroup>
-              <thead>
-              <tr><th>Rank</th><th>Name</th><th>Depth</th><th>Kills</th></tr>
-              </thead>
-              <tbody id="endLeaderboardTopBody"></tbody>
-            </table>
-          </div>
-        </div>
-        <div class="endLeaderboardSection">
-          <div class="endLeaderboardSectionTitle">Around You</div>
-          <div class="endLeaderboardTableWrap">
-            <table class="endLeaderboardTable">
-              <colgroup>
-                <col class="endLeaderboardColRank" />
-                <col class="endLeaderboardColName" />
-                <col class="endLeaderboardColNum" />
-                <col class="endLeaderboardColNum" />
-              </colgroup>
-              <thead>
-              <tr><th>Rank</th><th>Name</th><th>Depth</th><th>Kills</th></tr>
-              </thead>
-              <tbody id="endLeaderboardAroundBody"></tbody>
-            </table>
-          </div>
-        </div>
       </div>
     </section>
     <div class="endActionDivider" aria-hidden="true"></div>

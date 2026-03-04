@@ -976,19 +976,15 @@ export function createGame(args: CreateGameArgs) {
   const endLeaderboardPanelEl = args.ui.endEl.root.querySelector<HTMLElement>("#endLeaderboardPanel");
   const endTabStatsBtnEl = args.ui.endEl.root.querySelector<HTMLButtonElement>("#endTabStats");
   const endTabLeaderboardBtnEl = args.ui.endEl.root.querySelector<HTMLButtonElement>("#endTabLeaderboard");
-  const endRunBannerDepthEl = args.ui.endEl.root.querySelector<HTMLElement>("#endRunBannerDepth");
-  const endRunBannerKillsEl = args.ui.endEl.root.querySelector<HTMLElement>("#endRunBannerKills");
-  const endRunBannerRankEl = args.ui.endEl.root.querySelector<HTMLElement>("#endRunBannerRank");
-  const endRunTop10BadgeEl = args.ui.endEl.root.querySelector<HTMLElement>("#endRunTop10Badge");
-  const endLeaderboardGridEl = args.ui.endEl.root.querySelector<HTMLElement>(".endLeaderboardGrid");
-  const endLeaderboardTopBodyEl = args.ui.endEl.root.querySelector<HTMLTableSectionElement>("#endLeaderboardTopBody");
-  const endLeaderboardAroundBodyEl = args.ui.endEl.root.querySelector<HTMLTableSectionElement>("#endLeaderboardAroundBody");
+  const endLeaderboardTop10BadgeEl = args.ui.endEl.root.querySelector<HTMLElement>("#endLeaderboardTop10Badge");
+  const endLeaderboardListWrapEl = args.ui.endEl.root.querySelector<HTMLElement>("#endLeaderboardListWrap");
+  const endLeaderboardListEl = args.ui.endEl.root.querySelector<HTMLOListElement>("#endLeaderboardList");
   const endLeaderboardStatusEl = args.ui.endEl.root.querySelector<HTMLDivElement>("#endLeaderboardStatus");
   const endLeaderboardRetryBtnEl = args.ui.endEl.root.querySelector<HTMLButtonElement>("#endLeaderboardRetryBtn");
   const endLeaderboardSubmitWrapEl = args.ui.endEl.root.querySelector<HTMLDivElement>("#endLeaderboardSubmitWrap");
-  const endLeaderboardSubmittedAsEl = args.ui.endEl.root.querySelector<HTMLDivElement>("#endLeaderboardSubmittedAs");
   const endLeaderboardNameInputEl = args.ui.endEl.root.querySelector<HTMLInputElement>("#endLeaderboardName");
   const endLeaderboardSubmitBtnEl = args.ui.endEl.root.querySelector<HTMLButtonElement>("#endLeaderboardSubmitBtn");
+  const endLeaderboardSubmitDoneEl = args.ui.endEl.root.querySelector<HTMLSpanElement>("#endLeaderboardSubmitDone");
   const endLeaderboardSubmitStatusEl = args.ui.endEl.root.querySelector<HTMLDivElement>("#endLeaderboardSubmitStatus");
   type EndTabId = "stats" | "leaderboard";
   let endActiveTab: EndTabId = "stats";
@@ -997,19 +993,15 @@ export function createGame(args: CreateGameArgs) {
     && endLeaderboardPanelEl
     && endTabStatsBtnEl
     && endTabLeaderboardBtnEl
-    && endRunBannerDepthEl
-    && endRunBannerKillsEl
-    && endRunBannerRankEl
-    && endRunTop10BadgeEl
-    && endLeaderboardGridEl
-    && endLeaderboardTopBodyEl
-    && endLeaderboardAroundBodyEl
+    && endLeaderboardTop10BadgeEl
+    && endLeaderboardListWrapEl
+    && endLeaderboardListEl
     && endLeaderboardStatusEl
     && endLeaderboardRetryBtnEl
     && endLeaderboardSubmitWrapEl
-    && endLeaderboardSubmittedAsEl
     && endLeaderboardNameInputEl
     && endLeaderboardSubmitBtnEl
+    && endLeaderboardSubmitDoneEl
     && endLeaderboardSubmitStatusEl
   );
   let endLeaderboardRunPayload: EndLeaderboardRunPayload | null = null;
@@ -1018,6 +1010,7 @@ export function createGame(args: CreateGameArgs) {
   let endLeaderboardSubmittedName: string | null = null;
   let endLeaderboardProjectedRank: number | null = null;
   let endLeaderboardSubmitForcedDisabled = false;
+  let endLeaderboardAutoScrolled = false;
 
   function setLeaderboardInputFocusState(focused: boolean): void {
     uiInteractionState.textInputFocused = focused;
@@ -1030,25 +1023,13 @@ export function createGame(args: CreateGameArgs) {
   function setEndLeaderboardStatus(message: string): void {
     if (!endLeaderboardStatusEl) return;
     endLeaderboardStatusEl.textContent = message;
+    endLeaderboardStatusEl.hidden = message.length <= 0;
   }
 
   function setEndTop10Badge(rank: number | null): void {
-    if (!endRunTop10BadgeEl) return;
+    if (!endLeaderboardTop10BadgeEl) return;
     const show = typeof rank === "number" && Number.isFinite(rank) && rank > 0 && rank <= 10;
-    endRunTop10BadgeEl.hidden = !show;
-  }
-
-  function setEndRunBannerSummary(payload: EndLeaderboardRunPayload | null, rank: number | null): void {
-    if (!endRunBannerDepthEl || !endRunBannerKillsEl || !endRunBannerRankEl) return;
-    const depth = payload?.depthReached ?? 0;
-    const kills = payload?.kills ?? 0;
-    endRunBannerDepthEl.textContent = String(Math.max(0, Math.floor(depth)));
-    endRunBannerKillsEl.textContent = String(Math.max(0, Math.floor(kills)));
-    const normalizedRank = typeof rank === "number" && Number.isFinite(rank) && rank > 0
-      ? Math.floor(rank)
-      : null;
-    endRunBannerRankEl.textContent = normalizedRank ? `#${normalizedRank}` : "--";
-    setEndTop10Badge(normalizedRank);
+    endLeaderboardTop10BadgeEl.hidden = !show;
   }
 
   function hasLeaderboardNameInput(): boolean {
@@ -1063,7 +1044,13 @@ export function createGame(args: CreateGameArgs) {
       || !leaderboardClient
       || !hasLeaderboardNameInput();
     if (endLeaderboardNameInputEl) endLeaderboardNameInputEl.disabled = lockInput;
-    if (endLeaderboardSubmitBtnEl) endLeaderboardSubmitBtnEl.disabled = disableSubmit;
+    if (endLeaderboardSubmitBtnEl) {
+      endLeaderboardSubmitBtnEl.disabled = disableSubmit;
+      endLeaderboardSubmitBtnEl.hidden = !!endLeaderboardSubmittedName;
+    }
+    if (endLeaderboardSubmitDoneEl) {
+      endLeaderboardSubmitDoneEl.hidden = !endLeaderboardSubmittedName;
+    }
   }
 
   function setEndActiveTab(next: EndTabId): void {
@@ -1078,6 +1065,9 @@ export function createGame(args: CreateGameArgs) {
     endTabLeaderboardBtnEl.setAttribute("aria-selected", showStats ? "false" : "true");
     if (endActiveTab === "leaderboard" && endLeaderboardRunPayload) {
       void loadEndLeaderboardPreview();
+      requestAnimationFrame(() => {
+        maybeAutoScrollEndLeaderboardToYou();
+      });
     }
   }
 
@@ -1091,57 +1081,124 @@ export function createGame(args: CreateGameArgs) {
     refreshEndLeaderboardSubmitControls();
   }
 
-  function setEndLeaderboardGridVisible(visible: boolean): void {
-    if (!endLeaderboardGridEl) return;
-    endLeaderboardGridEl.hidden = !visible;
+  function buildLeaderboardYouRow(payload: EndLeaderboardRunPayload, rank: number | null): LeaderboardRow {
+    const normalizedRank =
+      typeof rank === "number" && Number.isFinite(rank) && rank > 0
+        ? Math.floor(rank)
+        : 1;
+    const displayName = endLeaderboardSubmittedName && endLeaderboardSubmittedName.length > 0
+      ? endLeaderboardSubmittedName
+      : "YOU";
+    return {
+      rank: normalizedRank,
+      display_name: displayName,
+      depth: Math.max(0, Math.floor(payload.depthReached)),
+      kills: Math.max(0, Math.floor(payload.kills)),
+      isYou: true,
+    };
   }
 
-  function formatLeaderboardRankLabel(rank: number): string {
-    if (rank === 1) return "🥇";
-    if (rank === 2) return "🥈";
-    if (rank === 3) return "🥉";
-    return String(rank);
+  function mergeLeaderboardRows(top: LeaderboardRow[], around: LeaderboardRow[], youRow: LeaderboardRow): LeaderboardRow[] {
+    const rowsByRank = new Map<number, LeaderboardRow>();
+    const ingest = (rows: LeaderboardRow[]) => {
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const rank = Number.isFinite(row.rank) ? Math.max(1, Math.floor(row.rank)) : 0;
+        if (rank <= 0) continue;
+        rowsByRank.set(rank, {
+          rank,
+          display_name: row.display_name || "ANON",
+          depth: Number.isFinite(row.depth) ? Math.max(0, Math.floor(row.depth)) : 0,
+          kills: Number.isFinite(row.kills) ? Math.max(0, Math.floor(row.kills)) : 0,
+          isYou: !!row.isYou,
+        });
+      }
+    };
+    ingest(top);
+    ingest(around);
+    rowsByRank.set(youRow.rank, { ...youRow, isYou: true });
+    return Array.from(rowsByRank.values()).sort((a, b) => a.rank - b.rank);
   }
 
-  function renderEndLeaderboardRows(bodyEl: HTMLTableSectionElement | null, rows: LeaderboardRow[]): void {
-    if (!bodyEl) return;
-    bodyEl.innerHTML = "";
+  function renderEndLeaderboardRows(listEl: HTMLOListElement | null, rows: LeaderboardRow[]): void {
+    if (!listEl) return;
+    listEl.innerHTML = "";
     if (rows.length <= 0) {
-      const tr = document.createElement("tr");
-      const td = document.createElement("td");
-      td.colSpan = 4;
-      td.classList.add("endLeaderboardEmptyCell");
-      td.textContent = "No runs submitted yet.\nBe the first.";
-      tr.appendChild(td);
-      bodyEl.appendChild(tr);
+      const li = document.createElement("li");
+      li.classList.add("endLeaderboardRowEmpty");
+      li.textContent = "No runs submitted yet.\nBe the first.";
+      listEl.appendChild(li);
       return;
     }
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const normalizedRank = Math.max(1, Math.floor(row.rank));
-      const isYou = !!row.isYou || row.display_name === "YOU";
-      const tr = document.createElement("tr");
-      if (isYou) tr.classList.add("isYou");
-
-      const rankTd = document.createElement("td");
-      rankTd.textContent = formatLeaderboardRankLabel(normalizedRank);
-      tr.appendChild(rankTd);
-
-      const nameTd = document.createElement("td");
+      const isYou = !!row.isYou;
+      const depth = Math.max(0, Math.floor(row.depth));
+      const kills = Math.max(0, Math.floor(row.kills));
+      const li = document.createElement("li");
+      li.classList.add("endLeaderboardRow");
+      if (isYou) {
+        li.classList.add("isYou");
+        li.dataset.you = "true";
+      }
+      li.dataset.rank = String(normalizedRank);
+      const rankLabel = document.createElement("span");
+      rankLabel.classList.add("endLeaderboardRowRank");
+      rankLabel.textContent = `${normalizedRank}.`;
+      const nameLabel = document.createElement("span");
+      nameLabel.classList.add("endLeaderboardRowName");
       const displayName = row.display_name || "ANON";
-      nameTd.textContent = isYou ? `> ${displayName}` : displayName;
-      tr.appendChild(nameTd);
+      nameLabel.textContent = isYou ? `> ${displayName}` : displayName;
+      const depthValue = document.createElement("span");
+      depthValue.classList.add("endLeaderboardRowDepth");
+      depthValue.textContent = String(depth);
+      const killsValue = document.createElement("span");
+      killsValue.classList.add("endLeaderboardRowKills");
+      killsValue.textContent = String(kills);
 
-      const depthTd = document.createElement("td");
-      depthTd.textContent = String(Math.max(0, Math.floor(row.depth)));
-      tr.appendChild(depthTd);
+      li.appendChild(rankLabel);
+      li.appendChild(nameLabel);
+      li.appendChild(depthValue);
+      li.appendChild(killsValue);
+      listEl.appendChild(li);
+    }
+  }
 
-      const killsTd = document.createElement("td");
-      killsTd.textContent = String(Math.max(0, Math.floor(row.kills)));
-      tr.appendChild(killsTd);
+  function maybeAutoScrollEndLeaderboardToYou(): void {
+    if (endLeaderboardAutoScrolled) return;
+    if (endActiveTab !== "leaderboard") return;
+    if (!endLeaderboardListWrapEl || !endLeaderboardListEl) return;
+    const youRow = endLeaderboardListEl.querySelector<HTMLElement>(".endLeaderboardRow.isYou");
+    if (!youRow) return;
+    const target = youRow.offsetTop - ((endLeaderboardListWrapEl.clientHeight - youRow.offsetHeight) * 0.5);
+    const maxScroll = Math.max(0, endLeaderboardListWrapEl.scrollHeight - endLeaderboardListWrapEl.clientHeight);
+    endLeaderboardListWrapEl.scrollTop = Math.max(0, Math.min(maxScroll, target));
+    endLeaderboardAutoScrolled = true;
+  }
 
-      bodyEl.appendChild(tr);
+  function renderEndLeaderboardMergedRows(payload: EndLeaderboardRunPayload, top: LeaderboardRow[], around: LeaderboardRow[], rank: number | null): void {
+    const youRow = buildLeaderboardYouRow(payload, rank);
+    const mergedRows = mergeLeaderboardRows(top, around, youRow);
+    renderEndLeaderboardRows(endLeaderboardListEl, mergedRows);
+    requestAnimationFrame(() => {
+      maybeAutoScrollEndLeaderboardToYou();
+    });
+  }
+
+  function renderEndLeaderboardYouOnly(payload: EndLeaderboardRunPayload, rank: number | null): void {
+    renderEndLeaderboardRows(endLeaderboardListEl, [buildLeaderboardYouRow(payload, rank)]);
+    requestAnimationFrame(() => {
+      maybeAutoScrollEndLeaderboardToYou();
+    });
+  }
+
+  function clearEndLeaderboardRows(): void {
+    if (!endLeaderboardListEl) return;
+    endLeaderboardListEl.innerHTML = "";
+    if (endLeaderboardListWrapEl) {
+      endLeaderboardListWrapEl.scrollTop = 0;
     }
   }
 
@@ -1151,22 +1208,17 @@ export function createGame(args: CreateGameArgs) {
     endLeaderboardSubmittedName = null;
     endLeaderboardProjectedRank = null;
     endLeaderboardSubmitForcedDisabled = false;
+    endLeaderboardAutoScrolled = false;
     endLeaderboardRequestSeq++;
     setLeaderboardInputFocusState(false);
     if (!hasEndLeaderboardUi) return;
     setEndLeaderboardStatus("Loading leaderboard...");
     setEndLeaderboardSubmitStatus("");
-    setEndRunBannerSummary(null, null);
+    setEndTop10Badge(null);
     setEndLeaderboardSubmitDisabled(false);
     if (endLeaderboardRetryBtnEl) endLeaderboardRetryBtnEl.hidden = true;
-    if (endLeaderboardSubmittedAsEl) {
-      endLeaderboardSubmittedAsEl.hidden = true;
-      endLeaderboardSubmittedAsEl.textContent = "";
-    }
     if (endLeaderboardSubmitWrapEl) endLeaderboardSubmitWrapEl.hidden = false;
-    setEndLeaderboardGridVisible(false);
-    renderEndLeaderboardRows(endLeaderboardTopBodyEl, []);
-    renderEndLeaderboardRows(endLeaderboardAroundBodyEl, []);
+    clearEndLeaderboardRows();
     if (endLeaderboardNameInputEl) {
       endLeaderboardNameInputEl.value = "";
       refreshEndLeaderboardSubmitControls();
@@ -1181,28 +1233,17 @@ export function createGame(args: CreateGameArgs) {
       setEndLeaderboardStatus("Leaderboard unavailable (missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)");
       setEndLeaderboardSubmitDisabled(true);
       setEndLeaderboardSubmitStatus("Configure Supabase env vars and restart the dev server.");
-      setEndRunBannerSummary(payload, null);
+      setEndTop10Badge(null);
       if (endLeaderboardRetryBtnEl) endLeaderboardRetryBtnEl.hidden = false;
       if (endLeaderboardSubmitWrapEl) endLeaderboardSubmitWrapEl.hidden = false;
-      setEndLeaderboardGridVisible(false);
-      renderEndLeaderboardRows(endLeaderboardTopBodyEl, []);
-      renderEndLeaderboardRows(endLeaderboardAroundBodyEl, [
-        {
-          rank: 1,
-          display_name: "YOU",
-          depth: payload.depthReached,
-          kills: payload.kills,
-          isYou: true,
-        },
-      ]);
+      renderEndLeaderboardYouOnly(payload, endLeaderboardProjectedRank);
       return;
     }
     setEndLeaderboardSubmitDisabled(false);
-    if (endLeaderboardSubmitWrapEl) endLeaderboardSubmitWrapEl.hidden = !!endLeaderboardSubmittedName;
+    if (endLeaderboardSubmitWrapEl) endLeaderboardSubmitWrapEl.hidden = false;
     if (endLeaderboardRetryBtnEl) endLeaderboardRetryBtnEl.hidden = true;
-    setEndLeaderboardGridVisible(false);
     setEndLeaderboardStatus("Loading leaderboard...");
-    setEndRunBannerSummary(payload, endLeaderboardProjectedRank);
+    endLeaderboardAutoScrolled = false;
     const requestSeq = ++endLeaderboardRequestSeq;
     try {
       const preview = await leaderboardClient.previewRun({
@@ -1212,22 +1253,18 @@ export function createGame(args: CreateGameArgs) {
         window: 6,
       });
       if (requestSeq !== endLeaderboardRequestSeq) return;
-      renderEndLeaderboardRows(endLeaderboardTopBodyEl, preview.top);
-      renderEndLeaderboardRows(endLeaderboardAroundBodyEl, preview.around);
       endLeaderboardProjectedRank = Number.isFinite(preview.rank) ? Math.max(1, Math.floor(preview.rank)) : null;
-      setEndRunBannerSummary(payload, endLeaderboardProjectedRank);
-      setEndLeaderboardGridVisible(true);
-      setEndLeaderboardStatus(
-        endLeaderboardProjectedRank ? `Your projected rank: #${endLeaderboardProjectedRank}` : "Leaderboard ready.",
-      );
+      renderEndLeaderboardMergedRows(payload, preview.top, preview.around, endLeaderboardProjectedRank);
+      setEndTop10Badge(endLeaderboardProjectedRank);
+      setEndLeaderboardStatus("");
       if (endLeaderboardRetryBtnEl) endLeaderboardRetryBtnEl.hidden = true;
     } catch (error) {
       if (requestSeq !== endLeaderboardRequestSeq) return;
       const message = error instanceof Error ? error.message : "Failed to load leaderboard.";
       setEndLeaderboardStatus("Leaderboard unavailable");
       setEndLeaderboardSubmitStatus(message);
-      setEndRunBannerSummary(payload, null);
-      setEndLeaderboardGridVisible(false);
+      setEndTop10Badge(null);
+      renderEndLeaderboardYouOnly(payload, endLeaderboardProjectedRank);
       if (endLeaderboardRetryBtnEl) endLeaderboardRetryBtnEl.hidden = false;
     }
   }
@@ -1263,12 +1300,8 @@ export function createGame(args: CreateGameArgs) {
       const submittedName = sanitizeLeaderboardDisplayName(String(submitted.display_name ?? displayName));
       if (endLeaderboardNameInputEl) endLeaderboardNameInputEl.value = submittedName;
       endLeaderboardSubmittedName = submittedName;
-      setEndLeaderboardSubmitStatus("Submitted!");
-      if (endLeaderboardSubmitWrapEl) endLeaderboardSubmitWrapEl.hidden = true;
-      if (endLeaderboardSubmittedAsEl) {
-        endLeaderboardSubmittedAsEl.hidden = false;
-        endLeaderboardSubmittedAsEl.textContent = `Submitted as ${submittedName}`;
-      }
+      setEndLeaderboardSubmitStatus("");
+      refreshEndLeaderboardSubmitControls();
       await loadEndLeaderboardPreview();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to submit leaderboard entry.";
@@ -1343,9 +1376,12 @@ export function createGame(args: CreateGameArgs) {
     endLeaderboardSubmittedName = null;
     endLeaderboardSubmitting = false;
     endLeaderboardProjectedRank = null;
-    setEndRunBannerSummary(endLeaderboardRunPayload, null);
+    endLeaderboardSubmitForcedDisabled = false;
+    endLeaderboardAutoScrolled = false;
+    setEndTop10Badge(null);
     if (hasEndLeaderboardUi) {
       setEndLeaderboardSubmitStatus("");
+      setEndLeaderboardStatus("Loading leaderboard...");
       setEndLeaderboardSubmitDisabled(false);
       refreshEndLeaderboardSubmitControls();
     }
