@@ -15,6 +15,7 @@ import { RNG } from "../../../../game/util/rng";
 import { zonesSystem } from "../../../../game/systems/sim/zones";
 import { STARTER_RELIC_IDS } from "../../../../game/content/starterRelics";
 import { getEnemyAimWorld } from "../../../../game/combat/aimPoints";
+import { makeRelicTriggeredMeta, makeWeaponHitMeta } from "../../../../game/combat/damageMeta";
 
 function rebuildEnemyHash(world: ReturnType<typeof createWorld>): void {
   clearSpatialHash(world.enemySpatialHash);
@@ -44,6 +45,7 @@ function runSparkProcCount(
       y: wy,
       isCrit: false,
       source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
     });
     relicTriggerSystem(world);
     world.events = [];
@@ -68,6 +70,7 @@ describe("relicTriggerSystem", () => {
         y: 150,
         isCrit: false,
         source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
       } as any
     );
 
@@ -99,6 +102,7 @@ describe("relicTriggerSystem", () => {
       y: enemyFeet.wy,
       isCrit: false,
       source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
     } as any);
 
     relicTriggerSystem(world);
@@ -111,7 +115,7 @@ describe("relicTriggerSystem", () => {
     expect(world.prStartY[0]).toBeLessThan(playerFeet.wy);
   });
 
-  test("loop guard: source OTHER ENEMY_HIT does not spawn bazooka", () => {
+  test("loop guard: proc-marked ENEMY_HIT does not spawn bazooka regardless of source", () => {
     const world = createWorld({ seed: 2, stage: stageDocks });
     world.relics.push("ACT_BAZOOKA_ON_HIT_20");
     world.events.push({
@@ -121,7 +125,8 @@ describe("relicTriggerSystem", () => {
       x: 200,
       y: 150,
       isCrit: false,
-      source: "OTHER",
+      source: "PISTOL",
+      damageMeta: makeRelicTriggeredMeta("TEST_PROC", "ON_HIT", { category: "HIT" }),
     });
 
     relicTriggerSystem(world);
@@ -144,6 +149,7 @@ describe("relicTriggerSystem", () => {
         y: 170,
         isCrit: true,
         source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
       } as any
     );
 
@@ -164,6 +170,7 @@ describe("relicTriggerSystem", () => {
       y: 150,
       isCrit: false,
       source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
     } as any);
 
     relicTriggerSystem(world);
@@ -195,6 +202,7 @@ describe("relicTriggerSystem", () => {
       y: 150,
       isCrit: false,
       source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
     });
 
     relicTriggerSystem(world);
@@ -213,6 +221,7 @@ describe("relicTriggerSystem", () => {
       y: 140,
       isCrit: false,
       source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
     });
 
     relicTriggerSystem(world);
@@ -245,6 +254,7 @@ describe("relicTriggerSystem", () => {
         y: aw.wy,
         isCrit: false,
         source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
       });
       relicTriggerSystem(world);
       world.events = [];
@@ -278,6 +288,7 @@ describe("relicTriggerSystem", () => {
       y: aw.wy,
       isCrit: false,
       source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
     } as any);
 
     relicTriggerSystem(world);
@@ -310,6 +321,7 @@ describe("relicTriggerSystem", () => {
       y: aw.wy,
       isCrit: false,
       source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
     } as any);
 
     relicTriggerSystem(world);
@@ -347,6 +359,7 @@ describe("relicTriggerSystem", () => {
         y: aw.wy,
         isCrit: false,
         source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
       });
       relicTriggerSystem(world);
       world.events = [];
@@ -390,6 +403,7 @@ describe("relicTriggerSystem", () => {
       y: aw.wy,
       isCrit: false,
       source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
     });
     const sparksBefore = world.prjKind.filter((k) => k === PRJ_KIND.SPARK).length;
     relicTriggerSystem(world);
@@ -507,6 +521,7 @@ describe("relicTriggerSystem", () => {
         y: aw.wy,
         isCrit: true,
         source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
       });
     }
 
@@ -519,7 +534,7 @@ describe("relicTriggerSystem", () => {
     }
   });
 
-  test("ACT_NOVA_ON_CRIT_FIRE zone ticks are source OTHER and do not retrigger relic procs", () => {
+  test("ACT_NOVA_ON_CRIT_FIRE zone ticks are proc-marked and do not retrigger relic procs", () => {
     const world = createWorld({ seed: 45, stage: stageDocks });
     world.relics.push("ACT_NOVA_ON_CRIT_FIRE");
     const a = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 22, 22);
@@ -536,6 +551,7 @@ describe("relicTriggerSystem", () => {
       y: aw.wy,
       isCrit: true,
       source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
     });
     relicTriggerSystem(world);
     expect(world.zAlive.length).toBe(1);
@@ -545,6 +561,7 @@ describe("relicTriggerSystem", () => {
     const zoneHitEvents = world.events.filter((ev) => ev.type === "ENEMY_HIT");
     expect(zoneHitEvents.length).toBeGreaterThan(0);
     expect(zoneHitEvents.every((ev) => ev.source === "OTHER")).toBe(true);
+    expect(zoneHitEvents.every((ev) => ev.damageMeta.isProcDamage === true)).toBe(true);
 
     const zonesBefore = world.zAlive.length;
     relicTriggerSystem(world);

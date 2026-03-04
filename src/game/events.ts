@@ -1,5 +1,50 @@
 import type { VendorOffer } from "./events/vendor";
 
+export type DamageCategory = "HIT" | "DOT";
+
+export type EffectMode = "INTRINSIC" | "TRIGGERED";
+
+export type AilmentKind = "IGNITE" | "POISON" | "BLEED";
+
+export type TriggerKey =
+  | "ON_HIT"
+  | "ON_KILL"
+  | "ON_CRIT"
+  | "ON_TICK"
+  | "ON_DODGE"
+  | "ON_MOVE"
+  | "OTHER";
+
+export type DamageCause =
+  | { kind: "WEAPON"; weaponId: string }
+  | { kind: "RELIC"; relicId: string; mode: EffectMode; triggerKey?: TriggerKey }
+  | { kind: "TRIGGER"; mode: EffectMode; triggerId?: string; objectiveId?: string }
+  | { kind: "ENVIRONMENT"; mode: EffectMode; hazardId: string }
+  | { kind: "AILMENT"; ailment: AilmentKind }
+  | { kind: "ENEMY"; enemyTypeId: string; attackId: string; mode: EffectMode }
+  | { kind: "UNKNOWN"; reason?: string };
+
+export type Instigator =
+  | { actor: "PLAYER"; id?: string }
+  | { actor: "ENEMY"; id?: string }
+  | { actor: "SYSTEM"; id?: string };
+
+export type DamageMeta = {
+  category: DamageCategory;
+  cause: DamageCause;
+  instigator: Instigator;
+  isProcDamage?: boolean;
+};
+
+export type LegacyDamageSource =
+  | "KNIFE"
+  | "PISTOL"
+  | "SWORD"
+  | "KNUCKLES"
+  | "SYRINGE"
+  | "BOUNCER"
+  | "OTHER";
+
 export type VfxId =
   | "EXPLOSION"
   | "LIGHTNING_HIT"
@@ -42,14 +87,9 @@ export type GameEvent =
     x: number;
     y: number;
     isCrit: boolean;
-    source:
-        | "KNIFE"
-        | "PISTOL"
-        | "SWORD"
-        | "KNUCKLES"
-        | "SYRINGE"
-        | "BOUNCER"
-        | "OTHER";
+    damageMeta: DamageMeta;
+    /** @deprecated Compatibility-only; gameplay logic must use damageMeta. */
+    source?: LegacyDamageSource;
 }
     | {
     type: "ENEMY_KILLED";
@@ -57,20 +97,16 @@ export type GameEvent =
     x: number;
     y: number;
     spawnTriggerId?: string;
-    source:
-        | "KNIFE"
-        | "PISTOL"
-        | "SWORD"
-        | "KNUCKLES"
-        | "SYRINGE"
-        | "BOUNCER"
-        | "OTHER";
+    damageMeta: DamageMeta;
+    /** @deprecated Compatibility-only; gameplay logic must use damageMeta. */
+    source?: LegacyDamageSource;
 }
     | {
     type: "PLAYER_HIT";
     damage: number;
     x: number;
     y: number;
+    damageMeta: DamageMeta;
 }
     | {
     // Generic sound trigger (preferred)

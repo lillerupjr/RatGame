@@ -13,6 +13,7 @@ import { PRJ_KIND } from "../../factories/projectileFactory";
 import { RNG } from "../../util/rng";
 import { createEnemyAilmentsState } from "../../combat_mods/ailments/enemyAilments";
 import { getEnemyAimWorld } from "../../combat/aimPoints";
+import { makeAilmentDotMeta, makeRelicTriggeredMeta, makeWeaponHitMeta } from "../../combat/damageMeta";
 
 function rebuildEnemyHash(world: ReturnType<typeof createWorld>): void {
   clearSpatialHash(world.enemySpatialHash);
@@ -44,6 +45,7 @@ describe("relicExplodeOnKillSystem", () => {
       x: aw.wx,
       y: aw.wy,
       source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
     });
 
     relicExplodeOnKillSystem(w, 1 / 60);
@@ -75,12 +77,56 @@ describe("relicExplodeOnKillSystem", () => {
       x: aw.wx,
       y: aw.wy,
       source: "OTHER",
+      damageMeta: makeRelicTriggeredMeta("TEST_PROC", "ON_KILL", { category: "HIT" }),
     });
 
     relicExplodeOnKillSystem(w, 1 / 60);
 
     expect(w.zAlive.length).toBe(0);
     expect(w.eHp[b]).toBe(40);
+  });
+
+  test("non-proc ailment kill still triggers on-kill relic effects", () => {
+    const w = createWorld({ seed: 77, stage: stageDocks });
+    w.relics = ["ACT_EXPLODE_ON_KILL"];
+
+    const dead = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 5);
+    const nearby = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 6, 5);
+    w.eHpMax[dead] = 100;
+    w.eAlive[dead] = false;
+    w.eHp[nearby] = 200;
+    rebuildEnemyHash(w);
+
+    const dw = getEnemyWorld(w, dead, KENNEY_TILE_WORLD);
+    w.events.push({
+      type: "ENEMY_KILLED",
+      enemyIndex: dead,
+      x: dw.wx,
+      y: dw.wy,
+      source: "OTHER",
+      damageMeta: makeAilmentDotMeta("POISON"),
+    });
+
+    relicExplodeOnKillSystem(w, 1 / 60);
+    expect(w.zAlive.length).toBe(1);
+  });
+
+  test("proc guard uses damageMeta even when source is not OTHER", () => {
+    const w = createWorld({ seed: 78, stage: stageDocks });
+    w.relics = ["ACT_EXPLODE_ON_KILL"];
+    const dead = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 5);
+    const dw = getEnemyWorld(w, dead, KENNEY_TILE_WORLD);
+    w.events.push({
+      type: "ENEMY_KILLED",
+      enemyIndex: dead,
+      x: dw.wx,
+      y: dw.wy,
+      source: "PISTOL",
+      damageMeta: makeRelicTriggeredMeta("TEST_PROC", "ON_KILL", { category: "HIT" }),
+    });
+
+    relicExplodeOnKillSystem(w, 1 / 60);
+    expect(w.zAlive.length).toBe(0);
   });
 
   test("PASS_DAMAGE_TO_POISON_ALL does not auto-apply poison from ACT_EXPLODE_ON_KILL", () => {
@@ -103,6 +149,7 @@ describe("relicExplodeOnKillSystem", () => {
       x: dw.wx,
       y: dw.wy,
       source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
     });
 
     relicExplodeOnKillSystem(w, 1 / 60);
@@ -129,6 +176,7 @@ describe("relicExplodeOnKillSystem", () => {
       x: aw.wx,
       y: aw.wy,
       source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
     });
 
     relicExplodeOnKillSystem(w, 1 / 60);
@@ -168,6 +216,7 @@ describe("relicExplodeOnKillSystem", () => {
       y: hw.wy,
       isCrit: false,
       source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
     });
 
     relicTriggerSystem(w);
@@ -206,6 +255,7 @@ describe("relicExplodeOnKillSystem", () => {
       y: dw.wy,
       isCrit: false,
       source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
     });
     w.events.push({
       type: "ENEMY_KILLED",
@@ -213,6 +263,7 @@ describe("relicExplodeOnKillSystem", () => {
       x: dw.wx,
       y: dw.wy,
       source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
     });
 
     relicExplodeOnKillSystem(w, 1 / 60);
@@ -262,6 +313,7 @@ describe("relicExplodeOnKillSystem", () => {
         y: dw.wy,
         isCrit: false,
         source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
       });
       w.events.push({
         type: "ENEMY_KILLED",
@@ -269,6 +321,7 @@ describe("relicExplodeOnKillSystem", () => {
         x: dw.wx,
         y: dw.wy,
         source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
       });
     }
 
@@ -292,6 +345,7 @@ describe("relicExplodeOnKillSystem", () => {
       x: dw.wx,
       y: dw.wy,
       source: "OTHER",
+      damageMeta: makeRelicTriggeredMeta("TEST_PROC", "ON_KILL", { category: "HIT" }),
     });
 
     relicExplodeOnKillSystem(w, 1 / 60);
@@ -315,7 +369,14 @@ describe("relicExplodeOnKillSystem", () => {
     rebuildEnemyHash(w);
 
     const dw = getEnemyWorld(w, dead, KENNEY_TILE_WORLD);
-    w.events.push({ type: "ENEMY_KILLED", enemyIndex: dead, x: dw.wx, y: dw.wy, source: "PISTOL" });
+    w.events.push({
+      type: "ENEMY_KILLED",
+      enemyIndex: dead,
+      x: dw.wx,
+      y: dw.wy,
+      source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
+    });
 
     relicExplodeOnKillSystem(w, 1 / 60);
 
@@ -335,7 +396,14 @@ describe("relicExplodeOnKillSystem", () => {
     rebuildEnemyHash(w);
 
     const dw = getEnemyWorld(w, dead, KENNEY_TILE_WORLD);
-    w.events.push({ type: "ENEMY_KILLED", enemyIndex: dead, x: dw.wx, y: dw.wy, source: "PISTOL" });
+    w.events.push({
+      type: "ENEMY_KILLED",
+      enemyIndex: dead,
+      x: dw.wx,
+      y: dw.wy,
+      source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
+    });
 
     relicExplodeOnKillSystem(w, 1 / 60);
 
@@ -357,7 +425,14 @@ describe("relicExplodeOnKillSystem", () => {
       ];
       rebuildEnemyHash(w);
       const dw = getEnemyWorld(w, dead, KENNEY_TILE_WORLD);
-      w.events.push({ type: "ENEMY_KILLED", enemyIndex: dead, x: dw.wx, y: dw.wy, source: "PISTOL" });
+      w.events.push({
+        type: "ENEMY_KILLED",
+        enemyIndex: dead,
+        x: dw.wx,
+        y: dw.wy,
+        source: "PISTOL",
+        damageMeta: makeWeaponHitMeta("PISTOL"),
+      });
       relicExplodeOnKillSystem(w, 1 / 60);
       return [w.eAilments[t1]?.ignite, w.eAilments[t2]?.ignite];
     };
@@ -382,7 +457,14 @@ describe("relicExplodeOnKillSystem", () => {
     w.eAilments[dead]!.ignite = [{ kind: "ignite", dps: 20, tLeft: 3 }];
     rebuildEnemyHash(w);
     const dw = getEnemyWorld(w, dead, KENNEY_TILE_WORLD);
-    w.events.push({ type: "ENEMY_KILLED", enemyIndex: dead, x: dw.wx, y: dw.wy, source: "OTHER" });
+    w.events.push({
+      type: "ENEMY_KILLED",
+      enemyIndex: dead,
+      x: dw.wx,
+      y: dw.wy,
+      source: "OTHER",
+      damageMeta: makeRelicTriggeredMeta("TEST_PROC", "ON_KILL", { category: "HIT" }),
+    });
 
     relicExplodeOnKillSystem(w, 1 / 60);
     expect(w.eAilments[a]?.ignite.length ?? 0).toBe(0);

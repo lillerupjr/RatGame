@@ -11,6 +11,7 @@ import { getEnemyWorld } from "../../coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getCardById } from "../content/cards/cardPool";
 import { resolveDotStats } from "../stats/combatStatsResolver";
+import { makeAilmentDotMeta } from "../../combat/damageMeta";
 
 const EPS = 1e-9;
 
@@ -140,43 +141,68 @@ export function ailmentTickSystem(w: any, dt: number): void {
     const bleedFinal = applyDotMitigation(bleedRaw * relicDotMoreMult, resistPhysical, damageReduction);
     const igniteFinal = applyDotMitigation(igniteDamageRaw * relicDotMoreMult, resistFire, damageReduction);
 
-    const total = poisonFinal + bleedFinal + igniteFinal;
-    if (total > 0) {
-      w.eHp[e] -= total;
-      w.metrics = w.metrics ?? {};
-      w.metrics.dps = w.metrics.dps ?? createDpsMetrics();
-      recordDamage(w.metrics.dps, w.timeSec ?? w.time ?? 0, total);
-      const pos = getEnemyEventPos(w, e);
+    let totalApplied = 0;
+    const pos = getEnemyEventPos(w, e);
+    const components: Array<{
+      ailment: "BLEED" | "IGNITE" | "POISON";
+      damage: number;
+      dmgPhys: number;
+      dmgFire: number;
+      dmgChaos: number;
+    }> = [
+      { ailment: "BLEED", damage: bleedFinal, dmgPhys: bleedFinal, dmgFire: 0, dmgChaos: 0 },
+      { ailment: "IGNITE", damage: igniteFinal, dmgPhys: 0, dmgFire: igniteFinal, dmgChaos: 0 },
+      { ailment: "POISON", damage: poisonFinal, dmgPhys: 0, dmgFire: 0, dmgChaos: poisonFinal },
+    ];
+
+    for (let ci = 0; ci < components.length; ci++) {
+      if (!w.eAlive[e]) break;
+      const comp = components[ci];
+      if (!(comp.damage > 0)) continue;
+
+      const ailmentMeta = makeAilmentDotMeta(comp.ailment);
+      w.eHp[e] -= comp.damage;
+      totalApplied += comp.damage;
+
       emitEvent(w, {
         type: "ENEMY_HIT",
         enemyIndex: e,
-        damage: total,
-        dmgPhys: bleedFinal,
-        dmgFire: igniteFinal,
-        dmgChaos: poisonFinal,
+        damage: comp.damage,
+        dmgPhys: comp.dmgPhys,
+        dmgFire: comp.dmgFire,
+        dmgChaos: comp.dmgChaos,
         x: pos.x,
         y: pos.y,
         isCrit: false,
         source: "OTHER",
+        damageMeta: ailmentMeta,
       });
 
-      if (w.eHp[e] <= 0) {
-        w.eAlive[e] = false;
-        w.kills = (w.kills ?? 0) + 1;
-        if ("roomChallengeActive" in w && "roomChallengeKillsCount" in w) {
-          onEnemyKilledForChallenge(w as World);
-        }
-        w.ePoisonedOnDeath ??= [];
-        w.ePoisonedOnDeath[e] = (st.poison.length > 0);
-        emitEvent(w, {
-          type: "ENEMY_KILLED",
-          enemyIndex: e,
-          x: pos.x,
-          y: pos.y,
-          spawnTriggerId: w.eSpawnTriggerId?.[e],
-          source: "OTHER",
-        });
+      if (w.eHp[e] > 0) continue;
+
+      w.eAlive[e] = false;
+      w.kills = (w.kills ?? 0) + 1;
+      if ("roomChallengeActive" in w && "roomChallengeKillsCount" in w) {
+        onEnemyKilledForChallenge(w as World);
       }
+      w.ePoisonedOnDeath ??= [];
+      w.ePoisonedOnDeath[e] = (st.poison.length > 0);
+      emitEvent(w, {
+        type: "ENEMY_KILLED",
+        enemyIndex: e,
+        x: pos.x,
+        y: pos.y,
+        spawnTriggerId: w.eSpawnTriggerId?.[e],
+        source: "OTHER",
+        damageMeta: ailmentMeta,
+      });
+      break;
+    }
+
+    if (totalApplied > 0) {
+      w.metrics = w.metrics ?? {};
+      w.metrics.dps = w.metrics.dps ?? createDpsMetrics();
+      recordDamage(w.metrics.dps, w.timeSec ?? w.time ?? 0, totalApplied);
     }
   }
 }

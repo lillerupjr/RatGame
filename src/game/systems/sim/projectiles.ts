@@ -7,6 +7,7 @@ import { anchorFromWorld, writeAnchor } from "../../coords/anchor";
 import { getEnemyWorld, getPlayerWorld, getProjectileWorld } from "../../coords/worldViews";
 import { PRJ_KIND } from "../../factories/projectileFactory";
 import { getEnemyAimWorld } from "../../combat/aimPoints";
+import { makeUnknownDamageMeta } from "../../combat/damageMeta";
 
 // --- Movement substepping (prevents "one whole tile per frame") ---
 export let PROJECTILE_MAX_MOVE_FRAC_PER_STEP = 0.5;   // fraction of tile per move substep
@@ -56,6 +57,7 @@ export function projectilesSystem(w: World, dt: number) {
     for (let i = 0; i < w.pAlive.length; i++) {
         if (!w.pAlive[i]) continue;
         syncProjectileZ(i);
+        const projectileDamageMeta = w.prDamageMeta?.[i] ?? makeUnknownDamageMeta("PROJECTILE_DAMAGE_META_MISSING");
         const zLogical = w.prZLogical[i] ?? 0;
         const zVisual = w.prZVisual[i] ?? w.prZ?.[i] ?? 0;
         const zIsInteger = Math.abs(zVisual - Math.round(zVisual)) <= 1e-6;
@@ -171,6 +173,7 @@ export function projectilesSystem(w: World, dt: number) {
                                     y: ew2.wy,
                                     isCrit: false,
                                     source: "OTHER",
+                                    damageMeta: projectileDamageMeta,
                                 });
                                 if (w.eHp[sparkTarget] <= 0) {
                                     w.eAlive[sparkTarget] = false;
@@ -182,6 +185,7 @@ export function projectilesSystem(w: World, dt: number) {
                                         y: ew2.wy,
                                         spawnTriggerId: w.eSpawnTriggerId[sparkTarget],
                                         source: "OTHER",
+                                        damageMeta: projectileDamageMeta,
                                     });
                                 }
                             }
@@ -200,6 +204,7 @@ export function projectilesSystem(w: World, dt: number) {
                                 tickEvery: 0.2,
                                 ttl: Math.max(0.12, w.prExplodeTtl[i] ?? 0.25),
                                 followPlayer: false,
+                                enemyDamageMeta: { ...projectileDamageMeta, category: "HIT" },
                             });
                             w.zTickLeft[z] = 0;
                             emitEvent(w, { type: "VFX", id: "EXPLOSION", x: tx, y: ty, radius: blastR });
@@ -366,6 +371,7 @@ export function projectilesSystem(w: World, dt: number) {
                         tickEvery: 0.2,
                         ttl: Math.max(0.12, w.prExplodeTtl[i] ?? 0.25),
                         followPlayer: false,
+                        enemyDamageMeta: { ...projectileDamageMeta, category: "HIT" },
                     });
 
                     // Apply first tick immediately (instant explosion feel)

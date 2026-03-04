@@ -9,13 +9,13 @@ import { spawnZone, ZONE_KIND } from "../../factories/zoneFactory";
 import { onEnemyKilledForChallenge } from "./roomChallenge";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getUserSettings } from "../../../userSettings";
-import type { RelicTriggerEvent } from "../../events";
+import type { DamageMeta, RelicTriggerEvent } from "../../events";
 import { addIgniteStacksFromSnapshots, createEnemyAilmentsState } from "../../combat_mods/ailments/enemyAilments";
 import { restoreArmor } from "../sim/playerArmor";
-import { relicTriggerMomentumDamageMultiplier } from "../sim/momentum";
 import { aimDir, getEnemyAimWorld, getPlayerAimWorld } from "../../combat/aimPoints";
 import { STARTER_RELIC_IDS } from "../../content/starterRelics";
 import { makeBazookaExhaustFollower } from "../../components/exhaustFollower";
+import { isProcDamage, makeRelicTriggeredMeta } from "../../combat/damageMeta";
 
 const RELIC_MISSILE_EXPLODE_RADIUS = 64;
 const RELIC_ALL_HITS_EXPLODE_RADIUS = 64;
@@ -55,50 +55,6 @@ function eventTypedDamage(ev: EnemyHitEvent): { phys: number; fire: number; chao
   if (typedTotal > 0) return { phys, fire, chaos, total: typedTotal };
   const total = Math.max(0, ev.damage ?? 0);
   return { phys: total, fire: 0, chaos: 0, total };
-}
-
-function applyDamageAsOther(
-  world: World,
-  enemyIndex: number,
-  dmgPhys: number,
-  dmgFire: number,
-  dmgChaos: number,
-): void {
-  const procMult = relicTriggerMomentumDamageMultiplier(world);
-  const scaledPhys = dmgPhys * procMult;
-  const scaledFire = dmgFire * procMult;
-  const scaledChaos = dmgChaos * procMult;
-  const dmgTotal = scaledPhys + scaledFire + scaledChaos;
-  if (!(dmgTotal > 0)) return;
-
-  world.eHp[enemyIndex] -= dmgTotal;
-  const ew = getEnemyWorld(world, enemyIndex, KENNEY_TILE_WORLD);
-  emitEvent(world, {
-    type: "ENEMY_HIT",
-    enemyIndex,
-    damage: dmgTotal,
-    dmgPhys: scaledPhys,
-    dmgFire: scaledFire,
-    dmgChaos: scaledChaos,
-    x: ew.wx,
-    y: ew.wy,
-    isCrit: false,
-    source: "OTHER",
-  });
-
-  if (world.eHp[enemyIndex] <= 0) {
-    world.eAlive[enemyIndex] = false;
-    world.kills++;
-    onEnemyKilledForChallenge(world);
-    emitEvent(world, {
-      type: "ENEMY_KILLED",
-      enemyIndex,
-      x: ew.wx,
-      y: ew.wy,
-      spawnTriggerId: world.eSpawnTriggerId[enemyIndex],
-      source: "OTHER",
-    });
-  }
 }
 
 export function computeEffectiveRelicProcChance(baseChance: number, overclockCount: number): number {
@@ -193,7 +149,12 @@ function processPendingDaggerShots(world: World): void {
   world.relicDaggerQueue = pending;
 }
 
-function applyAllHitsExplosion(world: World, ev: EnemyHitEvent, debugRelicLogs: boolean): void {
+function applyAllHitsExplosion(
+  world: World,
+  ev: EnemyHitEvent,
+  debugRelicLogs: boolean,
+  damageMeta: DamageMeta,
+): void {
   const typed = eventTypedDamage(ev);
   const explosionTotal = typed.total * 0.2;
   if (!(explosionTotal > 0)) return;
@@ -209,6 +170,7 @@ function applyAllHitsExplosion(world: World, ev: EnemyHitEvent, debugRelicLogs: 
     tickEvery: 999,
     ttl: 0.35,
     followPlayer: false,
+    enemyDamageMeta: { ...damageMeta, category: "HIT" },
   });
   emitEvent(world, { type: "VFX", id: "EXPLOSION", x: cx, y: cy, radius: RELIC_ALL_HITS_EXPLODE_RADIUS });
   emitEvent(world, { type: "SFX", id: "EXPLOSION_SYRINGE", vol: 0.55 });
@@ -247,6 +209,7 @@ function applyAllHitsExplosion(world: World, ev: EnemyHitEvent, debugRelicLogs: 
       y: ew.wy,
       isCrit: false,
       source: "OTHER",
+      damageMeta,
     });
 
     if (world.eHp[e] <= 0) {
@@ -260,12 +223,13 @@ function applyAllHitsExplosion(world: World, ev: EnemyHitEvent, debugRelicLogs: 
         y: ew.wy,
         spawnTriggerId: world.eSpawnTriggerId[e],
         source: "OTHER",
+        damageMeta,
       });
     }
   }
 }
 
-function applyExplodeOnKill(world: World, ev: EnemyKilledEvent): void {
+function applyExplodeOnKill(world: World, ev: EnemyKilledEvent, damageMeta: DamageMeta): void {
   const killed = ev.enemyIndex;
   const maxHp = world.eHpMax[killed] ?? 0;
   const dmg = 0.5 * maxHp;
@@ -283,6 +247,7 @@ function applyExplodeOnKill(world: World, ev: EnemyKilledEvent): void {
     tickEvery: 999,
     ttl: 0.35,
     followPlayer: false,
+    enemyDamageMeta: { ...damageMeta, category: "HIT" },
   });
   emitEvent(world, { type: "VFX", id: "EXPLOSION", x: cx, y: cy, radius: RELIC_EXPLODE_ON_KILL_RADIUS });
   emitEvent(world, { type: "SFX", id: "EXPLOSION_SYRINGE", vol: 0.55 });
@@ -308,6 +273,7 @@ function applyExplodeOnKill(world: World, ev: EnemyKilledEvent): void {
       y: ew.wy,
       isCrit: false,
       source: "OTHER",
+      damageMeta,
     });
 
     if (world.eHp[e] <= 0) {
@@ -321,6 +287,7 @@ function applyExplodeOnKill(world: World, ev: EnemyKilledEvent): void {
         y: ew.wy,
         spawnTriggerId: world.eSpawnTriggerId[e],
         source: "OTHER",
+        damageMeta,
       });
     }
   }
@@ -374,7 +341,7 @@ export function relicTriggerSystem(world: World): void {
   for (let i = 0; i < eventCount; i++) {
     const ev = world.events[i];
     if (ev.type !== "ENEMY_HIT") continue;
-    if (ev.source === "OTHER") continue; // loop guard: relic projectiles never retrigger relic procs
+    if (isProcDamage(ev.damageMeta)) continue; // loop guard: proc damage never retriggers relic procs
     const triggerEv: EnemyHitEvent = ev;
     dispatchRelicTriggers(world, triggerEv);
     if (hasTriggerEcho && !triggerEv.isRetrigger) {
@@ -407,7 +374,9 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
   if (!hasExplodeOnKill && !hasBazookaOnHit && !hasAllHitsExplode && !hasLifeOnHit && !hasSparkOnHit && !hasNovaOnCrit && !hasDaggerOnKill && !hasIgniteSpreadOnDeath && !hasStarterStreetReflex && !hasArmorOnHit && !hasArmorOnCrit && !hasArmorOnKill) return;
 
   if (ev.type === "ENEMY_KILLED") {
-    if (hasExplodeOnKill) applyExplodeOnKill(world, ev);
+    const explodeOnKillMeta = makeRelicTriggeredMeta("ACT_EXPLODE_ON_KILL", "ON_KILL", { category: "HIT" });
+    const daggerOnKillMeta = makeRelicTriggeredMeta("ACT_DAGGER_ON_KILL_50", "ON_KILL", { category: "HIT" });
+    if (hasExplodeOnKill) applyExplodeOnKill(world, ev, explodeOnKillMeta);
     if (hasIgniteSpreadOnDeath) applyIgniteSpreadOnDeath(world, ev);
     if (hasArmorOnKill) restoreArmor(world, ARMOR_RESTORE_ON_KILL_AMOUNT);
     if (hasDaggerOnKill) {
@@ -431,6 +400,7 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
             ttl: 6.0,
             critChance: 0,
             noCollide: true,
+            damageMeta: daggerOnKillMeta,
           });
           world.relicDaggerQueue.push({
             fireAt: world.time + RELIC_V2_DAGGER_DELAY_SEC,
@@ -446,6 +416,7 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
 
   const debugRelicLogs = import.meta.env.DEV && !!getUserSettings().debug.triggers;
   if (hasBazookaOnHit) {
+    const bazookaMeta = makeRelicTriggeredMeta("ACT_BAZOOKA_ON_HIT_20", "ON_HIT", { category: "HIT" });
     const typed = eventTypedDamage(ev);
     const explodeDamage = typed.total * 0.2;
     if (explodeDamage > 0) {
@@ -473,6 +444,7 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
         targetX: to.x,
         targetY: to.y,
         explodeRadius: RELIC_MISSILE_EXPLODE_RADIUS,
+        damageMeta: bazookaMeta,
       });
       // Spawn exhaust follower entity.
       const worldAny = world as any;
@@ -489,7 +461,8 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
   }
 
   if (hasAllHitsExplode) {
-    applyAllHitsExplosion(world, ev, debugRelicLogs);
+    const allHitsExplodeMeta = makeRelicTriggeredMeta("ACT_ALL_HITS_EXPLODE_20", "ON_HIT", { category: "HIT" });
+    applyAllHitsExplosion(world, ev, debugRelicLogs, allHitsExplodeMeta);
   }
 
   if (hasLifeOnHit) {
@@ -506,6 +479,7 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
   }
 
   if (hasStarterStreetReflex) {
+    const streetReflexMeta = makeRelicTriggeredMeta(STARTER_RELIC_IDS.STREET_REFLEX, "ON_HIT", { category: "HIT" });
     const didProc = rollProcChance(world, STARTER_STREET_REFLEX_PROC_CHANCE, hasRetryFailedProcs);
     if (didProc) {
       const from = getPlayerAimWorld(world);
@@ -559,6 +533,7 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
             critChance: 0,
             targetX: to.x,
             targetY: to.y,
+            damageMeta: streetReflexMeta,
           });
           emitEvent(world, { type: "SFX", id: "FIRE_OTHER", vol: 0.35 });
         }
@@ -567,6 +542,7 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
   }
 
   if (hasSparkOnHit) {
+    const sparkMeta = makeRelicTriggeredMeta("ACT_SPARK_ON_HIT_20", "ON_HIT", { category: "HIT" });
     const didProc = rollProcChance(world, RELIC_V2_SPARK_PROC_CHANCE, hasRetryFailedProcs);
     if (didProc) {
       let sparkSource = { x: ev.x, y: ev.y };
@@ -608,6 +584,7 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
           targetX: tw.x,
           targetY: tw.y,
           noCollide: true,
+          damageMeta: sparkMeta,
         });
         // Store target enemy index for tracking + damage on arrival
         world.prLastHitEnemy[p] = sparkTarget;
@@ -617,6 +594,7 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
   }
 
   if (hasNovaOnCrit && ev.isCrit) {
+    const novaMeta = makeRelicTriggeredMeta("ACT_NOVA_ON_CRIT_FIRE", "ON_CRIT", { category: "DOT" });
     const didProc = rollProcChance(world, RELIC_V2_NOVA_PROC_CHANCE, hasRetryFailedProcs);
     if (didProc) {
       const typed = eventTypedDamage(ev);
@@ -632,6 +610,7 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
           tickEvery: RELIC_V2_NOVA_TICK_SEC,
           ttl: RELIC_V2_NOVA_DURATION_SEC,
           followPlayer: false,
+          enemyDamageMeta: novaMeta,
         });
       }
     }

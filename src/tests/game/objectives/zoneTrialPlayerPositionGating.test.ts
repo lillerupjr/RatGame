@@ -8,6 +8,7 @@ import { getActiveMap } from "../../../game/map/compile/kenneyMap";
 import { getAuthoredMapDefByMapId } from "../../../game/map/authored/authoredMapRegistry";
 import { activateMapDef } from "../../../game/map/proceduralMapBridge";
 import { getZoneTrialObjectiveState, startZoneTrial, updateZoneTrialObjective } from "../../../game/objectives/zoneObjectiveSystem";
+import { makeUnknownDamageMeta } from "../../../game/combat/damageMeta";
 
 function setPlayerToTile(world: any, tx: number, ty: number): void {
   const center = tileToWorldCenter(tx, ty, KENNEY_TILE_WORLD);
@@ -82,7 +83,14 @@ describe("zone trial player-position gating", () => {
     // Outside all zones: kill should not count.
     setPlayerToTile(world, outsideAbsTx, outsideAbsTy);
     world.events = [
-      { type: "ENEMY_KILLED", enemyIndex: 0, x: 99999, y: 99999, source: "OTHER" as const },
+      {
+        type: "ENEMY_KILLED",
+        enemyIndex: 0,
+        x: 99999,
+        y: 99999,
+        source: "OTHER" as const,
+        damageMeta: makeUnknownDamageMeta("TEST_OUTSIDE_ZONE_KILL"),
+      },
     ];
     updateZoneTrialObjective(world);
     expect(zone.killCount).toBe(0);
@@ -91,7 +99,14 @@ describe("zone trial player-position gating", () => {
     setPlayerToTile(world, zoneAbsTx, zoneAbsTy);
     const far = tileToWorldCenter(outsideAbsTx, outsideAbsTy, KENNEY_TILE_WORLD);
     world.events = [
-      { type: "ENEMY_KILLED", enemyIndex: 1, x: far.wx, y: far.wy, source: "OTHER" as const },
+      {
+        type: "ENEMY_KILLED",
+        enemyIndex: 1,
+        x: far.wx,
+        y: far.wy,
+        source: "OTHER" as const,
+        damageMeta: makeUnknownDamageMeta("TEST_INSIDE_ZONE_KILL"),
+      },
     ];
     updateZoneTrialObjective(world);
     expect(zone.killCount).toBe(1);

@@ -118,4 +118,29 @@ describe("ailmentTickSystem", () => {
     ailmentTickSystem(w, 0.5);
     expect(w.eHp[0]).toBeCloseTo(92.5);
   });
+
+  test("dot kill emits ailment-attributed ENEMY_KILLED metadata", () => {
+    const st = createEnemyAilmentsState();
+    addPoison(st, 20); // dps 10 => 5 damage on first 0.5s tick
+
+    const w: any = {
+      eAlive: [true],
+      eHp: [4],
+      eAilments: [st],
+      eSpawnTriggerId: ["zone_test"],
+      ePoisonedOnDeath: [],
+      kills: 0,
+      events: [],
+      time: 0,
+      timeSec: 0,
+    };
+
+    ailmentTickSystem(w, 0.5);
+
+    const killEv = w.events.find((ev: any) => ev.type === "ENEMY_KILLED");
+    expect(killEv).toBeTruthy();
+    expect(killEv.damageMeta.cause.kind).toBe("AILMENT");
+    expect(killEv.damageMeta.cause.ailment).toBe("POISON");
+    expect(killEv.damageMeta.isProcDamage === true).toBe(false);
+  });
 });

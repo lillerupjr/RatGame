@@ -1,5 +1,6 @@
 import { emitEvent, type World } from "../../../engine/world/world";
 import { spawnZone, ZONE_KIND } from "../../factories/zoneFactory";
+import type { DamageMeta } from "../../events";
 
 export type DelayedExplosion = {
     t: number;
@@ -8,6 +9,7 @@ export type DelayedExplosion = {
     r: number;
     dmg: number;
     ttl: number;
+    damageMeta?: DamageMeta;
 
     // recursion controls
     wave: number;        // 0 = first aftershock wave
@@ -44,6 +46,7 @@ export function tickDelayedExplosions(w: World, dt: number): void {
             tickEvery: 0.2,
             ttl: ex.ttl,
             followPlayer: false,
+            enemyDamageMeta: ex.damageMeta ? { ...ex.damageMeta, category: "HIT" } : undefined,
         });
 
         // Single-hit burst immediately
@@ -82,6 +85,7 @@ export function tickDelayedExplosions(w: World, dt: number): void {
                     r: ex.r,
                     dmg: ex.dmg,
                     ttl: ex.ttl,
+                    damageMeta: ex.damageMeta ? { ...ex.damageMeta, category: "HIT" } : undefined,
 
                     wave: nextWave,
                     maxWaves: ex.maxWaves,

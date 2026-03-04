@@ -2,6 +2,7 @@ import { emitEvent, type World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { onEnemyKilledForChallenge } from "../progression/roomChallenge";
 import { getEnemyWorld } from "../../coords/worldViews";
+import { makeAilmentDotMeta } from "../../combat/damageMeta";
 
 /** Tick poison damage and emit poison hit/kill events. */
 export function poisonSystem(w: World, dt: number) {
@@ -21,6 +22,7 @@ export function poisonSystem(w: World, dt: number) {
         w.eHp[e] -= dmg;
 
         const ew = getEnemyWorld(w, e, KENNEY_TILE_WORLD);
+        const poisonMeta = makeAilmentDotMeta("POISON");
 
         emitEvent(w, {
             type: "ENEMY_HIT",
@@ -33,6 +35,7 @@ export function poisonSystem(w: World, dt: number) {
             y: ew.wy,
             isCrit: false, // Poison damage doesn't crit
             source: "OTHER",
+            damageMeta: poisonMeta,
         });
 
         if (w.eHp[e] <= 0) {
@@ -49,6 +52,7 @@ export function poisonSystem(w: World, dt: number) {
                 y: ew.wy,
                 spawnTriggerId: w.eSpawnTriggerId[e],
                 source: "OTHER",
+                damageMeta: poisonMeta,
             });
 
             // you can still clear poison here if you want

@@ -3,6 +3,7 @@ import type { World } from "../../engine/world/world";
 import { gridToWorld } from "../coords/grid";
 import { anchorFromWorld } from "../coords/anchor";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
+import type { DamageMeta } from "../events";
 
 const GLOBAL_PROJECTILE_SPEED_MULT = 1;
 
@@ -89,6 +90,9 @@ export type SpawnProjectileArgs = {
 
     // NEW (Height-based): explicit logical layer for this projectile
     zLogical?: number;
+
+    // Damage attribution metadata propagated through combat resolution.
+    damageMeta?: DamageMeta;
 };
 
 export type SpawnProjectileGridArgs = Omit<SpawnProjectileArgs, "x" | "y" | "dirX" | "dirY"> & {
@@ -209,6 +213,7 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     w.prMeleeRange.push(a.meleeRange ?? a.radius);
     w.prDirX.push(dx);
     w.prDirY.push(dy);
+    w.prDamageMeta.push(a.damageMeta);
 
     // orbital arrays (must stay index-aligned)
     w.prIsOrbital.push(isOrbital);

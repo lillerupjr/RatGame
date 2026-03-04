@@ -31,6 +31,12 @@ import {
 } from "../../coords/worldViews";
 import { getEnemyAimWorld } from "../../combat/aimPoints";
 import { STARTER_RELIC_IDS } from "../../content/starterRelics";
+import {
+  isProcDamage,
+  makeEnemyHitMeta,
+  makeUnknownDamageMeta,
+  makeWeaponHitMeta,
+} from "../../combat/damageMeta";
 const DMG_COLOR_PHYSICAL = "#ffffff";
 const DMG_COLOR_FIRE = "#ff9f3a";
 const DMG_COLOR_CHAOS = "#b57bff";
@@ -89,7 +95,7 @@ function spawnEnemyDamageTextSplit(w: World, ev: EnemyHitEvent): void {
   const phys = Number.isFinite(ev.dmgPhys) ? Math.max(0, ev.dmgPhys as number) : 0;
   const fire = Number.isFinite(ev.dmgFire) ? Math.max(0, ev.dmgFire as number) : 0;
   const chaos = Number.isFinite(ev.dmgChaos) ? Math.max(0, ev.dmgChaos as number) : 0;
-  const isPoisonLike = ev.source === "OTHER";
+  const isPoisonLike = ev.damageMeta.cause.kind === "AILMENT" && ev.damageMeta.cause.ailment === "POISON";
 
   const entries: Array<{ value: number; color: string }> = [];
   const physRounded = Math.round(phys);
@@ -323,6 +329,12 @@ export function collisionsSystem(w: World, dt: number) {
       hitSomething = true;
 
       const source = registry.projectileSourceFromKind(w.prjKind[p]);
+      const projectileDamageMeta =
+        w.prDamageMeta?.[p]
+        ?? (source !== "OTHER"
+          ? makeWeaponHitMeta(source, { category: "HIT", instigatorId: "player" })
+          : makeUnknownDamageMeta("PROJECTILE_DAMAGE_META_MISSING"));
+      const projectileIsProc = isProcDamage(projectileDamageMeta);
       const physBefore = w.prDmgPhys[p] ?? 0;
       const fireBefore = w.prDmgFire[p] ?? 0;
       const chaosBefore = w.prDmgChaos[p] ?? 0;
@@ -379,7 +391,7 @@ export function collisionsSystem(w: World, dt: number) {
         bLeft < 0
         && hasStarterContaminatedRounds
         && enemyPoisoned
-        && source !== "OTHER";
+        && !projectileIsProc;
       const isPiercingHit = bLeft < 0 && (w.prPierce[p] > 0 || contaminatedPierceHit);
       if (isPiercingHit && hasStarterContaminatedRounds && enemyPoisoned) {
         finalPhysDealt *= 1.2;
@@ -387,13 +399,13 @@ export function collisionsSystem(w: World, dt: number) {
         finalChaosDealt *= 1.2;
       }
 
-      if (hasStarterThermalStarter && enemyBurning && source !== "OTHER") {
+      if (hasStarterThermalStarter && enemyBurning && !projectileIsProc) {
         finalPhysDealt *= 1.15;
         finalFireDealt *= 1.15;
         finalChaosDealt *= 1.15;
       }
 
-      if (hasStarterPointBlankCarnage && source !== "OTHER") {
+      if (hasStarterPointBlankCarnage && !projectileIsProc) {
         const playerNow = getPlayerWorld(w, KENNEY_TILE_WORLD);
         const distToPlayer = Math.hypot(enemyAim.x - playerNow.wx, enemyAim.y - playerNow.wy);
         const nearFrac = Math.max(0, 1 - Math.min(1, distToPlayer / STARTER_POINT_BLANK_MAX_RANGE));
@@ -403,7 +415,7 @@ export function collisionsSystem(w: World, dt: number) {
         finalChaosDealt *= pointBlankMult;
       }
 
-      if (source === "OTHER") {
+      if (projectileIsProc) {
         const procMult = relicTriggerMomentumDamageMultiplier(w);
         if (procMult !== 1) {
           finalPhysDealt *= procMult;
@@ -473,6 +485,7 @@ export function collisionsSystem(w: World, dt: number) {
         isCrit,
         critMult: critMulti,
         source,
+        damageMeta: projectileDamageMeta,
       });
 
       // Bounce / pierce handling
@@ -532,7 +545,7 @@ export function collisionsSystem(w: World, dt: number) {
         }
       }
 
-      if (hasStarterPointBlankCarnage && source !== "OTHER") {
+      if (hasStarterPointBlankCarnage && !projectileIsProc) {
         const enemyFeet = getEnemyWorld(w, e, KENNEY_TILE_WORLD);
         const playerNow = getPlayerWorld(w, KENNEY_TILE_WORLD);
         const distToPlayerFeet = Math.hypot(enemyFeet.wx - playerNow.wx, enemyFeet.wy - playerNow.wy);
@@ -569,6 +582,7 @@ export function collisionsSystem(w: World, dt: number) {
           tickEvery: 0.2,      // doesn't matter; we force the first tick immediately
           ttl: exTtl,
           followPlayer: false,
+          enemyDamageMeta: { ...projectileDamageMeta, category: "HIT" },
         });
 
 // Force immediate tick this frame so it *feels* like an explosion
@@ -606,6 +620,7 @@ export function collisionsSystem(w: World, dt: number) {
               r: exR,
               dmg: exDmg,
               ttl: exTtl,
+              damageMeta: { ...projectileDamageMeta, category: "HIT" },
 
               wave: 0,
               maxWaves,
@@ -625,7 +640,7 @@ export function collisionsSystem(w: World, dt: number) {
       if (w.eHp[e] <= 0) {
         w.eAlive[e] = false;
         w.kills++;
-        if (source !== "OTHER") {
+        if (!projectileIsProc) {
           addMomentumOnKill(w, w.timeSec ?? w.time ?? 0);
         }
         onEnemyKilledForChallenge(w);
@@ -639,7 +654,8 @@ export function collisionsSystem(w: World, dt: number) {
           x: enemyAim.x,
           y: enemyAim.y,
           spawnTriggerId: w.eSpawnTriggerId[e],
-          source: registry.projectileSourceFromKind(w.prjKind[p]),
+          source,
+          damageMeta: projectileDamageMeta,
         });
       }
 
@@ -682,12 +698,14 @@ export function collisionsSystem(w: World, dt: number) {
       if (lifeDamage > 0) {
         breakMomentumOnLifeDamage(w, w.timeSec ?? w.time ?? 0);
       }
+      const projectileDamageMeta = w.prDamageMeta?.[p] ?? makeUnknownDamageMeta("PLAYER_PROJECTILE_HIT_UNATTRIBUTED");
 
       emitEvent(w, {
         type: "PLAYER_HIT",
         damage: lifeDamage,
         x: px,
         y: py,
+        damageMeta: projectileDamageMeta,
       });
 
       // usually enemy bullets should be consumed on hit
@@ -723,12 +741,18 @@ export function collisionsSystem(w: World, dt: number) {
       if (lifeDamage > 0) {
         breakMomentumOnLifeDamage(w, w.timeSec ?? w.time ?? 0);
       }
+      const enemyContactMeta = makeEnemyHitMeta(
+        String(w.eType[e] ?? "UNKNOWN"),
+        "CONTACT_BODY",
+        { category: "HIT", mode: "INTRINSIC", instigatorId: String(e) },
+      );
 
       emitEvent(w, {
         type: "PLAYER_HIT",
         damage: lifeDamage,
         x: px,
         y: py,
+        damageMeta: enemyContactMeta,
       });
 
       // Push-out so the player isn't stuck inside the enemy.

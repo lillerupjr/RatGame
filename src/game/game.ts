@@ -1042,6 +1042,8 @@ export function createGame(args: CreateGameArgs) {
     w.zTtl = [];
     w.zFollowPlayer = [];
     w.zDamagePlayer = [];
+    w.zEnemyDamageMeta = [];
+    w.zPlayerDamageMeta = [];
 
     // if your World has zDamagePlayer, keep this reset (safe even if unused)
     // @ts-ignore
@@ -1099,6 +1101,7 @@ export function createGame(args: CreateGameArgs) {
     w.prDirX = [];
     w.prDirY = [];
     w.prTtl = [];
+    w.prDamageMeta = [];
 
     w.prStartX = [];
     w.prStartY = [];

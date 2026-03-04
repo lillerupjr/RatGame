@@ -3,6 +3,7 @@ import type { World } from "../../engine/world/world";
 import { gridToWorld } from "../coords/grid";
 import { anchorFromWorld } from "../coords/anchor";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
+import type { DamageMeta } from "../events";
 
 export const ZONE_KIND = {
     AURA: 1,
@@ -28,6 +29,10 @@ export type SpawnZoneArgs = {
 
     // NEW: optional damage per tick to player (used by boss hazards)
     damagePlayer?: number;
+
+    // Optional attribution metadata for enemy/player damage events emitted by this zone.
+    enemyDamageMeta?: DamageMeta;
+    playerDamageMeta?: DamageMeta;
 };
 
 export type SpawnZoneGridArgs = Omit<SpawnZoneArgs, "x" | "y"> & {
@@ -60,6 +65,8 @@ export function spawnZone(w: World, a: SpawnZoneArgs) {
 
     // NEW
     w.zDamagePlayer.push(Math.max(0, a.damagePlayer ?? 0));
+    w.zEnemyDamageMeta.push(a.enemyDamageMeta);
+    w.zPlayerDamageMeta.push(a.playerDamageMeta);
 
     return i;
 }

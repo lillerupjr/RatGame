@@ -5,6 +5,7 @@ import { applyPlayerIncomingDamage, restoreArmor } from "../../../../game/system
 import { relicTriggerSystem } from "../../../../game/systems/progression/relicTriggerSystem";
 import { relicExplodeOnKillSystem } from "../../../../game/systems/sim/relicExplodeOnKill";
 import { applyRelic } from "../../../../game/systems/progression/relics";
+import { makeWeaponHitMeta } from "../../../../game/combat/damageMeta";
 
 describe("armor core", () => {
   test("damage is absorbed by armor before life", () => {
@@ -62,6 +63,7 @@ describe("armor core", () => {
       y: 0,
       isCrit: false,
       source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
     });
     relicTriggerSystem(world);
     expect(world.currentArmor).toBe(1);
@@ -73,6 +75,7 @@ describe("armor core", () => {
         x: 0,
         y: 0,
         source: "PISTOL",
+        damageMeta: makeWeaponHitMeta("PISTOL"),
       },
     ];
     relicExplodeOnKillSystem(world, 0.016);
@@ -102,6 +105,7 @@ describe("armor core", () => {
       y: 0,
       isCrit: true,
       source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
     });
     relicTriggerSystem(world);
     expect(world.currentArmor).toBe(5);
@@ -115,6 +119,7 @@ describe("armor core", () => {
         y: 0,
         isCrit: true,
         source: "PISTOL",
+        damageMeta: makeWeaponHitMeta("PISTOL"),
       },
     ];
     relicTriggerSystem(world);

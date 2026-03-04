@@ -2,7 +2,7 @@
 import { RNG } from "../../game/util/rng";
 import { createSpatialHash, type SpatialHash } from "../../game/util/spatialHash";
 import type { StageDef } from "../../game/content/stages";
-import type { GameEvent, PendingRelicDaggerShot, PendingRelicRetrigger } from "../../game/events";
+import type { DamageMeta, GameEvent, PendingRelicDaggerShot, PendingRelicRetrigger } from "../../game/events";
 import { KENNEY_TILE_WORLD } from "../render/kenneyTiles";
 import { getSpawnWorld } from "../../game/map/compile/kenneyMap";
 import { recomputeDerivedStats } from "../../game/stats/derivedStats";
@@ -407,6 +407,8 @@ export type World = {
   zTtl: number[];
   zFollowPlayer: boolean[];
   zDamagePlayer: number[];
+  zEnemyDamageMeta: (DamageMeta | undefined)[];
+  zPlayerDamageMeta: (DamageMeta | undefined)[];
 
   // -------------------------
   // Projectiles
@@ -448,6 +450,7 @@ export type World = {
   prDirY: number[];
   prTtl: number[];
   prBouncesLeft: number[];
+  prDamageMeta: (DamageMeta | undefined)[];
 
   // Bounces off camera bounds
   prWallBounce: boolean[];
@@ -853,6 +856,8 @@ export function createWorld(args: CreateWorldArgs): World {
     zTtl: [],
     zFollowPlayer: [],
     zDamagePlayer: [],
+    zEnemyDamageMeta: [],
+    zPlayerDamageMeta: [],
 
     // Projectiles
     pAlive: [],
@@ -887,6 +892,7 @@ export function createWorld(args: CreateWorldArgs): World {
     prDirY: [],
     prTtl: [],
     prBouncesLeft: [],
+    prDamageMeta: [],
     prWallBounce: [],
     prNoCollide: [],
 
@@ -1067,5 +1073,13 @@ export function clearEvents(w: World) {
 
 /** Enqueue a game event for downstream systems. */
 export function emitEvent(w: World, ev: GameEvent) {
+  if (import.meta.env.DEV) {
+    if (ev.type === "ENEMY_HIT" || ev.type === "ENEMY_KILLED" || ev.type === "PLAYER_HIT") {
+      const meta = (ev as any).damageMeta as DamageMeta | undefined;
+      if (!meta || !meta.category || !meta.cause || !meta.instigator) {
+        console.warn("[DamageMeta] Missing/invalid damageMeta on event", ev);
+      }
+    }
+  }
   w.events.push(ev);
 }

@@ -8,6 +8,7 @@ import { dropsSystem } from "../../../../game/systems/progression/drops";
 import { PICKUP_KIND, spawnGold } from "../../../../game/systems/progression/pickups";
 import { getPlayerWorld } from "../../../../game/coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../../engine/render/kenneyTiles";
+import { makeWeaponHitMeta } from "../../../../game/combat/damageMeta";
 
 describe("dropsSystem", () => {
   test("enemy kill spawns gold pickup value scaled by enemy max hp", () => {
@@ -16,7 +17,14 @@ describe("dropsSystem", () => {
 
     const hpMax = 100;
     w.eHpMax[e] = hpMax;
-    w.events.push({ type: "ENEMY_KILLED", enemyIndex: e, x: 0, y: 0, source: "PISTOL" } as any);
+    w.events.push({
+      type: "ENEMY_KILLED",
+      enemyIndex: e,
+      x: 0,
+      y: 0,
+      source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL", { category: "HIT", instigatorId: "player" }),
+    });
 
     dropsSystem(w, 1 / 60);
 

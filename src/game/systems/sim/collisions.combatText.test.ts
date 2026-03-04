@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import { createWorld } from "../../../engine/world/world";
 import { stageDocks } from "../../content/stages";
 import { processCombatTextFromEvents } from "./collisions";
+import { makeAilmentDotMeta, makeEnemyHitMeta, makeWeaponHitMeta } from "../../combat/damageMeta";
 
 const DMG_COLOR_PHYSICAL = "#ffffff";
 const DMG_COLOR_FIRE = "#ff9f3a";
@@ -23,6 +24,7 @@ describe("processCombatTextFromEvents typed split", () => {
       y: 120,
       isCrit: false,
       source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
     } as any);
 
     processCombatTextFromEvents(w, 0);
@@ -46,6 +48,7 @@ describe("processCombatTextFromEvents typed split", () => {
       y: 75,
       isCrit: false,
       source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
     } as any);
 
     processCombatTextFromEvents(w, 0);
@@ -70,6 +73,7 @@ describe("processCombatTextFromEvents typed split", () => {
       y: 40,
       isCrit: false,
       source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
     } as any);
 
     processCombatTextFromEvents(w, 0);
@@ -92,6 +96,7 @@ describe("processCombatTextFromEvents typed split", () => {
       isCrit: true,
       critMult: 2,
       source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
     } as any);
 
     processCombatTextFromEvents(w, 0);
@@ -115,6 +120,7 @@ describe("processCombatTextFromEvents typed split", () => {
       y: 10,
       isCrit: false,
       source: "OTHER",
+      damageMeta: makeAilmentDotMeta("POISON"),
     } as any);
 
     processCombatTextFromEvents(w, 0);
@@ -124,7 +130,13 @@ describe("processCombatTextFromEvents typed split", () => {
 
   test("PLAYER_HIT remains one red text entry", () => {
     const w = createWorld({ seed: 6, stage: stageDocks });
-    w.events.push({ type: "PLAYER_HIT", damage: 7, x: 11, y: 22 } as any);
+    w.events.push({
+      type: "PLAYER_HIT",
+      damage: 7,
+      x: 11,
+      y: 22,
+      damageMeta: makeEnemyHitMeta("TEST_ENEMY", "TEST_ATTACK"),
+    } as any);
 
     processCombatTextFromEvents(w, 0);
 

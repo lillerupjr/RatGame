@@ -11,6 +11,7 @@ import { applyPlayerIncomingDamage } from "./playerArmor";
 import { breakMomentumOnLifeDamage } from "./momentum";
 import { ZONE_KIND } from "../../factories/zoneFactory";
 import { type FireZoneVfx, spawnFireZoneVfx, updateFireZoneVfx } from "../../vfx/fireZoneVfx";
+import { makeEnvironmentDamageMeta } from "../../combat/damageMeta";
 
 /** Update zones, apply periodic damage, and process delayed explosions. */
 export function zonesSystem(w: World, dt: number) {
@@ -120,7 +121,10 @@ export function zonesSystem(w: World, dt: number) {
                     if (lifeDamage > 0) {
                         breakMomentumOnLifeDamage(w, w.timeSec ?? w.time ?? 0);
                     }
-                    emitEvent(w, { type: "PLAYER_HIT", damage: lifeDamage, x: px, y: py });
+                    const playerDamageMeta =
+                      w.zPlayerDamageMeta?.[z]
+                      ?? makeEnvironmentDamageMeta(`ZONE_PLAYER_${w.zKind[z]}`, { category: "DOT", mode: "INTRINSIC" });
+                    emitEvent(w, { type: "PLAYER_HIT", damage: lifeDamage, x: px, y: py, damageMeta: playerDamageMeta });
                 }
             }
         }
@@ -149,6 +153,9 @@ export function zonesSystem(w: World, dt: number) {
             if (!isEnemyInCircle(w, e, zx, zy, zr)) continue;
 
             w.eHp[e] -= dmg;
+            const enemyDamageMeta =
+              w.zEnemyDamageMeta?.[z]
+              ?? makeEnvironmentDamageMeta(`ZONE_ENEMY_${w.zKind[z]}`, { category: "DOT", mode: "INTRINSIC" });
 
             const ew = getEnemyWorld(w, e, T);
             emitEvent(w, {
@@ -162,6 +169,7 @@ export function zonesSystem(w: World, dt: number) {
                 y: ew.wy,
                 isCrit: false,
                 source: "OTHER",
+                damageMeta: enemyDamageMeta,
             });
 
             if (w.eHp[e] <= 0) {
@@ -176,6 +184,7 @@ export function zonesSystem(w: World, dt: number) {
                     y: ew.wy,
                     spawnTriggerId: w.eSpawnTriggerId[e],
                     source: "OTHER",
+                    damageMeta: enemyDamageMeta,
                 });
             }
         }

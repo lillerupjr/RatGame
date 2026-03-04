@@ -6,6 +6,7 @@ import {
 import { OBJECTIVE_TRIGGER_IDS } from "../../../../game/systems/progression/objectiveSpec";
 import { maybeStartFloorEndCountdown } from "../../../../game/systems/progression/floorEndCountdown";
 import { ENEMY_TYPE } from "../../../../game/factories/enemyFactory";
+import { makeUnknownDamageMeta } from "../../../../game/combat/damageMeta";
 
 function makeBossTripleWorld(): any {
   return {
@@ -58,6 +59,7 @@ describe("bossTripleObjectiveSync", () => {
       y: 0,
       spawnTriggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}3`,
       source: "OTHER",
+      damageMeta: makeUnknownDamageMeta("TEST_BOSS_ZONE_KILL"),
     });
 
     markBossTripleClearsFromSignalsAndEvents(world);
@@ -68,7 +70,14 @@ describe("bossTripleObjectiveSync", () => {
     const world = makeBossTripleWorld();
     world.eType[7] = ENEMY_TYPE.BOSS;
     world.eSpawnTriggerId[7] = `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}3`;
-    world.events.push({ type: "ENEMY_KILLED", enemyIndex: 7, x: 0, y: 0, source: "OTHER" });
+    world.events.push({
+      type: "ENEMY_KILLED",
+      enemyIndex: 7,
+      x: 0,
+      y: 0,
+      source: "OTHER",
+      damageMeta: makeUnknownDamageMeta("TEST_BOSS_ZONE_FALLBACK"),
+    });
 
     markBossTripleClearsFromSignalsAndEvents(world);
     expect(world.bossTriple.completed).toEqual([false, false, true]);
@@ -78,7 +87,14 @@ describe("bossTripleObjectiveSync", () => {
     const world = makeBossTripleWorld();
     world.eType[7] = ENEMY_TYPE.CHASER;
     world.eSpawnTriggerId[7] = `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}3`;
-    world.events.push({ type: "ENEMY_KILLED", enemyIndex: 7, x: 0, y: 0, source: "OTHER" });
+    world.events.push({
+      type: "ENEMY_KILLED",
+      enemyIndex: 7,
+      x: 0,
+      y: 0,
+      source: "OTHER",
+      damageMeta: makeUnknownDamageMeta("TEST_NON_BOSS_KILL"),
+    });
 
     markBossTripleClearsFromSignalsAndEvents(world);
     expect(world.bossTriple.completed).toEqual([false, false, false]);
@@ -104,9 +120,33 @@ describe("bossTripleObjectiveSync", () => {
     world.floorEndCountdownSec = 0;
     world.floorEndCountdownStartedKey = null;
     world.events = [
-      { type: "ENEMY_KILLED", enemyIndex: 0, x: 0, y: 0, spawnTriggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}1`, source: "OTHER" },
-      { type: "ENEMY_KILLED", enemyIndex: 1, x: 0, y: 0, spawnTriggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}2`, source: "OTHER" },
-      { type: "ENEMY_KILLED", enemyIndex: 2, x: 0, y: 0, spawnTriggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}3`, source: "OTHER" },
+      {
+        type: "ENEMY_KILLED",
+        enemyIndex: 0,
+        x: 0,
+        y: 0,
+        spawnTriggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}1`,
+        source: "OTHER",
+        damageMeta: makeUnknownDamageMeta("TEST_BOSS_TRIPLE_KILL_1"),
+      },
+      {
+        type: "ENEMY_KILLED",
+        enemyIndex: 1,
+        x: 0,
+        y: 0,
+        spawnTriggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}2`,
+        source: "OTHER",
+        damageMeta: makeUnknownDamageMeta("TEST_BOSS_TRIPLE_KILL_2"),
+      },
+      {
+        type: "ENEMY_KILLED",
+        enemyIndex: 2,
+        x: 0,
+        y: 0,
+        spawnTriggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}3`,
+        source: "OTHER",
+        damageMeta: makeUnknownDamageMeta("TEST_BOSS_TRIPLE_KILL_3"),
+      },
     ];
 
     markBossTripleClearsFromSignalsAndEvents(world);

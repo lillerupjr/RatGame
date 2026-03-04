@@ -427,4 +427,31 @@ describe("combatSystem pistol integration", () => {
     const fireSfxEvents = w.events.filter((ev) => ev.type === "SFX" && (ev as any).id === "FIRE_OTHER");
     expect(fireSfxEvents.length).toBe(2);
   });
+
+  test("enemy contact emits PLAYER_HIT with ENEMY damage metadata", () => {
+    const w = createWorld({ seed: 8080, stage: stageDocks });
+    w.events.length = 0;
+    setPlayerWorld(w, 0, 0);
+
+    const enemy = spawnBasicEnemy(w, 0, 0, 100);
+    w.eDamage[enemy] = 12;
+
+    collisionsSystem(w, 1 / 60);
+
+    const playerHit = w.events.find(
+      (ev): ev is Extract<(typeof w.events)[number], { type: "PLAYER_HIT" }> => ev.type === "PLAYER_HIT",
+    );
+    expect(playerHit).toBeTruthy();
+    if (!playerHit) return;
+
+    expect(playerHit.damageMeta.category).toBe("HIT");
+    expect(playerHit.damageMeta.cause.kind).toBe("ENEMY");
+    if (playerHit.damageMeta.cause.kind === "ENEMY") {
+      expect(playerHit.damageMeta.cause.attackId).toBe("CONTACT_BODY");
+      expect(playerHit.damageMeta.cause.mode).toBe("INTRINSIC");
+    }
+    expect(playerHit.damageMeta.instigator.actor).toBe("ENEMY");
+    expect(playerHit.damageMeta.instigator.id).toBe(String(enemy));
+    expect(playerHit.damageMeta.isProcDamage === true).toBe(false);
+  });
 });

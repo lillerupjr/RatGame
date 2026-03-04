@@ -3,6 +3,7 @@ import { ENEMY_TYPE } from "../../../game/factories/enemyFactory";
 import { rewardRunEventProducerSystem } from "../../../game/systems/progression/rewardRunEventProducerSystem";
 import { OBJECTIVE_TRIGGER_IDS } from "../../../game/systems/progression/objectiveSpec";
 import { createRewardPipelineWorld } from "./rewardPipeline.testUtils";
+import { makeUnknownDamageMeta } from "../../../game/combat/damageMeta";
 
 describe("rewardRunEventProducerSystem", () => {
   test("emits boss milestone from ENEMY_KILLED boss with boss-zone spawn trigger", () => {
@@ -14,6 +15,7 @@ describe("rewardRunEventProducerSystem", () => {
       y: 0,
       source: "OTHER",
       spawnTriggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}1`,
+      damageMeta: makeUnknownDamageMeta("TEST_REWARD_BOSS_KILL"),
     });
     world.eType[3] = ENEMY_TYPE.BOSS;
 
@@ -37,6 +39,7 @@ describe("rewardRunEventProducerSystem", () => {
       y: 0,
       source: "OTHER",
       spawnTriggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}1`,
+      damageMeta: makeUnknownDamageMeta("TEST_REWARD_NON_BOSS_KILL"),
     });
     world.eType[4] = ENEMY_TYPE.CHASER;
 
@@ -56,6 +59,7 @@ describe("rewardRunEventProducerSystem", () => {
         y: 0,
         source: "OTHER",
         spawnTriggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}2`,
+        damageMeta: makeUnknownDamageMeta("TEST_REWARD_BOSS_KILL_1"),
       },
       {
         type: "ENEMY_KILLED",
@@ -64,6 +68,7 @@ describe("rewardRunEventProducerSystem", () => {
         y: 0,
         source: "OTHER",
         spawnTriggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}3`,
+        damageMeta: makeUnknownDamageMeta("TEST_REWARD_BOSS_KILL_2"),
       },
     );
 

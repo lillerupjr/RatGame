@@ -2,6 +2,7 @@ import type { World } from "../../../engine/world/world";
 import { normalizeWorldRelics } from "../progression/relics";
 import type { RelicTriggerEvent } from "../../events";
 import { dispatchRelicTriggers, RELIC_RETRIGGER_DELAY_SEC } from "../progression/relicTriggerSystem";
+import { isProcDamage } from "../../combat/damageMeta";
 
 function findKillingBlowDamage(events: World["events"], killEventIndex: number, enemyIndex: number): number {
   for (let i = killEventIndex - 1; i >= 0; i--) {
@@ -28,7 +29,7 @@ export function relicExplodeOnKillSystem(w: World, _dt: number): void {
   for (let ei = 0; ei < eventCount; ei++) {
     const ev = w.events[ei];
     if (ev.type !== "ENEMY_KILLED") continue;
-    if (ev.source === "OTHER") continue; // loop guard
+    if (isProcDamage(ev.damageMeta)) continue; // loop guard
     const triggerEv: RelicTriggerEvent = {
       ...ev,
       killDamage: findKillingBlowDamage(w.events, ei, ev.enemyIndex),

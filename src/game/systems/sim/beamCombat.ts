@@ -9,6 +9,8 @@ import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
 import { onEnemyKilledForChallenge } from "../progression/roomChallenge";
 import { addMomentumOnKill, relicTriggerMomentumDamageMultiplier } from "./momentum";
 import { raycast3D } from "./collision3D";
+import type { DamageMeta } from "../../events";
+import { inferLegacySourceFromMeta, isProcDamage, makeUnknownDamageMeta, makeWeaponHitMeta } from "../../combat/damageMeta";
 
 export type BeamDamageConfig = {
   dirX: number;
@@ -29,6 +31,7 @@ export type BeamDamageConfig = {
   critRolls: 1 | 2;
   dotScalars: DotStatsScalars;
   allDamageContributesToPoison: boolean;
+  damageMeta?: DamageMeta;
 };
 
 type BeamTarget = {
@@ -113,6 +116,12 @@ export function updatePlayerBeamCombat(w: World, dt: number, cfg: BeamDamageConf
   if (w.playerBeamTickAccumulator < interval) return;
 
   const source = registry.projectileSourceFromKind(cfg.projectileKind);
+  const damageMeta =
+    cfg.damageMeta
+    ?? (source !== "OTHER"
+      ? makeWeaponHitMeta(source, { category: "HIT", instigatorId: "player" })
+      : makeUnknownDamageMeta("BEAM_DAMAGE_META_MISSING"));
+  const legacySource = inferLegacySourceFromMeta(damageMeta);
   const targets = collectBeamTargets(
     w,
     originX,
@@ -150,7 +159,7 @@ export function updatePlayerBeamCombat(w: World, dt: number, cfg: BeamDamageConf
       let finalPhys = resolved.physical;
       let finalFire = resolved.fire;
       let finalChaos = resolved.chaos;
-      if (source === "OTHER") {
+      if (isProcDamage(damageMeta)) {
         const procMult = relicTriggerMomentumDamageMultiplier(w);
         if (procMult !== 1) {
           finalPhys *= procMult;
@@ -208,14 +217,15 @@ export function updatePlayerBeamCombat(w: World, dt: number, cfg: BeamDamageConf
         y: t.wy,
         isCrit: resolved.isCrit,
         critMult: cfg.critMulti,
-        source,
+        source: legacySource,
+        damageMeta,
       });
 
       if (w.eHp[t.enemyIndex] > 0) continue;
 
       w.eAlive[t.enemyIndex] = false;
       w.kills++;
-      if (source !== "OTHER") {
+      if (!isProcDamage(damageMeta)) {
         addMomentumOnKill(w, w.timeSec ?? w.time ?? 0);
       }
       onEnemyKilledForChallenge(w);
@@ -226,7 +236,8 @@ export function updatePlayerBeamCombat(w: World, dt: number, cfg: BeamDamageConf
         x: t.wx,
         y: t.wy,
         spawnTriggerId: w.eSpawnTriggerId[t.enemyIndex],
-        source,
+        source: legacySource,
+        damageMeta,
       });
     }
   }

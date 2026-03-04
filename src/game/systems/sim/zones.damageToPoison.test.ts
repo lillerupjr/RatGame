@@ -3,10 +3,11 @@ import { createWorld } from "../../../engine/world/world";
 import { stageDocks } from "../../content/stages";
 import { ENEMY_TYPE, spawnEnemyGrid } from "../../factories/enemyFactory";
 import { clearSpatialHash, insertEntity } from "../../util/spatialHash";
-import { getEnemyWorld } from "../../coords/worldViews";
+import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { spawnZone, ZONE_KIND } from "../../factories/zoneFactory";
 import { zonesSystem } from "./zones";
+import { makeEnemyHitMeta } from "../../combat/damageMeta";
 
 function rebuildEnemyHash(world: ReturnType<typeof createWorld>): void {
   clearSpatialHash(world.enemySpatialHash);
@@ -43,5 +44,43 @@ describe("zonesSystem damage-to-poison behavior", () => {
     expect(w.eHp[enemy]).toBeCloseTo(180, 6);
     const poisonStacks = w.eAilments?.[enemy]?.poison ?? [];
     expect(poisonStacks.length).toBe(0);
+  });
+
+  test("boss hazard player damage emits PLAYER_HIT with ENEMY cause metadata", () => {
+    const w = createWorld({ seed: 47, stage: stageDocks });
+    const pw = getPlayerWorld(w, KENNEY_TILE_WORLD);
+
+    spawnZone(w, {
+      kind: ZONE_KIND.HAZARD,
+      x: pw.wx,
+      y: pw.wy,
+      radius: 80,
+      damage: 0,
+      damagePlayer: 12,
+      tickEvery: 0.1,
+      ttl: 1,
+      followPlayer: false,
+      playerDamageMeta: makeEnemyHitMeta("BOSS", "TEST_BOSS_HAZARD", {
+        category: "DOT",
+        instigatorId: "boss_test",
+      }),
+    });
+
+    zonesSystem(w, 0.11);
+
+    const playerHit = w.events.find((ev) => ev.type === "PLAYER_HIT");
+    expect(playerHit?.type).toBe("PLAYER_HIT");
+    if (!playerHit || playerHit.type !== "PLAYER_HIT") return;
+
+    expect(playerHit.damageMeta.category).toBe("DOT");
+    expect(playerHit.damageMeta.cause.kind).toBe("ENEMY");
+    if (playerHit.damageMeta.cause.kind === "ENEMY") {
+      expect(playerHit.damageMeta.cause.enemyTypeId).toBe("BOSS");
+      expect(playerHit.damageMeta.cause.attackId).toBe("TEST_BOSS_HAZARD");
+      expect(playerHit.damageMeta.cause.mode).toBe("INTRINSIC");
+    }
+    expect(playerHit.damageMeta.instigator.actor).toBe("ENEMY");
+    expect(playerHit.damageMeta.instigator.id).toBe("boss_test");
+    expect(playerHit.damageMeta.isProcDamage === true).toBe(false);
   });
 });

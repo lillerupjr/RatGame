@@ -15,6 +15,7 @@ import { getPlayerAimWorld } from "../../combat/aimPoints";
 import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { STARTER_RELIC_IDS } from "../../content/starterRelics";
+import { makeWeaponHitMeta } from "../../combat/damageMeta";
 
 /** Handle weapon cooldowns, targeting, and firing events. */
 export function combatSystem(w: World, dt: number) {
@@ -69,6 +70,11 @@ export function combatSystem(w: World, dt: number) {
   const finalCritChance = Math.min(1, resolved.critChance * (isAtFullMomentum ? 2 : 1));
   const hasStarterLuckyChamber = w.relics.includes(STARTER_RELIC_IDS.LUCKY_CHAMBER);
   const projectileKind = selectedWeapon.projectile.kind ?? PRJ_KIND.PISTOL;
+  const weaponDamageMeta = makeWeaponHitMeta(selectedWeapon.id, {
+    category: "HIT",
+    instigatorId: "player",
+    isProcDamage: false,
+  });
   const weaponFireMode = selectedWeapon.fireMode ?? "projectile";
   const runtime = w as any;
 
@@ -110,6 +116,7 @@ export function combatSystem(w: World, dt: number) {
       pierce: resolved.pierce,
       ttl: 2.2,
       maxDist: fireRangePx > 0 ? fireRangePx : undefined,
+      damageMeta: weaponDamageMeta,
     });
   };
 
@@ -178,6 +185,7 @@ export function combatSystem(w: World, dt: number) {
       critRolls: relicMods.critRolls ?? 1,
       dotScalars: dotStats,
       allDamageContributesToPoison: w.relics.includes("PASS_DAMAGE_TO_POISON_ALL"),
+      damageMeta: weaponDamageMeta,
     });
     w.playerBeamUvOffset += dt * Math.max(0, beam.uvScrollSpeed);
     if (!wasBeamActive && w.playerBeamActive) emitFireSfx();

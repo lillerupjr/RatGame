@@ -4,6 +4,7 @@ import { type World } from "../../../engine/world/world";
 import { ENEMY_TYPE } from "../../content/enemies";
 import { spawnZone, ZONE_KIND } from "../../factories/zoneFactory";
 import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
+import { makeEnemyHitMeta } from "../../combat/damageMeta";
 
 type BossId = "DOCKS_BOMBARD" | "SEWERS_PUDDLES" | "CHINATOWN_DASH";
 
@@ -16,7 +17,7 @@ type BossCtx = {
     dashT?: number;
 
     // delayed blasts
-    delayed?: Array<{ t: number; x: number; y: number; r: number; dmg: number }>;
+    delayed?: Array<{ t: number; x: number; y: number; r: number; dmg: number; attackId: string }>;
 };
 
 function findBossIndex(w: World): number {
@@ -71,7 +72,15 @@ function telegraphCircle(w: World, x: number, y: number, r: number, ttl: number)
     });
 }
 
-function hazardBlast(w: World, x: number, y: number, r: number, dmg: number, ttl = 0.35) {
+function hazardBlast(
+  w: World,
+  x: number,
+  y: number,
+  r: number,
+  dmg: number,
+  playerDamageMeta?: ReturnType<typeof makeEnemyHitMeta>,
+  ttl = 0.35,
+) {
     spawnZone(w, {
         kind: ZONE_KIND.HAZARD,
         x,
@@ -82,10 +91,20 @@ function hazardBlast(w: World, x: number, y: number, r: number, dmg: number, ttl
         tickEvery: 0.12,
         ttl,
         followPlayer: false,
+        playerDamageMeta,
     });
 }
 
-function hazardPuddle(w: World, x: number, y: number, r: number, dmg: number, tickEvery: number, ttl: number) {
+function hazardPuddle(
+  w: World,
+  x: number,
+  y: number,
+  r: number,
+  dmg: number,
+  tickEvery: number,
+  ttl: number,
+  playerDamageMeta?: ReturnType<typeof makeEnemyHitMeta>,
+) {
     spawnZone(w, {
         kind: ZONE_KIND.HAZARD,
         x,
@@ -96,6 +115,7 @@ function hazardPuddle(w: World, x: number, y: number, r: number, dmg: number, ti
         tickEvery,
         ttl,
         followPlayer: false,
+        playerDamageMeta,
     });
 }
 
@@ -111,6 +131,12 @@ export function bossSystem(w: World, dt: number) {
     const pw = getPlayerWorld(w);
     const px = pw.wx;
     const py = pw.wy;
+    const bossHazardMeta = (attackId: string) => makeEnemyHitMeta("BOSS", attackId, {
+      category: "DOT",
+      mode: "INTRINSIC",
+      instigatorId: String(boss),
+      isProcDamage: false,
+    });
 
     // -------------------------
     // Boss difficulty scaling
@@ -136,7 +162,7 @@ export function bossSystem(w: World, dt: number) {
             ctx.delayed[i].t -= dt;
             if (ctx.delayed[i].t <= 0) {
                 const ex = ctx.delayed[i];
-                hazardBlast(w, ex.x, ex.y, ex.r, ex.dmg);
+                hazardBlast(w, ex.x, ex.y, ex.r, ex.dmg, bossHazardMeta(ex.attackId));
                 ctx.delayed.splice(i, 1);
             }
         }
@@ -168,6 +194,7 @@ export function bossSystem(w: World, dt: number) {
                     y,
                     r: blastR,
                     dmg: 10 * HAZ * ENRAGE, // was 12 (but now scales + enrages)
+                    attackId: "DOCKS_BOMBARD_BLAST",
                 });
             }
         }
@@ -243,6 +270,7 @@ export function bossSystem(w: World, dt: number) {
                         y,
                         r: 36 * COVER,                // was 30
                         dmg: 12 * HAZ * ENRAGE,        // was 9
+                        attackId: "CHINATOWN_DASH_TRAIL",
                     });
                 }
             }
@@ -279,7 +307,8 @@ export function bossSystem(w: World, dt: number) {
                 72 * COVER,                 // was 64
                 7 * HAZ * ENRAGE,           // was 5
                 0.22,                       // was 0.25
-                6.2                         // was 4.8
+                6.2,                        // was 4.8
+                bossHazardMeta("SEWERS_PUDDLE")
             );
 
             // Extra denial puddles (more common + optionally multiple)
@@ -297,7 +326,8 @@ export function bossSystem(w: World, dt: number) {
                         58 * COVER,             // was 52
                         6 * HAZ * ENRAGE,       // was 4
                         0.22,                   // was 0.22
-                        5.0                     // was 3.6
+                        5.0,                    // was 3.6
+                        bossHazardMeta("SEWERS_PUDDLE")
                     );
                 }
             }

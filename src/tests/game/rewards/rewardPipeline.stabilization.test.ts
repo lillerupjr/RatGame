@@ -6,6 +6,7 @@ import { rewardPresenterSystem } from "../../../game/systems/progression/rewardP
 import { rewardRunEventProducerSystem } from "../../../game/systems/progression/rewardRunEventProducerSystem";
 import { rewardSchedulerSystem } from "../../../game/systems/progression/rewardSchedulerSystem";
 import { createRewardPipelineWorld, dismissActiveRewardUi, getActiveTicket } from "./rewardPipeline.testUtils";
+import { makeUnknownDamageMeta } from "../../../game/combat/damageMeta";
 
 describe("reward pipeline stabilization", () => {
   test("boss-zone ENTER/EXIT do not create reward events or consume budget", () => {
@@ -44,6 +45,7 @@ describe("reward pipeline stabilization", () => {
       x: 0,
       y: 0,
       source: "OTHER",
+      damageMeta: makeUnknownDamageMeta("TEST_REWARD_PIPELINE_BOSS_KILL"),
     });
 
     rewardRunEventProducerSystem(world, { includeCoreFacts: true, includeChest: false });
