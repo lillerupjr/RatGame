@@ -15,13 +15,34 @@ import {
     entity3DSeparationXY,
     checkSoACollision3D 
 } from "../../math/Entity3D";
-import { 
-    LayeredTileMap3D, 
-    Tile3D, 
-    getActiveLayeredMap,
-    MAX_STEP_HEIGHT 
-} from "../../map/compile/LayeredTileMap3D";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
+
+const MAX_STEP_HEIGHT = 1.05;
+
+type CollisionMap3D = {
+    config: {
+        tileSize: number;
+    };
+    canMove(
+        currentX: number,
+        currentY: number,
+        currentZ: number,
+        targetX: number,
+        targetY: number,
+        height: number,
+    ): {
+        canMove: boolean;
+        groundZ: number;
+        stepUp?: boolean;
+        stepDown?: boolean;
+    };
+    getGroundAt(x: number, y: number, maxZ: number): {
+        walkable: boolean;
+        z: number;
+    };
+    getCeilingAt(x: number, y: number, minZ: number): number;
+    getSolidTilesInBounds(bounds: BoundingBox3D): unknown[];
+};
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -160,7 +181,7 @@ export function resolveMapCollision3D(
     targetX: number, targetY: number,
     radius: number,
     height: number,
-    map: LayeredTileMap3D | null = getActiveLayeredMap()
+    map: CollisionMap3D | null = null,
 ): CollisionResolution3D {
     if (!map) {
         // No 3D map available - just allow the move
@@ -175,7 +196,6 @@ export function resolveMapCollision3D(
         };
     }
     
-    const tileSize = map.config.tileSize;
     let newX = targetX;
     let newY = targetY;
     let newZ = currentZ;
@@ -282,7 +302,7 @@ export function projectileHitsEntity3D(
 /** Test whether a projectile hits the map in 3D. */
 export function projectileHitsMap3D(
     px: number, py: number, pz: number, pr: number,
-    map: LayeredTileMap3D | null = getActiveLayeredMap()
+    map: CollisionMap3D | null = null,
 ): boolean {
     if (!map) return false;
     
@@ -461,7 +481,7 @@ export function raycast3D(
     originX: number, originY: number, originZ: number,
     dirX: number, dirY: number, dirZ: number,
     maxDistance: number,
-    map: LayeredTileMap3D | null = getActiveLayeredMap(),
+    map: CollisionMap3D | null = null,
     checkEntities: boolean = false,
     entityX?: number[], entityY?: number[], entityZ?: number[] | null,
     entityAlive?: boolean[], entityRadius?: number[], entityHeight?: number

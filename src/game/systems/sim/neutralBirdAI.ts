@@ -1,7 +1,7 @@
 import type { World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getPlayerWorld } from "../../coords/worldViews";
-import { getActiveMap } from "../../map/proceduralMapBridge";
+import { getActiveMap } from "../../map/authoredMapActivation";
 import { getUserSettings, updateUserSettings } from "../../../userSettings";
 import { getPigeonFramesForClipAndScreenDir } from "../../../engine/render/sprites/neutralSprites";
 import { worldDeltaToScreen } from "../../../engine/math/iso";

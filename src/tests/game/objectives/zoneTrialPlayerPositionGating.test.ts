@@ -6,7 +6,7 @@ import { tileToWorldCenter } from "../../../game/coords/tile";
 import { tileToGrid } from "../../../game/coords/grid";
 import { getActiveMap } from "../../../game/map/compile/kenneyMap";
 import { getAuthoredMapDefByMapId } from "../../../game/map/authored/authoredMapRegistry";
-import { activateMapDef } from "../../../game/map/proceduralMapBridge";
+import { activateMapDef } from "../../../game/map/authoredMapActivation";
 import { getZoneTrialObjectiveState, startZoneTrial, updateZoneTrialObjective } from "../../../game/objectives/zoneObjectiveSystem";
 import { makeUnknownDamageMeta } from "../../../game/combat/damageMeta";
 

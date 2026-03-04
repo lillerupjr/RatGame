@@ -22,7 +22,6 @@ import { worldDeltaToScreen, worldToScreen } from "../../../engine/math/iso";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { gridToWorld, worldToGrid } from "../../coords/grid";
 import { worldToTile, tileToWorldCenter } from "../../coords/tile";
-import { generateFloorMap } from "../generators/proceduralMap";
 import { loadTableMapDefFromJson } from "../formats/json/jsonMapLoader";
 import {
     getSemanticFieldDefForTileId,
@@ -80,8 +79,8 @@ export interface SupportSurface {
 }
 
 
-// NOTE: We intentionally do NOT import any authored maps here.
-// The active map is set by higher-level game flow (menu/proceduralMapBridge).
+// NOTE: We intentionally do NOT import authored maps here.
+// The active map is set by higher-level game flow (menu/authoredMapActivation).
 let _compiled: CompiledKenneyMap = compileKenneyMapFromTable({
     id: "EMPTY_BOOT",
     w: 1,
@@ -97,15 +96,6 @@ export function setActiveMap(mapDef: TableMapDef, options?: { runSeed?: number; 
     _compiled = compileKenneyMapFromTable(mapDef, options);
     _rampCache.clear();
     return _compiled;
-}
-
-/**
- * Regenerate and set a new procedural map.
- */
-/** Generate and activate a new procedural map with a fresh seed. */
-export function regenerateProceduralMap(): CompiledKenneyMap {
-    const seed = Date.now() >>> 0;
-    return setActiveMap(generateFloorMap(seed, 0), { runSeed: seed });
 }
 
 /**

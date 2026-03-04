@@ -10,7 +10,7 @@ import {
   setVirtualMoveAxes,
 } from "./systems/sim/input";
 import { movementSystem } from "./systems/sim/movement";
-import { spawnSystem, spawnOneEnemyOfType, spawnOneTrashEnemy } from "./systems/spawn/spawn";
+import { spawnOneEnemyOfType, spawnOneTrashEnemy } from "./systems/spawn/spawn";
 import { combatSystem } from "./systems/sim/combat";
 import { ailmentTickSystem } from "./combat_mods/systems/ailmentTickSystem";
 import { collisionsSystem, processCombatTextFromEvents } from "./systems/sim/collisions";
@@ -48,7 +48,6 @@ import {
 } from "./systems/progression/bossTripleObjectiveSync";
 
 import { formatTimeMMSS } from "./util/time";
-import type { WeaponId } from "./content/weapons";
 import { registry } from "./content/registry";
 import { spawnEnemyGrid, ENEMY_TYPE } from "./factories/enemyFactory";
 import { gridToWorld } from "./coords/grid";
@@ -56,12 +55,9 @@ import { anchorFromWorld } from "./coords/anchor";
 import { poisonSystem } from "./systems/sim/poison";
 import { fissionSystem } from "./systems/sim/fission";
 import { processMomentumEventQueue, tickMomentumDecay } from "./systems/sim/momentum";
-import {buildStaticRunMap, getReachable, type RunMap, type MapNode} from "./map/runMap";
 import { KENNEY_TILE_WORLD, preloadKenneyTiles } from "../engine/render/kenneyTiles";
 import type { Dir8 } from "../engine/render/sprites/dir8";
 import { dir8FromVector } from "../engine/render/sprites/dir8";
-
-import { initializeRoomChallenges } from "./systems/progression/roomChallenge";
 
 import {
   createDelveMap,
@@ -89,7 +85,6 @@ import { getProjectileSpriteByKind, preloadProjectileSprites } from "../engine/r
 import { enemySpritesReady, preloadEnemySprites } from "../engine/render/sprites/enemySprites";
 import {
   getSpriteByIdForPalette,
-  prewarmPaletteSprites,
   preloadRenderSprites,
 } from "../engine/render/sprites/renderSprites";
 import { setMusicStage, stopMusic } from "../engine/audio/music";
@@ -97,16 +92,13 @@ import type { TableMapCell, TableMapDef } from "./map/formats/table/tableMapType
 import { AUTHORED_MAP_DEFS, getAuthoredMapDefByMapId } from "./map/authored/authoredMapRegistry";
 import {
   activateMapDef,
-  generateAndActivateFloorMap,
-  generateAndActivateMazeFloorMap,
   getActiveMap,
   getActiveMapDef,
-  getActiveRoomData,
   applyObjectivesFromActiveMap,
   getSpawnWorldFromActive,
-} from "./map/proceduralMapBridge";
+  reloadActiveMap,
+} from "./map/authoredMapActivation";
 import { objectiveSpecFromFloorIntent } from "./map/floorObjectiveBinding";
-import { mapSourceFromFloorIntent } from "./map/floorMapSourceBinding";
 import { applyFloorOverlays } from "./map/floorOverlays";
 import { RNG } from "./util/rng";
 import { applyObjective } from "./map/objectiveTransforms";
@@ -121,7 +113,12 @@ import { spawnMilestonePigeonNearPlayer } from "./factories/neutralMobFactory";
 import { neutralAnimatedMobsSystem } from "./systems/sim/neutralAnimatedMobs";
 import { neutralBirdAISystem } from "./systems/sim/neutralBirdAI";
 import { getZoneTrialObjectiveState, startZoneTrial, updateZoneTrialObjective } from "./objectives/zoneObjectiveSystem";
-import { collectRuntimeSpriteIdsToPrewarm } from "./render/prewarmSprites";
+import {
+  awaitPrewarmDone,
+  collectRuntimeSpriteDeps,
+  enqueuePrewarm,
+  tickPrewarm,
+} from "./render/prewarmOwner";
 import { resolveActivePaletteId } from "./render/activePalette";
 import { applySfxSettingsToWorld } from "./audio/audioSettings";
 import { chooseCardReward, ensureCardRewardState } from "./combat_mods/rewards/cardRewardFlow";
@@ -153,6 +150,11 @@ import { updateExhaustFollowers } from "./systems/exhaustFollowerSystem";
 import { rewardRunEventProducerSystem } from "./systems/progression/rewardRunEventProducerSystem";
 import { rewardSchedulerSystem } from "./systems/progression/rewardSchedulerSystem";
 import { rewardPresenterSystem } from "./systems/progression/rewardPresenterSystem";
+import { getSupabaseEnv } from "../config/supabase";
+import {
+  LeaderboardClient,
+  type LeaderboardRow,
+} from "../leaderboard/leaderboardClient";
 
 
 type HudRefs = {
@@ -248,6 +250,11 @@ type FloorLoadContext = {
   floorIntent: FloorIntent;
 };
 
+type EndLeaderboardRunPayload = {
+  depthReached: number;
+  kills: number;
+};
+
 function clampNonNegativeFinite(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, value);
@@ -301,6 +308,9 @@ export function precomputeStaticMapData(): void {
 export function createGame(args: CreateGameArgs) {
   args.hud.lvlPill.hidden = false;
   const input: InputState = createInputState();
+  const uiInteractionState = {
+    textInputFocused: false,
+  };
   let mobileControlsEnabled = false;
   let nextPhoneDamageHapticAtMs = 0;
   const mobileControls = createMobileControls({
@@ -309,9 +319,17 @@ export function createGame(args: CreateGameArgs) {
     stickKnob: args.hud.mobileMoveKnob,
     interactBtn: args.hud.interactPrompt,
     onMove: (x, y, active) => {
+      if (uiInteractionState.textInputFocused) {
+        setVirtualMoveAxes(input, 0, 0, false);
+        return;
+      }
       setVirtualMoveAxes(input, x, y, active);
     },
     onInteractDown: (down) => {
+      if (uiInteractionState.textInputFocused) {
+        setVirtualInteractDown(input, false);
+        return;
+      }
       setVirtualInteractDown(input, down);
     },
   });
@@ -700,9 +718,7 @@ export function createGame(args: CreateGameArgs) {
       showDelveMap(`Depth ${world.delveDepth} cleared!\nChoose your next destination.`);
       return true;
     }
-
-    (world as any).mapPendingNextFloorIndex = (world.floorIndex ?? 0) + 1;
-    showMap("Choose your next zone.\n(There is a boss at the end of every floor.)");
+    completeRun(world);
     return true;
   }
 
@@ -926,15 +942,383 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function populateEndStats(w: World): void {
+    const summary = getEndRunSummary(w);
     args.ui.endEl.time.textContent = formatTimeMMSS(getEndStatsTimeSec(w));
-    args.ui.endEl.depth.textContent = String(getEndStatsDepth(w));
-    args.ui.endEl.kills.textContent = String(Math.max(0, Math.floor(w.kills ?? 0)));
+    args.ui.endEl.depth.textContent = String(summary.depthReached);
+    args.ui.endEl.kills.textContent = String(summary.kills);
     args.ui.endEl.gold.textContent = String(Math.max(0, Math.floor(getGold(w))));
     args.ui.endEl.relics.textContent = String(Array.isArray(w.relics) ? w.relics.length : 0);
     args.ui.endEl.cards.textContent = String(getEndStatsCardCount(w));
   }
 
+  function getEndRunSummary(w: World): EndLeaderboardRunPayload {
+    return {
+      depthReached: getEndStatsDepth(w),
+      kills: Math.max(0, Math.floor(w.kills ?? 0)),
+    };
+  }
+
+  function sanitizeLeaderboardDisplayName(raw: string): string {
+    const trimmed = raw.trim();
+    const cleaned = trimmed.replace(/[^A-Za-z0-9 _-]/g, "");
+    return cleaned.slice(0, 12);
+  }
+
+  const supabaseEnv = getSupabaseEnv();
+  const leaderboardClient = supabaseEnv
+    ? new LeaderboardClient({
+      supabaseUrl: supabaseEnv.url,
+      supabaseAnonKey: supabaseEnv.anonKey,
+      seasonId: "alpha",
+    })
+    : null;
+  const endStatsPanelEl = args.ui.endEl.root.querySelector<HTMLElement>("#endStatsPanel");
+  const endLeaderboardPanelEl = args.ui.endEl.root.querySelector<HTMLElement>("#endLeaderboardPanel");
+  const endTabStatsBtnEl = args.ui.endEl.root.querySelector<HTMLButtonElement>("#endTabStats");
+  const endTabLeaderboardBtnEl = args.ui.endEl.root.querySelector<HTMLButtonElement>("#endTabLeaderboard");
+  const endRunBannerDepthEl = args.ui.endEl.root.querySelector<HTMLElement>("#endRunBannerDepth");
+  const endRunBannerKillsEl = args.ui.endEl.root.querySelector<HTMLElement>("#endRunBannerKills");
+  const endRunBannerRankEl = args.ui.endEl.root.querySelector<HTMLElement>("#endRunBannerRank");
+  const endRunTop10BadgeEl = args.ui.endEl.root.querySelector<HTMLElement>("#endRunTop10Badge");
+  const endLeaderboardGridEl = args.ui.endEl.root.querySelector<HTMLElement>(".endLeaderboardGrid");
+  const endLeaderboardTopBodyEl = args.ui.endEl.root.querySelector<HTMLTableSectionElement>("#endLeaderboardTopBody");
+  const endLeaderboardAroundBodyEl = args.ui.endEl.root.querySelector<HTMLTableSectionElement>("#endLeaderboardAroundBody");
+  const endLeaderboardStatusEl = args.ui.endEl.root.querySelector<HTMLDivElement>("#endLeaderboardStatus");
+  const endLeaderboardRetryBtnEl = args.ui.endEl.root.querySelector<HTMLButtonElement>("#endLeaderboardRetryBtn");
+  const endLeaderboardSubmitWrapEl = args.ui.endEl.root.querySelector<HTMLDivElement>("#endLeaderboardSubmitWrap");
+  const endLeaderboardSubmittedAsEl = args.ui.endEl.root.querySelector<HTMLDivElement>("#endLeaderboardSubmittedAs");
+  const endLeaderboardNameInputEl = args.ui.endEl.root.querySelector<HTMLInputElement>("#endLeaderboardName");
+  const endLeaderboardSubmitBtnEl = args.ui.endEl.root.querySelector<HTMLButtonElement>("#endLeaderboardSubmitBtn");
+  const endLeaderboardSubmitStatusEl = args.ui.endEl.root.querySelector<HTMLDivElement>("#endLeaderboardSubmitStatus");
+  type EndTabId = "stats" | "leaderboard";
+  let endActiveTab: EndTabId = "stats";
+  const hasEndLeaderboardUi = !!(
+    endStatsPanelEl
+    && endLeaderboardPanelEl
+    && endTabStatsBtnEl
+    && endTabLeaderboardBtnEl
+    && endRunBannerDepthEl
+    && endRunBannerKillsEl
+    && endRunBannerRankEl
+    && endRunTop10BadgeEl
+    && endLeaderboardGridEl
+    && endLeaderboardTopBodyEl
+    && endLeaderboardAroundBodyEl
+    && endLeaderboardStatusEl
+    && endLeaderboardRetryBtnEl
+    && endLeaderboardSubmitWrapEl
+    && endLeaderboardSubmittedAsEl
+    && endLeaderboardNameInputEl
+    && endLeaderboardSubmitBtnEl
+    && endLeaderboardSubmitStatusEl
+  );
+  let endLeaderboardRunPayload: EndLeaderboardRunPayload | null = null;
+  let endLeaderboardRequestSeq = 0;
+  let endLeaderboardSubmitting = false;
+  let endLeaderboardSubmittedName: string | null = null;
+  let endLeaderboardProjectedRank: number | null = null;
+  let endLeaderboardSubmitForcedDisabled = false;
+
+  function setLeaderboardInputFocusState(focused: boolean): void {
+    uiInteractionState.textInputFocused = focused;
+    if (!focused) return;
+    setVirtualMoveAxes(input, 0, 0, false);
+    setVirtualInteractDown(input, false);
+    clearInputEdges(input);
+  }
+
+  function setEndLeaderboardStatus(message: string): void {
+    if (!endLeaderboardStatusEl) return;
+    endLeaderboardStatusEl.textContent = message;
+  }
+
+  function setEndTop10Badge(rank: number | null): void {
+    if (!endRunTop10BadgeEl) return;
+    const show = typeof rank === "number" && Number.isFinite(rank) && rank > 0 && rank <= 10;
+    endRunTop10BadgeEl.hidden = !show;
+  }
+
+  function setEndRunBannerSummary(payload: EndLeaderboardRunPayload | null, rank: number | null): void {
+    if (!endRunBannerDepthEl || !endRunBannerKillsEl || !endRunBannerRankEl) return;
+    const depth = payload?.depthReached ?? 0;
+    const kills = payload?.kills ?? 0;
+    endRunBannerDepthEl.textContent = String(Math.max(0, Math.floor(depth)));
+    endRunBannerKillsEl.textContent = String(Math.max(0, Math.floor(kills)));
+    const normalizedRank = typeof rank === "number" && Number.isFinite(rank) && rank > 0
+      ? Math.floor(rank)
+      : null;
+    endRunBannerRankEl.textContent = normalizedRank ? `#${normalizedRank}` : "--";
+    setEndTop10Badge(normalizedRank);
+  }
+
+  function hasLeaderboardNameInput(): boolean {
+    const rawName = endLeaderboardNameInputEl?.value ?? "";
+    return sanitizeLeaderboardDisplayName(rawName).length > 0;
+  }
+
+  function refreshEndLeaderboardSubmitControls(): void {
+    const lockInput = endLeaderboardSubmitForcedDisabled || endLeaderboardSubmitting || !!endLeaderboardSubmittedName;
+    const disableSubmit =
+      lockInput
+      || !leaderboardClient
+      || !hasLeaderboardNameInput();
+    if (endLeaderboardNameInputEl) endLeaderboardNameInputEl.disabled = lockInput;
+    if (endLeaderboardSubmitBtnEl) endLeaderboardSubmitBtnEl.disabled = disableSubmit;
+  }
+
+  function setEndActiveTab(next: EndTabId): void {
+    endActiveTab = next;
+    if (!endStatsPanelEl || !endLeaderboardPanelEl || !endTabStatsBtnEl || !endTabLeaderboardBtnEl) return;
+    const showStats = endActiveTab === "stats";
+    endStatsPanelEl.hidden = !showStats;
+    endLeaderboardPanelEl.hidden = showStats;
+    endTabStatsBtnEl.classList.toggle("active", showStats);
+    endTabLeaderboardBtnEl.classList.toggle("active", !showStats);
+    endTabStatsBtnEl.setAttribute("aria-selected", showStats ? "true" : "false");
+    endTabLeaderboardBtnEl.setAttribute("aria-selected", showStats ? "false" : "true");
+    if (endActiveTab === "leaderboard" && endLeaderboardRunPayload) {
+      void loadEndLeaderboardPreview();
+    }
+  }
+
+  function setEndLeaderboardSubmitStatus(message: string): void {
+    if (!endLeaderboardSubmitStatusEl) return;
+    endLeaderboardSubmitStatusEl.textContent = message;
+  }
+
+  function setEndLeaderboardSubmitDisabled(disabled: boolean): void {
+    endLeaderboardSubmitForcedDisabled = disabled;
+    refreshEndLeaderboardSubmitControls();
+  }
+
+  function setEndLeaderboardGridVisible(visible: boolean): void {
+    if (!endLeaderboardGridEl) return;
+    endLeaderboardGridEl.hidden = !visible;
+  }
+
+  function formatLeaderboardRankLabel(rank: number): string {
+    if (rank === 1) return "🥇";
+    if (rank === 2) return "🥈";
+    if (rank === 3) return "🥉";
+    return String(rank);
+  }
+
+  function renderEndLeaderboardRows(bodyEl: HTMLTableSectionElement | null, rows: LeaderboardRow[]): void {
+    if (!bodyEl) return;
+    bodyEl.innerHTML = "";
+    if (rows.length <= 0) {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 4;
+      td.classList.add("endLeaderboardEmptyCell");
+      td.textContent = "No runs submitted yet.\nBe the first.";
+      tr.appendChild(td);
+      bodyEl.appendChild(tr);
+      return;
+    }
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const normalizedRank = Math.max(1, Math.floor(row.rank));
+      const isYou = !!row.isYou || row.display_name === "YOU";
+      const tr = document.createElement("tr");
+      if (isYou) tr.classList.add("isYou");
+
+      const rankTd = document.createElement("td");
+      rankTd.textContent = formatLeaderboardRankLabel(normalizedRank);
+      tr.appendChild(rankTd);
+
+      const nameTd = document.createElement("td");
+      const displayName = row.display_name || "ANON";
+      nameTd.textContent = isYou ? `> ${displayName}` : displayName;
+      tr.appendChild(nameTd);
+
+      const depthTd = document.createElement("td");
+      depthTd.textContent = String(Math.max(0, Math.floor(row.depth)));
+      tr.appendChild(depthTd);
+
+      const killsTd = document.createElement("td");
+      killsTd.textContent = String(Math.max(0, Math.floor(row.kills)));
+      tr.appendChild(killsTd);
+
+      bodyEl.appendChild(tr);
+    }
+  }
+
+  function resetEndLeaderboardUiState(): void {
+    endLeaderboardRunPayload = null;
+    endLeaderboardSubmitting = false;
+    endLeaderboardSubmittedName = null;
+    endLeaderboardProjectedRank = null;
+    endLeaderboardSubmitForcedDisabled = false;
+    endLeaderboardRequestSeq++;
+    setLeaderboardInputFocusState(false);
+    if (!hasEndLeaderboardUi) return;
+    setEndLeaderboardStatus("Loading leaderboard...");
+    setEndLeaderboardSubmitStatus("");
+    setEndRunBannerSummary(null, null);
+    setEndLeaderboardSubmitDisabled(false);
+    if (endLeaderboardRetryBtnEl) endLeaderboardRetryBtnEl.hidden = true;
+    if (endLeaderboardSubmittedAsEl) {
+      endLeaderboardSubmittedAsEl.hidden = true;
+      endLeaderboardSubmittedAsEl.textContent = "";
+    }
+    if (endLeaderboardSubmitWrapEl) endLeaderboardSubmitWrapEl.hidden = false;
+    setEndLeaderboardGridVisible(false);
+    renderEndLeaderboardRows(endLeaderboardTopBodyEl, []);
+    renderEndLeaderboardRows(endLeaderboardAroundBodyEl, []);
+    if (endLeaderboardNameInputEl) {
+      endLeaderboardNameInputEl.value = "";
+      refreshEndLeaderboardSubmitControls();
+    }
+  }
+
+  async function loadEndLeaderboardPreview(): Promise<void> {
+    if (!hasEndLeaderboardUi) return;
+    const payload = endLeaderboardRunPayload;
+    if (!payload) return;
+    if (!leaderboardClient) {
+      setEndLeaderboardStatus("Leaderboard unavailable (missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)");
+      setEndLeaderboardSubmitDisabled(true);
+      setEndLeaderboardSubmitStatus("Configure Supabase env vars and restart the dev server.");
+      setEndRunBannerSummary(payload, null);
+      if (endLeaderboardRetryBtnEl) endLeaderboardRetryBtnEl.hidden = false;
+      if (endLeaderboardSubmitWrapEl) endLeaderboardSubmitWrapEl.hidden = false;
+      setEndLeaderboardGridVisible(false);
+      renderEndLeaderboardRows(endLeaderboardTopBodyEl, []);
+      renderEndLeaderboardRows(endLeaderboardAroundBodyEl, [
+        {
+          rank: 1,
+          display_name: "YOU",
+          depth: payload.depthReached,
+          kills: payload.kills,
+          isYou: true,
+        },
+      ]);
+      return;
+    }
+    setEndLeaderboardSubmitDisabled(false);
+    if (endLeaderboardSubmitWrapEl) endLeaderboardSubmitWrapEl.hidden = !!endLeaderboardSubmittedName;
+    if (endLeaderboardRetryBtnEl) endLeaderboardRetryBtnEl.hidden = true;
+    setEndLeaderboardGridVisible(false);
+    setEndLeaderboardStatus("Loading leaderboard...");
+    setEndRunBannerSummary(payload, endLeaderboardProjectedRank);
+    const requestSeq = ++endLeaderboardRequestSeq;
+    try {
+      const preview = await leaderboardClient.previewRun({
+        depth: payload.depthReached,
+        kills: payload.kills,
+        topLimit: 20,
+        window: 6,
+      });
+      if (requestSeq !== endLeaderboardRequestSeq) return;
+      renderEndLeaderboardRows(endLeaderboardTopBodyEl, preview.top);
+      renderEndLeaderboardRows(endLeaderboardAroundBodyEl, preview.around);
+      endLeaderboardProjectedRank = Number.isFinite(preview.rank) ? Math.max(1, Math.floor(preview.rank)) : null;
+      setEndRunBannerSummary(payload, endLeaderboardProjectedRank);
+      setEndLeaderboardGridVisible(true);
+      setEndLeaderboardStatus(
+        endLeaderboardProjectedRank ? `Your projected rank: #${endLeaderboardProjectedRank}` : "Leaderboard ready.",
+      );
+      if (endLeaderboardRetryBtnEl) endLeaderboardRetryBtnEl.hidden = true;
+    } catch (error) {
+      if (requestSeq !== endLeaderboardRequestSeq) return;
+      const message = error instanceof Error ? error.message : "Failed to load leaderboard.";
+      setEndLeaderboardStatus("Leaderboard unavailable");
+      setEndLeaderboardSubmitStatus(message);
+      setEndRunBannerSummary(payload, null);
+      setEndLeaderboardGridVisible(false);
+      if (endLeaderboardRetryBtnEl) endLeaderboardRetryBtnEl.hidden = false;
+    }
+  }
+
+  async function submitEndLeaderboardName(): Promise<void> {
+    if (!hasEndLeaderboardUi) return;
+    if (endLeaderboardSubmitting || endLeaderboardSubmittedName) return;
+    const payload = endLeaderboardRunPayload;
+    if (!payload) return;
+    if (!leaderboardClient) {
+      setEndLeaderboardStatus("Leaderboard unavailable (missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)");
+      setEndLeaderboardSubmitStatus("Configure Supabase env vars and restart the dev server.");
+      setEndLeaderboardSubmitDisabled(true);
+      return;
+    }
+
+    const rawName = endLeaderboardNameInputEl?.value ?? "";
+    const displayName = sanitizeLeaderboardDisplayName(rawName);
+    if (!displayName) {
+      setEndLeaderboardSubmitStatus("Enter 1-12 valid characters.");
+      return;
+    }
+
+    endLeaderboardSubmitting = true;
+    setEndLeaderboardSubmitStatus("Submitting...");
+    refreshEndLeaderboardSubmitControls();
+    try {
+      const submitted = await leaderboardClient.submitName({
+        depth: payload.depthReached,
+        kills: payload.kills,
+        displayName,
+      });
+      const submittedName = sanitizeLeaderboardDisplayName(String(submitted.display_name ?? displayName));
+      if (endLeaderboardNameInputEl) endLeaderboardNameInputEl.value = submittedName;
+      endLeaderboardSubmittedName = submittedName;
+      setEndLeaderboardSubmitStatus("Submitted!");
+      if (endLeaderboardSubmitWrapEl) endLeaderboardSubmitWrapEl.hidden = true;
+      if (endLeaderboardSubmittedAsEl) {
+        endLeaderboardSubmittedAsEl.hidden = false;
+        endLeaderboardSubmittedAsEl.textContent = `Submitted as ${submittedName}`;
+      }
+      await loadEndLeaderboardPreview();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to submit leaderboard entry.";
+      setEndLeaderboardSubmitStatus(message);
+      setEndLeaderboardSubmitDisabled(false);
+    } finally {
+      endLeaderboardSubmitting = false;
+      refreshEndLeaderboardSubmitControls();
+    }
+  }
+
+  if (hasEndLeaderboardUi && endLeaderboardNameInputEl && endLeaderboardSubmitBtnEl) {
+    if (endTabStatsBtnEl) {
+      endTabStatsBtnEl.addEventListener("click", () => setEndActiveTab("stats"));
+    }
+    if (endTabLeaderboardBtnEl) {
+      endTabLeaderboardBtnEl.addEventListener("click", () => setEndActiveTab("leaderboard"));
+    }
+    if (endLeaderboardRetryBtnEl) {
+      endLeaderboardRetryBtnEl.addEventListener("click", () => {
+        void loadEndLeaderboardPreview();
+      });
+    }
+    endLeaderboardSubmitBtnEl.addEventListener("click", () => {
+      void submitEndLeaderboardName();
+    });
+    endLeaderboardNameInputEl.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      void submitEndLeaderboardName();
+    });
+    endLeaderboardNameInputEl.addEventListener("input", () => {
+      const sanitized = sanitizeLeaderboardDisplayName(endLeaderboardNameInputEl.value);
+      if (sanitized !== endLeaderboardNameInputEl.value) {
+        endLeaderboardNameInputEl.value = sanitized;
+      }
+      if (!endLeaderboardSubmittedName) setEndLeaderboardSubmitStatus("");
+      refreshEndLeaderboardSubmitControls();
+    });
+    endLeaderboardNameInputEl.addEventListener("focus", () => {
+      setLeaderboardInputFocusState(true);
+    });
+    endLeaderboardNameInputEl.addEventListener("blur", () => {
+      setLeaderboardInputFocusState(false);
+    });
+  }
+
   function hideEndScreen(): void {
+    resetEndLeaderboardUiState();
+    setEndActiveTab("stats");
     args.ui.endEl.root.classList.remove("isVisible");
     args.ui.endEl.root.hidden = true;
   }
@@ -954,6 +1338,18 @@ export function createGame(args: CreateGameArgs) {
     hideCardRewardMenu();
     closeVendorShop(false);
     setDialog(null);
+    setEndActiveTab("stats");
+    endLeaderboardRunPayload = getEndRunSummary(w);
+    endLeaderboardSubmittedName = null;
+    endLeaderboardSubmitting = false;
+    endLeaderboardProjectedRank = null;
+    setEndRunBannerSummary(endLeaderboardRunPayload, null);
+    if (hasEndLeaderboardUi) {
+      setEndLeaderboardSubmitStatus("");
+      setEndLeaderboardSubmitDisabled(false);
+      refreshEndLeaderboardSubmitControls();
+    }
+    void loadEndLeaderboardPreview();
   }
 
   const applyPlayerSkinSelection = (skin: string) => {
@@ -1284,40 +1680,22 @@ export function createGame(args: CreateGameArgs) {
     w.floorDuration = w.stage.duration;
 
     const objectiveId = floorIntent.objectiveId ?? objectiveIdFromArchetype(floorIntent.archetype);
-
-    if (floorIntent.mapId) {
-      if (!floorIntent.objectiveId) {
-        console.error("[enterFloor] missing objectiveId for planned floor");
-        return false;
-      }
-      const baseMap = getStaticMapById(floorIntent.mapId);
-      if (!baseMap) {
-        console.error(`[enterFloor] missing authored map for mapId="${floorIntent.mapId}"`);
-        return false;
-      }
-      if (floorIntent.variantSeed === undefined) {
-        console.error("[enterFloor] missing variantSeed for planned floor");
-        return false;
-      }
-      const rng = new RNG(floorIntent.variantSeed);
-      const finalMap = applyObjective(baseMap, floorIntent.objectiveId, rng);
-      activateMapDef(finalMap, floorIntent.variantSeed);
-    } else {
-      const mapSource = mapSourceFromFloorIntent(floorIntent);
-      const variantSeed = floorIntent.variantSeed;
-      if (mapSource.type === "PROCEDURAL_ROOMS") {
-        const mapSeed = variantSeed ?? w.rng.int(0, 0x7fffffff);
-        generateAndActivateFloorMap(mapSeed, floorIntent.floorIndex, false, w);
-      } else if (mapSource.type === "PROCEDURAL_MAZE") {
-        const mapSeed = variantSeed ?? w.rng.int(0, 0x7fffffff);
-        generateAndActivateMazeFloorMap(mapSeed, floorIntent.floorIndex, false);
-      } else {
-        const staticDef = getStaticMapById(mapSource.mapId) ?? getDefaultStaticMap();
-        if (staticDef) {
-          activateMapDef(staticDef, variantSeed ?? w.rng.int(0, 0x7fffffff));
-        }
-      }
+    const targetMapId =
+      floorIntent.mapId
+      ?? (floorIntent.archetype === "VENDOR"
+        ? "SHOP"
+        : floorIntent.archetype === "HEAL"
+          ? "REST"
+          : undefined);
+    const baseMap = getStaticMapById(targetMapId) ?? getDefaultStaticMap();
+    if (!baseMap) {
+      console.error(`[enterFloor] missing authored map for mapId="${targetMapId ?? "AUTO"}"`);
+      return false;
     }
+    const variantSeed = floorIntent.variantSeed ?? w.rng.int(0, 0x7fffffff);
+    const rng = new RNG(variantSeed);
+    const finalMap = applyObjective(baseMap, objectiveId, rng);
+    activateMapDef(finalMap, variantSeed);
 
     floorLoadContext = { floorIntent };
     return true;
@@ -1326,8 +1704,9 @@ export function createGame(args: CreateGameArgs) {
   async function prewarmFloorLoadSprites(): Promise<void> {
     const w = world;
     const paletteId = resolveActivePaletteId();
-    const spriteIds = collectRuntimeSpriteIdsToPrewarm(w);
-    await prewarmPaletteSprites(paletteId, spriteIds);
+    const spriteIds = collectRuntimeSpriteDeps(w, getActiveMap());
+    enqueuePrewarm(paletteId, spriteIds);
+    await awaitPrewarmDone(1500);
 
     // 1) Always warm entity/core sprite modules.
     await awaitCoreSpriteReadiness(spriteIds, 1500);
@@ -1502,26 +1881,24 @@ export function createGame(args: CreateGameArgs) {
     };
   }
 
-  function buildFloorIntentFromRunNode(node: MapNode, floorIndex: number): FloorIntent {
-    return {
-      nodeId: node.id,
-      zoneId: node.zoneId,
-      depth: floorIndex + 1,
-      floorIndex,
-      archetype: node.floorArchetype,
-      objectiveId: objectiveIdFromArchetype(node.floorArchetype),
-    };
-  }
-
   function buildFallbackFloorIntent(w: World, floorIndex: number): FloorIntent {
     const zoneId = (w.stage?.id ?? w.stageId ?? "DOCKS") as any;
+    const archetype = w.floorArchetype ?? "SURVIVE";
+    const mapId =
+      archetype === "VENDOR"
+        ? "SHOP"
+        : archetype === "HEAL"
+          ? "REST"
+          : DEFAULT_MAP_POOL[floorIndex % DEFAULT_MAP_POOL.length];
     return {
       nodeId: "LEGACY_FLOOR",
       zoneId,
       depth: floorIndex + 1,
       floorIndex,
-      archetype: w.floorArchetype ?? "SURVIVE",
-      objectiveId: objectiveIdFromArchetype(w.floorArchetype ?? "SURVIVE"),
+      archetype,
+      mapId,
+      objectiveId: objectiveIdFromArchetype(archetype),
+      variantSeed: deterministicVariantSeed(w.runSeed, floorIndex, floorIndex + 1, archetype, mapId),
     };
   }
 
@@ -1607,15 +1984,6 @@ export function createGame(args: CreateGameArgs) {
 
 
   function applyMapSelection(mapId: string | undefined, seed: number) {
-    if (mapId === "PROC_ROOMS") {
-      generateAndActivateFloorMap(seed, 0, false, undefined);
-      return;
-    }
-    if (mapId === "PROC_MAZE") {
-      generateAndActivateMazeFloorMap(seed, 0, false);
-      return;
-    }
-
     const staticDef = getStaticMapById(mapId) ?? getDefaultStaticMap();
     if (staticDef) {
       activateMapDef(staticDef, seed);
@@ -1627,7 +1995,16 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function previewMap(mapId?: string) {
-    void mapId;
+    const seed = preparedStart?.seed ?? ((Date.now() ^ (Math.random() * 1e9)) >>> 0);
+    applyMapSelection(mapId, seed);
+  }
+
+  function reloadCurrentMapForDebug() {
+    const seed = preparedStart?.seed ?? ((Date.now() ^ (Math.random() * 1e9)) >>> 0);
+    const reloaded = reloadActiveMap(seed);
+    if (!reloaded && import.meta.env.DEV) {
+      console.warn("[map-selector] reload requested without an active authored map");
+    }
   }
 
   function resetRun(mapId?: string, options?: { skipMapSelection?: boolean; seedOverride?: number }) {
@@ -1648,6 +2025,7 @@ export function createGame(args: CreateGameArgs) {
     (world as any).mapMode = mapMode;
     (world as any).runtimeStructureSlicingEnabled = false;
     (world as any).runtimeStructureSliceDebug = false;
+    world.balance.spawnDirectorEnabled = true;
     if (mapMode) {
       setObjectives(world, []);
     } else {
@@ -1673,26 +2051,12 @@ export function createGame(args: CreateGameArgs) {
     (world as any).currentCharacterId = character.id;
     ensureStarterRelicForCharacter(world, character.id);
 
-    world.weapons = [{ id: character.startingWeaponId, level: 1, cdLeft: 0 }];
-
-    // Initialize room challenges from the current map
-    const roomData = getActiveRoomData();
-    if (roomData && roomData.length > 0) {
-      initializeRoomChallenges(world, roomData);
-    }
-
     // Create infinite delve map
     const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
     const delve = createDelveMap(seed);
     world.delveMap = delve;
     world.delveDepth = 1;
     world.delveScaling = getDepthScaling(1);
-
-    // Also keep legacy map for compatibility (will be phased out)
-    const g = buildStaticRunMap() as RunMap;
-    (world as any).runMap = g;
-    (world as any).mapCurrentNodeId = null;
-    (world as any).mapPendingNextFloorIndex = 0;
 
     // Pick starting node
     if (import.meta.env.DEV) {
@@ -1712,8 +2076,6 @@ export function createGame(args: CreateGameArgs) {
     resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
     (world as any).currentCharacterId = character.id;
     ensureStarterRelicForCharacter(world, character.id);
-
-    world.weapons = [{ id: character.startingWeaponId, level: 1, cdLeft: 0 }];
     world.delveMap = null;
     world.delveDepth = 1;
     world.delveScaling = getDepthScaling(1);
@@ -1749,8 +2111,6 @@ export function createGame(args: CreateGameArgs) {
     resetRun(mapId, { skipMapSelection: true, seedOverride: preparedStart?.seed });
     (world as any).currentCharacterId = character.id;
     ensureStarterRelicForCharacter(world, character.id);
-
-    world.weapons = [{ id: character.startingWeaponId, level: 1, cdLeft: 0 }];
     world.delveMap = null;
     world.delveDepth = 1;
     world.delveScaling = getDepthScaling(1);
@@ -1835,8 +2195,9 @@ export function createGame(args: CreateGameArgs) {
 
   async function prewarmActiveMapSpritesForCurrentPalette(): Promise<void> {
     const paletteId = resolveActivePaletteId();
-    const spriteIds = collectRuntimeSpriteIdsToPrewarm(world);
-    await prewarmPaletteSprites(paletteId, spriteIds);
+    const spriteIds = collectRuntimeSpriteDeps(world, getActiveMap());
+    enqueuePrewarm(paletteId, spriteIds);
+    await awaitPrewarmDone(1500);
 
     // Always warm entity/core sprite modules.
     await awaitCoreSpriteReadiness(spriteIds, 1500);
@@ -2099,120 +2460,6 @@ export function createGame(args: CreateGameArgs) {
     }
   }
 
-  function showMap(subText: string) {
-    resetRouteMapFrame();
-    setMapGraphFillLayout();
-    args.ui.mapEl.root.classList.remove("delveFull");
-    args.ui.mapEl.root.classList.remove("routeMode");
-    world.state = "MAP";
-    args.ui.mapEl.root.hidden = false;
-    setHudHidden(true);
-
-    args.ui.mapEl.sub.textContent = subText;
-
-    const g = (world as any).runMap as RunMap;
-    const fromId = (world as any).mapCurrentNodeId as string | null;
-
-    // Reachable set (clickable)
-    const reachable = new Set(getReachable(g, fromId).map((n) => n.id));
-
-    // --- Layout: convert node.row/col into SVG + percent positions ---
-    // Fixed grid layout (future-proof): always use g.cols x g.rows for positioning,
-    // even if we currently have only 3 nodes.
-    const cols = Math.max(1, g.cols | 0);
-    const rows = Math.max(1, g.rows | 0);
-
-    // Safe clamp in case a node has col/row outside the grid
-    const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-
-    // Visual margins in SVG coords (1000x520)
-    const x0 = 140, x1 = 860;
-    const y0 = 90, y1 = 430;
-
-    const pos = new Map<string, { x: number; y: number }>();
-    for (const n of g.nodes) {
-      const c = clamp(n.col | 0, 0, cols - 1);
-      const r = clamp(n.row | 0, 0, rows - 1);
-
-      const tx = cols > 1 ? c / (cols - 1) : 0.5;
-      const ty = rows > 1 ? r / (rows - 1) : 0.5;
-
-      const x = x0 + (x1 - x0) * tx;
-      const y = y0 + (y1 - y0) * ty;
-
-      pos.set(n.id, { x, y });
-    }
-
-    // --- Draw SVG edges + nodes (visuals) ---
-    const svg = args.ui.mapEl.svg;
-    const edgeLines = g.edges
-      .map((e) => {
-        const a = pos.get(e.from);
-        const b = pos.get(e.to);
-        if (!a || !b) return "";
-        return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="rgba(255,255,255,0.22)" stroke-width="6" stroke-linecap="round" />`;
-      })
-      .join("");
-
-    const nodeCircles = g.nodes
-      .map((n) => {
-        const p = pos.get(n.id)!;
-        const isReach = reachable.has(n.id);
-        const isChosen = (world as any).mapCurrentNodeId === n.id;
-
-        const fill = isChosen
-          ? "rgba(255,255,255,0.32)"
-          : isReach
-            ? "rgba(255,255,255,0.18)"
-            : "rgba(255,255,255,0.10)";
-
-        const stroke = isReach
-          ? "rgba(255,255,255,0.42)"
-          : "rgba(255,255,255,0.18)";
-
-        return `
-        <circle cx="${p.x}" cy="${p.y}" r="22" fill="${fill}" stroke="${stroke}" stroke-width="4" />
-        <text x="${p.x}" y="${p.y + 52}" text-anchor="middle" font-size="18" fill="rgba(255,255,255,0.92)" font-weight="800">${n.title}</text>
-      `;
-      })
-      .join("");
-
-    svg.innerHTML = `
-    <rect x="0" y="0" width="${MAP_VIEW_WIDTH}" height="${MAP_VIEW_HEIGHT}" fill="rgba(0,0,0,0)" />
-    ${edgeLines}
-    ${nodeCircles}
-  `;
-
-    // --- Hit layer buttons (clickable, but we show all nodes) ---
-    const hit = args.ui.mapEl.hit;
-    hit.innerHTML = "";
-
-    // Convert SVG coords to % so it scales with the container.
-    const toPct = (x: number, y: number) => ({ left: (x / MAP_VIEW_WIDTH) * 100, top: (y / MAP_VIEW_HEIGHT) * 100 });
-
-    for (const n of g.nodes) {
-      const p = pos.get(n.id)!;
-      const { left, top } = toPct(p.x, p.y);
-
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "mapHitBtn";
-      btn.dataset.nodeId = n.id;
-      btn.style.left = `${left}%`;
-      btn.style.top = `${top}%`;
-
-      const isReach = reachable.has(n.id) || (!fromId && reachable.has(n.id));
-      btn.disabled = !isReach;
-
-      btn.innerHTML = `
-      <div class="mapHitTitle">${n.title}</div>
-      <div class="mapHitDesc">${btn.disabled ? "Locked" : "Select"} · Boss at end</div>
-    `;
-
-      hit.appendChild(btn);
-    }
-  }
-
   function hideCardRewardMenu(): void {
     cardRewardMenu.render(null);
     relicRewardMenu.render(null);
@@ -2227,8 +2474,7 @@ export function createGame(args: CreateGameArgs) {
   function showDelveMap(subText: string) {
     const delve = world.delveMap as DelveMap;
     if (!delve) {
-      // Fallback to old map system
-      showMap(subText);
+      completeRun(world);
       return;
     }
 
@@ -2454,8 +2700,9 @@ export function createGame(args: CreateGameArgs) {
     }
     timeState.dtSim = dtReal * timeState.timeScale;
     const dtSim = timeState.dtSim;
+    tickPrewarm(2);
 
-    if (world.deathFx.active) {
+    if (deathFxActive) {
       world.deathFx.tReal = Math.min(world.deathFx.durationReal, world.deathFx.tReal + dtReal);
       const t = world.deathFx.tReal;
       const blackAlpha = clamp01(t / DEATH_TO_BLACK_DURATION_SEC);
@@ -2472,16 +2719,30 @@ export function createGame(args: CreateGameArgs) {
         clearInputEdges(input);
         return;
       }
-
-      // Freeze gameplay while death FX is running.
-      clearEvents(world);
-      clearInputEdges(input);
-      updateHud();
-      return;
     }
 
     // Always poll input (so movement is responsive immediately after closing menus)
+    if (deathFxActive || world.runState === "GAME_OVER") {
+      input._keyUp = false;
+      input._keyDown = false;
+      input._keyLeft = false;
+      input._keyRight = false;
+      input._keyInteract = false;
+      setVirtualMoveAxes(input, 0, 0, false);
+      setVirtualInteractDown(input, false);
+    }
     inputSystem(input, args.canvas);
+    if (deathFxActive || world.runState === "GAME_OVER") {
+      input.moveX = 0;
+      input.moveY = 0;
+      input.moveMag = 0;
+      input.up = false;
+      input.down = false;
+      input.left = false;
+      input.right = false;
+      input.interact = false;
+      input.interactPressed = false;
+    }
     updateNpcFacingRestore(performance.now());
     updateActiveInteractablePrompt();
 
@@ -2560,37 +2821,31 @@ export function createGame(args: CreateGameArgs) {
     neutralAnimatedMobsSystem(world, dtSim);
     roomChallengeSystem(world, dtSim);  // Track room challenges and lock exits
     spawnSurviveBossIfNeeded(world);
-    world.spawnDirectorConfig.enabled = !!world.balance.spawnDirectorEnabled;
-    if (world.balance.spawnDirectorEnabled) {
-      if (!world.floorEndCountdownActive) {
-        tickSpawnDirector(
-          world,
-          dtSim,
-          world.spawnDirectorConfig,
-          world.expectedPowerConfig,
-          world.expectedPowerBudgetConfig,
-          world.spawnDirectorState,
-          {
-            getDepth: () => {
-              if (Number.isFinite(world.delveDepth) && world.delveDepth > 0) return world.delveDepth;
-              return (world.floorIndex ?? 0) + 1;
-            },
-            isBossActive: () => world.runState === "BOSS" || bossAlive(world),
-            canSpawnNow: () => world.runState === "FLOOR" && world.phaseTime >= 2,
-            spawnTrash: () => {
-              return spawnOneTrashEnemy(world, undefined, undefined, "trash");
-            },
-          }
-        );
-      }
-    } else {
-      if (!world.floorEndCountdownActive) {
-        spawnSystem(world, dtSim);
-      }
+    world.spawnDirectorConfig.enabled = true;
+    if (!world.floorEndCountdownActive) {
+      tickSpawnDirector(
+        world,
+        dtSim,
+        world.spawnDirectorConfig,
+        world.expectedPowerConfig,
+        world.expectedPowerBudgetConfig,
+        world.spawnDirectorState,
+        {
+          getDepth: () => {
+            if (Number.isFinite(world.delveDepth) && world.delveDepth > 0) return world.delveDepth;
+            return (world.floorIndex ?? 0) + 1;
+          },
+          isBossActive: () => world.runState === "BOSS" || bossAlive(world),
+          canSpawnNow: () => world.runState === "FLOOR" && world.phaseTime >= 2,
+          spawnTrash: () => {
+            return spawnOneTrashEnemy(world, undefined, undefined, "trash");
+          },
+        }
+      );
     }
     tickBalanceCsvLogger(world as any, dtSim);
     const isNeutralObjectiveFloor = world.floorArchetype === "VENDOR" || world.floorArchetype === "HEAL";
-    if (!isNeutralObjectiveFloor) {
+    if (!isNeutralObjectiveFloor && !deathFxActive) {
       combatSystem(world, dtSim);
     }
     projectilesSystem(world, dtSim);
@@ -2598,9 +2853,10 @@ export function createGame(args: CreateGameArgs) {
     const combatMode = (world as any).combatMode ?? "mods";
     if (combatMode === "mods") {
       ailmentTickSystem(world, dtSim);
+    } else {
+      poisonSystem(world, dtSim);
     }
     fissionSystem(world, dtSim);  // Nuclear fission: projectile-projectile collisions
-    poisonSystem(world, dtSim);
     relicExplodeOnKillSystem(world, dtSim);
     bossSystem(world, dtSim);          // NEW: boss mechanics (telegraphs/hazards/dash)
     zonesSystem(world, dtSim);
@@ -2671,12 +2927,40 @@ export function createGame(args: CreateGameArgs) {
     renderSystem(world, args.ctx, args.canvas, args.uiCtx, args.uiCanvas);
   }
 
+  function retryRunFromEndOverlay(): void {
+    const characterId = (world as any).currentCharacterId as PlayableCharacterId | undefined;
+    const deterministicMode = !!(world as any).deterministicDelveMode;
+    const sandboxMode = !!(world as any).mapMode;
+    const floorIntent = (world.currentFloorIntent ?? null) as { mapId?: string } | null;
+    const fallbackMapId = (getActiveMapDef() as { id?: string } | null)?.id;
+    const sandboxMapId = sandboxMode ? (floorIntent?.mapId ?? fallbackMapId) : undefined;
+
+    quitRunToMenu();
+    if (!characterId) {
+      showMainMenuScreenFromEndOverlay();
+      return;
+    }
+
+    if (sandboxMode) {
+      startSandboxRun(characterId, sandboxMapId);
+      return;
+    }
+    if (deterministicMode) {
+      startDeterministicRun(characterId);
+      return;
+    }
+    startRun(characterId);
+  }
 
   // End screen button -> back to menu
   args.ui.endEl.root.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
     const btn = t?.closest("button") as HTMLButtonElement | null;
     if (!btn) return;
+    if (btn.id === "endRetryBtn") {
+      retryRunFromEndOverlay();
+      return;
+    }
     if (btn.id !== "endBtn") return;
 
     quitRunToMenu();
@@ -2738,23 +3022,9 @@ export function createGame(args: CreateGameArgs) {
       return;
     }
 
-    // Legacy map node clicks
-    const nodeId = btn.dataset.nodeId;
-    if (!nodeId) return;
-
-    const g = (world as any).runMap as RunMap;
-    const node = g.nodes.find((n) => n.id === nodeId);
-    if (!node) return;
-
-    // Commit choice
-    (world as any).mapCurrentNodeId = node.id;
-
-    const nextFloor = (world as any).mapPendingNextFloorIndex as number;
-
-    hideMap();
-
-    // Enter chosen floor/zone (boss is still at end of the floor like today)
-    queueFloorLoadIntent(buildFloorIntentFromRunNode(node, nextFloor));
+    if (import.meta.env.DEV) {
+      console.warn("[route-map] ignored click without deterministic or delve payload");
+    }
   });
 
   return {
@@ -2764,6 +3034,7 @@ export function createGame(args: CreateGameArgs) {
     startDeterministicRun,
     startSandboxRun,
     previewMap,
+    reloadCurrentMapForDebug,
     preloadBootAssets,
     prepareStartMap,
     prewarmActiveMapSpritesForCurrentPalette,

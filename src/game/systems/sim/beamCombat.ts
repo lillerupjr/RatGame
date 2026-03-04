@@ -229,7 +229,8 @@ export function updatePlayerBeamCombat(w: World, dt: number, cfg: BeamDamageConf
         addMomentumOnKill(w, w.timeSec ?? w.time ?? 0);
       }
       onEnemyKilledForChallenge(w);
-      w.ePoisonedOnDeath[t.enemyIndex] = w.ePoisonT[t.enemyIndex] > 0;
+      const poisonStacks = w.eAilments?.[t.enemyIndex]?.poison ?? [];
+      w.ePoisonedOnDeath[t.enemyIndex] = poisonStacks.length > 0;
       emitEvent(w, {
         type: "ENEMY_KILLED",
         enemyIndex: t.enemyIndex,

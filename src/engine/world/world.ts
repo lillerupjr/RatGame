@@ -33,7 +33,6 @@ import { defaultEnemyPowerCostConfig, type EnemyPowerCostConfig } from "../../ga
 import { createBalanceCsvLogger, type BalanceCsvLogger } from "../../game/balance/balanceCsvLogger";
 import { DEFAULT_SPAWN_TUNING } from "../../game/balance/spawnTuningDefaults";
 
-import type { WeaponId } from "../../game/content/weapons";
 import type { RelicInstance } from "../../game/content/relics";
 
 /**
@@ -240,11 +239,6 @@ export type World = {
     spawnRateMult: number;
   };
 
-  // Legacy map compatibility (if you still use it)
-  runMap?: any;
-  mapCurrentNodeId?: string | null;
-  mapPendingNextFloorIndex?: number;
-
   // -------------------------
   // Room Challenges
   // -------------------------
@@ -344,9 +338,8 @@ export type World = {
   neutralMobs: NeutralAnimatedMob[];
 
   // -------------------------
-  // Weapons + items
+  // Items + cards
   // -------------------------
-  weapons: { id: WeaponId; level: number; cdLeft: number }[];
   items: { id: any; level: number }[];
   cards: string[];
   combatCardIds: string[];
@@ -816,8 +809,7 @@ export function createWorld(args: CreateWorldArgs): World {
     npcs: [],
     neutralMobs: [],
 
-    // Weapons + items
-    weapons: [],
+    // Items + cards
     items: [],
     cards: [],
     combatCardIds: [],

@@ -93,15 +93,93 @@
   <div class="panel">
     <div class="title SectionHeader" id="endTitle">Run ended</div>
     <div class="subline" id="endSubline"></div>
-    <div class="endStats">
-      <div class="endStatRow StatRow"><span class="StatRowLabel">Time</span><strong class="StatRowValue" id="endStatTime">00:00</strong></div>
-      <div class="endStatRow StatRow"><span class="StatRowLabel">Depth</span><strong class="StatRowValue" id="endStatDepth">1</strong></div>
-      <div class="endStatRow StatRow"><span class="StatRowLabel">Kills</span><strong class="StatRowValue" id="endStatKills">0</strong></div>
-      <div class="endStatRow StatRow"><span class="StatRowLabel">Gold</span><strong class="StatRowValue" id="endStatGold">0</strong></div>
-      <div class="endStatRow StatRow"><span class="StatRowLabel">Relics</span><strong class="StatRowValue" id="endStatRelics">0</strong></div>
-      <div class="endStatRow StatRow"><span class="StatRowLabel">Cards</span><strong class="StatRowValue" id="endStatCards">0</strong></div>
+    <div id="endTabBar" class="endTabBar" role="tablist" aria-label="Run Over Tabs">
+      <button id="endTabStats" class="endTabBtn active" data-end-tab="stats" type="button" role="tab" aria-selected="true">Stats</button>
+      <button id="endTabLeaderboard" class="endTabBtn" data-end-tab="leaderboard" type="button" role="tab" aria-selected="false">Leaderboard</button>
     </div>
-    <button id="endBtn" class="PrimaryButton" type="button">Main Menu</button>
+    <section id="endStatsPanel" class="endTabPanel" data-end-panel="stats" role="tabpanel">
+      <div class="endStats">
+        <div class="endStatRow StatRow"><span class="StatRowLabel">Time</span><strong class="StatRowValue" id="endStatTime">00:00</strong></div>
+        <div class="endStatRow StatRow"><span class="StatRowLabel">Depth</span><strong class="StatRowValue" id="endStatDepth">1</strong></div>
+        <div class="endStatRow StatRow"><span class="StatRowLabel">Kills</span><strong class="StatRowValue" id="endStatKills">0</strong></div>
+        <div class="endStatRow StatRow"><span class="StatRowLabel">Gold</span><strong class="StatRowValue" id="endStatGold">0</strong></div>
+        <div class="endStatRow StatRow"><span class="StatRowLabel">Relics</span><strong class="StatRowValue" id="endStatRelics">0</strong></div>
+        <div class="endStatRow StatRow"><span class="StatRowLabel">Cards</span><strong class="StatRowValue" id="endStatCards">0</strong></div>
+      </div>
+    </section>
+    <section id="endLeaderboardPanel" class="endTabPanel endLeaderboard" data-end-panel="leaderboard" role="tabpanel" hidden>
+      <div class="endLeaderboardHeader">Depth Leaderboard</div>
+      <div id="endLeaderboardStatus" class="endLeaderboardStatus" aria-live="polite">Loading leaderboard...</div>
+      <button id="endLeaderboardRetryBtn" class="SecondaryButton endLeaderboardRetryBtn" type="button" hidden>Retry</button>
+      <div class="endRunBanner" role="status" aria-live="polite">
+        <div class="endRunBannerTitle">Your Run</div>
+        <div class="endRunBannerStats">
+          <span>Depth: <strong id="endRunBannerDepth">1</strong></span>
+          <span>Kills: <strong id="endRunBannerKills">0</strong></span>
+          <span>Rank: <strong id="endRunBannerRank">--</strong></span>
+          <span id="endRunTop10Badge" class="endRunTop10Badge" hidden>TOP 10</span>
+        </div>
+      </div>
+      <div id="endLeaderboardSubmitWrap" class="endLeaderboardSubmit">
+        <label for="endLeaderboardName" class="endLeaderboardInputLabel">Enter Name</label>
+        <div class="endLeaderboardSubmitRow">
+          <input
+            id="endLeaderboardName"
+            class="endLeaderboardNameInput"
+            type="text"
+            maxlength="12"
+            inputmode="text"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="RAT"
+          />
+          <button id="endLeaderboardSubmitBtn" class="PrimaryButton" type="button">Submit</button>
+        </div>
+        <div id="endLeaderboardSubmitStatus" class="endLeaderboardSubmitStatus" aria-live="polite"></div>
+      </div>
+      <div id="endLeaderboardSubmittedAs" class="endLeaderboardSubmittedAs" hidden></div>
+      <div class="endLeaderboardGrid">
+        <div class="endLeaderboardSection">
+          <div class="endLeaderboardSectionTitle">Top</div>
+          <div class="endLeaderboardTableWrap">
+            <table class="endLeaderboardTable">
+              <colgroup>
+                <col class="endLeaderboardColRank" />
+                <col class="endLeaderboardColName" />
+                <col class="endLeaderboardColNum" />
+                <col class="endLeaderboardColNum" />
+              </colgroup>
+              <thead>
+              <tr><th>Rank</th><th>Name</th><th>Depth</th><th>Kills</th></tr>
+              </thead>
+              <tbody id="endLeaderboardTopBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="endLeaderboardSection">
+          <div class="endLeaderboardSectionTitle">Around You</div>
+          <div class="endLeaderboardTableWrap">
+            <table class="endLeaderboardTable">
+              <colgroup>
+                <col class="endLeaderboardColRank" />
+                <col class="endLeaderboardColName" />
+                <col class="endLeaderboardColNum" />
+                <col class="endLeaderboardColNum" />
+              </colgroup>
+              <thead>
+              <tr><th>Rank</th><th>Name</th><th>Depth</th><th>Kills</th></tr>
+              </thead>
+              <tbody id="endLeaderboardAroundBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+    <div class="endActionDivider" aria-hidden="true"></div>
+    <div class="endActionRow">
+      <button id="endRetryBtn" class="SecondaryButton" type="button">Retry</button>
+      <button id="endBtn" class="PrimaryButton" type="button">Main Menu</button>
+    </div>
   </div>
 </div>
 

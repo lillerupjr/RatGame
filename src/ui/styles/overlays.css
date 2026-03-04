@@ -2134,6 +2134,44 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 #end .panel { width: min(560px, 92vw); padding: 20px; border-radius: 16px; }
 #end .title { font-size: 26px; font-weight: 900; margin-bottom: 6px; }
 #end .subline { opacity: 0.92; margin-bottom: 14px; white-space: pre-wrap; }
+#end .endTabBar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+#end .endTabBtn {
+  position: relative;
+  min-height: 40px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-weight: 900;
+  cursor: pointer;
+}
+#end .endTabBtn.active {
+  background: var(--primary-btn-bg);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+#end .endTabBtn.active::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 4px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--text-accent);
+}
+#end .endTabBtn:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: 1px;
+}
+#end .endTabPanel {
+  min-height: 0;
+}
 #end .endStats {
   display: grid;
   gap: 6px;
@@ -2155,10 +2193,171 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 #end .endStatRow strong {
   font-variant-numeric: tabular-nums;
 }
-#end button#endBtn {
-  margin-top: 14px;
+#end .endLeaderboard {
+  margin-top: 10px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--focus-bg);
+}
+#end .endLeaderboardHeader {
+  font-weight: 900;
+  margin-bottom: 6px;
+}
+#end .endLeaderboardStatus {
+  font-size: 12px;
+  opacity: 0.88;
+  margin-bottom: 6px;
+}
+#end .endLeaderboardRetryBtn {
+  margin-bottom: 8px;
+}
+#end .endRunBanner {
+  margin-bottom: 10px;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+}
+#end .endRunBannerTitle {
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 5px;
+}
+#end .endRunBannerStats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  font-size: 12px;
+}
+#end .endRunBannerStats strong {
+  font-variant-numeric: tabular-nums;
+}
+#end .endRunTop10Badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--text-accent);
+  color: var(--bg-overlay);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+#end .endLeaderboardGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+#end .endLeaderboardSectionTitle {
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 6px;
+  opacity: 0.9;
+}
+#end .endLeaderboardTableWrap {
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid var(--border-subtle);
+}
+#end .endLeaderboardTable {
   width: 100%;
-  padding: 12px 14px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+#end .endLeaderboardColRank {
+  width: 60px;
+}
+#end .endLeaderboardColName {
+  width: auto;
+}
+#end .endLeaderboardColNum {
+  width: 80px;
+}
+#end .endLeaderboardTable th,
+#end .endLeaderboardTable td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#end .endLeaderboardTable th:nth-child(1),
+#end .endLeaderboardTable th:nth-child(3),
+#end .endLeaderboardTable th:nth-child(4),
+#end .endLeaderboardTable td:nth-child(1),
+#end .endLeaderboardTable td:nth-child(3),
+#end .endLeaderboardTable td:nth-child(4) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+#end .endLeaderboardTable td.endLeaderboardEmptyCell {
+  white-space: pre-line;
+  text-align: left;
+}
+#end .endLeaderboardTable tr.isYou {
+  background: var(--active-bg);
+  color: var(--text-accent);
+  font-weight: 900;
+}
+#end .endLeaderboardSubmit {
+  margin-top: 10px;
+}
+#end .endLeaderboardInputLabel {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 6px;
+  opacity: 0.92;
+}
+#end .endLeaderboardSubmitRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+#end .endLeaderboardNameInput {
+  min-height: 36px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  padding: 0 10px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  touch-action: manipulation;
+}
+#end .endLeaderboardNameInput:disabled {
+  opacity: 0.7;
+}
+#end .endLeaderboardSubmitStatus {
+  margin-top: 6px;
+  min-height: 16px;
+  font-size: 12px;
+  opacity: 0.92;
+}
+#end .endLeaderboardSubmittedAs {
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-accent);
+}
+#end .endActionDivider {
+  height: 1px;
+  margin: 12px 0;
+  background: var(--border-default);
+  opacity: 0.5;
+}
+#end .endActionRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+#end .endActionRow button {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
   cursor: pointer;
@@ -2166,8 +2365,17 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   color: var(--text-primary);
   background: var(--primary-btn-bg);
 }
-#end button#endBtn:hover {
+#end .endActionRow button:hover {
   background: var(--primary-btn-hover-bg);
+}
+
+@media (max-width: 720px) {
+  #end .endLeaderboardGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #end .endActionRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* Deck overlays (reward + vendor) */

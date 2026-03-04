@@ -1,4 +1,5 @@
 import type { World } from "../../engine/world/world";
+import type { CompiledKenneyMap } from "../map/compile/kenneyMapLoader";
 import { getActiveMap } from "../map/compile/kenneyMap";
 
 /**
@@ -13,8 +14,11 @@ import { getActiveMap } from "../map/compile/kenneyMap";
  *
  * This intentionally stays conservative; expand later if needed.
  */
-export function collectRuntimeSpriteIdsToPrewarm(_w: World): string[] {
-  const map = getActiveMap();
+export function collectRuntimeSpriteIdsToPrewarm(
+  _w: World,
+  activeMap?: CompiledKenneyMap | null,
+): string[] {
+  const map = activeMap ?? getActiveMap();
   if (!map) return [];
 
   const out: string[] = [];

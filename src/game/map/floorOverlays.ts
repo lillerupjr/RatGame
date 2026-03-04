@@ -1,5 +1,5 @@
 import type { World } from "../../engine/world/world";
-import { getActiveMap, getSpawnWorldFromActive } from "./proceduralMapBridge";
+import { getActiveMap, getSpawnWorldFromActive } from "./authoredMapActivation";
 import { walkInfo } from "./compile/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import type { TriggerDef } from "../triggers/triggerTypes";

@@ -12,6 +12,8 @@ import { enqueueDelayedExplosion } from "./delayedExplosions";
 import { resolveProjectileDamagePacket } from "../../combat_mods/runtime/critDamagePacket";
 import { assertValidCrit, assertValidDamageBundle } from "../../combat_mods/debug/combatRuntimeAssert";
 import { applyAilmentsFromHit, ensureEnemyAilmentsAt } from "../../combat_mods/ailments/applyAilmentsFromHit";
+import { addPoison } from "../../combat_mods/ailments/enemyAilments";
+import { AILMENT_DURATIONS } from "../../combat_mods/ailments/ailmentTypes";
 import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
 import { getUserSettings } from "../../../userSettings";
 import { resolveCritRoll01 } from "../../combat_mods/runtime/critDamagePacket";
@@ -182,6 +184,7 @@ export function collisionsSystem(w: World, dt: number) {
   const igniteDamageMult = Math.max(0, dotStats.igniteDamageMult);
   const poisonDurationMult = Math.max(0, dotStats.dotDurationMult);
   const igniteDurationMult = Math.max(0, dotStats.dotDurationMult);
+  const legacyPoisonEnabled = ((w as any).combatMode ?? "mods") !== "mods";
   const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
   let px = pWorld.wx;
   let py = pWorld.wy;
@@ -381,7 +384,7 @@ export function collisionsSystem(w: World, dt: number) {
       const igniteStacks = Array.isArray(ailmentAtEnemy?.ignite)
         ? ailmentAtEnemy.ignite.length
         : (ailmentAtEnemy?.ignite ? 1 : 0);
-      const enemyPoisoned = (w.ePoisonT[e] ?? 0) > 0 || poisonStacks > 0;
+      const enemyPoisoned = (legacyPoisonEnabled && (w.ePoisonT[e] ?? 0) > 0) || poisonStacks > 0;
       const enemyBurning = igniteStacks > 0;
 
       const bLeft = w.prBouncesLeft[p];
@@ -463,8 +466,14 @@ export function collisionsSystem(w: World, dt: number) {
       const pdps = w.prPoisonDps[p];
       const pdur = w.prPoisonDur[p];
       if (pdur > 0 && pdps > 0) {
-        w.ePoisonDps[e] += pdps;
-        w.ePoisonT[e] = Math.max(w.ePoisonT[e], pdur);
+        if (legacyPoisonEnabled) {
+          w.ePoisonDps[e] += pdps;
+          w.ePoisonT[e] = Math.max(w.ePoisonT[e], pdur);
+        } else {
+          const payloadDurationMult = pdur / AILMENT_DURATIONS.poison;
+          const payloadDamageBudget = pdps * pdur;
+          addPoison(ailmentState, payloadDamageBudget, { durationMult: payloadDurationMult });
+        }
       }
 
       // Lock out re-hitting this same enemy for a short time
@@ -626,8 +635,9 @@ export function collisionsSystem(w: World, dt: number) {
         }
         onEnemyKilledForChallenge(w);
 
-        // snapshot poison-at-death BEFORE any cleanup
-        w.ePoisonedOnDeath[e] = (w.ePoisonT[e] > 0);
+        // Snapshot poison-at-death from ailment authority in mods mode.
+        const poisonAlive = Array.isArray(ailmentState.poison) && ailmentState.poison.length > 0;
+        w.ePoisonedOnDeath[e] = legacyPoisonEnabled ? (w.ePoisonT[e] > 0 || poisonAlive) : poisonAlive;
 
         emitEvent(w, {
           type: "ENEMY_KILLED",

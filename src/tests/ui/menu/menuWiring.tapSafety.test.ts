@@ -258,6 +258,16 @@ function findByData(root: FakeElement, key: string, value?: string): FakeElement
   return null;
 }
 
+function createGameApiMock() {
+  return {
+    previewMap: vi.fn(),
+    reloadCurrentMapForDebug: vi.fn(),
+    startRun: vi.fn(),
+    startDeterministicRun: vi.fn(),
+    startSandboxRun: vi.fn(),
+  };
+}
+
 describe("menuWiring tap safety", () => {
   beforeEach(() => {
     const doc = new FakeDocument();
@@ -275,12 +285,7 @@ describe("menuWiring tap safety", () => {
 
   test("start-run tap does not ghost-select a character on next screen", () => {
     const refs = createDomRefs();
-    wireMenus(refs, {
-      previewMap: vi.fn(),
-      startRun: vi.fn(),
-      startDeterministicRun: vi.fn(),
-      startSandboxRun: vi.fn(),
-    });
+    wireMenus(refs, createGameApiMock());
 
     const startRunBtn = refs.startRunBtn as unknown as FakeElement;
     tapElement(startRunBtn, 1, 240, 420);
@@ -305,12 +310,7 @@ describe("menuWiring tap safety", () => {
 
   test("starter modal closes via close button and backdrop tap", () => {
     const refs = createDomRefs();
-    wireMenus(refs, {
-      previewMap: vi.fn(),
-      startRun: vi.fn(),
-      startDeterministicRun: vi.fn(),
-      startSandboxRun: vi.fn(),
-    });
+    wireMenus(refs, createGameApiMock());
 
     tapElement(refs.startRunBtn as unknown as FakeElement, 1, 240, 420);
     const characterButtons = (refs.characterChoicesEl as unknown as FakeElement).querySelectorAll("button[data-character]");
@@ -343,12 +343,7 @@ describe("menuWiring tap safety", () => {
 
   test("starter modal closes with Escape and keeps selection active", () => {
     const refs = createDomRefs();
-    wireMenus(refs, {
-      previewMap: vi.fn(),
-      startRun: vi.fn(),
-      startDeterministicRun: vi.fn(),
-      startSandboxRun: vi.fn(),
-    });
+    wireMenus(refs, createGameApiMock());
 
     tapElement(refs.startRunBtn as unknown as FakeElement, 1, 240, 420);
     const characterButtons = (refs.characterChoicesEl as unknown as FakeElement).querySelectorAll("button[data-character]");
@@ -365,12 +360,7 @@ describe("menuWiring tap safety", () => {
 
   test("pointerup outside the pressed control does not activate", () => {
     const refs = createDomRefs();
-    wireMenus(refs, {
-      previewMap: vi.fn(),
-      startRun: vi.fn(),
-      startDeterministicRun: vi.fn(),
-      startSandboxRun: vi.fn(),
-    });
+    wireMenus(refs, createGameApiMock());
 
     const startRunBtn = refs.startRunBtn as unknown as FakeElement;
     startRunBtn.dispatchEvent(
@@ -392,12 +382,7 @@ describe("menuWiring tap safety", () => {
 
   test("mouse click still triggers action once without pointer events", () => {
     const refs = createDomRefs();
-    wireMenus(refs, {
-      previewMap: vi.fn(),
-      startRun: vi.fn(),
-      startDeterministicRun: vi.fn(),
-      startSandboxRun: vi.fn(),
-    });
+    wireMenus(refs, createGameApiMock());
 
     const startRunBtn = refs.startRunBtn as unknown as FakeElement;
     startRunBtn.dispatchEvent(new FakeMouseEvent("click", { clientX: 40, clientY: 50, target: startRunBtn }));

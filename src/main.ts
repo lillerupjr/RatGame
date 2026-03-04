@@ -961,6 +961,15 @@ async function bootstrap() {
 
   // Runtime render/debug toggles (works outside dev panel too).
   window.addEventListener("keydown", (ev) => {
+    const target = ev.target as HTMLElement | null;
+    const active = document.activeElement as HTMLElement | null;
+    const isTextEntryElement = (el: HTMLElement | null): boolean => {
+      if (!el) return false;
+      const tag = el.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+    };
+    if (isTextEntryElement(target) || isTextEntryElement(active)) return;
+
     if (ev.repeat) return;
 
     if (ev.code === "F5") {

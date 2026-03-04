@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { createWorld } from "../../../engine/world/world";
 import { stageDocks } from "../../../game/content/stages";
 import { getAuthoredMapDefByMapId } from "../../../game/map/authored/authoredMapRegistry";
-import { activateMapDef } from "../../../game/map/proceduralMapBridge";
+import { activateMapDef } from "../../../game/map/authoredMapActivation";
 import { startZoneTrial, getZoneTrialObjectiveState } from "../../../game/objectives/zoneObjectiveSystem";
 import { DEFAULT_SPAWN_TUNING } from "../../../game/balance/spawnTuningDefaults";
 

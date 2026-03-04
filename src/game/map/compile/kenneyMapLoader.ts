@@ -2889,11 +2889,5 @@ export function compileKenneyMapFromTable(
         isRoadWorld,
     };
 
-    const getTileWithRunResolver = (tx: number, ty: number): IsoTile => {
-        return getTile(tx, ty);
-    };
-
-    (compiled as any).getTileWithRunResolver = getTileWithRunResolver;
-
     return compiled;
 }

@@ -36,6 +36,11 @@ Thumbs.db
 RatGame.zip
 workspace.xml
 
+# Environment secrets
+.env.local
+.env.*.local
+!.env.example
+
 # VSCode / JetBrains local settings
 .vscode/*
 !.vscode/extensions.json

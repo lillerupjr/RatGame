@@ -291,52 +291,6 @@ export function preloadRenderSprites(): void {
     preloadVfxSprites();
 }
 
-/**
- * Prewarm remapped runtime sprites for a given palette.
- * This is a best-effort helper to reduce first-frame palette hitching.
- *
- * Notes:
- * - In-memory only (cache resets on reload).
- * - Safe to call multiple times; cache prevents duplicate work.
- * - Intended to be called during loading/transition screens.
- */
-export async function prewarmPaletteSprites(
-    paletteId: string,
-    spriteIds: string[],
-): Promise<void> {
-    const ids = Array.from(new Set(spriteIds.map((s) => s.trim()).filter(Boolean)));
-    if (ids.length === 0) return;
-
-    // Kick all loads; allow browser to schedule decode work.
-    for (const id of ids) {
-        void loadByIdInternal(id, paletteId);
-    }
-
-    // Wait until all are either ready or failed (bounded wait per sprite).
-    // This keeps the API deterministic and avoids hanging forever on a bad URL.
-    const start = performance.now();
-    const MAX_WAIT_MS = 1500;
-
-    await new Promise<void>((resolve) => {
-        const tick = () => {
-            const allDone = ids.every((id) => {
-                const rec = loadByIdInternal(id, paletteId);
-                return rec.ready;
-            });
-
-            const elapsed = performance.now() - start;
-            if (allDone || elapsed >= MAX_WAIT_MS) {
-                resolve();
-                return;
-            }
-
-            requestAnimationFrame(tick);
-        };
-
-        tick();
-    });
-}
-
 export function enqueueSpritePrewarm(
     spriteIds: string[],
     paletteId: PaletteId,

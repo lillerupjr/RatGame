@@ -3,7 +3,7 @@ import { createWorld } from "../../../engine/world/world";
 import { stageDocks } from "../../../game/content/stages";
 import { resolveBuildingCandidates } from "../../../game/content/buildings";
 import { getAuthoredMapDefByMapId } from "../../../game/map/authored/authoredMapRegistry";
-import { activateMapDef } from "../../../game/map/proceduralMapBridge";
+import { activateMapDef } from "../../../game/map/authoredMapActivation";
 import { getZoneTrialObjectiveState, startZoneTrial } from "../../../game/objectives/zoneObjectiveSystem";
 
 describe("zone trial china_town placement", () => {

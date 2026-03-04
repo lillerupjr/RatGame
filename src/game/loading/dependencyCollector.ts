@@ -1,4 +1,4 @@
-import { getActiveMapDef } from "../map/proceduralMapBridge";
+import { getActiveMapDef } from "../map/authoredMapActivation";
 import { getActiveMap } from "../map/compile/kenneyMap";
 import { PLAYABLE_CHARACTERS } from "../content/playableCharacters";
 

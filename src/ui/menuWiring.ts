@@ -11,6 +11,7 @@ import { isUserModeEnabled } from "../userSettings";
 
 type GameApi = {
     previewMap: (mapId?: string) => void;
+    reloadCurrentMapForDebug?: () => void;
     startRun: (characterId: PlayableCharacterId) => void;
     startDeterministicRun: (characterId: PlayableCharacterId) => void;
     startSandboxRun: (characterId: PlayableCharacterId, mapId?: string) => void;
@@ -49,15 +50,10 @@ const staticMapDefs: TableMapDef[] = AUTHORED_MAP_DEFS;
 const staticMapChoices: MapChoice[] = staticMapDefs.map((def) => ({
     id: def.id,
     label: toTitleCase(def.id),
-    desc: `Static map (${def.w}x${def.h}).`,
+    desc: `Authored map (${def.w}x${def.h}).`,
 }));
 
-const proceduralChoices: MapChoice[] = [
-    { id: "PROC_ROOMS", label: "Procedural Rooms", desc: "Generated room chain with ramps." },
-    { id: "PROC_MAZE", label: "Procedural Maze", desc: "Generated maze layout." },
-];
-
-const mapChoices: MapChoice[] = [...proceduralChoices, ...staticMapChoices];
+const mapChoices: MapChoice[] = staticMapChoices;
 
 export function wireMenus(refs: DomRefs, game: GameApi): void {
     const backgroundImageUrl = getBackgroundUrl();
@@ -70,10 +66,11 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     applyBackground(refs.creditsMenuEl, backgroundImageUrl);
     applyBackground(refs.characterSelectEl, backgroundImageUrl);
 
-    // Start with undefined (Delve mode) by default, not PROC_ROOMS
+    // Start with undefined (Delve mode) by default.
     let selectedMapId: string | undefined = refs.startBtn.dataset.map || undefined;
     let selectedCharacterId: PlayableCharacterId | undefined = undefined;
     let pendingStartMode: "DELVE" | "DETERMINISTIC" | "SANDBOX" = "DELVE";
+    let debugMapSelectorBtn: HTMLButtonElement | null = null;
     let starterModalOverlay: HTMLDivElement | null = null;
     let starterModalCharacterName: HTMLDivElement | null = null;
     let starterModalSpriteWrap: HTMLDivElement | null = null;
@@ -163,6 +160,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
 
     const applyUserModeMenuGating = () => {
         const isUserMode = isUserModeEnabled();
+        if (debugMapSelectorBtn) debugMapSelectorBtn.hidden = isUserMode;
 
         if (isUserMode && pendingStartMode !== "DELVE") {
             pendingStartMode = "DELVE";
@@ -175,6 +173,38 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
             refs.mapMenuEl.hidden = true;
             refs.mainMenuEl.hidden = false;
         }
+    };
+
+    const openMapSelectorMenu = () => {
+        if (isUserModeEnabled()) return;
+        pendingStartMode = "SANDBOX";
+        closeStarterModal();
+        refs.mainMenuEl.hidden = true;
+        refs.mapMenuEl.hidden = false;
+        if (!selectedMapId && mapChoices.length > 0) {
+            setSelectedMap(mapChoices[0].id);
+        }
+        game.previewMap(selectedMapId);
+    };
+
+    const ensureDebugMapSelectorButton = () => {
+        if (!import.meta.env.DEV) return;
+        if (debugMapSelectorBtn) return;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "terminalAction SecondaryButton";
+        btn.textContent = "MAP SELECTOR";
+        btn.hidden = isUserModeEnabled();
+        btn.setAttribute("data-map-selector-debug", "1");
+        bindActivate(btn, () => openMapSelectorMenu());
+        const host = ((refs.startRunBtn as any).parentNode as HTMLElement | null) ?? refs.mainMenuEl;
+        const anchor = refs.innkeeperBtn ?? null;
+        if (anchor && typeof (host as any).insertBefore === "function") {
+            host.insertBefore(btn, anchor);
+        } else {
+            host.appendChild(btn);
+        }
+        debugMapSelectorBtn = btn;
     };
 
     function getSelectedMapLabel(): string {
@@ -420,18 +450,35 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
       <div class="mapChoiceDesc">${choice.desc}</div>
     `;
 
-            bindActivate(btn, () => setSelectedMap(choice.id));
+            bindActivate(btn, () => {
+                setSelectedMap(choice.id);
+                game.previewMap(choice.id);
+            });
             refs.mapChoicesEl.appendChild(btn);
         }
 
         if (selectedMapId) {
             setSelectedMap(selectedMapId);
+            game.previewMap(selectedMapId);
         }
     }
 
     buildCharacterPicker();
     ensureStarterModal();
     buildMapPicker();
+    ensureDebugMapSelectorButton();
+    const mapMenuActions =
+        typeof (refs.mapMenuEl as any).querySelector === "function"
+            ? (refs.mapMenuEl as any).querySelector(".mapMenuActions")
+            : null;
+    if (mapMenuActions && typeof (mapMenuActions as any).insertBefore === "function") {
+        const reloadBtn = document.createElement("button");
+        reloadBtn.type = "button";
+        reloadBtn.className = "SecondaryButton";
+        reloadBtn.textContent = "Reload Current Map";
+        bindActivate(reloadBtn, () => game.reloadCurrentMapForDebug?.());
+        mapMenuActions.insertBefore(reloadBtn, refs.mapContinueBtn);
+    }
     refs.characterContinueBtn.hidden = true;
     applyUserModeMenuGating();
     if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
@@ -528,5 +575,15 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         applyUserModeMenuGating();
         refs.mainMenuEl.hidden = false;
     });
+
+    if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+        document.addEventListener("keydown", (ev) => {
+            if (!import.meta.env.DEV) return;
+            const kev = ev as KeyboardEvent;
+            if (kev.key.toLowerCase() !== "m" || !kev.shiftKey) return;
+            if (refs.mainMenuEl.hidden || isUserModeEnabled()) return;
+            openMapSelectorMenu();
+        });
+    }
 
 }
