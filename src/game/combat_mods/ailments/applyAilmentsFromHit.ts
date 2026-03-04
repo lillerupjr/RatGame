@@ -58,6 +58,7 @@ export function applyAilmentsFromHit(
   const poisonDurationMult = Math.max(0, extra?.poisonDurationMult ?? 1);
   const igniteDurationMult = Math.max(0, extra?.igniteDurationMult ?? 1);
   const allDamageContributesToPoison = !!extra?.allDamageContributesToPoison;
+  // DoT is derived from already-resolved hit payload; never reapply global hit damage here.
   const poisonBaseDamage = allDamageContributesToPoison
     ? Math.max(0, dealt.physical + dealt.fire + dealt.chaos)
     : Math.max(0, dealt.chaos);

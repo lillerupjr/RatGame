@@ -80,5 +80,15 @@ describe("recomputeDerivedStats – card LIFE_ADD", () => {
     expect(w.playerHpMax).toBe(125);
     expect(w.playerHp).toBe(50); // not healed, just clamped
   });
-});
 
+  it("less max life applies to total pool (base + flat life adds)", () => {
+    const w = stubWorld({
+      cards: ["CARD_LIFE_3"],
+      relics: ["SPEC_DAMAGE_MORE_200_MAX_LIFE_LESS_50"],
+      playerHp: 175,
+    });
+    recomputeDerivedStats(w);
+    expect(w.playerHpMax).toBe(87);
+    expect(w.playerHp).toBe(87);
+  });
+});

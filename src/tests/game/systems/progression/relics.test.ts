@@ -116,12 +116,24 @@ describe("relic scaffold phase 0", () => {
     expect(world.pSpeed).toBeCloseTo(baseMoveSpeed * 0.8, 6);
   });
 
-  test("SPEC_DOT_SPECIALIST does not alter generic derived damage multiplier", () => {
+  test("SPEC_DOT_SPECIALIST reduces global hit damage by 50%", () => {
     const world = createWorld({ seed: 11, stage: stageDocks });
     const baseDamageMult = world.dmgMult;
 
     applyRelic(world, "SPEC_DOT_SPECIALIST");
 
-    expect(world.dmgMult).toBeCloseTo(baseDamageMult, 6);
+    expect(world.dmgMult).toBeCloseTo(baseDamageMult * 0.5, 6);
+  });
+
+  test("multiple more/less sources stack multiplicatively", () => {
+    const world = createWorld({ seed: 12, stage: stageDocks });
+    const baseDamageMult = world.dmgMult;
+
+    applyRelic(world, "PASS_DAMAGE_PERCENT_20");
+    applyRelic(world, "SPEC_DAMAGE_MORE_100_ATTACK_SPEED_LESS_40");
+    applyRelic(world, "SPEC_ATTACK_SPEED_MORE_50_DAMAGE_LESS_30");
+
+    const expected = baseDamageMult * 1.2 * 2.0 * 0.7;
+    expect(world.dmgMult).toBeCloseTo(expected, 6);
   });
 });

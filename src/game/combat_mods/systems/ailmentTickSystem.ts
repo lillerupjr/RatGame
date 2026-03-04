@@ -52,6 +52,7 @@ export function ailmentTickSystem(w: any, dt: number): void {
     .filter((card): card is NonNullable<typeof card> => Boolean(card));
   const dotStats = resolveDotStats({ cards });
   const relicIds: string[] = Array.isArray(w.relics) ? w.relics : [];
+  // Dot-only scaling stays in the DoT pipeline; global hit multipliers must not be applied here.
   const relicDotMoreMult =
     (relicIds.includes("PASS_DOT_MORE_50") ? 1.5 : 1) *
     (relicIds.includes("SPEC_DOT_SPECIALIST") ? 3.0 : 1);

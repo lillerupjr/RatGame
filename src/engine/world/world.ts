@@ -995,7 +995,6 @@ export function createWorld(args: CreateWorldArgs): World {
       pressureBase: 0.7,
       pressurePerDepth: 0.05,
       pressureMin: 0.6,
-      pressureMax: 1.3,
       minFillPerTick: 0,
       waveEnabled: false,
       waveTotal: 10,

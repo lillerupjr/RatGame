@@ -40,8 +40,28 @@ export const STAT_KEYS = {
   CONVERT_PHYS_TO_CHAOS: "convert.physicalToChaos",
   CONVERT_FIRE_TO_CHAOS: "convert.fireToChaos",
 
+  // Global player stat pipelines (v1.0 contract)
+  GLOBAL_HIT_DAMAGE_ADD: "globalHitDamage.add",
+  GLOBAL_HIT_DAMAGE_INCREASED: "globalHitDamage.increased",
+  GLOBAL_HIT_DAMAGE_MORE: "globalHitDamage.more",
+  GLOBAL_HIT_DAMAGE_LESS: "globalHitDamage.less",
+
+  GLOBAL_ATTACK_SPEED_ADD: "globalAttackSpeed.add",
+  GLOBAL_ATTACK_SPEED_INCREASED: "globalAttackSpeed.increased",
+  GLOBAL_ATTACK_SPEED_MORE: "globalAttackSpeed.more",
+  GLOBAL_ATTACK_SPEED_LESS: "globalAttackSpeed.less",
+
+  MOVE_SPEED_ADD: "moveSpeed.add",
+  MOVE_SPEED_INCREASED: "moveSpeed.increased",
+  MOVE_SPEED_MORE: "moveSpeed.more",
+  MOVE_SPEED_LESS: "moveSpeed.less",
+
   // Defense
   LIFE_ADD: "life.add",
+  LIFE_INCREASED: "life.increased",
+  LIFE_DECREASED: "life.decreased",
+  LIFE_MORE: "life.more",
+  LIFE_LESS: "life.less",
   DAMAGE_REDUCTION_ADD: "damageReduction.add",
 } as const;
 

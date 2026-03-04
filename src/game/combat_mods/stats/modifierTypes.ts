@@ -1,14 +1,14 @@
 import type { StatKey } from "./statKeys";
 
-export type ModOp = "add" | "increased" | "more";
+export type ModOp = "add" | "increased" | "decreased" | "more" | "less";
 
 /**
  * A single stat modifier.
  *
  * Conventions:
  * - "add" is raw addition to a base stat (e.g. +3 fire damage, +0.04 crit chance).
- * - "increased" is additive scaling (sum bucket), expressed as fraction (0.15 = +15%).
- * - "more" is multiplicative scaling, expressed as fraction (0.20 = 20% more => *1.2).
+ * - "increased"/"decreased" are additive scaling (sum bucket), expressed as fraction (0.15 = +15%).
+ * - "more"/"less" are multiplicative scaling, expressed as fraction (0.20 = 20% more => *1.2).
  */
 export interface StatMod {
   key: StatKey;

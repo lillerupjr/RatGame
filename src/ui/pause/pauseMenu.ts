@@ -3,6 +3,7 @@ import { getCombatModsSnapshot } from "../../game/combat_mods";
 import { getAllCardIds, getCardById } from "../../game/combat_mods/content/cards/cardPool";
 import { resolveCombatStarterWeaponId } from "../../game/combat_mods/content/weapons/characterStarterMap";
 import { getCombatStarterWeaponById } from "../../game/combat_mods/content/weapons/starterWeapons";
+import { applyCardToWorld, removeCardFromWorld } from "../../game/combat_mods/rewards/cardApply";
 import { getGold } from "../../game/economy/gold";
 import { getAllRelicIds, getRelicById } from "../../game/content/relics";
 import {
@@ -70,7 +71,7 @@ function createStatTable(rows: Array<[string, string]>): HTMLTableElement {
 
 function describeCardMod(mod: { key: string; op: string; value: number }): string {
   const value = Number.isFinite(mod.value) ? mod.value : 0;
-  if (mod.op === "more" || mod.op === "increased") {
+  if (mod.op === "more" || mod.op === "increased" || mod.op === "less" || mod.op === "decreased") {
     const sign = value >= 0 ? "+" : "";
     return `${sign}${Math.round(value * 100)}% ${mod.op} ${mod.key}`;
   }
@@ -717,8 +718,7 @@ export function mountPauseMenu(args: {
         plusBtn.addEventListener("click", () => {
           const w = latestWorld as any;
           if (!w || typeof w !== "object") return;
-          if (!Array.isArray(w.cards)) w.cards = [];
-          w.cards.push(cardId);
+          applyCardToWorld(w, cardId);
           count.textContent = `x${countInstances(w.cards, cardId)}`;
           renderOwnedCards(latestWorld);
           renderTopStatsForOwnedAndSettings(latestWorld);
@@ -735,8 +735,7 @@ export function mountPauseMenu(args: {
             count.textContent = "x0";
             return;
           }
-          const index = w.cards.indexOf(cardId);
-          if (index >= 0) w.cards.splice(index, 1);
+          removeCardFromWorld(w, cardId);
           count.textContent = `x${countInstances(w.cards, cardId)}`;
           renderOwnedCards(latestWorld);
           renderTopStatsForOwnedAndSettings(latestWorld);

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { applyCardToWorld } from "../../../game/combat_mods/rewards/cardApply";
+import { applyCardToWorld, removeCardFromWorld } from "../../../game/combat_mods/rewards/cardApply";
 
 function stubWorld(): any {
   return {
@@ -45,5 +45,17 @@ describe("cardApply", () => {
     applyCardToWorld(world, "CARD_LIFE_1");
     expect(world.playerHpMax).toBe(125);
     expect(world.playerHp).toBe(105); // 80 + 25
+  });
+
+  test("removing one life card recomputes and clamps current HP", () => {
+    const world = stubWorld();
+    applyCardToWorld(world, "CARD_LIFE_3");
+    expect(world.playerHpMax).toBe(175);
+    expect(world.playerHp).toBe(175);
+
+    const removed = removeCardFromWorld(world, "CARD_LIFE_3");
+    expect(removed).toBe(true);
+    expect(world.playerHpMax).toBe(100);
+    expect(world.playerHp).toBe(100);
   });
 });

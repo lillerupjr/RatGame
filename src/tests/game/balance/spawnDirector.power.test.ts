@@ -10,7 +10,6 @@ const cfg: SpawnDirectorConfig = {
   pressureBase: 1,
   pressurePerDepth: 0,
   pressureMin: 1,
-  pressureMax: 1,
   minFillPerTick: 0,
   waveEnabled: false,
   waveTotal: 10,
@@ -111,5 +110,46 @@ describe("spawnDirector interval queue", () => {
     expect(w.spawnDirectorDebug.powerBudget).toBeCloseTo(88);
     expect((w.spawnDirectorDebug as any).pendingHpCommitted).toBeCloseTo(140);
     expect(state.waveRemaining).toBe(7);
+  });
+
+  test("spawn director telemetry pressure exceeds 50 and keeps climbing over long time", () => {
+    const state = createSpawnDirectorState();
+    const w: any = {
+      timeSec: 500,
+      phaseTime: 500,
+      metrics: { dps: createDpsMetrics() },
+      enemyPowerConfig: { costs: { trash: 1 } },
+      balance: {
+        spawnTuning: {
+          spawnBase: 1.0,
+          spawnPerDepth: 1.12,
+          hpBase: hpBaseForRepresentativeHp,
+          hpPerDepth: 1.18,
+          pressureAt0Sec: 0.8,
+          pressureAt120Sec: 1.6,
+        },
+      },
+    };
+
+    tickSpawnDirector(w, 1, cfg, expectedCfg, powerBudgetCfg, state, {
+      getDepth: () => 1,
+      isBossActive: () => false,
+      canSpawnNow: () => false,
+      spawnTrash: () => true,
+    });
+    const p1 = w.spawnDirectorDebug.pressure;
+    expect(p1).toBeGreaterThan(50);
+
+    w.timeSec = 560;
+    w.phaseTime = 560;
+    tickSpawnDirector(w, 1, cfg, expectedCfg, powerBudgetCfg, state, {
+      getDepth: () => 1,
+      isBossActive: () => false,
+      canSpawnNow: () => false,
+      spawnTrash: () => true,
+    });
+    const p2 = w.spawnDirectorDebug.pressure;
+    expect(p2).toBeGreaterThan(50);
+    expect(p2).toBeGreaterThan(p1);
   });
 });

@@ -193,6 +193,45 @@ describe("combatSystem pistol integration", () => {
     expect(damageDealt).toBeCloseTo(6);
   });
 
+  test("global hit damage scales hit-derived poison once (no DoT double dip)", () => {
+    const runScenario = (withGlobalHitMore: boolean): { hitDamage: number; poisonDps: number } => {
+      const w = createWorld({ seed: withGlobalHitMore ? 9003 : 9002, stage: stageDocks });
+      w.events.length = 0;
+      w.combatCardIds = [];
+      w.primaryWeaponCdLeft = 0;
+      (w as any).currentCharacterId = "HOBO";
+      setPlayerWorld(w, 0, 0);
+      if (withGlobalHitMore) applyRelic(w, "SPEC_DAMAGE_MORE_200_MAX_LIFE_LESS_50");
+      const enemy = spawnBasicEnemy(w, 90, 0, 500);
+
+      for (let i = 0; i < 180; i++) {
+        combatSystem(w, 1 / 60);
+        projectilesSystem(w, 1 / 60);
+        for (let p = 0; p < w.pAlive.length; p++) {
+          if (!w.pAlive[p]) continue;
+          w.prCritChance[p] = 0;
+          w.prChancePoison[p] = 1;
+          w.prChanceIgnite[p] = 0;
+          w.prChanceBleed[p] = 0;
+        }
+        const before = w.eHp[enemy];
+        collisionsSystem(w, 1 / 60);
+        if (w.eHp[enemy] >= before) continue;
+        const hitDamage = before - w.eHp[enemy];
+        const poisonDps = w.eAilments?.[enemy]?.poison?.[0]?.dps ?? 0;
+        if (poisonDps > 0) return { hitDamage, poisonDps };
+      }
+
+      throw new Error("Expected at least one poison-applying hit in scenario.");
+    };
+
+    const baseline = runScenario(false);
+    const boosted = runScenario(true);
+
+    expect(boosted.hitDamage).toBeCloseTo(baseline.hitDamage * 3, 6);
+    expect(boosted.poisonDps).toBeCloseTo(baseline.poisonDps * 3, 6);
+  });
+
   test("JOEY uses continuous laser beam profile in combat-mods primary fire", () => {
     const w = createWorld({ seed: 1234, stage: stageDocks });
     w.events.length = 0;

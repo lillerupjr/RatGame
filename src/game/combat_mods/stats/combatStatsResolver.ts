@@ -57,24 +57,27 @@ type Acc = {
   add: number;
   inc: number; // sum of increased
   more: number; // multiplicative factor, starts at 1
+  less: number; // multiplicative factor, starts at 1
 };
 
 function newAcc(): Acc {
-  return { add: 0, inc: 0, more: 1 };
+  return { add: 0, inc: 0, more: 1, less: 1 };
 }
 
 function applyMod(acc: Acc, mod: StatMod): void {
   if (mod.op === "add") acc.add += mod.value;
   else if (mod.op === "increased") acc.inc += mod.value;
+  else if (mod.op === "decreased") acc.inc -= mod.value;
   else if (mod.op === "more") acc.more *= 1 + mod.value;
+  else if (mod.op === "less") acc.less *= Math.max(0, 1 - mod.value);
 }
 
 /**
  * Resolve a single numeric stat from a base value and a stat accumulator.
- * Formula: (base + add) * (1 + inc) * more
+ * Formula: (base + add) * (1 + inc) * more * less
  */
 function resolveScalar(base: number, acc: Acc): number {
-  return (base + acc.add) * (1 + acc.inc) * acc.more;
+  return (base + acc.add) * (1 + acc.inc) * acc.more * acc.less;
 }
 
 function clamp01(v: number): number {
@@ -85,12 +88,14 @@ function combineAcc(...accs: Acc[]): Acc {
   let add = 0;
   let inc = 0;
   let more = 1;
+  let less = 1;
   for (const acc of accs) {
     add += acc.add;
     inc += acc.inc;
     more *= acc.more;
+    less *= acc.less;
   }
-  return { add, inc, more };
+  return { add, inc, more, less };
 }
 
 export function resolveWeaponStats(weapon: WeaponDef, loadout: CombatModsLoadout): ResolvedWeaponStats {
@@ -201,10 +206,10 @@ export function resolveDotStats(loadout: CombatModsLoadout): DotStatsScalars {
   const durationAcc = getAcc(STAT_KEYS.DOT_DURATION_INCREASED);
   const tickRateAcc = getAcc(STAT_KEYS.DOT_TICK_RATE_MORE);
 
-  const poisonDamageMult = Math.max(0, (1 + poisonAcc.inc) * poisonAcc.more);
-  const igniteDamageMult = Math.max(0, (1 + igniteAcc.inc) * igniteAcc.more);
-  const dotDurationMult = Math.max(0, (1 + durationAcc.inc) * durationAcc.more);
-  const tickRateMult = Math.max(0.0001, (1 + tickRateAcc.inc) * tickRateAcc.more);
+  const poisonDamageMult = Math.max(0, (1 + poisonAcc.inc) * poisonAcc.more * poisonAcc.less);
+  const igniteDamageMult = Math.max(0, (1 + igniteAcc.inc) * igniteAcc.more * igniteAcc.less);
+  const dotDurationMult = Math.max(0, (1 + durationAcc.inc) * durationAcc.more * durationAcc.less);
+  const tickRateMult = Math.max(0.0001, (1 + tickRateAcc.inc) * tickRateAcc.more * tickRateAcc.less);
 
   return {
     poisonDamageMult,

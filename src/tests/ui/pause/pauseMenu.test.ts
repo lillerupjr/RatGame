@@ -350,10 +350,15 @@ function makeWorld(overrides: Record<string, unknown> = {}) {
   return {
     playerHp: 80,
     playerHpMax: 100,
+    basePlayerHpMax: 100,
     baseMoveSpeed: 300,
     pSpeed: 260,
     basePickupRadius: 0,
     pickupRadius: 0,
+    maxArmor: 50,
+    currentArmor: 0,
+    momentumMax: 20,
+    momentumValue: 0,
     dmgMult: 1,
     fireRateMult: 1,
     areaMult: 1,
@@ -653,6 +658,35 @@ describe("pauseMenu", () => {
     minus.click();
     expect(root.textContent).toContain("x0");
     expect(() => minus.click()).not.toThrow();
+  });
+
+  test("debug card editor recomputes max HP and clamps current HP immediately", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+    userSettingsState.settings = {
+      ...userSettingsState.settings,
+      game: { userModeEnabled: false, healthOrbSide: "left" },
+    } as any;
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+    menu.setVisible(true);
+
+    const world = makeWorld({ cards: [], playerHp: 80, playerHpMax: 100, basePlayerHpMax: 100 });
+    menu.render(world);
+
+    const openBtn = root.querySelector("[data-debug-cards-open]") as any;
+    openBtn.click();
+
+    const addBtn = root.querySelector('[data-debug-card-add="CARD_LIFE_3"]') as any;
+    expect(addBtn).toBeTruthy();
+    addBtn.click();
+    expect(world.playerHpMax).toBe(175);
+    expect(world.playerHp).toBe(155);
+
+    const removeBtn = root.querySelector('[data-debug-card-remove="CARD_LIFE_3"]') as any;
+    expect(removeBtn).toBeTruthy();
+    removeBtn.click();
+    expect(world.playerHpMax).toBe(100);
+    expect(world.playerHp).toBe(100);
   });
 
   test("debug relic editor saves add/remove to world.relics", () => {

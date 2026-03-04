@@ -104,6 +104,15 @@ describe("resolveWeaponStats", () => {
     expect(out.shotsPerSecond).toBeCloseTo(3.0 * 1.2);
   });
 
+  test("engine supports decreased and less on the same key", () => {
+    const cDec = mkCard("T_DEC", [{ key: STAT_KEYS.SHOTS_PER_SECOND_INCREASED, op: "decreased", value: 0.10 }]);
+    const cMore = mkCard("T_MORE2", [{ key: STAT_KEYS.SHOTS_PER_SECOND_INCREASED, op: "more", value: 0.20 }]);
+    const cLess = mkCard("T_LESS", [{ key: STAT_KEYS.SHOTS_PER_SECOND_INCREASED, op: "less", value: 0.25 }]);
+
+    const out = resolveWeaponStats(JACK_PISTOL_V1, { cards: [cDec, cMore, cLess] });
+    expect(out.shotsPerSecond).toBeCloseTo(3.0 * 0.9 * 1.2 * 0.75);
+  });
+
   test("flat adds apply per damage type before conversion", () => {
     const c = mkCard("T_FLAT", [
       { key: STAT_KEYS.DAMAGE_ADD_PHYSICAL, op: "add", value: 3 },

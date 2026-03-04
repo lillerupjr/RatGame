@@ -47,6 +47,7 @@ export function chooseRelicReward(world: any, relicId: string): void {
   if (!state.options.includes(canonical)) {
     throw new Error(`Invalid relic reward choice: ${relicId}`);
   }
+  // applyRelic() is the single authority for immediate derived stat recompute + HP clamp.
   applyRelic(world, canonical, { source: "drop" });
   state.active = false;
   state.options = [];

@@ -22,3 +22,12 @@ export function applyCardToWorld(world: any, cardId: string): void {
     world.playerHp = Math.min(world.playerHpMax, world.playerHp + lifeAdd);
   }
 }
+
+export function removeCardFromWorld(world: any, cardId: string): boolean {
+  if (!Array.isArray(world.cards)) return false;
+  const index = world.cards.indexOf(cardId);
+  if (index < 0) return false;
+  world.cards.splice(index, 1);
+  recomputeDerivedStats(world);
+  return true;
+}

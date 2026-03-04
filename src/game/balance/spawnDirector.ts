@@ -10,7 +10,6 @@ export interface SpawnDirectorConfig {
   pressureBase: number;
   pressurePerDepth: number;
   pressureMin: number;
-  pressureMax: number;
   minFillPerTick?: number;
   waveEnabled: boolean;
   waveTotal: number;
@@ -63,17 +62,15 @@ export function createSpawnDirectorState(): SpawnDirectorState {
   };
 }
 
-function clamp(v: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, v));
-}
-
 function safeNum(v: any, fallback: number): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
 }
 
 export function pressureAtDepth(cfg: SpawnDirectorConfig, depth: number): number {
-  return clamp(cfg.pressureBase + cfg.pressurePerDepth * depth, cfg.pressureMin, cfg.pressureMax);
+  const d = Math.max(0, depth);
+  const p = cfg.pressureBase + cfg.pressurePerDepth * d;
+  return Math.max(cfg.pressureMin, p);
 }
 
 function recordSpawnCount(state: SpawnDirectorState, nowSec: number, count: number): void {
@@ -145,7 +142,9 @@ export function tickSpawnDirector(
   const pressureT120 = typeof tuning.pressureAt120Sec === "number" ? tuning.pressureAt120Sec : DEFAULT_SPAWN_TUNING.pressureAt120Sec;
 
   const expectedDps = BASELINE_PLAYER_DPS;
-  const basePressure = computePressure(tInFloorSec, pressureT0, pressureT120);
+  const previousPressure = safeNum((w as any).spawnDirectorDebug?.pressure, 0);
+  const rawBasePressure = computePressure(tInFloorSec, pressureT0, pressureT120);
+  const basePressure = Math.max(0, safeNum(rawBasePressure, previousPressure));
   const pressure = basePressure;
   const waveMult = waveMultiplier(cfg, now);
 

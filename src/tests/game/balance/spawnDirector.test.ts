@@ -8,7 +8,6 @@ const cfg: SpawnDirectorConfig = {
   pressureBase: 1,
   pressurePerDepth: 0,
   pressureMin: 1,
-  pressureMax: 1,
   minFillPerTick: 0,
   waveEnabled: false,
   waveTotal: 10,

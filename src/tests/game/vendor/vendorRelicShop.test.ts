@@ -5,6 +5,7 @@ import { generateVendorRelicOffers } from "../../../game/vendor/generateVendorRe
 import { VENDOR_RELIC_PRICE_G } from "../../../game/vendor/pricing";
 import { createVendorState } from "../../../game/vendor/vendorState";
 import { tryPurchaseVendorRelic } from "../../../game/vendor/vendorPurchase";
+import { applyCardToWorld } from "../../../game/combat_mods/rewards/cardApply";
 
 describe("vendor relic shop", () => {
   test("deterministic stock and stable on reopen", () => {
@@ -62,5 +63,26 @@ describe("vendor relic shop", () => {
     w.relics = ["PASS_MOVE_SPEED_20"];
     const offers = generateVendorRelicOffers(w, 5, VENDOR_RELIC_PRICE_G);
     expect(offers.some((o) => o.relicId === "PASS_MOVE_SPEED_20")).toBe(false);
+  });
+
+  test("buying life-less relic immediately updates max HP and clamps current HP", () => {
+    const w = createWorld({ seed: 1006, stage: stageDocks });
+    applyCardToWorld(w, "CARD_LIFE_3");
+    w.playerHp = 175;
+    w.run.runGold = VENDOR_RELIC_PRICE_G;
+    w.vendor = createVendorState([], [
+      {
+        relicId: "SPEC_DAMAGE_MORE_200_MAX_LIFE_LESS_50",
+        priceG: VENDOR_RELIC_PRICE_G,
+        isSold: false,
+      },
+    ]);
+
+    const ok = tryPurchaseVendorRelic(w, 0);
+
+    expect(ok).toBe(true);
+    expect(w.playerHpMax).toBe(87);
+    expect(w.playerHp).toBe(87);
+    expect(w.vendor.relicOffers[0].isSold).toBe(true);
   });
 });
