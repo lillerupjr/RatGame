@@ -13,6 +13,7 @@ export type ZoneTrialObjectiveState = {
   zones: ZoneObjective[];
   totalZones: number;
   completedZones: number;
+  rewardMilestonesGranted: number;
   completed: boolean;
   completionSignalEmitted: boolean;
 };

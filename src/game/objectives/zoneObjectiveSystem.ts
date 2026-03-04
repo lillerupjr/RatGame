@@ -287,6 +287,7 @@ export function startZoneTrial(world: World, config: Partial<ZoneTrialConfig> = 
     zones,
     totalZones: zones.length,
     completedZones: 0,
+    rewardMilestonesGranted: 0,
     completed: zones.length === 0,
     completionSignalEmitted: zones.length === 0,
   });
@@ -329,12 +330,13 @@ export function updateZoneTrialObjective(world: World): void {
         zone.killCount = zone.killTarget;
         zone.completed = true;
         state.completedZones++;
-        const zoneIndex = z + 1;
-        if (zoneIndex === 1 || zoneIndex === 2) {
+        state.rewardMilestonesGranted++;
+        const milestone = state.rewardMilestonesGranted;
+        if (milestone === 1 || milestone === 2) {
           enqueueRunEvent(world, {
             type: "ZONE_CLEARED",
             floorIndex: Number.isFinite(world.floorIndex) ? (world.floorIndex | 0) : 0,
-            zoneIndex,
+            zoneIndex: milestone,
           });
         }
       }
