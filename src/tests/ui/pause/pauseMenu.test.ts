@@ -249,9 +249,9 @@ const userSettingsState = vi.hoisted(() => ({
       paletteId: "db32",
       performanceMode: false,
       verticalTilesMode: "auto",
-      verticalTilesUser: 10,
+      verticalTilesUser: 9,
       verticalTilesAutoPhone: 6,
-      verticalTilesAutoDesktop: 10,
+      verticalTilesAutoDesktop: 9,
       visibleVerticalTiles: 12,
       tileRenderRadius: 0,
       spawnBase: 1.0,
@@ -294,20 +294,20 @@ vi.mock("../../../game/audio/audioSettings", () => ({
 vi.mock("../../../userSettings", () => ({
   DEFAULT_GAME_SPEED: 1.0,
   DEFAULT_VISIBLE_VERTICAL_TILES_PHONE: 6,
-  DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP: 10,
-  DEFAULT_VISIBLE_VERTICAL_TILES: 10,
+  DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP: 9,
+  DEFAULT_VISIBLE_VERTICAL_TILES: 9,
   DEFAULT_VERTICAL_TILES_MODE: "auto",
   MIN_GAME_SPEED: 0.5,
   MIN_VISIBLE_VERTICAL_TILES: 8,
   MAX_GAME_SPEED: 1.5,
   MAX_VISIBLE_VERTICAL_TILES: 20,
   clampGameSpeed: (v: number) => Math.max(0.5, Math.min(1.5, Number.isFinite(v) ? v : 1.0)),
-  clampVisibleVerticalTiles: (v: number) => Math.max(8, Math.min(20, Math.round(Number.isFinite(v) ? v : 10))),
+  clampVisibleVerticalTiles: (v: number) => Math.max(8, Math.min(20, Math.round(Number.isFinite(v) ? v : 9))),
   resolveVerticalTiles: (render: any) => {
     const mode = render?.verticalTilesMode === "manual" ? "manual" : "auto";
-    const manual = Math.max(8, Math.min(20, Math.round(Number(render?.verticalTilesUser ?? render?.visibleVerticalTiles ?? 10))));
+    const manual = Math.max(8, Math.min(20, Math.round(Number(render?.verticalTilesUser ?? render?.visibleVerticalTiles ?? 9))));
     const autoPhone = Math.max(8, Math.min(20, Math.round(Number(render?.verticalTilesAutoPhone ?? 6))));
-    const autoDesktop = Math.max(8, Math.min(20, Math.round(Number(render?.verticalTilesAutoDesktop ?? 10))));
+    const autoDesktop = Math.max(8, Math.min(20, Math.round(Number(render?.verticalTilesAutoDesktop ?? 9))));
     const viewportClass = "desktop" as const;
     const effective = mode === "manual" ? manual : autoDesktop;
     return { mode, viewportClass, effective, manual, autoPhone, autoDesktop };
@@ -328,9 +328,9 @@ vi.mock("../../../userSettings", () => ({
       renderPerfCountersEnabled: false,
       performanceMode: false,
       verticalTilesMode: "auto",
-      verticalTilesUser: 10,
+      verticalTilesUser: 9,
       verticalTilesAutoPhone: 6,
-      verticalTilesAutoDesktop: 10,
+      verticalTilesAutoDesktop: 9,
       visibleVerticalTiles: 12,
       tileRenderRadius: 0,
       paletteSwapEnabled: false,
@@ -439,9 +439,9 @@ describe("pauseMenu", () => {
         paletteId: "db32",
         performanceMode: false,
         verticalTilesMode: "auto",
-        verticalTilesUser: 10,
+        verticalTilesUser: 9,
         verticalTilesAutoPhone: 6,
-        verticalTilesAutoDesktop: 10,
+        verticalTilesAutoDesktop: 9,
         visibleVerticalTiles: 12,
         tileRenderRadius: 0,
         spawnBase: 1.0,
@@ -843,8 +843,8 @@ describe("pauseMenu", () => {
     expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({
       render: {
         verticalTilesMode: "manual",
-        verticalTilesUser: 10,
-        visibleVerticalTiles: 10,
+        verticalTilesUser: 9,
+        visibleVerticalTiles: 9,
       },
     });
 

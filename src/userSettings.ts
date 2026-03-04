@@ -5,7 +5,7 @@ export type VerticalTilesMode = "auto" | "manual";
 export type VerticalTilesViewportClass = "phone" | "desktop";
 
 export const DEFAULT_VISIBLE_VERTICAL_TILES_PHONE = 6;
-export const DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP = 10;
+export const DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP = 9;
 export const DEFAULT_VISIBLE_VERTICAL_TILES = DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP;
 export const MIN_VISIBLE_VERTICAL_TILES = 2;
 export const MAX_VISIBLE_VERTICAL_TILES = 24;
