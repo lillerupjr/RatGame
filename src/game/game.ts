@@ -124,9 +124,9 @@ import { getZoneTrialObjectiveState, startZoneTrial, updateZoneTrialObjective } 
 import { collectRuntimeSpriteIdsToPrewarm } from "./render/prewarmSprites";
 import { resolveActivePaletteId } from "./render/activePalette";
 import { applySfxSettingsToWorld } from "./audio/audioSettings";
-import { beginCardReward, chooseCardReward, ensureCardRewardState } from "./combat_mods/rewards/cardRewardFlow";
-import { beginRelicReward, chooseRelicReward, ensureRelicRewardState } from "./combat_mods/rewards/relicRewardFlow";
-import { addGold, getGold } from "./economy/gold";
+import { chooseCardReward, ensureCardRewardState } from "./combat_mods/rewards/cardRewardFlow";
+import { chooseRelicReward, ensureRelicRewardState } from "./combat_mods/rewards/relicRewardFlow";
+import { getGold } from "./economy/gold";
 import { getCardById } from "./combat_mods/content/cards/cardPool";
 import { generateVendorCards } from "./vendor/generateVendorCards";
 import { generateVendorRelicOffers } from "./vendor/generateVendorRelics";
@@ -141,7 +141,7 @@ import { tickBalanceCsvLogger } from "./balance/balanceCsvLogger";
 import { BASELINE_PLAYER_DPS, computePressure } from "./balance/pressureModel";
 import { DEFAULT_SPAWN_TUNING } from "./balance/spawnTuningDefaults";
 import { createFloorRewardBudget, type ObjectiveMode } from "./rewards/floorRewardBudget";
-import { handleRewardEvent, type RewardOutcome } from "./rewards/rewardDirector";
+import { resolveActiveRewardTicket } from "./rewards/rewardTickets";
 import { recomputeDerivedStats } from "./stats/derivedStats";
 import { hasAnyRelicWithTag, MOMENTUM_RELIC_TAG } from "./content/relics";
 import { createMobileControls } from "../ui/mobile/mobileControls";
@@ -150,6 +150,9 @@ import { ensureStarterRelicForCharacter } from "./systems/progression/starterRel
 import { getWorldRelicInstances } from "./systems/progression/relics";
 import { bazookaExhaustAssets, bazookaExhaustAssetsReady, preloadBazookaExhaustAssets } from "./vfx/bazookaExhaustAssets";
 import { updateExhaustFollowers } from "./systems/exhaustFollowerSystem";
+import { rewardRunEventProducerSystem } from "./systems/progression/rewardRunEventProducerSystem";
+import { rewardSchedulerSystem } from "./systems/progression/rewardSchedulerSystem";
+import { rewardPresenterSystem } from "./systems/progression/rewardPresenterSystem";
 
 
 type HudRefs = {
@@ -408,7 +411,7 @@ export function createGame(args: CreateGameArgs) {
 
   function resolvePendingAdvanceAfterInteractionClose(): void {
     if (!world.pendingAdvanceToNextFloor) return;
-    if (maybeHandleObjectiveCompletionReward()) {
+    if (runRewardPipeline()) {
       world.pendingAdvanceToNextFloor = false;
       return;
     }
@@ -682,116 +685,34 @@ export function createGame(args: CreateGameArgs) {
     return "NORMAL";
   }
 
-  function floorDepthForRewards(w: World): number {
-    if (Number.isFinite(w.delveDepth) && w.delveDepth > 0) return w.delveDepth;
-    return (w.floorIndex ?? 0) + 1;
-  }
-
-  function consumeFirstZoneClearedSignal(w: World): (1 | 2) | null {
-    const signals = w.triggerSignals;
-    for (let i = 0; i < signals.length; i++) {
-      const id = signals[i]?.triggerId;
-      if (typeof id !== "string" || !id.startsWith(OBJECTIVE_TRIGGER_IDS.zoneClearedPrefix)) continue;
-      signals.splice(i, 1);
-      const raw = Number.parseInt(id.slice(OBJECTIVE_TRIGGER_IDS.zoneClearedPrefix.length), 10);
-      if (raw === 1 || raw === 2) return raw;
-      return null;
-    }
-    return null;
-  }
-
   function syncRewardDebugFieldsFromBudget(w: World): void {
     const budget = w.floorRewardBudget;
     const nonObjectiveUsed = 2 - budget.nonObjectiveCardsRemaining;
     const objectiveUsed = budget.objectiveCardAvailable ? 0 : 1;
     w.cardRewardBudgetTotal = 3;
     w.cardRewardBudgetUsed = nonObjectiveUsed + objectiveUsed;
-    w.cardRewardClaimKeys = Object.keys(budget.fired);
+    if (!Array.isArray(w.cardRewardClaimKeys)) w.cardRewardClaimKeys = [];
+    const firedKeys = Object.keys(budget.fired ?? Object.create(null));
+    for (let i = 0; i < firedKeys.length; i++) {
+      const key = firedKeys[i];
+      if (!w.cardRewardClaimKeys.includes(key)) w.cardRewardClaimKeys.push(key);
+    }
   }
 
-  function applyRewardOutcome(
-    outcome: RewardOutcome,
-    cardSource: "ZONE_TRIAL" | "BOSS_CHEST",
-    mode: "CARD" | "RELIC" = "CARD",
-  ): boolean {
+  function runRewardPipeline(options: { includeCoreFacts?: boolean; includeChest?: boolean } = {}): boolean {
+    rewardRunEventProducerSystem(world, {
+      includeCoreFacts: options.includeCoreFacts,
+      includeChest: options.includeChest,
+    });
+    rewardSchedulerSystem(world);
     syncRewardDebugFieldsFromBudget(world);
-    if (outcome.type === "GRANT_CARD") {
+    const opened = rewardPresenterSystem(world);
+    if (!opened) return false;
+
     if (activeDialog) setDialog(null);
     if (vendorShopOpen) closeVendorShop(false);
-      if (mode === "RELIC") {
-        const cardReward = ensureCardRewardState(world);
-        cardReward.active = false;
-        cardReward.options = [];
-        beginRelicReward(world, "OBJECTIVE_COMPLETION", 3);
-      } else {
-        const relicReward = ensureRelicRewardState(world);
-        relicReward.active = false;
-        relicReward.options = [];
-        beginCardReward(world, cardSource, 3);
-      }
-      world.state = "REWARD";
-      world.lastCardRewardClaimKey = outcome.reason;
-      renderRewardMenuIfNeeded();
-      return true;
-    }
-    if (outcome.type === "GRANT_GOLD") {
-      addGold(world, outcome.amount);
-      world.lastCardRewardClaimKey = outcome.reason;
-      return false;
-    }
-    world.lastCardRewardClaimKey = outcome.reason;
-    return false;
-  }
-
-  function maybeHandleZoneTrialMilestoneReward(): boolean {
-    if (world.state !== "RUN" || world.runState !== "FLOOR") return false;
-    if (world.floorRewardBudget.mode !== "ZONE_TRIAL") return false;
-    // Final zone clear should resolve through objective completion (relic reward),
-    // not through zone milestone card rewards.
-    if (hasCompletedAnyObjective(world)) return false;
-    const zoneIndex = consumeFirstZoneClearedSignal(world);
-    if (!zoneIndex) return false;
-    const outcome = handleRewardEvent(
-      world.floorRewardBudget,
-      { type: "ZONE_COMPLETED", zoneIndex },
-      { depth: floorDepthForRewards(world) }
-    );
-    return applyRewardOutcome(outcome, "ZONE_TRIAL");
-  }
-
-  function maybeHandleSurviveOneMinuteReward(): boolean {
-    if (world.state !== "RUN" || world.runState !== "FLOOR") return false;
-    if (world.floorRewardBudget.mode !== "SURVIVE_TRIAL") return false;
-    if ((world.timeSec ?? 0) < 60) return false;
-    const outcome = handleRewardEvent(
-      world.floorRewardBudget,
-      { type: "SURVIVE_1MIN_REWARD" },
-      { depth: floorDepthForRewards(world) }
-    );
-    return applyRewardOutcome(outcome, "ZONE_TRIAL");
-  }
-
-  function maybeHandleObjectiveCompletionReward(): boolean {
-    if (world.state !== "RUN" || world.runState !== "FLOOR") return false;
-    if (world.floorArchetype === "VENDOR" || world.floorArchetype === "HEAL") return false;
-    if (!hasCompletedAnyObjective(world)) return false;
-    const outcome = handleRewardEvent(
-      world.floorRewardBudget,
-      { type: "OBJECTIVE_COMPLETED" },
-      { depth: floorDepthForRewards(world) }
-    );
-    return applyRewardOutcome(outcome, "ZONE_TRIAL", "RELIC");
-  }
-
-  function maybeHandleChestOpenedReward(): boolean {
-    if (!world.chestOpenRequested) return false;
-    world.chestOpenRequested = false;
-    const outcome = handleRewardEvent(
-      world.floorRewardBudget,
-      { type: "CHEST_OPENED", chestKind: "BOSS" },
-      { depth: floorDepthForRewards(world) }
-    );
-    return applyRewardOutcome(outcome, "BOSS_CHEST");
+    renderRewardMenuIfNeeded();
+    return true;
   }
 
   function handleDialogInput() {
@@ -848,6 +769,7 @@ export function createGame(args: CreateGameArgs) {
       if (!reward.active) return;
       const source = reward.source;
       chooseCardReward(world, cardId);
+      resolveActiveRewardTicket(world);
       renderRewardMenuIfNeeded();
 
       if (source === "ZONE_TRIAL" && tryAdvanceAfterObjectiveCompletion()) {
@@ -866,6 +788,7 @@ export function createGame(args: CreateGameArgs) {
       const reward = ensureRelicRewardState(world);
       if (!reward.active) return;
       chooseRelicReward(world, relicId);
+      resolveActiveRewardTicket(world);
       renderRewardMenuIfNeeded();
       if (tryAdvanceAfterObjectiveCompletion()) return;
       world.state = "RUN";
@@ -1385,6 +1308,14 @@ export function createGame(args: CreateGameArgs) {
     w.objectiveEvents = [];
     w.events = [];
     w.chestOpenRequested = false;
+    w.runEvents = [];
+    w.rewardTickets = [];
+    w.activeRewardTicketId = null;
+    w.rewardTicketSeq = 0;
+    w._rewardObjectiveCompletedSeen = Object.create(null);
+    w._rewardSurviveMilestoneSeen = Object.create(null);
+    w._rewardBossMilestoneCount = 0;
+    w._rewardSeenBossKillEvents = new WeakSet();
 
     w.floorEndCountdownActive = false;
     w.floorEndCountdownSec = 0;
@@ -2566,15 +2497,7 @@ export function createGame(args: CreateGameArgs) {
     objectiveSystem(world);
     syncBossTripleObjectiveStateFromClears(world);
     processMomentumEventQueue(world);
-    if (maybeHandleZoneTrialMilestoneReward()) {
-      clearEvents(world);
-      return;
-    }
-    if (maybeHandleSurviveOneMinuteReward()) {
-      clearEvents(world);
-      return;
-    }
-    if (maybeHandleObjectiveCompletionReward()) {
+    if (runRewardPipeline({ includeCoreFacts: true, includeChest: false })) {
       clearEvents(world);
       return;
     }
@@ -2592,8 +2515,8 @@ export function createGame(args: CreateGameArgs) {
     audioSystem(world, dt);
     maybeTriggerPhoneDamageHaptic();
 
-    // Chest open reward outcome (card while budget remains, else gold fallback).
-    if (maybeHandleChestOpenedReward()) {
+    // Process chest-request rewards after audio so pickup SFX is never skipped.
+    if (runRewardPipeline({ includeCoreFacts: false, includeChest: true })) {
       clearEvents(world);
       return;
     }

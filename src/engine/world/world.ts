@@ -19,6 +19,8 @@ import type { EnemyAilmentsState } from "../../game/combat_mods/ailments/enemyAi
 import type { CardRewardState } from "../../game/combat_mods/rewards/cardRewardFlow";
 import type { RelicRewardState } from "../../game/combat_mods/rewards/relicRewardFlow";
 import type { FloorRewardBudget } from "../../game/rewards/floorRewardBudget";
+import type { RunEvent } from "../../game/rewards/runEvents";
+import type { RewardTicket } from "../../game/rewards/rewardTickets";
 import type { VendorState } from "../../game/vendor/vendorState";
 import { createDpsMetrics, type DpsMetricsState } from "../../game/balance/dpsMetrics";
 import {
@@ -324,6 +326,10 @@ export type World = {
   cardRewardBudgetUsed: number;
   cardRewardClaimKeys: string[];
   lastCardRewardClaimKey: string | null;
+  runEvents: RunEvent[];
+  rewardTickets: RewardTicket[];
+  activeRewardTicketId: string | null;
+  rewardTicketSeq: number;
   floorEndCountdownSec: number;
   floorEndCountdownActive: boolean;
   floorEndCountdownStartedKey: string | null;
@@ -776,6 +782,10 @@ export function createWorld(args: CreateWorldArgs): World {
     cardRewardBudgetUsed: 0,
     cardRewardClaimKeys: [],
     lastCardRewardClaimKey: null,
+    runEvents: [],
+    rewardTickets: [],
+    activeRewardTicketId: null,
+    rewardTicketSeq: 0,
     floorEndCountdownSec: 0,
     floorEndCountdownActive: false,
     floorEndCountdownStartedKey: null,

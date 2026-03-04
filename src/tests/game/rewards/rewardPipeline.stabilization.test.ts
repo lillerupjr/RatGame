@@ -1,0 +1,98 @@
+import { describe, expect, test } from "vitest";
+import { ENEMY_TYPE } from "../../../game/factories/enemyFactory";
+import { OBJECTIVE_TRIGGER_IDS } from "../../../game/systems/progression/objectiveSpec";
+import { resolveActiveRewardTicket } from "../../../game/rewards/rewardTickets";
+import { rewardPresenterSystem } from "../../../game/systems/progression/rewardPresenterSystem";
+import { rewardRunEventProducerSystem } from "../../../game/systems/progression/rewardRunEventProducerSystem";
+import { rewardSchedulerSystem } from "../../../game/systems/progression/rewardSchedulerSystem";
+import { createRewardPipelineWorld, dismissActiveRewardUi, getActiveTicket } from "./rewardPipeline.testUtils";
+
+describe("reward pipeline stabilization", () => {
+  test("boss-zone ENTER/EXIT do not create reward events or consume budget", () => {
+    const world = createRewardPipelineWorld(81, "NORMAL");
+    world.floorArchetype = "BOSS_TRIPLE";
+    world.triggerSignals.push(
+      {
+        type: "ENTER",
+        entityId: 0,
+        triggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}1`,
+      },
+      {
+        type: "EXIT",
+        entityId: 0,
+        triggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}1`,
+      },
+    );
+
+    rewardRunEventProducerSystem(world, { includeCoreFacts: true, includeChest: false });
+    expect(world.runEvents).toHaveLength(0);
+    expect(world.triggerSignals).toHaveLength(2);
+
+    rewardSchedulerSystem(world);
+    expect(world.rewardTickets).toHaveLength(0);
+    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(2);
+  });
+
+  test("boss-zone KILL creates exactly one boss milestone event", () => {
+    const world = createRewardPipelineWorld(82, "NORMAL");
+    world.floorArchetype = "BOSS_TRIPLE";
+    world.eType[7] = ENEMY_TYPE.BOSS;
+    world.eSpawnTriggerId[7] = `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}1`;
+    world.events.push({
+      type: "ENEMY_KILLED",
+      enemyIndex: 7,
+      x: 0,
+      y: 0,
+      source: "OTHER",
+    });
+
+    rewardRunEventProducerSystem(world, { includeCoreFacts: true, includeChest: false });
+
+    expect(world.runEvents).toHaveLength(1);
+    expect(world.runEvents[0]).toMatchObject({
+      type: "BOSS_MILESTONE_CLEARED",
+      bossIndex: 1,
+      floorIndex: 0,
+    });
+  });
+
+  test("BOSS_TRIPLE chest open does not enqueue reward tickets", () => {
+    const world = createRewardPipelineWorld(83, "NORMAL");
+    world.floorArchetype = "BOSS_TRIPLE";
+    world.runEvents.push({
+      type: "CHEST_OPEN_REQUESTED",
+      floorIndex: 0,
+      chestKind: "BOSS",
+    });
+
+    rewardSchedulerSystem(world);
+
+    expect(world.rewardTickets).toHaveLength(0);
+    expect(world.cardRewardClaimKeys).toContain("0:BOSS_CHEST");
+    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(2);
+  });
+
+  test("zone trial sequence is CARD, CARD, RELIC in FIFO order", () => {
+    const world = createRewardPipelineWorld(84, "ZONE_TRIAL");
+    world.runEvents.push(
+      { type: "ZONE_CLEARED", floorIndex: 0, zoneIndex: 1 },
+      { type: "ZONE_CLEARED", floorIndex: 0, zoneIndex: 2 },
+      { type: "OBJECTIVE_COMPLETED", floorIndex: 0, objectiveId: "OBJ_ZONE_TRIAL" },
+    );
+
+    rewardSchedulerSystem(world);
+    expect(world.rewardTickets).toHaveLength(3);
+
+    const kinds: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      expect(rewardPresenterSystem(world)).toBe(true);
+      kinds.push(getActiveTicket(world)?.kind ?? "");
+      dismissActiveRewardUi(world);
+      resolveActiveRewardTicket(world);
+      world.state = "RUN";
+    }
+
+    expect(kinds).toEqual(["CARD_PICK", "CARD_PICK", "RELIC_PICK"]);
+    expect(rewardPresenterSystem(world)).toBe(false);
+  });
+});

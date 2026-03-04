@@ -4,7 +4,8 @@ import { DEFAULT_SPAWN_TUNING } from "../balance/spawnTuningDefaults";
 import { worldToTile } from "../coords/tile";
 import { getPlayerWorld } from "../coords/worldViews";
 import { getActiveMap, surfacesAtXY, walkInfo } from "../map/compile/kenneyMap";
-import { buildZoneClearedTriggerId, OBJECTIVE_TRIGGER_IDS } from "../systems/progression/objectiveSpec";
+import { enqueueRunEvent } from "../rewards/runEvents";
+import { OBJECTIVE_TRIGGER_IDS } from "../systems/progression/objectiveSpec";
 import {
   DEFAULT_ZONE_TRIAL_CONFIG,
   isTileInsideZone,
@@ -328,11 +329,14 @@ export function updateZoneTrialObjective(world: World): void {
         zone.killCount = zone.killTarget;
         zone.completed = true;
         state.completedZones++;
-        world.triggerSignals.push({
-          type: "KILL",
-          entityId: -1,
-          triggerId: buildZoneClearedTriggerId(z + 1),
-        });
+        const zoneIndex = z + 1;
+        if (zoneIndex === 1 || zoneIndex === 2) {
+          enqueueRunEvent(world, {
+            type: "ZONE_CLEARED",
+            floorIndex: Number.isFinite(world.floorIndex) ? (world.floorIndex | 0) : 0,
+            zoneIndex,
+          });
+        }
       }
       break;
     }

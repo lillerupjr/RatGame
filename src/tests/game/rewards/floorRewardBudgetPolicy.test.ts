@@ -1,156 +1,89 @@
 import { describe, expect, test } from "vitest";
-import {
-  processBossMilestoneRewards,
-  processChestOpenRequested,
-  processObjectiveCompletionReward,
-  processSurviveMilestoneRewards,
-  processZoneClearedReward,
-  resetFloorCardRewardBudget,
-} from "../../../game/combat_mods/rewards/rewardTriggers";
-import { OBJECTIVE_TRIGGER_IDS } from "../../../game/systems/progression/objectiveSpec";
-
-function createWorld(seed = 1): any {
-  let s = seed >>> 0;
-  const next = () => {
-    s ^= s << 13;
-    s ^= s >>> 17;
-    s ^= s << 5;
-    s >>>= 0;
-    return s / 0xffffffff;
-  };
-
-  const world: any = {
-    rng: { next },
-    state: "RUN",
-    runState: "FLOOR",
-    floorArchetype: "TIME_TRIAL",
-    floorIndex: 0,
-    timeSec: 0,
-    cards: [],
-    relics: [] as string[],
-    chestOpenRequested: false,
-    triggerSignals: [],
-    objectiveStates: [],
-    objectiveRewardClaimedKey: null,
-    zoneRewardClaimedKey: null,
-    zoneRewardClaimedKeys: [],
-    cardReward: {
-      active: false,
-      source: "ZONE_TRIAL",
-      options: [],
-    },
-    relicReward: {
-      active: false,
-      source: "OBJECTIVE_COMPLETION",
-      options: [],
-    },
-  };
-  resetFloorCardRewardBudget(world);
-  return world;
-}
-
-function resolveReward(world: any): void {
-  world.state = "RUN";
-  world.cardReward.active = false;
-  world.cardReward.options = [];
-  world.relicReward.active = false;
-  world.relicReward.options = [];
-}
+import { rewardSchedulerSystem } from "../../../game/systems/progression/rewardSchedulerSystem";
+import { createRewardPipelineWorld } from "./rewardPipeline.testUtils";
 
 describe("floor reward budget policies", () => {
-  test("ZONE_TRIAL policy grants exactly 3 rewards (zone1, zone2, completion)", () => {
-    const world = createWorld(101);
-    world.floorArchetype = "TIME_TRIAL";
-    world.objectiveStates = [{ id: "OBJ_ZONE_TRIAL", status: "ACTIVE" }];
+  test("ZONE_TRIAL grants zone1, zone2, and objective rewards exactly once", () => {
+    const world = createRewardPipelineWorld(101, "ZONE_TRIAL");
+    world.runEvents.push(
+      { type: "ZONE_CLEARED", floorIndex: 0, zoneIndex: 1 },
+      { type: "ZONE_CLEARED", floorIndex: 0, zoneIndex: 2 },
+      { type: "OBJECTIVE_COMPLETED", floorIndex: 0, objectiveId: "OBJ_ZONE_TRIAL" },
+      { type: "ZONE_CLEARED", floorIndex: 0, zoneIndex: 1 },
+    );
 
-    world.triggerSignals.push({ type: "KILL", entityId: -1, triggerId: `${OBJECTIVE_TRIGGER_IDS.zoneClearedPrefix}1` });
-    expect(processZoneClearedReward(world, 3)).toBe(true);
-    resolveReward(world);
+    rewardSchedulerSystem(world);
 
-    world.triggerSignals.push({ type: "KILL", entityId: -1, triggerId: `${OBJECTIVE_TRIGGER_IDS.zoneClearedPrefix}2` });
-    expect(processZoneClearedReward(world, 3)).toBe(true);
-    resolveReward(world);
-
-    world.triggerSignals.push({ type: "KILL", entityId: -1, triggerId: `${OBJECTIVE_TRIGGER_IDS.zoneClearedPrefix}3` });
-    expect(processZoneClearedReward(world, 3)).toBe(false);
-
-    world.objectiveStates[0].status = "COMPLETED";
-    expect(processObjectiveCompletionReward(world, 3)).toBe(true);
-    resolveReward(world);
-
-    world.objectiveStates[0].status = "COMPLETED";
-    expect(processObjectiveCompletionReward(world, 3)).toBe(false);
-    expect(world.cardRewardBudgetUsed).toBe(3);
-    expect(world.cardRewardBudgetTotal).toBe(3);
+    expect(world.rewardTickets).toHaveLength(3);
+    expect(world.rewardTickets.map((ticket: any) => ticket.kind)).toEqual([
+      "CARD_PICK",
+      "CARD_PICK",
+      "RELIC_PICK",
+    ]);
+    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
+    expect(world.floorRewardBudget.objectiveCardAvailable).toBe(false);
+    expect(world.cardRewardClaimKeys).toEqual([
+      "0:ZONE_CLEAR:1",
+      "0:ZONE_CLEAR:2",
+      "0:TRIAL_COMPLETE",
+    ]);
   });
 
-  test("BOSS policy grants reward on first and second boss clears only", () => {
-    const world = createWorld(202);
+  test("BOSS_TRIPLE grants boss milestones and objective reward, but chest gives no ticket", () => {
+    const world = createRewardPipelineWorld(202, "NORMAL");
     world.floorArchetype = "BOSS_TRIPLE";
-    world.objectiveStates = [{ id: "OBJ_BOSS_RARES", status: "COMPLETED" }];
+    world.runEvents.push(
+      { type: "BOSS_MILESTONE_CLEARED", floorIndex: 0, bossIndex: 1 },
+      { type: "BOSS_MILESTONE_CLEARED", floorIndex: 0, bossIndex: 2 },
+      { type: "CHEST_OPEN_REQUESTED", floorIndex: 0, chestKind: "BOSS" },
+      { type: "OBJECTIVE_COMPLETED", floorIndex: 0, objectiveId: "OBJ_BOSS_RARES" },
+    );
 
-    world.triggerSignals.push({ type: "KILL", entityId: 0, triggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}1` });
-    expect(processBossMilestoneRewards(world, 3)).toBe(true);
-    resolveReward(world);
+    rewardSchedulerSystem(world);
 
-    world.triggerSignals.push({ type: "KILL", entityId: 1, triggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}2` });
-    expect(processBossMilestoneRewards(world, 3)).toBe(true);
-    resolveReward(world);
-
-    world.triggerSignals.push({ type: "KILL", entityId: 2, triggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}3` });
-    expect(processBossMilestoneRewards(world, 3)).toBe(false);
-
-    world.chestOpenRequested = true;
-    expect(processChestOpenRequested(world, 3)).toBe(false);
-
-    expect(processObjectiveCompletionReward(world, 3)).toBe(false);
-    expect(world.cardRewardBudgetUsed).toBe(2);
+    expect(world.rewardTickets).toHaveLength(3);
+    expect(world.rewardTickets.map((ticket: any) => ticket.kind)).toEqual([
+      "CARD_PICK",
+      "CARD_PICK",
+      "RELIC_PICK",
+    ]);
+    expect(world.cardRewardClaimKeys).toContain("0:BOSS_CHEST");
+    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
   });
 
   test("SURVIVE policy grants rewards at 60s + objective + boss chest", () => {
-    const world = createWorld(303);
+    const world = createRewardPipelineWorld(303, "SURVIVE_TRIAL");
     world.floorArchetype = "SURVIVE";
-    world.objectiveStates = [{ id: "OBJ_SURVIVE", status: "ACTIVE" }];
+    world.runEvents.push(
+      { type: "SURVIVE_MILESTONE", floorIndex: 0, seconds: 60 },
+      { type: "OBJECTIVE_COMPLETED", floorIndex: 0, objectiveId: "OBJ_SURVIVE" },
+      { type: "CHEST_OPEN_REQUESTED", floorIndex: 0, chestKind: "BOSS" },
+    );
 
-    world.timeSec = 40;
-    expect(processSurviveMilestoneRewards(world, 3)).toBe(false);
+    rewardSchedulerSystem(world);
 
-    world.timeSec = 60;
-    expect(processSurviveMilestoneRewards(world, 3)).toBe(true);
-    resolveReward(world);
-
-    world.objectiveStates[0].status = "COMPLETED";
-    expect(processObjectiveCompletionReward(world, 3)).toBe(true);
-    resolveReward(world);
-
-    world.chestOpenRequested = true;
-    expect(processChestOpenRequested(world, 3)).toBe(true);
-    resolveReward(world);
-
-    expect(world.cardRewardBudgetUsed).toBe(3);
+    expect(world.rewardTickets).toHaveLength(3);
+    expect(world.rewardTickets.map((ticket: any) => ticket.kind)).toEqual([
+      "CARD_PICK",
+      "RELIC_PICK",
+      "CARD_PICK",
+    ]);
+    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
+    expect(world.floorRewardBudget.objectiveCardAvailable).toBe(false);
   });
 
   test("SURVIVE_BOSS policy grants exactly 3 rewards (60s, completion, chest)", () => {
-    const world = createWorld(404);
+    const world = createRewardPipelineWorld(404, "SURVIVE_TRIAL");
     world.floorArchetype = "SURVIVE";
     world._surviveBossSpawned = true;
-    world.objectiveStates = [{ id: "OBJ_SURVIVE", status: "ACTIVE" }];
+    world.runEvents.push(
+      { type: "SURVIVE_MILESTONE", floorIndex: 0, seconds: 60 },
+      { type: "OBJECTIVE_COMPLETED", floorIndex: 0, objectiveId: "OBJ_SURVIVE" },
+      { type: "CHEST_OPEN_REQUESTED", floorIndex: 0, chestKind: "BOSS" },
+    );
 
-    world.timeSec = 59;
-    expect(processSurviveMilestoneRewards(world, 3)).toBe(false);
-
-    world.timeSec = 60;
-    expect(processSurviveMilestoneRewards(world, 3)).toBe(true);
-    resolveReward(world);
-
-    world.objectiveStates[0].status = "COMPLETED";
-    expect(processObjectiveCompletionReward(world, 3)).toBe(true);
-    resolveReward(world);
-
-    world.chestOpenRequested = true;
-    expect(processChestOpenRequested(world, 3)).toBe(true);
-    resolveReward(world);
-
-    expect(world.cardRewardBudgetUsed).toBe(3);
+    rewardSchedulerSystem(world);
+    expect(world.rewardTickets).toHaveLength(3);
+    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
   });
 });

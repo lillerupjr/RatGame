@@ -20,9 +20,6 @@ export const OBJECTIVE_TRIGGER_IDS = {
 
   // Trial-level completion (existing)
   zoneTrialComplete: "OBJ_ZONE_TRIAL_COMPLETE",
-
-  // Per-zone clear milestone
-  zoneClearedPrefix: "OBJ_ZONE_CLEARED_",
   vendor: "OBJ_VENDOR",
   heal: "OBJ_HEAL",
 };
@@ -33,10 +30,6 @@ function buildIndexedTriggerIds(prefix: string, count: number): string[] {
     ids.push(`${prefix}${i + 1}`);
   }
   return ids;
-}
-
-export function buildZoneClearedTriggerId(zoneIndex1: number): string {
-  return `${OBJECTIVE_TRIGGER_IDS.zoneClearedPrefix}${zoneIndex1}`;
 }
 
 export function objectiveSpecToObjectiveDefs(spec: ObjectiveSpec): ObjectiveDef[] {
