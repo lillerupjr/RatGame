@@ -151,6 +151,20 @@ export type DeathFxState = {
   active: boolean;
   tReal: number;
   durationReal: number;
+  aFlash: number;
+  aDesat: number;
+  aVignette: number;
+  aDark: number;
+  aTitle: number;
+  aBlack: number;
+};
+
+export type CameraFollowState = {
+  posX: number;
+  posY: number;
+  targetX: number;
+  targetY: number;
+  followHalfLifeSec: number;
 };
 
 export type World = {
@@ -208,6 +222,7 @@ export type World = {
   time: number;
   timeSec: number;
   timeState: WorldTimeState;
+  camera: CameraFollowState;
   deathFx: DeathFxState;
   run: {
     runGold: number;
@@ -687,10 +702,23 @@ export function createWorld(args: CreateWorldArgs): World {
       timeScaleTarget: 1,
       timeScaleSlew: 12,
     },
+    camera: {
+      posX: 0,
+      posY: 0,
+      targetX: 0,
+      targetY: 0,
+      followHalfLifeSec: 0.08,
+    },
     deathFx: {
       active: false,
       tReal: 0,
       durationReal: 2,
+      aFlash: 0,
+      aDesat: 0,
+      aVignette: 0,
+      aDark: 0,
+      aTitle: 0,
+      aBlack: 0,
     },
     run: {
       runGold: 0,

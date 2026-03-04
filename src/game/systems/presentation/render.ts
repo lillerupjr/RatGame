@@ -160,6 +160,9 @@ function compareRenderKeys(a: RenderKey, b: RenderKey): number {
 const DEBUG_PLAYER_WEDGE = false;
 const DISABLE_WALLS_AND_CURTAINS = true;
 const HARDCODED_VOID_TOP_SRC = `${import.meta.env.BASE_URL}assets-runtime/tiles/floor/void.png`;
+const CAMERA_FOLLOW_HALF_LIFE_DEFAULT_SEC = 0.08;
+const CAMERA_FOLLOW_SNAP_DISTANCE_SQ = 4096 * 4096;
+const CAMERA_SMOOTHING_INTENSITY_SCALE = 0.25;
 
 // Background mode:
 // - "SOLID" = fastest, clean black void
@@ -185,6 +188,15 @@ const LIT_HEIGHTS_DEFAULT: readonly number[] = [0, 8];
 const MAX_LIT_HEIGHTS = 4;
 
 type ScreenPt = { x: number; y: number };
+
+function smoothTowardByHalfLife(current: number, target: number, halfLifeSec: number, dtRealSec: number): number {
+  if (!Number.isFinite(current)) return target;
+  if (!Number.isFinite(target)) return current;
+  if (!Number.isFinite(halfLifeSec) || halfLifeSec <= 0) return target;
+  if (!Number.isFinite(dtRealSec) || dtRealSec <= 0) return current;
+  const alpha = 1 - Math.pow(0.5, dtRealSec / halfLifeSec);
+  return current + (target - current) * alpha;
+}
 
 function computeTriToTriAffine(
   s0: ScreenPt, s1: ScreenPt, s2: ScreenPt,
@@ -805,10 +817,50 @@ export async function renderSystem(
 
   // Isometric camera: project world coords into screen space, then keep player centered
   const p0 = worldToScreen(px, py);
-  (w as any).cameraX = p0.x;
-  (w as any).cameraY = p0.y;
-
-  viewport.centerOnProjected(p0.x, p0.y);
+  const cameraState = (w as any).camera as
+    | {
+      posX: number;
+      posY: number;
+      targetX: number;
+      targetY: number;
+      followHalfLifeSec: number;
+    }
+    | undefined;
+  const cameraSmoothingEnabled = renderSettings.cameraSmoothingEnabled !== false;
+  const dtReal = Number.isFinite(w.timeState?.dtReal) ? w.timeState.dtReal : 1 / 60;
+  let cameraProjectedX = p0.x;
+  let cameraProjectedY = p0.y;
+  if (cameraState) {
+    const wasUninitialized = cameraState.targetX === 0
+      && cameraState.targetY === 0
+      && cameraState.posX === 0
+      && cameraState.posY === 0;
+    cameraState.targetX = p0.x;
+    cameraState.targetY = p0.y;
+    const hasValidPos = Number.isFinite(cameraState.posX) && Number.isFinite(cameraState.posY);
+    const dx = (cameraState.posX ?? p0.x) - p0.x;
+    const dy = (cameraState.posY ?? p0.y) - p0.y;
+    const shouldSnap = !cameraSmoothingEnabled
+      || !hasValidPos
+      || wasUninitialized
+      || (dx * dx + dy * dy > CAMERA_FOLLOW_SNAP_DISTANCE_SQ);
+    if (shouldSnap) {
+      cameraState.posX = p0.x;
+      cameraState.posY = p0.y;
+    } else {
+      const halfLifeSec = Number.isFinite(cameraState.followHalfLifeSec) && cameraState.followHalfLifeSec > 0
+        ? cameraState.followHalfLifeSec
+        : CAMERA_FOLLOW_HALF_LIFE_DEFAULT_SEC;
+      const tunedHalfLifeSec = Math.max(0.001, halfLifeSec * CAMERA_SMOOTHING_INTENSITY_SCALE);
+      cameraState.posX = smoothTowardByHalfLife(cameraState.posX, p0.x, tunedHalfLifeSec, dtReal);
+      cameraState.posY = smoothTowardByHalfLife(cameraState.posY, p0.y, tunedHalfLifeSec, dtReal);
+    }
+    cameraProjectedX = cameraState.posX;
+    cameraProjectedY = cameraState.posY;
+  }
+  (w as any).cameraX = cameraProjectedX;
+  (w as any).cameraY = cameraProjectedY;
+  viewport.centerOnProjected(cameraProjectedX, cameraProjectedY);
   const camTx = viewport.camTx;
   const camTy = viewport.camTy;
   const s = viewport.worldScaleDevice;
@@ -4766,44 +4818,22 @@ function deathFxClamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-function deathFxSmoothstep(edge0: number, edge1: number, value: number): number {
-  if (!Number.isFinite(edge0) || !Number.isFinite(edge1)) return 0;
-  if (!Number.isFinite(value)) return 0;
-  if (edge1 <= edge0) return value >= edge1 ? 1 : 0;
-  const t = deathFxClamp01((value - edge0) / (edge1 - edge0));
-  return t * t * (3 - 2 * t);
-}
-
 function renderDeathFxOverlay(w: World, ctx: CanvasRenderingContext2D, ww: number, hh: number): void {
   const deathFx = w.deathFx;
   if (!deathFx?.active) return;
 
-  const t = Math.max(0, deathFx.tReal);
-  const duration = Math.max(0.001, deathFx.durationReal);
-  const aIn = deathFxSmoothstep(0.05, 0.25, t);
-  const aOut = 1 - deathFxSmoothstep(1.4, duration, t);
-  const alpha = deathFxClamp01(aIn * aOut);
-  if (alpha <= 0) return;
+  const blackAlpha = deathFxClamp01(deathFx.aBlack);
+  const titleAlpha = deathFxClamp01(deathFx.aTitle);
+  if (blackAlpha <= 0 && titleAlpha <= 0) return;
+
+  ctx.fillStyle = `rgba(0, 0, 0, ${blackAlpha.toFixed(4)})`;
+  ctx.fillRect(0, 0, ww, hh);
+
+  if (titleAlpha <= 0) return;
 
   const cx = ww * 0.5;
   const cy = hh * 0.5;
-  const radius = Math.hypot(ww, hh) * 0.65;
-  const vignette = ctx.createRadialGradient(cx, cy, radius * 0.18, cx, cy, radius);
-  vignette.addColorStop(0, `rgba(0, 0, 0, ${(0.08 * alpha).toFixed(4)})`);
-  vignette.addColorStop(1, `rgba(0, 0, 0, ${(0.78 * alpha).toFixed(4)})`);
-  ctx.fillStyle = vignette;
-  ctx.fillRect(0, 0, ww, hh);
-
-  ctx.fillStyle = `rgba(96, 96, 96, ${(0.24 * alpha).toFixed(4)})`;
-  ctx.fillRect(0, 0, ww, hh);
-
-  const pulse = 0.5 + 0.5 * Math.sin(t * 10);
-  const pulseAlpha = (0.08 + 0.10 * pulse) * alpha;
-  ctx.fillStyle = `rgba(130, 0, 0, ${pulseAlpha.toFixed(4)})`;
-  ctx.fillRect(0, 0, ww, hh);
-
-  const textAlpha = deathFxClamp01(deathFxSmoothstep(0.1, 0.4, t) * aOut);
-  const textScale = 0.9 + 0.1 * deathFxSmoothstep(0.1, 0.45, t);
+  const textScale = 1.06 - 0.06 * titleAlpha;
   const fontSize = Math.round(Math.max(52, Math.min(120, ww * 0.14)));
 
   ctx.save();
@@ -4813,8 +4843,8 @@ function renderDeathFxOverlay(w: World, ctx: CanvasRenderingContext2D, ww: numbe
   ctx.textBaseline = "middle";
   ctx.font = `900 ${fontSize}px "Impact", "Arial Black", sans-serif`;
   ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.08));
-  ctx.strokeStyle = `rgba(0, 0, 0, ${(0.78 * textAlpha).toFixed(4)})`;
-  ctx.fillStyle = `rgba(165, 18, 18, ${(0.96 * textAlpha).toFixed(4)})`;
+  ctx.strokeStyle = `rgba(0, 0, 0, ${(0.90 * titleAlpha).toFixed(4)})`;
+  ctx.fillStyle = `rgba(165, 18, 18, ${(0.98 * titleAlpha).toFixed(4)})`;
   ctx.strokeText("WASTED", 0, 0);
   ctx.fillText("WASTED", 0, 0);
   ctx.restore();

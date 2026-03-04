@@ -255,13 +255,20 @@ function clampNonNegativeFinite(value: number): number {
 
 const MAX_FRAME_DT_REAL_SEC = 0.05;
 const DEFAULT_TIME_SCALE_SLEW = 12;
-const DEATH_SLOWMO_TARGET = 0.12;
-const DEATH_SLOWMO_SLEW = 16;
-const DEATH_FX_DURATION = 2.0;
+const DEATH_TO_BLACK_DURATION_SEC = 3.0;
+const DEATH_WASTED_FADE_IN_SEC = 1.0;
+const DEATH_WASTED_HOLD_SEC = 2.0;
+const DEATH_TIME_SCALE_SLEW = 48;
+const DEATH_FX_DURATION = DEATH_TO_BLACK_DURATION_SEC + DEATH_WASTED_FADE_IN_SEC + DEATH_WASTED_HOLD_SEC;
 
 function clampFrameDtReal(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(MAX_FRAME_DT_REAL_SEC, value));
+}
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
 }
 
 function approachExp(current: number, target: number, slewPerSec: number, dtRealSec: number): number {
@@ -927,12 +934,21 @@ export function createGame(args: CreateGameArgs) {
     args.ui.endEl.cards.textContent = String(getEndStatsCardCount(w));
   }
 
+  function hideEndScreen(): void {
+    args.ui.endEl.root.classList.remove("isVisible");
+    args.ui.endEl.root.hidden = true;
+  }
+
   function showEndScreen(w: World, title: string, subtitle: string): void {
     updateHud();
     args.ui.endEl.title.textContent = title;
     args.ui.endEl.sub.textContent = subtitle;
     populateEndStats(w);
+    args.ui.endEl.root.classList.remove("isVisible");
     args.ui.endEl.root.hidden = false;
+    requestAnimationFrame(() => {
+      args.ui.endEl.root.classList.add("isVisible");
+    });
     args.ui.menuEl.hidden = true;
     setHudHidden(true);
     hideCardRewardMenu();
@@ -1707,7 +1723,7 @@ export function createGame(args: CreateGameArgs) {
 
     args.ui.menuEl.hidden = true;
     args.ui.mapEl.root.hidden = false;
-    args.ui.endEl.root.hidden = true;
+    hideEndScreen();
     setHudHidden(false);
     hideCardRewardMenu();
 
@@ -1745,7 +1761,7 @@ export function createGame(args: CreateGameArgs) {
     // UI: ensure we’re not stuck in menus/overlays.
     args.ui.menuEl.hidden = true;
     args.ui.mapEl.root.hidden = true;
-    args.ui.endEl.root.hidden = true;
+    hideEndScreen();
     setHudHidden(false);
     hideCardRewardMenu();
 
@@ -1886,12 +1902,13 @@ export function createGame(args: CreateGameArgs) {
     world.state = "MENU";
     world.runState = "FLOOR";
     world.currentFloorIntent = null;
+    world.deathFx.active = false;
     world.objectiveRewardClaimedKey = null;
     (world as any).deterministicDelveMode = false;
     args.ui.mapEl.root.hidden = true;
     hideCardRewardMenu();
     closeVendorShop(false);
-    args.ui.endEl.root.hidden = true;
+    hideEndScreen();
     args.ui.dialogEl.root.hidden = true;
     setHudHidden(true);
     args.ui.menuEl.hidden = true;
@@ -2383,6 +2400,12 @@ export function createGame(args: CreateGameArgs) {
     world.deathFx.active = true;
     world.deathFx.tReal = 0;
     world.deathFx.durationReal = DEATH_FX_DURATION;
+    world.deathFx.aFlash = 0;
+    world.deathFx.aDesat = 0;
+    world.deathFx.aVignette = 0;
+    world.deathFx.aDark = 0;
+    world.deathFx.aTitle = 0;
+    world.deathFx.aBlack = 0;
     world.runState = "GAME_OVER";
     world.floorEndCountdownActive = false;
     world.floorEndCountdownSec = 0;
@@ -2390,8 +2413,15 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function finalizeDeathFx(): void {
-    world.deathFx.active = false;
+    // Keep the WASTED overlay locked while the end screen fades in above it.
+    world.deathFx.active = true;
     world.deathFx.tReal = world.deathFx.durationReal;
+    world.deathFx.aFlash = 0;
+    world.deathFx.aDesat = 0;
+    world.deathFx.aVignette = 0;
+    world.deathFx.aDark = 0;
+    world.deathFx.aTitle = 1;
+    world.deathFx.aBlack = 1;
     world.state = "LOSE";
     const depth = getEndStatsDepth(world);
     showEndScreen(world, "Run Ended", `You died on depth ${depth}.`);
@@ -2399,31 +2429,55 @@ export function createGame(args: CreateGameArgs) {
 
   function update(rawDtReal: number) {
     const dtReal = clampFrameDtReal(rawDtReal);
+    const settings = getUserSettings() as any;
     const baselineTimeScaleTarget = clampGameSpeed(
-      Number((getUserSettings() as any)?.game?.gameSpeed ?? DEFAULT_GAME_SPEED),
+      Number(settings?.game?.gameSpeed ?? DEFAULT_GAME_SPEED),
     );
+    const deathSlowdownEnabled = !!settings?.render?.deathSlowdownEnabled;
     const timeState = world.timeState;
     const deathFxActive = world.deathFx.active;
     timeState.dtReal = dtReal;
-    timeState.timeScaleTarget = deathFxActive ? DEATH_SLOWMO_TARGET : baselineTimeScaleTarget;
-    timeState.timeScaleSlew = deathFxActive ? DEATH_SLOWMO_SLEW : DEFAULT_TIME_SCALE_SLEW;
-    timeState.timeScale = approachExp(
-      timeState.timeScale,
-      timeState.timeScaleTarget,
-      timeState.timeScaleSlew,
-      dtReal,
-    );
+    if (deathFxActive && deathSlowdownEnabled) {
+      const blackProgress = clamp01(world.deathFx.tReal / DEATH_TO_BLACK_DURATION_SEC);
+      timeState.timeScaleTarget = baselineTimeScaleTarget * (1 - blackProgress);
+      timeState.timeScaleSlew = DEATH_TIME_SCALE_SLEW;
+      timeState.timeScale = timeState.timeScaleTarget;
+    } else {
+      timeState.timeScaleTarget = baselineTimeScaleTarget;
+      timeState.timeScaleSlew = DEFAULT_TIME_SCALE_SLEW;
+      timeState.timeScale = approachExp(
+        timeState.timeScale,
+        timeState.timeScaleTarget,
+        timeState.timeScaleSlew,
+        dtReal,
+      );
+    }
     timeState.dtSim = dtReal * timeState.timeScale;
     const dtSim = timeState.dtSim;
 
     if (world.deathFx.active) {
       world.deathFx.tReal = Math.min(world.deathFx.durationReal, world.deathFx.tReal + dtReal);
-      if (world.deathFx.tReal >= world.deathFx.durationReal) {
+      const t = world.deathFx.tReal;
+      const blackAlpha = clamp01(t / DEATH_TO_BLACK_DURATION_SEC);
+      const titleFadeT = (t - DEATH_TO_BLACK_DURATION_SEC) / DEATH_WASTED_FADE_IN_SEC;
+      world.deathFx.aFlash = 0;
+      world.deathFx.aDesat = 0;
+      world.deathFx.aVignette = 0;
+      world.deathFx.aDark = 0;
+      world.deathFx.aBlack = blackAlpha;
+      world.deathFx.aTitle = blackAlpha >= 1 ? clamp01(titleFadeT) : 0;
+      if (world.deathFx.tReal >= world.deathFx.durationReal && world.state !== "LOSE") {
         finalizeDeathFx();
         clearEvents(world);
         clearInputEdges(input);
         return;
       }
+
+      // Freeze gameplay while death FX is running.
+      clearEvents(world);
+      clearInputEdges(input);
+      updateHud();
+      return;
     }
 
     // Always poll input (so movement is responsive immediately after closing menus)

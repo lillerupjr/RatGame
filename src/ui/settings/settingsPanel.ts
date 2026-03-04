@@ -226,6 +226,10 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
   gameSpeedRow.slider.setAttribute("data-game-speed-slider", "1");
   gamePanel.appendChild(gameSpeedRow.row);
 
+  const deathSlowdownRow = createToggleRow("Death slowmo");
+  deathSlowdownRow.input.setAttribute("data-death-slowmo-toggle", "1");
+  gamePanel.appendChild(deathSlowdownRow.row);
+
   const graphicsHeader = document.createElement("h4");
   graphicsHeader.className = "settingsCategoryTitle";
   graphicsHeader.textContent = "Graphics";
@@ -234,6 +238,10 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
   const performanceModeRow = createToggleRow("Performance mode");
   performanceModeRow.input.setAttribute("data-performance-mode-toggle", "1");
   graphicsPanel.appendChild(performanceModeRow.row);
+
+  const cameraSmoothingRow = createToggleRow("Camera smoothing");
+  cameraSmoothingRow.input.setAttribute("data-camera-smoothing-toggle", "1");
+  graphicsPanel.appendChild(cameraSmoothingRow.row);
 
   const verticalTilesModeRow = document.createElement("div");
   verticalTilesModeRow.className = "settingsRow";
@@ -395,6 +403,14 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
     options.onPerformanceModeChanged?.();
   };
 
+  const onDeathSlowdownToggle = () => {
+    updateUserSettings({ render: { deathSlowdownEnabled: !!deathSlowdownRow.input.checked } });
+  };
+
+  const onCameraSmoothingToggle = () => {
+    updateUserSettings({ render: { cameraSmoothingEnabled: !!cameraSmoothingRow.input.checked } });
+  };
+
   const onVerticalTilesMode = (mode: VerticalTilesMode) => {
     const settings = readSettings();
     const viewport = getViewportDimensions();
@@ -422,6 +438,8 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
     userModeRow.input.checked = !!settings.game.userModeEnabled;
     updateHealthOrbSideUi(settings.game.healthOrbSide);
     performanceModeRow.input.checked = !!settings.render.performanceMode;
+    deathSlowdownRow.input.checked = !!settings.render.deathSlowdownEnabled;
+    cameraSmoothingRow.input.checked = settings.render.cameraSmoothingEnabled !== false;
 
     musicMuteRow.input.checked = !!settings.audio.musicMuted;
     sfxMuteRow.input.checked = !!settings.audio.sfxMuted;
@@ -436,6 +454,8 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
   orbLeftBtn.addEventListener("click", () => onHealthOrbSide("left"));
   orbRightBtn.addEventListener("click", () => onHealthOrbSide("right"));
   performanceModeRow.input.addEventListener("change", onPerformanceModeToggle);
+  deathSlowdownRow.input.addEventListener("change", onDeathSlowdownToggle);
+  cameraSmoothingRow.input.addEventListener("change", onCameraSmoothingToggle);
   verticalTilesModeAutoBtn.addEventListener("click", () => onVerticalTilesMode("auto"));
   verticalTilesModeManualBtn.addEventListener("click", () => onVerticalTilesMode("manual"));
   gameSpeedRow.slider.addEventListener("input", () => {

@@ -2118,7 +2118,19 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 #levelup { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 8; }
 #levelup .panel { width: min(980px, 95vw); padding: 20px; border-radius: 18px; }
 
-#end { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 7; }
+#end {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--bg-overlay);
+  z-index: 7;
+  opacity: 0;
+  transition: opacity 700ms ease;
+}
+#end.isVisible {
+  opacity: 1;
+}
 #end .panel { width: min(560px, 92vw); padding: 20px; border-radius: 16px; }
 #end .title { font-size: 26px; font-weight: 900; margin-bottom: 6px; }
 #end .subline { opacity: 0.92; margin-bottom: 14px; white-space: pre-wrap; }
@@ -2164,6 +2176,12 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   inset: 0;
   display: grid;
   place-items: center;
+  box-sizing: border-box;
+  padding:
+    var(--overlay-pad-top)
+    var(--overlay-pad-right)
+    var(--overlay-pad-bottom)
+    var(--overlay-pad-left);
   background:
     radial-gradient(120% 120% at 50% 5%, var(--accent-glow), transparent 46%),
     var(--bg-overlay);

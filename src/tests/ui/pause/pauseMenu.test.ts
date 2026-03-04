@@ -248,6 +248,8 @@ const userSettingsState = vi.hoisted(() => ({
       paletteSwapEnabled: false,
       paletteId: "db32",
       performanceMode: false,
+      deathSlowdownEnabled: true,
+      cameraSmoothingEnabled: true,
       verticalTilesMode: "auto",
       verticalTilesUser: 9,
       verticalTilesAutoPhone: 6,
@@ -327,6 +329,8 @@ vi.mock("../../../userSettings", () => ({
       entityAnchorsEnabled: false,
       renderPerfCountersEnabled: false,
       performanceMode: false,
+      deathSlowdownEnabled: true,
+      cameraSmoothingEnabled: true,
       verticalTilesMode: "auto",
       verticalTilesUser: 9,
       verticalTilesAutoPhone: 6,
@@ -438,6 +442,8 @@ describe("pauseMenu", () => {
         paletteSwapEnabled: false,
         paletteId: "db32",
         performanceMode: false,
+        deathSlowdownEnabled: true,
+        cameraSmoothingEnabled: true,
         verticalTilesMode: "auto",
         verticalTilesUser: 9,
         verticalTilesAutoPhone: 6,
@@ -808,6 +814,38 @@ describe("pauseMenu", () => {
     toggle.checked = true;
     toggle.dispatchEvent(new Event("change") as any);
     expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({ render: { performanceMode: true } });
+  });
+
+  test("death slowmo toggle updates user settings from game tab", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+    menu.setVisible(true);
+    menu.render(makeWorld());
+
+    (root.querySelector('[data-settings-tab="GAME"]') as any).click();
+    const toggle = root.querySelector("[data-death-slowmo-toggle]") as any;
+    expect(toggle).toBeTruthy();
+
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event("change") as any);
+    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({ render: { deathSlowdownEnabled: true } });
+  });
+
+  test("camera smoothing toggle updates user settings from graphics tab", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+    menu.setVisible(true);
+    menu.render(makeWorld());
+
+    (root.querySelector('[data-settings-tab="GRAPHICS"]') as any).click();
+    const toggle = root.querySelector("[data-camera-smoothing-toggle]") as any;
+    expect(toggle).toBeTruthy();
+
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event("change") as any);
+    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({ render: { cameraSmoothingEnabled: false } });
   });
 
   test("vertical tiles slider updates user settings", () => {
