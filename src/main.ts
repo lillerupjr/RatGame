@@ -8,7 +8,7 @@ import { primeAudio } from "./game/audio/audioManager";
 import { setMusicMuted, setMusicVolume, setSfxMuted, setSfxVolume } from "./game/audio/audioSettings";
 import { resolveActivePaletteId } from "./game/render/activePalette";
 import { getSpriteByIdForPalette } from "./engine/render/sprites/renderSprites";
-import { defaultPixelScaleForViewport, resizeCanvasPixelPerfect } from "./engine/render/pixelPerfect";
+import { attachCanvasAutoResize } from "./engine/render/pixelPerfect";
 import { getDomRefs } from "./ui/domRefs";
 import { applyTheme } from "./ui/theme";
 import { wireMenus } from "./ui/menuWiring";
@@ -726,28 +726,17 @@ async function bootstrap() {
     rootStyle.setProperty("--safe-h", `${h}px`);
   };
 
-  function resize() {
-    const settings = getUserSettings();
-    const pixelScale = defaultPixelScaleForViewport(window.innerWidth, window.innerHeight);
-    const maxDpr = settings.render.performanceMode ? 1 : 4;
-    resizeCanvasPixelPerfect(canvas, ctx, window.innerWidth, window.innerHeight, pixelScale, maxDpr);
-    resizeCanvasPixelPerfect(uiCanvas, uiCtx, window.innerWidth, window.innerHeight, pixelScale, maxDpr);
+  const syncCanvasResolutionMetadata = () => {
     uiCanvas.dataset.effectiveDpr = canvas.dataset.effectiveDpr;
     uiCanvas.dataset.pixelScale = canvas.dataset.pixelScale;
-
-    const debugCanvas = document.querySelector("canvas");
-    console.log("viewport", {
-      innerW: window.innerWidth,
-      innerH: window.innerHeight,
-      dpr: window.devicePixelRatio,
-      canvasW: debugCanvas?.width,
-      canvasH: debugCanvas?.height,
-      clientW: debugCanvas?.clientWidth,
-      clientH: debugCanvas?.clientHeight,
-    });
-  }
-  window.addEventListener("resize", resize);
-  resize();
+  };
+  const detachWorldCanvasAutoResize = attachCanvasAutoResize(canvas, ctx, syncCanvasResolutionMetadata);
+  const detachUiCanvasAutoResize = attachCanvasAutoResize(uiCanvas, uiCtx, syncCanvasResolutionMetadata);
+  syncCanvasResolutionMetadata();
+  window.addEventListener("beforeunload", () => {
+    detachWorldCanvasAutoResize();
+    detachUiCanvasAutoResize();
+  }, { once: true });
 
   const game = createGame({
     canvas,
@@ -1026,7 +1015,7 @@ async function bootstrap() {
 
   let last = performance.now();
   function frame(now: number) {
-    const dt = Math.min(0.033, (now - last) / 1000);
+    const dtReal = Math.min(0.05, (now - last) / 1000);
     last = now;
     syncUiForAppState(appStateController.appState, appStateController.runState);
     uiCtx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1102,7 +1091,7 @@ async function bootstrap() {
           }
         }
         if (appStateController.runState === RunState.PLAYING) {
-          game.update(dt);
+          game.update(dtReal);
         }
         game.render();
         syncUiSafeRect();

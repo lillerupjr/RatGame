@@ -115,7 +115,7 @@ import { findNearestWalkableSpawnGrid } from "./systems/spawn/findWalkableSpawn"
 import { DEFAULT_MAP_POOL } from "./map/mapIds";
 import { OBJECTIVE_TRIGGER_IDS } from "./systems/progression/objectiveSpec";
 import { getPlayableCharacter, PLAYABLE_CHARACTERS, type PlayableCharacterId } from "./content/playableCharacters";
-import { getUserSettings } from "../userSettings";
+import { DEFAULT_GAME_SPEED, clampGameSpeed, getUserSettings } from "../userSettings";
 import { neutralMobSpritesReady, preloadNeutralMobSprites } from "../engine/render/sprites/neutralSprites";
 import { spawnMilestonePigeonNearPlayer } from "./factories/neutralMobFactory";
 import { neutralAnimatedMobsSystem } from "./systems/sim/neutralAnimatedMobs";
@@ -251,6 +251,26 @@ type FloorLoadContext = {
 function clampNonNegativeFinite(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, value);
+}
+
+const MAX_FRAME_DT_REAL_SEC = 0.05;
+const DEFAULT_TIME_SCALE_SLEW = 12;
+const DEATH_SLOWMO_TARGET = 0.12;
+const DEATH_SLOWMO_SLEW = 16;
+const DEATH_FX_DURATION = 2.0;
+
+function clampFrameDtReal(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(MAX_FRAME_DT_REAL_SEC, value));
+}
+
+function approachExp(current: number, target: number, slewPerSec: number, dtRealSec: number): number {
+  if (!Number.isFinite(current)) return target;
+  if (!Number.isFinite(target)) return current;
+  if (Math.abs(target - current) <= 1e-9) return target;
+  if (!Number.isFinite(slewPerSec) || slewPerSec <= 0 || dtRealSec <= 0) return target;
+  const alpha = 1 - Math.exp(-slewPerSec * dtRealSec);
+  return current + (target - current) * alpha;
 }
 
 export function precomputeStaticMapData(): void {
@@ -2359,7 +2379,52 @@ export function createGame(args: CreateGameArgs) {
     return false;
   }
 
-  function update(dt: number) {
+  function triggerDeathFx(): void {
+    world.deathFx.active = true;
+    world.deathFx.tReal = 0;
+    world.deathFx.durationReal = DEATH_FX_DURATION;
+    world.runState = "GAME_OVER";
+    world.floorEndCountdownActive = false;
+    world.floorEndCountdownSec = 0;
+    emitEvent(world, { type: "SFX", id: "RUN_LOSE", vol: 1.0, rate: 1 });
+  }
+
+  function finalizeDeathFx(): void {
+    world.deathFx.active = false;
+    world.deathFx.tReal = world.deathFx.durationReal;
+    world.state = "LOSE";
+    const depth = getEndStatsDepth(world);
+    showEndScreen(world, "Run Ended", `You died on depth ${depth}.`);
+  }
+
+  function update(rawDtReal: number) {
+    const dtReal = clampFrameDtReal(rawDtReal);
+    const baselineTimeScaleTarget = clampGameSpeed(
+      Number((getUserSettings() as any)?.game?.gameSpeed ?? DEFAULT_GAME_SPEED),
+    );
+    const timeState = world.timeState;
+    const deathFxActive = world.deathFx.active;
+    timeState.dtReal = dtReal;
+    timeState.timeScaleTarget = deathFxActive ? DEATH_SLOWMO_TARGET : baselineTimeScaleTarget;
+    timeState.timeScaleSlew = deathFxActive ? DEATH_SLOWMO_SLEW : DEFAULT_TIME_SCALE_SLEW;
+    timeState.timeScale = approachExp(
+      timeState.timeScale,
+      timeState.timeScaleTarget,
+      timeState.timeScaleSlew,
+      dtReal,
+    );
+    timeState.dtSim = dtReal * timeState.timeScale;
+    const dtSim = timeState.dtSim;
+
+    if (world.deathFx.active) {
+      world.deathFx.tReal = Math.min(world.deathFx.durationReal, world.deathFx.tReal + dtReal);
+      if (world.deathFx.tReal >= world.deathFx.durationReal) {
+        finalizeDeathFx();
+        clearEvents(world);
+        clearInputEdges(input);
+        return;
+      }
+    }
 
     // Always poll input (so movement is responsive immediately after closing menus)
     inputSystem(input, args.canvas);
@@ -2374,7 +2439,7 @@ export function createGame(args: CreateGameArgs) {
     // Handle pause states
     if (world.state === "REWARD" || world.state === "MAP") {
       if (world.state === "REWARD") {
-        tickFloorEndCountdown(world, dt);
+        tickFloorEndCountdown(world, dtSim);
         if (isFloorEndCountdownDone(world)) {
           finishFloorEndCountdown();
           return;
@@ -2408,14 +2473,14 @@ export function createGame(args: CreateGameArgs) {
     }
 
     // total run time (optional for future meta / analytics)
-    world.time += dt;
+    world.time += dtSim;
 
     // phase time (drives FLOOR/BOSS/TRANSITION)
-    world.phaseTime += dt;
+    world.phaseTime += dtSim;
     // Spawn pacing uses the same clock as floor progression/spawn cadence.
     world.timeSec = world.phaseTime;
     world.level = 1;
-    tickMomentumDecay(world, dt, world.timeSec);
+    tickMomentumDecay(world, dtSim, world.timeSec);
     recomputeDerivedStats(world);
 
     const mapMode = !!(world as any).mapMode;
@@ -2427,7 +2492,7 @@ export function createGame(args: CreateGameArgs) {
       }
     }
     if (world.runState === "TRANSITION") {
-      world.transitionTime = Math.max(0, world.transitionTime - dt);
+      world.transitionTime = Math.max(0, world.transitionTime - dtSim);
       if (world.transitionTime <= 0) {
         const nextFloorIndex = (world.floorIndex ?? 0) + 1;
         void enterFloor(world, buildFallbackFloorIntent(world, nextFloorIndex));
@@ -2435,18 +2500,18 @@ export function createGame(args: CreateGameArgs) {
     }
 
     if (!activeDialog && !vendorShopOpen) {
-      movementSystem(world, input, dt);
+      movementSystem(world, input, dtSim);
     }
-    neutralBirdAISystem(world, dt);
-    neutralAnimatedMobsSystem(world, dt);
-    roomChallengeSystem(world, dt);  // Track room challenges and lock exits
+    neutralBirdAISystem(world, dtSim);
+    neutralAnimatedMobsSystem(world, dtSim);
+    roomChallengeSystem(world, dtSim);  // Track room challenges and lock exits
     spawnSurviveBossIfNeeded(world);
     world.spawnDirectorConfig.enabled = !!world.balance.spawnDirectorEnabled;
     if (world.balance.spawnDirectorEnabled) {
       if (!world.floorEndCountdownActive) {
         tickSpawnDirector(
           world,
-          dt,
+          dtSim,
           world.spawnDirectorConfig,
           world.expectedPowerConfig,
           world.expectedPowerBudgetConfig,
@@ -2466,33 +2531,33 @@ export function createGame(args: CreateGameArgs) {
       }
     } else {
       if (!world.floorEndCountdownActive) {
-        spawnSystem(world, dt);
+        spawnSystem(world, dtSim);
       }
     }
-    tickBalanceCsvLogger(world as any, dt);
+    tickBalanceCsvLogger(world as any, dtSim);
     const isNeutralObjectiveFloor = world.floorArchetype === "VENDOR" || world.floorArchetype === "HEAL";
     if (!isNeutralObjectiveFloor) {
-      combatSystem(world, dt);
+      combatSystem(world, dtSim);
     }
-    projectilesSystem(world, dt);
-    collisionsSystem(world, dt);
+    projectilesSystem(world, dtSim);
+    collisionsSystem(world, dtSim);
     const combatMode = (world as any).combatMode ?? "mods";
     if (combatMode === "mods") {
-      ailmentTickSystem(world, dt);
+      ailmentTickSystem(world, dtSim);
     }
-    fissionSystem(world, dt);  // Nuclear fission: projectile-projectile collisions
-    poisonSystem(world, dt);
-    relicExplodeOnKillSystem(world, dt);
-    bossSystem(world, dt);          // NEW: boss mechanics (telegraphs/hazards/dash)
-    zonesSystem(world, dt);
-    pickupsSystem(world, dt);
-    dropsSystem(world, dt);
-    triggerSystem(world, dt, input);
+    fissionSystem(world, dtSim);  // Nuclear fission: projectile-projectile collisions
+    poisonSystem(world, dtSim);
+    relicExplodeOnKillSystem(world, dtSim);
+    bossSystem(world, dtSim);          // NEW: boss mechanics (telegraphs/hazards/dash)
+    zonesSystem(world, dtSim);
+    pickupsSystem(world, dtSim);
+    dropsSystem(world, dtSim);
+    triggerSystem(world, dtSim, input);
     relicTriggerSystem(world);
-    updateExhaustFollowers(world as any, dt, bazookaExhaustAssets);
-    vfxSystem(world, dt);
+    updateExhaustFollowers(world as any, dtSim, bazookaExhaustAssets);
+    vfxSystem(world, dtSim);
     relicRetriggerSystem(world);
-    processCombatTextFromEvents(world, dt);
+    processCombatTextFromEvents(world, dtSim);
     updateZoneTrialObjective(world);
     syncZoneTrialNavState(world);
     markBossTripleClearsFromSignalsAndEvents(world);
@@ -2500,50 +2565,46 @@ export function createGame(args: CreateGameArgs) {
     objectiveSystem(world);
     syncBossTripleObjectiveStateFromClears(world);
     processMomentumEventQueue(world);
-    if (runRewardPipeline({ includeCoreFacts: true, includeChest: false })) {
-      clearEvents(world);
-      return;
+
+    if (world.playerHp <= 0 && !world.deathFx.active && world.runState !== "GAME_OVER") {
+      triggerDeathFx();
     }
-    if (!world.cardReward?.active && !world.relicReward?.active) {
-      maybeStartFloorEndCountdown(world);
+
+    if (!world.deathFx.active) {
+      if (runRewardPipeline({ includeCoreFacts: true, includeChest: false })) {
+        clearEvents(world);
+        return;
+      }
+      if (!world.cardReward?.active && !world.relicReward?.active) {
+        maybeStartFloorEndCountdown(world);
+      }
+      tickFloorEndCountdown(world, dtSim);
+      if (isFloorEndCountdownDone(world)) {
+        finishFloorEndCountdown();
+        return;
+      }
+      outcomeSystem(world);
     }
-    tickFloorEndCountdown(world, dt);
-    if (isFloorEndCountdownDone(world)) {
-      finishFloorEndCountdown();
-      return;
-    }
-    outcomeSystem(world);
 
     // SFX consumes events before any early-return branches
-    audioSystem(world, dt);
+    audioSystem(world, dtSim);
     maybeTriggerPhoneDamageHaptic();
 
-    // Process chest-request rewards after audio so pickup SFX is never skipped.
-    if (runRewardPipeline({ includeCoreFacts: false, includeChest: true })) {
-      clearEvents(world);
-      return;
+    if (!world.deathFx.active) {
+      // Process chest-request rewards after audio so pickup SFX is never skipped.
+      if (runRewardPipeline({ includeCoreFacts: false, includeChest: true })) {
+        clearEvents(world);
+        return;
+      }
+
+      if (tryAdvanceAfterObjectiveCompletion()) {
+        clearEvents(world);
+        return;
+      }
     }
 
     // Clear events AFTER all consumers ran this frame
     clearEvents(world);
-    if (tryAdvanceAfterObjectiveCompletion()) {
-      return;
-    }
-
-    // Simple lose condition
-    if (world.playerHp <= 0) {
-      world.runState = "GAME_OVER";
-      world.state = "LOSE";
-
-      emitEvent(world, { type: "SFX", id: "RUN_LOSE", vol: 1.0, rate: 1 });
-      audioSystem(world, dt);
-      clearEvents(world);
-
-      const depth = getEndStatsDepth(world);
-      showEndScreen(world, "Run Ended", `You died on depth ${depth}.`);
-      return;
-    }
-
 
     // HUD
     updateHud();

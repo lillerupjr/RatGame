@@ -239,6 +239,7 @@ const userSettingsState = vi.hoisted(() => ({
     game: {
       userModeEnabled: true,
       healthOrbSide: "left",
+      gameSpeed: 1.0,
     },
     render: {
       entityShadowsDisable: false,
@@ -247,6 +248,11 @@ const userSettingsState = vi.hoisted(() => ({
       paletteSwapEnabled: false,
       paletteId: "db32",
       performanceMode: false,
+      verticalTilesMode: "auto",
+      verticalTilesUser: 10,
+      verticalTilesAutoPhone: 6,
+      verticalTilesAutoDesktop: 10,
+      visibleVerticalTiles: 12,
       tileRenderRadius: 0,
       spawnBase: 1.0,
       spawnPerDepth: 1.12,
@@ -286,6 +292,26 @@ vi.mock("../../../game/audio/audioSettings", () => ({
 }));
 
 vi.mock("../../../userSettings", () => ({
+  DEFAULT_GAME_SPEED: 1.0,
+  DEFAULT_VISIBLE_VERTICAL_TILES_PHONE: 6,
+  DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP: 10,
+  DEFAULT_VISIBLE_VERTICAL_TILES: 10,
+  DEFAULT_VERTICAL_TILES_MODE: "auto",
+  MIN_GAME_SPEED: 0.5,
+  MIN_VISIBLE_VERTICAL_TILES: 8,
+  MAX_GAME_SPEED: 1.5,
+  MAX_VISIBLE_VERTICAL_TILES: 20,
+  clampGameSpeed: (v: number) => Math.max(0.5, Math.min(1.5, Number.isFinite(v) ? v : 1.0)),
+  clampVisibleVerticalTiles: (v: number) => Math.max(8, Math.min(20, Math.round(Number.isFinite(v) ? v : 10))),
+  resolveVerticalTiles: (render: any) => {
+    const mode = render?.verticalTilesMode === "manual" ? "manual" : "auto";
+    const manual = Math.max(8, Math.min(20, Math.round(Number(render?.verticalTilesUser ?? render?.visibleVerticalTiles ?? 10))));
+    const autoPhone = Math.max(8, Math.min(20, Math.round(Number(render?.verticalTilesAutoPhone ?? 6))));
+    const autoDesktop = Math.max(8, Math.min(20, Math.round(Number(render?.verticalTilesAutoDesktop ?? 10))));
+    const viewportClass = "desktop" as const;
+    const effective = mode === "manual" ? manual : autoDesktop;
+    return { mode, viewportClass, effective, manual, autoPhone, autoDesktop };
+  },
   DEFAULT_SETTINGS: {
     debug: {
       pauseDebugCards: false,
@@ -294,12 +320,18 @@ vi.mock("../../../userSettings", () => ({
     game: {
       userModeEnabled: true,
       healthOrbSide: "left",
+      gameSpeed: 1.0,
     },
     render: {
       entityShadowsDisable: false,
       entityAnchorsEnabled: false,
       renderPerfCountersEnabled: false,
       performanceMode: false,
+      verticalTilesMode: "auto",
+      verticalTilesUser: 10,
+      verticalTilesAutoPhone: 6,
+      verticalTilesAutoDesktop: 10,
+      visibleVerticalTiles: 12,
       tileRenderRadius: 0,
       paletteSwapEnabled: false,
       paletteId: "db32",
@@ -397,7 +429,8 @@ describe("pauseMenu", () => {
     debugFlags.pauseCsvControls = false;
     userSettingsState.settings = {
       debug: { pauseDebugCards: false, pauseCsvControls: false },
-      game: { userModeEnabled: true, healthOrbSide: "left" },
+      game: { userModeEnabled: true, healthOrbSide: "left",
+      gameSpeed: 1.0 },
       render: {
         entityShadowsDisable: false,
         entityAnchorsEnabled: false,
@@ -405,6 +438,11 @@ describe("pauseMenu", () => {
         paletteSwapEnabled: false,
         paletteId: "db32",
         performanceMode: false,
+        verticalTilesMode: "auto",
+        verticalTilesUser: 10,
+        verticalTilesAutoPhone: 6,
+        verticalTilesAutoDesktop: 10,
+        visibleVerticalTiles: 12,
         tileRenderRadius: 0,
         spawnBase: 1.0,
         spawnPerDepth: 1.12,
@@ -584,7 +622,8 @@ describe("pauseMenu", () => {
     document.body.appendChild(root as any);
     userSettingsState.settings = {
       ...userSettingsState.settings,
-      game: { userModeEnabled: true, healthOrbSide: "left" },
+      game: { userModeEnabled: true, healthOrbSide: "left",
+      gameSpeed: 1.0 },
     } as any;
     const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
     menu.setVisible(true);
@@ -600,7 +639,8 @@ describe("pauseMenu", () => {
     document.body.appendChild(root as any);
     userSettingsState.settings = {
       ...userSettingsState.settings,
-      game: { userModeEnabled: false, healthOrbSide: "left" },
+      game: { userModeEnabled: false, healthOrbSide: "left",
+      gameSpeed: 1.0 },
     } as any;
     const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
     menu.setVisible(true);
@@ -619,7 +659,8 @@ describe("pauseMenu", () => {
     document.body.appendChild(root as any);
     userSettingsState.settings = {
       ...userSettingsState.settings,
-      game: { userModeEnabled: false, healthOrbSide: "left" },
+      game: { userModeEnabled: false, healthOrbSide: "left",
+      gameSpeed: 1.0 },
     } as any;
     const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
     menu.setVisible(true);
@@ -665,7 +706,8 @@ describe("pauseMenu", () => {
     document.body.appendChild(root as any);
     userSettingsState.settings = {
       ...userSettingsState.settings,
-      game: { userModeEnabled: false, healthOrbSide: "left" },
+      game: { userModeEnabled: false, healthOrbSide: "left",
+      gameSpeed: 1.0 },
     } as any;
     const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
     menu.setVisible(true);
@@ -694,7 +736,8 @@ describe("pauseMenu", () => {
     document.body.appendChild(root as any);
     userSettingsState.settings = {
       ...userSettingsState.settings,
-      game: { userModeEnabled: false, healthOrbSide: "left" },
+      game: { userModeEnabled: false, healthOrbSide: "left",
+      gameSpeed: 1.0 },
     } as any;
     const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
     menu.setVisible(true);
@@ -724,7 +767,8 @@ describe("pauseMenu", () => {
     document.body.appendChild(root as any);
     userSettingsState.settings = {
       ...userSettingsState.settings,
-      game: { userModeEnabled: false, healthOrbSide: "left" },
+      game: { userModeEnabled: false, healthOrbSide: "left",
+      gameSpeed: 1.0 },
     } as any;
     const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
     menu.setVisible(true);
@@ -764,6 +808,70 @@ describe("pauseMenu", () => {
     toggle.checked = true;
     toggle.dispatchEvent(new Event("change") as any);
     expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({ render: { performanceMode: true } });
+  });
+
+  test("vertical tiles slider updates user settings", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+    menu.setVisible(true);
+    menu.render(makeWorld());
+
+    (root.querySelector('[data-settings-tab="GRAPHICS"]') as any).click();
+    const slider = root.querySelector("[data-vertical-tiles-slider]") as any;
+    expect(slider).toBeTruthy();
+
+    slider.value = "16";
+    slider.dispatchEvent(new Event("input") as any);
+    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({ render: { verticalTilesAutoDesktop: 16 } });
+  });
+
+  test("vertical tiles mode manual stores user override", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+    menu.setVisible(true);
+    menu.render(makeWorld());
+
+    (root.querySelector('[data-settings-tab="GRAPHICS"]') as any).click();
+    const manualBtn = root.querySelector('[data-vertical-tiles-mode="manual"]') as any;
+    const slider = root.querySelector("[data-vertical-tiles-slider]") as any;
+    expect(manualBtn).toBeTruthy();
+    expect(slider).toBeTruthy();
+
+    manualBtn.click();
+    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({
+      render: {
+        verticalTilesMode: "manual",
+        verticalTilesUser: 10,
+        visibleVerticalTiles: 10,
+      },
+    });
+
+    slider.value = "14";
+    slider.dispatchEvent(new Event("input") as any);
+    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({
+      render: {
+        verticalTilesUser: 14,
+        visibleVerticalTiles: 14,
+      },
+    });
+  });
+
+  test("game speed slider updates user settings", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
+    menu.setVisible(true);
+    menu.render(makeWorld());
+
+    (root.querySelector('[data-settings-tab="GAME"]') as any).click();
+    const slider = root.querySelector("[data-game-speed-slider]") as any;
+    expect(slider).toBeTruthy();
+
+    slider.value = "1.25";
+    slider.dispatchEvent(new Event("input") as any);
+    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({ game: { gameSpeed: 1.25 } });
   });
 
   test("settings tabs switch visible panels", () => {

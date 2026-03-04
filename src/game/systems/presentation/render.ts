@@ -83,7 +83,10 @@ import {
   resolveVendorShadowFootOffset,
 } from "./shadowFootOffsets";
 import { resolveDebugFlags } from "../../../debugSettings";
-import { getUserSettings } from "../../../userSettings";
+import {
+  getUserSettings,
+  resolveVerticalTiles,
+} from "../../../userSettings";
 import { type FireZoneVfx, renderFireZoneVfx } from "../../vfx/fireZoneVfx";
 import { BAZOOKA_EXHAUST_OFFSET, bazookaExhaustAssets } from "../../vfx/bazookaExhaustAssets";
 import { TILE_ID_OCEAN } from "../../world/semanticFields";
@@ -113,6 +116,7 @@ import {
   setRenderPerfDrawTag,
   setRenderTileLoopRadius,
 } from "./renderPerfCounters";
+import { ViewportTransform } from "./viewportTransform";
 
 // ============================================
 // RenderKey & KindOrder (Isometric Painter Model)
@@ -155,8 +159,6 @@ function compareRenderKeys(a: RenderKey, b: RenderKey): number {
 
 const DEBUG_PLAYER_WEDGE = false;
 const DISABLE_WALLS_AND_CURTAINS = true;
-const VISIBLE_VERTICAL_TILES = 12;
-const LOGICAL_ASPECT = 16 / 9;
 const HARDCODED_VOID_TOP_SRC = `${import.meta.env.BASE_URL}assets-runtime/tiles/floor/void.png`;
 
 // Background mode:
@@ -378,9 +380,7 @@ function drawVoidBackgroundOnce(
   ctx: CanvasRenderingContext2D,
   devW: number,
   devH: number,
-  camTx: number,
-  camTy: number,
-  s: number,
+  viewport: ViewportTransform,
 ): void {
   // Always reset to screen space for background
   ctx.save();
@@ -412,11 +412,10 @@ function drawVoidBackgroundOnce(
   }
 
   if (voidBgPattern) {
-    // World-locked: pattern origin follows the same camera translation as world rendering.
-    // We are in screen space here, so convert world-space translate (camTx/camTy)
-    // into device pixels by multiplying with s.
-    const ox = Math.round(camTx * s);
-    const oy = Math.round(camTy * s);
+    // World-locked: pattern origin follows the active viewport world transform.
+    const patternOffset = viewport.getPatternOffsetDevice();
+    const ox = patternOffset.x;
+    const oy = patternOffset.y;
 
     // Force context-translate path; CanvasPattern.setTransform can trigger
     // slow paths on some browser/GPU combinations.
@@ -636,65 +635,49 @@ function buildLightingOccluderGroups(
 
 function drawOcclusionTileRectScreen(
   maskCtx: CanvasRenderingContext2D,
+  viewport: ViewportTransform,
   tx0: number,
   ty0: number,
   tx1: number,
   ty1: number,
   z: number,
-  worldToScreenFn: (x: number, y: number) => { x: number; y: number },
   tileWorld: number,
   elevPx: number,
-  camTx: number,
-  camTy: number,
-  s: number,
-  safeOffsetX: number,
-  safeOffsetY: number,
-  dpr: number,
 ): void {
-  const p0 = worldToScreenFn(tx0 * tileWorld, ty0 * tileWorld);
-  const p1 = worldToScreenFn(tx1 * tileWorld, ty0 * tileWorld);
-  const p2 = worldToScreenFn(tx1 * tileWorld, ty1 * tileWorld);
-  const p3 = worldToScreenFn(tx0 * tileWorld, ty1 * tileWorld);
   const zPx = z * elevPx;
-  const ox = safeOffsetX * dpr;
-  const oy = safeOffsetY * dpr;
-  const sx0 = (p0.x + camTx) * s + ox;
-  const sy0 = (p0.y + camTy - zPx) * s + oy;
-  const sx1 = (p1.x + camTx) * s + ox;
-  const sy1 = (p1.y + camTy - zPx) * s + oy;
-  const sx2 = (p2.x + camTx) * s + ox;
-  const sy2 = (p2.y + camTy - zPx) * s + oy;
-  const sx3 = (p3.x + camTx) * s + ox;
-  const sy3 = (p3.y + camTy - zPx) * s + oy;
+  const v0 = viewport.project(tx0 * tileWorld, ty0 * tileWorld, zPx);
+  const v1 = viewport.project(tx1 * tileWorld, ty0 * tileWorld, zPx);
+  const v2 = viewport.project(tx1 * tileWorld, ty1 * tileWorld, zPx);
+  const v3 = viewport.project(tx0 * tileWorld, ty1 * tileWorld, zPx);
   maskCtx.beginPath();
-  maskCtx.moveTo(sx0, sy0);
-  maskCtx.lineTo(sx1, sy1);
-  maskCtx.lineTo(sx2, sy2);
-  maskCtx.lineTo(sx3, sy3);
+  maskCtx.moveTo(v0.x, v0.y);
+  maskCtx.lineTo(v1.x, v1.y);
+  maskCtx.lineTo(v2.x, v2.y);
+  maskCtx.lineTo(v3.x, v3.y);
   maskCtx.closePath();
   maskCtx.fill();
 }
 
 function getOcclusionTileRectPts(
+  viewport: ViewportTransform,
   tx0: number,
   ty0: number,
   tx1: number,
   ty1: number,
   z: number,
-  worldToScreenFn: (x: number, y: number) => { x: number; y: number },
   tileWorld: number,
   elevPx: number,
 ): [number, number, number, number, number, number, number, number] {
-  const p0 = worldToScreenFn(tx0 * tileWorld, ty0 * tileWorld);
-  const p1 = worldToScreenFn(tx1 * tileWorld, ty0 * tileWorld);
-  const p2 = worldToScreenFn(tx1 * tileWorld, ty1 * tileWorld);
-  const p3 = worldToScreenFn(tx0 * tileWorld, ty1 * tileWorld);
   const zPx = z * elevPx;
+  const p0 = viewport.projectToView(tx0 * tileWorld, ty0 * tileWorld, zPx);
+  const p1 = viewport.projectToView(tx1 * tileWorld, ty0 * tileWorld, zPx);
+  const p2 = viewport.projectToView(tx1 * tileWorld, ty1 * tileWorld, zPx);
+  const p3 = viewport.projectToView(tx0 * tileWorld, ty1 * tileWorld, zPx);
   return [
-    p0.x, p0.y - zPx,
-    p1.x, p1.y - zPx,
-    p2.x, p2.y - zPx,
-    p3.x, p3.y - zPx,
+    p0.x, p0.y,
+    p1.x, p1.y,
+    p2.x, p2.y,
+    p3.x, p3.y,
   ];
 }
 
@@ -725,14 +708,20 @@ export async function renderSystem(
   uiCtx?: CanvasRenderingContext2D,
   uiCanvas?: HTMLCanvasElement,
 ) {
-  const cssW = Math.max(1, canvas.clientWidth);
-  const cssH = Math.max(1, canvas.clientHeight);
+  const canvasRect = canvas.getBoundingClientRect();
+  const cssW = Math.max(1, canvasRect.width);
+  const cssH = Math.max(1, canvasRect.height);
   const screenW = cssW;
   const screenH = cssH;
   const devW = Math.max(1, canvas.width);
   const devH = Math.max(1, canvas.height);
   const storedDpr = Number(canvas.dataset.effectiveDpr ?? "");
-  const dpr = Number.isFinite(storedDpr) && storedDpr >= 1 ? storedDpr : Math.max(1, devW / cssW);
+  const dpr = Number.isFinite(storedDpr) && storedDpr >= 1
+    ? storedDpr
+    : Math.max(1, window.devicePixelRatio || 1);
+  const settings = getUserSettings();
+  const renderSettings = settings.render;
+  const visibleVerticalTiles = resolveVerticalTiles(renderSettings, cssW, cssH).effective;
   const hasUiOverlay = !!uiCtx && !!uiCanvas;
   const overlayCtx = uiCtx ?? ctx;
   const overlayCanvas = uiCanvas ?? canvas;
@@ -742,17 +731,25 @@ export async function renderSystem(
   const overlayDpr = Number.isFinite(overlayStoredDpr) && overlayStoredDpr >= 1
     ? overlayStoredDpr
     : dpr;
-  const logicalWorldHeight = Math.max(1, VISIBLE_VERTICAL_TILES * KENNEY_TILE_WORLD);
-  const logicalWorldWidth = Math.max(1, Math.round(logicalWorldHeight * LOGICAL_ASPECT));
-  const zoom = Math.max(1, Math.floor(cssH / logicalWorldHeight));
-  const ww = logicalWorldWidth;
-  const hh = logicalWorldHeight;
-  const scaledW = logicalWorldWidth * zoom;
-  const scaledH = logicalWorldHeight * zoom;
-  const safeOffsetX = Math.floor((cssW - scaledW) * 0.5);
-  const safeOffsetY = Math.floor((cssH - scaledH) * 0.5);
+  const viewport = new ViewportTransform({
+    cssWidth: cssW,
+    cssHeight: cssH,
+    dpr,
+    visibleVerticalTiles,
+    tileWorldUnits: KENNEY_TILE_WORLD,
+    uiTopPx: 0,
+    uiBottomPx: 0,
+  });
+  viewport.setWorldProjector(worldToScreen);
+  const zoom = viewport.zoom;
+  const ww = viewport.visibleWorldWidth;
+  const hh = viewport.visibleWorldHeight;
+  const scaledW = viewport.worldRect.width;
+  const scaledH = viewport.worldRect.height;
+  const safeOffsetX = viewport.safeOffsetCssX;
+  const safeOffsetY = viewport.safeOffsetCssY;
   configurePixelPerfect(ctx);
-  const renderPerfCountersEnabled = getUserSettings().render.renderPerfCountersEnabled;
+  const renderPerfCountersEnabled = renderSettings.renderPerfCountersEnabled;
   setRenderPerfCountersEnabled(renderPerfCountersEnabled);
   beginRenderPerfFrame(devW, devH);
   (w as any).viewW = ww;
@@ -763,8 +760,8 @@ export async function renderSystem(
     width: scaledW,
     height: scaledH,
     zoom,
-    logicalWidth: logicalWorldWidth,
-    logicalHeight: logicalWorldHeight,
+    logicalWidth: ww,
+    logicalHeight: hh,
   };
 
   const PLAYER_R = w.playerR;
@@ -811,21 +808,15 @@ export async function renderSystem(
   (w as any).cameraX = p0.x;
   (w as any).cameraY = p0.y;
 
-  const s = dpr * zoom;
-  const viewCenterX = snapPx(ww * 0.5);
-  const viewCenterY = snapPx(hh * 0.5);
-  const camXRaw = viewCenterX - p0.x;
-  const camYRaw = viewCenterY - p0.y;
-  const camTx = Math.round(camXRaw);
-  const camTy = Math.round(camYRaw);
+  viewport.centerOnProjected(p0.x, p0.y);
+  const camTx = viewport.camTx;
+  const camTy = viewport.camTy;
+  const s = viewport.worldScaleDevice;
   // NEW: draw background once, world-locked to the camera
-  drawVoidBackgroundOnce(ctx, devW, devH, camTx + safeOffsetX / Math.max(1, zoom), camTy + safeOffsetY / Math.max(1, zoom), s);
+  drawVoidBackgroundOnce(ctx, devW, devH, viewport);
   const camX = 0;
   const camY = 0;
-  const worldToScreenPx = (xWorld: number, yWorld: number) => ({
-    x: (xWorld + camTx + safeOffsetX / Math.max(1, zoom)) * s,
-    y: (yWorld + camTy + safeOffsetY / Math.max(1, zoom)) * s,
-  });
+  const worldToScreenPx = (xWorld: number, yWorld: number) => viewport.projectProjectedToDevice(xWorld, yWorld);
   const drawAlignmentDot = (target: CanvasRenderingContext2D, color: string) => {
     target.save();
     target.fillStyle = color;
@@ -834,8 +825,7 @@ export async function renderSystem(
   };
 
   ctx.save();
-  ctx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
-  ctx.translate(camTx, camTy);
+  viewport.applyWorld(ctx);
   drawAlignmentDot(ctx, "rgba(255,0,255,0.9)"); // world
 
 
@@ -1559,9 +1549,7 @@ export async function renderSystem(
     toScreenAtZ,
   };
 
-  const settings = getUserSettings();
   const debug = settings.debug;
-  const renderSettings = settings.render;
   const RENDER_ENTITY_SHADOWS = !renderSettings.entityShadowsDisable;
   const RENDER_ENTITY_ANCHORS = renderSettings.entityAnchorsEnabled;
   const SHOW_ENTITY_ANCHOR_OVERLAY = debug.entityAnchorOverlay;
@@ -3564,8 +3552,7 @@ export async function renderSystem(
     // IMPORTANT: match the WORLD camera transform (exactly like lighting masks)
     sctx.save();
     configurePixelPerfect(sctx);
-    sctx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
-    sctx.translate(camTx, camTy);
+    viewport.applyWorld(sctx);
     drawAlignmentDot(sctx, "rgba(255,128,0,0.9)"); // structure
   } else {
     structureLayerScratchCanvas = null;
@@ -3705,15 +3692,15 @@ export async function renderSystem(
                 if (surfaceBucket) for (let i = 0; i < surfaceBucket.entries.length; i++) {
                   const e = surfaceBucket.entries[i];
                   drawOcclusionTileRectScreen(
-                    southCtx, e.tx0, e.ty0, e.tx1, e.ty1, e.z,
-                    worldToScreen, T, ELEV_PX, camTx, camTy, s, safeOffsetX, safeOffsetY, dpr,
+                    southCtx, viewport, e.tx0, e.ty0, e.tx1, e.ty1, e.z,
+                    T, ELEV_PX,
                   );
                 }
                 if (volumetricBucket) for (let i = 0; i < volumetricBucket.entries.length; i++) {
                   const e = volumetricBucket.entries[i];
                   drawOcclusionTileRectScreen(
-                    southCtx, e.tx0, e.ty0, e.tx1, e.ty1, e.z,
-                    worldToScreen, T, ELEV_PX, camTx, camTy, s, safeOffsetX, safeOffsetY, dpr,
+                    southCtx, viewport, e.tx0, e.ty0, e.tx1, e.ty1, e.z,
+                    T, ELEV_PX,
                   );
                 }
               }
@@ -3722,8 +3709,7 @@ export async function renderSystem(
         } else if (bandSurfaceEntries && bandSurfaceEntries.length > 0) {
           southCtx.save();
           configurePixelPerfect(southCtx);
-          southCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
-          southCtx.translate(camTx, camTy);
+          viewport.applyWorld(southCtx);
           for (let i = 0; i < bandSurfaceEntries.length; i++) {
             bandSurfaceEntries[i].draw(southCtx);
           }
@@ -3981,8 +3967,7 @@ export async function renderSystem(
     inverseCtx.clearRect(0, 0, devW, devH);
     inverseCtx.save();
     configurePixelPerfect(inverseCtx);
-    inverseCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
-    inverseCtx.translate(camTx, camTy);
+    viewport.applyWorld(inverseCtx);
     drawAlignmentDot(inverseCtx, "rgba(0,255,0,0.9)"); // inverse mask
     inverseCtx.globalCompositeOperation = "source-over";
     setRenderPerfDrawTag("mask:building");
@@ -4003,8 +3988,7 @@ export async function renderSystem(
 
       shadowCtx.save();
       configurePixelPerfect(shadowCtx);
-      shadowCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
-      shadowCtx.translate(camTx, camTy);
+      viewport.applyWorld(shadowCtx);
       drawAlignmentDot(shadowCtx, "rgba(255,64,64,0.9)"); // shadow mask
       setRenderPerfDrawTag("mask:shadow");
       for (let i = 0; i < entityShadowMaskParams.length; i++) {
@@ -4016,8 +4000,7 @@ export async function renderSystem(
       if (entitySilhouetteMaskDraws.length > 0) {
         silhouetteCtx.save();
         configurePixelPerfect(silhouetteCtx);
-        silhouetteCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
-        silhouetteCtx.translate(camTx, camTy);
+        viewport.applyWorld(silhouetteCtx);
         drawAlignmentDot(silhouetteCtx, "rgba(64,128,255,0.9)"); // silhouette mask
         for (let i = 0; i < entitySilhouetteMaskDraws.length; i++) {
           entitySilhouetteMaskDraws[i](silhouetteCtx);
@@ -4042,8 +4025,7 @@ export async function renderSystem(
       southCtx.clearRect(0, 0, devW, devH);
       southCtx.save();
       configurePixelPerfect(southCtx);
-      southCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
-      southCtx.translate(camTx, camTy);
+      viewport.applyWorld(southCtx);
       drawAlignmentDot(southCtx, "rgba(255,255,255,0.9)"); // south occlusion mask
       southCtx.globalCompositeOperation = "source-over";
       setRenderPerfDrawTag("mask:south");
@@ -4104,8 +4086,6 @@ export async function renderSystem(
   const lightDefs = compiledMap.lightDefs;
   const projectedLights: ProjectedLight[] = [];
   const lightsByHeight = new Map<number, number>();
-  const lightSafeOffsetX = safeOffsetX * dpr;
-  const lightSafeOffsetY = safeOffsetY * dpr;
   for (let i = 0; i < lightDefs.length; i++) {
     const ld = lightDefs[i];
     const ltx = Math.floor(ld.worldX / T);
@@ -4120,11 +4100,11 @@ export async function renderSystem(
     const occlusion = isStreetLamp
       ? ((debugFlags.lightingOcclusionEnabled && w.lighting.occlusionEnabled) ? 1 : 0)
       : 0;
-    const p = worldToScreen(ld.worldX, ld.worldY);
     const screenOffsetX = (ld.screenOffsetPx?.x ?? 0) * s;
     const screenOffsetY = (ld.screenOffsetPx?.y ?? 0) * s;
-    const sx = (p.x + camTx) * s + screenOffsetX + lightSafeOffsetX;
-    const sy = (p.y + camTy - ld.heightUnits * ELEV_PX) * s + screenOffsetY + lightSafeOffsetY;
+    const pos = viewport.project(ld.worldX, ld.worldY, ld.heightUnits * ELEV_PX);
+    const sx = pos.x + screenOffsetX;
+    const sy = pos.y + screenOffsetY;
     const poolSy = sy - (ld.poolHeightOffsetUnits ?? 0) * ELEV_PX * s;
     const flickerPhase = (Math.sin(ld.worldX * 0.013 + ld.worldY * 0.007) * 43758.5453) % (Math.PI * 2);
     projectedLights.push({
@@ -4163,9 +4143,9 @@ export async function renderSystem(
         const t = sampleCount <= 1 ? 0 : i / (sampleCount - 1);
         const wx = w.playerBeamStartX + beamDx * t;
         const wy = w.playerBeamStartY + beamDy * t;
-        const p = worldToScreen(wx, wy);
-        const sx = (p.x + camTx) * s + lightSafeOffsetX;
-        const sy = (p.y + camTy - (w.pzVisual ?? w.pz ?? 0) * ELEV_PX) * s + lightSafeOffsetY;
+        const pos = viewport.project(wx, wy, (w.pzVisual ?? w.pz ?? 0) * ELEV_PX);
+        const sx = pos.x;
+        const sy = pos.y;
         projectedLights.push({
           sx,
           sy,
@@ -4249,8 +4229,9 @@ export async function renderSystem(
           for (let i = 0; i < entries.length; i++) {
             const e = entries[i];
             const p = getOcclusionTileRectPts(
+              viewport,
               e.tx0, e.ty0, e.tx1, e.ty1, e.z,
-              worldToScreen, T, ELEV_PX,
+              T, ELEV_PX,
             );
             pts.push(p);
             minX = Math.min(minX, p[0], p[2], p[4], p[6]);
@@ -4292,8 +4273,9 @@ export async function renderSystem(
             if (firstKey !== undefined) compiledChunkMaskRasterCache.delete(firstKey);
           }
         }
-        const dx = (raster.minX + camTx) * s + safeOffsetX * dpr;
-        const dy = (raster.minY + camTy) * s + safeOffsetY * dpr;
+        const origin = viewport.projectProjectedToDevice(raster.minX, raster.minY);
+        const dx = origin.x;
+        const dy = origin.y;
         const dw = raster.canvas.width * s;
         const dh = raster.canvas.height * s;
         targetCtx.imageSmoothingEnabled = false;
@@ -4393,8 +4375,7 @@ export async function renderSystem(
       const entries = sameBandVolumetricSilhouettes.get(L);
       if (!entries || entries.length === 0) return false;
       targetCtx.save();
-      targetCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
-      targetCtx.translate(camTx, camTy);
+      viewport.applyWorld(targetCtx);
       for (let ei = 0; ei < entries.length; ei++) {
         countRenderMaskRasterChunk();
         countRenderMaskDrawEntry();
@@ -4525,8 +4506,7 @@ export async function renderSystem(
       } else {
         const groupEntries = buildLightingOccluderGroups([L], occluderEntries).get(L) ?? [];
         maskCtx.save();
-        maskCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
-        maskCtx.translate(camTx, camTy);
+        viewport.applyWorld(maskCtx);
         for (let oi = 0; oi < groupEntries.length; oi++) {
           countRenderMaskRasterChunk();
           countRenderMaskDrawEntry();
@@ -4565,8 +4545,7 @@ export async function renderSystem(
           aboveCtx.globalCompositeOperation = "source-over";
           aboveCtx.clearRect(0, 0, devW, devH);
           aboveCtx.save();
-          aboveCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
-          aboveCtx.translate(camTx, camTy);
+          viewport.applyWorld(aboveCtx);
           for (let oi = 0; oi < groupEntries.length; oi++) {
             if (groupEntries[oi].minZ <= playerBand) continue;
             countRenderMaskRasterChunk();
@@ -4619,8 +4598,7 @@ export async function renderSystem(
             sameCtx.globalCompositeOperation = "source-over";
             sameCtx.clearRect(0, 0, devW, devH);
             sameCtx.save();
-            sameCtx.setTransform(s, 0, 0, s, safeOffsetX * dpr, safeOffsetY * dpr);
-            sameCtx.translate(camTx, camTy);
+            viewport.applyWorld(sameCtx);
             for (let oi = 0; oi < groupEntries.length; oi++) {
               if (groupEntries[oi].class !== "VOLUMETRIC") continue;
               if (Math.floor(groupEntries[oi].minZ + 1e-3) !== playerBand) continue;
@@ -4767,10 +4745,7 @@ export async function renderSystem(
       { x: 0, y: 0, w: cssW, h: cssH },
       (wx, wy) => {
         const p = worldToScreen(wx, wy);
-        return {
-          x: safeOffsetX + (p.x + camTx) * zoom,
-          y: safeOffsetY + (p.y + camTy) * zoom,
-        };
+        return viewport.projectProjectedToCss(p.x, p.y);
       }
     );
   }
@@ -4783,6 +4758,66 @@ export async function renderSystem(
   if (getUserSettings().debug.dpsMeter) {
     renderDPSMeter(w, overlayCtx, screenW, screenH);
   }
+  renderDeathFxOverlay(w, overlayCtx, screenW, screenH);
+}
+
+function deathFxClamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
+function deathFxSmoothstep(edge0: number, edge1: number, value: number): number {
+  if (!Number.isFinite(edge0) || !Number.isFinite(edge1)) return 0;
+  if (!Number.isFinite(value)) return 0;
+  if (edge1 <= edge0) return value >= edge1 ? 1 : 0;
+  const t = deathFxClamp01((value - edge0) / (edge1 - edge0));
+  return t * t * (3 - 2 * t);
+}
+
+function renderDeathFxOverlay(w: World, ctx: CanvasRenderingContext2D, ww: number, hh: number): void {
+  const deathFx = w.deathFx;
+  if (!deathFx?.active) return;
+
+  const t = Math.max(0, deathFx.tReal);
+  const duration = Math.max(0.001, deathFx.durationReal);
+  const aIn = deathFxSmoothstep(0.05, 0.25, t);
+  const aOut = 1 - deathFxSmoothstep(1.4, duration, t);
+  const alpha = deathFxClamp01(aIn * aOut);
+  if (alpha <= 0) return;
+
+  const cx = ww * 0.5;
+  const cy = hh * 0.5;
+  const radius = Math.hypot(ww, hh) * 0.65;
+  const vignette = ctx.createRadialGradient(cx, cy, radius * 0.18, cx, cy, radius);
+  vignette.addColorStop(0, `rgba(0, 0, 0, ${(0.08 * alpha).toFixed(4)})`);
+  vignette.addColorStop(1, `rgba(0, 0, 0, ${(0.78 * alpha).toFixed(4)})`);
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, ww, hh);
+
+  ctx.fillStyle = `rgba(96, 96, 96, ${(0.24 * alpha).toFixed(4)})`;
+  ctx.fillRect(0, 0, ww, hh);
+
+  const pulse = 0.5 + 0.5 * Math.sin(t * 10);
+  const pulseAlpha = (0.08 + 0.10 * pulse) * alpha;
+  ctx.fillStyle = `rgba(130, 0, 0, ${pulseAlpha.toFixed(4)})`;
+  ctx.fillRect(0, 0, ww, hh);
+
+  const textAlpha = deathFxClamp01(deathFxSmoothstep(0.1, 0.4, t) * aOut);
+  const textScale = 0.9 + 0.1 * deathFxSmoothstep(0.1, 0.45, t);
+  const fontSize = Math.round(Math.max(52, Math.min(120, ww * 0.14)));
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(textScale, textScale);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `900 ${fontSize}px "Impact", "Arial Black", sans-serif`;
+  ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.08));
+  ctx.strokeStyle = `rgba(0, 0, 0, ${(0.78 * textAlpha).toFixed(4)})`;
+  ctx.fillStyle = `rgba(165, 18, 18, ${(0.96 * textAlpha).toFixed(4)})`;
+  ctx.strokeText("WASTED", 0, 0);
+  ctx.fillText("WASTED", 0, 0);
+  ctx.restore();
 }
 
 

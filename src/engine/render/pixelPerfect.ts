@@ -43,18 +43,20 @@ export function configurePixelPerfect(ctx: CanvasRenderingContext2D): void {
 export function resizeCanvasPixelPerfect(
   canvas: HTMLCanvasElement,
   ctx: CanvasRenderingContext2D,
-  cssW: number,
-  cssH: number,
-  pixelScale: number = defaultPixelScaleForViewport(cssW, cssH),
-  maxDpr: number = 4,
+  pixelScale?: number,
 ): number {
+  const rect = canvas.getBoundingClientRect();
+  const cssW = Math.max(1, rect.width);
+  const cssH = Math.max(1, rect.height);
   // Pixel-perfect uses integer pixelScale in the configured clamp range.
-  const resolvedPixelScale = normalizePixelScale(pixelScale);
-  const dpr = Math.min(Math.max(1, window.devicePixelRatio || 1), Math.max(1, maxDpr || 1));
-  canvas.width = snapPx(cssW * dpr);
-  canvas.height = snapPx(cssH * dpr);
-  canvas.style.width = `${snapPx(cssW)}px`;
-  canvas.style.height = `${snapPx(cssH)}px`;
+  const resolvedPixelScale = normalizePixelScale(pixelScale ?? defaultPixelScaleForViewport(cssW, cssH));
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  // Let CSS control layout size (#c/#ui use width/height: 100%).
+  // Avoid locking inline pixel width/height, which can break reactions to viewport changes.
+  if (canvas.style.width) canvas.style.width = "";
+  if (canvas.style.height) canvas.style.height = "";
   canvas.dataset.pixelScale = String(resolvedPixelScale);
   canvas.dataset.effectiveDpr = String(dpr);
 
@@ -62,6 +64,59 @@ export function resizeCanvasPixelPerfect(
   configurePixelPerfect(ctx);
 
   return resolvedPixelScale;
+}
+
+export function attachCanvasAutoResize(
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+  onResized?: () => void,
+): () => void {
+  let lastCssW = 0;
+  let lastCssH = 0;
+  let lastDpr = 0;
+  let rafId = 0;
+  let disposed = false;
+
+  const recompute = () => {
+    const rect = canvas.getBoundingClientRect();
+    const cssW = Math.max(1, Math.round(rect.width));
+    const cssH = Math.max(1, Math.round(rect.height));
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+
+    if (cssW === lastCssW && cssH === lastCssH && dpr === lastDpr) return;
+
+    lastCssW = cssW;
+    lastCssH = cssH;
+    lastDpr = dpr;
+
+    const pixelScale = defaultPixelScaleForViewport(cssW, cssH);
+    resizeCanvasPixelPerfect(canvas, ctx, pixelScale);
+    onResized?.();
+  };
+
+  const resizeObserver = typeof ResizeObserver !== "undefined"
+    ? new ResizeObserver(() => recompute())
+    : null;
+  resizeObserver?.observe(canvas);
+  window.addEventListener("resize", recompute);
+
+  const tick = () => {
+    if (disposed) return;
+    recompute();
+    rafId = window.requestAnimationFrame(tick);
+  };
+  rafId = window.requestAnimationFrame(tick);
+  recompute();
+
+  return () => {
+    disposed = true;
+    if (rafId) {
+      window.cancelAnimationFrame(rafId);
+      rafId = 0;
+    }
+    resizeObserver?.disconnect();
+    window.removeEventListener("resize", recompute);
+  };
 }
 
 export function snapZoom(value: number): number {

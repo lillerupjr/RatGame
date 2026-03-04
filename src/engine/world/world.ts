@@ -139,6 +139,20 @@ export type NeutralAnimatedMob = {
   castsShadow?: boolean;
 };
 
+export type WorldTimeState = {
+  dtReal: number;
+  dtSim: number;
+  timeScale: number;
+  timeScaleTarget: number;
+  timeScaleSlew: number;
+};
+
+export type DeathFxState = {
+  active: boolean;
+  tReal: number;
+  durationReal: number;
+};
+
 export type World = {
   // -------------------------
   // Core
@@ -193,6 +207,8 @@ export type World = {
   // Total run time
   time: number;
   timeSec: number;
+  timeState: WorldTimeState;
+  deathFx: DeathFxState;
   run: {
     runGold: number;
   };
@@ -664,6 +680,18 @@ export function createWorld(args: CreateWorldArgs): World {
 
     time: 0,
     timeSec: 0,
+    timeState: {
+      dtReal: 0,
+      dtSim: 0,
+      timeScale: 1,
+      timeScaleTarget: 1,
+      timeScaleSlew: 12,
+    },
+    deathFx: {
+      active: false,
+      tReal: 0,
+      durationReal: 2,
+    },
     run: {
       runGold: 0,
     },

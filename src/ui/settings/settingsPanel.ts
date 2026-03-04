@@ -4,7 +4,20 @@ import {
   setSfxMuted,
   setSfxVolume,
 } from "../../game/audio/audioSettings";
-import { DEFAULT_SETTINGS, getUserSettings, updateUserSettings } from "../../userSettings";
+import {
+  DEFAULT_GAME_SPEED,
+  DEFAULT_SETTINGS,
+  clampVisibleVerticalTiles,
+  clampGameSpeed,
+  getUserSettings,
+  MAX_GAME_SPEED,
+  MAX_VISIBLE_VERTICAL_TILES,
+  MIN_GAME_SPEED,
+  MIN_VISIBLE_VERTICAL_TILES,
+  resolveVerticalTiles,
+  type VerticalTilesMode,
+  updateUserSettings,
+} from "../../userSettings";
 
 export type SettingsTabId = "GAME" | "GRAPHICS" | "AUDIO";
 
@@ -204,6 +217,15 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
   healthOrbRow.appendChild(healthOrbSegment);
   gamePanel.appendChild(healthOrbRow);
 
+  const gameSpeedRow = createSliderRow(
+    "Game speed",
+    MIN_GAME_SPEED,
+    MAX_GAME_SPEED,
+    0.05,
+  );
+  gameSpeedRow.slider.setAttribute("data-game-speed-slider", "1");
+  gamePanel.appendChild(gameSpeedRow.row);
+
   const graphicsHeader = document.createElement("h4");
   graphicsHeader.className = "settingsCategoryTitle";
   graphicsHeader.textContent = "Graphics";
@@ -212,6 +234,41 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
   const performanceModeRow = createToggleRow("Performance mode");
   performanceModeRow.input.setAttribute("data-performance-mode-toggle", "1");
   graphicsPanel.appendChild(performanceModeRow.row);
+
+  const verticalTilesModeRow = document.createElement("div");
+  verticalTilesModeRow.className = "settingsRow";
+  const verticalTilesModeLabelWrap = document.createElement("div");
+  verticalTilesModeLabelWrap.className = "settingsRowLabelWrap";
+  const verticalTilesModeLabel = document.createElement("div");
+  verticalTilesModeLabel.className = "settingsRowLabel";
+  verticalTilesModeLabel.textContent = "Vertical tiles mode";
+  verticalTilesModeLabelWrap.appendChild(verticalTilesModeLabel);
+  const verticalTilesModeSegment = document.createElement("div");
+  verticalTilesModeSegment.className = "settingsSegment";
+  const verticalTilesModeAutoBtn = document.createElement("button");
+  verticalTilesModeAutoBtn.type = "button";
+  verticalTilesModeAutoBtn.className = "settingsSegmentBtn";
+  verticalTilesModeAutoBtn.textContent = "Auto";
+  verticalTilesModeAutoBtn.setAttribute("data-vertical-tiles-mode", "auto");
+  const verticalTilesModeManualBtn = document.createElement("button");
+  verticalTilesModeManualBtn.type = "button";
+  verticalTilesModeManualBtn.className = "settingsSegmentBtn";
+  verticalTilesModeManualBtn.textContent = "Manual";
+  verticalTilesModeManualBtn.setAttribute("data-vertical-tiles-mode", "manual");
+  verticalTilesModeSegment.appendChild(verticalTilesModeAutoBtn);
+  verticalTilesModeSegment.appendChild(verticalTilesModeManualBtn);
+  verticalTilesModeRow.appendChild(verticalTilesModeLabelWrap);
+  verticalTilesModeRow.appendChild(verticalTilesModeSegment);
+  graphicsPanel.appendChild(verticalTilesModeRow);
+
+  const verticalTilesRow = createSliderRow(
+    "Vertical tiles",
+    MIN_VISIBLE_VERTICAL_TILES,
+    MAX_VISIBLE_VERTICAL_TILES,
+    1,
+  );
+  verticalTilesRow.slider.setAttribute("data-vertical-tiles-slider", "1");
+  graphicsPanel.appendChild(verticalTilesRow.row);
 
   // Render padding (tile render radius) — dev-facing but safe to keep here.
   // Range matches renderer clamp expectations (-12..12).
@@ -270,8 +327,30 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
     orbRightBtn.setAttribute("aria-pressed", side === "right" ? "true" : "false");
   };
 
+  const getViewportDimensions = () => {
+    const width = typeof window !== "undefined" && Number.isFinite(window.innerWidth)
+      ? window.innerWidth
+      : 1280;
+    const height = typeof window !== "undefined" && Number.isFinite(window.innerHeight)
+      ? window.innerHeight
+      : 720;
+    return { width, height };
+  };
+
+  const setVerticalTilesModeUi = (mode: VerticalTilesMode) => {
+    const isAuto = mode === "auto";
+    verticalTilesModeAutoBtn.classList.toggle("active", isAuto);
+    verticalTilesModeManualBtn.classList.toggle("active", !isAuto);
+    verticalTilesModeAutoBtn.setAttribute("aria-pressed", isAuto ? "true" : "false");
+    verticalTilesModeManualBtn.setAttribute("aria-pressed", isAuto ? "false" : "true");
+  };
+
   const syncSliders = () => {
     const settings = readSettings();
+
+    const gameSpeed = clampGameSpeed(Number(settings.game.gameSpeed ?? DEFAULT_GAME_SPEED));
+    gameSpeedRow.slider.value = `${gameSpeed}`;
+    gameSpeedRow.value.textContent = `${gameSpeed.toFixed(2)}x`;
 
     const audio = settings.audio;
     masterRow.slider.value = `${clamp01(audio.masterVolume)}`;
@@ -280,6 +359,14 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
     masterRow.value.textContent = `${Math.round(clamp01(audio.masterVolume) * 100)}%`;
     musicRow.value.textContent = `${Math.round(clamp01(audio.musicVolume) * 100)}%`;
     sfxRow.value.textContent = `${Math.round(clamp01(audio.sfxVolume) * 100)}%`;
+
+    const viewport = getViewportDimensions();
+    const resolvedVerticalTiles = resolveVerticalTiles(settings.render, viewport.width, viewport.height);
+    verticalTilesRow.slider.value = `${resolvedVerticalTiles.effective}`;
+    verticalTilesRow.value.textContent = resolvedVerticalTiles.mode === "auto"
+      ? `${resolvedVerticalTiles.effective} (${resolvedVerticalTiles.viewportClass} auto)`
+      : `${resolvedVerticalTiles.effective}`;
+    setVerticalTilesModeUi(resolvedVerticalTiles.mode);
 
     const pad = clampInt(Number(settings.render.tileRenderRadius), -12, 12);
     renderPaddingRow.slider.value = `${pad}`;
@@ -308,6 +395,28 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
     options.onPerformanceModeChanged?.();
   };
 
+  const onVerticalTilesMode = (mode: VerticalTilesMode) => {
+    const settings = readSettings();
+    const viewport = getViewportDimensions();
+    const resolved = resolveVerticalTiles(settings.render, viewport.width, viewport.height);
+    if (mode === "manual") {
+      updateUserSettings({
+        render: {
+          verticalTilesMode: "manual",
+          verticalTilesUser: resolved.effective,
+          visibleVerticalTiles: resolved.effective,
+        },
+      });
+    } else {
+      updateUserSettings({
+        render: {
+          verticalTilesMode: "auto",
+        },
+      });
+    }
+    syncSliders();
+  };
+
   const refresh = () => {
     const settings = readSettings();
     userModeRow.input.checked = !!settings.game.userModeEnabled;
@@ -327,6 +436,32 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
   orbLeftBtn.addEventListener("click", () => onHealthOrbSide("left"));
   orbRightBtn.addEventListener("click", () => onHealthOrbSide("right"));
   performanceModeRow.input.addEventListener("change", onPerformanceModeToggle);
+  verticalTilesModeAutoBtn.addEventListener("click", () => onVerticalTilesMode("auto"));
+  verticalTilesModeManualBtn.addEventListener("click", () => onVerticalTilesMode("manual"));
+  gameSpeedRow.slider.addEventListener("input", () => {
+    const v = clampGameSpeed(Number.parseFloat(gameSpeedRow.slider.value));
+    updateUserSettings({ game: { gameSpeed: v } });
+    syncSliders();
+  });
+  verticalTilesRow.slider.addEventListener("input", () => {
+    const v = clampVisibleVerticalTiles(Number.parseFloat(verticalTilesRow.slider.value));
+    const settings = readSettings();
+    const viewport = getViewportDimensions();
+    const resolved = resolveVerticalTiles(settings.render, viewport.width, viewport.height);
+    if (resolved.mode === "manual") {
+      updateUserSettings({
+        render: {
+          verticalTilesUser: v,
+          visibleVerticalTiles: v,
+        },
+      });
+    } else if (resolved.viewportClass === "phone") {
+      updateUserSettings({ render: { verticalTilesAutoPhone: v } });
+    } else {
+      updateUserSettings({ render: { verticalTilesAutoDesktop: v } });
+    }
+    syncSliders();
+  });
   renderPaddingRow.slider.addEventListener("input", () => {
     const v = clampInt(Number.parseFloat(renderPaddingRow.slider.value), -12, 12);
     updateUserSettings({ render: { tileRenderRadius: v } });
@@ -353,11 +488,18 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
   setActiveTab(activeTab);
   refresh();
   applyAudioPreferencesFromSettings();
+  const onResize = () => syncSliders();
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    window.addEventListener("resize", onResize);
+  }
 
   return {
     element: root,
     refresh,
     destroy() {
+      if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
+        window.removeEventListener("resize", onResize);
+      }
       root.remove();
     },
   };

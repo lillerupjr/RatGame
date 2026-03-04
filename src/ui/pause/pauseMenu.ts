@@ -619,12 +619,15 @@ export function mountPauseMenu(args: {
     summary.className = "pauseMeta";
     summary.textContent = `Character: ${characterId} | Weapon: ${starterWeaponName}`;
 
+    const effectiveCrit = computeEffectiveCrit(world, resolved.critChance);
+    const showEffective = effectiveCrit !== resolved.critChance;
+
     const rows: Array<[string, string]> = [
       ["Shots/sec", resolved.shotsPerSecond.toFixed(2)],
       ["Base Physical", resolved.baseDamage.physical.toFixed(1)],
       ["Base Fire", resolved.baseDamage.fire.toFixed(1)],
       ["Base Chaos", resolved.baseDamage.chaos.toFixed(1)],
-      ["Crit Chance", pct(resolved.critChance)],
+      ["Crit Chance", showEffective ? `${pct(resolved.critChance)} (${pct(effectiveCrit)} eff)` : pct(resolved.critChance)],
       ["Crit Multi", `${resolved.critMulti.toFixed(2)}x`],
       ["Poison Chance", pct(resolved.chanceToPoison)],
       ["Ignite Chance", pct(resolved.chanceToIgnite)],
@@ -972,15 +975,21 @@ export function mountPauseMenu(args: {
     renderDebugLayer();
   };
 
+  const computeEffectiveCrit = (world: World, baseCrit: number): number => {
+    const hasFullCritRelic = world.relics.includes("MOM_FULL_CRIT_DOUBLE");
+    const hasLuckyCrit = world.relics.includes("PASS_CRIT_ROLLS_TWICE");
+    const isAtFullMomentum = hasFullCritRelic && world.momentumMax > 0 && world.momentumValue >= world.momentumMax;
+    const afterMomentum = Math.min(1, baseCrit * (isAtFullMomentum ? 2 : 1));
+    return hasLuckyCrit ? 1 - (1 - afterMomentum) ** 2 : afterMomentum;
+  };
+
   const renderTopStatsForOwnedAndSettings = (world: World | null) => {
     if (!world) return;
     const summary = document.createElement("div");
     summary.className = "pauseMeta";
     const snapshot = getCombatModsSnapshot(world as any);
     const baseCritChance = safeNum(snapshot.weaponStats.critChance);
-    const hasFullCritRelic = world.relics.includes("MOM_FULL_CRIT_DOUBLE");
-    const isAtFullMomentum = hasFullCritRelic && world.momentumMax > 0 && world.momentumValue >= world.momentumMax;
-    const effectiveCritChance = Math.max(0, Math.min(1, baseCritChance * (isAtFullMomentum ? 2 : 1)));
+    const effectiveCritChance = computeEffectiveCrit(world, baseCritChance);
     summary.textContent =
       `HP ${Math.ceil(safeNum(world.playerHp))}/${Math.ceil(safeNum(world.playerHpMax))} · ` +
       `Gold ${Math.ceil(safeNum(getGold(world)))} · ` +
