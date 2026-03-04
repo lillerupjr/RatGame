@@ -35,18 +35,23 @@ jobs:
       - name: Pull LFS objects
         run: git lfs pull
 
-      - name: Validate Supabase env
+      - name: Resolve Supabase env
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          SECRET_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SECRET_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VAR_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VAR_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
         run: |
-          test -n "$VITE_SUPABASE_URL" || (echo "Missing secret: VITE_SUPABASE_URL" && exit 1)
-          test -n "$VITE_SUPABASE_ANON_KEY" || (echo "Missing secret: VITE_SUPABASE_ANON_KEY" && exit 1)
+          RESOLVED_URL="${SECRET_SUPABASE_URL:-$VAR_SUPABASE_URL}"
+          RESOLVED_KEY="${SECRET_SUPABASE_ANON_KEY:-$VAR_SUPABASE_ANON_KEY}"
+          test -n "$RESOLVED_URL" || (echo "Missing VITE_SUPABASE_URL (set Actions secret or variable)." && exit 1)
+          test -n "$RESOLVED_KEY" || (echo "Missing VITE_SUPABASE_ANON_KEY (set Actions secret or variable)." && exit 1)
+          {
+            echo "VITE_SUPABASE_URL=$RESOLVED_URL"
+            echo "VITE_SUPABASE_ANON_KEY=$RESOLVED_KEY"
+          } >> "$GITHUB_ENV"
 
       - name: Build
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
 
       - name: Verify runtime assets in dist
