@@ -16,6 +16,7 @@ import { zonesSystem } from "../../../../game/systems/sim/zones";
 import { STARTER_RELIC_IDS } from "../../../../game/content/starterRelics";
 import { getEnemyAimWorld } from "../../../../game/combat/aimPoints";
 import { makeRelicTriggeredMeta, makeWeaponHitMeta } from "../../../../game/combat/damageMeta";
+import { anchorFromWorld } from "../../../../game/coords/anchor";
 
 function rebuildEnemyHash(world: ReturnType<typeof createWorld>): void {
   clearSpatialHash(world.enemySpatialHash);
@@ -24,6 +25,14 @@ function rebuildEnemyHash(world: ReturnType<typeof createWorld>): void {
     const ew = getEnemyWorld(world, i, KENNEY_TILE_WORLD);
     insertEntity(world.enemySpatialHash, i, ew.wx, ew.wy, world.eR[i] ?? 0);
   }
+}
+
+function setPlayerWorld(world: ReturnType<typeof createWorld>, wx: number, wy: number): void {
+  const a = anchorFromWorld(wx, wy, KENNEY_TILE_WORLD);
+  world.pgxi = a.gxi;
+  world.pgyi = a.gyi;
+  world.pgox = a.gox;
+  world.pgoy = a.goy;
 }
 
 function runSparkProcCount(
@@ -85,21 +94,22 @@ describe("relicTriggerSystem", () => {
     expect(world.prExplodeDmg[0]).toBeCloseTo(20, 6);
   });
 
-  test("ACT_BAZOOKA_ON_HIT_20 aims at enemy center and spawns from player aim point", () => {
+  test("ACT_BAZOOKA_ON_HIT_20 targets event hit coordinates and spawns from player aim point", () => {
     const world = createWorld({ seed: 12, stage: stageDocks });
     world.relics.push("ACT_BAZOOKA_ON_HIT_20");
     const enemy = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 5, 5);
     rebuildEnemyHash(world);
     const enemyFeet = getEnemyWorld(world, enemy, KENNEY_TILE_WORLD);
-    const enemyAim = getEnemyAimWorld(world, enemy);
+    const hitX = enemyFeet.wx + 7;
+    const hitY = enemyFeet.wy + 11;
     const playerFeet = getPlayerWorld(world, KENNEY_TILE_WORLD);
 
     world.events.push({
       type: "ENEMY_HIT",
       enemyIndex: enemy,
       damage: 100,
-      x: enemyFeet.wx,
-      y: enemyFeet.wy,
+      x: hitX,
+      y: hitY,
       isCrit: false,
       source: "PISTOL",
       damageMeta: makeWeaponHitMeta("PISTOL"),
@@ -109,9 +119,8 @@ describe("relicTriggerSystem", () => {
 
     expect(world.pAlive.length).toBe(1);
     expect(world.prjKind[0]).toBe(PRJ_KIND.MISSILE);
-    expect(world.prTargetX[0]).toBeCloseTo(enemyAim.x, 6);
-    expect(world.prTargetY[0]).toBeCloseTo(enemyAim.y, 6);
-    expect(world.prTargetY[0]).toBeLessThan(enemyFeet.wy);
+    expect(world.prTargetX[0]).toBeCloseTo(hitX, 6);
+    expect(world.prTargetY[0]).toBeCloseTo(hitY, 6);
     expect(world.prStartY[0]).toBeLessThan(playerFeet.wy);
   });
 
@@ -208,6 +217,58 @@ describe("relicTriggerSystem", () => {
     relicTriggerSystem(world);
 
     expect(world.playerHp).toBe(100);
+  });
+
+  test("STARTER_POINT_BLANK_CARNAGE adds knockback impulse on close ENEMY_HIT", () => {
+    const world = createWorld({ seed: 501, stage: stageDocks });
+    world.relics.push(STARTER_RELIC_IDS.POINT_BLANK_CARNAGE);
+    const enemy = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 8, 8);
+    rebuildEnemyHash(world);
+    const enemyAim = getEnemyAimWorld(world, enemy);
+    setPlayerWorld(world, enemyAim.x - 20, enemyAim.y);
+
+    world.events.push({
+      type: "ENEMY_HIT",
+      enemyIndex: enemy,
+      damage: 20,
+      x: enemyAim.x,
+      y: enemyAim.y,
+      isCrit: false,
+      source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
+    });
+
+    relicTriggerSystem(world);
+
+    const knockVx = (((world as any)._eKnockVx ?? []) as number[])[enemy] ?? 0;
+    const knockVy = (((world as any)._eKnockVy ?? []) as number[])[enemy] ?? 0;
+    expect(Math.hypot(knockVx, knockVy)).toBeGreaterThan(0);
+  });
+
+  test("STARTER_POINT_BLANK_CARNAGE does not add knockback outside close range", () => {
+    const world = createWorld({ seed: 502, stage: stageDocks });
+    world.relics.push(STARTER_RELIC_IDS.POINT_BLANK_CARNAGE);
+    const enemy = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 8, 8);
+    rebuildEnemyHash(world);
+    const enemyAim = getEnemyAimWorld(world, enemy);
+    setPlayerWorld(world, enemyAim.x - 400, enemyAim.y);
+
+    world.events.push({
+      type: "ENEMY_HIT",
+      enemyIndex: enemy,
+      damage: 20,
+      x: enemyAim.x,
+      y: enemyAim.y,
+      isCrit: false,
+      source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
+    });
+
+    relicTriggerSystem(world);
+
+    const knockVx = (((world as any)._eKnockVx ?? []) as number[])[enemy] ?? 0;
+    const knockVy = (((world as any)._eKnockVy ?? []) as number[])[enemy] ?? 0;
+    expect(Math.hypot(knockVx, knockVy)).toBe(0);
   });
 
   test("ACT_ALL_HITS_EXPLODE_20 creates explosion on hit", () => {

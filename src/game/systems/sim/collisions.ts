@@ -43,8 +43,6 @@ const DMG_COLOR_CHAOS = "#b57bff";
 const DMG_COLOR_POISON = "#6fe36f";
 const DMG_COLOR_PLAYER = "#ff4b4b";
 const STARTER_POINT_BLANK_MAX_RANGE = 220;
-const STARTER_POINT_BLANK_KNOCKBACK_RANGE = 84;
-const STARTER_POINT_BLANK_KNOCKBACK_PX = 34;
 
 type EnemyHitEvent = Extract<import("../../events").GameEvent, { type: "ENEMY_HIT" }>;
 type PlayerHitEvent = Extract<import("../../events").GameEvent, { type: "PLAYER_HIT" }>;
@@ -542,23 +540,6 @@ export function collisionsSystem(w: World, dt: number) {
           // Starter Contaminated Rounds: poisoned targets are always pierced.
         } else {
           w.pAlive[p] = false;
-        }
-      }
-
-      if (hasStarterPointBlankCarnage && !projectileIsProc) {
-        const enemyFeet = getEnemyWorld(w, e, KENNEY_TILE_WORLD);
-        const playerNow = getPlayerWorld(w, KENNEY_TILE_WORLD);
-        const distToPlayerFeet = Math.hypot(enemyFeet.wx - playerNow.wx, enemyFeet.wy - playerNow.wy);
-        if (distToPlayerFeet <= STARTER_POINT_BLANK_KNOCKBACK_RANGE) {
-          const len = Math.max(0.0001, distToPlayerFeet);
-          const ux = (enemyFeet.wx - playerNow.wx) / len;
-          const uy = (enemyFeet.wy - playerNow.wy) / len;
-          const closeFrac = 1 - Math.min(1, distToPlayerFeet / STARTER_POINT_BLANK_KNOCKBACK_RANGE);
-          const speed = (120 + 300 * closeFrac);
-          const knockVx = ((w as any)._eKnockVx ??= []) as number[];
-          const knockVy = ((w as any)._eKnockVy ??= []) as number[];
-          knockVx[e] = ux * speed;
-          knockVy[e] = uy * speed;
         }
       }
 

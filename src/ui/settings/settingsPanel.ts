@@ -26,6 +26,11 @@ function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
 }
 
+function clampInt(v: number, lo: number, hi: number): number {
+  if (!Number.isFinite(v)) return lo;
+  return Math.max(lo, Math.min(hi, Math.round(v)));
+}
+
 function readSettings() {
   const raw = getUserSettings() as any;
   return {
@@ -208,6 +213,12 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
   performanceModeRow.input.setAttribute("data-performance-mode-toggle", "1");
   graphicsPanel.appendChild(performanceModeRow.row);
 
+  // Render padding (tile render radius) — dev-facing but safe to keep here.
+  // Range matches renderer clamp expectations (-12..12).
+  const renderPaddingRow = createSliderRow("Render padding", -12, 12, 1);
+  renderPaddingRow.slider.setAttribute("data-render-padding-slider", "1");
+  graphicsPanel.appendChild(renderPaddingRow.row);
+
   const audioHeader = document.createElement("h4");
   audioHeader.className = "settingsCategoryTitle";
   audioHeader.textContent = "Audio";
@@ -260,13 +271,19 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
   };
 
   const syncSliders = () => {
-    const audio = readSettings().audio;
+    const settings = readSettings();
+
+    const audio = settings.audio;
     masterRow.slider.value = `${clamp01(audio.masterVolume)}`;
     musicRow.slider.value = `${clamp01(audio.musicVolume)}`;
     sfxRow.slider.value = `${clamp01(audio.sfxVolume)}`;
     masterRow.value.textContent = `${Math.round(clamp01(audio.masterVolume) * 100)}%`;
     musicRow.value.textContent = `${Math.round(clamp01(audio.musicVolume) * 100)}%`;
     sfxRow.value.textContent = `${Math.round(clamp01(audio.sfxVolume) * 100)}%`;
+
+    const pad = clampInt(Number(settings.render.tileRenderRadius), -12, 12);
+    renderPaddingRow.slider.value = `${pad}`;
+    renderPaddingRow.value.textContent = `${pad}`;
   };
 
   const applyAudioPatch = (patch: Partial<ReturnType<typeof getUserSettings>["audio"]>) => {
@@ -310,6 +327,11 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
   orbLeftBtn.addEventListener("click", () => onHealthOrbSide("left"));
   orbRightBtn.addEventListener("click", () => onHealthOrbSide("right"));
   performanceModeRow.input.addEventListener("change", onPerformanceModeToggle);
+  renderPaddingRow.slider.addEventListener("input", () => {
+    const v = clampInt(Number.parseFloat(renderPaddingRow.slider.value), -12, 12);
+    updateUserSettings({ render: { tileRenderRadius: v } });
+    syncSliders();
+  });
 
   masterRow.slider.addEventListener("input", () => {
     applyAudioPatch({ masterVolume: clamp01(Number.parseFloat(masterRow.slider.value)) });

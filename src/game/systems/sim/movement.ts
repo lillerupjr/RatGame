@@ -180,6 +180,8 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     // Apply and decay knockback velocity
     let kvx = knockVx[i] ?? 0;
     let kvy = knockVy[i] ?? 0;
+    if (!Number.isFinite(kvx)) kvx = 0;
+    if (!Number.isFinite(kvy)) kvy = 0;
     const hasKnockback = Math.abs(kvx) > 1 || Math.abs(kvy) > 1;
 
     // Query flow field for optimal direction toward player
@@ -201,15 +203,18 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     }
 
     const eWorldDir = gridDirToWorldDir(KENNEY_TILE_WORLD, gux, guy);
-    let moveWx = eWorldDir.wx * w.eSpeed[i];
-    let moveWy = eWorldDir.wy * w.eSpeed[i];
+    const chaseWx = eWorldDir.wx * w.eSpeed[i];
+    const chaseWy = eWorldDir.wy * w.eSpeed[i];
+    const moveWx = chaseWx + kvx;
+    const moveWy = chaseWy + kvy;
 
     if (hasKnockback) {
-      moveWx = kvx;
-      moveWy = kvy;
       const decay = Math.exp(-KNOCK_DECAY * dt);
       knockVx[i] = kvx * decay;
       knockVy[i] = kvy * decay;
+    } else {
+      knockVx[i] = 0;
+      knockVy[i] = 0;
     }
 
     const enx = ex + moveWx * dt;

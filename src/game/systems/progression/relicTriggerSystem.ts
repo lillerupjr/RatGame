@@ -41,6 +41,8 @@ const IGNITE_SPREAD_RADIUS_PX = 96;
 const STARTER_STREET_REFLEX_PROC_CHANCE = 0.2;
 const STARTER_STREET_REFLEX_RANGE = 260;
 const STARTER_STREET_REFLEX_SPEED = 260;
+const POINT_BLANK_KNOCK_RANGE_PX = 84;
+const POINT_BLANK_KNOCK_IMPULSE = 280;
 export const RELIC_RETRIGGER_DELAY_SEC = 0.5;
 
 type EnemyHitEvent = Extract<RelicTriggerEvent, { type: "ENEMY_HIT" }>;
@@ -55,6 +57,26 @@ function eventTypedDamage(ev: EnemyHitEvent): { phys: number; fire: number; chao
   if (typedTotal > 0) return { phys, fire, chaos, total: typedTotal };
   const total = Math.max(0, ev.damage ?? 0);
   return { phys: total, fire: 0, chaos: 0, total };
+}
+
+function applyPointBlankCarnageKnockback(world: World, ev: EnemyHitEvent): void {
+  const enemyIndex = ev.enemyIndex;
+  if (enemyIndex < 0 || !world.eAlive[enemyIndex]) return;
+
+  const from = getPlayerAimWorld(world);
+  const to = getEnemyAimWorld(world, enemyIndex);
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist > POINT_BLANK_KNOCK_RANGE_PX) return;
+
+  const inv = 1 / Math.max(1e-6, dist);
+  const nx = dx * inv;
+  const ny = dy * inv;
+  const knockVx = ((world as any)._eKnockVx ??= []) as number[];
+  const knockVy = ((world as any)._eKnockVy ??= []) as number[];
+  knockVx[enemyIndex] = (knockVx[enemyIndex] ?? 0) + nx * POINT_BLANK_KNOCK_IMPULSE;
+  knockVy[enemyIndex] = (knockVy[enemyIndex] ?? 0) + ny * POINT_BLANK_KNOCK_IMPULSE;
 }
 
 export function computeEffectiveRelicProcChance(baseChance: number, overclockCount: number): number {
@@ -367,11 +389,12 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
   const hasDaggerOnKill = world.relics.includes("ACT_DAGGER_ON_KILL_50");
   const hasIgniteSpreadOnDeath = world.relics.includes("ACT_IGNITE_SPREAD_ON_DEATH");
   const hasStarterStreetReflex = world.relics.includes(STARTER_RELIC_IDS.STREET_REFLEX);
+  const hasStarterPointBlankCarnage = world.relics.includes(STARTER_RELIC_IDS.POINT_BLANK_CARNAGE);
   const hasArmorOnHit = world.relics.includes("ARMOR_RESTORE_ON_HIT_1");
   const hasArmorOnCrit = world.relics.includes("ARMOR_RESTORE_ON_CRIT_5");
   const hasArmorOnKill = world.relics.includes("ARMOR_RESTORE_ON_KILL_10");
   const hasRetryFailedProcs = world.relics.includes("ACT_RETRY_FAILED_PROCS_ONCE");
-  if (!hasExplodeOnKill && !hasBazookaOnHit && !hasAllHitsExplode && !hasLifeOnHit && !hasSparkOnHit && !hasNovaOnCrit && !hasDaggerOnKill && !hasIgniteSpreadOnDeath && !hasStarterStreetReflex && !hasArmorOnHit && !hasArmorOnCrit && !hasArmorOnKill) return;
+  if (!hasExplodeOnKill && !hasBazookaOnHit && !hasAllHitsExplode && !hasLifeOnHit && !hasSparkOnHit && !hasNovaOnCrit && !hasDaggerOnKill && !hasIgniteSpreadOnDeath && !hasStarterStreetReflex && !hasStarterPointBlankCarnage && !hasArmorOnHit && !hasArmorOnCrit && !hasArmorOnKill) return;
 
   if (ev.type === "ENEMY_KILLED") {
     const explodeOnKillMeta = makeRelicTriggeredMeta("ACT_EXPLODE_ON_KILL", "ON_KILL", { category: "HIT" });
@@ -421,10 +444,7 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
     const explodeDamage = typed.total * 0.2;
     if (explodeDamage > 0) {
       const from = getPlayerAimWorld(world);
-      let to = { x: ev.x, y: ev.y };
-      if (ev.enemyIndex >= 0 && world.eAlive[ev.enemyIndex]) {
-        to = getEnemyAimWorld(world, ev.enemyIndex);
-      }
+      const to = { x: ev.x, y: ev.y };
       const { dx: dirX, dy: dirY } = aimDir(from, to);
       const p = spawnProjectile(world, {
         kind: PRJ_KIND.MISSILE,
@@ -476,6 +496,9 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
   }
   if (hasArmorOnCrit && ev.isCrit) {
     restoreArmor(world, ARMOR_RESTORE_ON_CRIT_AMOUNT);
+  }
+  if (hasStarterPointBlankCarnage) {
+    applyPointBlankCarnageKnockback(world, ev);
   }
 
   if (hasStarterStreetReflex) {
