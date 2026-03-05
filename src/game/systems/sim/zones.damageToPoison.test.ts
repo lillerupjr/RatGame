@@ -86,4 +86,34 @@ describe("zonesSystem damage-to-poison behavior", () => {
     expect(playerHit.damageMeta.instigator.id).toBe("boss_test");
     expect(playerHit.damageMeta.isProcDamage === true).toBe(false);
   });
+
+  test("enemy zone damage gates by logical floor, not visual ramp height", () => {
+    const w = createWorld({ seed: 48, stage: stageDocks });
+    const enemy = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 9, 9);
+    w.eHpMax[enemy] = 100;
+    w.eHp[enemy] = 100;
+
+    // Simulate a staircase/ramp frame where visual z has not yet matched logical floor.
+    w.activeFloorH = 1;
+    w.ezVisual[enemy] = 0.2;
+    w.ezLogical[enemy] = 1;
+
+    rebuildEnemyHash(w);
+    const ew = getEnemyWorld(w, enemy, KENNEY_TILE_WORLD);
+    spawnZone(w, {
+      kind: ZONE_KIND.FIRE,
+      x: ew.wx,
+      y: ew.wy,
+      radius: 64,
+      damage: 10,
+      tickEvery: 0.1,
+      ttl: 1,
+      followPlayer: false,
+    });
+
+    zonesSystem(w, 0.11);
+    tickZonesOnce(w, DOT_TICK_INTERVAL_SEC);
+
+    expect(w.eHp[enemy]).toBeCloseTo(90, 6);
+  });
 });

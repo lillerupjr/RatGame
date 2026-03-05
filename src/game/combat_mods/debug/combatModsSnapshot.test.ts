@@ -37,8 +37,8 @@ describe("combatModsSnapshot", () => {
 
   test("getCombatModsSnapshot resolves HOBO starter syringe profile", () => {
     const snap = getCombatModsSnapshot({ currentCharacterId: "HOBO", cards: [] });
-    expect(snap.weaponStats.baseDamage.physical).toBeCloseTo(9);
-    expect(snap.weaponStats.baseDamage.chaos).toBeCloseTo(9);
+    expect(snap.weaponStats.baseDamage.physical).toBeCloseTo(0);
+    expect(snap.weaponStats.baseDamage.chaos).toBeCloseTo(18);
     expect(snap.weaponStats.pierce).toBe(0);
     expect(snap.weaponStats.projectileSpeedPxPerSec).toBeCloseTo(180);
     expect(snap.weaponStats.chanceToPoison).toBeCloseTo(0.5);

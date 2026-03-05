@@ -63,11 +63,11 @@ describe("resolveWeaponStats", () => {
     expect(out.multiProjectileSpreadDeg).toBeCloseTo(24);
   });
 
-  test("baseline hobo syringe resolves split damage, no innate pierce, slow projectile, and base poison chance", () => {
+  test("baseline hobo syringe resolves chaos-only damage, no innate pierce, slow projectile, and base poison chance", () => {
     const out = resolveWeaponStats(HOBO_SYRINGE_V1, { cards: [] });
     expect(out.shotsPerSecond).toBeCloseTo(1.0);
-    expect(out.baseDamage.physical).toBeCloseTo(9);
-    expect(out.baseDamage.chaos).toBeCloseTo(9);
+    expect(out.baseDamage.physical).toBeCloseTo(0);
+    expect(out.baseDamage.chaos).toBeCloseTo(18);
     expect(out.baseDamage.fire).toBeCloseTo(0);
     expect(out.pierce).toBe(0);
     expect(out.projectileSpeedPxPerSec).toBeCloseTo(180);

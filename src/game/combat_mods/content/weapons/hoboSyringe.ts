@@ -9,7 +9,7 @@ export const HOBO_SYRINGE_V1: WeaponDef = {
   // Rifle parity cadence.
   shotsPerSecond: 1.0,
 
-  baseDamage: { physical: 9, fire: 0, chaos: 9 },
+  baseDamage: { physical: 0, fire: 0, chaos: 18 },
   baseCritChance: 0.05,
   baseCritMulti: 1.5,
   baseChanceToPoison: 0.5,

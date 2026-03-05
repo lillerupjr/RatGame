@@ -147,8 +147,11 @@ export function tickZonesOnce(w: World, dtTick: number): void {
       checkedEnemies.add(e);
       if (!w.eAlive[e]) continue;
 
-      const ez = (w.ezVisual?.[e] ?? 0) as number;
-      const enemyFloor = (ez + 0.00001) | 0;
+      const enemyFloorZ =
+        Number.isFinite(w.ezLogical?.[e])
+          ? (w.ezLogical[e] as number)
+          : ((w.ezVisual?.[e] ?? 0) as number);
+      const enemyFloor = (enemyFloorZ + 0.00001) | 0;
       if (enemyFloor !== zoneFloor) continue;
       if (!isEnemyInCircle(w, e, zx, zy, zr)) continue;
 
@@ -190,4 +193,3 @@ export function tickZonesOnce(w: World, dtTick: number): void {
     }
   }
 }
-

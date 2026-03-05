@@ -428,7 +428,7 @@ describe("combatSystem pistol integration", () => {
     expect(withDamageInc.damage).toBeCloseTo(baseline.damage * 1.2, 6);
   });
 
-  test("HOBO uses syringe profile with split damage, no innate pierce, and higher poison chance", () => {
+  test("HOBO uses syringe profile with chaos-only damage, no innate pierce, and higher poison chance", () => {
     const w = createWorld({ seed: 3333, stage: stageDocks });
     w.events.length = 0;
     w.combatCardIds = [];
@@ -466,8 +466,8 @@ describe("combatSystem pistol integration", () => {
     const firstProjectile = w.pAlive.findIndex(Boolean);
     expect(firstProjectile).toBeGreaterThanOrEqual(0);
     expect(w.prjKind[firstProjectile]).toBe(PRJ_KIND.SYRINGE);
-    expect(w.prDmgPhys[firstProjectile]).toBeCloseTo(9);
-    expect(w.prDmgChaos[firstProjectile]).toBeCloseTo(9);
+    expect(w.prDmgPhys[firstProjectile]).toBeCloseTo(0);
+    expect(w.prDmgChaos[firstProjectile]).toBeCloseTo(18);
     expect(w.prPierce[firstProjectile]).toBe(0);
     expect(w.prChancePoison[firstProjectile]).toBeCloseTo(0.5);
   });
