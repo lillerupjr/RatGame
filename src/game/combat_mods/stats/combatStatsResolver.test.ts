@@ -10,7 +10,7 @@ import { STAT_KEYS } from "./statKeys";
 import type { CardDef, StatMod } from "./modifierTypes";
 
 function mkCard(id: string, mods: StatMod[]): CardDef {
-  return { id, isEnabled: true, displayName: id, rarity: 1, powerTier: 1, tags: ["damage_generic"], mods };
+  return { id, isEnabled: true, displayName: id, rarity: 1, powerTier: 1, tags: ["gun"], mods };
 }
 
 describe("resolveWeaponStats", () => {
@@ -46,9 +46,9 @@ describe("resolveWeaponStats", () => {
     expect(out.baseDamage.physical).toBeCloseTo(0);
     expect(out.baseDamage.fire).toBeCloseTo(24);
     expect(out.baseDamage.chaos).toBeCloseTo(0);
-    expect(out.critChance).toBeCloseTo(0.10);
-    expect(out.critMulti).toBeCloseTo(1.75);
-    expect(out.chanceToIgnite).toBeCloseTo(0.25);
+    expect(out.critChance).toBeCloseTo(0);
+    expect(out.critMulti).toBeCloseTo(1);
+    expect(out.chanceToIgnite).toBeCloseTo(0);
     expect(out.projectileSpeedPxPerSec).toBeGreaterThan(520);
     expect(out.rangePx).toBeGreaterThan(420);
     expect(out.projectiles).toBe(1);

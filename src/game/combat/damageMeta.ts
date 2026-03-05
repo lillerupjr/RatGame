@@ -36,6 +36,21 @@ export function makeWeaponHitMeta(
   };
 }
 
+export function makeWeaponDotMeta(
+  weaponId: string,
+  options?: {
+    instigatorId?: string;
+    isProcDamage?: boolean;
+  },
+): DamageMeta {
+  return {
+    category: "DOT",
+    cause: { kind: "WEAPON", weaponId },
+    instigator: playerInstigator(options?.instigatorId),
+    isProcDamage: options?.isProcDamage,
+  };
+}
+
 export function makeRelicTriggeredMeta(
   relicId: string,
   triggerKey: TriggerKey,

@@ -101,8 +101,8 @@ function metricRowsForTab(world: any, tab: DebugMetricTab): Array<[string, strin
   }
 
   const spawnRows: Array<[string, string]> = [
-    ["Spawn Depth Mult (cum.)", `${safeNum(dbg.spawnPressureMult, 1).toFixed(2)}x`],
-    ["Enemy HP Depth Mult (cum.)", `${safeNum(dbg.spawnHpMult, 1).toFixed(2)}x`],
+    ["Spawn Heat Mult (cum.)", `${safeNum(dbg.spawnPressureMult, 1).toFixed(2)}x`],
+    ["Enemy HP Heat Mult (cum.)", `${safeNum(dbg.spawnHpMult, 1).toFixed(2)}x`],
     ["Time Pressure (base)", safeNum(dbg.basePressure, 0).toFixed(3)],
     ["Time Pressure (effective)", safeNum(dbg.effectivePressure, safeNum(dbg.pressure, 0)).toFixed(3)],
     ["Wave Intensity Mult", safeNum(dbg.waveMult, 1).toFixed(3)],

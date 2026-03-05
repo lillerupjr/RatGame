@@ -3,7 +3,7 @@ import type { WeaponDef } from "../../stats/modifierTypes";
 export const JACK_PISTOL_V1: WeaponDef = {
   id: "jack_pistol_v1",
   displayName: "Pistol",
-  tags: ["weapon", "gun", "projectile", "hit", "single_shot", "physical", "bleed"],
+  tags: ["weapon", "gun", "fires", "projectile", "hit", "crit", "single_shot", "physical", "bleed"],
 
   // Crit burst baseline.
   shotsPerSecond: 3.0,

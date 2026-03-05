@@ -30,9 +30,8 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
 
-function effectiveDepth(world: any): number {
-  if (Number.isFinite(world.delveDepth) && world.delveDepth > 0) return world.delveDepth;
-  return (world.floorIndex ?? 0) + 1;
+function effectiveHeat(world: any): number {
+  return Math.max(0, Math.floor(Number(world?.runHeat ?? 0)));
 }
 
 function zoneOverlaps(a: ZoneObjective, b: ZoneObjective): boolean {
@@ -251,10 +250,10 @@ export function startZoneTrial(world: World, config: Partial<ZoneTrialConfig> = 
   const baseKillTargetPerZone =
     config.killTargetPerZone ?? spec.params.killTargetPerZone ?? DEFAULT_ZONE_TRIAL_CONFIG.killTargetPerZone;
 
-  const d = Math.max(1, effectiveDepth(world));
-  const spawnDepthMult = Math.pow(DEFAULT_SPAWN_TUNING.spawnPerDepth, d - 1);
-  const hpDepthMult = Math.pow(DEFAULT_SPAWN_TUNING.hpPerDepth, d - 1);
-  const scaledKillTargetRaw = Math.round(baseKillTargetPerZone * spawnDepthMult * hpDepthMult);
+  const heat = effectiveHeat(world);
+  const spawnHeatMult = Math.pow(DEFAULT_SPAWN_TUNING.spawnPerDepth, heat);
+  const hpHeatMult = Math.pow(DEFAULT_SPAWN_TUNING.hpPerDepth, heat);
+  const scaledKillTargetRaw = Math.round(baseKillTargetPerZone * spawnHeatMult * hpHeatMult);
 
   const killTargetPerZone = clamp(
     scaledKillTargetRaw,
@@ -264,9 +263,9 @@ export function startZoneTrial(world: World, config: Partial<ZoneTrialConfig> = 
   if (import.meta.env.DEV) {
     console.debug("[zoneTrial] killTarget scaling", {
       baseKillTargetPerZone,
-      depth: d,
-      spawnDepthMult,
-      hpDepthMult,
+      heat,
+      spawnHeatMult,
+      hpHeatMult,
       killTargetPerZone,
     });
   }

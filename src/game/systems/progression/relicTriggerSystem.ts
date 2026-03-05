@@ -363,6 +363,7 @@ export function relicTriggerSystem(world: World): void {
   for (let i = 0; i < eventCount; i++) {
     const ev = world.events[i];
     if (ev.type !== "ENEMY_HIT") continue;
+    if (ev.damageMeta?.category !== "HIT") continue; // DoT ticks must not count as on-hit trigger events.
     if (isProcDamage(ev.damageMeta)) continue; // loop guard: proc damage never retriggers relic procs
     const triggerEv: EnemyHitEvent = ev;
     dispatchRelicTriggers(world, triggerEv);

@@ -14,6 +14,13 @@ export type NodePlan = {
   variantSeed: number;
 };
 
+export type DelveNodeState = "UNVISITED" | "ACTIVE" | "CLEARED";
+
+export type SerializedDelveNodeState = {
+  nodeId: string;
+  state: DelveNodeState;
+};
+
 export type DelveNode = {
   id: string;
   x: number;  // grid x coordinate
@@ -22,7 +29,7 @@ export type DelveNode = {
   floorArchetype: FloorArchetype;
   plan: NodePlan;
   title: string;
-  completed: boolean;
+  state: DelveNodeState;
 };
 
 export type DelveEdge = { from: string; to: string };
@@ -45,9 +52,53 @@ function nodeId(x: number, y: number): string {
   return `${x},${y}`;
 }
 
-function parseNodeId(id: string): { x: number; y: number } {
-  const [xs, ys] = id.split(",");
-  return { x: parseInt(xs, 10), y: parseInt(ys, 10) };
+function hasEdge(map: DelveMap, fromId: string, toId: string): boolean {
+  for (let i = 0; i < map.edges.length; i++) {
+    const edge = map.edges[i];
+    if (
+      (edge.from === fromId && edge.to === toId) ||
+      (edge.from === toId && edge.to === fromId)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isDelveNodeState(value: unknown): value is DelveNodeState {
+  return value === "UNVISITED" || value === "ACTIVE" || value === "CLEARED";
+}
+
+function startingReachableNodeIds(map: DelveMap): Set<string> {
+  const originId = nodeId(0, 0);
+  const out = new Set<string>();
+  const origin = map.nodes.get(originId);
+  if (origin && origin.y === 0) out.add(originId);
+  for (let i = 0; i < map.edges.length; i++) {
+    const edge = map.edges[i];
+    let neighborId: string | null = null;
+    if (edge.from === originId) neighborId = edge.to;
+    else if (edge.to === originId) neighborId = edge.from;
+    if (!neighborId) continue;
+    const neighbor = map.nodes.get(neighborId);
+    // First delve map pick is constrained to depth-0 layer only.
+    if (neighbor && neighbor.y === 0) out.add(neighbor.id);
+  }
+  return out;
+}
+
+function normalizeCurrentNodeIdFromStates(map: DelveMap): void {
+  if (map.currentNodeId) {
+    const current = map.nodes.get(map.currentNodeId);
+    if (current && current.state === "ACTIVE") return;
+  }
+  for (const node of map.nodes.values()) {
+    if (node.state === "ACTIVE") {
+      map.currentNodeId = node.id;
+      return;
+    }
+  }
+  map.currentNodeId = null;
 }
 
 function pickFloorArchetype(
@@ -110,7 +161,7 @@ export function createDelveMap(seed: number): DelveMap {
     floorArchetype: startArchetype,
     plan: buildNodePlan(rng, startDepth, startArchetype),
     title: `${ZONE_NAMES[startZone]} (Depth ${startDepth})`,
-    completed: false,
+    state: "UNVISITED",
   };
   nodes.set(startNode.id, startNode);
 
@@ -197,7 +248,7 @@ export function ensureAdjacentNodes(map: DelveMap, fromId: string, seed: number)
           floorArchetype,
           plan: buildNodePlan(nodeRng, depth, floorArchetype),
           title: `${ZONE_NAMES[zoneId]} (Depth ${depth})`,
-          completed: false,
+          state: "UNVISITED",
         };
         map.nodes.set(nid, newNode);
       }
@@ -229,7 +280,7 @@ export function ensureAdjacentNodes(map: DelveMap, fromId: string, seed: number)
         floorArchetype,
         plan: buildNodePlan(nodeRng, depth, floorArchetype),
         title: `${ZONE_NAMES[zoneId]} (Depth ${depth})`,
-        completed: false,
+        state: "UNVISITED",
       });
     }
     map.edges.push({ from: fromId, to: deeperId });
@@ -237,15 +288,62 @@ export function ensureAdjacentNodes(map: DelveMap, fromId: string, seed: number)
 }
 
 /**
+ * A node can only be entered once:
+ * - state must be UNVISITED
+ * - destination must be connected from current position
+ *   (or in the opening reachable set if no current node exists yet)
+ */
+export function canEnterNode(map: DelveMap, nodeIdToEnter: string): boolean {
+  const node = map.nodes.get(nodeIdToEnter);
+  if (!node || node.state !== "UNVISITED") return false;
+
+  const current = map.currentNodeId ? map.nodes.get(map.currentNodeId) ?? null : null;
+  if (current?.state === "ACTIVE") return false;
+
+  if (!map.currentNodeId) {
+    return startingReachableNodeIds(map).has(nodeIdToEnter);
+  }
+
+  return hasEdge(map, map.currentNodeId, nodeIdToEnter);
+}
+
+/**
+ * Mark a node active when the player enters it.
+ * Entry is rejected unless the node is UNVISITED and connected.
+ */
+export function markNodeActive(map: DelveMap, nodeIdToEnter: string): DelveNode | null {
+  if (!canEnterNode(map, nodeIdToEnter)) return null;
+  const node = map.nodes.get(nodeIdToEnter);
+  if (!node) return null;
+
+  node.state = "ACTIVE";
+  map.currentNodeId = nodeIdToEnter;
+  map.exploredDepth = Math.max(map.exploredDepth, node.y);
+  return node;
+}
+
+/**
+ * Mark the current active node as cleared after objective completion.
+ */
+export function markCurrentNodeCleared(map: DelveMap): DelveNode | null {
+  const currentId = map.currentNodeId;
+  if (!currentId) return null;
+  const node = map.nodes.get(currentId);
+  if (!node || node.state !== "ACTIVE") return null;
+  node.state = "CLEARED";
+  return node;
+}
+
+/**
  * Get nodes reachable from current position (or starting nodes if no position)
  */
 export function getReachableNodes(map: DelveMap): DelveNode[] {
   if (!map.currentNodeId) {
-    // Start of run: origin + its connected neighbors are reachable
+    // Start of run: only depth-0 origin layer nodes are reachable.
     const originId = nodeId(0, 0);
     const reachable = new Map<string, DelveNode>();
     const origin = map.nodes.get(originId);
-    if (origin) reachable.set(origin.id, origin);
+    if (origin && canEnterNode(map, origin.id)) reachable.set(origin.id, origin);
 
     for (const edge of map.edges) {
       let targetId: string | null = null;
@@ -253,7 +351,7 @@ export function getReachableNodes(map: DelveMap): DelveNode[] {
       else if (edge.to === originId) targetId = edge.from;
       if (!targetId) continue;
       const node = map.nodes.get(targetId);
-      if (node) reachable.set(node.id, node);
+      if (node && canEnterNode(map, node.id)) reachable.set(node.id, node);
     }
 
     return Array.from(reachable.values());
@@ -271,7 +369,7 @@ export function getReachableNodes(map: DelveMap): DelveNode[] {
 
     if (targetId) {
       const node = map.nodes.get(targetId);
-      if (node) reachable.push(node);
+      if (node && canEnterNode(map, node.id)) reachable.push(node);
     }
   }
 
@@ -279,22 +377,10 @@ export function getReachableNodes(map: DelveMap): DelveNode[] {
 }
 
 /**
- * Move to a node (marks current as completed, updates position)
+ * Move to a node (entry guard + activate destination)
  */
 export function moveToNode(map: DelveMap, nodeId: string): DelveNode | null {
-  const node = map.nodes.get(nodeId);
-  if (!node) return null;
-
-  // Mark previous node as completed
-  if (map.currentNodeId) {
-    const prev = map.nodes.get(map.currentNodeId);
-    if (prev) prev.completed = true;
-  }
-
-  map.currentNodeId = nodeId;
-  map.exploredDepth = Math.max(map.exploredDepth, node.y);
-
-  return node;
+  return markNodeActive(map, nodeId);
 }
 
 /**
@@ -321,6 +407,48 @@ export function getVisibleNodes(map: DelveMap, radius: number = 5): DelveNode[] 
 export function getVisibleEdges(map: DelveMap, visibleNodes: DelveNode[]): DelveEdge[] {
   const visibleIds = new Set(visibleNodes.map(n => n.id));
   return map.edges.filter(e => visibleIds.has(e.from) && visibleIds.has(e.to));
+}
+
+/**
+ * Number of cleared nodes in this delve map.
+ */
+export function countClearedNodes(map: DelveMap): number {
+  let n = 0;
+  for (const node of map.nodes.values()) {
+    if (node.state === "CLEARED") n++;
+  }
+  return n;
+}
+
+/**
+ * Serialize delve node states for save-ready integration.
+ */
+export function serializeNodeStates(map: DelveMap): SerializedDelveNodeState[] {
+  const rows: SerializedDelveNodeState[] = [];
+  for (const node of map.nodes.values()) {
+    rows.push({ nodeId: node.id, state: node.state });
+  }
+  rows.sort((a, b) => a.nodeId.localeCompare(b.nodeId));
+  return rows;
+}
+
+/**
+ * Hydrate known node states from serialized payload.
+ * Unknown node IDs are ignored to remain forward/backward compatible.
+ */
+export function hydrateNodeStates(
+  map: DelveMap,
+  rows: Array<{ nodeId: string; state: DelveNodeState }> | null | undefined,
+): void {
+  if (!Array.isArray(rows)) return;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || typeof row.nodeId !== "string" || !isDelveNodeState(row.state)) continue;
+    const node = map.nodes.get(row.nodeId);
+    if (!node) continue;
+    node.state = row.state;
+  }
+  normalizeCurrentNodeIdFromStates(map);
 }
 
 /**

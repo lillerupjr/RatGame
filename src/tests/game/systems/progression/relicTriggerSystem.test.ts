@@ -12,7 +12,7 @@ import { getEnemyWorld, getPlayerWorld } from "../../../../game/coords/worldView
 import { KENNEY_TILE_WORLD } from "../../../../engine/render/kenneyTiles";
 import { clearSpatialHash, insertEntity } from "../../../../game/util/spatialHash";
 import { RNG } from "../../../../game/util/rng";
-import { zonesSystem } from "../../../../game/systems/sim/zones";
+import { tickZonesOnce, zonesSystem } from "../../../../game/systems/sim/zones";
 import { STARTER_RELIC_IDS } from "../../../../game/content/starterRelics";
 import { getEnemyAimWorld } from "../../../../game/combat/aimPoints";
 import { makeRelicTriggeredMeta, makeWeaponHitMeta } from "../../../../game/combat/damageMeta";
@@ -619,6 +619,7 @@ describe("relicTriggerSystem", () => {
 
     world.events = [];
     zonesSystem(world, 0.5);
+    tickZonesOnce(world, 0.5);
     const zoneHitEvents = world.events.filter((ev) => ev.type === "ENEMY_HIT");
     expect(zoneHitEvents.length).toBeGreaterThan(0);
     expect(zoneHitEvents.every((ev) => ev.source === "OTHER")).toBe(true);

@@ -4,6 +4,8 @@ import { stageDocks } from "../../content/stages";
 import { combatSystem } from "./combat";
 import { projectilesSystem } from "./projectiles";
 import { collisionsSystem } from "./collisions";
+import { dotTickSystem } from "../../combat/dot/dotTickSystem";
+import { DOT_TICK_INTERVAL_SEC } from "../../combat/dot/dotConstants";
 import { anchorFromWorld } from "../../coords/anchor";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { PRJ_KIND } from "../../factories/projectileFactory";
@@ -42,6 +44,52 @@ function spawnBasicEnemy(w: World, wx: number, wy: number, hp = 200): number {
   w.ePoisonedOnDeath.push(false);
   w.eSpawnTriggerId.push(undefined);
   return e;
+}
+
+function runJoeyBeamDamageScenario(options?: {
+  cards?: string[];
+  durationSec?: number;
+  dt?: number;
+}): {
+  world: World;
+  enemy: number;
+  damage: number;
+  beamHits: Array<Extract<World["events"][number], { type: "ENEMY_HIT" }>>;
+} {
+  const dt = options?.dt ?? (1 / 60);
+  const durationSec = options?.durationSec ?? 1;
+  const steps = Math.round(durationSec / dt);
+
+  const world = createWorld({ seed: 4040, stage: stageDocks });
+  world.events.length = 0;
+  world.combatCardIds = [...(options?.cards ?? [])];
+  world.primaryWeaponCdLeft = 0;
+  (world as any).currentCharacterId = "JOEY";
+  world.rng.range = (() => 0.99) as any;
+  setPlayerWorld(world, 0, 0);
+  const enemy = spawnBasicEnemy(world, 90, 0, 5000);
+
+  collisionsSystem(world, dt);
+  const hpStart = world.eHp[enemy];
+  for (let i = 0; i < steps; i++) {
+    combatSystem(world, dt);
+    collisionsSystem(world, dt);
+    dotTickSystem(world, dt);
+  }
+
+  const beamHits = world.events.filter(
+    (ev): ev is Extract<typeof ev, { type: "ENEMY_HIT" }> =>
+      ev.type === "ENEMY_HIT"
+      && ev.damageMeta.category === "DOT"
+      && ev.damageMeta.cause.kind === "WEAPON",
+  );
+
+  return {
+    world,
+    enemy,
+    damage: hpStart - world.eHp[enemy],
+    beamHits,
+  };
 }
 
 describe("combatSystem pistol integration", () => {
@@ -250,6 +298,7 @@ describe("combatSystem pistol integration", () => {
     for (let i = 0; i < 60; i++) {
       combatSystem(w, 1 / 60);
       collisionsSystem(w, 1 / 60);
+      dotTickSystem(w, 1 / 60);
     }
 
     expect(w.playerBeamActive).toBe(true);
@@ -282,6 +331,7 @@ describe("combatSystem pistol integration", () => {
     for (let i = 0; i < 12; i++) {
       combatSystem(w, 1 / 60);
       collisionsSystem(w, 1 / 60);
+      dotTickSystem(w, 1 / 60);
     }
 
     expect(w.eHp[e1]).toBeLessThan(hp1);
@@ -307,6 +357,7 @@ describe("combatSystem pistol integration", () => {
       for (let i = 0; i < 12; i++) {
         combatSystem(w, 1 / 60);
         collisionsSystem(w, 1 / 60);
+        dotTickSystem(w, 1 / 60);
       }
       let hitCount = 0;
       for (let i = 0; i < enemies.length; i++) {
@@ -335,6 +386,46 @@ describe("combatSystem pistol integration", () => {
     expect(w.playerBeamActive).toBe(false);
     expect(w.pAlive.some(Boolean)).toBe(false);
     expect(w.events.some((ev) => ev.type === "ENEMY_HIT")).toBe(false);
+  });
+
+  test("JOEY beam ticks at 10Hz and emits non-crit DOT hits", () => {
+    const out = runJoeyBeamDamageScenario({ durationSec: 1, dt: DOT_TICK_INTERVAL_SEC });
+    expect(out.damage).toBeCloseTo(24, 6);
+    expect(out.beamHits.length).toBe(10);
+    expect(out.beamHits.every((ev) => ev.isCrit === false)).toBe(true);
+    expect(out.beamHits.every((ev) => ev.damageMeta.category === "DOT")).toBe(true);
+  });
+
+  test("JOEY beam ignores fire-rate and crit/ailment chance scaling", () => {
+    const baseline = runJoeyBeamDamageScenario({ durationSec: 2 });
+    const withFireRate = runJoeyBeamDamageScenario({
+      durationSec: 2,
+      cards: ["CARD_FIRE_RATE_4"],
+    });
+    const withCritAndAilmentCards = runJoeyBeamDamageScenario({
+      durationSec: 2,
+      cards: ["CARD_CRIT_CHANCE_4", "CARD_CRIT_MULTI_4", "CARD_IGNITE_CHANCE_1", "CARD_POISON_CHANCE_1"],
+    });
+
+    expect(withFireRate.damage).toBeCloseTo(baseline.damage, 6);
+    expect(withCritAndAilmentCards.damage).toBeCloseTo(baseline.damage, 6);
+
+    const st = withCritAndAilmentCards.world.eAilments?.[withCritAndAilmentCards.enemy];
+    expect(st?.bleed.length ?? 0).toBe(0);
+    expect(st?.ignite.length ?? 0).toBe(0);
+    expect(st?.poison.length ?? 0).toBe(0);
+    expect(withCritAndAilmentCards.beamHits.every((ev) => ev.isCrit === false)).toBe(true);
+  });
+
+  test("JOEY beam benefits from generic damage increased cards", () => {
+    const baseline = runJoeyBeamDamageScenario({ durationSec: 2 });
+    const withDamageInc = runJoeyBeamDamageScenario({
+      durationSec: 2,
+      cards: ["CARD_DAMAGE_INC_1"],
+    });
+
+    expect(withDamageInc.damage).toBeGreaterThan(baseline.damage);
+    expect(withDamageInc.damage).toBeCloseTo(baseline.damage * 1.2, 6);
   });
 
   test("HOBO uses syringe profile with split damage, no innate pierce, and higher poison chance", () => {

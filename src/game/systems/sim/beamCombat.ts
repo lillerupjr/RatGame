@@ -1,36 +1,29 @@
 import { emitEvent, type World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
-import { registry } from "../../content/registry";
 import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
-import { applyAilmentsFromHit, ensureEnemyAilmentsAt } from "../../combat_mods/ailments/applyAilmentsFromHit";
-import { resolveCritRoll01, resolveProjectileDamagePacket } from "../../combat_mods/runtime/critDamagePacket";
-import type { DotStatsScalars } from "../../combat_mods/stats/combatStatsResolver";
 import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
 import { onEnemyKilledForChallenge } from "../progression/roomChallenge";
 import { addMomentumOnKill, relicTriggerMomentumDamageMultiplier } from "./momentum";
 import { raycast3D } from "./collision3D";
+import { getCardById } from "../../combat_mods/content/cards/cardPool";
+import { resolveDotStats } from "../../combat_mods/stats/combatStatsResolver";
 import type { DamageMeta } from "../../events";
-import { inferLegacySourceFromMeta, isProcDamage, makeUnknownDamageMeta, makeWeaponHitMeta } from "../../combat/damageMeta";
+import {
+  inferLegacySourceFromMeta,
+  isProcDamage,
+  makeUnknownDamageMeta,
+  makeWeaponDotMeta,
+} from "../../combat/damageMeta";
 
-export type BeamDamageConfig = {
+export type BeamContactConfig = {
   dirX: number;
   dirY: number;
   maxRangePx: number;
-  tickIntervalSec: number;
   widthPx: number;
   glowIntensity: number;
   dpsPhys: number;
   dpsFire: number;
   dpsChaos: number;
-  critChance: number;
-  critMulti: number;
-  chanceBleed: number;
-  chanceIgnite: number;
-  chancePoison: number;
-  projectileKind: number;
-  critRolls: 1 | 2;
-  dotScalars: DotStatsScalars;
-  allDamageContributesToPoison: boolean;
   damageMeta?: DamageMeta;
 };
 
@@ -74,12 +67,15 @@ function collectBeamTargets(
 
 export function resetPlayerBeamState(w: World): void {
   w.playerBeamActive = false;
-  w.playerBeamTickAccumulator = 0;
   w.playerBeamWidthPx = 0;
   w.playerBeamGlowIntensity = 0;
+  w.playerBeamDpsPhys = 0;
+  w.playerBeamDpsFire = 0;
+  w.playerBeamDpsChaos = 0;
+  w.playerBeamDamageMeta = undefined;
 }
 
-export function updatePlayerBeamCombat(w: World, dt: number, cfg: BeamDamageConfig): void {
+export function updatePlayerBeamCombat(w: World, cfg: BeamContactConfig): void {
   const playerWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
   const originX = playerWorld.wx;
   const originY = playerWorld.wy;
@@ -101,6 +97,8 @@ export function updatePlayerBeamCombat(w: World, dt: number, cfg: BeamDamageConf
     ? Math.max(0, Math.min(cfg.maxRangePx, ray.hitDistance))
     : Math.max(0, cfg.maxRangePx);
 
+  const damageMeta = cfg.damageMeta ?? makeUnknownDamageMeta("BEAM_DAMAGE_META_MISSING", { category: "DOT" });
+
   w.playerBeamActive = true;
   w.playerBeamStartX = originX;
   w.playerBeamStartY = originY;
@@ -110,136 +108,102 @@ export function updatePlayerBeamCombat(w: World, dt: number, cfg: BeamDamageConf
   w.playerBeamDirY = dirY;
   w.playerBeamWidthPx = Math.max(1, cfg.widthPx);
   w.playerBeamGlowIntensity = Math.max(0, cfg.glowIntensity);
+  w.playerBeamDpsPhys = Math.max(0, cfg.dpsPhys);
+  w.playerBeamDpsFire = Math.max(0, cfg.dpsFire);
+  w.playerBeamDpsChaos = Math.max(0, cfg.dpsChaos);
+  w.playerBeamDamageMeta = damageMeta;
+}
 
-  const interval = Math.max(0.01, cfg.tickIntervalSec);
-  w.playerBeamTickAccumulator += dt;
-  if (w.playerBeamTickAccumulator < interval) return;
+export function tickBeamContactsOnce(w: World, dtTick: number): void {
+  if (!w.playerBeamActive) return;
 
-  const source = registry.projectileSourceFromKind(cfg.projectileKind);
-  const damageMeta =
-    cfg.damageMeta
-    ?? (source !== "OTHER"
-      ? makeWeaponHitMeta(source, { category: "HIT", instigatorId: "player" })
-      : makeUnknownDamageMeta("BEAM_DAMAGE_META_MISSING"));
+  const damageMeta = w.playerBeamDamageMeta ?? makeWeaponDotMeta("beam_unknown");
   const legacySource = inferLegacySourceFromMeta(damageMeta);
   const targets = collectBeamTargets(
     w,
-    originX,
-    originY,
-    dirX,
-    dirY,
-    endDistance,
-    cfg.widthPx,
+    w.playerBeamStartX,
+    w.playerBeamStartY,
+    w.playerBeamDirX,
+    w.playerBeamDirY,
+    Math.hypot(w.playerBeamEndX - w.playerBeamStartX, w.playerBeamEndY - w.playerBeamStartY),
+    w.playerBeamWidthPx,
   );
+  if (targets.length === 0) return;
 
-  while (w.playerBeamTickAccumulator >= interval) {
-    w.playerBeamTickAccumulator -= interval;
-    if (targets.length === 0) continue;
+  const cardIds = [...(w.cards ?? []), ...(w.combatCardIds ?? [])];
+  const cards = cardIds
+    .map((id) => getCardById(id))
+    .filter((card): card is NonNullable<typeof card> => Boolean(card));
+  const dotStats = resolveDotStats({ cards });
+  const relicIds: string[] = Array.isArray(w.relics) ? w.relics : [];
+  const relicDotMoreMult =
+    (relicIds.includes("PASS_DOT_MORE_50") ? 1.5 : 1) *
+    (relicIds.includes("SPEC_DOT_SPECIALIST") ? 3.0 : 1);
+  const dotScale = Math.max(0, relicDotMoreMult * Math.max(0.0001, dotStats.tickRateMult));
 
-    for (let i = 0; i < targets.length; i++) {
-      const t = targets[i];
-      if (!w.eAlive[t.enemyIndex]) continue;
+  for (let i = 0; i < targets.length; i++) {
+    const t = targets[i];
+    if (!w.eAlive[t.enemyIndex]) continue;
 
-      const critRoll = resolveCritRoll01(
-        cfg.critChance,
-        () => w.rng.range(0, 1),
-        cfg.critRolls,
-      );
-      const resolved = resolveProjectileDamagePacket(
-        {
-          physical: Math.max(0, cfg.dpsPhys * interval),
-          fire: Math.max(0, cfg.dpsFire * interval),
-          chaos: Math.max(0, cfg.dpsChaos * interval),
-          critChance: cfg.critChance,
-          critMulti: cfg.critMulti,
-        },
-        critRoll.roll01,
-      );
-
-      let finalPhys = resolved.physical;
-      let finalFire = resolved.fire;
-      let finalChaos = resolved.chaos;
-      if (isProcDamage(damageMeta)) {
-        const procMult = relicTriggerMomentumDamageMultiplier(w);
-        if (procMult !== 1) {
-          finalPhys *= procMult;
-          finalFire *= procMult;
-          finalChaos *= procMult;
-        }
+    let finalPhys = w.playerBeamDpsPhys * dtTick * dotScale;
+    let finalFire = w.playerBeamDpsFire * dtTick * dotScale;
+    let finalChaos = w.playerBeamDpsChaos * dtTick * dotScale;
+    if (isProcDamage(damageMeta)) {
+      const procMult = relicTriggerMomentumDamageMultiplier(w);
+      if (procMult !== 1) {
+        finalPhys *= procMult;
+        finalFire *= procMult;
+        finalChaos *= procMult;
       }
-      const damage = finalPhys + finalFire + finalChaos;
-      if (damage <= 0) continue;
-
-      if (!w.eAilments) w.eAilments = [];
-      const ailmentState = ensureEnemyAilmentsAt(w.eAilments, t.enemyIndex);
-      applyAilmentsFromHit(
-        ailmentState,
-        { physical: finalPhys, fire: finalFire, chaos: finalChaos },
-        {
-          bleed: cfg.chanceBleed,
-          ignite: cfg.chanceIgnite,
-          poison: cfg.chancePoison,
-        },
-        {
-          bleed: w.rng.range(0, 1),
-          ignite: w.rng.range(0, 1),
-          poison: w.rng.range(0, 1),
-        },
-        {
-          poisonDamageMult: Math.max(0, cfg.dotScalars.poisonDamageMult),
-          igniteDamageMult: Math.max(0, cfg.dotScalars.igniteDamageMult),
-          poisonDurationMult: Math.max(0, cfg.dotScalars.dotDurationMult),
-          igniteDurationMult: Math.max(0, cfg.dotScalars.dotDurationMult),
-          allDamageContributesToPoison: cfg.allDamageContributesToPoison,
-        },
-      );
-
-      w.eHp[t.enemyIndex] -= damage;
-
-      if (!(w as any).metrics) (w as any).metrics = {};
-      if (!(w as any).metrics.dps) (w as any).metrics.dps = createDpsMetrics();
-      recordDamage((w as any).metrics.dps, (w as any).timeSec ?? (w as any).time ?? 0, damage);
-
-      if (w.dpsEnabled) {
-        w.dpsTotalDamage += damage;
-        w.dpsRecentDamage.push(damage);
-        w.dpsRecentTimes.push(w.time);
-      }
-
-      emitEvent(w, {
-        type: "ENEMY_HIT",
-        enemyIndex: t.enemyIndex,
-        damage,
-        dmgPhys: finalPhys,
-        dmgFire: finalFire,
-        dmgChaos: finalChaos,
-        x: t.wx,
-        y: t.wy,
-        isCrit: resolved.isCrit,
-        critMult: cfg.critMulti,
-        source: legacySource,
-        damageMeta,
-      });
-
-      if (w.eHp[t.enemyIndex] > 0) continue;
-
-      w.eAlive[t.enemyIndex] = false;
-      w.kills++;
-      if (!isProcDamage(damageMeta)) {
-        addMomentumOnKill(w, w.timeSec ?? w.time ?? 0);
-      }
-      onEnemyKilledForChallenge(w);
-      const poisonStacks = w.eAilments?.[t.enemyIndex]?.poison ?? [];
-      w.ePoisonedOnDeath[t.enemyIndex] = poisonStacks.length > 0;
-      emitEvent(w, {
-        type: "ENEMY_KILLED",
-        enemyIndex: t.enemyIndex,
-        x: t.wx,
-        y: t.wy,
-        spawnTriggerId: w.eSpawnTriggerId[t.enemyIndex],
-        source: legacySource,
-        damageMeta,
-      });
     }
+    const damage = finalPhys + finalFire + finalChaos;
+    if (damage <= 0) continue;
+
+    w.eHp[t.enemyIndex] -= damage;
+
+    if (!(w as any).metrics) (w as any).metrics = {};
+    if (!(w as any).metrics.dps) (w as any).metrics.dps = createDpsMetrics();
+    recordDamage((w as any).metrics.dps, (w as any).timeSec ?? (w as any).time ?? 0, damage);
+
+    if (w.dpsEnabled) {
+      w.dpsTotalDamage += damage;
+      w.dpsRecentDamage.push(damage);
+      w.dpsRecentTimes.push(w.time);
+    }
+
+    emitEvent(w, {
+      type: "ENEMY_HIT",
+      enemyIndex: t.enemyIndex,
+      damage,
+      dmgPhys: finalPhys,
+      dmgFire: finalFire,
+      dmgChaos: finalChaos,
+      x: t.wx,
+      y: t.wy,
+      isCrit: false,
+      source: legacySource,
+      damageMeta,
+    });
+
+    if (w.eHp[t.enemyIndex] > 0) continue;
+
+    w.eAlive[t.enemyIndex] = false;
+    w.kills++;
+    if (!isProcDamage(damageMeta)) {
+      addMomentumOnKill(w, w.timeSec ?? w.time ?? 0);
+    }
+    onEnemyKilledForChallenge(w);
+    const poisonStacks = w.eAilments?.[t.enemyIndex]?.poison ?? [];
+    w.ePoisonedOnDeath[t.enemyIndex] = poisonStacks.length > 0;
+    emitEvent(w, {
+      type: "ENEMY_KILLED",
+      enemyIndex: t.enemyIndex,
+      x: t.wx,
+      y: t.wy,
+      spawnTriggerId: w.eSpawnTriggerId[t.enemyIndex],
+      source: legacySource,
+      damageMeta,
+    });
   }
 }
+

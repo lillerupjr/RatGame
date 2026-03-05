@@ -40,9 +40,51 @@ const powerBudgetCfg: ExpectedPowerBudgetConfig = {
 };
 
 const TARGET_REPRESENTATIVE_HP = 20;
-const hpBaseForRepresentativeHp = TARGET_REPRESENTATIVE_HP / Math.max(1, registry.enemy(ENEMY_TYPE.CHASER).hp);
+const chaserBaseLife = registry.enemy(ENEMY_TYPE.CHASER).baseLife ?? 1;
+const hpBaseForRepresentativeHp =
+  TARGET_REPRESENTATIVE_HP / Math.max(1, chaserBaseLife);
 
 describe("spawnDirector interval queue", () => {
+  test("same heat yields same scaling regardless of map-depth presentation", () => {
+    const stateA = createSpawnDirectorState();
+    const stateB = createSpawnDirectorState();
+    const makeWorld = () => ({
+      timeSec: 10,
+      phaseTime: 10,
+      metrics: { dps: createDpsMetrics() },
+      enemyPowerConfig: { costs: { trash: 1 } },
+      balance: {
+        spawnTuning: {
+          spawnBase: 1.0,
+          spawnPerDepth: 1.12,
+          hpBase: hpBaseForRepresentativeHp,
+          hpPerDepth: 1.18,
+          pressureAt0Sec: 0.8,
+          pressureAt120Sec: 1.6,
+        },
+      },
+    });
+    const wA: any = { ...makeWorld(), mapDepth: 1 };
+    const wB: any = { ...makeWorld(), mapDepth: 999 };
+
+    tickSpawnDirector(wA, 1, cfg, expectedCfg, powerBudgetCfg, stateA, {
+      getRunHeat: () => 10,
+      isBossActive: () => false,
+      canSpawnNow: () => false,
+      spawnTrash: () => true,
+    });
+    tickSpawnDirector(wB, 1, cfg, expectedCfg, powerBudgetCfg, stateB, {
+      getRunHeat: () => 10,
+      isBossActive: () => false,
+      canSpawnNow: () => false,
+      spawnTrash: () => true,
+    });
+
+    expect(wA.spawnDirectorDebug.spawnPressureMult).toBeCloseTo(wB.spawnDirectorDebug.spawnPressureMult);
+    expect(wA.spawnDirectorDebug.spawnHpMult).toBeCloseTo(wB.spawnDirectorDebug.spawnHpMult);
+    expect(wA.spawnDirectorDebug.powerPerSecond).toBeCloseTo(wB.spawnDirectorDebug.powerPerSecond);
+  });
+
   test("spawn interval converts elapsed time into pending count", () => {
     const state = createSpawnDirectorState();
     const w: any = {
@@ -63,7 +105,7 @@ describe("spawnDirector interval queue", () => {
     let spawned = 0;
 
     tickSpawnDirector(w, 10, cfg, expectedCfg, powerBudgetCfg, state, {
-      getDepth: () => 0,
+      getRunHeat: () => 0,
       isBossActive: () => false,
       canSpawnNow: () => false,
       spawnTrash: () => {
@@ -99,7 +141,7 @@ describe("spawnDirector interval queue", () => {
     };
 
     tickSpawnDirector(w, 10, cfg, expectedCfg, powerBudgetCfg, state, {
-      getDepth: () => 0,
+      getRunHeat: () => 0,
       isBossActive: () => false,
       canSpawnNow: () => true,
       // Spend more than representative HP (20) per spawn: 40 HP each.
@@ -132,7 +174,7 @@ describe("spawnDirector interval queue", () => {
     };
 
     tickSpawnDirector(w, 1, cfg, expectedCfg, powerBudgetCfg, state, {
-      getDepth: () => 1,
+      getRunHeat: () => 1,
       isBossActive: () => false,
       canSpawnNow: () => false,
       spawnTrash: () => true,
@@ -143,7 +185,7 @@ describe("spawnDirector interval queue", () => {
     w.timeSec = 560;
     w.phaseTime = 560;
     tickSpawnDirector(w, 1, cfg, expectedCfg, powerBudgetCfg, state, {
-      getDepth: () => 1,
+      getRunHeat: () => 1,
       isBossActive: () => false,
       canSpawnNow: () => false,
       spawnTrash: () => true,

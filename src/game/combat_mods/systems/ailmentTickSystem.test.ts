@@ -43,7 +43,7 @@ describe("ailmentTickSystem", () => {
     expect(w.eAilments[0].ignite.length).toBe(0);
   });
 
-  test("poison/ignite only apply on 0.5s discrete ticks", () => {
+  test("poison/ignite only apply on 0.1s discrete ticks", () => {
     const st = createEnemyAilmentsState();
     addPoison(st, 20); // dps 10
     applyIgniteStacked(st, 16); // dps 4
@@ -55,16 +55,16 @@ describe("ailmentTickSystem", () => {
       events: [],
     };
 
-    ailmentTickSystem(w, 0.25);
+    ailmentTickSystem(w, 0.099);
     // no poison/ignite tick yet
     expect(w.eHp[0]).toBeCloseTo(100);
 
-    ailmentTickSystem(w, 0.25);
-    // one 0.5s tick: (10 + 4) * 0.5 = 7
-    expect(w.eHp[0]).toBeCloseTo(93);
+    ailmentTickSystem(w, 0.005);
+    // one 0.1s tick: (10 + 4) * 0.1 = 1.4
+    expect(w.eHp[0]).toBeCloseTo(98.6);
   });
 
-  test("bleed also applies on 0.5s discrete ticks", () => {
+  test("bleed also applies on 0.1s discrete ticks", () => {
     const st = createEnemyAilmentsState();
     addBleed(st, 12); // dps 2
 
@@ -75,15 +75,15 @@ describe("ailmentTickSystem", () => {
       events: [],
     };
 
-    ailmentTickSystem(w, 0.25);
+    ailmentTickSystem(w, 0.099);
     expect(w.eHp[0]).toBeCloseTo(100);
 
-    ailmentTickSystem(w, 0.25);
-    // one 0.5s tick: 2 * 0.5 = 1
-    expect(w.eHp[0]).toBeCloseTo(99);
+    ailmentTickSystem(w, 0.005);
+    // one 0.1s tick: 2 * 0.1 = 0.2
+    expect(w.eHp[0]).toBeCloseTo(99.8);
   });
 
-  test("CARD_DOT_TICK_RATE_MORE_20 causes faster tick cadence without changing duration", () => {
+  test("CARD_DOT_TICK_RATE_MORE_20 scales DoT output inside the fixed tick pipeline", () => {
     const st = createEnemyAilmentsState();
     addPoison(st, 10); // dps 5 over 2s
 
@@ -95,12 +95,12 @@ describe("ailmentTickSystem", () => {
       events: [],
     };
 
-    ailmentTickSystem(w, 0.25);
+    ailmentTickSystem(w, 0.099);
     expect(w.eHp[0]).toBeCloseTo(100);
 
-    ailmentTickSystem(w, 0.20);
-    // Tick interval becomes ~0.4167s, so one full tick should have fired by now.
-    expect(w.eHp[0]).toBeCloseTo(97.5);
+    ailmentTickSystem(w, 0.005);
+    // one fixed 0.1s tick: 5 * 0.1 * 1.2 = 0.6
+    expect(w.eHp[0]).toBeCloseTo(99.4);
   });
 
   test("SPEC_DOT_SPECIALIST multiplies dot damage by 3x in tick pipeline", () => {

@@ -37,8 +37,12 @@ export interface DamageBundle {
 export type WeaponTag =
   | "weapon"
   | "gun"
+  | "fires"
   | "projectile"
   | "hit"
+  | "crit"
+  | "dot"
+  | "beam"
   | "single_shot"
   // damage identity
   | "physical"
@@ -50,27 +54,19 @@ export type WeaponTag =
   | "poison";
 
 export type CardTag =
-  // damage identity
-  | "damage_generic"
-  | "damage_physical"
-  | "damage_fire"
-  | "damage_chaos"
-  // elemental identity
-  | "fire"
-  // conversion identity
-  | "convert_fire"
-  | "convert_chaos"
-  // mechanics identity
-  | "fire_rate"
+  | "gun"
+  | "fires"
+  | "projectile"
+  | "hit"
   | "crit"
-  | "accuracy"
-  | "projectiles"
-  | "pierce"
-  // ailments / DOT identity
+  | "dot"
+  | "beam"
+  | "physical"
+  | "fire"
+  | "chaos"
   | "bleed"
   | "ignite"
   | "poison"
-  | "dot"
   // survivability
   | "life"
   | "defense";
@@ -78,7 +74,6 @@ export type CardTag =
 export interface WeaponBeamDef {
   maxRangePx: number;
   dps: number;
-  tickIntervalSec: number;
   widthPx: number;
   glowIntensity: number;
   uvScrollSpeed: number;

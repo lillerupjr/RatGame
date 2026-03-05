@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { beginCardReward, chooseCardReward, ensureCardRewardState } from "./cardRewardFlow";
+import { getCardById } from "../content/cards/cardPool";
 
 function createWorld(seed = 123, currentCharacterId?: string): any {
   let s = seed >>> 0;
@@ -67,15 +68,28 @@ describe("cardRewardFlow", () => {
     expect(() => chooseCardReward(w, "NOT_IN_OPTIONS")).toThrow();
   });
 
-  test("HOBO reward options exclude ignite cards", () => {
+  test("HOBO reward options exclude physical-tagged cards", () => {
     const w = createWorld(91, "HOBO");
     beginCardReward(w, "ZONE_TRIAL", 3);
-    expect(ensureCardRewardState(w).options.some((id) => id.includes("IGNITE"))).toBe(false);
+    for (const id of ensureCardRewardState(w).options) {
+      const card = getCardById(id);
+      expect(card).toBeTruthy();
+      if (!card) continue;
+      expect(card.tags.includes("physical")).toBe(false);
+    }
   });
 
-  test("JOEY reward options exclude poison cards", () => {
+  test("JOEY reward options exclude fires/hit/projectile/crit-tagged cards", () => {
     const w = createWorld(92, "JOEY");
     beginCardReward(w, "ZONE_TRIAL", 3);
-    expect(ensureCardRewardState(w).options.some((id) => id.includes("POISON"))).toBe(false);
+    for (const id of ensureCardRewardState(w).options) {
+      const card = getCardById(id);
+      expect(card).toBeTruthy();
+      if (!card) continue;
+      expect(card.tags.includes("fires")).toBe(false);
+      expect(card.tags.includes("hit")).toBe(false);
+      expect(card.tags.includes("projectile")).toBe(false);
+      expect(card.tags.includes("crit")).toBe(false);
+    }
   });
 });

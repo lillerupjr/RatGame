@@ -1,7 +1,4 @@
-import {
-  createEnemyAilmentsState,
-  tickEnemyAilments,
-} from "../ailments/enemyAilments";
+import { createEnemyAilmentsState, tickEnemyAilments } from "../ailments/enemyAilments";
 import { AILMENT_TICK_INTERVAL_SEC } from "../ailments/ailmentTypes";
 import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
 import type { World } from "../../../engine/world/world";
@@ -12,8 +9,7 @@ import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getCardById } from "../content/cards/cardPool";
 import { resolveDotStats } from "../stats/combatStatsResolver";
 import { makeAilmentDotMeta } from "../../combat/damageMeta";
-
-const EPS = 1e-9;
+import { DOT_TICK_INTERVAL_SEC } from "../../combat/dot/dotConstants";
 
 function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
@@ -22,10 +18,9 @@ function clamp01(v: number): number {
 /**
  * Apply mitigation for DoT ticks:
  * resist -> damageReduction.
- * For now resists and armor are 0 by default, but keep the plumbing.
  */
 function applyDotMitigation(raw: number, resist: number, damageReduction: number): number {
-  const r = clamp01(resist); // if resist is stored as 0..1
+  const r = clamp01(resist);
   let out = raw * (1 - r);
   out *= 1 - clamp01(damageReduction);
   return out;
@@ -42,10 +37,10 @@ function getEnemyEventPos(w: any, e: number): { x: number; y: number } {
   return { x: ew.wx, y: ew.wy };
 }
 
-export function ailmentTickSystem(w: any, dt: number): void {
+export function tickAilmentsOnce(w: any, dtTick: number): void {
   const n = w.eHp?.length ?? 0;
   if (!w.eAlive || !w.eHp) return;
-  w.eDotTickAcc ??= [];
+
   const cardIds = [...(w.cards ?? []), ...(w.combatCardIds ?? [])];
   const cards = cardIds
     .map((id: string) => getCardById(id))
@@ -57,7 +52,6 @@ export function ailmentTickSystem(w: any, dt: number): void {
     (relicIds.includes("PASS_DOT_MORE_50") ? 1.5 : 1) *
     (relicIds.includes("SPEC_DOT_SPECIALIST") ? 3.0 : 1);
   const tickRateMult = Math.max(0.0001, dotStats.tickRateMult);
-  const tickIntervalSec = AILMENT_TICK_INTERVAL_SEC / tickRateMult;
 
   for (let e = 0; e < n; e++) {
     if (!w.eAlive[e]) continue;
@@ -70,46 +64,30 @@ export function ailmentTickSystem(w: any, dt: number): void {
       st.ignite = igniteRaw ? [igniteRaw] : [];
     }
 
-    // Poison/ignite/bleed now tick on a fixed cadence.
-    let poisonRaw = 0;
-    let bleedRaw = 0;
-    let igniteDamageRaw = 0;
-    let remaining = Math.max(0, dt);
-    let acc = Math.max(0, w.eDotTickAcc[e] ?? 0);
-    while (remaining > EPS) {
-      const stepToTick = tickIntervalSec - acc;
-      const step = Math.min(remaining, Math.max(EPS, stepToTick));
+    let poisonDps = 0;
+    for (const s of st.poison) poisonDps += s.dps;
+    let bleedDps = 0;
+    for (const s of st.bleed) bleedDps += s.dps;
+    let igniteDps = 0;
+    for (const s of st.ignite) igniteDps += s.dps;
 
-      let poisonDps = 0;
-      for (const s of st.poison) poisonDps += s.dps;
-      let bleedDps = 0;
-      for (const s of st.bleed) bleedDps += s.dps;
-      let igniteDps = 0;
-      for (const s of st.ignite) igniteDps += s.dps;
-
-      // Advance ailment timers for this slice.
-      tickEnemyAilments(st, step);
-
-      remaining -= step;
-      acc += step;
-
-      // Tick-rate scaling: more frequency means more full-size tick payouts.
-      if (acc + EPS >= tickIntervalSec) {
-        bleedRaw += bleedDps * AILMENT_TICK_INTERVAL_SEC;
-        poisonRaw += poisonDps * AILMENT_TICK_INTERVAL_SEC;
-        igniteDamageRaw += igniteDps * AILMENT_TICK_INTERVAL_SEC;
-        acc = 0;
-      }
-    }
-    if (st.poison.length === 0 && st.bleed.length === 0 && st.ignite.length === 0) acc = 0;
-    w.eDotTickAcc[e] = acc;
+    tickEnemyAilments(st, dtTick);
 
     // --- Status VFX transitions ---
     const pos0 = getEnemyEventPos(w, e);
     // Bleed
     if (st.bleed.length > 0 && !st.bleedVfxAlive) {
       st.bleedVfxAlive = true;
-      emitEvent(w, { type: "VFX", id: "STATUS_BLEED_LOOP", x: pos0.x, y: pos0.y, loop: true, scale: 1, followEnemyIndex: e, offsetYPx: -16 });
+      emitEvent(w, {
+        type: "VFX",
+        id: "STATUS_BLEED_LOOP",
+        x: pos0.x,
+        y: pos0.y,
+        loop: true,
+        scale: 1,
+        followEnemyIndex: e,
+        offsetYPx: -16,
+      });
     } else if (st.bleed.length === 0 && st.bleedVfxAlive) {
       st.bleedVfxAlive = false;
       emitEvent(w, { type: "VFX_STOP_FOLLOW", id: "STATUS_BLEED_LOOP", enemyIndex: e });
@@ -117,7 +95,16 @@ export function ailmentTickSystem(w: any, dt: number): void {
     // Poison
     if (st.poison.length > 0 && !st.poisonVfxAlive) {
       st.poisonVfxAlive = true;
-      emitEvent(w, { type: "VFX", id: "STATUS_POISON_LOOP", x: pos0.x, y: pos0.y, loop: true, scale: 1, followEnemyIndex: e, offsetYPx: -16 });
+      emitEvent(w, {
+        type: "VFX",
+        id: "STATUS_POISON_LOOP",
+        x: pos0.x,
+        y: pos0.y,
+        loop: true,
+        scale: 1,
+        followEnemyIndex: e,
+        offsetYPx: -16,
+      });
     } else if (st.poison.length === 0 && st.poisonVfxAlive) {
       st.poisonVfxAlive = false;
       emitEvent(w, { type: "VFX_STOP_FOLLOW", id: "STATUS_POISON_LOOP", enemyIndex: e });
@@ -125,22 +112,43 @@ export function ailmentTickSystem(w: any, dt: number): void {
     // Burning (ignite)
     if (st.ignite.length > 0 && !st.burningVfxAlive) {
       st.burningVfxAlive = true;
-      emitEvent(w, { type: "VFX", id: "STATUS_BURNING_LOOP", x: pos0.x, y: pos0.y, loop: true, scale: 1, followEnemyIndex: e, offsetYPx: -16 });
+      emitEvent(w, {
+        type: "VFX",
+        id: "STATUS_BURNING_LOOP",
+        x: pos0.x,
+        y: pos0.y,
+        loop: true,
+        scale: 1,
+        followEnemyIndex: e,
+        offsetYPx: -16,
+      });
     } else if (st.ignite.length === 0 && st.burningVfxAlive) {
       st.burningVfxAlive = false;
       emitEvent(w, { type: "VFX_STOP_FOLLOW", id: "STATUS_BURNING_LOOP", enemyIndex: e });
     }
 
+    const tickScale = dtTick / AILMENT_TICK_INTERVAL_SEC;
+    const poisonRaw = poisonDps * AILMENT_TICK_INTERVAL_SEC * tickScale * tickRateMult;
+    const bleedRaw = bleedDps * AILMENT_TICK_INTERVAL_SEC * tickScale * tickRateMult;
+    const igniteRawDamage = igniteDps * AILMENT_TICK_INTERVAL_SEC * tickScale * tickRateMult;
+
     // Read enemy mitigation fields (default to 0)
     const resistChaos = w.eResistChaos?.[e] ?? 0;
     const resistPhysical = w.eResistPhysical?.[e] ?? 0;
     const resistFire = w.eResistFire?.[e] ?? 0;
-
     const damageReduction = w.eDamageReduction?.[e] ?? 0;
 
-    const poisonFinal = applyDotMitigation(poisonRaw * relicDotMoreMult, resistChaos, damageReduction);
+    const poisonFinal = applyDotMitigation(
+      poisonRaw * dotStats.poisonDamageMult * relicDotMoreMult,
+      resistChaos,
+      damageReduction,
+    );
     const bleedFinal = applyDotMitigation(bleedRaw * relicDotMoreMult, resistPhysical, damageReduction);
-    const igniteFinal = applyDotMitigation(igniteDamageRaw * relicDotMoreMult, resistFire, damageReduction);
+    const igniteFinal = applyDotMitigation(
+      igniteRawDamage * dotStats.igniteDamageMult * relicDotMoreMult,
+      resistFire,
+      damageReduction,
+    );
 
     let totalApplied = 0;
     const pos = getEnemyEventPos(w, e);
@@ -187,7 +195,7 @@ export function ailmentTickSystem(w: any, dt: number): void {
         onEnemyKilledForChallenge(w as World);
       }
       w.ePoisonedOnDeath ??= [];
-      w.ePoisonedOnDeath[e] = (st.poison.length > 0);
+      w.ePoisonedOnDeath[e] = st.poison.length > 0;
       emitEvent(w, {
         type: "ENEMY_KILLED",
         enemyIndex: e,
@@ -207,3 +215,16 @@ export function ailmentTickSystem(w: any, dt: number): void {
     }
   }
 }
+
+/**
+ * Backwards-compatible wrapper that simulates fixed-rate ticks over variable frame dt.
+ */
+export function ailmentTickSystem(w: any, dt: number): void {
+  const runtime = w as any;
+  runtime._ailmentTickAcc = Math.max(0, runtime._ailmentTickAcc ?? 0) + Math.max(0, dt);
+  while (runtime._ailmentTickAcc >= DOT_TICK_INTERVAL_SEC) {
+    runtime._ailmentTickAcc -= DOT_TICK_INTERVAL_SEC;
+    tickAilmentsOnce(w, DOT_TICK_INTERVAL_SEC);
+  }
+}
+

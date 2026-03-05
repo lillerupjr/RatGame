@@ -4,7 +4,7 @@ import { PRJ_KIND } from "../../../factories/projectileFactory";
 export const JAMAL_THROWING_KNIFE_V1: WeaponDef = {
   id: "jamal_throwing_knife_v1",
   displayName: "Throwing Knife",
-  tags: ["weapon", "gun", "projectile", "hit", "single_shot", "physical", "bleed"],
+  tags: ["weapon", "gun", "fires", "projectile", "hit", "crit", "single_shot", "physical", "bleed"],
 
   // Baseline cadence is 1 cycle/sec; Jamal's hidden starter +1 projectile yields 2 knives/cycle.
   shotsPerSecond: 1.0,

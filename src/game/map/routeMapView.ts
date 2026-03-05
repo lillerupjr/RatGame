@@ -51,8 +51,8 @@ export type BuildDelveRouteMapOptions = {
 
 function statusForNode(node: DelveNode, isCurrent: boolean, reachableIds: Set<string>): RouteNodeStatus {
   if (isCurrent) return "CURRENT";
-  if (reachableIds.has(node.id)) return "REACHABLE";
-  if (node.completed) return "COMPLETED";
+  if (node.state === "CLEARED") return "COMPLETED";
+  if (reachableIds.has(node.id) && node.state === "UNVISITED") return "REACHABLE";
   return "LOCKED";
 }
 
@@ -97,9 +97,9 @@ export function buildDelveRouteMapVM(
       depth: nodeDepth(node),
       x: node.x,
       status: statusForNode(node, isCurrent, reachableIds),
-      reachable: reachableIds.has(node.id),
+      reachable: reachableIds.has(node.id) && node.state === "UNVISITED",
       current: isCurrent,
-      completed: !!node.completed,
+      completed: node.state === "CLEARED",
       title: node.title,
       subtitle: `Depth ${nodeDepth(node)}`,
     });
@@ -164,4 +164,3 @@ export function buildDeterministicRouteMapVM(
     },
   };
 }
-

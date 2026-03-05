@@ -1,0 +1,15 @@
+# Supabase CLI project config.
+# The production project ref is resolved in CI from VITE_SUPABASE_URL and linked at runtime.
+project_id = "ratgame"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15

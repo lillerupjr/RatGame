@@ -6,8 +6,9 @@ import { clearSpatialHash, insertEntity } from "../../util/spatialHash";
 import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { spawnZone, ZONE_KIND } from "../../factories/zoneFactory";
-import { zonesSystem } from "./zones";
+import { tickZonesOnce, zonesSystem } from "./zones";
 import { makeEnemyHitMeta } from "../../combat/damageMeta";
+import { DOT_TICK_INTERVAL_SEC } from "../../combat/dot/dotConstants";
 
 function rebuildEnemyHash(world: ReturnType<typeof createWorld>): void {
   clearSpatialHash(world.enemySpatialHash);
@@ -40,6 +41,7 @@ describe("zonesSystem damage-to-poison behavior", () => {
     });
 
     zonesSystem(w, 0.11);
+    tickZonesOnce(w, DOT_TICK_INTERVAL_SEC);
 
     expect(w.eHp[enemy]).toBeCloseTo(180, 6);
     const poisonStacks = w.eAilments?.[enemy]?.poison ?? [];
@@ -67,6 +69,7 @@ describe("zonesSystem damage-to-poison behavior", () => {
     });
 
     zonesSystem(w, 0.11);
+    tickZonesOnce(w, DOT_TICK_INTERVAL_SEC);
 
     const playerHit = w.events.find((ev) => ev.type === "PLAYER_HIT");
     expect(playerHit?.type).toBe("PLAYER_HIT");

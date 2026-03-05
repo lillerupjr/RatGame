@@ -184,7 +184,6 @@ export function collisionsSystem(w: World, dt: number) {
   const igniteDamageMult = Math.max(0, dotStats.igniteDamageMult);
   const poisonDurationMult = Math.max(0, dotStats.dotDurationMult);
   const igniteDurationMult = Math.max(0, dotStats.dotDurationMult);
-  const legacyPoisonEnabled = ((w as any).combatMode ?? "mods") !== "mods";
   const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
   let px = pWorld.wx;
   let py = pWorld.wy;
@@ -384,7 +383,7 @@ export function collisionsSystem(w: World, dt: number) {
       const igniteStacks = Array.isArray(ailmentAtEnemy?.ignite)
         ? ailmentAtEnemy.ignite.length
         : (ailmentAtEnemy?.ignite ? 1 : 0);
-      const enemyPoisoned = (legacyPoisonEnabled && (w.ePoisonT[e] ?? 0) > 0) || poisonStacks > 0;
+      const enemyPoisoned = poisonStacks > 0;
       const enemyBurning = igniteStacks > 0;
 
       const bLeft = w.prBouncesLeft[p];
@@ -466,14 +465,9 @@ export function collisionsSystem(w: World, dt: number) {
       const pdps = w.prPoisonDps[p];
       const pdur = w.prPoisonDur[p];
       if (pdur > 0 && pdps > 0) {
-        if (legacyPoisonEnabled) {
-          w.ePoisonDps[e] += pdps;
-          w.ePoisonT[e] = Math.max(w.ePoisonT[e], pdur);
-        } else {
-          const payloadDurationMult = pdur / AILMENT_DURATIONS.poison;
-          const payloadDamageBudget = pdps * pdur;
-          addPoison(ailmentState, payloadDamageBudget, { durationMult: payloadDurationMult });
-        }
+        const payloadDurationMult = pdur / AILMENT_DURATIONS.poison;
+        const payloadDamageBudget = pdps * pdur;
+        addPoison(ailmentState, payloadDamageBudget, { durationMult: payloadDurationMult });
       }
 
       // Lock out re-hitting this same enemy for a short time
@@ -637,7 +631,7 @@ export function collisionsSystem(w: World, dt: number) {
 
         // Snapshot poison-at-death from ailment authority in mods mode.
         const poisonAlive = Array.isArray(ailmentState.poison) && ailmentState.poison.length > 0;
-        w.ePoisonedOnDeath[e] = legacyPoisonEnabled ? (w.ePoisonT[e] > 0 || poisonAlive) : poisonAlive;
+        w.ePoisonedOnDeath[e] = poisonAlive;
 
         emitEvent(w, {
           type: "ENEMY_KILLED",

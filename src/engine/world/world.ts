@@ -208,6 +208,8 @@ export type World = {
   stageId: StageId;
   stageTime: number;
   runSeed: number;
+  runHeat: number;
+  mapDepth: number;
 
   // Floor index (0..2) and timers
   floorIndex: number;
@@ -357,6 +359,7 @@ export type World = {
   floorEndCountdownSec: number;
   floorEndCountdownActive: boolean;
   floorEndCountdownStartedKey: string | null;
+  floorClearCommitted: boolean;
   objectiveRewardClaimedKey: string | null;
   zoneRewardClaimedKey?: string | null;
   zoneRewardClaimedKeys?: string[];
@@ -368,10 +371,14 @@ export type World = {
   playerBeamEndY: number;
   playerBeamDirX: number;
   playerBeamDirY: number;
-  playerBeamTickAccumulator: number;
   playerBeamUvOffset: number;
   playerBeamWidthPx: number;
   playerBeamGlowIntensity: number;
+  playerBeamDpsPhys: number;
+  playerBeamDpsFire: number;
+  playerBeamDpsChaos: number;
+  playerBeamDamageMeta?: DamageMeta;
+  dotTickAcc: number;
 
   // -------------------------
   // Level (frozen)
@@ -396,6 +403,7 @@ export type World = {
   evy: number[];
   eFaceX: number[];
   eFaceY: number[];
+  eBaseLife: number[];
   eHp: number[];
   eHpMax: number[];
   eR: number[];
@@ -605,7 +613,7 @@ export type World = {
   enemyPowerConfig: EnemyPowerCostConfig;
   balanceCsvLogger: BalanceCsvLogger;
   spawnDirectorDebug?: {
-    depth: number;
+    heat: number;
     timeSec: number;
     expectedDps: number;
     actualDps: number;
@@ -678,6 +686,8 @@ export function createWorld(args: CreateWorldArgs): World {
     stageId: stage.id,
     stageTime: 0,
     runSeed: args.seed ?? 1337,
+    runHeat: 0,
+    mapDepth: 1,
 
     floorIndex: 0,
     floorArchetype: "SURVIVE",
@@ -840,6 +850,7 @@ export function createWorld(args: CreateWorldArgs): World {
     floorEndCountdownSec: 0,
     floorEndCountdownActive: false,
     floorEndCountdownStartedKey: null,
+    floorClearCommitted: false,
     objectiveRewardClaimedKey: null,
     zoneRewardClaimedKey: null,
     zoneRewardClaimedKeys: [],
@@ -851,10 +862,14 @@ export function createWorld(args: CreateWorldArgs): World {
     playerBeamEndY: 0,
     playerBeamDirX: 1,
     playerBeamDirY: 0,
-    playerBeamTickAccumulator: 0,
     playerBeamUvOffset: 0,
     playerBeamWidthPx: 0,
     playerBeamGlowIntensity: 0,
+    playerBeamDpsPhys: 0,
+    playerBeamDpsFire: 0,
+    playerBeamDpsChaos: 0,
+    playerBeamDamageMeta: undefined,
+    dotTickAcc: 0,
 
     // Level
     level: 1,
@@ -874,6 +889,7 @@ export function createWorld(args: CreateWorldArgs): World {
     evy: [],
     eFaceX: [],
     eFaceY: [],
+    eBaseLife: [],
     eHp: [],
     eHpMax: [],
     eR: [],
@@ -1031,8 +1047,8 @@ export function createWorld(args: CreateWorldArgs): World {
     balance: {
       spawnDirectorEnabled: true,
       // Tuning Orbs (authoritative knobs)
-      // All three scale multiplicatively with depth:
-      // mult(depth) = basePerDepth ^ max(0, depth - 1)
+      // All three scale multiplicatively with runHeat:
+      // mult(heat) = basePerDepth ^ max(0, heat)
       spawnTuning: {
         ...DEFAULT_SPAWN_TUNING,
       },

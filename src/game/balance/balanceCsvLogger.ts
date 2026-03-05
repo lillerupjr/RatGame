@@ -2,7 +2,7 @@
 
 export type BalanceCsvRow = {
   tSec: number;
-  depth: number;
+  heat: number;
 
   // Core balancing signals
   spawnedHpThisSec: number;
@@ -118,12 +118,12 @@ export function tickBalanceCsvLogger(w: any, dtSec: number): void {
 
   const dbg = (w as any).spawnDirectorDebug ?? null;
 
-  const depth = safeNum(dbg?.depth, safeNum(w.floorIndex, 0));
+  const heat = safeNum(dbg?.heat, safeNum(w.runHeat, 0));
   const aliveEnemyHp = sumAliveEnemyHp(w);
 
   const row: BalanceCsvRow = {
     tSec: sec,
-    depth,
+    heat,
 
     spawnedHpThisSec: safeNum(logger.bucketSpawnedHp, 0),
     spawnedHpTotal: safeNum(logger.totalSpawnedHp, 0),
@@ -149,7 +149,7 @@ export function tickBalanceCsvLogger(w: any, dtSec: number): void {
 export function buildBalanceCsv(logger: BalanceCsvLogger): string {
   const header = [
     "tSec",
-    "depth",
+    "heat",
     "spawnedHpThisSec",
     "spawnedHpTotal",
     "aliveEnemyHp",
@@ -168,7 +168,7 @@ export function buildBalanceCsv(logger: BalanceCsvLogger): string {
   for (const r of logger.rows) {
     const cols = [
       r.tSec,
-      r.depth,
+      r.heat,
       r.spawnedHpThisSec,
       r.spawnedHpTotal,
       r.aliveEnemyHp,

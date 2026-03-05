@@ -1,12 +1,12 @@
 import { describe, expect, test } from "vitest";
-import type { DelveMap, DelveNode } from "../../../game/map/delveMap";
+import type { DelveMap, DelveNode, DelveNodeState } from "../../../game/map/delveMap";
 import { buildDelveRouteMapVM, buildDeterministicRouteMapVM } from "../../../game/map/routeMapView";
 
 function mkNode(
   id: string,
   x: number,
   y: number,
-  completed = false,
+  state: DelveNodeState = "UNVISITED",
 ): DelveNode {
   return {
     id,
@@ -21,21 +21,21 @@ function mkNode(
       variantSeed: 1,
     },
     title: `${id}`,
-    completed,
+    state,
   };
 }
 
 describe("routeMapView", () => {
   test("buildDelveRouteMapVM applies statuses and depth window with forced reachable nodes", () => {
     const nodes = new Map<string, DelveNode>();
-    const A = mkNode("0,0", 0, 0, true);
-    const B = mkNode("0,1", 0, 1, true);
-    const C = mkNode("0,2", 0, 2, false);
-    const D = mkNode("1,2", 1, 2, false);
-    const E = mkNode("0,3", 0, 3, false);
-    const G = mkNode("0,11", 0, 11, false); // outside normal window, but reachable
-    const H = mkNode("-1,9", -1, 9, false); // in window and locked
-    const F = mkNode("0,12", 0, 12, false); // outside window and not reachable
+    const A = mkNode("0,0", 0, 0, "CLEARED");
+    const B = mkNode("0,1", 0, 1, "CLEARED");
+    const C = mkNode("0,2", 0, 2, "CLEARED");
+    const D = mkNode("1,2", 1, 2, "UNVISITED");
+    const E = mkNode("0,3", 0, 3, "UNVISITED");
+    const G = mkNode("0,11", 0, 11, "UNVISITED"); // outside normal window, but reachable
+    const H = mkNode("-1,9", -1, 9, "CLEARED"); // in window and must stay completed
+    const F = mkNode("0,12", 0, 12, "UNVISITED"); // outside window and not reachable
     [A, B, C, D, E, F, G, H].forEach((n) => nodes.set(n.id, n));
 
     const map: DelveMap = {
@@ -61,7 +61,7 @@ describe("routeMapView", () => {
 
     expect(byId.get(C.id)?.status).toBe("CURRENT");
     expect(byId.get(G.id)?.status).toBe("REACHABLE");
-    expect(byId.get(H.id)?.status).toBe("LOCKED");
+    expect(byId.get(H.id)?.status).toBe("COMPLETED");
     expect(byId.get(A.id)?.status).toBe("COMPLETED");
 
     expect(byId.has(G.id)).toBe(true); // forced include reachable, even outside window
@@ -89,4 +89,3 @@ describe("routeMapView", () => {
     }
   });
 });
-

@@ -122,7 +122,7 @@ export function tickSpawnDirector(
   powerBudgetCfg: ExpectedPowerBudgetConfig,
   state: SpawnDirectorState,
   callbacks: {
-    getDepth: () => number;
+    getRunHeat: () => number;
     isBossActive: () => boolean;
     canSpawnNow?: () => boolean;
     spawnTrash: () => boolean | number;
@@ -135,7 +135,7 @@ export function tickSpawnDirector(
   if (w.metrics?.dps) tickDpsMetrics(w.metrics.dps, w.timeSec ?? 0, dtSec);
 
   const now = w.timeSec ?? 0;
-  const depth = Math.max(1, Math.floor(callbacks.getDepth() || 1));
+  const heat = Math.max(0, Math.floor(callbacks.getRunHeat() || 0));
   const tInFloorSec = Math.max(0, safeNum((w as any).phaseTime, safeNum((w as any).timeSec, 0)));
   const tuning = w.balance?.spawnTuning ?? {};
   const pressureT0 = typeof tuning.pressureAt0Sec === "number" ? tuning.pressureAt0Sec : DEFAULT_SPAWN_TUNING.pressureAt0Sec;
@@ -148,22 +148,23 @@ export function tickSpawnDirector(
   const pressure = basePressure;
   const waveMult = waveMultiplier(cfg, now);
 
-  // Authoritative spawn scaling: spawnBase * spawnPerDepth^(depth-1)
+  // Authoritative spawn scaling: spawnBase * spawnPerDepth^heat
   const spawnBase = typeof tuning.spawnBase === "number"
     ? tuning.spawnBase
     : DEFAULT_SPAWN_TUNING.spawnBase;
   const spawnPerDepth = typeof tuning.spawnPerDepth === "number"
     ? tuning.spawnPerDepth
     : DEFAULT_SPAWN_TUNING.spawnPerDepth;
-  const spawnMult = Math.max(0, spawnBase) * Math.pow(Math.max(0.0001, spawnPerDepth), Math.max(0, depth - 1));
+  const spawnMult = Math.max(0, spawnBase) * Math.pow(Math.max(0.0001, spawnPerDepth), heat);
   const hpBase = typeof tuning.hpBase === "number" ? tuning.hpBase : DEFAULT_SPAWN_TUNING.hpBase;
   const hpPerDepth = typeof tuning.hpPerDepth === "number" ? tuning.hpPerDepth : DEFAULT_SPAWN_TUNING.hpPerDepth;
-  const hpMult = Math.max(0, hpBase) * Math.pow(Math.max(0.0001, hpPerDepth), Math.max(0, depth - 1));
+  const hpMult = Math.max(0, hpBase) * Math.pow(Math.max(0.0001, hpPerDepth), heat);
 
   // Authoritative spawn HP/sec: baselineDps * pressure * spawnMult
   const spawnHpPerSecond = BASELINE_PLAYER_DPS * pressure * spawnMult;
   // Convert HP budget flow to enemy-count interval using representative trash HP.
-  const baseEnemyHp = Math.max(1, registry.enemy(ENEMY_TYPE.CHASER).hp);
+  const chaserDef = registry.enemy(ENEMY_TYPE.CHASER);
+  const baseEnemyHp = Math.max(1, chaserDef.baseLife ?? chaserDef.hp ?? 1);
   const enemyHpForRate = baseEnemyHp * hpMult;
   state.powerBudget += spawnHpPerSecond * Math.max(0, dtSec);
 
@@ -242,7 +243,7 @@ export function tickSpawnDirector(
   const spawnRatePerSec = enemyHpForRate > 0 ? spawnHpPerSecond / enemyHpForRate : 0;
 
   w.spawnDirectorDebug = {
-    depth,
+    heat,
     timeSec: now,
     expectedDps,
     actualDps,

@@ -579,7 +579,7 @@ describe("pauseMenu", () => {
     menu.render(makeWorld({ currentCharacterId: "JOEY" }));
 
     expect(root.textContent).toContain("Weapon: Laser");
-    expect(root.textContent).toContain("Crit Multi1.75x");
+    expect(root.textContent).toContain("Crit Multi1.00x");
   });
 
   test("build panel shows syringe weapon summary for HOBO", () => {

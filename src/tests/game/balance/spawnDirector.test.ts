@@ -45,7 +45,7 @@ describe("spawnDirector wave scheduler", () => {
     const w: any = { timeSec: 0, metrics: { dps: createDpsMetrics() } };
 
     tickSpawnDirector(w, 0.016, cfg, expectedCfg, powerBudgetCfg, state, {
-      getDepth: () => 0,
+      getRunHeat: () => 0,
       isBossActive: () => false,
       canSpawnNow: () => true,
       spawnTrash: () => {
@@ -60,7 +60,7 @@ describe("spawnDirector wave scheduler", () => {
     expect(state.lastChunkSize).toBe(3);
 
     tickSpawnDirector(w, 0.1, cfg, expectedCfg, powerBudgetCfg, state, {
-      getDepth: () => 0,
+      getRunHeat: () => 0,
       isBossActive: () => false,
       canSpawnNow: () => true,
       spawnTrash: () => {
@@ -71,7 +71,7 @@ describe("spawnDirector wave scheduler", () => {
     expect(spawns).toBe(3);
 
     tickSpawnDirector(w, 1.0, cfg, expectedCfg, powerBudgetCfg, state, {
-      getDepth: () => 0,
+      getRunHeat: () => 0,
       isBossActive: () => false,
       canSpawnNow: () => true,
       spawnTrash: () => {
@@ -90,7 +90,7 @@ describe("spawnDirector wave scheduler", () => {
 
     state.pendingSpawns = 5;
     tickSpawnDirector(w, 0.016, cfg, expectedZero, powerBudgetCfg, state, {
-      getDepth: () => 0,
+      getRunHeat: () => 0,
       isBossActive: () => false,
       canSpawnNow: () => true,
       spawnTrash: () => {
@@ -103,7 +103,7 @@ describe("spawnDirector wave scheduler", () => {
 
     state.pendingSpawns += 1; // now 6
     tickSpawnDirector(w, 0.016, cfg, expectedZero, powerBudgetCfg, state, {
-      getDepth: () => 0,
+      getRunHeat: () => 0,
       isBossActive: () => false,
       canSpawnNow: () => true,
       spawnTrash: () => {
@@ -122,7 +122,7 @@ describe("spawnDirector wave scheduler", () => {
     const w: any = { timeSec: 0, metrics: { dps: createDpsMetrics() } };
 
     tickSpawnDirector(w, 5, cfg, expectedCfg, powerBudgetCfg, state, {
-      getDepth: () => 0,
+      getRunHeat: () => 0,
       isBossActive: () => false,
       canSpawnNow: () => false,
       spawnTrash: () => {

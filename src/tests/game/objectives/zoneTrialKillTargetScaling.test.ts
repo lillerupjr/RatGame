@@ -7,15 +7,14 @@ import { startZoneTrial, getZoneTrialObjectiveState } from "../../../game/object
 import { DEFAULT_SPAWN_TUNING } from "../../../game/balance/spawnTuningDefaults";
 
 describe("zone trial kill target scaling", () => {
-  test("scales kill target by spawnPerDepth and hpPerDepth at depth 2", () => {
+  test("scales kill target by spawnPerDepth and hpPerDepth at heat 1", () => {
     const world = createWorld({ seed: 101, stage: stageDocks });
     const mapDef = getAuthoredMapDefByMapId("china_town");
     expect(mapDef).toBeTruthy();
     if (!mapDef) return;
     activateMapDef(mapDef, 101);
 
-    world.floorIndex = 1; // effective depth = 2
-    world.delveDepth = 0 as any;
+    world.runHeat = 1;
     world.currentObjectiveSpec = {
       objectiveType: "ZONE_TRIAL",
       params: {

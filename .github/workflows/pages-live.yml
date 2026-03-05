@@ -31,6 +31,9 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Install Supabase CLI
+        run: npm install -g supabase
+
       - name: Install
         run: npm ci
 
@@ -46,12 +49,30 @@ jobs:
         run: |
           RESOLVED_URL="${SECRET_SUPABASE_URL:-$VAR_SUPABASE_URL}"
           RESOLVED_KEY="${SECRET_SUPABASE_ANON_KEY:-$VAR_SUPABASE_ANON_KEY}"
+          PROJECT_REF="$(printf '%s' "$RESOLVED_URL" | sed -E 's#https?://([^.]+)\.supabase\.co.*#\1#')"
           test -n "$RESOLVED_URL" || (echo "Missing VITE_SUPABASE_URL (set Actions secret or variable)." && exit 1)
           test -n "$RESOLVED_KEY" || (echo "Missing VITE_SUPABASE_ANON_KEY (set Actions secret or variable)." && exit 1)
+          test "$PROJECT_REF" != "$RESOLVED_URL" || (echo "Could not derive Supabase project ref from VITE_SUPABASE_URL." && exit 1)
           {
             echo "VITE_SUPABASE_URL=$RESOLVED_URL"
             echo "VITE_SUPABASE_ANON_KEY=$RESOLVED_KEY"
+            echo "SUPABASE_PROJECT_REF=$PROJECT_REF"
           } >> "$GITHUB_ENV"
+
+      - name: Link Supabase project
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          test -n "$SUPABASE_ACCESS_TOKEN" || (echo "Missing SUPABASE_ACCESS_TOKEN secret." && exit 1)
+          test -n "$SUPABASE_DB_PASSWORD" || (echo "Missing SUPABASE_DB_PASSWORD secret." && exit 1)
+          supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Apply DB migrations
+        run: supabase db push
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
       - name: Build
         run: npm run build

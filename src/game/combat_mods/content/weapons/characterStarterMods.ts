@@ -8,7 +8,7 @@ const JAMAL_STARTER_PROJECTILE_CARD: CardDef = {
   displayName: "Jamal Starter: +1 projectile",
   rarity: 1,
   powerTier: 1,
-  tags: ["projectiles"],
+  tags: ["projectile"],
   mods: [{ key: STAT_KEYS.PROJECTILES_ADD, op: "add", value: 1 }],
 };
 

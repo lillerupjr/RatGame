@@ -12,7 +12,7 @@ import {
 import { movementSystem } from "./systems/sim/movement";
 import { spawnOneEnemyOfType, spawnOneTrashEnemy } from "./systems/spawn/spawn";
 import { combatSystem } from "./systems/sim/combat";
-import { ailmentTickSystem } from "./combat_mods/systems/ailmentTickSystem";
+import { dotTickSystem } from "./combat/dot/dotTickSystem";
 import { collisionsSystem, processCombatTextFromEvents } from "./systems/sim/collisions";
 import { projectilesSystem } from "./systems/sim/projectiles";
 import { pickupsSystem } from "./systems/progression/pickups";
@@ -52,7 +52,6 @@ import { registry } from "./content/registry";
 import { spawnEnemyGrid, ENEMY_TYPE } from "./factories/enemyFactory";
 import { gridToWorld } from "./coords/grid";
 import { anchorFromWorld } from "./coords/anchor";
-import { poisonSystem } from "./systems/sim/poison";
 import { fissionSystem } from "./systems/sim/fission";
 import { processMomentumEventQueue, tickMomentumDecay } from "./systems/sim/momentum";
 import { KENNEY_TILE_WORLD, preloadKenneyTiles } from "../engine/render/kenneyTiles";
@@ -60,9 +59,11 @@ import type { Dir8 } from "../engine/render/sprites/dir8";
 import { dir8FromVector } from "../engine/render/sprites/dir8";
 
 import {
+  canEnterNode,
+  countClearedNodes,
   createDelveMap,
   ensureAdjacentNodes,
-  getReachableNodes,
+  markCurrentNodeCleared,
   moveToNode,
   getDepthScaling,
   getNodeDepth,
@@ -150,6 +151,11 @@ import { updateExhaustFollowers } from "./systems/exhaustFollowerSystem";
 import { rewardRunEventProducerSystem } from "./systems/progression/rewardRunEventProducerSystem";
 import { rewardSchedulerSystem } from "./systems/progression/rewardSchedulerSystem";
 import { rewardPresenterSystem } from "./systems/progression/rewardPresenterSystem";
+import {
+  commitFloorClear,
+  normalizedRunHeat,
+  resetFloorClearCommit,
+} from "./systems/progression/runHeat";
 import { getSupabaseEnv } from "../config/supabase";
 import {
   LeaderboardClient,
@@ -251,13 +257,53 @@ type FloorLoadContext = {
 };
 
 type EndLeaderboardRunPayload = {
-  depthReached: number;
+  heat: number;
   kills: number;
+  characterId: string;
 };
+
+const LEADERBOARD_UNKNOWN_CHARACTER_ID = "UNKNOWN";
+const LEADERBOARD_CHARACTER_ID_PATTERN = /^[A-Z][A-Z0-9_]{2,23}$/;
+const LEADERBOARD_CHARACTER_NAME_BY_ID = new Map<string, string>(
+  PLAYABLE_CHARACTERS.map((character) => [character.id, character.displayName]),
+);
 
 function clampNonNegativeFinite(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, value);
+}
+
+function normalizeLeaderboardCharacterId(raw: unknown): string {
+  const upper = typeof raw === "string" ? raw.trim().toUpperCase() : "";
+  if (!LEADERBOARD_CHARACTER_ID_PATTERN.test(upper)) return LEADERBOARD_UNKNOWN_CHARACTER_ID;
+  return upper;
+}
+
+function leaderboardCharacterLabel(characterId: unknown): string {
+  const normalizedId = normalizeLeaderboardCharacterId(characterId);
+  return LEADERBOARD_CHARACTER_NAME_BY_ID.get(normalizedId) ?? "Unknown";
+}
+
+function getRunHeat(w: World): number {
+  return normalizedRunHeat(w.runHeat);
+}
+
+function getMapDepth(w: World): number {
+  if (Number.isFinite(w.mapDepth) && w.mapDepth > 0) return Math.floor(w.mapDepth);
+  if (Number.isFinite(w.delveDepth) && w.delveDepth > 0) return Math.floor(w.delveDepth);
+  return Math.max(1, Math.floor((w.floorIndex ?? 0) + 1));
+}
+
+function setMapDepth(w: World, depth: number): void {
+  const normalized = Math.max(1, Math.floor(Number(depth) || 1));
+  w.mapDepth = normalized;
+  // Backwards-compatible alias while call-sites migrate.
+  w.delveDepth = normalized;
+}
+
+function applyRunHeatScaling(w: World): void {
+  const effectiveDepth = getRunHeat(w) + 1;
+  w.delveScaling = getDepthScaling(effectiveDepth);
 }
 
 const MAX_FRAME_DT_REAL_SEC = 0.05;
@@ -688,6 +734,44 @@ export function createGame(args: CreateGameArgs) {
     }
   }
 
+  function validateDelveHeatInvariant(w: World, reason: string): void {
+    if (!import.meta.env.DEV) return;
+    const delve = w.delveMap as DelveMap | null;
+    if (!delve) return;
+    const runHeat = getRunHeat(w);
+    const cleared = countClearedNodes(delve);
+    if (runHeat === cleared) return;
+    console.error("[delve:heat-integrity]", {
+      reason,
+      runHeat,
+      clearedNodes: cleared,
+      currentNodeId: delve.currentNodeId,
+    });
+  }
+
+  function commitCurrentNodeClear(w: World): boolean {
+    if (w.floorClearCommitted) return false;
+    const delve = w.delveMap as DelveMap | null;
+    if (delve) {
+      const currentId = delve.currentNodeId;
+      const currentNode = currentId ? delve.nodes.get(currentId) ?? null : null;
+      if (!currentNode || currentNode.state !== "ACTIVE") {
+        if (import.meta.env.DEV) {
+          console.error("[delve] Refusing floor-clear commit without ACTIVE node", {
+            currentNodeId: currentId ?? null,
+            currentState: currentNode?.state ?? null,
+          });
+        }
+        return false;
+      }
+      const cleared = markCurrentNodeCleared(delve);
+      if (!cleared) return false;
+    }
+    const committed = commitFloorClear(w);
+    if (committed) validateDelveHeatInvariant(w, "commitCurrentNodeClear");
+    return committed;
+  }
+
   function tryAdvanceAfterObjectiveCompletion(): boolean {
     if (!hasCompletedAnyObjective(world)) return false;
     const isLegacyFinalFloor =
@@ -696,6 +780,7 @@ export function createGame(args: CreateGameArgs) {
       (world.floorIndex ?? 0) >= FLOORS_PER_RUN - 1 &&
       world.runState !== "TRANSITION";
     if (isLegacyFinalFloor) {
+      commitCurrentNodeClear(world);
       completeRun(world);
       return true;
     }
@@ -703,19 +788,20 @@ export function createGame(args: CreateGameArgs) {
     if (world.state === "REWARD" && world.cardReward?.active) return false;
     if (world.state === "REWARD" && world.relicReward?.active) return false;
     if (world.floorEndCountdownActive && world.floorEndCountdownSec > 0) return false;
+    commitCurrentNodeClear(world);
 
     if (isDeterministicDelveMode()) {
       showDeterministicFloorPicker(
         "Objective complete.\nChoose next floor type.",
         (world.floorIndex ?? 0) + 1,
-        (world.delveDepth ?? 1) + 1,
+        getMapDepth(world) + 1,
       );
       return true;
     }
 
     const delve = world.delveMap as DelveMap;
     if (delve) {
-      showDelveMap(`Depth ${world.delveDepth} cleared!\nChoose your next destination.`);
+      showDelveMap(`Depth ${getMapDepth(world)} cleared!\nChoose your next destination.`);
       return true;
     }
     completeRun(world);
@@ -931,8 +1017,7 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function getEndStatsDepth(w: World): number {
-    if (Number.isFinite(w.delveDepth) && w.delveDepth > 0) return Math.floor(w.delveDepth);
-    return Math.max(1, Math.floor((w.floorIndex ?? 0) + 1));
+    return getMapDepth(w);
   }
 
   function getEndStatsCardCount(w: World): number {
@@ -944,7 +1029,7 @@ export function createGame(args: CreateGameArgs) {
   function populateEndStats(w: World): void {
     const summary = getEndRunSummary(w);
     args.ui.endEl.time.textContent = formatTimeMMSS(getEndStatsTimeSec(w));
-    args.ui.endEl.depth.textContent = String(summary.depthReached);
+    args.ui.endEl.depth.textContent = String(getEndStatsDepth(w));
     args.ui.endEl.kills.textContent = String(summary.kills);
     args.ui.endEl.gold.textContent = String(Math.max(0, Math.floor(getGold(w))));
     args.ui.endEl.relics.textContent = String(Array.isArray(w.relics) ? w.relics.length : 0);
@@ -953,8 +1038,9 @@ export function createGame(args: CreateGameArgs) {
 
   function getEndRunSummary(w: World): EndLeaderboardRunPayload {
     return {
-      depthReached: getEndStatsDepth(w),
+      heat: getRunHeat(w),
       kills: Math.max(0, Math.floor(w.kills ?? 0)),
+      characterId: normalizeLeaderboardCharacterId((w as any).currentCharacterId),
     };
   }
 
@@ -1092,8 +1178,9 @@ export function createGame(args: CreateGameArgs) {
     return {
       rank: normalizedRank,
       display_name: displayName,
-      depth: Math.max(0, Math.floor(payload.depthReached)),
+      heat: Math.max(0, Math.floor(payload.heat)),
       kills: Math.max(0, Math.floor(payload.kills)),
+      character_id: normalizeLeaderboardCharacterId(payload.characterId),
       isYou: true,
     };
   }
@@ -1108,8 +1195,9 @@ export function createGame(args: CreateGameArgs) {
         rowsByRank.set(rank, {
           rank,
           display_name: row.display_name || "ANON",
-          depth: Number.isFinite(row.depth) ? Math.max(0, Math.floor(row.depth)) : 0,
+          heat: Number.isFinite(row.heat) ? Math.max(0, Math.floor(row.heat)) : 0,
           kills: Number.isFinite(row.kills) ? Math.max(0, Math.floor(row.kills)) : 0,
+          character_id: normalizeLeaderboardCharacterId(row.character_id),
           isYou: !!row.isYou,
         });
       }
@@ -1135,8 +1223,9 @@ export function createGame(args: CreateGameArgs) {
       const row = rows[i];
       const normalizedRank = Math.max(1, Math.floor(row.rank));
       const isYou = !!row.isYou;
-      const depth = Math.max(0, Math.floor(row.depth));
+      const heat = Math.max(0, Math.floor(row.heat));
       const kills = Math.max(0, Math.floor(row.kills));
+      const character = leaderboardCharacterLabel(row.character_id);
       const li = document.createElement("li");
       li.classList.add("endLeaderboardRow");
       if (isYou) {
@@ -1151,17 +1240,21 @@ export function createGame(args: CreateGameArgs) {
       nameLabel.classList.add("endLeaderboardRowName");
       const displayName = row.display_name || "ANON";
       nameLabel.textContent = isYou ? `> ${displayName}` : displayName;
-      const depthValue = document.createElement("span");
-      depthValue.classList.add("endLeaderboardRowDepth");
-      depthValue.textContent = String(depth);
+      const heatValue = document.createElement("span");
+      heatValue.classList.add("endLeaderboardRowHeat");
+      heatValue.textContent = String(heat);
       const killsValue = document.createElement("span");
       killsValue.classList.add("endLeaderboardRowKills");
       killsValue.textContent = String(kills);
+      const characterValue = document.createElement("span");
+      characterValue.classList.add("endLeaderboardRowCharacter");
+      characterValue.textContent = character;
 
       li.appendChild(rankLabel);
       li.appendChild(nameLabel);
-      li.appendChild(depthValue);
+      li.appendChild(heatValue);
       li.appendChild(killsValue);
+      li.appendChild(characterValue);
       listEl.appendChild(li);
     }
   }
@@ -1247,7 +1340,7 @@ export function createGame(args: CreateGameArgs) {
     const requestSeq = ++endLeaderboardRequestSeq;
     try {
       const preview = await leaderboardClient.previewRun({
-        depth: payload.depthReached,
+        heat: payload.heat,
         kills: payload.kills,
         topLimit: 20,
         window: 6,
@@ -1293,9 +1386,10 @@ export function createGame(args: CreateGameArgs) {
     refreshEndLeaderboardSubmitControls();
     try {
       const submitted = await leaderboardClient.submitName({
-        depth: payload.depthReached,
+        heat: payload.heat,
         kills: payload.kills,
         displayName,
+        characterId: payload.characterId,
       });
       const submittedName = sanitizeLeaderboardDisplayName(String(submitted.display_name ?? displayName));
       if (endLeaderboardNameInputEl) endLeaderboardNameInputEl.value = submittedName;
@@ -1484,6 +1578,7 @@ export function createGame(args: CreateGameArgs) {
     w.evy = [];
     w.eFaceX = [];
     w.eFaceY = [];
+    w.eBaseLife = [];
     w.eHp = [];
     w.eHpMax = [];
     w.eR = [];
@@ -1704,6 +1799,7 @@ export function createGame(args: CreateGameArgs) {
     w.floorIndex = floorIntent.floorIndex;
     w.floorArchetype = floorIntent.archetype;
     w.currentFloorIntent = floorIntent;
+    setMapDepth(w, floorIntent.depth);
 
     const sid = floorIntent.zoneId;
 
@@ -1774,6 +1870,7 @@ export function createGame(args: CreateGameArgs) {
     w.floorEndCountdownActive = false;
     w.floorEndCountdownSec = 0;
     w.floorEndCountdownStartedKey = null;
+    resetFloorClearCommit(w);
 
     w.pendingAdvanceToNextFloor = false;
 
@@ -1861,7 +1958,8 @@ export function createGame(args: CreateGameArgs) {
       w.spawnDirectorState.spawnsPerSecond = 0;
     }
 
-    const depth = Math.max(1, Math.floor((w.currentFloorIntent?.depth ?? (w.floorIndex ?? 0) + 1) as number));
+    applyRunHeatScaling(w);
+    const heat = getRunHeat(w);
     const seed = 10;
 
     if (w.spawnDirectorState) {
@@ -1874,12 +1972,12 @@ export function createGame(args: CreateGameArgs) {
       const spawnPerDepth = typeof tuning.spawnPerDepth === "number" ? tuning.spawnPerDepth : DEFAULT_SPAWN_TUNING.spawnPerDepth;
       const pressureAt0Sec = typeof tuning.pressureAt0Sec === "number" ? tuning.pressureAt0Sec : DEFAULT_SPAWN_TUNING.pressureAt0Sec;
       const pressureAt120Sec = typeof tuning.pressureAt120Sec === "number" ? tuning.pressureAt120Sec : DEFAULT_SPAWN_TUNING.pressureAt120Sec;
-      const spawnMult = spawnBase * Math.pow(Math.max(0.0001, spawnPerDepth), Math.max(0, depth - 1));
+      const spawnMult = spawnBase * Math.pow(Math.max(0.0001, spawnPerDepth), heat);
       const pressure = computePressure(0, pressureAt0Sec, pressureAt120Sec);
       const spawnHPPerSecond = BASELINE_PLAYER_DPS * pressure * spawnMult;
       console.log(
         "[SpawnModel]",
-        "depth=", depth,
+        "heat=", heat,
         "pressure=", pressure.toFixed(2),
         "spawnHPPerSec=", spawnHPPerSecond.toFixed(2)
       );
@@ -2056,7 +2154,6 @@ export function createGame(args: CreateGameArgs) {
     });
     applySfxSettingsToWorld(world);
     (world as any).deterministicDelveMode = false;
-    (world as any).combatMode = "mods";
     const mapMode = isMapMode(mapId);
     (world as any).mapMode = mapMode;
     (world as any).runtimeStructureSlicingEnabled = false;
@@ -2091,8 +2188,8 @@ export function createGame(args: CreateGameArgs) {
     const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
     const delve = createDelveMap(seed);
     world.delveMap = delve;
-    world.delveDepth = 1;
-    world.delveScaling = getDepthScaling(1);
+    setMapDepth(world, 1);
+    applyRunHeatScaling(world);
 
     // Pick starting node
     if (import.meta.env.DEV) {
@@ -2113,8 +2210,8 @@ export function createGame(args: CreateGameArgs) {
     (world as any).currentCharacterId = character.id;
     ensureStarterRelicForCharacter(world, character.id);
     world.delveMap = null;
-    world.delveDepth = 1;
-    world.delveScaling = getDepthScaling(1);
+    setMapDepth(world, 1);
+    applyRunHeatScaling(world);
     world.runState = "FLOOR";
     world.state = "RUN";
     (world as any).deterministicDelveMode = true;
@@ -2148,8 +2245,8 @@ export function createGame(args: CreateGameArgs) {
     (world as any).currentCharacterId = character.id;
     ensureStarterRelicForCharacter(world, character.id);
     world.delveMap = null;
-    world.delveDepth = 1;
-    world.delveScaling = getDepthScaling(1);
+    setMapDepth(world, 1);
+    applyRunHeatScaling(world);
     // IMPORTANT: sandbox must still run the sim.
     world.runState = "FLOOR";
     world.state = "RUN";
@@ -2463,7 +2560,7 @@ export function createGame(args: CreateGameArgs) {
       btn.className = `mapHitBtn routeNode routeNode--${archetypeClass} routeNode--${statusClass}`;
       btn.style.left = `${pos.x}px`;
       btn.style.top = `${pos.y}px`;
-      btn.disabled = !node.reachable || node.current;
+      btn.disabled = !node.reachable || node.current || node.completed;
       if (node.mode === "DELVE") {
         btn.dataset.delveNodeId = node.id;
       } else if (node.deterministicData) {
@@ -2520,6 +2617,7 @@ export function createGame(args: CreateGameArgs) {
     if (delve.currentNodeId) {
       ensureAdjacentNodes(delve, delve.currentNodeId, seed);
     }
+    validateDelveHeatInvariant(world, "showDelveMap");
     const vm = buildDelveRouteMapVM(delve, {
       windowBack: 2,
       windowForward: 8,
@@ -2867,10 +2965,7 @@ export function createGame(args: CreateGameArgs) {
         world.expectedPowerBudgetConfig,
         world.spawnDirectorState,
         {
-          getDepth: () => {
-            if (Number.isFinite(world.delveDepth) && world.delveDepth > 0) return world.delveDepth;
-            return (world.floorIndex ?? 0) + 1;
-          },
+          getRunHeat: () => getRunHeat(world),
           isBossActive: () => world.runState === "BOSS" || bossAlive(world),
           canSpawnNow: () => world.runState === "FLOOR" && world.phaseTime >= 2,
           spawnTrash: () => {
@@ -2886,16 +2981,11 @@ export function createGame(args: CreateGameArgs) {
     }
     projectilesSystem(world, dtSim);
     collisionsSystem(world, dtSim);
-    const combatMode = (world as any).combatMode ?? "mods";
-    if (combatMode === "mods") {
-      ailmentTickSystem(world, dtSim);
-    } else {
-      poisonSystem(world, dtSim);
-    }
     fissionSystem(world, dtSim);  // Nuclear fission: projectile-projectile collisions
     relicExplodeOnKillSystem(world, dtSim);
     bossSystem(world, dtSim);          // NEW: boss mechanics (telegraphs/hazards/dash)
     zonesSystem(world, dtSim);
+    dotTickSystem(world, dtSim);
     pickupsSystem(world, dtSim);
     dropsSystem(world, dtSim);
     triggerSystem(world, dtSim, input);
@@ -3018,8 +3108,7 @@ export function createGame(args: CreateGameArgs) {
     if (detArchetype) {
       const floorIndex = Number.parseInt(btn.dataset.detFloorIndex ?? "0", 10) || 0;
       const depth = Number.parseInt(btn.dataset.detDepth ?? "1", 10) || 1;
-      world.delveDepth = depth;
-      world.delveScaling = getDepthScaling(depth);
+      setMapDepth(world, depth);
       hideMap();
       queueFloorLoadIntent(
         buildDeterministicFloorIntent({
@@ -3036,14 +3125,23 @@ export function createGame(args: CreateGameArgs) {
     if (delveNodeId) {
       const delve = world.delveMap as DelveMap;
       if (!delve) return;
+      const destinationNode = delve.nodes.get(delveNodeId);
+      if (!destinationNode || destinationNode.state !== "UNVISITED") return;
+      if (!canEnterNode(delve, delveNodeId)) return;
 
       const node = moveToNode(delve, delveNodeId);
       if (!node) return;
+      if (import.meta.env.DEV && node.state !== "ACTIVE") {
+        console.error("[delve] Entered node is not ACTIVE after moveToNode", {
+          nodeId: node.id,
+          state: node.state,
+        });
+        return;
+      }
 
-      // Update depth and scaling
+      // Update map depth for presentation and generation.
       const depth = getNodeDepth(node);
-      world.delveDepth = depth;
-      world.delveScaling = getDepthScaling(depth);
+      setMapDepth(world, depth);
 
       // Generate adjacent nodes for next time
       const seed = world.rng.int(0, 0x7fffffff);
@@ -3051,8 +3149,7 @@ export function createGame(args: CreateGameArgs) {
 
       hideMap();
 
-      // Enter the chosen zone with depth-scaled difficulty
-      // floorIndex is used for enemy type weights, zoneId for visuals/music
+      // Enter the chosen zone. floorIndex is used for enemy type weights, zoneId for visuals/music.
       const floorIndex = Math.min(2, Math.floor((depth - 1) / 3));
       queueFloorLoadIntent(buildFloorIntentFromDelveNode(node, floorIndex));
       return;

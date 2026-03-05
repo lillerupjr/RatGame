@@ -24,23 +24,23 @@ export function spawnEnemyGrid(
     _tileWorld: number = KENNEY_TILE_WORLD
 ) {
     const s = registry.enemy(type);
-
-    // Apply delve scaling (damage only)
-    const scaling = w.delveScaling ?? { hpMult: 1, damageMult: 1 };
-
-    // Depth (1-based)
-    const depth = Math.max(
+    const baseLife = Math.max(
       1,
-      Math.floor((w.currentFloorIntent?.depth ?? (w.floorIndex ?? 0) + 1) as number)
+      Math.round(Number.isFinite(s.baseLife) ? s.baseLife : (s.hp ?? 1))
     );
 
-    // Authoritative HP scaling: hpBase * hpPerDepth^(depth-1)
+    // Apply run-heat scaling (damage only).
+    const scaling = w.delveScaling ?? { hpMult: 1, damageMult: 1 };
+
+    const heat = Math.max(0, Math.floor((w.runHeat ?? 0) as number));
+
+    // Authoritative HP scaling: hpBase * hpPerDepth^heat
     const tuning = (w as any).balance?.spawnTuning ?? {};
     const hpBase = typeof tuning.hpBase === "number" ? Math.max(0, tuning.hpBase) : 1.0;
     const hpPerDepth = typeof tuning.hpPerDepth === "number" ? Math.max(0.0001, tuning.hpPerDepth) : 1.0;
-    const effectiveHpMult = hpBase * Math.pow(hpPerDepth, Math.max(0, depth - 1));
+    const effectiveHpMult = hpBase * Math.pow(hpPerDepth, heat);
 
-    const scaledHp = Math.max(1, Math.round(s.hp * effectiveHpMult));
+    const scaledHp = Math.max(1, Math.round(baseLife * effectiveHpMult));
     const scaledDamage = Math.round(s.damage * scaling.damageMult);
 
     // Balance telemetry: record how much HP just entered the world.
@@ -61,6 +61,7 @@ export function spawnEnemyGrid(
     w.evy.push(0);
     w.eFaceX.push(0);
     w.eFaceY.push(-1);
+    w.eBaseLife.push(baseLife);
     w.eHp.push(scaledHp);
     w.eHpMax.push(scaledHp);
     w.eR.push(s.radius);

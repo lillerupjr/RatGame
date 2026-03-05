@@ -15,7 +15,9 @@ export type EnemyType = (typeof ENEMY_TYPE)[keyof typeof ENEMY_TYPE];
 export type EnemyDef = {
     id: EnemyType;
     name: string;
-    hp: number;
+    baseLife: number;
+    /** Legacy alias kept for compatibility; equal to `baseLife`. */
+    hp?: number;
     radius: number;
     speed: number;
     damage: number;
@@ -28,6 +30,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     [ENEMY_TYPE.CHASER]: {
         id: ENEMY_TYPE.CHASER,
         name: "Chaser",
+        baseLife: 24,
         hp: 24,
         radius: 14,
         speed: 90,
@@ -37,6 +40,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     [ENEMY_TYPE.RUNNER]: {
         id: ENEMY_TYPE.RUNNER,
         name: "Runner",
+        baseLife: 16,
         hp: 16,
         radius: 12,
         speed: 130,
@@ -46,6 +50,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     [ENEMY_TYPE.BRUISER]: {
         id: ENEMY_TYPE.BRUISER,
         name: "Bruiser",
+        baseLife: 64,
         hp: 64,
         radius: 18,
         speed: 70,
@@ -55,6 +60,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     [ENEMY_TYPE.MINOTAUR]: {
         id: ENEMY_TYPE.MINOTAUR,
         name: "Minotaur",
+        baseLife: 80,
         hp: 80,
         radius: 20,
         speed: 60,
@@ -64,6 +70,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     [ENEMY_TYPE.ABOMINATION]: {
         id: ENEMY_TYPE.ABOMINATION,
         name: "Abomination",
+        baseLife: 120,
         hp: 120,
         radius: 22,
         speed: 50,
@@ -73,6 +80,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     [ENEMY_TYPE.RATCHEMIST]: {
         id: ENEMY_TYPE.RATCHEMIST,
         name: "Ratchemist",
+        baseLife: 40,
         hp: 40,
         radius: 14,
         speed: 80,
@@ -82,6 +90,7 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     [ENEMY_TYPE.BOSS]: {
         id: ENEMY_TYPE.BOSS,
         name: "Boss",
+        baseLife: 240,
         hp: 240,
         radius: 34,
         speed: 55,

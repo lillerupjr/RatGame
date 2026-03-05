@@ -8,7 +8,7 @@ export const MECHANICS_CARDS_V1: CardDef[] = [
     displayName: "+1 pierce",
     rarity: 4,
     powerTier: 3,
-    tags: ["pierce"],
+    tags: ["projectile"],
     mods: [{ key: STAT_KEYS.PIERCE_ADD, op: "add", value: 1 }],
   },
   {
@@ -17,7 +17,7 @@ export const MECHANICS_CARDS_V1: CardDef[] = [
     displayName: "+2 pierce",
     rarity: 4,
     powerTier: 4,
-    tags: ["pierce"],
+    tags: ["projectile"],
     mods: [{ key: STAT_KEYS.PIERCE_ADD, op: "add", value: 2 }],
   },
   {
@@ -26,7 +26,7 @@ export const MECHANICS_CARDS_V1: CardDef[] = [
     displayName: "+1 projectile",
     rarity: 4,
     powerTier: 3,
-    tags: ["projectiles"],
+    tags: ["projectile"],
     mods: [{ key: STAT_KEYS.PROJECTILES_ADD, op: "add", value: 1 }],
   },
   {
@@ -35,7 +35,7 @@ export const MECHANICS_CARDS_V1: CardDef[] = [
     displayName: "+2 projectile",
     rarity: 4,
     powerTier: 4,
-    tags: ["projectiles"],
+    tags: ["projectile"],
     mods: [{ key: STAT_KEYS.PROJECTILES_ADD, op: "add", value: 2 }],
   },
   {
@@ -44,7 +44,7 @@ export const MECHANICS_CARDS_V1: CardDef[] = [
     displayName: "+30% increased poison damage",
     rarity: 2,
     powerTier: 2,
-    tags: ["poison", "dot"],
+    tags: ["chaos"],
     mods: [{ key: STAT_KEYS.DOT_POISON_DAMAGE_INCREASED, op: "increased", value: 0.30 }],
   },
   {
@@ -53,7 +53,7 @@ export const MECHANICS_CARDS_V1: CardDef[] = [
     displayName: "+30% increased ignite damage",
     rarity: 2,
     powerTier: 2,
-    tags: ["ignite", "dot"],
+    tags: ["fires"],
     mods: [{ key: STAT_KEYS.DOT_IGNITE_DAMAGE_INCREASED, op: "increased", value: 0.30 }],
   },
   {
@@ -62,7 +62,7 @@ export const MECHANICS_CARDS_V1: CardDef[] = [
     displayName: "+25% increased damage over time duration",
     rarity: 2,
     powerTier: 2,
-    tags: ["dot"],
+    tags: ["hit"],
     mods: [{ key: STAT_KEYS.DOT_DURATION_INCREASED, op: "increased", value: 0.25 }],
   },
   {
@@ -71,7 +71,7 @@ export const MECHANICS_CARDS_V1: CardDef[] = [
     displayName: "Damage over time ticks 20% more frequently",
     rarity: 3,
     powerTier: 3,
-    tags: ["dot"],
+    tags: ["hit"],
     mods: [{ key: STAT_KEYS.DOT_TICK_RATE_MORE, op: "more", value: 0.20 }],
   },
 ];

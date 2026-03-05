@@ -12,7 +12,8 @@ import {
 
 const DEFAULT_OPTION_COUNT = 3;
 
-function floorDepthForRewards(world: World): number {
+function floorMapDepthForRewards(world: World): number {
+  if (Number.isFinite(world.mapDepth) && world.mapDepth > 0) return world.mapDepth;
   if (Number.isFinite(world.delveDepth) && world.delveDepth > 0) return world.delveDepth;
   return (world.floorIndex ?? 0) + 1;
 }
@@ -67,7 +68,7 @@ function rewardPlanForRunEvent(
   ticketKind: RewardTicketKind;
   ticketSource: RewardTicketSource;
 } {
-  const depth = floorDepthForRewards(world);
+  const depth = floorMapDepthForRewards(world);
 
   switch (ev.type) {
     case "ZONE_CLEARED":

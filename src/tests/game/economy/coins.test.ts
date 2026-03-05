@@ -1,22 +1,24 @@
 import { describe, expect, test } from "vitest";
-import { coinColorFromValue, goldValueFromEnemyMaxHp } from "../../../game/economy/coins";
+import {
+  BOSS_GOLD_MULTIPLIER,
+  GOLD_PER_HP,
+  coinColorFromValue,
+  goldValueFromEnemyBaseLife,
+} from "../../../game/economy/coins";
 
 describe("coins", () => {
-  test("gold value scales up with enemy max hp", () => {
-    expect(goldValueFromEnemyMaxHp(1)).toBe(1);
-    expect(goldValueFromEnemyMaxHp(24)).toBe(1);
-    expect(goldValueFromEnemyMaxHp(25)).toBe(1);
-    expect(goldValueFromEnemyMaxHp(50)).toBe(2);
-    expect(goldValueFromEnemyMaxHp(125)).toBe(5);
+  test("gold value is derived from base life (floor(baseLife * GOLD_PER_HP))", () => {
+    expect(goldValueFromEnemyBaseLife(24)).toBe(Math.floor(24 * GOLD_PER_HP));
+    expect(goldValueFromEnemyBaseLife(64)).toBe(Math.floor(64 * GOLD_PER_HP));
+    expect(goldValueFromEnemyBaseLife(240)).toBe(Math.floor(240 * GOLD_PER_HP));
+    expect(goldValueFromEnemyBaseLife(80, { isBoss: true })).toBe(
+      Math.floor(Math.floor(80 * GOLD_PER_HP) * BOSS_GOLD_MULTIPLIER)
+    );
   });
 
-  test("coin color tiers map from copper to higher tiers", () => {
-    expect(coinColorFromValue(1)).toBe("#b87333");
-    expect(coinColorFromValue(2)).toBe("#c0c0c0");
+  test("coin fallback color stays fixed across values", () => {
+    expect(coinColorFromValue(1)).toBe("#ffd700");
     expect(coinColorFromValue(4)).toBe("#ffd700");
-    expect(coinColorFromValue(8)).toBe("#8ecae6");
-    expect(coinColorFromValue(16)).toBe("#67e8f9");
-    expect(coinColorFromValue(32)).toBe("#a855f7");
-    expect(coinColorFromValue(64)).toContain("hsl(");
+    expect(coinColorFromValue(128)).toBe("#ffd700");
   });
 });

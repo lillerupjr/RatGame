@@ -17,7 +17,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+3 physical damage",
     rarity: 1,
     powerTier: 1,
-    tags: ["damage_physical"],
+    tags: ["physical"],
     mods: [{ key: STAT_KEYS.DAMAGE_ADD_PHYSICAL, op: "add", value: 3 }],
   },
   {
@@ -26,7 +26,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+6 physical damage",
     rarity: 2,
     powerTier: 2,
-    tags: ["damage_physical"],
+    tags: ["physical"],
     mods: [{ key: STAT_KEYS.DAMAGE_ADD_PHYSICAL, op: "add", value: 6 }],
   },
   {
@@ -35,7 +35,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+9 physical damage",
     rarity: 3,
     powerTier: 3,
-    tags: ["damage_physical"],
+    tags: ["physical"],
     mods: [{ key: STAT_KEYS.DAMAGE_ADD_PHYSICAL, op: "add", value: 9 }],
   },
   {
@@ -44,7 +44,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+20% damage",
     rarity: 1,
     powerTier: 1,
-    tags: ["damage_generic"],
+    tags: ["gun"],
     mods: [{ key: STAT_KEYS.DAMAGE_INCREASED, op: "increased", value: 0.20 }],
   },
   {
@@ -53,7 +53,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+35% damage",
     rarity: 2,
     powerTier: 2,
-    tags: ["damage_generic"],
+    tags: ["gun"],
     mods: [{ key: STAT_KEYS.DAMAGE_INCREASED, op: "increased", value: 0.35 }],
   },
   {
@@ -62,7 +62,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+50% damage",
     rarity: 3,
     powerTier: 3,
-    tags: ["damage_generic"],
+    tags: ["gun"],
     mods: [{ key: STAT_KEYS.DAMAGE_INCREASED, op: "increased", value: 0.50 }],
   },
   {
@@ -71,7 +71,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+15% fire rate",
     rarity: 1,
     powerTier: 1,
-    tags: ["fire_rate"],
+    tags: ["fires"],
     mods: [{ key: STAT_KEYS.SHOTS_PER_SECOND_INCREASED, op: "increased", value: 0.15 }],
   },
   {
@@ -80,7 +80,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+25% fire rate",
     rarity: 2,
     powerTier: 2,
-    tags: ["fire_rate"],
+    tags: ["fires"],
     mods: [{ key: STAT_KEYS.SHOTS_PER_SECOND_INCREASED, op: "increased", value: 0.25 }],
   },
   {
@@ -89,7 +89,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+35% fire rate",
     rarity: 3,
     powerTier: 3,
-    tags: ["fire_rate"],
+    tags: ["fires"],
     mods: [{ key: STAT_KEYS.SHOTS_PER_SECOND_INCREASED, op: "increased", value: 0.35 }],
   },
   {
@@ -98,7 +98,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+45% fire rate",
     rarity: 4,
     powerTier: 4,
-    tags: ["fire_rate"],
+    tags: ["fires"],
     mods: [{ key: STAT_KEYS.SHOTS_PER_SECOND_INCREASED, op: "increased", value: 0.45 }],
   },
   {
@@ -107,7 +107,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+4% crit chance",
     rarity: 1,
     powerTier: 1,
-    tags: ["crit"],
+    tags: ["crit", "hit"],
     mods: [{ key: STAT_KEYS.CRIT_CHANCE_ADD, op: "add", value: 0.04 }],
   },
   {
@@ -116,7 +116,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+7% crit chance",
     rarity: 2,
     powerTier: 2,
-    tags: ["crit"],
+    tags: ["crit", "hit"],
     mods: [{ key: STAT_KEYS.CRIT_CHANCE_ADD, op: "add", value: 0.07 }],
   },
   {
@@ -125,7 +125,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+10% crit chance",
     rarity: 3,
     powerTier: 3,
-    tags: ["crit"],
+    tags: ["crit", "hit"],
     mods: [{ key: STAT_KEYS.CRIT_CHANCE_ADD, op: "add", value: 0.10 }],
   },
   {
@@ -134,7 +134,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+13% crit chance",
     rarity: 4,
     powerTier: 4,
-    tags: ["crit"],
+    tags: ["crit", "hit"],
     mods: [{ key: STAT_KEYS.CRIT_CHANCE_ADD, op: "add", value: 0.13 }],
   },
   {
@@ -143,7 +143,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+0.25 crit multiplier",
     rarity: 1,
     powerTier: 1,
-    tags: ["crit"],
+    tags: ["crit", "hit"],
     mods: [{ key: STAT_KEYS.CRIT_MULTI_ADD, op: "add", value: 0.25 }],
   },
   {
@@ -152,7 +152,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+0.5 crit multiplier",
     rarity: 2,
     powerTier: 2,
-    tags: ["crit"],
+    tags: ["crit", "hit"],
     mods: [{ key: STAT_KEYS.CRIT_MULTI_ADD, op: "add", value: 0.5 }],
   },
   {
@@ -161,7 +161,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+0.75 crit multiplier",
     rarity: 3,
     powerTier: 3,
-    tags: ["crit"],
+    tags: ["crit", "hit"],
     mods: [{ key: STAT_KEYS.CRIT_MULTI_ADD, op: "add", value: 0.75 }],
   },
   {
@@ -170,7 +170,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+1.0 crit multiplier",
     rarity: 4,
     powerTier: 4,
-    tags: ["crit"],
+    tags: ["crit", "hit"],
     mods: [{ key: STAT_KEYS.CRIT_MULTI_ADD, op: "add", value: 1.0 }],
   },
   {
@@ -179,7 +179,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+0.8 accuracy",
     rarity: 1,
     powerTier: 1,
-    tags: ["accuracy"],
+    tags: ["projectile"],
     mods: [{ key: STAT_KEYS.SPREAD_BASE_DEG_ADD, op: "add", value: -0.8 }],
   },
   {
@@ -188,7 +188,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "Convert 40% physical to fire",
     rarity: 2,
     powerTier: 2,
-    tags: ["convert_fire", "fire"],
+    tags: ["physical"],
     mods: [{ key: STAT_KEYS.CONVERT_PHYS_TO_FIRE, op: "add", value: 0.40 }],
   },
   {
@@ -197,7 +197,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "Convert 40% physical to chaos",
     rarity: 2,
     powerTier: 2,
-    tags: ["convert_chaos", "poison"],
+    tags: ["physical"],
     mods: [{ key: STAT_KEYS.CONVERT_PHYS_TO_CHAOS, op: "add", value: 0.40 }],
   },
   {
@@ -206,7 +206,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+4 fire damage",
     rarity: 2,
     powerTier: 1,
-    tags: ["damage_fire"],
+    tags: ["fires"],
     mods: [{ key: STAT_KEYS.DAMAGE_ADD_FIRE, op: "add", value: 4 }],
   },
   {
@@ -215,7 +215,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+4 chaos damage",
     rarity: 2,
     powerTier: 1,
-    tags: ["damage_chaos"],
+    tags: ["chaos"],
     mods: [{ key: STAT_KEYS.DAMAGE_ADD_CHAOS, op: "add", value: 4 }],
   },
   {
@@ -224,7 +224,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+25% bleed chance",
     rarity: 2,
     powerTier: 1,
-    tags: ["bleed"],
+    tags: ["physical"],
     mods: [{ key: STAT_KEYS.CHANCE_TO_BLEED_ADD, op: "add", value: 0.25 }],
   },
   {
@@ -233,7 +233,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+25% ignite chance",
     rarity: 2,
     powerTier: 1,
-    tags: ["ignite"],
+    tags: ["fires"],
     mods: [{ key: STAT_KEYS.CHANCE_TO_IGNITE_ADD, op: "add", value: 0.25 }],
   },
   {
@@ -242,7 +242,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+25% poison chance",
     rarity: 2,
     powerTier: 1,
-    tags: ["poison"],
+    tags: ["chaos"],
     mods: [{ key: STAT_KEYS.CHANCE_TO_POISON_ADD, op: "add", value: 0.25 }],
   },
   {
@@ -251,7 +251,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+3% crit chance and +10% damage",
     rarity: 3,
     powerTier: 1,
-    tags: ["crit", "damage_generic"],
+    tags: ["hit", "crit"],
     mods: [
       { key: STAT_KEYS.CRIT_CHANCE_ADD, op: "add", value: 0.03 },
       { key: STAT_KEYS.DAMAGE_INCREASED, op: "increased", value: 0.10 },
@@ -263,7 +263,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+5% crit chance and +20% damage",
     rarity: 4,
     powerTier: 2,
-    tags: ["crit", "damage_generic"],
+    tags: ["hit", "crit"],
     mods: [
       { key: STAT_KEYS.CRIT_CHANCE_ADD, op: "add", value: 0.05 },
       { key: STAT_KEYS.DAMAGE_INCREASED, op: "increased", value: 0.20 },
@@ -275,7 +275,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+7% crit chance and +30% damage",
     rarity: 4,
     powerTier: 3,
-    tags: ["crit", "damage_generic"],
+    tags: ["hit", "crit"],
     mods: [
       { key: STAT_KEYS.CRIT_CHANCE_ADD, op: "add", value: 0.07 },
       { key: STAT_KEYS.DAMAGE_INCREASED, op: "increased", value: 0.30 },
@@ -287,7 +287,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+12% fire rate, -0.5 accuracy",
     rarity: 3,
     powerTier: 1,
-    tags: ["fire_rate", "accuracy"],
+    tags: ["fires", "projectile"],
     mods: [
       { key: STAT_KEYS.SHOTS_PER_SECOND_INCREASED, op: "increased", value: 0.12 },
       { key: STAT_KEYS.SPREAD_BASE_DEG_ADD, op: "add", value: 0.5 },
@@ -299,7 +299,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+0.7 accuracy and +2% crit chance",
     rarity: 3,
     powerTier: 1,
-    tags: ["accuracy", "crit"],
+    tags: ["projectile", "hit", "crit"],
     mods: [
       { key: STAT_KEYS.SPREAD_BASE_DEG_ADD, op: "add", value: -0.7 },
       { key: STAT_KEYS.CRIT_CHANCE_ADD, op: "add", value: 0.02 },
@@ -311,7 +311,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "Convert 30% physical to fire and +15% ignite chance",
     rarity: 4,
     powerTier: 2,
-    tags: ["convert_fire", "fire", "ignite"],
+    tags: ["physical"],
     mods: [
       { key: STAT_KEYS.CONVERT_PHYS_TO_FIRE, op: "add", value: 0.30 },
       { key: STAT_KEYS.CHANCE_TO_IGNITE_ADD, op: "add", value: 0.15 },
@@ -323,7 +323,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "Convert 30% physical to chaos and +15% poison chance",
     rarity: 4,
     powerTier: 2,
-    tags: ["convert_chaos", "poison"],
+    tags: ["physical"],
     mods: [
       { key: STAT_KEYS.CONVERT_PHYS_TO_CHAOS, op: "add", value: 0.30 },
       { key: STAT_KEYS.CHANCE_TO_POISON_ADD, op: "add", value: 0.15 },
