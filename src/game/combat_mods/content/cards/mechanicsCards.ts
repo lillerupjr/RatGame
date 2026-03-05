@@ -71,7 +71,7 @@ export const MECHANICS_CARDS_V1: CardDef[] = [
     displayName: "Damage over time ticks 20% more frequently",
     rarity: 3,
     powerTier: 3,
-    tags: ["hit"],
+    tags: ["dot"],
     mods: [{ key: STAT_KEYS.DOT_TICK_RATE_MORE, op: "more", value: 0.20 }],
   },
 ];

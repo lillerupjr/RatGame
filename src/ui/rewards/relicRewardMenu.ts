@@ -87,15 +87,8 @@ export function mountRelicRewardMenu(args: {
       name.className = "deckCardTitle";
       name.textContent = relic?.displayName ?? relicId;
 
-      const desc = document.createElement("div");
-      desc.className = "deckCardDesc";
-      const line = document.createElement("div");
-      line.textContent = (relic?.desc && relic.desc.length > 0) ? relic.desc[0] : "(No description)";
-      desc.appendChild(line);
-
       btn.appendChild(top);
       btn.appendChild(name);
-      btn.appendChild(desc);
       tapSafe.bindActivate(btn, () => args.onPick(relicId));
       choices.appendChild(btn);
     }

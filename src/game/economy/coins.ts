@@ -4,7 +4,7 @@ export const GOLD_COIN_COLOR = "#ffd700";
 
 export function baseGoldFromEnemyBaseLife(baseLife: number): number {
   const life = Number.isFinite(baseLife) ? Math.max(0, baseLife) : 0;
-  return Math.max(0, Math.floor(life * GOLD_PER_HP));
+  return Math.max(1, Math.floor(life * GOLD_PER_HP));
 }
 
 export function goldValueFromEnemyBaseLife(
@@ -16,7 +16,7 @@ export function goldValueFromEnemyBaseLife(
   if (Number.isFinite(options?.multiplier)) {
     gold *= Math.max(0, options?.multiplier ?? 1);
   }
-  return Math.max(0, Math.floor(gold));
+  return Math.max(1, Math.floor(gold));
 }
 
 export function coinColorFromValue(_value: number): string {

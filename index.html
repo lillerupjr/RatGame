@@ -16,19 +16,37 @@
 <canvas id="ui"></canvas>
 
 <div id="hud" hidden>
-  <div id="hudTop">
-    <span class="pill" id="fpsPill">FPS: 0</span>
-    <span class="pill" id="palettePill">Palette: db32</span>
-    <span class="pill" id="timePill">00:00</span>
-    <span class="pill" id="killsPill">Kills: 0</span>
-    <span class="pill" id="hpPill">HP: 0/0</span>
-    <span class="pill armorPill" id="armorPill" hidden>Armor: 0/0</span>
-    <span class="pill momentumPill" id="momentumPill" hidden>Momentum: 0/20</span>
-    <span class="pill" id="lvlPill" hidden>Lv: 1</span>
-  </div>
-  <div id="objectiveOverlay" hidden>
-    <div class="objectiveTitle" id="objectiveTitle">Objective</div>
-    <div class="objectiveStatus" id="objectiveStatus">Status</div>
+  <div id="hudTopStack">
+    <div id="hudTopRow">
+      <div id="hudTopLeft">
+        <div id="hudTop">
+          <span class="pill" id="fpsPill">FPS: 0</span>
+          <span class="pill" id="palettePill">Palette: db32</span>
+          <span class="pill" id="timePill">00:00</span>
+          <span class="pill" id="killsPill">Kills: 0</span>
+          <span class="pill" id="hpPill">HP: 0/0</span>
+          <span class="pill armorPill" id="armorPill" hidden>Armor: 0/0</span>
+          <span class="pill momentumPill" id="momentumPill" hidden>Momentum: 0/20</span>
+          <span class="pill" id="lvlPill" hidden>Lv: 1</span>
+        </div>
+        <div id="hudObjective">
+          <div id="objectiveOverlay" hidden>
+            <div class="objectiveTitle" id="objectiveTitle">Objective</div>
+            <div class="objectiveStatus" id="objectiveStatus">Status</div>
+          </div>
+        </div>
+      </div>
+      <div id="hudTopCenter">
+        <div id="hudBossBar" hidden>
+          <div id="hudBossTitle" class="hudBossTitle">BOSS</div>
+          <div id="hudBossTrack" class="hudBossTrack" role="presentation">
+            <div id="hudBossFill" class="hudBossFill"></div>
+          </div>
+          <div id="hudBossValue" class="hudBossValue">0 / 0</div>
+        </div>
+      </div>
+      <div id="hudTopRight"></div>
+    </div>
   </div>
 </div>
 

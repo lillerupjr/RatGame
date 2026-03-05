@@ -194,4 +194,44 @@ describe("spawnDirector interval queue", () => {
     expect(p2).toBeGreaterThan(50);
     expect(p2).toBeGreaterThan(p1);
   });
+
+  test("high pressure is not throttled by wave chunk cadence", () => {
+    const state = createSpawnDirectorState();
+    const w: any = {
+      timeSec: 0,
+      phaseTime: 0,
+      metrics: { dps: createDpsMetrics() },
+      enemyPowerConfig: { costs: { trash: 1 } },
+      balance: {
+        spawnTuning: {
+          spawnBase: 1.0,
+          spawnPerDepth: 1.0,
+          hpBase: hpBaseForRepresentativeHp,
+          hpPerDepth: 1.0,
+          pressureAt0Sec: 225,
+          pressureAt120Sec: 225,
+        },
+      },
+    };
+    let spawned = 0;
+    const dt = 1 / 60;
+    for (let i = 0; i < 60; i++) {
+      w.timeSec += dt;
+      w.phaseTime += dt;
+      tickSpawnDirector(w, dt, cfg, expectedCfg, powerBudgetCfg, state, {
+        getRunHeat: () => 0,
+        isBossActive: () => false,
+        canSpawnNow: () => true,
+        spawnTrash: () => {
+          spawned += 1;
+          return true;
+        },
+      });
+    }
+
+    // 1-second sanity: should be far above cadence-limited single-chunk spawning.
+    expect(spawned).toBeGreaterThan(100);
+    expect(w.spawnDirectorDebug.spawnHpPerSecond).toBeCloseTo(5400, 6);
+    expect(w.spawnDirectorDebug.queuedPerSecond).toBeGreaterThan(40);
+  });
 });

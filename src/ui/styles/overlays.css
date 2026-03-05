@@ -396,9 +396,167 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 #c, #ui { position: fixed; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; }
 #c { z-index: 0; }
 #ui { z-index: 1; pointer-events: none; }
-#hud { position: fixed; left: calc(12px + var(--safe-left)); top: calc(12px + var(--safe-top)); color: var(--text-primary); font-family: var(--font-mono); font-size: 14px; line-height: 1.4; user-select: none; z-index: 3; transform: scale(1.125); transform-origin: top left; }
-#hud .pill { display: inline-block; padding: 6px 10px; border-radius: var(--radius-pill); border: 1px solid var(--border-default); background: var(--focus-bg); margin-right: 8px; }
-#hudTop { display: inline-block; }
+#hud {
+  --hud-panel-w: clamp(135px, 21vw, 240px);
+  --hud-pad: clamp(8px, 1.2vw, 14px);
+  --hud-meta-size: clamp(10px, 1.3vw, 12px);
+  --hud-primary-size: clamp(12px, 1.6vw, 14px);
+  --hud-objective-title-size: clamp(12px, 1.8vw, 16px);
+  --hud-top-gap: clamp(6px, 1vh, 10px);
+  --boss-lane-offset: clamp(8px, 1.5vh, 16px);
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--hud-primary-size);
+  line-height: 1.4;
+  user-select: none;
+  padding: calc(var(--boss-lane-offset) + var(--safe-top)) calc(12px + var(--safe-right)) 0 calc(12px + var(--safe-left));
+}
+
+#hudTopStack {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--hud-top-gap);
+}
+
+#hudTopRow {
+  display: grid;
+  grid-template-columns: minmax(0, var(--hud-panel-w)) minmax(0, 1fr) minmax(0, var(--hud-panel-w));
+  align-items: start;
+  column-gap: clamp(8px, 1vw, 16px);
+  width: 100%;
+}
+
+#hudTopLeft {
+  max-width: var(--hud-panel-w);
+  min-width: 0;
+  justify-self: stretch;
+  padding: var(--hud-pad);
+  border: 1px solid rgba(120, 186, 229, 0.3);
+  background: linear-gradient(
+    180deg,
+    rgba(10, 26, 45, 0.68) 0%,
+    rgba(10, 24, 42, 0.52) 100%
+  );
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(4px, 0.6vw, 8px);
+}
+
+#hudTopCenter {
+  margin-top: 0;
+  width: 100%;
+  min-width: 0;
+  justify-self: stretch;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+#hudTopRight {
+  width: 100%;
+  min-width: 0;
+}
+
+#hudTop {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, max-content));
+  grid-template-rows: auto auto;
+  column-gap: clamp(10px, 1.2vw, 16px);
+  row-gap: clamp(2px, 0.4vw, 6px);
+  align-items: baseline;
+}
+
+#hud .pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  margin-right: 0;
+  white-space: nowrap;
+}
+
+#fpsPill {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  font-size: var(--hud-meta-size);
+  line-height: 1.15;
+  opacity: 0.62;
+  letter-spacing: 0.04em;
+}
+
+#timePill {
+  grid-column: 1;
+  grid-row: 2;
+  font-size: var(--hud-primary-size);
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+#lvlPill {
+  grid-column: 2;
+  grid-row: 2;
+  font-size: var(--hud-primary-size);
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+#hudBossBar {
+  --boss-accent: #f66;
+  width: min(100%, clamp(240px, 70vw, 900px));
+  max-width: min(100%, 92vw);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: clamp(3px, 0.5vw, 6px);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.26));
+}
+
+#hudBossTitle {
+  display: none;
+}
+
+#hudBossTrack {
+  position: relative;
+  height: clamp(10px, 1.6vw, 14px);
+  border: 1px solid rgba(190, 230, 255, 0.28);
+  background: rgba(16, 38, 56, 0.4);
+  overflow: hidden;
+}
+
+#hudBossFill {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: var(--boss-accent);
+}
+
+#hudBossValue {
+  font-size: var(--hud-meta-size);
+  font-weight: 800;
+  line-height: 1;
+  align-self: center;
+  text-align: center;
+  opacity: 0.78;
+  letter-spacing: 0.02em;
+}
+
+#hudObjective {
+  width: 100%;
+}
 
 #vitalsOrbRoot {
   --orb-core-d: 92px;
@@ -687,26 +845,32 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 #objectiveOverlay {
-  margin-top: 8px;
-  padding: 8px 10px;
-  border-radius: var(--radius-md);
-  background: var(--focus-bg);
-  border: 1px solid var(--border-default);
-  max-width: min(520px, calc(100vw - 24px));
+  margin-top: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 #objectiveOverlay .objectiveTitle {
-  font-size: 12px;
+  font-size: var(--hud-objective-title-size);
   font-weight: 900;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  opacity: 0.9;
+  letter-spacing: 0.03em;
+  line-height: 1.25;
+  text-transform: none;
+  opacity: 0.95;
+  text-wrap: balance;
 }
 
 #objectiveOverlay .objectiveStatus {
-  font-size: 12px;
-  margin-top: 4px;
-  opacity: 0.9;
+  font-size: var(--hud-meta-size);
+  line-height: 1.35;
+  margin-top: clamp(2px, 0.4vw, 6px);
+  opacity: 0.84;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 #interactPrompt {
@@ -2450,10 +2614,13 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 }
 
 .deckOverlay .panel {
-  width: min(980px, 95vw);
+  width: min(980px, 100%);
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 20px;
   border-radius: 18px;
   background: linear-gradient(180deg, var(--bg-elevated), var(--focus-bg));
+  overflow-x: hidden;
 }
 
 .deckOverlay .title {
@@ -2654,7 +2821,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 .deckCardButton.tier-4 .deckCardTier { color: rgba(255, 200, 125, 0.98); }
 
 .vendorOverlay .panel {
-  width: min(1040px, 95vw);
+  width: min(1040px, 100%);
+  max-width: 100%;
+  box-sizing: border-box;
   max-height: calc(100dvh - 20px);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -3393,28 +3562,52 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
 /* In-game HUD + pause responsive pass */
 @media (max-width: 768px) {
   #hud {
-    left: calc(8px + var(--safe-left));
-    top: calc(8px + var(--safe-top));
-    transform: scale(0.93);
+    --hud-panel-w: clamp(135px, 27vw, 225px);
+    padding: calc(8px + var(--safe-top)) calc(8px + var(--safe-right)) 0 calc(8px + var(--safe-left));
+    --hud-top-gap: 6px;
+  }
+
+  #hudTopRow {
+    column-gap: 8px;
+  }
+
+  #hudTopLeft {
+    padding: clamp(7px, 1vw, 10px);
   }
 
   #hudTop {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    max-width: calc((100vw - 16px) / 0.93);
+    column-gap: clamp(8px, 1vw, 12px);
+    row-gap: 4px;
   }
 
-  #hud .pill {
-    margin-right: 0;
-    padding: 5px 8px;
-    font-size: 12px;
+  #fpsPill {
+    font-size: var(--hud-meta-size);
   }
 
-  #objectiveOverlay {
-    margin-top: 6px;
-    padding: 6px 8px;
-    max-width: min(460px, calc((100vw - 16px) / 0.93));
+  #timePill,
+  #lvlPill {
+    font-size: var(--hud-primary-size);
+  }
+
+  #hudBossBar {
+    width: min(100%, clamp(220px, 72vw, 760px));
+    gap: clamp(3px, 0.6vw, 6px);
+  }
+
+  #hudBossTrack {
+    height: clamp(10px, 1.9vw, 13px);
+  }
+
+  #hudBossValue {
+    font-size: var(--hud-meta-size);
+  }
+
+  #objectiveOverlay .objectiveTitle {
+    font-size: clamp(12px, 2.3vw, 15px);
+  }
+
+  #objectiveOverlay .objectiveStatus {
+    font-size: clamp(10px, 1.9vw, 12px);
   }
 
   #vitalsOrbRoot {
@@ -3515,6 +3708,36 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   }
 }
 
+@media (max-width: 640px) {
+  #hud {
+    --hud-panel-w: min(100%, 240px);
+    --hud-top-gap: 8px;
+  }
+
+  #hudTopRow {
+    grid-template-columns: 1fr;
+    row-gap: 8px;
+  }
+
+  #hudTopLeft {
+    justify-self: start;
+    max-width: min(100%, var(--hud-panel-w));
+  }
+
+  #hudTopCenter {
+    grid-column: 1;
+    justify-self: stretch;
+  }
+
+  #hudTopRight {
+    display: none;
+  }
+
+  #hudBossBar {
+    width: min(100%, clamp(220px, 92vw, 720px));
+  }
+}
+
 @media (max-height: 500px) {
   .pausePanel {
     overflow-y: auto;
@@ -3540,23 +3763,39 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000;
   }
 
   #hud {
-    transform: scale(0.84);
-    left: calc(6px + var(--safe-left));
-    top: calc(6px + var(--safe-top));
+    --hud-panel-w: clamp(128px, 24vw, 210px);
+    padding: calc(6px + var(--safe-top)) calc(6px + var(--safe-right)) 0 calc(6px + var(--safe-left));
+    --hud-top-gap: 4px;
   }
 
-  #hudTop {
-    max-width: calc((100vw - 12px) / 0.84);
+  #hudTopRow {
+    grid-template-columns: minmax(0, var(--hud-panel-w)) minmax(0, 1fr) minmax(0, var(--hud-panel-w));
+    column-gap: 6px;
   }
 
-  #hud .pill {
-    padding: 4px 7px;
-    font-size: 11px;
+  #hudTopLeft {
+    padding: 6px 8px;
   }
 
-  #objectiveOverlay {
-    margin-top: 4px;
-    padding: 5px 7px;
+  #fpsPill {
+    font-size: clamp(9px, 1.15vw, 11px);
+  }
+
+  #timePill,
+  #lvlPill {
+    font-size: clamp(11px, 1.45vw, 13px);
+  }
+
+  #hudBossBar {
+    width: min(100%, clamp(220px, 66vw, 620px));
+  }
+
+  #hudBossTrack {
+    height: clamp(9px, 1.35vw, 11px);
+  }
+
+  #hudBossValue {
+    font-size: clamp(9px, 1.1vw, 11px);
   }
 
   #objectiveOverlay .objectiveTitle,

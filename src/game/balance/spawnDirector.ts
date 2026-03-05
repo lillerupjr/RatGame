@@ -32,6 +32,7 @@ export interface SpawnDirectorState {
   powerBudget: number;
   pendingHpCommitted: number;
   pendingSpawns: number;
+  releaseSpawnsBudget: number;
   waveRemaining: number;
   chunkCooldownSec: number;
   waveCooldownSecLeft: number;
@@ -49,6 +50,7 @@ export function createSpawnDirectorState(): SpawnDirectorState {
     powerBudget: 0,
     pendingHpCommitted: 0,
     pendingSpawns: 0,
+    releaseSpawnsBudget: 0,
     waveRemaining: 0,
     chunkCooldownSec: 0,
     waveCooldownSecLeft: 0,
@@ -178,6 +180,7 @@ export function tickSpawnDirector(
   }
   if (queuedFromInterval > 0) {
     state.pendingSpawns += queuedFromInterval;
+    state.releaseSpawnsBudget += queuedFromInterval;
     state.queuedPerSecond = recordRate(
       state.queueEvents,
       state.queueWindowSec,
@@ -224,6 +227,7 @@ export function tickSpawnDirector(
         const spawnedHp = typeof spawnResult === "number" ? spawnResult : enemyHpForRate;
         state.powerBudget = Math.max(0, state.powerBudget - Math.max(0, spawnedHp));
         state.pendingHpCommitted = Math.max(0, state.pendingHpCommitted - enemyHpForRate);
+        state.releaseSpawnsBudget = Math.max(0, state.releaseSpawnsBudget - 1);
         chunkSpawned++;
         spawned++;
       }
@@ -232,6 +236,45 @@ export function tickSpawnDirector(
     state.lastChunkSize = chunkSpawned;
     state.chunkCooldownSec = Math.max(0.01, cfg.waveChunkDelaySec);
     if (state.waveRemaining <= 0) {
+      state.waveCooldownSecLeft = Math.max(0, cfg.waveCooldownSec);
+    }
+  }
+
+  // Throughput catch-up:
+  // Preserve wave chunking for look/feel, but if backlog grows beyond one wave,
+  // release additional spawns from queue budget so pressure is not throttled.
+  const backlogTotal = state.pendingSpawns + state.waveRemaining;
+  const shouldCatchUp = canSpawn && backlogTotal > Math.max(0, cfg.waveTotal);
+  if (shouldCatchUp) {
+    const capLeft = Math.max(0, cfg.maxSpawnsPerTick - spawned);
+    const budgeted = Math.max(0, Math.floor(state.releaseSpawnsBudget));
+    const catchUpAttempts = Math.min(capLeft, budgeted);
+    let catchUpSpawned = 0;
+    for (let i = 0; i < catchUpAttempts; i++) {
+      if (state.waveRemaining <= 0 && state.pendingSpawns <= 0) break;
+      const useWave = state.waveRemaining > 0;
+      const spawnResult = callbacks.spawnTrash();
+      const didSpawn =
+        spawnResult === true || (typeof spawnResult === "number" && spawnResult > 0);
+      if (!didSpawn) continue;
+
+      const spawnedHp = typeof spawnResult === "number" ? spawnResult : enemyHpForRate;
+      state.powerBudget = Math.max(0, state.powerBudget - Math.max(0, spawnedHp));
+      state.pendingHpCommitted = Math.max(0, state.pendingHpCommitted - enemyHpForRate);
+      state.releaseSpawnsBudget = Math.max(0, state.releaseSpawnsBudget - 1);
+
+      if (useWave) {
+        state.waveRemaining = Math.max(0, state.waveRemaining - 1);
+      } else {
+        state.pendingSpawns = Math.max(0, state.pendingSpawns - 1);
+      }
+
+      catchUpSpawned++;
+      spawned++;
+      if (spawned >= cfg.maxSpawnsPerTick) break;
+    }
+    state.lastChunkSize += catchUpSpawned;
+    if (state.waveRemaining <= 0 && state.lastChunkSize > 0) {
       state.waveCooldownSecLeft = Math.max(0, cfg.waveCooldownSec);
     }
   }

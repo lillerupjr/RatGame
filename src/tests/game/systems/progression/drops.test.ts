@@ -11,7 +11,7 @@ import { KENNEY_TILE_WORLD } from "../../../../engine/render/kenneyTiles";
 import { makeWeaponHitMeta } from "../../../../game/combat/damageMeta";
 
 describe("dropsSystem", () => {
-  test("enemy kill spawns one-value coins using enemy base life (not scaled hp)", () => {
+  test("enemy kill spawns exactly one gold pickup using enemy base life (not scaled hp)", () => {
     const w = createWorld({ seed: 1, stage: stageDocks });
     const e = spawnEnemyGrid(w, ENEMY_TYPE.BRUISER, 5, 5);
 
@@ -33,10 +33,9 @@ describe("dropsSystem", () => {
       .map((kind, idx) => (kind === PICKUP_KIND.GOLD ? idx : -1))
       .filter((idx) => idx >= 0);
 
-    expect(coinIndexes).toHaveLength(expectedGold);
-    for (const idx of coinIndexes) {
-      expect(w.xValue[idx]).toBe(1);
-    }
+    expect(coinIndexes).toHaveLength(1);
+    expect(w.xValue[coinIndexes[0]]).toBe(expectedGold);
+    expect(w.xKind.filter((kind) => kind === PICKUP_KIND.CHEST)).toHaveLength(0);
   });
 
   test("boss gold multiplier applies after base-life calculation", () => {
@@ -54,9 +53,12 @@ describe("dropsSystem", () => {
     dropsSystem(w, 1 / 60);
 
     const expectedGold = goldValueFromEnemyBaseLife(w.eBaseLife[boss], { isBoss: true });
-    const coinCount = w.xKind.filter((kind) => kind === PICKUP_KIND.GOLD).length;
+    const coinIndexes = w.xKind
+      .map((kind, idx) => (kind === PICKUP_KIND.GOLD ? idx : -1))
+      .filter((idx) => idx >= 0);
     const chestCount = w.xKind.filter((kind) => kind === PICKUP_KIND.CHEST).length;
-    expect(coinCount).toBe(expectedGold);
+    expect(coinIndexes).toHaveLength(1);
+    expect(w.xValue[coinIndexes[0]]).toBe(expectedGold);
     expect(chestCount).toBe(1);
   });
 

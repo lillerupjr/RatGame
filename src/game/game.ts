@@ -48,6 +48,7 @@ import {
 } from "./systems/progression/bossTripleObjectiveSync";
 
 import { formatTimeMMSS } from "./util/time";
+import { getBossAccent } from "./content/floors";
 import { registry } from "./content/registry";
 import { spawnEnemyGrid, ENEMY_TYPE } from "./factories/enemyFactory";
 import { gridToWorld } from "./coords/grid";
@@ -165,6 +166,11 @@ import {
 
 type HudRefs = {
   root: HTMLDivElement;
+  topStack: HTMLDivElement;
+  topRow: HTMLDivElement;
+  topLeft: HTMLDivElement;
+  topCenter: HTMLDivElement;
+  topRight: HTMLDivElement;
   fpsPill: HTMLSpanElement;
   palettePill: HTMLSpanElement;
   timePill: HTMLSpanElement;
@@ -178,6 +184,12 @@ type HudRefs = {
   vitalsArmorText: HTMLSpanElement;
   vitalsMomentumText: HTMLSpanElement;
   lvlPill: HTMLSpanElement;
+  bossBar: HTMLDivElement;
+  bossTitle: HTMLDivElement;
+  bossTrack: HTMLDivElement;
+  bossFill: HTMLDivElement;
+  bossValue: HTMLDivElement;
+  objectiveRoot: HTMLDivElement;
   objectiveOverlay: HTMLDivElement;
   objectiveTitle: HTMLDivElement;
   objectiveStatus: HTMLDivElement;
@@ -1727,11 +1739,15 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function bossAlive(w: World): boolean {
+    return findFirstAliveBossIndex(w) >= 0;
+  }
+
+  function findFirstAliveBossIndex(w: World): number {
     for (let i = 0; i < w.eAlive.length; i++) {
       if (!w.eAlive[i]) continue;
-      if (w.eType[i] === ENEMY_TYPE.BOSS) return true;
+      if (w.eType[i] === ENEMY_TYPE.BOSS) return i;
     }
-    return false;
+    return -1;
   }
 
   function spawnSurviveBossIfNeeded(w: World): void {
@@ -2689,69 +2705,85 @@ export function createGame(args: CreateGameArgs) {
   function updateHud() {
     const orbSide = ((getUserSettings() as any).game?.healthOrbSide ?? "left") as "left" | "right";
     args.hud.vitalsOrbRoot.classList.toggle("isRight", orbSide === "right");
-    args.hud.fpsPill.textContent = `FPS: ${Math.round((world as any).fps ?? 0)}`;
+
+    args.hud.fpsPill.hidden = false;
+    args.hud.timePill.hidden = false;
+    args.hud.lvlPill.hidden = false;
+    args.hud.palettePill.hidden = true;
+    args.hud.killsPill.hidden = true;
+    args.hud.hpPill.hidden = true;
+    args.hud.armorPill.hidden = true;
+    args.hud.momentumPill.hidden = true;
+
+    args.hud.fpsPill.textContent = `FPS ${Math.round((world as any).fps ?? 0)}`;
+    args.hud.timePill.textContent = `\u23f1 ${formatTimeMMSS(world.time)}`;
+    args.hud.lvlPill.textContent = `\ud83d\udcb0 ${getGold(world)}`;
     args.hud.palettePill.textContent = `Palette: ${resolveActivePaletteId()}`;
-    args.hud.timePill.textContent = formatTimeMMSS(world.time);
     args.hud.killsPill.textContent = `Kills: ${world.kills}`;
     args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
-    args.hud.armorPill.hidden = true;
     args.hud.armorPill.textContent = `Armor: ${Math.max(0, Math.ceil(world.currentArmor))}/${world.maxArmor}`;
     const hasMomentumRelic = hasAnyRelicWithTag(world.relics, MOMENTUM_RELIC_TAG);
-    args.hud.momentumPill.hidden = true;
     if (hasMomentumRelic) {
       args.hud.momentumPill.textContent = `Momentum: ${Math.max(0, Math.ceil(world.momentumValue))}/${Math.max(0, Math.ceil(world.momentumMax))}`;
     }
     updateVitalsOrb(hasMomentumRelic);
 
-    args.hud.lvlPill.textContent = `Gold: ${getGold(world)}`;
+    const bossIndex = findFirstAliveBossIndex(world);
+    const inBossContext = world.runState === "BOSS" || bossIndex >= 0;
+    if (!inBossContext || bossIndex < 0) {
+      args.hud.bossBar.hidden = true;
+    } else {
+      const hpNow = Math.max(0, world.eHp[bossIndex] ?? 0);
+      const hpMax = Math.max(1, world.eHpMax[bossIndex] ?? 1);
+      const bossHpPct = clamp01(hpNow / hpMax);
+      const accent = getBossAccent(world) ?? "#f66";
+
+      args.hud.bossValue.textContent = `${Math.ceil(hpNow)} / ${Math.ceil(hpMax)}`;
+      args.hud.bossBar.style.setProperty("--boss-accent", accent);
+      args.hud.bossFill.style.transform = `scaleX(${bossHpPct.toFixed(4)})`;
+      args.hud.bossBar.hidden = false;
+    }
 
     const spec = world.currentObjectiveSpec;
     if (!spec || world.runState !== "FLOOR") {
       args.hud.objectiveOverlay.hidden = true;
+      args.hud.objectiveStatus.hidden = true;
       return;
     }
 
-    const status = world.objectiveStates[0]?.status ?? "IDLE";
     let title = "Objective";
-    let detail = "";
 
     switch (spec.objectiveType) {
       case "SURVIVE_TIMER": {
         const remaining = Math.max(0, spec.params.timeLimitSec - world.phaseTime);
-        title = "Survive";
-        detail = `Time Remaining: ${formatTimeMMSS(remaining)} · ${status}`;
+        title = `Survive · ${formatTimeMMSS(remaining)} left`;
         break;
       }
       case "ZONE_TRIAL": {
-        const zoneState = getZoneTrialObjectiveState(world);
-        const target = zoneState?.zones[0]?.killTarget ?? spec.params.killTargetPerZone;
         title = "Slay enemies inside the marked zones.";
-        detail = `Defeat ${target} enemies in each zone · ${status}`;
         break;
       }
       case "VENDOR_VISIT":
-        title = "Vendor";
-        detail = `Interact to exit · ${status}`;
+        title = "Visit the vendor to continue.";
         break;
       case "HEAL_VISIT":
-        title = "Heal";
-        detail = `Interact to exit · ${status}`;
+        title = "Use the heal station to continue.";
         break;
       case "KILL_RARES_IN_ZONES": {
         const progress = world.objectiveStates[0]?.progress?.signalCount ?? 0;
-        title = "Boss Hunt";
-        detail = `Bosses: ${Math.min(progress, spec.params.bossCount)}/${spec.params.bossCount} · ${status}`;
+        title = `Boss Hunt · ${Math.min(progress, spec.params.bossCount)}/${spec.params.bossCount}`;
         break;
       }
     }
 
     if (world.floorEndCountdownActive) {
       const secs = Math.max(0, Math.ceil(world.floorEndCountdownSec));
-      detail = `Leaving in ${secs}...`;
+      title = `Leaving in ${secs}...`;
     }
 
     args.hud.objectiveTitle.textContent = title;
-    args.hud.objectiveStatus.textContent = detail;
+    args.hud.objectiveStatus.textContent = "";
+    args.hud.objectiveStatus.hidden = true;
     args.hud.objectiveOverlay.hidden = false;
   }
   // ---------------------------------

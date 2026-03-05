@@ -4804,9 +4804,7 @@ export async function renderSystem(
   overlayCtx.setTransform(overlayDpr, 0, 0, overlayDpr, safeOffsetX * overlayDpr, safeOffsetY * overlayDpr);
   if (debugFlags.showGrid) renderTileGridCompass(w, overlayCtx, scaledW, scaledH); // tile-grid N/E/S/W (matches in-game tests)
 
-  // HUD widgets are intentionally screen-anchored (same space as perf/fps text).
   overlayCtx.setTransform(overlayDpr, 0, 0, overlayDpr, 0, 0);
-  renderBossHealthBar(w, overlayCtx, screenW, screenH);
   if (getUserSettings().debug.dpsMeter) {
     renderDPSMeter(w, overlayCtx, screenW, screenH);
   }
@@ -5056,52 +5054,6 @@ function renderHealthOrb(w: World, ctx: CanvasRenderingContext2D, ww: number, hh
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(`${Math.ceil(w.playerHp)} / ${Math.ceil(w.playerHpMax)}`, x, y);
-
-  ctx.restore();
-}
-
-function renderBossHealthBar(w: World, ctx: CanvasRenderingContext2D, ww: number, hh: number) {
-  let bossIdx = -1;
-  for (let i = 0; i < w.eAlive.length; i++) {
-    if (!w.eAlive[i]) continue;
-    if (w.eType[i] === ENEMY_TYPE.BOSS) {
-      bossIdx = i;
-      break;
-    }
-  }
-  if (bossIdx < 0) return;
-
-  const hp = w.eHp[bossIdx];
-  const max = w.eHpMax[bossIdx] || 1;
-  const t = Math.max(0, Math.min(1, hp / max));
-
-  const barW = Math.min(680, ww * 0.72);
-  const barH = 18;
-  const x = ww * 0.5 - barW * 0.5;
-  const y = 18;
-
-  const accent = getBossAccent(w) ?? "#f66";
-
-  ctx.save();
-
-  ctx.globalAlpha = 0.8;
-  ctx.fillStyle = "#111";
-  ctx.fillRect(x, y, barW, barH);
-
-  ctx.globalAlpha = 0.95;
-  ctx.fillStyle = accent;
-  ctx.fillRect(x, y, barW * t, barH);
-
-  ctx.globalAlpha = 1;
-  ctx.strokeStyle = "rgba(255,255,255,0.25)";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(x, y, barW, barH);
-
-  ctx.fillStyle = "#fff";
-  ctx.font = "12px monospace";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(`BOSS  ${Math.ceil(hp)} / ${Math.ceil(max)}`, x + barW * 0.5, y + barH * 0.5);
 
   ctx.restore();
 }

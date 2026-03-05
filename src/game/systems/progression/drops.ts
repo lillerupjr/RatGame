@@ -6,20 +6,6 @@ import { spawnChest, spawnGold, PICKUP_KIND, handlePickupSpecialCase } from "./p
 import { ENEMY_TYPE } from "../../factories/enemyFactory";
 import { getEnemyWorld, getPickupWorld, getPlayerWorld } from "../../coords/worldViews";
 
-const MAX_COINS_PER_DROP = 256;
-const COIN_SCATTER_RADIUS_PX = 8;
-
-function spawnGoldCoins(w: World, x: number, y: number, count: number): void {
-  const clampedCount = Math.max(0, Math.min(MAX_COINS_PER_DROP, Math.floor(count)));
-  for (let i = 0; i < clampedCount; i++) {
-    const angle = w.rng.range(0, Math.PI * 2);
-    const radius = clampedCount > 1 ? w.rng.range(0, COIN_SCATTER_RADIUS_PX) : 0;
-    const sx = x + Math.cos(angle) * radius;
-    const sy = y + Math.sin(angle) * radius;
-    spawnGold(w, sx, sy, 1);
-  }
-}
-
 /** Handle drop spawns from kill events and pickup collection. */
 export function dropsSystem(w: World, _dt: number) {
   // 1) Spawn gold orbs (and boss chest for bosses) from kill events.
@@ -31,9 +17,9 @@ export function dropsSystem(w: World, _dt: number) {
       ? Math.max(0, Math.floor(w.eBaseLife[e.enemyIndex]))
       : 0;
     const isBoss = w.eType[e.enemyIndex] === ENEMY_TYPE.BOSS;
-    const goldCount = goldValueFromEnemyBaseLife(baseLife, { isBoss });
+    const goldValue = goldValueFromEnemyBaseLife(baseLife, { isBoss });
     const enemyPos = getEnemyWorld(w, e.enemyIndex, KENNEY_TILE_WORLD);
-    spawnGoldCoins(w, enemyPos.wx, enemyPos.wy, goldCount);
+    spawnGold(w, enemyPos.wx, enemyPos.wy, goldValue);
 
     // Boss chest drop (no magnet)
     if (isBoss) {

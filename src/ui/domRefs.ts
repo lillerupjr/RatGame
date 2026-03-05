@@ -38,6 +38,11 @@ type DialogRefs = {
 
 export type HudRefs = {
     root: HTMLDivElement;
+    topStack: HTMLDivElement;
+    topRow: HTMLDivElement;
+    topLeft: HTMLDivElement;
+    topCenter: HTMLDivElement;
+    topRight: HTMLDivElement;
     fpsPill: HTMLSpanElement;
     palettePill: HTMLSpanElement;
     timePill: HTMLSpanElement;
@@ -51,6 +56,12 @@ export type HudRefs = {
     vitalsArmorText: HTMLSpanElement;
     vitalsMomentumText: HTMLSpanElement;
     lvlPill: HTMLSpanElement;
+    bossBar: HTMLDivElement;
+    bossTitle: HTMLDivElement;
+    bossTrack: HTMLDivElement;
+    bossFill: HTMLDivElement;
+    bossValue: HTMLDivElement;
+    objectiveRoot: HTMLDivElement;
     objectiveOverlay: HTMLDivElement;
     objectiveTitle: HTMLDivElement;
     objectiveStatus: HTMLDivElement;
@@ -208,6 +219,11 @@ export function getDomRefs(): DomRefs {
     const menuSublineEl = getEl<HTMLDivElement>("menuSubline");
 
     const hudEl = getEl<HTMLDivElement>("hud");
+    const hudTopStack = getEl<HTMLDivElement>("hudTopStack");
+    const hudTopRow = getEl<HTMLDivElement>("hudTopRow");
+    const hudTopLeft = getEl<HTMLDivElement>("hudTopLeft");
+    const hudTopCenter = getEl<HTMLDivElement>("hudTopCenter");
+    const hudTopRight = getEl<HTMLDivElement>("hudTopRight");
     const fpsPill = getEl<HTMLSpanElement>("fpsPill");
     const palettePill = getEl<HTMLSpanElement>("palettePill");
     const timePill = getEl<HTMLSpanElement>("timePill");
@@ -221,6 +237,12 @@ export function getDomRefs(): DomRefs {
     const vitalsArmorText = getEl<HTMLSpanElement>("vitalsArmorText");
     const vitalsMomentumText = getEl<HTMLSpanElement>("vitalsMomentumText");
     const lvlPill = getEl<HTMLSpanElement>("lvlPill");
+    const bossBar = getEl<HTMLDivElement>("hudBossBar");
+    const bossTitle = getEl<HTMLDivElement>("hudBossTitle");
+    const bossTrack = getEl<HTMLDivElement>("hudBossTrack");
+    const bossFill = getEl<HTMLDivElement>("hudBossFill");
+    const bossValue = getEl<HTMLDivElement>("hudBossValue");
+    const objectiveRoot = getEl<HTMLDivElement>("hudObjective");
     const objectiveOverlay = getEl<HTMLDivElement>("objectiveOverlay");
     const objectiveTitle = getEl<HTMLDivElement>("objectiveTitle");
     const objectiveStatus = getEl<HTMLDivElement>("objectiveStatus");
@@ -261,6 +283,11 @@ export function getDomRefs(): DomRefs {
 
     const hud: HudRefs = {
         root: hudEl,
+        topStack: hudTopStack,
+        topRow: hudTopRow,
+        topLeft: hudTopLeft,
+        topCenter: hudTopCenter,
+        topRight: hudTopRight,
         fpsPill,
         palettePill,
         timePill,
@@ -274,6 +301,12 @@ export function getDomRefs(): DomRefs {
         vitalsArmorText,
         vitalsMomentumText,
         lvlPill,
+        bossBar,
+        bossTitle,
+        bossTrack,
+        bossFill,
+        bossValue,
+        objectiveRoot,
         objectiveOverlay,
         objectiveTitle,
         objectiveStatus,

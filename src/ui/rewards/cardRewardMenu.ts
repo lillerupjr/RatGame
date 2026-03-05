@@ -93,17 +93,8 @@ export function mountCardRewardMenu(args: {
       titleRow.className = "deckCardTitle";
       titleRow.textContent = card.name;
 
-      const desc = document.createElement("div");
-      desc.className = "deckCardDesc";
-      for (let lineIdx = 0; lineIdx < card.lines.length; lineIdx++) {
-        const line = document.createElement("div");
-        line.textContent = card.lines[lineIdx];
-        desc.appendChild(line);
-      }
-
       btn.appendChild(tierRow);
       btn.appendChild(titleRow);
-      btn.appendChild(desc);
       tapSafe.bindActivate(btn, () => args.onPick(cardId));
       choices.appendChild(btn);
     }
