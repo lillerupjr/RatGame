@@ -112,7 +112,7 @@ export const MAP_SKINS: Record<string, MapSkinBundle> = {
     // Wet/cold night. Keeps divination, but adds fuller night palettes.
     palettePool: ["divination", "moonlight_15", "night_16", "reha_16"],
     floor: "tiles/floor/asphalt/1",
-    apron: "tiles/walls/asphalt",
+    apron: "tiles/walls/sidewalk_apron",
     wall: "tiles/walls/asphalt",
     background: "tiles/animated/water2/1",
     semantic: {

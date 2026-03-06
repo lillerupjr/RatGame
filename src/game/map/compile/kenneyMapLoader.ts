@@ -1753,17 +1753,6 @@ export function compileKenneyMapFromTable(
         }
     }
 
-    function maxSurfaceZAt(tx: number, ty: number): number | null {
-        const surfaces = surfacesAtXY(tx, ty);
-        if (surfaces.length === 0) return null;
-        let best = surfaces[0].zBase;
-        for (let i = 1; i < surfaces.length; i++) {
-            const z = surfaces[i].zBase;
-            if (z > best) best = z;
-        }
-        return best;
-    }
-
     const addStampWall = (
         tx: number,
         ty: number,
@@ -2504,19 +2493,21 @@ export function compileKenneyMapFromTable(
     for (let coordI = 0; coordI < surfaceCoords.length; coordI++) {
         const tx = surfaceCoords[coordI].tx;
         const ty = surfaceCoords[coordI].ty;
-        const list = surfacesAtXY(tx, ty);
-        if (list.length === 0) continue;
-
-        const zHere = maxSurfaceZAt(tx, ty);
-        if (zHere === null) continue;
+        const hereSurface = highestSurfaceAt(tx, ty);
+        if (!hereSurface) continue;
+        const zHere = hereSurface.zBase;
+        const hereIsOcean = hereSurface.tile.kind === TILE_ID_OCEAN;
 
         for (let d = 0; d < DIRS.length; d++) {
             const { dir, dx, dy } = DIRS[d];
             const nTx = tx + dx;
             const nTy = ty + dy;
 
-            const zNeighbor = maxSurfaceZAt(nTx, nTy);
-            const neighborZ = zNeighbor === null ? apronBaseZ : zNeighbor;
+            const neighborSurface = highestSurfaceAt(nTx, nTy);
+            const neighborIsOcean = neighborSurface?.tile.kind === TILE_ID_OCEAN;
+            if (hereIsOcean && neighborIsOcean) continue;
+
+            const neighborZ = neighborSurface?.zBase ?? apronBaseZ;
             const zA = zHere;
             const zB = neighborZ;
             if (zA === zB) continue;
@@ -2533,7 +2524,8 @@ export function compileKenneyMapFromTable(
             if (emittedFaces.has(dedupKey)) continue;
             emittedFaces.add(dedupKey);
 
-            const ownerSurface = highestSurfaceAt(ownerTx, ownerTy);
+            const ownerSurface = ownerIsHere ? hereSurface : neighborSurface;
+            if (ownerSurface?.tile.kind === TILE_ID_OCEAN) continue;
             const renderTopKind = ownerSurface?.renderTopKind ?? "FLOOR";
             const renderDir = ownerSurface?.renderDir ?? "N";
             const renderAnchorY = ownerSurface?.renderAnchorY ?? floorAnchorY;
