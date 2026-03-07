@@ -104,9 +104,9 @@ export const RELICS: RelicDef[] = [
   {
     id: "SPEC_DAMAGE_MORE_100_ATTACK_SPEED_LESS_40",
     isEnabled: true,
-    displayName: "100% more damage\n40% less attack speed",
+    displayName: "100% more damage\n30% less attack speed",
     kind: "PASSIVE",
-    desc: ["100% more damage", "40% less attack speed"],
+    desc: ["100% more damage", "30% less attack speed"],
   },
   {
     id: "SPEC_ATTACK_SPEED_MORE_50_DAMAGE_LESS_30",
@@ -415,6 +415,10 @@ function mapLegacyRelicSuffixToCanonical(suffix: string): string {
 
 export function toCanonicalRelicId(id: string): string {
   if (!id) return id;
+  const directMapped = mapLegacyRelicSuffixToCanonical(id);
+  if (directMapped !== id) {
+    return directMapped;
+  }
   if (id.startsWith("RELIC_")) {
     const suffix = id.slice("RELIC_".length);
     const mapped = mapLegacyRelicSuffixToCanonical(suffix);

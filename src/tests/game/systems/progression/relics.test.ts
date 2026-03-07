@@ -72,6 +72,12 @@ describe("relic scaffold phase 0", () => {
     expect(world.relics).toEqual(["PASS_MOVE_SPEED_20"]);
   });
 
+  test("plain legacy relic ids are normalized on grant", () => {
+    const world = createWorld({ seed: 6_001, stage: stageDocks });
+    applyRelic(world, "ACT_TRIGGERS_HAPPEN_TWICE");
+    expect(world.relics).toEqual(["ACT_TRIGGERS_DOUBLE"]);
+  });
+
   test("SPEC_DAMAGE_MORE_100_ATTACK_SPEED_LESS_40 applies more damage and less attack speed", () => {
     const world = createWorld({ seed: 7, stage: stageDocks });
     const baseDamageMult = world.dmgMult;
@@ -80,7 +86,7 @@ describe("relic scaffold phase 0", () => {
     applyRelic(world, "SPEC_DAMAGE_MORE_100_ATTACK_SPEED_LESS_40");
 
     expect(world.dmgMult).toBeCloseTo(baseDamageMult * 2.0, 6);
-    expect(world.fireRateMult).toBeCloseTo(baseFireRateMult * 0.6, 6);
+    expect(world.fireRateMult).toBeCloseTo(baseFireRateMult * 0.7, 6);
   });
 
   test("SPEC_ATTACK_SPEED_MORE_50_DAMAGE_LESS_30 applies more attack speed and less damage", () => {

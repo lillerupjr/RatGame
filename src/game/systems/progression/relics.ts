@@ -257,7 +257,7 @@ export function getRelicMods(world: World): RelicMods {
       (hasSpecDamageMore200LifeLess50 ? 2.0 : 0),
     lessDamage: hasSpecAttackMore50DamageLess30 ? 0.3 : 0,
     moreAttackSpeed: hasSpecAttackMore50DamageLess30 ? 0.5 : 0,
-    lessAttackSpeed: hasSpecDamageMore100AttackLess40 ? 0.4 : 0,
+    lessAttackSpeed: hasSpecDamageMore100AttackLess40 ? 0.3 : 0,
     lessMaxLife: hasSpecDamageMore200LifeLess50 ? 0.5 : 0,
     flatMaxArmor: hasSpecArmor100MoveLess20 ? 100 : 0,
     lessMoveSpeed: hasSpecArmor100MoveLess20 ? 0.2 : 0,

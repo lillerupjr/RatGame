@@ -184,7 +184,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_CONVERT_FIRE_1",
-    isEnabled: true,
+    isEnabled: false,
     displayName: "Convert 40% physical to fire",
     rarity: 2,
     powerTier: 2,
@@ -193,7 +193,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_CONVERT_CHAOS_1",
-    isEnabled: true,
+    isEnabled: false,
     displayName: "Convert 40% physical to chaos",
     rarity: 2,
     powerTier: 2,
@@ -307,7 +307,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_CONVERT_FIRE_2",
-    isEnabled: true,
+    isEnabled: false,
     displayName: "Convert 30% physical to fire and +15% ignite chance",
     rarity: 4,
     powerTier: 2,
@@ -319,7 +319,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
   },
   {
     id: "CARD_CONVERT_CHAOS_2",
-    isEnabled: true,
+    isEnabled: false,
     displayName: "Convert 30% physical to chaos and +15% poison chance",
     rarity: 4,
     powerTier: 2,

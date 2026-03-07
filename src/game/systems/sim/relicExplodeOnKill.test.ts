@@ -194,6 +194,37 @@ describe("relicExplodeOnKillSystem", () => {
     expect(w.relicRetriggerQueue.length).toBe(0);
   });
 
+  test("legacy ACT_TRIGGERS_HAPPEN_TWICE id retriggers explosion after normalization", () => {
+    const w = createWorld({ seed: 14_001, stage: stageDocks });
+    w.relics = ["ACT_EXPLODE_ON_KILL", "ACT_TRIGGERS_HAPPEN_TWICE"];
+
+    const a = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 5);
+    w.eHpMax[a] = 100;
+    w.eHp[a] = 0;
+    w.eAlive[a] = false;
+
+    rebuildEnemyHash(w);
+    const aw = getEnemyWorld(w, a, KENNEY_TILE_WORLD);
+    w.events.push({
+      type: "ENEMY_KILLED",
+      enemyIndex: a,
+      x: aw.wx,
+      y: aw.wy,
+      source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL"),
+    });
+
+    relicExplodeOnKillSystem(w, 1 / 60);
+    expect(w.relics.includes("ACT_TRIGGERS_DOUBLE")).toBe(true);
+    expect(w.zAlive.length).toBe(1);
+    expect(w.relicRetriggerQueue.length).toBe(1);
+
+    w.time += 0.5;
+    relicRetriggerSystem(w);
+    expect(w.zAlive.length).toBe(2);
+    expect(w.relicRetriggerQueue.length).toBe(0);
+  });
+
   test("PASS_DAMAGE_TO_POISON_ALL does not auto-apply poison from ACT_ALL_HITS_EXPLODE_20", () => {
     const w = createWorld({ seed: 45, stage: stageDocks });
     w.relics = ["ACT_ALL_HITS_EXPLODE_20", "PASS_DAMAGE_TO_POISON_ALL"];

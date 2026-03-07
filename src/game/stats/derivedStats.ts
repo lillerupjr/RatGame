@@ -118,7 +118,7 @@ export function recomputeDerivedStats(w: World) {
     const attackSpeedLess: number[] = [];
     if (itemAttackSpeedMoreFactor !== 1) attackSpeedMore.push(itemAttackSpeedMoreFactor - 1);
     if (hasRelic("SPEC_ATTACK_SPEED_MORE_50_DAMAGE_LESS_30")) attackSpeedMore.push(0.5);
-    if (hasRelic("SPEC_DAMAGE_MORE_100_ATTACK_SPEED_LESS_40")) attackSpeedLess.push(0.4);
+    if (hasRelic("SPEC_DAMAGE_MORE_100_ATTACK_SPEED_LESS_40")) attackSpeedLess.push(0.3);
     w.fireRateMult = resolveScalarPipeline({
         base: 1,
         flatAdds: [],
