@@ -1,83 +1,10 @@
 {
-  "id": "Downtown",
-  "buildingPackId": "avenue_buildings",
-  "width": 24,
-  "height": 14,
-  "centerOnZero": false,
-
-  "fields": [
-    {
-      "x": 0,
-      "y": 0,
-      "w": 24,
-      "h": 14,
-      "type": "road"
-    },
-    {
-      "x": 0,
-      "y": 1,
-      "w": 24,
-      "h": 1,
-      "type": "sidewalk"
-    },
-    {
-      "x": 0,
-      "y": 12,
-      "w": 24,
-      "h": 1,
-      "type": "sidewalk"
-    },
-
-    {
-      "x": 0,
-      "y": 6,
-      "w": 24,
-      "h": 1,
-      "type": "sidewalk"
-    },
-
-    {
-      "x": 9,
-      "y": 0,
-      "w": 1,
-      "h": 14,
-      "type": "sidewalk"
-    },
-    {
-      "x": 15,
-      "y": 0,
-      "w": 1,
-      "h": 14,
-      "type": "sidewalk"
-    },
-    {
-      "x": 5,
-      "y": 7,
-      "w": 6,
-      "h": 4,
-      "type": "park"
-    },
-    {
-      "x": 13,
-      "y": 7,
-      "w": 6,
-      "h": 4,
-      "type": "park"
-    }
-  ],
-
-  "cells": [
-    { "x": 0, "y": 0, "type": "spawn" }
-  ],
-
-  "stamps": [
-    { "x": 0,  "y": 0, "type": "building", "w": 6, "h": 1 },
-    { "x": 7,  "y": 0, "type": "building", "w": 5, "h": 1 },
-    { "x": 10, "y": 0, "type": "building", "w": 5, "h": 1 },
-    { "x": 16, "y": 0, "type": "building", "w": 8, "h": 1 },
-    { "x": 0,  "y": 13, "type": "building", "w": 6, "h": 1 },
-    { "x": 7,  "y": 13, "type": "building", "w": 5, "h": 1 },
-    { "x": 10, "y": 13, "type": "building", "w": 5, "h": 1 },
-    { "x": 16, "y": 13, "type": "building", "w": 8, "h": 1 }
-  ]
+  "id": "downtown",
+  "buildingPackId": "downtown_buildings",
+  "mapSkinId": "downtown",
+  "chunkGrid": {
+    "id": "downtown",
+    "cols": 1,
+    "rows": 1
+  }
 }

@@ -24,6 +24,7 @@ import { mountPauseMenu } from "./ui/pause/pauseMenu";
 import { togglePause } from "./game/app/pauseController";
 import { mountSettingsPanel } from "./ui/settings/settingsPanel";
 import { STARTER_RELIC_BY_CHARACTER, validateStarterRelics } from "./game/content/starterRelics";
+import { installStandaloneViewportFix } from "./game/app/viewportSizing";
 
 type DevSettingsUiController = {
   open(): void;
@@ -703,6 +704,7 @@ async function bootstrap() {
   });
   const canvas = refs.canvas;
   const uiCanvas = refs.uiCanvas;
+  const detachStandaloneViewportFix = installStandaloneViewportFix();
   const rawCtx = canvas.getContext("2d");
   if (!rawCtx) throw new Error("Canvas 2D context not available");
   const ctx = rawCtx;
@@ -734,6 +736,7 @@ async function bootstrap() {
   const detachUiCanvasAutoResize = attachCanvasAutoResize(uiCanvas, uiCtx, syncCanvasResolutionMetadata);
   syncCanvasResolutionMetadata();
   window.addEventListener("beforeunload", () => {
+    detachStandaloneViewportFix();
     detachWorldCanvasAutoResize();
     detachUiCanvasAutoResize();
   }, { once: true });

@@ -1,0 +1,54 @@
+{
+  "id": "downtown2",
+  "buildingPackId": "downtown_buildings",
+  "width": 24,
+  "height": 24,
+
+  "fields": [
+    { "x": 2, "y": 0, "w": 20, "h": 2, "type": "building" },
+    { "x": 2, "y": 22, "w": 20, "h": 2, "type": "building" },
+
+    { "x": 0, "y": 0, "w": 24, "h": 24, "type": "sidewalk" },
+
+    { "x": 2, "y": 9, "w": 9, "h": 6, "type": "park" },
+    { "x": 13, "y": 9, "w": 9, "h": 6, "type": "park" },
+
+    { "x": 0, "y": 3, "w": 24, "h": 5, "type": "road" },
+    { "x": 0, "y": 16, "w": 24, "h": 5, "type": "road" },
+
+    { "x": 0, "y": 0, "w": 1, "h": 24, "type": "road" },
+    { "x": 23, "y": 0, "w": 1, "h": 24, "type": "road" }
+
+
+  ],
+  "stamps": [
+
+    { "x": 2, "y": 3, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 6, "y": 3, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 10, "y": 3, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 14, "y": 3, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 18, "y": 3, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 22, "y": 3, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+
+    { "x": 2, "y": 8, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 6, "y": 8, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 10, "y": 8, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 14, "y": 8, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 18, "y": 8, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 22, "y": 8, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+
+    { "x": 2, "y": 16, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 6, "y": 16, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 10, "y": 16, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 14, "y": 16, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 18, "y": 16, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 22, "y": 16, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+
+    { "x": 2, "y": 21, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 6, "y": 21, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 10, "y": 21, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 14, "y": 21, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 18, "y": 21, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 },
+    { "x": 22, "y": 21, "z": 0, "type": "prop", "propId": "street_lamp_n", "w": 1, "h": 1 }
+  ]
+}

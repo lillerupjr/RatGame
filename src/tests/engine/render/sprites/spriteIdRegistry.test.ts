@@ -7,6 +7,7 @@ describe("spriteIdRegistry", () => {
 
     expect(ids.has("tiles/floor/sidewalk/1")).toBe(true);
     expect(ids.has("structures/buildings/avenue/1")).toBe(true);
+    expect(ids.has("structures/buildings/downtown/1")).toBe(true);
     expect(ids.has("structures/containers/container_base")).toBe(true);
     expect(ids.has("props/boats/boat1_e")).toBe(true);
   });

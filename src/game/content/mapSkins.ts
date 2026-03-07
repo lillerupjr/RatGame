@@ -164,7 +164,7 @@ export const MAP_SKINS: Record<string, MapSkinBundle> = {
   // ─────────────────────────────────────────────────────────────
 
   downtown: {
-    palettePool: ["chroma_noir", "night_16"],
+    palettePool: ["db32", "sweetie_16", "endesga_16"],
   },
 
   industrial: {

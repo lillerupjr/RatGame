@@ -25,8 +25,8 @@ export type PaletteId = ReturnType<typeof resolveActivePaletteId>;
 
 const cache: Record<string, LoadedImg> = Object.create(null);
 const ANIMATED_TILE_SETS = {
-    water1: { fps: 6, frameCount: 4 },
-    water2: { fps: 6, frameCount: 6 },
+    water1: { fps: 6, frameCount: 4, playback: "pingpong" },
+    water2: { fps: 6, frameCount: 6, playback: "pingpong" },
 } as const;
 const animatedTileFramesBySetAndPalette = new Map<string, LoadedImg[]>();
 const prewarmQueue: { spriteId: string; paletteId: PaletteId }[] = [];
@@ -117,6 +117,9 @@ function resolveUrl(spriteId: string): string | null {
     const id = remapLegacySpriteId(normalized);
 
     if (id.startsWith("entities/") || id.startsWith("loot/") || id.startsWith("vfx/")) {
+        return `${import.meta.env.BASE_URL}assets-runtime/${id}.png`;
+    }
+    if (id.startsWith("structures/buildings/downtown/")) {
         return `${import.meta.env.BASE_URL}assets-runtime/${id}.png`;
     }
     if (
@@ -271,7 +274,13 @@ export function getAnimatedWaterSprite(nowMs: number, flowRate: number): LoadedI
 export function getAnimatedTileFrame(setId: AnimatedTileSetId, timeSec: number): LoadedImg {
     const set = ANIMATED_TILE_SETS[setId];
     const t = Number.isFinite(timeSec) ? Math.max(0, timeSec) : 0;
-    const frameIdx = Math.floor(t * set.fps) % set.frameCount;
+    const step = Math.floor(t * set.fps);
+    let frameIdx = step % set.frameCount;
+    if (set.playback === "pingpong" && set.frameCount > 1) {
+        const period = set.frameCount * 2 - 2;
+        const phase = step % period;
+        frameIdx = phase < set.frameCount ? phase : period - phase;
+    }
     return getAnimatedTileFrames(setId)[frameIdx];
 }
 // IMPORTANT: this must be a named export (your render.ts imports it by name)

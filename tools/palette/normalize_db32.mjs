@@ -17,6 +17,7 @@ const SUBSET_DIRS = [
   "tiles/walls",
   "tiles/stairs",
   "structures/buildings/avenue",
+  "structures/buildings/downtown",
   "structures/buildings/china_town",
   "structures/containers",
   "props",
@@ -132,6 +133,10 @@ function reportCoverage() {
     {
       name: "china_town buildings",
       dir: path.join(OUT_ROOT, "structures", "buildings", "china_town"),
+    },
+    {
+      name: "downtown buildings",
+      dir: path.join(OUT_ROOT, "structures", "buildings", "downtown"),
     },
   ];
 

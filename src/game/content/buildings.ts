@@ -89,6 +89,14 @@ const CANONICAL_BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
   avenue_6: makeMonolithicBuilding("avenue_6", "structures/buildings/avenue/6", { heightUnits: 16 }),
   avenue_7: makeMonolithicBuilding("avenue_7", "structures/buildings/avenue/7", { heightUnits: 16 }),
 
+  downtown_1: makeMonolithicBuilding("downtown_1", "structures/buildings/downtown/1", { heightUnits: 32 }),
+  downtown_2: makeMonolithicBuilding("downtown_2", "structures/buildings/downtown/2", { heightUnits: 16 }),
+  downtown_3: makeMonolithicBuilding("downtown_3", "structures/buildings/downtown/3", { heightUnits: 16 }),
+  downtown_4: makeMonolithicBuilding("downtown_4", "structures/buildings/downtown/4", { heightUnits: 32, w: 3, h: 3 }),
+  downtown_5: makeMonolithicBuilding("downtown_5", "structures/buildings/downtown/5", { heightUnits: 24, w: 2, h: 2 }),
+  downtown_6: makeMonolithicBuilding("downtown_6", "structures/buildings/downtown/6", { heightUnits: 16 }),
+  downtown_7: makeMonolithicBuilding("downtown_7", "structures/buildings/downtown/7", { heightUnits: 16 }),
+
   china_town_1: makeMonolithicBuilding("china_town_1", "structures/buildings/china_town/1", { heightUnits: 32 }),
   china_town_2: makeMonolithicBuilding("china_town_2", "structures/buildings/china_town/2", { heightUnits: 16 }),
   china_town_3: makeMonolithicBuilding("china_town_3", "structures/buildings/china_town/3", { heightUnits: 32,   anchorLiftUnits: -2, }),
@@ -121,6 +129,7 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
 
 export const BUILDING_PACKS: Record<BuildingPackId, BuildingSkinId[]> = {
   avenue_buildings: ["avenue_1", "avenue_2", "avenue_3", "avenue_4", "avenue_5", "avenue_6", "avenue_7"],
+  downtown_buildings: ["downtown_1", "downtown_2", "downtown_3", "downtown_4", "downtown_5", "downtown_6", "downtown_7"],
   china_town_buildings: ["china_town_1", "china_town_2", "china_town_3","china_town_4", "china_town_5", "china_town_6"],
   [DEFAULT_BUILDING_PACK_ID]: [
     "avenue_1",

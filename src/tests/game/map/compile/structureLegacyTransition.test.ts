@@ -41,6 +41,20 @@ describe("structure legacy transition", () => {
     expect(structureRoofs.some((o) => o.spriteId.includes("structures/buildings/china_town/"))).toBe(false);
   });
 
+  it("uses downtown building pack assets for downtown semantic building areas", () => {
+    const def = getAuthoredMapDefByMapId("downtown");
+    expect(def).toBeTruthy();
+    expect(def?.buildingPackId).toBe("downtown_buildings");
+
+    const compiled = compileKenneyMapFromTable(def!);
+    const structureRoofs = compiled.overlays.filter(
+      (o) => o.layerRole === "STRUCTURE" && o.spriteId.includes("structures/buildings/"),
+    );
+    expect(structureRoofs.length).toBeGreaterThan(0);
+    expect(structureRoofs.some((o) => o.spriteId.includes("structures/buildings/downtown/"))).toBe(true);
+    expect(structureRoofs.some((o) => o.spriteId.includes("structures/buildings/china_town/"))).toBe(false);
+  });
+
   it("uses china town building pack assets for china town semantic building areas", () => {
     const chinaPackIds = BUILDING_PACKS["china_town_buildings"] ?? [];
     expect(chinaPackIds.length).toBeGreaterThan(0);
