@@ -13,17 +13,79 @@ create table if not exists public.leaderboard_entries (
 
 -- Forward migration safety for existing installs
 alter table public.leaderboard_entries
+  add column if not exists season_id text;
+
+alter table public.leaderboard_entries
+  add column if not exists heat int;
+
+alter table public.leaderboard_entries
+  add column if not exists kills int;
+
+alter table public.leaderboard_entries
+  add column if not exists display_name text;
+
+alter table public.leaderboard_entries
   add column if not exists character_id text;
+
+alter table public.leaderboard_entries
+  add column if not exists created_at timestamptz;
+
+update public.leaderboard_entries
+set season_id = 'alpha'
+where season_id is null;
+
+update public.leaderboard_entries
+set heat = 0
+where heat is null;
+
+update public.leaderboard_entries
+set kills = 0
+where kills is null;
+
+update public.leaderboard_entries
+set display_name = 'PLAYER'
+where display_name is null or btrim(display_name) = '';
 
 update public.leaderboard_entries
 set character_id = 'UNKNOWN'
 where character_id is null;
+
+update public.leaderboard_entries
+set created_at = now()
+where created_at is null;
+
+alter table public.leaderboard_entries
+  alter column season_id set default 'alpha';
+
+alter table public.leaderboard_entries
+  alter column season_id set not null;
+
+alter table public.leaderboard_entries
+  alter column heat set default 0;
+
+alter table public.leaderboard_entries
+  alter column heat set not null;
+
+alter table public.leaderboard_entries
+  alter column kills set default 0;
+
+alter table public.leaderboard_entries
+  alter column kills set not null;
+
+alter table public.leaderboard_entries
+  alter column display_name set not null;
 
 alter table public.leaderboard_entries
   alter column character_id set default 'UNKNOWN';
 
 alter table public.leaderboard_entries
   alter column character_id set not null;
+
+alter table public.leaderboard_entries
+  alter column created_at set default now();
+
+alter table public.leaderboard_entries
+  alter column created_at set not null;
 
 -- Stable ranking index
 create index if not exists leaderboard_entries_rank_idx
