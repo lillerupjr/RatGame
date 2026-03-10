@@ -4,12 +4,15 @@
   "height": 40,
   "centerOnZero": false,
   "mapSkinId": "building1",
-  "buildingPackId": "avenue_buildings",
+  "buildingPackId": "china_town_buildings",
   "fields": [
-    { "x": 0, "y": 0, "w": 40, "h": 40, "type": "sidewalk" }
+    { "x": 0, "y": 0, "w": 40, "h": 40, "type": "sidewalk" },
+
+    { "x": 8, "y": 8, "z": 0, "type": "building", "w": 2, "h": 1, "layout": "perimeter_outward" }
+
   ],
   "cells": [
-    { "x": 20, "y": 20, "type": "spawn" }
+    { "x": 12, "y": 12, "type": "spawn" }
   ],
   "stamps": [
     { "x": 0, "y": 0, "z": 0, "type": "prop", "propId": "street_lamp_e", "w": 1, "h": 1 }

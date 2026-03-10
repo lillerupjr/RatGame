@@ -194,6 +194,7 @@ type JsonMapField = {
   semantic?: string;
   startHeight?: number;
   targetHeight?: number;
+  layout?: "perimeter_outward";
 };
 
 type JsonMapDef = {
@@ -222,6 +223,7 @@ type JsonMapDef = {
     stackChance?: number;
     propId?: string;
     dir?: string;
+    layout?: "perimeter_outward";
     semantic?: string;
     startHeight?: number;
     targetHeight?: number;
@@ -318,6 +320,71 @@ function normalizeCardinalDir(raw: string | undefined): "N" | "E" | "S" | "W" | 
   const up = raw.toUpperCase();
   if (up === "N" || up === "E" || up === "S" || up === "W") return up;
   return undefined;
+}
+
+function normalizeCardinalDirOrThrow(
+  raw: string | undefined,
+  context: string,
+  source?: string,
+): "N" | "E" | "S" | "W" | undefined {
+  if (raw === undefined) return undefined;
+  const up = normalizeCardinalDir(raw);
+  if (up) return up;
+  throw new Error(`JSON map loader${formatSource(source)}: ${context} must be one of N/E/S/W.`);
+}
+
+function normalizeBuildingDirOrThrow(
+  raw: string | undefined,
+  context: string,
+  source?: string,
+): "N" | "E" | "S" | "W" | undefined {
+  if (raw === undefined) return undefined;
+  const up = raw.trim().toUpperCase();
+  if (up === "N" || up === "E" || up === "S" || up === "W") return up;
+  if (up === "NE" || up === "NW" || up === "SE" || up === "SW") {
+    throw new Error(
+      `JSON map loader${formatSource(source)}: ${context}.dir must be cardinal for buildings (N/E/S/W). Diagonals are not supported.`,
+    );
+  }
+  throw new Error(`JSON map loader${formatSource(source)}: ${context}.dir must be one of N/E/S/W for buildings.`);
+}
+
+function validateBuildingDirAndFlipped(
+  dir: "N" | "E" | "S" | "W" | undefined,
+  flipped: boolean | undefined,
+  context: string,
+  source?: string,
+): void {
+  if (dir !== undefined && flipped !== undefined) {
+    throw new Error(`JSON map loader${formatSource(source)}: ${context} cannot define both dir and flipped for buildings.`);
+  }
+}
+
+function normalizeBuildingLayoutOrThrow(
+  raw: string | undefined,
+  context: string,
+  source?: string,
+): "perimeter_outward" | undefined {
+  if (raw === undefined) return undefined;
+  const low = raw.trim().toLowerCase();
+  if (low === "perimeter_outward") return "perimeter_outward";
+  throw new Error(`JSON map loader${formatSource(source)}: ${context}.layout must be "perimeter_outward" for buildings.`);
+}
+
+function validatePerimeterBuildingLayoutOverrides(
+  layout: "perimeter_outward" | undefined,
+  dir: "N" | "E" | "S" | "W" | undefined,
+  flipped: boolean | undefined,
+  context: string,
+  source?: string,
+): void {
+  if (layout !== "perimeter_outward") return;
+  if (dir !== undefined) {
+    throw new Error(`JSON map loader${formatSource(source)}: ${context} cannot define dir when layout=perimeter_outward.`);
+  }
+  if (flipped !== undefined) {
+    throw new Error(`JSON map loader${formatSource(source)}: ${context} cannot define flipped when layout=perimeter_outward.`);
+  }
 }
 
 function optionalNumberField(obj: Record<string, unknown>, key: string): number | undefined {
@@ -650,7 +717,8 @@ function optionalFieldsField(
     const triggerId = optionalStringField(field, "triggerId") ?? undefined;
     const triggerType = optionalStringField(field, "triggerType") ?? undefined;
     const radius = optionalNumberField(field, "radius") ?? undefined;
-    const dir = optionalDirField(field, "dir");
+    const dirRaw = optionalStringField(field, "dir");
+    const layoutRaw = optionalStringField(field, "layout");
     const semantic = optionalStringField(field, "semantic");
     const startHeight = optionalNumberField(field, "startHeight");
     const targetHeight = optionalNumberField(field, "targetHeight");
@@ -664,17 +732,28 @@ function optionalFieldsField(
           throw new Error(`JSON map loader${formatSource(source)}: fields[${index}].collision must be "BLOCK" or "PASS".`);
         })();
     const blocksMovement = optionalBooleanField(field, "blocksMovement");
+    const skinId = optionalStringField(field, "skinId");
     const flipped = optionalBooleanField(field, "flipped");
     const stackLevel = optionalNumberField(field, "stackLevel");
     const zStackUnits = optionalNumberField(field, "zStackUnits");
     const resolvedTypeRaw = (type ?? "floor").toLowerCase();
+    if (layoutRaw !== undefined && resolvedTypeRaw !== "building") {
+      throw new Error(`JSON map loader${formatSource(source)}: fields[${index}].layout is only supported for type=building.`);
+    }
     const resolvedZ = z ?? 0;
+    const dir = resolvedTypeRaw === "building"
+      ? undefined
+      : normalizeCardinalDirOrThrow(dirRaw, `fields[${index}].dir`, source);
 
     if (resolvedTypeRaw === "road") {
       roadRects.push({ x: x0, y: y0, z: resolvedZ, w: iw, h: ih, semantic, dir, startHeight, targetHeight });
     }
 
     if (resolvedTypeRaw === "building") {
+      const buildingDir = normalizeBuildingDirOrThrow(dirRaw, `fields[${index}]`, source);
+      const layout = normalizeBuildingLayoutOrThrow(layoutRaw, `fields[${index}]`, source);
+      validateBuildingDirAndFlipped(buildingDir, flipped, `fields[${index}]`, source);
+      validatePerimeterBuildingLayoutOverrides(layout, buildingDir, flipped, `fields[${index}]`, source);
       stamps.push({
         x: x0,
         y: y0,
@@ -682,6 +761,9 @@ function optionalFieldsField(
         type: "building",
         w: iw,
         h: ih,
+        skinId: skinId ?? undefined,
+        dir: buildingDir,
+        layout,
         collision,
         blocksMovement,
         flipped,
@@ -762,7 +844,8 @@ function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): S
     const heightUnitsMax = optionalNumberField(entry, "heightUnitsMax");
     const stackChance = optionalNumberField(entry, "stackChance");
     const propId = optionalStringField(entry, "propId");
-    const dir = optionalStringField(entry, "dir");
+    const dirRaw = optionalStringField(entry, "dir");
+    const layoutRaw = optionalStringField(entry, "layout");
     const semantic = optionalStringField(entry, "semantic");
     const startHeight = optionalNumberField(entry, "startHeight");
     const targetHeight = optionalNumberField(entry, "targetHeight");
@@ -778,6 +861,20 @@ function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): S
         })();
     const blocksMovement = optionalBooleanField(entry, "blocksMovement");
     const flipped = optionalBooleanField(entry, "flipped");
+    const layout = type === "building"
+      ? normalizeBuildingLayoutOrThrow(layoutRaw, `stamps[${index}]`, source)
+      : undefined;
+    if (layoutRaw !== undefined && type !== "building") {
+      throw new Error(`JSON map loader${formatSource(source)}: stamps[${index}].layout is only supported for type=building.`);
+    }
+    const buildingDir = type === "building"
+      ? normalizeBuildingDirOrThrow(dirRaw, `stamps[${index}]`, source)
+      : undefined;
+    if (type === "building") {
+      validateBuildingDirAndFlipped(buildingDir, flipped, `stamps[${index}]`, source);
+      validatePerimeterBuildingLayoutOverrides(layout, buildingDir, flipped, `stamps[${index}]`, source);
+    }
+    const dir = type === "building" ? buildingDir : dirRaw;
     const stackLevel = optionalNumberField(entry, "stackLevel");
     const zStackUnits = optionalNumberField(entry, "zStackUnits");
     return {
@@ -795,6 +892,7 @@ function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): S
       stackChance,
       propId,
       dir,
+      layout,
       semantic,
       startHeight,
       targetHeight,

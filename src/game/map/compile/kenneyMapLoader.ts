@@ -31,6 +31,8 @@ import type { MarkingPiece, RoadBand, RoadContext } from "../../roads/markings/t
 export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL" | typeof TILE_ID_OCEAN;
 export type StairDir = "N" | "E" | "S" | "W";
 export type WallDir = "N" | "E" | "S" | "W";
+type BuildingDir = "N" | "E" | "S" | "W";
+type BuildingAxis = "NS" | "EW";
 
 export type IsoTile = {
     kind: IsoTileKind;
@@ -330,6 +332,45 @@ function resolveRoadDirFromSemantic(semantic?: string, dir?: "N" | "E" | "S" | "
     if (s.endsWith("_s") || s.endsWith(":s")) return "S";
     if (s.endsWith("_w") || s.endsWith(":w")) return "W";
     return undefined;
+}
+
+function normalizeBuildingDir(dir?: string): BuildingDir | undefined {
+    if (dir === undefined) return undefined;
+    const up = dir.trim().toUpperCase();
+    if (up === "N" || up === "E" || up === "S" || up === "W") return up;
+    if (up === "NE" || up === "NW" || up === "SE" || up === "SW") {
+        throw new Error(`[buildings] Unsupported diagonal dir "${dir}". Use N/E/S/W.`);
+    }
+    throw new Error(`[buildings] Invalid dir "${dir}". Use N/E/S/W.`);
+}
+
+function directionSuffix(dir: BuildingDir): "n" | "e" | "s" | "w" {
+    if (dir === "N") return "n";
+    if (dir === "E") return "e";
+    if (dir === "S") return "s";
+    return "w";
+}
+
+function resolveBuildingSpriteId(baseId: string, dir?: BuildingDir): string {
+    if (!dir) return baseId;
+    return `${baseId}/${directionSuffix(dir)}`;
+}
+
+function axisForBuildingDir(dir: BuildingDir): BuildingAxis {
+    return dir === "N" || dir === "S" ? "NS" : "EW";
+}
+
+function orientBuildingFootprintByDir(
+    w: number,
+    h: number,
+    defaultFacing: "E" | "S" | undefined,
+    dir?: BuildingDir,
+): { w: number; h: number } {
+    if (!dir) return { w, h };
+    const baseAxis: BuildingAxis = (defaultFacing ?? "S") === "E" ? "EW" : "NS";
+    const targetAxis = axisForBuildingDir(dir);
+    if (baseAxis === targetAxis) return { w, h };
+    return { w: h, h: w };
 }
 
 function mergeRoadRectsPreserveOrient(rects: AuthRoadRect[]): AuthRoadRect[] {
@@ -1847,6 +1888,10 @@ export function compileKenneyMapFromTable(
         const zBase = stamp.z ?? 0;
         const w = Math.max(1, (stamp.w ?? 1) | 0);
         const h = Math.max(1, (stamp.h ?? 1) | 0);
+        const buildingDir = stamp.type === "building" ? normalizeBuildingDir(stamp.dir) : undefined;
+        if (buildingDir && typeof stamp.flipped === "boolean") {
+            throw new Error(`[buildings] Building stamp at (${stamp.x},${stamp.y}) cannot combine dir with flipped.`);
+        }
         if (stamp.type === "building" || stamp.type === "container") {
             if (stamp.w === undefined || stamp.h === undefined) {
                 throw new Error(`Building stamp at (${stamp.x},${stamp.y}) must define w/h.`);
@@ -1860,6 +1905,186 @@ export function compileKenneyMapFromTable(
             });
 
             const forcedSkinId = skinOverride ?? stamp.skinId;
+            const buildingLayout = stamp.type === "building" ? stamp.layout : undefined;
+            if (buildingLayout === "perimeter_outward" && buildingDir !== undefined) {
+                throw new Error(`[buildings] Building stamp at (${stamp.x},${stamp.y}) cannot combine layout=perimeter_outward with dir.`);
+            }
+            if (buildingLayout === "perimeter_outward" && typeof stamp.flipped === "boolean") {
+                throw new Error(`[buildings] Building stamp at (${stamp.x},${stamp.y}) cannot combine layout=perimeter_outward with flipped.`);
+            }
+
+            if (buildingLayout === "perimeter_outward") {
+                const assertHeightRange = (skin: BuildingSkin): void => {
+                    if (stamp.heightUnitsMin !== undefined && skin.heightUnits < stamp.heightUnitsMin) {
+                        throw new Error(`Building skin "${skin.id}" heightUnits ${skin.heightUnits} is below minimum ${stamp.heightUnitsMin}.`);
+                    }
+                    if (stamp.heightUnitsMax !== undefined && skin.heightUnits > stamp.heightUnitsMax) {
+                        throw new Error(`Building skin "${skin.id}" heightUnits ${skin.heightUnits} is above maximum ${stamp.heightUnitsMax}.`);
+                    }
+                };
+                const candidateSkins: BuildingSkin[] = (() => {
+                    if (forcedSkinId) {
+                        const forced = BUILDING_SKINS[forcedSkinId] ?? CONTAINER_SKINS[forcedSkinId];
+                        if (!forced) {
+                            throw new Error(`[buildings] Missing skin entry for id=${forcedSkinId} (stamp (${stamp.x},${stamp.y}))`);
+                        }
+                        assertHeightRange(forced);
+                        return [forced];
+                    }
+                    return resolveBuildingCandidates(buildingPackId)
+                        .map((id) => BUILDING_SKINS[id] ?? CONTAINER_SKINS[id])
+                        .filter((skin): skin is BuildingSkin => !!skin)
+                        .filter((skin) => stamp.heightUnitsMin === undefined || skin.heightUnits >= stamp.heightUnitsMin)
+                        .filter((skin) => stamp.heightUnitsMax === undefined || skin.heightUnits <= stamp.heightUnitsMax);
+                })();
+                const occupied = new Array(w * h).fill(false);
+                const canPlace = (x0: number, y0: number, cw: number, ch: number): boolean => {
+                    if (x0 < 0 || y0 < 0) return false;
+                    if (x0 + cw > w || y0 + ch > h) return false;
+                    for (let dy = 0; dy < ch; dy++) {
+                        for (let dx = 0; dx < cw; dx++) {
+                            if (occupied[(y0 + dy) * w + (x0 + dx)]) return false;
+                        }
+                    }
+                    return true;
+                };
+                const occupy = (x0: number, y0: number, cw: number, ch: number): void => {
+                    for (let dy = 0; dy < ch; dy++) {
+                        for (let dx = 0; dx < cw; dx++) {
+                            occupied[(y0 + dy) * w + (x0 + dx)] = true;
+                        }
+                    }
+                };
+                const placements: Array<{ x: number; y: number; w: number; h: number; skinId: string; dir: BuildingDir }> = [];
+                const sides: BuildingDir[] = ["S", "E", "N", "W"];
+                const chooseLargestCoverage = (candidates: Array<{
+                    x: number;
+                    y: number;
+                    w: number;
+                    h: number;
+                    coverage: number;
+                    skinId: string;
+                }>, side: BuildingDir, cursorTag: string) => {
+                    let maxCoverage = candidates[0].coverage;
+                    for (let i = 1; i < candidates.length; i++) {
+                        if (candidates[i].coverage > maxCoverage) maxCoverage = candidates[i].coverage;
+                    }
+                    const best = candidates.filter((c) => c.coverage === maxCoverage);
+                    const seed = hashString(
+                        `${runSeed}:${mapId}:${stampIndex}:perimeter:${stamp.x},${stamp.y}:${w}x${h}:${side}:${cursorTag}`,
+                    );
+                    const rng = new RNG(seed);
+                    return best[rng.int(0, best.length - 1)] ?? best[0];
+                };
+
+                // Pass 1: corners first, ownership priority S -> E -> N -> W.
+                for (let sideIndex = 0; sideIndex < sides.length; sideIndex++) {
+                    const side = sides[sideIndex];
+                    const corners = (() => {
+                        if (side === "S") return [{ x: 0, y: h - 1 }, { x: w - 1, y: h - 1 }];
+                        if (side === "E") return [{ x: w - 1, y: h - 1 }, { x: w - 1, y: 0 }];
+                        if (side === "N") return [{ x: w - 1, y: 0 }, { x: 0, y: 0 }];
+                        return [{ x: 0, y: 0 }, { x: 0, y: h - 1 }];
+                    })();
+                    for (let ci = 0; ci < corners.length; ci++) {
+                        const corner = corners[ci];
+                        if (corner.x < 0 || corner.y < 0 || corner.x >= w || corner.y >= h) continue;
+                        if (occupied[corner.y * w + corner.x]) continue;
+                        const candidates: Array<{
+                            x: number;
+                            y: number;
+                            w: number;
+                            h: number;
+                            coverage: number;
+                            skinId: string;
+                        }> = [];
+                        for (let i = 0; i < candidateSkins.length; i++) {
+                            const skin = candidateSkins[i];
+                            const oriented = orientBuildingFootprintByDir(skin.w, skin.h, skin.defaultFacing, side);
+                            const cw = oriented.w;
+                            const ch = oriented.h;
+                            const xCandidates = side === "E"
+                                ? [w - cw]
+                                : side === "W"
+                                    ? [0]
+                                    : [Math.max(0, Math.min(corner.x, w - cw)), Math.max(0, Math.min(corner.x - cw + 1, w - cw))];
+                            const yCandidates = side === "S"
+                                ? [h - ch]
+                                : side === "N"
+                                    ? [0]
+                                    : [Math.max(0, Math.min(corner.y, h - ch)), Math.max(0, Math.min(corner.y - ch + 1, h - ch))];
+                            for (let xi = 0; xi < xCandidates.length; xi++) {
+                                for (let yi = 0; yi < yCandidates.length; yi++) {
+                                    const px = xCandidates[xi];
+                                    const py = yCandidates[yi];
+                                    if (px > corner.x || corner.x >= px + cw || py > corner.y || corner.y >= py + ch) continue;
+                                    if (!canPlace(px, py, cw, ch)) continue;
+                                    const coverage = side === "N" || side === "S" ? cw : ch;
+                                    candidates.push({ x: px, y: py, w: cw, h: ch, coverage, skinId: skin.id });
+                                }
+                            }
+                        }
+                        if (candidates.length === 0) continue;
+                        const picked = chooseLargestCoverage(candidates, side, `corner:${corner.x},${corner.y}`);
+                        placements.push({ x: picked.x, y: picked.y, w: picked.w, h: picked.h, skinId: picked.skinId, dir: side });
+                        occupy(picked.x, picked.y, picked.w, picked.h);
+                    }
+                }
+
+                // Pass 2: fill remaining side spans in same order.
+                for (let sideIndex = 0; sideIndex < sides.length; sideIndex++) {
+                    const side = sides[sideIndex];
+                    const limit = side === "S" || side === "N" ? w : h;
+                    let cursor = 0;
+                    while (cursor < limit) {
+                        const candidates: Array<{
+                            x: number;
+                            y: number;
+                            w: number;
+                            h: number;
+                            coverage: number;
+                            skinId: string;
+                        }> = [];
+                        for (let i = 0; i < candidateSkins.length; i++) {
+                            const skin = candidateSkins[i];
+                            const oriented = orientBuildingFootprintByDir(skin.w, skin.h, skin.defaultFacing, side);
+                            const cw = oriented.w;
+                            const ch = oriented.h;
+                            const x0 = side === "E" ? (w - cw) : cursor;
+                            const y0 = side === "S" ? (h - ch) : cursor;
+                            const px = side === "N" || side === "S" ? x0 : (side === "E" ? w - cw : 0);
+                            const py = side === "E" || side === "W" ? y0 : (side === "S" ? h - ch : 0);
+                            if (!canPlace(px, py, cw, ch)) continue;
+                            const coverage = side === "N" || side === "S" ? cw : ch;
+                            candidates.push({ x: px, y: py, w: cw, h: ch, coverage, skinId: skin.id });
+                        }
+                        if (candidates.length === 0) {
+                            cursor++;
+                            continue;
+                        }
+                        const picked = chooseLargestCoverage(candidates, side, `side:${cursor}`);
+                        placements.push({ x: picked.x, y: picked.y, w: picked.w, h: picked.h, skinId: picked.skinId, dir: side });
+                        occupy(picked.x, picked.y, picked.w, picked.h);
+                        cursor += picked.coverage;
+                    }
+                }
+                for (let i = 0; i < placements.length; i++) {
+                    const p = placements[i];
+                    compileBuildingStamp({
+                        x: stamp.x + p.x,
+                        y: stamp.y + p.y,
+                        z: zBase,
+                        type: "building",
+                        w: p.w,
+                        h: p.h,
+                        skinId: p.skinId,
+                        dir: p.dir,
+                        collision: stamp.collision,
+                        blocksMovement: stamp.blocksMovement,
+                    }, stampIndex);
+                }
+                return;
+            }
 
             if (!forcedSkinId) {
                 const candidateIds = resolveBuildingCandidates(buildingPackId);
@@ -1867,6 +2092,13 @@ export function compileKenneyMapFromTable(
                     .map((id) => BUILDING_SKINS[id])
                     .filter((skin): skin is BuildingSkin => !!skin)
                     .flatMap((skin) => {
+                        if (buildingDir) {
+                            const oriented = orientBuildingFootprintByDir(skin.w, skin.h, skin.defaultFacing, buildingDir);
+                            if (oriented.w <= w && oriented.h <= h) {
+                                return [{ skin, oriented: { ...oriented, flipped: false } }];
+                            }
+                            return [];
+                        }
                         if (typeof stamp.flipped === "boolean") {
                             const oriented = resolveFlippedFootprint(skin.w, skin.h, skin.isFlippable, stamp.flipped);
                             if (oriented.w <= w && oriented.h <= h) return [{ skin, oriented }];
@@ -1964,7 +2196,7 @@ export function compileKenneyMapFromTable(
                         w: p.w,
                         h: p.h,
                         skinId: p.skinId,
-                        flipped: p.flipped,
+                        ...(buildingDir ? { dir: buildingDir } : { flipped: p.flipped }),
                         collision: stamp.collision,
                         blocksMovement: stamp.blocksMovement,
                     }, stampIndex);
@@ -1995,7 +2227,10 @@ export function compileKenneyMapFromTable(
             if (!skin) {
                 throw new Error(`[buildings] Missing skin entry for id=${forcedSkinId} (stamp (${stamp.x},${stamp.y}))`);
             }
-            const oriented = resolveFlippedFootprint(skin.w, skin.h, skin.isFlippable, !!stamp.flipped);
+            const orientedByDir = orientBuildingFootprintByDir(skin.w, skin.h, skin.defaultFacing, buildingDir);
+            const oriented = buildingDir
+                ? { ...orientedByDir, flipped: false }
+                : resolveFlippedFootprint(skin.w, skin.h, skin.isFlippable, !!stamp.flipped);
             const placeW = oriented.w;
             const placeH = oriented.h;
             if (stamp.heightUnitsMin !== undefined && skin.heightUnits < stamp.heightUnitsMin) {
@@ -2021,6 +2256,7 @@ export function compileKenneyMapFromTable(
             const isMonolithicSkin =
                 skin.wallSouth.every((id) => id === skin.roof) &&
                 skin.wallEast.every((id) => id === skin.roof);
+            const roofSpriteId = resolveBuildingSpriteId(skin.roof, buildingDir);
 
             if (isMonolithicSkin) {
                 const seAnchor = seAnchorFromTopLeft(sx, sy, placeW, placeH);
@@ -2035,7 +2271,7 @@ export function compileKenneyMapFromTable(
                     anchorTx: seAnchor.anchorTx,
                     anchorTy: seAnchor.anchorTy,
                     z: zBase,
-                    spriteId: skin.roof,
+                    spriteId: roofSpriteId,
                     drawDxOffset: offsetPx.x + anchorOffsetPx.x,
                     drawDyOffset: anchorLiftPx + offsetPx.y + anchorOffsetPx.y,
                     sliceOffsetPx,
@@ -2073,7 +2309,10 @@ export function compileKenneyMapFromTable(
 
             // South edge (bottom row)
             for (let i = 0; i < placeW; i++) {
-                const spriteId = skin.wallSouth[Math.min(i, skin.wallSouth.length - 1)];
+                const spriteId = resolveBuildingSpriteId(
+                    skin.wallSouth[Math.min(i, skin.wallSouth.length - 1)],
+                    buildingDir,
+                );
                 addStampWall(
                     sx + i,
                     sy + placeH - 1,
@@ -2087,7 +2326,10 @@ export function compileKenneyMapFromTable(
             }
             // East edge (right column)
             for (let j = 0; j < placeH; j++) {
-                const spriteId = skin.wallEast[Math.min(j, skin.wallEast.length - 1)];
+                const spriteId = resolveBuildingSpriteId(
+                    skin.wallEast[Math.min(j, skin.wallEast.length - 1)],
+                    buildingDir,
+                );
                 addStampWall(
                     sx + placeW - 1,
                     sy + j,
@@ -2112,7 +2354,7 @@ export function compileKenneyMapFromTable(
                 anchorTx: roofAnchor.anchorTx,
                 anchorTy: roofAnchor.anchorTy,
                 z: zBase + heightUnits,
-                spriteId: skin.roof,
+                spriteId: roofSpriteId,
                 drawDyOffset: anchorLiftPx + roofLiftPx + offsetPx.y + anchorOffsetPx.y,
                 drawDxOffset: offsetPx.x + anchorOffsetPx.x,
                 sliceOffsetPx,

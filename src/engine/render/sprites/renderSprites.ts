@@ -119,9 +119,6 @@ function resolveUrl(spriteId: string): string | null {
     if (id.startsWith("entities/") || id.startsWith("loot/") || id.startsWith("vfx/")) {
         return `${import.meta.env.BASE_URL}assets-runtime/${id}.png`;
     }
-    if (id.startsWith("structures/buildings/downtown/")) {
-        return `${import.meta.env.BASE_URL}assets-runtime/${id}.png`;
-    }
     if (
         id.startsWith("tiles/")
         || id.startsWith("structures/")

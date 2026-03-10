@@ -62,6 +62,7 @@ export type SemanticStamp = {
     stackChance?: number;
     propId?: string;
     dir?: string;
+    layout?: "perimeter_outward";
     semantic?: string;
     startHeight?: number;
     targetHeight?: number;
