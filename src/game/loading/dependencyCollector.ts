@@ -45,18 +45,22 @@ export function collectFloorDependencies(): DependencySet {
   }
 
   // Enemy core packs used by runtime enemy sprites.
-  const enemyDefs: Array<{ skin: string; anim: string; frameCount: number }> = [
+  const enemyDefs: Array<{ skin: string; anim?: string; frameCount?: number }> = [
     { skin: "rat1", anim: "running-4-frames", frameCount: 4 },
     { skin: "rat2", anim: "walk-4-frames", frameCount: 4 },
     { skin: "rat4", anim: "walk-4-frames", frameCount: 4 },
+    { skin: "lootGoblin", anim: "walk", frameCount: 6 },
     { skin: "infested", anim: "walk", frameCount: 4 },
   ];
   for (const def of enemyDefs) {
     for (const dir of ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"]) {
       spriteIds.add(`entities/enemies/${def.skin}/rotations/${dir}`);
-      for (let i = 0; i < def.frameCount; i++) {
-        const frame = `frame_${String(i).padStart(3, "0")}`;
-        spriteIds.add(`entities/enemies/${def.skin}/animations/${def.anim}/${dir}/${frame}`);
+      if (def.anim && Number.isFinite(def.frameCount)) {
+        const frameCount = Math.max(0, def.frameCount ?? 0);
+        for (let i = 0; i < frameCount; i++) {
+          const frame = `frame_${String(i).padStart(3, "0")}`;
+          spriteIds.add(`entities/enemies/${def.skin}/animations/${def.anim}/${dir}/${frame}`);
+        }
       }
     }
   }

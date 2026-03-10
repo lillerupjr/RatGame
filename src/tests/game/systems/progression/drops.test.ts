@@ -6,6 +6,7 @@ import { spawnEnemyGrid } from "../../../../game/factories/enemyFactory";
 import { goldValueFromEnemyBaseLife } from "../../../../game/economy/coins";
 import { dropsSystem } from "../../../../game/systems/progression/drops";
 import { PICKUP_KIND, spawnGold } from "../../../../game/systems/progression/pickups";
+import { LOOT_GOBLIN_TRIGGER_PREFIX } from "../../../../game/systems/progression/lootGoblin";
 import { getPlayerWorld } from "../../../../game/coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../../engine/render/kenneyTiles";
 import { makeWeaponHitMeta } from "../../../../game/combat/damageMeta";
@@ -71,5 +72,36 @@ describe("dropsSystem", () => {
 
     expect(w.run.runGold).toBe(7);
     expect(w.xAlive.some(Boolean)).toBe(false);
+  });
+
+  test("loot goblin kill emits delayed 300x1g drops and skips normal kill drops", () => {
+    const w = createWorld({ seed: 4, stage: stageDocks });
+    const goblin = spawnEnemyGrid(w, ENEMY_TYPE.LOOT_GOBLIN, 40, 40);
+    w.eSpawnTriggerId[goblin] = `${LOOT_GOBLIN_TRIGGER_PREFIX}:0:40:40`;
+    w.events.push({
+      type: "ENEMY_KILLED",
+      enemyIndex: goblin,
+      x: (40.5) * KENNEY_TILE_WORLD,
+      y: (40.5) * KENNEY_TILE_WORLD,
+      source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL", { category: "HIT", instigatorId: "player" }),
+    });
+
+    // Schedules delayed drops only; no immediate regular kill drop.
+    dropsSystem(w, 0);
+    expect(w.xAlive.filter(Boolean)).toHaveLength(0);
+    w.events.length = 0;
+
+    for (let i = 0; i < 320; i++) {
+      dropsSystem(w, 0.1);
+    }
+
+    const aliveCoinIndexes = w.xAlive
+      .map((alive, idx) => (alive && (w.xKind[idx] ?? PICKUP_KIND.GOLD) === PICKUP_KIND.GOLD ? idx : -1))
+      .filter((idx) => idx >= 0);
+    expect(aliveCoinIndexes).toHaveLength(300);
+    const total = aliveCoinIndexes.reduce((sum, idx) => sum + (w.xValue[idx] ?? 0), 0);
+    expect(total).toBe(300);
+    expect(w.xKind.filter((kind) => kind === PICKUP_KIND.CHEST)).toHaveLength(0);
   });
 });

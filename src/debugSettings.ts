@@ -47,6 +47,7 @@ export type DebugSettings = {
   fireRateMult: number;
   entityAnchorOverlay: boolean;
   enemyAimOverlay: boolean;
+  lootGoblinOverlay: boolean;
   pauseDebugCards: boolean;
   pauseCsvControls: boolean;
   dpsMeter: boolean;
@@ -106,6 +107,7 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "godMode", label: "godMode" },
   { key: "entityAnchorOverlay", label: "entityAnchorOverlay" },
   { key: "enemyAimOverlay", label: "enemyAimOverlay" },
+  { key: "lootGoblinOverlay", label: "lootGoblinOverlay" },
   { key: "pauseDebugCards", label: "Enable Pause Debug Cards" },
   { key: "pauseCsvControls", label: "Enable Pause CSV Controls" },
   { key: "dpsMeter", label: "Show DPS Meter" },
@@ -140,6 +142,7 @@ export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   fireRateMult: 1,
   entityAnchorOverlay: false,
   enemyAimOverlay: false,
+  lootGoblinOverlay: false,
   pauseDebugCards: false,
   pauseCsvControls: false,
   dpsMeter: false,
@@ -174,6 +177,7 @@ export type ResolvedDebugFlags = {
   showStructureSlices: boolean;
   showMapOverlays: boolean;
   showEnemyAimOverlay: boolean;
+  showLootGoblinOverlay: boolean;
   lightingOcclusionEnabled: boolean;
   lightingHeightBandedOcclusion: boolean;
   lightingUseLegacyGlobalOcclusion: boolean;
@@ -201,6 +205,7 @@ export function resolveDebugFlags(debug: DebugSettings): ResolvedDebugFlags {
     showStructureSlices: debug.slices || debug.spriteBounds,
     showMapOverlays: !debug.mapOverlaysDisabled,
     showEnemyAimOverlay: debug.enemyAimOverlay,
+    showLootGoblinOverlay: debug.lootGoblinOverlay,
     lightingOcclusionEnabled: !debug.disableLightingOcclusion,
     lightingHeightBandedOcclusion: !debug.disableLightingHeightBandedOcclusion,
     lightingUseLegacyGlobalOcclusion: debug.lightingUseLegacyGlobalOcclusion,

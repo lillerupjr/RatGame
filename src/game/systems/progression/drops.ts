@@ -5,13 +5,24 @@ import { goldValueFromEnemyBaseLife } from "../../economy/coins";
 import { spawnChest, spawnGold, PICKUP_KIND, handlePickupSpecialCase } from "./pickups";
 import { ENEMY_TYPE } from "../../factories/enemyFactory";
 import { getEnemyWorld, getPickupWorld, getPlayerWorld } from "../../coords/worldViews";
+import {
+  isLootGoblinEnemy,
+  scheduleLootGoblinGoldBurst,
+  tickLootGoblinGoldBurst,
+} from "./lootGoblin";
 
 /** Handle drop spawns from kill events and pickup collection. */
-export function dropsSystem(w: World, _dt: number) {
+export function dropsSystem(w: World, dt: number) {
+  tickLootGoblinGoldBurst(w, dt);
+
   // 1) Spawn gold orbs (and boss chest for bosses) from kill events.
   for (let i = 0; i < w.events.length; i++) {
     const e = w.events[i];
     if (e.type !== "ENEMY_KILLED") continue;
+    if (isLootGoblinEnemy(w, e.enemyIndex)) {
+      scheduleLootGoblinGoldBurst(w, e.x, e.y);
+      continue;
+    }
 
     const baseLife = Number.isFinite(w.eBaseLife[e.enemyIndex])
       ? Math.max(0, Math.floor(w.eBaseLife[e.enemyIndex]))

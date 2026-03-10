@@ -12,6 +12,11 @@ import {
   isFieldStale,
   type FlowField,
 } from "../../map/generators/flowField";
+import {
+  FLEE_SPEED_MULT,
+  FLEE_TRIGGER_RADIUS_TILES,
+  isLootGoblinEnemy,
+} from "../progression/lootGoblin";
 
 type GridPos = { gx: number; gy: number };
 type WorldPos = { wx: number; wy: number };
@@ -187,9 +192,28 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     // Query flow field for optimal direction toward player
     const flowDir = queryFlowDirection(flowField, ex, ey, eCur.floorH, KENNEY_TILE_WORLD);
 
-    let gux: number;
-    let guy: number;
-    if (flowDir) {
+    const isGoblin = isLootGoblinEnemy(w, i);
+    let gux = 0;
+    let guy = 0;
+    if (isGoblin) {
+      const fleeRadiusWorld = FLEE_TRIGGER_RADIUS_TILES * KENNEY_TILE_WORLD;
+      const distToPlayer = Math.hypot(ex - px, ey - py);
+      if (distToPlayer <= fleeRadiusWorld) {
+        if (flowDir) {
+          gux = -flowDir.dx;
+          guy = -flowDir.dy;
+        }
+        if (Math.hypot(gux, guy) <= 1e-6) {
+          const gvx = eGrid0.gx - playerGrid.gx;
+          const gvy = eGrid0.gy - playerGrid.gy;
+          const gdist = Math.hypot(gvx, gvy);
+          if (gdist > 1e-6) {
+            gux = gvx / gdist;
+            guy = gvy / gdist;
+          }
+        }
+      }
+    } else if (flowDir) {
       gux = flowDir.dx;
       guy = flowDir.dy;
     } else {
@@ -203,8 +227,9 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     }
 
     const eWorldDir = gridDirToWorldDir(KENNEY_TILE_WORLD, gux, guy);
-    const chaseWx = eWorldDir.wx * w.eSpeed[i];
-    const chaseWy = eWorldDir.wy * w.eSpeed[i];
+    const speedMult = isGoblin ? FLEE_SPEED_MULT : 1;
+    const chaseWx = eWorldDir.wx * w.eSpeed[i] * speedMult;
+    const chaseWy = eWorldDir.wy * w.eSpeed[i] * speedMult;
     const moveWx = chaseWx + kvx;
     const moveWy = chaseWy + kvy;
 

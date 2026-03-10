@@ -18,6 +18,7 @@ import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
 import { getUserSettings } from "../../../userSettings";
 import { resolveCritRoll01 } from "../../combat_mods/runtime/critDamagePacket";
 import { getRelicMods, normalizeWorldRelics } from "../progression/relics";
+import { isLootGoblinEnemy } from "../progression/lootGoblin";
 import { getCardById } from "../../combat_mods/content/cards/cardPool";
 import { resolveDotStats } from "../../combat_mods/stats/combatStatsResolver";
 import { applyPlayerIncomingDamage } from "./playerArmor";
@@ -711,6 +712,7 @@ export function collisionsSystem(w: World, dt: number) {
     for (let i = 0; i < nearbyToPlayer.length; i++) {
       const e = nearbyToPlayer[i];
       if (!w.eAlive[e]) continue;
+      if (isLootGoblinEnemy(w, e)) continue;
 
       const ew = getEnemyWorld(w, e, KENNEY_TILE_WORLD);
       const dx = ew.wx - px;

@@ -5,6 +5,7 @@ import {
   getPlayerWorld,
   getProjectileWorld,
 } from "../../coords/worldViews";
+import { ENEMY_TYPE } from "../../content/enemies";
 
 /**
  * Determines if a projectile hits an enemy based on whether it's melee or ranged.
@@ -36,13 +37,12 @@ export function isEnemyHit(
 
   // Enemy vertical height depends on enemy type (Milestone C)
 // Enemy vertical height depends on enemy type (Milestone C)
-  const et = (w.eType?.[e] ?? 1) | 0; // fallback to CHASER-ish
+  const et = (w.eType?.[e] ?? ENEMY_TYPE.CHASER) | 0;
   const HIT_HEIGHT_Z =
-      et === 1 ? 2 :      // CHASER (was 1)
-          et === 2 ? 3 :      // RUNNER (was 2)
-              et === 3 ? 4 :      // BRUISER (was 3)
-                  et === 99 ? 4 :     // BOSS   (was 3)
-                      2;
+      et === ENEMY_TYPE.CHASER ? 2 :
+          et === ENEMY_TYPE.RUNNER || et === ENEMY_TYPE.LOOT_GOBLIN ? 3 :
+              et === ENEMY_TYPE.BRUISER || et === ENEMY_TYPE.BOSS ? 4 :
+                  2;
 
 
   const ezFeet = w.ezVisual?.[e] ?? 0; // stored by movement on stairs
@@ -106,13 +106,12 @@ export function isPlayerHit(w: World, e: number, playerR: number): boolean {
   // -----------------------------------------
   const PLAYER_HIT_HEIGHT_Z = 0.9;
 
-  const et = (w.eType?.[e] ?? 1) | 0;
+  const et = (w.eType?.[e] ?? ENEMY_TYPE.CHASER) | 0;
   const ENEMY_HIT_HEIGHT_Z =
-      et === 1 ? 1 :
-          et === 2 ? 2 :
-              et === 3 ? 3 :
-                  et === 99 ? 3 :
-                      1;
+      et === ENEMY_TYPE.CHASER ? 1 :
+          et === ENEMY_TYPE.RUNNER || et === ENEMY_TYPE.LOOT_GOBLIN ? 2 :
+              et === ENEMY_TYPE.BRUISER || et === ENEMY_TYPE.BOSS ? 3 :
+                  1;
 
   const pzFeet = w.pzVisual ?? w.pz ?? 0;
   const ezFeet = w.ezVisual?.[e] ?? 0;

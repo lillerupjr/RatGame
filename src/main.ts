@@ -152,6 +152,7 @@ function installDevSettingsUi(): DevSettingsUiController {
     godMode: "God Mode",
     entityAnchorOverlay: "Show Entity Anchors",
     enemyAimOverlay: "Enemy Aim Overlay",
+    lootGoblinOverlay: "Loot Goblin Overlay",
     pauseDebugCards: "Pause Debug Cards",
     pauseCsvControls: "Pause CSV Controls",
     dpsMeter: "DPS Meter",

@@ -7,6 +7,7 @@ export const ENEMY_TYPE = {
     MINOTAUR: 4,
     ABOMINATION: 5,
     RATCHEMIST: 6,
+    LOOT_GOBLIN: 7,
     BOSS: 99,
 } as const;
 
@@ -86,6 +87,16 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
         speed: 80,
         damage: 12,
         color: "#8bf",
+    },
+    [ENEMY_TYPE.LOOT_GOBLIN]: {
+        id: ENEMY_TYPE.LOOT_GOBLIN,
+        name: "Loot Goblin",
+        baseLife: 16,
+        hp: 16,
+        radius: 12,
+        speed: 130,
+        damage: 0,
+        color: "#fd7",
     },
     [ENEMY_TYPE.BOSS]: {
         id: ENEMY_TYPE.BOSS,

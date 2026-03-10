@@ -153,6 +153,10 @@ import { rewardRunEventProducerSystem } from "./systems/progression/rewardRunEve
 import { rewardSchedulerSystem } from "./systems/progression/rewardSchedulerSystem";
 import { rewardPresenterSystem } from "./systems/progression/rewardPresenterSystem";
 import {
+  resetLootGoblinFloorState,
+  trySpawnLootGoblinForFloor,
+} from "./systems/progression/lootGoblin";
+import {
   commitFloorClear,
   normalizedRunHeat,
   resetFloorClearCommit,
@@ -1916,6 +1920,8 @@ export function createGame(args: CreateGameArgs) {
     clearFloorEntities(w);
     applyMapFeaturesFromCells(w);
     spawnMilestonePigeonNearPlayer(w);
+    resetLootGoblinFloorState(w);
+    trySpawnLootGoblinForFloor(w);
 
     resetFloorProgressionState(w);
 

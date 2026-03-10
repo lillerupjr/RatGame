@@ -16,6 +16,7 @@ const ENEMY_OFFSETS_BY_SKIN: Record<string, ShadowFootOffset> = {
   rat1: { x: 0, y: 0 },
   rat2: { x: 0, y: 0 },
   rat4: { x: 0, y: 0 },
+  lootGoblin: { x: 0, y: 0 },
   infested: { x: 0, y: 0 },
 };
 
@@ -50,6 +51,8 @@ export function resolveEnemyShadowFootOffset(type: EnemyType): ShadowFootOffset 
       return ENEMY_OFFSETS_BY_SKIN.rat2 ?? DEFAULT_OFFSET;
     case ENEMY_TYPE.BRUISER:
       return ENEMY_OFFSETS_BY_SKIN.rat4 ?? DEFAULT_OFFSET;
+    case ENEMY_TYPE.LOOT_GOBLIN:
+      return ENEMY_OFFSETS_BY_SKIN.lootGoblin ?? DEFAULT_OFFSET;
     case ENEMY_TYPE.BOSS:
       return ENEMY_OFFSETS_BY_SKIN.infested ?? DEFAULT_OFFSET;
     default:

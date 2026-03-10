@@ -63,6 +63,7 @@ import {
 import { orientedDims, seAnchorFromTopLeft } from "../../../engine/render/sprites/structureFootprintOwnership";
 import {
   drawEnemyAimOverlay,
+  drawLootGoblinOverlay,
   drawOccluderOverlay,
   drawProjectileFaceOverlay,
   drawRampOverlay,
@@ -163,6 +164,11 @@ const HARDCODED_VOID_TOP_SRC = `${import.meta.env.BASE_URL}assets-runtime/tiles/
 const CAMERA_FOLLOW_HALF_LIFE_DEFAULT_SEC = 0.08;
 const CAMERA_FOLLOW_SNAP_DISTANCE_SQ = 4096 * 4096;
 const CAMERA_SMOOTHING_INTENSITY_SCALE = 0.25;
+const LOOT_GOBLIN_GLOW_OUTER_RADIUS_MULT = 2.35;
+const LOOT_GOBLIN_GLOW_INNER_RADIUS_MULT = 0.35;
+const LOOT_GOBLIN_GLOW_PULSE_MIN = 0.95;
+const LOOT_GOBLIN_GLOW_PULSE_RANGE = 0.3;
+const LOOT_GOBLIN_GLOW_PULSE_SPEED = 2.8;
 
 // Background mode:
 // - "SOLID" = fastest, clean black void
@@ -1617,6 +1623,7 @@ export async function renderSystem(
   const SHOW_STRUCTURE_COLLISION_DEBUG = debugFlags.showStructureCollision;
   const SHOW_STRUCTURE_SLICE_DEBUG = debugFlags.showStructureSlices;
   const SHOW_ENEMY_AIM_OVERLAY = debugFlags.showEnemyAimOverlay;
+  const SHOW_LOOT_GOBLIN_OVERLAY = debugFlags.showLootGoblinOverlay;
   const buildingMaskDebugView = debugFlags.buildingMaskDebugView;
   const SHOW_BUILDING_MASK_DEBUG = debugFlags.showBuildingMaskDebug;
   const SHOW_ZONE_OBJECTIVE_BOUNDS = !!debug.objectives?.showZoneBounds;
@@ -2647,6 +2654,41 @@ export async function renderSystem(
         const faceDx = w.eFaceX?.[i] ?? 0;
         const faceDy = w.eFaceY?.[i] ?? -1;
         const moving = Math.hypot(w.evx?.[i] ?? 0, w.evy?.[i] ?? 0) > 1e-4;
+        const isLootGoblin = w.eType[i] === ENEMY_TYPE.LOOT_GOBLIN;
+
+        if (isLootGoblin) {
+          const pulse =
+            LOOT_GOBLIN_GLOW_PULSE_MIN
+            + LOOT_GOBLIN_GLOW_PULSE_RANGE * (0.5 + 0.5 * Math.sin((w.time ?? 0) * LOOT_GOBLIN_GLOW_PULSE_SPEED + i * 0.37));
+          const enemyR = Math.max(8, w.eR[i] ?? 10);
+          const outerRx = enemyR * ISO_X * LOOT_GOBLIN_GLOW_OUTER_RADIUS_MULT;
+          const outerRy = enemyR * ISO_Y * LOOT_GOBLIN_GLOW_OUTER_RADIUS_MULT;
+          const innerR = Math.max(1, enemyR * LOOT_GOBLIN_GLOW_INNER_RADIUS_MULT);
+          const glow = ctx.createRadialGradient(
+            feet.screenX,
+            feet.screenY - enemyR * 0.25,
+            innerR,
+            feet.screenX,
+            feet.screenY,
+            Math.max(outerRx, outerRy),
+          );
+          glow.addColorStop(0, `rgba(255, 244, 178, ${0.42 * pulse})`);
+          glow.addColorStop(0.55, `rgba(255, 215, 90, ${0.24 * pulse})`);
+          glow.addColorStop(1, "rgba(255, 180, 60, 0)");
+          ctx.save();
+          ctx.globalCompositeOperation = "lighter";
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.ellipse(feet.screenX, feet.screenY, outerRx, outerRy, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 0.45 * pulse;
+          ctx.strokeStyle = "rgba(255, 214, 96, 0.95)";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.ellipse(feet.screenX, feet.screenY, outerRx * 0.92, outerRy * 0.92, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
 
         const fr = getEnemySpriteFrame({
           type: w.eType[i] as any,
@@ -3941,6 +3983,7 @@ export async function renderSystem(
   drawTriggerOverlay(debugContext, SHOW_TRIGGER_ZONES);
   drawRoadSemanticOverlay(debugContext, SHOW_ROAD_SEMANTIC, viewRect);
   drawEnemyAimOverlay(debugContext, SHOW_ENEMY_AIM_OVERLAY);
+  drawLootGoblinOverlay(debugContext, SHOW_LOOT_GOBLIN_OVERLAY);
   if (SHOW_STRUCTURE_COLLISION_DEBUG) {
     const blocked = blockedTilesInView(viewRect);
     if (blocked.length > 0) {

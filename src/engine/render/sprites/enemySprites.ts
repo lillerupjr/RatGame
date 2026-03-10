@@ -84,6 +84,16 @@ const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
         runAnim: "walk",
         frameCount: 6,
     },
+    [ENEMY_TYPE.LOOT_GOBLIN]: {
+        skin: "lootGoblin",
+        scale: 1.5,
+        anchorX: 0.5,
+        anchorY: 0.65,
+        frameW: 92,
+        frameH: 92,
+        runAnim: "walk",
+        frameCount: 6,
+    },
     [ENEMY_TYPE.BOSS]: {
         skin: "infested",
         scale: 2,

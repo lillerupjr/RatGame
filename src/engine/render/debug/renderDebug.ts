@@ -5,6 +5,7 @@ import { getTileSpriteById } from "../sprites/renderSprites";
 import { getEnemyAimDebugInfo, getEnemyAimWorld } from "../../../game/combat/aimPoints";
 import { getEnemyWorld } from "../../../game/coords/worldViews";
 import { ENEMIES, type EnemyType } from "../../../game/content/enemies";
+import { getLootGoblinDebugSnapshot } from "../../../game/systems/progression/lootGoblin";
 import {
   getApronDebugStats,
   getRampFacesForDebug,
@@ -846,6 +847,67 @@ export function drawEnemyAimOverlay(ctx: DebugOverlayContext, show: boolean) {
     for (let i = 0; i < lines.length; i++) {
       c.fillText(lines[i], boxX + padX, boxY + padY + i * lineHeight);
     }
+  }
+
+  c.restore();
+}
+
+export function drawLootGoblinOverlay(ctx: DebugOverlayContext, show: boolean) {
+  if (!show) return;
+
+  const snap = getLootGoblinDebugSnapshot(ctx.w);
+  const c = ctx.ctx;
+  const lines = [
+    "[Loot Goblin]",
+    `floor=${snap.floorIndex} chance=1/${snap.spawnChanceDenominator}`,
+    `rolled=${snap.spawnRolled ? "yes" : "no"} roll=${snap.rollValue ?? "-"} pass=${snap.chancePassed ? "yes" : "no"}`,
+    `spawned=${snap.spawned ? "yes" : "no"} alive=${snap.alive ? "yes" : "no"} idx=${snap.enemyIndex ?? "-"}`,
+    `tile=${snap.spawnTx ?? "-"},${snap.spawnTy ?? "-"}`,
+    `queuedDrops=${snap.queuedGoldDrops}`,
+  ];
+  if (snap.failureReason) lines.push(`reason=${snap.failureReason}`);
+
+  c.save();
+  c.globalAlpha = 1;
+  c.font = "11px monospace";
+  c.textAlign = "left";
+  c.textBaseline = "top";
+
+  const lineH = 12;
+  const padX = 6;
+  const padY = 6;
+  let maxW = 0;
+  for (let i = 0; i < lines.length; i++) {
+    maxW = Math.max(maxW, c.measureText(lines[i]).width);
+  }
+  const boxW = Math.ceil(maxW + padX * 2);
+  const boxH = Math.ceil(lines.length * lineH + padY * 2);
+  const boxX = 10;
+  const boxY = 10;
+
+  c.fillStyle = "rgba(0,0,0,0.72)";
+  c.fillRect(boxX, boxY, boxW, boxH);
+  c.strokeStyle = "rgba(255,220,120,0.65)";
+  c.strokeRect(boxX + 0.5, boxY + 0.5, boxW - 1, boxH - 1);
+
+  c.fillStyle = "rgba(255,240,200,0.98)";
+  for (let i = 0; i < lines.length; i++) {
+    c.fillText(lines[i], boxX + padX, boxY + padY + i * lineH);
+  }
+
+  if (snap.spawnWx !== null && snap.spawnWy !== null) {
+    const p = ctx.toScreen(snap.spawnWx, snap.spawnWy);
+    c.strokeStyle = snap.alive ? "rgba(100,255,140,0.95)" : "rgba(255,120,120,0.95)";
+    c.lineWidth = 2;
+    c.beginPath();
+    c.arc(p.x, p.y, 10, 0, Math.PI * 2);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(p.x - 8, p.y);
+    c.lineTo(p.x + 8, p.y);
+    c.moveTo(p.x, p.y - 8);
+    c.lineTo(p.x, p.y + 8);
+    c.stroke();
   }
 
   c.restore();
