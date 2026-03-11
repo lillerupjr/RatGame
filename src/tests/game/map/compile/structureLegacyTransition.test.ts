@@ -163,7 +163,7 @@ describe("structure legacy transition", () => {
     expect(structures.every((s) => /\/[nesw]$/.test(s.spriteId))).toBe(true);
   });
 
-  it("perimeter_outward uses S→E→N→W corner ownership with fallback", () => {
+  it("perimeter_outward corner picks use outward-facing adjacent side dirs", () => {
     const mapDef: TableMapDef = {
       id: "downtown_perimeter_corner_priority",
       w: 20,
@@ -183,19 +183,31 @@ describe("structure legacy transition", () => {
     const maxY = minY + 12 - 1;
 
     expect(coverAt(maxX, maxY)).toBeTruthy();
-    expect(coverAt(maxX, maxY)?.spriteId.endsWith("/s")).toBe(true); // SE -> S
+    expect(
+      coverAt(maxX, maxY)?.spriteId.endsWith("/s")
+      || coverAt(maxX, maxY)?.spriteId.endsWith("/e"),
+    ).toBe(true); // SE -> S|E
 
     expect(coverAt(maxX, minY)).toBeTruthy();
-    expect(coverAt(maxX, minY)?.spriteId.endsWith("/e")).toBe(true); // NE -> E
+    expect(
+      coverAt(maxX, minY)?.spriteId.endsWith("/e")
+      || coverAt(maxX, minY)?.spriteId.endsWith("/n"),
+    ).toBe(true); // NE -> E|N
 
     expect(coverAt(minX, minY)).toBeTruthy();
-    expect(coverAt(minX, minY)?.spriteId.endsWith("/n")).toBe(true); // NW -> N
+    expect(
+      coverAt(minX, minY)?.spriteId.endsWith("/n")
+      || coverAt(minX, minY)?.spriteId.endsWith("/w"),
+    ).toBe(true); // NW -> N|W
 
     expect(coverAt(minX, maxY)).toBeTruthy();
-    expect(coverAt(minX, maxY)?.spriteId.endsWith("/s")).toBe(true); // SW -> S
+    expect(
+      coverAt(minX, maxY)?.spriteId.endsWith("/s")
+      || coverAt(minX, maxY)?.spriteId.endsWith("/w"),
+    ).toBe(true); // SW -> S|W
   });
 
-  it("perimeter_outward resolves corners before side fill", () => {
+  it("perimeter_outward corner pass keeps all corners outward-facing", () => {
     const mapDef: TableMapDef = {
       id: "downtown_perimeter_corner_first_pass",
       w: 26,
@@ -215,10 +227,22 @@ describe("structure legacy transition", () => {
     const maxX = minX + 16 - 1;
     const maxY = minY + 16 - 1;
 
-    expect(coverAt(maxX, maxY)?.spriteId.endsWith("/s")).toBe(true); // SE corner set by S pass
-    expect(coverAt(minX, maxY)?.spriteId.endsWith("/s")).toBe(true); // SW corner set by S pass
-    expect(coverAt(maxX, minY)?.spriteId.endsWith("/e")).toBe(true); // NE corner set by E pass
-    expect(coverAt(minX, minY)?.spriteId.endsWith("/n")).toBe(true); // NW corner set by N pass
+    expect(
+      coverAt(maxX, maxY)?.spriteId.endsWith("/s")
+      || coverAt(maxX, maxY)?.spriteId.endsWith("/e"),
+    ).toBe(true); // SE -> S|E
+    expect(
+      coverAt(minX, maxY)?.spriteId.endsWith("/s")
+      || coverAt(minX, maxY)?.spriteId.endsWith("/w"),
+    ).toBe(true); // SW -> S|W
+    expect(
+      coverAt(maxX, minY)?.spriteId.endsWith("/e")
+      || coverAt(maxX, minY)?.spriteId.endsWith("/n"),
+    ).toBe(true); // NE -> E|N
+    expect(
+      coverAt(minX, minY)?.spriteId.endsWith("/n")
+      || coverAt(minX, minY)?.spriteId.endsWith("/w"),
+    ).toBe(true); // NW -> N|W
   });
 
   it("perimeter_outward placement is deterministic for the same seed", () => {
@@ -237,6 +261,34 @@ describe("structure legacy transition", () => {
         .filter((o) => o.layerRole === "STRUCTURE" && o.spriteId.includes("structures/buildings/downtown/"))
         .map((o) => ({ tx: o.tx, ty: o.ty, w: o.w, h: o.h, spriteId: o.spriteId }));
     expect(normalize(a)).toEqual(normalize(b));
+  });
+
+  it("perimeter_outward uses dir as side-priority seed", () => {
+    const makeMap = (dir: "E" | "W"): TableMapDef => ({
+      id: "downtown_perimeter_dir_priority",
+      w: 28,
+      h: 28,
+      buildingPackId: "downtown_buildings",
+      cells: [{ x: 0, y: 0, z: 0, type: "floor" }],
+      stamps: [{ x: 3, y: 2, z: 0, type: "building", w: 13, h: 15, layout: "perimeter_outward", dir }],
+    });
+
+    const e = compileKenneyMapFromTable(makeMap("E"), { runSeed: 813, mapId: "perimeter_dir_priority" });
+    const w = compileKenneyMapFromTable(makeMap("W"), { runSeed: 813, mapId: "perimeter_dir_priority" });
+
+    const normalize = (compiled: ReturnType<typeof compileKenneyMapFromTable>) =>
+      compiled.overlays
+        .filter((o) => o.layerRole === "STRUCTURE" && o.spriteId.includes("structures/buildings/downtown/"))
+        .map((o) => ({ tx: o.tx, ty: o.ty, w: o.w, h: o.h, spriteId: o.spriteId }))
+        .sort((a, b) =>
+          a.tx - b.tx
+          || a.ty - b.ty
+          || a.w - b.w
+          || a.h - b.h
+          || a.spriteId.localeCompare(b.spriteId),
+        );
+
+    expect(normalize(e)).not.toEqual(normalize(w));
   });
 
   it("uses china town building pack assets for china town semantic building areas", () => {

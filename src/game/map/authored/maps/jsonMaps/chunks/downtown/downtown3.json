@@ -3,6 +3,7 @@
   "buildingPackId": "downtown_buildings",
   "width": 24,
   "height": 24,
+  "layout": "perimeter_outward",
 
   "fields": [
     { "x": 2, "y": 0, "w": 20, "h": 2, "type": "building" },

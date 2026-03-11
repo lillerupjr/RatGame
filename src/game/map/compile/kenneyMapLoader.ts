@@ -1759,6 +1759,7 @@ export function compileKenneyMapFromTable(
     const blockedTiles = new Set<string>();
     const blockedTileSpansByKey = new Map<string, Array<{ zFrom: number; zTo: number }>>();
     const nonFlippableWarned = new Set<string>();
+    const perimeterGlobalUsageBySkin = new Map<string, number>();
     const wallFaces = new Set<string>();
     const wallFaceList: SolidFaceRec[] = [];
 
@@ -1907,9 +1908,6 @@ export function compileKenneyMapFromTable(
 
             const forcedSkinId = skinOverride ?? stamp.skinId;
             const buildingLayout = stamp.type === "building" ? stamp.layout : undefined;
-            if (buildingLayout === "perimeter_outward" && buildingDir !== undefined) {
-                throw new Error(`[buildings] Building stamp at (${stamp.x},${stamp.y}) cannot combine layout=perimeter_outward with dir.`);
-            }
             if (buildingLayout === "perimeter_outward" && typeof stamp.flipped === "boolean") {
                 throw new Error(`[buildings] Building stamp at (${stamp.x},${stamp.y}) cannot combine layout=perimeter_outward with flipped.`);
             }
@@ -1957,115 +1955,207 @@ export function compileKenneyMapFromTable(
                     }
                 };
                 const placements: Array<{ x: number; y: number; w: number; h: number; skinId: string; dir: BuildingDir }> = [];
-                const sides: BuildingDir[] = ["S", "E", "N", "W"];
-                const chooseLargestCoverage = (candidates: Array<{
+                const baseSideOrder: BuildingDir[] = ["S", "E", "N", "W"];
+                const perimeterPriorityDir: BuildingDir | undefined = buildingDir;
+                const sideOrder: BuildingDir[] = (() => {
+                    if (!perimeterPriorityDir) return baseSideOrder;
+                    const start = baseSideOrder.indexOf(perimeterPriorityDir);
+                    if (start < 0) return baseSideOrder;
+                    return [
+                        ...baseSideOrder.slice(start),
+                        ...baseSideOrder.slice(0, start),
+                    ];
+                })();
+                type PerimeterPickCandidate = {
                     x: number;
                     y: number;
                     w: number;
                     h: number;
                     coverage: number;
                     skinId: string;
-                }>, side: BuildingDir, cursorTag: string) => {
-                    let maxCoverage = candidates[0].coverage;
-                    for (let i = 1; i < candidates.length; i++) {
-                        if (candidates[i].coverage > maxCoverage) maxCoverage = candidates[i].coverage;
+                    dir: BuildingDir;
+                };
+                const fieldUsageBySkin = new Map<string, number>();
+                const sideUsageBySkin: Record<BuildingDir, Map<string, number>> = {
+                    S: new Map<string, number>(),
+                    E: new Map<string, number>(),
+                    N: new Map<string, number>(),
+                    W: new Map<string, number>(),
+                };
+                const recentUsageScoreBySkin = new Map<string, number>();
+                const COVERAGE_WEIGHT_GAMMA = 1.35;
+                const GLOBAL_USAGE_PENALTY = 0.32;
+                const FIELD_USAGE_PENALTY = 0.55;
+                const SIDE_USAGE_PENALTY = 0.75;
+                const RECENT_USAGE_PENALTY = 1.25;
+                const RECENT_USAGE_DECAY = 0.72;
+                const PRIORITY_DIR_BOOST = 1.6;
+                const decayRecentUsage = (): void => {
+                    for (const [skinId, score] of recentUsageScoreBySkin.entries()) {
+                        const decayed = score * RECENT_USAGE_DECAY;
+                        if (decayed <= 1e-4) recentUsageScoreBySkin.delete(skinId);
+                        else recentUsageScoreBySkin.set(skinId, decayed);
                     }
-                    const best = candidates.filter((c) => c.coverage === maxCoverage);
+                };
+                const registerPerimeterPick = (skinId: string, side: BuildingDir): void => {
+                    decayRecentUsage();
+                    fieldUsageBySkin.set(skinId, (fieldUsageBySkin.get(skinId) ?? 0) + 1);
+                    const bySide = sideUsageBySkin[side];
+                    bySide.set(skinId, (bySide.get(skinId) ?? 0) + 1);
+                    recentUsageScoreBySkin.set(skinId, (recentUsageScoreBySkin.get(skinId) ?? 0) + 1);
+                    perimeterGlobalUsageBySkin.set(skinId, (perimeterGlobalUsageBySkin.get(skinId) ?? 0) + 1);
+                };
+                const choosePenalizedWeightedCandidate = (
+                    candidates: PerimeterPickCandidate[],
+                    cursorTag: string,
+                ): PerimeterPickCandidate => {
                     const seed = hashString(
-                        `${runSeed}:${mapId}:${stampIndex}:perimeter:${stamp.x},${stamp.y}:${w}x${h}:${side}:${cursorTag}`,
+                        `${runSeed}:${mapId}:${stampIndex}:perimeter:${stamp.x},${stamp.y}:${w}x${h}:${cursorTag}`,
                     );
                     const rng = new RNG(seed);
-                    return best[rng.int(0, best.length - 1)] ?? best[0];
+                    let totalWeight = 0;
+                    const weights: number[] = new Array(candidates.length);
+                    for (let i = 0; i < candidates.length; i++) {
+                        const c = candidates[i];
+                        const coverageWeight = Math.pow(Math.max(1, c.coverage), COVERAGE_WEIGHT_GAMMA);
+                        const globalUsage = perimeterGlobalUsageBySkin.get(c.skinId) ?? 0;
+                        const fieldUsage = fieldUsageBySkin.get(c.skinId) ?? 0;
+                        const sideUsage = sideUsageBySkin[c.dir].get(c.skinId) ?? 0;
+                        const recentUsageScore = recentUsageScoreBySkin.get(c.skinId) ?? 0;
+                        const penalty = Math.exp(
+                            -(
+                                globalUsage * GLOBAL_USAGE_PENALTY
+                                + fieldUsage * FIELD_USAGE_PENALTY
+                                + sideUsage * SIDE_USAGE_PENALTY
+                                + recentUsageScore * RECENT_USAGE_PENALTY
+                            ),
+                        );
+                        const priorityBoost =
+                            perimeterPriorityDir !== undefined && c.dir === perimeterPriorityDir
+                                ? PRIORITY_DIR_BOOST
+                                : 1;
+                        const weight = Math.max(1e-6, coverageWeight * penalty * priorityBoost);
+                        weights[i] = weight;
+                        totalWeight += weight;
+                    }
+                    let roll = rng.next() * Math.max(1e-6, totalWeight);
+                    for (let i = 0; i < candidates.length; i++) {
+                        roll -= weights[i];
+                        if (roll <= 0) return candidates[i];
+                    }
+                    return candidates[candidates.length - 1] ?? candidates[0];
                 };
-
-                // Pass 1: corners first, ownership priority S -> E -> N -> W.
-                for (let sideIndex = 0; sideIndex < sides.length; sideIndex++) {
-                    const side = sides[sideIndex];
-                    const corners = (() => {
-                        if (side === "S") return [{ x: 0, y: h - 1 }, { x: w - 1, y: h - 1 }];
-                        if (side === "E") return [{ x: w - 1, y: h - 1 }, { x: w - 1, y: 0 }];
-                        if (side === "N") return [{ x: w - 1, y: 0 }, { x: 0, y: 0 }];
-                        return [{ x: 0, y: 0 }, { x: 0, y: h - 1 }];
-                    })();
-                    for (let ci = 0; ci < corners.length; ci++) {
-                        const corner = corners[ci];
-                        if (corner.x < 0 || corner.y < 0 || corner.x >= w || corner.y >= h) continue;
-                        if (occupied[corner.y * w + corner.x]) continue;
-                        const candidates: Array<{
-                            x: number;
-                            y: number;
-                            w: number;
-                            h: number;
-                            coverage: number;
-                            skinId: string;
-                        }> = [];
+                const collectCornerCandidates = (
+                    cornerX: number,
+                    cornerY: number,
+                    dirs: readonly BuildingDir[],
+                ): PerimeterPickCandidate[] => {
+                    const candidates: PerimeterPickCandidate[] = [];
+                    const seen = new Set<string>();
+                    for (let di = 0; di < dirs.length; di++) {
+                        const dir = dirs[di];
                         for (let i = 0; i < candidateSkins.length; i++) {
                             const skin = candidateSkins[i];
-                            const oriented = orientBuildingFootprintByDir(skin.w, skin.h, skin.defaultFacing, side);
+                            const oriented = orientBuildingFootprintByDir(skin.w, skin.h, skin.defaultFacing, dir);
                             const cw = oriented.w;
                             const ch = oriented.h;
-                            const xCandidates = side === "E"
+                            const xCandidates = dir === "E"
                                 ? [w - cw]
-                                : side === "W"
+                                : dir === "W"
                                     ? [0]
-                                    : [Math.max(0, Math.min(corner.x, w - cw)), Math.max(0, Math.min(corner.x - cw + 1, w - cw))];
-                            const yCandidates = side === "S"
+                                    : [Math.max(0, Math.min(cornerX, w - cw)), Math.max(0, Math.min(cornerX - cw + 1, w - cw))];
+                            const yCandidates = dir === "S"
                                 ? [h - ch]
-                                : side === "N"
+                                : dir === "N"
                                     ? [0]
-                                    : [Math.max(0, Math.min(corner.y, h - ch)), Math.max(0, Math.min(corner.y - ch + 1, h - ch))];
+                                    : [Math.max(0, Math.min(cornerY, h - ch)), Math.max(0, Math.min(cornerY - ch + 1, h - ch))];
                             for (let xi = 0; xi < xCandidates.length; xi++) {
                                 for (let yi = 0; yi < yCandidates.length; yi++) {
                                     const px = xCandidates[xi];
                                     const py = yCandidates[yi];
-                                    if (px > corner.x || corner.x >= px + cw || py > corner.y || corner.y >= py + ch) continue;
+                                    if (px > cornerX || cornerX >= px + cw || py > cornerY || cornerY >= py + ch) continue;
                                     if (!canPlace(px, py, cw, ch)) continue;
-                                    const coverage = side === "N" || side === "S" ? cw : ch;
-                                    candidates.push({ x: px, y: py, w: cw, h: ch, coverage, skinId: skin.id });
+                                    const coverage = dir === "N" || dir === "S" ? cw : ch;
+                                    const key = `${px},${py}:${cw}x${ch}:${skin.id}:${dir}`;
+                                    if (seen.has(key)) continue;
+                                    seen.add(key);
+                                    candidates.push({ x: px, y: py, w: cw, h: ch, coverage, skinId: skin.id, dir });
                                 }
                             }
                         }
-                        if (candidates.length === 0) continue;
-                        const picked = chooseLargestCoverage(candidates, side, `corner:${corner.x},${corner.y}`);
-                        placements.push({ x: picked.x, y: picked.y, w: picked.w, h: picked.h, skinId: picked.skinId, dir: side });
-                        occupy(picked.x, picked.y, picked.w, picked.h);
+                    }
+                    return candidates;
+                };
+                const collectSideCandidates = (side: BuildingDir, cursor: number): PerimeterPickCandidate[] => {
+                    const candidates: PerimeterPickCandidate[] = [];
+                    for (let i = 0; i < candidateSkins.length; i++) {
+                        const skin = candidateSkins[i];
+                        const oriented = orientBuildingFootprintByDir(skin.w, skin.h, skin.defaultFacing, side);
+                        const cw = oriented.w;
+                        const ch = oriented.h;
+                        const px = side === "N" || side === "S" ? cursor : (side === "E" ? w - cw : 0);
+                        const py = side === "E" || side === "W" ? cursor : (side === "S" ? h - ch : 0);
+                        if (!canPlace(px, py, cw, ch)) continue;
+                        const coverage = side === "N" || side === "S" ? cw : ch;
+                        candidates.push({ x: px, y: py, w: cw, h: ch, coverage, skinId: skin.id, dir: side });
+                    }
+                    return candidates;
+                };
+
+                // Pass 1: corners first, with priority seeded by dir (if present).
+                type CornerTag = "SW" | "SE" | "NE" | "NW";
+                const cornersByTag: Record<CornerTag, { x: number; y: number; dirs: readonly BuildingDir[] }> = {
+                    SW: { x: 0, y: h - 1, dirs: ["S", "W"] },
+                    SE: { x: w - 1, y: h - 1, dirs: ["S", "E"] },
+                    NE: { x: w - 1, y: 0, dirs: ["E", "N"] },
+                    NW: { x: 0, y: 0, dirs: ["N", "W"] },
+                };
+                const sideToCorners: Record<BuildingDir, readonly CornerTag[]> = {
+                    S: ["SW", "SE"],
+                    E: ["SE", "NE"],
+                    N: ["NE", "NW"],
+                    W: ["NW", "SW"],
+                };
+                const seenCornerTags = new Set<CornerTag>();
+                const cornerOrder: CornerTag[] = [];
+                for (let i = 0; i < sideOrder.length; i++) {
+                    const side = sideOrder[i];
+                    const tags = sideToCorners[side];
+                    for (let j = 0; j < tags.length; j++) {
+                        const tag = tags[j];
+                        if (seenCornerTags.has(tag)) continue;
+                        seenCornerTags.add(tag);
+                        cornerOrder.push(tag);
                     }
                 }
+                for (let i = 0; i < cornerOrder.length; i++) {
+                    const tag = cornerOrder[i];
+                    const corner = cornersByTag[tag];
+                    if (corner.x < 0 || corner.y < 0 || corner.x >= w || corner.y >= h) continue;
+                    if (occupied[corner.y * w + corner.x]) continue;
+                    const candidates = collectCornerCandidates(corner.x, corner.y, corner.dirs);
+                    if (candidates.length === 0) continue;
+                    const picked = choosePenalizedWeightedCandidate(candidates, `corner:${tag}:${corner.x},${corner.y}`);
+                    placements.push({ x: picked.x, y: picked.y, w: picked.w, h: picked.h, skinId: picked.skinId, dir: picked.dir });
+                    occupy(picked.x, picked.y, picked.w, picked.h);
+                    registerPerimeterPick(picked.skinId, picked.dir);
+                }
 
-                // Pass 2: fill remaining side spans in same order.
-                for (let sideIndex = 0; sideIndex < sides.length; sideIndex++) {
-                    const side = sides[sideIndex];
+                // Pass 2: fill remaining side spans in priority side order.
+                for (let sideIndex = 0; sideIndex < sideOrder.length; sideIndex++) {
+                    const side = sideOrder[sideIndex];
                     const limit = side === "S" || side === "N" ? w : h;
                     let cursor = 0;
                     while (cursor < limit) {
-                        const candidates: Array<{
-                            x: number;
-                            y: number;
-                            w: number;
-                            h: number;
-                            coverage: number;
-                            skinId: string;
-                        }> = [];
-                        for (let i = 0; i < candidateSkins.length; i++) {
-                            const skin = candidateSkins[i];
-                            const oriented = orientBuildingFootprintByDir(skin.w, skin.h, skin.defaultFacing, side);
-                            const cw = oriented.w;
-                            const ch = oriented.h;
-                            const x0 = side === "E" ? (w - cw) : cursor;
-                            const y0 = side === "S" ? (h - ch) : cursor;
-                            const px = side === "N" || side === "S" ? x0 : (side === "E" ? w - cw : 0);
-                            const py = side === "E" || side === "W" ? y0 : (side === "S" ? h - ch : 0);
-                            if (!canPlace(px, py, cw, ch)) continue;
-                            const coverage = side === "N" || side === "S" ? cw : ch;
-                            candidates.push({ x: px, y: py, w: cw, h: ch, coverage, skinId: skin.id });
-                        }
+                        const candidates = collectSideCandidates(side, cursor);
                         if (candidates.length === 0) {
                             cursor++;
                             continue;
                         }
-                        const picked = chooseLargestCoverage(candidates, side, `side:${cursor}`);
-                        placements.push({ x: picked.x, y: picked.y, w: picked.w, h: picked.h, skinId: picked.skinId, dir: side });
+                        const picked = choosePenalizedWeightedCandidate(candidates, `side:${side}:${cursor}`);
+                        placements.push({ x: picked.x, y: picked.y, w: picked.w, h: picked.h, skinId: picked.skinId, dir: picked.dir });
                         occupy(picked.x, picked.y, picked.w, picked.h);
+                        registerPerimeterPick(picked.skinId, picked.dir);
                         cursor += picked.coverage;
                     }
                 }

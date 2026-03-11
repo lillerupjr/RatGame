@@ -201,6 +201,7 @@ type JsonMapDef = {
   id: string;
   width?: number;
   height?: number;
+  layout?: "perimeter_outward";
   chunkGrid?: {
     id: string;
     cols: number;
@@ -379,9 +380,8 @@ function validatePerimeterBuildingLayoutOverrides(
   source?: string,
 ): void {
   if (layout !== "perimeter_outward") return;
-  if (dir !== undefined) {
-    throw new Error(`JSON map loader${formatSource(source)}: ${context} cannot define dir when layout=perimeter_outward.`);
-  }
+  // In perimeter layout, dir is allowed and interpreted as side-priority seed.
+  void dir;
   if (flipped !== undefined) {
     throw new Error(`JSON map loader${formatSource(source)}: ${context} cannot define flipped when layout=perimeter_outward.`);
   }
@@ -636,6 +636,7 @@ function requireCellsField(
 
 function optionalFieldsField(
   obj: Record<string, unknown>,
+  defaultBuildingLayout?: "perimeter_outward",
   source?: string
 ): {
   cells: TableMapCell[];
@@ -751,7 +752,7 @@ function optionalFieldsField(
 
     if (resolvedTypeRaw === "building") {
       const buildingDir = normalizeBuildingDirOrThrow(dirRaw, `fields[${index}]`, source);
-      const layout = normalizeBuildingLayoutOrThrow(layoutRaw, `fields[${index}]`, source);
+      const layout = normalizeBuildingLayoutOrThrow(layoutRaw, `fields[${index}]`, source) ?? defaultBuildingLayout;
       validateBuildingDirAndFlipped(buildingDir, flipped, `fields[${index}]`, source);
       validatePerimeterBuildingLayoutOverrides(layout, buildingDir, flipped, `fields[${index}]`, source);
       stamps.push({
@@ -800,7 +801,11 @@ function optionalFieldsField(
   return { cells: out, stamps, roadRects };
 }
 
-function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): SemanticStamp[] | undefined {
+function optionalSemanticStamp(
+  obj: Record<string, unknown>,
+  defaultBuildingLayout?: "perimeter_outward",
+  source?: string,
+): SemanticStamp[] | undefined {
   const arr = obj.stamps;
   if (arr === undefined) return undefined;
   if (!Array.isArray(arr)) {
@@ -862,7 +867,7 @@ function optionalSemanticStamp(obj: Record<string, unknown>, source?: string): S
     const blocksMovement = optionalBooleanField(entry, "blocksMovement");
     const flipped = optionalBooleanField(entry, "flipped");
     const layout = type === "building"
-      ? normalizeBuildingLayoutOrThrow(layoutRaw, `stamps[${index}]`, source)
+      ? (normalizeBuildingLayoutOrThrow(layoutRaw, `stamps[${index}]`, source) ?? defaultBuildingLayout)
       : undefined;
     if (layoutRaw !== undefined && type !== "building") {
       throw new Error(`JSON map loader${formatSource(source)}: stamps[${index}].layout is only supported for type=building.`);
@@ -1008,10 +1013,15 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     throw new Error(`JSON map loader${formatSource(source)}: root must be an object.`);
   }
 
+  const defaultBuildingLayout = normalizeBuildingLayoutOrThrow(
+    optionalStringField(data, "layout"),
+    "layout",
+    source,
+  );
   const id = requireStringField(data, "id", source);
   const isDocksMap = id.trim().toUpperCase() === "DOCKS";
   const chunkGrid = optionalChunkGridField(data, source);
-  const fieldParsed = optionalFieldsField(data, source);
+  const fieldParsed = optionalFieldsField(data, defaultBuildingLayout, source);
   const fieldCells = fieldParsed.cells;
   const pointCells = requireCellsField(data, source);
 
@@ -1156,7 +1166,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     for (let i = 0; i < fieldCells.length; i++) add(shiftCell(fieldCells[i]));
     for (let i = 0; i < pointCells.length; i++) add(shiftCell(pointCells[i]));
 
-    const stampsRaw = optionalSemanticStamp(data, source);
+    const stampsRaw = optionalSemanticStamp(data, defaultBuildingLayout, source);
     const stamps = (() => {
       const shiftedFieldStamps = fieldParsed.stamps.map(shiftStamp);
       const shiftedAuthoredStamps = (stampsRaw ?? []).map(shiftStamp);
@@ -1215,7 +1225,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
   for (let i = 0; i < pointCells.length; i++) add(pointCells[i]);
 
   const cells = merged;
-  const stampsRaw = optionalSemanticStamp(data, source);
+  const stampsRaw = optionalSemanticStamp(data, defaultBuildingLayout, source);
   const stamps = (() => {
     const merged = [...fieldParsed.stamps, ...(stampsRaw ?? [])];
     return merged.length > 0 ? merged : undefined;
@@ -1243,6 +1253,7 @@ export function loadTableMapDefFromJson(data: unknown, source?: string): TableMa
     id,
     width,
     height,
+    layout: defaultBuildingLayout,
     cells,
     stamps,
     roadSemanticRects: roadRects,

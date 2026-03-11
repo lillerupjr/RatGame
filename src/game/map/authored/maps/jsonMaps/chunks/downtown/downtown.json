@@ -3,15 +3,14 @@
   "buildingPackId": "downtown_buildings",
   "width": 24,
   "height": 24,
+  "layout": "perimeter_outward",
+
 
   "fields": [
-
-
-
     { "x": 0, "y": 0, "w": 24, "h": 24, "type": "sidewalk" },
-    { "x": 3, "y": 3, "w": 15, "h": 4, "type": "building" },
+    { "x": 3, "y": 3, "w": 15, "h": 5, "type": "building" },
 
-    { "x": 3, "y": 15, "w": 15, "h": 5, "type": "park" },
+    { "x": 3, "y": 15, "w": 15, "h": 5, "type": "building" },
 
     { "x": 0, "y": 0, "w": 24, "h": 2, "type": "road" },
     { "x": 0, "y": 21, "w": 24, "h": 3, "type": "road" },

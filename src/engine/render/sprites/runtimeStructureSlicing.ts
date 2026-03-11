@@ -138,11 +138,15 @@ export function buildRuntimeStructureBandPieces(
   // Keep slice offset in authored screen pixels (same convention as drawDxOffset).
   const sliceOffsetX = input.sliceOffsetX ?? 0;
   const sliceOffsetY = input.sliceOffsetY ?? 0;
+  // Keep core slice stride anchored to tile-grid screen spacing, independent of sprite scale.
+  // Example: scale=0.5 => source bands double in width, so destination bands still land at ~64px.
+  const safeScale = Math.max(1e-6, Math.abs(scale));
+  const sourceBandPx = Math.max(1, Math.round(bandPx / safeScale));
   const layout = getVerticalBandLayout(
     input.spriteId,
     input.spriteWidth,
     input.spriteHeight,
-    bandPx,
+    sourceBandPx,
     input.footprintW,
     input.footprintH,
     input.sliceOriginX,

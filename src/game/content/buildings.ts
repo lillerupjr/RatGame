@@ -103,8 +103,36 @@ const CANONICAL_BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
     w: 2,
     h: 2,
     spriteScale: 1,
-  })
-};
+  }),
+  china_town_2: makeMonolithicBuilding("china_town_2", "structures/buildings/china_town/2", {
+    heightUnits: 32,
+    anchorLiftUnits: -7,
+    w: 3,
+    h: 3,
+    spriteScale: 1,
+  }),
+  china_town_3: makeMonolithicBuilding("china_town_3", "structures/buildings/china_town/3", {
+    heightUnits: 32,
+    anchorLiftUnits: -2,
+    w: 6,
+    h: 6,
+    spriteScale: 1,
+  }),
+  china_town_4: makeMonolithicBuilding("china_town_4", "structures/buildings/china_town/4", {
+    heightUnits: 32,
+    anchorLiftUnits: -2,
+    w: 3,
+    h: 3,
+    spriteScale: 0.5,
+  }),
+    china_town_5: makeMonolithicBuilding("china_town_5", "structures/buildings/china_town/5", {
+      heightUnits: 32,
+      anchorLiftUnits: -1,
+      w: 3,
+      h: 3,
+      spriteScale: 0.5,
+    })
+}
 
 const BUILDING_ID_ALIASES: Record<BuildingSkinId, BuildingSkinId> = {
   building1: "avenue_1",

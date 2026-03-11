@@ -245,14 +245,23 @@ describe("jsonMapLoader", () => {
     }, "inline")).toThrow(/layout is only supported for type=building/i);
   });
 
-  it("rejects perimeter layout with parent dir or flipped", () => {
-    expect(() => loadTableMapDefFromJson({
+  it("allows perimeter layout with dir and rejects flipped", () => {
+    const withDir = loadTableMapDefFromJson({
       id: "STAMP_BUILDING_LAYOUT_DIR_TEST",
       width: 12,
       height: 12,
       cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
       stamps: [{ x: 1, y: 1, z: 0, type: "building", w: 8, h: 8, layout: "perimeter_outward", dir: "S" }],
-    }, "inline")).toThrow(/cannot define dir when layout=perimeter_outward/i);
+    }, "inline");
+    expect(withDir.stamps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "building",
+          layout: "perimeter_outward",
+          dir: "S",
+        }),
+      ]),
+    );
 
     expect(() => loadTableMapDefFromJson({
       id: "STAMP_BUILDING_LAYOUT_FLIPPED_TEST",
@@ -260,6 +269,75 @@ describe("jsonMapLoader", () => {
       height: 12,
       cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
       stamps: [{ x: 1, y: 1, z: 0, type: "building", w: 8, h: 8, layout: "perimeter_outward", flipped: true }],
+    }, "inline")).toThrow(/cannot define flipped when layout=perimeter_outward/i);
+  });
+
+  it("applies root layout to building fields when field layout is omitted", () => {
+    const mapDef = loadTableMapDefFromJson({
+      id: "ROOT_LAYOUT_FIELDS_TEST",
+      width: 12,
+      height: 12,
+      layout: "perimeter_outward",
+      cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
+      fields: [{ x: 1, y: 1, z: 0, type: "building", w: 8, h: 8 }],
+    }, "inline");
+
+    expect(mapDef.stamps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "building",
+          layout: "perimeter_outward",
+        }),
+      ]),
+    );
+  });
+
+  it("applies root layout to authored building stamps when stamp layout is omitted", () => {
+    const mapDef = loadTableMapDefFromJson({
+      id: "ROOT_LAYOUT_STAMPS_TEST",
+      width: 12,
+      height: 12,
+      layout: "perimeter_outward",
+      cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
+      stamps: [{ x: 1, y: 1, z: 0, type: "building", w: 8, h: 8 }],
+    }, "inline");
+
+    expect(mapDef.stamps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "building",
+          layout: "perimeter_outward",
+        }),
+      ]),
+    );
+  });
+
+  it("allows root perimeter layout with dir and rejects flipped", () => {
+    const withDir = loadTableMapDefFromJson({
+      id: "ROOT_LAYOUT_DIR_CONFLICT_TEST",
+      width: 12,
+      height: 12,
+      layout: "perimeter_outward",
+      cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
+      fields: [{ x: 1, y: 1, z: 0, type: "building", w: 8, h: 8, dir: "S" }],
+    }, "inline");
+    expect(withDir.stamps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "building",
+          layout: "perimeter_outward",
+          dir: "S",
+        }),
+      ]),
+    );
+
+    expect(() => loadTableMapDefFromJson({
+      id: "ROOT_LAYOUT_FLIPPED_CONFLICT_TEST",
+      width: 12,
+      height: 12,
+      layout: "perimeter_outward",
+      cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
+      stamps: [{ x: 1, y: 1, z: 0, type: "building", w: 8, h: 8, flipped: true }],
     }, "inline")).toThrow(/cannot define flipped when layout=perimeter_outward/i);
   });
 
