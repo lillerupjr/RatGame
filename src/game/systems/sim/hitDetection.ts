@@ -6,6 +6,7 @@ import {
   getProjectileWorld,
 } from "../../coords/worldViews";
 import { ENEMY_TYPE } from "../../content/enemies";
+import { isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
 
 /**
  * Determines if a projectile hits an enemy based on whether it's melee or ranged.
@@ -100,6 +101,7 @@ export function isEnemyHit(
  */
 /** Return true if the player overlaps an enemy. */
 export function isPlayerHit(w: World, e: number, playerR: number): boolean {
+  if (isPoeEnemyDormant(w, e)) return false;
   // -----------------------------------------
   // Milestone C: height-aware contact hits
   // Player and enemy only collide if their vertical ranges overlap.

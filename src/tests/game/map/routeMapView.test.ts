@@ -73,13 +73,22 @@ describe("routeMapView", () => {
 
   test("buildDeterministicRouteMapVM builds reachable deterministic nodes", () => {
     const vm = buildDeterministicRouteMapVM(
-      ["SURVIVE", "TIME_TRIAL", "VENDOR", "HEAL", "BOSS_TRIPLE"],
+      [
+        { archetype: "SURVIVE" },
+        { archetype: "SURVIVE", objectiveId: "POE_MAP_CLEAR", title: "PoE Map" },
+        { archetype: "TIME_TRIAL" },
+        { archetype: "VENDOR" },
+        { archetype: "HEAL" },
+        { archetype: "BOSS_TRIPLE" },
+      ],
       2,
       5,
     );
     expect(vm.mode).toBe("DETERMINISTIC");
-    expect(vm.nodes.length).toBe(5);
+    expect(vm.nodes.length).toBe(6);
     expect(vm.edges.length).toBe(0);
+    const poeNode = vm.nodes.find((node) => node.title === "PoE Map");
+    expect(poeNode?.deterministicData?.objectiveId).toBe("POE_MAP_CLEAR");
     for (const node of vm.nodes) {
       expect(node.status).toBe("REACHABLE");
       expect(node.reachable).toBe(true);

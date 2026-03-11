@@ -20,4 +20,10 @@ export type FloorIntent = {
   spawnZoneRadiusTiles?: number;
   spawnZoneMinSeparationTiles?: number;
   placementPolicy?: PlacementPolicy;
+  poeMapModifiers?: {
+    packSizeMultiplier?: number;
+    rarePackChanceMultiplier?: number;
+    magicPackChanceMultiplier?: number;
+    extraPopulationScalar?: number;
+  };
 };

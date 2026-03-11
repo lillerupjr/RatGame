@@ -17,6 +17,7 @@ import {
   FLEE_TRIGGER_RADIUS_TILES,
   isLootGoblinEnemy,
 } from "../progression/lootGoblin";
+import { getPoeEnemyLeashAnchor, isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
 
 type GridPos = { gx: number; gy: number };
 type WorldPos = { wx: number; wy: number };
@@ -182,6 +183,12 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     ezVisual[i] = eCur.zVisual;
     ezLogical[i] = eCur.zLogical;
 
+    if (isPoeEnemyDormant(w, i)) {
+      knockVx[i] = 0;
+      knockVy[i] = 0;
+      continue;
+    }
+
     // Apply and decay knockback velocity
     let kvx = knockVx[i] ?? 0;
     let kvy = knockVy[i] ?? 0;
@@ -193,43 +200,57 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     const flowDir = queryFlowDirection(flowField, ex, ey, eCur.floorH, KENNEY_TILE_WORLD);
 
     const isGoblin = isLootGoblinEnemy(w, i);
-    let gux = 0;
-    let guy = 0;
-    if (isGoblin) {
-      const fleeRadiusWorld = FLEE_TRIGGER_RADIUS_TILES * KENNEY_TILE_WORLD;
-      const distToPlayer = Math.hypot(ex - px, ey - py);
-      if (distToPlayer <= fleeRadiusWorld) {
-        if (flowDir) {
-          gux = -flowDir.dx;
-          guy = -flowDir.dy;
-        }
-        if (Math.hypot(gux, guy) <= 1e-6) {
-          const gvx = eGrid0.gx - playerGrid.gx;
-          const gvy = eGrid0.gy - playerGrid.gy;
-          const gdist = Math.hypot(gvx, gvy);
-          if (gdist > 1e-6) {
-            gux = gvx / gdist;
-            guy = gvy / gdist;
+    const leashAnchor = getPoeEnemyLeashAnchor(w, i);
+    let chaseWx = 0;
+    let chaseWy = 0;
+
+    if (leashAnchor) {
+      const dx = leashAnchor.wx - ex;
+      const dy = leashAnchor.wy - ey;
+      const len = Math.hypot(dx, dy);
+      if (len > 1e-6) {
+        chaseWx = (dx / len) * w.eSpeed[i];
+        chaseWy = (dy / len) * w.eSpeed[i];
+      }
+    } else {
+      let gux = 0;
+      let guy = 0;
+      if (isGoblin) {
+        const fleeRadiusWorld = FLEE_TRIGGER_RADIUS_TILES * KENNEY_TILE_WORLD;
+        const distToPlayer = Math.hypot(ex - px, ey - py);
+        if (distToPlayer <= fleeRadiusWorld) {
+          if (flowDir) {
+            gux = -flowDir.dx;
+            guy = -flowDir.dy;
+          }
+          if (Math.hypot(gux, guy) <= 1e-6) {
+            const gvx = eGrid0.gx - playerGrid.gx;
+            const gvy = eGrid0.gy - playerGrid.gy;
+            const gdist = Math.hypot(gvx, gvy);
+            if (gdist > 1e-6) {
+              gux = gvx / gdist;
+              guy = gvy / gdist;
+            }
           }
         }
+      } else if (flowDir) {
+        gux = flowDir.dx;
+        guy = flowDir.dy;
+      } else {
+        // Fallback: direct chase for off-graph or unreachable enemies
+        const enemyGrid = gridFromAnchor(w.egxi[i], w.egyi[i], w.egox[i], w.egoy[i]);
+        const gvx = playerGrid.gx - enemyGrid.gx;
+        const gvy = playerGrid.gy - enemyGrid.gy;
+        const gdist = Math.hypot(gvx, gvy) || 1;
+        gux = gvx / gdist;
+        guy = gvy / gdist;
       }
-    } else if (flowDir) {
-      gux = flowDir.dx;
-      guy = flowDir.dy;
-    } else {
-      // Fallback: direct chase for off-graph or unreachable enemies
-      const enemyGrid = gridFromAnchor(w.egxi[i], w.egyi[i], w.egox[i], w.egoy[i]);
-      const gvx = playerGrid.gx - enemyGrid.gx;
-      const gvy = playerGrid.gy - enemyGrid.gy;
-      const gdist = Math.hypot(gvx, gvy) || 1;
-      gux = gvx / gdist;
-      guy = gvy / gdist;
-    }
 
-    const eWorldDir = gridDirToWorldDir(KENNEY_TILE_WORLD, gux, guy);
-    const speedMult = isGoblin ? FLEE_SPEED_MULT : 1;
-    const chaseWx = eWorldDir.wx * w.eSpeed[i] * speedMult;
-    const chaseWy = eWorldDir.wy * w.eSpeed[i] * speedMult;
+      const eWorldDir = gridDirToWorldDir(KENNEY_TILE_WORLD, gux, guy);
+      const speedMult = isGoblin ? FLEE_SPEED_MULT : 1;
+      chaseWx = eWorldDir.wx * w.eSpeed[i] * speedMult;
+      chaseWy = eWorldDir.wy * w.eSpeed[i] * speedMult;
+    }
     const moveWx = chaseWx + kvx;
     const moveWy = chaseWy + kvy;
 

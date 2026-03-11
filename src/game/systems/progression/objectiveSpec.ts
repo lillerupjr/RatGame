@@ -6,6 +6,10 @@ export type ObjectiveSpec =
       objectiveType: "ZONE_TRIAL";
       params: { zoneCount: number; zoneSize: number; killTargetPerZone: number };
     }
+  | {
+      objectiveType: "POE_MAP_CLEAR";
+      params: { clearCount: number };
+    }
   | { objectiveType: "VENDOR_VISIT"; params: Record<string, never> }
   | { objectiveType: "HEAL_VISIT"; params: Record<string, never> }
   | {
@@ -17,6 +21,7 @@ export const OBJECTIVE_TRIGGER_IDS = {
   timer: "OBJ_TIMER",
   zonePrefix: "OBJ_ZONE_",
   bossZonePrefix: "OBJ_BOSS_ZONE_",
+  poePackClear: "OBJ_POE_PACK_CLEAR",
 
   // Trial-level completion (existing)
   zoneTrialComplete: "OBJ_ZONE_TRIAL_COMPLETE",
@@ -61,6 +66,19 @@ export function objectiveSpecToObjectiveDefs(spec: ObjectiveSpec): ObjectiveDef[
         },
       ];
     }
+    case "POE_MAP_CLEAR":
+      return [
+        {
+          id: "OBJ_POE_MAP_CLEAR",
+          listensTo: [OBJECTIVE_TRIGGER_IDS.poePackClear],
+          completionRule: {
+            type: "SIGNAL_COUNT",
+            count: spec.params.clearCount,
+            signalType: "KILL",
+          },
+          outcomes: [],
+        },
+      ];
     case "VENDOR_VISIT":
       return [
         {

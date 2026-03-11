@@ -116,6 +116,80 @@ function waveMultiplier(cfg: SpawnDirectorConfig, nowSec: number): number {
   return cfg.waveLowMult + (cfg.waveHighMult - cfg.waveLowMult) * s;
 }
 
+function resolveSpawnModelMultipliers(w: any, heat: number): {
+  spawnMult: number;
+  hpMult: number;
+  pressureAt0Sec: number;
+  pressureAt120Sec: number;
+  representativeEnemyHp: number;
+} {
+  const tuning = w.balance?.spawnTuning ?? {};
+  const pressureAt0Sec =
+    typeof tuning.pressureAt0Sec === "number"
+      ? tuning.pressureAt0Sec
+      : DEFAULT_SPAWN_TUNING.pressureAt0Sec;
+  const pressureAt120Sec =
+    typeof tuning.pressureAt120Sec === "number"
+      ? tuning.pressureAt120Sec
+      : DEFAULT_SPAWN_TUNING.pressureAt120Sec;
+
+  const spawnBase =
+    typeof tuning.spawnBase === "number" ? tuning.spawnBase : DEFAULT_SPAWN_TUNING.spawnBase;
+  const spawnPerDepth =
+    typeof tuning.spawnPerDepth === "number" ? tuning.spawnPerDepth : DEFAULT_SPAWN_TUNING.spawnPerDepth;
+  const spawnMult = Math.max(0, spawnBase) * Math.pow(Math.max(0.0001, spawnPerDepth), heat);
+
+  const hpBase = typeof tuning.hpBase === "number" ? tuning.hpBase : DEFAULT_SPAWN_TUNING.hpBase;
+  const hpPerDepth =
+    typeof tuning.hpPerDepth === "number" ? tuning.hpPerDepth : DEFAULT_SPAWN_TUNING.hpPerDepth;
+  const hpMult = Math.max(0, hpBase) * Math.pow(Math.max(0.0001, hpPerDepth), heat);
+
+  const chaserDef = registry.enemy(ENEMY_TYPE.CHASER);
+  const baseEnemyHp = Math.max(1, chaserDef.baseLife ?? chaserDef.hp ?? 1);
+  const representativeEnemyHp = Math.max(1, baseEnemyHp * hpMult);
+
+  return {
+    spawnMult,
+    hpMult,
+    pressureAt0Sec,
+    pressureAt120Sec,
+    representativeEnemyHp,
+  };
+}
+
+export function computeSurviveBudgetForDurationSeconds(w: any, durationSec: number): number {
+  const duration = Math.max(0, safeNum(durationSec, 0));
+  if (duration <= 0) return 0;
+
+  const heat = Math.max(0, Math.floor(safeNum(w.runHeat, 0)));
+  const multipliers = resolveSpawnModelMultipliers(w, heat);
+  const steps = Math.max(1, Math.ceil(duration));
+  const dt = duration / steps;
+
+  let hpBudget = 0;
+  for (let i = 0; i < steps; i++) {
+    const t0 = i * dt;
+    const t1 = (i + 1) * dt;
+    const p0 = computePressure(t0, multipliers.pressureAt0Sec, multipliers.pressureAt120Sec);
+    const p1 = computePressure(t1, multipliers.pressureAt0Sec, multipliers.pressureAt120Sec);
+    const avgPressure = (p0 + p1) * 0.5;
+    hpBudget += BASELINE_PLAYER_DPS * avgPressure * multipliers.spawnMult * dt;
+  }
+
+  return Math.max(0, hpBudget);
+}
+
+export function computeSurviveEquivalentSpawnCountForDurationSeconds(w: any, durationSec: number): number {
+  const duration = Math.max(0, safeNum(durationSec, 0));
+  if (duration <= 0) return 0;
+
+  const heat = Math.max(0, Math.floor(safeNum(w.runHeat, 0)));
+  const multipliers = resolveSpawnModelMultipliers(w, heat);
+  const hpBudget = computeSurviveBudgetForDurationSeconds(w, duration);
+  if (multipliers.representativeEnemyHp <= 0) return 0;
+  return hpBudget / multipliers.representativeEnemyHp;
+}
+
 export function tickSpawnDirector(
   w: any,
   dtSec: number,
@@ -139,9 +213,9 @@ export function tickSpawnDirector(
   const now = w.timeSec ?? 0;
   const heat = Math.max(0, Math.floor(callbacks.getRunHeat() || 0));
   const tInFloorSec = Math.max(0, safeNum((w as any).phaseTime, safeNum((w as any).timeSec, 0)));
-  const tuning = w.balance?.spawnTuning ?? {};
-  const pressureT0 = typeof tuning.pressureAt0Sec === "number" ? tuning.pressureAt0Sec : DEFAULT_SPAWN_TUNING.pressureAt0Sec;
-  const pressureT120 = typeof tuning.pressureAt120Sec === "number" ? tuning.pressureAt120Sec : DEFAULT_SPAWN_TUNING.pressureAt120Sec;
+  const multipliers = resolveSpawnModelMultipliers(w, heat);
+  const pressureT0 = multipliers.pressureAt0Sec;
+  const pressureT120 = multipliers.pressureAt120Sec;
 
   const expectedDps = BASELINE_PLAYER_DPS;
   const previousPressure = safeNum((w as any).spawnDirectorDebug?.pressure, 0);
@@ -149,25 +223,13 @@ export function tickSpawnDirector(
   const basePressure = Math.max(0, safeNum(rawBasePressure, previousPressure));
   const pressure = basePressure;
   const waveMult = waveMultiplier(cfg, now);
-
-  // Authoritative spawn scaling: spawnBase * spawnPerDepth^heat
-  const spawnBase = typeof tuning.spawnBase === "number"
-    ? tuning.spawnBase
-    : DEFAULT_SPAWN_TUNING.spawnBase;
-  const spawnPerDepth = typeof tuning.spawnPerDepth === "number"
-    ? tuning.spawnPerDepth
-    : DEFAULT_SPAWN_TUNING.spawnPerDepth;
-  const spawnMult = Math.max(0, spawnBase) * Math.pow(Math.max(0.0001, spawnPerDepth), heat);
-  const hpBase = typeof tuning.hpBase === "number" ? tuning.hpBase : DEFAULT_SPAWN_TUNING.hpBase;
-  const hpPerDepth = typeof tuning.hpPerDepth === "number" ? tuning.hpPerDepth : DEFAULT_SPAWN_TUNING.hpPerDepth;
-  const hpMult = Math.max(0, hpBase) * Math.pow(Math.max(0.0001, hpPerDepth), heat);
+  const spawnMult = multipliers.spawnMult;
+  const hpMult = multipliers.hpMult;
 
   // Authoritative spawn HP/sec: baselineDps * pressure * spawnMult
   const spawnHpPerSecond = BASELINE_PLAYER_DPS * pressure * spawnMult;
   // Convert HP budget flow to enemy-count interval using representative trash HP.
-  const chaserDef = registry.enemy(ENEMY_TYPE.CHASER);
-  const baseEnemyHp = Math.max(1, chaserDef.baseLife ?? chaserDef.hp ?? 1);
-  const enemyHpForRate = baseEnemyHp * hpMult;
+  const enemyHpForRate = multipliers.representativeEnemyHp;
   state.powerBudget += spawnHpPerSecond * Math.max(0, dtSec);
 
   let queuedFromInterval = 0;

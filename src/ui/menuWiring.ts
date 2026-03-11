@@ -71,6 +71,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     let selectedCharacterId: PlayableCharacterId | undefined = undefined;
     let pendingStartMode: "DELVE" | "DETERMINISTIC" | "SANDBOX" = "DELVE";
     let debugMapSelectorBtn: HTMLButtonElement | null = null;
+    let debugPathSelectBtn: HTMLButtonElement | null = null;
     let starterModalOverlay: HTMLDivElement | null = null;
     let starterModalCharacterName: HTMLDivElement | null = null;
     let starterModalSpriteWrap: HTMLDivElement | null = null;
@@ -161,6 +162,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     const applyUserModeMenuGating = () => {
         const isUserMode = isUserModeEnabled();
         if (debugMapSelectorBtn) debugMapSelectorBtn.hidden = isUserMode;
+        if (debugPathSelectBtn) debugPathSelectBtn.hidden = isUserMode;
 
         if (isUserMode && pendingStartMode !== "DELVE") {
             pendingStartMode = "DELVE";
@@ -187,6 +189,17 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         game.previewMap(selectedMapId);
     };
 
+    const openDeterministicPathSelect = () => {
+        if (isUserModeEnabled()) return;
+        pendingStartMode = "DETERMINISTIC";
+        selectedMapId = undefined;
+        delete refs.startBtn.dataset.map;
+        updateMenuSubline();
+        closeStarterModal();
+        refs.mainMenuEl.hidden = true;
+        refs.characterSelectEl.hidden = false;
+    };
+
     const ensureDebugMapSelectorButton = () => {
         if (!import.meta.env.DEV) return;
         if (debugMapSelectorBtn) return;
@@ -205,6 +218,26 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
             host.appendChild(btn);
         }
         debugMapSelectorBtn = btn;
+    };
+
+    const ensureDebugPathSelectButton = () => {
+        if (!import.meta.env.DEV) return;
+        if (debugPathSelectBtn) return;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "terminalAction SecondaryButton";
+        btn.textContent = "PATH SELECT";
+        btn.hidden = isUserModeEnabled();
+        btn.setAttribute("data-path-select-debug", "1");
+        bindActivate(btn, () => openDeterministicPathSelect());
+        const host = ((refs.startRunBtn as any).parentNode as HTMLElement | null) ?? refs.mainMenuEl;
+        const anchor = refs.innkeeperBtn ?? null;
+        if (anchor && typeof (host as any).insertBefore === "function") {
+            host.insertBefore(btn, anchor);
+        } else {
+            host.appendChild(btn);
+        }
+        debugPathSelectBtn = btn;
     };
 
     function getSelectedMapLabel(): string {
@@ -466,6 +499,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     buildCharacterPicker();
     ensureStarterModal();
     buildMapPicker();
+    ensureDebugPathSelectButton();
     ensureDebugMapSelectorButton();
     const mapMenuActions =
         typeof (refs.mapMenuEl as any).querySelector === "function"

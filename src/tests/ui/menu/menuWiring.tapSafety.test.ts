@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { wireMenus } from "../../../ui/menuWiring";
 import type { DomRefs } from "../../../ui/domRefs";
+import { updateUserSettings } from "../../../userSettings";
 
 type Listener = (ev: FakeEvent) => void;
 
@@ -281,6 +282,7 @@ describe("menuWiring tap safety", () => {
     (globalThis as any).HTMLButtonElement = FakeElement;
     (globalThis as any).Node = FakeElement;
     (globalThis as any).window = { open: vi.fn() };
+    updateUserSettings({ game: { userModeEnabled: true } });
   });
 
   test("start-run tap does not ghost-select a character on next screen", () => {
@@ -390,5 +392,32 @@ describe("menuWiring tap safety", () => {
     expect(refs.mainMenuEl.hidden).toBe(true);
     expect(refs.characterSelectEl.hidden).toBe(false);
     expect(refs.characterContinueBtn.disabled).toBe(true);
+  });
+
+  test("dev PATH SELECT opens deterministic flow and launches deterministic run", () => {
+    const refs = createDomRefs();
+    const game = createGameApiMock();
+    updateUserSettings({ game: { userModeEnabled: false } });
+    wireMenus(refs, game);
+
+    const pathSelectBtn = findByData(refs.mainMenuEl as unknown as FakeElement, "pathSelectDebug");
+    expect(pathSelectBtn).toBeTruthy();
+
+    tapElement(pathSelectBtn as FakeElement, 1, 220, 300);
+    expect(refs.mainMenuEl.hidden).toBe(true);
+    expect(refs.characterSelectEl.hidden).toBe(false);
+
+    const characterButtons = (refs.characterChoicesEl as unknown as FakeElement).querySelectorAll("button[data-character]");
+    expect(characterButtons.length).toBeGreaterThan(0);
+    const firstCharacterBtn = characterButtons[0];
+    tapElement(firstCharacterBtn, 2, 260, 440);
+
+    const starterSelectBtn = findByData(refs.characterSelectEl as unknown as FakeElement, "characterStarterSelect");
+    expect(starterSelectBtn).toBeTruthy();
+    tapElement(starterSelectBtn as FakeElement, 3, 280, 460);
+
+    expect(game.startDeterministicRun).toHaveBeenCalledTimes(1);
+    expect(game.startRun).not.toHaveBeenCalled();
+    expect(game.startSandboxRun).not.toHaveBeenCalled();
   });
 });

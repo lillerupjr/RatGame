@@ -76,6 +76,7 @@ import type { FloorIntent } from "./map/floorIntent";
 import {
   buildDelveRouteMapVM,
   buildDeterministicRouteMapVM,
+  type DeterministicRouteOption,
   type RouteMapVM,
   type RouteNodeStatus,
 } from "./map/routeMapView";
@@ -104,7 +105,7 @@ import { objectiveSpecFromFloorIntent } from "./map/floorObjectiveBinding";
 import { applyFloorOverlays } from "./map/floorOverlays";
 import { RNG } from "./util/rng";
 import { applyObjective } from "./map/objectiveTransforms";
-import { objectiveIdFromArchetype } from "./map/objectivePlan";
+import { OBJECTIVE_IDS, objectiveIdFromArchetype, type ObjectiveId } from "./map/objectivePlan";
 import { findNearestWalkableSpawnGrid } from "./systems/spawn/findWalkableSpawn";
 import { DEFAULT_MAP_POOL } from "./map/mapIds";
 import { OBJECTIVE_TRIGGER_IDS } from "./systems/progression/objectiveSpec";
@@ -115,6 +116,14 @@ import { spawnMilestonePigeonNearPlayer } from "./factories/neutralMobFactory";
 import { neutralAnimatedMobsSystem } from "./systems/sim/neutralAnimatedMobs";
 import { neutralBirdAISystem } from "./systems/sim/neutralBirdAI";
 import { getZoneTrialObjectiveState, startZoneTrial, updateZoneTrialObjective } from "./objectives/zoneObjectiveSystem";
+import {
+  getPoeMapObjectiveDebugSnapshot,
+  getPoeMapObjectiveProgress,
+  initializePoeMapObjective,
+  isPoeMapObjectiveActive,
+  resetPoeMapObjectiveState,
+  tickPoeMapObjective,
+} from "./objectives/poeMapObjectiveSystem";
 import {
   awaitPrewarmDone,
   collectRuntimeSpriteDeps,
@@ -825,6 +834,7 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function objectiveModeForFloor(w: World): ObjectiveMode {
+    if (w.currentObjectiveSpec?.objectiveType === "POE_MAP_CLEAR") return "NORMAL";
     if (w.floorArchetype === "SURVIVE") return "SURVIVE_TRIAL";
     if (w.floorArchetype === "TIME_TRIAL") return "ZONE_TRIAL";
     return "NORMAL";
@@ -1539,17 +1549,20 @@ export function createGame(args: CreateGameArgs) {
 
   const FLOORS_PER_RUN = 3;
   const TRANSITION_SECS = 0;
-  const DETERMINISTIC_ARCHETYPES: FloorArchetype[] = [
-    "SURVIVE",
-    "TIME_TRIAL",
-    "VENDOR",
-    "HEAL",
-    "BOSS_TRIPLE",
+  const DETERMINISTIC_CHOICES: DeterministicRouteOption[] = [
+    { archetype: "SURVIVE", title: "Survive" },
+    { archetype: "SURVIVE", objectiveId: "POE_MAP_CLEAR", title: "PoE Map" },
+    { archetype: "TIME_TRIAL", title: "Zone Trial" },
+    { archetype: "VENDOR", title: "Vendor" },
+    { archetype: "HEAL", title: "Heal" },
+    { archetype: "BOSS_TRIPLE", title: "3 Bosses" },
   ];
   const DETERMINISTIC_ZONES = ["DOCKS", "SEWERS", "CHINATOWN"] as const;
 
   type DeterministicChoice = {
     archetype: FloorArchetype;
+    objectiveId?: ObjectiveId;
+    title?: string;
     floorIndex: number;
     depth: number;
   };
@@ -1584,6 +1597,7 @@ export function createGame(args: CreateGameArgs) {
 
   function clearFloorEntities(w: World) {
     // Keep player stats/items/weapons; wipe transient entities.
+    resetPoeMapObjectiveState(w);
     w.eAlive = [];
     w.eType = [];
     w.egxi = [];
@@ -1756,6 +1770,7 @@ export function createGame(args: CreateGameArgs) {
 
   function spawnSurviveBossIfNeeded(w: World): void {
     if (w.floorArchetype !== "SURVIVE") return;
+    if (w.currentObjectiveSpec?.objectiveType !== "SURVIVE_TIMER") return;
     if (w.runState !== "FLOOR") return;
     if ((w as any)._surviveBossSpawned) return;
     const remaining = (w.floorDuration ?? 0) - (w.phaseTime ?? 0);
@@ -1920,12 +1935,30 @@ export function createGame(args: CreateGameArgs) {
     clearFloorEntities(w);
     applyMapFeaturesFromCells(w);
     spawnMilestonePigeonNearPlayer(w);
+    let objectiveSpec = objectiveSpecFromFloorIntent(ctx.floorIntent);
+    const isPoeMapFloor = objectiveSpec.objectiveType === "POE_MAP_CLEAR";
     resetLootGoblinFloorState(w);
-    trySpawnLootGoblinForFloor(w);
+    if (!isPoeMapFloor) {
+      trySpawnLootGoblinForFloor(w);
+    }
+
+    if (objectiveSpec.objectiveType === "POE_MAP_CLEAR") {
+      const objectiveSeed =
+        floorIntent.variantSeed
+        ?? hashString(`${floorIntent.nodeId}:${floorIntent.floorIndex}:${floorIntent.depth}:poe`);
+      const poeInit = initializePoeMapObjective(w, {
+        objectiveSeed,
+        modifiers: floorIntent.poeMapModifiers,
+      });
+      objectiveSpec = {
+        objectiveType: "POE_MAP_CLEAR",
+        params: {
+          clearCount: Math.max(1, poeInit.totalPacks),
+        },
+      };
+    }
 
     resetFloorProgressionState(w);
-
-    const objectiveSpec = objectiveSpecFromFloorIntent(ctx.floorIntent);
     w.currentObjectiveSpec = objectiveSpec;
     resetObjectiveRuntime(w);
     initObjectivesForFloor(w, {
@@ -1982,9 +2015,10 @@ export function createGame(args: CreateGameArgs) {
 
     applyRunHeatScaling(w);
     const heat = getRunHeat(w);
+    const isPoeMapFloorObjective = objectiveSpec.objectiveType === "POE_MAP_CLEAR";
     const seed = 10;
 
-    if (w.spawnDirectorState) {
+    if (w.spawnDirectorState && !isPoeMapFloorObjective) {
       w.spawnDirectorState.pendingSpawns += seed;
     }
 
@@ -2064,11 +2098,13 @@ export function createGame(args: CreateGameArgs) {
     depth: number,
     archetype: FloorArchetype,
     mapId?: string,
+    objectiveId?: ObjectiveId,
   ): number {
-    return hashString(`${runSeed}:${floorIndex}:${depth}:${archetype}:${mapId ?? "AUTO"}`);
+    return hashString(`${runSeed}:${floorIndex}:${depth}:${archetype}:${mapId ?? "AUTO"}:${objectiveId ?? "AUTO"}`);
   }
 
   function buildDeterministicFloorIntent(choice: DeterministicChoice): FloorIntent {
+    const objectiveId = choice.objectiveId ?? objectiveIdFromArchetype(choice.archetype);
     const mapId =
       choice.archetype === "VENDOR"
         ? "SHOP"
@@ -2076,24 +2112,25 @@ export function createGame(args: CreateGameArgs) {
           ? "REST"
           : DEFAULT_MAP_POOL[
               hashString(
-                `${world.runSeed}:${choice.floorIndex}:${choice.depth}:${choice.archetype}:mapPick`,
+                `${world.runSeed}:${choice.floorIndex}:${choice.depth}:${choice.archetype}:${objectiveId}:mapPick`,
               ) % DEFAULT_MAP_POOL.length
             ];
     const zoneId = DETERMINISTIC_ZONES[choice.floorIndex % DETERMINISTIC_ZONES.length];
     return {
-      nodeId: `DET_${choice.floorIndex}_${choice.depth}_${choice.archetype}`,
+      nodeId: `DET_${choice.floorIndex}_${choice.depth}_${choice.archetype}_${objectiveId}`,
       zoneId,
       depth: choice.depth,
       floorIndex: choice.floorIndex,
       archetype: choice.archetype,
       mapId,
-      objectiveId: objectiveIdFromArchetype(choice.archetype),
+      objectiveId,
       variantSeed: deterministicVariantSeed(
         world.runSeed,
         choice.floorIndex,
         choice.depth,
         choice.archetype,
         mapId,
+        objectiveId,
       ),
     };
   }
@@ -2527,8 +2564,9 @@ export function createGame(args: CreateGameArgs) {
       return;
     }
     const zoneText = node.mode === "DETERMINISTIC" ? "Deterministic choice" : node.zoneId;
+    const nodeTitle = node.mode === "DETERMINISTIC" ? node.title : floorArchetypeLabel(node.archetype);
     args.ui.mapEl.infoPanel.innerHTML = `
-      <div class="routeInfoTitle">${floorArchetypeLabel(node.archetype)} · Depth ${node.depth}</div>
+      <div class="routeInfoTitle">${nodeTitle} · Depth ${node.depth}</div>
       <div class="routeInfoMeta">${zoneText} · ${routeStatusLabel(node.status)}</div>
     `;
   }
@@ -2589,8 +2627,11 @@ export function createGame(args: CreateGameArgs) {
         btn.dataset.detFloorArchetype = node.deterministicData.archetype;
         btn.dataset.detFloorIndex = String(node.deterministicData.floorIndex);
         btn.dataset.detDepth = String(node.deterministicData.depth);
+        if (node.deterministicData.objectiveId) {
+          btn.dataset.detObjectiveId = node.deterministicData.objectiveId;
+        }
       }
-      btn.textContent = floorArchetypeLabel(node.archetype);
+      btn.textContent = node.mode === "DETERMINISTIC" ? node.title : floorArchetypeLabel(node.archetype);
       btn.addEventListener("mouseenter", () => setRouteInfo(node));
       btn.addEventListener("focus", () => setRouteInfo(node));
       btn.addEventListener("pointerdown", () => setRouteInfo(node));
@@ -2622,7 +2663,7 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function showDeterministicFloorPicker(subText: string, floorIndex: number, depth: number) {
-    const vm = buildDeterministicRouteMapVM(DETERMINISTIC_ARCHETYPES, floorIndex, depth);
+    const vm = buildDeterministicRouteMapVM(DETERMINISTIC_CHOICES, floorIndex, depth);
     renderRouteMap(vm, subText);
   }
 
@@ -2769,6 +2810,31 @@ export function createGame(args: CreateGameArgs) {
         title = "Slay enemies inside the marked zones.";
         break;
       }
+      case "POE_MAP_CLEAR": {
+        const progress = getPoeMapObjectiveProgress(world);
+        const cleared = progress?.cleared ?? 0;
+        const total = progress?.total ?? Math.max(1, spec.params.clearCount);
+        title = `Clear Packs · ${Math.min(cleared, total)}/${total}`;
+        if (import.meta.env.DEV) {
+          const debug = getPoeMapObjectiveDebugSnapshot(world);
+          if (debug) {
+            const nearest = debug.nearestPackDistanceTiles;
+            const nearestSleeping = debug.nearestSleepingPackDistanceTiles;
+            const nearestText = nearest == null ? "-" : nearest.toFixed(1);
+            const sleepingText = nearestSleeping == null ? "-" : nearestSleeping.toFixed(1);
+            args.hud.objectiveStatus.textContent =
+              `DBG budget ${debug.survive2MinBudget.toFixed(1)} -> ${debug.totalPopulationBudget.toFixed(1)} | `
+              + `packs ${debug.packCount} (S:${debug.sleepingPacks} C:${debug.combatPacks} L:${debug.leashingPacks} X:${debug.clearedPacks}) | `
+              + `enemies alive ${debug.aliveEnemies} dormant ${debug.dormantEnemies} | `
+              + `nearest ${nearestText}t sleeping ${sleepingText}t`;
+            args.hud.objectiveStatus.hidden = false;
+          } else {
+            args.hud.objectiveStatus.textContent = "DBG no active PoE runtime state";
+            args.hud.objectiveStatus.hidden = false;
+          }
+        }
+        break;
+      }
       case "VENDOR_VISIT":
         title = "Visit the vendor to continue.";
         break;
@@ -2788,8 +2854,10 @@ export function createGame(args: CreateGameArgs) {
     }
 
     args.hud.objectiveTitle.textContent = title;
-    args.hud.objectiveStatus.textContent = "";
-    args.hud.objectiveStatus.hidden = true;
+    if (spec.objectiveType !== "POE_MAP_CLEAR" || !import.meta.env.DEV) {
+      args.hud.objectiveStatus.textContent = "";
+      args.hud.objectiveStatus.hidden = true;
+    }
     args.hud.objectiveOverlay.hidden = false;
   }
   // ---------------------------------
@@ -2989,12 +3057,13 @@ export function createGame(args: CreateGameArgs) {
     if (!activeDialog && !vendorShopOpen) {
       movementSystem(world, input, dtSim);
     }
+    tickPoeMapObjective(world);
     neutralBirdAISystem(world, dtSim);
     neutralAnimatedMobsSystem(world, dtSim);
     roomChallengeSystem(world, dtSim);  // Track room challenges and lock exits
     spawnSurviveBossIfNeeded(world);
     world.spawnDirectorConfig.enabled = true;
-    if (!world.floorEndCountdownActive) {
+    if (!world.floorEndCountdownActive && !isPoeMapObjectiveActive(world)) {
       tickSpawnDirector(
         world,
         dtSim,
@@ -3027,6 +3096,7 @@ export function createGame(args: CreateGameArgs) {
     pickupsSystem(world, dtSim);
     dropsSystem(world, dtSim);
     triggerSystem(world, dtSim, input);
+    tickPoeMapObjective(world);
     relicTriggerSystem(world);
     updateExhaustFollowers(world as any, dtSim, bazookaExhaustAssets);
     vfxSystem(world, dtSim);
@@ -3146,11 +3216,17 @@ export function createGame(args: CreateGameArgs) {
     if (detArchetype) {
       const floorIndex = Number.parseInt(btn.dataset.detFloorIndex ?? "0", 10) || 0;
       const depth = Number.parseInt(btn.dataset.detDepth ?? "1", 10) || 1;
+      const rawObjectiveId = btn.dataset.detObjectiveId;
+      const detObjectiveId =
+        rawObjectiveId && OBJECTIVE_IDS.includes(rawObjectiveId as ObjectiveId)
+          ? (rawObjectiveId as ObjectiveId)
+          : undefined;
       setMapDepth(world, depth);
       hideMap();
       queueFloorLoadIntent(
         buildDeterministicFloorIntent({
           archetype: detArchetype,
+          objectiveId: detObjectiveId,
           floorIndex,
           depth,
         }),

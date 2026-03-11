@@ -2,6 +2,7 @@ import type { StageId } from "../content/stages";
 import type { DelveMap, DelveNode } from "./delveMap";
 import { getReachableNodes } from "./delveMap";
 import type { FloorArchetype } from "./floorArchetype";
+import type { ObjectiveId } from "./objectivePlan";
 
 export type RouteMapMode = "DELVE" | "DETERMINISTIC";
 
@@ -24,7 +25,15 @@ export type RouteNodeVM = {
     floorIndex: number;
     depth: number;
     archetype: FloorArchetype;
+    objectiveId?: ObjectiveId;
   };
+};
+
+export type DeterministicRouteOption = {
+  archetype: FloorArchetype;
+  objectiveId?: ObjectiveId;
+  title?: string;
+  subtitle?: string;
 };
 
 export type RouteEdgeVM = {
@@ -127,15 +136,15 @@ export function buildDelveRouteMapVM(
 }
 
 export function buildDeterministicRouteMapVM(
-  archetypes: FloorArchetype[],
+  options: DeterministicRouteOption[],
   floorIndex: number,
   depth: number,
 ): RouteMapVM {
-  const centeredOffset = (archetypes.length - 1) * 0.5;
-  const nodes: RouteNodeVM[] = archetypes.map((archetype, i) => ({
-    id: `det-${floorIndex}-${depth}-${archetype}-${i}`,
+  const centeredOffset = (options.length - 1) * 0.5;
+  const nodes: RouteNodeVM[] = options.map((choice, i) => ({
+    id: `det-${floorIndex}-${depth}-${choice.archetype}-${choice.objectiveId ?? "AUTO"}-${i}`,
     mode: "DETERMINISTIC",
-    archetype,
+    archetype: choice.archetype,
     zoneId: "DETERMINISTIC",
     depth,
     x: i - centeredOffset,
@@ -143,12 +152,13 @@ export function buildDeterministicRouteMapVM(
     reachable: true,
     current: false,
     completed: false,
-    title: archetype,
-    subtitle: `Depth ${depth}`,
+    title: choice.title ?? choice.archetype,
+    subtitle: choice.subtitle ?? `Depth ${depth}`,
     deterministicData: {
       floorIndex,
       depth,
-      archetype,
+      archetype: choice.archetype,
+      objectiveId: choice.objectiveId,
     },
   }));
 

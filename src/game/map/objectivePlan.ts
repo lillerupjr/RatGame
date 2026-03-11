@@ -4,6 +4,7 @@ import type { ObjectiveSpec } from "../systems/progression/objectiveSpec";
 export type ObjectiveId =
   | "SURVIVE_TIMER"
   | "ZONE_TRIAL"
+  | "POE_MAP_CLEAR"
   | "TIME_TRIAL_ZONES"
   | "VENDOR_VISIT"
   | "HEAL_VISIT"
@@ -12,6 +13,7 @@ export type ObjectiveId =
 export const OBJECTIVE_IDS: ObjectiveId[] = [
   "SURVIVE_TIMER",
   "ZONE_TRIAL",
+  "POE_MAP_CLEAR",
   "TIME_TRIAL_ZONES",
   "VENDOR_VISIT",
   "HEAL_VISIT",
@@ -56,6 +58,13 @@ export function objectiveSpecFromObjectiveId(
           zoneCount: params?.zoneCount ?? 3,
           zoneSize: 4,
           killTargetPerZone: 8,
+        },
+      };
+    case "POE_MAP_CLEAR":
+      return {
+        objectiveType: "POE_MAP_CLEAR",
+        params: {
+          clearCount: 1,
         },
       };
     case "TIME_TRIAL_ZONES":
