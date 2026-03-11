@@ -32,6 +32,8 @@ export type RuntimeStructureBandInput = {
   flipped?: boolean;
   sliceOffsetX?: number;
   sliceOffsetY?: number;
+  /** Optional source X (in unscaled sprite pixels) where core bands begin. */
+  sliceOriginX?: number;
   scale?: number;
   bandPx?: number;
   sliceStride?: number;
@@ -70,6 +72,7 @@ export function getVerticalBandLayout(
   bandPx: number = DEFAULT_STRUCTURE_BAND_PX,
   footprintW?: number,
   footprintH?: number,
+  sliceOriginX?: number,
 ): ReadonlyArray<RuntimeBandLayout> {
   const h = Math.max(1, spriteHeight | 0);
   const w = Math.max(1, spriteWidth | 0);
@@ -79,9 +82,12 @@ export function getVerticalBandLayout(
   const tileH = Math.max(1, (footprintH ?? meta.tileHeight) | 0);
   const coreCount = tileW + tileH;
   const coreExpectedW = coreCount * band;
-  const extraW = Math.max(0, w - coreExpectedW);
-  const extraLeftW = Math.floor(extraW / 2);
-  const extraRightW = extraW - extraLeftW;
+  const maxCoreOrigin = Math.max(0, w - coreExpectedW);
+  const centeredOrigin = Math.floor(maxCoreOrigin / 2);
+  const extraLeftW = Number.isFinite(sliceOriginX)
+    ? Math.max(0, Math.min(maxCoreOrigin, Math.round(sliceOriginX as number)))
+    : centeredOrigin;
+  const extraRightW = Math.max(0, w - coreExpectedW - extraLeftW);
   const cacheKey = `${spriteId}|${w}x${h}|${band}|${coreCount}|${extraLeftW}`;
   const cached = layoutCache.get(cacheKey);
   if (cached) return cached;
@@ -139,6 +145,7 @@ export function buildRuntimeStructureBandPieces(
     bandPx,
     input.footprintW,
     input.footprintH,
+    input.sliceOriginX,
   );
   const meta = getSpriteMeta(input.spriteId);
   const baseTileW = Math.max(1, (input.footprintW ?? meta.tileWidth) | 0);

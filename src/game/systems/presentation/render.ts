@@ -3346,6 +3346,7 @@ export async function renderSystem(
             flipped: !!o.flipX,
             sliceOffsetX: o.sliceOffsetPx?.x  ?? 0,
             sliceOffsetY: o.sliceOffsetPx?.y ?? 0,
+            sliceOriginX: o.sliceOriginPx?.x,
             baseZ: o.z,
             baseDx: draw.dx,
             baseDy: draw.dy,

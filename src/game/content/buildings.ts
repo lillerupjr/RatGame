@@ -35,6 +35,7 @@ export type BuildingSkin = {
     enabled: boolean;
     stepPx: number;
     originPx?: { x: number; y: number };
+    originPxByDir?: Partial<Record<"N" | "E" | "S" | "W", { x: number; y: number }>>;
     offsetPx?: { x: number; y: number };
   };
 
@@ -96,7 +97,13 @@ const CANONICAL_BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
 
 
 
-  china_town_1: makeMonolithicBuilding("china_town_1", "structures/buildings/china_town/1", { heightUnits: 8 , anchorLiftUnits: -4, w: 2, h: 1, spriteScale: 1.15})
+  china_town_1: makeMonolithicBuilding("china_town_1", "structures/buildings/china_town/1", {
+    heightUnits: 8,
+    anchorLiftUnits: -4,
+    w: 2,
+    h: 2,
+    spriteScale: 1,
+  })
 };
 
 const BUILDING_ID_ALIASES: Record<BuildingSkinId, BuildingSkinId> = {

@@ -184,6 +184,50 @@ describe("runtimeStructureSlicing", () => {
     }
   });
 
+  it("supports overriding core slice origin while preserving the full sprite span", () => {
+    clearRuntimeStructureSliceCache();
+    registerSpriteMeta("structures/buildings/test/runtime_custom_origin", {
+      tileWidth: 2,
+      tileHeight: 1,
+      zHeight: 1,
+    });
+    const baseInput = {
+      structureInstanceId: "runtime_custom_origin",
+      spriteId: "structures/buildings/test/runtime_custom_origin",
+      seTx: 9,
+      seTy: 8,
+      footprintW: 2,
+      footprintH: 1,
+      baseZ: 0,
+      baseDx: 0,
+      baseDy: 0,
+      spriteWidth: 256,
+      spriteHeight: 256,
+      bandPx: 64,
+      scale: 1,
+      sliceOffsetX: 0,
+    };
+    const centered = buildRuntimeStructureBandPieces(baseInput);
+    const shifted = buildRuntimeStructureBandPieces({
+      ...baseInput,
+      sliceOriginX: 20,
+    });
+
+    expect(centered.map((p) => p.srcRect.x)).toEqual([0, 32, 96, 160, 224]);
+    expect(centered.map((p) => p.srcRect.w)).toEqual([32, 64, 64, 64, 32]);
+
+    expect(shifted.map((p) => p.srcRect.x)).toEqual([0, 20, 84, 148, 212]);
+    expect(shifted.map((p) => p.srcRect.w)).toEqual([20, 64, 64, 64, 44]);
+    expect(shifted[1].dstRect.x).toBe(centered[1].dstRect.x - 12);
+
+    const centeredLeft = centered[0].dstRect.x;
+    const centeredRight = centered[centered.length - 1].dstRect.x + centered[centered.length - 1].dstRect.w;
+    const shiftedLeft = shifted[0].dstRect.x;
+    const shiftedRight = shifted[shifted.length - 1].dstRect.x + shifted[shifted.length - 1].dstRect.w;
+    expect(shiftedLeft).toBe(centeredLeft);
+    expect(shiftedRight).toBe(centeredRight);
+  });
+
   it("applies sliceOffsetX as a uniform unscaled shift to all bands", () => {
     clearRuntimeStructureSliceCache();
     registerSpriteMeta("structures/buildings/test/runtime_dst_x_offset", {

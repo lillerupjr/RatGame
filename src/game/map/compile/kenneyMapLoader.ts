@@ -173,6 +173,7 @@ export type StampOverlay = {
     drawDyOffset?: number;
     drawDxOffset?: number;
     sliceOffsetPx?: { x: number; y: number };
+    sliceOriginPx?: { x: number; y: number };
     scale?: number;
     kind?: "ROOF" | "PROP";
     flipX?: boolean;
@@ -2248,6 +2249,9 @@ export function compileKenneyMapFromTable(
             const offsetPx = skin.offsetPx ?? { x: 0, y: 0 };
             const anchorOffsetPx = skin.anchorOffsetPx ?? { x: 0, y: 0 };
             const sliceOffsetPx = skin.slice?.offsetPx ?? { x: 0, y: 0 };
+            const sliceOriginPx =
+                (buildingDir ? skin.slice?.originPxByDir?.[buildingDir] : undefined) ??
+                skin.slice?.originPx;
 
             if (skin.wallSouth.length === 0 || skin.wallEast.length === 0 || !skin.roof) {
                 throw new Error(`Building skin "${skin.id}" is missing required sprites.`);
@@ -2275,6 +2279,7 @@ export function compileKenneyMapFromTable(
                     drawDxOffset: offsetPx.x + anchorOffsetPx.x,
                     drawDyOffset: anchorLiftPx + offsetPx.y + anchorOffsetPx.y,
                     sliceOffsetPx,
+                    sliceOriginPx,
                     flipX: oriented.flipped,
                     scale,
                     kind: "ROOF",
@@ -2358,6 +2363,7 @@ export function compileKenneyMapFromTable(
                 drawDyOffset: anchorLiftPx + roofLiftPx + offsetPx.y + anchorOffsetPx.y,
                 drawDxOffset: offsetPx.x + anchorOffsetPx.x,
                 sliceOffsetPx,
+                sliceOriginPx,
                 flipX: oriented.flipped,
                 scale,
                 kind: "ROOF",
