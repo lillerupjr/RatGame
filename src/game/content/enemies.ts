@@ -91,8 +91,8 @@ export const ENEMIES: Record<EnemyType, EnemyDef> = {
     [ENEMY_TYPE.LOOT_GOBLIN]: {
         id: ENEMY_TYPE.LOOT_GOBLIN,
         name: "Loot Goblin",
-        baseLife: 16,
-        hp: 16,
+        baseLife: 500,
+        hp: 500,
         radius: 12,
         speed: 130,
         damage: 0,

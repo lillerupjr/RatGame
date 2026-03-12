@@ -12,7 +12,9 @@ export const SPAWN_CHANCE_DENOMINATOR = 2;
 export const FLEE_TRIGGER_RADIUS_TILES = 8;
 export const FLEE_SPEED_MULT = 1.6;
 export const DROP_TOTAL_GOLD = 300;
-export const DROP_INTERVAL_SEC = 0.1;
+const DROP_INTERVAL_BASE_SEC = 0.1;
+const DROP_SPEED_MULT = 2;
+export const DROP_INTERVAL_SEC = DROP_INTERVAL_BASE_SEC / DROP_SPEED_MULT;
 export const DROP_RADIUS_TILES = 3;
 
 type QueuedGoldDrop = {

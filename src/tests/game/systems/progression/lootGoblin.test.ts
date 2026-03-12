@@ -47,6 +47,7 @@ describe("lootGoblin progression runtime", () => {
     trySpawnLootGoblinForFloor(w);
     expect(w.eAlive.length).toBe(1);
     expect(w.eType[0]).toBe(ENEMY_TYPE.LOOT_GOBLIN);
+    expect(w.eBaseLife[0]).toBe(500);
     expect(typeof w.eSpawnTriggerId[0]).toBe("string");
     expect((w.eSpawnTriggerId[0] ?? "").startsWith(LOOT_GOBLIN_TRIGGER_PREFIX)).toBe(true);
 
@@ -63,7 +64,9 @@ describe("lootGoblin progression runtime", () => {
     tickLootGoblinGoldBurst(w, 0);
     expect(w.xAlive.filter(Boolean)).toHaveLength(0);
 
-    for (let i = 0; i < 320; i++) {
+    // Burst cadence is 2x faster than before (0.05s interval),
+    // so all 300 one-gold drops should finish around 15s.
+    for (let i = 0; i < 151; i++) {
       tickLootGoblinGoldBurst(w, 0.1);
     }
 
