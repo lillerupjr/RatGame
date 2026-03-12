@@ -2564,9 +2564,8 @@ export function createGame(args: CreateGameArgs) {
       return;
     }
     const zoneText = node.mode === "DETERMINISTIC" ? "Deterministic choice" : node.zoneId;
-    const nodeTitle = node.mode === "DETERMINISTIC" ? node.title : floorArchetypeLabel(node.archetype);
     args.ui.mapEl.infoPanel.innerHTML = `
-      <div class="routeInfoTitle">${nodeTitle} · Depth ${node.depth}</div>
+      <div class="routeInfoTitle">${node.title} · Depth ${node.depth}</div>
       <div class="routeInfoMeta">${zoneText} · ${routeStatusLabel(node.status)}</div>
     `;
   }
@@ -2631,7 +2630,7 @@ export function createGame(args: CreateGameArgs) {
           btn.dataset.detObjectiveId = node.deterministicData.objectiveId;
         }
       }
-      btn.textContent = node.mode === "DETERMINISTIC" ? node.title : floorArchetypeLabel(node.archetype);
+      btn.textContent = node.title;
       btn.addEventListener("mouseenter", () => setRouteInfo(node));
       btn.addEventListener("focus", () => setRouteInfo(node));
       btn.addEventListener("pointerdown", () => setRouteInfo(node));
@@ -2823,9 +2822,12 @@ export function createGame(args: CreateGameArgs) {
             const nearestText = nearest == null ? "-" : nearest.toFixed(1);
             const sleepingText = nearestSleeping == null ? "-" : nearestSleeping.toFixed(1);
             args.hud.objectiveStatus.textContent =
-              `DBG budget ${debug.survive2MinBudget.toFixed(1)} -> ${debug.totalPopulationBudget.toFixed(1)} | `
+              `DBG mobs ${debug.aliveEnemies}/${debug.totalEnemies} | `
+              + `hp ${Math.round(debug.aliveEnemyHp)}/${Math.round(debug.totalEnemyHp)} | `
+              + `preBudget ${debug.totalPopulationBudget.toFixed(1)} | `
+              + `spent ${debug.spentPopulationBudget.toFixed(1)} | `
               + `packs ${debug.packCount} (S:${debug.sleepingPacks} C:${debug.combatPacks} L:${debug.leashingPacks} X:${debug.clearedPacks}) | `
-              + `enemies alive ${debug.aliveEnemies} dormant ${debug.dormantEnemies} | `
+              + `dormant ${debug.dormantEnemies} | `
               + `nearest ${nearestText}t sleeping ${sleepingText}t`;
             args.hud.objectiveStatus.hidden = false;
           } else {

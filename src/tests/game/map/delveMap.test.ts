@@ -36,8 +36,24 @@ describe("delveMap", () => {
       expect(["DOCKS", "SEWERS", "CHINATOWN"]).toContain(startNode.zoneId);
       expect(startNode.state).toBe("UNVISITED");
       expect(startNode.plan.depth).toBe(1);
-      expect(["docks", "avenue", "china_town", "highway"]).toContain(startNode.plan.mapId);
+      expect(["docks", "avenue", "china_town", "downtown", "highway"]).toContain(startNode.plan.mapId);
       expect(startNode.plan.objectiveId).toBeTruthy();
+    });
+
+    it("can roll PoE objective on SURVIVE nodes", () => {
+      let foundPoe = false;
+      for (let seed = 1; seed <= 512; seed++) {
+        const map = createDelveMap(seed);
+        for (const node of map.nodes.values()) {
+          if (node.floorArchetype === "SURVIVE" && node.plan.objectiveId === "POE_MAP_CLEAR") {
+            foundPoe = true;
+            break;
+          }
+        }
+        if (foundPoe) break;
+      }
+
+      expect(foundPoe).toBe(true);
     });
   });
 

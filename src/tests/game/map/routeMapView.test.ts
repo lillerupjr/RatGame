@@ -71,6 +71,22 @@ describe("routeMapView", () => {
     expect(vm.edges.some((e) => e.fromId === E.id && e.toId === F.id)).toBe(false);
   });
 
+  test("buildDelveRouteMapVM labels PoE objective nodes", () => {
+    const poe = mkNode("0,0", 0, 0, "UNVISITED");
+    poe.plan.objectiveId = "POE_MAP_CLEAR";
+    const map: DelveMap = {
+      nodes: new Map([[poe.id, poe]]),
+      edges: [],
+      currentNodeId: null,
+      exploredDepth: 0,
+    };
+
+    const vm = buildDelveRouteMapVM(map);
+    expect(vm.nodes).toHaveLength(1);
+    expect(vm.nodes[0].title).toBe("PoE Map");
+    expect(vm.nodes[0].subtitle).toContain("Depth 1");
+  });
+
   test("buildDeterministicRouteMapVM builds reachable deterministic nodes", () => {
     const vm = buildDeterministicRouteMapVM(
       [

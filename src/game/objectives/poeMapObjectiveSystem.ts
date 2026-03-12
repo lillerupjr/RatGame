@@ -2,7 +2,8 @@ import type { World } from "../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { spawnEnemy, type EnemyType, ENEMY_TYPE } from "../factories/enemyFactory";
 import { getEnemyWorld, getPlayerWorld } from "../coords/worldViews";
-import { getActiveMap, getSpawnWorldFromActive, getTileHeight, isWalkable } from "../map/authoredMapActivation";
+import { getActiveMap, getSpawnWorldFromActive, getTileHeight } from "../map/authoredMapActivation";
+import { walkInfo } from "../map/compile/kenneyMap";
 import { RNG } from "../util/rng";
 import { OBJECTIVE_TRIGGER_IDS } from "../systems/progression/objectiveSpec";
 import { computeSurviveEquivalentSpawnCountForDurationSeconds } from "../balance/spawnDirector";
@@ -54,6 +55,7 @@ export type PoeMapPopulationPlan = {
 export type PoeMapDebugSnapshot = {
   survive2MinBudget: number;
   totalPopulationBudget: number;
+  spentPopulationBudget: number;
   chunkCount: number;
   packCount: number;
   sleepingPacks: number;
@@ -61,6 +63,9 @@ export type PoeMapDebugSnapshot = {
   leashingPacks: number;
   clearedPacks: number;
   aliveEnemies: number;
+  totalEnemies: number;
+  aliveEnemyHp: number;
+  totalEnemyHp: number;
   dormantEnemies: number;
   nearestPackDistanceTiles: number | null;
   nearestSleepingPackDistanceTiles: number | null;
@@ -69,6 +74,7 @@ export type PoeMapDebugSnapshot = {
 type RuntimePack = {
   id: string;
   state: PoeMapPackState;
+  budgetCost: number;
   anchorTx: number;
   anchorTy: number;
   anchorWx: number;
@@ -289,13 +295,27 @@ function tileDistance(aTx: number, aTy: number, bTx: number, bTy: number): numbe
   return Math.hypot(dx, dy);
 }
 
+function isValidPoeSpawnTile(tx: number, ty: number): boolean {
+  const map = getActiveMap();
+  if (!map) return false;
+  if (tx < map.originTx || tx >= map.originTx + map.width) return false;
+  if (ty < map.originTy || ty >= map.originTy + map.height) return false;
+  if (map.blockedTiles?.has(`${tx},${ty}`)) return false;
+  if (map.surfacesAtXY(tx, ty).length <= 0) return false;
+  const tile = map.getTile(tx, ty);
+  if (tile.kind === "VOID" || tile.kind === "STAIRS") return false;
+  const wx = (tx + 0.5) * KENNEY_TILE_WORLD;
+  const wy = (ty + 0.5) * KENNEY_TILE_WORLD;
+  return !!walkInfo(wx, wy, KENNEY_TILE_WORLD).walkable;
+}
+
 function hasWalkableFootprint(tx: number, ty: number): boolean {
-  if (!isWalkable(tx, ty)) return false;
+  if (!isValidPoeSpawnTile(tx, ty)) return false;
   let walkableNeighbors = 0;
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
       if (dx === 0 && dy === 0) continue;
-      if (isWalkable(tx + dx, ty + dy)) walkableNeighbors++;
+      if (isValidPoeSpawnTile(tx + dx, ty + dy)) walkableNeighbors++;
     }
   }
   return walkableNeighbors >= 5;
@@ -324,7 +344,7 @@ function chooseAnchorInChunk(
   for (let attempt = 0; attempt < MAX_ANCHOR_RETRIES; attempt++) {
     const tx = rng.int(chunk.tx0, chunk.tx1);
     const ty = rng.int(chunk.ty0, chunk.ty1);
-    if (!isWalkable(tx, ty)) continue;
+    if (!isValidPoeSpawnTile(tx, ty)) continue;
     if (tileDistance(tx, ty, spawnTx, spawnTy) < SAFE_ZONE_RADIUS_TILES) continue;
     if (anchorTooCloseToExisting(tx, ty, existingAnchors, MIN_ANCHOR_SEPARATION_TILES)) continue;
     if (!hasWalkableFootprint(tx, ty)) continue;
@@ -347,7 +367,7 @@ function chooseAnchorNearSpawnInChunk(
       const tx = spawnTx + rng.int(-radius, radius);
       const ty = spawnTy + rng.int(-radius, radius);
       if (tx < chunk.tx0 || tx > chunk.tx1 || ty < chunk.ty0 || ty > chunk.ty1) continue;
-      if (!isWalkable(tx, ty)) continue;
+      if (!isValidPoeSpawnTile(tx, ty)) continue;
       if (tileDistance(tx, ty, spawnTx, spawnTy) < SAFE_ZONE_RADIUS_TILES) continue;
       if (anchorTooCloseToExisting(tx, ty, existingAnchors, MIN_ANCHOR_SEPARATION_TILES)) continue;
       if (!hasWalkableFootprint(tx, ty)) continue;
@@ -370,7 +390,7 @@ function fallbackAnchor(
   for (let i = 0; i < total; i++) {
     const tx = originTx + (i % width);
     const ty = originTy + Math.floor(i / width);
-    if (!isWalkable(tx, ty)) continue;
+    if (!isValidPoeSpawnTile(tx, ty)) continue;
     if (tileDistance(tx, ty, spawnTx, spawnTy) < 2) continue;
     return { tx, ty };
   }
@@ -378,7 +398,7 @@ function fallbackAnchor(
   for (let tries = 0; tries < total; tries++) {
     const tx = originTx + rng.int(0, Math.max(0, width - 1));
     const ty = originTy + rng.int(0, Math.max(0, height - 1));
-    if (!isWalkable(tx, ty)) continue;
+    if (!isValidPoeSpawnTile(tx, ty)) continue;
     return { tx, ty };
   }
 
@@ -582,7 +602,7 @@ function findMemberSpawnTile(
     for (let attempt = 0; attempt < 18; attempt++) {
       const tx = anchorTx + rng.int(-radius, radius);
       const ty = anchorTy + rng.int(-radius, radius);
-      if (!isWalkable(tx, ty)) continue;
+      if (!isValidPoeSpawnTile(tx, ty)) continue;
       const h = getTileHeight(tx, ty);
       const ah = getTileHeight(anchorTx, anchorTy);
       if (Math.abs(h - ah) > 1) continue;
@@ -639,7 +659,7 @@ function ensureFallbackPack(plan: PoeMapPopulationPlan, rng: RNG, originTx: numb
       for (let i = 0; i < 36; i++) {
         const tx = spawnTx + rng.int(-radius, radius);
         const ty = spawnTy + rng.int(-radius, radius);
-        if (!isWalkable(tx, ty)) continue;
+        if (!isValidPoeSpawnTile(tx, ty)) continue;
         if (!hasWalkableFootprint(tx, ty)) continue;
         return { tx, ty };
       }
@@ -780,13 +800,26 @@ export function getPoeMapObjectiveDebugSnapshot(world: World): PoeMapDebugSnapsh
   let leashingPacks = 0;
   let clearedPacks = 0;
   let aliveEnemies = 0;
+  let totalEnemies = 0;
+  let aliveEnemyHp = 0;
+  let totalEnemyHp = 0;
+  let spentPopulationBudget = 0;
   for (let i = 0; i < state.packs.length; i++) {
     const pack = state.packs[i];
+    spentPopulationBudget += pack.budgetCost;
     if (pack.state === "sleeping") sleepingPacks++;
     else if (pack.state === "combat") combatPacks++;
     else if (pack.state === "leashing") leashingPacks++;
     else clearedPacks++;
-    aliveEnemies += countAlivePackMembers(world, pack);
+    totalEnemies += pack.enemyIndices.length;
+    for (let j = 0; j < pack.enemyIndices.length; j++) {
+      const enemyIndex = pack.enemyIndices[j];
+      const hpMax = Math.max(0, Number(world.eHpMax[enemyIndex] ?? 0));
+      totalEnemyHp += hpMax;
+      if (!world.eAlive[enemyIndex]) continue;
+      aliveEnemies++;
+      aliveEnemyHp += Math.max(0, Number(world.eHp[enemyIndex] ?? 0));
+    }
   }
 
   const player = getPlayerWorld(world, KENNEY_TILE_WORLD);
@@ -805,6 +838,7 @@ export function getPoeMapObjectiveDebugSnapshot(world: World): PoeMapDebugSnapsh
   return {
     survive2MinBudget: state.plan.survive2MinBudget,
     totalPopulationBudget: state.plan.totalPopulationBudget,
+    spentPopulationBudget,
     chunkCount: state.plan.chunkBudget.length,
     packCount: state.packs.length,
     sleepingPacks,
@@ -812,6 +846,9 @@ export function getPoeMapObjectiveDebugSnapshot(world: World): PoeMapDebugSnapsh
     leashingPacks,
     clearedPacks,
     aliveEnemies,
+    totalEnemies,
+    aliveEnemyHp,
+    totalEnemyHp,
     dormantEnemies: state.dormantEnemyIndices.size,
     nearestPackDistanceTiles: Number.isFinite(nearestPackDistanceWorld) ? nearestPackDistanceWorld / KENNEY_TILE_WORLD : null,
     nearestSleepingPackDistanceTiles: Number.isFinite(nearestSleepingDistanceWorld) ? nearestSleepingDistanceWorld / KENNEY_TILE_WORLD : null,
@@ -963,6 +1000,7 @@ export function initializePoeMapObjective(
     const runtimePack: RuntimePack = {
       id: pack.id,
       state: "sleeping",
+      budgetCost: pack.budgetCost,
       anchorTx: pack.anchorTx,
       anchorTy: pack.anchorTy,
       anchorWx: anchorWorld.wx,

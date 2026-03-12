@@ -96,6 +96,7 @@ describe("poe map population runtime", () => {
       const pack = plan.packs[i];
       const chunkBudget = plan.chunkBudget[pack.chunkIndex] ?? 0;
       expect(pack.budgetCost).toBeLessThanOrEqual(chunkBudget + 1e-6);
+      expect(activeMap.blockedTiles.has(`${pack.anchorTx},${pack.anchorTy}`)).toBe(false);
       for (let j = 0; j < pack.members.length; j++) {
         expect(pack.members[j].type).not.toBe(ENEMY_TYPE.BOSS);
         expect(pack.members[j].type).not.toBe(ENEMY_TYPE.LOOT_GOBLIN);
@@ -120,6 +121,7 @@ describe("poe map population runtime", () => {
       expect(tx).toBeLessThanOrEqual(maxTx);
       expect(ty).toBeGreaterThanOrEqual(minTy);
       expect(ty).toBeLessThanOrEqual(maxTy);
+      expect(activeMap.blockedTiles.has(`${tx},${ty}`)).toBe(false);
     }
   });
 
@@ -132,7 +134,14 @@ describe("poe map population runtime", () => {
     expect(debugAtStart).toBeTruthy();
     expect(debugAtStart?.packCount).toBe(totalPacks);
     expect(debugAtStart?.aliveEnemies).toBeGreaterThan(0);
+    expect(debugAtStart?.totalEnemies).toBeGreaterThan(0);
+    expect(debugAtStart?.aliveEnemies).toBe(debugAtStart?.totalEnemies);
     expect(debugAtStart?.dormantEnemies).toBe(debugAtStart?.aliveEnemies);
+    expect(debugAtStart?.aliveEnemyHp).toBeGreaterThan(0);
+    expect(debugAtStart?.totalEnemyHp).toBeGreaterThan(0);
+    expect(debugAtStart?.aliveEnemyHp).toBeLessThanOrEqual(debugAtStart?.totalEnemyHp ?? 0);
+    expect(debugAtStart?.spentPopulationBudget).toBeGreaterThan(0);
+    expect(debugAtStart?.spentPopulationBudget).toBeLessThanOrEqual((debugAtStart?.totalPopulationBudget ?? 0) + 1e-6);
     expect(debugAtStart?.nearestPackDistanceTiles).not.toBeNull();
 
     expect(isPoeEnemyDormant(world, 0)).toBe(true);

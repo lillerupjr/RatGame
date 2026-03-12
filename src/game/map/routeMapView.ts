@@ -69,6 +69,22 @@ function nodeDepth(node: DelveNode): number {
   return node.y + 1;
 }
 
+function delveNodeTitle(node: DelveNode): string {
+  if (node.plan.objectiveId === "POE_MAP_CLEAR") return "PoE Map";
+  switch (node.floorArchetype) {
+    case "SURVIVE":
+      return "Survive";
+    case "TIME_TRIAL":
+      return "Zone Trial";
+    case "VENDOR":
+      return "Vendor";
+    case "HEAL":
+      return "Heal";
+    case "BOSS_TRIPLE":
+      return "3 Bosses";
+  }
+}
+
 export function buildDelveRouteMapVM(
   delveMap: DelveMap,
   options?: BuildDelveRouteMapOptions,
@@ -109,8 +125,8 @@ export function buildDelveRouteMapVM(
       reachable: reachableIds.has(node.id) && node.state === "UNVISITED",
       current: isCurrent,
       completed: node.state === "CLEARED",
-      title: node.title,
-      subtitle: `Depth ${nodeDepth(node)}`,
+      title: delveNodeTitle(node),
+      subtitle: `${node.zoneId} · Depth ${nodeDepth(node)}`,
     });
   }
 

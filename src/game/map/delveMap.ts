@@ -47,6 +47,7 @@ const ZONE_NAMES: Record<StageId, string> = {
   SEWERS: "Sewers",
   CHINATOWN: "Chinatown",
 };
+const POE_MAP_SURVIVE_OBJECTIVE_CHANCE_PCT = 30;
 
 function nodeId(x: number, y: number): string {
   return `${x},${y}`;
@@ -128,6 +129,13 @@ function pickMapId(rng: RNG): MapId {
   return DEFAULT_MAP_POOL[rng.int(0, DEFAULT_MAP_POOL.length - 1)];
 }
 
+function pickObjectiveId(rng: RNG, archetype: FloorArchetype): ObjectiveId {
+  if (archetype !== "SURVIVE") return objectiveIdFromArchetype(archetype);
+  return rng.int(1, 100) <= POE_MAP_SURVIVE_OBJECTIVE_CHANCE_PCT
+    ? "POE_MAP_CLEAR"
+    : "SURVIVE_TIMER";
+}
+
 function buildNodePlan(rng: RNG, depth: number, archetype: FloorArchetype): NodePlan {
   const mapId = (() => {
     if (archetype === "VENDOR") return "SHOP" as MapId;
@@ -137,7 +145,7 @@ function buildNodePlan(rng: RNG, depth: number, archetype: FloorArchetype): Node
   return {
     depth,
     mapId,
-    objectiveId: objectiveIdFromArchetype(archetype),
+    objectiveId: pickObjectiveId(rng, archetype),
     variantSeed: rng.int(0, 0x7fffffff),
   };
 }
