@@ -8,7 +8,11 @@ import {
 import { isKnownRenderableSpriteId } from "./spriteIdRegistry";
 import { getFloorVariantCount, RUNTIME_FLOOR_VARIANT_COUNTS, type RuntimeFloorFamily } from "../../../game/content/runtimeFloorConfig";
 import { applyPaletteSwapToCanvas } from "../palette/paletteSwap";
-import { resolveActivePaletteId } from "../../../game/render/activePalette";
+import {
+    resolveActivePaletteId,
+    resolveActivePaletteSwapWeights,
+    resolvePaletteVariantKeyForPaletteId,
+} from "../../../game/render/activePalette";
 import {
     getDecalSpriteId,
     RUNTIME_DECAL_SPRITE_IDS,
@@ -31,12 +35,19 @@ const ANIMATED_TILE_SETS = {
 const animatedTileFramesBySetAndPalette = new Map<string, LoadedImg[]>();
 const prewarmQueue: { spriteId: string; paletteId: PaletteId }[] = [];
 let prewarmActive = false;
+const PALETTE_MANAGED_PREFIXES = [
+    "tiles/",
+    "structures/",
+    "props/",
+    "entities/",
+] as const;
 
 export type AnimatedTileSetId = keyof typeof ANIMATED_TILE_SETS;
 
 function getAnimatedTileFrames(setId: AnimatedTileSetId): LoadedImg[] {
     const paletteId = effectivePaletteId();
-    const cacheKey = `${setId}@@pal:${paletteId}`;
+    const variantKey = effectivePaletteVariantKey(paletteId);
+    const cacheKey = `${setId}@@palv:${variantKey}`;
     const cached = animatedTileFramesBySetAndPalette.get(cacheKey);
     if (cached) return cached;
 
@@ -60,6 +71,10 @@ function makeTransparent1x1(): HTMLImageElement {
 function effectivePaletteId(forcedPaletteId?: string): string {
     if (forcedPaletteId) return forcedPaletteId;
     return resolveActivePaletteId();
+}
+
+function effectivePaletteVariantKey(forcedPaletteId?: string): string {
+    return resolvePaletteVariantKeyForPaletteId(effectivePaletteId(forcedPaletteId));
 }
 
 function normalizeSpriteId(spriteId: string): string {
@@ -103,6 +118,11 @@ function remapLegacySpriteId(id: string): string {
     return directMap[id] ?? id;
 }
 
+export function isPaletteManagedSpriteId(spriteId: string): boolean {
+    const normalized = remapLegacySpriteId(normalizeSpriteId(spriteId));
+    return PALETTE_MANAGED_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
+
 function isWaterBackgroundId(spriteId: string): boolean {
     const normalized = normalizeSpriteId(spriteId);
     return normalized.startsWith("tiles/backgrounds/water")
@@ -133,8 +153,12 @@ function resolveUrl(spriteId: string): string | null {
 function loadByIdInternal(spriteId: string, forcedPaletteId?: string): LoadedImg {
     const rawId = spriteId.trim();
     const paletteId = effectivePaletteId(forcedPaletteId);
-    const paletteKey = `@@pal:${paletteId}`;
-    const key = `${rawId}${paletteKey}`;
+    const paletteVariantKey = effectivePaletteVariantKey(paletteId);
+    const paletteSwapWeights = resolveActivePaletteSwapWeights();
+    const paletteManaged = isPaletteManagedSpriteId(rawId);
+    const key = paletteManaged
+        ? `${rawId}@@palv:${paletteVariantKey}`
+        : `${rawId}@@raw`;
     if (!rawId) return { img: new Image(), ready: false };
     if (cache[key]) return cache[key];
 
@@ -149,7 +173,7 @@ function loadByIdInternal(spriteId: string, forcedPaletteId?: string): LoadedImg
     // IMPORTANT:
     // If palette swap is active, never expose the db32 image to rendering.
     // Keep a transparent placeholder until the swapped image is ready.
-    const enabledNow = paletteId !== "db32";
+    const enabledNow = paletteManaged && paletteId !== "db32";
     const rec: LoadedImg = {
         img: enabledNow ? makeTransparent1x1() : new Image(),
         ready: false,
@@ -158,8 +182,7 @@ function loadByIdInternal(spriteId: string, forcedPaletteId?: string): LoadedImg
 
     const baseImg = new Image();
     baseImg.onload = () => {
-        const paletteId2 = effectivePaletteId(forcedPaletteId);
-        const enabled = paletteId2 !== "db32";
+        const enabled = paletteManaged && paletteId !== "db32";
 
         if (!enabled) {
             // db32 path: expose base immediately
@@ -169,7 +192,7 @@ function loadByIdInternal(spriteId: string, forcedPaletteId?: string): LoadedImg
         }
 
         try {
-            const swappedCanvas = applyPaletteSwapToCanvas(baseImg, paletteId2);
+            const swappedCanvas = applyPaletteSwapToCanvas(baseImg, paletteId, paletteSwapWeights);
 
             const swappedImg = new Image();
             swappedImg.onload = () => {

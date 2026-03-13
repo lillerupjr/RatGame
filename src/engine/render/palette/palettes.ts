@@ -1,3 +1,5 @@
+import { hexToRgb, rgbToHsv, type Hsv } from "./colorMath";
+
 export type HexColor = `#${string}`;
 
 export type PaletteDef = {
@@ -188,7 +190,43 @@ export const PALETTES: readonly PaletteDef[] = [
   SUNSET_CAVE_EXTENDED,
 ] as const;
 
+const paletteHueAnchorsById = new Map<string, readonly number[]>();
+const paletteHsvAnchorsById = new Map<string, readonly PaletteHsvAnchor[]>();
+
+export type PaletteHsvAnchor = Readonly<Pick<Hsv, "h" | "s" | "v">>;
+
 export function getPaletteById(id: string): PaletteDef {
   const found = PALETTES.find((p) => p.id === id);
   return found ?? DB32;
+}
+
+export function getPaletteHueAnchors(id: string): readonly number[] {
+  const palette = getPaletteById(id);
+  const cached = paletteHueAnchorsById.get(palette.id);
+  if (cached) return cached;
+
+  const anchors = Object.freeze(
+    getPaletteHsvAnchors(palette.id).map((anchor) => anchor.h),
+  ) as readonly number[];
+  paletteHueAnchorsById.set(palette.id, anchors);
+  return anchors;
+}
+
+export function getPaletteHsvAnchors(id: string): readonly PaletteHsvAnchor[] {
+  const palette = getPaletteById(id);
+  const cached = paletteHsvAnchorsById.get(palette.id);
+  if (cached) return cached;
+
+  const anchors = Object.freeze(
+    palette.colors.map((hex) => {
+      const hsv = rgbToHsv(hexToRgb(hex));
+      return Object.freeze({
+        h: hsv.h,
+        s: hsv.s,
+        v: hsv.v,
+      });
+    }),
+  ) as readonly PaletteHsvAnchor[];
+  paletteHsvAnchorsById.set(palette.id, anchors);
+  return anchors;
 }

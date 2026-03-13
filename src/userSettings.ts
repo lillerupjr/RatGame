@@ -1,4 +1,8 @@
-import { DEFAULT_DEBUG_SETTINGS, type DebugSettings } from "./debugSettings";
+import {
+  DEFAULT_DEBUG_SETTINGS,
+  normalizePaletteRemapWeightPercent,
+  type DebugSettings,
+} from "./debugSettings";
 import { DEFAULT_SPAWN_TUNING } from "./game/balance/spawnTuningDefaults";
 
 export type VerticalTilesMode = "auto" | "manual";
@@ -30,6 +34,10 @@ export type RenderSettings = {
   tileRenderRadius: number;
   // Palette swap (Phase 1): apply at sprite load time, cached.
   paletteSwapEnabled: boolean;
+  // Dev-only HUD debug line for current resolved palette id.
+  paletteHudDebugOverlayEnabled?: boolean;
+  // Dev-only toggle to bypass final ambient darkness/tint screen overlay.
+  darknessMaskDebugDisabled?: boolean;
   paletteId:
     | "db32"
     | "divination"
@@ -106,6 +114,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
     visibleVerticalTiles: DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP,
     tileRenderRadius: 3,
     paletteSwapEnabled: false,
+    paletteHudDebugOverlayEnabled: false,
+    darknessMaskDebugDisabled: false,
     paletteId: "db32",
     ...DEFAULT_SPAWN_TUNING,
   },
@@ -233,6 +243,12 @@ function mergeSettings(
   }
   if (gamePatch.gameSpeed !== undefined) {
     gamePatch.gameSpeed = clampGameSpeed(Number(gamePatch.gameSpeed));
+  }
+  if (debugPatch.paletteSWeightPercent !== undefined) {
+    debugPatch.paletteSWeightPercent = normalizePaletteRemapWeightPercent(debugPatch.paletteSWeightPercent);
+  }
+  if (debugPatch.paletteVWeightPercent !== undefined) {
+    debugPatch.paletteVWeightPercent = normalizePaletteRemapWeightPercent(debugPatch.paletteVWeightPercent);
   }
 
   return {

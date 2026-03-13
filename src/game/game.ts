@@ -131,6 +131,7 @@ import {
   tickPrewarm,
 } from "./render/prewarmOwner";
 import { resolveActivePaletteId } from "./render/activePalette";
+import { formatPaletteHudDebugText, shouldShowPaletteHudDebugOverlay } from "./render/renderDebugPolicy";
 import { applySfxSettingsToWorld } from "./audio/audioSettings";
 import { chooseCardReward, ensureCardRewardState } from "./combat_mods/rewards/cardRewardFlow";
 import { chooseRelicReward, ensureRelicRewardState } from "./combat_mods/rewards/relicRewardFlow";
@@ -2749,13 +2750,14 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function updateHud() {
-    const orbSide = ((getUserSettings() as any).game?.healthOrbSide ?? "left") as "left" | "right";
+    const settings = getUserSettings();
+    const orbSide = (settings.game?.healthOrbSide ?? "left") as "left" | "right";
     args.hud.vitalsOrbRoot.classList.toggle("isRight", orbSide === "right");
 
     args.hud.fpsPill.hidden = false;
     args.hud.timePill.hidden = false;
     args.hud.lvlPill.hidden = false;
-    args.hud.palettePill.hidden = true;
+    args.hud.palettePill.hidden = !shouldShowPaletteHudDebugOverlay(settings);
     args.hud.killsPill.hidden = true;
     args.hud.hpPill.hidden = true;
     args.hud.armorPill.hidden = true;
@@ -2764,7 +2766,7 @@ export function createGame(args: CreateGameArgs) {
     args.hud.fpsPill.textContent = `FPS ${Math.round((world as any).fps ?? 0)}`;
     args.hud.timePill.textContent = `\u23f1 ${formatTimeMMSS(world.time)}`;
     args.hud.lvlPill.textContent = `\ud83d\udcb0 ${getGold(world)}`;
-    args.hud.palettePill.textContent = `Palette: ${resolveActivePaletteId()}`;
+    args.hud.palettePill.textContent = formatPaletteHudDebugText(resolveActivePaletteId());
     args.hud.killsPill.textContent = `Kills: ${world.kills}`;
     args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
     args.hud.armorPill.textContent = `Armor: ${Math.max(0, Math.ceil(world.currentArmor))}/${world.maxArmor}`;

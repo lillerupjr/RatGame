@@ -17,6 +17,26 @@ export type ObjectiveDebugSettings = {
   showZoneBounds: boolean;
 };
 
+export const PALETTE_REMAP_WEIGHT_OPTIONS = [0, 25, 50, 75, 100] as const;
+export type PaletteRemapWeightPercent = (typeof PALETTE_REMAP_WEIGHT_OPTIONS)[number];
+
+export function normalizePaletteRemapWeightPercent(value: unknown): PaletteRemapWeightPercent {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+
+  let nearest: PaletteRemapWeightPercent = PALETTE_REMAP_WEIGHT_OPTIONS[0];
+  let nearestDist = Math.abs(numeric - nearest);
+  for (let i = 1; i < PALETTE_REMAP_WEIGHT_OPTIONS.length; i++) {
+    const candidate = PALETTE_REMAP_WEIGHT_OPTIONS[i];
+    const dist = Math.abs(numeric - candidate);
+    if (dist < nearestDist) {
+      nearest = candidate;
+      nearestDist = dist;
+    }
+  }
+  return nearest;
+}
+
 export type DebugSettings = {
   grid: boolean;
   walkMask: boolean;
@@ -38,6 +58,8 @@ export type DebugSettings = {
   godMode: boolean;
   dmgMult: number;
   fireRateMult: number;
+  paletteSWeightPercent: PaletteRemapWeightPercent;
+  paletteVWeightPercent: PaletteRemapWeightPercent;
   entityAnchorOverlay: boolean;
   enemyAimOverlay: boolean;
   lootGoblinOverlay: boolean;
@@ -51,7 +73,13 @@ export type DebugSettings = {
 
 export type BooleanDebugSettingKey = Exclude<
   keyof DebugSettings,
-  "waterFlowRate" | "dmgMult" | "fireRateMult" | "neutralBirdAI" | "objectives"
+  | "waterFlowRate"
+  | "dmgMult"
+  | "fireRateMult"
+  | "paletteSWeightPercent"
+  | "paletteVWeightPercent"
+  | "neutralBirdAI"
+  | "objectives"
 >;
 
 export type DebugToggleDefinition = {
@@ -115,6 +143,8 @@ export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   godMode: false,
   dmgMult: 1,
   fireRateMult: 1,
+  paletteSWeightPercent: 0,
+  paletteVWeightPercent: 0,
   entityAnchorOverlay: false,
   enemyAimOverlay: false,
   lootGoblinOverlay: false,

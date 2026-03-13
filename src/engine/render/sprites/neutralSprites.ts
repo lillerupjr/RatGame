@@ -1,5 +1,5 @@
 import type { Dir8 } from "./dir8";
-import { resolveActivePaletteId } from "../../../game/render/activePalette";
+import { resolveActivePaletteId, resolveActivePaletteVariantKey } from "../../../game/render/activePalette";
 import { getSpriteByIdForPalette } from "./renderSprites";
 import {
   createPaletteSwapState,
@@ -20,7 +20,7 @@ const DIR_TO_PATH: Record<Dir8, string> = {
 
 const DIRS: Dir8[] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 
-const paletteState = createPaletteSwapState(resolveActivePaletteId());
+const paletteState = createPaletteSwapState(resolveActivePaletteVariantKey());
 const flyingByPalette = new Map<string, Record<Dir8, HTMLImageElement[]>>();
 const idleByPalette = new Map<string, Record<Dir8, HTMLImageElement[]>>();
 const preloadByPalette = new Map<string, Promise<void>>();
@@ -65,7 +65,7 @@ function isPaletteReady(paletteId: string): boolean {
 }
 
 export function neutralMobSpritesReady(): boolean {
-  return isPaletteReady(resolveActivePaletteId());
+  return isPaletteReady(resolveActivePaletteVariantKey());
 }
 
 function loadImage(spriteId: string, paletteId: string): Promise<HTMLImageElement> {
@@ -92,12 +92,12 @@ export function getPigeonFramesForClipAndScreenDir(
   clip: "IDLE" | "TAKEOFF" | "FLY_TO_TARGET" | "LAND",
   dir: Dir8,
 ): HTMLImageElement[] {
-  const paletteId = resolveActivePaletteId();
-  notePaletteRequested(paletteState, paletteId);
-  if (!isPaletteReady(paletteId)) {
+  const paletteVariantKey = resolveActivePaletteVariantKey();
+  notePaletteRequested(paletteState, paletteVariantKey);
+  if (!isPaletteReady(paletteVariantKey)) {
     void preloadNeutralMobSprites();
   }
-  const activePalette = isPaletteReady(paletteId) ? paletteId : paletteState.lastReadyPaletteId;
+  const activePalette = isPaletteReady(paletteVariantKey) ? paletteVariantKey : paletteState.lastReadyPaletteId;
   const flying = getFlyingFrames(activePalette);
   const idle = getIdleFrames(activePalette);
   if (clip === "IDLE" || clip === "LAND") {
@@ -114,12 +114,13 @@ export function getPigeonFramesForClip(
 
 export async function preloadNeutralMobSprites(): Promise<void> {
   const paletteId = resolveActivePaletteId();
-  notePaletteRequested(paletteState, paletteId);
-  if (isPaletteReady(paletteId)) {
-    notePaletteReady(paletteState, paletteId);
+  const paletteVariantKey = resolveActivePaletteVariantKey();
+  notePaletteRequested(paletteState, paletteVariantKey);
+  if (isPaletteReady(paletteVariantKey)) {
+    notePaletteReady(paletteState, paletteVariantKey);
     return;
   }
-  const inFlight = preloadByPalette.get(paletteId);
+  const inFlight = preloadByPalette.get(paletteVariantKey);
   if (inFlight) {
     await inFlight;
     return;
@@ -127,8 +128,8 @@ export async function preloadNeutralMobSprites(): Promise<void> {
 
   const job = (async () => {
   try {
-    const flying = getFlyingFrames(paletteId);
-    const idle = getIdleFrames(paletteId);
+    const flying = getFlyingFrames(paletteVariantKey);
+    const idle = getIdleFrames(paletteVariantKey);
     for (let i = 0; i < DIRS.length; i++) {
       const dir = DIRS[i];
       const dirPath = DIR_TO_PATH[dir];
@@ -149,13 +150,13 @@ export async function preloadNeutralMobSprites(): Promise<void> {
       }
       idle[dir] = idleFrames;
     }
-    notePaletteReady(paletteState, paletteId);
+    notePaletteReady(paletteState, paletteVariantKey);
   } catch (err) {
     void err;
   }
   })().finally(() => {
-    preloadByPalette.delete(paletteId);
+    preloadByPalette.delete(paletteVariantKey);
   });
-  preloadByPalette.set(paletteId, job);
+  preloadByPalette.set(paletteVariantKey, job);
   await job;
 }

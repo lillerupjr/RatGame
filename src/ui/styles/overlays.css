@@ -509,6 +509,15 @@ html.ios-standalone-fix #ui {
   letter-spacing: 0.04em;
 }
 
+#palettePill {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  font-size: var(--hud-meta-size);
+  line-height: 1.15;
+  opacity: 0.72;
+  letter-spacing: 0.03em;
+}
+
 #timePill {
   grid-column: 1;
   grid-row: 2;

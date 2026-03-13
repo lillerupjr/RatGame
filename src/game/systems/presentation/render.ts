@@ -102,6 +102,7 @@ import { TILE_ID_OCEAN } from "../../world/semanticFields";
 import { getZoneTrialObjectiveState } from "../../objectives/zoneObjectiveSystem";
 import { renderZoneObjectives } from "../../render/renderZoneObjectives";
 import { resolveActivePaletteId } from "../../render/activePalette";
+import { shouldApplyAmbientDarknessOverlay } from "../../render/renderDebugPolicy";
 import { resolveNavArrowTarget } from "../../ui/navArrowTarget";
 import { renderNavArrow } from "../../ui/navArrowRender";
 import { coinColorFromValue } from "../../economy/coins";
@@ -3736,9 +3737,11 @@ export async function renderSystem(
 
 
   // PASS 8: final screen-space ambient darkness/tint only
-  setRenderPerfDrawTag("lighting");
-  renderAmbientDarknessOverlay(ctx, w.lighting, devW, devH);
-  setRenderPerfDrawTag(null);
+  if (shouldApplyAmbientDarknessOverlay(renderSettings)) {
+    setRenderPerfDrawTag("lighting");
+    renderAmbientDarknessOverlay(ctx, w.lighting, devW, devH);
+    setRenderPerfDrawTag(null);
+  }
   // Building-mask debug overlay draw disabled to avoid full-canvas mask artifacts.
 
 

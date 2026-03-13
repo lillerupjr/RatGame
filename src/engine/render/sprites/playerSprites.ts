@@ -1,5 +1,5 @@
 import { type Dir8 } from "./dir8";
-import { resolveActivePaletteId } from "../../../game/render/activePalette";
+import { resolveActivePaletteVariantKey } from "../../../game/render/activePalette";
 import {
     createPaletteSwapState,
     notePaletteReady,
@@ -38,7 +38,7 @@ const PLAYER_SKIN_SCALE: Record<string, number> = {
 };
 
 let playerSkin = "jamal";
-const paletteState = createPaletteSwapState(resolveActivePaletteId());
+const paletteState = createPaletteSwapState(resolveActivePaletteVariantKey());
 const packsByPalette = new Map<string, Map<string, SpritePack>>();
 const preloadByPaletteSkin = new Map<string, Promise<void>>();
 
@@ -65,15 +65,15 @@ export function getPlayerIdleSpriteUrl(skin: string): string {
 }
 
 export async function preloadPlayerSprites() {
-    const paletteId = resolveActivePaletteId();
-    notePaletteRequested(paletteState, paletteId);
-    const map = getPaletteMap(paletteId);
+    const paletteVariantKey = resolveActivePaletteVariantKey();
+    notePaletteRequested(paletteState, paletteVariantKey);
+    const map = getPaletteMap(paletteVariantKey);
     if (map.has(playerSkin)) {
-        notePaletteReady(paletteState, paletteId);
+        notePaletteReady(paletteState, paletteVariantKey);
         return;
     }
 
-    const key = `${paletteId}:${playerSkin}`;
+    const key = `${paletteVariantKey}:${playerSkin}`;
     const inFlight = preloadByPaletteSkin.get(key);
     if (inFlight) {
         await inFlight;
@@ -87,7 +87,7 @@ export async function preloadPlayerSprites() {
         })
         .then((pack) => {
             map.set(playerSkin, pack);
-            notePaletteReady(paletteState, paletteId);
+            notePaletteReady(paletteState, paletteVariantKey);
         })
         .catch((err) => {
             console.warn("[playerSprites] Failed to preload player pack", err);
@@ -100,9 +100,9 @@ export async function preloadPlayerSprites() {
 }
 
 export function playerSpritesReady() {
-    const paletteId = resolveActivePaletteId();
-    notePaletteRequested(paletteState, paletteId);
-    const current = getPaletteMap(paletteId).get(playerSkin);
+    const paletteVariantKey = resolveActivePaletteVariantKey();
+    notePaletteRequested(paletteState, paletteVariantKey);
+    const current = getPaletteMap(paletteVariantKey).get(playerSkin);
     if (!current) {
         void preloadPlayerSprites();
     }
@@ -116,9 +116,9 @@ export function getPlayerSpriteFrame(args: {
     moving: boolean;
     time: number;
 }): SpriteFrame | null {
-    const paletteId = resolveActivePaletteId();
-    notePaletteRequested(paletteState, paletteId);
-    const currentPack = getPaletteMap(paletteId).get(playerSkin);
+    const paletteVariantKey = resolveActivePaletteVariantKey();
+    notePaletteRequested(paletteState, paletteVariantKey);
+    const currentPack = getPaletteMap(paletteVariantKey).get(playerSkin);
     if (!currentPack) {
         void preloadPlayerSprites();
     }

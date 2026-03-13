@@ -44,10 +44,10 @@ No normal-light drawing occurs in the final pass.
 
 - No mask-based normal-light occlusion path remains in `render.ts`.
 - No inverse/source/combined lighting mask state remains in `WorldLightingState`.
-- No mask-only lighting debug toggles/UI remain in debug settings panel.
+- No legacy mask-only lighting pipeline is restored by debug controls.
+- Dev Tools may disable only the final ambient darkness/tint overlay for inspection.
 
 ## V1 Approximation Notes
 
 - Oversized lights may overextend across depth in edge cases.
 - Support/source-anchor sorting is deterministic and stable.
-

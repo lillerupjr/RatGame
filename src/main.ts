@@ -15,6 +15,7 @@ import { wireMenus } from "./ui/menuWiring";
 import {
   DEBUG_TOGGLE_DEFINITIONS,
   NEUTRAL_BIRD_FORCE_STATES,
+  PALETTE_REMAP_WEIGHT_OPTIONS,
   makeAllDebugOffSettings,
   type BooleanDebugSettingKey,
 } from "./debugSettings";
@@ -324,6 +325,97 @@ function installDevSettingsUi(): DevSettingsUiController {
   paletteIdRow.appendChild(paletteIdSelect);
   panel.appendChild(paletteIdRow);
 
+  const createPaletteWeightSelect = (
+    label: string,
+    onChange: (value: SettingsDebug["paletteSWeightPercent"]) => void,
+  ): HTMLSelectElement => {
+    const row = document.createElement("label");
+    row.style.display = "flex";
+    row.style.alignItems = "center";
+    row.style.justifyContent = "space-between";
+    row.style.gap = "10px";
+    row.style.padding = "4px 0";
+
+    const text = document.createElement("span");
+    text.textContent = label;
+
+    const select = document.createElement("select");
+    applyDevSelectStyle(select);
+    for (let i = 0; i < PALETTE_REMAP_WEIGHT_OPTIONS.length; i++) {
+      const weight = PALETTE_REMAP_WEIGHT_OPTIONS[i];
+      const opt = document.createElement("option");
+      opt.value = `${weight}`;
+      opt.textContent = `${weight}%`;
+      select.appendChild(opt);
+    }
+    select.addEventListener("change", () => {
+      const value = Number.parseInt(select.value, 10);
+      onChange((Number.isFinite(value) ? value : 0) as SettingsDebug["paletteSWeightPercent"]);
+    });
+
+    row.appendChild(text);
+    row.appendChild(select);
+    panel.appendChild(row);
+    return select;
+  };
+
+  const paletteSWeightSelect = createPaletteWeightSelect("Palette Saturation Weight", (value) => {
+    updateUserSettings({
+      debug: {
+        paletteSWeightPercent: value,
+      },
+    });
+  });
+  const paletteVWeightSelect = createPaletteWeightSelect("Palette Value Weight", (value) => {
+    updateUserSettings({
+      debug: {
+        paletteVWeightPercent: value,
+      },
+    });
+  });
+
+  const paletteHudDebugOverlayRow = document.createElement("label");
+  paletteHudDebugOverlayRow.style.display = "flex";
+  paletteHudDebugOverlayRow.style.alignItems = "center";
+  paletteHudDebugOverlayRow.style.justifyContent = "space-between";
+  paletteHudDebugOverlayRow.style.gap = "10px";
+  paletteHudDebugOverlayRow.style.padding = "4px 0";
+  const paletteHudDebugOverlayText = document.createElement("span");
+  paletteHudDebugOverlayText.textContent = "Palette HUD Debug Overlay";
+  const paletteHudDebugOverlayInput = document.createElement("input");
+  paletteHudDebugOverlayInput.type = "checkbox";
+  paletteHudDebugOverlayInput.addEventListener("change", () => {
+    updateUserSettings({
+      render: {
+        paletteHudDebugOverlayEnabled: paletteHudDebugOverlayInput.checked,
+      },
+    });
+  });
+  paletteHudDebugOverlayRow.appendChild(paletteHudDebugOverlayText);
+  paletteHudDebugOverlayRow.appendChild(paletteHudDebugOverlayInput);
+  panel.appendChild(paletteHudDebugOverlayRow);
+
+  const darknessMaskDebugRow = document.createElement("label");
+  darknessMaskDebugRow.style.display = "flex";
+  darknessMaskDebugRow.style.alignItems = "center";
+  darknessMaskDebugRow.style.justifyContent = "space-between";
+  darknessMaskDebugRow.style.gap = "10px";
+  darknessMaskDebugRow.style.padding = "4px 0";
+  const darknessMaskDebugText = document.createElement("span");
+  darknessMaskDebugText.textContent = "Disable Darkness Mask";
+  const darknessMaskDebugInput = document.createElement("input");
+  darknessMaskDebugInput.type = "checkbox";
+  darknessMaskDebugInput.addEventListener("change", () => {
+    updateUserSettings({
+      render: {
+        darknessMaskDebugDisabled: darknessMaskDebugInput.checked,
+      },
+    });
+  });
+  darknessMaskDebugRow.appendChild(darknessMaskDebugText);
+  darknessMaskDebugRow.appendChild(darknessMaskDebugInput);
+  panel.appendChild(darknessMaskDebugRow);
+
   const waterFlowRow = document.createElement("div");
   waterFlowRow.style.display = "flex";
   waterFlowRow.style.flexDirection = "column";
@@ -550,6 +642,8 @@ function installDevSettingsUi(): DevSettingsUiController {
         renderPerfCountersEnabled: false,
         performanceMode: false,
         paletteSwapEnabled: false,
+        paletteHudDebugOverlayEnabled: false,
+        darknessMaskDebugDisabled: false,
       },
     });
     syncFromSettings();
@@ -569,6 +663,8 @@ function installDevSettingsUi(): DevSettingsUiController {
     birdRepickTargetInput.checked = s.debug.neutralBirdAI.debugRepickTarget;
     waterFlowInput.value = `${s.debug.waterFlowRate}`;
     waterFlowValue.textContent = `${s.debug.waterFlowRate.toFixed(2)}x`;
+    paletteSWeightSelect.value = `${s.debug.paletteSWeightPercent}`;
+    paletteVWeightSelect.value = `${s.debug.paletteVWeightPercent}`;
     dmgMultBtn.textContent = `${s.debug.dmgMult}x`;
     fireRateMultBtn.textContent = `${s.debug.fireRateMult}x`;
     entityShadowsInput.checked = s.render.entityShadowsDisable;
@@ -576,6 +672,8 @@ function installDevSettingsUi(): DevSettingsUiController {
     renderPerfCountersInput.checked = s.render.renderPerfCountersEnabled;
     paletteSwapInput.checked = s.render.paletteSwapEnabled;
     paletteIdSelect.value = s.render.paletteId;
+    paletteHudDebugOverlayInput.checked = s.render.paletteHudDebugOverlayEnabled === true;
+    darknessMaskDebugInput.checked = s.render.darknessMaskDebugDisabled === true;
     const isUserMode = !!(s as any).game?.userModeEnabled;
     debugLayerToggleBtn.hidden = isUserMode;
     if (isUserMode) setOpen(false);

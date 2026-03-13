@@ -1,5 +1,5 @@
 import { type Dir8 } from "./dir8";
-import { resolveActivePaletteId } from "../../../game/render/activePalette";
+import { resolveActivePaletteId, resolveActivePaletteVariantKey } from "../../../game/render/activePalette";
 import { getSpriteByIdForPalette } from "./renderSprites";
 import {
   createPaletteSwapState,
@@ -35,7 +35,7 @@ const ANCHOR_X = 0.5;
 const ANCHOR_Y = 0.72;
 
 let warned = false;
-const paletteState = createPaletteSwapState(resolveActivePaletteId());
+const paletteState = createPaletteSwapState(resolveActivePaletteVariantKey());
 const framesByPalette = new Map<string, Partial<Record<Dir8, HTMLImageElement[]>>>();
 const sizeByPalette = new Map<string, { w: number; h: number }>();
 const preloadByPalette = new Map<string, Promise<void>>();
@@ -87,18 +87,19 @@ function resolveFrameId(dir: Dir8, frameIndex: number): string {
 
 export async function preloadVendorNpcSprites(): Promise<void> {
   const paletteId = resolveActivePaletteId();
-  notePaletteRequested(paletteState, paletteId);
-  if (isPaletteReady(paletteId)) {
-    notePaletteReady(paletteState, paletteId);
+  const paletteVariantKey = resolveActivePaletteVariantKey();
+  notePaletteRequested(paletteState, paletteVariantKey);
+  if (isPaletteReady(paletteVariantKey)) {
+    notePaletteReady(paletteState, paletteVariantKey);
     return;
   }
-  const inFlight = preloadByPalette.get(paletteId);
+  const inFlight = preloadByPalette.get(paletteVariantKey);
   if (inFlight) {
     await inFlight;
     return;
   }
 
-  const frameMap = getFrameMap(paletteId);
+  const frameMap = getFrameMap(paletteVariantKey);
   const job = (async () => {
   try {
     for (const [dir] of Object.entries(DIR_TO_PATH) as [Dir8, string][]) {
@@ -112,32 +113,33 @@ export async function preloadVendorNpcSprites(): Promise<void> {
     }
 
     const south = frameMap.S?.[0];
-    sizeByPalette.set(paletteId, { w: south?.width ?? 0, h: south?.height ?? 0 });
-    notePaletteReady(paletteState, paletteId);
+    sizeByPalette.set(paletteVariantKey, { w: south?.width ?? 0, h: south?.height ?? 0 });
+    notePaletteReady(paletteState, paletteVariantKey);
   } catch (err) {
     console.warn("[vendorSprites] Failed to preload vendor breathing-idle sprites", err);
   }
   })().finally(() => {
-    preloadByPalette.delete(paletteId);
+    preloadByPalette.delete(paletteVariantKey);
   });
-  preloadByPalette.set(paletteId, job);
+  preloadByPalette.set(paletteVariantKey, job);
   await job;
 }
 
 export function vendorNpcSpritesReady(): boolean {
-  const paletteId = resolveActivePaletteId();
-  notePaletteRequested(paletteState, paletteId);
-  if (isPaletteReady(paletteId)) return true;
+  const paletteVariantKey = resolveActivePaletteVariantKey();
+  notePaletteRequested(paletteState, paletteVariantKey);
+  if (isPaletteReady(paletteVariantKey)) return true;
   return isPaletteReady(paletteState.lastReadyPaletteId);
 }
 
 export function getVendorNpcSpriteFrame(args: { dir: Dir8; time: number }): SpriteFrame | null {
   const paletteId = resolveActivePaletteId();
-  notePaletteRequested(paletteState, paletteId);
-  if (!isPaletteReady(paletteId)) {
+  const paletteVariantKey = resolveActivePaletteVariantKey();
+  notePaletteRequested(paletteState, paletteVariantKey);
+  if (!isPaletteReady(paletteVariantKey)) {
     void preloadVendorNpcSprites();
   }
-  const activePalette = isPaletteReady(paletteId) ? paletteId : paletteState.lastReadyPaletteId;
+  const activePalette = isPaletteReady(paletteVariantKey) ? paletteVariantKey : paletteState.lastReadyPaletteId;
   const frameMap = getFrameMap(activePalette);
   const size = sizeByPalette.get(activePalette);
   const frames = frameMap[args.dir] ?? frameMap.S;

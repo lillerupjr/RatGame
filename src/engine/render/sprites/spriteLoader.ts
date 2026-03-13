@@ -1,5 +1,5 @@
 import { type Dir8 } from "./dir8";
-import { resolveActivePaletteId } from "../../../game/render/activePalette";
+import { resolveActivePaletteId, resolveActivePaletteVariantKey } from "../../../game/render/activePalette";
 import { getSpriteByIdForPalette } from "./renderSprites";
 
 export type AnimKey = string;
@@ -67,9 +67,9 @@ function asSpriteId(assetPath: string): string {
     return normalized.toLowerCase().endsWith(".png") ? normalized.slice(0, -4) : normalized;
 }
 
-async function loadImage(spriteId: string, paletteId: string): Promise<HTMLImageElement> {
+async function loadImage(spriteId: string, paletteId: string, paletteVariantKey: string): Promise<HTMLImageElement> {
     const id = asSpriteId(spriteId);
-    const cacheId = `${id}@@pal:${paletteId}`;
+    const cacheId = `${id}@@palv:${paletteVariantKey}`;
     const existing = imageCache.get(cacheId);
     if (existing) return existing;
 
@@ -133,12 +133,12 @@ function packCacheKey(
     source: SpriteLoaderSource,
     animKeys?: AnimKey[],
     frameCount?: number,
-    paletteId?: string,
+    paletteVariantKey?: string,
 ) {
     const animKey = animKeys ? animKeys.join(",") : "*";
     const frames = frameCount ?? DEFAULT_FRAME_COUNT;
-    const pal = paletteId ?? "db32";
-    return `${source.packRoot}:${skin}:${animKey}:${frames}:@@pal:${pal}`;
+    const pal = paletteVariantKey ?? "db32@@sw:0@@vw:0";
+    return `${source.packRoot}:${skin}:${animKey}:${frames}:@@palv:${pal}`;
 }
 
 export async function preloadSpritePack(
@@ -153,7 +153,8 @@ export async function preloadSpritePack(
     const animKeys = options?.animKeys;
     const frameCount = options?.frameCount ?? DEFAULT_FRAME_COUNT;
     const paletteId = resolveActivePaletteId();
-    const cacheKey = packCacheKey(skin, source, animKeys, frameCount, paletteId);
+    const paletteVariantKey = resolveActivePaletteVariantKey();
+    const cacheKey = packCacheKey(skin, source, animKeys, frameCount, paletteVariantKey);
     const cached = packCache.get(cacheKey);
     if (cached) return cached;
 
@@ -163,6 +164,7 @@ export async function preloadSpritePack(
             const img = await loadImage(
                 packSuffix(source.packRoot, skin, `rotations/${dirKey}.png`),
                 paletteId,
+                paletteVariantKey,
             );
             rotations[dirKeyToDir8(dirKey)] = img;
         });
@@ -187,6 +189,7 @@ export async function preloadSpritePack(
                         loadImage(
                             packSuffix(source.packRoot, skin, `animations/${animKey}/${dirKey}/${frameName}`),
                             paletteId,
+                            paletteVariantKey,
                         ).then((img) => {
                             frames[i] = img;
                         }),

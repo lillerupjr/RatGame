@@ -1,5 +1,5 @@
 import { ENEMY_TYPE, type EnemyType } from "../../../game/content/enemies";
-import { resolveActivePaletteId } from "../../../game/render/activePalette";
+import { resolveActivePaletteVariantKey } from "../../../game/render/activePalette";
 import { dir8FromVector } from "./dir8";
 import {
     createPaletteSwapState,
@@ -127,7 +127,7 @@ export function getEnemySpriteFrameMeta(type: EnemyType): EnemySpriteFrameMeta |
     };
 }
 
-const paletteState = createPaletteSwapState(resolveActivePaletteId());
+const paletteState = createPaletteSwapState(resolveActivePaletteVariantKey());
 const packsByPalette = new Map<string, Map<string, SpritePack>>();
 const preloadByPaletteSkin = new Map<string, Promise<void>>();
 
@@ -148,26 +148,26 @@ function getRequiredSkins(): string[] {
 }
 
 function markPaletteReadyIfComplete(paletteId: string): void {
-    const map = getPaletteMap(paletteId);
-    const allLoaded = getRequiredSkins().every((skin) => map.has(skin));
-    if (allLoaded) notePaletteReady(paletteState, paletteId);
+  const map = getPaletteMap(paletteId);
+  const allLoaded = getRequiredSkins().every((skin) => map.has(skin));
+  if (allLoaded) notePaletteReady(paletteState, paletteId);
 }
 
 export function enemySpritesReady(): boolean {
-    const paletteId = resolveActivePaletteId();
-    const map = getPaletteMap(paletteId);
+    const paletteVariantKey = resolveActivePaletteVariantKey();
+    const map = getPaletteMap(paletteVariantKey);
     return getRequiredSkins().every((skin) => map.has(skin));
 }
 
 export function preloadEnemySprites() {
-    const paletteId = resolveActivePaletteId();
-    notePaletteRequested(paletteState, paletteId);
-    const map = getPaletteMap(paletteId);
+    const paletteVariantKey = resolveActivePaletteVariantKey();
+    notePaletteRequested(paletteState, paletteVariantKey);
+    const map = getPaletteMap(paletteVariantKey);
     const skins = getRequiredSkins();
 
     for (const skin of skins) {
         if (map.has(skin)) continue;
-        const key = `${paletteId}:${skin}`;
+        const key = `${paletteVariantKey}:${skin}`;
         if (preloadByPaletteSkin.has(key)) continue;
         const def = Object.values(ENEMY_SPRITES).find((entry) => entry?.skin === skin);
         const job = preloadSpritePack(skin, {
@@ -177,7 +177,7 @@ export function preloadEnemySprites() {
         })
             .then((pack) => {
                 map.set(skin, pack);
-                markPaletteReadyIfComplete(paletteId);
+                markPaletteReadyIfComplete(paletteVariantKey);
             })
             .catch((err) => {
                 console.warn(`[enemySprites] Failed to preload ${skin}`, err);
@@ -212,11 +212,11 @@ export function getEnemySpriteFrame(args: {
     | null {
     const def = ENEMY_SPRITES[args.type];
     if (!def) return null;
-    const paletteId = resolveActivePaletteId();
-    notePaletteRequested(paletteState, paletteId);
+    const paletteVariantKey = resolveActivePaletteVariantKey();
+    notePaletteRequested(paletteState, paletteVariantKey);
     preloadEnemySprites();
 
-    const pack = getPaletteMap(paletteId).get(def.skin)
+    const pack = getPaletteMap(paletteVariantKey).get(def.skin)
         ?? getPaletteMap(paletteState.lastReadyPaletteId).get(def.skin);
     if (!pack) return null;
 

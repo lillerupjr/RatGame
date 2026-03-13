@@ -1,70 +1,101 @@
-import { DB32, type HexColor, getPaletteById } from "./palettes";
+import { hsvToRgb, hueDistanceDegrees, rgbToHsv } from "./colorMath";
+import { getPaletteHsvAnchors, type PaletteHsvAnchor } from "./palettes";
 
-type RGB = { r: number; g: number; b: number };
-const db32IndexByRgb = new Map<number, number>();
-const db32ToTargetLutCache = new Map<string, Uint8Array>();
+export type PaletteSwapWeights = {
+  sWeight: number;
+  vWeight: number;
+};
 
-for (let i = 0; i < DB32.colors.length; i++) {
-  const c = hexToRgb(DB32.colors[i]);
-  db32IndexByRgb.set(rgbKey(c.r, c.g, c.b), i);
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
 }
 
-function hexToRgb(hex: HexColor): RGB {
-  const h = hex.slice(1);
-  const r = Number.parseInt(h.slice(0, 2), 16);
-  const g = Number.parseInt(h.slice(2, 4), 16);
-  const b = Number.parseInt(h.slice(4, 6), 16);
-  return { r, g, b };
+function mix(a: number, b: number, t: number): number {
+  const weight = clamp01(t);
+  return a * (1 - weight) + b * weight;
 }
 
-function rgbKey(r: number, g: number, b: number): number {
-  // 24-bit key
-  return (r << 16) | (g << 8) | b;
+export function resolvePaletteSwapWeights(weights?: Partial<PaletteSwapWeights> | null): PaletteSwapWeights {
+  return {
+    sWeight: clamp01(weights?.sWeight ?? 0),
+    vWeight: clamp01(weights?.vWeight ?? 0),
+  };
 }
 
-function distSq(a: RGB, b: RGB): number {
-  const dr = a.r - b.r;
-  const dg = a.g - b.g;
-  const db = a.b - b.b;
-  return dr * dr + dg * dg + db * db;
-}
+export function pickNearestHueAnchor(sourceHue: number, paletteHueAnchors: readonly number[]): number {
+  if (paletteHueAnchors.length === 0) return sourceHue;
 
-/**
- * Build a mapping from each DB32 color (0..31) to the nearest target palette color index.
- * Target palette can be any length >= 1 (Divination is 7).
- */
-export function buildDb32ToTargetIndexLut(targetPaletteId: string): Uint8Array {
-  const cached = db32ToTargetLutCache.get(targetPaletteId);
-  if (cached) return cached;
-  const target = getPaletteById(targetPaletteId);
-  const srcRgb = DB32.colors.map(hexToRgb);
-  const tgtRgb = target.colors.map(hexToRgb);
-
-  const lut = new Uint8Array(32);
-  for (let i = 0; i < 32; i++) {
-    let bestJ = 0;
-    let bestD = Number.POSITIVE_INFINITY;
-    for (let j = 0; j < tgtRgb.length; j++) {
-      const d = distSq(srcRgb[i], tgtRgb[j]);
-      if (d < bestD) {
-        bestD = d;
-        bestJ = j;
-      }
+  let nearest = paletteHueAnchors[0];
+  let nearestDist = hueDistanceDegrees(sourceHue, nearest);
+  for (let i = 1; i < paletteHueAnchors.length; i++) {
+    const candidate = paletteHueAnchors[i];
+    const candidateDist = hueDistanceDegrees(sourceHue, candidate);
+    if (candidateDist < nearestDist) {
+      nearest = candidate;
+      nearestDist = candidateDist;
     }
-    lut[i] = bestJ;
   }
-  db32ToTargetLutCache.set(targetPaletteId, lut);
-  return lut;
+  return nearest;
+}
+
+export function pickNearestPaletteHsvAnchor(
+  sourceHue: number,
+  paletteHsvAnchors: readonly PaletteHsvAnchor[],
+): PaletteHsvAnchor {
+  if (paletteHsvAnchors.length === 0) {
+    return {
+      h: sourceHue,
+      s: 0,
+      v: 0,
+    };
+  }
+
+  let nearest = paletteHsvAnchors[0];
+  let nearestDist = hueDistanceDegrees(sourceHue, nearest.h);
+  for (let i = 1; i < paletteHsvAnchors.length; i++) {
+    const candidate = paletteHsvAnchors[i];
+    const candidateDist = hueDistanceDegrees(sourceHue, candidate.h);
+    if (candidateDist < nearestDist) {
+      nearest = candidate;
+      nearestDist = candidateDist;
+    }
+  }
+  return nearest;
+}
+
+export function remapRgbaByHueLockInPlace(
+  data: Uint8ClampedArray,
+  paletteHsvAnchors: readonly PaletteHsvAnchor[],
+  weights?: Partial<PaletteSwapWeights> | null,
+): void {
+  if (paletteHsvAnchors.length === 0) return;
+  const remapWeights = resolvePaletteSwapWeights(weights);
+
+  for (let i = 0; i < data.length; i += 4) {
+    const a = data[i + 3];
+    if (a === 0) continue;
+
+    const hsv = rgbToHsv({ r: data[i], g: data[i + 1], b: data[i + 2] });
+    const nearestPalette = pickNearestPaletteHsvAnchor(hsv.h, paletteHsvAnchors);
+    const remappedRgb = hsvToRgb({
+      h: nearestPalette.h,
+      s: mix(hsv.s, nearestPalette.s, remapWeights.sWeight),
+      v: mix(hsv.v, nearestPalette.v, remapWeights.vWeight),
+    });
+
+    data[i] = remappedRgb.r;
+    data[i + 1] = remappedRgb.g;
+    data[i + 2] = remappedRgb.b;
+  }
 }
 
 export function applyPaletteSwapToCanvas(
   srcImg: HTMLImageElement,
   targetPaletteId: string,
+  weights?: Partial<PaletteSwapWeights> | null,
 ): HTMLCanvasElement {
-  const target = getPaletteById(targetPaletteId);
-  const targetRgb = target.colors.map(hexToRgb);
-
-  const db32ToTarget = buildDb32ToTargetIndexLut(targetPaletteId);
+  const paletteHsvAnchors = getPaletteHsvAnchors(targetPaletteId);
 
   const canvas = document.createElement("canvas");
   canvas.width = srcImg.naturalWidth || srcImg.width;
@@ -80,21 +111,7 @@ export function applyPaletteSwapToCanvas(
   const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const data = imgData.data;
 
-  for (let i = 0; i < data.length; i += 4) {
-    const a = data[i + 3];
-    if (a === 0) continue;
-
-    const key = rgbKey(data[i], data[i + 1], data[i + 2]);
-    const srcIndex = db32IndexByRgb.get(key);
-    if (srcIndex === undefined) continue; // non-DB32 pixel: leave as-is
-
-    const tgtIndex = db32ToTarget[srcIndex];
-    const tgt = targetRgb[tgtIndex];
-
-    data[i] = tgt.r;
-    data[i + 1] = tgt.g;
-    data[i + 2] = tgt.b;
-  }
+  remapRgbaByHueLockInPlace(data, paletteHsvAnchors, weights);
 
   ctx.putImageData(imgData, 0, 0);
   return canvas;

@@ -20,7 +20,16 @@ Divination (Lospec), 7 colors:
 - `#75d7da`
 - `#9effb8`
 
-Runtime remap logic computes nearest target color from DB32 using RGB squared distance.
+Runtime remap logic uses hue-locked HSV remap:
+
+- RGB -> HSV
+- Hue snaps to nearest palette hue anchor (circular hue distance)
+- Saturation is preserved
+- Value/lightness is preserved
+- HSV -> RGB
+- Alpha is preserved
+
+Tie-breaks on equal hue distance use first palette order.
 
 ## Toggle controls
 
@@ -44,8 +53,9 @@ Keyboard shortcut:
 
 ## Known behavior
 
-- Divination has 7 colors, so many DB32 midtones collapse into fewer bands.
-- This is expected and part of the look for this palette.
+- Palette output now behaves as hue families rather than strict discrete target colors.
+- Original shading/highlights are largely preserved because saturation and value are preserved.
+- Low-saturation pixels still participate in hue remap (no neutral-lane exemption).
 
 ## Entity sprite behavior (no-flash swap)
 
