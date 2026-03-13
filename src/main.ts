@@ -366,10 +366,10 @@ function installDevSettingsUi(): DevSettingsUiController {
       },
     });
   });
-  const paletteVWeightSelect = createPaletteWeightSelect("Palette Value Weight", (value) => {
+  const paletteDarknessSelect = createPaletteWeightSelect("Palette Darkness", (value) => {
     updateUserSettings({
       debug: {
-        paletteVWeightPercent: value,
+        paletteDarknessPercent: value,
       },
     });
   });
@@ -664,7 +664,7 @@ function installDevSettingsUi(): DevSettingsUiController {
     waterFlowInput.value = `${s.debug.waterFlowRate}`;
     waterFlowValue.textContent = `${s.debug.waterFlowRate.toFixed(2)}x`;
     paletteSWeightSelect.value = `${s.debug.paletteSWeightPercent}`;
-    paletteVWeightSelect.value = `${s.debug.paletteVWeightPercent}`;
+    paletteDarknessSelect.value = `${s.debug.paletteDarknessPercent}`;
     dmgMultBtn.textContent = `${s.debug.dmgMult}x`;
     fireRateMultBtn.textContent = `${s.debug.fireRateMult}x`;
     entityShadowsInput.checked = s.render.entityShadowsDisable;
@@ -1030,6 +1030,15 @@ async function bootstrap() {
   };
 
   // Runtime render/debug toggles (works outside dev panel too).
+  const cyclePaletteRemapWeight = (
+    currentValue: (typeof PALETTE_REMAP_WEIGHT_OPTIONS)[number],
+  ): (typeof PALETTE_REMAP_WEIGHT_OPTIONS)[number] => {
+    const idx = PALETTE_REMAP_WEIGHT_OPTIONS.indexOf(currentValue);
+    const currentIdx = idx >= 0 ? idx : 0;
+    const nextIdx = (currentIdx + 1) % PALETTE_REMAP_WEIGHT_OPTIONS.length;
+    return PALETTE_REMAP_WEIGHT_OPTIONS[nextIdx];
+  };
+
   window.addEventListener("keydown", (ev) => {
     const target = ev.target as HTMLElement | null;
     const active = document.activeElement as HTMLElement | null;
@@ -1083,6 +1092,24 @@ async function bootstrap() {
       }
 
       updateUserSettings({ render: { paletteSwapEnabled: true, paletteId: PALETTE_CYCLE[nextIdx] as PaletteId } });
+      return;
+    }
+
+    if (ev.code === "F6") {
+      ev.preventDefault();
+      const current = getUserSettings().debug.paletteSWeightPercent;
+      updateUserSettings({
+        debug: { paletteSWeightPercent: cyclePaletteRemapWeight(current) },
+      });
+      return;
+    }
+
+    if (ev.code === "F7") {
+      ev.preventDefault();
+      const current = getUserSettings().debug.paletteDarknessPercent;
+      updateUserSettings({
+        debug: { paletteDarknessPercent: cyclePaletteRemapWeight(current) },
+      });
       return;
     }
 

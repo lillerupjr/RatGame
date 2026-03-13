@@ -173,7 +173,7 @@ function loadByIdInternal(spriteId: string, forcedPaletteId?: string): LoadedImg
     // IMPORTANT:
     // If palette swap is active, never expose the db32 image to rendering.
     // Keep a transparent placeholder until the swapped image is ready.
-    const enabledNow = paletteManaged && paletteId !== "db32";
+    const enabledNow = paletteManaged && (paletteId !== "db32" || paletteSwapWeights.darkness > 0);
     const rec: LoadedImg = {
         img: enabledNow ? makeTransparent1x1() : new Image(),
         ready: false,
@@ -182,7 +182,7 @@ function loadByIdInternal(spriteId: string, forcedPaletteId?: string): LoadedImg
 
     const baseImg = new Image();
     baseImg.onload = () => {
-        const enabled = paletteManaged && paletteId !== "db32";
+        const enabled = paletteManaged && (paletteId !== "db32" || paletteSwapWeights.darkness > 0);
 
         if (!enabled) {
             // db32 path: expose base immediately

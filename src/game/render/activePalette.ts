@@ -25,7 +25,7 @@ export type ActivePaletteId =
 
 export type PaletteSwapWeightPercents = {
   sWeightPercent: number;
-  vWeightPercent: number;
+  darknessPercent: number;
 };
 
 /**
@@ -51,7 +51,7 @@ export function resolveActivePaletteSwapWeightPercents(): PaletteSwapWeightPerce
   const debug = getUserSettings().debug;
   return {
     sWeightPercent: normalizePaletteRemapWeightPercent(debug.paletteSWeightPercent),
-    vWeightPercent: normalizePaletteRemapWeightPercent(debug.paletteVWeightPercent),
+    darknessPercent: normalizePaletteRemapWeightPercent(debug.paletteDarknessPercent),
   };
 }
 
@@ -59,7 +59,7 @@ export function resolveActivePaletteSwapWeights(): PaletteSwapWeights {
   const percents = resolveActivePaletteSwapWeightPercents();
   return {
     sWeight: percents.sWeightPercent / 100,
-    vWeight: percents.vWeightPercent / 100,
+    darkness: percents.darknessPercent / 100,
   };
 }
 
@@ -67,7 +67,7 @@ export function buildPaletteVariantKey(
   paletteId: string,
   percents: PaletteSwapWeightPercents,
 ): string {
-  return `${paletteId}@@sw:${percents.sWeightPercent}@@vw:${percents.vWeightPercent}`;
+  return `${paletteId}@@sw:${percents.sWeightPercent}@@dk:${percents.darknessPercent}`;
 }
 
 export function resolvePaletteVariantKeyForPaletteId(paletteId: string): string {

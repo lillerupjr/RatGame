@@ -3,7 +3,7 @@ import { getPaletteHsvAnchors, type PaletteHsvAnchor } from "./palettes";
 
 export type PaletteSwapWeights = {
   sWeight: number;
-  vWeight: number;
+  darkness: number;
 };
 
 function clamp01(value: number): number {
@@ -19,7 +19,7 @@ function mix(a: number, b: number, t: number): number {
 export function resolvePaletteSwapWeights(weights?: Partial<PaletteSwapWeights> | null): PaletteSwapWeights {
   return {
     sWeight: clamp01(weights?.sWeight ?? 0),
-    vWeight: clamp01(weights?.vWeight ?? 0),
+    darkness: clamp01(weights?.darkness ?? 0),
   };
 }
 
@@ -78,10 +78,11 @@ export function remapRgbaByHueLockInPlace(
 
     const hsv = rgbToHsv({ r: data[i], g: data[i + 1], b: data[i + 2] });
     const nearestPalette = pickNearestPaletteHsvAnchor(hsv.h, paletteHsvAnchors);
+    const valueAfterDarkness = hsv.v * (1 - remapWeights.darkness);
     const remappedRgb = hsvToRgb({
       h: nearestPalette.h,
       s: mix(hsv.s, nearestPalette.s, remapWeights.sWeight),
-      v: mix(hsv.v, nearestPalette.v, remapWeights.vWeight),
+      v: valueAfterDarkness,
     });
 
     data[i] = remappedRgb.r;

@@ -59,7 +59,7 @@ export type DebugSettings = {
   dmgMult: number;
   fireRateMult: number;
   paletteSWeightPercent: PaletteRemapWeightPercent;
-  paletteVWeightPercent: PaletteRemapWeightPercent;
+  paletteDarknessPercent: PaletteRemapWeightPercent;
   entityAnchorOverlay: boolean;
   enemyAimOverlay: boolean;
   lootGoblinOverlay: boolean;
@@ -77,7 +77,7 @@ export type BooleanDebugSettingKey = Exclude<
   | "dmgMult"
   | "fireRateMult"
   | "paletteSWeightPercent"
-  | "paletteVWeightPercent"
+  | "paletteDarknessPercent"
   | "neutralBirdAI"
   | "objectives"
 >;
@@ -144,7 +144,7 @@ export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   dmgMult: 1,
   fireRateMult: 1,
   paletteSWeightPercent: 0,
-  paletteVWeightPercent: 0,
+  paletteDarknessPercent: 0,
   entityAnchorOverlay: false,
   enemyAimOverlay: false,
   lootGoblinOverlay: false,

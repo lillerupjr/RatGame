@@ -137,7 +137,7 @@ function packCacheKey(
 ) {
     const animKey = animKeys ? animKeys.join(",") : "*";
     const frames = frameCount ?? DEFAULT_FRAME_COUNT;
-    const pal = paletteVariantKey ?? "db32@@sw:0@@vw:0";
+    const pal = paletteVariantKey ?? "db32@@sw:0@@dk:0";
     return `${source.packRoot}:${skin}:${animKey}:${frames}:@@palv:${pal}`;
 }
 

@@ -247,9 +247,10 @@ function mergeSettings(
   if (debugPatch.paletteSWeightPercent !== undefined) {
     debugPatch.paletteSWeightPercent = normalizePaletteRemapWeightPercent(debugPatch.paletteSWeightPercent);
   }
-  if (debugPatch.paletteVWeightPercent !== undefined) {
-    debugPatch.paletteVWeightPercent = normalizePaletteRemapWeightPercent(debugPatch.paletteVWeightPercent);
+  if (debugPatch.paletteDarknessPercent !== undefined) {
+    debugPatch.paletteDarknessPercent = normalizePaletteRemapWeightPercent(debugPatch.paletteDarknessPercent);
   }
+  delete debugPatch.paletteVWeightPercent;
 
   return {
     ...base,

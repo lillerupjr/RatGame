@@ -53,7 +53,7 @@ describe("remapRgbaByHueLockInPlace", () => {
     expect(Math.abs(after.v - before.v)).toBeLessThanOrEqual(0.02);
   });
 
-  it("blends saturation and value with independent debug weights", () => {
+  it("blends saturation and applies darkness as a final value multiplier", () => {
     const srcRgb = hsvToRgb({ h: 18, s: 0.2, v: 0.9 });
     const before = rgbToHsv(srcRgb);
 
@@ -61,12 +61,12 @@ describe("remapRgbaByHueLockInPlace", () => {
     remapRgbaByHueLockInPlace(
       data,
       [{ h: 220, s: 1, v: 0.2 }],
-      { sWeight: 0.5, vWeight: 0.25 },
+      { sWeight: 0.5, darkness: 0.25 },
     );
 
     const after = rgbToHsv({ r: data[0], g: data[1], b: data[2] });
     const expectedS = before.s * 0.5 + 1 * 0.5;
-    const expectedV = before.v * 0.75 + 0.2 * 0.25;
+    const expectedV = before.v * 0.75;
 
     expect(hueDistanceDegrees(after.h, 220)).toBeLessThanOrEqual(1.5);
     expect(Math.abs(after.s - expectedS)).toBeLessThanOrEqual(0.03);
