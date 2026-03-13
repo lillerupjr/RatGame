@@ -61,16 +61,6 @@ export type WorldLightingState = {
   ambientTintStrength?: number;
   groundYScale?: number;
   occlusionEnabled: boolean;
-  showBuildingMaskDebug: boolean;
-  buildingMaskDebugView: "OFF" | "SOURCE" | "INVERSE" | "COMBINED";
-  occlusionMaskCanvas?: HTMLCanvasElement | null;
-  occlusionMaskCtx?: CanvasRenderingContext2D | null;
-  inverseBuildingSliceMaskCanvas?: HTMLCanvasElement | null;
-  inverseBuildingSliceMaskCtx?: CanvasRenderingContext2D | null;
-  combinedOcclusionMaskCanvas?: HTMLCanvasElement | null;
-  combinedOcclusionMaskCtx?: CanvasRenderingContext2D | null;
-  debugBuildingMaskCanvas?: HTMLCanvasElement | null;
-  debugBuildingMaskCtx?: CanvasRenderingContext2D | null;
 };
 
 export type NpcActor = {
@@ -732,16 +722,6 @@ export function createWorld(args: CreateWorldArgs): World {
       ambientTintStrength: 0,
       groundYScale: 0.65,
       occlusionEnabled: true,
-      showBuildingMaskDebug: false,
-      buildingMaskDebugView: "OFF",
-      occlusionMaskCanvas: null,
-      occlusionMaskCtx: null,
-      inverseBuildingSliceMaskCanvas: null,
-      inverseBuildingSliceMaskCtx: null,
-      combinedOcclusionMaskCanvas: null,
-      combinedOcclusionMaskCtx: null,
-      debugBuildingMaskCanvas: null,
-      debugBuildingMaskCtx: null,
     },
 
     // Delve / route

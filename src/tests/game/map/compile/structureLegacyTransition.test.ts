@@ -510,8 +510,12 @@ describe("structure legacy transition", () => {
     const compiled = compileKenneyMapFromTable(mapDef, { runSeed: 101, mapId: mapDef.id });
     expect(compiled.lightDefs.length).toBe(1);
     expect(compiled.lightDefs[0]).toMatchObject({
+      id: "authored_light_compiled_light_defs_0",
       worldX: (2 + 0.5) * 64,
       worldY: (1 + 0.5) * 64,
+      zBase: 3,
+      zLogical: 3,
+      supportHeightUnits: 3,
       heightUnits: 3,
       radiusPx: 140,
       intensity: 0.8,
@@ -530,6 +534,9 @@ describe("structure legacy transition", () => {
     const compiled = compileKenneyMapFromTable(mapDef, { runSeed: 22, mapId: mapDef.id });
     expect(compiled.lightDefs.length).toBe(1);
     const light = compiled.lightDefs[0];
+    expect(light.id).toBe("authored_light_street_lamp_semantic_compile_0");
+    expect(light.zBase).toBe(0);
+    expect(light.zLogical).toBe(0);
     expect(light.shape).toBe("STREET_LAMP");
     expect(light.pool?.radiusPx).toBe(120);
     expect(light.pool?.yScale).toBe(0.65);
@@ -550,6 +557,9 @@ describe("structure legacy transition", () => {
     const compiled = compileKenneyMapFromTable(mapDef, { runSeed: 33, mapId: mapDef.id });
     expect(compiled.lightDefs.length).toBe(1);
     const light = compiled.lightDefs[0];
+    expect(light.id).toBe("authored_light_neon_semantic_compile_0");
+    expect(light.zBase).toBe(0);
+    expect(light.zLogical).toBe(0);
     expect(light.shape).toBe("RADIAL");
     expect(light.color).toBe("#FF4FD8");
     expect(light.tintStrength).toBe(0.70);
@@ -567,7 +577,11 @@ describe("structure legacy transition", () => {
       stamps: [{ x: 3, y: 2, z: 0, type: "prop", propId: "street_lamp_e", w: 1, h: 1 }],
     };
     const compiled = compileKenneyMapFromTable(mapDef, { runSeed: 77, mapId: mapDef.id });
-    expect(compiled.lightDefs.some((l) => l.shape === "STREET_LAMP")).toBe(true);
+    const lampLight = compiled.lightDefs.find((l) => l.shape === "STREET_LAMP");
+    expect(lampLight).toBeTruthy();
+    expect(lampLight?.id).toBe("prop_light_street_lamp_e_3_2_0");
+    expect(lampLight?.zBase).toBe(0);
+    expect(lampLight?.zLogical).toBe(0);
     expect(compiled.blockedTiles.has("3,2")).toBe(false);
   });
 });

@@ -71,8 +71,11 @@ export type LightFlicker =
     | { kind: "NOISE"; speed?: number; amount?: number }
     | { kind: "PULSE"; speed?: number; amount?: number };
 export type LightDef = {
+    id: string;
     worldX: number;
     worldY: number;
+    zBase: number;
+    zLogical: number;
     supportHeightUnits?: number;
     heightUnits: number;
     poolHeightOffsetUnits?: number;
@@ -735,7 +738,13 @@ export function compileKenneyMapFromTable(
             ...byType[semanticType],
         };
     };
-    const lightDefs: LightDef[] = (def.lights ?? []).map((light) => {
+    const resolveLightSortZ = (supportHeightUnits: number | undefined, heightUnits: number): { zBase: number; zLogical: number } => {
+        const support = Number.isFinite(supportHeightUnits) ? (supportHeightUnits as number) : heightUnits;
+        const zBase = support;
+        const zLogical = Math.floor(zBase + 1e-3);
+        return { zBase, zLogical };
+    };
+    const lightDefs: LightDef[] = (def.lights ?? []).map((light, lightIndex) => {
         const semanticPreset: Partial<Pick<LightDef, "shape" | "color" | "tintStrength" | "pool" | "cone" | "radiusPx" | "intensity" | "flicker">> = (() => {
             const t = light.semanticType;
             if (!t) return {};
@@ -752,11 +761,17 @@ export function compileKenneyMapFromTable(
             || light.semanticType === "street_lamp_e"
             || light.semanticType === "street_lamp_s"
             || light.semanticType === "street_lamp_w";
+        const supportHeightUnits = light.heightUnits ?? 0;
+        const heightUnits = light.heightUnits ?? 0;
+        const { zBase, zLogical } = resolveLightSortZ(supportHeightUnits, heightUnits);
         return {
+            id: `authored_light_${mapId}_${lightIndex}`,
             worldX: (light.x + originTx + (isStreetLampSemantic ? 0 : 0.5)) * KENNEY_TILE_WORLD,
             worldY: (light.y + originTy + (isStreetLampSemantic ? 0 : 0.5)) * KENNEY_TILE_WORLD,
-            supportHeightUnits: light.heightUnits ?? 0,
-            heightUnits: light.heightUnits ?? 0,
+            zBase,
+            zLogical,
+            supportHeightUnits,
+            heightUnits,
             poolHeightOffsetUnits: light.poolHeightOffsetUnits ?? 0,
             intensity: semanticPreset?.intensity ?? light.intensity,
             radiusPx: semanticPreset?.radiusPx ?? light.radiusPx,
@@ -2585,8 +2600,11 @@ export function compileKenneyMapFromTable(
                 kind: "PROP",
             });
             lightDefs.push({
+                id: `lamp_post_ground_${sx}_${sy}_${zBase}`,
                 worldX: sx * KENNEY_TILE_WORLD,
                 worldY: sy * KENNEY_TILE_WORLD,
+                zBase: preset.groundPool.heightUnits,
+                zLogical: Math.floor(preset.groundPool.heightUnits + 1e-3),
                 heightUnits: preset.groundPool.heightUnits,
                 intensity: preset.groundPool.intensity,
                 radiusPx: preset.groundPool.radiusPx,
@@ -2596,8 +2614,11 @@ export function compileKenneyMapFromTable(
                 flicker: { kind: "NONE" },
             });
             lightDefs.push({
+                id: `lamp_post_top_${sx}_${sy}_${zBase}`,
                 worldX: sx * KENNEY_TILE_WORLD,
                 worldY: sy * KENNEY_TILE_WORLD,
+                zBase: preset.topGlow.heightUnits,
+                zLogical: Math.floor(preset.topGlow.heightUnits + 1e-3),
                 heightUnits: preset.topGlow.heightUnits,
                 intensity: preset.topGlow.intensity,
                 radiusPx: preset.topGlow.radiusPx,
@@ -2748,11 +2769,16 @@ export function compileKenneyMapFromTable(
                 const semanticType = prop.id as "street_lamp_n" | "street_lamp_e" | "street_lamp_s" | "street_lamp_w";
                 const preset = streetLampPreset(semanticType);
                 const lightHeightOffsetUnits = prop.lightHeightOffsetUnits ?? 0;
+                const supportHeightUnits = zBase;
+                const heightUnits = zBase + (prop.anchorLiftUnits ?? 0) + lightHeightOffsetUnits;
                 lightDefs.push({
+                    id: `prop_light_${prop.id}_${anchorTx}_${anchorTy}_${zBase}`,
                     worldX: ((stamp.x | 0) + originTx) * KENNEY_TILE_WORLD,
                     worldY: ((stamp.y | 0) + originTy) * KENNEY_TILE_WORLD,
-                    supportHeightUnits: zBase,
-                    heightUnits: zBase + (prop.anchorLiftUnits ?? 0) + lightHeightOffsetUnits,
+                    zBase: supportHeightUnits,
+                    zLogical: Math.floor(supportHeightUnits + 1e-3),
+                    supportHeightUnits,
+                    heightUnits,
                     poolHeightOffsetUnits: prop.lightPoolHeightOffsetUnits ?? -lightHeightOffsetUnits,
                     screenOffsetPx: prop.lightScreenOffsetPx ?? { x: 0, y: 0 },
                     intensity: 0.85,

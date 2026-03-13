@@ -1,4 +1,3 @@
-export type LightingMaskDebugMode = "OFF" | "SOURCE" | "INVERSE" | "COMBINED";
 export type NeutralBirdForceState =
   | "NONE"
   | "IDLE"
@@ -32,13 +31,7 @@ export type DebugSettings = {
   projectileFaces: boolean;
   triggers: boolean;
   debugRoadSemantic: boolean;
-  disableLightingOcclusion: boolean;
-  disableLightingHeightBandedOcclusion: boolean;
-  lightingUseLegacyGlobalOcclusion: boolean;
-  disableLightingCompiledMaskCache: boolean;
   disableVisualCompiledCutoutCache: boolean;
-  lightingMasks: boolean;
-  lightingMaskDebugMode: LightingMaskDebugMode;
   mapOverlaysDisabled: boolean;
   rampFaces: boolean;
   forceSpawnOverride: boolean;
@@ -58,20 +51,13 @@ export type DebugSettings = {
 
 export type BooleanDebugSettingKey = Exclude<
   keyof DebugSettings,
-  "lightingMaskDebugMode" | "waterFlowRate" | "dmgMult" | "fireRateMult" | "neutralBirdAI" | "objectives"
+  "waterFlowRate" | "dmgMult" | "fireRateMult" | "neutralBirdAI" | "objectives"
 >;
 
 export type DebugToggleDefinition = {
   key: BooleanDebugSettingKey;
   label: string;
 };
-
-export const LIGHTING_MASK_DEBUG_MODES: readonly LightingMaskDebugMode[] = [
-  "OFF",
-  "SOURCE",
-  "INVERSE",
-  "COMBINED",
-] as const;
 
 export const NEUTRAL_BIRD_FORCE_STATES: readonly NeutralBirdForceState[] = [
   "NONE",
@@ -95,12 +81,7 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "projectileFaces", label: "projectileFaces" },
   { key: "triggers", label: "triggers" },
   { key: "debugRoadSemantic", label: "debugRoadSemantic" },
-  { key: "disableLightingOcclusion", label: "disableLightingOcclusion" },
-  { key: "disableLightingHeightBandedOcclusion", label: "disableLightingHeightBandedOcclusion" },
-  { key: "lightingUseLegacyGlobalOcclusion", label: "lightingUseLegacyGlobalOcclusion" },
-  { key: "disableLightingCompiledMaskCache", label: "disableLightingCompiledMaskCache" },
   { key: "disableVisualCompiledCutoutCache", label: "disableVisualCompiledCutoutCache" },
-  { key: "lightingMasks", label: "lightingMasks" },
   { key: "mapOverlaysDisabled", label: "mapOverlaysDisabled" },
   { key: "rampFaces", label: "rampFaces" },
   { key: "forceSpawnOverride", label: "forceSpawnOverride" },
@@ -127,13 +108,7 @@ export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   projectileFaces: false,
   triggers: false,
   debugRoadSemantic: false,
-  disableLightingOcclusion: false,
-  disableLightingHeightBandedOcclusion: false,
-  lightingUseLegacyGlobalOcclusion: false,
-  disableLightingCompiledMaskCache: false,
   disableVisualCompiledCutoutCache: false,
-  lightingMasks: false,
-  lightingMaskDebugMode: "OFF",
   mapOverlaysDisabled: false,
   rampFaces: false,
   forceSpawnOverride: false,
@@ -178,19 +153,10 @@ export type ResolvedDebugFlags = {
   showMapOverlays: boolean;
   showEnemyAimOverlay: boolean;
   showLootGoblinOverlay: boolean;
-  lightingOcclusionEnabled: boolean;
-  lightingHeightBandedOcclusion: boolean;
-  lightingUseLegacyGlobalOcclusion: boolean;
-  lightingCompiledMaskCache: boolean;
   visualCompiledCutoutCache: boolean;
-  buildingMaskDebugView: LightingMaskDebugMode;
-  showBuildingMaskDebug: boolean;
 };
 
 export function resolveDebugFlags(debug: DebugSettings): ResolvedDebugFlags {
-  const buildingMaskDebugView: LightingMaskDebugMode = debug.lightingMasks
-    ? debug.lightingMaskDebugMode
-    : "OFF";
   return {
     showGrid: debug.grid,
     showWalkMask: debug.walkMask,
@@ -206,12 +172,6 @@ export function resolveDebugFlags(debug: DebugSettings): ResolvedDebugFlags {
     showMapOverlays: !debug.mapOverlaysDisabled,
     showEnemyAimOverlay: debug.enemyAimOverlay,
     showLootGoblinOverlay: debug.lootGoblinOverlay,
-    lightingOcclusionEnabled: !debug.disableLightingOcclusion,
-    lightingHeightBandedOcclusion: !debug.disableLightingHeightBandedOcclusion,
-    lightingUseLegacyGlobalOcclusion: debug.lightingUseLegacyGlobalOcclusion,
-    lightingCompiledMaskCache: !debug.disableLightingCompiledMaskCache,
     visualCompiledCutoutCache: !debug.disableVisualCompiledCutoutCache,
-    buildingMaskDebugView,
-    showBuildingMaskDebug: buildingMaskDebugView !== "OFF",
   };
 }

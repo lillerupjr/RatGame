@@ -14,7 +14,6 @@ import { applyTheme } from "./ui/theme";
 import { wireMenus } from "./ui/menuWiring";
 import {
   DEBUG_TOGGLE_DEFINITIONS,
-  LIGHTING_MASK_DEBUG_MODES,
   NEUTRAL_BIRD_FORCE_STATES,
   makeAllDebugOffSettings,
   type BooleanDebugSettingKey,
@@ -144,8 +143,6 @@ function installDevSettingsUi(): DevSettingsUiController {
     projectileFaces: "Show Projectile Faces",
     triggers: "Show Trigger Zones",
     debugRoadSemantic: "Show Road Semantics",
-    disableLightingOcclusion: "Disable Lighting Occlusion",
-    lightingMasks: "Show Lighting Masks",
     mapOverlaysDisabled: "Disable Map Overlays",
     rampFaces: "Show Ramp Faces",
     forceSpawnOverride: "Force Spawn Override",
@@ -326,34 +323,6 @@ function installDevSettingsUi(): DevSettingsUiController {
   paletteIdRow.appendChild(paletteIdText);
   paletteIdRow.appendChild(paletteIdSelect);
   panel.appendChild(paletteIdRow);
-
-  const modeRow = document.createElement("label");
-  modeRow.style.display = "flex";
-  modeRow.style.alignItems = "center";
-  modeRow.style.justifyContent = "space-between";
-  modeRow.style.gap = "10px";
-  modeRow.style.padding = "4px 0";
-  const modeText = document.createElement("span");
-  modeText.textContent = "Lighting Mask Mode";
-  const modeSelect = document.createElement("select");
-  applyDevSelectStyle(modeSelect);
-  const modes = LIGHTING_MASK_DEBUG_MODES;
-  for (let i = 0; i < modes.length; i++) {
-    const opt = document.createElement("option");
-    opt.value = modes[i];
-    opt.textContent = modes[i];
-    modeSelect.appendChild(opt);
-  }
-  modeSelect.addEventListener("change", () => {
-    updateUserSettings({
-      debug: {
-        lightingMaskDebugMode: modeSelect.value as SettingsDebug["lightingMaskDebugMode"],
-      },
-    });
-  });
-  modeRow.appendChild(modeText);
-  modeRow.appendChild(modeSelect);
-  panel.appendChild(modeRow);
 
   const waterFlowRow = document.createElement("div");
   waterFlowRow.style.display = "flex";
@@ -593,7 +562,6 @@ function installDevSettingsUi(): DevSettingsUiController {
       const def = DEBUG_TOGGLE_DEFINITIONS[i];
       checks.get(def.key)!.checked = s.debug[def.key];
     }
-    modeSelect.value = s.debug.lightingMaskDebugMode;
     birdEnabledInput.checked = s.debug.neutralBirdAI.disabled;
     birdDisableTransitionsInput.checked = s.debug.neutralBirdAI.disableTransitions;
     birdDrawDebugInput.checked = s.debug.neutralBirdAI.drawDebug;

@@ -1,6 +1,11 @@
 # ai/AGENTS.md
 
-Instruction to LLM
+Audience note:
+This file defines repository and engine architecture invariants for implementation work.
+It is not the source of truth for design-discussion behavior.
+Design discussions are governed separately by the RatGame Design Partner Protocol.
+
+Instruction to implementation agents
 
 * No time-gated comments
 * Contract-style documentation only
@@ -194,16 +199,20 @@ Pass 0: UNDERLAYS (all apron underlays, depth-sorted)
 For each zLogical layer (ascending):
 1. TOPS
 2. ENTITIES
-3. OCCLUDERS
+3. LIGHTS
+4. OCCLUDERS
 
 Rules
+- Lights must render after entities and before occluders
 - Occluders must render after entities
 - All relevant layers must be included (not only surface layers)
 - Depth sorting within each pass is driven by zVisual (no per-system depth heuristics)
 
 
 Achievements
-- [ ] Entities are hidden by higher occluders via render order alone
+- [x] Entities are hidden by higher occluders via render order alone
+- [x] Final screen-space pass keeps only ambient darkness/tint (no normal-light pass)
+- [x] Legacy light-mask occlusion/debug pipeline is removed from runtime render path
 
 ---
 
@@ -298,11 +307,3 @@ Partial execution or batching steps is invalid.
     - State that the contract is complete
 
 ---
-
-## 13. Current focus
-
-High-value, allowed work:
-- Finalize direction mapping helper
-- Keep apron vs occluder separation strict
-- Centralize remaining render heuristics into map compilation
-- Strengthen tile-grid-based vertical collision
