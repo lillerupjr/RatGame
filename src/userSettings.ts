@@ -4,6 +4,12 @@ import {
   type DebugSettings,
 } from "./debugSettings";
 import { DEFAULT_SPAWN_TUNING } from "./game/balance/spawnTuningDefaults";
+import {
+  getFirstPaletteInGroup,
+  isPaletteIdInGroup,
+  normalizePaletteGroup,
+  type PaletteGroup,
+} from "./engine/render/palette/palettes";
 
 export type VerticalTilesMode = "auto" | "manual";
 export type VerticalTilesViewportClass = "phone" | "desktop";
@@ -38,25 +44,8 @@ export type RenderSettings = {
   paletteHudDebugOverlayEnabled?: boolean;
   // Dev-only toggle to bypass final ambient darkness/tint screen overlay.
   darknessMaskDebugDisabled?: boolean;
-  paletteId:
-    | "db32"
-    | "divination"
-    | "cyberpunk"
-    | "moonlight_15"
-    | "st8_moonlight"
-    | "chroma_noir"
-    | "swamp_kin"
-    | "lost_in_the_desert"
-    | "endesga_16"
-    | "sweetie_16"
-    | "dawnbringer_16"
-    | "night_16"
-    | "fun_16"
-    | "reha_16"
-    | "arne_16"
-    | "lush_sunset"
-    | "vaporhaze_16"
-    | "sunset_cave_extended";
+  paletteGroup: PaletteGroup;
+  paletteId: string;
   spawnBase: number;
   spawnPerDepth: number;
   hpBase: number;
@@ -116,6 +105,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
     paletteSwapEnabled: false,
     paletteHudDebugOverlayEnabled: false,
     darknessMaskDebugDisabled: false,
+    paletteGroup: "live",
     paletteId: "db32",
     ...DEFAULT_SPAWN_TUNING,
   },
@@ -144,6 +134,12 @@ export function clampVisibleVerticalTiles(value: number): number {
 
 function normalizeVerticalTilesMode(value: unknown): VerticalTilesMode {
   return value === "manual" ? "manual" : "auto";
+}
+
+function resolvePaletteIdForGroup(group: PaletteGroup, paletteId: unknown): string {
+  const candidate = typeof paletteId === "string" ? paletteId : "";
+  if (isPaletteIdInGroup(candidate, group)) return candidate;
+  return getFirstPaletteInGroup(group).id;
 }
 
 function classifyVerticalTilesViewport(viewportWidth: number, viewportHeight: number): VerticalTilesViewportClass {
@@ -252,7 +248,7 @@ function mergeSettings(
   }
   delete debugPatch.paletteVWeightPercent;
 
-  return {
+  const merged: UserSettings = {
     ...base,
     debug: {
       ...base.debug,
@@ -269,6 +265,18 @@ function mergeSettings(
     audio: {
       ...base.audio,
       ...(audioPatch as Partial<UserSettings["audio"]>),
+    },
+  };
+
+  const normalizedPaletteGroup = normalizePaletteGroup(merged.render.paletteGroup);
+  const normalizedPaletteId = resolvePaletteIdForGroup(normalizedPaletteGroup, merged.render.paletteId);
+
+  return {
+    ...merged,
+    render: {
+      ...merged.render,
+      paletteGroup: normalizedPaletteGroup,
+      paletteId: normalizedPaletteId,
     },
   };
 }

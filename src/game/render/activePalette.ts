@@ -4,24 +4,7 @@ import { getActiveMapSkinPaletteId } from "../content/mapSkins";
 import type { PaletteSwapWeights } from "../../engine/render/palette/paletteSwap";
 
 export type ActivePaletteId =
-  | "db32"
-  | "divination"
-  | "cyberpunk"
-  | "moonlight_15"
-  | "st8_moonlight"
-  | "chroma_noir"
-  | "swamp_kin"
-  | "lost_in_the_desert"
-  | "endesga_16"
-  | "sweetie_16"
-  | "dawnbringer_16"
-  | "night_16"
-  | "fun_16"
-  | "reha_16"
-  | "arne_16"
-  | "lush_sunset"
-  | "vaporhaze_16"
-  | "sunset_cave_extended";
+  string;
 
 export type PaletteSwapWeightPercents = {
   sWeightPercent: number;

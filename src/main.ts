@@ -8,6 +8,13 @@ import { primeAudio } from "./game/audio/audioManager";
 import { setMusicMuted, setMusicVolume, setSfxMuted, setSfxVolume } from "./game/audio/audioSettings";
 import { resolveActivePaletteId } from "./game/render/activePalette";
 import { getSpriteByIdForPalette } from "./engine/render/sprites/renderSprites";
+import {
+  getFirstPaletteInGroup,
+  getNextPaletteInGroup,
+  getPalettesByGroup,
+  normalizePaletteGroup,
+  PALETTE_GROUPS,
+} from "./engine/render/palette/palettes";
 import { attachCanvasAutoResize } from "./engine/render/pixelPerfect";
 import { getDomRefs } from "./ui/domRefs";
 import { applyTheme } from "./ui/theme";
@@ -275,6 +282,27 @@ function installDevSettingsUi(): DevSettingsUiController {
   paletteSwapRow.appendChild(paletteSwapInput);
   panel.appendChild(paletteSwapRow);
 
+  const paletteGroupRow = document.createElement("label");
+  paletteGroupRow.style.display = "flex";
+  paletteGroupRow.style.alignItems = "center";
+  paletteGroupRow.style.justifyContent = "space-between";
+  paletteGroupRow.style.gap = "10px";
+  paletteGroupRow.style.padding = "4px 0";
+  const paletteGroupText = document.createElement("span");
+  paletteGroupText.textContent = "Palette Group";
+  const paletteGroupSelect = document.createElement("select");
+  applyDevSelectStyle(paletteGroupSelect);
+  for (let i = 0; i < PALETTE_GROUPS.length; i++) {
+    const group = PALETTE_GROUPS[i];
+    const opt = document.createElement("option");
+    opt.value = group;
+    opt.textContent = group;
+    paletteGroupSelect.appendChild(opt);
+  }
+  paletteGroupRow.appendChild(paletteGroupText);
+  paletteGroupRow.appendChild(paletteGroupSelect);
+  panel.appendChild(paletteGroupRow);
+
   const paletteIdRow = document.createElement("label");
   paletteIdRow.style.display = "flex";
   paletteIdRow.style.alignItems = "center";
@@ -285,39 +313,44 @@ function installDevSettingsUi(): DevSettingsUiController {
   paletteIdText.textContent = "Palette";
   const paletteIdSelect = document.createElement("select");
   applyDevSelectStyle(paletteIdSelect);
-  const PALETTE_IDS = [
-    "db32",
-    "divination",
-    "cyberpunk",
-    "moonlight_15",
-    "st8_moonlight",
-    "chroma_noir",
-    "swamp_kin",
-    "lost_in_the_desert",
-    "endesga_16",
-    "sweetie_16",
-    "dawnbringer_16",
-    "night_16",
-    "fun_16",
-    "reha_16",
-    "arne_16",
-    "lush_sunset",
-    "vaporhaze_16",
-    "sunset_cave_extended",
-  ] as const;
+  const rebuildPaletteOptions = (groupRaw: string, selectedIdRaw: string): string => {
+    const group = normalizePaletteGroup(groupRaw);
+    const selectedId = typeof selectedIdRaw === "string" ? selectedIdRaw : "";
+    const palettes = getPalettesByGroup(group);
+    const nextSelected = palettes.some((palette) => palette.id === selectedId)
+      ? selectedId
+      : (palettes[0]?.id ?? "db32");
 
-  type PaletteId = (typeof PALETTE_IDS)[number];
+    paletteIdSelect.replaceChildren();
+    for (let i = 0; i < palettes.length; i++) {
+      const palette = palettes[i];
+      const opt = document.createElement("option");
+      opt.value = palette.id;
+      opt.textContent = `${palette.name} (${palette.id})`;
+      paletteIdSelect.appendChild(opt);
+    }
+    paletteIdSelect.value = nextSelected;
+    return nextSelected;
+  };
 
-  for (const id of PALETTE_IDS) {
-    const opt = document.createElement("option");
-    opt.value = id;
-    opt.textContent = id;
-    paletteIdSelect.appendChild(opt);
-  }
-  paletteIdSelect.addEventListener("change", () => {
+  paletteGroupSelect.addEventListener("change", () => {
+    const group = normalizePaletteGroup(paletteGroupSelect.value);
+    const currentPaletteId = getUserSettings().render.paletteId;
+    const nextPaletteId = rebuildPaletteOptions(group, currentPaletteId);
     updateUserSettings({
       render: {
-        paletteId: paletteIdSelect.value as PaletteId,
+        paletteGroup: group,
+        paletteId: nextPaletteId,
+      },
+    });
+  });
+  paletteIdSelect.addEventListener("change", () => {
+    const group = normalizePaletteGroup(paletteGroupSelect.value);
+    const nextPaletteId = rebuildPaletteOptions(group, paletteIdSelect.value);
+    updateUserSettings({
+      render: {
+        paletteGroup: group,
+        paletteId: nextPaletteId,
       },
     });
   });
@@ -671,7 +704,8 @@ function installDevSettingsUi(): DevSettingsUiController {
     entityAnchorsInput.checked = s.render.entityAnchorsEnabled;
     renderPerfCountersInput.checked = s.render.renderPerfCountersEnabled;
     paletteSwapInput.checked = s.render.paletteSwapEnabled;
-    paletteIdSelect.value = s.render.paletteId;
+    paletteGroupSelect.value = normalizePaletteGroup(s.render.paletteGroup);
+    paletteIdSelect.value = rebuildPaletteOptions(s.render.paletteGroup, s.render.paletteId);
     paletteHudDebugOverlayInput.checked = s.render.paletteHudDebugOverlayEnabled === true;
     darknessMaskDebugInput.checked = s.render.darknessMaskDebugDisabled === true;
     const isUserMode = !!(s as any).game?.userModeEnabled;
@@ -1053,45 +1087,29 @@ async function bootstrap() {
 
     if (ev.code === "F5") {
       ev.preventDefault();
-      const PALETTE_CYCLE = [
-        "db32",
-        "divination",
-        "cyberpunk",
-        "moonlight_15",
-        "st8_moonlight",
-        "chroma_noir",
-        "swamp_kin",
-        "lost_in_the_desert",
-        "endesga_16",
-        "sweetie_16",
-        "dawnbringer_16",
-        "night_16",
-        "fun_16",
-        "reha_16",
-        "arne_16",
-        "lush_sunset",
-        "vaporhaze_16",
-        "sunset_cave_extended",
-      ] as const;
-
-      type PaletteId = (typeof PALETTE_CYCLE)[number];
-
       const current = getUserSettings().render;
+      const group = normalizePaletteGroup(current.paletteGroup);
 
       if (!current.paletteSwapEnabled) {
-        updateUserSettings({ render: { paletteSwapEnabled: true, paletteId: PALETTE_CYCLE[0] as PaletteId } });
+        const first = getFirstPaletteInGroup(group);
+        updateUserSettings({
+          render: {
+            paletteSwapEnabled: true,
+            paletteGroup: group,
+            paletteId: first.id,
+          },
+        });
         return;
       }
 
-      const idx = Math.max(0, PALETTE_CYCLE.indexOf(current.paletteId as PaletteId));
-      const nextIdx = idx + 1;
-
-      if (nextIdx >= PALETTE_CYCLE.length) {
-        updateUserSettings({ render: { paletteSwapEnabled: false } });
-        return;
-      }
-
-      updateUserSettings({ render: { paletteSwapEnabled: true, paletteId: PALETTE_CYCLE[nextIdx] as PaletteId } });
+      const next = getNextPaletteInGroup(current.paletteId, group);
+      updateUserSettings({
+        render: {
+          paletteSwapEnabled: true,
+          paletteGroup: group,
+          paletteId: next.id,
+        },
+      });
       return;
     }
 

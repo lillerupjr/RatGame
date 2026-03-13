@@ -53,7 +53,7 @@ describe("remapRgbaByHueLockInPlace", () => {
     expect(Math.abs(after.v - before.v)).toBeLessThanOrEqual(0.02);
   });
 
-  it("blends saturation and applies darkness as a final value multiplier", () => {
+  it("blends saturation and applies non-linear darkness as a final value multiplier", () => {
     const srcRgb = hsvToRgb({ h: 18, s: 0.2, v: 0.9 });
     const before = rgbToHsv(srcRgb);
 
@@ -66,7 +66,8 @@ describe("remapRgbaByHueLockInPlace", () => {
 
     const after = rgbToHsv({ r: data[0], g: data[1], b: data[2] });
     const expectedS = before.s * 0.5 + 1 * 0.5;
-    const expectedV = before.v * 0.75;
+    const expectedBrightness = 1 - Math.pow(0.25, 1.8);
+    const expectedV = before.v * expectedBrightness;
 
     expect(hueDistanceDegrees(after.h, 220)).toBeLessThanOrEqual(1.5);
     expect(Math.abs(after.s - expectedS)).toBeLessThanOrEqual(0.03);

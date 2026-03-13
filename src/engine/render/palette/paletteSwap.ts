@@ -78,7 +78,8 @@ export function remapRgbaByHueLockInPlace(
 
     const hsv = rgbToHsv({ r: data[i], g: data[i + 1], b: data[i + 2] });
     const nearestPalette = pickNearestPaletteHsvAnchor(hsv.h, paletteHsvAnchors);
-    const valueAfterDarkness = hsv.v * (1 - remapWeights.darkness);
+    const darknessBrightness = 1 - Math.pow(remapWeights.darkness, 1.8);
+    const valueAfterDarkness = hsv.v * darknessBrightness;
     const remappedRgb = hsvToRgb({
       h: nearestPalette.h,
       s: mix(hsv.s, nearestPalette.s, remapWeights.sWeight),

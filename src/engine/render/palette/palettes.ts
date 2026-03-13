@@ -2,15 +2,27 @@ import { hexToRgb, rgbToHsv, type Hsv } from "./colorMath";
 
 export type HexColor = `#${string}`;
 
+export type PaletteGroup = "live" | "test";
+
+export const PALETTE_GROUPS: readonly PaletteGroup[] = ["live", "test"] as const;
+
+export function normalizePaletteGroup(value: unknown): PaletteGroup {
+  return value === "test" ? "test" : "live";
+}
+
 export type PaletteDef = {
   id: string;
   name: string;
+  group: PaletteGroup;
+  source?: "built_in" | "lospec";
   colors: readonly HexColor[];
 };
 
 export const DB32: PaletteDef = {
   id: "db32",
   name: "DawnBringer 32",
+  group: "live",
+  source: "built_in",
   colors: [
     "#000000", "#222034", "#45283c", "#663931", "#8f563b", "#df7126", "#d9a066", "#eec39a",
     "#fbf236", "#99e550", "#6abe30", "#37946e", "#4b692f", "#524b24", "#323c39", "#3f3f74",
@@ -22,7 +34,8 @@ export const DB32: PaletteDef = {
 export const DIVINATION: PaletteDef = {
   id: "divination",
   name: "Divination (Lospec)",
-  // Source: lospec.com/palette-list/divination
+  group: "live",
+  source: "lospec",
   colors: [
     "#001c40",
     "#1e2a5f",
@@ -37,7 +50,8 @@ export const DIVINATION: PaletteDef = {
 export const CYBERPUNK: PaletteDef = {
   id: "cyberpunk",
   name: "Cyberpunk Neon",
-  // Carefully selected cyberpunk palette optimized for neon urban readability.
+  group: "live",
+  source: "built_in",
   colors: [
     "#0b0f1a", // deep shadow
     "#1a1c2c",
@@ -59,13 +73,11 @@ export const CYBERPUNK: PaletteDef = {
   ] as const,
 };
 
-// ------------------------------------------------------------
-// New 16-color palettes (Lospec)
-// ------------------------------------------------------------
-
 export const ENDESGA_16: PaletteDef = {
   id: "endesga_16",
   name: "Endesga 16",
+  group: "live",
+  source: "lospec",
   colors: [
     "#e4a672", "#b86f50", "#743f39", "#3f2832",
     "#9e2835", "#e53b44", "#fb922b", "#ffe762",
@@ -77,6 +89,8 @@ export const ENDESGA_16: PaletteDef = {
 export const SWEETIE_16: PaletteDef = {
   id: "sweetie_16",
   name: "Sweetie 16",
+  group: "live",
+  source: "lospec",
   colors: [
     "#1a1c2c", "#5d275d", "#b13e53", "#ef7d57",
     "#ffcd75", "#a7f070", "#38b764", "#257179",
@@ -88,6 +102,8 @@ export const SWEETIE_16: PaletteDef = {
 export const DAWNBRINGER_16: PaletteDef = {
   id: "dawnbringer_16",
   name: "DawnBringer 16",
+  group: "live",
+  source: "lospec",
   colors: [
     "#140c1c", "#442434", "#30346d", "#4e4a4e",
     "#854c30", "#346524", "#d04648", "#757161",
@@ -99,6 +115,8 @@ export const DAWNBRINGER_16: PaletteDef = {
 export const NIGHT_16: PaletteDef = {
   id: "night_16",
   name: "Night 16",
+  group: "live",
+  source: "lospec",
   colors: [
     "#000000", "#1d2b53", "#7e2553", "#008751",
     "#ab5236", "#5f574f", "#c2c3c7", "#fff1e8",
@@ -110,6 +128,8 @@ export const NIGHT_16: PaletteDef = {
 export const FUN_16: PaletteDef = {
   id: "fun_16",
   name: "Fun16",
+  group: "live",
+  source: "lospec",
   colors: [
     "#2f0e1f", "#3c2d3b", "#3a4456", "#4a5888",
     "#4b6b8c", "#679cb2", "#7ac7c0", "#92e8c0",
@@ -121,6 +141,8 @@ export const FUN_16: PaletteDef = {
 export const REHA_16: PaletteDef = {
   id: "reha_16",
   name: "Reha16",
+  group: "live",
+  source: "lospec",
   colors: [
     "#010e05", "#122303", "#2b2c21", "#3b3453",
     "#673d49", "#1e624e", "#943b38", "#8d6148",
@@ -132,6 +154,8 @@ export const REHA_16: PaletteDef = {
 export const ARNE_16: PaletteDef = {
   id: "arne_16",
   name: "Arne 16",
+  group: "live",
+  source: "lospec",
   colors: [
     "#000000", "#1b2632", "#41596a", "#5b7d87",
     "#86a8a4", "#c0d1cc", "#ffffff", "#f6cbca",
@@ -143,6 +167,8 @@ export const ARNE_16: PaletteDef = {
 export const LUSH_SUNSET: PaletteDef = {
   id: "lush_sunset",
   name: "Lush Sunset",
+  group: "live",
+  source: "lospec",
   colors: [
     "#092f35", "#1e5a46", "#7d2b42", "#d64c2b",
     "#f08d1b", "#ffd34e", "#f7a18b", "#ffffff",
@@ -154,6 +180,8 @@ export const LUSH_SUNSET: PaletteDef = {
 export const VAPORHAZE_16: PaletteDef = {
   id: "vaporhaze_16",
   name: "Vaporhaze 16",
+  group: "live",
+  source: "lospec",
   colors: [
     "#0d0c1d", "#1f1d3a", "#3b2a5f", "#593196",
     "#7b42c5", "#a86ee3", "#e0b5ff", "#f7e8ff",
@@ -165,6 +193,8 @@ export const VAPORHAZE_16: PaletteDef = {
 export const SUNSET_CAVE_EXTENDED: PaletteDef = {
   id: "sunset_cave_extended",
   name: "Sunset Cave Extended",
+  group: "live",
+  source: "lospec",
   colors: [
     "#120317", "#2a0b3d", "#4e1b63", "#6d2b8b",
     "#8b3bb4", "#a64fe0", "#c27cff", "#e1b3ff",
@@ -173,11 +203,85 @@ export const SUNSET_CAVE_EXTENDED: PaletteDef = {
   ] as const,
 };
 
+export const MIDNIGHT_ABLAZE: PaletteDef = {
+  id: "midnight_ablaze",
+  name: "Midnight ablaze",
+  group: "test",
+  source: "lospec",
+  colors: [
+    "#ff8274", // rgb(255, 130, 116)
+    "#d53c6a", // rgb(213, 60, 106)
+    "#7c183c", // rgb(124, 24, 60)
+    "#460e2b", // rgb(70, 14, 43)
+    "#31051e", // rgb(49, 5, 30)
+    "#1f0510", // rgb(31, 5, 16)
+    "#130208", // rgb(19, 2, 8)
+  ] as const,
+};
+
+export const BLESSING: PaletteDef = {
+  id: "blessing",
+  name: "Blessing",
+  group: "test",
+  source: "lospec",
+  colors: [
+    "#74569b", // rgb(116, 86, 155)
+    "#96fbc7", // rgb(150, 251, 199)
+    "#f7ffae", // rgb(247, 255, 174)
+    "#ffb3cb", // rgb(255, 179, 203)
+    "#d8bfd8", // rgb(216, 191, 216)
+  ] as const,
+};
+
+export const HOLLOW: PaletteDef = {
+  id: "hollow",
+  name: "Hollow",
+  group: "test",
+  source: "lospec",
+  colors: [
+    "#0f0f1b", // rgb(15, 15, 27)
+    "#565a75", // rgb(86, 90, 117)
+    "#c6b7be", // rgb(198, 183, 190)
+    "#fafbf6", // rgb(250, 251, 246)
+  ] as const,
+};
+
+export const BERRY_NEBULA: PaletteDef = {
+  id: "berry_nebula",
+  name: "Berry Nebula",
+  group: "test",
+  source: "lospec",
+  colors: [
+    "#6ceded", // rgb(108, 237, 237)
+    "#6cb9c9", // rgb(108, 185, 201)
+    "#6d85a5", // rgb(109, 133, 165)
+    "#6e5181", // rgb(110, 81, 129)
+    "#6f1d5c", // rgb(111, 29, 92)
+    "#4f1446", // rgb(79, 20, 70)
+    "#2e0a30", // rgb(46, 10, 48)
+    "#0d001a", // rgb(13, 0, 26)
+  ] as const,
+};
+
+export const CYCLOPE6: PaletteDef = {
+  id: "cyclope6",
+  name: "Cyclope6",
+  group: "test",
+  source: "lospec",
+  colors: [
+    "#411d31", // rgb(65, 29, 49)
+    "#631b34", // rgb(99, 27, 52)
+    "#32535f", // rgb(50, 83, 95)
+    "#0b8a8f", // rgb(11, 138, 143)
+    "#0eaf9b", // rgb(14, 175, 155)
+    "#30e1b9", // rgb(48, 225, 185)
+  ] as const,
+};
+
 export const PALETTES: readonly PaletteDef[] = [
   DB32,
   DIVINATION,
   CYBERPUNK,
-
   ENDESGA_16,
   SWEETIE_16,
   DAWNBRINGER_16,
@@ -188,12 +292,40 @@ export const PALETTES: readonly PaletteDef[] = [
   LUSH_SUNSET,
   VAPORHAZE_16,
   SUNSET_CAVE_EXTENDED,
+  MIDNIGHT_ABLAZE,
+  BLESSING,
+  HOLLOW,
+  BERRY_NEBULA,
+  CYCLOPE6,
 ] as const;
 
 const paletteHueAnchorsById = new Map<string, readonly number[]>();
 const paletteHsvAnchorsById = new Map<string, readonly PaletteHsvAnchor[]>();
 
 export type PaletteHsvAnchor = Readonly<Pick<Hsv, "h" | "s" | "v">>;
+
+export function getPalettesByGroup(group: PaletteGroup): readonly PaletteDef[] {
+  return PALETTES.filter((palette) => palette.group === group);
+}
+
+export function getFirstPaletteInGroup(group: PaletteGroup): PaletteDef {
+  const palettes = getPalettesByGroup(group);
+  return palettes[0] ?? DB32;
+}
+
+export function getNextPaletteInGroup(currentId: string, group: PaletteGroup): PaletteDef {
+  const palettes = getPalettesByGroup(group);
+  if (palettes.length === 0) return DB32;
+
+  const index = palettes.findIndex((palette) => palette.id === currentId);
+  if (index < 0) return palettes[0];
+
+  return palettes[(index + 1) % palettes.length];
+}
+
+export function isPaletteIdInGroup(id: string, group: PaletteGroup): boolean {
+  return getPalettesByGroup(group).some((palette) => palette.id === id);
+}
 
 export function getPaletteById(id: string): PaletteDef {
   const found = PALETTES.find((p) => p.id === id);
