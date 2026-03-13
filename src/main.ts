@@ -32,6 +32,9 @@ import { togglePause } from "./game/app/pauseController";
 import { mountSettingsPanel } from "./ui/settings/settingsPanel";
 import { STARTER_RELIC_BY_CHARACTER, validateStarterRelics } from "./game/content/starterRelics";
 import { installStandaloneViewportFix } from "./game/app/viewportSizing";
+import { buildPaletteSnapshotArtifactFromCanvas } from "./game/paletteLab/snapshotThumbnail";
+import { getPaletteSnapshotRecord, savePaletteSnapshotArtifact } from "./game/paletteLab/snapshotStorage";
+import { mountSnapshotViewerPalettePanel } from "./ui/paletteLab/snapshotViewerPalettePanel";
 
 type DevSettingsUiController = {
   open(): void;
@@ -744,6 +747,7 @@ async function bootstrap() {
     "mainMenu",
     "characterSelect",
     "mapMenu",
+    "paletteLabMenu",
     "innkeeperMenu",
     "settingsMenu",
     "creditsMenu",
@@ -853,7 +857,47 @@ async function bootstrap() {
 
   syncUiSafeRect();
 
-  wireMenus(refs, game);
+  const returnToPaletteLabMenu = (sublineText: string) => {
+    appStateController.setRunState(RunState.PLAYING);
+    appStateController.setAppState(AppState.MENU);
+    game.quitRunToMenu();
+    refs.welcomeScreen.hidden = true;
+    refs.mainMenuEl.hidden = true;
+    refs.characterSelectEl.hidden = true;
+    refs.mapMenuEl.hidden = true;
+    refs.paletteLabMenuEl.hidden = false;
+    refs.innkeeperMenuEl.hidden = true;
+    refs.settingsMenuEl.hidden = true;
+    refs.creditsMenuEl.hidden = true;
+    refs.ui.menuEl.hidden = true;
+    refs.ui.mapEl.root.hidden = true;
+    refs.ui.levelupEl.root.hidden = true;
+    refs.ui.endEl.root.hidden = true;
+    refs.ui.dialogEl.root.hidden = true;
+    refs.hud.root.hidden = true;
+    refs.hud.vitalsOrbRoot.hidden = true;
+    refs.paletteLabSublineEl.textContent = sublineText;
+  };
+
+  wireMenus(refs, {
+    previewMap: game.previewMap,
+    reloadCurrentMapForDebug: game.reloadCurrentMapForDebug,
+    startRun: game.startRun,
+    startDeterministicRun: game.startDeterministicRun,
+    startSandboxRun: game.startSandboxRun,
+    openPaletteSnapshot: async (snapshotId: string) => {
+      const snapshot = await getPaletteSnapshotRecord(snapshotId);
+      if (!snapshot) {
+        throw new Error(`Palette snapshot "${snapshotId}" was not found.`);
+      }
+      game.openPaletteSnapshotRecord(snapshot);
+    },
+  });
+  const snapshotViewerPalettePanel = mountSnapshotViewerPalettePanel({
+    onClose: () => {
+      returnToPaletteLabMenu("Returned from snapshot viewer.");
+    },
+  });
   let pauseCogBtn: HTMLButtonElement | null = null;
 
   function syncUiForAppState(appState: AppState, runState: RunState): void {
@@ -863,6 +907,7 @@ async function bootstrap() {
       refs.mainMenuEl.hidden = true;
       refs.characterSelectEl.hidden = true;
       refs.mapMenuEl.hidden = true;
+      refs.paletteLabMenuEl.hidden = true;
       refs.innkeeperMenuEl.hidden = true;
       refs.settingsMenuEl.hidden = true;
       refs.creditsMenuEl.hidden = true;
@@ -891,6 +936,7 @@ async function bootstrap() {
         refs.mainMenuEl.hidden = true;
         refs.characterSelectEl.hidden = true;
         refs.mapMenuEl.hidden = true;
+        refs.paletteLabMenuEl.hidden = true;
         refs.innkeeperMenuEl.hidden = true;
         refs.settingsMenuEl.hidden = true;
         refs.creditsMenuEl.hidden = true;
@@ -902,6 +948,7 @@ async function bootstrap() {
         || !refs.mainMenuEl.hidden
         || !refs.characterSelectEl.hidden
         || !refs.mapMenuEl.hidden
+        || !refs.paletteLabMenuEl.hidden
         || !refs.innkeeperMenuEl.hidden
         || !refs.settingsMenuEl.hidden
         || !refs.creditsMenuEl.hidden
@@ -937,6 +984,7 @@ async function bootstrap() {
       refs.mainMenuEl.hidden = true;
       refs.characterSelectEl.hidden = true;
       refs.mapMenuEl.hidden = true;
+      refs.paletteLabMenuEl.hidden = true;
       refs.innkeeperMenuEl.hidden = true;
       refs.settingsMenuEl.hidden = true;
       refs.creditsMenuEl.hidden = true;
@@ -983,6 +1031,24 @@ async function bootstrap() {
       },
       onOpenDevTools: () => {
         devSettingsUi.open();
+      },
+      onSavePaletteSnapshot: (snapshotDraft) => {
+        void buildPaletteSnapshotArtifactFromCanvas(snapshotDraft, refs.canvas)
+          .then(async (artifact) => {
+            const world = game.getWorld() as any;
+            if (!world || typeof world !== "object") return;
+            world.paletteSnapshotArtifact = artifact;
+            world.paletteSnapshotSavedRecord = await savePaletteSnapshotArtifact(artifact);
+            world.paletteSnapshotSaveError = null;
+          })
+          .catch((err) => {
+            const world = game.getWorld() as any;
+            if (world && typeof world === "object") {
+              world.paletteSnapshotSaveError =
+                err instanceof Error ? err.message : "Failed to capture or store snapshot.";
+            }
+            console.error("[palette-snapshot] Failed to capture or store snapshot.", err);
+          });
       },
     },
   });
@@ -1142,6 +1208,12 @@ async function bootstrap() {
     const dtReal = Math.min(0.05, (now - last) / 1000);
     last = now;
     syncUiForAppState(appStateController.appState, appStateController.runState);
+    const w = game.getWorld() as any;
+    snapshotViewerPalettePanel.sync(
+      appStateController.appState === AppState.RUN
+      && !!w?.paletteSnapshotViewerActive
+      && w?.state === "MAP",
+    );
     uiCtx.setTransform(1, 0, 0, 1, 0, 0);
     uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
 

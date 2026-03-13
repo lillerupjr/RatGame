@@ -547,7 +547,17 @@ export async function renderSystem(
     : Math.max(1, window.devicePixelRatio || 1);
   const settings = getUserSettings();
   const renderSettings = settings.render;
-  const visibleVerticalTiles = resolveVerticalTiles(renderSettings, cssW, cssH).effective;
+  const snapshotViewerCamera = ((w as any).paletteSnapshotViewerCamera ?? null) as
+    | { x?: unknown; y?: unknown; zoom?: unknown }
+    | null;
+  const snapshotZoom = Number(snapshotViewerCamera?.zoom);
+  let visibleVerticalTiles = resolveVerticalTiles(renderSettings, cssW, cssH).effective;
+  if (Number.isFinite(snapshotZoom) && snapshotZoom > 0) {
+    const derivedVisibleTiles = cssH / (snapshotZoom * KENNEY_TILE_WORLD);
+    if (Number.isFinite(derivedVisibleTiles) && derivedVisibleTiles > 0) {
+      visibleVerticalTiles = derivedVisibleTiles;
+    }
+  }
   const hasUiOverlay = !!uiCtx && !!uiCanvas;
   const overlayCtx = uiCtx ?? ctx;
   const overlayCanvas = uiCanvas ?? canvas;
@@ -644,7 +654,19 @@ export async function renderSystem(
   const dtReal = Number.isFinite(w.timeState?.dtReal) ? w.timeState.dtReal : 1 / 60;
   let cameraProjectedX = p0.x;
   let cameraProjectedY = p0.y;
-  if (cameraState) {
+  const hasSnapshotCameraOverride =
+    Number.isFinite(Number(snapshotViewerCamera?.x))
+    && Number.isFinite(Number(snapshotViewerCamera?.y));
+  if (hasSnapshotCameraOverride) {
+    cameraProjectedX = Number(snapshotViewerCamera?.x);
+    cameraProjectedY = Number(snapshotViewerCamera?.y);
+    if (cameraState) {
+      cameraState.targetX = cameraProjectedX;
+      cameraState.targetY = cameraProjectedY;
+      cameraState.posX = cameraProjectedX;
+      cameraState.posY = cameraProjectedY;
+    }
+  } else if (cameraState) {
     const wasUninitialized = cameraState.targetX === 0
       && cameraState.targetY === 0
       && cameraState.posX === 0

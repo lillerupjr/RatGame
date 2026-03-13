@@ -87,6 +87,7 @@ export type DomRefs = {
     continueBtn: HTMLButtonElement;
     mainMenuEl: HTMLDivElement;
     startRunBtn: HTMLButtonElement;
+    paletteLabBtn: HTMLButtonElement;
     creditsBtn: HTMLButtonElement | null;
     innkeeperBtn: HTMLButtonElement;
     settingsBtn: HTMLButtonElement;
@@ -104,6 +105,10 @@ export type DomRefs = {
     mapMenuSublineEl: HTMLDivElement;
     mapBackBtn: HTMLButtonElement;
     mapContinueBtn: HTMLButtonElement;
+    paletteLabMenuEl: HTMLDivElement;
+    paletteLabSublineEl: HTMLDivElement;
+    paletteLabSnapshotGridEl: HTMLDivElement;
+    paletteLabBackBtn: HTMLButtonElement;
     innkeeperMenuEl: HTMLDivElement;
     innkeeperBackBtn: HTMLButtonElement;
     settingsMenuEl: HTMLDivElement;
@@ -184,6 +189,7 @@ export function getDomRefs(): DomRefs {
 
     const mainMenuEl = getEl<HTMLDivElement>("mainMenu");
     const startRunBtn = getEl<HTMLButtonElement>("startRunBtn");
+    const paletteLabBtn = getEl<HTMLButtonElement>("paletteLabBtn");
     const creditsBtn = document.getElementById("creditsBtn") as HTMLButtonElement | null;
     const innkeeperBtn = getEl<HTMLButtonElement>("innkeeperBtn");
     const settingsBtn = getEl<HTMLButtonElement>("settingsBtn");
@@ -203,6 +209,11 @@ export function getDomRefs(): DomRefs {
     const mapMenuSublineEl = getEl<HTMLDivElement>("mapMenuSubline");
     const mapBackBtn = getEl<HTMLButtonElement>("mapBackBtn");
     const mapContinueBtn = getEl<HTMLButtonElement>("mapContinueBtn");
+
+    const paletteLabMenuEl = getEl<HTMLDivElement>("paletteLabMenu");
+    const paletteLabSublineEl = getEl<HTMLDivElement>("paletteLabSubline");
+    const paletteLabSnapshotGridEl = getEl<HTMLDivElement>("paletteLabSnapshotGrid");
+    const paletteLabBackBtn = getEl<HTMLButtonElement>("paletteLabBackBtn");
 
     const innkeeperMenuEl = getEl<HTMLDivElement>("innkeeperMenu");
     const innkeeperBackBtn = getEl<HTMLButtonElement>("innkeeperBackBtn");
@@ -362,6 +373,7 @@ export function getDomRefs(): DomRefs {
         continueBtn,
         mainMenuEl,
         startRunBtn,
+        paletteLabBtn,
         creditsBtn,
         innkeeperBtn,
         settingsBtn,
@@ -379,6 +391,10 @@ export function getDomRefs(): DomRefs {
         mapMenuSublineEl,
         mapBackBtn,
         mapContinueBtn,
+        paletteLabMenuEl,
+        paletteLabSublineEl,
+        paletteLabSnapshotGridEl,
+        paletteLabBackBtn,
         innkeeperMenuEl,
         innkeeperBackBtn,
         settingsMenuEl,

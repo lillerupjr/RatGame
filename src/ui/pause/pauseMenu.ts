@@ -15,11 +15,16 @@ import {
 import { DEFAULT_SETTINGS, getUserSettings, updateUserSettings } from "../../userSettings";
 import { DEFAULT_SPAWN_TUNING } from "../../game/balance/spawnTuningDefaults";
 import { mountSettingsPanel, type SettingsPanelController } from "../settings/settingsPanel";
+import {
+  capturePaletteSnapshotDraft,
+  type PaletteSnapshotCaptureDraft,
+} from "../../game/paletteLab/snapshotCapture";
 
 export type PauseMenuActions = {
   onResume(): void;
   onQuitRun(): void;
   onOpenDevTools?(): void;
+  onSavePaletteSnapshot?(snapshot: PaletteSnapshotCaptureDraft): void;
 };
 
 export type PauseMenuController = {
@@ -182,6 +187,13 @@ export function mountPauseMenu(args: {
   quitBtn.textContent = "Quit Run";
   quitBtn.setAttribute("data-pause-quit", "1");
   headerActions.appendChild(quitBtn);
+
+  const savePaletteSnapshotBtn = document.createElement("button");
+  savePaletteSnapshotBtn.type = "button";
+  savePaletteSnapshotBtn.className = "pauseBtn pauseActionSaveSnapshot";
+  savePaletteSnapshotBtn.textContent = "Save Palette Snapshot";
+  savePaletteSnapshotBtn.setAttribute("data-pause-save-palette-snapshot", "1");
+  headerActions.appendChild(savePaletteSnapshotBtn);
 
   if (args.actions.onOpenDevTools) {
     const devToolsBtn = document.createElement("button");
@@ -418,6 +430,13 @@ export function mountPauseMenu(args: {
   let debugRelicMessage = "";
   const debugCardIds = getAllCardIds();
   const debugRelicIds = getAllRelicIds();
+
+  savePaletteSnapshotBtn.addEventListener("click", () => {
+    if (!latestWorld) return;
+    const snapshot = capturePaletteSnapshotDraft(latestWorld);
+    (latestWorld as any).paletteSnapshotDraft = snapshot;
+    args.actions.onSavePaletteSnapshot?.(snapshot);
+  });
 
   const closeQuitConfirm = () => {
     quitConfirmOverlay.hidden = true;

@@ -8,6 +8,11 @@ import { getCombatStarterWeaponById } from "../game/combat_mods/content/weapons/
 import { getRelicById, getRelicShortDesc } from "../game/content/relics";
 import { STARTER_RELIC_BY_CHARACTER } from "../game/content/starterRelics";
 import { isUserModeEnabled } from "../userSettings";
+import {
+    deletePaletteSnapshotRecord,
+    listPaletteSnapshotRecords,
+    renamePaletteSnapshotRecord,
+} from "../game/paletteLab/snapshotStorage";
 
 type GameApi = {
     previewMap: (mapId?: string) => void;
@@ -15,6 +20,7 @@ type GameApi = {
     startRun: (characterId: PlayableCharacterId) => void;
     startDeterministicRun: (characterId: PlayableCharacterId) => void;
     startSandboxRun: (characterId: PlayableCharacterId, mapId?: string) => void;
+    openPaletteSnapshot?: (snapshotId: string) => Promise<void> | void;
 };
 
 type MapChoice = {
@@ -56,11 +62,12 @@ const staticMapChoices: MapChoice[] = staticMapDefs.map((def) => ({
 const mapChoices: MapChoice[] = staticMapChoices;
 
 export function wireMenus(refs: DomRefs, game: GameApi): void {
-    const backgroundImageUrl = getBackgroundUrl();
-    applyBackground(refs.welcomeScreen, backgroundImageUrl);
-    applyBackground(refs.mainMenuEl, backgroundImageUrl);
-    applyBackground(refs.mapMenuEl, backgroundImageUrl);
-    applyBackground(refs.menuEl, backgroundImageUrl);
+  const backgroundImageUrl = getBackgroundUrl();
+  applyBackground(refs.welcomeScreen, backgroundImageUrl);
+  applyBackground(refs.mainMenuEl, backgroundImageUrl);
+  applyBackground(refs.mapMenuEl, backgroundImageUrl);
+  applyBackground(refs.paletteLabMenuEl, backgroundImageUrl);
+  applyBackground(refs.menuEl, backgroundImageUrl);
     applyBackground(refs.innkeeperMenuEl, backgroundImageUrl);
     applyBackground(refs.settingsMenuEl, backgroundImageUrl);
     applyBackground(refs.creditsMenuEl, backgroundImageUrl);
@@ -76,8 +83,9 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     let starterModalCharacterName: HTMLDivElement | null = null;
     let starterModalSpriteWrap: HTMLDivElement | null = null;
     let starterModalRelicName: HTMLDivElement | null = null;
-    let starterModalRelicDesc: HTMLDivElement | null = null;
-    let starterModalCharacterId: PlayableCharacterId | null = null;
+  let starterModalRelicDesc: HTMLDivElement | null = null;
+  let starterModalCharacterId: PlayableCharacterId | null = null;
+  const paletteSnapshotThumbUrlById = new Map<string, string>();
     const SUPPRESS_CLICK_WINDOW_MS = 450;
     const SUPPRESS_CLICK_RADIUS_PX = 40;
     let suppressClickUntilMs = 0;
@@ -103,9 +111,192 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         return true;
     };
 
-    const clearActiveUiFocus = () => {
+  const clearActiveUiFocus = () => {
         const active = document.activeElement as HTMLElement | null;
         if (active && typeof active.blur === "function") active.blur();
+  };
+
+  const formatSnapshotTime = (createdAt: number): string => {
+    if (!Number.isFinite(createdAt)) return "-";
+    return new Date(createdAt).toLocaleString();
+  };
+
+  const formatMapBiomeLabel = (mapId?: string, biomeId?: string): string => {
+    if (mapId && biomeId) return `${toTitleCase(mapId)} · ${toTitleCase(biomeId)}`;
+    if (mapId) return toTitleCase(mapId);
+    if (biomeId) return toTitleCase(biomeId);
+    return "Unknown map";
+  };
+
+  const revokePaletteSnapshotThumbUrls = () => {
+    if (typeof URL === "undefined" || typeof URL.revokeObjectURL !== "function") return;
+    for (const url of paletteSnapshotThumbUrlById.values()) {
+      URL.revokeObjectURL(url);
+    }
+    paletteSnapshotThumbUrlById.clear();
+  };
+
+    const clearPaletteSnapshotCards = () => {
+        revokePaletteSnapshotThumbUrls();
+        while (refs.paletteLabSnapshotGridEl.firstChild) {
+            refs.paletteLabSnapshotGridEl.removeChild(refs.paletteLabSnapshotGridEl.firstChild);
+        }
+    };
+
+    const readPrompt = (message: string, defaultValue: string): string | null => {
+        if (typeof window === "undefined" || typeof window.prompt !== "function") return null;
+        return window.prompt(message, defaultValue);
+    };
+
+    const readConfirm = (message: string): boolean => {
+        if (typeof window === "undefined" || typeof window.confirm !== "function") return false;
+        return window.confirm(message);
+    };
+
+    const runOpenSnapshotAction = async (snapshotId: string) => {
+        if (typeof game.openPaletteSnapshot !== "function") {
+            refs.paletteLabSublineEl.textContent = "Palette Lab viewer is not available in this build.";
+            return;
+        }
+        refs.paletteLabSublineEl.textContent = "Opening snapshot...";
+        try {
+            await game.openPaletteSnapshot(snapshotId);
+        } catch (err) {
+            refs.paletteLabSublineEl.textContent =
+                err instanceof Error ? err.message : "Failed to open snapshot.";
+        }
+    };
+
+    const runRenameSnapshotAction = async (snapshotId: string, currentName: string) => {
+        const nextNameRaw = readPrompt("Rename palette snapshot", currentName);
+        if (nextNameRaw == null) return;
+        const nextName = nextNameRaw.trim();
+        if (!nextName) {
+            refs.paletteLabSublineEl.textContent = "Snapshot name cannot be empty.";
+            return;
+        }
+        try {
+            await renamePaletteSnapshotRecord(snapshotId, nextName);
+            await renderPaletteSnapshotCards();
+        } catch (err) {
+            refs.paletteLabSublineEl.textContent =
+                err instanceof Error ? err.message : "Failed to rename snapshot.";
+        }
+    };
+
+    const runDeleteSnapshotAction = async (snapshotId: string, snapshotName: string) => {
+        const confirmed = readConfirm(
+            `Delete snapshot \"${snapshotName}\" permanently? This cannot be undone.`,
+        );
+        if (!confirmed) return;
+        try {
+            await deletePaletteSnapshotRecord(snapshotId);
+            await renderPaletteSnapshotCards();
+        } catch (err) {
+            refs.paletteLabSublineEl.textContent =
+                err instanceof Error ? err.message : "Failed to delete snapshot.";
+        }
+    };
+
+    const renderPaletteSnapshotCards = async () => {
+        refs.paletteLabSublineEl.textContent = "Loading snapshots...";
+        clearPaletteSnapshotCards();
+
+        try {
+            const records = await listPaletteSnapshotRecords();
+            if (records.length === 0) {
+                const empty = document.createElement("div");
+                empty.className = "paletteLabEmpty";
+                empty.textContent = "No palette snapshots saved yet.";
+                refs.paletteLabSnapshotGridEl.appendChild(empty);
+                refs.paletteLabSublineEl.textContent = "Saved palette snapshots: 0";
+                return;
+            }
+
+            refs.paletteLabSublineEl.textContent = `Saved palette snapshots: ${records.length}`;
+            for (const record of records) {
+                const card = document.createElement("article");
+                card.className = "paletteLabSnapshotCard";
+                card.setAttribute("data-palette-snapshot-id", record.id);
+
+                const thumbWrap = document.createElement("div");
+                thumbWrap.className = "paletteLabSnapshotThumbWrap";
+                const thumb = document.createElement("img");
+                thumb.className = "paletteLabSnapshotThumb";
+                thumb.alt = record.metadata.name;
+                if (
+                    record.thumbnail
+                    && typeof URL !== "undefined"
+                    && typeof URL.createObjectURL === "function"
+                ) {
+                    const url = URL.createObjectURL(record.thumbnail);
+                    paletteSnapshotThumbUrlById.set(record.id, url);
+                    thumb.src = url;
+                }
+                thumbWrap.appendChild(thumb);
+
+                const body = document.createElement("div");
+                body.className = "paletteLabSnapshotBody";
+                const name = document.createElement("div");
+                name.className = "paletteLabSnapshotName";
+                name.textContent = record.metadata.name;
+                const time = document.createElement("div");
+                time.className = "paletteLabSnapshotMeta";
+                time.textContent = formatSnapshotTime(record.metadata.createdAt);
+                const map = document.createElement("div");
+                map.className = "paletteLabSnapshotMeta";
+                map.textContent = formatMapBiomeLabel(record.sceneContext.mapId, record.sceneContext.biomeId);
+
+                const actions = document.createElement("div");
+                actions.className = "paletteLabSnapshotActions";
+                const addActionButton = (
+                    label: string,
+                    actionId: string,
+                    onActivate: () => Promise<void>,
+                ) => {
+                    const btn = document.createElement("button");
+                    btn.type = "button";
+                    btn.className = "SecondaryButton paletteLabSnapshotActionBtn";
+                    btn.textContent = label;
+                    btn.setAttribute("data-palette-snapshot-action", actionId);
+                    btn.setAttribute("data-palette-snapshot-id", record.id);
+                    bindActivate(btn, () => {
+                        void onActivate();
+                    });
+                    actions.appendChild(btn);
+                };
+
+                addActionButton("Open Snapshot", "open", async () => runOpenSnapshotAction(record.id));
+                addActionButton("Rename", "rename", async () =>
+                    runRenameSnapshotAction(record.id, record.metadata.name),
+                );
+                addActionButton("Delete", "delete", async () =>
+                    runDeleteSnapshotAction(record.id, record.metadata.name),
+                );
+
+                body.appendChild(name);
+                body.appendChild(time);
+                body.appendChild(map);
+                body.appendChild(actions);
+                card.appendChild(thumbWrap);
+                card.appendChild(body);
+                refs.paletteLabSnapshotGridEl.appendChild(card);
+            }
+        } catch (err) {
+            const error = document.createElement("div");
+            error.className = "paletteLabError";
+            error.textContent =
+                err instanceof Error ? err.message : "Failed to load palette snapshots.";
+            refs.paletteLabSnapshotGridEl.appendChild(error);
+            refs.paletteLabSublineEl.textContent = "Unable to load snapshots.";
+        }
+    };
+
+    const openPaletteLab = () => {
+        closeStarterModal();
+        refs.mainMenuEl.hidden = true;
+        refs.paletteLabMenuEl.hidden = false;
+        void renderPaletteSnapshotCards();
     };
 
     const bindActivate = (el: HTMLElement, action: () => void) => {
@@ -177,27 +368,29 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         }
     };
 
-    const openMapSelectorMenu = () => {
+  const openMapSelectorMenu = () => {
         if (isUserModeEnabled()) return;
         pendingStartMode = "SANDBOX";
         closeStarterModal();
-        refs.mainMenuEl.hidden = true;
-        refs.mapMenuEl.hidden = false;
+    refs.mainMenuEl.hidden = true;
+    refs.mapMenuEl.hidden = false;
+    refs.paletteLabMenuEl.hidden = true;
         if (!selectedMapId && mapChoices.length > 0) {
             setSelectedMap(mapChoices[0].id);
         }
         game.previewMap(selectedMapId);
     };
 
-    const openDeterministicPathSelect = () => {
+  const openDeterministicPathSelect = () => {
         if (isUserModeEnabled()) return;
         pendingStartMode = "DETERMINISTIC";
         selectedMapId = undefined;
         delete refs.startBtn.dataset.map;
         updateMenuSubline();
         closeStarterModal();
-        refs.mainMenuEl.hidden = true;
-        refs.characterSelectEl.hidden = false;
+    refs.mainMenuEl.hidden = true;
+    refs.paletteLabMenuEl.hidden = true;
+    refs.characterSelectEl.hidden = false;
     };
 
     const ensureDebugMapSelectorButton = () => {
@@ -535,13 +728,19 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
 
         closeStarterModal();
         refs.mainMenuEl.hidden = true;
+        refs.paletteLabMenuEl.hidden = true;
         refs.characterSelectEl.hidden = false;
+    });
+
+    bindActivate(refs.paletteLabBtn, () => {
+        openPaletteLab();
     });
 
     // Character selection -> Main menu
     bindActivate(refs.characterBackBtn, () => {
         closeStarterModal();
         refs.characterSelectEl.hidden = true;
+        refs.paletteLabMenuEl.hidden = true;
         applyUserModeMenuGating();
         refs.mainMenuEl.hidden = false;
     });
@@ -555,6 +754,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     bindActivate(refs.mapBackBtn, () => {
         closeStarterModal();
         refs.mapMenuEl.hidden = true;
+        refs.paletteLabMenuEl.hidden = true;
         applyUserModeMenuGating();
         refs.mainMenuEl.hidden = false;
     });
@@ -563,19 +763,28 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         pendingStartMode = "SANDBOX";
         closeStarterModal();
         refs.mapMenuEl.hidden = true;
+        refs.paletteLabMenuEl.hidden = true;
         refs.characterSelectEl.hidden = false;
         game.previewMap(selectedMapId);
+    });
+
+    bindActivate(refs.paletteLabBackBtn, () => {
+        refs.paletteLabMenuEl.hidden = true;
+        applyUserModeMenuGating();
+        refs.mainMenuEl.hidden = false;
     });
 
     // Main menu -> Innkeeper
     bindActivate(refs.innkeeperBtn, () => {
         refs.mainMenuEl.hidden = true;
+        refs.paletteLabMenuEl.hidden = true;
         refs.innkeeperMenuEl.hidden = false;
     });
 
     // Innkeeper -> Main menu
     bindActivate(refs.innkeeperBackBtn, () => {
         refs.innkeeperMenuEl.hidden = true;
+        refs.paletteLabMenuEl.hidden = true;
         applyUserModeMenuGating();
         refs.mainMenuEl.hidden = false;
     });
@@ -583,6 +792,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     // Main menu -> Settings
     bindActivate(refs.settingsBtn, () => {
         refs.mainMenuEl.hidden = true;
+        refs.paletteLabMenuEl.hidden = true;
         refs.settingsMenuEl.hidden = false;
     });
 
@@ -590,6 +800,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     if (refs.creditsBtn) {
         bindActivate(refs.creditsBtn, () => {
             refs.mainMenuEl.hidden = true;
+            refs.paletteLabMenuEl.hidden = true;
             refs.creditsMenuEl.hidden = false;
         });
     }
@@ -598,6 +809,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     bindActivate(refs.settingsBackBtn, () => {
         closeStarterModal();
         refs.settingsMenuEl.hidden = true;
+        refs.paletteLabMenuEl.hidden = true;
         applyUserModeMenuGating();
         refs.mainMenuEl.hidden = false;
     });
@@ -606,6 +818,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     bindActivate(refs.creditsBackBtn, () => {
         closeStarterModal();
         refs.creditsMenuEl.hidden = true;
+        refs.paletteLabMenuEl.hidden = true;
         applyUserModeMenuGating();
         refs.mainMenuEl.hidden = false;
     });

@@ -506,6 +506,58 @@ describe("pauseMenu", () => {
     expect(onOpenDevTools).toHaveBeenCalledTimes(1);
   });
 
+  test("save palette snapshot button captures current scene and emits callback payload", () => {
+    const root = document.createElement("div") as unknown as HTMLDivElement;
+    document.body.appendChild(root as any);
+
+    const onSavePaletteSnapshot = vi.fn();
+    const menu = mountPauseMenu({
+      root,
+      actions: {
+        onResume: vi.fn(),
+        onQuitRun: vi.fn(),
+        onSavePaletteSnapshot,
+      },
+    });
+    menu.setVisible(true);
+    const world = makeWorld({
+      floorIndex: 1,
+      runSeed: 99,
+      currentFloorIntent: { mapId: "Avenue", zoneId: "SEWERS", variantSeed: 777 },
+      camera: { posX: 45, posY: 90 },
+      cameraSafeRect: { zoom: 2.25 },
+      lighting: { darknessAlpha: 0.6 },
+      eAlive: [true],
+      eType: [3],
+      egxi: [4],
+      egyi: [5],
+      egox: [0.1],
+      egoy: [0.2],
+      eHp: [10],
+      eFaceX: [1],
+      eFaceY: [0],
+      ezVisual: [0],
+      ezLogical: [0],
+    });
+    menu.render(world);
+
+    (root.querySelector("[data-pause-save-palette-snapshot]") as any).click();
+
+    expect(onSavePaletteSnapshot).toHaveBeenCalledTimes(1);
+    const captured = onSavePaletteSnapshot.mock.calls[0][0];
+    expect(captured.sceneContext).toMatchObject({
+      mapId: "Avenue",
+      biomeId: "SEWERS",
+      seed: 777,
+    });
+    expect(captured.cameraState).toEqual({
+      cameraX: 45,
+      cameraY: 90,
+      cameraZoom: 2.25,
+    });
+    expect((world as any).paletteSnapshotDraft).toEqual(captured);
+  });
+
   test("setVisible(true) reapplies visibility if root gets hidden externally", () => {
     const root = document.createElement("div") as unknown as HTMLDivElement;
     document.body.appendChild(root as any);

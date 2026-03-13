@@ -50,7 +50,7 @@ import {
 import { formatTimeMMSS } from "./util/time";
 import { getBossAccent } from "./content/floors";
 import { registry } from "./content/registry";
-import { spawnEnemyGrid, ENEMY_TYPE } from "./factories/enemyFactory";
+import { spawnEnemyGrid, ENEMY_TYPE, type EnemyType } from "./factories/enemyFactory";
 import { gridToWorld } from "./coords/grid";
 import { anchorFromWorld } from "./coords/anchor";
 import { fissionSystem } from "./systems/sim/fission";
@@ -176,6 +176,11 @@ import {
   LeaderboardClient,
   type LeaderboardRow,
 } from "../leaderboard/leaderboardClient";
+import type { PaletteSnapshotStorageRecord } from "./paletteLab/snapshotStorage";
+import {
+  buildPaletteSnapshotFloorIntent,
+  extractPaletteSnapshotSceneRestoreState,
+} from "./paletteLab/snapshotRestore";
 
 
 type HudRefs = {
@@ -1035,6 +1040,7 @@ export function createGame(args: CreateGameArgs) {
   }
   let pendingStartIntent: StartIntent | null = null;
   let pendingFloorIntent: FloorIntent | null = null;
+  let pendingPaletteSnapshotRestore: PaletteSnapshotStorageRecord | null = null;
   let preparedStart: PreparedStart | null = null;
   let bootAssetsPreloaded = false;
   let floorLoadContext: FloorLoadContext | null = null;
@@ -1757,6 +1763,70 @@ export function createGame(args: CreateGameArgs) {
     w.neutralMobs = [];
   }
 
+  function clearPaletteSnapshotViewerState(w: World): void {
+    (w as any).paletteSnapshotViewerActive = false;
+    (w as any).paletteSnapshotViewerCamera = null;
+  }
+
+  function applyPaletteSnapshotSceneRestore(
+    w: World,
+    snapshot: PaletteSnapshotStorageRecord,
+  ): void {
+    const restored = extractPaletteSnapshotSceneRestoreState(snapshot, w.stageId);
+    clearFloorEntities(w);
+
+    w.pgxi = restored.player.pgxi;
+    w.pgyi = restored.player.pgyi;
+    w.pgox = restored.player.pgox;
+    w.pgoy = restored.player.pgoy;
+    w.pz = restored.player.pz;
+    w.pzVisual = restored.player.pzVisual;
+    w.pzLogical = restored.player.pzLogical;
+    w.activeFloorH = restored.player.pzLogical;
+    w.pvx = restored.player.pvx;
+    w.pvy = restored.player.pvy;
+    w.lastAimX = restored.player.lastAimX;
+    w.lastAimY = restored.player.lastAimY;
+
+    w.camera.posX = restored.cameraX;
+    w.camera.posY = restored.cameraY;
+    w.camera.targetX = restored.cameraX;
+    w.camera.targetY = restored.cameraY;
+    (w as any).paletteSnapshotViewerCamera = {
+      x: restored.cameraX,
+      y: restored.cameraY,
+      zoom: restored.cameraZoom,
+    };
+
+    w.lighting.darknessAlpha = restored.lighting.darknessAlpha;
+    w.lighting.ambientTint = restored.lighting.ambientTint;
+    w.lighting.ambientTintStrength = restored.lighting.ambientTintStrength;
+
+    for (const enemy of restored.enemies) {
+      const enemyType = Number.isFinite(enemy.type)
+        ? (Math.max(0, Math.floor(enemy.type)) as EnemyType)
+        : ENEMY_TYPE.CHASER;
+      const enemyIndex = spawnEnemyGrid(w, enemyType, enemy.pgxi, enemy.pgyi, KENNEY_TILE_WORLD);
+      w.egox[enemyIndex] = enemy.pgox;
+      w.egoy[enemyIndex] = enemy.pgoy;
+      w.eHp[enemyIndex] = Math.max(0, enemy.hp);
+      w.eHpMax[enemyIndex] = Math.max(1, enemy.hp);
+      w.eFaceX[enemyIndex] = enemy.faceX;
+      w.eFaceY[enemyIndex] = enemy.faceY;
+      w.ezVisual[enemyIndex] = enemy.zVisual;
+      w.ezLogical[enemyIndex] = enemy.zLogical;
+      if (enemy.hp <= 0) w.eAlive[enemyIndex] = false;
+    }
+
+    setDialog(null);
+    closeVendorShop(false);
+    hideCardRewardMenu();
+    args.ui.mapEl.root.hidden = true;
+    setHudHidden(true);
+    w.state = "MAP";
+    (w as any).paletteSnapshotViewerActive = true;
+  }
+
   function bossAlive(w: World): boolean {
     return findFirstAliveBossIndex(w) >= 0;
   }
@@ -2045,10 +2115,16 @@ export function createGame(args: CreateGameArgs) {
 
     // Enter gameplay state (delve picker leaves us in MAP; floor load must resume RUN).
     w.state = "RUN";
+    clearPaletteSnapshotViewerState(w);
+    const snapshotRestore = pendingPaletteSnapshotRestore;
+    pendingPaletteSnapshotRestore = null;
+    if (snapshotRestore) {
+      applyPaletteSnapshotSceneRestore(w, snapshotRestore);
+    }
 
     // UI: hide map overlay, show HUD.
     args.ui.mapEl.root.hidden = true;
-    setHudHidden(false);
+    setHudHidden(!!(w as any).paletteSnapshotViewerActive);
     hideCardRewardMenu();
   }
 
@@ -2445,9 +2521,31 @@ export function createGame(args: CreateGameArgs) {
     queueStartIntent({ mode: "SANDBOX", characterId, mapId });
   }
 
+  function openPaletteSnapshotRecord(record: PaletteSnapshotStorageRecord): void {
+    const mapId =
+      typeof record.sceneContext?.mapId === "string" && record.sceneContext.mapId.trim().length > 0
+        ? record.sceneContext.mapId.trim()
+        : undefined;
+    if (mapId && !getStaticMapById(mapId)) {
+      const snapshotName =
+        typeof record.metadata?.name === "string" && record.metadata.name.trim().length > 0
+          ? record.metadata.name.trim()
+          : record.id;
+      throw new Error(
+        `Snapshot "${snapshotName}" references map "${mapId}" that is unavailable in this build.`,
+      );
+    }
+    pendingStartIntent = null;
+    preparedStart = null;
+    pendingPaletteSnapshotRestore = record;
+    const fallbackSeed = Number.isFinite(world.runSeed) ? Math.floor(world.runSeed) : 1337;
+    queueFloorLoadIntent(buildPaletteSnapshotFloorIntent(record, world.stageId, fallbackSeed));
+  }
+
   function quitRunToMenu() {
     pendingStartIntent = null;
     pendingFloorIntent = null;
+    pendingPaletteSnapshotRestore = null;
     preparedStart = null;
     floorLoadContext = null;
     setDialog(null);
@@ -2456,6 +2554,7 @@ export function createGame(args: CreateGameArgs) {
     world.state = "MENU";
     world.runState = "FLOOR";
     world.currentFloorIntent = null;
+    clearPaletteSnapshotViewerState(world);
     world.deathFx.active = false;
     world.objectiveRewardClaimedKey = null;
     (world as any).deterministicDelveMode = false;
@@ -2474,12 +2573,14 @@ export function createGame(args: CreateGameArgs) {
     const mainMenu = document.getElementById("mainMenu") as HTMLDivElement | null;
     const characterSelect = document.getElementById("characterSelect") as HTMLDivElement | null;
     const mapMenu = document.getElementById("mapMenu") as HTMLDivElement | null;
+    const paletteLabMenu = document.getElementById("paletteLabMenu") as HTMLDivElement | null;
     const innkeeperMenu = document.getElementById("innkeeperMenu") as HTMLDivElement | null;
     const settingsMenu = document.getElementById("settingsMenu") as HTMLDivElement | null;
     if (welcomeScreen) welcomeScreen.hidden = true;
     if (mainMenu) mainMenu.hidden = false;
     if (characterSelect) characterSelect.hidden = true;
     if (mapMenu) mapMenu.hidden = true;
+    if (paletteLabMenu) paletteLabMenu.hidden = true;
     if (innkeeperMenu) innkeeperMenu.hidden = true;
     if (settingsMenu) settingsMenu.hidden = true;
   }
@@ -3284,6 +3385,7 @@ export function createGame(args: CreateGameArgs) {
     startRun,
     startDeterministicRun,
     startSandboxRun,
+    openPaletteSnapshotRecord,
     previewMap,
     reloadCurrentMapForDebug,
     preloadBootAssets,
