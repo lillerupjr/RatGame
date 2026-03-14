@@ -977,6 +977,9 @@ async function bootstrap() {
     onClose: () => {
       returnToPaletteLabMenu("Returned from snapshot viewer.");
     },
+    onRerollSeed: () => {
+      game.rerollPaletteSnapshotViewerSeed();
+    },
   });
   let pauseCogBtn: HTMLButtonElement | null = null;
 
@@ -1291,6 +1294,7 @@ async function bootstrap() {
     const w = game.getWorld() as any;
     snapshotViewerPalettePanel.sync(
       appStateController.appState === AppState.RUN
+      && appStateController.runState === RunState.PLAYING
       && !!w?.paletteSnapshotViewerActive
       && w?.state === "MAP",
     );

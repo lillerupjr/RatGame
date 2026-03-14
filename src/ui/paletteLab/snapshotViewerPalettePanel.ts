@@ -21,6 +21,7 @@ export type SnapshotViewerPalettePanelController = {
 
 type MountSnapshotViewerPalettePanelArgs = {
   onClose: () => void;
+  onRerollSeed?: () => void;
 };
 
 const NOOP_CONTROLLER: SnapshotViewerPalettePanelController = {
@@ -89,6 +90,18 @@ export function mountSnapshotViewerPalettePanel(
   const darknessSelect = createSelectRow("Darkness", "darkness");
   const lightModeSelect = createSelectRow("Light Mode", "light-mode");
   const lightStrengthSelect = createSelectRow("Light Strength", "light-strength");
+  const actions = document.createElement("div");
+  actions.className = "snapshotViewerPalettePanelActions";
+  const rerollSeedBtn = document.createElement("button");
+  rerollSeedBtn.type = "button";
+  rerollSeedBtn.className = "SecondaryButton snapshotViewerPalettePanelAction";
+  rerollSeedBtn.textContent = "Reroll Seed";
+  rerollSeedBtn.setAttribute("data-snapshot-viewer-panel-reroll", "true");
+  rerollSeedBtn.addEventListener("click", () => {
+    args.onRerollSeed?.();
+  });
+  actions.appendChild(rerollSeedBtn);
+  body.appendChild(actions);
   for (let i = 0; i < PALETTE_REMAP_WEIGHT_OPTIONS.length; i += 1) {
     const optionValue = PALETTE_REMAP_WEIGHT_OPTIONS[i];
     const option = document.createElement("option");

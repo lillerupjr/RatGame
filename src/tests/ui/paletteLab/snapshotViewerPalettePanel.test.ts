@@ -219,6 +219,17 @@ describe("snapshot viewer palette panel", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  test("reroll seed button triggers callback", () => {
+    const onRerollSeed = vi.fn();
+    const panel = mountSnapshotViewerPalettePanel({ onClose: vi.fn(), onRerollSeed });
+    panel.sync(true);
+
+    const rerollBtn = findByData((globalThis as any).document.body, "snapshotViewerPanelReroll", "true");
+    expect(rerollBtn).toBeTruthy();
+    rerollBtn?.dispatchEvent(new FakeEvent("click", rerollBtn));
+    expect(onRerollSeed).toHaveBeenCalledTimes(1);
+  });
+
   test("group change rebuilds palette and updates settings", () => {
     const panel = mountSnapshotViewerPalettePanel({ onClose: vi.fn() });
     panel.sync(true);

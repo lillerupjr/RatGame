@@ -1461,6 +1461,30 @@ html.ios-standalone-fix #ui {
   gap: 4px;
 }
 
+.snapshotViewerPalettePanelActions {
+  display: grid;
+}
+
+.snapshotViewerPalettePanelAction {
+  min-height: 34px;
+  border-radius: 0;
+  border: 1px solid var(--border-default);
+  background: var(--focus-bg);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background var(--transition-standard), border-color var(--transition-standard);
+}
+
+.snapshotViewerPalettePanelAction:hover {
+  background: var(--hover-bg);
+  border-color: var(--border-strong);
+}
+
 .snapshotViewerPalettePanelLabel {
   font-size: 11px;
   font-weight: 700;
@@ -1495,7 +1519,8 @@ html.ios-standalone-fix #ui {
 }
 
 .snapshotViewerPalettePanelSelect:focus-visible,
-.snapshotViewerPalettePanelClose:focus-visible {
+.snapshotViewerPalettePanelClose:focus-visible,
+.snapshotViewerPalettePanelAction:focus-visible {
   outline: none;
   border-color: var(--border-strong);
   box-shadow: 0 0 0 1px var(--accent-soft);

@@ -1041,6 +1041,7 @@ export function createGame(args: CreateGameArgs) {
   let pendingStartIntent: StartIntent | null = null;
   let pendingFloorIntent: FloorIntent | null = null;
   let pendingPaletteSnapshotRestore: PaletteSnapshotStorageRecord | null = null;
+  let activePaletteSnapshotViewerRecord: PaletteSnapshotStorageRecord | null = null;
   let preparedStart: PreparedStart | null = null;
   let bootAssetsPreloaded = false;
   let floorLoadContext: FloorLoadContext | null = null;
@@ -2119,7 +2120,10 @@ export function createGame(args: CreateGameArgs) {
     const snapshotRestore = pendingPaletteSnapshotRestore;
     pendingPaletteSnapshotRestore = null;
     if (snapshotRestore) {
+      activePaletteSnapshotViewerRecord = snapshotRestore;
       applyPaletteSnapshotSceneRestore(w, snapshotRestore);
+    } else {
+      activePaletteSnapshotViewerRecord = null;
     }
 
     // UI: hide map overlay, show HUD.
@@ -2521,6 +2525,25 @@ export function createGame(args: CreateGameArgs) {
     queueStartIntent({ mode: "SANDBOX", characterId, mapId });
   }
 
+  function normalizePaletteSnapshotRecordSeed(
+    record: PaletteSnapshotStorageRecord,
+  ): PaletteSnapshotStorageRecord {
+    const rawSeed = record.sceneContext?.seed;
+    const resolvedSeed = Number.isFinite(rawSeed)
+      ? Math.floor(rawSeed as number)
+      : hashString(
+        `${record.id}|${record.metadata?.createdAt ?? 0}|${record.sceneContext?.mapId ?? ""}|${record.sceneContext?.biomeId ?? ""}`,
+      );
+
+    return {
+      ...record,
+      sceneContext: {
+        ...record.sceneContext,
+        seed: resolvedSeed,
+      },
+    };
+  }
+
   function openPaletteSnapshotRecord(record: PaletteSnapshotStorageRecord): void {
     const mapId =
       typeof record.sceneContext?.mapId === "string" && record.sceneContext.mapId.trim().length > 0
@@ -2537,15 +2560,42 @@ export function createGame(args: CreateGameArgs) {
     }
     pendingStartIntent = null;
     preparedStart = null;
-    pendingPaletteSnapshotRestore = record;
-    const fallbackSeed = Number.isFinite(world.runSeed) ? Math.floor(world.runSeed) : 1337;
-    queueFloorLoadIntent(buildPaletteSnapshotFloorIntent(record, world.stageId, fallbackSeed));
+    const seededRecord = normalizePaletteSnapshotRecordSeed(record);
+    activePaletteSnapshotViewerRecord = seededRecord;
+    pendingPaletteSnapshotRestore = seededRecord;
+    const fallbackSeed = Number.isFinite(seededRecord.sceneContext.seed)
+      ? Math.floor(seededRecord.sceneContext.seed as number)
+      : 1337;
+    queueFloorLoadIntent(buildPaletteSnapshotFloorIntent(seededRecord, world.stageId, fallbackSeed));
+  }
+
+  function rerollPaletteSnapshotViewerSeed(): boolean {
+    if (!(world as any).paletteSnapshotViewerActive) return false;
+    const activeRecord = activePaletteSnapshotViewerRecord;
+    if (!activeRecord) return false;
+
+    const rerolledSeed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
+    const rerolledRecord: PaletteSnapshotStorageRecord = {
+      ...activeRecord,
+      sceneContext: {
+        ...activeRecord.sceneContext,
+        seed: rerolledSeed,
+      },
+    };
+
+    pendingStartIntent = null;
+    preparedStart = null;
+    activePaletteSnapshotViewerRecord = rerolledRecord;
+    pendingPaletteSnapshotRestore = rerolledRecord;
+    queueFloorLoadIntent(buildPaletteSnapshotFloorIntent(rerolledRecord, world.stageId, rerolledSeed));
+    return true;
   }
 
   function quitRunToMenu() {
     pendingStartIntent = null;
     pendingFloorIntent = null;
     pendingPaletteSnapshotRestore = null;
+    activePaletteSnapshotViewerRecord = null;
     preparedStart = null;
     floorLoadContext = null;
     setDialog(null);
@@ -3386,6 +3436,7 @@ export function createGame(args: CreateGameArgs) {
     startDeterministicRun,
     startSandboxRun,
     openPaletteSnapshotRecord,
+    rerollPaletteSnapshotViewerSeed,
     previewMap,
     reloadCurrentMapForDebug,
     preloadBootAssets,
