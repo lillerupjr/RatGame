@@ -16,7 +16,22 @@ describe("palette groups", () => {
 
   it("includes the locked Lospec additions in the test group", () => {
     const ids = getPalettesByGroup("test").map((palette) => palette.id);
-    expect(ids).toEqual(["midnight_ablaze", "blessing", "hollow", "berry_nebula", "cyclope6"]);
+    expect(ids).toEqual([
+      "midnight_ablaze",
+      "blessing",
+      "hollow",
+      "berry_nebula",
+      "cyclope6",
+      "bloodmoon21",
+      "blk_aqu4",
+      "dustbyte",
+      "hydrangea_11",
+      "fiery_plague_gb",
+      "leopolds_dreams",
+      "look_of_horror",
+      "aquaverse",
+      "sunraze",
+    ]);
   });
 
   it("cycles to the next palette within the selected group", () => {

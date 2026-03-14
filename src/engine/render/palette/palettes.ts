@@ -278,6 +278,153 @@ export const CYCLOPE6: PaletteDef = {
   ] as const,
 };
 
+export const BLOODMOON21: PaletteDef = {
+  id: "bloodmoon21",
+  name: "BloodMoon21",
+  group: "test",
+  source: "lospec",
+  colors: [
+    "#130310",
+    "#1d0518",
+    "#270721",
+    "#3c0921",
+    "#520b20",
+    "#7d0f1f",
+    "#a8141d",
+    "#d3181c",
+    "#ff252b",
+  ] as const,
+};
+
+export const BLK_AQU4: PaletteDef = {
+  id: "blk_aqu4",
+  name: "BLK AQU4",
+  group: "test",
+  source: "lospec",
+  colors: [
+    "#0a0f14",
+    "#1a2a2f",
+    "#2e5963",
+    "#49a6a6",
+  ] as const,
+};
+
+export const DUSTBYTE: PaletteDef = {
+  id: "dustbyte",
+  name: "dustbyte",
+  group: "test",
+  source: "lospec",
+  colors: [
+    "#1b1a1f",
+    "#3a2d3f",
+    "#6a4a5b",
+    "#a86f6f",
+    "#d6a37a",
+    "#f2d3a0",
+  ] as const,
+};
+
+export const HYDRANGEA_11: PaletteDef = {
+  id: "hydrangea_11",
+  name: "Hydrangea 11",
+  group: "test",
+  source: "lospec",
+  colors: [
+    "#1e1c3a",
+    "#3a2c6d",
+    "#5a4bb3",
+    "#7c6fe5",
+    "#a8a4ff",
+    "#d1d1ff",
+    "#f1eaff",
+    "#c6b7ff",
+    "#9d8ff7",
+    "#7466d8",
+    "#4a4aa3",
+  ] as const,
+};
+
+export const FIERY_PLAGUE_GB: PaletteDef = {
+  id: "fiery_plague_gb",
+  name: "Fiery Plague GB",
+  group: "test",
+  source: "lospec",
+  colors: [
+    "#1b0c0c",
+    "#5a1e1e",
+    "#a33b2f",
+    "#ff7a3d",
+  ] as const,
+};
+
+export const LEOPOLDS_DREAMS: PaletteDef = {
+  id: "leopolds_dreams",
+  name: "Leopold's Dreams",
+  group: "test",
+  source: "lospec",
+  colors: [
+    "#120c2c",
+    "#2a1f4f",
+    "#513b8f",
+    "#7f6ad6",
+    "#b0a6ff",
+    "#e2dcff",
+  ] as const,
+};
+
+export const LOOK_OF_HORROR: PaletteDef = {
+  id: "look_of_horror",
+  name: "Look of Horror",
+  group: "test",
+  source: "lospec",
+  colors: [
+    "#0b0b0b",
+    "#1a1a1a",
+    "#3a1f1f",
+    "#6a2323",
+    "#a52a2a",
+    "#e84545",
+  ] as const,
+};
+
+export const AQUAVERSE: PaletteDef = {
+  id: "aquaverse",
+  name: "Aquaverse",
+  group: "test",
+  source: "lospec",
+  colors: [
+    "#0c1b2a",
+    "#153e5c",
+    "#1f6f8b",
+    "#2aa7b8",
+    "#7dd0d6",
+    "#d0f4f7",
+  ] as const,
+};
+
+export const SUNRAZE: PaletteDef = {
+  id: "sunraze",
+  name: "Sunraze",
+  group: "test",
+  source: "lospec",
+  colors: [
+    "#1b0c1b",
+    "#3a1e3a",
+    "#5b2e5b",
+    "#7a3f7a",
+    "#a04aa0",
+    "#d06ad0",
+    "#ff8cff",
+    "#ffb38c",
+    "#ff7a5a",
+    "#ff4a3a",
+    "#ff2a1f",
+    "#d11c1c",
+    "#8c1111",
+    "#4a0707",
+  ] as const,
+};
+
 export const PALETTES: readonly PaletteDef[] = [
   DB32,
   DIVINATION,
@@ -297,6 +444,15 @@ export const PALETTES: readonly PaletteDef[] = [
   HOLLOW,
   BERRY_NEBULA,
   CYCLOPE6,
+  BLOODMOON21,
+  BLK_AQU4,
+  DUSTBYTE,
+  HYDRANGEA_11,
+  FIERY_PLAGUE_GB,
+  LEOPOLDS_DREAMS,
+  LOOK_OF_HORROR,
+  AQUAVERSE,
+  SUNRAZE,
 ] as const;
 
 const paletteHueAnchorsById = new Map<string, readonly number[]>();

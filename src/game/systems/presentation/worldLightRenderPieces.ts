@@ -1,4 +1,9 @@
 import type { ProjectedLight } from "./renderLighting";
+import {
+  resolveLightColorAndIntensity,
+  type LightColorMode,
+  type LightStrength,
+} from "./lightColorResolution";
 
 type LightFlicker = ProjectedLight["flicker"];
 
@@ -14,6 +19,8 @@ export type CompiledStaticLight = {
   screenOffsetPx?: { x: number; y: number };
   intensity: number;
   radiusPx: number;
+  colorMode?: LightColorMode;
+  strength?: LightStrength;
   color?: string;
   tintStrength?: number;
   shape?: ProjectedLight["shape"];
@@ -67,6 +74,14 @@ export type BuildFrameWorldLightRegistryParams = {
   elevPx: number;
   worldScale: number;
   streetLampOcclusionEnabled: boolean;
+  lightOverrides: {
+    colorModeOverride: "authored" | LightColorMode;
+    strengthOverride: "authored" | LightStrength;
+  };
+  lightPalette: {
+    paletteId: string;
+    saturationWeight: number;
+  };
   staticLights: ReadonlyArray<CompiledStaticLight>;
   runtimeBeam?: RuntimeBeamLightConfig | null;
   tileHeightAtWorld: (worldX: number, worldY: number) => number;
@@ -107,6 +122,21 @@ function buildStaticLightRecord(
   const pos = params.projectToScreen(light.worldX, light.worldY, light.heightUnits * params.elevPx);
   const sx = pos.x + screenOffsetX;
   const sy = pos.y + screenOffsetY;
+  const effectiveColorMode = params.lightOverrides.colorModeOverride === "authored"
+    ? light.colorMode
+    : params.lightOverrides.colorModeOverride;
+  const effectiveStrength = params.lightOverrides.strengthOverride === "authored"
+    ? light.strength
+    : params.lightOverrides.strengthOverride;
+  const resolvedLight = resolveLightColorAndIntensity({
+    colorMode: effectiveColorMode,
+    strength: effectiveStrength,
+    authoredColor: light.color,
+    baseIntensity: light.intensity,
+    paletteId: params.lightPalette.paletteId,
+    saturationWeight: params.lightPalette.saturationWeight,
+  });
+  if (resolvedLight.skip) return null;
   const poolSy = sy - (light.poolHeightOffsetUnits ?? 0) * params.elevPx * params.worldScale;
   const flickerPhase = (Math.sin(light.worldX * 0.013 + light.worldY * 0.007) * 43758.5453) % (Math.PI * 2);
 
@@ -116,10 +146,10 @@ function buildStaticLightRecord(
     poolSy,
     lightZ: projectedZ,
     radiusPx: light.radiusPx * params.worldScale,
-    intensity: light.intensity,
+    intensity: resolvedLight.intensity,
     occlusion: isStreetLamp && params.streetLampOcclusionEnabled ? 1 : 0,
     shape: light.shape ?? "RADIAL",
-    color: light.color ?? "#FFFFFF",
+    color: resolvedLight.color,
     tintStrength: light.tintStrength ?? 0.35,
     flicker: light.flicker ?? { kind: "NONE" },
     flickerPhase,

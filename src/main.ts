@@ -69,6 +69,7 @@ function installDevSettingsUi(): DevSettingsUiController {
     select.style.border = "1px solid var(--border-default)";
     select.style.borderRadius = "0";
     select.style.fontFamily = "var(--font-mono)";
+    select.style.setProperty("color-scheme", "dark");
   };
 
   const debugLayerToggleBtn = document.createElement("button");
@@ -132,6 +133,7 @@ function installDevSettingsUi(): DevSettingsUiController {
   headerRow.appendChild(closeBtn);
 
   type SettingsDebug = ReturnType<typeof getUserSettings>["debug"];
+  type SettingsRender = ReturnType<typeof getUserSettings>["render"];
   const checks = new Map<BooleanDebugSettingKey, HTMLInputElement>();
   const debugToggleGrid = document.createElement("div");
   debugToggleGrid.style.display = "grid";
@@ -410,6 +412,80 @@ function installDevSettingsUi(): DevSettingsUiController {
     });
   });
 
+  const lightColorModeRow = document.createElement("label");
+  lightColorModeRow.style.display = "flex";
+  lightColorModeRow.style.alignItems = "center";
+  lightColorModeRow.style.justifyContent = "space-between";
+  lightColorModeRow.style.gap = "10px";
+  lightColorModeRow.style.padding = "4px 0";
+  const lightColorModeText = document.createElement("span");
+  lightColorModeText.textContent = "Light Mode";
+  const lightColorModeSelect = document.createElement("select");
+  applyDevSelectStyle(lightColorModeSelect);
+  const lightColorModeOptions: Array<{
+    value: SettingsRender["lightColorModeOverride"];
+    label: string;
+  }> = [
+    { value: "authored", label: "Authored" },
+    { value: "off", label: "Off" },
+    { value: "standard", label: "Standard" },
+    { value: "palette", label: "Palette" },
+  ];
+  for (let i = 0; i < lightColorModeOptions.length; i++) {
+    const optionDef = lightColorModeOptions[i];
+    const opt = document.createElement("option");
+    opt.value = optionDef.value;
+    opt.textContent = optionDef.label;
+    lightColorModeSelect.appendChild(opt);
+  }
+  lightColorModeSelect.addEventListener("change", () => {
+    updateUserSettings({
+      render: {
+        lightColorModeOverride: lightColorModeSelect.value as SettingsRender["lightColorModeOverride"],
+      },
+    });
+  });
+  lightColorModeRow.appendChild(lightColorModeText);
+  lightColorModeRow.appendChild(lightColorModeSelect);
+  panel.appendChild(lightColorModeRow);
+
+  const lightStrengthRow = document.createElement("label");
+  lightStrengthRow.style.display = "flex";
+  lightStrengthRow.style.alignItems = "center";
+  lightStrengthRow.style.justifyContent = "space-between";
+  lightStrengthRow.style.gap = "10px";
+  lightStrengthRow.style.padding = "4px 0";
+  const lightStrengthText = document.createElement("span");
+  lightStrengthText.textContent = "Light Strength";
+  const lightStrengthSelect = document.createElement("select");
+  applyDevSelectStyle(lightStrengthSelect);
+  const lightStrengthOptions: Array<{
+    value: SettingsRender["lightStrengthOverride"];
+    label: string;
+  }> = [
+    { value: "authored", label: "Authored" },
+    { value: "low", label: "Low" },
+    { value: "medium", label: "Medium" },
+    { value: "high", label: "High" },
+  ];
+  for (let i = 0; i < lightStrengthOptions.length; i++) {
+    const optionDef = lightStrengthOptions[i];
+    const opt = document.createElement("option");
+    opt.value = optionDef.value;
+    opt.textContent = optionDef.label;
+    lightStrengthSelect.appendChild(opt);
+  }
+  lightStrengthSelect.addEventListener("change", () => {
+    updateUserSettings({
+      render: {
+        lightStrengthOverride: lightStrengthSelect.value as SettingsRender["lightStrengthOverride"],
+      },
+    });
+  });
+  lightStrengthRow.appendChild(lightStrengthText);
+  lightStrengthRow.appendChild(lightStrengthSelect);
+  panel.appendChild(lightStrengthRow);
+
   const paletteHudDebugOverlayRow = document.createElement("label");
   paletteHudDebugOverlayRow.style.display = "flex";
   paletteHudDebugOverlayRow.style.alignItems = "center";
@@ -680,6 +756,8 @@ function installDevSettingsUi(): DevSettingsUiController {
         paletteSwapEnabled: false,
         paletteHudDebugOverlayEnabled: false,
         darknessMaskDebugDisabled: false,
+        lightColorModeOverride: "authored",
+        lightStrengthOverride: "authored",
       },
     });
     syncFromSettings();
@@ -709,6 +787,8 @@ function installDevSettingsUi(): DevSettingsUiController {
     paletteSwapInput.checked = s.render.paletteSwapEnabled;
     paletteGroupSelect.value = normalizePaletteGroup(s.render.paletteGroup);
     paletteIdSelect.value = rebuildPaletteOptions(s.render.paletteGroup, s.render.paletteId);
+    lightColorModeSelect.value = s.render.lightColorModeOverride;
+    lightStrengthSelect.value = s.render.lightStrengthOverride;
     paletteHudDebugOverlayInput.checked = s.render.paletteHudDebugOverlayEnabled === true;
     darknessMaskDebugInput.checked = s.render.darknessMaskDebugDisabled === true;
     const isUserMode = !!(s as any).game?.userModeEnabled;

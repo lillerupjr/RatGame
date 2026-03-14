@@ -519,6 +519,8 @@ describe("structure legacy transition", () => {
       heightUnits: 3,
       radiusPx: 140,
       intensity: 0.8,
+      colorMode: "standard",
+      strength: "medium",
       shape: "RADIAL",
     });
   });
@@ -544,6 +546,8 @@ describe("structure legacy transition", () => {
     expect(light.cone?.angleRad).toBe(0.9);
     expect(light.cone?.lengthPx).toBe(260);
     expect(light.color).toBe("#FFFB74");
+    expect(light.colorMode).toBe("standard");
+    expect(light.strength).toBe("medium");
   });
 
   it("builds neon semantic presets as colored RADIAL lightDefs", () => {
@@ -565,6 +569,8 @@ describe("structure legacy transition", () => {
     expect(light.tintStrength).toBe(0.70);
     expect(light.radiusPx).toBe(220);
     expect(light.intensity).toBe(0.75);
+    expect(light.colorMode).toBe("standard");
+    expect(light.strength).toBe("medium");
     expect(light.flicker).toEqual({ kind: "NOISE", speed: 9, amount: 0.25 });
   });
 
@@ -582,6 +588,8 @@ describe("structure legacy transition", () => {
     expect(lampLight?.id).toBe("prop_light_street_lamp_e_3_2_0");
     expect(lampLight?.zBase).toBe(0);
     expect(lampLight?.zLogical).toBe(0);
+    expect(lampLight?.colorMode).toBe("standard");
+    expect(lampLight?.strength).toBe("medium");
     expect(compiled.blockedTiles.has("3,2")).toBe(false);
   });
 });

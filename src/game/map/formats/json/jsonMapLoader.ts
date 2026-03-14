@@ -926,6 +926,26 @@ function optionalMapLightsField(obj: Record<string, unknown>, source?: string): 
     const poolHeightOffsetUnits = optionalNumberField(entry, "poolHeightOffsetUnits");
     const radiusPx = requireNumberField(entry, "radiusPx", source);
     const intensity = requireNumberField(entry, "intensity", source);
+    const colorModeRaw = optionalStringField(entry, "colorMode");
+    const colorMode = colorModeRaw
+      ? (() => {
+          const low = colorModeRaw.toLowerCase();
+          if (low === "off" || low === "standard" || low === "palette") {
+            return low as "off" | "standard" | "palette";
+          }
+          throw new Error(`JSON map loader${formatSource(source)}: lights[${index}].colorMode must be off|standard|palette.`);
+        })()
+      : undefined;
+    const strengthRaw = optionalStringField(entry, "strength");
+    const strength = strengthRaw
+      ? (() => {
+          const low = strengthRaw.toLowerCase();
+          if (low === "low" || low === "medium" || low === "high") {
+            return low as "low" | "medium" | "high";
+          }
+          throw new Error(`JSON map loader${formatSource(source)}: lights[${index}].strength must be low|medium|high.`);
+        })()
+      : undefined;
     const color = optionalStringField(entry, "color");
     const tintStrength = optionalNumberField(entry, "tintStrength");
     const shapeRaw = optionalStringField(entry, "shape");
@@ -997,6 +1017,8 @@ function optionalMapLightsField(obj: Record<string, unknown>, source?: string): 
       poolHeightOffsetUnits,
       radiusPx,
       intensity,
+      colorMode,
+      strength,
       color,
       tintStrength,
       shape,

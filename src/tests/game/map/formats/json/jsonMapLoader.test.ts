@@ -42,6 +42,30 @@ describe("jsonMapLoader", () => {
     ]);
   });
 
+  it("parses light colorMode and strength fields", () => {
+    const mapDef = loadTableMapDefFromJson({
+      id: "LIGHTS_MODE_STRENGTH_TEST",
+      width: 2,
+      height: 2,
+      cells: [{ x: 0, y: 0, type: "floor", z: 0 }],
+      lights: [{
+        x: 1,
+        y: 1,
+        radiusPx: 120,
+        intensity: 0.65,
+        colorMode: "palette",
+        strength: "high",
+        color: "#ffaa44",
+      }],
+    }, "inline");
+
+    expect(mapDef.lights?.[0]).toMatchObject({
+      colorMode: "palette",
+      strength: "high",
+      color: "#ffaa44",
+    });
+  });
+
   it("parses street lamp semantic light fields", () => {
     const mapDef = loadTableMapDefFromJson({
       id: "LIGHTS_SEMANTIC_TEST",

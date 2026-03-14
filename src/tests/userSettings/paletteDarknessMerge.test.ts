@@ -61,4 +61,16 @@ describe("userSettings palette darkness merge", () => {
 
     expect(getUserSettings().render.paletteId).toBe(firstTestPalette.id);
   });
+
+  it("normalizes light override values to safe defaults", () => {
+    updateUserSettings({
+      render: {
+        lightColorModeOverride: "__bad__",
+        lightStrengthOverride: "__bad__",
+      } as any,
+    });
+
+    expect(getUserSettings().render.lightColorModeOverride).toBe("authored");
+    expect(getUserSettings().render.lightStrengthOverride).toBe("authored");
+  });
 });

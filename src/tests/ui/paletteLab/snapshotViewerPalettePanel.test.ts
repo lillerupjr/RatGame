@@ -105,6 +105,8 @@ const userSettingsState = vi.hoisted(() => ({
       paletteSwapEnabled: false,
       paletteGroup: "live",
       paletteId: "db32",
+      lightColorModeOverride: "authored",
+      lightStrengthOverride: "authored",
     },
     debug: {
       paletteSWeightPercent: 25,
@@ -180,6 +182,8 @@ describe("snapshot viewer palette panel", () => {
         paletteSwapEnabled: false,
         paletteGroup: "live",
         paletteId: "db32",
+        lightColorModeOverride: "authored",
+        lightStrengthOverride: "authored",
       },
       debug: {
         paletteSWeightPercent: 25,
@@ -247,5 +251,23 @@ describe("snapshot viewer palette panel", () => {
 
     expect(userSettingsState.settings.debug.paletteSWeightPercent).toBe(100);
     expect(userSettingsState.settings.debug.paletteDarknessPercent).toBe(75);
+  });
+
+  test("light mode and strength controls persist in settings", () => {
+    const panel = mountSnapshotViewerPalettePanel({ onClose: vi.fn() });
+    panel.sync(true);
+
+    const modeSelect = findByData((globalThis as any).document.body, "snapshotViewerControl", "light-mode");
+    const strengthSelect = findByData((globalThis as any).document.body, "snapshotViewerControl", "light-strength");
+    expect(modeSelect).toBeTruthy();
+    expect(strengthSelect).toBeTruthy();
+
+    (modeSelect as FakeElement).value = "palette";
+    modeSelect?.dispatchEvent(new FakeEvent("change", modeSelect));
+    (strengthSelect as FakeElement).value = "high";
+    strengthSelect?.dispatchEvent(new FakeEvent("change", strengthSelect));
+
+    expect(userSettingsState.settings.render.lightColorModeOverride).toBe("palette");
+    expect(userSettingsState.settings.render.lightStrengthOverride).toBe("high");
   });
 });

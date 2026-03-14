@@ -1,5 +1,10 @@
 // src/game/map/kenneyMapLoader.ts
-import type { SemanticStamp, TableMapDef } from "../formats/table/tableMapTypes";
+import type {
+    SemanticStamp,
+    TableMapDef,
+    TableMapLightColorMode,
+    TableMapLightStrength,
+} from "../formats/table/tableMapTypes";
 import { KENNEY_TILE_ANCHOR_Y, KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import type { TriggerDef } from "../../triggers/triggerTypes";
 import { resolveMapSkin, resolveSemanticSprite, type MapSkinId, MapSkinBundle } from "../../content/mapSkins";
@@ -70,6 +75,8 @@ export type LightFlicker =
     | { kind: "NONE" }
     | { kind: "NOISE"; speed?: number; amount?: number }
     | { kind: "PULSE"; speed?: number; amount?: number };
+export type LightColorMode = TableMapLightColorMode;
+export type LightStrength = TableMapLightStrength;
 export type LightDef = {
     id: string;
     worldX: number;
@@ -82,6 +89,8 @@ export type LightDef = {
     screenOffsetPx?: { x: number; y: number };
     intensity: number;
     radiusPx: number;
+    colorMode: LightColorMode;
+    strength: LightStrength;
     color?: string;
     tintStrength?: number;
     shape?: LightShape;
@@ -738,6 +747,10 @@ export function compileKenneyMapFromTable(
             ...byType[semanticType],
         };
     };
+    const normalizeLightColorMode = (value: unknown): LightColorMode =>
+        value === "off" || value === "palette" ? value : "standard";
+    const normalizeLightStrength = (value: unknown): LightStrength =>
+        value === "low" || value === "high" ? value : "medium";
     const resolveLightSortZ = (supportHeightUnits: number | undefined, heightUnits: number): { zBase: number; zLogical: number } => {
         const support = Number.isFinite(supportHeightUnits) ? (supportHeightUnits as number) : heightUnits;
         const zBase = support;
@@ -775,6 +788,8 @@ export function compileKenneyMapFromTable(
             poolHeightOffsetUnits: light.poolHeightOffsetUnits ?? 0,
             intensity: semanticPreset?.intensity ?? light.intensity,
             radiusPx: semanticPreset?.radiusPx ?? light.radiusPx,
+            colorMode: normalizeLightColorMode(light.colorMode),
+            strength: normalizeLightStrength(light.strength),
             color: light.color ?? semanticPreset?.color,
             tintStrength: light.tintStrength ?? semanticPreset?.tintStrength,
             shape: light.shape ?? semanticPreset?.shape ?? "RADIAL",
@@ -2608,6 +2623,8 @@ export function compileKenneyMapFromTable(
                 heightUnits: preset.groundPool.heightUnits,
                 intensity: preset.groundPool.intensity,
                 radiusPx: preset.groundPool.radiusPx,
+                colorMode: "standard",
+                strength: "medium",
                 color: preset.groundPool.color,
                 tintStrength: preset.groundPool.tintStrength,
                 shape: preset.groundPool.shape,
@@ -2622,6 +2639,8 @@ export function compileKenneyMapFromTable(
                 heightUnits: preset.topGlow.heightUnits,
                 intensity: preset.topGlow.intensity,
                 radiusPx: preset.topGlow.radiusPx,
+                colorMode: "standard",
+                strength: "medium",
                 color: preset.topGlow.color,
                 tintStrength: preset.topGlow.tintStrength,
                 shape: preset.topGlow.shape,
@@ -2783,6 +2802,8 @@ export function compileKenneyMapFromTable(
                     screenOffsetPx: prop.lightScreenOffsetPx ?? { x: 0, y: 0 },
                     intensity: 0.85,
                     radiusPx: 140,
+                    colorMode: "standard",
+                    strength: "medium",
                     color: preset.color,
                     tintStrength: preset.tintStrength,
                     shape: preset.shape,

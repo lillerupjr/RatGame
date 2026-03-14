@@ -94,6 +94,8 @@ export type TableObjectiveDef = {
 
 export type ApronBaseMode = "PLATEAU" | "ISLANDS";
 export type TableMapLightShape = "RADIAL" | "STREET_LAMP";
+export type TableMapLightColorMode = "off" | "standard" | "palette";
+export type TableMapLightStrength = "low" | "medium" | "high";
 export type TableMapLightSemanticType =
     | "street_lamp_n"
     | "street_lamp_e"
@@ -113,6 +115,8 @@ export type TableMapLight = {
     poolHeightOffsetUnits?: number;
     radiusPx: number;
     intensity: number;
+    colorMode?: TableMapLightColorMode;
+    strength?: TableMapLightStrength;
     color?: string;
     tintStrength?: number;
     shape?: TableMapLightShape;

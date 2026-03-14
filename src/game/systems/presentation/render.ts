@@ -101,7 +101,7 @@ import { BAZOOKA_EXHAUST_OFFSET, bazookaExhaustAssets } from "../../vfx/bazookaE
 import { TILE_ID_OCEAN } from "../../world/semanticFields";
 import { getZoneTrialObjectiveState } from "../../objectives/zoneObjectiveSystem";
 import { renderZoneObjectives } from "../../render/renderZoneObjectives";
-import { resolveActivePaletteId } from "../../render/activePalette";
+import { resolveActivePaletteId, resolveActivePaletteSwapWeights } from "../../render/activePalette";
 import { shouldApplyAmbientDarknessOverlay } from "../../render/renderDebugPolicy";
 import { resolveNavArrowTarget } from "../../ui/navArrowTarget";
 import { renderNavArrow } from "../../ui/navArrowRender";
@@ -1613,12 +1613,23 @@ export async function renderSystem(
   }
 
   const beamLightZ = w.pzVisual ?? w.pz ?? tileHAtWorld(w.playerBeamStartX, w.playerBeamStartY);
+  const activePaletteId = resolveActivePaletteId();
+  const activePaletteSwapWeights = resolveActivePaletteSwapWeights();
+  const currentSettings = getUserSettings();
   const worldLightRegistry = buildFrameWorldLightRegistry({
     mapId: compiledMap.id,
     tileWorld: T,
     elevPx: ELEV_PX,
     worldScale: s,
     streetLampOcclusionEnabled: w.lighting.occlusionEnabled,
+    lightOverrides: {
+      colorModeOverride: currentSettings.render.lightColorModeOverride,
+      strengthOverride: currentSettings.render.lightStrengthOverride,
+    },
+    lightPalette: {
+      paletteId: activePaletteId,
+      saturationWeight: activePaletteSwapWeights.sWeight,
+    },
     staticLights: compiledMap.lightDefs,
     runtimeBeam: {
       active: !!w.playerBeamActive,

@@ -1280,9 +1280,23 @@ html.ios-standalone-fix #ui {
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);
   box-shadow: var(--shadow-medium);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
 }
-#paletteLabMenu .title { font-size: 26px; font-weight: 900; margin-bottom: 6px; text-align: center; }
-#paletteLabMenu .subline { opacity: 0.85; margin-bottom: 16px; font-size: 14px; text-align: center; }
+#paletteLabMenu .title {
+  font-size: 26px;
+  font-weight: 900;
+  margin-bottom: 6px;
+  text-align: center;
+  color: var(--text-primary);
+}
+#paletteLabMenu .subline {
+  opacity: 0.85;
+  margin-bottom: 16px;
+  font-size: 14px;
+  text-align: center;
+  color: var(--text-muted);
+}
 #paletteLabSnapshotGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -1466,11 +1480,18 @@ html.ios-standalone-fix #ui {
   font-size: 12px;
   padding: 0 10px;
   transition: background var(--transition-standard), border-color var(--transition-standard);
+  color-scheme: dark;
 }
 
 .snapshotViewerPalettePanelSelect:hover {
   background: var(--hover-bg);
   border-color: var(--border-strong);
+}
+
+.snapshotViewerPalettePanelSelect option,
+.snapshotViewerPalettePanelSelect optgroup {
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 .snapshotViewerPalettePanelSelect:focus-visible,

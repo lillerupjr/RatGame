@@ -7,7 +7,12 @@ import {
   normalizePaletteRemapWeightPercent,
   PALETTE_REMAP_WEIGHT_OPTIONS,
 } from "../../debugSettings";
-import { getUserSettings, updateUserSettings } from "../../userSettings";
+import {
+  getUserSettings,
+  updateUserSettings,
+  type LightColorModeOverride,
+  type LightStrengthOverride,
+} from "../../userSettings";
 
 export type SnapshotViewerPalettePanelController = {
   sync(active: boolean): void;
@@ -82,6 +87,8 @@ export function mountSnapshotViewerPalettePanel(
   const paletteIdSelect = createSelectRow("Palette", "palette-id");
   const saturationSelect = createSelectRow("Saturation Weight", "saturation-weight");
   const darknessSelect = createSelectRow("Darkness", "darkness");
+  const lightModeSelect = createSelectRow("Light Mode", "light-mode");
+  const lightStrengthSelect = createSelectRow("Light Strength", "light-strength");
   for (let i = 0; i < PALETTE_REMAP_WEIGHT_OPTIONS.length; i += 1) {
     const optionValue = PALETTE_REMAP_WEIGHT_OPTIONS[i];
     const option = document.createElement("option");
@@ -89,6 +96,32 @@ export function mountSnapshotViewerPalettePanel(
     option.textContent = `${optionValue}%`;
     saturationSelect.appendChild(option.cloneNode(true));
     darknessSelect.appendChild(option);
+  }
+  const lightModeOptions: Array<{ value: LightColorModeOverride; label: string }> = [
+    { value: "authored", label: "Authored" },
+    { value: "off", label: "Off" },
+    { value: "standard", label: "Standard" },
+    { value: "palette", label: "Palette" },
+  ];
+  for (let i = 0; i < lightModeOptions.length; i += 1) {
+    const optionDef = lightModeOptions[i];
+    const option = document.createElement("option");
+    option.value = optionDef.value;
+    option.textContent = optionDef.label;
+    lightModeSelect.appendChild(option);
+  }
+  const lightStrengthOptions: Array<{ value: LightStrengthOverride; label: string }> = [
+    { value: "authored", label: "Authored" },
+    { value: "low", label: "Low" },
+    { value: "medium", label: "Medium" },
+    { value: "high", label: "High" },
+  ];
+  for (let i = 0; i < lightStrengthOptions.length; i += 1) {
+    const optionDef = lightStrengthOptions[i];
+    const option = document.createElement("option");
+    option.value = optionDef.value;
+    option.textContent = optionDef.label;
+    lightStrengthSelect.appendChild(option);
   }
 
   const rebuildPaletteOptions = (groupRaw: string, selectedIdRaw: string): string => {
@@ -118,6 +151,8 @@ export function mountSnapshotViewerPalettePanel(
       settings.render.paletteSwapEnabled ? "1" : "0",
       settings.render.paletteGroup,
       settings.render.paletteId,
+      settings.render.lightColorModeOverride,
+      settings.render.lightStrengthOverride,
       settings.debug.paletteSWeightPercent,
       settings.debug.paletteDarknessPercent,
     ].join("|");
@@ -130,6 +165,8 @@ export function mountSnapshotViewerPalettePanel(
     const nextPaletteId = rebuildPaletteOptions(group, settings.render.paletteId);
     saturationSelect.value = `${normalizePaletteRemapWeightPercent(settings.debug.paletteSWeightPercent)}`;
     darknessSelect.value = `${normalizePaletteRemapWeightPercent(settings.debug.paletteDarknessPercent)}`;
+    lightModeSelect.value = settings.render.lightColorModeOverride;
+    lightStrengthSelect.value = settings.render.lightStrengthOverride;
     if (nextPaletteId !== settings.render.paletteId || group !== settings.render.paletteGroup) {
       updateUserSettings({
         render: {
@@ -186,6 +223,24 @@ export function mountSnapshotViewerPalettePanel(
     const numeric = Number.parseInt(darknessSelect.value, 10);
     updateUserSettings({
       debug: { paletteDarknessPercent: normalizePaletteRemapWeightPercent(numeric) },
+    });
+    lastSettingsKey = "";
+  });
+
+  lightModeSelect.addEventListener("change", () => {
+    updateUserSettings({
+      render: {
+        lightColorModeOverride: lightModeSelect.value as LightColorModeOverride,
+      },
+    });
+    lastSettingsKey = "";
+  });
+
+  lightStrengthSelect.addEventListener("change", () => {
+    updateUserSettings({
+      render: {
+        lightStrengthOverride: lightStrengthSelect.value as LightStrengthOverride,
+      },
     });
     lastSettingsKey = "";
   });

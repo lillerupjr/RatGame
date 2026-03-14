@@ -13,6 +13,8 @@ import {
 
 export type VerticalTilesMode = "auto" | "manual";
 export type VerticalTilesViewportClass = "phone" | "desktop";
+export type LightColorModeOverride = "authored" | "off" | "standard" | "palette";
+export type LightStrengthOverride = "authored" | "low" | "medium" | "high";
 
 export const DEFAULT_VISIBLE_VERTICAL_TILES_PHONE = 6;
 export const DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP = 9;
@@ -44,6 +46,8 @@ export type RenderSettings = {
   paletteHudDebugOverlayEnabled?: boolean;
   // Dev-only toggle to bypass final ambient darkness/tint screen overlay.
   darknessMaskDebugDisabled?: boolean;
+  lightColorModeOverride: LightColorModeOverride;
+  lightStrengthOverride: LightStrengthOverride;
   paletteGroup: PaletteGroup;
   paletteId: string;
   spawnBase: number;
@@ -105,6 +109,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
     paletteSwapEnabled: false,
     paletteHudDebugOverlayEnabled: false,
     darknessMaskDebugDisabled: false,
+    lightColorModeOverride: "authored",
+    lightStrengthOverride: "authored",
     paletteGroup: "live",
     paletteId: "db32",
     ...DEFAULT_SPAWN_TUNING,
@@ -134,6 +140,16 @@ export function clampVisibleVerticalTiles(value: number): number {
 
 function normalizeVerticalTilesMode(value: unknown): VerticalTilesMode {
   return value === "manual" ? "manual" : "auto";
+}
+
+function normalizeLightColorModeOverride(value: unknown): LightColorModeOverride {
+  if (value === "off" || value === "standard" || value === "palette") return value;
+  return "authored";
+}
+
+function normalizeLightStrengthOverride(value: unknown): LightStrengthOverride {
+  if (value === "low" || value === "medium" || value === "high") return value;
+  return "authored";
 }
 
 function resolvePaletteIdForGroup(group: PaletteGroup, paletteId: unknown): string {
@@ -237,6 +253,12 @@ function mergeSettings(
   if (renderPatch.verticalTilesAutoDesktop !== undefined) {
     renderPatch.verticalTilesAutoDesktop = clampVisibleVerticalTiles(Number(renderPatch.verticalTilesAutoDesktop));
   }
+  if (renderPatch.lightColorModeOverride !== undefined) {
+    renderPatch.lightColorModeOverride = normalizeLightColorModeOverride(renderPatch.lightColorModeOverride);
+  }
+  if (renderPatch.lightStrengthOverride !== undefined) {
+    renderPatch.lightStrengthOverride = normalizeLightStrengthOverride(renderPatch.lightStrengthOverride);
+  }
   if (gamePatch.gameSpeed !== undefined) {
     gamePatch.gameSpeed = clampGameSpeed(Number(gamePatch.gameSpeed));
   }
@@ -270,11 +292,15 @@ function mergeSettings(
 
   const normalizedPaletteGroup = normalizePaletteGroup(merged.render.paletteGroup);
   const normalizedPaletteId = resolvePaletteIdForGroup(normalizedPaletteGroup, merged.render.paletteId);
+  const normalizedLightColorModeOverride = normalizeLightColorModeOverride(merged.render.lightColorModeOverride);
+  const normalizedLightStrengthOverride = normalizeLightStrengthOverride(merged.render.lightStrengthOverride);
 
   return {
     ...merged,
     render: {
       ...merged.render,
+      lightColorModeOverride: normalizedLightColorModeOverride,
+      lightStrengthOverride: normalizedLightStrengthOverride,
       paletteGroup: normalizedPaletteGroup,
       paletteId: normalizedPaletteId,
     },
