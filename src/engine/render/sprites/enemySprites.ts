@@ -1,5 +1,10 @@
 import { ENEMY_TYPE, type EnemyType } from "../../../game/content/enemies";
-import { resolveActivePaletteVariantKey } from "../../../game/render/activePalette";
+import {
+    buildPaletteVariantKey,
+    resolveActivePaletteId,
+    resolveActivePaletteSwapWeightPercents,
+    resolveActivePaletteVariantKey,
+} from "../../../game/render/activePalette";
 import { dir8FromVector } from "./dir8";
 import {
     createPaletteSwapState,
@@ -8,7 +13,9 @@ import {
 } from "./paletteSwapState";
 import {
     getSpriteFrame,
+    isSpritePreloadError,
     preloadSpritePack,
+    type SpriteDarknessPercent,
     type SpriteLoaderSource,
     type SpritePack,
 } from "./spriteLoader";
@@ -130,6 +137,21 @@ export function getEnemySpriteFrameMeta(type: EnemyType): EnemySpriteFrameMeta |
 const paletteState = createPaletteSwapState(resolveActivePaletteVariantKey());
 const packsByPalette = new Map<string, Map<string, SpritePack>>();
 const preloadByPaletteSkin = new Map<string, Promise<void>>();
+type PreloadStatus = "READY" | "PENDING" | "UNSUPPORTED" | "FAILED";
+const preloadStatusByPaletteSkin = new Map<string, PreloadStatus>();
+const preloadWarnedByPaletteSkin = new Set<string>();
+
+function resolvePaletteVariantKeyForDarknessPercent(
+    darknessPercent?: SpriteDarknessPercent,
+): string {
+    if (darknessPercent == null) return resolveActivePaletteVariantKey();
+    const paletteId = resolveActivePaletteId();
+    const active = resolveActivePaletteSwapWeightPercents();
+    return buildPaletteVariantKey(paletteId, {
+        sWeightPercent: active.sWeightPercent,
+        darknessPercent,
+    });
+}
 
 function getPaletteMap(paletteId: string): Map<string, SpritePack> {
     const existing = packsByPalette.get(paletteId);
@@ -160,7 +182,7 @@ export function enemySpritesReady(): boolean {
 }
 
 export function preloadEnemySprites() {
-    const paletteVariantKey = resolveActivePaletteVariantKey();
+    const paletteVariantKey = resolvePaletteVariantKeyForDarknessPercent();
     notePaletteRequested(paletteState, paletteVariantKey);
     const map = getPaletteMap(paletteVariantKey);
     const skins = getRequiredSkins();
@@ -168,7 +190,10 @@ export function preloadEnemySprites() {
     for (const skin of skins) {
         if (map.has(skin)) continue;
         const key = `${paletteVariantKey}:${skin}`;
+        const existingStatus = preloadStatusByPaletteSkin.get(key);
+        if (existingStatus === "PENDING" || existingStatus === "READY" || existingStatus === "FAILED") continue;
         if (preloadByPaletteSkin.has(key)) continue;
+        preloadStatusByPaletteSkin.set(key, "PENDING");
         const def = Object.values(ENEMY_SPRITES).find((entry) => entry?.skin === skin);
         const job = preloadSpritePack(skin, {
             source: def?.source,
@@ -177,10 +202,59 @@ export function preloadEnemySprites() {
         })
             .then((pack) => {
                 map.set(skin, pack);
+                preloadStatusByPaletteSkin.set(key, "READY");
                 markPaletteReadyIfComplete(paletteVariantKey);
             })
             .catch((err) => {
-                console.warn(`[enemySprites] Failed to preload ${skin}`, err);
+                preloadStatusByPaletteSkin.set(key, "FAILED");
+                if (!preloadWarnedByPaletteSkin.has(key)) {
+                    preloadWarnedByPaletteSkin.add(key);
+                    console.warn(`[enemySprites] Failed to preload ${skin}`, err);
+                }
+            })
+            .finally(() => {
+                preloadByPaletteSkin.delete(key);
+            });
+        preloadByPaletteSkin.set(key, job);
+    }
+}
+
+function preloadEnemySpritesForDarknessPercent(darknessPercent: SpriteDarknessPercent) {
+    const paletteVariantKey = resolvePaletteVariantKeyForDarknessPercent(darknessPercent);
+    notePaletteRequested(paletteState, paletteVariantKey);
+    const map = getPaletteMap(paletteVariantKey);
+    const skins = getRequiredSkins();
+
+    for (const skin of skins) {
+        if (map.has(skin)) continue;
+        const key = `${paletteVariantKey}:${skin}`;
+        const existingStatus = preloadStatusByPaletteSkin.get(key);
+        if (existingStatus === "PENDING" || existingStatus === "READY" || existingStatus === "UNSUPPORTED" || existingStatus === "FAILED") continue;
+        if (preloadByPaletteSkin.has(key)) continue;
+        preloadStatusByPaletteSkin.set(key, "PENDING");
+        const def = Object.values(ENEMY_SPRITES).find((entry) => entry?.skin === skin);
+        const job = preloadSpritePack(skin, {
+            source: def?.source,
+            animKeys: def?.runAnim ? [def.runAnim] : undefined,
+            frameCount: def?.frameCount,
+            darknessPercent,
+        })
+            .then((pack) => {
+                map.set(skin, pack);
+                preloadStatusByPaletteSkin.set(key, "READY");
+                markPaletteReadyIfComplete(paletteVariantKey);
+            })
+            .catch((err) => {
+                const status: PreloadStatus = isSpritePreloadError(err) && err.kind === "UNSUPPORTED"
+                    ? "UNSUPPORTED"
+                    : "FAILED";
+                preloadStatusByPaletteSkin.set(key, status);
+                if (!preloadWarnedByPaletteSkin.has(key)) {
+                    preloadWarnedByPaletteSkin.add(key);
+                    if (status === "FAILED") {
+                        console.warn(`[enemySprites] Failed to preload ${skin}`, err);
+                    }
+                }
             })
             .finally(() => {
                 preloadByPaletteSkin.delete(key);
@@ -218,6 +292,65 @@ export function getEnemySpriteFrame(args: {
 
     const pack = getPaletteMap(paletteVariantKey).get(def.skin)
         ?? getPaletteMap(paletteState.lastReadyPaletteId).get(def.skin);
+    if (!pack) return null;
+
+    const dir = dir8FromVector(args.faceDx, args.faceDy);
+    const anim = args.moving ? def.runAnim : undefined;
+    const img = getSpriteFrame(pack, {
+        dir,
+        anim,
+        t: args.time,
+        useRotationIfNoAnim: true,
+    });
+
+    return {
+        img,
+        sx: 0,
+        sy: 0,
+        sw: pack.size.w,
+        sh: pack.size.h,
+        path: def.skin,
+        w: pack.size.w,
+        h: pack.size.h,
+        scale: def.scale,
+        anchorX: def.anchorX,
+        anchorY: def.anchorY,
+    };
+}
+
+export function getEnemySpriteFrameForDarknessPercent(args: {
+    type: EnemyType;
+    time: number;
+    faceDx: number;
+    faceDy: number;
+    moving: boolean;
+    darknessPercent: SpriteDarknessPercent;
+}):
+    | {
+    img: HTMLImageElement;
+    sx: number;
+    sy: number;
+    sw: number;
+    sh: number;
+    path: string;
+    w: number;
+    h: number;
+    scale: number;
+    anchorX: number;
+    anchorY: number;
+}
+    | null {
+    const def = ENEMY_SPRITES[args.type];
+    if (!def) return null;
+    const paletteVariantKey = resolvePaletteVariantKeyForDarknessPercent(args.darknessPercent);
+    notePaletteRequested(paletteState, paletteVariantKey);
+    const statusKey = `${paletteVariantKey}:${def.skin}`;
+    const currentStatus = preloadStatusByPaletteSkin.get(statusKey);
+    if (currentStatus !== "UNSUPPORTED" && currentStatus !== "FAILED") {
+        preloadEnemySpritesForDarknessPercent(args.darknessPercent);
+    }
+
+    const pack = getPaletteMap(paletteVariantKey).get(def.skin);
     if (!pack) return null;
 
     const dir = dir8FromVector(args.faceDx, args.faceDy);

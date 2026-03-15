@@ -1,5 +1,10 @@
 import { type Dir8 } from "./dir8";
-import { resolveActivePaletteVariantKey } from "../../../game/render/activePalette";
+import {
+    buildPaletteVariantKey,
+    resolveActivePaletteId,
+    resolveActivePaletteSwapWeightPercents,
+    resolveActivePaletteVariantKey,
+} from "../../../game/render/activePalette";
 import {
     createPaletteSwapState,
     notePaletteReady,
@@ -8,6 +13,7 @@ import {
 import {
     getSpriteFrame,
     preloadSpritePack,
+    type SpriteDarknessPercent,
     type SpriteLoaderSource,
     type SpritePack,
 } from "./spriteLoader";
@@ -42,6 +48,18 @@ const paletteState = createPaletteSwapState(resolveActivePaletteVariantKey());
 const packsByPalette = new Map<string, Map<string, SpritePack>>();
 const preloadByPaletteSkin = new Map<string, Promise<void>>();
 
+function resolvePaletteVariantKeyForDarknessPercent(
+    darknessPercent?: SpriteDarknessPercent,
+): string {
+    if (darknessPercent == null) return resolveActivePaletteVariantKey();
+    const paletteId = resolveActivePaletteId();
+    const active = resolveActivePaletteSwapWeightPercents();
+    return buildPaletteVariantKey(paletteId, {
+        sWeightPercent: active.sWeightPercent,
+        darknessPercent,
+    });
+}
+
 export function getPlayerSkin(): string {
     return playerSkin;
 }
@@ -65,7 +83,7 @@ export function getPlayerIdleSpriteUrl(skin: string): string {
 }
 
 export async function preloadPlayerSprites() {
-    const paletteVariantKey = resolveActivePaletteVariantKey();
+    const paletteVariantKey = resolvePaletteVariantKeyForDarknessPercent();
     notePaletteRequested(paletteState, paletteVariantKey);
     const map = getPaletteMap(paletteVariantKey);
     if (map.has(playerSkin)) {
@@ -84,6 +102,44 @@ export async function preloadPlayerSprites() {
             source: PLAYER_SOURCE,
             animKeys: [PLAYER_WALK_ANIM],
             frameCount: 6,
+        })
+        .then((pack) => {
+            map.set(playerSkin, pack);
+            notePaletteReady(paletteState, paletteVariantKey);
+        })
+        .catch((err) => {
+            console.warn("[playerSprites] Failed to preload player pack", err);
+        })
+        .finally(() => {
+            preloadByPaletteSkin.delete(key);
+        });
+    preloadByPaletteSkin.set(key, job);
+    await job;
+}
+
+async function preloadPlayerSpritesForDarknessPercent(
+    darknessPercent: SpriteDarknessPercent,
+): Promise<void> {
+    const paletteVariantKey = resolvePaletteVariantKeyForDarknessPercent(darknessPercent);
+    notePaletteRequested(paletteState, paletteVariantKey);
+    const map = getPaletteMap(paletteVariantKey);
+    if (map.has(playerSkin)) {
+        notePaletteReady(paletteState, paletteVariantKey);
+        return;
+    }
+
+    const key = `${paletteVariantKey}:${playerSkin}`;
+    const inFlight = preloadByPaletteSkin.get(key);
+    if (inFlight) {
+        await inFlight;
+        return;
+    }
+
+    const job = preloadSpritePack(playerSkin, {
+            source: PLAYER_SOURCE,
+            animKeys: [PLAYER_WALK_ANIM],
+            frameCount: 6,
+            darknessPercent,
         })
         .then((pack) => {
             map.set(playerSkin, pack);
@@ -124,6 +180,44 @@ export function getPlayerSpriteFrame(args: {
     }
     const playerPack = currentPack ?? getPaletteMap(paletteState.lastReadyPaletteId).get(playerSkin);
     if (!playerPack) {
+        return null;
+    }
+
+    try {
+        const img = getSpriteFrame(playerPack, {
+            dir: args.dir,
+            anim: args.moving ? PLAYER_WALK_ANIM : undefined,
+            t: args.time,
+            useRotationIfNoAnim: true,
+        });
+
+        return {
+            img,
+            sx: 0,
+            sy: 0,
+            sw: playerPack.size.w,
+            sh: playerPack.size.h,
+            scale: PLAYER_SKIN_SCALE[playerSkin] ?? PLAYER_SPRITE_SCALE,
+            anchorX: PLAYER_ANCHOR_X,
+            anchorY: PLAYER_ANCHOR_Y,
+        };
+    } catch (err) {
+        console.warn("[playerSprites] Failed to read player frame", err);
+        return null;
+    }
+}
+
+export function getPlayerSpriteFrameForDarknessPercent(args: {
+    dir: Dir8;
+    moving: boolean;
+    time: number;
+    darknessPercent: SpriteDarknessPercent;
+}): SpriteFrame | null {
+    const paletteVariantKey = resolvePaletteVariantKeyForDarknessPercent(args.darknessPercent);
+    notePaletteRequested(paletteState, paletteVariantKey);
+    const playerPack = getPaletteMap(paletteVariantKey).get(playerSkin);
+    if (!playerPack) {
+        void preloadPlayerSpritesForDarknessPercent(args.darknessPercent);
         return null;
     }
 

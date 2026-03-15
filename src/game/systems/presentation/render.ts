@@ -4,11 +4,28 @@ import { registry } from "../../content/registry";
 import { ZONE_KIND } from "../../factories/zoneFactory";
 import { getBossAccent, getFloorVisual } from "../../content/floors";
 import { ENEMY_TYPE } from "../../content/enemies";
-import { getPlayerSkin, getPlayerSpriteFrame, playerSpritesReady } from "../../../engine/render/sprites/playerSprites";
+import {
+  getPlayerSkin,
+  getPlayerSpriteFrame,
+  getPlayerSpriteFrameForDarknessPercent,
+  playerSpritesReady,
+} from "../../../engine/render/sprites/playerSprites";
 import { type Dir8 } from "../../../engine/render/sprites/dir8";
-import { getEnemySpriteFrame, preloadEnemySprites } from "../../../engine/render/sprites/enemySprites";
-import { getVendorNpcSpriteFrame, preloadVendorNpcSprites, vendorNpcSpritesReady } from "../../../engine/render/sprites/vendorSprites";
-import { preloadNeutralMobSprites } from "../../../engine/render/sprites/neutralSprites";
+import {
+  getEnemySpriteFrame,
+  getEnemySpriteFrameForDarknessPercent,
+  preloadEnemySprites,
+} from "../../../engine/render/sprites/enemySprites";
+import {
+  getVendorNpcSpriteFrame,
+  getVendorNpcSpriteFrameForDarknessPercent,
+  preloadVendorNpcSprites,
+  vendorNpcSpritesReady,
+} from "../../../engine/render/sprites/vendorSprites";
+import {
+  getPigeonFramesForClipAndScreenDirForDarknessPercent,
+  preloadNeutralMobSprites,
+} from "../../../engine/render/sprites/neutralSprites";
 import {
   heightAtWorld,
   walkInfo,
@@ -53,6 +70,7 @@ import {
   getTileSpriteById,
   getSpriteById,
   getSpriteByIdForDarknessPercent,
+  type LoadedImg,
 } from "../../../engine/render/sprites/renderSprites";
 import { VFX_CLIPS, VFX_CLIP_INDEX } from "../../content/vfxRegistry";
 import { PRJ_KIND } from "../../factories/projectileFactory";
@@ -107,7 +125,7 @@ import { shouldApplyAmbientDarknessOverlay } from "../../render/renderDebugPolic
 import { resolveNavArrowTarget } from "../../ui/navArrowTarget";
 import { renderNavArrow } from "../../ui/navArrowRender";
 import { coinColorFromValue } from "../../economy/coins";
-import { getCurrencyFrame } from "../../content/loot/currencyVisual";
+import { getCurrencyFrame, getCurrencyFrameForDarknessPercent } from "../../content/loot/currencyVisual";
 import {
   beginRenderPerfFrame,
   countRenderTileLoopIteration,
@@ -137,6 +155,10 @@ import {
   type StaticRelightDarknessBucket,
   type StaticRelightLightCandidate,
 } from "./staticRelightPoc";
+import {
+  computeNearestDynamicRelightAlpha,
+  type DynamicRelightLightCandidate,
+} from "./dynamicSpriteRelightV1";
 import {
   buildStaticRelightBakeContextKey,
   buildStaticRelightPieceKey,
@@ -284,6 +306,590 @@ function composePieceLocalRelightBakedCanvas(
   outputCtx.drawImage(staticRelightPieceScratch!, 0, 0, pieceW, pieceH);
   outputCtx.restore();
   return output;
+}
+
+type StaticRelightFrameContext = {
+  baseDarknessBucket: StaticRelightDarknessBucket;
+  targetDarknessBucket: 0 | 25 | 50 | 75;
+  strengthScale: number;
+  lights: StaticRelightLightCandidate[];
+  maxLights: number;
+  tileInfluenceRadius: number;
+  minBlendAlpha: number;
+};
+
+type StaticRelightRuntimeState = {
+  compiledMap: ReturnType<typeof getActiveCompiledMap>;
+  enabled: boolean;
+  frame: StaticRelightFrameContext | null;
+  relightLights: StaticRelightLightCandidate[];
+  contextKey: string;
+  targetDarknessBucket: 0 | 25 | 50 | 75;
+  baseDarknessBucket: StaticRelightDarknessBucket;
+  strengthScale: number;
+};
+
+const STATIC_RELIGHT_MAX_LIGHTS = 2;
+const STATIC_RELIGHT_TILE_RADIUS = 6;
+const STATIC_RELIGHT_MIN_BLEND_ALPHA = 0.04;
+const STATIC_RELIGHT_INCLUDE_STRUCTURES = false;
+const STATIC_RELIGHT_ELEV_PX = 16;
+const STATIC_RELIGHT_SIDEWALK_SRC_SIZE = 128;
+const STATIC_RELIGHT_SIDEWALK_ISO_HEIGHT = 64;
+
+function floorRelightPieceKey(
+  tx: number,
+  ty: number,
+  zBase: number,
+  renderAnchorY: number,
+  family: "sidewalk" | "asphalt" | "park",
+  variantIndex: number,
+  rotationQuarterTurns: 0 | 1 | 2 | 3,
+): string {
+  return buildStaticRelightPieceKey({
+    kind: "FLOOR_TOP",
+    parts: [tx, ty, zBase, renderAnchorY, family, variantIndex, rotationQuarterTurns],
+  });
+}
+
+function decalRelightPieceKey(
+  tx: number,
+  ty: number,
+  zBase: number,
+  renderAnchorY: number,
+  setId: RuntimeDecalSetId,
+  variantIndex: number,
+  rotationQuarterTurns: 0 | 1 | 2 | 3,
+  decalScale: number,
+): string {
+  return buildStaticRelightPieceKey({
+    kind: "DECAL_TOP",
+    parts: [tx, ty, zBase, renderAnchorY, setId, variantIndex, rotationQuarterTurns, decalScale],
+  });
+}
+
+function structureSliceRelightPieceKey(
+  o: StampOverlay,
+  bandIndex: number,
+  ownerTx: number,
+  ownerTy: number,
+  srcX: number,
+  srcY: number,
+  srcW: number,
+  srcH: number,
+  drawW: number,
+  drawH: number,
+  flipped: boolean,
+): string {
+  return buildStaticRelightPieceKey({
+    kind: "STRUCTURE_SLICE",
+    parts: [
+      o.id,
+      o.spriteId,
+      bandIndex,
+      ownerTx,
+      ownerTy,
+      srcX,
+      srcY,
+      srcW,
+      srcH,
+      drawW,
+      drawH,
+      flipped ? 1 : 0,
+    ],
+  });
+}
+
+function buildRampRoadTiles(compiledMap: ReturnType<typeof getActiveCompiledMap>): Set<string> {
+  const rampRoadTiles = new Set<string>();
+  if (!compiledMap?.roadSemanticRects) return rampRoadTiles;
+  for (let i = 0; i < compiledMap.roadSemanticRects.length; i++) {
+    const rr = compiledMap.roadSemanticRects[i];
+    const semantic = rr.semantic?.trim().toLowerCase() ?? "";
+    if (!(semantic === "ramp" || semantic.startsWith("ramp_"))) continue;
+    const minX = rr.x | 0;
+    const minY = rr.y | 0;
+    const maxX = minX + Math.max(1, rr.w | 0) - 1;
+    const maxY = minY + Math.max(1, rr.h | 0) - 1;
+    for (let ty = minY; ty <= maxY; ty++) {
+      for (let tx = minX; tx <= maxX; tx++) {
+        rampRoadTiles.add(`${tx},${ty}`);
+      }
+    }
+  }
+  return rampRoadTiles;
+}
+
+function resolveStaticRelightRuntimeState(w: World): StaticRelightRuntimeState {
+  const compiledMap = getActiveCompiledMap();
+  const settings = getUserSettings();
+  const renderSettings = settings.render;
+  const activePaletteId = resolveActivePaletteId();
+  const activePaletteSwapWeights = resolveActivePaletteSwapWeights();
+  const staticRelightPocEnabled = renderSettings.staticRelightPocEnabled === true;
+  const baseDarknessBucket = settings.debug.paletteDarknessPercent as StaticRelightDarknessBucket;
+  const strengthScale = Math.max(0, Math.min(1, settings.debug.staticRelightStrengthPercent / 100));
+  const targetDarknessBucket = settings.debug.staticRelightTargetDarknessPercent as 0 | 25 | 50 | 75;
+  const enabled = staticRelightPocEnabled
+    && baseDarknessBucket > 0
+    && strengthScale > 0;
+  const tileHAtWorld = (x: number, y: number) => heightAtWorld(x, y, KENNEY_TILE_WORLD);
+  const mapStaticLightRegistry = buildFrameWorldLightRegistry({
+    mapId: compiledMap.id,
+    tileWorld: KENNEY_TILE_WORLD,
+    elevPx: STATIC_RELIGHT_ELEV_PX,
+    worldScale: 1,
+    streetLampOcclusionEnabled: w.lighting.occlusionEnabled,
+    lightOverrides: {
+      colorModeOverride: settings.render.lightColorModeOverride,
+      strengthOverride: settings.render.lightStrengthOverride,
+    },
+    lightPalette: {
+      paletteId: activePaletteId,
+      saturationWeight: activePaletteSwapWeights.sWeight,
+    },
+    staticLights: compiledMap.lightDefs,
+    runtimeBeam: {
+      active: false,
+      startWorldX: 0,
+      startWorldY: 0,
+      endWorldX: 0,
+      endWorldY: 0,
+      zVisual: 0,
+      widthPx: 0,
+      glowIntensity: 0,
+    },
+    tileHeightAtWorld: tileHAtWorld,
+    isTileInRenderRadius: () => true,
+    projectToScreen: (worldX, worldY, zPx) => {
+      const p = worldToScreen(worldX, worldY);
+      return { x: p.x, y: p.y - zPx };
+    },
+  });
+
+  const relightLights: StaticRelightLightCandidate[] = [];
+  if (enabled) {
+    for (let i = 0; i < mapStaticLightRegistry.lights.length; i++) {
+      const light = mapStaticLightRegistry.lights[i];
+      if (light.source !== "MAP_STATIC") continue;
+      const projected = light.projected;
+      const intensity = Math.max(0, projected.intensity ?? 0);
+      if (intensity <= 0) continue;
+      const radiusPx = projected.shape === "STREET_LAMP"
+        ? Math.max(1, projected.pool?.radiusPx ?? projected.radiusPx)
+        : Math.max(1, projected.radiusPx);
+      const centerY = projected.shape === "STREET_LAMP"
+        ? (Number.isFinite(projected.poolSy) ? (projected.poolSy as number) : projected.sy)
+        : projected.sy;
+      relightLights.push({
+        id: light.id,
+        tileX: light.anchorTx,
+        tileY: light.anchorTy,
+        centerX: projected.sx,
+        centerY,
+        radiusPx,
+        yScale: projected.shape === "STREET_LAMP"
+          ? Math.max(0.1, Math.min(1.5, projected.pool?.yScale ?? 1))
+          : 1,
+        intensity,
+      });
+    }
+  }
+
+  let frame: StaticRelightFrameContext | null = null;
+  if (enabled && relightLights.length > 0 && targetDarknessBucket < baseDarknessBucket) {
+    frame = {
+      baseDarknessBucket: baseDarknessBucket,
+      targetDarknessBucket: targetDarknessBucket,
+      strengthScale: strengthScale,
+      lights: relightLights,
+      maxLights: STATIC_RELIGHT_MAX_LIGHTS,
+      tileInfluenceRadius: STATIC_RELIGHT_TILE_RADIUS,
+      minBlendAlpha: STATIC_RELIGHT_MIN_BLEND_ALPHA,
+    };
+  }
+
+  const contextKey = buildStaticRelightBakeContextKey({
+    mapId: compiledMap.id,
+    relightEnabled: enabled,
+    paletteId: activePaletteId,
+    saturationWeightPercent: Math.round(activePaletteSwapWeights.sWeight * 100),
+    darknessPercent: baseDarknessBucket,
+    baseDarknessBucket: baseDarknessBucket,
+    staticRelightStrengthPercent: settings.debug.staticRelightStrengthPercent,
+    staticRelightTargetDarknessPercent: targetDarknessBucket,
+    lightColorModeOverride: settings.render.lightColorModeOverride,
+    lightStrengthOverride: settings.render.lightStrengthOverride,
+    lights: relightLights,
+  });
+
+  return {
+    compiledMap,
+    enabled,
+    frame,
+    relightLights,
+    contextKey,
+    targetDarknessBucket,
+    baseDarknessBucket,
+    strengthScale,
+  };
+}
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
+function planStaticRelightBlendForPiece(
+  staticRelightFrame: StaticRelightFrameContext,
+  pieceTileX: number,
+  pieceTileY: number,
+  pieceX: number,
+  pieceY: number,
+  pieceW: number,
+  pieceH: number,
+): PieceLocalRelightPlan | null {
+  const planned = planPieceLocalRelight({
+    baseDarknessBucket: staticRelightFrame.baseDarknessBucket,
+    pieceTileX,
+    pieceTileY,
+    pieceScreenRect: {
+      x: pieceX,
+      y: pieceY,
+      width: pieceW,
+      height: pieceH,
+    },
+    lights: staticRelightFrame.lights,
+    maxLights: staticRelightFrame.maxLights,
+    tileInfluenceRadius: staticRelightFrame.tileInfluenceRadius,
+    minBlendAlpha: staticRelightFrame.minBlendAlpha,
+  });
+  if (!planned) return null;
+  const targetDarknessBucket = staticRelightFrame.targetDarknessBucket < staticRelightFrame.baseDarknessBucket
+    ? staticRelightFrame.targetDarknessBucket
+    : planned.targetDarknessBucket;
+  const strengthBlendAlpha = clamp01(staticRelightFrame.strengthScale);
+  if (strengthBlendAlpha < staticRelightFrame.minBlendAlpha) return null;
+  return {
+    ...planned,
+    targetDarknessBucket,
+    blendAlpha: strengthBlendAlpha,
+  };
+}
+
+function hasNearbyStaticRelightTileLight(
+  staticRelightFrame: StaticRelightFrameContext,
+  tileX: number,
+  tileY: number,
+): boolean {
+  const radius = Math.max(0.01, staticRelightFrame.tileInfluenceRadius);
+  for (let i = 0; i < staticRelightFrame.lights.length; i++) {
+    const light = staticRelightFrame.lights[i];
+    const dx = light.tileX - tileX;
+    const dy = light.tileY - tileY;
+    if (Math.hypot(dx, dy) <= radius) return true;
+  }
+  return false;
+}
+
+type StaticRelightBakeAssetState = "READY" | "PENDING" | "FAILED";
+
+type StaticGroundRelightBakeResult = {
+  needsRetry: boolean;
+  requiredKeyCount: number;
+  readyCount: number;
+  pendingCount: number;
+  failedCount: number;
+  pendingKeys: string[];
+};
+
+function classifyStaticRelightBakeAsset(rec: LoadedImg | null | undefined): StaticRelightBakeAssetState {
+  if (!rec) return "FAILED";
+  if (rec.ready && rec.img && rec.img.naturalWidth > 0 && rec.img.naturalHeight > 0) return "READY";
+  if (rec.failed || rec.unsupported) return "FAILED";
+  if (rec.ready) return "FAILED";
+  return "PENDING";
+}
+
+type StaticRelightBakeDependencyTracker = {
+  required: Set<string>;
+  ready: Set<string>;
+  pending: Set<string>;
+  failed: Set<string>;
+  pendingSample: string[];
+};
+
+function createStaticRelightBakeDependencyTracker(): StaticRelightBakeDependencyTracker {
+  return {
+    required: new Set<string>(),
+    ready: new Set<string>(),
+    pending: new Set<string>(),
+    failed: new Set<string>(),
+    pendingSample: [],
+  };
+}
+
+function noteStaticRelightDependencyState(
+  tracker: StaticRelightBakeDependencyTracker,
+  key: string,
+  state: StaticRelightBakeAssetState,
+): void {
+  tracker.required.add(key);
+  if (state === "READY") {
+    tracker.ready.add(key);
+    tracker.pending.delete(key);
+    tracker.failed.delete(key);
+    return;
+  }
+  if (state === "PENDING") {
+    tracker.pending.add(key);
+    tracker.ready.delete(key);
+    if (tracker.pendingSample.length < 20 && !tracker.pendingSample.includes(key)) {
+      tracker.pendingSample.push(key);
+    }
+    return;
+  }
+  tracker.failed.add(key);
+  tracker.ready.delete(key);
+  tracker.pending.delete(key);
+}
+
+function rebuildFullMapStaticGroundRelightBake(
+  compiledMap: ReturnType<typeof getActiveCompiledMap>,
+  rampRoadTiles: Set<string>,
+  staticRelightFrame: StaticRelightFrameContext,
+): StaticGroundRelightBakeResult {
+  let needsRetry = false;
+  const deps = createStaticRelightBakeDependencyTracker();
+  const seenSurfaceIds = new Set<string>();
+  for (const surfaces of compiledMap.surfacesByKey.values()) {
+    for (let i = 0; i < surfaces.length; i++) {
+      const surface = surfaces[i];
+      if (seenSurfaceIds.has(surface.id)) continue;
+      seenSurfaceIds.add(surface.id);
+      const runtimeTop = surface.runtimeTop;
+      if (runtimeTop?.kind !== "SQUARE_128_RUNTIME") continue;
+      const tx = surface.tx;
+      const ty = surface.ty;
+      const anchorY = surface.renderAnchorY ?? KENNEY_TILE_ANCHOR_Y;
+      const pieceKey = floorRelightPieceKey(
+        tx,
+        ty,
+        surface.zBase,
+        anchorY,
+        runtimeTop.family,
+        runtimeTop.variantIndex,
+        runtimeTop.rotationQuarterTurns,
+      );
+      if (staticRelightBakeStore.get(pieceKey)) continue;
+      const isRampRoadTile = runtimeTop.family === "asphalt" && rampRoadTiles.has(`${tx},${ty}`);
+      if (isRampRoadTile) continue;
+      const wx = (tx + 0.5) * KENNEY_TILE_WORLD;
+      const wy = (ty + 0.5) * KENNEY_TILE_WORLD;
+      const p = worldToScreen(wx, wy);
+      const centerX = snapPx(p.x);
+      const centerY = snapPx(
+        p.y - surface.zBase * STATIC_RELIGHT_ELEV_PX - STATIC_RELIGHT_SIDEWALK_ISO_HEIGHT * (anchorY - 0.5),
+      );
+      const drawX = snapPx(centerX - STATIC_RELIGHT_SIDEWALK_SRC_SIZE * 0.5);
+      const drawY = snapPx(centerY - STATIC_RELIGHT_SIDEWALK_ISO_HEIGHT * 0.5);
+      const relightPlan = planStaticRelightBlendForPiece(
+        staticRelightFrame,
+        tx,
+        ty,
+        drawX,
+        drawY,
+        STATIC_RELIGHT_SIDEWALK_SRC_SIZE,
+        STATIC_RELIGHT_SIDEWALK_ISO_HEIGHT,
+      );
+      if (!relightPlan) {
+        staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
+        continue;
+      }
+      const srcId = `tiles/floor/${runtimeTop.family}/${runtimeTop.variantIndex}`;
+      const src = getTileSpriteById(srcId);
+      const srcKey = `floor-base:${srcId}`;
+      const srcState = classifyStaticRelightBakeAsset(src);
+      noteStaticRelightDependencyState(deps, srcKey, srcState);
+      if (srcState !== "READY" || !src.img || src.img.width <= 0 || src.img.height <= 0) {
+        if (srcState === "PENDING") needsRetry = true;
+        else staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
+        continue;
+      }
+      const baseBaked = getRuntimeIsoTopCanvas(src.img, runtimeTop.rotationQuarterTurns);
+      if (!baseBaked) {
+        staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
+        continue;
+      }
+      const lighterRec = getSpriteByIdForDarknessPercent(srcId, relightPlan.targetDarknessBucket);
+      const lighterKey = `floor-lit:${srcId}@@dk:${relightPlan.targetDarknessBucket}`;
+      const lighterState = classifyStaticRelightBakeAsset(lighterRec);
+      noteStaticRelightDependencyState(deps, lighterKey, lighterState);
+      if (lighterState !== "READY" || !lighterRec.img || lighterRec.img.width <= 0 || lighterRec.img.height <= 0) {
+        if (lighterState === "PENDING") needsRetry = true;
+        else staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
+        continue;
+      }
+      const lighterBaked = getRuntimeIsoTopCanvas(lighterRec.img, runtimeTop.rotationQuarterTurns);
+      if (!lighterBaked) {
+        staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
+        continue;
+      }
+      const baked = composePieceLocalRelightBakedCanvas(
+        relightPlan,
+        baseBaked.width,
+        baseBaked.height,
+        (target) => target.drawImage(baseBaked, 0, 0, baseBaked.width, baseBaked.height),
+        (target) => target.drawImage(lighterBaked, 0, 0, baseBaked.width, baseBaked.height),
+      );
+      if (baked) staticRelightBakeStore.set(pieceKey, { kind: "RELIT", baked });
+      else staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
+    }
+  }
+
+  for (let i = 0; i < compiledMap.decals.length; i++) {
+    const decal = compiledMap.decals[i];
+    if (rampRoadTiles.has(`${decal.tx},${decal.ty}`)) continue;
+    if (!hasNearbyStaticRelightTileLight(
+      staticRelightFrame,
+      Math.floor(decal.tx),
+      Math.floor(decal.ty),
+    )) {
+      continue;
+    }
+    const decalScale = roadMarkingDecalScale(decal.setId, decal.variantIndex);
+    const pieceKey = decalRelightPieceKey(
+      decal.tx,
+      decal.ty,
+      decal.zBase,
+      decal.renderAnchorY,
+      decal.setId,
+      decal.variantIndex,
+      decal.rotationQuarterTurns,
+      decalScale,
+    );
+    if (staticRelightBakeStore.get(pieceKey)) continue;
+    const src = getRuntimeDecalSprite(decal.setId, decal.variantIndex);
+    const decalSpriteId = getDecalSpriteId(decal.setId, decal.variantIndex);
+    if (!decalSpriteId) {
+      staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
+      continue;
+    }
+    const srcKey = `decal-base:${decalSpriteId}`;
+    const srcState = classifyStaticRelightBakeAsset(src);
+    noteStaticRelightDependencyState(deps, srcKey, srcState);
+    if (srcState !== "READY" || !src.img || src.img.width <= 0 || src.img.height <= 0) {
+      if (srcState === "PENDING") needsRetry = true;
+      else staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
+      continue;
+    }
+    const baked = getRuntimeIsoDecalCanvas(src.img, decal.rotationQuarterTurns, decalScale);
+    if (!baked) {
+      staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
+      continue;
+    }
+    const renderAnchorY = decal.renderAnchorY;
+    const wx = decal.tx * KENNEY_TILE_WORLD;
+    const wy = decal.ty * KENNEY_TILE_WORLD;
+    const p = worldToScreen(wx, wy);
+    const rawCenterX = p.x;
+    const rawCenterY = p.y - decal.zBase * STATIC_RELIGHT_ELEV_PX - STATIC_RELIGHT_SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5);
+    const shouldSnapRoadMarking = shouldPixelSnapRoadMarking(decal.setId, decal.variantIndex);
+    const centerX = shouldSnapRoadMarking ? Math.round(rawCenterX) : snapPx(rawCenterX);
+    const centerY = shouldSnapRoadMarking ? Math.round(rawCenterY) : snapPx(rawCenterY);
+    const drawX = shouldSnapRoadMarking ? Math.round(centerX - baked.width * 0.5) : snapPx(centerX - baked.width * 0.5);
+    const drawY = shouldSnapRoadMarking ? Math.round(centerY - baked.height * 0.5) : snapPx(centerY - baked.height * 0.5);
+    const relightPlan = planStaticRelightBlendForPiece(
+      staticRelightFrame,
+      Math.floor(decal.tx),
+      Math.floor(decal.ty),
+      drawX,
+      drawY,
+      baked.width,
+      baked.height,
+    );
+    if (!relightPlan) {
+      staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
+      continue;
+    }
+    const lighterRec = getSpriteByIdForDarknessPercent(decalSpriteId, relightPlan.targetDarknessBucket);
+    const lighterKey = `decal-lit:${decalSpriteId}@@dk:${relightPlan.targetDarknessBucket}`;
+    const lighterState = classifyStaticRelightBakeAsset(lighterRec);
+    noteStaticRelightDependencyState(deps, lighterKey, lighterState);
+    if (lighterState !== "READY" || !lighterRec.img || lighterRec.img.width <= 0 || lighterRec.img.height <= 0) {
+      if (lighterState === "PENDING") needsRetry = true;
+      else staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
+      continue;
+    }
+    const lighterBaked = getRuntimeIsoDecalCanvas(lighterRec.img, decal.rotationQuarterTurns, decalScale);
+    if (!lighterBaked) {
+      staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
+      continue;
+    }
+    const bakedCanvas = composePieceLocalRelightBakedCanvas(
+      relightPlan,
+      baked.width,
+      baked.height,
+      (target) => target.drawImage(baked, 0, 0, baked.width, baked.height),
+      (target) => target.drawImage(lighterBaked, 0, 0, baked.width, baked.height),
+    );
+    if (bakedCanvas) staticRelightBakeStore.set(pieceKey, { kind: "RELIT", baked: bakedCanvas });
+    else staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
+  }
+
+  return {
+    needsRetry,
+    requiredKeyCount: deps.required.size,
+    readyCount: deps.ready.size,
+    pendingCount: deps.pending.size,
+    failedCount: deps.failed.size,
+    pendingKeys: deps.pendingSample,
+  };
+}
+
+let lastStaticRelightLoadingFailureKey = "";
+let lastStaticRelightLoadingPendingLogAtMs = 0;
+let lastStaticRelightLoadingPendingSignature = "";
+
+export async function prepareStaticGroundRelightForLoading(w: World): Promise<boolean> {
+  const staticRelight = resolveStaticRelightRuntimeState(w);
+  staticRelightBakeStore.resetIfContextChanged(staticRelight.contextKey);
+  if (!staticRelight.enabled || !staticRelight.frame) return true;
+  const rampRoadTiles = buildRampRoadTiles(staticRelight.compiledMap);
+  const result = rebuildFullMapStaticGroundRelightBake(
+    staticRelight.compiledMap,
+    rampRoadTiles,
+    staticRelight.frame,
+  );
+  if (result.pendingCount > 0) {
+    const signature = `${staticRelight.contextKey}::${result.pendingCount}::${result.failedCount}::${result.pendingKeys.join("|")}`;
+    const now = performance.now();
+    if (
+      signature !== lastStaticRelightLoadingPendingSignature
+      || now - lastStaticRelightLoadingPendingLogAtMs >= 1000
+    ) {
+      lastStaticRelightLoadingPendingSignature = signature;
+      lastStaticRelightLoadingPendingLogAtMs = now;
+      console.debug(
+        `[static-relight:loading] required=${result.requiredKeyCount} ready=${result.readyCount} pending=${result.pendingCount} failed=${result.failedCount}`,
+        result.pendingKeys,
+      );
+    }
+    return false;
+  }
+  lastStaticRelightLoadingPendingSignature = "";
+  if (result.failedCount > 0) {
+    const failureKey = `${staticRelight.contextKey}::${result.failedCount}`;
+    if (failureKey !== lastStaticRelightLoadingFailureKey) {
+      lastStaticRelightLoadingFailureKey = failureKey;
+      console.warn(
+        `[static-relight:loading] proceeding with ${result.failedCount} failed static relight dependencies (fallback to base)`,
+      );
+    }
+  } else {
+    lastStaticRelightLoadingFailureKey = "";
+  }
+  return true;
 }
 
 function smoothTowardByHalfLife(current: number, target: number, halfLifeSec: number, dtRealSec: number): number {
@@ -909,19 +1515,30 @@ export async function renderSystem(
   };
 
   const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-  type StaticRelightFrameContext = {
-    baseDarknessBucket: StaticRelightDarknessBucket;
+  const DYNAMIC_RELIGHT_MIN_ALPHA = 0.04;
+  let staticRelightFrame: StaticRelightFrameContext | null = null;
+  type DynamicSpriteRelightFrameContext = {
     targetDarknessBucket: 0 | 25 | 50 | 75;
     strengthScale: number;
-    lights: StaticRelightLightCandidate[];
-    maxLights: number;
-    tileInfluenceRadius: number;
-    minBlendAlpha: number;
+    minAlpha: number;
+    lights: DynamicRelightLightCandidate[];
   };
-  const STATIC_RELIGHT_MAX_LIGHTS = 2;
-  const STATIC_RELIGHT_TILE_RADIUS = 6;
-  const STATIC_RELIGHT_MIN_BLEND_ALPHA = 0.04;
-  let staticRelightFrame: StaticRelightFrameContext | null = null;
+  let dynamicSpriteRelightFrame: DynamicSpriteRelightFrameContext | null = null;
+  const resolveDynamicSpriteRelightAlpha = (
+    screenX: number,
+    screenY: number,
+  ): number => {
+    if (!dynamicSpriteRelightFrame) return 0;
+    const nearest = computeNearestDynamicRelightAlpha({
+      screenX,
+      screenY,
+      lights: dynamicSpriteRelightFrame.lights,
+      strengthScale: dynamicSpriteRelightFrame.strengthScale,
+      minAlpha: dynamicSpriteRelightFrame.minAlpha,
+    });
+    if (!nearest) return 0;
+    return nearest.alpha;
+  };
   const planStaticRelightForPiece = (
     pieceTileX: number,
     pieceTileY: number,
@@ -931,87 +1548,16 @@ export async function renderSystem(
     pieceH: number,
   ): PieceLocalRelightPlan | null => {
     if (!staticRelightFrame) return null;
-    const planned = planPieceLocalRelight({
-      baseDarknessBucket: staticRelightFrame.baseDarknessBucket,
+    return planStaticRelightBlendForPiece(
+      staticRelightFrame,
       pieceTileX,
       pieceTileY,
-      pieceScreenRect: {
-        x: pieceX,
-        y: pieceY,
-        width: pieceW,
-        height: pieceH,
-      },
-      lights: staticRelightFrame.lights,
-      maxLights: staticRelightFrame.maxLights,
-      tileInfluenceRadius: staticRelightFrame.tileInfluenceRadius,
-      minBlendAlpha: staticRelightFrame.minBlendAlpha,
-    });
-    if (!planned) return null;
-    const targetDarknessBucket = staticRelightFrame.targetDarknessBucket < staticRelightFrame.baseDarknessBucket
-      ? staticRelightFrame.targetDarknessBucket
-      : planned.targetDarknessBucket;
-    const strengthBlendAlpha = clamp(staticRelightFrame.strengthScale, 0, 1);
-    if (strengthBlendAlpha < staticRelightFrame.minBlendAlpha) return null;
-    return {
-      ...planned,
-      targetDarknessBucket,
-      blendAlpha: strengthBlendAlpha,
-    };
+      pieceX,
+      pieceY,
+      pieceW,
+      pieceH,
+    );
   };
-  const floorRelightPieceKey = (
-    tx: number,
-    ty: number,
-    zBase: number,
-    renderAnchorY: number,
-    family: "sidewalk" | "asphalt" | "park",
-    variantIndex: number,
-    rotationQuarterTurns: 0 | 1 | 2 | 3,
-  ): string => buildStaticRelightPieceKey({
-    kind: "FLOOR_TOP",
-    parts: [tx, ty, zBase, renderAnchorY, family, variantIndex, rotationQuarterTurns],
-  });
-  const decalRelightPieceKey = (
-    tx: number,
-    ty: number,
-    zBase: number,
-    renderAnchorY: number,
-    setId: RuntimeDecalSetId,
-    variantIndex: number,
-    rotationQuarterTurns: 0 | 1 | 2 | 3,
-    decalScale: number,
-  ): string => buildStaticRelightPieceKey({
-    kind: "DECAL_TOP",
-    parts: [tx, ty, zBase, renderAnchorY, setId, variantIndex, rotationQuarterTurns, decalScale],
-  });
-  const structureSliceRelightPieceKey = (
-    o: StampOverlay,
-    bandIndex: number,
-    ownerTx: number,
-    ownerTy: number,
-    srcX: number,
-    srcY: number,
-    srcW: number,
-    srcH: number,
-    drawW: number,
-    drawH: number,
-    flipped: boolean,
-  ): string => buildStaticRelightPieceKey({
-    kind: "STRUCTURE_SLICE",
-    parts: [
-      o.id,
-      o.spriteId,
-      bandIndex,
-      ownerTx,
-      ownerTy,
-      srcX,
-      srcY,
-      srcW,
-      srcH,
-      drawW,
-      drawH,
-      flipped ? 1 : 0,
-    ],
-  });
 
   // Existing optional cull (kept, but unrelated to masking)
   const ENABLE_BUILDING_SOUTH_CULL = false;
@@ -1714,23 +2260,7 @@ export async function renderSystem(
     ) + 2;
   const activeH = w.activeFloorH ?? 0;
   const compiledMap = getActiveCompiledMap();
-  const rampRoadTiles = new Set<string>();
-  if (compiledMap?.roadSemanticRects) {
-    for (let i = 0; i < compiledMap.roadSemanticRects.length; i++) {
-      const rr = compiledMap.roadSemanticRects[i];
-      const semantic = rr.semantic?.trim().toLowerCase() ?? "";
-      if (!(semantic === "ramp" || semantic.startsWith("ramp_"))) continue;
-      const minX = rr.x | 0;
-      const minY = rr.y | 0;
-      const maxX = minX + Math.max(1, rr.w | 0) - 1;
-      const maxY = minY + Math.max(1, rr.h | 0) - 1;
-      for (let ty = minY; ty <= maxY; ty++) {
-        for (let tx = minX; tx <= maxX; tx++) {
-          rampRoadTiles.add(`${tx},${ty}`);
-        }
-      }
-    }
-  }
+  const rampRoadTiles = buildRampRoadTiles(compiledMap);
 
   const beamLightZ = w.pzVisual ?? w.pz ?? tileHAtWorld(w.playerBeamStartX, w.playerBeamStartY);
   const activePaletteId = resolveActivePaletteId();
@@ -1765,317 +2295,32 @@ export async function renderSystem(
     isTileInRenderRadius,
     projectToScreen: (worldX, worldY, zPx) => viewport.project(worldX, worldY, zPx),
   });
-  const mapStaticLightRegistry = buildFrameWorldLightRegistry({
-    mapId: compiledMap.id,
-    tileWorld: T,
-    elevPx: ELEV_PX,
-    worldScale: 1,
-    streetLampOcclusionEnabled: w.lighting.occlusionEnabled,
-    lightOverrides: {
-      colorModeOverride: currentSettings.render.lightColorModeOverride,
-      strengthOverride: currentSettings.render.lightStrengthOverride,
-    },
-    lightPalette: {
-      paletteId: activePaletteId,
-      saturationWeight: activePaletteSwapWeights.sWeight,
-    },
-    staticLights: compiledMap.lightDefs,
-    runtimeBeam: {
-      active: false,
-      startWorldX: 0,
-      startWorldY: 0,
-      endWorldX: 0,
-      endWorldY: 0,
-      zVisual: 0,
-      widthPx: 0,
-      glowIntensity: 0,
-    },
-    tileHeightAtWorld: tileHAtWorld,
-    isTileInRenderRadius: () => true,
-    projectToScreen: (worldX, worldY, zPx) => {
-      const p = worldToScreen(worldX, worldY);
-      return { x: p.x, y: p.y - zPx };
-    },
-  });
-  const staticRelightPocEnabled = renderSettings.staticRelightPocEnabled === true;
-  const baseRelightDarknessBucket = settings.debug.paletteDarknessPercent as StaticRelightDarknessBucket;
-  const staticRelightStrengthScale = Math.max(0, Math.min(1, settings.debug.staticRelightStrengthPercent / 100));
-  const staticRelightTargetDarkness = settings.debug.staticRelightTargetDarknessPercent as 0 | 25 | 50 | 75;
-  const staticRelightEnabled = staticRelightPocEnabled
-    && baseRelightDarknessBucket > 0
-    && staticRelightStrengthScale > 0;
-  const relightLights: StaticRelightLightCandidate[] = [];
-  if (staticRelightEnabled) {
-    for (let i = 0; i < mapStaticLightRegistry.lights.length; i++) {
-      const light = mapStaticLightRegistry.lights[i];
-      if (light.source !== "MAP_STATIC") continue;
-      const projected = light.projected;
-      const intensity = Math.max(0, projected.intensity ?? 0);
-      if (intensity <= 0) continue;
-      const radiusPx = projected.shape === "STREET_LAMP"
-        ? Math.max(1, projected.pool?.radiusPx ?? projected.radiusPx)
-        : Math.max(1, projected.radiusPx);
-      const centerY = projected.shape === "STREET_LAMP"
-        ? (Number.isFinite(projected.poolSy) ? (projected.poolSy as number) : projected.sy)
-        : projected.sy;
-      relightLights.push({
-        id: light.id,
-        tileX: light.anchorTx,
-        tileY: light.anchorTy,
-        centerX: projected.sx,
-        centerY,
-        radiusPx,
-        yScale: projected.shape === "STREET_LAMP"
-          ? Math.max(0.1, Math.min(1.5, projected.pool?.yScale ?? 1))
-          : 1,
-        intensity,
-      });
-    }
-  }
-  const staticRelightContextKey = buildStaticRelightBakeContextKey({
-    mapId: compiledMap.id,
-    relightEnabled: staticRelightEnabled,
-    paletteId: activePaletteId,
-    saturationWeightPercent: Math.round(activePaletteSwapWeights.sWeight * 100),
-    darknessPercent: baseRelightDarknessBucket,
-    baseDarknessBucket: baseRelightDarknessBucket,
-    staticRelightStrengthPercent: settings.debug.staticRelightStrengthPercent,
-    staticRelightTargetDarknessPercent: staticRelightTargetDarkness,
-    lightColorModeOverride: currentSettings.render.lightColorModeOverride,
-    lightStrengthOverride: currentSettings.render.lightStrengthOverride,
-    lights: relightLights,
-  });
-  const staticRelightContextChanged = staticRelightBakeStore.resetIfContextChanged(staticRelightContextKey);
-  if (staticRelightEnabled && relightLights.length > 0) {
-    staticRelightFrame = {
-      baseDarknessBucket: baseRelightDarknessBucket,
-      targetDarknessBucket: staticRelightTargetDarkness,
-      strengthScale: staticRelightStrengthScale,
-      lights: relightLights,
-      maxLights: STATIC_RELIGHT_MAX_LIGHTS,
-      tileInfluenceRadius: STATIC_RELIGHT_TILE_RADIUS,
-      minBlendAlpha: STATIC_RELIGHT_MIN_BLEND_ALPHA,
+  const staticRelight = resolveStaticRelightRuntimeState(w);
+  dynamicSpriteRelightFrame = null;
+  if (staticRelight.frame && staticRelight.relightLights.length > 0) {
+    const dynamicLights: DynamicRelightLightCandidate[] = staticRelight.relightLights.map((light) => ({
+      id: light.id,
+      centerX: light.centerX,
+      centerY: light.centerY,
+      radiusPx: light.radiusPx,
+      yScale: light.yScale,
+      intensity: light.intensity,
+    }));
+    dynamicSpriteRelightFrame = {
+      targetDarknessBucket: staticRelight.targetDarknessBucket,
+      strengthScale: staticRelight.strengthScale,
+      minAlpha: DYNAMIC_RELIGHT_MIN_ALPHA,
+      lights: dynamicLights,
     };
   }
-  const rebuildFullMapStaticRelightBake = () => {
-    if (!staticRelightFrame) return;
-    const seenSurfaceIds = new Set<string>();
-    for (const surfaces of compiledMap.surfacesByKey.values()) {
-      for (let i = 0; i < surfaces.length; i++) {
-        const surface = surfaces[i];
-        if (seenSurfaceIds.has(surface.id)) continue;
-        seenSurfaceIds.add(surface.id);
-        const runtimeTop = surface.runtimeTop;
-        if (runtimeTop?.kind !== "SQUARE_128_RUNTIME") continue;
-        const tx = surface.tx;
-        const ty = surface.ty;
-        const isRampRoadTile = runtimeTop.family === "asphalt" && rampRoadTiles.has(`${tx},${ty}`);
-        if (isRampRoadTile) continue;
-        const srcId = `tiles/floor/${runtimeTop.family}/${runtimeTop.variantIndex}`;
-        const src = getTileSpriteById(srcId);
-        if (!src.ready || !src.img || src.img.width <= 0 || src.img.height <= 0) continue;
-        const baseBaked = getRuntimeIsoTopCanvas(src.img, runtimeTop.rotationQuarterTurns);
-        if (!baseBaked) continue;
-        const anchorY = surface.renderAnchorY ?? ANCHOR_Y;
-        const wx = (tx + 0.5) * T;
-        const wy = (ty + 0.5) * T;
-        const p = worldToScreen(wx, wy);
-        const centerX = snapPx(p.x + camX);
-        const centerY = snapPx(
-          p.y + camY - surface.zBase * ELEV_PX - SIDEWALK_ISO_HEIGHT * (anchorY - 0.5),
-        );
-        const drawX = snapPx(centerX - SIDEWALK_SRC_SIZE * 0.5);
-        const drawY = snapPx(centerY - SIDEWALK_ISO_HEIGHT * 0.5);
-        const pieceKey = floorRelightPieceKey(
-          tx,
-          ty,
-          surface.zBase,
-          anchorY,
-          runtimeTop.family,
-          runtimeTop.variantIndex,
-          runtimeTop.rotationQuarterTurns,
-        );
-        const relightPlan = planStaticRelightForPiece(tx, ty, drawX, drawY, baseBaked.width, baseBaked.height);
-        if (!relightPlan) {
-          staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
-          continue;
-        }
-        const lighterRec = getSpriteByIdForDarknessPercent(srcId, relightPlan.targetDarknessBucket);
-        if (!lighterRec.ready || !lighterRec.img || lighterRec.img.width <= 0 || lighterRec.img.height <= 0) continue;
-        const lighterBaked = getRuntimeIsoTopCanvas(lighterRec.img, runtimeTop.rotationQuarterTurns);
-        if (!lighterBaked) continue;
-        const baked = composePieceLocalRelightBakedCanvas(
-          relightPlan,
-          baseBaked.width,
-          baseBaked.height,
-          (target) => target.drawImage(baseBaked, 0, 0, baseBaked.width, baseBaked.height),
-          (target) => target.drawImage(lighterBaked, 0, 0, baseBaked.width, baseBaked.height),
-        );
-        if (baked) staticRelightBakeStore.set(pieceKey, { kind: "RELIT", baked });
-        else staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
-      }
-    }
-
-    for (let i = 0; i < compiledMap.decals.length; i++) {
-      const decal = compiledMap.decals[i];
-      if (rampRoadTiles.has(`${decal.tx},${decal.ty}`)) continue;
-      const src = getRuntimeDecalSprite(decal.setId, decal.variantIndex);
-      if (!src.ready || !src.img || src.img.width <= 0 || src.img.height <= 0) continue;
-      const decalScale = roadMarkingDecalScale(decal.setId, decal.variantIndex);
-      const baked = getRuntimeIsoDecalCanvas(src.img, decal.rotationQuarterTurns, decalScale);
-      if (!baked) continue;
-      const renderAnchorY = decal.renderAnchorY;
-      const wx = decal.tx * T;
-      const wy = decal.ty * T;
-      const p = worldToScreen(wx, wy);
-      const rawCenterX = p.x + camX;
-      const rawCenterY = p.y + camY - decal.zBase * ELEV_PX - SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5);
-      const shouldSnapRoadMarking = shouldPixelSnapRoadMarking(decal.setId, decal.variantIndex);
-      const centerX = shouldSnapRoadMarking ? Math.round(rawCenterX) : snapPx(rawCenterX);
-      const centerY = shouldSnapRoadMarking ? Math.round(rawCenterY) : snapPx(rawCenterY);
-      const drawX = shouldSnapRoadMarking ? Math.round(centerX - baked.width * 0.5) : snapPx(centerX - baked.width * 0.5);
-      const drawY = shouldSnapRoadMarking ? Math.round(centerY - baked.height * 0.5) : snapPx(centerY - baked.height * 0.5);
-      const pieceKey = decalRelightPieceKey(
-        decal.tx,
-        decal.ty,
-        decal.zBase,
-        renderAnchorY,
-        decal.setId,
-        decal.variantIndex,
-        decal.rotationQuarterTurns,
-        decalScale,
-      );
-      const relightPlan = planStaticRelightForPiece(
-        Math.floor(decal.tx),
-        Math.floor(decal.ty),
-        drawX,
-        drawY,
-        baked.width,
-        baked.height,
-      );
-      if (!relightPlan) {
-        staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
-        continue;
-      }
-      const decalSpriteId = getDecalSpriteId(decal.setId, decal.variantIndex);
-      if (!decalSpriteId) {
-        staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
-        continue;
-      }
-      const lighterRec = getSpriteByIdForDarknessPercent(decalSpriteId, relightPlan.targetDarknessBucket);
-      if (!lighterRec.ready || !lighterRec.img || lighterRec.img.width <= 0 || lighterRec.img.height <= 0) continue;
-      const lighterBaked = getRuntimeIsoDecalCanvas(lighterRec.img, decal.rotationQuarterTurns, decalScale);
-      if (!lighterBaked) continue;
-      const bakedCanvas = composePieceLocalRelightBakedCanvas(
-        relightPlan,
-        baked.width,
-        baked.height,
-        (target) => target.drawImage(baked, 0, 0, baked.width, baked.height),
-        (target) => target.drawImage(lighterBaked, 0, 0, baked.width, baked.height),
-      );
-      if (bakedCanvas) staticRelightBakeStore.set(pieceKey, { kind: "RELIT", baked: bakedCanvas });
-      else staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
-    }
-
-    for (let i = 0; i < compiledMap.overlays.length; i++) {
-      const o = compiledMap.overlays[i];
-      const useRuntimeStructureSlicing = o.kind === "PROP" || o.layerRole === "STRUCTURE";
-      if (!useRuntimeStructureSlicing || o.layerRole !== "STRUCTURE") continue;
-      const draw = buildOverlayDraw(o);
-      if (!draw) continue;
-      const img = draw.img;
-      if (!img) continue;
-      const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(img) : img;
-      const bandPieces = buildRuntimeStructureBandPieces({
-        structureInstanceId: o.id,
-        spriteId: o.spriteId,
-        seTx: o.seTx,
-        seTy: o.seTy,
-        footprintW: o.w,
-        footprintH: o.h,
-        flipped: !!o.flipX,
-        sliceOffsetX: o.sliceOffsetPx?.x ?? 0,
-        sliceOffsetY: o.sliceOffsetPx?.y ?? 0,
-        sliceOriginX: o.sliceOriginPx?.x,
-        baseZ: o.z,
-        baseDx: draw.dx,
-        baseDy: draw.dy,
-        spriteWidth: draw.dw,
-        spriteHeight: draw.dh,
-        scale: draw.scale ?? 1,
-      });
-      for (let bi = 0; bi < bandPieces.length; bi++) {
-        const band = bandPieces[bi];
-        const ownerTx = band.renderKey.within;
-        const ownerTy = band.renderKey.slice - band.renderKey.within;
-        const x0 = Math.round(band.dstRect.x);
-        const y0 = Math.round(band.dstRect.y);
-        const x1 = Math.round(band.dstRect.x + band.dstRect.w);
-        const y1 = Math.round(band.dstRect.y + band.dstRect.h);
-        const snappedW = Math.max(0, x1 - x0);
-        const snappedH = Math.max(0, y1 - y0);
-        if (snappedW <= 0 || snappedH <= 0) continue;
-        const pieceKey = structureSliceRelightPieceKey(
-          o,
-          band.index,
-          ownerTx,
-          ownerTy,
-          band.srcRect.x,
-          band.srcRect.y,
-          band.srcRect.w,
-          band.srcRect.h,
-          snappedW,
-          snappedH,
-          !!draw.flipX,
-        );
-        const relightPlan = planStaticRelightForPiece(ownerTx, ownerTy, x0, y0, snappedW, snappedH);
-        if (!relightPlan) {
-          staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
-          continue;
-        }
-        const lighterRec = getSpriteByIdForDarknessPercent(o.spriteId, relightPlan.targetDarknessBucket);
-        if (!lighterRec.ready || !lighterRec.img || lighterRec.img.width <= 0 || lighterRec.img.height <= 0) continue;
-        const lighterSource: CanvasImageSource = draw.flipX
-          ? getFlippedOverlayImage(lighterRec.img)
-          : lighterRec.img;
-        const bakedCanvas = composePieceLocalRelightBakedCanvas(
-          relightPlan,
-          snappedW,
-          snappedH,
-          (target, width, height) => {
-            target.drawImage(
-              sourceImg,
-              band.srcRect.x,
-              band.srcRect.y,
-              band.srcRect.w,
-              band.srcRect.h,
-              0,
-              0,
-              width,
-              height,
-            );
-          },
-          (target, width, height) => {
-            target.drawImage(
-              lighterSource,
-              band.srcRect.x,
-              band.srcRect.y,
-              band.srcRect.w,
-              band.srcRect.h,
-              0,
-              0,
-              width,
-              height,
-            );
-          },
-        );
-        if (bakedCanvas) staticRelightBakeStore.set(pieceKey, { kind: "RELIT", baked: bakedCanvas });
-        else staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
-      }
-    }
-  };
-  if (staticRelightEnabled && staticRelightFrame && staticRelightContextChanged) {
-    rebuildFullMapStaticRelightBake();
+  const staticRelightContextChanged = staticRelightBakeStore.resetIfContextChanged(staticRelight.contextKey);
+  staticRelightFrame = staticRelight.frame;
+  if (staticRelightContextChanged && staticRelight.frame) {
+    void rebuildFullMapStaticGroundRelightBake(
+      staticRelight.compiledMap,
+      rampRoadTiles,
+      staticRelight.frame,
+    );
   }
 
   // ----------------------------
@@ -2810,12 +3055,26 @@ export async function renderSystem(
       const drawClosure = () => {
         if (kind === 1) {
           const value = Math.max(1, Math.floor(w.xValue?.[i] ?? 1));
+          const dynamicRelightAlpha = resolveDynamicSpriteRelightAlpha(p.x, p.y);
           const sprite = getCurrencyFrame(value, w.time ?? 0);
           if (sprite.ready) {
             const S = 16;
             ctx.globalAlpha = 1;
             ctx.imageSmoothingEnabled = false;
             ctx.drawImage(sprite.img, p.x - S / 2, p.y - S / 2, S, S);
+            if (dynamicRelightAlpha > 0 && dynamicSpriteRelightFrame) {
+              const litSprite = getCurrencyFrameForDarknessPercent(
+                value,
+                w.time ?? 0,
+                dynamicSpriteRelightFrame.targetDarknessBucket,
+              );
+              if (litSprite.ready) {
+                ctx.save();
+                ctx.globalAlpha = dynamicRelightAlpha;
+                ctx.drawImage(litSprite.img, p.x - S / 2, p.y - S / 2, S, S);
+                ctx.restore();
+              }
+            }
           } else {
             const fill = coinColorFromValue(value);
             ctx.globalAlpha = 1;
@@ -2922,6 +3181,7 @@ export async function renderSystem(
           faceDy,
           moving,
         });
+        const dynamicRelightAlpha = resolveDynamicSpriteRelightAlpha(feet.screenX, feet.screenY);
 
         if (fr) {
           const dw = fr.sw * fr.scale;
@@ -2938,6 +3198,22 @@ export async function renderSystem(
           const dy = feet.screenY - dh * anchorY;
 
           ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, Math.round(dx), Math.round(dy), dw, dh);
+          if (dynamicRelightAlpha > 0 && dynamicSpriteRelightFrame) {
+            const litFrame = getEnemySpriteFrameForDarknessPercent({
+              type: w.eType[i] as any,
+              time: w.time ?? 0,
+              faceDx,
+              faceDy,
+              moving,
+              darknessPercent: dynamicSpriteRelightFrame.targetDarknessBucket,
+            });
+            if (litFrame) {
+              ctx.save();
+              ctx.globalAlpha = dynamicRelightAlpha;
+              ctx.drawImage(litFrame.img, litFrame.sx, litFrame.sy, litFrame.sw, litFrame.sh, Math.round(dx), Math.round(dy), dw, dh);
+              ctx.restore();
+            }
+          }
           drawEntityAnchorOverlay(feet.screenX, feet.screenY, dx, dy, dw, dh);
         } else {
           ctx.globalAlpha = 1;
@@ -3009,6 +3285,7 @@ export async function renderSystem(
           ? getVendorNpcSpriteFrame({ dir: npc.dirCurrent, time: w.time ?? 0 })
           : null;
         if (!fr) return;
+        const dynamicRelightAlpha = resolveDynamicSpriteRelightAlpha(feet.screenX, feet.screenY);
         const dw = fr.sw * fr.scale;
         const dh = fr.sh * fr.scale;
         const frAny = fr as any;
@@ -3021,6 +3298,19 @@ export async function renderSystem(
         const dx = feet.screenX - dw * anchorX;
         const dy = feet.screenY - dh * anchorY;
         ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, Math.round(dx), Math.round(dy), dw, dh);
+        if (dynamicRelightAlpha > 0 && dynamicSpriteRelightFrame) {
+          const litFrame = getVendorNpcSpriteFrameForDarknessPercent({
+            dir: npc.dirCurrent,
+            time: w.time ?? 0,
+            darknessPercent: dynamicSpriteRelightFrame.targetDarknessBucket,
+          });
+          if (litFrame) {
+            ctx.save();
+            ctx.globalAlpha = dynamicRelightAlpha;
+            ctx.drawImage(litFrame.img, litFrame.sx, litFrame.sy, litFrame.sw, litFrame.sh, Math.round(dx), Math.round(dy), dw, dh);
+            ctx.restore();
+          }
+        }
         drawEntityAnchorOverlay(feet.screenX, feet.screenY, dx, dy, dw, dh);
       };
 
@@ -3054,6 +3344,7 @@ export async function renderSystem(
         if (frameCount <= 0) return;
         const frame = mob.spriteFrames[mob.anim.frameIndex % frameCount];
         if (!frame || frame.width <= 0 || frame.height <= 0) return;
+        const dynamicRelightAlpha = resolveDynamicSpriteRelightAlpha(feet.screenX, feet.screenY);
 
         const dw = frame.width * mob.render.scale;
         const dh = frame.height * mob.render.scale;
@@ -3073,6 +3364,28 @@ export async function renderSystem(
           ctx.restore();
         } else {
           ctx.drawImage(frame, snapPx(dx), snapPx(dy), dw, dh);
+        }
+        if (dynamicRelightAlpha > 0 && dynamicSpriteRelightFrame) {
+          const litFrames = getPigeonFramesForClipAndScreenDirForDarknessPercent(
+            mob.anim.clip,
+            mob.render.screenDir,
+            dynamicSpriteRelightFrame.targetDarknessBucket,
+          );
+          if (litFrames.length > 0) {
+            const litFrame = litFrames[mob.anim.frameIndex % litFrames.length];
+            if (litFrame) {
+              ctx.save();
+              ctx.globalAlpha = dynamicRelightAlpha;
+              if (mob.render.flipX) {
+                ctx.translate(snapPx(dx + dw), snapPx(dy));
+                ctx.scale(-1, 1);
+                ctx.drawImage(litFrame, 0, 0, dw, dh);
+              } else {
+                ctx.drawImage(litFrame, snapPx(dx), snapPx(dy), dw, dh);
+              }
+              ctx.restore();
+            }
+          }
         }
 
         drawEntityAnchorOverlay(feet.screenX, feet.screenY, dx, dy, dw, dh);
@@ -3405,6 +3718,7 @@ export async function renderSystem(
 
       const dir = ((w as any)._plDir ?? "N") as Dir8;
       const moving = (w as any)._plMoving ?? false;
+      const dynamicRelightAlpha = resolveDynamicSpriteRelightAlpha(feet.screenX, feet.screenY);
       const fr = playerSpritesReady()
         ? getPlayerSpriteFrame({ dir, moving, time: w.time ?? 0 })
         : null;
@@ -3424,6 +3738,20 @@ export async function renderSystem(
         const dy = Math.round(feet.screenY - dh * anchorY);
 
         ctx.drawImage(fr.img, fr.sx, fr.sy, fr.sw, fr.sh, dx, dy, dw, dh);
+        if (dynamicRelightAlpha > 0 && dynamicSpriteRelightFrame) {
+          const litFrame = getPlayerSpriteFrameForDarknessPercent({
+            dir,
+            moving,
+            time: w.time ?? 0,
+            darknessPercent: dynamicSpriteRelightFrame.targetDarknessBucket,
+          });
+          if (litFrame) {
+            ctx.save();
+            ctx.globalAlpha = dynamicRelightAlpha;
+            ctx.drawImage(litFrame.img, litFrame.sx, litFrame.sy, litFrame.sw, litFrame.sh, dx, dy, dw, dh);
+            ctx.restore();
+          }
+        }
         drawEntityAnchorOverlay(feet.screenX, feet.screenY, dx, dy, dw, dh);
       } else {
         ctx.fillStyle = "#eaeaf2";
@@ -3610,7 +3938,7 @@ export async function renderSystem(
               if (snappedW <= 0 || snappedH <= 0) return;
               ctx.imageSmoothingEnabled = false;
               let relitCanvas: HTMLCanvasElement | null = null;
-              if (o.layerRole === "STRUCTURE" && staticRelightFrame) {
+              if (STATIC_RELIGHT_INCLUDE_STRUCTURES && o.layerRole === "STRUCTURE" && staticRelightFrame) {
                 const pieceKey = structureSliceRelightPieceKey(
                   o,
                   band.index,

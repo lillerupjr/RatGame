@@ -1,4 +1,8 @@
-import { getSpriteById, type LoadedImg } from "../../../engine/render/sprites/renderSprites";
+import {
+  getSpriteById,
+  getSpriteByIdForDarknessPercent,
+  type LoadedImg,
+} from "../../../engine/render/sprites/renderSprites";
 
 const COIN_FPS = 10;
 const GEM_FPS = 10;
@@ -30,6 +34,16 @@ export function getCurrencyFrame(value: number, time: number): LoadedImg {
   const tier = currencyTierForValue(value);
   const frameIndex = Math.floor(Math.max(0, time) * tier.fps) % tier.frameCount;
   return getSpriteById(frameSpriteId(tier.dir, tier.n, frameIndex + 1));
+}
+
+export function getCurrencyFrameForDarknessPercent(
+  value: number,
+  time: number,
+  darknessPercent: 0 | 25 | 50 | 75 | 100,
+): LoadedImg {
+  const tier = currencyTierForValue(value);
+  const frameIndex = Math.floor(Math.max(0, time) * tier.fps) % tier.frameCount;
+  return getSpriteByIdForDarknessPercent(frameSpriteId(tier.dir, tier.n, frameIndex + 1), darknessPercent);
 }
 
 export function preloadCurrencySprites(): void {

@@ -3,7 +3,6 @@ export type RuntimeDecalSetId = "sidewalk" | "asphalt" | "road_markings";
 export const RUNTIME_DECAL_SPRITE_IDS: Record<RuntimeDecalSetId, string[]> = {
     sidewalk: [
         "tiles/floor/decals/sidewalk_1",
-        "tiles/floor/decals/sidewalk_2",
         "tiles/floor/decals/sidewalk_3",
         "tiles/floor/decals/sidewalk_4",
         "tiles/floor/decals/sidewalk_5",

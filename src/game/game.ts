@@ -17,7 +17,10 @@ import { collisionsSystem, processCombatTextFromEvents } from "./systems/sim/col
 import { projectilesSystem } from "./systems/sim/projectiles";
 import { pickupsSystem } from "./systems/progression/pickups";
 import { dropsSystem } from "./systems/progression/drops";
-import { renderSystem } from "./systems/presentation/render";
+import {
+  prepareStaticGroundRelightForLoading,
+  renderSystem,
+} from "./systems/presentation/render";
 import { zonesSystem } from "./systems/sim/zones";
 import { relicExplodeOnKillSystem } from "./systems/sim/relicExplodeOnKill";
 import { bossSystem } from "./systems/progression/boss";
@@ -88,6 +91,7 @@ import { getProjectileSpriteByKind, preloadProjectileSprites } from "../engine/r
 import { enemySpritesReady, preloadEnemySprites } from "../engine/render/sprites/enemySprites";
 import {
   getSpriteByIdForPalette,
+  type LoadedImg,
   preloadRenderSprites,
 } from "../engine/render/sprites/renderSprites";
 import { setMusicStage, stopMusic } from "../engine/audio/music";
@@ -131,6 +135,7 @@ import {
   tickPrewarm,
 } from "./render/prewarmOwner";
 import { resolveActivePaletteId } from "./render/activePalette";
+import { collectFloorDependencies } from "./loading/dependencyCollector";
 import { formatPaletteHudDebugText, shouldShowPaletteHudDebugOverlay } from "./render/renderDebugPolicy";
 import { applySfxSettingsToWorld } from "./audio/audioSettings";
 import { chooseCardReward, ensureCardRewardState } from "./combat_mods/rewards/cardRewardFlow";
@@ -1940,18 +1945,32 @@ export function createGame(args: CreateGameArgs) {
     return true;
   }
 
-  async function prewarmFloorLoadSprites(): Promise<void> {
+  async function prewarmFloorLoadSprites(): Promise<boolean> {
     const w = world;
     const paletteId = resolveActivePaletteId();
-    const spriteIds = collectRuntimeSpriteDeps(w, getActiveMap());
+    const runtimeSpriteIds = collectRuntimeSpriteDeps(w, getActiveMap());
+    const depsSpriteIds = collectFloorDependencies().spriteIds;
+    const spriteIds = Array.from(new Set([...runtimeSpriteIds, ...depsSpriteIds]));
     enqueuePrewarm(paletteId, spriteIds);
     await awaitPrewarmDone(1500);
 
     // 1) Always warm entity/core sprite modules.
-    await awaitCoreSpriteReadiness(spriteIds, 1500);
+    const primaryState = await awaitCoreSpriteReadiness(spriteIds, 1500);
+    if (primaryState !== "READY") {
+      console.debug(
+        `[loading][prewarm-floor] primary readiness=${primaryState} sprites=${spriteIds.length}`,
+      );
+      return false;
+    }
 
     // 2) One more short wait to ensure swapped images are installed.
-    await awaitCoreSpriteReadiness(spriteIds, 300);
+    const settleState = await awaitCoreSpriteReadiness(spriteIds, 300);
+    if (settleState !== "READY") {
+      console.debug(
+        `[loading][prewarm-floor] settle readiness=${settleState} sprites=${spriteIds.length}`,
+      );
+    }
+    return settleState === "READY";
   }
 
   /**
@@ -2135,7 +2154,8 @@ export function createGame(args: CreateGameArgs) {
   async function enterFloor(w: World, floorIntent: FloorIntent): Promise<void> {
     void w;
     if (!beginFloorLoad(floorIntent)) return;
-    await prewarmFloorLoadSprites();
+    const ready = await prewarmFloorLoadSprites();
+    if (!ready) return;
     finalizeFloorLoad();
   }
 
@@ -2418,10 +2438,20 @@ export function createGame(args: CreateGameArgs) {
     preparedStart = { seed, mapId };
   }
 
+  type ReadinessState = "READY" | "PENDING" | "FAILED";
+
+  function classifyLoadedImg(rec: LoadedImg | null | undefined): ReadinessState {
+    if (!rec) return "FAILED";
+    if (rec.ready && rec.img && rec.img.naturalWidth > 0 && rec.img.naturalHeight > 0) return "READY";
+    if (rec.failed || rec.unsupported) return "FAILED";
+    if (rec.ready) return "FAILED";
+    return "PENDING";
+  }
+
   async function awaitCoreSpriteReadiness(
     runtimeSpriteIds: string[],
     maxWaitMs: number = 1500,
-  ): Promise<void> {
+  ): Promise<ReadinessState> {
     // Kick idempotent loads.
     preloadPlayerSprites();
     preloadEnemySprites();
@@ -2433,31 +2463,100 @@ export function createGame(args: CreateGameArgs) {
 
     const start = performance.now();
 
-    await new Promise<void>((resolve) => {
+    return await new Promise<ReadinessState>((resolve) => {
       const tick = () => {
         const elapsed = performance.now() - start;
         const paletteId = resolveActivePaletteId();
-        const projectileKinds = [1, 2, 3, 4, 5, 6];
-        const projectilesReady = projectileKinds.every((kind) => {
+        const projectileKinds = [1, 2, 5, 7, 8];
+        let failed = false;
+        const failedProjectileKinds: number[] = [];
+        const pendingProjectileKinds: number[] = [];
+        let projectilesReady = true;
+        for (let i = 0; i < projectileKinds.length; i++) {
+          const kind = projectileKinds[i];
           const rec = getProjectileSpriteByKind(kind);
-          return !!rec?.ready;
-        });
-        const runtimeReady = runtimeSpriteIds.every((id) => {
+          const state = classifyLoadedImg(rec as LoadedImg | null | undefined);
+          if (state === "FAILED") {
+            failed = true;
+            failedProjectileKinds.push(kind);
+            projectilesReady = false;
+          } else if (state === "PENDING") {
+            pendingProjectileKinds.push(kind);
+            projectilesReady = false;
+          }
+        }
+        const failedRuntimeIds: string[] = [];
+        const pendingRuntimeIds: string[] = [];
+        let runtimeReady = true;
+        for (let i = 0; i < runtimeSpriteIds.length; i++) {
+          const id = runtimeSpriteIds[i];
           const rec = getSpriteByIdForPalette(id, paletteId);
-          return rec.ready;
-        });
+          const state = classifyLoadedImg(rec);
+          if (state === "FAILED") {
+            failed = true;
+            runtimeReady = false;
+            if (failedRuntimeIds.length < 20) failedRuntimeIds.push(id);
+          } else if (state === "PENDING") {
+            runtimeReady = false;
+            if (pendingRuntimeIds.length < 20) pendingRuntimeIds.push(id);
+          }
+        }
+        const playerReady = playerSpritesReady();
+        const vendorReady = vendorNpcSpritesReady();
+        const enemyReady = enemySpritesReady();
+        const neutralReady = neutralMobSpritesReady();
+        const bazookaReady = bazookaExhaustAssetsReady();
 
         const ready =
-          playerSpritesReady()
-          && vendorNpcSpritesReady()
-          && enemySpritesReady()
-          && neutralMobSpritesReady()
+          playerReady
+          && vendorReady
+          && enemyReady
+          && neutralReady
           && projectilesReady
-          && bazookaExhaustAssetsReady()
+          && bazookaReady
           && runtimeReady;
 
-        if (ready || elapsed >= maxWaitMs) {
-          resolve();
+        if (ready) {
+          resolve("READY");
+          return;
+        }
+        if (failed) {
+          console.warn("[loading][sprite-ready] FAILED", {
+            elapsedMs: Math.round(elapsed),
+            runtimeSpriteCount: runtimeSpriteIds.length,
+            playerReady,
+            vendorReady,
+            enemyReady,
+            neutralReady,
+            projectilesReady,
+            bazookaReady,
+            runtimeReady,
+            failedProjectileKinds,
+            pendingProjectileKinds,
+            failedRuntimeIds,
+            pendingRuntimeIds,
+          });
+          resolve("FAILED");
+          return;
+        }
+        if (elapsed >= maxWaitMs) {
+          console.debug("[loading][sprite-ready] PENDING/TIMEOUT", {
+            elapsedMs: Math.round(elapsed),
+            maxWaitMs,
+            runtimeSpriteCount: runtimeSpriteIds.length,
+            playerReady,
+            vendorReady,
+            enemyReady,
+            neutralReady,
+            projectilesReady,
+            bazookaReady,
+            runtimeReady,
+            failedProjectileKinds,
+            pendingProjectileKinds,
+            failedRuntimeIds,
+            pendingRuntimeIds,
+          });
+          resolve("PENDING");
           return;
         }
         requestAnimationFrame(tick);
@@ -2466,17 +2565,35 @@ export function createGame(args: CreateGameArgs) {
     });
   }
 
-  async function prewarmActiveMapSpritesForCurrentPalette(): Promise<void> {
+  async function prewarmActiveMapSpritesForCurrentPalette(): Promise<boolean> {
     const paletteId = resolveActivePaletteId();
-    const spriteIds = collectRuntimeSpriteDeps(world, getActiveMap());
+    const runtimeSpriteIds = collectRuntimeSpriteDeps(world, getActiveMap());
+    const depsSpriteIds = collectFloorDependencies().spriteIds;
+    const spriteIds = Array.from(new Set([...runtimeSpriteIds, ...depsSpriteIds]));
     enqueuePrewarm(paletteId, spriteIds);
     await awaitPrewarmDone(1500);
 
     // Always warm entity/core sprite modules.
-    await awaitCoreSpriteReadiness(spriteIds, 1500);
+    const primaryState = await awaitCoreSpriteReadiness(spriteIds, 1500);
+    if (primaryState !== "READY") {
+      console.debug(
+        `[loading][prewarm-map] primary readiness=${primaryState} sprites=${spriteIds.length}`,
+      );
+      return false;
+    }
 
     // Ensure swapped images have landed before leaving LOADING.
-    await awaitCoreSpriteReadiness(spriteIds, 300);
+    const settleState = await awaitCoreSpriteReadiness(spriteIds, 300);
+    if (settleState !== "READY") {
+      console.debug(
+        `[loading][prewarm-map] settle readiness=${settleState} sprites=${spriteIds.length}`,
+      );
+    }
+    return settleState === "READY";
+  }
+
+  async function prepareStaticGroundRelightForLoadingStage(): Promise<boolean> {
+    return prepareStaticGroundRelightForLoading(world);
   }
 
   function performPreparedStartIntent(intent: StartIntent): void {
@@ -3442,6 +3559,7 @@ export function createGame(args: CreateGameArgs) {
     preloadBootAssets,
     prepareStartMap,
     prewarmActiveMapSpritesForCurrentPalette,
+    prepareStaticGroundRelightForLoading: prepareStaticGroundRelightForLoadingStage,
     performPreparedStartIntent,
     consumePendingStartIntent,
     beginFloorLoad,

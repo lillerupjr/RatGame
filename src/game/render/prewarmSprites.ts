@@ -2,6 +2,23 @@ import type { World } from "../../engine/world/world";
 import type { CompiledKenneyMap } from "../map/compile/kenneyMapLoader";
 import { getActiveMap } from "../map/compile/kenneyMap";
 
+function isPrewarmableSpriteId(spriteId: string): boolean {
+  const id = spriteId.trim().replace(/\.png$/i, "");
+  if (
+    id === "tiles/floor/decals/sidewalk_2"
+    || id === "tiles/walls/sidewalk_s"
+    || id === "tiles/walls/sidewalk_e"
+  ) {
+    return false;
+  }
+  return id.startsWith("tiles/")
+    || id.startsWith("structures/")
+    || id.startsWith("props/")
+    || id.startsWith("entities/")
+    || id.startsWith("loot/")
+    || id.startsWith("vfx/");
+}
+
 /**
  * Build a conservative list of runtime sprite ids to prewarm for a floor/map.
  * Goal: reduce first-frame palette hitching without scanning the entire universe.
@@ -78,5 +95,6 @@ export function collectRuntimeSpriteIdsToPrewarm(
   return out
     .map((s) => s.trim())
     .filter(Boolean)
-    .map((s) => (s.toLowerCase().endsWith(".png") ? s.slice(0, -4) : s));
+    .map((s) => (s.toLowerCase().endsWith(".png") ? s.slice(0, -4) : s))
+    .filter(isPrewarmableSpriteId);
 }

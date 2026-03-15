@@ -1236,14 +1236,15 @@ async function bootstrap() {
     },
     prewarmDependencies: async () => {
       if (activeStartIntent) {
-        await game.prewarmActiveMapSpritesForCurrentPalette();
-        return true;
+        return game.prewarmActiveMapSpritesForCurrentPalette();
       }
       if (activeFloorIntent) {
-        await game.prewarmFloorLoadSprites();
-        return true;
+        return game.prewarmFloorLoadSprites();
       }
       return true;
+    },
+    prepareStaticRelight: async () => {
+      return game.prepareStaticGroundRelightForLoading();
     },
     primeAudio: async () => {
       const deps = cachedDeps ?? collectFloorDependencies();

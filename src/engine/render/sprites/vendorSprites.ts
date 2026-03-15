@@ -1,6 +1,11 @@
 import { type Dir8 } from "./dir8";
-import { resolveActivePaletteId, resolveActivePaletteVariantKey } from "../../../game/render/activePalette";
-import { getSpriteByIdForPalette } from "./renderSprites";
+import {
+  buildPaletteVariantKey,
+  resolveActivePaletteId,
+  resolveActivePaletteSwapWeightPercents,
+  resolveActivePaletteVariantKey,
+} from "../../../game/render/activePalette";
+import { getSpriteByIdForDarknessPercent, getSpriteByIdForPalette } from "./renderSprites";
 import {
   createPaletteSwapState,
   notePaletteReady,
@@ -39,6 +44,19 @@ const paletteState = createPaletteSwapState(resolveActivePaletteVariantKey());
 const framesByPalette = new Map<string, Partial<Record<Dir8, HTMLImageElement[]>>>();
 const sizeByPalette = new Map<string, { w: number; h: number }>();
 const preloadByPalette = new Map<string, Promise<void>>();
+type SpriteDarknessPercent = 0 | 25 | 50 | 75 | 100;
+
+function resolvePaletteVariantKeyForDarknessPercent(
+  darknessPercent?: SpriteDarknessPercent,
+): string {
+  if (darknessPercent == null) return resolveActivePaletteVariantKey();
+  const paletteId = resolveActivePaletteId();
+  const active = resolveActivePaletteSwapWeightPercents();
+  return buildPaletteVariantKey(paletteId, {
+    sWeightPercent: active.sWeightPercent,
+    darknessPercent,
+  });
+}
 
 function getFrameMap(paletteId: string): Partial<Record<Dir8, HTMLImageElement[]>> {
   const existing = framesByPalette.get(paletteId);
@@ -59,12 +77,18 @@ function isPaletteReady(paletteId: string): boolean {
   return true;
 }
 
-async function loadImage(spriteId: string, paletteId: string): Promise<HTMLImageElement> {
+async function loadImage(
+  spriteId: string,
+  paletteId: string,
+  darknessPercent?: SpriteDarknessPercent,
+): Promise<HTMLImageElement> {
   return await new Promise<HTMLImageElement>((resolve, reject) => {
     const started = performance.now();
     const MAX_WAIT_MS = 1500;
     const tick = () => {
-      const rec = getSpriteByIdForPalette(spriteId, paletteId);
+      const rec = darknessPercent == null
+        ? getSpriteByIdForPalette(spriteId, paletteId)
+        : getSpriteByIdForDarknessPercent(spriteId, darknessPercent);
       if (rec.ready) {
         resolve(rec.img);
         return;
@@ -87,7 +111,7 @@ function resolveFrameId(dir: Dir8, frameIndex: number): string {
 
 export async function preloadVendorNpcSprites(): Promise<void> {
   const paletteId = resolveActivePaletteId();
-  const paletteVariantKey = resolveActivePaletteVariantKey();
+  const paletteVariantKey = resolvePaletteVariantKeyForDarknessPercent();
   notePaletteRequested(paletteState, paletteVariantKey);
   if (isPaletteReady(paletteVariantKey)) {
     notePaletteReady(paletteState, paletteVariantKey);
@@ -106,6 +130,48 @@ export async function preloadVendorNpcSprites(): Promise<void> {
       const frames: HTMLImageElement[] = [];
       for (let i = 0; i < FRAME_COUNT; i++) {
         const img = await loadImage(resolveFrameId(dir, i), paletteId);
+        if (img.decode) await img.decode();
+        frames.push(img);
+      }
+      frameMap[dir] = frames;
+    }
+
+    const south = frameMap.S?.[0];
+    sizeByPalette.set(paletteVariantKey, { w: south?.width ?? 0, h: south?.height ?? 0 });
+    notePaletteReady(paletteState, paletteVariantKey);
+  } catch (err) {
+    console.warn("[vendorSprites] Failed to preload vendor breathing-idle sprites", err);
+  }
+  })().finally(() => {
+    preloadByPalette.delete(paletteVariantKey);
+  });
+  preloadByPalette.set(paletteVariantKey, job);
+  await job;
+}
+
+async function preloadVendorNpcSpritesForDarknessPercent(
+  darknessPercent: SpriteDarknessPercent,
+): Promise<void> {
+  const paletteId = resolveActivePaletteId();
+  const paletteVariantKey = resolvePaletteVariantKeyForDarknessPercent(darknessPercent);
+  notePaletteRequested(paletteState, paletteVariantKey);
+  if (isPaletteReady(paletteVariantKey)) {
+    notePaletteReady(paletteState, paletteVariantKey);
+    return;
+  }
+  const inFlight = preloadByPalette.get(paletteVariantKey);
+  if (inFlight) {
+    await inFlight;
+    return;
+  }
+
+  const frameMap = getFrameMap(paletteVariantKey);
+  const job = (async () => {
+  try {
+    for (const [dir] of Object.entries(DIR_TO_PATH) as [Dir8, string][]) {
+      const frames: HTMLImageElement[] = [];
+      for (let i = 0; i < FRAME_COUNT; i++) {
+        const img = await loadImage(resolveFrameId(dir, i), paletteId, darknessPercent);
         if (img.decode) await img.decode();
         frames.push(img);
       }
@@ -150,6 +216,35 @@ export function getVendorNpcSpriteFrame(args: { dir: Dir8; time: number }): Spri
     }
     return null;
   }
+  const idx = Math.floor(Math.max(0, args.time) * 8) % frames.length;
+  const img = frames[idx];
+  return {
+    img,
+    sx: 0,
+    sy: 0,
+    sw: size?.w || img.width,
+    sh: size?.h || img.height,
+    scale: SCALE,
+    anchorX: ANCHOR_X,
+    anchorY: ANCHOR_Y,
+  };
+}
+
+export function getVendorNpcSpriteFrameForDarknessPercent(args: {
+  dir: Dir8;
+  time: number;
+  darknessPercent: SpriteDarknessPercent;
+}): SpriteFrame | null {
+  const paletteVariantKey = resolvePaletteVariantKeyForDarknessPercent(args.darknessPercent);
+  notePaletteRequested(paletteState, paletteVariantKey);
+  if (!isPaletteReady(paletteVariantKey)) {
+    void preloadVendorNpcSpritesForDarknessPercent(args.darknessPercent);
+    return null;
+  }
+  const frameMap = getFrameMap(paletteVariantKey);
+  const size = sizeByPalette.get(paletteVariantKey);
+  const frames = frameMap[args.dir] ?? frameMap.S;
+  if (!frames || frames.length === 0) return null;
   const idx = Math.floor(Math.max(0, args.time) * 8) % frames.length;
   const img = frames[idx];
   return {

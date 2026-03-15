@@ -25,6 +25,9 @@ import { preloadVfxSprites } from "../../../game/content/vfxRegistry";
 export type LoadedImg = {
     img: HTMLImageElement;
     ready: boolean;
+    failed?: boolean;
+    unsupported?: boolean;
+    error?: string;
 };
 export type PaletteId = ReturnType<typeof resolveActivePaletteId>;
 type PaletteSwapWeightPercents = {
@@ -193,13 +196,13 @@ function loadByIdInternal(
     const key = paletteManaged
         ? `${rawId}@@palv:${paletteVariantKey}`
         : `${rawId}@@raw`;
-    if (!rawId) return { img: new Image(), ready: false };
+    if (!rawId) return { img: new Image(), ready: false, failed: true, unsupported: true, error: "empty-id" };
     if (cache[key]) return cache[key];
 
     const url = resolveUrl(rawId);
     if (!url) {
         console.warn(`[renderSprites] Missing tile sprite: ${spriteId}`);
-        const rec = { img: new Image(), ready: false };
+        const rec = { img: new Image(), ready: false, failed: true, unsupported: true, error: "missing-url" };
         cache[key] = rec;
         return rec;
     }
@@ -211,6 +214,8 @@ function loadByIdInternal(
     const rec: LoadedImg = {
         img: enabledNow ? makeTransparent1x1() : new Image(),
         ready: false,
+        failed: false,
+        unsupported: false,
     };
     cache[key] = rec;
 
@@ -222,6 +227,8 @@ function loadByIdInternal(
             // db32 path: expose base immediately
             rec.img = baseImg;
             rec.ready = true;
+            rec.failed = false;
+            rec.error = undefined;
             return;
         }
 
@@ -232,19 +239,28 @@ function loadByIdInternal(
             swappedImg.onload = () => {
                 rec.img = swappedImg;
                 rec.ready = true;
+                rec.failed = false;
+                rec.error = undefined;
             };
             swappedImg.onerror = () => {
                 rec.img = baseImg;
                 rec.ready = true;
+                rec.failed = false;
+                rec.error = undefined;
             };
             swappedImg.src = swappedCanvas.toDataURL("image/png");
         } catch {
             rec.img = baseImg;
             rec.ready = true;
+            rec.failed = false;
+            rec.error = undefined;
         }
     };
     baseImg.onerror = () => {
         rec.ready = false;
+        rec.failed = true;
+        rec.unsupported = false;
+        rec.error = `decode-failed:${rawId}`;
     };
     baseImg.src = url;
 
@@ -257,20 +273,29 @@ function loadById(spriteId: string): LoadedImg {
 
 function loadByUrl(cacheKey: string, url: string | null): LoadedImg {
     const key = cacheKey.trim();
-    if (!key) return { img: new Image(), ready: false };
+    if (!key) return { img: new Image(), ready: false, failed: true, unsupported: true, error: "empty-key" };
     if (cache[key]) return cache[key];
 
     if (!url) {
-        const rec = { img: new Image(), ready: false };
+        const rec = { img: new Image(), ready: false, failed: true, unsupported: true, error: "missing-url" };
         cache[key] = rec;
         return rec;
     }
 
     const img = new Image();
-    const rec: LoadedImg = { img, ready: false };
+    const rec: LoadedImg = { img, ready: false, failed: false, unsupported: false };
     cache[key] = rec;
-    img.onload = () => (rec.ready = true);
-    img.onerror = () => (rec.ready = false);
+    img.onload = () => {
+        rec.ready = true;
+        rec.failed = false;
+        rec.error = undefined;
+    };
+    img.onerror = () => {
+        rec.ready = false;
+        rec.failed = true;
+        rec.unsupported = false;
+        rec.error = `decode-failed:${cacheKey}`;
+    };
     img.src = url;
     return rec;
 }
@@ -313,7 +338,7 @@ export function getRuntimeDecalSprite(
     variantIndex: number,
 ): LoadedImg {
     const spriteId = getDecalSpriteId(setId, variantIndex);
-    if (!spriteId) return { img: new Image(), ready: false };
+    if (!spriteId) return { img: new Image(), ready: false, failed: true, unsupported: true, error: "missing-decal-id" };
     return loadById(spriteId);
 }
 
