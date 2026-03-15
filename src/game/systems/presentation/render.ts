@@ -121,46 +121,15 @@ import {
   setRenderTileLoopRadius,
 } from "./renderPerfCounters";
 import { ViewportTransform } from "./viewportTransform";
-
-// ============================================
-// RenderKey & KindOrder (Isometric Painter Model)
-// ============================================
-
-/** Semantic layer ordering (used as tie-breaker in slice ordering). */
-enum KindOrder {
-  FLOOR = 0,
-  DECAL = 1,
-  ZONE_OBJECTIVE = 2,
-  SHADOW = 3,
-  ENTITY = 4,
-  VFX = 5,
-  LIGHT = 6,
-  STRUCTURE = 7,
-  OCCLUDER = 8,
-  OVERLAY = 9,
-}
-
-/** Canonical render key for deterministic ordering. */
-interface RenderKey {
-  slice: number;      // tx + ty (primary: slice ordering, NW -> SE)
-  within: number;     // tx (secondary: within-slice ordering)
-  baseZ: number;      // surface height (tertiary: occlusion)
-  feetSortY?: number; // optional feet-Y sort key for entities
-  kindOrder: KindOrder; // semantic layer (quaternary: kind bias)
-  stableId: number;   // deterministic tie-breaker (quinary)
-}
-
-/** Compare two RenderKeys lexicographically. */
-function compareRenderKeys(a: RenderKey, b: RenderKey): number {
-  if (a.slice !== b.slice) return a.slice - b.slice;
-  if (a.within !== b.within) return a.within - b.within;
-  if (a.baseZ !== b.baseZ) return a.baseZ - b.baseZ;
-  const ay = a.feetSortY ?? 0;
-  const by = b.feetSortY ?? 0;
-  if (ay !== by) return ay - by;
-  if (a.kindOrder !== b.kindOrder) return a.kindOrder - b.kindOrder;
-  return a.stableId - b.stableId;
-}
+import {
+  deriveFeetSortYFromKey,
+  KindOrder,
+  compareRenderKeys,
+  isGroundKindForRenderPass,
+  isWorldKindForRenderPass,
+  resolveRenderZBand,
+  type RenderKey,
+} from "./worldRenderOrdering";
 
 const DEBUG_PLAYER_WEDGE = false;
 const DISABLE_WALLS_AND_CURTAINS = true;
@@ -360,13 +329,6 @@ function getRuntimeIsoDecalCanvas(
 let hardcodedVoidTopImage: HTMLImageElement | null = null;
 let hardcodedVoidTopReady = false;
 let hardcodedVoidTopFailed = false;
-// NEW: structures layer scratch (used for player cutout)
-let structureLayerScratchCanvas: HTMLCanvasElement | null = null;
-let structureLayerScratchCtx: CanvasRenderingContext2D | null = null;
-let southBuildingMaskScratchCanvas: HTMLCanvasElement | null = null;
-let southBuildingMaskScratchCtx: CanvasRenderingContext2D | null = null;
-let cutoutVoidScratchCanvas: HTMLCanvasElement | null = null;
-let cutoutVoidScratchCtx: CanvasRenderingContext2D | null = null;
 
 function getHardcodedVoidTop(): { ready: boolean; img: HTMLImageElement | null } {
   if (hardcodedVoidTopReady && hardcodedVoidTopImage) {
@@ -455,56 +417,6 @@ function getFlippedOverlayImage(img: HTMLImageElement): HTMLCanvasElement {
   c2d.drawImage(img, 0, 0);
   flippedOverlayImageCache.set(img, canvas);
   return canvas;
-}
-
-function ensureScratchMaskCanvas(
-  canvas: HTMLCanvasElement | null,
-  c2d: CanvasRenderingContext2D | null,
-  screenW: number,
-  screenH: number,
-): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null {
-  const resolvedCanvas = canvas ?? document.createElement("canvas");
-  if (resolvedCanvas.width !== screenW) resolvedCanvas.width = screenW;
-  if (resolvedCanvas.height !== screenH) resolvedCanvas.height = screenH;
-  let resolvedCtx = c2d;
-  if (!resolvedCtx || resolvedCtx.canvas !== resolvedCanvas) {
-    resolvedCtx = resolvedCanvas.getContext("2d");
-    if (!resolvedCtx) return null;
-  }
-  configurePixelPerfect(resolvedCtx);
-  return { canvas: resolvedCanvas, ctx: resolvedCtx };
-}
-
-type OccluderClass = "VOLUMETRIC" | "SURFACE";
-type OccluderEntry = {
-  minZ: number;
-  class: OccluderClass;
-  draw: (ctx: CanvasRenderingContext2D) => void;
-};
-
-function drawOcclusionTileRectScreen(
-  maskCtx: CanvasRenderingContext2D,
-  viewport: ViewportTransform,
-  tx0: number,
-  ty0: number,
-  tx1: number,
-  ty1: number,
-  z: number,
-  tileWorld: number,
-  elevPx: number,
-): void {
-  const zPx = z * elevPx;
-  const v0 = viewport.project(tx0 * tileWorld, ty0 * tileWorld, zPx);
-  const v1 = viewport.project(tx1 * tileWorld, ty0 * tileWorld, zPx);
-  const v2 = viewport.project(tx1 * tileWorld, ty1 * tileWorld, zPx);
-  const v3 = viewport.project(tx0 * tileWorld, ty1 * tileWorld, zPx);
-  maskCtx.beginPath();
-  maskCtx.moveTo(v0.x, v0.y);
-  maskCtx.lineTo(v1.x, v1.y);
-  maskCtx.lineTo(v2.x, v2.y);
-  maskCtx.lineTo(v3.x, v3.y);
-  maskCtx.closePath();
-  maskCtx.fill();
 }
 
 function isTileInPlayerSouthWedge(
@@ -873,26 +785,6 @@ export async function renderSystem(
 
   const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-  // ------------------------------------------------------------
-  // Wedge-only structure masking (tile-space)
-  // Rule: include a slice iff its OWNER/ANCHOR tile is inside the
-  // SE→SW wedge (25% region) relative to the player tile.
-  // Pure tile coordinates, no screen math.
-  // ------------------------------------------------------------
-  const isOwnerTileInPlayerWedge = (ownerTx: number, ownerTy: number) => {
-    const dx = ownerTx - playerTx;
-    const dy = ownerTy - playerTy;
-
-    // Exclude the player tile itself (optional, keeps behavior stable)
-    if (dx === 0 && dy === 0) return false;
-
-    const sum = dx + dy;
-    if (sum <= 0) return false;
-
-    const diff = Math.abs(dx - dy);
-    return diff <= sum;
-  };
-
   // Existing optional cull (kept, but unrelated to masking)
   const ENABLE_BUILDING_SOUTH_CULL = false;
   const shouldCullBuildingAt = (tx: number, ty: number, w: number = 1, h: number = 1) => {
@@ -947,17 +839,7 @@ export async function renderSystem(
   };
 
   type MaskDraw = (maskCtx: CanvasRenderingContext2D) => void;
-  const playerOcclusionZ = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
-  const playerRenderBand = Math.floor(playerOcclusionZ + 1e-3);
-  const occluderEntries: OccluderEntry[] = [];
   const entitySilhouetteMaskDraws: MaskDraw[] = [];
-  const shouldRouteToStructureScratch = (pieceBand: number, ownerTx: number, ownerTy: number): boolean => {
-    if (pieceBand > playerRenderBand) return true;
-    if (pieceBand < playerRenderBand) return false;
-    const topSurface = maxNonStairSurfaceZ(ownerTx, ownerTy);
-    if (topSurface !== null && Math.floor(topSurface + 1e-3) > pieceBand) return false;
-    return isOwnerTileInPlayerWedge(ownerTx, ownerTy);
-  };
 
     // Preserve caller transform (world camera / mask camera) per piece.
     const drawRenderPieceTo = (target: CanvasRenderingContext2D, c: RenderPieceDraw) => {
@@ -977,33 +859,6 @@ export async function renderSystem(
     };
     // Default draw to main ctx (unchanged behavior for most pieces)
     const drawRenderPiece = (c: RenderPieceDraw) => drawRenderPieceTo(ctx, c);
-
-    const addSurfaceOccluderTileMaskAtZ = (
-      tx: number,
-      ty: number,
-      zVisual: number,
-      cls: OccluderClass = "SURFACE",
-    ) => {
-      const draw = (maskCtx: CanvasRenderingContext2D) => {
-        const p0 = worldToScreen(tx * T, ty * T);
-        const p1 = worldToScreen((tx + 1) * T, ty * T);
-        const p2 = worldToScreen((tx + 1) * T, (ty + 1) * T);
-        const p3 = worldToScreen(tx * T, (ty + 1) * T);
-        const zPx = zVisual * ELEV_PX;
-        maskCtx.save();
-        maskCtx.globalCompositeOperation = "source-over";
-        maskCtx.fillStyle = "rgba(255,255,255,1)";
-        maskCtx.beginPath();
-        maskCtx.moveTo(p0.x + camX, p0.y + camY - zPx);
-        maskCtx.lineTo(p1.x + camX, p1.y + camY - zPx);
-        maskCtx.lineTo(p2.x + camX, p2.y + camY - zPx);
-        maskCtx.lineTo(p3.x + camX, p3.y + camY - zPx);
-        maskCtx.closePath();
-        maskCtx.fill();
-        maskCtx.restore();
-      };
-      occluderEntries.push({ minZ: zVisual, class: cls, draw });
-    };
 
     const srcUvNW: ScreenPt = { x: 64, y: 0 };
     const srcUvNE: ScreenPt = { x: 128, y: 32 };
@@ -1593,7 +1448,6 @@ export async function renderSystem(
     ) + 2;
   const activeH = w.activeFloorH ?? 0;
   const compiledMap = getActiveCompiledMap();
-  const compiledOcclusionGeom = compiledMap.occlusionGeometry;
   const rampRoadTiles = new Set<string>();
   if (compiledMap?.roadSemanticRects) {
     for (let i = 0; i < compiledMap.roadSemanticRects.length; i++) {
@@ -1668,7 +1522,6 @@ export async function renderSystem(
   // Map from slice -> array of drawables for that slice
   const sliceDrawables = new Map<number, SliceDrawable[]>();
   const deferredStructureSliceDebugDraws: Array<() => void> = [];
-  let hasStructureLayerDraw = false;
 
   const drawClosureFn: SliceDrawFn = (payload) => {
     (payload as (() => void))();
@@ -1819,14 +1672,6 @@ export async function renderSystem(
           if (surface.id.startsWith("building_floor_") && shouldCullBuildingAt(tx, ty)) continue;
           if (surface.runtimeTop?.kind === "SQUARE_128_RUNTIME") {
             const runtimeTop = surface.runtimeTop;
-            if (surface.zBase > 0) {
-              addSurfaceOccluderTileMaskAtZ(
-                tx,
-                ty,
-                surface.zBase,
-                surface.id.startsWith("building_floor_") ? "VOLUMETRIC" : "SURFACE",
-              );
-            }
             const renderKey: RenderKey = {
               slice: tx + ty,
               within: tx,
@@ -1888,15 +1733,6 @@ export async function renderSystem(
             kindOrder: KindOrder.FLOOR,
             stableId: topStableId,
           };
-          if (surface.zBase > 0) {
-            addSurfaceOccluderTileMaskAtZ(
-              tx,
-              ty,
-              surface.zBase,
-              surface.id.startsWith("building_floor_") ? "VOLUMETRIC" : "SURFACE",
-            );
-          }
-
           addToSlice(tx + ty, renderKey, drawImageTopFn, {
             img: topImg,
             dx,
@@ -1918,8 +1754,6 @@ export async function renderSystem(
       const decal = decals[i];
       if (!isTileInRenderRadius(decal.tx, decal.ty)) continue;
       if (!RENDER_ALL_HEIGHTS && decal.zLogical !== activeH) continue;
-      if (decal.zBase > 0) addSurfaceOccluderTileMaskAtZ(decal.tx, decal.ty, decal.zBase);
-
       const renderKey: RenderKey = {
         slice: decal.tx + decal.ty,
         within: decal.tx,
@@ -3075,19 +2909,8 @@ export async function renderSystem(
           stableId: faceStableId + di * 0.001,
         };
         addToSlice(face.tx + face.ty, renderKey, () => {
-          const sctx = structureLayerScratchCtx;
-          const isStructureish = renderKey.kindOrder === KindOrder.STRUCTURE || renderKey.kindOrder === KindOrder.OVERLAY;
-
-          // Owner tile for face pieces is (face.tx, face.ty)
-          const pieceBand = Math.floor(renderKey.baseZ + 1e-3);
-
-          if (isStructureish && sctx && shouldRouteToStructureScratch(pieceBand, face.tx, face.ty)) {
-            hasStructureLayerDraw = true;
-            drawRenderPieceTo(sctx, d);
-          } else drawRenderPiece(d);
+          drawRenderPiece(d);
         });
-
-        // Structure coverage is represented by SURFACE tiles for cutout heuristics.
       }
     }
   }
@@ -3124,19 +2947,8 @@ export async function renderSystem(
         stableId: occStableId,
       };
       addToSlice(occ.tx + occ.ty, renderKey, () => {
-        const sctx = structureLayerScratchCtx;
-        const isStructureish = renderKey.kindOrder === KindOrder.STRUCTURE || renderKey.kindOrder === KindOrder.OVERLAY;
-
-        // Owner tile for walls is (occ.tx, occ.ty)
-        const pieceBand = Math.floor(renderKey.baseZ + 1e-3);
-
-        if (isStructureish && sctx && shouldRouteToStructureScratch(pieceBand, occ.tx, occ.ty)) {
-          hasStructureLayerDraw = true;
-          drawRenderPieceTo(sctx, draw);
-        } else drawRenderPiece(draw);
+        drawRenderPiece(draw);
       });
-
-      // Wall coverage is represented by SURFACE tiles for cutout heuristics.
     }
   }
 
@@ -3208,17 +3020,6 @@ export async function renderSystem(
               stableId: band.renderKey.stableId,
             };
             addToSlice(band.renderKey.slice, overlayKey, () => {
-              const sctx = structureLayerScratchCtx;
-
-              // Owner tile for a band piece is derived from its renderKey.
-              const pieceBand = Math.floor(overlayKey.baseZ + 1e-3);
-
-              const wantsStructureTarget =
-                (overlayKey.kindOrder === KindOrder.STRUCTURE || overlayKey.kindOrder === KindOrder.OVERLAY);
-
-              // Route to structure scratch ONLY if wedge-owned; otherwise draw to main ctx.
-              const target = wantsStructureTarget && sctx && shouldRouteToStructureScratch(pieceBand, ownerTx, ownerTy) ? sctx : ctx;
-              if (target === sctx) hasStructureLayerDraw = true;
               const img = draw.img;
               if (!img) return;
               const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(img) : img;
@@ -3229,8 +3030,8 @@ export async function renderSystem(
               const snappedW = Math.max(0, x1 - x0);
               const snappedH = Math.max(0, y1 - y0);
               if (snappedW <= 0 || snappedH <= 0) return;
-              target.imageSmoothingEnabled = false;
-              target.drawImage(
+              ctx.imageSmoothingEnabled = false;
+              ctx.drawImage(
                 sourceImg,
                 band.srcRect.x,
                 band.srcRect.y,
@@ -3261,21 +3062,6 @@ export async function renderSystem(
                 });
               }
             });
-
-            // Structure coverage is represented by SURFACE tiles for cutout heuristics.
-          }
-          {
-            const ownerTx = (o.anchorTx ?? (o.tx + o.w - 1));
-            const ownerTy = (o.anchorTy ?? (o.ty + o.h - 1));
-            if ((o.layerRole === "STRUCTURE" || (o.kind ?? "ROOF") === "ROOF") && isOwnerTileInPlayerWedge(ownerTx, ownerTy)) {
-              for (let fy = 0; fy < o.h; fy++) {
-                for (let fx = 0; fx < o.w; fx++) {
-                  const tx = o.tx + fx;
-                  const ty = o.ty + fy;
-                  if (!isTileInRenderRadius(tx, ty)) continue;
-                }
-              }
-            }
           }
         } else {
           const slice = (o.anchorTx ?? (o.tx + o.w - 1)) + (o.anchorTy ?? (o.ty + o.h - 1));
@@ -3293,387 +3079,79 @@ export async function renderSystem(
             stableId: 200000 + i,
           };
           addToSlice(slice, overlayKey, () => {
-            const sctx = structureLayerScratchCtx;
-            const isStructureish = overlayKey.kindOrder === KindOrder.STRUCTURE || overlayKey.kindOrder === KindOrder.OVERLAY;
-
-            // Owner tile for overlays is their anchor tile (used for slice/placement)
-            const ownerTx = (o.anchorTx ?? (o.tx + o.w - 1));
-            const ownerTy = (o.anchorTy ?? (o.ty + o.h - 1));
-            const pieceBand = Math.floor(overlayKey.baseZ + 1e-3);
-
-            if (isStructureish && sctx && shouldRouteToStructureScratch(pieceBand, ownerTx, ownerTy)) {
-              hasStructureLayerDraw = true;
-              drawRenderPieceTo(sctx, draw);
-            } else drawRenderPiece(draw);
+            drawRenderPiece(draw);
           });
-
-          // Structure coverage is represented by SURFACE tiles for cutout heuristics.
         }
       }
     }
 
   // ============================================
-  // FINAL RENDER PASS: Execute by zBand with ground/depth phases
+  // FINAL RENDER PASS: Execute by zBand with GROUND then WORLD
   // ============================================
   const sliceKeys = Array.from(sliceDrawables.keys());
   countRenderSliceKeySort();
   sliceKeys.sort((a, b) => a - b);
 
-  // Sort once per slice and collect all zBands.
-  const zBands = new Set<number>();
-  for (let i = 0; i < sliceKeys.length; i++) {
-    const drawables = sliceDrawables.get(sliceKeys[i])!;
-    countRenderDrawableSort();
-    drawables.sort((a, b) => compareRenderKeys(a.key, b.key));
-    for (let j = 0; j < drawables.length; j++) {
-      const key = drawables[j].key;
-      const baseBand = Math.floor(key.baseZ + 1e-3);
-      const tx = key.within | 0;
-      const ty = (key.slice - key.within) | 0;
-      const band = (rampRoadTiles.has(`${tx},${ty}`) && baseBand > 0 && baseBand < 8)
-        ? (baseBand >= 4 ? 8 : 0)
-        : baseBand;
-      zBands.add(band);
-    }
-  }
-
-  const zBandKeys = Array.from(zBands);
-  zBandKeys.sort((a, b) => a - b);
-  setRenderZBandCount(zBandKeys.length);
-
-  const isGroundKind = (kind: KindOrder) =>
-    kind === KindOrder.FLOOR || kind === KindOrder.DECAL;
-  const isEntityKind = (kind: KindOrder) =>
-    kind === KindOrder.ZONE_OBJECTIVE
-    || kind === KindOrder.SHADOW
-    || kind === KindOrder.ENTITY
-    || kind === KindOrder.VFX;
-  const isLightKind = (kind: KindOrder) =>
-    kind === KindOrder.LIGHT;
-  const isOccluderKind = (kind: KindOrder) =>
-    kind === KindOrder.STRUCTURE
-    || kind === KindOrder.OCCLUDER
-    || kind === KindOrder.OVERLAY;
-  const resolveDrawableBand = (key: RenderKey): number => {
-    const baseBand = Math.floor(key.baseZ + 1e-3);
-    const tx = key.within | 0;
-    const ty = (key.slice - key.within) | 0;
-    if (rampRoadTiles.has(`${tx},${ty}`) && baseBand > 0 && baseBand < 8) {
-      return baseBand >= 4 ? 8 : 0;
-    }
-    return baseBand;
-  };
   const kindToDrawTag = (kind: KindOrder): "floors" | "decals" | "entities" | "structures" | "lighting" => {
-    if (kind === KindOrder.FLOOR) return "floors";
+    if (kind === KindOrder.FLOOR || kind === KindOrder.SHADOW) return "floors";
     if (kind === KindOrder.DECAL) return "decals";
     if (kind === KindOrder.LIGHT) return "lighting";
     if (
       kind === KindOrder.ENTITY
       || kind === KindOrder.VFX
       || kind === KindOrder.ZONE_OBJECTIVE
-      || kind === KindOrder.SHADOW
     ) return "entities";
     return "structures";
   };
 
-  // ============================================
-  // STRUCTURE LAYER (for player cutout) — Milestone 1: hard hole
-  // ============================================
-  const structureLayer = ensureScratchMaskCanvas(
-    structureLayerScratchCanvas,
-    structureLayerScratchCtx,
-    devW,
-    devH,
-  );
-  if (structureLayer) {
-    structureLayerScratchCanvas = structureLayer.canvas;
-    structureLayerScratchCtx = structureLayer.ctx;
-
-    const sctx = structureLayer.ctx;
-    // Clear in screen space
-    sctx.setTransform(1, 0, 0, 1, 0, 0);
-    sctx.globalCompositeOperation = "source-over";
-    sctx.clearRect(0, 0, devW, devH);
-
-    // IMPORTANT: match the WORLD camera transform (exactly like lighting masks)
-    sctx.save();
-    configurePixelPerfect(sctx);
-    viewport.applyWorld(sctx);
-    drawAlignmentDot(sctx, "rgba(255,128,0,0.9)"); // structure
-  } else {
-    structureLayerScratchCanvas = null;
-    structureLayerScratchCtx = null;
-  }
-
-  const surfaceCutoutEntriesByBand = new Map<number, OccluderEntry[]>();
-  for (let zi = 0; zi < zBandKeys.length; zi++) {
-    const zb = zBandKeys[zi];
-    const entries: OccluderEntry[] = [];
-    for (let oi = 0; oi < occluderEntries.length; oi++) {
-      const entry = occluderEntries[oi];
-      if (entry.class !== "SURFACE") continue;
-      if (Math.floor(entry.minZ + 1e-3) !== zb) continue;
-      entries.push(entry);
+  // Sort once per slice and collect all zBands. WORLD keys missing feetSortY
+  // get a deterministic derived value from owner tile center projection.
+  const zBands = new Set<number>();
+  for (let i = 0; i < sliceKeys.length; i++) {
+    const drawables = sliceDrawables.get(sliceKeys[i])!;
+    for (let j = 0; j < drawables.length; j++) {
+      const key = drawables[j].key;
+      if (isWorldKindForRenderPass(key.kindOrder) && key.feetSortY == null) {
+        key.feetSortY = deriveFeetSortYFromKey(key, T, toScreenAtZ);
+      }
+      zBands.add(resolveRenderZBand(key, rampRoadTiles));
     }
-    if (entries.length > 0) surfaceCutoutEntriesByBand.set(zb, entries);
-  }
-  const useCompiledVisualCutout = !!(
-    debugFlags.visualCompiledCutoutCache
-    && compiledOcclusionGeom
-    && compiledOcclusionGeom.availableBands.length > 0
-  );
-  const visualChunkSize = compiledOcclusionGeom?.chunkSize ?? 16;
-  const visualChunkX0 = Math.floor(minTx / visualChunkSize);
-  const visualChunkY0 = Math.floor(minTy / visualChunkSize);
-  const visualChunkX1 = Math.floor(maxTx / visualChunkSize);
-  const visualChunkY1 = Math.floor(maxTy / visualChunkSize);
-  const surfaceCutoutMaskLayer = ensureScratchMaskCanvas(
-    southBuildingMaskScratchCanvas,
-    southBuildingMaskScratchCtx,
-    devW,
-    devH,
-  );
-  if (surfaceCutoutMaskLayer) {
-    southBuildingMaskScratchCanvas = surfaceCutoutMaskLayer.canvas;
-    southBuildingMaskScratchCtx = surfaceCutoutMaskLayer.ctx;
-  }
-  if (!cutoutVoidScratchCanvas) cutoutVoidScratchCanvas = document.createElement("canvas");
-  if (!cutoutVoidScratchCtx || cutoutVoidScratchCtx.canvas !== cutoutVoidScratchCanvas) {
-    cutoutVoidScratchCtx = cutoutVoidScratchCanvas.getContext("2d");
+    countRenderDrawableSort();
+    drawables.sort((a, b) => compareRenderKeys(a.key, b.key));
   }
 
-  const pzAbs = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
-  const feet = getEntityFeetPos(px, py, pzAbs);
-  const sp = worldToScreenPx(feet.screenX, feet.screenY);
-  const playerSx = sp.x;
-  const playerSy = sp.y;
-  const radiusWorld = 150;
-  const radiusPx = radiusWorld * s;
-  const outerR = radiusPx * 1.35;
-  const innerR = Math.max(1, outerR * 0.72);
-  const playerBand = Math.floor(playerOcclusionZ + 1e-3);
+  const zBandKeys = Array.from(zBands);
+  zBandKeys.sort((a, b) => a - b);
+  setRenderZBandCount(zBandKeys.length);
 
   for (let zi = 0; zi < zBandKeys.length; zi++) {
     const zb = zBandKeys[zi];
-    const bandSurfaceEntries = (zb > playerBand && !useCompiledVisualCutout)
-      ? surfaceCutoutEntriesByBand.get(zb)
-      : undefined;
-    let hasCompiledCutEntries = false;
-    if (zb > playerBand && useCompiledVisualCutout && compiledOcclusionGeom) {
-      const band = compiledOcclusionGeom.byBandAndClass.get(zb);
-      if (band) {
-        outer: for (let cy = visualChunkY0; cy <= visualChunkY1; cy++) {
-          for (let cx = visualChunkX0; cx <= visualChunkX1; cx++) {
-            const key = `${cx},${cy}`;
-            const surfaceBucket = band.surface.get(key);
-            const volumetricBucket = band.volumetric.get(key);
-            if ((surfaceBucket && surfaceBucket.entries.length > 0) || (volumetricBucket && volumetricBucket.entries.length > 0)) {
-              hasCompiledCutEntries = true;
-              break outer;
-            }
-          }
-        }
-      }
-    }
-    const useGroundCutout = !!(
-      surfaceCutoutMaskLayer
-      && cutoutVoidScratchCtx
-      && (
-        (bandSurfaceEntries && bandSurfaceEntries.length > 0)
-        || hasCompiledCutEntries
-      )
-    );
-    const cutPad = 4;
-    const cutX0 = Math.max(0, Math.floor(playerSx - outerR - cutPad));
-    const cutY0 = Math.max(0, Math.floor(playerSy - outerR - cutPad));
-    const cutX1 = Math.min(devW, Math.ceil(playerSx + outerR + cutPad));
-    const cutY1 = Math.min(devH, Math.ceil(playerSy + outerR + cutPad));
-    const cutW = Math.max(0, cutX1 - cutX0);
-    const cutH = Math.max(0, cutY1 - cutY0);
 
-    // Snapshot only the player-cut region before drawing this band.
-    if (useGroundCutout && cutW > 0 && cutH > 0 && cutoutVoidScratchCanvas && cutoutVoidScratchCtx) {
-      if (cutoutVoidScratchCanvas.width !== cutW) cutoutVoidScratchCanvas.width = cutW;
-      if (cutoutVoidScratchCanvas.height !== cutH) cutoutVoidScratchCanvas.height = cutH;
-      const restoreCtx = cutoutVoidScratchCtx;
-      configurePixelPerfect(restoreCtx);
-      restoreCtx.setTransform(1, 0, 0, 1, 0, 0);
-      restoreCtx.globalCompositeOperation = "source-over";
-      restoreCtx.clearRect(0, 0, cutW, cutH);
-      setRenderPerfDrawTag("cutoutVoid");
-      restoreCtx.drawImage(canvas, cutX0, cutY0, cutW, cutH, 0, 0, cutW, cutH);
-      setRenderPerfDrawTag(null);
-    }
-
-    // Ground phase: FLOOR + DECAL only.
+    // Pass 1: GROUND
     for (let si = 0; si < sliceKeys.length; si++) {
       const drawables = sliceDrawables.get(sliceKeys[si])!;
       for (let di = 0; di < drawables.length; di++) {
         const drawable = drawables[di];
-        if (resolveDrawableBand(drawable.key) !== zb) continue;
-        if (!isGroundKind(drawable.key.kindOrder)) continue;
+        if (resolveRenderZBand(drawable.key, rampRoadTiles) !== zb) continue;
+        if (!isGroundKindForRenderPass(drawable.key.kindOrder)) continue;
         setRenderPerfDrawTag(kindToDrawTag(drawable.key.kindOrder));
         drawable.drawFn(drawable.payload);
       }
     }
 
-    // Reveal VOID only inside the player cutout.
-    // This visually "turns the floor into void" only where the cutout mask is active.
-    if (useGroundCutout && cutW > 0 && cutH > 0 && cutoutVoidScratchCanvas && cutoutVoidScratchCtx) {
-        const southCtx = surfaceCutoutMaskLayer.ctx;
-        const restoreCtx = cutoutVoidScratchCtx;
-
-        southCtx.setTransform(1, 0, 0, 1, 0, 0);
-        southCtx.globalCompositeOperation = "source-over";
-        southCtx.clearRect(0, 0, devW, devH);
-        if (hasCompiledCutEntries && compiledOcclusionGeom) {
-          const band = compiledOcclusionGeom.byBandAndClass.get(zb);
-          if (band) {
-            southCtx.fillStyle = "rgba(255,255,255,1)";
-            for (let cy = visualChunkY0; cy <= visualChunkY1; cy++) {
-              for (let cx = visualChunkX0; cx <= visualChunkX1; cx++) {
-                const key = `${cx},${cy}`;
-                const surfaceBucket = band.surface.get(key);
-                const volumetricBucket = band.volumetric.get(key);
-                if (surfaceBucket) for (let i = 0; i < surfaceBucket.entries.length; i++) {
-                  const e = surfaceBucket.entries[i];
-                  drawOcclusionTileRectScreen(
-                    southCtx, viewport, e.tx0, e.ty0, e.tx1, e.ty1, e.z,
-                    T, ELEV_PX,
-                  );
-                }
-                if (volumetricBucket) for (let i = 0; i < volumetricBucket.entries.length; i++) {
-                  const e = volumetricBucket.entries[i];
-                  drawOcclusionTileRectScreen(
-                    southCtx, viewport, e.tx0, e.ty0, e.tx1, e.ty1, e.z,
-                    T, ELEV_PX,
-                  );
-                }
-              }
-            }
-          }
-        } else if (bandSurfaceEntries && bandSurfaceEntries.length > 0) {
-          southCtx.save();
-          configurePixelPerfect(southCtx);
-          viewport.applyWorld(southCtx);
-          for (let i = 0; i < bandSurfaceEntries.length; i++) {
-            bandSurfaceEntries[i].draw(southCtx);
-          }
-          southCtx.restore();
-        }
-
-        southCtx.setTransform(1, 0, 0, 1, 0, 0);
-        southCtx.globalCompositeOperation = "destination-in";
-        const g = southCtx.createRadialGradient(playerSx, playerSy, innerR, playerSx, playerSy, outerR);
-        g.addColorStop(0.0, "rgba(0,0,0,1)");
-        g.addColorStop(1.0, "rgba(0,0,0,0)");
-        southCtx.fillStyle = g;
-        southCtx.beginPath();
-        southCtx.arc(playerSx, playerSy, outerR, 0, Math.PI * 2);
-        southCtx.fill();
-        southCtx.globalCompositeOperation = "source-over";
-
-        restoreCtx.setTransform(1, 0, 0, 1, 0, 0);
-        restoreCtx.globalCompositeOperation = "destination-in";
-        setRenderPerfDrawTag("cutoutVoid");
-        restoreCtx.drawImage(surfaceCutoutMaskLayer.canvas, cutX0, cutY0, cutW, cutH, 0, 0, cutW, cutH);
-        setRenderPerfDrawTag(null);
-        restoreCtx.globalCompositeOperation = "source-over";
-
-        ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.globalCompositeOperation = "source-over";
-        setRenderPerfDrawTag("cutoutVoid");
-        ctx.drawImage(cutoutVoidScratchCanvas, cutX0, cutY0);
-        setRenderPerfDrawTag(null);
-        ctx.restore();
-    }
-
-    // Depth phases:
-    //   ENTITIES -> LIGHTS -> OCCLUDERS
-    // This guarantees LIGHT draws after entities and before occluders.
+    // Pass 2: WORLD
     for (let si = 0; si < sliceKeys.length; si++) {
       const drawables = sliceDrawables.get(sliceKeys[si])!;
       for (let di = 0; di < drawables.length; di++) {
         const drawable = drawables[di];
-        if (resolveDrawableBand(drawable.key) !== zb) continue;
-        if (!isEntityKind(drawable.key.kindOrder)) continue;
-        setRenderPerfDrawTag(kindToDrawTag(drawable.key.kindOrder));
-        drawable.drawFn(drawable.payload);
-      }
-    }
-    for (let si = 0; si < sliceKeys.length; si++) {
-      const drawables = sliceDrawables.get(sliceKeys[si])!;
-      for (let di = 0; di < drawables.length; di++) {
-        const drawable = drawables[di];
-        if (resolveDrawableBand(drawable.key) !== zb) continue;
-        if (!isLightKind(drawable.key.kindOrder)) continue;
-        setRenderPerfDrawTag(kindToDrawTag(drawable.key.kindOrder));
-        drawable.drawFn(drawable.payload);
-      }
-    }
-    for (let si = 0; si < sliceKeys.length; si++) {
-      const drawables = sliceDrawables.get(sliceKeys[si])!;
-      for (let di = 0; di < drawables.length; di++) {
-        const drawable = drawables[di];
-        if (resolveDrawableBand(drawable.key) !== zb) continue;
-        if (!isOccluderKind(drawable.key.kindOrder)) continue;
+        if (resolveRenderZBand(drawable.key, rampRoadTiles) !== zb) continue;
+        if (!isWorldKindForRenderPass(drawable.key.kindOrder)) continue;
         setRenderPerfDrawTag(kindToDrawTag(drawable.key.kindOrder));
         drawable.drawFn(drawable.payload);
       }
     }
   }
   setRenderPerfDrawTag(null);
-
-  // ============================================
-  // STRUCTURE CUTOUT COMPOSITE (Milestone 1: hard circle)
-  // ============================================
-  if (hasStructureLayerDraw && structureLayerScratchCanvas && structureLayerScratchCtx) {
-    const sctx = structureLayerScratchCtx;
-
-    // End the structure-layer world transform so we can punch hole in screen-space
-    sctx.restore();
-
-    const pzAbs = w.pzVisual ?? w.pz ?? tileHAtWorld(px, py);
-    const feet = getEntityFeetPos(px, py, pzAbs);
-    const sp = worldToScreenPx(feet.screenX, feet.screenY);
-    const playerSx = sp.x;
-    const playerSy = sp.y;
-    const radiusWorld = 150;
-    const radiusPx = radiusWorld * s;
-
-    // Soft edge hole using destination-out + radial gradient.
-    // Center is fully erased; edge fades to no erase.
-    sctx.save();
-    sctx.globalCompositeOperation = "destination-out";
-
-    // Bigger radius (tune these defaults)
-    const outerR = radiusPx * 1.35;
-    const innerR = Math.max(1, outerR * 0.72);
-
-    // Radial gradient: alpha=1 in center (erase), alpha=0 at edge (no erase)
-    const g = sctx.createRadialGradient(playerSx, playerSy, innerR, playerSx, playerSy, outerR);
-    g.addColorStop(0.0, "rgba(0,0,0,1)");
-    g.addColorStop(1.0, "rgba(0,0,0,0)");
-
-    sctx.fillStyle = g;
-    sctx.beginPath();
-    sctx.arc(playerSx, playerSy, outerR, 0, Math.PI * 2);
-    sctx.fill();
-
-    sctx.restore();
-    sctx.globalCompositeOperation = "source-over";
-
-    // Composite structures over the already-rendered scene.
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    configurePixelPerfect(ctx);
-    ctx.globalCompositeOperation = "source-over";
-    setRenderPerfDrawTag("structures");
-    ctx.drawImage(structureLayerScratchCanvas, 0, 0);
-    setRenderPerfDrawTag(null);
-    ctx.restore();
-  }
 
   // Optional floor tint overlay
   const floorVis = getFloorVisual(w);
@@ -3792,7 +3270,7 @@ export async function renderSystem(
       `drawImage/frame: ${perf.drawImageCallsPerFrame.toFixed(1)}`,
       `tag void:${tag.void.toFixed(1)} floors:${tag.floors.toFixed(1)} decals:${tag.decals.toFixed(1)} ent:${tag.entities.toFixed(1)}`,
       `tag struct:${tag.structures.toFixed(1)}`,
-      `tag cutoutVoid:${tag.cutoutVoid.toFixed(1)} lighting:${tag.lighting.toFixed(1)} untagged:${tag.untagged.toFixed(1)}`,
+      `tag lighting:${tag.lighting.toFixed(1)} untagged:${tag.untagged.toFixed(1)}`,
       `gradientCreate/frame: ${perf.gradientCreateCallsPerFrame.toFixed(1)} addColorStop/frame: ${perf.addColorStopCallsPerFrame.toFixed(1)}`,
       `save/frame: ${perf.saveCallsPerFrame.toFixed(1)} restore/frame: ${perf.restoreCallsPerFrame.toFixed(1)}`,
       `saveTag fl:${saveTag.floors.toFixed(1)} de:${saveTag.decals.toFixed(1)} li:${saveTag.lighting.toFixed(1)} un:${saveTag.untagged.toFixed(1)}`,

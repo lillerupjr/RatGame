@@ -55,8 +55,6 @@ export type DrawTag =
   | "structures"
   | "mask:building"
   | "mask:shadow"
-  | "mask:south"
-  | "cutoutVoid"
   | "lighting";
 
 const DRAW_TAGS: DrawTag[] = [
@@ -68,8 +66,6 @@ const DRAW_TAGS: DrawTag[] = [
   "structures",
   "mask:building",
   "mask:shadow",
-  "mask:south",
-  "cutoutVoid",
   "lighting",
 ];
 
@@ -83,8 +79,6 @@ function makeZeroByTag(): Record<DrawTag, number> {
     structures: 0,
     "mask:building": 0,
     "mask:shadow": 0,
-    "mask:south": 0,
-    cutoutVoid: 0,
     lighting: 0,
   };
 }
