@@ -53,8 +53,9 @@ describe("staticRelightPoc", () => {
 
     expect(plan).not.toBeNull();
     expect(plan?.targetDarknessBucket).toBe(50);
-    expect((plan?.blendAlpha ?? 0) > 0).toBe(true);
+    expect(plan?.blendAlpha).toBe(1);
     expect((plan?.masks.length ?? 0) > 0).toBe(true);
+    expect(plan?.masks[0].alpha).toBeCloseTo(0.9);
   });
 
   it("returns piece-local mask coordinates and bounds", () => {
@@ -92,5 +93,65 @@ describe("staticRelightPoc", () => {
     expect(nextLighterBucket(50)).toBe(25);
     expect(nextLighterBucket(25)).toBe(0);
     expect(nextLighterBucket(0)).toBeNull();
+  });
+
+  it("uses strength-neutral blend alpha for pieces intersecting the same light", () => {
+    const lights: StaticRelightLightCandidate[] = [
+      {
+        id: "lamp_shared",
+        tileX: 10,
+        tileY: 10,
+        centerX: 256,
+        centerY: 256,
+        radiusPx: 180,
+        intensity: 0.8,
+      },
+    ];
+
+    const planA = planPieceLocalRelight({
+      baseDarknessBucket: 75,
+      pieceTileX: 10,
+      pieceTileY: 10,
+      pieceScreenRect: { x: 160, y: 210, width: 128, height: 64 },
+      lights,
+    });
+    const planB = planPieceLocalRelight({
+      baseDarknessBucket: 75,
+      pieceTileX: 11,
+      pieceTileY: 10,
+      pieceScreenRect: { x: 260, y: 210, width: 128, height: 64 },
+      lights,
+    });
+
+    expect(planA).not.toBeNull();
+    expect(planB).not.toBeNull();
+    expect(planA?.blendAlpha).toBe(1);
+    expect(planB?.blendAlpha).toBe(1);
+  });
+
+  it("relights when light overlaps piece bounds even if piece center is farther away", () => {
+    const lights: StaticRelightLightCandidate[] = [
+      {
+        id: "edge_overlap",
+        tileX: 4,
+        tileY: 4,
+        centerX: 100,
+        centerY: 100,
+        radiusPx: 30,
+        intensity: 1,
+      },
+    ];
+
+    const plan = planPieceLocalRelight({
+      baseDarknessBucket: 75,
+      pieceTileX: 4,
+      pieceTileY: 4,
+      pieceScreenRect: { x: 128, y: 80, width: 64, height: 64 },
+      lights,
+    });
+
+    expect(plan).not.toBeNull();
+    expect(plan?.blendAlpha).toBe(1);
+    expect((plan?.masks.length ?? 0) > 0).toBe(true);
   });
 });

@@ -111,6 +111,8 @@ const userSettingsState = vi.hoisted(() => ({
     debug: {
       paletteSWeightPercent: 25,
       paletteDarknessPercent: 50,
+      staticRelightStrengthPercent: 100,
+      staticRelightTargetDarknessPercent: 50,
     },
   },
 }));
@@ -126,11 +128,28 @@ vi.mock("../../../engine/render/palette/palettes", () => ({
 
 vi.mock("../../../debugSettings", () => ({
   PALETTE_REMAP_WEIGHT_OPTIONS: [0, 25, 50, 75, 100],
+  STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS: [0, 25, 50, 75],
   normalizePaletteRemapWeightPercent: (value: unknown) => {
     const numeric = Number(value);
     const options = [0, 25, 50, 75, 100];
     if (!Number.isFinite(numeric)) return 0;
     let best = 0;
+    let dist = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < options.length; i += 1) {
+      const option = options[i];
+      const currentDist = Math.abs(option - numeric);
+      if (currentDist < dist) {
+        best = option;
+        dist = currentDist;
+      }
+    }
+    return best;
+  },
+  normalizeStaticRelightTargetDarknessPercent: (value: unknown) => {
+    const numeric = Number(value);
+    const options = [0, 25, 50, 75];
+    if (!Number.isFinite(numeric)) return 50;
+    let best = 50;
     let dist = Number.POSITIVE_INFINITY;
     for (let i = 0; i < options.length; i += 1) {
       const option = options[i];
@@ -188,6 +207,8 @@ describe("snapshot viewer palette panel", () => {
       debug: {
         paletteSWeightPercent: 25,
         paletteDarknessPercent: 50,
+        staticRelightStrengthPercent: 100,
+        staticRelightTargetDarknessPercent: 50,
       },
     };
     const doc = new FakeDocument();
@@ -280,5 +301,27 @@ describe("snapshot viewer palette panel", () => {
 
     expect(userSettingsState.settings.render.lightColorModeOverride).toBe("palette");
     expect(userSettingsState.settings.render.lightStrengthOverride).toBe("high");
+  });
+
+  test("static relight controls persist in settings", () => {
+    const panel = mountSnapshotViewerPalettePanel({ onClose: vi.fn() });
+    panel.sync(true);
+
+    const strengthSelect = findByData((globalThis as any).document.body, "snapshotViewerControl", "static-relight-strength");
+    const targetDarknessSelect = findByData(
+      (globalThis as any).document.body,
+      "snapshotViewerControl",
+      "static-relight-target-darkness",
+    );
+    expect(strengthSelect).toBeTruthy();
+    expect(targetDarknessSelect).toBeTruthy();
+
+    (strengthSelect as FakeElement).value = "75";
+    strengthSelect?.dispatchEvent(new FakeEvent("change", strengthSelect));
+    (targetDarknessSelect as FakeElement).value = "25";
+    targetDarknessSelect?.dispatchEvent(new FakeEvent("change", targetDarknessSelect));
+
+    expect(userSettingsState.settings.debug.staticRelightStrengthPercent).toBe(75);
+    expect(userSettingsState.settings.debug.staticRelightTargetDarknessPercent).toBe(25);
   });
 });

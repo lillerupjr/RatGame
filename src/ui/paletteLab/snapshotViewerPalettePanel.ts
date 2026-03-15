@@ -6,6 +6,8 @@ import {
 import {
   normalizePaletteRemapWeightPercent,
   PALETTE_REMAP_WEIGHT_OPTIONS,
+  normalizeStaticRelightTargetDarknessPercent,
+  STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS,
 } from "../../debugSettings";
 import {
   getUserSettings,
@@ -88,6 +90,11 @@ export function mountSnapshotViewerPalettePanel(
   const paletteIdSelect = createSelectRow("Palette", "palette-id");
   const saturationSelect = createSelectRow("Saturation Weight", "saturation-weight");
   const darknessSelect = createSelectRow("Darkness", "darkness");
+  const staticRelightStrengthSelect = createSelectRow("Static Relight Strength", "static-relight-strength");
+  const staticRelightTargetDarknessSelect = createSelectRow(
+    "Static Relight Target Darkness",
+    "static-relight-target-darkness",
+  );
   const lightModeSelect = createSelectRow("Light Mode", "light-mode");
   const lightStrengthSelect = createSelectRow("Light Strength", "light-strength");
   const actions = document.createElement("div");
@@ -109,6 +116,14 @@ export function mountSnapshotViewerPalettePanel(
     option.textContent = `${optionValue}%`;
     saturationSelect.appendChild(option.cloneNode(true));
     darknessSelect.appendChild(option);
+    staticRelightStrengthSelect.appendChild(option.cloneNode(true));
+  }
+  for (let i = 0; i < STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS.length; i += 1) {
+    const optionValue = STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS[i];
+    const option = document.createElement("option");
+    option.value = `${optionValue}`;
+    option.textContent = `${optionValue}%`;
+    staticRelightTargetDarknessSelect.appendChild(option);
   }
   const lightModeOptions: Array<{ value: LightColorModeOverride; label: string }> = [
     { value: "authored", label: "Authored" },
@@ -168,6 +183,8 @@ export function mountSnapshotViewerPalettePanel(
       settings.render.lightStrengthOverride,
       settings.debug.paletteSWeightPercent,
       settings.debug.paletteDarknessPercent,
+      settings.debug.staticRelightStrengthPercent,
+      settings.debug.staticRelightTargetDarknessPercent,
     ].join("|");
   };
 
@@ -178,6 +195,10 @@ export function mountSnapshotViewerPalettePanel(
     const nextPaletteId = rebuildPaletteOptions(group, settings.render.paletteId);
     saturationSelect.value = `${normalizePaletteRemapWeightPercent(settings.debug.paletteSWeightPercent)}`;
     darknessSelect.value = `${normalizePaletteRemapWeightPercent(settings.debug.paletteDarknessPercent)}`;
+    staticRelightStrengthSelect.value = `${normalizePaletteRemapWeightPercent(settings.debug.staticRelightStrengthPercent)}`;
+    staticRelightTargetDarknessSelect.value = `${
+      normalizeStaticRelightTargetDarknessPercent(settings.debug.staticRelightTargetDarknessPercent)
+    }`;
     lightModeSelect.value = settings.render.lightColorModeOverride;
     lightStrengthSelect.value = settings.render.lightStrengthOverride;
     if (nextPaletteId !== settings.render.paletteId || group !== settings.render.paletteGroup) {
@@ -236,6 +257,22 @@ export function mountSnapshotViewerPalettePanel(
     const numeric = Number.parseInt(darknessSelect.value, 10);
     updateUserSettings({
       debug: { paletteDarknessPercent: normalizePaletteRemapWeightPercent(numeric) },
+    });
+    lastSettingsKey = "";
+  });
+
+  staticRelightStrengthSelect.addEventListener("change", () => {
+    const numeric = Number.parseInt(staticRelightStrengthSelect.value, 10);
+    updateUserSettings({
+      debug: { staticRelightStrengthPercent: normalizePaletteRemapWeightPercent(numeric) },
+    });
+    lastSettingsKey = "";
+  });
+
+  staticRelightTargetDarknessSelect.addEventListener("change", () => {
+    const numeric = Number.parseInt(staticRelightTargetDarknessSelect.value, 10);
+    updateUserSettings({
+      debug: { staticRelightTargetDarknessPercent: normalizeStaticRelightTargetDarknessPercent(numeric) },
     });
     lastSettingsKey = "";
   });

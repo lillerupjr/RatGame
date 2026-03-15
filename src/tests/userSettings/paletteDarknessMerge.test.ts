@@ -29,6 +29,18 @@ describe("userSettings palette darkness merge", () => {
     expect(getUserSettings().debug.paletteDarknessPercent).toBe(50);
   });
 
+  it("normalizes static relight debug controls to allowed buckets", () => {
+    updateUserSettings({
+      debug: {
+        staticRelightStrengthPercent: 63 as any,
+        staticRelightTargetDarknessPercent: 61 as any,
+      },
+    });
+
+    expect(getUserSettings().debug.staticRelightStrengthPercent).toBe(75);
+    expect(getUserSettings().debug.staticRelightTargetDarknessPercent).toBe(50);
+  });
+
   it("snaps palette id to a valid id when palette group changes", () => {
     updateUserSettings({
       render: {

@@ -14,6 +14,7 @@ export type StaticRelightLightCandidate = {
   centerX: number;
   centerY: number;
   radiusPx: number;
+  yScale?: number;
   intensity: number;
 };
 
@@ -22,6 +23,7 @@ export type StaticRelightMask = {
   centerX: number;
   centerY: number;
   radiusPx: number;
+  yScale?: number;
   alpha: number;
 };
 
@@ -50,10 +52,12 @@ export type PlanPieceLocalRelightParams = {
 
 type ScoredLight = {
   lightId: string;
-  score: number;
+  rankScore: number;
   centerX: number;
   centerY: number;
   radiusPx: number;
+  yScale?: number;
+  intensity: number;
 };
 
 function clamp01(value: number): number {
@@ -85,9 +89,10 @@ export function planPieceLocalRelight(
   const maxLights = Math.max(1, Math.floor(params.maxLights ?? 2));
   const tileInfluenceRadius = Math.max(0.01, Number(params.tileInfluenceRadius ?? 6));
   const minBlendAlpha = clamp01(params.minBlendAlpha ?? 0.04);
-
-  const pieceCenterX = pieceRect.x + pieceW * 0.5;
-  const pieceCenterY = pieceRect.y + pieceH * 0.5;
+  const pieceMinX = pieceRect.x;
+  const pieceMinY = pieceRect.y;
+  const pieceMaxX = pieceRect.x + pieceW;
+  const pieceMaxY = pieceRect.y + pieceH;
 
   const scored: ScoredLight[] = [];
   for (let i = 0; i < params.lights.length; i++) {
@@ -97,37 +102,35 @@ export function planPieceLocalRelight(
     const tileDistance = Math.hypot(tileDx, tileDy);
     if (tileDistance > tileInfluenceRadius) continue;
 
+    const intensity = clamp01(light.intensity);
+    if (intensity <= 0) continue;
     const radiusPx = Math.max(8, Number(light.radiusPx) || 0);
-    const pixelDistance = Math.hypot(pieceCenterX - light.centerX, pieceCenterY - light.centerY);
-    const pixelFactor = clamp01(1 - pixelDistance / radiusPx);
-    if (pixelFactor <= 0) continue;
+    const nearestX = Math.max(pieceMinX, Math.min(pieceMaxX, light.centerX));
+    const nearestY = Math.max(pieceMinY, Math.min(pieceMaxY, light.centerY));
+    const distanceToPiece = Math.hypot(light.centerX - nearestX, light.centerY - nearestY);
+    if (distanceToPiece > radiusPx) continue;
 
+    const overlapFactor = clamp01(1 - distanceToPiece / radiusPx);
     const tileFactor = clamp01(1 - tileDistance / tileInfluenceRadius);
-    const score = pixelFactor * tileFactor * clamp01(light.intensity);
-    if (score <= 0.01) continue;
+    const rankScore = overlapFactor * tileFactor * intensity;
+    if (rankScore <= 0.001) continue;
 
     scored.push({
       lightId: light.id,
-      score,
+      rankScore,
       centerX: light.centerX,
       centerY: light.centerY,
       radiusPx,
+      yScale: light.yScale,
+      intensity,
     });
   }
 
   if (scored.length === 0) return null;
-  scored.sort((a, b) => b.score - a.score);
+  scored.sort((a, b) => b.rankScore - a.rankScore);
   const selected = scored.slice(0, maxLights);
 
-  let scoreSum = 0;
-  let maxScore = 0;
-  for (let i = 0; i < selected.length; i++) {
-    scoreSum += selected[i].score;
-    if (selected[i].score > maxScore) maxScore = selected[i].score;
-  }
-  if (scoreSum <= 0 || maxScore <= 0) return null;
-
-  const blendAlpha = clamp01(scoreSum * 1.2);
+  const blendAlpha = 1;
   if (blendAlpha < minBlendAlpha) return null;
 
   const masks: StaticRelightMask[] = selected.map((light) => ({
@@ -135,7 +138,8 @@ export function planPieceLocalRelight(
     centerX: light.centerX - pieceRect.x,
     centerY: light.centerY - pieceRect.y,
     radiusPx: light.radiusPx,
-    alpha: clamp01(light.score / maxScore),
+    yScale: light.yScale,
+    alpha: clamp01(light.intensity),
   }));
 
   if (masks.length === 0) return null;

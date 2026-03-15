@@ -1,5 +1,6 @@
 import {
   DEFAULT_DEBUG_SETTINGS,
+  normalizeStaticRelightTargetDarknessPercent,
   normalizePaletteRemapWeightPercent,
   type DebugSettings,
 } from "./debugSettings";
@@ -269,6 +270,14 @@ function mergeSettings(
   }
   if (debugPatch.paletteDarknessPercent !== undefined) {
     debugPatch.paletteDarknessPercent = normalizePaletteRemapWeightPercent(debugPatch.paletteDarknessPercent);
+  }
+  if (debugPatch.staticRelightStrengthPercent !== undefined) {
+    debugPatch.staticRelightStrengthPercent = normalizePaletteRemapWeightPercent(debugPatch.staticRelightStrengthPercent);
+  }
+  if (debugPatch.staticRelightTargetDarknessPercent !== undefined) {
+    debugPatch.staticRelightTargetDarknessPercent = normalizeStaticRelightTargetDarknessPercent(
+      debugPatch.staticRelightTargetDarknessPercent,
+    );
   }
   delete debugPatch.paletteVWeightPercent;
 

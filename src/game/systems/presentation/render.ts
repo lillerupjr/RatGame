@@ -167,7 +167,6 @@ const runtimeIsoDecalCache = new WeakMap<HTMLImageElement, Map<string, HTMLCanva
 const runtimeDiamondCanvasCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
 let staticRelightPieceScratch: HTMLCanvasElement | null = null;
 let staticRelightMaskScratch: HTMLCanvasElement | null = null;
-let staticRelightMaskBrush: HTMLCanvasElement | null = null;
 
 type ScreenPt = { x: number; y: number };
 
@@ -205,25 +204,6 @@ function getStaticRelightMaskScratchContext(
   return ctx;
 }
 
-function getStaticRelightMaskBrush(): HTMLCanvasElement | null {
-  if (staticRelightMaskBrush) return staticRelightMaskBrush;
-  const size = 128;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  configurePixelPerfect(ctx);
-  const c = size * 0.5;
-  const grad = ctx.createRadialGradient(c, c, 0, c, c, c);
-  grad.addColorStop(0, "rgba(255,255,255,1)");
-  grad.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, size, size);
-  staticRelightMaskBrush = canvas;
-  return canvas;
-}
-
 function drawPieceLocalRelightBlend(
   ctx: CanvasRenderingContext2D,
   plan: PieceLocalRelightPlan,
@@ -239,8 +219,6 @@ function drawPieceLocalRelightBlend(
   if (!scratchCtx) return;
   const maskCtx = getStaticRelightMaskScratchContext(pieceW, pieceH);
   if (!maskCtx) return;
-  const maskBrush = getStaticRelightMaskBrush();
-  if (!maskBrush) return;
   let hasMask = false;
   const clampedBlendAlpha = Math.max(0, Math.min(1, plan.blendAlpha));
   if (clampedBlendAlpha <= 0) return;
@@ -255,21 +233,28 @@ function drawPieceLocalRelightBlend(
   maskCtx.globalCompositeOperation = "source-over";
   maskCtx.globalAlpha = 1;
   maskCtx.clearRect(0, 0, pieceW, pieceH);
+  maskCtx.globalCompositeOperation = "lighter";
 
   for (let i = 0; i < plan.masks.length; i++) {
     const mask = plan.masks[i];
     const maskAlpha = Math.max(0, Math.min(1, mask.alpha));
     const radiusPx = Math.max(1, mask.radiusPx);
+    const yScale = Math.max(0.1, Math.min(2, Number(mask.yScale ?? 1)));
     if (maskAlpha <= 0 || radiusPx <= 0) continue;
-    const diameter = radiusPx * 2;
-    maskCtx.globalAlpha = maskAlpha;
-    maskCtx.drawImage(
-      maskBrush,
-      mask.centerX - radiusPx,
-      mask.centerY - radiusPx,
-      diameter,
-      diameter,
+    maskCtx.save();
+    maskCtx.translate(mask.centerX, mask.centerY);
+    maskCtx.scale(1, yScale);
+    const grad = maskCtx.createRadialGradient(0, 0, 0, 0, 0, radiusPx);
+    grad.addColorStop(0, `rgba(255,255,255,${maskAlpha})`);
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    maskCtx.fillStyle = grad;
+    maskCtx.fillRect(
+      -radiusPx,
+      -radiusPx,
+      radiusPx * 2,
+      radiusPx * 2,
     );
+    maskCtx.restore();
     hasMask = true;
   }
 
@@ -911,6 +896,8 @@ export async function renderSystem(
   const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
   type StaticRelightFrameContext = {
     baseDarknessBucket: StaticRelightDarknessBucket;
+    targetDarknessBucket: 0 | 25 | 50 | 75;
+    strengthScale: number;
     lights: StaticRelightLightCandidate[];
     maxLights: number;
     tileInfluenceRadius: number;
@@ -929,7 +916,7 @@ export async function renderSystem(
     pieceH: number,
   ): PieceLocalRelightPlan | null => {
     if (!staticRelightFrame) return null;
-    return planPieceLocalRelight({
+    const planned = planPieceLocalRelight({
       baseDarknessBucket: staticRelightFrame.baseDarknessBucket,
       pieceTileX,
       pieceTileY,
@@ -944,6 +931,17 @@ export async function renderSystem(
       tileInfluenceRadius: staticRelightFrame.tileInfluenceRadius,
       minBlendAlpha: staticRelightFrame.minBlendAlpha,
     });
+    if (!planned) return null;
+    const targetDarknessBucket = staticRelightFrame.targetDarknessBucket < staticRelightFrame.baseDarknessBucket
+      ? staticRelightFrame.targetDarknessBucket
+      : planned.targetDarknessBucket;
+    const strengthBlendAlpha = clamp(staticRelightFrame.strengthScale, 0, 1);
+    if (strengthBlendAlpha < staticRelightFrame.minBlendAlpha) return null;
+    return {
+      ...planned,
+      targetDarknessBucket,
+      blendAlpha: strengthBlendAlpha,
+    };
   };
 
   // Existing optional cull (kept, but unrelated to masking)
@@ -1723,7 +1721,9 @@ export async function renderSystem(
   });
   const staticRelightPocEnabled = renderSettings.staticRelightPocEnabled === true;
   const baseRelightDarknessBucket = settings.debug.paletteDarknessPercent as StaticRelightDarknessBucket;
-  if (staticRelightPocEnabled && baseRelightDarknessBucket > 0) {
+  const staticRelightStrengthScale = Math.max(0, Math.min(1, settings.debug.staticRelightStrengthPercent / 100));
+  const staticRelightTargetDarkness = settings.debug.staticRelightTargetDarknessPercent as 0 | 25 | 50 | 75;
+  if (staticRelightPocEnabled && baseRelightDarknessBucket > 0 && staticRelightStrengthScale > 0) {
     const worldScale = Math.max(1e-6, s);
     const deviceToViewX = (deviceX: number) =>
       (deviceX - viewport.safeOffsetDeviceX) / worldScale - camTx;
@@ -1749,12 +1749,17 @@ export async function renderSystem(
         centerX: deviceToViewX(projected.sx),
         centerY: deviceToViewY(centerDeviceY),
         radiusPx: radiusDevicePx / worldScale,
+        yScale: projected.shape === "STREET_LAMP"
+          ? Math.max(0.1, Math.min(1.5, projected.pool?.yScale ?? 1))
+          : 1,
         intensity,
       });
     }
     if (relightLights.length > 0) {
       staticRelightFrame = {
         baseDarknessBucket: baseRelightDarknessBucket,
+        targetDarknessBucket: staticRelightTargetDarkness,
+        strengthScale: staticRelightStrengthScale,
         lights: relightLights,
         maxLights: STATIC_RELIGHT_MAX_LIGHTS,
         tileInfluenceRadius: STATIC_RELIGHT_TILE_RADIUS,

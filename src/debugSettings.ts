@@ -19,6 +19,8 @@ export type ObjectiveDebugSettings = {
 
 export const PALETTE_REMAP_WEIGHT_OPTIONS = [0, 25, 50, 75, 100] as const;
 export type PaletteRemapWeightPercent = (typeof PALETTE_REMAP_WEIGHT_OPTIONS)[number];
+export const STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS = [0, 25, 50, 75] as const;
+export type StaticRelightTargetDarknessPercent = (typeof STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS)[number];
 
 export function normalizePaletteRemapWeightPercent(value: unknown): PaletteRemapWeightPercent {
   const numeric = Number(value);
@@ -28,6 +30,25 @@ export function normalizePaletteRemapWeightPercent(value: unknown): PaletteRemap
   let nearestDist = Math.abs(numeric - nearest);
   for (let i = 1; i < PALETTE_REMAP_WEIGHT_OPTIONS.length; i++) {
     const candidate = PALETTE_REMAP_WEIGHT_OPTIONS[i];
+    const dist = Math.abs(numeric - candidate);
+    if (dist < nearestDist) {
+      nearest = candidate;
+      nearestDist = dist;
+    }
+  }
+  return nearest;
+}
+
+export function normalizeStaticRelightTargetDarknessPercent(
+  value: unknown,
+): StaticRelightTargetDarknessPercent {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 50;
+
+  let nearest: StaticRelightTargetDarknessPercent = STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS[0];
+  let nearestDist = Math.abs(numeric - nearest);
+  for (let i = 1; i < STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS.length; i++) {
+    const candidate = STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS[i];
     const dist = Math.abs(numeric - candidate);
     if (dist < nearestDist) {
       nearest = candidate;
@@ -60,6 +81,8 @@ export type DebugSettings = {
   fireRateMult: number;
   paletteSWeightPercent: PaletteRemapWeightPercent;
   paletteDarknessPercent: PaletteRemapWeightPercent;
+  staticRelightStrengthPercent: PaletteRemapWeightPercent;
+  staticRelightTargetDarknessPercent: StaticRelightTargetDarknessPercent;
   entityAnchorOverlay: boolean;
   enemyAimOverlay: boolean;
   lootGoblinOverlay: boolean;
@@ -78,6 +101,8 @@ export type BooleanDebugSettingKey = Exclude<
   | "fireRateMult"
   | "paletteSWeightPercent"
   | "paletteDarknessPercent"
+  | "staticRelightStrengthPercent"
+  | "staticRelightTargetDarknessPercent"
   | "neutralBirdAI"
   | "objectives"
 >;
@@ -145,6 +170,8 @@ export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
   fireRateMult: 1,
   paletteSWeightPercent: 0,
   paletteDarknessPercent: 0,
+  staticRelightStrengthPercent: 100,
+  staticRelightTargetDarknessPercent: 50,
   entityAnchorOverlay: false,
   enemyAimOverlay: false,
   lootGoblinOverlay: false,

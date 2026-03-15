@@ -23,7 +23,9 @@ import {
   DEBUG_TOGGLE_DEFINITIONS,
   NEUTRAL_BIRD_FORCE_STATES,
   PALETTE_REMAP_WEIGHT_OPTIONS,
+  STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS,
   makeAllDebugOffSettings,
+  normalizeStaticRelightTargetDarknessPercent,
   type BooleanDebugSettingKey,
 } from "./debugSettings";
 import { getUserSettings, initUserSettings, updateUserSettings } from "./userSettings";
@@ -432,6 +434,41 @@ function installDevSettingsUi(): DevSettingsUiController {
       },
     });
   });
+  const staticRelightStrengthSelect = createPaletteWeightSelect("Static Relight Strength", (value) => {
+    updateUserSettings({
+      debug: {
+        staticRelightStrengthPercent: value,
+      },
+    });
+  });
+  const staticRelightTargetDarknessRow = document.createElement("label");
+  staticRelightTargetDarknessRow.style.display = "flex";
+  staticRelightTargetDarknessRow.style.alignItems = "center";
+  staticRelightTargetDarknessRow.style.justifyContent = "space-between";
+  staticRelightTargetDarknessRow.style.gap = "10px";
+  staticRelightTargetDarknessRow.style.padding = "4px 0";
+  const staticRelightTargetDarknessText = document.createElement("span");
+  staticRelightTargetDarknessText.textContent = "Static Relight Target Darkness";
+  const staticRelightTargetDarknessSelect = document.createElement("select");
+  applyDevSelectStyle(staticRelightTargetDarknessSelect);
+  for (let i = 0; i < STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS.length; i++) {
+    const optionValue = STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS[i];
+    const opt = document.createElement("option");
+    opt.value = `${optionValue}`;
+    opt.textContent = `${optionValue}%`;
+    staticRelightTargetDarknessSelect.appendChild(opt);
+  }
+  staticRelightTargetDarknessSelect.addEventListener("change", () => {
+    const value = Number.parseInt(staticRelightTargetDarknessSelect.value, 10);
+    updateUserSettings({
+      debug: {
+        staticRelightTargetDarknessPercent: normalizeStaticRelightTargetDarknessPercent(value),
+      },
+    });
+  });
+  staticRelightTargetDarknessRow.appendChild(staticRelightTargetDarknessText);
+  staticRelightTargetDarknessRow.appendChild(staticRelightTargetDarknessSelect);
+  panel.appendChild(staticRelightTargetDarknessRow);
 
   const lightColorModeRow = document.createElement("label");
   lightColorModeRow.style.display = "flex";
@@ -801,6 +838,8 @@ function installDevSettingsUi(): DevSettingsUiController {
     waterFlowValue.textContent = `${s.debug.waterFlowRate.toFixed(2)}x`;
     paletteSWeightSelect.value = `${s.debug.paletteSWeightPercent}`;
     paletteDarknessSelect.value = `${s.debug.paletteDarknessPercent}`;
+    staticRelightStrengthSelect.value = `${s.debug.staticRelightStrengthPercent}`;
+    staticRelightTargetDarknessSelect.value = `${s.debug.staticRelightTargetDarknessPercent}`;
     dmgMultBtn.textContent = `${s.debug.dmgMult}x`;
     fireRateMultBtn.textContent = `${s.debug.fireRateMult}x`;
     entityShadowsInput.checked = s.render.entityShadowsDisable;
