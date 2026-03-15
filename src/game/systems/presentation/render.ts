@@ -120,7 +120,11 @@ import { BAZOOKA_EXHAUST_OFFSET, bazookaExhaustAssets } from "../../vfx/bazookaE
 import { TILE_ID_OCEAN } from "../../world/semanticFields";
 import { getZoneTrialObjectiveState } from "../../objectives/zoneObjectiveSystem";
 import { renderZoneObjectives } from "../../render/renderZoneObjectives";
-import { resolveActivePaletteId, resolveActivePaletteSwapWeights } from "../../render/activePalette";
+import {
+  resolveActivePaletteId,
+  resolveActivePaletteSwapWeights,
+  resolveActivePaletteVariantKey,
+} from "../../render/activePalette";
 import { shouldApplyAmbientDarknessOverlay } from "../../render/renderDebugPolicy";
 import { resolveNavArrowTarget } from "../../ui/navArrowTarget";
 import { renderNavArrow } from "../../ui/navArrowRender";
@@ -195,6 +199,9 @@ const runtimeDiamondCanvasCache = new WeakMap<HTMLCanvasElement, HTMLCanvasEleme
 let staticRelightPieceScratch: HTMLCanvasElement | null = null;
 let staticRelightMaskScratch: HTMLCanvasElement | null = null;
 const staticRelightBakeStore = new StaticRelightBakeStore<HTMLCanvasElement>();
+const STATIC_RELIGHT_RUNTIME_RETRY_INTERVAL_MS = 50;
+let staticRelightPendingRuntimeRebuildContextKey = "";
+let staticRelightPendingRuntimeRebuildAtMs = 0;
 
 type ScreenPt = { x: number; y: number };
 
@@ -425,6 +432,7 @@ function resolveStaticRelightRuntimeState(w: World): StaticRelightRuntimeState {
   const settings = getUserSettings();
   const renderSettings = settings.render;
   const activePaletteId = resolveActivePaletteId();
+  const activePaletteVariantKey = resolveActivePaletteVariantKey();
   const activePaletteSwapWeights = resolveActivePaletteSwapWeights();
   const staticRelightPocEnabled = renderSettings.staticRelightPocEnabled === true;
   const baseDarknessBucket = settings.debug.paletteDarknessPercent as StaticRelightDarknessBucket;
@@ -512,7 +520,12 @@ function resolveStaticRelightRuntimeState(w: World): StaticRelightRuntimeState {
   const contextKey = buildStaticRelightBakeContextKey({
     mapId: compiledMap.id,
     relightEnabled: enabled,
+    staticRelightPocEnabled,
     paletteId: activePaletteId,
+    paletteVariantKey: activePaletteVariantKey,
+    paletteSwapEnabled: renderSettings.paletteSwapEnabled === true,
+    paletteGroup: renderSettings.paletteGroup,
+    paletteSelectionId: renderSettings.paletteId,
     saturationWeightPercent: Math.round(activePaletteSwapWeights.sWeight * 100),
     darknessPercent: baseDarknessBucket,
     baseDarknessBucket: baseDarknessBucket,
@@ -2315,12 +2328,39 @@ export async function renderSystem(
   }
   const staticRelightContextChanged = staticRelightBakeStore.resetIfContextChanged(staticRelight.contextKey);
   staticRelightFrame = staticRelight.frame;
+  if (staticRelightContextChanged) {
+    staticRelightPendingRuntimeRebuildContextKey = "";
+    staticRelightPendingRuntimeRebuildAtMs = 0;
+  }
   if (staticRelightContextChanged && staticRelight.frame) {
-    void rebuildFullMapStaticGroundRelightBake(
+    const result = rebuildFullMapStaticGroundRelightBake(
       staticRelight.compiledMap,
       rampRoadTiles,
       staticRelight.frame,
     );
+    if (result.needsRetry) {
+      staticRelightPendingRuntimeRebuildContextKey = staticRelight.contextKey;
+      staticRelightPendingRuntimeRebuildAtMs = performance.now() + STATIC_RELIGHT_RUNTIME_RETRY_INTERVAL_MS;
+    }
+  } else if (
+    staticRelight.frame
+    && staticRelightPendingRuntimeRebuildContextKey === staticRelight.contextKey
+    && performance.now() >= staticRelightPendingRuntimeRebuildAtMs
+  ) {
+    const retryResult = rebuildFullMapStaticGroundRelightBake(
+      staticRelight.compiledMap,
+      rampRoadTiles,
+      staticRelight.frame,
+    );
+    if (retryResult.needsRetry) {
+      staticRelightPendingRuntimeRebuildAtMs = performance.now() + STATIC_RELIGHT_RUNTIME_RETRY_INTERVAL_MS;
+    } else {
+      staticRelightPendingRuntimeRebuildContextKey = "";
+      staticRelightPendingRuntimeRebuildAtMs = 0;
+    }
+  } else if (!staticRelight.frame) {
+    staticRelightPendingRuntimeRebuildContextKey = "";
+    staticRelightPendingRuntimeRebuildAtMs = 0;
   }
 
   // ----------------------------

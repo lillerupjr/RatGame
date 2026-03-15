@@ -8,7 +8,12 @@ export type StaticRelightPieceKind = "FLOOR_TOP" | "DECAL_TOP" | "STRUCTURE_SLIC
 export type StaticRelightBakeContextKeyInput = {
   mapId: string;
   relightEnabled: boolean;
+  staticRelightPocEnabled?: boolean;
   paletteId: string;
+  paletteVariantKey?: string;
+  paletteSwapEnabled?: boolean;
+  paletteGroup?: string;
+  paletteSelectionId?: string;
   saturationWeightPercent: number;
   darknessPercent: number;
   baseDarknessBucket: StaticRelightDarknessBucket;
@@ -66,7 +71,12 @@ export function buildStaticRelightBakeContextKey(
   return [
     `map:${input.mapId}`,
     `enabled:${input.relightEnabled ? 1 : 0}`,
+    `poc:${input.staticRelightPocEnabled ? 1 : 0}`,
     `pal:${input.paletteId}`,
+    `palv:${input.paletteVariantKey ?? ""}`,
+    `swap:${input.paletteSwapEnabled ? 1 : 0}`,
+    `palg:${input.paletteGroup ?? ""}`,
+    `pals:${input.paletteSelectionId ?? ""}`,
     `sat:${q(input.saturationWeightPercent, 1)}`,
     `dark:${q(input.darknessPercent, 1)}`,
     `base:${input.baseDarknessBucket}`,

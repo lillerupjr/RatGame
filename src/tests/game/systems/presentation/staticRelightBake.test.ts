@@ -36,7 +36,12 @@ describe("staticRelightBake", () => {
     const base = buildStaticRelightBakeContextKey({
       mapId: "downtown",
       relightEnabled: true,
+      staticRelightPocEnabled: true,
       paletteId: "fiery_plague_gb",
+      paletteVariantKey: "fiery_plague_gb@@sw:75@@dk:100",
+      paletteSwapEnabled: true,
+      paletteGroup: "live",
+      paletteSelectionId: "fiery_plague_gb",
       saturationWeightPercent: 75,
       darknessPercent: 100,
       baseDarknessBucket: 100,
@@ -50,7 +55,12 @@ describe("staticRelightBake", () => {
     const mapChanged = buildStaticRelightBakeContextKey({
       mapId: "china_town",
       relightEnabled: true,
+      staticRelightPocEnabled: true,
       paletteId: "fiery_plague_gb",
+      paletteVariantKey: "fiery_plague_gb@@sw:75@@dk:100",
+      paletteSwapEnabled: true,
+      paletteGroup: "live",
+      paletteSelectionId: "fiery_plague_gb",
       saturationWeightPercent: 75,
       darknessPercent: 100,
       baseDarknessBucket: 100,
@@ -63,7 +73,12 @@ describe("staticRelightBake", () => {
     const strengthChanged = buildStaticRelightBakeContextKey({
       mapId: "downtown",
       relightEnabled: true,
+      staticRelightPocEnabled: true,
       paletteId: "fiery_plague_gb",
+      paletteVariantKey: "fiery_plague_gb@@sw:75@@dk:100",
+      paletteSwapEnabled: true,
+      paletteGroup: "live",
+      paletteSelectionId: "fiery_plague_gb",
       saturationWeightPercent: 75,
       darknessPercent: 100,
       baseDarknessBucket: 100,
@@ -76,7 +91,12 @@ describe("staticRelightBake", () => {
     const targetChanged = buildStaticRelightBakeContextKey({
       mapId: "downtown",
       relightEnabled: true,
+      staticRelightPocEnabled: true,
       paletteId: "fiery_plague_gb",
+      paletteVariantKey: "fiery_plague_gb@@sw:75@@dk:100",
+      paletteSwapEnabled: true,
+      paletteGroup: "live",
+      paletteSelectionId: "fiery_plague_gb",
       saturationWeightPercent: 75,
       darknessPercent: 100,
       baseDarknessBucket: 100,
@@ -89,7 +109,12 @@ describe("staticRelightBake", () => {
     const lightOverrideChanged = buildStaticRelightBakeContextKey({
       mapId: "downtown",
       relightEnabled: true,
+      staticRelightPocEnabled: true,
       paletteId: "fiery_plague_gb",
+      paletteVariantKey: "fiery_plague_gb@@sw:75@@dk:100",
+      paletteSwapEnabled: true,
+      paletteGroup: "live",
+      paletteSelectionId: "fiery_plague_gb",
       saturationWeightPercent: 75,
       darknessPercent: 100,
       baseDarknessBucket: 100,
@@ -99,11 +124,30 @@ describe("staticRelightBake", () => {
       lightStrengthOverride: "authored",
       lights: makeLights(),
     });
+    const paletteSelectionChanged = buildStaticRelightBakeContextKey({
+      mapId: "downtown",
+      relightEnabled: true,
+      staticRelightPocEnabled: true,
+      paletteId: "fiery_plague_gb",
+      paletteVariantKey: "fiery_plague_gb@@sw:75@@dk:100",
+      paletteSwapEnabled: true,
+      paletteGroup: "modded",
+      paletteSelectionId: "cga_mono",
+      saturationWeightPercent: 75,
+      darknessPercent: 100,
+      baseDarknessBucket: 100,
+      staticRelightStrengthPercent: 75,
+      staticRelightTargetDarknessPercent: 50,
+      lightColorModeOverride: "authored",
+      lightStrengthOverride: "authored",
+      lights: makeLights(),
+    });
 
     expect(mapChanged).not.toBe(base);
     expect(strengthChanged).not.toBe(base);
     expect(targetChanged).not.toBe(base);
     expect(lightOverrideChanged).not.toBe(base);
+    expect(paletteSelectionChanged).not.toBe(base);
   });
 
   it("keeps context key stable for equivalent quantized lights", () => {
