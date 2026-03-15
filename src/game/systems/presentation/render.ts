@@ -137,6 +137,11 @@ import {
   type StaticRelightDarknessBucket,
   type StaticRelightLightCandidate,
 } from "./staticRelightPoc";
+import {
+  buildStaticRelightBakeContextKey,
+  buildStaticRelightPieceKey,
+  StaticRelightBakeStore,
+} from "./staticRelightBake";
 
 const DEBUG_PLAYER_WEDGE = false;
 const DISABLE_WALLS_AND_CURTAINS = true;
@@ -167,6 +172,7 @@ const runtimeIsoDecalCache = new WeakMap<HTMLImageElement, Map<string, HTMLCanva
 const runtimeDiamondCanvasCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
 let staticRelightPieceScratch: HTMLCanvasElement | null = null;
 let staticRelightMaskScratch: HTMLCanvasElement | null = null;
+const staticRelightBakeStore = new StaticRelightBakeStore<HTMLCanvasElement>();
 
 type ScreenPt = { x: number; y: number };
 
@@ -204,37 +210,18 @@ function getStaticRelightMaskScratchContext(
   return ctx;
 }
 
-function drawPieceLocalRelightBlend(
-  ctx: CanvasRenderingContext2D,
+function drawPieceLocalRelightMask(
+  maskCtx: CanvasRenderingContext2D,
   plan: PieceLocalRelightPlan,
-  pieceX: number,
-  pieceY: number,
   pieceW: number,
   pieceH: number,
-  drawVariantLocal: (target: CanvasRenderingContext2D, width: number, height: number) => void,
-): void {
-  if (!(pieceW > 0) || !(pieceH > 0)) return;
-  if (!(plan.blendAlpha > 0) || plan.masks.length === 0) return;
-  const scratchCtx = getStaticRelightPieceScratchContext(pieceW, pieceH);
-  if (!scratchCtx) return;
-  const maskCtx = getStaticRelightMaskScratchContext(pieceW, pieceH);
-  if (!maskCtx) return;
+): boolean {
   let hasMask = false;
-  const clampedBlendAlpha = Math.max(0, Math.min(1, plan.blendAlpha));
-  if (clampedBlendAlpha <= 0) return;
-
-  scratchCtx.setTransform(1, 0, 0, 1, 0, 0);
-  scratchCtx.globalCompositeOperation = "source-over";
-  scratchCtx.globalAlpha = 1;
-  scratchCtx.clearRect(0, 0, pieceW, pieceH);
-  drawVariantLocal(scratchCtx, pieceW, pieceH);
-
   maskCtx.setTransform(1, 0, 0, 1, 0, 0);
   maskCtx.globalCompositeOperation = "source-over";
   maskCtx.globalAlpha = 1;
   maskCtx.clearRect(0, 0, pieceW, pieceH);
   maskCtx.globalCompositeOperation = "lighter";
-
   for (let i = 0; i < plan.masks.length; i++) {
     const mask = plan.masks[i];
     const maskAlpha = Math.max(0, Math.min(1, mask.alpha));
@@ -248,27 +235,55 @@ function drawPieceLocalRelightBlend(
     grad.addColorStop(0, `rgba(255,255,255,${maskAlpha})`);
     grad.addColorStop(1, "rgba(255,255,255,0)");
     maskCtx.fillStyle = grad;
-    maskCtx.fillRect(
-      -radiusPx,
-      -radiusPx,
-      radiusPx * 2,
-      radiusPx * 2,
-    );
+    maskCtx.fillRect(-radiusPx, -radiusPx, radiusPx * 2, radiusPx * 2);
     maskCtx.restore();
     hasMask = true;
   }
+  return hasMask;
+}
 
-  if (!hasMask) return;
+function composePieceLocalRelightBakedCanvas(
+  plan: PieceLocalRelightPlan,
+  pieceW: number,
+  pieceH: number,
+  drawBaseLocal: (target: CanvasRenderingContext2D, width: number, height: number) => void,
+  drawVariantLocal: (target: CanvasRenderingContext2D, width: number, height: number) => void,
+): HTMLCanvasElement | null {
+  if (!(pieceW > 0) || !(pieceH > 0)) return null;
+  const output = document.createElement("canvas");
+  output.width = Math.max(1, Math.ceil(pieceW));
+  output.height = Math.max(1, Math.ceil(pieceH));
+  const outputCtx = output.getContext("2d");
+  if (!outputCtx) return null;
+  configurePixelPerfect(outputCtx);
+  outputCtx.imageSmoothingEnabled = false;
+  drawBaseLocal(outputCtx, pieceW, pieceH);
 
+  if (!(plan.blendAlpha > 0) || plan.masks.length === 0) return output;
+  const clampedBlendAlpha = Math.max(0, Math.min(1, plan.blendAlpha));
+  if (clampedBlendAlpha <= 0) return output;
+  const scratchCtx = getStaticRelightPieceScratchContext(pieceW, pieceH);
+  if (!scratchCtx) return output;
+  const maskCtx = getStaticRelightMaskScratchContext(pieceW, pieceH);
+  if (!maskCtx) return output;
+
+  scratchCtx.setTransform(1, 0, 0, 1, 0, 0);
+  scratchCtx.globalCompositeOperation = "source-over";
+  scratchCtx.globalAlpha = 1;
+  scratchCtx.clearRect(0, 0, pieceW, pieceH);
+  drawVariantLocal(scratchCtx, pieceW, pieceH);
+  const hasMask = drawPieceLocalRelightMask(maskCtx, plan, pieceW, pieceH);
+  if (!hasMask) return output;
   scratchCtx.globalCompositeOperation = "destination-in";
   scratchCtx.globalAlpha = 1;
   scratchCtx.drawImage(staticRelightMaskScratch!, 0, 0, pieceW, pieceH);
 
-  ctx.save();
-  ctx.globalCompositeOperation = "source-over";
-  ctx.globalAlpha = clampedBlendAlpha;
-  ctx.drawImage(staticRelightPieceScratch!, pieceX, pieceY, pieceW, pieceH);
-  ctx.restore();
+  outputCtx.save();
+  outputCtx.globalCompositeOperation = "source-over";
+  outputCtx.globalAlpha = clampedBlendAlpha;
+  outputCtx.drawImage(staticRelightPieceScratch!, 0, 0, pieceW, pieceH);
+  outputCtx.restore();
+  return output;
 }
 
 function smoothTowardByHalfLife(current: number, target: number, halfLifeSec: number, dtRealSec: number): number {
@@ -943,6 +958,60 @@ export async function renderSystem(
       blendAlpha: strengthBlendAlpha,
     };
   };
+  const floorRelightPieceKey = (
+    tx: number,
+    ty: number,
+    zBase: number,
+    renderAnchorY: number,
+    family: "sidewalk" | "asphalt" | "park",
+    variantIndex: number,
+    rotationQuarterTurns: 0 | 1 | 2 | 3,
+  ): string => buildStaticRelightPieceKey({
+    kind: "FLOOR_TOP",
+    parts: [tx, ty, zBase, renderAnchorY, family, variantIndex, rotationQuarterTurns],
+  });
+  const decalRelightPieceKey = (
+    tx: number,
+    ty: number,
+    zBase: number,
+    renderAnchorY: number,
+    setId: RuntimeDecalSetId,
+    variantIndex: number,
+    rotationQuarterTurns: 0 | 1 | 2 | 3,
+    decalScale: number,
+  ): string => buildStaticRelightPieceKey({
+    kind: "DECAL_TOP",
+    parts: [tx, ty, zBase, renderAnchorY, setId, variantIndex, rotationQuarterTurns, decalScale],
+  });
+  const structureSliceRelightPieceKey = (
+    o: StampOverlay,
+    bandIndex: number,
+    ownerTx: number,
+    ownerTy: number,
+    srcX: number,
+    srcY: number,
+    srcW: number,
+    srcH: number,
+    drawW: number,
+    drawH: number,
+    flipped: boolean,
+  ): string => buildStaticRelightPieceKey({
+    kind: "STRUCTURE_SLICE",
+    parts: [
+      o.id,
+      o.spriteId,
+      bandIndex,
+      ownerTx,
+      ownerTy,
+      srcX,
+      srcY,
+      srcW,
+      srcH,
+      drawW,
+      drawH,
+      flipped ? 1 : 0,
+    ],
+  });
 
   // Existing optional cull (kept, but unrelated to masking)
   const ENABLE_BUILDING_SOUTH_CULL = false;
@@ -1085,35 +1154,24 @@ export async function renderSystem(
         const dy = centerY - SIDEWALK_ISO_HEIGHT * 0.5;
         const drawX = snapPx(dx);
         const drawY = snapPx(dy);
-        ctx.drawImage(baseBaked, drawX, drawY);
-
-        const relightPlan = planStaticRelightForPiece(
-          tx,
-          ty,
-          drawX,
-          drawY,
-          baseBaked.width,
-          baseBaked.height,
-        );
-        if (relightPlan) {
-          const relightSpriteId = `tiles/floor/${family}/${variantIndex}`;
-          const lighterRec = getSpriteByIdForDarknessPercent(relightSpriteId, relightPlan.targetDarknessBucket);
-          if (lighterRec.ready && lighterRec.img && lighterRec.img.width > 0 && lighterRec.img.height > 0) {
-            const lighterBaked = getRuntimeIsoTopCanvas(lighterRec.img, rotationQuarterTurns);
-            if (lighterBaked) {
-              drawPieceLocalRelightBlend(
-                ctx,
-                relightPlan,
-                drawX,
-                drawY,
-                baseBaked.width,
-                baseBaked.height,
-                (target) => {
-                  target.drawImage(lighterBaked, 0, 0, baseBaked.width, baseBaked.height);
-                },
-              );
-            }
-          }
+        let relitCanvas: HTMLCanvasElement | null = null;
+        if (staticRelightFrame) {
+          const pieceKey = floorRelightPieceKey(
+            tx,
+            ty,
+            zBase,
+            renderAnchorY,
+            family,
+            variantIndex,
+            rotationQuarterTurns,
+          );
+          const bakedEntry = staticRelightBakeStore.get(pieceKey);
+          if (bakedEntry?.kind === "RELIT") relitCanvas = bakedEntry.baked;
+        }
+        if (relitCanvas) {
+          ctx.drawImage(relitCanvas, drawX, drawY, baseBaked.width, baseBaked.height);
+        } else {
+          ctx.drawImage(baseBaked, drawX, drawY);
         }
       }
 
@@ -1167,37 +1225,25 @@ export async function renderSystem(
         const dy = centerY - baked.height * 0.5;
         const drawX = shouldSnapRoadMarking ? Math.round(dx) : snapPx(dx);
         const drawY = shouldSnapRoadMarking ? Math.round(dy) : snapPx(dy);
-        ctx.drawImage(baked, drawX, drawY);
-
-        const relightPlan = planStaticRelightForPiece(
-          Math.floor(tx),
-          Math.floor(ty),
-          drawX,
-          drawY,
-          baked.width,
-          baked.height,
-        );
-        if (relightPlan) {
-          const decalSpriteId = getDecalSpriteId(setId, variantIndex);
-          if (decalSpriteId) {
-            const lighterRec = getSpriteByIdForDarknessPercent(decalSpriteId, relightPlan.targetDarknessBucket);
-            if (lighterRec.ready && lighterRec.img && lighterRec.img.width > 0 && lighterRec.img.height > 0) {
-              const lighterBaked = getRuntimeIsoDecalCanvas(lighterRec.img, rotationQuarterTurns, decalScale);
-              if (lighterBaked) {
-                drawPieceLocalRelightBlend(
-                  ctx,
-                  relightPlan,
-                  drawX,
-                  drawY,
-                  baked.width,
-                  baked.height,
-                  (target) => {
-                    target.drawImage(lighterBaked, 0, 0, baked.width, baked.height);
-                  },
-                );
-              }
-            }
-          }
+        let relitCanvas: HTMLCanvasElement | null = null;
+        if (staticRelightFrame) {
+          const pieceKey = decalRelightPieceKey(
+            Math.floor(tx),
+            Math.floor(ty),
+            zBase,
+            renderAnchorY,
+            setId,
+            variantIndex,
+            rotationQuarterTurns,
+            decalScale,
+          );
+          const bakedEntry = staticRelightBakeStore.get(pieceKey);
+          if (bakedEntry?.kind === "RELIT") relitCanvas = bakedEntry.baked;
+        }
+        if (relitCanvas) {
+          ctx.drawImage(relitCanvas, drawX, drawY, baked.width, baked.height);
+        } else {
+          ctx.drawImage(baked, drawX, drawY);
         }
       }
     };
@@ -1719,53 +1765,317 @@ export async function renderSystem(
     isTileInRenderRadius,
     projectToScreen: (worldX, worldY, zPx) => viewport.project(worldX, worldY, zPx),
   });
+  const mapStaticLightRegistry = buildFrameWorldLightRegistry({
+    mapId: compiledMap.id,
+    tileWorld: T,
+    elevPx: ELEV_PX,
+    worldScale: 1,
+    streetLampOcclusionEnabled: w.lighting.occlusionEnabled,
+    lightOverrides: {
+      colorModeOverride: currentSettings.render.lightColorModeOverride,
+      strengthOverride: currentSettings.render.lightStrengthOverride,
+    },
+    lightPalette: {
+      paletteId: activePaletteId,
+      saturationWeight: activePaletteSwapWeights.sWeight,
+    },
+    staticLights: compiledMap.lightDefs,
+    runtimeBeam: {
+      active: false,
+      startWorldX: 0,
+      startWorldY: 0,
+      endWorldX: 0,
+      endWorldY: 0,
+      zVisual: 0,
+      widthPx: 0,
+      glowIntensity: 0,
+    },
+    tileHeightAtWorld: tileHAtWorld,
+    isTileInRenderRadius: () => true,
+    projectToScreen: (worldX, worldY, zPx) => {
+      const p = worldToScreen(worldX, worldY);
+      return { x: p.x, y: p.y - zPx };
+    },
+  });
   const staticRelightPocEnabled = renderSettings.staticRelightPocEnabled === true;
   const baseRelightDarknessBucket = settings.debug.paletteDarknessPercent as StaticRelightDarknessBucket;
   const staticRelightStrengthScale = Math.max(0, Math.min(1, settings.debug.staticRelightStrengthPercent / 100));
   const staticRelightTargetDarkness = settings.debug.staticRelightTargetDarknessPercent as 0 | 25 | 50 | 75;
-  if (staticRelightPocEnabled && baseRelightDarknessBucket > 0 && staticRelightStrengthScale > 0) {
-    const worldScale = Math.max(1e-6, s);
-    const deviceToViewX = (deviceX: number) =>
-      (deviceX - viewport.safeOffsetDeviceX) / worldScale - camTx;
-    const deviceToViewY = (deviceY: number) =>
-      (deviceY - viewport.safeOffsetDeviceY) / worldScale - camTy;
-    const relightLights: StaticRelightLightCandidate[] = [];
-    for (let i = 0; i < worldLightRegistry.lights.length; i++) {
-      const light = worldLightRegistry.lights[i];
+  const staticRelightEnabled = staticRelightPocEnabled
+    && baseRelightDarknessBucket > 0
+    && staticRelightStrengthScale > 0;
+  const relightLights: StaticRelightLightCandidate[] = [];
+  if (staticRelightEnabled) {
+    for (let i = 0; i < mapStaticLightRegistry.lights.length; i++) {
+      const light = mapStaticLightRegistry.lights[i];
       if (light.source !== "MAP_STATIC") continue;
       const projected = light.projected;
       const intensity = Math.max(0, projected.intensity ?? 0);
       if (intensity <= 0) continue;
-      const radiusDevicePx = projected.shape === "STREET_LAMP"
+      const radiusPx = projected.shape === "STREET_LAMP"
         ? Math.max(1, projected.pool?.radiusPx ?? projected.radiusPx)
         : Math.max(1, projected.radiusPx);
-      const centerDeviceY = projected.shape === "STREET_LAMP"
+      const centerY = projected.shape === "STREET_LAMP"
         ? (Number.isFinite(projected.poolSy) ? (projected.poolSy as number) : projected.sy)
         : projected.sy;
       relightLights.push({
         id: light.id,
         tileX: light.anchorTx,
         tileY: light.anchorTy,
-        centerX: deviceToViewX(projected.sx),
-        centerY: deviceToViewY(centerDeviceY),
-        radiusPx: radiusDevicePx / worldScale,
+        centerX: projected.sx,
+        centerY,
+        radiusPx,
         yScale: projected.shape === "STREET_LAMP"
           ? Math.max(0.1, Math.min(1.5, projected.pool?.yScale ?? 1))
           : 1,
         intensity,
       });
     }
-    if (relightLights.length > 0) {
-      staticRelightFrame = {
-        baseDarknessBucket: baseRelightDarknessBucket,
-        targetDarknessBucket: staticRelightTargetDarkness,
-        strengthScale: staticRelightStrengthScale,
-        lights: relightLights,
-        maxLights: STATIC_RELIGHT_MAX_LIGHTS,
-        tileInfluenceRadius: STATIC_RELIGHT_TILE_RADIUS,
-        minBlendAlpha: STATIC_RELIGHT_MIN_BLEND_ALPHA,
-      };
+  }
+  const staticRelightContextKey = buildStaticRelightBakeContextKey({
+    mapId: compiledMap.id,
+    relightEnabled: staticRelightEnabled,
+    paletteId: activePaletteId,
+    saturationWeightPercent: Math.round(activePaletteSwapWeights.sWeight * 100),
+    darknessPercent: baseRelightDarknessBucket,
+    baseDarknessBucket: baseRelightDarknessBucket,
+    staticRelightStrengthPercent: settings.debug.staticRelightStrengthPercent,
+    staticRelightTargetDarknessPercent: staticRelightTargetDarkness,
+    lightColorModeOverride: currentSettings.render.lightColorModeOverride,
+    lightStrengthOverride: currentSettings.render.lightStrengthOverride,
+    lights: relightLights,
+  });
+  const staticRelightContextChanged = staticRelightBakeStore.resetIfContextChanged(staticRelightContextKey);
+  if (staticRelightEnabled && relightLights.length > 0) {
+    staticRelightFrame = {
+      baseDarknessBucket: baseRelightDarknessBucket,
+      targetDarknessBucket: staticRelightTargetDarkness,
+      strengthScale: staticRelightStrengthScale,
+      lights: relightLights,
+      maxLights: STATIC_RELIGHT_MAX_LIGHTS,
+      tileInfluenceRadius: STATIC_RELIGHT_TILE_RADIUS,
+      minBlendAlpha: STATIC_RELIGHT_MIN_BLEND_ALPHA,
+    };
+  }
+  const rebuildFullMapStaticRelightBake = () => {
+    if (!staticRelightFrame) return;
+    const seenSurfaceIds = new Set<string>();
+    for (const surfaces of compiledMap.surfacesByKey.values()) {
+      for (let i = 0; i < surfaces.length; i++) {
+        const surface = surfaces[i];
+        if (seenSurfaceIds.has(surface.id)) continue;
+        seenSurfaceIds.add(surface.id);
+        const runtimeTop = surface.runtimeTop;
+        if (runtimeTop?.kind !== "SQUARE_128_RUNTIME") continue;
+        const tx = surface.tx;
+        const ty = surface.ty;
+        const isRampRoadTile = runtimeTop.family === "asphalt" && rampRoadTiles.has(`${tx},${ty}`);
+        if (isRampRoadTile) continue;
+        const srcId = `tiles/floor/${runtimeTop.family}/${runtimeTop.variantIndex}`;
+        const src = getTileSpriteById(srcId);
+        if (!src.ready || !src.img || src.img.width <= 0 || src.img.height <= 0) continue;
+        const baseBaked = getRuntimeIsoTopCanvas(src.img, runtimeTop.rotationQuarterTurns);
+        if (!baseBaked) continue;
+        const anchorY = surface.renderAnchorY ?? ANCHOR_Y;
+        const wx = (tx + 0.5) * T;
+        const wy = (ty + 0.5) * T;
+        const p = worldToScreen(wx, wy);
+        const centerX = snapPx(p.x + camX);
+        const centerY = snapPx(
+          p.y + camY - surface.zBase * ELEV_PX - SIDEWALK_ISO_HEIGHT * (anchorY - 0.5),
+        );
+        const drawX = snapPx(centerX - SIDEWALK_SRC_SIZE * 0.5);
+        const drawY = snapPx(centerY - SIDEWALK_ISO_HEIGHT * 0.5);
+        const pieceKey = floorRelightPieceKey(
+          tx,
+          ty,
+          surface.zBase,
+          anchorY,
+          runtimeTop.family,
+          runtimeTop.variantIndex,
+          runtimeTop.rotationQuarterTurns,
+        );
+        const relightPlan = planStaticRelightForPiece(tx, ty, drawX, drawY, baseBaked.width, baseBaked.height);
+        if (!relightPlan) {
+          staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
+          continue;
+        }
+        const lighterRec = getSpriteByIdForDarknessPercent(srcId, relightPlan.targetDarknessBucket);
+        if (!lighterRec.ready || !lighterRec.img || lighterRec.img.width <= 0 || lighterRec.img.height <= 0) continue;
+        const lighterBaked = getRuntimeIsoTopCanvas(lighterRec.img, runtimeTop.rotationQuarterTurns);
+        if (!lighterBaked) continue;
+        const baked = composePieceLocalRelightBakedCanvas(
+          relightPlan,
+          baseBaked.width,
+          baseBaked.height,
+          (target) => target.drawImage(baseBaked, 0, 0, baseBaked.width, baseBaked.height),
+          (target) => target.drawImage(lighterBaked, 0, 0, baseBaked.width, baseBaked.height),
+        );
+        if (baked) staticRelightBakeStore.set(pieceKey, { kind: "RELIT", baked });
+        else staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
+      }
     }
+
+    for (let i = 0; i < compiledMap.decals.length; i++) {
+      const decal = compiledMap.decals[i];
+      if (rampRoadTiles.has(`${decal.tx},${decal.ty}`)) continue;
+      const src = getRuntimeDecalSprite(decal.setId, decal.variantIndex);
+      if (!src.ready || !src.img || src.img.width <= 0 || src.img.height <= 0) continue;
+      const decalScale = roadMarkingDecalScale(decal.setId, decal.variantIndex);
+      const baked = getRuntimeIsoDecalCanvas(src.img, decal.rotationQuarterTurns, decalScale);
+      if (!baked) continue;
+      const renderAnchorY = decal.renderAnchorY;
+      const wx = decal.tx * T;
+      const wy = decal.ty * T;
+      const p = worldToScreen(wx, wy);
+      const rawCenterX = p.x + camX;
+      const rawCenterY = p.y + camY - decal.zBase * ELEV_PX - SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5);
+      const shouldSnapRoadMarking = shouldPixelSnapRoadMarking(decal.setId, decal.variantIndex);
+      const centerX = shouldSnapRoadMarking ? Math.round(rawCenterX) : snapPx(rawCenterX);
+      const centerY = shouldSnapRoadMarking ? Math.round(rawCenterY) : snapPx(rawCenterY);
+      const drawX = shouldSnapRoadMarking ? Math.round(centerX - baked.width * 0.5) : snapPx(centerX - baked.width * 0.5);
+      const drawY = shouldSnapRoadMarking ? Math.round(centerY - baked.height * 0.5) : snapPx(centerY - baked.height * 0.5);
+      const pieceKey = decalRelightPieceKey(
+        decal.tx,
+        decal.ty,
+        decal.zBase,
+        renderAnchorY,
+        decal.setId,
+        decal.variantIndex,
+        decal.rotationQuarterTurns,
+        decalScale,
+      );
+      const relightPlan = planStaticRelightForPiece(
+        Math.floor(decal.tx),
+        Math.floor(decal.ty),
+        drawX,
+        drawY,
+        baked.width,
+        baked.height,
+      );
+      if (!relightPlan) {
+        staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
+        continue;
+      }
+      const decalSpriteId = getDecalSpriteId(decal.setId, decal.variantIndex);
+      if (!decalSpriteId) {
+        staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
+        continue;
+      }
+      const lighterRec = getSpriteByIdForDarknessPercent(decalSpriteId, relightPlan.targetDarknessBucket);
+      if (!lighterRec.ready || !lighterRec.img || lighterRec.img.width <= 0 || lighterRec.img.height <= 0) continue;
+      const lighterBaked = getRuntimeIsoDecalCanvas(lighterRec.img, decal.rotationQuarterTurns, decalScale);
+      if (!lighterBaked) continue;
+      const bakedCanvas = composePieceLocalRelightBakedCanvas(
+        relightPlan,
+        baked.width,
+        baked.height,
+        (target) => target.drawImage(baked, 0, 0, baked.width, baked.height),
+        (target) => target.drawImage(lighterBaked, 0, 0, baked.width, baked.height),
+      );
+      if (bakedCanvas) staticRelightBakeStore.set(pieceKey, { kind: "RELIT", baked: bakedCanvas });
+      else staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
+    }
+
+    for (let i = 0; i < compiledMap.overlays.length; i++) {
+      const o = compiledMap.overlays[i];
+      const useRuntimeStructureSlicing = o.kind === "PROP" || o.layerRole === "STRUCTURE";
+      if (!useRuntimeStructureSlicing || o.layerRole !== "STRUCTURE") continue;
+      const draw = buildOverlayDraw(o);
+      if (!draw) continue;
+      const img = draw.img;
+      if (!img) continue;
+      const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(img) : img;
+      const bandPieces = buildRuntimeStructureBandPieces({
+        structureInstanceId: o.id,
+        spriteId: o.spriteId,
+        seTx: o.seTx,
+        seTy: o.seTy,
+        footprintW: o.w,
+        footprintH: o.h,
+        flipped: !!o.flipX,
+        sliceOffsetX: o.sliceOffsetPx?.x ?? 0,
+        sliceOffsetY: o.sliceOffsetPx?.y ?? 0,
+        sliceOriginX: o.sliceOriginPx?.x,
+        baseZ: o.z,
+        baseDx: draw.dx,
+        baseDy: draw.dy,
+        spriteWidth: draw.dw,
+        spriteHeight: draw.dh,
+        scale: draw.scale ?? 1,
+      });
+      for (let bi = 0; bi < bandPieces.length; bi++) {
+        const band = bandPieces[bi];
+        const ownerTx = band.renderKey.within;
+        const ownerTy = band.renderKey.slice - band.renderKey.within;
+        const x0 = Math.round(band.dstRect.x);
+        const y0 = Math.round(band.dstRect.y);
+        const x1 = Math.round(band.dstRect.x + band.dstRect.w);
+        const y1 = Math.round(band.dstRect.y + band.dstRect.h);
+        const snappedW = Math.max(0, x1 - x0);
+        const snappedH = Math.max(0, y1 - y0);
+        if (snappedW <= 0 || snappedH <= 0) continue;
+        const pieceKey = structureSliceRelightPieceKey(
+          o,
+          band.index,
+          ownerTx,
+          ownerTy,
+          band.srcRect.x,
+          band.srcRect.y,
+          band.srcRect.w,
+          band.srcRect.h,
+          snappedW,
+          snappedH,
+          !!draw.flipX,
+        );
+        const relightPlan = planStaticRelightForPiece(ownerTx, ownerTy, x0, y0, snappedW, snappedH);
+        if (!relightPlan) {
+          staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
+          continue;
+        }
+        const lighterRec = getSpriteByIdForDarknessPercent(o.spriteId, relightPlan.targetDarknessBucket);
+        if (!lighterRec.ready || !lighterRec.img || lighterRec.img.width <= 0 || lighterRec.img.height <= 0) continue;
+        const lighterSource: CanvasImageSource = draw.flipX
+          ? getFlippedOverlayImage(lighterRec.img)
+          : lighterRec.img;
+        const bakedCanvas = composePieceLocalRelightBakedCanvas(
+          relightPlan,
+          snappedW,
+          snappedH,
+          (target, width, height) => {
+            target.drawImage(
+              sourceImg,
+              band.srcRect.x,
+              band.srcRect.y,
+              band.srcRect.w,
+              band.srcRect.h,
+              0,
+              0,
+              width,
+              height,
+            );
+          },
+          (target, width, height) => {
+            target.drawImage(
+              lighterSource,
+              band.srcRect.x,
+              band.srcRect.y,
+              band.srcRect.w,
+              band.srcRect.h,
+              0,
+              0,
+              width,
+              height,
+            );
+          },
+        );
+        if (bakedCanvas) staticRelightBakeStore.set(pieceKey, { kind: "RELIT", baked: bakedCanvas });
+        else staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
+      }
+    }
+  };
+  if (staticRelightEnabled && staticRelightFrame && staticRelightContextChanged) {
+    rebuildFullMapStaticRelightBake();
   }
 
   // ----------------------------
@@ -3299,55 +3609,38 @@ export async function renderSystem(
               const snappedH = Math.max(0, y1 - y0);
               if (snappedW <= 0 || snappedH <= 0) return;
               ctx.imageSmoothingEnabled = false;
-              ctx.drawImage(
-                sourceImg,
-                band.srcRect.x,
-                band.srcRect.y,
-                band.srcRect.w,
-                band.srcRect.h,
-                x0,
-                y0,
-                snappedW,
-                snappedH,
-              );
-              const relightPlan = o.layerRole === "STRUCTURE"
-                ? planStaticRelightForPiece(
+              let relitCanvas: HTMLCanvasElement | null = null;
+              if (o.layerRole === "STRUCTURE" && staticRelightFrame) {
+                const pieceKey = structureSliceRelightPieceKey(
+                  o,
+                  band.index,
                   ownerTx,
                   ownerTy,
+                  band.srcRect.x,
+                  band.srcRect.y,
+                  band.srcRect.w,
+                  band.srcRect.h,
+                  snappedW,
+                  snappedH,
+                  !!draw.flipX,
+                );
+                const bakedEntry = staticRelightBakeStore.get(pieceKey);
+                if (bakedEntry?.kind === "RELIT") relitCanvas = bakedEntry.baked;
+              }
+              if (relitCanvas) {
+                ctx.drawImage(relitCanvas, x0, y0, snappedW, snappedH);
+              } else {
+                ctx.drawImage(
+                  sourceImg,
+                  band.srcRect.x,
+                  band.srcRect.y,
+                  band.srcRect.w,
+                  band.srcRect.h,
                   x0,
                   y0,
                   snappedW,
                   snappedH,
-                )
-                : null;
-              if (relightPlan) {
-                const lighterRec = getSpriteByIdForDarknessPercent(o.spriteId, relightPlan.targetDarknessBucket);
-                if (lighterRec.ready && lighterRec.img && lighterRec.img.width > 0 && lighterRec.img.height > 0) {
-                  const lighterSource: CanvasImageSource = draw.flipX
-                    ? getFlippedOverlayImage(lighterRec.img)
-                    : lighterRec.img;
-                  drawPieceLocalRelightBlend(
-                    ctx,
-                    relightPlan,
-                    x0,
-                    y0,
-                    snappedW,
-                    snappedH,
-                    (target, width, height) => {
-                      target.drawImage(
-                        lighterSource,
-                        band.srcRect.x,
-                        band.srcRect.y,
-                        band.srcRect.w,
-                        band.srcRect.h,
-                        0,
-                        0,
-                        width,
-                        height,
-                      );
-                    },
-                  );
-                }
+                );
               }
               if (SHOW_STRUCTURE_SLICE_DEBUG) {
                 const ownerTile = {
