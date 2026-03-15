@@ -73,4 +73,20 @@ describe("userSettings palette darkness merge", () => {
     expect(getUserSettings().render.lightColorModeOverride).toBe("authored");
     expect(getUserSettings().render.lightStrengthOverride).toBe("authored");
   });
+
+  it("persists static relight poc render toggle", () => {
+    updateUserSettings({
+      render: {
+        staticRelightPocEnabled: true,
+      },
+    } as any);
+    expect(getUserSettings().render.staticRelightPocEnabled).toBe(true);
+
+    updateUserSettings({
+      render: {
+        staticRelightPocEnabled: false,
+      },
+    } as any);
+    expect(getUserSettings().render.staticRelightPocEnabled).toBe(false);
+  });
 });

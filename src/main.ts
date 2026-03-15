@@ -266,6 +266,27 @@ function installDevSettingsUi(): DevSettingsUiController {
   renderPerfCountersRow.appendChild(renderPerfCountersInput);
   panel.appendChild(renderPerfCountersRow);
 
+  const staticRelightPocRow = document.createElement("label");
+  staticRelightPocRow.style.display = "flex";
+  staticRelightPocRow.style.alignItems = "center";
+  staticRelightPocRow.style.justifyContent = "space-between";
+  staticRelightPocRow.style.gap = "10px";
+  staticRelightPocRow.style.padding = "4px 0";
+  const staticRelightPocText = document.createElement("span");
+  staticRelightPocText.textContent = "Static Relight POC";
+  const staticRelightPocInput = document.createElement("input");
+  staticRelightPocInput.type = "checkbox";
+  staticRelightPocInput.addEventListener("change", () => {
+    updateUserSettings({
+      render: {
+        staticRelightPocEnabled: staticRelightPocInput.checked,
+      },
+    });
+  });
+  staticRelightPocRow.appendChild(staticRelightPocText);
+  staticRelightPocRow.appendChild(staticRelightPocInput);
+  panel.appendChild(staticRelightPocRow);
+
   const paletteSwapRow = document.createElement("label");
   paletteSwapRow.style.display = "flex";
   paletteSwapRow.style.alignItems = "center";
@@ -753,6 +774,7 @@ function installDevSettingsUi(): DevSettingsUiController {
         entityAnchorsEnabled: false,
         renderPerfCountersEnabled: false,
         performanceMode: false,
+        staticRelightPocEnabled: false,
         paletteSwapEnabled: false,
         paletteHudDebugOverlayEnabled: false,
         darknessMaskDebugDisabled: false,
@@ -784,6 +806,7 @@ function installDevSettingsUi(): DevSettingsUiController {
     entityShadowsInput.checked = s.render.entityShadowsDisable;
     entityAnchorsInput.checked = s.render.entityAnchorsEnabled;
     renderPerfCountersInput.checked = s.render.renderPerfCountersEnabled;
+    staticRelightPocInput.checked = s.render.staticRelightPocEnabled === true;
     paletteSwapInput.checked = s.render.paletteSwapEnabled;
     paletteGroupSelect.value = normalizePaletteGroup(s.render.paletteGroup);
     paletteIdSelect.value = rebuildPaletteOptions(s.render.paletteGroup, s.render.paletteId);

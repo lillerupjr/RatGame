@@ -31,6 +31,7 @@ export type RenderSettings = {
   entityAnchorsEnabled: boolean;
   renderPerfCountersEnabled: boolean;
   performanceMode: boolean;
+  staticRelightPocEnabled: boolean;
   deathSlowdownEnabled: boolean;
   cameraSmoothingEnabled: boolean;
   verticalTilesMode?: VerticalTilesMode;
@@ -98,6 +99,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
     entityAnchorsEnabled: false,
     renderPerfCountersEnabled: false,
     performanceMode: false,
+    staticRelightPocEnabled: false,
     deathSlowdownEnabled: true,
     cameraSmoothingEnabled: true,
     verticalTilesMode: DEFAULT_VERTICAL_TILES_MODE,

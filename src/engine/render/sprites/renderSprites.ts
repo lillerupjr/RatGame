@@ -9,8 +9,9 @@ import { isKnownRenderableSpriteId } from "./spriteIdRegistry";
 import { getFloorVariantCount, RUNTIME_FLOOR_VARIANT_COUNTS, type RuntimeFloorFamily } from "../../../game/content/runtimeFloorConfig";
 import { applyPaletteSwapToCanvas } from "../palette/paletteSwap";
 import {
+    buildPaletteVariantKey,
     resolveActivePaletteId,
-    resolveActivePaletteSwapWeights,
+    resolveActivePaletteSwapWeightPercents,
     resolvePaletteVariantKeyForPaletteId,
 } from "../../../game/render/activePalette";
 import {
@@ -26,6 +27,10 @@ export type LoadedImg = {
     ready: boolean;
 };
 export type PaletteId = ReturnType<typeof resolveActivePaletteId>;
+type PaletteSwapWeightPercents = {
+    sWeightPercent: number;
+    darknessPercent: number;
+};
 
 const cache: Record<string, LoadedImg> = Object.create(null);
 const ANIMATED_TILE_SETS = {
@@ -75,6 +80,29 @@ function effectivePaletteId(forcedPaletteId?: string): string {
 
 function effectivePaletteVariantKey(forcedPaletteId?: string): string {
     return resolvePaletteVariantKeyForPaletteId(effectivePaletteId(forcedPaletteId));
+}
+
+function clampWeightPercent(value: number): number {
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function normalizeWeightPercents(weights: PaletteSwapWeightPercents): PaletteSwapWeightPercents {
+    return {
+        sWeightPercent: clampWeightPercent(weights.sWeightPercent),
+        darknessPercent: clampWeightPercent(weights.darknessPercent),
+    };
+}
+
+function toPaletteSwapWeights(weights: PaletteSwapWeightPercents): {
+    sWeight: number;
+    darkness: number;
+} {
+    const normalized = normalizeWeightPercents(weights);
+    return {
+        sWeight: normalized.sWeightPercent / 100,
+        darkness: normalized.darknessPercent / 100,
+    };
 }
 
 function normalizeSpriteId(spriteId: string): string {
@@ -150,11 +178,17 @@ function resolveUrl(spriteId: string): string | null {
     return null;
 }
 
-function loadByIdInternal(spriteId: string, forcedPaletteId?: string): LoadedImg {
+function loadByIdInternal(
+    spriteId: string,
+    forcedPaletteId?: string,
+    forcedWeightPercents?: PaletteSwapWeightPercents,
+): LoadedImg {
     const rawId = spriteId.trim();
     const paletteId = effectivePaletteId(forcedPaletteId);
-    const paletteVariantKey = effectivePaletteVariantKey(paletteId);
-    const paletteSwapWeights = resolveActivePaletteSwapWeights();
+    const defaultWeightPercents = resolveActivePaletteSwapWeightPercents();
+    const effectiveWeightPercents = normalizeWeightPercents(forcedWeightPercents ?? defaultWeightPercents);
+    const paletteVariantKey = buildPaletteVariantKey(paletteId, effectiveWeightPercents);
+    const paletteSwapWeights = toPaletteSwapWeights(effectiveWeightPercents);
     const paletteManaged = isPaletteManagedSpriteId(rawId);
     const key = paletteManaged
         ? `${rawId}@@palv:${paletteVariantKey}`
@@ -251,6 +285,18 @@ export function getSpriteById(spriteId: string): LoadedImg {
 
 export function getSpriteByIdForPalette(spriteId: string, paletteId: string): LoadedImg {
     return loadByIdInternal(spriteId, paletteId);
+}
+
+export function getSpriteByIdForDarknessPercent(
+    spriteId: string,
+    darknessPercent: 0 | 25 | 50 | 75 | 100,
+): LoadedImg {
+    const paletteId = effectivePaletteId();
+    const activePercents = resolveActivePaletteSwapWeightPercents();
+    return loadByIdInternal(spriteId, paletteId, {
+        sWeightPercent: activePercents.sWeightPercent,
+        darknessPercent,
+    });
 }
 
 export function getRuntimeSquareFloorSprite(
