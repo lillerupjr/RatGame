@@ -59,23 +59,24 @@ export function ownerTileForBandFromSE(
   anchorTx: number,
   anchorTy: number,
   w: number,
-  h: number,
+  _h: number,
   bandIndex: number,
 ): { tx: number; ty: number } {
   const tw = normalizedExtent(w);
-  const th = normalizedExtent(h);
-  const bandCount = tw + th;
-  const i = Math.max(0, Math.min(bandCount - 1, bandIndex | 0));
-  if (i < tw) {
+  const i = bandIndex | 0;
+
+  // Integer progression from left-to-right visual ownership:
+  // - walk east along south edge up to SE (i <= tw - 1),
+  // - then walk north on east edge,
+  // - support overflow on either side with virtual anchors.
+  if (i <= tw - 1) {
     return {
-      tx: anchorTx - i,
+      tx: anchorTx - ((tw - 1) - i),
       ty: anchorTy,
     };
   }
-
-  const j = i - tw;
   return {
     tx: anchorTx,
-    ty: anchorTy - j,
+    ty: anchorTy - (i - (tw - 1)),
   };
 }

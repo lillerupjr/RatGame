@@ -169,14 +169,11 @@ export function buildRuntimeStructureBandPieces(
   const out: RuntimeStructureBandRenderPiece[] = new Array(layout.length);
   for (let i = 0; i < layout.length; i++) {
     const band = layout[i];
-    const spriteBandIndex = band.index === 0
-      ? 0
+    const ownerBandIndex = band.index === 0
+      ? -1
       : band.index === coreCount + 1
-        ? coreCount - 1
+        ? coreCount
         : band.index - 1;
-    const ownerBandIndex = spriteBandIndex < tileW
-      ? (tileW - 1) - spriteBandIndex
-      : spriteBandIndex;
     const owner = ownerTileForBandFromSE(anchorTx, anchorTy, tileW, tileH, ownerBandIndex);
 
     out[i] = {
