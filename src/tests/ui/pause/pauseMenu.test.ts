@@ -948,7 +948,7 @@ describe("pauseMenu", () => {
     });
   });
 
-  test("game speed slider updates user settings", () => {
+  test("game speed slider is not exposed in user settings panel", () => {
     const root = document.createElement("div") as unknown as HTMLDivElement;
     document.body.appendChild(root as any);
     const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
@@ -957,11 +957,7 @@ describe("pauseMenu", () => {
 
     (root.querySelector('[data-settings-tab="GAME"]') as any).click();
     const slider = root.querySelector("[data-game-speed-slider]") as any;
-    expect(slider).toBeTruthy();
-
-    slider.value = "1.25";
-    slider.dispatchEvent(new Event("input") as any);
-    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({ game: { gameSpeed: 1.25 } });
+    expect(slider).toBeNull();
   });
 
   test("settings tabs switch visible panels", () => {

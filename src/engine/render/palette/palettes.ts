@@ -192,7 +192,7 @@ export const VAPORHAZE_16: PaletteDef = {
 
 export const SUNSET_CAVE_EXTENDED: PaletteDef = {
   id: "sunset_cave_extended",
-  name: "Sunset Cave Extended",
+  name: "SCE",
   group: "live",
   source: "lospec",
   colors: [

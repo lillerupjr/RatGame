@@ -1,32 +1,53 @@
+import type { PaletteGroup } from "./engine/render/palette/palettes";
 import {
-  DEFAULT_DEBUG_SETTINGS,
-  normalizeStaticRelightTargetDarknessPercent,
+  DEFAULT_VISIBLE_VERTICAL_TILES,
+  DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP,
+  DEFAULT_VISIBLE_VERTICAL_TILES_PHONE,
+  DEFAULT_VERTICAL_TILES_MODE,
+  MAX_VISIBLE_VERTICAL_TILES,
+  MIN_VISIBLE_VERTICAL_TILES,
+  clampVisibleVerticalTiles,
+  resolveVerticalTiles as resolveVerticalTilesByUserGraphics,
+  type ResolvedVerticalTiles,
+  type VerticalTilesMode,
+} from "./settings/userSettings";
+import {
+  DEFAULT_GAME_SPEED,
+  MAX_GAME_SPEED,
+  MIN_GAME_SPEED,
+  clampGameSpeed,
   normalizePaletteRemapWeightPercent,
-  type DebugSettings,
-} from "./debugSettings";
-import { DEFAULT_SPAWN_TUNING } from "./game/balance/spawnTuningDefaults";
+  normalizeStaticRelightTargetDarknessPercent,
+  type LightColorModeOverride,
+  type LightStrengthOverride,
+  type StructureTriangleAdmissionMode,
+} from "./settings/systemOverrides";
 import {
-  getFirstPaletteInGroup,
-  isPaletteIdInGroup,
-  normalizePaletteGroup,
-  type PaletteGroup,
-} from "./engine/render/palette/palettes";
+  getSettings,
+  initSettings,
+  updateDebugToolsSettings,
+  updateSystemOverrides,
+  updateUserSettings as updateBucketUserSettings,
+} from "./settings/settingsStore";
 
-export type VerticalTilesMode = "auto" | "manual";
+export {
+  DEFAULT_GAME_SPEED,
+  DEFAULT_VISIBLE_VERTICAL_TILES,
+  DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP,
+  DEFAULT_VISIBLE_VERTICAL_TILES_PHONE,
+  DEFAULT_VERTICAL_TILES_MODE,
+  MAX_GAME_SPEED,
+  MAX_VISIBLE_VERTICAL_TILES,
+  MIN_GAME_SPEED,
+  MIN_VISIBLE_VERTICAL_TILES,
+  clampGameSpeed,
+  clampVisibleVerticalTiles,
+  type ResolvedVerticalTiles,
+  type VerticalTilesMode,
+};
+export type { LightColorModeOverride, LightStrengthOverride, StructureTriangleAdmissionMode };
+
 export type VerticalTilesViewportClass = "phone" | "desktop";
-export type LightColorModeOverride = "authored" | "off" | "standard" | "palette";
-export type LightStrengthOverride = "authored" | "low" | "medium" | "high";
-export type StructureTriangleAdmissionMode = "viewport" | "renderDistance" | "hybrid" | "compare";
-
-export const DEFAULT_VISIBLE_VERTICAL_TILES_PHONE = 6;
-export const DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP = 9;
-export const DEFAULT_VISIBLE_VERTICAL_TILES = DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP;
-export const MIN_VISIBLE_VERTICAL_TILES = 2;
-export const MAX_VISIBLE_VERTICAL_TILES = 24;
-export const DEFAULT_VERTICAL_TILES_MODE: VerticalTilesMode = "auto";
-export const MIN_GAME_SPEED = 0.5;
-export const MAX_GAME_SPEED = 1.5;
-export const DEFAULT_GAME_SPEED = 1.0;
 
 export type RenderSettings = {
   entityShadowsDisable: boolean;
@@ -46,14 +67,10 @@ export type RenderSettings = {
   verticalTilesUser?: number;
   verticalTilesAutoPhone?: number;
   verticalTilesAutoDesktop?: number;
-  // Legacy key kept for localStorage compatibility.
   visibleVerticalTiles?: number;
   tileRenderRadius: number;
-  // Palette swap (Phase 1): apply at sprite load time, cached.
   paletteSwapEnabled: boolean;
-  // Dev-only HUD debug line for current resolved palette id.
   paletteHudDebugOverlayEnabled?: boolean;
-  // Dev-only toggle to bypass final ambient darkness/tint screen overlay.
   darknessMaskDebugDisabled?: boolean;
   lightColorModeOverride: LightColorModeOverride;
   lightStrengthOverride: LightStrengthOverride;
@@ -65,7 +82,6 @@ export type RenderSettings = {
   hpPerDepth: number;
   pressureAt0Sec: number;
   pressureAt120Sec: number;
-  // Legacy keys kept for localStorage compatibility.
   staticRelightPocEnabled?: boolean;
   structureTriangleGeometryPocEnabled?: boolean;
 };
@@ -84,6 +100,52 @@ export type AudioPreferenceSettings = {
   sfxMuted: boolean;
 };
 
+export type NeutralBirdAIDebugSettings = {
+  disabled: boolean;
+  forceState: "NONE" | "IDLE" | "TAKEOFF" | "FLY_TO_TARGET" | "LAND";
+  disableTransitions: boolean;
+  drawDebug: boolean;
+  debugRepickTarget: boolean;
+};
+
+export type DebugSettings = {
+  grid: boolean;
+  walkMask: boolean;
+  blockedTiles: boolean;
+  ramps: boolean;
+  colliders: boolean;
+  slices: boolean;
+  occluders: boolean;
+  decals: boolean;
+  structureHeights: boolean;
+  spriteBounds: boolean;
+  projectileFaces: boolean;
+  triggers: boolean;
+  debugRoadSemantic: boolean;
+  disableVisualCompiledCutoutCache: boolean;
+  mapOverlaysDisabled: boolean;
+  rampFaces: boolean;
+  forceSpawnOverride: boolean;
+  godMode: boolean;
+  dmgMult: number;
+  fireRateMult: number;
+  paletteSWeightPercent: 0 | 25 | 50 | 75 | 100;
+  paletteDarknessPercent: 0 | 25 | 50 | 75 | 100;
+  staticRelightStrengthPercent: 0 | 25 | 50 | 75 | 100;
+  staticRelightTargetDarknessPercent: 0 | 25 | 50 | 75;
+  entityAnchorOverlay: boolean;
+  enemyAimOverlay: boolean;
+  lootGoblinOverlay: boolean;
+  pauseDebugCards: boolean;
+  pauseCsvControls: boolean;
+  dpsMeter: boolean;
+  waterFlowRate: number;
+  neutralBirdAI: NeutralBirdAIDebugSettings;
+  objectives: {
+    showZoneBounds: boolean;
+  };
+};
+
 export type UserSettings = {
   debug: DebugSettings;
   game: GameSettings;
@@ -92,378 +154,359 @@ export type UserSettings = {
 };
 
 export type UserSettingsPatch = {
-  debug?: Partial<UserSettings["debug"]>;
-  game?: Partial<UserSettings["game"]>;
-  render?: Partial<UserSettings["render"]>;
-  audio?: Partial<UserSettings["audio"]>;
+  debug?: Partial<DebugSettings> & {
+    neutralBirdAI?: Partial<NeutralBirdAIDebugSettings> & { enabled?: boolean };
+    objectives?: Partial<DebugSettings["objectives"]>;
+    paletteVWeightPercent?: unknown;
+  };
+  game?: Partial<GameSettings>;
+  render?: Partial<RenderSettings> & {
+    entityShadowsEnabled?: boolean;
+  };
+  audio?: Partial<AudioPreferenceSettings>;
 };
 
-export const DEFAULT_SETTINGS: UserSettings = {
-  debug: { ...DEFAULT_DEBUG_SETTINGS },
-  game: {
-    userModeEnabled: true,
-    healthOrbSide: "left",
-    gameSpeed: DEFAULT_GAME_SPEED,
-  },
-  render: {
-    entityShadowsDisable: false,
-    entityAnchorsEnabled: false,
-    renderPerfCountersEnabled: false,
-    performanceMode: false,
-    staticRelightEnabled: true,
-    structureTriangleGeometryEnabled: true,
-    structureTriangleAdmissionMode: "hybrid",
-    structureTriangleCutoutEnabled: false,
-    structureTriangleCutoutWidth: 2,
-    structureTriangleCutoutHeight: 2,
-    structureTriangleCutoutAlpha: 0.45,
-    deathSlowdownEnabled: true,
-    cameraSmoothingEnabled: true,
-    verticalTilesMode: DEFAULT_VERTICAL_TILES_MODE,
-    verticalTilesUser: DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP,
-    verticalTilesAutoPhone: DEFAULT_VISIBLE_VERTICAL_TILES_PHONE,
-    verticalTilesAutoDesktop: DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP,
-    visibleVerticalTiles: DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP,
-    tileRenderRadius: 3,
-    paletteSwapEnabled: false,
-    paletteHudDebugOverlayEnabled: false,
-    darknessMaskDebugDisabled: false,
-    lightColorModeOverride: "authored",
-    lightStrengthOverride: "authored",
-    paletteGroup: "live",
-    paletteId: "db32",
-    ...DEFAULT_SPAWN_TUNING,
-  },
-  audio: {
-    masterVolume: 1,
-    musicVolume: 0.6,
-    sfxVolume: 1,
-    musicMuted: false,
-    sfxMuted: false,
-  },
-};
+function toLegacySettings(): UserSettings {
+  const settings = getSettings();
+  const visibleVerticalTiles = settings.user.graphics.verticalTilesMode === "manual"
+    ? settings.user.graphics.verticalTilesUser
+    : undefined;
 
-const LS_KEY = "ratgame:userSettings";
-
-let currentSettings: UserSettings = DEFAULT_SETTINGS;
-
-export function clampGameSpeed(value: number): number {
-  if (!Number.isFinite(value)) return DEFAULT_GAME_SPEED;
-  return Math.max(MIN_GAME_SPEED, Math.min(MAX_GAME_SPEED, value));
+  return {
+    debug: {
+      grid: settings.debug.grid,
+      walkMask: settings.debug.walkMask,
+      blockedTiles: settings.debug.blockedTiles,
+      ramps: settings.debug.ramps,
+      colliders: settings.debug.colliders,
+      slices: settings.debug.slices,
+      occluders: settings.debug.occluders,
+      decals: settings.debug.decals,
+      structureHeights: settings.debug.structureHeights,
+      spriteBounds: settings.debug.spriteBounds,
+      projectileFaces: settings.debug.projectileFaces,
+      triggers: settings.debug.triggers,
+      debugRoadSemantic: settings.debug.debugRoadSemantic,
+      disableVisualCompiledCutoutCache: settings.system.disableVisualCompiledCutoutCache,
+      mapOverlaysDisabled: settings.system.mapOverlaysDisabled,
+      rampFaces: settings.system.rampFaces,
+      forceSpawnOverride: settings.system.forceSpawnOverride,
+      godMode: settings.system.godMode,
+      dmgMult: settings.system.dmgMult,
+      fireRateMult: settings.system.fireRateMult,
+      paletteSWeightPercent: settings.system.paletteSWeightPercent,
+      paletteDarknessPercent: settings.system.paletteDarknessPercent,
+      staticRelightStrengthPercent: settings.system.staticRelightStrengthPercent,
+      staticRelightTargetDarknessPercent: settings.system.staticRelightTargetDarknessPercent,
+      entityAnchorOverlay: settings.debug.entityAnchorOverlay,
+      enemyAimOverlay: settings.debug.enemyAimOverlay,
+      lootGoblinOverlay: settings.debug.lootGoblinOverlay,
+      pauseDebugCards: settings.debug.pauseDebugCards,
+      pauseCsvControls: settings.debug.pauseCsvControls,
+      dpsMeter: settings.debug.dpsMeter,
+      waterFlowRate: settings.system.waterFlowRate,
+      neutralBirdAI: {
+        disabled: settings.system.neutralBirdDisabled,
+        forceState: settings.system.neutralBirdForceState,
+        disableTransitions: settings.system.neutralBirdDisableTransitions,
+        drawDebug: settings.debug.neutralBirdDrawDebug,
+        debugRepickTarget: settings.system.neutralBirdDebugRepickTarget,
+      },
+      objectives: {
+        showZoneBounds: settings.debug.objectivesShowZoneBounds,
+      },
+    },
+    game: {
+      userModeEnabled: settings.user.game.userModeEnabled,
+      healthOrbSide: settings.user.game.healthOrbSide,
+      gameSpeed: settings.system.gameSpeed,
+    },
+    render: {
+      entityShadowsDisable: settings.system.entityShadowsDisable,
+      entityAnchorsEnabled: settings.debug.entityAnchorsEnabled,
+      renderPerfCountersEnabled: settings.debug.renderPerfCountersEnabled,
+      performanceMode: settings.user.graphics.performanceMode,
+      staticRelightEnabled: settings.system.staticRelightEnabled,
+      structureTriangleGeometryEnabled: settings.system.structureTriangleGeometryEnabled,
+      structureTriangleAdmissionMode: settings.system.structureTriangleAdmissionMode,
+      structureTriangleCutoutEnabled: settings.system.structureTriangleCutoutEnabled,
+      structureTriangleCutoutWidth: settings.system.structureTriangleCutoutWidth,
+      structureTriangleCutoutHeight: settings.system.structureTriangleCutoutHeight,
+      structureTriangleCutoutAlpha: settings.system.structureTriangleCutoutAlpha,
+      deathSlowdownEnabled: settings.user.graphics.deathSlowdownEnabled,
+      cameraSmoothingEnabled: settings.user.graphics.cameraSmoothingEnabled,
+      verticalTilesMode: settings.user.graphics.verticalTilesMode,
+      verticalTilesUser: settings.user.graphics.verticalTilesUser,
+      verticalTilesAutoPhone: settings.user.graphics.verticalTilesAutoPhone,
+      verticalTilesAutoDesktop: settings.user.graphics.verticalTilesAutoDesktop,
+      visibleVerticalTiles,
+      tileRenderRadius: settings.system.tileRenderRadius,
+      paletteSwapEnabled: settings.system.paletteSwapEnabled,
+      paletteHudDebugOverlayEnabled: settings.debug.paletteHudDebugOverlayEnabled,
+      darknessMaskDebugDisabled: settings.system.darknessMaskDebugDisabled,
+      lightColorModeOverride: settings.system.lightColorModeOverride,
+      lightStrengthOverride: settings.system.lightStrengthOverride,
+      paletteGroup: settings.system.paletteGroup,
+      paletteId: settings.system.paletteId,
+      spawnBase: settings.system.spawnBase,
+      spawnPerDepth: settings.system.spawnPerDepth,
+      hpBase: settings.system.hpBase,
+      hpPerDepth: settings.system.hpPerDepth,
+      pressureAt0Sec: settings.system.pressureAt0Sec,
+      pressureAt120Sec: settings.system.pressureAt120Sec,
+      staticRelightPocEnabled: undefined,
+      structureTriangleGeometryPocEnabled: undefined,
+    },
+    audio: {
+      ...settings.user.audio,
+    },
+  };
 }
 
-export function clampVisibleVerticalTiles(value: number): number {
-  if (!Number.isFinite(value)) return DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP;
-  return Math.max(MIN_VISIBLE_VERTICAL_TILES, Math.min(MAX_VISIBLE_VERTICAL_TILES, Math.round(value)));
-}
+export const DEFAULT_SETTINGS: UserSettings = toLegacySettings();
 
-function normalizeVerticalTilesMode(value: unknown): VerticalTilesMode {
-  return value === "manual" ? "manual" : "auto";
-}
+function splitLegacyPatch(patch: UserSettingsPatch): {
+  userPatch: Parameters<typeof updateBucketUserSettings>[0];
+  debugPatch: Parameters<typeof updateDebugToolsSettings>[0];
+  systemPatch: Parameters<typeof updateSystemOverrides>[0];
+} {
+  const userPatch: Parameters<typeof updateBucketUserSettings>[0] = {};
+  const debugPatch: Parameters<typeof updateDebugToolsSettings>[0] = {};
+  const systemPatch: Parameters<typeof updateSystemOverrides>[0] = {};
 
-function normalizeLightColorModeOverride(value: unknown): LightColorModeOverride {
-  if (value === "off" || value === "standard" || value === "palette") return value;
-  return "authored";
-}
+  const gamePatch = patch.game;
+  if (gamePatch) {
+    if (gamePatch.userModeEnabled !== undefined || gamePatch.healthOrbSide !== undefined) {
+      userPatch.game = {
+        userModeEnabled: gamePatch.userModeEnabled,
+        healthOrbSide: gamePatch.healthOrbSide,
+      };
+    }
+    if (gamePatch.gameSpeed !== undefined) {
+      systemPatch.gameSpeed = gamePatch.gameSpeed;
+    }
+  }
 
-function normalizeLightStrengthOverride(value: unknown): LightStrengthOverride {
-  if (value === "low" || value === "medium" || value === "high") return value;
-  return "authored";
-}
+  const audioPatch = patch.audio;
+  if (audioPatch) {
+    userPatch.audio = {
+      ...audioPatch,
+    };
+  }
 
-function normalizeStructureTriangleAdmissionMode(value: unknown): StructureTriangleAdmissionMode {
-  if (value === "viewport" || value === "renderDistance") return value;
-  if (value === "compare") return import.meta.env.DEV ? "compare" : "hybrid";
-  return "hybrid";
-}
+  const renderPatch = { ...(patch.render ?? {}) };
+  if (renderPatch.entityShadowsEnabled !== undefined && renderPatch.entityShadowsDisable === undefined) {
+    renderPatch.entityShadowsDisable = !renderPatch.entityShadowsEnabled;
+  }
 
-function normalizeStructureTriangleCutoutSpan(value: unknown): number {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 2;
-  return Math.max(0, Math.min(12, Math.round(numeric)));
-}
+  if (Object.keys(renderPatch).length > 0) {
+    if (
+      renderPatch.performanceMode !== undefined
+      || renderPatch.deathSlowdownEnabled !== undefined
+      || renderPatch.cameraSmoothingEnabled !== undefined
+      || renderPatch.verticalTilesMode !== undefined
+      || renderPatch.verticalTilesUser !== undefined
+      || renderPatch.verticalTilesAutoPhone !== undefined
+      || renderPatch.verticalTilesAutoDesktop !== undefined
+      || renderPatch.visibleVerticalTiles !== undefined
+    ) {
+      const nextGraphics: Record<string, unknown> = {};
+      if (renderPatch.performanceMode !== undefined) nextGraphics.performanceMode = renderPatch.performanceMode;
+      if (renderPatch.deathSlowdownEnabled !== undefined) nextGraphics.deathSlowdownEnabled = renderPatch.deathSlowdownEnabled;
+      if (renderPatch.cameraSmoothingEnabled !== undefined) nextGraphics.cameraSmoothingEnabled = renderPatch.cameraSmoothingEnabled;
+      if (renderPatch.verticalTilesMode !== undefined) nextGraphics.verticalTilesMode = renderPatch.verticalTilesMode;
+      if (renderPatch.verticalTilesUser !== undefined) nextGraphics.verticalTilesUser = renderPatch.verticalTilesUser;
+      if (renderPatch.verticalTilesAutoPhone !== undefined) nextGraphics.verticalTilesAutoPhone = renderPatch.verticalTilesAutoPhone;
+      if (renderPatch.verticalTilesAutoDesktop !== undefined) {
+        nextGraphics.verticalTilesAutoDesktop = renderPatch.verticalTilesAutoDesktop;
+      }
+      if (renderPatch.visibleVerticalTiles !== undefined) {
+        nextGraphics.verticalTilesUser = renderPatch.visibleVerticalTiles;
+        nextGraphics.verticalTilesMode = "manual";
+      }
+      userPatch.graphics = nextGraphics as any;
+    }
 
-function normalizeStructureTriangleCutoutAlpha(value: unknown): number {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 0.45;
-  return Math.max(0, Math.min(1, numeric));
-}
+    if (renderPatch.entityAnchorsEnabled !== undefined) debugPatch.entityAnchorsEnabled = renderPatch.entityAnchorsEnabled;
+    if (renderPatch.renderPerfCountersEnabled !== undefined) {
+      debugPatch.renderPerfCountersEnabled = renderPatch.renderPerfCountersEnabled;
+    }
+    if (renderPatch.paletteHudDebugOverlayEnabled !== undefined) {
+      debugPatch.paletteHudDebugOverlayEnabled = renderPatch.paletteHudDebugOverlayEnabled;
+    }
 
-function resolvePaletteIdForGroup(group: PaletteGroup, paletteId: unknown): string {
-  const candidate = typeof paletteId === "string" ? paletteId : "";
-  if (isPaletteIdInGroup(candidate, group)) return candidate;
-  return getFirstPaletteInGroup(group).id;
-}
+    if (renderPatch.entityShadowsDisable !== undefined) systemPatch.entityShadowsDisable = renderPatch.entityShadowsDisable;
+    if (renderPatch.staticRelightEnabled !== undefined) systemPatch.staticRelightEnabled = renderPatch.staticRelightEnabled;
+    if (renderPatch.staticRelightPocEnabled !== undefined && renderPatch.staticRelightEnabled === undefined) {
+      systemPatch.staticRelightEnabled = renderPatch.staticRelightPocEnabled;
+    }
+    if (renderPatch.structureTriangleGeometryEnabled !== undefined) {
+      systemPatch.structureTriangleGeometryEnabled = renderPatch.structureTriangleGeometryEnabled;
+    }
+    if (
+      renderPatch.structureTriangleGeometryPocEnabled !== undefined
+      && renderPatch.structureTriangleGeometryEnabled === undefined
+    ) {
+      systemPatch.structureTriangleGeometryEnabled = renderPatch.structureTriangleGeometryPocEnabled;
+    }
+    if (renderPatch.structureTriangleAdmissionMode !== undefined) {
+      systemPatch.structureTriangleAdmissionMode = renderPatch.structureTriangleAdmissionMode;
+    }
+    if (renderPatch.structureTriangleCutoutEnabled !== undefined) {
+      systemPatch.structureTriangleCutoutEnabled = renderPatch.structureTriangleCutoutEnabled;
+    }
+    if (renderPatch.structureTriangleCutoutWidth !== undefined) {
+      systemPatch.structureTriangleCutoutWidth = renderPatch.structureTriangleCutoutWidth;
+    }
+    if (renderPatch.structureTriangleCutoutHeight !== undefined) {
+      systemPatch.structureTriangleCutoutHeight = renderPatch.structureTriangleCutoutHeight;
+    }
+    if (renderPatch.structureTriangleCutoutAlpha !== undefined) {
+      systemPatch.structureTriangleCutoutAlpha = renderPatch.structureTriangleCutoutAlpha;
+    }
+    if (renderPatch.tileRenderRadius !== undefined) systemPatch.tileRenderRadius = renderPatch.tileRenderRadius;
+    if (renderPatch.paletteSwapEnabled !== undefined) systemPatch.paletteSwapEnabled = renderPatch.paletteSwapEnabled;
+    if (renderPatch.darknessMaskDebugDisabled !== undefined) {
+      systemPatch.darknessMaskDebugDisabled = renderPatch.darknessMaskDebugDisabled;
+    }
+    if (renderPatch.lightColorModeOverride !== undefined) {
+      systemPatch.lightColorModeOverride = renderPatch.lightColorModeOverride;
+    }
+    if (renderPatch.lightStrengthOverride !== undefined) {
+      systemPatch.lightStrengthOverride = renderPatch.lightStrengthOverride;
+    }
+    if (renderPatch.paletteGroup !== undefined) systemPatch.paletteGroup = renderPatch.paletteGroup;
+    if (renderPatch.paletteId !== undefined) systemPatch.paletteId = renderPatch.paletteId;
+    if (renderPatch.spawnBase !== undefined) systemPatch.spawnBase = renderPatch.spawnBase;
+    if (renderPatch.spawnPerDepth !== undefined) systemPatch.spawnPerDepth = renderPatch.spawnPerDepth;
+    if (renderPatch.hpBase !== undefined) systemPatch.hpBase = renderPatch.hpBase;
+    if (renderPatch.hpPerDepth !== undefined) systemPatch.hpPerDepth = renderPatch.hpPerDepth;
+    if (renderPatch.pressureAt0Sec !== undefined) systemPatch.pressureAt0Sec = renderPatch.pressureAt0Sec;
+    if (renderPatch.pressureAt120Sec !== undefined) systemPatch.pressureAt120Sec = renderPatch.pressureAt120Sec;
+  }
 
-function classifyVerticalTilesViewport(viewportWidth: number, viewportHeight: number): VerticalTilesViewportClass {
-  const width = Number.isFinite(viewportWidth) ? viewportWidth : Number.POSITIVE_INFINITY;
-  const height = Number.isFinite(viewportHeight) ? viewportHeight : Number.POSITIVE_INFINITY;
-  const coarsePointer = typeof window !== "undefined"
-    && typeof window.matchMedia === "function"
-    && window.matchMedia("(pointer: coarse)").matches;
-  if (coarsePointer && (width <= 768 || height <= 500)) return "phone";
-  return "desktop";
-}
+  const debugAny = patch.debug as any;
+  if (debugAny) {
+    const debugBooleanKeys = [
+      "grid",
+      "walkMask",
+      "blockedTiles",
+      "ramps",
+      "colliders",
+      "slices",
+      "occluders",
+      "decals",
+      "structureHeights",
+      "spriteBounds",
+      "projectileFaces",
+      "triggers",
+      "debugRoadSemantic",
+      "entityAnchorOverlay",
+      "enemyAimOverlay",
+      "lootGoblinOverlay",
+      "pauseDebugCards",
+      "pauseCsvControls",
+      "dpsMeter",
+    ] as const;
+    for (const key of debugBooleanKeys) {
+      if (debugAny[key] !== undefined) (debugPatch as any)[key] = debugAny[key];
+    }
 
-export type ResolvedVerticalTiles = {
-  mode: VerticalTilesMode;
-  viewportClass: VerticalTilesViewportClass;
-  effective: number;
-  manual: number;
-  autoPhone: number;
-  autoDesktop: number;
-};
+    if (debugAny.disableVisualCompiledCutoutCache !== undefined) {
+      systemPatch.disableVisualCompiledCutoutCache = debugAny.disableVisualCompiledCutoutCache;
+    }
+    if (debugAny.mapOverlaysDisabled !== undefined) systemPatch.mapOverlaysDisabled = debugAny.mapOverlaysDisabled;
+    if (debugAny.rampFaces !== undefined) systemPatch.rampFaces = debugAny.rampFaces;
+    if (debugAny.forceSpawnOverride !== undefined) systemPatch.forceSpawnOverride = debugAny.forceSpawnOverride;
+    if (debugAny.godMode !== undefined) systemPatch.godMode = debugAny.godMode;
+    if (debugAny.dmgMult !== undefined) systemPatch.dmgMult = debugAny.dmgMult;
+    if (debugAny.fireRateMult !== undefined) systemPatch.fireRateMult = debugAny.fireRateMult;
+    if (debugAny.waterFlowRate !== undefined) systemPatch.waterFlowRate = debugAny.waterFlowRate;
+    if (debugAny.paletteSWeightPercent !== undefined) {
+      systemPatch.paletteSWeightPercent = normalizePaletteRemapWeightPercent(debugAny.paletteSWeightPercent);
+    }
+    if (debugAny.paletteDarknessPercent !== undefined) {
+      systemPatch.paletteDarknessPercent = normalizePaletteRemapWeightPercent(debugAny.paletteDarknessPercent);
+    }
+    if (debugAny.staticRelightStrengthPercent !== undefined) {
+      systemPatch.staticRelightStrengthPercent = normalizePaletteRemapWeightPercent(debugAny.staticRelightStrengthPercent);
+    }
+    if (debugAny.staticRelightTargetDarknessPercent !== undefined) {
+      systemPatch.staticRelightTargetDarknessPercent = normalizeStaticRelightTargetDarknessPercent(
+        debugAny.staticRelightTargetDarknessPercent,
+      );
+    }
+
+    if (debugAny.objectives?.showZoneBounds !== undefined) {
+      debugPatch.objectivesShowZoneBounds = debugAny.objectives.showZoneBounds;
+    }
+
+    const neutralBirdPatch = { ...(debugAny.neutralBirdAI ?? {}) };
+    if (typeof neutralBirdPatch.enabled === "boolean" && typeof neutralBirdPatch.disabled !== "boolean") {
+      neutralBirdPatch.disabled = !neutralBirdPatch.enabled;
+    }
+    if (neutralBirdPatch.disabled !== undefined) systemPatch.neutralBirdDisabled = neutralBirdPatch.disabled;
+    if (neutralBirdPatch.forceState !== undefined) systemPatch.neutralBirdForceState = neutralBirdPatch.forceState;
+    if (neutralBirdPatch.disableTransitions !== undefined) {
+      systemPatch.neutralBirdDisableTransitions = neutralBirdPatch.disableTransitions;
+    }
+    if (neutralBirdPatch.drawDebug !== undefined) debugPatch.neutralBirdDrawDebug = neutralBirdPatch.drawDebug;
+    if (neutralBirdPatch.debugRepickTarget !== undefined) {
+      systemPatch.neutralBirdDebugRepickTarget = neutralBirdPatch.debugRepickTarget;
+    }
+  }
+
+  return { userPatch, debugPatch, systemPatch };
+}
 
 export function resolveVerticalTiles(
   renderSettings: Partial<RenderSettings> | undefined,
   viewportWidth: number,
   viewportHeight: number,
 ): ResolvedVerticalTiles {
-  const modeRaw = renderSettings?.verticalTilesMode;
-  const legacyVisible = Number(renderSettings?.visibleVerticalTiles);
-  const mode = modeRaw === "auto" || modeRaw === "manual"
-    ? modeRaw
-    : (Number.isFinite(legacyVisible) ? "manual" : DEFAULT_VERTICAL_TILES_MODE);
-
-  const manual = clampVisibleVerticalTiles(
-    Number(renderSettings?.verticalTilesUser ?? renderSettings?.visibleVerticalTiles ?? DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP),
-  );
-  const autoPhone = clampVisibleVerticalTiles(
-    Number(renderSettings?.verticalTilesAutoPhone ?? DEFAULT_VISIBLE_VERTICAL_TILES_PHONE),
-  );
-  const autoDesktop = clampVisibleVerticalTiles(
-    Number(renderSettings?.verticalTilesAutoDesktop ?? DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP),
-  );
-  const viewportClass = classifyVerticalTilesViewport(viewportWidth, viewportHeight);
-  const effective = mode === "manual"
-    ? manual
-    : (viewportClass === "phone" ? autoPhone : autoDesktop);
-  return { mode, viewportClass, effective, manual, autoPhone, autoDesktop };
-}
-
-function mergeSettings(
-  base: UserSettings,
-  patch?: UserSettingsPatch,
-): UserSettings {
-  if (!patch) return base;
-
-  const patchAny = patch as any;
-  const debugPatch: Record<string, unknown> = { ...(patchAny.debug ?? {}) };
-  const gamePatch: Record<string, unknown> = { ...(patchAny.game ?? {}) };
-  const renderPatch: Record<string, unknown> = { ...(patchAny.render ?? {}) };
-  const audioPatch: Record<string, unknown> = { ...(patchAny.audio ?? {}) };
-  const neutralBirdPatch = (debugPatch.neutralBirdAI as Record<string, unknown> | undefined) ?? undefined;
-  if (
-    neutralBirdPatch
-    && typeof neutralBirdPatch.disabled !== "boolean"
-    && typeof neutralBirdPatch.enabled === "boolean"
-  ) {
-    neutralBirdPatch.disabled = !neutralBirdPatch.enabled;
-    delete neutralBirdPatch.enabled;
-    debugPatch.neutralBirdAI = neutralBirdPatch;
-  }
-  if (
-    typeof renderPatch.entityShadowsDisable !== "boolean"
-    && typeof renderPatch.entityShadowsEnabled === "boolean"
-  ) {
-    renderPatch.entityShadowsDisable = !renderPatch.entityShadowsEnabled;
-  }
-  if (renderPatch.visibleVerticalTiles !== undefined) {
-    const clampedLegacy = clampVisibleVerticalTiles(Number(renderPatch.visibleVerticalTiles));
-    renderPatch.visibleVerticalTiles = clampedLegacy;
-    if (renderPatch.verticalTilesUser === undefined) {
-      renderPatch.verticalTilesUser = clampedLegacy;
-    }
-    if (renderPatch.verticalTilesMode === undefined) {
-      renderPatch.verticalTilesMode = "manual";
-    }
-  }
-  if (renderPatch.verticalTilesMode !== undefined) {
-    renderPatch.verticalTilesMode = normalizeVerticalTilesMode(renderPatch.verticalTilesMode);
-  }
-  if (renderPatch.verticalTilesUser !== undefined) {
-    renderPatch.verticalTilesUser = clampVisibleVerticalTiles(Number(renderPatch.verticalTilesUser));
-  }
-  if (renderPatch.verticalTilesAutoPhone !== undefined) {
-    renderPatch.verticalTilesAutoPhone = clampVisibleVerticalTiles(Number(renderPatch.verticalTilesAutoPhone));
-  }
-  if (renderPatch.verticalTilesAutoDesktop !== undefined) {
-    renderPatch.verticalTilesAutoDesktop = clampVisibleVerticalTiles(Number(renderPatch.verticalTilesAutoDesktop));
-  }
-  if (renderPatch.lightColorModeOverride !== undefined) {
-    renderPatch.lightColorModeOverride = normalizeLightColorModeOverride(renderPatch.lightColorModeOverride);
-  }
-  if (renderPatch.lightStrengthOverride !== undefined) {
-    renderPatch.lightStrengthOverride = normalizeLightStrengthOverride(renderPatch.lightStrengthOverride);
-  }
-  if (renderPatch.structureTriangleAdmissionMode !== undefined) {
-    renderPatch.structureTriangleAdmissionMode = normalizeStructureTriangleAdmissionMode(
-      renderPatch.structureTriangleAdmissionMode,
-    );
-  }
-  if (renderPatch.staticRelightEnabled === undefined && typeof renderPatch.staticRelightPocEnabled === "boolean") {
-    renderPatch.staticRelightEnabled = renderPatch.staticRelightPocEnabled;
-  }
-  if (
-    renderPatch.structureTriangleGeometryEnabled === undefined
-    && typeof renderPatch.structureTriangleGeometryPocEnabled === "boolean"
-  ) {
-    renderPatch.structureTriangleGeometryEnabled = renderPatch.structureTriangleGeometryPocEnabled;
-  }
-  if (renderPatch.structureTriangleCutoutWidth !== undefined) {
-    renderPatch.structureTriangleCutoutWidth = normalizeStructureTriangleCutoutSpan(
-      renderPatch.structureTriangleCutoutWidth,
-    );
-  }
-  if (renderPatch.structureTriangleCutoutHeight !== undefined) {
-    renderPatch.structureTriangleCutoutHeight = normalizeStructureTriangleCutoutSpan(
-      renderPatch.structureTriangleCutoutHeight,
-    );
-  }
-  if (renderPatch.structureTriangleCutoutAlpha !== undefined) {
-    renderPatch.structureTriangleCutoutAlpha = normalizeStructureTriangleCutoutAlpha(
-      renderPatch.structureTriangleCutoutAlpha,
-    );
-  }
-  if (gamePatch.gameSpeed !== undefined) {
-    gamePatch.gameSpeed = clampGameSpeed(Number(gamePatch.gameSpeed));
-  }
-  if (debugPatch.paletteSWeightPercent !== undefined) {
-    debugPatch.paletteSWeightPercent = normalizePaletteRemapWeightPercent(debugPatch.paletteSWeightPercent);
-  }
-  if (debugPatch.paletteDarknessPercent !== undefined) {
-    debugPatch.paletteDarknessPercent = normalizePaletteRemapWeightPercent(debugPatch.paletteDarknessPercent);
-  }
-  if (debugPatch.staticRelightStrengthPercent !== undefined) {
-    debugPatch.staticRelightStrengthPercent = normalizePaletteRemapWeightPercent(debugPatch.staticRelightStrengthPercent);
-  }
-  if (debugPatch.staticRelightTargetDarknessPercent !== undefined) {
-    debugPatch.staticRelightTargetDarknessPercent = normalizeStaticRelightTargetDarknessPercent(
-      debugPatch.staticRelightTargetDarknessPercent,
-    );
-  }
-  delete debugPatch.paletteVWeightPercent;
-
-  const merged: UserSettings = {
-    ...base,
-    debug: {
-      ...base.debug,
-      ...(debugPatch as Partial<UserSettings["debug"]>),
+  return resolveVerticalTilesByUserGraphics(
+    {
+      verticalTilesMode: renderSettings?.verticalTilesMode,
+      verticalTilesUser: renderSettings?.verticalTilesUser,
+      verticalTilesAutoPhone: renderSettings?.verticalTilesAutoPhone,
+      verticalTilesAutoDesktop: renderSettings?.verticalTilesAutoDesktop,
     },
-    game: {
-      ...base.game,
-      ...(gamePatch as Partial<UserSettings["game"]>),
-    },
-    render: {
-      ...base.render,
-      ...(renderPatch as Partial<UserSettings["render"]>),
-    },
-    audio: {
-      ...base.audio,
-      ...(audioPatch as Partial<UserSettings["audio"]>),
-    },
-  };
-
-  const normalizedPaletteGroup = normalizePaletteGroup(merged.render.paletteGroup);
-  const normalizedPaletteId = resolvePaletteIdForGroup(normalizedPaletteGroup, merged.render.paletteId);
-  const normalizedLightColorModeOverride = normalizeLightColorModeOverride(merged.render.lightColorModeOverride);
-  const normalizedLightStrengthOverride = normalizeLightStrengthOverride(merged.render.lightStrengthOverride);
-  const normalizedStructureTriangleAdmissionMode = normalizeStructureTriangleAdmissionMode(
-    merged.render.structureTriangleAdmissionMode,
+    viewportWidth,
+    viewportHeight,
   );
-  const normalizedStaticRelightEnabled = merged.render.staticRelightEnabled !== false;
-  const normalizedStructureTriangleGeometryEnabled = merged.render.structureTriangleGeometryEnabled !== false;
-  const normalizedStructureTriangleCutoutWidth = normalizeStructureTriangleCutoutSpan(
-    merged.render.structureTriangleCutoutWidth,
-  );
-  const normalizedStructureTriangleCutoutHeight = normalizeStructureTriangleCutoutSpan(
-    merged.render.structureTriangleCutoutHeight,
-  );
-  const normalizedStructureTriangleCutoutAlpha = normalizeStructureTriangleCutoutAlpha(
-    merged.render.structureTriangleCutoutAlpha,
-  );
-
-  return {
-    ...merged,
-    render: {
-      ...merged.render,
-      lightColorModeOverride: normalizedLightColorModeOverride,
-      lightStrengthOverride: normalizedLightStrengthOverride,
-      staticRelightEnabled: normalizedStaticRelightEnabled,
-      structureTriangleGeometryEnabled: normalizedStructureTriangleGeometryEnabled,
-      structureTriangleAdmissionMode: normalizedStructureTriangleAdmissionMode,
-      structureTriangleCutoutWidth: normalizedStructureTriangleCutoutWidth,
-      structureTriangleCutoutHeight: normalizedStructureTriangleCutoutHeight,
-      structureTriangleCutoutAlpha: normalizedStructureTriangleCutoutAlpha,
-      staticRelightPocEnabled: undefined,
-      structureTriangleGeometryPocEnabled: undefined,
-      paletteGroup: normalizedPaletteGroup,
-      paletteId: normalizedPaletteId,
-    },
-  };
-}
-
-async function loadLocalOverrides(): Promise<UserSettingsPatch | undefined> {
-  try {
-    const mod = await import(/* @vite-ignore */ "./userSettings.local");
-    return (mod as any).default ?? (mod as any);
-  } catch {
-    return undefined;
-  }
-}
-
-function loadFromLocalStorage(): UserSettingsPatch | undefined {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return undefined;
-    return JSON.parse(raw);
-  } catch {
-    return undefined;
-  }
-}
-
-function saveToLocalStorage(settings: UserSettings): void {
-  try {
-    localStorage.setItem(LS_KEY, JSON.stringify(settings));
-  } catch {
-    // ignore
-  }
 }
 
 export async function initUserSettings(): Promise<UserSettings> {
-  const local = await loadLocalOverrides();
-  const storage = loadFromLocalStorage();
-
-  currentSettings = mergeSettings(
-    mergeSettings(DEFAULT_SETTINGS, local),
-    storage,
-  );
-
-  return currentSettings;
+  await initSettings();
+  return getUserSettings();
 }
 
 export function getUserSettings(): UserSettings {
-  return currentSettings;
+  return toLegacySettings();
 }
 
-export function updateUserSettings(
-  patch: UserSettingsPatch,
-): UserSettings {
-  currentSettings = mergeSettings(currentSettings, patch);
-
-  saveToLocalStorage(currentSettings);
-
-  return currentSettings;
+export function updateUserSettings(patch: UserSettingsPatch): UserSettings {
+  const split = splitLegacyPatch(patch);
+  if (Object.keys(split.userPatch).length > 0) {
+    updateBucketUserSettings(split.userPatch);
+  }
+  if (Object.keys(split.debugPatch).length > 0) {
+    updateDebugToolsSettings(split.debugPatch);
+  }
+  if (Object.keys(split.systemPatch).length > 0) {
+    updateSystemOverrides(split.systemPatch);
+  }
+  return getUserSettings();
 }
 
 export function isPauseDebugCardsEnabled(): boolean {
-  return !!currentSettings.debug.pauseDebugCards;
+  return !!getSettings().debug.pauseDebugCards;
 }
 
 export function isPauseCsvControlsEnabled(): boolean {
-  return !!currentSettings.debug.pauseCsvControls;
+  return !!getSettings().debug.pauseCsvControls;
 }
 
 export function isUserModeEnabled(): boolean {
-  return !!currentSettings.game.userModeEnabled;
+  return !!getSettings().user.game.userModeEnabled;
 }

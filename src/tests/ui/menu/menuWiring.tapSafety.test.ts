@@ -485,6 +485,7 @@ describe("menuWiring tap safety", () => {
     ];
 
     const refs = createDomRefs();
+    updateUserSettings({ game: { userModeEnabled: false } });
     wireMenus(refs, createGameApiMock());
     tapElement(refs.paletteLabBtn as unknown as FakeElement, 1, 220, 300);
     await flushUiTasks();
@@ -512,6 +513,7 @@ describe("menuWiring tap safety", () => {
 
     const refs = createDomRefs();
     const game = createGameApiMock();
+    updateUserSettings({ game: { userModeEnabled: false } });
     const win = (globalThis as any).window;
     vi.mocked(win.prompt).mockReturnValue("Snapshot Renamed");
     vi.mocked(win.confirm).mockReturnValue(false);
@@ -568,6 +570,7 @@ describe("menuWiring tap safety", () => {
 
     const refs = createDomRefs();
     const game = createGameApiMock();
+    updateUserSettings({ game: { userModeEnabled: false } });
     game.openPaletteSnapshot.mockRejectedValueOnce(
       new Error('Snapshot "Missing Map Snapshot" references map "missing_map" that is unavailable in this build.'),
     );

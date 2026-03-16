@@ -354,6 +354,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         const isUserMode = isUserModeEnabled();
         if (debugMapSelectorBtn) debugMapSelectorBtn.hidden = isUserMode;
         if (debugPathSelectBtn) debugPathSelectBtn.hidden = isUserMode;
+        refs.paletteLabBtn.hidden = isUserMode;
 
         if (isUserMode && pendingStartMode !== "DELVE") {
             pendingStartMode = "DELVE";
@@ -364,6 +365,10 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
 
         if (isUserMode && !refs.mapMenuEl.hidden) {
             refs.mapMenuEl.hidden = true;
+            refs.mainMenuEl.hidden = false;
+        }
+        if (isUserMode && !refs.paletteLabMenuEl.hidden) {
+            refs.paletteLabMenuEl.hidden = true;
             refs.mainMenuEl.hidden = false;
         }
     };
@@ -733,6 +738,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     });
 
     bindActivate(refs.paletteLabBtn, () => {
+        if (isUserModeEnabled()) return;
         openPaletteLab();
     });
 
