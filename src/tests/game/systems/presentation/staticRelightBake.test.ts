@@ -36,7 +36,7 @@ describe("staticRelightBake", () => {
     const base = buildStaticRelightBakeContextKey({
       mapId: "downtown",
       relightEnabled: true,
-      staticRelightPocEnabled: true,
+      staticRelightEnabled: true,
       paletteId: "fiery_plague_gb",
       paletteVariantKey: "fiery_plague_gb@@sw:75@@dk:100",
       paletteSwapEnabled: true,
@@ -55,7 +55,7 @@ describe("staticRelightBake", () => {
     const mapChanged = buildStaticRelightBakeContextKey({
       mapId: "china_town",
       relightEnabled: true,
-      staticRelightPocEnabled: true,
+      staticRelightEnabled: true,
       paletteId: "fiery_plague_gb",
       paletteVariantKey: "fiery_plague_gb@@sw:75@@dk:100",
       paletteSwapEnabled: true,
@@ -73,7 +73,7 @@ describe("staticRelightBake", () => {
     const strengthChanged = buildStaticRelightBakeContextKey({
       mapId: "downtown",
       relightEnabled: true,
-      staticRelightPocEnabled: true,
+      staticRelightEnabled: true,
       paletteId: "fiery_plague_gb",
       paletteVariantKey: "fiery_plague_gb@@sw:75@@dk:100",
       paletteSwapEnabled: true,
@@ -91,7 +91,7 @@ describe("staticRelightBake", () => {
     const targetChanged = buildStaticRelightBakeContextKey({
       mapId: "downtown",
       relightEnabled: true,
-      staticRelightPocEnabled: true,
+      staticRelightEnabled: true,
       paletteId: "fiery_plague_gb",
       paletteVariantKey: "fiery_plague_gb@@sw:75@@dk:100",
       paletteSwapEnabled: true,
@@ -109,7 +109,7 @@ describe("staticRelightBake", () => {
     const lightOverrideChanged = buildStaticRelightBakeContextKey({
       mapId: "downtown",
       relightEnabled: true,
-      staticRelightPocEnabled: true,
+      staticRelightEnabled: true,
       paletteId: "fiery_plague_gb",
       paletteVariantKey: "fiery_plague_gb@@sw:75@@dk:100",
       paletteSwapEnabled: true,
@@ -127,7 +127,7 @@ describe("staticRelightBake", () => {
     const paletteSelectionChanged = buildStaticRelightBakeContextKey({
       mapId: "downtown",
       relightEnabled: true,
-      staticRelightPocEnabled: true,
+      staticRelightEnabled: true,
       paletteId: "fiery_plague_gb",
       paletteVariantKey: "fiery_plague_gb@@sw:75@@dk:100",
       paletteSwapEnabled: true,

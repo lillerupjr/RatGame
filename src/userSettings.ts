@@ -33,9 +33,13 @@ export type RenderSettings = {
   entityAnchorsEnabled: boolean;
   renderPerfCountersEnabled: boolean;
   performanceMode: boolean;
-  staticRelightPocEnabled: boolean;
-  structureTriangleGeometryPocEnabled: boolean;
+  staticRelightEnabled: boolean;
+  structureTriangleGeometryEnabled: boolean;
   structureTriangleAdmissionMode: StructureTriangleAdmissionMode;
+  structureTriangleCutoutEnabled: boolean;
+  structureTriangleCutoutWidth: number;
+  structureTriangleCutoutHeight: number;
+  structureTriangleCutoutAlpha: number;
   deathSlowdownEnabled: boolean;
   cameraSmoothingEnabled: boolean;
   verticalTilesMode?: VerticalTilesMode;
@@ -61,6 +65,9 @@ export type RenderSettings = {
   hpPerDepth: number;
   pressureAt0Sec: number;
   pressureAt120Sec: number;
+  // Legacy keys kept for localStorage compatibility.
+  staticRelightPocEnabled?: boolean;
+  structureTriangleGeometryPocEnabled?: boolean;
 };
 
 export type GameSettings = {
@@ -103,9 +110,13 @@ export const DEFAULT_SETTINGS: UserSettings = {
     entityAnchorsEnabled: false,
     renderPerfCountersEnabled: false,
     performanceMode: false,
-    staticRelightPocEnabled: false,
-    structureTriangleGeometryPocEnabled: false,
+    staticRelightEnabled: true,
+    structureTriangleGeometryEnabled: true,
     structureTriangleAdmissionMode: "hybrid",
+    structureTriangleCutoutEnabled: false,
+    structureTriangleCutoutWidth: 2,
+    structureTriangleCutoutHeight: 2,
+    structureTriangleCutoutAlpha: 0.45,
     deathSlowdownEnabled: true,
     cameraSmoothingEnabled: true,
     verticalTilesMode: DEFAULT_VERTICAL_TILES_MODE,
@@ -161,8 +172,21 @@ function normalizeLightStrengthOverride(value: unknown): LightStrengthOverride {
 }
 
 function normalizeStructureTriangleAdmissionMode(value: unknown): StructureTriangleAdmissionMode {
-  if (value === "viewport" || value === "renderDistance" || value === "compare") return value;
+  if (value === "viewport" || value === "renderDistance") return value;
+  if (value === "compare") return import.meta.env.DEV ? "compare" : "hybrid";
   return "hybrid";
+}
+
+function normalizeStructureTriangleCutoutSpan(value: unknown): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 2;
+  return Math.max(0, Math.min(12, Math.round(numeric)));
+}
+
+function normalizeStructureTriangleCutoutAlpha(value: unknown): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0.45;
+  return Math.max(0, Math.min(1, numeric));
 }
 
 function resolvePaletteIdForGroup(group: PaletteGroup, paletteId: unknown): string {
@@ -277,6 +301,30 @@ function mergeSettings(
       renderPatch.structureTriangleAdmissionMode,
     );
   }
+  if (renderPatch.staticRelightEnabled === undefined && typeof renderPatch.staticRelightPocEnabled === "boolean") {
+    renderPatch.staticRelightEnabled = renderPatch.staticRelightPocEnabled;
+  }
+  if (
+    renderPatch.structureTriangleGeometryEnabled === undefined
+    && typeof renderPatch.structureTriangleGeometryPocEnabled === "boolean"
+  ) {
+    renderPatch.structureTriangleGeometryEnabled = renderPatch.structureTriangleGeometryPocEnabled;
+  }
+  if (renderPatch.structureTriangleCutoutWidth !== undefined) {
+    renderPatch.structureTriangleCutoutWidth = normalizeStructureTriangleCutoutSpan(
+      renderPatch.structureTriangleCutoutWidth,
+    );
+  }
+  if (renderPatch.structureTriangleCutoutHeight !== undefined) {
+    renderPatch.structureTriangleCutoutHeight = normalizeStructureTriangleCutoutSpan(
+      renderPatch.structureTriangleCutoutHeight,
+    );
+  }
+  if (renderPatch.structureTriangleCutoutAlpha !== undefined) {
+    renderPatch.structureTriangleCutoutAlpha = normalizeStructureTriangleCutoutAlpha(
+      renderPatch.structureTriangleCutoutAlpha,
+    );
+  }
   if (gamePatch.gameSpeed !== undefined) {
     gamePatch.gameSpeed = clampGameSpeed(Number(gamePatch.gameSpeed));
   }
@@ -323,6 +371,17 @@ function mergeSettings(
   const normalizedStructureTriangleAdmissionMode = normalizeStructureTriangleAdmissionMode(
     merged.render.structureTriangleAdmissionMode,
   );
+  const normalizedStaticRelightEnabled = merged.render.staticRelightEnabled !== false;
+  const normalizedStructureTriangleGeometryEnabled = merged.render.structureTriangleGeometryEnabled !== false;
+  const normalizedStructureTriangleCutoutWidth = normalizeStructureTriangleCutoutSpan(
+    merged.render.structureTriangleCutoutWidth,
+  );
+  const normalizedStructureTriangleCutoutHeight = normalizeStructureTriangleCutoutSpan(
+    merged.render.structureTriangleCutoutHeight,
+  );
+  const normalizedStructureTriangleCutoutAlpha = normalizeStructureTriangleCutoutAlpha(
+    merged.render.structureTriangleCutoutAlpha,
+  );
 
   return {
     ...merged,
@@ -330,7 +389,14 @@ function mergeSettings(
       ...merged.render,
       lightColorModeOverride: normalizedLightColorModeOverride,
       lightStrengthOverride: normalizedLightStrengthOverride,
+      staticRelightEnabled: normalizedStaticRelightEnabled,
+      structureTriangleGeometryEnabled: normalizedStructureTriangleGeometryEnabled,
       structureTriangleAdmissionMode: normalizedStructureTriangleAdmissionMode,
+      structureTriangleCutoutWidth: normalizedStructureTriangleCutoutWidth,
+      structureTriangleCutoutHeight: normalizedStructureTriangleCutoutHeight,
+      structureTriangleCutoutAlpha: normalizedStructureTriangleCutoutAlpha,
+      staticRelightPocEnabled: undefined,
+      structureTriangleGeometryPocEnabled: undefined,
       paletteGroup: normalizedPaletteGroup,
       paletteId: normalizedPaletteId,
     },

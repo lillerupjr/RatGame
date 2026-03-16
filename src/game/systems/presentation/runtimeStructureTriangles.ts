@@ -1,4 +1,4 @@
-import { screenToWorld, worldToScreen } from "../../../engine/math/iso";
+import { screenToWorld } from "../../../engine/math/iso";
 
 export type RuntimeStructureTrianglePoint = {
   x: number;
@@ -204,6 +204,7 @@ export function buildStructureTriangleCandidatesForBand(
   progressionIndex: number,
   ladderStepPx: number = STRUCTURE_TRI_LADDER_STEP_PX,
   ladderStaggerPx: number = STRUCTURE_TRI_LADDER_STAGGER_PX,
+  ownerParity: 0 | 1 = 0,
   parityFlip: boolean = false,
 ): Array<[
   RuntimeStructureTrianglePoint,
@@ -219,8 +220,9 @@ export function buildStructureTriangleCandidatesForBand(
   const ladderStep = Math.max(1, ladderStepPx | 0);
   const ladderStagger = Math.max(1, Math.min(ladderStep - 1, ladderStaggerPx | 0));
   const parityBias = parityFlip ? 1 : 0;
-  const phasedProgression = progressionIndex + parityBias;
-  const rightPhase = positiveMod(phasedProgression * ladderStagger, ladderStep);
+  void progressionIndex;
+  const parityPhase = ((ownerParity + parityBias) & 1) * ladderStagger;
+  const rightPhase = positiveMod(parityPhase, ladderStep);
   const leftPhase = positiveMod(rightPhase - ladderStagger, ladderStep);
 
   const zigZagPoints: Array<{ x: number; y: number; side: "L" | "R" }> = [];
@@ -313,31 +315,17 @@ function defaultCameraTileFromCentroid(cx: number, cy: number, tileWorld: number
   };
 }
 
-function expectedAlignedBottomYFromOwnerTile(
-  ownerTx: number,
-  ownerTy: number,
-  tileWorld: number,
-): number {
-  const safeTileWorld = Math.max(1, tileWorld);
-  // Use owner-tile south-east corner as the stable row anchor in projected space.
-  const ownerCornerWorldX = (ownerTx + 1) * safeTileWorld;
-  const ownerCornerWorldY = (ownerTy + 1) * safeTileWorld;
-  const projected = worldToScreen(ownerCornerWorldX, ownerCornerWorldY);
-  return Math.round(projected.y);
-}
-
 export function buildRuntimeStructureTrianglePiecesForBand(
   input: RuntimeStructureTriangleBuildInput,
 ): RuntimeStructureTriangleBuildResult {
-  const survivors: Array<{
-    points: [RuntimeStructureTrianglePoint, RuntimeStructureTrianglePoint, RuntimeStructureTrianglePoint];
-    srcPoints: [RuntimeStructureTrianglePoint, RuntimeStructureTrianglePoint, RuntimeStructureTrianglePoint];
-  }> = [];
+  const pieces: RuntimeStructureTrianglePiece[] = [];
+  const ownerParity = ((input.parentTx + input.parentTy) & 1) as 0 | 1;
   const candidates = buildStructureTriangleCandidatesForBand(
     input.dstRect,
     input.progressionIndex,
     input.ladderStepPx,
     input.ladderStaggerPx,
+    ownerParity,
     input.parityFlip,
   );
   let beforeCull = 0;
@@ -346,7 +334,6 @@ export function buildRuntimeStructureTrianglePiecesForBand(
   const threshold = input.alphaThreshold ?? STRUCTURE_TRI_ALPHA_THRESHOLD;
   const cameraResolver = input.cameraTileFromCentroid
     ?? ((x: number, y: number) => defaultCameraTileFromCentroid(x, y, input.tileWorld));
-  let occupiedMaxY = Number.NEGATIVE_INFINITY;
 
   for (let i = 0; i < candidates.length; i++) {
     const [a, b, c] = candidates[i];
@@ -354,33 +341,6 @@ export function buildRuntimeStructureTrianglePiecesForBand(
     if (alphaMap && !triangleHasVisibleSpritePixels(a, b, c, input.dstRect, input.srcRect, alphaMap, threshold)) {
       continue;
     }
-    const srcA = mapPointFromDstToSrc(a, input.dstRect, input.srcRect);
-    const srcB = mapPointFromDstToSrc(b, input.dstRect, input.srcRect);
-    const srcC = mapPointFromDstToSrc(c, input.dstRect, input.srcRect);
-    survivors.push({
-      points: [a, b, c],
-      srcPoints: [srcA, srcB, srcC],
-    });
-    const triMaxY = Math.max(a.y, b.y, c.y);
-    if (triMaxY > occupiedMaxY) occupiedMaxY = triMaxY;
-    afterCull++;
-  }
-  if (survivors.length <= 0 || !Number.isFinite(occupiedMaxY)) {
-    return {
-      pieces: [],
-      stats: { beforeCull, afterCull },
-    };
-  }
-
-  const expectedBottomY = expectedAlignedBottomYFromOwnerTile(input.parentTx, input.parentTy, input.tileWorld);
-  const shiftY = expectedBottomY - occupiedMaxY;
-  const pieces: RuntimeStructureTrianglePiece[] = [];
-  for (let i = 0; i < survivors.length; i++) {
-    const survivor = survivors[i];
-    const [a0, b0, c0] = survivor.points;
-    const a = { x: a0.x, y: a0.y + shiftY };
-    const b = { x: b0.x, y: b0.y + shiftY };
-    const c = { x: c0.x, y: c0.y + shiftY };
     const minX = Math.min(a.x, b.x, c.x);
     const maxX = Math.max(a.x, b.x, c.x);
     const minY = Math.min(a.y, b.y, c.y);
@@ -388,12 +348,15 @@ export function buildRuntimeStructureTrianglePiecesForBand(
     const cx = (a.x + b.x + c.x) / 3;
     const cy = (a.y + b.y + c.y) / 3;
     const cameraTile = cameraResolver(cx, cy);
+    const srcA = mapPointFromDstToSrc(a, input.dstRect, input.srcRect);
+    const srcB = mapPointFromDstToSrc(b, input.dstRect, input.srcRect);
+    const srcC = mapPointFromDstToSrc(c, input.dstRect, input.srcRect);
     const triangleOrdinal = pieces.length;
     pieces.push({
       structureInstanceId: input.structureInstanceId,
       stableId: triangleStableId(input.structureInstanceId, input.bandIndex, triangleOrdinal),
       points: [a, b, c],
-      srcPoints: survivor.srcPoints,
+      srcPoints: [srcA, srcB, srcC],
       parentTx: input.parentTx,
       parentTy: input.parentTy,
       cameraTx: cameraTile.tx,
@@ -418,6 +381,7 @@ export function buildRuntimeStructureTrianglePiecesForBand(
         h: input.dstRect.h,
       },
     });
+    afterCull++;
   }
 
   return {

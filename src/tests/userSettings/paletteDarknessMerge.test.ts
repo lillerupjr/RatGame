@@ -86,36 +86,47 @@ describe("userSettings palette darkness merge", () => {
     expect(getUserSettings().render.lightStrengthOverride).toBe("authored");
   });
 
-  it("persists static relight poc render toggle", () => {
+  it("persists static relight render toggle", () => {
+    updateUserSettings({
+      render: {
+        staticRelightEnabled: true,
+      },
+    } as any);
+    expect(getUserSettings().render.staticRelightEnabled).toBe(true);
+
+    updateUserSettings({
+      render: {
+        staticRelightEnabled: false,
+      },
+    } as any);
+    expect(getUserSettings().render.staticRelightEnabled).toBe(false);
+  });
+
+  it("persists structure triangle geometry render toggle", () => {
+    updateUserSettings({
+      render: {
+        structureTriangleGeometryEnabled: true,
+      },
+    } as any);
+    expect(getUserSettings().render.structureTriangleGeometryEnabled).toBe(true);
+
+    updateUserSettings({
+      render: {
+        structureTriangleGeometryEnabled: false,
+      },
+    } as any);
+    expect(getUserSettings().render.structureTriangleGeometryEnabled).toBe(false);
+  });
+
+  it("migrates legacy poc toggle keys to production render toggles", () => {
     updateUserSettings({
       render: {
         staticRelightPocEnabled: true,
-      },
-    } as any);
-    expect(getUserSettings().render.staticRelightPocEnabled).toBe(true);
-
-    updateUserSettings({
-      render: {
-        staticRelightPocEnabled: false,
-      },
-    } as any);
-    expect(getUserSettings().render.staticRelightPocEnabled).toBe(false);
-  });
-
-  it("persists structure triangle geometry poc render toggle", () => {
-    updateUserSettings({
-      render: {
         structureTriangleGeometryPocEnabled: true,
-      },
+      } as any,
     } as any);
-    expect(getUserSettings().render.structureTriangleGeometryPocEnabled).toBe(true);
-
-    updateUserSettings({
-      render: {
-        structureTriangleGeometryPocEnabled: false,
-      },
-    } as any);
-    expect(getUserSettings().render.structureTriangleGeometryPocEnabled).toBe(false);
+    expect(getUserSettings().render.staticRelightEnabled).toBe(true);
+    expect(getUserSettings().render.structureTriangleGeometryEnabled).toBe(true);
   });
 
   it("normalizes and persists structure triangle admission mode", () => {
@@ -132,5 +143,31 @@ describe("userSettings palette darkness merge", () => {
       },
     } as any);
     expect(getUserSettings().render.structureTriangleAdmissionMode).toBe("renderDistance");
+  });
+
+  it("normalizes and persists structure triangle cutout settings", () => {
+    updateUserSettings({
+      render: {
+        structureTriangleCutoutWidth: 99 as any,
+        structureTriangleCutoutHeight: -6 as any,
+        structureTriangleCutoutAlpha: 3.5 as any,
+      },
+    } as any);
+    expect(getUserSettings().render.structureTriangleCutoutWidth).toBe(12);
+    expect(getUserSettings().render.structureTriangleCutoutHeight).toBe(0);
+    expect(getUserSettings().render.structureTriangleCutoutAlpha).toBe(1);
+
+    updateUserSettings({
+      render: {
+        structureTriangleCutoutEnabled: true,
+        structureTriangleCutoutWidth: 3,
+        structureTriangleCutoutHeight: 4,
+        structureTriangleCutoutAlpha: 0.35,
+      },
+    } as any);
+    expect(getUserSettings().render.structureTriangleCutoutEnabled).toBe(true);
+    expect(getUserSettings().render.structureTriangleCutoutWidth).toBe(3);
+    expect(getUserSettings().render.structureTriangleCutoutHeight).toBe(4);
+    expect(getUserSettings().render.structureTriangleCutoutAlpha).toBe(0.35);
   });
 });

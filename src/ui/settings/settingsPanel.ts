@@ -284,6 +284,22 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
   renderPaddingRow.slider.setAttribute("data-render-padding-slider", "1");
   graphicsPanel.appendChild(renderPaddingRow.row);
 
+  const structureCutoutEnabledRow = createToggleRow("Structure cutout");
+  structureCutoutEnabledRow.input.setAttribute("data-structure-cutout-toggle", "1");
+  graphicsPanel.appendChild(structureCutoutEnabledRow.row);
+
+  const structureCutoutWidthRow = createSliderRow("Structure cutout width", 0, 12, 1);
+  structureCutoutWidthRow.slider.setAttribute("data-structure-cutout-width-slider", "1");
+  graphicsPanel.appendChild(structureCutoutWidthRow.row);
+
+  const structureCutoutHeightRow = createSliderRow("Structure cutout height", 0, 12, 1);
+  structureCutoutHeightRow.slider.setAttribute("data-structure-cutout-height-slider", "1");
+  graphicsPanel.appendChild(structureCutoutHeightRow.row);
+
+  const structureCutoutAlphaRow = createSliderRow("Structure cutout alpha", 0, 1, 0.05);
+  structureCutoutAlphaRow.slider.setAttribute("data-structure-cutout-alpha-slider", "1");
+  graphicsPanel.appendChild(structureCutoutAlphaRow.row);
+
   const audioHeader = document.createElement("h4");
   audioHeader.className = "settingsCategoryTitle";
   audioHeader.textContent = "Audio";
@@ -379,6 +395,18 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
     const pad = clampInt(Number(settings.render.tileRenderRadius), -12, 12);
     renderPaddingRow.slider.value = `${pad}`;
     renderPaddingRow.value.textContent = `${pad}`;
+
+    const cutoutWidth = clampInt(Number(settings.render.structureTriangleCutoutWidth ?? 2), 0, 12);
+    structureCutoutWidthRow.slider.value = `${cutoutWidth}`;
+    structureCutoutWidthRow.value.textContent = `${cutoutWidth}`;
+
+    const cutoutHeight = clampInt(Number(settings.render.structureTriangleCutoutHeight ?? 2), 0, 12);
+    structureCutoutHeightRow.slider.value = `${cutoutHeight}`;
+    structureCutoutHeightRow.value.textContent = `${cutoutHeight}`;
+
+    const cutoutAlpha = clamp01(Number(settings.render.structureTriangleCutoutAlpha ?? 0.45));
+    structureCutoutAlphaRow.slider.value = `${cutoutAlpha}`;
+    structureCutoutAlphaRow.value.textContent = `${Math.round(cutoutAlpha * 100)}%`;
   };
 
   const applyAudioPatch = (patch: Partial<ReturnType<typeof getUserSettings>["audio"]>) => {
@@ -411,6 +439,10 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
     updateUserSettings({ render: { cameraSmoothingEnabled: !!cameraSmoothingRow.input.checked } });
   };
 
+  const onStructureCutoutToggle = () => {
+    updateUserSettings({ render: { structureTriangleCutoutEnabled: !!structureCutoutEnabledRow.input.checked } });
+  };
+
   const onVerticalTilesMode = (mode: VerticalTilesMode) => {
     const settings = readSettings();
     const viewport = getViewportDimensions();
@@ -440,6 +472,7 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
     performanceModeRow.input.checked = !!settings.render.performanceMode;
     deathSlowdownRow.input.checked = !!settings.render.deathSlowdownEnabled;
     cameraSmoothingRow.input.checked = settings.render.cameraSmoothingEnabled !== false;
+    structureCutoutEnabledRow.input.checked = settings.render.structureTriangleCutoutEnabled === true;
 
     musicMuteRow.input.checked = !!settings.audio.musicMuted;
     sfxMuteRow.input.checked = !!settings.audio.sfxMuted;
@@ -456,6 +489,7 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
   performanceModeRow.input.addEventListener("change", onPerformanceModeToggle);
   deathSlowdownRow.input.addEventListener("change", onDeathSlowdownToggle);
   cameraSmoothingRow.input.addEventListener("change", onCameraSmoothingToggle);
+  structureCutoutEnabledRow.input.addEventListener("change", onStructureCutoutToggle);
   verticalTilesModeAutoBtn.addEventListener("click", () => onVerticalTilesMode("auto"));
   verticalTilesModeManualBtn.addEventListener("click", () => onVerticalTilesMode("manual"));
   gameSpeedRow.slider.addEventListener("input", () => {
@@ -485,6 +519,21 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
   renderPaddingRow.slider.addEventListener("input", () => {
     const v = clampInt(Number.parseFloat(renderPaddingRow.slider.value), -12, 12);
     updateUserSettings({ render: { tileRenderRadius: v } });
+    syncSliders();
+  });
+  structureCutoutWidthRow.slider.addEventListener("input", () => {
+    const v = clampInt(Number.parseFloat(structureCutoutWidthRow.slider.value), 0, 12);
+    updateUserSettings({ render: { structureTriangleCutoutWidth: v } });
+    syncSliders();
+  });
+  structureCutoutHeightRow.slider.addEventListener("input", () => {
+    const v = clampInt(Number.parseFloat(structureCutoutHeightRow.slider.value), 0, 12);
+    updateUserSettings({ render: { structureTriangleCutoutHeight: v } });
+    syncSliders();
+  });
+  structureCutoutAlphaRow.slider.addEventListener("input", () => {
+    const v = clamp01(Number.parseFloat(structureCutoutAlphaRow.slider.value));
+    updateUserSettings({ render: { structureTriangleCutoutAlpha: v } });
     syncSliders();
   });
 

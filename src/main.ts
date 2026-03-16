@@ -268,47 +268,47 @@ function installDevSettingsUi(): DevSettingsUiController {
   renderPerfCountersRow.appendChild(renderPerfCountersInput);
   panel.appendChild(renderPerfCountersRow);
 
-  const staticRelightPocRow = document.createElement("label");
-  staticRelightPocRow.style.display = "flex";
-  staticRelightPocRow.style.alignItems = "center";
-  staticRelightPocRow.style.justifyContent = "space-between";
-  staticRelightPocRow.style.gap = "10px";
-  staticRelightPocRow.style.padding = "4px 0";
-  const staticRelightPocText = document.createElement("span");
-  staticRelightPocText.textContent = "Static Relight POC";
-  const staticRelightPocInput = document.createElement("input");
-  staticRelightPocInput.type = "checkbox";
-  staticRelightPocInput.addEventListener("change", () => {
+  const staticRelightRow = document.createElement("label");
+  staticRelightRow.style.display = "flex";
+  staticRelightRow.style.alignItems = "center";
+  staticRelightRow.style.justifyContent = "space-between";
+  staticRelightRow.style.gap = "10px";
+  staticRelightRow.style.padding = "4px 0";
+  const staticRelightText = document.createElement("span");
+  staticRelightText.textContent = "Static Relight";
+  const staticRelightInput = document.createElement("input");
+  staticRelightInput.type = "checkbox";
+  staticRelightInput.addEventListener("change", () => {
     updateUserSettings({
       render: {
-        staticRelightPocEnabled: staticRelightPocInput.checked,
+        staticRelightEnabled: staticRelightInput.checked,
       },
     });
   });
-  staticRelightPocRow.appendChild(staticRelightPocText);
-  staticRelightPocRow.appendChild(staticRelightPocInput);
-  panel.appendChild(staticRelightPocRow);
+  staticRelightRow.appendChild(staticRelightText);
+  staticRelightRow.appendChild(staticRelightInput);
+  panel.appendChild(staticRelightRow);
 
-  const structureTriangleGeometryPocRow = document.createElement("label");
-  structureTriangleGeometryPocRow.style.display = "flex";
-  structureTriangleGeometryPocRow.style.alignItems = "center";
-  structureTriangleGeometryPocRow.style.justifyContent = "space-between";
-  structureTriangleGeometryPocRow.style.gap = "10px";
-  structureTriangleGeometryPocRow.style.padding = "4px 0";
-  const structureTriangleGeometryPocText = document.createElement("span");
-  structureTriangleGeometryPocText.textContent = "Structure Triangle Geometry POC";
-  const structureTriangleGeometryPocInput = document.createElement("input");
-  structureTriangleGeometryPocInput.type = "checkbox";
-  structureTriangleGeometryPocInput.addEventListener("change", () => {
+  const structureTriangleGeometryRow = document.createElement("label");
+  structureTriangleGeometryRow.style.display = "flex";
+  structureTriangleGeometryRow.style.alignItems = "center";
+  structureTriangleGeometryRow.style.justifyContent = "space-between";
+  structureTriangleGeometryRow.style.gap = "10px";
+  structureTriangleGeometryRow.style.padding = "4px 0";
+  const structureTriangleGeometryText = document.createElement("span");
+  structureTriangleGeometryText.textContent = "Structure Triangle Geometry";
+  const structureTriangleGeometryInput = document.createElement("input");
+  structureTriangleGeometryInput.type = "checkbox";
+  structureTriangleGeometryInput.addEventListener("change", () => {
     updateUserSettings({
       render: {
-        structureTriangleGeometryPocEnabled: structureTriangleGeometryPocInput.checked,
+        structureTriangleGeometryEnabled: structureTriangleGeometryInput.checked,
       },
     });
   });
-  structureTriangleGeometryPocRow.appendChild(structureTriangleGeometryPocText);
-  structureTriangleGeometryPocRow.appendChild(structureTriangleGeometryPocInput);
-  panel.appendChild(structureTriangleGeometryPocRow);
+  structureTriangleGeometryRow.appendChild(structureTriangleGeometryText);
+  structureTriangleGeometryRow.appendChild(structureTriangleGeometryInput);
+  panel.appendChild(structureTriangleGeometryRow);
 
   const structureTriangleAdmissionModeRow = document.createElement("label");
   structureTriangleAdmissionModeRow.style.display = "flex";
@@ -327,8 +327,10 @@ function installDevSettingsUi(): DevSettingsUiController {
     { value: "hybrid", label: "Hybrid" },
     { value: "viewport", label: "Viewport" },
     { value: "renderDistance", label: "Render Distance" },
-    { value: "compare", label: "Compare" },
   ];
+  if (import.meta.env.DEV) {
+    structureTriangleAdmissionModeOptions.push({ value: "compare", label: "Compare (Dev)" });
+  }
   for (let i = 0; i < structureTriangleAdmissionModeOptions.length; i++) {
     const optDef = structureTriangleAdmissionModeOptions[i];
     const opt = document.createElement("option");
@@ -346,6 +348,97 @@ function installDevSettingsUi(): DevSettingsUiController {
   structureTriangleAdmissionModeRow.appendChild(structureTriangleAdmissionModeText);
   structureTriangleAdmissionModeRow.appendChild(structureTriangleAdmissionModeSelect);
   panel.appendChild(structureTriangleAdmissionModeRow);
+
+  const structureTriangleCutoutEnabledRow = document.createElement("label");
+  structureTriangleCutoutEnabledRow.style.display = "flex";
+  structureTriangleCutoutEnabledRow.style.alignItems = "center";
+  structureTriangleCutoutEnabledRow.style.justifyContent = "space-between";
+  structureTriangleCutoutEnabledRow.style.gap = "10px";
+  structureTriangleCutoutEnabledRow.style.padding = "4px 0";
+  const structureTriangleCutoutEnabledText = document.createElement("span");
+  structureTriangleCutoutEnabledText.textContent = "Structure Triangle Cutout";
+  const structureTriangleCutoutEnabledInput = document.createElement("input");
+  structureTriangleCutoutEnabledInput.type = "checkbox";
+  structureTriangleCutoutEnabledInput.addEventListener("change", () => {
+    updateUserSettings({
+      render: {
+        structureTriangleCutoutEnabled: structureTriangleCutoutEnabledInput.checked,
+      },
+    });
+  });
+  structureTriangleCutoutEnabledRow.appendChild(structureTriangleCutoutEnabledText);
+  structureTriangleCutoutEnabledRow.appendChild(structureTriangleCutoutEnabledInput);
+  panel.appendChild(structureTriangleCutoutEnabledRow);
+
+  const createStructureTriangleCutoutSelect = (
+    label: string,
+    values: readonly number[],
+    formatLabel: (value: number) => string,
+    onChange: (value: number) => void,
+  ): HTMLSelectElement => {
+    const row = document.createElement("label");
+    row.style.display = "flex";
+    row.style.alignItems = "center";
+    row.style.justifyContent = "space-between";
+    row.style.gap = "10px";
+    row.style.padding = "4px 0";
+    const text = document.createElement("span");
+    text.textContent = label;
+    const select = document.createElement("select");
+    applyDevSelectStyle(select);
+    for (let i = 0; i < values.length; i++) {
+      const value = values[i];
+      const opt = document.createElement("option");
+      opt.value = `${value}`;
+      opt.textContent = formatLabel(value);
+      select.appendChild(opt);
+    }
+    select.addEventListener("change", () => {
+      const value = Number(select.value);
+      onChange(Number.isFinite(value) ? value : 0);
+    });
+    row.appendChild(text);
+    row.appendChild(select);
+    panel.appendChild(row);
+    return select;
+  };
+
+  const structureTriangleCutoutWidthSelect = createStructureTriangleCutoutSelect(
+    "Structure Cutout Width",
+    [0, 1, 2, 3, 4, 5, 6, 8, 10, 12],
+    (value) => `${value}`,
+    (value) => {
+      updateUserSettings({
+        render: {
+          structureTriangleCutoutWidth: value,
+        },
+      });
+    },
+  );
+  const structureTriangleCutoutHeightSelect = createStructureTriangleCutoutSelect(
+    "Structure Cutout Height",
+    [0, 1, 2, 3, 4, 5, 6, 8, 10, 12],
+    (value) => `${value}`,
+    (value) => {
+      updateUserSettings({
+        render: {
+          structureTriangleCutoutHeight: value,
+        },
+      });
+    },
+  );
+  const structureTriangleCutoutAlphaSelect = createStructureTriangleCutoutSelect(
+    "Structure Cutout Alpha",
+    [0, 0.1, 0.2, 0.3, 0.4, 0.45, 0.5, 0.6, 0.75, 0.9, 1],
+    (value) => `${Math.round(value * 100)}%`,
+    (value) => {
+      updateUserSettings({
+        render: {
+          structureTriangleCutoutAlpha: value,
+        },
+      });
+    },
+  );
 
   const paletteSwapRow = document.createElement("label");
   paletteSwapRow.style.display = "flex";
@@ -869,9 +962,13 @@ function installDevSettingsUi(): DevSettingsUiController {
         entityAnchorsEnabled: false,
         renderPerfCountersEnabled: false,
         performanceMode: false,
-        staticRelightPocEnabled: false,
-        structureTriangleGeometryPocEnabled: false,
+        staticRelightEnabled: false,
+        structureTriangleGeometryEnabled: false,
         structureTriangleAdmissionMode: "hybrid",
+        structureTriangleCutoutEnabled: false,
+        structureTriangleCutoutWidth: 2,
+        structureTriangleCutoutHeight: 2,
+        structureTriangleCutoutAlpha: 0.45,
         paletteSwapEnabled: false,
         paletteHudDebugOverlayEnabled: false,
         darknessMaskDebugDisabled: false,
@@ -905,9 +1002,17 @@ function installDevSettingsUi(): DevSettingsUiController {
     entityShadowsInput.checked = s.render.entityShadowsDisable;
     entityAnchorsInput.checked = s.render.entityAnchorsEnabled;
     renderPerfCountersInput.checked = s.render.renderPerfCountersEnabled;
-    staticRelightPocInput.checked = s.render.staticRelightPocEnabled === true;
-    structureTriangleGeometryPocInput.checked = s.render.structureTriangleGeometryPocEnabled === true;
+    staticRelightInput.checked = s.render.staticRelightEnabled !== false;
+    structureTriangleGeometryInput.checked = s.render.structureTriangleGeometryEnabled !== false;
     structureTriangleAdmissionModeSelect.value = s.render.structureTriangleAdmissionMode ?? "hybrid";
+    structureTriangleCutoutEnabledInput.checked = s.render.structureTriangleCutoutEnabled === true;
+    structureTriangleCutoutWidthSelect.value = `${s.render.structureTriangleCutoutWidth ?? 2}`;
+    structureTriangleCutoutHeightSelect.value = `${s.render.structureTriangleCutoutHeight ?? 2}`;
+    const cutoutAlphaRaw = Number.isFinite(Number(s.render.structureTriangleCutoutAlpha))
+      ? Number(s.render.structureTriangleCutoutAlpha)
+      : 0.45;
+    const cutoutAlphaNormalized = Math.max(0, Math.min(1, cutoutAlphaRaw));
+    structureTriangleCutoutAlphaSelect.value = `${cutoutAlphaNormalized}`;
     paletteSwapInput.checked = s.render.paletteSwapEnabled;
     paletteGroupSelect.value = normalizePaletteGroup(s.render.paletteGroup);
     paletteIdSelect.value = rebuildPaletteOptions(s.render.paletteGroup, s.render.paletteId);

@@ -1065,11 +1065,11 @@ function resolveStaticRelightRuntimeState(w: World): StaticRelightRuntimeState {
   const activePaletteId = resolveActivePaletteId();
   const activePaletteVariantKey = resolveActivePaletteVariantKey();
   const activePaletteSwapWeights = resolveActivePaletteSwapWeights();
-  const staticRelightPocEnabled = renderSettings.staticRelightPocEnabled === true;
+  const staticRelightEnabled = renderSettings.staticRelightEnabled !== false;
   const baseDarknessBucket = settings.debug.paletteDarknessPercent as StaticRelightDarknessBucket;
   const strengthScale = Math.max(0, Math.min(1, settings.debug.staticRelightStrengthPercent / 100));
   const targetDarknessBucket = settings.debug.staticRelightTargetDarknessPercent as 0 | 25 | 50 | 75;
-  const enabled = staticRelightPocEnabled
+  const enabled = staticRelightEnabled
     && baseDarknessBucket > 0
     && strengthScale > 0;
   const tileHAtWorld = (x: number, y: number) => heightAtWorld(x, y, KENNEY_TILE_WORLD);
@@ -1151,7 +1151,7 @@ function resolveStaticRelightRuntimeState(w: World): StaticRelightRuntimeState {
   const contextKey = buildStaticRelightBakeContextKey({
     mapId: compiledMap.id,
     relightEnabled: enabled,
-    staticRelightPocEnabled,
+    staticRelightEnabled,
     paletteId: activePaletteId,
     paletteVariantKey: activePaletteVariantKey,
     paletteSwapEnabled: renderSettings.paletteSwapEnabled === true,
@@ -1501,7 +1501,7 @@ let lastStructureTriangleLoadingPendingSignature = "";
 
 export async function prepareRuntimeStructureTrianglesForLoading(_w: World): Promise<boolean> {
   const settings = getUserSettings();
-  const enabled = settings.render.structureTriangleGeometryPocEnabled === true;
+  const enabled = settings.render.structureTriangleGeometryEnabled !== false;
   const compiledMap = getActiveCompiledMap();
   const contextKey = buildRuntimeStructureTriangleContextKey({
     mapId: compiledMap.id,
@@ -3034,16 +3034,52 @@ export async function renderSystem(
     };
   }
   const staticRelightContextChanged = staticRelightBakeStore.resetIfContextChanged(staticRelight.contextKey);
-  const structureTriangleGeometryPocEnabled = renderSettings.structureTriangleGeometryPocEnabled === true;
+  const structureTriangleGeometryEnabled = renderSettings.structureTriangleGeometryEnabled !== false;
   const structureTriangleAdmissionMode = renderSettings.structureTriangleAdmissionMode ?? "hybrid";
+  const structureTriangleCutoutEnabled = structureTriangleGeometryEnabled
+    && renderSettings.structureTriangleCutoutEnabled === true;
+  const structureTriangleCutoutHalfWidth = Math.max(
+    0,
+    Math.min(12, Math.round(Number(renderSettings.structureTriangleCutoutWidth ?? 2))),
+  );
+  const structureTriangleCutoutHalfHeight = Math.max(
+    0,
+    Math.min(12, Math.round(Number(renderSettings.structureTriangleCutoutHeight ?? 2))),
+  );
+  const structureTriangleCutoutAlpha = Math.max(
+    0,
+    Math.min(1, Number(renderSettings.structureTriangleCutoutAlpha ?? 0.45)),
+  );
+  const playerCameraTx = playerTx;
+  const playerCameraTy = playerTy;
+  const playerRenderFields = deriveParentTileRenderFields(playerTx, playerTy);
+  const isParentTileAfterPlayer = (parentTx: number, parentTy: number): boolean => {
+    const parentFields = deriveParentTileRenderFields(parentTx, parentTy);
+    if (parentFields.slice !== playerRenderFields.slice) return parentFields.slice > playerRenderFields.slice;
+    return parentFields.within > playerRenderFields.within;
+  };
+  const structureCutoutHalfWidthPx = Math.max(1, structureTriangleCutoutHalfWidth * T * ISO_X);
+  const structureCutoutHalfHeightPx = Math.max(1, structureTriangleCutoutHalfHeight * T * ISO_Y);
+  const structureCutoutScreenRect: ScreenRect = {
+    minX: p0.x - structureCutoutHalfWidthPx,
+    maxX: p0.x + structureCutoutHalfWidthPx,
+    minY: p0.y - structureCutoutHalfHeightPx,
+    maxY: p0.y + structureCutoutHalfHeightPx,
+  };
+  const isPointInsideStructureCutoutScreenRect = (x: number, y: number): boolean => (
+    x >= structureCutoutScreenRect.minX
+    && x <= structureCutoutScreenRect.maxX
+    && y >= structureCutoutScreenRect.minY
+    && y <= structureCutoutScreenRect.maxY
+  );
   const runtimeStructureTriangleContextKey = buildRuntimeStructureTriangleContextKey({
     mapId: compiledMap.id,
-    enabled: structureTriangleGeometryPocEnabled,
+    enabled: structureTriangleGeometryEnabled,
   });
   const runtimeStructureTriangleContextChanged = runtimeStructureTriangleCacheStore
     .resetIfContextChanged(runtimeStructureTriangleContextKey);
   staticRelightFrame = staticRelight.frame;
-  if (runtimeStructureTriangleContextChanged && structureTriangleGeometryPocEnabled) {
+  if (runtimeStructureTriangleContextChanged && structureTriangleGeometryEnabled) {
     rebuildRuntimeStructureTriangleCacheForMap(compiledMap);
   }
   if (staticRelightContextChanged) {
@@ -3103,6 +3139,7 @@ export async function renderSystem(
   // Map from slice -> array of drawables for that slice
   const sliceDrawables = new Map<number, SliceDrawable[]>();
   const deferredStructureSliceDebugDraws: Array<() => void> = [];
+  let didQueueStructureCutoutDebugRect = false;
 
   const drawClosureFn: SliceDrawFn = (payload) => {
     (payload as (() => void))();
@@ -4625,13 +4662,13 @@ export async function renderSystem(
         : viewRect;
       // In triangle-geometry mode, STRUCTURE visibility authority is triangle camera-tiles.
       // So we must not cull structures by overlay footprint before triangle admission runs.
-      const overlayPrefilterViewRect = structureTriangleGeometryPocEnabled
+      const overlayPrefilterViewRect = structureTriangleGeometryEnabled
         ? mapWideOverlayViewRect(compiledMap)
         : viewRect;
       const ovs = overlaysInView(overlayPrefilterViewRect);
       for (let i = 0; i < ovs.length; i++) {
         const o = ovs[i];
-        const passesOverlayCoarsePrefilter = structureTriangleGeometryPocEnabled && o.layerRole === "STRUCTURE"
+        const passesOverlayCoarsePrefilter = structureTriangleGeometryEnabled && o.layerRole === "STRUCTURE"
           ? true
           : tileRectIntersectsRenderRadius(o.tx, o.tx + o.w - 1, o.ty, o.ty + o.h - 1);
         if (!passesOverlayCoarsePrefilter) continue;
@@ -4683,7 +4720,7 @@ export async function renderSystem(
           }
 
           let usedTriangleGeometryPath = false;
-          if (structureTriangleGeometryPocEnabled && o.layerRole === "STRUCTURE") {
+          if (structureTriangleGeometryEnabled && o.layerRole === "STRUCTURE") {
             const geometrySignature = runtimeStructureTriangleGeometrySignatureForOverlay(o, {
               dx: draw.dx,
               dy: draw.dy,
@@ -4696,8 +4733,43 @@ export async function renderSystem(
             if (triangleCache && draw.img) {
               usedTriangleGeometryPath = true;
               const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(draw.img) : draw.img;
+              const footprintW = Math.max(1, o.w | 0);
+              const footprintH = Math.max(1, o.h | 0);
+              const buildingMinCameraTx = o.tx;
+              const buildingMaxCameraTx = o.tx + footprintW - 1;
+              const buildingMinCameraTy = o.ty;
+              const buildingMaxCameraTy = o.ty + footprintH - 1;
+              const buildingDirectionalRejected = (
+                buildingMaxCameraTx < playerCameraTx
+                || buildingMaxCameraTy < playerCameraTy
+              );
+              const buildingDirectionalEligible = !buildingDirectionalRejected;
+              if (SHOW_STRUCTURE_SLICE_DEBUG && structureTriangleCutoutEnabled && !didQueueStructureCutoutDebugRect) {
+                didQueueStructureCutoutDebugRect = true;
+                deferredStructureSliceDebugDraws.push(() => {
+                  ctx.save();
+                  const x = structureCutoutScreenRect.minX;
+                  const y = structureCutoutScreenRect.minY;
+                  const wRect = structureCutoutScreenRect.maxX - structureCutoutScreenRect.minX;
+                  const hRect = structureCutoutScreenRect.maxY - structureCutoutScreenRect.minY;
+                  ctx.fillStyle = "rgba(120,40,255,0.08)";
+                  ctx.strokeStyle = "rgba(160,90,255,0.8)";
+                  ctx.lineWidth = 1;
+                  ctx.fillRect(x, y, wRect, hRect);
+                  ctx.strokeRect(x, y, wRect, hRect);
+                  ctx.font = "11px monospace";
+                  const labelPos = worldToScreen(playerCameraTx * T, playerCameraTy * T);
+                  const label = `cutout screenRect C:${playerCameraTx},${playerCameraTy} w:${structureTriangleCutoutHalfWidth} h:${structureTriangleCutoutHalfHeight} px:${Math.round(wRect)}x${Math.round(hRect)} a:${structureTriangleCutoutAlpha.toFixed(2)}`;
+                  ctx.fillStyle = "rgba(0,0,0,0.8)";
+                  ctx.fillText(label, labelPos.x + 9, labelPos.y - 7);
+                  ctx.fillStyle = "rgba(185,145,255,0.95)";
+                  ctx.fillText(label, labelPos.x + 8, labelPos.y - 8);
+                  ctx.restore();
+                });
+              }
               for (let gi = 0; gi < triangleCache.parentTileGroups.length; gi++) {
                 const group = triangleCache.parentTileGroups[gi];
+                const groupParentAfterPlayer = isParentTileAfterPlayer(group.parentTx, group.parentTy);
                 const groupBoundsInViewport = runtimeStructureRectIntersects(group.localBounds, projectedViewportRect);
                 const isCameraTileInsideStrictViewport = (tx: number, ty: number): boolean => (
                   tx >= strictViewportTileBounds.minTx
@@ -4708,6 +4780,8 @@ export async function renderSystem(
                 const viewportVisibleTriangles = [] as typeof group.triangles;
                 const renderDistanceVisibleTriangles = [] as typeof group.triangles;
                 const finalVisibleTriangles = [] as typeof group.triangles;
+                const cutoutEligibleTriangles = [] as typeof group.triangles;
+                let cutoutBuildingRejectedCount = 0;
                 const compareDistanceOnlyTriangles = [] as typeof group.triangles;
                 for (let ti = 0; ti < group.triangles.length; ti++) {
                   const tri = group.triangles[ti];
@@ -4727,6 +4801,14 @@ export async function renderSystem(
                     if (structureTriangleAdmissionMode === "compare" && renderDistanceVisible && !viewportVisible) {
                       compareDistanceOnlyTriangles.push(tri);
                     }
+                    if (structureTriangleCutoutEnabled && !buildingDirectionalEligible) cutoutBuildingRejectedCount++;
+                    const triCenterX = (tri.points[0].x + tri.points[1].x + tri.points[2].x) / 3;
+                    const triCenterY = (tri.points[0].y + tri.points[1].y + tri.points[2].y) / 3;
+                    const cutoutEligible = structureTriangleCutoutEnabled
+                      && buildingDirectionalEligible
+                      && groupParentAfterPlayer
+                      && isPointInsideStructureCutoutScreenRect(triCenterX, triCenterY);
+                    if (cutoutEligible) cutoutEligibleTriangles.push(tri);
                   }
                 }
                 const finalAdmitted = finalVisibleTriangles.length > 0;
@@ -4779,7 +4861,7 @@ export async function renderSystem(
                         ? "rgba(255,120,40,0.95)"
                         : "rgba(255,180,90,0.95)";
                     ctx.fillText(label, labelX, labelY);
-                    const statsLabel = `vis:${finalVisibleTriangles.length}/${group.triangles.length} vp:${viewportVisibleTriangles.length} rd:${renderDistanceVisibleTriangles.length} gb:${groupBoundsInViewport ? 1 : 0}`;
+                    const statsLabel = `vis:${finalVisibleTriangles.length}/${group.triangles.length} vp:${viewportVisibleTriangles.length} rd:${renderDistanceVisibleTriangles.length} cut:${cutoutEligibleTriangles.length} bdir:${buildingDirectionalEligible ? "pass" : "rej"} brej:${cutoutBuildingRejectedCount} bbox:${buildingMinCameraTx},${buildingMinCameraTy}-${buildingMaxCameraTx},${buildingMaxCameraTy} gb:${groupBoundsInViewport ? 1 : 0}`;
                     ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
                     ctx.fillText(statsLabel, labelX + 1, labelY + 12);
                     ctx.fillStyle = "rgba(220, 240, 255, 0.95)";
@@ -4802,18 +4884,43 @@ export async function renderSystem(
                     const tri = finalVisibleTriangles[ti];
                     const [s0, s1, s2] = tri.srcPoints;
                     const [d0, d1, d2] = tri.points;
-                    drawTexturedTriangle(
-                      ctx,
-                      sourceImg,
-                      draw.dw,
-                      draw.dh,
-                      s0,
-                      s1,
-                      s2,
-                      d0,
-                      d1,
-                      d2,
-                    );
+                    const cutoutEligible = structureTriangleCutoutEnabled
+                      && buildingDirectionalEligible
+                      && groupParentAfterPlayer
+                      && isPointInsideStructureCutoutScreenRect(
+                        (tri.points[0].x + tri.points[1].x + tri.points[2].x) / 3,
+                        (tri.points[0].y + tri.points[1].y + tri.points[2].y) / 3,
+                      );
+                    if (cutoutEligible && structureTriangleCutoutAlpha < 1) {
+                      ctx.save();
+                      ctx.globalAlpha = ctx.globalAlpha * structureTriangleCutoutAlpha;
+                      drawTexturedTriangle(
+                        ctx,
+                        sourceImg,
+                        draw.dw,
+                        draw.dh,
+                        s0,
+                        s1,
+                        s2,
+                        d0,
+                        d1,
+                        d2,
+                      );
+                      ctx.restore();
+                    } else {
+                      drawTexturedTriangle(
+                        ctx,
+                        sourceImg,
+                        draw.dw,
+                        draw.dh,
+                        s0,
+                        s1,
+                        s2,
+                        d0,
+                        d1,
+                        d2,
+                      );
+                    }
                     const compareDistanceOnly = compareDistanceOnlyTriangles.includes(tri);
                     if (compareDistanceOnly) {
                       const [a, b, c] = tri.points;
@@ -4826,6 +4933,21 @@ export async function renderSystem(
                       ctx.fillStyle = "rgba(255,120,40,0.28)";
                       ctx.fill();
                       ctx.strokeStyle = "rgba(255,120,40,0.9)";
+                      ctx.lineWidth = 1;
+                      ctx.stroke();
+                      ctx.restore();
+                    }
+                    if (SHOW_STRUCTURE_SLICE_DEBUG && cutoutEligible) {
+                      const [a, b, c] = tri.points;
+                      ctx.save();
+                      ctx.beginPath();
+                      ctx.moveTo(a.x, a.y);
+                      ctx.lineTo(b.x, b.y);
+                      ctx.lineTo(c.x, c.y);
+                      ctx.closePath();
+                      ctx.fillStyle = "rgba(160,90,255,0.18)";
+                      ctx.fill();
+                      ctx.strokeStyle = "rgba(190,130,255,0.95)";
                       ctx.lineWidth = 1;
                       ctx.stroke();
                       ctx.restore();
@@ -5144,6 +5266,7 @@ export async function renderSystem(
       `fullCanvasBlits/frame: ${perf.fullCanvasBlitsPerFrame.toFixed(1)}`,
       `tileRadius: ${perf.tileLoopRadius.toFixed(0)} tileLoopIters/frame: ${perf.tileLoopIterationsPerFrame.toFixed(1)}`,
       `triAdmission: mode=${structureTriangleAdmissionMode} authority=${structureTriangleAdmissionMode === "viewport" ? "viewportRect" : "sharedRenderDistance(tileRadius)"} tileRadius=${sliderPadding}`,
+      `triCutout: ${structureTriangleCutoutEnabled ? "on" : "off"} center=${playerCameraTx},${playerCameraTy} size=${structureTriangleCutoutHalfWidth}x${structureTriangleCutoutHalfHeight} alpha=${structureTriangleCutoutAlpha.toFixed(2)}`,
       `bands z:${perf.zBandCountPerFrame.toFixed(1)} light:${perf.lightBandCountPerFrame.toFixed(1)} masks build:${perf.maskBuildsPerFrame.toFixed(1)} hit:${perf.maskCacheHitsPerFrame.toFixed(1)} miss:${perf.maskCacheMissesPerFrame.toFixed(1)}`,
       `masks rasterChunks/frame: ${perf.maskRasterChunksPerFrame.toFixed(1)} drawEntries/frame: ${perf.maskDrawEntriesPerFrame.toFixed(1)}`,
     ];
