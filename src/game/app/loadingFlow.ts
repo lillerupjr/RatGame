@@ -82,6 +82,15 @@ function stageProgress(stage: LoadingStage): number {
 }
 
 export function createLoadingController(hooks: LoadingHooks): LoadingController {
+  // Development policy: never let PREWARM_DEPENDENCIES loop forever.
+  // If readiness cannot converge within these bounds, fail open and continue.
+  const STAGE_FAIL_OPEN_ATTEMPT_LIMIT: Partial<Record<LoadingStage, number>> = {
+    [LoadingStage.PREWARM_DEPENDENCIES]: 4,
+  };
+  const STAGE_FAIL_OPEN_ELAPSED_MS: Partial<Record<LoadingStage, number>> = {
+    [LoadingStage.PREWARM_DEPENDENCIES]: 9000,
+  };
+
   let currentMapId = "";
   let stageRunning = false;
   let prewarmInitialized = false;
@@ -89,6 +98,7 @@ export function createLoadingController(hooks: LoadingHooks): LoadingController 
   let stageIndex = 0;
   let stageDone = false;
   const stageAttemptByStage = new Map<LoadingStage, number>();
+  const stageEnteredAtByStage = new Map<LoadingStage, number>();
   const stagePendingLogAtByStage = new Map<LoadingStage, number>();
   const stageEnterLogged = new Set<LoadingStage>();
 
@@ -155,6 +165,7 @@ export function createLoadingController(hooks: LoadingHooks): LoadingController 
       stageIndex = 0;
       stageDone = false;
       stageAttemptByStage.clear();
+      stageEnteredAtByStage.clear();
       stagePendingLogAtByStage.clear();
       stageEnterLogged.clear();
       controller.stage = stageOrder[0];
@@ -171,6 +182,9 @@ export function createLoadingController(hooks: LoadingHooks): LoadingController 
 
       const stage = stageOrder[stageIndex];
       controller.stage = stage;
+      if (!stageEnteredAtByStage.has(stage)) {
+        stageEnteredAtByStage.set(stage, performance.now());
+      }
       if (!stageEnterLogged.has(stage)) {
         stageEnterLogged.add(stage);
         console.debug(`[loading] stage enter: ${stageName(stage)}`);
@@ -184,15 +198,34 @@ export function createLoadingController(hooks: LoadingHooks): LoadingController 
           stageRunning = false;
           if (!stageDone) {
             const now = performance.now();
-            const lastLogAt = stagePendingLogAtByStage.get(stage) ?? 0;
-            if (now - lastLogAt >= 1000) {
-              stagePendingLogAtByStage.set(stage, now);
-              console.debug(`[loading] stage pending: ${stageName(stage)} (attempt ${attempt})`);
+            const enteredAt = stageEnteredAtByStage.get(stage) ?? now;
+            const elapsedMs = now - enteredAt;
+            const attemptLimit = STAGE_FAIL_OPEN_ATTEMPT_LIMIT[stage];
+            const elapsedLimit = STAGE_FAIL_OPEN_ELAPSED_MS[stage];
+            const attemptLimitExceeded = attemptLimit !== undefined && attempt >= attemptLimit;
+            const elapsedLimitExceeded = elapsedLimit !== undefined && elapsedMs >= elapsedLimit;
+            if (attemptLimitExceeded || elapsedLimitExceeded) {
+              stageDone = true;
+              console.warn("[loading] stage fail-open", {
+                stage: stageName(stage),
+                attempt,
+                elapsedMs: Math.round(elapsedMs),
+                attemptLimit: attemptLimit ?? null,
+                elapsedLimitMs: elapsedLimit ?? null,
+                reason: attemptLimitExceeded ? "attempt-limit" : "elapsed-limit",
+              });
+            } else {
+              const lastLogAt = stagePendingLogAtByStage.get(stage) ?? 0;
+              if (now - lastLogAt >= 1000) {
+                stagePendingLogAtByStage.set(stage, now);
+                console.debug(`[loading] stage pending: ${stageName(stage)} (attempt ${attempt})`);
+              }
             }
           } else {
             console.debug(`[loading] stage complete: ${stageName(stage)} (attempt ${attempt})`);
           }
           if (stageDone) {
+            stageEnteredAtByStage.delete(stage);
             stageIndex++;
             stageDone = false;
           }

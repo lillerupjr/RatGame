@@ -5,7 +5,12 @@ import {
   resolveActivePaletteSwapWeightPercents,
   resolveActivePaletteVariantKey,
 } from "../../../game/render/activePalette";
-import { getSpriteByIdForDarknessPercent, getSpriteByIdForPalette } from "./renderSprites";
+import {
+  getSpriteByIdForVariantKey,
+  getSpriteCacheDebugSnapshotByKey,
+  hasSpriteRecordForCacheKey,
+  resolveSpriteCacheKeyForVariantKey,
+} from "./renderSprites";
 import {
   createPaletteSwapState,
   notePaletteReady,
@@ -82,27 +87,43 @@ function isPaletteReady(paletteId: string): boolean {
   return true;
 }
 
-export function neutralMobSpritesReady(): boolean {
-  return isPaletteReady(resolveActivePaletteVariantKey());
+export function neutralMobSpritesReady(
+  paletteVariantKey: string = resolveActivePaletteVariantKey(),
+): boolean {
+  return isPaletteReady(paletteVariantKey);
 }
 
 function loadImage(
   spriteId: string,
-  paletteId: string,
-  darknessPercent?: SpriteDarknessPercent,
+  paletteVariantKey: string,
 ): Promise<HTMLImageElement> {
+  const cacheKey = resolveSpriteCacheKeyForVariantKey(spriteId, paletteVariantKey);
+  const cacheHitAtRequest = hasSpriteRecordForCacheKey(cacheKey);
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const started = performance.now();
     const MAX_WAIT_MS = 1500;
     const tick = () => {
-      const rec = darknessPercent == null
-        ? getSpriteByIdForPalette(spriteId, paletteId)
-        : getSpriteByIdForDarknessPercent(spriteId, darknessPercent);
-      if (rec.ready) {
+      const rec = getSpriteByIdForVariantKey(spriteId, paletteVariantKey);
+      const validReady = rec.ready && rec.img && rec.img.naturalWidth > 0 && rec.img.naturalHeight > 0;
+      if (validReady) {
         resolve(rec.img);
         return;
       }
+      if (rec.unsupported || rec.failed || rec.ready) {
+        reject(new Error(`[neutralSprites] Failed to load ${spriteId} (state=${rec.unsupported ? "UNSUPPORTED" : "FAILED"})`));
+        return;
+      }
       if (performance.now() - started >= MAX_WAIT_MS) {
+        const activePaletteVariantKey = resolveActivePaletteVariantKey();
+        const cacheSnapshot = getSpriteCacheDebugSnapshotByKey(cacheKey);
+        console.warn("[neutralSprites] preload timeout", {
+          spriteId,
+          awaitedCacheKey: cacheKey,
+          cacheHitAtRequest,
+          awaitedPaletteVariantKey: paletteVariantKey,
+          activePaletteVariantKey,
+          cacheSnapshot,
+        });
         reject(new Error(`[neutralSprites] Failed to load ${spriteId}`));
         return;
       }
@@ -155,9 +176,10 @@ export function getPigeonFramesForClip(
   return getPigeonFramesForClipAndScreenDir(clip, "E");
 }
 
-export async function preloadNeutralMobSprites(): Promise<void> {
-  const paletteId = resolveActivePaletteId();
-  const paletteVariantKey = resolvePaletteVariantKeyForDarknessPercent();
+export async function preloadNeutralMobSprites(
+  requestedPaletteVariantKey?: string,
+): Promise<void> {
+  const paletteVariantKey = requestedPaletteVariantKey ?? resolvePaletteVariantKeyForDarknessPercent();
   notePaletteRequested(paletteState, paletteVariantKey);
   if (isPaletteReady(paletteVariantKey)) {
     notePaletteReady(paletteState, paletteVariantKey);
@@ -179,7 +201,7 @@ export async function preloadNeutralMobSprites(): Promise<void> {
       const flyingFrames: HTMLImageElement[] = [];
       for (let fi = 0; fi < 10; fi++) {
         const flyingId = `entities/animals/pigeon/animations/flying/${dirPath}/frame_${String(fi).padStart(3, "0")}`;
-        const img = await loadImage(flyingId, paletteId);
+        const img = await loadImage(flyingId, paletteVariantKey);
         if (img.decode) await img.decode();
         flyingFrames.push(img);
       }
@@ -187,7 +209,7 @@ export async function preloadNeutralMobSprites(): Promise<void> {
       const idleFrames: HTMLImageElement[] = [];
       for (let ii = 0; ii < 10; ii++) {
         const idleId = `entities/animals/pigeon/rotations/${dirPath}/frame_${String(ii).padStart(3, "0")}`;
-        const img = await loadImage(idleId, paletteId);
+        const img = await loadImage(idleId, paletteVariantKey);
         if (img.decode) await img.decode();
         idleFrames.push(img);
       }
@@ -207,7 +229,6 @@ export async function preloadNeutralMobSprites(): Promise<void> {
 async function preloadNeutralMobSpritesForDarknessPercent(
   darknessPercent: SpriteDarknessPercent,
 ): Promise<void> {
-  const paletteId = resolveActivePaletteId();
   const paletteVariantKey = resolvePaletteVariantKeyForDarknessPercent(darknessPercent);
   notePaletteRequested(paletteState, paletteVariantKey);
   if (isPaletteReady(paletteVariantKey)) {
@@ -230,7 +251,7 @@ async function preloadNeutralMobSpritesForDarknessPercent(
       const flyingFrames: HTMLImageElement[] = [];
       for (let fi = 0; fi < 10; fi++) {
         const flyingId = `entities/animals/pigeon/animations/flying/${dirPath}/frame_${String(fi).padStart(3, "0")}`;
-        const img = await loadImage(flyingId, paletteId, darknessPercent);
+        const img = await loadImage(flyingId, paletteVariantKey);
         if (img.decode) await img.decode();
         flyingFrames.push(img);
       }
@@ -238,7 +259,7 @@ async function preloadNeutralMobSpritesForDarknessPercent(
       const idleFrames: HTMLImageElement[] = [];
       for (let ii = 0; ii < 10; ii++) {
         const idleId = `entities/animals/pigeon/rotations/${dirPath}/frame_${String(ii).padStart(3, "0")}`;
-        const img = await loadImage(idleId, paletteId, darknessPercent);
+        const img = await loadImage(idleId, paletteVariantKey);
         if (img.decode) await img.decode();
         idleFrames.push(img);
       }

@@ -82,8 +82,10 @@ export function getPlayerIdleSpriteUrl(skin: string): string {
     return `${import.meta.env.BASE_URL}assets-runtime/base_db32/entities/player/${skin}/rotations/south.png`;
 }
 
-export async function preloadPlayerSprites() {
-    const paletteVariantKey = resolvePaletteVariantKeyForDarknessPercent();
+export async function preloadPlayerSprites(
+    requestedPaletteVariantKey?: string,
+) {
+    const paletteVariantKey = requestedPaletteVariantKey ?? resolvePaletteVariantKeyForDarknessPercent();
     notePaletteRequested(paletteState, paletteVariantKey);
     const map = getPaletteMap(paletteVariantKey);
     if (map.has(playerSkin)) {
@@ -102,6 +104,7 @@ export async function preloadPlayerSprites() {
             source: PLAYER_SOURCE,
             animKeys: [PLAYER_WALK_ANIM],
             frameCount: 6,
+            paletteVariantKey,
         })
         .then((pack) => {
             map.set(playerSkin, pack);
@@ -140,6 +143,7 @@ async function preloadPlayerSpritesForDarknessPercent(
             animKeys: [PLAYER_WALK_ANIM],
             frameCount: 6,
             darknessPercent,
+            paletteVariantKey,
         })
         .then((pack) => {
             map.set(playerSkin, pack);
@@ -155,8 +159,9 @@ async function preloadPlayerSpritesForDarknessPercent(
     await job;
 }
 
-export function playerSpritesReady() {
-    const paletteVariantKey = resolveActivePaletteVariantKey();
+export function playerSpritesReady(
+    paletteVariantKey: string = resolveActivePaletteVariantKey(),
+) {
     notePaletteRequested(paletteState, paletteVariantKey);
     const current = getPaletteMap(paletteVariantKey).get(playerSkin);
     if (!current) {

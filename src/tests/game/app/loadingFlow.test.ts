@@ -83,4 +83,37 @@ describe("loadingFlow", () => {
     expect(calls).toContain("spawn");
     expect(calls.indexOf("spawn")).toBeGreaterThan(calls.indexOf("relight:3"));
   });
+
+  it("fails open prewarm stage after bounded attempts so loading cannot hang forever", async () => {
+    const calls: string[] = [];
+    let prewarmAttempts = 0;
+    const controller = createLoadingController({
+      compileMap: async () => { calls.push("compile"); },
+      precomputeStaticMap: async () => { calls.push("precompute"); },
+      prewarmDependencies: async () => {
+        prewarmAttempts++;
+        calls.push(`prewarm:${prewarmAttempts}`);
+        return false;
+      },
+      prepareStructureTriangles: async () => {
+        calls.push("triangles");
+        return true;
+      },
+      prepareStaticRelight: async () => {
+        calls.push("relight");
+        return true;
+      },
+      primeAudio: async () => { calls.push("audio"); },
+      spawnEntities: async () => { calls.push("spawn"); },
+      finalize: async () => { calls.push("finalize"); },
+    });
+
+    controller.beginMapLoad("downtown");
+    await tickUntilDone(controller, 128);
+
+    expect(controller.isDone()).toBe(true);
+    expect(prewarmAttempts).toBe(4);
+    expect(calls).toContain("spawn");
+    expect(calls).toContain("finalize");
+  });
 });

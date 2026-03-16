@@ -137,9 +137,10 @@ export function getEnemySpriteFrameMeta(type: EnemyType): EnemySpriteFrameMeta |
 const paletteState = createPaletteSwapState(resolveActivePaletteVariantKey());
 const packsByPalette = new Map<string, Map<string, SpritePack>>();
 const preloadByPaletteSkin = new Map<string, Promise<void>>();
-type PreloadStatus = "READY" | "PENDING" | "UNSUPPORTED" | "FAILED";
+type PreloadStatus = "READY" | "PENDING" | "UNSUPPORTED" | "FAILED_TRANSIENT" | "FAILED_PERMANENT";
 const preloadStatusByPaletteSkin = new Map<string, PreloadStatus>();
-const preloadWarnedByPaletteSkin = new Set<string>();
+const preloadWarnedByPaletteSkinStatus = new Set<string>();
+const preloadSkippedByPaletteSkinStatus = new Set<string>();
 
 function resolvePaletteVariantKeyForDarknessPercent(
     darknessPercent?: SpriteDarknessPercent,
@@ -169,47 +170,106 @@ function getRequiredSkins(): string[] {
     return Array.from(skins);
 }
 
-function markPaletteReadyIfComplete(paletteId: string): void {
+function resolveRequestedSkins(requiredSkins?: readonly string[]): string[] {
+    if (requiredSkins === undefined) return getRequiredSkins();
+    const known = new Set(getRequiredSkins());
+    const out: string[] = [];
+    for (let i = 0; i < requiredSkins.length; i++) {
+        const skin = requiredSkins[i];
+        if (!known.has(skin) || out.includes(skin)) continue;
+        out.push(skin);
+    }
+    return out;
+}
+
+function markPaletteReadyIfComplete(paletteId: string, requiredSkins?: readonly string[]): void {
   const map = getPaletteMap(paletteId);
-  const allLoaded = getRequiredSkins().every((skin) => map.has(skin));
+  const skins = resolveRequestedSkins(requiredSkins);
+  const allLoaded = skins.every((skin) => map.has(skin));
   if (allLoaded) notePaletteReady(paletteState, paletteId);
 }
 
-export function enemySpritesReady(): boolean {
-    const paletteVariantKey = resolveActivePaletteVariantKey();
+export function enemySpritesReady(
+    requiredSkins?: readonly string[],
+    paletteVariantKey: string = resolveActivePaletteVariantKey(),
+): boolean {
     const map = getPaletteMap(paletteVariantKey);
-    return getRequiredSkins().every((skin) => map.has(skin));
+    const skins = resolveRequestedSkins(requiredSkins);
+    if (skins.length === 0) return true;
+    return skins.every((skin) => map.has(skin));
 }
 
-export function preloadEnemySprites() {
-    const paletteVariantKey = resolvePaletteVariantKeyForDarknessPercent();
+export function preloadEnemySprites(
+    requiredSkins?: readonly string[],
+    paletteVariantKey: string = resolvePaletteVariantKeyForDarknessPercent(),
+) {
     notePaletteRequested(paletteState, paletteVariantKey);
     const map = getPaletteMap(paletteVariantKey);
-    const skins = getRequiredSkins();
+    const skins = resolveRequestedSkins(requiredSkins);
+    if (skins.length === 0) {
+        notePaletteReady(paletteState, paletteVariantKey);
+        return;
+    }
 
     for (const skin of skins) {
         if (map.has(skin)) continue;
         const key = `${paletteVariantKey}:${skin}`;
         const existingStatus = preloadStatusByPaletteSkin.get(key);
-        if (existingStatus === "PENDING" || existingStatus === "READY" || existingStatus === "FAILED") continue;
+        if (
+            existingStatus === "PENDING"
+            || existingStatus === "READY"
+            || existingStatus === "UNSUPPORTED"
+            || existingStatus === "FAILED_PERMANENT"
+        ) {
+            if (existingStatus === "UNSUPPORTED" || existingStatus === "FAILED_PERMANENT") {
+                const skipKey = `${key}:${existingStatus}`;
+                if (!preloadSkippedByPaletteSkinStatus.has(skipKey)) {
+                    preloadSkippedByPaletteSkinStatus.add(skipKey);
+                    console.debug("[enemySprites] Skipping non-retryable preload status", {
+                        skin,
+                        paletteVariantKey,
+                        status: existingStatus,
+                    });
+                }
+            }
+            continue;
+        }
         if (preloadByPaletteSkin.has(key)) continue;
+        if (existingStatus === "FAILED_TRANSIENT") {
+            console.debug("[enemySprites] Retrying transient preload failure", {
+                skin,
+                paletteVariantKey,
+            });
+        }
         preloadStatusByPaletteSkin.set(key, "PENDING");
         const def = Object.values(ENEMY_SPRITES).find((entry) => entry?.skin === skin);
         const job = preloadSpritePack(skin, {
             source: def?.source,
             animKeys: def?.runAnim ? [def.runAnim] : undefined,
             frameCount: def?.frameCount,
+            paletteVariantKey,
         })
             .then((pack) => {
                 map.set(skin, pack);
                 preloadStatusByPaletteSkin.set(key, "READY");
-                markPaletteReadyIfComplete(paletteVariantKey);
+                markPaletteReadyIfComplete(paletteVariantKey, skins);
             })
             .catch((err) => {
-                preloadStatusByPaletteSkin.set(key, "FAILED");
-                if (!preloadWarnedByPaletteSkin.has(key)) {
-                    preloadWarnedByPaletteSkin.add(key);
-                    console.warn(`[enemySprites] Failed to preload ${skin}`, err);
+                const status: PreloadStatus =
+                    isSpritePreloadError(err) && err.kind === "TIMED_OUT"
+                        ? "FAILED_TRANSIENT"
+                        : isSpritePreloadError(err) && err.kind === "UNSUPPORTED"
+                            ? "UNSUPPORTED"
+                            : "FAILED_PERMANENT";
+                preloadStatusByPaletteSkin.set(key, status);
+                const warnKey = `${key}:${status}`;
+                if (!preloadWarnedByPaletteSkinStatus.has(warnKey)) {
+                    preloadWarnedByPaletteSkinStatus.add(warnKey);
+                    if (status === "FAILED_TRANSIENT") {
+                        console.warn(`[enemySprites] Timed out preloading ${skin}; will retry`, err);
+                    } else if (status === "FAILED_PERMANENT") {
+                        console.warn(`[enemySprites] Failed to preload ${skin}; marked permanent`, err);
+                    }
                 }
             })
             .finally(() => {
@@ -219,17 +279,30 @@ export function preloadEnemySprites() {
     }
 }
 
-function preloadEnemySpritesForDarknessPercent(darknessPercent: SpriteDarknessPercent) {
-    const paletteVariantKey = resolvePaletteVariantKeyForDarknessPercent(darknessPercent);
+function preloadEnemySpritesForDarknessPercent(
+    darknessPercent: SpriteDarknessPercent,
+    requiredSkins?: readonly string[],
+    requestedPaletteVariantKey: string = resolvePaletteVariantKeyForDarknessPercent(darknessPercent),
+) {
+    const paletteVariantKey = requestedPaletteVariantKey;
     notePaletteRequested(paletteState, paletteVariantKey);
     const map = getPaletteMap(paletteVariantKey);
-    const skins = getRequiredSkins();
+    const skins = resolveRequestedSkins(requiredSkins);
+    if (skins.length === 0) {
+        notePaletteReady(paletteState, paletteVariantKey);
+        return;
+    }
 
     for (const skin of skins) {
         if (map.has(skin)) continue;
         const key = `${paletteVariantKey}:${skin}`;
         const existingStatus = preloadStatusByPaletteSkin.get(key);
-        if (existingStatus === "PENDING" || existingStatus === "READY" || existingStatus === "UNSUPPORTED" || existingStatus === "FAILED") continue;
+        if (
+            existingStatus === "PENDING"
+            || existingStatus === "READY"
+            || existingStatus === "UNSUPPORTED"
+            || existingStatus === "FAILED_PERMANENT"
+        ) continue;
         if (preloadByPaletteSkin.has(key)) continue;
         preloadStatusByPaletteSkin.set(key, "PENDING");
         const def = Object.values(ENEMY_SPRITES).find((entry) => entry?.skin === skin);
@@ -238,21 +311,28 @@ function preloadEnemySpritesForDarknessPercent(darknessPercent: SpriteDarknessPe
             animKeys: def?.runAnim ? [def.runAnim] : undefined,
             frameCount: def?.frameCount,
             darknessPercent,
+            paletteVariantKey,
         })
             .then((pack) => {
                 map.set(skin, pack);
                 preloadStatusByPaletteSkin.set(key, "READY");
-                markPaletteReadyIfComplete(paletteVariantKey);
+                markPaletteReadyIfComplete(paletteVariantKey, skins);
             })
             .catch((err) => {
-                const status: PreloadStatus = isSpritePreloadError(err) && err.kind === "UNSUPPORTED"
-                    ? "UNSUPPORTED"
-                    : "FAILED";
+                const status: PreloadStatus =
+                    isSpritePreloadError(err) && err.kind === "TIMED_OUT"
+                        ? "FAILED_TRANSIENT"
+                        : isSpritePreloadError(err) && err.kind === "UNSUPPORTED"
+                            ? "UNSUPPORTED"
+                            : "FAILED_PERMANENT";
                 preloadStatusByPaletteSkin.set(key, status);
-                if (!preloadWarnedByPaletteSkin.has(key)) {
-                    preloadWarnedByPaletteSkin.add(key);
-                    if (status === "FAILED") {
-                        console.warn(`[enemySprites] Failed to preload ${skin}`, err);
+                const warnKey = `${key}:${status}`;
+                if (!preloadWarnedByPaletteSkinStatus.has(warnKey)) {
+                    preloadWarnedByPaletteSkinStatus.add(warnKey);
+                    if (status === "FAILED_TRANSIENT") {
+                        console.warn(`[enemySprites] Timed out preloading ${skin}; will retry`, err);
+                    } else if (status === "FAILED_PERMANENT") {
+                        console.warn(`[enemySprites] Failed to preload ${skin}; marked permanent`, err);
                     }
                 }
             })
@@ -288,7 +368,7 @@ export function getEnemySpriteFrame(args: {
     if (!def) return null;
     const paletteVariantKey = resolveActivePaletteVariantKey();
     notePaletteRequested(paletteState, paletteVariantKey);
-    preloadEnemySprites();
+    preloadEnemySprites([def.skin], paletteVariantKey);
 
     const pack = getPaletteMap(paletteVariantKey).get(def.skin)
         ?? getPaletteMap(paletteState.lastReadyPaletteId).get(def.skin);
@@ -346,8 +426,8 @@ export function getEnemySpriteFrameForDarknessPercent(args: {
     notePaletteRequested(paletteState, paletteVariantKey);
     const statusKey = `${paletteVariantKey}:${def.skin}`;
     const currentStatus = preloadStatusByPaletteSkin.get(statusKey);
-    if (currentStatus !== "UNSUPPORTED" && currentStatus !== "FAILED") {
-        preloadEnemySpritesForDarknessPercent(args.darknessPercent);
+    if (currentStatus !== "UNSUPPORTED" && currentStatus !== "FAILED_PERMANENT") {
+        preloadEnemySpritesForDarknessPercent(args.darknessPercent, [def.skin], paletteVariantKey);
     }
 
     const pack = getPaletteMap(paletteVariantKey).get(def.skin);

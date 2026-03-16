@@ -91,7 +91,7 @@ import { preloadBackgrounds } from "./render/background";
 import { getProjectileSpriteByKind, preloadProjectileSprites } from "../engine/render/sprites/projectileSprites";
 import { enemySpritesReady, preloadEnemySprites } from "../engine/render/sprites/enemySprites";
 import {
-  getSpriteByIdForPalette,
+  getSpriteByIdForVariantKey,
   type LoadedImg,
   preloadRenderSprites,
 } from "../engine/render/sprites/renderSprites";
@@ -135,7 +135,7 @@ import {
   enqueuePrewarm,
   tickPrewarm,
 } from "./render/prewarmOwner";
-import { resolveActivePaletteId } from "./render/activePalette";
+import { resolveActivePaletteId, resolveActivePaletteVariantKey } from "./render/activePalette";
 import { collectFloorDependencies } from "./loading/dependencyCollector";
 import { formatPaletteHudDebugText, shouldShowPaletteHudDebugOverlay } from "./render/renderDebugPolicy";
 import { applySfxSettingsToWorld } from "./audio/audioSettings";
@@ -1948,27 +1948,28 @@ export function createGame(args: CreateGameArgs) {
 
   async function prewarmFloorLoadSprites(): Promise<boolean> {
     const w = world;
-    const paletteId = resolveActivePaletteId();
+    const paletteVariantKey = resolveActivePaletteVariantKey();
     const runtimeSpriteIds = collectRuntimeSpriteDeps(w, getActiveMap());
     const depsSpriteIds = collectFloorDependencies().spriteIds;
     const spriteIds = Array.from(new Set([...runtimeSpriteIds, ...depsSpriteIds]));
-    enqueuePrewarm(paletteId, spriteIds);
+    const requiredSpriteIds = spriteIds.filter((id) => !isOptionalRuntimeSpriteIdForLoading(id));
+    enqueuePrewarm(paletteVariantKey, spriteIds);
     await awaitPrewarmDone(1500);
 
     // 1) Always warm entity/core sprite modules.
-    const primaryState = await awaitCoreSpriteReadiness(spriteIds, 1500);
+    const primaryState = await awaitCoreSpriteReadiness(requiredSpriteIds, 1500, paletteVariantKey);
     if (primaryState !== "READY") {
       console.debug(
-        `[loading][prewarm-floor] primary readiness=${primaryState} sprites=${spriteIds.length}`,
+        `[loading][prewarm-floor] primary readiness=${primaryState} required=${requiredSpriteIds.length} total=${spriteIds.length}`,
       );
       return false;
     }
 
     // 2) One more short wait to ensure swapped images are installed.
-    const settleState = await awaitCoreSpriteReadiness(spriteIds, 300);
+    const settleState = await awaitCoreSpriteReadiness(requiredSpriteIds, 300, paletteVariantKey);
     if (settleState !== "READY") {
       console.debug(
-        `[loading][prewarm-floor] settle readiness=${settleState} sprites=${spriteIds.length}`,
+        `[loading][prewarm-floor] settle readiness=${settleState} required=${requiredSpriteIds.length} total=${spriteIds.length}`,
       );
     }
     return settleState === "READY";
@@ -2449,15 +2450,39 @@ export function createGame(args: CreateGameArgs) {
     return "PENDING";
   }
 
+  function normalizeRuntimeSpriteId(spriteId: string): string {
+    const trimmed = spriteId.trim();
+    return trimmed.toLowerCase().endsWith(".png") ? trimmed.slice(0, -4) : trimmed;
+  }
+
+  function isOptionalRuntimeSpriteIdForLoading(spriteId: string): boolean {
+    const normalized = normalizeRuntimeSpriteId(spriteId);
+    return normalized.startsWith("entities/npc/vendor/")
+      || normalized.startsWith("entities/animals/pigeon/");
+  }
+
+  function collectEnemySkinsForReadiness(runtimeSpriteIds: string[]): string[] {
+    const out = new Set<string>();
+    for (let i = 0; i < runtimeSpriteIds.length; i++) {
+      const normalized = normalizeRuntimeSpriteId(runtimeSpriteIds[i]);
+      const match = /^entities\/enemies\/([^/]+)\//.exec(normalized);
+      if (match && match[1]) out.add(match[1]);
+    }
+    return Array.from(out);
+  }
+
   async function awaitCoreSpriteReadiness(
     runtimeSpriteIds: string[],
     maxWaitMs: number = 1500,
+    awaitedPaletteVariantKey: string = resolveActivePaletteVariantKey(),
   ): Promise<ReadinessState> {
+    const requiredEnemySkins = collectEnemySkinsForReadiness(runtimeSpriteIds);
+
     // Kick idempotent loads.
-    preloadPlayerSprites();
-    preloadEnemySprites();
-    preloadVendorNpcSprites();
-    preloadNeutralMobSprites();
+    preloadPlayerSprites(awaitedPaletteVariantKey);
+    preloadEnemySprites(requiredEnemySkins, awaitedPaletteVariantKey);
+    preloadVendorNpcSprites(awaitedPaletteVariantKey);
+    preloadNeutralMobSprites(awaitedPaletteVariantKey);
     preloadProjectileSprites();
     preloadBazookaExhaustAssets();
     preloadRenderSprites();
@@ -2467,7 +2492,7 @@ export function createGame(args: CreateGameArgs) {
     return await new Promise<ReadinessState>((resolve) => {
       const tick = () => {
         const elapsed = performance.now() - start;
-        const paletteId = resolveActivePaletteId();
+        const activePaletteVariantKey = resolveActivePaletteVariantKey();
         const projectileKinds = [1, 2, 5, 7, 8];
         let failed = false;
         const failedProjectileKinds: number[] = [];
@@ -2491,7 +2516,7 @@ export function createGame(args: CreateGameArgs) {
         let runtimeReady = true;
         for (let i = 0; i < runtimeSpriteIds.length; i++) {
           const id = runtimeSpriteIds[i];
-          const rec = getSpriteByIdForPalette(id, paletteId);
+          const rec = getSpriteByIdForVariantKey(id, awaitedPaletteVariantKey);
           const state = classifyLoadedImg(rec);
           if (state === "FAILED") {
             failed = true;
@@ -2502,22 +2527,39 @@ export function createGame(args: CreateGameArgs) {
             if (pendingRuntimeIds.length < 20) pendingRuntimeIds.push(id);
           }
         }
-        const playerReady = playerSpritesReady();
-        const vendorReady = vendorNpcSpritesReady();
-        const enemyReady = enemySpritesReady();
-        const neutralReady = neutralMobSpritesReady();
+        const playerReady = playerSpritesReady(awaitedPaletteVariantKey);
+        const vendorReady = vendorNpcSpritesReady(awaitedPaletteVariantKey);
+        const enemyReady = enemySpritesReady(requiredEnemySkins, awaitedPaletteVariantKey);
+        const neutralReady = neutralMobSpritesReady(awaitedPaletteVariantKey);
         const bazookaReady = bazookaExhaustAssetsReady();
+
+        // Optional gate: vendor + pigeon assets are nice-to-have at map entry.
+        const optionalReady = vendorReady && neutralReady;
+        const blockingGates: string[] = [];
+        if (!playerReady) blockingGates.push("player");
+        if (!enemyReady) blockingGates.push("enemy");
+        if (!projectilesReady) blockingGates.push("projectiles");
+        if (!bazookaReady) blockingGates.push("bazooka");
+        if (!runtimeReady) blockingGates.push("runtime");
+        if (!vendorReady) blockingGates.push("vendor(optional)");
+        if (!neutralReady) blockingGates.push("neutral(optional)");
 
         const ready =
           playerReady
-          && vendorReady
           && enemyReady
-          && neutralReady
           && projectilesReady
           && bazookaReady
           && runtimeReady;
 
         if (ready) {
+          if (!optionalReady) {
+            console.warn("[loading][sprite-ready] proceeding with optional sprite families not ready", {
+              awaitedPaletteVariantKey,
+              activePaletteVariantKey,
+              vendorReady,
+              neutralReady,
+            });
+          }
           resolve("READY");
           return;
         }
@@ -2525,6 +2567,10 @@ export function createGame(args: CreateGameArgs) {
           console.warn("[loading][sprite-ready] FAILED", {
             elapsedMs: Math.round(elapsed),
             runtimeSpriteCount: runtimeSpriteIds.length,
+            requiredEnemySkins,
+            awaitedPaletteVariantKey,
+            activePaletteVariantKey,
+            blockingGates,
             playerReady,
             vendorReady,
             enemyReady,
@@ -2545,6 +2591,10 @@ export function createGame(args: CreateGameArgs) {
             elapsedMs: Math.round(elapsed),
             maxWaitMs,
             runtimeSpriteCount: runtimeSpriteIds.length,
+            requiredEnemySkins,
+            awaitedPaletteVariantKey,
+            activePaletteVariantKey,
+            blockingGates,
             playerReady,
             vendorReady,
             enemyReady,
@@ -2567,27 +2617,28 @@ export function createGame(args: CreateGameArgs) {
   }
 
   async function prewarmActiveMapSpritesForCurrentPalette(): Promise<boolean> {
-    const paletteId = resolveActivePaletteId();
+    const paletteVariantKey = resolveActivePaletteVariantKey();
     const runtimeSpriteIds = collectRuntimeSpriteDeps(world, getActiveMap());
     const depsSpriteIds = collectFloorDependencies().spriteIds;
     const spriteIds = Array.from(new Set([...runtimeSpriteIds, ...depsSpriteIds]));
-    enqueuePrewarm(paletteId, spriteIds);
+    const requiredSpriteIds = spriteIds.filter((id) => !isOptionalRuntimeSpriteIdForLoading(id));
+    enqueuePrewarm(paletteVariantKey, spriteIds);
     await awaitPrewarmDone(1500);
 
     // Always warm entity/core sprite modules.
-    const primaryState = await awaitCoreSpriteReadiness(spriteIds, 1500);
+    const primaryState = await awaitCoreSpriteReadiness(requiredSpriteIds, 1500, paletteVariantKey);
     if (primaryState !== "READY") {
       console.debug(
-        `[loading][prewarm-map] primary readiness=${primaryState} sprites=${spriteIds.length}`,
+        `[loading][prewarm-map] primary readiness=${primaryState} required=${requiredSpriteIds.length} total=${spriteIds.length}`,
       );
       return false;
     }
 
     // Ensure swapped images have landed before leaving LOADING.
-    const settleState = await awaitCoreSpriteReadiness(spriteIds, 300);
+    const settleState = await awaitCoreSpriteReadiness(requiredSpriteIds, 300, paletteVariantKey);
     if (settleState !== "READY") {
       console.debug(
-        `[loading][prewarm-map] settle readiness=${settleState} sprites=${spriteIds.length}`,
+        `[loading][prewarm-map] settle readiness=${settleState} required=${requiredSpriteIds.length} total=${spriteIds.length}`,
       );
     }
     return settleState === "READY";

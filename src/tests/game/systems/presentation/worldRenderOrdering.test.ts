@@ -3,6 +3,7 @@ import {
   KindOrder,
   compareRenderKeys,
   deriveFeetSortYFromKey,
+  deriveStructureSouthTieBreakFromSeAnchor,
   isGroundKindForRenderPass,
   isWorldKindForRenderPass,
   resolveRenderZBand,
@@ -85,5 +86,48 @@ describe("worldRenderOrdering", () => {
 
     mixedWorld.sort(compareRenderKeys);
     expect(mixedWorld.map((k) => k.stableId)).toEqual([1, 3, 2]);
+  });
+
+  it("uses structure south tie-break before stableId for structure-key ties", () => {
+    const northSource = deriveStructureSouthTieBreakFromSeAnchor(-1, 2);
+    const southSource = deriveStructureSouthTieBreakFromSeAnchor(1, 2);
+    const southButLowStable = key({
+      feetSortY: 120,
+      kindOrder: KindOrder.STRUCTURE,
+      stableId: 1,
+      ...southSource,
+    });
+    const northButHighStable = key({
+      feetSortY: 120,
+      kindOrder: KindOrder.STRUCTURE,
+      stableId: 999,
+      ...northSource,
+    });
+
+    const tied = [southButLowStable, northButHighStable];
+    tied.sort(compareRenderKeys);
+
+    // North source renders first; south source wins draw order even with lower stableId.
+    expect(tied.map((k) => k.stableId)).toEqual([999, 1]);
+  });
+
+  it("falls back to stableId when structure south tie-break is equal", () => {
+    const southKey = deriveStructureSouthTieBreakFromSeAnchor(8, 7);
+    const a = key({
+      kindOrder: KindOrder.STRUCTURE,
+      feetSortY: 120,
+      stableId: 7,
+      ...southKey,
+    });
+    const b = key({
+      kindOrder: KindOrder.STRUCTURE,
+      feetSortY: 120,
+      stableId: 3,
+      ...southKey,
+    });
+
+    const tied = [a, b];
+    tied.sort(compareRenderKeys);
+    expect(tied.map((k) => k.stableId)).toEqual([3, 7]);
   });
 });

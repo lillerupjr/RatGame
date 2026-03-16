@@ -6,8 +6,8 @@ import { renderLoadingScreen } from "./game/app/loadingScreen";
 import { collectFloorDependencies } from "./game/loading/dependencyCollector";
 import { primeAudio } from "./game/audio/audioManager";
 import { setMusicMuted, setMusicVolume, setSfxMuted, setSfxVolume } from "./game/audio/audioSettings";
-import { resolveActivePaletteId } from "./game/render/activePalette";
-import { getSpriteByIdForPalette } from "./engine/render/sprites/renderSprites";
+import { resolveActivePaletteVariantKey } from "./game/render/activePalette";
+import { getSpriteByIdForVariantKey } from "./engine/render/sprites/renderSprites";
 import {
   getFirstPaletteInGroup,
   getNextPaletteInGroup,
@@ -614,8 +614,8 @@ async function bootstrap() {
         if (firstRunDiagPending) {
           firstRunDiagPending = false;
           const deps = collectFloorDependencies();
-          const paletteId = resolveActivePaletteId();
-          const notReady = deps.spriteIds.filter((id) => !getSpriteByIdForPalette(id, paletteId).ready);
+          const paletteVariantKey = resolveActivePaletteVariantKey();
+          const notReady = deps.spriteIds.filter((id) => !getSpriteByIdForVariantKey(id, paletteVariantKey).ready);
           if (notReady.length > 0) {
             console.warn(
               `[loading] First RUN frame had ${notReady.length} not-ready sprites (showing up to 20):`,

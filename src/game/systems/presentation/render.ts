@@ -146,6 +146,7 @@ import {
 import { ViewportTransform } from "./viewportTransform";
 import {
   deriveFeetSortYFromKey,
+  deriveStructureSouthTieBreakFromSeAnchor,
   KindOrder,
   compareRenderKeys,
   isGroundKindForRenderPass,
@@ -4675,6 +4676,9 @@ export async function renderSystem(
         if ((o.kind ?? "ROOF") === "ROOF" && shouldCullBuildingAt(o.tx, o.ty, o.w, o.h)) continue;
         const draw = buildOverlayDraw(o);
         if (!draw) continue;
+        const structureSouthTieBreak = o.layerRole === "STRUCTURE"
+          ? deriveStructureSouthTieBreakFromSeAnchor(o.seTx, o.seTy)
+          : null;
         const useRuntimeStructureSlicing =
           o.kind === "PROP" || o.layerRole === "STRUCTURE";
 
@@ -4876,6 +4880,7 @@ export async function renderSystem(
                   within: renderFields.within,
                   baseZ: o.z,
                   kindOrder: KindOrder.STRUCTURE,
+                  ...(structureSouthTieBreak ?? {}),
                   stableId: group.stableId,
                 };
                 addToSlice(renderFields.slice, overlayKey, () => {
@@ -4970,6 +4975,7 @@ export async function renderSystem(
               within: band.renderKey.within,
               baseZ: band.renderKey.baseZ,
               kindOrder: KindOrder.STRUCTURE,
+              ...(structureSouthTieBreak ?? {}),
               stableId: band.renderKey.stableId,
             };
             addToSlice(band.renderKey.slice, overlayKey, () => {

@@ -29,6 +29,17 @@ export type LoadedImg = {
     unsupported?: boolean;
     error?: string;
 };
+export type SpriteCacheDebugState = "PENDING" | "READY" | "FAILED" | "UNSUPPORTED";
+export type SpriteCacheDebugSnapshot = {
+    cacheKey: string;
+    spriteId: string;
+    paletteVariantKey: string | null;
+    requestCount: number;
+    state: SpriteCacheDebugState;
+    createdAtMs: number;
+    updatedAtMs: number;
+    lastError?: string;
+};
 export type PaletteId = ReturnType<typeof resolveActivePaletteId>;
 type PaletteSwapWeightPercents = {
     sWeightPercent: number;
@@ -41,8 +52,9 @@ const ANIMATED_TILE_SETS = {
     water2: { fps: 6, frameCount: 6, playback: "pingpong" },
 } as const;
 const animatedTileFramesBySetAndPalette = new Map<string, LoadedImg[]>();
-const prewarmQueue: { spriteId: string; paletteId: PaletteId }[] = [];
+const prewarmQueue: { spriteId: string; paletteVariantKey: string }[] = [];
 let prewarmActive = false;
+const spriteCacheDebugByKey = new Map<string, SpriteCacheDebugSnapshot>();
 const PALETTE_MANAGED_PREFIXES = [
     "tiles/",
     "structures/",
@@ -113,6 +125,21 @@ function normalizeSpriteId(spriteId: string): string {
     return trimmed.toLowerCase().endsWith(".png") ? trimmed.slice(0, -4) : trimmed;
 }
 
+function parsePaletteVariantKey(variantKey: string): {
+    paletteId: string;
+    sWeightPercent: number;
+    darknessPercent: number;
+} | null {
+    const trimmed = variantKey.trim();
+    const match = /^(.+)@@sw:(\d+)@@dk:(\d+)$/.exec(trimmed);
+    if (!match) return null;
+    return {
+        paletteId: match[1],
+        sWeightPercent: clampWeightPercent(Number(match[2])),
+        darknessPercent: clampWeightPercent(Number(match[3])),
+    };
+}
+
 function remapLegacySpriteId(id: string): string {
     if (id.startsWith("tiles/stairs/sidewalk_apron_")) {
         return id.replace("tiles/stairs/sidewalk_apron_", "tiles/stairs/stone/stone_");
@@ -181,6 +208,79 @@ function resolveUrl(spriteId: string): string | null {
     return null;
 }
 
+function buildSpriteCacheKey(
+    rawSpriteId: string,
+    paletteManaged: boolean,
+    paletteVariantKey: string,
+): string {
+    return paletteManaged
+        ? `${rawSpriteId}@@palv:${paletteVariantKey}`
+        : `${rawSpriteId}@@raw`;
+}
+
+function noteSpriteCacheRequest(
+    cacheKey: string,
+    spriteId: string,
+    paletteVariantKey: string | null,
+): void {
+    const now = performance.now();
+    const existing = spriteCacheDebugByKey.get(cacheKey);
+    if (existing) {
+        existing.requestCount += 1;
+        existing.updatedAtMs = now;
+        spriteCacheDebugByKey.set(cacheKey, existing);
+        if (import.meta.env.DEV && existing.requestCount === 2) {
+            console.debug("[renderSprites] cache hit", {
+                cacheKey,
+                spriteId,
+                paletteVariantKey,
+            });
+        }
+        return;
+    }
+    spriteCacheDebugByKey.set(cacheKey, {
+        cacheKey,
+        spriteId,
+        paletteVariantKey,
+        requestCount: 1,
+        state: "PENDING",
+        createdAtMs: now,
+        updatedAtMs: now,
+    });
+    if (import.meta.env.DEV) {
+        console.debug("[renderSprites] cache new", {
+            cacheKey,
+            spriteId,
+            paletteVariantKey,
+        });
+    }
+}
+
+function noteSpriteCacheState(
+    cacheKey: string,
+    state: SpriteCacheDebugState,
+    error?: string,
+): void {
+    const existing = spriteCacheDebugByKey.get(cacheKey);
+    if (!existing) return;
+    const previousState = existing.state;
+    existing.state = state;
+    existing.updatedAtMs = performance.now();
+    existing.lastError = error;
+    spriteCacheDebugByKey.set(cacheKey, existing);
+    if (import.meta.env.DEV && previousState !== state) {
+        console.debug("[renderSprites] cache state transition", {
+            cacheKey,
+            spriteId: existing.spriteId,
+            paletteVariantKey: existing.paletteVariantKey,
+            from: previousState,
+            to: state,
+            requestCount: existing.requestCount,
+            error: error ?? null,
+        });
+    }
+}
+
 function loadByIdInternal(
     spriteId: string,
     forcedPaletteId?: string,
@@ -193,9 +293,8 @@ function loadByIdInternal(
     const paletteVariantKey = buildPaletteVariantKey(paletteId, effectiveWeightPercents);
     const paletteSwapWeights = toPaletteSwapWeights(effectiveWeightPercents);
     const paletteManaged = isPaletteManagedSpriteId(rawId);
-    const key = paletteManaged
-        ? `${rawId}@@palv:${paletteVariantKey}`
-        : `${rawId}@@raw`;
+    const key = buildSpriteCacheKey(rawId, paletteManaged, paletteVariantKey);
+    noteSpriteCacheRequest(key, rawId, paletteManaged ? paletteVariantKey : null);
     if (!rawId) return { img: new Image(), ready: false, failed: true, unsupported: true, error: "empty-id" };
     if (cache[key]) return cache[key];
 
@@ -204,6 +303,7 @@ function loadByIdInternal(
         console.warn(`[renderSprites] Missing tile sprite: ${spriteId}`);
         const rec = { img: new Image(), ready: false, failed: true, unsupported: true, error: "missing-url" };
         cache[key] = rec;
+        noteSpriteCacheState(key, "UNSUPPORTED", "missing-url");
         return rec;
     }
 
@@ -229,6 +329,7 @@ function loadByIdInternal(
             rec.ready = true;
             rec.failed = false;
             rec.error = undefined;
+            noteSpriteCacheState(key, "READY");
             return;
         }
 
@@ -241,12 +342,14 @@ function loadByIdInternal(
                 rec.ready = true;
                 rec.failed = false;
                 rec.error = undefined;
+                noteSpriteCacheState(key, "READY");
             };
             swappedImg.onerror = () => {
                 rec.img = baseImg;
                 rec.ready = true;
                 rec.failed = false;
                 rec.error = undefined;
+                noteSpriteCacheState(key, "READY");
             };
             swappedImg.src = swappedCanvas.toDataURL("image/png");
         } catch {
@@ -254,6 +357,7 @@ function loadByIdInternal(
             rec.ready = true;
             rec.failed = false;
             rec.error = undefined;
+            noteSpriteCacheState(key, "READY");
         }
     };
     baseImg.onerror = () => {
@@ -261,6 +365,7 @@ function loadByIdInternal(
         rec.failed = true;
         rec.unsupported = false;
         rec.error = `decode-failed:${rawId}`;
+        noteSpriteCacheState(key, "FAILED", rec.error);
     };
     baseImg.src = url;
 
@@ -312,6 +417,18 @@ export function getSpriteByIdForPalette(spriteId: string, paletteId: string): Lo
     return loadByIdInternal(spriteId, paletteId);
 }
 
+export function getSpriteByIdForVariantKey(
+    spriteId: string,
+    paletteVariantKey: string,
+): LoadedImg {
+    const parsed = parsePaletteVariantKey(paletteVariantKey);
+    if (!parsed) return loadByIdInternal(spriteId);
+    return loadByIdInternal(spriteId, parsed.paletteId, {
+        sWeightPercent: parsed.sWeightPercent,
+        darknessPercent: parsed.darknessPercent,
+    });
+}
+
 export function getSpriteByIdForDarknessPercent(
     spriteId: string,
     darknessPercent: 0 | 25 | 50 | 75 | 100,
@@ -322,6 +439,25 @@ export function getSpriteByIdForDarknessPercent(
         sWeightPercent: activePercents.sWeightPercent,
         darknessPercent,
     });
+}
+
+export function resolveSpriteCacheKeyForVariantKey(
+    spriteId: string,
+    paletteVariantKey: string,
+): string {
+    const rawSpriteId = spriteId.trim();
+    const paletteManaged = isPaletteManagedSpriteId(rawSpriteId);
+    return buildSpriteCacheKey(rawSpriteId, paletteManaged, paletteVariantKey);
+}
+
+export function hasSpriteRecordForCacheKey(cacheKey: string): boolean {
+    return !!cache[cacheKey];
+}
+
+export function getSpriteCacheDebugSnapshotByKey(cacheKey: string): SpriteCacheDebugSnapshot | null {
+    const existing = spriteCacheDebugByKey.get(cacheKey);
+    if (!existing) return null;
+    return { ...existing };
 }
 
 export function getRuntimeSquareFloorSprite(
@@ -393,11 +529,11 @@ export function preloadRenderSprites(): void {
 
 export function enqueueSpritePrewarm(
     spriteIds: string[],
-    paletteId: PaletteId,
+    paletteVariantKey: string,
 ): void {
     const ids = Array.from(new Set(spriteIds.map((s) => s.trim()).filter(Boolean)));
     for (const id of ids) {
-        prewarmQueue.push({ spriteId: id, paletteId });
+        prewarmQueue.push({ spriteId: id, paletteVariantKey });
     }
     prewarmActive = prewarmQueue.length > 0;
 }
@@ -408,7 +544,7 @@ export function tickSpritePrewarm(budgetMs: number): boolean {
     const start = performance.now();
     while (prewarmQueue.length > 0) {
         const item = prewarmQueue.shift()!;
-        void loadByIdInternal(item.spriteId, item.paletteId);
+        void getSpriteByIdForVariantKey(item.spriteId, item.paletteVariantKey);
         if (performance.now() - start >= budgetMs) {
             return false;
         }

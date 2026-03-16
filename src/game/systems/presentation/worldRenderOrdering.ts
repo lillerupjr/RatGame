@@ -19,6 +19,10 @@ export interface RenderKey {
   baseZ: number;
   feetSortY?: number;
   kindOrder: KindOrder;
+  /** Optional structure-only geometric tie-break derived from source footprint southness. */
+  structureSouthSlice?: number;
+  /** Secondary within-south-slice tie-break (typically SE tx) for deterministic ordering. */
+  structureSouthWithin?: number;
   stableId: number;
 }
 
@@ -30,7 +34,27 @@ export function compareRenderKeys(a: RenderKey, b: RenderKey): number {
   const by = b.feetSortY ?? 0;
   if (ay !== by) return ay - by;
   if (a.kindOrder !== b.kindOrder) return a.kindOrder - b.kindOrder;
+  const aSouthSlice = a.structureSouthSlice;
+  const bSouthSlice = b.structureSouthSlice;
+  if (aSouthSlice != null && bSouthSlice != null) {
+    if (aSouthSlice !== bSouthSlice) return aSouthSlice - bSouthSlice;
+    const aSouthWithin = a.structureSouthWithin ?? 0;
+    const bSouthWithin = b.structureSouthWithin ?? 0;
+    if (aSouthWithin !== bSouthWithin) return aSouthWithin - bSouthWithin;
+  }
   return a.stableId - b.stableId;
+}
+
+export function deriveStructureSouthTieBreakFromSeAnchor(
+  seTx: number,
+  seTy: number,
+): { structureSouthSlice: number; structureSouthWithin: number } {
+  const tx = seTx | 0;
+  const ty = seTy | 0;
+  return {
+    structureSouthSlice: tx + ty,
+    structureSouthWithin: tx,
+  };
 }
 
 export function isGroundKindForRenderPass(kind: KindOrder): boolean {

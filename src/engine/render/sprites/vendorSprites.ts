@@ -5,7 +5,12 @@ import {
   resolveActivePaletteSwapWeightPercents,
   resolveActivePaletteVariantKey,
 } from "../../../game/render/activePalette";
-import { getSpriteByIdForDarknessPercent, getSpriteByIdForPalette } from "./renderSprites";
+import {
+  getSpriteByIdForVariantKey,
+  getSpriteCacheDebugSnapshotByKey,
+  hasSpriteRecordForCacheKey,
+  resolveSpriteCacheKeyForVariantKey,
+} from "./renderSprites";
 import {
   createPaletteSwapState,
   notePaletteReady,
@@ -79,21 +84,35 @@ function isPaletteReady(paletteId: string): boolean {
 
 async function loadImage(
   spriteId: string,
-  paletteId: string,
-  darknessPercent?: SpriteDarknessPercent,
+  paletteVariantKey: string,
 ): Promise<HTMLImageElement> {
+  const cacheKey = resolveSpriteCacheKeyForVariantKey(spriteId, paletteVariantKey);
+  const cacheHitAtRequest = hasSpriteRecordForCacheKey(cacheKey);
   return await new Promise<HTMLImageElement>((resolve, reject) => {
     const started = performance.now();
     const MAX_WAIT_MS = 1500;
     const tick = () => {
-      const rec = darknessPercent == null
-        ? getSpriteByIdForPalette(spriteId, paletteId)
-        : getSpriteByIdForDarknessPercent(spriteId, darknessPercent);
-      if (rec.ready) {
+      const rec = getSpriteByIdForVariantKey(spriteId, paletteVariantKey);
+      const validReady = rec.ready && rec.img && rec.img.naturalWidth > 0 && rec.img.naturalHeight > 0;
+      if (validReady) {
         resolve(rec.img);
         return;
       }
+      if (rec.unsupported || rec.failed || rec.ready) {
+        reject(new Error(`[vendorSprites] Failed to load ${spriteId} (state=${rec.unsupported ? "UNSUPPORTED" : "FAILED"})`));
+        return;
+      }
       if (performance.now() - started >= MAX_WAIT_MS) {
+        const activePaletteVariantKey = resolveActivePaletteVariantKey();
+        const cacheSnapshot = getSpriteCacheDebugSnapshotByKey(cacheKey);
+        console.warn("[vendorSprites] preload timeout", {
+          spriteId,
+          awaitedCacheKey: cacheKey,
+          cacheHitAtRequest,
+          awaitedPaletteVariantKey: paletteVariantKey,
+          activePaletteVariantKey,
+          cacheSnapshot,
+        });
         reject(new Error(`[vendorSprites] Failed to load ${spriteId}`));
         return;
       }
@@ -109,9 +128,10 @@ function resolveFrameId(dir: Dir8, frameIndex: number): string {
   return `entities/npc/vendor/breathing-idle/${dirPath}/${file.slice(0, -4)}`;
 }
 
-export async function preloadVendorNpcSprites(): Promise<void> {
-  const paletteId = resolveActivePaletteId();
-  const paletteVariantKey = resolvePaletteVariantKeyForDarknessPercent();
+export async function preloadVendorNpcSprites(
+  requestedPaletteVariantKey?: string,
+): Promise<void> {
+  const paletteVariantKey = requestedPaletteVariantKey ?? resolvePaletteVariantKeyForDarknessPercent();
   notePaletteRequested(paletteState, paletteVariantKey);
   if (isPaletteReady(paletteVariantKey)) {
     notePaletteReady(paletteState, paletteVariantKey);
@@ -129,7 +149,7 @@ export async function preloadVendorNpcSprites(): Promise<void> {
     for (const [dir] of Object.entries(DIR_TO_PATH) as [Dir8, string][]) {
       const frames: HTMLImageElement[] = [];
       for (let i = 0; i < FRAME_COUNT; i++) {
-        const img = await loadImage(resolveFrameId(dir, i), paletteId);
+        const img = await loadImage(resolveFrameId(dir, i), paletteVariantKey);
         if (img.decode) await img.decode();
         frames.push(img);
       }
@@ -152,7 +172,6 @@ export async function preloadVendorNpcSprites(): Promise<void> {
 async function preloadVendorNpcSpritesForDarknessPercent(
   darknessPercent: SpriteDarknessPercent,
 ): Promise<void> {
-  const paletteId = resolveActivePaletteId();
   const paletteVariantKey = resolvePaletteVariantKeyForDarknessPercent(darknessPercent);
   notePaletteRequested(paletteState, paletteVariantKey);
   if (isPaletteReady(paletteVariantKey)) {
@@ -171,7 +190,7 @@ async function preloadVendorNpcSpritesForDarknessPercent(
     for (const [dir] of Object.entries(DIR_TO_PATH) as [Dir8, string][]) {
       const frames: HTMLImageElement[] = [];
       for (let i = 0; i < FRAME_COUNT; i++) {
-        const img = await loadImage(resolveFrameId(dir, i), paletteId, darknessPercent);
+        const img = await loadImage(resolveFrameId(dir, i), paletteVariantKey);
         if (img.decode) await img.decode();
         frames.push(img);
       }
@@ -191,15 +210,13 @@ async function preloadVendorNpcSpritesForDarknessPercent(
   await job;
 }
 
-export function vendorNpcSpritesReady(): boolean {
-  const paletteVariantKey = resolveActivePaletteVariantKey();
+export function vendorNpcSpritesReady(paletteVariantKey: string = resolveActivePaletteVariantKey()): boolean {
   notePaletteRequested(paletteState, paletteVariantKey);
   if (isPaletteReady(paletteVariantKey)) return true;
   return isPaletteReady(paletteState.lastReadyPaletteId);
 }
 
 export function getVendorNpcSpriteFrame(args: { dir: Dir8; time: number }): SpriteFrame | null {
-  const paletteId = resolveActivePaletteId();
   const paletteVariantKey = resolveActivePaletteVariantKey();
   notePaletteRequested(paletteState, paletteVariantKey);
   if (!isPaletteReady(paletteVariantKey)) {

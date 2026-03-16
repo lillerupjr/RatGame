@@ -1,7 +1,7 @@
 import type { World } from "../../engine/world/world";
 import type { CompiledKenneyMap } from "../map/compile/kenneyMapLoader";
 import { collectRuntimeSpriteIdsToPrewarm } from "./prewarmSprites";
-import { enqueueSpritePrewarm, tickSpritePrewarm, type PaletteId } from "../../engine/render/sprites/renderSprites";
+import { enqueueSpritePrewarm, tickSpritePrewarm } from "../../engine/render/sprites/renderSprites";
 
 export type SpriteId = string;
 
@@ -9,8 +9,8 @@ export function collectRuntimeSpriteDeps(world: World, activeMap?: CompiledKenne
   return collectRuntimeSpriteIdsToPrewarm(world, activeMap);
 }
 
-export function enqueuePrewarm(paletteId: PaletteId, spriteIds: SpriteId[]): void {
-  enqueueSpritePrewarm(spriteIds, paletteId);
+export function enqueuePrewarm(paletteVariantKey: string, spriteIds: SpriteId[]): void {
+  enqueueSpritePrewarm(spriteIds, paletteVariantKey);
 }
 
 export function tickPrewarm(budgetMs: number): boolean {
