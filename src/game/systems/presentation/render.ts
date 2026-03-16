@@ -168,6 +168,17 @@ import {
   buildStaticRelightPieceKey,
   StaticRelightBakeStore,
 } from "./staticRelightBake";
+import {
+  buildRuntimeStructureTriangleCache,
+  buildRuntimeStructureTriangleContextKey,
+  buildRuntimeStructureTriangleGeometrySignature,
+  buildRuntimeStructureTrianglePiecesForBand,
+  deriveParentTileRenderFields,
+  rectIntersects as runtimeStructureRectIntersects,
+  resolveRuntimeStructureBandProgressionIndex,
+  RuntimeStructureTriangleCacheStore,
+  type RuntimeStructureTriangleRect,
+} from "./runtimeStructureTriangles";
 
 const DEBUG_PLAYER_WEDGE = false;
 const DISABLE_WALLS_AND_CURTAINS = true;
@@ -199,6 +210,7 @@ const runtimeDiamondCanvasCache = new WeakMap<HTMLCanvasElement, HTMLCanvasEleme
 let staticRelightPieceScratch: HTMLCanvasElement | null = null;
 let staticRelightMaskScratch: HTMLCanvasElement | null = null;
 const staticRelightBakeStore = new StaticRelightBakeStore<HTMLCanvasElement>();
+const runtimeStructureTriangleCacheStore = new RuntimeStructureTriangleCacheStore();
 const STATIC_RELIGHT_RUNTIME_RETRY_INTERVAL_MS = 50;
 let staticRelightPendingRuntimeRebuildContextKey = "";
 let staticRelightPendingRuntimeRebuildAtMs = 0;
@@ -343,6 +355,625 @@ const STATIC_RELIGHT_INCLUDE_STRUCTURES = false;
 const STATIC_RELIGHT_ELEV_PX = 16;
 const STATIC_RELIGHT_SIDEWALK_SRC_SIZE = 128;
 const STATIC_RELIGHT_SIDEWALK_ISO_HEIGHT = 64;
+const STRUCTURE_SLICE_TRI_LADDER_STEP_PX = 64;
+const STRUCTURE_SLICE_TRI_LADDER_STAGGER_PX = 32;
+const STRUCTURE_SLICE_TRI_PARITY_FLIP = false;
+const STRUCTURE_SLICE_TRI_CULL_ALPHA_THRESHOLD = 1;
+
+type StructureSliceDebugRect = { x: number; y: number; w: number; h: number };
+type StructureSliceDebugPoint = { x: number; y: number };
+type StructureSliceDebugTriangleStats = { beforeCull: number; afterCull: number };
+type StructureSliceDebugAlphaMap = {
+  width: number;
+  height: number;
+  data: Uint8ClampedArray;
+};
+type RuntimeStructureTriangleBounds = {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+};
+type RuntimeStructureTrianglePiece = {
+  points: [StructureSliceDebugPoint, StructureSliceDebugPoint, StructureSliceDebugPoint];
+  parentTx: number;
+  parentTy: number;
+  bandIndex: number;
+  structureInstanceId: string;
+  stableId: number;
+  bounds: RuntimeStructureTriangleBounds;
+};
+type RuntimeStructureTriangleParentTileGroup = {
+  parentTx: number;
+  parentTy: number;
+  triangles: RuntimeStructureTrianglePiece[];
+  bounds: StructureSliceDebugRect;
+};
+
+let structureSliceDebugReadbackCanvas: HTMLCanvasElement | null = null;
+let structureSliceDebugReadbackCtx: CanvasRenderingContext2D | null = null;
+const structureSliceDebugAlphaMapCache = new WeakMap<object, StructureSliceDebugAlphaMap | null>();
+
+function positiveMod(n: number, m: number): number {
+  const mm = Math.max(1, m);
+  const r = n % mm;
+  return r < 0 ? r + mm : r;
+}
+
+function resolveStructureSliceDebugProgressionIndex(
+  bandIndex: number,
+  footprintW: number,
+  footprintH: number,
+): number {
+  const tileW = Math.max(1, footprintW | 0);
+  const tileH = Math.max(1, footprintH | 0);
+  const coreCount = tileW + tileH;
+  // Match runtimeStructureSlicing ownerBandIndex mapping exactly.
+  if (bandIndex === 0) return -1;
+  if (bandIndex === coreCount + 1) return coreCount;
+  return bandIndex - 1;
+}
+
+function getStructureSliceDebugAlphaMap(
+  sourceImg: CanvasImageSource,
+): StructureSliceDebugAlphaMap | null {
+  if (!(sourceImg instanceof HTMLImageElement || sourceImg instanceof HTMLCanvasElement)) return null;
+  const key = sourceImg as object;
+  if (structureSliceDebugAlphaMapCache.has(key)) {
+    return structureSliceDebugAlphaMapCache.get(key) ?? null;
+  }
+  const width = sourceImg instanceof HTMLImageElement
+    ? (sourceImg.naturalWidth || sourceImg.width || 0)
+    : sourceImg.width;
+  const height = sourceImg instanceof HTMLImageElement
+    ? (sourceImg.naturalHeight || sourceImg.height || 0)
+    : sourceImg.height;
+  if (width <= 0 || height <= 0) {
+    structureSliceDebugAlphaMapCache.set(key, null);
+    return null;
+  }
+  const canvas = structureSliceDebugReadbackCanvas ?? document.createElement("canvas");
+  structureSliceDebugReadbackCanvas = canvas;
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
+  const readbackCtx = structureSliceDebugReadbackCtx ?? canvas.getContext("2d", { willReadFrequently: true });
+  structureSliceDebugReadbackCtx = readbackCtx;
+  if (!readbackCtx) {
+    structureSliceDebugAlphaMapCache.set(key, null);
+    return null;
+  }
+  try {
+    readbackCtx.setTransform(1, 0, 0, 1, 0, 0);
+    readbackCtx.clearRect(0, 0, width, height);
+    readbackCtx.drawImage(sourceImg, 0, 0, width, height);
+    const imgData = readbackCtx.getImageData(0, 0, width, height);
+    const resolved = {
+      width,
+      height,
+      data: imgData.data,
+    };
+    structureSliceDebugAlphaMapCache.set(key, resolved);
+    return resolved;
+  } catch {
+    structureSliceDebugAlphaMapCache.set(key, null);
+    return null;
+  }
+}
+
+function pointInTriangle(p: StructureSliceDebugPoint, a: StructureSliceDebugPoint, b: StructureSliceDebugPoint, c: StructureSliceDebugPoint): boolean {
+  const ab = (p.x - b.x) * (a.y - b.y) - (a.x - b.x) * (p.y - b.y);
+  const bc = (p.x - c.x) * (b.y - c.y) - (b.x - c.x) * (p.y - c.y);
+  const ca = (p.x - a.x) * (c.y - a.y) - (c.x - a.x) * (p.y - a.y);
+  const hasNeg = ab < 0 || bc < 0 || ca < 0;
+  const hasPos = ab > 0 || bc > 0 || ca > 0;
+  return !(hasNeg && hasPos);
+}
+
+function mapDebugPointFromDstToSrc(
+  p: StructureSliceDebugPoint,
+  dstRect: StructureSliceDebugRect,
+  srcRect: StructureSliceDebugRect,
+): StructureSliceDebugPoint {
+  const nx = dstRect.w !== 0 ? (p.x - dstRect.x) / dstRect.w : 0;
+  const ny = dstRect.h !== 0 ? (p.y - dstRect.y) / dstRect.h : 0;
+  return {
+    x: srcRect.x + nx * srcRect.w,
+    y: srcRect.y + ny * srcRect.h,
+  };
+}
+
+function resolveTriangleCentroidOwnerTile(
+  triA: StructureSliceDebugPoint,
+  triB: StructureSliceDebugPoint,
+  triC: StructureSliceDebugPoint,
+  tileWorld: number,
+): { tx: number; ty: number; cx: number; cy: number } {
+  const cx = (triA.x + triB.x + triC.x) / 3;
+  const cy = (triA.y + triB.y + triC.y) / 3;
+  const world = screenToWorld(cx, cy);
+  const safeTileWorld = Math.max(1, tileWorld);
+  return {
+    tx: Math.floor(world.x / safeTileWorld),
+    ty: Math.floor(world.y / safeTileWorld),
+    cx,
+    cy,
+  };
+}
+
+function ownerTileColor(tx: number, ty: number, alpha: number): string {
+  const hash = ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
+  const hue = hash % 360;
+  const clampedAlpha = Math.max(0, Math.min(1, alpha));
+  return `hsla(${hue}, 92%, 54%, ${clampedAlpha})`;
+}
+
+function hashStructureTriangleStableId(
+  structureInstanceId: string,
+  bandIndex: number,
+  triangleOrdinal: number,
+): number {
+  let hash = 2166136261;
+  for (let i = 0; i < structureInstanceId.length; i++) {
+    hash ^= structureInstanceId.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  hash ^= bandIndex | 0;
+  hash = Math.imul(hash, 16777619);
+  hash ^= triangleOrdinal | 0;
+  hash = Math.imul(hash, 16777619);
+  return hash >>> 0;
+}
+
+function triangleHasVisibleSpritePixels(
+  triA: StructureSliceDebugPoint,
+  triB: StructureSliceDebugPoint,
+  triC: StructureSliceDebugPoint,
+  dstRect: StructureSliceDebugRect,
+  srcRect: StructureSliceDebugRect,
+  alphaMap: StructureSliceDebugAlphaMap,
+): boolean {
+  if (!(srcRect.w > 0) || !(srcRect.h > 0)) return false;
+  const a = mapDebugPointFromDstToSrc(triA, dstRect, srcRect);
+  const b = mapDebugPointFromDstToSrc(triB, dstRect, srcRect);
+  const c = mapDebugPointFromDstToSrc(triC, dstRect, srcRect);
+
+  const srcMinX = Math.max(
+    0,
+    Math.floor(Math.max(srcRect.x, Math.min(a.x, b.x, c.x))),
+  );
+  const srcMaxX = Math.min(
+    alphaMap.width - 1,
+    Math.ceil(Math.min(srcRect.x + srcRect.w, Math.max(a.x, b.x, c.x))) - 1,
+  );
+  const srcMinY = Math.max(
+    0,
+    Math.floor(Math.max(srcRect.y, Math.min(a.y, b.y, c.y))),
+  );
+  const srcMaxY = Math.min(
+    alphaMap.height - 1,
+    Math.ceil(Math.min(srcRect.y + srcRect.h, Math.max(a.y, b.y, c.y))) - 1,
+  );
+  if (srcMinX > srcMaxX || srcMinY > srcMaxY) return false;
+
+  for (let sy = srcMinY; sy <= srcMaxY; sy++) {
+    for (let sx = srcMinX; sx <= srcMaxX; sx++) {
+      const alphaIdx = ((sy * alphaMap.width + sx) << 2) + 3;
+      if ((alphaMap.data[alphaIdx] | 0) < STRUCTURE_SLICE_TRI_CULL_ALPHA_THRESHOLD) continue;
+      if (pointInTriangle({ x: sx + 0.5, y: sy + 0.5 }, a, b, c)) return true;
+    }
+  }
+  return false;
+}
+
+function buildRuntimeStructureTriangleDebugPieces(
+  rect: StructureSliceDebugRect,
+  progressionIndex: number,
+  tileWorld: number,
+  structureInstanceId: string,
+  bandIndex: number,
+  sourceImg?: CanvasImageSource,
+  srcRect?: StructureSliceDebugRect,
+): { pieces: RuntimeStructureTrianglePiece[]; stats: StructureSliceDebugTriangleStats } {
+  let beforeCull = 0;
+  let afterCull = 0;
+  const pieces: RuntimeStructureTrianglePiece[] = [];
+  const x0 = rect.x;
+  const y0 = rect.y;
+  const x1 = rect.x + rect.w;
+  const y1 = rect.y + rect.h;
+  if (!(x1 > x0) || !(y1 > y0)) return { pieces, stats: { beforeCull, afterCull } };
+  const ladderStep = Math.max(1, STRUCTURE_SLICE_TRI_LADDER_STEP_PX);
+  const ladderStagger = Math.max(1, Math.min(ladderStep - 1, STRUCTURE_SLICE_TRI_LADDER_STAGGER_PX));
+  const alphaMap = sourceImg && srcRect ? getStructureSliceDebugAlphaMap(sourceImg) : null;
+  const canCullByAlpha = !!alphaMap && !!srcRect;
+
+  const parityBias = STRUCTURE_SLICE_TRI_PARITY_FLIP ? 1 : 0;
+  const phasedProgression = progressionIndex + parityBias;
+  // 64px ladder step on both sides; each progression step shifts phase by 32px.
+  const rightPhase = positiveMod(phasedProgression * ladderStagger, ladderStep);
+  const leftPhase = positiveMod(rightPhase - ladderStagger, ladderStep);
+
+  const zigZagPoints: Array<{ x: number; y: number; side: "L" | "R" }> = [];
+  const collectLadder = (x: number, phase: number, side: "L" | "R") => {
+    // Start one ladder point below the rect so clipped bottom-edge wedges are still generated.
+    let first = y1 - positiveMod(y1 - phase, ladderStep);
+    if (first < y1) first += ladderStep;
+    for (let y = first; y >= y0 - ladderStep; y -= ladderStep) {
+      zigZagPoints.push({ x, y, side });
+    }
+  };
+  collectLadder(x1, rightPhase, "R");
+  collectLadder(x0, leftPhase, "L");
+  zigZagPoints.sort((a, b) => {
+    if (a.y !== b.y) return b.y - a.y;
+    if (a.side === b.side) return 0;
+    return a.side === "R" ? -1 : 1;
+  });
+
+  for (let i = 0; i + 2 < zigZagPoints.length; i++) {
+    const a = zigZagPoints[i];
+    const b = zigZagPoints[i + 1];
+    const c = zigZagPoints[i + 2];
+    const minX = Math.min(a.x, b.x, c.x);
+    const maxX = Math.max(a.x, b.x, c.x);
+    const minY = Math.min(a.y, b.y, c.y);
+    const maxY = Math.max(a.y, b.y, c.y);
+    if (maxX <= x0 || minX >= x1 || maxY <= y0 || minY >= y1) continue;
+    beforeCull++;
+    if (canCullByAlpha && !triangleHasVisibleSpritePixels(a, b, c, rect, srcRect!, alphaMap!)) continue;
+    const owner = resolveTriangleCentroidOwnerTile(a, b, c, tileWorld);
+    const triangleOrdinal = pieces.length;
+    pieces.push({
+      points: [
+        { x: a.x, y: a.y },
+        { x: b.x, y: b.y },
+        { x: c.x, y: c.y },
+      ],
+      parentTx: owner.tx,
+      parentTy: owner.ty,
+      bandIndex,
+      structureInstanceId,
+      stableId: hashStructureTriangleStableId(structureInstanceId, bandIndex, triangleOrdinal),
+      bounds: { minX, minY, maxX, maxY },
+    });
+    afterCull++;
+  }
+  return {
+    pieces,
+    stats: { beforeCull, afterCull },
+  };
+}
+
+function groupRuntimeStructureTrianglePiecesByParentTile(
+  pieces: RuntimeStructureTrianglePiece[],
+): RuntimeStructureTriangleParentTileGroup[] {
+  const byParent = new Map<string, {
+    parentTx: number;
+    parentTy: number;
+    triangles: RuntimeStructureTrianglePiece[];
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+  }>();
+  for (let i = 0; i < pieces.length; i++) {
+    const piece = pieces[i];
+    const key = `${piece.parentTx},${piece.parentTy}`;
+    let group = byParent.get(key);
+    if (!group) {
+      group = {
+        parentTx: piece.parentTx,
+        parentTy: piece.parentTy,
+        triangles: [],
+        minX: piece.bounds.minX,
+        minY: piece.bounds.minY,
+        maxX: piece.bounds.maxX,
+        maxY: piece.bounds.maxY,
+      };
+      byParent.set(key, group);
+    }
+    group.triangles.push(piece);
+    if (piece.bounds.minX < group.minX) group.minX = piece.bounds.minX;
+    if (piece.bounds.minY < group.minY) group.minY = piece.bounds.minY;
+    if (piece.bounds.maxX > group.maxX) group.maxX = piece.bounds.maxX;
+    if (piece.bounds.maxY > group.maxY) group.maxY = piece.bounds.maxY;
+  }
+  const out: RuntimeStructureTriangleParentTileGroup[] = [];
+  byParent.forEach((group) => {
+    out.push({
+      parentTx: group.parentTx,
+      parentTy: group.parentTy,
+      triangles: group.triangles,
+      bounds: {
+        x: group.minX,
+        y: group.minY,
+        w: group.maxX - group.minX,
+        h: group.maxY - group.minY,
+      },
+    });
+  });
+  out.sort((a, b) => {
+    if (a.parentTy !== b.parentTy) return a.parentTy - b.parentTy;
+    return a.parentTx - b.parentTx;
+  });
+  return out;
+}
+
+function drawStructureSliceTriangleDebugOverlay(
+  ctx: CanvasRenderingContext2D,
+  rect: StructureSliceDebugRect,
+  progressionIndex: number,
+  tileWorld: number,
+  structureInstanceId: string,
+  bandIndex: number,
+  sourceImg?: CanvasImageSource,
+  srcRect?: StructureSliceDebugRect,
+): StructureSliceDebugTriangleStats {
+  const { pieces, stats } = buildRuntimeStructureTriangleDebugPieces(
+    rect,
+    progressionIndex,
+    tileWorld,
+    structureInstanceId,
+    bandIndex,
+    sourceImg,
+    srcRect,
+  );
+  if (pieces.length <= 0) return stats;
+  const groups = groupRuntimeStructureTrianglePiecesByParentTile(pieces);
+  const x0 = rect.x;
+  const y0 = rect.y;
+  const x1 = rect.x + rect.w;
+  const y1 = rect.y + rect.h;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x0, y0, Math.max(0, rect.w), Math.max(0, rect.h));
+  ctx.clip();
+
+  for (let gi = 0; gi < groups.length; gi++) {
+    const group = groups[gi];
+    const fill = ownerTileColor(group.parentTx, group.parentTy, 0.13);
+    const stroke = ownerTileColor(group.parentTx, group.parentTy, 0.52);
+    for (let ti = 0; ti < group.triangles.length; ti++) {
+      const tri = group.triangles[ti];
+      const [a, b, c] = tri.points;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.lineTo(c.x, c.y);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+    const gx0 = group.bounds.x;
+    const gy0 = group.bounds.y;
+    const gx1 = gx0 + group.bounds.w;
+    const gy1 = gy0 + group.bounds.h;
+    const labelX = Math.max(x0 + 2, Math.min(x1 - 2, (gx0 + gx1) * 0.5));
+    const labelY = Math.max(y0 + 2, Math.min(y1 - 2, (gy0 + gy1) * 0.5));
+    ctx.font = "8px monospace";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+    ctx.fillText(`t:${group.parentTx},${group.parentTy}`, labelX + 1, labelY + 1);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.fillText(`t:${group.parentTx},${group.parentTy}`, labelX, labelY);
+  }
+
+  ctx.restore();
+  return stats;
+}
+
+type RuntimeStructureTriangleProjectedDraw = {
+  dx: number;
+  dy: number;
+  dw: number;
+  dh: number;
+  flipX: boolean;
+  scale: number;
+};
+
+type RuntimeStructureTriangleAssetState = "READY" | "PENDING" | "FAILED";
+
+type RuntimeStructureTriangleBuildResult = {
+  pendingCount: number;
+  failedCount: number;
+  builtCount: number;
+  fallbackCount: number;
+  pendingKeys: string[];
+};
+
+function classifyRuntimeStructureTriangleAsset(rec: LoadedImg | null | undefined): RuntimeStructureTriangleAssetState {
+  if (!rec) return "FAILED";
+  if (rec.ready && rec.img && rec.img.naturalWidth > 0 && rec.img.naturalHeight > 0) return "READY";
+  if (rec.failed || rec.unsupported) return "FAILED";
+  if (rec.ready) return "FAILED";
+  return "PENDING";
+}
+
+function mapWideOverlayViewRect(compiledMap: ReturnType<typeof getActiveCompiledMap>): ViewRect {
+  const minTx = compiledMap.originTx;
+  const minTy = compiledMap.originTy;
+  const maxTx = minTx + Math.max(1, compiledMap.width) - 1;
+  const maxTy = minTy + Math.max(1, compiledMap.height) - 1;
+  return { minTx, maxTx, minTy, maxTy };
+}
+
+function collectMapWideStructureOverlays(compiledMap: ReturnType<typeof getActiveCompiledMap>): StampOverlay[] {
+  const allOverlays = overlaysInView(mapWideOverlayViewRect(compiledMap));
+  const out: StampOverlay[] = [];
+  for (let i = 0; i < allOverlays.length; i++) {
+    const overlay = allOverlays[i];
+    if (overlay.layerRole !== "STRUCTURE") continue;
+    out.push(overlay);
+  }
+  return out;
+}
+
+function buildRuntimeStructureProjectedDraw(
+  overlay: StampOverlay,
+  image: HTMLImageElement,
+): RuntimeStructureTriangleProjectedDraw {
+  const tileWorld = KENNEY_TILE_WORLD;
+  const elevPx = 16;
+  const scale = overlay.scale ?? 1;
+  const spriteW = image.width;
+  const spriteH = image.height;
+  const southY = overlay.ty + overlay.h - 1;
+  const anchorTx = overlay.anchorTx ?? (overlay.w >= overlay.h ? (overlay.tx + overlay.w - 1) : overlay.tx);
+  const anchorTy = overlay.anchorTy ?? southY;
+  const footprintW = Math.max(1, overlay.w | 0);
+  const isFootprintOverlay =
+    overlay.layerRole === "STRUCTURE" || ((overlay.kind ?? "ROOF") === "PROP" && (footprintW > 1 || (overlay.h | 0) > 1));
+  const tileWidth = 2 * tileWorld * ISO_X;
+  const halfTileW = tileWidth * 0.5;
+  const footprintAnchorAdjustX = isFootprintOverlay
+    ? ((overlay.h - overlay.w) * halfTileW) * 0.5
+    : 0;
+  const wx = (anchorTx + 0.5) * tileWorld;
+  const wy = (anchorTy + 0.5) * tileWorld;
+  const projected = worldToScreen(wx, wy);
+  const zVisual = overlay.z + (overlay.zVisualOffsetUnits ?? 0);
+  return {
+    dx: projected.x - spriteW * scale * 0.5 + (overlay.drawDxOffset ?? 0) + footprintAnchorAdjustX,
+    dy: projected.y - spriteH * scale - zVisual * elevPx - (overlay.drawDyOffset ?? 0),
+    dw: spriteW,
+    dh: spriteH,
+    flipX: !!overlay.flipX,
+    scale,
+  };
+}
+
+function runtimeStructureTriangleGeometrySignatureForOverlay(
+  overlay: StampOverlay,
+  draw: RuntimeStructureTriangleProjectedDraw,
+): string {
+  return buildRuntimeStructureTriangleGeometrySignature({
+    structureInstanceId: overlay.id,
+    spriteId: overlay.spriteId,
+    seTx: overlay.seTx,
+    seTy: overlay.seTy,
+    footprintW: overlay.w,
+    footprintH: overlay.h,
+    flipX: draw.flipX,
+    scale: draw.scale,
+    baseDx: draw.dx,
+    baseDy: draw.dy,
+    spriteWidth: draw.dw,
+    spriteHeight: draw.dh,
+    sliceOffsetX: overlay.sliceOffsetPx?.x ?? 0,
+    sliceOffsetY: overlay.sliceOffsetPx?.y ?? 0,
+    sliceOriginX: overlay.sliceOriginPx?.x,
+    baseZ: overlay.z,
+  });
+}
+
+function toRuntimeStructureTriangleRect(rect: { x: number; y: number; w: number; h: number }): RuntimeStructureTriangleRect {
+  return {
+    x: rect.x,
+    y: rect.y,
+    w: rect.w,
+    h: rect.h,
+  };
+}
+
+function buildRuntimeStructureTriangleCacheForOverlay(
+  overlay: StampOverlay,
+  image: HTMLImageElement,
+): { cache: ReturnType<typeof buildRuntimeStructureTriangleCache> | null; geometrySignature: string } {
+  const draw = buildRuntimeStructureProjectedDraw(overlay, image);
+  const geometrySignature = runtimeStructureTriangleGeometrySignatureForOverlay(overlay, draw);
+  const bandPieces = buildRuntimeStructureBandPieces({
+    structureInstanceId: overlay.id,
+    spriteId: overlay.spriteId,
+    seTx: overlay.seTx,
+    seTy: overlay.seTy,
+    footprintW: overlay.w,
+    footprintH: overlay.h,
+    flipped: draw.flipX,
+    sliceOffsetX: overlay.sliceOffsetPx?.x ?? 0,
+    sliceOffsetY: overlay.sliceOffsetPx?.y ?? 0,
+    sliceOriginX: overlay.sliceOriginPx?.x,
+    baseZ: overlay.z,
+    baseDx: draw.dx,
+    baseDy: draw.dy,
+    spriteWidth: draw.dw,
+    spriteHeight: draw.dh,
+    scale: draw.scale,
+  });
+  const sourceImage: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(image) : image;
+  const alphaMap = getStructureSliceDebugAlphaMap(sourceImage) as any;
+  const pieces = [] as ReturnType<typeof buildRuntimeStructureTriangleCache>["triangles"];
+  for (let i = 0; i < bandPieces.length; i++) {
+    const band = bandPieces[i];
+    const progressionIndex = resolveRuntimeStructureBandProgressionIndex(band.index, overlay.w, overlay.h);
+    const parentTx = band.renderKey.within;
+    const parentTy = band.renderKey.slice - band.renderKey.within;
+    const built = buildRuntimeStructureTrianglePiecesForBand({
+      structureInstanceId: overlay.id,
+      bandIndex: band.index,
+      progressionIndex,
+      parentTx,
+      parentTy,
+      srcRect: toRuntimeStructureTriangleRect(band.srcRect),
+      dstRect: toRuntimeStructureTriangleRect(band.dstRect),
+      tileWorld: KENNEY_TILE_WORLD,
+      alphaMap,
+    });
+    if (built.pieces.length > 0) pieces.push(...built.pieces);
+  }
+  if (pieces.length <= 0) {
+    return { cache: null, geometrySignature };
+  }
+  return {
+    cache: buildRuntimeStructureTriangleCache(overlay.id, overlay.spriteId, geometrySignature, pieces),
+    geometrySignature,
+  };
+}
+
+function rebuildRuntimeStructureTriangleCacheForMap(
+  compiledMap: ReturnType<typeof getActiveCompiledMap>,
+): RuntimeStructureTriangleBuildResult {
+  const overlays = collectMapWideStructureOverlays(compiledMap);
+  let pendingCount = 0;
+  let failedCount = 0;
+  let builtCount = 0;
+  let fallbackCount = 0;
+  const pendingKeys: string[] = [];
+  for (let i = 0; i < overlays.length; i++) {
+    const overlay = overlays[i];
+    const rec = overlay.spriteId ? getTileSpriteById(overlay.spriteId) : null;
+    const state = classifyRuntimeStructureTriangleAsset(rec);
+    if (state === "PENDING") {
+      pendingCount++;
+      if (pendingKeys.length < 20 && overlay.spriteId) pendingKeys.push(overlay.spriteId);
+      continue;
+    }
+    if (state === "FAILED" || !rec?.img || rec.img.width <= 0 || rec.img.height <= 0) {
+      failedCount++;
+      fallbackCount++;
+      runtimeStructureTriangleCacheStore.markFallback(overlay.id);
+      continue;
+    }
+    const built = buildRuntimeStructureTriangleCacheForOverlay(overlay, rec.img);
+    if (!built.cache) {
+      fallbackCount++;
+      runtimeStructureTriangleCacheStore.markFallback(overlay.id);
+      continue;
+    }
+    runtimeStructureTriangleCacheStore.set(built.cache);
+    builtCount++;
+  }
+
+  return {
+    pendingCount,
+    failedCount,
+    builtCount,
+    fallbackCount,
+    pendingKeys,
+  };
+}
 
 function floorRelightPieceKey(
   tx: number,
@@ -863,6 +1494,52 @@ function rebuildFullMapStaticGroundRelightBake(
 let lastStaticRelightLoadingFailureKey = "";
 let lastStaticRelightLoadingPendingLogAtMs = 0;
 let lastStaticRelightLoadingPendingSignature = "";
+
+let lastStructureTriangleLoadingFailureKey = "";
+let lastStructureTriangleLoadingPendingLogAtMs = 0;
+let lastStructureTriangleLoadingPendingSignature = "";
+
+export async function prepareRuntimeStructureTrianglesForLoading(_w: World): Promise<boolean> {
+  const settings = getUserSettings();
+  const enabled = settings.render.structureTriangleGeometryPocEnabled === true;
+  const compiledMap = getActiveCompiledMap();
+  const contextKey = buildRuntimeStructureTriangleContextKey({
+    mapId: compiledMap.id,
+    enabled,
+  });
+  runtimeStructureTriangleCacheStore.resetIfContextChanged(contextKey);
+  if (!enabled) return true;
+  const result = rebuildRuntimeStructureTriangleCacheForMap(compiledMap);
+  if (result.pendingCount > 0) {
+    const signature = `${contextKey}::${result.pendingCount}::${result.failedCount}::${result.pendingKeys.join("|")}`;
+    const now = performance.now();
+    if (
+      signature !== lastStructureTriangleLoadingPendingSignature
+      || now - lastStructureTriangleLoadingPendingLogAtMs >= 1000
+    ) {
+      lastStructureTriangleLoadingPendingSignature = signature;
+      lastStructureTriangleLoadingPendingLogAtMs = now;
+      console.debug(
+        `[structure-triangles:loading] built=${result.builtCount} pending=${result.pendingCount} failed=${result.failedCount} fallback=${result.fallbackCount}`,
+        result.pendingKeys,
+      );
+    }
+    return false;
+  }
+  lastStructureTriangleLoadingPendingSignature = "";
+  if (result.failedCount > 0) {
+    const failureKey = `${contextKey}::${result.failedCount}::${result.fallbackCount}`;
+    if (failureKey !== lastStructureTriangleLoadingFailureKey) {
+      lastStructureTriangleLoadingFailureKey = failureKey;
+      console.warn(
+        `[structure-triangles:loading] proceeding with ${result.failedCount} failed structure triangle dependencies (fallback path kept)`,
+      );
+    }
+  } else {
+    lastStructureTriangleLoadingFailureKey = "";
+  }
+  return true;
+}
 
 export async function prepareStaticGroundRelightForLoading(w: World): Promise<boolean> {
   const staticRelight = resolveStaticRelightRuntimeState(w);
@@ -2236,6 +2913,28 @@ export async function renderSystem(
 
   const baseCulling = getCullingView(0);
   const viewRect = baseCulling.tileBounds;
+  const projectedViewportRect: RuntimeStructureTriangleRect = {
+    x: -camTx,
+    y: -camTy,
+    w: ww,
+    h: hh,
+  };
+  const strictViewportTileBounds: TileBounds = (() => {
+    const vx0 = projectedViewportRect.x;
+    const vy0 = projectedViewportRect.y;
+    const vx1 = projectedViewportRect.x + projectedViewportRect.w;
+    const vy1 = projectedViewportRect.y + projectedViewportRect.h;
+    const c0 = screenToWorld(vx0, vy0);
+    const c1 = screenToWorld(vx1, vy0);
+    const c2 = screenToWorld(vx0, vy1);
+    const c3 = screenToWorld(vx1, vy1);
+    return {
+      minTx: Math.floor(Math.min(c0.x, c1.x, c2.x, c3.x) / T),
+      maxTx: Math.floor(Math.max(c0.x, c1.x, c2.x, c3.x) / T),
+      minTy: Math.floor(Math.min(c0.y, c1.y, c2.y, c3.y) / T),
+      maxTy: Math.floor(Math.max(c0.y, c1.y, c2.y, c3.y) / T),
+    };
+  })();
   const minTx = viewRect.minTx;
   const maxTx = viewRect.maxTx;
   const minTy = viewRect.minTy;
@@ -2259,7 +2958,15 @@ export async function renderSystem(
   ): boolean => {
     return !(maxRectTx < minTx || minRectTx > maxTx || maxRectTy < minTy || minRectTy > maxTy);
   };
-
+  const tileRectIntersectsBounds = (
+    minRectTx: number,
+    maxRectTx: number,
+    minRectTy: number,
+    maxRectTy: number,
+    bounds: TileBounds,
+  ): boolean => {
+    return !(maxRectTx < bounds.minTx || minRectTx > bounds.maxTx || maxRectTy < bounds.minTy || minRectTy > bounds.maxTy);
+  };
   const minSum = minTx + minTy;
   const maxSum = maxTx + maxTy;
   const playerTxForProjectileCull = Math.floor(px / KENNEY_TILE_WORLD);
@@ -2327,7 +3034,18 @@ export async function renderSystem(
     };
   }
   const staticRelightContextChanged = staticRelightBakeStore.resetIfContextChanged(staticRelight.contextKey);
+  const structureTriangleGeometryPocEnabled = renderSettings.structureTriangleGeometryPocEnabled === true;
+  const structureTriangleAdmissionMode = renderSettings.structureTriangleAdmissionMode ?? "hybrid";
+  const runtimeStructureTriangleContextKey = buildRuntimeStructureTriangleContextKey({
+    mapId: compiledMap.id,
+    enabled: structureTriangleGeometryPocEnabled,
+  });
+  const runtimeStructureTriangleContextChanged = runtimeStructureTriangleCacheStore
+    .resetIfContextChanged(runtimeStructureTriangleContextKey);
   staticRelightFrame = staticRelight.frame;
+  if (runtimeStructureTriangleContextChanged && structureTriangleGeometryPocEnabled) {
+    rebuildRuntimeStructureTriangleCacheForMap(compiledMap);
+  }
   if (staticRelightContextChanged) {
     staticRelightPendingRuntimeRebuildContextKey = "";
     staticRelightPendingRuntimeRebuildAtMs = 0;
@@ -3902,10 +4620,21 @@ export async function renderSystem(
     // Collect OVERLAYS (roofs + props) into slices
     // ----------------------------
     if (debugFlags.showMapOverlays) {
-      const ovs = overlaysInView(viewRect);
+      const triangleOverlayPrefilterBounds = structureTriangleAdmissionMode === "viewport"
+        ? strictViewportTileBounds
+        : viewRect;
+      // In triangle-geometry mode, STRUCTURE visibility authority is triangle camera-tiles.
+      // So we must not cull structures by overlay footprint before triangle admission runs.
+      const overlayPrefilterViewRect = structureTriangleGeometryPocEnabled
+        ? mapWideOverlayViewRect(compiledMap)
+        : viewRect;
+      const ovs = overlaysInView(overlayPrefilterViewRect);
       for (let i = 0; i < ovs.length; i++) {
         const o = ovs[i];
-        if (!tileRectIntersectsRenderRadius(o.tx, o.tx + o.w - 1, o.ty, o.ty + o.h - 1)) continue;
+        const passesOverlayCoarsePrefilter = structureTriangleGeometryPocEnabled && o.layerRole === "STRUCTURE"
+          ? true
+          : tileRectIntersectsRenderRadius(o.tx, o.tx + o.w - 1, o.ty, o.ty + o.h - 1);
+        if (!passesOverlayCoarsePrefilter) continue;
         if ((o.kind ?? "ROOF") === "ROOF" && shouldCullBuildingAt(o.tx, o.ty, o.w, o.h)) continue;
         const draw = buildOverlayDraw(o);
         if (!draw) continue;
@@ -3952,6 +4681,162 @@ export async function renderSystem(
               last3: owners.slice(Math.max(0, owners.length - 3)),
             });
           }
+
+          let usedTriangleGeometryPath = false;
+          if (structureTriangleGeometryPocEnabled && o.layerRole === "STRUCTURE") {
+            const geometrySignature = runtimeStructureTriangleGeometrySignatureForOverlay(o, {
+              dx: draw.dx,
+              dy: draw.dy,
+              dw: draw.dw,
+              dh: draw.dh,
+              flipX: !!draw.flipX,
+              scale: draw.scale ?? 1,
+            });
+            const triangleCache = runtimeStructureTriangleCacheStore.get(o.id, geometrySignature);
+            if (triangleCache && draw.img) {
+              usedTriangleGeometryPath = true;
+              const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(draw.img) : draw.img;
+              for (let gi = 0; gi < triangleCache.parentTileGroups.length; gi++) {
+                const group = triangleCache.parentTileGroups[gi];
+                const groupBoundsInViewport = runtimeStructureRectIntersects(group.localBounds, projectedViewportRect);
+                const isCameraTileInsideStrictViewport = (tx: number, ty: number): boolean => (
+                  tx >= strictViewportTileBounds.minTx
+                  && tx <= strictViewportTileBounds.maxTx
+                  && ty >= strictViewportTileBounds.minTy
+                  && ty <= strictViewportTileBounds.maxTy
+                );
+                const viewportVisibleTriangles = [] as typeof group.triangles;
+                const renderDistanceVisibleTriangles = [] as typeof group.triangles;
+                const finalVisibleTriangles = [] as typeof group.triangles;
+                const compareDistanceOnlyTriangles = [] as typeof group.triangles;
+                for (let ti = 0; ti < group.triangles.length; ti++) {
+                  const tri = group.triangles[ti];
+                  const viewportVisible = isCameraTileInsideStrictViewport(tri.cameraTx, tri.cameraTy);
+                  const renderDistanceVisible = isTileInRenderRadius(tri.cameraTx, tri.cameraTy);
+                  if (viewportVisible) viewportVisibleTriangles.push(tri);
+                  if (renderDistanceVisible) renderDistanceVisibleTriangles.push(tri);
+                  const finalVisible = structureTriangleAdmissionMode === "viewport"
+                    ? viewportVisible
+                    : structureTriangleAdmissionMode === "renderDistance"
+                      ? renderDistanceVisible
+                      : structureTriangleAdmissionMode === "hybrid"
+                        ? (renderDistanceVisible && viewportVisible)
+                        : renderDistanceVisible;
+                  if (finalVisible) {
+                    finalVisibleTriangles.push(tri);
+                    if (structureTriangleAdmissionMode === "compare" && renderDistanceVisible && !viewportVisible) {
+                      compareDistanceOnlyTriangles.push(tri);
+                    }
+                  }
+                }
+                const finalAdmitted = finalVisibleTriangles.length > 0;
+                if (SHOW_STRUCTURE_SLICE_DEBUG) {
+                  deferredStructureSliceDebugDraws.push(() => {
+                    ctx.save();
+                    const bounds = group.localBounds;
+                    const admittedViewportStyle = finalAdmitted && compareDistanceOnlyTriangles.length === 0;
+                    ctx.lineWidth = admittedViewportStyle ? 1.5 : 1;
+                    ctx.strokeStyle = admittedViewportStyle
+                      ? "rgba(0,255,170,0.92)"
+                      : compareDistanceOnlyTriangles.length > 0
+                        ? "rgba(255,120,40,0.92)"
+                        : "rgba(255,180,90,0.65)";
+                    ctx.fillStyle = admittedViewportStyle
+                      ? "rgba(0,255,170,0.08)"
+                      : compareDistanceOnlyTriangles.length > 0
+                        ? "rgba(255,120,40,0.08)"
+                        : "rgba(255,180,90,0.04)";
+                    ctx.fillRect(bounds.x, bounds.y, bounds.w, bounds.h);
+                    ctx.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
+                    for (let ti = 0; ti < group.triangles.length; ti++) {
+                      const tri = group.triangles[ti];
+                      const [a, b, c] = tri.points;
+                      ctx.beginPath();
+                      ctx.moveTo(a.x, a.y);
+                      ctx.lineTo(b.x, b.y);
+                      ctx.lineTo(c.x, c.y);
+                      ctx.closePath();
+                      ctx.strokeStyle = admittedViewportStyle
+                        ? "rgba(0,255,170,0.72)"
+                        : compareDistanceOnlyTriangles.length > 0
+                          ? "rgba(255,120,40,0.72)"
+                          : "rgba(255,180,90,0.38)";
+                      ctx.stroke();
+                    }
+                    const labelX = bounds.x + bounds.w * 0.5;
+                    const labelY = bounds.y + bounds.h * 0.5;
+                    const representativeCamera = finalVisibleTriangles[0] ?? group.triangles[0] ?? null;
+                    const labelSuffix = compareDistanceOnlyTriangles.length > 0 ? " rd-only" : "";
+                    const label = representativeCamera
+                      ? `P:${group.parentTx},${group.parentTy} C:${representativeCamera.cameraTx},${representativeCamera.cameraTy}${labelSuffix}`
+                      : `P:${group.parentTx},${group.parentTy}${labelSuffix}`;
+                    ctx.font = "10px monospace";
+                    ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+                    ctx.fillText(label, labelX + 1, labelY + 1);
+                    ctx.fillStyle = admittedViewportStyle
+                      ? "rgba(0,255,170,0.96)"
+                      : compareDistanceOnlyTriangles.length > 0
+                        ? "rgba(255,120,40,0.95)"
+                        : "rgba(255,180,90,0.95)";
+                    ctx.fillText(label, labelX, labelY);
+                    const statsLabel = `vis:${finalVisibleTriangles.length}/${group.triangles.length} vp:${viewportVisibleTriangles.length} rd:${renderDistanceVisibleTriangles.length} gb:${groupBoundsInViewport ? 1 : 0}`;
+                    ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+                    ctx.fillText(statsLabel, labelX + 1, labelY + 12);
+                    ctx.fillStyle = "rgba(220, 240, 255, 0.95)";
+                    ctx.fillText(statsLabel, labelX, labelY + 11);
+                    ctx.restore();
+                  });
+                }
+                if (!finalAdmitted) continue;
+                const renderFields = deriveParentTileRenderFields(group.parentTx, group.parentTy);
+                const overlayKey: RenderKey = {
+                  slice: renderFields.slice,
+                  within: renderFields.within,
+                  baseZ: o.z,
+                  kindOrder: KindOrder.STRUCTURE,
+                  stableId: group.stableId,
+                };
+                addToSlice(renderFields.slice, overlayKey, () => {
+                  ctx.imageSmoothingEnabled = false;
+                  for (let ti = 0; ti < finalVisibleTriangles.length; ti++) {
+                    const tri = finalVisibleTriangles[ti];
+                    const [s0, s1, s2] = tri.srcPoints;
+                    const [d0, d1, d2] = tri.points;
+                    drawTexturedTriangle(
+                      ctx,
+                      sourceImg,
+                      draw.dw,
+                      draw.dh,
+                      s0,
+                      s1,
+                      s2,
+                      d0,
+                      d1,
+                      d2,
+                    );
+                    const compareDistanceOnly = compareDistanceOnlyTriangles.includes(tri);
+                    if (compareDistanceOnly) {
+                      const [a, b, c] = tri.points;
+                      ctx.save();
+                      ctx.beginPath();
+                      ctx.moveTo(a.x, a.y);
+                      ctx.lineTo(b.x, b.y);
+                      ctx.lineTo(c.x, c.y);
+                      ctx.closePath();
+                      ctx.fillStyle = "rgba(255,120,40,0.28)";
+                      ctx.fill();
+                      ctx.strokeStyle = "rgba(255,120,40,0.9)";
+                      ctx.lineWidth = 1;
+                      ctx.stroke();
+                      ctx.restore();
+                    }
+                  }
+                });
+              }
+            }
+          }
+
+          if (usedTriangleGeometryPath) continue;
 
           for (let bi = 0; bi < bandPieces.length; bi++) {
             const band = bandPieces[bi];
@@ -4011,21 +4896,30 @@ export async function renderSystem(
                 );
               }
               if (SHOW_STRUCTURE_SLICE_DEBUG) {
-                const ownerTile = {
-                  tx: band.renderKey.within,
-                  ty: ownerTy,
-                };
                 deferredStructureSliceDebugDraws.push(() => {
                   ctx.save();
                   ctx.strokeStyle = "#00ffd5";
                   ctx.lineWidth = 1;
                   ctx.strokeRect(band.dstRect.x, band.dstRect.y, band.dstRect.w, band.dstRect.h);
+                  const progressionIndex = resolveStructureSliceDebugProgressionIndex(
+                    band.index,
+                    o.w,
+                    o.h,
+                  );
+                  drawStructureSliceTriangleDebugOverlay(
+                    ctx,
+                    band.dstRect,
+                    progressionIndex,
+                    T,
+                    o.id,
+                    band.index,
+                    sourceImg,
+                    band.srcRect,
+                  );
                   ctx.fillStyle = "#00ffd5";
                   ctx.font = "10px monospace";
                   const topY = band.dstRect.y + 12;
-                  const bottomY = Math.max(topY + 10, band.dstRect.y + band.dstRect.h - 4);
                   ctx.fillText(`#${band.index}`, band.dstRect.x + 2, topY);
-                  ctx.fillText(`t:${ownerTile.tx},${ownerTile.ty}`, band.dstRect.x + 2, bottomY);
                   ctx.restore();
                 });
               }
@@ -4249,6 +5143,7 @@ export async function renderSystem(
       `sliceSorts/frame: ${perf.sliceKeySortsPerFrame.toFixed(1)} drawableSorts/frame: ${perf.drawableSortsPerFrame.toFixed(1)}`,
       `fullCanvasBlits/frame: ${perf.fullCanvasBlitsPerFrame.toFixed(1)}`,
       `tileRadius: ${perf.tileLoopRadius.toFixed(0)} tileLoopIters/frame: ${perf.tileLoopIterationsPerFrame.toFixed(1)}`,
+      `triAdmission: mode=${structureTriangleAdmissionMode} authority=${structureTriangleAdmissionMode === "viewport" ? "viewportRect" : "sharedRenderDistance(tileRadius)"} tileRadius=${sliderPadding}`,
       `bands z:${perf.zBandCountPerFrame.toFixed(1)} light:${perf.lightBandCountPerFrame.toFixed(1)} masks build:${perf.maskBuildsPerFrame.toFixed(1)} hit:${perf.maskCacheHitsPerFrame.toFixed(1)} miss:${perf.maskCacheMissesPerFrame.toFixed(1)}`,
       `masks rasterChunks/frame: ${perf.maskRasterChunksPerFrame.toFixed(1)} drawEntries/frame: ${perf.maskDrawEntriesPerFrame.toFixed(1)}`,
     ];

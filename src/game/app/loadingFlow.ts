@@ -2,11 +2,12 @@ export const enum LoadingStage {
   COMPILE_MAP = 0,
   PRECOMPUTE_STATIC_MAP = 1,
   PREWARM_DEPENDENCIES = 2,
-  PREPARE_STATIC_RELIGHT = 3,
-  PRIME_AUDIO = 4,
-  SPAWN_ENTITIES = 5,
-  FINALIZE = 6,
-  DONE = 7,
+  PREPARE_STRUCTURE_TRIANGLES = 3,
+  PREPARE_STATIC_RELIGHT = 4,
+  PRIME_AUDIO = 5,
+  SPAWN_ENTITIES = 6,
+  FINALIZE = 7,
+  DONE = 8,
 }
 
 export interface LoadingController {
@@ -23,6 +24,7 @@ type LoadingHooks = {
   compileMap: (mapId: string) => void | Promise<void>;
   precomputeStaticMap: () => void | Promise<void>;
   prewarmDependencies: () => boolean | Promise<boolean>;
+  prepareStructureTriangles: () => boolean | Promise<boolean>;
   prepareStaticRelight: () => boolean | Promise<boolean>;
   primeAudio: () => void | Promise<void>;
   spawnEntities: () => void | Promise<void>;
@@ -37,6 +39,8 @@ function stageName(stage: LoadingStage): string {
       return "PRECOMPUTE_STATIC_MAP";
     case LoadingStage.PREWARM_DEPENDENCIES:
       return "PREWARM_DEPENDENCIES";
+    case LoadingStage.PREPARE_STRUCTURE_TRIANGLES:
+      return "PREPARE_STRUCTURE_TRIANGLES";
     case LoadingStage.PREPARE_STATIC_RELIGHT:
       return "PREPARE_STATIC_RELIGHT";
     case LoadingStage.PRIME_AUDIO:
@@ -60,6 +64,8 @@ function stageProgress(stage: LoadingStage): number {
       return 0.35;
     case LoadingStage.PREWARM_DEPENDENCIES:
       return 0.6;
+    case LoadingStage.PREPARE_STRUCTURE_TRIANGLES:
+      return 0.69;
     case LoadingStage.PREPARE_STATIC_RELIGHT:
       return 0.75;
     case LoadingStage.PRIME_AUDIO:
@@ -90,6 +96,7 @@ export function createLoadingController(hooks: LoadingHooks): LoadingController 
     LoadingStage.COMPILE_MAP,
     LoadingStage.PRECOMPUTE_STATIC_MAP,
     LoadingStage.PREWARM_DEPENDENCIES,
+    LoadingStage.PREPARE_STRUCTURE_TRIANGLES,
     LoadingStage.PREPARE_STATIC_RELIGHT,
     LoadingStage.PRIME_AUDIO,
     LoadingStage.SPAWN_ENTITIES,
@@ -109,6 +116,9 @@ export function createLoadingController(hooks: LoadingHooks): LoadingController 
       case LoadingStage.PREWARM_DEPENDENCIES:
         if (!prewarmInitialized) prewarmInitialized = true;
         stageDone = await hooks.prewarmDependencies();
+        break;
+      case LoadingStage.PREPARE_STRUCTURE_TRIANGLES:
+        stageDone = await hooks.prepareStructureTriangles();
         break;
       case LoadingStage.PREPARE_STATIC_RELIGHT:
         stageDone = await hooks.prepareStaticRelight();

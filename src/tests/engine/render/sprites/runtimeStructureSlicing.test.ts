@@ -103,6 +103,35 @@ describe("runtimeStructureSlicing", () => {
     expect(pieces.map((p) => p.dstRect.x)).toEqual([100, 150, 214, 278, 342, 406, 470]);
   });
 
+  it("clamps side padding bands to one tile width and captures overflow nearest the core edges", () => {
+    clearRuntimeStructureSliceCache();
+    registerSpriteMeta("structures/buildings/test/runtime_band_clamp", {
+      tileWidth: 2,
+      tileHeight: 3,
+      zHeight: 1,
+    });
+    const spriteW = 700; // core=320 => 380 total overflow (190 per side when centered)
+    const coreCount = 5;
+    const coreExpectedW = coreCount * DEFAULT_STRUCTURE_BAND_PX; // 320
+    const centeredCoreOrigin = Math.floor((spriteW - coreExpectedW) / 2); // 190
+    const bands = getVerticalBandLayout(
+      "structures/buildings/test/runtime_band_clamp",
+      spriteW,
+      150,
+      DEFAULT_STRUCTURE_BAND_PX,
+    );
+    expect(bands).toHaveLength(7);
+    const left = bands[0];
+    const right = bands[bands.length - 1];
+    expect(left.index).toBe(0);
+    expect(right.index).toBe(6);
+
+    expect(left.srcRect.w).toBe(DEFAULT_STRUCTURE_BAND_PX);
+    expect(right.srcRect.w).toBe(DEFAULT_STRUCTURE_BAND_PX);
+    expect(left.srcRect.x).toBe(centeredCoreOrigin - DEFAULT_STRUCTURE_BAND_PX);
+    expect(right.srcRect.x).toBe(centeredCoreOrigin + coreExpectedW);
+  });
+
   it("assigns unique virtual ownership anchors for left/right overflow padding bands", () => {
     clearRuntimeStructureSliceCache();
     registerSpriteMeta("structures/buildings/test/runtime_padding_owner", {

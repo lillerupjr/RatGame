@@ -289,6 +289,64 @@ function installDevSettingsUi(): DevSettingsUiController {
   staticRelightPocRow.appendChild(staticRelightPocInput);
   panel.appendChild(staticRelightPocRow);
 
+  const structureTriangleGeometryPocRow = document.createElement("label");
+  structureTriangleGeometryPocRow.style.display = "flex";
+  structureTriangleGeometryPocRow.style.alignItems = "center";
+  structureTriangleGeometryPocRow.style.justifyContent = "space-between";
+  structureTriangleGeometryPocRow.style.gap = "10px";
+  structureTriangleGeometryPocRow.style.padding = "4px 0";
+  const structureTriangleGeometryPocText = document.createElement("span");
+  structureTriangleGeometryPocText.textContent = "Structure Triangle Geometry POC";
+  const structureTriangleGeometryPocInput = document.createElement("input");
+  structureTriangleGeometryPocInput.type = "checkbox";
+  structureTriangleGeometryPocInput.addEventListener("change", () => {
+    updateUserSettings({
+      render: {
+        structureTriangleGeometryPocEnabled: structureTriangleGeometryPocInput.checked,
+      },
+    });
+  });
+  structureTriangleGeometryPocRow.appendChild(structureTriangleGeometryPocText);
+  structureTriangleGeometryPocRow.appendChild(structureTriangleGeometryPocInput);
+  panel.appendChild(structureTriangleGeometryPocRow);
+
+  const structureTriangleAdmissionModeRow = document.createElement("label");
+  structureTriangleAdmissionModeRow.style.display = "flex";
+  structureTriangleAdmissionModeRow.style.alignItems = "center";
+  structureTriangleAdmissionModeRow.style.justifyContent = "space-between";
+  structureTriangleAdmissionModeRow.style.gap = "10px";
+  structureTriangleAdmissionModeRow.style.padding = "4px 0";
+  const structureTriangleAdmissionModeText = document.createElement("span");
+  structureTriangleAdmissionModeText.textContent = "Structure Triangle Admission";
+  const structureTriangleAdmissionModeSelect = document.createElement("select");
+  applyDevSelectStyle(structureTriangleAdmissionModeSelect);
+  const structureTriangleAdmissionModeOptions: Array<{
+    value: SettingsRender["structureTriangleAdmissionMode"];
+    label: string;
+  }> = [
+    { value: "hybrid", label: "Hybrid" },
+    { value: "viewport", label: "Viewport" },
+    { value: "renderDistance", label: "Render Distance" },
+    { value: "compare", label: "Compare" },
+  ];
+  for (let i = 0; i < structureTriangleAdmissionModeOptions.length; i++) {
+    const optDef = structureTriangleAdmissionModeOptions[i];
+    const opt = document.createElement("option");
+    opt.value = optDef.value;
+    opt.textContent = optDef.label;
+    structureTriangleAdmissionModeSelect.appendChild(opt);
+  }
+  structureTriangleAdmissionModeSelect.addEventListener("change", () => {
+    updateUserSettings({
+      render: {
+        structureTriangleAdmissionMode: structureTriangleAdmissionModeSelect.value as SettingsRender["structureTriangleAdmissionMode"],
+      },
+    });
+  });
+  structureTriangleAdmissionModeRow.appendChild(structureTriangleAdmissionModeText);
+  structureTriangleAdmissionModeRow.appendChild(structureTriangleAdmissionModeSelect);
+  panel.appendChild(structureTriangleAdmissionModeRow);
+
   const paletteSwapRow = document.createElement("label");
   paletteSwapRow.style.display = "flex";
   paletteSwapRow.style.alignItems = "center";
@@ -812,6 +870,8 @@ function installDevSettingsUi(): DevSettingsUiController {
         renderPerfCountersEnabled: false,
         performanceMode: false,
         staticRelightPocEnabled: false,
+        structureTriangleGeometryPocEnabled: false,
+        structureTriangleAdmissionMode: "hybrid",
         paletteSwapEnabled: false,
         paletteHudDebugOverlayEnabled: false,
         darknessMaskDebugDisabled: false,
@@ -846,6 +906,8 @@ function installDevSettingsUi(): DevSettingsUiController {
     entityAnchorsInput.checked = s.render.entityAnchorsEnabled;
     renderPerfCountersInput.checked = s.render.renderPerfCountersEnabled;
     staticRelightPocInput.checked = s.render.staticRelightPocEnabled === true;
+    structureTriangleGeometryPocInput.checked = s.render.structureTriangleGeometryPocEnabled === true;
+    structureTriangleAdmissionModeSelect.value = s.render.structureTriangleAdmissionMode ?? "hybrid";
     paletteSwapInput.checked = s.render.paletteSwapEnabled;
     paletteGroupSelect.value = normalizePaletteGroup(s.render.paletteGroup);
     paletteIdSelect.value = rebuildPaletteOptions(s.render.paletteGroup, s.render.paletteId);
@@ -1242,6 +1304,9 @@ async function bootstrap() {
         return game.prewarmFloorLoadSprites();
       }
       return true;
+    },
+    prepareStructureTriangles: async () => {
+      return game.prepareRuntimeStructureTrianglesForLoading();
     },
     prepareStaticRelight: async () => {
       return game.prepareStaticGroundRelightForLoading();

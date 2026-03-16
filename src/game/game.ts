@@ -18,6 +18,7 @@ import { projectilesSystem } from "./systems/sim/projectiles";
 import { pickupsSystem } from "./systems/progression/pickups";
 import { dropsSystem } from "./systems/progression/drops";
 import {
+  prepareRuntimeStructureTrianglesForLoading,
   prepareStaticGroundRelightForLoading,
   renderSystem,
 } from "./systems/presentation/render";
@@ -2596,6 +2597,10 @@ export function createGame(args: CreateGameArgs) {
     return prepareStaticGroundRelightForLoading(world);
   }
 
+  async function prepareRuntimeStructureTrianglesForLoadingStage(): Promise<boolean> {
+    return prepareRuntimeStructureTrianglesForLoading(world);
+  }
+
   function performPreparedStartIntent(intent: StartIntent): void {
     if (!preparedStart) {
       prepareStartMap(intent);
@@ -3559,6 +3564,7 @@ export function createGame(args: CreateGameArgs) {
     preloadBootAssets,
     prepareStartMap,
     prewarmActiveMapSpritesForCurrentPalette,
+    prepareRuntimeStructureTrianglesForLoading: prepareRuntimeStructureTrianglesForLoadingStage,
     prepareStaticGroundRelightForLoading: prepareStaticGroundRelightForLoadingStage,
     performPreparedStartIntent,
     consumePendingStartIntent,

@@ -101,4 +101,36 @@ describe("userSettings palette darkness merge", () => {
     } as any);
     expect(getUserSettings().render.staticRelightPocEnabled).toBe(false);
   });
+
+  it("persists structure triangle geometry poc render toggle", () => {
+    updateUserSettings({
+      render: {
+        structureTriangleGeometryPocEnabled: true,
+      },
+    } as any);
+    expect(getUserSettings().render.structureTriangleGeometryPocEnabled).toBe(true);
+
+    updateUserSettings({
+      render: {
+        structureTriangleGeometryPocEnabled: false,
+      },
+    } as any);
+    expect(getUserSettings().render.structureTriangleGeometryPocEnabled).toBe(false);
+  });
+
+  it("normalizes and persists structure triangle admission mode", () => {
+    updateUserSettings({
+      render: {
+        structureTriangleAdmissionMode: "__bad__" as any,
+      },
+    } as any);
+    expect(getUserSettings().render.structureTriangleAdmissionMode).toBe("hybrid");
+
+    updateUserSettings({
+      render: {
+        structureTriangleAdmissionMode: "renderDistance",
+      },
+    } as any);
+    expect(getUserSettings().render.structureTriangleAdmissionMode).toBe("renderDistance");
+  });
 });

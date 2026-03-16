@@ -13,13 +13,17 @@ async function tickUntilDone(
 }
 
 describe("loadingFlow", () => {
-  it("runs static relight stage after prewarm and before spawn", async () => {
+  it("runs structure-triangle and static-relight stages after prewarm and before spawn", async () => {
     const calls: string[] = [];
     const controller = createLoadingController({
       compileMap: async () => { calls.push("compile"); },
       precomputeStaticMap: async () => { calls.push("precompute"); },
       prewarmDependencies: async () => {
         calls.push("prewarm");
+        return true;
+      },
+      prepareStructureTriangles: async () => {
+        calls.push("triangles");
         return true;
       },
       prepareStaticRelight: async () => {
@@ -39,6 +43,7 @@ describe("loadingFlow", () => {
       "compile",
       "precompute",
       "prewarm",
+      "triangles",
       "relight",
       "audio",
       "spawn",
@@ -54,6 +59,10 @@ describe("loadingFlow", () => {
       precomputeStaticMap: async () => { calls.push("precompute"); },
       prewarmDependencies: async () => {
         calls.push("prewarm");
+        return true;
+      },
+      prepareStructureTriangles: async () => {
+        calls.push("triangles");
         return true;
       },
       prepareStaticRelight: async () => {

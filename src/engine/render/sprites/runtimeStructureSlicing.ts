@@ -83,26 +83,31 @@ export function getVerticalBandLayout(
   const coreCount = tileW + tileH;
   const coreExpectedW = coreCount * band;
   const maxCoreOrigin = Math.max(0, w - coreExpectedW);
-  const centeredOrigin = Math.floor(maxCoreOrigin / 2);
-  const extraLeftW = Number.isFinite(sliceOriginX)
+  const centeredCoreOrigin = Math.floor(maxCoreOrigin / 2);
+  const coreOriginX = Number.isFinite(sliceOriginX)
     ? Math.max(0, Math.min(maxCoreOrigin, Math.round(sliceOriginX as number)))
-    : centeredOrigin;
-  const extraRightW = Math.max(0, w - coreExpectedW - extraLeftW);
-  const cacheKey = `${spriteId}|${w}x${h}|${band}|${coreCount}|${extraLeftW}`;
+    : centeredCoreOrigin;
+  // Side bands are overflow capture only: clamp each side to at most one tile band.
+  const leftOverflowRaw = Math.max(0, coreOriginX);
+  const rightOverflowRaw = Math.max(0, w - (coreOriginX + coreExpectedW));
+  const leftOverflowW = Math.max(0, Math.min(band, leftOverflowRaw));
+  const rightOverflowW = Math.max(0, Math.min(band, rightOverflowRaw));
+  const cacheKey = `${spriteId}|${w}x${h}|${band}|${coreCount}|${coreOriginX}|${leftOverflowW}|${rightOverflowW}`;
   const cached = layoutCache.get(cacheKey);
   if (cached) return cached;
 
   const bands: RuntimeBandLayout[] = [];
-  if (extraLeftW > 0) {
+  if (leftOverflowW > 0) {
+    const leftSrcX = Math.max(0, coreOriginX - leftOverflowW);
     bands.push({
       index: 0,
-      srcRect: { x: 0, y: 0, w: extraLeftW, h },
-      offsetX: -extraLeftW,
+      srcRect: { x: leftSrcX, y: 0, w: leftOverflowW, h },
+      offsetX: -leftOverflowW,
     });
   }
 
   for (let i = 0; i < coreCount; i++) {
-    const srcX = extraLeftW + i * band;
+    const srcX = coreOriginX + i * band;
     const srcW = Math.max(0, Math.min(band, w - srcX));
     if (srcW <= 0) continue;
     bands.push({
@@ -112,9 +117,9 @@ export function getVerticalBandLayout(
     });
   }
 
-  if (extraRightW > 0) {
-    const srcX = extraLeftW + coreExpectedW;
-    const srcW = Math.max(0, Math.min(extraRightW, w - srcX));
+  if (rightOverflowW > 0) {
+    const srcX = coreOriginX + coreExpectedW;
+    const srcW = Math.max(0, Math.min(rightOverflowW, w - srcX));
     if (srcW > 0) {
       bands.push({
         index: coreCount + 1,

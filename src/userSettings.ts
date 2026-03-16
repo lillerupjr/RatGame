@@ -16,6 +16,7 @@ export type VerticalTilesMode = "auto" | "manual";
 export type VerticalTilesViewportClass = "phone" | "desktop";
 export type LightColorModeOverride = "authored" | "off" | "standard" | "palette";
 export type LightStrengthOverride = "authored" | "low" | "medium" | "high";
+export type StructureTriangleAdmissionMode = "viewport" | "renderDistance" | "hybrid" | "compare";
 
 export const DEFAULT_VISIBLE_VERTICAL_TILES_PHONE = 6;
 export const DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP = 9;
@@ -33,6 +34,8 @@ export type RenderSettings = {
   renderPerfCountersEnabled: boolean;
   performanceMode: boolean;
   staticRelightPocEnabled: boolean;
+  structureTriangleGeometryPocEnabled: boolean;
+  structureTriangleAdmissionMode: StructureTriangleAdmissionMode;
   deathSlowdownEnabled: boolean;
   cameraSmoothingEnabled: boolean;
   verticalTilesMode?: VerticalTilesMode;
@@ -101,6 +104,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
     renderPerfCountersEnabled: false,
     performanceMode: false,
     staticRelightPocEnabled: false,
+    structureTriangleGeometryPocEnabled: false,
+    structureTriangleAdmissionMode: "hybrid",
     deathSlowdownEnabled: true,
     cameraSmoothingEnabled: true,
     verticalTilesMode: DEFAULT_VERTICAL_TILES_MODE,
@@ -153,6 +158,11 @@ function normalizeLightColorModeOverride(value: unknown): LightColorModeOverride
 function normalizeLightStrengthOverride(value: unknown): LightStrengthOverride {
   if (value === "low" || value === "medium" || value === "high") return value;
   return "authored";
+}
+
+function normalizeStructureTriangleAdmissionMode(value: unknown): StructureTriangleAdmissionMode {
+  if (value === "viewport" || value === "renderDistance" || value === "compare") return value;
+  return "hybrid";
 }
 
 function resolvePaletteIdForGroup(group: PaletteGroup, paletteId: unknown): string {
@@ -262,6 +272,11 @@ function mergeSettings(
   if (renderPatch.lightStrengthOverride !== undefined) {
     renderPatch.lightStrengthOverride = normalizeLightStrengthOverride(renderPatch.lightStrengthOverride);
   }
+  if (renderPatch.structureTriangleAdmissionMode !== undefined) {
+    renderPatch.structureTriangleAdmissionMode = normalizeStructureTriangleAdmissionMode(
+      renderPatch.structureTriangleAdmissionMode,
+    );
+  }
   if (gamePatch.gameSpeed !== undefined) {
     gamePatch.gameSpeed = clampGameSpeed(Number(gamePatch.gameSpeed));
   }
@@ -305,6 +320,9 @@ function mergeSettings(
   const normalizedPaletteId = resolvePaletteIdForGroup(normalizedPaletteGroup, merged.render.paletteId);
   const normalizedLightColorModeOverride = normalizeLightColorModeOverride(merged.render.lightColorModeOverride);
   const normalizedLightStrengthOverride = normalizeLightStrengthOverride(merged.render.lightStrengthOverride);
+  const normalizedStructureTriangleAdmissionMode = normalizeStructureTriangleAdmissionMode(
+    merged.render.structureTriangleAdmissionMode,
+  );
 
   return {
     ...merged,
@@ -312,6 +330,7 @@ function mergeSettings(
       ...merged.render,
       lightColorModeOverride: normalizedLightColorModeOverride,
       lightStrengthOverride: normalizedLightStrengthOverride,
+      structureTriangleAdmissionMode: normalizedStructureTriangleAdmissionMode,
       paletteGroup: normalizedPaletteGroup,
       paletteId: normalizedPaletteId,
     },
