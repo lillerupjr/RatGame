@@ -1,4 +1,9 @@
-import type { DebugToolsSettings } from "./settingsTypes";
+import type {
+  DebugToolsSettings,
+  ShadowCasterMode,
+  ShadowV1DebugGeometryMode,
+} from "./settingsTypes";
+import { DEFAULT_SHADOW_SUN_V1_TIME_HOUR, clampShadowSunTimeHour } from "../shadowSunV1";
 
 export type DebugToggleDefinition = {
   key: keyof DebugToolsSettings;
@@ -59,7 +64,20 @@ export const DEFAULT_DEBUG_TOOLS_SETTINGS: DebugToolsSettings = {
   entityAnchorsEnabled: false,
   renderPerfCountersEnabled: false,
   paletteHudDebugOverlayEnabled: false,
+  shadowSunTimeHour: DEFAULT_SHADOW_SUN_V1_TIME_HOUR,
+  shadowV1DebugGeometryMode: "full",
+  shadowCasterMode: "v2AlphaSilhouette",
 };
+
+function normalizeShadowV1DebugGeometryMode(value: unknown): ShadowV1DebugGeometryMode {
+  if (value === "capOnly" || value === "connectorsOnly") return value;
+  return "full";
+}
+
+function normalizeShadowCasterMode(value: unknown): ShadowCasterMode {
+  if (value === "v1Roof") return "v1Roof";
+  return "v2AlphaSilhouette";
+}
 
 export type DebugToolsSettingsPatch = Partial<DebugToolsSettings>;
 
@@ -95,6 +113,9 @@ export function sanitizeDebugToolsSettings(input: Partial<DebugToolsSettings> | 
     entityAnchorsEnabled: !!merged.entityAnchorsEnabled,
     renderPerfCountersEnabled: !!merged.renderPerfCountersEnabled,
     paletteHudDebugOverlayEnabled: !!merged.paletteHudDebugOverlayEnabled,
+    shadowSunTimeHour: clampShadowSunTimeHour(merged.shadowSunTimeHour),
+    shadowV1DebugGeometryMode: normalizeShadowV1DebugGeometryMode(merged.shadowV1DebugGeometryMode),
+    shadowCasterMode: normalizeShadowCasterMode(merged.shadowCasterMode),
   };
 }
 

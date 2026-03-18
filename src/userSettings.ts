@@ -140,6 +140,9 @@ export type DebugSettings = {
   pauseDebugCards: boolean;
   pauseCsvControls: boolean;
   dpsMeter: boolean;
+  shadowSunTimeHour: number;
+  shadowV1DebugGeometryMode: "full" | "capOnly" | "connectorsOnly";
+  shadowCasterMode: "v1Roof" | "v2AlphaSilhouette";
   waterFlowRate: number;
   neutralBirdAI: NeutralBirdAIDebugSettings;
   objectives: {
@@ -206,6 +209,9 @@ function toLegacySettings(): UserSettings {
       pauseDebugCards: settings.debug.pauseDebugCards,
       pauseCsvControls: settings.debug.pauseCsvControls,
       dpsMeter: settings.debug.dpsMeter,
+      shadowSunTimeHour: settings.debug.shadowSunTimeHour,
+      shadowV1DebugGeometryMode: settings.debug.shadowV1DebugGeometryMode,
+      shadowCasterMode: settings.debug.shadowCasterMode,
       waterFlowRate: settings.system.waterFlowRate,
       neutralBirdAI: {
         disabled: settings.system.neutralBirdDisabled,
@@ -413,6 +419,15 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     ] as const;
     for (const key of debugBooleanKeys) {
       if (debugAny[key] !== undefined) (debugPatch as any)[key] = debugAny[key];
+    }
+    if (debugAny.shadowSunTimeHour !== undefined) {
+      debugPatch.shadowSunTimeHour = debugAny.shadowSunTimeHour;
+    }
+    if (debugAny.shadowV1DebugGeometryMode !== undefined) {
+      debugPatch.shadowV1DebugGeometryMode = debugAny.shadowV1DebugGeometryMode;
+    }
+    if (debugAny.shadowCasterMode !== undefined) {
+      debugPatch.shadowCasterMode = debugAny.shadowCasterMode;
     }
 
     if (debugAny.disableVisualCompiledCutoutCache !== undefined) {

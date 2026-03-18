@@ -2,9 +2,11 @@ import type { DebugToolsSettings } from "../../settings/settingsTypes";
 import {
   applyColumnMajorGridOrder,
   createSection,
+  createSelectRow,
   createThreeColumnGrid,
   createToggleRow,
 } from "./devToolsSectionHelpers";
+import { SHADOW_SUN_V1_HOUR_OPTIONS, getShadowSunV1Model } from "../../shadowSunV1";
 
 export type DebugToolsSectionController = {
   sync(debug: DebugToolsSettings): void;
@@ -19,6 +21,44 @@ export function mountDebugToolsSection(
     "SECTION 1 - Debug Tools",
     "Visualization and diagnostics only. These controls write to settings.debug and default to OFF.",
   );
+
+  const shadowSunHourSelect = createSelectRow(
+    section,
+    "Shadow Sun Time",
+    SHADOW_SUN_V1_HOUR_OPTIONS,
+    (value) => `${`${value}`.padStart(2, "0")}:00`,
+    (value) => applyDebugPatch({ shadowSunTimeHour: value }),
+  );
+
+  const shadowV1DebugGeometryModeSelect = createSelectRow<DebugToolsSettings["shadowV1DebugGeometryMode"]>(
+    section,
+    "Shadow V1 Debug Geometry",
+    ["full", "capOnly", "connectorsOnly"],
+    (value) => value === "capOnly" ? "Cap Only" : value === "connectorsOnly" ? "Connectors Only" : "Full",
+    (value) => applyDebugPatch({ shadowV1DebugGeometryMode: value }),
+  );
+
+  const shadowCasterModeSelect = createSelectRow<DebugToolsSettings["shadowCasterMode"]>(
+    section,
+    "Shadow Caster",
+    ["v2AlphaSilhouette", "v1Roof"],
+    (value) => value === "v1Roof" ? "V1 Roof" : "V2 Alpha Silhouette",
+    (value) => applyDebugPatch({ shadowCasterMode: value }),
+  );
+
+  const shadowSunReadout = document.createElement("div");
+  shadowSunReadout.style.padding = "2px 0 10px 0";
+  shadowSunReadout.style.opacity = "0.85";
+  shadowSunReadout.style.fontFamily = "var(--font-mono)";
+  shadowSunReadout.style.fontSize = "11px";
+  section.appendChild(shadowSunReadout);
+
+  const syncShadowSunReadout = (timeHour: number) => {
+    const sun = getShadowSunV1Model(timeHour);
+    const f = sun.forward;
+    const p = sun.projectionDirection;
+    shadowSunReadout.textContent = `Sun ${sun.timeLabel} elev:${sun.elevationDeg.toFixed(1)}deg dir:${sun.directionLabel} forward(${f.x.toFixed(3)}, ${f.y.toFixed(3)}, ${f.z.toFixed(3)}) proj(${p.x.toFixed(3)}, ${p.y.toFixed(3)})`;
+  };
 
   const grid = createThreeColumnGrid(section);
 
@@ -58,6 +98,10 @@ export function mountDebugToolsSection(
 
   return {
     sync(debug) {
+      shadowSunHourSelect.value = `${debug.shadowSunTimeHour}`;
+      shadowV1DebugGeometryModeSelect.value = debug.shadowV1DebugGeometryMode;
+      shadowCasterModeSelect.value = debug.shadowCasterMode;
+      syncShadowSunReadout(debug.shadowSunTimeHour);
       for (const [key, input] of Object.entries(controls)) {
         input.checked = !!(debug as any)[key];
       }

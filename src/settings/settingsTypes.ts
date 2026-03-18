@@ -5,6 +5,8 @@ export type VerticalTilesViewportClass = "phone" | "desktop";
 export type LightColorModeOverride = "authored" | "off" | "standard" | "palette";
 export type LightStrengthOverride = "authored" | "low" | "medium" | "high";
 export type StructureTriangleAdmissionMode = "viewport" | "renderDistance" | "hybrid" | "compare";
+export type ShadowV1DebugGeometryMode = "full" | "capOnly" | "connectorsOnly";
+export type ShadowCasterMode = "v1Roof" | "v2AlphaSilhouette";
 
 export type NeutralBirdForceState =
   | "NONE"
@@ -68,6 +70,9 @@ export type DebugToolsSettings = {
   entityAnchorsEnabled: boolean;
   renderPerfCountersEnabled: boolean;
   paletteHudDebugOverlayEnabled: boolean;
+  shadowSunTimeHour: number;
+  shadowV1DebugGeometryMode: ShadowV1DebugGeometryMode;
+  shadowCasterMode: ShadowCasterMode;
 };
 
 export type SystemOverrides = {

@@ -98,7 +98,7 @@ import {
   renderAmbientDarknessOverlay,
   resolveLightingGroundYScale,
 } from "./renderLighting";
-import { renderEntityShadow, type ShadowParams } from "./renderShadow";
+import { getShadowSunModel, renderEntityShadow, type ShadowParams } from "./renderShadow";
 import {
   buildFrameWorldLightRegistry,
   type WorldLightRenderPiece,
@@ -180,6 +180,23 @@ import {
   RuntimeStructureTriangleCacheStore,
   type RuntimeStructureTriangleRect,
 } from "./runtimeStructureTriangles";
+import {
+  buildStructureShadowCacheEntry,
+  buildStructureShadowContextKey,
+  STRUCTURE_SHADOW_V1_ROOF_SCAN_STEP_PX,
+  StructureShadowCacheStore,
+  type StructureShadowCacheEntry,
+  type StructureShadowProjectedTriangle,
+} from "./structureShadowV1";
+import {
+  buildStructureShadowV2CacheEntry,
+  buildStructureShadowV2ContextKey,
+  STRUCTURE_SHADOW_V2_ALPHA_THRESHOLD,
+  STRUCTURE_SHADOW_V2_MAX_LOOP_POINTS,
+  STRUCTURE_SHADOW_V2_SILHOUETTE_SAMPLE_STEP,
+  StructureShadowV2CacheStore,
+  type StructureShadowV2CacheEntry,
+} from "./structureShadowV2AlphaSilhouette";
 
 const DEBUG_PLAYER_WEDGE = false;
 const DISABLE_WALLS_AND_CURTAINS = true;
@@ -192,6 +209,7 @@ const LOOT_GOBLIN_GLOW_INNER_RADIUS_MULT = 0.35;
 const LOOT_GOBLIN_GLOW_PULSE_MIN = 0.95;
 const LOOT_GOBLIN_GLOW_PULSE_RANGE = 0.3;
 const LOOT_GOBLIN_GLOW_PULSE_SPEED = 2.8;
+const STRUCTURE_SHADOW_V1_MAX_DARKNESS = 0.38;
 
 // Background mode:
 // - "SOLID" = fastest, clean black void
@@ -212,6 +230,8 @@ let staticRelightPieceScratch: HTMLCanvasElement | null = null;
 let staticRelightMaskScratch: HTMLCanvasElement | null = null;
 const staticRelightBakeStore = new StaticRelightBakeStore<HTMLCanvasElement>();
 const runtimeStructureTriangleCacheStore = new RuntimeStructureTriangleCacheStore();
+const structureShadowV1CacheStore = new StructureShadowCacheStore();
+const structureShadowV2CacheStore = new StructureShadowV2CacheStore();
 const STATIC_RELIGHT_RUNTIME_RETRY_INTERVAL_MS = 50;
 let staticRelightPendingRuntimeRebuildContextKey = "";
 let staticRelightPendingRuntimeRebuildAtMs = 0;
@@ -1637,6 +1657,40 @@ function drawTexturedTriangle(
   ctx.restore();
 }
 
+function drawStructureShadowProjectedTriangles(
+  ctx: CanvasRenderingContext2D,
+  triangles: readonly StructureShadowProjectedTriangle[],
+  maxDarkness: number,
+): void {
+  if (triangles.length <= 0) return;
+  const alpha = Math.max(0, Math.min(1, maxDarkness));
+  if (alpha <= 0) return;
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+  ctx.beginPath();
+  for (let i = 0; i < triangles.length; i++) {
+    const tri = triangles[i];
+    const [a, b, c] = tri;
+    const signedArea2 =
+      (b.x - a.x) * (c.y - a.y)
+      - (b.y - a.y) * (c.x - a.x);
+    if (signedArea2 >= 0) {
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.lineTo(c.x, c.y);
+    } else {
+      // Normalize winding so overlapping triangles do not cancel under non-zero fill.
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(c.x, c.y);
+      ctx.lineTo(b.x, b.y);
+    }
+    ctx.closePath();
+  }
+  ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+  ctx.fill();
+  ctx.restore();
+}
+
 function getDiamondFitCanvas(src: HTMLCanvasElement): HTMLCanvasElement {
   const cached = runtimeDiamondCanvasCache.get(src);
   if (cached) return cached;
@@ -2757,6 +2811,8 @@ export async function renderSystem(
   const SHOW_STRUCTURE_COLLISION_DEBUG = debugFlags.showStructureCollision;
   const SHOW_STRUCTURE_SLICE_DEBUG = debugFlags.showStructureSlices;
   const SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG = debugFlags.showStructureTriangleFootprint;
+  const SHADOW_V1_DEBUG_GEOMETRY_MODE = debug.shadowV1DebugGeometryMode;
+  const SHADOW_CASTER_MODE = debug.shadowCasterMode;
   const SHOW_ENEMY_AIM_OVERLAY = debugFlags.showEnemyAimOverlay;
   const SHOW_LOOT_GOBLIN_OVERLAY = debugFlags.showLootGoblinOverlay;
   const SHOW_ZONE_OBJECTIVE_BOUNDS = !!debug.objectives?.showZoneBounds;
@@ -3227,6 +3283,24 @@ export async function renderSystem(
   });
   const runtimeStructureTriangleContextChanged = runtimeStructureTriangleCacheStore
     .resetIfContextChanged(runtimeStructureTriangleContextKey);
+  const shadowSunModel = getShadowSunModel(debug.shadowSunTimeHour);
+  const structureShadowContextKey = buildStructureShadowContextKey({
+    mapId: compiledMap.id,
+    enabled: structureTriangleGeometryEnabled,
+    sunStepKey: shadowSunModel.stepKey,
+    roofScanStepPx: STRUCTURE_SHADOW_V1_ROOF_SCAN_STEP_PX,
+  });
+  const structureShadowV2ContextKey = buildStructureShadowV2ContextKey({
+    mapId: compiledMap.id,
+    enabled: structureTriangleGeometryEnabled,
+    sunStepKey: shadowSunModel.stepKey,
+    roofScanStepPx: STRUCTURE_SHADOW_V1_ROOF_SCAN_STEP_PX,
+    alphaThreshold: STRUCTURE_SHADOW_V2_ALPHA_THRESHOLD,
+    silhouetteSampleStep: STRUCTURE_SHADOW_V2_SILHOUETTE_SAMPLE_STEP,
+    maxLoopPoints: STRUCTURE_SHADOW_V2_MAX_LOOP_POINTS,
+  });
+  structureShadowV1CacheStore.resetIfContextChanged(structureShadowContextKey);
+  structureShadowV2CacheStore.resetIfContextChanged(structureShadowV2ContextKey);
   staticRelightFrame = staticRelight.frame;
   if (runtimeStructureTriangleContextChanged && structureTriangleGeometryEnabled) {
     rebuildRuntimeStructureTriangleCacheForMap(compiledMap);
@@ -3287,6 +3361,7 @@ export async function renderSystem(
 
   // Map from slice -> array of drawables for that slice
   const sliceDrawables = new Map<number, SliceDrawable[]>();
+  const structureShadowTrianglesByBand = new Map<number, StructureShadowProjectedTriangle[]>();
   const deferredStructureSliceDebugDraws: Array<() => void> = [];
   let didQueueStructureCutoutDebugRect = false;
 
@@ -3360,7 +3435,12 @@ export async function renderSystem(
   };
 
   const drawEntityShadowFn: SliceDrawFn = (payload) => {
-    renderEntityShadow(ctx, payload as ShadowParams, compiledMap);
+    renderEntityShadow(
+      ctx,
+      payload as ShadowParams,
+      compiledMap,
+      shadowSunModel.projectionDirection,
+    );
   };
   const worldLightGroundYScale = resolveLightingGroundYScale(w.lighting.groundYScale ?? 0.65);
 
@@ -3390,6 +3470,21 @@ export async function renderSystem(
       return;
     }
     bucket.push({ key, drawFn: drawOrFn as SliceDrawFn, payload });
+  };
+
+  const queueStructureShadowTrianglesForBand = (
+    zBand: number,
+    triangles: readonly StructureShadowProjectedTriangle[],
+  ): void => {
+    if (triangles.length <= 0) return;
+    let bucket = structureShadowTrianglesByBand.get(zBand);
+    if (!bucket) {
+      bucket = [];
+      structureShadowTrianglesByBand.set(zBand, bucket);
+    }
+    for (let i = 0; i < triangles.length; i++) {
+      bucket.push(triangles[i]);
+    }
   };
 
   // ----------------------------
@@ -4900,6 +4995,7 @@ export async function renderSystem(
 	                ? buildProjectedStructureFootprintQuad(o)
 	                : null;
 	              let overlayHasVisibleTriangleGroup = false;
+                let structureShadowCacheHit = false;
 	              if (SHOW_STRUCTURE_SLICE_DEBUG && structureTriangleCutoutEnabled && !didQueueStructureCutoutDebugRect) {
 	                didQueueStructureCutoutDebugRect = true;
 	                deferredStructureSliceDebugDraws.push(() => {
@@ -5113,6 +5209,279 @@ export async function renderSystem(
 	                  }
 	                });
 	              }
+              if (overlayHasVisibleTriangleGroup) {
+                let structureShadowV1CacheEntry: StructureShadowCacheEntry | null = null;
+                let structureShadowV2CacheEntry: StructureShadowV2CacheEntry | null = null;
+                let projectedStructureShadowTriangles: readonly StructureShadowProjectedTriangle[] = [];
+                let projectedStructureShadowBounds: RuntimeStructureTriangleRect | null = null;
+                if (SHADOW_CASTER_MODE === "v2AlphaSilhouette") {
+                  const cachedStructureShadowV2 = structureShadowV2CacheStore.get(
+                    o.id,
+                    geometrySignature,
+                    shadowSunModel.stepKey,
+                  );
+                  if (cachedStructureShadowV2) {
+                    structureShadowV2CacheEntry = cachedStructureShadowV2;
+                    structureShadowCacheHit = true;
+                  } else {
+                    const rebuiltStructureShadowV2 = buildStructureShadowV2CacheEntry({
+                      overlay: o,
+                      triangleCache,
+                      geometrySignature,
+                      tileWorld: T,
+                      toScreenAtZ,
+                      sunForward: shadowSunModel.forward,
+                      sunProjectionDirection: shadowSunModel.projectionDirection,
+                      sunStepKey: shadowSunModel.stepKey,
+                      drawDx: draw.dx,
+                      drawDy: draw.dy,
+                      drawScale: draw.scale ?? 1,
+                      sourceImage: sourceImg,
+                      roofScanStepPx: STRUCTURE_SHADOW_V1_ROOF_SCAN_STEP_PX,
+                      alphaThreshold: STRUCTURE_SHADOW_V2_ALPHA_THRESHOLD,
+                      silhouetteSampleStep: STRUCTURE_SHADOW_V2_SILHOUETTE_SAMPLE_STEP,
+                      maxLoopPoints: STRUCTURE_SHADOW_V2_MAX_LOOP_POINTS,
+                    });
+                    structureShadowV2CacheEntry = rebuiltStructureShadowV2;
+                    structureShadowV2CacheStore.set(rebuiltStructureShadowV2);
+                    structureShadowCacheHit = false;
+                  }
+                  projectedStructureShadowTriangles = structureShadowV2CacheEntry.shadowTriangles;
+                  projectedStructureShadowBounds = structureShadowV2CacheEntry.projectedBounds;
+                } else {
+                  const cachedStructureShadow = structureShadowV1CacheStore.get(
+                    o.id,
+                    geometrySignature,
+                    shadowSunModel.stepKey,
+                  );
+                  if (cachedStructureShadow) {
+                    structureShadowV1CacheEntry = cachedStructureShadow;
+                    structureShadowCacheHit = true;
+                  } else {
+                    const rebuiltStructureShadow = buildStructureShadowCacheEntry({
+                      overlay: o,
+                      triangleCache,
+                      geometrySignature,
+                      tileWorld: T,
+                      toScreenAtZ,
+                      sunForward: shadowSunModel.forward,
+                      sunProjectionDirection: shadowSunModel.projectionDirection,
+                      sunStepKey: shadowSunModel.stepKey,
+                      roofScanStepPx: STRUCTURE_SHADOW_V1_ROOF_SCAN_STEP_PX,
+                    });
+                    structureShadowV1CacheEntry = rebuiltStructureShadow;
+                    structureShadowV1CacheStore.set(rebuiltStructureShadow);
+                    structureShadowCacheHit = false;
+                  }
+                  projectedStructureShadowTriangles = structureShadowV1CacheEntry.shadowTriangles;
+                  projectedStructureShadowBounds = structureShadowV1CacheEntry.projectedBounds;
+                }
+                const projectedShadowVisible = projectedStructureShadowBounds
+                  ? runtimeStructureRectIntersects(projectedStructureShadowBounds, projectedViewportRect)
+                  : false;
+                if (projectedShadowVisible && projectedStructureShadowTriangles.length > 0) {
+                  const shadowBand = resolveRenderZBand(
+                    {
+                      slice: o.seTx + o.seTy,
+                      within: o.seTx,
+                      baseZ: o.z,
+                    },
+                    rampRoadTiles,
+                  );
+                  queueStructureShadowTrianglesForBand(shadowBand, projectedStructureShadowTriangles);
+                }
+
+                if (SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG) {
+                  const debugShadowCacheHit = structureShadowCacheHit;
+                  if (structureShadowV2CacheEntry) {
+                    const debugShadowEntry = structureShadowV2CacheEntry;
+                    deferredStructureSliceDebugDraws.push(() => {
+                      const showCapDebug = SHADOW_V1_DEBUG_GEOMETRY_MODE !== "connectorsOnly";
+                      const showConnectorDebug = SHADOW_V1_DEBUG_GEOMETRY_MODE !== "capOnly";
+                      const activeRoofLevel = debugShadowEntry.roofScan.activeLevel;
+                      const roofCorner = activeRoofLevel?.quad?.[0] ?? null;
+                      ctx.save();
+                      ctx.lineWidth = 1;
+                      if (activeRoofLevel) {
+                        const [rnw, rne, rse, rsw] = activeRoofLevel.quad;
+                        ctx.beginPath();
+                        ctx.moveTo(rnw.x, rnw.y);
+                        ctx.lineTo(rne.x, rne.y);
+                        ctx.lineTo(rse.x, rse.y);
+                        ctx.lineTo(rsw.x, rsw.y);
+                        ctx.closePath();
+                        ctx.strokeStyle = "rgba(255, 240, 180, 0.92)";
+                        ctx.stroke();
+                      }
+                      if (showCapDebug) {
+                        for (let ti = 0; ti < debugShadowEntry.projectedCapTriangles.length; ti++) {
+                          const [a, b, c] = debugShadowEntry.projectedCapTriangles[ti];
+                          ctx.beginPath();
+                          ctx.moveTo(a.x, a.y);
+                          ctx.lineTo(b.x, b.y);
+                          ctx.lineTo(c.x, c.y);
+                          ctx.closePath();
+                          ctx.fillStyle = "rgba(0, 0, 0, 0.24)";
+                          ctx.strokeStyle = "rgba(120, 170, 255, 0.95)";
+                          ctx.fill();
+                          ctx.stroke();
+                        }
+                      }
+                      if (showConnectorDebug) {
+                        for (let ti = 0; ti < debugShadowEntry.connectorTriangles.length; ti++) {
+                          const [a, b, c] = debugShadowEntry.connectorTriangles[ti];
+                          ctx.beginPath();
+                          ctx.moveTo(a.x, a.y);
+                          ctx.lineTo(b.x, b.y);
+                          ctx.lineTo(c.x, c.y);
+                          ctx.closePath();
+                          ctx.fillStyle = "rgba(15, 20, 35, 0.20)";
+                          ctx.strokeStyle = "rgba(180, 210, 255, 0.90)";
+                          ctx.fill();
+                          ctx.stroke();
+                        }
+                      }
+                      for (let ei = 0; ei < debugShadowEntry.sourceBoundaryEdges.length; ei++) {
+                        const [a, b] = debugShadowEntry.sourceBoundaryEdges[ei];
+                        ctx.beginPath();
+                        ctx.moveTo(a.x, a.y);
+                        ctx.lineTo(b.x, b.y);
+                        ctx.strokeStyle = "rgba(255, 150, 80, 0.97)";
+                        ctx.stroke();
+                      }
+                      for (let ei = 0; ei < debugShadowEntry.projectedBoundaryEdges.length; ei++) {
+                        const [a, b] = debugShadowEntry.projectedBoundaryEdges[ei];
+                        ctx.beginPath();
+                        ctx.moveTo(a.x, a.y);
+                        ctx.lineTo(b.x, b.y);
+                        ctx.strokeStyle = "rgba(110, 190, 255, 0.98)";
+                        ctx.stroke();
+                      }
+                      const shadowBounds = debugShadowEntry.projectedBounds;
+                      const labelX = shadowBounds
+                        ? shadowBounds.x + 4
+                        : roofCorner
+                          ? roofCorner.x + 4
+                          : draw.dx + 4;
+                      const labelY = shadowBounds
+                        ? shadowBounds.y - 8
+                        : roofCorner
+                          ? roofCorner.y - 8
+                          : draw.dy - 8;
+                      if (shadowBounds) {
+                        ctx.strokeStyle = "rgba(120, 170, 255, 0.95)";
+                        ctx.strokeRect(shadowBounds.x, shadowBounds.y, shadowBounds.w, shadowBounds.h);
+                      }
+                      const roofLevelLabel = activeRoofLevel ? `${activeRoofLevel.level}` : "none";
+                      const cacheLabel = `shadow:v2 cache:${debugShadowCacheHit ? "hit" : "rebuild"} mode:${SHADOW_V1_DEBUG_GEOMETRY_MODE} roofL:${roofLevelLabel} castH:${Math.round(debugShadowEntry.castHeightPx)} loops:${debugShadowEntry.sourceBoundaryLoops.length} edge:${debugShadowEntry.sourceBoundaryEdges.length} cap:${debugShadowEntry.projectedCapTriangles.length} conn:${debugShadowEntry.connectorTriangles.length}`;
+                      ctx.font = "10px monospace";
+                      ctx.fillStyle = "rgba(0, 0, 0, 0.84)";
+                      ctx.fillText(cacheLabel, labelX + 1, labelY + 1);
+                      ctx.fillStyle = "rgba(210, 230, 255, 0.97)";
+                      ctx.fillText(cacheLabel, labelX, labelY);
+                      ctx.restore();
+                    });
+                  } else if (structureShadowV1CacheEntry) {
+                    const debugShadowEntry = structureShadowV1CacheEntry;
+                    deferredStructureSliceDebugDraws.push(() => {
+                      const activeRoofLevel = debugShadowEntry.roofScan.activeLevel;
+                      if (!activeRoofLevel) return;
+                      const showCapDebug = SHADOW_V1_DEBUG_GEOMETRY_MODE !== "connectorsOnly";
+                      const showConnectorDebug = SHADOW_V1_DEBUG_GEOMETRY_MODE !== "capOnly";
+                      ctx.save();
+                      ctx.lineWidth = 1;
+                      for (let ti = 0; ti < debugShadowEntry.roofCasterTriangles.length; ti++) {
+                        const tri = debugShadowEntry.roofCasterTriangles[ti];
+                        const [a, b, c] = tri.points;
+                        ctx.beginPath();
+                        ctx.moveTo(a.x, a.y);
+                        ctx.lineTo(b.x, b.y);
+                        ctx.lineTo(c.x, c.y);
+                        ctx.closePath();
+                        ctx.fillStyle = "rgba(255, 220, 90, 0.32)";
+                        ctx.strokeStyle = "rgba(255, 245, 175, 0.98)";
+                        ctx.fill();
+                        ctx.stroke();
+                      }
+                      const [rnw, rne, rse, rsw] = activeRoofLevel.quad;
+                      ctx.beginPath();
+                      ctx.moveTo(rnw.x, rnw.y);
+                      ctx.lineTo(rne.x, rne.y);
+                      ctx.lineTo(rse.x, rse.y);
+                      ctx.lineTo(rsw.x, rsw.y);
+                      ctx.closePath();
+                      ctx.strokeStyle = "rgba(255, 240, 180, 0.96)";
+                      ctx.stroke();
+                      if (showCapDebug) {
+                        for (let ti = 0; ti < debugShadowEntry.projectedTriangles.length; ti++) {
+                          const [a, b, c] = debugShadowEntry.projectedTriangles[ti];
+                          ctx.beginPath();
+                          ctx.moveTo(a.x, a.y);
+                          ctx.lineTo(b.x, b.y);
+                          ctx.lineTo(c.x, c.y);
+                          ctx.closePath();
+                          ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
+                          ctx.strokeStyle = "rgba(130, 170, 255, 0.95)";
+                          ctx.fill();
+                          ctx.stroke();
+                        }
+                      }
+                      if (showConnectorDebug) {
+                        for (let ti = 0; ti < debugShadowEntry.connectorTriangles.length; ti++) {
+                          const [a, b, c] = debugShadowEntry.connectorTriangles[ti];
+                          ctx.beginPath();
+                          ctx.moveTo(a.x, a.y);
+                          ctx.lineTo(b.x, b.y);
+                          ctx.lineTo(c.x, c.y);
+                          ctx.closePath();
+                          ctx.fillStyle = "rgba(15, 20, 35, 0.20)";
+                          ctx.strokeStyle = "rgba(175, 200, 255, 0.90)";
+                          ctx.fill();
+                          ctx.stroke();
+                        }
+                      }
+                      for (let ei = 0; ei < debugShadowEntry.roofBoundaryEdges.length; ei++) {
+                        const [a, b] = debugShadowEntry.roofBoundaryEdges[ei];
+                        ctx.beginPath();
+                        ctx.moveTo(a.x, a.y);
+                        ctx.lineTo(b.x, b.y);
+                        ctx.strokeStyle = "rgba(255, 140, 70, 0.98)";
+                        ctx.stroke();
+                      }
+                      for (let ei = 0; ei < debugShadowEntry.footprintBoundaryEdges.length; ei++) {
+                        const [a, b] = debugShadowEntry.footprintBoundaryEdges[ei];
+                        ctx.beginPath();
+                        ctx.moveTo(a.x, a.y);
+                        ctx.lineTo(b.x, b.y);
+                        ctx.strokeStyle = "rgba(140, 255, 170, 0.95)";
+                        ctx.stroke();
+                      }
+                      for (let ei = 0; ei < debugShadowEntry.projectedBoundaryEdges.length; ei++) {
+                        const [a, b] = debugShadowEntry.projectedBoundaryEdges[ei];
+                        ctx.beginPath();
+                        ctx.moveTo(a.x, a.y);
+                        ctx.lineTo(b.x, b.y);
+                        ctx.strokeStyle = "rgba(110, 190, 255, 0.98)";
+                        ctx.stroke();
+                      }
+                      const shadowBounds = debugShadowEntry.projectedBounds;
+                      const labelX = shadowBounds ? shadowBounds.x + 4 : rnw.x + 4;
+                      const labelY = shadowBounds ? shadowBounds.y - 8 : rnw.y - 8;
+                      if (shadowBounds) {
+                        ctx.strokeStyle = "rgba(120, 170, 255, 0.95)";
+                        ctx.strokeRect(shadowBounds.x, shadowBounds.y, shadowBounds.w, shadowBounds.h);
+                      }
+                      const cacheLabel = `shadow:v1 cache:${debugShadowCacheHit ? "hit" : "rebuild"} mode:${SHADOW_V1_DEBUG_GEOMETRY_MODE} roofL:${activeRoofLevel.level} cast:${debugShadowEntry.roofCasterTriangles.length} edge:${debugShadowEntry.roofBoundaryEdges.length} base:${debugShadowEntry.footprintBoundaryEdges.length} cap:${debugShadowEntry.projectedTriangles.length} conn:${debugShadowEntry.connectorTriangles.length}`;
+                      ctx.font = "10px monospace";
+                      ctx.fillStyle = "rgba(0, 0, 0, 0.84)";
+                      ctx.fillText(cacheLabel, labelX + 1, labelY + 1);
+                      ctx.fillStyle = "rgba(210, 230, 255, 0.97)";
+                      ctx.fillText(cacheLabel, labelX, labelY);
+                      ctx.restore();
+                    });
+                  }
+                }
+              }
               if (SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG && projectedFootprintQuad && overlayHasVisibleTriangleGroup) {
                 const allTriangles = triangleCache.triangles;
                 const triangleCentroids: Array<{ tri: typeof allTriangles[number]; centroid: ScreenPt }> = [];
@@ -5441,6 +5810,9 @@ export async function renderSystem(
     countRenderDrawableSort();
     drawables.sort((a, b) => compareRenderKeys(a.key, b.key));
   }
+  structureShadowTrianglesByBand.forEach((triangles, zBand) => {
+    if (triangles.length > 0) zBands.add(zBand);
+  });
 
   const zBandKeys = Array.from(zBands);
   zBandKeys.sort((a, b) => a - b);
@@ -5459,6 +5831,11 @@ export async function renderSystem(
         setRenderPerfDrawTag(kindToDrawTag(drawable.key.kindOrder));
         drawable.drawFn(drawable.payload);
       }
+    }
+    const structureShadowBandTriangles = structureShadowTrianglesByBand.get(zb) ?? [];
+    if (structureShadowBandTriangles.length > 0) {
+      setRenderPerfDrawTag("floors");
+      drawStructureShadowProjectedTriangles(ctx, structureShadowBandTriangles, STRUCTURE_SHADOW_V1_MAX_DARKNESS);
     }
 
     // Pass 2: WORLD
@@ -5617,9 +5994,17 @@ export async function renderSystem(
     }
     ctx.textAlign = "left";
   }
+  let screenDebugLineY = 30;
+  if (SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG) {
+    const forward = shadowSunModel.forward;
+    const projection = shadowSunModel.projectionDirection;
+    const sunLine = `shadowSun ${shadowSunModel.timeLabel} caster:${SHADOW_CASTER_MODE} elev:${shadowSunModel.elevationDeg.toFixed(1)} dir:${shadowSunModel.directionLabel} f(${forward.x.toFixed(3)},${forward.y.toFixed(3)},${forward.z.toFixed(3)}) p(${projection.x.toFixed(3)},${projection.y.toFixed(3)}) step:${shadowSunModel.stepKey}`;
+    ctx.fillText(sunLine, 8, screenDebugLineY);
+    screenDebugLineY += 16;
+  }
   if (SHOW_ROAD_SEMANTIC) {
     const roadWPlayer = roadAreaWidthAt(playerTx, playerTy);
-    ctx.fillText(`roadW(player): ${roadWPlayer}`, 8, 30);
+    ctx.fillText(`roadW(player): ${roadWPlayer}`, 8, screenDebugLineY);
   }
   ctx.restore();
   endRenderPerfFrame(w.timeSec ?? 0);

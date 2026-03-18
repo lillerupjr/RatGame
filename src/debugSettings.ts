@@ -34,6 +34,9 @@ export type BooleanDebugSettingKey = Exclude<
   | "paletteDarknessPercent"
   | "staticRelightStrengthPercent"
   | "staticRelightTargetDarknessPercent"
+  | "shadowSunTimeHour"
+  | "shadowV1DebugGeometryMode"
+  | "shadowCasterMode"
   | "neutralBirdAI"
   | "objectives"
 >;
@@ -89,6 +92,9 @@ export function makeAllDebugOffSettings(): DebugSettings {
     paletteDarknessPercent: 0,
     staticRelightStrengthPercent: 0,
     staticRelightTargetDarknessPercent: 50,
+    shadowSunTimeHour: DEFAULT_DEBUG_SETTINGS.shadowSunTimeHour,
+    shadowV1DebugGeometryMode: DEFAULT_DEBUG_SETTINGS.shadowV1DebugGeometryMode,
+    shadowCasterMode: DEFAULT_DEBUG_SETTINGS.shadowCasterMode,
     waterFlowRate: 1,
     neutralBirdAI: {
       ...DEFAULT_DEBUG_SETTINGS.neutralBirdAI,
