@@ -53,6 +53,7 @@ export type DebugToolsSettings = {
   decals: boolean;
   structureHeights: boolean;
   spriteBounds: boolean;
+  structureTriangleFootprint: boolean;
   projectileFaces: boolean;
   triggers: boolean;
   debugRoadSemantic: boolean;

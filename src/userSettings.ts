@@ -119,6 +119,7 @@ export type DebugSettings = {
   decals: boolean;
   structureHeights: boolean;
   spriteBounds: boolean;
+  structureTriangleFootprint: boolean;
   projectileFaces: boolean;
   triggers: boolean;
   debugRoadSemantic: boolean;
@@ -184,6 +185,7 @@ function toLegacySettings(): UserSettings {
       decals: settings.debug.decals,
       structureHeights: settings.debug.structureHeights,
       spriteBounds: settings.debug.spriteBounds,
+      structureTriangleFootprint: settings.debug.structureTriangleFootprint,
       projectileFaces: settings.debug.projectileFaces,
       triggers: settings.debug.triggers,
       debugRoadSemantic: settings.debug.debugRoadSemantic,
@@ -398,6 +400,7 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
       "decals",
       "structureHeights",
       "spriteBounds",
+      "structureTriangleFootprint",
       "projectileFaces",
       "triggers",
       "debugRoadSemantic",

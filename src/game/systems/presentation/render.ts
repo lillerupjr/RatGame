@@ -2756,6 +2756,7 @@ export async function renderSystem(
   const SHOW_STRUCTURE_HEIGHTS = debugFlags.showStructureHeights;
   const SHOW_STRUCTURE_COLLISION_DEBUG = debugFlags.showStructureCollision;
   const SHOW_STRUCTURE_SLICE_DEBUG = debugFlags.showStructureSlices;
+  const SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG = debugFlags.showStructureTriangleFootprint;
   const SHOW_ENEMY_AIM_OVERLAY = debugFlags.showEnemyAimOverlay;
   const SHOW_LOOT_GOBLIN_OVERLAY = debugFlags.showLootGoblinOverlay;
   const SHOW_ZONE_OBJECTIVE_BOUNDS = !!debug.objectives?.showZoneBounds;
@@ -3073,6 +3074,153 @@ export async function renderSystem(
     && y >= structureCutoutScreenRect.minY
     && y <= structureCutoutScreenRect.maxY
   );
+  type ProjectedQuad = [ScreenPt, ScreenPt, ScreenPt, ScreenPt];
+  type FootprintSupportCell = {
+    col: number;
+    row: number;
+    quad: ProjectedQuad;
+    supported: boolean;
+  };
+  type FootprintSupportLevel = {
+    level: number;
+    liftYPx: number;
+    quad: ProjectedQuad;
+    cells: FootprintSupportCell[];
+    supportedCells: number;
+    totalCells: number;
+    anySupport: boolean;
+    allSupported: boolean;
+  };
+  type StructureTriangleSemanticClass =
+    | "TOP"
+    | "LEFT_SOUTH"
+    | "RIGHT_EAST"
+    | "UNCLASSIFIED"
+    | "CONFLICT";
+
+  const STRUCTURE_FOOTPRINT_SCAN_STEP_PX = 64;
+
+  const buildProjectedStructureFootprintQuad = (overlay: StampOverlay): ProjectedQuad => {
+    const zVisual = overlay.z + (overlay.zVisualOffsetUnits ?? 0);
+    const minWorldX = overlay.tx * T;
+    const minWorldY = overlay.ty * T;
+    const maxWorldX = (overlay.tx + overlay.w) * T;
+    const maxWorldY = (overlay.ty + overlay.h) * T;
+    const nw = toScreenAtZ(minWorldX, minWorldY, zVisual);
+    const ne = toScreenAtZ(maxWorldX, minWorldY, zVisual);
+    const se = toScreenAtZ(maxWorldX, maxWorldY, zVisual);
+    const sw = toScreenAtZ(minWorldX, maxWorldY, zVisual);
+    return [nw, ne, se, sw];
+  };
+  const isPointInsideProjectedStructureFootprintQuad = (
+    quad: ProjectedQuad,
+    x: number,
+    y: number,
+  ): boolean => {
+    const p = { x, y };
+    return pointInTriangle(p, quad[0], quad[1], quad[2]) || pointInTriangle(p, quad[0], quad[2], quad[3]);
+  };
+  const lerpScreenPt = (a: ScreenPt, b: ScreenPt, t: number): ScreenPt => ({
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t,
+  });
+  const sampleProjectedQuadPoint = (quad: ProjectedQuad, u: number, v: number): ScreenPt => {
+    const top = lerpScreenPt(quad[0], quad[1], u);
+    const bottom = lerpScreenPt(quad[3], quad[2], u);
+    return lerpScreenPt(top, bottom, v);
+  };
+  const liftProjectedFootprintQuad = (quad: ProjectedQuad, liftYPx: number): ProjectedQuad => {
+    const liftedY = -liftYPx;
+    return [
+      { x: quad[0].x, y: quad[0].y + liftedY },
+      { x: quad[1].x, y: quad[1].y + liftedY },
+      { x: quad[2].x, y: quad[2].y + liftedY },
+      { x: quad[3].x, y: quad[3].y + liftedY },
+    ];
+  };
+  const buildFootprintSupportLevel = (
+    quad: ProjectedQuad,
+    cols: number,
+    rows: number,
+    triangleCentroids: ScreenPt[],
+    level: number,
+    liftYPx: number,
+  ): FootprintSupportLevel => {
+    const cells: FootprintSupportCell[] = [];
+    let supportedCells = 0;
+    for (let row = 0; row < rows; row++) {
+      const v0 = row / rows;
+      const v1 = (row + 1) / rows;
+      for (let col = 0; col < cols; col++) {
+        const u0 = col / cols;
+        const u1 = (col + 1) / cols;
+        const cellQuad: ProjectedQuad = [
+          sampleProjectedQuadPoint(quad, u0, v0),
+          sampleProjectedQuadPoint(quad, u1, v0),
+          sampleProjectedQuadPoint(quad, u1, v1),
+          sampleProjectedQuadPoint(quad, u0, v1),
+        ];
+        let supported = false;
+        for (let ti = 0; ti < triangleCentroids.length; ti++) {
+          const centroid = triangleCentroids[ti];
+          if (!isPointInsideProjectedStructureFootprintQuad(cellQuad, centroid.x, centroid.y)) continue;
+          supported = true;
+          break;
+        }
+        if (supported) supportedCells++;
+        cells.push({
+          col,
+          row,
+          quad: cellQuad,
+          supported,
+        });
+      }
+    }
+    const totalCells = cols * rows;
+    return {
+      level,
+      liftYPx,
+      quad,
+      cells,
+      supportedCells,
+      totalCells,
+      anySupport: supportedCells > 0,
+      allSupported: supportedCells === totalCells,
+    };
+  };
+  const scanLiftedFootprintSupportLevels = (
+    baseQuad: ProjectedQuad,
+    cols: number,
+    rows: number,
+    triangleCentroids: ScreenPt[],
+  ): { levels: FootprintSupportLevel[]; highestValidLevel: number } => {
+    const levels: FootprintSupportLevel[] = [];
+    let highestValidLevel = -1;
+    const baseMaxY = Math.max(baseQuad[0].y, baseQuad[1].y, baseQuad[2].y, baseQuad[3].y);
+    let minCentroidY = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < triangleCentroids.length; i++) {
+      minCentroidY = Math.min(minCentroidY, triangleCentroids[i].y);
+    }
+    const maxLevels = Number.isFinite(minCentroidY)
+      ? Math.max(1, Math.ceil((baseMaxY - minCentroidY) / STRUCTURE_FOOTPRINT_SCAN_STEP_PX) + 2)
+      : 1;
+    for (let level = 0; level < maxLevels; level++) {
+      const liftYPx = level * STRUCTURE_FOOTPRINT_SCAN_STEP_PX;
+      const liftedQuad = liftProjectedFootprintQuad(baseQuad, liftYPx);
+      const levelResult = buildFootprintSupportLevel(
+        liftedQuad,
+        cols,
+        rows,
+        triangleCentroids,
+        level,
+        liftYPx,
+      );
+      levels.push(levelResult);
+      if (levelResult.allSupported) highestValidLevel = level;
+      if (!levelResult.allSupported || !levelResult.anySupport) break;
+    }
+    return { levels, highestValidLevel };
+  };
   const runtimeStructureTriangleContextKey = buildRuntimeStructureTriangleContextKey({
     mapId: compiledMap.id,
     enabled: structureTriangleGeometryEnabled,
@@ -4734,23 +4882,27 @@ export async function renderSystem(
               scale: draw.scale ?? 1,
             });
             const triangleCache = runtimeStructureTriangleCacheStore.get(o.id, geometrySignature);
-            if (triangleCache && draw.img) {
-              usedTriangleGeometryPath = true;
-              const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(draw.img) : draw.img;
-              const footprintW = Math.max(1, o.w | 0);
-              const footprintH = Math.max(1, o.h | 0);
+	            if (triangleCache && draw.img) {
+	              usedTriangleGeometryPath = true;
+	              const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(draw.img) : draw.img;
+	              const footprintW = Math.max(1, o.w | 0);
+	              const footprintH = Math.max(1, o.h | 0);
               const buildingMinCameraTx = o.tx;
               const buildingMaxCameraTx = o.tx + footprintW - 1;
               const buildingMinCameraTy = o.ty;
               const buildingMaxCameraTy = o.ty + footprintH - 1;
-              const buildingDirectionalRejected = (
-                buildingMaxCameraTx < playerCameraTx
-                || buildingMaxCameraTy < playerCameraTy
-              );
-              const buildingDirectionalEligible = !buildingDirectionalRejected;
-              if (SHOW_STRUCTURE_SLICE_DEBUG && structureTriangleCutoutEnabled && !didQueueStructureCutoutDebugRect) {
-                didQueueStructureCutoutDebugRect = true;
-                deferredStructureSliceDebugDraws.push(() => {
+	              const buildingDirectionalRejected = (
+	                buildingMaxCameraTx < playerCameraTx
+	                || buildingMaxCameraTy < playerCameraTy
+	              );
+	              const buildingDirectionalEligible = !buildingDirectionalRejected;
+	              const projectedFootprintQuad = SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG
+	                ? buildProjectedStructureFootprintQuad(o)
+	                : null;
+	              let overlayHasVisibleTriangleGroup = false;
+	              if (SHOW_STRUCTURE_SLICE_DEBUG && structureTriangleCutoutEnabled && !didQueueStructureCutoutDebugRect) {
+	                didQueueStructureCutoutDebugRect = true;
+	                deferredStructureSliceDebugDraws.push(() => {
                   ctx.save();
                   const x = structureCutoutScreenRect.minX;
                   const y = structureCutoutScreenRect.minY;
@@ -4872,11 +5024,12 @@ export async function renderSystem(
                     ctx.fillText(statsLabel, labelX, labelY + 11);
                     ctx.restore();
                   });
-                }
-                if (!finalAdmitted) continue;
-                const renderFields = deriveParentTileRenderFields(group.parentTx, group.parentTy);
-                const overlayKey: RenderKey = {
-                  slice: renderFields.slice,
+	                }
+	                if (!finalAdmitted) continue;
+	                overlayHasVisibleTriangleGroup = true;
+	                const renderFields = deriveParentTileRenderFields(group.parentTx, group.parentTy);
+	                const overlayKey: RenderKey = {
+	                  slice: renderFields.slice,
                   within: renderFields.within,
                   baseZ: o.z,
                   kindOrder: KindOrder.STRUCTURE,
@@ -4956,12 +5109,191 @@ export async function renderSystem(
                       ctx.lineWidth = 1;
                       ctx.stroke();
                       ctx.restore();
-                    }
+	                    }
+	                  }
+	                });
+	              }
+              if (SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG && projectedFootprintQuad && overlayHasVisibleTriangleGroup) {
+                const allTriangles = triangleCache.triangles;
+                const triangleCentroids: Array<{ tri: typeof allTriangles[number]; centroid: ScreenPt }> = [];
+                const centroidPoints: ScreenPt[] = [];
+                for (let ti = 0; ti < allTriangles.length; ti++) {
+                  const tri = allTriangles[ti];
+                  const [a, b, c] = tri.points;
+                  const centroid = { x: (a.x + b.x + c.x) / 3, y: (a.y + b.y + c.y) / 3 };
+                  triangleCentroids.push({ tri, centroid });
+                  centroidPoints.push(centroid);
+                }
+                const supportScan = scanLiftedFootprintSupportLevels(
+                  projectedFootprintQuad,
+                  footprintW,
+                  footprintH,
+                  centroidPoints,
+                );
+                const activeLevelIndex = supportScan.highestValidLevel >= 0 ? supportScan.highestValidLevel : 0;
+                const activeLevel = supportScan.levels[Math.min(activeLevelIndex, supportScan.levels.length - 1)] ?? null;
+                const leftSouthMaxProgression = footprintW - 1;
+                const rightEastMinProgression = footprintW;
+                const progressionByOwnerTile = new Map<string, { min: number; max: number }>();
+                for (let bi = 0; bi < bandPieces.length; bi++) {
+                  const band = bandPieces[bi];
+                  const ownerTx = band.renderKey.within;
+                  const ownerTy = band.renderKey.slice - band.renderKey.within;
+                  const ownerKey = `${ownerTx},${ownerTy}`;
+                  const progression = resolveRuntimeStructureBandProgressionIndex(band.index, footprintW, footprintH);
+                  const existing = progressionByOwnerTile.get(ownerKey);
+                  if (!existing) {
+                    progressionByOwnerTile.set(ownerKey, { min: progression, max: progression });
+                  } else {
+                    if (progression < existing.min) existing.min = progression;
+                    if (progression > existing.max) existing.max = progression;
                   }
+                }
+                const semanticCounts: Record<StructureTriangleSemanticClass, number> = {
+                  TOP: 0,
+                  LEFT_SOUTH: 0,
+                  RIGHT_EAST: 0,
+                  UNCLASSIFIED: 0,
+                  CONFLICT: 0,
+                };
+                const semanticTriangles = triangleCentroids.map((entry) => {
+                  const ownerKey = `${entry.tri.parentTx},${entry.tri.parentTy}`;
+                  const ownerRange = progressionByOwnerTile.get(ownerKey);
+                  const isTop = !!activeLevel && isPointInsideProjectedStructureFootprintQuad(
+                    activeLevel.quad,
+                    entry.centroid.x,
+                    entry.centroid.y,
+                  );
+                  const leftCandidate = !!ownerRange && ownerRange.min <= leftSouthMaxProgression;
+                  const rightCandidate = !!ownerRange && ownerRange.max >= rightEastMinProgression;
+                  let semantic: StructureTriangleSemanticClass = "UNCLASSIFIED";
+                  if (isTop) {
+                    semantic = "TOP";
+                  } else if (leftCandidate && rightCandidate) {
+                    semantic = "CONFLICT";
+                  } else if (leftCandidate) {
+                    semantic = "LEFT_SOUTH";
+                  } else if (rightCandidate) {
+                    semantic = "RIGHT_EAST";
+                  }
+                  semanticCounts[semantic]++;
+                  return {
+                    tri: entry.tri,
+                    centroid: entry.centroid,
+                    semantic,
+                  };
+                });
+                deferredStructureSliceDebugDraws.push(() => {
+                  if (!activeLevel) return;
+                  ctx.save();
+                  ctx.lineWidth = 1;
+                  for (let ti = 0; ti < semanticTriangles.length; ti++) {
+                    const entry = semanticTriangles[ti];
+                    const tri = entry.tri;
+                    const [a, b, c] = tri.points;
+                    ctx.beginPath();
+                    ctx.moveTo(a.x, a.y);
+                    ctx.lineTo(b.x, b.y);
+                    ctx.lineTo(c.x, c.y);
+                    ctx.closePath();
+                    if (entry.semantic === "TOP") {
+                      ctx.fillStyle = "rgba(255, 216, 64, 0.30)";
+                      ctx.strokeStyle = "rgba(255, 240, 170, 0.95)";
+                    } else if (entry.semantic === "LEFT_SOUTH") {
+                      ctx.fillStyle = "rgba(85, 210, 255, 0.24)";
+                      ctx.strokeStyle = "rgba(150, 240, 255, 0.95)";
+                    } else if (entry.semantic === "RIGHT_EAST") {
+                      ctx.fillStyle = "rgba(255, 150, 80, 0.24)";
+                      ctx.strokeStyle = "rgba(255, 195, 130, 0.95)";
+                    } else if (entry.semantic === "CONFLICT") {
+                      ctx.fillStyle = "rgba(255, 80, 220, 0.26)";
+                      ctx.strokeStyle = "rgba(255, 150, 240, 0.96)";
+                    } else {
+                      ctx.fillStyle = "rgba(95, 120, 150, 0.18)";
+                      ctx.strokeStyle = "rgba(180, 205, 235, 0.82)";
+                    }
+                    ctx.fill();
+                    ctx.stroke();
+                  }
+                  for (let ci = 0; ci < activeLevel.cells.length; ci++) {
+                    const cell = activeLevel.cells[ci];
+                    const [c0, c1, c2, c3] = cell.quad;
+                    ctx.beginPath();
+                    ctx.moveTo(c0.x, c0.y);
+                    ctx.lineTo(c1.x, c1.y);
+                    ctx.lineTo(c2.x, c2.y);
+                    ctx.lineTo(c3.x, c3.y);
+                    ctx.closePath();
+                    ctx.fillStyle = cell.supported
+                      ? "rgba(120, 255, 145, 0.07)"
+                      : "rgba(255, 90, 90, 0.16)";
+                    ctx.strokeStyle = cell.supported
+                      ? "rgba(120, 255, 145, 0.42)"
+                      : "rgba(255, 110, 110, 0.88)";
+                    ctx.fill();
+                    ctx.stroke();
+                  }
+                  const [nw, ne, se, sw] = activeLevel.quad;
+                  ctx.beginPath();
+                  ctx.moveTo(nw.x, nw.y);
+                  ctx.lineTo(ne.x, ne.y);
+                  ctx.lineTo(se.x, se.y);
+                  ctx.lineTo(sw.x, sw.y);
+                  ctx.closePath();
+                  ctx.fillStyle = activeLevel.allSupported
+                    ? "rgba(120, 255, 145, 0.10)"
+                    : "rgba(255, 120, 120, 0.08)";
+                  ctx.strokeStyle = activeLevel.allSupported
+                    ? "rgba(120, 255, 145, 0.95)"
+                    : "rgba(255, 140, 140, 0.95)";
+                  ctx.fill();
+                  ctx.stroke();
+                  const roofLevelLabel = supportScan.highestValidLevel >= 0
+                    ? `${supportScan.highestValidLevel}`
+                    : "none";
+                  const labelX = nw.x + 8;
+                  const labelY = nw.y - 8;
+                  ctx.font = "10px monospace";
+                  const header = `roof:${roofLevelLabel} active:${activeLevel.level} lift:${Math.round(activeLevel.liftYPx)} cells:${activeLevel.supportedCells}/${activeLevel.totalCells}`;
+                  ctx.fillStyle = "rgba(0, 0, 0, 0.82)";
+                  ctx.fillText(header, labelX + 1, labelY + 1);
+                  ctx.fillStyle = "rgba(235, 255, 235, 0.96)";
+                  ctx.fillText(header, labelX, labelY);
+                  const semanticLabel = `TOP:${semanticCounts.TOP} LS:${semanticCounts.LEFT_SOUTH} RE:${semanticCounts.RIGHT_EAST} U:${semanticCounts.UNCLASSIFIED} C:${semanticCounts.CONFLICT}`;
+                  ctx.fillStyle = "rgba(0, 0, 0, 0.82)";
+                  ctx.fillText(semanticLabel, labelX + 1, labelY + 12);
+                  ctx.fillStyle = "rgba(235, 240, 255, 0.96)";
+                  ctx.fillText(semanticLabel, labelX, labelY + 11);
+                  const ownershipLabel = `ranges first:${footprintW + 1} last:${footprintH + 1} split@i=${rightEastMinProgression}`;
+                  ctx.fillStyle = "rgba(0, 0, 0, 0.82)";
+                  ctx.fillText(ownershipLabel, labelX + 1, labelY + 23);
+                  ctx.fillStyle = "rgba(230, 230, 230, 0.95)";
+                  ctx.fillText(ownershipLabel, labelX, labelY + 22);
+                  const maxLevelRows = 6;
+                  for (let li = 0; li < supportScan.levels.length && li < maxLevelRows; li++) {
+                    const level = supportScan.levels[li];
+                    const rowY = labelY + 34 + li * 11;
+                    const levelLabel = `L${level.level}: ${level.supportedCells}/${level.totalCells} ${level.allSupported ? "ok" : "fail"}`;
+                    ctx.fillStyle = "rgba(0, 0, 0, 0.78)";
+                    ctx.fillText(levelLabel, labelX + 1, rowY + 1);
+                    ctx.fillStyle = level.allSupported
+                      ? "rgba(150, 255, 175, 0.95)"
+                      : "rgba(255, 160, 160, 0.96)";
+                    ctx.fillText(levelLabel, labelX, rowY);
+                  }
+                  if (supportScan.levels.length > maxLevelRows) {
+                    const rowY = labelY + 34 + maxLevelRows * 11;
+                    const overflowLabel = `... +${supportScan.levels.length - maxLevelRows} levels`;
+                    ctx.fillStyle = "rgba(0, 0, 0, 0.78)";
+                    ctx.fillText(overflowLabel, labelX + 1, rowY + 1);
+                    ctx.fillStyle = "rgba(220, 220, 220, 0.95)";
+                    ctx.fillText(overflowLabel, labelX, rowY);
+                  }
+                  ctx.restore();
                 });
               }
-            }
-          }
+	            }
+	          }
 
           if (usedTriangleGeometryPath) continue;
 

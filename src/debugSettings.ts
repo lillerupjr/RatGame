@@ -54,6 +54,7 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "decals", label: "decals" },
   { key: "structureHeights", label: "structureHeights" },
   { key: "spriteBounds", label: "spriteBounds" },
+  { key: "structureTriangleFootprint", label: "structureTriangleFootprint" },
   { key: "projectileFaces", label: "projectileFaces" },
   { key: "triggers", label: "triggers" },
   { key: "debugRoadSemantic", label: "debugRoadSemantic" },
@@ -113,6 +114,7 @@ export type ResolvedDebugFlags = {
   showStructureHeights: boolean;
   showStructureCollision: boolean;
   showStructureSlices: boolean;
+  showStructureTriangleFootprint: boolean;
   showMapOverlays: boolean;
   showEnemyAimOverlay: boolean;
   showLootGoblinOverlay: boolean;
@@ -132,6 +134,7 @@ export function resolveDebugFlags(debug: DebugSettings): ResolvedDebugFlags {
     showStructureHeights: debug.structureHeights,
     showStructureCollision: debug.blockedTiles || debug.colliders,
     showStructureSlices: debug.slices || debug.spriteBounds,
+    showStructureTriangleFootprint: debug.structureTriangleFootprint,
     showMapOverlays: !debug.mapOverlaysDisabled,
     showEnemyAimOverlay: debug.enemyAimOverlay,
     showLootGoblinOverlay: debug.lootGoblinOverlay,
