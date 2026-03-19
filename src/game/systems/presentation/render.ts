@@ -229,7 +229,15 @@ const LOOT_GOBLIN_GLOW_PULSE_RANGE = 0.3;
 const LOOT_GOBLIN_GLOW_PULSE_SPEED = 2.8;
 const STRUCTURE_SHADOW_V1_MAX_DARKNESS = 0.38;
 const STRUCTURE_SHADOW_V5_LENGTH_PX = 220;
-const STRUCTURE_SHADOW_V5_STRIP_COUNT = 12;
+const STRUCTURE_SHADOW_V5_PIXEL_SLICE_STEP_PX = 1;
+const STRUCTURE_SHADOW_V5_EAST_WEST_FIXED_AXIS: ScreenPt = {
+  x: ISO_X / Math.hypot(ISO_X, ISO_Y),
+  y: -ISO_Y / Math.hypot(ISO_X, ISO_Y),
+};
+const STRUCTURE_SHADOW_V5_SOUTH_NORTH_FIXED_AXIS: ScreenPt = {
+  x: -ISO_X / Math.hypot(ISO_X, ISO_Y),
+  y: -ISO_Y / Math.hypot(ISO_X, ISO_Y),
+};
 
 // Background mode:
 // - "SOLID" = fastest, clean black void
@@ -1886,31 +1894,33 @@ function includePointInBounds(bounds: MutableBounds, point: ScreenPt): void {
   if (point.y > bounds.maxY) bounds.maxY = point.y;
 }
 
-function computeFaceLocalAxisFromTriangles(
+function computeFaceLocalAxisFromFixedIsoDirection(
   triangles: readonly StructureV5ShadowMaskTriangle[],
   originX: number,
   originY: number,
+  fixedHeightDir: ScreenPt,
 ): V5FaceLocalAxis | null {
   if (triangles.length <= 0) return null;
   const points: ScreenPt[] = [];
-  let minY = Number.POSITIVE_INFINITY;
   let maxY = Number.NEGATIVE_INFINITY;
   for (let ti = 0; ti < triangles.length; ti++) {
     const tri = triangles[ti].dstTriangle;
     for (let vi = 0; vi < tri.length; vi++) {
       const local = { x: tri[vi].x - originX, y: tri[vi].y - originY };
       points.push(local);
-      if (local.y < minY) minY = local.y;
       if (local.y > maxY) maxY = local.y;
     }
   }
-  if (points.length <= 0 || !Number.isFinite(minY) || !Number.isFinite(maxY)) return null;
+  if (points.length <= 0 || !Number.isFinite(maxY)) return null;
+  const dirLen = Math.hypot(fixedHeightDir.x, fixedHeightDir.y);
+  if (!(dirLen > 1e-4)) return null;
+  const heightDir = { x: fixedHeightDir.x / dirLen, y: fixedHeightDir.y / dirLen };
+  let minY = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < points.length; i++) if (points[i].y < minY) minY = points[i].y;
   const eps = Math.max(1, (maxY - minY) * 0.04);
   const bottomCandidates = points.filter((p) => p.y >= maxY - eps);
-  const topCandidates = points.filter((p) => p.y <= minY + eps);
   const bottomPoints = bottomCandidates.length > 0 ? bottomCandidates : points.filter((p) => p.y >= maxY - 1e-3);
-  const topPoints = topCandidates.length > 0 ? topCandidates : points.filter((p) => p.y <= minY + 1e-3);
-  if (bottomPoints.length <= 0 || topPoints.length <= 0) return null;
+  if (bottomPoints.length <= 0) return null;
   const avgPoint = (arr: readonly ScreenPt[]): ScreenPt => {
     let sx = 0;
     let sy = 0;
@@ -1921,24 +1931,22 @@ function computeFaceLocalAxisFromTriangles(
     return { x: sx / arr.length, y: sy / arr.length };
   };
   const centerBottom = avgPoint(bottomPoints);
-  const centerTop = avgPoint(topPoints);
-  const dx = centerTop.x - centerBottom.x;
-  const dy = centerTop.y - centerBottom.y;
-  const len = Math.hypot(dx, dy);
-  if (!(len > 1e-4)) {
-    const fallbackHeight = Math.max(1, maxY - minY);
-    return {
-      centerBottom,
-      centerTop: { x: centerBottom.x, y: centerBottom.y - fallbackHeight },
-      heightDir: { x: 0, y: -1 },
-      faceHeight: fallbackHeight,
-    };
+  let maxAlong = 0;
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    const along = (p.x - centerBottom.x) * heightDir.x + (p.y - centerBottom.y) * heightDir.y;
+    if (along > maxAlong) maxAlong = along;
   }
+  const fallbackHeight = Math.max(1, maxY - minY);
+  const faceHeight = Math.max(maxAlong, fallbackHeight);
   return {
     centerBottom,
-    centerTop,
-    heightDir: { x: dx / len, y: dy / len },
-    faceHeight: len,
+    centerTop: {
+      x: centerBottom.x + heightDir.x * faceHeight,
+      y: centerBottom.y + heightDir.y * faceHeight,
+    },
+    heightDir,
+    faceHeight,
   };
 }
 
@@ -1956,22 +1964,21 @@ function drawMaskHeightDeformedByFaceAxis(
   maskCanvas: HTMLCanvasElement,
   axis: V5FaceLocalAxis,
   shadowVector: ScreenPt,
-  stripCount: number,
+  sliceStepPx: number,
 ): V5StripDebugBand[] {
   const debugBands: V5StripDebugBand[] = [];
   if (!(axis.faceHeight > 1e-4)) {
-    drawMaskTranslated(targetCtx, maskCanvas, 0, 0);
+    targetCtx.drawImage(maskCanvas, 0, 0);
     return debugBands;
   }
-  const strips = Math.max(1, stripCount | 0);
+  const sliceStep = Math.max(1, Math.floor(sliceStepPx));
+  const strips = Math.max(1, Math.ceil(axis.faceHeight / sliceStep));
   const tangent = { x: -axis.heightDir.y, y: axis.heightDir.x };
   const extent = Math.max(maskCanvas.width, maskCanvas.height) * 2 + 8;
   for (let i = 0; i < strips; i++) {
-    const t0 = i / strips;
-    const t1 = (i + 1) / strips;
-    const tMid = (t0 + t1) * 0.5;
-    const h0 = axis.faceHeight * t0;
-    const h1 = axis.faceHeight * t1;
+    const h0 = Math.min(axis.faceHeight, i * sliceStep);
+    const h1 = Math.min(axis.faceHeight, h0 + sliceStep);
+    if (!(h1 > h0)) continue;
     const lowerCenter = {
       x: axis.centerBottom.x + axis.heightDir.x * h0,
       y: axis.centerBottom.y + axis.heightDir.y * h0,
@@ -1984,9 +1991,11 @@ function drawMaskHeightDeformedByFaceAxis(
     const q1 = { x: lowerCenter.x - tangent.x * extent, y: lowerCenter.y - tangent.y * extent };
     const q2 = { x: upperCenter.x - tangent.x * extent, y: upperCenter.y - tangent.y * extent };
     const q3 = { x: upperCenter.x + tangent.x * extent, y: upperCenter.y + tangent.y * extent };
+    let t = h0 / axis.faceHeight;
+    if (h1 >= axis.faceHeight - 1e-4) t = 1;
     const stripOffset = {
-      x: shadowVector.x * tMid,
-      y: shadowVector.y * tMid,
+      x: shadowVector.x * t,
+      y: shadowVector.y * t,
     };
     targetCtx.save();
     targetCtx.beginPath();
@@ -1999,7 +2008,7 @@ function drawMaskHeightDeformedByFaceAxis(
     targetCtx.drawImage(maskCanvas, stripOffset.x, stripOffset.y);
     targetCtx.restore();
     debugBands.push({
-      tMid,
+      tMid: t,
       lowerCenter,
       upperCenter,
     });
@@ -2153,8 +2162,18 @@ function drawStructureV5ShadowMasks(
     const shiftedX = offsetX;
     const shiftedY = offsetY;
     const shadowVector = { x: shiftedX, y: shiftedY };
-    const eastWestAxis = computeFaceLocalAxisFromTriangles(eastWestTriangles, originX, originY);
-    const southNorthAxis = computeFaceLocalAxisFromTriangles(southNorthTriangles, originX, originY);
+    const eastWestAxis = computeFaceLocalAxisFromFixedIsoDirection(
+      eastWestTriangles,
+      originX,
+      originY,
+      STRUCTURE_SHADOW_V5_EAST_WEST_FIXED_AXIS,
+    );
+    const southNorthAxis = computeFaceLocalAxisFromFixedIsoDirection(
+      southNorthTriangles,
+      originX,
+      originY,
+      STRUCTURE_SHADOW_V5_SOUTH_NORTH_FIXED_AXIS,
+    );
     const drawTopMaskLocal = (targetCtx: CanvasRenderingContext2D, raw: boolean): void => {
       if (raw) {
         targetCtx.drawImage(topMaskCanvas, 0, 0);
@@ -2170,16 +2189,13 @@ function drawStructureV5ShadowMasks(
         targetCtx.drawImage(eastWestMaskCanvas, 0, 0);
         return [];
       }
-      if (!eastWestAxis) {
-        drawMaskTranslated(targetCtx, eastWestMaskCanvas, shadowVector.x, shadowVector.y);
-        return [];
-      }
+      if (!eastWestAxis) return [];
       return drawMaskHeightDeformedByFaceAxis(
         targetCtx,
         eastWestMaskCanvas,
         eastWestAxis,
         shadowVector,
-        STRUCTURE_SHADOW_V5_STRIP_COUNT,
+        STRUCTURE_SHADOW_V5_PIXEL_SLICE_STEP_PX,
       );
     };
     const drawSouthNorthMaskLocal = (
@@ -2190,16 +2206,13 @@ function drawStructureV5ShadowMasks(
         targetCtx.drawImage(southNorthMaskCanvas, 0, 0);
         return [];
       }
-      if (!southNorthAxis) {
-        drawMaskTranslated(targetCtx, southNorthMaskCanvas, shadowVector.x, shadowVector.y);
-        return [];
-      }
+      if (!southNorthAxis) return [];
       return drawMaskHeightDeformedByFaceAxis(
         targetCtx,
         southNorthMaskCanvas,
         southNorthAxis,
         shadowVector,
-        STRUCTURE_SHADOW_V5_STRIP_COUNT,
+        STRUCTURE_SHADOW_V5_PIXEL_SLICE_STEP_PX,
       );
     };
     const drawLocalMaskToWorld = (drawLocal: (targetCtx: CanvasRenderingContext2D) => void): void => {
@@ -2356,14 +2369,14 @@ function drawStructureV5ShadowMasks(
         eastWestBands,
         "rgba(120, 220, 255, 0.95)",
         "rgba(120, 220, 255, 0.38)",
-        "EW axis",
+        "EW axis (fixed)",
       );
       drawAxisDebug(
         southNorthAxis,
         southNorthBands,
         "rgba(255, 140, 120, 0.95)",
         "rgba(255, 140, 120, 0.38)",
-        "SN axis",
+        "SN axis (fixed)",
       );
       ctx.restore();
       anchorDiagnostic = {
