@@ -1,14 +1,19 @@
 import {
   triangulateRuntimeSliceBandQuad,
+  type RuntimeStructureTrianglePiece,
   type RuntimeSliceBandDiagonal,
   type RuntimeStructureTriangleRect,
 } from "./runtimeStructureTriangles";
-import type { StructureShadowPoint } from "./structureShadowV1";
+import type {
+  StructureShadowPoint,
+  StructureShadowProjectedTriangle,
+} from "./structureShadowV1";
 
 export type Point = StructureShadowPoint;
 
 export type SliceCorrespondence = {
   sliceIndex: number;
+  sourceBandIndex?: number;
   baseSegment: { a: Point; b: Point };
   topSegment: { a: Point; b: Point };
 };
@@ -53,6 +58,55 @@ export type DestinationShadowTriangle = {
   points: [Point, Point, Point];
 };
 
+export type SourceBandTriangle = {
+  structureInstanceId: string;
+  sliceIndex: number;
+  sourceBandIndex: number;
+  bandIndex: number;
+  sourceTriangleStableId: number | string;
+  sourceTriangleIndexWithinBand: number;
+  sourceTrianglePoints: [Point, Point, Point];
+  sourceSrcPoints?: [Point, Point, Point];
+};
+
+export type DestinationBandTriangle = {
+  sliceIndex: number;
+  bandIndex: number;
+  destinationTriangleIndex: 0 | 1;
+  destinationTrianglePoints: [Point, Point, Point];
+};
+
+export type ShadowTriangleCorrespondence = {
+  structureInstanceId: string;
+  sliceIndex: number;
+  bandIndex: number;
+  sourceTriangleStableId: number | string;
+  sourceTriangleIndexWithinBand: number;
+  destinationTriangleIndex: 0 | 1;
+  destinationTrianglePoints: [Point, Point, Point];
+  sourceTrianglePoints: [Point, Point, Point];
+  sourceSrcPoints?: [Point, Point, Point];
+};
+
+export type ShadowTriangleCorrespondenceMismatch = {
+  structureInstanceId: string;
+  sliceIndex: number;
+  bandIndex: number;
+  sourceTriangleCount: number;
+  destinationTriangleCount: number;
+  reason: "COUNT_MISMATCH";
+};
+
+export type ShadowTriangleCorrespondenceGroup = {
+  structureInstanceId: string;
+  sliceIndex: number;
+  bandIndex: number;
+  sourceTriangles: SourceBandTriangle[];
+  destinationTriangles: DestinationBandTriangle[];
+  correspondences: ShadowTriangleCorrespondence[];
+  mismatch: ShadowTriangleCorrespondenceMismatch | null;
+};
+
 export type SliceStripMidpointDiagnostic = {
   sliceIndex: number;
   baseMidpoint: Point;
@@ -74,6 +128,12 @@ export type StructureShadowV4CacheEntry = {
   layerBands: SliceLayerBand[];
   destinationBandTriangles: SliceBandTrianglePair[];
   destinationTriangles: DestinationShadowTriangle[];
+  topCapTriangles: StructureShadowProjectedTriangle[];
+  sourceBandTriangles: SourceBandTriangle[];
+  destinationBandEntries: DestinationBandTriangle[];
+  triangleCorrespondence: ShadowTriangleCorrespondence[];
+  triangleCorrespondenceGroups: ShadowTriangleCorrespondenceGroup[];
+  triangleCorrespondenceMismatches: ShadowTriangleCorrespondenceMismatch[];
   midpointDiagnostics: SliceStripMidpointDiagnostic[];
   deltaReference: Point | null;
   isDeltaConstant: boolean;
@@ -87,6 +147,8 @@ export type BuildStructureShadowV4CacheEntryInput = {
   castHeightPx: number;
   sunDirection: { x: number; y: number };
   sliceCorrespondence: readonly SliceCorrespondence[];
+  topCapTriangles?: readonly StructureShadowProjectedTriangle[];
+  sourceTriangles?: readonly RuntimeStructureTrianglePiece[];
   sliceOwnerParity?: ReadonlyMap<number, 0 | 1>;
 };
 
@@ -217,8 +279,222 @@ function triangulateLayerBands(
   return { pairs, triangles };
 }
 
-function buildBoundsFromStrips(strips: readonly SliceStrip[]): RuntimeStructureTriangleRect | null {
-  if (strips.length <= 0) return null;
+function buildSliceOrderIndex(correspondences: readonly SliceCorrespondence[]): Map<number, number> {
+  const out = new Map<number, number>();
+  for (let i = 0; i < correspondences.length; i++) {
+    const sliceIndex = correspondences[i].sliceIndex | 0;
+    if (!out.has(sliceIndex)) out.set(sliceIndex, i);
+  }
+  return out;
+}
+
+function sliceBandKey(sliceIndex: number, bandIndex: number): string {
+  return `${sliceIndex}:${bandIndex}`;
+}
+
+function sortSliceBandKeys(
+  keys: readonly string[],
+  sliceOrder: ReadonlyMap<number, number>,
+): string[] {
+  const toPair = (key: string): { sliceIndex: number; bandIndex: number } => {
+    const sep = key.indexOf(":");
+    const sliceIndex = sep >= 0 ? Number(key.slice(0, sep)) : 0;
+    const bandIndex = sep >= 0 ? Number(key.slice(sep + 1)) : 0;
+    return {
+      sliceIndex: Number.isFinite(sliceIndex) ? sliceIndex : 0,
+      bandIndex: Number.isFinite(bandIndex) ? bandIndex : 0,
+    };
+  };
+  return keys.slice().sort((a, b) => {
+    const pa = toPair(a);
+    const pb = toPair(b);
+    const sa = sliceOrder.get(pa.sliceIndex) ?? Number.MAX_SAFE_INTEGER;
+    const sb = sliceOrder.get(pb.sliceIndex) ?? Number.MAX_SAFE_INTEGER;
+    if (sa !== sb) return sa - sb;
+    if (pa.sliceIndex !== pb.sliceIndex) return pa.sliceIndex - pb.sliceIndex;
+    return pa.bandIndex - pb.bandIndex;
+  });
+}
+
+function buildSourceBandTriangles(
+  structureInstanceId: string,
+  correspondences: readonly SliceCorrespondence[],
+  sourceTriangles: readonly RuntimeStructureTrianglePiece[] | undefined,
+): SourceBandTriangle[] {
+  if (!sourceTriangles || sourceTriangles.length <= 0) return [];
+  const byRuntimeBand = new Map<number, RuntimeStructureTrianglePiece[]>();
+  for (let i = 0; i < sourceTriangles.length; i++) {
+    const tri = sourceTriangles[i];
+    const runtimeBandIndex = tri.bandIndex | 0;
+    let bucket = byRuntimeBand.get(runtimeBandIndex);
+    if (!bucket) {
+      bucket = [];
+      byRuntimeBand.set(runtimeBandIndex, bucket);
+    }
+    bucket.push(tri);
+  }
+
+  const out: SourceBandTriangle[] = [];
+  for (let ci = 0; ci < correspondences.length; ci++) {
+    const corr = correspondences[ci];
+    const sourceBandIndex = Number.isFinite(corr.sourceBandIndex as number)
+      ? (corr.sourceBandIndex as number)
+      : (corr.sliceIndex + 1);
+    const sourceBandTriangles = byRuntimeBand.get(sourceBandIndex) ?? [];
+    for (let ti = 0; ti < sourceBandTriangles.length; ti++) {
+      const sourceTri = sourceBandTriangles[ti];
+      const bandIndex = Math.floor(ti / 2);
+      const sourceTriangleIndexWithinBand = ti % 2;
+      out.push({
+        structureInstanceId,
+        sliceIndex: corr.sliceIndex,
+        sourceBandIndex,
+        bandIndex,
+        sourceTriangleStableId: sourceTri.stableId,
+        sourceTriangleIndexWithinBand,
+        sourceTrianglePoints: cloneTriangle(sourceTri.points),
+        sourceSrcPoints: cloneTriangle(sourceTri.srcPoints),
+      });
+    }
+  }
+  return out;
+}
+
+function buildDestinationBandEntries(
+  destinationTriangles: readonly DestinationShadowTriangle[],
+): DestinationBandTriangle[] {
+  const out: DestinationBandTriangle[] = [];
+  for (let i = 0; i < destinationTriangles.length; i++) {
+    const tri = destinationTriangles[i];
+    out.push({
+      sliceIndex: tri.sliceIndex,
+      bandIndex: tri.bandIndex,
+      destinationTriangleIndex: tri.triangleIndex,
+      destinationTrianglePoints: cloneTriangle(tri.points),
+    });
+  }
+  return out;
+}
+
+function buildTriangleCorrespondence(
+  structureInstanceId: string,
+  correspondences: readonly SliceCorrespondence[],
+  sourceBandTriangles: readonly SourceBandTriangle[],
+  destinationBandEntries: readonly DestinationBandTriangle[],
+): {
+  groups: ShadowTriangleCorrespondenceGroup[];
+  correspondences: ShadowTriangleCorrespondence[];
+  mismatches: ShadowTriangleCorrespondenceMismatch[];
+} {
+  const sourceBySliceBand = new Map<string, SourceBandTriangle[]>();
+  const destinationBySliceBand = new Map<string, DestinationBandTriangle[]>();
+  const sliceOrder = buildSliceOrderIndex(correspondences);
+
+  for (let i = 0; i < sourceBandTriangles.length; i++) {
+    const source = sourceBandTriangles[i];
+    const key = sliceBandKey(source.sliceIndex, source.bandIndex);
+    let bucket = sourceBySliceBand.get(key);
+    if (!bucket) {
+      bucket = [];
+      sourceBySliceBand.set(key, bucket);
+    }
+    bucket.push(source);
+  }
+  for (let i = 0; i < destinationBandEntries.length; i++) {
+    const destination = destinationBandEntries[i];
+    const key = sliceBandKey(destination.sliceIndex, destination.bandIndex);
+    let bucket = destinationBySliceBand.get(key);
+    if (!bucket) {
+      bucket = [];
+      destinationBySliceBand.set(key, bucket);
+    }
+    bucket.push(destination);
+  }
+
+  const allKeysSet = new Set<string>();
+  sourceBySliceBand.forEach((_value, key) => allKeysSet.add(key));
+  destinationBySliceBand.forEach((_value, key) => allKeysSet.add(key));
+  const allKeys = sortSliceBandKeys(Array.from(allKeysSet), sliceOrder);
+
+  const groups: ShadowTriangleCorrespondenceGroup[] = [];
+  const corresponded: ShadowTriangleCorrespondence[] = [];
+  const mismatches: ShadowTriangleCorrespondenceMismatch[] = [];
+  for (let i = 0; i < allKeys.length; i++) {
+    const key = allKeys[i];
+    const sep = key.indexOf(":");
+    const sliceIndex = sep >= 0 ? Number(key.slice(0, sep)) : 0;
+    const bandIndex = sep >= 0 ? Number(key.slice(sep + 1)) : 0;
+    const sourceGroup = (sourceBySliceBand.get(key) ?? []).slice().sort((a, b) => (
+      a.sourceTriangleIndexWithinBand - b.sourceTriangleIndexWithinBand
+    ));
+    const destinationGroup = (destinationBySliceBand.get(key) ?? []).slice().sort((a, b) => (
+      a.destinationTriangleIndex - b.destinationTriangleIndex
+    ));
+
+    let mismatch: ShadowTriangleCorrespondenceMismatch | null = null;
+    if (sourceGroup.length !== destinationGroup.length) {
+      mismatch = {
+        structureInstanceId,
+        sliceIndex,
+        bandIndex,
+        sourceTriangleCount: sourceGroup.length,
+        destinationTriangleCount: destinationGroup.length,
+        reason: "COUNT_MISMATCH",
+      };
+      mismatches.push(mismatch);
+    }
+
+    const groupCorrespondence: ShadowTriangleCorrespondence[] = [];
+    if (!mismatch) {
+      for (let ti = 0; ti < sourceGroup.length; ti++) {
+        const source = sourceGroup[ti];
+        const destination = destinationGroup[ti];
+        const mapped: ShadowTriangleCorrespondence = {
+          structureInstanceId,
+          sliceIndex,
+          bandIndex,
+          sourceTriangleStableId: source.sourceTriangleStableId,
+          sourceTriangleIndexWithinBand: source.sourceTriangleIndexWithinBand,
+          destinationTriangleIndex: destination.destinationTriangleIndex,
+          destinationTrianglePoints: cloneTriangle(destination.destinationTrianglePoints),
+          sourceTrianglePoints: cloneTriangle(source.sourceTrianglePoints),
+          sourceSrcPoints: source.sourceSrcPoints ? cloneTriangle(source.sourceSrcPoints) : undefined,
+        };
+        groupCorrespondence.push(mapped);
+        corresponded.push(mapped);
+      }
+    }
+
+    groups.push({
+      structureInstanceId,
+      sliceIndex,
+      bandIndex,
+      sourceTriangles: sourceGroup.map((item) => ({
+        ...item,
+        sourceTrianglePoints: cloneTriangle(item.sourceTrianglePoints),
+        sourceSrcPoints: item.sourceSrcPoints ? cloneTriangle(item.sourceSrcPoints) : undefined,
+      })),
+      destinationTriangles: destinationGroup.map((item) => ({
+        ...item,
+        destinationTrianglePoints: cloneTriangle(item.destinationTrianglePoints),
+      })),
+      correspondences: groupCorrespondence,
+      mismatch,
+    });
+  }
+
+  return {
+    groups,
+    correspondences: corresponded,
+    mismatches,
+  };
+}
+
+function buildBoundsFromGeometry(
+  strips: readonly SliceStrip[],
+  topCapTriangles: readonly StructureShadowProjectedTriangle[],
+): RuntimeStructureTriangleRect | null {
+  if (strips.length <= 0 && topCapTriangles.length <= 0) return null;
   let minX = Number.POSITIVE_INFINITY;
   let minY = Number.POSITIVE_INFINITY;
   let maxX = Number.NEGATIVE_INFINITY;
@@ -228,6 +504,16 @@ function buildBoundsFromStrips(strips: readonly SliceStrip[]): RuntimeStructureT
     const points = [strip.baseA, strip.baseB, strip.topA, strip.topB];
     for (let p = 0; p < points.length; p++) {
       const point = points[p];
+      if (point.x < minX) minX = point.x;
+      if (point.y < minY) minY = point.y;
+      if (point.x > maxX) maxX = point.x;
+      if (point.y > maxY) maxY = point.y;
+    }
+  }
+  for (let i = 0; i < topCapTriangles.length; i++) {
+    const tri = topCapTriangles[i];
+    for (let p = 0; p < tri.length; p++) {
+      const point = tri[p];
       if (point.x < minX) minX = point.x;
       if (point.y < minY) minY = point.y;
       if (point.x > maxX) maxX = point.x;
@@ -279,6 +565,7 @@ export function buildStructureShadowV4CacheEntry(
   const roofHeightPx = castHeightPx;
   const correspondences = input.sliceCorrespondence.map((corr) => ({
     sliceIndex: corr.sliceIndex,
+    sourceBandIndex: corr.sourceBandIndex,
     baseSegment: {
       a: clonePoint(corr.baseSegment.a),
       b: clonePoint(corr.baseSegment.b),
@@ -307,6 +594,19 @@ export function buildStructureShadowV4CacheEntry(
     layerBands.push(...buildSliceLayerBands(stripLayerEdges));
   }
   const triangulation = triangulateLayerBands(layerBands, input.sliceOwnerParity);
+  const sourceBandTriangles = buildSourceBandTriangles(
+    input.structureInstanceId,
+    correspondences,
+    input.sourceTriangles,
+  );
+  const destinationBandEntries = buildDestinationBandEntries(triangulation.triangles);
+  const triangleCorrespondence = buildTriangleCorrespondence(
+    input.structureInstanceId,
+    correspondences,
+    sourceBandTriangles,
+    destinationBandEntries,
+  );
+  const topCapTriangles = (input.topCapTriangles ?? []).map((tri) => cloneTriangle(tri));
 
   const midpointDiagnostics: SliceStripMidpointDiagnostic[] = sliceStrips.map((strip) => {
     const baseMidpoint = midpoint(strip.baseA, strip.baseB);
@@ -340,10 +640,16 @@ export function buildStructureShadowV4CacheEntry(
     layerBands,
     destinationBandTriangles: triangulation.pairs,
     destinationTriangles: triangulation.triangles,
+    topCapTriangles,
+    sourceBandTriangles,
+    destinationBandEntries,
+    triangleCorrespondence: triangleCorrespondence.correspondences,
+    triangleCorrespondenceGroups: triangleCorrespondence.groups,
+    triangleCorrespondenceMismatches: triangleCorrespondence.mismatches,
     midpointDiagnostics,
     deltaReference: deltaCheck.reference,
     isDeltaConstant: deltaCheck.constant,
-    projectedBounds: buildBoundsFromStrips(sliceStrips),
+    projectedBounds: buildBoundsFromGeometry(sliceStrips, topCapTriangles),
   };
 }
 

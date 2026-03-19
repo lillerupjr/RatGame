@@ -1,7 +1,9 @@
 import type {
   DebugToolsSettings,
   ShadowCasterMode,
+  ShadowDebugMode,
   ShadowHybridDiagnosticMode,
+  ShadowV5DebugView,
   ShadowV1DebugGeometryMode,
 } from "./settingsTypes";
 import { DEFAULT_SHADOW_SUN_V1_TIME_HOUR, clampShadowSunTimeHour } from "../shadowSunV1";
@@ -69,6 +71,8 @@ export const DEFAULT_DEBUG_TOOLS_SETTINGS: DebugToolsSettings = {
   shadowV1DebugGeometryMode: "full",
   shadowCasterMode: "v3HybridTriangles",
   shadowHybridDiagnosticMode: "off",
+  shadowDebugMode: "warpedOnly",
+  shadowV5DebugView: "finalOnly",
 };
 
 function normalizeShadowV1DebugGeometryMode(value: unknown): ShadowV1DebugGeometryMode {
@@ -81,6 +85,7 @@ function normalizeShadowCasterMode(value: unknown): ShadowCasterMode {
   if (value === "v2AlphaSilhouette") return "v2AlphaSilhouette";
   if (value === "v3HybridTriangles") return "v3HybridTriangles";
   if (value === "v4SliceStrips") return "v4SliceStrips";
+  if (value === "v5TriangleShadowMask") return "v5TriangleShadowMask";
   return "v3HybridTriangles";
 }
 
@@ -88,6 +93,20 @@ function normalizeShadowHybridDiagnosticMode(value: unknown): ShadowHybridDiagno
   if (value === "solidShadowPass") return "solidShadowPass";
   if (value === "solidMainCanvas") return "solidMainCanvas";
   return "off";
+}
+
+function normalizeShadowDebugMode(value: unknown): ShadowDebugMode {
+  if (value === "flatOnly") return "flatOnly";
+  if (value === "both") return "both";
+  return "warpedOnly";
+}
+
+function normalizeShadowV5DebugView(value: unknown): ShadowV5DebugView {
+  if (value === "topMask") return "topMask";
+  if (value === "eastWestMask") return "eastWestMask";
+  if (value === "southNorthMask") return "southNorthMask";
+  if (value === "all") return "all";
+  return "finalOnly";
 }
 
 export type DebugToolsSettingsPatch = Partial<DebugToolsSettings>;
@@ -128,6 +147,8 @@ export function sanitizeDebugToolsSettings(input: Partial<DebugToolsSettings> | 
     shadowV1DebugGeometryMode: normalizeShadowV1DebugGeometryMode(merged.shadowV1DebugGeometryMode),
     shadowCasterMode: normalizeShadowCasterMode(merged.shadowCasterMode),
     shadowHybridDiagnosticMode: normalizeShadowHybridDiagnosticMode(merged.shadowHybridDiagnosticMode),
+    shadowDebugMode: normalizeShadowDebugMode(merged.shadowDebugMode),
+    shadowV5DebugView: normalizeShadowV5DebugView(merged.shadowV5DebugView),
   };
 }
 

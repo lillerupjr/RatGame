@@ -198,9 +198,12 @@ import {
   type StructureShadowV2CacheEntry,
 } from "./structureShadowV2AlphaSilhouette";
 import {
+  buildHybridTriangleSemanticMap,
+  resolveHybridSemanticMaskBuckets,
   buildStructureShadowHybridCacheEntry,
   buildStructureShadowHybridContextKey,
   StructureShadowHybridCacheStore,
+  type HybridSemanticMaskBucket,
   type StructureHybridShadowProjectedTriangle,
   type StructureShadowHybridCacheEntry,
 } from "./structureShadowHybridTriangles";
@@ -209,6 +212,7 @@ import {
   buildStructureShadowV4ContextKey,
   StructureShadowV4CacheStore,
   type SliceCorrespondence,
+  type ShadowTriangleCorrespondence,
   type StructureShadowV4CacheEntry,
 } from "./structureShadowV4";
 
@@ -224,6 +228,7 @@ const LOOT_GOBLIN_GLOW_PULSE_MIN = 0.95;
 const LOOT_GOBLIN_GLOW_PULSE_RANGE = 0.3;
 const LOOT_GOBLIN_GLOW_PULSE_SPEED = 2.8;
 const STRUCTURE_SHADOW_V1_MAX_DARKNESS = 0.38;
+const STRUCTURE_SHADOW_V5_LENGTH_PX = 220;
 
 // Background mode:
 // - "SOLID" = fastest, clean black void
@@ -242,6 +247,11 @@ const runtimeIsoDecalCache = new WeakMap<HTMLImageElement, Map<string, HTMLCanva
 const runtimeDiamondCanvasCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
 let staticRelightPieceScratch: HTMLCanvasElement | null = null;
 let staticRelightMaskScratch: HTMLCanvasElement | null = null;
+let structureShadowV5TopMaskScratch: HTMLCanvasElement | null = null;
+let structureShadowV5EastWestMaskScratch: HTMLCanvasElement | null = null;
+let structureShadowV5SouthNorthMaskScratch: HTMLCanvasElement | null = null;
+let structureShadowV5CoverageMaskScratch: HTMLCanvasElement | null = null;
+let structureShadowV5FinalMaskScratch: HTMLCanvasElement | null = null;
 const staticRelightBakeStore = new StaticRelightBakeStore<HTMLCanvasElement>();
 const runtimeStructureTriangleCacheStore = new RuntimeStructureTriangleCacheStore();
 const structureShadowV1CacheStore = new StructureShadowCacheStore();
@@ -286,6 +296,69 @@ function getStaticRelightMaskScratchContext(
   configurePixelPerfect(ctx);
   ctx.imageSmoothingEnabled = true;
   return ctx;
+}
+
+type StructureShadowV5MaskScratchContexts = {
+  topMaskCtx: CanvasRenderingContext2D;
+  eastWestMaskCtx: CanvasRenderingContext2D;
+  southNorthMaskCtx: CanvasRenderingContext2D;
+  coverageMaskCtx: CanvasRenderingContext2D;
+  finalMaskCtx: CanvasRenderingContext2D;
+  topMaskCanvas: HTMLCanvasElement;
+  eastWestMaskCanvas: HTMLCanvasElement;
+  southNorthMaskCanvas: HTMLCanvasElement;
+  coverageMaskCanvas: HTMLCanvasElement;
+  finalMaskCanvas: HTMLCanvasElement;
+  width: number;
+  height: number;
+};
+
+function ensureScratchCanvas2D(
+  existing: HTMLCanvasElement | null,
+  width: number,
+  height: number,
+): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null {
+  const w = Math.max(1, Math.ceil(width));
+  const h = Math.max(1, Math.ceil(height));
+  const canvas = existing ?? document.createElement("canvas");
+  if (canvas.width !== w) canvas.width = w;
+  if (canvas.height !== h) canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  configurePixelPerfect(ctx);
+  ctx.imageSmoothingEnabled = false;
+  return { canvas, ctx };
+}
+
+function getStructureShadowV5MaskScratchContexts(
+  width: number,
+  height: number,
+): StructureShadowV5MaskScratchContexts | null {
+  const top = ensureScratchCanvas2D(structureShadowV5TopMaskScratch, width, height);
+  const eastWest = ensureScratchCanvas2D(structureShadowV5EastWestMaskScratch, width, height);
+  const southNorth = ensureScratchCanvas2D(structureShadowV5SouthNorthMaskScratch, width, height);
+  const coverage = ensureScratchCanvas2D(structureShadowV5CoverageMaskScratch, width, height);
+  const finalMask = ensureScratchCanvas2D(structureShadowV5FinalMaskScratch, width, height);
+  if (!top || !eastWest || !southNorth || !coverage || !finalMask) return null;
+  structureShadowV5TopMaskScratch = top.canvas;
+  structureShadowV5EastWestMaskScratch = eastWest.canvas;
+  structureShadowV5SouthNorthMaskScratch = southNorth.canvas;
+  structureShadowV5CoverageMaskScratch = coverage.canvas;
+  structureShadowV5FinalMaskScratch = finalMask.canvas;
+  return {
+    topMaskCtx: top.ctx,
+    eastWestMaskCtx: eastWest.ctx,
+    southNorthMaskCtx: southNorth.ctx,
+    coverageMaskCtx: coverage.ctx,
+    finalMaskCtx: finalMask.ctx,
+    topMaskCanvas: top.canvas,
+    eastWestMaskCanvas: eastWest.canvas,
+    southNorthMaskCanvas: southNorth.canvas,
+    coverageMaskCanvas: coverage.canvas,
+    finalMaskCanvas: finalMask.canvas,
+    width: top.canvas.width,
+    height: top.canvas.height,
+  };
 }
 
 function drawPieceLocalRelightMask(
@@ -1715,6 +1788,207 @@ type StructureHybridShadowRenderPiece = {
   projectedMappings: readonly StructureHybridShadowProjectedTriangle[];
 };
 
+type StructureV4ShadowRenderPiece = {
+  sourceImage: CanvasImageSource;
+  sourceImageWidth: number;
+  sourceImageHeight: number;
+  topCapTriangles: readonly StructureShadowProjectedTriangle[];
+  triangleCorrespondence: readonly ShadowTriangleCorrespondence[];
+};
+
+type StructureV5ShadowMaskTriangle = {
+  stableId: number;
+  semanticBucket: HybridSemanticMaskBucket;
+  srcTriangle: [ScreenPt, ScreenPt, ScreenPt];
+  dstTriangle: [ScreenPt, ScreenPt, ScreenPt];
+};
+
+type StructureV5ShadowRenderPiece = {
+  sourceImage: CanvasImageSource;
+  sourceImageWidth: number;
+  sourceImageHeight: number;
+  triangles: readonly StructureV5ShadowMaskTriangle[];
+};
+
+type ShadowV5DebugViewMode = "finalOnly" | "topMask" | "eastWestMask" | "southNorthMask" | "all";
+
+type StructureV5ShadowDrawStats = {
+  piecesDrawn: number;
+  trianglesDrawn: number;
+  finalShadowDrawCalls: number;
+};
+
+type DrawStructureV5ShadowMaskOutput = StructureV5ShadowDrawStats;
+
+type MutableBounds = {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+};
+
+function includeTriangleInBounds(bounds: MutableBounds, triangle: [ScreenPt, ScreenPt, ScreenPt], dx: number, dy: number): void {
+  for (let i = 0; i < triangle.length; i++) {
+    const p = triangle[i];
+    if (p.x < bounds.minX) bounds.minX = p.x;
+    if (p.y < bounds.minY) bounds.minY = p.y;
+    if (p.x > bounds.maxX) bounds.maxX = p.x;
+    if (p.y > bounds.maxY) bounds.maxY = p.y;
+    const px = p.x + dx;
+    const py = p.y + dy;
+    if (px < bounds.minX) bounds.minX = px;
+    if (py < bounds.minY) bounds.minY = py;
+    if (px > bounds.maxX) bounds.maxX = px;
+    if (py > bounds.maxY) bounds.maxY = py;
+  }
+}
+
+function drawStructureV5ShadowMasks(
+  ctx: CanvasRenderingContext2D,
+  pieces: readonly StructureV5ShadowRenderPiece[],
+  projectionDirection: { x: number; y: number },
+  debugView: ShadowV5DebugViewMode,
+  maxDarkness: number,
+): DrawStructureV5ShadowMaskOutput {
+  if (pieces.length <= 0) {
+    return {
+      piecesDrawn: 0,
+      trianglesDrawn: 0,
+      finalShadowDrawCalls: 0,
+    };
+  }
+  const offsetX = projectionDirection.x * STRUCTURE_SHADOW_V5_LENGTH_PX;
+  const offsetY = projectionDirection.y * STRUCTURE_SHADOW_V5_LENGTH_PX;
+  const shadowAlpha = Math.max(0, Math.min(1, maxDarkness));
+  let piecesDrawn = 0;
+  let trianglesDrawn = 0;
+  let finalShadowDrawCalls = 0;
+
+  for (let pi = 0; pi < pieces.length; pi++) {
+    const piece = pieces[pi];
+    if (piece.triangles.length <= 0) continue;
+    const bounds: MutableBounds = {
+      minX: Number.POSITIVE_INFINITY,
+      minY: Number.POSITIVE_INFINITY,
+      maxX: Number.NEGATIVE_INFINITY,
+      maxY: Number.NEGATIVE_INFINITY,
+    };
+    for (let ti = 0; ti < piece.triangles.length; ti++) {
+      includeTriangleInBounds(bounds, piece.triangles[ti].dstTriangle, offsetX, offsetY);
+    }
+    if (!Number.isFinite(bounds.minX) || !Number.isFinite(bounds.minY) || !Number.isFinite(bounds.maxX) || !Number.isFinite(bounds.maxY)) {
+      continue;
+    }
+    const pad = 2;
+    const originX = Math.floor(bounds.minX) - pad;
+    const originY = Math.floor(bounds.minY) - pad;
+    const canvasW = Math.max(1, Math.ceil(bounds.maxX - bounds.minX) + pad * 2);
+    const canvasH = Math.max(1, Math.ceil(bounds.maxY - bounds.minY) + pad * 2);
+    const scratch = getStructureShadowV5MaskScratchContexts(canvasW, canvasH);
+    if (!scratch) continue;
+
+    const {
+      topMaskCtx,
+      eastWestMaskCtx,
+      southNorthMaskCtx,
+      coverageMaskCtx,
+      finalMaskCtx,
+      topMaskCanvas,
+      eastWestMaskCanvas,
+      southNorthMaskCanvas,
+      coverageMaskCanvas,
+      finalMaskCanvas,
+      width,
+      height,
+    } = scratch;
+
+    topMaskCtx.setTransform(1, 0, 0, 1, 0, 0);
+    eastWestMaskCtx.setTransform(1, 0, 0, 1, 0, 0);
+    southNorthMaskCtx.setTransform(1, 0, 0, 1, 0, 0);
+    coverageMaskCtx.setTransform(1, 0, 0, 1, 0, 0);
+    finalMaskCtx.setTransform(1, 0, 0, 1, 0, 0);
+
+    topMaskCtx.globalCompositeOperation = "source-over";
+    eastWestMaskCtx.globalCompositeOperation = "source-over";
+    southNorthMaskCtx.globalCompositeOperation = "source-over";
+    coverageMaskCtx.globalCompositeOperation = "source-over";
+    finalMaskCtx.globalCompositeOperation = "source-over";
+
+    topMaskCtx.clearRect(0, 0, width, height);
+    eastWestMaskCtx.clearRect(0, 0, width, height);
+    southNorthMaskCtx.clearRect(0, 0, width, height);
+    coverageMaskCtx.clearRect(0, 0, width, height);
+    finalMaskCtx.clearRect(0, 0, width, height);
+
+    for (let ti = 0; ti < piece.triangles.length; ti++) {
+      const tri = piece.triangles[ti];
+      const targetCtx = tri.semanticBucket === "TOP"
+        ? topMaskCtx
+        : tri.semanticBucket === "EAST_WEST"
+          ? eastWestMaskCtx
+          : southNorthMaskCtx;
+      const [s0, s1, s2] = tri.srcTriangle;
+      const [d0, d1, d2] = tri.dstTriangle;
+      drawTexturedTriangle(
+        targetCtx,
+        piece.sourceImage,
+        piece.sourceImageWidth,
+        piece.sourceImageHeight,
+        s0,
+        s1,
+        s2,
+        { x: d0.x - originX, y: d0.y - originY },
+        { x: d1.x - originX, y: d1.y - originY },
+        { x: d2.x - originX, y: d2.y - originY },
+      );
+      trianglesDrawn += 1;
+    }
+
+    const shiftedX = Math.round(offsetX);
+    const shiftedY = Math.round(offsetY);
+    const drawShiftedMask = (targetCtx: CanvasRenderingContext2D, sourceCanvas: HTMLCanvasElement) => {
+      targetCtx.drawImage(sourceCanvas, shiftedX, shiftedY);
+    };
+
+    coverageMaskCtx.clearRect(0, 0, width, height);
+    coverageMaskCtx.globalCompositeOperation = "source-over";
+    drawShiftedMask(coverageMaskCtx, topMaskCanvas);
+    drawShiftedMask(coverageMaskCtx, eastWestMaskCanvas);
+    drawShiftedMask(coverageMaskCtx, southNorthMaskCanvas);
+
+    finalMaskCtx.clearRect(0, 0, width, height);
+    if (shadowAlpha > 0) {
+      finalMaskCtx.fillStyle = `rgba(0,0,0,${shadowAlpha})`;
+      finalMaskCtx.fillRect(0, 0, width, height);
+      finalMaskCtx.globalCompositeOperation = "destination-in";
+      finalMaskCtx.drawImage(coverageMaskCanvas, 0, 0);
+      finalMaskCtx.globalCompositeOperation = "source-over";
+    }
+
+    if (debugView === "topMask") {
+      ctx.drawImage(topMaskCanvas, originX + shiftedX, originY + shiftedY);
+    } else if (debugView === "eastWestMask") {
+      ctx.drawImage(eastWestMaskCanvas, originX + shiftedX, originY + shiftedY);
+    } else if (debugView === "southNorthMask") {
+      ctx.drawImage(southNorthMaskCanvas, originX + shiftedX, originY + shiftedY);
+    } else if (debugView === "all") {
+      ctx.drawImage(topMaskCanvas, originX + shiftedX, originY + shiftedY);
+      ctx.drawImage(eastWestMaskCanvas, originX + shiftedX, originY + shiftedY);
+      ctx.drawImage(southNorthMaskCanvas, originX + shiftedX, originY + shiftedY);
+    } else {
+      ctx.drawImage(finalMaskCanvas, originX, originY);
+      finalShadowDrawCalls += 1;
+    }
+    piecesDrawn += 1;
+  }
+
+  return {
+    piecesDrawn,
+    trianglesDrawn,
+    finalShadowDrawCalls,
+  };
+}
+
 function drawStructureHybridShadowProjectedTriangles(
   ctx: CanvasRenderingContext2D,
   pieces: readonly StructureHybridShadowRenderPiece[],
@@ -1769,6 +2043,69 @@ function drawStructureHybridProjectedTrianglesSolid(
     const mappings = pieces[i].projectedMappings;
     for (let ti = 0; ti < mappings.length; ti++) {
       const [a, b, c] = mappings[ti].projectedTriangle;
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.lineTo(c.x, c.y);
+      ctx.closePath();
+      triangleCount++;
+    }
+  }
+  ctx.fillStyle = fillStyle;
+  ctx.fill();
+  ctx.restore();
+  return triangleCount;
+}
+
+function drawStructureV4ShadowWarpedTriangles(
+  ctx: CanvasRenderingContext2D,
+  pieces: readonly StructureV4ShadowRenderPiece[],
+  maxDarkness: number,
+): number {
+  if (pieces.length <= 0) return 0;
+  const shadowAlpha = Math.max(0, Math.min(1, maxDarkness));
+  if (shadowAlpha <= 0) return 0;
+  let triangleCount = 0;
+  for (let i = 0; i < pieces.length; i++) {
+    const piece = pieces[i];
+    const correspondences = piece.triangleCorrespondence;
+    for (let ci = 0; ci < correspondences.length; ci++) {
+      const correspondence = correspondences[ci];
+      const srcTriangle = correspondence.sourceSrcPoints ?? correspondence.sourceTrianglePoints;
+      const [s0, s1, s2] = srcTriangle;
+      const [d0, d1, d2] = correspondence.destinationTrianglePoints;
+      drawShadowTexturedTriangle(
+        ctx,
+        piece.sourceImage,
+        piece.sourceImageWidth,
+        piece.sourceImageHeight,
+        s0,
+        s1,
+        s2,
+        d0,
+        d1,
+        d2,
+        shadowAlpha,
+      );
+      triangleCount++;
+    }
+  }
+  return triangleCount;
+}
+
+function drawStructureV4ShadowTrianglesSolid(
+  ctx: CanvasRenderingContext2D,
+  pieces: readonly StructureV4ShadowRenderPiece[],
+  fillStyle: string,
+): number {
+  if (pieces.length <= 0) return 0;
+  let triangleCount = 0;
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+  ctx.beginPath();
+  for (let i = 0; i < pieces.length; i++) {
+    const correspondences = pieces[i].triangleCorrespondence;
+    for (let ci = 0; ci < correspondences.length; ci++) {
+      const [a, b, c] = correspondences[ci].destinationTrianglePoints;
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
       ctx.lineTo(c.x, c.y);
@@ -2939,6 +3276,8 @@ export async function renderSystem(
   const SHADOW_V1_DEBUG_GEOMETRY_MODE = debug.shadowV1DebugGeometryMode;
   const SHADOW_CASTER_MODE = debug.shadowCasterMode;
   const SHADOW_HYBRID_DIAGNOSTIC_MODE = debug.shadowHybridDiagnosticMode;
+  const SHADOW_DEBUG_MODE = debug.shadowDebugMode;
+  const SHADOW_V5_DEBUG_VIEW = debug.shadowV5DebugView;
   const SHOW_ENEMY_AIM_OVERLAY = debugFlags.showEnemyAimOverlay;
   const SHOW_LOOT_GOBLIN_OVERLAY = debugFlags.showLootGoblinOverlay;
   const SHOW_ZONE_OBJECTIVE_BOUNDS = !!debug.objectives?.showZoneBounds;
@@ -3502,6 +3841,8 @@ export async function renderSystem(
   const sliceDrawables = new Map<number, SliceDrawable[]>();
   const structureShadowTrianglesByBand = new Map<number, StructureShadowProjectedTriangle[]>();
   const structureHybridShadowByBand = new Map<number, StructureHybridShadowRenderPiece[]>();
+  const structureV4ShadowByBand = new Map<number, StructureV4ShadowRenderPiece[]>();
+  const structureV5ShadowByBand = new Map<number, StructureV5ShadowRenderPiece[]>();
   type HybridShadowDiagnosticStats = {
     cacheHits: number;
     cacheMisses: number;
@@ -3537,6 +3878,11 @@ export async function renderSystem(
     strips: number;
     layerEdges: number;
     layerBands: number;
+    sourceBandTriangles: number;
+    destinationBandEntries: number;
+    correspondencePairs: number;
+    correspondenceMismatches: number;
+    topCapTriangles: number;
     destinationBandPairs: number;
     destinationTriangles: number;
     diagonalA: number;
@@ -3552,6 +3898,19 @@ export async function renderSystem(
     sampleLayerBands: number;
     sampleSelectedSlice: string;
     sampleSelectedBand: string;
+    renderMode: string;
+    piecesQueued: number;
+    trianglesQueued: number;
+    topCapTrianglesQueued: number;
+    topCapTrianglesDrawnShadowPass: number;
+    topCapTrianglesDrawnMainCanvas: number;
+    warpedTrianglesDrawnShadowPass: number;
+    flatTrianglesDrawnShadowPass: number;
+    flatTrianglesDrawnMainCanvas: number;
+    warpedDrawCalls: number;
+    flatDrawCalls: number;
+    piecesComposited: number;
+    trianglesComposited: number;
   };
   const v4ShadowDiagnosticStats: V4ShadowDiagnosticStats = {
     cacheHits: 0,
@@ -3560,6 +3919,11 @@ export async function renderSystem(
     strips: 0,
     layerEdges: 0,
     layerBands: 0,
+    sourceBandTriangles: 0,
+    destinationBandEntries: 0,
+    correspondencePairs: 0,
+    correspondenceMismatches: 0,
+    topCapTriangles: 0,
     destinationBandPairs: 0,
     destinationTriangles: 0,
     diagonalA: 0,
@@ -3575,6 +3939,33 @@ export async function renderSystem(
     sampleLayerBands: 0,
     sampleSelectedSlice: "none",
     sampleSelectedBand: "none",
+    renderMode: SHADOW_DEBUG_MODE,
+    piecesQueued: 0,
+    trianglesQueued: 0,
+    topCapTrianglesQueued: 0,
+    topCapTrianglesDrawnShadowPass: 0,
+    topCapTrianglesDrawnMainCanvas: 0,
+    warpedTrianglesDrawnShadowPass: 0,
+    flatTrianglesDrawnShadowPass: 0,
+    flatTrianglesDrawnMainCanvas: 0,
+    warpedDrawCalls: 0,
+    flatDrawCalls: 0,
+    piecesComposited: 0,
+    trianglesComposited: 0,
+  };
+  type V5ShadowDiagnosticStats = {
+    piecesQueued: number;
+    trianglesQueued: number;
+    piecesDrawn: number;
+    trianglesDrawn: number;
+    finalShadowDrawCalls: number;
+  };
+  const v5ShadowDiagnosticStats: V5ShadowDiagnosticStats = {
+    piecesQueued: 0,
+    trianglesQueued: 0,
+    piecesDrawn: 0,
+    trianglesDrawn: 0,
+    finalShadowDrawCalls: 0,
   };
   const hybridMainCanvasDiagnosticPieces: StructureHybridShadowRenderPiece[] = [];
   const deferredStructureSliceDebugDraws: Array<() => void> = [];
@@ -3711,6 +4102,32 @@ export async function renderSystem(
     if (!bucket) {
       bucket = [];
       structureHybridShadowByBand.set(zBand, bucket);
+    }
+    bucket.push(piece);
+  };
+
+  const queueStructureV4ShadowForBand = (
+    zBand: number,
+    piece: StructureV4ShadowRenderPiece,
+  ): void => {
+    if (piece.triangleCorrespondence.length <= 0 && piece.topCapTriangles.length <= 0) return;
+    let bucket = structureV4ShadowByBand.get(zBand);
+    if (!bucket) {
+      bucket = [];
+      structureV4ShadowByBand.set(zBand, bucket);
+    }
+    bucket.push(piece);
+  };
+
+  const queueStructureV5ShadowForBand = (
+    zBand: number,
+    piece: StructureV5ShadowRenderPiece,
+  ): void => {
+    if (piece.triangles.length <= 0) return;
+    let bucket = structureV5ShadowByBand.get(zBand);
+    if (!bucket) {
+      bucket = [];
+      structureV5ShadowByBand.set(zBand, bucket);
     }
     bucket.push(piece);
   };
@@ -5208,6 +5625,8 @@ export async function renderSystem(
 	            if (triangleCache && draw.img) {
 	              usedTriangleGeometryPath = true;
 	              const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(draw.img) : draw.img;
+                const usingV5Caster = SHADOW_CASTER_MODE === "v5TriangleShadowMask";
+                const admittedTrianglesForV5: typeof triangleCache.triangles = [];
 	              const footprintW = Math.max(1, o.w | 0);
 	              const footprintH = Math.max(1, o.h | 0);
               const buildingMinCameraTx = o.tx;
@@ -5350,6 +5769,7 @@ export async function renderSystem(
                   });
 	                }
 	                if (!finalAdmitted) continue;
+	                if (usingV5Caster) admittedTrianglesForV5.push(...finalVisibleTriangles);
 	                overlayHasVisibleTriangleGroup = true;
 	                const renderFields = deriveParentTileRenderFields(group.parentTx, group.parentTy);
 	                const overlayKey: RenderKey = {
@@ -5447,7 +5867,7 @@ export async function renderSystem(
                 let hybridProjectedMappings: readonly StructureHybridShadowProjectedTriangle[] = [];
                 const usingV4Caster = SHADOW_CASTER_MODE === "v4SliceStrips";
                 const usingHybridCaster = SHADOW_CASTER_MODE === "v3HybridTriangles";
-                if (usingHybridCaster || usingV4Caster) {
+                if (usingHybridCaster || usingV4Caster || usingV5Caster) {
                   const cachedStructureShadowHybrid = structureShadowHybridCacheStore.get(
                     o.id,
                     geometrySignature,
@@ -5487,6 +5907,7 @@ export async function renderSystem(
                     } else {
                       const correspondences: SliceCorrespondence[] = structureShadowHybridCacheEntry.slicePerimeterSegments.map((segment) => ({
                         sliceIndex: segment.sliceIndex,
+                        sourceBandIndex: segment.bandIndex,
                         baseSegment: {
                           a: { x: segment.baseSegment[0].x, y: segment.baseSegment[0].y },
                           b: { x: segment.baseSegment[1].x, y: segment.baseSegment[1].y },
@@ -5525,6 +5946,8 @@ export async function renderSystem(
                         castHeightPx: structureShadowHybridCacheEntry.castHeightPx,
                         sunDirection: shadowSunModel.projectionDirection,
                         sliceCorrespondence: correspondences,
+                        topCapTriangles: structureShadowHybridCacheEntry.projectedTopCapTriangles,
+                        sourceTriangles: triangleCache.triangles,
                         sliceOwnerParity,
                       });
                       structureShadowV4CacheEntry = rebuiltStructureShadowV4;
@@ -5537,6 +5960,11 @@ export async function renderSystem(
                     v4ShadowDiagnosticStats.strips += structureShadowV4CacheEntry.sliceStrips.length;
                     v4ShadowDiagnosticStats.layerEdges += structureShadowV4CacheEntry.layerEdges.length;
                     v4ShadowDiagnosticStats.layerBands += structureShadowV4CacheEntry.layerBands.length;
+                    v4ShadowDiagnosticStats.topCapTriangles += structureShadowV4CacheEntry.topCapTriangles.length;
+                    v4ShadowDiagnosticStats.sourceBandTriangles += structureShadowV4CacheEntry.sourceBandTriangles.length;
+                    v4ShadowDiagnosticStats.destinationBandEntries += structureShadowV4CacheEntry.destinationBandEntries.length;
+                    v4ShadowDiagnosticStats.correspondencePairs += structureShadowV4CacheEntry.triangleCorrespondence.length;
+                    v4ShadowDiagnosticStats.correspondenceMismatches += structureShadowV4CacheEntry.triangleCorrespondenceMismatches.length;
                     v4ShadowDiagnosticStats.destinationBandPairs += structureShadowV4CacheEntry.destinationBandTriangles.length;
                     v4ShadowDiagnosticStats.destinationTriangles += structureShadowV4CacheEntry.destinationTriangles.length;
                     for (let di = 0; di < structureShadowV4CacheEntry.destinationBandTriangles.length; di++) {
@@ -5589,6 +6017,22 @@ export async function renderSystem(
                         if (selectedBand && selectedPair) {
                           const t0 = selectedPair.tri0;
                           const t1 = selectedPair.tri1;
+                          const selectedGroup = structureShadowV4CacheEntry.triangleCorrespondenceGroups.find(
+                            (group) => group.sliceIndex === selectedBand.sliceIndex && group.bandIndex === selectedBand.bandIndex,
+                          );
+                          const groupSummary = selectedGroup
+                            ? [
+                                `src:${selectedGroup.sourceTriangles.length}`,
+                                `dst:${selectedGroup.destinationTriangles.length}`,
+                                `map:${selectedGroup.correspondences.length}`,
+                                selectedGroup.mismatch
+                                  ? `mismatch:${selectedGroup.mismatch.sourceTriangleCount}/${selectedGroup.mismatch.destinationTriangleCount}`
+                                  : "mismatch:none",
+                              ].join(" ")
+                            : "src:0 dst:0 map:0 mismatch:none";
+                          const pairSummary = selectedGroup?.correspondences[0]
+                            ? `pair sIdx:${selectedGroup.correspondences[0].sourceTriangleIndexWithinBand}->dIdx:${selectedGroup.correspondences[0].destinationTriangleIndex}`
+                            : "pair:none";
                           v4ShadowDiagnosticStats.sampleSelectedBand = [
                             `i${selectedBand.sliceIndex} b${selectedBand.bandIndex}`,
                             `lowerA(${selectedBand.lowerA.x.toFixed(1)},${selectedBand.lowerA.y.toFixed(1)})`,
@@ -5597,11 +6041,13 @@ export async function renderSystem(
                             `upperB(${selectedBand.upperB.x.toFixed(1)},${selectedBand.upperB.y.toFixed(1)})`,
                             `tri0[(${t0[0].x.toFixed(1)},${t0[0].y.toFixed(1)}),(${t0[1].x.toFixed(1)},${t0[1].y.toFixed(1)}),(${t0[2].x.toFixed(1)},${t0[2].y.toFixed(1)})]`,
                             `tri1[(${t1[0].x.toFixed(1)},${t1[0].y.toFixed(1)}),(${t1[1].x.toFixed(1)},${t1[1].y.toFixed(1)}),(${t1[2].x.toFixed(1)},${t1[2].y.toFixed(1)})]`,
+                            groupSummary,
+                            pairSummary,
                           ].join(" ");
                         }
                       }
                     }
-                  } else {
+                  } else if (usingHybridCaster) {
                     hybridProjectedMappings = structureShadowHybridCacheEntry.projectedMappings;
                     projectedStructureShadowBounds = structureShadowHybridCacheEntry.projectedBounds;
                     hybridShadowDiagnosticStats.casterTriangles += structureShadowHybridCacheEntry.casterTriangles.length;
@@ -5672,7 +6118,31 @@ export async function renderSystem(
                 const projectedShadowVisible = projectedStructureShadowBounds
                   ? runtimeStructureRectIntersects(projectedStructureShadowBounds, projectedViewportRect)
                   : false;
-                if (projectedShadowVisible) {
+                const v5Triangles: StructureV5ShadowMaskTriangle[] = [];
+                if (usingV5Caster && structureShadowHybridCacheEntry && admittedTrianglesForV5.length > 0) {
+                  const semanticByStableId = buildHybridTriangleSemanticMap({
+                    overlay: o,
+                    triangleCache,
+                    activeRoofQuad: structureShadowHybridCacheEntry.roofScan.activeLevel?.quad ?? null,
+                    triangles: admittedTrianglesForV5,
+                  });
+                  for (let ti = 0; ti < admittedTrianglesForV5.length; ti++) {
+                    const tri = admittedTrianglesForV5[ti];
+                    const semantic = semanticByStableId.get(tri.stableId) ?? "UNCLASSIFIED";
+                    const buckets = resolveHybridSemanticMaskBuckets(semantic);
+                    for (let bi = 0; bi < buckets.length; bi++) {
+                      v5Triangles.push({
+                        stableId: tri.stableId,
+                        semanticBucket: buckets[bi],
+                        srcTriangle: [tri.srcPoints[0], tri.srcPoints[1], tri.srcPoints[2]],
+                        dstTriangle: [tri.points[0], tri.points[1], tri.points[2]],
+                      });
+                    }
+                  }
+                }
+                const shouldQueueProjectedShadow = projectedShadowVisible && !usingV5Caster;
+                const shouldQueueV5Shadow = usingV5Caster && v5Triangles.length > 0;
+                if (shouldQueueProjectedShadow || shouldQueueV5Shadow) {
                   const shadowBand = resolveRenderZBand(
                     {
                       slice: o.seTx + o.seTy,
@@ -5681,7 +6151,34 @@ export async function renderSystem(
                     },
                     rampRoadTiles,
                   );
-                  if (usingHybridCaster && hybridProjectedMappings.length > 0) {
+                  if (shouldQueueV5Shadow) {
+                    queueStructureV5ShadowForBand(shadowBand, {
+                      sourceImage: sourceImg,
+                      sourceImageWidth: Math.max(1, Math.round(draw.dw)),
+                      sourceImageHeight: Math.max(1, Math.round(draw.dh)),
+                      triangles: v5Triangles,
+                    });
+                    v5ShadowDiagnosticStats.piecesQueued += 1;
+                    v5ShadowDiagnosticStats.trianglesQueued += v5Triangles.length;
+                  } else if (
+                    usingV4Caster
+                    && structureShadowV4CacheEntry
+                    && (
+                      structureShadowV4CacheEntry.triangleCorrespondence.length > 0
+                      || structureShadowV4CacheEntry.topCapTriangles.length > 0
+                    )
+                  ) {
+                    queueStructureV4ShadowForBand(shadowBand, {
+                      sourceImage: sourceImg,
+                      sourceImageWidth: Math.max(1, Math.round(draw.dw)),
+                      sourceImageHeight: Math.max(1, Math.round(draw.dh)),
+                      topCapTriangles: structureShadowV4CacheEntry.topCapTriangles,
+                      triangleCorrespondence: structureShadowV4CacheEntry.triangleCorrespondence,
+                    });
+                    v4ShadowDiagnosticStats.piecesQueued += 1;
+                    v4ShadowDiagnosticStats.trianglesQueued += structureShadowV4CacheEntry.triangleCorrespondence.length;
+                    v4ShadowDiagnosticStats.topCapTrianglesQueued += structureShadowV4CacheEntry.topCapTriangles.length;
+                  } else if (usingHybridCaster && hybridProjectedMappings.length > 0) {
                     queueStructureHybridShadowForBand(shadowBand, {
                       sourceImage: sourceImg,
                       sourceImageWidth: Math.max(1, Math.round(draw.dw)),
@@ -5703,11 +6200,26 @@ export async function renderSystem(
                       ctx.save();
                       ctx.lineWidth = 1.15;
                       ctx.font = "9px monospace";
-                      const selectedSliceIndex = debugShadowEntry.sliceStrips[0]?.sliceIndex ?? null;
+                      const selectedGroup = debugShadowEntry.triangleCorrespondenceGroups[0] ?? null;
+                      const selectedSliceIndex = selectedGroup?.sliceIndex ?? debugShadowEntry.sliceStrips[0]?.sliceIndex ?? null;
+                      const selectedBandIndex = selectedGroup?.bandIndex ?? 0;
                       const bandPairByKey = new Map<string, (typeof debugShadowEntry.destinationBandTriangles)[number]>();
                       for (let pi = 0; pi < debugShadowEntry.destinationBandTriangles.length; pi++) {
                         const pair = debugShadowEntry.destinationBandTriangles[pi];
                         bandPairByKey.set(`${pair.sliceIndex}:${pair.bandIndex}`, pair);
+                      }
+                      // 0) Top cap shadow geometry (distinct from strips).
+                      for (let ti = 0; ti < debugShadowEntry.topCapTriangles.length; ti++) {
+                        const [a, b, c] = debugShadowEntry.topCapTriangles[ti];
+                        ctx.beginPath();
+                        ctx.moveTo(a.x, a.y);
+                        ctx.lineTo(b.x, b.y);
+                        ctx.lineTo(c.x, c.y);
+                        ctx.closePath();
+                        ctx.fillStyle = "rgba(255, 175, 70, 0.16)";
+                        ctx.strokeStyle = "rgba(255, 205, 115, 0.95)";
+                        ctx.fill();
+                        ctx.stroke();
                       }
                       // 1) Layer edges (faint). Selected slice is highlighted for readability.
                       for (let li = 0; li < debugShadowEntry.layerEdges.length; li++) {
@@ -5746,13 +6258,16 @@ export async function renderSystem(
                         const band = debugShadowEntry.layerBands[bi];
                         const pair = bandPairByKey.get(`${band.sliceIndex}:${band.bandIndex}`);
                         const isSelectedSlice = selectedSliceIndex != null && band.sliceIndex === selectedSliceIndex;
+                        const isSelectedBand = isSelectedSlice && band.bandIndex === selectedBandIndex;
                         ctx.beginPath();
                         ctx.moveTo(band.lowerA.x, band.lowerA.y);
                         ctx.lineTo(band.lowerB.x, band.lowerB.y);
                         ctx.lineTo(band.upperB.x, band.upperB.y);
                         ctx.lineTo(band.upperA.x, band.upperA.y);
                         ctx.closePath();
-                        ctx.strokeStyle = isSelectedSlice
+                        ctx.strokeStyle = isSelectedBand
+                          ? "rgba(230, 245, 255, 0.85)"
+                          : isSelectedSlice
                           ? "rgba(205, 215, 255, 0.70)"
                           : "rgba(205, 215, 255, 0.20)";
                         ctx.stroke();
@@ -5774,7 +6289,8 @@ export async function renderSystem(
                           const centerX = (band.lowerA.x + band.lowerB.x + band.upperA.x + band.upperB.x) * 0.25;
                           const centerY = (band.lowerA.y + band.lowerB.y + band.upperA.y + band.upperB.y) * 0.25;
                           ctx.fillStyle = "rgba(225, 235, 255, 0.9)";
-                          ctx.fillText(`b${band.bandIndex}`, centerX + 2, centerY - 2);
+                          const suffix = isSelectedBand ? "*" : "";
+                          ctx.fillText(`b${band.bandIndex}${suffix}`, centerX + 2, centerY - 2);
                         }
                       }
                       // 4) Destination triangles tri0 / tri1.
@@ -5811,6 +6327,91 @@ export async function renderSystem(
                           ctx.fillStyle = "rgba(180, 160, 255, 0.95)";
                           ctx.fillText("t1", t1cx + 1, t1cy - 1);
                         }
+                      }
+                      const triangleCentroid = (tri: readonly [{ x: number; y: number }, { x: number; y: number }, { x: number; y: number }]) => ({
+                        x: (tri[0].x + tri[1].x + tri[2].x) / 3,
+                        y: (tri[0].y + tri[1].y + tri[2].y) / 3,
+                      });
+                      // 5) Explicit source -> destination correspondence for selected slice+band.
+                      for (let gi = 0; gi < debugShadowEntry.triangleCorrespondenceGroups.length; gi++) {
+                        const group = debugShadowEntry.triangleCorrespondenceGroups[gi];
+                        const isSelectedGroup = selectedSliceIndex != null
+                          && group.sliceIndex === selectedSliceIndex
+                          && group.bandIndex === selectedBandIndex;
+                        if (!isSelectedGroup) continue;
+                        for (let si = 0; si < group.sourceTriangles.length; si++) {
+                          const src = group.sourceTriangles[si];
+                          const [a, b, c] = src.sourceTrianglePoints;
+                          ctx.beginPath();
+                          ctx.moveTo(a.x, a.y);
+                          ctx.lineTo(b.x, b.y);
+                          ctx.lineTo(c.x, c.y);
+                          ctx.closePath();
+                          ctx.strokeStyle = "rgba(255, 150, 70, 0.92)";
+                          ctx.stroke();
+                        }
+                        for (let di = 0; di < group.destinationTriangles.length; di++) {
+                          const dst = group.destinationTriangles[di];
+                          const [a, b, c] = dst.destinationTrianglePoints;
+                          ctx.beginPath();
+                          ctx.moveTo(a.x, a.y);
+                          ctx.lineTo(b.x, b.y);
+                          ctx.lineTo(c.x, c.y);
+                          ctx.closePath();
+                          ctx.strokeStyle = "rgba(90, 255, 160, 0.92)";
+                          ctx.stroke();
+                        }
+                        for (let ci = 0; ci < group.correspondences.length; ci++) {
+                          const pair = group.correspondences[ci];
+                          const srcCentroid = triangleCentroid(pair.sourceTrianglePoints);
+                          const dstCentroid = triangleCentroid(pair.destinationTrianglePoints);
+                          const midX = (srcCentroid.x + dstCentroid.x) * 0.5;
+                          const midY = (srcCentroid.y + dstCentroid.y) * 0.5;
+                          ctx.beginPath();
+                          ctx.moveTo(srcCentroid.x, srcCentroid.y);
+                          ctx.lineTo(dstCentroid.x, dstCentroid.y);
+                          ctx.strokeStyle = "rgba(255, 225, 85, 0.95)";
+                          ctx.stroke();
+                          ctx.fillStyle = "rgba(255, 250, 205, 0.98)";
+                          ctx.fillText(
+                            `s${pair.sliceIndex} b${pair.bandIndex} src${pair.sourceTriangleIndexWithinBand}->dst${pair.destinationTriangleIndex}`,
+                            midX + 2,
+                            midY - 2,
+                          );
+                        }
+                        if (group.mismatch) {
+                          const srcAnchor = group.sourceTriangles[0]
+                            ? triangleCentroid(group.sourceTriangles[0].sourceTrianglePoints)
+                            : null;
+                          const dstAnchor = group.destinationTriangles[0]
+                            ? triangleCentroid(group.destinationTriangles[0].destinationTrianglePoints)
+                            : null;
+                          const anchorX = srcAnchor ? srcAnchor.x : (dstAnchor ? dstAnchor.x : draw.dx);
+                          const anchorY = srcAnchor ? srcAnchor.y : (dstAnchor ? dstAnchor.y : draw.dy);
+                          ctx.fillStyle = "rgba(255, 90, 90, 0.98)";
+                          ctx.fillText(
+                            `MISMATCH s${group.sliceIndex} b${group.bandIndex} src:${group.mismatch.sourceTriangleCount} dst:${group.mismatch.destinationTriangleCount}`,
+                            anchorX + 4,
+                            anchorY - 10,
+                          );
+                        }
+                      }
+                      for (let mi = 0; mi < debugShadowEntry.triangleCorrespondenceMismatches.length; mi++) {
+                        const mismatch = debugShadowEntry.triangleCorrespondenceMismatches[mi];
+                        const sourceCandidate = debugShadowEntry.sourceBandTriangles.find(
+                          (source) => source.sliceIndex === mismatch.sliceIndex && source.bandIndex === mismatch.bandIndex,
+                        );
+                        const destinationCandidate = debugShadowEntry.destinationBandEntries.find(
+                          (destination) => destination.sliceIndex === mismatch.sliceIndex && destination.bandIndex === mismatch.bandIndex,
+                        );
+                        const sourceAnchor = sourceCandidate ? triangleCentroid(sourceCandidate.sourceTrianglePoints) : null;
+                        const destinationAnchor = destinationCandidate ? triangleCentroid(destinationCandidate.destinationTrianglePoints) : null;
+                        const anchorX = sourceAnchor ? sourceAnchor.x : (destinationAnchor ? destinationAnchor.x : draw.dx);
+                        const anchorY = sourceAnchor ? sourceAnchor.y : (destinationAnchor ? destinationAnchor.y : draw.dy);
+                        ctx.beginPath();
+                        ctx.arc(anchorX, anchorY, 3, 0, Math.PI * 2);
+                        ctx.fillStyle = "rgba(255, 70, 70, 0.98)";
+                        ctx.fill();
                       }
                       for (let si = 0; si < debugShadowEntry.sliceStrips.length; si++) {
                         const strip = debugShadowEntry.sliceStrips[si];
@@ -5867,7 +6468,7 @@ export async function renderSystem(
                       const deltaLabel = ref
                         ? `d(${ref.x.toFixed(1)},${ref.y.toFixed(1)})`
                         : "d(none)";
-                      const focusLabel = selectedSliceIndex != null ? `${selectedSliceIndex}` : "none";
+                      const focusLabel = selectedSliceIndex != null ? `${selectedSliceIndex}:${selectedBandIndex}` : "none";
                       let diagonalACount = 0;
                       let diagonalBCount = 0;
                       for (let di = 0; di < debugShadowEntry.destinationBandTriangles.length; di++) {
@@ -5878,7 +6479,7 @@ export async function renderSystem(
                         }
                       }
                       const diagonalLabel = `A:${diagonalACount} B:${diagonalBCount}`;
-                      const cacheLabel = `shadow:v4 cache:${debugShadowCacheHit ? "hit" : "rebuild"} corr:${debugShadowEntry.correspondences.length} strips:${debugShadowEntry.sliceStrips.length} layers:${debugShadowEntry.layerHeightsPx.length} edges:${debugShadowEntry.layerEdges.length} bands:${debugShadowEntry.layerBands.length} triPairs:${debugShadowEntry.destinationBandTriangles.length} tri:${debugShadowEntry.destinationTriangles.length} diag:${diagonalLabel} focus:${focusLabel} deltaConst:${debugShadowEntry.isDeltaConstant ? "yes" : "no"} ${deltaLabel}`;
+                      const cacheLabel = `shadow:v4 cache:${debugShadowCacheHit ? "hit" : "rebuild"} cap:${debugShadowEntry.topCapTriangles.length} corr:${debugShadowEntry.correspondences.length} strips:${debugShadowEntry.sliceStrips.length} layers:${debugShadowEntry.layerHeightsPx.length} edges:${debugShadowEntry.layerEdges.length} bands:${debugShadowEntry.layerBands.length} triPairs:${debugShadowEntry.destinationBandTriangles.length} tri:${debugShadowEntry.destinationTriangles.length} srcTri:${debugShadowEntry.sourceBandTriangles.length} dstTri:${debugShadowEntry.destinationBandEntries.length} map:${debugShadowEntry.triangleCorrespondence.length} mismatch:${debugShadowEntry.triangleCorrespondenceMismatches.length} diag:${diagonalLabel} focus:${focusLabel} deltaConst:${debugShadowEntry.isDeltaConstant ? "yes" : "no"} ${deltaLabel}`;
                       ctx.font = "10px monospace";
                       ctx.fillStyle = "rgba(0, 0, 0, 0.84)";
                       ctx.fillText(cacheLabel, labelX + 1, labelY + 1);
@@ -6555,6 +7156,12 @@ export async function renderSystem(
   structureHybridShadowByBand.forEach((pieces, zBand) => {
     if (pieces.length > 0) zBands.add(zBand);
   });
+  structureV4ShadowByBand.forEach((pieces, zBand) => {
+    if (pieces.length > 0) zBands.add(zBand);
+  });
+  structureV5ShadowByBand.forEach((pieces, zBand) => {
+    if (pieces.length > 0) zBands.add(zBand);
+  });
 
   const zBandKeys = Array.from(zBands);
   zBandKeys.sort((a, b) => a - b);
@@ -6603,6 +7210,66 @@ export async function renderSystem(
           hybridShadowDiagnosticStats.trianglesComposited += hybridTrianglesInBand;
         }
       }
+    }
+    const structureV4BandPieces = structureV4ShadowByBand.get(zb) ?? [];
+    if (structureV4BandPieces.length > 0) {
+      const bandTopCapTriangles: StructureShadowProjectedTriangle[] = [];
+      for (let pi = 0; pi < structureV4BandPieces.length; pi++) {
+        const piece = structureV4BandPieces[pi];
+        for (let ci = 0; ci < piece.topCapTriangles.length; ci++) {
+          bandTopCapTriangles.push(piece.topCapTriangles[ci]);
+        }
+      }
+      const drawFlatContribution = SHADOW_DEBUG_MODE === "flatOnly" || SHADOW_DEBUG_MODE === "both";
+      const drawWarpedContribution = SHADOW_DEBUG_MODE === "warpedOnly" || SHADOW_DEBUG_MODE === "both";
+      const flatShadowFill = `rgba(0,0,0,${Math.max(0, Math.min(1, STRUCTURE_SHADOW_V1_MAX_DARKNESS)).toFixed(3)})`;
+
+      setRenderPerfDrawTag("floors");
+      if (drawFlatContribution) {
+        if (bandTopCapTriangles.length > 0) {
+          drawStructureShadowProjectedTriangles(ctx, bandTopCapTriangles, STRUCTURE_SHADOW_V1_MAX_DARKNESS);
+          v4ShadowDiagnosticStats.topCapTrianglesDrawnShadowPass += bandTopCapTriangles.length;
+          v4ShadowDiagnosticStats.trianglesComposited += bandTopCapTriangles.length;
+          v4ShadowDiagnosticStats.flatDrawCalls += 1;
+        }
+        const flatTriangles = drawStructureV4ShadowTrianglesSolid(
+          ctx,
+          structureV4BandPieces,
+          flatShadowFill,
+        );
+        v4ShadowDiagnosticStats.flatTrianglesDrawnShadowPass += flatTriangles;
+        v4ShadowDiagnosticStats.trianglesComposited += flatTriangles;
+        if (flatTriangles > 0) {
+          v4ShadowDiagnosticStats.flatDrawCalls += 1;
+        }
+      }
+      if (drawWarpedContribution) {
+        const warpedTriangles = drawStructureV4ShadowWarpedTriangles(
+          ctx,
+          structureV4BandPieces,
+          STRUCTURE_SHADOW_V1_MAX_DARKNESS,
+        );
+        v4ShadowDiagnosticStats.warpedTrianglesDrawnShadowPass += warpedTriangles;
+        v4ShadowDiagnosticStats.trianglesComposited += warpedTriangles;
+        if (warpedTriangles > 0) {
+          v4ShadowDiagnosticStats.warpedDrawCalls += 1;
+        }
+      }
+      v4ShadowDiagnosticStats.piecesComposited += structureV4BandPieces.length;
+    }
+    const structureV5BandPieces = structureV5ShadowByBand.get(zb) ?? [];
+    if (structureV5BandPieces.length > 0) {
+      setRenderPerfDrawTag("floors");
+      const v5Draw = drawStructureV5ShadowMasks(
+        ctx,
+        structureV5BandPieces,
+        shadowSunModel.projectionDirection,
+        SHADOW_V5_DEBUG_VIEW,
+        STRUCTURE_SHADOW_V1_MAX_DARKNESS,
+      );
+      v5ShadowDiagnosticStats.piecesDrawn += v5Draw.piecesDrawn;
+      v5ShadowDiagnosticStats.trianglesDrawn += v5Draw.trianglesDrawn;
+      v5ShadowDiagnosticStats.finalShadowDrawCalls += v5Draw.finalShadowDrawCalls;
     }
 
     // Pass 2: WORLD
@@ -6785,7 +7452,7 @@ export async function renderSystem(
       ctx.fillText(hybridLine, 8, screenDebugLineY);
       screenDebugLineY += 16;
     } else if (SHADOW_CASTER_MODE === "v4SliceStrips") {
-      const v4Line = `v4Diag cache h:${v4ShadowDiagnosticStats.cacheHits} m:${v4ShadowDiagnosticStats.cacheMisses} corr:${v4ShadowDiagnosticStats.correspondences} strips:${v4ShadowDiagnosticStats.strips} edges:${v4ShadowDiagnosticStats.layerEdges} bands:${v4ShadowDiagnosticStats.layerBands} triPairs:${v4ShadowDiagnosticStats.destinationBandPairs} tri:${v4ShadowDiagnosticStats.destinationTriangles} diag:${v4ShadowDiagnosticStats.diagonalRule} deltaConst pass:${v4ShadowDiagnosticStats.deltaConstPass} fail:${v4ShadowDiagnosticStats.deltaConstFail} ${v4ShadowDiagnosticStats.firstSliceSummary}`;
+      const v4Line = `v4Diag mode:${v4ShadowDiagnosticStats.renderMode} cache h:${v4ShadowDiagnosticStats.cacheHits} m:${v4ShadowDiagnosticStats.cacheMisses} cap:${v4ShadowDiagnosticStats.topCapTriangles} corr:${v4ShadowDiagnosticStats.correspondences} strips:${v4ShadowDiagnosticStats.strips} edges:${v4ShadowDiagnosticStats.layerEdges} bands:${v4ShadowDiagnosticStats.layerBands} srcTri:${v4ShadowDiagnosticStats.sourceBandTriangles} dstTri:${v4ShadowDiagnosticStats.destinationBandEntries} map:${v4ShadowDiagnosticStats.correspondencePairs} mismatch:${v4ShadowDiagnosticStats.correspondenceMismatches} queue p:${v4ShadowDiagnosticStats.piecesQueued} stripT:${v4ShadowDiagnosticStats.trianglesQueued} capT:${v4ShadowDiagnosticStats.topCapTrianglesQueued} draw capPass:${v4ShadowDiagnosticStats.topCapTrianglesDrawnShadowPass} capMain:${v4ShadowDiagnosticStats.topCapTrianglesDrawnMainCanvas} warp:${v4ShadowDiagnosticStats.warpedTrianglesDrawnShadowPass} flatPass:${v4ShadowDiagnosticStats.flatTrianglesDrawnShadowPass} flatMain:${v4ShadowDiagnosticStats.flatTrianglesDrawnMainCanvas} calls warp:${v4ShadowDiagnosticStats.warpedDrawCalls} flat:${v4ShadowDiagnosticStats.flatDrawCalls} comp p:${v4ShadowDiagnosticStats.piecesComposited} t:${v4ShadowDiagnosticStats.trianglesComposited} triPairs:${v4ShadowDiagnosticStats.destinationBandPairs} tri:${v4ShadowDiagnosticStats.destinationTriangles} diag:${v4ShadowDiagnosticStats.diagonalRule} deltaConst pass:${v4ShadowDiagnosticStats.deltaConstPass} fail:${v4ShadowDiagnosticStats.deltaConstFail} ${v4ShadowDiagnosticStats.firstSliceSummary}`;
       ctx.fillText(v4Line, 8, screenDebugLineY);
       screenDebugLineY += 16;
       const v4SampleLine = `v4Sample roofH:${v4ShadowDiagnosticStats.sampleRoofHeightPx ?? "none"} heights:${v4ShadowDiagnosticStats.sampleLayerHeights} slices:${v4ShadowDiagnosticStats.sampleSliceCount} edges:${v4ShadowDiagnosticStats.sampleLayerEdges} bands:${v4ShadowDiagnosticStats.sampleLayerBands} ${v4ShadowDiagnosticStats.sampleSelectedSlice}`;
@@ -6793,6 +7460,10 @@ export async function renderSystem(
       screenDebugLineY += 16;
       const v4BandLine = `v4Band ${v4ShadowDiagnosticStats.sampleSelectedBand}`;
       ctx.fillText(v4BandLine, 8, screenDebugLineY);
+      screenDebugLineY += 16;
+    } else if (SHADOW_CASTER_MODE === "v5TriangleShadowMask") {
+      const v5Line = `v5Diag view:${SHADOW_V5_DEBUG_VIEW} queue p:${v5ShadowDiagnosticStats.piecesQueued} t:${v5ShadowDiagnosticStats.trianglesQueued} draw p:${v5ShadowDiagnosticStats.piecesDrawn} t:${v5ShadowDiagnosticStats.trianglesDrawn} finalCalls:${v5ShadowDiagnosticStats.finalShadowDrawCalls}`;
+      ctx.fillText(v5Line, 8, screenDebugLineY);
       screenDebugLineY += 16;
     }
   }

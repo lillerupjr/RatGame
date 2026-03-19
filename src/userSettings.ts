@@ -142,8 +142,10 @@ export type DebugSettings = {
   dpsMeter: boolean;
   shadowSunTimeHour: number;
   shadowV1DebugGeometryMode: "full" | "capOnly" | "connectorsOnly";
-  shadowCasterMode: "v1Roof" | "v2AlphaSilhouette" | "v3HybridTriangles" | "v4SliceStrips";
+  shadowCasterMode: "v1Roof" | "v2AlphaSilhouette" | "v3HybridTriangles" | "v4SliceStrips" | "v5TriangleShadowMask";
   shadowHybridDiagnosticMode: "off" | "solidShadowPass" | "solidMainCanvas";
+  shadowDebugMode: "flatOnly" | "warpedOnly" | "both";
+  shadowV5DebugView: "finalOnly" | "topMask" | "eastWestMask" | "southNorthMask" | "all";
   waterFlowRate: number;
   neutralBirdAI: NeutralBirdAIDebugSettings;
   objectives: {
@@ -214,6 +216,8 @@ function toLegacySettings(): UserSettings {
       shadowV1DebugGeometryMode: settings.debug.shadowV1DebugGeometryMode,
       shadowCasterMode: settings.debug.shadowCasterMode,
       shadowHybridDiagnosticMode: settings.debug.shadowHybridDiagnosticMode,
+      shadowDebugMode: settings.debug.shadowDebugMode,
+      shadowV5DebugView: settings.debug.shadowV5DebugView,
       waterFlowRate: settings.system.waterFlowRate,
       neutralBirdAI: {
         disabled: settings.system.neutralBirdDisabled,
@@ -433,6 +437,12 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     }
     if (debugAny.shadowHybridDiagnosticMode !== undefined) {
       debugPatch.shadowHybridDiagnosticMode = debugAny.shadowHybridDiagnosticMode;
+    }
+    if (debugAny.shadowDebugMode !== undefined) {
+      debugPatch.shadowDebugMode = debugAny.shadowDebugMode;
+    }
+    if (debugAny.shadowV5DebugView !== undefined) {
+      debugPatch.shadowV5DebugView = debugAny.shadowV5DebugView;
     }
 
     if (debugAny.disableVisualCompiledCutoutCache !== undefined) {

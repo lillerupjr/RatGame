@@ -6,8 +6,10 @@ export type LightColorModeOverride = "authored" | "off" | "standard" | "palette"
 export type LightStrengthOverride = "authored" | "low" | "medium" | "high";
 export type StructureTriangleAdmissionMode = "viewport" | "renderDistance" | "hybrid" | "compare";
 export type ShadowV1DebugGeometryMode = "full" | "capOnly" | "connectorsOnly";
-export type ShadowCasterMode = "v1Roof" | "v2AlphaSilhouette" | "v3HybridTriangles" | "v4SliceStrips";
+export type ShadowCasterMode = "v1Roof" | "v2AlphaSilhouette" | "v3HybridTriangles" | "v4SliceStrips" | "v5TriangleShadowMask";
 export type ShadowHybridDiagnosticMode = "off" | "solidShadowPass" | "solidMainCanvas";
+export type ShadowDebugMode = "flatOnly" | "warpedOnly" | "both";
+export type ShadowV5DebugView = "finalOnly" | "topMask" | "eastWestMask" | "southNorthMask" | "all";
 
 export type NeutralBirdForceState =
   | "NONE"
@@ -75,6 +77,8 @@ export type DebugToolsSettings = {
   shadowV1DebugGeometryMode: ShadowV1DebugGeometryMode;
   shadowCasterMode: ShadowCasterMode;
   shadowHybridDiagnosticMode: ShadowHybridDiagnosticMode;
+  shadowDebugMode: ShadowDebugMode;
+  shadowV5DebugView: ShadowV5DebugView;
 };
 
 export type SystemOverrides = {

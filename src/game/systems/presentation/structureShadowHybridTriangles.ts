@@ -269,7 +269,8 @@ function quantizeHeightToStep(
   return clamp(q, 0, maxCastHeightPx);
 }
 
-type HybridSemanticClass = "TOP" | "LEFT_SOUTH" | "RIGHT_EAST" | "UNCLASSIFIED" | "CONFLICT";
+export type HybridSemanticClass = "TOP" | "LEFT_SOUTH" | "RIGHT_EAST" | "UNCLASSIFIED" | "CONFLICT";
+export type HybridSemanticMaskBucket = "TOP" | "EAST_WEST" | "SOUTH_NORTH";
 
 type HybridSemanticContext = {
   activeRoofQuad: StructureShadowProjectedQuad | null;
@@ -328,6 +329,44 @@ function classifyHybridTriangleSemantic(
   if (leftCandidate) return "LEFT_SOUTH";
   if (rightCandidate) return "RIGHT_EAST";
   return "UNCLASSIFIED";
+}
+
+const TOP_MASK_BUCKETS: readonly HybridSemanticMaskBucket[] = ["TOP"];
+const EAST_WEST_MASK_BUCKETS: readonly HybridSemanticMaskBucket[] = ["EAST_WEST"];
+const SOUTH_NORTH_MASK_BUCKETS: readonly HybridSemanticMaskBucket[] = ["SOUTH_NORTH"];
+const BOTH_SIDE_MASK_BUCKETS: readonly HybridSemanticMaskBucket[] = ["EAST_WEST", "SOUTH_NORTH"];
+
+export function resolveHybridSemanticMaskBuckets(
+  semantic: HybridSemanticClass,
+): readonly HybridSemanticMaskBucket[] {
+  if (semantic === "TOP") return TOP_MASK_BUCKETS;
+  if (semantic === "RIGHT_EAST") return EAST_WEST_MASK_BUCKETS;
+  if (semantic === "LEFT_SOUTH") return SOUTH_NORTH_MASK_BUCKETS;
+  return BOTH_SIDE_MASK_BUCKETS;
+}
+
+export type BuildHybridTriangleSemanticMapInput = {
+  overlay: StampOverlay;
+  triangleCache: RuntimeStructureTriangleCache;
+  activeRoofQuad: StructureShadowProjectedQuad | null;
+  triangles?: readonly RuntimeStructureTrianglePiece[];
+};
+
+export function buildHybridTriangleSemanticMap(
+  input: BuildHybridTriangleSemanticMapInput,
+): Map<number, HybridSemanticClass> {
+  const context = buildHybridSemanticContext(
+    input.overlay,
+    input.triangleCache,
+    input.activeRoofQuad,
+  );
+  const triangles = input.triangles ?? input.triangleCache.triangles;
+  const byStableId = new Map<number, HybridSemanticClass>();
+  for (let i = 0; i < triangles.length; i++) {
+    const tri = triangles[i];
+    byStableId.set(tri.stableId, classifyHybridTriangleSemantic(tri, context));
+  }
+  return byStableId;
 }
 
 function resolveHybridSideSemantic(

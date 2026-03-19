@@ -41,7 +41,7 @@ export function mountDebugToolsSection(
   const shadowCasterModeSelect = createSelectRow<DebugToolsSettings["shadowCasterMode"]>(
     section,
     "Shadow Caster",
-    ["v4SliceStrips", "v3HybridTriangles", "v2AlphaSilhouette", "v1Roof"],
+    ["v5TriangleShadowMask", "v4SliceStrips", "v3HybridTriangles", "v2AlphaSilhouette", "v1Roof"],
     (value) => (
       value === "v1Roof"
         ? "V1 Roof"
@@ -49,14 +49,16 @@ export function mountDebugToolsSection(
           ? "V2 Alpha Silhouette"
           : value === "v3HybridTriangles"
             ? "V3 Hybrid Triangles"
-            : "V4 Slice Strips"
+            : value === "v4SliceStrips"
+              ? "V4 Slice Strips"
+              : "V5 Triangle Shadow Mask"
     ),
     (value) => applyDebugPatch({ shadowCasterMode: value }),
   );
 
   const shadowHybridDiagnosticModeSelect = createSelectRow<DebugToolsSettings["shadowHybridDiagnosticMode"]>(
     section,
-    "Hybrid Shadow Diagnostic",
+    "Triangle Shadow Diagnostic",
     ["off", "solidShadowPass", "solidMainCanvas"],
     (value) => (
       value === "solidShadowPass"
@@ -66,6 +68,38 @@ export function mountDebugToolsSection(
           : "Warped (Shadow Pass)"
     ),
     (value) => applyDebugPatch({ shadowHybridDiagnosticMode: value }),
+  );
+
+  const shadowDebugModeSelect = createSelectRow<DebugToolsSettings["shadowDebugMode"]>(
+    section,
+    "V4 Shadow Draw Mode",
+    ["warpedOnly", "flatOnly", "both"],
+    (value) => (
+      value === "flatOnly"
+        ? "Flat Only"
+        : value === "both"
+          ? "Both"
+          : "Warped Only"
+    ),
+    (value) => applyDebugPatch({ shadowDebugMode: value }),
+  );
+
+  const shadowV5DebugViewSelect = createSelectRow<DebugToolsSettings["shadowV5DebugView"]>(
+    section,
+    "V5 Mask Debug View",
+    ["finalOnly", "topMask", "eastWestMask", "southNorthMask", "all"],
+    (value) => (
+      value === "topMask"
+        ? "Top Mask"
+        : value === "eastWestMask"
+          ? "East-West Mask"
+          : value === "southNorthMask"
+            ? "South-North Mask"
+            : value === "all"
+              ? "All (Panes)"
+              : "Final Only"
+    ),
+    (value) => applyDebugPatch({ shadowV5DebugView: value }),
   );
 
   const shadowSunReadout = document.createElement("div");
@@ -124,6 +158,11 @@ export function mountDebugToolsSection(
       shadowV1DebugGeometryModeSelect.value = debug.shadowV1DebugGeometryMode;
       shadowCasterModeSelect.value = debug.shadowCasterMode;
       shadowHybridDiagnosticModeSelect.value = debug.shadowHybridDiagnosticMode;
+      shadowDebugModeSelect.value = debug.shadowDebugMode;
+      shadowV5DebugViewSelect.value = debug.shadowV5DebugView;
+      const v5DebugViewActive = debug.shadowCasterMode === "v5TriangleShadowMask";
+      shadowV5DebugViewSelect.disabled = !v5DebugViewActive;
+      shadowV5DebugViewSelect.style.opacity = v5DebugViewActive ? "1" : "0.65";
       syncShadowSunReadout(debug.shadowSunTimeHour);
       for (const [key, input] of Object.entries(controls)) {
         input.checked = !!(debug as any)[key];

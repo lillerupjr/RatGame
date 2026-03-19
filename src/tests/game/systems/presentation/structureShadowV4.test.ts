@@ -5,6 +5,7 @@ import {
   projectToGround,
   type SliceCorrespondence,
 } from "../../../../game/systems/presentation/structureShadowV4";
+import type { RuntimeStructureTrianglePiece } from "../../../../game/systems/presentation/runtimeStructureTriangles";
 
 function pointEq(a: { x: number; y: number }, b: { x: number; y: number }): boolean {
   return a.x === b.x && a.y === b.y;
@@ -15,6 +16,27 @@ function triHasVertices(
   expected: readonly [{ x: number; y: number }, { x: number; y: number }, { x: number; y: number }],
 ): boolean {
   return expected.every((p) => tri.some((q) => pointEq(p, q)));
+}
+
+function sourceTriangle(
+  stableId: number,
+  bandIndex: number,
+  points: [{ x: number; y: number }, { x: number; y: number }, { x: number; y: number }],
+): RuntimeStructureTrianglePiece {
+  return {
+    structureInstanceId: "s4-src",
+    stableId,
+    points,
+    srcPoints: points,
+    parentTx: 0,
+    parentTy: 0,
+    cameraTx: 0,
+    cameraTy: 0,
+    bandIndex,
+    localBounds: { x: 0, y: 0, w: 1, h: 1 },
+    srcRectLocal: { x: 0, y: 0, w: 1, h: 1 },
+    dstRectLocal: { x: 0, y: 0, w: 1, h: 1 },
+  };
 }
 
 describe("structureShadowV4", () => {
@@ -185,5 +207,98 @@ describe("structureShadowV4", () => {
     expect(pair.diagonal).toBe("B_to_Aprime");
     expect(triHasVertices(pair.tri0, [band.lowerA, band.lowerB, band.upperA])).toBe(true);
     expect(triHasVertices(pair.tri1, [band.lowerB, band.upperA, band.upperB])).toBe(true);
+  });
+
+  it("builds explicit one-to-one source/destination correspondence from slice-band topology", () => {
+    const correspondence: SliceCorrespondence[] = [{
+      sliceIndex: 0,
+      sourceBandIndex: 1,
+      baseSegment: { a: { x: 0, y: 100 }, b: { x: 40, y: 100 } },
+      topSegment: { a: { x: 0, y: 0 }, b: { x: 40, y: 0 } },
+    }];
+
+    const sourceTriangles: RuntimeStructureTrianglePiece[] = [
+      sourceTriangle(10, 1, [{ x: 1, y: 90 }, { x: 20, y: 90 }, { x: 20, y: 70 }]),
+      sourceTriangle(11, 1, [{ x: 1, y: 90 }, { x: 20, y: 70 }, { x: 1, y: 70 }]),
+      sourceTriangle(12, 1, [{ x: 1, y: 70 }, { x: 20, y: 70 }, { x: 20, y: 50 }]),
+      sourceTriangle(13, 1, [{ x: 1, y: 70 }, { x: 20, y: 50 }, { x: 1, y: 50 }]),
+    ];
+
+    const entry = buildStructureShadowV4CacheEntry({
+      structureInstanceId: "s4-match",
+      geometrySignature: "g4-match",
+      sunStepKey: "sun-v1:h13",
+      castHeightPx: 128,
+      sunDirection: { x: 0, y: 0 },
+      sliceCorrespondence: correspondence,
+      sourceTriangles,
+    });
+
+    expect(entry.sourceBandTriangles).toHaveLength(4);
+    expect(entry.destinationBandEntries).toHaveLength(4);
+    expect(entry.triangleCorrespondence).toHaveLength(4);
+    expect(entry.triangleCorrespondenceMismatches).toHaveLength(0);
+    expect(entry.triangleCorrespondenceGroups).toHaveLength(2);
+    expect(entry.triangleCorrespondenceGroups[0].correspondences).toHaveLength(2);
+    expect(entry.triangleCorrespondenceGroups[1].correspondences).toHaveLength(2);
+    expect(entry.triangleCorrespondence[0].sourceTriangleIndexWithinBand).toBe(0);
+    expect(entry.triangleCorrespondence[0].destinationTriangleIndex).toBe(0);
+    expect(entry.triangleCorrespondence[1].sourceTriangleIndexWithinBand).toBe(1);
+    expect(entry.triangleCorrespondence[1].destinationTriangleIndex).toBe(1);
+  });
+
+  it("surfaces mismatches explicitly when source/destination slice-band counts differ", () => {
+    const correspondence: SliceCorrespondence[] = [{
+      sliceIndex: 0,
+      sourceBandIndex: 1,
+      baseSegment: { a: { x: 0, y: 100 }, b: { x: 40, y: 100 } },
+      topSegment: { a: { x: 0, y: 0 }, b: { x: 40, y: 0 } },
+    }];
+    const sourceTriangles: RuntimeStructureTrianglePiece[] = [
+      sourceTriangle(21, 1, [{ x: 0, y: 90 }, { x: 20, y: 90 }, { x: 20, y: 70 }]),
+    ];
+
+    const entry = buildStructureShadowV4CacheEntry({
+      structureInstanceId: "s4-mismatch",
+      geometrySignature: "g4-mismatch",
+      sunStepKey: "sun-v1:h13",
+      castHeightPx: 64,
+      sunDirection: { x: 0, y: 0 },
+      sliceCorrespondence: correspondence,
+      sourceTriangles,
+    });
+
+    expect(entry.sourceBandTriangles).toHaveLength(1);
+    expect(entry.destinationBandEntries).toHaveLength(2);
+    expect(entry.triangleCorrespondence).toHaveLength(0);
+    expect(entry.triangleCorrespondenceMismatches).toHaveLength(1);
+    expect(entry.triangleCorrespondenceMismatches[0].sourceTriangleCount).toBe(1);
+    expect(entry.triangleCorrespondenceMismatches[0].destinationTriangleCount).toBe(2);
+    expect(entry.triangleCorrespondenceGroups[0].mismatch).toBeTruthy();
+  });
+
+  it("retains projected top-cap triangles in V4 cache output", () => {
+    const correspondence: SliceCorrespondence[] = [{
+      sliceIndex: 0,
+      baseSegment: { a: { x: 0, y: 100 }, b: { x: 40, y: 100 } },
+      topSegment: { a: { x: 0, y: 0 }, b: { x: 40, y: 0 } },
+    }];
+    const topCap: Array<[{ x: number; y: number }, { x: number; y: number }, { x: number; y: number }]> = [
+      [{ x: 120, y: 180 }, { x: 160, y: 180 }, { x: 140, y: 210 }],
+    ];
+
+    const entry = buildStructureShadowV4CacheEntry({
+      structureInstanceId: "s4-cap",
+      geometrySignature: "g4-cap",
+      sunStepKey: "sun-v1:h14",
+      castHeightPx: 64,
+      sunDirection: { x: 0.1, y: -0.2 },
+      sliceCorrespondence: correspondence,
+      topCapTriangles: topCap,
+    });
+
+    expect(entry.topCapTriangles).toHaveLength(1);
+    expect(entry.topCapTriangles[0]).toEqual(topCap[0]);
+    expect(entry.projectedBounds).toBeTruthy();
   });
 });

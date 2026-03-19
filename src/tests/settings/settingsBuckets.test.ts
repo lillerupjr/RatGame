@@ -25,6 +25,8 @@ describe("settings bucket defaults", () => {
       shadowV1DebugGeometryMode,
       shadowCasterMode,
       shadowHybridDiagnosticMode,
+      shadowDebugMode,
+      shadowV5DebugView,
       ...booleanFlags
     } = debug;
     for (const [key, value] of Object.entries(booleanFlags)) {
@@ -34,6 +36,8 @@ describe("settings bucket defaults", () => {
     expect(shadowV1DebugGeometryMode).toBe("full");
     expect(shadowCasterMode).toBe("v3HybridTriangles");
     expect(shadowHybridDiagnosticMode).toBe("off");
+    expect(shadowDebugMode).toBe("warpedOnly");
+    expect(shadowV5DebugView).toBe("finalOnly");
   });
 
   it("sanitizes debug shadow sun hour to daylight range with hourly steps", () => {
@@ -56,6 +60,8 @@ describe("settings bucket defaults", () => {
       .toBe("v3HybridTriangles");
     expect(sanitizeDebugToolsSettings({ shadowCasterMode: "v4SliceStrips" as any }).shadowCasterMode)
       .toBe("v4SliceStrips");
+    expect(sanitizeDebugToolsSettings({ shadowCasterMode: "v5TriangleShadowMask" as any }).shadowCasterMode)
+      .toBe("v5TriangleShadowMask");
     expect(sanitizeDebugToolsSettings({ shadowCasterMode: "invalid" as any }).shadowCasterMode)
       .toBe("v3HybridTriangles");
     expect(sanitizeDebugToolsSettings({ shadowHybridDiagnosticMode: "solidShadowPass" as any }).shadowHybridDiagnosticMode)
@@ -64,6 +70,22 @@ describe("settings bucket defaults", () => {
       .toBe("solidMainCanvas");
     expect(sanitizeDebugToolsSettings({ shadowHybridDiagnosticMode: "invalid" as any }).shadowHybridDiagnosticMode)
       .toBe("off");
+    expect(sanitizeDebugToolsSettings({ shadowDebugMode: "flatOnly" as any }).shadowDebugMode)
+      .toBe("flatOnly");
+    expect(sanitizeDebugToolsSettings({ shadowDebugMode: "both" as any }).shadowDebugMode)
+      .toBe("both");
+    expect(sanitizeDebugToolsSettings({ shadowDebugMode: "invalid" as any }).shadowDebugMode)
+      .toBe("warpedOnly");
+    expect(sanitizeDebugToolsSettings({ shadowV5DebugView: "topMask" as any }).shadowV5DebugView)
+      .toBe("topMask");
+    expect(sanitizeDebugToolsSettings({ shadowV5DebugView: "eastWestMask" as any }).shadowV5DebugView)
+      .toBe("eastWestMask");
+    expect(sanitizeDebugToolsSettings({ shadowV5DebugView: "southNorthMask" as any }).shadowV5DebugView)
+      .toBe("southNorthMask");
+    expect(sanitizeDebugToolsSettings({ shadowV5DebugView: "all" as any }).shadowV5DebugView)
+      .toBe("all");
+    expect(sanitizeDebugToolsSettings({ shadowV5DebugView: "invalid" as any }).shadowV5DebugView)
+      .toBe("finalOnly");
   });
 
   it("sanitizes user settings ranges and enums", () => {
