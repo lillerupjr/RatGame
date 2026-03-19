@@ -10,6 +10,7 @@ export type ShadowCasterMode = "v1Roof" | "v2AlphaSilhouette" | "v3HybridTriangl
 export type ShadowHybridDiagnosticMode = "off" | "solidShadowPass" | "solidMainCanvas";
 export type ShadowDebugMode = "flatOnly" | "warpedOnly" | "both";
 export type ShadowV5DebugView = "finalOnly" | "topMask" | "eastWestMask" | "southNorthMask" | "all";
+export type ShadowV5TransformDebugMode = "deformed" | "raw";
 
 export type NeutralBirdForceState =
   | "NONE"
@@ -79,6 +80,7 @@ export type DebugToolsSettings = {
   shadowHybridDiagnosticMode: ShadowHybridDiagnosticMode;
   shadowDebugMode: ShadowDebugMode;
   shadowV5DebugView: ShadowV5DebugView;
+  shadowV5TransformDebugMode: ShadowV5TransformDebugMode;
 };
 
 export type SystemOverrides = {

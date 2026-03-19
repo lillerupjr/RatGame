@@ -96,10 +96,18 @@ export function mountDebugToolsSection(
           : value === "southNorthMask"
             ? "South-North Mask"
             : value === "all"
-              ? "All (Panes)"
+              ? "All Masks"
               : "Final Only"
     ),
     (value) => applyDebugPatch({ shadowV5DebugView: value }),
+  );
+
+  const shadowV5TransformDebugModeSelect = createSelectRow<DebugToolsSettings["shadowV5TransformDebugMode"]>(
+    section,
+    "V5 Mask Transform",
+    ["deformed", "raw"],
+    (value) => value === "raw" ? "Raw Mask" : "Deformed Mask",
+    (value) => applyDebugPatch({ shadowV5TransformDebugMode: value }),
   );
 
   const shadowSunReadout = document.createElement("div");
@@ -160,9 +168,12 @@ export function mountDebugToolsSection(
       shadowHybridDiagnosticModeSelect.value = debug.shadowHybridDiagnosticMode;
       shadowDebugModeSelect.value = debug.shadowDebugMode;
       shadowV5DebugViewSelect.value = debug.shadowV5DebugView;
+      shadowV5TransformDebugModeSelect.value = debug.shadowV5TransformDebugMode;
       const v5DebugViewActive = debug.shadowCasterMode === "v5TriangleShadowMask";
       shadowV5DebugViewSelect.disabled = !v5DebugViewActive;
       shadowV5DebugViewSelect.style.opacity = v5DebugViewActive ? "1" : "0.65";
+      shadowV5TransformDebugModeSelect.disabled = !v5DebugViewActive;
+      shadowV5TransformDebugModeSelect.style.opacity = v5DebugViewActive ? "1" : "0.65";
       syncShadowSunReadout(debug.shadowSunTimeHour);
       for (const [key, input] of Object.entries(controls)) {
         input.checked = !!(debug as any)[key];

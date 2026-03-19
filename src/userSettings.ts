@@ -146,6 +146,7 @@ export type DebugSettings = {
   shadowHybridDiagnosticMode: "off" | "solidShadowPass" | "solidMainCanvas";
   shadowDebugMode: "flatOnly" | "warpedOnly" | "both";
   shadowV5DebugView: "finalOnly" | "topMask" | "eastWestMask" | "southNorthMask" | "all";
+  shadowV5TransformDebugMode: "deformed" | "raw";
   waterFlowRate: number;
   neutralBirdAI: NeutralBirdAIDebugSettings;
   objectives: {
@@ -218,6 +219,7 @@ function toLegacySettings(): UserSettings {
       shadowHybridDiagnosticMode: settings.debug.shadowHybridDiagnosticMode,
       shadowDebugMode: settings.debug.shadowDebugMode,
       shadowV5DebugView: settings.debug.shadowV5DebugView,
+      shadowV5TransformDebugMode: settings.debug.shadowV5TransformDebugMode,
       waterFlowRate: settings.system.waterFlowRate,
       neutralBirdAI: {
         disabled: settings.system.neutralBirdDisabled,
@@ -443,6 +445,9 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     }
     if (debugAny.shadowV5DebugView !== undefined) {
       debugPatch.shadowV5DebugView = debugAny.shadowV5DebugView;
+    }
+    if (debugAny.shadowV5TransformDebugMode !== undefined) {
+      debugPatch.shadowV5TransformDebugMode = debugAny.shadowV5TransformDebugMode;
     }
 
     if (debugAny.disableVisualCompiledCutoutCache !== undefined) {

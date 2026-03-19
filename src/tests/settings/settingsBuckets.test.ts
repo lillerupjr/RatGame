@@ -27,6 +27,7 @@ describe("settings bucket defaults", () => {
       shadowHybridDiagnosticMode,
       shadowDebugMode,
       shadowV5DebugView,
+      shadowV5TransformDebugMode,
       ...booleanFlags
     } = debug;
     for (const [key, value] of Object.entries(booleanFlags)) {
@@ -38,6 +39,7 @@ describe("settings bucket defaults", () => {
     expect(shadowHybridDiagnosticMode).toBe("off");
     expect(shadowDebugMode).toBe("warpedOnly");
     expect(shadowV5DebugView).toBe("finalOnly");
+    expect(shadowV5TransformDebugMode).toBe("deformed");
   });
 
   it("sanitizes debug shadow sun hour to daylight range with hourly steps", () => {
@@ -86,6 +88,10 @@ describe("settings bucket defaults", () => {
       .toBe("all");
     expect(sanitizeDebugToolsSettings({ shadowV5DebugView: "invalid" as any }).shadowV5DebugView)
       .toBe("finalOnly");
+    expect(sanitizeDebugToolsSettings({ shadowV5TransformDebugMode: "raw" as any }).shadowV5TransformDebugMode)
+      .toBe("raw");
+    expect(sanitizeDebugToolsSettings({ shadowV5TransformDebugMode: "invalid" as any }).shadowV5TransformDebugMode)
+      .toBe("deformed");
   });
 
   it("sanitizes user settings ranges and enums", () => {

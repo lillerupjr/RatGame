@@ -4,6 +4,7 @@ import type {
   ShadowDebugMode,
   ShadowHybridDiagnosticMode,
   ShadowV5DebugView,
+  ShadowV5TransformDebugMode,
   ShadowV1DebugGeometryMode,
 } from "./settingsTypes";
 import { DEFAULT_SHADOW_SUN_V1_TIME_HOUR, clampShadowSunTimeHour } from "../shadowSunV1";
@@ -73,6 +74,7 @@ export const DEFAULT_DEBUG_TOOLS_SETTINGS: DebugToolsSettings = {
   shadowHybridDiagnosticMode: "off",
   shadowDebugMode: "warpedOnly",
   shadowV5DebugView: "finalOnly",
+  shadowV5TransformDebugMode: "deformed",
 };
 
 function normalizeShadowV1DebugGeometryMode(value: unknown): ShadowV1DebugGeometryMode {
@@ -107,6 +109,11 @@ function normalizeShadowV5DebugView(value: unknown): ShadowV5DebugView {
   if (value === "southNorthMask") return "southNorthMask";
   if (value === "all") return "all";
   return "finalOnly";
+}
+
+function normalizeShadowV5TransformDebugMode(value: unknown): ShadowV5TransformDebugMode {
+  if (value === "raw") return "raw";
+  return "deformed";
 }
 
 export type DebugToolsSettingsPatch = Partial<DebugToolsSettings>;
@@ -149,6 +156,7 @@ export function sanitizeDebugToolsSettings(input: Partial<DebugToolsSettings> | 
     shadowHybridDiagnosticMode: normalizeShadowHybridDiagnosticMode(merged.shadowHybridDiagnosticMode),
     shadowDebugMode: normalizeShadowDebugMode(merged.shadowDebugMode),
     shadowV5DebugView: normalizeShadowV5DebugView(merged.shadowV5DebugView),
+    shadowV5TransformDebugMode: normalizeShadowV5TransformDebugMode(merged.shadowV5TransformDebugMode),
   };
 }
 
