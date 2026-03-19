@@ -37,6 +37,13 @@ export type BooleanDebugSettingKey = Exclude<
   | "shadowSunTimeHour"
   | "shadowV1DebugGeometryMode"
   | "shadowCasterMode"
+  | "shadowHybridDiagnosticMode"
+  | "shadowDebugMode"
+  | "shadowV5DebugView"
+  | "shadowV5TransformDebugMode"
+  | "shadowV6SemanticBucket"
+  | "shadowV6StructureIndex"
+  | "shadowV6SliceCount"
   | "neutralBirdAI"
   | "objectives"
 >;
@@ -95,6 +102,13 @@ export function makeAllDebugOffSettings(): DebugSettings {
     shadowSunTimeHour: DEFAULT_DEBUG_SETTINGS.shadowSunTimeHour,
     shadowV1DebugGeometryMode: DEFAULT_DEBUG_SETTINGS.shadowV1DebugGeometryMode,
     shadowCasterMode: DEFAULT_DEBUG_SETTINGS.shadowCasterMode,
+    shadowHybridDiagnosticMode: DEFAULT_DEBUG_SETTINGS.shadowHybridDiagnosticMode,
+    shadowDebugMode: DEFAULT_DEBUG_SETTINGS.shadowDebugMode,
+    shadowV5DebugView: DEFAULT_DEBUG_SETTINGS.shadowV5DebugView,
+    shadowV5TransformDebugMode: DEFAULT_DEBUG_SETTINGS.shadowV5TransformDebugMode,
+    shadowV6SemanticBucket: DEFAULT_DEBUG_SETTINGS.shadowV6SemanticBucket,
+    shadowV6StructureIndex: DEFAULT_DEBUG_SETTINGS.shadowV6StructureIndex,
+    shadowV6SliceCount: DEFAULT_DEBUG_SETTINGS.shadowV6SliceCount,
     waterFlowRate: 1,
     neutralBirdAI: {
       ...DEFAULT_DEBUG_SETTINGS.neutralBirdAI,

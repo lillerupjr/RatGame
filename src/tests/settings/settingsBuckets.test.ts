@@ -28,6 +28,9 @@ describe("settings bucket defaults", () => {
       shadowDebugMode,
       shadowV5DebugView,
       shadowV5TransformDebugMode,
+      shadowV6SemanticBucket,
+      shadowV6StructureIndex,
+      shadowV6SliceCount,
       ...booleanFlags
     } = debug;
     for (const [key, value] of Object.entries(booleanFlags)) {
@@ -40,6 +43,9 @@ describe("settings bucket defaults", () => {
     expect(shadowDebugMode).toBe("warpedOnly");
     expect(shadowV5DebugView).toBe("finalOnly");
     expect(shadowV5TransformDebugMode).toBe("deformed");
+    expect(shadowV6SemanticBucket).toBe("EAST_WEST");
+    expect(shadowV6StructureIndex).toBe(0);
+    expect(shadowV6SliceCount).toBe(8);
   });
 
   it("sanitizes debug shadow sun hour to daylight range with hourly steps", () => {
@@ -64,6 +70,8 @@ describe("settings bucket defaults", () => {
       .toBe("v4SliceStrips");
     expect(sanitizeDebugToolsSettings({ shadowCasterMode: "v5TriangleShadowMask" as any }).shadowCasterMode)
       .toBe("v5TriangleShadowMask");
+    expect(sanitizeDebugToolsSettings({ shadowCasterMode: "v6FaceSliceDebug" as any }).shadowCasterMode)
+      .toBe("v6FaceSliceDebug");
     expect(sanitizeDebugToolsSettings({ shadowCasterMode: "invalid" as any }).shadowCasterMode)
       .toBe("v3HybridTriangles");
     expect(sanitizeDebugToolsSettings({ shadowHybridDiagnosticMode: "solidShadowPass" as any }).shadowHybridDiagnosticMode)
@@ -92,6 +100,18 @@ describe("settings bucket defaults", () => {
       .toBe("raw");
     expect(sanitizeDebugToolsSettings({ shadowV5TransformDebugMode: "invalid" as any }).shadowV5TransformDebugMode)
       .toBe("deformed");
+    expect(sanitizeDebugToolsSettings({ shadowV6SemanticBucket: "TOP" as any }).shadowV6SemanticBucket)
+      .toBe("TOP");
+    expect(sanitizeDebugToolsSettings({ shadowV6SemanticBucket: "bad" as any }).shadowV6SemanticBucket)
+      .toBe("EAST_WEST");
+    expect(sanitizeDebugToolsSettings({ shadowV6StructureIndex: -4 }).shadowV6StructureIndex)
+      .toBe(0);
+    expect(sanitizeDebugToolsSettings({ shadowV6StructureIndex: 999 }).shadowV6StructureIndex)
+      .toBe(127);
+    expect(sanitizeDebugToolsSettings({ shadowV6SliceCount: 0 }).shadowV6SliceCount)
+      .toBe(1);
+    expect(sanitizeDebugToolsSettings({ shadowV6SliceCount: 99 }).shadowV6SliceCount)
+      .toBe(32);
   });
 
   it("sanitizes user settings ranges and enums", () => {

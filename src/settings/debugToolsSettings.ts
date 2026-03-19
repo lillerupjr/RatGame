@@ -3,11 +3,19 @@ import type {
   ShadowCasterMode,
   ShadowDebugMode,
   ShadowHybridDiagnosticMode,
+  ShadowV6SemanticBucket,
   ShadowV5DebugView,
   ShadowV5TransformDebugMode,
   ShadowV1DebugGeometryMode,
 } from "./settingsTypes";
 import { DEFAULT_SHADOW_SUN_V1_TIME_HOUR, clampShadowSunTimeHour } from "../shadowSunV1";
+import {
+  STRUCTURE_SHADOW_V6_DEFAULT_SLICE_COUNT,
+  STRUCTURE_SHADOW_V6_DEFAULT_STRUCTURE_INDEX,
+  clampStructureV6SliceCount,
+  clampStructureV6StructureIndex,
+  normalizeStructureV6SemanticBucket,
+} from "../game/systems/presentation/structureShadowV6FaceSlices";
 
 export type DebugToggleDefinition = {
   key: keyof DebugToolsSettings;
@@ -75,6 +83,9 @@ export const DEFAULT_DEBUG_TOOLS_SETTINGS: DebugToolsSettings = {
   shadowDebugMode: "warpedOnly",
   shadowV5DebugView: "finalOnly",
   shadowV5TransformDebugMode: "deformed",
+  shadowV6SemanticBucket: "EAST_WEST",
+  shadowV6StructureIndex: STRUCTURE_SHADOW_V6_DEFAULT_STRUCTURE_INDEX,
+  shadowV6SliceCount: STRUCTURE_SHADOW_V6_DEFAULT_SLICE_COUNT,
 };
 
 function normalizeShadowV1DebugGeometryMode(value: unknown): ShadowV1DebugGeometryMode {
@@ -88,6 +99,7 @@ function normalizeShadowCasterMode(value: unknown): ShadowCasterMode {
   if (value === "v3HybridTriangles") return "v3HybridTriangles";
   if (value === "v4SliceStrips") return "v4SliceStrips";
   if (value === "v5TriangleShadowMask") return "v5TriangleShadowMask";
+  if (value === "v6FaceSliceDebug") return "v6FaceSliceDebug";
   return "v3HybridTriangles";
 }
 
@@ -114,6 +126,10 @@ function normalizeShadowV5DebugView(value: unknown): ShadowV5DebugView {
 function normalizeShadowV5TransformDebugMode(value: unknown): ShadowV5TransformDebugMode {
   if (value === "raw") return "raw";
   return "deformed";
+}
+
+function normalizeShadowV6SemanticBucket(value: unknown): ShadowV6SemanticBucket {
+  return normalizeStructureV6SemanticBucket(value);
 }
 
 export type DebugToolsSettingsPatch = Partial<DebugToolsSettings>;
@@ -157,6 +173,9 @@ export function sanitizeDebugToolsSettings(input: Partial<DebugToolsSettings> | 
     shadowDebugMode: normalizeShadowDebugMode(merged.shadowDebugMode),
     shadowV5DebugView: normalizeShadowV5DebugView(merged.shadowV5DebugView),
     shadowV5TransformDebugMode: normalizeShadowV5TransformDebugMode(merged.shadowV5TransformDebugMode),
+    shadowV6SemanticBucket: normalizeShadowV6SemanticBucket(merged.shadowV6SemanticBucket),
+    shadowV6StructureIndex: clampStructureV6StructureIndex(merged.shadowV6StructureIndex),
+    shadowV6SliceCount: clampStructureV6SliceCount(merged.shadowV6SliceCount),
   };
 }
 

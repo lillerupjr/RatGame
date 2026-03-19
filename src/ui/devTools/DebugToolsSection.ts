@@ -3,6 +3,7 @@ import {
   applyColumnMajorGridOrder,
   createSection,
   createSelectRow,
+  createSliderRow,
   createThreeColumnGrid,
   createToggleRow,
 } from "./devToolsSectionHelpers";
@@ -41,7 +42,7 @@ export function mountDebugToolsSection(
   const shadowCasterModeSelect = createSelectRow<DebugToolsSettings["shadowCasterMode"]>(
     section,
     "Shadow Caster",
-    ["v5TriangleShadowMask", "v4SliceStrips", "v3HybridTriangles", "v2AlphaSilhouette", "v1Roof"],
+    ["v6FaceSliceDebug", "v5TriangleShadowMask", "v4SliceStrips", "v3HybridTriangles", "v2AlphaSilhouette", "v1Roof"],
     (value) => (
       value === "v1Roof"
         ? "V1 Roof"
@@ -51,7 +52,9 @@ export function mountDebugToolsSection(
             ? "V3 Hybrid Triangles"
             : value === "v4SliceStrips"
               ? "V4 Slice Strips"
-              : "V5 Triangle Shadow Mask"
+              : value === "v5TriangleShadowMask"
+                ? "V5 Triangle Shadow Mask"
+                : "V6 Face Slice Debug"
     ),
     (value) => applyDebugPatch({ shadowCasterMode: value }),
   );
@@ -110,6 +113,31 @@ export function mountDebugToolsSection(
     (value) => applyDebugPatch({ shadowV5TransformDebugMode: value }),
   );
 
+  const shadowV6SemanticBucketSelect = createSelectRow<DebugToolsSettings["shadowV6SemanticBucket"]>(
+    section,
+    "V6 Semantic Bucket",
+    ["EAST_WEST", "SOUTH_NORTH", "TOP"],
+    (value) => value === "EAST_WEST" ? "East-West" : value === "SOUTH_NORTH" ? "South-North" : "Top",
+    (value) => applyDebugPatch({ shadowV6SemanticBucket: value }),
+  );
+
+  const shadowV6StructureIndexSlider = createSliderRow(
+    section,
+    "V6 Structure Slot",
+    0,
+    127,
+    1,
+    (value) => applyDebugPatch({ shadowV6StructureIndex: value }),
+  );
+  const shadowV6SliceCountSlider = createSliderRow(
+    section,
+    "V6 Slice Count",
+    1,
+    32,
+    1,
+    (value) => applyDebugPatch({ shadowV6SliceCount: value }),
+  );
+
   const shadowSunReadout = document.createElement("div");
   shadowSunReadout.style.padding = "2px 0 10px 0";
   shadowSunReadout.style.opacity = "0.85";
@@ -122,6 +150,11 @@ export function mountDebugToolsSection(
     const f = sun.forward;
     const p = sun.projectionDirection;
     shadowSunReadout.textContent = `Sun ${sun.timeLabel} elev:${sun.elevationDeg.toFixed(1)}deg dir:${sun.directionLabel} forward(${f.x.toFixed(3)}, ${f.y.toFixed(3)}, ${f.z.toFixed(3)}) proj(${p.x.toFixed(3)}, ${p.y.toFixed(3)})`;
+  };
+
+  const syncV6SliderReadouts = (debug: DebugToolsSettings): void => {
+    shadowV6StructureIndexSlider.value.textContent = `${Math.round(debug.shadowV6StructureIndex)}`;
+    shadowV6SliceCountSlider.value.textContent = `${Math.round(debug.shadowV6SliceCount)}`;
   };
 
   const grid = createThreeColumnGrid(section);
@@ -169,12 +202,25 @@ export function mountDebugToolsSection(
       shadowDebugModeSelect.value = debug.shadowDebugMode;
       shadowV5DebugViewSelect.value = debug.shadowV5DebugView;
       shadowV5TransformDebugModeSelect.value = debug.shadowV5TransformDebugMode;
+      shadowV6SemanticBucketSelect.value = debug.shadowV6SemanticBucket;
+      shadowV6StructureIndexSlider.input.value = `${Math.round(debug.shadowV6StructureIndex)}`;
+      shadowV6SliceCountSlider.input.value = `${Math.round(debug.shadowV6SliceCount)}`;
       const v5DebugViewActive = debug.shadowCasterMode === "v5TriangleShadowMask";
       shadowV5DebugViewSelect.disabled = !v5DebugViewActive;
       shadowV5DebugViewSelect.style.opacity = v5DebugViewActive ? "1" : "0.65";
       shadowV5TransformDebugModeSelect.disabled = !v5DebugViewActive;
       shadowV5TransformDebugModeSelect.style.opacity = v5DebugViewActive ? "1" : "0.65";
+      const v6DebugViewActive = debug.shadowCasterMode === "v6FaceSliceDebug";
+      shadowV6SemanticBucketSelect.disabled = !v6DebugViewActive;
+      shadowV6SemanticBucketSelect.style.opacity = v6DebugViewActive ? "1" : "0.65";
+      shadowV6StructureIndexSlider.input.disabled = !v6DebugViewActive;
+      shadowV6SliceCountSlider.input.disabled = !v6DebugViewActive;
+      shadowV6StructureIndexSlider.input.style.opacity = v6DebugViewActive ? "1" : "0.65";
+      shadowV6SliceCountSlider.input.style.opacity = v6DebugViewActive ? "1" : "0.65";
+      shadowV6StructureIndexSlider.value.style.opacity = v6DebugViewActive ? "1" : "0.65";
+      shadowV6SliceCountSlider.value.style.opacity = v6DebugViewActive ? "1" : "0.65";
       syncShadowSunReadout(debug.shadowSunTimeHour);
+      syncV6SliderReadouts(debug);
       for (const [key, input] of Object.entries(controls)) {
         input.checked = !!(debug as any)[key];
       }

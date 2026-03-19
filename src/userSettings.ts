@@ -142,11 +142,20 @@ export type DebugSettings = {
   dpsMeter: boolean;
   shadowSunTimeHour: number;
   shadowV1DebugGeometryMode: "full" | "capOnly" | "connectorsOnly";
-  shadowCasterMode: "v1Roof" | "v2AlphaSilhouette" | "v3HybridTriangles" | "v4SliceStrips" | "v5TriangleShadowMask";
+  shadowCasterMode:
+    | "v1Roof"
+    | "v2AlphaSilhouette"
+    | "v3HybridTriangles"
+    | "v4SliceStrips"
+    | "v5TriangleShadowMask"
+    | "v6FaceSliceDebug";
   shadowHybridDiagnosticMode: "off" | "solidShadowPass" | "solidMainCanvas";
   shadowDebugMode: "flatOnly" | "warpedOnly" | "both";
   shadowV5DebugView: "finalOnly" | "topMask" | "eastWestMask" | "southNorthMask" | "all";
   shadowV5TransformDebugMode: "deformed" | "raw";
+  shadowV6SemanticBucket: "TOP" | "EAST_WEST" | "SOUTH_NORTH";
+  shadowV6StructureIndex: number;
+  shadowV6SliceCount: number;
   waterFlowRate: number;
   neutralBirdAI: NeutralBirdAIDebugSettings;
   objectives: {
@@ -220,6 +229,9 @@ function toLegacySettings(): UserSettings {
       shadowDebugMode: settings.debug.shadowDebugMode,
       shadowV5DebugView: settings.debug.shadowV5DebugView,
       shadowV5TransformDebugMode: settings.debug.shadowV5TransformDebugMode,
+      shadowV6SemanticBucket: settings.debug.shadowV6SemanticBucket,
+      shadowV6StructureIndex: settings.debug.shadowV6StructureIndex,
+      shadowV6SliceCount: settings.debug.shadowV6SliceCount,
       waterFlowRate: settings.system.waterFlowRate,
       neutralBirdAI: {
         disabled: settings.system.neutralBirdDisabled,
@@ -448,6 +460,15 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     }
     if (debugAny.shadowV5TransformDebugMode !== undefined) {
       debugPatch.shadowV5TransformDebugMode = debugAny.shadowV5TransformDebugMode;
+    }
+    if (debugAny.shadowV6SemanticBucket !== undefined) {
+      debugPatch.shadowV6SemanticBucket = debugAny.shadowV6SemanticBucket;
+    }
+    if (debugAny.shadowV6StructureIndex !== undefined) {
+      debugPatch.shadowV6StructureIndex = debugAny.shadowV6StructureIndex;
+    }
+    if (debugAny.shadowV6SliceCount !== undefined) {
+      debugPatch.shadowV6SliceCount = debugAny.shadowV6SliceCount;
     }
 
     if (debugAny.disableVisualCompiledCutoutCache !== undefined) {

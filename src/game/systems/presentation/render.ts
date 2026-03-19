@@ -170,16 +170,21 @@ import {
   StaticRelightBakeStore,
 } from "./staticRelightBake";
 import {
-  buildRuntimeStructureTriangleCache,
   buildRuntimeStructureTriangleContextKey,
-  buildRuntimeStructureTriangleGeometrySignature,
-  buildRuntimeStructureTrianglePiecesForBand,
   deriveParentTileRenderFields,
   rectIntersects as runtimeStructureRectIntersects,
   resolveRuntimeStructureBandProgressionIndex,
   RuntimeStructureTriangleCacheStore,
   type RuntimeStructureTriangleRect,
 } from "./runtimeStructureTriangles";
+import { pointInTriangle } from "./structureTriangles/structureTriangleCulling";
+import { drawStructureSliceTriangleDebugOverlay } from "./structureTriangles/structureTriangleDebug";
+import {
+  mapWideOverlayViewRect,
+  prepareRuntimeStructureTrianglesForLoading as prepareRuntimeStructureTrianglesForLoadingInternal,
+  rebuildRuntimeStructureTriangleCacheForMap,
+  runtimeStructureTriangleGeometrySignatureForOverlay,
+} from "./structureTriangles/structureTriangleCacheRebuild";
 import {
   buildStructureShadowCacheEntry,
   buildStructureShadowContextKey,
@@ -215,6 +220,16 @@ import {
   type ShadowTriangleCorrespondence,
   type StructureShadowV4CacheEntry,
 } from "./structureShadowV4";
+import {
+  buildStructureV6SliceAxis,
+  buildStructureV6FaceSlices,
+  clampStructureV6SliceCount,
+  resolveStructureV6SliceIndex,
+  resolveStructureV6SelectedCandidateIndex,
+  type StructureV6FaceSlice,
+  type StructureV6SliceAxis,
+  type StructureV6SemanticBucket,
+} from "./structureShadowV6FaceSlices";
 
 const DEBUG_PLAYER_WEDGE = false;
 const DISABLE_WALLS_AND_CURTAINS = true;
@@ -238,6 +253,7 @@ const STRUCTURE_SHADOW_V5_SOUTH_NORTH_FIXED_AXIS: ScreenPt = {
   x: -ISO_X / Math.hypot(ISO_X, ISO_Y),
   y: -ISO_Y / Math.hypot(ISO_X, ISO_Y),
 };
+const STRUCTURE_SHADOW_V6_DEBUG_PANEL_PADDING_PX = 8;
 
 // Background mode:
 // - "SOLID" = fastest, clean black void
@@ -261,6 +277,7 @@ let structureShadowV5EastWestMaskScratch: HTMLCanvasElement | null = null;
 let structureShadowV5SouthNorthMaskScratch: HTMLCanvasElement | null = null;
 let structureShadowV5CoverageMaskScratch: HTMLCanvasElement | null = null;
 let structureShadowV5FinalMaskScratch: HTMLCanvasElement | null = null;
+let structureShadowV6FaceScratch: HTMLCanvasElement | null = null;
 const staticRelightBakeStore = new StaticRelightBakeStore<HTMLCanvasElement>();
 const runtimeStructureTriangleCacheStore = new RuntimeStructureTriangleCacheStore();
 const structureShadowV1CacheStore = new StructureShadowCacheStore();
@@ -474,625 +491,6 @@ const STATIC_RELIGHT_INCLUDE_STRUCTURES = false;
 const STATIC_RELIGHT_ELEV_PX = 16;
 const STATIC_RELIGHT_SIDEWALK_SRC_SIZE = 128;
 const STATIC_RELIGHT_SIDEWALK_ISO_HEIGHT = 64;
-const STRUCTURE_SLICE_TRI_LADDER_STEP_PX = 64;
-const STRUCTURE_SLICE_TRI_LADDER_STAGGER_PX = 32;
-const STRUCTURE_SLICE_TRI_PARITY_FLIP = false;
-const STRUCTURE_SLICE_TRI_CULL_ALPHA_THRESHOLD = 1;
-
-type StructureSliceDebugRect = { x: number; y: number; w: number; h: number };
-type StructureSliceDebugPoint = { x: number; y: number };
-type StructureSliceDebugTriangleStats = { beforeCull: number; afterCull: number };
-type StructureSliceDebugAlphaMap = {
-  width: number;
-  height: number;
-  data: Uint8ClampedArray;
-};
-type RuntimeStructureTriangleBounds = {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-};
-type RuntimeStructureTrianglePiece = {
-  points: [StructureSliceDebugPoint, StructureSliceDebugPoint, StructureSliceDebugPoint];
-  parentTx: number;
-  parentTy: number;
-  bandIndex: number;
-  structureInstanceId: string;
-  stableId: number;
-  bounds: RuntimeStructureTriangleBounds;
-};
-type RuntimeStructureTriangleParentTileGroup = {
-  parentTx: number;
-  parentTy: number;
-  triangles: RuntimeStructureTrianglePiece[];
-  bounds: StructureSliceDebugRect;
-};
-
-let structureSliceDebugReadbackCanvas: HTMLCanvasElement | null = null;
-let structureSliceDebugReadbackCtx: CanvasRenderingContext2D | null = null;
-const structureSliceDebugAlphaMapCache = new WeakMap<object, StructureSliceDebugAlphaMap | null>();
-
-function positiveMod(n: number, m: number): number {
-  const mm = Math.max(1, m);
-  const r = n % mm;
-  return r < 0 ? r + mm : r;
-}
-
-function resolveStructureSliceDebugProgressionIndex(
-  bandIndex: number,
-  footprintW: number,
-  footprintH: number,
-): number {
-  const tileW = Math.max(1, footprintW | 0);
-  const tileH = Math.max(1, footprintH | 0);
-  const coreCount = tileW + tileH;
-  // Match runtimeStructureSlicing ownerBandIndex mapping exactly.
-  if (bandIndex === 0) return -1;
-  if (bandIndex === coreCount + 1) return coreCount;
-  return bandIndex - 1;
-}
-
-function getStructureSliceDebugAlphaMap(
-  sourceImg: CanvasImageSource,
-): StructureSliceDebugAlphaMap | null {
-  if (!(sourceImg instanceof HTMLImageElement || sourceImg instanceof HTMLCanvasElement)) return null;
-  const key = sourceImg as object;
-  if (structureSliceDebugAlphaMapCache.has(key)) {
-    return structureSliceDebugAlphaMapCache.get(key) ?? null;
-  }
-  const width = sourceImg instanceof HTMLImageElement
-    ? (sourceImg.naturalWidth || sourceImg.width || 0)
-    : sourceImg.width;
-  const height = sourceImg instanceof HTMLImageElement
-    ? (sourceImg.naturalHeight || sourceImg.height || 0)
-    : sourceImg.height;
-  if (width <= 0 || height <= 0) {
-    structureSliceDebugAlphaMapCache.set(key, null);
-    return null;
-  }
-  const canvas = structureSliceDebugReadbackCanvas ?? document.createElement("canvas");
-  structureSliceDebugReadbackCanvas = canvas;
-  if (canvas.width !== width) canvas.width = width;
-  if (canvas.height !== height) canvas.height = height;
-  const readbackCtx = structureSliceDebugReadbackCtx ?? canvas.getContext("2d", { willReadFrequently: true });
-  structureSliceDebugReadbackCtx = readbackCtx;
-  if (!readbackCtx) {
-    structureSliceDebugAlphaMapCache.set(key, null);
-    return null;
-  }
-  try {
-    readbackCtx.setTransform(1, 0, 0, 1, 0, 0);
-    readbackCtx.clearRect(0, 0, width, height);
-    readbackCtx.drawImage(sourceImg, 0, 0, width, height);
-    const imgData = readbackCtx.getImageData(0, 0, width, height);
-    const resolved = {
-      width,
-      height,
-      data: imgData.data,
-    };
-    structureSliceDebugAlphaMapCache.set(key, resolved);
-    return resolved;
-  } catch {
-    structureSliceDebugAlphaMapCache.set(key, null);
-    return null;
-  }
-}
-
-function pointInTriangle(p: StructureSliceDebugPoint, a: StructureSliceDebugPoint, b: StructureSliceDebugPoint, c: StructureSliceDebugPoint): boolean {
-  const ab = (p.x - b.x) * (a.y - b.y) - (a.x - b.x) * (p.y - b.y);
-  const bc = (p.x - c.x) * (b.y - c.y) - (b.x - c.x) * (p.y - c.y);
-  const ca = (p.x - a.x) * (c.y - a.y) - (c.x - a.x) * (p.y - a.y);
-  const hasNeg = ab < 0 || bc < 0 || ca < 0;
-  const hasPos = ab > 0 || bc > 0 || ca > 0;
-  return !(hasNeg && hasPos);
-}
-
-function mapDebugPointFromDstToSrc(
-  p: StructureSliceDebugPoint,
-  dstRect: StructureSliceDebugRect,
-  srcRect: StructureSliceDebugRect,
-): StructureSliceDebugPoint {
-  const nx = dstRect.w !== 0 ? (p.x - dstRect.x) / dstRect.w : 0;
-  const ny = dstRect.h !== 0 ? (p.y - dstRect.y) / dstRect.h : 0;
-  return {
-    x: srcRect.x + nx * srcRect.w,
-    y: srcRect.y + ny * srcRect.h,
-  };
-}
-
-function resolveTriangleCentroidOwnerTile(
-  triA: StructureSliceDebugPoint,
-  triB: StructureSliceDebugPoint,
-  triC: StructureSliceDebugPoint,
-  tileWorld: number,
-): { tx: number; ty: number; cx: number; cy: number } {
-  const cx = (triA.x + triB.x + triC.x) / 3;
-  const cy = (triA.y + triB.y + triC.y) / 3;
-  const world = screenToWorld(cx, cy);
-  const safeTileWorld = Math.max(1, tileWorld);
-  return {
-    tx: Math.floor(world.x / safeTileWorld),
-    ty: Math.floor(world.y / safeTileWorld),
-    cx,
-    cy,
-  };
-}
-
-function ownerTileColor(tx: number, ty: number, alpha: number): string {
-  const hash = ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
-  const hue = hash % 360;
-  const clampedAlpha = Math.max(0, Math.min(1, alpha));
-  return `hsla(${hue}, 92%, 54%, ${clampedAlpha})`;
-}
-
-function hashStructureTriangleStableId(
-  structureInstanceId: string,
-  bandIndex: number,
-  triangleOrdinal: number,
-): number {
-  let hash = 2166136261;
-  for (let i = 0; i < structureInstanceId.length; i++) {
-    hash ^= structureInstanceId.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  hash ^= bandIndex | 0;
-  hash = Math.imul(hash, 16777619);
-  hash ^= triangleOrdinal | 0;
-  hash = Math.imul(hash, 16777619);
-  return hash >>> 0;
-}
-
-function triangleHasVisibleSpritePixels(
-  triA: StructureSliceDebugPoint,
-  triB: StructureSliceDebugPoint,
-  triC: StructureSliceDebugPoint,
-  dstRect: StructureSliceDebugRect,
-  srcRect: StructureSliceDebugRect,
-  alphaMap: StructureSliceDebugAlphaMap,
-): boolean {
-  if (!(srcRect.w > 0) || !(srcRect.h > 0)) return false;
-  const a = mapDebugPointFromDstToSrc(triA, dstRect, srcRect);
-  const b = mapDebugPointFromDstToSrc(triB, dstRect, srcRect);
-  const c = mapDebugPointFromDstToSrc(triC, dstRect, srcRect);
-
-  const srcMinX = Math.max(
-    0,
-    Math.floor(Math.max(srcRect.x, Math.min(a.x, b.x, c.x))),
-  );
-  const srcMaxX = Math.min(
-    alphaMap.width - 1,
-    Math.ceil(Math.min(srcRect.x + srcRect.w, Math.max(a.x, b.x, c.x))) - 1,
-  );
-  const srcMinY = Math.max(
-    0,
-    Math.floor(Math.max(srcRect.y, Math.min(a.y, b.y, c.y))),
-  );
-  const srcMaxY = Math.min(
-    alphaMap.height - 1,
-    Math.ceil(Math.min(srcRect.y + srcRect.h, Math.max(a.y, b.y, c.y))) - 1,
-  );
-  if (srcMinX > srcMaxX || srcMinY > srcMaxY) return false;
-
-  for (let sy = srcMinY; sy <= srcMaxY; sy++) {
-    for (let sx = srcMinX; sx <= srcMaxX; sx++) {
-      const alphaIdx = ((sy * alphaMap.width + sx) << 2) + 3;
-      if ((alphaMap.data[alphaIdx] | 0) < STRUCTURE_SLICE_TRI_CULL_ALPHA_THRESHOLD) continue;
-      if (pointInTriangle({ x: sx + 0.5, y: sy + 0.5 }, a, b, c)) return true;
-    }
-  }
-  return false;
-}
-
-function buildRuntimeStructureTriangleDebugPieces(
-  rect: StructureSliceDebugRect,
-  progressionIndex: number,
-  tileWorld: number,
-  structureInstanceId: string,
-  bandIndex: number,
-  sourceImg?: CanvasImageSource,
-  srcRect?: StructureSliceDebugRect,
-): { pieces: RuntimeStructureTrianglePiece[]; stats: StructureSliceDebugTriangleStats } {
-  let beforeCull = 0;
-  let afterCull = 0;
-  const pieces: RuntimeStructureTrianglePiece[] = [];
-  const x0 = rect.x;
-  const y0 = rect.y;
-  const x1 = rect.x + rect.w;
-  const y1 = rect.y + rect.h;
-  if (!(x1 > x0) || !(y1 > y0)) return { pieces, stats: { beforeCull, afterCull } };
-  const ladderStep = Math.max(1, STRUCTURE_SLICE_TRI_LADDER_STEP_PX);
-  const ladderStagger = Math.max(1, Math.min(ladderStep - 1, STRUCTURE_SLICE_TRI_LADDER_STAGGER_PX));
-  const alphaMap = sourceImg && srcRect ? getStructureSliceDebugAlphaMap(sourceImg) : null;
-  const canCullByAlpha = !!alphaMap && !!srcRect;
-
-  const parityBias = STRUCTURE_SLICE_TRI_PARITY_FLIP ? 1 : 0;
-  const phasedProgression = progressionIndex + parityBias;
-  // 64px ladder step on both sides; each progression step shifts phase by 32px.
-  const rightPhase = positiveMod(phasedProgression * ladderStagger, ladderStep);
-  const leftPhase = positiveMod(rightPhase - ladderStagger, ladderStep);
-
-  const zigZagPoints: Array<{ x: number; y: number; side: "L" | "R" }> = [];
-  const collectLadder = (x: number, phase: number, side: "L" | "R") => {
-    // Start one ladder point below the rect so clipped bottom-edge wedges are still generated.
-    let first = y1 - positiveMod(y1 - phase, ladderStep);
-    if (first < y1) first += ladderStep;
-    for (let y = first; y >= y0 - ladderStep; y -= ladderStep) {
-      zigZagPoints.push({ x, y, side });
-    }
-  };
-  collectLadder(x1, rightPhase, "R");
-  collectLadder(x0, leftPhase, "L");
-  zigZagPoints.sort((a, b) => {
-    if (a.y !== b.y) return b.y - a.y;
-    if (a.side === b.side) return 0;
-    return a.side === "R" ? -1 : 1;
-  });
-
-  for (let i = 0; i + 2 < zigZagPoints.length; i++) {
-    const a = zigZagPoints[i];
-    const b = zigZagPoints[i + 1];
-    const c = zigZagPoints[i + 2];
-    const minX = Math.min(a.x, b.x, c.x);
-    const maxX = Math.max(a.x, b.x, c.x);
-    const minY = Math.min(a.y, b.y, c.y);
-    const maxY = Math.max(a.y, b.y, c.y);
-    if (maxX <= x0 || minX >= x1 || maxY <= y0 || minY >= y1) continue;
-    beforeCull++;
-    if (canCullByAlpha && !triangleHasVisibleSpritePixels(a, b, c, rect, srcRect!, alphaMap!)) continue;
-    const owner = resolveTriangleCentroidOwnerTile(a, b, c, tileWorld);
-    const triangleOrdinal = pieces.length;
-    pieces.push({
-      points: [
-        { x: a.x, y: a.y },
-        { x: b.x, y: b.y },
-        { x: c.x, y: c.y },
-      ],
-      parentTx: owner.tx,
-      parentTy: owner.ty,
-      bandIndex,
-      structureInstanceId,
-      stableId: hashStructureTriangleStableId(structureInstanceId, bandIndex, triangleOrdinal),
-      bounds: { minX, minY, maxX, maxY },
-    });
-    afterCull++;
-  }
-  return {
-    pieces,
-    stats: { beforeCull, afterCull },
-  };
-}
-
-function groupRuntimeStructureTrianglePiecesByParentTile(
-  pieces: RuntimeStructureTrianglePiece[],
-): RuntimeStructureTriangleParentTileGroup[] {
-  const byParent = new Map<string, {
-    parentTx: number;
-    parentTy: number;
-    triangles: RuntimeStructureTrianglePiece[];
-    minX: number;
-    minY: number;
-    maxX: number;
-    maxY: number;
-  }>();
-  for (let i = 0; i < pieces.length; i++) {
-    const piece = pieces[i];
-    const key = `${piece.parentTx},${piece.parentTy}`;
-    let group = byParent.get(key);
-    if (!group) {
-      group = {
-        parentTx: piece.parentTx,
-        parentTy: piece.parentTy,
-        triangles: [],
-        minX: piece.bounds.minX,
-        minY: piece.bounds.minY,
-        maxX: piece.bounds.maxX,
-        maxY: piece.bounds.maxY,
-      };
-      byParent.set(key, group);
-    }
-    group.triangles.push(piece);
-    if (piece.bounds.minX < group.minX) group.minX = piece.bounds.minX;
-    if (piece.bounds.minY < group.minY) group.minY = piece.bounds.minY;
-    if (piece.bounds.maxX > group.maxX) group.maxX = piece.bounds.maxX;
-    if (piece.bounds.maxY > group.maxY) group.maxY = piece.bounds.maxY;
-  }
-  const out: RuntimeStructureTriangleParentTileGroup[] = [];
-  byParent.forEach((group) => {
-    out.push({
-      parentTx: group.parentTx,
-      parentTy: group.parentTy,
-      triangles: group.triangles,
-      bounds: {
-        x: group.minX,
-        y: group.minY,
-        w: group.maxX - group.minX,
-        h: group.maxY - group.minY,
-      },
-    });
-  });
-  out.sort((a, b) => {
-    if (a.parentTy !== b.parentTy) return a.parentTy - b.parentTy;
-    return a.parentTx - b.parentTx;
-  });
-  return out;
-}
-
-function drawStructureSliceTriangleDebugOverlay(
-  ctx: CanvasRenderingContext2D,
-  rect: StructureSliceDebugRect,
-  progressionIndex: number,
-  tileWorld: number,
-  structureInstanceId: string,
-  bandIndex: number,
-  sourceImg?: CanvasImageSource,
-  srcRect?: StructureSliceDebugRect,
-): StructureSliceDebugTriangleStats {
-  const { pieces, stats } = buildRuntimeStructureTriangleDebugPieces(
-    rect,
-    progressionIndex,
-    tileWorld,
-    structureInstanceId,
-    bandIndex,
-    sourceImg,
-    srcRect,
-  );
-  if (pieces.length <= 0) return stats;
-  const groups = groupRuntimeStructureTrianglePiecesByParentTile(pieces);
-  const x0 = rect.x;
-  const y0 = rect.y;
-  const x1 = rect.x + rect.w;
-  const y1 = rect.y + rect.h;
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(x0, y0, Math.max(0, rect.w), Math.max(0, rect.h));
-  ctx.clip();
-
-  for (let gi = 0; gi < groups.length; gi++) {
-    const group = groups[gi];
-    const fill = ownerTileColor(group.parentTx, group.parentTy, 0.13);
-    const stroke = ownerTileColor(group.parentTx, group.parentTy, 0.52);
-    for (let ti = 0; ti < group.triangles.length; ti++) {
-      const tri = group.triangles[ti];
-      const [a, b, c] = tri.points;
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.lineTo(c.x, c.y);
-      ctx.closePath();
-      ctx.fillStyle = fill;
-      ctx.fill();
-      ctx.strokeStyle = stroke;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
-    const gx0 = group.bounds.x;
-    const gy0 = group.bounds.y;
-    const gx1 = gx0 + group.bounds.w;
-    const gy1 = gy0 + group.bounds.h;
-    const labelX = Math.max(x0 + 2, Math.min(x1 - 2, (gx0 + gx1) * 0.5));
-    const labelY = Math.max(y0 + 2, Math.min(y1 - 2, (gy0 + gy1) * 0.5));
-    ctx.font = "8px monospace";
-    ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
-    ctx.fillText(`t:${group.parentTx},${group.parentTy}`, labelX + 1, labelY + 1);
-    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-    ctx.fillText(`t:${group.parentTx},${group.parentTy}`, labelX, labelY);
-  }
-
-  ctx.restore();
-  return stats;
-}
-
-type RuntimeStructureTriangleProjectedDraw = {
-  dx: number;
-  dy: number;
-  dw: number;
-  dh: number;
-  flipX: boolean;
-  scale: number;
-};
-
-type RuntimeStructureTriangleAssetState = "READY" | "PENDING" | "FAILED";
-
-type RuntimeStructureTriangleBuildResult = {
-  pendingCount: number;
-  failedCount: number;
-  builtCount: number;
-  fallbackCount: number;
-  pendingKeys: string[];
-};
-
-function classifyRuntimeStructureTriangleAsset(rec: LoadedImg | null | undefined): RuntimeStructureTriangleAssetState {
-  if (!rec) return "FAILED";
-  if (rec.ready && rec.img && rec.img.naturalWidth > 0 && rec.img.naturalHeight > 0) return "READY";
-  if (rec.failed || rec.unsupported) return "FAILED";
-  if (rec.ready) return "FAILED";
-  return "PENDING";
-}
-
-function mapWideOverlayViewRect(compiledMap: ReturnType<typeof getActiveCompiledMap>): ViewRect {
-  const minTx = compiledMap.originTx;
-  const minTy = compiledMap.originTy;
-  const maxTx = minTx + Math.max(1, compiledMap.width) - 1;
-  const maxTy = minTy + Math.max(1, compiledMap.height) - 1;
-  return { minTx, maxTx, minTy, maxTy };
-}
-
-function collectMapWideStructureOverlays(compiledMap: ReturnType<typeof getActiveCompiledMap>): StampOverlay[] {
-  const allOverlays = overlaysInView(mapWideOverlayViewRect(compiledMap));
-  const out: StampOverlay[] = [];
-  for (let i = 0; i < allOverlays.length; i++) {
-    const overlay = allOverlays[i];
-    if (overlay.layerRole !== "STRUCTURE") continue;
-    out.push(overlay);
-  }
-  return out;
-}
-
-function buildRuntimeStructureProjectedDraw(
-  overlay: StampOverlay,
-  image: HTMLImageElement,
-): RuntimeStructureTriangleProjectedDraw {
-  const tileWorld = KENNEY_TILE_WORLD;
-  const elevPx = 16;
-  const scale = overlay.scale ?? 1;
-  const spriteW = image.width;
-  const spriteH = image.height;
-  const southY = overlay.ty + overlay.h - 1;
-  const anchorTx = overlay.anchorTx ?? (overlay.w >= overlay.h ? (overlay.tx + overlay.w - 1) : overlay.tx);
-  const anchorTy = overlay.anchorTy ?? southY;
-  const footprintW = Math.max(1, overlay.w | 0);
-  const isFootprintOverlay =
-    overlay.layerRole === "STRUCTURE" || ((overlay.kind ?? "ROOF") === "PROP" && (footprintW > 1 || (overlay.h | 0) > 1));
-  const tileWidth = 2 * tileWorld * ISO_X;
-  const halfTileW = tileWidth * 0.5;
-  const footprintAnchorAdjustX = isFootprintOverlay
-    ? ((overlay.h - overlay.w) * halfTileW) * 0.5
-    : 0;
-  const wx = (anchorTx + 0.5) * tileWorld;
-  const wy = (anchorTy + 0.5) * tileWorld;
-  const projected = worldToScreen(wx, wy);
-  const zVisual = overlay.z + (overlay.zVisualOffsetUnits ?? 0);
-  return {
-    dx: projected.x - spriteW * scale * 0.5 + (overlay.drawDxOffset ?? 0) + footprintAnchorAdjustX,
-    dy: projected.y - spriteH * scale - zVisual * elevPx - (overlay.drawDyOffset ?? 0),
-    dw: spriteW,
-    dh: spriteH,
-    flipX: !!overlay.flipX,
-    scale,
-  };
-}
-
-function runtimeStructureTriangleGeometrySignatureForOverlay(
-  overlay: StampOverlay,
-  draw: RuntimeStructureTriangleProjectedDraw,
-): string {
-  return buildRuntimeStructureTriangleGeometrySignature({
-    structureInstanceId: overlay.id,
-    spriteId: overlay.spriteId,
-    seTx: overlay.seTx,
-    seTy: overlay.seTy,
-    footprintW: overlay.w,
-    footprintH: overlay.h,
-    flipX: draw.flipX,
-    scale: draw.scale,
-    baseDx: draw.dx,
-    baseDy: draw.dy,
-    spriteWidth: draw.dw,
-    spriteHeight: draw.dh,
-    sliceOffsetX: overlay.sliceOffsetPx?.x ?? 0,
-    sliceOffsetY: overlay.sliceOffsetPx?.y ?? 0,
-    sliceOriginX: overlay.sliceOriginPx?.x,
-    baseZ: overlay.z,
-  });
-}
-
-function toRuntimeStructureTriangleRect(rect: { x: number; y: number; w: number; h: number }): RuntimeStructureTriangleRect {
-  return {
-    x: rect.x,
-    y: rect.y,
-    w: rect.w,
-    h: rect.h,
-  };
-}
-
-function buildRuntimeStructureTriangleCacheForOverlay(
-  overlay: StampOverlay,
-  image: HTMLImageElement,
-): { cache: ReturnType<typeof buildRuntimeStructureTriangleCache> | null; geometrySignature: string } {
-  const draw = buildRuntimeStructureProjectedDraw(overlay, image);
-  const geometrySignature = runtimeStructureTriangleGeometrySignatureForOverlay(overlay, draw);
-  const bandPieces = buildRuntimeStructureBandPieces({
-    structureInstanceId: overlay.id,
-    spriteId: overlay.spriteId,
-    seTx: overlay.seTx,
-    seTy: overlay.seTy,
-    footprintW: overlay.w,
-    footprintH: overlay.h,
-    flipped: draw.flipX,
-    sliceOffsetX: overlay.sliceOffsetPx?.x ?? 0,
-    sliceOffsetY: overlay.sliceOffsetPx?.y ?? 0,
-    sliceOriginX: overlay.sliceOriginPx?.x,
-    baseZ: overlay.z,
-    baseDx: draw.dx,
-    baseDy: draw.dy,
-    spriteWidth: draw.dw,
-    spriteHeight: draw.dh,
-    scale: draw.scale,
-  });
-  const sourceImage: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(image) : image;
-  const alphaMap = getStructureSliceDebugAlphaMap(sourceImage) as any;
-  const pieces = [] as ReturnType<typeof buildRuntimeStructureTriangleCache>["triangles"];
-  for (let i = 0; i < bandPieces.length; i++) {
-    const band = bandPieces[i];
-    const progressionIndex = resolveRuntimeStructureBandProgressionIndex(band.index, overlay.w, overlay.h);
-    const parentTx = band.renderKey.within;
-    const parentTy = band.renderKey.slice - band.renderKey.within;
-    const built = buildRuntimeStructureTrianglePiecesForBand({
-      structureInstanceId: overlay.id,
-      bandIndex: band.index,
-      progressionIndex,
-      parentTx,
-      parentTy,
-      srcRect: toRuntimeStructureTriangleRect(band.srcRect),
-      dstRect: toRuntimeStructureTriangleRect(band.dstRect),
-      tileWorld: KENNEY_TILE_WORLD,
-      alphaMap,
-    });
-    if (built.pieces.length > 0) pieces.push(...built.pieces);
-  }
-  if (pieces.length <= 0) {
-    return { cache: null, geometrySignature };
-  }
-  return {
-    cache: buildRuntimeStructureTriangleCache(overlay.id, overlay.spriteId, geometrySignature, pieces),
-    geometrySignature,
-  };
-}
-
-function rebuildRuntimeStructureTriangleCacheForMap(
-  compiledMap: ReturnType<typeof getActiveCompiledMap>,
-): RuntimeStructureTriangleBuildResult {
-  const overlays = collectMapWideStructureOverlays(compiledMap);
-  let pendingCount = 0;
-  let failedCount = 0;
-  let builtCount = 0;
-  let fallbackCount = 0;
-  const pendingKeys: string[] = [];
-  for (let i = 0; i < overlays.length; i++) {
-    const overlay = overlays[i];
-    const rec = overlay.spriteId ? getTileSpriteById(overlay.spriteId) : null;
-    const state = classifyRuntimeStructureTriangleAsset(rec);
-    if (state === "PENDING") {
-      pendingCount++;
-      if (pendingKeys.length < 20 && overlay.spriteId) pendingKeys.push(overlay.spriteId);
-      continue;
-    }
-    if (state === "FAILED" || !rec?.img || rec.img.width <= 0 || rec.img.height <= 0) {
-      failedCount++;
-      fallbackCount++;
-      runtimeStructureTriangleCacheStore.markFallback(overlay.id);
-      continue;
-    }
-    const built = buildRuntimeStructureTriangleCacheForOverlay(overlay, rec.img);
-    if (!built.cache) {
-      fallbackCount++;
-      runtimeStructureTriangleCacheStore.markFallback(overlay.id);
-      continue;
-    }
-    runtimeStructureTriangleCacheStore.set(built.cache);
-    builtCount++;
-  }
-
-  return {
-    pendingCount,
-    failedCount,
-    builtCount,
-    fallbackCount,
-    pendingKeys,
-  };
-}
 
 function floorRelightPieceKey(
   tx: number,
@@ -1614,50 +1012,11 @@ let lastStaticRelightLoadingFailureKey = "";
 let lastStaticRelightLoadingPendingLogAtMs = 0;
 let lastStaticRelightLoadingPendingSignature = "";
 
-let lastStructureTriangleLoadingFailureKey = "";
-let lastStructureTriangleLoadingPendingLogAtMs = 0;
-let lastStructureTriangleLoadingPendingSignature = "";
-
 export async function prepareRuntimeStructureTrianglesForLoading(_w: World): Promise<boolean> {
-  const settings = getUserSettings();
-  const enabled = settings.render.structureTriangleGeometryEnabled !== false;
-  const compiledMap = getActiveCompiledMap();
-  const contextKey = buildRuntimeStructureTriangleContextKey({
-    mapId: compiledMap.id,
-    enabled,
+  return prepareRuntimeStructureTrianglesForLoadingInternal({
+    cacheStore: runtimeStructureTriangleCacheStore,
+    getFlippedOverlayImage,
   });
-  runtimeStructureTriangleCacheStore.resetIfContextChanged(contextKey);
-  if (!enabled) return true;
-  const result = rebuildRuntimeStructureTriangleCacheForMap(compiledMap);
-  if (result.pendingCount > 0) {
-    const signature = `${contextKey}::${result.pendingCount}::${result.failedCount}::${result.pendingKeys.join("|")}`;
-    const now = performance.now();
-    if (
-      signature !== lastStructureTriangleLoadingPendingSignature
-      || now - lastStructureTriangleLoadingPendingLogAtMs >= 1000
-    ) {
-      lastStructureTriangleLoadingPendingSignature = signature;
-      lastStructureTriangleLoadingPendingLogAtMs = now;
-      console.debug(
-        `[structure-triangles:loading] built=${result.builtCount} pending=${result.pendingCount} failed=${result.failedCount} fallback=${result.fallbackCount}`,
-        result.pendingKeys,
-      );
-    }
-    return false;
-  }
-  lastStructureTriangleLoadingPendingSignature = "";
-  if (result.failedCount > 0) {
-    const failureKey = `${contextKey}::${result.failedCount}::${result.fallbackCount}`;
-    if (failureKey !== lastStructureTriangleLoadingFailureKey) {
-      lastStructureTriangleLoadingFailureKey = failureKey;
-      console.warn(
-        `[structure-triangles:loading] proceeding with ${result.failedCount} failed structure triangle dependencies (fallback path kept)`,
-      );
-    }
-  } else {
-    lastStructureTriangleLoadingFailureKey = "";
-  }
-  return true;
 }
 
 export async function prepareStaticGroundRelightForLoading(w: World): Promise<boolean> {
@@ -1845,6 +1204,70 @@ type StructureV5ShadowAnchorDiagnostic = {
   transformedMaskDrawOrigin: ScreenPt;
   finalShadowDrawOrigin: ScreenPt;
   offset: ScreenPt;
+};
+
+type StructureV6ShadowDebugCandidate = {
+  structureInstanceId: string;
+  sourceImage: CanvasImageSource;
+  sourceImageWidth: number;
+  sourceImageHeight: number;
+  triangles: readonly StructureV5ShadowMaskTriangle[];
+  zBand: number;
+};
+
+type StructureV6ExtrudedSliceDebug = {
+  slice: StructureV6FaceSlice;
+  t: number;
+  offsetX: number;
+  offsetY: number;
+  canvas: HTMLCanvasElement;
+  pixelCount: number;
+  contentBounds: { minX: number; minY: number; maxX: number; maxY: number } | null;
+};
+
+type StructureV6FaceSliceDebugData = {
+  structureInstanceId: string;
+  zBand: number;
+  requestedSemanticBucket: StructureV6SemanticBucket;
+  semanticBucket: StructureV6SemanticBucket;
+  requestedStructureIndex: number;
+  selectedStructureIndex: number;
+  candidateCount: number;
+  sourceTriangleCount: number;
+  nonEmptySliceCount: number;
+  faceBounds: { minX: number; minY: number; maxX: number; maxY: number };
+  faceCanvas: HTMLCanvasElement;
+  axis: StructureV6SliceAxis;
+  slices: ReadonlyArray<{
+    slice: StructureV6FaceSlice;
+    canvas: HTMLCanvasElement;
+    pixelCount: number;
+    contentBounds: { minX: number; minY: number; maxX: number; maxY: number } | null;
+  }>;
+  shadowVector: ScreenPt;
+  displacedCanvasOrigin: ScreenPt;
+  faceCanvasOrigin: ScreenPt;
+  mergedShadowDrawOrigin: ScreenPt;
+  displacedSlices: readonly StructureV6ExtrudedSliceDebug[];
+  displacedSlicesCanvas: HTMLCanvasElement;
+  mergedShadowCanvas: HTMLCanvasElement;
+};
+
+type StructureV6FaceSliceCastMode = "baselineToTop" | "constantMax";
+
+type StructureV6VerticalShadowMaskDebugData = {
+  structureInstanceId: string;
+  zBand: number;
+  requestedSemanticBucket: StructureV6SemanticBucket;
+  requestedStructureIndex: number;
+  selectedStructureIndex: number;
+  candidateCount: number;
+  shadowVector: ScreenPt;
+  bucketAShadow: StructureV6FaceSliceDebugData | null;
+  bucketBShadow: StructureV6FaceSliceDebugData | null;
+  topShadow: StructureV6FaceSliceDebugData | null;
+  mergedVerticalShadowDrawOrigin: ScreenPt;
+  mergedVerticalShadowCanvas: HTMLCanvasElement;
 };
 
 type DrawStructureV5ShadowMaskOutput = StructureV5ShadowDrawStats & {
@@ -2408,6 +1831,673 @@ function drawStructureV5ShadowMasks(
     finalShadowDrawCalls,
     anchorDiagnostic,
   };
+}
+
+function countStructureV6CandidateTrianglesForBucket(
+  candidate: StructureV6ShadowDebugCandidate,
+  bucket: StructureV6SemanticBucket,
+): number {
+  let count = 0;
+  for (let i = 0; i < candidate.triangles.length; i++) {
+    if (candidate.triangles[i].semanticBucket === bucket) count += 1;
+  }
+  return count;
+}
+
+function filterStructureV6CandidateForBucket(
+  candidate: StructureV6ShadowDebugCandidate,
+  bucket: StructureV6SemanticBucket,
+): StructureV6ShadowDebugCandidate {
+  const triangles = candidate.triangles.filter((triangle) => triangle.semanticBucket === bucket);
+  return {
+    structureInstanceId: candidate.structureInstanceId,
+    sourceImage: candidate.sourceImage,
+    sourceImageWidth: candidate.sourceImageWidth,
+    sourceImageHeight: candidate.sourceImageHeight,
+    triangles,
+    zBand: candidate.zBand,
+  };
+}
+
+type BuildStructureV6FaceSliceDebugOptions = {
+  axisOverride?: StructureV6SliceAxis;
+  useSunRelativeAxis?: boolean;
+  castMode?: StructureV6FaceSliceCastMode;
+  disableSlicing?: boolean;
+};
+
+function normalizeScreenVector(v: ScreenPt): ScreenPt {
+  const len = Math.hypot(v.x, v.y);
+  if (!(len > 1e-6)) return { x: 1, y: 0 };
+  return { x: v.x / len, y: v.y / len };
+}
+
+function dotScreenVectors(a: ScreenPt, b: ScreenPt): number {
+  return a.x * b.x + a.y * b.y;
+}
+
+function perpendicularScreenVector(v: ScreenPt): ScreenPt {
+  return { x: v.y, y: -v.x };
+}
+
+function buildStructureV6SunRelativeSliceAxis(
+  faceWidth: number,
+  faceHeight: number,
+  shadowVector: ScreenPt,
+): StructureV6SliceAxis {
+  const width = Math.max(1, Math.ceil(faceWidth));
+  const height = Math.max(1, Math.ceil(faceHeight));
+  const sliceDir = normalizeScreenVector(shadowVector);
+  const sliceNormal = normalizeScreenVector(perpendicularScreenVector(sliceDir));
+  const corners: ScreenPt[] = [
+    { x: 0, y: 0 },
+    { x: width, y: 0 },
+    { x: width, y: height },
+    { x: 0, y: height },
+  ];
+  let minT = Number.POSITIVE_INFINITY;
+  let maxT = Number.NEGATIVE_INFINITY;
+  for (let i = 0; i < corners.length; i++) {
+    const t = dotScreenVectors(corners[i], sliceNormal);
+    if (t < minT) minT = t;
+    if (t > maxT) maxT = t;
+  }
+  if (!Number.isFinite(minT) || !Number.isFinite(maxT)) {
+    minT = 0;
+    maxT = 1;
+  }
+  if (Math.abs(maxT - minT) < 1e-6) maxT = minT + 1;
+  return {
+    sliceDir,
+    sliceNormal,
+    minT,
+    maxT,
+  };
+}
+
+function buildStructureV6FaceSliceDebugData(
+  candidate: StructureV6ShadowDebugCandidate,
+  requestedSemanticBucket: StructureV6SemanticBucket,
+  semanticBucket: StructureV6SemanticBucket,
+  requestedStructureIndex: number,
+  selectedStructureIndex: number,
+  candidateCount: number,
+  requestedSliceCount: number,
+  shadowVector: ScreenPt,
+  options?: BuildStructureV6FaceSliceDebugOptions,
+): StructureV6FaceSliceDebugData | null {
+  if (candidate.triangles.length <= 0) return null;
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (let ti = 0; ti < candidate.triangles.length; ti++) {
+    const tri = candidate.triangles[ti].dstTriangle;
+    for (let vi = 0; vi < tri.length; vi++) {
+      const p = tri[vi];
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+  }
+  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+    return null;
+  }
+
+  const pad = 1;
+  const originX = Math.floor(minX) - pad;
+  const originY = Math.floor(minY) - pad;
+  const width = Math.max(1, Math.ceil(maxX - minX) + pad * 2);
+  const height = Math.max(1, Math.ceil(maxY - minY) + pad * 2);
+  const scratch = ensureScratchCanvas2D(structureShadowV6FaceScratch, width, height);
+  if (!scratch) return null;
+  structureShadowV6FaceScratch = scratch.canvas;
+  const faceCtx = scratch.ctx;
+  faceCtx.setTransform(1, 0, 0, 1, 0, 0);
+  faceCtx.globalAlpha = 1;
+  faceCtx.globalCompositeOperation = "source-over";
+  faceCtx.clearRect(0, 0, width, height);
+  for (let ti = 0; ti < candidate.triangles.length; ti++) {
+    const tri = candidate.triangles[ti];
+    const [s0, s1, s2] = tri.srcTriangle;
+    const [d0, d1, d2] = tri.dstTriangle;
+    drawTexturedTriangle(
+      faceCtx,
+      candidate.sourceImage,
+      candidate.sourceImageWidth,
+      candidate.sourceImageHeight,
+      s0,
+      s1,
+      s2,
+      { x: d0.x - originX, y: d0.y - originY },
+      { x: d1.x - originX, y: d1.y - originY },
+      { x: d2.x - originX, y: d2.y - originY },
+    );
+  }
+  const faceCanvas = document.createElement("canvas");
+  faceCanvas.width = width;
+  faceCanvas.height = height;
+  const faceCanvasCtx = faceCanvas.getContext("2d");
+  if (!faceCanvasCtx) return null;
+  configurePixelPerfect(faceCanvasCtx);
+  faceCanvasCtx.imageSmoothingEnabled = false;
+  faceCanvasCtx.clearRect(0, 0, width, height);
+  faceCanvasCtx.drawImage(scratch.canvas, 0, 0);
+
+  const axis = options?.axisOverride
+    ?? (options?.useSunRelativeAxis
+      ? buildStructureV6SunRelativeSliceAxis(width, height, shadowVector)
+      : buildStructureV6SliceAxis(width, height, semanticBucket));
+  const castMode = options?.castMode ?? "baselineToTop";
+  const disableSlicing = options?.disableSlicing === true;
+  if (disableSlicing) {
+    const offsetX = shadowVector.x;
+    const offsetY = shadowVector.y;
+    const displacedMinX = Math.min(0, offsetX);
+    const displacedMinY = Math.min(0, offsetY);
+    const displacedMaxX = Math.max(width, width + offsetX);
+    const displacedMaxY = Math.max(height, height + offsetY);
+    const displacedPad = 1;
+    const displacedOriginX = Math.floor(displacedMinX) - displacedPad;
+    const displacedOriginY = Math.floor(displacedMinY) - displacedPad;
+    const displacedWidth = Math.max(1, Math.ceil(displacedMaxX - displacedMinX) + displacedPad * 2);
+    const displacedHeight = Math.max(1, Math.ceil(displacedMaxY - displacedMinY) + displacedPad * 2);
+    const displacedSlicesCanvas = document.createElement("canvas");
+    displacedSlicesCanvas.width = displacedWidth;
+    displacedSlicesCanvas.height = displacedHeight;
+    const displacedSlicesCtx = displacedSlicesCanvas.getContext("2d");
+    if (!displacedSlicesCtx) return null;
+    configurePixelPerfect(displacedSlicesCtx);
+    displacedSlicesCtx.imageSmoothingEnabled = false;
+    displacedSlicesCtx.clearRect(0, 0, displacedWidth, displacedHeight);
+    displacedSlicesCtx.drawImage(
+      faceCanvas,
+      Math.round(offsetX - displacedOriginX),
+      Math.round(offsetY - displacedOriginY),
+    );
+    const mergedShadowCanvas = document.createElement("canvas");
+    mergedShadowCanvas.width = displacedWidth;
+    mergedShadowCanvas.height = displacedHeight;
+    const mergedShadowCtx = mergedShadowCanvas.getContext("2d");
+    if (!mergedShadowCtx) return null;
+    configurePixelPerfect(mergedShadowCtx);
+    mergedShadowCtx.imageSmoothingEnabled = false;
+    mergedShadowCtx.clearRect(0, 0, displacedWidth, displacedHeight);
+    mergedShadowCtx.drawImage(displacedSlicesCanvas, 0, 0);
+    mergedShadowCtx.globalCompositeOperation = "source-in";
+    mergedShadowCtx.fillStyle = "rgba(0,0,0,0.78)";
+    mergedShadowCtx.fillRect(0, 0, displacedWidth, displacedHeight);
+    mergedShadowCtx.globalCompositeOperation = "source-over";
+    return {
+      structureInstanceId: candidate.structureInstanceId,
+      zBand: candidate.zBand,
+      requestedSemanticBucket,
+      semanticBucket,
+      requestedStructureIndex,
+      selectedStructureIndex,
+      candidateCount,
+      sourceTriangleCount: candidate.triangles.length,
+      nonEmptySliceCount: candidate.triangles.length > 0 ? 1 : 0,
+      faceBounds: { minX, minY, maxX, maxY },
+      faceCanvas,
+      axis,
+      slices: [],
+      shadowVector,
+      displacedCanvasOrigin: { x: displacedOriginX, y: displacedOriginY },
+      faceCanvasOrigin: { x: originX, y: originY },
+      mergedShadowDrawOrigin: { x: originX + displacedOriginX, y: originY + displacedOriginY },
+      displacedSlices: [],
+      displacedSlicesCanvas,
+      mergedShadowCanvas,
+    };
+  }
+  const sliceCount = clampStructureV6SliceCount(requestedSliceCount);
+  const sliceDefs = buildStructureV6FaceSlices(axis, sliceCount);
+  const sourceImageData = faceCtx.getImageData(0, 0, width, height);
+  const source = sourceImageData.data;
+  const perSliceData: Uint8ClampedArray[] = new Array(sliceDefs.length);
+  const perSlicePixelCounts: number[] = new Array(sliceDefs.length);
+  const perSliceBounds: Array<{ minX: number; minY: number; maxX: number; maxY: number }> = new Array(sliceDefs.length);
+  for (let i = 0; i < sliceDefs.length; i++) {
+    perSliceData[i] = new Uint8ClampedArray(source.length);
+    perSlicePixelCounts[i] = 0;
+    perSliceBounds[i] = {
+      minX: Number.POSITIVE_INFINITY,
+      minY: Number.POSITIVE_INFINITY,
+      maxX: Number.NEGATIVE_INFINITY,
+      maxY: Number.NEGATIVE_INFINITY,
+    };
+  }
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const pixelIndex = (y * width + x) << 2;
+      const alpha = source[pixelIndex + 3] | 0;
+      if (alpha <= 0) continue;
+      const sliceIndex = resolveStructureV6SliceIndex(
+        x + 0.5,
+        y + 0.5,
+        axis,
+        sliceDefs.length,
+      );
+      const out = perSliceData[sliceIndex];
+      out[pixelIndex] = source[pixelIndex];
+      out[pixelIndex + 1] = source[pixelIndex + 1];
+      out[pixelIndex + 2] = source[pixelIndex + 2];
+      out[pixelIndex + 3] = source[pixelIndex + 3];
+      perSlicePixelCounts[sliceIndex] += 1;
+      const bounds = perSliceBounds[sliceIndex];
+      if (x < bounds.minX) bounds.minX = x;
+      if (y < bounds.minY) bounds.minY = y;
+      if (x > bounds.maxX) bounds.maxX = x;
+      if (y > bounds.maxY) bounds.maxY = y;
+    }
+  }
+  const slices = sliceDefs.map((slice, index) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      configurePixelPerfect(ctx);
+      ctx.imageSmoothingEnabled = false;
+      const imageData = ctx.createImageData(width, height);
+      imageData.data.set(perSliceData[index]);
+      ctx.putImageData(imageData, 0, 0);
+    }
+    return {
+      slice,
+      canvas,
+      pixelCount: perSlicePixelCounts[index],
+      contentBounds: perSlicePixelCounts[index] > 0
+        ? {
+            minX: perSliceBounds[index].minX,
+            minY: perSliceBounds[index].minY,
+            maxX: perSliceBounds[index].maxX,
+            maxY: perSliceBounds[index].maxY,
+      }
+        : null,
+    };
+  });
+  const nonEmptySlices = slices.filter((sliceEntry) => sliceEntry.pixelCount > 0);
+  const castSlices = nonEmptySlices.length > 0 ? nonEmptySlices : slices;
+  const sliceDenominator = Math.max(1, castSlices.length - 1);
+  const displacedSlices: StructureV6ExtrudedSliceDebug[] = new Array(castSlices.length);
+  let displacedMinX = 0;
+  let displacedMinY = 0;
+  let displacedMaxX = width;
+  let displacedMaxY = height;
+  for (let i = 0; i < castSlices.length; i++) {
+    const t = castMode === "constantMax"
+      ? 1
+      : castSlices.length <= 1
+        ? 0
+        : i / sliceDenominator;
+    const offsetX = shadowVector.x * t;
+    const offsetY = shadowVector.y * t;
+    const sliceEntry = castSlices[i];
+    displacedSlices[i] = {
+      slice: sliceEntry.slice,
+      t,
+      offsetX,
+      offsetY,
+      canvas: sliceEntry.canvas,
+      pixelCount: sliceEntry.pixelCount,
+      contentBounds: sliceEntry.contentBounds,
+    };
+    const content = sliceEntry.contentBounds;
+    if (!content) continue;
+    const minXWithOffset = content.minX + offsetX;
+    const minYWithOffset = content.minY + offsetY;
+    const maxXWithOffset = content.maxX + 1 + offsetX;
+    const maxYWithOffset = content.maxY + 1 + offsetY;
+    if (minXWithOffset < displacedMinX) displacedMinX = minXWithOffset;
+    if (minYWithOffset < displacedMinY) displacedMinY = minYWithOffset;
+    if (maxXWithOffset > displacedMaxX) displacedMaxX = maxXWithOffset;
+    if (maxYWithOffset > displacedMaxY) displacedMaxY = maxYWithOffset;
+  }
+  const displacedPad = 1;
+  const displacedOriginX = Math.floor(displacedMinX) - displacedPad;
+  const displacedOriginY = Math.floor(displacedMinY) - displacedPad;
+  const displacedWidth = Math.max(1, Math.ceil(displacedMaxX - displacedMinX) + displacedPad * 2);
+  const displacedHeight = Math.max(1, Math.ceil(displacedMaxY - displacedMinY) + displacedPad * 2);
+  const displacedSlicesCanvas = document.createElement("canvas");
+  displacedSlicesCanvas.width = displacedWidth;
+  displacedSlicesCanvas.height = displacedHeight;
+  const displacedSlicesCtx = displacedSlicesCanvas.getContext("2d");
+  if (!displacedSlicesCtx) return null;
+  configurePixelPerfect(displacedSlicesCtx);
+  displacedSlicesCtx.imageSmoothingEnabled = false;
+  displacedSlicesCtx.clearRect(0, 0, displacedWidth, displacedHeight);
+  for (let i = 0; i < displacedSlices.length; i++) {
+    const sliceEntry = displacedSlices[i];
+    if (!sliceEntry.contentBounds) continue;
+    displacedSlicesCtx.drawImage(
+      sliceEntry.canvas,
+      Math.round(sliceEntry.offsetX - displacedOriginX),
+      Math.round(sliceEntry.offsetY - displacedOriginY),
+    );
+  }
+  const mergedShadowCanvas = document.createElement("canvas");
+  mergedShadowCanvas.width = displacedWidth;
+  mergedShadowCanvas.height = displacedHeight;
+  const mergedShadowCtx = mergedShadowCanvas.getContext("2d");
+  if (!mergedShadowCtx) return null;
+  configurePixelPerfect(mergedShadowCtx);
+  mergedShadowCtx.imageSmoothingEnabled = false;
+  mergedShadowCtx.clearRect(0, 0, displacedWidth, displacedHeight);
+  mergedShadowCtx.drawImage(displacedSlicesCanvas, 0, 0);
+  mergedShadowCtx.globalCompositeOperation = "source-in";
+  mergedShadowCtx.fillStyle = "rgba(0,0,0,0.78)";
+  mergedShadowCtx.fillRect(0, 0, displacedWidth, displacedHeight);
+  mergedShadowCtx.globalCompositeOperation = "source-over";
+  return {
+    structureInstanceId: candidate.structureInstanceId,
+    zBand: candidate.zBand,
+    requestedSemanticBucket,
+    semanticBucket,
+    requestedStructureIndex,
+    selectedStructureIndex,
+    candidateCount,
+    sourceTriangleCount: candidate.triangles.length,
+    nonEmptySliceCount: nonEmptySlices.length,
+    faceBounds: { minX, minY, maxX, maxY },
+    faceCanvas,
+    axis,
+    slices,
+    shadowVector,
+    displacedCanvasOrigin: { x: displacedOriginX, y: displacedOriginY },
+    faceCanvasOrigin: { x: originX, y: originY },
+    mergedShadowDrawOrigin: { x: originX + displacedOriginX, y: originY + displacedOriginY },
+    displacedSlices,
+    displacedSlicesCanvas,
+    mergedShadowCanvas,
+  };
+}
+
+function buildStructureV6VerticalShadowMaskDebugData(
+  candidate: StructureV6ShadowDebugCandidate,
+  requestedSemanticBucket: StructureV6SemanticBucket,
+  requestedStructureIndex: number,
+  selectedStructureIndex: number,
+  candidateCount: number,
+  requestedSliceCount: number,
+  shadowVector: ScreenPt,
+): StructureV6VerticalShadowMaskDebugData | null {
+  const bucketAShadow = buildStructureV6FaceSliceDebugData(
+    filterStructureV6CandidateForBucket(candidate, "EAST_WEST"),
+    requestedSemanticBucket,
+    "EAST_WEST",
+    requestedStructureIndex,
+    selectedStructureIndex,
+    candidateCount,
+    requestedSliceCount,
+    shadowVector,
+  );
+  const bucketBShadow = buildStructureV6FaceSliceDebugData(
+    filterStructureV6CandidateForBucket(candidate, "SOUTH_NORTH"),
+    requestedSemanticBucket,
+    "SOUTH_NORTH",
+    requestedStructureIndex,
+    selectedStructureIndex,
+    candidateCount,
+    requestedSliceCount,
+    shadowVector,
+  );
+  const topSource = filterStructureV6CandidateForBucket(candidate, "TOP");
+  const topShadow = buildStructureV6FaceSliceDebugData(
+    topSource,
+    requestedSemanticBucket,
+    "TOP",
+    requestedStructureIndex,
+    selectedStructureIndex,
+    candidateCount,
+    requestedSliceCount,
+    shadowVector,
+    {
+      disableSlicing: true,
+    },
+  );
+  if (!bucketAShadow && !bucketBShadow && !topShadow) return null;
+
+  const bucketShadows = [bucketAShadow, bucketBShadow, topShadow].filter(
+    (entry): entry is StructureV6FaceSliceDebugData => entry !== null,
+  );
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (let i = 0; i < bucketShadows.length; i++) {
+    const bucket = bucketShadows[i];
+    const drawX = bucket.mergedShadowDrawOrigin.x;
+    const drawY = bucket.mergedShadowDrawOrigin.y;
+    minX = Math.min(minX, drawX);
+    minY = Math.min(minY, drawY);
+    maxX = Math.max(maxX, drawX + bucket.displacedSlicesCanvas.width);
+    maxY = Math.max(maxY, drawY + bucket.displacedSlicesCanvas.height);
+  }
+  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+    return null;
+  }
+  const mergedPad = 1;
+  const mergedOriginX = Math.floor(minX) - mergedPad;
+  const mergedOriginY = Math.floor(minY) - mergedPad;
+  const mergedWidth = Math.max(1, Math.ceil(maxX - minX) + mergedPad * 2);
+  const mergedHeight = Math.max(1, Math.ceil(maxY - minY) + mergedPad * 2);
+  const mergedVerticalShadowCanvas = document.createElement("canvas");
+  mergedVerticalShadowCanvas.width = mergedWidth;
+  mergedVerticalShadowCanvas.height = mergedHeight;
+  const mergedVerticalShadowCtx = mergedVerticalShadowCanvas.getContext("2d");
+  if (!mergedVerticalShadowCtx) return null;
+  configurePixelPerfect(mergedVerticalShadowCtx);
+  mergedVerticalShadowCtx.imageSmoothingEnabled = false;
+  mergedVerticalShadowCtx.clearRect(0, 0, mergedWidth, mergedHeight);
+  for (let i = 0; i < bucketShadows.length; i++) {
+    const bucket = bucketShadows[i];
+    mergedVerticalShadowCtx.drawImage(
+      bucket.displacedSlicesCanvas,
+      Math.round(bucket.mergedShadowDrawOrigin.x - mergedOriginX),
+      Math.round(bucket.mergedShadowDrawOrigin.y - mergedOriginY),
+    );
+  }
+  // Tint once after unioning coverage so overlapping buckets do not add extra darkness.
+  mergedVerticalShadowCtx.globalCompositeOperation = "source-in";
+  mergedVerticalShadowCtx.fillStyle = "rgba(0,0,0,0.78)";
+  mergedVerticalShadowCtx.fillRect(0, 0, mergedWidth, mergedHeight);
+  mergedVerticalShadowCtx.globalCompositeOperation = "source-over";
+
+  return {
+    structureInstanceId: candidate.structureInstanceId,
+    zBand: candidate.zBand,
+    requestedSemanticBucket,
+    requestedStructureIndex,
+    selectedStructureIndex,
+    candidateCount,
+    shadowVector,
+    bucketAShadow,
+    bucketBShadow,
+    topShadow,
+    mergedVerticalShadowDrawOrigin: { x: mergedOriginX, y: mergedOriginY },
+    mergedVerticalShadowCanvas,
+  };
+}
+
+function drawStructureV65MergedShadowMaskInWorld(
+  ctx: CanvasRenderingContext2D,
+  debugData: StructureV6VerticalShadowMaskDebugData,
+): void {
+  if (debugData.mergedVerticalShadowCanvas.width <= 0 || debugData.mergedVerticalShadowCanvas.height <= 0) return;
+  const drawX = Math.round(debugData.mergedVerticalShadowDrawOrigin.x);
+  const drawY = Math.round(debugData.mergedVerticalShadowDrawOrigin.y);
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.globalCompositeOperation = "source-over";
+  ctx.globalAlpha = 1;
+  ctx.drawImage(
+    debugData.mergedVerticalShadowCanvas,
+    drawX,
+    drawY,
+  );
+  ctx.restore();
+}
+
+function drawStructureV6FaceSliceDebugPanel(
+  ctx: CanvasRenderingContext2D,
+  cssW: number,
+  cssH: number,
+  debugData: StructureV6VerticalShadowMaskDebugData,
+): void {
+  const panelPadding = STRUCTURE_SHADOW_V6_DEBUG_PANEL_PADDING_PX;
+  const panelW = Math.max(420, Math.min(900, cssW - panelPadding * 2));
+  const panelH = Math.max(300, Math.min(560, cssH - panelPadding * 2));
+  const panelX = cssW - panelW - panelPadding;
+  const panelY = panelPadding;
+
+  const drawViewFrame = (
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    label: string,
+  ): { contentX: number; contentY: number; contentW: number; contentH: number } => {
+    ctx.fillStyle = "rgba(32, 38, 52, 0.60)";
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = "rgba(160, 186, 238, 0.52)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    ctx.fillStyle = "rgba(210, 228, 255, 0.92)";
+    ctx.font = "10px monospace";
+    ctx.fillText(label, x + 4, y + 11);
+    return {
+      contentX: x + 4,
+      contentY: y + 14,
+      contentW: Math.max(1, w - 8),
+      contentH: Math.max(1, h - 18),
+    };
+  };
+
+  const drawFittedCanvas = (
+    canvas: HTMLCanvasElement,
+    target: { contentX: number; contentY: number; contentW: number; contentH: number },
+  ): { x: number; y: number; w: number; h: number } | null => {
+    const srcW = Math.max(1, canvas.width);
+    const srcH = Math.max(1, canvas.height);
+    const scale = Math.min(target.contentW / srcW, target.contentH / srcH);
+    if (!(scale > 0)) return null;
+    const drawW = Math.max(1, Math.floor(srcW * scale));
+    const drawH = Math.max(1, Math.floor(srcH * scale));
+    const drawX = target.contentX + Math.floor((target.contentW - drawW) * 0.5);
+    const drawY = target.contentY + Math.floor((target.contentH - drawH) * 0.5);
+    ctx.drawImage(canvas, drawX, drawY, drawW, drawH);
+    return { x: drawX, y: drawY, w: drawW, h: drawH };
+  };
+
+  const drawEmptyFrameLabel = (
+    frame: { contentX: number; contentY: number; contentW: number; contentH: number },
+    label: string,
+  ): void => {
+    ctx.fillStyle = "rgba(245, 245, 245, 0.85)";
+    ctx.font = "11px monospace";
+    ctx.fillText(label, frame.contentX + 4, frame.contentY + 14);
+  };
+
+  const drawTopCollected = (
+    frame: { contentX: number; contentY: number; contentW: number; contentH: number },
+    topShadow: StructureV6FaceSliceDebugData | null,
+  ): void => {
+    if (!topShadow) {
+      drawEmptyFrameLabel(frame, "No TOP triangles");
+      return;
+    }
+    drawFittedCanvas(topShadow.faceCanvas, frame);
+  };
+
+  ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "rgba(12, 14, 18, 0.88)";
+  ctx.fillRect(panelX, panelY, panelW, panelH);
+  ctx.strokeStyle = "rgba(185, 210, 255, 0.48)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(panelX + 0.5, panelY + 0.5, panelW - 1, panelH - 1);
+
+  const titleX = panelX + 10;
+  let textY = panelY + 16;
+  ctx.font = "12px monospace";
+  ctx.fillStyle = "rgba(240, 245, 255, 0.96)";
+  ctx.fillText("V6.7 TOP Face Shadow Cast (No Top Slicing)", titleX, textY);
+  textY += 14;
+  const trimmedId = debugData.structureInstanceId.length > 52
+    ? `${debugData.structureInstanceId.slice(0, 49)}...`
+    : debugData.structureInstanceId;
+  ctx.fillStyle = "rgba(210, 228, 255, 0.9)";
+  ctx.fillText(
+    `id:${trimmedId} sel:${debugData.selectedStructureIndex}/${Math.max(0, debugData.candidateCount - 1)} req:${debugData.requestedStructureIndex} reqBucket:${debugData.requestedSemanticBucket}`,
+    titleX,
+    textY,
+  );
+  textY += 14;
+  const bucketATris = debugData.bucketAShadow?.sourceTriangleCount ?? 0;
+  const bucketBTriCount = debugData.bucketBShadow?.sourceTriangleCount ?? 0;
+  const topTriCount = debugData.topShadow?.sourceTriangleCount ?? 0;
+  const bucketACastSlices = debugData.bucketAShadow?.nonEmptySliceCount ?? 0;
+  const bucketBCastSlices = debugData.bucketBShadow?.nonEmptySliceCount ?? 0;
+  const topCastSlices = debugData.topShadow?.nonEmptySliceCount ?? 0;
+  ctx.fillStyle = "rgba(195, 214, 246, 0.88)";
+  ctx.fillText(
+    `EW tris:${bucketATris} cast:${bucketACastSlices}  SN tris:${bucketBTriCount} cast:${bucketBCastSlices}  TOP tris:${topTriCount} cast:${topCastSlices}`,
+    titleX,
+    textY,
+  );
+  textY += 14;
+  ctx.fillStyle = "rgba(255, 221, 168, 0.86)";
+  ctx.fillText(
+    `shadowVector(${debugData.shadowVector.x.toFixed(1)},${debugData.shadowVector.y.toFixed(1)}) zBand:${debugData.zBand} worldOrigin(${debugData.mergedVerticalShadowDrawOrigin.x.toFixed(1)},${debugData.mergedVerticalShadowDrawOrigin.y.toFixed(1)})`,
+    titleX,
+    textY,
+  );
+
+  const bodyTop = textY + 10;
+  const bodyBottom = panelY + panelH - 10;
+  const bodyHeight = Math.max(1, bodyBottom - bodyTop);
+  const bodyWidth = panelW - 20;
+  const columnGap = 8;
+  const rowGap = 8;
+  const topRowH = Math.max(110, Math.floor((bodyHeight - rowGap) * 0.5));
+  const bottomRowH = Math.max(110, bodyHeight - topRowH - rowGap);
+  const columnW = Math.max(120, Math.floor((bodyWidth - columnGap) * 0.5));
+  const leftX = panelX + 10;
+  const rightX = leftX + columnW + columnGap;
+  const topY = bodyTop;
+  const bottomY = topY + topRowH + rowGap;
+
+  const topCollectedFrame = drawViewFrame(leftX, topY, columnW, topRowH, "TOP Collected");
+  const topModeFrame = drawViewFrame(rightX, topY, columnW, topRowH, "TOP Mode");
+  const topCastFrame = drawViewFrame(leftX, bottomY, columnW, bottomRowH, "TOP Cast Shadow");
+  const mergedFrame = drawViewFrame(rightX, bottomY, columnW, bottomRowH, "Merged Shadow (Vertical + TOP)");
+
+  drawTopCollected(topCollectedFrame, debugData.topShadow);
+  drawEmptyFrameLabel(topModeFrame, "whole-face move (no slicing)");
+  ctx.fillStyle = "rgba(245, 245, 245, 0.92)";
+  ctx.font = "10px monospace";
+  ctx.fillText(
+    `offset = shadowVector`,
+    topModeFrame.contentX + 4,
+    topModeFrame.contentY + 30,
+  );
+  if (debugData.topShadow) {
+    drawFittedCanvas(debugData.topShadow.mergedShadowCanvas, topCastFrame);
+  } else {
+    drawEmptyFrameLabel(topCastFrame, "No TOP cast");
+  }
+  drawFittedCanvas(debugData.mergedVerticalShadowCanvas, mergedFrame);
+  ctx.fillStyle = "rgba(245, 245, 245, 0.94)";
+  ctx.font = "10px monospace";
+  ctx.fillText(
+    `single-tint merged mask (non-additive overlap)`,
+    mergedFrame.contentX + 4,
+    mergedFrame.contentY + mergedFrame.contentH - 2,
+  );
+  ctx.restore();
 }
 
 function drawStructureHybridShadowProjectedTriangles(
@@ -3700,6 +3790,12 @@ export async function renderSystem(
   const SHADOW_DEBUG_MODE = debug.shadowDebugMode;
   const SHADOW_V5_DEBUG_VIEW = debug.shadowV5DebugView;
   const SHADOW_V5_TRANSFORM_DEBUG_MODE = debug.shadowV5TransformDebugMode;
+  const SHADOW_V6_REQUESTED_SEMANTIC_BUCKET = debug.shadowV6SemanticBucket;
+  const SHADOW_V6_PRIMARY_SEMANTIC_BUCKET: StructureV6SemanticBucket = "EAST_WEST";
+  const SHADOW_V6_SECONDARY_SEMANTIC_BUCKET: StructureV6SemanticBucket = "SOUTH_NORTH";
+  const SHADOW_V6_TOP_SEMANTIC_BUCKET: StructureV6SemanticBucket = "TOP";
+  const SHADOW_V6_STRUCTURE_INDEX = debug.shadowV6StructureIndex;
+  const SHADOW_V6_SLICE_COUNT = debug.shadowV6SliceCount;
   const SHOW_ENEMY_AIM_OVERLAY = debugFlags.showEnemyAimOverlay;
   const SHOW_LOOT_GOBLIN_OVERLAY = debugFlags.showLootGoblinOverlay;
   const SHOW_ZONE_OBJECTIVE_BOUNDS = !!debug.objectives?.showZoneBounds;
@@ -4203,7 +4299,10 @@ export async function renderSystem(
   structureShadowV4CacheStore.resetIfContextChanged(structureShadowV4ContextKey);
   staticRelightFrame = staticRelight.frame;
   if (runtimeStructureTriangleContextChanged && structureTriangleGeometryEnabled) {
-    rebuildRuntimeStructureTriangleCacheForMap(compiledMap);
+    rebuildRuntimeStructureTriangleCacheForMap(compiledMap, {
+      cacheStore: runtimeStructureTriangleCacheStore,
+      getFlippedOverlayImage,
+    });
   }
   if (staticRelightContextChanged) {
     staticRelightPendingRuntimeRebuildContextKey = "";
@@ -4265,6 +4364,8 @@ export async function renderSystem(
   const structureHybridShadowByBand = new Map<number, StructureHybridShadowRenderPiece[]>();
   const structureV4ShadowByBand = new Map<number, StructureV4ShadowRenderPiece[]>();
   const structureV5ShadowByBand = new Map<number, StructureV5ShadowRenderPiece[]>();
+  const structureV6ShadowDebugCandidates: StructureV6ShadowDebugCandidate[] = [];
+  let structureV6VerticalShadowDebugData: StructureV6VerticalShadowMaskDebugData | null = null;
   type HybridShadowDiagnosticStats = {
     cacheHits: number;
     cacheMisses: number;
@@ -6049,7 +6150,8 @@ export async function renderSystem(
 	              usedTriangleGeometryPath = true;
 	              const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(draw.img) : draw.img;
                 const usingV5Caster = SHADOW_CASTER_MODE === "v5TriangleShadowMask";
-                const admittedTrianglesForV5: typeof triangleCache.triangles = [];
+                const usingV6Caster = SHADOW_CASTER_MODE === "v6FaceSliceDebug";
+                const admittedTrianglesForSemanticMasks: typeof triangleCache.triangles = [];
 	              const footprintW = Math.max(1, o.w | 0);
 	              const footprintH = Math.max(1, o.h | 0);
               const buildingMinCameraTx = o.tx;
@@ -6192,7 +6294,7 @@ export async function renderSystem(
                   });
 	                }
 	                if (!finalAdmitted) continue;
-	                if (usingV5Caster) admittedTrianglesForV5.push(...finalVisibleTriangles);
+	                if (usingV5Caster || usingV6Caster) admittedTrianglesForSemanticMasks.push(...finalVisibleTriangles);
 	                overlayHasVisibleTriangleGroup = true;
 	                const renderFields = deriveParentTileRenderFields(group.parentTx, group.parentTy);
 	                const overlayKey: RenderKey = {
@@ -6290,7 +6392,7 @@ export async function renderSystem(
                 let hybridProjectedMappings: readonly StructureHybridShadowProjectedTriangle[] = [];
                 const usingV4Caster = SHADOW_CASTER_MODE === "v4SliceStrips";
                 const usingHybridCaster = SHADOW_CASTER_MODE === "v3HybridTriangles";
-                if (usingHybridCaster || usingV4Caster || usingV5Caster) {
+                if (usingHybridCaster || usingV4Caster || usingV5Caster || usingV6Caster) {
                   const cachedStructureShadowHybrid = structureShadowHybridCacheStore.get(
                     o.id,
                     geometrySignature,
@@ -6542,24 +6644,40 @@ export async function renderSystem(
                   ? runtimeStructureRectIntersects(projectedStructureShadowBounds, projectedViewportRect)
                   : false;
                 const v5Triangles: StructureV5ShadowMaskTriangle[] = [];
-                if (usingV5Caster && structureShadowHybridCacheEntry && admittedTrianglesForV5.length > 0) {
+                const v6Triangles: StructureV5ShadowMaskTriangle[] = [];
+                if (
+                  (usingV5Caster || usingV6Caster)
+                  && structureShadowHybridCacheEntry
+                  && admittedTrianglesForSemanticMasks.length > 0
+                ) {
                   const semanticByStableId = buildHybridTriangleSemanticMap({
                     overlay: o,
                     triangleCache,
                     activeRoofQuad: structureShadowHybridCacheEntry.roofScan.activeLevel?.quad ?? null,
-                    triangles: admittedTrianglesForV5,
+                    triangles: admittedTrianglesForSemanticMasks,
                   });
-                  for (let ti = 0; ti < admittedTrianglesForV5.length; ti++) {
-                    const tri = admittedTrianglesForV5[ti];
+                  for (let ti = 0; ti < admittedTrianglesForSemanticMasks.length; ti++) {
+                    const tri = admittedTrianglesForSemanticMasks[ti];
                     const semantic = semanticByStableId.get(tri.stableId) ?? "UNCLASSIFIED";
                     const buckets = resolveHybridSemanticMaskBuckets(semantic);
                     for (let bi = 0; bi < buckets.length; bi++) {
-                      v5Triangles.push({
+                      const bucket = buckets[bi];
+                      if (
+                        usingV6Caster
+                        && bucket !== SHADOW_V6_PRIMARY_SEMANTIC_BUCKET
+                        && bucket !== SHADOW_V6_SECONDARY_SEMANTIC_BUCKET
+                        && bucket !== SHADOW_V6_TOP_SEMANTIC_BUCKET
+                      ) {
+                        continue;
+                      }
+                      const triEntry: StructureV5ShadowMaskTriangle = {
                         stableId: tri.stableId,
-                        semanticBucket: buckets[bi],
+                        semanticBucket: bucket,
                         srcTriangle: [tri.srcPoints[0], tri.srcPoints[1], tri.srcPoints[2]],
                         dstTriangle: [tri.points[0], tri.points[1], tri.points[2]],
-                      });
+                      };
+                      if (usingV5Caster) v5Triangles.push(triEntry);
+                      if (usingV6Caster) v6Triangles.push(triEntry);
                     }
                   }
                 }
@@ -6567,13 +6685,13 @@ export async function renderSystem(
                   x: draw.dx + draw.dw * 0.5,
                   y: draw.dy + draw.dh,
                 };
-                if (admittedTrianglesForV5.length > 0) {
+                if (admittedTrianglesForSemanticMasks.length > 0) {
                   let minX = Number.POSITIVE_INFINITY;
                   let minY = Number.POSITIVE_INFINITY;
                   let maxX = Number.NEGATIVE_INFINITY;
                   let maxY = Number.NEGATIVE_INFINITY;
-                  for (let ti = 0; ti < admittedTrianglesForV5.length; ti++) {
-                    const tri = admittedTrianglesForV5[ti];
+                  for (let ti = 0; ti < admittedTrianglesForSemanticMasks.length; ti++) {
+                    const tri = admittedTrianglesForSemanticMasks[ti];
                     for (let vi = 0; vi < tri.points.length; vi++) {
                       const p = tri.points[vi];
                       if (p.x < minX) minX = p.x;
@@ -6593,19 +6711,29 @@ export async function renderSystem(
                   x: draw.dx + draw.dw * 0.5,
                   y: draw.dy + draw.dh,
                 };
-                const shouldQueueProjectedShadow = projectedShadowVisible && !usingV5Caster;
+                const structureShadowBand = resolveRenderZBand(
+                  {
+                    slice: o.seTx + o.seTy,
+                    within: o.seTx,
+                    baseZ: o.z,
+                  },
+                  rampRoadTiles,
+                );
+                if (usingV6Caster && v6Triangles.length > 0) {
+                  structureV6ShadowDebugCandidates.push({
+                    structureInstanceId: o.id,
+                    sourceImage: sourceImg,
+                    sourceImageWidth: Math.max(1, Math.round(draw.dw)),
+                    sourceImageHeight: Math.max(1, Math.round(draw.dh)),
+                    triangles: v6Triangles,
+                    zBand: structureShadowBand,
+                  });
+                }
+                const shouldQueueProjectedShadow = projectedShadowVisible && !usingV5Caster && !usingV6Caster;
                 const shouldQueueV5Shadow = usingV5Caster && v5Triangles.length > 0;
                 if (shouldQueueProjectedShadow || shouldQueueV5Shadow) {
-                  const shadowBand = resolveRenderZBand(
-                    {
-                      slice: o.seTx + o.seTy,
-                      within: o.seTx,
-                      baseZ: o.z,
-                    },
-                    rampRoadTiles,
-                  );
                   if (shouldQueueV5Shadow) {
-                    queueStructureV5ShadowForBand(shadowBand, {
+                    queueStructureV5ShadowForBand(structureShadowBand, {
                       structureInstanceId: o.id,
                       sourceImage: sourceImg,
                       sourceImageWidth: Math.max(1, Math.round(draw.dw)),
@@ -6625,7 +6753,7 @@ export async function renderSystem(
                       || structureShadowV4CacheEntry.topCapTriangles.length > 0
                     )
                   ) {
-                    queueStructureV4ShadowForBand(shadowBand, {
+                    queueStructureV4ShadowForBand(structureShadowBand, {
                       sourceImage: sourceImg,
                       sourceImageWidth: Math.max(1, Math.round(draw.dw)),
                       sourceImageHeight: Math.max(1, Math.round(draw.dh)),
@@ -6636,7 +6764,7 @@ export async function renderSystem(
                     v4ShadowDiagnosticStats.trianglesQueued += structureShadowV4CacheEntry.triangleCorrespondence.length;
                     v4ShadowDiagnosticStats.topCapTrianglesQueued += structureShadowV4CacheEntry.topCapTriangles.length;
                   } else if (usingHybridCaster && hybridProjectedMappings.length > 0) {
-                    queueStructureHybridShadowForBand(shadowBand, {
+                    queueStructureHybridShadowForBand(structureShadowBand, {
                       sourceImage: sourceImg,
                       sourceImageWidth: Math.max(1, Math.round(draw.dw)),
                       sourceImageHeight: Math.max(1, Math.round(draw.dh)),
@@ -6645,7 +6773,7 @@ export async function renderSystem(
                     hybridShadowDiagnosticStats.piecesQueued += 1;
                     hybridShadowDiagnosticStats.trianglesQueued += hybridProjectedMappings.length;
                   } else if (!usingV4Caster && projectedStructureShadowTriangles.length > 0) {
-                    queueStructureShadowTrianglesForBand(shadowBand, projectedStructureShadowTriangles);
+                    queueStructureShadowTrianglesForBand(structureShadowBand, projectedStructureShadowTriangles);
                   }
                 }
 
@@ -7527,7 +7655,7 @@ export async function renderSystem(
                   ctx.strokeStyle = "#00ffd5";
                   ctx.lineWidth = 1;
                   ctx.strokeRect(band.dstRect.x, band.dstRect.y, band.dstRect.w, band.dstRect.h);
-                  const progressionIndex = resolveStructureSliceDebugProgressionIndex(
+                  const progressionIndex = resolveRuntimeStructureBandProgressionIndex(
                     band.index,
                     o.w,
                     o.h,
@@ -7572,6 +7700,45 @@ export async function renderSystem(
         }
       }
     }
+
+  if (SHADOW_CASTER_MODE === "v6FaceSliceDebug" && structureV6ShadowDebugCandidates.length > 0) {
+    const v65ShadowVector: ScreenPt = {
+      x: shadowSunModel.projectionDirection.x * STRUCTURE_SHADOW_V5_LENGTH_PX,
+      y: shadowSunModel.projectionDirection.y * STRUCTURE_SHADOW_V5_LENGTH_PX,
+    };
+    const candidatesWithPrimaryBucket = structureV6ShadowDebugCandidates.filter(
+      (candidate) => countStructureV6CandidateTrianglesForBucket(candidate, SHADOW_V6_PRIMARY_SEMANTIC_BUCKET) > 0,
+    );
+    const candidatePool = candidatesWithPrimaryBucket.length > 0
+      ? candidatesWithPrimaryBucket
+      : structureV6ShadowDebugCandidates;
+    const orderedCandidates = candidatePool
+      .slice()
+      .sort((a, b) => {
+        const byId = a.structureInstanceId.localeCompare(b.structureInstanceId);
+        if (byId !== 0) return byId;
+        return (
+          countStructureV6CandidateTrianglesForBucket(b, SHADOW_V6_PRIMARY_SEMANTIC_BUCKET)
+          - countStructureV6CandidateTrianglesForBucket(a, SHADOW_V6_PRIMARY_SEMANTIC_BUCKET)
+        );
+      });
+    const selectedStructureIndex = resolveStructureV6SelectedCandidateIndex(
+      orderedCandidates.length,
+      SHADOW_V6_STRUCTURE_INDEX,
+    );
+    const selected = selectedStructureIndex >= 0 ? orderedCandidates[selectedStructureIndex] : null;
+    if (selected) {
+      structureV6VerticalShadowDebugData = buildStructureV6VerticalShadowMaskDebugData(
+        selected,
+        SHADOW_V6_REQUESTED_SEMANTIC_BUCKET,
+        SHADOW_V6_STRUCTURE_INDEX,
+        selectedStructureIndex,
+        orderedCandidates.length,
+        SHADOW_V6_SLICE_COUNT,
+        v65ShadowVector,
+      );
+    }
+  }
 
   // ============================================
   // FINAL RENDER PASS: Execute by zBand with GROUND then WORLD
@@ -7619,6 +7786,9 @@ export async function renderSystem(
   structureV5ShadowByBand.forEach((pieces, zBand) => {
     if (pieces.length > 0) zBands.add(zBand);
   });
+  if (SHADOW_CASTER_MODE === "v6FaceSliceDebug" && structureV6VerticalShadowDebugData) {
+    zBands.add(structureV6VerticalShadowDebugData.zBand);
+  }
 
   const zBandKeys = Array.from(zBands);
   zBandKeys.sort((a, b) => a - b);
@@ -7732,6 +7902,14 @@ export async function renderSystem(
       if (!v5ShadowAnchorDiagnostic && v5Draw.anchorDiagnostic) {
         v5ShadowAnchorDiagnostic = v5Draw.anchorDiagnostic;
       }
+    }
+    if (
+      SHADOW_CASTER_MODE === "v6FaceSliceDebug"
+      && structureV6VerticalShadowDebugData
+      && structureV6VerticalShadowDebugData.zBand === zb
+    ) {
+      setRenderPerfDrawTag("floors");
+      drawStructureV65MergedShadowMaskInWorld(ctx, structureV6VerticalShadowDebugData);
     }
 
     // Pass 2: WORLD
@@ -7868,6 +8046,9 @@ export async function renderSystem(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.font = "12px monospace";
   ctx.fillStyle = "#fff";
+  if (SHADOW_CASTER_MODE === "v6FaceSliceDebug" && structureV6VerticalShadowDebugData) {
+    drawStructureV6FaceSliceDebugPanel(ctx, cssW, cssH, structureV6VerticalShadowDebugData);
+  }
   const perf = getRenderPerfSnapshot();
   if (renderPerfCountersEnabled) {
     const tag = perf.drawImageByTagPerFrame;
@@ -7950,6 +8131,18 @@ export async function renderSystem(
         ctx.fillText(v5SpaceLineB, 8, screenDebugLineY);
         screenDebugLineY += 16;
       }
+    } else if (SHADOW_CASTER_MODE === "v6FaceSliceDebug") {
+      const selectedId = structureV6VerticalShadowDebugData?.structureInstanceId ?? "none";
+      const bucketATris = structureV6VerticalShadowDebugData?.bucketAShadow?.sourceTriangleCount ?? 0;
+      const bucketBTriCount = structureV6VerticalShadowDebugData?.bucketBShadow?.sourceTriangleCount ?? 0;
+      const topTriCount = structureV6VerticalShadowDebugData?.topShadow?.sourceTriangleCount ?? 0;
+      const bucketACastSlices = structureV6VerticalShadowDebugData?.bucketAShadow?.nonEmptySliceCount ?? 0;
+      const bucketBCastSlices = structureV6VerticalShadowDebugData?.bucketBShadow?.nonEmptySliceCount ?? 0;
+      const topCastSlices = structureV6VerticalShadowDebugData?.topShadow?.nonEmptySliceCount ?? 0;
+      const shadowVector = structureV6VerticalShadowDebugData?.shadowVector ?? { x: 0, y: 0 };
+      const v6Line = `v6.7Diag buckets:${SHADOW_V6_PRIMARY_SEMANTIC_BUCKET}+${SHADOW_V6_SECONDARY_SEMANTIC_BUCKET}+${SHADOW_V6_TOP_SEMANTIC_BUCKET} reqBucket:${SHADOW_V6_REQUESTED_SEMANTIC_BUCKET} structReq:${SHADOW_V6_STRUCTURE_INDEX} selected:${selectedId} candidates:${structureV6ShadowDebugCandidates.length} triEW:${bucketATris} triSN:${bucketBTriCount} triTOP:${topTriCount} castEW:${bucketACastSlices} castSN:${bucketBCastSlices} castTOP:${topCastSlices} vec(${shadowVector.x.toFixed(1)},${shadowVector.y.toFixed(1)})`;
+      ctx.fillText(v6Line, 8, screenDebugLineY);
+      screenDebugLineY += 16;
     }
   }
   if (SHOW_ROAD_SEMANTIC) {
