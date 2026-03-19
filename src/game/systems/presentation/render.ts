@@ -98,7 +98,7 @@ import {
   renderAmbientDarknessOverlay,
   resolveLightingGroundYScale,
 } from "./renderLighting";
-import { getShadowSunModel, renderEntityShadow, type ShadowParams } from "./renderShadow";
+import { renderEntityShadow, type ShadowParams } from "./renderShadow";
 import {
   buildFrameWorldLightRegistry,
   type WorldLightRenderPiece,
@@ -155,20 +155,22 @@ import {
   type RenderKey,
 } from "./worldRenderOrdering";
 import {
-  planPieceLocalRelight,
-  type PieceLocalRelightPlan,
-  type StaticRelightDarknessBucket,
-  type StaticRelightLightCandidate,
-} from "./staticRelightPoc";
-import {
   computeNearestDynamicRelightAlpha,
   type DynamicRelightLightCandidate,
 } from "./dynamicSpriteRelightV1";
 import {
-  buildStaticRelightBakeContextKey,
-  buildStaticRelightPieceKey,
   StaticRelightBakeStore,
 } from "./staticRelightBake";
+import { type StaticRelightFrameContext } from "./staticRelight/staticRelightTypes";
+import {
+  STATIC_RELIGHT_INCLUDE_STRUCTURES,
+  buildRampRoadTiles,
+  decalRelightPieceKey,
+  floorRelightPieceKey,
+  prepareStaticGroundRelightForLoading as prepareStaticGroundRelightForLoadingInternal,
+  structureSliceRelightPieceKey,
+  syncStaticRelightRuntimeForFrame,
+} from "./staticRelight/staticRelightBakeRebuild";
 import {
   buildRuntimeStructureTriangleContextKey,
   deriveParentTileRenderFields,
@@ -186,37 +188,19 @@ import {
   runtimeStructureTriangleGeometrySignatureForOverlay,
 } from "./structureTriangles/structureTriangleCacheRebuild";
 import {
-  buildStructureShadowCacheEntry,
-  buildStructureShadowContextKey,
-  STRUCTURE_SHADOW_V1_ROOF_SCAN_STEP_PX,
   StructureShadowCacheStore,
-  type StructureShadowCacheEntry,
   type StructureShadowProjectedTriangle,
 } from "./structureShadowV1";
 import {
-  buildStructureShadowV2CacheEntry,
-  buildStructureShadowV2ContextKey,
-  STRUCTURE_SHADOW_V2_ALPHA_THRESHOLD,
-  STRUCTURE_SHADOW_V2_MAX_LOOP_POINTS,
-  STRUCTURE_SHADOW_V2_SILHOUETTE_SAMPLE_STEP,
   StructureShadowV2CacheStore,
-  type StructureShadowV2CacheEntry,
 } from "./structureShadowV2AlphaSilhouette";
 import {
-  buildHybridTriangleSemanticMap,
-  resolveHybridSemanticMaskBuckets,
-  buildStructureShadowHybridCacheEntry,
-  buildStructureShadowHybridContextKey,
   StructureShadowHybridCacheStore,
   type HybridSemanticMaskBucket,
   type StructureHybridShadowProjectedTriangle,
-  type StructureShadowHybridCacheEntry,
 } from "./structureShadowHybridTriangles";
 import {
-  buildStructureShadowV4CacheEntry,
-  buildStructureShadowV4ContextKey,
   StructureShadowV4CacheStore,
-  type SliceCorrespondence,
   type ShadowTriangleCorrespondence,
   type StructureShadowV4CacheEntry,
 } from "./structureShadowV4";
@@ -230,6 +214,17 @@ import {
   type StructureV6SliceAxis,
   type StructureV6SemanticBucket,
 } from "./structureShadowV6FaceSlices";
+import {
+  getStructureShadowV5MaskScratchContexts,
+  getStructureShadowV6FaceScratchContext,
+} from "./structureShadows/structureShadowScratch";
+import {
+  buildStructureShadowFrameContext,
+} from "./structureShadows/structureShadowFrameContext";
+import {
+  buildStructureShadowFrameResult as buildOrchestratedStructureShadowFrameResult,
+  buildStructureV6VerticalShadowFrameResult,
+} from "./structureShadows/structureShadowOrchestrator";
 
 const DEBUG_PLAYER_WEDGE = false;
 const DISABLE_WALLS_AND_CURTAINS = true;
@@ -270,747 +265,14 @@ const flippedOverlayImageCache = new WeakMap<HTMLImageElement, HTMLCanvasElement
 const runtimeIsoTopCache = new WeakMap<HTMLImageElement, Map<0 | 1 | 2 | 3, HTMLCanvasElement>>();
 const runtimeIsoDecalCache = new WeakMap<HTMLImageElement, Map<string, HTMLCanvasElement>>();
 const runtimeDiamondCanvasCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
-let staticRelightPieceScratch: HTMLCanvasElement | null = null;
-let staticRelightMaskScratch: HTMLCanvasElement | null = null;
-let structureShadowV5TopMaskScratch: HTMLCanvasElement | null = null;
-let structureShadowV5EastWestMaskScratch: HTMLCanvasElement | null = null;
-let structureShadowV5SouthNorthMaskScratch: HTMLCanvasElement | null = null;
-let structureShadowV5CoverageMaskScratch: HTMLCanvasElement | null = null;
-let structureShadowV5FinalMaskScratch: HTMLCanvasElement | null = null;
-let structureShadowV6FaceScratch: HTMLCanvasElement | null = null;
 const staticRelightBakeStore = new StaticRelightBakeStore<HTMLCanvasElement>();
 const runtimeStructureTriangleCacheStore = new RuntimeStructureTriangleCacheStore();
 const structureShadowV1CacheStore = new StructureShadowCacheStore();
 const structureShadowV2CacheStore = new StructureShadowV2CacheStore();
 const structureShadowHybridCacheStore = new StructureShadowHybridCacheStore();
 const structureShadowV4CacheStore = new StructureShadowV4CacheStore();
-const STATIC_RELIGHT_RUNTIME_RETRY_INTERVAL_MS = 50;
-let staticRelightPendingRuntimeRebuildContextKey = "";
-let staticRelightPendingRuntimeRebuildAtMs = 0;
 
 type ScreenPt = { x: number; y: number };
-
-function getStaticRelightPieceScratchContext(
-  width: number,
-  height: number,
-): CanvasRenderingContext2D | null {
-  const w = Math.max(1, Math.ceil(width));
-  const h = Math.max(1, Math.ceil(height));
-  const canvas = staticRelightPieceScratch ?? document.createElement("canvas");
-  if (canvas.width !== w) canvas.width = w;
-  if (canvas.height !== h) canvas.height = h;
-  staticRelightPieceScratch = canvas;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  configurePixelPerfect(ctx);
-  ctx.imageSmoothingEnabled = false;
-  return ctx;
-}
-
-function getStaticRelightMaskScratchContext(
-  width: number,
-  height: number,
-): CanvasRenderingContext2D | null {
-  const w = Math.max(1, Math.ceil(width));
-  const h = Math.max(1, Math.ceil(height));
-  const canvas = staticRelightMaskScratch ?? document.createElement("canvas");
-  if (canvas.width !== w) canvas.width = w;
-  if (canvas.height !== h) canvas.height = h;
-  staticRelightMaskScratch = canvas;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  configurePixelPerfect(ctx);
-  ctx.imageSmoothingEnabled = true;
-  return ctx;
-}
-
-type StructureShadowV5MaskScratchContexts = {
-  topMaskCtx: CanvasRenderingContext2D;
-  eastWestMaskCtx: CanvasRenderingContext2D;
-  southNorthMaskCtx: CanvasRenderingContext2D;
-  coverageMaskCtx: CanvasRenderingContext2D;
-  finalMaskCtx: CanvasRenderingContext2D;
-  topMaskCanvas: HTMLCanvasElement;
-  eastWestMaskCanvas: HTMLCanvasElement;
-  southNorthMaskCanvas: HTMLCanvasElement;
-  coverageMaskCanvas: HTMLCanvasElement;
-  finalMaskCanvas: HTMLCanvasElement;
-  width: number;
-  height: number;
-};
-
-function ensureScratchCanvas2D(
-  existing: HTMLCanvasElement | null,
-  width: number,
-  height: number,
-): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null {
-  const w = Math.max(1, Math.ceil(width));
-  const h = Math.max(1, Math.ceil(height));
-  const canvas = existing ?? document.createElement("canvas");
-  if (canvas.width !== w) canvas.width = w;
-  if (canvas.height !== h) canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  configurePixelPerfect(ctx);
-  ctx.imageSmoothingEnabled = false;
-  return { canvas, ctx };
-}
-
-function getStructureShadowV5MaskScratchContexts(
-  width: number,
-  height: number,
-): StructureShadowV5MaskScratchContexts | null {
-  const top = ensureScratchCanvas2D(structureShadowV5TopMaskScratch, width, height);
-  const eastWest = ensureScratchCanvas2D(structureShadowV5EastWestMaskScratch, width, height);
-  const southNorth = ensureScratchCanvas2D(structureShadowV5SouthNorthMaskScratch, width, height);
-  const coverage = ensureScratchCanvas2D(structureShadowV5CoverageMaskScratch, width, height);
-  const finalMask = ensureScratchCanvas2D(structureShadowV5FinalMaskScratch, width, height);
-  if (!top || !eastWest || !southNorth || !coverage || !finalMask) return null;
-  structureShadowV5TopMaskScratch = top.canvas;
-  structureShadowV5EastWestMaskScratch = eastWest.canvas;
-  structureShadowV5SouthNorthMaskScratch = southNorth.canvas;
-  structureShadowV5CoverageMaskScratch = coverage.canvas;
-  structureShadowV5FinalMaskScratch = finalMask.canvas;
-  return {
-    topMaskCtx: top.ctx,
-    eastWestMaskCtx: eastWest.ctx,
-    southNorthMaskCtx: southNorth.ctx,
-    coverageMaskCtx: coverage.ctx,
-    finalMaskCtx: finalMask.ctx,
-    topMaskCanvas: top.canvas,
-    eastWestMaskCanvas: eastWest.canvas,
-    southNorthMaskCanvas: southNorth.canvas,
-    coverageMaskCanvas: coverage.canvas,
-    finalMaskCanvas: finalMask.canvas,
-    width: top.canvas.width,
-    height: top.canvas.height,
-  };
-}
-
-function drawPieceLocalRelightMask(
-  maskCtx: CanvasRenderingContext2D,
-  plan: PieceLocalRelightPlan,
-  pieceW: number,
-  pieceH: number,
-): boolean {
-  let hasMask = false;
-  maskCtx.setTransform(1, 0, 0, 1, 0, 0);
-  maskCtx.globalCompositeOperation = "source-over";
-  maskCtx.globalAlpha = 1;
-  maskCtx.clearRect(0, 0, pieceW, pieceH);
-  maskCtx.globalCompositeOperation = "lighter";
-  for (let i = 0; i < plan.masks.length; i++) {
-    const mask = plan.masks[i];
-    const maskAlpha = Math.max(0, Math.min(1, mask.alpha));
-    const radiusPx = Math.max(1, mask.radiusPx);
-    const yScale = Math.max(0.1, Math.min(2, Number(mask.yScale ?? 1)));
-    if (maskAlpha <= 0 || radiusPx <= 0) continue;
-    maskCtx.save();
-    maskCtx.translate(mask.centerX, mask.centerY);
-    maskCtx.scale(1, yScale);
-    const grad = maskCtx.createRadialGradient(0, 0, 0, 0, 0, radiusPx);
-    grad.addColorStop(0, `rgba(255,255,255,${maskAlpha})`);
-    grad.addColorStop(1, "rgba(255,255,255,0)");
-    maskCtx.fillStyle = grad;
-    maskCtx.fillRect(-radiusPx, -radiusPx, radiusPx * 2, radiusPx * 2);
-    maskCtx.restore();
-    hasMask = true;
-  }
-  return hasMask;
-}
-
-function composePieceLocalRelightBakedCanvas(
-  plan: PieceLocalRelightPlan,
-  pieceW: number,
-  pieceH: number,
-  drawBaseLocal: (target: CanvasRenderingContext2D, width: number, height: number) => void,
-  drawVariantLocal: (target: CanvasRenderingContext2D, width: number, height: number) => void,
-): HTMLCanvasElement | null {
-  if (!(pieceW > 0) || !(pieceH > 0)) return null;
-  const output = document.createElement("canvas");
-  output.width = Math.max(1, Math.ceil(pieceW));
-  output.height = Math.max(1, Math.ceil(pieceH));
-  const outputCtx = output.getContext("2d");
-  if (!outputCtx) return null;
-  configurePixelPerfect(outputCtx);
-  outputCtx.imageSmoothingEnabled = false;
-  drawBaseLocal(outputCtx, pieceW, pieceH);
-
-  if (!(plan.blendAlpha > 0) || plan.masks.length === 0) return output;
-  const clampedBlendAlpha = Math.max(0, Math.min(1, plan.blendAlpha));
-  if (clampedBlendAlpha <= 0) return output;
-  const scratchCtx = getStaticRelightPieceScratchContext(pieceW, pieceH);
-  if (!scratchCtx) return output;
-  const maskCtx = getStaticRelightMaskScratchContext(pieceW, pieceH);
-  if (!maskCtx) return output;
-
-  scratchCtx.setTransform(1, 0, 0, 1, 0, 0);
-  scratchCtx.globalCompositeOperation = "source-over";
-  scratchCtx.globalAlpha = 1;
-  scratchCtx.clearRect(0, 0, pieceW, pieceH);
-  drawVariantLocal(scratchCtx, pieceW, pieceH);
-  const hasMask = drawPieceLocalRelightMask(maskCtx, plan, pieceW, pieceH);
-  if (!hasMask) return output;
-  scratchCtx.globalCompositeOperation = "destination-in";
-  scratchCtx.globalAlpha = 1;
-  scratchCtx.drawImage(staticRelightMaskScratch!, 0, 0, pieceW, pieceH);
-
-  outputCtx.save();
-  outputCtx.globalCompositeOperation = "source-over";
-  outputCtx.globalAlpha = clampedBlendAlpha;
-  outputCtx.drawImage(staticRelightPieceScratch!, 0, 0, pieceW, pieceH);
-  outputCtx.restore();
-  return output;
-}
-
-type StaticRelightFrameContext = {
-  baseDarknessBucket: StaticRelightDarknessBucket;
-  targetDarknessBucket: 0 | 25 | 50 | 75;
-  strengthScale: number;
-  lights: StaticRelightLightCandidate[];
-  maxLights: number;
-  tileInfluenceRadius: number;
-  minBlendAlpha: number;
-};
-
-type StaticRelightRuntimeState = {
-  compiledMap: ReturnType<typeof getActiveCompiledMap>;
-  enabled: boolean;
-  frame: StaticRelightFrameContext | null;
-  relightLights: StaticRelightLightCandidate[];
-  contextKey: string;
-  targetDarknessBucket: 0 | 25 | 50 | 75;
-  baseDarknessBucket: StaticRelightDarknessBucket;
-  strengthScale: number;
-};
-
-const STATIC_RELIGHT_MAX_LIGHTS = 2;
-const STATIC_RELIGHT_TILE_RADIUS = 6;
-const STATIC_RELIGHT_MIN_BLEND_ALPHA = 0.04;
-const STATIC_RELIGHT_INCLUDE_STRUCTURES = false;
-const STATIC_RELIGHT_ELEV_PX = 16;
-const STATIC_RELIGHT_SIDEWALK_SRC_SIZE = 128;
-const STATIC_RELIGHT_SIDEWALK_ISO_HEIGHT = 64;
-
-function floorRelightPieceKey(
-  tx: number,
-  ty: number,
-  zBase: number,
-  renderAnchorY: number,
-  family: "sidewalk" | "asphalt" | "park",
-  variantIndex: number,
-  rotationQuarterTurns: 0 | 1 | 2 | 3,
-): string {
-  return buildStaticRelightPieceKey({
-    kind: "FLOOR_TOP",
-    parts: [tx, ty, zBase, renderAnchorY, family, variantIndex, rotationQuarterTurns],
-  });
-}
-
-function decalRelightPieceKey(
-  tx: number,
-  ty: number,
-  zBase: number,
-  renderAnchorY: number,
-  setId: RuntimeDecalSetId,
-  variantIndex: number,
-  rotationQuarterTurns: 0 | 1 | 2 | 3,
-  decalScale: number,
-): string {
-  return buildStaticRelightPieceKey({
-    kind: "DECAL_TOP",
-    parts: [tx, ty, zBase, renderAnchorY, setId, variantIndex, rotationQuarterTurns, decalScale],
-  });
-}
-
-function structureSliceRelightPieceKey(
-  o: StampOverlay,
-  bandIndex: number,
-  ownerTx: number,
-  ownerTy: number,
-  srcX: number,
-  srcY: number,
-  srcW: number,
-  srcH: number,
-  drawW: number,
-  drawH: number,
-  flipped: boolean,
-): string {
-  return buildStaticRelightPieceKey({
-    kind: "STRUCTURE_SLICE",
-    parts: [
-      o.id,
-      o.spriteId,
-      bandIndex,
-      ownerTx,
-      ownerTy,
-      srcX,
-      srcY,
-      srcW,
-      srcH,
-      drawW,
-      drawH,
-      flipped ? 1 : 0,
-    ],
-  });
-}
-
-function buildRampRoadTiles(compiledMap: ReturnType<typeof getActiveCompiledMap>): Set<string> {
-  const rampRoadTiles = new Set<string>();
-  if (!compiledMap?.roadSemanticRects) return rampRoadTiles;
-  for (let i = 0; i < compiledMap.roadSemanticRects.length; i++) {
-    const rr = compiledMap.roadSemanticRects[i];
-    const semantic = rr.semantic?.trim().toLowerCase() ?? "";
-    if (!(semantic === "ramp" || semantic.startsWith("ramp_"))) continue;
-    const minX = rr.x | 0;
-    const minY = rr.y | 0;
-    const maxX = minX + Math.max(1, rr.w | 0) - 1;
-    const maxY = minY + Math.max(1, rr.h | 0) - 1;
-    for (let ty = minY; ty <= maxY; ty++) {
-      for (let tx = minX; tx <= maxX; tx++) {
-        rampRoadTiles.add(`${tx},${ty}`);
-      }
-    }
-  }
-  return rampRoadTiles;
-}
-
-function resolveStaticRelightRuntimeState(w: World): StaticRelightRuntimeState {
-  const compiledMap = getActiveCompiledMap();
-  const settings = getUserSettings();
-  const renderSettings = settings.render;
-  const activePaletteId = resolveActivePaletteId();
-  const activePaletteVariantKey = resolveActivePaletteVariantKey();
-  const activePaletteSwapWeights = resolveActivePaletteSwapWeights();
-  const staticRelightEnabled = renderSettings.staticRelightEnabled !== false;
-  const baseDarknessBucket = settings.debug.paletteDarknessPercent as StaticRelightDarknessBucket;
-  const strengthScale = Math.max(0, Math.min(1, settings.debug.staticRelightStrengthPercent / 100));
-  const targetDarknessBucket = settings.debug.staticRelightTargetDarknessPercent as 0 | 25 | 50 | 75;
-  const enabled = staticRelightEnabled
-    && baseDarknessBucket > 0
-    && strengthScale > 0;
-  const tileHAtWorld = (x: number, y: number) => heightAtWorld(x, y, KENNEY_TILE_WORLD);
-  const mapStaticLightRegistry = buildFrameWorldLightRegistry({
-    mapId: compiledMap.id,
-    tileWorld: KENNEY_TILE_WORLD,
-    elevPx: STATIC_RELIGHT_ELEV_PX,
-    worldScale: 1,
-    streetLampOcclusionEnabled: w.lighting.occlusionEnabled,
-    lightOverrides: {
-      colorModeOverride: settings.render.lightColorModeOverride,
-      strengthOverride: settings.render.lightStrengthOverride,
-    },
-    lightPalette: {
-      paletteId: activePaletteId,
-      saturationWeight: activePaletteSwapWeights.sWeight,
-    },
-    staticLights: compiledMap.lightDefs,
-    runtimeBeam: {
-      active: false,
-      startWorldX: 0,
-      startWorldY: 0,
-      endWorldX: 0,
-      endWorldY: 0,
-      zVisual: 0,
-      widthPx: 0,
-      glowIntensity: 0,
-    },
-    tileHeightAtWorld: tileHAtWorld,
-    isTileInRenderRadius: () => true,
-    projectToScreen: (worldX, worldY, zPx) => {
-      const p = worldToScreen(worldX, worldY);
-      return { x: p.x, y: p.y - zPx };
-    },
-  });
-
-  const relightLights: StaticRelightLightCandidate[] = [];
-  if (enabled) {
-    for (let i = 0; i < mapStaticLightRegistry.lights.length; i++) {
-      const light = mapStaticLightRegistry.lights[i];
-      if (light.source !== "MAP_STATIC") continue;
-      const projected = light.projected;
-      const intensity = Math.max(0, projected.intensity ?? 0);
-      if (intensity <= 0) continue;
-      const radiusPx = projected.shape === "STREET_LAMP"
-        ? Math.max(1, projected.pool?.radiusPx ?? projected.radiusPx)
-        : Math.max(1, projected.radiusPx);
-      const centerY = projected.shape === "STREET_LAMP"
-        ? (Number.isFinite(projected.poolSy) ? (projected.poolSy as number) : projected.sy)
-        : projected.sy;
-      relightLights.push({
-        id: light.id,
-        tileX: light.anchorTx,
-        tileY: light.anchorTy,
-        centerX: projected.sx,
-        centerY,
-        radiusPx,
-        yScale: projected.shape === "STREET_LAMP"
-          ? Math.max(0.1, Math.min(1.5, projected.pool?.yScale ?? 1))
-          : 1,
-        intensity,
-      });
-    }
-  }
-
-  let frame: StaticRelightFrameContext | null = null;
-  if (enabled && relightLights.length > 0 && targetDarknessBucket < baseDarknessBucket) {
-    frame = {
-      baseDarknessBucket: baseDarknessBucket,
-      targetDarknessBucket: targetDarknessBucket,
-      strengthScale: strengthScale,
-      lights: relightLights,
-      maxLights: STATIC_RELIGHT_MAX_LIGHTS,
-      tileInfluenceRadius: STATIC_RELIGHT_TILE_RADIUS,
-      minBlendAlpha: STATIC_RELIGHT_MIN_BLEND_ALPHA,
-    };
-  }
-
-  const contextKey = buildStaticRelightBakeContextKey({
-    mapId: compiledMap.id,
-    relightEnabled: enabled,
-    staticRelightEnabled,
-    paletteId: activePaletteId,
-    paletteVariantKey: activePaletteVariantKey,
-    paletteSwapEnabled: renderSettings.paletteSwapEnabled === true,
-    paletteGroup: renderSettings.paletteGroup,
-    paletteSelectionId: renderSettings.paletteId,
-    saturationWeightPercent: Math.round(activePaletteSwapWeights.sWeight * 100),
-    darknessPercent: baseDarknessBucket,
-    baseDarknessBucket: baseDarknessBucket,
-    staticRelightStrengthPercent: settings.debug.staticRelightStrengthPercent,
-    staticRelightTargetDarknessPercent: targetDarknessBucket,
-    lightColorModeOverride: settings.render.lightColorModeOverride,
-    lightStrengthOverride: settings.render.lightStrengthOverride,
-    lights: relightLights,
-  });
-
-  return {
-    compiledMap,
-    enabled,
-    frame,
-    relightLights,
-    contextKey,
-    targetDarknessBucket,
-    baseDarknessBucket,
-    strengthScale,
-  };
-}
-
-function clamp01(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(1, value));
-}
-
-function planStaticRelightBlendForPiece(
-  staticRelightFrame: StaticRelightFrameContext,
-  pieceTileX: number,
-  pieceTileY: number,
-  pieceX: number,
-  pieceY: number,
-  pieceW: number,
-  pieceH: number,
-): PieceLocalRelightPlan | null {
-  const planned = planPieceLocalRelight({
-    baseDarknessBucket: staticRelightFrame.baseDarknessBucket,
-    pieceTileX,
-    pieceTileY,
-    pieceScreenRect: {
-      x: pieceX,
-      y: pieceY,
-      width: pieceW,
-      height: pieceH,
-    },
-    lights: staticRelightFrame.lights,
-    maxLights: staticRelightFrame.maxLights,
-    tileInfluenceRadius: staticRelightFrame.tileInfluenceRadius,
-    minBlendAlpha: staticRelightFrame.minBlendAlpha,
-  });
-  if (!planned) return null;
-  const targetDarknessBucket = staticRelightFrame.targetDarknessBucket < staticRelightFrame.baseDarknessBucket
-    ? staticRelightFrame.targetDarknessBucket
-    : planned.targetDarknessBucket;
-  const strengthBlendAlpha = clamp01(staticRelightFrame.strengthScale);
-  if (strengthBlendAlpha < staticRelightFrame.minBlendAlpha) return null;
-  return {
-    ...planned,
-    targetDarknessBucket,
-    blendAlpha: strengthBlendAlpha,
-  };
-}
-
-function hasNearbyStaticRelightTileLight(
-  staticRelightFrame: StaticRelightFrameContext,
-  tileX: number,
-  tileY: number,
-): boolean {
-  const radius = Math.max(0.01, staticRelightFrame.tileInfluenceRadius);
-  for (let i = 0; i < staticRelightFrame.lights.length; i++) {
-    const light = staticRelightFrame.lights[i];
-    const dx = light.tileX - tileX;
-    const dy = light.tileY - tileY;
-    if (Math.hypot(dx, dy) <= radius) return true;
-  }
-  return false;
-}
-
-type StaticRelightBakeAssetState = "READY" | "PENDING" | "FAILED";
-
-type StaticGroundRelightBakeResult = {
-  needsRetry: boolean;
-  requiredKeyCount: number;
-  readyCount: number;
-  pendingCount: number;
-  failedCount: number;
-  pendingKeys: string[];
-};
-
-function classifyStaticRelightBakeAsset(rec: LoadedImg | null | undefined): StaticRelightBakeAssetState {
-  if (!rec) return "FAILED";
-  if (rec.ready && rec.img && rec.img.naturalWidth > 0 && rec.img.naturalHeight > 0) return "READY";
-  if (rec.failed || rec.unsupported) return "FAILED";
-  if (rec.ready) return "FAILED";
-  return "PENDING";
-}
-
-type StaticRelightBakeDependencyTracker = {
-  required: Set<string>;
-  ready: Set<string>;
-  pending: Set<string>;
-  failed: Set<string>;
-  pendingSample: string[];
-};
-
-function createStaticRelightBakeDependencyTracker(): StaticRelightBakeDependencyTracker {
-  return {
-    required: new Set<string>(),
-    ready: new Set<string>(),
-    pending: new Set<string>(),
-    failed: new Set<string>(),
-    pendingSample: [],
-  };
-}
-
-function noteStaticRelightDependencyState(
-  tracker: StaticRelightBakeDependencyTracker,
-  key: string,
-  state: StaticRelightBakeAssetState,
-): void {
-  tracker.required.add(key);
-  if (state === "READY") {
-    tracker.ready.add(key);
-    tracker.pending.delete(key);
-    tracker.failed.delete(key);
-    return;
-  }
-  if (state === "PENDING") {
-    tracker.pending.add(key);
-    tracker.ready.delete(key);
-    if (tracker.pendingSample.length < 20 && !tracker.pendingSample.includes(key)) {
-      tracker.pendingSample.push(key);
-    }
-    return;
-  }
-  tracker.failed.add(key);
-  tracker.ready.delete(key);
-  tracker.pending.delete(key);
-}
-
-function rebuildFullMapStaticGroundRelightBake(
-  compiledMap: ReturnType<typeof getActiveCompiledMap>,
-  rampRoadTiles: Set<string>,
-  staticRelightFrame: StaticRelightFrameContext,
-): StaticGroundRelightBakeResult {
-  let needsRetry = false;
-  const deps = createStaticRelightBakeDependencyTracker();
-  const seenSurfaceIds = new Set<string>();
-  for (const surfaces of compiledMap.surfacesByKey.values()) {
-    for (let i = 0; i < surfaces.length; i++) {
-      const surface = surfaces[i];
-      if (seenSurfaceIds.has(surface.id)) continue;
-      seenSurfaceIds.add(surface.id);
-      const runtimeTop = surface.runtimeTop;
-      if (runtimeTop?.kind !== "SQUARE_128_RUNTIME") continue;
-      const tx = surface.tx;
-      const ty = surface.ty;
-      const anchorY = surface.renderAnchorY ?? KENNEY_TILE_ANCHOR_Y;
-      const pieceKey = floorRelightPieceKey(
-        tx,
-        ty,
-        surface.zBase,
-        anchorY,
-        runtimeTop.family,
-        runtimeTop.variantIndex,
-        runtimeTop.rotationQuarterTurns,
-      );
-      if (staticRelightBakeStore.get(pieceKey)) continue;
-      const isRampRoadTile = runtimeTop.family === "asphalt" && rampRoadTiles.has(`${tx},${ty}`);
-      if (isRampRoadTile) continue;
-      const wx = (tx + 0.5) * KENNEY_TILE_WORLD;
-      const wy = (ty + 0.5) * KENNEY_TILE_WORLD;
-      const p = worldToScreen(wx, wy);
-      const centerX = snapPx(p.x);
-      const centerY = snapPx(
-        p.y - surface.zBase * STATIC_RELIGHT_ELEV_PX - STATIC_RELIGHT_SIDEWALK_ISO_HEIGHT * (anchorY - 0.5),
-      );
-      const drawX = snapPx(centerX - STATIC_RELIGHT_SIDEWALK_SRC_SIZE * 0.5);
-      const drawY = snapPx(centerY - STATIC_RELIGHT_SIDEWALK_ISO_HEIGHT * 0.5);
-      const relightPlan = planStaticRelightBlendForPiece(
-        staticRelightFrame,
-        tx,
-        ty,
-        drawX,
-        drawY,
-        STATIC_RELIGHT_SIDEWALK_SRC_SIZE,
-        STATIC_RELIGHT_SIDEWALK_ISO_HEIGHT,
-      );
-      if (!relightPlan) {
-        staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
-        continue;
-      }
-      const srcId = `tiles/floor/${runtimeTop.family}/${runtimeTop.variantIndex}`;
-      const src = getTileSpriteById(srcId);
-      const srcKey = `floor-base:${srcId}`;
-      const srcState = classifyStaticRelightBakeAsset(src);
-      noteStaticRelightDependencyState(deps, srcKey, srcState);
-      if (srcState !== "READY" || !src.img || src.img.width <= 0 || src.img.height <= 0) {
-        if (srcState === "PENDING") needsRetry = true;
-        else staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
-        continue;
-      }
-      const baseBaked = getRuntimeIsoTopCanvas(src.img, runtimeTop.rotationQuarterTurns);
-      if (!baseBaked) {
-        staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
-        continue;
-      }
-      const lighterRec = getSpriteByIdForDarknessPercent(srcId, relightPlan.targetDarknessBucket);
-      const lighterKey = `floor-lit:${srcId}@@dk:${relightPlan.targetDarknessBucket}`;
-      const lighterState = classifyStaticRelightBakeAsset(lighterRec);
-      noteStaticRelightDependencyState(deps, lighterKey, lighterState);
-      if (lighterState !== "READY" || !lighterRec.img || lighterRec.img.width <= 0 || lighterRec.img.height <= 0) {
-        if (lighterState === "PENDING") needsRetry = true;
-        else staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
-        continue;
-      }
-      const lighterBaked = getRuntimeIsoTopCanvas(lighterRec.img, runtimeTop.rotationQuarterTurns);
-      if (!lighterBaked) {
-        staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
-        continue;
-      }
-      const baked = composePieceLocalRelightBakedCanvas(
-        relightPlan,
-        baseBaked.width,
-        baseBaked.height,
-        (target) => target.drawImage(baseBaked, 0, 0, baseBaked.width, baseBaked.height),
-        (target) => target.drawImage(lighterBaked, 0, 0, baseBaked.width, baseBaked.height),
-      );
-      if (baked) staticRelightBakeStore.set(pieceKey, { kind: "RELIT", baked });
-      else staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
-    }
-  }
-
-  for (let i = 0; i < compiledMap.decals.length; i++) {
-    const decal = compiledMap.decals[i];
-    if (rampRoadTiles.has(`${decal.tx},${decal.ty}`)) continue;
-    if (!hasNearbyStaticRelightTileLight(
-      staticRelightFrame,
-      Math.floor(decal.tx),
-      Math.floor(decal.ty),
-    )) {
-      continue;
-    }
-    const decalScale = roadMarkingDecalScale(decal.setId, decal.variantIndex);
-    const pieceKey = decalRelightPieceKey(
-      decal.tx,
-      decal.ty,
-      decal.zBase,
-      decal.renderAnchorY,
-      decal.setId,
-      decal.variantIndex,
-      decal.rotationQuarterTurns,
-      decalScale,
-    );
-    if (staticRelightBakeStore.get(pieceKey)) continue;
-    const src = getRuntimeDecalSprite(decal.setId, decal.variantIndex);
-    const decalSpriteId = getDecalSpriteId(decal.setId, decal.variantIndex);
-    if (!decalSpriteId) {
-      staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
-      continue;
-    }
-    const srcKey = `decal-base:${decalSpriteId}`;
-    const srcState = classifyStaticRelightBakeAsset(src);
-    noteStaticRelightDependencyState(deps, srcKey, srcState);
-    if (srcState !== "READY" || !src.img || src.img.width <= 0 || src.img.height <= 0) {
-      if (srcState === "PENDING") needsRetry = true;
-      else staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
-      continue;
-    }
-    const baked = getRuntimeIsoDecalCanvas(src.img, decal.rotationQuarterTurns, decalScale);
-    if (!baked) {
-      staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
-      continue;
-    }
-    const renderAnchorY = decal.renderAnchorY;
-    const wx = decal.tx * KENNEY_TILE_WORLD;
-    const wy = decal.ty * KENNEY_TILE_WORLD;
-    const p = worldToScreen(wx, wy);
-    const rawCenterX = p.x;
-    const rawCenterY = p.y - decal.zBase * STATIC_RELIGHT_ELEV_PX - STATIC_RELIGHT_SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5);
-    const shouldSnapRoadMarking = shouldPixelSnapRoadMarking(decal.setId, decal.variantIndex);
-    const centerX = shouldSnapRoadMarking ? Math.round(rawCenterX) : snapPx(rawCenterX);
-    const centerY = shouldSnapRoadMarking ? Math.round(rawCenterY) : snapPx(rawCenterY);
-    const drawX = shouldSnapRoadMarking ? Math.round(centerX - baked.width * 0.5) : snapPx(centerX - baked.width * 0.5);
-    const drawY = shouldSnapRoadMarking ? Math.round(centerY - baked.height * 0.5) : snapPx(centerY - baked.height * 0.5);
-    const relightPlan = planStaticRelightBlendForPiece(
-      staticRelightFrame,
-      Math.floor(decal.tx),
-      Math.floor(decal.ty),
-      drawX,
-      drawY,
-      baked.width,
-      baked.height,
-    );
-    if (!relightPlan) {
-      staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
-      continue;
-    }
-    const lighterRec = getSpriteByIdForDarknessPercent(decalSpriteId, relightPlan.targetDarknessBucket);
-    const lighterKey = `decal-lit:${decalSpriteId}@@dk:${relightPlan.targetDarknessBucket}`;
-    const lighterState = classifyStaticRelightBakeAsset(lighterRec);
-    noteStaticRelightDependencyState(deps, lighterKey, lighterState);
-    if (lighterState !== "READY" || !lighterRec.img || lighterRec.img.width <= 0 || lighterRec.img.height <= 0) {
-      if (lighterState === "PENDING") needsRetry = true;
-      else staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
-      continue;
-    }
-    const lighterBaked = getRuntimeIsoDecalCanvas(lighterRec.img, decal.rotationQuarterTurns, decalScale);
-    if (!lighterBaked) {
-      staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
-      continue;
-    }
-    const bakedCanvas = composePieceLocalRelightBakedCanvas(
-      relightPlan,
-      baked.width,
-      baked.height,
-      (target) => target.drawImage(baked, 0, 0, baked.width, baked.height),
-      (target) => target.drawImage(lighterBaked, 0, 0, baked.width, baked.height),
-    );
-    if (bakedCanvas) staticRelightBakeStore.set(pieceKey, { kind: "RELIT", baked: bakedCanvas });
-    else staticRelightBakeStore.set(pieceKey, { kind: "BASE" });
-  }
-
-  return {
-    needsRetry,
-    requiredKeyCount: deps.required.size,
-    readyCount: deps.ready.size,
-    pendingCount: deps.pending.size,
-    failedCount: deps.failed.size,
-    pendingKeys: deps.pendingSample,
-  };
-}
-
-let lastStaticRelightLoadingFailureKey = "";
-let lastStaticRelightLoadingPendingLogAtMs = 0;
-let lastStaticRelightLoadingPendingSignature = "";
 
 export async function prepareRuntimeStructureTrianglesForLoading(_w: World): Promise<boolean> {
   return prepareRuntimeStructureTrianglesForLoadingInternal({
@@ -1020,44 +282,11 @@ export async function prepareRuntimeStructureTrianglesForLoading(_w: World): Pro
 }
 
 export async function prepareStaticGroundRelightForLoading(w: World): Promise<boolean> {
-  const staticRelight = resolveStaticRelightRuntimeState(w);
-  staticRelightBakeStore.resetIfContextChanged(staticRelight.contextKey);
-  if (!staticRelight.enabled || !staticRelight.frame) return true;
-  const rampRoadTiles = buildRampRoadTiles(staticRelight.compiledMap);
-  const result = rebuildFullMapStaticGroundRelightBake(
-    staticRelight.compiledMap,
-    rampRoadTiles,
-    staticRelight.frame,
-  );
-  if (result.pendingCount > 0) {
-    const signature = `${staticRelight.contextKey}::${result.pendingCount}::${result.failedCount}::${result.pendingKeys.join("|")}`;
-    const now = performance.now();
-    if (
-      signature !== lastStaticRelightLoadingPendingSignature
-      || now - lastStaticRelightLoadingPendingLogAtMs >= 1000
-    ) {
-      lastStaticRelightLoadingPendingSignature = signature;
-      lastStaticRelightLoadingPendingLogAtMs = now;
-      console.debug(
-        `[static-relight:loading] required=${result.requiredKeyCount} ready=${result.readyCount} pending=${result.pendingCount} failed=${result.failedCount}`,
-        result.pendingKeys,
-      );
-    }
-    return false;
-  }
-  lastStaticRelightLoadingPendingSignature = "";
-  if (result.failedCount > 0) {
-    const failureKey = `${staticRelight.contextKey}::${result.failedCount}`;
-    if (failureKey !== lastStaticRelightLoadingFailureKey) {
-      lastStaticRelightLoadingFailureKey = failureKey;
-      console.warn(
-        `[static-relight:loading] proceeding with ${result.failedCount} failed static relight dependencies (fallback to base)`,
-      );
-    }
-  } else {
-    lastStaticRelightLoadingFailureKey = "";
-  }
-  return true;
+  return prepareStaticGroundRelightForLoadingInternal(w, {
+    bakeStore: staticRelightBakeStore,
+    getRuntimeIsoTopCanvas,
+    getRuntimeIsoDecalCanvas,
+  });
 }
 
 function smoothTowardByHalfLife(current: number, target: number, halfLifeSec: number, dtRealSec: number): number {
@@ -1950,9 +1179,8 @@ function buildStructureV6FaceSliceDebugData(
   const originY = Math.floor(minY) - pad;
   const width = Math.max(1, Math.ceil(maxX - minX) + pad * 2);
   const height = Math.max(1, Math.ceil(maxY - minY) + pad * 2);
-  const scratch = ensureScratchCanvas2D(structureShadowV6FaceScratch, width, height);
+  const scratch = getStructureShadowV6FaceScratchContext(width, height);
   if (!scratch) return null;
-  structureShadowV6FaceScratch = scratch.canvas;
   const faceCtx = scratch.ctx;
   faceCtx.setTransform(1, 0, 0, 1, 0, 0);
   faceCtx.globalAlpha = 1;
@@ -3257,26 +2485,6 @@ export async function renderSystem(
     if (!nearest) return 0;
     return nearest.alpha;
   };
-  const planStaticRelightForPiece = (
-    pieceTileX: number,
-    pieceTileY: number,
-    pieceX: number,
-    pieceY: number,
-    pieceW: number,
-    pieceH: number,
-  ): PieceLocalRelightPlan | null => {
-    if (!staticRelightFrame) return null;
-    return planStaticRelightBlendForPiece(
-      staticRelightFrame,
-      pieceTileX,
-      pieceTileY,
-      pieceX,
-      pieceY,
-      pieceW,
-      pieceH,
-    );
-  };
-
   // Existing optional cull (kept, but unrelated to masking)
   const ENABLE_BUILDING_SOUTH_CULL = false;
   const shouldCullBuildingAt = (tx: number, ty: number, w: number = 1, h: number = 1) => {
@@ -4056,7 +3264,11 @@ export async function renderSystem(
     isTileInRenderRadius,
     projectToScreen: (worldX, worldY, zPx) => viewport.project(worldX, worldY, zPx),
   });
-  const staticRelight = resolveStaticRelightRuntimeState(w);
+  const staticRelight = syncStaticRelightRuntimeForFrame(w, {
+    bakeStore: staticRelightBakeStore,
+    getRuntimeIsoTopCanvas,
+    getRuntimeIsoDecalCanvas,
+  }, rampRoadTiles);
   dynamicSpriteRelightFrame = null;
   if (staticRelight.frame && staticRelight.relightLights.length > 0) {
     const dynamicLights: DynamicRelightLightCandidate[] = staticRelight.relightLights.map((light) => ({
@@ -4074,7 +3286,6 @@ export async function renderSystem(
       lights: dynamicLights,
     };
   }
-  const staticRelightContextChanged = staticRelightBakeStore.resetIfContextChanged(staticRelight.contextKey);
   const structureTriangleGeometryEnabled = renderSettings.structureTriangleGeometryEnabled !== false;
   const structureTriangleAdmissionMode = renderSettings.structureTriangleAdmissionMode ?? "hybrid";
   const structureTriangleCutoutEnabled = structureTriangleGeometryEnabled
@@ -4266,77 +3477,27 @@ export async function renderSystem(
   });
   const runtimeStructureTriangleContextChanged = runtimeStructureTriangleCacheStore
     .resetIfContextChanged(runtimeStructureTriangleContextKey);
-  const shadowSunModel = getShadowSunModel(debug.shadowSunTimeHour);
-  const structureShadowContextKey = buildStructureShadowContextKey({
-    mapId: compiledMap.id,
-    enabled: structureTriangleGeometryEnabled,
-    sunStepKey: shadowSunModel.stepKey,
-    roofScanStepPx: STRUCTURE_SHADOW_V1_ROOF_SCAN_STEP_PX,
-  });
-  const structureShadowV2ContextKey = buildStructureShadowV2ContextKey({
-    mapId: compiledMap.id,
-    enabled: structureTriangleGeometryEnabled,
-    sunStepKey: shadowSunModel.stepKey,
-    roofScanStepPx: STRUCTURE_SHADOW_V1_ROOF_SCAN_STEP_PX,
-    alphaThreshold: STRUCTURE_SHADOW_V2_ALPHA_THRESHOLD,
-    silhouetteSampleStep: STRUCTURE_SHADOW_V2_SILHOUETTE_SAMPLE_STEP,
-    maxLoopPoints: STRUCTURE_SHADOW_V2_MAX_LOOP_POINTS,
-  });
-  const structureShadowHybridContextKey = buildStructureShadowHybridContextKey({
-    mapId: compiledMap.id,
-    enabled: structureTriangleGeometryEnabled,
-    sunStepKey: shadowSunModel.stepKey,
-    roofScanStepPx: STRUCTURE_SHADOW_V1_ROOF_SCAN_STEP_PX,
-  });
-  const structureShadowV4ContextKey = buildStructureShadowV4ContextKey({
-    mapId: compiledMap.id,
-    enabled: structureTriangleGeometryEnabled,
-    sunStepKey: shadowSunModel.stepKey,
-  });
-  structureShadowV1CacheStore.resetIfContextChanged(structureShadowContextKey);
-  structureShadowV2CacheStore.resetIfContextChanged(structureShadowV2ContextKey);
-  structureShadowHybridCacheStore.resetIfContextChanged(structureShadowHybridContextKey);
-  structureShadowV4CacheStore.resetIfContextChanged(structureShadowV4ContextKey);
+  const structureShadowFrame = buildStructureShadowFrameContext(
+    {
+      mapId: compiledMap.id,
+      structureTriangleGeometryEnabled,
+      shadowCasterMode: SHADOW_CASTER_MODE,
+      shadowSunTimeHour: debug.shadowSunTimeHour,
+    },
+    {
+      v1: structureShadowV1CacheStore,
+      v2: structureShadowV2CacheStore,
+      hybrid: structureShadowHybridCacheStore,
+      v4: structureShadowV4CacheStore,
+    },
+  );
+  const shadowSunModel = structureShadowFrame.sunModel;
   staticRelightFrame = staticRelight.frame;
   if (runtimeStructureTriangleContextChanged && structureTriangleGeometryEnabled) {
     rebuildRuntimeStructureTriangleCacheForMap(compiledMap, {
       cacheStore: runtimeStructureTriangleCacheStore,
       getFlippedOverlayImage,
     });
-  }
-  if (staticRelightContextChanged) {
-    staticRelightPendingRuntimeRebuildContextKey = "";
-    staticRelightPendingRuntimeRebuildAtMs = 0;
-  }
-  if (staticRelightContextChanged && staticRelight.frame) {
-    const result = rebuildFullMapStaticGroundRelightBake(
-      staticRelight.compiledMap,
-      rampRoadTiles,
-      staticRelight.frame,
-    );
-    if (result.needsRetry) {
-      staticRelightPendingRuntimeRebuildContextKey = staticRelight.contextKey;
-      staticRelightPendingRuntimeRebuildAtMs = performance.now() + STATIC_RELIGHT_RUNTIME_RETRY_INTERVAL_MS;
-    }
-  } else if (
-    staticRelight.frame
-    && staticRelightPendingRuntimeRebuildContextKey === staticRelight.contextKey
-    && performance.now() >= staticRelightPendingRuntimeRebuildAtMs
-  ) {
-    const retryResult = rebuildFullMapStaticGroundRelightBake(
-      staticRelight.compiledMap,
-      rampRoadTiles,
-      staticRelight.frame,
-    );
-    if (retryResult.needsRetry) {
-      staticRelightPendingRuntimeRebuildAtMs = performance.now() + STATIC_RELIGHT_RUNTIME_RETRY_INTERVAL_MS;
-    } else {
-      staticRelightPendingRuntimeRebuildContextKey = "";
-      staticRelightPendingRuntimeRebuildAtMs = 0;
-    }
-  } else if (!staticRelight.frame) {
-    staticRelightPendingRuntimeRebuildContextKey = "";
-    staticRelightPendingRuntimeRebuildAtMs = 0;
   }
 
   // ----------------------------
@@ -6149,8 +5310,8 @@ export async function renderSystem(
 	            if (triangleCache && draw.img) {
 	              usedTriangleGeometryPath = true;
 	              const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(draw.img) : draw.img;
-                const usingV5Caster = SHADOW_CASTER_MODE === "v5TriangleShadowMask";
-                const usingV6Caster = SHADOW_CASTER_MODE === "v6FaceSliceDebug";
+                const usingV5Caster = structureShadowFrame.routing.usesV5;
+                const usingV6Caster = structureShadowFrame.routing.usesV6;
                 const admittedTrianglesForSemanticMasks: typeof triangleCache.triangles = [];
 	              const footprintW = Math.max(1, o.w | 0);
 	              const footprintH = Math.max(1, o.h | 0);
@@ -6383,334 +5544,6 @@ export async function renderSystem(
 	                });
 	              }
               if (overlayHasVisibleTriangleGroup) {
-                let structureShadowV1CacheEntry: StructureShadowCacheEntry | null = null;
-                let structureShadowV2CacheEntry: StructureShadowV2CacheEntry | null = null;
-                let structureShadowHybridCacheEntry: StructureShadowHybridCacheEntry | null = null;
-                let structureShadowV4CacheEntry: StructureShadowV4CacheEntry | null = null;
-                let projectedStructureShadowTriangles: readonly StructureShadowProjectedTriangle[] = [];
-                let projectedStructureShadowBounds: RuntimeStructureTriangleRect | null = null;
-                let hybridProjectedMappings: readonly StructureHybridShadowProjectedTriangle[] = [];
-                const usingV4Caster = SHADOW_CASTER_MODE === "v4SliceStrips";
-                const usingHybridCaster = SHADOW_CASTER_MODE === "v3HybridTriangles";
-                if (usingHybridCaster || usingV4Caster || usingV5Caster || usingV6Caster) {
-                  const cachedStructureShadowHybrid = structureShadowHybridCacheStore.get(
-                    o.id,
-                    geometrySignature,
-                    shadowSunModel.stepKey,
-                  );
-                  if (cachedStructureShadowHybrid) {
-                    structureShadowHybridCacheEntry = cachedStructureShadowHybrid;
-                    structureShadowCacheHit = true;
-                    if (usingHybridCaster) hybridShadowDiagnosticStats.cacheHits += 1;
-                  } else {
-                    const rebuiltStructureShadowHybrid = buildStructureShadowHybridCacheEntry({
-                      overlay: o,
-                      triangleCache,
-                      geometrySignature,
-                      tileWorld: T,
-                      toScreenAtZ,
-                      sunForward: shadowSunModel.forward,
-                      sunProjectionDirection: shadowSunModel.projectionDirection,
-                      sunStepKey: shadowSunModel.stepKey,
-                      roofScanStepPx: STRUCTURE_SHADOW_V1_ROOF_SCAN_STEP_PX,
-                    });
-                    structureShadowHybridCacheEntry = rebuiltStructureShadowHybrid;
-                    structureShadowHybridCacheStore.set(rebuiltStructureShadowHybrid);
-                    structureShadowCacheHit = false;
-                    if (usingHybridCaster) hybridShadowDiagnosticStats.cacheMisses += 1;
-                  }
-                  if (usingV4Caster) {
-                    const cachedStructureShadowV4 = structureShadowV4CacheStore.get(
-                      o.id,
-                      geometrySignature,
-                      shadowSunModel.stepKey,
-                    );
-                    if (cachedStructureShadowV4) {
-                      structureShadowV4CacheEntry = cachedStructureShadowV4;
-                      structureShadowCacheHit = true;
-                      v4ShadowDiagnosticStats.cacheHits += 1;
-                    } else {
-                      const correspondences: SliceCorrespondence[] = structureShadowHybridCacheEntry.slicePerimeterSegments.map((segment) => ({
-                        sliceIndex: segment.sliceIndex,
-                        sourceBandIndex: segment.bandIndex,
-                        baseSegment: {
-                          a: { x: segment.baseSegment[0].x, y: segment.baseSegment[0].y },
-                          b: { x: segment.baseSegment[1].x, y: segment.baseSegment[1].y },
-                        },
-                        topSegment: {
-                          a: { x: segment.topSegment[0].x, y: segment.topSegment[0].y },
-                          b: { x: segment.topSegment[1].x, y: segment.topSegment[1].y },
-                        },
-                      }));
-                      const bandOwnerParity = new Map<number, 0 | 1>();
-                      for (let ti = 0; ti < triangleCache.triangles.length; ti++) {
-                        const tri = triangleCache.triangles[ti];
-                        if (bandOwnerParity.has(tri.bandIndex)) continue;
-                        bandOwnerParity.set(tri.bandIndex, ((tri.parentTx + tri.parentTy) & 1) as 0 | 1);
-                      }
-                      let parityAnchorBandIndex: number | null = null;
-                      let parityAnchorValue: 0 | 1 = 0;
-                      if (bandOwnerParity.size > 0) {
-                        const orderedBands = Array.from(bandOwnerParity.keys()).sort((a, b) => a - b);
-                        parityAnchorBandIndex = orderedBands[0];
-                        parityAnchorValue = bandOwnerParity.get(parityAnchorBandIndex) ?? 0;
-                      }
-                      const sliceOwnerParity = new Map<number, 0 | 1>();
-                      for (let si = 0; si < structureShadowHybridCacheEntry.slicePerimeterSegments.length; si++) {
-                        const segment = structureShadowHybridCacheEntry.slicePerimeterSegments[si];
-                        let parity = bandOwnerParity.get(segment.bandIndex);
-                        if (parity == null && parityAnchorBandIndex != null) {
-                          parity = ((parityAnchorValue + ((segment.bandIndex - parityAnchorBandIndex) & 1)) & 1) as 0 | 1;
-                        }
-                        if (parity != null) sliceOwnerParity.set(segment.sliceIndex, parity);
-                      }
-                      const rebuiltStructureShadowV4 = buildStructureShadowV4CacheEntry({
-                        structureInstanceId: o.id,
-                        geometrySignature,
-                        sunStepKey: shadowSunModel.stepKey,
-                        castHeightPx: structureShadowHybridCacheEntry.castHeightPx,
-                        sunDirection: shadowSunModel.projectionDirection,
-                        sliceCorrespondence: correspondences,
-                        topCapTriangles: structureShadowHybridCacheEntry.projectedTopCapTriangles,
-                        sourceTriangles: triangleCache.triangles,
-                        sliceOwnerParity,
-                      });
-                      structureShadowV4CacheEntry = rebuiltStructureShadowV4;
-                      structureShadowV4CacheStore.set(rebuiltStructureShadowV4);
-                      structureShadowCacheHit = false;
-                      v4ShadowDiagnosticStats.cacheMisses += 1;
-                    }
-                    projectedStructureShadowBounds = structureShadowV4CacheEntry.projectedBounds;
-                    v4ShadowDiagnosticStats.correspondences += structureShadowV4CacheEntry.correspondences.length;
-                    v4ShadowDiagnosticStats.strips += structureShadowV4CacheEntry.sliceStrips.length;
-                    v4ShadowDiagnosticStats.layerEdges += structureShadowV4CacheEntry.layerEdges.length;
-                    v4ShadowDiagnosticStats.layerBands += structureShadowV4CacheEntry.layerBands.length;
-                    v4ShadowDiagnosticStats.topCapTriangles += structureShadowV4CacheEntry.topCapTriangles.length;
-                    v4ShadowDiagnosticStats.sourceBandTriangles += structureShadowV4CacheEntry.sourceBandTriangles.length;
-                    v4ShadowDiagnosticStats.destinationBandEntries += structureShadowV4CacheEntry.destinationBandEntries.length;
-                    v4ShadowDiagnosticStats.correspondencePairs += structureShadowV4CacheEntry.triangleCorrespondence.length;
-                    v4ShadowDiagnosticStats.correspondenceMismatches += structureShadowV4CacheEntry.triangleCorrespondenceMismatches.length;
-                    v4ShadowDiagnosticStats.destinationBandPairs += structureShadowV4CacheEntry.destinationBandTriangles.length;
-                    v4ShadowDiagnosticStats.destinationTriangles += structureShadowV4CacheEntry.destinationTriangles.length;
-                    for (let di = 0; di < structureShadowV4CacheEntry.destinationBandTriangles.length; di++) {
-                      if (structureShadowV4CacheEntry.destinationBandTriangles[di].diagonal === "A_to_Bprime") {
-                        v4ShadowDiagnosticStats.diagonalA += 1;
-                      } else {
-                        v4ShadowDiagnosticStats.diagonalB += 1;
-                      }
-                    }
-                    v4ShadowDiagnosticStats.diagonalRule = `A:${v4ShadowDiagnosticStats.diagonalA} B:${v4ShadowDiagnosticStats.diagonalB}`;
-                    if (structureShadowV4CacheEntry.isDeltaConstant) {
-                      v4ShadowDiagnosticStats.deltaConstPass += 1;
-                    } else {
-                      v4ShadowDiagnosticStats.deltaConstFail += 1;
-                    }
-                    const firstDiagnostic = structureShadowV4CacheEntry.midpointDiagnostics[0];
-                    if (firstDiagnostic) {
-                      v4ShadowDiagnosticStats.firstSliceSummary = `i${firstDiagnostic.sliceIndex} b(${firstDiagnostic.baseMidpoint.x.toFixed(1)},${firstDiagnostic.baseMidpoint.y.toFixed(1)}) t(${firstDiagnostic.topMidpoint.x.toFixed(1)},${firstDiagnostic.topMidpoint.y.toFixed(1)}) d(${firstDiagnostic.delta.x.toFixed(1)},${firstDiagnostic.delta.y.toFixed(1)})`;
-                    }
-                    if (v4ShadowDiagnosticStats.sampleRoofHeightPx == null) {
-                      v4ShadowDiagnosticStats.sampleRoofHeightPx = structureShadowV4CacheEntry.roofHeightPx;
-                      v4ShadowDiagnosticStats.sampleLayerHeights = structureShadowV4CacheEntry.layerHeightsPx.join(",");
-                      v4ShadowDiagnosticStats.sampleSliceCount = structureShadowV4CacheEntry.sliceStrips.length;
-                      v4ShadowDiagnosticStats.sampleLayerEdges = structureShadowV4CacheEntry.layerEdges.length;
-                      v4ShadowDiagnosticStats.sampleLayerBands = structureShadowV4CacheEntry.layerBands.length;
-                      const selectedSlice = structureShadowV4CacheEntry.sliceStrips[0];
-                      if (selectedSlice) {
-                        const selectedEdges = structureShadowV4CacheEntry.layerEdges.filter((edge) => edge.sliceIndex === selectedSlice.sliceIndex);
-                        const layer0 = selectedEdges[0];
-                        const layerLast = selectedEdges[selectedEdges.length - 1];
-                        v4ShadowDiagnosticStats.sampleSelectedSlice = [
-                          `i${selectedSlice.sliceIndex}`,
-                          `baseA(${selectedSlice.baseA.x.toFixed(1)},${selectedSlice.baseA.y.toFixed(1)})`,
-                          `baseB(${selectedSlice.baseB.x.toFixed(1)},${selectedSlice.baseB.y.toFixed(1)})`,
-                          `topA(${selectedSlice.topA.x.toFixed(1)},${selectedSlice.topA.y.toFixed(1)})`,
-                          `topB(${selectedSlice.topB.x.toFixed(1)},${selectedSlice.topB.y.toFixed(1)})`,
-                          layer0
-                            ? `L0A(${layer0.a.x.toFixed(1)},${layer0.a.y.toFixed(1)}) L0B(${layer0.b.x.toFixed(1)},${layer0.b.y.toFixed(1)})`
-                            : "L0(none)",
-                          layerLast
-                            ? `LTA(${layerLast.a.x.toFixed(1)},${layerLast.a.y.toFixed(1)}) LTB(${layerLast.b.x.toFixed(1)},${layerLast.b.y.toFixed(1)})`
-                            : "LT(none)",
-                        ].join(" ");
-                        const selectedBand = structureShadowV4CacheEntry.layerBands.find(
-                          (band) => band.sliceIndex === selectedSlice.sliceIndex && band.bandIndex === 0,
-                        );
-                        const selectedPair = structureShadowV4CacheEntry.destinationBandTriangles.find(
-                          (pair) => pair.sliceIndex === selectedSlice.sliceIndex && pair.bandIndex === 0,
-                        );
-                        if (selectedBand && selectedPair) {
-                          const t0 = selectedPair.tri0;
-                          const t1 = selectedPair.tri1;
-                          const selectedGroup = structureShadowV4CacheEntry.triangleCorrespondenceGroups.find(
-                            (group) => group.sliceIndex === selectedBand.sliceIndex && group.bandIndex === selectedBand.bandIndex,
-                          );
-                          const groupSummary = selectedGroup
-                            ? [
-                                `src:${selectedGroup.sourceTriangles.length}`,
-                                `dst:${selectedGroup.destinationTriangles.length}`,
-                                `map:${selectedGroup.correspondences.length}`,
-                                selectedGroup.mismatch
-                                  ? `mismatch:${selectedGroup.mismatch.sourceTriangleCount}/${selectedGroup.mismatch.destinationTriangleCount}`
-                                  : "mismatch:none",
-                              ].join(" ")
-                            : "src:0 dst:0 map:0 mismatch:none";
-                          const pairSummary = selectedGroup?.correspondences[0]
-                            ? `pair sIdx:${selectedGroup.correspondences[0].sourceTriangleIndexWithinBand}->dIdx:${selectedGroup.correspondences[0].destinationTriangleIndex}`
-                            : "pair:none";
-                          v4ShadowDiagnosticStats.sampleSelectedBand = [
-                            `i${selectedBand.sliceIndex} b${selectedBand.bandIndex}`,
-                            `lowerA(${selectedBand.lowerA.x.toFixed(1)},${selectedBand.lowerA.y.toFixed(1)})`,
-                            `lowerB(${selectedBand.lowerB.x.toFixed(1)},${selectedBand.lowerB.y.toFixed(1)})`,
-                            `upperA(${selectedBand.upperA.x.toFixed(1)},${selectedBand.upperA.y.toFixed(1)})`,
-                            `upperB(${selectedBand.upperB.x.toFixed(1)},${selectedBand.upperB.y.toFixed(1)})`,
-                            `tri0[(${t0[0].x.toFixed(1)},${t0[0].y.toFixed(1)}),(${t0[1].x.toFixed(1)},${t0[1].y.toFixed(1)}),(${t0[2].x.toFixed(1)},${t0[2].y.toFixed(1)})]`,
-                            `tri1[(${t1[0].x.toFixed(1)},${t1[0].y.toFixed(1)}),(${t1[1].x.toFixed(1)},${t1[1].y.toFixed(1)}),(${t1[2].x.toFixed(1)},${t1[2].y.toFixed(1)})]`,
-                            groupSummary,
-                            pairSummary,
-                          ].join(" ");
-                        }
-                      }
-                    }
-                  } else if (usingHybridCaster) {
-                    hybridProjectedMappings = structureShadowHybridCacheEntry.projectedMappings;
-                    projectedStructureShadowBounds = structureShadowHybridCacheEntry.projectedBounds;
-                    hybridShadowDiagnosticStats.casterTriangles += structureShadowHybridCacheEntry.casterTriangles.length;
-                    hybridShadowDiagnosticStats.projectedTriangles += structureShadowHybridCacheEntry.projectedMappings.length;
-                  }
-                } else if (SHADOW_CASTER_MODE === "v2AlphaSilhouette") {
-                  const cachedStructureShadowV2 = structureShadowV2CacheStore.get(
-                    o.id,
-                    geometrySignature,
-                    shadowSunModel.stepKey,
-                  );
-                  if (cachedStructureShadowV2) {
-                    structureShadowV2CacheEntry = cachedStructureShadowV2;
-                    structureShadowCacheHit = true;
-                  } else {
-                    const rebuiltStructureShadowV2 = buildStructureShadowV2CacheEntry({
-                      overlay: o,
-                      triangleCache,
-                      geometrySignature,
-                      tileWorld: T,
-                      toScreenAtZ,
-                      sunForward: shadowSunModel.forward,
-                      sunProjectionDirection: shadowSunModel.projectionDirection,
-                      sunStepKey: shadowSunModel.stepKey,
-                      drawDx: draw.dx,
-                      drawDy: draw.dy,
-                      drawScale: draw.scale ?? 1,
-                      sourceImage: sourceImg,
-                      roofScanStepPx: STRUCTURE_SHADOW_V1_ROOF_SCAN_STEP_PX,
-                      alphaThreshold: STRUCTURE_SHADOW_V2_ALPHA_THRESHOLD,
-                      silhouetteSampleStep: STRUCTURE_SHADOW_V2_SILHOUETTE_SAMPLE_STEP,
-                      maxLoopPoints: STRUCTURE_SHADOW_V2_MAX_LOOP_POINTS,
-                    });
-                    structureShadowV2CacheEntry = rebuiltStructureShadowV2;
-                    structureShadowV2CacheStore.set(rebuiltStructureShadowV2);
-                    structureShadowCacheHit = false;
-                  }
-                  projectedStructureShadowTriangles = structureShadowV2CacheEntry.shadowTriangles;
-                  projectedStructureShadowBounds = structureShadowV2CacheEntry.projectedBounds;
-                } else {
-                  const cachedStructureShadow = structureShadowV1CacheStore.get(
-                    o.id,
-                    geometrySignature,
-                    shadowSunModel.stepKey,
-                  );
-                  if (cachedStructureShadow) {
-                    structureShadowV1CacheEntry = cachedStructureShadow;
-                    structureShadowCacheHit = true;
-                  } else {
-                    const rebuiltStructureShadow = buildStructureShadowCacheEntry({
-                      overlay: o,
-                      triangleCache,
-                      geometrySignature,
-                      tileWorld: T,
-                      toScreenAtZ,
-                      sunForward: shadowSunModel.forward,
-                      sunProjectionDirection: shadowSunModel.projectionDirection,
-                      sunStepKey: shadowSunModel.stepKey,
-                      roofScanStepPx: STRUCTURE_SHADOW_V1_ROOF_SCAN_STEP_PX,
-                    });
-                    structureShadowV1CacheEntry = rebuiltStructureShadow;
-                    structureShadowV1CacheStore.set(rebuiltStructureShadow);
-                    structureShadowCacheHit = false;
-                  }
-                  projectedStructureShadowTriangles = structureShadowV1CacheEntry.shadowTriangles;
-                  projectedStructureShadowBounds = structureShadowV1CacheEntry.projectedBounds;
-                }
-                const projectedShadowVisible = projectedStructureShadowBounds
-                  ? runtimeStructureRectIntersects(projectedStructureShadowBounds, projectedViewportRect)
-                  : false;
-                const v5Triangles: StructureV5ShadowMaskTriangle[] = [];
-                const v6Triangles: StructureV5ShadowMaskTriangle[] = [];
-                if (
-                  (usingV5Caster || usingV6Caster)
-                  && structureShadowHybridCacheEntry
-                  && admittedTrianglesForSemanticMasks.length > 0
-                ) {
-                  const semanticByStableId = buildHybridTriangleSemanticMap({
-                    overlay: o,
-                    triangleCache,
-                    activeRoofQuad: structureShadowHybridCacheEntry.roofScan.activeLevel?.quad ?? null,
-                    triangles: admittedTrianglesForSemanticMasks,
-                  });
-                  for (let ti = 0; ti < admittedTrianglesForSemanticMasks.length; ti++) {
-                    const tri = admittedTrianglesForSemanticMasks[ti];
-                    const semantic = semanticByStableId.get(tri.stableId) ?? "UNCLASSIFIED";
-                    const buckets = resolveHybridSemanticMaskBuckets(semantic);
-                    for (let bi = 0; bi < buckets.length; bi++) {
-                      const bucket = buckets[bi];
-                      if (
-                        usingV6Caster
-                        && bucket !== SHADOW_V6_PRIMARY_SEMANTIC_BUCKET
-                        && bucket !== SHADOW_V6_SECONDARY_SEMANTIC_BUCKET
-                        && bucket !== SHADOW_V6_TOP_SEMANTIC_BUCKET
-                      ) {
-                        continue;
-                      }
-                      const triEntry: StructureV5ShadowMaskTriangle = {
-                        stableId: tri.stableId,
-                        semanticBucket: bucket,
-                        srcTriangle: [tri.srcPoints[0], tri.srcPoints[1], tri.srcPoints[2]],
-                        dstTriangle: [tri.points[0], tri.points[1], tri.points[2]],
-                      };
-                      if (usingV5Caster) v5Triangles.push(triEntry);
-                      if (usingV6Caster) v6Triangles.push(triEntry);
-                    }
-                  }
-                }
-                let v5MaskAnchor: ScreenPt = {
-                  x: draw.dx + draw.dw * 0.5,
-                  y: draw.dy + draw.dh,
-                };
-                if (admittedTrianglesForSemanticMasks.length > 0) {
-                  let minX = Number.POSITIVE_INFINITY;
-                  let minY = Number.POSITIVE_INFINITY;
-                  let maxX = Number.NEGATIVE_INFINITY;
-                  let maxY = Number.NEGATIVE_INFINITY;
-                  for (let ti = 0; ti < admittedTrianglesForSemanticMasks.length; ti++) {
-                    const tri = admittedTrianglesForSemanticMasks[ti];
-                    for (let vi = 0; vi < tri.points.length; vi++) {
-                      const p = tri.points[vi];
-                      if (p.x < minX) minX = p.x;
-                      if (p.y < minY) minY = p.y;
-                      if (p.x > maxX) maxX = p.x;
-                      if (p.y > maxY) maxY = p.y;
-                    }
-                  }
-                  if (Number.isFinite(minX) && Number.isFinite(maxX) && Number.isFinite(maxY)) {
-                    v5MaskAnchor = {
-                      x: (minX + maxX) * 0.5,
-                      y: maxY,
-                    };
-                  }
-                }
-                const v5BuildingAnchor: ScreenPt = {
-                  x: draw.dx + draw.dw * 0.5,
-                  y: draw.dy + draw.dh,
-                };
                 const structureShadowBand = resolveRenderZBand(
                   {
                     slice: o.seTx + o.seTy,
@@ -6719,66 +5552,68 @@ export async function renderSystem(
                   },
                   rampRoadTiles,
                 );
-                if (usingV6Caster && v6Triangles.length > 0) {
-                  structureV6ShadowDebugCandidates.push({
-                    structureInstanceId: o.id,
-                    sourceImage: sourceImg,
-                    sourceImageWidth: Math.max(1, Math.round(draw.dw)),
-                    sourceImageHeight: Math.max(1, Math.round(draw.dh)),
-                    triangles: v6Triangles,
-                    zBand: structureShadowBand,
-                  });
+                const structureShadowResult = buildOrchestratedStructureShadowFrameResult({
+                  frame: structureShadowFrame,
+                  overlay: o,
+                  triangleCache,
+                  geometrySignature,
+                  tileWorld: T,
+                  toScreenAtZ,
+                  draw: {
+                    dx: draw.dx,
+                    dy: draw.dy,
+                    dw: draw.dw,
+                    dh: draw.dh,
+                    scale: draw.scale ?? 1,
+                  },
+                  sourceImage: sourceImg,
+                  admittedTrianglesForSemanticMasks,
+                  projectedViewportRect,
+                  projectedRectIntersects: runtimeStructureRectIntersects,
+                  structureShadowBand,
+                  v6PrimarySemanticBucket: SHADOW_V6_PRIMARY_SEMANTIC_BUCKET,
+                  v6SecondarySemanticBucket: SHADOW_V6_SECONDARY_SEMANTIC_BUCKET,
+                  v6TopSemanticBucket: SHADOW_V6_TOP_SEMANTIC_BUCKET,
+                  cacheStores: {
+                    v1: structureShadowV1CacheStore,
+                    v2: structureShadowV2CacheStore,
+                    hybrid: structureShadowHybridCacheStore,
+                    v4: structureShadowV4CacheStore,
+                  },
+                  diagnostics: {
+                    hybrid: hybridShadowDiagnosticStats,
+                    v4: v4ShadowDiagnosticStats,
+                  },
+                });
+
+                const structureShadowV1CacheEntry = structureShadowResult.structureShadowV1CacheEntry;
+                const structureShadowV2CacheEntry = structureShadowResult.structureShadowV2CacheEntry;
+                const structureShadowHybridCacheEntry = structureShadowResult.structureShadowHybridCacheEntry;
+                const structureShadowV4CacheEntry = structureShadowResult.structureShadowV4CacheEntry;
+                const debugShadowCacheHit = structureShadowResult.structureShadowCacheHit;
+
+                if (structureShadowResult.v6Candidate) {
+                  structureV6ShadowDebugCandidates.push(structureShadowResult.v6Candidate);
                 }
-                const shouldQueueProjectedShadow = projectedShadowVisible && !usingV5Caster && !usingV6Caster;
-                const shouldQueueV5Shadow = usingV5Caster && v5Triangles.length > 0;
-                if (shouldQueueProjectedShadow || shouldQueueV5Shadow) {
-                  if (shouldQueueV5Shadow) {
-                    queueStructureV5ShadowForBand(structureShadowBand, {
-                      structureInstanceId: o.id,
-                      sourceImage: sourceImg,
-                      sourceImageWidth: Math.max(1, Math.round(draw.dw)),
-                      sourceImageHeight: Math.max(1, Math.round(draw.dh)),
-                      triangles: v5Triangles,
-                      buildingDrawOrigin: { x: draw.dx, y: draw.dy },
-                      buildingAnchor: v5BuildingAnchor,
-                      maskAnchor: v5MaskAnchor,
-                    });
-                    v5ShadowDiagnosticStats.piecesQueued += 1;
-                    v5ShadowDiagnosticStats.trianglesQueued += v5Triangles.length;
-                  } else if (
-                    usingV4Caster
-                    && structureShadowV4CacheEntry
-                    && (
-                      structureShadowV4CacheEntry.triangleCorrespondence.length > 0
-                      || structureShadowV4CacheEntry.topCapTriangles.length > 0
-                    )
-                  ) {
-                    queueStructureV4ShadowForBand(structureShadowBand, {
-                      sourceImage: sourceImg,
-                      sourceImageWidth: Math.max(1, Math.round(draw.dw)),
-                      sourceImageHeight: Math.max(1, Math.round(draw.dh)),
-                      topCapTriangles: structureShadowV4CacheEntry.topCapTriangles,
-                      triangleCorrespondence: structureShadowV4CacheEntry.triangleCorrespondence,
-                    });
-                    v4ShadowDiagnosticStats.piecesQueued += 1;
-                    v4ShadowDiagnosticStats.trianglesQueued += structureShadowV4CacheEntry.triangleCorrespondence.length;
-                    v4ShadowDiagnosticStats.topCapTrianglesQueued += structureShadowV4CacheEntry.topCapTriangles.length;
-                  } else if (usingHybridCaster && hybridProjectedMappings.length > 0) {
-                    queueStructureHybridShadowForBand(structureShadowBand, {
-                      sourceImage: sourceImg,
-                      sourceImageWidth: Math.max(1, Math.round(draw.dw)),
-                      sourceImageHeight: Math.max(1, Math.round(draw.dh)),
-                      projectedMappings: hybridProjectedMappings,
-                    });
-                    hybridShadowDiagnosticStats.piecesQueued += 1;
-                    hybridShadowDiagnosticStats.trianglesQueued += hybridProjectedMappings.length;
-                  } else if (!usingV4Caster && projectedStructureShadowTriangles.length > 0) {
-                    queueStructureShadowTrianglesForBand(structureShadowBand, projectedStructureShadowTriangles);
-                  }
+
+                if (structureShadowResult.v5Piece) {
+                  queueStructureV5ShadowForBand(structureShadowBand, structureShadowResult.v5Piece);
+                  v5ShadowDiagnosticStats.piecesQueued += 1;
+                  v5ShadowDiagnosticStats.trianglesQueued += structureShadowResult.v5Piece.triangles.length;
+                } else if (structureShadowResult.v4Piece) {
+                  queueStructureV4ShadowForBand(structureShadowBand, structureShadowResult.v4Piece);
+                  v4ShadowDiagnosticStats.piecesQueued += 1;
+                  v4ShadowDiagnosticStats.trianglesQueued += structureShadowResult.v4Piece.triangleCorrespondence.length;
+                  v4ShadowDiagnosticStats.topCapTrianglesQueued += structureShadowResult.v4Piece.topCapTriangles.length;
+                } else if (structureShadowResult.hybridPiece) {
+                  queueStructureHybridShadowForBand(structureShadowBand, structureShadowResult.hybridPiece);
+                  hybridShadowDiagnosticStats.piecesQueued += 1;
+                  hybridShadowDiagnosticStats.trianglesQueued += structureShadowResult.hybridPiece.projectedMappings.length;
+                } else if (structureShadowResult.projectedTriangles) {
+                  queueStructureShadowTrianglesForBand(structureShadowBand, structureShadowResult.projectedTriangles);
                 }
 
                 if (SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG) {
-                  const debugShadowCacheHit = structureShadowCacheHit;
                   if (structureShadowV4CacheEntry) {
                     const debugShadowEntry = structureShadowV4CacheEntry;
                     deferredStructureSliceDebugDraws.push(() => {
@@ -7701,44 +6536,18 @@ export async function renderSystem(
       }
     }
 
-  if (SHADOW_CASTER_MODE === "v6FaceSliceDebug" && structureV6ShadowDebugCandidates.length > 0) {
-    const v65ShadowVector: ScreenPt = {
-      x: shadowSunModel.projectionDirection.x * STRUCTURE_SHADOW_V5_LENGTH_PX,
-      y: shadowSunModel.projectionDirection.y * STRUCTURE_SHADOW_V5_LENGTH_PX,
-    };
-    const candidatesWithPrimaryBucket = structureV6ShadowDebugCandidates.filter(
-      (candidate) => countStructureV6CandidateTrianglesForBucket(candidate, SHADOW_V6_PRIMARY_SEMANTIC_BUCKET) > 0,
-    );
-    const candidatePool = candidatesWithPrimaryBucket.length > 0
-      ? candidatesWithPrimaryBucket
-      : structureV6ShadowDebugCandidates;
-    const orderedCandidates = candidatePool
-      .slice()
-      .sort((a, b) => {
-        const byId = a.structureInstanceId.localeCompare(b.structureInstanceId);
-        if (byId !== 0) return byId;
-        return (
-          countStructureV6CandidateTrianglesForBucket(b, SHADOW_V6_PRIMARY_SEMANTIC_BUCKET)
-          - countStructureV6CandidateTrianglesForBucket(a, SHADOW_V6_PRIMARY_SEMANTIC_BUCKET)
-        );
-      });
-    const selectedStructureIndex = resolveStructureV6SelectedCandidateIndex(
-      orderedCandidates.length,
-      SHADOW_V6_STRUCTURE_INDEX,
-    );
-    const selected = selectedStructureIndex >= 0 ? orderedCandidates[selectedStructureIndex] : null;
-    if (selected) {
-      structureV6VerticalShadowDebugData = buildStructureV6VerticalShadowMaskDebugData(
-        selected,
-        SHADOW_V6_REQUESTED_SEMANTIC_BUCKET,
-        SHADOW_V6_STRUCTURE_INDEX,
-        selectedStructureIndex,
-        orderedCandidates.length,
-        SHADOW_V6_SLICE_COUNT,
-        v65ShadowVector,
-      );
-    }
-  }
+  structureV6VerticalShadowDebugData = buildStructureV6VerticalShadowFrameResult({
+    frame: structureShadowFrame,
+    candidates: structureV6ShadowDebugCandidates,
+    primarySemanticBucket: SHADOW_V6_PRIMARY_SEMANTIC_BUCKET,
+    requestedSemanticBucket: SHADOW_V6_REQUESTED_SEMANTIC_BUCKET,
+    requestedStructureIndex: SHADOW_V6_STRUCTURE_INDEX,
+    requestedSliceCount: SHADOW_V6_SLICE_COUNT,
+    shadowLengthPx: STRUCTURE_SHADOW_V5_LENGTH_PX,
+    countCandidateTrianglesForBucket: countStructureV6CandidateTrianglesForBucket,
+    resolveSelectedCandidateIndex: resolveStructureV6SelectedCandidateIndex,
+    buildVerticalDebugData: buildStructureV6VerticalShadowMaskDebugData,
+  });
 
   // ============================================
   // FINAL RENDER PASS: Execute by zBand with GROUND then WORLD
@@ -7786,7 +6595,7 @@ export async function renderSystem(
   structureV5ShadowByBand.forEach((pieces, zBand) => {
     if (pieces.length > 0) zBands.add(zBand);
   });
-  if (SHADOW_CASTER_MODE === "v6FaceSliceDebug" && structureV6VerticalShadowDebugData) {
+  if (structureShadowFrame.routing.usesV6 && structureV6VerticalShadowDebugData) {
     zBands.add(structureV6VerticalShadowDebugData.zBand);
   }
 
@@ -7904,7 +6713,7 @@ export async function renderSystem(
       }
     }
     if (
-      SHADOW_CASTER_MODE === "v6FaceSliceDebug"
+      structureShadowFrame.routing.usesV6
       && structureV6VerticalShadowDebugData
       && structureV6VerticalShadowDebugData.zBand === zb
     ) {
@@ -8046,7 +6855,7 @@ export async function renderSystem(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.font = "12px monospace";
   ctx.fillStyle = "#fff";
-  if (SHADOW_CASTER_MODE === "v6FaceSliceDebug" && structureV6VerticalShadowDebugData) {
+  if (structureShadowFrame.routing.usesV6 && structureV6VerticalShadowDebugData) {
     drawStructureV6FaceSliceDebugPanel(ctx, cssW, cssH, structureV6VerticalShadowDebugData);
   }
   const perf = getRenderPerfSnapshot();
@@ -8090,11 +6899,11 @@ export async function renderSystem(
     const sunLine = `shadowSun ${shadowSunModel.timeLabel} caster:${SHADOW_CASTER_MODE} elev:${shadowSunModel.elevationDeg.toFixed(1)} dir:${shadowSunModel.directionLabel} f(${forward.x.toFixed(3)},${forward.y.toFixed(3)},${forward.z.toFixed(3)}) p(${projection.x.toFixed(3)},${projection.y.toFixed(3)}) step:${shadowSunModel.stepKey}`;
     ctx.fillText(sunLine, 8, screenDebugLineY);
     screenDebugLineY += 16;
-    if (SHADOW_CASTER_MODE === "v3HybridTriangles") {
+    if (structureShadowFrame.routing.usesHybrid) {
       const hybridLine = `hybridDiag mode:${SHADOW_HYBRID_DIAGNOSTIC_MODE} cache h:${hybridShadowDiagnosticStats.cacheHits} m:${hybridShadowDiagnosticStats.cacheMisses} cast:${hybridShadowDiagnosticStats.casterTriangles} proj:${hybridShadowDiagnosticStats.projectedTriangles} queue p:${hybridShadowDiagnosticStats.piecesQueued} t:${hybridShadowDiagnosticStats.trianglesQueued} pass p:${hybridShadowDiagnosticStats.piecesDrawnShadowPass} t:${hybridShadowDiagnosticStats.trianglesDrawnShadowPass} main p:${hybridShadowDiagnosticStats.piecesDrawnMainCanvas} t:${hybridShadowDiagnosticStats.trianglesDrawnMainCanvas} comp p:${hybridShadowDiagnosticStats.piecesComposited} t:${hybridShadowDiagnosticStats.trianglesComposited}`;
       ctx.fillText(hybridLine, 8, screenDebugLineY);
       screenDebugLineY += 16;
-    } else if (SHADOW_CASTER_MODE === "v4SliceStrips") {
+    } else if (structureShadowFrame.routing.usesV4) {
       const v4Line = `v4Diag mode:${v4ShadowDiagnosticStats.renderMode} cache h:${v4ShadowDiagnosticStats.cacheHits} m:${v4ShadowDiagnosticStats.cacheMisses} cap:${v4ShadowDiagnosticStats.topCapTriangles} corr:${v4ShadowDiagnosticStats.correspondences} strips:${v4ShadowDiagnosticStats.strips} edges:${v4ShadowDiagnosticStats.layerEdges} bands:${v4ShadowDiagnosticStats.layerBands} srcTri:${v4ShadowDiagnosticStats.sourceBandTriangles} dstTri:${v4ShadowDiagnosticStats.destinationBandEntries} map:${v4ShadowDiagnosticStats.correspondencePairs} mismatch:${v4ShadowDiagnosticStats.correspondenceMismatches} queue p:${v4ShadowDiagnosticStats.piecesQueued} stripT:${v4ShadowDiagnosticStats.trianglesQueued} capT:${v4ShadowDiagnosticStats.topCapTrianglesQueued} draw capPass:${v4ShadowDiagnosticStats.topCapTrianglesDrawnShadowPass} capMain:${v4ShadowDiagnosticStats.topCapTrianglesDrawnMainCanvas} warp:${v4ShadowDiagnosticStats.warpedTrianglesDrawnShadowPass} flatPass:${v4ShadowDiagnosticStats.flatTrianglesDrawnShadowPass} flatMain:${v4ShadowDiagnosticStats.flatTrianglesDrawnMainCanvas} calls warp:${v4ShadowDiagnosticStats.warpedDrawCalls} flat:${v4ShadowDiagnosticStats.flatDrawCalls} comp p:${v4ShadowDiagnosticStats.piecesComposited} t:${v4ShadowDiagnosticStats.trianglesComposited} triPairs:${v4ShadowDiagnosticStats.destinationBandPairs} tri:${v4ShadowDiagnosticStats.destinationTriangles} diag:${v4ShadowDiagnosticStats.diagonalRule} deltaConst pass:${v4ShadowDiagnosticStats.deltaConstPass} fail:${v4ShadowDiagnosticStats.deltaConstFail} ${v4ShadowDiagnosticStats.firstSliceSummary}`;
       ctx.fillText(v4Line, 8, screenDebugLineY);
       screenDebugLineY += 16;
@@ -8104,7 +6913,7 @@ export async function renderSystem(
       const v4BandLine = `v4Band ${v4ShadowDiagnosticStats.sampleSelectedBand}`;
       ctx.fillText(v4BandLine, 8, screenDebugLineY);
       screenDebugLineY += 16;
-    } else if (SHADOW_CASTER_MODE === "v5TriangleShadowMask") {
+    } else if (structureShadowFrame.routing.usesV5) {
       const v5Line = `v5Diag view:${SHADOW_V5_DEBUG_VIEW} xf:${SHADOW_V5_TRANSFORM_DEBUG_MODE} queue p:${v5ShadowDiagnosticStats.piecesQueued} t:${v5ShadowDiagnosticStats.trianglesQueued} draw p:${v5ShadowDiagnosticStats.piecesDrawn} t:${v5ShadowDiagnosticStats.trianglesDrawn} finalCalls:${v5ShadowDiagnosticStats.finalShadowDrawCalls}`;
       ctx.fillText(v5Line, 8, screenDebugLineY);
       screenDebugLineY += 16;
@@ -8131,7 +6940,7 @@ export async function renderSystem(
         ctx.fillText(v5SpaceLineB, 8, screenDebugLineY);
         screenDebugLineY += 16;
       }
-    } else if (SHADOW_CASTER_MODE === "v6FaceSliceDebug") {
+    } else if (structureShadowFrame.routing.usesV6) {
       const selectedId = structureV6VerticalShadowDebugData?.structureInstanceId ?? "none";
       const bucketATris = structureV6VerticalShadowDebugData?.bucketAShadow?.sourceTriangleCount ?? 0;
       const bucketBTriCount = structureV6VerticalShadowDebugData?.bucketBShadow?.sourceTriangleCount ?? 0;
