@@ -197,6 +197,20 @@ import {
   StructureShadowV2CacheStore,
   type StructureShadowV2CacheEntry,
 } from "./structureShadowV2AlphaSilhouette";
+import {
+  buildStructureShadowHybridCacheEntry,
+  buildStructureShadowHybridContextKey,
+  StructureShadowHybridCacheStore,
+  type StructureHybridShadowProjectedTriangle,
+  type StructureShadowHybridCacheEntry,
+} from "./structureShadowHybridTriangles";
+import {
+  buildStructureShadowV4CacheEntry,
+  buildStructureShadowV4ContextKey,
+  StructureShadowV4CacheStore,
+  type SliceCorrespondence,
+  type StructureShadowV4CacheEntry,
+} from "./structureShadowV4";
 
 const DEBUG_PLAYER_WEDGE = false;
 const DISABLE_WALLS_AND_CURTAINS = true;
@@ -232,6 +246,8 @@ const staticRelightBakeStore = new StaticRelightBakeStore<HTMLCanvasElement>();
 const runtimeStructureTriangleCacheStore = new RuntimeStructureTriangleCacheStore();
 const structureShadowV1CacheStore = new StructureShadowCacheStore();
 const structureShadowV2CacheStore = new StructureShadowV2CacheStore();
+const structureShadowHybridCacheStore = new StructureShadowHybridCacheStore();
+const structureShadowV4CacheStore = new StructureShadowV4CacheStore();
 const STATIC_RELIGHT_RUNTIME_RETRY_INTERVAL_MS = 50;
 let staticRelightPendingRuntimeRebuildContextKey = "";
 let staticRelightPendingRuntimeRebuildAtMs = 0;
@@ -1657,6 +1673,115 @@ function drawTexturedTriangle(
   ctx.restore();
 }
 
+function drawShadowTexturedTriangle(
+  ctx: CanvasRenderingContext2D,
+  img: CanvasImageSource,
+  imgW: number,
+  imgH: number,
+  s0: ScreenPt, s1: ScreenPt, s2: ScreenPt,
+  d0: ScreenPt, d1: ScreenPt, d2: ScreenPt,
+  shadowAlpha: number,
+): void {
+  const m = computeTriToTriAffine(s0, s1, s2, d0, d1, d2);
+  if (!m) return;
+  const alpha = Math.max(0, Math.min(1, shadowAlpha));
+  if (alpha <= 0) return;
+  const textureAlpha = Math.max(0.14, Math.min(0.48, alpha * 0.95));
+  const darkenAlpha = Math.max(alpha, Math.min(0.9, alpha * 1.75));
+  ctx.save();
+  const baseAlpha = ctx.globalAlpha;
+  ctx.beginPath();
+  ctx.moveTo(d0.x, d0.y);
+  ctx.lineTo(d1.x, d1.y);
+  ctx.lineTo(d2.x, d2.y);
+  ctx.closePath();
+  ctx.clip();
+  ctx.globalAlpha = baseAlpha * textureAlpha;
+  ctx.transform(m.a, m.b, m.c, m.d, m.e, m.f);
+  ctx.drawImage(img, 0, 0, imgW, imgH);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  // Keep warped source variation visible while forcing a dark shadow treatment.
+  ctx.globalAlpha = baseAlpha;
+  ctx.globalCompositeOperation = "source-atop";
+  ctx.fillStyle = `rgba(0,0,0,${darkenAlpha})`;
+  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.restore();
+}
+
+type StructureHybridShadowRenderPiece = {
+  sourceImage: CanvasImageSource;
+  sourceImageWidth: number;
+  sourceImageHeight: number;
+  projectedMappings: readonly StructureHybridShadowProjectedTriangle[];
+};
+
+function drawStructureHybridShadowProjectedTriangles(
+  ctx: CanvasRenderingContext2D,
+  pieces: readonly StructureHybridShadowRenderPiece[],
+  maxDarkness: number,
+): void {
+  if (pieces.length <= 0) return;
+  const shadowAlpha = Math.max(0, Math.min(1, maxDarkness));
+  if (shadowAlpha <= 0) return;
+  for (let i = 0; i < pieces.length; i++) {
+    const piece = pieces[i];
+    const projectedMappings = piece.projectedMappings;
+    for (let ti = 0; ti < projectedMappings.length; ti++) {
+      const mapping = projectedMappings[ti];
+      const [s0, s1, s2] = mapping.srcTriangle;
+      const [d0, d1, d2] = mapping.projectedTriangle;
+      drawShadowTexturedTriangle(
+        ctx,
+        piece.sourceImage,
+        piece.sourceImageWidth,
+        piece.sourceImageHeight,
+        s0,
+        s1,
+        s2,
+        d0,
+        d1,
+        d2,
+        shadowAlpha,
+      );
+    }
+  }
+}
+
+function countStructureHybridProjectedTriangles(
+  pieces: readonly StructureHybridShadowRenderPiece[],
+): number {
+  let count = 0;
+  for (let i = 0; i < pieces.length; i++) count += pieces[i].projectedMappings.length;
+  return count;
+}
+
+function drawStructureHybridProjectedTrianglesSolid(
+  ctx: CanvasRenderingContext2D,
+  pieces: readonly StructureHybridShadowRenderPiece[],
+  fillStyle: string,
+): number {
+  if (pieces.length <= 0) return 0;
+  let triangleCount = 0;
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+  ctx.beginPath();
+  for (let i = 0; i < pieces.length; i++) {
+    const mappings = pieces[i].projectedMappings;
+    for (let ti = 0; ti < mappings.length; ti++) {
+      const [a, b, c] = mappings[ti].projectedTriangle;
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.lineTo(c.x, c.y);
+      ctx.closePath();
+      triangleCount++;
+    }
+  }
+  ctx.fillStyle = fillStyle;
+  ctx.fill();
+  ctx.restore();
+  return triangleCount;
+}
+
 function drawStructureShadowProjectedTriangles(
   ctx: CanvasRenderingContext2D,
   triangles: readonly StructureShadowProjectedTriangle[],
@@ -2813,6 +2938,7 @@ export async function renderSystem(
   const SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG = debugFlags.showStructureTriangleFootprint;
   const SHADOW_V1_DEBUG_GEOMETRY_MODE = debug.shadowV1DebugGeometryMode;
   const SHADOW_CASTER_MODE = debug.shadowCasterMode;
+  const SHADOW_HYBRID_DIAGNOSTIC_MODE = debug.shadowHybridDiagnosticMode;
   const SHOW_ENEMY_AIM_OVERLAY = debugFlags.showEnemyAimOverlay;
   const SHOW_LOOT_GOBLIN_OVERLAY = debugFlags.showLootGoblinOverlay;
   const SHOW_ZONE_OBJECTIVE_BOUNDS = !!debug.objectives?.showZoneBounds;
@@ -3299,8 +3425,21 @@ export async function renderSystem(
     silhouetteSampleStep: STRUCTURE_SHADOW_V2_SILHOUETTE_SAMPLE_STEP,
     maxLoopPoints: STRUCTURE_SHADOW_V2_MAX_LOOP_POINTS,
   });
+  const structureShadowHybridContextKey = buildStructureShadowHybridContextKey({
+    mapId: compiledMap.id,
+    enabled: structureTriangleGeometryEnabled,
+    sunStepKey: shadowSunModel.stepKey,
+    roofScanStepPx: STRUCTURE_SHADOW_V1_ROOF_SCAN_STEP_PX,
+  });
+  const structureShadowV4ContextKey = buildStructureShadowV4ContextKey({
+    mapId: compiledMap.id,
+    enabled: structureTriangleGeometryEnabled,
+    sunStepKey: shadowSunModel.stepKey,
+  });
   structureShadowV1CacheStore.resetIfContextChanged(structureShadowContextKey);
   structureShadowV2CacheStore.resetIfContextChanged(structureShadowV2ContextKey);
+  structureShadowHybridCacheStore.resetIfContextChanged(structureShadowHybridContextKey);
+  structureShadowV4CacheStore.resetIfContextChanged(structureShadowV4ContextKey);
   staticRelightFrame = staticRelight.frame;
   if (runtimeStructureTriangleContextChanged && structureTriangleGeometryEnabled) {
     rebuildRuntimeStructureTriangleCacheForMap(compiledMap);
@@ -3362,6 +3501,82 @@ export async function renderSystem(
   // Map from slice -> array of drawables for that slice
   const sliceDrawables = new Map<number, SliceDrawable[]>();
   const structureShadowTrianglesByBand = new Map<number, StructureShadowProjectedTriangle[]>();
+  const structureHybridShadowByBand = new Map<number, StructureHybridShadowRenderPiece[]>();
+  type HybridShadowDiagnosticStats = {
+    cacheHits: number;
+    cacheMisses: number;
+    casterTriangles: number;
+    projectedTriangles: number;
+    piecesQueued: number;
+    trianglesQueued: number;
+    piecesDrawnShadowPass: number;
+    trianglesDrawnShadowPass: number;
+    piecesDrawnMainCanvas: number;
+    trianglesDrawnMainCanvas: number;
+    piecesComposited: number;
+    trianglesComposited: number;
+  };
+  const hybridShadowDiagnosticStats: HybridShadowDiagnosticStats = {
+    cacheHits: 0,
+    cacheMisses: 0,
+    casterTriangles: 0,
+    projectedTriangles: 0,
+    piecesQueued: 0,
+    trianglesQueued: 0,
+    piecesDrawnShadowPass: 0,
+    trianglesDrawnShadowPass: 0,
+    piecesDrawnMainCanvas: 0,
+    trianglesDrawnMainCanvas: 0,
+    piecesComposited: 0,
+    trianglesComposited: 0,
+  };
+  type V4ShadowDiagnosticStats = {
+    cacheHits: number;
+    cacheMisses: number;
+    correspondences: number;
+    strips: number;
+    layerEdges: number;
+    layerBands: number;
+    destinationBandPairs: number;
+    destinationTriangles: number;
+    diagonalA: number;
+    diagonalB: number;
+    diagonalRule: string;
+    deltaConstPass: number;
+    deltaConstFail: number;
+    firstSliceSummary: string;
+    sampleRoofHeightPx: number | null;
+    sampleLayerHeights: string;
+    sampleSliceCount: number;
+    sampleLayerEdges: number;
+    sampleLayerBands: number;
+    sampleSelectedSlice: string;
+    sampleSelectedBand: string;
+  };
+  const v4ShadowDiagnosticStats: V4ShadowDiagnosticStats = {
+    cacheHits: 0,
+    cacheMisses: 0,
+    correspondences: 0,
+    strips: 0,
+    layerEdges: 0,
+    layerBands: 0,
+    destinationBandPairs: 0,
+    destinationTriangles: 0,
+    diagonalA: 0,
+    diagonalB: 0,
+    diagonalRule: "A:0 B:0",
+    deltaConstPass: 0,
+    deltaConstFail: 0,
+    firstSliceSummary: "none",
+    sampleRoofHeightPx: null,
+    sampleLayerHeights: "none",
+    sampleSliceCount: 0,
+    sampleLayerEdges: 0,
+    sampleLayerBands: 0,
+    sampleSelectedSlice: "none",
+    sampleSelectedBand: "none",
+  };
+  const hybridMainCanvasDiagnosticPieces: StructureHybridShadowRenderPiece[] = [];
   const deferredStructureSliceDebugDraws: Array<() => void> = [];
   let didQueueStructureCutoutDebugRect = false;
 
@@ -3485,6 +3700,19 @@ export async function renderSystem(
     for (let i = 0; i < triangles.length; i++) {
       bucket.push(triangles[i]);
     }
+  };
+
+  const queueStructureHybridShadowForBand = (
+    zBand: number,
+    piece: StructureHybridShadowRenderPiece,
+  ): void => {
+    if (piece.projectedMappings.length <= 0) return;
+    let bucket = structureHybridShadowByBand.get(zBand);
+    if (!bucket) {
+      bucket = [];
+      structureHybridShadowByBand.set(zBand, bucket);
+    }
+    bucket.push(piece);
   };
 
   // ----------------------------
@@ -5212,9 +5440,174 @@ export async function renderSystem(
               if (overlayHasVisibleTriangleGroup) {
                 let structureShadowV1CacheEntry: StructureShadowCacheEntry | null = null;
                 let structureShadowV2CacheEntry: StructureShadowV2CacheEntry | null = null;
+                let structureShadowHybridCacheEntry: StructureShadowHybridCacheEntry | null = null;
+                let structureShadowV4CacheEntry: StructureShadowV4CacheEntry | null = null;
                 let projectedStructureShadowTriangles: readonly StructureShadowProjectedTriangle[] = [];
                 let projectedStructureShadowBounds: RuntimeStructureTriangleRect | null = null;
-                if (SHADOW_CASTER_MODE === "v2AlphaSilhouette") {
+                let hybridProjectedMappings: readonly StructureHybridShadowProjectedTriangle[] = [];
+                const usingV4Caster = SHADOW_CASTER_MODE === "v4SliceStrips";
+                const usingHybridCaster = SHADOW_CASTER_MODE === "v3HybridTriangles";
+                if (usingHybridCaster || usingV4Caster) {
+                  const cachedStructureShadowHybrid = structureShadowHybridCacheStore.get(
+                    o.id,
+                    geometrySignature,
+                    shadowSunModel.stepKey,
+                  );
+                  if (cachedStructureShadowHybrid) {
+                    structureShadowHybridCacheEntry = cachedStructureShadowHybrid;
+                    structureShadowCacheHit = true;
+                    if (usingHybridCaster) hybridShadowDiagnosticStats.cacheHits += 1;
+                  } else {
+                    const rebuiltStructureShadowHybrid = buildStructureShadowHybridCacheEntry({
+                      overlay: o,
+                      triangleCache,
+                      geometrySignature,
+                      tileWorld: T,
+                      toScreenAtZ,
+                      sunForward: shadowSunModel.forward,
+                      sunProjectionDirection: shadowSunModel.projectionDirection,
+                      sunStepKey: shadowSunModel.stepKey,
+                      roofScanStepPx: STRUCTURE_SHADOW_V1_ROOF_SCAN_STEP_PX,
+                    });
+                    structureShadowHybridCacheEntry = rebuiltStructureShadowHybrid;
+                    structureShadowHybridCacheStore.set(rebuiltStructureShadowHybrid);
+                    structureShadowCacheHit = false;
+                    if (usingHybridCaster) hybridShadowDiagnosticStats.cacheMisses += 1;
+                  }
+                  if (usingV4Caster) {
+                    const cachedStructureShadowV4 = structureShadowV4CacheStore.get(
+                      o.id,
+                      geometrySignature,
+                      shadowSunModel.stepKey,
+                    );
+                    if (cachedStructureShadowV4) {
+                      structureShadowV4CacheEntry = cachedStructureShadowV4;
+                      structureShadowCacheHit = true;
+                      v4ShadowDiagnosticStats.cacheHits += 1;
+                    } else {
+                      const correspondences: SliceCorrespondence[] = structureShadowHybridCacheEntry.slicePerimeterSegments.map((segment) => ({
+                        sliceIndex: segment.sliceIndex,
+                        baseSegment: {
+                          a: { x: segment.baseSegment[0].x, y: segment.baseSegment[0].y },
+                          b: { x: segment.baseSegment[1].x, y: segment.baseSegment[1].y },
+                        },
+                        topSegment: {
+                          a: { x: segment.topSegment[0].x, y: segment.topSegment[0].y },
+                          b: { x: segment.topSegment[1].x, y: segment.topSegment[1].y },
+                        },
+                      }));
+                      const bandOwnerParity = new Map<number, 0 | 1>();
+                      for (let ti = 0; ti < triangleCache.triangles.length; ti++) {
+                        const tri = triangleCache.triangles[ti];
+                        if (bandOwnerParity.has(tri.bandIndex)) continue;
+                        bandOwnerParity.set(tri.bandIndex, ((tri.parentTx + tri.parentTy) & 1) as 0 | 1);
+                      }
+                      let parityAnchorBandIndex: number | null = null;
+                      let parityAnchorValue: 0 | 1 = 0;
+                      if (bandOwnerParity.size > 0) {
+                        const orderedBands = Array.from(bandOwnerParity.keys()).sort((a, b) => a - b);
+                        parityAnchorBandIndex = orderedBands[0];
+                        parityAnchorValue = bandOwnerParity.get(parityAnchorBandIndex) ?? 0;
+                      }
+                      const sliceOwnerParity = new Map<number, 0 | 1>();
+                      for (let si = 0; si < structureShadowHybridCacheEntry.slicePerimeterSegments.length; si++) {
+                        const segment = structureShadowHybridCacheEntry.slicePerimeterSegments[si];
+                        let parity = bandOwnerParity.get(segment.bandIndex);
+                        if (parity == null && parityAnchorBandIndex != null) {
+                          parity = ((parityAnchorValue + ((segment.bandIndex - parityAnchorBandIndex) & 1)) & 1) as 0 | 1;
+                        }
+                        if (parity != null) sliceOwnerParity.set(segment.sliceIndex, parity);
+                      }
+                      const rebuiltStructureShadowV4 = buildStructureShadowV4CacheEntry({
+                        structureInstanceId: o.id,
+                        geometrySignature,
+                        sunStepKey: shadowSunModel.stepKey,
+                        castHeightPx: structureShadowHybridCacheEntry.castHeightPx,
+                        sunDirection: shadowSunModel.projectionDirection,
+                        sliceCorrespondence: correspondences,
+                        sliceOwnerParity,
+                      });
+                      structureShadowV4CacheEntry = rebuiltStructureShadowV4;
+                      structureShadowV4CacheStore.set(rebuiltStructureShadowV4);
+                      structureShadowCacheHit = false;
+                      v4ShadowDiagnosticStats.cacheMisses += 1;
+                    }
+                    projectedStructureShadowBounds = structureShadowV4CacheEntry.projectedBounds;
+                    v4ShadowDiagnosticStats.correspondences += structureShadowV4CacheEntry.correspondences.length;
+                    v4ShadowDiagnosticStats.strips += structureShadowV4CacheEntry.sliceStrips.length;
+                    v4ShadowDiagnosticStats.layerEdges += structureShadowV4CacheEntry.layerEdges.length;
+                    v4ShadowDiagnosticStats.layerBands += structureShadowV4CacheEntry.layerBands.length;
+                    v4ShadowDiagnosticStats.destinationBandPairs += structureShadowV4CacheEntry.destinationBandTriangles.length;
+                    v4ShadowDiagnosticStats.destinationTriangles += structureShadowV4CacheEntry.destinationTriangles.length;
+                    for (let di = 0; di < structureShadowV4CacheEntry.destinationBandTriangles.length; di++) {
+                      if (structureShadowV4CacheEntry.destinationBandTriangles[di].diagonal === "A_to_Bprime") {
+                        v4ShadowDiagnosticStats.diagonalA += 1;
+                      } else {
+                        v4ShadowDiagnosticStats.diagonalB += 1;
+                      }
+                    }
+                    v4ShadowDiagnosticStats.diagonalRule = `A:${v4ShadowDiagnosticStats.diagonalA} B:${v4ShadowDiagnosticStats.diagonalB}`;
+                    if (structureShadowV4CacheEntry.isDeltaConstant) {
+                      v4ShadowDiagnosticStats.deltaConstPass += 1;
+                    } else {
+                      v4ShadowDiagnosticStats.deltaConstFail += 1;
+                    }
+                    const firstDiagnostic = structureShadowV4CacheEntry.midpointDiagnostics[0];
+                    if (firstDiagnostic) {
+                      v4ShadowDiagnosticStats.firstSliceSummary = `i${firstDiagnostic.sliceIndex} b(${firstDiagnostic.baseMidpoint.x.toFixed(1)},${firstDiagnostic.baseMidpoint.y.toFixed(1)}) t(${firstDiagnostic.topMidpoint.x.toFixed(1)},${firstDiagnostic.topMidpoint.y.toFixed(1)}) d(${firstDiagnostic.delta.x.toFixed(1)},${firstDiagnostic.delta.y.toFixed(1)})`;
+                    }
+                    if (v4ShadowDiagnosticStats.sampleRoofHeightPx == null) {
+                      v4ShadowDiagnosticStats.sampleRoofHeightPx = structureShadowV4CacheEntry.roofHeightPx;
+                      v4ShadowDiagnosticStats.sampleLayerHeights = structureShadowV4CacheEntry.layerHeightsPx.join(",");
+                      v4ShadowDiagnosticStats.sampleSliceCount = structureShadowV4CacheEntry.sliceStrips.length;
+                      v4ShadowDiagnosticStats.sampleLayerEdges = structureShadowV4CacheEntry.layerEdges.length;
+                      v4ShadowDiagnosticStats.sampleLayerBands = structureShadowV4CacheEntry.layerBands.length;
+                      const selectedSlice = structureShadowV4CacheEntry.sliceStrips[0];
+                      if (selectedSlice) {
+                        const selectedEdges = structureShadowV4CacheEntry.layerEdges.filter((edge) => edge.sliceIndex === selectedSlice.sliceIndex);
+                        const layer0 = selectedEdges[0];
+                        const layerLast = selectedEdges[selectedEdges.length - 1];
+                        v4ShadowDiagnosticStats.sampleSelectedSlice = [
+                          `i${selectedSlice.sliceIndex}`,
+                          `baseA(${selectedSlice.baseA.x.toFixed(1)},${selectedSlice.baseA.y.toFixed(1)})`,
+                          `baseB(${selectedSlice.baseB.x.toFixed(1)},${selectedSlice.baseB.y.toFixed(1)})`,
+                          `topA(${selectedSlice.topA.x.toFixed(1)},${selectedSlice.topA.y.toFixed(1)})`,
+                          `topB(${selectedSlice.topB.x.toFixed(1)},${selectedSlice.topB.y.toFixed(1)})`,
+                          layer0
+                            ? `L0A(${layer0.a.x.toFixed(1)},${layer0.a.y.toFixed(1)}) L0B(${layer0.b.x.toFixed(1)},${layer0.b.y.toFixed(1)})`
+                            : "L0(none)",
+                          layerLast
+                            ? `LTA(${layerLast.a.x.toFixed(1)},${layerLast.a.y.toFixed(1)}) LTB(${layerLast.b.x.toFixed(1)},${layerLast.b.y.toFixed(1)})`
+                            : "LT(none)",
+                        ].join(" ");
+                        const selectedBand = structureShadowV4CacheEntry.layerBands.find(
+                          (band) => band.sliceIndex === selectedSlice.sliceIndex && band.bandIndex === 0,
+                        );
+                        const selectedPair = structureShadowV4CacheEntry.destinationBandTriangles.find(
+                          (pair) => pair.sliceIndex === selectedSlice.sliceIndex && pair.bandIndex === 0,
+                        );
+                        if (selectedBand && selectedPair) {
+                          const t0 = selectedPair.tri0;
+                          const t1 = selectedPair.tri1;
+                          v4ShadowDiagnosticStats.sampleSelectedBand = [
+                            `i${selectedBand.sliceIndex} b${selectedBand.bandIndex}`,
+                            `lowerA(${selectedBand.lowerA.x.toFixed(1)},${selectedBand.lowerA.y.toFixed(1)})`,
+                            `lowerB(${selectedBand.lowerB.x.toFixed(1)},${selectedBand.lowerB.y.toFixed(1)})`,
+                            `upperA(${selectedBand.upperA.x.toFixed(1)},${selectedBand.upperA.y.toFixed(1)})`,
+                            `upperB(${selectedBand.upperB.x.toFixed(1)},${selectedBand.upperB.y.toFixed(1)})`,
+                            `tri0[(${t0[0].x.toFixed(1)},${t0[0].y.toFixed(1)}),(${t0[1].x.toFixed(1)},${t0[1].y.toFixed(1)}),(${t0[2].x.toFixed(1)},${t0[2].y.toFixed(1)})]`,
+                            `tri1[(${t1[0].x.toFixed(1)},${t1[0].y.toFixed(1)}),(${t1[1].x.toFixed(1)},${t1[1].y.toFixed(1)}),(${t1[2].x.toFixed(1)},${t1[2].y.toFixed(1)})]`,
+                          ].join(" ");
+                        }
+                      }
+                    }
+                  } else {
+                    hybridProjectedMappings = structureShadowHybridCacheEntry.projectedMappings;
+                    projectedStructureShadowBounds = structureShadowHybridCacheEntry.projectedBounds;
+                    hybridShadowDiagnosticStats.casterTriangles += structureShadowHybridCacheEntry.casterTriangles.length;
+                    hybridShadowDiagnosticStats.projectedTriangles += structureShadowHybridCacheEntry.projectedMappings.length;
+                  }
+                } else if (SHADOW_CASTER_MODE === "v2AlphaSilhouette") {
                   const cachedStructureShadowV2 = structureShadowV2CacheStore.get(
                     o.id,
                     geometrySignature,
@@ -5279,7 +5672,7 @@ export async function renderSystem(
                 const projectedShadowVisible = projectedStructureShadowBounds
                   ? runtimeStructureRectIntersects(projectedStructureShadowBounds, projectedViewportRect)
                   : false;
-                if (projectedShadowVisible && projectedStructureShadowTriangles.length > 0) {
+                if (projectedShadowVisible) {
                   const shadowBand = resolveRenderZBand(
                     {
                       slice: o.seTx + o.seTy,
@@ -5288,12 +5681,358 @@ export async function renderSystem(
                     },
                     rampRoadTiles,
                   );
-                  queueStructureShadowTrianglesForBand(shadowBand, projectedStructureShadowTriangles);
+                  if (usingHybridCaster && hybridProjectedMappings.length > 0) {
+                    queueStructureHybridShadowForBand(shadowBand, {
+                      sourceImage: sourceImg,
+                      sourceImageWidth: Math.max(1, Math.round(draw.dw)),
+                      sourceImageHeight: Math.max(1, Math.round(draw.dh)),
+                      projectedMappings: hybridProjectedMappings,
+                    });
+                    hybridShadowDiagnosticStats.piecesQueued += 1;
+                    hybridShadowDiagnosticStats.trianglesQueued += hybridProjectedMappings.length;
+                  } else if (!usingV4Caster && projectedStructureShadowTriangles.length > 0) {
+                    queueStructureShadowTrianglesForBand(shadowBand, projectedStructureShadowTriangles);
+                  }
                 }
 
                 if (SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG) {
                   const debugShadowCacheHit = structureShadowCacheHit;
-                  if (structureShadowV2CacheEntry) {
+                  if (structureShadowV4CacheEntry) {
+                    const debugShadowEntry = structureShadowV4CacheEntry;
+                    deferredStructureSliceDebugDraws.push(() => {
+                      ctx.save();
+                      ctx.lineWidth = 1.15;
+                      ctx.font = "9px monospace";
+                      const selectedSliceIndex = debugShadowEntry.sliceStrips[0]?.sliceIndex ?? null;
+                      const bandPairByKey = new Map<string, (typeof debugShadowEntry.destinationBandTriangles)[number]>();
+                      for (let pi = 0; pi < debugShadowEntry.destinationBandTriangles.length; pi++) {
+                        const pair = debugShadowEntry.destinationBandTriangles[pi];
+                        bandPairByKey.set(`${pair.sliceIndex}:${pair.bandIndex}`, pair);
+                      }
+                      // 1) Layer edges (faint). Selected slice is highlighted for readability.
+                      for (let li = 0; li < debugShadowEntry.layerEdges.length; li++) {
+                        const layerEdge = debugShadowEntry.layerEdges[li];
+                        const isSelectedSlice = selectedSliceIndex != null && layerEdge.sliceIndex === selectedSliceIndex;
+                        const midX = (layerEdge.a.x + layerEdge.b.x) * 0.5;
+                        const midY = (layerEdge.a.y + layerEdge.b.y) * 0.5;
+                        ctx.beginPath();
+                        ctx.moveTo(layerEdge.a.x, layerEdge.a.y);
+                        ctx.lineTo(layerEdge.b.x, layerEdge.b.y);
+                        ctx.strokeStyle = isSelectedSlice
+                          ? "rgba(170, 230, 255, 0.75)"
+                          : "rgba(170, 230, 255, 0.30)";
+                        ctx.stroke();
+                        if (isSelectedSlice) {
+                          ctx.fillStyle = "rgba(200, 235, 255, 0.92)";
+                          ctx.fillText(`${layerEdge.layerIndex}`, midX + 2, midY - 2);
+                        }
+                      }
+                      // 2) Band side edges lower->upper.
+                      for (let bi = 0; bi < debugShadowEntry.layerBands.length; bi++) {
+                        const band = debugShadowEntry.layerBands[bi];
+                        const isSelectedSlice = selectedSliceIndex != null && band.sliceIndex === selectedSliceIndex;
+                        ctx.beginPath();
+                        ctx.moveTo(band.lowerA.x, band.lowerA.y);
+                        ctx.lineTo(band.upperA.x, band.upperA.y);
+                        ctx.moveTo(band.lowerB.x, band.lowerB.y);
+                        ctx.lineTo(band.upperB.x, band.upperB.y);
+                        ctx.strokeStyle = isSelectedSlice
+                          ? "rgba(120, 240, 220, 0.8)"
+                          : "rgba(120, 240, 220, 0.25)";
+                        ctx.stroke();
+                      }
+                      // 3) Band quad outline + runtime diagonal per (sliceParity + bandIndex).
+                      for (let bi = 0; bi < debugShadowEntry.layerBands.length; bi++) {
+                        const band = debugShadowEntry.layerBands[bi];
+                        const pair = bandPairByKey.get(`${band.sliceIndex}:${band.bandIndex}`);
+                        const isSelectedSlice = selectedSliceIndex != null && band.sliceIndex === selectedSliceIndex;
+                        ctx.beginPath();
+                        ctx.moveTo(band.lowerA.x, band.lowerA.y);
+                        ctx.lineTo(band.lowerB.x, band.lowerB.y);
+                        ctx.lineTo(band.upperB.x, band.upperB.y);
+                        ctx.lineTo(band.upperA.x, band.upperA.y);
+                        ctx.closePath();
+                        ctx.strokeStyle = isSelectedSlice
+                          ? "rgba(205, 215, 255, 0.70)"
+                          : "rgba(205, 215, 255, 0.20)";
+                        ctx.stroke();
+                        if (pair) {
+                          ctx.beginPath();
+                          if (pair.diagonal === "A_to_Bprime") {
+                            ctx.moveTo(band.lowerA.x, band.lowerA.y);
+                            ctx.lineTo(band.upperB.x, band.upperB.y);
+                          } else {
+                            ctx.moveTo(band.lowerB.x, band.lowerB.y);
+                            ctx.lineTo(band.upperA.x, band.upperA.y);
+                          }
+                          ctx.strokeStyle = isSelectedSlice
+                            ? "rgba(255, 245, 125, 0.92)"
+                            : "rgba(255, 245, 125, 0.28)";
+                          ctx.stroke();
+                        }
+                        if (isSelectedSlice) {
+                          const centerX = (band.lowerA.x + band.lowerB.x + band.upperA.x + band.upperB.x) * 0.25;
+                          const centerY = (band.lowerA.y + band.lowerB.y + band.upperA.y + band.upperB.y) * 0.25;
+                          ctx.fillStyle = "rgba(225, 235, 255, 0.9)";
+                          ctx.fillText(`b${band.bandIndex}`, centerX + 2, centerY - 2);
+                        }
+                      }
+                      // 4) Destination triangles tri0 / tri1.
+                      for (let pi = 0; pi < debugShadowEntry.destinationBandTriangles.length; pi++) {
+                        const pair = debugShadowEntry.destinationBandTriangles[pi];
+                        const isSelectedSlice = selectedSliceIndex != null && pair.sliceIndex === selectedSliceIndex;
+                        const [t0a, t0b, t0c] = pair.tri0;
+                        const [t1a, t1b, t1c] = pair.tri1;
+                        ctx.beginPath();
+                        ctx.moveTo(t0a.x, t0a.y);
+                        ctx.lineTo(t0b.x, t0b.y);
+                        ctx.lineTo(t0c.x, t0c.y);
+                        ctx.closePath();
+                        ctx.strokeStyle = isSelectedSlice
+                          ? "rgba(255, 120, 170, 0.85)"
+                          : "rgba(255, 120, 170, 0.32)";
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(t1a.x, t1a.y);
+                        ctx.lineTo(t1b.x, t1b.y);
+                        ctx.lineTo(t1c.x, t1c.y);
+                        ctx.closePath();
+                        ctx.strokeStyle = isSelectedSlice
+                          ? "rgba(165, 145, 255, 0.85)"
+                          : "rgba(165, 145, 255, 0.30)";
+                        ctx.stroke();
+                        if (isSelectedSlice) {
+                          const t0cx = (t0a.x + t0b.x + t0c.x) / 3;
+                          const t0cy = (t0a.y + t0b.y + t0c.y) / 3;
+                          const t1cx = (t1a.x + t1b.x + t1c.x) / 3;
+                          const t1cy = (t1a.y + t1b.y + t1c.y) / 3;
+                          ctx.fillStyle = "rgba(255, 130, 180, 0.95)";
+                          ctx.fillText("t0", t0cx + 1, t0cy - 1);
+                          ctx.fillStyle = "rgba(180, 160, 255, 0.95)";
+                          ctx.fillText("t1", t1cx + 1, t1cy - 1);
+                        }
+                      }
+                      for (let si = 0; si < debugShadowEntry.sliceStrips.length; si++) {
+                        const strip = debugShadowEntry.sliceStrips[si];
+                        const baseMidX = (strip.baseA.x + strip.baseB.x) * 0.5;
+                        const baseMidY = (strip.baseA.y + strip.baseB.y) * 0.5;
+                        const topMidX = (strip.topA.x + strip.topB.x) * 0.5;
+                        const topMidY = (strip.topA.y + strip.topB.y) * 0.5;
+                        // Base segment: red
+                        ctx.beginPath();
+                        ctx.moveTo(strip.baseA.x, strip.baseA.y);
+                        ctx.lineTo(strip.baseB.x, strip.baseB.y);
+                        ctx.strokeStyle = "rgba(255, 70, 70, 0.96)";
+                        ctx.stroke();
+                        // Top segment: green
+                        ctx.beginPath();
+                        ctx.moveTo(strip.topA.x, strip.topA.y);
+                        ctx.lineTo(strip.topB.x, strip.topB.y);
+                        ctx.strokeStyle = "rgba(70, 255, 120, 0.96)";
+                        ctx.stroke();
+                        // Strip edges: cyan
+                        ctx.beginPath();
+                        ctx.moveTo(strip.baseA.x, strip.baseA.y);
+                        ctx.lineTo(strip.topA.x, strip.topA.y);
+                        ctx.moveTo(strip.baseB.x, strip.baseB.y);
+                        ctx.lineTo(strip.topB.x, strip.topB.y);
+                        ctx.strokeStyle = "rgba(80, 225, 255, 0.96)";
+                        ctx.stroke();
+                        // Midpoint connector: yellow
+                        ctx.beginPath();
+                        ctx.moveTo(baseMidX, baseMidY);
+                        ctx.lineTo(topMidX, topMidY);
+                        ctx.strokeStyle = "rgba(255, 235, 90, 0.98)";
+                        ctx.stroke();
+                        ctx.fillStyle = "rgba(255, 245, 190, 0.98)";
+                        ctx.fillText(`${strip.sliceIndex}`, baseMidX + 2, baseMidY - 2);
+                      }
+                      const bounds = debugShadowEntry.projectedBounds;
+                      const anchor = debugShadowEntry.sliceStrips[0];
+                      const labelX = bounds
+                        ? bounds.x + 4
+                        : anchor
+                          ? anchor.baseA.x + 4
+                          : draw.dx + 4;
+                      const labelY = bounds
+                        ? bounds.y - 8
+                        : anchor
+                          ? anchor.baseA.y - 8
+                          : draw.dy - 8;
+                      if (bounds) {
+                        ctx.strokeStyle = "rgba(120, 170, 255, 0.95)";
+                        ctx.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
+                      }
+                      const ref = debugShadowEntry.deltaReference;
+                      const deltaLabel = ref
+                        ? `d(${ref.x.toFixed(1)},${ref.y.toFixed(1)})`
+                        : "d(none)";
+                      const focusLabel = selectedSliceIndex != null ? `${selectedSliceIndex}` : "none";
+                      let diagonalACount = 0;
+                      let diagonalBCount = 0;
+                      for (let di = 0; di < debugShadowEntry.destinationBandTriangles.length; di++) {
+                        if (debugShadowEntry.destinationBandTriangles[di].diagonal === "A_to_Bprime") {
+                          diagonalACount += 1;
+                        } else {
+                          diagonalBCount += 1;
+                        }
+                      }
+                      const diagonalLabel = `A:${diagonalACount} B:${diagonalBCount}`;
+                      const cacheLabel = `shadow:v4 cache:${debugShadowCacheHit ? "hit" : "rebuild"} corr:${debugShadowEntry.correspondences.length} strips:${debugShadowEntry.sliceStrips.length} layers:${debugShadowEntry.layerHeightsPx.length} edges:${debugShadowEntry.layerEdges.length} bands:${debugShadowEntry.layerBands.length} triPairs:${debugShadowEntry.destinationBandTriangles.length} tri:${debugShadowEntry.destinationTriangles.length} diag:${diagonalLabel} focus:${focusLabel} deltaConst:${debugShadowEntry.isDeltaConstant ? "yes" : "no"} ${deltaLabel}`;
+                      ctx.font = "10px monospace";
+                      ctx.fillStyle = "rgba(0, 0, 0, 0.84)";
+                      ctx.fillText(cacheLabel, labelX + 1, labelY + 1);
+                      ctx.fillStyle = "rgba(210, 230, 255, 0.97)";
+                      ctx.fillText(cacheLabel, labelX, labelY);
+                      ctx.restore();
+                    });
+                  } else if (structureShadowHybridCacheEntry) {
+                    const debugShadowEntry = structureShadowHybridCacheEntry;
+                    deferredStructureSliceDebugDraws.push(() => {
+                      const activeRoofLevel = debugShadowEntry.roofScan.activeLevel;
+                      const roofCorner = activeRoofLevel?.quad?.[0]
+                        ?? debugShadowEntry.projectedTopCapTriangles[0]?.[0]
+                        ?? debugShadowEntry.casterTriangles[0]?.[0]
+                        ?? null;
+                      const showCapDebug = SHADOW_V1_DEBUG_GEOMETRY_MODE !== "connectorsOnly";
+                      const showStripDebug = SHADOW_V1_DEBUG_GEOMETRY_MODE !== "capOnly";
+                      const showSourceDebug = SHADOW_V1_DEBUG_GEOMETRY_MODE !== "capOnly";
+                      const showRebuiltDebug = SHADOW_V1_DEBUG_GEOMETRY_MODE !== "capOnly";
+                      ctx.save();
+                      ctx.lineWidth = 1;
+                      if (activeRoofLevel) {
+                        const [rnw, rne, rse, rsw] = activeRoofLevel.quad;
+                        ctx.beginPath();
+                        ctx.moveTo(rnw.x, rnw.y);
+                        ctx.lineTo(rne.x, rne.y);
+                        ctx.lineTo(rse.x, rse.y);
+                        ctx.lineTo(rsw.x, rsw.y);
+                        ctx.closePath();
+                        ctx.strokeStyle = "rgba(255, 240, 180, 0.92)";
+                        ctx.stroke();
+                      }
+                      if (showSourceDebug) {
+                        for (let ti = 0; ti < debugShadowEntry.casterTriangles.length; ti++) {
+                          const [a, b, c] = debugShadowEntry.casterTriangles[ti];
+                          ctx.beginPath();
+                          ctx.moveTo(a.x, a.y);
+                          ctx.lineTo(b.x, b.y);
+                          ctx.lineTo(c.x, c.y);
+                          ctx.closePath();
+                          ctx.fillStyle = "rgba(255, 220, 90, 0.28)";
+                          ctx.strokeStyle = "rgba(255, 245, 175, 0.96)";
+                          ctx.fill();
+                          ctx.stroke();
+                        }
+                      }
+                      if (showCapDebug) {
+                        for (let ti = 0; ti < debugShadowEntry.projectedTopCapTriangles.length; ti++) {
+                          const [a, b, c] = debugShadowEntry.projectedTopCapTriangles[ti];
+                          ctx.beginPath();
+                          ctx.moveTo(a.x, a.y);
+                          ctx.lineTo(b.x, b.y);
+                          ctx.lineTo(c.x, c.y);
+                          ctx.closePath();
+                          ctx.fillStyle = "rgba(20, 110, 245, 0.15)";
+                          ctx.strokeStyle = "rgba(90, 170, 255, 0.95)";
+                          ctx.fill();
+                          ctx.stroke();
+                        }
+                      }
+                      if (showStripDebug) {
+                        ctx.font = "9px monospace";
+                        for (let si = 0; si < debugShadowEntry.slicePerimeterSegments.length; si++) {
+                          const segment = debugShadowEntry.slicePerimeterSegments[si];
+                          const [ba, bb] = segment.baseSegment;
+                          const [ta, tb] = segment.topSegment;
+                          const hue = (segment.sliceIndex * 37) % 360;
+                          const baseMidX = (ba.x + bb.x) * 0.5;
+                          const baseMidY = (ba.y + bb.y) * 0.5;
+                          const topMidX = (ta.x + tb.x) * 0.5;
+                          const topMidY = (ta.y + tb.y) * 0.5;
+                          ctx.beginPath();
+                          ctx.moveTo(ba.x, ba.y);
+                          ctx.lineTo(bb.x, bb.y);
+                          ctx.strokeStyle = `hsla(${hue}, 92%, 65%, 0.98)`;
+                          ctx.stroke();
+                          ctx.beginPath();
+                          ctx.moveTo(ta.x, ta.y);
+                          ctx.lineTo(tb.x, tb.y);
+                          ctx.strokeStyle = `hsla(${hue}, 80%, 56%, 0.95)`;
+                          ctx.stroke();
+                          ctx.save();
+                          ctx.setLineDash([3, 2]);
+                          ctx.beginPath();
+                          ctx.moveTo(baseMidX, baseMidY);
+                          ctx.lineTo(topMidX, topMidY);
+                          ctx.strokeStyle = `hsla(${hue}, 75%, 74%, 0.9)`;
+                          ctx.stroke();
+                          ctx.restore();
+                          ctx.fillStyle = `hsla(${hue}, 90%, 78%, 0.98)`;
+                          ctx.fillText(`${segment.sliceIndex}`, baseMidX + 2, baseMidY - 2);
+                        }
+                      }
+                      if (showRebuiltDebug) {
+                        for (let ti = 0; ti < debugShadowEntry.projectedTriangles.length; ti++) {
+                          const [a, b, c] = debugShadowEntry.projectedTriangles[ti];
+                          ctx.beginPath();
+                          ctx.moveTo(a.x, a.y);
+                          ctx.lineTo(b.x, b.y);
+                          ctx.lineTo(c.x, c.y);
+                          ctx.closePath();
+                          ctx.fillStyle = "rgba(0, 0, 0, 0.20)";
+                          ctx.strokeStyle = "rgba(120, 170, 255, 0.95)";
+                          ctx.fill();
+                          ctx.stroke();
+                        }
+                      }
+                      if (showStripDebug) {
+                        const sampleBandIndex = debugShadowEntry.slicePerimeterSegments[0]?.bandIndex
+                          ?? debugShadowEntry.sliceShadowStrips[0]?.bandIndex
+                          ?? null;
+                        if (sampleBandIndex != null) {
+                          for (let mi = 0; mi < debugShadowEntry.projectedMappings.length; mi++) {
+                            const mapping = debugShadowEntry.projectedMappings[mi];
+                            if (mapping.bandIndex !== sampleBandIndex) continue;
+                            const [sa, sb, sc] = mapping.sourceTriangle;
+                            const [da, db, dc] = mapping.projectedTriangle;
+                            const sx = (sa.x + sb.x + sc.x) / 3;
+                            const sy = (sa.y + sb.y + sc.y) / 3;
+                            const dx = (da.x + db.x + dc.x) / 3;
+                            const dy = (da.y + db.y + dc.y) / 3;
+                            ctx.beginPath();
+                            ctx.moveTo(sx, sy);
+                            ctx.lineTo(dx, dy);
+                            ctx.strokeStyle = "rgba(255, 110, 240, 0.85)";
+                            ctx.stroke();
+                          }
+                        }
+                      }
+                      const shadowBounds = debugShadowEntry.projectedBounds;
+                      const labelX = shadowBounds
+                        ? shadowBounds.x + 4
+                        : roofCorner
+                          ? roofCorner.x + 4
+                          : draw.dx + 4;
+                      const labelY = shadowBounds
+                        ? shadowBounds.y - 8
+                        : roofCorner
+                          ? roofCorner.y - 8
+                          : draw.dy - 8;
+                      if (shadowBounds && (showCapDebug || showRebuiltDebug)) {
+                        ctx.strokeStyle = "rgba(120, 170, 255, 0.95)";
+                        ctx.strokeRect(shadowBounds.x, shadowBounds.y, shadowBounds.w, shadowBounds.h);
+                      }
+                      const roofLevelLabel = activeRoofLevel ? `${activeRoofLevel.level}` : "none";
+                      const cacheLabel = `shadow:v3-hybrid cache:${debugShadowCacheHit ? "hit" : "rebuild"} mode:${SHADOW_V1_DEBUG_GEOMETRY_MODE} roofL:${roofLevelLabel} side:${debugShadowEntry.sideSemantic} cast:${debugShadowEntry.casterTriangles.length} top:${debugShadowEntry.topCasterTriangleCount} sideCast:${debugShadowEntry.sideCasterTriangleCount} seg:${debugShadowEntry.slicePerimeterSegments.length} strips:${debugShadowEntry.sliceShadowStrips.length} cap:${debugShadowEntry.projectedTopCapTriangles.length} rebuilt:${debugShadowEntry.projectedTriangles.length}`;
+                      ctx.font = "10px monospace";
+                      ctx.fillStyle = "rgba(0, 0, 0, 0.84)";
+                      ctx.fillText(cacheLabel, labelX + 1, labelY + 1);
+                      ctx.fillStyle = "rgba(210, 230, 255, 0.97)";
+                      ctx.fillText(cacheLabel, labelX, labelY);
+                      ctx.restore();
+                    });
+                  } else if (structureShadowV2CacheEntry) {
                     const debugShadowEntry = structureShadowV2CacheEntry;
                     deferredStructureSliceDebugDraws.push(() => {
                       const showCapDebug = SHADOW_V1_DEBUG_GEOMETRY_MODE !== "connectorsOnly";
@@ -5813,6 +6552,9 @@ export async function renderSystem(
   structureShadowTrianglesByBand.forEach((triangles, zBand) => {
     if (triangles.length > 0) zBands.add(zBand);
   });
+  structureHybridShadowByBand.forEach((pieces, zBand) => {
+    if (pieces.length > 0) zBands.add(zBand);
+  });
 
   const zBandKeys = Array.from(zBands);
   zBandKeys.sort((a, b) => a - b);
@@ -5837,6 +6579,31 @@ export async function renderSystem(
       setRenderPerfDrawTag("floors");
       drawStructureShadowProjectedTriangles(ctx, structureShadowBandTriangles, STRUCTURE_SHADOW_V1_MAX_DARKNESS);
     }
+    const structureHybridBandPieces = structureHybridShadowByBand.get(zb) ?? [];
+    if (structureHybridBandPieces.length > 0) {
+      if (SHADOW_HYBRID_DIAGNOSTIC_MODE === "solidMainCanvas") {
+        for (let pi = 0; pi < structureHybridBandPieces.length; pi++) {
+          hybridMainCanvasDiagnosticPieces.push(structureHybridBandPieces[pi]);
+        }
+      } else {
+        const hybridTrianglesInBand = countStructureHybridProjectedTriangles(structureHybridBandPieces);
+        hybridShadowDiagnosticStats.piecesDrawnShadowPass += structureHybridBandPieces.length;
+        hybridShadowDiagnosticStats.trianglesDrawnShadowPass += hybridTrianglesInBand;
+        hybridShadowDiagnosticStats.piecesComposited += structureHybridBandPieces.length;
+        setRenderPerfDrawTag("floors");
+        if (SHADOW_HYBRID_DIAGNOSTIC_MODE === "solidShadowPass") {
+          const drawnTriangles = drawStructureHybridProjectedTrianglesSolid(
+            ctx,
+            structureHybridBandPieces,
+            "rgba(255, 60, 140, 0.92)",
+          );
+          hybridShadowDiagnosticStats.trianglesComposited += drawnTriangles;
+        } else {
+          drawStructureHybridShadowProjectedTriangles(ctx, structureHybridBandPieces, STRUCTURE_SHADOW_V1_MAX_DARKNESS);
+          hybridShadowDiagnosticStats.trianglesComposited += hybridTrianglesInBand;
+        }
+      }
+    }
 
     // Pass 2: WORLD
     for (let si = 0; si < sliceKeys.length; si++) {
@@ -5849,6 +6616,18 @@ export async function renderSystem(
         drawable.drawFn(drawable.payload);
       }
     }
+  }
+  if (SHADOW_HYBRID_DIAGNOSTIC_MODE === "solidMainCanvas" && hybridMainCanvasDiagnosticPieces.length > 0) {
+    setRenderPerfDrawTag("floors");
+    const drawnTriangles = drawStructureHybridProjectedTrianglesSolid(
+      ctx,
+      hybridMainCanvasDiagnosticPieces,
+      "rgba(40, 255, 155, 0.9)",
+    );
+    hybridShadowDiagnosticStats.piecesDrawnMainCanvas = hybridMainCanvasDiagnosticPieces.length;
+    hybridShadowDiagnosticStats.trianglesDrawnMainCanvas = drawnTriangles;
+    hybridShadowDiagnosticStats.piecesComposited += hybridMainCanvasDiagnosticPieces.length;
+    hybridShadowDiagnosticStats.trianglesComposited += drawnTriangles;
   }
   setRenderPerfDrawTag(null);
 
@@ -6001,6 +6780,21 @@ export async function renderSystem(
     const sunLine = `shadowSun ${shadowSunModel.timeLabel} caster:${SHADOW_CASTER_MODE} elev:${shadowSunModel.elevationDeg.toFixed(1)} dir:${shadowSunModel.directionLabel} f(${forward.x.toFixed(3)},${forward.y.toFixed(3)},${forward.z.toFixed(3)}) p(${projection.x.toFixed(3)},${projection.y.toFixed(3)}) step:${shadowSunModel.stepKey}`;
     ctx.fillText(sunLine, 8, screenDebugLineY);
     screenDebugLineY += 16;
+    if (SHADOW_CASTER_MODE === "v3HybridTriangles") {
+      const hybridLine = `hybridDiag mode:${SHADOW_HYBRID_DIAGNOSTIC_MODE} cache h:${hybridShadowDiagnosticStats.cacheHits} m:${hybridShadowDiagnosticStats.cacheMisses} cast:${hybridShadowDiagnosticStats.casterTriangles} proj:${hybridShadowDiagnosticStats.projectedTriangles} queue p:${hybridShadowDiagnosticStats.piecesQueued} t:${hybridShadowDiagnosticStats.trianglesQueued} pass p:${hybridShadowDiagnosticStats.piecesDrawnShadowPass} t:${hybridShadowDiagnosticStats.trianglesDrawnShadowPass} main p:${hybridShadowDiagnosticStats.piecesDrawnMainCanvas} t:${hybridShadowDiagnosticStats.trianglesDrawnMainCanvas} comp p:${hybridShadowDiagnosticStats.piecesComposited} t:${hybridShadowDiagnosticStats.trianglesComposited}`;
+      ctx.fillText(hybridLine, 8, screenDebugLineY);
+      screenDebugLineY += 16;
+    } else if (SHADOW_CASTER_MODE === "v4SliceStrips") {
+      const v4Line = `v4Diag cache h:${v4ShadowDiagnosticStats.cacheHits} m:${v4ShadowDiagnosticStats.cacheMisses} corr:${v4ShadowDiagnosticStats.correspondences} strips:${v4ShadowDiagnosticStats.strips} edges:${v4ShadowDiagnosticStats.layerEdges} bands:${v4ShadowDiagnosticStats.layerBands} triPairs:${v4ShadowDiagnosticStats.destinationBandPairs} tri:${v4ShadowDiagnosticStats.destinationTriangles} diag:${v4ShadowDiagnosticStats.diagonalRule} deltaConst pass:${v4ShadowDiagnosticStats.deltaConstPass} fail:${v4ShadowDiagnosticStats.deltaConstFail} ${v4ShadowDiagnosticStats.firstSliceSummary}`;
+      ctx.fillText(v4Line, 8, screenDebugLineY);
+      screenDebugLineY += 16;
+      const v4SampleLine = `v4Sample roofH:${v4ShadowDiagnosticStats.sampleRoofHeightPx ?? "none"} heights:${v4ShadowDiagnosticStats.sampleLayerHeights} slices:${v4ShadowDiagnosticStats.sampleSliceCount} edges:${v4ShadowDiagnosticStats.sampleLayerEdges} bands:${v4ShadowDiagnosticStats.sampleLayerBands} ${v4ShadowDiagnosticStats.sampleSelectedSlice}`;
+      ctx.fillText(v4SampleLine, 8, screenDebugLineY);
+      screenDebugLineY += 16;
+      const v4BandLine = `v4Band ${v4ShadowDiagnosticStats.sampleSelectedBand}`;
+      ctx.fillText(v4BandLine, 8, screenDebugLineY);
+      screenDebugLineY += 16;
+    }
   }
   if (SHOW_ROAD_SEMANTIC) {
     const roadWPlayer = roadAreaWidthAt(playerTx, playerTy);

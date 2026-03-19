@@ -82,6 +82,21 @@ export type RuntimeStructureTriangleContextKeyInput = {
   enabled: boolean;
 };
 
+export type RuntimeSliceBandDiagonal = "A_to_Bprime" | "B_to_Aprime";
+
+export type RuntimeSliceBandQuad<TPoint extends RuntimeStructureTrianglePoint = RuntimeStructureTrianglePoint> = {
+  lowerA: TPoint;
+  lowerB: TPoint;
+  upperA: TPoint;
+  upperB: TPoint;
+};
+
+export type RuntimeSliceBandTriangles<TPoint extends RuntimeStructureTrianglePoint = RuntimeStructureTrianglePoint> = {
+  diagonal: RuntimeSliceBandDiagonal;
+  tri0: [TPoint, TPoint, TPoint];
+  tri1: [TPoint, TPoint, TPoint];
+};
+
 export type RuntimeStructureTriangleGeometrySignatureInput = {
   structureInstanceId: string;
   spriteId: string;
@@ -197,6 +212,38 @@ export function resolveRuntimeStructureBandProgressionIndex(
   if (bandIndex === 0) return -1;
   if (bandIndex === coreCount + 1) return coreCount;
   return bandIndex - 1;
+}
+
+// Mirrors main slice ladder parity behavior: per-slice owner parity and vertical band parity
+// jointly decide which diagonal should be used for a quad-like band split.
+export function resolveRuntimeSliceBandDiagonal(
+  ownerParity: number,
+  bandIndex: number,
+): RuntimeSliceBandDiagonal {
+  const parity = ((ownerParity | 0) + (bandIndex | 0)) & 1;
+  return parity === 0 ? "A_to_Bprime" : "B_to_Aprime";
+}
+
+// Mirrors the triangle ordering emitted by the main zig-zag slice triangulation.
+// Keep this shared so alternate consumers (like shadow V4) stay topology-compatible.
+export function triangulateRuntimeSliceBandQuad<TPoint extends RuntimeStructureTrianglePoint>(
+  quad: RuntimeSliceBandQuad<TPoint>,
+  ownerParity: number,
+  bandIndex: number,
+): RuntimeSliceBandTriangles<TPoint> {
+  const diagonal = resolveRuntimeSliceBandDiagonal(ownerParity, bandIndex);
+  if (diagonal === "A_to_Bprime") {
+    return {
+      diagonal,
+      tri0: [quad.lowerB, quad.lowerA, quad.upperB],
+      tri1: [quad.lowerA, quad.upperB, quad.upperA],
+    };
+  }
+  return {
+    diagonal,
+    tri0: [quad.lowerA, quad.lowerB, quad.upperA],
+    tri1: [quad.lowerB, quad.upperA, quad.upperB],
+  };
 }
 
 export function buildStructureTriangleCandidatesForBand(

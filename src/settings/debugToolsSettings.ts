@@ -1,6 +1,7 @@
 import type {
   DebugToolsSettings,
   ShadowCasterMode,
+  ShadowHybridDiagnosticMode,
   ShadowV1DebugGeometryMode,
 } from "./settingsTypes";
 import { DEFAULT_SHADOW_SUN_V1_TIME_HOUR, clampShadowSunTimeHour } from "../shadowSunV1";
@@ -66,7 +67,8 @@ export const DEFAULT_DEBUG_TOOLS_SETTINGS: DebugToolsSettings = {
   paletteHudDebugOverlayEnabled: false,
   shadowSunTimeHour: DEFAULT_SHADOW_SUN_V1_TIME_HOUR,
   shadowV1DebugGeometryMode: "full",
-  shadowCasterMode: "v2AlphaSilhouette",
+  shadowCasterMode: "v3HybridTriangles",
+  shadowHybridDiagnosticMode: "off",
 };
 
 function normalizeShadowV1DebugGeometryMode(value: unknown): ShadowV1DebugGeometryMode {
@@ -76,7 +78,16 @@ function normalizeShadowV1DebugGeometryMode(value: unknown): ShadowV1DebugGeomet
 
 function normalizeShadowCasterMode(value: unknown): ShadowCasterMode {
   if (value === "v1Roof") return "v1Roof";
-  return "v2AlphaSilhouette";
+  if (value === "v2AlphaSilhouette") return "v2AlphaSilhouette";
+  if (value === "v3HybridTriangles") return "v3HybridTriangles";
+  if (value === "v4SliceStrips") return "v4SliceStrips";
+  return "v3HybridTriangles";
+}
+
+function normalizeShadowHybridDiagnosticMode(value: unknown): ShadowHybridDiagnosticMode {
+  if (value === "solidShadowPass") return "solidShadowPass";
+  if (value === "solidMainCanvas") return "solidMainCanvas";
+  return "off";
 }
 
 export type DebugToolsSettingsPatch = Partial<DebugToolsSettings>;
@@ -116,6 +127,7 @@ export function sanitizeDebugToolsSettings(input: Partial<DebugToolsSettings> | 
     shadowSunTimeHour: clampShadowSunTimeHour(merged.shadowSunTimeHour),
     shadowV1DebugGeometryMode: normalizeShadowV1DebugGeometryMode(merged.shadowV1DebugGeometryMode),
     shadowCasterMode: normalizeShadowCasterMode(merged.shadowCasterMode),
+    shadowHybridDiagnosticMode: normalizeShadowHybridDiagnosticMode(merged.shadowHybridDiagnosticMode),
   };
 }
 

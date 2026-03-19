@@ -142,7 +142,8 @@ export type DebugSettings = {
   dpsMeter: boolean;
   shadowSunTimeHour: number;
   shadowV1DebugGeometryMode: "full" | "capOnly" | "connectorsOnly";
-  shadowCasterMode: "v1Roof" | "v2AlphaSilhouette";
+  shadowCasterMode: "v1Roof" | "v2AlphaSilhouette" | "v3HybridTriangles" | "v4SliceStrips";
+  shadowHybridDiagnosticMode: "off" | "solidShadowPass" | "solidMainCanvas";
   waterFlowRate: number;
   neutralBirdAI: NeutralBirdAIDebugSettings;
   objectives: {
@@ -212,6 +213,7 @@ function toLegacySettings(): UserSettings {
       shadowSunTimeHour: settings.debug.shadowSunTimeHour,
       shadowV1DebugGeometryMode: settings.debug.shadowV1DebugGeometryMode,
       shadowCasterMode: settings.debug.shadowCasterMode,
+      shadowHybridDiagnosticMode: settings.debug.shadowHybridDiagnosticMode,
       waterFlowRate: settings.system.waterFlowRate,
       neutralBirdAI: {
         disabled: settings.system.neutralBirdDisabled,
@@ -428,6 +430,9 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     }
     if (debugAny.shadowCasterMode !== undefined) {
       debugPatch.shadowCasterMode = debugAny.shadowCasterMode;
+    }
+    if (debugAny.shadowHybridDiagnosticMode !== undefined) {
+      debugPatch.shadowHybridDiagnosticMode = debugAny.shadowHybridDiagnosticMode;
     }
 
     if (debugAny.disableVisualCompiledCutoutCache !== undefined) {

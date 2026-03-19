@@ -404,9 +404,9 @@ export function buildStructureShadowCacheEntry(
     const tri = roofCasterTriangles[i];
     const [a, b, c] = tri.points;
     projectedTriangles.push([
-      { x: a.x + castOffsetX, y: a.y + castOffsetY },
-      { x: b.x + castOffsetX, y: b.y + castOffsetY },
-      { x: c.x + castOffsetX, y: c.y + castOffsetY },
+      { x: a.x + castOffsetX, y: a.y + castHeightPx + castOffsetY },
+      { x: b.x + castOffsetX, y: b.y + castHeightPx + castOffsetY },
+      { x: c.x + castOffsetX, y: c.y + castHeightPx + castOffsetY },
     ]);
   }
 
@@ -425,12 +425,12 @@ export function buildStructureShadowCacheEntry(
       y: b.y + castHeightPx,
     };
     const aProjected: StructureShadowPoint = {
-      x: a.x + castOffsetX,
-      y: a.y + castOffsetY,
+      x: aFootprint.x + castOffsetX,
+      y: aFootprint.y + castOffsetY,
     };
     const bProjected: StructureShadowPoint = {
-      x: b.x + castOffsetX,
-      y: b.y + castOffsetY,
+      x: bFootprint.x + castOffsetX,
+      y: bFootprint.y + castOffsetY,
     };
     footprintBoundaryEdges.push([aFootprint, bFootprint]);
     projectedBoundaryEdges.push([aProjected, bProjected]);

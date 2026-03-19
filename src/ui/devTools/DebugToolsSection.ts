@@ -41,9 +41,31 @@ export function mountDebugToolsSection(
   const shadowCasterModeSelect = createSelectRow<DebugToolsSettings["shadowCasterMode"]>(
     section,
     "Shadow Caster",
-    ["v2AlphaSilhouette", "v1Roof"],
-    (value) => value === "v1Roof" ? "V1 Roof" : "V2 Alpha Silhouette",
+    ["v4SliceStrips", "v3HybridTriangles", "v2AlphaSilhouette", "v1Roof"],
+    (value) => (
+      value === "v1Roof"
+        ? "V1 Roof"
+        : value === "v2AlphaSilhouette"
+          ? "V2 Alpha Silhouette"
+          : value === "v3HybridTriangles"
+            ? "V3 Hybrid Triangles"
+            : "V4 Slice Strips"
+    ),
     (value) => applyDebugPatch({ shadowCasterMode: value }),
+  );
+
+  const shadowHybridDiagnosticModeSelect = createSelectRow<DebugToolsSettings["shadowHybridDiagnosticMode"]>(
+    section,
+    "Hybrid Shadow Diagnostic",
+    ["off", "solidShadowPass", "solidMainCanvas"],
+    (value) => (
+      value === "solidShadowPass"
+        ? "Flat Fill (Shadow Pass)"
+        : value === "solidMainCanvas"
+          ? "Flat Fill (Main Canvas)"
+          : "Warped (Shadow Pass)"
+    ),
+    (value) => applyDebugPatch({ shadowHybridDiagnosticMode: value }),
   );
 
   const shadowSunReadout = document.createElement("div");
@@ -101,6 +123,7 @@ export function mountDebugToolsSection(
       shadowSunHourSelect.value = `${debug.shadowSunTimeHour}`;
       shadowV1DebugGeometryModeSelect.value = debug.shadowV1DebugGeometryMode;
       shadowCasterModeSelect.value = debug.shadowCasterMode;
+      shadowHybridDiagnosticModeSelect.value = debug.shadowHybridDiagnosticMode;
       syncShadowSunReadout(debug.shadowSunTimeHour);
       for (const [key, input] of Object.entries(controls)) {
         input.checked = !!(debug as any)[key];

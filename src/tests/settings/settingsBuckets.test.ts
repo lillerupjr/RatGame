@@ -24,6 +24,7 @@ describe("settings bucket defaults", () => {
       shadowSunTimeHour,
       shadowV1DebugGeometryMode,
       shadowCasterMode,
+      shadowHybridDiagnosticMode,
       ...booleanFlags
     } = debug;
     for (const [key, value] of Object.entries(booleanFlags)) {
@@ -31,7 +32,8 @@ describe("settings bucket defaults", () => {
     }
     expect(shadowSunTimeHour).toBe(DEFAULT_SHADOW_SUN_V1_TIME_HOUR);
     expect(shadowV1DebugGeometryMode).toBe("full");
-    expect(shadowCasterMode).toBe("v2AlphaSilhouette");
+    expect(shadowCasterMode).toBe("v3HybridTriangles");
+    expect(shadowHybridDiagnosticMode).toBe("off");
   });
 
   it("sanitizes debug shadow sun hour to daylight range with hourly steps", () => {
@@ -48,8 +50,20 @@ describe("settings bucket defaults", () => {
       .toBe("full");
     expect(sanitizeDebugToolsSettings({ shadowCasterMode: "v1Roof" as any }).shadowCasterMode)
       .toBe("v1Roof");
-    expect(sanitizeDebugToolsSettings({ shadowCasterMode: "invalid" as any }).shadowCasterMode)
+    expect(sanitizeDebugToolsSettings({ shadowCasterMode: "v2AlphaSilhouette" as any }).shadowCasterMode)
       .toBe("v2AlphaSilhouette");
+    expect(sanitizeDebugToolsSettings({ shadowCasterMode: "v3HybridTriangles" as any }).shadowCasterMode)
+      .toBe("v3HybridTriangles");
+    expect(sanitizeDebugToolsSettings({ shadowCasterMode: "v4SliceStrips" as any }).shadowCasterMode)
+      .toBe("v4SliceStrips");
+    expect(sanitizeDebugToolsSettings({ shadowCasterMode: "invalid" as any }).shadowCasterMode)
+      .toBe("v3HybridTriangles");
+    expect(sanitizeDebugToolsSettings({ shadowHybridDiagnosticMode: "solidShadowPass" as any }).shadowHybridDiagnosticMode)
+      .toBe("solidShadowPass");
+    expect(sanitizeDebugToolsSettings({ shadowHybridDiagnosticMode: "solidMainCanvas" as any }).shadowHybridDiagnosticMode)
+      .toBe("solidMainCanvas");
+    expect(sanitizeDebugToolsSettings({ shadowHybridDiagnosticMode: "invalid" as any }).shadowHybridDiagnosticMode)
+      .toBe("off");
   });
 
   it("sanitizes user settings ranges and enums", () => {
