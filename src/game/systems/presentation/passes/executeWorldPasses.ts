@@ -1,6 +1,6 @@
-export type ExecuteWorldPassContext = Record<string, any>;
+import type { WorldPassContext, WorldPassResult } from "../contracts/worldPassContext";
 
-export function executeWorldPasses(input: ExecuteWorldPassContext): void {
+export function executeWorldPasses(input: WorldPassContext): WorldPassResult {
   const {
     sliceDrawables,
     countRenderSliceKeySort,
@@ -17,7 +17,7 @@ export function executeWorldPasses(input: ExecuteWorldPassContext): void {
     structureV4ShadowByBand,
     structureV5ShadowByBand,
     structureShadowFrame,
-    structureV6VerticalShadowDebugData,
+    structureV6VerticalShadowDebugDataList,
     setRenderZBandCount,
     KindOrder,
     isGroundKindForRenderPass,
@@ -90,8 +90,10 @@ export function executeWorldPasses(input: ExecuteWorldPassContext): void {
   structureV5ShadowByBand.forEach((pieces: any, zBand: any) => {
     if (pieces.length > 0) zBands.add(zBand);
   });
-  if (structureShadowFrame.routing.usesV6 && structureV6VerticalShadowDebugData) {
-    zBands.add(structureV6VerticalShadowDebugData.zBand);
+  if (structureShadowFrame.routing.usesV6) {
+    for (let i = 0; i < structureV6VerticalShadowDebugDataList.length; i++) {
+      zBands.add(structureV6VerticalShadowDebugDataList[i].zBand);
+    }
   }
 
   const zBandKeys = Array.from(zBands);
@@ -207,19 +209,19 @@ export function executeWorldPasses(input: ExecuteWorldPassContext): void {
         v5ShadowAnchorDiagnostic = v5Draw.anchorDiagnostic;
       }
     }
-    if (
-      structureShadowFrame.routing.usesV6
-      && structureV6VerticalShadowDebugData
-      && structureV6VerticalShadowDebugData.zBand === zb
-    ) {
+    if (structureShadowFrame.routing.usesV6 && structureV6VerticalShadowDebugDataList.length > 0) {
       setRenderPerfDrawTag("floors");
-      executeDebugPass({
-        phase: "structureV6MergedMask",
-        input: {
-          ctx,
-          debugData: structureV6VerticalShadowDebugData,
-        },
-      });
+      for (let i = 0; i < structureV6VerticalShadowDebugDataList.length; i++) {
+        const structureShadowDebugData = structureV6VerticalShadowDebugDataList[i];
+        if (structureShadowDebugData.zBand !== zb) continue;
+        executeDebugPass({
+          phase: "structureV6MergedMask",
+          input: {
+            ctx,
+            debugData: structureShadowDebugData,
+          },
+        });
+      }
     }
 
     // Pass 2: WORLD
@@ -247,6 +249,5 @@ export function executeWorldPasses(input: ExecuteWorldPassContext): void {
     hybridShadowDiagnosticStats.trianglesComposited += drawnTriangles;
   }
   setRenderPerfDrawTag(null);
-  input.v5ShadowAnchorDiagnostic = v5ShadowAnchorDiagnostic;
-
+  return { v5ShadowAnchorDiagnostic };
 }

@@ -109,6 +109,11 @@ export function makeAllDebugOffSettings(): DebugSettings {
     shadowV6SemanticBucket: DEFAULT_DEBUG_SETTINGS.shadowV6SemanticBucket,
     shadowV6StructureIndex: DEFAULT_DEBUG_SETTINGS.shadowV6StructureIndex,
     shadowV6SliceCount: DEFAULT_DEBUG_SETTINGS.shadowV6SliceCount,
+    shadowV6AllStructures: false,
+    shadowV6OneStructureOnly: false,
+    shadowV6VerticalOnly: false,
+    shadowV6TopOnly: false,
+    shadowV6ForceRefresh: false,
     waterFlowRate: 1,
     neutralBirdAI: {
       ...DEFAULT_DEBUG_SETTINGS.neutralBirdAI,

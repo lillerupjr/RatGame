@@ -91,6 +91,12 @@ export type DebugToolsSettings = {
   shadowV6SemanticBucket: ShadowV6SemanticBucket;
   shadowV6StructureIndex: number;
   shadowV6SliceCount: number;
+  shadowV6AllStructures: boolean;
+  shadowV6OneStructureOnly: boolean;
+  shadowV6VerticalOnly: boolean;
+  shadowV6TopOnly: boolean;
+  shadowV6ForceRefresh: boolean;
+  shadowV6FaceSliceDebugOverlay: boolean;
 };
 
 export type SystemOverrides = {

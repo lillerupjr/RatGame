@@ -175,6 +175,22 @@ export function drawStructureV6FaceSliceDebugPanel(
     textY,
   );
   textY += 14;
+  const requestedBucketShadow = debugData.requestedSemanticBucket === "SOUTH_NORTH"
+    ? debugData.bucketBShadow
+    : debugData.requestedSemanticBucket === "TOP"
+      ? debugData.topShadow
+      : debugData.bucketAShadow;
+  ctx.fillStyle = "rgba(196, 255, 220, 0.90)";
+  if (requestedBucketShadow) {
+    ctx.fillText(
+      `reqSliceSpace h:${requestedBucketShadow.sliceSpaceHeightPx.toFixed(2)} minS:${requestedBucketShadow.sliceSpaceMinS.toFixed(2)} maxS:${requestedBucketShadow.sliceSpaceMaxS.toFixed(2)} thick:${requestedBucketShadow.desiredSliceThicknessPx} slices:${requestedBucketShadow.sliceCountUsed} occPx:${requestedBucketShadow.occupiedPixelCount}`,
+      titleX,
+      textY,
+    );
+  } else {
+    ctx.fillText("reqSliceSpace h:n/a (no bucket content)", titleX, textY);
+  }
+  textY += 14;
   ctx.fillStyle = "rgba(255, 221, 168, 0.86)";
   ctx.fillText(
     `shadowVector(${debugData.shadowVector.x.toFixed(1)},${debugData.shadowVector.y.toFixed(1)}) zBand:${debugData.zBand} worldOrigin(${debugData.mergedVerticalShadowDrawOrigin.x.toFixed(1)},${debugData.mergedVerticalShadowDrawOrigin.y.toFixed(1)})`,

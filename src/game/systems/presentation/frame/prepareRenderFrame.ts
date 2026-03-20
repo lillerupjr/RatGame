@@ -1,5 +1,5 @@
-export type PreparedRenderFrame = Record<string, any>;
+import type { RenderFrameContext } from "../contracts/renderFrameContext";
 
-export function prepareRenderFrame<T extends PreparedRenderFrame>(frame: T): T {
+export function prepareRenderFrame(frame: RenderFrameContext): RenderFrameContext {
   return frame;
 }

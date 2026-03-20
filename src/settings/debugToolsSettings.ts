@@ -86,6 +86,12 @@ export const DEFAULT_DEBUG_TOOLS_SETTINGS: DebugToolsSettings = {
   shadowV6SemanticBucket: "EAST_WEST",
   shadowV6StructureIndex: STRUCTURE_SHADOW_V6_DEFAULT_STRUCTURE_INDEX,
   shadowV6SliceCount: STRUCTURE_SHADOW_V6_DEFAULT_SLICE_COUNT,
+  shadowV6AllStructures: true,
+  shadowV6OneStructureOnly: false,
+  shadowV6VerticalOnly: false,
+  shadowV6TopOnly: false,
+  shadowV6ForceRefresh: false,
+  shadowV6FaceSliceDebugOverlay: false,
 };
 
 function normalizeShadowV1DebugGeometryMode(value: unknown): ShadowV1DebugGeometryMode {
@@ -176,6 +182,12 @@ export function sanitizeDebugToolsSettings(input: Partial<DebugToolsSettings> | 
     shadowV6SemanticBucket: normalizeShadowV6SemanticBucket(merged.shadowV6SemanticBucket),
     shadowV6StructureIndex: clampStructureV6StructureIndex(merged.shadowV6StructureIndex),
     shadowV6SliceCount: clampStructureV6SliceCount(merged.shadowV6SliceCount),
+    shadowV6AllStructures: !!merged.shadowV6AllStructures,
+    shadowV6OneStructureOnly: !!merged.shadowV6OneStructureOnly,
+    shadowV6VerticalOnly: !!merged.shadowV6VerticalOnly,
+    shadowV6TopOnly: !!merged.shadowV6TopOnly,
+    shadowV6ForceRefresh: !!merged.shadowV6ForceRefresh,
+    shadowV6FaceSliceDebugOverlay: !!merged.shadowV6FaceSliceDebugOverlay,
   };
 }
 

@@ -1,10 +1,10 @@
-import type { RenderCollectionContext } from "./collectFrameDrawables";
+import type { CollectionContext } from "../contracts/collectionContext";
 
 type RenderKey = any;
 type ShadowParams = any;
 type Dir8 = any;
 
-export function collectGroundDrawables(input: RenderCollectionContext): void {
+export function collectGroundDrawables(input: CollectionContext): void {
   const {
     w,
     minSum,

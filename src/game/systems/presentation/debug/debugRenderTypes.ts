@@ -48,6 +48,12 @@ export type RenderDebugFlags = {
   shadowV6TopSemanticBucket: ShadowV6SemanticBucket;
   shadowV6StructureIndex: number;
   shadowV6SliceCount: number;
+  shadowV6AllStructures: boolean;
+  shadowV6OneStructureOnly: boolean;
+  shadowV6VerticalOnly: boolean;
+  shadowV6TopOnly: boolean;
+  shadowV6ForceRefresh: boolean;
+  shadowV6FaceSliceDebugOverlay: boolean;
   shadowSunTimeHour: number;
 };
 
@@ -100,6 +106,12 @@ export type StructureV6FaceSliceDebugData = {
   selectedStructureIndex: number;
   candidateCount: number;
   sourceTriangleCount: number;
+  occupiedPixelCount: number;
+  sliceSpaceMinS: number;
+  sliceSpaceMaxS: number;
+  sliceSpaceHeightPx: number;
+  desiredSliceThicknessPx: number;
+  sliceCountUsed: number;
   nonEmptySliceCount: number;
   faceBounds: { minX: number; minY: number; maxX: number; maxY: number };
   faceCanvas: HTMLCanvasElement;
@@ -231,6 +243,17 @@ export type RenderDebugScreenPassInput = {
   structureShadowRouting: StructureShadowRenderMode;
   structureV6VerticalShadowDebugData: StructureV6VerticalShadowMaskDebugData | null;
   structureV6ShadowDebugCandidateCount: number;
+  structureV6ShadowCastCount: number;
+  structureV6ShadowCacheStats: {
+    sunStepKey: string;
+    cacheHits: number;
+    cacheMisses: number;
+    rebuiltStructures: number;
+    reusedStructures: number;
+    sunStepChanged: boolean;
+    forceRefresh: boolean;
+    cacheSize: number;
+  } | null;
   v5ShadowAnchorDiagnostic: StructureV5ShadowAnchorDiagnostic | null;
   shadowSunModel: ShadowSunDebugModel;
   structureTriangleAdmissionMode: StructureTriangleAdmissionMode;

@@ -173,7 +173,7 @@ import {
 } from "./structureShadows/structureShadowFrameContext";
 import {
   buildStructureShadowFrameResult as buildOrchestratedStructureShadowFrameResult,
-  buildStructureV6VerticalShadowFrameResult,
+  buildStructureV6VerticalShadowFrameResults,
 } from "./structureShadows/structureShadowOrchestrator";
 import {
   countStructureHybridProjectedTriangles,
@@ -212,14 +212,29 @@ import {
   structureShadowV1CacheStore,
   structureShadowV2CacheStore,
   structureShadowV4CacheStore,
+  structureShadowV6CacheStore,
 } from "./presentationSubsystemStores";
+import type { StructureV6ShadowCacheFrameStats } from "./structureShadows/structureShadowV6Cache";
 import { buildDebugFrameContext } from "./debug/debugFrameContext";
 import { executeDebugPass } from "./debug/renderDebugPass";
 import { prepareRenderFrame } from "./frame/prepareRenderFrame";
+import { drawVoidBackgroundOnce } from "./frame/backgroundPass";
+import { resolveCameraBootstrap } from "./frame/cameraBootstrap";
+import {
+  buildViewportCulling,
+  isTileInPlayerSouthWedge,
+  type ScreenRect,
+  type TileBounds,
+} from "./frame/viewportCulling";
 import { collectFrameDrawables } from "./collection/collectFrameDrawables";
 import { executeWorldPasses } from "./passes/executeWorldPasses";
 import { renderScreenOverlays } from "./ui/renderScreenOverlays";
 import { renderUiPass } from "./ui/renderUiPass";
+import type { RenderFrameContext } from "./contracts/renderFrameContext";
+import type { CollectionContext } from "./contracts/collectionContext";
+import type { WorldPassContext } from "./contracts/worldPassContext";
+import type { ScreenOverlayContext } from "./contracts/screenOverlayContext";
+import type { UiPassContext } from "./contracts/uiPassContext";
 import { resolveStructureOverlayAdmissionContext } from "./structures/structureOverlayAdmission";
 import { collectStructureOverlays } from "./structures/collectStructureOverlays";
 import { buildStructureSlices } from "./structures/buildStructureSlices";
@@ -229,7 +244,6 @@ import type { StructureDrawablePayload } from "./structures/structurePresentatio
 
 const DEBUG_PLAYER_WEDGE = false;
 const DISABLE_WALLS_AND_CURTAINS = true;
-const HARDCODED_VOID_TOP_SRC = `${import.meta.env.BASE_URL}assets-runtime/tiles/floor/void.png`;
 const CAMERA_FOLLOW_HALF_LIFE_DEFAULT_SEC = 0.08;
 const CAMERA_FOLLOW_SNAP_DISTANCE_SQ = 4096 * 4096;
 const CAMERA_SMOOTHING_INTENSITY_SCALE = 0.25;
@@ -241,120 +255,7 @@ const LOOT_GOBLIN_GLOW_PULSE_SPEED = 2.8;
 const STRUCTURE_SHADOW_V1_MAX_DARKNESS = 0.38;
 const STRUCTURE_SHADOW_V5_LENGTH_PX = 220;
 
-// Background mode:
-// - "SOLID" = fastest, clean black void
-// - "PATTERN" = repeats void tile as canvas pattern (still fast, looks textured)
-const VOID_BG_MODE: "SOLID" | "PATTERN" = "SOLID";
-
-let voidBgPattern: CanvasPattern | null = null;
-let voidBgPatternImgRef: HTMLImageElement | null = null;
-
 type ScreenPt = { x: number; y: number };
-
-function smoothTowardByHalfLife(current: number, target: number, halfLifeSec: number, dtRealSec: number): number {
-  if (!Number.isFinite(current)) return target;
-  if (!Number.isFinite(target)) return current;
-  if (!Number.isFinite(halfLifeSec) || halfLifeSec <= 0) return target;
-  if (!Number.isFinite(dtRealSec) || dtRealSec <= 0) return current;
-  const alpha = 1 - Math.pow(0.5, dtRealSec / halfLifeSec);
-  return current + (target - current) * alpha;
-}
-
-let hardcodedVoidTopImage: HTMLImageElement | null = null;
-let hardcodedVoidTopReady = false;
-let hardcodedVoidTopFailed = false;
-
-function getHardcodedVoidTop(): { ready: boolean; img: HTMLImageElement | null } {
-  if (hardcodedVoidTopReady && hardcodedVoidTopImage) {
-    return { ready: true, img: hardcodedVoidTopImage };
-  }
-  if (hardcodedVoidTopFailed) {
-    return { ready: false, img: null };
-  }
-    if (!hardcodedVoidTopImage) {
-    const img = new Image();
-    img.src = HARDCODED_VOID_TOP_SRC;
-    img.onload = () => { hardcodedVoidTopReady = true; };
-    img.onerror = () => { hardcodedVoidTopFailed = true; };
-    hardcodedVoidTopImage = img;
-  }
-  return { ready: false, img: hardcodedVoidTopImage };
-}
-
-function drawVoidBackgroundOnce(
-  ctx: CanvasRenderingContext2D,
-  devW: number,
-  devH: number,
-  viewport: ViewportTransform,
-): void {
-  // Always reset to screen space for background
-  ctx.save();
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.globalCompositeOperation = "source-over";
-
-  if (VOID_BG_MODE === "SOLID") {
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, devW, devH);
-    ctx.restore();
-    return;
-  }
-
-  // PATTERN mode: use the void tile image as a repeating pattern
-  const rec = getHardcodedVoidTop();
-  const img = rec.ready ? rec.img : null;
-  if (!img || img.width <= 0 || img.height <= 0) {
-    // Fallback while loading
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, devW, devH);
-    ctx.restore();
-    return;
-  }
-
-  // Rebuild pattern only if image changes (or first time)
-  if (!voidBgPattern || voidBgPatternImgRef !== img) {
-    voidBgPatternImgRef = img;
-    voidBgPattern = ctx.createPattern(img, "repeat");
-  }
-
-  if (voidBgPattern) {
-    // World-locked: pattern origin follows the active viewport world transform.
-    const patternOffset = viewport.getPatternOffsetDevice();
-    const ox = patternOffset.x;
-    const oy = patternOffset.y;
-
-    // Force context-translate path; CanvasPattern.setTransform can trigger
-    // slow paths on some browser/GPU combinations.
-    ctx.save();
-    ctx.translate(ox, oy);
-    ctx.fillStyle = voidBgPattern;
-    ctx.fillRect(-ox, -oy, devW, devH);
-    ctx.restore();
-  } else {
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, devW, devH);
-  }
-
-  ctx.restore();
-}
-
-function isTileInPlayerSouthWedge(
-  tx: number,
-  ty: number,
-  playerTx: number,
-  playerTy: number
-): boolean {
-  const dx = tx - playerTx;
-  const dy = ty - playerTy;
-
-  if (dx === 0 && dy === 0) return false;
-
-  const sum = dx + dy;
-  if (sum <= 0) return false;
-
-  const diff = Math.abs(dx - dy);
-
-  return diff <= sum;
-}
 
 /** Render tiles, entities, overlays, and debug layers. */
 export async function renderSystem(
@@ -471,59 +372,21 @@ export async function renderSystem(
 
   // Isometric camera: project world coords into screen space, then keep player centered
   const p0 = worldToScreen(px, py);
-  const cameraState = (w as any).camera as
-    | {
-      posX: number;
-      posY: number;
-      targetX: number;
-      targetY: number;
-      followHalfLifeSec: number;
-    }
-    | undefined;
   const cameraSmoothingEnabled = renderSettings.cameraSmoothingEnabled !== false;
   const dtReal = Number.isFinite(w.timeState?.dtReal) ? w.timeState.dtReal : 1 / 60;
-  let cameraProjectedX = p0.x;
-  let cameraProjectedY = p0.y;
-  const hasSnapshotCameraOverride =
-    Number.isFinite(Number(snapshotViewerCamera?.x))
-    && Number.isFinite(Number(snapshotViewerCamera?.y));
-  if (hasSnapshotCameraOverride) {
-    cameraProjectedX = Number(snapshotViewerCamera?.x);
-    cameraProjectedY = Number(snapshotViewerCamera?.y);
-    if (cameraState) {
-      cameraState.targetX = cameraProjectedX;
-      cameraState.targetY = cameraProjectedY;
-      cameraState.posX = cameraProjectedX;
-      cameraState.posY = cameraProjectedY;
-    }
-  } else if (cameraState) {
-    const wasUninitialized = cameraState.targetX === 0
-      && cameraState.targetY === 0
-      && cameraState.posX === 0
-      && cameraState.posY === 0;
-    cameraState.targetX = p0.x;
-    cameraState.targetY = p0.y;
-    const hasValidPos = Number.isFinite(cameraState.posX) && Number.isFinite(cameraState.posY);
-    const dx = (cameraState.posX ?? p0.x) - p0.x;
-    const dy = (cameraState.posY ?? p0.y) - p0.y;
-    const shouldSnap = !cameraSmoothingEnabled
-      || !hasValidPos
-      || wasUninitialized
-      || (dx * dx + dy * dy > CAMERA_FOLLOW_SNAP_DISTANCE_SQ);
-    if (shouldSnap) {
-      cameraState.posX = p0.x;
-      cameraState.posY = p0.y;
-    } else {
-      const halfLifeSec = Number.isFinite(cameraState.followHalfLifeSec) && cameraState.followHalfLifeSec > 0
-        ? cameraState.followHalfLifeSec
-        : CAMERA_FOLLOW_HALF_LIFE_DEFAULT_SEC;
-      const tunedHalfLifeSec = Math.max(0.001, halfLifeSec * CAMERA_SMOOTHING_INTENSITY_SCALE);
-      cameraState.posX = smoothTowardByHalfLife(cameraState.posX, p0.x, tunedHalfLifeSec, dtReal);
-      cameraState.posY = smoothTowardByHalfLife(cameraState.posY, p0.y, tunedHalfLifeSec, dtReal);
-    }
-    cameraProjectedX = cameraState.posX;
-    cameraProjectedY = cameraState.posY;
-  }
+  const cameraBootstrap = resolveCameraBootstrap({
+    world: w,
+    projectedPlayerX: p0.x,
+    projectedPlayerY: p0.y,
+    snapshotViewerCamera,
+    cameraSmoothingEnabled,
+    dtReal,
+    followHalfLifeDefaultSec: CAMERA_FOLLOW_HALF_LIFE_DEFAULT_SEC,
+    followSnapDistanceSq: CAMERA_FOLLOW_SNAP_DISTANCE_SQ,
+    smoothingIntensityScale: CAMERA_SMOOTHING_INTENSITY_SCALE,
+  });
+  const cameraProjectedX = cameraBootstrap.cameraProjectedX;
+  const cameraProjectedY = cameraBootstrap.cameraProjectedY;
   (w as any).cameraX = cameraProjectedX;
   (w as any).cameraY = cameraProjectedY;
   viewport.centerOnProjected(cameraProjectedX, cameraProjectedY);
@@ -1214,6 +1077,11 @@ export async function renderSystem(
   const SHADOW_V6_TOP_SEMANTIC_BUCKET = debugFlags.shadowV6TopSemanticBucket;
   const SHADOW_V6_STRUCTURE_INDEX = debugFlags.shadowV6StructureIndex;
   const SHADOW_V6_SLICE_COUNT = debugFlags.shadowV6SliceCount;
+  const SHADOW_V6_ALL_STRUCTURES = debugFlags.shadowV6AllStructures;
+  const SHADOW_V6_ONE_STRUCTURE_ONLY = debugFlags.shadowV6OneStructureOnly;
+  const SHADOW_V6_VERTICAL_ONLY = debugFlags.shadowV6VerticalOnly;
+  const SHADOW_V6_TOP_ONLY = debugFlags.shadowV6TopOnly;
+  const SHADOW_V6_FORCE_REFRESH = debugFlags.shadowV6ForceRefresh;
   const SHOW_ZONE_OBJECTIVE_BOUNDS = debugFlags.showZoneObjectiveBounds;
   const drawEntityAnchorDebug = (
     feetX: number,
@@ -1248,204 +1116,30 @@ export async function renderSystem(
   const sliderPadding = Math.max(-12, Math.min(12, Number.isFinite(configuredRadius) ? Math.round(configuredRadius) : 0));
   const renderPaddingFactor = Math.max(-0.9, Math.min(0.9, sliderPadding / 12));
   setRenderTileLoopRadius(sliderPadding);
-  type ScreenRect = { minX: number; maxX: number; minY: number; maxY: number };
-  type TileBounds = { minTx: number; maxTx: number; minTy: number; maxTy: number };
-  type CullingView = { screenRect: ScreenRect; tileBounds: TileBounds };
-
-  const pointInRect = (px: number, py: number, r: ScreenRect): boolean => (
-    px >= r.minX && px <= r.maxX && py >= r.minY && py <= r.maxY
-  );
-  const cross = (ax: number, ay: number, bx: number, by: number, cx: number, cy: number): number => (
-    (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
-  );
-  const pointInConvexQuad = (
-    px: number,
-    py: number,
-    x0: number, y0: number,
-    x1: number, y1: number,
-    x2: number, y2: number,
-    x3: number, y3: number,
-  ): boolean => {
-    const c0 = cross(x0, y0, x1, y1, px, py);
-    const c1 = cross(x1, y1, x2, y2, px, py);
-    const c2 = cross(x2, y2, x3, y3, px, py);
-    const c3 = cross(x3, y3, x0, y0, px, py);
-    const hasPos = c0 > 0 || c1 > 0 || c2 > 0 || c3 > 0;
-    const hasNeg = c0 < 0 || c1 < 0 || c2 < 0 || c3 < 0;
-    return !(hasPos && hasNeg);
-  };
-  const onSegment = (ax: number, ay: number, bx: number, by: number, px: number, py: number): boolean => (
-    px >= Math.min(ax, bx) && px <= Math.max(ax, bx) &&
-    py >= Math.min(ay, by) && py <= Math.max(ay, by)
-  );
-  const segmentsIntersect = (
-    ax: number, ay: number, bx: number, by: number,
-    cx: number, cy: number, dx: number, dy: number,
-  ): boolean => {
-    const o1 = cross(ax, ay, bx, by, cx, cy);
-    const o2 = cross(ax, ay, bx, by, dx, dy);
-    const o3 = cross(cx, cy, dx, dy, ax, ay);
-    const o4 = cross(cx, cy, dx, dy, bx, by);
-
-    if ((o1 > 0) !== (o2 > 0) && (o3 > 0) !== (o4 > 0)) return true;
-    if (o1 === 0 && onSegment(ax, ay, bx, by, cx, cy)) return true;
-    if (o2 === 0 && onSegment(ax, ay, bx, by, dx, dy)) return true;
-    if (o3 === 0 && onSegment(cx, cy, dx, dy, ax, ay)) return true;
-    if (o4 === 0 && onSegment(cx, cy, dx, dy, bx, by)) return true;
-    return false;
-  };
-  const tileDiamondIntersectsScreenRect = (tx: number, ty: number, rect: ScreenRect): boolean => {
-    const x0w = tx * T;
-    const y0w = ty * T;
-    const p0 = worldToScreen(x0w, y0w);
-    const p1 = worldToScreen(x0w + T, y0w);
-    const p2 = worldToScreen(x0w + T, y0w + T);
-    const p3 = worldToScreen(x0w, y0w + T);
-
-    if (pointInRect(p0.x, p0.y, rect) || pointInRect(p1.x, p1.y, rect) || pointInRect(p2.x, p2.y, rect) || pointInRect(p3.x, p3.y, rect)) return true;
-
-    const rx0 = rect.minX, ry0 = rect.minY;
-    const rx1 = rect.maxX, ry1 = rect.minY;
-    const rx2 = rect.maxX, ry2 = rect.maxY;
-    const rx3 = rect.minX, ry3 = rect.maxY;
-
-    if (
-      pointInConvexQuad(rx0, ry0, p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y) ||
-      pointInConvexQuad(rx1, ry1, p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y) ||
-      pointInConvexQuad(rx2, ry2, p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y) ||
-      pointInConvexQuad(rx3, ry3, p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y)
-    ) {
-      return true;
-    }
-
-    const quadEdges: Array<[number, number, number, number]> = [
-      [p0.x, p0.y, p1.x, p1.y],
-      [p1.x, p1.y, p2.x, p2.y],
-      [p2.x, p2.y, p3.x, p3.y],
-      [p3.x, p3.y, p0.x, p0.y],
-    ];
-    const rectEdges: Array<[number, number, number, number]> = [
-      [rx0, ry0, rx1, ry1],
-      [rx1, ry1, rx2, ry2],
-      [rx2, ry2, rx3, ry3],
-      [rx3, ry3, rx0, ry0],
-    ];
-    for (let i = 0; i < quadEdges.length; i++) {
-      const [ax, ay, bx, by] = quadEdges[i];
-      for (let j = 0; j < rectEdges.length; j++) {
-        const [cx, cy, dx, dy] = rectEdges[j];
-        if (segmentsIntersect(ax, ay, bx, by, cx, cy, dx, dy)) return true;
-      }
-    }
-    return false;
-  };
-
-  const cullingCache = new Map<number, CullingView>();
-  const getCullingView = (extraPadTiles: number): CullingView => {
-    const p = Math.floor(extraPadTiles);
-    const cached = cullingCache.get(p);
-    if (cached) return cached;
-
-    const baseMinX = -camTx;
-    const baseMaxX = -camTx + ww;
-    const baseMinY = -camTy;
-    const baseMaxY = -camTy + hh;
-    const centerX = (baseMinX + baseMaxX) * 0.5;
-    const centerY = (baseMinY + baseMaxY) * 0.5;
-    const baseHalfW = (baseMaxX - baseMinX) * 0.5;
-    const baseHalfH = (baseMaxY - baseMinY) * 0.5;
-    const padFactorExtra = p / 12;
-    const scale = Math.max(0.1, 1 + renderPaddingFactor + padFactorExtra);
-    const minHalfW = T * ISO_X;
-    const minHalfH = T * ISO_Y;
-    const halfW = Math.max(minHalfW, baseHalfW * scale);
-    const halfH = Math.max(minHalfH, baseHalfH * scale);
-    const sx0 = centerX - halfW;
-    const sx1 = centerX + halfW;
-    const sy0 = centerY - halfH;
-    const sy1 = centerY + halfH;
-    const screenRect: ScreenRect = {
-      minX: Math.min(sx0, sx1),
-      maxX: Math.max(sx0, sx1),
-      minY: Math.min(sy0, sy1),
-      maxY: Math.max(sy0, sy1),
-    };
-
-    const c0 = screenToWorld(screenRect.minX, screenRect.minY);
-    const c1 = screenToWorld(screenRect.maxX, screenRect.minY);
-    const c2 = screenToWorld(screenRect.minX, screenRect.maxY);
-    const c3 = screenToWorld(screenRect.maxX, screenRect.maxY);
-    const minWx = Math.min(c0.x, c1.x, c2.x, c3.x);
-    const maxWx = Math.max(c0.x, c1.x, c2.x, c3.x);
-    const minWy = Math.min(c0.y, c1.y, c2.y, c3.y);
-    const maxWy = Math.max(c0.y, c1.y, c2.y, c3.y);
-    const tileBounds: TileBounds = {
-      minTx: Math.floor(minWx / T),
-      maxTx: Math.floor(maxWx / T),
-      minTy: Math.floor(minWy / T),
-      maxTy: Math.floor(maxWy / T),
-    };
-    const view: CullingView = { screenRect, tileBounds };
-    cullingCache.set(p, view);
-    return view;
-  };
-
-  const baseCulling = getCullingView(0);
-  const viewRect = baseCulling.tileBounds;
-  const projectedViewportRect: RuntimeStructureTriangleRect = {
-    x: -camTx,
-    y: -camTy,
-    w: ww,
-    h: hh,
-  };
-  const strictViewportTileBounds: TileBounds = (() => {
-    const vx0 = projectedViewportRect.x;
-    const vy0 = projectedViewportRect.y;
-    const vx1 = projectedViewportRect.x + projectedViewportRect.w;
-    const vy1 = projectedViewportRect.y + projectedViewportRect.h;
-    const c0 = screenToWorld(vx0, vy0);
-    const c1 = screenToWorld(vx1, vy0);
-    const c2 = screenToWorld(vx0, vy1);
-    const c3 = screenToWorld(vx1, vy1);
-    return {
-      minTx: Math.floor(Math.min(c0.x, c1.x, c2.x, c3.x) / T),
-      maxTx: Math.floor(Math.max(c0.x, c1.x, c2.x, c3.x) / T),
-      minTy: Math.floor(Math.min(c0.y, c1.y, c2.y, c3.y) / T),
-      maxTy: Math.floor(Math.max(c0.y, c1.y, c2.y, c3.y) / T),
-    };
-  })();
+  const viewportCulling = buildViewportCulling({
+    camTx,
+    camTy,
+    visibleWorldWidth: ww,
+    visibleWorldHeight: hh,
+    tileWorld: T,
+    isoX: ISO_X,
+    isoY: ISO_Y,
+    renderPaddingFactor,
+    worldToScreen,
+    screenToWorld,
+  });
+  const baseCulling = viewportCulling.baseCulling;
+  const viewRect = viewportCulling.viewRect;
+  const projectedViewportRect: RuntimeStructureTriangleRect = viewportCulling.projectedViewportRect;
+  const strictViewportTileBounds: TileBounds = viewportCulling.strictViewportTileBounds;
   const minTx = viewRect.minTx;
   const maxTx = viewRect.maxTx;
   const minTy = viewRect.minTy;
   const maxTy = viewRect.maxTy;
-
-  const isTileInRenderRadius = (tx: number, ty: number): boolean => {
-    if (tx < minTx || tx > maxTx || ty < minTy || ty > maxTy) return false;
-    return tileDiamondIntersectsScreenRect(tx, ty, baseCulling.screenRect);
-  };
-  const isTileInRenderRadiusPadded = (tx: number, ty: number, padTiles: number): boolean => {
-    const culling = getCullingView(Math.max(0, Math.floor(padTiles)));
-    const bounds = culling.tileBounds;
-    if (tx < bounds.minTx || tx > bounds.maxTx || ty < bounds.minTy || ty > bounds.maxTy) return false;
-    return tileDiamondIntersectsScreenRect(tx, ty, culling.screenRect);
-  };
-  const tileRectIntersectsRenderRadius = (
-    minRectTx: number,
-    maxRectTx: number,
-    minRectTy: number,
-    maxRectTy: number,
-  ): boolean => {
-    return !(maxRectTx < minTx || minRectTx > maxTx || maxRectTy < minTy || minRectTy > maxTy);
-  };
-  const tileRectIntersectsBounds = (
-    minRectTx: number,
-    maxRectTx: number,
-    minRectTy: number,
-    maxRectTy: number,
-    bounds: TileBounds,
-  ): boolean => {
-    return !(maxRectTx < bounds.minTx || minRectTx > bounds.maxTx || maxRectTy < bounds.minTy || minRectTy > bounds.maxTy);
-  };
+  const isTileInRenderRadius = viewportCulling.isTileInRenderRadius;
+  const isTileInRenderRadiusPadded = viewportCulling.isTileInRenderRadiusPadded;
+  const tileRectIntersectsRenderRadius = viewportCulling.tileRectIntersectsRenderRadius;
+  const tileRectIntersectsBounds = viewportCulling.tileRectIntersectsBounds;
   const minSum = minTx + minTy;
   const maxSum = maxTx + maxTy;
   const playerTxForProjectileCull = Math.floor(px / KENNEY_TILE_WORLD);
@@ -1610,6 +1304,8 @@ export async function renderSystem(
   const structureV5ShadowByBand = new Map<number, StructureV5ShadowRenderPiece[]>();
   const structureV6ShadowDebugCandidates: StructureV6ShadowDebugCandidate[] = [];
   let structureV6VerticalShadowDebugData: StructureV6VerticalShadowMaskDebugData | null = null;
+  let structureV6VerticalShadowDebugDataList: StructureV6VerticalShadowMaskDebugData[] = [];
+  let structureV6ShadowCacheStats: StructureV6ShadowCacheFrameStats | null = null;
   type HybridShadowDiagnosticStats = {
     cacheHits: number;
     cacheMisses: number;
@@ -1922,17 +1618,48 @@ export async function renderSystem(
   // (Underlay prepass removed; faces now render as occluders)
 
   // ----------------------------
-  const renderFrame = prepareRenderFrame({
-    w,
+  const renderFrame: RenderFrameContext = prepareRenderFrame({
+    world: w,
     ctx,
     canvas,
     uiCtx,
     uiCanvas,
+    overlayCtx,
+    overlayCanvas,
+    hasUiOverlay,
+    cssW,
+    cssH,
+    screenW,
+    screenH,
+    devW,
+    devH,
+    dpr,
+    overlayDevW,
+    overlayDevH,
+    overlayDpr,
+    visibleVerticalTiles,
     viewport,
+    zoom,
+    worldWidth: ww,
+    worldHeight: hh,
+    scaledW,
+    scaledH,
+    safeOffsetX,
+    safeOffsetY,
+    playerWorldX: px,
+    playerWorldY: py,
+    playerTileX: playerTx,
+    playerTileY: playerTy,
+    cameraProjectedX,
+    cameraProjectedY,
+    camTx,
+    camTy,
+    worldScaleDevice: s,
     renderSettings,
-  });
+  } as RenderFrameContext);
 
-  const collectionResult = collectFrameDrawables({
+  const collectionContext: CollectionContext = {
+    frame: renderFrame,
     w,
     minSum,
     maxSum,
@@ -2103,22 +1830,37 @@ export async function renderSystem(
     structureShadowV4CacheStore,
     buildStructureDrawables,
     drawStructureDrawableFn,
-    buildStructureV6VerticalShadowFrameResult,
+    buildStructureV6VerticalShadowFrameResults,
     SHADOW_V6_REQUESTED_SEMANTIC_BUCKET,
     SHADOW_V6_STRUCTURE_INDEX,
     SHADOW_V6_SLICE_COUNT,
+    SHADOW_V6_ALL_STRUCTURES,
+    SHADOW_V6_ONE_STRUCTURE_ONLY,
+    SHADOW_V6_VERTICAL_ONLY,
+    SHADOW_V6_TOP_ONLY,
+    SHADOW_V6_FORCE_REFRESH,
     STRUCTURE_SHADOW_V5_LENGTH_PX,
     countStructureV6CandidateTrianglesForBucket,
     resolveStructureV6SelectedCandidateIndex,
     buildStructureV6VerticalShadowMaskDebugData,
+    structureShadowV6CacheStore,
     didQueueStructureCutoutDebugRect,
     structureV6VerticalShadowDebugData,
-  });
+    structureV6VerticalShadowDebugDataList,
+    structureV6ShadowCacheStats,
+  } as CollectionContext;
+
+  const collectionResult = collectFrameDrawables(collectionContext);
 
   didQueueStructureCutoutDebugRect = collectionResult.didQueueStructureCutoutDebugRect;
   structureV6VerticalShadowDebugData =
     collectionResult.structureV6VerticalShadowDebugData as StructureV6VerticalShadowMaskDebugData | null;
-  const worldPassContext: Record<string, any> = {
+  structureV6VerticalShadowDebugDataList =
+    collectionResult.structureV6VerticalShadowDebugDataList as StructureV6VerticalShadowMaskDebugData[];
+  structureV6ShadowCacheStats =
+    collectionResult.structureV6ShadowCacheStats as StructureV6ShadowCacheFrameStats | null;
+  const worldPassContext: WorldPassContext = {
+    frame: renderFrame,
     sliceDrawables,
     countRenderSliceKeySort,
     isWorldKindForRenderPass,
@@ -2135,6 +1877,7 @@ export async function renderSystem(
     structureV5ShadowByBand,
     structureShadowFrame,
     structureV6VerticalShadowDebugData,
+    structureV6VerticalShadowDebugDataList,
     setRenderZBandCount,
     KindOrder,
     isGroundKindForRenderPass,
@@ -2160,11 +1903,12 @@ export async function renderSystem(
     v5ShadowDiagnosticStats,
     v5ShadowAnchorDiagnostic,
     executeDebugPass,
-  };
-  executeWorldPasses(worldPassContext);
-  v5ShadowAnchorDiagnostic = worldPassContext.v5ShadowAnchorDiagnostic;
+  } as WorldPassContext;
+  const worldPassResult = executeWorldPasses(worldPassContext);
+  v5ShadowAnchorDiagnostic = worldPassResult.v5ShadowAnchorDiagnostic as StructureV5ShadowAnchorDiagnostic | null;
 
-  renderScreenOverlays({
+  const screenOverlayContext: ScreenOverlayContext = {
+    frame: renderFrame,
     w,
     ctx,
     getFloorVisual,
@@ -2186,7 +1930,9 @@ export async function renderSystem(
     renderPerfCountersEnabled,
     structureShadowFrame,
     structureV6VerticalShadowDebugData,
+    structureV6VerticalShadowDebugDataList,
     structureV6ShadowDebugCandidates,
+    structureV6ShadowCacheStats,
     v5ShadowAnchorDiagnostic,
     shadowSunModel,
     structureTriangleAdmissionMode,
@@ -2223,9 +1969,11 @@ export async function renderSystem(
     cssW,
     cssH,
     dpr,
-  });
+  } as ScreenOverlayContext;
+  renderScreenOverlays(screenOverlayContext);
 
-  renderUiPass({
+  const uiPassContext: UiPassContext = {
+    frame: renderFrame,
     overlayCtx,
     overlayDpr,
     hasUiOverlay,
@@ -2246,5 +1994,6 @@ export async function renderSystem(
     screenW,
     screenH,
     renderFrame,
-  });
+  } as UiPassContext;
+  renderUiPass(uiPassContext);
 }

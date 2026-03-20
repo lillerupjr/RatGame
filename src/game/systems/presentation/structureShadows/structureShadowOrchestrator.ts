@@ -506,6 +506,7 @@ export function buildStructureShadowFrameResult(
   const v6Candidate: StructureV6ShadowDebugCandidate | null = frame.routing.usesV6 && v6Triangles.length > 0
     ? {
         structureInstanceId: overlay.id,
+        geometrySignature,
         sourceImage: input.sourceImage,
         sourceImageWidth: Math.max(1, Math.round(input.draw.dw)),
         sourceImageHeight: Math.max(1, Math.round(input.draw.dh)),
@@ -554,24 +555,32 @@ export type BuildStructureV6VerticalShadowFrameResultInput<TVerticalDebugData> =
   ) => TVerticalDebugData | null;
 };
 
-export function buildStructureV6VerticalShadowFrameResult<TVerticalDebugData>(
+export type BuildStructureV6VerticalShadowFrameResults<TVerticalDebugData> = {
+  selectedStructureIndex: number;
+  orderedCandidateCount: number;
+  shadowVector: { x: number; y: number };
+  selected: TVerticalDebugData | null;
+  all: readonly TVerticalDebugData[];
+};
+
+export function buildStructureV6VerticalShadowFrameResults<TVerticalDebugData>(
   input: BuildStructureV6VerticalShadowFrameResultInput<TVerticalDebugData>,
-): TVerticalDebugData | null {
-  if (!input.frame.routing.usesV6 || input.candidates.length <= 0) return null;
+): BuildStructureV6VerticalShadowFrameResults<TVerticalDebugData> {
+  const emptyResult: BuildStructureV6VerticalShadowFrameResults<TVerticalDebugData> = {
+    selectedStructureIndex: -1,
+    orderedCandidateCount: 0,
+    shadowVector: { x: 0, y: 0 },
+    selected: null,
+    all: [],
+  };
+  if (!input.frame.routing.usesV6 || input.candidates.length <= 0) return emptyResult;
 
   const shadowVector = {
     x: input.frame.sunModel.projectionDirection.x * input.shadowLengthPx,
     y: input.frame.sunModel.projectionDirection.y * input.shadowLengthPx,
   };
 
-  const candidatesWithPrimaryBucket = input.candidates.filter(
-    (candidate) => input.countCandidateTrianglesForBucket(candidate, input.primarySemanticBucket) > 0,
-  );
-  const candidatePool = candidatesWithPrimaryBucket.length > 0
-    ? candidatesWithPrimaryBucket
-    : input.candidates;
-
-  const orderedCandidates = candidatePool
+  const orderedCandidates = input.candidates
     .slice()
     .sort((a, b) => {
       const byId = a.structureInstanceId.localeCompare(b.structureInstanceId);
@@ -586,16 +595,34 @@ export function buildStructureV6VerticalShadowFrameResult<TVerticalDebugData>(
     orderedCandidates.length,
     input.requestedStructureIndex,
   );
-  const selected = selectedStructureIndex >= 0 ? orderedCandidates[selectedStructureIndex] : null;
-  if (!selected) return null;
+  let selected: TVerticalDebugData | null = null;
+  const all: TVerticalDebugData[] = [];
+  for (let i = 0; i < orderedCandidates.length; i++) {
+    const built = input.buildVerticalDebugData(
+      orderedCandidates[i],
+      input.requestedSemanticBucket,
+      input.requestedStructureIndex,
+      i,
+      orderedCandidates.length,
+      input.requestedSliceCount,
+      shadowVector,
+    );
+    if (!built) continue;
+    all.push(built);
+    if (i === selectedStructureIndex) selected = built;
+  }
 
-  return input.buildVerticalDebugData(
-    selected,
-    input.requestedSemanticBucket,
-    input.requestedStructureIndex,
+  return {
     selectedStructureIndex,
-    orderedCandidates.length,
-    input.requestedSliceCount,
+    orderedCandidateCount: orderedCandidates.length,
     shadowVector,
-  );
+    selected,
+    all,
+  };
+}
+
+export function buildStructureV6VerticalShadowFrameResult<TVerticalDebugData>(
+  input: BuildStructureV6VerticalShadowFrameResultInput<TVerticalDebugData>,
+): TVerticalDebugData | null {
+  return buildStructureV6VerticalShadowFrameResults(input).selected;
 }

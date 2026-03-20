@@ -131,11 +131,49 @@ export function mountDebugToolsSection(
   );
   const shadowV6SliceCountSlider = createSliderRow(
     section,
-    "V6 Slice Count",
+    "V6 Slice Thickness Px",
     1,
     32,
     1,
     (value) => applyDebugPatch({ shadowV6SliceCount: value }),
+  );
+  const shadowV6AllStructuresToggle = createToggleRow(
+    section,
+    "V6 Cast All Structures",
+    (checked) => applyDebugPatch(
+      checked
+        ? { shadowV6AllStructures: true, shadowV6OneStructureOnly: false }
+        : { shadowV6AllStructures: false },
+    ),
+  );
+  const shadowV6OneStructureOnlyToggle = createToggleRow(
+    section,
+    "V6 Cast One Structure",
+    (checked) => applyDebugPatch(
+      checked
+        ? { shadowV6OneStructureOnly: true, shadowV6AllStructures: false }
+        : { shadowV6OneStructureOnly: false },
+    ),
+  );
+  const shadowV6VerticalOnlyToggle = createToggleRow(
+    section,
+    "V6 Vertical Only",
+    (checked) => applyDebugPatch({ shadowV6VerticalOnly: checked }),
+  );
+  const shadowV6TopOnlyToggle = createToggleRow(
+    section,
+    "V6 Top Only",
+    (checked) => applyDebugPatch({ shadowV6TopOnly: checked }),
+  );
+  const shadowV6ForceRefreshToggle = createToggleRow(
+    section,
+    "V6 Force Refresh",
+    (checked) => applyDebugPatch({ shadowV6ForceRefresh: checked }),
+  );
+  const shadowV6FaceSliceDebugOverlayToggle = createToggleRow(
+    section,
+    "V6 Face Slice Debug",
+    (checked) => applyDebugPatch({ shadowV6FaceSliceDebugOverlay: checked }),
   );
 
   const shadowSunReadout = document.createElement("div");
@@ -205,6 +243,12 @@ export function mountDebugToolsSection(
       shadowV6SemanticBucketSelect.value = debug.shadowV6SemanticBucket;
       shadowV6StructureIndexSlider.input.value = `${Math.round(debug.shadowV6StructureIndex)}`;
       shadowV6SliceCountSlider.input.value = `${Math.round(debug.shadowV6SliceCount)}`;
+      shadowV6AllStructuresToggle.checked = !!debug.shadowV6AllStructures;
+      shadowV6OneStructureOnlyToggle.checked = !!debug.shadowV6OneStructureOnly;
+      shadowV6VerticalOnlyToggle.checked = !!debug.shadowV6VerticalOnly;
+      shadowV6TopOnlyToggle.checked = !!debug.shadowV6TopOnly;
+      shadowV6ForceRefreshToggle.checked = !!debug.shadowV6ForceRefresh;
+      shadowV6FaceSliceDebugOverlayToggle.checked = !!debug.shadowV6FaceSliceDebugOverlay;
       const v5DebugViewActive = debug.shadowCasterMode === "v5TriangleShadowMask";
       shadowV5DebugViewSelect.disabled = !v5DebugViewActive;
       shadowV5DebugViewSelect.style.opacity = v5DebugViewActive ? "1" : "0.65";
@@ -219,6 +263,20 @@ export function mountDebugToolsSection(
       shadowV6SliceCountSlider.input.style.opacity = v6DebugViewActive ? "1" : "0.65";
       shadowV6StructureIndexSlider.value.style.opacity = v6DebugViewActive ? "1" : "0.65";
       shadowV6SliceCountSlider.value.style.opacity = v6DebugViewActive ? "1" : "0.65";
+      shadowV6AllStructuresToggle.disabled = !v6DebugViewActive;
+      shadowV6AllStructuresToggle.style.opacity = v6DebugViewActive ? "1" : "0.65";
+      shadowV6OneStructureOnlyToggle.disabled = !v6DebugViewActive;
+      shadowV6OneStructureOnlyToggle.style.opacity = v6DebugViewActive ? "1" : "0.65";
+      shadowV6VerticalOnlyToggle.disabled = !v6DebugViewActive;
+      shadowV6VerticalOnlyToggle.style.opacity = v6DebugViewActive ? "1" : "0.65";
+      shadowV6TopOnlyToggle.disabled = !v6DebugViewActive;
+      shadowV6TopOnlyToggle.style.opacity = v6DebugViewActive ? "1" : "0.65";
+      shadowV6ForceRefreshToggle.disabled = !v6DebugViewActive;
+      shadowV6ForceRefreshToggle.style.opacity = v6DebugViewActive ? "1" : "0.65";
+      shadowV6FaceSliceDebugOverlayToggle.disabled = !v6DebugViewActive;
+      if (shadowV6FaceSliceDebugOverlayToggle.parentElement) {
+        shadowV6FaceSliceDebugOverlayToggle.parentElement.style.display = v6DebugViewActive ? "flex" : "none";
+      }
       syncShadowSunReadout(debug.shadowSunTimeHour);
       syncV6SliderReadouts(debug);
       for (const [key, input] of Object.entries(controls)) {

@@ -130,7 +130,10 @@ export function buildStructureV6FaceSlices(
   axis: StructureV6SliceAxis,
   requestedSliceCount: number,
 ): StructureV6FaceSlice[] {
-  const sliceCount = clampStructureV6SliceCount(requestedSliceCount);
+  const numericSliceCount = Number(requestedSliceCount);
+  const sliceCount = Number.isFinite(numericSliceCount)
+    ? Math.max(1, Math.floor(numericSliceCount))
+    : STRUCTURE_SHADOW_V6_DEFAULT_SLICE_COUNT;
   const minT = axis.minT;
   const maxT = axis.maxT;
   const rangeT = Math.max(1e-6, maxT - minT);

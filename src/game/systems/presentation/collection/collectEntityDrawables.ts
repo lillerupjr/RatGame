@@ -1,9 +1,9 @@
-import type { RenderCollectionContext } from "./collectFrameDrawables";
+import type { CollectionContext } from "../contracts/collectionContext";
 
 type RenderKey = any;
 type Dir8 = any;
 
-export function collectEntityDrawables(input: RenderCollectionContext): void {
+export function collectEntityDrawables(input: CollectionContext): void {
   const {
     w,
     T,

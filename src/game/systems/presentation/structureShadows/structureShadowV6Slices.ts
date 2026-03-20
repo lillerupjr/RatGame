@@ -13,6 +13,13 @@ import { getStructureShadowV6FaceScratchContext } from "./structureShadowScratch
 import type { StructureV6ShadowDebugCandidate } from "./structureShadowTypes";
 
 type ScreenPt = { x: number; y: number };
+type SliceSpaceAlphaSpan = {
+  occupiedPixelCount: number;
+  minS: number;
+  maxS: number;
+};
+
+const STRUCTURE_SHADOW_V6_DEFAULT_DESIRED_SLICE_THICKNESS_PX = 8;
 
 export type StructureV6ExtrudedSliceDebug = {
   slice: StructureV6FaceSlice;
@@ -33,6 +40,12 @@ export type StructureV6FaceSliceDebugData = {
   selectedStructureIndex: number;
   candidateCount: number;
   sourceTriangleCount: number;
+  occupiedPixelCount: number;
+  sliceSpaceMinS: number;
+  sliceSpaceMaxS: number;
+  sliceSpaceHeightPx: number;
+  desiredSliceThicknessPx: number;
+  sliceCountUsed: number;
   nonEmptySliceCount: number;
   faceBounds: { minX: number; minY: number; maxX: number; maxY: number };
   faceCanvas: HTMLCanvasElement;
@@ -69,6 +82,11 @@ export type StructureV6VerticalShadowMaskDebugData = {
   mergedVerticalShadowCanvas: HTMLCanvasElement;
 };
 
+export type BuildStructureV6VerticalShadowMaskOptions = {
+  includeVertical?: boolean;
+  includeTop?: boolean;
+};
+
 type BuildStructureV6FaceSliceDebugOptions = {
   axisOverride?: StructureV6SliceAxis;
   useSunRelativeAxis?: boolean;
@@ -88,6 +106,42 @@ function dotScreenVectors(a: ScreenPt, b: ScreenPt): number {
 
 function perpendicularScreenVector(v: ScreenPt): ScreenPt {
   return { x: v.y, y: -v.x };
+}
+
+function computeSliceSpaceAlphaSpan(
+  source: Uint8ClampedArray,
+  width: number,
+  height: number,
+  sliceNormal: ScreenPt,
+): SliceSpaceAlphaSpan {
+  let occupiedPixelCount = 0;
+  let minS = Number.POSITIVE_INFINITY;
+  let maxS = Number.NEGATIVE_INFINITY;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const pixelIndex = (y * width + x) << 2;
+      const alpha = source[pixelIndex + 3] | 0;
+      if (alpha <= 0) continue;
+      occupiedPixelCount += 1;
+      const sx = x + 0.5;
+      const sy = y + 0.5;
+      const s = sx * sliceNormal.x + sy * sliceNormal.y;
+      if (s < minS) minS = s;
+      if (s > maxS) maxS = s;
+    }
+  }
+  if (occupiedPixelCount <= 0) {
+    return {
+      occupiedPixelCount: 0,
+      minS: 0,
+      maxS: 1,
+    };
+  }
+  return {
+    occupiedPixelCount,
+    minS,
+    maxS,
+  };
 }
 
 function buildStructureV6SunRelativeSliceAxis(
@@ -143,6 +197,7 @@ function filterStructureV6CandidateForBucket(
   const triangles = candidate.triangles.filter((triangle) => triangle.semanticBucket === bucket);
   return {
     structureInstanceId: candidate.structureInstanceId,
+    geometrySignature: candidate.geometrySignature,
     sourceImage: candidate.sourceImage,
     sourceImageWidth: candidate.sourceImageWidth,
     sourceImageHeight: candidate.sourceImageHeight,
@@ -224,6 +279,32 @@ export function buildStructureV6FaceSliceDebugData(
     ?? (options?.useSunRelativeAxis
       ? buildStructureV6SunRelativeSliceAxis(width, height, shadowVector)
       : buildStructureV6SliceAxis(width, height, semanticBucket));
+  const sourceImageData = faceCtx.getImageData(0, 0, width, height);
+  const source = sourceImageData.data;
+  const occupiedSliceSpan = computeSliceSpaceAlphaSpan(source, width, height, axis.sliceNormal);
+  let sliceSpaceMinS = occupiedSliceSpan.minS;
+  let sliceSpaceMaxS = occupiedSliceSpan.maxS;
+  if (
+    occupiedSliceSpan.occupiedPixelCount <= 0
+    || !Number.isFinite(sliceSpaceMinS)
+    || !Number.isFinite(sliceSpaceMaxS)
+  ) {
+    sliceSpaceMinS = axis.minT;
+    sliceSpaceMaxS = axis.maxT;
+  }
+  if (Math.abs(sliceSpaceMaxS - sliceSpaceMinS) < 1e-6) sliceSpaceMaxS = sliceSpaceMinS + 1;
+  const sliceSpaceHeightPx = Math.max(0, sliceSpaceMaxS - sliceSpaceMinS);
+  const desiredSliceThicknessPx = Math.max(
+    1,
+    clampStructureV6SliceCount(requestedSliceCount ?? STRUCTURE_SHADOW_V6_DEFAULT_DESIRED_SLICE_THICKNESS_PX),
+  );
+  const sliceCount = Math.max(1, Math.ceil(sliceSpaceHeightPx / desiredSliceThicknessPx));
+  const sliceAxis: StructureV6SliceAxis = {
+    sliceDir: axis.sliceDir,
+    sliceNormal: axis.sliceNormal,
+    minT: sliceSpaceMinS,
+    maxT: sliceSpaceMaxS,
+  };
   const castMode = options?.castMode ?? "baselineToTop";
   const disableSlicing = options?.disableSlicing === true;
   if (disableSlicing) {
@@ -273,10 +354,16 @@ export function buildStructureV6FaceSliceDebugData(
       selectedStructureIndex,
       candidateCount,
       sourceTriangleCount: candidate.triangles.length,
+      occupiedPixelCount: occupiedSliceSpan.occupiedPixelCount,
+      sliceSpaceMinS,
+      sliceSpaceMaxS,
+      sliceSpaceHeightPx,
+      desiredSliceThicknessPx,
+      sliceCountUsed: sliceCount,
       nonEmptySliceCount: candidate.triangles.length > 0 ? 1 : 0,
       faceBounds: { minX, minY, maxX, maxY },
       faceCanvas,
-      axis,
+      axis: sliceAxis,
       slices: [],
       shadowVector,
       displacedCanvasOrigin: { x: displacedOriginX, y: displacedOriginY },
@@ -287,10 +374,7 @@ export function buildStructureV6FaceSliceDebugData(
       mergedShadowCanvas,
     };
   }
-  const sliceCount = clampStructureV6SliceCount(requestedSliceCount);
-  const sliceDefs = buildStructureV6FaceSlices(axis, sliceCount);
-  const sourceImageData = faceCtx.getImageData(0, 0, width, height);
-  const source = sourceImageData.data;
+  const sliceDefs = buildStructureV6FaceSlices(sliceAxis, sliceCount);
   const perSliceData: Uint8ClampedArray[] = new Array(sliceDefs.length);
   const perSlicePixelCounts: number[] = new Array(sliceDefs.length);
   const perSliceBounds: Array<{ minX: number; minY: number; maxX: number; maxY: number }> = new Array(sliceDefs.length);
@@ -312,7 +396,7 @@ export function buildStructureV6FaceSliceDebugData(
       const sliceIndex = resolveStructureV6SliceIndex(
         x + 0.5,
         y + 0.5,
-        axis,
+        sliceAxis,
         sliceDefs.length,
       );
       const out = perSliceData[sliceIndex];
@@ -435,10 +519,16 @@ export function buildStructureV6FaceSliceDebugData(
     selectedStructureIndex,
     candidateCount,
     sourceTriangleCount: candidate.triangles.length,
+    occupiedPixelCount: occupiedSliceSpan.occupiedPixelCount,
+    sliceSpaceMinS,
+    sliceSpaceMaxS,
+    sliceSpaceHeightPx,
+    desiredSliceThicknessPx,
+    sliceCountUsed: sliceCount,
     nonEmptySliceCount: nonEmptySlices.length,
     faceBounds: { minX, minY, maxX, maxY },
     faceCanvas,
-    axis,
+    axis: sliceAxis,
     slices,
     shadowVector,
     displacedCanvasOrigin: { x: displacedOriginX, y: displacedOriginY },
@@ -458,41 +548,49 @@ export function buildStructureV6VerticalShadowMaskDebugData(
   candidateCount: number,
   requestedSliceCount: number,
   shadowVector: ScreenPt,
+  options?: BuildStructureV6VerticalShadowMaskOptions,
 ): StructureV6VerticalShadowMaskDebugData | null {
-  const bucketAShadow = buildStructureV6FaceSliceDebugData(
-    filterStructureV6CandidateForBucket(candidate, "EAST_WEST"),
-    requestedSemanticBucket,
-    "EAST_WEST",
-    requestedStructureIndex,
-    selectedStructureIndex,
-    candidateCount,
-    requestedSliceCount,
-    shadowVector,
-  );
-  const bucketBShadow = buildStructureV6FaceSliceDebugData(
-    filterStructureV6CandidateForBucket(candidate, "SOUTH_NORTH"),
-    requestedSemanticBucket,
-    "SOUTH_NORTH",
-    requestedStructureIndex,
-    selectedStructureIndex,
-    candidateCount,
-    requestedSliceCount,
-    shadowVector,
-  );
-  const topSource = filterStructureV6CandidateForBucket(candidate, "TOP");
-  const topShadow = buildStructureV6FaceSliceDebugData(
-    topSource,
-    requestedSemanticBucket,
-    "TOP",
-    requestedStructureIndex,
-    selectedStructureIndex,
-    candidateCount,
-    requestedSliceCount,
-    shadowVector,
-    {
-      disableSlicing: true,
-    },
-  );
+  const includeVertical = options?.includeVertical !== false;
+  const includeTop = options?.includeTop !== false;
+  const bucketAShadow = includeVertical
+    ? buildStructureV6FaceSliceDebugData(
+      filterStructureV6CandidateForBucket(candidate, "EAST_WEST"),
+      requestedSemanticBucket,
+      "EAST_WEST",
+      requestedStructureIndex,
+      selectedStructureIndex,
+      candidateCount,
+      requestedSliceCount,
+      shadowVector,
+    )
+    : null;
+  const bucketBShadow = includeVertical
+    ? buildStructureV6FaceSliceDebugData(
+      filterStructureV6CandidateForBucket(candidate, "SOUTH_NORTH"),
+      requestedSemanticBucket,
+      "SOUTH_NORTH",
+      requestedStructureIndex,
+      selectedStructureIndex,
+      candidateCount,
+      requestedSliceCount,
+      shadowVector,
+    )
+    : null;
+  const topShadow = includeTop
+    ? buildStructureV6FaceSliceDebugData(
+      filterStructureV6CandidateForBucket(candidate, "TOP"),
+      requestedSemanticBucket,
+      "TOP",
+      requestedStructureIndex,
+      selectedStructureIndex,
+      candidateCount,
+      requestedSliceCount,
+      shadowVector,
+      {
+        disableSlicing: true,
+      },
+    )
+    : null;
   if (!bucketAShadow && !bucketBShadow && !topShadow) return null;
 
   const bucketShadows = [bucketAShadow, bucketBShadow, topShadow].filter(

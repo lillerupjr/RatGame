@@ -1,6 +1,6 @@
-export type RenderUiPassContext = Record<string, any>;
+import type { UiPassContext } from "../contracts/uiPassContext";
 
-export function renderUiPass(input: RenderUiPassContext): void {
+export function renderUiPass(input: UiPassContext): void {
   const {
     overlayCtx,
     overlayDpr,

@@ -1,0 +1,42 @@
+import type { World } from "../../../../engine/world/world";
+import type { ViewportTransform } from "../viewportTransform";
+
+export interface RenderFrameContext {
+  world: World;
+  ctx: CanvasRenderingContext2D;
+  canvas: HTMLCanvasElement;
+  uiCtx?: CanvasRenderingContext2D;
+  uiCanvas?: HTMLCanvasElement;
+  overlayCtx: CanvasRenderingContext2D;
+  overlayCanvas: HTMLCanvasElement;
+  hasUiOverlay: boolean;
+  cssW: number;
+  cssH: number;
+  screenW: number;
+  screenH: number;
+  devW: number;
+  devH: number;
+  dpr: number;
+  overlayDevW: number;
+  overlayDevH: number;
+  overlayDpr: number;
+  visibleVerticalTiles: number;
+  viewport: ViewportTransform;
+  zoom: number;
+  worldWidth: number;
+  worldHeight: number;
+  scaledW: number;
+  scaledH: number;
+  safeOffsetX: number;
+  safeOffsetY: number;
+  playerWorldX: number;
+  playerWorldY: number;
+  playerTileX: number;
+  playerTileY: number;
+  cameraProjectedX: number;
+  cameraProjectedY: number;
+  camTx: number;
+  camTy: number;
+  worldScaleDevice: number;
+  renderSettings: unknown;
+}

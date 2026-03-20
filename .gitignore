@@ -58,3 +58,5 @@ public/assets-runtime/_generated/
 
 # Contracts
 **/contracts/**
+!src/game/systems/presentation/contracts/
+!src/game/systems/presentation/contracts/**

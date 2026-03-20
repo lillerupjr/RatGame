@@ -156,6 +156,12 @@ export type DebugSettings = {
   shadowV6SemanticBucket: "TOP" | "EAST_WEST" | "SOUTH_NORTH";
   shadowV6StructureIndex: number;
   shadowV6SliceCount: number;
+  shadowV6AllStructures: boolean;
+  shadowV6OneStructureOnly: boolean;
+  shadowV6VerticalOnly: boolean;
+  shadowV6TopOnly: boolean;
+  shadowV6ForceRefresh: boolean;
+  shadowV6FaceSliceDebugOverlay: boolean;
   waterFlowRate: number;
   neutralBirdAI: NeutralBirdAIDebugSettings;
   objectives: {
@@ -232,6 +238,12 @@ function toLegacySettings(): UserSettings {
       shadowV6SemanticBucket: settings.debug.shadowV6SemanticBucket,
       shadowV6StructureIndex: settings.debug.shadowV6StructureIndex,
       shadowV6SliceCount: settings.debug.shadowV6SliceCount,
+      shadowV6AllStructures: settings.debug.shadowV6AllStructures,
+      shadowV6OneStructureOnly: settings.debug.shadowV6OneStructureOnly,
+      shadowV6VerticalOnly: settings.debug.shadowV6VerticalOnly,
+      shadowV6TopOnly: settings.debug.shadowV6TopOnly,
+      shadowV6ForceRefresh: settings.debug.shadowV6ForceRefresh,
+      shadowV6FaceSliceDebugOverlay: settings.debug.shadowV6FaceSliceDebugOverlay,
       waterFlowRate: settings.system.waterFlowRate,
       neutralBirdAI: {
         disabled: settings.system.neutralBirdDisabled,
@@ -436,6 +448,12 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
       "pauseDebugCards",
       "pauseCsvControls",
       "dpsMeter",
+      "shadowV6AllStructures",
+      "shadowV6OneStructureOnly",
+      "shadowV6VerticalOnly",
+      "shadowV6TopOnly",
+      "shadowV6ForceRefresh",
+      "shadowV6FaceSliceDebugOverlay",
     ] as const;
     for (const key of debugBooleanKeys) {
       if (debugAny[key] !== undefined) (debugPatch as any)[key] = debugAny[key];
@@ -469,6 +487,21 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     }
     if (debugAny.shadowV6SliceCount !== undefined) {
       debugPatch.shadowV6SliceCount = debugAny.shadowV6SliceCount;
+    }
+    if (debugAny.shadowV6AllStructures !== undefined) {
+      debugPatch.shadowV6AllStructures = debugAny.shadowV6AllStructures;
+    }
+    if (debugAny.shadowV6OneStructureOnly !== undefined) {
+      debugPatch.shadowV6OneStructureOnly = debugAny.shadowV6OneStructureOnly;
+    }
+    if (debugAny.shadowV6VerticalOnly !== undefined) {
+      debugPatch.shadowV6VerticalOnly = debugAny.shadowV6VerticalOnly;
+    }
+    if (debugAny.shadowV6TopOnly !== undefined) {
+      debugPatch.shadowV6TopOnly = debugAny.shadowV6TopOnly;
+    }
+    if (debugAny.shadowV6ForceRefresh !== undefined) {
+      debugPatch.shadowV6ForceRefresh = debugAny.shadowV6ForceRefresh;
     }
 
     if (debugAny.disableVisualCompiledCutoutCache !== undefined) {

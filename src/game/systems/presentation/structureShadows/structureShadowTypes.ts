@@ -91,6 +91,7 @@ export type StructureV5ShadowRenderPiece = {
 
 export type StructureV6ShadowDebugCandidate = {
   structureInstanceId: string;
+  geometrySignature: string;
   sourceImage: CanvasImageSource;
   sourceImageWidth: number;
   sourceImageHeight: number;

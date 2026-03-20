@@ -34,6 +34,12 @@ export function resolveRenderDebugFlags(debug: DebugSettings): RenderDebugFlags 
     shadowV6TopSemanticBucket: "TOP",
     shadowV6StructureIndex: debug.shadowV6StructureIndex,
     shadowV6SliceCount: debug.shadowV6SliceCount,
+    shadowV6AllStructures: debug.shadowV6AllStructures,
+    shadowV6OneStructureOnly: debug.shadowV6OneStructureOnly,
+    shadowV6VerticalOnly: debug.shadowV6VerticalOnly,
+    shadowV6TopOnly: debug.shadowV6TopOnly,
+    shadowV6ForceRefresh: debug.shadowV6ForceRefresh,
+    shadowV6FaceSliceDebugOverlay: debug.shadowV6FaceSliceDebugOverlay,
     shadowSunTimeHour: debug.shadowSunTimeHour,
   };
 }

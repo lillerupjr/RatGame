@@ -1,6 +1,6 @@
-export type RenderScreenOverlaysContext = Record<string, any>;
+import type { ScreenOverlayContext } from "../contracts/screenOverlayContext";
 
-export function renderScreenOverlays(input: RenderScreenOverlaysContext): void {
+export function renderScreenOverlays(input: ScreenOverlayContext): void {
   const {
     w,
     ctx,
@@ -23,7 +23,9 @@ export function renderScreenOverlays(input: RenderScreenOverlaysContext): void {
     renderPerfCountersEnabled,
     structureShadowFrame,
     structureV6VerticalShadowDebugData,
+    structureV6VerticalShadowDebugDataList,
     structureV6ShadowDebugCandidates,
+    structureV6ShadowCacheStats,
     v5ShadowAnchorDiagnostic,
     shadowSunModel,
     structureTriangleAdmissionMode,
@@ -57,6 +59,9 @@ export function renderScreenOverlays(input: RenderScreenOverlaysContext): void {
     worldToScreenPx,
     KENNEY_TILE_WORLD,
     s,
+    cssW,
+    cssH,
+    dpr,
   } = input as any;
 
   // Optional floor tint overlay
@@ -115,14 +120,16 @@ export function renderScreenOverlays(input: RenderScreenOverlaysContext): void {
       phase: "screen",
       input: {
         ctx,
-        cssW: input.cssW,
-        cssH: input.cssH,
-        dpr: input.dpr,
+        cssW,
+        cssH,
+        dpr,
         flags: debugFlags,
         renderPerfCountersEnabled,
         structureShadowRouting: structureShadowFrame.routing,
         structureV6VerticalShadowDebugData,
         structureV6ShadowDebugCandidateCount: structureV6ShadowDebugCandidates.length,
+        structureV6ShadowCastCount: structureV6VerticalShadowDebugDataList.length,
+        structureV6ShadowCacheStats,
         v5ShadowAnchorDiagnostic,
         shadowSunModel,
         structureTriangleAdmissionMode,

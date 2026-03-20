@@ -13,6 +13,8 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
     structureShadowRouting,
     structureV6VerticalShadowDebugData,
     structureV6ShadowDebugCandidateCount,
+    structureV6ShadowCastCount,
+    structureV6ShadowCacheStats,
     v5ShadowAnchorDiagnostic,
     shadowSunModel,
     structureTriangleAdmissionMode,
@@ -34,7 +36,11 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
   ctx.font = "12px monospace";
   ctx.fillStyle = "#fff";
 
-  if (structureShadowRouting.usesV6 && structureV6VerticalShadowDebugData) {
+  if (
+    structureShadowRouting.usesV6
+    && flags.shadowV6FaceSliceDebugOverlay
+    && structureV6VerticalShadowDebugData
+  ) {
     drawStructureV6FaceSliceDebugPanel(ctx, cssW, cssH, structureV6VerticalShadowDebugData);
   }
 
@@ -130,8 +136,17 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
       const bucketBCastSlices = structureV6VerticalShadowDebugData?.bucketBShadow?.nonEmptySliceCount ?? 0;
       const topCastSlices = structureV6VerticalShadowDebugData?.topShadow?.nonEmptySliceCount ?? 0;
       const shadowVector = structureV6VerticalShadowDebugData?.shadowVector ?? { x: 0, y: 0 };
-      const v6Line = `v6.7Diag buckets:${flags.shadowV6PrimarySemanticBucket}+${flags.shadowV6SecondarySemanticBucket}+${flags.shadowV6TopSemanticBucket} reqBucket:${flags.shadowV6RequestedSemanticBucket} structReq:${flags.shadowV6StructureIndex} selected:${selectedId} candidates:${structureV6ShadowDebugCandidateCount} triEW:${bucketATris} triSN:${bucketBTriCount} triTOP:${topTriCount} castEW:${bucketACastSlices} castSN:${bucketBCastSlices} castTOP:${topCastSlices} vec(${shadowVector.x.toFixed(1)},${shadowVector.y.toFixed(1)})`;
+      const v6Mode = [
+        flags.shadowV6OneStructureOnly ? "one" : flags.shadowV6AllStructures ? "all" : "none",
+        flags.shadowV6VerticalOnly ? "verticalOnly" : "vertical+top",
+        flags.shadowV6TopOnly ? "topOnly" : "top+vertical",
+      ].join("|");
+      const v6Line = `v6.8Diag buckets:${flags.shadowV6PrimarySemanticBucket}+${flags.shadowV6SecondarySemanticBucket}+${flags.shadowV6TopSemanticBucket} reqBucket:${flags.shadowV6RequestedSemanticBucket} structReq:${flags.shadowV6StructureIndex} selected:${selectedId} candidates:${structureV6ShadowDebugCandidateCount} castStruct:${structureV6ShadowCastCount} mode:${v6Mode} triEW:${bucketATris} triSN:${bucketBTriCount} triTOP:${topTriCount} castEW:${bucketACastSlices} castSN:${bucketBCastSlices} castTOP:${topCastSlices} vec(${shadowVector.x.toFixed(1)},${shadowVector.y.toFixed(1)})`;
       ctx.fillText(v6Line, 8, screenDebugLineY);
+      screenDebugLineY += 16;
+      const cacheStats = structureV6ShadowCacheStats;
+      const v6CacheLine = `v6Cache sun:${cacheStats?.sunStepKey ?? shadowSunModel.stepKey} hit:${cacheStats?.cacheHits ?? 0} miss:${cacheStats?.cacheMisses ?? 0} rebuilt:${cacheStats?.rebuiltStructures ?? 0} reused:${cacheStats?.reusedStructures ?? 0} changed:${cacheStats?.sunStepChanged ? 1 : 0} force:${(flags.shadowV6ForceRefresh || cacheStats?.forceRefresh) ? 1 : 0} size:${cacheStats?.cacheSize ?? 0}`;
+      ctx.fillText(v6CacheLine, 8, screenDebugLineY);
       screenDebugLineY += 16;
     }
   }

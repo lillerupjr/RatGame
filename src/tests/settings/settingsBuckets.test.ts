@@ -31,6 +31,11 @@ describe("settings bucket defaults", () => {
       shadowV6SemanticBucket,
       shadowV6StructureIndex,
       shadowV6SliceCount,
+      shadowV6AllStructures,
+      shadowV6OneStructureOnly,
+      shadowV6VerticalOnly,
+      shadowV6TopOnly,
+      shadowV6ForceRefresh,
       ...booleanFlags
     } = debug;
     for (const [key, value] of Object.entries(booleanFlags)) {
@@ -46,6 +51,11 @@ describe("settings bucket defaults", () => {
     expect(shadowV6SemanticBucket).toBe("EAST_WEST");
     expect(shadowV6StructureIndex).toBe(0);
     expect(shadowV6SliceCount).toBe(8);
+    expect(shadowV6AllStructures).toBe(true);
+    expect(shadowV6OneStructureOnly).toBe(false);
+    expect(shadowV6VerticalOnly).toBe(false);
+    expect(shadowV6TopOnly).toBe(false);
+    expect(shadowV6ForceRefresh).toBe(false);
   });
 
   it("sanitizes debug shadow sun hour to daylight range with hourly steps", () => {
@@ -112,6 +122,16 @@ describe("settings bucket defaults", () => {
       .toBe(1);
     expect(sanitizeDebugToolsSettings({ shadowV6SliceCount: 99 }).shadowV6SliceCount)
       .toBe(32);
+    expect(sanitizeDebugToolsSettings({ shadowV6AllStructures: 0 as any }).shadowV6AllStructures)
+      .toBe(false);
+    expect(sanitizeDebugToolsSettings({ shadowV6OneStructureOnly: 1 as any }).shadowV6OneStructureOnly)
+      .toBe(true);
+    expect(sanitizeDebugToolsSettings({ shadowV6VerticalOnly: 1 as any }).shadowV6VerticalOnly)
+      .toBe(true);
+    expect(sanitizeDebugToolsSettings({ shadowV6TopOnly: "" as any }).shadowV6TopOnly)
+      .toBe(false);
+    expect(sanitizeDebugToolsSettings({ shadowV6ForceRefresh: 1 as any }).shadowV6ForceRefresh)
+      .toBe(true);
   });
 
   it("sanitizes user settings ranges and enums", () => {
