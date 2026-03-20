@@ -18,10 +18,23 @@ import { projectilesSystem } from "./systems/sim/projectiles";
 import { pickupsSystem } from "./systems/progression/pickups";
 import { dropsSystem } from "./systems/progression/drops";
 import {
-  prepareRuntimeStructureTrianglesForLoading,
-  prepareStaticGroundRelightForLoading,
   renderSystem,
 } from "./systems/presentation/render";
+import {
+  prepareRuntimeStructureTrianglesForLoading as prepareRuntimeStructureTrianglesForLoadingInternal,
+} from "./systems/presentation/structureTriangles/structureTriangleCacheRebuild";
+import {
+  prepareStaticGroundRelightForLoading as prepareStaticGroundRelightForLoadingInternal,
+} from "./systems/presentation/staticRelight/staticRelightBakeRebuild";
+import {
+  getFlippedOverlayImage,
+  getRuntimeIsoDecalCanvas,
+  getRuntimeIsoTopCanvas,
+} from "./systems/presentation/presentationImageTransforms";
+import {
+  runtimeStructureTriangleCacheStore,
+  staticRelightBakeStore,
+} from "./systems/presentation/presentationSubsystemStores";
 import { zonesSystem } from "./systems/sim/zones";
 import { relicExplodeOnKillSystem } from "./systems/sim/relicExplodeOnKill";
 import { bossSystem } from "./systems/progression/boss";
@@ -2645,11 +2658,18 @@ export function createGame(args: CreateGameArgs) {
   }
 
   async function prepareStaticGroundRelightForLoadingStage(): Promise<boolean> {
-    return prepareStaticGroundRelightForLoading(world);
+    return prepareStaticGroundRelightForLoadingInternal(world, {
+      bakeStore: staticRelightBakeStore,
+      getRuntimeIsoTopCanvas,
+      getRuntimeIsoDecalCanvas,
+    });
   }
 
   async function prepareRuntimeStructureTrianglesForLoadingStage(): Promise<boolean> {
-    return prepareRuntimeStructureTrianglesForLoading(world);
+    return prepareRuntimeStructureTrianglesForLoadingInternal({
+      cacheStore: runtimeStructureTriangleCacheStore,
+      getFlippedOverlayImage,
+    });
   }
 
   function performPreparedStartIntent(intent: StartIntent): void {

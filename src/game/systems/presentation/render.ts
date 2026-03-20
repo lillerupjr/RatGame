@@ -1,5 +1,5 @@
 // src/game/systems/render.ts
-import { gridAtPlayer, type World } from "../../../engine/world/world";
+import { type World } from "../../../engine/world/world";
 import { registry } from "../../content/registry";
 import { ZONE_KIND } from "../../factories/zoneFactory";
 import { getBossAccent, getFloorVisual } from "../../content/floors";
@@ -35,7 +35,6 @@ import {
   occluderLayers,
   occludersInViewForLayer,
   overlaysInView,
-  blockedTilesInView,
   decalsInView,
   getActiveMap as getActiveCompiledMap,
   getSupportSurfaceAt,
@@ -81,15 +80,6 @@ import {
 } from "../../../engine/render/sprites/runtimeStructureSlicing";
 import { orientedDims, seAnchorFromTopLeft } from "../../../engine/render/sprites/structureFootprintOwnership";
 import {
-  drawEnemyAimOverlay,
-  drawLootGoblinOverlay,
-  drawOccluderOverlay,
-  drawProjectileFaceOverlay,
-  drawRampOverlay,
-  drawRoadSemanticOverlay,
-  drawStructureHeightOverlay,
-  drawTriggerOverlay,
-  drawWalkMaskOverlay,
   type DebugOverlayContext,
 } from "../../../engine/render/debug/renderDebug";
 import { configurePixelPerfect, snapPx } from "../../../engine/render/pixelPerfect";
@@ -110,7 +100,6 @@ import {
   resolveProjectileShadowFootOffset,
   resolveVendorShadowFootOffset,
 } from "./shadowFootOffsets";
-import { resolveDebugFlags } from "../../../debugSettings";
 import {
   getUserSettings,
   resolveVerticalTiles,
@@ -137,7 +126,6 @@ import {
   countRenderDrawableSort,
   countRenderSliceKeySort,
   endRenderPerfFrame,
-  getRenderPerfSnapshot,
   setRenderZBandCount,
   setRenderPerfCountersEnabled,
   setRenderPerfDrawTag,
@@ -158,66 +146,28 @@ import {
   computeNearestDynamicRelightAlpha,
   type DynamicRelightLightCandidate,
 } from "./dynamicSpriteRelightV1";
-import {
-  StaticRelightBakeStore,
-} from "./staticRelightBake";
 import { type StaticRelightFrameContext } from "./staticRelight/staticRelightTypes";
 import {
   STATIC_RELIGHT_INCLUDE_STRUCTURES,
   buildRampRoadTiles,
   decalRelightPieceKey,
   floorRelightPieceKey,
-  prepareStaticGroundRelightForLoading as prepareStaticGroundRelightForLoadingInternal,
   structureSliceRelightPieceKey,
   syncStaticRelightRuntimeForFrame,
 } from "./staticRelight/staticRelightBakeRebuild";
 import {
   buildRuntimeStructureTriangleContextKey,
-  deriveParentTileRenderFields,
-  rectIntersects as runtimeStructureRectIntersects,
-  resolveRuntimeStructureBandProgressionIndex,
-  RuntimeStructureTriangleCacheStore,
   type RuntimeStructureTriangleRect,
 } from "./runtimeStructureTriangles";
-import { pointInTriangle } from "./structureTriangles/structureTriangleCulling";
-import { drawStructureSliceTriangleDebugOverlay } from "./structureTriangles/structureTriangleDebug";
 import {
-  mapWideOverlayViewRect,
-  prepareRuntimeStructureTrianglesForLoading as prepareRuntimeStructureTrianglesForLoadingInternal,
   rebuildRuntimeStructureTriangleCacheForMap,
-  runtimeStructureTriangleGeometrySignatureForOverlay,
 } from "./structureTriangles/structureTriangleCacheRebuild";
 import {
-  StructureShadowCacheStore,
   type StructureShadowProjectedTriangle,
 } from "./structureShadowV1";
 import {
-  StructureShadowV2CacheStore,
-} from "./structureShadowV2AlphaSilhouette";
-import {
-  StructureShadowHybridCacheStore,
-  type HybridSemanticMaskBucket,
-  type StructureHybridShadowProjectedTriangle,
-} from "./structureShadowHybridTriangles";
-import {
-  StructureShadowV4CacheStore,
-  type ShadowTriangleCorrespondence,
-  type StructureShadowV4CacheEntry,
-} from "./structureShadowV4";
-import {
-  buildStructureV6SliceAxis,
-  buildStructureV6FaceSlices,
-  clampStructureV6SliceCount,
-  resolveStructureV6SliceIndex,
   resolveStructureV6SelectedCandidateIndex,
-  type StructureV6FaceSlice,
-  type StructureV6SliceAxis,
-  type StructureV6SemanticBucket,
 } from "./structureShadowV6FaceSlices";
-import {
-  getStructureShadowV5MaskScratchContexts,
-  getStructureShadowV6FaceScratchContext,
-} from "./structureShadows/structureShadowScratch";
 import {
   buildStructureShadowFrameContext,
 } from "./structureShadows/structureShadowFrameContext";
@@ -225,6 +175,52 @@ import {
   buildStructureShadowFrameResult as buildOrchestratedStructureShadowFrameResult,
   buildStructureV6VerticalShadowFrameResult,
 } from "./structureShadows/structureShadowOrchestrator";
+import {
+  countStructureHybridProjectedTriangles,
+  drawStructureHybridProjectedTrianglesSolid,
+  drawStructureHybridShadowProjectedTriangles,
+  drawStructureShadowProjectedTriangles,
+  drawStructureV4ShadowTrianglesSolid,
+  drawStructureV4ShadowWarpedTriangles,
+} from "./structureShadows/structureShadowProjectedDraw";
+import {
+  type StructureHybridShadowRenderPiece,
+  type StructureV4ShadowRenderPiece,
+  type StructureV5ShadowRenderPiece,
+  type StructureV6ShadowDebugCandidate,
+} from "./structureShadows/structureShadowTypes";
+import {
+  drawStructureV5ShadowMasks,
+  type StructureV5ShadowAnchorDiagnostic,
+} from "./structureShadows/structureShadowV5Masks";
+import {
+  buildStructureV6VerticalShadowMaskDebugData,
+  countStructureV6CandidateTrianglesForBucket,
+  type StructureV6VerticalShadowMaskDebugData,
+} from "./structureShadows/structureShadowV6Slices";
+import { drawTexturedTriangle } from "./renderPrimitives/drawTexturedTriangle";
+import {
+  getDiamondFitCanvas,
+  getFlippedOverlayImage,
+  getRuntimeIsoDecalCanvas,
+  getRuntimeIsoTopCanvas,
+} from "./presentationImageTransforms";
+import {
+  runtimeStructureTriangleCacheStore,
+  staticRelightBakeStore,
+  structureShadowHybridCacheStore,
+  structureShadowV1CacheStore,
+  structureShadowV2CacheStore,
+  structureShadowV4CacheStore,
+} from "./presentationSubsystemStores";
+import { buildDebugFrameContext } from "./debug/debugFrameContext";
+import { executeDebugPass } from "./debug/renderDebugPass";
+import { resolveStructureOverlayAdmissionContext } from "./structures/structureOverlayAdmission";
+import { collectStructureOverlays } from "./structures/collectStructureOverlays";
+import { buildStructureSlices } from "./structures/buildStructureSlices";
+import { buildStructureDrawables } from "./structures/buildStructureDrawables";
+import { renderStructurePass } from "./structures/renderStructurePass";
+import type { StructureDrawablePayload } from "./structures/structurePresentationTypes";
 
 const DEBUG_PLAYER_WEDGE = false;
 const DISABLE_WALLS_AND_CURTAINS = true;
@@ -239,16 +235,6 @@ const LOOT_GOBLIN_GLOW_PULSE_RANGE = 0.3;
 const LOOT_GOBLIN_GLOW_PULSE_SPEED = 2.8;
 const STRUCTURE_SHADOW_V1_MAX_DARKNESS = 0.38;
 const STRUCTURE_SHADOW_V5_LENGTH_PX = 220;
-const STRUCTURE_SHADOW_V5_PIXEL_SLICE_STEP_PX = 1;
-const STRUCTURE_SHADOW_V5_EAST_WEST_FIXED_AXIS: ScreenPt = {
-  x: ISO_X / Math.hypot(ISO_X, ISO_Y),
-  y: -ISO_Y / Math.hypot(ISO_X, ISO_Y),
-};
-const STRUCTURE_SHADOW_V5_SOUTH_NORTH_FIXED_AXIS: ScreenPt = {
-  x: -ISO_X / Math.hypot(ISO_X, ISO_Y),
-  y: -ISO_Y / Math.hypot(ISO_X, ISO_Y),
-};
-const STRUCTURE_SHADOW_V6_DEBUG_PANEL_PADDING_PX = 8;
 
 // Background mode:
 // - "SOLID" = fastest, clean black void
@@ -258,36 +244,7 @@ const VOID_BG_MODE: "SOLID" | "PATTERN" = "SOLID";
 let voidBgPattern: CanvasPattern | null = null;
 let voidBgPatternImgRef: HTMLImageElement | null = null;
 
-const flippedOverlayImageCache = new WeakMap<HTMLImageElement, HTMLCanvasElement>();
-
-// ROI #3: prebaked iso runtime tops (sidewalk/asphalt/park)
-// Keyed by the *actual* loaded image object (palette-specific) + rotation.
-const runtimeIsoTopCache = new WeakMap<HTMLImageElement, Map<0 | 1 | 2 | 3, HTMLCanvasElement>>();
-const runtimeIsoDecalCache = new WeakMap<HTMLImageElement, Map<string, HTMLCanvasElement>>();
-const runtimeDiamondCanvasCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
-const staticRelightBakeStore = new StaticRelightBakeStore<HTMLCanvasElement>();
-const runtimeStructureTriangleCacheStore = new RuntimeStructureTriangleCacheStore();
-const structureShadowV1CacheStore = new StructureShadowCacheStore();
-const structureShadowV2CacheStore = new StructureShadowV2CacheStore();
-const structureShadowHybridCacheStore = new StructureShadowHybridCacheStore();
-const structureShadowV4CacheStore = new StructureShadowV4CacheStore();
-
 type ScreenPt = { x: number; y: number };
-
-export async function prepareRuntimeStructureTrianglesForLoading(_w: World): Promise<boolean> {
-  return prepareRuntimeStructureTrianglesForLoadingInternal({
-    cacheStore: runtimeStructureTriangleCacheStore,
-    getFlippedOverlayImage,
-  });
-}
-
-export async function prepareStaticGroundRelightForLoading(w: World): Promise<boolean> {
-  return prepareStaticGroundRelightForLoadingInternal(w, {
-    bakeStore: staticRelightBakeStore,
-    getRuntimeIsoTopCanvas,
-    getRuntimeIsoDecalCanvas,
-  });
-}
 
 function smoothTowardByHalfLife(current: number, target: number, halfLifeSec: number, dtRealSec: number): number {
   if (!Number.isFinite(current)) return target;
@@ -296,1711 +253,6 @@ function smoothTowardByHalfLife(current: number, target: number, halfLifeSec: nu
   if (!Number.isFinite(dtRealSec) || dtRealSec <= 0) return current;
   const alpha = 1 - Math.pow(0.5, dtRealSec / halfLifeSec);
   return current + (target - current) * alpha;
-}
-
-function computeTriToTriAffine(
-  s0: ScreenPt, s1: ScreenPt, s2: ScreenPt,
-  d0: ScreenPt, d1: ScreenPt, d2: ScreenPt,
-): { a: number; b: number; c: number; d: number; e: number; f: number } | null {
-  const den = s0.x * (s1.y - s2.y) + s1.x * (s2.y - s0.y) + s2.x * (s0.y - s1.y);
-  if (Math.abs(den) < 1e-8) return null;
-  const a = (d0.x * (s1.y - s2.y) + d1.x * (s2.y - s0.y) + d2.x * (s0.y - s1.y)) / den;
-  const c = (d0.x * (s2.x - s1.x) + d1.x * (s0.x - s2.x) + d2.x * (s1.x - s0.x)) / den;
-  const e = (
-    d0.x * (s1.x * s2.y - s2.x * s1.y) +
-    d1.x * (s2.x * s0.y - s0.x * s2.y) +
-    d2.x * (s0.x * s1.y - s1.x * s0.y)
-  ) / den;
-  const b = (d0.y * (s1.y - s2.y) + d1.y * (s2.y - s0.y) + d2.y * (s0.y - s1.y)) / den;
-  const d = (d0.y * (s2.x - s1.x) + d1.y * (s0.x - s2.x) + d2.y * (s1.x - s0.x)) / den;
-  const f = (
-    d0.y * (s1.x * s2.y - s2.x * s1.y) +
-    d1.y * (s2.x * s0.y - s0.x * s2.y) +
-    d2.y * (s0.x * s1.y - s1.x * s0.y)
-  ) / den;
-  return { a, b, c, d, e, f };
-}
-
-function drawTexturedTriangle(
-  ctx: CanvasRenderingContext2D,
-  img: CanvasImageSource,
-  imgW: number,
-  imgH: number,
-  s0: ScreenPt, s1: ScreenPt, s2: ScreenPt,
-  d0: ScreenPt, d1: ScreenPt, d2: ScreenPt,
-): void {
-  const m = computeTriToTriAffine(s0, s1, s2, d0, d1, d2);
-  if (!m) return;
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(d0.x, d0.y);
-  ctx.lineTo(d1.x, d1.y);
-  ctx.lineTo(d2.x, d2.y);
-  ctx.closePath();
-  ctx.clip();
-  ctx.transform(m.a, m.b, m.c, m.d, m.e, m.f);
-  ctx.drawImage(img, 0, 0, imgW, imgH);
-  ctx.restore();
-}
-
-function drawShadowTexturedTriangle(
-  ctx: CanvasRenderingContext2D,
-  img: CanvasImageSource,
-  imgW: number,
-  imgH: number,
-  s0: ScreenPt, s1: ScreenPt, s2: ScreenPt,
-  d0: ScreenPt, d1: ScreenPt, d2: ScreenPt,
-  shadowAlpha: number,
-): void {
-  const m = computeTriToTriAffine(s0, s1, s2, d0, d1, d2);
-  if (!m) return;
-  const alpha = Math.max(0, Math.min(1, shadowAlpha));
-  if (alpha <= 0) return;
-  const textureAlpha = Math.max(0.14, Math.min(0.48, alpha * 0.95));
-  const darkenAlpha = Math.max(alpha, Math.min(0.9, alpha * 1.75));
-  ctx.save();
-  const baseAlpha = ctx.globalAlpha;
-  ctx.beginPath();
-  ctx.moveTo(d0.x, d0.y);
-  ctx.lineTo(d1.x, d1.y);
-  ctx.lineTo(d2.x, d2.y);
-  ctx.closePath();
-  ctx.clip();
-  ctx.globalAlpha = baseAlpha * textureAlpha;
-  ctx.transform(m.a, m.b, m.c, m.d, m.e, m.f);
-  ctx.drawImage(img, 0, 0, imgW, imgH);
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  // Keep warped source variation visible while forcing a dark shadow treatment.
-  ctx.globalAlpha = baseAlpha;
-  ctx.globalCompositeOperation = "source-atop";
-  ctx.fillStyle = `rgba(0,0,0,${darkenAlpha})`;
-  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  ctx.restore();
-}
-
-type StructureHybridShadowRenderPiece = {
-  sourceImage: CanvasImageSource;
-  sourceImageWidth: number;
-  sourceImageHeight: number;
-  projectedMappings: readonly StructureHybridShadowProjectedTriangle[];
-};
-
-type StructureV4ShadowRenderPiece = {
-  sourceImage: CanvasImageSource;
-  sourceImageWidth: number;
-  sourceImageHeight: number;
-  topCapTriangles: readonly StructureShadowProjectedTriangle[];
-  triangleCorrespondence: readonly ShadowTriangleCorrespondence[];
-};
-
-type StructureV5ShadowMaskTriangle = {
-  stableId: number;
-  semanticBucket: HybridSemanticMaskBucket;
-  srcTriangle: [ScreenPt, ScreenPt, ScreenPt];
-  dstTriangle: [ScreenPt, ScreenPt, ScreenPt];
-};
-
-type StructureV5ShadowRenderPiece = {
-  structureInstanceId: string;
-  sourceImage: CanvasImageSource;
-  sourceImageWidth: number;
-  sourceImageHeight: number;
-  triangles: readonly StructureV5ShadowMaskTriangle[];
-  buildingDrawOrigin: ScreenPt;
-  buildingAnchor: ScreenPt;
-  maskAnchor: ScreenPt;
-};
-
-type ShadowV5DebugViewMode = "finalOnly" | "topMask" | "eastWestMask" | "southNorthMask" | "all";
-type ShadowV5TransformDebugMode = "deformed" | "raw";
-
-type StructureV5ShadowDrawStats = {
-  piecesDrawn: number;
-  trianglesDrawn: number;
-  finalShadowDrawCalls: number;
-};
-
-type StructureV5ShadowAnchorDiagnostic = {
-  structureInstanceId: string;
-  triangleDestinationSpace: "screen";
-  rawBounds: { minX: number; minY: number; maxX: number; maxY: number };
-  transformedBounds: { minX: number; minY: number; maxX: number; maxY: number };
-  maskCanvasOrigin: ScreenPt;
-  maskAnchor: ScreenPt;
-  buildingDrawOrigin: ScreenPt;
-  buildingAnchor: ScreenPt;
-  transformedAnchor: ScreenPt;
-  transformedMaskDrawOrigin: ScreenPt;
-  finalShadowDrawOrigin: ScreenPt;
-  offset: ScreenPt;
-};
-
-type StructureV6ShadowDebugCandidate = {
-  structureInstanceId: string;
-  sourceImage: CanvasImageSource;
-  sourceImageWidth: number;
-  sourceImageHeight: number;
-  triangles: readonly StructureV5ShadowMaskTriangle[];
-  zBand: number;
-};
-
-type StructureV6ExtrudedSliceDebug = {
-  slice: StructureV6FaceSlice;
-  t: number;
-  offsetX: number;
-  offsetY: number;
-  canvas: HTMLCanvasElement;
-  pixelCount: number;
-  contentBounds: { minX: number; minY: number; maxX: number; maxY: number } | null;
-};
-
-type StructureV6FaceSliceDebugData = {
-  structureInstanceId: string;
-  zBand: number;
-  requestedSemanticBucket: StructureV6SemanticBucket;
-  semanticBucket: StructureV6SemanticBucket;
-  requestedStructureIndex: number;
-  selectedStructureIndex: number;
-  candidateCount: number;
-  sourceTriangleCount: number;
-  nonEmptySliceCount: number;
-  faceBounds: { minX: number; minY: number; maxX: number; maxY: number };
-  faceCanvas: HTMLCanvasElement;
-  axis: StructureV6SliceAxis;
-  slices: ReadonlyArray<{
-    slice: StructureV6FaceSlice;
-    canvas: HTMLCanvasElement;
-    pixelCount: number;
-    contentBounds: { minX: number; minY: number; maxX: number; maxY: number } | null;
-  }>;
-  shadowVector: ScreenPt;
-  displacedCanvasOrigin: ScreenPt;
-  faceCanvasOrigin: ScreenPt;
-  mergedShadowDrawOrigin: ScreenPt;
-  displacedSlices: readonly StructureV6ExtrudedSliceDebug[];
-  displacedSlicesCanvas: HTMLCanvasElement;
-  mergedShadowCanvas: HTMLCanvasElement;
-};
-
-type StructureV6FaceSliceCastMode = "baselineToTop" | "constantMax";
-
-type StructureV6VerticalShadowMaskDebugData = {
-  structureInstanceId: string;
-  zBand: number;
-  requestedSemanticBucket: StructureV6SemanticBucket;
-  requestedStructureIndex: number;
-  selectedStructureIndex: number;
-  candidateCount: number;
-  shadowVector: ScreenPt;
-  bucketAShadow: StructureV6FaceSliceDebugData | null;
-  bucketBShadow: StructureV6FaceSliceDebugData | null;
-  topShadow: StructureV6FaceSliceDebugData | null;
-  mergedVerticalShadowDrawOrigin: ScreenPt;
-  mergedVerticalShadowCanvas: HTMLCanvasElement;
-};
-
-type DrawStructureV5ShadowMaskOutput = StructureV5ShadowDrawStats & {
-  anchorDiagnostic: StructureV5ShadowAnchorDiagnostic | null;
-};
-
-type MutableBounds = {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-};
-
-type V5FaceLocalAxis = {
-  centerBottom: ScreenPt;
-  centerTop: ScreenPt;
-  heightDir: ScreenPt;
-  faceHeight: number;
-};
-
-type V5StripDebugBand = {
-  tMid: number;
-  lowerCenter: ScreenPt;
-  upperCenter: ScreenPt;
-};
-
-function includeTriangleInBounds(bounds: MutableBounds, triangle: [ScreenPt, ScreenPt, ScreenPt], dx: number, dy: number): void {
-  for (let i = 0; i < triangle.length; i++) {
-    const p = triangle[i];
-    if (p.x < bounds.minX) bounds.minX = p.x;
-    if (p.y < bounds.minY) bounds.minY = p.y;
-    if (p.x > bounds.maxX) bounds.maxX = p.x;
-    if (p.y > bounds.maxY) bounds.maxY = p.y;
-    const px = p.x + dx;
-    const py = p.y + dy;
-    if (px < bounds.minX) bounds.minX = px;
-    if (py < bounds.minY) bounds.minY = py;
-    if (px > bounds.maxX) bounds.maxX = px;
-    if (py > bounds.maxY) bounds.maxY = py;
-  }
-}
-
-function includePointInBounds(bounds: MutableBounds, point: ScreenPt): void {
-  if (point.x < bounds.minX) bounds.minX = point.x;
-  if (point.y < bounds.minY) bounds.minY = point.y;
-  if (point.x > bounds.maxX) bounds.maxX = point.x;
-  if (point.y > bounds.maxY) bounds.maxY = point.y;
-}
-
-function computeFaceLocalAxisFromFixedIsoDirection(
-  triangles: readonly StructureV5ShadowMaskTriangle[],
-  originX: number,
-  originY: number,
-  fixedHeightDir: ScreenPt,
-): V5FaceLocalAxis | null {
-  if (triangles.length <= 0) return null;
-  const points: ScreenPt[] = [];
-  let maxY = Number.NEGATIVE_INFINITY;
-  for (let ti = 0; ti < triangles.length; ti++) {
-    const tri = triangles[ti].dstTriangle;
-    for (let vi = 0; vi < tri.length; vi++) {
-      const local = { x: tri[vi].x - originX, y: tri[vi].y - originY };
-      points.push(local);
-      if (local.y > maxY) maxY = local.y;
-    }
-  }
-  if (points.length <= 0 || !Number.isFinite(maxY)) return null;
-  const dirLen = Math.hypot(fixedHeightDir.x, fixedHeightDir.y);
-  if (!(dirLen > 1e-4)) return null;
-  const heightDir = { x: fixedHeightDir.x / dirLen, y: fixedHeightDir.y / dirLen };
-  let minY = Number.POSITIVE_INFINITY;
-  for (let i = 0; i < points.length; i++) if (points[i].y < minY) minY = points[i].y;
-  const eps = Math.max(1, (maxY - minY) * 0.04);
-  const bottomCandidates = points.filter((p) => p.y >= maxY - eps);
-  const bottomPoints = bottomCandidates.length > 0 ? bottomCandidates : points.filter((p) => p.y >= maxY - 1e-3);
-  if (bottomPoints.length <= 0) return null;
-  const avgPoint = (arr: readonly ScreenPt[]): ScreenPt => {
-    let sx = 0;
-    let sy = 0;
-    for (let i = 0; i < arr.length; i++) {
-      sx += arr[i].x;
-      sy += arr[i].y;
-    }
-    return { x: sx / arr.length, y: sy / arr.length };
-  };
-  const centerBottom = avgPoint(bottomPoints);
-  let maxAlong = 0;
-  for (let i = 0; i < points.length; i++) {
-    const p = points[i];
-    const along = (p.x - centerBottom.x) * heightDir.x + (p.y - centerBottom.y) * heightDir.y;
-    if (along > maxAlong) maxAlong = along;
-  }
-  const fallbackHeight = Math.max(1, maxY - minY);
-  const faceHeight = Math.max(maxAlong, fallbackHeight);
-  return {
-    centerBottom,
-    centerTop: {
-      x: centerBottom.x + heightDir.x * faceHeight,
-      y: centerBottom.y + heightDir.y * faceHeight,
-    },
-    heightDir,
-    faceHeight,
-  };
-}
-
-function drawMaskTranslated(
-  targetCtx: CanvasRenderingContext2D,
-  maskCanvas: HTMLCanvasElement,
-  offsetX: number,
-  offsetY: number,
-): void {
-  targetCtx.drawImage(maskCanvas, offsetX, offsetY);
-}
-
-function drawMaskHeightDeformedByFaceAxis(
-  targetCtx: CanvasRenderingContext2D,
-  maskCanvas: HTMLCanvasElement,
-  axis: V5FaceLocalAxis,
-  shadowVector: ScreenPt,
-  sliceStepPx: number,
-): V5StripDebugBand[] {
-  const debugBands: V5StripDebugBand[] = [];
-  if (!(axis.faceHeight > 1e-4)) {
-    targetCtx.drawImage(maskCanvas, 0, 0);
-    return debugBands;
-  }
-  const sliceStep = Math.max(1, Math.floor(sliceStepPx));
-  const strips = Math.max(1, Math.ceil(axis.faceHeight / sliceStep));
-  const tangent = { x: -axis.heightDir.y, y: axis.heightDir.x };
-  const extent = Math.max(maskCanvas.width, maskCanvas.height) * 2 + 8;
-  for (let i = 0; i < strips; i++) {
-    const h0 = Math.min(axis.faceHeight, i * sliceStep);
-    const h1 = Math.min(axis.faceHeight, h0 + sliceStep);
-    if (!(h1 > h0)) continue;
-    const lowerCenter = {
-      x: axis.centerBottom.x + axis.heightDir.x * h0,
-      y: axis.centerBottom.y + axis.heightDir.y * h0,
-    };
-    const upperCenter = {
-      x: axis.centerBottom.x + axis.heightDir.x * h1,
-      y: axis.centerBottom.y + axis.heightDir.y * h1,
-    };
-    const q0 = { x: lowerCenter.x + tangent.x * extent, y: lowerCenter.y + tangent.y * extent };
-    const q1 = { x: lowerCenter.x - tangent.x * extent, y: lowerCenter.y - tangent.y * extent };
-    const q2 = { x: upperCenter.x - tangent.x * extent, y: upperCenter.y - tangent.y * extent };
-    const q3 = { x: upperCenter.x + tangent.x * extent, y: upperCenter.y + tangent.y * extent };
-    let t = h0 / axis.faceHeight;
-    if (h1 >= axis.faceHeight - 1e-4) t = 1;
-    const stripOffset = {
-      x: shadowVector.x * t,
-      y: shadowVector.y * t,
-    };
-    targetCtx.save();
-    targetCtx.beginPath();
-    targetCtx.moveTo(q0.x, q0.y);
-    targetCtx.lineTo(q1.x, q1.y);
-    targetCtx.lineTo(q2.x, q2.y);
-    targetCtx.lineTo(q3.x, q3.y);
-    targetCtx.closePath();
-    targetCtx.clip();
-    targetCtx.drawImage(maskCanvas, stripOffset.x, stripOffset.y);
-    targetCtx.restore();
-    debugBands.push({
-      tMid: t,
-      lowerCenter,
-      upperCenter,
-    });
-  }
-  return debugBands;
-}
-
-function drawStructureV5ShadowMasks(
-  ctx: CanvasRenderingContext2D,
-  pieces: readonly StructureV5ShadowRenderPiece[],
-  projectionDirection: { x: number; y: number },
-  debugView: ShadowV5DebugViewMode,
-  maxDarkness: number,
-  anchorDebugEnabled: boolean,
-  transformDebugMode: ShadowV5TransformDebugMode,
-): DrawStructureV5ShadowMaskOutput {
-  if (pieces.length <= 0) {
-    return {
-      piecesDrawn: 0,
-      trianglesDrawn: 0,
-      finalShadowDrawCalls: 0,
-      anchorDiagnostic: null,
-    };
-  }
-  const offsetX = projectionDirection.x * STRUCTURE_SHADOW_V5_LENGTH_PX;
-  const offsetY = projectionDirection.y * STRUCTURE_SHADOW_V5_LENGTH_PX;
-  const shadowAlpha = Math.max(0, Math.min(1, maxDarkness));
-  let piecesDrawn = 0;
-  let trianglesDrawn = 0;
-  let finalShadowDrawCalls = 0;
-  let anchorDiagnostic: StructureV5ShadowAnchorDiagnostic | null = null;
-
-  for (let pi = 0; pi < pieces.length; pi++) {
-    const piece = pieces[pi];
-    if (piece.triangles.length <= 0) continue;
-    const eastWestTriangles = piece.triangles.filter((tri) => tri.semanticBucket === "EAST_WEST");
-    const southNorthTriangles = piece.triangles.filter((tri) => tri.semanticBucket === "SOUTH_NORTH");
-    const bounds: MutableBounds = {
-      minX: Number.POSITIVE_INFINITY,
-      minY: Number.POSITIVE_INFINITY,
-      maxX: Number.NEGATIVE_INFINITY,
-      maxY: Number.NEGATIVE_INFINITY,
-    };
-    const rawBounds: MutableBounds = {
-      minX: Number.POSITIVE_INFINITY,
-      minY: Number.POSITIVE_INFINITY,
-      maxX: Number.NEGATIVE_INFINITY,
-      maxY: Number.NEGATIVE_INFINITY,
-    };
-    for (let ti = 0; ti < piece.triangles.length; ti++) {
-      const triangle = piece.triangles[ti].dstTriangle;
-      includeTriangleInBounds(bounds, triangle, offsetX, offsetY);
-      for (let vi = 0; vi < triangle.length; vi++) {
-        const p = triangle[vi];
-        if (p.x < rawBounds.minX) rawBounds.minX = p.x;
-        if (p.y < rawBounds.minY) rawBounds.minY = p.y;
-        if (p.x > rawBounds.maxX) rawBounds.maxX = p.x;
-        if (p.y > rawBounds.maxY) rawBounds.maxY = p.y;
-      }
-    }
-    if (
-      !Number.isFinite(bounds.minX)
-      || !Number.isFinite(bounds.minY)
-      || !Number.isFinite(bounds.maxX)
-      || !Number.isFinite(bounds.maxY)
-      || !Number.isFinite(rawBounds.minX)
-      || !Number.isFinite(rawBounds.minY)
-      || !Number.isFinite(rawBounds.maxX)
-      || !Number.isFinite(rawBounds.maxY)
-    ) {
-      continue;
-    }
-    const pad = 2;
-    const originX = Math.floor(bounds.minX) - pad;
-    const originY = Math.floor(bounds.minY) - pad;
-    const canvasW = Math.max(1, Math.ceil(bounds.maxX - bounds.minX) + pad * 2);
-    const canvasH = Math.max(1, Math.ceil(bounds.maxY - bounds.minY) + pad * 2);
-    const scratch = getStructureShadowV5MaskScratchContexts(canvasW, canvasH);
-    if (!scratch) continue;
-
-    const {
-      topMaskCtx,
-      eastWestMaskCtx,
-      southNorthMaskCtx,
-      coverageMaskCtx,
-      finalMaskCtx,
-      topMaskCanvas,
-      eastWestMaskCanvas,
-      southNorthMaskCanvas,
-      coverageMaskCanvas,
-      finalMaskCanvas,
-      width,
-      height,
-    } = scratch;
-    const topLocalPoints: ScreenPt[] = [];
-    const eastWestLocalPoints: ScreenPt[] = [];
-    const southNorthLocalPoints: ScreenPt[] = [];
-
-    topMaskCtx.setTransform(1, 0, 0, 1, 0, 0);
-    eastWestMaskCtx.setTransform(1, 0, 0, 1, 0, 0);
-    southNorthMaskCtx.setTransform(1, 0, 0, 1, 0, 0);
-    coverageMaskCtx.setTransform(1, 0, 0, 1, 0, 0);
-    finalMaskCtx.setTransform(1, 0, 0, 1, 0, 0);
-
-    topMaskCtx.globalCompositeOperation = "source-over";
-    eastWestMaskCtx.globalCompositeOperation = "source-over";
-    southNorthMaskCtx.globalCompositeOperation = "source-over";
-    coverageMaskCtx.globalCompositeOperation = "source-over";
-    finalMaskCtx.globalCompositeOperation = "source-over";
-
-    topMaskCtx.clearRect(0, 0, width, height);
-    eastWestMaskCtx.clearRect(0, 0, width, height);
-    southNorthMaskCtx.clearRect(0, 0, width, height);
-    coverageMaskCtx.clearRect(0, 0, width, height);
-    finalMaskCtx.clearRect(0, 0, width, height);
-
-    for (let ti = 0; ti < piece.triangles.length; ti++) {
-      const tri = piece.triangles[ti];
-      const targetCtx = tri.semanticBucket === "TOP"
-        ? topMaskCtx
-        : tri.semanticBucket === "EAST_WEST"
-          ? eastWestMaskCtx
-          : southNorthMaskCtx;
-      const [s0, s1, s2] = tri.srcTriangle;
-      const [d0, d1, d2] = tri.dstTriangle;
-      drawTexturedTriangle(
-        targetCtx,
-        piece.sourceImage,
-        piece.sourceImageWidth,
-        piece.sourceImageHeight,
-        s0,
-        s1,
-        s2,
-        { x: d0.x - originX, y: d0.y - originY },
-        { x: d1.x - originX, y: d1.y - originY },
-        { x: d2.x - originX, y: d2.y - originY },
-      );
-      const localA = { x: d0.x - originX, y: d0.y - originY };
-      const localB = { x: d1.x - originX, y: d1.y - originY };
-      const localC = { x: d2.x - originX, y: d2.y - originY };
-      if (tri.semanticBucket === "TOP") {
-        topLocalPoints.push(localA, localB, localC);
-      } else if (tri.semanticBucket === "EAST_WEST") {
-        eastWestLocalPoints.push(localA, localB, localC);
-      } else {
-        southNorthLocalPoints.push(localA, localB, localC);
-      }
-      trianglesDrawn += 1;
-    }
-
-    const shiftedX = offsetX;
-    const shiftedY = offsetY;
-    const shadowVector = { x: shiftedX, y: shiftedY };
-    const eastWestAxis = computeFaceLocalAxisFromFixedIsoDirection(
-      eastWestTriangles,
-      originX,
-      originY,
-      STRUCTURE_SHADOW_V5_EAST_WEST_FIXED_AXIS,
-    );
-    const southNorthAxis = computeFaceLocalAxisFromFixedIsoDirection(
-      southNorthTriangles,
-      originX,
-      originY,
-      STRUCTURE_SHADOW_V5_SOUTH_NORTH_FIXED_AXIS,
-    );
-    const drawTopMaskLocal = (targetCtx: CanvasRenderingContext2D, raw: boolean): void => {
-      if (raw) {
-        targetCtx.drawImage(topMaskCanvas, 0, 0);
-      } else {
-        drawMaskTranslated(targetCtx, topMaskCanvas, shadowVector.x, shadowVector.y);
-      }
-    };
-    const drawEastWestMaskLocal = (
-      targetCtx: CanvasRenderingContext2D,
-      raw: boolean,
-    ): V5StripDebugBand[] => {
-      if (raw) {
-        targetCtx.drawImage(eastWestMaskCanvas, 0, 0);
-        return [];
-      }
-      if (!eastWestAxis) return [];
-      return drawMaskHeightDeformedByFaceAxis(
-        targetCtx,
-        eastWestMaskCanvas,
-        eastWestAxis,
-        shadowVector,
-        STRUCTURE_SHADOW_V5_PIXEL_SLICE_STEP_PX,
-      );
-    };
-    const drawSouthNorthMaskLocal = (
-      targetCtx: CanvasRenderingContext2D,
-      raw: boolean,
-    ): V5StripDebugBand[] => {
-      if (raw) {
-        targetCtx.drawImage(southNorthMaskCanvas, 0, 0);
-        return [];
-      }
-      if (!southNorthAxis) return [];
-      return drawMaskHeightDeformedByFaceAxis(
-        targetCtx,
-        southNorthMaskCanvas,
-        southNorthAxis,
-        shadowVector,
-        STRUCTURE_SHADOW_V5_PIXEL_SLICE_STEP_PX,
-      );
-    };
-    const drawLocalMaskToWorld = (drawLocal: (targetCtx: CanvasRenderingContext2D) => void): void => {
-      ctx.save();
-      ctx.translate(originX, originY);
-      drawLocal(ctx);
-      ctx.restore();
-    };
-
-    coverageMaskCtx.clearRect(0, 0, width, height);
-    coverageMaskCtx.globalCompositeOperation = "source-over";
-    drawTopMaskLocal(coverageMaskCtx, false);
-    const eastWestBands = drawEastWestMaskLocal(coverageMaskCtx, false);
-    const southNorthBands = drawSouthNorthMaskLocal(coverageMaskCtx, false);
-
-    finalMaskCtx.clearRect(0, 0, width, height);
-    if (shadowAlpha > 0) {
-      finalMaskCtx.fillStyle = `rgba(0,0,0,${shadowAlpha})`;
-      finalMaskCtx.fillRect(0, 0, width, height);
-      finalMaskCtx.globalCompositeOperation = "destination-in";
-      finalMaskCtx.drawImage(coverageMaskCanvas, 0, 0);
-      finalMaskCtx.globalCompositeOperation = "source-over";
-    }
-    const showRawDebugMasks = transformDebugMode === "raw";
-
-    if (debugView === "topMask") {
-      drawLocalMaskToWorld((targetCtx) => drawTopMaskLocal(targetCtx, showRawDebugMasks));
-    } else if (debugView === "eastWestMask") {
-      drawLocalMaskToWorld((targetCtx) => {
-        drawEastWestMaskLocal(targetCtx, showRawDebugMasks);
-      });
-    } else if (debugView === "southNorthMask") {
-      drawLocalMaskToWorld((targetCtx) => {
-        drawSouthNorthMaskLocal(targetCtx, showRawDebugMasks);
-      });
-    } else if (debugView === "all") {
-      drawLocalMaskToWorld((targetCtx) => {
-        drawTopMaskLocal(targetCtx, showRawDebugMasks);
-        drawEastWestMaskLocal(targetCtx, showRawDebugMasks);
-        drawSouthNorthMaskLocal(targetCtx, showRawDebugMasks);
-      });
-    } else {
-      ctx.drawImage(finalMaskCanvas, originX, originY);
-      finalShadowDrawCalls += 1;
-    }
-    if (anchorDebugEnabled && !anchorDiagnostic) {
-      const rawW = Math.max(0, rawBounds.maxX - rawBounds.minX);
-      const rawH = Math.max(0, rawBounds.maxY - rawBounds.minY);
-      const transformedBounds: MutableBounds = {
-        minX: Number.POSITIVE_INFINITY,
-        minY: Number.POSITIVE_INFINITY,
-        maxX: Number.NEGATIVE_INFINITY,
-        maxY: Number.NEGATIVE_INFINITY,
-      };
-      const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
-      const includeDisplacedLocalPoints = (
-        points: readonly ScreenPt[],
-        axis: V5FaceLocalAxis | null,
-        fullOffset: boolean,
-      ) => {
-        for (let i = 0; i < points.length; i++) {
-          const p = points[i];
-          const t = fullOffset || !axis || !(axis.faceHeight > 1e-4)
-            ? 1
-            : clamp01(
-              ((p.x - axis.centerBottom.x) * axis.heightDir.x + (p.y - axis.centerBottom.y) * axis.heightDir.y)
-                / axis.faceHeight,
-            );
-          includePointInBounds(transformedBounds, {
-            x: originX + p.x + shadowVector.x * t,
-            y: originY + p.y + shadowVector.y * t,
-          });
-        }
-      };
-      includeDisplacedLocalPoints(topLocalPoints, null, true);
-      includeDisplacedLocalPoints(eastWestLocalPoints, eastWestAxis, false);
-      includeDisplacedLocalPoints(southNorthLocalPoints, southNorthAxis, false);
-      if (!Number.isFinite(transformedBounds.minX)) {
-        transformedBounds.minX = rawBounds.minX;
-        transformedBounds.minY = rawBounds.minY;
-        transformedBounds.maxX = rawBounds.maxX;
-        transformedBounds.maxY = rawBounds.maxY;
-      }
-      const transformedAnchor = { x: piece.maskAnchor.x, y: piece.maskAnchor.y };
-      // Verification overlay: raw masks + face-local axis/strip scaffolding for one structure.
-      ctx.save();
-      ctx.globalAlpha = 0.35;
-      ctx.translate(originX, originY);
-      drawTopMaskLocal(ctx, true);
-      drawEastWestMaskLocal(ctx, true);
-      drawSouthNorthMaskLocal(ctx, true);
-      ctx.translate(-originX, -originY);
-      ctx.globalAlpha = 1;
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = "rgba(80, 220, 255, 0.95)";
-      ctx.strokeRect(rawBounds.minX, rawBounds.minY, rawW, rawH);
-      ctx.strokeStyle = "rgba(255, 180, 70, 0.95)";
-      ctx.strokeRect(
-        transformedBounds.minX,
-        transformedBounds.minY,
-        Math.max(0, transformedBounds.maxX - transformedBounds.minX),
-        Math.max(0, transformedBounds.maxY - transformedBounds.minY),
-      );
-      const drawAnchorPoint = (point: ScreenPt, color: string, label: string) => {
-        ctx.beginPath();
-        ctx.arc(point.x, point.y, 3, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.fillStyle = "rgba(245, 245, 245, 0.96)";
-        ctx.font = "10px monospace";
-        ctx.fillText(label, point.x + 4, point.y - 4);
-      };
-      drawAnchorPoint(piece.maskAnchor, "rgba(70, 220, 255, 0.96)", "mask");
-      drawAnchorPoint(piece.buildingAnchor, "rgba(110, 255, 135, 0.96)", "build");
-      drawAnchorPoint(transformedAnchor, "rgba(255, 200, 80, 0.98)", "xform");
-      drawAnchorPoint(piece.buildingDrawOrigin, "rgba(255, 120, 220, 0.95)", "draw0");
-      const drawAxisDebug = (
-        axis: V5FaceLocalAxis | null,
-        bands: readonly V5StripDebugBand[],
-        lineColor: string,
-        bandColor: string,
-        label: string,
-      ) => {
-        if (!axis) return;
-        const bottom = { x: originX + axis.centerBottom.x, y: originY + axis.centerBottom.y };
-        const top = { x: originX + axis.centerTop.x, y: originY + axis.centerTop.y };
-        const tangent = { x: -axis.heightDir.y, y: axis.heightDir.x };
-        ctx.beginPath();
-        ctx.moveTo(bottom.x, bottom.y);
-        ctx.lineTo(top.x, top.y);
-        ctx.strokeStyle = lineColor;
-        ctx.stroke();
-        ctx.fillStyle = "rgba(245, 245, 245, 0.96)";
-        ctx.fillText(label, bottom.x + 4, bottom.y + 10);
-        const span = 24;
-        for (let bi = 0; bi < bands.length; bi++) {
-          const lower = { x: originX + bands[bi].lowerCenter.x, y: originY + bands[bi].lowerCenter.y };
-          const upper = { x: originX + bands[bi].upperCenter.x, y: originY + bands[bi].upperCenter.y };
-          ctx.beginPath();
-          ctx.moveTo(lower.x - tangent.x * span, lower.y - tangent.y * span);
-          ctx.lineTo(lower.x + tangent.x * span, lower.y + tangent.y * span);
-          ctx.strokeStyle = bandColor;
-          ctx.stroke();
-          if (bi === bands.length - 1) {
-            ctx.beginPath();
-            ctx.moveTo(upper.x - tangent.x * span, upper.y - tangent.y * span);
-            ctx.lineTo(upper.x + tangent.x * span, upper.y + tangent.y * span);
-            ctx.stroke();
-          }
-        }
-      };
-      drawAxisDebug(
-        eastWestAxis,
-        eastWestBands,
-        "rgba(120, 220, 255, 0.95)",
-        "rgba(120, 220, 255, 0.38)",
-        "EW axis (fixed)",
-      );
-      drawAxisDebug(
-        southNorthAxis,
-        southNorthBands,
-        "rgba(255, 140, 120, 0.95)",
-        "rgba(255, 140, 120, 0.38)",
-        "SN axis (fixed)",
-      );
-      ctx.restore();
-      anchorDiagnostic = {
-        structureInstanceId: piece.structureInstanceId,
-        triangleDestinationSpace: "screen",
-        rawBounds: {
-          minX: rawBounds.minX,
-          minY: rawBounds.minY,
-          maxX: rawBounds.maxX,
-          maxY: rawBounds.maxY,
-        },
-        transformedBounds,
-        maskCanvasOrigin: { x: originX, y: originY },
-        maskAnchor: { x: piece.maskAnchor.x, y: piece.maskAnchor.y },
-        buildingDrawOrigin: { x: piece.buildingDrawOrigin.x, y: piece.buildingDrawOrigin.y },
-        buildingAnchor: { x: piece.buildingAnchor.x, y: piece.buildingAnchor.y },
-        transformedAnchor,
-        transformedMaskDrawOrigin: { x: originX + shiftedX, y: originY + shiftedY },
-        finalShadowDrawOrigin: { x: originX, y: originY },
-        offset: { x: shiftedX, y: shiftedY },
-      };
-    }
-    piecesDrawn += 1;
-  }
-
-  return {
-    piecesDrawn,
-    trianglesDrawn,
-    finalShadowDrawCalls,
-    anchorDiagnostic,
-  };
-}
-
-function countStructureV6CandidateTrianglesForBucket(
-  candidate: StructureV6ShadowDebugCandidate,
-  bucket: StructureV6SemanticBucket,
-): number {
-  let count = 0;
-  for (let i = 0; i < candidate.triangles.length; i++) {
-    if (candidate.triangles[i].semanticBucket === bucket) count += 1;
-  }
-  return count;
-}
-
-function filterStructureV6CandidateForBucket(
-  candidate: StructureV6ShadowDebugCandidate,
-  bucket: StructureV6SemanticBucket,
-): StructureV6ShadowDebugCandidate {
-  const triangles = candidate.triangles.filter((triangle) => triangle.semanticBucket === bucket);
-  return {
-    structureInstanceId: candidate.structureInstanceId,
-    sourceImage: candidate.sourceImage,
-    sourceImageWidth: candidate.sourceImageWidth,
-    sourceImageHeight: candidate.sourceImageHeight,
-    triangles,
-    zBand: candidate.zBand,
-  };
-}
-
-type BuildStructureV6FaceSliceDebugOptions = {
-  axisOverride?: StructureV6SliceAxis;
-  useSunRelativeAxis?: boolean;
-  castMode?: StructureV6FaceSliceCastMode;
-  disableSlicing?: boolean;
-};
-
-function normalizeScreenVector(v: ScreenPt): ScreenPt {
-  const len = Math.hypot(v.x, v.y);
-  if (!(len > 1e-6)) return { x: 1, y: 0 };
-  return { x: v.x / len, y: v.y / len };
-}
-
-function dotScreenVectors(a: ScreenPt, b: ScreenPt): number {
-  return a.x * b.x + a.y * b.y;
-}
-
-function perpendicularScreenVector(v: ScreenPt): ScreenPt {
-  return { x: v.y, y: -v.x };
-}
-
-function buildStructureV6SunRelativeSliceAxis(
-  faceWidth: number,
-  faceHeight: number,
-  shadowVector: ScreenPt,
-): StructureV6SliceAxis {
-  const width = Math.max(1, Math.ceil(faceWidth));
-  const height = Math.max(1, Math.ceil(faceHeight));
-  const sliceDir = normalizeScreenVector(shadowVector);
-  const sliceNormal = normalizeScreenVector(perpendicularScreenVector(sliceDir));
-  const corners: ScreenPt[] = [
-    { x: 0, y: 0 },
-    { x: width, y: 0 },
-    { x: width, y: height },
-    { x: 0, y: height },
-  ];
-  let minT = Number.POSITIVE_INFINITY;
-  let maxT = Number.NEGATIVE_INFINITY;
-  for (let i = 0; i < corners.length; i++) {
-    const t = dotScreenVectors(corners[i], sliceNormal);
-    if (t < minT) minT = t;
-    if (t > maxT) maxT = t;
-  }
-  if (!Number.isFinite(minT) || !Number.isFinite(maxT)) {
-    minT = 0;
-    maxT = 1;
-  }
-  if (Math.abs(maxT - minT) < 1e-6) maxT = minT + 1;
-  return {
-    sliceDir,
-    sliceNormal,
-    minT,
-    maxT,
-  };
-}
-
-function buildStructureV6FaceSliceDebugData(
-  candidate: StructureV6ShadowDebugCandidate,
-  requestedSemanticBucket: StructureV6SemanticBucket,
-  semanticBucket: StructureV6SemanticBucket,
-  requestedStructureIndex: number,
-  selectedStructureIndex: number,
-  candidateCount: number,
-  requestedSliceCount: number,
-  shadowVector: ScreenPt,
-  options?: BuildStructureV6FaceSliceDebugOptions,
-): StructureV6FaceSliceDebugData | null {
-  if (candidate.triangles.length <= 0) return null;
-  let minX = Number.POSITIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-  for (let ti = 0; ti < candidate.triangles.length; ti++) {
-    const tri = candidate.triangles[ti].dstTriangle;
-    for (let vi = 0; vi < tri.length; vi++) {
-      const p = tri[vi];
-      if (p.x < minX) minX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y > maxY) maxY = p.y;
-    }
-  }
-  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
-    return null;
-  }
-
-  const pad = 1;
-  const originX = Math.floor(minX) - pad;
-  const originY = Math.floor(minY) - pad;
-  const width = Math.max(1, Math.ceil(maxX - minX) + pad * 2);
-  const height = Math.max(1, Math.ceil(maxY - minY) + pad * 2);
-  const scratch = getStructureShadowV6FaceScratchContext(width, height);
-  if (!scratch) return null;
-  const faceCtx = scratch.ctx;
-  faceCtx.setTransform(1, 0, 0, 1, 0, 0);
-  faceCtx.globalAlpha = 1;
-  faceCtx.globalCompositeOperation = "source-over";
-  faceCtx.clearRect(0, 0, width, height);
-  for (let ti = 0; ti < candidate.triangles.length; ti++) {
-    const tri = candidate.triangles[ti];
-    const [s0, s1, s2] = tri.srcTriangle;
-    const [d0, d1, d2] = tri.dstTriangle;
-    drawTexturedTriangle(
-      faceCtx,
-      candidate.sourceImage,
-      candidate.sourceImageWidth,
-      candidate.sourceImageHeight,
-      s0,
-      s1,
-      s2,
-      { x: d0.x - originX, y: d0.y - originY },
-      { x: d1.x - originX, y: d1.y - originY },
-      { x: d2.x - originX, y: d2.y - originY },
-    );
-  }
-  const faceCanvas = document.createElement("canvas");
-  faceCanvas.width = width;
-  faceCanvas.height = height;
-  const faceCanvasCtx = faceCanvas.getContext("2d");
-  if (!faceCanvasCtx) return null;
-  configurePixelPerfect(faceCanvasCtx);
-  faceCanvasCtx.imageSmoothingEnabled = false;
-  faceCanvasCtx.clearRect(0, 0, width, height);
-  faceCanvasCtx.drawImage(scratch.canvas, 0, 0);
-
-  const axis = options?.axisOverride
-    ?? (options?.useSunRelativeAxis
-      ? buildStructureV6SunRelativeSliceAxis(width, height, shadowVector)
-      : buildStructureV6SliceAxis(width, height, semanticBucket));
-  const castMode = options?.castMode ?? "baselineToTop";
-  const disableSlicing = options?.disableSlicing === true;
-  if (disableSlicing) {
-    const offsetX = shadowVector.x;
-    const offsetY = shadowVector.y;
-    const displacedMinX = Math.min(0, offsetX);
-    const displacedMinY = Math.min(0, offsetY);
-    const displacedMaxX = Math.max(width, width + offsetX);
-    const displacedMaxY = Math.max(height, height + offsetY);
-    const displacedPad = 1;
-    const displacedOriginX = Math.floor(displacedMinX) - displacedPad;
-    const displacedOriginY = Math.floor(displacedMinY) - displacedPad;
-    const displacedWidth = Math.max(1, Math.ceil(displacedMaxX - displacedMinX) + displacedPad * 2);
-    const displacedHeight = Math.max(1, Math.ceil(displacedMaxY - displacedMinY) + displacedPad * 2);
-    const displacedSlicesCanvas = document.createElement("canvas");
-    displacedSlicesCanvas.width = displacedWidth;
-    displacedSlicesCanvas.height = displacedHeight;
-    const displacedSlicesCtx = displacedSlicesCanvas.getContext("2d");
-    if (!displacedSlicesCtx) return null;
-    configurePixelPerfect(displacedSlicesCtx);
-    displacedSlicesCtx.imageSmoothingEnabled = false;
-    displacedSlicesCtx.clearRect(0, 0, displacedWidth, displacedHeight);
-    displacedSlicesCtx.drawImage(
-      faceCanvas,
-      Math.round(offsetX - displacedOriginX),
-      Math.round(offsetY - displacedOriginY),
-    );
-    const mergedShadowCanvas = document.createElement("canvas");
-    mergedShadowCanvas.width = displacedWidth;
-    mergedShadowCanvas.height = displacedHeight;
-    const mergedShadowCtx = mergedShadowCanvas.getContext("2d");
-    if (!mergedShadowCtx) return null;
-    configurePixelPerfect(mergedShadowCtx);
-    mergedShadowCtx.imageSmoothingEnabled = false;
-    mergedShadowCtx.clearRect(0, 0, displacedWidth, displacedHeight);
-    mergedShadowCtx.drawImage(displacedSlicesCanvas, 0, 0);
-    mergedShadowCtx.globalCompositeOperation = "source-in";
-    mergedShadowCtx.fillStyle = "rgba(0,0,0,0.78)";
-    mergedShadowCtx.fillRect(0, 0, displacedWidth, displacedHeight);
-    mergedShadowCtx.globalCompositeOperation = "source-over";
-    return {
-      structureInstanceId: candidate.structureInstanceId,
-      zBand: candidate.zBand,
-      requestedSemanticBucket,
-      semanticBucket,
-      requestedStructureIndex,
-      selectedStructureIndex,
-      candidateCount,
-      sourceTriangleCount: candidate.triangles.length,
-      nonEmptySliceCount: candidate.triangles.length > 0 ? 1 : 0,
-      faceBounds: { minX, minY, maxX, maxY },
-      faceCanvas,
-      axis,
-      slices: [],
-      shadowVector,
-      displacedCanvasOrigin: { x: displacedOriginX, y: displacedOriginY },
-      faceCanvasOrigin: { x: originX, y: originY },
-      mergedShadowDrawOrigin: { x: originX + displacedOriginX, y: originY + displacedOriginY },
-      displacedSlices: [],
-      displacedSlicesCanvas,
-      mergedShadowCanvas,
-    };
-  }
-  const sliceCount = clampStructureV6SliceCount(requestedSliceCount);
-  const sliceDefs = buildStructureV6FaceSlices(axis, sliceCount);
-  const sourceImageData = faceCtx.getImageData(0, 0, width, height);
-  const source = sourceImageData.data;
-  const perSliceData: Uint8ClampedArray[] = new Array(sliceDefs.length);
-  const perSlicePixelCounts: number[] = new Array(sliceDefs.length);
-  const perSliceBounds: Array<{ minX: number; minY: number; maxX: number; maxY: number }> = new Array(sliceDefs.length);
-  for (let i = 0; i < sliceDefs.length; i++) {
-    perSliceData[i] = new Uint8ClampedArray(source.length);
-    perSlicePixelCounts[i] = 0;
-    perSliceBounds[i] = {
-      minX: Number.POSITIVE_INFINITY,
-      minY: Number.POSITIVE_INFINITY,
-      maxX: Number.NEGATIVE_INFINITY,
-      maxY: Number.NEGATIVE_INFINITY,
-    };
-  }
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const pixelIndex = (y * width + x) << 2;
-      const alpha = source[pixelIndex + 3] | 0;
-      if (alpha <= 0) continue;
-      const sliceIndex = resolveStructureV6SliceIndex(
-        x + 0.5,
-        y + 0.5,
-        axis,
-        sliceDefs.length,
-      );
-      const out = perSliceData[sliceIndex];
-      out[pixelIndex] = source[pixelIndex];
-      out[pixelIndex + 1] = source[pixelIndex + 1];
-      out[pixelIndex + 2] = source[pixelIndex + 2];
-      out[pixelIndex + 3] = source[pixelIndex + 3];
-      perSlicePixelCounts[sliceIndex] += 1;
-      const bounds = perSliceBounds[sliceIndex];
-      if (x < bounds.minX) bounds.minX = x;
-      if (y < bounds.minY) bounds.minY = y;
-      if (x > bounds.maxX) bounds.maxX = x;
-      if (y > bounds.maxY) bounds.maxY = y;
-    }
-  }
-  const slices = sliceDefs.map((slice, index) => {
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext("2d");
-    if (ctx) {
-      configurePixelPerfect(ctx);
-      ctx.imageSmoothingEnabled = false;
-      const imageData = ctx.createImageData(width, height);
-      imageData.data.set(perSliceData[index]);
-      ctx.putImageData(imageData, 0, 0);
-    }
-    return {
-      slice,
-      canvas,
-      pixelCount: perSlicePixelCounts[index],
-      contentBounds: perSlicePixelCounts[index] > 0
-        ? {
-            minX: perSliceBounds[index].minX,
-            minY: perSliceBounds[index].minY,
-            maxX: perSliceBounds[index].maxX,
-            maxY: perSliceBounds[index].maxY,
-      }
-        : null,
-    };
-  });
-  const nonEmptySlices = slices.filter((sliceEntry) => sliceEntry.pixelCount > 0);
-  const castSlices = nonEmptySlices.length > 0 ? nonEmptySlices : slices;
-  const sliceDenominator = Math.max(1, castSlices.length - 1);
-  const displacedSlices: StructureV6ExtrudedSliceDebug[] = new Array(castSlices.length);
-  let displacedMinX = 0;
-  let displacedMinY = 0;
-  let displacedMaxX = width;
-  let displacedMaxY = height;
-  for (let i = 0; i < castSlices.length; i++) {
-    const t = castMode === "constantMax"
-      ? 1
-      : castSlices.length <= 1
-        ? 0
-        : i / sliceDenominator;
-    const offsetX = shadowVector.x * t;
-    const offsetY = shadowVector.y * t;
-    const sliceEntry = castSlices[i];
-    displacedSlices[i] = {
-      slice: sliceEntry.slice,
-      t,
-      offsetX,
-      offsetY,
-      canvas: sliceEntry.canvas,
-      pixelCount: sliceEntry.pixelCount,
-      contentBounds: sliceEntry.contentBounds,
-    };
-    const content = sliceEntry.contentBounds;
-    if (!content) continue;
-    const minXWithOffset = content.minX + offsetX;
-    const minYWithOffset = content.minY + offsetY;
-    const maxXWithOffset = content.maxX + 1 + offsetX;
-    const maxYWithOffset = content.maxY + 1 + offsetY;
-    if (minXWithOffset < displacedMinX) displacedMinX = minXWithOffset;
-    if (minYWithOffset < displacedMinY) displacedMinY = minYWithOffset;
-    if (maxXWithOffset > displacedMaxX) displacedMaxX = maxXWithOffset;
-    if (maxYWithOffset > displacedMaxY) displacedMaxY = maxYWithOffset;
-  }
-  const displacedPad = 1;
-  const displacedOriginX = Math.floor(displacedMinX) - displacedPad;
-  const displacedOriginY = Math.floor(displacedMinY) - displacedPad;
-  const displacedWidth = Math.max(1, Math.ceil(displacedMaxX - displacedMinX) + displacedPad * 2);
-  const displacedHeight = Math.max(1, Math.ceil(displacedMaxY - displacedMinY) + displacedPad * 2);
-  const displacedSlicesCanvas = document.createElement("canvas");
-  displacedSlicesCanvas.width = displacedWidth;
-  displacedSlicesCanvas.height = displacedHeight;
-  const displacedSlicesCtx = displacedSlicesCanvas.getContext("2d");
-  if (!displacedSlicesCtx) return null;
-  configurePixelPerfect(displacedSlicesCtx);
-  displacedSlicesCtx.imageSmoothingEnabled = false;
-  displacedSlicesCtx.clearRect(0, 0, displacedWidth, displacedHeight);
-  for (let i = 0; i < displacedSlices.length; i++) {
-    const sliceEntry = displacedSlices[i];
-    if (!sliceEntry.contentBounds) continue;
-    displacedSlicesCtx.drawImage(
-      sliceEntry.canvas,
-      Math.round(sliceEntry.offsetX - displacedOriginX),
-      Math.round(sliceEntry.offsetY - displacedOriginY),
-    );
-  }
-  const mergedShadowCanvas = document.createElement("canvas");
-  mergedShadowCanvas.width = displacedWidth;
-  mergedShadowCanvas.height = displacedHeight;
-  const mergedShadowCtx = mergedShadowCanvas.getContext("2d");
-  if (!mergedShadowCtx) return null;
-  configurePixelPerfect(mergedShadowCtx);
-  mergedShadowCtx.imageSmoothingEnabled = false;
-  mergedShadowCtx.clearRect(0, 0, displacedWidth, displacedHeight);
-  mergedShadowCtx.drawImage(displacedSlicesCanvas, 0, 0);
-  mergedShadowCtx.globalCompositeOperation = "source-in";
-  mergedShadowCtx.fillStyle = "rgba(0,0,0,0.78)";
-  mergedShadowCtx.fillRect(0, 0, displacedWidth, displacedHeight);
-  mergedShadowCtx.globalCompositeOperation = "source-over";
-  return {
-    structureInstanceId: candidate.structureInstanceId,
-    zBand: candidate.zBand,
-    requestedSemanticBucket,
-    semanticBucket,
-    requestedStructureIndex,
-    selectedStructureIndex,
-    candidateCount,
-    sourceTriangleCount: candidate.triangles.length,
-    nonEmptySliceCount: nonEmptySlices.length,
-    faceBounds: { minX, minY, maxX, maxY },
-    faceCanvas,
-    axis,
-    slices,
-    shadowVector,
-    displacedCanvasOrigin: { x: displacedOriginX, y: displacedOriginY },
-    faceCanvasOrigin: { x: originX, y: originY },
-    mergedShadowDrawOrigin: { x: originX + displacedOriginX, y: originY + displacedOriginY },
-    displacedSlices,
-    displacedSlicesCanvas,
-    mergedShadowCanvas,
-  };
-}
-
-function buildStructureV6VerticalShadowMaskDebugData(
-  candidate: StructureV6ShadowDebugCandidate,
-  requestedSemanticBucket: StructureV6SemanticBucket,
-  requestedStructureIndex: number,
-  selectedStructureIndex: number,
-  candidateCount: number,
-  requestedSliceCount: number,
-  shadowVector: ScreenPt,
-): StructureV6VerticalShadowMaskDebugData | null {
-  const bucketAShadow = buildStructureV6FaceSliceDebugData(
-    filterStructureV6CandidateForBucket(candidate, "EAST_WEST"),
-    requestedSemanticBucket,
-    "EAST_WEST",
-    requestedStructureIndex,
-    selectedStructureIndex,
-    candidateCount,
-    requestedSliceCount,
-    shadowVector,
-  );
-  const bucketBShadow = buildStructureV6FaceSliceDebugData(
-    filterStructureV6CandidateForBucket(candidate, "SOUTH_NORTH"),
-    requestedSemanticBucket,
-    "SOUTH_NORTH",
-    requestedStructureIndex,
-    selectedStructureIndex,
-    candidateCount,
-    requestedSliceCount,
-    shadowVector,
-  );
-  const topSource = filterStructureV6CandidateForBucket(candidate, "TOP");
-  const topShadow = buildStructureV6FaceSliceDebugData(
-    topSource,
-    requestedSemanticBucket,
-    "TOP",
-    requestedStructureIndex,
-    selectedStructureIndex,
-    candidateCount,
-    requestedSliceCount,
-    shadowVector,
-    {
-      disableSlicing: true,
-    },
-  );
-  if (!bucketAShadow && !bucketBShadow && !topShadow) return null;
-
-  const bucketShadows = [bucketAShadow, bucketBShadow, topShadow].filter(
-    (entry): entry is StructureV6FaceSliceDebugData => entry !== null,
-  );
-  let minX = Number.POSITIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-  for (let i = 0; i < bucketShadows.length; i++) {
-    const bucket = bucketShadows[i];
-    const drawX = bucket.mergedShadowDrawOrigin.x;
-    const drawY = bucket.mergedShadowDrawOrigin.y;
-    minX = Math.min(minX, drawX);
-    minY = Math.min(minY, drawY);
-    maxX = Math.max(maxX, drawX + bucket.displacedSlicesCanvas.width);
-    maxY = Math.max(maxY, drawY + bucket.displacedSlicesCanvas.height);
-  }
-  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
-    return null;
-  }
-  const mergedPad = 1;
-  const mergedOriginX = Math.floor(minX) - mergedPad;
-  const mergedOriginY = Math.floor(minY) - mergedPad;
-  const mergedWidth = Math.max(1, Math.ceil(maxX - minX) + mergedPad * 2);
-  const mergedHeight = Math.max(1, Math.ceil(maxY - minY) + mergedPad * 2);
-  const mergedVerticalShadowCanvas = document.createElement("canvas");
-  mergedVerticalShadowCanvas.width = mergedWidth;
-  mergedVerticalShadowCanvas.height = mergedHeight;
-  const mergedVerticalShadowCtx = mergedVerticalShadowCanvas.getContext("2d");
-  if (!mergedVerticalShadowCtx) return null;
-  configurePixelPerfect(mergedVerticalShadowCtx);
-  mergedVerticalShadowCtx.imageSmoothingEnabled = false;
-  mergedVerticalShadowCtx.clearRect(0, 0, mergedWidth, mergedHeight);
-  for (let i = 0; i < bucketShadows.length; i++) {
-    const bucket = bucketShadows[i];
-    mergedVerticalShadowCtx.drawImage(
-      bucket.displacedSlicesCanvas,
-      Math.round(bucket.mergedShadowDrawOrigin.x - mergedOriginX),
-      Math.round(bucket.mergedShadowDrawOrigin.y - mergedOriginY),
-    );
-  }
-  // Tint once after unioning coverage so overlapping buckets do not add extra darkness.
-  mergedVerticalShadowCtx.globalCompositeOperation = "source-in";
-  mergedVerticalShadowCtx.fillStyle = "rgba(0,0,0,0.78)";
-  mergedVerticalShadowCtx.fillRect(0, 0, mergedWidth, mergedHeight);
-  mergedVerticalShadowCtx.globalCompositeOperation = "source-over";
-
-  return {
-    structureInstanceId: candidate.structureInstanceId,
-    zBand: candidate.zBand,
-    requestedSemanticBucket,
-    requestedStructureIndex,
-    selectedStructureIndex,
-    candidateCount,
-    shadowVector,
-    bucketAShadow,
-    bucketBShadow,
-    topShadow,
-    mergedVerticalShadowDrawOrigin: { x: mergedOriginX, y: mergedOriginY },
-    mergedVerticalShadowCanvas,
-  };
-}
-
-function drawStructureV65MergedShadowMaskInWorld(
-  ctx: CanvasRenderingContext2D,
-  debugData: StructureV6VerticalShadowMaskDebugData,
-): void {
-  if (debugData.mergedVerticalShadowCanvas.width <= 0 || debugData.mergedVerticalShadowCanvas.height <= 0) return;
-  const drawX = Math.round(debugData.mergedVerticalShadowDrawOrigin.x);
-  const drawY = Math.round(debugData.mergedVerticalShadowDrawOrigin.y);
-  ctx.save();
-  ctx.imageSmoothingEnabled = false;
-  ctx.globalCompositeOperation = "source-over";
-  ctx.globalAlpha = 1;
-  ctx.drawImage(
-    debugData.mergedVerticalShadowCanvas,
-    drawX,
-    drawY,
-  );
-  ctx.restore();
-}
-
-function drawStructureV6FaceSliceDebugPanel(
-  ctx: CanvasRenderingContext2D,
-  cssW: number,
-  cssH: number,
-  debugData: StructureV6VerticalShadowMaskDebugData,
-): void {
-  const panelPadding = STRUCTURE_SHADOW_V6_DEBUG_PANEL_PADDING_PX;
-  const panelW = Math.max(420, Math.min(900, cssW - panelPadding * 2));
-  const panelH = Math.max(300, Math.min(560, cssH - panelPadding * 2));
-  const panelX = cssW - panelW - panelPadding;
-  const panelY = panelPadding;
-
-  const drawViewFrame = (
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    label: string,
-  ): { contentX: number; contentY: number; contentW: number; contentH: number } => {
-    ctx.fillStyle = "rgba(32, 38, 52, 0.60)";
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = "rgba(160, 186, 238, 0.52)";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-    ctx.fillStyle = "rgba(210, 228, 255, 0.92)";
-    ctx.font = "10px monospace";
-    ctx.fillText(label, x + 4, y + 11);
-    return {
-      contentX: x + 4,
-      contentY: y + 14,
-      contentW: Math.max(1, w - 8),
-      contentH: Math.max(1, h - 18),
-    };
-  };
-
-  const drawFittedCanvas = (
-    canvas: HTMLCanvasElement,
-    target: { contentX: number; contentY: number; contentW: number; contentH: number },
-  ): { x: number; y: number; w: number; h: number } | null => {
-    const srcW = Math.max(1, canvas.width);
-    const srcH = Math.max(1, canvas.height);
-    const scale = Math.min(target.contentW / srcW, target.contentH / srcH);
-    if (!(scale > 0)) return null;
-    const drawW = Math.max(1, Math.floor(srcW * scale));
-    const drawH = Math.max(1, Math.floor(srcH * scale));
-    const drawX = target.contentX + Math.floor((target.contentW - drawW) * 0.5);
-    const drawY = target.contentY + Math.floor((target.contentH - drawH) * 0.5);
-    ctx.drawImage(canvas, drawX, drawY, drawW, drawH);
-    return { x: drawX, y: drawY, w: drawW, h: drawH };
-  };
-
-  const drawEmptyFrameLabel = (
-    frame: { contentX: number; contentY: number; contentW: number; contentH: number },
-    label: string,
-  ): void => {
-    ctx.fillStyle = "rgba(245, 245, 245, 0.85)";
-    ctx.font = "11px monospace";
-    ctx.fillText(label, frame.contentX + 4, frame.contentY + 14);
-  };
-
-  const drawTopCollected = (
-    frame: { contentX: number; contentY: number; contentW: number; contentH: number },
-    topShadow: StructureV6FaceSliceDebugData | null,
-  ): void => {
-    if (!topShadow) {
-      drawEmptyFrameLabel(frame, "No TOP triangles");
-      return;
-    }
-    drawFittedCanvas(topShadow.faceCanvas, frame);
-  };
-
-  ctx.save();
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = "rgba(12, 14, 18, 0.88)";
-  ctx.fillRect(panelX, panelY, panelW, panelH);
-  ctx.strokeStyle = "rgba(185, 210, 255, 0.48)";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(panelX + 0.5, panelY + 0.5, panelW - 1, panelH - 1);
-
-  const titleX = panelX + 10;
-  let textY = panelY + 16;
-  ctx.font = "12px monospace";
-  ctx.fillStyle = "rgba(240, 245, 255, 0.96)";
-  ctx.fillText("V6.7 TOP Face Shadow Cast (No Top Slicing)", titleX, textY);
-  textY += 14;
-  const trimmedId = debugData.structureInstanceId.length > 52
-    ? `${debugData.structureInstanceId.slice(0, 49)}...`
-    : debugData.structureInstanceId;
-  ctx.fillStyle = "rgba(210, 228, 255, 0.9)";
-  ctx.fillText(
-    `id:${trimmedId} sel:${debugData.selectedStructureIndex}/${Math.max(0, debugData.candidateCount - 1)} req:${debugData.requestedStructureIndex} reqBucket:${debugData.requestedSemanticBucket}`,
-    titleX,
-    textY,
-  );
-  textY += 14;
-  const bucketATris = debugData.bucketAShadow?.sourceTriangleCount ?? 0;
-  const bucketBTriCount = debugData.bucketBShadow?.sourceTriangleCount ?? 0;
-  const topTriCount = debugData.topShadow?.sourceTriangleCount ?? 0;
-  const bucketACastSlices = debugData.bucketAShadow?.nonEmptySliceCount ?? 0;
-  const bucketBCastSlices = debugData.bucketBShadow?.nonEmptySliceCount ?? 0;
-  const topCastSlices = debugData.topShadow?.nonEmptySliceCount ?? 0;
-  ctx.fillStyle = "rgba(195, 214, 246, 0.88)";
-  ctx.fillText(
-    `EW tris:${bucketATris} cast:${bucketACastSlices}  SN tris:${bucketBTriCount} cast:${bucketBCastSlices}  TOP tris:${topTriCount} cast:${topCastSlices}`,
-    titleX,
-    textY,
-  );
-  textY += 14;
-  ctx.fillStyle = "rgba(255, 221, 168, 0.86)";
-  ctx.fillText(
-    `shadowVector(${debugData.shadowVector.x.toFixed(1)},${debugData.shadowVector.y.toFixed(1)}) zBand:${debugData.zBand} worldOrigin(${debugData.mergedVerticalShadowDrawOrigin.x.toFixed(1)},${debugData.mergedVerticalShadowDrawOrigin.y.toFixed(1)})`,
-    titleX,
-    textY,
-  );
-
-  const bodyTop = textY + 10;
-  const bodyBottom = panelY + panelH - 10;
-  const bodyHeight = Math.max(1, bodyBottom - bodyTop);
-  const bodyWidth = panelW - 20;
-  const columnGap = 8;
-  const rowGap = 8;
-  const topRowH = Math.max(110, Math.floor((bodyHeight - rowGap) * 0.5));
-  const bottomRowH = Math.max(110, bodyHeight - topRowH - rowGap);
-  const columnW = Math.max(120, Math.floor((bodyWidth - columnGap) * 0.5));
-  const leftX = panelX + 10;
-  const rightX = leftX + columnW + columnGap;
-  const topY = bodyTop;
-  const bottomY = topY + topRowH + rowGap;
-
-  const topCollectedFrame = drawViewFrame(leftX, topY, columnW, topRowH, "TOP Collected");
-  const topModeFrame = drawViewFrame(rightX, topY, columnW, topRowH, "TOP Mode");
-  const topCastFrame = drawViewFrame(leftX, bottomY, columnW, bottomRowH, "TOP Cast Shadow");
-  const mergedFrame = drawViewFrame(rightX, bottomY, columnW, bottomRowH, "Merged Shadow (Vertical + TOP)");
-
-  drawTopCollected(topCollectedFrame, debugData.topShadow);
-  drawEmptyFrameLabel(topModeFrame, "whole-face move (no slicing)");
-  ctx.fillStyle = "rgba(245, 245, 245, 0.92)";
-  ctx.font = "10px monospace";
-  ctx.fillText(
-    `offset = shadowVector`,
-    topModeFrame.contentX + 4,
-    topModeFrame.contentY + 30,
-  );
-  if (debugData.topShadow) {
-    drawFittedCanvas(debugData.topShadow.mergedShadowCanvas, topCastFrame);
-  } else {
-    drawEmptyFrameLabel(topCastFrame, "No TOP cast");
-  }
-  drawFittedCanvas(debugData.mergedVerticalShadowCanvas, mergedFrame);
-  ctx.fillStyle = "rgba(245, 245, 245, 0.94)";
-  ctx.font = "10px monospace";
-  ctx.fillText(
-    `single-tint merged mask (non-additive overlap)`,
-    mergedFrame.contentX + 4,
-    mergedFrame.contentY + mergedFrame.contentH - 2,
-  );
-  ctx.restore();
-}
-
-function drawStructureHybridShadowProjectedTriangles(
-  ctx: CanvasRenderingContext2D,
-  pieces: readonly StructureHybridShadowRenderPiece[],
-  maxDarkness: number,
-): void {
-  if (pieces.length <= 0) return;
-  const shadowAlpha = Math.max(0, Math.min(1, maxDarkness));
-  if (shadowAlpha <= 0) return;
-  for (let i = 0; i < pieces.length; i++) {
-    const piece = pieces[i];
-    const projectedMappings = piece.projectedMappings;
-    for (let ti = 0; ti < projectedMappings.length; ti++) {
-      const mapping = projectedMappings[ti];
-      const [s0, s1, s2] = mapping.srcTriangle;
-      const [d0, d1, d2] = mapping.projectedTriangle;
-      drawShadowTexturedTriangle(
-        ctx,
-        piece.sourceImage,
-        piece.sourceImageWidth,
-        piece.sourceImageHeight,
-        s0,
-        s1,
-        s2,
-        d0,
-        d1,
-        d2,
-        shadowAlpha,
-      );
-    }
-  }
-}
-
-function countStructureHybridProjectedTriangles(
-  pieces: readonly StructureHybridShadowRenderPiece[],
-): number {
-  let count = 0;
-  for (let i = 0; i < pieces.length; i++) count += pieces[i].projectedMappings.length;
-  return count;
-}
-
-function drawStructureHybridProjectedTrianglesSolid(
-  ctx: CanvasRenderingContext2D,
-  pieces: readonly StructureHybridShadowRenderPiece[],
-  fillStyle: string,
-): number {
-  if (pieces.length <= 0) return 0;
-  let triangleCount = 0;
-  ctx.save();
-  ctx.globalCompositeOperation = "source-over";
-  ctx.beginPath();
-  for (let i = 0; i < pieces.length; i++) {
-    const mappings = pieces[i].projectedMappings;
-    for (let ti = 0; ti < mappings.length; ti++) {
-      const [a, b, c] = mappings[ti].projectedTriangle;
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.lineTo(c.x, c.y);
-      ctx.closePath();
-      triangleCount++;
-    }
-  }
-  ctx.fillStyle = fillStyle;
-  ctx.fill();
-  ctx.restore();
-  return triangleCount;
-}
-
-function drawStructureV4ShadowWarpedTriangles(
-  ctx: CanvasRenderingContext2D,
-  pieces: readonly StructureV4ShadowRenderPiece[],
-  maxDarkness: number,
-): number {
-  if (pieces.length <= 0) return 0;
-  const shadowAlpha = Math.max(0, Math.min(1, maxDarkness));
-  if (shadowAlpha <= 0) return 0;
-  let triangleCount = 0;
-  for (let i = 0; i < pieces.length; i++) {
-    const piece = pieces[i];
-    const correspondences = piece.triangleCorrespondence;
-    for (let ci = 0; ci < correspondences.length; ci++) {
-      const correspondence = correspondences[ci];
-      const srcTriangle = correspondence.sourceSrcPoints ?? correspondence.sourceTrianglePoints;
-      const [s0, s1, s2] = srcTriangle;
-      const [d0, d1, d2] = correspondence.destinationTrianglePoints;
-      drawShadowTexturedTriangle(
-        ctx,
-        piece.sourceImage,
-        piece.sourceImageWidth,
-        piece.sourceImageHeight,
-        s0,
-        s1,
-        s2,
-        d0,
-        d1,
-        d2,
-        shadowAlpha,
-      );
-      triangleCount++;
-    }
-  }
-  return triangleCount;
-}
-
-function drawStructureV4ShadowTrianglesSolid(
-  ctx: CanvasRenderingContext2D,
-  pieces: readonly StructureV4ShadowRenderPiece[],
-  fillStyle: string,
-): number {
-  if (pieces.length <= 0) return 0;
-  let triangleCount = 0;
-  ctx.save();
-  ctx.globalCompositeOperation = "source-over";
-  ctx.beginPath();
-  for (let i = 0; i < pieces.length; i++) {
-    const correspondences = pieces[i].triangleCorrespondence;
-    for (let ci = 0; ci < correspondences.length; ci++) {
-      const [a, b, c] = correspondences[ci].destinationTrianglePoints;
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.lineTo(c.x, c.y);
-      ctx.closePath();
-      triangleCount++;
-    }
-  }
-  ctx.fillStyle = fillStyle;
-  ctx.fill();
-  ctx.restore();
-  return triangleCount;
-}
-
-function drawStructureShadowProjectedTriangles(
-  ctx: CanvasRenderingContext2D,
-  triangles: readonly StructureShadowProjectedTriangle[],
-  maxDarkness: number,
-): void {
-  if (triangles.length <= 0) return;
-  const alpha = Math.max(0, Math.min(1, maxDarkness));
-  if (alpha <= 0) return;
-  ctx.save();
-  ctx.globalCompositeOperation = "source-over";
-  ctx.beginPath();
-  for (let i = 0; i < triangles.length; i++) {
-    const tri = triangles[i];
-    const [a, b, c] = tri;
-    const signedArea2 =
-      (b.x - a.x) * (c.y - a.y)
-      - (b.y - a.y) * (c.x - a.x);
-    if (signedArea2 >= 0) {
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.lineTo(c.x, c.y);
-    } else {
-      // Normalize winding so overlapping triangles do not cancel under non-zero fill.
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(c.x, c.y);
-      ctx.lineTo(b.x, b.y);
-    }
-    ctx.closePath();
-  }
-  ctx.fillStyle = `rgba(0,0,0,${alpha})`;
-  ctx.fill();
-  ctx.restore();
-}
-
-function getDiamondFitCanvas(src: HTMLCanvasElement): HTMLCanvasElement {
-  const cached = runtimeDiamondCanvasCache.get(src);
-  if (cached) return cached;
-  const out = document.createElement("canvas");
-  out.width = 128;
-  out.height = 64;
-  const c2d = out.getContext("2d");
-  if (c2d) {
-    configurePixelPerfect(c2d);
-    c2d.imageSmoothingEnabled = false;
-    c2d.drawImage(src, Math.round((128 - src.width) * 0.5), Math.round((64 - src.height) * 0.5));
-  }
-  runtimeDiamondCanvasCache.set(src, out);
-  return out;
-}
-
-function getRuntimeIsoTopCanvas(
-  srcImg: HTMLImageElement,
-  rotationQuarterTurns: 0 | 1 | 2 | 3,
-): HTMLCanvasElement | null {
-  if (!srcImg || srcImg.width <= 0 || srcImg.height <= 0) return null;
-
-  let byRot = runtimeIsoTopCache.get(srcImg);
-  if (!byRot) {
-    byRot = new Map();
-    runtimeIsoTopCache.set(srcImg, byRot);
-  }
-
-  const cached = byRot.get(rotationQuarterTurns);
-  if (cached) return cached;
-
-  // 128x128 square -> 128x64 iso diamond
-  const outW = 128;
-  const outH = 64;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = outW;
-  canvas.height = outH;
-
-  const c2d = canvas.getContext("2d");
-  if (!c2d) return null;
-  configurePixelPerfect(c2d);
-
-  // Bake so that the diamond is centered at (outW/2, outH/2).
-  // This matches the runtime path that translated to (centerX, centerY).
-  c2d.save();
-  c2d.translate(outW * 0.5, outH * 0.5);
-
-  // Apply 2:1 iso projection from square space into diamond space.
-  c2d.transform(0.5, 0.25, -0.5, 0.25, 0, 0);
-
-  // Apply rotation in square space (as before).
-  c2d.rotate(rotationQuarterTurns * (Math.PI * 0.5));
-
-  // Draw source square centered.
-  c2d.translate(-(128 * 0.5), -(128 * 0.5));
-  c2d.drawImage(srcImg, 0, 0, 128, 128);
-  c2d.restore();
-
-  byRot.set(rotationQuarterTurns, canvas);
-  return canvas;
-}
-
-function getRuntimeIsoDecalCanvas(
-  srcImg: HTMLImageElement,
-  rotationQuarterTurns: 0 | 1 | 2 | 3,
-  scale: number,
-): HTMLCanvasElement | null {
-  if (!srcImg || srcImg.width <= 0 || srcImg.height <= 0) return null;
-  if (!(scale > 0)) return null;
-
-  let byKey = runtimeIsoDecalCache.get(srcImg);
-  if (!byKey) {
-    byKey = new Map();
-    runtimeIsoDecalCache.set(srcImg, byKey);
-  }
-
-  const scaleQ = Math.round(scale * 1000) / 1000;
-  const key = `${rotationQuarterTurns}|${scaleQ}`;
-  const cached = byKey.get(key);
-  if (cached) return cached;
-
-  const srcW = srcImg.width * scaleQ;
-  const srcH = srcImg.height * scaleQ;
-  const rotOdd = (rotationQuarterTurns & 1) === 1;
-  const rotW = rotOdd ? srcH : srcW;
-  const rotH = rotOdd ? srcW : srcH;
-  const span = rotW + rotH;
-  const outW = Math.max(1, Math.ceil(span * 0.5));
-  const outH = Math.max(1, Math.ceil(span * 0.25));
-
-  const canvas = document.createElement("canvas");
-  canvas.width = outW;
-  canvas.height = outH;
-
-  const c2d = canvas.getContext("2d");
-  if (!c2d) return null;
-  configurePixelPerfect(c2d);
-
-  c2d.save();
-  c2d.translate(outW * 0.5, outH * 0.5);
-  c2d.transform(0.5, 0.25, -0.5, 0.25, 0, 0);
-  c2d.rotate(rotationQuarterTurns * (Math.PI * 0.5));
-  c2d.translate(-(srcW * 0.5), -(srcH * 0.5));
-  c2d.drawImage(srcImg, 0, 0, srcW, srcH);
-  c2d.restore();
-
-  byKey.set(key, canvas);
-  return canvas;
 }
 
 let hardcodedVoidTopImage: HTMLImageElement | null = null;
@@ -2078,22 +330,6 @@ function drawVoidBackgroundOnce(
   }
 
   ctx.restore();
-}
-
-function getFlippedOverlayImage(img: HTMLImageElement): HTMLCanvasElement {
-  const cached = flippedOverlayImageCache.get(img);
-  if (cached) return cached;
-  const canvas = document.createElement("canvas");
-  canvas.width = img.width;
-  canvas.height = img.height;
-  const c2d = canvas.getContext("2d");
-  if (!c2d) return canvas;
-  configurePixelPerfect(c2d);
-  c2d.translate(canvas.width, 0);
-  c2d.scale(-1, 1);
-  c2d.drawImage(img, 0, 0);
-  flippedOverlayImageCache.set(img, canvas);
-  return canvas;
 }
 
 function isTileInPlayerSouthWedge(
@@ -2435,29 +671,6 @@ export async function renderSystem(
       screenX: screen.x,
       screenY: screen.y,
     };
-  };
-
-  const drawEntityAnchorOverlay = (
-    feetX: number,
-    feetY: number,
-    drawX: number,
-    drawY: number,
-    drawW: number,
-    drawH: number,
-  ) => {
-    if (!SHOW_ENTITY_ANCHOR_OVERLAY) return;
-    ctx.save();
-    ctx.strokeStyle = "rgba(255, 80, 80, 0.95)";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(Math.round(drawX), Math.round(drawY), Math.round(drawW), Math.round(drawH));
-    ctx.strokeStyle = "rgba(80, 255, 220, 0.95)";
-    ctx.beginPath();
-    ctx.moveTo(Math.round(feetX - 4), Math.round(feetY));
-    ctx.lineTo(Math.round(feetX + 4), Math.round(feetY));
-    ctx.moveTo(Math.round(feetX), Math.round(feetY - 4));
-    ctx.lineTo(Math.round(feetX), Math.round(feetY + 4));
-    ctx.stroke();
-    ctx.restore();
   };
 
   const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -2977,36 +1190,48 @@ export async function renderSystem(
   };
 
   const debug = settings.debug;
+  const debugFrame = buildDebugFrameContext(debug);
   const RENDER_ENTITY_SHADOWS = !renderSettings.entityShadowsDisable;
   const RENDER_ENTITY_ANCHORS = renderSettings.entityAnchorsEnabled;
-  const SHOW_ENTITY_ANCHOR_OVERLAY = debug.entityAnchorOverlay;
-  const debugFlags = resolveDebugFlags(debug);
-  const SHOW_WALK_MASK = debugFlags.showWalkMask;
-  const SHOW_RAMPS = debugFlags.showRamps;
-  const SHOW_OCCLUDER_DEBUG = debugFlags.showOccluders;
-  const SHOW_DECAL_DEBUG = debugFlags.showDecals;
-  const SHOW_PROJECTILE_FACES = debugFlags.showProjectileFaces;
-  const SHOW_TRIGGER_ZONES = debugFlags.showTriggers;
-  const SHOW_ROAD_SEMANTIC = debugFlags.showRoadSemantic;
-  const SHOW_STRUCTURE_HEIGHTS = debugFlags.showStructureHeights;
-  const SHOW_STRUCTURE_COLLISION_DEBUG = debugFlags.showStructureCollision;
+  const debugFlags = debugFrame.flags;
+  const SHOW_ENTITY_ANCHOR_OVERLAY = debugFlags.showEntityAnchorOverlay;
   const SHOW_STRUCTURE_SLICE_DEBUG = debugFlags.showStructureSlices;
   const SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG = debugFlags.showStructureTriangleFootprint;
-  const SHADOW_V1_DEBUG_GEOMETRY_MODE = debug.shadowV1DebugGeometryMode;
-  const SHADOW_CASTER_MODE = debug.shadowCasterMode;
-  const SHADOW_HYBRID_DIAGNOSTIC_MODE = debug.shadowHybridDiagnosticMode;
-  const SHADOW_DEBUG_MODE = debug.shadowDebugMode;
-  const SHADOW_V5_DEBUG_VIEW = debug.shadowV5DebugView;
-  const SHADOW_V5_TRANSFORM_DEBUG_MODE = debug.shadowV5TransformDebugMode;
-  const SHADOW_V6_REQUESTED_SEMANTIC_BUCKET = debug.shadowV6SemanticBucket;
-  const SHADOW_V6_PRIMARY_SEMANTIC_BUCKET: StructureV6SemanticBucket = "EAST_WEST";
-  const SHADOW_V6_SECONDARY_SEMANTIC_BUCKET: StructureV6SemanticBucket = "SOUTH_NORTH";
-  const SHADOW_V6_TOP_SEMANTIC_BUCKET: StructureV6SemanticBucket = "TOP";
-  const SHADOW_V6_STRUCTURE_INDEX = debug.shadowV6StructureIndex;
-  const SHADOW_V6_SLICE_COUNT = debug.shadowV6SliceCount;
-  const SHOW_ENEMY_AIM_OVERLAY = debugFlags.showEnemyAimOverlay;
-  const SHOW_LOOT_GOBLIN_OVERLAY = debugFlags.showLootGoblinOverlay;
-  const SHOW_ZONE_OBJECTIVE_BOUNDS = !!debug.objectives?.showZoneBounds;
+  const SHADOW_V1_DEBUG_GEOMETRY_MODE = debugFlags.shadowV1DebugGeometryMode;
+  const SHADOW_CASTER_MODE = debugFlags.shadowCasterMode;
+  const SHADOW_HYBRID_DIAGNOSTIC_MODE = debugFlags.shadowHybridDiagnosticMode;
+  const SHADOW_DEBUG_MODE = debugFlags.shadowDebugMode;
+  const SHADOW_V5_DEBUG_VIEW = debugFlags.shadowV5DebugView;
+  const SHADOW_V5_TRANSFORM_DEBUG_MODE = debugFlags.shadowV5TransformDebugMode;
+  const SHADOW_V6_REQUESTED_SEMANTIC_BUCKET = debugFlags.shadowV6RequestedSemanticBucket;
+  const SHADOW_V6_PRIMARY_SEMANTIC_BUCKET = debugFlags.shadowV6PrimarySemanticBucket;
+  const SHADOW_V6_SECONDARY_SEMANTIC_BUCKET = debugFlags.shadowV6SecondarySemanticBucket;
+  const SHADOW_V6_TOP_SEMANTIC_BUCKET = debugFlags.shadowV6TopSemanticBucket;
+  const SHADOW_V6_STRUCTURE_INDEX = debugFlags.shadowV6StructureIndex;
+  const SHADOW_V6_SLICE_COUNT = debugFlags.shadowV6SliceCount;
+  const SHOW_ZONE_OBJECTIVE_BOUNDS = debugFlags.showZoneObjectiveBounds;
+  const drawEntityAnchorDebug = (
+    feetX: number,
+    feetY: number,
+    drawX: number,
+    drawY: number,
+    drawW: number,
+    drawH: number,
+  ): void => {
+    executeDebugPass({
+      phase: "entityAnchor",
+      input: {
+        ctx,
+        show: SHOW_ENTITY_ANCHOR_OVERLAY,
+        feetX,
+        feetY,
+        drawX,
+        drawY,
+        drawW,
+        drawH,
+      },
+    });
+  };
 
   // Enemy Z buffer (optional visual override)
   const ez = w.ezVisual;
@@ -3304,11 +1529,11 @@ export async function renderSystem(
   );
   const playerCameraTx = playerTx;
   const playerCameraTy = playerTy;
-  const playerRenderFields = deriveParentTileRenderFields(playerTx, playerTy);
   const isParentTileAfterPlayer = (parentTx: number, parentTy: number): boolean => {
-    const parentFields = deriveParentTileRenderFields(parentTx, parentTy);
-    if (parentFields.slice !== playerRenderFields.slice) return parentFields.slice > playerRenderFields.slice;
-    return parentFields.within > playerRenderFields.within;
+    const parentSlice = parentTx + parentTy;
+    const playerSlice = playerCameraTx + playerCameraTy;
+    if (parentSlice !== playerSlice) return parentSlice > playerSlice;
+    return parentTx > playerCameraTx;
   };
   const structureCutoutHalfWidthPx = Math.max(1, structureTriangleCutoutHalfWidth * T * ISO_X);
   const structureCutoutHalfHeightPx = Math.max(1, structureTriangleCutoutHalfHeight * T * ISO_Y);
@@ -3324,153 +1549,6 @@ export async function renderSystem(
     && y >= structureCutoutScreenRect.minY
     && y <= structureCutoutScreenRect.maxY
   );
-  type ProjectedQuad = [ScreenPt, ScreenPt, ScreenPt, ScreenPt];
-  type FootprintSupportCell = {
-    col: number;
-    row: number;
-    quad: ProjectedQuad;
-    supported: boolean;
-  };
-  type FootprintSupportLevel = {
-    level: number;
-    liftYPx: number;
-    quad: ProjectedQuad;
-    cells: FootprintSupportCell[];
-    supportedCells: number;
-    totalCells: number;
-    anySupport: boolean;
-    allSupported: boolean;
-  };
-  type StructureTriangleSemanticClass =
-    | "TOP"
-    | "LEFT_SOUTH"
-    | "RIGHT_EAST"
-    | "UNCLASSIFIED"
-    | "CONFLICT";
-
-  const STRUCTURE_FOOTPRINT_SCAN_STEP_PX = 64;
-
-  const buildProjectedStructureFootprintQuad = (overlay: StampOverlay): ProjectedQuad => {
-    const zVisual = overlay.z + (overlay.zVisualOffsetUnits ?? 0);
-    const minWorldX = overlay.tx * T;
-    const minWorldY = overlay.ty * T;
-    const maxWorldX = (overlay.tx + overlay.w) * T;
-    const maxWorldY = (overlay.ty + overlay.h) * T;
-    const nw = toScreenAtZ(minWorldX, minWorldY, zVisual);
-    const ne = toScreenAtZ(maxWorldX, minWorldY, zVisual);
-    const se = toScreenAtZ(maxWorldX, maxWorldY, zVisual);
-    const sw = toScreenAtZ(minWorldX, maxWorldY, zVisual);
-    return [nw, ne, se, sw];
-  };
-  const isPointInsideProjectedStructureFootprintQuad = (
-    quad: ProjectedQuad,
-    x: number,
-    y: number,
-  ): boolean => {
-    const p = { x, y };
-    return pointInTriangle(p, quad[0], quad[1], quad[2]) || pointInTriangle(p, quad[0], quad[2], quad[3]);
-  };
-  const lerpScreenPt = (a: ScreenPt, b: ScreenPt, t: number): ScreenPt => ({
-    x: a.x + (b.x - a.x) * t,
-    y: a.y + (b.y - a.y) * t,
-  });
-  const sampleProjectedQuadPoint = (quad: ProjectedQuad, u: number, v: number): ScreenPt => {
-    const top = lerpScreenPt(quad[0], quad[1], u);
-    const bottom = lerpScreenPt(quad[3], quad[2], u);
-    return lerpScreenPt(top, bottom, v);
-  };
-  const liftProjectedFootprintQuad = (quad: ProjectedQuad, liftYPx: number): ProjectedQuad => {
-    const liftedY = -liftYPx;
-    return [
-      { x: quad[0].x, y: quad[0].y + liftedY },
-      { x: quad[1].x, y: quad[1].y + liftedY },
-      { x: quad[2].x, y: quad[2].y + liftedY },
-      { x: quad[3].x, y: quad[3].y + liftedY },
-    ];
-  };
-  const buildFootprintSupportLevel = (
-    quad: ProjectedQuad,
-    cols: number,
-    rows: number,
-    triangleCentroids: ScreenPt[],
-    level: number,
-    liftYPx: number,
-  ): FootprintSupportLevel => {
-    const cells: FootprintSupportCell[] = [];
-    let supportedCells = 0;
-    for (let row = 0; row < rows; row++) {
-      const v0 = row / rows;
-      const v1 = (row + 1) / rows;
-      for (let col = 0; col < cols; col++) {
-        const u0 = col / cols;
-        const u1 = (col + 1) / cols;
-        const cellQuad: ProjectedQuad = [
-          sampleProjectedQuadPoint(quad, u0, v0),
-          sampleProjectedQuadPoint(quad, u1, v0),
-          sampleProjectedQuadPoint(quad, u1, v1),
-          sampleProjectedQuadPoint(quad, u0, v1),
-        ];
-        let supported = false;
-        for (let ti = 0; ti < triangleCentroids.length; ti++) {
-          const centroid = triangleCentroids[ti];
-          if (!isPointInsideProjectedStructureFootprintQuad(cellQuad, centroid.x, centroid.y)) continue;
-          supported = true;
-          break;
-        }
-        if (supported) supportedCells++;
-        cells.push({
-          col,
-          row,
-          quad: cellQuad,
-          supported,
-        });
-      }
-    }
-    const totalCells = cols * rows;
-    return {
-      level,
-      liftYPx,
-      quad,
-      cells,
-      supportedCells,
-      totalCells,
-      anySupport: supportedCells > 0,
-      allSupported: supportedCells === totalCells,
-    };
-  };
-  const scanLiftedFootprintSupportLevels = (
-    baseQuad: ProjectedQuad,
-    cols: number,
-    rows: number,
-    triangleCentroids: ScreenPt[],
-  ): { levels: FootprintSupportLevel[]; highestValidLevel: number } => {
-    const levels: FootprintSupportLevel[] = [];
-    let highestValidLevel = -1;
-    const baseMaxY = Math.max(baseQuad[0].y, baseQuad[1].y, baseQuad[2].y, baseQuad[3].y);
-    let minCentroidY = Number.POSITIVE_INFINITY;
-    for (let i = 0; i < triangleCentroids.length; i++) {
-      minCentroidY = Math.min(minCentroidY, triangleCentroids[i].y);
-    }
-    const maxLevels = Number.isFinite(minCentroidY)
-      ? Math.max(1, Math.ceil((baseMaxY - minCentroidY) / STRUCTURE_FOOTPRINT_SCAN_STEP_PX) + 2)
-      : 1;
-    for (let level = 0; level < maxLevels; level++) {
-      const liftYPx = level * STRUCTURE_FOOTPRINT_SCAN_STEP_PX;
-      const liftedQuad = liftProjectedFootprintQuad(baseQuad, liftYPx);
-      const levelResult = buildFootprintSupportLevel(
-        liftedQuad,
-        cols,
-        rows,
-        triangleCentroids,
-        level,
-        liftYPx,
-      );
-      levels.push(levelResult);
-      if (levelResult.allSupported) highestValidLevel = level;
-      if (!levelResult.allSupported || !levelResult.anySupport) break;
-    }
-    return { levels, highestValidLevel };
-  };
   const runtimeStructureTriangleContextKey = buildRuntimeStructureTriangleContextKey({
     mapId: compiledMap.id,
     enabled: structureTriangleGeometryEnabled,
@@ -3482,7 +1560,7 @@ export async function renderSystem(
       mapId: compiledMap.id,
       structureTriangleGeometryEnabled,
       shadowCasterMode: SHADOW_CASTER_MODE,
-      shadowSunTimeHour: debug.shadowSunTimeHour,
+      shadowSunTimeHour: debugFlags.shadowSunTimeHour,
     },
     {
       v1: structureShadowV1CacheStore,
@@ -3815,6 +1893,22 @@ export async function renderSystem(
       structureV5ShadowByBand.set(zBand, bucket);
     }
     bucket.push(piece);
+  };
+
+  const drawStructureDrawableFn: SliceDrawFn = (payload) => {
+    renderStructurePass({
+      ctx,
+      payload: payload as StructureDrawablePayload,
+      showStructureSliceDebug: SHOW_STRUCTURE_SLICE_DEBUG,
+      tileWorld: T,
+      deferredStructureSliceDebugDraws,
+      resolveRelitCanvas: (pieceKey) => {
+        if (!pieceKey) return null;
+        const bakedEntry = staticRelightBakeStore.get(pieceKey);
+        return bakedEntry?.kind === "RELIT" ? bakedEntry.baked : null;
+      },
+      drawOverlayRenderPiece: drawRenderPiece,
+    });
   };
 
   // ----------------------------
@@ -4583,14 +2677,14 @@ export async function renderSystem(
               ctx.restore();
             }
           }
-          drawEntityAnchorOverlay(feet.screenX, feet.screenY, dx, dy, dw, dh);
+          drawEntityAnchorDebug(feet.screenX, feet.screenY, dx, dy, dw, dh);
         } else {
           ctx.globalAlpha = 1;
           ctx.fillStyle = baseColor;
           ctx.beginPath();
           ctx.ellipse(feet.screenX, feet.screenY, (w.eR[i] ?? 10) * ISO_X, (w.eR[i] ?? 10) * ISO_Y, 0, 0, Math.PI * 2);
           ctx.fill();
-          drawEntityAnchorOverlay(feet.screenX, feet.screenY, feet.screenX - 8, feet.screenY - 8, 16, 16);
+          drawEntityAnchorDebug(feet.screenX, feet.screenY, feet.screenX - 8, feet.screenY - 8, 16, 16);
         }
 
         if (isBoss) {
@@ -4680,7 +2774,7 @@ export async function renderSystem(
             ctx.restore();
           }
         }
-        drawEntityAnchorOverlay(feet.screenX, feet.screenY, dx, dy, dw, dh);
+        drawEntityAnchorDebug(feet.screenX, feet.screenY, dx, dy, dw, dh);
       };
 
       addToSlice(feet.slice, renderKey, drawClosure);
@@ -4757,7 +2851,7 @@ export async function renderSystem(
           }
         }
 
-        drawEntityAnchorOverlay(feet.screenX, feet.screenY, dx, dy, dw, dh);
+        drawEntityAnchorDebug(feet.screenX, feet.screenY, dx, dy, dw, dh);
 
         if (!mob.debug.renderLogged) {
           mob.debug.renderLogged = true;
@@ -5121,13 +3215,13 @@ export async function renderSystem(
             ctx.restore();
           }
         }
-        drawEntityAnchorOverlay(feet.screenX, feet.screenY, dx, dy, dw, dh);
+        drawEntityAnchorDebug(feet.screenX, feet.screenY, dx, dy, dw, dh);
       } else {
         ctx.fillStyle = "#eaeaf2";
         ctx.beginPath();
         ctx.ellipse(feet.screenX, feet.screenY, PLAYER_R * ISO_X, PLAYER_R * ISO_Y, 0, 0, Math.PI * 2);
         ctx.fill();
-        drawEntityAnchorOverlay(feet.screenX, feet.screenY, feet.screenX - 8, feet.screenY - 8, 16, 16);
+        drawEntityAnchorDebug(feet.screenX, feet.screenY, feet.screenX - 8, feet.screenY - 8, 16, 16);
       }
     };
 
@@ -5226,1315 +3320,94 @@ export async function renderSystem(
       });
     }
   }
+  // ----------------------------
+  // Collect OVERLAYS (roofs + props) into slices
+  // ----------------------------
+  {
+    const structureAdmission = resolveStructureOverlayAdmissionContext({
+      compiledMap,
+      strictViewportTileBounds,
+      viewRect,
+      structureTriangleGeometryEnabled,
+      structureTriangleAdmissionMode,
+    });
 
-    // ----------------------------
-    // Collect OVERLAYS (roofs + props) into slices
-    // ----------------------------
-    if (debugFlags.showMapOverlays) {
-      const triangleOverlayPrefilterBounds = structureTriangleAdmissionMode === "viewport"
-        ? strictViewportTileBounds
-        : viewRect;
-      // In triangle-geometry mode, STRUCTURE visibility authority is triangle camera-tiles.
-      // So we must not cull structures by overlay footprint before triangle admission runs.
-      const overlayPrefilterViewRect = structureTriangleGeometryEnabled
-        ? mapWideOverlayViewRect(compiledMap)
-        : viewRect;
-      const ovs = overlaysInView(overlayPrefilterViewRect);
-      for (let i = 0; i < ovs.length; i++) {
-        const o = ovs[i];
-        const passesOverlayCoarsePrefilter = structureTriangleGeometryEnabled && o.layerRole === "STRUCTURE"
-          ? true
-          : tileRectIntersectsRenderRadius(o.tx, o.tx + o.w - 1, o.ty, o.ty + o.h - 1);
-        if (!passesOverlayCoarsePrefilter) continue;
-        if ((o.kind ?? "ROOF") === "ROOF" && shouldCullBuildingAt(o.tx, o.ty, o.w, o.h)) continue;
-        const draw = buildOverlayDraw(o);
-        if (!draw) continue;
-        const structureSouthTieBreak = o.layerRole === "STRUCTURE"
-          ? deriveStructureSouthTieBreakFromSeAnchor(o.seTx, o.seTy)
-          : null;
-        const useRuntimeStructureSlicing =
-          o.kind === "PROP" || o.layerRole === "STRUCTURE";
+    const structureOverlayCandidates = collectStructureOverlays({
+      showMapOverlays: debugFlags.showMapOverlays,
+      admission: structureAdmission,
+      structureTriangleGeometryEnabled,
+      tileRectIntersectsRenderRadius,
+      shouldCullBuildingAt,
+      buildOverlayDraw,
+      deriveStructureSouthTieBreakFromSeAnchor,
+    });
 
-          if (useRuntimeStructureSlicing) {
-          const bandPieces = buildRuntimeStructureBandPieces({
-            structureInstanceId: o.id,
-            spriteId: o.spriteId,
-            seTx: o.seTx,
-            seTy: o.seTy,
-            footprintW: o.w,
-            footprintH: o.h,
-            flipped: !!o.flipX,
-            sliceOffsetX: o.sliceOffsetPx?.x  ?? 0,
-            sliceOffsetY: o.sliceOffsetPx?.y ?? 0,
-            sliceOriginX: o.sliceOriginPx?.x,
-            baseZ: o.z,
-            baseDx: draw.dx,
-            baseDy: draw.dy,
-            spriteWidth: draw.dw,
-            spriteHeight: draw.dh,
-            scale: draw.scale ?? 1,
-          });
+    const structureSliceBuild = buildStructureSlices({
+      ctx,
+      candidates: structureOverlayCandidates,
+      tileWorld: T,
+      projectedViewportRect,
+      strictViewportTileBounds,
+      structureTriangleGeometryEnabled,
+      structureTriangleAdmissionMode,
+      structureTriangleCutoutEnabled,
+      structureTriangleCutoutHalfWidth,
+      structureTriangleCutoutHalfHeight,
+      structureTriangleCutoutAlpha,
+      structureCutoutScreenRect,
+      isPointInsideStructureCutoutScreenRect,
+      playerCameraTx,
+      playerCameraTy,
+      isTileInRenderRadius,
+      isParentTileAfterPlayer,
+      toScreenAtZ,
+      rampRoadTiles,
+      resolveRenderZBand,
+      structureShadowFrame,
+      v6PrimarySemanticBucket: SHADOW_V6_PRIMARY_SEMANTIC_BUCKET,
+      v6SecondarySemanticBucket: SHADOW_V6_SECONDARY_SEMANTIC_BUCKET,
+      v6TopSemanticBucket: SHADOW_V6_TOP_SEMANTIC_BUCKET,
+      runtimeStructureTriangleCacheStore,
+      getFlippedOverlayImage,
+      showStructureSliceDebug: SHOW_STRUCTURE_SLICE_DEBUG,
+      showStructureTriangleFootprintDebug: SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG,
+      shadowV1DebugGeometryMode: SHADOW_V1_DEBUG_GEOMETRY_MODE,
+      deferredStructureSliceDebugDraws,
+      didQueueStructureCutoutDebugRect,
+      logStructureOwnershipDebug: LOG_STRUCTURE_OWNERSHIP_DEBUG,
+      loggedStructureOwnershipDebugIds,
+      shadowQueueCallbacks: {
+        queueStructureShadowTrianglesForBand,
+        queueStructureHybridShadowForBand,
+        queueStructureV4ShadowForBand,
+        queueStructureV5ShadowForBand,
+        structureV6ShadowDebugCandidates,
+      },
+      shadowDiagnostics: {
+        hybrid: hybridShadowDiagnosticStats,
+        v4: v4ShadowDiagnosticStats,
+        v5: v5ShadowDiagnosticStats,
+      },
+      staticRelightFrame: staticRelight.frame,
+      structureShadowV1CacheStore,
+      structureShadowV2CacheStore,
+      structureShadowHybridCacheStore,
+      structureShadowV4CacheStore,
+    });
 
-          if (LOG_STRUCTURE_OWNERSHIP_DEBUG && !loggedStructureOwnershipDebugIds.has(o.id)) {
-            loggedStructureOwnershipDebugIds.add(o.id);
-            const oriented = { w: Math.max(1, o.w | 0), h: Math.max(1, o.h | 0) };
-            const expectedSE = seAnchorFromTopLeft(o.tx, o.ty, oriented.w, oriented.h);
-            const owners = bandPieces.map((piece) => ({
-              tx: piece.renderKey.within,
-              ty: piece.renderKey.slice - piece.renderKey.within,
-            }));
-            console.log("[structure-ownership]", {
-              structureId: o.id,
-              flipped: !!o.flipX,
-              w: oriented.w,
-              h: oriented.h,
-              anchorTx: o.seTx,
-              anchorTy: o.seTy,
-              seMatchesTopLeft: o.seTx === expectedSE.anchorTx && o.seTy === expectedSE.anchorTy,
-              first3: owners.slice(0, 3),
-              last3: owners.slice(Math.max(0, owners.length - 3)),
-            });
-          }
+    didQueueStructureCutoutDebugRect = structureSliceBuild.didQueueStructureCutoutDebugRect;
 
-          let usedTriangleGeometryPath = false;
-          if (structureTriangleGeometryEnabled && o.layerRole === "STRUCTURE") {
-            const geometrySignature = runtimeStructureTriangleGeometrySignatureForOverlay(o, {
-              dx: draw.dx,
-              dy: draw.dy,
-              dw: draw.dw,
-              dh: draw.dh,
-              flipX: !!draw.flipX,
-              scale: draw.scale ?? 1,
-            });
-            const triangleCache = runtimeStructureTriangleCacheStore.get(o.id, geometrySignature);
-	            if (triangleCache && draw.img) {
-	              usedTriangleGeometryPath = true;
-	              const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(draw.img) : draw.img;
-                const usingV5Caster = structureShadowFrame.routing.usesV5;
-                const usingV6Caster = structureShadowFrame.routing.usesV6;
-                const admittedTrianglesForSemanticMasks: typeof triangleCache.triangles = [];
-	              const footprintW = Math.max(1, o.w | 0);
-	              const footprintH = Math.max(1, o.h | 0);
-              const buildingMinCameraTx = o.tx;
-              const buildingMaxCameraTx = o.tx + footprintW - 1;
-              const buildingMinCameraTy = o.ty;
-              const buildingMaxCameraTy = o.ty + footprintH - 1;
-	              const buildingDirectionalRejected = (
-	                buildingMaxCameraTx < playerCameraTx
-	                || buildingMaxCameraTy < playerCameraTy
-	              );
-	              const buildingDirectionalEligible = !buildingDirectionalRejected;
-	              const projectedFootprintQuad = SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG
-	                ? buildProjectedStructureFootprintQuad(o)
-	                : null;
-	              let overlayHasVisibleTriangleGroup = false;
-                let structureShadowCacheHit = false;
-	              if (SHOW_STRUCTURE_SLICE_DEBUG && structureTriangleCutoutEnabled && !didQueueStructureCutoutDebugRect) {
-	                didQueueStructureCutoutDebugRect = true;
-	                deferredStructureSliceDebugDraws.push(() => {
-                  ctx.save();
-                  const x = structureCutoutScreenRect.minX;
-                  const y = structureCutoutScreenRect.minY;
-                  const wRect = structureCutoutScreenRect.maxX - structureCutoutScreenRect.minX;
-                  const hRect = structureCutoutScreenRect.maxY - structureCutoutScreenRect.minY;
-                  ctx.fillStyle = "rgba(120,40,255,0.08)";
-                  ctx.strokeStyle = "rgba(160,90,255,0.8)";
-                  ctx.lineWidth = 1;
-                  ctx.fillRect(x, y, wRect, hRect);
-                  ctx.strokeRect(x, y, wRect, hRect);
-                  ctx.font = "11px monospace";
-                  const labelPos = worldToScreen(playerCameraTx * T, playerCameraTy * T);
-                  const label = `cutout screenRect C:${playerCameraTx},${playerCameraTy} w:${structureTriangleCutoutHalfWidth} h:${structureTriangleCutoutHalfHeight} px:${Math.round(wRect)}x${Math.round(hRect)} a:${structureTriangleCutoutAlpha.toFixed(2)}`;
-                  ctx.fillStyle = "rgba(0,0,0,0.8)";
-                  ctx.fillText(label, labelPos.x + 9, labelPos.y - 7);
-                  ctx.fillStyle = "rgba(185,145,255,0.95)";
-                  ctx.fillText(label, labelPos.x + 8, labelPos.y - 8);
-                  ctx.restore();
-                });
-              }
-              for (let gi = 0; gi < triangleCache.parentTileGroups.length; gi++) {
-                const group = triangleCache.parentTileGroups[gi];
-                const groupParentAfterPlayer = isParentTileAfterPlayer(group.parentTx, group.parentTy);
-                const groupBoundsInViewport = runtimeStructureRectIntersects(group.localBounds, projectedViewportRect);
-                const isCameraTileInsideStrictViewport = (tx: number, ty: number): boolean => (
-                  tx >= strictViewportTileBounds.minTx
-                  && tx <= strictViewportTileBounds.maxTx
-                  && ty >= strictViewportTileBounds.minTy
-                  && ty <= strictViewportTileBounds.maxTy
-                );
-                const viewportVisibleTriangles = [] as typeof group.triangles;
-                const renderDistanceVisibleTriangles = [] as typeof group.triangles;
-                const finalVisibleTriangles = [] as typeof group.triangles;
-                const cutoutEligibleTriangles = [] as typeof group.triangles;
-                let cutoutBuildingRejectedCount = 0;
-                const compareDistanceOnlyTriangles = [] as typeof group.triangles;
-                for (let ti = 0; ti < group.triangles.length; ti++) {
-                  const tri = group.triangles[ti];
-                  const viewportVisible = isCameraTileInsideStrictViewport(tri.cameraTx, tri.cameraTy);
-                  const renderDistanceVisible = isTileInRenderRadius(tri.cameraTx, tri.cameraTy);
-                  if (viewportVisible) viewportVisibleTriangles.push(tri);
-                  if (renderDistanceVisible) renderDistanceVisibleTriangles.push(tri);
-                  const finalVisible = structureTriangleAdmissionMode === "viewport"
-                    ? viewportVisible
-                    : structureTriangleAdmissionMode === "renderDistance"
-                      ? renderDistanceVisible
-                      : structureTriangleAdmissionMode === "hybrid"
-                        ? (renderDistanceVisible && viewportVisible)
-                        : renderDistanceVisible;
-                  if (finalVisible) {
-                    finalVisibleTriangles.push(tri);
-                    if (structureTriangleAdmissionMode === "compare" && renderDistanceVisible && !viewportVisible) {
-                      compareDistanceOnlyTriangles.push(tri);
-                    }
-                    if (structureTriangleCutoutEnabled && !buildingDirectionalEligible) cutoutBuildingRejectedCount++;
-                    const triCenterX = (tri.points[0].x + tri.points[1].x + tri.points[2].x) / 3;
-                    const triCenterY = (tri.points[0].y + tri.points[1].y + tri.points[2].y) / 3;
-                    const cutoutEligible = structureTriangleCutoutEnabled
-                      && buildingDirectionalEligible
-                      && groupParentAfterPlayer
-                      && isPointInsideStructureCutoutScreenRect(triCenterX, triCenterY);
-                    if (cutoutEligible) cutoutEligibleTriangles.push(tri);
-                  }
-                }
-                const finalAdmitted = finalVisibleTriangles.length > 0;
-                if (SHOW_STRUCTURE_SLICE_DEBUG) {
-                  deferredStructureSliceDebugDraws.push(() => {
-                    ctx.save();
-                    const bounds = group.localBounds;
-                    const admittedViewportStyle = finalAdmitted && compareDistanceOnlyTriangles.length === 0;
-                    ctx.lineWidth = admittedViewportStyle ? 1.5 : 1;
-                    ctx.strokeStyle = admittedViewportStyle
-                      ? "rgba(0,255,170,0.92)"
-                      : compareDistanceOnlyTriangles.length > 0
-                        ? "rgba(255,120,40,0.92)"
-                        : "rgba(255,180,90,0.65)";
-                    ctx.fillStyle = admittedViewportStyle
-                      ? "rgba(0,255,170,0.08)"
-                      : compareDistanceOnlyTriangles.length > 0
-                        ? "rgba(255,120,40,0.08)"
-                        : "rgba(255,180,90,0.04)";
-                    ctx.fillRect(bounds.x, bounds.y, bounds.w, bounds.h);
-                    ctx.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
-                    for (let ti = 0; ti < group.triangles.length; ti++) {
-                      const tri = group.triangles[ti];
-                      const [a, b, c] = tri.points;
-                      ctx.beginPath();
-                      ctx.moveTo(a.x, a.y);
-                      ctx.lineTo(b.x, b.y);
-                      ctx.lineTo(c.x, c.y);
-                      ctx.closePath();
-                      ctx.strokeStyle = admittedViewportStyle
-                        ? "rgba(0,255,170,0.72)"
-                        : compareDistanceOnlyTriangles.length > 0
-                          ? "rgba(255,120,40,0.72)"
-                          : "rgba(255,180,90,0.38)";
-                      ctx.stroke();
-                    }
-                    const labelX = bounds.x + bounds.w * 0.5;
-                    const labelY = bounds.y + bounds.h * 0.5;
-                    const representativeCamera = finalVisibleTriangles[0] ?? group.triangles[0] ?? null;
-                    const labelSuffix = compareDistanceOnlyTriangles.length > 0 ? " rd-only" : "";
-                    const label = representativeCamera
-                      ? `P:${group.parentTx},${group.parentTy} C:${representativeCamera.cameraTx},${representativeCamera.cameraTy}${labelSuffix}`
-                      : `P:${group.parentTx},${group.parentTy}${labelSuffix}`;
-                    ctx.font = "10px monospace";
-                    ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
-                    ctx.fillText(label, labelX + 1, labelY + 1);
-                    ctx.fillStyle = admittedViewportStyle
-                      ? "rgba(0,255,170,0.96)"
-                      : compareDistanceOnlyTriangles.length > 0
-                        ? "rgba(255,120,40,0.95)"
-                        : "rgba(255,180,90,0.95)";
-                    ctx.fillText(label, labelX, labelY);
-                    const statsLabel = `vis:${finalVisibleTriangles.length}/${group.triangles.length} vp:${viewportVisibleTriangles.length} rd:${renderDistanceVisibleTriangles.length} cut:${cutoutEligibleTriangles.length} bdir:${buildingDirectionalEligible ? "pass" : "rej"} brej:${cutoutBuildingRejectedCount} bbox:${buildingMinCameraTx},${buildingMinCameraTy}-${buildingMaxCameraTx},${buildingMaxCameraTy} gb:${groupBoundsInViewport ? 1 : 0}`;
-                    ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
-                    ctx.fillText(statsLabel, labelX + 1, labelY + 12);
-                    ctx.fillStyle = "rgba(220, 240, 255, 0.95)";
-                    ctx.fillText(statsLabel, labelX, labelY + 11);
-                    ctx.restore();
-                  });
-	                }
-	                if (!finalAdmitted) continue;
-	                if (usingV5Caster || usingV6Caster) admittedTrianglesForSemanticMasks.push(...finalVisibleTriangles);
-	                overlayHasVisibleTriangleGroup = true;
-	                const renderFields = deriveParentTileRenderFields(group.parentTx, group.parentTy);
-	                const overlayKey: RenderKey = {
-	                  slice: renderFields.slice,
-                  within: renderFields.within,
-                  baseZ: o.z,
-                  kindOrder: KindOrder.STRUCTURE,
-                  ...(structureSouthTieBreak ?? {}),
-                  stableId: group.stableId,
-                };
-                addToSlice(renderFields.slice, overlayKey, () => {
-                  ctx.imageSmoothingEnabled = false;
-                  for (let ti = 0; ti < finalVisibleTriangles.length; ti++) {
-                    const tri = finalVisibleTriangles[ti];
-                    const [s0, s1, s2] = tri.srcPoints;
-                    const [d0, d1, d2] = tri.points;
-                    const cutoutEligible = structureTriangleCutoutEnabled
-                      && buildingDirectionalEligible
-                      && groupParentAfterPlayer
-                      && isPointInsideStructureCutoutScreenRect(
-                        (tri.points[0].x + tri.points[1].x + tri.points[2].x) / 3,
-                        (tri.points[0].y + tri.points[1].y + tri.points[2].y) / 3,
-                      );
-                    if (cutoutEligible && structureTriangleCutoutAlpha < 1) {
-                      ctx.save();
-                      ctx.globalAlpha = ctx.globalAlpha * structureTriangleCutoutAlpha;
-                      drawTexturedTriangle(
-                        ctx,
-                        sourceImg,
-                        draw.dw,
-                        draw.dh,
-                        s0,
-                        s1,
-                        s2,
-                        d0,
-                        d1,
-                        d2,
-                      );
-                      ctx.restore();
-                    } else {
-                      drawTexturedTriangle(
-                        ctx,
-                        sourceImg,
-                        draw.dw,
-                        draw.dh,
-                        s0,
-                        s1,
-                        s2,
-                        d0,
-                        d1,
-                        d2,
-                      );
-                    }
-                    const compareDistanceOnly = compareDistanceOnlyTriangles.includes(tri);
-                    if (compareDistanceOnly) {
-                      const [a, b, c] = tri.points;
-                      ctx.save();
-                      ctx.beginPath();
-                      ctx.moveTo(a.x, a.y);
-                      ctx.lineTo(b.x, b.y);
-                      ctx.lineTo(c.x, c.y);
-                      ctx.closePath();
-                      ctx.fillStyle = "rgba(255,120,40,0.28)";
-                      ctx.fill();
-                      ctx.strokeStyle = "rgba(255,120,40,0.9)";
-                      ctx.lineWidth = 1;
-                      ctx.stroke();
-                      ctx.restore();
-                    }
-                    if (SHOW_STRUCTURE_SLICE_DEBUG && cutoutEligible) {
-                      const [a, b, c] = tri.points;
-                      ctx.save();
-                      ctx.beginPath();
-                      ctx.moveTo(a.x, a.y);
-                      ctx.lineTo(b.x, b.y);
-                      ctx.lineTo(c.x, c.y);
-                      ctx.closePath();
-                      ctx.fillStyle = "rgba(160,90,255,0.18)";
-                      ctx.fill();
-                      ctx.strokeStyle = "rgba(190,130,255,0.95)";
-                      ctx.lineWidth = 1;
-                      ctx.stroke();
-                      ctx.restore();
-	                    }
-	                  }
-	                });
-	              }
-              if (overlayHasVisibleTriangleGroup) {
-                const structureShadowBand = resolveRenderZBand(
-                  {
-                    slice: o.seTx + o.seTy,
-                    within: o.seTx,
-                    baseZ: o.z,
-                  },
-                  rampRoadTiles,
-                );
-                const structureShadowResult = buildOrchestratedStructureShadowFrameResult({
-                  frame: structureShadowFrame,
-                  overlay: o,
-                  triangleCache,
-                  geometrySignature,
-                  tileWorld: T,
-                  toScreenAtZ,
-                  draw: {
-                    dx: draw.dx,
-                    dy: draw.dy,
-                    dw: draw.dw,
-                    dh: draw.dh,
-                    scale: draw.scale ?? 1,
-                  },
-                  sourceImage: sourceImg,
-                  admittedTrianglesForSemanticMasks,
-                  projectedViewportRect,
-                  projectedRectIntersects: runtimeStructureRectIntersects,
-                  structureShadowBand,
-                  v6PrimarySemanticBucket: SHADOW_V6_PRIMARY_SEMANTIC_BUCKET,
-                  v6SecondarySemanticBucket: SHADOW_V6_SECONDARY_SEMANTIC_BUCKET,
-                  v6TopSemanticBucket: SHADOW_V6_TOP_SEMANTIC_BUCKET,
-                  cacheStores: {
-                    v1: structureShadowV1CacheStore,
-                    v2: structureShadowV2CacheStore,
-                    hybrid: structureShadowHybridCacheStore,
-                    v4: structureShadowV4CacheStore,
-                  },
-                  diagnostics: {
-                    hybrid: hybridShadowDiagnosticStats,
-                    v4: v4ShadowDiagnosticStats,
-                  },
-                });
-
-                const structureShadowV1CacheEntry = structureShadowResult.structureShadowV1CacheEntry;
-                const structureShadowV2CacheEntry = structureShadowResult.structureShadowV2CacheEntry;
-                const structureShadowHybridCacheEntry = structureShadowResult.structureShadowHybridCacheEntry;
-                const structureShadowV4CacheEntry = structureShadowResult.structureShadowV4CacheEntry;
-                const debugShadowCacheHit = structureShadowResult.structureShadowCacheHit;
-
-                if (structureShadowResult.v6Candidate) {
-                  structureV6ShadowDebugCandidates.push(structureShadowResult.v6Candidate);
-                }
-
-                if (structureShadowResult.v5Piece) {
-                  queueStructureV5ShadowForBand(structureShadowBand, structureShadowResult.v5Piece);
-                  v5ShadowDiagnosticStats.piecesQueued += 1;
-                  v5ShadowDiagnosticStats.trianglesQueued += structureShadowResult.v5Piece.triangles.length;
-                } else if (structureShadowResult.v4Piece) {
-                  queueStructureV4ShadowForBand(structureShadowBand, structureShadowResult.v4Piece);
-                  v4ShadowDiagnosticStats.piecesQueued += 1;
-                  v4ShadowDiagnosticStats.trianglesQueued += structureShadowResult.v4Piece.triangleCorrespondence.length;
-                  v4ShadowDiagnosticStats.topCapTrianglesQueued += structureShadowResult.v4Piece.topCapTriangles.length;
-                } else if (structureShadowResult.hybridPiece) {
-                  queueStructureHybridShadowForBand(structureShadowBand, structureShadowResult.hybridPiece);
-                  hybridShadowDiagnosticStats.piecesQueued += 1;
-                  hybridShadowDiagnosticStats.trianglesQueued += structureShadowResult.hybridPiece.projectedMappings.length;
-                } else if (structureShadowResult.projectedTriangles) {
-                  queueStructureShadowTrianglesForBand(structureShadowBand, structureShadowResult.projectedTriangles);
-                }
-
-                if (SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG) {
-                  if (structureShadowV4CacheEntry) {
-                    const debugShadowEntry = structureShadowV4CacheEntry;
-                    deferredStructureSliceDebugDraws.push(() => {
-                      ctx.save();
-                      ctx.lineWidth = 1.15;
-                      ctx.font = "9px monospace";
-                      const selectedGroup = debugShadowEntry.triangleCorrespondenceGroups[0] ?? null;
-                      const selectedSliceIndex = selectedGroup?.sliceIndex ?? debugShadowEntry.sliceStrips[0]?.sliceIndex ?? null;
-                      const selectedBandIndex = selectedGroup?.bandIndex ?? 0;
-                      const bandPairByKey = new Map<string, (typeof debugShadowEntry.destinationBandTriangles)[number]>();
-                      for (let pi = 0; pi < debugShadowEntry.destinationBandTriangles.length; pi++) {
-                        const pair = debugShadowEntry.destinationBandTriangles[pi];
-                        bandPairByKey.set(`${pair.sliceIndex}:${pair.bandIndex}`, pair);
-                      }
-                      // 0) Top cap shadow geometry (distinct from strips).
-                      for (let ti = 0; ti < debugShadowEntry.topCapTriangles.length; ti++) {
-                        const [a, b, c] = debugShadowEntry.topCapTriangles[ti];
-                        ctx.beginPath();
-                        ctx.moveTo(a.x, a.y);
-                        ctx.lineTo(b.x, b.y);
-                        ctx.lineTo(c.x, c.y);
-                        ctx.closePath();
-                        ctx.fillStyle = "rgba(255, 175, 70, 0.16)";
-                        ctx.strokeStyle = "rgba(255, 205, 115, 0.95)";
-                        ctx.fill();
-                        ctx.stroke();
-                      }
-                      // 1) Layer edges (faint). Selected slice is highlighted for readability.
-                      for (let li = 0; li < debugShadowEntry.layerEdges.length; li++) {
-                        const layerEdge = debugShadowEntry.layerEdges[li];
-                        const isSelectedSlice = selectedSliceIndex != null && layerEdge.sliceIndex === selectedSliceIndex;
-                        const midX = (layerEdge.a.x + layerEdge.b.x) * 0.5;
-                        const midY = (layerEdge.a.y + layerEdge.b.y) * 0.5;
-                        ctx.beginPath();
-                        ctx.moveTo(layerEdge.a.x, layerEdge.a.y);
-                        ctx.lineTo(layerEdge.b.x, layerEdge.b.y);
-                        ctx.strokeStyle = isSelectedSlice
-                          ? "rgba(170, 230, 255, 0.75)"
-                          : "rgba(170, 230, 255, 0.30)";
-                        ctx.stroke();
-                        if (isSelectedSlice) {
-                          ctx.fillStyle = "rgba(200, 235, 255, 0.92)";
-                          ctx.fillText(`${layerEdge.layerIndex}`, midX + 2, midY - 2);
-                        }
-                      }
-                      // 2) Band side edges lower->upper.
-                      for (let bi = 0; bi < debugShadowEntry.layerBands.length; bi++) {
-                        const band = debugShadowEntry.layerBands[bi];
-                        const isSelectedSlice = selectedSliceIndex != null && band.sliceIndex === selectedSliceIndex;
-                        ctx.beginPath();
-                        ctx.moveTo(band.lowerA.x, band.lowerA.y);
-                        ctx.lineTo(band.upperA.x, band.upperA.y);
-                        ctx.moveTo(band.lowerB.x, band.lowerB.y);
-                        ctx.lineTo(band.upperB.x, band.upperB.y);
-                        ctx.strokeStyle = isSelectedSlice
-                          ? "rgba(120, 240, 220, 0.8)"
-                          : "rgba(120, 240, 220, 0.25)";
-                        ctx.stroke();
-                      }
-                      // 3) Band quad outline + runtime diagonal per (sliceParity + bandIndex).
-                      for (let bi = 0; bi < debugShadowEntry.layerBands.length; bi++) {
-                        const band = debugShadowEntry.layerBands[bi];
-                        const pair = bandPairByKey.get(`${band.sliceIndex}:${band.bandIndex}`);
-                        const isSelectedSlice = selectedSliceIndex != null && band.sliceIndex === selectedSliceIndex;
-                        const isSelectedBand = isSelectedSlice && band.bandIndex === selectedBandIndex;
-                        ctx.beginPath();
-                        ctx.moveTo(band.lowerA.x, band.lowerA.y);
-                        ctx.lineTo(band.lowerB.x, band.lowerB.y);
-                        ctx.lineTo(band.upperB.x, band.upperB.y);
-                        ctx.lineTo(band.upperA.x, band.upperA.y);
-                        ctx.closePath();
-                        ctx.strokeStyle = isSelectedBand
-                          ? "rgba(230, 245, 255, 0.85)"
-                          : isSelectedSlice
-                          ? "rgba(205, 215, 255, 0.70)"
-                          : "rgba(205, 215, 255, 0.20)";
-                        ctx.stroke();
-                        if (pair) {
-                          ctx.beginPath();
-                          if (pair.diagonal === "A_to_Bprime") {
-                            ctx.moveTo(band.lowerA.x, band.lowerA.y);
-                            ctx.lineTo(band.upperB.x, band.upperB.y);
-                          } else {
-                            ctx.moveTo(band.lowerB.x, band.lowerB.y);
-                            ctx.lineTo(band.upperA.x, band.upperA.y);
-                          }
-                          ctx.strokeStyle = isSelectedSlice
-                            ? "rgba(255, 245, 125, 0.92)"
-                            : "rgba(255, 245, 125, 0.28)";
-                          ctx.stroke();
-                        }
-                        if (isSelectedSlice) {
-                          const centerX = (band.lowerA.x + band.lowerB.x + band.upperA.x + band.upperB.x) * 0.25;
-                          const centerY = (band.lowerA.y + band.lowerB.y + band.upperA.y + band.upperB.y) * 0.25;
-                          ctx.fillStyle = "rgba(225, 235, 255, 0.9)";
-                          const suffix = isSelectedBand ? "*" : "";
-                          ctx.fillText(`b${band.bandIndex}${suffix}`, centerX + 2, centerY - 2);
-                        }
-                      }
-                      // 4) Destination triangles tri0 / tri1.
-                      for (let pi = 0; pi < debugShadowEntry.destinationBandTriangles.length; pi++) {
-                        const pair = debugShadowEntry.destinationBandTriangles[pi];
-                        const isSelectedSlice = selectedSliceIndex != null && pair.sliceIndex === selectedSliceIndex;
-                        const [t0a, t0b, t0c] = pair.tri0;
-                        const [t1a, t1b, t1c] = pair.tri1;
-                        ctx.beginPath();
-                        ctx.moveTo(t0a.x, t0a.y);
-                        ctx.lineTo(t0b.x, t0b.y);
-                        ctx.lineTo(t0c.x, t0c.y);
-                        ctx.closePath();
-                        ctx.strokeStyle = isSelectedSlice
-                          ? "rgba(255, 120, 170, 0.85)"
-                          : "rgba(255, 120, 170, 0.32)";
-                        ctx.stroke();
-                        ctx.beginPath();
-                        ctx.moveTo(t1a.x, t1a.y);
-                        ctx.lineTo(t1b.x, t1b.y);
-                        ctx.lineTo(t1c.x, t1c.y);
-                        ctx.closePath();
-                        ctx.strokeStyle = isSelectedSlice
-                          ? "rgba(165, 145, 255, 0.85)"
-                          : "rgba(165, 145, 255, 0.30)";
-                        ctx.stroke();
-                        if (isSelectedSlice) {
-                          const t0cx = (t0a.x + t0b.x + t0c.x) / 3;
-                          const t0cy = (t0a.y + t0b.y + t0c.y) / 3;
-                          const t1cx = (t1a.x + t1b.x + t1c.x) / 3;
-                          const t1cy = (t1a.y + t1b.y + t1c.y) / 3;
-                          ctx.fillStyle = "rgba(255, 130, 180, 0.95)";
-                          ctx.fillText("t0", t0cx + 1, t0cy - 1);
-                          ctx.fillStyle = "rgba(180, 160, 255, 0.95)";
-                          ctx.fillText("t1", t1cx + 1, t1cy - 1);
-                        }
-                      }
-                      const triangleCentroid = (tri: readonly [{ x: number; y: number }, { x: number; y: number }, { x: number; y: number }]) => ({
-                        x: (tri[0].x + tri[1].x + tri[2].x) / 3,
-                        y: (tri[0].y + tri[1].y + tri[2].y) / 3,
-                      });
-                      // 5) Explicit source -> destination correspondence for selected slice+band.
-                      for (let gi = 0; gi < debugShadowEntry.triangleCorrespondenceGroups.length; gi++) {
-                        const group = debugShadowEntry.triangleCorrespondenceGroups[gi];
-                        const isSelectedGroup = selectedSliceIndex != null
-                          && group.sliceIndex === selectedSliceIndex
-                          && group.bandIndex === selectedBandIndex;
-                        if (!isSelectedGroup) continue;
-                        for (let si = 0; si < group.sourceTriangles.length; si++) {
-                          const src = group.sourceTriangles[si];
-                          const [a, b, c] = src.sourceTrianglePoints;
-                          ctx.beginPath();
-                          ctx.moveTo(a.x, a.y);
-                          ctx.lineTo(b.x, b.y);
-                          ctx.lineTo(c.x, c.y);
-                          ctx.closePath();
-                          ctx.strokeStyle = "rgba(255, 150, 70, 0.92)";
-                          ctx.stroke();
-                        }
-                        for (let di = 0; di < group.destinationTriangles.length; di++) {
-                          const dst = group.destinationTriangles[di];
-                          const [a, b, c] = dst.destinationTrianglePoints;
-                          ctx.beginPath();
-                          ctx.moveTo(a.x, a.y);
-                          ctx.lineTo(b.x, b.y);
-                          ctx.lineTo(c.x, c.y);
-                          ctx.closePath();
-                          ctx.strokeStyle = "rgba(90, 255, 160, 0.92)";
-                          ctx.stroke();
-                        }
-                        for (let ci = 0; ci < group.correspondences.length; ci++) {
-                          const pair = group.correspondences[ci];
-                          const srcCentroid = triangleCentroid(pair.sourceTrianglePoints);
-                          const dstCentroid = triangleCentroid(pair.destinationTrianglePoints);
-                          const midX = (srcCentroid.x + dstCentroid.x) * 0.5;
-                          const midY = (srcCentroid.y + dstCentroid.y) * 0.5;
-                          ctx.beginPath();
-                          ctx.moveTo(srcCentroid.x, srcCentroid.y);
-                          ctx.lineTo(dstCentroid.x, dstCentroid.y);
-                          ctx.strokeStyle = "rgba(255, 225, 85, 0.95)";
-                          ctx.stroke();
-                          ctx.fillStyle = "rgba(255, 250, 205, 0.98)";
-                          ctx.fillText(
-                            `s${pair.sliceIndex} b${pair.bandIndex} src${pair.sourceTriangleIndexWithinBand}->dst${pair.destinationTriangleIndex}`,
-                            midX + 2,
-                            midY - 2,
-                          );
-                        }
-                        if (group.mismatch) {
-                          const srcAnchor = group.sourceTriangles[0]
-                            ? triangleCentroid(group.sourceTriangles[0].sourceTrianglePoints)
-                            : null;
-                          const dstAnchor = group.destinationTriangles[0]
-                            ? triangleCentroid(group.destinationTriangles[0].destinationTrianglePoints)
-                            : null;
-                          const anchorX = srcAnchor ? srcAnchor.x : (dstAnchor ? dstAnchor.x : draw.dx);
-                          const anchorY = srcAnchor ? srcAnchor.y : (dstAnchor ? dstAnchor.y : draw.dy);
-                          ctx.fillStyle = "rgba(255, 90, 90, 0.98)";
-                          ctx.fillText(
-                            `MISMATCH s${group.sliceIndex} b${group.bandIndex} src:${group.mismatch.sourceTriangleCount} dst:${group.mismatch.destinationTriangleCount}`,
-                            anchorX + 4,
-                            anchorY - 10,
-                          );
-                        }
-                      }
-                      for (let mi = 0; mi < debugShadowEntry.triangleCorrespondenceMismatches.length; mi++) {
-                        const mismatch = debugShadowEntry.triangleCorrespondenceMismatches[mi];
-                        const sourceCandidate = debugShadowEntry.sourceBandTriangles.find(
-                          (source) => source.sliceIndex === mismatch.sliceIndex && source.bandIndex === mismatch.bandIndex,
-                        );
-                        const destinationCandidate = debugShadowEntry.destinationBandEntries.find(
-                          (destination) => destination.sliceIndex === mismatch.sliceIndex && destination.bandIndex === mismatch.bandIndex,
-                        );
-                        const sourceAnchor = sourceCandidate ? triangleCentroid(sourceCandidate.sourceTrianglePoints) : null;
-                        const destinationAnchor = destinationCandidate ? triangleCentroid(destinationCandidate.destinationTrianglePoints) : null;
-                        const anchorX = sourceAnchor ? sourceAnchor.x : (destinationAnchor ? destinationAnchor.x : draw.dx);
-                        const anchorY = sourceAnchor ? sourceAnchor.y : (destinationAnchor ? destinationAnchor.y : draw.dy);
-                        ctx.beginPath();
-                        ctx.arc(anchorX, anchorY, 3, 0, Math.PI * 2);
-                        ctx.fillStyle = "rgba(255, 70, 70, 0.98)";
-                        ctx.fill();
-                      }
-                      for (let si = 0; si < debugShadowEntry.sliceStrips.length; si++) {
-                        const strip = debugShadowEntry.sliceStrips[si];
-                        const baseMidX = (strip.baseA.x + strip.baseB.x) * 0.5;
-                        const baseMidY = (strip.baseA.y + strip.baseB.y) * 0.5;
-                        const topMidX = (strip.topA.x + strip.topB.x) * 0.5;
-                        const topMidY = (strip.topA.y + strip.topB.y) * 0.5;
-                        // Base segment: red
-                        ctx.beginPath();
-                        ctx.moveTo(strip.baseA.x, strip.baseA.y);
-                        ctx.lineTo(strip.baseB.x, strip.baseB.y);
-                        ctx.strokeStyle = "rgba(255, 70, 70, 0.96)";
-                        ctx.stroke();
-                        // Top segment: green
-                        ctx.beginPath();
-                        ctx.moveTo(strip.topA.x, strip.topA.y);
-                        ctx.lineTo(strip.topB.x, strip.topB.y);
-                        ctx.strokeStyle = "rgba(70, 255, 120, 0.96)";
-                        ctx.stroke();
-                        // Strip edges: cyan
-                        ctx.beginPath();
-                        ctx.moveTo(strip.baseA.x, strip.baseA.y);
-                        ctx.lineTo(strip.topA.x, strip.topA.y);
-                        ctx.moveTo(strip.baseB.x, strip.baseB.y);
-                        ctx.lineTo(strip.topB.x, strip.topB.y);
-                        ctx.strokeStyle = "rgba(80, 225, 255, 0.96)";
-                        ctx.stroke();
-                        // Midpoint connector: yellow
-                        ctx.beginPath();
-                        ctx.moveTo(baseMidX, baseMidY);
-                        ctx.lineTo(topMidX, topMidY);
-                        ctx.strokeStyle = "rgba(255, 235, 90, 0.98)";
-                        ctx.stroke();
-                        ctx.fillStyle = "rgba(255, 245, 190, 0.98)";
-                        ctx.fillText(`${strip.sliceIndex}`, baseMidX + 2, baseMidY - 2);
-                      }
-                      const bounds = debugShadowEntry.projectedBounds;
-                      const anchor = debugShadowEntry.sliceStrips[0];
-                      const labelX = bounds
-                        ? bounds.x + 4
-                        : anchor
-                          ? anchor.baseA.x + 4
-                          : draw.dx + 4;
-                      const labelY = bounds
-                        ? bounds.y - 8
-                        : anchor
-                          ? anchor.baseA.y - 8
-                          : draw.dy - 8;
-                      if (bounds) {
-                        ctx.strokeStyle = "rgba(120, 170, 255, 0.95)";
-                        ctx.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
-                      }
-                      const ref = debugShadowEntry.deltaReference;
-                      const deltaLabel = ref
-                        ? `d(${ref.x.toFixed(1)},${ref.y.toFixed(1)})`
-                        : "d(none)";
-                      const focusLabel = selectedSliceIndex != null ? `${selectedSliceIndex}:${selectedBandIndex}` : "none";
-                      let diagonalACount = 0;
-                      let diagonalBCount = 0;
-                      for (let di = 0; di < debugShadowEntry.destinationBandTriangles.length; di++) {
-                        if (debugShadowEntry.destinationBandTriangles[di].diagonal === "A_to_Bprime") {
-                          diagonalACount += 1;
-                        } else {
-                          diagonalBCount += 1;
-                        }
-                      }
-                      const diagonalLabel = `A:${diagonalACount} B:${diagonalBCount}`;
-                      const cacheLabel = `shadow:v4 cache:${debugShadowCacheHit ? "hit" : "rebuild"} cap:${debugShadowEntry.topCapTriangles.length} corr:${debugShadowEntry.correspondences.length} strips:${debugShadowEntry.sliceStrips.length} layers:${debugShadowEntry.layerHeightsPx.length} edges:${debugShadowEntry.layerEdges.length} bands:${debugShadowEntry.layerBands.length} triPairs:${debugShadowEntry.destinationBandTriangles.length} tri:${debugShadowEntry.destinationTriangles.length} srcTri:${debugShadowEntry.sourceBandTriangles.length} dstTri:${debugShadowEntry.destinationBandEntries.length} map:${debugShadowEntry.triangleCorrespondence.length} mismatch:${debugShadowEntry.triangleCorrespondenceMismatches.length} diag:${diagonalLabel} focus:${focusLabel} deltaConst:${debugShadowEntry.isDeltaConstant ? "yes" : "no"} ${deltaLabel}`;
-                      ctx.font = "10px monospace";
-                      ctx.fillStyle = "rgba(0, 0, 0, 0.84)";
-                      ctx.fillText(cacheLabel, labelX + 1, labelY + 1);
-                      ctx.fillStyle = "rgba(210, 230, 255, 0.97)";
-                      ctx.fillText(cacheLabel, labelX, labelY);
-                      ctx.restore();
-                    });
-                  } else if (structureShadowHybridCacheEntry) {
-                    const debugShadowEntry = structureShadowHybridCacheEntry;
-                    deferredStructureSliceDebugDraws.push(() => {
-                      const activeRoofLevel = debugShadowEntry.roofScan.activeLevel;
-                      const roofCorner = activeRoofLevel?.quad?.[0]
-                        ?? debugShadowEntry.projectedTopCapTriangles[0]?.[0]
-                        ?? debugShadowEntry.casterTriangles[0]?.[0]
-                        ?? null;
-                      const showCapDebug = SHADOW_V1_DEBUG_GEOMETRY_MODE !== "connectorsOnly";
-                      const showStripDebug = SHADOW_V1_DEBUG_GEOMETRY_MODE !== "capOnly";
-                      const showSourceDebug = SHADOW_V1_DEBUG_GEOMETRY_MODE !== "capOnly";
-                      const showRebuiltDebug = SHADOW_V1_DEBUG_GEOMETRY_MODE !== "capOnly";
-                      ctx.save();
-                      ctx.lineWidth = 1;
-                      if (activeRoofLevel) {
-                        const [rnw, rne, rse, rsw] = activeRoofLevel.quad;
-                        ctx.beginPath();
-                        ctx.moveTo(rnw.x, rnw.y);
-                        ctx.lineTo(rne.x, rne.y);
-                        ctx.lineTo(rse.x, rse.y);
-                        ctx.lineTo(rsw.x, rsw.y);
-                        ctx.closePath();
-                        ctx.strokeStyle = "rgba(255, 240, 180, 0.92)";
-                        ctx.stroke();
-                      }
-                      if (showSourceDebug) {
-                        for (let ti = 0; ti < debugShadowEntry.casterTriangles.length; ti++) {
-                          const [a, b, c] = debugShadowEntry.casterTriangles[ti];
-                          ctx.beginPath();
-                          ctx.moveTo(a.x, a.y);
-                          ctx.lineTo(b.x, b.y);
-                          ctx.lineTo(c.x, c.y);
-                          ctx.closePath();
-                          ctx.fillStyle = "rgba(255, 220, 90, 0.28)";
-                          ctx.strokeStyle = "rgba(255, 245, 175, 0.96)";
-                          ctx.fill();
-                          ctx.stroke();
-                        }
-                      }
-                      if (showCapDebug) {
-                        for (let ti = 0; ti < debugShadowEntry.projectedTopCapTriangles.length; ti++) {
-                          const [a, b, c] = debugShadowEntry.projectedTopCapTriangles[ti];
-                          ctx.beginPath();
-                          ctx.moveTo(a.x, a.y);
-                          ctx.lineTo(b.x, b.y);
-                          ctx.lineTo(c.x, c.y);
-                          ctx.closePath();
-                          ctx.fillStyle = "rgba(20, 110, 245, 0.15)";
-                          ctx.strokeStyle = "rgba(90, 170, 255, 0.95)";
-                          ctx.fill();
-                          ctx.stroke();
-                        }
-                      }
-                      if (showStripDebug) {
-                        ctx.font = "9px monospace";
-                        for (let si = 0; si < debugShadowEntry.slicePerimeterSegments.length; si++) {
-                          const segment = debugShadowEntry.slicePerimeterSegments[si];
-                          const [ba, bb] = segment.baseSegment;
-                          const [ta, tb] = segment.topSegment;
-                          const hue = (segment.sliceIndex * 37) % 360;
-                          const baseMidX = (ba.x + bb.x) * 0.5;
-                          const baseMidY = (ba.y + bb.y) * 0.5;
-                          const topMidX = (ta.x + tb.x) * 0.5;
-                          const topMidY = (ta.y + tb.y) * 0.5;
-                          ctx.beginPath();
-                          ctx.moveTo(ba.x, ba.y);
-                          ctx.lineTo(bb.x, bb.y);
-                          ctx.strokeStyle = `hsla(${hue}, 92%, 65%, 0.98)`;
-                          ctx.stroke();
-                          ctx.beginPath();
-                          ctx.moveTo(ta.x, ta.y);
-                          ctx.lineTo(tb.x, tb.y);
-                          ctx.strokeStyle = `hsla(${hue}, 80%, 56%, 0.95)`;
-                          ctx.stroke();
-                          ctx.save();
-                          ctx.setLineDash([3, 2]);
-                          ctx.beginPath();
-                          ctx.moveTo(baseMidX, baseMidY);
-                          ctx.lineTo(topMidX, topMidY);
-                          ctx.strokeStyle = `hsla(${hue}, 75%, 74%, 0.9)`;
-                          ctx.stroke();
-                          ctx.restore();
-                          ctx.fillStyle = `hsla(${hue}, 90%, 78%, 0.98)`;
-                          ctx.fillText(`${segment.sliceIndex}`, baseMidX + 2, baseMidY - 2);
-                        }
-                      }
-                      if (showRebuiltDebug) {
-                        for (let ti = 0; ti < debugShadowEntry.projectedTriangles.length; ti++) {
-                          const [a, b, c] = debugShadowEntry.projectedTriangles[ti];
-                          ctx.beginPath();
-                          ctx.moveTo(a.x, a.y);
-                          ctx.lineTo(b.x, b.y);
-                          ctx.lineTo(c.x, c.y);
-                          ctx.closePath();
-                          ctx.fillStyle = "rgba(0, 0, 0, 0.20)";
-                          ctx.strokeStyle = "rgba(120, 170, 255, 0.95)";
-                          ctx.fill();
-                          ctx.stroke();
-                        }
-                      }
-                      if (showStripDebug) {
-                        const sampleBandIndex = debugShadowEntry.slicePerimeterSegments[0]?.bandIndex
-                          ?? debugShadowEntry.sliceShadowStrips[0]?.bandIndex
-                          ?? null;
-                        if (sampleBandIndex != null) {
-                          for (let mi = 0; mi < debugShadowEntry.projectedMappings.length; mi++) {
-                            const mapping = debugShadowEntry.projectedMappings[mi];
-                            if (mapping.bandIndex !== sampleBandIndex) continue;
-                            const [sa, sb, sc] = mapping.sourceTriangle;
-                            const [da, db, dc] = mapping.projectedTriangle;
-                            const sx = (sa.x + sb.x + sc.x) / 3;
-                            const sy = (sa.y + sb.y + sc.y) / 3;
-                            const dx = (da.x + db.x + dc.x) / 3;
-                            const dy = (da.y + db.y + dc.y) / 3;
-                            ctx.beginPath();
-                            ctx.moveTo(sx, sy);
-                            ctx.lineTo(dx, dy);
-                            ctx.strokeStyle = "rgba(255, 110, 240, 0.85)";
-                            ctx.stroke();
-                          }
-                        }
-                      }
-                      const shadowBounds = debugShadowEntry.projectedBounds;
-                      const labelX = shadowBounds
-                        ? shadowBounds.x + 4
-                        : roofCorner
-                          ? roofCorner.x + 4
-                          : draw.dx + 4;
-                      const labelY = shadowBounds
-                        ? shadowBounds.y - 8
-                        : roofCorner
-                          ? roofCorner.y - 8
-                          : draw.dy - 8;
-                      if (shadowBounds && (showCapDebug || showRebuiltDebug)) {
-                        ctx.strokeStyle = "rgba(120, 170, 255, 0.95)";
-                        ctx.strokeRect(shadowBounds.x, shadowBounds.y, shadowBounds.w, shadowBounds.h);
-                      }
-                      const roofLevelLabel = activeRoofLevel ? `${activeRoofLevel.level}` : "none";
-                      const cacheLabel = `shadow:v3-hybrid cache:${debugShadowCacheHit ? "hit" : "rebuild"} mode:${SHADOW_V1_DEBUG_GEOMETRY_MODE} roofL:${roofLevelLabel} side:${debugShadowEntry.sideSemantic} cast:${debugShadowEntry.casterTriangles.length} top:${debugShadowEntry.topCasterTriangleCount} sideCast:${debugShadowEntry.sideCasterTriangleCount} seg:${debugShadowEntry.slicePerimeterSegments.length} strips:${debugShadowEntry.sliceShadowStrips.length} cap:${debugShadowEntry.projectedTopCapTriangles.length} rebuilt:${debugShadowEntry.projectedTriangles.length}`;
-                      ctx.font = "10px monospace";
-                      ctx.fillStyle = "rgba(0, 0, 0, 0.84)";
-                      ctx.fillText(cacheLabel, labelX + 1, labelY + 1);
-                      ctx.fillStyle = "rgba(210, 230, 255, 0.97)";
-                      ctx.fillText(cacheLabel, labelX, labelY);
-                      ctx.restore();
-                    });
-                  } else if (structureShadowV2CacheEntry) {
-                    const debugShadowEntry = structureShadowV2CacheEntry;
-                    deferredStructureSliceDebugDraws.push(() => {
-                      const showCapDebug = SHADOW_V1_DEBUG_GEOMETRY_MODE !== "connectorsOnly";
-                      const showConnectorDebug = SHADOW_V1_DEBUG_GEOMETRY_MODE !== "capOnly";
-                      const activeRoofLevel = debugShadowEntry.roofScan.activeLevel;
-                      const roofCorner = activeRoofLevel?.quad?.[0] ?? null;
-                      ctx.save();
-                      ctx.lineWidth = 1;
-                      if (activeRoofLevel) {
-                        const [rnw, rne, rse, rsw] = activeRoofLevel.quad;
-                        ctx.beginPath();
-                        ctx.moveTo(rnw.x, rnw.y);
-                        ctx.lineTo(rne.x, rne.y);
-                        ctx.lineTo(rse.x, rse.y);
-                        ctx.lineTo(rsw.x, rsw.y);
-                        ctx.closePath();
-                        ctx.strokeStyle = "rgba(255, 240, 180, 0.92)";
-                        ctx.stroke();
-                      }
-                      if (showCapDebug) {
-                        for (let ti = 0; ti < debugShadowEntry.projectedCapTriangles.length; ti++) {
-                          const [a, b, c] = debugShadowEntry.projectedCapTriangles[ti];
-                          ctx.beginPath();
-                          ctx.moveTo(a.x, a.y);
-                          ctx.lineTo(b.x, b.y);
-                          ctx.lineTo(c.x, c.y);
-                          ctx.closePath();
-                          ctx.fillStyle = "rgba(0, 0, 0, 0.24)";
-                          ctx.strokeStyle = "rgba(120, 170, 255, 0.95)";
-                          ctx.fill();
-                          ctx.stroke();
-                        }
-                      }
-                      if (showConnectorDebug) {
-                        for (let ti = 0; ti < debugShadowEntry.connectorTriangles.length; ti++) {
-                          const [a, b, c] = debugShadowEntry.connectorTriangles[ti];
-                          ctx.beginPath();
-                          ctx.moveTo(a.x, a.y);
-                          ctx.lineTo(b.x, b.y);
-                          ctx.lineTo(c.x, c.y);
-                          ctx.closePath();
-                          ctx.fillStyle = "rgba(15, 20, 35, 0.20)";
-                          ctx.strokeStyle = "rgba(180, 210, 255, 0.90)";
-                          ctx.fill();
-                          ctx.stroke();
-                        }
-                      }
-                      for (let ei = 0; ei < debugShadowEntry.sourceBoundaryEdges.length; ei++) {
-                        const [a, b] = debugShadowEntry.sourceBoundaryEdges[ei];
-                        ctx.beginPath();
-                        ctx.moveTo(a.x, a.y);
-                        ctx.lineTo(b.x, b.y);
-                        ctx.strokeStyle = "rgba(255, 150, 80, 0.97)";
-                        ctx.stroke();
-                      }
-                      for (let ei = 0; ei < debugShadowEntry.projectedBoundaryEdges.length; ei++) {
-                        const [a, b] = debugShadowEntry.projectedBoundaryEdges[ei];
-                        ctx.beginPath();
-                        ctx.moveTo(a.x, a.y);
-                        ctx.lineTo(b.x, b.y);
-                        ctx.strokeStyle = "rgba(110, 190, 255, 0.98)";
-                        ctx.stroke();
-                      }
-                      const shadowBounds = debugShadowEntry.projectedBounds;
-                      const labelX = shadowBounds
-                        ? shadowBounds.x + 4
-                        : roofCorner
-                          ? roofCorner.x + 4
-                          : draw.dx + 4;
-                      const labelY = shadowBounds
-                        ? shadowBounds.y - 8
-                        : roofCorner
-                          ? roofCorner.y - 8
-                          : draw.dy - 8;
-                      if (shadowBounds) {
-                        ctx.strokeStyle = "rgba(120, 170, 255, 0.95)";
-                        ctx.strokeRect(shadowBounds.x, shadowBounds.y, shadowBounds.w, shadowBounds.h);
-                      }
-                      const roofLevelLabel = activeRoofLevel ? `${activeRoofLevel.level}` : "none";
-                      const cacheLabel = `shadow:v2 cache:${debugShadowCacheHit ? "hit" : "rebuild"} mode:${SHADOW_V1_DEBUG_GEOMETRY_MODE} roofL:${roofLevelLabel} castH:${Math.round(debugShadowEntry.castHeightPx)} loops:${debugShadowEntry.sourceBoundaryLoops.length} edge:${debugShadowEntry.sourceBoundaryEdges.length} cap:${debugShadowEntry.projectedCapTriangles.length} conn:${debugShadowEntry.connectorTriangles.length}`;
-                      ctx.font = "10px monospace";
-                      ctx.fillStyle = "rgba(0, 0, 0, 0.84)";
-                      ctx.fillText(cacheLabel, labelX + 1, labelY + 1);
-                      ctx.fillStyle = "rgba(210, 230, 255, 0.97)";
-                      ctx.fillText(cacheLabel, labelX, labelY);
-                      ctx.restore();
-                    });
-                  } else if (structureShadowV1CacheEntry) {
-                    const debugShadowEntry = structureShadowV1CacheEntry;
-                    deferredStructureSliceDebugDraws.push(() => {
-                      const activeRoofLevel = debugShadowEntry.roofScan.activeLevel;
-                      if (!activeRoofLevel) return;
-                      const showCapDebug = SHADOW_V1_DEBUG_GEOMETRY_MODE !== "connectorsOnly";
-                      const showConnectorDebug = SHADOW_V1_DEBUG_GEOMETRY_MODE !== "capOnly";
-                      ctx.save();
-                      ctx.lineWidth = 1;
-                      for (let ti = 0; ti < debugShadowEntry.roofCasterTriangles.length; ti++) {
-                        const tri = debugShadowEntry.roofCasterTriangles[ti];
-                        const [a, b, c] = tri.points;
-                        ctx.beginPath();
-                        ctx.moveTo(a.x, a.y);
-                        ctx.lineTo(b.x, b.y);
-                        ctx.lineTo(c.x, c.y);
-                        ctx.closePath();
-                        ctx.fillStyle = "rgba(255, 220, 90, 0.32)";
-                        ctx.strokeStyle = "rgba(255, 245, 175, 0.98)";
-                        ctx.fill();
-                        ctx.stroke();
-                      }
-                      const [rnw, rne, rse, rsw] = activeRoofLevel.quad;
-                      ctx.beginPath();
-                      ctx.moveTo(rnw.x, rnw.y);
-                      ctx.lineTo(rne.x, rne.y);
-                      ctx.lineTo(rse.x, rse.y);
-                      ctx.lineTo(rsw.x, rsw.y);
-                      ctx.closePath();
-                      ctx.strokeStyle = "rgba(255, 240, 180, 0.96)";
-                      ctx.stroke();
-                      if (showCapDebug) {
-                        for (let ti = 0; ti < debugShadowEntry.projectedTriangles.length; ti++) {
-                          const [a, b, c] = debugShadowEntry.projectedTriangles[ti];
-                          ctx.beginPath();
-                          ctx.moveTo(a.x, a.y);
-                          ctx.lineTo(b.x, b.y);
-                          ctx.lineTo(c.x, c.y);
-                          ctx.closePath();
-                          ctx.fillStyle = "rgba(0, 0, 0, 0.22)";
-                          ctx.strokeStyle = "rgba(130, 170, 255, 0.95)";
-                          ctx.fill();
-                          ctx.stroke();
-                        }
-                      }
-                      if (showConnectorDebug) {
-                        for (let ti = 0; ti < debugShadowEntry.connectorTriangles.length; ti++) {
-                          const [a, b, c] = debugShadowEntry.connectorTriangles[ti];
-                          ctx.beginPath();
-                          ctx.moveTo(a.x, a.y);
-                          ctx.lineTo(b.x, b.y);
-                          ctx.lineTo(c.x, c.y);
-                          ctx.closePath();
-                          ctx.fillStyle = "rgba(15, 20, 35, 0.20)";
-                          ctx.strokeStyle = "rgba(175, 200, 255, 0.90)";
-                          ctx.fill();
-                          ctx.stroke();
-                        }
-                      }
-                      for (let ei = 0; ei < debugShadowEntry.roofBoundaryEdges.length; ei++) {
-                        const [a, b] = debugShadowEntry.roofBoundaryEdges[ei];
-                        ctx.beginPath();
-                        ctx.moveTo(a.x, a.y);
-                        ctx.lineTo(b.x, b.y);
-                        ctx.strokeStyle = "rgba(255, 140, 70, 0.98)";
-                        ctx.stroke();
-                      }
-                      for (let ei = 0; ei < debugShadowEntry.footprintBoundaryEdges.length; ei++) {
-                        const [a, b] = debugShadowEntry.footprintBoundaryEdges[ei];
-                        ctx.beginPath();
-                        ctx.moveTo(a.x, a.y);
-                        ctx.lineTo(b.x, b.y);
-                        ctx.strokeStyle = "rgba(140, 255, 170, 0.95)";
-                        ctx.stroke();
-                      }
-                      for (let ei = 0; ei < debugShadowEntry.projectedBoundaryEdges.length; ei++) {
-                        const [a, b] = debugShadowEntry.projectedBoundaryEdges[ei];
-                        ctx.beginPath();
-                        ctx.moveTo(a.x, a.y);
-                        ctx.lineTo(b.x, b.y);
-                        ctx.strokeStyle = "rgba(110, 190, 255, 0.98)";
-                        ctx.stroke();
-                      }
-                      const shadowBounds = debugShadowEntry.projectedBounds;
-                      const labelX = shadowBounds ? shadowBounds.x + 4 : rnw.x + 4;
-                      const labelY = shadowBounds ? shadowBounds.y - 8 : rnw.y - 8;
-                      if (shadowBounds) {
-                        ctx.strokeStyle = "rgba(120, 170, 255, 0.95)";
-                        ctx.strokeRect(shadowBounds.x, shadowBounds.y, shadowBounds.w, shadowBounds.h);
-                      }
-                      const cacheLabel = `shadow:v1 cache:${debugShadowCacheHit ? "hit" : "rebuild"} mode:${SHADOW_V1_DEBUG_GEOMETRY_MODE} roofL:${activeRoofLevel.level} cast:${debugShadowEntry.roofCasterTriangles.length} edge:${debugShadowEntry.roofBoundaryEdges.length} base:${debugShadowEntry.footprintBoundaryEdges.length} cap:${debugShadowEntry.projectedTriangles.length} conn:${debugShadowEntry.connectorTriangles.length}`;
-                      ctx.font = "10px monospace";
-                      ctx.fillStyle = "rgba(0, 0, 0, 0.84)";
-                      ctx.fillText(cacheLabel, labelX + 1, labelY + 1);
-                      ctx.fillStyle = "rgba(210, 230, 255, 0.97)";
-                      ctx.fillText(cacheLabel, labelX, labelY);
-                      ctx.restore();
-                    });
-                  }
-                }
-              }
-              if (SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG && projectedFootprintQuad && overlayHasVisibleTriangleGroup) {
-                const allTriangles = triangleCache.triangles;
-                const triangleCentroids: Array<{ tri: typeof allTriangles[number]; centroid: ScreenPt }> = [];
-                const centroidPoints: ScreenPt[] = [];
-                for (let ti = 0; ti < allTriangles.length; ti++) {
-                  const tri = allTriangles[ti];
-                  const [a, b, c] = tri.points;
-                  const centroid = { x: (a.x + b.x + c.x) / 3, y: (a.y + b.y + c.y) / 3 };
-                  triangleCentroids.push({ tri, centroid });
-                  centroidPoints.push(centroid);
-                }
-                const supportScan = scanLiftedFootprintSupportLevels(
-                  projectedFootprintQuad,
-                  footprintW,
-                  footprintH,
-                  centroidPoints,
-                );
-                const activeLevelIndex = supportScan.highestValidLevel >= 0 ? supportScan.highestValidLevel : 0;
-                const activeLevel = supportScan.levels[Math.min(activeLevelIndex, supportScan.levels.length - 1)] ?? null;
-                const leftSouthMaxProgression = footprintW - 1;
-                const rightEastMinProgression = footprintW;
-                const progressionByOwnerTile = new Map<string, { min: number; max: number }>();
-                for (let bi = 0; bi < bandPieces.length; bi++) {
-                  const band = bandPieces[bi];
-                  const ownerTx = band.renderKey.within;
-                  const ownerTy = band.renderKey.slice - band.renderKey.within;
-                  const ownerKey = `${ownerTx},${ownerTy}`;
-                  const progression = resolveRuntimeStructureBandProgressionIndex(band.index, footprintW, footprintH);
-                  const existing = progressionByOwnerTile.get(ownerKey);
-                  if (!existing) {
-                    progressionByOwnerTile.set(ownerKey, { min: progression, max: progression });
-                  } else {
-                    if (progression < existing.min) existing.min = progression;
-                    if (progression > existing.max) existing.max = progression;
-                  }
-                }
-                const semanticCounts: Record<StructureTriangleSemanticClass, number> = {
-                  TOP: 0,
-                  LEFT_SOUTH: 0,
-                  RIGHT_EAST: 0,
-                  UNCLASSIFIED: 0,
-                  CONFLICT: 0,
-                };
-                const semanticTriangles = triangleCentroids.map((entry) => {
-                  const ownerKey = `${entry.tri.parentTx},${entry.tri.parentTy}`;
-                  const ownerRange = progressionByOwnerTile.get(ownerKey);
-                  const isTop = !!activeLevel && isPointInsideProjectedStructureFootprintQuad(
-                    activeLevel.quad,
-                    entry.centroid.x,
-                    entry.centroid.y,
-                  );
-                  const leftCandidate = !!ownerRange && ownerRange.min <= leftSouthMaxProgression;
-                  const rightCandidate = !!ownerRange && ownerRange.max >= rightEastMinProgression;
-                  let semantic: StructureTriangleSemanticClass = "UNCLASSIFIED";
-                  if (isTop) {
-                    semantic = "TOP";
-                  } else if (leftCandidate && rightCandidate) {
-                    semantic = "CONFLICT";
-                  } else if (leftCandidate) {
-                    semantic = "LEFT_SOUTH";
-                  } else if (rightCandidate) {
-                    semantic = "RIGHT_EAST";
-                  }
-                  semanticCounts[semantic]++;
-                  return {
-                    tri: entry.tri,
-                    centroid: entry.centroid,
-                    semantic,
-                  };
-                });
-                deferredStructureSliceDebugDraws.push(() => {
-                  if (!activeLevel) return;
-                  ctx.save();
-                  ctx.lineWidth = 1;
-                  for (let ti = 0; ti < semanticTriangles.length; ti++) {
-                    const entry = semanticTriangles[ti];
-                    const tri = entry.tri;
-                    const [a, b, c] = tri.points;
-                    ctx.beginPath();
-                    ctx.moveTo(a.x, a.y);
-                    ctx.lineTo(b.x, b.y);
-                    ctx.lineTo(c.x, c.y);
-                    ctx.closePath();
-                    if (entry.semantic === "TOP") {
-                      ctx.fillStyle = "rgba(255, 216, 64, 0.30)";
-                      ctx.strokeStyle = "rgba(255, 240, 170, 0.95)";
-                    } else if (entry.semantic === "LEFT_SOUTH") {
-                      ctx.fillStyle = "rgba(85, 210, 255, 0.24)";
-                      ctx.strokeStyle = "rgba(150, 240, 255, 0.95)";
-                    } else if (entry.semantic === "RIGHT_EAST") {
-                      ctx.fillStyle = "rgba(255, 150, 80, 0.24)";
-                      ctx.strokeStyle = "rgba(255, 195, 130, 0.95)";
-                    } else if (entry.semantic === "CONFLICT") {
-                      ctx.fillStyle = "rgba(255, 80, 220, 0.26)";
-                      ctx.strokeStyle = "rgba(255, 150, 240, 0.96)";
-                    } else {
-                      ctx.fillStyle = "rgba(95, 120, 150, 0.18)";
-                      ctx.strokeStyle = "rgba(180, 205, 235, 0.82)";
-                    }
-                    ctx.fill();
-                    ctx.stroke();
-                  }
-                  for (let ci = 0; ci < activeLevel.cells.length; ci++) {
-                    const cell = activeLevel.cells[ci];
-                    const [c0, c1, c2, c3] = cell.quad;
-                    ctx.beginPath();
-                    ctx.moveTo(c0.x, c0.y);
-                    ctx.lineTo(c1.x, c1.y);
-                    ctx.lineTo(c2.x, c2.y);
-                    ctx.lineTo(c3.x, c3.y);
-                    ctx.closePath();
-                    ctx.fillStyle = cell.supported
-                      ? "rgba(120, 255, 145, 0.07)"
-                      : "rgba(255, 90, 90, 0.16)";
-                    ctx.strokeStyle = cell.supported
-                      ? "rgba(120, 255, 145, 0.42)"
-                      : "rgba(255, 110, 110, 0.88)";
-                    ctx.fill();
-                    ctx.stroke();
-                  }
-                  const [nw, ne, se, sw] = activeLevel.quad;
-                  ctx.beginPath();
-                  ctx.moveTo(nw.x, nw.y);
-                  ctx.lineTo(ne.x, ne.y);
-                  ctx.lineTo(se.x, se.y);
-                  ctx.lineTo(sw.x, sw.y);
-                  ctx.closePath();
-                  ctx.fillStyle = activeLevel.allSupported
-                    ? "rgba(120, 255, 145, 0.10)"
-                    : "rgba(255, 120, 120, 0.08)";
-                  ctx.strokeStyle = activeLevel.allSupported
-                    ? "rgba(120, 255, 145, 0.95)"
-                    : "rgba(255, 140, 140, 0.95)";
-                  ctx.fill();
-                  ctx.stroke();
-                  const roofLevelLabel = supportScan.highestValidLevel >= 0
-                    ? `${supportScan.highestValidLevel}`
-                    : "none";
-                  const labelX = nw.x + 8;
-                  const labelY = nw.y - 8;
-                  ctx.font = "10px monospace";
-                  const header = `roof:${roofLevelLabel} active:${activeLevel.level} lift:${Math.round(activeLevel.liftYPx)} cells:${activeLevel.supportedCells}/${activeLevel.totalCells}`;
-                  ctx.fillStyle = "rgba(0, 0, 0, 0.82)";
-                  ctx.fillText(header, labelX + 1, labelY + 1);
-                  ctx.fillStyle = "rgba(235, 255, 235, 0.96)";
-                  ctx.fillText(header, labelX, labelY);
-                  const semanticLabel = `TOP:${semanticCounts.TOP} LS:${semanticCounts.LEFT_SOUTH} RE:${semanticCounts.RIGHT_EAST} U:${semanticCounts.UNCLASSIFIED} C:${semanticCounts.CONFLICT}`;
-                  ctx.fillStyle = "rgba(0, 0, 0, 0.82)";
-                  ctx.fillText(semanticLabel, labelX + 1, labelY + 12);
-                  ctx.fillStyle = "rgba(235, 240, 255, 0.96)";
-                  ctx.fillText(semanticLabel, labelX, labelY + 11);
-                  const ownershipLabel = `ranges first:${footprintW + 1} last:${footprintH + 1} split@i=${rightEastMinProgression}`;
-                  ctx.fillStyle = "rgba(0, 0, 0, 0.82)";
-                  ctx.fillText(ownershipLabel, labelX + 1, labelY + 23);
-                  ctx.fillStyle = "rgba(230, 230, 230, 0.95)";
-                  ctx.fillText(ownershipLabel, labelX, labelY + 22);
-                  const maxLevelRows = 6;
-                  for (let li = 0; li < supportScan.levels.length && li < maxLevelRows; li++) {
-                    const level = supportScan.levels[li];
-                    const rowY = labelY + 34 + li * 11;
-                    const levelLabel = `L${level.level}: ${level.supportedCells}/${level.totalCells} ${level.allSupported ? "ok" : "fail"}`;
-                    ctx.fillStyle = "rgba(0, 0, 0, 0.78)";
-                    ctx.fillText(levelLabel, labelX + 1, rowY + 1);
-                    ctx.fillStyle = level.allSupported
-                      ? "rgba(150, 255, 175, 0.95)"
-                      : "rgba(255, 160, 160, 0.96)";
-                    ctx.fillText(levelLabel, labelX, rowY);
-                  }
-                  if (supportScan.levels.length > maxLevelRows) {
-                    const rowY = labelY + 34 + maxLevelRows * 11;
-                    const overflowLabel = `... +${supportScan.levels.length - maxLevelRows} levels`;
-                    ctx.fillStyle = "rgba(0, 0, 0, 0.78)";
-                    ctx.fillText(overflowLabel, labelX + 1, rowY + 1);
-                    ctx.fillStyle = "rgba(220, 220, 220, 0.95)";
-                    ctx.fillText(overflowLabel, labelX, rowY);
-                  }
-                  ctx.restore();
-                });
-              }
-	            }
-	          }
-
-          if (usedTriangleGeometryPath) continue;
-
-          for (let bi = 0; bi < bandPieces.length; bi++) {
-            const band = bandPieces[bi];
-            const ownerTx = band.renderKey.within;
-            const ownerTy = band.renderKey.slice - band.renderKey.within;
-            if (!isTileInRenderRadius(ownerTx, ownerTy)) continue;
-            const overlayKey: RenderKey = {
-              slice: band.renderKey.slice,
-              within: band.renderKey.within,
-              baseZ: band.renderKey.baseZ,
-              kindOrder: KindOrder.STRUCTURE,
-              ...(structureSouthTieBreak ?? {}),
-              stableId: band.renderKey.stableId,
-            };
-            addToSlice(band.renderKey.slice, overlayKey, () => {
-              const img = draw.img;
-              if (!img) return;
-              const sourceImg: CanvasImageSource = draw.flipX ? getFlippedOverlayImage(img) : img;
-              const x0 = Math.round(band.dstRect.x);
-              const y0 = Math.round(band.dstRect.y);
-              const x1 = Math.round(band.dstRect.x + band.dstRect.w);
-              const y1 = Math.round(band.dstRect.y + band.dstRect.h);
-              const snappedW = Math.max(0, x1 - x0);
-              const snappedH = Math.max(0, y1 - y0);
-              if (snappedW <= 0 || snappedH <= 0) return;
-              ctx.imageSmoothingEnabled = false;
-              let relitCanvas: HTMLCanvasElement | null = null;
-              if (STATIC_RELIGHT_INCLUDE_STRUCTURES && o.layerRole === "STRUCTURE" && staticRelightFrame) {
-                const pieceKey = structureSliceRelightPieceKey(
-                  o,
-                  band.index,
-                  ownerTx,
-                  ownerTy,
-                  band.srcRect.x,
-                  band.srcRect.y,
-                  band.srcRect.w,
-                  band.srcRect.h,
-                  snappedW,
-                  snappedH,
-                  !!draw.flipX,
-                );
-                const bakedEntry = staticRelightBakeStore.get(pieceKey);
-                if (bakedEntry?.kind === "RELIT") relitCanvas = bakedEntry.baked;
-              }
-              if (relitCanvas) {
-                ctx.drawImage(relitCanvas, x0, y0, snappedW, snappedH);
-              } else {
-                ctx.drawImage(
-                  sourceImg,
-                  band.srcRect.x,
-                  band.srcRect.y,
-                  band.srcRect.w,
-                  band.srcRect.h,
-                  x0,
-                  y0,
-                  snappedW,
-                  snappedH,
-                );
-              }
-              if (SHOW_STRUCTURE_SLICE_DEBUG) {
-                deferredStructureSliceDebugDraws.push(() => {
-                  ctx.save();
-                  ctx.strokeStyle = "#00ffd5";
-                  ctx.lineWidth = 1;
-                  ctx.strokeRect(band.dstRect.x, band.dstRect.y, band.dstRect.w, band.dstRect.h);
-                  const progressionIndex = resolveRuntimeStructureBandProgressionIndex(
-                    band.index,
-                    o.w,
-                    o.h,
-                  );
-                  drawStructureSliceTriangleDebugOverlay(
-                    ctx,
-                    band.dstRect,
-                    progressionIndex,
-                    T,
-                    o.id,
-                    band.index,
-                    sourceImg,
-                    band.srcRect,
-                  );
-                  ctx.fillStyle = "#00ffd5";
-                  ctx.font = "10px monospace";
-                  const topY = band.dstRect.y + 12;
-                  ctx.fillText(`#${band.index}`, band.dstRect.x + 2, topY);
-                  ctx.restore();
-                });
-              }
-            });
-          }
-        } else {
-          const slice = (o.anchorTx ?? (o.tx + o.w - 1)) + (o.anchorTy ?? (o.ty + o.h - 1));
-          const within = o.anchorTx ?? (o.tx + o.w - 1);
-          const kindOrder = o.layerRole === "STRUCTURE"
-            ? KindOrder.STRUCTURE
-            : (o.kind ?? "ROOF") === "PROP"
-              ? KindOrder.ENTITY
-              : KindOrder.OVERLAY;
-          const overlayKey: RenderKey = {
-            slice,
-            within,
-            baseZ: o.z,
-            kindOrder,
-            stableId: 200000 + i,
-          };
-          addToSlice(slice, overlayKey, () => {
-            drawRenderPiece(draw);
-          });
-        }
-      }
+    const structureDrawables = buildStructureDrawables(structureSliceBuild.pieces);
+    for (let si = 0; si < structureDrawables.length; si++) {
+      const structureDrawable = structureDrawables[si];
+      addToSlice(
+        structureDrawable.slice,
+        structureDrawable.key,
+        drawStructureDrawableFn,
+        structureDrawable.payload,
+      );
     }
+  }
 
   structureV6VerticalShadowDebugData = buildStructureV6VerticalShadowFrameResult({
     frame: structureShadowFrame,
@@ -6718,7 +3591,13 @@ export async function renderSystem(
       && structureV6VerticalShadowDebugData.zBand === zb
     ) {
       setRenderPerfDrawTag("floors");
-      drawStructureV65MergedShadowMaskInWorld(ctx, structureV6VerticalShadowDebugData);
+      executeDebugPass({
+        phase: "structureV6MergedMask",
+        input: {
+          ctx,
+          debugData: structureV6VerticalShadowDebugData,
+        },
+      });
     }
 
     // Pass 2: WORLD
@@ -6768,70 +3647,20 @@ export async function renderSystem(
     ctx.restore();
   }
 
-  drawWalkMaskOverlay(debugContext, SHOW_WALK_MASK);
-  drawRampOverlay(debugContext, SHOW_RAMPS);
-  drawOccluderOverlay(debugContext, SHOW_OCCLUDER_DEBUG, viewRect);
-  if (SHOW_DECAL_DEBUG) {
-    const decals = decalsInView(viewRect);
-    if (decals.length > 0) {
-      ctx.save();
-      ctx.lineWidth = 1;
-      ctx.font = "10px monospace";
-      for (let i = 0; i < decals.length; i++) {
-        const d = decals[i];
-        if (!isTileInRenderRadius(d.tx, d.ty)) continue;
-        const p0 = toScreen(d.tx * T, d.ty * T);
-        const p1 = toScreen((d.tx + 1) * T, d.ty * T);
-        const p2 = toScreen((d.tx + 1) * T, (d.ty + 1) * T);
-        const p3 = toScreen(d.tx * T, (d.ty + 1) * T);
-        const color = d.setId === "sidewalk" ? "rgba(40,220,255,0.95)" : "rgba(255,170,40,0.95)";
-        ctx.strokeStyle = color;
-        ctx.beginPath();
-        ctx.moveTo(p0.x, p0.y);
-        ctx.lineTo(p1.x, p1.y);
-        ctx.lineTo(p2.x, p2.y);
-        ctx.lineTo(p3.x, p3.y);
-        ctx.closePath();
-        ctx.stroke();
-        ctx.fillStyle = color;
-        ctx.fillText(d.setId, p0.x + 4, p0.y + 10);
-      }
-      ctx.restore();
-    }
-  }
-  drawProjectileFaceOverlay(debugContext, SHOW_PROJECTILE_FACES, viewRect);
-  drawStructureHeightOverlay(debugContext, SHOW_STRUCTURE_HEIGHTS, viewRect);
-  drawTriggerOverlay(debugContext, SHOW_TRIGGER_ZONES);
-  drawRoadSemanticOverlay(debugContext, SHOW_ROAD_SEMANTIC, viewRect);
-  drawEnemyAimOverlay(debugContext, SHOW_ENEMY_AIM_OVERLAY);
-  drawLootGoblinOverlay(debugContext, SHOW_LOOT_GOBLIN_OVERLAY);
-  if (SHOW_STRUCTURE_COLLISION_DEBUG) {
-    const blocked = blockedTilesInView(viewRect);
-    if (blocked.length > 0) {
-      ctx.save();
-      ctx.strokeStyle = "rgba(255, 80, 80, 0.95)";
-      ctx.fillStyle = "rgba(255, 80, 80, 0.12)";
-      ctx.lineWidth = 1;
-      for (let i = 0; i < blocked.length; i++) {
-        const t = blocked[i];
-        const p0 = toScreen(t.tx * T, t.ty * T);
-        const p1 = toScreen((t.tx + 1) * T, t.ty * T);
-        const p2 = toScreen((t.tx + 1) * T, (t.ty + 1) * T);
-        const p3 = toScreen(t.tx * T, (t.ty + 1) * T);
-        ctx.beginPath();
-        ctx.moveTo(p0.x, p0.y);
-        ctx.lineTo(p1.x, p1.y);
-        ctx.lineTo(p2.x, p2.y);
-        ctx.lineTo(p3.x, p3.y);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-  }
-  for (let i = 0; i < deferredStructureSliceDebugDraws.length; i++) {
-    deferredStructureSliceDebugDraws[i]();
+  if (debugFrame.enabled) {
+    executeDebugPass({
+      phase: "world",
+      input: {
+        ctx,
+        debugContext,
+        viewRect,
+        toScreen,
+        tileWorld: T,
+        isTileInRenderRadius,
+        deferredStructureSliceDebugDraws,
+        flags: debugFlags,
+      },
+    });
   }
 
   // Floating combat text: world pass (same camera transform as world content)
@@ -6850,115 +3679,36 @@ export async function renderSystem(
   // Building-mask debug overlay draw disabled to avoid full-canvas mask artifacts.
 
 
-  // Screen-space debug text
-  ctx.save();
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.font = "12px monospace";
-  ctx.fillStyle = "#fff";
-  if (structureShadowFrame.routing.usesV6 && structureV6VerticalShadowDebugData) {
-    drawStructureV6FaceSliceDebugPanel(ctx, cssW, cssH, structureV6VerticalShadowDebugData);
+  if (debugFrame.enabled || renderPerfCountersEnabled || structureShadowFrame.routing.usesV6) {
+    executeDebugPass({
+      phase: "screen",
+      input: {
+        ctx,
+        cssW,
+        cssH,
+        dpr,
+        flags: debugFlags,
+        renderPerfCountersEnabled,
+        structureShadowRouting: structureShadowFrame.routing,
+        structureV6VerticalShadowDebugData,
+        structureV6ShadowDebugCandidateCount: structureV6ShadowDebugCandidates.length,
+        v5ShadowAnchorDiagnostic,
+        shadowSunModel,
+        structureTriangleAdmissionMode,
+        sliderPadding,
+        playerCameraTx,
+        playerCameraTy,
+        structureTriangleCutoutEnabled,
+        structureTriangleCutoutHalfWidth,
+        structureTriangleCutoutHalfHeight,
+        structureTriangleCutoutAlpha,
+        roadWidthAtPlayer: roadAreaWidthAt(playerTx, playerTy),
+        hybridShadowDiagnosticStats,
+        v4ShadowDiagnosticStats,
+        v5ShadowDiagnosticStats,
+      },
+    });
   }
-  const perf = getRenderPerfSnapshot();
-  if (renderPerfCountersEnabled) {
-    const tag = perf.drawImageByTagPerFrame;
-    const saveTag = perf.saveByTagPerFrame;
-    const restoreTag = perf.restoreByTagPerFrame;
-    const perfLines = [
-      `drawImage/frame: ${perf.drawImageCallsPerFrame.toFixed(1)}`,
-      `tag void:${tag.void.toFixed(1)} floors:${tag.floors.toFixed(1)} decals:${tag.decals.toFixed(1)} ent:${tag.entities.toFixed(1)}`,
-      `tag struct:${tag.structures.toFixed(1)}`,
-      `tag lighting:${tag.lighting.toFixed(1)} untagged:${tag.untagged.toFixed(1)}`,
-      `gradientCreate/frame: ${perf.gradientCreateCallsPerFrame.toFixed(1)} addColorStop/frame: ${perf.addColorStopCallsPerFrame.toFixed(1)}`,
-      `save/frame: ${perf.saveCallsPerFrame.toFixed(1)} restore/frame: ${perf.restoreCallsPerFrame.toFixed(1)}`,
-      `saveTag fl:${saveTag.floors.toFixed(1)} de:${saveTag.decals.toFixed(1)} li:${saveTag.lighting.toFixed(1)} un:${saveTag.untagged.toFixed(1)}`,
-      `saveTag struct:${saveTag.structures.toFixed(1)}`,
-      `restoreTag fl:${restoreTag.floors.toFixed(1)} de:${restoreTag.decals.toFixed(1)} li:${restoreTag.lighting.toFixed(1)} un:${restoreTag.untagged.toFixed(1)}`,
-      `restoreTag struct:${restoreTag.structures.toFixed(1)}`,
-      `closures/frame: ${perf.closuresCreatedPerFrame.toFixed(1)}`,
-      `sliceSorts/frame: ${perf.sliceKeySortsPerFrame.toFixed(1)} drawableSorts/frame: ${perf.drawableSortsPerFrame.toFixed(1)}`,
-      `fullCanvasBlits/frame: ${perf.fullCanvasBlitsPerFrame.toFixed(1)}`,
-      `tileRadius: ${perf.tileLoopRadius.toFixed(0)} tileLoopIters/frame: ${perf.tileLoopIterationsPerFrame.toFixed(1)}`,
-      `triAdmission: mode=${structureTriangleAdmissionMode} authority=${structureTriangleAdmissionMode === "viewport" ? "viewportRect" : "sharedRenderDistance(tileRadius)"} tileRadius=${sliderPadding}`,
-      `triCutout: ${structureTriangleCutoutEnabled ? "on" : "off"} center=${playerCameraTx},${playerCameraTy} size=${structureTriangleCutoutHalfWidth}x${structureTriangleCutoutHalfHeight} alpha=${structureTriangleCutoutAlpha.toFixed(2)}`,
-      `bands z:${perf.zBandCountPerFrame.toFixed(1)} light:${perf.lightBandCountPerFrame.toFixed(1)} masks build:${perf.maskBuildsPerFrame.toFixed(1)} hit:${perf.maskCacheHitsPerFrame.toFixed(1)} miss:${perf.maskCacheMissesPerFrame.toFixed(1)}`,
-      `masks rasterChunks/frame: ${perf.maskRasterChunksPerFrame.toFixed(1)} drawEntries/frame: ${perf.maskDrawEntriesPerFrame.toFixed(1)}`,
-    ];
-    ctx.textAlign = "right";
-    const perfX = cssW - 8;
-    const perfLineH = 16;
-    const perfY0 = cssH - 8 - perfLineH * (perfLines.length - 1);
-    for (let i = 0; i < perfLines.length; i++) {
-      ctx.fillText(perfLines[i], perfX, perfY0 + i * perfLineH);
-    }
-    ctx.textAlign = "left";
-  }
-  let screenDebugLineY = 30;
-  if (SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG) {
-    const forward = shadowSunModel.forward;
-    const projection = shadowSunModel.projectionDirection;
-    const sunLine = `shadowSun ${shadowSunModel.timeLabel} caster:${SHADOW_CASTER_MODE} elev:${shadowSunModel.elevationDeg.toFixed(1)} dir:${shadowSunModel.directionLabel} f(${forward.x.toFixed(3)},${forward.y.toFixed(3)},${forward.z.toFixed(3)}) p(${projection.x.toFixed(3)},${projection.y.toFixed(3)}) step:${shadowSunModel.stepKey}`;
-    ctx.fillText(sunLine, 8, screenDebugLineY);
-    screenDebugLineY += 16;
-    if (structureShadowFrame.routing.usesHybrid) {
-      const hybridLine = `hybridDiag mode:${SHADOW_HYBRID_DIAGNOSTIC_MODE} cache h:${hybridShadowDiagnosticStats.cacheHits} m:${hybridShadowDiagnosticStats.cacheMisses} cast:${hybridShadowDiagnosticStats.casterTriangles} proj:${hybridShadowDiagnosticStats.projectedTriangles} queue p:${hybridShadowDiagnosticStats.piecesQueued} t:${hybridShadowDiagnosticStats.trianglesQueued} pass p:${hybridShadowDiagnosticStats.piecesDrawnShadowPass} t:${hybridShadowDiagnosticStats.trianglesDrawnShadowPass} main p:${hybridShadowDiagnosticStats.piecesDrawnMainCanvas} t:${hybridShadowDiagnosticStats.trianglesDrawnMainCanvas} comp p:${hybridShadowDiagnosticStats.piecesComposited} t:${hybridShadowDiagnosticStats.trianglesComposited}`;
-      ctx.fillText(hybridLine, 8, screenDebugLineY);
-      screenDebugLineY += 16;
-    } else if (structureShadowFrame.routing.usesV4) {
-      const v4Line = `v4Diag mode:${v4ShadowDiagnosticStats.renderMode} cache h:${v4ShadowDiagnosticStats.cacheHits} m:${v4ShadowDiagnosticStats.cacheMisses} cap:${v4ShadowDiagnosticStats.topCapTriangles} corr:${v4ShadowDiagnosticStats.correspondences} strips:${v4ShadowDiagnosticStats.strips} edges:${v4ShadowDiagnosticStats.layerEdges} bands:${v4ShadowDiagnosticStats.layerBands} srcTri:${v4ShadowDiagnosticStats.sourceBandTriangles} dstTri:${v4ShadowDiagnosticStats.destinationBandEntries} map:${v4ShadowDiagnosticStats.correspondencePairs} mismatch:${v4ShadowDiagnosticStats.correspondenceMismatches} queue p:${v4ShadowDiagnosticStats.piecesQueued} stripT:${v4ShadowDiagnosticStats.trianglesQueued} capT:${v4ShadowDiagnosticStats.topCapTrianglesQueued} draw capPass:${v4ShadowDiagnosticStats.topCapTrianglesDrawnShadowPass} capMain:${v4ShadowDiagnosticStats.topCapTrianglesDrawnMainCanvas} warp:${v4ShadowDiagnosticStats.warpedTrianglesDrawnShadowPass} flatPass:${v4ShadowDiagnosticStats.flatTrianglesDrawnShadowPass} flatMain:${v4ShadowDiagnosticStats.flatTrianglesDrawnMainCanvas} calls warp:${v4ShadowDiagnosticStats.warpedDrawCalls} flat:${v4ShadowDiagnosticStats.flatDrawCalls} comp p:${v4ShadowDiagnosticStats.piecesComposited} t:${v4ShadowDiagnosticStats.trianglesComposited} triPairs:${v4ShadowDiagnosticStats.destinationBandPairs} tri:${v4ShadowDiagnosticStats.destinationTriangles} diag:${v4ShadowDiagnosticStats.diagonalRule} deltaConst pass:${v4ShadowDiagnosticStats.deltaConstPass} fail:${v4ShadowDiagnosticStats.deltaConstFail} ${v4ShadowDiagnosticStats.firstSliceSummary}`;
-      ctx.fillText(v4Line, 8, screenDebugLineY);
-      screenDebugLineY += 16;
-      const v4SampleLine = `v4Sample roofH:${v4ShadowDiagnosticStats.sampleRoofHeightPx ?? "none"} heights:${v4ShadowDiagnosticStats.sampleLayerHeights} slices:${v4ShadowDiagnosticStats.sampleSliceCount} edges:${v4ShadowDiagnosticStats.sampleLayerEdges} bands:${v4ShadowDiagnosticStats.sampleLayerBands} ${v4ShadowDiagnosticStats.sampleSelectedSlice}`;
-      ctx.fillText(v4SampleLine, 8, screenDebugLineY);
-      screenDebugLineY += 16;
-      const v4BandLine = `v4Band ${v4ShadowDiagnosticStats.sampleSelectedBand}`;
-      ctx.fillText(v4BandLine, 8, screenDebugLineY);
-      screenDebugLineY += 16;
-    } else if (structureShadowFrame.routing.usesV5) {
-      const v5Line = `v5Diag view:${SHADOW_V5_DEBUG_VIEW} xf:${SHADOW_V5_TRANSFORM_DEBUG_MODE} queue p:${v5ShadowDiagnosticStats.piecesQueued} t:${v5ShadowDiagnosticStats.trianglesQueued} draw p:${v5ShadowDiagnosticStats.piecesDrawn} t:${v5ShadowDiagnosticStats.trianglesDrawn} finalCalls:${v5ShadowDiagnosticStats.finalShadowDrawCalls}`;
-      ctx.fillText(v5Line, 8, screenDebugLineY);
-      screenDebugLineY += 16;
-      if (v5ShadowAnchorDiagnostic) {
-        const d = v5ShadowAnchorDiagnostic;
-        const v5SpaceLineA = [
-          `v5Space id:${d.structureInstanceId}`,
-          `dst:${d.triangleDestinationSpace}`,
-          `maskOrigin(${d.maskCanvasOrigin.x.toFixed(1)},${d.maskCanvasOrigin.y.toFixed(1)})`,
-          `buildOrigin(${d.buildingDrawOrigin.x.toFixed(1)},${d.buildingDrawOrigin.y.toFixed(1)})`,
-          `xformOrigin(${d.transformedMaskDrawOrigin.x.toFixed(1)},${d.transformedMaskDrawOrigin.y.toFixed(1)})`,
-          `finalOrigin(${d.finalShadowDrawOrigin.x.toFixed(1)},${d.finalShadowDrawOrigin.y.toFixed(1)})`,
-        ].join(" ");
-        ctx.fillText(v5SpaceLineA, 8, screenDebugLineY);
-        screenDebugLineY += 16;
-        const v5SpaceLineB = [
-          `v5Anchor mask(${d.maskAnchor.x.toFixed(1)},${d.maskAnchor.y.toFixed(1)})`,
-          `build(${d.buildingAnchor.x.toFixed(1)},${d.buildingAnchor.y.toFixed(1)})`,
-          `xform(${d.transformedAnchor.x.toFixed(1)},${d.transformedAnchor.y.toFixed(1)})`,
-          `offset(${d.offset.x.toFixed(2)},${d.offset.y.toFixed(2)})`,
-          `raw[${d.rawBounds.minX.toFixed(1)},${d.rawBounds.minY.toFixed(1)}→${d.rawBounds.maxX.toFixed(1)},${d.rawBounds.maxY.toFixed(1)}]`,
-          `xraw[${d.transformedBounds.minX.toFixed(1)},${d.transformedBounds.minY.toFixed(1)}→${d.transformedBounds.maxX.toFixed(1)},${d.transformedBounds.maxY.toFixed(1)}]`,
-        ].join(" ");
-        ctx.fillText(v5SpaceLineB, 8, screenDebugLineY);
-        screenDebugLineY += 16;
-      }
-    } else if (structureShadowFrame.routing.usesV6) {
-      const selectedId = structureV6VerticalShadowDebugData?.structureInstanceId ?? "none";
-      const bucketATris = structureV6VerticalShadowDebugData?.bucketAShadow?.sourceTriangleCount ?? 0;
-      const bucketBTriCount = structureV6VerticalShadowDebugData?.bucketBShadow?.sourceTriangleCount ?? 0;
-      const topTriCount = structureV6VerticalShadowDebugData?.topShadow?.sourceTriangleCount ?? 0;
-      const bucketACastSlices = structureV6VerticalShadowDebugData?.bucketAShadow?.nonEmptySliceCount ?? 0;
-      const bucketBCastSlices = structureV6VerticalShadowDebugData?.bucketBShadow?.nonEmptySliceCount ?? 0;
-      const topCastSlices = structureV6VerticalShadowDebugData?.topShadow?.nonEmptySliceCount ?? 0;
-      const shadowVector = structureV6VerticalShadowDebugData?.shadowVector ?? { x: 0, y: 0 };
-      const v6Line = `v6.7Diag buckets:${SHADOW_V6_PRIMARY_SEMANTIC_BUCKET}+${SHADOW_V6_SECONDARY_SEMANTIC_BUCKET}+${SHADOW_V6_TOP_SEMANTIC_BUCKET} reqBucket:${SHADOW_V6_REQUESTED_SEMANTIC_BUCKET} structReq:${SHADOW_V6_STRUCTURE_INDEX} selected:${selectedId} candidates:${structureV6ShadowDebugCandidates.length} triEW:${bucketATris} triSN:${bucketBTriCount} triTOP:${topTriCount} castEW:${bucketACastSlices} castSN:${bucketBCastSlices} castTOP:${topCastSlices} vec(${shadowVector.x.toFixed(1)},${shadowVector.y.toFixed(1)})`;
-      ctx.fillText(v6Line, 8, screenDebugLineY);
-      screenDebugLineY += 16;
-    }
-  }
-  if (SHOW_ROAD_SEMANTIC) {
-    const roadWPlayer = roadAreaWidthAt(playerTx, playerTy);
-    ctx.fillText(`roadW(player): ${roadWPlayer}`, 8, screenDebugLineY);
-  }
-  ctx.restore();
   endRenderPerfFrame(w.timeSec ?? 0);
 
   if (DEBUG_PLAYER_WEDGE) {
@@ -7005,7 +3755,17 @@ export async function renderSystem(
     );
   }
   overlayCtx.setTransform(overlayDpr, 0, 0, overlayDpr, safeOffsetX * overlayDpr, safeOffsetY * overlayDpr);
-  if (debugFlags.showGrid) renderTileGridCompass(w, overlayCtx, scaledW, scaledH); // tile-grid N/E/S/W (matches in-game tests)
+  if (debugFlags.showGrid) {
+    executeDebugPass({
+      phase: "gridCompass",
+      input: {
+        w,
+        ctx: overlayCtx,
+        ww: scaledW,
+        hh: scaledH,
+      },
+    });
+  }
 
   overlayCtx.setTransform(overlayDpr, 0, 0, overlayDpr, 0, 0);
   if (getUserSettings().debug.dpsMeter) {
@@ -7061,128 +3821,6 @@ function renderDeathFxOverlay(w: World, ctx: CanvasRenderingContext2D, ww: numbe
  *  - tile West  (-x) => screen North-West (↖)
  *
  * This compass is intentionally NOT "screen north"; it is the tile grid axes.
- */
-function renderTileGridCompass(w: World, ctx: CanvasRenderingContext2D, ww: number, hh: number) {
-  // Optional toggle (defaults ON)
-  const enabled = ((w as any).tileCompassEnabled ?? true) as boolean;
-  if (!enabled) return;
-
-  // Panel placement (top-right) and sizing
-  const pad = 12;
-  const size = 120;
-
-  // Top-aligned, horizontally centered
-  const x0 = Math.round(ww * 0.5 - size * 0.5);
-  const y0 = pad;
-
-
-  const cx = x0 + size * 0.5;
-  const cy = y0 + size * 0.5;
-
-  // Radius for arrows/labels
-  const R = size * 0.36;
-
-  // Draw panel
-  ctx.save();
-  ctx.globalAlpha = 0.75;
-  ctx.fillStyle = "#111";
-  ctx.fillRect(x0, y0, size, size);
-
-  ctx.globalAlpha = 0.9;
-  ctx.strokeStyle = "rgba(255,255,255,0.22)";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(x0, y0, size, size);
-
-  // Title
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = "rgba(255,255,255,0.85)";
-  ctx.font = "bold 12px monospace";
-  ctx.textAlign = "left";
-  ctx.textBaseline = "top";
-
-  // Center dot
-  ctx.fillStyle = "rgba(255,255,255,0.65)";
-  ctx.beginPath();
-  ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Helper: draw a single arrow + label
-  const drawArrow = (dx: number, dy: number, label: string) => {
-    // Normalize direction
-    const len = Math.hypot(dx, dy) || 1;
-    const ux = dx / len;
-    const uy = dy / len;
-
-    const x1 = cx + ux * R;
-    const y1 = cy + uy * R;
-
-    // Shaft
-    ctx.strokeStyle = "rgba(255,255,255,0.85)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(x1, y1);
-    ctx.stroke();
-
-    // Arrow head
-    const headL = 10;
-    const headW = 6;
-
-    // Perp vector
-    const px = -uy;
-    const py = ux;
-
-    const hx0 = x1 - ux * headL;
-    const hy0 = y1 - uy * headL;
-
-    const hxL = hx0 + px * headW;
-    const hyL = hy0 + py * headW;
-
-    const hxR = hx0 - px * headW;
-    const hyR = hy0 - py * headW;
-
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(hxL, hyL);
-    ctx.lineTo(hxR, hyR);
-    ctx.closePath();
-    ctx.fill();
-
-    // Label near arrow tip
-    ctx.fillStyle = "rgba(255,255,255,0.9)";
-    ctx.font = "bold 14px monospace";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(label, cx + ux * (R + 18), cy + uy * (R + 18));
-  };
-
-  // IMPORTANT: these are SCREEN vectors (pixels), not world or tile vectors.
-  // Based on your verified mapping:
-  //  N(tile) = ↗ , E(tile) = ↘ , S(tile) = ↙ , W(tile) = ↖
-  drawArrow(+1, -1, "N"); // ↗
-  drawArrow(+1, +1, "E"); // ↘
-  drawArrow(-1, +1, "S"); // ↙
-  drawArrow(-1, -1, "W"); // ↖
-
-  // Optional: show player grid coords for sanity (tiny)
-  const g = gridAtPlayer(w);
-  const pWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
-  const ptx = Math.floor(pWorld.wx / KENNEY_TILE_WORLD);
-  const pty = Math.floor(pWorld.wy / KENNEY_TILE_WORLD);
-  const roadW = roadAreaWidthAt(ptx, pty);
-  ctx.globalAlpha = 0.9;
-  ctx.fillStyle = "rgba(255,255,255,0.55)";
-  ctx.font = "10px monospace";
-  ctx.textAlign = "left";
-  ctx.textBaseline = "bottom";
-  ctx.fillText(`gx:${g.gx.toFixed(2)} gy:${g.gy.toFixed(2)}`, x0 + 8, y0 + size - 8);
-  ctx.fillText(`roadW:${roadW}`, x0 + 8, y0 + size - 20);
-
-  ctx.restore();
-}
-/**
- * Render floating combat text (damage numbers).
  */
 function renderFloatingText(
     w: World,
