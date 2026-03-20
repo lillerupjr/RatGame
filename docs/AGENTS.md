@@ -307,3 +307,41 @@ Partial execution or batching steps is invalid.
     - State that the contract is complete
 
 ---
+## Renderer Architecture Contract (Post-Decomposition)
+
+The renderer is a staged pipeline. `render.ts` is a conductor only and must not contain subsystem logic.
+
+### Pipeline Stages (locked)
+
+1. prepareRenderFrame — frame context, camera, viewport, settings snapshot
+2. collectFrameDrawables — gather all world drawables (delegates to subsystems)
+3. sortFrameDrawables — ordering authority (single source of truth)
+4. executeWorldPasses — ground, world, shadows, lighting
+5. executeScreenOverlays — screen-space effects
+6. executeUiPass — UI layer
+7. executeDebugPass — debug overlays (optional)
+
+### Ownership Rules (locked)
+
+* structures → presentation/structures/*
+* structure shadows → presentation/structureShadows/*
+* structure triangles → presentation/structureTriangles/*
+* static relight → presentation/staticRelight/*
+* debug overlays → presentation/debug/*
+
+### Hard Rules
+
+* render.ts must NOT contain:
+
+  * slice generation
+  * triangle math
+  * shadow algorithms
+  * relight algorithms
+  * debug drawing logic
+* No large loops (>100 lines) inside renderSystem
+* No new "renderUtils" or helper dump files
+* All new rendering features must attach to an existing stage
+
+### Principle
+
+The renderer is a pipeline of systems, not a system itself.
