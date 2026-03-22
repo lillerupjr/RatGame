@@ -55,6 +55,8 @@ export type RenderDebugFlags = {
   shadowV6ForceRefresh: boolean;
   shadowV6FaceSliceDebugOverlay: boolean;
   shadowSunTimeHour: number;
+  sunElevationOverrideEnabled: boolean;
+  sunElevationOverrideDeg: number;
 };
 
 export type RenderDebugFrameContext = {

@@ -3,6 +3,7 @@ import { getSupportSurfaceAt } from "../../map/compile/kenneyMap";
 import {
   DEFAULT_SHADOW_SUN_V1_TIME_HOUR,
   getShadowSunV1Model,
+  type ShadowSunElevationOverride,
   type ShadowSunV1Model,
 } from "../../../shadowSunV1";
 
@@ -32,8 +33,11 @@ const SHADOW_FOOT_OFFSET_Y = 0;
 
 export type ShadowSunModel = ShadowSunV1Model;
 
-export function getShadowSunModel(timeHour: number = DEFAULT_SHADOW_SUN_V1_TIME_HOUR): ShadowSunModel {
-  return getShadowSunV1Model(timeHour);
+export function getShadowSunModel(
+  timeHour: number = DEFAULT_SHADOW_SUN_V1_TIME_HOUR,
+  elevationOverride?: ShadowSunElevationOverride,
+): ShadowSunModel {
+  return getShadowSunV1Model(timeHour, elevationOverride);
 }
 
 function clamp(v: number, lo: number, hi: number): number {

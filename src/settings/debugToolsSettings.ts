@@ -8,7 +8,12 @@ import type {
   ShadowV5TransformDebugMode,
   ShadowV1DebugGeometryMode,
 } from "./settingsTypes";
-import { DEFAULT_SHADOW_SUN_V1_TIME_HOUR, clampShadowSunTimeHour } from "../shadowSunV1";
+import {
+  DEFAULT_SHADOW_SUN_V1_ELEVATION_OVERRIDE_DEG,
+  DEFAULT_SHADOW_SUN_V1_TIME_HOUR,
+  clampShadowSunElevationOverrideDeg,
+  clampShadowSunTimeHour,
+} from "../shadowSunV1";
 import {
   STRUCTURE_SHADOW_V6_DEFAULT_SLICE_COUNT,
   STRUCTURE_SHADOW_V6_DEFAULT_STRUCTURE_INDEX,
@@ -77,8 +82,10 @@ export const DEFAULT_DEBUG_TOOLS_SETTINGS: DebugToolsSettings = {
   renderPerfCountersEnabled: false,
   paletteHudDebugOverlayEnabled: false,
   shadowSunTimeHour: DEFAULT_SHADOW_SUN_V1_TIME_HOUR,
+  sunElevationOverrideEnabled: false,
+  sunElevationOverrideDeg: DEFAULT_SHADOW_SUN_V1_ELEVATION_OVERRIDE_DEG,
   shadowV1DebugGeometryMode: "full",
-  shadowCasterMode: "v3HybridTriangles",
+  shadowCasterMode: "v1Roof",
   shadowHybridDiagnosticMode: "off",
   shadowDebugMode: "warpedOnly",
   shadowV5DebugView: "finalOnly",
@@ -106,7 +113,7 @@ function normalizeShadowCasterMode(value: unknown): ShadowCasterMode {
   if (value === "v4SliceStrips") return "v4SliceStrips";
   if (value === "v5TriangleShadowMask") return "v5TriangleShadowMask";
   if (value === "v6FaceSliceDebug") return "v6FaceSliceDebug";
-  return "v3HybridTriangles";
+  return "v1Roof";
 }
 
 function normalizeShadowHybridDiagnosticMode(value: unknown): ShadowHybridDiagnosticMode {
@@ -173,6 +180,8 @@ export function sanitizeDebugToolsSettings(input: Partial<DebugToolsSettings> | 
     renderPerfCountersEnabled: !!merged.renderPerfCountersEnabled,
     paletteHudDebugOverlayEnabled: !!merged.paletteHudDebugOverlayEnabled,
     shadowSunTimeHour: clampShadowSunTimeHour(merged.shadowSunTimeHour),
+    sunElevationOverrideEnabled: !!merged.sunElevationOverrideEnabled,
+    sunElevationOverrideDeg: clampShadowSunElevationOverrideDeg(merged.sunElevationOverrideDeg),
     shadowV1DebugGeometryMode: normalizeShadowV1DebugGeometryMode(merged.shadowV1DebugGeometryMode),
     shadowCasterMode: normalizeShadowCasterMode(merged.shadowCasterMode),
     shadowHybridDiagnosticMode: normalizeShadowHybridDiagnosticMode(merged.shadowHybridDiagnosticMode),

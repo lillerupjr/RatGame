@@ -141,6 +141,8 @@ export type DebugSettings = {
   pauseCsvControls: boolean;
   dpsMeter: boolean;
   shadowSunTimeHour: number;
+  sunElevationOverrideEnabled: boolean;
+  sunElevationOverrideDeg: number;
   shadowV1DebugGeometryMode: "full" | "capOnly" | "connectorsOnly";
   shadowCasterMode:
     | "v1Roof"
@@ -229,6 +231,8 @@ function toLegacySettings(): UserSettings {
       pauseCsvControls: settings.debug.pauseCsvControls,
       dpsMeter: settings.debug.dpsMeter,
       shadowSunTimeHour: settings.debug.shadowSunTimeHour,
+      sunElevationOverrideEnabled: settings.debug.sunElevationOverrideEnabled,
+      sunElevationOverrideDeg: settings.debug.sunElevationOverrideDeg,
       shadowV1DebugGeometryMode: settings.debug.shadowV1DebugGeometryMode,
       shadowCasterMode: settings.debug.shadowCasterMode,
       shadowHybridDiagnosticMode: settings.debug.shadowHybridDiagnosticMode,
@@ -448,6 +452,7 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
       "pauseDebugCards",
       "pauseCsvControls",
       "dpsMeter",
+      "sunElevationOverrideEnabled",
       "shadowV6AllStructures",
       "shadowV6OneStructureOnly",
       "shadowV6VerticalOnly",
@@ -460,6 +465,9 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     }
     if (debugAny.shadowSunTimeHour !== undefined) {
       debugPatch.shadowSunTimeHour = debugAny.shadowSunTimeHour;
+    }
+    if (debugAny.sunElevationOverrideDeg !== undefined) {
+      debugPatch.sunElevationOverrideDeg = debugAny.sunElevationOverrideDeg;
     }
     if (debugAny.shadowV1DebugGeometryMode !== undefined) {
       debugPatch.shadowV1DebugGeometryMode = debugAny.shadowV1DebugGeometryMode;

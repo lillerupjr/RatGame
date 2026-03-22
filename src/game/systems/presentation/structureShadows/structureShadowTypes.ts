@@ -29,6 +29,8 @@ export type StructureShadowFrameInputs = {
   structureTriangleGeometryEnabled: boolean;
   shadowCasterMode: ShadowCasterMode;
   shadowSunTimeHour: number;
+  sunElevationOverrideEnabled: boolean;
+  sunElevationOverrideDeg: number;
 };
 
 export type StructureShadowContextKeys = {

@@ -41,5 +41,7 @@ export function resolveRenderDebugFlags(debug: DebugSettings): RenderDebugFlags 
     shadowV6ForceRefresh: debug.shadowV6ForceRefresh,
     shadowV6FaceSliceDebugOverlay: debug.shadowV6FaceSliceDebugOverlay,
     shadowSunTimeHour: debug.shadowSunTimeHour,
+    sunElevationOverrideEnabled: debug.sunElevationOverrideEnabled,
+    sunElevationOverrideDeg: debug.sunElevationOverrideDeg,
   };
 }

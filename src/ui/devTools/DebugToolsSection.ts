@@ -7,7 +7,13 @@ import {
   createThreeColumnGrid,
   createToggleRow,
 } from "./devToolsSectionHelpers";
-import { SHADOW_SUN_V1_HOUR_OPTIONS, getShadowSunV1Model } from "../../shadowSunV1";
+import {
+  SHADOW_SUN_V1_HOUR_OPTIONS,
+  SHADOW_SUN_V1_MAX_ELEVATION_OVERRIDE_DEG,
+  SHADOW_SUN_V1_MIN_ELEVATION_OVERRIDE_DEG,
+  clampShadowSunElevationOverrideDeg,
+  getShadowSunV1Model,
+} from "../../shadowSunV1";
 
 export type DebugToolsSectionController = {
   sync(debug: DebugToolsSettings): void;
@@ -29,6 +35,19 @@ export function mountDebugToolsSection(
     SHADOW_SUN_V1_HOUR_OPTIONS,
     (value) => `${`${value}`.padStart(2, "0")}:00`,
     (value) => applyDebugPatch({ shadowSunTimeHour: value }),
+  );
+  const sunElevationOverrideToggle = createToggleRow(
+    section,
+    "Sun Elevation Override",
+    (checked) => applyDebugPatch({ sunElevationOverrideEnabled: checked }),
+  );
+  const sunElevationOverrideSlider = createSliderRow(
+    section,
+    "Sun Elevation (deg)",
+    SHADOW_SUN_V1_MIN_ELEVATION_OVERRIDE_DEG,
+    SHADOW_SUN_V1_MAX_ELEVATION_OVERRIDE_DEG,
+    1,
+    (value) => applyDebugPatch({ sunElevationOverrideDeg: value }),
   );
 
   const shadowV1DebugGeometryModeSelect = createSelectRow<DebugToolsSettings["shadowV1DebugGeometryMode"]>(
@@ -183,11 +202,20 @@ export function mountDebugToolsSection(
   shadowSunReadout.style.fontSize = "11px";
   section.appendChild(shadowSunReadout);
 
-  const syncShadowSunReadout = (timeHour: number) => {
-    const sun = getShadowSunV1Model(timeHour);
+  const syncShadowSunReadout = (debug: DebugToolsSettings) => {
+    const sun = getShadowSunV1Model(debug.shadowSunTimeHour, {
+      sunElevationOverrideEnabled: debug.sunElevationOverrideEnabled,
+      sunElevationOverrideDeg: debug.sunElevationOverrideDeg,
+    });
     const f = sun.forward;
     const p = sun.projectionDirection;
-    shadowSunReadout.textContent = `Sun ${sun.timeLabel} elev:${sun.elevationDeg.toFixed(1)}deg dir:${sun.directionLabel} forward(${f.x.toFixed(3)}, ${f.y.toFixed(3)}, ${f.z.toFixed(3)}) proj(${p.x.toFixed(3)}, ${p.y.toFixed(3)})`;
+    const modeLabel = debug.sunElevationOverrideEnabled ? "override:on" : "override:off";
+    shadowSunReadout.textContent = `Sun ${sun.timeLabel} elev:${sun.elevationDeg.toFixed(1)}deg ${modeLabel} dir:${sun.directionLabel} forward(${f.x.toFixed(3)}, ${f.y.toFixed(3)}, ${f.z.toFixed(3)}) proj(${p.x.toFixed(3)}, ${p.y.toFixed(3)})`;
+  };
+
+  const syncSunElevationOverrideReadout = (debug: DebugToolsSettings): void => {
+    const clamped = clampShadowSunElevationOverrideDeg(debug.sunElevationOverrideDeg);
+    sunElevationOverrideSlider.value.textContent = `${clamped.toFixed(1)}`;
   };
 
   const syncV6SliderReadouts = (debug: DebugToolsSettings): void => {
@@ -234,6 +262,11 @@ export function mountDebugToolsSection(
   return {
     sync(debug) {
       shadowSunHourSelect.value = `${debug.shadowSunTimeHour}`;
+      sunElevationOverrideToggle.checked = !!debug.sunElevationOverrideEnabled;
+      sunElevationOverrideSlider.input.value = `${clampShadowSunElevationOverrideDeg(debug.sunElevationOverrideDeg)}`;
+      sunElevationOverrideSlider.input.disabled = !debug.sunElevationOverrideEnabled;
+      sunElevationOverrideSlider.input.style.opacity = debug.sunElevationOverrideEnabled ? "1" : "0.65";
+      sunElevationOverrideSlider.value.style.opacity = debug.sunElevationOverrideEnabled ? "1" : "0.65";
       shadowV1DebugGeometryModeSelect.value = debug.shadowV1DebugGeometryMode;
       shadowCasterModeSelect.value = debug.shadowCasterMode;
       shadowHybridDiagnosticModeSelect.value = debug.shadowHybridDiagnosticMode;
@@ -277,7 +310,8 @@ export function mountDebugToolsSection(
       if (shadowV6FaceSliceDebugOverlayToggle.parentElement) {
         shadowV6FaceSliceDebugOverlayToggle.parentElement.style.display = v6DebugViewActive ? "flex" : "none";
       }
-      syncShadowSunReadout(debug.shadowSunTimeHour);
+      syncShadowSunReadout(debug);
+      syncSunElevationOverrideReadout(debug);
       syncV6SliderReadouts(debug);
       for (const [key, input] of Object.entries(controls)) {
         input.checked = !!(debug as any)[key];

@@ -82,6 +82,8 @@ export type DebugToolsSettings = {
   renderPerfCountersEnabled: boolean;
   paletteHudDebugOverlayEnabled: boolean;
   shadowSunTimeHour: number;
+  sunElevationOverrideEnabled: boolean;
+  sunElevationOverrideDeg: number;
   shadowV1DebugGeometryMode: ShadowV1DebugGeometryMode;
   shadowCasterMode: ShadowCasterMode;
   shadowHybridDiagnosticMode: ShadowHybridDiagnosticMode;

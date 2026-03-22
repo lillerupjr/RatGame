@@ -1260,6 +1260,8 @@ export async function renderSystem(
       structureTriangleGeometryEnabled,
       shadowCasterMode: SHADOW_CASTER_MODE,
       shadowSunTimeHour: debugFlags.shadowSunTimeHour,
+      sunElevationOverrideEnabled: debugFlags.sunElevationOverrideEnabled,
+      sunElevationOverrideDeg: debugFlags.sunElevationOverrideDeg,
     },
     {
       v1: structureShadowV1CacheStore,

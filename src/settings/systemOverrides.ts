@@ -123,7 +123,7 @@ export const DEFAULT_SYSTEM_OVERRIDES: SystemOverrides = {
   tileRenderRadius: 2,
 
   paletteSwapEnabled: false,
-  darknessMaskDebugDisabled: false,
+  darknessMaskDebugDisabled: true,
   lightColorModeOverride: "palette",
   lightStrengthOverride: "high",
   paletteGroup: "live",

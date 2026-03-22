@@ -35,6 +35,7 @@ export type BooleanDebugSettingKey = Exclude<
   | "staticRelightStrengthPercent"
   | "staticRelightTargetDarknessPercent"
   | "shadowSunTimeHour"
+  | "sunElevationOverrideDeg"
   | "shadowV1DebugGeometryMode"
   | "shadowCasterMode"
   | "shadowHybridDiagnosticMode"
@@ -100,6 +101,8 @@ export function makeAllDebugOffSettings(): DebugSettings {
     staticRelightStrengthPercent: 0,
     staticRelightTargetDarknessPercent: 50,
     shadowSunTimeHour: DEFAULT_DEBUG_SETTINGS.shadowSunTimeHour,
+    sunElevationOverrideEnabled: false,
+    sunElevationOverrideDeg: DEFAULT_DEBUG_SETTINGS.sunElevationOverrideDeg,
     shadowV1DebugGeometryMode: DEFAULT_DEBUG_SETTINGS.shadowV1DebugGeometryMode,
     shadowCasterMode: DEFAULT_DEBUG_SETTINGS.shadowCasterMode,
     shadowHybridDiagnosticMode: DEFAULT_DEBUG_SETTINGS.shadowHybridDiagnosticMode,

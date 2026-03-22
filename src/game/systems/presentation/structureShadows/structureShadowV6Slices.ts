@@ -20,6 +20,7 @@ type SliceSpaceAlphaSpan = {
 };
 
 const STRUCTURE_SHADOW_V6_DEFAULT_DESIRED_SLICE_THICKNESS_PX = 8;
+const STRUCTURE_SHADOW_V6_FINAL_MASK_BINARY_ALPHA_THRESHOLD = 0.5;
 
 export type StructureV6ExtrudedSliceDebug = {
   slice: StructureV6FaceSlice;
@@ -204,6 +205,69 @@ function filterStructureV6CandidateForBucket(
     triangles,
     zBand: candidate.zBand,
   };
+}
+
+function drawStructureV6SliceDuplicationStamps(
+  targetCtx: CanvasRenderingContext2D,
+  displacedSlices: readonly StructureV6ExtrudedSliceDebug[],
+  displacedOriginX: number,
+  displacedOriginY: number,
+): void {
+  const drawSliceAtOffset = (
+    sliceEntry: StructureV6ExtrudedSliceDebug,
+    offsetX: number,
+    offsetY: number,
+  ): void => {
+    if (!sliceEntry.contentBounds) return;
+    targetCtx.drawImage(
+      sliceEntry.canvas,
+      Math.round(offsetX - displacedOriginX),
+      Math.round(offsetY - displacedOriginY),
+    );
+  };
+
+  if (displacedSlices.length <= 0) return;
+  if (displacedSlices.length === 1) {
+    const only = displacedSlices[0];
+    drawSliceAtOffset(only, only.offsetX, only.offsetY);
+    return;
+  }
+
+  for (let i = 0; i < displacedSlices.length - 1; i++) {
+    const current = displacedSlices[i];
+    const next = displacedSlices[i + 1];
+    drawSliceAtOffset(current, current.offsetX, current.offsetY);
+    if (!current.contentBounds) continue;
+    const dx = next.offsetX - current.offsetX;
+    const dy = next.offsetY - current.offsetY;
+    // Fill by screen-row progression to avoid oversampling mostly-horizontal movement.
+    const segmentSteps = Math.max(1, Math.ceil(Math.abs(dy)));
+    if (segmentSteps <= 1) continue;
+    for (let k = 1; k < segmentSteps; k++) {
+      const u = k / segmentSteps;
+      drawSliceAtOffset(current, current.offsetX + dx * u, current.offsetY + dy * u);
+    }
+  }
+
+  const last = displacedSlices[displacedSlices.length - 1];
+  drawSliceAtOffset(last, last.offsetX, last.offsetY);
+}
+
+function applyStructureV6BinaryAlphaThreshold(
+  targetCtx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  threshold: number,
+): void {
+  if (width <= 0 || height <= 0) return;
+  const clampedThreshold = Math.max(0, Math.min(1, threshold));
+  const thresholdAlpha = Math.round(clampedThreshold * 255);
+  const imageData = targetCtx.getImageData(0, 0, width, height);
+  const pixels = imageData.data;
+  for (let i = 0; i < pixels.length; i += 4) {
+    pixels[i + 3] = pixels[i + 3] > thresholdAlpha ? 255 : 0;
+  }
+  targetCtx.putImageData(imageData, 0, 0);
 }
 
 export function buildStructureV6FaceSliceDebugData(
@@ -488,15 +552,12 @@ export function buildStructureV6FaceSliceDebugData(
   configurePixelPerfect(displacedSlicesCtx);
   displacedSlicesCtx.imageSmoothingEnabled = false;
   displacedSlicesCtx.clearRect(0, 0, displacedWidth, displacedHeight);
-  for (let i = 0; i < displacedSlices.length; i++) {
-    const sliceEntry = displacedSlices[i];
-    if (!sliceEntry.contentBounds) continue;
-    displacedSlicesCtx.drawImage(
-      sliceEntry.canvas,
-      Math.round(sliceEntry.offsetX - displacedOriginX),
-      Math.round(sliceEntry.offsetY - displacedOriginY),
-    );
-  }
+  drawStructureV6SliceDuplicationStamps(
+    displacedSlicesCtx,
+    displacedSlices,
+    displacedOriginX,
+    displacedOriginY,
+  );
   const mergedShadowCanvas = document.createElement("canvas");
   mergedShadowCanvas.width = displacedWidth;
   mergedShadowCanvas.height = displacedHeight;
@@ -633,6 +694,12 @@ export function buildStructureV6VerticalShadowMaskDebugData(
       Math.round(bucket.mergedShadowDrawOrigin.y - mergedOriginY),
     );
   }
+  applyStructureV6BinaryAlphaThreshold(
+    mergedVerticalShadowCtx,
+    mergedWidth,
+    mergedHeight,
+    STRUCTURE_SHADOW_V6_FINAL_MASK_BINARY_ALPHA_THRESHOLD,
+  );
   // Tint once after unioning coverage so overlapping buckets do not add extra darkness.
   mergedVerticalShadowCtx.globalCompositeOperation = "source-in";
   mergedVerticalShadowCtx.fillStyle = "rgba(0,0,0,0.78)";

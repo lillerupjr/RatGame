@@ -4,9 +4,12 @@ import {
   sanitizeDebugToolsSettings,
 } from "../../settings/debugToolsSettings";
 import {
+  DEFAULT_SHADOW_SUN_V1_ELEVATION_OVERRIDE_DEG,
   DEFAULT_SHADOW_SUN_V1_TIME_HOUR,
   SHADOW_SUN_V1_DAYLIGHT_END_HOUR,
   SHADOW_SUN_V1_DAYLIGHT_START_HOUR,
+  SHADOW_SUN_V1_MAX_ELEVATION_OVERRIDE_DEG,
+  SHADOW_SUN_V1_MIN_ELEVATION_OVERRIDE_DEG,
 } from "../../shadowSunV1";
 import {
   DEFAULT_USER_SETTINGS,
@@ -22,6 +25,8 @@ describe("settings bucket defaults", () => {
     const debug = DEFAULT_DEBUG_TOOLS_SETTINGS;
     const {
       shadowSunTimeHour,
+      sunElevationOverrideEnabled,
+      sunElevationOverrideDeg,
       shadowV1DebugGeometryMode,
       shadowCasterMode,
       shadowHybridDiagnosticMode,
@@ -42,8 +47,10 @@ describe("settings bucket defaults", () => {
       expect(value, key).toBe(false);
     }
     expect(shadowSunTimeHour).toBe(DEFAULT_SHADOW_SUN_V1_TIME_HOUR);
+    expect(sunElevationOverrideEnabled).toBe(false);
+    expect(sunElevationOverrideDeg).toBe(DEFAULT_SHADOW_SUN_V1_ELEVATION_OVERRIDE_DEG);
     expect(shadowV1DebugGeometryMode).toBe("full");
-    expect(shadowCasterMode).toBe("v3HybridTriangles");
+    expect(shadowCasterMode).toBe("v1Roof");
     expect(shadowHybridDiagnosticMode).toBe("off");
     expect(shadowDebugMode).toBe("warpedOnly");
     expect(shadowV5DebugView).toBe("finalOnly");
@@ -66,6 +73,16 @@ describe("settings bucket defaults", () => {
     expect(sanitizeDebugToolsSettings({ shadowSunTimeHour: 12.6 }).shadowSunTimeHour).toBe(13);
     expect(sanitizeDebugToolsSettings({ shadowSunTimeHour: Number.NaN }).shadowSunTimeHour)
       .toBe(DEFAULT_SHADOW_SUN_V1_TIME_HOUR);
+    expect(sanitizeDebugToolsSettings({ sunElevationOverrideEnabled: 1 as any }).sunElevationOverrideEnabled)
+      .toBe(true);
+    expect(sanitizeDebugToolsSettings({ sunElevationOverrideDeg: SHADOW_SUN_V1_MIN_ELEVATION_OVERRIDE_DEG - 10 })
+      .sunElevationOverrideDeg)
+      .toBe(SHADOW_SUN_V1_MIN_ELEVATION_OVERRIDE_DEG);
+    expect(sanitizeDebugToolsSettings({ sunElevationOverrideDeg: SHADOW_SUN_V1_MAX_ELEVATION_OVERRIDE_DEG + 10 })
+      .sunElevationOverrideDeg)
+      .toBe(SHADOW_SUN_V1_MAX_ELEVATION_OVERRIDE_DEG);
+    expect(sanitizeDebugToolsSettings({ sunElevationOverrideDeg: Number.NaN }).sunElevationOverrideDeg)
+      .toBe(DEFAULT_SHADOW_SUN_V1_ELEVATION_OVERRIDE_DEG);
     expect(sanitizeDebugToolsSettings({ shadowV1DebugGeometryMode: "capOnly" }).shadowV1DebugGeometryMode)
       .toBe("capOnly");
     expect(sanitizeDebugToolsSettings({ shadowV1DebugGeometryMode: "invalid" as any }).shadowV1DebugGeometryMode)
@@ -83,7 +100,7 @@ describe("settings bucket defaults", () => {
     expect(sanitizeDebugToolsSettings({ shadowCasterMode: "v6FaceSliceDebug" as any }).shadowCasterMode)
       .toBe("v6FaceSliceDebug");
     expect(sanitizeDebugToolsSettings({ shadowCasterMode: "invalid" as any }).shadowCasterMode)
-      .toBe("v3HybridTriangles");
+      .toBe("v1Roof");
     expect(sanitizeDebugToolsSettings({ shadowHybridDiagnosticMode: "solidShadowPass" as any }).shadowHybridDiagnosticMode)
       .toBe("solidShadowPass");
     expect(sanitizeDebugToolsSettings({ shadowHybridDiagnosticMode: "solidMainCanvas" as any }).shadowHybridDiagnosticMode)
@@ -165,5 +182,6 @@ describe("settings bucket defaults", () => {
     expect(sanitized.spawnPerDepth).toBeLessThanOrEqual(1.5);
     expect(sanitized.paletteId.length).toBeGreaterThan(0);
     expect(DEFAULT_SYSTEM_OVERRIDES.gameSpeed).toBe(1);
+    expect(DEFAULT_SYSTEM_OVERRIDES.darknessMaskDebugDisabled).toBe(true);
   });
 });

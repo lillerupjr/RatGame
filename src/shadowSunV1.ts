@@ -2,9 +2,12 @@ export const SHADOW_SUN_V1_DAYLIGHT_START_HOUR = 7;
 export const SHADOW_SUN_V1_SOLAR_NOON_HOUR = 13;
 export const SHADOW_SUN_V1_DAYLIGHT_END_HOUR = 19;
 export const SHADOW_SUN_V1_MAX_ELEVATION_DEG = 55;
+export const SHADOW_SUN_V1_MIN_ELEVATION_OVERRIDE_DEG = 1;
+export const SHADOW_SUN_V1_MAX_ELEVATION_OVERRIDE_DEG = 89;
 export const SHADOW_SUN_V1_MAX_PROJECTION_SCALE = 6;
 export const SHADOW_SUN_V1_PROJECTION_Z_EPSILON = 1e-3;
 export const DEFAULT_SHADOW_SUN_V1_TIME_HOUR = SHADOW_SUN_V1_SOLAR_NOON_HOUR;
+export const DEFAULT_SHADOW_SUN_V1_ELEVATION_OVERRIDE_DEG = SHADOW_SUN_V1_MAX_ELEVATION_DEG;
 
 export const SHADOW_SUN_V1_HOUR_OPTIONS = [
   7,
@@ -32,6 +35,11 @@ export type ShadowSunV1Model = {
   forward: { x: number; y: number; z: number };
   projectionDirection: { x: number; y: number };
   stepKey: string;
+};
+
+export type ShadowSunElevationOverride = {
+  sunElevationOverrideEnabled?: boolean;
+  sunElevationOverrideDeg?: number;
 };
 
 type Vec2 = { x: number; y: number };
@@ -103,6 +111,21 @@ function resolveElevationDeg(timeHour: number): number {
   return lerp(SHADOW_SUN_V1_MAX_ELEVATION_DEG, 0, t);
 }
 
+function formatElevationStepKey(value: number): string {
+  const rounded = Math.round(value * 100) / 100;
+  const asFixed = rounded.toFixed(2);
+  return asFixed.endsWith(".00")
+    ? asFixed.slice(0, -3)
+    : asFixed.endsWith("0")
+      ? asFixed.slice(0, -1)
+      : asFixed;
+}
+
+function buildStepKey(timeHour: number, overrideEnabled: boolean, elevationDeg: number): string {
+  if (!overrideEnabled) return `sun-v1:h${timeHour}`;
+  return `sun-v1:h${timeHour}:e${formatElevationStepKey(elevationDeg)}`;
+}
+
 function resolveDirectionLabel(horizontalDirection: Vec2): ShadowSunDirectionLabel {
   let bestLabel: ShadowSunDirectionLabel = "SE";
   let bestDot = Number.NEGATIVE_INFINITY;
@@ -140,15 +163,32 @@ export function clampShadowSunTimeHour(value: unknown): number {
   );
 }
 
+export function clampShadowSunElevationOverrideDeg(value: unknown): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return DEFAULT_SHADOW_SUN_V1_ELEVATION_OVERRIDE_DEG;
+  return clamp(
+    numeric,
+    SHADOW_SUN_V1_MIN_ELEVATION_OVERRIDE_DEG,
+    SHADOW_SUN_V1_MAX_ELEVATION_OVERRIDE_DEG,
+  );
+}
+
 export function formatShadowSunTimeLabel(timeHour: number): string {
   const hour = clampShadowSunTimeHour(timeHour);
   return `${`${hour}`.padStart(2, "0")}:00`;
 }
 
-export function getShadowSunV1Model(timeHour: number): ShadowSunV1Model {
+export function getShadowSunV1Model(
+  timeHour: number,
+  elevationOverride?: ShadowSunElevationOverride,
+): ShadowSunV1Model {
   const normalizedHour = clampShadowSunTimeHour(timeHour);
   const horizontalDirection = resolveHorizontalDirection(normalizedHour);
-  const elevationDeg = resolveElevationDeg(normalizedHour);
+  const timeOfDayElevationDeg = resolveElevationDeg(normalizedHour);
+  const overrideEnabled = elevationOverride?.sunElevationOverrideEnabled === true;
+  const elevationDeg = overrideEnabled
+    ? clampShadowSunElevationOverrideDeg(elevationOverride?.sunElevationOverrideDeg)
+    : timeOfDayElevationDeg;
   const elevationRad = elevationDeg * DEG_TO_RAD;
   const horizontalScale = Math.cos(elevationRad);
   const forward = {
@@ -163,6 +203,6 @@ export function getShadowSunV1Model(timeHour: number): ShadowSunV1Model {
     directionLabel: resolveDirectionLabel(horizontalDirection),
     forward,
     projectionDirection: buildProjectionDirection(forward),
-    stepKey: `sun-v1:h${normalizedHour}`,
+    stepKey: buildStepKey(normalizedHour, overrideEnabled, elevationDeg),
   };
 }
