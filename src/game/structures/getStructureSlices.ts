@@ -43,5 +43,35 @@ export function getStructureSlices(input: {
     if (left) out.push(left);
     if (right) out.push(right);
   }
+
+  // Inflate only the two outer edge slices to full 64px without touching
+  // slice count, order, or internal seam placement.
+  if (out.length > 0) {
+    let leftmostIndex = 0;
+    let rightmostIndex = 0;
+    for (let i = 1; i < out.length; i++) {
+      if (out[i].x < out[leftmostIndex].x) leftmostIndex = i;
+      if (out[i].x > out[rightmostIndex].x) rightmostIndex = i;
+    }
+
+    const leftmost = out[leftmostIndex];
+    if (leftmost.width < BAND_PX) {
+      const expandBy = BAND_PX - leftmost.width;
+      out[leftmostIndex] = {
+        ...leftmost,
+        x: leftmost.x - expandBy,
+        width: BAND_PX,
+      };
+    }
+
+    const rightmost = out[rightmostIndex];
+    if (rightmost.width < BAND_PX) {
+      out[rightmostIndex] = {
+        ...rightmost,
+        width: BAND_PX,
+      };
+    }
+  }
+
   return out;
 }

@@ -6,7 +6,10 @@ import {
   type StructureAnchorResult,
   type StructureSliceDebugAlphaMap,
 } from "../../../structures/getStructureAnchor";
-import { buildMonolithicSliceGeometry } from "../../../structures/buildMonolithicDebugSliceTriangles";
+import {
+  buildMonolithicSliceGeometry,
+  cullMonolithicTrianglesByAlphaWithDiagnostics,
+} from "../../../structures/buildMonolithicDebugSliceTriangles";
 import { getStructureSlices } from "../../../structures/getStructureSlices";
 import {
   resolveRuntimeStructureBandProgressionIndex,
@@ -58,6 +61,7 @@ import type {
 
 type ScreenPt = { x: number; y: number };
 type ScreenRect = { minX: number; maxX: number; minY: number; maxY: number };
+type LocalRect = { minX: number; maxX: number; minY: number; maxY: number };
 type ProjectedQuad = [ScreenPt, ScreenPt, ScreenPt, ScreenPt];
 type FootprintSupportCell = {
   col: number;
@@ -753,6 +757,98 @@ type QueueStructureSlicesDebugDrawInput = {
   };
 };
 
+function isFootprintCandidateTriangle(input: {
+  triangle: { a: ScreenPt; b: ScreenPt; c: ScreenPt };
+  leftGuideSegment: { a: ScreenPt; b: ScreenPt } | null;
+  rightGuideSegment: { a: ScreenPt; b: ScreenPt } | null;
+}): boolean {
+  const edges: Array<{ p0: ScreenPt; p1: ScreenPt }> = [
+    { p0: input.triangle.a, p1: input.triangle.b },
+    { p0: input.triangle.b, p1: input.triangle.c },
+    { p0: input.triangle.c, p1: input.triangle.a },
+  ];
+
+  const isCandidateOnGuide = (guide: { a: ScreenPt; b: ScreenPt } | null): boolean => {
+    if (!guide) return false;
+    for (let i = 0; i < edges.length; i++) {
+      const edge = edges[i];
+      const edgeLen = Math.hypot(edge.p1.x - edge.p0.x, edge.p1.y - edge.p0.y);
+      if (edgeLen <= 1e-4) continue;
+      const fullSharedEdge = isPointOnSegment(edge.p0, guide.a, guide.b)
+        && isPointOnSegment(edge.p1, guide.a, guide.b);
+      const overlapLen = segmentOverlapLengthOnLine(edge.p0, edge.p1, guide.a, guide.b);
+      const majorityOverlap = overlapLen > edgeLen * 0.5 + 1e-4;
+      if (!fullSharedEdge && !majorityOverlap) continue;
+      const centroid = {
+        x: (input.triangle.a.x + input.triangle.b.x + input.triangle.c.x) / 3,
+        y: (input.triangle.a.y + input.triangle.b.y + input.triangle.c.y) / 3,
+      };
+      if (isPointAboveGuideLine(centroid, guide.a, guide.b)) return true;
+    }
+    return false;
+  };
+
+  return isCandidateOnGuide(input.leftGuideSegment) || isCandidateOnGuide(input.rightGuideSegment);
+}
+
+function isPointOnSegment(p: ScreenPt, a: ScreenPt, b: ScreenPt): boolean {
+  const eps = 1e-4;
+  const abx = b.x - a.x;
+  const aby = b.y - a.y;
+  const apx = p.x - a.x;
+  const apy = p.y - a.y;
+  const cross = abx * apy - aby * apx;
+  if (Math.abs(cross) > eps) return false;
+  const dot = apx * abx + apy * aby;
+  if (dot < -eps) return false;
+  const lenSq = abx * abx + aby * aby;
+  if (dot > lenSq + eps) return false;
+  return true;
+}
+
+function isPointAboveGuideLine(p: ScreenPt, a: ScreenPt, b: ScreenPt): boolean {
+  const dx = b.x - a.x;
+  if (Math.abs(dx) <= 1e-6) {
+    return p.y < Math.min(a.y, b.y);
+  }
+  const t = (p.x - a.x) / dx;
+  const yOnLine = a.y + (b.y - a.y) * t;
+  return p.y < yOnLine - 1e-4;
+}
+
+function segmentOverlapLengthOnLine(
+  edgeA: ScreenPt,
+  edgeB: ScreenPt,
+  guideA: ScreenPt,
+  guideB: ScreenPt,
+): number {
+  const eps = 1e-4;
+  const dx = edgeB.x - edgeA.x;
+  const dy = edgeB.y - edgeA.y;
+  const edgeLen = Math.hypot(dx, dy);
+  if (edgeLen <= eps) return 0;
+
+  // Require guide segment to lie on the same infinite line as edge.
+  const crossA = dx * (guideA.y - edgeA.y) - dy * (guideA.x - edgeA.x);
+  const crossB = dx * (guideB.y - edgeA.y) - dy * (guideB.x - edgeA.x);
+  if (Math.abs(crossA) > eps || Math.abs(crossB) > eps) return 0;
+
+  const ux = dx / edgeLen;
+  const uy = dy / edgeLen;
+  const project = (p: ScreenPt): number => ((p.x - edgeA.x) * ux) + ((p.y - edgeA.y) * uy);
+
+  const edgeMin = 0;
+  const edgeMax = edgeLen;
+  const g0 = project(guideA);
+  const g1 = project(guideB);
+  const guideMin = Math.min(g0, g1);
+  const guideMax = Math.max(g0, g1);
+
+  const overlapMin = Math.max(edgeMin, guideMin);
+  const overlapMax = Math.min(edgeMax, guideMax);
+  return Math.max(0, overlapMax - overlapMin);
+}
+
 function queueStructureSlicesDebugDraw(input: QueueStructureSlicesDebugDrawInput): void {
   const alphaMap = getStructureAnchorAlphaMap(input.draw.img);
   if (!alphaMap) return;
@@ -763,20 +859,59 @@ function queueStructureSlicesDebugDraw(input: QueueStructureSlicesDebugDrawInput
   });
   if (!anchorResult) return;
 
+  const alphaBounds = anchorResult.occupiedBoundsPx;
+  const alphaMaxXExclusive = alphaBounds.maxX + 1;
+  const alphaMaxYExclusive = alphaBounds.maxY + 1;
+  const rawWorkMinX = Math.min(alphaBounds.minX, anchorResult.anchorPx.x);
+  const rawWorkMaxX = Math.max(alphaMaxXExclusive, anchorResult.anchorPx.x);
+  const workMinX = rawWorkMinX;
+  const workMaxX = rawWorkMaxX;
+  const workMinY = Math.min(alphaBounds.minY, anchorResult.anchorPx.y);
+  const workMaxY = Math.max(alphaMaxYExclusive, anchorResult.anchorPx.y);
+  const workWidth = Math.max(0, workMaxX - workMinX);
+  const workHeight = Math.max(0, workMaxY - workMinY);
+  if (workWidth <= 0 || workHeight <= 0) return;
+
   const slices = getStructureSlices({
-    bounds: { width: alphaMap.width, height: alphaMap.height },
-    anchor: anchorResult.anchorPx,
+    bounds: { width: workWidth, height: workHeight },
+    anchor: {
+      x: anchorResult.anchorPx.x - workMinX,
+      y: anchorResult.anchorPx.y - workMinY,
+    },
   });
-  const sliceIndicesBySpatialOrder = slices
-    .map((slice, originalIndex) => ({ originalIndex, x: slice.x }))
-    .sort((a, b) => a.x - b.x || a.originalIndex - b.originalIndex);
-  const spatialIndexByOriginalIndex = new Map<number, number>();
-  for (let i = 0; i < sliceIndicesBySpatialOrder.length; i++) {
-    spatialIndexByOriginalIndex.set(sliceIndicesBySpatialOrder[i].originalIndex, i);
-  }
-  const sliceGeometry = slices.map((slice, originalIndex) =>
-    buildMonolithicSliceGeometry(slice, spatialIndexByOriginalIndex.get(originalIndex) ?? originalIndex),
-  );
+  const workAnchor = {
+    x: anchorResult.anchorPx.x - workMinX,
+    y: anchorResult.anchorPx.y - workMinY,
+  };
+  const sliceGeometry = slices.map((slice) => {
+    const geometry = buildMonolithicSliceGeometry(slice, workAnchor);
+    const cull = cullMonolithicTrianglesByAlphaWithDiagnostics({
+      triangles: geometry.triangles,
+      alphaMap,
+      workRectSpriteLocal: {
+        x: workMinX,
+        y: workMinY,
+        w: workWidth,
+        h: workHeight,
+      },
+      workOffsetSpriteLocal: {
+        x: workMinX,
+        y: workMinY,
+      },
+    });
+    const triangles = cull.keptTriangles;
+    const culledSamples = cull.samples.filter((sample) => !sample.kept);
+    const keptSamples = cull.samples.filter((sample) => sample.kept);
+    return {
+      ...geometry,
+      triangles,
+      culledTriangles: culledSamples.map((sample) => sample.triangle),
+      culledSamples,
+      keptSamples,
+      totalTriangles: geometry.triangles.length,
+      minVisiblePixels: cull.minVisiblePixels,
+    };
+  });
 
   const unitScaleX = input.draw.dw / Math.max(1, alphaMap.width);
   const unitScaleY = input.draw.dh / Math.max(1, alphaMap.height);
@@ -786,10 +921,32 @@ function queueStructureSlicesDebugDraw(input: QueueStructureSlicesDebugDrawInput
     x: toScreenX(anchorResult.anchorPx.x),
     y: toScreenY(anchorResult.anchorPx.y),
   };
+  const workRect: LocalRect = {
+    minX: 0,
+    maxX: workWidth,
+    minY: 0,
+    maxY: workHeight,
+  };
+  const leftGuideTarget = intersectRayWithRectBoundary(
+    workAnchor,
+    { x: -1, y: -0.5 },
+    workRect,
+  );
+  const rightGuideTarget = intersectRayWithRectBoundary(
+    workAnchor,
+    { x: 1, y: -0.5 },
+    workRect,
+  );
 
   input.deferredStructureSliceDebugDraws.push(() => {
     const { ctx } = input;
     ctx.save();
+    const leftGuideSegment = leftGuideTarget
+      ? { a: workAnchor, b: leftGuideTarget }
+      : null;
+    const rightGuideSegment = rightGuideTarget
+      ? { a: workAnchor, b: rightGuideTarget }
+      : null;
 
     ctx.lineWidth = 1;
     for (let i = 0; i < slices.length; i++) {
@@ -797,8 +954,18 @@ function queueStructureSlicesDebugDraw(input: QueueStructureSlicesDebugDrawInput
       const even = (i % 2) === 0;
       ctx.fillStyle = even ? "rgba(255, 210, 80, 0.20)" : "rgba(100, 245, 155, 0.18)";
       ctx.strokeStyle = even ? "rgba(255, 210, 80, 0.95)" : "rgba(100, 245, 155, 0.92)";
-      ctx.fillRect(toScreenX(slice.x), toScreenY(0), slice.width * unitScaleX, slice.height * unitScaleY);
-      ctx.strokeRect(toScreenX(slice.x), toScreenY(0), slice.width * unitScaleX, slice.height * unitScaleY);
+      ctx.fillRect(
+        toScreenX(workMinX + slice.x),
+        toScreenY(workMinY),
+        slice.width * unitScaleX,
+        slice.height * unitScaleY,
+      );
+      ctx.strokeRect(
+        toScreenX(workMinX + slice.x),
+        toScreenY(workMinY),
+        slice.width * unitScaleX,
+        slice.height * unitScaleY,
+      );
     }
 
     // Stage 1: edge points.
@@ -807,7 +974,7 @@ function queueStructureSlicesDebugDraw(input: QueueStructureSlicesDebugDrawInput
       for (let pi = 0; pi < geom.edgePoints.length; pi++) {
         const p = geom.edgePoints[pi];
         ctx.beginPath();
-        ctx.arc(toScreenX(p.x), toScreenY(p.y), 1.5, 0, Math.PI * 2);
+        ctx.arc(toScreenX(workMinX + p.x), toScreenY(workMinY + p.y), 1.5, 0, Math.PI * 2);
         ctx.fillStyle = p.side === "R" ? "rgba(255, 240, 120, 0.95)" : "rgba(120, 230, 255, 0.95)";
         ctx.fill();
       }
@@ -818,24 +985,51 @@ function queueStructureSlicesDebugDraw(input: QueueStructureSlicesDebugDrawInput
       const strip = sliceGeometry[i].stripPoints;
       if (strip.length < 2) continue;
       ctx.beginPath();
-      ctx.moveTo(toScreenX(strip[0].x), toScreenY(strip[0].y));
+      ctx.moveTo(toScreenX(workMinX + strip[0].x), toScreenY(workMinY + strip[0].y));
       for (let si = 1; si < strip.length; si++) {
-        ctx.lineTo(toScreenX(strip[si].x), toScreenY(strip[si].y));
+        ctx.lineTo(toScreenX(workMinX + strip[si].x), toScreenY(workMinY + strip[si].y));
       }
       ctx.strokeStyle = "rgba(255, 120, 70, 0.85)";
       ctx.lineWidth = 1;
       ctx.stroke();
     }
 
-    // Stage 3: emitted triangles.
+    let footprintLeftCount = 0;
+    let footprintRightCount = 0;
+
+    // Stage 3: emitted triangles (culled + kept).
     for (let i = 0; i < sliceGeometry.length; i++) {
+      const culledTriangles = sliceGeometry[i].culledTriangles;
+      for (let ti = 0; ti < culledTriangles.length; ti++) {
+        const tri = culledTriangles[ti];
+        ctx.beginPath();
+        ctx.moveTo(toScreenX(workMinX + tri.a.x), toScreenY(workMinY + tri.a.y));
+        ctx.lineTo(toScreenX(workMinX + tri.b.x), toScreenY(workMinY + tri.b.y));
+        ctx.lineTo(toScreenX(workMinX + tri.c.x), toScreenY(workMinY + tri.c.y));
+        ctx.closePath();
+        ctx.fillStyle = "rgba(255, 30, 60, 0.16)";
+        ctx.strokeStyle = "rgba(255, 90, 110, 0.96)";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 2]);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+
       const triangles = sliceGeometry[i].triangles;
+      const footprintCandidates = triangles.filter((tri) =>
+        isFootprintCandidateTriangle({
+          triangle: tri,
+          leftGuideSegment,
+          rightGuideSegment,
+        }),
+      );
       for (let ti = 0; ti < triangles.length; ti++) {
         const tri = triangles[ti];
         ctx.beginPath();
-        ctx.moveTo(toScreenX(tri.a.x), toScreenY(tri.a.y));
-        ctx.lineTo(toScreenX(tri.b.x), toScreenY(tri.b.y));
-        ctx.lineTo(toScreenX(tri.c.x), toScreenY(tri.c.y));
+        ctx.moveTo(toScreenX(workMinX + tri.a.x), toScreenY(workMinY + tri.a.y));
+        ctx.lineTo(toScreenX(workMinX + tri.b.x), toScreenY(workMinY + tri.b.y));
+        ctx.lineTo(toScreenX(workMinX + tri.c.x), toScreenY(workMinY + tri.c.y));
         ctx.closePath();
         ctx.fillStyle = "rgba(255, 80, 150, 0.08)";
         ctx.strokeStyle = "rgba(255, 120, 185, 0.55)";
@@ -843,6 +1037,26 @@ function queueStructureSlicesDebugDraw(input: QueueStructureSlicesDebugDrawInput
         ctx.fill();
         ctx.stroke();
       }
+      for (let ti = 0; ti < footprintCandidates.length; ti++) {
+        const tri = footprintCandidates[ti];
+        const centroidX = (tri.a.x + tri.b.x + tri.c.x) / 3;
+        if (centroidX < workAnchor.x) {
+          footprintLeftCount++;
+        } else {
+          footprintRightCount++;
+        }
+        ctx.beginPath();
+        ctx.moveTo(toScreenX(workMinX + tri.a.x), toScreenY(workMinY + tri.a.y));
+        ctx.lineTo(toScreenX(workMinX + tri.b.x), toScreenY(workMinY + tri.b.y));
+        ctx.lineTo(toScreenX(workMinX + tri.c.x), toScreenY(workMinY + tri.c.y));
+        ctx.closePath();
+        ctx.fillStyle = "rgba(255, 0, 220, 0.40)";
+        ctx.strokeStyle = "rgba(255, 60, 240, 1)";
+        ctx.lineWidth = 3;
+        ctx.fill();
+        ctx.stroke();
+      }
+
     }
 
     ctx.beginPath();
@@ -853,8 +1067,75 @@ function queueStructureSlicesDebugDraw(input: QueueStructureSlicesDebugDrawInput
     ctx.lineWidth = 1;
     ctx.stroke();
 
+    const dimensionLabel = `N:${footprintLeftCount}  M:${footprintRightCount}`;
+    ctx.font = "12px monospace";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+    ctx.fillText(dimensionLabel, anchorPt.x + 10, anchorPt.y - 14);
+    ctx.fillStyle = "rgba(255, 215, 245, 0.98)";
+    ctx.fillText(dimensionLabel, anchorPt.x + 9, anchorPt.y - 15);
+
+    // Footprint guide lines from anchor using iso-ground edge directions.
+    // Drawn last so they remain visible over all debug layers.
+    const drawGuideLine = (target: { x: number; y: number } | null, color: string): void => {
+      if (!target) return;
+      const tx = toScreenX(workMinX + target.x);
+      const ty = toScreenY(workMinY + target.y);
+
+      // Contrast under-stroke.
+      ctx.beginPath();
+      ctx.moveTo(anchorPt.x, anchorPt.y);
+      ctx.lineTo(tx, ty);
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.9)";
+      ctx.lineWidth = 6;
+      ctx.stroke();
+
+      // Colored top stroke.
+      ctx.beginPath();
+      ctx.moveTo(anchorPt.x, anchorPt.y);
+      ctx.lineTo(tx, ty);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 4;
+      ctx.stroke();
+    };
+    drawGuideLine(leftGuideTarget, "rgba(80, 205, 255, 1)");
+    drawGuideLine(rightGuideTarget, "rgba(255, 200, 90, 1)");
+
     ctx.restore();
   });
+}
+
+function intersectRayWithRectBoundary(
+  origin: { x: number; y: number },
+  direction: { x: number; y: number },
+  rect: LocalRect,
+): { x: number; y: number } | null {
+  const eps = 1e-6;
+  const candidates: Array<{ t: number; x: number; y: number }> = [];
+  const pushIfInRect = (t: number): void => {
+    if (!(t > eps) || !Number.isFinite(t)) return;
+    const x = origin.x + direction.x * t;
+    const y = origin.y + direction.y * t;
+    if (x < rect.minX - eps || x > rect.maxX + eps) return;
+    if (y < rect.minY - eps || y > rect.maxY + eps) return;
+    candidates.push({ t, x, y });
+  };
+
+  // Side boundaries.
+  if (Math.abs(direction.x) > eps) {
+    pushIfInRect((rect.minX - origin.x) / direction.x);
+    pushIfInRect((rect.maxX - origin.x) / direction.x);
+  }
+  // Top boundary only (bottom boundary intentionally excluded).
+  if (Math.abs(direction.y) > eps) {
+    pushIfInRect((rect.minY - origin.y) / direction.y);
+  }
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => a.t - b.t);
+  const hit = candidates[0];
+  return {
+    x: Math.max(rect.minX, Math.min(rect.maxX, hit.x)),
+    y: Math.max(rect.minY, Math.min(rect.maxY, hit.y)),
+  };
 }
 
 function queueStructureAnchorDebugDraw(input: QueueStructureAnchorDebugDrawInput): void {
@@ -1464,6 +1745,7 @@ function queueStructureTriangleFootprintShadowDebugDraws(
           ctx.stroke();
         }
       }
+
       if (showCapDebug) {
         for (let ti = 0; ti < debugShadowEntry.projectedTopCapTriangles.length; ti++) {
           const [a, b, c] = debugShadowEntry.projectedTopCapTriangles[ti];
@@ -1762,6 +2044,6 @@ function queueStructureTriangleFootprintShadowDebugDraws(
       ctx.fillStyle = "rgba(210, 230, 255, 0.97)";
       ctx.fillText(cacheLabel, labelX, labelY);
       ctx.restore();
-    });
-  }
+  });
+}
 }
