@@ -6,7 +6,7 @@ import type { StructureDrawablePayload } from "./structurePresentationTypes";
 export type RenderStructurePassInput = {
   ctx: CanvasRenderingContext2D;
   payload: StructureDrawablePayload;
-  showStructureSliceDebug: boolean;
+  showStructureTriangleFootprintDebug: boolean;
   tileWorld: number;
   deferredStructureSliceDebugDraws: Array<() => void>;
   resolveRelitCanvas: (pieceKey: string | null) => HTMLCanvasElement | null;
@@ -25,7 +25,7 @@ export function renderStructurePass(input: RenderStructurePassInput): void {
   const {
     ctx,
     payload,
-    showStructureSliceDebug,
+    showStructureTriangleFootprintDebug,
     tileWorld,
     deferredStructureSliceDebugDraws,
     resolveRelitCanvas,
@@ -97,7 +97,7 @@ export function renderStructurePass(input: RenderStructurePassInput): void {
         ctx.stroke();
         ctx.restore();
       }
-      if (showStructureSliceDebug && cutoutEligible) {
+      if (showStructureTriangleFootprintDebug && cutoutEligible) {
         const [a, b, c] = tri.points;
         ctx.save();
         ctx.beginPath();
@@ -143,7 +143,7 @@ export function renderStructurePass(input: RenderStructurePassInput): void {
     );
   }
 
-  if (!showStructureSliceDebug) return;
+  if (!showStructureTriangleFootprintDebug) return;
 
   deferredStructureSliceDebugDraws.push(() => {
     ctx.save();

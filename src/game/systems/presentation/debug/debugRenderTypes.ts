@@ -32,6 +32,7 @@ export type RenderDebugFlags = {
   showStructureCollision: boolean;
   showStructureSlices: boolean;
   showStructureTriangleFootprint: boolean;
+  showStructureAnchors: boolean;
   showEnemyAimOverlay: boolean;
   showLootGoblinOverlay: boolean;
   showMapOverlays: boolean;

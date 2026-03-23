@@ -17,7 +17,9 @@ function computeDebugPassEnabled(debug: DebugSettings): boolean {
     || debug.colliders
     || debug.slices
     || debug.spriteBounds
+    || debug.showStructureSlices
     || debug.structureTriangleFootprint
+    || debug.showStructureAnchors
     || debug.enemyAimOverlay
     || debug.lootGoblinOverlay
   );

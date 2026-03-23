@@ -236,10 +236,20 @@ export function mountDebugToolsSection(
     decals: createToggleRow(grid, "Show Decals", (checked) => applyDebugPatch({ decals: checked })),
     structureHeights: createToggleRow(grid, "Show Structure Heights", (checked) => applyDebugPatch({ structureHeights: checked })),
     spriteBounds: createToggleRow(grid, "Show Sprite Bounds", (checked) => applyDebugPatch({ spriteBounds: checked })),
+    showStructureSlices: createToggleRow(
+      grid,
+      "Show Structure Slices",
+      (checked) => applyDebugPatch({ showStructureSlices: checked }),
+    ),
     structureTriangleFootprint: createToggleRow(
       grid,
       "Structure Triangle Footprint",
       (checked) => applyDebugPatch({ structureTriangleFootprint: checked }),
+    ),
+    showStructureAnchors: createToggleRow(
+      grid,
+      "Show Structure Anchors",
+      (checked) => applyDebugPatch({ showStructureAnchors: checked }),
     ),
     projectileFaces: createToggleRow(grid, "Show Projectile Faces", (checked) => applyDebugPatch({ projectileFaces: checked })),
     triggers: createToggleRow(grid, "Show Trigger Zones", (checked) => applyDebugPatch({ triggers: checked })),

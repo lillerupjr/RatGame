@@ -38,7 +38,9 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "decals", label: "decals" },
   { key: "structureHeights", label: "structureHeights" },
   { key: "spriteBounds", label: "spriteBounds" },
+  { key: "showStructureSlices", label: "showStructureSlices" },
   { key: "structureTriangleFootprint", label: "structureTriangleFootprint" },
+  { key: "showStructureAnchors", label: "showStructureAnchors" },
   { key: "projectileFaces", label: "projectileFaces" },
   { key: "triggers", label: "triggers" },
   { key: "debugRoadSemantic", label: "debugRoadSemantic" },
@@ -66,7 +68,9 @@ export const DEFAULT_DEBUG_TOOLS_SETTINGS: DebugToolsSettings = {
   decals: false,
   structureHeights: false,
   spriteBounds: false,
+  showStructureSlices: false,
   structureTriangleFootprint: false,
+  showStructureAnchors: false,
   projectileFaces: false,
   triggers: false,
   debugRoadSemantic: false,
@@ -164,7 +168,9 @@ export function sanitizeDebugToolsSettings(input: Partial<DebugToolsSettings> | 
     decals: !!merged.decals,
     structureHeights: !!merged.structureHeights,
     spriteBounds: !!merged.spriteBounds,
+    showStructureSlices: !!merged.showStructureSlices,
     structureTriangleFootprint: !!merged.structureTriangleFootprint,
+    showStructureAnchors: !!merged.showStructureAnchors,
     projectileFaces: !!merged.projectileFaces,
     triggers: !!merged.triggers,
     debugRoadSemantic: !!merged.debugRoadSemantic,
@@ -223,6 +229,7 @@ export type ResolvedDebugFlags = {
   showStructureCollision: boolean;
   showStructureSlices: boolean;
   showStructureTriangleFootprint: boolean;
+  showStructureAnchors: boolean;
   showMapOverlays: boolean;
   showEnemyAimOverlay: boolean;
   showLootGoblinOverlay: boolean;
@@ -246,8 +253,9 @@ export function resolveDebugFlags(args: {
     showRoadSemantic: args.debug.debugRoadSemantic,
     showStructureHeights: args.debug.structureHeights,
     showStructureCollision: args.debug.blockedTiles || args.debug.colliders,
-    showStructureSlices: args.debug.slices || args.debug.spriteBounds,
+    showStructureSlices: args.debug.showStructureSlices,
     showStructureTriangleFootprint: args.debug.structureTriangleFootprint,
+    showStructureAnchors: args.debug.showStructureAnchors,
     showMapOverlays: !args.mapOverlaysDisabled,
     showEnemyAimOverlay: args.debug.enemyAimOverlay,
     showLootGoblinOverlay: args.debug.lootGoblinOverlay,

@@ -2,6 +2,13 @@ import { buildRuntimeStructureBandPieces } from "../../../../engine/render/sprit
 import { seAnchorFromTopLeft } from "../../../../engine/render/sprites/structureFootprintOwnership";
 import type { ShadowV6SemanticBucket } from "../../../../settings/settingsTypes";
 import {
+  getStructureAnchorFromAlphaMap,
+  type StructureAnchorResult,
+  type StructureSliceDebugAlphaMap,
+} from "../../../structures/getStructureAnchor";
+import { buildMonolithicSliceGeometry } from "../../../structures/buildMonolithicDebugSliceTriangles";
+import { getStructureSlices } from "../../../structures/getStructureSlices";
+import {
   resolveRuntimeStructureBandProgressionIndex,
   rectIntersects as runtimeStructureRectIntersects,
   type RuntimeStructureTriangleRect,
@@ -76,6 +83,7 @@ type StructureTriangleSemanticClass =
   | "CONFLICT";
 
 const STRUCTURE_FOOTPRINT_SCAN_STEP_PX = 64;
+const structureAnchorAlphaMapCache = new WeakMap<HTMLImageElement, StructureSliceDebugAlphaMap>();
 
 type BuildStructureSlicesInput = {
   ctx: CanvasRenderingContext2D;
@@ -113,6 +121,7 @@ type BuildStructureSlicesInput = {
   getFlippedOverlayImage: (img: HTMLImageElement) => HTMLCanvasElement;
   showStructureSliceDebug: boolean;
   showStructureTriangleFootprintDebug: boolean;
+  showStructureAnchors: boolean;
   shadowV1DebugGeometryMode: string;
   deferredStructureSliceDebugDraws: Array<() => void>;
   didQueueStructureCutoutDebugRect: boolean;
@@ -140,6 +149,22 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
     const o = candidate.overlay;
     const draw = candidate.draw;
     const structureSouthTieBreak = candidate.structureSouthTieBreak;
+
+    if (input.showStructureAnchors) {
+      queueStructureAnchorDebugDraw({
+        ctx: input.ctx,
+        deferredStructureSliceDebugDraws: input.deferredStructureSliceDebugDraws,
+        overlayId: o.id,
+        draw,
+      });
+    }
+    if (input.showStructureSliceDebug) {
+      queueStructureSlicesDebugDraw({
+        ctx: input.ctx,
+        deferredStructureSliceDebugDraws: input.deferredStructureSliceDebugDraws,
+        draw,
+      });
+    }
 
     if (candidate.useRuntimeStructureSlicing) {
       const bandPieces = buildRuntimeStructureBandPieces({
@@ -216,7 +241,7 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
             : null;
           let overlayHasVisibleTriangleGroup = false;
 
-          if (input.showStructureSliceDebug && input.structureTriangleCutoutEnabled && !didQueueStructureCutoutDebugRect) {
+          if (input.showStructureTriangleFootprintDebug && input.structureTriangleCutoutEnabled && !didQueueStructureCutoutDebugRect) {
             didQueueStructureCutoutDebugRect = true;
             input.deferredStructureSliceDebugDraws.push(() => {
               input.ctx.save();
@@ -283,7 +308,7 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
             }
 
             const finalAdmitted = finalVisibleTriangles.length > 0;
-            if (input.showStructureSliceDebug) {
+            if (input.showStructureTriangleFootprintDebug) {
               input.deferredStructureSliceDebugDraws.push(() => {
                 input.ctx.save();
                 const bounds = group.localBounds;
@@ -667,6 +692,275 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
     pieces,
     didQueueStructureCutoutDebugRect,
   };
+}
+
+function getStructureAnchorAlphaMap(img: HTMLImageElement): StructureSliceDebugAlphaMap | null {
+  if (!img || img.width <= 0 || img.height <= 0) return null;
+  const cached = structureAnchorAlphaMapCache.get(img);
+  if (cached && cached.width === img.width && cached.height === img.height) return cached;
+  if (typeof document === "undefined") return null;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  let imageData: ImageData;
+  try {
+    imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  } catch {
+    return null;
+  }
+
+  const alphaMap = {
+    width: canvas.width,
+    height: canvas.height,
+    data: imageData.data,
+  } satisfies StructureSliceDebugAlphaMap;
+  structureAnchorAlphaMapCache.set(img, alphaMap);
+  return alphaMap;
+}
+
+type QueueStructureAnchorDebugDrawInput = {
+  ctx: CanvasRenderingContext2D;
+  deferredStructureSliceDebugDraws: Array<() => void>;
+  overlayId: string;
+  draw: {
+    img: HTMLImageElement;
+    dx: number;
+    dy: number;
+    dw: number;
+    dh: number;
+    flipX?: boolean;
+    scale?: number;
+  };
+};
+
+type QueueStructureSlicesDebugDrawInput = {
+  ctx: CanvasRenderingContext2D;
+  deferredStructureSliceDebugDraws: Array<() => void>;
+  draw: {
+    img: HTMLImageElement;
+    dx: number;
+    dy: number;
+    dw: number;
+    dh: number;
+    flipX?: boolean;
+  };
+};
+
+function queueStructureSlicesDebugDraw(input: QueueStructureSlicesDebugDrawInput): void {
+  const alphaMap = getStructureAnchorAlphaMap(input.draw.img);
+  if (!alphaMap) return;
+
+  const anchorResult = getStructureAnchorFromAlphaMap({
+    alphaMap,
+    flipX: !!input.draw.flipX,
+  });
+  if (!anchorResult) return;
+
+  const slices = getStructureSlices({
+    bounds: { width: alphaMap.width, height: alphaMap.height },
+    anchor: anchorResult.anchorPx,
+  });
+  const sliceIndicesBySpatialOrder = slices
+    .map((slice, originalIndex) => ({ originalIndex, x: slice.x }))
+    .sort((a, b) => a.x - b.x || a.originalIndex - b.originalIndex);
+  const spatialIndexByOriginalIndex = new Map<number, number>();
+  for (let i = 0; i < sliceIndicesBySpatialOrder.length; i++) {
+    spatialIndexByOriginalIndex.set(sliceIndicesBySpatialOrder[i].originalIndex, i);
+  }
+  const sliceGeometry = slices.map((slice, originalIndex) =>
+    buildMonolithicSliceGeometry(slice, spatialIndexByOriginalIndex.get(originalIndex) ?? originalIndex),
+  );
+
+  const unitScaleX = input.draw.dw / Math.max(1, alphaMap.width);
+  const unitScaleY = input.draw.dh / Math.max(1, alphaMap.height);
+  const toScreenX = (x: number): number => input.draw.dx + x * unitScaleX;
+  const toScreenY = (y: number): number => input.draw.dy + y * unitScaleY;
+  const anchorPt = {
+    x: toScreenX(anchorResult.anchorPx.x),
+    y: toScreenY(anchorResult.anchorPx.y),
+  };
+
+  input.deferredStructureSliceDebugDraws.push(() => {
+    const { ctx } = input;
+    ctx.save();
+
+    ctx.lineWidth = 1;
+    for (let i = 0; i < slices.length; i++) {
+      const slice = slices[i];
+      const even = (i % 2) === 0;
+      ctx.fillStyle = even ? "rgba(255, 210, 80, 0.20)" : "rgba(100, 245, 155, 0.18)";
+      ctx.strokeStyle = even ? "rgba(255, 210, 80, 0.95)" : "rgba(100, 245, 155, 0.92)";
+      ctx.fillRect(toScreenX(slice.x), toScreenY(0), slice.width * unitScaleX, slice.height * unitScaleY);
+      ctx.strokeRect(toScreenX(slice.x), toScreenY(0), slice.width * unitScaleX, slice.height * unitScaleY);
+    }
+
+    // Stage 1: edge points.
+    for (let i = 0; i < sliceGeometry.length; i++) {
+      const geom = sliceGeometry[i];
+      for (let pi = 0; pi < geom.edgePoints.length; pi++) {
+        const p = geom.edgePoints[pi];
+        ctx.beginPath();
+        ctx.arc(toScreenX(p.x), toScreenY(p.y), 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = p.side === "R" ? "rgba(255, 240, 120, 0.95)" : "rgba(120, 230, 255, 0.95)";
+        ctx.fill();
+      }
+    }
+
+    // Stage 2: zig-zag strip.
+    for (let i = 0; i < sliceGeometry.length; i++) {
+      const strip = sliceGeometry[i].stripPoints;
+      if (strip.length < 2) continue;
+      ctx.beginPath();
+      ctx.moveTo(toScreenX(strip[0].x), toScreenY(strip[0].y));
+      for (let si = 1; si < strip.length; si++) {
+        ctx.lineTo(toScreenX(strip[si].x), toScreenY(strip[si].y));
+      }
+      ctx.strokeStyle = "rgba(255, 120, 70, 0.85)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // Stage 3: emitted triangles.
+    for (let i = 0; i < sliceGeometry.length; i++) {
+      const triangles = sliceGeometry[i].triangles;
+      for (let ti = 0; ti < triangles.length; ti++) {
+        const tri = triangles[ti];
+        ctx.beginPath();
+        ctx.moveTo(toScreenX(tri.a.x), toScreenY(tri.a.y));
+        ctx.lineTo(toScreenX(tri.b.x), toScreenY(tri.b.y));
+        ctx.lineTo(toScreenX(tri.c.x), toScreenY(tri.c.y));
+        ctx.closePath();
+        ctx.fillStyle = "rgba(255, 80, 150, 0.08)";
+        ctx.strokeStyle = "rgba(255, 120, 185, 0.55)";
+        ctx.lineWidth = 1;
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+
+    ctx.beginPath();
+    ctx.arc(anchorPt.x, anchorPt.y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 70, 90, 0.95)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 240, 245, 0.95)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.restore();
+  });
+}
+
+function queueStructureAnchorDebugDraw(input: QueueStructureAnchorDebugDrawInput): void {
+  const alphaMap = getStructureAnchorAlphaMap(input.draw.img);
+  if (!alphaMap) return;
+
+  const anchorResult = getStructureAnchorFromAlphaMap({
+    alphaMap,
+    flipX: !!input.draw.flipX,
+  });
+  if (!anchorResult) return;
+
+  const drawScale = input.draw.scale ?? 1;
+  const unitScaleX = (input.draw.dw / Math.max(1, alphaMap.width)) * drawScale;
+  const unitScaleY = (input.draw.dh / Math.max(1, alphaMap.height)) * drawScale;
+  const toScreen = (x: number, y: number): ScreenPt => ({
+    x: input.draw.dx + x * unitScaleX,
+    y: input.draw.dy + y * unitScaleY,
+  });
+
+  const bounds = anchorResult.occupiedBoundsPx;
+  const anchorPt = toScreen(anchorResult.anchorPx.x, anchorResult.anchorPx.y);
+  const bboxX = input.draw.dx + bounds.minX * unitScaleX;
+  const bboxY = input.draw.dy + bounds.minY * unitScaleY;
+  const bboxW = Math.max(1, (bounds.maxX - bounds.minX + 1) * unitScaleX);
+  const bboxH = Math.max(1, (bounds.maxY - bounds.minY + 1) * unitScaleY);
+  const profilePoints = collectSouthProfilePoints(anchorResult, toScreen);
+  const plateauPoints = collectPlateauProfilePoints(anchorResult, toScreen);
+
+  input.deferredStructureSliceDebugDraws.push(() => {
+    const { ctx } = input;
+    ctx.save();
+    ctx.lineWidth = 1;
+    ctx.fillStyle = "rgba(95, 210, 255, 0.10)";
+    ctx.strokeStyle = "rgba(95, 210, 255, 0.95)";
+    ctx.fillRect(bboxX, bboxY, bboxW, bboxH);
+    ctx.strokeRect(bboxX, bboxY, bboxW, bboxH);
+
+    if (profilePoints.length > 1) {
+      ctx.beginPath();
+      ctx.moveTo(profilePoints[0].x, profilePoints[0].y);
+      for (let i = 1; i < profilePoints.length; i++) {
+        ctx.lineTo(profilePoints[i].x, profilePoints[i].y);
+      }
+      ctx.strokeStyle = "rgba(140, 180, 255, 0.60)";
+      ctx.stroke();
+    }
+
+    if (plateauPoints.length > 1) {
+      ctx.beginPath();
+      ctx.moveTo(plateauPoints[0].x, plateauPoints[0].y);
+      for (let i = 1; i < plateauPoints.length; i++) {
+        ctx.lineTo(plateauPoints[i].x, plateauPoints[i].y);
+      }
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(255, 210, 95, 0.98)";
+      ctx.stroke();
+    }
+
+    const dotRadius = Math.max(2, Math.min(6, drawScale * 2));
+    ctx.beginPath();
+    ctx.arc(anchorPt.x, anchorPt.y, dotRadius, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 70, 90, 0.95)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 240, 245, 0.95)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    const label = `anchor:${input.overlayId}`;
+    ctx.font = "10px monospace";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.82)";
+    ctx.fillText(label, bboxX + 1, bboxY - 6 + 1);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.94)";
+    ctx.fillText(label, bboxX, bboxY - 6);
+    ctx.restore();
+  });
+}
+
+function collectSouthProfilePoints(
+  anchorResult: StructureAnchorResult,
+  toScreen: (x: number, y: number) => ScreenPt,
+): ScreenPt[] {
+  const points: ScreenPt[] = [];
+  const bounds = anchorResult.occupiedBoundsPx;
+  for (let lx = 0; lx < anchorResult.southYByXLocal.length; lx++) {
+    const y = anchorResult.southYByXLocal[lx];
+    if (y < 0) continue;
+    points.push(toScreen(bounds.minX + lx + 0.5, bounds.minY + y + 0.5));
+  }
+  return points;
+}
+
+function collectPlateauProfilePoints(
+  anchorResult: StructureAnchorResult,
+  toScreen: (x: number, y: number) => ScreenPt,
+): ScreenPt[] {
+  const points: ScreenPt[] = [];
+  const bounds = anchorResult.occupiedBoundsPx;
+  const startX = Math.max(0, anchorResult.plateauRangeLocal.startX | 0);
+  const endX = Math.min(anchorResult.southYByXLocal.length - 1, anchorResult.plateauRangeLocal.endX | 0);
+  for (let lx = startX; lx <= endX; lx++) {
+    const y = anchorResult.southYByXLocal[lx];
+    if (y < 0) continue;
+    points.push(toScreen(bounds.minX + lx + 0.5, bounds.minY + y + 0.5));
+  }
+  return points;
 }
 
 function buildProjectedStructureFootprintQuad(

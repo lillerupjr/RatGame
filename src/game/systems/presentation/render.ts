@@ -1065,6 +1065,7 @@ export async function renderSystem(
   const SHOW_ENTITY_ANCHOR_OVERLAY = debugFlags.showEntityAnchorOverlay;
   const SHOW_STRUCTURE_SLICE_DEBUG = debugFlags.showStructureSlices;
   const SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG = debugFlags.showStructureTriangleFootprint;
+  const SHOW_STRUCTURE_ANCHORS = debugFlags.showStructureAnchors || ((w as any).showStructureAnchors ?? false);
   const SHADOW_V1_DEBUG_GEOMETRY_MODE = debugFlags.shadowV1DebugGeometryMode;
   const SHADOW_CASTER_MODE = debugFlags.shadowCasterMode;
   const SHADOW_HYBRID_DIAGNOSTIC_MODE = debugFlags.shadowHybridDiagnosticMode;
@@ -1602,7 +1603,7 @@ export async function renderSystem(
     renderStructurePass({
       ctx,
       payload: payload as StructureDrawablePayload,
-      showStructureSliceDebug: SHOW_STRUCTURE_SLICE_DEBUG,
+      showStructureTriangleFootprintDebug: SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG,
       tileWorld: T,
       deferredStructureSliceDebugDraws,
       resolveRelitCanvas: (pieceKey) => {
@@ -1813,6 +1814,7 @@ export async function renderSystem(
     getFlippedOverlayImage,
     SHOW_STRUCTURE_SLICE_DEBUG,
     SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG,
+    SHOW_STRUCTURE_ANCHORS,
     SHADOW_V1_DEBUG_GEOMETRY_MODE,
     deferredStructureSliceDebugDraws,
     LOG_STRUCTURE_OWNERSHIP_DEBUG,
