@@ -35,6 +35,7 @@ export type BooleanDebugSettingKey = Exclude<
   | "staticRelightStrengthPercent"
   | "staticRelightTargetDarknessPercent"
   | "shadowSunTimeHour"
+  | "shadowSunAzimuthDeg"
   | "sunElevationOverrideDeg"
   | "shadowV1DebugGeometryMode"
   | "shadowCasterMode"
@@ -103,6 +104,7 @@ export function makeAllDebugOffSettings(): DebugSettings {
     staticRelightStrengthPercent: 0,
     staticRelightTargetDarknessPercent: 50,
     shadowSunTimeHour: DEFAULT_DEBUG_SETTINGS.shadowSunTimeHour,
+    shadowSunAzimuthDeg: DEFAULT_DEBUG_SETTINGS.shadowSunAzimuthDeg,
     sunElevationOverrideEnabled: false,
     sunElevationOverrideDeg: DEFAULT_DEBUG_SETTINGS.sunElevationOverrideDeg,
     shadowV1DebugGeometryMode: DEFAULT_DEBUG_SETTINGS.shadowV1DebugGeometryMode,
@@ -119,6 +121,8 @@ export function makeAllDebugOffSettings(): DebugSettings {
     shadowV6VerticalOnly: false,
     shadowV6TopOnly: false,
     shadowV6ForceRefresh: false,
+    sweepShadowDebug: false,
+    tileHeightMap: false,
     waterFlowRate: 1,
     neutralBirdAI: {
       ...DEFAULT_DEBUG_SETTINGS.neutralBirdAI,
@@ -151,6 +155,8 @@ export type ResolvedDebugFlags = {
   showEnemyAimOverlay: boolean;
   showLootGoblinOverlay: boolean;
   visualCompiledCutoutCache: boolean;
+  showSweepShadowDebug: boolean;
+  showTileHeightMap: boolean;
 };
 
 export function resolveDebugFlags(debug: DebugSettings): ResolvedDebugFlags {
@@ -173,5 +179,7 @@ export function resolveDebugFlags(debug: DebugSettings): ResolvedDebugFlags {
     showEnemyAimOverlay: debug.enemyAimOverlay,
     showLootGoblinOverlay: debug.lootGoblinOverlay,
     visualCompiledCutoutCache: !debug.disableVisualCompiledCutoutCache,
+    showSweepShadowDebug: debug.sweepShadowDebug,
+    showTileHeightMap: debug.tileHeightMap,
   };
 }

@@ -37,7 +37,7 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
   ctx.fillStyle = "#fff";
 
   if (
-    structureShadowRouting.usesV6
+    structureShadowRouting.usesV6Debug
     && flags.shadowV6FaceSliceDebugOverlay
     && structureV6VerticalShadowDebugData
   ) {
@@ -127,7 +127,7 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
         ctx.fillText(v5SpaceLineB, 8, screenDebugLineY);
         screenDebugLineY += 16;
       }
-    } else if (structureShadowRouting.usesV6) {
+    } else if (structureShadowRouting.usesV6Debug) {
       const selectedId = structureV6VerticalShadowDebugData?.structureInstanceId ?? "none";
       const bucketATris = structureV6VerticalShadowDebugData?.bucketAShadow?.sourceTriangleCount ?? 0;
       const bucketBTriCount = structureV6VerticalShadowDebugData?.bucketBShadow?.sourceTriangleCount ?? 0;

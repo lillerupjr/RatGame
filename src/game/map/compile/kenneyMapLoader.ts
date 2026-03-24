@@ -37,6 +37,8 @@ import {
     collectRequiredMonolithicBuildingSkinIdsForMap,
     getRequiredMonolithicBuildingPlacementGeometryForSprite,
 } from "../../structures/monolithicBuildingSemanticPrepass";
+import type { TileHeightGrid } from "../sweepShadow";
+import { renderHeightUnitsToSweepTileHeight } from "../tileHeightUnits";
 
 export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL" | typeof TILE_ID_OCEAN;
 export type StairDir = "N" | "E" | "S" | "W";
@@ -290,6 +292,7 @@ export type CompiledKenneyMap = {
     decalsInView(view: ViewRect): DecalPiece[];
     blockedTiles: Set<string>;
     blockedTileSpansByKey: Map<string, Array<{ zFrom: number; zTo: number }>>;
+    tileHeightGrid: TileHeightGrid;
     roadMarkingContext: RoadContext;
     roadMarkings: MarkingPiece[];
     roadAreaMaskWorld: Uint8Array;
@@ -380,9 +383,15 @@ function directionSuffix(dir: BuildingDir): "n" | "e" | "s" | "w" {
     return "w";
 }
 
+function hasDirectionalVariants(baseId: string): boolean {
+    return baseId.endsWith("/images");
+}
+
 function resolveBuildingSpriteId(baseId: string, dir?: BuildingDir): string {
-    if (!dir) return baseId;
-    return `${baseId}/${directionSuffix(dir)}`;
+    if (!dir) {
+        return hasDirectionalVariants(baseId) ? `${baseId}/s` : baseId;
+    }
+    return hasDirectionalVariants(baseId) ? `${baseId}/${directionSuffix(dir)}` : `${baseId}/${directionSuffix(dir)}`;
 }
 
 function axisForBuildingDir(dir: BuildingDir): BuildingAxis {
@@ -502,6 +511,13 @@ export function compileKenneyMapFromTable(
     const INHERIT_DOMINANT_FLOOR_SKIN = "__INHERIT_DOMINANT_FLOOR__";
     const RUNTIME_TILE_SKIN_PREFIX = "__RUNTIME_SQUARE_128__";
     const runtimeTileSkin = (family: RuntimeFloorTop["family"]) => `${RUNTIME_TILE_SKIN_PREFIX}${family}`;
+    type HeightStampRec = {
+        tx: number;
+        ty: number;
+        w: number;
+        h: number;
+        topZ: number;
+    };
 
     const pickRuntimeSquareTop = (family: RuntimeFloorTop["family"], tx: number, ty: number): RuntimeFloorTop => {
         const variantCount = getFloorVariantCount(family);
@@ -517,6 +533,38 @@ export function compileKenneyMapFromTable(
             variantIndex,
             rotationQuarterTurns,
         };
+    };
+    const heightStampRecs: HeightStampRec[] = [];
+    const recordHeightStamp = (tx: number, ty: number, w: number, h: number, topZ: number): void => {
+        if (!Number.isFinite(topZ)) return;
+        heightStampRecs.push({
+            tx: tx | 0,
+            ty: ty | 0,
+            w: Math.max(1, w | 0),
+            h: Math.max(1, h | 0),
+            topZ,
+        });
+    };
+    const hashHeightGrid = (
+        heights: Float32Array,
+        width: number,
+        height: number,
+        gridOriginTx: number,
+        gridOriginTy: number,
+    ): string => {
+        let hash = 2166136261;
+        const mix = (value: number) => {
+            hash ^= value | 0;
+            hash = Math.imul(hash, 16777619);
+        };
+        mix(width);
+        mix(height);
+        mix(gridOriginTx);
+        mix(gridOriginTy);
+        for (let i = 0; i < heights.length; i++) {
+            mix(Math.round(heights[i] * 1024));
+        }
+        return `h${(hash >>> 0).toString(16)}`;
     };
 
     // Excel/table coords are tile coords (identity mapping).
@@ -1964,13 +2012,14 @@ export function compileKenneyMapFromTable(
         w: number;
         h: number;
         heightUnits: number;
+        tileHeightUnits: number;
         source: "semantic" | "legacy";
         spriteId: string;
     };
     const requireLegacySkinGeometry = (
         skin: BuildingSkin,
         context: string,
-    ): { w: number; h: number; heightUnits: number } => {
+    ): { w: number; h: number; heightUnits: number; tileHeightUnits: number } => {
         const rawW = skin.w;
         const rawH = skin.h;
         const rawHeightUnits = skin.heightUnits;
@@ -1983,6 +2032,10 @@ export function compileKenneyMapFromTable(
             w: Math.max(1, (rawW as number) | 0),
             h: Math.max(1, (rawH as number) | 0),
             heightUnits: Math.max(1, (rawHeightUnits as number) | 0),
+            tileHeightUnits: Math.max(
+                renderHeightUnitsToSweepTileHeight(1),
+                renderHeightUnitsToSweepTileHeight(rawHeightUnits as number),
+            ),
         };
     };
     const placementGeometryByKey = new Map<string, PlacementGeometry>();
@@ -2009,6 +2062,7 @@ export function compileKenneyMapFromTable(
                 w: semantic.w,
                 h: semantic.h,
                 heightUnits: semantic.heightUnits,
+                tileHeightUnits: semantic.tileHeightUnits,
                 source: "semantic",
                 spriteId: semanticSpriteId,
             };
@@ -2026,6 +2080,7 @@ export function compileKenneyMapFromTable(
             w: legacyGeometry.w,
             h: legacyGeometry.h,
             heightUnits: legacyGeometry.heightUnits,
+            tileHeightUnits: legacyGeometry.tileHeightUnits,
             source: "legacy",
             spriteId: semanticSpriteId,
         };
@@ -2557,6 +2612,7 @@ export function compileKenneyMapFromTable(
             }
 
             const heightUnits = skinGeometry.heightUnits | 0;
+            const tileHeightUnits = Math.max(0, skinGeometry.tileHeightUnits);
             const scale = skin.spriteScale ?? 1;
             const anchorLiftPx = isMonolithicSkin
                 ? 0
@@ -2578,8 +2634,8 @@ export function compileKenneyMapFromTable(
 
             if (isMonolithicSkin) {
                 const seAnchor = seAnchorFromTopLeft(sx, sy, placeW, placeH);
-                overlays.push({
-                    id: `building_${skin.id}_${sx}_${sy}_${w}x${h}`,
+            overlays.push({
+                id: `building_${skin.id}_${sx}_${sy}_${w}x${h}`,
                     tx: sx,
                     ty: sy,
                     w: placeW,
@@ -2601,6 +2657,13 @@ export function compileKenneyMapFromTable(
                     monolithicSemanticSpriteId: roofSpriteId,
                     layerRole: "STRUCTURE",
                 });
+                recordHeightStamp(
+                    sx,
+                    sy,
+                    placeW,
+                    placeH,
+                    renderHeightUnitsToSweepTileHeight(zBase) + tileHeightUnits,
+                );
 
                 if (EMIT_STRUCTURE_SUPPORT_TOPS) {
                     for (let dx = 0; dx < placeW; dx++) {
@@ -2685,6 +2748,13 @@ export function compileKenneyMapFromTable(
                 kind: "ROOF",
                 layerRole: "STRUCTURE",
             });
+            recordHeightStamp(
+                sx,
+                sy,
+                placeW,
+                placeH,
+                renderHeightUnitsToSweepTileHeight(zBase) + tileHeightUnits,
+            );
 
             if (EMIT_STRUCTURE_SUPPORT_TOPS) {
                 for (let dx = 0; dx < placeW; dx++) {
@@ -2810,6 +2880,13 @@ export function compileKenneyMapFromTable(
                 scale: 1,
                 kind: "PROP",
             });
+            recordHeightStamp(
+                sx,
+                sy,
+                w,
+                h,
+                renderHeightUnitsToSweepTileHeight(Math.max(zBase + 1, preset.topGlow.heightUnits)),
+            );
             lightDefs.push({
                 id: `lamp_post_ground_${sx}_${sy}_${zBase}`,
                 worldX: sx * KENNEY_TILE_WORLD,
@@ -2984,6 +3061,15 @@ export function compileKenneyMapFromTable(
                 scale: 1,
                 kind: "PROP",
             });
+            if (typeof prop.lightHeightOffsetUnits === "number") {
+                recordHeightStamp(
+                    (stamp.x | 0) + originTx,
+                    (stamp.y | 0) + originTy,
+                    w,
+                    h,
+                    renderHeightUnitsToSweepTileHeight(zBase + Math.max(1, prop.lightHeightOffsetUnits)),
+                );
+            }
 
             if (isStreetLampProp) {
                 const semanticType = prop.id as "street_lamp_n" | "street_lamp_e" | "street_lamp_s" | "street_lamp_w";
@@ -3406,6 +3492,39 @@ export function compileKenneyMapFromTable(
         byBandAndClass: occlusionByBandAndClass,
         availableBands: Array.from(occlusionByBandAndClass.keys()).sort((a, b) => a - b),
     };
+    const tileHeightGrid: TileHeightGrid = (() => {
+        const w = def.w;
+        const h = def.h;
+        const heights = new Float32Array(w * h);
+        for (let ty = 0; ty < h; ty++) {
+            for (let tx = 0; tx < w; tx++) {
+                const atx = tx + originTx;
+                const aty = ty + originTy;
+                const tile = getTile(atx, aty);
+                heights[ty * w + tx] = renderHeightUnitsToSweepTileHeight(tile.h);
+            }
+        }
+        for (let i = 0; i < heightStampRecs.length; i++) {
+            const stamp = heightStampRecs[i];
+            for (let dy = 0; dy < stamp.h; dy++) {
+                for (let dx = 0; dx < stamp.w; dx++) {
+                    const lx = stamp.tx + dx - originTx;
+                    const ly = stamp.ty + dy - originTy;
+                    if (lx < 0 || ly < 0 || lx >= w || ly >= h) continue;
+                    const idx = ly * w + lx;
+                    if (stamp.topZ > heights[idx]) heights[idx] = stamp.topZ;
+                }
+            }
+        }
+        return {
+            originTx,
+            originTy,
+            width: w,
+            height: h,
+            version: hashHeightGrid(heights, w, h, originTx, originTy),
+            heights,
+        };
+    })();
 
     const compiled: CompiledKenneyMap = {
         id: def.id,
@@ -3443,6 +3562,7 @@ export function compileKenneyMapFromTable(
         decalsInView,
         blockedTiles,
         blockedTileSpansByKey,
+        tileHeightGrid,
         roadMarkingContext: roadMarkingContextCompat,
         roadMarkings: roadMarkingsAll,
         roadAreaMaskWorld,

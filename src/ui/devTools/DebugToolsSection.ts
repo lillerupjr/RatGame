@@ -36,6 +36,14 @@ export function mountDebugToolsSection(
     (value) => `${`${value}`.padStart(2, "0")}:00`,
     (value) => applyDebugPatch({ shadowSunTimeHour: value }),
   );
+  const shadowSunAzimuthSlider = createSliderRow(
+    section,
+    "Sun Azimuth (deg)",
+    -1,
+    359,
+    1,
+    (value) => applyDebugPatch({ shadowSunAzimuthDeg: value }),
+  );
   const sunElevationOverrideToggle = createToggleRow(
     section,
     "Sun Elevation Override",
@@ -61,7 +69,7 @@ export function mountDebugToolsSection(
   const shadowCasterModeSelect = createSelectRow<DebugToolsSettings["shadowCasterMode"]>(
     section,
     "Shadow Caster",
-    ["v6FaceSliceDebug", "v5TriangleShadowMask", "v4SliceStrips", "v3HybridTriangles", "v2AlphaSilhouette", "v1Roof"],
+    ["v6SweepShadow", "v6FaceSliceDebug", "v5TriangleShadowMask", "v4SliceStrips", "v3HybridTriangles", "v2AlphaSilhouette", "v1Roof"],
     (value) => (
       value === "v1Roof"
         ? "V1 Roof"
@@ -73,7 +81,9 @@ export function mountDebugToolsSection(
               ? "V4 Slice Strips"
               : value === "v5TriangleShadowMask"
                 ? "V5 Triangle Shadow Mask"
-                : "V6 Face Slice Debug"
+                : value === "v6SweepShadow"
+                  ? "V6 Sweep Shadow"
+                  : "V6 Face Slice Debug"
     ),
     (value) => applyDebugPatch({ shadowCasterMode: value }),
   );
@@ -204,13 +214,15 @@ export function mountDebugToolsSection(
 
   const syncShadowSunReadout = (debug: DebugToolsSettings) => {
     const sun = getShadowSunV1Model(debug.shadowSunTimeHour, {
+      shadowSunAzimuthDeg: debug.shadowSunAzimuthDeg,
       sunElevationOverrideEnabled: debug.sunElevationOverrideEnabled,
       sunElevationOverrideDeg: debug.sunElevationOverrideDeg,
     });
     const f = sun.forward;
     const p = sun.projectionDirection;
     const modeLabel = debug.sunElevationOverrideEnabled ? "override:on" : "override:off";
-    shadowSunReadout.textContent = `Sun ${sun.timeLabel} elev:${sun.elevationDeg.toFixed(1)}deg ${modeLabel} dir:${sun.directionLabel} forward(${f.x.toFixed(3)}, ${f.y.toFixed(3)}, ${f.z.toFixed(3)}) proj(${p.x.toFixed(3)}, ${p.y.toFixed(3)})`;
+    const azLabel = debug.shadowSunAzimuthDeg >= 0 ? ` az:${debug.shadowSunAzimuthDeg}deg` : " az:auto";
+    shadowSunReadout.textContent = `Sun ${sun.timeLabel}${azLabel} elev:${sun.elevationDeg.toFixed(1)}deg ${modeLabel} dir:${sun.directionLabel} forward(${f.x.toFixed(3)}, ${f.y.toFixed(3)}, ${f.z.toFixed(3)}) proj(${p.x.toFixed(3)}, ${p.y.toFixed(3)})`;
   };
 
   const syncSunElevationOverrideReadout = (debug: DebugToolsSettings): void => {
@@ -270,6 +282,8 @@ export function mountDebugToolsSection(
     entityAnchorsEnabled: createToggleRow(grid, "Render Entity Anchors", (checked) => applyDebugPatch({ entityAnchorsEnabled: checked })),
     renderPerfCountersEnabled: createToggleRow(grid, "Render Perf Counters", (checked) => applyDebugPatch({ renderPerfCountersEnabled: checked })),
     paletteHudDebugOverlayEnabled: createToggleRow(grid, "Palette HUD Debug Overlay", (checked) => applyDebugPatch({ paletteHudDebugOverlayEnabled: checked })),
+    sweepShadowDebug: createToggleRow(grid, "Sweep Shadow Debug", (checked) => applyDebugPatch({ sweepShadowDebug: checked })),
+    tileHeightMap: createToggleRow(grid, "Show Tile Height Map", (checked) => applyDebugPatch({ tileHeightMap: checked })),
   };
 
   applyColumnMajorGridOrder(grid, 3);
@@ -277,6 +291,8 @@ export function mountDebugToolsSection(
   return {
     sync(debug) {
       shadowSunHourSelect.value = `${debug.shadowSunTimeHour}`;
+      shadowSunAzimuthSlider.input.value = `${debug.shadowSunAzimuthDeg}`;
+      shadowSunAzimuthSlider.value.textContent = debug.shadowSunAzimuthDeg >= 0 ? `${debug.shadowSunAzimuthDeg}` : "auto";
       sunElevationOverrideToggle.checked = !!debug.sunElevationOverrideEnabled;
       sunElevationOverrideSlider.input.value = `${clampShadowSunElevationOverrideDeg(debug.sunElevationOverrideDeg)}`;
       sunElevationOverrideSlider.input.disabled = !debug.sunElevationOverrideEnabled;

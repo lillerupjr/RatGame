@@ -86,6 +86,7 @@ import {
   resolveLightingGroundYScale,
 } from "./renderLighting";
 import { renderEntityShadow, type ShadowParams } from "./renderShadow";
+import { computeSweepShadowMap, getSweepShadowMap } from "../../map/sweepShadow";
 import {
   buildFrameWorldLightRegistry,
   type WorldLightRenderPiece,
@@ -1236,6 +1237,7 @@ export async function renderSystem(
       mapId: compiledMap.id,
       shadowCasterMode: SHADOW_CASTER_MODE,
       shadowSunTimeHour: debugFlags.shadowSunTimeHour,
+      shadowSunAzimuthDeg: debugFlags.shadowSunAzimuthDeg,
       sunElevationOverrideEnabled: debugFlags.sunElevationOverrideEnabled,
       sunElevationOverrideDeg: debugFlags.sunElevationOverrideDeg,
     },
@@ -1247,6 +1249,9 @@ export async function renderSystem(
     },
   );
   const shadowSunModel = structureShadowFrame.sunModel;
+  if (SHADOW_CASTER_MODE === "v6SweepShadow") {
+    computeSweepShadowMap(compiledMap.tileHeightGrid, shadowSunModel, compiledMap.id);
+  }
   staticRelightFrame = staticRelight.frame;
   if (runtimeStructureTriangleContextChanged) {
     rebuildMonolithicStructureTriangleCacheForMap(compiledMap, {
@@ -1838,6 +1843,48 @@ export async function renderSystem(
     collectionResult.structureV6VerticalShadowDebugDataList as StructureV6VerticalShadowMaskDebugData[];
   structureV6ShadowCacheStats =
     collectionResult.structureV6ShadowCacheStats as StructureV6ShadowCacheFrameStats | null;
+  const drawSweepShadowBand = (zBand: number, firstZBand: number) => {
+    if (SHADOW_CASTER_MODE !== "v6SweepShadow" || zBand !== firstZBand) return;
+    const sweepShadowMap = getSweepShadowMap();
+    if (!sweepShadowMap) return;
+    setRenderPerfDrawTag("floors");
+    const SWEEP_MAX_DARKNESS = 0.38;
+    const BUCKET_COUNT = 4;
+    const { originTx: soTx, originTy: soTy, width: sw, height: sh, data: sData } = sweepShadowMap;
+    for (let bucket = 1; bucket <= BUCKET_COUNT; bucket++) {
+      const lo = (bucket - 1) / BUCKET_COUNT;
+      const hi = bucket / BUCKET_COUNT;
+      const alpha = hi * SWEEP_MAX_DARKNESS;
+      ctx.save();
+      ctx.globalCompositeOperation = "source-over";
+      ctx.beginPath();
+      let count = 0;
+      for (let sty = 0; sty < sh; sty++) {
+        for (let stx = 0; stx < sw; stx++) {
+          const intensity = sData[sty * sw + stx];
+          if (intensity <= lo || intensity > hi) continue;
+          const atx = stx + soTx;
+          const aty = sty + soTy;
+          const tileH = tileHAtWorld((atx + 0.5) * T, (aty + 0.5) * T);
+          const nw = toScreenAtZ(atx * T, aty * T, tileH);
+          const ne = toScreenAtZ((atx + 1) * T, aty * T, tileH);
+          const se = toScreenAtZ((atx + 1) * T, (aty + 1) * T, tileH);
+          const swc = toScreenAtZ(atx * T, (aty + 1) * T, tileH);
+          ctx.moveTo(nw.x, nw.y);
+          ctx.lineTo(ne.x, ne.y);
+          ctx.lineTo(se.x, se.y);
+          ctx.lineTo(swc.x, swc.y);
+          ctx.closePath();
+          count++;
+        }
+      }
+      if (count > 0) {
+        ctx.fillStyle = `rgba(0,0,0,${alpha.toFixed(3)})`;
+        ctx.fill("nonzero");
+      }
+      ctx.restore();
+    }
+  };
   const worldPassContext: WorldPassContext = {
     frame: renderFrame,
     sliceDrawables,
@@ -1882,6 +1929,7 @@ export async function renderSystem(
     v5ShadowDiagnosticStats,
     v5ShadowAnchorDiagnostic,
     executeDebugPass,
+    drawSweepShadowBand,
   } as WorldPassContext;
   const worldPassResult = executeWorldPasses(worldPassContext);
   v5ShadowAnchorDiagnostic = worldPassResult.v5ShadowAnchorDiagnostic as StructureV5ShadowAnchorDiagnostic | null;

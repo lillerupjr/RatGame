@@ -48,6 +48,14 @@ describe("monolithicStructureGeometry helpers", () => {
     flipX: false,
     source: "computed",
     heightUnits: 1,
+    tileHeightUnits: 8,
+    faceTriangleCounts: {
+      leftSouth: 1,
+      rightEast: 1,
+      selected: 1,
+      rule: "max",
+      triangleHeightPx: 64,
+    },
     n: input.n,
     m: input.m,
     anchorSpriteLocal: { x: 0, y: 0 },
@@ -316,5 +324,66 @@ describe("monolithicStructureGeometry helpers", () => {
     expect(groups.map((group) => [group.parentTx, group.parentTy])).toEqual([[10, 13], [10, 13]]);
     expect(groups.map((group) => group.bandIndex)).toEqual([0, 1]);
     expect(new Set(groups.map((group) => group.stableId)).size).toBe(2);
+  });
+
+  it("assigns side semantics from monolithic slicer owner progression", () => {
+    const geometry = makeGeometry({
+      n: 2,
+      m: 2,
+      sliceEntries: [
+        {
+          index: 0,
+          bandIndex: 1,
+          parentFootprintProgression: 0,
+          parentFootprintOffsetTx: 0,
+          parentFootprintOffsetTy: 1,
+          triangles: [makeLocalTriangleAtTile(10, 11)],
+        },
+        {
+          index: 1,
+          bandIndex: 3,
+          parentFootprintProgression: 2,
+          parentFootprintOffsetTx: 1,
+          parentFootprintOffsetTy: 0,
+          triangles: [makeLocalTriangleAtTile(11, 10)],
+        },
+        {
+          index: 2,
+          bandIndex: 1,
+          parentFootprintProgression: 0,
+          parentFootprintOffsetTx: 1,
+          parentFootprintOffsetTy: 1,
+          triangles: [makeLocalTriangleAtTile(10, 10)],
+        },
+        {
+          index: 3,
+          bandIndex: 3,
+          parentFootprintProgression: 2,
+          parentFootprintOffsetTx: 1,
+          parentFootprintOffsetTy: 1,
+          triangles: [makeLocalTriangleAtTile(11, 11)],
+        },
+      ],
+    });
+
+    const triangles = buildRuntimeTrianglesFromMonolithicGeometry(
+      {
+        id: "slice-semantics",
+        seTx: 11,
+        seTy: 11,
+        z: 0,
+        spriteId: "test-sprite",
+        layerRole: "STRUCTURE",
+      } as any,
+      { dx: 0, dy: 0, dw: 256, dh: 256, flipX: false, scale: 1 },
+      geometry,
+    );
+
+    expect(triangles.map((tri) => tri.semanticSide)).toEqual([
+      "LEFT_SOUTH",
+      "RIGHT_EAST",
+      "LEFT_SOUTH",
+      "RIGHT_EAST",
+    ]);
   });
 });

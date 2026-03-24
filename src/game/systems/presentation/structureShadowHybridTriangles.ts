@@ -325,6 +325,7 @@ function classifyHybridTriangleSemantic(
   const isTop = !!context.activeRoofQuad
     && isPointInsideQuad(context.activeRoofQuad, centroid.x, centroid.y);
   if (isTop) return "TOP";
+  if (tri.semanticSide !== undefined) return tri.semanticSide;
   const ownerKey = `${tri.ownerTx},${tri.ownerTy}`;
   const ownerRange = context.progressionByOwnerTile.get(ownerKey);
   const leftCandidate = !!ownerRange && ownerRange.min <= context.leftSouthMaxProgression;

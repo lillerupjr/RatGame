@@ -142,6 +142,7 @@ export type DebugSettings = {
   pauseCsvControls: boolean;
   dpsMeter: boolean;
   shadowSunTimeHour: number;
+  shadowSunAzimuthDeg: number;
   sunElevationOverrideEnabled: boolean;
   sunElevationOverrideDeg: number;
   shadowV1DebugGeometryMode: "full" | "capOnly" | "connectorsOnly";
@@ -151,6 +152,7 @@ export type DebugSettings = {
     | "v3HybridTriangles"
     | "v4SliceStrips"
     | "v5TriangleShadowMask"
+    | "v6SweepShadow"
     | "v6FaceSliceDebug";
   shadowHybridDiagnosticMode: "off" | "solidShadowPass" | "solidMainCanvas";
   shadowDebugMode: "flatOnly" | "warpedOnly" | "both";
@@ -165,6 +167,8 @@ export type DebugSettings = {
   shadowV6TopOnly: boolean;
   shadowV6ForceRefresh: boolean;
   shadowV6FaceSliceDebugOverlay: boolean;
+  sweepShadowDebug: boolean;
+  tileHeightMap: boolean;
   waterFlowRate: number;
   neutralBirdAI: NeutralBirdAIDebugSettings;
   objectives: {
@@ -235,6 +239,7 @@ function toLegacySettings(): UserSettings {
       pauseCsvControls: settings.debug.pauseCsvControls,
       dpsMeter: settings.debug.dpsMeter,
       shadowSunTimeHour: settings.debug.shadowSunTimeHour,
+      shadowSunAzimuthDeg: settings.debug.shadowSunAzimuthDeg,
       sunElevationOverrideEnabled: settings.debug.sunElevationOverrideEnabled,
       sunElevationOverrideDeg: settings.debug.sunElevationOverrideDeg,
       shadowV1DebugGeometryMode: settings.debug.shadowV1DebugGeometryMode,
@@ -252,6 +257,8 @@ function toLegacySettings(): UserSettings {
       shadowV6TopOnly: settings.debug.shadowV6TopOnly,
       shadowV6ForceRefresh: settings.debug.shadowV6ForceRefresh,
       shadowV6FaceSliceDebugOverlay: settings.debug.shadowV6FaceSliceDebugOverlay,
+      sweepShadowDebug: settings.debug.sweepShadowDebug,
+      tileHeightMap: settings.debug.tileHeightMap,
       waterFlowRate: settings.system.waterFlowRate,
       neutralBirdAI: {
         disabled: settings.system.neutralBirdDisabled,
@@ -448,6 +455,8 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
       "pauseDebugCards",
       "pauseCsvControls",
       "dpsMeter",
+      "sweepShadowDebug",
+      "tileHeightMap",
       "sunElevationOverrideEnabled",
       "shadowV6AllStructures",
       "shadowV6OneStructureOnly",
@@ -461,6 +470,9 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     }
     if (debugAny.shadowSunTimeHour !== undefined) {
       debugPatch.shadowSunTimeHour = debugAny.shadowSunTimeHour;
+    }
+    if (debugAny.shadowSunAzimuthDeg !== undefined) {
+      debugPatch.shadowSunAzimuthDeg = debugAny.shadowSunAzimuthDeg;
     }
     if (debugAny.sunElevationOverrideDeg !== undefined) {
       debugPatch.sunElevationOverrideDeg = debugAny.sunElevationOverrideDeg;

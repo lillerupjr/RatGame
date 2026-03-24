@@ -24,6 +24,8 @@ export function resolveRenderDebugFlags(debug: DebugSettings): RenderDebugFlags 
     showLootGoblinOverlay: baseFlags.showLootGoblinOverlay,
     showMapOverlays: baseFlags.showMapOverlays,
     showZoneObjectiveBounds: !!debug.objectives?.showZoneBounds,
+    showSweepShadowDebug: baseFlags.showSweepShadowDebug,
+    showTileHeightMap: baseFlags.showTileHeightMap,
     shadowV1DebugGeometryMode: debug.shadowV1DebugGeometryMode,
     shadowCasterMode: debug.shadowCasterMode,
     shadowHybridDiagnosticMode: debug.shadowHybridDiagnosticMode,
@@ -43,6 +45,7 @@ export function resolveRenderDebugFlags(debug: DebugSettings): RenderDebugFlags 
     shadowV6ForceRefresh: debug.shadowV6ForceRefresh,
     shadowV6FaceSliceDebugOverlay: debug.shadowV6FaceSliceDebugOverlay,
     shadowSunTimeHour: debug.shadowSunTimeHour,
+    shadowSunAzimuthDeg: debug.shadowSunAzimuthDeg,
     sunElevationOverrideEnabled: debug.sunElevationOverrideEnabled,
     sunElevationOverrideDeg: debug.sunElevationOverrideDeg,
   };

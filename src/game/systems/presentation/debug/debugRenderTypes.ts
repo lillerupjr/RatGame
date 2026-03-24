@@ -38,6 +38,8 @@ export type RenderDebugFlags = {
   showLootGoblinOverlay: boolean;
   showMapOverlays: boolean;
   showZoneObjectiveBounds: boolean;
+  showSweepShadowDebug: boolean;
+  showTileHeightMap: boolean;
   shadowV1DebugGeometryMode: ShadowV1DebugGeometryMode;
   shadowCasterMode: ShadowCasterMode;
   shadowHybridDiagnosticMode: ShadowHybridDiagnosticMode;
@@ -57,6 +59,7 @@ export type RenderDebugFlags = {
   shadowV6ForceRefresh: boolean;
   shadowV6FaceSliceDebugOverlay: boolean;
   shadowSunTimeHour: number;
+  shadowSunAzimuthDeg: number;
   sunElevationOverrideEnabled: boolean;
   sunElevationOverrideDeg: number;
 };

@@ -115,7 +115,7 @@ export function renderScreenOverlays(input: ScreenOverlayContext): void {
   }
   // Building-mask debug overlay draw disabled to avoid full-canvas mask artifacts.
 
-  if (debugFrame.enabled || renderPerfCountersEnabled || structureShadowFrame.routing.usesV6) {
+  if (debugFrame.enabled || renderPerfCountersEnabled || structureShadowFrame.routing.usesV6Debug) {
     executeDebugPass({
       phase: "screen",
       input: {

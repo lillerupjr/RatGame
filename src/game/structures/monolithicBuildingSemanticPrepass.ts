@@ -20,6 +20,10 @@ import {
   type StructureSliceDebugAlphaMap,
 } from "./getStructureAnchor";
 import { getStructureSlices, type StructureSliceBand } from "./getStructureSlices";
+import {
+  pixelHeightToSweepTileHeight,
+  renderHeightUnitsToSweepTileHeight,
+} from "../map/tileHeightUnits";
 
 type RuntimeStructureTrianglePoint = { x: number; y: number };
 type RuntimeStructureTriangleRect = { x: number; y: number; w: number; h: number };
@@ -30,7 +34,16 @@ export type MonolithicBuildingPlacementGeometry = {
   w: number;
   h: number;
   heightUnits: number;
-  source: "computed";
+  tileHeightUnits: number;
+  source: "computed" | "fallback";
+};
+
+export type MonolithicBuildingFaceTriangleCounts = {
+  leftSouth: number;
+  rightEast: number;
+  selected: number;
+  rule: "max";
+  triangleHeightPx: number;
 };
 
 export type MonolithicBuildingSemanticSliceEntry = {
@@ -51,8 +64,10 @@ export type MonolithicBuildingSemanticGeometry = {
   spriteId: string;
   semanticKey: string;
   flipX: boolean;
-  source: "computed";
+  source: "computed" | "fallback";
   heightUnits: number;
+  tileHeightUnits: number;
+  faceTriangleCounts: MonolithicBuildingFaceTriangleCounts;
   n: number;
   m: number;
   anchorSpriteLocal: RuntimeStructureTrianglePoint | null;
@@ -76,6 +91,7 @@ export type MonolithicBuildingSemanticGeometry = {
 const PREPASS_ALPHA_THRESHOLD = 1;
 const PREPASS_MIN_VISIBLE_PIXELS = 32;
 const DEFAULT_HEIGHT_UNITS = 32;
+const SEMANTIC_FACE_TRIANGLE_HEIGHT_PX = 64;
 
 const semanticGeometryByKey = new Map<string, MonolithicBuildingSemanticGeometry>();
 const canonicalSemanticKeyBySkinId = new Map<string, string>();
@@ -159,6 +175,65 @@ function resolveTargetMonolithicBuildingSkins(requiredSkinIds?: Iterable<string>
   return all.filter((skin) => required.has(skin.id));
 }
 
+type NodeProcessWithBuiltins = NodeJS.Process & {
+  getBuiltinModule?: (id: string) => unknown;
+};
+
+type NodeMonolithicSemanticAssetLoader = {
+  loadAlphaMap(spriteId: string): StructureSliceDebugAlphaMap | null;
+};
+
+let cachedNodeMonolithicSemanticAssetLoader: NodeMonolithicSemanticAssetLoader | null | undefined;
+
+function getNodeMonolithicSemanticAssetLoader(): NodeMonolithicSemanticAssetLoader | null {
+  if (typeof window !== "undefined") return null;
+  if (cachedNodeMonolithicSemanticAssetLoader !== undefined) {
+    return cachedNodeMonolithicSemanticAssetLoader;
+  }
+  const processRef = globalThis.process as NodeProcessWithBuiltins | undefined;
+  if (!processRef?.getBuiltinModule) {
+    cachedNodeMonolithicSemanticAssetLoader = null;
+    return cachedNodeMonolithicSemanticAssetLoader;
+  }
+  try {
+    const fs = processRef.getBuiltinModule("fs") as typeof import("node:fs") | undefined;
+    const path = processRef.getBuiltinModule("path") as typeof import("node:path") | undefined;
+    const url = processRef.getBuiltinModule("url") as typeof import("node:url") | undefined;
+    const moduleBuiltin = processRef.getBuiltinModule("module") as typeof import("node:module") | undefined;
+    if (!fs || !path || !url || !moduleBuiltin) {
+      cachedNodeMonolithicSemanticAssetLoader = null;
+      return cachedNodeMonolithicSemanticAssetLoader;
+    }
+    const require = moduleBuiltin.createRequire(import.meta.url);
+    const { PNG } = require("pngjs") as typeof import("pngjs");
+    const repoRoot = path.join(path.dirname(url.fileURLToPath(import.meta.url)), "../../..");
+    cachedNodeMonolithicSemanticAssetLoader = {
+      loadAlphaMap(spriteId: string): StructureSliceDebugAlphaMap | null {
+        const normalizedSpriteId = normalizeSpriteToken(spriteId);
+        if (!normalizedSpriteId) return null;
+        const assetPaths = [
+          path.join(repoRoot, "public", "assets-runtime", "base_db32", `${normalizedSpriteId}.png`),
+          path.join(repoRoot, "public", "assets-runtime", `${normalizedSpriteId}.png`),
+        ];
+        for (let i = 0; i < assetPaths.length; i++) {
+          const assetPath = assetPaths[i];
+          if (!fs.existsSync(assetPath)) continue;
+          const png = PNG.sync.read(fs.readFileSync(assetPath));
+          return {
+            width: png.width,
+            height: png.height,
+            data: new Uint8ClampedArray(png.data),
+          };
+        }
+        return null;
+      },
+    };
+  } catch {
+    cachedNodeMonolithicSemanticAssetLoader = null;
+  }
+  return cachedNodeMonolithicSemanticAssetLoader;
+}
+
 export function collectRequiredMonolithicBuildingSkinIdsForMap(def: TableMapDef): string[] {
   const required = new Set<string>();
   const addId = (rawId: string | undefined): void => {
@@ -228,16 +303,33 @@ function buildPlacementOnlySemanticGeometry(input: {
   skinId: string;
   spriteId: string;
   heightUnits: number;
+  tileHeightUnits?: number;
   n: number;
   m: number;
 }): MonolithicBuildingSemanticGeometry {
+  const tileHeightUnits = Math.max(
+    pixelHeightToSweepTileHeight(SEMANTIC_FACE_TRIANGLE_HEIGHT_PX),
+    input.tileHeightUnits ?? renderHeightUnitsToSweepTileHeight(input.heightUnits),
+  );
+  const faceTriangleCount = Math.max(
+    1,
+    Math.round(tileHeightUnits / pixelHeightToSweepTileHeight(SEMANTIC_FACE_TRIANGLE_HEIGHT_PX)),
+  );
   return {
     skinId: input.skinId,
     spriteId: input.spriteId,
     semanticKey: semanticGeometryKey(input.skinId, input.spriteId, false),
     flipX: false,
-    source: "computed",
+    source: "fallback",
     heightUnits: Math.max(1, input.heightUnits | 0),
+    tileHeightUnits,
+    faceTriangleCounts: {
+      leftSouth: faceTriangleCount,
+      rightEast: faceTriangleCount,
+      selected: faceTriangleCount,
+      rule: "max",
+      triangleHeightPx: SEMANTIC_FACE_TRIANGLE_HEIGHT_PX,
+    },
     n: Math.max(1, input.n | 0),
     m: Math.max(1, input.m | 0),
     anchorSpriteLocal: null,
@@ -254,10 +346,46 @@ function buildPlacementOnlySemanticGeometry(input: {
   };
 }
 
+function tryComputeSemanticGeometryFromNodeAsset(
+  skinId: string,
+  spriteId: string,
+  input?: { flipX?: boolean },
+): MonolithicBuildingSemanticGeometry | null {
+  const loader = getNodeMonolithicSemanticAssetLoader();
+  if (!loader) return null;
+  const alphaMap = loader.loadAlphaMap(spriteId);
+  if (!alphaMap) return null;
+  const normal = buildMonolithicBuildingSemanticGeometryFromAlphaMap(skinId, spriteId, alphaMap, {
+    flipX: false,
+  });
+  if (normal) setSemanticGeometry(normal);
+  const flipped = buildMonolithicBuildingSemanticGeometryFromAlphaMap(skinId, spriteId, alphaMap, {
+    flipX: true,
+  });
+  if (flipped) setSemanticGeometry(flipped);
+  return (input?.flipX ? flipped : normal) ?? null;
+}
+
 function ensureNodeSemanticPlacementFallbackForSkin(skinId: string): void {
   if (typeof Image !== "undefined") return;
   const normalizedSkinId = normalizeSkinToken(skinId);
   if (!normalizedSkinId) return;
+  const skin = BUILDING_SKINS[normalizedSkinId];
+  if (skin && isMonolithicBuildingDefinition(skin)) {
+    const spriteIds = resolveSemanticSpriteVariantsForSkin(skin);
+    for (let i = 0; i < spriteIds.length; i++) {
+      const normalizedSpriteId = normalizeSpriteToken(spriteIds[i]);
+      if (!normalizedSpriteId) continue;
+      const existing = semanticGeometryByKey.get(
+        semanticGeometryKey(normalizedSkinId, normalizedSpriteId, false),
+      );
+      if (existing?.source === "computed") continue;
+      tryComputeSemanticGeometryFromNodeAsset(normalizedSkinId, normalizedSpriteId);
+    }
+    const canonicalKey = canonicalSemanticKeyBySkinId.get(normalizedSkinId);
+    const canonical = canonicalKey ? semanticGeometryByKey.get(canonicalKey) : null;
+    if (canonical?.source === "computed") return;
+  }
   const fallback = MONOLITHIC_BUILDING_SEMANTIC_PLACEMENT_FALLBACK[normalizedSkinId];
   if (!fallback) return;
   const spriteIds = Object.keys(fallback.bySpriteId);
@@ -271,6 +399,7 @@ function ensureNodeSemanticPlacementFallbackForSkin(skinId: string): void {
       skinId: normalizedSkinId,
       spriteId: normalizedSpriteId,
       heightUnits: entry.heightUnits,
+      tileHeightUnits: entry.tileHeightUnits,
       n: entry.n,
       m: entry.m,
     }));
@@ -510,6 +639,48 @@ function triangleIsFootprintCandidate(
   return false;
 }
 
+function minTriangleVertexY(triangle: MonolithicSliceTriangle): number {
+  return Math.min(triangle.a.y, triangle.b.y, triangle.c.y);
+}
+
+function resolveSemanticFaceTriangleRow(
+  triangle: MonolithicSliceTriangle,
+  anchorSpriteLocal: RuntimeStructureTrianglePoint,
+): number {
+  const verticalDistancePx = anchorSpriteLocal.y - minTriangleVertexY(triangle);
+  if (!(verticalDistancePx > 0)) return 0;
+  return Math.ceil(verticalDistancePx / SEMANTIC_FACE_TRIANGLE_HEIGHT_PX);
+}
+
+function resolveSemanticFaceTriangleCounts(
+  sliceEntries: readonly MonolithicBuildingSemanticSliceEntry[],
+  n: number,
+  anchorSpriteLocal: RuntimeStructureTrianglePoint,
+): MonolithicBuildingFaceTriangleCounts {
+  const leftSouthRows = new Set<number>();
+  const rightEastRows = new Set<number>();
+  for (let si = 0; si < sliceEntries.length; si++) {
+    const entry = sliceEntries[si];
+    for (let ti = 0; ti < entry.triangles.length; ti++) {
+      const triangle = entry.triangles[ti];
+      const row = resolveSemanticFaceTriangleRow(triangle, anchorSpriteLocal);
+      if (row <= 0) continue;
+      if (entry.parentFootprintProgression < n) leftSouthRows.add(row);
+      else rightEastRows.add(row);
+    }
+  }
+  const leftSouth = leftSouthRows.size;
+  const rightEast = rightEastRows.size;
+  const selected = Math.max(leftSouth, rightEast);
+  return {
+    leftSouth,
+    rightEast,
+    selected,
+    rule: "max",
+    triangleHeightPx: SEMANTIC_FACE_TRIANGLE_HEIGHT_PX,
+  };
+}
+
 function intersectRayWithRectBoundary(
   origin: RuntimeStructureTrianglePoint,
   direction: RuntimeStructureTrianglePoint,
@@ -665,6 +836,15 @@ export function buildMonolithicBuildingSemanticGeometryFromAlphaMap(
     ...entry,
     ...resolveMonolithicSliceParentFootprintPosition(entry.bandIndex, n, m),
   }));
+  const anchorSpriteLocal = {
+    x: anchorResult.anchorPx.x,
+    y: anchorResult.anchorPx.y,
+  } satisfies RuntimeStructureTrianglePoint;
+  const faceTriangleCounts = resolveSemanticFaceTriangleCounts(sliceEntries, n, anchorSpriteLocal);
+  const tileHeightUnits = Math.max(
+    pixelHeightToSweepTileHeight(SEMANTIC_FACE_TRIANGLE_HEIGHT_PX),
+    pixelHeightToSweepTileHeight(faceTriangleCounts.selected * SEMANTIC_FACE_TRIANGLE_HEIGHT_PX),
+  );
 
   return {
     skinId,
@@ -673,12 +853,11 @@ export function buildMonolithicBuildingSemanticGeometryFromAlphaMap(
     flipX,
     source: "computed",
     heightUnits: Math.max(1, Math.round(input?.heightUnits ?? DEFAULT_HEIGHT_UNITS)),
+    tileHeightUnits,
+    faceTriangleCounts,
     n,
     m,
-    anchorSpriteLocal: {
-      x: anchorResult.anchorPx.x,
-      y: anchorResult.anchorPx.y,
-    },
+    anchorSpriteLocal,
     bboxSpriteLocal,
     anchorResult,
     occupiedBoundsPx: anchorResult.occupiedBoundsPx,
@@ -907,6 +1086,10 @@ function toPlacementGeometry(semantic: MonolithicBuildingSemanticGeometry): Mono
     w: Math.max(1, semantic.n | 0),
     h: Math.max(1, semantic.m | 0),
     heightUnits: Math.max(1, semantic.heightUnits | 0),
+    tileHeightUnits: Math.max(
+      pixelHeightToSweepTileHeight(SEMANTIC_FACE_TRIANGLE_HEIGHT_PX),
+      semantic.tileHeightUnits,
+    ),
     source: semantic.source,
   };
 }

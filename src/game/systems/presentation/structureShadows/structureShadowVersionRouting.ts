@@ -7,6 +7,7 @@ export function resolveStructureShadowVersion(mode: ShadowCasterMode): Structure
 
 export function resolveStructureShadowRouting(mode: ShadowCasterMode): StructureShadowRenderMode {
   const resolved = resolveStructureShadowVersion(mode);
+  const usesV6 = resolved === "v6SweepShadow" || resolved === "v6FaceSliceDebug";
   return {
     mode: resolved,
     usesV1: resolved === "v1Roof",
@@ -14,6 +15,7 @@ export function resolveStructureShadowRouting(mode: ShadowCasterMode): Structure
     usesHybrid: resolved === "v3HybridTriangles",
     usesV4: resolved === "v4SliceStrips",
     usesV5: resolved === "v5TriangleShadowMask",
-    usesV6: resolved === "v6FaceSliceDebug",
+    usesV6,
+    usesV6Debug: resolved === "v6FaceSliceDebug",
   };
 }

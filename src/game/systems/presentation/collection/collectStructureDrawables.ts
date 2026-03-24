@@ -297,7 +297,7 @@ export function collectStructureDrawables(input: CollectionContext): {
     forceRefresh,
     cacheSize: 0,
   };
-  if (structureShadowFrame.routing.usesV6) {
+  if (structureShadowFrame.routing.usesV6Debug) {
     const fullMapPopulationKey = [
       `map:${compiledMap.id}`,
       `sun:${structureShadowFrame.sunModel.stepKey}`,

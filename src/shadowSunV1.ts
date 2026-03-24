@@ -40,6 +40,7 @@ export type ShadowSunV1Model = {
 export type ShadowSunElevationOverride = {
   sunElevationOverrideEnabled?: boolean;
   sunElevationOverrideDeg?: number;
+  shadowSunAzimuthDeg?: number;
 };
 
 type Vec2 = { x: number; y: number };
@@ -126,6 +127,13 @@ function buildStepKey(timeHour: number, overrideEnabled: boolean, elevationDeg: 
   return `sun-v1:h${timeHour}:e${formatElevationStepKey(elevationDeg)}`;
 }
 
+function clampShadowSunAzimuthDeg(value: unknown): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return -1;
+  if (numeric < 0) return -1;
+  return Math.round(numeric) % 360;
+}
+
 function resolveDirectionLabel(horizontalDirection: Vec2): ShadowSunDirectionLabel {
   let bestLabel: ShadowSunDirectionLabel = "SE";
   let bestDot = Number.NEGATIVE_INFINITY;
@@ -138,6 +146,11 @@ function resolveDirectionLabel(horizontalDirection: Vec2): ShadowSunDirectionLab
     }
   }
   return bestLabel;
+}
+
+function azimuthToDirection(azimuthDeg: number): Vec2 {
+  const rad = azimuthDeg * DEG_TO_RAD;
+  return normalize2({ x: Math.sin(rad), y: -Math.cos(rad) });
 }
 
 function buildProjectionDirection(forward: { x: number; y: number; z: number }): Vec2 {
@@ -183,7 +196,10 @@ export function getShadowSunV1Model(
   elevationOverride?: ShadowSunElevationOverride,
 ): ShadowSunV1Model {
   const normalizedHour = clampShadowSunTimeHour(timeHour);
-  const horizontalDirection = resolveHorizontalDirection(normalizedHour);
+  const azimuthDeg = clampShadowSunAzimuthDeg(elevationOverride?.shadowSunAzimuthDeg);
+  const horizontalDirection = azimuthDeg >= 0
+    ? azimuthToDirection(azimuthDeg)
+    : resolveHorizontalDirection(normalizedHour);
   const timeOfDayElevationDeg = resolveElevationDeg(normalizedHour);
   const overrideEnabled = elevationOverride?.sunElevationOverrideEnabled === true;
   const elevationDeg = overrideEnabled
@@ -203,6 +219,6 @@ export function getShadowSunV1Model(
     directionLabel: resolveDirectionLabel(horizontalDirection),
     forward,
     projectionDirection: buildProjectionDirection(forward),
-    stepKey: buildStepKey(normalizedHour, overrideEnabled, elevationDeg),
+    stepKey: `${buildStepKey(normalizedHour, overrideEnabled, elevationDeg)}${azimuthDeg >= 0 ? `:a${azimuthDeg}` : ""}`,
   };
 }

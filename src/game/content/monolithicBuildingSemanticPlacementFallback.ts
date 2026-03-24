@@ -4,6 +4,7 @@ export type MonolithicBuildingSemanticPlacementFallback = {
     n: number;
     m: number;
     heightUnits: number;
+    tileHeightUnits?: number;
   }>;
 };
 

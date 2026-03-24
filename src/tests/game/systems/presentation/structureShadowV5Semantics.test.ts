@@ -11,6 +11,7 @@ function triangle(
   parentTx: number,
   parentTy: number,
   points: [{ x: number; y: number }, { x: number; y: number }, { x: number; y: number }],
+  semanticSide?: RuntimeStructureTrianglePiece["semanticSide"],
 ): RuntimeStructureTrianglePiece {
   const basePoint = [...points].sort((lhs, rhs) => rhs.y - lhs.y || rhs.x - lhs.x)[0];
   return {
@@ -32,6 +33,7 @@ function triangle(
     triangleTy: 0,
     cameraTx: 0,
     cameraTy: 0,
+    semanticSide,
     localBounds: { x: 0, y: 0, w: 1, h: 1 },
     srcRectLocal: { x: 0, y: 0, w: 1, h: 1 },
     dstRectLocal: { x: 0, y: 0, w: 1, h: 1 },
@@ -96,5 +98,26 @@ describe("structureShadowV5 semantic adapter", () => {
     });
 
     expect(semantics.get(missingOwnerTri.stableId)).toBe("UNCLASSIFIED");
+  });
+
+  it("prefers slicer-authored side semantics before fallback owner-range inference", () => {
+    const triCache = cacheWithTriangles([]);
+    const preassignedTri = triangle(
+      12,
+      1,
+      9,
+      9,
+      [{ x: 180, y: 180 }, { x: 190, y: 180 }, { x: 180, y: 190 }],
+      "LEFT_SOUTH",
+    );
+
+    const semantics = buildHybridTriangleSemanticMap({
+      overlay: { w: 2, h: 2 } as any,
+      triangleCache: triCache,
+      activeRoofQuad: null,
+      triangles: [preassignedTri],
+    });
+
+    expect(semantics.get(preassignedTri.stableId)).toBe("LEFT_SOUTH");
   });
 });

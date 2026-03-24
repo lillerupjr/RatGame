@@ -25,6 +25,7 @@ describe("settings bucket defaults", () => {
     const debug = DEFAULT_DEBUG_TOOLS_SETTINGS;
     const {
       shadowSunTimeHour,
+      shadowSunAzimuthDeg,
       sunElevationOverrideEnabled,
       sunElevationOverrideDeg,
       shadowV1DebugGeometryMode,
@@ -47,6 +48,7 @@ describe("settings bucket defaults", () => {
       expect(value, key).toBe(false);
     }
     expect(shadowSunTimeHour).toBe(DEFAULT_SHADOW_SUN_V1_TIME_HOUR);
+    expect(shadowSunAzimuthDeg).toBe(-1);
     expect(sunElevationOverrideEnabled).toBe(false);
     expect(sunElevationOverrideDeg).toBe(DEFAULT_SHADOW_SUN_V1_ELEVATION_OVERRIDE_DEG);
     expect(shadowV1DebugGeometryMode).toBe("full");
@@ -75,6 +77,9 @@ describe("settings bucket defaults", () => {
       .toBe(DEFAULT_SHADOW_SUN_V1_TIME_HOUR);
     expect(sanitizeDebugToolsSettings({ sunElevationOverrideEnabled: 1 as any }).sunElevationOverrideEnabled)
       .toBe(true);
+    expect(sanitizeDebugToolsSettings({ shadowSunAzimuthDeg: -5 }).shadowSunAzimuthDeg).toBe(-1);
+    expect(sanitizeDebugToolsSettings({ shadowSunAzimuthDeg: 361 }).shadowSunAzimuthDeg).toBe(1);
+    expect(sanitizeDebugToolsSettings({ shadowSunAzimuthDeg: Number.NaN }).shadowSunAzimuthDeg).toBe(-1);
     expect(sanitizeDebugToolsSettings({ sunElevationOverrideDeg: SHADOW_SUN_V1_MIN_ELEVATION_OVERRIDE_DEG - 10 })
       .sunElevationOverrideDeg)
       .toBe(SHADOW_SUN_V1_MIN_ELEVATION_OVERRIDE_DEG);
@@ -97,6 +102,8 @@ describe("settings bucket defaults", () => {
       .toBe("v4SliceStrips");
     expect(sanitizeDebugToolsSettings({ shadowCasterMode: "v5TriangleShadowMask" as any }).shadowCasterMode)
       .toBe("v5TriangleShadowMask");
+    expect(sanitizeDebugToolsSettings({ shadowCasterMode: "v6SweepShadow" as any }).shadowCasterMode)
+      .toBe("v6SweepShadow");
     expect(sanitizeDebugToolsSettings({ shadowCasterMode: "v6FaceSliceDebug" as any }).shadowCasterMode)
       .toBe("v6FaceSliceDebug");
     expect(sanitizeDebugToolsSettings({ shadowCasterMode: "invalid" as any }).shadowCasterMode)
@@ -149,6 +156,10 @@ describe("settings bucket defaults", () => {
       .toBe(false);
     expect(sanitizeDebugToolsSettings({ shadowV6ForceRefresh: 1 as any }).shadowV6ForceRefresh)
       .toBe(true);
+    expect(sanitizeDebugToolsSettings({ sweepShadowDebug: 1 as any }).sweepShadowDebug)
+      .toBe(true);
+    expect(sanitizeDebugToolsSettings({ tileHeightMap: 0 as any }).tileHeightMap)
+      .toBe(false);
   });
 
   it("sanitizes user settings ranges and enums", () => {

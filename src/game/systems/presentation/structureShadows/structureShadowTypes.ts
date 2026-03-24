@@ -22,12 +22,14 @@ export type StructureShadowRenderMode = {
   usesV4: boolean;
   usesV5: boolean;
   usesV6: boolean;
+  usesV6Debug: boolean;
 };
 
 export type StructureShadowFrameInputs = {
   mapId: string;
   shadowCasterMode: ShadowCasterMode;
   shadowSunTimeHour: number;
+  shadowSunAzimuthDeg: number;
   sunElevationOverrideEnabled: boolean;
   sunElevationOverrideDeg: number;
 };

@@ -37,6 +37,7 @@ export function buildStructureShadowFrameContext(
   cacheStores: StructureShadowCacheStores,
 ): StructureShadowFrameResult {
   const sunModel = getShadowSunModel(input.shadowSunTimeHour, {
+    shadowSunAzimuthDeg: input.shadowSunAzimuthDeg,
     sunElevationOverrideEnabled: input.sunElevationOverrideEnabled,
     sunElevationOverrideDeg: input.sunElevationOverrideDeg,
   });

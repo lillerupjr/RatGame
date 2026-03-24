@@ -42,6 +42,7 @@ export function executeWorldPasses(input: WorldPassContext): WorldPassResult {
     SHADOW_V5_TRANSFORM_DEBUG_MODE,
     v5ShadowDiagnosticStats,
     executeDebugPass,
+    drawSweepShadowBand,
   } = input as any;
   let v5ShadowAnchorDiagnostic = input.v5ShadowAnchorDiagnostic;
 
@@ -90,7 +91,7 @@ export function executeWorldPasses(input: WorldPassContext): WorldPassResult {
   structureV5ShadowByBand.forEach((pieces: any, zBand: any) => {
     if (pieces.length > 0) zBands.add(zBand);
   });
-  if (structureShadowFrame.routing.usesV6) {
+  if (structureShadowFrame.routing.usesV6Debug) {
     for (let i = 0; i < structureV6VerticalShadowDebugDataList.length; i++) {
       zBands.add(structureV6VerticalShadowDebugDataList[i].zBand);
     }
@@ -113,6 +114,9 @@ export function executeWorldPasses(input: WorldPassContext): WorldPassResult {
         setRenderPerfDrawTag(kindToDrawTag(drawable.key.kindOrder));
         drawable.drawFn(drawable.payload);
       }
+    }
+    if (drawSweepShadowBand) {
+      drawSweepShadowBand(zb, zBandKeys[0]);
     }
     const structureShadowBandTriangles = structureShadowTrianglesByBand.get(zb) ?? [];
     if (structureShadowBandTriangles.length > 0) {
@@ -209,7 +213,7 @@ export function executeWorldPasses(input: WorldPassContext): WorldPassResult {
         v5ShadowAnchorDiagnostic = v5Draw.anchorDiagnostic;
       }
     }
-    if (structureShadowFrame.routing.usesV6 && structureV6VerticalShadowDebugDataList.length > 0) {
+    if (structureShadowFrame.routing.usesV6Debug && structureV6VerticalShadowDebugDataList.length > 0) {
       setRenderPerfDrawTag("floors");
       for (let i = 0; i < structureV6VerticalShadowDebugDataList.length; i++) {
         const structureShadowDebugData = structureV6VerticalShadowDebugDataList[i];

@@ -12,6 +12,7 @@ export type ShadowCasterMode =
   | "v3HybridTriangles"
   | "v4SliceStrips"
   | "v5TriangleShadowMask"
+  | "v6SweepShadow"
   | "v6FaceSliceDebug";
 export type ShadowHybridDiagnosticMode = "off" | "solidShadowPass" | "solidMainCanvas";
 export type ShadowDebugMode = "flatOnly" | "warpedOnly" | "both";
@@ -85,6 +86,7 @@ export type DebugToolsSettings = {
   renderPerfCountersEnabled: boolean;
   paletteHudDebugOverlayEnabled: boolean;
   shadowSunTimeHour: number;
+  shadowSunAzimuthDeg: number;
   sunElevationOverrideEnabled: boolean;
   sunElevationOverrideDeg: number;
   shadowV1DebugGeometryMode: ShadowV1DebugGeometryMode;
@@ -102,6 +104,8 @@ export type DebugToolsSettings = {
   shadowV6TopOnly: boolean;
   shadowV6ForceRefresh: boolean;
   shadowV6FaceSliceDebugOverlay: boolean;
+  sweepShadowDebug: boolean;
+  tileHeightMap: boolean;
 };
 
 export type SystemOverrides = {

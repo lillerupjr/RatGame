@@ -126,4 +126,16 @@ describe("shadowSunV1", () => {
     expect(on20.stepKey).not.toBe(off.stepKey);
     expect(on20.stepKey).not.toBe(on25.stepKey);
   });
+
+  it("allows azimuth override while keeping elevation behavior intact", () => {
+    const auto = getShadowSunV1Model(13);
+    const overridden = getShadowSunV1Model(13, {
+      shadowSunAzimuthDeg: 90,
+    });
+    expect(overridden.elevationDeg).toBe(auto.elevationDeg);
+    expect(overridden.directionLabel).toBe("NE");
+    expect(overridden.forward.x).toBeGreaterThan(0);
+    expect(Math.abs(overridden.forward.y)).toBeLessThan(1e-6);
+    expect(overridden.stepKey).toContain(":a90");
+  });
 });

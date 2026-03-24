@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   buildMonolithicBuildingSemanticGeometryFromAlphaMap,
+  getMonolithicBuildingSemanticGeometryForSprite,
   resolveMonolithicSliceParentFootprintPosition,
   resolveMonolithicSliceParentTileFromSeAnchor,
 } from "../../../game/structures/monolithicBuildingSemanticPrepass";
 import { getDowntown2MonolithicAlphaMap } from "../../../game/content/monolithicBuildingAlphaDowntown2";
+import { pixelHeightToSweepTileHeight } from "../../../game/map/tileHeightUnits";
 
 describe("monolithicBuildingSemanticPrepass", () => {
   it("maps semantic slice bands to the open footprint walk with endpoint clamping", () => {
@@ -62,6 +64,14 @@ describe("monolithicBuildingSemanticPrepass", () => {
     expect(first?.n).toBe(4);
     expect(first?.m).toBe(4);
     expect(first?.heightUnits).toBe(32);
+    expect(first?.tileHeightUnits).toBe(
+      pixelHeightToSweepTileHeight((first?.faceTriangleCounts.selected ?? 0) * 64),
+    );
+    expect(first?.faceTriangleCounts.rule).toBe("max");
+    expect(first?.faceTriangleCounts.triangleHeightPx).toBe(64);
+    expect(first?.faceTriangleCounts.leftSouth).toBeGreaterThan(0);
+    expect(first?.faceTriangleCounts.rightEast).toBeGreaterThan(0);
+    expect(first?.faceTriangleCounts.selected).toBe(first?.tileHeightUnits);
     expect(first?.anchorSpriteLocal).toBeTruthy();
     expect(first?.sliceEntries.length).toBeGreaterThan(0);
     expect(first?.sliceEntries.every((entry) => (
@@ -69,5 +79,19 @@ describe("monolithicBuildingSemanticPrepass", () => {
       && Number.isInteger(entry.parentFootprintOffsetTx)
       && Number.isInteger(entry.parentFootprintOffsetTy)
     ))).toBe(true);
+  });
+
+  it("loads asset-backed semantic geometry in node and marks it computed", () => {
+    const semantic = getMonolithicBuildingSemanticGeometryForSprite(
+      "downtown_2",
+      "structures/buildings/downtown/2",
+    );
+    expect(semantic).toBeTruthy();
+    expect(semantic?.source).toBe("computed");
+    expect(semantic?.sliceEntries.length).toBeGreaterThan(0);
+    expect(semantic?.tileHeightUnits).toBe(
+      pixelHeightToSweepTileHeight((semantic?.faceTriangleCounts.selected ?? 0) * 64),
+    );
+    expect(semantic?.faceTriangleCounts.triangleHeightPx).toBe(64);
   });
 });

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { getAuthoredMapDefByMapId } from "../../../../game/map/authored/authoredMapRegistry";
 import { compileKenneyMapFromTable } from "../../../../game/map/compile/kenneyMapLoader";
 import { BUILDING_PACKS, BUILDING_SKINS } from "../../../../game/content/buildings";
@@ -6,9 +6,21 @@ import type { TableMapDef } from "../../../../game/map/formats/table/tableMapTyp
 import { CONTAINER_SKINS } from "../../../../game/content/containers";
 import { seAnchorFromTopLeft } from "../../../../engine/render/sprites/structureFootprintOwnership";
 import { RUNTIME_FLOOR_VARIANT_COUNTS } from "../../../../game/content/runtimeFloorConfig";
-import { getRequiredMonolithicBuildingPlacementGeometry } from "../../../../game/structures/monolithicBuildingSemanticPrepass";
+import {
+  computeMonolithicBuildingSemanticsForSkinIds,
+  getRequiredMonolithicBuildingPlacementGeometry,
+} from "../../../../game/structures/monolithicBuildingSemanticPrepass";
+import { renderHeightUnitsToSweepTileHeight } from "../../../../game/map/tileHeightUnits";
 
 describe("structure legacy transition", () => {
+  beforeAll(async () => {
+    const result = await computeMonolithicBuildingSemanticsForSkinIds(Object.keys(BUILDING_SKINS), {
+      timeoutMs: 15000,
+      pollMs: 8,
+    });
+    expect(result.missingSkinIds).toEqual([]);
+  });
+
   it("limits downtown building pack to directional skins 1..3", () => {
     expect(BUILDING_PACKS.downtown_buildings).toEqual(["downtown_1", "downtown_2", "downtown_3"]);
   });
@@ -81,6 +93,7 @@ describe("structure legacy transition", () => {
     expect(semantic.w).toBe(4);
     expect(semantic.h).toBe(4);
     expect(semantic.heightUnits).toBe(32);
+    expect(semantic.tileHeightUnits).toBe(13);
     expect(skin.anchorLiftUnits).toBeUndefined();
 
     const mapDef: TableMapDef = {
@@ -607,6 +620,36 @@ describe("structure legacy transition", () => {
     expect(light.colorMode).toBe("standard");
     expect(light.strength).toBe("medium");
     expect(light.flicker).toEqual({ kind: "NOISE", speed: 9, amount: 0.25 });
+  });
+
+  it("builds tileHeightGrid from compiled structure data instead of sprite scans", () => {
+    const avenueGeometry = getRequiredMonolithicBuildingPlacementGeometry("avenue_1", "test:height-grid");
+    const mapDef: TableMapDef = {
+      id: "compiled_height_grid_structure_authority",
+      w: 8,
+      h: 8,
+      cells: [{ x: 0, y: 0, z: 0, type: "floor" }],
+      stamps: [
+        { x: 2, y: 2, z: 0, type: "building", skinId: "building1", w: avenueGeometry.w, h: avenueGeometry.h },
+        { x: 5, y: 5, z: 0, type: "prop", propId: "street_lamp_n", w: 1, h: 1 },
+      ],
+    };
+    const compiled = compileKenneyMapFromTable(mapDef, { runSeed: 404, mapId: mapDef.id });
+    const grid = compiled.tileHeightGrid;
+    const at = (tx: number, ty: number) => grid.heights[(ty - grid.originTy) * grid.width + (tx - grid.originTx)];
+
+    expect(at(2, 2)).toBe(avenueGeometry.tileHeightUnits);
+    expect(at(2 + avenueGeometry.w - 1, 2 + avenueGeometry.h - 1)).toBe(avenueGeometry.tileHeightUnits);
+    expect(at(5, 5)).toBe(renderHeightUnitsToSweepTileHeight(12));
+    expect(grid.version).toMatch(/^h[0-9a-f]+$/);
+  });
+
+  it("registers avenue2 with the batch processed building pack", () => {
+    const def = getAuthoredMapDefByMapId("avenue2");
+    expect(def).toBeTruthy();
+    expect(def?.buildingPackId).toBe("batch_processed_buildings");
+    expect(BUILDING_PACKS.batch_processed_buildings?.length).toBeGreaterThan(0);
+    expect(BUILDING_SKINS.bp_0?.roof).toBe("structures/buildings/batch_processed/0");
   });
 
   it("street lamp props emit their own lightDef and do not block movement", () => {

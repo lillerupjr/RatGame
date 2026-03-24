@@ -56,6 +56,8 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "entityAnchorsEnabled", label: "entityAnchorsEnabled" },
   { key: "renderPerfCountersEnabled", label: "renderPerfCountersEnabled" },
   { key: "paletteHudDebugOverlayEnabled", label: "paletteHudDebugOverlayEnabled" },
+  { key: "sweepShadowDebug", label: "sweepShadowDebug" },
+  { key: "tileHeightMap", label: "tileHeightMap" },
 ] as const;
 
 export const DEFAULT_DEBUG_TOOLS_SETTINGS: DebugToolsSettings = {
@@ -88,6 +90,7 @@ export const DEFAULT_DEBUG_TOOLS_SETTINGS: DebugToolsSettings = {
   renderPerfCountersEnabled: false,
   paletteHudDebugOverlayEnabled: false,
   shadowSunTimeHour: DEFAULT_SHADOW_SUN_V1_TIME_HOUR,
+  shadowSunAzimuthDeg: -1,
   sunElevationOverrideEnabled: false,
   sunElevationOverrideDeg: DEFAULT_SHADOW_SUN_V1_ELEVATION_OVERRIDE_DEG,
   shadowV1DebugGeometryMode: "full",
@@ -105,7 +108,16 @@ export const DEFAULT_DEBUG_TOOLS_SETTINGS: DebugToolsSettings = {
   shadowV6TopOnly: false,
   shadowV6ForceRefresh: false,
   shadowV6FaceSliceDebugOverlay: false,
+  sweepShadowDebug: false,
+  tileHeightMap: false,
 };
+
+function clampShadowSunAzimuthDeg(value: unknown): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return -1;
+  if (numeric < 0) return -1;
+  return Math.round(numeric) % 360;
+}
 
 function normalizeShadowV1DebugGeometryMode(value: unknown): ShadowV1DebugGeometryMode {
   if (value === "capOnly" || value === "connectorsOnly") return value;
@@ -118,6 +130,7 @@ function normalizeShadowCasterMode(value: unknown): ShadowCasterMode {
   if (value === "v3HybridTriangles") return "v3HybridTriangles";
   if (value === "v4SliceStrips") return "v4SliceStrips";
   if (value === "v5TriangleShadowMask") return "v5TriangleShadowMask";
+  if (value === "v6SweepShadow") return "v6SweepShadow";
   if (value === "v6FaceSliceDebug") return "v6FaceSliceDebug";
   return "v1Roof";
 }
@@ -189,6 +202,7 @@ export function sanitizeDebugToolsSettings(input: Partial<DebugToolsSettings> | 
     renderPerfCountersEnabled: !!merged.renderPerfCountersEnabled,
     paletteHudDebugOverlayEnabled: !!merged.paletteHudDebugOverlayEnabled,
     shadowSunTimeHour: clampShadowSunTimeHour(merged.shadowSunTimeHour),
+    shadowSunAzimuthDeg: clampShadowSunAzimuthDeg(merged.shadowSunAzimuthDeg),
     sunElevationOverrideEnabled: !!merged.sunElevationOverrideEnabled,
     sunElevationOverrideDeg: clampShadowSunElevationOverrideDeg(merged.sunElevationOverrideDeg),
     shadowV1DebugGeometryMode: normalizeShadowV1DebugGeometryMode(merged.shadowV1DebugGeometryMode),
@@ -206,6 +220,8 @@ export function sanitizeDebugToolsSettings(input: Partial<DebugToolsSettings> | 
     shadowV6TopOnly: !!merged.shadowV6TopOnly,
     shadowV6ForceRefresh: !!merged.shadowV6ForceRefresh,
     shadowV6FaceSliceDebugOverlay: !!merged.shadowV6FaceSliceDebugOverlay,
+    sweepShadowDebug: !!merged.sweepShadowDebug,
+    tileHeightMap: !!merged.tileHeightMap,
   };
 }
 
@@ -238,6 +254,8 @@ export type ResolvedDebugFlags = {
   showEnemyAimOverlay: boolean;
   showLootGoblinOverlay: boolean;
   visualCompiledCutoutCache: boolean;
+  showSweepShadowDebug: boolean;
+  showTileHeightMap: boolean;
 };
 
 export function resolveDebugFlags(args: {
@@ -265,5 +283,7 @@ export function resolveDebugFlags(args: {
     showEnemyAimOverlay: args.debug.enemyAimOverlay,
     showLootGoblinOverlay: args.debug.lootGoblinOverlay,
     visualCompiledCutoutCache: !args.disableVisualCompiledCutoutCache,
+    showSweepShadowDebug: args.debug.sweepShadowDebug,
+    showTileHeightMap: args.debug.tileHeightMap,
   };
 }

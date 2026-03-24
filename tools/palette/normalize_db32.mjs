@@ -19,6 +19,7 @@ const SUBSET_DIRS = [
   "structures/buildings/avenue",
   "structures/buildings/downtown",
   "structures/buildings/china_town",
+  "structures/buildings/batch_processed",
   "structures/containers",
   "props",
   "entities",
@@ -200,6 +201,21 @@ function relFromAssetsRuntime(absFile) {
   return rel.replace(/\\/g, "/");
 }
 
+function getOutputRelativePaths(rel) {
+  const batchMatch = rel.match(
+    /^structures\/buildings\/batch_processed\/([^/]+)\/images\/(n|e|s|w|ne|nw|se|sw)\.png$/i,
+  );
+  if (!batchMatch) return [rel];
+
+  const [, buildingId, dir] = batchMatch;
+  const normalizedDir = dir.toLowerCase();
+  const outputs = [`structures/buildings/batch_processed/${buildingId}/${normalizedDir}.png`];
+  if (normalizedDir === "s") {
+    outputs.unshift(`structures/buildings/batch_processed/${buildingId}.png`);
+  }
+  return outputs;
+}
+
 function countPngFiles(rootDir) {
   if (!fs.existsSync(rootDir)) return 0;
   return walkPngFiles(rootDir).length;
@@ -267,10 +283,13 @@ function main() {
 
   for (const abs of inFiles) {
     const rel = relFromAssetsRuntime(abs); // e.g. tiles/floor/asphalt/1.png
-    const outAbs = path.join(OUT_ROOT, rel);
+    const outRels = getOutputRelativePaths(rel);
     try {
-      pixels += normalizePngToDb32(abs, outAbs, hueAnchors);
-      files++;
+      for (const outRel of outRels) {
+        const outAbs = path.join(OUT_ROOT, outRel);
+        pixels += normalizePngToDb32(abs, outAbs, hueAnchors);
+        files++;
+      }
     } catch (err) {
       failed++;
       console.warn(`[assets:db32] Skipped invalid PNG: ${rel}`);

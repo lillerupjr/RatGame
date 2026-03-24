@@ -27,6 +27,12 @@ export type RuntimeStructureTriangleRect = {
   h: number;
 };
 
+export type RuntimeStructureTriangleSemanticSide =
+  | "LEFT_SOUTH"
+  | "RIGHT_EAST"
+  | "CONFLICT"
+  | "UNCLASSIFIED";
+
 export type RuntimeStructureTrianglePiece = {
   structureInstanceId: string;
   stableId: number;
@@ -46,6 +52,7 @@ export type RuntimeStructureTrianglePiece = {
   triangleTy: number;
   cameraTx: number;
   cameraTy: number;
+  semanticSide?: RuntimeStructureTriangleSemanticSide;
   localBounds: RuntimeStructureTriangleRect;
   srcRectLocal: RuntimeStructureTriangleRect;
   dstRectLocal: RuntimeStructureTriangleRect;
@@ -459,7 +466,28 @@ export function buildRuntimeTrianglesFromMonolithicGeometry(
       });
     }
   }
+  assignRuntimeTriangleSemanticSides(out, geometry.n, geometry.m);
   return out;
+}
+
+function assignRuntimeTriangleSemanticSides(
+  triangles: RuntimeStructureTrianglePiece[],
+  footprintW: number,
+  footprintH: number,
+): void {
+  const safeW = Math.max(1, footprintW | 0);
+  const safeH = Math.max(1, footprintH | 0);
+  for (let i = 0; i < triangles.length; i++) {
+    const tri = triangles[i];
+    let semanticSide: RuntimeStructureTriangleSemanticSide = "UNCLASSIFIED";
+    const progression = resolveRuntimeStructureBandProgressionIndex(tri.bandIndex, safeW, safeH);
+    if (Number.isFinite(progression) && progression < safeW) {
+      semanticSide = "LEFT_SOUTH";
+    } else if (Number.isFinite(progression)) {
+      semanticSide = "RIGHT_EAST";
+    }
+    tri.semanticSide = semanticSide;
+  }
 }
 
 function buildRuntimeStructureTriangleCache(
