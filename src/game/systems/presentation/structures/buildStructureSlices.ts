@@ -111,6 +111,7 @@ type BuildStructureSlicesInput = {
   showStructureSliceDebug: boolean;
   showStructureTriangleFootprintDebug: boolean;
   showStructureAnchors: boolean;
+  showStructureTriangleOwnershipSortDebug: boolean;
   shadowV1DebugGeometryMode: string;
   deferredStructureSliceDebugDraws: Array<() => void>;
   didQueueStructureCutoutDebugRect: boolean;
@@ -192,6 +193,13 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
       const usingV6Caster = input.structureShadowFrame.routing.usesV6;
       const admittedTrianglesForSemanticMasks: typeof triangleCache.triangles = [];
       const finalVisibleTrianglesForDebug: RuntimeStructureTrianglePiece[] = [];
+      const visibleTriangleGroupsForDebug: Array<{
+        stableId: number;
+        parentTx: number;
+        parentTy: number;
+        feetSortY: number;
+        visibleTriangles: RuntimeStructureTrianglePiece[];
+      }> = [];
       const buildingDirectionalRejected = o.seTx < input.playerCameraTx || o.seTy < input.playerCameraTy;
       const buildingDirectionalEligible = !buildingDirectionalRejected;
       let overlayHasVisibleTriangleGroup = false;
@@ -242,6 +250,13 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
         if (!finalVisibleTriangles.length) continue;
         if (usingV5Caster || usingV6Caster) admittedTrianglesForSemanticMasks.push(...finalVisibleTriangles);
         finalVisibleTrianglesForDebug.push(...finalVisibleTriangles);
+        visibleTriangleGroupsForDebug.push({
+          stableId: group.stableId,
+          parentTx: group.parentTx,
+          parentTy: group.parentTy,
+          feetSortY: group.feetSortY,
+          visibleTriangles: [...finalVisibleTriangles],
+        });
         overlayHasVisibleTriangleGroup = true;
 
         pieces.push({
@@ -335,7 +350,12 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
 
       if (
         monolithic
-        && (input.showStructureAnchors || input.showStructureSliceDebug || input.showStructureTriangleFootprintDebug)
+        && (
+          input.showStructureAnchors
+          || input.showStructureSliceDebug
+          || input.showStructureTriangleFootprintDebug
+          || input.showStructureTriangleOwnershipSortDebug
+        )
       ) {
         const activeRoofQuad = activeRoofQuadForSemanticDebug({
           structureShadowV1CacheEntry: structureShadowResult.structureShadowV1CacheEntry,
@@ -365,6 +385,15 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
           showSlices: input.showStructureSliceDebug,
           showSemanticFaces: input.showStructureTriangleFootprintDebug,
           semanticFaceTriangles,
+        });
+        queueMonolithicTriangleOwnershipSortDebugDraw({
+          ctx: input.ctx,
+          deferredStructureSliceDebugDraws: input.deferredStructureSliceDebugDraws,
+          enabled: input.showStructureTriangleOwnershipSortDebug,
+          overlayBaseZ: o.z,
+          visibleGroups: visibleTriangleGroupsForDebug,
+          tileWorld: input.tileWorld,
+          toScreenAtZ: input.toScreenAtZ,
         });
       }
       continue;
@@ -408,6 +437,115 @@ type QueueMonolithicStructureDebugDrawInput = {
     semantic: HybridSemanticClass;
   }>;
 };
+
+type QueueMonolithicTriangleOwnershipSortDebugDrawInput = {
+  ctx: CanvasRenderingContext2D;
+  deferredStructureSliceDebugDraws: Array<() => void>;
+  enabled: boolean;
+  overlayBaseZ: number;
+  visibleGroups: ReadonlyArray<{
+    stableId: number;
+    parentTx: number;
+    parentTy: number;
+    feetSortY: number;
+    visibleTriangles: readonly RuntimeStructureTrianglePiece[];
+  }>;
+  tileWorld: number;
+  toScreenAtZ: (worldX: number, worldY: number, zVisual: number) => ScreenPt;
+};
+
+function drawCrossMarker(
+  ctx: CanvasRenderingContext2D,
+  pt: ScreenPt,
+  radius: number,
+  strokeStyle: string,
+): void {
+  ctx.beginPath();
+  ctx.moveTo(pt.x - radius, pt.y);
+  ctx.lineTo(pt.x + radius, pt.y);
+  ctx.moveTo(pt.x, pt.y - radius);
+  ctx.lineTo(pt.x, pt.y + radius);
+  ctx.strokeStyle = strokeStyle;
+  ctx.stroke();
+}
+
+function ownerTileMarkerQuad(
+  tx: number,
+  ty: number,
+  z: number,
+  tileWorld: number,
+  toScreenAtZ: QueueMonolithicTriangleOwnershipSortDebugDrawInput["toScreenAtZ"],
+): ProjectedQuad {
+  return [
+    toScreenAtZ(tx * tileWorld, ty * tileWorld, z),
+    toScreenAtZ((tx + 1) * tileWorld, ty * tileWorld, z),
+    toScreenAtZ((tx + 1) * tileWorld, (ty + 1) * tileWorld, z),
+    toScreenAtZ(tx * tileWorld, (ty + 1) * tileWorld, z),
+  ];
+}
+
+function queueMonolithicTriangleOwnershipSortDebugDraw(
+  input: QueueMonolithicTriangleOwnershipSortDebugDrawInput,
+): void {
+  if (!input.enabled || input.visibleGroups.length <= 0) return;
+
+  input.deferredStructureSliceDebugDraws.push(() => {
+    const { ctx } = input;
+    ctx.save();
+    ctx.lineWidth = 1.2;
+    ctx.font = "5px monospace";
+    ctx.textBaseline = "top";
+    ctx.textAlign = "center";
+
+    for (let gi = 0; gi < input.visibleGroups.length; gi++) {
+      const group = input.visibleGroups[gi];
+      const ownerQuad = ownerTileMarkerQuad(
+        group.parentTx,
+        group.parentTy,
+        input.overlayBaseZ,
+        input.tileWorld,
+        input.toScreenAtZ,
+      );
+      const ownerCenter = {
+        x: (ownerQuad[0].x + ownerQuad[1].x + ownerQuad[2].x + ownerQuad[3].x) * 0.25,
+        y: (ownerQuad[0].y + ownerQuad[1].y + ownerQuad[2].y + ownerQuad[3].y) * 0.25,
+      };
+
+      ctx.beginPath();
+      ctx.moveTo(ownerQuad[0].x, ownerQuad[0].y);
+      for (let qi = 1; qi < ownerQuad.length; qi++) ctx.lineTo(ownerQuad[qi].x, ownerQuad[qi].y);
+      ctx.closePath();
+      ctx.strokeStyle = "rgba(255, 240, 110, 0.55)";
+      ctx.stroke();
+      drawCrossMarker(ctx, ownerCenter, 4, "rgba(255, 240, 110, 0.92)");
+
+      for (let ti = 0; ti < group.visibleTriangles.length; ti++) {
+        const tri = group.visibleTriangles[ti];
+        const [a, b, c] = tri.points;
+        const centroid = {
+          x: (a.x + b.x + c.x) / 3,
+          y: (a.y + b.y + c.y) / 3,
+        };
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.lineTo(c.x, c.y);
+        ctx.closePath();
+        ctx.fillStyle = "rgba(55, 200, 255, 0.10)";
+        ctx.strokeStyle = "rgba(55, 200, 255, 0.92)";
+        ctx.fill();
+        ctx.stroke();
+        const triLabel = `P(${tri.parentTx},${tri.parentTy}) T(${tri.triangleTx},${tri.triangleTy})`;
+        ctx.fillStyle = "rgba(0,0,0,0.88)";
+        ctx.fillText(triLabel, centroid.x + 1, centroid.y - 7);
+        ctx.fillStyle = "rgba(230, 245, 255, 0.98)";
+        ctx.fillText(triLabel, centroid.x, centroid.y - 8);
+      }
+    }
+
+    ctx.restore();
+  });
+}
 
 function semanticFaceStyle(semantic: HybridSemanticClass): { fill: string; stroke: string } {
   if (semantic === "TOP") {

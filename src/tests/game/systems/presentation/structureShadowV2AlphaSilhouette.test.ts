@@ -25,6 +25,8 @@ function makeTriangle(
   return {
     structureInstanceId: "building-1",
     stableId,
+    sliceIndex: 0,
+    bandIndex: 0,
     points: [p0, p1, p2],
     srcPoints: [p0, p1, p2],
     basePoint,
@@ -35,9 +37,10 @@ function makeTriangle(
     admissionTy: 0,
     parentTx: 0,
     parentTy: 0,
+    triangleTx: 0,
+    triangleTy: 0,
     cameraTx: 0,
     cameraTy: 0,
-    bandIndex: 0,
     localBounds: {
       x: minX,
       y: minY,

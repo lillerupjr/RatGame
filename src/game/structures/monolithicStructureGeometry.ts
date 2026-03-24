@@ -9,8 +9,10 @@ import {
 } from "../map/compile/kenneyMap";
 import {
   getRequiredMonolithicBuildingSemanticGeometryForSprite,
+  resolveMonolithicFootprintTopLeftFromSeAnchor,
   resolveMonolithicFootprintTileBoundsFromSeAnchor,
   type MonolithicBuildingSemanticGeometry,
+  type MonolithicBuildingSemanticSliceEntry,
 } from "./monolithicBuildingSemanticPrepass";
 
 export type RuntimeStructureTrianglePoint = {
@@ -28,6 +30,8 @@ export type RuntimeStructureTriangleRect = {
 export type RuntimeStructureTrianglePiece = {
   structureInstanceId: string;
   stableId: number;
+  sliceIndex: number;
+  bandIndex: number;
   points: [RuntimeStructureTrianglePoint, RuntimeStructureTrianglePoint, RuntimeStructureTrianglePoint];
   srcPoints: [RuntimeStructureTrianglePoint, RuntimeStructureTrianglePoint, RuntimeStructureTrianglePoint];
   basePoint: RuntimeStructureTrianglePoint;
@@ -38,9 +42,10 @@ export type RuntimeStructureTrianglePiece = {
   admissionTy: number;
   parentTx: number;
   parentTy: number;
+  triangleTx: number;
+  triangleTy: number;
   cameraTx: number;
   cameraTy: number;
-  bandIndex: number;
   localBounds: RuntimeStructureTriangleRect;
   srcRectLocal: RuntimeStructureTriangleRect;
   dstRectLocal: RuntimeStructureTriangleRect;
@@ -48,6 +53,8 @@ export type RuntimeStructureTrianglePiece = {
 
 export type RuntimeStructureParentTileGroup = {
   structureInstanceId: string;
+  sliceIndex: number;
+  bandIndex: number;
   parentTx: number;
   parentTy: number;
   feetSortY: number;
@@ -142,6 +149,8 @@ export type MonolithicStructureGeometry = MonolithicBuildingSemanticGeometry & {
   workAnchorLocal: RuntimeStructureTrianglePoint;
 };
 
+const STRUCTURE_ELEV_PX = 16;
+
 function q(value: number, step: number): number {
   if (!Number.isFinite(value)) return 0;
   const safeStep = Math.max(1e-6, Math.abs(step));
@@ -163,11 +172,15 @@ function triangleStableId(structureInstanceId: string, bandIndex: number, triang
 
 function groupStableId(
   structureInstanceId: string,
+  sliceIndex: number,
+  bandIndex: number,
   parentTx: number,
   parentTy: number,
   feetSortY: number,
 ): number {
-  return hashString32(`${structureInstanceId}:group:${parentTx}:${parentTy}:${q(feetSortY, 0.001)}`);
+  return hashString32(
+    `${structureInstanceId}:group:${sliceIndex}:${bandIndex}:${parentTx}:${parentTy}:${q(feetSortY, 0.001)}`,
+  );
 }
 
 export function resolveTriangleBaseReferencePoint(
@@ -255,6 +268,36 @@ function localBoundsOfTriangle(
   };
 }
 
+function resolveMonolithicSliceParentTileForOverlay(
+  overlay: StampOverlay,
+  geometry: MonolithicStructureGeometry,
+  sliceEntry: Pick<
+    MonolithicBuildingSemanticSliceEntry,
+    "parentFootprintOffsetTx" | "parentFootprintOffsetTy"
+  >,
+): { tx: number; ty: number } {
+  const topLeft = resolveMonolithicFootprintTopLeftFromSeAnchor(
+    overlay.seTx,
+    overlay.seTy,
+    geometry.n,
+    geometry.m,
+  );
+  return {
+    tx: topLeft.tx + sliceEntry.parentFootprintOffsetTx,
+    ty: topLeft.ty + sliceEntry.parentFootprintOffsetTy,
+  };
+}
+
+function projectTileCenterFeetSortYNoCamera(
+  tx: number,
+  ty: number,
+  zVisual: number,
+): number {
+  const wx = (tx + 0.5) * KENNEY_TILE_WORLD;
+  const wy = (ty + 0.5) * KENNEY_TILE_WORLD;
+  return worldToScreen(wx, wy).y - zVisual * STRUCTURE_ELEV_PX;
+}
+
 function monolithicSemanticLookupForOverlay(
   overlay: StampOverlay,
 ): { skinId: string; spriteId: string } | null {
@@ -322,25 +365,29 @@ export function resolveMonolithicFootprintTileBoundsForOverlay(
   );
 }
 
-function groupRuntimeStructureTrianglesByParentTile(
+export function groupRuntimeStructureTrianglesBySliceParent(
   structureInstanceId: string,
   pieces: RuntimeStructureTrianglePiece[],
+  input?: { zVisual?: number },
 ): RuntimeStructureParentTileGroup[] {
   const byParent = new Map<string, RuntimeStructureParentTileGroup>();
+  const zVisual = input?.zVisual ?? 0;
   for (let i = 0; i < pieces.length; i++) {
     const tri = pieces[i];
-    const feetSortY = q(tri.feetSortY, 0.001);
-    const key = `${tri.ownerTx},${tri.ownerTy},${feetSortY}`;
+    const feetSortY = q(projectTileCenterFeetSortYNoCamera(tri.parentTx, tri.parentTy, zVisual), 0.001);
+    const key = `${tri.sliceIndex}:${tri.bandIndex}:${tri.parentTx},${tri.parentTy}`;
     const existing = byParent.get(key);
     if (!existing) {
       byParent.set(key, {
         structureInstanceId,
-        parentTx: tri.ownerTx,
-        parentTy: tri.ownerTy,
+        sliceIndex: tri.sliceIndex,
+        bandIndex: tri.bandIndex,
+        parentTx: tri.parentTx,
+        parentTy: tri.parentTy,
         feetSortY,
         triangles: [tri],
         localBounds: { ...tri.localBounds },
-        stableId: groupStableId(structureInstanceId, tri.ownerTx, tri.ownerTy, feetSortY),
+        stableId: groupStableId(structureInstanceId, tri.sliceIndex, tri.bandIndex, tri.parentTx, tri.parentTy, feetSortY),
       });
       continue;
     }
@@ -357,10 +404,15 @@ function groupRuntimeStructureTrianglesByParentTile(
       h: Math.max(0, maxY - minY),
     };
   }
-  return Array.from(byParent.values());
+  return Array.from(byParent.values()).sort((a, b) => (
+    a.bandIndex - b.bandIndex
+    || a.sliceIndex - b.sliceIndex
+    || a.parentTy - b.parentTy
+    || a.parentTx - b.parentTx
+  ));
 }
 
-function buildRuntimeTrianglesFromMonolithicGeometry(
+export function buildRuntimeTrianglesFromMonolithicGeometry(
   overlay: StampOverlay,
   draw: RuntimeStructureTriangleProjectedDraw,
   geometry: MonolithicStructureGeometry,
@@ -369,6 +421,7 @@ function buildRuntimeTrianglesFromMonolithicGeometry(
   const scale = draw.scale ?? 1;
   for (let si = 0; si < geometry.sliceEntries.length; si++) {
     const sliceEntry = geometry.sliceEntries[si];
+    const parentTile = resolveMonolithicSliceParentTileForOverlay(overlay, geometry, sliceEntry);
     for (let ti = 0; ti < sliceEntry.triangles.length; ti++) {
       const tri = sliceEntry.triangles[ti];
       const s0 = { x: tri.a.x, y: tri.a.y };
@@ -384,19 +437,22 @@ function buildRuntimeTrianglesFromMonolithicGeometry(
       out.push({
         structureInstanceId: overlay.id,
         stableId: triangleStableId(overlay.id, sliceEntry.bandIndex, out.length),
+        sliceIndex: sliceEntry.index,
+        bandIndex: sliceEntry.bandIndex,
         points: [d0, d1, d2],
         srcPoints: [s0, s1, s2],
         basePoint,
         feetSortY: basePoint.y,
-        ownerTx: baseTile.tx,
-        ownerTy: baseTile.ty,
+        ownerTx: parentTile.tx,
+        ownerTy: parentTile.ty,
         admissionTx: baseTile.tx,
         admissionTy: baseTile.ty,
-        parentTx: baseTile.tx,
-        parentTy: baseTile.ty,
+        parentTx: parentTile.tx,
+        parentTy: parentTile.ty,
+        triangleTx: baseTile.tx,
+        triangleTy: baseTile.ty,
         cameraTx: baseTile.tx,
         cameraTy: baseTile.ty,
-        bandIndex: sliceEntry.bandIndex,
         localBounds: bounds,
         srcRectLocal: srcRect,
         dstRectLocal: bounds,
@@ -407,6 +463,7 @@ function buildRuntimeTrianglesFromMonolithicGeometry(
 }
 
 function buildRuntimeStructureTriangleCache(
+  overlay: StampOverlay,
   structureInstanceId: string,
   spriteId: string,
   geometrySignature: string,
@@ -418,7 +475,9 @@ function buildRuntimeStructureTriangleCache(
     spriteId,
     geometrySignature,
     triangles,
-    parentTileGroups: groupRuntimeStructureTrianglesByParentTile(structureInstanceId, triangles),
+    parentTileGroups: groupRuntimeStructureTrianglesBySliceParent(structureInstanceId, triangles, {
+      zVisual: overlay.z + (overlay.zVisualOffsetUnits ?? 0),
+    }),
     monolithic: geometry,
   };
 }
@@ -648,6 +707,7 @@ export function buildMonolithicStructureTriangleCacheForOverlay(input: {
   if (triangles.length <= 0) return { cache: null, geometrySignature };
   return {
     cache: buildRuntimeStructureTriangleCache(
+      input.overlay,
       input.overlay.id,
       input.overlay.spriteId,
       geometrySignature,

@@ -20,6 +20,7 @@ function computeDebugPassEnabled(debug: DebugSettings): boolean {
     || debug.showStructureSlices
     || debug.structureTriangleFootprint
     || debug.showStructureAnchors
+    || debug.showStructureTriangleOwnershipSort
     || debug.enemyAimOverlay
     || debug.lootGoblinOverlay
   );

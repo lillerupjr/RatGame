@@ -33,6 +33,7 @@ export type RenderDebugFlags = {
   showStructureSlices: boolean;
   showStructureTriangleFootprint: boolean;
   showStructureAnchors: boolean;
+  showStructureTriangleOwnershipSort: boolean;
   showEnemyAimOverlay: boolean;
   showLootGoblinOverlay: boolean;
   showMapOverlays: boolean;

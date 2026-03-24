@@ -36,6 +36,9 @@ export type MonolithicBuildingPlacementGeometry = {
 export type MonolithicBuildingSemanticSliceEntry = {
   index: number;
   bandIndex: number;
+  parentFootprintProgression: number;
+  parentFootprintOffsetTx: number;
+  parentFootprintOffsetTy: number;
   slice: StructureSliceBand;
   edgePoints: MonolithicSliceEdgePoint[];
   stripPoints: MonolithicSliceEdgePoint[];
@@ -77,6 +80,16 @@ const DEFAULT_HEIGHT_UNITS = 32;
 const semanticGeometryByKey = new Map<string, MonolithicBuildingSemanticGeometry>();
 const canonicalSemanticKeyBySkinId = new Map<string, string>();
 const warnedMissingBySemanticKey = new Set<string>();
+
+type MonolithicSliceParentFootprintPosition = Pick<
+  MonolithicBuildingSemanticSliceEntry,
+  "parentFootprintProgression" | "parentFootprintOffsetTx" | "parentFootprintOffsetTy"
+>;
+
+type PendingMonolithicBuildingSemanticSliceEntry = Omit<
+  MonolithicBuildingSemanticSliceEntry,
+  "parentFootprintProgression" | "parentFootprintOffsetTx" | "parentFootprintOffsetTy"
+>;
 
 function normalizeSpriteToken(raw: string | undefined): string | undefined {
   if (typeof raw !== "string") return undefined;
@@ -271,6 +284,49 @@ function ensureNodeSemanticPlacementFallbackForSkin(skinId: string): void {
       );
     }
   }
+}
+
+export function resolveMonolithicSliceParentFootprintPosition(
+  bandIndex: number,
+  footprintW: number,
+  footprintH: number,
+): MonolithicSliceParentFootprintPosition {
+  const safeW = Math.max(1, footprintW | 0);
+  const safeH = Math.max(1, footprintH | 0);
+  const coreCount = safeW + safeH;
+  const lastProgression = Math.max(0, coreCount - 1);
+  const clampedBandIndex = Math.max(0, Math.min(coreCount + 1, bandIndex | 0));
+
+  if (clampedBandIndex <= 0) {
+    return {
+      parentFootprintProgression: 0,
+      parentFootprintOffsetTx: 0,
+      parentFootprintOffsetTy: safeH - 1,
+    };
+  }
+
+  if (clampedBandIndex >= coreCount + 1) {
+    return {
+      parentFootprintProgression: lastProgression,
+      parentFootprintOffsetTx: safeW - 1,
+      parentFootprintOffsetTy: 0,
+    };
+  }
+
+  if (clampedBandIndex <= safeW) {
+    return {
+      parentFootprintProgression: clampedBandIndex - 1,
+      parentFootprintOffsetTx: clampedBandIndex - 1,
+      parentFootprintOffsetTy: safeH - 1,
+    };
+  }
+
+  const eastProgression = clampedBandIndex - safeW - 1;
+  return {
+    parentFootprintProgression: clampedBandIndex - 1,
+    parentFootprintOffsetTx: safeW - 1,
+    parentFootprintOffsetTy: Math.max(0, safeH - 1 - eastProgression),
+  };
 }
 
 function ensureNodeSemanticPlacementFallback(requiredSkinIds?: Iterable<string>): void {
@@ -543,7 +599,7 @@ export function buildMonolithicBuildingSemanticGeometryFromAlphaMap(
     }
     : null;
 
-  const sliceEntries: MonolithicBuildingSemanticSliceEntry[] = [];
+  const pendingSliceEntries: PendingMonolithicBuildingSemanticSliceEntry[] = [];
   const footprintCandidatesSpriteLocal: MonolithicSliceTriangle[] = [];
   let footprintLeftCount = 0;
   let footprintRightCount = 0;
@@ -592,7 +648,7 @@ export function buildMonolithicBuildingSemanticGeometryFromAlphaMap(
       if (centroidX < anchorResult.anchorPx.x) footprintLeftCount++;
       else footprintRightCount++;
     }
-    sliceEntries.push({
+    pendingSliceEntries.push({
       index: si,
       bandIndex,
       slice,
@@ -603,6 +659,13 @@ export function buildMonolithicBuildingSemanticGeometryFromAlphaMap(
     });
   }
 
+  const n = Math.max(1, footprintLeftCount | 0);
+  const m = Math.max(1, footprintRightCount | 0);
+  const sliceEntries: MonolithicBuildingSemanticSliceEntry[] = pendingSliceEntries.map((entry) => ({
+    ...entry,
+    ...resolveMonolithicSliceParentFootprintPosition(entry.bandIndex, n, m),
+  }));
+
   return {
     skinId,
     spriteId,
@@ -610,8 +673,8 @@ export function buildMonolithicBuildingSemanticGeometryFromAlphaMap(
     flipX,
     source: "computed",
     heightUnits: Math.max(1, Math.round(input?.heightUnits ?? DEFAULT_HEIGHT_UNITS)),
-    n: Math.max(1, footprintLeftCount | 0),
-    m: Math.max(1, footprintRightCount | 0),
+    n,
+    m,
     anchorSpriteLocal: {
       x: anchorResult.anchorPx.x,
       y: anchorResult.anchorPx.y,
@@ -857,6 +920,25 @@ export function resolveMonolithicFootprintTopLeftFromSeAnchor(
   return {
     tx: (seTx | 0) - Math.max(1, n | 0) + 1,
     ty: (seTy | 0) - Math.max(1, m | 0) + 1,
+  };
+}
+
+export function resolveMonolithicSliceParentTileFromSeAnchor(
+  seTx: number,
+  seTy: number,
+  n: number,
+  m: number,
+  bandIndex: number,
+): {
+  tx: number;
+  ty: number;
+} & MonolithicSliceParentFootprintPosition {
+  const topLeft = resolveMonolithicFootprintTopLeftFromSeAnchor(seTx, seTy, n, m);
+  const parent = resolveMonolithicSliceParentFootprintPosition(bandIndex, n, m);
+  return {
+    ...parent,
+    tx: topLeft.tx + parent.parentFootprintOffsetTx,
+    ty: topLeft.ty + parent.parentFootprintOffsetTy,
   };
 }
 

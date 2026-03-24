@@ -67,6 +67,7 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "spriteBounds", label: "spriteBounds" },
   { key: "showStructureSlices", label: "showStructureSlices" },
   { key: "structureTriangleFootprint", label: "structureTriangleFootprint" },
+  { key: "showStructureTriangleOwnershipSort", label: "showStructureTriangleOwnershipSort" },
   { key: "projectileFaces", label: "projectileFaces" },
   { key: "triggers", label: "triggers" },
   { key: "debugRoadSemantic", label: "debugRoadSemantic" },
@@ -145,6 +146,7 @@ export type ResolvedDebugFlags = {
   showStructureSlices: boolean;
   showStructureTriangleFootprint: boolean;
   showStructureAnchors: boolean;
+  showStructureTriangleOwnershipSort: boolean;
   showMapOverlays: boolean;
   showEnemyAimOverlay: boolean;
   showLootGoblinOverlay: boolean;
@@ -166,6 +168,7 @@ export function resolveDebugFlags(debug: DebugSettings): ResolvedDebugFlags {
     showStructureSlices: debug.showStructureSlices,
     showStructureTriangleFootprint: debug.structureTriangleFootprint,
     showStructureAnchors: debug.showStructureAnchors,
+    showStructureTriangleOwnershipSort: debug.showStructureTriangleOwnershipSort,
     showMapOverlays: !debug.mapOverlaysDisabled,
     showEnemyAimOverlay: debug.enemyAimOverlay,
     showLootGoblinOverlay: debug.lootGoblinOverlay,

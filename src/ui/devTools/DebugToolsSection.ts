@@ -251,6 +251,11 @@ export function mountDebugToolsSection(
       "Show Structure Anchors",
       (checked) => applyDebugPatch({ showStructureAnchors: checked }),
     ),
+    showStructureTriangleOwnershipSort: createToggleRow(
+      grid,
+      "Triangle Ownership/Sort",
+      (checked) => applyDebugPatch({ showStructureTriangleOwnershipSort: checked }),
+    ),
     projectileFaces: createToggleRow(grid, "Show Projectile Faces", (checked) => applyDebugPatch({ projectileFaces: checked })),
     triggers: createToggleRow(grid, "Show Trigger Zones", (checked) => applyDebugPatch({ triggers: checked })),
     debugRoadSemantic: createToggleRow(grid, "Show Road Semantics", (checked) => applyDebugPatch({ debugRoadSemantic: checked })),

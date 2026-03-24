@@ -41,6 +41,7 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "showStructureSlices", label: "showStructureSlices" },
   { key: "structureTriangleFootprint", label: "structureSemanticFaces" },
   { key: "showStructureAnchors", label: "showStructureAnchors" },
+  { key: "showStructureTriangleOwnershipSort", label: "showStructureTriangleOwnershipSort" },
   { key: "projectileFaces", label: "projectileFaces" },
   { key: "triggers", label: "triggers" },
   { key: "debugRoadSemantic", label: "debugRoadSemantic" },
@@ -71,6 +72,7 @@ export const DEFAULT_DEBUG_TOOLS_SETTINGS: DebugToolsSettings = {
   showStructureSlices: false,
   structureTriangleFootprint: false,
   showStructureAnchors: false,
+  showStructureTriangleOwnershipSort: false,
   projectileFaces: false,
   triggers: false,
   debugRoadSemantic: false,
@@ -171,6 +173,7 @@ export function sanitizeDebugToolsSettings(input: Partial<DebugToolsSettings> | 
     showStructureSlices: !!merged.showStructureSlices,
     structureTriangleFootprint: !!merged.structureTriangleFootprint,
     showStructureAnchors: !!merged.showStructureAnchors,
+    showStructureTriangleOwnershipSort: !!merged.showStructureTriangleOwnershipSort,
     projectileFaces: !!merged.projectileFaces,
     triggers: !!merged.triggers,
     debugRoadSemantic: !!merged.debugRoadSemantic,
@@ -230,6 +233,7 @@ export type ResolvedDebugFlags = {
   showStructureSlices: boolean;
   showStructureTriangleFootprint: boolean;
   showStructureAnchors: boolean;
+  showStructureTriangleOwnershipSort: boolean;
   showMapOverlays: boolean;
   showEnemyAimOverlay: boolean;
   showLootGoblinOverlay: boolean;
@@ -256,6 +260,7 @@ export function resolveDebugFlags(args: {
     showStructureSlices: args.debug.showStructureSlices,
     showStructureTriangleFootprint: args.debug.structureTriangleFootprint,
     showStructureAnchors: args.debug.showStructureAnchors,
+    showStructureTriangleOwnershipSort: args.debug.showStructureTriangleOwnershipSort,
     showMapOverlays: !args.mapOverlaysDisabled,
     showEnemyAimOverlay: args.debug.enemyAimOverlay,
     showLootGoblinOverlay: args.debug.lootGoblinOverlay,

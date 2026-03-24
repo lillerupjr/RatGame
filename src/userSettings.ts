@@ -120,6 +120,7 @@ export type DebugSettings = {
   showStructureSlices: boolean;
   structureTriangleFootprint: boolean;
   showStructureAnchors: boolean;
+  showStructureTriangleOwnershipSort: boolean;
   projectileFaces: boolean;
   triggers: boolean;
   debugRoadSemantic: boolean;
@@ -212,6 +213,7 @@ function toLegacySettings(): UserSettings {
       showStructureSlices: settings.debug.showStructureSlices,
       structureTriangleFootprint: settings.debug.structureTriangleFootprint,
       showStructureAnchors: settings.debug.showStructureAnchors,
+      showStructureTriangleOwnershipSort: settings.debug.showStructureTriangleOwnershipSort,
       projectileFaces: settings.debug.projectileFaces,
       triggers: settings.debug.triggers,
       debugRoadSemantic: settings.debug.debugRoadSemantic,
@@ -436,6 +438,7 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
       "showStructureSlices",
       "structureTriangleFootprint",
       "showStructureAnchors",
+      "showStructureTriangleOwnershipSort",
       "projectileFaces",
       "triggers",
       "debugRoadSemantic",

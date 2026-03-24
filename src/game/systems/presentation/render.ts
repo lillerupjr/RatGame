@@ -1044,6 +1044,7 @@ export async function renderSystem(
   const SHOW_STRUCTURE_SLICE_DEBUG = debugFlags.showStructureSlices;
   const SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG = debugFlags.showStructureTriangleFootprint;
   const SHOW_STRUCTURE_ANCHORS = debugFlags.showStructureAnchors || ((w as any).showStructureAnchors ?? false);
+  const SHOW_STRUCTURE_TRIANGLE_OWNERSHIP_SORT_DEBUG = debugFlags.showStructureTriangleOwnershipSort;
   const SHADOW_V1_DEBUG_GEOMETRY_MODE = debugFlags.shadowV1DebugGeometryMode;
   const SHADOW_CASTER_MODE = debugFlags.shadowCasterMode;
   const SHADOW_HYBRID_DIAGNOSTIC_MODE = debugFlags.shadowHybridDiagnosticMode;
@@ -1788,6 +1789,7 @@ export async function renderSystem(
     SHOW_STRUCTURE_SLICE_DEBUG,
     SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG,
     SHOW_STRUCTURE_ANCHORS,
+    SHOW_STRUCTURE_TRIANGLE_OWNERSHIP_SORT_DEBUG,
     SHADOW_V1_DEBUG_GEOMETRY_MODE,
     deferredStructureSliceDebugDraws,
     LOG_STRUCTURE_OWNERSHIP_DEBUG,

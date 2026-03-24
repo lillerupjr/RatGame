@@ -69,6 +69,7 @@ export type DebugToolsSettings = {
   showStructureSlices: boolean;
   structureTriangleFootprint: boolean;
   showStructureAnchors: boolean;
+  showStructureTriangleOwnershipSort: boolean;
   projectileFaces: boolean;
   triggers: boolean;
   debugRoadSemantic: boolean;
