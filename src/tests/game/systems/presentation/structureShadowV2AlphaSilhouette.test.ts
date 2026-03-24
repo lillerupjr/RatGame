@@ -7,7 +7,7 @@ import {
 import type {
   RuntimeStructureTriangleCache,
   RuntimeStructureTrianglePiece,
-} from "../../../../game/systems/presentation/runtimeStructureTriangles";
+} from "../../../../game/structures/monolithicStructureGeometry";
 
 function makeTriangle(
   stableId: number,
@@ -21,11 +21,18 @@ function makeTriangle(
   const p0 = { x: a[0], y: a[1] };
   const p1 = { x: b[0], y: b[1] };
   const p2 = { x: c[0], y: c[1] };
+  const basePoint = [p0, p1, p2].sort((lhs, rhs) => rhs.y - lhs.y || rhs.x - lhs.x)[0];
   return {
     structureInstanceId: "building-1",
     stableId,
     points: [p0, p1, p2],
     srcPoints: [p0, p1, p2],
+    basePoint,
+    feetSortY: basePoint.y,
+    ownerTx: 0,
+    ownerTy: 0,
+    admissionTx: 0,
+    admissionTy: 0,
     parentTx: 0,
     parentTy: 0,
     cameraTx: 0,

@@ -3,7 +3,11 @@ import type {
   RuntimeStructureTriangleCache,
   RuntimeStructureTrianglePiece,
   RuntimeStructureTriangleRect,
-} from "./runtimeStructureTriangles";
+} from "../../structures/monolithicStructureGeometry";
+import {
+  resolveMonolithicFootprintDimensionsForOverlay,
+  resolveMonolithicFootprintTileBoundsForOverlay,
+} from "../../structures/monolithicStructureGeometry";
 import {
   STRUCTURE_SHADOW_V1_ROOF_SCAN_STEP_PX,
   type StructureShadowPoint,
@@ -269,10 +273,11 @@ function buildProjectedStructureFootprintQuad(
   toScreenAtZ: (worldX: number, worldY: number, zVisual: number) => StructureShadowPoint,
 ): StructureShadowProjectedQuad {
   const zVisual = overlay.z + (overlay.zVisualOffsetUnits ?? 0);
-  const minWorldX = overlay.tx * tileWorld;
-  const minWorldY = overlay.ty * tileWorld;
-  const maxWorldX = (overlay.tx + overlay.w) * tileWorld;
-  const maxWorldY = (overlay.ty + overlay.h) * tileWorld;
+  const bounds = resolveMonolithicFootprintTileBoundsForOverlay(overlay);
+  const minWorldX = bounds.minTx * tileWorld;
+  const minWorldY = bounds.minTy * tileWorld;
+  const maxWorldX = (bounds.maxTx + 1) * tileWorld;
+  const maxWorldY = (bounds.maxTy + 1) * tileWorld;
   const nw = toScreenAtZ(minWorldX, minWorldY, zVisual);
   const ne = toScreenAtZ(maxWorldX, minWorldY, zVisual);
   const se = toScreenAtZ(maxWorldX, maxWorldY, zVisual);
@@ -720,8 +725,9 @@ function buildConnectorTrianglesForLoops(
 export function buildStructureShadowV2CacheEntry(
   input: BuildStructureShadowV2CacheEntryInput,
 ): StructureShadowV2CacheEntry {
-  const footprintCols = Math.max(1, input.overlay.w | 0);
-  const footprintRows = Math.max(1, input.overlay.h | 0);
+  const footprint = resolveMonolithicFootprintDimensionsForOverlay(input.overlay);
+  const footprintCols = footprint.w;
+  const footprintRows = footprint.h;
   const roofScanStepPx = clampToPositiveInt(
     input.roofScanStepPx ?? ROOF_SCAN_STEP_DEFAULT,
     ROOF_SCAN_STEP_DEFAULT,

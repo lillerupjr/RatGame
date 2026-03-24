@@ -3,8 +3,11 @@ import type {
   RuntimeStructureTriangleCache,
   RuntimeStructureTrianglePiece,
   RuntimeStructureTriangleRect,
-} from "./runtimeStructureTriangles";
-import { resolveRuntimeStructureBandProgressionIndex } from "./runtimeStructureTriangles";
+} from "../../structures/monolithicStructureGeometry";
+import {
+  resolveMonolithicFootprintDimensionsForOverlay,
+  resolveRuntimeStructureBandProgressionIndex,
+} from "../../structures/monolithicStructureGeometry";
 import {
   buildStructureShadowCacheEntry,
   STRUCTURE_SHADOW_V1_ROOF_SCAN_STEP_PX,
@@ -284,14 +287,15 @@ function buildHybridSemanticContext(
   triangleCache: RuntimeStructureTriangleCache,
   activeRoofQuad: StructureShadowProjectedQuad | null,
 ): HybridSemanticContext {
-  const footprintW = Math.max(1, overlay.w | 0);
-  const footprintH = Math.max(1, overlay.h | 0);
+  const footprint = resolveMonolithicFootprintDimensionsForOverlay(overlay);
+  const footprintW = footprint.w;
+  const footprintH = footprint.h;
   const leftSouthMaxProgression = footprintW - 1;
   const rightEastMinProgression = footprintW;
   const progressionByOwnerTile = new Map<string, { min: number; max: number }>();
   for (let i = 0; i < triangleCache.triangles.length; i++) {
     const tri = triangleCache.triangles[i];
-    const ownerKey = `${tri.parentTx},${tri.parentTy}`;
+    const ownerKey = `${tri.ownerTx},${tri.ownerTy}`;
     const progression = resolveRuntimeStructureBandProgressionIndex(tri.bandIndex, footprintW, footprintH);
     const existing = progressionByOwnerTile.get(ownerKey);
     if (!existing) {
@@ -321,7 +325,7 @@ function classifyHybridTriangleSemantic(
   const isTop = !!context.activeRoofQuad
     && isPointInsideQuad(context.activeRoofQuad, centroid.x, centroid.y);
   if (isTop) return "TOP";
-  const ownerKey = `${tri.parentTx},${tri.parentTy}`;
+  const ownerKey = `${tri.ownerTx},${tri.ownerTy}`;
   const ownerRange = context.progressionByOwnerTile.get(ownerKey);
   const leftCandidate = !!ownerRange && ownerRange.min <= context.leftSouthMaxProgression;
   const rightCandidate = !!ownerRange && ownerRange.max >= context.rightEastMinProgression;
@@ -436,8 +440,9 @@ export function buildStructureShadowHybridCacheEntry(
     baseShadow.roofScan,
     input.sunProjectionDirection,
   );
-  const footprintW = Math.max(1, input.overlay.w | 0);
-  const footprintH = Math.max(1, input.overlay.h | 0);
+  const footprint = resolveMonolithicFootprintDimensionsForOverlay(input.overlay);
+  const footprintW = footprint.w;
+  const footprintH = footprint.h;
   const baseFootprintQuad = baseShadow.roofScan.levels[0]?.quad ?? null;
   const topFaceQuad = baseShadow.roofScan.activeLevel?.quad ?? baseFootprintQuad;
   const slicePerimeterSegments = baseFootprintQuad && topFaceQuad

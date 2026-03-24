@@ -55,7 +55,6 @@ export type RenderSettings = {
   renderPerfCountersEnabled: boolean;
   performanceMode: boolean;
   staticRelightEnabled: boolean;
-  structureTriangleGeometryEnabled: boolean;
   structureTriangleAdmissionMode: StructureTriangleAdmissionMode;
   structureTriangleCutoutEnabled: boolean;
   structureTriangleCutoutWidth: number;
@@ -83,7 +82,6 @@ export type RenderSettings = {
   pressureAt0Sec: number;
   pressureAt120Sec: number;
   staticRelightPocEnabled?: boolean;
-  structureTriangleGeometryPocEnabled?: boolean;
 };
 
 export type GameSettings = {
@@ -275,7 +273,6 @@ function toLegacySettings(): UserSettings {
       renderPerfCountersEnabled: settings.debug.renderPerfCountersEnabled,
       performanceMode: settings.user.graphics.performanceMode,
       staticRelightEnabled: settings.system.staticRelightEnabled,
-      structureTriangleGeometryEnabled: settings.system.structureTriangleGeometryEnabled,
       structureTriangleAdmissionMode: settings.system.structureTriangleAdmissionMode,
       structureTriangleCutoutEnabled: settings.system.structureTriangleCutoutEnabled,
       structureTriangleCutoutWidth: settings.system.structureTriangleCutoutWidth,
@@ -303,7 +300,6 @@ function toLegacySettings(): UserSettings {
       pressureAt0Sec: settings.system.pressureAt0Sec,
       pressureAt120Sec: settings.system.pressureAt120Sec,
       staticRelightPocEnabled: undefined,
-      structureTriangleGeometryPocEnabled: undefined,
     },
     audio: {
       ...settings.user.audio,
@@ -387,15 +383,6 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     if (renderPatch.staticRelightEnabled !== undefined) systemPatch.staticRelightEnabled = renderPatch.staticRelightEnabled;
     if (renderPatch.staticRelightPocEnabled !== undefined && renderPatch.staticRelightEnabled === undefined) {
       systemPatch.staticRelightEnabled = renderPatch.staticRelightPocEnabled;
-    }
-    if (renderPatch.structureTriangleGeometryEnabled !== undefined) {
-      systemPatch.structureTriangleGeometryEnabled = renderPatch.structureTriangleGeometryEnabled;
-    }
-    if (
-      renderPatch.structureTriangleGeometryPocEnabled !== undefined
-      && renderPatch.structureTriangleGeometryEnabled === undefined
-    ) {
-      systemPatch.structureTriangleGeometryEnabled = renderPatch.structureTriangleGeometryPocEnabled;
     }
     if (renderPatch.structureTriangleAdmissionMode !== undefined) {
       systemPatch.structureTriangleAdmissionMode = renderPatch.structureTriangleAdmissionMode;

@@ -47,9 +47,6 @@ export function mountSystemOverridesSection(
   const staticRelightEnabled = createToggleRow(renderingGrid, "Static Relight Enabled", (checked) => {
     applySystemPatch({ staticRelightEnabled: checked });
   });
-  const structureTriangleGeometryEnabled = createToggleRow(renderingGrid, "Structure Triangle Geometry", (checked) => {
-    applySystemPatch({ structureTriangleGeometryEnabled: checked });
-  });
   const structureTriangleAdmissionMode = createSelectRow<SystemOverrides["structureTriangleAdmissionMode"]>(
     renderingGrid,
     "Structure Triangle Admission",
@@ -272,7 +269,6 @@ export function mountSystemOverridesSection(
     sync(system) {
       entityShadowsDisable.checked = system.entityShadowsDisable;
       staticRelightEnabled.checked = system.staticRelightEnabled;
-      structureTriangleGeometryEnabled.checked = system.structureTriangleGeometryEnabled;
       structureTriangleAdmissionMode.value = system.structureTriangleAdmissionMode;
       structureTriangleCutoutEnabled.checked = system.structureTriangleCutoutEnabled;
       structureTriangleCutoutWidth.value = `${system.structureTriangleCutoutWidth}`;

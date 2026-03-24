@@ -5,13 +5,13 @@ export type BuildingPackId = string;
 
 export type BuildingSkin = {
     id: BuildingSkinId;
-    w: number;
-    h: number;
-    heightUnits: number;
+    w?: number;
+    h?: number;
+    heightUnits?: number;
     isFlippable: boolean;
     defaultFacing?: "E" | "S";
     flipMode?: "H";
-    anchorLiftUnits: number;
+    anchorLiftUnits?: number;
     wallLiftUnits?: number;
     roofLiftUnits?: number;
     roofLiftPx?: number;

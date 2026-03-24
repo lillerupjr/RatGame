@@ -1,15 +1,14 @@
-import type { RuntimeStructureBandRenderPiece } from "../../../../engine/render/sprites/runtimeStructureSlicing";
 import type { StampOverlay, ViewRect } from "../../../map/compile/kenneyMap";
 import type {
+  RuntimeStructureAnchorPlacementDebug,
   RuntimeStructureTriangleCache,
   RuntimeStructureTrianglePiece,
   RuntimeStructureTriangleRect,
-} from "../runtimeStructureTriangles";
+} from "../../../structures/monolithicStructureGeometry";
 import type {
   KindOrder,
   RenderKey,
 } from "../worldRenderOrdering";
-import type { StaticRelightFrameContext } from "../staticRelight/staticRelightTypes";
 import type { StructureShadowProjectedTriangle } from "../structureShadowV1";
 import type {
   StructureHybridShadowRenderPiece,
@@ -26,6 +25,7 @@ export type StructureOverlayDraw = {
   dh: number;
   flipX?: boolean;
   scale?: number;
+  anchorPlacementDebugNoCamera?: RuntimeStructureAnchorPlacementDebug;
 };
 
 export type StructureTileBounds = {
@@ -61,6 +61,7 @@ export type StructureTriangleSlicePiece = {
   triangleCache: RuntimeStructureTriangleCache;
   parentTx: number;
   parentTy: number;
+  feetSortY: number;
   stableId: number;
   finalVisibleTriangles: RuntimeStructureTrianglePiece[];
   compareDistanceOnlyTriangles: RuntimeStructureTrianglePiece[];
@@ -72,17 +73,6 @@ export type StructureTriangleSlicePiece = {
   isPointInsideStructureCutoutScreenRect: (x: number, y: number) => boolean;
 };
 
-export type StructureBandSlicePiece = {
-  kind: "band";
-  overlay: StampOverlay;
-  draw: StructureOverlayDraw;
-  sourceImage: CanvasImageSource;
-  band: RuntimeStructureBandRenderPiece;
-  structureSouthTieBreak: StructureSouthTieBreak | null;
-  staticRelightFrame: StaticRelightFrameContext | null;
-  staticRelightEnabledForStructures: boolean;
-};
-
 export type StructureDirectOverlaySlicePiece = {
   kind: "overlay";
   overlayIndex: number;
@@ -92,7 +82,6 @@ export type StructureDirectOverlaySlicePiece = {
 
 export type StructureSlicePiece =
   | StructureTriangleSlicePiece
-  | StructureBandSlicePiece
   | StructureDirectOverlaySlicePiece;
 
 export type StructureSliceBuildResult = {
@@ -104,11 +93,6 @@ export type StructureDrawablePayload =
   | {
       kind: "triangleGroup";
       piece: StructureTriangleSlicePiece;
-    }
-  | {
-      kind: "band";
-      piece: StructureBandSlicePiece;
-      staticRelightPieceKey: string | null;
     }
   | {
       kind: "overlay";

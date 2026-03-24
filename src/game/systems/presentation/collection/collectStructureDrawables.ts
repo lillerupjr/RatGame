@@ -1,10 +1,10 @@
 import type { CollectionContext } from "../contracts/collectionContext";
 import type { StructureV6ShadowCacheFrameStats } from "../structureShadows/structureShadowV6Cache";
-import { rectIntersects as runtimeStructureRectIntersects } from "../runtimeStructureTriangles";
 import {
   buildRuntimeStructureProjectedDraw,
+  rectIntersects as runtimeStructureRectIntersects,
   runtimeStructureTriangleGeometrySignatureForOverlay,
-} from "../structureTriangles/structureTriangleCacheRebuild";
+} from "../../../structures/monolithicStructureGeometry";
 import { buildStructureShadowFrameResult as buildOrchestratedStructureShadowFrameResult } from "../structureShadows/structureShadowOrchestrator";
 
 type RenderKey = any;
@@ -33,7 +33,6 @@ export function collectStructureDrawables(input: CollectionContext): {
     resolveStructureOverlayAdmissionContext,
     compiledMap,
     strictViewportTileBounds,
-    structureTriangleGeometryEnabled,
     structureTriangleAdmissionMode,
     collectStructureOverlays,
     debugFlags,
@@ -60,7 +59,7 @@ export function collectStructureDrawables(input: CollectionContext): {
     SHADOW_V6_PRIMARY_SEMANTIC_BUCKET,
     SHADOW_V6_SECONDARY_SEMANTIC_BUCKET,
     SHADOW_V6_TOP_SEMANTIC_BUCKET,
-    runtimeStructureTriangleCacheStore,
+    monolithicStructureGeometryCacheStore,
     getTileSpriteById,
     getFlippedOverlayImage,
     SHOW_STRUCTURE_SLICE_DEBUG,
@@ -199,14 +198,12 @@ export function collectStructureDrawables(input: CollectionContext): {
       compiledMap,
       strictViewportTileBounds,
       viewRect,
-      structureTriangleGeometryEnabled,
       structureTriangleAdmissionMode,
     });
 
     const structureOverlayCandidates = collectStructureOverlays({
       showMapOverlays: debugFlags.showMapOverlays,
       admission: structureAdmission,
-      structureTriangleGeometryEnabled,
       tileRectIntersectsRenderRadius,
       shouldCullBuildingAt,
       buildOverlayDraw,
@@ -219,7 +216,6 @@ export function collectStructureDrawables(input: CollectionContext): {
       tileWorld: T,
       projectedViewportRect,
       strictViewportTileBounds,
-      structureTriangleGeometryEnabled,
       structureTriangleAdmissionMode,
       structureTriangleCutoutEnabled,
       structureTriangleCutoutHalfWidth,
@@ -238,7 +234,7 @@ export function collectStructureDrawables(input: CollectionContext): {
       v6PrimarySemanticBucket: SHADOW_V6_PRIMARY_SEMANTIC_BUCKET,
       v6SecondarySemanticBucket: SHADOW_V6_SECONDARY_SEMANTIC_BUCKET,
       v6TopSemanticBucket: SHADOW_V6_TOP_SEMANTIC_BUCKET,
-      runtimeStructureTriangleCacheStore,
+      monolithicStructureGeometryCacheStore,
       getFlippedOverlayImage,
       showStructureSliceDebug: SHOW_STRUCTURE_SLICE_DEBUG,
       showStructureTriangleFootprintDebug: SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG,
@@ -350,7 +346,7 @@ export function collectStructureDrawables(input: CollectionContext): {
         if (!spriteRec?.ready || !spriteRec.img || spriteRec.img.width <= 0 || spriteRec.img.height <= 0) continue;
         const projectedDraw = buildRuntimeStructureProjectedDraw(overlay, spriteRec.img);
         const geometrySignature = runtimeStructureTriangleGeometrySignatureForOverlay(overlay, projectedDraw);
-        const triangleCache = runtimeStructureTriangleCacheStore.get(overlay.id, geometrySignature);
+        const triangleCache = monolithicStructureGeometryCacheStore.get(overlay.id, geometrySignature);
         if (!triangleCache || triangleCache.triangles.length <= 0) continue;
         const cached = !forceRefresh
           ? structureShadowV6CacheStore.get({

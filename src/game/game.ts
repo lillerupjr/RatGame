@@ -21,8 +21,8 @@ import {
   renderSystem,
 } from "./systems/presentation/render";
 import {
-  prepareRuntimeStructureTrianglesForLoading as prepareRuntimeStructureTrianglesForLoadingInternal,
-} from "./systems/presentation/structureTriangles/structureTriangleCacheRebuild";
+  prepareMonolithicStructureTrianglesForLoading as prepareRuntimeStructureTrianglesForLoadingInternal,
+} from "./structures/monolithicStructureGeometry";
 import {
   prepareStaticGroundRelightForLoading as prepareStaticGroundRelightForLoadingInternal,
 } from "./systems/presentation/staticRelight/staticRelightBakeRebuild";
@@ -32,7 +32,7 @@ import {
   getRuntimeIsoTopCanvas,
 } from "./systems/presentation/presentationImageTransforms";
 import {
-  runtimeStructureTriangleCacheStore,
+  monolithicStructureGeometryCacheStore,
   staticRelightBakeStore,
 } from "./systems/presentation/presentationSubsystemStores";
 import { zonesSystem } from "./systems/sim/zones";
@@ -112,12 +112,12 @@ import { setMusicStage, stopMusic } from "../engine/audio/music";
 import type { TableMapCell, TableMapDef } from "./map/formats/table/tableMapTypes";
 import { AUTHORED_MAP_DEFS, getAuthoredMapDefByMapId } from "./map/authored/authoredMapRegistry";
 import {
-  activateMapDef,
+  activateMapDefAsync,
   getActiveMap,
   getActiveMapDef,
   applyObjectivesFromActiveMap,
   getSpawnWorldFromActive,
-  reloadActiveMap,
+  reloadActiveMapAsync,
 } from "./map/authoredMapActivation";
 import { objectiveSpecFromFloorIntent } from "./map/floorObjectiveBinding";
 import { applyFloorOverlays } from "./map/floorOverlays";
@@ -1914,7 +1914,7 @@ export function createGame(args: CreateGameArgs) {
     };
   }
 
-  function beginFloorLoad(floorIntent: FloorIntent): boolean {
+  async function beginFloorLoad(floorIntent: FloorIntent): Promise<boolean> {
     const w = world;
     setDialog(null);
     closeVendorShop(false);
@@ -1953,7 +1953,7 @@ export function createGame(args: CreateGameArgs) {
     const variantSeed = floorIntent.variantSeed ?? w.rng.int(0, 0x7fffffff);
     const rng = new RNG(variantSeed);
     const finalMap = applyObjective(baseMap, objectiveId, rng);
-    activateMapDef(finalMap, variantSeed);
+    await activateMapDefAsync(finalMap, variantSeed);
 
     floorLoadContext = { floorIntent };
     return true;
@@ -2168,7 +2168,7 @@ export function createGame(args: CreateGameArgs) {
 
   async function enterFloor(w: World, floorIntent: FloorIntent): Promise<void> {
     void w;
-    if (!beginFloorLoad(floorIntent)) return;
+    if (!(await beginFloorLoad(floorIntent))) return;
     const ready = await prewarmFloorLoadSprites();
     if (!ready) return;
     finalizeFloorLoad();
@@ -2292,10 +2292,10 @@ export function createGame(args: CreateGameArgs) {
   }
 
 
-  function applyMapSelection(mapId: string | undefined, seed: number) {
+  async function applyMapSelection(mapId: string | undefined, seed: number): Promise<void> {
     const staticDef = getStaticMapById(mapId) ?? getDefaultStaticMap();
     if (staticDef) {
-      activateMapDef(staticDef, seed);
+      await activateMapDefAsync(staticDef, seed);
     }
   }
 
@@ -2303,25 +2303,25 @@ export function createGame(args: CreateGameArgs) {
     return !!mapId;
   }
 
-  function previewMap(mapId?: string) {
+  async function previewMap(mapId?: string): Promise<void> {
     const seed = preparedStart?.seed ?? ((Date.now() ^ (Math.random() * 1e9)) >>> 0);
-    applyMapSelection(mapId, seed);
+    await applyMapSelection(mapId, seed);
   }
 
-  function reloadCurrentMapForDebug() {
+  async function reloadCurrentMapForDebug(): Promise<void> {
     const seed = preparedStart?.seed ?? ((Date.now() ^ (Math.random() * 1e9)) >>> 0);
-    const reloaded = reloadActiveMap(seed);
+    const reloaded = await reloadActiveMapAsync(seed);
     if (!reloaded && import.meta.env.DEV) {
       console.warn("[map-selector] reload requested without an active authored map");
     }
   }
 
-  function resetRun(mapId?: string, options?: { skipMapSelection?: boolean; seedOverride?: number }) {
+  async function resetRun(mapId?: string, options?: { skipMapSelection?: boolean; seedOverride?: number }) {
     setDialog(null);
     closeVendorShop(false);
     const seed = options?.seedOverride ?? ((Date.now() ^ (Math.random() * 1e9)) >>> 0);
     if (!options?.skipMapSelection) {
-      applyMapSelection(mapId, seed);
+      await applyMapSelection(mapId, seed);
     }
     world = createWorld({
       seed,
@@ -2331,8 +2331,6 @@ export function createGame(args: CreateGameArgs) {
     (world as any).deterministicDelveMode = false;
     const mapMode = isMapMode(mapId);
     (world as any).mapMode = mapMode;
-    (world as any).runtimeStructureSlicingEnabled = false;
-    (world as any).runtimeStructureSliceDebug = false;
     world.balance.spawnDirectorEnabled = true;
     if (mapMode) {
       setObjectives(world, []);
@@ -2348,14 +2346,14 @@ export function createGame(args: CreateGameArgs) {
     hideCardRewardMenu();
   }
 
-  function executeStartRun(characterId: PlayableCharacterId) {
+  async function executeStartRun(characterId: PlayableCharacterId): Promise<void> {
     const character = getPlayableCharacter(characterId);
     if (!character) return;
 
     applyPlayerSkinSelection(character.idleSpriteKey);
     preloadPlayerSprites();
 
-    resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
+    await resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
     (world as any).currentCharacterId = character.id;
     ensureStarterRelicForCharacter(world, character.id);
 
@@ -2374,14 +2372,14 @@ export function createGame(args: CreateGameArgs) {
     showDelveMap("Choose your starting location.\nGo deeper for greater challenge and rewards.");
   }
 
-  function executeStartDeterministicRun(characterId: PlayableCharacterId) {
+  async function executeStartDeterministicRun(characterId: PlayableCharacterId): Promise<void> {
     const character = getPlayableCharacter(characterId);
     if (!character) return;
 
     applyPlayerSkinSelection(character.idleSpriteKey);
     preloadPlayerSprites();
 
-    resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
+    await resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
     (world as any).currentCharacterId = character.id;
     ensureStarterRelicForCharacter(world, character.id);
     world.delveMap = null;
@@ -2409,14 +2407,14 @@ export function createGame(args: CreateGameArgs) {
     );
   }
 
-  function executeStartSandboxRun(characterId: PlayableCharacterId, mapId?: string) {
+  async function executeStartSandboxRun(characterId: PlayableCharacterId, mapId?: string): Promise<void> {
     const character = getPlayableCharacter(characterId);
     if (!character) return;
 
     applyPlayerSkinSelection(character.idleSpriteKey);
     preloadPlayerSprites();
 
-    resetRun(mapId, { skipMapSelection: true, seedOverride: preparedStart?.seed });
+    await resetRun(mapId, { skipMapSelection: true, seedOverride: preparedStart?.seed });
     (world as any).currentCharacterId = character.id;
     ensureStarterRelicForCharacter(world, character.id);
     world.delveMap = null;
@@ -2439,7 +2437,7 @@ export function createGame(args: CreateGameArgs) {
     }
   }
 
-  function prepareStartMap(intent: StartIntent): void {
+  async function prepareStartMap(intent: StartIntent): Promise<void> {
     const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
  
     // Only sandbox preloads/activates a map at start.
@@ -2447,7 +2445,7 @@ export function createGame(args: CreateGameArgs) {
     const mapId = intent.mode === "SANDBOX" ? intent.mapId : undefined;
 
     if (intent.mode === "SANDBOX") {
-      applyMapSelection(mapId, seed);
+      await applyMapSelection(mapId, seed);
     }
 
     preparedStart = { seed, mapId };
@@ -2667,21 +2665,21 @@ export function createGame(args: CreateGameArgs) {
 
   async function prepareRuntimeStructureTrianglesForLoadingStage(): Promise<boolean> {
     return prepareRuntimeStructureTrianglesForLoadingInternal({
-      cacheStore: runtimeStructureTriangleCacheStore,
+      cacheStore: monolithicStructureGeometryCacheStore,
       getFlippedOverlayImage,
     });
   }
 
-  function performPreparedStartIntent(intent: StartIntent): void {
+  async function performPreparedStartIntent(intent: StartIntent): Promise<void> {
     if (!preparedStart) {
-      prepareStartMap(intent);
+      await prepareStartMap(intent);
     }
     if (intent.mode === "SANDBOX") {
-      executeStartSandboxRun(intent.characterId, intent.mapId);
+      await executeStartSandboxRun(intent.characterId, intent.mapId);
     } else if (intent.mode === "DETERMINISTIC") {
-      executeStartDeterministicRun(intent.characterId);
+      await executeStartDeterministicRun(intent.characterId);
     } else {
-      executeStartRun(intent.characterId);
+      await executeStartRun(intent.characterId);
     }
     preparedStart = null;
   }

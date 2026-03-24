@@ -1,5 +1,3 @@
-import { resolveRuntimeStructureBandProgressionIndex } from "../runtimeStructureTriangles";
-import { drawStructureSliceTriangleDebugOverlay } from "../structureTriangles/structureTriangleDebug";
 import { drawTexturedTriangle } from "../renderPrimitives/drawTexturedTriangle";
 import type { StructureDrawablePayload } from "./structurePresentationTypes";
 
@@ -97,78 +95,7 @@ export function renderStructurePass(input: RenderStructurePassInput): void {
         ctx.stroke();
         ctx.restore();
       }
-      if (showStructureTriangleFootprintDebug && cutoutEligible) {
-        const [a, b, c] = tri.points;
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.lineTo(c.x, c.y);
-        ctx.closePath();
-        ctx.fillStyle = "rgba(160,90,255,0.18)";
-        ctx.fill();
-        ctx.strokeStyle = "rgba(190,130,255,0.95)";
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        ctx.restore();
-      }
     }
     return;
   }
-
-  const piece = payload.piece;
-  const x0 = Math.round(piece.band.dstRect.x);
-  const y0 = Math.round(piece.band.dstRect.y);
-  const x1 = Math.round(piece.band.dstRect.x + piece.band.dstRect.w);
-  const y1 = Math.round(piece.band.dstRect.y + piece.band.dstRect.h);
-  const snappedW = Math.max(0, x1 - x0);
-  const snappedH = Math.max(0, y1 - y0);
-  if (snappedW <= 0 || snappedH <= 0) return;
-  ctx.imageSmoothingEnabled = false;
-
-  const relitCanvas = resolveRelitCanvas(payload.staticRelightPieceKey);
-  if (relitCanvas) {
-    ctx.drawImage(relitCanvas, x0, y0, snappedW, snappedH);
-  } else {
-    ctx.drawImage(
-      piece.sourceImage,
-      piece.band.srcRect.x,
-      piece.band.srcRect.y,
-      piece.band.srcRect.w,
-      piece.band.srcRect.h,
-      x0,
-      y0,
-      snappedW,
-      snappedH,
-    );
-  }
-
-  if (!showStructureTriangleFootprintDebug) return;
-
-  deferredStructureSliceDebugDraws.push(() => {
-    ctx.save();
-    ctx.strokeStyle = "#00ffd5";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(piece.band.dstRect.x, piece.band.dstRect.y, piece.band.dstRect.w, piece.band.dstRect.h);
-    const progressionIndex = resolveRuntimeStructureBandProgressionIndex(
-      piece.band.index,
-      piece.overlay.w,
-      piece.overlay.h,
-    );
-    drawStructureSliceTriangleDebugOverlay(
-      ctx,
-      piece.band.dstRect,
-      progressionIndex,
-      tileWorld,
-      piece.overlay.id,
-      piece.band.index,
-      piece.sourceImage,
-      piece.band.srcRect,
-    );
-    ctx.fillStyle = "#00ffd5";
-    ctx.font = "10px monospace";
-    const topY = piece.band.dstRect.y + 12;
-    ctx.fillText(`#${piece.band.index}`, piece.band.dstRect.x + 2, topY);
-    ctx.restore();
-  });
 }

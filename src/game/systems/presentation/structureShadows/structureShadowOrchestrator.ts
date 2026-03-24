@@ -4,7 +4,7 @@ import type {
   RuntimeStructureTriangleCache,
   RuntimeStructureTrianglePiece,
   RuntimeStructureTriangleRect,
-} from "../runtimeStructureTriangles";
+} from "../../../structures/monolithicStructureGeometry";
 import {
   STRUCTURE_SHADOW_V1_ROOF_SCAN_STEP_PX,
   buildStructureShadowCacheEntry,
@@ -186,7 +186,7 @@ export function buildStructureShadowFrameResult(
         for (let ti = 0; ti < triangleCache.triangles.length; ti++) {
           const tri = triangleCache.triangles[ti];
           if (bandOwnerParity.has(tri.bandIndex)) continue;
-          bandOwnerParity.set(tri.bandIndex, ((tri.parentTx + tri.parentTy) & 1) as 0 | 1);
+          bandOwnerParity.set(tri.bandIndex, ((tri.ownerTx + tri.ownerTy) & 1) as 0 | 1);
         }
         let parityAnchorBandIndex: number | null = null;
         let parityAnchorValue: 0 | 1 = 0;

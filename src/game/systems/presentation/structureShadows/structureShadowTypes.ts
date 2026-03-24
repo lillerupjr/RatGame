@@ -26,7 +26,6 @@ export type StructureShadowRenderMode = {
 
 export type StructureShadowFrameInputs = {
   mapId: string;
-  structureTriangleGeometryEnabled: boolean;
   shadowCasterMode: ShadowCasterMode;
   shadowSunTimeHour: number;
   sunElevationOverrideEnabled: boolean;

@@ -379,11 +379,11 @@ async function bootstrap() {
     compileMap: async () => {
       cachedDeps = null;
       if (activeStartIntent) {
-        game.prepareStartMap(activeStartIntent);
+        await game.prepareStartMap(activeStartIntent);
         return;
       }
       if (activeFloorIntent) {
-        game.beginFloorLoad(activeFloorIntent);
+        await game.beginFloorLoad(activeFloorIntent);
       }
     },
     precomputeStaticMap: async () => {
@@ -410,7 +410,7 @@ async function bootstrap() {
     },
     spawnEntities: async () => {
       if (activeStartIntent) {
-        game.performPreparedStartIntent(activeStartIntent);
+        await game.performPreparedStartIntent(activeStartIntent);
         return;
       }
       if (activeFloorIntent) {
@@ -548,8 +548,8 @@ async function bootstrap() {
             appStateController.setAppState(AppState.LOADING);
           } else {
             // DELVE / DETERMINISTIC: do not enter LOADING at character pick.
-            game.prepareStartMap(pending);
-            game.performPreparedStartIntent(pending);
+            void game.prepareStartMap(pending);
+            void game.performPreparedStartIntent(pending);
           }
         } else {
           ctx.clearRect(0, 0, canvas.width, canvas.height);

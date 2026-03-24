@@ -1,5 +1,5 @@
 import { type ViewRect, getActiveMap as getActiveCompiledMap } from "../../../map/compile/kenneyMap";
-import { mapWideOverlayViewRect } from "../structureTriangles/structureTriangleCacheRebuild";
+import { mapWideOverlayViewRect } from "../../../structures/monolithicStructureGeometry";
 import type {
   StructureAdmissionMode,
   StructureOverlayAdmissionContext,
@@ -10,7 +10,6 @@ export type ResolveStructureOverlayAdmissionContextInput = {
   compiledMap: ReturnType<typeof getActiveCompiledMap>;
   strictViewportTileBounds: StructureTileBounds;
   viewRect: ViewRect;
-  structureTriangleGeometryEnabled: boolean;
   structureTriangleAdmissionMode: StructureAdmissionMode;
 };
 
@@ -21,11 +20,9 @@ export function resolveStructureOverlayAdmissionContext(
     ? input.strictViewportTileBounds
     : input.viewRect;
 
-  // In triangle-geometry mode, STRUCTURE visibility authority is triangle camera-tiles.
-  // So we must not cull structures by overlay footprint before triangle admission runs.
-  const overlayPrefilterViewRect = input.structureTriangleGeometryEnabled
-    ? mapWideOverlayViewRect(input.compiledMap)
-    : input.viewRect;
+  // Monolithic triangle geometry is always the visibility authority for STRUCTURE overlays.
+  // Keep a map-wide prefilter so footprint culling does not run before triangle admission.
+  const overlayPrefilterViewRect = mapWideOverlayViewRect(input.compiledMap);
 
   return {
     triangleOverlayPrefilterBounds,

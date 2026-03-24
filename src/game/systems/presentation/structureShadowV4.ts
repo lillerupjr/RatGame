@@ -3,7 +3,7 @@ import {
   type RuntimeStructureTrianglePiece,
   type RuntimeSliceBandDiagonal,
   type RuntimeStructureTriangleRect,
-} from "./runtimeStructureTriangles";
+} from "../../structures/monolithicStructureGeometry";
 import type {
   StructureShadowPoint,
   StructureShadowProjectedTriangle,

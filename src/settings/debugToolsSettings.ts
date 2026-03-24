@@ -39,7 +39,7 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "structureHeights", label: "structureHeights" },
   { key: "spriteBounds", label: "spriteBounds" },
   { key: "showStructureSlices", label: "showStructureSlices" },
-  { key: "structureTriangleFootprint", label: "structureTriangleFootprint" },
+  { key: "structureTriangleFootprint", label: "structureSemanticFaces" },
   { key: "showStructureAnchors", label: "showStructureAnchors" },
   { key: "projectileFaces", label: "projectileFaces" },
   { key: "triggers", label: "triggers" },

@@ -114,7 +114,6 @@ export const DEFAULT_SYSTEM_OVERRIDES: SystemOverrides = {
 
   entityShadowsDisable: false,
   staticRelightEnabled: true,
-  structureTriangleGeometryEnabled: true,
   structureTriangleAdmissionMode: "hybrid",
   structureTriangleCutoutEnabled: true,
   structureTriangleCutoutWidth: 4,
@@ -166,7 +165,6 @@ export function sanitizeSystemOverrides(input: Partial<SystemOverrides> | undefi
 
     entityShadowsDisable: !!merged.entityShadowsDisable,
     staticRelightEnabled: merged.staticRelightEnabled !== false,
-    structureTriangleGeometryEnabled: merged.structureTriangleGeometryEnabled !== false,
     structureTriangleAdmissionMode: normalizeStructureTriangleAdmissionMode(merged.structureTriangleAdmissionMode),
     structureTriangleCutoutEnabled: !!merged.structureTriangleCutoutEnabled,
     structureTriangleCutoutWidth: normalizeStructureTriangleCutoutSpan(merged.structureTriangleCutoutWidth),

@@ -9,7 +9,6 @@ import type {
 export type CollectStructureOverlaysInput = {
   showMapOverlays: boolean;
   admission: StructureOverlayAdmissionContext;
-  structureTriangleGeometryEnabled: boolean;
   tileRectIntersectsRenderRadius: (
     minRectTx: number,
     maxRectTx: number,
@@ -32,7 +31,7 @@ export function collectStructureOverlays(input: CollectStructureOverlaysInput): 
 
   for (let i = 0; i < overlays.length; i++) {
     const overlay = overlays[i];
-    const passesOverlayCoarsePrefilter = input.structureTriangleGeometryEnabled && overlay.layerRole === "STRUCTURE"
+    const passesOverlayCoarsePrefilter = overlay.layerRole === "STRUCTURE"
       ? true
       : input.tileRectIntersectsRenderRadius(
         overlay.tx,

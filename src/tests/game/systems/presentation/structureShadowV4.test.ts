@@ -5,7 +5,7 @@ import {
   projectToGround,
   type SliceCorrespondence,
 } from "../../../../game/systems/presentation/structureShadowV4";
-import type { RuntimeStructureTrianglePiece } from "../../../../game/systems/presentation/runtimeStructureTriangles";
+import type { RuntimeStructureTrianglePiece } from "../../../../game/structures/monolithicStructureGeometry";
 
 function pointEq(a: { x: number; y: number }, b: { x: number; y: number }): boolean {
   return a.x === b.x && a.y === b.y;
@@ -23,11 +23,18 @@ function sourceTriangle(
   bandIndex: number,
   points: [{ x: number; y: number }, { x: number; y: number }, { x: number; y: number }],
 ): RuntimeStructureTrianglePiece {
+  const basePoint = [...points].sort((lhs, rhs) => rhs.y - lhs.y || rhs.x - lhs.x)[0];
   return {
     structureInstanceId: "s4-src",
     stableId,
     points,
     srcPoints: points,
+    basePoint,
+    feetSortY: basePoint.y,
+    ownerTx: 0,
+    ownerTy: 0,
+    admissionTx: 0,
+    admissionTy: 0,
     parentTx: 0,
     parentTy: 0,
     cameraTx: 0,

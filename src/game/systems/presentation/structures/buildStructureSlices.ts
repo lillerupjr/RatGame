@@ -1,24 +1,16 @@
-import { buildRuntimeStructureBandPieces } from "../../../../engine/render/sprites/runtimeStructureSlicing";
-import { seAnchorFromTopLeft } from "../../../../engine/render/sprites/structureFootprintOwnership";
 import type { ShadowV6SemanticBucket } from "../../../../settings/settingsTypes";
 import {
-  getStructureAnchorFromAlphaMap,
-  type StructureAnchorResult,
-  type StructureSliceDebugAlphaMap,
-} from "../../../structures/getStructureAnchor";
-import {
-  buildMonolithicSliceGeometry,
-  cullMonolithicTrianglesByAlphaWithDiagnostics,
-} from "../../../structures/buildMonolithicDebugSliceTriangles";
-import { getStructureSlices } from "../../../structures/getStructureSlices";
-import {
-  resolveRuntimeStructureBandProgressionIndex,
   rectIntersects as runtimeStructureRectIntersects,
+  runtimeStructureTriangleGeometrySignatureForOverlay,
+  buildMonolithicStructureTriangleCacheForOverlay,
+  getMonolithicGeometryFromCache,
+  resolveMonolithicFootprintTileBoundsForOverlay,
+  type RuntimeStructureTrianglePiece,
   type RuntimeStructureTriangleRect,
   type RuntimeStructureTriangleCacheStore,
-} from "../runtimeStructureTriangles";
-import { pointInTriangle } from "../structureTriangles/structureTriangleCulling";
-import { runtimeStructureTriangleGeometrySignatureForOverlay } from "../structureTriangles/structureTriangleCacheRebuild";
+  type MonolithicStructureGeometry,
+  type RuntimeStructureAnchorPlacementDebug,
+} from "../../../structures/monolithicStructureGeometry";
 import {
   buildStructureShadowFrameResult as buildOrchestratedStructureShadowFrameResult,
 } from "../structureShadows/structureShadowOrchestrator";
@@ -33,15 +25,16 @@ import type {
   StructureShadowV2CacheEntry,
   StructureShadowV2CacheStore,
 } from "../structureShadowV2AlphaSilhouette";
-import type {
-  StructureShadowHybridCacheEntry,
-  StructureShadowHybridCacheStore,
+import {
+  buildHybridTriangleSemanticMap,
+  type HybridSemanticClass,
+  type StructureShadowHybridCacheEntry,
+  type StructureShadowHybridCacheStore,
 } from "../structureShadowHybridTriangles";
 import type {
   StructureShadowV4CacheEntry,
   StructureShadowV4CacheStore,
 } from "../structureShadowV4";
-import { STATIC_RELIGHT_INCLUDE_STRUCTURES } from "../staticRelight/staticRelightBakeRebuild";
 import type { StaticRelightFrameContext } from "../staticRelight/staticRelightTypes";
 import {
   isCameraTileInsideBounds,
@@ -79,15 +72,8 @@ type FootprintSupportLevel = {
   anySupport: boolean;
   allSupported: boolean;
 };
-type StructureTriangleSemanticClass =
-  | "TOP"
-  | "LEFT_SOUTH"
-  | "RIGHT_EAST"
-  | "UNCLASSIFIED"
-  | "CONFLICT";
 
 const STRUCTURE_FOOTPRINT_SCAN_STEP_PX = 64;
-const structureAnchorAlphaMapCache = new WeakMap<HTMLImageElement, StructureSliceDebugAlphaMap>();
 
 type BuildStructureSlicesInput = {
   ctx: CanvasRenderingContext2D;
@@ -95,7 +81,6 @@ type BuildStructureSlicesInput = {
   tileWorld: number;
   projectedViewportRect: RuntimeStructureTriangleRect;
   strictViewportTileBounds: StructureTileBounds;
-  structureTriangleGeometryEnabled: boolean;
   structureTriangleAdmissionMode: StructureAdmissionMode;
   structureTriangleCutoutEnabled: boolean;
   structureTriangleCutoutHalfWidth: number;
@@ -121,7 +106,7 @@ type BuildStructureSlicesInput = {
   v6PrimarySemanticBucket: ShadowV6SemanticBucket;
   v6SecondarySemanticBucket: ShadowV6SemanticBucket;
   v6TopSemanticBucket: ShadowV6SemanticBucket;
-  runtimeStructureTriangleCacheStore: RuntimeStructureTriangleCacheStore;
+  monolithicStructureGeometryCacheStore: RuntimeStructureTriangleCacheStore;
   getFlippedOverlayImage: (img: HTMLImageElement) => HTMLCanvasElement;
   showStructureSliceDebug: boolean;
   showStructureTriangleFootprintDebug: boolean;
@@ -154,535 +139,238 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
     const draw = candidate.draw;
     const structureSouthTieBreak = candidate.structureSouthTieBreak;
 
-    if (input.showStructureAnchors) {
-      queueStructureAnchorDebugDraw({
-        ctx: input.ctx,
-        deferredStructureSliceDebugDraws: input.deferredStructureSliceDebugDraws,
-        overlayId: o.id,
-        draw,
-      });
-    }
-    if (input.showStructureSliceDebug) {
-      queueStructureSlicesDebugDraw({
-        ctx: input.ctx,
-        deferredStructureSliceDebugDraws: input.deferredStructureSliceDebugDraws,
-        draw,
-      });
-    }
-
-    if (candidate.useRuntimeStructureSlicing) {
-      const bandPieces = buildRuntimeStructureBandPieces({
-        structureInstanceId: o.id,
-        spriteId: o.spriteId,
-        seTx: o.seTx,
-        seTy: o.seTy,
-        footprintW: o.w,
-        footprintH: o.h,
-        flipped: !!o.flipX,
-        sliceOffsetX: o.sliceOffsetPx?.x ?? 0,
-        sliceOffsetY: o.sliceOffsetPx?.y ?? 0,
-        sliceOriginX: o.sliceOriginPx?.x,
-        baseZ: o.z,
-        baseDx: draw.dx,
-        baseDy: draw.dy,
-        spriteWidth: draw.dw,
-        spriteHeight: draw.dh,
+    if (candidate.useRuntimeStructureSlicing && draw.img) {
+      const projectedDraw = {
+        dx: draw.dx,
+        dy: draw.dy,
+        dw: draw.dw,
+        dh: draw.dh,
+        flipX: !!draw.flipX,
         scale: draw.scale ?? 1,
-      });
+      };
+      const geometrySignature = runtimeStructureTriangleGeometrySignatureForOverlay(o, projectedDraw);
+      let triangleCache = input.monolithicStructureGeometryCacheStore.get(o.id, geometrySignature);
+      if (!triangleCache) {
+        const built = buildMonolithicStructureTriangleCacheForOverlay({
+          overlay: o,
+          image: draw.img,
+          draw: projectedDraw,
+          getFlippedOverlayImage: input.getFlippedOverlayImage,
+        });
+        if (built.cache) {
+          input.monolithicStructureGeometryCacheStore.set(built.cache);
+          triangleCache = built.cache;
+        } else {
+          input.monolithicStructureGeometryCacheStore.markFallback(o.id);
+        }
+      }
+      if (!triangleCache) continue;
+
+      const sourceImg: CanvasImageSource = draw.flipX ? input.getFlippedOverlayImage(draw.img) : draw.img;
+      const monolithic = getMonolithicGeometryFromCache(triangleCache);
 
       if (input.logStructureOwnershipDebug && !input.loggedStructureOwnershipDebugIds.has(o.id)) {
         input.loggedStructureOwnershipDebugIds.add(o.id);
-        const oriented = { w: Math.max(1, o.w | 0), h: Math.max(1, o.h | 0) };
-        const expectedSE = seAnchorFromTopLeft(o.tx, o.ty, oriented.w, oriented.h);
-        const owners = bandPieces.map((piece) => ({
-          tx: piece.renderKey.within,
-          ty: piece.renderKey.slice - piece.renderKey.within,
+        const owners = triangleCache.parentTileGroups.map((group) => ({
+          tx: group.parentTx,
+          ty: group.parentTy,
+          feetSortY: group.feetSortY,
         }));
         console.log("[structure-ownership]", {
           structureId: o.id,
           flipped: !!o.flipX,
-          w: oriented.w,
-          h: oriented.h,
+          w: monolithic?.n ?? Math.max(1, o.w | 0),
+          h: monolithic?.m ?? Math.max(1, o.h | 0),
           anchorTx: o.seTx,
           anchorTy: o.seTy,
-          seMatchesTopLeft: o.seTx === expectedSE.anchorTx && o.seTy === expectedSE.anchorTy,
           first3: owners.slice(0, 3),
           last3: owners.slice(Math.max(0, owners.length - 3)),
         });
       }
 
-      let usedTriangleGeometryPath = false;
-      if (input.structureTriangleGeometryEnabled && o.layerRole === "STRUCTURE") {
-        const geometrySignature = runtimeStructureTriangleGeometrySignatureForOverlay(o, {
+      const usingV5Caster = input.structureShadowFrame.routing.usesV5;
+      const usingV6Caster = input.structureShadowFrame.routing.usesV6;
+      const admittedTrianglesForSemanticMasks: typeof triangleCache.triangles = [];
+      const finalVisibleTrianglesForDebug: RuntimeStructureTrianglePiece[] = [];
+      const buildingDirectionalRejected = o.seTx < input.playerCameraTx || o.seTy < input.playerCameraTy;
+      const buildingDirectionalEligible = !buildingDirectionalRejected;
+      let overlayHasVisibleTriangleGroup = false;
+
+      if (input.showStructureTriangleFootprintDebug && input.structureTriangleCutoutEnabled && !didQueueStructureCutoutDebugRect) {
+        didQueueStructureCutoutDebugRect = true;
+        input.deferredStructureSliceDebugDraws.push(() => {
+          input.ctx.save();
+          const x = input.structureCutoutScreenRect.minX;
+          const y = input.structureCutoutScreenRect.minY;
+          const wRect = input.structureCutoutScreenRect.maxX - input.structureCutoutScreenRect.minX;
+          const hRect = input.structureCutoutScreenRect.maxY - input.structureCutoutScreenRect.minY;
+          input.ctx.fillStyle = "rgba(120,40,255,0.08)";
+          input.ctx.strokeStyle = "rgba(160,90,255,0.8)";
+          input.ctx.lineWidth = 1;
+          input.ctx.fillRect(x, y, wRect, hRect);
+          input.ctx.strokeRect(x, y, wRect, hRect);
+          input.ctx.restore();
+        });
+      }
+
+      for (let gi = 0; gi < triangleCache.parentTileGroups.length; gi++) {
+        const group = triangleCache.parentTileGroups[gi];
+        const groupParentAfterPlayer = input.isParentTileAfterPlayer(group.parentTx, group.parentTy);
+        const finalVisibleTriangles = [] as typeof group.triangles;
+        const compareDistanceOnlyTriangles = [] as typeof group.triangles;
+
+        for (let ti = 0; ti < group.triangles.length; ti++) {
+          const tri = group.triangles[ti];
+          const viewportVisible = isCameraTileInsideBounds(
+            tri.admissionTx,
+            tri.admissionTy,
+            input.strictViewportTileBounds,
+          );
+          const renderDistanceVisible = input.isTileInRenderRadius(tri.admissionTx, tri.admissionTy);
+          const finalVisible = isTriangleVisibleForAdmissionMode(
+            input.structureTriangleAdmissionMode,
+            viewportVisible,
+            renderDistanceVisible,
+          );
+          if (!finalVisible) continue;
+          finalVisibleTriangles.push(tri);
+          if (input.structureTriangleAdmissionMode === "compare" && renderDistanceVisible && !viewportVisible) {
+            compareDistanceOnlyTriangles.push(tri);
+          }
+        }
+
+        if (!finalVisibleTriangles.length) continue;
+        if (usingV5Caster || usingV6Caster) admittedTrianglesForSemanticMasks.push(...finalVisibleTriangles);
+        finalVisibleTrianglesForDebug.push(...finalVisibleTriangles);
+        overlayHasVisibleTriangleGroup = true;
+
+        pieces.push({
+          kind: "triangleGroup",
+          overlay: o,
+          draw,
+          sourceImage: sourceImg,
+          geometrySignature,
+          triangleCache,
+          parentTx: group.parentTx,
+          parentTy: group.parentTy,
+          feetSortY: group.feetSortY,
+          stableId: group.stableId,
+          finalVisibleTriangles,
+          compareDistanceOnlyTriangles,
+          structureSouthTieBreak,
+          cutoutEnabled: input.structureTriangleCutoutEnabled,
+          cutoutAlpha: input.structureTriangleCutoutAlpha,
+          buildingDirectionalEligible,
+          groupParentAfterPlayer,
+          isPointInsideStructureCutoutScreenRect: input.isPointInsideStructureCutoutScreenRect,
+        });
+      }
+
+      if (!overlayHasVisibleTriangleGroup) continue;
+
+      const structureShadowBand = input.resolveRenderZBand(
+        {
+          slice: o.seTx + o.seTy,
+          within: o.seTx,
+          baseZ: o.z,
+        },
+        input.rampRoadTiles,
+      );
+      const structureShadowResult = buildOrchestratedStructureShadowFrameResult({
+        frame: input.structureShadowFrame,
+        overlay: o,
+        triangleCache,
+        geometrySignature,
+        tileWorld: input.tileWorld,
+        toScreenAtZ: input.toScreenAtZ,
+        draw: {
           dx: draw.dx,
           dy: draw.dy,
           dw: draw.dw,
           dh: draw.dh,
-          flipX: !!draw.flipX,
           scale: draw.scale ?? 1,
-        });
-        const triangleCache = input.runtimeStructureTriangleCacheStore.get(o.id, geometrySignature);
+        },
+        sourceImage: sourceImg,
+        admittedTrianglesForSemanticMasks,
+        projectedViewportRect: input.projectedViewportRect,
+        projectedRectIntersects: runtimeStructureRectIntersects,
+        structureShadowBand,
+        v6PrimarySemanticBucket: input.v6PrimarySemanticBucket,
+        v6SecondarySemanticBucket: input.v6SecondarySemanticBucket,
+        v6TopSemanticBucket: input.v6TopSemanticBucket,
+        cacheStores: {
+          v1: input.structureShadowV1CacheStore,
+          v2: input.structureShadowV2CacheStore,
+          hybrid: input.structureShadowHybridCacheStore,
+          v4: input.structureShadowV4CacheStore,
+        },
+        diagnostics: {
+          hybrid: input.shadowDiagnostics.hybrid,
+          v4: input.shadowDiagnostics.v4,
+        },
+      });
 
-        if (triangleCache && draw.img) {
-          usedTriangleGeometryPath = true;
-          const sourceImg: CanvasImageSource = draw.flipX ? input.getFlippedOverlayImage(draw.img) : draw.img;
-          const usingV5Caster = input.structureShadowFrame.routing.usesV5;
-          const usingV6Caster = input.structureShadowFrame.routing.usesV6;
-          const admittedTrianglesForSemanticMasks: typeof triangleCache.triangles = [];
-          const footprintW = Math.max(1, o.w | 0);
-          const footprintH = Math.max(1, o.h | 0);
-          const buildingMinCameraTx = o.tx;
-          const buildingMaxCameraTx = o.tx + footprintW - 1;
-          const buildingMinCameraTy = o.ty;
-          const buildingMaxCameraTy = o.ty + footprintH - 1;
-          const buildingDirectionalRejected = (
-            buildingMaxCameraTx < input.playerCameraTx
-            || buildingMaxCameraTy < input.playerCameraTy
-          );
-          const buildingDirectionalEligible = !buildingDirectionalRejected;
-          const projectedFootprintQuad = input.showStructureTriangleFootprintDebug
-            ? buildProjectedStructureFootprintQuad(o, input.tileWorld, input.toScreenAtZ)
-            : null;
-          let overlayHasVisibleTriangleGroup = false;
-
-          if (input.showStructureTriangleFootprintDebug && input.structureTriangleCutoutEnabled && !didQueueStructureCutoutDebugRect) {
-            didQueueStructureCutoutDebugRect = true;
-            input.deferredStructureSliceDebugDraws.push(() => {
-              input.ctx.save();
-              const x = input.structureCutoutScreenRect.minX;
-              const y = input.structureCutoutScreenRect.minY;
-              const wRect = input.structureCutoutScreenRect.maxX - input.structureCutoutScreenRect.minX;
-              const hRect = input.structureCutoutScreenRect.maxY - input.structureCutoutScreenRect.minY;
-              input.ctx.fillStyle = "rgba(120,40,255,0.08)";
-              input.ctx.strokeStyle = "rgba(160,90,255,0.8)";
-              input.ctx.lineWidth = 1;
-              input.ctx.fillRect(x, y, wRect, hRect);
-              input.ctx.strokeRect(x, y, wRect, hRect);
-              input.ctx.font = "11px monospace";
-              const labelPos = input.toScreenAtZ(input.playerCameraTx * input.tileWorld, input.playerCameraTy * input.tileWorld, 0);
-              const label = `cutout screenRect C:${input.playerCameraTx},${input.playerCameraTy} w:${input.structureTriangleCutoutHalfWidth} h:${input.structureTriangleCutoutHalfHeight} px:${Math.round(wRect)}x${Math.round(hRect)} a:${input.structureTriangleCutoutAlpha.toFixed(2)}`;
-              input.ctx.fillStyle = "rgba(0,0,0,0.8)";
-              input.ctx.fillText(label, labelPos.x + 9, labelPos.y - 7);
-              input.ctx.fillStyle = "rgba(185,145,255,0.95)";
-              input.ctx.fillText(label, labelPos.x + 8, labelPos.y - 8);
-              input.ctx.restore();
-            });
-          }
-
-          for (let gi = 0; gi < triangleCache.parentTileGroups.length; gi++) {
-            const group = triangleCache.parentTileGroups[gi];
-            const groupParentAfterPlayer = input.isParentTileAfterPlayer(group.parentTx, group.parentTy);
-            const groupBoundsInViewport = runtimeStructureRectIntersects(group.localBounds, input.projectedViewportRect);
-            const viewportVisibleTriangles = [] as typeof group.triangles;
-            const renderDistanceVisibleTriangles = [] as typeof group.triangles;
-            const finalVisibleTriangles = [] as typeof group.triangles;
-            const cutoutEligibleTriangles = [] as typeof group.triangles;
-            let cutoutBuildingRejectedCount = 0;
-            const compareDistanceOnlyTriangles = [] as typeof group.triangles;
-
-            for (let ti = 0; ti < group.triangles.length; ti++) {
-              const tri = group.triangles[ti];
-              const viewportVisible = isCameraTileInsideBounds(
-                tri.cameraTx,
-                tri.cameraTy,
-                input.strictViewportTileBounds,
-              );
-              const renderDistanceVisible = input.isTileInRenderRadius(tri.cameraTx, tri.cameraTy);
-              if (viewportVisible) viewportVisibleTriangles.push(tri);
-              if (renderDistanceVisible) renderDistanceVisibleTriangles.push(tri);
-              const finalVisible = isTriangleVisibleForAdmissionMode(
-                input.structureTriangleAdmissionMode,
-                viewportVisible,
-                renderDistanceVisible,
-              );
-              if (finalVisible) {
-                finalVisibleTriangles.push(tri);
-                if (input.structureTriangleAdmissionMode === "compare" && renderDistanceVisible && !viewportVisible) {
-                  compareDistanceOnlyTriangles.push(tri);
-                }
-                if (input.structureTriangleCutoutEnabled && !buildingDirectionalEligible) cutoutBuildingRejectedCount++;
-                const triCenterX = (tri.points[0].x + tri.points[1].x + tri.points[2].x) / 3;
-                const triCenterY = (tri.points[0].y + tri.points[1].y + tri.points[2].y) / 3;
-                const cutoutEligible = input.structureTriangleCutoutEnabled
-                  && buildingDirectionalEligible
-                  && groupParentAfterPlayer
-                  && input.isPointInsideStructureCutoutScreenRect(triCenterX, triCenterY);
-                if (cutoutEligible) cutoutEligibleTriangles.push(tri);
-              }
-            }
-
-            const finalAdmitted = finalVisibleTriangles.length > 0;
-            if (input.showStructureTriangleFootprintDebug) {
-              input.deferredStructureSliceDebugDraws.push(() => {
-                input.ctx.save();
-                const bounds = group.localBounds;
-                const admittedViewportStyle = finalAdmitted && compareDistanceOnlyTriangles.length === 0;
-                input.ctx.lineWidth = admittedViewportStyle ? 1.5 : 1;
-                input.ctx.strokeStyle = admittedViewportStyle
-                  ? "rgba(0,255,170,0.92)"
-                  : compareDistanceOnlyTriangles.length > 0
-                    ? "rgba(255,120,40,0.92)"
-                    : "rgba(255,180,90,0.65)";
-                input.ctx.fillStyle = admittedViewportStyle
-                  ? "rgba(0,255,170,0.08)"
-                  : compareDistanceOnlyTriangles.length > 0
-                    ? "rgba(255,120,40,0.08)"
-                    : "rgba(255,180,90,0.04)";
-                input.ctx.fillRect(bounds.x, bounds.y, bounds.w, bounds.h);
-                input.ctx.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
-                for (let ti = 0; ti < group.triangles.length; ti++) {
-                  const tri = group.triangles[ti];
-                  const [a, b, c] = tri.points;
-                  input.ctx.beginPath();
-                  input.ctx.moveTo(a.x, a.y);
-                  input.ctx.lineTo(b.x, b.y);
-                  input.ctx.lineTo(c.x, c.y);
-                  input.ctx.closePath();
-                  input.ctx.strokeStyle = admittedViewportStyle
-                    ? "rgba(0,255,170,0.72)"
-                    : compareDistanceOnlyTriangles.length > 0
-                      ? "rgba(255,120,40,0.72)"
-                      : "rgba(255,180,90,0.38)";
-                  input.ctx.stroke();
-                }
-                const labelX = bounds.x + bounds.w * 0.5;
-                const labelY = bounds.y + bounds.h * 0.5;
-                const representativeCamera = finalVisibleTriangles[0] ?? group.triangles[0] ?? null;
-                const labelSuffix = compareDistanceOnlyTriangles.length > 0 ? " rd-only" : "";
-                const label = representativeCamera
-                  ? `P:${group.parentTx},${group.parentTy} C:${representativeCamera.cameraTx},${representativeCamera.cameraTy}${labelSuffix}`
-                  : `P:${group.parentTx},${group.parentTy}${labelSuffix}`;
-                input.ctx.font = "10px monospace";
-                input.ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
-                input.ctx.fillText(label, labelX + 1, labelY + 1);
-                input.ctx.fillStyle = admittedViewportStyle
-                  ? "rgba(0,255,170,0.96)"
-                  : compareDistanceOnlyTriangles.length > 0
-                    ? "rgba(255,120,40,0.95)"
-                    : "rgba(255,180,90,0.95)";
-                input.ctx.fillText(label, labelX, labelY);
-                const statsLabel = `vis:${finalVisibleTriangles.length}/${group.triangles.length} vp:${viewportVisibleTriangles.length} rd:${renderDistanceVisibleTriangles.length} cut:${cutoutEligibleTriangles.length} bdir:${buildingDirectionalEligible ? "pass" : "rej"} brej:${cutoutBuildingRejectedCount} bbox:${buildingMinCameraTx},${buildingMinCameraTy}-${buildingMaxCameraTx},${buildingMaxCameraTy} gb:${groupBoundsInViewport ? 1 : 0}`;
-                input.ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
-                input.ctx.fillText(statsLabel, labelX + 1, labelY + 12);
-                input.ctx.fillStyle = "rgba(220, 240, 255, 0.95)";
-                input.ctx.fillText(statsLabel, labelX, labelY + 11);
-                input.ctx.restore();
-              });
-            }
-            if (!finalAdmitted) continue;
-
-            if (usingV5Caster || usingV6Caster) admittedTrianglesForSemanticMasks.push(...finalVisibleTriangles);
-            overlayHasVisibleTriangleGroup = true;
-
-            pieces.push({
-              kind: "triangleGroup",
-              overlay: o,
-              draw,
-              sourceImage: sourceImg,
-              geometrySignature,
-              triangleCache,
-              parentTx: group.parentTx,
-              parentTy: group.parentTy,
-              stableId: group.stableId,
-              finalVisibleTriangles,
-              compareDistanceOnlyTriangles,
-              structureSouthTieBreak,
-              cutoutEnabled: input.structureTriangleCutoutEnabled,
-              cutoutAlpha: input.structureTriangleCutoutAlpha,
-              buildingDirectionalEligible,
-              groupParentAfterPlayer,
-              isPointInsideStructureCutoutScreenRect: input.isPointInsideStructureCutoutScreenRect,
-            });
-          }
-
-          if (overlayHasVisibleTriangleGroup) {
-            const structureShadowBand = input.resolveRenderZBand(
-              {
-                slice: o.seTx + o.seTy,
-                within: o.seTx,
-                baseZ: o.z,
-              },
-              input.rampRoadTiles,
-            );
-            const structureShadowResult = buildOrchestratedStructureShadowFrameResult({
-              frame: input.structureShadowFrame,
-              overlay: o,
-              triangleCache,
-              geometrySignature,
-              tileWorld: input.tileWorld,
-              toScreenAtZ: input.toScreenAtZ,
-              draw: {
-                dx: draw.dx,
-                dy: draw.dy,
-                dw: draw.dw,
-                dh: draw.dh,
-                scale: draw.scale ?? 1,
-              },
-              sourceImage: sourceImg,
-              admittedTrianglesForSemanticMasks,
-              projectedViewportRect: input.projectedViewportRect,
-              projectedRectIntersects: runtimeStructureRectIntersects,
-              structureShadowBand,
-              v6PrimarySemanticBucket: input.v6PrimarySemanticBucket,
-              v6SecondarySemanticBucket: input.v6SecondarySemanticBucket,
-              v6TopSemanticBucket: input.v6TopSemanticBucket,
-              cacheStores: {
-                v1: input.structureShadowV1CacheStore,
-                v2: input.structureShadowV2CacheStore,
-                hybrid: input.structureShadowHybridCacheStore,
-                v4: input.structureShadowV4CacheStore,
-              },
-              diagnostics: {
-                hybrid: input.shadowDiagnostics.hybrid,
-                v4: input.shadowDiagnostics.v4,
-              },
-            });
-            const structureShadowV1CacheEntry = structureShadowResult.structureShadowV1CacheEntry;
-            const structureShadowV2CacheEntry = structureShadowResult.structureShadowV2CacheEntry;
-            const structureShadowHybridCacheEntry = structureShadowResult.structureShadowHybridCacheEntry;
-            const structureShadowV4CacheEntry = structureShadowResult.structureShadowV4CacheEntry;
-            const debugShadowCacheHit = structureShadowResult.structureShadowCacheHit;
-
-            if (structureShadowResult.v6Candidate) {
-              input.shadowQueueCallbacks.structureV6ShadowDebugCandidates.push(structureShadowResult.v6Candidate);
-            }
-
-            if (structureShadowResult.v5Piece) {
-              input.shadowQueueCallbacks.queueStructureV5ShadowForBand(structureShadowBand, structureShadowResult.v5Piece);
-              input.shadowDiagnostics.v5.piecesQueued += 1;
-              input.shadowDiagnostics.v5.trianglesQueued += structureShadowResult.v5Piece.triangles.length;
-            } else if (structureShadowResult.v4Piece) {
-              input.shadowQueueCallbacks.queueStructureV4ShadowForBand(structureShadowBand, structureShadowResult.v4Piece);
-              input.shadowDiagnostics.v4.piecesQueued += 1;
-              input.shadowDiagnostics.v4.trianglesQueued += structureShadowResult.v4Piece.triangleCorrespondence.length;
-              input.shadowDiagnostics.v4.topCapTrianglesQueued += structureShadowResult.v4Piece.topCapTriangles.length;
-            } else if (structureShadowResult.hybridPiece) {
-              input.shadowQueueCallbacks.queueStructureHybridShadowForBand(structureShadowBand, structureShadowResult.hybridPiece);
-              input.shadowDiagnostics.hybrid.piecesQueued += 1;
-              input.shadowDiagnostics.hybrid.trianglesQueued += structureShadowResult.hybridPiece.projectedMappings.length;
-            } else if (structureShadowResult.projectedTriangles) {
-              input.shadowQueueCallbacks.queueStructureShadowTrianglesForBand(
-                structureShadowBand,
-                structureShadowResult.projectedTriangles,
-              );
-            }
-
-            queueStructureTriangleFootprintShadowDebugDraws({
-              ctx: input.ctx,
-              showStructureTriangleFootprintDebug: input.showStructureTriangleFootprintDebug,
-              deferredStructureSliceDebugDraws: input.deferredStructureSliceDebugDraws,
-              structureShadowV1CacheEntry,
-              structureShadowV2CacheEntry,
-              structureShadowHybridCacheEntry,
-              structureShadowV4CacheEntry,
-              debugShadowCacheHit,
-              draw,
-              shadowV1DebugGeometryMode: input.shadowV1DebugGeometryMode,
-            });
-          }
-
-          if (input.showStructureTriangleFootprintDebug && projectedFootprintQuad && overlayHasVisibleTriangleGroup) {
-            const allTriangles = triangleCache.triangles;
-            const triangleCentroids: Array<{ tri: typeof allTriangles[number]; centroid: ScreenPt }> = [];
-            const centroidPoints: ScreenPt[] = [];
-            for (let ti = 0; ti < allTriangles.length; ti++) {
-              const tri = allTriangles[ti];
-              const [a, b, c] = tri.points;
-              const centroid = { x: (a.x + b.x + c.x) / 3, y: (a.y + b.y + c.y) / 3 };
-              triangleCentroids.push({ tri, centroid });
-              centroidPoints.push(centroid);
-            }
-            const supportScan = scanLiftedFootprintSupportLevels(
-              projectedFootprintQuad,
-              footprintW,
-              footprintH,
-              centroidPoints,
-            );
-            const activeLevelIndex = supportScan.highestValidLevel >= 0 ? supportScan.highestValidLevel : 0;
-            const activeLevel = supportScan.levels[Math.min(activeLevelIndex, supportScan.levels.length - 1)] ?? null;
-            const leftSouthMaxProgression = footprintW - 1;
-            const rightEastMinProgression = footprintW;
-            const progressionByOwnerTile = new Map<string, { min: number; max: number }>();
-            for (let bi = 0; bi < bandPieces.length; bi++) {
-              const band = bandPieces[bi];
-              const ownerTx = band.renderKey.within;
-              const ownerTy = band.renderKey.slice - band.renderKey.within;
-              const ownerKey = `${ownerTx},${ownerTy}`;
-              const progression = resolveRuntimeStructureBandProgressionIndex(band.index, footprintW, footprintH);
-              const existing = progressionByOwnerTile.get(ownerKey);
-              if (!existing) {
-                progressionByOwnerTile.set(ownerKey, { min: progression, max: progression });
-              } else {
-                if (progression < existing.min) existing.min = progression;
-                if (progression > existing.max) existing.max = progression;
-              }
-            }
-            const semanticCounts: Record<StructureTriangleSemanticClass, number> = {
-              TOP: 0,
-              LEFT_SOUTH: 0,
-              RIGHT_EAST: 0,
-              UNCLASSIFIED: 0,
-              CONFLICT: 0,
-            };
-            const semanticTriangles = triangleCentroids.map((entry) => {
-              const ownerKey = `${entry.tri.parentTx},${entry.tri.parentTy}`;
-              const ownerRange = progressionByOwnerTile.get(ownerKey);
-              const isTop = !!activeLevel && isPointInsideProjectedStructureFootprintQuad(
-                activeLevel.quad,
-                entry.centroid.x,
-                entry.centroid.y,
-              );
-              const leftCandidate = !!ownerRange && ownerRange.min <= leftSouthMaxProgression;
-              const rightCandidate = !!ownerRange && ownerRange.max >= rightEastMinProgression;
-              let semantic: StructureTriangleSemanticClass = "UNCLASSIFIED";
-              if (isTop) {
-                semantic = "TOP";
-              } else if (leftCandidate && rightCandidate) {
-                semantic = "CONFLICT";
-              } else if (leftCandidate) {
-                semantic = "LEFT_SOUTH";
-              } else if (rightCandidate) {
-                semantic = "RIGHT_EAST";
-              }
-              semanticCounts[semantic]++;
-              return {
-                tri: entry.tri,
-                centroid: entry.centroid,
-                semantic,
-              };
-            });
-            input.deferredStructureSliceDebugDraws.push(() => {
-              if (!activeLevel) return;
-              input.ctx.save();
-              input.ctx.lineWidth = 1;
-              for (let ti = 0; ti < semanticTriangles.length; ti++) {
-                const entry = semanticTriangles[ti];
-                const tri = entry.tri;
-                const [a, b, c] = tri.points;
-                input.ctx.beginPath();
-                input.ctx.moveTo(a.x, a.y);
-                input.ctx.lineTo(b.x, b.y);
-                input.ctx.lineTo(c.x, c.y);
-                input.ctx.closePath();
-                if (entry.semantic === "TOP") {
-                  input.ctx.fillStyle = "rgba(255, 216, 64, 0.30)";
-                  input.ctx.strokeStyle = "rgba(255, 240, 170, 0.95)";
-                } else if (entry.semantic === "LEFT_SOUTH") {
-                  input.ctx.fillStyle = "rgba(85, 210, 255, 0.24)";
-                  input.ctx.strokeStyle = "rgba(150, 240, 255, 0.95)";
-                } else if (entry.semantic === "RIGHT_EAST") {
-                  input.ctx.fillStyle = "rgba(255, 150, 80, 0.24)";
-                  input.ctx.strokeStyle = "rgba(255, 195, 130, 0.95)";
-                } else if (entry.semantic === "CONFLICT") {
-                  input.ctx.fillStyle = "rgba(255, 80, 220, 0.26)";
-                  input.ctx.strokeStyle = "rgba(255, 150, 240, 0.96)";
-                } else {
-                  input.ctx.fillStyle = "rgba(95, 120, 150, 0.18)";
-                  input.ctx.strokeStyle = "rgba(180, 205, 235, 0.82)";
-                }
-                input.ctx.fill();
-                input.ctx.stroke();
-              }
-              for (let ci = 0; ci < activeLevel.cells.length; ci++) {
-                const cell = activeLevel.cells[ci];
-                const [c0, c1, c2, c3] = cell.quad;
-                input.ctx.beginPath();
-                input.ctx.moveTo(c0.x, c0.y);
-                input.ctx.lineTo(c1.x, c1.y);
-                input.ctx.lineTo(c2.x, c2.y);
-                input.ctx.lineTo(c3.x, c3.y);
-                input.ctx.closePath();
-                input.ctx.fillStyle = cell.supported
-                  ? "rgba(120, 255, 145, 0.07)"
-                  : "rgba(255, 90, 90, 0.16)";
-                input.ctx.strokeStyle = cell.supported
-                  ? "rgba(120, 255, 145, 0.42)"
-                  : "rgba(255, 110, 110, 0.88)";
-                input.ctx.fill();
-                input.ctx.stroke();
-              }
-              const [nw, ne, se, sw] = activeLevel.quad;
-              input.ctx.beginPath();
-              input.ctx.moveTo(nw.x, nw.y);
-              input.ctx.lineTo(ne.x, ne.y);
-              input.ctx.lineTo(se.x, se.y);
-              input.ctx.lineTo(sw.x, sw.y);
-              input.ctx.closePath();
-              input.ctx.fillStyle = activeLevel.allSupported
-                ? "rgba(120, 255, 145, 0.10)"
-                : "rgba(255, 120, 120, 0.08)";
-              input.ctx.strokeStyle = activeLevel.allSupported
-                ? "rgba(120, 255, 145, 0.95)"
-                : "rgba(255, 140, 140, 0.95)";
-              input.ctx.fill();
-              input.ctx.stroke();
-              const roofLevelLabel = supportScan.highestValidLevel >= 0
-                ? `${supportScan.highestValidLevel}`
-                : "none";
-              const labelX = nw.x + 8;
-              const labelY = nw.y - 8;
-              input.ctx.font = "10px monospace";
-              const header = `roof:${roofLevelLabel} active:${activeLevel.level} lift:${Math.round(activeLevel.liftYPx)} cells:${activeLevel.supportedCells}/${activeLevel.totalCells}`;
-              input.ctx.fillStyle = "rgba(0, 0, 0, 0.82)";
-              input.ctx.fillText(header, labelX + 1, labelY + 1);
-              input.ctx.fillStyle = "rgba(235, 255, 235, 0.96)";
-              input.ctx.fillText(header, labelX, labelY);
-              const semanticLabel = `TOP:${semanticCounts.TOP} LS:${semanticCounts.LEFT_SOUTH} RE:${semanticCounts.RIGHT_EAST} U:${semanticCounts.UNCLASSIFIED} C:${semanticCounts.CONFLICT}`;
-              input.ctx.fillStyle = "rgba(0, 0, 0, 0.82)";
-              input.ctx.fillText(semanticLabel, labelX + 1, labelY + 12);
-              input.ctx.fillStyle = "rgba(235, 240, 255, 0.96)";
-              input.ctx.fillText(semanticLabel, labelX, labelY + 11);
-              const ownershipLabel = `ranges first:${footprintW + 1} last:${footprintH + 1} split@i=${rightEastMinProgression}`;
-              input.ctx.fillStyle = "rgba(0, 0, 0, 0.82)";
-              input.ctx.fillText(ownershipLabel, labelX + 1, labelY + 23);
-              input.ctx.fillStyle = "rgba(230, 230, 230, 0.95)";
-              input.ctx.fillText(ownershipLabel, labelX, labelY + 22);
-              const maxLevelRows = 6;
-              for (let li = 0; li < supportScan.levels.length && li < maxLevelRows; li++) {
-                const level = supportScan.levels[li];
-                const rowY = labelY + 34 + li * 11;
-                const levelLabel = `L${level.level}: ${level.supportedCells}/${level.totalCells} ${level.allSupported ? "ok" : "fail"}`;
-                input.ctx.fillStyle = "rgba(0, 0, 0, 0.78)";
-                input.ctx.fillText(levelLabel, labelX + 1, rowY + 1);
-                input.ctx.fillStyle = level.allSupported
-                  ? "rgba(150, 255, 175, 0.95)"
-                  : "rgba(255, 160, 160, 0.96)";
-                input.ctx.fillText(levelLabel, labelX, rowY);
-              }
-              if (supportScan.levels.length > maxLevelRows) {
-                const rowY = labelY + 34 + maxLevelRows * 11;
-                const overflowLabel = `... +${supportScan.levels.length - maxLevelRows} levels`;
-                input.ctx.fillStyle = "rgba(0, 0, 0, 0.78)";
-                input.ctx.fillText(overflowLabel, labelX + 1, rowY + 1);
-                input.ctx.fillStyle = "rgba(220, 220, 220, 0.95)";
-                input.ctx.fillText(overflowLabel, labelX, rowY);
-              }
-              input.ctx.restore();
-            });
-          }
-        }
+      if (structureShadowResult.v6Candidate) {
+        input.shadowQueueCallbacks.structureV6ShadowDebugCandidates.push(structureShadowResult.v6Candidate);
+      }
+      if (structureShadowResult.v5Piece) {
+        input.shadowQueueCallbacks.queueStructureV5ShadowForBand(structureShadowBand, structureShadowResult.v5Piece);
+        input.shadowDiagnostics.v5.piecesQueued += 1;
+        input.shadowDiagnostics.v5.trianglesQueued += structureShadowResult.v5Piece.triangles.length;
+      } else if (structureShadowResult.v4Piece) {
+        input.shadowQueueCallbacks.queueStructureV4ShadowForBand(structureShadowBand, structureShadowResult.v4Piece);
+        input.shadowDiagnostics.v4.piecesQueued += 1;
+        input.shadowDiagnostics.v4.trianglesQueued += structureShadowResult.v4Piece.triangleCorrespondence.length;
+        input.shadowDiagnostics.v4.topCapTrianglesQueued += structureShadowResult.v4Piece.topCapTriangles.length;
+      } else if (structureShadowResult.hybridPiece) {
+        input.shadowQueueCallbacks.queueStructureHybridShadowForBand(structureShadowBand, structureShadowResult.hybridPiece);
+        input.shadowDiagnostics.hybrid.piecesQueued += 1;
+        input.shadowDiagnostics.hybrid.trianglesQueued += structureShadowResult.hybridPiece.projectedMappings.length;
+      } else if (structureShadowResult.projectedTriangles) {
+        input.shadowQueueCallbacks.queueStructureShadowTrianglesForBand(
+          structureShadowBand,
+          structureShadowResult.projectedTriangles,
+        );
       }
 
-      if (usedTriangleGeometryPath) continue;
-
-      const sourceImg: CanvasImageSource = draw.flipX ? input.getFlippedOverlayImage(draw.img) : draw.img;
-      for (let bi = 0; bi < bandPieces.length; bi++) {
-        const band = bandPieces[bi];
-        const ownerTx = band.renderKey.within;
-        const ownerTy = band.renderKey.slice - band.renderKey.within;
-        if (!input.isTileInRenderRadius(ownerTx, ownerTy)) continue;
-        pieces.push({
-          kind: "band",
-          overlay: o,
+      if (
+        monolithic
+        && (input.showStructureAnchors || input.showStructureSliceDebug || input.showStructureTriangleFootprintDebug)
+      ) {
+        const activeRoofQuad = activeRoofQuadForSemanticDebug({
+          structureShadowV1CacheEntry: structureShadowResult.structureShadowV1CacheEntry,
+          structureShadowV2CacheEntry: structureShadowResult.structureShadowV2CacheEntry,
+          structureShadowHybridCacheEntry: structureShadowResult.structureShadowHybridCacheEntry,
+        });
+        const semanticByStableId = input.showStructureTriangleFootprintDebug
+          ? buildHybridTriangleSemanticMap({
+            overlay: o,
+            triangleCache,
+            activeRoofQuad,
+            triangles: finalVisibleTrianglesForDebug,
+          })
+          : null;
+        const semanticFaceTriangles = finalVisibleTrianglesForDebug.map((tri) => ({
+          points: [tri.points[0], tri.points[1], tri.points[2]] as [ScreenPt, ScreenPt, ScreenPt],
+          semantic: semanticByStableId?.get(tri.stableId) ?? "UNCLASSIFIED",
+        }));
+        queueMonolithicStructureDebugDraw({
+          ctx: input.ctx,
+          deferredStructureSliceDebugDraws: input.deferredStructureSliceDebugDraws,
+          overlayId: o.id,
+          overlaySpriteId: o.spriteId,
           draw,
-          sourceImage: sourceImg,
-          band,
-          structureSouthTieBreak,
-          staticRelightFrame: input.staticRelightFrame,
-          staticRelightEnabledForStructures: STATIC_RELIGHT_INCLUDE_STRUCTURES,
+          geometry: monolithic,
+          showAnchors: input.showStructureAnchors,
+          showSlices: input.showStructureSliceDebug,
+          showSemanticFaces: input.showStructureTriangleFootprintDebug,
+          semanticFaceTriangles,
         });
       }
-    } else {
+      continue;
+    }
+
+    {
       pieces.push({
         kind: "overlay",
         overlayIndex: candidate.overlayIndex,
@@ -698,524 +386,381 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
   };
 }
 
-function getStructureAnchorAlphaMap(img: HTMLImageElement): StructureSliceDebugAlphaMap | null {
-  if (!img || img.width <= 0 || img.height <= 0) return null;
-  const cached = structureAnchorAlphaMapCache.get(img);
-  if (cached && cached.width === img.width && cached.height === img.height) return cached;
-  if (typeof document === "undefined") return null;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = img.width;
-  canvas.height = img.height;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return null;
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-  let imageData: ImageData;
-  try {
-    imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  } catch {
-    return null;
-  }
-
-  const alphaMap = {
-    width: canvas.width,
-    height: canvas.height,
-    data: imageData.data,
-  } satisfies StructureSliceDebugAlphaMap;
-  structureAnchorAlphaMapCache.set(img, alphaMap);
-  return alphaMap;
-}
-
-type QueueStructureAnchorDebugDrawInput = {
+type QueueMonolithicStructureDebugDrawInput = {
   ctx: CanvasRenderingContext2D;
   deferredStructureSliceDebugDraws: Array<() => void>;
   overlayId: string;
+  overlaySpriteId: string;
   draw: {
-    img: HTMLImageElement;
     dx: number;
     dy: number;
     dw: number;
     dh: number;
-    flipX?: boolean;
     scale?: number;
+    anchorPlacementDebugNoCamera?: RuntimeStructureAnchorPlacementDebug;
   };
+  geometry: MonolithicStructureGeometry;
+  showAnchors: boolean;
+  showSlices: boolean;
+  showSemanticFaces: boolean;
+  semanticFaceTriangles: ReadonlyArray<{
+    points: [ScreenPt, ScreenPt, ScreenPt];
+    semantic: HybridSemanticClass;
+  }>;
 };
 
-type QueueStructureSlicesDebugDrawInput = {
-  ctx: CanvasRenderingContext2D;
-  deferredStructureSliceDebugDraws: Array<() => void>;
-  draw: {
-    img: HTMLImageElement;
-    dx: number;
-    dy: number;
-    dw: number;
-    dh: number;
-    flipX?: boolean;
-  };
-};
-
-function isFootprintCandidateTriangle(input: {
-  triangle: { a: ScreenPt; b: ScreenPt; c: ScreenPt };
-  leftGuideSegment: { a: ScreenPt; b: ScreenPt } | null;
-  rightGuideSegment: { a: ScreenPt; b: ScreenPt } | null;
-}): boolean {
-  const edges: Array<{ p0: ScreenPt; p1: ScreenPt }> = [
-    { p0: input.triangle.a, p1: input.triangle.b },
-    { p0: input.triangle.b, p1: input.triangle.c },
-    { p0: input.triangle.c, p1: input.triangle.a },
-  ];
-
-  const isCandidateOnGuide = (guide: { a: ScreenPt; b: ScreenPt } | null): boolean => {
-    if (!guide) return false;
-    for (let i = 0; i < edges.length; i++) {
-      const edge = edges[i];
-      const edgeLen = Math.hypot(edge.p1.x - edge.p0.x, edge.p1.y - edge.p0.y);
-      if (edgeLen <= 1e-4) continue;
-      const fullSharedEdge = isPointOnSegment(edge.p0, guide.a, guide.b)
-        && isPointOnSegment(edge.p1, guide.a, guide.b);
-      const overlapLen = segmentOverlapLengthOnLine(edge.p0, edge.p1, guide.a, guide.b);
-      const majorityOverlap = overlapLen > edgeLen * 0.5 + 1e-4;
-      if (!fullSharedEdge && !majorityOverlap) continue;
-      const centroid = {
-        x: (input.triangle.a.x + input.triangle.b.x + input.triangle.c.x) / 3,
-        y: (input.triangle.a.y + input.triangle.b.y + input.triangle.c.y) / 3,
-      };
-      if (isPointAboveGuideLine(centroid, guide.a, guide.b)) return true;
-    }
-    return false;
-  };
-
-  return isCandidateOnGuide(input.leftGuideSegment) || isCandidateOnGuide(input.rightGuideSegment);
-}
-
-function isPointOnSegment(p: ScreenPt, a: ScreenPt, b: ScreenPt): boolean {
-  const eps = 1e-4;
-  const abx = b.x - a.x;
-  const aby = b.y - a.y;
-  const apx = p.x - a.x;
-  const apy = p.y - a.y;
-  const cross = abx * apy - aby * apx;
-  if (Math.abs(cross) > eps) return false;
-  const dot = apx * abx + apy * aby;
-  if (dot < -eps) return false;
-  const lenSq = abx * abx + aby * aby;
-  if (dot > lenSq + eps) return false;
-  return true;
-}
-
-function isPointAboveGuideLine(p: ScreenPt, a: ScreenPt, b: ScreenPt): boolean {
-  const dx = b.x - a.x;
-  if (Math.abs(dx) <= 1e-6) {
-    return p.y < Math.min(a.y, b.y);
-  }
-  const t = (p.x - a.x) / dx;
-  const yOnLine = a.y + (b.y - a.y) * t;
-  return p.y < yOnLine - 1e-4;
-}
-
-function segmentOverlapLengthOnLine(
-  edgeA: ScreenPt,
-  edgeB: ScreenPt,
-  guideA: ScreenPt,
-  guideB: ScreenPt,
-): number {
-  const eps = 1e-4;
-  const dx = edgeB.x - edgeA.x;
-  const dy = edgeB.y - edgeA.y;
-  const edgeLen = Math.hypot(dx, dy);
-  if (edgeLen <= eps) return 0;
-
-  // Require guide segment to lie on the same infinite line as edge.
-  const crossA = dx * (guideA.y - edgeA.y) - dy * (guideA.x - edgeA.x);
-  const crossB = dx * (guideB.y - edgeA.y) - dy * (guideB.x - edgeA.x);
-  if (Math.abs(crossA) > eps || Math.abs(crossB) > eps) return 0;
-
-  const ux = dx / edgeLen;
-  const uy = dy / edgeLen;
-  const project = (p: ScreenPt): number => ((p.x - edgeA.x) * ux) + ((p.y - edgeA.y) * uy);
-
-  const edgeMin = 0;
-  const edgeMax = edgeLen;
-  const g0 = project(guideA);
-  const g1 = project(guideB);
-  const guideMin = Math.min(g0, g1);
-  const guideMax = Math.max(g0, g1);
-
-  const overlapMin = Math.max(edgeMin, guideMin);
-  const overlapMax = Math.min(edgeMax, guideMax);
-  return Math.max(0, overlapMax - overlapMin);
-}
-
-function queueStructureSlicesDebugDraw(input: QueueStructureSlicesDebugDrawInput): void {
-  const alphaMap = getStructureAnchorAlphaMap(input.draw.img);
-  if (!alphaMap) return;
-
-  const anchorResult = getStructureAnchorFromAlphaMap({
-    alphaMap,
-    flipX: !!input.draw.flipX,
-  });
-  if (!anchorResult) return;
-
-  const alphaBounds = anchorResult.occupiedBoundsPx;
-  const alphaMaxXExclusive = alphaBounds.maxX + 1;
-  const alphaMaxYExclusive = alphaBounds.maxY + 1;
-  const rawWorkMinX = Math.min(alphaBounds.minX, anchorResult.anchorPx.x);
-  const rawWorkMaxX = Math.max(alphaMaxXExclusive, anchorResult.anchorPx.x);
-  const workMinX = rawWorkMinX;
-  const workMaxX = rawWorkMaxX;
-  const workMinY = Math.min(alphaBounds.minY, anchorResult.anchorPx.y);
-  const workMaxY = Math.max(alphaMaxYExclusive, anchorResult.anchorPx.y);
-  const workWidth = Math.max(0, workMaxX - workMinX);
-  const workHeight = Math.max(0, workMaxY - workMinY);
-  if (workWidth <= 0 || workHeight <= 0) return;
-
-  const slices = getStructureSlices({
-    bounds: { width: workWidth, height: workHeight },
-    anchor: {
-      x: anchorResult.anchorPx.x - workMinX,
-      y: anchorResult.anchorPx.y - workMinY,
-    },
-  });
-  const workAnchor = {
-    x: anchorResult.anchorPx.x - workMinX,
-    y: anchorResult.anchorPx.y - workMinY,
-  };
-  const sliceGeometry = slices.map((slice) => {
-    const geometry = buildMonolithicSliceGeometry(slice, workAnchor);
-    const cull = cullMonolithicTrianglesByAlphaWithDiagnostics({
-      triangles: geometry.triangles,
-      alphaMap,
-      workRectSpriteLocal: {
-        x: workMinX,
-        y: workMinY,
-        w: workWidth,
-        h: workHeight,
-      },
-      workOffsetSpriteLocal: {
-        x: workMinX,
-        y: workMinY,
-      },
-    });
-    const triangles = cull.keptTriangles;
-    const culledSamples = cull.samples.filter((sample) => !sample.kept);
-    const keptSamples = cull.samples.filter((sample) => sample.kept);
+function semanticFaceStyle(semantic: HybridSemanticClass): { fill: string; stroke: string } {
+  if (semantic === "TOP") {
     return {
-      ...geometry,
-      triangles,
-      culledTriangles: culledSamples.map((sample) => sample.triangle),
-      culledSamples,
-      keptSamples,
-      totalTriangles: geometry.triangles.length,
-      minVisiblePixels: cull.minVisiblePixels,
+      fill: "rgba(80, 200, 255, 0.36)",
+      stroke: "rgba(120, 225, 255, 0.98)",
     };
-  });
-
-  const unitScaleX = input.draw.dw / Math.max(1, alphaMap.width);
-  const unitScaleY = input.draw.dh / Math.max(1, alphaMap.height);
-  const toScreenX = (x: number): number => input.draw.dx + x * unitScaleX;
-  const toScreenY = (y: number): number => input.draw.dy + y * unitScaleY;
-  const anchorPt = {
-    x: toScreenX(anchorResult.anchorPx.x),
-    y: toScreenY(anchorResult.anchorPx.y),
-  };
-  const workRect: LocalRect = {
-    minX: 0,
-    maxX: workWidth,
-    minY: 0,
-    maxY: workHeight,
-  };
-  const leftGuideTarget = intersectRayWithRectBoundary(
-    workAnchor,
-    { x: -1, y: -0.5 },
-    workRect,
-  );
-  const rightGuideTarget = intersectRayWithRectBoundary(
-    workAnchor,
-    { x: 1, y: -0.5 },
-    workRect,
-  );
-
-  input.deferredStructureSliceDebugDraws.push(() => {
-    const { ctx } = input;
-    ctx.save();
-    const leftGuideSegment = leftGuideTarget
-      ? { a: workAnchor, b: leftGuideTarget }
-      : null;
-    const rightGuideSegment = rightGuideTarget
-      ? { a: workAnchor, b: rightGuideTarget }
-      : null;
-
-    ctx.lineWidth = 1;
-    for (let i = 0; i < slices.length; i++) {
-      const slice = slices[i];
-      const even = (i % 2) === 0;
-      ctx.fillStyle = even ? "rgba(255, 210, 80, 0.20)" : "rgba(100, 245, 155, 0.18)";
-      ctx.strokeStyle = even ? "rgba(255, 210, 80, 0.95)" : "rgba(100, 245, 155, 0.92)";
-      ctx.fillRect(
-        toScreenX(workMinX + slice.x),
-        toScreenY(workMinY),
-        slice.width * unitScaleX,
-        slice.height * unitScaleY,
-      );
-      ctx.strokeRect(
-        toScreenX(workMinX + slice.x),
-        toScreenY(workMinY),
-        slice.width * unitScaleX,
-        slice.height * unitScaleY,
-      );
-    }
-
-    // Stage 1: edge points.
-    for (let i = 0; i < sliceGeometry.length; i++) {
-      const geom = sliceGeometry[i];
-      for (let pi = 0; pi < geom.edgePoints.length; pi++) {
-        const p = geom.edgePoints[pi];
-        ctx.beginPath();
-        ctx.arc(toScreenX(workMinX + p.x), toScreenY(workMinY + p.y), 1.5, 0, Math.PI * 2);
-        ctx.fillStyle = p.side === "R" ? "rgba(255, 240, 120, 0.95)" : "rgba(120, 230, 255, 0.95)";
-        ctx.fill();
-      }
-    }
-
-    // Stage 2: zig-zag strip.
-    for (let i = 0; i < sliceGeometry.length; i++) {
-      const strip = sliceGeometry[i].stripPoints;
-      if (strip.length < 2) continue;
-      ctx.beginPath();
-      ctx.moveTo(toScreenX(workMinX + strip[0].x), toScreenY(workMinY + strip[0].y));
-      for (let si = 1; si < strip.length; si++) {
-        ctx.lineTo(toScreenX(workMinX + strip[si].x), toScreenY(workMinY + strip[si].y));
-      }
-      ctx.strokeStyle = "rgba(255, 120, 70, 0.85)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
-
-    let footprintLeftCount = 0;
-    let footprintRightCount = 0;
-
-    // Stage 3: emitted triangles (culled + kept).
-    for (let i = 0; i < sliceGeometry.length; i++) {
-      const culledTriangles = sliceGeometry[i].culledTriangles;
-      for (let ti = 0; ti < culledTriangles.length; ti++) {
-        const tri = culledTriangles[ti];
-        ctx.beginPath();
-        ctx.moveTo(toScreenX(workMinX + tri.a.x), toScreenY(workMinY + tri.a.y));
-        ctx.lineTo(toScreenX(workMinX + tri.b.x), toScreenY(workMinY + tri.b.y));
-        ctx.lineTo(toScreenX(workMinX + tri.c.x), toScreenY(workMinY + tri.c.y));
-        ctx.closePath();
-        ctx.fillStyle = "rgba(255, 30, 60, 0.16)";
-        ctx.strokeStyle = "rgba(255, 90, 110, 0.96)";
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 2]);
-        ctx.fill();
-        ctx.stroke();
-      }
-      ctx.setLineDash([]);
-
-      const triangles = sliceGeometry[i].triangles;
-      const footprintCandidates = triangles.filter((tri) =>
-        isFootprintCandidateTriangle({
-          triangle: tri,
-          leftGuideSegment,
-          rightGuideSegment,
-        }),
-      );
-      for (let ti = 0; ti < triangles.length; ti++) {
-        const tri = triangles[ti];
-        ctx.beginPath();
-        ctx.moveTo(toScreenX(workMinX + tri.a.x), toScreenY(workMinY + tri.a.y));
-        ctx.lineTo(toScreenX(workMinX + tri.b.x), toScreenY(workMinY + tri.b.y));
-        ctx.lineTo(toScreenX(workMinX + tri.c.x), toScreenY(workMinY + tri.c.y));
-        ctx.closePath();
-        ctx.fillStyle = "rgba(255, 80, 150, 0.08)";
-        ctx.strokeStyle = "rgba(255, 120, 185, 0.55)";
-        ctx.lineWidth = 1;
-        ctx.fill();
-        ctx.stroke();
-      }
-      for (let ti = 0; ti < footprintCandidates.length; ti++) {
-        const tri = footprintCandidates[ti];
-        const centroidX = (tri.a.x + tri.b.x + tri.c.x) / 3;
-        if (centroidX < workAnchor.x) {
-          footprintLeftCount++;
-        } else {
-          footprintRightCount++;
-        }
-        ctx.beginPath();
-        ctx.moveTo(toScreenX(workMinX + tri.a.x), toScreenY(workMinY + tri.a.y));
-        ctx.lineTo(toScreenX(workMinX + tri.b.x), toScreenY(workMinY + tri.b.y));
-        ctx.lineTo(toScreenX(workMinX + tri.c.x), toScreenY(workMinY + tri.c.y));
-        ctx.closePath();
-        ctx.fillStyle = "rgba(255, 0, 220, 0.40)";
-        ctx.strokeStyle = "rgba(255, 60, 240, 1)";
-        ctx.lineWidth = 3;
-        ctx.fill();
-        ctx.stroke();
-      }
-
-    }
-
-    ctx.beginPath();
-    ctx.arc(anchorPt.x, anchorPt.y, 3, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255, 70, 90, 0.95)";
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255, 240, 245, 0.95)";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    const dimensionLabel = `N:${footprintLeftCount}  M:${footprintRightCount}`;
-    ctx.font = "12px monospace";
-    ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
-    ctx.fillText(dimensionLabel, anchorPt.x + 10, anchorPt.y - 14);
-    ctx.fillStyle = "rgba(255, 215, 245, 0.98)";
-    ctx.fillText(dimensionLabel, anchorPt.x + 9, anchorPt.y - 15);
-
-    // Footprint guide lines from anchor using iso-ground edge directions.
-    // Drawn last so they remain visible over all debug layers.
-    const drawGuideLine = (target: { x: number; y: number } | null, color: string): void => {
-      if (!target) return;
-      const tx = toScreenX(workMinX + target.x);
-      const ty = toScreenY(workMinY + target.y);
-
-      // Contrast under-stroke.
-      ctx.beginPath();
-      ctx.moveTo(anchorPt.x, anchorPt.y);
-      ctx.lineTo(tx, ty);
-      ctx.strokeStyle = "rgba(0, 0, 0, 0.9)";
-      ctx.lineWidth = 6;
-      ctx.stroke();
-
-      // Colored top stroke.
-      ctx.beginPath();
-      ctx.moveTo(anchorPt.x, anchorPt.y);
-      ctx.lineTo(tx, ty);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 4;
-      ctx.stroke();
+  }
+  if (semantic === "LEFT_SOUTH") {
+    return {
+      fill: "rgba(95, 255, 150, 0.34)",
+      stroke: "rgba(145, 255, 185, 0.98)",
     };
-    drawGuideLine(leftGuideTarget, "rgba(80, 205, 255, 1)");
-    drawGuideLine(rightGuideTarget, "rgba(255, 200, 90, 1)");
-
-    ctx.restore();
-  });
-}
-
-function intersectRayWithRectBoundary(
-  origin: { x: number; y: number },
-  direction: { x: number; y: number },
-  rect: LocalRect,
-): { x: number; y: number } | null {
-  const eps = 1e-6;
-  const candidates: Array<{ t: number; x: number; y: number }> = [];
-  const pushIfInRect = (t: number): void => {
-    if (!(t > eps) || !Number.isFinite(t)) return;
-    const x = origin.x + direction.x * t;
-    const y = origin.y + direction.y * t;
-    if (x < rect.minX - eps || x > rect.maxX + eps) return;
-    if (y < rect.minY - eps || y > rect.maxY + eps) return;
-    candidates.push({ t, x, y });
-  };
-
-  // Side boundaries.
-  if (Math.abs(direction.x) > eps) {
-    pushIfInRect((rect.minX - origin.x) / direction.x);
-    pushIfInRect((rect.maxX - origin.x) / direction.x);
   }
-  // Top boundary only (bottom boundary intentionally excluded).
-  if (Math.abs(direction.y) > eps) {
-    pushIfInRect((rect.minY - origin.y) / direction.y);
+  if (semantic === "RIGHT_EAST") {
+    return {
+      fill: "rgba(255, 200, 95, 0.34)",
+      stroke: "rgba(255, 225, 130, 0.98)",
+    };
   }
-  if (!candidates.length) return null;
-  candidates.sort((a, b) => a.t - b.t);
-  const hit = candidates[0];
+  if (semantic === "CONFLICT") {
+    return {
+      fill: "rgba(255, 75, 220, 0.45)",
+      stroke: "rgba(255, 130, 235, 1)",
+    };
+  }
   return {
-    x: Math.max(rect.minX, Math.min(rect.maxX, hit.x)),
-    y: Math.max(rect.minY, Math.min(rect.maxY, hit.y)),
+    fill: "rgba(215, 215, 215, 0.28)",
+    stroke: "rgba(245, 245, 245, 0.9)",
   };
 }
 
-function queueStructureAnchorDebugDraw(input: QueueStructureAnchorDebugDrawInput): void {
-  const alphaMap = getStructureAnchorAlphaMap(input.draw.img);
-  if (!alphaMap) return;
+function activeRoofQuadForSemanticDebug(input: {
+  structureShadowV1CacheEntry: StructureShadowCacheEntry | null;
+  structureShadowV2CacheEntry: StructureShadowV2CacheEntry | null;
+  structureShadowHybridCacheEntry: StructureShadowHybridCacheEntry | null;
+}): ProjectedQuad | null {
+  const hybrid = input.structureShadowHybridCacheEntry?.roofScan.activeLevel?.quad ?? null;
+  if (hybrid) return hybrid;
+  const v2 = input.structureShadowV2CacheEntry?.roofScan.activeLevel?.quad ?? null;
+  if (v2) return v2;
+  const v1 = input.structureShadowV1CacheEntry?.roofScan.activeLevel?.quad ?? null;
+  if (v1) return v1;
+  return null;
+}
 
-  const anchorResult = getStructureAnchorFromAlphaMap({
-    alphaMap,
-    flipX: !!input.draw.flipX,
-  });
-  if (!anchorResult) return;
-
-  const drawScale = input.draw.scale ?? 1;
-  const unitScaleX = (input.draw.dw / Math.max(1, alphaMap.width)) * drawScale;
-  const unitScaleY = (input.draw.dh / Math.max(1, alphaMap.height)) * drawScale;
+function queueMonolithicStructureDebugDraw(input: QueueMonolithicStructureDebugDrawInput): void {
+  const scale = input.draw.scale ?? 1;
   const toScreen = (x: number, y: number): ScreenPt => ({
-    x: input.draw.dx + x * unitScaleX,
-    y: input.draw.dy + y * unitScaleY,
+    x: input.draw.dx + x * scale,
+    y: input.draw.dy + y * scale,
   });
-
-  const bounds = anchorResult.occupiedBoundsPx;
+  const toScreenX = (x: number): number => input.draw.dx + x * scale;
+  const toScreenY = (y: number): number => input.draw.dy + y * scale;
+  const anchorResult = input.geometry.anchorResult;
   const anchorPt = toScreen(anchorResult.anchorPx.x, anchorResult.anchorPx.y);
-  const bboxX = input.draw.dx + bounds.minX * unitScaleX;
-  const bboxY = input.draw.dy + bounds.minY * unitScaleY;
-  const bboxW = Math.max(1, (bounds.maxX - bounds.minX + 1) * unitScaleX);
-  const bboxH = Math.max(1, (bounds.maxY - bounds.minY + 1) * unitScaleY);
+  const anchorPlacementDebug = input.draw.anchorPlacementDebugNoCamera ?? null;
+
   const profilePoints = collectSouthProfilePoints(anchorResult, toScreen);
   const plateauPoints = collectPlateauProfilePoints(anchorResult, toScreen);
+  const occupied = input.geometry.occupiedBoundsPx;
+  const workRect = input.geometry.workRectSpriteLocal;
+  const showAnySlices = input.showSlices || input.showSemanticFaces;
 
   input.deferredStructureSliceDebugDraws.push(() => {
     const { ctx } = input;
     ctx.save();
-    ctx.lineWidth = 1;
-    ctx.fillStyle = "rgba(95, 210, 255, 0.10)";
-    ctx.strokeStyle = "rgba(95, 210, 255, 0.95)";
-    ctx.fillRect(bboxX, bboxY, bboxW, bboxH);
-    ctx.strokeRect(bboxX, bboxY, bboxW, bboxH);
 
-    if (profilePoints.length > 1) {
-      ctx.beginPath();
-      ctx.moveTo(profilePoints[0].x, profilePoints[0].y);
-      for (let i = 1; i < profilePoints.length; i++) {
-        ctx.lineTo(profilePoints[i].x, profilePoints[i].y);
+    if (input.showAnchors) {
+      const bboxX = toScreenX(occupied.minX);
+      const bboxY = toScreenY(occupied.minY);
+      const bboxW = Math.max(1, (occupied.maxX - occupied.minX + 1) * scale);
+      const bboxH = Math.max(1, (occupied.maxY - occupied.minY + 1) * scale);
+      ctx.lineWidth = 1;
+      ctx.fillStyle = "rgba(95, 210, 255, 0.10)";
+      ctx.strokeStyle = "rgba(95, 210, 255, 0.95)";
+      ctx.fillRect(bboxX, bboxY, bboxW, bboxH);
+      ctx.strokeRect(bboxX, bboxY, bboxW, bboxH);
+      if (profilePoints.length > 1) {
+        ctx.beginPath();
+        ctx.moveTo(profilePoints[0].x, profilePoints[0].y);
+        for (let i = 1; i < profilePoints.length; i++) ctx.lineTo(profilePoints[i].x, profilePoints[i].y);
+        ctx.strokeStyle = "rgba(140, 180, 255, 0.60)";
+        ctx.stroke();
       }
-      ctx.strokeStyle = "rgba(140, 180, 255, 0.60)";
-      ctx.stroke();
+      if (plateauPoints.length > 1) {
+        ctx.beginPath();
+        ctx.moveTo(plateauPoints[0].x, plateauPoints[0].y);
+        for (let i = 1; i < plateauPoints.length; i++) ctx.lineTo(plateauPoints[i].x, plateauPoints[i].y);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "rgba(255, 210, 95, 0.98)";
+        ctx.stroke();
+      }
+      const label = `anchor:${input.overlayId}`;
+      ctx.font = "10px monospace";
+      ctx.fillStyle = "rgba(0, 0, 0, 0.82)";
+      ctx.fillText(label, bboxX + 1, bboxY - 6 + 1);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.94)";
+      ctx.fillText(label, bboxX, bboxY - 6);
+
+      if (anchorPlacementDebug) {
+        let computedAnchorScreen = anchorPlacementDebug.computedAnchorScreenNoCamera
+          ? { ...anchorPlacementDebug.computedAnchorScreenNoCamera }
+          : (anchorPlacementDebug.anchorSpriteLocal
+            ? toScreen(anchorPlacementDebug.anchorSpriteLocal.x, anchorPlacementDebug.anchorSpriteLocal.y)
+            : null);
+        const reservedSeCornerScreen = anchorPlacementDebug.reservedSeCornerScreenNoCamera
+          ? { ...anchorPlacementDebug.reservedSeCornerScreenNoCamera }
+          : null;
+        const derivedWorldCornerScreen = anchorPlacementDebug.anchorDerivedWorldCornerScreenNoCamera
+          ? { ...anchorPlacementDebug.anchorDerivedWorldCornerScreenNoCamera }
+          : null;
+        if (computedAnchorScreen && reservedSeCornerScreen) {
+          const camDx = anchorPt.x - computedAnchorScreen.x;
+          const camDy = anchorPt.y - computedAnchorScreen.y;
+          computedAnchorScreen = {
+            x: computedAnchorScreen.x + camDx,
+            y: computedAnchorScreen.y + camDy,
+          };
+          const reservedScreen = {
+            x: reservedSeCornerScreen.x + camDx,
+            y: reservedSeCornerScreen.y + camDy,
+          };
+          const derivedScreen = derivedWorldCornerScreen
+            ? {
+              x: derivedWorldCornerScreen.x + camDx,
+              y: derivedWorldCornerScreen.y + camDy,
+            }
+            : null;
+          const alignmentDx = computedAnchorScreen.x - reservedScreen.x;
+          const alignmentDy = computedAnchorScreen.y - reservedScreen.y;
+
+          ctx.lineWidth = Math.max(2, Math.min(4, scale * 1.5));
+          ctx.strokeStyle = "rgba(255, 90, 170, 0.96)";
+          ctx.beginPath();
+          ctx.moveTo(reservedScreen.x, reservedScreen.y);
+          ctx.lineTo(computedAnchorScreen.x, computedAnchorScreen.y);
+          ctx.stroke();
+
+          const crossR = Math.max(5, Math.min(9, scale * 3));
+          ctx.lineWidth = Math.max(2, Math.min(4, scale * 1.8));
+          ctx.strokeStyle = "rgba(255, 230, 90, 1)";
+          ctx.beginPath();
+          ctx.moveTo(reservedScreen.x - crossR, reservedScreen.y);
+          ctx.lineTo(reservedScreen.x + crossR, reservedScreen.y);
+          ctx.moveTo(reservedScreen.x, reservedScreen.y - crossR);
+          ctx.lineTo(reservedScreen.x, reservedScreen.y + crossR);
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.arc(computedAnchorScreen.x, computedAnchorScreen.y, Math.max(3, Math.min(7, scale * 2.25)), 0, Math.PI * 2);
+          ctx.strokeStyle = "rgba(255, 90, 170, 1)";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.fillStyle = "rgba(255, 90, 170, 0.3)";
+          ctx.fill();
+
+          if (derivedScreen) {
+            const d = Math.max(5, Math.min(9, scale * 3));
+            ctx.lineWidth = Math.max(2, Math.min(4, scale * 1.8));
+            ctx.strokeStyle = "rgba(80, 245, 255, 1)";
+            ctx.fillStyle = "rgba(80, 245, 255, 0.25)";
+            ctx.beginPath();
+            ctx.moveTo(derivedScreen.x, derivedScreen.y - d);
+            ctx.lineTo(derivedScreen.x + d, derivedScreen.y);
+            ctx.lineTo(derivedScreen.x, derivedScreen.y + d);
+            ctx.lineTo(derivedScreen.x - d, derivedScreen.y);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+          }
+
+          const alignLabel = `SE Δ(${alignmentDx.toFixed(2)}, ${alignmentDy.toFixed(2)})`;
+          const labelX = reservedScreen.x + 10;
+          const labelY = reservedScreen.y - 8;
+          ctx.font = "10px monospace";
+          ctx.fillStyle = "rgba(0,0,0,0.84)";
+          ctx.fillText(alignLabel, labelX + 1, labelY + 1);
+          ctx.fillStyle = "rgba(255,240,120,0.98)";
+          ctx.fillText(alignLabel, labelX, labelY);
+          const markerLegend = "A=raw anchor  C=anchor->world corner  SE=footprint corner";
+          ctx.fillStyle = "rgba(0,0,0,0.84)";
+          ctx.fillText(markerLegend, labelX + 1, labelY + 13);
+          ctx.fillStyle = "rgba(220,240,255,0.96)";
+          ctx.fillText(markerLegend, labelX, labelY + 12);
+        }
+      }
     }
 
-    if (plateauPoints.length > 1) {
-      ctx.beginPath();
-      ctx.moveTo(plateauPoints[0].x, plateauPoints[0].y);
-      for (let i = 1; i < plateauPoints.length; i++) {
-        ctx.lineTo(plateauPoints[i].x, plateauPoints[i].y);
+    if (showAnySlices) {
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(255, 120, 70, 0.8)";
+      ctx.strokeRect(
+        toScreenX(workRect.x),
+        toScreenY(workRect.y),
+        workRect.w * scale,
+        workRect.h * scale,
+      );
+
+      for (let si = 0; si < input.geometry.slices.length; si++) {
+        const slice = input.geometry.slices[si];
+        const sx = workRect.x + slice.x;
+        const even = (si % 2) === 0;
+        ctx.fillStyle = even ? "rgba(255, 210, 80, 0.20)" : "rgba(100, 245, 155, 0.18)";
+        ctx.strokeStyle = even ? "rgba(255, 210, 80, 0.95)" : "rgba(100, 245, 155, 0.92)";
+        ctx.fillRect(toScreenX(sx), toScreenY(workRect.y), slice.width * scale, slice.height * scale);
+        ctx.strokeRect(toScreenX(sx), toScreenY(workRect.y), slice.width * scale, slice.height * scale);
       }
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "rgba(255, 210, 95, 0.98)";
-      ctx.stroke();
+
+      for (let si = 0; si < input.geometry.sliceEntries.length; si++) {
+        const entry = input.geometry.sliceEntries[si];
+        if (input.showSlices) {
+          for (let pi = 0; pi < entry.edgePoints.length; pi++) {
+            const p = entry.edgePoints[pi];
+            ctx.beginPath();
+            ctx.arc(toScreenX(p.x), toScreenY(p.y), 1.5, 0, Math.PI * 2);
+            ctx.fillStyle = p.side === "R" ? "rgba(255, 240, 120, 0.95)" : "rgba(120, 230, 255, 0.95)";
+            ctx.fill();
+          }
+          if (entry.stripPoints.length > 1) {
+            ctx.beginPath();
+            ctx.moveTo(toScreenX(entry.stripPoints[0].x), toScreenY(entry.stripPoints[0].y));
+            for (let pi = 1; pi < entry.stripPoints.length; pi++) {
+              ctx.lineTo(toScreenX(entry.stripPoints[pi].x), toScreenY(entry.stripPoints[pi].y));
+            }
+            ctx.strokeStyle = "rgba(255, 120, 70, 0.85)";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+        }
+        if (input.showSlices) {
+          for (let ti = 0; ti < entry.culledTriangles.length; ti++) {
+            const tri = entry.culledTriangles[ti];
+            ctx.beginPath();
+            ctx.moveTo(toScreenX(tri.a.x), toScreenY(tri.a.y));
+            ctx.lineTo(toScreenX(tri.b.x), toScreenY(tri.b.y));
+            ctx.lineTo(toScreenX(tri.c.x), toScreenY(tri.c.y));
+            ctx.closePath();
+            ctx.fillStyle = "rgba(255, 30, 60, 0.16)";
+            ctx.strokeStyle = "rgba(255, 90, 110, 0.96)";
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 2]);
+            ctx.fill();
+            ctx.stroke();
+          }
+          ctx.setLineDash([]);
+        }
+        for (let ti = 0; ti < entry.triangles.length; ti++) {
+          const tri = entry.triangles[ti];
+          ctx.beginPath();
+          ctx.moveTo(toScreenX(tri.a.x), toScreenY(tri.a.y));
+          ctx.lineTo(toScreenX(tri.b.x), toScreenY(tri.b.y));
+          ctx.lineTo(toScreenX(tri.c.x), toScreenY(tri.c.y));
+          ctx.closePath();
+          ctx.fillStyle = "rgba(255, 80, 150, 0.05)";
+          ctx.strokeStyle = "rgba(255, 120, 185, 0.35)";
+          ctx.lineWidth = 1;
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+
+      for (let ti = 0; ti < input.semanticFaceTriangles.length; ti++) {
+        const tri = input.semanticFaceTriangles[ti];
+        const style = semanticFaceStyle(tri.semantic);
+        ctx.beginPath();
+        ctx.moveTo(tri.points[0].x, tri.points[0].y);
+        ctx.lineTo(tri.points[1].x, tri.points[1].y);
+        ctx.lineTo(tri.points[2].x, tri.points[2].y);
+        ctx.closePath();
+        ctx.fillStyle = style.fill;
+        ctx.strokeStyle = style.stroke;
+        ctx.lineWidth = 2;
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      if (input.showSlices) {
+        for (let ti = 0; ti < input.geometry.footprintCandidatesSpriteLocal.length; ti++) {
+          const tri = input.geometry.footprintCandidatesSpriteLocal[ti];
+          ctx.beginPath();
+          ctx.moveTo(toScreenX(tri.a.x), toScreenY(tri.a.y));
+          ctx.lineTo(toScreenX(tri.b.x), toScreenY(tri.b.y));
+          ctx.lineTo(toScreenX(tri.c.x), toScreenY(tri.c.y));
+          ctx.closePath();
+          ctx.fillStyle = "rgba(255, 0, 220, 0.40)";
+          ctx.strokeStyle = "rgba(255, 60, 240, 1)";
+          ctx.lineWidth = 3;
+          ctx.fill();
+          ctx.stroke();
+        }
+        const dimensionLabel = `N:${input.geometry.n}  M:${input.geometry.m}`;
+        ctx.font = "12px monospace";
+        ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+        ctx.fillText(dimensionLabel, anchorPt.x + 10, anchorPt.y - 14);
+        ctx.fillStyle = "rgba(255, 215, 245, 0.98)";
+        ctx.fillText(dimensionLabel, anchorPt.x + 9, anchorPt.y - 15);
+      }
+
+      if (input.showSemanticFaces) {
+        const semanticCounts: Record<HybridSemanticClass, number> = {
+          TOP: 0,
+          LEFT_SOUTH: 0,
+          RIGHT_EAST: 0,
+          CONFLICT: 0,
+          UNCLASSIFIED: 0,
+        };
+        for (let i = 0; i < input.semanticFaceTriangles.length; i++) {
+          semanticCounts[input.semanticFaceTriangles[i].semantic] += 1;
+        }
+        const legendRows: Array<{ label: string; semantic: HybridSemanticClass }> = [
+          { label: `TOP ${semanticCounts.TOP}`, semantic: "TOP" },
+          { label: `LEFT/SOUTH ${semanticCounts.LEFT_SOUTH}`, semantic: "LEFT_SOUTH" },
+          { label: `RIGHT/EAST ${semanticCounts.RIGHT_EAST}`, semantic: "RIGHT_EAST" },
+          { label: `CONFLICT ${semanticCounts.CONFLICT}`, semantic: "CONFLICT" },
+          { label: `UNCLASS ${semanticCounts.UNCLASSIFIED}`, semantic: "UNCLASSIFIED" },
+        ];
+        const legendX = anchorPt.x + 12;
+        const legendY = anchorPt.y - 16;
+        ctx.font = "11px monospace";
+        for (let ri = 0; ri < legendRows.length; ri++) {
+          const row = legendRows[ri];
+          const y = legendY + ri * 13;
+          const style = semanticFaceStyle(row.semantic);
+          ctx.fillStyle = "rgba(0, 0, 0, 0.72)";
+          ctx.fillRect(legendX - 2, y - 9, 11, 11);
+          ctx.fillStyle = style.fill;
+          ctx.fillRect(legendX, y - 7, 7, 7);
+          ctx.strokeStyle = style.stroke;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(legendX, y - 7, 7, 7);
+          ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+          ctx.fillText(row.label, legendX + 11, y + 1);
+          ctx.fillStyle = "rgba(245, 245, 245, 0.96)";
+          ctx.fillText(row.label, legendX + 10, y);
+        }
+      }
     }
 
-    const dotRadius = Math.max(2, Math.min(6, drawScale * 2));
     ctx.beginPath();
-    ctx.arc(anchorPt.x, anchorPt.y, dotRadius, 0, Math.PI * 2);
+    ctx.arc(anchorPt.x, anchorPt.y, Math.max(2, Math.min(6, scale * 2)), 0, Math.PI * 2);
     ctx.fillStyle = "rgba(255, 70, 90, 0.95)";
     ctx.fill();
     ctx.strokeStyle = "rgba(255, 240, 245, 0.95)";
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    const label = `anchor:${input.overlayId}`;
-    ctx.font = "10px monospace";
-    ctx.fillStyle = "rgba(0, 0, 0, 0.82)";
-    ctx.fillText(label, bboxX + 1, bboxY - 6 + 1);
-    ctx.fillStyle = "rgba(255, 255, 255, 0.94)";
-    ctx.fillText(label, bboxX, bboxY - 6);
     ctx.restore();
   });
 }
 
 function collectSouthProfilePoints(
-  anchorResult: StructureAnchorResult,
+  anchorResult: MonolithicStructureGeometry["anchorResult"],
   toScreen: (x: number, y: number) => ScreenPt,
 ): ScreenPt[] {
   const points: ScreenPt[] = [];
@@ -1229,7 +774,7 @@ function collectSouthProfilePoints(
 }
 
 function collectPlateauProfilePoints(
-  anchorResult: StructureAnchorResult,
+  anchorResult: MonolithicStructureGeometry["anchorResult"],
   toScreen: (x: number, y: number) => ScreenPt,
 ): ScreenPt[] {
   const points: ScreenPt[] = [];
@@ -1244,23 +789,41 @@ function collectPlateauProfilePoints(
   return points;
 }
 
+function pointInTriangle(
+  p: ScreenPt,
+  a: ScreenPt,
+  b: ScreenPt,
+  c: ScreenPt,
+): boolean {
+  const ab = (p.x - b.x) * (a.y - b.y) - (a.x - b.x) * (p.y - b.y);
+  const bc = (p.x - c.x) * (b.y - c.y) - (b.x - c.x) * (p.y - c.y);
+  const ca = (p.x - a.x) * (c.y - a.y) - (c.x - a.x) * (p.y - a.y);
+  const hasNeg = ab < 0 || bc < 0 || ca < 0;
+  const hasPos = ab > 0 || bc > 0 || ca > 0;
+  return !(hasNeg && hasPos);
+}
+
 function buildProjectedStructureFootprintQuad(
   overlay: {
-    tx: number;
-    ty: number;
-    w: number;
-    h: number;
+    seTx: number;
+    seTy: number;
     z: number;
     zVisualOffsetUnits?: number;
+    layerRole?: "STRUCTURE" | "OVERLAY";
+    monolithicSemanticSkinId?: string;
+    monolithicSemanticSpriteId?: string;
+    w: number;
+    h: number;
   },
   tileWorld: number,
   toScreenAtZ: (worldX: number, worldY: number, zVisual: number) => ScreenPt,
 ): ProjectedQuad {
   const zVisual = overlay.z + (overlay.zVisualOffsetUnits ?? 0);
-  const minWorldX = overlay.tx * tileWorld;
-  const minWorldY = overlay.ty * tileWorld;
-  const maxWorldX = (overlay.tx + overlay.w) * tileWorld;
-  const maxWorldY = (overlay.ty + overlay.h) * tileWorld;
+  const bounds = resolveMonolithicFootprintTileBoundsForOverlay(overlay as any);
+  const minWorldX = bounds.minTx * tileWorld;
+  const minWorldY = bounds.minTy * tileWorld;
+  const maxWorldX = (bounds.maxTx + 1) * tileWorld;
+  const maxWorldY = (bounds.maxTy + 1) * tileWorld;
   const nw = toScreenAtZ(minWorldX, minWorldY, zVisual);
   const ne = toScreenAtZ(maxWorldX, minWorldY, zVisual);
   const se = toScreenAtZ(maxWorldX, maxWorldY, zVisual);

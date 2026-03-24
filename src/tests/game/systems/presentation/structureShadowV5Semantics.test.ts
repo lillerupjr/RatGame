@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { RuntimeStructureTriangleCache, RuntimeStructureTrianglePiece } from "../../../../game/systems/presentation/runtimeStructureTriangles";
+import type { RuntimeStructureTriangleCache, RuntimeStructureTrianglePiece } from "../../../../game/structures/monolithicStructureGeometry";
 import {
   buildHybridTriangleSemanticMap,
   resolveHybridSemanticMaskBuckets,
@@ -12,11 +12,18 @@ function triangle(
   parentTy: number,
   points: [{ x: number; y: number }, { x: number; y: number }, { x: number; y: number }],
 ): RuntimeStructureTrianglePiece {
+  const basePoint = [...points].sort((lhs, rhs) => rhs.y - lhs.y || rhs.x - lhs.x)[0];
   return {
     structureInstanceId: "v5-semantic",
     stableId,
     points,
     srcPoints: points,
+    basePoint,
+    feetSortY: basePoint.y,
+    ownerTx: parentTx,
+    ownerTy: parentTy,
+    admissionTx: parentTx,
+    admissionTy: parentTy,
     parentTx,
     parentTy,
     cameraTx: 0,

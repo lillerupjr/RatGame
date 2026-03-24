@@ -32,6 +32,11 @@ import {
 import { buildRoadMarkingsPipeline } from "../../roads/markings/roadMarkingsPipeline";
 import { resolveMarkingSprite } from "../../roads/markings/markingSpriteResolver";
 import type { MarkingPiece, RoadBand, RoadContext } from "../../roads/markings/types";
+import {
+    assertMonolithicBuildingSemanticPrepassComplete,
+    collectRequiredMonolithicBuildingSkinIdsForMap,
+    getRequiredMonolithicBuildingPlacementGeometryForSprite,
+} from "../../structures/monolithicBuildingSemanticPrepass";
 
 export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL" | typeof TILE_ID_OCEAN;
 export type StairDir = "N" | "E" | "S" | "W";
@@ -189,6 +194,8 @@ export type StampOverlay = {
     scale?: number;
     kind?: "ROOF" | "PROP";
     flipX?: boolean;
+    monolithicSemanticSkinId?: string;
+    monolithicSemanticSpriteId?: string;
     /** Semantic render routing for overlay pieces. */
     layerRole?: "STRUCTURE" | "OVERLAY";
 };
@@ -316,6 +323,15 @@ export type CompiledKenneyMap = {
     occlusionGeometry: CompiledOcclusionGeometry;
     isRoadWorld(x: number, y: number): boolean;
 };
+
+function normalizeSkinId(raw: string | undefined): string | undefined {
+    if (typeof raw !== "string") return undefined;
+    const trimmed = raw.trim();
+    if (!trimmed) return undefined;
+    return trimmed
+        .replace(/\s*_\s*/g, "_")
+        .replace(/\s*\/\s*/g, "/");
+}
 
 type RoadRect = {
     x: number;
@@ -467,9 +483,14 @@ export function compileKenneyMapFromTable(
     const skinIdToUse = def.mapSkinId;
     const resolvedMapSkin = resolveMapSkin(skinIdToUse);
     const mapSkinDefaults = def.mapSkinDefaults;
-    const buildingPackId = (def.buildingPackId ?? DEFAULT_BUILDING_PACK_ID).trim() || DEFAULT_BUILDING_PACK_ID;
+    const buildingPackId = normalizeSkinId(def.buildingPackId) ?? DEFAULT_BUILDING_PACK_ID;
     const runSeed = options?.runSeed ?? 0;
     const mapId = options?.mapId ?? def.id;
+    const requiredBuildingSkinIds = collectRequiredMonolithicBuildingSkinIdsForMap(def);
+    assertMonolithicBuildingSemanticPrepassComplete(
+        `compileKenneyMapFromTable:${mapId}`,
+        requiredBuildingSkinIds,
+    );
 
     const hashString = (s: string): number => {
         let hash = 0;
@@ -1789,6 +1810,7 @@ export function compileKenneyMapFromTable(
     const blockedTiles = new Set<string>();
     const blockedTileSpansByKey = new Map<string, Array<{ zFrom: number; zTo: number }>>();
     const nonFlippableWarned = new Set<string>();
+    const buildingDimensionOverrideWarned = new Set<string>();
     const perimeterGlobalUsageBySkin = new Map<string, number>();
     const wallFaces = new Set<string>();
     const wallFaceList: SolidFaceRec[] = [];
@@ -1890,6 +1912,36 @@ export function compileKenneyMapFromTable(
             }
         }
     };
+    const warnBuildingDimensionOverride = (input: {
+        stamp: SemanticStamp;
+        skinId: string;
+        source: PlacementGeometry["source"];
+        spriteId: string;
+        authoredW: number;
+        authoredH: number;
+        placedW: number;
+        placedH: number;
+        mapId: string;
+    }): void => {
+        if (input.authoredW === input.placedW && input.authoredH === input.placedH) return;
+        const key = [
+            input.mapId,
+            input.stamp.x | 0,
+            input.stamp.y | 0,
+            input.skinId,
+            `${input.authoredW}x${input.authoredH}`,
+            `${input.placedW}x${input.placedH}`,
+            input.source,
+            input.spriteId,
+        ].join(":");
+        if (buildingDimensionOverrideWarned.has(key)) return;
+        buildingDimensionOverrideWarned.add(key);
+        console.warn(
+            `[buildings] Dimension override for skin=${input.skinId} at stamp (${input.stamp.x},${input.stamp.y}) `
+            + `on map=${input.mapId}: authored ${input.authoredW}x${input.authoredH} -> placed ${input.placedW}x${input.placedH} `
+            + `(source=${input.source}, sprite=${input.spriteId}).`,
+        );
+    };
 
     const resolveFlippedFootprint = (w: number, h: number, isFlippable: boolean, flippedRequested: boolean) => {
         if (flippedRequested && !isFlippable) {
@@ -1906,6 +1958,79 @@ export function compileKenneyMapFromTable(
             w: useFlipped ? h : w,
             h: useFlipped ? w : h,
         };
+    };
+
+    type PlacementGeometry = {
+        w: number;
+        h: number;
+        heightUnits: number;
+        source: "semantic" | "legacy";
+        spriteId: string;
+    };
+    const requireLegacySkinGeometry = (
+        skin: BuildingSkin,
+        context: string,
+    ): { w: number; h: number; heightUnits: number } => {
+        const rawW = skin.w;
+        const rawH = skin.h;
+        const rawHeightUnits = skin.heightUnits;
+        if (!Number.isFinite(rawW) || !Number.isFinite(rawH) || !Number.isFinite(rawHeightUnits)) {
+            throw new Error(
+                `[buildings] Missing legacy geometry metadata for ${skin.id} (${context}).`,
+            );
+        }
+        return {
+            w: Math.max(1, (rawW as number) | 0),
+            h: Math.max(1, (rawH as number) | 0),
+            heightUnits: Math.max(1, (rawHeightUnits as number) | 0),
+        };
+    };
+    const placementGeometryByKey = new Map<string, PlacementGeometry>();
+    const warnedLegacyGeometryBySkinId = new Set<string>();
+    const isMonolithicBuildingSkin = (skin: BuildingSkin): boolean =>
+        skin.wallSouth.every((id) => id === skin.roof) && skin.wallEast.every((id) => id === skin.roof);
+    const resolvePlacementGeometryForSkin = (
+        skin: BuildingSkin,
+        context: string,
+        resolvedSpriteId?: string,
+    ): PlacementGeometry => {
+        const semanticSpriteId = (resolvedSpriteId ?? skin.roof).trim().replace(/\.png$/i, "");
+        const cacheKey = `${skin.id}::${semanticSpriteId}`;
+        const cached = placementGeometryByKey.get(cacheKey);
+        if (cached) return cached;
+        const isBuildingSkin = !!BUILDING_SKINS[skin.id];
+        if (isBuildingSkin) {
+            const semantic = getRequiredMonolithicBuildingPlacementGeometryForSprite(
+                skin.id,
+                semanticSpriteId,
+                `compile-map:${context}`,
+            );
+            const resolved: PlacementGeometry = {
+                w: semantic.w,
+                h: semantic.h,
+                heightUnits: semantic.heightUnits,
+                source: "semantic",
+                spriteId: semanticSpriteId,
+            };
+            placementGeometryByKey.set(cacheKey, resolved);
+            return resolved;
+        }
+        if (!warnedLegacyGeometryBySkinId.has(skin.id)) {
+            warnedLegacyGeometryBySkinId.add(skin.id);
+            console.warn(
+                `[buildings] Legacy geometry metadata read for non-building skin ${skin.id} in ${context}.`,
+            );
+        }
+        const legacyGeometry = requireLegacySkinGeometry(skin, `legacy-placement:${context}`);
+        const resolved: PlacementGeometry = {
+            w: legacyGeometry.w,
+            h: legacyGeometry.h,
+            heightUnits: legacyGeometry.heightUnits,
+            source: "legacy",
+            spriteId: semanticSpriteId,
+        };
+        placementGeometryByKey.set(cacheKey, resolved);
+        return resolved;
     };
 
     const EMIT_STRUCTURE_SUPPORT_TOPS = false;
@@ -1936,7 +2061,7 @@ export function compileKenneyMapFromTable(
                 mapDefaults: mapSkinDefaults,
             });
 
-            const forcedSkinId = skinOverride ?? stamp.skinId;
+            const forcedSkinId = normalizeSkinId(skinOverride ?? stamp.skinId);
             const buildingLayout = stamp.type === "building" ? stamp.layout : undefined;
             if (buildingLayout === "perimeter_outward" && typeof stamp.flipped === "boolean") {
                 throw new Error(`[buildings] Building stamp at (${stamp.x},${stamp.y}) cannot combine layout=perimeter_outward with flipped.`);
@@ -1944,11 +2069,12 @@ export function compileKenneyMapFromTable(
 
             if (buildingLayout === "perimeter_outward") {
                 const assertHeightRange = (skin: BuildingSkin): void => {
-                    if (stamp.heightUnitsMin !== undefined && skin.heightUnits < stamp.heightUnitsMin) {
-                        throw new Error(`Building skin "${skin.id}" heightUnits ${skin.heightUnits} is below minimum ${stamp.heightUnitsMin}.`);
+                    const geometry = resolvePlacementGeometryForSkin(skin, `perimeter-height-range:${skin.id}`);
+                    if (stamp.heightUnitsMin !== undefined && geometry.heightUnits < stamp.heightUnitsMin) {
+                        throw new Error(`Building skin "${skin.id}" heightUnits ${geometry.heightUnits} is below minimum ${stamp.heightUnitsMin}.`);
                     }
-                    if (stamp.heightUnitsMax !== undefined && skin.heightUnits > stamp.heightUnitsMax) {
-                        throw new Error(`Building skin "${skin.id}" heightUnits ${skin.heightUnits} is above maximum ${stamp.heightUnitsMax}.`);
+                    if (stamp.heightUnitsMax !== undefined && geometry.heightUnits > stamp.heightUnitsMax) {
+                        throw new Error(`Building skin "${skin.id}" heightUnits ${geometry.heightUnits} is above maximum ${stamp.heightUnitsMax}.`);
                     }
                 };
                 const candidateSkins: BuildingSkin[] = (() => {
@@ -1963,8 +2089,14 @@ export function compileKenneyMapFromTable(
                     return resolveBuildingCandidates(buildingPackId)
                         .map((id) => BUILDING_SKINS[id] ?? CONTAINER_SKINS[id])
                         .filter((skin): skin is BuildingSkin => !!skin)
-                        .filter((skin) => stamp.heightUnitsMin === undefined || skin.heightUnits >= stamp.heightUnitsMin)
-                        .filter((skin) => stamp.heightUnitsMax === undefined || skin.heightUnits <= stamp.heightUnitsMax);
+                        .filter((skin) => {
+                            const geometry = resolvePlacementGeometryForSkin(skin, `perimeter-candidate-filter:${skin.id}`);
+                            return stamp.heightUnitsMin === undefined || geometry.heightUnits >= stamp.heightUnitsMin;
+                        })
+                        .filter((skin) => {
+                            const geometry = resolvePlacementGeometryForSkin(skin, `perimeter-candidate-filter:${skin.id}`);
+                            return stamp.heightUnitsMax === undefined || geometry.heightUnits <= stamp.heightUnitsMax;
+                        });
                 })();
                 const occupied = new Array(w * h).fill(false);
                 const canPlace = (x0: number, y0: number, cw: number, ch: number): boolean => {
@@ -2086,7 +2218,18 @@ export function compileKenneyMapFromTable(
                         const dir = dirs[di];
                         for (let i = 0; i < candidateSkins.length; i++) {
                             const skin = candidateSkins[i];
-                            const oriented = orientBuildingFootprintByDir(skin.w, skin.h, skin.defaultFacing, dir);
+                            const monolithicSkin = isMonolithicBuildingSkin(skin);
+                            const directionalSpriteId = monolithicSkin
+                                ? resolveBuildingSpriteId(skin.roof, dir)
+                                : undefined;
+                            const geometry = resolvePlacementGeometryForSkin(
+                                skin,
+                                `perimeter-corner:${skin.id}`,
+                                directionalSpriteId,
+                            );
+                            const oriented = monolithicSkin
+                                ? { w: geometry.w, h: geometry.h }
+                                : orientBuildingFootprintByDir(geometry.w, geometry.h, skin.defaultFacing, dir);
                             const cw = oriented.w;
                             const ch = oriented.h;
                             const xCandidates = dir === "E"
@@ -2120,7 +2263,18 @@ export function compileKenneyMapFromTable(
                     const candidates: PerimeterPickCandidate[] = [];
                     for (let i = 0; i < candidateSkins.length; i++) {
                         const skin = candidateSkins[i];
-                        const oriented = orientBuildingFootprintByDir(skin.w, skin.h, skin.defaultFacing, side);
+                        const monolithicSkin = isMonolithicBuildingSkin(skin);
+                        const directionalSpriteId = monolithicSkin
+                            ? resolveBuildingSpriteId(skin.roof, side)
+                            : undefined;
+                        const geometry = resolvePlacementGeometryForSkin(
+                            skin,
+                            `perimeter-side:${skin.id}`,
+                            directionalSpriteId,
+                        );
+                        const oriented = monolithicSkin
+                            ? { w: geometry.w, h: geometry.h }
+                            : orientBuildingFootprintByDir(geometry.w, geometry.h, skin.defaultFacing, side);
                         const cw = oriented.w;
                         const ch = oriented.h;
                         const px = side === "N" || side === "S" ? cursor : (side === "E" ? w - cw : 0);
@@ -2213,37 +2367,54 @@ export function compileKenneyMapFromTable(
                     .map((id) => BUILDING_SKINS[id])
                     .filter((skin): skin is BuildingSkin => !!skin)
                     .flatMap((skin) => {
+                        const monolithicSkin = isMonolithicBuildingSkin(skin);
+                        const directionalSpriteId = monolithicSkin && buildingDir
+                            ? resolveBuildingSpriteId(skin.roof, buildingDir)
+                            : undefined;
+                        const geometry = resolvePlacementGeometryForSkin(
+                            skin,
+                            `candidate-select:${skin.id}`,
+                            directionalSpriteId,
+                        );
                         if (buildingDir) {
-                            const oriented = orientBuildingFootprintByDir(skin.w, skin.h, skin.defaultFacing, buildingDir);
+                            const oriented = monolithicSkin
+                                ? { w: geometry.w, h: geometry.h }
+                                : orientBuildingFootprintByDir(geometry.w, geometry.h, skin.defaultFacing, buildingDir);
                             if (oriented.w <= w && oriented.h <= h) {
                                 return [{ skin, oriented: { ...oriented, flipped: false } }];
                             }
                             return [];
                         }
                         if (typeof stamp.flipped === "boolean") {
-                            const oriented = resolveFlippedFootprint(skin.w, skin.h, skin.isFlippable, stamp.flipped);
+                            const oriented = resolveFlippedFootprint(geometry.w, geometry.h, skin.isFlippable, stamp.flipped);
                             if (oriented.w <= w && oriented.h <= h) return [{ skin, oriented }];
                             return [];
                         }
 
                         const fitsNormal =
-                            skin.w <= w &&
-                            skin.h <= h;
+                            geometry.w <= w &&
+                            geometry.h <= h;
                         const fitsFlipped =
                             skin.isFlippable &&
-                            skin.h <= w &&
-                            skin.w <= h;
+                            geometry.h <= w &&
+                            geometry.w <= h;
 
                         if (fitsNormal) {
-                            return [{ skin, oriented: { w: skin.w, h: skin.h, flipped: false } }];
+                            return [{ skin, oriented: { w: geometry.w, h: geometry.h, flipped: false } }];
                         }
                         if (fitsFlipped) {
-                            return [{ skin, oriented: { w: skin.h, h: skin.w, flipped: true } }];
+                            return [{ skin, oriented: { w: geometry.h, h: geometry.w, flipped: true } }];
                         }
                         return [];
                     })
-                    .filter(({ skin }) => stamp.heightUnitsMin === undefined || skin.heightUnits >= stamp.heightUnitsMin)
-                    .filter(({ skin }) => stamp.heightUnitsMax === undefined || skin.heightUnits <= stamp.heightUnitsMax);
+                    .filter(({ skin }) => {
+                        const geometry = resolvePlacementGeometryForSkin(skin, `candidate-height-filter:${skin.id}`);
+                        return stamp.heightUnitsMin === undefined || geometry.heightUnits >= stamp.heightUnitsMin;
+                    })
+                    .filter(({ skin }) => {
+                        const geometry = resolvePlacementGeometryForSkin(skin, `candidate-height-filter:${skin.id}`);
+                        return stamp.heightUnitsMax === undefined || geometry.heightUnits <= stamp.heightUnitsMax;
+                    });
 
                 const occupied = new Array(w * h).fill(false);
                 const placements: Array<{ x: number; y: number; w: number; h: number; skinId: string; flipped: boolean }> = [];
@@ -2348,23 +2519,49 @@ export function compileKenneyMapFromTable(
             if (!skin) {
                 throw new Error(`[buildings] Missing skin entry for id=${forcedSkinId} (stamp (${stamp.x},${stamp.y}))`);
             }
-            const orientedByDir = orientBuildingFootprintByDir(skin.w, skin.h, skin.defaultFacing, buildingDir);
+            const isMonolithicSkin = isMonolithicBuildingSkin(skin);
+            const resolvedPlacementSpriteId = isMonolithicSkin
+                ? resolveBuildingSpriteId(skin.roof, buildingDir)
+                : undefined;
+            const skinGeometry = resolvePlacementGeometryForSkin(
+                skin,
+                `forced-placement:${skin.id}`,
+                resolvedPlacementSpriteId,
+            );
+            const orientedByDir = isMonolithicSkin
+                ? { w: skinGeometry.w, h: skinGeometry.h }
+                : orientBuildingFootprintByDir(skinGeometry.w, skinGeometry.h, skin.defaultFacing, buildingDir);
             const oriented = buildingDir
                 ? { ...orientedByDir, flipped: false }
-                : resolveFlippedFootprint(skin.w, skin.h, skin.isFlippable, !!stamp.flipped);
+                : resolveFlippedFootprint(skinGeometry.w, skinGeometry.h, skin.isFlippable, !!stamp.flipped);
             const placeW = oriented.w;
             const placeH = oriented.h;
-            if (stamp.heightUnitsMin !== undefined && skin.heightUnits < stamp.heightUnitsMin) {
-                throw new Error(`Building skin "${skin.id}" heightUnits ${skin.heightUnits} is below minimum ${stamp.heightUnitsMin}.`);
+            if (stamp.type === "building") {
+                warnBuildingDimensionOverride({
+                    stamp,
+                    skinId: skin.id,
+                    source: skinGeometry.source,
+                    spriteId: skinGeometry.spriteId,
+                    authoredW: w,
+                    authoredH: h,
+                    placedW: placeW,
+                    placedH: placeH,
+                    mapId,
+                });
             }
-            if (stamp.heightUnitsMax !== undefined && skin.heightUnits > stamp.heightUnitsMax) {
-                throw new Error(`Building skin "${skin.id}" heightUnits ${skin.heightUnits} is above maximum ${stamp.heightUnitsMax}.`);
+            if (stamp.heightUnitsMin !== undefined && skinGeometry.heightUnits < stamp.heightUnitsMin) {
+                throw new Error(`Building skin "${skin.id}" heightUnits ${skinGeometry.heightUnits} is below minimum ${stamp.heightUnitsMin}.`);
+            }
+            if (stamp.heightUnitsMax !== undefined && skinGeometry.heightUnits > stamp.heightUnitsMax) {
+                throw new Error(`Building skin "${skin.id}" heightUnits ${skinGeometry.heightUnits} is above maximum ${stamp.heightUnitsMax}.`);
             }
 
-            const heightUnits = skin.heightUnits | 0;
-            const anchorLiftPx = (skin.anchorLiftUnits | 0) * HEIGHT_UNIT_PX;
-            const wallLiftPx = ((skin.wallLiftUnits ?? 0) | 0) * HEIGHT_UNIT_PX;
+            const heightUnits = skinGeometry.heightUnits | 0;
             const scale = skin.spriteScale ?? 1;
+            const anchorLiftPx = isMonolithicSkin
+                ? 0
+                : (((skin.anchorLiftUnits ?? 0) | 0) * HEIGHT_UNIT_PX);
+            const wallLiftPx = ((skin.wallLiftUnits ?? 0) | 0) * HEIGHT_UNIT_PX;
             const roofLiftPx = (skin.roofLiftPx ?? (((skin.roofLiftUnits ?? 0) | 0) * HEIGHT_UNIT_PX)) * scale;
             const offsetPx = skin.offsetPx ?? { x: 0, y: 0 };
             const anchorOffsetPx = skin.anchorOffsetPx ?? { x: 0, y: 0 };
@@ -2377,9 +2574,6 @@ export function compileKenneyMapFromTable(
                 throw new Error(`Building skin "${skin.id}" is missing required sprites.`);
             }
 
-            const isMonolithicSkin =
-                skin.wallSouth.every((id) => id === skin.roof) &&
-                skin.wallEast.every((id) => id === skin.roof);
             const roofSpriteId = resolveBuildingSpriteId(skin.roof, buildingDir);
 
             if (isMonolithicSkin) {
@@ -2403,6 +2597,8 @@ export function compileKenneyMapFromTable(
                     flipX: oriented.flipped,
                     scale,
                     kind: "ROOF",
+                    monolithicSemanticSkinId: skin.id,
+                    monolithicSemanticSpriteId: roofSpriteId,
                     layerRole: "STRUCTURE",
                 });
 
@@ -2657,27 +2853,30 @@ export function compileKenneyMapFromTable(
             const pool = stamp.pool ?? [CONTAINER_PACK_ID];
             const flippedRequested = typeof stamp.flipped === "boolean" ? stamp.flipped : undefined;
             let chosen: BuildingSkin;
+            let chosenGeometry: { w: number; h: number; heightUnits: number };
             let chosenFlipped = false;
             if (stamp.skinId) {
-                const forced = CONTAINER_SKINS[stamp.skinId];
+                const forced = CONTAINER_SKINS[normalizeSkinId(stamp.skinId) ?? ""];
                 if (!forced) {
                     throw new Error(`Container selection: unknown skinId "${stamp.skinId}".`);
                 }
+                const forcedGeometry = requireLegacySkinGeometry(forced, `container-forced:${forced.id}`);
                 if (flippedRequested !== undefined) {
-                    const oriented = resolveFlippedFootprint(forced.w, forced.h, forced.isFlippable, flippedRequested);
+                    const oriented = resolveFlippedFootprint(forcedGeometry.w, forcedGeometry.h, forced.isFlippable, flippedRequested);
                     if (oriented.w !== w || oriented.h !== h) {
                         throw new Error(`Container selection: forced skin "${forced.id}" with flipped=${flippedRequested} does not match stamp ${w}x${h}.`);
                     }
                     chosenFlipped = oriented.flipped;
                 } else {
-                    const fitsNormal = forced.w === w && forced.h === h;
-                    const fitsFlipped = forced.isFlippable && forced.h === w && forced.w === h;
+                    const fitsNormal = forcedGeometry.w === w && forcedGeometry.h === h;
+                    const fitsFlipped = forced.isFlippable && forcedGeometry.h === w && forcedGeometry.w === h;
                     if (!fitsNormal && !fitsFlipped) {
                         throw new Error(`Container selection: forced skin "${forced.id}" does not match stamp ${w}x${h} in either orientation.`);
                     }
                     chosenFlipped = !fitsNormal && fitsFlipped;
                 }
                 chosen = forced;
+                chosenGeometry = forcedGeometry;
             } else {
                 const poolIds = pool.map((id) => id.trim()).filter(Boolean);
                 const candidatesById = new Map<BuildingSkinId, BuildingSkin>();
@@ -2692,21 +2891,22 @@ export function compileKenneyMapFromTable(
                 }
                 const candidates = Array.from(candidatesById.values())
                     .flatMap((skin) => {
+                        const geometry = requireLegacySkinGeometry(skin, `container-candidate:${skin.id}`);
                         if (flippedRequested !== undefined) {
-                            const oriented = resolveFlippedFootprint(skin.w, skin.h, skin.isFlippable, flippedRequested);
+                            const oriented = resolveFlippedFootprint(geometry.w, geometry.h, skin.isFlippable, flippedRequested);
                             if (oriented.w === w && oriented.h === h) {
-                                return [{ skin, flipped: oriented.flipped }];
+                                return [{ skin, geometry, flipped: oriented.flipped }];
                             }
                             return [];
                         }
-                        const fitsNormal = skin.w === w && skin.h === h;
-                        const fitsFlipped = skin.isFlippable && skin.h === w && skin.w === h;
-                        if (fitsNormal) return [{ skin, flipped: false }];
-                        if (fitsFlipped) return [{ skin, flipped: true }];
+                        const fitsNormal = geometry.w === w && geometry.h === h;
+                        const fitsFlipped = skin.isFlippable && geometry.h === w && geometry.w === h;
+                        if (fitsNormal) return [{ skin, geometry, flipped: false }];
+                        if (fitsFlipped) return [{ skin, geometry, flipped: true }];
                         return [];
                     })
-                    .filter(({ skin }) => stamp.heightUnitsMin === undefined || skin.heightUnits >= stamp.heightUnitsMin)
-                    .filter(({ skin }) => stamp.heightUnitsMax === undefined || skin.heightUnits <= stamp.heightUnitsMax)
+                    .filter(({ geometry }) => stamp.heightUnitsMin === undefined || geometry.heightUnits >= stamp.heightUnitsMin)
+                    .filter(({ geometry }) => stamp.heightUnitsMax === undefined || geometry.heightUnits <= stamp.heightUnitsMax)
                     .sort((a, b) => a.skin.id.localeCompare(b.skin.id));
                 if (candidates.length === 0) {
                     throw new Error(`Container selection: no candidates for stamp ${w}x${h} with pool [${pool.join(", ")}].`);
@@ -2715,11 +2915,12 @@ export function compileKenneyMapFromTable(
                 const rng = new RNG(seed);
                 const picked = candidates[rng.int(0, candidates.length - 1)] ?? candidates[0];
                 chosen = picked.skin;
+                chosenGeometry = picked.geometry;
                 chosenFlipped = picked.flipped;
             }
 
             const stackLevel = Math.max(0, Math.trunc(stamp.stackLevel ?? 0));
-            const zStackUnits = Math.trunc(stamp.zStackUnits ?? (stackLevel * chosen.heightUnits));
+            const zStackUnits = Math.trunc(stamp.zStackUnits ?? (stackLevel * chosenGeometry.heightUnits));
             const baseStamp: SemanticStamp = {
                 ...stamp,
                 type: "building",
@@ -2738,7 +2939,7 @@ export function compileKenneyMapFromTable(
                 const roll = (seed % 10000) / 10000;
                 if (roll < chance) {
                     compileBuildingStamp(
-                        { ...baseStamp, z: (stamp.z ?? 0) + chosen.heightUnits },
+                        { ...baseStamp, z: (stamp.z ?? 0) + chosenGeometry.heightUnits },
                         stampIndex,
                         chosen.id
                     );

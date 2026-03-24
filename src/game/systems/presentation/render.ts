@@ -75,9 +75,6 @@ import { VFX_CLIPS, VFX_CLIP_INDEX } from "../../content/vfxRegistry";
 import { PRJ_KIND } from "../../factories/projectileFactory";
 import { getDecalSpriteId, type RuntimeDecalSetId } from "../../content/runtimeDecalConfig";
 import { roadMarkingDecalScale, shouldPixelSnapRoadMarking } from "../../roads/roadMarkingRender";
-import {
-  buildRuntimeStructureBandPieces,
-} from "../../../engine/render/sprites/runtimeStructureSlicing";
 import { orientedDims, seAnchorFromTopLeft } from "../../../engine/render/sprites/structureFootprintOwnership";
 import {
   type DebugOverlayContext,
@@ -152,16 +149,15 @@ import {
   buildRampRoadTiles,
   decalRelightPieceKey,
   floorRelightPieceKey,
-  structureSliceRelightPieceKey,
   syncStaticRelightRuntimeForFrame,
 } from "./staticRelight/staticRelightBakeRebuild";
 import {
+  buildRuntimeStructureProjectedDraw,
   buildRuntimeStructureTriangleContextKey,
+  type RuntimeStructureAnchorPlacementDebug,
   type RuntimeStructureTriangleRect,
-} from "./runtimeStructureTriangles";
-import {
-  rebuildRuntimeStructureTriangleCacheForMap,
-} from "./structureTriangles/structureTriangleCacheRebuild";
+  rebuildMonolithicStructureTriangleCacheForMap,
+} from "../../structures/monolithicStructureGeometry";
 import {
   type StructureShadowProjectedTriangle,
 } from "./structureShadowV1";
@@ -206,7 +202,7 @@ import {
   getRuntimeIsoTopCanvas,
 } from "./presentationImageTransforms";
 import {
-  runtimeStructureTriangleCacheStore,
+  monolithicStructureGeometryCacheStore,
   staticRelightBakeStore,
   structureShadowHybridCacheStore,
   structureShadowV1CacheStore,
@@ -617,6 +613,7 @@ export async function renderSystem(
 
     flipX?: boolean;
     scale?: number;
+    anchorPlacementDebugNoCamera?: RuntimeStructureAnchorPlacementDebug;
   };
 
   type MaskDraw = (maskCtx: CanvasRenderingContext2D) => void;
@@ -992,39 +989,19 @@ export async function renderSystem(
   const buildOverlayDraw = (o: StampOverlay): RenderPieceDraw | null => {
     const rec = o.spriteId ? getTileSpriteById(o.spriteId) : null;
     if (!rec?.ready || !rec.img || rec.img.width <= 0 || rec.img.height <= 0) return null;
-    const ow = rec.img.width;
-    const oh = rec.img.height;
-    const scale = o.scale ?? 1;
-    const southY = o.ty + o.h - 1;
-    const anchorTx =
-        o.anchorTx ??
-        (o.w >= o.h ? (o.tx + o.w - 1) : o.tx); // SE if wide, SW if tall
-
-    const anchorTy = o.anchorTy ?? southY;
+    const projectedNoCamera = buildRuntimeStructureProjectedDraw(o, rec.img);
     const footprintW = Math.max(1, o.w | 0);
     const isFootprintOverlay =
       o.layerRole === "STRUCTURE" || ((o.kind ?? "ROOF") === "PROP" && (footprintW > 1 || (o.h | 0) > 1));
-    const tileWidth = 2 * T * ISO_X;
-    const halfTileW = tileWidth * 0.5;
-    // Derived footprint skew correction in screen X:
-    // 3x2 => -32, 2x3 => +32 (with T=64, ISO_X=1), scales with (h-w).
-    const footprintAnchorAdjustX = isFootprintOverlay
-      ? ((o.h - o.w) * halfTileW) * 0.5
-      : 0;
-    const wx = (anchorTx + 0.5) * T;
-    const wy = (anchorTy + 0.5) * T;
-    const p = worldToScreen(wx, wy);
-    const zVisual = o.z + (o.zVisualOffsetUnits ?? 0);
-    const dx = p.x + camX - ow * scale * 0.5 + (o.drawDxOffset ?? 0) + footprintAnchorAdjustX;
-    const dy = p.y + camY - oh * scale - zVisual * ELEV_PX - (o.drawDyOffset ?? 0);
+    const dx = projectedNoCamera.dx + camX;
+    const dy = projectedNoCamera.dy + camY;
     if (LOG_STRUCTURE_ANCHOR_DEBUG && isFootprintOverlay && !loggedStructureAnchorDebugIds.has(o.id)) {
       loggedStructureAnchorDebugIds.add(o.id);
       console.log("[structure-anchor-debug]", {
         id: o.id,
-        anchorTx,
-        anchorTy,
         tileW: footprintW,
-        xAdjustPx: footprintAnchorAdjustX,
+        mode: projectedNoCamera.anchorPlacementDebugNoCamera?.mode ?? "n/a",
+        alignmentDelta: projectedNoCamera.anchorPlacementDebugNoCamera?.alignmentDeltaPx ?? null,
         screenX: dx,
       });
     }
@@ -1032,10 +1009,11 @@ export async function renderSystem(
       img: rec.img,
       dx,
       dy,
-      dw: ow,
-      dh: oh,
-      flipX: !!o.flipX,
-      scale,
+      dw: projectedNoCamera.dw,
+      dh: projectedNoCamera.dh,
+      flipX: projectedNoCamera.flipX,
+      scale: projectedNoCamera.scale,
+      anchorPlacementDebugNoCamera: projectedNoCamera.anchorPlacementDebugNoCamera,
     };
   };
 
@@ -1211,10 +1189,8 @@ export async function renderSystem(
       lights: dynamicLights,
     };
   }
-  const structureTriangleGeometryEnabled = renderSettings.structureTriangleGeometryEnabled !== false;
   const structureTriangleAdmissionMode = renderSettings.structureTriangleAdmissionMode ?? "hybrid";
-  const structureTriangleCutoutEnabled = structureTriangleGeometryEnabled
-    && renderSettings.structureTriangleCutoutEnabled === true;
+  const structureTriangleCutoutEnabled = renderSettings.structureTriangleCutoutEnabled === true;
   const structureTriangleCutoutHalfWidth = Math.max(
     0,
     Math.min(12, Math.round(Number(renderSettings.structureTriangleCutoutWidth ?? 2))),
@@ -1251,14 +1227,12 @@ export async function renderSystem(
   );
   const runtimeStructureTriangleContextKey = buildRuntimeStructureTriangleContextKey({
     mapId: compiledMap.id,
-    enabled: structureTriangleGeometryEnabled,
   });
-  const runtimeStructureTriangleContextChanged = runtimeStructureTriangleCacheStore
+  const runtimeStructureTriangleContextChanged = monolithicStructureGeometryCacheStore
     .resetIfContextChanged(runtimeStructureTriangleContextKey);
   const structureShadowFrame = buildStructureShadowFrameContext(
     {
       mapId: compiledMap.id,
-      structureTriangleGeometryEnabled,
       shadowCasterMode: SHADOW_CASTER_MODE,
       shadowSunTimeHour: debugFlags.shadowSunTimeHour,
       sunElevationOverrideEnabled: debugFlags.sunElevationOverrideEnabled,
@@ -1273,9 +1247,9 @@ export async function renderSystem(
   );
   const shadowSunModel = structureShadowFrame.sunModel;
   staticRelightFrame = staticRelight.frame;
-  if (runtimeStructureTriangleContextChanged && structureTriangleGeometryEnabled) {
-    rebuildRuntimeStructureTriangleCacheForMap(compiledMap, {
-      cacheStore: runtimeStructureTriangleCacheStore,
+  if (runtimeStructureTriangleContextChanged) {
+    rebuildMonolithicStructureTriangleCacheForMap(compiledMap, {
+      cacheStore: monolithicStructureGeometryCacheStore,
       getFlippedOverlayImage,
     });
   }
@@ -1786,7 +1760,6 @@ export async function renderSystem(
     CONTAINER_WALL_SORT_BIAS,
     resolveStructureOverlayAdmissionContext,
     strictViewportTileBounds,
-    structureTriangleGeometryEnabled,
     structureTriangleAdmissionMode,
     collectStructureOverlays,
     debugFlags,
@@ -1810,7 +1783,7 @@ export async function renderSystem(
     SHADOW_V6_PRIMARY_SEMANTIC_BUCKET,
     SHADOW_V6_SECONDARY_SEMANTIC_BUCKET,
     SHADOW_V6_TOP_SEMANTIC_BUCKET,
-    runtimeStructureTriangleCacheStore,
+    monolithicStructureGeometryCacheStore,
     getFlippedOverlayImage,
     SHOW_STRUCTURE_SLICE_DEBUG,
     SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG,

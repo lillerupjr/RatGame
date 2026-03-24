@@ -6,6 +6,7 @@ import type { TableMapDef } from "../../../../game/map/formats/table/tableMapTyp
 import { CONTAINER_SKINS } from "../../../../game/content/containers";
 import { seAnchorFromTopLeft } from "../../../../engine/render/sprites/structureFootprintOwnership";
 import { RUNTIME_FLOOR_VARIANT_COUNTS } from "../../../../game/content/runtimeFloorConfig";
+import { getRequiredMonolithicBuildingPlacementGeometry } from "../../../../game/structures/monolithicBuildingSemanticPrepass";
 
 describe("structure legacy transition", () => {
   it("limits downtown building pack to directional skins 1..3", () => {
@@ -50,15 +51,15 @@ describe("structure legacy transition", () => {
     expect(downtownPackIds.length).toBeGreaterThan(0);
     const seedId = downtownPackIds.find((id) => !!BUILDING_SKINS[id]);
     expect(seedId).toBeTruthy();
-    const seedSkin = BUILDING_SKINS[seedId!];
+    const seedGeometry = getRequiredMonolithicBuildingPlacementGeometry(seedId!, "test:downtown-pack-smoke");
 
     const mapDef: TableMapDef = {
       id: "downtown_pack_smoke",
-      w: Math.max(8, seedSkin.w + 2),
-      h: Math.max(8, seedSkin.h + 2),
+      w: Math.max(8, seedGeometry.w + 2),
+      h: Math.max(8, seedGeometry.h + 2),
       buildingPackId: "downtown_buildings",
       cells: [{ x: 0, y: 0, z: 0, type: "floor" }],
-      stamps: [{ x: 1, y: 1, z: 0, type: "building", w: seedSkin.w, h: seedSkin.h }],
+      stamps: [{ x: 1, y: 1, z: 0, type: "building", w: seedGeometry.w, h: seedGeometry.h }],
     };
 
     const compiled = compileKenneyMapFromTable(mapDef);
@@ -68,6 +69,36 @@ describe("structure legacy transition", () => {
     expect(structureRoofs.length).toBeGreaterThan(0);
     expect(structureRoofs.some((o) => o.spriteId.includes("structures/buildings/downtown/"))).toBe(true);
     expect(structureRoofs.some((o) => o.spriteId.includes("structures/buildings/china_town/"))).toBe(false);
+  });
+
+  it("keeps downtown_2 footprint parity and removes authored lift dependency", () => {
+    const skin = BUILDING_SKINS.downtown_2;
+    expect(skin).toBeTruthy();
+    expect(() => (skin as any).w).toThrow();
+    expect(() => (skin as any).h).toThrow();
+    expect(() => (skin as any).heightUnits).toThrow();
+    const semantic = getRequiredMonolithicBuildingPlacementGeometry("downtown_2", "test:downtown_2");
+    expect(semantic.w).toBe(4);
+    expect(semantic.h).toBe(4);
+    expect(semantic.heightUnits).toBe(32);
+    expect(skin.anchorLiftUnits).toBeUndefined();
+
+    const mapDef: TableMapDef = {
+      id: "downtown_2_computed_metadata_parity",
+      w: 10,
+      h: 10,
+      cells: [{ x: 0, y: 0, z: 0, type: "floor" }],
+      stamps: [{ x: 2, y: 2, z: 0, type: "building", skinId: "downtown_2", w: 4, h: 4 }],
+    };
+
+    const compiled = compileKenneyMapFromTable(mapDef, { runSeed: 919, mapId: mapDef.id });
+    const roof = compiled.overlays.find(
+      (o) => o.layerRole === "STRUCTURE" && o.spriteId.startsWith("structures/buildings/downtown/2"),
+    );
+    expect(roof).toBeTruthy();
+    expect(roof?.w).toBe(4);
+    expect(roof?.h).toBe(4);
+    expect(roof?.drawDyOffset).toBe(0);
   });
 
   it("uses directional downtown roof sprite IDs when building dir is set", () => {
@@ -294,16 +325,17 @@ describe("structure legacy transition", () => {
   it("uses china town building pack assets for china town semantic building areas", () => {
     const chinaPackIds = BUILDING_PACKS["china_town_buildings"] ?? [];
     expect(chinaPackIds.length).toBeGreaterThan(0);
-    const seedSkin = BUILDING_SKINS[chinaPackIds[0]];
-    expect(seedSkin).toBeTruthy();
+    const seedId = chinaPackIds.find((id) => !!BUILDING_SKINS[id]);
+    expect(seedId).toBeTruthy();
+    const seedGeometry = getRequiredMonolithicBuildingPlacementGeometry(seedId!, "test:china-pack-smoke");
 
     const mapDef: TableMapDef = {
       id: "china_pack_smoke",
-      w: Math.max(4, seedSkin.w + 1),
-      h: Math.max(4, seedSkin.h + 1),
+      w: Math.max(4, seedGeometry.w + 1),
+      h: Math.max(4, seedGeometry.h + 1),
       buildingPackId: "china_town_buildings",
       cells: [{ x: 0, y: 0, z: 0, type: "floor" }],
-      stamps: [{ x: 0, y: 0, z: 0, type: "building", w: seedSkin.w, h: seedSkin.h }],
+      stamps: [{ x: 0, y: 0, z: 0, type: "building", w: seedGeometry.w, h: seedGeometry.h }],
     };
 
     const compiled = compileKenneyMapFromTable(mapDef);
@@ -372,6 +404,9 @@ describe("structure legacy transition", () => {
 
   it("applies stackLevel using heightUnits for container z placement", () => {
     const container = CONTAINER_SKINS.container1;
+    const containerW = container.w ?? 3;
+    const containerH = container.h ?? 2;
+    const containerHeightUnits = container.heightUnits ?? 8;
     const mapDef: TableMapDef = {
       id: "container_stack_level",
       w: 6,
@@ -383,8 +418,8 @@ describe("structure legacy transition", () => {
         z: 0,
         type: "container",
         skinId: "container1",
-        w: container.w,
-        h: container.h,
+        w: containerW,
+        h: containerH,
         stackLevel: 1,
         stackChance: 0,
       }],
@@ -392,7 +427,7 @@ describe("structure legacy transition", () => {
     const compiled = compileKenneyMapFromTable(mapDef);
     const structure = compiled.overlays.find((o) => o.layerRole === "STRUCTURE" && o.spriteId.includes("structures/containers/"));
     expect(structure).toBeTruthy();
-    expect(structure!.z).toBeGreaterThanOrEqual(container.heightUnits);
+    expect(structure!.z).toBeGreaterThanOrEqual(containerHeightUnits);
   });
 
   it("auto-flips container skin when only flipped orientation matches stamp dimensions", () => {

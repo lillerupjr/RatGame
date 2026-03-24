@@ -1,20 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as kenneyMap from "../../../../game/map/compile/kenneyMap";
 import * as renderSprites from "../../../../engine/render/sprites/renderSprites";
-import { RuntimeStructureTriangleCacheStore } from "../../../../game/systems/presentation/runtimeStructureTriangles";
 import {
+  RuntimeStructureTriangleCacheStore,
   classifyRuntimeStructureTriangleAsset,
   collectMapWideStructureOverlays,
   mapWideOverlayViewRect,
-  rebuildRuntimeStructureTriangleCacheForMap,
+  rebuildMonolithicStructureTriangleCacheForMap,
   runtimeStructureTriangleGeometrySignatureForOverlay,
-} from "../../../../game/systems/presentation/structureTriangles/structureTriangleCacheRebuild";
+} from "../../../../game/structures/monolithicStructureGeometry";
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("structureTriangleCacheRebuild", () => {
+describe("monolithicStructureGeometry cache rebuild", () => {
   it("classifies asset readiness states", () => {
     expect(classifyRuntimeStructureTriangleAsset(null)).toBe("FAILED");
 
@@ -122,7 +122,7 @@ describe("structureTriangleCacheRebuild", () => {
     vi.spyOn(renderSprites, "getTileSpriteById").mockReturnValue(null as any);
 
     const cacheStore = new RuntimeStructureTriangleCacheStore();
-    const result = rebuildRuntimeStructureTriangleCacheForMap(compiledMap, {
+    const result = rebuildMonolithicStructureTriangleCacheForMap(compiledMap, {
       cacheStore,
       getFlippedOverlayImage: vi.fn() as any,
     });

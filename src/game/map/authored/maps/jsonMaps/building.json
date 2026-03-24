@@ -4,13 +4,13 @@
   "height": 40,
   "centerOnZero": false,
   "mapSkinId": "building1",
-  "buildingPackId": "downtown_buildings",
+  "buildingPackId": "china_town_buildings",
   "fields": [
     { "x": 0, "y": 0, "w": 40, "h": 40, "type": "sidewalk" },
 
-    { "x": 4, "y": 8, "z": 0, "type": "building", "w": 5, "h": 5, "skinId": "downtown_1", "dir":  "S" },
-    { "x": 24, "y": 16, "z": 0, "type": "building", "w": 6, "h": 6, "skinId": "downtown_2", "dir":  "S" },
-    { "x": 4, "y": 24, "z": 0, "type": "building", "w": 5, "h": 5, "skinId": "downtown_3", "dir":  "S" }
+    { "x": 4, "y": 8, "z": 0, "type": "building", "w": 5, "h": 5, "skinId": "china_town_2", "dir":  "N" },
+    { "x": 24, "y": 16, "z": 0, "type": "building", "w": 6, "h": 6, "skinId": "china_town_2", "dir":  "S" },
+    { "x": 4, "y": 24, "z": 0, "type": "building", "w": 6, "h": 6, "skinId": "china_town_2", "dir":  "E" }
   ],
   "cells": [
     { "x": 15, "y": 15, "type": "spawn" }

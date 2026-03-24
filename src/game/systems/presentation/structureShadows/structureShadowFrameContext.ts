@@ -43,13 +43,13 @@ export function buildStructureShadowFrameContext(
   const contextKeys = {
     v1: buildStructureShadowContextKey({
       mapId: input.mapId,
-      enabled: input.structureTriangleGeometryEnabled,
+      enabled: true,
       sunStepKey: sunModel.stepKey,
       roofScanStepPx: STRUCTURE_SHADOW_V1_ROOF_SCAN_STEP_PX,
     }),
     v2: buildStructureShadowV2ContextKey({
       mapId: input.mapId,
-      enabled: input.structureTriangleGeometryEnabled,
+      enabled: true,
       sunStepKey: sunModel.stepKey,
       roofScanStepPx: STRUCTURE_SHADOW_V1_ROOF_SCAN_STEP_PX,
       alphaThreshold: STRUCTURE_SHADOW_V2_ALPHA_THRESHOLD,
@@ -58,13 +58,13 @@ export function buildStructureShadowFrameContext(
     }),
     hybrid: buildStructureShadowHybridContextKey({
       mapId: input.mapId,
-      enabled: input.structureTriangleGeometryEnabled,
+      enabled: true,
       sunStepKey: sunModel.stepKey,
       roofScanStepPx: STRUCTURE_SHADOW_V1_ROOF_SCAN_STEP_PX,
     }),
     v4: buildStructureShadowV4ContextKey({
       mapId: input.mapId,
-      enabled: input.structureTriangleGeometryEnabled,
+      enabled: true,
       sunStepKey: sunModel.stepKey,
     }),
   };

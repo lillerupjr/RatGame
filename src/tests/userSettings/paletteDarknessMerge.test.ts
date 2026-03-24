@@ -102,31 +102,13 @@ describe("userSettings palette darkness merge", () => {
     expect(getUserSettings().render.staticRelightEnabled).toBe(false);
   });
 
-  it("persists structure triangle geometry render toggle", () => {
-    updateUserSettings({
-      render: {
-        structureTriangleGeometryEnabled: true,
-      },
-    } as any);
-    expect(getUserSettings().render.structureTriangleGeometryEnabled).toBe(true);
-
-    updateUserSettings({
-      render: {
-        structureTriangleGeometryEnabled: false,
-      },
-    } as any);
-    expect(getUserSettings().render.structureTriangleGeometryEnabled).toBe(false);
-  });
-
-  it("migrates legacy poc toggle keys to production render toggles", () => {
+  it("migrates legacy static relight poc key to production render toggle", () => {
     updateUserSettings({
       render: {
         staticRelightPocEnabled: true,
-        structureTriangleGeometryPocEnabled: true,
       } as any,
     } as any);
     expect(getUserSettings().render.staticRelightEnabled).toBe(true);
-    expect(getUserSettings().render.structureTriangleGeometryEnabled).toBe(true);
   });
 
   it("normalizes and persists structure triangle admission mode", () => {

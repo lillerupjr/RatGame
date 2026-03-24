@@ -113,7 +113,6 @@ export type SystemOverrides = {
 
   entityShadowsDisable: boolean;
   staticRelightEnabled: boolean;
-  structureTriangleGeometryEnabled: boolean;
   structureTriangleAdmissionMode: StructureTriangleAdmissionMode;
   structureTriangleCutoutEnabled: boolean;
   structureTriangleCutoutWidth: number;

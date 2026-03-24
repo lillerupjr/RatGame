@@ -243,7 +243,7 @@ export function mountDebugToolsSection(
     ),
     structureTriangleFootprint: createToggleRow(
       grid,
-      "Structure Triangle Footprint",
+      "Structure Semantic Faces",
       (checked) => applyDebugPatch({ structureTriangleFootprint: checked }),
     ),
     showStructureAnchors: createToggleRow(
