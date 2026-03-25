@@ -37,12 +37,7 @@ export type BooleanDebugSettingKey = Exclude<
   | "shadowSunTimeHour"
   | "shadowSunAzimuthDeg"
   | "sunElevationOverrideDeg"
-  | "shadowV1DebugGeometryMode"
   | "shadowCasterMode"
-  | "shadowHybridDiagnosticMode"
-  | "shadowDebugMode"
-  | "shadowV5DebugView"
-  | "shadowV5TransformDebugMode"
   | "shadowV6SemanticBucket"
   | "shadowV6StructureIndex"
   | "shadowV6SliceCount"
@@ -107,12 +102,7 @@ export function makeAllDebugOffSettings(): DebugSettings {
     shadowSunAzimuthDeg: DEFAULT_DEBUG_SETTINGS.shadowSunAzimuthDeg,
     sunElevationOverrideEnabled: false,
     sunElevationOverrideDeg: DEFAULT_DEBUG_SETTINGS.sunElevationOverrideDeg,
-    shadowV1DebugGeometryMode: DEFAULT_DEBUG_SETTINGS.shadowV1DebugGeometryMode,
     shadowCasterMode: DEFAULT_DEBUG_SETTINGS.shadowCasterMode,
-    shadowHybridDiagnosticMode: DEFAULT_DEBUG_SETTINGS.shadowHybridDiagnosticMode,
-    shadowDebugMode: DEFAULT_DEBUG_SETTINGS.shadowDebugMode,
-    shadowV5DebugView: DEFAULT_DEBUG_SETTINGS.shadowV5DebugView,
-    shadowV5TransformDebugMode: DEFAULT_DEBUG_SETTINGS.shadowV5TransformDebugMode,
     shadowV6SemanticBucket: DEFAULT_DEBUG_SETTINGS.shadowV6SemanticBucket,
     shadowV6StructureIndex: DEFAULT_DEBUG_SETTINGS.shadowV6StructureIndex,
     shadowV6SliceCount: DEFAULT_DEBUG_SETTINGS.shadowV6SliceCount,

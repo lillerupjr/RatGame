@@ -1,55 +1,41 @@
 import type { ShadowV6SemanticBucket } from "../../../../settings/settingsTypes";
 import {
-  rectIntersects as runtimeStructureRectIntersects,
   runtimeStructureTriangleGeometrySignatureForOverlay,
   buildMonolithicStructureTriangleCacheForOverlay,
   getMonolithicGeometryFromCache,
   resolveMonolithicFootprintTileBoundsForOverlay,
+  resolveRuntimeStructureTriangleSemanticHeight,
   type RuntimeStructureTrianglePiece,
+  type RuntimeStructureTriangleSemanticClass,
   type RuntimeStructureTriangleRect,
   type RuntimeStructureTriangleCacheStore,
   type MonolithicStructureGeometry,
   type RuntimeStructureAnchorPlacementDebug,
 } from "../../../structures/monolithicStructureGeometry";
+import { pixelHeightToSweepTileHeight } from "../../../map/tileHeightUnits";
 import {
   buildStructureShadowFrameResult as buildOrchestratedStructureShadowFrameResult,
 } from "../structureShadows/structureShadowOrchestrator";
+import {
+  applyRuntimeStructureTriangleSemanticInfoMap,
+  buildRuntimeStructureTriangleSemanticInfoMap,
+} from "../structureShadows/structureTriangleSemantics";
 import type {
   StructureShadowFrameResult,
 } from "../structureShadows/structureShadowTypes";
-import type {
-  StructureShadowCacheEntry,
-  StructureShadowCacheStore,
-} from "../structureShadowV1";
-import type {
-  StructureShadowV2CacheEntry,
-  StructureShadowV2CacheStore,
-} from "../structureShadowV2AlphaSilhouette";
-import {
-  buildHybridTriangleSemanticMap,
-  type HybridSemanticClass,
-  type StructureShadowHybridCacheEntry,
-  type StructureShadowHybridCacheStore,
-} from "../structureShadowHybridTriangles";
-import type {
-  StructureShadowV4CacheEntry,
-  StructureShadowV4CacheStore,
-} from "../structureShadowV4";
 import type { StaticRelightFrameContext } from "../staticRelight/staticRelightTypes";
 import {
   isCameraTileInsideBounds,
   isTriangleVisibleForAdmissionMode,
 } from "./structureOverlayAdmission";
 import type {
-  HybridShadowDiagnosticStats,
   StructureAdmissionMode,
   StructureOverlayCandidate,
   StructureShadowQueueCallbacks,
   StructureSliceBuildResult,
   StructureSlicePiece,
   StructureTileBounds,
-  V4ShadowDiagnosticStats,
-  V5ShadowDiagnosticStats,
+  HybridSemanticClass,
 } from "./structurePresentationTypes";
 
 type ScreenPt = { x: number; y: number };
@@ -72,6 +58,11 @@ type FootprintSupportLevel = {
   anySupport: boolean;
   allSupported: boolean;
 };
+
+type StructureShadowCacheEntry = any;
+type StructureShadowV2CacheEntry = any;
+type StructureShadowHybridCacheEntry = any;
+type StructureShadowV4CacheEntry = any;
 
 const STRUCTURE_FOOTPRINT_SCAN_STEP_PX = 64;
 
@@ -112,22 +103,12 @@ type BuildStructureSlicesInput = {
   showStructureTriangleFootprintDebug: boolean;
   showStructureAnchors: boolean;
   showStructureTriangleOwnershipSortDebug: boolean;
-  shadowV1DebugGeometryMode: string;
   deferredStructureSliceDebugDraws: Array<() => void>;
   didQueueStructureCutoutDebugRect: boolean;
   logStructureOwnershipDebug: boolean;
   loggedStructureOwnershipDebugIds: Set<string>;
   shadowQueueCallbacks: StructureShadowQueueCallbacks;
-  shadowDiagnostics: {
-    hybrid: HybridShadowDiagnosticStats;
-    v4: V4ShadowDiagnosticStats;
-    v5: V5ShadowDiagnosticStats;
-  };
   staticRelightFrame: StaticRelightFrameContext | null;
-  structureShadowV1CacheStore: StructureShadowCacheStore;
-  structureShadowV2CacheStore: StructureShadowV2CacheStore;
-  structureShadowHybridCacheStore: StructureShadowHybridCacheStore;
-  structureShadowV4CacheStore: StructureShadowV4CacheStore;
 };
 
 export function buildStructureSlices(input: BuildStructureSlicesInput): StructureSliceBuildResult {
@@ -189,8 +170,6 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
         });
       }
 
-      const usingV5Caster = input.structureShadowFrame.routing.usesV5;
-      const usingV6Caster = input.structureShadowFrame.routing.usesV6;
       const admittedTrianglesForSemanticMasks: typeof triangleCache.triangles = [];
       const finalVisibleTrianglesForDebug: RuntimeStructureTrianglePiece[] = [];
       const visibleTriangleGroupsForDebug: Array<{
@@ -248,7 +227,7 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
         }
 
         if (!finalVisibleTriangles.length) continue;
-        if (usingV5Caster || usingV6Caster) admittedTrianglesForSemanticMasks.push(...finalVisibleTriangles);
+        if (input.structureShadowFrame.routing.usesV6Debug) admittedTrianglesForSemanticMasks.push(...finalVisibleTriangles);
         finalVisibleTrianglesForDebug.push(...finalVisibleTriangles);
         visibleTriangleGroupsForDebug.push({
           stableId: group.stableId,
@@ -283,6 +262,27 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
 
       if (!overlayHasVisibleTriangleGroup) continue;
 
+      const semanticInfoByStableId = buildRuntimeStructureTriangleSemanticInfoMap({
+        overlay: o,
+        triangleCache,
+        tileWorld: input.tileWorld,
+        toScreenAtZ: input.toScreenAtZ,
+      });
+      const semanticByStableId = new Map(
+        Array.from(semanticInfoByStableId.entries(), ([stableId, info]) => [stableId, info.semantic] as const),
+      );
+      applyRuntimeStructureTriangleSemanticInfoMap(triangleCache, semanticInfoByStableId);
+      const resolvedStructuralRoofHeightUnits = pixelHeightToSweepTileHeight(triangleCache.maxSideHeightPx);
+      if (
+        resolvedStructuralRoofHeightUnits > 0
+        && o.resolvedStructuralRoofHeightUnits !== resolvedStructuralRoofHeightUnits
+      ) {
+        if (o.applyResolvedStructuralRoofHeightUnits) {
+          o.applyResolvedStructuralRoofHeightUnits(resolvedStructuralRoofHeightUnits);
+        } else {
+          o.resolvedStructuralRoofHeightUnits = resolvedStructuralRoofHeightUnits;
+        }
+      }
       const structureShadowBand = input.resolveRenderZBand(
         {
           slice: o.seTx + o.seTy,
@@ -293,59 +293,23 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
       );
       const structureShadowResult = buildOrchestratedStructureShadowFrameResult({
         frame: input.structureShadowFrame,
-        overlay: o,
-        triangleCache,
+        structureInstanceId: o.id,
         geometrySignature,
-        tileWorld: input.tileWorld,
-        toScreenAtZ: input.toScreenAtZ,
         draw: {
-          dx: draw.dx,
-          dy: draw.dy,
           dw: draw.dw,
           dh: draw.dh,
-          scale: draw.scale ?? 1,
         },
         sourceImage: sourceImg,
         admittedTrianglesForSemanticMasks,
-        projectedViewportRect: input.projectedViewportRect,
-        projectedRectIntersects: runtimeStructureRectIntersects,
+        semanticByStableId,
         structureShadowBand,
         v6PrimarySemanticBucket: input.v6PrimarySemanticBucket,
         v6SecondarySemanticBucket: input.v6SecondarySemanticBucket,
         v6TopSemanticBucket: input.v6TopSemanticBucket,
-        cacheStores: {
-          v1: input.structureShadowV1CacheStore,
-          v2: input.structureShadowV2CacheStore,
-          hybrid: input.structureShadowHybridCacheStore,
-          v4: input.structureShadowV4CacheStore,
-        },
-        diagnostics: {
-          hybrid: input.shadowDiagnostics.hybrid,
-          v4: input.shadowDiagnostics.v4,
-        },
       });
 
       if (structureShadowResult.v6Candidate) {
         input.shadowQueueCallbacks.structureV6ShadowDebugCandidates.push(structureShadowResult.v6Candidate);
-      }
-      if (structureShadowResult.v5Piece) {
-        input.shadowQueueCallbacks.queueStructureV5ShadowForBand(structureShadowBand, structureShadowResult.v5Piece);
-        input.shadowDiagnostics.v5.piecesQueued += 1;
-        input.shadowDiagnostics.v5.trianglesQueued += structureShadowResult.v5Piece.triangles.length;
-      } else if (structureShadowResult.v4Piece) {
-        input.shadowQueueCallbacks.queueStructureV4ShadowForBand(structureShadowBand, structureShadowResult.v4Piece);
-        input.shadowDiagnostics.v4.piecesQueued += 1;
-        input.shadowDiagnostics.v4.trianglesQueued += structureShadowResult.v4Piece.triangleCorrespondence.length;
-        input.shadowDiagnostics.v4.topCapTrianglesQueued += structureShadowResult.v4Piece.topCapTriangles.length;
-      } else if (structureShadowResult.hybridPiece) {
-        input.shadowQueueCallbacks.queueStructureHybridShadowForBand(structureShadowBand, structureShadowResult.hybridPiece);
-        input.shadowDiagnostics.hybrid.piecesQueued += 1;
-        input.shadowDiagnostics.hybrid.trianglesQueued += structureShadowResult.hybridPiece.projectedMappings.length;
-      } else if (structureShadowResult.projectedTriangles) {
-        input.shadowQueueCallbacks.queueStructureShadowTrianglesForBand(
-          structureShadowBand,
-          structureShadowResult.projectedTriangles,
-        );
       }
 
       if (
@@ -357,23 +321,23 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
           || input.showStructureTriangleOwnershipSortDebug
         )
       ) {
-        const activeRoofQuad = activeRoofQuadForSemanticDebug({
-          structureShadowV1CacheEntry: structureShadowResult.structureShadowV1CacheEntry,
-          structureShadowV2CacheEntry: structureShadowResult.structureShadowV2CacheEntry,
-          structureShadowHybridCacheEntry: structureShadowResult.structureShadowHybridCacheEntry,
-        });
-        const semanticByStableId = input.showStructureTriangleFootprintDebug
-          ? buildHybridTriangleSemanticMap({
-            overlay: o,
+        const heightLevelByStableId = new Map<number, number>();
+        const semanticFaceTriangles = finalVisibleTrianglesForDebug.map((tri) => {
+          const semantic = semanticByStableId.get(tri.stableId) ?? "UNCLASSIFIED";
+          const resolvedHeight = resolveRuntimeStructureTriangleSemanticHeight(
+            tri,
+            semantic,
             triangleCache,
-            activeRoofQuad,
-            triangles: finalVisibleTrianglesForDebug,
-          })
-          : null;
-        const semanticFaceTriangles = finalVisibleTrianglesForDebug.map((tri) => ({
-          points: [tri.points[0], tri.points[1], tri.points[2]] as [ScreenPt, ScreenPt, ScreenPt],
-          semantic: semanticByStableId?.get(tri.stableId) ?? "UNCLASSIFIED",
-        }));
+          );
+          heightLevelByStableId.set(tri.stableId, resolvedHeight.level);
+          return {
+            points: [tri.points[0], tri.points[1], tri.points[2]] as [ScreenPt, ScreenPt, ScreenPt],
+            semantic,
+            semanticRole: tri.semanticRole,
+            heightLevel: resolvedHeight.level,
+            heightPx: resolvedHeight.px,
+          };
+        });
         queueMonolithicStructureDebugDraw({
           ctx: input.ctx,
           deferredStructureSliceDebugDraws: input.deferredStructureSliceDebugDraws,
@@ -392,6 +356,7 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
           enabled: input.showStructureTriangleOwnershipSortDebug,
           overlayBaseZ: o.z,
           visibleGroups: visibleTriangleGroupsForDebug,
+          heightLevelByStableId,
           tileWorld: input.tileWorld,
           toScreenAtZ: input.toScreenAtZ,
         });
@@ -435,6 +400,9 @@ type QueueMonolithicStructureDebugDrawInput = {
   semanticFaceTriangles: ReadonlyArray<{
     points: [ScreenPt, ScreenPt, ScreenPt];
     semantic: HybridSemanticClass;
+    semanticRole: RuntimeStructureTrianglePiece["semanticRole"];
+    heightLevel: number;
+    heightPx: number;
   }>;
 };
 
@@ -450,6 +418,7 @@ type QueueMonolithicTriangleOwnershipSortDebugDrawInput = {
     feetSortY: number;
     visibleTriangles: readonly RuntimeStructureTrianglePiece[];
   }>;
+  heightLevelByStableId: ReadonlyMap<number, number>;
   tileWorld: number;
   toScreenAtZ: (worldX: number, worldY: number, zVisual: number) => ScreenPt;
 };
@@ -531,11 +500,16 @@ function queueMonolithicTriangleOwnershipSortDebugDraw(
         ctx.lineTo(b.x, b.y);
         ctx.lineTo(c.x, c.y);
         ctx.closePath();
-        ctx.fillStyle = "rgba(55, 200, 255, 0.10)";
-        ctx.strokeStyle = "rgba(55, 200, 255, 0.92)";
+        ctx.fillStyle = tri.semanticRole === "OVERHANG"
+          ? "rgba(255, 70, 170, 0.16)"
+          : "rgba(55, 200, 255, 0.10)";
+        ctx.strokeStyle = tri.semanticRole === "OVERHANG"
+          ? "rgba(255, 125, 195, 0.96)"
+          : "rgba(55, 200, 255, 0.92)";
         ctx.fill();
         ctx.stroke();
-        const triLabel = `P(${tri.parentTx},${tri.parentTy}) T(${tri.triangleTx},${tri.triangleTy})`;
+        const heightLevel = input.heightLevelByStableId.get(tri.stableId) ?? tri.heightFromParentLevel;
+        const triLabel = `P(${tri.parentTx},${tri.parentTy}) T(${tri.triangleTx},${tri.triangleTy}) H:${heightLevel} ${tri.semanticRole}`;
         ctx.fillStyle = "rgba(0,0,0,0.88)";
         ctx.fillText(triLabel, centroid.x + 1, centroid.y - 7);
         ctx.fillStyle = "rgba(230, 245, 255, 0.98)";
@@ -547,7 +521,16 @@ function queueMonolithicTriangleOwnershipSortDebugDraw(
   });
 }
 
-function semanticFaceStyle(semantic: HybridSemanticClass): { fill: string; stroke: string } {
+function semanticFaceStyle(
+  semantic: HybridSemanticClass,
+  semanticRole: RuntimeStructureTrianglePiece["semanticRole"],
+): { fill: string; stroke: string } {
+  if (semanticRole === "OVERHANG") {
+    return {
+      fill: "rgba(255, 70, 170, 0.46)",
+      stroke: "rgba(255, 125, 195, 1)",
+    };
+  }
   if (semantic === "TOP") {
     return {
       fill: "rgba(80, 200, 255, 0.36)",
@@ -576,20 +559,6 @@ function semanticFaceStyle(semantic: HybridSemanticClass): { fill: string; strok
     fill: "rgba(215, 215, 215, 0.28)",
     stroke: "rgba(245, 245, 245, 0.9)",
   };
-}
-
-function activeRoofQuadForSemanticDebug(input: {
-  structureShadowV1CacheEntry: StructureShadowCacheEntry | null;
-  structureShadowV2CacheEntry: StructureShadowV2CacheEntry | null;
-  structureShadowHybridCacheEntry: StructureShadowHybridCacheEntry | null;
-}): ProjectedQuad | null {
-  const hybrid = input.structureShadowHybridCacheEntry?.roofScan.activeLevel?.quad ?? null;
-  if (hybrid) return hybrid;
-  const v2 = input.structureShadowV2CacheEntry?.roofScan.activeLevel?.quad ?? null;
-  if (v2) return v2;
-  const v1 = input.structureShadowV1CacheEntry?.roofScan.activeLevel?.quad ?? null;
-  if (v1) return v1;
-  return null;
 }
 
 function queueMonolithicStructureDebugDraw(input: QueueMonolithicStructureDebugDrawInput): void {
@@ -810,7 +779,7 @@ function queueMonolithicStructureDebugDraw(input: QueueMonolithicStructureDebugD
 
       for (let ti = 0; ti < input.semanticFaceTriangles.length; ti++) {
         const tri = input.semanticFaceTriangles[ti];
-        const style = semanticFaceStyle(tri.semantic);
+        const style = semanticFaceStyle(tri.semantic, tri.semanticRole);
         ctx.beginPath();
         ctx.moveTo(tri.points[0].x, tri.points[0].y);
         ctx.lineTo(tri.points[1].x, tri.points[1].y);
@@ -853,8 +822,10 @@ function queueMonolithicStructureDebugDraw(input: QueueMonolithicStructureDebugD
           CONFLICT: 0,
           UNCLASSIFIED: 0,
         };
+        let overhangCount = 0;
         for (let i = 0; i < input.semanticFaceTriangles.length; i++) {
           semanticCounts[input.semanticFaceTriangles[i].semantic] += 1;
+          if (input.semanticFaceTriangles[i].semanticRole === "OVERHANG") overhangCount += 1;
         }
         const legendRows: Array<{ label: string; semantic: HybridSemanticClass }> = [
           { label: `TOP ${semanticCounts.TOP}`, semantic: "TOP" },
@@ -869,7 +840,7 @@ function queueMonolithicStructureDebugDraw(input: QueueMonolithicStructureDebugD
         for (let ri = 0; ri < legendRows.length; ri++) {
           const row = legendRows[ri];
           const y = legendY + ri * 13;
-          const style = semanticFaceStyle(row.semantic);
+          const style = semanticFaceStyle(row.semantic, "STRUCTURAL");
           ctx.fillStyle = "rgba(0, 0, 0, 0.72)";
           ctx.fillRect(legendX - 2, y - 9, 11, 11);
           ctx.fillStyle = style.fill;
@@ -882,6 +853,19 @@ function queueMonolithicStructureDebugDraw(input: QueueMonolithicStructureDebugD
           ctx.fillStyle = "rgba(245, 245, 245, 0.96)";
           ctx.fillText(row.label, legendX + 10, y);
         }
+        const overhangY = legendY + legendRows.length * 13;
+        const overhangStyle = semanticFaceStyle("RIGHT_EAST", "OVERHANG");
+        ctx.fillStyle = "rgba(0, 0, 0, 0.72)";
+        ctx.fillRect(legendX - 2, overhangY - 9, 11, 11);
+        ctx.fillStyle = overhangStyle.fill;
+        ctx.fillRect(legendX, overhangY - 7, 7, 7);
+        ctx.strokeStyle = overhangStyle.stroke;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(legendX, overhangY - 7, 7, 7);
+        ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+        ctx.fillText(`OVERHANG ${overhangCount}`, legendX + 11, overhangY + 1);
+        ctx.fillStyle = "rgba(245, 245, 245, 0.96)";
+        ctx.fillText(`OVERHANG ${overhangCount}`, legendX + 10, overhangY);
       }
     }
 
@@ -1320,10 +1304,10 @@ function queueStructureTriangleFootprintShadowDebugDraws(
       for (let mi = 0; mi < debugShadowEntry.triangleCorrespondenceMismatches.length; mi++) {
         const mismatch = debugShadowEntry.triangleCorrespondenceMismatches[mi];
         const sourceCandidate = debugShadowEntry.sourceBandTriangles.find(
-          (source) => source.sliceIndex === mismatch.sliceIndex && source.bandIndex === mismatch.bandIndex,
+          (source: any) => source.sliceIndex === mismatch.sliceIndex && source.bandIndex === mismatch.bandIndex,
         );
         const destinationCandidate = debugShadowEntry.destinationBandEntries.find(
-          (destination) => destination.sliceIndex === mismatch.sliceIndex && destination.bandIndex === mismatch.bandIndex,
+          (destination: any) => destination.sliceIndex === mismatch.sliceIndex && destination.bandIndex === mismatch.bandIndex,
         );
         const sourceAnchor = sourceCandidate ? triangleCentroid(sourceCandidate.sourceTrianglePoints) : null;
         const destinationAnchor = destinationCandidate ? triangleCentroid(destinationCandidate.destinationTrianglePoints) : null;

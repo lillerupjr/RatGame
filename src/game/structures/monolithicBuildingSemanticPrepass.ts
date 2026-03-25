@@ -91,7 +91,7 @@ export type MonolithicBuildingSemanticGeometry = {
 const PREPASS_ALPHA_THRESHOLD = 1;
 const PREPASS_MIN_VISIBLE_PIXELS = 32;
 const DEFAULT_HEIGHT_UNITS = 32;
-const SEMANTIC_FACE_TRIANGLE_HEIGHT_PX = 64;
+export const STRUCTURE_TRIANGLE_HEIGHT_STEP_PX = 64;
 
 const semanticGeometryByKey = new Map<string, MonolithicBuildingSemanticGeometry>();
 const canonicalSemanticKeyBySkinId = new Map<string, string>();
@@ -308,12 +308,12 @@ function buildPlacementOnlySemanticGeometry(input: {
   m: number;
 }): MonolithicBuildingSemanticGeometry {
   const tileHeightUnits = Math.max(
-    pixelHeightToSweepTileHeight(SEMANTIC_FACE_TRIANGLE_HEIGHT_PX),
+    pixelHeightToSweepTileHeight(STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
     input.tileHeightUnits ?? renderHeightUnitsToSweepTileHeight(input.heightUnits),
   );
   const faceTriangleCount = Math.max(
     1,
-    Math.round(tileHeightUnits / pixelHeightToSweepTileHeight(SEMANTIC_FACE_TRIANGLE_HEIGHT_PX)),
+    Math.round(tileHeightUnits / pixelHeightToSweepTileHeight(STRUCTURE_TRIANGLE_HEIGHT_STEP_PX)),
   );
   return {
     skinId: input.skinId,
@@ -328,7 +328,7 @@ function buildPlacementOnlySemanticGeometry(input: {
       rightEast: faceTriangleCount,
       selected: faceTriangleCount,
       rule: "max",
-      triangleHeightPx: SEMANTIC_FACE_TRIANGLE_HEIGHT_PX,
+      triangleHeightPx: STRUCTURE_TRIANGLE_HEIGHT_STEP_PX,
     },
     n: Math.max(1, input.n | 0),
     m: Math.max(1, input.m | 0),
@@ -649,7 +649,7 @@ function resolveSemanticFaceTriangleRow(
 ): number {
   const verticalDistancePx = anchorSpriteLocal.y - minTriangleVertexY(triangle);
   if (!(verticalDistancePx > 0)) return 0;
-  return Math.ceil(verticalDistancePx / SEMANTIC_FACE_TRIANGLE_HEIGHT_PX);
+  return Math.ceil(verticalDistancePx / STRUCTURE_TRIANGLE_HEIGHT_STEP_PX);
 }
 
 function resolveSemanticFaceTriangleCounts(
@@ -677,7 +677,7 @@ function resolveSemanticFaceTriangleCounts(
     rightEast,
     selected,
     rule: "max",
-    triangleHeightPx: SEMANTIC_FACE_TRIANGLE_HEIGHT_PX,
+    triangleHeightPx: STRUCTURE_TRIANGLE_HEIGHT_STEP_PX,
   };
 }
 
@@ -842,8 +842,8 @@ export function buildMonolithicBuildingSemanticGeometryFromAlphaMap(
   } satisfies RuntimeStructureTrianglePoint;
   const faceTriangleCounts = resolveSemanticFaceTriangleCounts(sliceEntries, n, anchorSpriteLocal);
   const tileHeightUnits = Math.max(
-    pixelHeightToSweepTileHeight(SEMANTIC_FACE_TRIANGLE_HEIGHT_PX),
-    pixelHeightToSweepTileHeight(faceTriangleCounts.selected * SEMANTIC_FACE_TRIANGLE_HEIGHT_PX),
+    pixelHeightToSweepTileHeight(STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
+    pixelHeightToSweepTileHeight(faceTriangleCounts.selected * STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
   );
 
   return {
@@ -1087,7 +1087,7 @@ function toPlacementGeometry(semantic: MonolithicBuildingSemanticGeometry): Mono
     h: Math.max(1, semantic.m | 0),
     heightUnits: Math.max(1, semantic.heightUnits | 0),
     tileHeightUnits: Math.max(
-      pixelHeightToSweepTileHeight(SEMANTIC_FACE_TRIANGLE_HEIGHT_PX),
+      pixelHeightToSweepTileHeight(STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
       semantic.tileHeightUnits,
     ),
     source: semantic.source,

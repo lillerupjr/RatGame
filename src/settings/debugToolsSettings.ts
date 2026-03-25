@@ -1,12 +1,7 @@
 import type {
   DebugToolsSettings,
   ShadowCasterMode,
-  ShadowDebugMode,
-  ShadowHybridDiagnosticMode,
   ShadowV6SemanticBucket,
-  ShadowV5DebugView,
-  ShadowV5TransformDebugMode,
-  ShadowV1DebugGeometryMode,
 } from "./settingsTypes";
 import {
   DEFAULT_SHADOW_SUN_V1_ELEVATION_OVERRIDE_DEG,
@@ -93,12 +88,7 @@ export const DEFAULT_DEBUG_TOOLS_SETTINGS: DebugToolsSettings = {
   shadowSunAzimuthDeg: -1,
   sunElevationOverrideEnabled: false,
   sunElevationOverrideDeg: DEFAULT_SHADOW_SUN_V1_ELEVATION_OVERRIDE_DEG,
-  shadowV1DebugGeometryMode: "full",
-  shadowCasterMode: "v1Roof",
-  shadowHybridDiagnosticMode: "off",
-  shadowDebugMode: "warpedOnly",
-  shadowV5DebugView: "finalOnly",
-  shadowV5TransformDebugMode: "deformed",
+  shadowCasterMode: "v6SweepShadow",
   shadowV6SemanticBucket: "EAST_WEST",
   shadowV6StructureIndex: STRUCTURE_SHADOW_V6_DEFAULT_STRUCTURE_INDEX,
   shadowV6SliceCount: STRUCTURE_SHADOW_V6_DEFAULT_SLICE_COUNT,
@@ -119,45 +109,10 @@ function clampShadowSunAzimuthDeg(value: unknown): number {
   return Math.round(numeric) % 360;
 }
 
-function normalizeShadowV1DebugGeometryMode(value: unknown): ShadowV1DebugGeometryMode {
-  if (value === "capOnly" || value === "connectorsOnly") return value;
-  return "full";
-}
-
 function normalizeShadowCasterMode(value: unknown): ShadowCasterMode {
-  if (value === "v1Roof") return "v1Roof";
-  if (value === "v2AlphaSilhouette") return "v2AlphaSilhouette";
-  if (value === "v3HybridTriangles") return "v3HybridTriangles";
-  if (value === "v4SliceStrips") return "v4SliceStrips";
-  if (value === "v5TriangleShadowMask") return "v5TriangleShadowMask";
   if (value === "v6SweepShadow") return "v6SweepShadow";
   if (value === "v6FaceSliceDebug") return "v6FaceSliceDebug";
-  return "v1Roof";
-}
-
-function normalizeShadowHybridDiagnosticMode(value: unknown): ShadowHybridDiagnosticMode {
-  if (value === "solidShadowPass") return "solidShadowPass";
-  if (value === "solidMainCanvas") return "solidMainCanvas";
-  return "off";
-}
-
-function normalizeShadowDebugMode(value: unknown): ShadowDebugMode {
-  if (value === "flatOnly") return "flatOnly";
-  if (value === "both") return "both";
-  return "warpedOnly";
-}
-
-function normalizeShadowV5DebugView(value: unknown): ShadowV5DebugView {
-  if (value === "topMask") return "topMask";
-  if (value === "eastWestMask") return "eastWestMask";
-  if (value === "southNorthMask") return "southNorthMask";
-  if (value === "all") return "all";
-  return "finalOnly";
-}
-
-function normalizeShadowV5TransformDebugMode(value: unknown): ShadowV5TransformDebugMode {
-  if (value === "raw") return "raw";
-  return "deformed";
+  return "v6SweepShadow";
 }
 
 function normalizeShadowV6SemanticBucket(value: unknown): ShadowV6SemanticBucket {
@@ -205,12 +160,7 @@ export function sanitizeDebugToolsSettings(input: Partial<DebugToolsSettings> | 
     shadowSunAzimuthDeg: clampShadowSunAzimuthDeg(merged.shadowSunAzimuthDeg),
     sunElevationOverrideEnabled: !!merged.sunElevationOverrideEnabled,
     sunElevationOverrideDeg: clampShadowSunElevationOverrideDeg(merged.sunElevationOverrideDeg),
-    shadowV1DebugGeometryMode: normalizeShadowV1DebugGeometryMode(merged.shadowV1DebugGeometryMode),
     shadowCasterMode: normalizeShadowCasterMode(merged.shadowCasterMode),
-    shadowHybridDiagnosticMode: normalizeShadowHybridDiagnosticMode(merged.shadowHybridDiagnosticMode),
-    shadowDebugMode: normalizeShadowDebugMode(merged.shadowDebugMode),
-    shadowV5DebugView: normalizeShadowV5DebugView(merged.shadowV5DebugView),
-    shadowV5TransformDebugMode: normalizeShadowV5TransformDebugMode(merged.shadowV5TransformDebugMode),
     shadowV6SemanticBucket: normalizeShadowV6SemanticBucket(merged.shadowV6SemanticBucket),
     shadowV6StructureIndex: clampStructureV6StructureIndex(merged.shadowV6StructureIndex),
     shadowV6SliceCount: clampStructureV6SliceCount(merged.shadowV6SliceCount),

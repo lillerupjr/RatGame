@@ -198,6 +198,8 @@ export type StampOverlay = {
     flipX?: boolean;
     monolithicSemanticSkinId?: string;
     monolithicSemanticSpriteId?: string;
+    resolvedStructuralRoofHeightUnits?: number;
+    applyResolvedStructuralRoofHeightUnits?: (heightUnits: number) => void;
     /** Semantic render routing for overlay pieces. */
     layerRole?: "STRUCTURE" | "OVERLAY";
 };
@@ -517,6 +519,8 @@ export function compileKenneyMapFromTable(
         w: number;
         h: number;
         topZ: number;
+        baseSweepZ?: number;
+        overlay?: StampOverlay;
     };
 
     const pickRuntimeSquareTop = (family: RuntimeFloorTop["family"], tx: number, ty: number): RuntimeFloorTop => {
@@ -535,7 +539,17 @@ export function compileKenneyMapFromTable(
         };
     };
     const heightStampRecs: HeightStampRec[] = [];
-    const recordHeightStamp = (tx: number, ty: number, w: number, h: number, topZ: number): void => {
+    const recordHeightStamp = (
+        tx: number,
+        ty: number,
+        w: number,
+        h: number,
+        topZ: number,
+        input?: {
+            baseSweepZ?: number;
+            overlay?: StampOverlay;
+        },
+    ): void => {
         if (!Number.isFinite(topZ)) return;
         heightStampRecs.push({
             tx: tx | 0,
@@ -543,6 +557,8 @@ export function compileKenneyMapFromTable(
             w: Math.max(1, w | 0),
             h: Math.max(1, h | 0),
             topZ,
+            baseSweepZ: input?.baseSweepZ,
+            overlay: input?.overlay,
         });
     };
     const hashHeightGrid = (
@@ -565,6 +581,61 @@ export function compileKenneyMapFromTable(
             mix(Math.round(heights[i] * 1024));
         }
         return `h${(hash >>> 0).toString(16)}`;
+    };
+    let tileHeightGrid: TileHeightGrid;
+    const resolveHeightStampTopZ = (stamp: HeightStampRec): number => {
+        const resolvedStructuralRoofHeightUnits = stamp.overlay?.resolvedStructuralRoofHeightUnits;
+        if (
+            Number.isFinite(resolvedStructuralRoofHeightUnits)
+            && resolvedStructuralRoofHeightUnits !== undefined
+            && Number.isFinite(stamp.baseSweepZ)
+        ) {
+            return (stamp.baseSweepZ ?? 0) + resolvedStructuralRoofHeightUnits;
+        }
+        return stamp.topZ;
+    };
+    const buildTileHeightGrid = (): TileHeightGrid => {
+        const w = def.w;
+        const h = def.h;
+        const heights = new Float32Array(w * h);
+        for (let ty = 0; ty < h; ty++) {
+            for (let tx = 0; tx < w; tx++) {
+                const atx = tx + originTx;
+                const aty = ty + originTy;
+                const tile = getTile(atx, aty);
+                heights[ty * w + tx] = renderHeightUnitsToSweepTileHeight(tile.h);
+            }
+        }
+        for (let i = 0; i < heightStampRecs.length; i++) {
+            const stamp = heightStampRecs[i];
+            const topZ = resolveHeightStampTopZ(stamp);
+            for (let dy = 0; dy < stamp.h; dy++) {
+                for (let dx = 0; dx < stamp.w; dx++) {
+                    const lx = stamp.tx + dx - originTx;
+                    const ly = stamp.ty + dy - originTy;
+                    if (lx < 0 || ly < 0 || lx >= w || ly >= h) continue;
+                    const idx = ly * w + lx;
+                    if (topZ > heights[idx]) heights[idx] = topZ;
+                }
+            }
+        }
+        return {
+            originTx,
+            originTy,
+            width: w,
+            height: h,
+            version: hashHeightGrid(heights, w, h, originTx, originTy),
+            heights,
+        };
+    };
+    const refreshTileHeightGrid = (): void => {
+        const nextGrid = buildTileHeightGrid();
+        tileHeightGrid.originTx = nextGrid.originTx;
+        tileHeightGrid.originTy = nextGrid.originTy;
+        tileHeightGrid.width = nextGrid.width;
+        tileHeightGrid.height = nextGrid.height;
+        tileHeightGrid.version = nextGrid.version;
+        tileHeightGrid.heights = nextGrid.heights;
     };
 
     // Excel/table coords are tile coords (identity mapping).
@@ -2634,8 +2705,8 @@ export function compileKenneyMapFromTable(
 
             if (isMonolithicSkin) {
                 const seAnchor = seAnchorFromTopLeft(sx, sy, placeW, placeH);
-            overlays.push({
-                id: `building_${skin.id}_${sx}_${sy}_${w}x${h}`,
+                const overlay: StampOverlay = {
+                    id: `building_${skin.id}_${sx}_${sy}_${w}x${h}`,
                     tx: sx,
                     ty: sy,
                     w: placeW,
@@ -2656,13 +2727,25 @@ export function compileKenneyMapFromTable(
                     monolithicSemanticSkinId: skin.id,
                     monolithicSemanticSpriteId: roofSpriteId,
                     layerRole: "STRUCTURE",
-                });
+                };
+                overlay.applyResolvedStructuralRoofHeightUnits = (heightUnits: number): void => {
+                    if (!Number.isFinite(heightUnits)) return;
+                    const normalizedHeightUnits = Math.max(0, heightUnits | 0);
+                    if (overlay.resolvedStructuralRoofHeightUnits === normalizedHeightUnits) return;
+                    overlay.resolvedStructuralRoofHeightUnits = normalizedHeightUnits;
+                    refreshTileHeightGrid();
+                };
+                overlays.push(overlay);
                 recordHeightStamp(
                     sx,
                     sy,
                     placeW,
                     placeH,
                     renderHeightUnitsToSweepTileHeight(zBase) + tileHeightUnits,
+                    {
+                        baseSweepZ: renderHeightUnitsToSweepTileHeight(zBase),
+                        overlay,
+                    },
                 );
 
                 if (EMIT_STRUCTURE_SUPPORT_TOPS) {
@@ -3492,39 +3575,7 @@ export function compileKenneyMapFromTable(
         byBandAndClass: occlusionByBandAndClass,
         availableBands: Array.from(occlusionByBandAndClass.keys()).sort((a, b) => a - b),
     };
-    const tileHeightGrid: TileHeightGrid = (() => {
-        const w = def.w;
-        const h = def.h;
-        const heights = new Float32Array(w * h);
-        for (let ty = 0; ty < h; ty++) {
-            for (let tx = 0; tx < w; tx++) {
-                const atx = tx + originTx;
-                const aty = ty + originTy;
-                const tile = getTile(atx, aty);
-                heights[ty * w + tx] = renderHeightUnitsToSweepTileHeight(tile.h);
-            }
-        }
-        for (let i = 0; i < heightStampRecs.length; i++) {
-            const stamp = heightStampRecs[i];
-            for (let dy = 0; dy < stamp.h; dy++) {
-                for (let dx = 0; dx < stamp.w; dx++) {
-                    const lx = stamp.tx + dx - originTx;
-                    const ly = stamp.ty + dy - originTy;
-                    if (lx < 0 || ly < 0 || lx >= w || ly >= h) continue;
-                    const idx = ly * w + lx;
-                    if (stamp.topZ > heights[idx]) heights[idx] = stamp.topZ;
-                }
-            }
-        }
-        return {
-            originTx,
-            originTy,
-            width: w,
-            height: h,
-            version: hashHeightGrid(heights, w, h, originTx, originTy),
-            heights,
-        };
-    })();
+    tileHeightGrid = buildTileHeightGrid();
 
     const compiled: CompiledKenneyMap = {
         id: def.id,

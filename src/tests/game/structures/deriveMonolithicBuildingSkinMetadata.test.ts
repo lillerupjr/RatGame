@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  STRUCTURE_TRIANGLE_HEIGHT_STEP_PX,
   buildMonolithicBuildingSemanticGeometryFromAlphaMap,
   getMonolithicBuildingSemanticGeometryForSprite,
   resolveMonolithicSliceParentFootprintPosition,
@@ -65,10 +66,10 @@ describe("monolithicBuildingSemanticPrepass", () => {
     expect(first?.m).toBe(4);
     expect(first?.heightUnits).toBe(32);
     expect(first?.tileHeightUnits).toBe(
-      pixelHeightToSweepTileHeight((first?.faceTriangleCounts.selected ?? 0) * 64),
+      pixelHeightToSweepTileHeight((first?.faceTriangleCounts.selected ?? 0) * STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
     );
     expect(first?.faceTriangleCounts.rule).toBe("max");
-    expect(first?.faceTriangleCounts.triangleHeightPx).toBe(64);
+    expect(first?.faceTriangleCounts.triangleHeightPx).toBe(STRUCTURE_TRIANGLE_HEIGHT_STEP_PX);
     expect(first?.faceTriangleCounts.leftSouth).toBeGreaterThan(0);
     expect(first?.faceTriangleCounts.rightEast).toBeGreaterThan(0);
     expect(first?.faceTriangleCounts.selected).toBe(first?.tileHeightUnits);
@@ -90,8 +91,8 @@ describe("monolithicBuildingSemanticPrepass", () => {
     expect(semantic?.source).toBe("computed");
     expect(semantic?.sliceEntries.length).toBeGreaterThan(0);
     expect(semantic?.tileHeightUnits).toBe(
-      pixelHeightToSweepTileHeight((semantic?.faceTriangleCounts.selected ?? 0) * 64),
+      pixelHeightToSweepTileHeight((semantic?.faceTriangleCounts.selected ?? 0) * STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
     );
-    expect(semantic?.faceTriangleCounts.triangleHeightPx).toBe(64);
+    expect(semantic?.faceTriangleCounts.triangleHeightPx).toBe(STRUCTURE_TRIANGLE_HEIGHT_STEP_PX);
   });
 });

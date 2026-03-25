@@ -59,10 +59,6 @@ If the repo already has nearby shadow files under presentation, keep existing ve
 
 Do not rewrite these unless absolutely required for extraction:
 
-- `structureShadowV1`
-- `structureShadowV2AlphaSilhouette`
-- `structureShadowHybridTriangles`
-- `structureShadowV4`
 - `structureShadowV6FaceSlices`
 
 These modules remain the owners of their own algorithm details.
@@ -109,11 +105,6 @@ Own only scratch canvas lifecycle for the structure shadow subsystem.
 Move structure-shadow-specific scratch ownership out of `render.ts`.
 
 Examples currently visible in renderer that belong here:
-- `structureShadowV5TopMaskScratch`
-- `structureShadowV5EastWestMaskScratch`
-- `structureShadowV5SouthNorthMaskScratch`
-- `structureShadowV5CoverageMaskScratch`
-- `structureShadowV5FinalMaskScratch`
 - `structureShadowV6FaceScratch`
 
 If more structure-shadow-only scratch canvases exist deeper in `render.ts`, move them here too.

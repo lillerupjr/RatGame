@@ -9,6 +9,7 @@ import {
 } from "../map/compile/kenneyMap";
 import {
   getRequiredMonolithicBuildingSemanticGeometryForSprite,
+  STRUCTURE_TRIANGLE_HEIGHT_STEP_PX,
   resolveMonolithicFootprintTopLeftFromSeAnchor,
   resolveMonolithicFootprintTileBoundsFromSeAnchor,
   type MonolithicBuildingSemanticGeometry,
@@ -33,6 +34,19 @@ export type RuntimeStructureTriangleSemanticSide =
   | "CONFLICT"
   | "UNCLASSIFIED";
 
+export type RuntimeStructureTriangleSemanticFace = "UP" | "EAST" | "SOUTH";
+
+export type RuntimeStructureTriangleSemanticRole = "STRUCTURAL" | "OVERHANG";
+
+export type RuntimeStructureTriangleSemanticClass =
+  | "TOP"
+  | RuntimeStructureTriangleSemanticSide;
+
+export type RuntimeStructureTriangleSemanticHeight = {
+  level: number;
+  px: number;
+};
+
 export type RuntimeStructureTrianglePiece = {
   structureInstanceId: string;
   stableId: number;
@@ -53,6 +67,11 @@ export type RuntimeStructureTrianglePiece = {
   cameraTx: number;
   cameraTy: number;
   semanticSide?: RuntimeStructureTriangleSemanticSide;
+  semanticFace: RuntimeStructureTriangleSemanticFace;
+  semanticRole: RuntimeStructureTriangleSemanticRole;
+  height: number;
+  heightFromParentLevel: number;
+  heightFromParentPx: number;
   localBounds: RuntimeStructureTriangleRect;
   srcRectLocal: RuntimeStructureTriangleRect;
   dstRectLocal: RuntimeStructureTriangleRect;
@@ -76,6 +95,8 @@ export type RuntimeStructureTriangleCache = {
   triangles: RuntimeStructureTrianglePiece[];
   parentTileGroups: RuntimeStructureParentTileGroup[];
   geometrySignature: string;
+  maxSideHeightLevel: number;
+  maxSideHeightPx: number;
   monolithic?: MonolithicStructureGeometry | null;
 };
 
@@ -460,17 +481,42 @@ export function buildRuntimeTrianglesFromMonolithicGeometry(
         triangleTy: baseTile.ty,
         cameraTx: baseTile.tx,
         cameraTy: baseTile.ty,
+        semanticFace: "UP",
+        semanticRole: "STRUCTURAL",
+        height: 0,
+        heightFromParentLevel: 0,
+        heightFromParentPx: 0,
         localBounds: bounds,
         srcRectLocal: srcRect,
         dstRectLocal: bounds,
       });
     }
   }
-  assignRuntimeTriangleSemanticSides(out, geometry.n, geometry.m);
+  assignRuntimeTriangleSemanticSidesAndHeights(out, geometry.n, geometry.m);
   return out;
 }
 
-function assignRuntimeTriangleSemanticSides(
+function resolveRuntimeTriangleHeightFromParentLevel(
+  triangle: Pick<RuntimeStructureTrianglePiece, "cameraTx" | "cameraTy" | "parentTx" | "parentTy">,
+  semanticSide: RuntimeStructureTriangleSemanticSide,
+): number {
+  const dx = Math.abs((triangle.cameraTx | 0) - (triangle.parentTx | 0));
+  const dy = Math.abs((triangle.cameraTy | 0) - (triangle.parentTy | 0));
+  if (semanticSide === "LEFT_SOUTH") return dx;
+  if (semanticSide === "RIGHT_EAST") return dy;
+  if (semanticSide === "CONFLICT") return Math.max(dx, dy);
+  return 0;
+}
+
+function resolveRuntimeTriangleSemanticFace(
+  semanticSide: RuntimeStructureTriangleSemanticSide,
+): RuntimeStructureTriangleSemanticFace {
+  if (semanticSide === "RIGHT_EAST") return "EAST";
+  if (semanticSide === "LEFT_SOUTH" || semanticSide === "CONFLICT") return "SOUTH";
+  return "UP";
+}
+
+function assignRuntimeTriangleSemanticSidesAndHeights(
   triangles: RuntimeStructureTrianglePiece[],
   footprintW: number,
   footprintH: number,
@@ -487,7 +533,54 @@ function assignRuntimeTriangleSemanticSides(
       semanticSide = "RIGHT_EAST";
     }
     tri.semanticSide = semanticSide;
+    tri.semanticFace = resolveRuntimeTriangleSemanticFace(semanticSide);
+    tri.semanticRole = "STRUCTURAL";
+    tri.heightFromParentLevel = resolveRuntimeTriangleHeightFromParentLevel(tri, semanticSide);
+    tri.height = tri.heightFromParentLevel;
+    tri.heightFromParentPx = tri.heightFromParentLevel * STRUCTURE_TRIANGLE_HEIGHT_STEP_PX;
   }
+}
+
+export function resolveRuntimeStructureTriangleCacheMaxSideHeight(
+  triangles: readonly Pick<
+    RuntimeStructureTrianglePiece,
+    "semanticFace" | "semanticRole" | "heightFromParentLevel" | "heightFromParentPx"
+  >[],
+): RuntimeStructureTriangleSemanticHeight {
+  let level = 0;
+  let px = 0;
+  for (let i = 0; i < triangles.length; i++) {
+    const tri = triangles[i];
+    if (tri.semanticRole !== "STRUCTURAL") continue;
+    if (tri.semanticFace !== "EAST" && tri.semanticFace !== "SOUTH") continue;
+    if (tri.heightFromParentLevel > level) level = tri.heightFromParentLevel;
+    if (tri.heightFromParentPx > px) px = tri.heightFromParentPx;
+  }
+  return { level, px };
+}
+
+export function resolveRuntimeStructureTriangleSemanticHeight(
+  triangle: Pick<RuntimeStructureTrianglePiece, "heightFromParentLevel" | "heightFromParentPx">,
+  semantic: RuntimeStructureTriangleSemanticClass,
+  triangleCache: Pick<RuntimeStructureTriangleCache, "maxSideHeightLevel" | "maxSideHeightPx">,
+): RuntimeStructureTriangleSemanticHeight {
+  const safeTriangleLevel = Number.isFinite(triangle.heightFromParentLevel) ? Math.max(0, triangle.heightFromParentLevel) : 0;
+  const safeTrianglePx = Number.isFinite(triangle.heightFromParentPx) ? Math.max(0, triangle.heightFromParentPx) : 0;
+  const safeCacheLevel = Number.isFinite(triangleCache.maxSideHeightLevel) ? Math.max(0, triangleCache.maxSideHeightLevel) : 0;
+  const safeCachePx = Number.isFinite(triangleCache.maxSideHeightPx) ? Math.max(0, triangleCache.maxSideHeightPx) : 0;
+  if (semantic === "TOP") {
+    return {
+      level: safeCacheLevel,
+      px: safeCachePx,
+    };
+  }
+  if (semantic === "UNCLASSIFIED") {
+    return { level: 0, px: 0 };
+  }
+  return {
+    level: safeTriangleLevel,
+    px: safeTrianglePx,
+  };
 }
 
 function buildRuntimeStructureTriangleCache(
@@ -498,6 +591,7 @@ function buildRuntimeStructureTriangleCache(
   geometry: MonolithicStructureGeometry,
   triangles: RuntimeStructureTrianglePiece[],
 ): RuntimeStructureTriangleCache {
+  const maxSideHeight = resolveRuntimeStructureTriangleCacheMaxSideHeight(triangles);
   return {
     structureInstanceId,
     spriteId,
@@ -506,6 +600,8 @@ function buildRuntimeStructureTriangleCache(
     parentTileGroups: groupRuntimeStructureTrianglesBySliceParent(structureInstanceId, triangles, {
       zVisual: overlay.z + (overlay.zVisualOffsetUnits ?? 0),
     }),
+    maxSideHeightLevel: maxSideHeight.level,
+    maxSideHeightPx: maxSideHeight.px,
     monolithic: geometry,
   };
 }

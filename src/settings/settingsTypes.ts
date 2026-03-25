@@ -5,19 +5,9 @@ export type VerticalTilesViewportClass = "phone" | "desktop";
 export type LightColorModeOverride = "authored" | "off" | "standard" | "palette";
 export type LightStrengthOverride = "authored" | "low" | "medium" | "high";
 export type StructureTriangleAdmissionMode = "viewport" | "renderDistance" | "hybrid" | "compare";
-export type ShadowV1DebugGeometryMode = "full" | "capOnly" | "connectorsOnly";
 export type ShadowCasterMode =
-  | "v1Roof"
-  | "v2AlphaSilhouette"
-  | "v3HybridTriangles"
-  | "v4SliceStrips"
-  | "v5TriangleShadowMask"
   | "v6SweepShadow"
   | "v6FaceSliceDebug";
-export type ShadowHybridDiagnosticMode = "off" | "solidShadowPass" | "solidMainCanvas";
-export type ShadowDebugMode = "flatOnly" | "warpedOnly" | "both";
-export type ShadowV5DebugView = "finalOnly" | "topMask" | "eastWestMask" | "southNorthMask" | "all";
-export type ShadowV5TransformDebugMode = "deformed" | "raw";
 export type ShadowV6SemanticBucket = "TOP" | "EAST_WEST" | "SOUTH_NORTH";
 
 export type NeutralBirdForceState =
@@ -89,12 +79,7 @@ export type DebugToolsSettings = {
   shadowSunAzimuthDeg: number;
   sunElevationOverrideEnabled: boolean;
   sunElevationOverrideDeg: number;
-  shadowV1DebugGeometryMode: ShadowV1DebugGeometryMode;
   shadowCasterMode: ShadowCasterMode;
-  shadowHybridDiagnosticMode: ShadowHybridDiagnosticMode;
-  shadowDebugMode: ShadowDebugMode;
-  shadowV5DebugView: ShadowV5DebugView;
-  shadowV5TransformDebugMode: ShadowV5TransformDebugMode;
   shadowV6SemanticBucket: ShadowV6SemanticBucket;
   shadowV6StructureIndex: number;
   shadowV6SliceCount: number;

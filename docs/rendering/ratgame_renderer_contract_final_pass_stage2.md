@@ -27,18 +27,14 @@ These are **hidden subsystems** and must be removed.
 
 ## Required Extraction Targets
 
-### 1. Structure Shadow V5/V6 Implementation
+### 1. Structure Shadow V6 Implementation
 
 Create:
 
 src/game/systems/presentation/structureShadows/
-- structureShadowV5Masks.ts
 - structureShadowV6Slices.ts
 
 Move OUT of render.ts:
-- drawStructureV5ShadowMasks
-- computeFaceLocalAxisFromFixedIsoDirection
-- drawMaskHeightDeformedByFaceAxis
 - buildStructureV6FaceSliceDebugData
 - buildStructureV6VerticalShadowMaskDebugData
 - all slice/axis/mask math

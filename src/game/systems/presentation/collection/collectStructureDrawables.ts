@@ -6,6 +6,7 @@ import {
   runtimeStructureTriangleGeometrySignatureForOverlay,
 } from "../../../structures/monolithicStructureGeometry";
 import { buildStructureShadowFrameResult as buildOrchestratedStructureShadowFrameResult } from "../structureShadows/structureShadowOrchestrator";
+import { buildRuntimeStructureTriangleSemanticMap } from "../structureShadows/structureTriangleSemantics";
 
 type RenderKey = any;
 
@@ -66,23 +67,11 @@ export function collectStructureDrawables(input: CollectionContext): {
     SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG,
     SHOW_STRUCTURE_ANCHORS,
     SHOW_STRUCTURE_TRIANGLE_OWNERSHIP_SORT_DEBUG,
-    SHADOW_V1_DEBUG_GEOMETRY_MODE,
     deferredStructureSliceDebugDraws,
     LOG_STRUCTURE_OWNERSHIP_DEBUG,
     loggedStructureOwnershipDebugIds,
-    queueStructureShadowTrianglesForBand,
-    queueStructureHybridShadowForBand,
-    queueStructureV4ShadowForBand,
-    queueStructureV5ShadowForBand,
     structureV6ShadowDebugCandidates,
-    hybridShadowDiagnosticStats,
-    v4ShadowDiagnosticStats,
-    v5ShadowDiagnosticStats,
     staticRelight,
-    structureShadowV1CacheStore,
-    structureShadowV2CacheStore,
-    structureShadowHybridCacheStore,
-    structureShadowV4CacheStore,
     buildStructureDrawables,
     drawStructureDrawableFn,
     buildStructureV6VerticalShadowFrameResults,
@@ -241,28 +230,14 @@ export function collectStructureDrawables(input: CollectionContext): {
       showStructureTriangleFootprintDebug: SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG,
       showStructureAnchors: SHOW_STRUCTURE_ANCHORS,
       showStructureTriangleOwnershipSortDebug: SHOW_STRUCTURE_TRIANGLE_OWNERSHIP_SORT_DEBUG,
-      shadowV1DebugGeometryMode: SHADOW_V1_DEBUG_GEOMETRY_MODE,
       deferredStructureSliceDebugDraws,
       didQueueStructureCutoutDebugRect,
       logStructureOwnershipDebug: LOG_STRUCTURE_OWNERSHIP_DEBUG,
       loggedStructureOwnershipDebugIds,
       shadowQueueCallbacks: {
-        queueStructureShadowTrianglesForBand,
-        queueStructureHybridShadowForBand,
-        queueStructureV4ShadowForBand,
-        queueStructureV5ShadowForBand,
         structureV6ShadowDebugCandidates,
       },
-      shadowDiagnostics: {
-        hybrid: hybridShadowDiagnosticStats,
-        v4: v4ShadowDiagnosticStats,
-        v5: v5ShadowDiagnosticStats,
-      },
       staticRelightFrame: staticRelight.frame,
-      structureShadowV1CacheStore,
-      structureShadowV2CacheStore,
-      structureShadowHybridCacheStore,
-      structureShadowV4CacheStore,
     });
 
     didQueueStructureCutoutDebugRect = structureSliceBuild.didQueueStructureCutoutDebugRect;
@@ -368,6 +343,12 @@ export function collectStructureDrawables(input: CollectionContext): {
         const sourceImage: CanvasImageSource = projectedDraw.flipX
           ? getFlippedOverlayImage(spriteRec.img)
           : spriteRec.img;
+        const semanticByStableId = buildRuntimeStructureTriangleSemanticMap({
+          overlay,
+          triangleCache,
+          tileWorld: T,
+          toScreenAtZ,
+        });
         const structureShadowBand = resolveRenderZBand(
           {
             slice: overlay.seTx + overlay.seTy,
@@ -378,36 +359,19 @@ export function collectStructureDrawables(input: CollectionContext): {
         );
         const shadowResult = buildOrchestratedStructureShadowFrameResult({
           frame: structureShadowFrame,
-          overlay,
-          triangleCache,
+          structureInstanceId: overlay.id,
           geometrySignature,
-          tileWorld: T,
-          toScreenAtZ,
           draw: {
-            dx: projectedDraw.dx,
-            dy: projectedDraw.dy,
             dw: projectedDraw.dw,
             dh: projectedDraw.dh,
-            scale: projectedDraw.scale ?? 1,
           },
           sourceImage,
           admittedTrianglesForSemanticMasks: triangleCache.triangles,
-          projectedViewportRect,
-          projectedRectIntersects: runtimeStructureRectIntersects,
+          semanticByStableId,
           structureShadowBand,
           v6PrimarySemanticBucket: SHADOW_V6_PRIMARY_SEMANTIC_BUCKET,
           v6SecondarySemanticBucket: SHADOW_V6_SECONDARY_SEMANTIC_BUCKET,
           v6TopSemanticBucket: SHADOW_V6_TOP_SEMANTIC_BUCKET,
-          cacheStores: {
-            v1: structureShadowV1CacheStore,
-            v2: structureShadowV2CacheStore,
-            hybrid: structureShadowHybridCacheStore,
-            v4: structureShadowV4CacheStore,
-          },
-          diagnostics: {
-            hybrid: noopHybridDiagnostics,
-            v4: noopV4Diagnostics,
-          },
         });
         const candidate = shadowResult.v6Candidate;
         if (!candidate) continue;

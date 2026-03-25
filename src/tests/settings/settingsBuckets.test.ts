@@ -28,12 +28,7 @@ describe("settings bucket defaults", () => {
       shadowSunAzimuthDeg,
       sunElevationOverrideEnabled,
       sunElevationOverrideDeg,
-      shadowV1DebugGeometryMode,
       shadowCasterMode,
-      shadowHybridDiagnosticMode,
-      shadowDebugMode,
-      shadowV5DebugView,
-      shadowV5TransformDebugMode,
       shadowV6SemanticBucket,
       shadowV6StructureIndex,
       shadowV6SliceCount,
@@ -51,12 +46,7 @@ describe("settings bucket defaults", () => {
     expect(shadowSunAzimuthDeg).toBe(-1);
     expect(sunElevationOverrideEnabled).toBe(false);
     expect(sunElevationOverrideDeg).toBe(DEFAULT_SHADOW_SUN_V1_ELEVATION_OVERRIDE_DEG);
-    expect(shadowV1DebugGeometryMode).toBe("full");
-    expect(shadowCasterMode).toBe("v1Roof");
-    expect(shadowHybridDiagnosticMode).toBe("off");
-    expect(shadowDebugMode).toBe("warpedOnly");
-    expect(shadowV5DebugView).toBe("finalOnly");
-    expect(shadowV5TransformDebugMode).toBe("deformed");
+    expect(shadowCasterMode).toBe("v6SweepShadow");
     expect(shadowV6SemanticBucket).toBe("EAST_WEST");
     expect(shadowV6StructureIndex).toBe(0);
     expect(shadowV6SliceCount).toBe(8);
@@ -88,52 +78,12 @@ describe("settings bucket defaults", () => {
       .toBe(SHADOW_SUN_V1_MAX_ELEVATION_OVERRIDE_DEG);
     expect(sanitizeDebugToolsSettings({ sunElevationOverrideDeg: Number.NaN }).sunElevationOverrideDeg)
       .toBe(DEFAULT_SHADOW_SUN_V1_ELEVATION_OVERRIDE_DEG);
-    expect(sanitizeDebugToolsSettings({ shadowV1DebugGeometryMode: "capOnly" }).shadowV1DebugGeometryMode)
-      .toBe("capOnly");
-    expect(sanitizeDebugToolsSettings({ shadowV1DebugGeometryMode: "invalid" as any }).shadowV1DebugGeometryMode)
-      .toBe("full");
-    expect(sanitizeDebugToolsSettings({ shadowCasterMode: "v1Roof" as any }).shadowCasterMode)
-      .toBe("v1Roof");
-    expect(sanitizeDebugToolsSettings({ shadowCasterMode: "v2AlphaSilhouette" as any }).shadowCasterMode)
-      .toBe("v2AlphaSilhouette");
-    expect(sanitizeDebugToolsSettings({ shadowCasterMode: "v3HybridTriangles" as any }).shadowCasterMode)
-      .toBe("v3HybridTriangles");
-    expect(sanitizeDebugToolsSettings({ shadowCasterMode: "v4SliceStrips" as any }).shadowCasterMode)
-      .toBe("v4SliceStrips");
-    expect(sanitizeDebugToolsSettings({ shadowCasterMode: "v5TriangleShadowMask" as any }).shadowCasterMode)
-      .toBe("v5TriangleShadowMask");
     expect(sanitizeDebugToolsSettings({ shadowCasterMode: "v6SweepShadow" as any }).shadowCasterMode)
       .toBe("v6SweepShadow");
     expect(sanitizeDebugToolsSettings({ shadowCasterMode: "v6FaceSliceDebug" as any }).shadowCasterMode)
       .toBe("v6FaceSliceDebug");
     expect(sanitizeDebugToolsSettings({ shadowCasterMode: "invalid" as any }).shadowCasterMode)
-      .toBe("v1Roof");
-    expect(sanitizeDebugToolsSettings({ shadowHybridDiagnosticMode: "solidShadowPass" as any }).shadowHybridDiagnosticMode)
-      .toBe("solidShadowPass");
-    expect(sanitizeDebugToolsSettings({ shadowHybridDiagnosticMode: "solidMainCanvas" as any }).shadowHybridDiagnosticMode)
-      .toBe("solidMainCanvas");
-    expect(sanitizeDebugToolsSettings({ shadowHybridDiagnosticMode: "invalid" as any }).shadowHybridDiagnosticMode)
-      .toBe("off");
-    expect(sanitizeDebugToolsSettings({ shadowDebugMode: "flatOnly" as any }).shadowDebugMode)
-      .toBe("flatOnly");
-    expect(sanitizeDebugToolsSettings({ shadowDebugMode: "both" as any }).shadowDebugMode)
-      .toBe("both");
-    expect(sanitizeDebugToolsSettings({ shadowDebugMode: "invalid" as any }).shadowDebugMode)
-      .toBe("warpedOnly");
-    expect(sanitizeDebugToolsSettings({ shadowV5DebugView: "topMask" as any }).shadowV5DebugView)
-      .toBe("topMask");
-    expect(sanitizeDebugToolsSettings({ shadowV5DebugView: "eastWestMask" as any }).shadowV5DebugView)
-      .toBe("eastWestMask");
-    expect(sanitizeDebugToolsSettings({ shadowV5DebugView: "southNorthMask" as any }).shadowV5DebugView)
-      .toBe("southNorthMask");
-    expect(sanitizeDebugToolsSettings({ shadowV5DebugView: "all" as any }).shadowV5DebugView)
-      .toBe("all");
-    expect(sanitizeDebugToolsSettings({ shadowV5DebugView: "invalid" as any }).shadowV5DebugView)
-      .toBe("finalOnly");
-    expect(sanitizeDebugToolsSettings({ shadowV5TransformDebugMode: "raw" as any }).shadowV5TransformDebugMode)
-      .toBe("raw");
-    expect(sanitizeDebugToolsSettings({ shadowV5TransformDebugMode: "invalid" as any }).shadowV5TransformDebugMode)
-      .toBe("deformed");
+      .toBe("v6SweepShadow");
     expect(sanitizeDebugToolsSettings({ shadowV6SemanticBucket: "TOP" as any }).shadowV6SemanticBucket)
       .toBe("TOP");
     expect(sanitizeDebugToolsSettings({ shadowV6SemanticBucket: "bad" as any }).shadowV6SemanticBucket)

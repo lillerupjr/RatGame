@@ -4,6 +4,8 @@ import { KENNEY_TILE_WORLD } from "../../../../engine/render/kenneyTiles";
 import {
   buildRuntimeStructureTriangleContextKey,
   buildRuntimeStructureTriangleGeometrySignature,
+  resolveRuntimeStructureTriangleCacheMaxSideHeight,
+  resolveRuntimeStructureTriangleSemanticHeight,
   buildRuntimeTrianglesFromMonolithicGeometry,
   deriveParentTileRenderFields,
   groupRuntimeStructureTrianglesBySliceParent,
@@ -16,6 +18,7 @@ import {
   type MonolithicStructureGeometry,
   type RuntimeStructureTriangleCache,
 } from "../../../../game/structures/monolithicStructureGeometry";
+import { STRUCTURE_TRIANGLE_HEIGHT_STEP_PX } from "../../../../game/structures/monolithicBuildingSemanticPrepass";
 
 describe("monolithicStructureGeometry helpers", () => {
   const makeLocalTriangleAtTile = (tx: number, ty: number) => {
@@ -54,7 +57,7 @@ describe("monolithicStructureGeometry helpers", () => {
       rightEast: 1,
       selected: 1,
       rule: "max",
-      triangleHeightPx: 64,
+      triangleHeightPx: STRUCTURE_TRIANGLE_HEIGHT_STEP_PX,
     },
     n: input.n,
     m: input.m,
@@ -164,6 +167,8 @@ describe("monolithicStructureGeometry helpers", () => {
       triangles: [],
       parentTileGroups: [],
       geometrySignature: "sig:a",
+      maxSideHeightLevel: 0,
+      maxSideHeightPx: 0,
       monolithic: null,
     };
     store.set(cache);
@@ -268,6 +273,11 @@ describe("monolithicStructureGeometry helpers", () => {
     expect(triangles.map((tri) => [tri.triangleTx, tri.triangleTy])).toEqual([[15, 8], [15, 10]]);
     expect(triangles.map((tri) => [tri.cameraTx, tri.cameraTy])).toEqual([[15, 8], [15, 10]]);
     expect(triangles.map((tri) => [tri.admissionTx, tri.admissionTy])).toEqual([[15, 8], [15, 10]]);
+    expect(triangles.map((tri) => tri.heightFromParentLevel)).toEqual([1, 3]);
+    expect(triangles.map((tri) => tri.heightFromParentPx)).toEqual([
+      STRUCTURE_TRIANGLE_HEIGHT_STEP_PX,
+      STRUCTURE_TRIANGLE_HEIGHT_STEP_PX * 3,
+    ]);
 
     const groups = groupRuntimeStructureTrianglesBySliceParent("slice-owner", triangles);
     expect(groups).toHaveLength(1);
@@ -345,7 +355,7 @@ describe("monolithicStructureGeometry helpers", () => {
           parentFootprintProgression: 2,
           parentFootprintOffsetTx: 1,
           parentFootprintOffsetTy: 0,
-          triangles: [makeLocalTriangleAtTile(11, 10)],
+          triangles: [makeLocalTriangleAtTile(11, 11)],
         },
         {
           index: 2,
@@ -353,7 +363,7 @@ describe("monolithicStructureGeometry helpers", () => {
           parentFootprintProgression: 0,
           parentFootprintOffsetTx: 1,
           parentFootprintOffsetTy: 1,
-          triangles: [makeLocalTriangleAtTile(10, 10)],
+          triangles: [makeLocalTriangleAtTile(10, 11)],
         },
         {
           index: 3,
@@ -361,7 +371,7 @@ describe("monolithicStructureGeometry helpers", () => {
           parentFootprintProgression: 2,
           parentFootprintOffsetTx: 1,
           parentFootprintOffsetTy: 1,
-          triangles: [makeLocalTriangleAtTile(11, 11)],
+          triangles: [makeLocalTriangleAtTile(11, 9)],
         },
       ],
     });
@@ -385,5 +395,73 @@ describe("monolithicStructureGeometry helpers", () => {
       "LEFT_SOUTH",
       "RIGHT_EAST",
     ]);
+    expect(triangles.map((tri) => tri.semanticFace)).toEqual([
+      "SOUTH",
+      "EAST",
+      "SOUTH",
+      "EAST",
+    ]);
+    expect(triangles.map((tri) => tri.semanticRole)).toEqual([
+      "STRUCTURAL",
+      "STRUCTURAL",
+      "STRUCTURAL",
+      "STRUCTURAL",
+    ]);
+    expect(triangles.map((tri) => tri.height)).toEqual([0, 1, 1, 2]);
+    expect(triangles.map((tri) => tri.heightFromParentLevel)).toEqual([0, 1, 1, 2]);
+    expect(triangles.map((tri) => tri.heightFromParentPx)).toEqual([
+      0,
+      STRUCTURE_TRIANGLE_HEIGHT_STEP_PX,
+      STRUCTURE_TRIANGLE_HEIGHT_STEP_PX,
+      STRUCTURE_TRIANGLE_HEIGHT_STEP_PX * 2,
+    ]);
+
+    const maxSideHeight = resolveRuntimeStructureTriangleCacheMaxSideHeight(triangles);
+    expect(maxSideHeight).toEqual({
+      level: 2,
+      px: STRUCTURE_TRIANGLE_HEIGHT_STEP_PX * 2,
+    });
+
+    const cacheLike: RuntimeStructureTriangleCache = {
+      structureInstanceId: "slice-semantics",
+      spriteId: "test-sprite",
+      triangles,
+      parentTileGroups: [],
+      geometrySignature: "cache-like",
+      maxSideHeightLevel: maxSideHeight.level,
+      maxSideHeightPx: maxSideHeight.px,
+      monolithic: geometry,
+    };
+    expect(resolveRuntimeStructureTriangleSemanticHeight(
+      triangles[2],
+      "LEFT_SOUTH",
+      cacheLike,
+    )).toEqual({
+      level: 1,
+      px: STRUCTURE_TRIANGLE_HEIGHT_STEP_PX,
+    });
+    expect(resolveRuntimeStructureTriangleSemanticHeight(
+      triangles[0],
+      "TOP",
+      cacheLike,
+    )).toEqual({
+      level: 2,
+      px: STRUCTURE_TRIANGLE_HEIGHT_STEP_PX * 2,
+    });
+    expect(resolveRuntimeStructureTriangleSemanticHeight(
+      triangles[0],
+      "UNCLASSIFIED",
+      cacheLike,
+    )).toEqual({
+      level: 0,
+      px: 0,
+    });
+
+    triangles[3].semanticRole = "OVERHANG";
+    const structuralOnlyMaxSideHeight = resolveRuntimeStructureTriangleCacheMaxSideHeight(triangles);
+    expect(structuralOnlyMaxSideHeight).toEqual({
+      level: 1,
+      px: STRUCTURE_TRIANGLE_HEIGHT_STEP_PX,
+    });
   });
 });

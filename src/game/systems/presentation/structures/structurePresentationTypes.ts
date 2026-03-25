@@ -9,11 +9,7 @@ import type {
   KindOrder,
   RenderKey,
 } from "../worldRenderOrdering";
-import type { StructureShadowProjectedTriangle } from "../structureShadowV1";
 import type {
-  StructureHybridShadowRenderPiece,
-  StructureV4ShadowRenderPiece,
-  StructureV5ShadowRenderPiece,
   StructureV6ShadowDebugCandidate,
 } from "../structureShadows/structureShadowTypes";
 
@@ -107,72 +103,9 @@ export type StructureDrawable = {
   payload: StructureDrawablePayload;
 };
 
-export type HybridShadowDiagnosticStats = {
-  cacheHits: number;
-  cacheMisses: number;
-  casterTriangles: number;
-  projectedTriangles: number;
-  piecesQueued: number;
-  trianglesQueued: number;
-  [key: string]: number;
-};
-
-export type V4ShadowDiagnosticStats = {
-  cacheHits: number;
-  cacheMisses: number;
-  correspondences: number;
-  strips: number;
-  layerEdges: number;
-  layerBands: number;
-  sourceBandTriangles: number;
-  destinationBandEntries: number;
-  correspondencePairs: number;
-  correspondenceMismatches: number;
-  topCapTriangles: number;
-  destinationBandPairs: number;
-  destinationTriangles: number;
-  diagonalA: number;
-  diagonalB: number;
-  diagonalRule: string;
-  deltaConstPass: number;
-  deltaConstFail: number;
-  firstSliceSummary: string;
-  sampleRoofHeightPx: number | null;
-  sampleLayerHeights: string;
-  sampleSliceCount: number;
-  sampleLayerEdges: number;
-  sampleLayerBands: number;
-  sampleSelectedSlice: string;
-  sampleSelectedBand: string;
-  piecesQueued: number;
-  trianglesQueued: number;
-  topCapTrianglesQueued: number;
-  [key: string]: number | string | null;
-};
-
-export type V5ShadowDiagnosticStats = {
-  piecesQueued: number;
-  trianglesQueued: number;
-  [key: string]: number;
-};
+export type HybridSemanticClass = "TOP" | "LEFT_SOUTH" | "RIGHT_EAST" | "UNCLASSIFIED" | "CONFLICT";
 
 export type StructureShadowQueueCallbacks = {
-  queueStructureShadowTrianglesForBand: (
-    zBand: number,
-    triangles: readonly StructureShadowProjectedTriangle[],
-  ) => void;
-  queueStructureHybridShadowForBand: (
-    zBand: number,
-    piece: StructureHybridShadowRenderPiece,
-  ) => void;
-  queueStructureV4ShadowForBand: (
-    zBand: number,
-    piece: StructureV4ShadowRenderPiece,
-  ) => void;
-  queueStructureV5ShadowForBand: (
-    zBand: number,
-    piece: StructureV5ShadowRenderPiece,
-  ) => void;
   structureV6ShadowDebugCandidates: StructureV6ShadowDebugCandidate[];
 };
 

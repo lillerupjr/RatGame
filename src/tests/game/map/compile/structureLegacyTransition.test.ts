@@ -644,6 +644,38 @@ describe("structure legacy transition", () => {
     expect(grid.version).toMatch(/^h[0-9a-f]+$/);
   });
 
+  it("restamps tileHeightGrid from a stored resolved structural roof height when available", () => {
+    const avenueGeometry = getRequiredMonolithicBuildingPlacementGeometry("avenue_1", "test:height-grid-plumbing");
+    const mapDef: TableMapDef = {
+      id: "compiled_height_grid_structure_plumbing",
+      w: 8,
+      h: 8,
+      cells: [{ x: 0, y: 0, z: 0, type: "floor" }],
+      stamps: [
+        { x: 2, y: 2, z: 0, type: "building", skinId: "building1", w: avenueGeometry.w, h: avenueGeometry.h },
+      ],
+    };
+    const compiled = compileKenneyMapFromTable(mapDef, { runSeed: 405, mapId: mapDef.id });
+    const grid = compiled.tileHeightGrid;
+    const at = (tx: number, ty: number) => grid.heights[(ty - grid.originTy) * grid.width + (tx - grid.originTx)];
+    const overlay = compiled.overlays.find((entry) => (
+      entry.layerRole === "STRUCTURE"
+      && entry.monolithicSemanticSkinId !== undefined
+      && typeof entry.applyResolvedStructuralRoofHeightUnits === "function"
+    ));
+    const resolvedStructuralRoofHeightUnits = Math.max(1, avenueGeometry.tileHeightUnits - 3);
+
+    expect(at(2, 2)).toBe(avenueGeometry.tileHeightUnits);
+    expect(overlay?.applyResolvedStructuralRoofHeightUnits).toBeTypeOf("function");
+
+    const prevVersion = grid.version;
+    overlay?.applyResolvedStructuralRoofHeightUnits?.(resolvedStructuralRoofHeightUnits);
+
+    expect(at(2, 2)).toBe(resolvedStructuralRoofHeightUnits);
+    expect(at(2 + avenueGeometry.w - 1, 2 + avenueGeometry.h - 1)).toBe(resolvedStructuralRoofHeightUnits);
+    expect(grid.version).not.toBe(prevVersion);
+  });
+
   it("registers avenue2 with the batch processed building pack", () => {
     const def = getAuthoredMapDefByMapId("avenue2");
     expect(def).toBeTruthy();

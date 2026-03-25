@@ -2,11 +2,6 @@ import type { DebugOverlayContext } from "../../../../engine/render/debug/render
 import type { ViewRect } from "../../../map/compile/kenneyMap";
 import type {
   ShadowCasterMode,
-  ShadowDebugMode,
-  ShadowHybridDiagnosticMode,
-  ShadowV1DebugGeometryMode,
-  ShadowV5DebugView,
-  ShadowV5TransformDebugMode,
   ShadowV6SemanticBucket,
   StructureTriangleAdmissionMode,
 } from "../../../../settings/settingsTypes";
@@ -40,12 +35,7 @@ export type RenderDebugFlags = {
   showZoneObjectiveBounds: boolean;
   showSweepShadowDebug: boolean;
   showTileHeightMap: boolean;
-  shadowV1DebugGeometryMode: ShadowV1DebugGeometryMode;
   shadowCasterMode: ShadowCasterMode;
-  shadowHybridDiagnosticMode: ShadowHybridDiagnosticMode;
-  shadowDebugMode: ShadowDebugMode;
-  shadowV5DebugView: ShadowV5DebugView;
-  shadowV5TransformDebugMode: ShadowV5TransformDebugMode;
   shadowV6RequestedSemanticBucket: ShadowV6SemanticBucket;
   shadowV6PrimarySemanticBucket: ShadowV6SemanticBucket;
   shadowV6SecondarySemanticBucket: ShadowV6SemanticBucket;
@@ -67,31 +57,6 @@ export type RenderDebugFlags = {
 export type RenderDebugFrameContext = {
   enabled: boolean;
   flags: RenderDebugFlags;
-};
-
-export type StructureV5ShadowDrawStats = {
-  piecesDrawn: number;
-  trianglesDrawn: number;
-  finalShadowDrawCalls: number;
-};
-
-export type StructureV5ShadowAnchorDiagnostic = {
-  structureInstanceId: string;
-  triangleDestinationSpace: "screen";
-  rawBounds: { minX: number; minY: number; maxX: number; maxY: number };
-  transformedBounds: { minX: number; minY: number; maxX: number; maxY: number };
-  maskCanvasOrigin: ScreenPt;
-  maskAnchor: ScreenPt;
-  buildingDrawOrigin: ScreenPt;
-  buildingAnchor: ScreenPt;
-  transformedAnchor: ScreenPt;
-  transformedMaskDrawOrigin: ScreenPt;
-  finalShadowDrawOrigin: ScreenPt;
-  offset: ScreenPt;
-};
-
-export type DrawStructureV5ShadowMaskOutput = StructureV5ShadowDrawStats & {
-  anchorDiagnostic: StructureV5ShadowAnchorDiagnostic | null;
 };
 
 export type StructureV6ExtrudedSliceDebug = {
@@ -155,71 +120,6 @@ export type StructureV6VerticalShadowMaskDebugData = {
   mergedVerticalShadowCanvas: HTMLCanvasElement;
 };
 
-export type HybridShadowDiagnosticStats = {
-  cacheHits: number;
-  cacheMisses: number;
-  casterTriangles: number;
-  projectedTriangles: number;
-  piecesQueued: number;
-  trianglesQueued: number;
-  piecesDrawnShadowPass: number;
-  trianglesDrawnShadowPass: number;
-  piecesDrawnMainCanvas: number;
-  trianglesDrawnMainCanvas: number;
-  piecesComposited: number;
-  trianglesComposited: number;
-};
-
-export type V4ShadowDiagnosticStats = {
-  cacheHits: number;
-  cacheMisses: number;
-  correspondences: number;
-  strips: number;
-  layerEdges: number;
-  layerBands: number;
-  sourceBandTriangles: number;
-  destinationBandEntries: number;
-  correspondencePairs: number;
-  correspondenceMismatches: number;
-  topCapTriangles: number;
-  destinationBandPairs: number;
-  destinationTriangles: number;
-  diagonalA: number;
-  diagonalB: number;
-  diagonalRule: string;
-  deltaConstPass: number;
-  deltaConstFail: number;
-  firstSliceSummary: string;
-  sampleRoofHeightPx: number | null;
-  sampleLayerHeights: string;
-  sampleSliceCount: number;
-  sampleLayerEdges: number;
-  sampleLayerBands: number;
-  sampleSelectedSlice: string;
-  sampleSelectedBand: string;
-  renderMode: string;
-  piecesQueued: number;
-  trianglesQueued: number;
-  topCapTrianglesQueued: number;
-  topCapTrianglesDrawnShadowPass: number;
-  topCapTrianglesDrawnMainCanvas: number;
-  warpedTrianglesDrawnShadowPass: number;
-  flatTrianglesDrawnShadowPass: number;
-  flatTrianglesDrawnMainCanvas: number;
-  warpedDrawCalls: number;
-  flatDrawCalls: number;
-  piecesComposited: number;
-  trianglesComposited: number;
-};
-
-export type V5ShadowDiagnosticStats = {
-  piecesQueued: number;
-  trianglesQueued: number;
-  piecesDrawn: number;
-  trianglesDrawn: number;
-  finalShadowDrawCalls: number;
-};
-
 export type RenderDebugWorldPassInput = {
   ctx: CanvasRenderingContext2D;
   debugContext: DebugOverlayContext;
@@ -261,7 +161,6 @@ export type RenderDebugScreenPassInput = {
     forceRefresh: boolean;
     cacheSize: number;
   } | null;
-  v5ShadowAnchorDiagnostic: StructureV5ShadowAnchorDiagnostic | null;
   shadowSunModel: ShadowSunDebugModel;
   structureTriangleAdmissionMode: StructureTriangleAdmissionMode;
   sliderPadding: number;
@@ -272,7 +171,4 @@ export type RenderDebugScreenPassInput = {
   structureTriangleCutoutHalfHeight: number;
   structureTriangleCutoutAlpha: number;
   roadWidthAtPlayer: number;
-  hybridShadowDiagnosticStats: HybridShadowDiagnosticStats;
-  v4ShadowDiagnosticStats: V4ShadowDiagnosticStats;
-  v5ShadowDiagnosticStats: V5ShadowDiagnosticStats;
 };

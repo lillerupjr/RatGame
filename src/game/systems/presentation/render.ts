@@ -160,36 +160,17 @@ import {
   rebuildMonolithicStructureTriangleCacheForMap,
 } from "../../structures/monolithicStructureGeometry";
 import {
-  type StructureShadowProjectedTriangle,
-} from "./structureShadowV1";
-import {
   resolveStructureV6SelectedCandidateIndex,
 } from "./structureShadowV6FaceSlices";
 import {
   buildStructureShadowFrameContext,
 } from "./structureShadows/structureShadowFrameContext";
 import {
-  buildStructureShadowFrameResult as buildOrchestratedStructureShadowFrameResult,
   buildStructureV6VerticalShadowFrameResults,
 } from "./structureShadows/structureShadowOrchestrator";
 import {
-  countStructureHybridProjectedTriangles,
-  drawStructureHybridProjectedTrianglesSolid,
-  drawStructureHybridShadowProjectedTriangles,
-  drawStructureShadowProjectedTriangles,
-  drawStructureV4ShadowTrianglesSolid,
-  drawStructureV4ShadowWarpedTriangles,
-} from "./structureShadows/structureShadowProjectedDraw";
-import {
-  type StructureHybridShadowRenderPiece,
-  type StructureV4ShadowRenderPiece,
-  type StructureV5ShadowRenderPiece,
   type StructureV6ShadowDebugCandidate,
 } from "./structureShadows/structureShadowTypes";
-import {
-  drawStructureV5ShadowMasks,
-  type StructureV5ShadowAnchorDiagnostic,
-} from "./structureShadows/structureShadowV5Masks";
 import {
   buildStructureV6VerticalShadowMaskDebugData,
   countStructureV6CandidateTrianglesForBucket,
@@ -205,10 +186,6 @@ import {
 import {
   monolithicStructureGeometryCacheStore,
   staticRelightBakeStore,
-  structureShadowHybridCacheStore,
-  structureShadowV1CacheStore,
-  structureShadowV2CacheStore,
-  structureShadowV4CacheStore,
   structureShadowV6CacheStore,
 } from "./presentationSubsystemStores";
 import type { StructureV6ShadowCacheFrameStats } from "./structureShadows/structureShadowV6Cache";
@@ -1046,12 +1023,7 @@ export async function renderSystem(
   const SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG = debugFlags.showStructureTriangleFootprint;
   const SHOW_STRUCTURE_ANCHORS = debugFlags.showStructureAnchors || ((w as any).showStructureAnchors ?? false);
   const SHOW_STRUCTURE_TRIANGLE_OWNERSHIP_SORT_DEBUG = debugFlags.showStructureTriangleOwnershipSort;
-  const SHADOW_V1_DEBUG_GEOMETRY_MODE = debugFlags.shadowV1DebugGeometryMode;
   const SHADOW_CASTER_MODE = debugFlags.shadowCasterMode;
-  const SHADOW_HYBRID_DIAGNOSTIC_MODE = debugFlags.shadowHybridDiagnosticMode;
-  const SHADOW_DEBUG_MODE = debugFlags.shadowDebugMode;
-  const SHADOW_V5_DEBUG_VIEW = debugFlags.shadowV5DebugView;
-  const SHADOW_V5_TRANSFORM_DEBUG_MODE = debugFlags.shadowV5TransformDebugMode;
   const SHADOW_V6_REQUESTED_SEMANTIC_BUCKET = debugFlags.shadowV6RequestedSemanticBucket;
   const SHADOW_V6_PRIMARY_SEMANTIC_BUCKET = debugFlags.shadowV6PrimarySemanticBucket;
   const SHADOW_V6_SECONDARY_SEMANTIC_BUCKET = debugFlags.shadowV6SecondarySemanticBucket;
@@ -1232,22 +1204,14 @@ export async function renderSystem(
   });
   const runtimeStructureTriangleContextChanged = monolithicStructureGeometryCacheStore
     .resetIfContextChanged(runtimeStructureTriangleContextKey);
-  const structureShadowFrame = buildStructureShadowFrameContext(
-    {
-      mapId: compiledMap.id,
-      shadowCasterMode: SHADOW_CASTER_MODE,
-      shadowSunTimeHour: debugFlags.shadowSunTimeHour,
-      shadowSunAzimuthDeg: debugFlags.shadowSunAzimuthDeg,
-      sunElevationOverrideEnabled: debugFlags.sunElevationOverrideEnabled,
-      sunElevationOverrideDeg: debugFlags.sunElevationOverrideDeg,
-    },
-    {
-      v1: structureShadowV1CacheStore,
-      v2: structureShadowV2CacheStore,
-      hybrid: structureShadowHybridCacheStore,
-      v4: structureShadowV4CacheStore,
-    },
-  );
+  const structureShadowFrame = buildStructureShadowFrameContext({
+    mapId: compiledMap.id,
+    shadowCasterMode: SHADOW_CASTER_MODE,
+    shadowSunTimeHour: debugFlags.shadowSunTimeHour,
+    shadowSunAzimuthDeg: debugFlags.shadowSunAzimuthDeg,
+    sunElevationOverrideEnabled: debugFlags.sunElevationOverrideEnabled,
+    sunElevationOverrideDeg: debugFlags.sunElevationOverrideDeg,
+  });
   const shadowSunModel = structureShadowFrame.sunModel;
   if (SHADOW_CASTER_MODE === "v6SweepShadow") {
     computeSweepShadowMap(compiledMap.tileHeightGrid, shadowSunModel, compiledMap.id);
@@ -1281,140 +1245,10 @@ export async function renderSystem(
 
   // Map from slice -> array of drawables for that slice
   const sliceDrawables = new Map<number, SliceDrawable[]>();
-  const structureShadowTrianglesByBand = new Map<number, StructureShadowProjectedTriangle[]>();
-  const structureHybridShadowByBand = new Map<number, StructureHybridShadowRenderPiece[]>();
-  const structureV4ShadowByBand = new Map<number, StructureV4ShadowRenderPiece[]>();
-  const structureV5ShadowByBand = new Map<number, StructureV5ShadowRenderPiece[]>();
   const structureV6ShadowDebugCandidates: StructureV6ShadowDebugCandidate[] = [];
   let structureV6VerticalShadowDebugData: StructureV6VerticalShadowMaskDebugData | null = null;
   let structureV6VerticalShadowDebugDataList: StructureV6VerticalShadowMaskDebugData[] = [];
   let structureV6ShadowCacheStats: StructureV6ShadowCacheFrameStats | null = null;
-  type HybridShadowDiagnosticStats = {
-    cacheHits: number;
-    cacheMisses: number;
-    casterTriangles: number;
-    projectedTriangles: number;
-    piecesQueued: number;
-    trianglesQueued: number;
-    piecesDrawnShadowPass: number;
-    trianglesDrawnShadowPass: number;
-    piecesDrawnMainCanvas: number;
-    trianglesDrawnMainCanvas: number;
-    piecesComposited: number;
-    trianglesComposited: number;
-  };
-  const hybridShadowDiagnosticStats: HybridShadowDiagnosticStats = {
-    cacheHits: 0,
-    cacheMisses: 0,
-    casterTriangles: 0,
-    projectedTriangles: 0,
-    piecesQueued: 0,
-    trianglesQueued: 0,
-    piecesDrawnShadowPass: 0,
-    trianglesDrawnShadowPass: 0,
-    piecesDrawnMainCanvas: 0,
-    trianglesDrawnMainCanvas: 0,
-    piecesComposited: 0,
-    trianglesComposited: 0,
-  };
-  type V4ShadowDiagnosticStats = {
-    cacheHits: number;
-    cacheMisses: number;
-    correspondences: number;
-    strips: number;
-    layerEdges: number;
-    layerBands: number;
-    sourceBandTriangles: number;
-    destinationBandEntries: number;
-    correspondencePairs: number;
-    correspondenceMismatches: number;
-    topCapTriangles: number;
-    destinationBandPairs: number;
-    destinationTriangles: number;
-    diagonalA: number;
-    diagonalB: number;
-    diagonalRule: string;
-    deltaConstPass: number;
-    deltaConstFail: number;
-    firstSliceSummary: string;
-    sampleRoofHeightPx: number | null;
-    sampleLayerHeights: string;
-    sampleSliceCount: number;
-    sampleLayerEdges: number;
-    sampleLayerBands: number;
-    sampleSelectedSlice: string;
-    sampleSelectedBand: string;
-    renderMode: string;
-    piecesQueued: number;
-    trianglesQueued: number;
-    topCapTrianglesQueued: number;
-    topCapTrianglesDrawnShadowPass: number;
-    topCapTrianglesDrawnMainCanvas: number;
-    warpedTrianglesDrawnShadowPass: number;
-    flatTrianglesDrawnShadowPass: number;
-    flatTrianglesDrawnMainCanvas: number;
-    warpedDrawCalls: number;
-    flatDrawCalls: number;
-    piecesComposited: number;
-    trianglesComposited: number;
-  };
-  const v4ShadowDiagnosticStats: V4ShadowDiagnosticStats = {
-    cacheHits: 0,
-    cacheMisses: 0,
-    correspondences: 0,
-    strips: 0,
-    layerEdges: 0,
-    layerBands: 0,
-    sourceBandTriangles: 0,
-    destinationBandEntries: 0,
-    correspondencePairs: 0,
-    correspondenceMismatches: 0,
-    topCapTriangles: 0,
-    destinationBandPairs: 0,
-    destinationTriangles: 0,
-    diagonalA: 0,
-    diagonalB: 0,
-    diagonalRule: "A:0 B:0",
-    deltaConstPass: 0,
-    deltaConstFail: 0,
-    firstSliceSummary: "none",
-    sampleRoofHeightPx: null,
-    sampleLayerHeights: "none",
-    sampleSliceCount: 0,
-    sampleLayerEdges: 0,
-    sampleLayerBands: 0,
-    sampleSelectedSlice: "none",
-    sampleSelectedBand: "none",
-    renderMode: SHADOW_DEBUG_MODE,
-    piecesQueued: 0,
-    trianglesQueued: 0,
-    topCapTrianglesQueued: 0,
-    topCapTrianglesDrawnShadowPass: 0,
-    topCapTrianglesDrawnMainCanvas: 0,
-    warpedTrianglesDrawnShadowPass: 0,
-    flatTrianglesDrawnShadowPass: 0,
-    flatTrianglesDrawnMainCanvas: 0,
-    warpedDrawCalls: 0,
-    flatDrawCalls: 0,
-    piecesComposited: 0,
-    trianglesComposited: 0,
-  };
-  type V5ShadowDiagnosticStats = {
-    piecesQueued: number;
-    trianglesQueued: number;
-    piecesDrawn: number;
-    trianglesDrawn: number;
-    finalShadowDrawCalls: number;
-  };
-  const v5ShadowDiagnosticStats: V5ShadowDiagnosticStats = {
-    piecesQueued: 0,
-    trianglesQueued: 0,
-    piecesDrawn: 0,
-    trianglesDrawn: 0,
-    finalShadowDrawCalls: 0,
-  };
-  let v5ShadowAnchorDiagnostic: StructureV5ShadowAnchorDiagnostic | null = null;
-  const hybridMainCanvasDiagnosticPieces: StructureHybridShadowRenderPiece[] = [];
   const deferredStructureSliceDebugDraws: Array<() => void> = [];
   let didQueueStructureCutoutDebugRect = false;
 
@@ -1523,60 +1357,6 @@ export async function renderSystem(
       return;
     }
     bucket.push({ key, drawFn: drawOrFn as SliceDrawFn, payload });
-  };
-
-  const queueStructureShadowTrianglesForBand = (
-    zBand: number,
-    triangles: readonly StructureShadowProjectedTriangle[],
-  ): void => {
-    if (triangles.length <= 0) return;
-    let bucket = structureShadowTrianglesByBand.get(zBand);
-    if (!bucket) {
-      bucket = [];
-      structureShadowTrianglesByBand.set(zBand, bucket);
-    }
-    for (let i = 0; i < triangles.length; i++) {
-      bucket.push(triangles[i]);
-    }
-  };
-
-  const queueStructureHybridShadowForBand = (
-    zBand: number,
-    piece: StructureHybridShadowRenderPiece,
-  ): void => {
-    if (piece.projectedMappings.length <= 0) return;
-    let bucket = structureHybridShadowByBand.get(zBand);
-    if (!bucket) {
-      bucket = [];
-      structureHybridShadowByBand.set(zBand, bucket);
-    }
-    bucket.push(piece);
-  };
-
-  const queueStructureV4ShadowForBand = (
-    zBand: number,
-    piece: StructureV4ShadowRenderPiece,
-  ): void => {
-    if (piece.triangleCorrespondence.length <= 0 && piece.topCapTriangles.length <= 0) return;
-    let bucket = structureV4ShadowByBand.get(zBand);
-    if (!bucket) {
-      bucket = [];
-      structureV4ShadowByBand.set(zBand, bucket);
-    }
-    bucket.push(piece);
-  };
-
-  const queueStructureV5ShadowForBand = (
-    zBand: number,
-    piece: StructureV5ShadowRenderPiece,
-  ): void => {
-    if (piece.triangles.length <= 0) return;
-    let bucket = structureV5ShadowByBand.get(zBand);
-    if (!bucket) {
-      bucket = [];
-      structureV5ShadowByBand.set(zBand, bucket);
-    }
-    bucket.push(piece);
   };
 
   const drawStructureDrawableFn: SliceDrawFn = (payload) => {
@@ -1795,23 +1575,11 @@ export async function renderSystem(
     SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG,
     SHOW_STRUCTURE_ANCHORS,
     SHOW_STRUCTURE_TRIANGLE_OWNERSHIP_SORT_DEBUG,
-    SHADOW_V1_DEBUG_GEOMETRY_MODE,
     deferredStructureSliceDebugDraws,
     LOG_STRUCTURE_OWNERSHIP_DEBUG,
     loggedStructureOwnershipDebugIds,
-    queueStructureShadowTrianglesForBand,
-    queueStructureHybridShadowForBand,
-    queueStructureV4ShadowForBand,
-    queueStructureV5ShadowForBand,
     structureV6ShadowDebugCandidates,
-    hybridShadowDiagnosticStats,
-    v4ShadowDiagnosticStats,
-    v5ShadowDiagnosticStats,
     staticRelight,
-    structureShadowV1CacheStore,
-    structureShadowV2CacheStore,
-    structureShadowHybridCacheStore,
-    structureShadowV4CacheStore,
     buildStructureDrawables,
     drawStructureDrawableFn,
     buildStructureV6VerticalShadowFrameResults,
@@ -1897,42 +1665,17 @@ export async function renderSystem(
     rampRoadTiles,
     countRenderDrawableSort,
     compareRenderKeys,
-    structureShadowTrianglesByBand,
-    structureHybridShadowByBand,
-    structureV4ShadowByBand,
-    structureV5ShadowByBand,
     structureShadowFrame,
-    structureV6VerticalShadowDebugData,
     structureV6VerticalShadowDebugDataList,
     setRenderZBandCount,
     KindOrder,
     isGroundKindForRenderPass,
     setRenderPerfDrawTag,
-    drawStructureShadowProjectedTriangles,
     ctx,
-    STRUCTURE_SHADOW_V1_MAX_DARKNESS,
-    SHADOW_HYBRID_DIAGNOSTIC_MODE,
-    hybridMainCanvasDiagnosticPieces,
-    countStructureHybridProjectedTriangles,
-    hybridShadowDiagnosticStats,
-    drawStructureHybridProjectedTrianglesSolid,
-    drawStructureHybridShadowProjectedTriangles,
-    SHADOW_DEBUG_MODE,
-    drawStructureV4ShadowTrianglesSolid,
-    drawStructureV4ShadowWarpedTriangles,
-    v4ShadowDiagnosticStats,
-    drawStructureV5ShadowMasks,
-    shadowSunModel,
-    SHADOW_V5_DEBUG_VIEW,
-    SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG,
-    SHADOW_V5_TRANSFORM_DEBUG_MODE,
-    v5ShadowDiagnosticStats,
-    v5ShadowAnchorDiagnostic,
     executeDebugPass,
     drawSweepShadowBand,
   } as WorldPassContext;
-  const worldPassResult = executeWorldPasses(worldPassContext);
-  v5ShadowAnchorDiagnostic = worldPassResult.v5ShadowAnchorDiagnostic as StructureV5ShadowAnchorDiagnostic | null;
+  executeWorldPasses(worldPassContext);
 
   const screenOverlayContext: ScreenOverlayContext = {
     frame: renderFrame,
@@ -1960,7 +1703,6 @@ export async function renderSystem(
     structureV6VerticalShadowDebugDataList,
     structureV6ShadowDebugCandidates,
     structureV6ShadowCacheStats,
-    v5ShadowAnchorDiagnostic,
     shadowSunModel,
     structureTriangleAdmissionMode,
     sliderPadding,
@@ -1973,9 +1715,6 @@ export async function renderSystem(
     roadAreaWidthAt,
     playerTx,
     playerTy,
-    hybridShadowDiagnosticStats,
-    v4ShadowDiagnosticStats,
-    v5ShadowDiagnosticStats,
     endRenderPerfFrame,
     DEBUG_PLAYER_WEDGE,
     px,

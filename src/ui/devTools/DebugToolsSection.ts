@@ -58,88 +58,16 @@ export function mountDebugToolsSection(
     (value) => applyDebugPatch({ sunElevationOverrideDeg: value }),
   );
 
-  const shadowV1DebugGeometryModeSelect = createSelectRow<DebugToolsSettings["shadowV1DebugGeometryMode"]>(
-    section,
-    "Shadow V1 Debug Geometry",
-    ["full", "capOnly", "connectorsOnly"],
-    (value) => value === "capOnly" ? "Cap Only" : value === "connectorsOnly" ? "Connectors Only" : "Full",
-    (value) => applyDebugPatch({ shadowV1DebugGeometryMode: value }),
-  );
-
   const shadowCasterModeSelect = createSelectRow<DebugToolsSettings["shadowCasterMode"]>(
     section,
     "Shadow Caster",
-    ["v6SweepShadow", "v6FaceSliceDebug", "v5TriangleShadowMask", "v4SliceStrips", "v3HybridTriangles", "v2AlphaSilhouette", "v1Roof"],
+    ["v6SweepShadow", "v6FaceSliceDebug"],
     (value) => (
-      value === "v1Roof"
-        ? "V1 Roof"
-        : value === "v2AlphaSilhouette"
-          ? "V2 Alpha Silhouette"
-          : value === "v3HybridTriangles"
-            ? "V3 Hybrid Triangles"
-            : value === "v4SliceStrips"
-              ? "V4 Slice Strips"
-              : value === "v5TriangleShadowMask"
-                ? "V5 Triangle Shadow Mask"
-                : value === "v6SweepShadow"
-                  ? "V6 Sweep Shadow"
-                  : "V6 Face Slice Debug"
+      value === "v6SweepShadow"
+        ? "V6 Sweep Shadow"
+        : "V6 Face Slice Debug"
     ),
     (value) => applyDebugPatch({ shadowCasterMode: value }),
-  );
-
-  const shadowHybridDiagnosticModeSelect = createSelectRow<DebugToolsSettings["shadowHybridDiagnosticMode"]>(
-    section,
-    "Triangle Shadow Diagnostic",
-    ["off", "solidShadowPass", "solidMainCanvas"],
-    (value) => (
-      value === "solidShadowPass"
-        ? "Flat Fill (Shadow Pass)"
-        : value === "solidMainCanvas"
-          ? "Flat Fill (Main Canvas)"
-          : "Warped (Shadow Pass)"
-    ),
-    (value) => applyDebugPatch({ shadowHybridDiagnosticMode: value }),
-  );
-
-  const shadowDebugModeSelect = createSelectRow<DebugToolsSettings["shadowDebugMode"]>(
-    section,
-    "V4 Shadow Draw Mode",
-    ["warpedOnly", "flatOnly", "both"],
-    (value) => (
-      value === "flatOnly"
-        ? "Flat Only"
-        : value === "both"
-          ? "Both"
-          : "Warped Only"
-    ),
-    (value) => applyDebugPatch({ shadowDebugMode: value }),
-  );
-
-  const shadowV5DebugViewSelect = createSelectRow<DebugToolsSettings["shadowV5DebugView"]>(
-    section,
-    "V5 Mask Debug View",
-    ["finalOnly", "topMask", "eastWestMask", "southNorthMask", "all"],
-    (value) => (
-      value === "topMask"
-        ? "Top Mask"
-        : value === "eastWestMask"
-          ? "East-West Mask"
-          : value === "southNorthMask"
-            ? "South-North Mask"
-            : value === "all"
-              ? "All Masks"
-              : "Final Only"
-    ),
-    (value) => applyDebugPatch({ shadowV5DebugView: value }),
-  );
-
-  const shadowV5TransformDebugModeSelect = createSelectRow<DebugToolsSettings["shadowV5TransformDebugMode"]>(
-    section,
-    "V5 Mask Transform",
-    ["deformed", "raw"],
-    (value) => value === "raw" ? "Raw Mask" : "Deformed Mask",
-    (value) => applyDebugPatch({ shadowV5TransformDebugMode: value }),
   );
 
   const shadowV6SemanticBucketSelect = createSelectRow<DebugToolsSettings["shadowV6SemanticBucket"]>(
@@ -298,12 +226,7 @@ export function mountDebugToolsSection(
       sunElevationOverrideSlider.input.disabled = !debug.sunElevationOverrideEnabled;
       sunElevationOverrideSlider.input.style.opacity = debug.sunElevationOverrideEnabled ? "1" : "0.65";
       sunElevationOverrideSlider.value.style.opacity = debug.sunElevationOverrideEnabled ? "1" : "0.65";
-      shadowV1DebugGeometryModeSelect.value = debug.shadowV1DebugGeometryMode;
       shadowCasterModeSelect.value = debug.shadowCasterMode;
-      shadowHybridDiagnosticModeSelect.value = debug.shadowHybridDiagnosticMode;
-      shadowDebugModeSelect.value = debug.shadowDebugMode;
-      shadowV5DebugViewSelect.value = debug.shadowV5DebugView;
-      shadowV5TransformDebugModeSelect.value = debug.shadowV5TransformDebugMode;
       shadowV6SemanticBucketSelect.value = debug.shadowV6SemanticBucket;
       shadowV6StructureIndexSlider.input.value = `${Math.round(debug.shadowV6StructureIndex)}`;
       shadowV6SliceCountSlider.input.value = `${Math.round(debug.shadowV6SliceCount)}`;
@@ -313,11 +236,6 @@ export function mountDebugToolsSection(
       shadowV6TopOnlyToggle.checked = !!debug.shadowV6TopOnly;
       shadowV6ForceRefreshToggle.checked = !!debug.shadowV6ForceRefresh;
       shadowV6FaceSliceDebugOverlayToggle.checked = !!debug.shadowV6FaceSliceDebugOverlay;
-      const v5DebugViewActive = debug.shadowCasterMode === "v5TriangleShadowMask";
-      shadowV5DebugViewSelect.disabled = !v5DebugViewActive;
-      shadowV5DebugViewSelect.style.opacity = v5DebugViewActive ? "1" : "0.65";
-      shadowV5TransformDebugModeSelect.disabled = !v5DebugViewActive;
-      shadowV5TransformDebugModeSelect.style.opacity = v5DebugViewActive ? "1" : "0.65";
       const v6DebugViewActive = debug.shadowCasterMode === "v6FaceSliceDebug";
       shadowV6SemanticBucketSelect.disabled = !v6DebugViewActive;
       shadowV6SemanticBucketSelect.style.opacity = v6DebugViewActive ? "1" : "0.65";

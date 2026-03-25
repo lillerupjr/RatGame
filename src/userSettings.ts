@@ -145,19 +145,9 @@ export type DebugSettings = {
   shadowSunAzimuthDeg: number;
   sunElevationOverrideEnabled: boolean;
   sunElevationOverrideDeg: number;
-  shadowV1DebugGeometryMode: "full" | "capOnly" | "connectorsOnly";
   shadowCasterMode:
-    | "v1Roof"
-    | "v2AlphaSilhouette"
-    | "v3HybridTriangles"
-    | "v4SliceStrips"
-    | "v5TriangleShadowMask"
     | "v6SweepShadow"
     | "v6FaceSliceDebug";
-  shadowHybridDiagnosticMode: "off" | "solidShadowPass" | "solidMainCanvas";
-  shadowDebugMode: "flatOnly" | "warpedOnly" | "both";
-  shadowV5DebugView: "finalOnly" | "topMask" | "eastWestMask" | "southNorthMask" | "all";
-  shadowV5TransformDebugMode: "deformed" | "raw";
   shadowV6SemanticBucket: "TOP" | "EAST_WEST" | "SOUTH_NORTH";
   shadowV6StructureIndex: number;
   shadowV6SliceCount: number;
@@ -242,12 +232,7 @@ function toLegacySettings(): UserSettings {
       shadowSunAzimuthDeg: settings.debug.shadowSunAzimuthDeg,
       sunElevationOverrideEnabled: settings.debug.sunElevationOverrideEnabled,
       sunElevationOverrideDeg: settings.debug.sunElevationOverrideDeg,
-      shadowV1DebugGeometryMode: settings.debug.shadowV1DebugGeometryMode,
       shadowCasterMode: settings.debug.shadowCasterMode,
-      shadowHybridDiagnosticMode: settings.debug.shadowHybridDiagnosticMode,
-      shadowDebugMode: settings.debug.shadowDebugMode,
-      shadowV5DebugView: settings.debug.shadowV5DebugView,
-      shadowV5TransformDebugMode: settings.debug.shadowV5TransformDebugMode,
       shadowV6SemanticBucket: settings.debug.shadowV6SemanticBucket,
       shadowV6StructureIndex: settings.debug.shadowV6StructureIndex,
       shadowV6SliceCount: settings.debug.shadowV6SliceCount,
@@ -477,23 +462,8 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     if (debugAny.sunElevationOverrideDeg !== undefined) {
       debugPatch.sunElevationOverrideDeg = debugAny.sunElevationOverrideDeg;
     }
-    if (debugAny.shadowV1DebugGeometryMode !== undefined) {
-      debugPatch.shadowV1DebugGeometryMode = debugAny.shadowV1DebugGeometryMode;
-    }
     if (debugAny.shadowCasterMode !== undefined) {
       debugPatch.shadowCasterMode = debugAny.shadowCasterMode;
-    }
-    if (debugAny.shadowHybridDiagnosticMode !== undefined) {
-      debugPatch.shadowHybridDiagnosticMode = debugAny.shadowHybridDiagnosticMode;
-    }
-    if (debugAny.shadowDebugMode !== undefined) {
-      debugPatch.shadowDebugMode = debugAny.shadowDebugMode;
-    }
-    if (debugAny.shadowV5DebugView !== undefined) {
-      debugPatch.shadowV5DebugView = debugAny.shadowV5DebugView;
-    }
-    if (debugAny.shadowV5TransformDebugMode !== undefined) {
-      debugPatch.shadowV5TransformDebugMode = debugAny.shadowV5TransformDebugMode;
     }
     if (debugAny.shadowV6SemanticBucket !== undefined) {
       debugPatch.shadowV6SemanticBucket = debugAny.shadowV6SemanticBucket;
