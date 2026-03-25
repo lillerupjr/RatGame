@@ -1,6 +1,7 @@
 import type { PaletteGroup } from "../engine/render/palette/palettes";
 
 export type VerticalTilesMode = "auto" | "manual";
+export type RenderBackendMode = "canvas2d" | "webgl";
 export type VerticalTilesViewportClass = "phone" | "desktop";
 export type LightColorModeOverride = "authored" | "off" | "standard" | "palette";
 export type LightStrengthOverride = "authored" | "low" | "medium" | "high";
@@ -39,6 +40,7 @@ export type UserSettings = {
     performanceMode: boolean;
     deathSlowdownEnabled: boolean;
     cameraSmoothingEnabled: boolean;
+    renderBackend: RenderBackendMode;
     verticalTilesMode: VerticalTilesMode;
     verticalTilesUser: number;
     verticalTilesAutoPhone: number;

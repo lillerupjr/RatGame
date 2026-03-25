@@ -1,4 +1,5 @@
 import type { CollectionContext } from "../contracts/collectionContext";
+import { enqueueSliceCommand } from "../frame/renderFrameBuilder";
 import type { StructureV6ShadowCacheFrameStats } from "../structureShadows/structureShadowV6Cache";
 import {
   buildRuntimeStructureProjectedDraw,
@@ -6,6 +7,7 @@ import {
   runtimeStructureTriangleGeometrySignatureForOverlay,
 } from "../../../structures/monolithicStructureGeometry";
 import { buildStructureShadowFrameResult as buildOrchestratedStructureShadowFrameResult } from "../structureShadows/structureShadowOrchestrator";
+import { shouldBuildStructureV6ShadowMasksForFrame } from "../structureShadows/structureShadowVersionRouting";
 import { buildRuntimeStructureTriangleSemanticMap } from "../structureShadows/structureTriangleSemantics";
 
 type RenderKey = any;
@@ -24,8 +26,7 @@ export function collectStructureDrawables(input: CollectionContext): {
     facePiecesInViewForLayer,
     viewRect,
     KindOrder,
-    addToSlice,
-    drawRenderPiece,
+    frameBuilder,
     occluderLayers,
     occludersInViewForLayer,
     shouldCullBuildingAt,
@@ -73,7 +74,6 @@ export function collectStructureDrawables(input: CollectionContext): {
     structureV6ShadowDebugCandidates,
     staticRelight,
     buildStructureDrawables,
-    drawStructureDrawableFn,
     buildStructureV6VerticalShadowFrameResults,
     SHADOW_V6_REQUESTED_SEMANTIC_BUCKET,
     SHADOW_V6_STRUCTURE_INDEX,
@@ -137,8 +137,9 @@ export function collectStructureDrawables(input: CollectionContext): {
           kindOrder: faceKindOrder,
           stableId: faceStableId + di * 0.001,
         };
-        addToSlice(face.tx + face.ty, renderKey, () => {
-          drawRenderPiece(d);
+        enqueueSliceCommand(frameBuilder, renderKey, "sprite", {
+          variant: "renderPieceSprite",
+          draw: d,
         });
       }
     }
@@ -175,8 +176,9 @@ export function collectStructureDrawables(input: CollectionContext): {
         kindOrder: wallKindOrder,
         stableId: occStableId,
       };
-      addToSlice(occ.tx + occ.ty, renderKey, () => {
-        drawRenderPiece(draw);
+      enqueueSliceCommand(frameBuilder, renderKey, "sprite", {
+        variant: "renderPieceSprite",
+        draw,
       });
     }
   }
@@ -245,12 +247,28 @@ export function collectStructureDrawables(input: CollectionContext): {
     const structureDrawables = buildStructureDrawables(structureSliceBuild.pieces);
     for (let si = 0; si < structureDrawables.length; si++) {
       const structureDrawable = structureDrawables[si];
-      addToSlice(
-        structureDrawable.slice,
-        structureDrawable.key,
-        drawStructureDrawableFn,
-        structureDrawable.payload,
-      );
+      if (structureDrawable.payload.kind === "overlay") {
+        enqueueSliceCommand(frameBuilder, structureDrawable.key, "overlay", {
+          variant: "structureOverlay",
+          piece: structureDrawable.payload.piece,
+        });
+        continue;
+      }
+
+      enqueueSliceCommand(frameBuilder, structureDrawable.key, "triangle", {
+        variant: "structureTriangleGroup",
+        image: structureDrawable.payload.piece.draw.img,
+        flipX: !!structureDrawable.payload.piece.draw.flipX,
+        drawWidth: structureDrawable.payload.piece.draw.dw,
+        drawHeight: structureDrawable.payload.piece.draw.dh,
+        finalVisibleTriangles: structureDrawable.payload.piece.finalVisibleTriangles,
+        compareDistanceOnlyStableIds: structureDrawable.payload.piece.compareDistanceOnlyTriangles.map((triangle: any) => triangle.stableId),
+        cutoutEnabled: structureDrawable.payload.piece.cutoutEnabled,
+        cutoutAlpha: structureDrawable.payload.piece.cutoutAlpha,
+        buildingDirectionalEligible: structureDrawable.payload.piece.buildingDirectionalEligible,
+        groupParentAfterPlayer: structureDrawable.payload.piece.groupParentAfterPlayer,
+        cutoutScreenRect: structureCutoutScreenRect,
+      });
     }
   }
 
@@ -272,7 +290,7 @@ export function collectStructureDrawables(input: CollectionContext): {
     forceRefresh,
     cacheSize: 0,
   };
-  if (structureShadowFrame.routing.usesV6Debug) {
+  if (shouldBuildStructureV6ShadowMasksForFrame(structureShadowFrame)) {
     const fullMapPopulationKey = [
       `map:${compiledMap.id}`,
       `sun:${structureShadowFrame.sunModel.stepKey}`,

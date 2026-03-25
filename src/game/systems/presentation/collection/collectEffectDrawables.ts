@@ -1,4 +1,5 @@
 import type { CollectionContext } from "../contracts/collectionContext";
+import { enqueueSliceCommand } from "../frame/renderFrameBuilder";
 
 type RenderKey = any;
 
@@ -17,7 +18,7 @@ export function collectEffectDrawables(input: CollectionContext): void {
     ISO_Y,
     renderFireZoneVfx,
     getSpriteById,
-    addToSlice,
+    frameBuilder,
     VFX_CLIPS,
     tileHAtWorld,
     ctx,
@@ -52,48 +53,18 @@ export function collectEffectDrawables(input: CollectionContext): void {
         stableId: 100000 + i,
       };
 
-      const kind = w.zKind[i];
-      const r = w.zR[i];
-
-      const drawClosure = () => {
-        const p = toScreen(zx, zy);
-        const rx = r * ISO_X;
-        const ry = r * ISO_Y;
-
-        if (kind === ZONE_KIND.AURA) {
-          ctx.globalAlpha = 0.16;
-          ctx.fillStyle = "#7bdcff";
-          ctx.beginPath();
-          ctx.ellipse(p.x, p.y, rx, ry, 0, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.globalAlpha = 0.28;
-          ctx.strokeStyle = "#ffffff";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.ellipse(p.x, p.y, rx * 0.98, ry * 0.98, 0, 0, Math.PI * 2);
-          ctx.stroke();
-
-          ctx.globalAlpha = 1;
-        } else if (kind === ZONE_KIND.FIRE) {
-          const fvfxArr = ((w as any)._fireZoneVfx ?? []) as (any | null)[];
-          const fvfx = fvfxArr[i];
-          if (fvfx) {
-            renderFireZoneVfx(ctx, fvfx, toScreen, getSpriteById, ISO_X, ISO_Y);
-          } else {
-            // Fallback: flat rendering if VFX data missing
-            const pulse = 0.85 + 0.15 * Math.sin((w.time ?? 0) * 7 + i * 0.37);
-            ctx.globalAlpha = 0.26 * pulse;
-            ctx.fillStyle = "#ff3a2e";
-            ctx.beginPath();
-            ctx.ellipse(p.x, p.y, rx, ry, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.globalAlpha = 1;
-          }
-        }
-      };
-
-      addToSlice(zSlice, renderKey, drawClosure);
+      enqueueSliceCommand(frameBuilder, renderKey, "primitive", {
+        variant: "zoneEffect",
+        zoneIndex: i,
+        zoneKind: w.zKind[i],
+        radius: w.zR[i],
+        worldX: zx,
+        worldY: zy,
+        screenX: toScreen(zx, zy).x,
+        screenY: toScreen(zx, zy).y,
+        radiusScreenX: w.zR[i] * ISO_X,
+        radiusScreenY: w.zR[i] * ISO_Y,
+      });
     }
   }
 
@@ -119,23 +90,33 @@ export function collectEffectDrawables(input: CollectionContext): void {
         stableId: 200000 + i,
       };
 
-      const drawClosure = () => {
-        const clip = VFX_CLIPS[w.vfxClipId[i]];
-        const rawFrame = Math.floor(w.vfxElapsed[i] * clip.fps);
-        const frameIndex = clip.loop
-          ? rawFrame % clip.spriteIds.length
-          : Math.min(clip.spriteIds.length - 1, rawFrame);
-        const sprite = getSpriteById(clip.spriteIds[frameIndex]);
-        if (!sprite.ready) return;
+      const clip = VFX_CLIPS[w.vfxClipId[i]];
+      const rawFrame = clip ? Math.floor(w.vfxElapsed[i] * clip.fps) : 0;
+      const frameIndex = clip
+        ? (clip.loop ? rawFrame % clip.spriteIds.length : Math.min(clip.spriteIds.length - 1, rawFrame))
+        : -1;
+      const spriteId = clip && frameIndex >= 0 ? clip.spriteIds[frameIndex] : null;
+      const sprite = spriteId ? getSpriteById(spriteId) : null;
+      if (sprite?.ready && sprite.img) {
         const scale = w.vfxRadius[i] > 0 ? w.vfxRadius[i] / 32 : w.vfxScale[i];
         const size = 64 * scale;
-        const p = toScreen(w.vfxX[i], w.vfxY[i]);
-        ctx.globalAlpha = 1;
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(sprite.img, p.x - size / 2, p.y - size / 2 + w.vfxOffsetYPx[i], size, size);
-      };
+        const p = toScreen(vx, vy);
+        enqueueSliceCommand(frameBuilder, renderKey, "sprite", {
+          variant: "imageSprite",
+          image: sprite.img,
+          dx: p.x - size * 0.5,
+          dy: p.y - size * 0.5 + w.vfxOffsetYPx[i],
+          dw: size,
+          dh: size,
+          alpha: 1,
+        });
+        continue;
+      }
 
-      addToSlice(vtx + vty, renderKey, drawClosure);
+      enqueueSliceCommand(frameBuilder, renderKey, "sprite", {
+        variant: "vfxClip",
+        vfxIndex: i,
+      });
     }
   }
 

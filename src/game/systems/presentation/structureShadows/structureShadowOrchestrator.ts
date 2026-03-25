@@ -9,6 +9,7 @@ import type {
   StructureShadowOverlayQueueResult,
   StructureV6ShadowDebugCandidate,
 } from "./structureShadowTypes";
+import { shouldBuildStructureV6ShadowMasksForFrame } from "./structureShadowVersionRouting";
 
 export type BuildStructureShadowFrameResultInput = {
   frame: StructureShadowFrameResult;
@@ -30,7 +31,7 @@ export type BuildStructureShadowFrameResultInput = {
 export function buildStructureShadowFrameResult(
   input: BuildStructureShadowFrameResultInput,
 ): StructureShadowOverlayQueueResult {
-  if (!input.frame.routing.usesV6Debug) {
+  if (!shouldBuildStructureV6ShadowMasksForFrame(input.frame)) {
     return {
       structureShadowBand: input.structureShadowBand,
       v6Candidate: null,
@@ -107,7 +108,7 @@ export function buildStructureV6VerticalShadowFrameResults<TVerticalDebugData>(
     selected: null,
     all: [],
   };
-  if (!input.frame.routing.usesV6Debug || input.candidates.length <= 0) return emptyResult;
+  if (!shouldBuildStructureV6ShadowMasksForFrame(input.frame) || input.candidates.length <= 0) return emptyResult;
 
   const shadowVector = {
     x: input.frame.sunModel.projectionDirection.x * input.shadowLengthPx,

@@ -596,6 +596,76 @@ export function drawStreetLampTint(
   ctx.globalAlpha = prevA;
 }
 
+export type ProjectedLightTintSprite = {
+  image: HTMLCanvasElement;
+  dx: number;
+  dy: number;
+  dw: number;
+  dh: number;
+  alpha: number;
+  blendMode: "additive";
+};
+
+export function resolveProjectedLightTintSprite(
+  light: ProjectedLight,
+  timeSec: number,
+  groundYScaleInput: number | undefined,
+): ProjectedLightTintSprite | null {
+  const intensity = computeProjectedLightIntensity(light, timeSec);
+  if (intensity <= 0) return null;
+  const tintAlpha = intensity * clamp01(light.tintStrength);
+  if (tintAlpha <= 0) return null;
+  const groundYScale = clampGroundYScale(groundYScaleInput);
+  const aQ = qAlpha(tintAlpha);
+  if (aQ <= 0) return null;
+
+  if (light.shape === "STREET_LAMP") {
+    const pool = light.pool ?? { radiusPx: Math.max(1, light.radiusPx * 0.7), yScale: 1 };
+    const cone = light.cone ?? { dirRad: Math.PI * 0.5, angleRad: 0.9, lengthPx: Math.max(light.radiusPx, 160) };
+    const poolSy = Number.isFinite(light.poolSy) ? (light.poolSy as number) : light.sy;
+    const poolRadiusPx = Math.max(1, pool.radiusPx);
+    const coneLengthPx = Math.max(1, cone.lengthPx);
+    const poolR = Math.max(1, q(poolRadiusPx, 4));
+    const poolH = Math.max(1, q(poolR * 2 * groundYScale, 2));
+    const poolDy = q(poolSy - light.sy, 2);
+    const coneLen = Math.max(1, q(coneLengthPx, 4));
+    const coneSprite = getStreetLampConeTintSprite(light.color, cone.angleRad);
+    const coneLenScale = coneLen / CONE_TINT_BASE_LENGTH_PX;
+    const coneH = Math.max(1, q(coneSprite.height * coneLenScale, 2));
+    const composite = getStreetLampTintCompositeSprite(
+      light.color,
+      poolR,
+      poolH,
+      poolDy,
+      coneLen,
+      coneH,
+      cone.angleRad,
+      cone.dirRad,
+      groundYScale,
+    );
+    return {
+      image: composite.canvas,
+      dx: light.sx - composite.ox,
+      dy: light.sy - composite.oy,
+      dw: composite.canvas.width,
+      dh: composite.canvas.height,
+      alpha: aQ,
+      blendMode: "additive",
+    };
+  }
+
+  const rQ = Math.max(1, q(Math.max(1, light.radiusPx), 4));
+  return {
+    image: getRadialTintSprite(light.color),
+    dx: light.sx - rQ,
+    dy: light.sy - rQ,
+    dw: rQ * 2,
+    dh: rQ * 2,
+    alpha: aQ,
+    blendMode: "additive",
+  };
+}
+
 export function drawProjectedLightAdditive(
   ctx: CanvasRenderingContext2D,
   light: ProjectedLight,

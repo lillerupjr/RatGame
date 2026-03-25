@@ -20,6 +20,22 @@ type FrameCounters = {
   maskCacheMisses: number;
   maskRasterChunks: number;
   maskDrawEntries: number;
+  backendWebglCommands: number;
+  backendCanvasFallbackCommands: number;
+  backendUnsupportedCommands: number;
+  backendWebglGroundCommands: number;
+  backendUnsupportedGroundCommands: number;
+  backendRequested: "canvas2d" | "webgl";
+  backendSelected: "canvas2d" | "webgl";
+  backendDefault: "canvas2d" | "webgl";
+  backendWebglReadyForDefault: boolean;
+  backendFallbackReason: string | null;
+  backendUnsupportedVariants: string[];
+  backendWebglByFamily: Record<string, number>;
+  backendCanvasFallbackByFamily: Record<string, number>;
+  backendUnsupportedByFamily: Record<string, number>;
+  backendUnsupportedByKind: Record<string, number>;
+  backendPartiallyHandledFamilies: string[];
 };
 
 type Snapshot = {
@@ -44,6 +60,22 @@ type Snapshot = {
   maskCacheMissesPerFrame: number;
   maskRasterChunksPerFrame: number;
   maskDrawEntriesPerFrame: number;
+  backendWebglCommandsPerFrame: number;
+  backendCanvasFallbackCommandsPerFrame: number;
+  backendUnsupportedCommandsPerFrame: number;
+  backendWebglGroundCommandsPerFrame: number;
+  backendUnsupportedGroundCommandsPerFrame: number;
+  backendRequested: "canvas2d" | "webgl";
+  backendSelected: "canvas2d" | "webgl";
+  backendDefault: "canvas2d" | "webgl";
+  backendWebglReadyForDefault: boolean;
+  backendFallbackReason: string | null;
+  backendUnsupportedVariants: string[];
+  backendWebglByFamilyPerFrame: Record<string, number>;
+  backendCanvasFallbackByFamilyPerFrame: Record<string, number>;
+  backendUnsupportedByFamilyPerFrame: Record<string, number>;
+  backendUnsupportedByKindPerFrame: Record<string, number>;
+  backendPartiallyHandledFamilies: string[];
 };
 
 export type DrawTag =
@@ -105,6 +137,22 @@ const ZERO_FRAME: FrameCounters = {
   maskCacheMisses: 0,
   maskRasterChunks: 0,
   maskDrawEntries: 0,
+  backendWebglCommands: 0,
+  backendCanvasFallbackCommands: 0,
+  backendUnsupportedCommands: 0,
+  backendWebglGroundCommands: 0,
+  backendUnsupportedGroundCommands: 0,
+  backendRequested: "canvas2d",
+  backendSelected: "canvas2d",
+  backendDefault: "canvas2d",
+  backendWebglReadyForDefault: false,
+  backendFallbackReason: null,
+  backendUnsupportedVariants: [],
+  backendWebglByFamily: {},
+  backendCanvasFallbackByFamily: {},
+  backendUnsupportedByFamily: {},
+  backendUnsupportedByKind: {},
+  backendPartiallyHandledFamilies: [],
 };
 
 function makeZeroFrame(): FrameCounters {
@@ -113,6 +161,12 @@ function makeZeroFrame(): FrameCounters {
     drawImageByTag: makeZeroByTag(),
     saveByTag: makeZeroByTag(),
     restoreByTag: makeZeroByTag(),
+    backendUnsupportedVariants: [],
+    backendWebglByFamily: {},
+    backendCanvasFallbackByFamily: {},
+    backendUnsupportedByFamily: {},
+    backendUnsupportedByKind: {},
+    backendPartiallyHandledFamilies: [],
   };
 }
 
@@ -147,7 +201,35 @@ let snapshot: Snapshot = {
   maskCacheMissesPerFrame: 0,
   maskRasterChunksPerFrame: 0,
   maskDrawEntriesPerFrame: 0,
+  backendWebglCommandsPerFrame: 0,
+  backendCanvasFallbackCommandsPerFrame: 0,
+  backendUnsupportedCommandsPerFrame: 0,
+  backendWebglGroundCommandsPerFrame: 0,
+  backendUnsupportedGroundCommandsPerFrame: 0,
+  backendRequested: "canvas2d",
+  backendSelected: "canvas2d",
+  backendDefault: "canvas2d",
+  backendWebglReadyForDefault: false,
+  backendFallbackReason: null,
+  backendUnsupportedVariants: [],
+  backendWebglByFamilyPerFrame: {},
+  backendCanvasFallbackByFamilyPerFrame: {},
+  backendUnsupportedByFamilyPerFrame: {},
+  backendUnsupportedByKindPerFrame: {},
+  backendPartiallyHandledFamilies: [],
 };
+
+function mergeCountMaps(target: Record<string, number>, source: Record<string, number>): void {
+  for (const [key, value] of Object.entries(source)) {
+    target[key] = (target[key] ?? 0) + value;
+  }
+}
+
+function divideCountMap(source: Record<string, number>, denom: number): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(source)) out[key] = value / denom;
+  return out;
+}
 
 let currentDrawTag: DrawTag = "untagged";
 
@@ -255,6 +337,31 @@ function foldCurrentFrame(nowSec: number): void {
   accum.maskCacheMisses += frame.maskCacheMisses;
   accum.maskRasterChunks += frame.maskRasterChunks;
   accum.maskDrawEntries += frame.maskDrawEntries;
+  accum.backendWebglCommands += frame.backendWebglCommands;
+  accum.backendCanvasFallbackCommands += frame.backendCanvasFallbackCommands;
+  accum.backendUnsupportedCommands += frame.backendUnsupportedCommands;
+  accum.backendRequested = frame.backendRequested;
+  accum.backendSelected = frame.backendSelected;
+  accum.backendDefault = frame.backendDefault;
+  accum.backendWebglReadyForDefault = frame.backendWebglReadyForDefault;
+  accum.backendFallbackReason = frame.backendFallbackReason;
+  mergeCountMaps(accum.backendWebglByFamily, frame.backendWebglByFamily);
+  mergeCountMaps(accum.backendCanvasFallbackByFamily, frame.backendCanvasFallbackByFamily);
+  mergeCountMaps(accum.backendUnsupportedByFamily, frame.backendUnsupportedByFamily);
+  if (frame.backendUnsupportedVariants.length > 0) {
+    for (let i = 0; i < frame.backendUnsupportedVariants.length; i++) {
+      if (!accum.backendUnsupportedVariants.includes(frame.backendUnsupportedVariants[i])) {
+        accum.backendUnsupportedVariants.push(frame.backendUnsupportedVariants[i]);
+      }
+    }
+  }
+  if (frame.backendPartiallyHandledFamilies.length > 0) {
+    for (let i = 0; i < frame.backendPartiallyHandledFamilies.length; i++) {
+      if (!accum.backendPartiallyHandledFamilies.includes(frame.backendPartiallyHandledFamilies[i])) {
+        accum.backendPartiallyHandledFamilies.push(frame.backendPartiallyHandledFamilies[i]);
+      }
+    }
+  }
   framesAccum += 1;
 
   if (lastReportSec < 0) lastReportSec = nowSec;
@@ -292,6 +399,22 @@ function foldCurrentFrame(nowSec: number): void {
       maskCacheMissesPerFrame: accum.maskCacheMisses / denom,
       maskRasterChunksPerFrame: accum.maskRasterChunks / denom,
       maskDrawEntriesPerFrame: accum.maskDrawEntries / denom,
+      backendWebglCommandsPerFrame: accum.backendWebglCommands / denom,
+      backendCanvasFallbackCommandsPerFrame: accum.backendCanvasFallbackCommands / denom,
+      backendUnsupportedCommandsPerFrame: accum.backendUnsupportedCommands / denom,
+      backendWebglGroundCommandsPerFrame: accum.backendWebglGroundCommands / denom,
+      backendUnsupportedGroundCommandsPerFrame: accum.backendUnsupportedGroundCommands / denom,
+      backendRequested: accum.backendRequested,
+      backendSelected: accum.backendSelected,
+      backendDefault: accum.backendDefault,
+      backendWebglReadyForDefault: accum.backendWebglReadyForDefault,
+      backendFallbackReason: accum.backendFallbackReason,
+      backendUnsupportedVariants: [...accum.backendUnsupportedVariants],
+      backendWebglByFamilyPerFrame: divideCountMap(accum.backendWebglByFamily, denom),
+      backendCanvasFallbackByFamilyPerFrame: divideCountMap(accum.backendCanvasFallbackByFamily, denom),
+      backendUnsupportedByFamilyPerFrame: divideCountMap(accum.backendUnsupportedByFamily, denom),
+      backendUnsupportedByKindPerFrame: divideCountMap(accum.backendUnsupportedByKind, denom),
+      backendPartiallyHandledFamilies: [...accum.backendPartiallyHandledFamilies],
     };
     accum = makeZeroFrame();
     framesAccum = 0;
@@ -377,6 +500,43 @@ export function countRenderMaskDrawEntry(n: number = 1): void {
   frame.maskDrawEntries += n;
 }
 
+export function setRenderBackendStats(input: {
+  requestedBackend: "canvas2d" | "webgl";
+  selectedBackend: "canvas2d" | "webgl";
+  defaultBackend: "canvas2d" | "webgl";
+  webglReadyForDefault: boolean;
+  fallbackReason: string | null;
+  webglCommandCount: number;
+  canvasFallbackCommandCount: number;
+  unsupportedCommandCount: number;
+  webglGroundCommandCount: number;
+  unsupportedGroundCommandCount: number;
+  unsupportedVariants: readonly string[];
+  webglByFamily: Readonly<Record<string, number>>;
+  canvasFallbackByFamily: Readonly<Record<string, number>>;
+  unsupportedByFamily: Readonly<Record<string, number>>;
+  unsupportedByKind: Readonly<Record<string, number>>;
+  partiallyHandledFamilies: readonly string[];
+}): void {
+  if (!enabled) return;
+  frame.backendRequested = input.requestedBackend;
+  frame.backendSelected = input.selectedBackend;
+  frame.backendDefault = input.defaultBackend;
+  frame.backendWebglReadyForDefault = input.webglReadyForDefault;
+  frame.backendFallbackReason = input.fallbackReason;
+  frame.backendWebglCommands = Math.max(0, input.webglCommandCount | 0);
+  frame.backendCanvasFallbackCommands = Math.max(0, input.canvasFallbackCommandCount | 0);
+  frame.backendUnsupportedCommands = Math.max(0, input.unsupportedCommandCount | 0);
+  frame.backendWebglGroundCommands = Math.max(0, input.webglGroundCommandCount | 0);
+  frame.backendUnsupportedGroundCommands = Math.max(0, input.unsupportedGroundCommandCount | 0);
+  frame.backendUnsupportedVariants = [...input.unsupportedVariants];
+  frame.backendWebglByFamily = { ...input.webglByFamily };
+  frame.backendCanvasFallbackByFamily = { ...input.canvasFallbackByFamily };
+  frame.backendUnsupportedByFamily = { ...input.unsupportedByFamily };
+  frame.backendUnsupportedByKind = { ...input.unsupportedByKind };
+  frame.backendPartiallyHandledFamilies = [...input.partiallyHandledFamilies];
+}
+
 export function getRenderPerfSnapshot(): Snapshot {
   if (!enabled) {
     return {
@@ -401,6 +561,22 @@ export function getRenderPerfSnapshot(): Snapshot {
       maskCacheMissesPerFrame: 0,
       maskRasterChunksPerFrame: 0,
       maskDrawEntriesPerFrame: 0,
+      backendWebglCommandsPerFrame: 0,
+      backendCanvasFallbackCommandsPerFrame: 0,
+      backendUnsupportedCommandsPerFrame: 0,
+      backendWebglGroundCommandsPerFrame: 0,
+      backendUnsupportedGroundCommandsPerFrame: 0,
+      backendRequested: "canvas2d",
+      backendSelected: "canvas2d",
+      backendDefault: "canvas2d",
+      backendWebglReadyForDefault: false,
+      backendFallbackReason: null,
+      backendUnsupportedVariants: [],
+      backendWebglByFamilyPerFrame: {},
+      backendCanvasFallbackByFamilyPerFrame: {},
+      backendUnsupportedByFamilyPerFrame: {},
+      backendUnsupportedByKindPerFrame: {},
+      backendPartiallyHandledFamilies: [],
     };
   }
   return snapshot;

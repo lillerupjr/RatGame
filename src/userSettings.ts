@@ -10,6 +10,7 @@ import {
   resolveVerticalTiles as resolveVerticalTilesByUserGraphics,
   type ResolvedVerticalTiles,
   type VerticalTilesMode,
+  type RenderBackendMode,
 } from "./settings/userSettings";
 import {
   DEFAULT_GAME_SPEED,
@@ -42,6 +43,7 @@ export {
   MIN_VISIBLE_VERTICAL_TILES,
   clampGameSpeed,
   clampVisibleVerticalTiles,
+  type RenderBackendMode,
   type ResolvedVerticalTiles,
   type VerticalTilesMode,
 };
@@ -54,6 +56,7 @@ export type RenderSettings = {
   entityAnchorsEnabled: boolean;
   renderPerfCountersEnabled: boolean;
   performanceMode: boolean;
+  renderBackend: RenderBackendMode;
   staticRelightEnabled: boolean;
   structureTriangleAdmissionMode: StructureTriangleAdmissionMode;
   structureTriangleCutoutEnabled: boolean;
@@ -266,6 +269,7 @@ function toLegacySettings(): UserSettings {
       entityAnchorsEnabled: settings.debug.entityAnchorsEnabled,
       renderPerfCountersEnabled: settings.debug.renderPerfCountersEnabled,
       performanceMode: settings.user.graphics.performanceMode,
+      renderBackend: settings.user.graphics.renderBackend,
       staticRelightEnabled: settings.system.staticRelightEnabled,
       structureTriangleAdmissionMode: settings.system.structureTriangleAdmissionMode,
       structureTriangleCutoutEnabled: settings.system.structureTriangleCutoutEnabled,
@@ -342,6 +346,7 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
       renderPatch.performanceMode !== undefined
       || renderPatch.deathSlowdownEnabled !== undefined
       || renderPatch.cameraSmoothingEnabled !== undefined
+      || renderPatch.renderBackend !== undefined
       || renderPatch.verticalTilesMode !== undefined
       || renderPatch.verticalTilesUser !== undefined
       || renderPatch.verticalTilesAutoPhone !== undefined
@@ -352,6 +357,7 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
       if (renderPatch.performanceMode !== undefined) nextGraphics.performanceMode = renderPatch.performanceMode;
       if (renderPatch.deathSlowdownEnabled !== undefined) nextGraphics.deathSlowdownEnabled = renderPatch.deathSlowdownEnabled;
       if (renderPatch.cameraSmoothingEnabled !== undefined) nextGraphics.cameraSmoothingEnabled = renderPatch.cameraSmoothingEnabled;
+      if (renderPatch.renderBackend !== undefined) nextGraphics.renderBackend = renderPatch.renderBackend;
       if (renderPatch.verticalTilesMode !== undefined) nextGraphics.verticalTilesMode = renderPatch.verticalTilesMode;
       if (renderPatch.verticalTilesUser !== undefined) nextGraphics.verticalTilesUser = renderPatch.verticalTilesUser;
       if (renderPatch.verticalTilesAutoPhone !== undefined) nextGraphics.verticalTilesAutoPhone = renderPatch.verticalTilesAutoPhone;

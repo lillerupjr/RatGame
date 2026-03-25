@@ -1,7 +1,9 @@
 import type { RenderFrameContext } from "./renderFrameContext";
+import type { RenderFrameBuilder } from "../frame/renderFrameBuilder";
 
 export interface CollectionContext {
   frame: RenderFrameContext;
+  frameBuilder: RenderFrameBuilder;
   didQueueStructureCutoutDebugRect: boolean;
   structureV6VerticalShadowDebugData: unknown;
   structureV6VerticalShadowDebugDataList: readonly unknown[];

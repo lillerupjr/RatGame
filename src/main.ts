@@ -32,6 +32,17 @@ import { installStandaloneViewportFix } from "./game/app/viewportSizing";
 import { buildPaletteSnapshotArtifactFromCanvas } from "./game/paletteLab/snapshotThumbnail";
 import { getPaletteSnapshotRecord, savePaletteSnapshotArtifact } from "./game/paletteLab/snapshotStorage";
 import { mountSnapshotViewerPalettePanel } from "./ui/paletteLab/snapshotViewerPalettePanel";
+import {
+  attachWebGLWorldSurface,
+  getRenderableWebGLWorldSurface,
+  getWebGLWorldSurfaceFailureReason,
+  noteWebGLWorldSurfaceFailure,
+  syncWorldCanvasBackendVisibility,
+} from "./game/systems/presentation/backend/webglSurface";
+import {
+  resolveRenderBackendSelection,
+  WEBGL_INIT_UNAVAILABLE_REASON,
+} from "./game/systems/presentation/backend/renderBackendSelection";
 
 type DevSettingsUiController = {
   open(): void;
@@ -106,10 +117,28 @@ async function bootstrap() {
   });
   const canvas = refs.canvas;
   const uiCanvas = refs.uiCanvas;
+  const webglCanvas = document.createElement("canvas");
+  webglCanvas.id = "c-webgl";
+  webglCanvas.setAttribute("aria-hidden", "true");
+  canvas.insertAdjacentElement("afterend", webglCanvas);
   const detachStandaloneViewportFix = installStandaloneViewportFix();
   const rawCtx = canvas.getContext("2d");
   if (!rawCtx) throw new Error("Canvas 2D context not available");
   const ctx = rawCtx;
+  const webglCtx = webglCanvas.getContext("webgl", {
+    alpha: true,
+    antialias: false,
+    premultipliedAlpha: true,
+    preserveDrawingBuffer: false,
+  });
+  if (webglCtx) {
+    attachWebGLWorldSurface(canvas, {
+      canvas: webglCanvas,
+      gl: webglCtx,
+    });
+  } else {
+    noteWebGLWorldSurfaceFailure(canvas, WEBGL_INIT_UNAVAILABLE_REASON);
+  }
   const uiRawCtx = uiCanvas.getContext("2d");
   if (!uiRawCtx) throw new Error("UI canvas 2D context not available");
   const uiCtx = uiRawCtx;
@@ -133,6 +162,10 @@ async function bootstrap() {
   const syncCanvasResolutionMetadata = () => {
     uiCanvas.dataset.effectiveDpr = canvas.dataset.effectiveDpr;
     uiCanvas.dataset.pixelScale = canvas.dataset.pixelScale;
+    webglCanvas.width = canvas.width;
+    webglCanvas.height = canvas.height;
+    webglCanvas.dataset.effectiveDpr = canvas.dataset.effectiveDpr;
+    webglCanvas.dataset.pixelScale = canvas.dataset.pixelScale;
   };
   const detachWorldCanvasAutoResize = attachCanvasAutoResize(canvas, ctx, syncCanvasResolutionMetadata);
   const detachUiCanvasAutoResize = attachCanvasAutoResize(uiCanvas, uiCtx, syncCanvasResolutionMetadata);
@@ -199,6 +232,15 @@ async function bootstrap() {
     },
   });
   let pauseCogBtn: HTMLButtonElement | null = null;
+  const resolveWorldSnapshotCanvas = () => {
+    const backendSelection = resolveRenderBackendSelection(
+      getUserSettings().render as any,
+      getRenderableWebGLWorldSurface(canvas),
+      getWebGLWorldSurfaceFailureReason(canvas),
+    );
+    const webglSurface = getRenderableWebGLWorldSurface(canvas);
+    return backendSelection.selectedBackend === "webgl" && webglSurface ? webglSurface.canvas : canvas;
+  };
 
   function syncUiForAppState(appState: AppState, runState: RunState): void {
     if (appState === AppState.BOOT || appState === AppState.LOADING) {
@@ -300,6 +342,14 @@ async function bootstrap() {
   }
 
   const appStateController = createAppStateController();
+  const syncWorldBackendSurface = () => {
+    const backendSelection = resolveRenderBackendSelection(
+      getUserSettings().render as any,
+      getRenderableWebGLWorldSurface(canvas),
+      getWebGLWorldSurfaceFailureReason(canvas),
+    );
+    syncWorldCanvasBackendVisibility(canvas, backendSelection.selectedBackend, appStateController.appState === AppState.RUN);
+  };
   let bootProgress = 0;
   let activeStartIntent: ReturnType<typeof game.consumePendingStartIntent> = null;
   let activeFloorIntent: ReturnType<typeof game.consumePendingFloorLoadIntent> = null;
@@ -333,7 +383,7 @@ async function bootstrap() {
         devSettingsUi.open();
       },
       onSavePaletteSnapshot: (snapshotDraft) => {
-        void buildPaletteSnapshotArtifactFromCanvas(snapshotDraft, refs.canvas)
+        void buildPaletteSnapshotArtifactFromCanvas(snapshotDraft, resolveWorldSnapshotCanvas())
           .then(async (artifact) => {
             const world = game.getWorld() as any;
             if (!world || typeof world !== "object") return;
@@ -512,6 +562,7 @@ async function bootstrap() {
     const dtReal = Math.min(0.05, (now - last) / 1000);
     last = now;
     syncUiForAppState(appStateController.appState, appStateController.runState);
+    syncWorldBackendSurface();
     const w = game.getWorld() as any;
     snapshotViewerPalettePanel.sync(
       appStateController.appState === AppState.RUN

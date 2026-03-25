@@ -116,13 +116,14 @@ describe("settings bucket defaults", () => {
     const sanitized = sanitizeUserSettings({
       game: { healthOrbSide: "invalid" as any },
       audio: { masterVolume: 2, musicVolume: -1, sfxVolume: NaN },
-      graphics: { verticalTilesMode: "bad" as any, verticalTilesUser: 999 },
+      graphics: { verticalTilesMode: "bad" as any, verticalTilesUser: 999, renderBackend: "broken" as any },
     });
 
     expect(sanitized.game.healthOrbSide).toBe("left");
     expect(sanitized.audio.masterVolume).toBe(1);
     expect(sanitized.audio.musicVolume).toBe(0);
     expect(sanitized.audio.sfxVolume).toBe(DEFAULT_USER_SETTINGS.audio.sfxVolume);
+    expect(sanitized.graphics.renderBackend).toBe("canvas2d");
     expect(sanitized.graphics.verticalTilesMode).toBe("auto");
     expect(sanitized.graphics.verticalTilesUser).toBeLessThanOrEqual(24);
   });

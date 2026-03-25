@@ -1,6 +1,25 @@
 import { getRenderPerfSnapshot } from "../renderPerfCounters";
 import type { RenderDebugScreenPassInput } from "./debugRenderTypes";
 import { drawStructureV6FaceSliceDebugPanel } from "./renderDebugStructures";
+import { describeRenderBackendFallbackReason } from "../backend/renderBackendSelection";
+
+function summarizeBackendFamilyCounts(counts: Record<string, number>): string {
+  const entries = Object.entries(counts)
+    .filter(([, value]) => value > 0)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 4)
+    .map(([key, value]) => `${key}:${value.toFixed(1)}`);
+  return entries.length > 0 ? entries.join(" ") : "none";
+}
+
+function summarizeBackendKindCounts(counts: Record<string, number>): string {
+  const entries = Object.entries(counts)
+    .filter(([, value]) => value > 0)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 4)
+    .map(([key, value]) => `${key}:${value.toFixed(1)}`);
+  return entries.length > 0 ? entries.join(" ") : "none";
+}
 
 export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): void {
   const {
@@ -64,6 +83,15 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
       `triCutout: ${structureTriangleCutoutEnabled ? "on" : "off"} center=${playerCameraTx},${playerCameraTy} size=${structureTriangleCutoutHalfWidth}x${structureTriangleCutoutHalfHeight} alpha=${structureTriangleCutoutAlpha.toFixed(2)}`,
       `bands z:${perf.zBandCountPerFrame.toFixed(1)} light:${perf.lightBandCountPerFrame.toFixed(1)} masks build:${perf.maskBuildsPerFrame.toFixed(1)} hit:${perf.maskCacheHitsPerFrame.toFixed(1)} miss:${perf.maskCacheMissesPerFrame.toFixed(1)}`,
       `masks rasterChunks/frame: ${perf.maskRasterChunksPerFrame.toFixed(1)} drawEntries/frame: ${perf.maskDrawEntriesPerFrame.toFixed(1)}`,
+      `backend: req=${perf.backendRequested} selected=${perf.backendSelected} default=${perf.backendDefault} webglDefault=${perf.backendWebglReadyForDefault ? "yes" : "no"}`,
+      `backend counts: webgl:${perf.backendWebglCommandsPerFrame.toFixed(1)} canvas:${perf.backendCanvasFallbackCommandsPerFrame.toFixed(1)} unsupported:${perf.backendUnsupportedCommandsPerFrame.toFixed(1)}`,
+      `backend ground: webgl:${perf.backendWebglGroundCommandsPerFrame.toFixed(1)} unsupported:${perf.backendUnsupportedGroundCommandsPerFrame.toFixed(1)}`,
+      `backend fallback reason: ${describeRenderBackendFallbackReason(perf.backendFallbackReason)}`,
+      `backend unsupported: ${perf.backendUnsupportedVariants.length > 0 ? perf.backendUnsupportedVariants.join(", ") : "none"}`,
+      `backend unsupported kinds: ${summarizeBackendKindCounts(perf.backendUnsupportedByKindPerFrame)}`,
+      `backend webgl families: ${summarizeBackendFamilyCounts(perf.backendWebglByFamilyPerFrame)}`,
+      `backend canvas families: ${summarizeBackendFamilyCounts(perf.backendCanvasFallbackByFamilyPerFrame)}`,
+      `backend partial families: ${perf.backendPartiallyHandledFamilies.length > 0 ? perf.backendPartiallyHandledFamilies.join(", ") : "none"}`,
     ];
     ctx.textAlign = "right";
     const perfX = cssW - 8;

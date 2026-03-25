@@ -1,9 +1,10 @@
 import type { ScreenOverlayContext } from "../contracts/screenOverlayContext";
+import { enqueueScreenCommand, enqueueWorldTailCommand } from "../frame/renderFrameBuilder";
 
 export function renderScreenOverlays(input: ScreenOverlayContext): void {
   const {
     w,
-    ctx,
+    frameBuilder,
     getFloorVisual,
     devW,
     devH,
@@ -38,7 +39,6 @@ export function renderScreenOverlays(input: ScreenOverlayContext): void {
     roadAreaWidthAt,
     playerTx,
     playerTy,
-    endRenderPerfFrame,
     DEBUG_PLAYER_WEDGE,
     px,
     py,
@@ -63,29 +63,31 @@ export function renderScreenOverlays(input: ScreenOverlayContext): void {
   // Optional floor tint overlay
   const floorVis = getFloorVisual(w);
   if (floorVis) {
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalAlpha = floorVis.tintAlpha;
-    ctx.fillStyle = floorVis.tint;
-    ctx.fillRect(0, 0, devW, devH);
-    ctx.restore();
+    enqueueScreenCommand(frameBuilder, "overlay", {
+      variant: "screenTint",
+      color: floorVis.tint,
+      alpha: floorVis.tintAlpha,
+      width: devW,
+      height: devH,
+    });
   }
 
   const GLOBAL_SCREEN_TINT_ALPHA = (w.lighting.darknessAlpha ?? 0) > 0 ? 0 : 0.3;
   if (GLOBAL_SCREEN_TINT_ALPHA > 0) {
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalAlpha = GLOBAL_SCREEN_TINT_ALPHA;
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, devW, devH);
-    ctx.restore();
+    enqueueScreenCommand(frameBuilder, "overlay", {
+      variant: "screenTint",
+      color: "#000",
+      alpha: GLOBAL_SCREEN_TINT_ALPHA,
+      width: devW,
+      height: devH,
+    });
   }
 
   if (debugFrame.enabled) {
-    executeDebugPass({
+    enqueueWorldTailCommand(frameBuilder, "debug", {
+      variant: "debugPass",
       phase: "world",
       input: {
-        ctx,
         debugContext,
         viewRect,
         toScreen,
@@ -98,24 +100,28 @@ export function renderScreenOverlays(input: ScreenOverlayContext): void {
   }
 
   // Floating combat text: world pass (same camera transform as world content)
-  drawFloatingText(w, ctx, toScreen);
-
-  // Restore camera transform before drawing screen-space overlays / HUD.
-  ctx.restore();
+  enqueueWorldTailCommand(frameBuilder, "primitive", {
+    variant: "floatingText",
+  });
 
   // PASS 8: final screen-space ambient darkness/tint only
   if (shouldApplyAmbientDarknessOverlay(renderSettings)) {
-    setRenderPerfDrawTag("lighting");
-    renderAmbientDarknessOverlay(ctx, w.lighting, devW, devH);
-    setRenderPerfDrawTag(null);
+    enqueueScreenCommand(frameBuilder, "overlay", {
+      variant: "ambientDarkness",
+      width: devW,
+      height: devH,
+      darknessAlpha: w.lighting.darknessAlpha ?? 0,
+      ambientTint: w.lighting.ambientTint ?? "#000000",
+      ambientTintStrength: w.lighting.ambientTintStrength ?? 0,
+    });
   }
   // Building-mask debug overlay draw disabled to avoid full-canvas mask artifacts.
 
   if (debugFrame.enabled || renderPerfCountersEnabled || structureShadowFrame.routing.usesV6Debug) {
-    executeDebugPass({
+    enqueueScreenCommand(frameBuilder, "debug", {
+      variant: "debugPass",
       phase: "screen",
       input: {
-        ctx,
         cssW,
         cssH,
         dpr,
@@ -139,15 +145,11 @@ export function renderScreenOverlays(input: ScreenOverlayContext): void {
       },
     });
   }
-  endRenderPerfFrame(w.timeSec ?? 0);
 
   if (DEBUG_PLAYER_WEDGE) {
     const playerPos = { x: px, y: py };
     const playerTile = worldToTile(playerPos.x, playerPos.y);
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalCompositeOperation = "source-over";
-    ctx.fillStyle = "rgba(255, 0, 0, 0.18)";
+    const cells: Array<{ x: number; y: number; w: number; h: number }> = [];
     for (let sum = minSum; sum <= maxSum; sum++) {
       const ty0 = Math.max(minTy, sum - maxTx);
       const ty1 = Math.min(maxTy, sum - minTx);
@@ -159,51 +161,17 @@ export function renderScreenOverlays(input: ScreenOverlayContext): void {
         const z = tileHAtWorld(wx, wy);
         const screen = tileToScreen(tx, ty, z);
         const p = worldToScreenPx(screen.x, screen.y);
-        ctx.fillRect(
-          Math.floor(p.x),
-          Math.floor(p.y),
-          KENNEY_TILE_WORLD * s,
-          (KENNEY_TILE_WORLD / 2) * s
-        );
+        cells.push({
+          x: Math.floor(p.x),
+          y: Math.floor(p.y),
+          w: KENNEY_TILE_WORLD * s,
+          h: (KENNEY_TILE_WORLD / 2) * s,
+        });
       }
     }
-    ctx.restore();
+    enqueueScreenCommand(frameBuilder, "primitive", {
+      variant: "playerWedge",
+      cells,
+    });
   }
-}
-
-function drawFloatingText(
-  w: any,
-  ctx: CanvasRenderingContext2D,
-  toScreen: (x: number, y: number) => { x: number; y: number },
-): void {
-  ctx.save();
-  ctx.imageSmoothingEnabled = false;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-
-  for (let i = w.floatTextX.length - 1; i >= 0; i--) {
-    const ttl = w.floatTextTtl[i];
-    if (ttl <= 0) continue;
-
-    const p = toScreen(w.floatTextX[i], w.floatTextY[i]);
-    const x = p.x;
-    const y = p.y;
-
-    const value = w.floatTextValue[i];
-    const color = w.floatTextColor[i];
-    const size = w.floatTextSize[i] ?? (w.floatTextIsCrit[i] ? 16 : 12);
-    const isPlayer = w.floatTextIsPlayer[i] ?? false;
-
-    const maxTtl = 0.8;
-    const progress = 1 - ttl / maxTtl;
-
-    const rise = progress * 0.35;
-    const alpha = progress > 0.6 ? 1 - (progress - 0.6) / 0.4 : 1;
-
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = color;
-    ctx.font = `${size}px monospace`;
-    ctx.fillText(isPlayer ? `-${value}` : `${value}`, x, y - rise);
-  }
-  ctx.restore();
 }

@@ -120,10 +120,10 @@ import { getCurrencyFrame, getCurrencyFrameForDarknessPercent } from "../../cont
 import {
   beginRenderPerfFrame,
   countRenderTileLoopIteration,
-  countRenderClosureCreated,
   countRenderDrawableSort,
   countRenderSliceKeySort,
   endRenderPerfFrame,
+  setRenderBackendStats,
   setRenderZBandCount,
   setRenderPerfCountersEnabled,
   setRenderPerfDrawTag,
@@ -201,20 +201,37 @@ import {
   type TileBounds,
 } from "./frame/viewportCulling";
 import { collectFrameDrawables } from "./collection/collectFrameDrawables";
-import { executeWorldPasses } from "./passes/executeWorldPasses";
+import { Canvas2DRenderer } from "./backend/Canvas2DRenderer";
+import { WebGLRenderer } from "./backend/WebGLRenderer";
+import { buildPureWebGLCommandList, createBackendStats } from "./backend/renderBackendRouting";
+import { commandFamilyKey, noteRenderBackendFamilyPlacement } from "./backend/renderBackendCapabilities";
+import {
+  resolveRenderBackendSelection,
+  WEBGL_RUNTIME_FAILURE_REASON,
+} from "./backend/renderBackendSelection";
+import { buildRenderExecutionPlan } from "./backend/renderExecutionPlan";
+import {
+  clearWebGLWorldSurfaceFailure,
+  getRenderableWebGLWorldSurface,
+  getWebGLWorldSurfaceFailureReason,
+  noteWebGLWorldSurfaceFailure,
+  syncWorldCanvasBackendVisibility,
+} from "./backend/webglSurface";
+import {
+  createRenderFrameBuilder,
+  enqueueWorldBandCommand,
+  finalizeRenderFrame,
+} from "./frame/renderFrameBuilder";
 import { renderScreenOverlays } from "./ui/renderScreenOverlays";
 import { renderUiPass } from "./ui/renderUiPass";
 import type { RenderFrameContext } from "./contracts/renderFrameContext";
 import type { CollectionContext } from "./contracts/collectionContext";
-import type { WorldPassContext } from "./contracts/worldPassContext";
 import type { ScreenOverlayContext } from "./contracts/screenOverlayContext";
 import type { UiPassContext } from "./contracts/uiPassContext";
 import { resolveStructureOverlayAdmissionContext } from "./structures/structureOverlayAdmission";
 import { collectStructureOverlays } from "./structures/collectStructureOverlays";
 import { buildStructureSlices } from "./structures/buildStructureSlices";
 import { buildStructureDrawables } from "./structures/buildStructureDrawables";
-import { renderStructurePass } from "./structures/renderStructurePass";
-import type { StructureDrawablePayload } from "./structures/structurePresentationTypes";
 
 const DEBUG_PLAYER_WEDGE = false;
 const DISABLE_WALLS_AND_CURTAINS = true;
@@ -1232,148 +1249,14 @@ export async function renderSystem(
   {
     // noop
   }
-  // ============================================
-  // SLICE-BUCKETED COLLECTION AND DRAWING
-  // ============================================
-  // Drawable descriptor for any render element
-  type SliceDrawFn = (payload: unknown) => void;
-  type SliceDrawable = {
-    key: RenderKey;
-    drawFn: SliceDrawFn;
-    payload: unknown;
-  };
-
-  // Map from slice -> array of drawables for that slice
-  const sliceDrawables = new Map<number, SliceDrawable[]>();
+  const frameBuilder = createRenderFrameBuilder();
   const structureV6ShadowDebugCandidates: StructureV6ShadowDebugCandidate[] = [];
   let structureV6VerticalShadowDebugData: StructureV6VerticalShadowMaskDebugData | null = null;
   let structureV6VerticalShadowDebugDataList: StructureV6VerticalShadowMaskDebugData[] = [];
   let structureV6ShadowCacheStats: StructureV6ShadowCacheFrameStats | null = null;
   const deferredStructureSliceDebugDraws: Array<() => void> = [];
   let didQueueStructureCutoutDebugRect = false;
-
-  const drawClosureFn: SliceDrawFn = (payload) => {
-    (payload as (() => void))();
-  };
-
-  const drawRuntimeSidewalkTopFn: SliceDrawFn = (payload) => {
-    const p = payload as {
-      tx: number;
-      ty: number;
-      zBase: number;
-      anchorY: number;
-      family: RuntimeDecalSetId;
-      variantIndex: number;
-      rotationQuarterTurns: number;
-    };
-    drawRuntimeSidewalkTop(
-      p.tx,
-      p.ty,
-      p.zBase,
-      p.anchorY,
-      p.family as any,
-      p.variantIndex,
-      p.rotationQuarterTurns as any,
-    );
-  };
-
-  const drawImageTopFn: SliceDrawFn = (payload) => {
-    const p = payload as {
-      img: CanvasImageSource;
-      dx: number;
-      dy: number;
-      dw: number;
-      dh: number;
-    };
-    ctx.drawImage(p.img, snapPx(p.dx), snapPx(p.dy), p.dw, p.dh);
-  };
-
-  const drawRuntimeDecalTopFn: SliceDrawFn = (payload) => {
-    const p = payload as {
-      tx: number;
-      ty: number;
-      zBase: number;
-      renderAnchorY: number;
-      setId: RuntimeDecalSetId;
-      variantIndex: number;
-      rotationQuarterTurns: number;
-    };
-    drawRuntimeDecalTop(
-      p.tx,
-      p.ty,
-      p.zBase,
-      p.renderAnchorY,
-      p.setId,
-      p.variantIndex,
-      p.rotationQuarterTurns as any,
-    );
-  };
-
-  const drawZoneObjectiveFn: SliceDrawFn = (payload) => {
-    const p = payload as { zone: any };
-    renderZoneObjectives(ctx, w, {
-      zone: p.zone,
-      mapOriginTx: compiledMap.originTx,
-      mapOriginTy: compiledMap.originTy,
-      tileWorld: T,
-      toScreen,
-      showZoneBounds: SHOW_ZONE_OBJECTIVE_BOUNDS,
-    });
-  };
-
-  const drawEntityShadowFn: SliceDrawFn = (payload) => {
-    renderEntityShadow(
-      ctx,
-      payload as ShadowParams,
-      compiledMap,
-      shadowSunModel.projectionDirection,
-    );
-  };
   const worldLightGroundYScale = resolveLightingGroundYScale(w.lighting.groundYScale ?? 0.65);
-
-  const drawPendingLightRenderPieceFn: SliceDrawFn = (payload) => {
-    const lightPiece = payload as WorldLightRenderPiece;
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    configurePixelPerfect(ctx);
-    drawProjectedLightAdditive(ctx, lightPiece.light.projected, w.time ?? 0, worldLightGroundYScale);
-    ctx.restore();
-  };
-
-  const addToSlice = (
-    slice: number,
-    key: RenderKey,
-    drawOrFn: (() => void) | SliceDrawFn,
-    payload?: unknown,
-  ) => {
-    let bucket = sliceDrawables.get(slice);
-    if (!bucket) {
-      bucket = [];
-      sliceDrawables.set(slice, bucket);
-    }
-    if (typeof payload === "undefined") {
-      countRenderClosureCreated();
-      bucket.push({ key, drawFn: drawClosureFn, payload: drawOrFn as (() => void) });
-      return;
-    }
-    bucket.push({ key, drawFn: drawOrFn as SliceDrawFn, payload });
-  };
-
-  const drawStructureDrawableFn: SliceDrawFn = (payload) => {
-    renderStructurePass({
-      ctx,
-      payload: payload as StructureDrawablePayload,
-      showStructureTriangleFootprintDebug: SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG,
-      tileWorld: T,
-      deferredStructureSliceDebugDraws,
-      resolveRelitCanvas: (pieceKey) => {
-        if (!pieceKey) return null;
-        const bakedEntry = staticRelightBakeStore.get(pieceKey);
-        return bakedEntry?.kind === "RELIT" ? bakedEntry.baked : null;
-      },
-      drawOverlayRenderPiece: drawRenderPiece,
-    });
-  };
 
   // ----------------------------
   // Prepass: build all apron slice draws and bucket them by slice.
@@ -1423,6 +1306,7 @@ export async function renderSystem(
 
   const collectionContext: CollectionContext = {
     frame: renderFrame,
+    frameBuilder,
     w,
     minSum,
     maxSum,
@@ -1436,33 +1320,30 @@ export async function renderSystem(
     RENDER_ALL_HEIGHTS,
     activeH,
     shouldCullBuildingAt,
-    addToSlice,
     ANCHOR_Y,
-    drawRuntimeSidewalkTopFn,
     TILE_ID_OCEAN,
     getAnimatedTileFrame,
     OCEAN_ANIM_TIME_SCALE,
     getTileSpriteById,
+    getRuntimeIsoTopCanvas,
     OCEAN_TOP_SCALE,
     STAIR_TOP_SCALE,
     FLOOR_TOP_SCALE,
     OCEAN_BASE_FRAME_PX,
     getRuntimeIsoDecalCanvas,
+    getRuntimeDecalSprite,
     T,
     worldToScreen,
     camX,
     camY,
     ELEV_PX,
     STAIR_TOP_DY,
-    drawImageTopFn,
     decalsInView,
     viewRect,
     KindOrder,
-    drawRuntimeDecalTopFn,
     getZoneTrialObjectiveState,
     compiledMap,
     tileHAtWorld,
-    drawZoneObjectiveFn,
     RENDER_ENTITY_SHADOWS,
     getEnemyWorld,
     KENNEY_TILE_WORLD,
@@ -1470,7 +1351,6 @@ export async function renderSystem(
     getSupportSurfaceAt,
     getEnemySpriteFrame,
     resolveEnemyShadowFootOffset,
-    drawEntityShadowFn,
     entitySilhouetteMaskDraws,
     getEntityFeetPos,
     RENDER_ENTITY_ANCHORS,
@@ -1528,18 +1408,22 @@ export async function renderSystem(
     getProjectileSpriteByKind,
     PROJECTILE_BASE_DRAW_PX,
     getProjectileDrawScale,
+    staticRelightFrame,
+    staticRelightBakeStore,
+    floorRelightPieceKey,
+    decalRelightPieceKey,
+    roadMarkingDecalScale,
+    shouldPixelSnapRoadMarking,
     bazookaExhaustAssets,
     BAZOOKA_EXHAUST_OFFSET,
     PRJ_KIND,
     VFX_CLIP_INDEX,
     getPlayerSpriteFrameForDarknessPercent,
     worldLightRegistry,
-    drawPendingLightRenderPieceFn,
     DISABLE_WALLS_AND_CURTAINS,
     buildFaceDraws,
     facePieceLayers,
     facePiecesInViewForLayer,
-    drawRenderPiece,
     occluderLayers,
     occludersInViewForLayer,
     buildWallDraw,
@@ -1581,7 +1465,6 @@ export async function renderSystem(
     structureV6ShadowDebugCandidates,
     staticRelight,
     buildStructureDrawables,
-    drawStructureDrawableFn,
     buildStructureV6VerticalShadowFrameResults,
     SHADOW_V6_REQUESTED_SEMANTIC_BUCKET,
     SHADOW_V6_STRUCTURE_INDEX,
@@ -1611,74 +1494,10 @@ export async function renderSystem(
     collectionResult.structureV6VerticalShadowDebugDataList as StructureV6VerticalShadowMaskDebugData[];
   structureV6ShadowCacheStats =
     collectionResult.structureV6ShadowCacheStats as StructureV6ShadowCacheFrameStats | null;
-  const drawSweepShadowBand = (zBand: number, firstZBand: number) => {
-    if (SHADOW_CASTER_MODE !== "v6SweepShadow" || zBand !== firstZBand) return;
-    const sweepShadowMap = getSweepShadowMap();
-    if (!sweepShadowMap) return;
-    setRenderPerfDrawTag("floors");
-    const SWEEP_MAX_DARKNESS = 0.38;
-    const BUCKET_COUNT = 4;
-    const { originTx: soTx, originTy: soTy, width: sw, height: sh, data: sData } = sweepShadowMap;
-    for (let bucket = 1; bucket <= BUCKET_COUNT; bucket++) {
-      const lo = (bucket - 1) / BUCKET_COUNT;
-      const hi = bucket / BUCKET_COUNT;
-      const alpha = hi * SWEEP_MAX_DARKNESS;
-      ctx.save();
-      ctx.globalCompositeOperation = "source-over";
-      ctx.beginPath();
-      let count = 0;
-      for (let sty = 0; sty < sh; sty++) {
-        for (let stx = 0; stx < sw; stx++) {
-          const intensity = sData[sty * sw + stx];
-          if (intensity <= lo || intensity > hi) continue;
-          const atx = stx + soTx;
-          const aty = sty + soTy;
-          const tileH = tileHAtWorld((atx + 0.5) * T, (aty + 0.5) * T);
-          const nw = toScreenAtZ(atx * T, aty * T, tileH);
-          const ne = toScreenAtZ((atx + 1) * T, aty * T, tileH);
-          const se = toScreenAtZ((atx + 1) * T, (aty + 1) * T, tileH);
-          const swc = toScreenAtZ(atx * T, (aty + 1) * T, tileH);
-          ctx.moveTo(nw.x, nw.y);
-          ctx.lineTo(ne.x, ne.y);
-          ctx.lineTo(se.x, se.y);
-          ctx.lineTo(swc.x, swc.y);
-          ctx.closePath();
-          count++;
-        }
-      }
-      if (count > 0) {
-        ctx.fillStyle = `rgba(0,0,0,${alpha.toFixed(3)})`;
-        ctx.fill("nonzero");
-      }
-      ctx.restore();
-    }
-  };
-  const worldPassContext: WorldPassContext = {
-    frame: renderFrame,
-    sliceDrawables,
-    countRenderSliceKeySort,
-    isWorldKindForRenderPass,
-    deriveFeetSortYFromKey,
-    T,
-    toScreenAtZ,
-    resolveRenderZBand,
-    rampRoadTiles,
-    countRenderDrawableSort,
-    compareRenderKeys,
-    structureShadowFrame,
-    structureV6VerticalShadowDebugDataList,
-    setRenderZBandCount,
-    KindOrder,
-    isGroundKindForRenderPass,
-    setRenderPerfDrawTag,
-    ctx,
-    executeDebugPass,
-    drawSweepShadowBand,
-  } as WorldPassContext;
-  executeWorldPasses(worldPassContext);
 
   const screenOverlayContext: ScreenOverlayContext = {
     frame: renderFrame,
+    frameBuilder,
     w,
     ctx,
     getFloorVisual,
@@ -1715,7 +1534,6 @@ export async function renderSystem(
     roadAreaWidthAt,
     playerTx,
     playerTy,
-    endRenderPerfFrame,
     DEBUG_PLAYER_WEDGE,
     px,
     py,
@@ -1737,6 +1555,227 @@ export async function renderSystem(
     dpr,
   } as ScreenOverlayContext;
   renderScreenOverlays(screenOverlayContext);
+
+  if (SHADOW_CASTER_MODE === "v6SweepShadow") {
+    const sweepShadowMap = getSweepShadowMap();
+    if (sweepShadowMap) {
+      enqueueWorldBandCommand(frameBuilder, "overlay", {
+        variant: "sweepShadowMap",
+        zBand: "FIRST",
+        sweepShadowMap,
+      });
+    }
+  }
+
+  for (let i = 0; i < structureV6VerticalShadowDebugDataList.length; i++) {
+    const debugData = structureV6VerticalShadowDebugDataList[i];
+    enqueueWorldBandCommand(frameBuilder, "debug", {
+      variant: "debugPass",
+      phase: "structureV6MergedMask",
+      zBand: debugData.zBand,
+      input: {
+        debugData,
+      },
+    });
+  }
+
+  const commandFrame = finalizeRenderFrame({
+    builder: frameBuilder,
+    countRenderSliceKeySort,
+    countRenderDrawableSort,
+    setRenderZBandCount,
+    tileWorld: T,
+    projectToScreenAtZ: toScreenAtZ,
+    rampRoadTiles,
+  });
+  const executionPlan = buildRenderExecutionPlan(commandFrame, rampRoadTiles);
+
+  const canvasRenderer = new Canvas2DRenderer(renderFrame, {
+    w,
+    T,
+    compiledMap,
+    shadowSunModel,
+    rampRoadTiles,
+    camX,
+    camY,
+    ELEV_PX,
+    ANCHOR_Y,
+    SIDEWALK_SRC_SIZE,
+    SIDEWALK_ISO_HEIGHT,
+    staticRelightFrame,
+    staticRelightBakeStore,
+    worldLightGroundYScale,
+    SHOW_ZONE_OBJECTIVE_BOUNDS,
+    SHOW_ENTITY_ANCHOR_OVERLAY,
+    RENDER_ENTITY_ANCHORS,
+    ENTITY_ANCHOR_X01_DEFAULT,
+    ENTITY_ANCHOR_Y01_DEFAULT,
+    worldToScreen,
+    toScreen,
+    toScreenAtZ,
+    tileHAtWorld,
+    getRuntimeIsoTopCanvas,
+    getRuntimeIsoDecalCanvas,
+    getRuntimeDecalSprite,
+    getDiamondFitCanvas,
+    getFlippedOverlayImage,
+    getTileSpriteById,
+    getSpriteById,
+    getEnemySpriteFrame,
+    getEnemySpriteFrameForDarknessPercent,
+    getVendorNpcSpriteFrame,
+    getVendorNpcSpriteFrameForDarknessPercent,
+    getPigeonFramesForClipAndScreenDirForDarknessPercent,
+    getPlayerSpriteFrame,
+    getPlayerSpriteFrameForDarknessPercent,
+    playerSpritesReady,
+    vendorNpcSpritesReady,
+    getProjectileWorld,
+    KENNEY_TILE_WORLD,
+    getProjectileSpriteByKind,
+    getProjectileDrawScale,
+    PROJECTILE_BASE_DRAW_PX,
+    resolveProjectileShadowFootOffset,
+    bazookaExhaustAssets,
+    BAZOOKA_EXHAUST_OFFSET,
+    worldDeltaToScreen,
+    snapToNearestWalkableGround,
+    renderFireZoneVfx,
+    ZONE_KIND,
+    ISO_X,
+    ISO_Y,
+    VFX_CLIPS,
+    VFX_CLIP_INDEX,
+    registry,
+    resolveDynamicSpriteRelightAlpha,
+    dynamicSpriteRelightFrame,
+    getCurrencyFrame,
+    getCurrencyFrameForDarknessPercent,
+    coinColorFromValue,
+    ENEMY_TYPE,
+    LOOT_GOBLIN_GLOW_OUTER_RADIUS_MULT,
+    LOOT_GOBLIN_GLOW_INNER_RADIUS_MULT,
+    LOOT_GOBLIN_GLOW_PULSE_MIN,
+    LOOT_GOBLIN_GLOW_PULSE_RANGE,
+    LOOT_GOBLIN_GLOW_PULSE_SPEED,
+    resolveAnchor01,
+    debug,
+    PLAYER_R,
+    roadMarkingDecalScale,
+    shouldPixelSnapRoadMarking,
+    floorRelightPieceKey,
+    decalRelightPieceKey,
+    getUserSettings,
+    setRenderPerfDrawTag,
+    renderAmbientDarknessOverlay,
+    executeDebugPass,
+    srcUvNW,
+    srcUvNE,
+    srcUvSE,
+    srcUvSW,
+    getRampQuadPoints,
+  });
+  const webglSurface = getRenderableWebGLWorldSurface(canvas);
+  const backendSelection = resolveRenderBackendSelection(
+    renderSettings as any,
+    webglSurface,
+    getWebGLWorldSurfaceFailureReason(canvas),
+  );
+  if (backendSelection.selectedBackend === "webgl" && webglSurface) {
+    const stats = createBackendStats("webgl");
+    try {
+      clearWebGLWorldSurfaceFailure(canvas);
+      const cachedSurface = webglSurface as typeof webglSurface & { renderer?: WebGLRenderer };
+      const webglRenderer = cachedSurface.renderer ?? new WebGLRenderer(renderFrame, webglSurface.gl);
+      cachedSurface.renderer = webglRenderer;
+      webglRenderer.setFrameContext(renderFrame);
+      const webglWorldCommands = buildPureWebGLCommandList(executionPlan.world, stats);
+      const webglScreenCommands = buildPureWebGLCommandList(executionPlan.screen, stats);
+
+      canvasRenderer.clearOverlayCanvas();
+      canvasRenderer.clearMainCanvas();
+      webglRenderer.beginFrame();
+      webglRenderer.useWorldSpace();
+      webglRenderer.renderCommands(webglWorldCommands);
+      webglRenderer.useScreenSpace();
+      webglRenderer.renderCommands(webglScreenCommands);
+
+      setRenderBackendStats({
+        requestedBackend: backendSelection.requestedBackend,
+        selectedBackend: backendSelection.selectedBackend,
+        defaultBackend: backendSelection.policy.defaultBackend,
+        webglReadyForDefault: backendSelection.policy.webglReadyForDefault,
+        fallbackReason: backendSelection.fallbackReason,
+        webglCommandCount: stats.webglCommandCount,
+        canvasFallbackCommandCount: stats.canvasFallbackCommandCount,
+        unsupportedCommandCount: stats.unsupportedCommandCount,
+        webglGroundCommandCount: stats.webglGroundCommandCount,
+        unsupportedGroundCommandCount: stats.unsupportedGroundCommandCount,
+        unsupportedVariants: stats.unsupportedVariants,
+        webglByFamily: stats.webglByFamily,
+        canvasFallbackByFamily: stats.canvasFallbackByFamily,
+        unsupportedByFamily: stats.unsupportedByFamily,
+        unsupportedByKind: stats.unsupportedByKind,
+        partiallyHandledFamilies: stats.partiallyHandledFamilies,
+      });
+    } catch (error) {
+      noteWebGLWorldSurfaceFailure(canvas, WEBGL_RUNTIME_FAILURE_REASON);
+      syncWorldCanvasBackendVisibility(canvas, "canvas2d", true);
+      console.error("[render] WebGL backend failed, falling back to Canvas2D.", error);
+      canvasRenderer.render(executionPlan);
+      const fallbackStats = createBackendStats("canvas2d");
+      const allCommands = [...executionPlan.world, ...executionPlan.screen];
+      fallbackStats.canvasFallbackCommandCount = allCommands.length;
+      for (let i = 0; i < allCommands.length; i++) {
+        noteRenderBackendFamilyPlacement(fallbackStats, commandFamilyKey(allCommands[i]), "canvas2d");
+      }
+      setRenderBackendStats({
+        requestedBackend: backendSelection.requestedBackend,
+        selectedBackend: "canvas2d",
+        defaultBackend: backendSelection.policy.defaultBackend,
+        webglReadyForDefault: backendSelection.policy.webglReadyForDefault,
+        fallbackReason: WEBGL_RUNTIME_FAILURE_REASON,
+        webglCommandCount: fallbackStats.webglCommandCount,
+        canvasFallbackCommandCount: fallbackStats.canvasFallbackCommandCount,
+        unsupportedCommandCount: fallbackStats.unsupportedCommandCount,
+        webglGroundCommandCount: fallbackStats.webglGroundCommandCount,
+        unsupportedGroundCommandCount: fallbackStats.unsupportedGroundCommandCount,
+        unsupportedVariants: fallbackStats.unsupportedVariants,
+        webglByFamily: fallbackStats.webglByFamily,
+        canvasFallbackByFamily: fallbackStats.canvasFallbackByFamily,
+        unsupportedByFamily: fallbackStats.unsupportedByFamily,
+        unsupportedByKind: fallbackStats.unsupportedByKind,
+        partiallyHandledFamilies: fallbackStats.partiallyHandledFamilies,
+      });
+    }
+  } else {
+    canvasRenderer.render(executionPlan);
+    const stats = createBackendStats("canvas2d");
+    const allCommands = [...executionPlan.world, ...executionPlan.screen];
+    stats.canvasFallbackCommandCount = allCommands.length;
+    for (let i = 0; i < allCommands.length; i++) {
+      noteRenderBackendFamilyPlacement(stats, commandFamilyKey(allCommands[i]), "canvas2d");
+    }
+    setRenderBackendStats({
+      requestedBackend: backendSelection.requestedBackend,
+      selectedBackend: "canvas2d",
+      defaultBackend: backendSelection.policy.defaultBackend,
+      webglReadyForDefault: backendSelection.policy.webglReadyForDefault,
+      fallbackReason: backendSelection.fallbackReason,
+      webglCommandCount: stats.webglCommandCount,
+      canvasFallbackCommandCount: stats.canvasFallbackCommandCount,
+      unsupportedCommandCount: stats.unsupportedCommandCount,
+      webglGroundCommandCount: stats.webglGroundCommandCount,
+      unsupportedGroundCommandCount: stats.unsupportedGroundCommandCount,
+      unsupportedVariants: stats.unsupportedVariants,
+      webglByFamily: stats.webglByFamily,
+      canvasFallbackByFamily: stats.canvasFallbackByFamily,
+      unsupportedByFamily: stats.unsupportedByFamily,
+      unsupportedByKind: stats.unsupportedByKind,
+      partiallyHandledFamilies: stats.partiallyHandledFamilies,
+    });
+  }
+  endRenderPerfFrame(w.timeSec ?? 0);
 
   const uiPassContext: UiPassContext = {
     frame: renderFrame,

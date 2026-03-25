@@ -16,6 +16,7 @@ import { pixelHeightToSweepTileHeight } from "../../../map/tileHeightUnits";
 import {
   buildStructureShadowFrameResult as buildOrchestratedStructureShadowFrameResult,
 } from "../structureShadows/structureShadowOrchestrator";
+import { shouldBuildStructureV6ShadowMasksForFrame } from "../structureShadows/structureShadowVersionRouting";
 import {
   applyRuntimeStructureTriangleSemanticInfoMap,
   buildRuntimeStructureTriangleSemanticInfoMap,
@@ -146,7 +147,17 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
           input.monolithicStructureGeometryCacheStore.markFallback(o.id);
         }
       }
-      if (!triangleCache) continue;
+      if (!triangleCache) {
+        // Triangle slicing unavailable (e.g. PROPs without monolithic
+        // semantic geometry). Fall through to simple overlay rendering.
+        pieces.push({
+          kind: "overlay",
+          overlayIndex: candidate.overlayIndex,
+          overlay: o,
+          draw,
+        });
+        continue;
+      }
 
       const sourceImg: CanvasImageSource = draw.flipX ? input.getFlippedOverlayImage(draw.img) : draw.img;
       const monolithic = getMonolithicGeometryFromCache(triangleCache);
@@ -227,7 +238,9 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
         }
 
         if (!finalVisibleTriangles.length) continue;
-        if (input.structureShadowFrame.routing.usesV6Debug) admittedTrianglesForSemanticMasks.push(...finalVisibleTriangles);
+        if (shouldBuildStructureV6ShadowMasksForFrame(input.structureShadowFrame)) {
+          admittedTrianglesForSemanticMasks.push(...finalVisibleTriangles);
+        }
         finalVisibleTrianglesForDebug.push(...finalVisibleTriangles);
         visibleTriangleGroupsForDebug.push({
           stableId: group.stableId,
