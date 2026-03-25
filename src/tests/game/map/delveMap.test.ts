@@ -36,7 +36,7 @@ describe("delveMap", () => {
       expect(["DOCKS", "SEWERS", "CHINATOWN"]).toContain(startNode.zoneId);
       expect(startNode.state).toBe("UNVISITED");
       expect(startNode.plan.depth).toBe(1);
-      expect(["docks", "avenue", "china_town", "downtown", "highway"]).toContain(startNode.plan.mapId);
+      expect(["docks", "avenue", "china_town", "downtown", "industrial", "highway"]).toContain(startNode.plan.mapId);
       expect(startNode.plan.objectiveId).toBeTruthy();
     });
 

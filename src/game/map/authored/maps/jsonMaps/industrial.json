@@ -1,0 +1,10 @@
+{
+  "id": "industrial",
+  "buildingPackId": "industrial_buildings",
+  "mapSkinId": "industrial",
+  "chunkGrid": {
+    "id": "industrial",
+    "cols": 3,
+    "rows": 3
+  }
+}

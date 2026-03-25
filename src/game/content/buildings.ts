@@ -181,8 +181,11 @@ export const BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
 };
 
 export const BUILDING_PACKS: Record<BuildingPackId, BuildingSkinId[]> = {
+  // Findings summary: authored maps select building content via buildingPackId, runtime theme via mapSkinId,
+  // and delve reaches maps through DEFAULT_MAP_POOL. Keep industrial explicit and empty so it never aliases downtown.
   avenue_buildings: ["avenue_1", "avenue_2", "avenue_3", "avenue_4", "avenue_5", "avenue_6", "avenue_7"],
   downtown_buildings: ["downtown_1", "downtown_2", "downtown_3"],
+  industrial_buildings: [],
   china_town_buildings: ["china_town_1", "china_town_2", "china_town_3", "china_town_4", "china_town_5"],
   batch_processed_buildings: [
     "bp_0", "bp_1", "bp_2", "bp_3", "bp_4", "bp_5", "bp_6", "bp_7", "bp_8", "bp_9",
