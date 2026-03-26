@@ -9,11 +9,13 @@ function makeFakeGl() {
   const drawOrder: string[] = [];
   const drawModes: number[] = [];
   const matrices: number[][] = [];
+  const textureUploads: string[] = [];
   let currentTexture: any = null;
   return {
     drawOrder,
     drawModes,
     matrices,
+    textureUploads,
     VERTEX_SHADER: 0x8B31,
     FRAGMENT_SHADER: 0x8B30,
     COMPILE_STATUS: 0x8B81,
@@ -76,8 +78,11 @@ function makeFakeGl() {
     uniform4f: () => {},
     activeTexture: () => {},
     texImage2D: (_target: unknown, _level: unknown, _internal: unknown, _format: unknown, _type: unknown, source: any) => {
-      if (currentTexture) currentTexture.label = source.getAttribute?.("data-label") ?? "unknown";
+      const label = source.getAttribute?.("data-label") ?? "unknown";
+      if (currentTexture) currentTexture.label = label;
+      textureUploads.push(label);
     },
+    deleteTexture: () => {},
     uniform1f: () => {},
     bufferData: () => {},
     blendFunc: () => {},
@@ -93,6 +98,14 @@ function makeImage(label: string): any {
   return {
     width: 16,
     height: 16,
+    getAttribute: (name: string) => (name === "data-label" ? label : null),
+  };
+}
+
+function makeChunkCanvas(label: string, width: number = 64, height: number = 32): any {
+  return {
+    width,
+    height,
     getAttribute: (name: string) => (name === "data-label" ? label : null),
   };
 }
@@ -340,6 +353,481 @@ describe("WebGLRenderer", () => {
 
     expect(gl.drawOrder).toEqual(["projected-ground"]);
     expect(gl.drawModes).toEqual([gl.TRIANGLES]);
+  });
+
+  it("renders cached ground chunks and skips covered ground commands", () => {
+    const gl = makeFakeGl();
+    const renderer = new WebGLRenderer({
+      world: {} as any,
+      ctx: {} as any,
+      canvas: gl.canvas,
+      overlayCtx: {} as any,
+      overlayCanvas: { width: 100, height: 100 } as any,
+      hasUiOverlay: true,
+      cssW: 100,
+      cssH: 100,
+      screenW: 100,
+      screenH: 100,
+      devW: 100,
+      devH: 100,
+      dpr: 1,
+      overlayDevW: 100,
+      overlayDevH: 100,
+      overlayDpr: 1,
+      visibleVerticalTiles: 10,
+      viewport: {
+        worldScaleDevice: 1,
+        camTx: 0,
+        camTy: 0,
+        safeOffsetDeviceX: 0,
+        safeOffsetDeviceY: 0,
+      } as any,
+      zoom: 1,
+      worldWidth: 100,
+      worldHeight: 100,
+      scaledW: 100,
+      scaledH: 100,
+      safeOffsetX: 0,
+      safeOffsetY: 0,
+      playerWorldX: 0,
+      playerWorldY: 0,
+      playerTileX: 0,
+      playerTileY: 0,
+      cameraProjectedX: 0,
+      cameraProjectedY: 0,
+      camTx: 0,
+      camTy: 0,
+      worldScaleDevice: 1,
+      renderSettings: {},
+    }, gl);
+    const chunkCanvas = makeChunkCanvas("chunk-z0");
+
+    renderer.beginFrame();
+    renderer.useWorldSpace();
+    renderer.renderCommands([
+      makeProjectedSurfaceCommand(makeImage("covered-ground"), 9),
+      makeCommand(makeImage("entity"), 10),
+    ], {
+      groundChunkCache: {
+        generation: 1,
+        getVisibleEntries: (zBand: number) => zBand === 0 ? [{
+          zBand: 0,
+          chunkX: 0,
+          chunkY: 0,
+          minTx: 0,
+          maxTx: 1,
+          minTy: 0,
+          maxTy: 1,
+          sortSlice: 0,
+          sortWithin: 0,
+          drawX: -32,
+          drawY: -16,
+          canvas: chunkCanvas,
+        }] : [],
+        hasCoveredStableId: (stableId: number) => stableId === 9,
+      },
+      viewRect: { minTx: -1, maxTx: 2, minTy: -1, maxTy: 2 },
+      rampRoadTiles: new Set<string>(),
+    });
+
+    expect(gl.drawOrder).toEqual(["chunk-z0", "entity"]);
+    expect(gl.drawModes).toEqual([gl.TRIANGLE_STRIP, gl.TRIANGLES]);
+  });
+
+  it("keeps chunk draw order aligned with z-band transitions", () => {
+    const gl = makeFakeGl();
+    const renderer = new WebGLRenderer({
+      world: {} as any,
+      ctx: {} as any,
+      canvas: gl.canvas,
+      overlayCtx: {} as any,
+      overlayCanvas: { width: 100, height: 100 } as any,
+      hasUiOverlay: true,
+      cssW: 100,
+      cssH: 100,
+      screenW: 100,
+      screenH: 100,
+      devW: 100,
+      devH: 100,
+      dpr: 1,
+      overlayDevW: 100,
+      overlayDevH: 100,
+      overlayDpr: 1,
+      visibleVerticalTiles: 10,
+      viewport: {
+        worldScaleDevice: 1,
+        camTx: 0,
+        camTy: 0,
+        safeOffsetDeviceX: 0,
+        safeOffsetDeviceY: 0,
+      } as any,
+      zoom: 1,
+      worldWidth: 100,
+      worldHeight: 100,
+      scaledW: 100,
+      scaledH: 100,
+      safeOffsetX: 0,
+      safeOffsetY: 0,
+      playerWorldX: 0,
+      playerWorldY: 0,
+      playerTileX: 0,
+      playerTileY: 0,
+      cameraProjectedX: 0,
+      cameraProjectedY: 0,
+      camTx: 0,
+      camTy: 0,
+      worldScaleDevice: 1,
+      renderSettings: {},
+    }, gl);
+
+    renderer.beginFrame();
+    renderer.useWorldSpace();
+    renderer.renderCommands([
+      makeProjectedSurfaceCommand(makeImage("covered-ground-z0"), 1, 0),
+      makeCommand(makeImage("entity-z0"), 2),
+      {
+        ...makeProjectedSurfaceCommand(makeImage("covered-ground-z1"), 3, 40),
+        key: {
+          slice: 1,
+          within: 0,
+          baseZ: 1,
+          kindOrder: KindOrder.FLOOR,
+          stableId: 3,
+        },
+      } as RenderCommand,
+      {
+        ...makeCommand(makeImage("entity-z1"), 4),
+        key: {
+          slice: 1,
+          within: 0,
+          baseZ: 1,
+          kindOrder: KindOrder.ENTITY,
+          stableId: 4,
+        },
+      } as RenderCommand,
+    ], {
+      groundChunkCache: {
+        generation: 1,
+        getVisibleEntries: (zBand: number) => zBand === 0
+          ? [{
+            zBand: 0,
+            chunkX: 0,
+            chunkY: 0,
+            minTx: 0,
+            maxTx: 1,
+            minTy: 0,
+            maxTy: 1,
+            sortSlice: 0,
+            sortWithin: 0,
+            drawX: -32,
+            drawY: -16,
+            canvas: makeChunkCanvas("chunk-z0"),
+          }]
+          : zBand === 1
+            ? [{
+              zBand: 1,
+              chunkX: 0,
+              chunkY: 0,
+              minTx: 0,
+              maxTx: 1,
+              minTy: 0,
+              maxTy: 1,
+              sortSlice: 0,
+              sortWithin: 0,
+              drawX: -32,
+              drawY: 16,
+              canvas: makeChunkCanvas("chunk-z1"),
+            }]
+            : [],
+        hasCoveredStableId: (stableId: number) => stableId === 1 || stableId === 3,
+      },
+      viewRect: { minTx: -1, maxTx: 2, minTy: -1, maxTy: 2 },
+      rampRoadTiles: new Set<string>(),
+    });
+
+    expect(gl.drawOrder).toEqual(["chunk-z0", "entity-z0", "chunk-z1", "entity-z1"]);
+  });
+
+  it("does not redraw cached ground chunks for tail-stage world commands", () => {
+    const gl = makeFakeGl();
+    const renderer = new WebGLRenderer({
+      world: {} as any,
+      ctx: {} as any,
+      canvas: gl.canvas,
+      overlayCtx: {} as any,
+      overlayCanvas: { width: 100, height: 100 } as any,
+      hasUiOverlay: true,
+      cssW: 100,
+      cssH: 100,
+      screenW: 100,
+      screenH: 100,
+      devW: 100,
+      devH: 100,
+      dpr: 1,
+      overlayDevW: 100,
+      overlayDevH: 100,
+      overlayDpr: 1,
+      visibleVerticalTiles: 10,
+      viewport: {
+        worldScaleDevice: 1,
+        camTx: 0,
+        camTy: 0,
+        safeOffsetDeviceX: 0,
+        safeOffsetDeviceY: 0,
+      } as any,
+      zoom: 1,
+      worldWidth: 100,
+      worldHeight: 100,
+      scaledW: 100,
+      scaledH: 100,
+      safeOffsetX: 0,
+      safeOffsetY: 0,
+      playerWorldX: 0,
+      playerWorldY: 0,
+      playerTileX: 0,
+      playerTileY: 0,
+      cameraProjectedX: 0,
+      cameraProjectedY: 0,
+      camTx: 0,
+      camTy: 0,
+      worldScaleDevice: 1,
+      renderSettings: {},
+    }, gl);
+    const chunkCanvas = makeChunkCanvas("chunk-z0");
+
+    renderer.beginFrame();
+    renderer.useWorldSpace();
+    renderer.renderCommands([
+      makeProjectedSurfaceCommand(makeImage("covered-ground"), 9),
+      {
+        pass: "WORLD",
+        key: {
+          slice: 0,
+          within: 0,
+          baseZ: 0,
+          kindOrder: KindOrder.OVERLAY,
+          stableId: 10,
+        },
+        semanticFamily: "screenOverlay",
+        finalForm: "primitive",
+        payload: {
+          stage: "tail",
+        },
+      } as RenderCommand,
+    ], {
+      groundChunkCache: {
+        generation: 1,
+        getVisibleEntries: (zBand: number) => zBand === 0 ? [{
+          zBand: 0,
+          chunkX: 0,
+          chunkY: 0,
+          minTx: 0,
+          maxTx: 1,
+          minTy: 0,
+          maxTy: 1,
+          sortSlice: 0,
+          sortWithin: 0,
+          drawX: -32,
+          drawY: -16,
+          canvas: chunkCanvas,
+        }] : [],
+        hasCoveredStableId: (stableId: number) => stableId === 9,
+      },
+      viewRect: { minTx: -1, maxTx: 2, minTy: -1, maxTy: 2 },
+      rampRoadTiles: new Set<string>(),
+    });
+
+    expect(gl.drawOrder).toEqual(["chunk-z0"]);
+  });
+
+  it("keeps uncovered projected surfaces on the legacy WebGL path", () => {
+    const gl = makeFakeGl();
+    const renderer = new WebGLRenderer({
+      world: {} as any,
+      ctx: {} as any,
+      canvas: gl.canvas,
+      overlayCtx: {} as any,
+      overlayCanvas: { width: 100, height: 100 } as any,
+      hasUiOverlay: true,
+      cssW: 100,
+      cssH: 100,
+      screenW: 100,
+      screenH: 100,
+      devW: 100,
+      devH: 100,
+      dpr: 1,
+      overlayDevW: 100,
+      overlayDevH: 100,
+      overlayDpr: 1,
+      visibleVerticalTiles: 10,
+      viewport: {
+        worldScaleDevice: 1,
+        camTx: 0,
+        camTy: 0,
+        safeOffsetDeviceX: 0,
+        safeOffsetDeviceY: 0,
+      } as any,
+      zoom: 1,
+      worldWidth: 100,
+      worldHeight: 100,
+      scaledW: 100,
+      scaledH: 100,
+      safeOffsetX: 0,
+      safeOffsetY: 0,
+      playerWorldX: 0,
+      playerWorldY: 0,
+      playerTileX: 0,
+      playerTileY: 0,
+      cameraProjectedX: 0,
+      cameraProjectedY: 0,
+      camTx: 0,
+      camTy: 0,
+      worldScaleDevice: 1,
+      renderSettings: {},
+    }, gl);
+    const image = makeImage("uncovered-ground");
+
+    renderer.beginFrame();
+    renderer.useWorldSpace();
+    renderer.renderCommands([makeProjectedSurfaceCommand(image, 9)], {
+      groundChunkCache: {
+        generation: 1,
+        getVisibleEntries: () => [],
+        hasCoveredStableId: () => false,
+      },
+      viewRect: { minTx: -1, maxTx: 2, minTy: -1, maxTy: 2 },
+      rampRoadTiles: new Set<string>(),
+    });
+
+    expect(gl.drawOrder).toEqual(["uncovered-ground"]);
+    expect(gl.drawModes).toEqual([gl.TRIANGLES]);
+  });
+
+  it("reuses chunk textures across frames and reuploads after cache invalidation", () => {
+    const gl = makeFakeGl();
+    const renderer = new WebGLRenderer({
+      world: {} as any,
+      ctx: {} as any,
+      canvas: gl.canvas,
+      overlayCtx: {} as any,
+      overlayCanvas: { width: 100, height: 100 } as any,
+      hasUiOverlay: true,
+      cssW: 100,
+      cssH: 100,
+      screenW: 100,
+      screenH: 100,
+      devW: 100,
+      devH: 100,
+      dpr: 1,
+      overlayDevW: 100,
+      overlayDevH: 100,
+      overlayDpr: 1,
+      visibleVerticalTiles: 10,
+      viewport: {
+        worldScaleDevice: 1,
+        camTx: 0,
+        camTy: 0,
+        safeOffsetDeviceX: 0,
+        safeOffsetDeviceY: 0,
+      } as any,
+      zoom: 1,
+      worldWidth: 100,
+      worldHeight: 100,
+      scaledW: 100,
+      scaledH: 100,
+      safeOffsetX: 0,
+      safeOffsetY: 0,
+      playerWorldX: 0,
+      playerWorldY: 0,
+      playerTileX: 0,
+      playerTileY: 0,
+      cameraProjectedX: 0,
+      cameraProjectedY: 0,
+      camTx: 0,
+      camTy: 0,
+      worldScaleDevice: 1,
+      renderSettings: {},
+    }, gl);
+    const commands = [makeProjectedSurfaceCommand(makeImage("covered-ground"), 9)];
+    const chunkGen1Canvas = makeChunkCanvas("chunk-gen1");
+    const chunkGen2Canvas = makeChunkCanvas("chunk-gen2");
+
+    renderer.beginFrame();
+    renderer.useWorldSpace();
+    renderer.renderCommands(commands, {
+      groundChunkCache: {
+        generation: 1,
+        getVisibleEntries: () => [{
+          zBand: 0,
+          chunkX: 0,
+          chunkY: 0,
+          minTx: 0,
+          maxTx: 1,
+          minTy: 0,
+          maxTy: 1,
+          sortSlice: 0,
+          sortWithin: 0,
+          drawX: -32,
+          drawY: -16,
+          canvas: chunkGen1Canvas,
+        }],
+        hasCoveredStableId: () => true,
+      },
+      viewRect: { minTx: -1, maxTx: 2, minTy: -1, maxTy: 2 },
+      rampRoadTiles: new Set<string>(),
+    });
+
+    renderer.beginFrame();
+    renderer.useWorldSpace();
+    renderer.renderCommands(commands, {
+      groundChunkCache: {
+        generation: 1,
+        getVisibleEntries: () => [{
+          zBand: 0,
+          chunkX: 0,
+          chunkY: 0,
+          minTx: 0,
+          maxTx: 1,
+          minTy: 0,
+          maxTy: 1,
+          sortSlice: 0,
+          sortWithin: 0,
+          drawX: -32,
+          drawY: -16,
+          canvas: chunkGen1Canvas,
+        }],
+        hasCoveredStableId: () => true,
+      },
+      viewRect: { minTx: -1, maxTx: 2, minTy: -1, maxTy: 2 },
+      rampRoadTiles: new Set<string>(),
+    });
+
+    renderer.beginFrame();
+    renderer.useWorldSpace();
+    renderer.renderCommands(commands, {
+      groundChunkCache: {
+        generation: 2,
+        getVisibleEntries: () => [{
+          zBand: 0,
+          chunkX: 0,
+          chunkY: 0,
+          minTx: 0,
+          maxTx: 1,
+          minTy: 0,
+          maxTy: 1,
+          sortSlice: 0,
+          sortWithin: 0,
+          drawX: -32,
+          drawY: -16,
+          canvas: chunkGen2Canvas,
+        }],
+        hasCoveredStableId: () => true,
+      },
+      viewRect: { minTx: -1, maxTx: 2, minTy: -1, maxTy: 2 },
+      rampRoadTiles: new Set<string>(),
+    });
+
+    expect(gl.textureUploads).toEqual(["chunk-gen1", "chunk-gen2"]);
   });
 
   it("batches adjacent compatible projected surfaces without changing stream order", () => {

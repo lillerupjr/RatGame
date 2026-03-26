@@ -1,17 +1,26 @@
 import { ZONE_KIND } from "../../../factories/zoneFactory";
+import type { ViewRect } from "../../../map/compile/kenneyMap";
 import type { RenderFrameContext } from "../contracts/renderFrameContext";
 import type { RenderCommand } from "../contracts/renderCommands";
+import type {
+  CanvasGroundChunkCacheEntry,
+  CanvasGroundChunkCacheStore,
+} from "../canvasGroundChunkCache";
 import { resolveProjectedLightTintSprite } from "../renderLighting";
 import {
   countRenderWebGLBatch,
   countRenderWebGLBufferUpload,
   countRenderWebGLCanvasComposite,
   countRenderWebGLDrawCall,
+  countRenderWebGLGroundChunkDraw,
+  countRenderWebGLGroundChunkTextureUpload,
+  countRenderWebGLGroundChunksVisible,
   countRenderWebGLProjectedSurfaceDraw,
   countRenderWebGLTextureBind,
   countRenderWebGLTrianglesSubmitted,
   noteRenderWebGLTextureUsage,
 } from "../renderPerfCounters";
+import { resolveRenderZBand } from "../worldRenderOrdering";
 
 type BlendMode = "normal" | "additive";
 type QuadSpace = "world" | "screen";
@@ -73,6 +82,19 @@ type CachedTexture = {
   texture: WebGLTexture;
   width: number;
   height: number;
+};
+
+type CachedGroundChunkTexture = {
+  texture: WebGLTexture;
+  sourceCanvas: HTMLCanvasElement;
+  width: number;
+  height: number;
+};
+
+type GroundChunkRenderContext = {
+  groundChunkCache: Pick<CanvasGroundChunkCacheStore, "generation" | "getVisibleEntries" | "hasCoveredStableId">;
+  viewRect: ViewRect;
+  rampRoadTiles: ReadonlySet<string>;
 };
 
 const VERTEX_SHADER_SOURCE = `
@@ -151,6 +173,7 @@ let radialMaskCanvas: HTMLCanvasElement | null = null;
 let ringMaskCanvas: HTMLCanvasElement | null = null;
 
 const MAX_BATCH_TRIANGLES = 2048;
+const EMPTY_RAMP_ROAD_TILES = new Set<string>();
 
 function getWhiteTextureCanvas(): HTMLCanvasElement {
   if (whiteTextureCanvas) return whiteTextureCanvas;
@@ -270,9 +293,11 @@ export class WebGLRenderer {
   private readonly uAlpha: WebGLUniformLocation;
   private readonly uColor: WebGLUniformLocation;
   private readonly textureCache = new WeakMap<object, CachedTexture>();
+  private readonly groundChunkTextureCache = new Map<string, CachedGroundChunkTexture>();
   private readonly compositeTexture: WebGLTexture;
   private currentSpace: QuadSpace = "world";
   private frameContext: RenderFrameContext;
+  private lastGroundChunkCacheGeneration = -1;
 
   constructor(
     frameContext: RenderFrameContext,
@@ -348,10 +373,26 @@ export class WebGLRenderer {
     this.gl.uniformMatrix3fv(this.uMatrix, false, this.buildScreenMatrix());
   }
 
-  renderCommands(commands: readonly RenderCommand[]): void {
+  renderCommands(
+    commands: readonly RenderCommand[],
+    groundChunkContext?: GroundChunkRenderContext,
+  ): void {
+    this.syncGroundChunkTextures(groundChunkContext);
     let batch: OrderedTriangleBatch | null = null;
+    let lastZBand: number | null = null;
     for (let i = 0; i < commands.length; i++) {
       const command = commands[i];
+      const stage = (command.payload as { stage?: string } | undefined)?.stage ?? "slice";
+      if (groundChunkContext && stage !== "tail") {
+        const zBand = resolveRenderZBand(command.key, groundChunkContext.rampRoadTiles ?? EMPTY_RAMP_ROAD_TILES);
+        if (zBand !== lastZBand) {
+          this.flushTriangleBatch(batch);
+          batch = null;
+          this.drawVisibleGroundChunksForBand(zBand, groundChunkContext);
+          lastZBand = zBand;
+        }
+      }
+      if (this.shouldSkipGroundCommand(command, groundChunkContext)) continue;
       const batchableTriangles = this.resolveBatchableTriangles(command);
       if (batchableTriangles.length > 0) {
         if (
@@ -376,6 +417,47 @@ export class WebGLRenderer {
       this.renderCommandStandalone(command);
     }
     this.flushTriangleBatch(batch);
+  }
+
+  private syncGroundChunkTextures(groundChunkContext: GroundChunkRenderContext | undefined): void {
+    if (!groundChunkContext) return;
+    if (groundChunkContext.groundChunkCache.generation === this.lastGroundChunkCacheGeneration) return;
+    this.clearGroundChunkTextures();
+    this.lastGroundChunkCacheGeneration = groundChunkContext.groundChunkCache.generation;
+  }
+
+  private clearGroundChunkTextures(): void {
+    if (this.groundChunkTextureCache.size <= 0) return;
+    const glWithDeleteTexture = this.gl as WebGLRenderingContext & {
+      deleteTexture?: (texture: WebGLTexture | null) => void;
+    };
+    if (typeof glWithDeleteTexture.deleteTexture === "function") {
+      for (const cached of this.groundChunkTextureCache.values()) {
+        glWithDeleteTexture.deleteTexture(cached.texture);
+      }
+    }
+    this.groundChunkTextureCache.clear();
+  }
+
+  private drawVisibleGroundChunksForBand(
+    zBand: number,
+    groundChunkContext: GroundChunkRenderContext,
+  ): void {
+    const entries = groundChunkContext.groundChunkCache.getVisibleEntries(zBand, groundChunkContext.viewRect);
+    if (entries.length <= 0) return;
+    countRenderWebGLGroundChunksVisible(entries.length);
+    for (let i = 0; i < entries.length; i++) {
+      this.drawGroundChunkEntry(entries[i]);
+    }
+  }
+
+  private shouldSkipGroundCommand(
+    command: RenderCommand,
+    groundChunkContext: GroundChunkRenderContext | undefined,
+  ): boolean {
+    if (!groundChunkContext) return false;
+    if (command.semanticFamily !== "groundSurface" && command.semanticFamily !== "groundDecal") return false;
+    return groundChunkContext.groundChunkCache.hasCoveredStableId(command.key?.stableId) === true;
   }
 
   compositeCanvasSurface(sourceCanvas: HTMLCanvasElement): void {
@@ -513,6 +595,66 @@ export class WebGLRenderer {
     }
 
     return [];
+  }
+
+  private groundChunkTextureKey(entry: CanvasGroundChunkCacheEntry): string {
+    return `${entry.zBand}|${entry.chunkX}|${entry.chunkY}`;
+  }
+
+  private resolveGroundChunkTexture(entry: CanvasGroundChunkCacheEntry): CachedGroundChunkTexture | null {
+    const sourceCanvas = entry.canvas;
+    if (!(sourceCanvas.width > 0 && sourceCanvas.height > 0)) return null;
+    const cacheKey = this.groundChunkTextureKey(entry);
+    let cached = this.groundChunkTextureCache.get(cacheKey) ?? null;
+    let needsUpload = false;
+    if (!cached) {
+      const texture = this.gl.createTexture();
+      if (!texture) return null;
+      cached = {
+        texture,
+        sourceCanvas,
+        width: sourceCanvas.width,
+        height: sourceCanvas.height,
+      };
+      this.groundChunkTextureCache.set(cacheKey, cached);
+      needsUpload = true;
+    }
+    needsUpload = needsUpload
+      || cached.sourceCanvas !== sourceCanvas
+      || cached.width !== sourceCanvas.width
+      || cached.height !== sourceCanvas.height;
+    noteRenderWebGLTextureUsage(sourceCanvas as unknown as object);
+    countRenderWebGLTextureBind();
+    this.gl.bindTexture(this.gl.TEXTURE_2D, cached.texture);
+    if (needsUpload) {
+      cached.sourceCanvas = sourceCanvas;
+      cached.width = sourceCanvas.width;
+      cached.height = sourceCanvas.height;
+      this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
+      this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+      this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
+      this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.NEAREST);
+      this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, sourceCanvas);
+      countRenderWebGLGroundChunkTextureUpload();
+    }
+    return cached;
+  }
+
+  private drawGroundChunkEntry(entry: CanvasGroundChunkCacheEntry): void {
+    const { gl } = this;
+    gl.activeTexture(gl.TEXTURE0);
+    const cached = this.resolveGroundChunkTexture(entry);
+    if (!cached) return;
+    this.applySpace("world");
+    this.setBlendMode("normal");
+    gl.uniform1f(this.uAlpha, 1);
+    gl.uniform4f(this.uColor, 1, 1, 1, 1);
+    this.uploadQuadVertices(entry.drawX, entry.drawY, cached.width, cached.height, 0, false);
+    this.uploadQuadTexCoords(0, 0, 1, 1);
+    countRenderWebGLGroundChunkDraw();
+    countRenderWebGLDrawCall();
+    countRenderWebGLTrianglesSubmitted(2);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
   private buildTriangleDrawsFromPayload(payload: Record<string, unknown>): TriangleDraw[] {

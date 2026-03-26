@@ -1,10 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   beginRenderPerfFrame,
+  countRenderCanvasGroundChunkDraw,
+  countRenderCanvasGroundChunkRebuild,
+  countRenderCanvasGroundChunksVisible,
   countRenderWebGLBatch,
   countRenderWebGLBufferUpload,
   countRenderWebGLCanvasComposite,
   countRenderWebGLDrawCall,
+  countRenderWebGLGroundChunkDraw,
+  countRenderWebGLGroundChunkTextureUpload,
+  countRenderWebGLGroundChunksVisible,
   countRenderWebGLProjectedSurfaceDraw,
   countRenderWebGLTextureBind,
   countRenderWebGLTrianglesSubmitted,
@@ -75,6 +81,9 @@ describe("render perf counters", () => {
     countRenderWebGLCanvasComposite(1);
     countRenderWebGLProjectedSurfaceDraw(2);
     countRenderWebGLTrianglesSubmitted(9);
+    countRenderWebGLGroundChunkDraw(3);
+    countRenderWebGLGroundChunksVisible(4);
+    countRenderWebGLGroundChunkTextureUpload(1);
     noteRenderWebGLTextureUsage({ id: "a" });
     noteRenderWebGLTextureUsage({ id: "b" });
     setBackend("webgl");
@@ -90,6 +99,9 @@ describe("render perf counters", () => {
     expect(snapshot.webglProjectedSurfaceDrawsPerFrame).toBe(2);
     expect(snapshot.webglTrianglesSubmittedPerFrame).toBe(9);
     expect(snapshot.webglUniqueTexturesPerFrame).toBe(2);
+    expect(snapshot.webglGroundChunkDrawsPerFrame).toBe(3);
+    expect(snapshot.webglGroundChunksVisiblePerFrame).toBe(4);
+    expect(snapshot.webglGroundChunkTextureUploadsPerFrame).toBe(1);
   });
 
   it("switches overlay perf text based on the selected backend", () => {
@@ -100,6 +112,9 @@ describe("render perf counters", () => {
     countRenderWebGLDrawCall(4);
     countRenderWebGLBatch(3);
     countRenderWebGLTextureBind(6);
+    countRenderWebGLGroundChunkDraw(2);
+    countRenderWebGLGroundChunksVisible(5);
+    countRenderWebGLGroundChunkTextureUpload(1);
     setBackend("webgl");
     publishCurrentPerfFrame();
     renderDebugLightingOverlay({
@@ -115,6 +130,25 @@ describe("render perf counters", () => {
       structureV6ShadowCastCount: 0,
       structureV6ShadowCacheStats: null,
       shadowSunModel: { forward: { x: 0, y: 0, z: 0 }, projectionDirection: { x: 0, y: 0 }, timeLabel: "", elevationDeg: 0, directionLabel: "", stepKey: "" },
+      shadowSunDayCycleStatus: {
+        enabled: false,
+        cycleModeLabel: "",
+        multiplier: 1,
+        stepsPerDay: 0,
+        stepSpanMinutes: 0,
+        manualSeedLabel: "",
+        continuousTimeLabel: "",
+        quantizedTimeLabel: "",
+        stepIndex: 0,
+        advancing: false,
+        stepChanged: false,
+        advancementClamped: false,
+        baseRateLabel: "",
+      },
+      ambientSunLighting: {
+        ambientElevationDeg: 0,
+        ambientDarkness01: 0,
+      },
       structureTriangleAdmissionMode: "viewport",
       sliderPadding: 0,
       playerCameraTx: 0,
@@ -128,14 +162,23 @@ describe("render perf counters", () => {
     const webglLines = ctx.fillText.mock.calls.map((call) => String(call[0]));
     expect(webglLines.some((line) => line.includes("gl draw/frame:"))).toBe(true);
     expect(webglLines.some((line) => line.includes("gl batches/frame:"))).toBe(true);
+    expect(webglLines.some((line) => line.includes("groundChunkDraw/frame:"))).toBe(true);
+    expect(webglLines.some((line) => line.includes("groundChunkTextureUpload/frame:"))).toBe(true);
     expect(webglLines.some((line) => line.includes("drawImage/frame:"))).toBe(false);
 
     ctx.fillText.mockClear();
 
     resetPerfCounters();
     beginRenderPerfFrame(320, 180);
+    countRenderCanvasGroundChunkDraw(3);
+    countRenderCanvasGroundChunksVisible(5);
+    countRenderCanvasGroundChunkRebuild(2);
     setBackend("canvas2d");
     publishCurrentPerfFrame();
+    const canvasSnapshot = getRenderPerfSnapshot();
+    expect(canvasSnapshot.canvasGroundChunkDrawsPerFrame).toBe(3);
+    expect(canvasSnapshot.canvasGroundChunksVisiblePerFrame).toBe(5);
+    expect(canvasSnapshot.canvasGroundChunkRebuildsPerFrame).toBe(2);
     renderDebugLightingOverlay({
       ctx,
       cssW: 320,
@@ -149,6 +192,25 @@ describe("render perf counters", () => {
       structureV6ShadowCastCount: 0,
       structureV6ShadowCacheStats: null,
       shadowSunModel: { forward: { x: 0, y: 0, z: 0 }, projectionDirection: { x: 0, y: 0 }, timeLabel: "", elevationDeg: 0, directionLabel: "", stepKey: "" },
+      shadowSunDayCycleStatus: {
+        enabled: false,
+        cycleModeLabel: "",
+        multiplier: 1,
+        stepsPerDay: 0,
+        stepSpanMinutes: 0,
+        manualSeedLabel: "",
+        continuousTimeLabel: "",
+        quantizedTimeLabel: "",
+        stepIndex: 0,
+        advancing: false,
+        stepChanged: false,
+        advancementClamped: false,
+        baseRateLabel: "",
+      },
+      ambientSunLighting: {
+        ambientElevationDeg: 0,
+        ambientDarkness01: 0,
+      },
       structureTriangleAdmissionMode: "viewport",
       sliderPadding: 0,
       playerCameraTx: 0,
@@ -161,6 +223,7 @@ describe("render perf counters", () => {
     } as any);
     const canvasLines = ctx.fillText.mock.calls.map((call) => String(call[0]));
     expect(canvasLines.some((line) => line.includes("drawImage/frame:"))).toBe(true);
+    expect(canvasLines.some((line) => line.includes("groundChunkDraw/frame:"))).toBe(true);
     expect(canvasLines.some((line) => line.includes("gl draw/frame:"))).toBe(false);
   });
 });

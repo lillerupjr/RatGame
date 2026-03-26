@@ -255,4 +255,371 @@ describe("Canvas2DRenderer", () => {
     expect(ctx.transform).toHaveBeenCalledTimes(2);
     expect(overlayCtx.drawImage).not.toHaveBeenCalled();
   });
+
+  it("renders simple quad sprites without an extra per-draw save/restore", () => {
+    const ctx = makeCtx(320, 180);
+    const overlayCtx = makeCtx(320, 180);
+    const renderer = new Canvas2DRenderer({
+      world: {} as any,
+      ctx,
+      canvas: { width: 320, height: 180 } as any,
+      overlayCtx,
+      overlayCanvas: { width: 320, height: 180 } as any,
+      hasUiOverlay: true,
+      cssW: 320,
+      cssH: 180,
+      screenW: 320,
+      screenH: 180,
+      devW: 320,
+      devH: 180,
+      dpr: 1,
+      overlayDevW: 320,
+      overlayDevH: 180,
+      overlayDpr: 1,
+      visibleVerticalTiles: 10,
+      viewport: {
+        applyWorld: vi.fn(),
+      } as any,
+      zoom: 1,
+      worldWidth: 320,
+      worldHeight: 180,
+      scaledW: 320,
+      scaledH: 180,
+      safeOffsetX: 0,
+      safeOffsetY: 0,
+      playerWorldX: 0,
+      playerWorldY: 0,
+      playerTileX: 0,
+      playerTileY: 0,
+      cameraProjectedX: 0,
+      cameraProjectedY: 0,
+      camTx: 0,
+      camTy: 0,
+      worldScaleDevice: 1,
+      renderSettings: {},
+    } as any, {
+      renderAmbientDarknessOverlay: vi.fn(),
+      setRenderPerfDrawTag: vi.fn(),
+    } as any);
+
+    renderer.renderWorldCommands([{
+      pass: "WORLD",
+      key: {
+        slice: 0,
+        within: 0,
+        baseZ: 0,
+        kindOrder: KindOrder.ENTITY,
+        stableId: 11,
+      },
+      semanticFamily: "worldSprite",
+      finalForm: "quad",
+      payload: {
+        image: { width: 16, height: 16 } as any,
+        sx: 0,
+        sy: 0,
+        sw: 16,
+        sh: 16,
+        dx: 12,
+        dy: 18,
+        dw: 16,
+        dh: 16,
+        alpha: 0.75,
+      },
+    } as RenderCommand]);
+
+    expect(ctx.save).toHaveBeenCalledTimes(1);
+    expect(ctx.restore).toHaveBeenCalledTimes(1);
+    expect(ctx.drawImage).toHaveBeenCalledTimes(1);
+  });
+
+  it("applies triangle alpha without an extra outer save/restore", () => {
+    const ctx = makeCtx(320, 180);
+    const overlayCtx = makeCtx(320, 180);
+    const renderer = new Canvas2DRenderer({
+      world: {} as any,
+      ctx,
+      canvas: { width: 320, height: 180 } as any,
+      overlayCtx,
+      overlayCanvas: { width: 320, height: 180 } as any,
+      hasUiOverlay: true,
+      cssW: 320,
+      cssH: 180,
+      screenW: 320,
+      screenH: 180,
+      devW: 320,
+      devH: 180,
+      dpr: 1,
+      overlayDevW: 320,
+      overlayDevH: 180,
+      overlayDpr: 1,
+      visibleVerticalTiles: 10,
+      viewport: {
+        applyWorld: vi.fn(),
+      } as any,
+      zoom: 1,
+      worldWidth: 320,
+      worldHeight: 180,
+      scaledW: 320,
+      scaledH: 180,
+      safeOffsetX: 0,
+      safeOffsetY: 0,
+      playerWorldX: 0,
+      playerWorldY: 0,
+      playerTileX: 0,
+      playerTileY: 0,
+      cameraProjectedX: 0,
+      cameraProjectedY: 0,
+      camTx: 0,
+      camTy: 0,
+      worldScaleDevice: 1,
+      renderSettings: {},
+    } as any, {
+      renderAmbientDarknessOverlay: vi.fn(),
+      setRenderPerfDrawTag: vi.fn(),
+    } as any);
+
+    renderer.renderWorldCommands([{
+      pass: "WORLD",
+      key: {
+        slice: 0,
+        within: 0,
+        baseZ: 0,
+        kindOrder: KindOrder.STRUCTURE,
+        stableId: 12,
+      },
+      semanticFamily: "worldGeometry",
+      finalForm: "triangles",
+      payload: {
+        image: { width: 128, height: 64 } as any,
+        sourceWidth: 128,
+        sourceHeight: 64,
+        triangles: [{
+          srcPoints: [{ x: 0, y: 0 }, { x: 64, y: 32 }, { x: 0, y: 64 }],
+          dstPoints: [{ x: 10, y: 10 }, { x: 30, y: 10 }, { x: 20, y: 24 }],
+          alpha: 0.5,
+        }],
+      },
+    } as RenderCommand]);
+
+    expect(ctx.save).toHaveBeenCalledTimes(2);
+    expect(ctx.restore).toHaveBeenCalledTimes(2);
+    expect(ctx.clip).toHaveBeenCalledTimes(1);
+  });
+
+  it("draws cached ground chunks and skips covered ground commands in the world stream", () => {
+    const ctx = makeCtx(320, 180);
+    const overlayCtx = makeCtx(320, 180);
+    const groundChunkCanvas = { width: 128, height: 64 } as any;
+    const renderer = new Canvas2DRenderer({
+      world: {} as any,
+      ctx,
+      canvas: { width: 320, height: 180 } as any,
+      overlayCtx,
+      overlayCanvas: { width: 320, height: 180 } as any,
+      hasUiOverlay: true,
+      cssW: 320,
+      cssH: 180,
+      screenW: 320,
+      screenH: 180,
+      devW: 320,
+      devH: 180,
+      dpr: 1,
+      overlayDevW: 320,
+      overlayDevH: 180,
+      overlayDpr: 1,
+      visibleVerticalTiles: 10,
+      viewport: {
+        applyWorld: vi.fn(),
+      } as any,
+      zoom: 1,
+      worldWidth: 320,
+      worldHeight: 180,
+      scaledW: 320,
+      scaledH: 180,
+      safeOffsetX: 0,
+      safeOffsetY: 0,
+      playerWorldX: 0,
+      playerWorldY: 0,
+      playerTileX: 0,
+      playerTileY: 0,
+      cameraProjectedX: 0,
+      cameraProjectedY: 0,
+      camTx: 0,
+      camTy: 0,
+      worldScaleDevice: 1,
+      renderSettings: {},
+    } as any, {
+      w: {
+        floatTextX: [],
+        floatTextY: [],
+        floatTextText: [],
+        floatTextColor: [],
+        floatTextTtl: [],
+        floatTextVy: [],
+      },
+      renderAmbientDarknessOverlay: vi.fn(),
+      setRenderPerfDrawTag: vi.fn(),
+      countRenderCanvasGroundChunkDraw: vi.fn(),
+      countRenderCanvasGroundChunksVisible: vi.fn(),
+      viewRect: { minTx: -2, maxTx: 2, minTy: -2, maxTy: 2 },
+      groundChunkCache: {
+        getVisibleEntries: vi.fn(() => [{
+          canvas: groundChunkCanvas,
+          drawX: -64,
+          drawY: -32,
+          minTx: -1,
+          maxTx: 1,
+          minTy: -1,
+          maxTy: 1,
+        }]),
+        hasCoveredStableId: vi.fn((stableId: number) => stableId === 7),
+      },
+      rampRoadTiles: new Set<string>(),
+    } as any);
+
+    renderer.renderWorldCommands([{
+      pass: "GROUND",
+      key: {
+        slice: 0,
+        within: 0,
+        baseZ: 0,
+        kindOrder: KindOrder.FLOOR,
+        stableId: 7,
+      },
+      semanticFamily: "groundSurface",
+      finalForm: "projectedSurface",
+      payload: {
+        image: { width: 128, height: 64 } as any,
+        sourceWidth: 128,
+        sourceHeight: 64,
+        triangles: buildTrianglePairFromQuad(buildDiamondSourceQuad(128, 64), {
+          nw: { x: 0, y: 0 },
+          ne: { x: 32, y: 0 },
+          se: { x: 16, y: 16 },
+          sw: { x: -16, y: 16 },
+        }),
+      },
+    } as RenderCommand]);
+
+    expect(ctx.drawImage).toHaveBeenCalledTimes(1);
+    expect(ctx.drawImage).toHaveBeenCalledWith(groundChunkCanvas, -64, -32);
+    expect(ctx.transform).not.toHaveBeenCalled();
+  });
+
+  it("does not redraw cached ground chunks for tail-stage world commands", () => {
+    const ctx = makeCtx(320, 180);
+    const overlayCtx = makeCtx(320, 180);
+    const groundChunkCanvas = { width: 128, height: 64 } as any;
+    const renderer = new Canvas2DRenderer({
+      world: {} as any,
+      ctx,
+      canvas: { width: 320, height: 180 } as any,
+      overlayCtx,
+      overlayCanvas: { width: 320, height: 180 } as any,
+      hasUiOverlay: true,
+      cssW: 320,
+      cssH: 180,
+      screenW: 320,
+      screenH: 180,
+      devW: 320,
+      devH: 180,
+      dpr: 1,
+      overlayDevW: 320,
+      overlayDevH: 180,
+      overlayDpr: 1,
+      visibleVerticalTiles: 10,
+      viewport: {
+        applyWorld: vi.fn(),
+      } as any,
+      zoom: 1,
+      worldWidth: 320,
+      worldHeight: 180,
+      scaledW: 320,
+      scaledH: 180,
+      safeOffsetX: 0,
+      safeOffsetY: 0,
+      playerWorldX: 0,
+      playerWorldY: 0,
+      playerTileX: 0,
+      playerTileY: 0,
+      cameraProjectedX: 0,
+      cameraProjectedY: 0,
+      camTx: 0,
+      camTy: 0,
+      worldScaleDevice: 1,
+      renderSettings: {},
+    } as any, {
+      w: {
+        floatTextX: [],
+        floatTextY: [],
+        floatTextText: [],
+        floatTextColor: [],
+        floatTextTtl: [],
+        floatTextVy: [],
+      },
+      renderAmbientDarknessOverlay: vi.fn(),
+      setRenderPerfDrawTag: vi.fn(),
+      countRenderCanvasGroundChunkDraw: vi.fn(),
+      countRenderCanvasGroundChunksVisible: vi.fn(),
+      viewRect: { minTx: -2, maxTx: 2, minTy: -2, maxTy: 2 },
+      groundChunkCache: {
+        getVisibleEntries: vi.fn(() => [{
+          canvas: groundChunkCanvas,
+          drawX: -64,
+          drawY: -32,
+          minTx: -1,
+          maxTx: 1,
+          minTy: -1,
+          maxTy: 1,
+        }]),
+        hasCoveredStableId: vi.fn(() => false),
+      },
+      rampRoadTiles: new Set<string>(),
+    } as any);
+
+    renderer.renderWorldCommands([
+      {
+        pass: "GROUND",
+        key: {
+          slice: 0,
+          within: 0,
+          baseZ: 1,
+          kindOrder: KindOrder.FLOOR,
+          stableId: 1,
+        },
+        semanticFamily: "groundSurface",
+        finalForm: "projectedSurface",
+        payload: {
+          stage: "slice",
+          image: { width: 128, height: 64 } as any,
+          sourceWidth: 128,
+          sourceHeight: 64,
+          triangles: buildTrianglePairFromQuad(buildDiamondSourceQuad(128, 64), {
+            nw: { x: 0, y: 0 },
+            ne: { x: 32, y: 0 },
+            se: { x: 16, y: 16 },
+            sw: { x: -16, y: 16 },
+          }),
+        },
+      } as RenderCommand,
+      {
+        pass: "WORLD",
+        key: {
+          slice: 0,
+          within: 0,
+          baseZ: 0,
+          kindOrder: KindOrder.OVERLAY,
+          stableId: 2,
+        },
+        semanticFamily: "screenOverlay",
+        finalForm: "primitive",
+        payload: {
+          stage: "tail",
+        },
+      } as RenderCommand,
+    ]);
+
+    expect(ctx.drawImage).toHaveBeenCalledTimes(3);
+    expect(ctx.drawImage.mock.calls.filter((call) => call[0] === groundChunkCanvas)).toHaveLength(1);
+  });
 });

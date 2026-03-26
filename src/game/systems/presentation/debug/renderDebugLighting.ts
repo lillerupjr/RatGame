@@ -71,10 +71,12 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
           `gl draw/frame: ${perf.webglDrawCallsPerFrame.toFixed(1)} gl batches/frame: ${perf.webglBatchesPerFrame.toFixed(1)}`,
           `texBind/frame: ${perf.webglTextureBindsPerFrame.toFixed(1)} bufUpload/frame: ${perf.webglBufferUploadsPerFrame.toFixed(1)}`,
           `gl composites/frame: ${perf.webglCanvasCompositesPerFrame.toFixed(1)} projectedSurface/frame: ${perf.webglProjectedSurfaceDrawsPerFrame.toFixed(1)} triSubmit/frame: ${perf.webglTrianglesSubmittedPerFrame.toFixed(1)}`,
+          `groundChunkDraw/frame: ${perf.webglGroundChunkDrawsPerFrame.toFixed(1)} visibleGroundChunks/frame: ${perf.webglGroundChunksVisiblePerFrame.toFixed(1)} groundChunkTextureUpload/frame: ${perf.webglGroundChunkTextureUploadsPerFrame.toFixed(1)}`,
           `gl uniqueTextures/frame: ${perf.webglUniqueTexturesPerFrame.toFixed(1)}`,
         ]
       : [
           `drawImage/frame: ${perf.drawImageCallsPerFrame.toFixed(1)}`,
+          `groundChunkDraw/frame: ${perf.canvasGroundChunkDrawsPerFrame.toFixed(1)} visibleChunks/frame: ${perf.canvasGroundChunksVisiblePerFrame.toFixed(1)} rebuildChunks/frame: ${perf.canvasGroundChunkRebuildsPerFrame.toFixed(1)}`,
           `tag void:${tag.void.toFixed(1)} floors:${tag.floors.toFixed(1)} decals:${tag.decals.toFixed(1)} ent:${tag.entities.toFixed(1)}`,
           `tag struct:${tag.structures.toFixed(1)}`,
           `tag lighting:${tag.lighting.toFixed(1)} untagged:${tag.untagged.toFixed(1)}`,

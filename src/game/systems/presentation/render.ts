@@ -119,6 +119,9 @@ import { coinColorFromValue } from "../../economy/coins";
 import { getCurrencyFrame, getCurrencyFrameForDarknessPercent } from "../../content/loot/currencyVisual";
 import {
   beginRenderPerfFrame,
+  countRenderCanvasGroundChunkRebuild,
+  countRenderCanvasGroundChunkDraw,
+  countRenderCanvasGroundChunksVisible,
   countRenderTileLoopIteration,
   countRenderDrawableSort,
   countRenderSliceKeySort,
@@ -184,10 +187,12 @@ import {
   getRuntimeIsoTopCanvas,
 } from "./presentationImageTransforms";
 import {
+  canvasGroundChunkCacheStore,
   monolithicStructureGeometryCacheStore,
   staticRelightBakeStore,
   structureShadowV6CacheStore,
 } from "./presentationSubsystemStores";
+import { syncCanvasGroundChunkCacheForFrame } from "./canvasGroundChunkCache";
 import type { StructureV6ShadowCacheFrameStats } from "./structureShadows/structureShadowV6Cache";
 import { buildDebugFrameContext } from "./debug/debugFrameContext";
 import { executeDebugPass } from "./debug/renderDebugPass";
@@ -1197,6 +1202,70 @@ export async function renderSystem(
       lights: dynamicLights,
     };
   }
+  const groundChunkCacheContextKey = [
+    staticRelight.contextKey,
+    `renderAll:${RENDER_ALL_HEIGHTS ? 1 : 0}`,
+    `activeH:${activeH}`,
+  ].join("||");
+  const groundChunkCacheSync = syncCanvasGroundChunkCacheForFrame({
+    cacheStore: canvasGroundChunkCacheStore,
+    contextKey: groundChunkCacheContextKey,
+    compiledMap,
+    renderAllHeights: RENDER_ALL_HEIGHTS,
+    activeH,
+    shouldCullBuildingAt,
+    w,
+    ANCHOR_Y,
+    TILE_ID_OCEAN,
+    getAnimatedTileFrame,
+    OCEAN_ANIM_TIME_SCALE,
+    getTileSpriteById,
+    getRuntimeIsoTopCanvas,
+    OCEAN_TOP_SCALE,
+    STAIR_TOP_SCALE,
+    FLOOR_TOP_SCALE,
+    OCEAN_BASE_FRAME_PX,
+    getRuntimeIsoDecalCanvas,
+    getDiamondFitCanvas,
+    getRuntimeDecalSprite,
+    T,
+    worldToScreen,
+    camX,
+    camY,
+    ELEV_PX,
+    STAIR_TOP_DY,
+    SIDEWALK_ISO_HEIGHT,
+    rampRoadTiles,
+    staticRelightFrame: staticRelight.frame,
+    staticRelightBakeStore,
+    floorRelightPieceKey,
+    decalRelightPieceKey,
+    roadMarkingDecalScale,
+    shouldPixelSnapRoadMarking,
+    snapPx,
+    getRampQuadPoints: (tx: number, ty: number, renderAnchorY: number) => {
+      const anchorYOffset = SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5);
+      const sample = (wx: number, wy: number): ScreenPt => {
+        const p = worldToScreen(wx, wy);
+        const hz = tileHAtWorld(wx, wy);
+        return {
+          x: snapPx(p.x + camX),
+          y: snapPx(p.y + camY - hz * ELEV_PX - anchorYOffset),
+        };
+      };
+      const x0 = tx * T;
+      const y0 = ty * T;
+      return {
+        nw: sample(x0, y0),
+        ne: sample(x0 + T, y0),
+        se: sample(x0 + T, y0 + T),
+        sw: sample(x0, y0 + T),
+      };
+    },
+  });
+  if (groundChunkCacheSync.rebuiltChunkCount > 0) {
+    countRenderCanvasGroundChunkRebuild(groundChunkCacheSync.rebuiltChunkCount);
+  }
   const structureTriangleAdmissionMode = renderSettings.structureTriangleAdmissionMode ?? "hybrid";
   const structureTriangleCutoutEnabled = renderSettings.structureTriangleCutoutEnabled === true;
   const structureTriangleCutoutHalfWidth = Math.max(
@@ -1821,6 +1890,10 @@ export async function renderSystem(
     decalRelightPieceKey,
     getUserSettings,
     setRenderPerfDrawTag,
+    countRenderCanvasGroundChunkDraw,
+    countRenderCanvasGroundChunksVisible,
+    viewRect,
+    groundChunkCache: canvasGroundChunkCacheStore,
     renderAmbientDarknessOverlay,
     executeDebugPass,
     srcUvNW,
@@ -1850,7 +1923,11 @@ export async function renderSystem(
       canvasRenderer.clearMainCanvas();
       webglRenderer.beginFrame();
       webglRenderer.useWorldSpace();
-      webglRenderer.renderCommands(webglWorldCommands);
+      webglRenderer.renderCommands(webglWorldCommands, {
+        groundChunkCache: canvasGroundChunkCacheStore,
+        viewRect,
+        rampRoadTiles,
+      });
       canvasRenderer.renderScreenCommands(executionPlan.screen);
 
       setRenderBackendStats({

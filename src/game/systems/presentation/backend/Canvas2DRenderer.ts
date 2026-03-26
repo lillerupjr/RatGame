@@ -7,14 +7,54 @@ import type { RenderExecutionPlan } from "./renderExecutionPlan";
 import type { RenderFrameContext } from "../contracts/renderFrameContext";
 import type { RenderCommand } from "../contracts/renderCommands";
 import { renderZoneObjectives } from "../../../render/renderZoneObjectives";
+import { resolveRenderZBand } from "../worldRenderOrdering";
 
 type Canvas2DRendererDeps = any;
+const EMPTY_RAMP_ROAD_TILES = new Set<string>();
 
 export class Canvas2DRenderer {
   constructor(
     private readonly frameContext: RenderFrameContext,
     private readonly deps: Canvas2DRendererDeps,
   ) {}
+
+  private withAbsoluteGlobalAlpha(
+    ctx: CanvasRenderingContext2D,
+    alpha: number,
+    draw: () => void,
+  ): void {
+    const resolvedAlpha = Number.isFinite(alpha) ? alpha : 1;
+    const previousAlpha = ctx.globalAlpha;
+    if (Math.abs(previousAlpha - resolvedAlpha) <= 1e-9) {
+      draw();
+      return;
+    }
+    ctx.globalAlpha = resolvedAlpha;
+    try {
+      draw();
+    } finally {
+      ctx.globalAlpha = previousAlpha;
+    }
+  }
+
+  private withMultipliedGlobalAlpha(
+    ctx: CanvasRenderingContext2D,
+    alphaMultiplier: number,
+    draw: () => void,
+  ): void {
+    const resolvedMultiplier = Number.isFinite(alphaMultiplier) ? alphaMultiplier : 1;
+    if (Math.abs(resolvedMultiplier - 1) <= 1e-9) {
+      draw();
+      return;
+    }
+    const previousAlpha = ctx.globalAlpha;
+    ctx.globalAlpha = previousAlpha * resolvedMultiplier;
+    try {
+      draw();
+    } finally {
+      ctx.globalAlpha = previousAlpha;
+    }
+  }
 
   render(plan: RenderExecutionPlan): void {
     this.clearMainCanvas();
@@ -52,7 +92,17 @@ export class Canvas2DRenderer {
     const { ctx, viewport } = this.frameContext;
     ctx.save();
     viewport.applyWorld(ctx);
+    let lastZBand: number | null = null;
     for (let i = 0; i < commands.length; i++) {
+      const stage = commands[i].payload?.stage ?? "slice";
+      if (stage !== "tail") {
+        const zBand = resolveRenderZBand(commands[i].key, this.deps.rampRoadTiles ?? EMPTY_RAMP_ROAD_TILES);
+        if (zBand !== lastZBand) {
+          this.drawVisibleGroundChunksForBand(zBand);
+          lastZBand = zBand;
+        }
+      }
+      if (this.shouldSkipGroundCommand(commands[i])) continue;
       this.executeCommand(commands[i]);
     }
     ctx.restore();
@@ -81,6 +131,27 @@ export class Canvas2DRenderer {
       width: this.frameContext.devW,
       height: this.frameContext.devH,
     };
+  }
+
+  private drawVisibleGroundChunksForBand(zBand: number): void {
+    const cache = this.deps.groundChunkCache;
+    const viewRect = this.deps.viewRect;
+    if (!cache || !viewRect) return;
+    const entries = cache.getVisibleEntries(zBand, viewRect);
+    if (entries.length === 0) return;
+    const ctx = this.frameContext.ctx;
+    this.deps.countRenderCanvasGroundChunksVisible?.(entries.length);
+    this.deps.setRenderPerfDrawTag?.("floors");
+    for (let i = 0; i < entries.length; i++) {
+      ctx.drawImage(entries[i].canvas, entries[i].drawX, entries[i].drawY);
+    }
+    this.deps.setRenderPerfDrawTag?.(null);
+    this.deps.countRenderCanvasGroundChunkDraw?.(entries.length);
+  }
+
+  private shouldSkipGroundCommand(command: RenderCommand): boolean {
+    if (command.semanticFamily !== "groundSurface" && command.semanticFamily !== "groundDecal") return false;
+    return this.deps.groundChunkCache?.hasCoveredStableId?.(command.key?.stableId) === true;
   }
 
   private executeCommand(command: RenderCommand): void {
@@ -476,18 +547,20 @@ export class Canvas2DRenderer {
     const rotationRad = Number.isFinite(Number(data.rotationRad)) ? Number(data.rotationRad) : 0;
     const flipX = !!data.flipX;
     const ctx = this.frameContext.ctx;
-    ctx.save();
-    ctx.globalAlpha = alpha;
     ctx.imageSmoothingEnabled = false;
     if (rotationRad || flipX) {
+      ctx.save();
+      ctx.globalAlpha = alpha;
       ctx.translate(snapPx(dx + dw * 0.5), snapPx(dy + dh * 0.5));
       if (rotationRad) ctx.rotate(rotationRad);
       ctx.scale(flipX ? -1 : 1, 1);
       ctx.drawImage(image, sx, sy, sw, sh, snapPx(-dw * 0.5), snapPx(-dh * 0.5), dw, dh);
-    } else {
-      ctx.drawImage(image, sx, sy, sw, sh, snapPx(dx), snapPx(dy), dw, dh);
+      ctx.restore();
+      return;
     }
-    ctx.restore();
+    this.withAbsoluteGlobalAlpha(ctx, alpha, () => {
+      ctx.drawImage(image, sx, sy, sw, sh, snapPx(dx), snapPx(dy), dw, dh);
+    });
   }
 
   private drawPickup(data: any): void {
@@ -511,10 +584,9 @@ export class Canvas2DRenderer {
             this.deps.dynamicSpriteRelightFrame.targetDarknessBucket,
           );
           if (litSprite.ready) {
-            ctx.save();
-            ctx.globalAlpha = dynamicRelightAlpha;
-            ctx.drawImage(litSprite.img, p.x - size / 2, p.y - size / 2, size, size);
-            ctx.restore();
+            this.withAbsoluteGlobalAlpha(ctx, dynamicRelightAlpha, () => {
+              ctx.drawImage(litSprite.img, p.x - size / 2, p.y - size / 2, size, size);
+            });
           }
         }
         return;
@@ -600,10 +672,9 @@ export class Canvas2DRenderer {
           darknessPercent: this.deps.dynamicSpriteRelightFrame.targetDarknessBucket,
         });
         if (litFrame) {
-          ctx.save();
-          ctx.globalAlpha = dynamicRelightAlpha;
-          ctx.drawImage(litFrame.img, litFrame.sx, litFrame.sy, litFrame.sw, litFrame.sh, Math.round(draw.dx), Math.round(draw.dy), draw.dw, draw.dh);
-          ctx.restore();
+          this.withAbsoluteGlobalAlpha(ctx, dynamicRelightAlpha, () => {
+            ctx.drawImage(litFrame.img, litFrame.sx, litFrame.sy, litFrame.sw, litFrame.sh, Math.round(draw.dx), Math.round(draw.dy), draw.dw, draw.dh);
+          });
         }
       }
       this.drawEntityAnchorDebug(feet.screenX, feet.screenY, draw.dx, draw.dy, draw.dw, draw.dh);
@@ -650,10 +721,9 @@ export class Canvas2DRenderer {
         darknessPercent: this.deps.dynamicSpriteRelightFrame.targetDarknessBucket,
       });
       if (litFrame) {
-        ctx.save();
-        ctx.globalAlpha = dynamicRelightAlpha;
-        ctx.drawImage(litFrame.img, litFrame.sx, litFrame.sy, litFrame.sw, litFrame.sh, Math.round(draw.dx), Math.round(draw.dy), draw.dw, draw.dh);
-        ctx.restore();
+        this.withAbsoluteGlobalAlpha(ctx, dynamicRelightAlpha, () => {
+          ctx.drawImage(litFrame.img, litFrame.sx, litFrame.sy, litFrame.sw, litFrame.sh, Math.round(draw.dx), Math.round(draw.dy), draw.dw, draw.dh);
+        });
       }
     }
     this.drawEntityAnchorDebug(feet.screenX, feet.screenY, draw.dx, draw.dy, draw.dw, draw.dh);
@@ -688,16 +758,18 @@ export class Canvas2DRenderer {
       if (litFrames.length > 0) {
         const litFrame = litFrames[mob.anim.frameIndex % litFrames.length];
         if (litFrame) {
-          ctx.save();
-          ctx.globalAlpha = dynamicRelightAlpha;
           if (mob.render.flipX) {
+            ctx.save();
+            ctx.globalAlpha = dynamicRelightAlpha;
             ctx.translate(snapPx(draw.dx + draw.dw), snapPx(draw.dy));
             ctx.scale(-1, 1);
             ctx.drawImage(litFrame, 0, 0, draw.dw, draw.dh);
+            ctx.restore();
           } else {
-            ctx.drawImage(litFrame, snapPx(draw.dx), snapPx(draw.dy), draw.dw, draw.dh);
+            this.withAbsoluteGlobalAlpha(ctx, dynamicRelightAlpha, () => {
+              ctx.drawImage(litFrame, snapPx(draw.dx), snapPx(draw.dy), draw.dw, draw.dh);
+            });
           }
-          ctx.restore();
         }
       }
     }
@@ -780,21 +852,20 @@ export class Canvas2DRenderer {
     const lift = Math.max(0, Number(data.zLift) || 0);
     const t = Math.max(0, Math.min(1, 1 - lift / 70));
     const radius = this.deps.w.prR[i] ?? 4;
-    ctx.save();
-    ctx.globalAlpha = 0.18 * t;
-    ctx.fillStyle = "#000";
-    ctx.beginPath();
-    ctx.ellipse(
-      shadowScreen.x + projectileShadowOffset.x,
-      shadowScreen.y + projectileShadowOffset.y,
-      radius * this.deps.ISO_X * (0.95 + 0.15 * t),
-      radius * this.deps.ISO_Y * (0.85 + 0.1 * t),
-      0,
-      0,
-      Math.PI * 2,
-    );
-    ctx.fill();
-    ctx.restore();
+    this.withAbsoluteGlobalAlpha(ctx, 0.18 * t, () => {
+      ctx.fillStyle = "#000";
+      ctx.beginPath();
+      ctx.ellipse(
+        shadowScreen.x + projectileShadowOffset.x,
+        shadowScreen.y + projectileShadowOffset.y,
+        radius * this.deps.ISO_X * (0.95 + 0.15 * t),
+        radius * this.deps.ISO_Y * (0.85 + 0.1 * t),
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+    });
 
     const delta = this.deps.worldDeltaToScreen(this.deps.w.prDirX[i] ?? 1, this.deps.w.prDirY[i] ?? 0);
     const angle = Math.atan2(delta.dy, delta.dx);
@@ -907,10 +978,9 @@ export class Canvas2DRenderer {
           darknessPercent: this.deps.dynamicSpriteRelightFrame.targetDarknessBucket,
         });
         if (litFrame) {
-          ctx.save();
-          ctx.globalAlpha = dynamicRelightAlpha;
-          ctx.drawImage(litFrame.img, litFrame.sx, litFrame.sy, litFrame.sw, litFrame.sh, Math.round(draw.dx), Math.round(draw.dy), draw.dw, draw.dh);
-          ctx.restore();
+          this.withAbsoluteGlobalAlpha(ctx, dynamicRelightAlpha, () => {
+            ctx.drawImage(litFrame.img, litFrame.sx, litFrame.sy, litFrame.sw, litFrame.sh, Math.round(draw.dx), Math.round(draw.dy), draw.dw, draw.dh);
+          });
         }
       }
       this.drawEntityAnchorDebug(feet.screenX, feet.screenY, draw.dx, draw.dy, draw.dw, draw.dh);
@@ -927,7 +997,14 @@ export class Canvas2DRenderer {
     const ctx = this.frameContext.ctx;
     const image = draw.img;
     if (!image || image.width <= 0 || image.height <= 0) return;
-    const scale = draw.scale ?? 1;
+    const scale = Number.isFinite(Number(draw.scale)) ? Number(draw.scale) : 1;
+    const drawWidth = Number(draw.dw ?? 0) * scale;
+    const drawHeight = Number(draw.dh ?? 0) * scale;
+    if (!(drawWidth > 0 && drawHeight > 0)) return;
+    if (!draw.flipX) {
+      ctx.drawImage(image, snapPx(Number(draw.dx ?? 0)), snapPx(Number(draw.dy ?? 0)), drawWidth, drawHeight);
+      return;
+    }
     ctx.save();
     ctx.translate(snapPx(draw.dx), snapPx(draw.dy));
     ctx.scale(scale, scale);
@@ -949,10 +1026,9 @@ export class Canvas2DRenderer {
       const [d0, d1, d2] = triangle.dstPoints;
       const alpha = Number.isFinite(Number(triangle.alpha)) ? Number(triangle.alpha) : 1;
       if (alpha < 1) {
-        ctx.save();
-        ctx.globalAlpha = ctx.globalAlpha * alpha;
-        drawTexturedTriangle(ctx, image, Number(data.sourceWidth), Number(data.sourceHeight), s0, s1, s2, d0, d1, d2);
-        ctx.restore();
+        this.withMultipliedGlobalAlpha(ctx, alpha, () => {
+          drawTexturedTriangle(ctx, image, Number(data.sourceWidth), Number(data.sourceHeight), s0, s1, s2, d0, d1, d2);
+        });
       } else {
         drawTexturedTriangle(ctx, image, Number(data.sourceWidth), Number(data.sourceHeight), s0, s1, s2, d0, d1, d2);
       }

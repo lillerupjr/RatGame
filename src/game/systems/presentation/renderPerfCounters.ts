@@ -44,6 +44,12 @@ type FrameCounters = {
   webglProjectedSurfaceDraws: number;
   webglTrianglesSubmitted: number;
   webglUniqueTextures: number;
+  webglGroundChunkDraws: number;
+  webglGroundChunksVisible: number;
+  webglGroundChunkTextureUploads: number;
+  canvasGroundChunkDraws: number;
+  canvasGroundChunksVisible: number;
+  canvasGroundChunkRebuilds: number;
 };
 
 type Snapshot = {
@@ -92,6 +98,12 @@ type Snapshot = {
   webglProjectedSurfaceDrawsPerFrame: number;
   webglTrianglesSubmittedPerFrame: number;
   webglUniqueTexturesPerFrame: number;
+  webglGroundChunkDrawsPerFrame: number;
+  webglGroundChunksVisiblePerFrame: number;
+  webglGroundChunkTextureUploadsPerFrame: number;
+  canvasGroundChunkDrawsPerFrame: number;
+  canvasGroundChunksVisiblePerFrame: number;
+  canvasGroundChunkRebuildsPerFrame: number;
 };
 
 export type DrawTag =
@@ -177,6 +189,12 @@ const ZERO_FRAME: FrameCounters = {
   webglProjectedSurfaceDraws: 0,
   webglTrianglesSubmitted: 0,
   webglUniqueTextures: 0,
+  webglGroundChunkDraws: 0,
+  webglGroundChunksVisible: 0,
+  webglGroundChunkTextureUploads: 0,
+  canvasGroundChunkDraws: 0,
+  canvasGroundChunksVisible: 0,
+  canvasGroundChunkRebuilds: 0,
 };
 
 function makeZeroFrame(): FrameCounters {
@@ -250,6 +268,12 @@ let snapshot: Snapshot = {
   webglProjectedSurfaceDrawsPerFrame: 0,
   webglTrianglesSubmittedPerFrame: 0,
   webglUniqueTexturesPerFrame: 0,
+  webglGroundChunkDrawsPerFrame: 0,
+  webglGroundChunksVisiblePerFrame: 0,
+  webglGroundChunkTextureUploadsPerFrame: 0,
+  canvasGroundChunkDrawsPerFrame: 0,
+  canvasGroundChunksVisiblePerFrame: 0,
+  canvasGroundChunkRebuildsPerFrame: 0,
 };
 
 function mergeCountMaps(target: Record<string, number>, source: Record<string, number>): void {
@@ -367,6 +391,12 @@ function foldCurrentFrame(nowSec: number): void {
     webglProjectedSurfaceDrawsPerFrame: frame.webglProjectedSurfaceDraws,
     webglTrianglesSubmittedPerFrame: frame.webglTrianglesSubmitted,
     webglUniqueTexturesPerFrame: frame.webglUniqueTextures,
+    webglGroundChunkDrawsPerFrame: frame.webglGroundChunkDraws,
+    webglGroundChunksVisiblePerFrame: frame.webglGroundChunksVisible,
+    webglGroundChunkTextureUploadsPerFrame: frame.webglGroundChunkTextureUploads,
+    canvasGroundChunkDrawsPerFrame: frame.canvasGroundChunkDraws,
+    canvasGroundChunksVisiblePerFrame: frame.canvasGroundChunksVisible,
+    canvasGroundChunkRebuildsPerFrame: frame.canvasGroundChunkRebuilds,
   };
 
   accum.drawImageCalls += frame.drawImageCalls;
@@ -415,6 +445,12 @@ function foldCurrentFrame(nowSec: number): void {
   accum.webglProjectedSurfaceDraws += frame.webglProjectedSurfaceDraws;
   accum.webglTrianglesSubmitted += frame.webglTrianglesSubmitted;
   accum.webglUniqueTextures += frame.webglUniqueTextures;
+  accum.webglGroundChunkDraws += frame.webglGroundChunkDraws;
+  accum.webglGroundChunksVisible += frame.webglGroundChunksVisible;
+  accum.webglGroundChunkTextureUploads += frame.webglGroundChunkTextureUploads;
+  accum.canvasGroundChunkDraws += frame.canvasGroundChunkDraws;
+  accum.canvasGroundChunksVisible += frame.canvasGroundChunksVisible;
+  accum.canvasGroundChunkRebuilds += frame.canvasGroundChunkRebuilds;
   mergeCountMaps(accum.backendWebglByAxes, frame.backendWebglByAxes);
   mergeCountMaps(accum.backendCanvasFallbackByAxes, frame.backendCanvasFallbackByAxes);
   mergeCountMaps(accum.backendUnsupportedByAxes, frame.backendUnsupportedByAxes);
@@ -494,6 +530,12 @@ function foldCurrentFrame(nowSec: number): void {
       webglProjectedSurfaceDrawsPerFrame: accum.webglProjectedSurfaceDraws / denom,
       webglTrianglesSubmittedPerFrame: accum.webglTrianglesSubmitted / denom,
       webglUniqueTexturesPerFrame: accum.webglUniqueTextures / denom,
+      webglGroundChunkDrawsPerFrame: accum.webglGroundChunkDraws / denom,
+      webglGroundChunksVisiblePerFrame: accum.webglGroundChunksVisible / denom,
+      webglGroundChunkTextureUploadsPerFrame: accum.webglGroundChunkTextureUploads / denom,
+      canvasGroundChunkDrawsPerFrame: accum.canvasGroundChunkDraws / denom,
+      canvasGroundChunksVisiblePerFrame: accum.canvasGroundChunksVisible / denom,
+      canvasGroundChunkRebuildsPerFrame: accum.canvasGroundChunkRebuilds / denom,
     };
     accum = makeZeroFrame();
     framesAccum = 0;
@@ -614,6 +656,36 @@ export function countRenderWebGLTrianglesSubmitted(n: number = 1): void {
   frame.webglTrianglesSubmitted += n;
 }
 
+export function countRenderWebGLGroundChunkDraw(n: number = 1): void {
+  if (!enabled) return;
+  frame.webglGroundChunkDraws += n;
+}
+
+export function countRenderWebGLGroundChunksVisible(n: number = 1): void {
+  if (!enabled) return;
+  frame.webglGroundChunksVisible += n;
+}
+
+export function countRenderWebGLGroundChunkTextureUpload(n: number = 1): void {
+  if (!enabled) return;
+  frame.webglGroundChunkTextureUploads += n;
+}
+
+export function countRenderCanvasGroundChunkDraw(n: number = 1): void {
+  if (!enabled) return;
+  frame.canvasGroundChunkDraws += n;
+}
+
+export function countRenderCanvasGroundChunksVisible(n: number = 1): void {
+  if (!enabled) return;
+  frame.canvasGroundChunksVisible += n;
+}
+
+export function countRenderCanvasGroundChunkRebuild(n: number = 1): void {
+  if (!enabled) return;
+  frame.canvasGroundChunkRebuilds += n;
+}
+
 export function noteRenderWebGLTextureUsage(source: object | null | undefined): void {
   if (!enabled || !source || (typeof source !== "object" && typeof source !== "function")) return;
   if (webglUniqueTextureSet.has(source)) return;
@@ -706,6 +778,12 @@ export function getRenderPerfSnapshot(): Snapshot {
       webglProjectedSurfaceDrawsPerFrame: 0,
       webglTrianglesSubmittedPerFrame: 0,
       webglUniqueTexturesPerFrame: 0,
+      webglGroundChunkDrawsPerFrame: 0,
+      webglGroundChunksVisiblePerFrame: 0,
+      webglGroundChunkTextureUploadsPerFrame: 0,
+      canvasGroundChunkDrawsPerFrame: 0,
+      canvasGroundChunksVisiblePerFrame: 0,
+      canvasGroundChunkRebuildsPerFrame: 0,
     };
   }
   return snapshot;
