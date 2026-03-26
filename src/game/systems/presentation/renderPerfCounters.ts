@@ -30,12 +30,12 @@ type FrameCounters = {
   backendDefault: "canvas2d" | "webgl";
   backendWebglReadyForDefault: boolean;
   backendFallbackReason: string | null;
-  backendUnsupportedVariants: string[];
-  backendWebglByFamily: Record<string, number>;
-  backendCanvasFallbackByFamily: Record<string, number>;
-  backendUnsupportedByFamily: Record<string, number>;
-  backendUnsupportedByKind: Record<string, number>;
-  backendPartiallyHandledFamilies: string[];
+  backendUnsupportedCommandKeys: string[];
+  backendWebglByAxes: Record<string, number>;
+  backendCanvasFallbackByAxes: Record<string, number>;
+  backendUnsupportedByAxes: Record<string, number>;
+  backendUnsupportedBySemanticFamily: Record<string, number>;
+  backendPartiallyHandledAxes: string[];
 };
 
 type Snapshot = {
@@ -70,12 +70,12 @@ type Snapshot = {
   backendDefault: "canvas2d" | "webgl";
   backendWebglReadyForDefault: boolean;
   backendFallbackReason: string | null;
-  backendUnsupportedVariants: string[];
-  backendWebglByFamilyPerFrame: Record<string, number>;
-  backendCanvasFallbackByFamilyPerFrame: Record<string, number>;
-  backendUnsupportedByFamilyPerFrame: Record<string, number>;
-  backendUnsupportedByKindPerFrame: Record<string, number>;
-  backendPartiallyHandledFamilies: string[];
+  backendUnsupportedCommandKeys: string[];
+  backendWebglByAxesPerFrame: Record<string, number>;
+  backendCanvasFallbackByAxesPerFrame: Record<string, number>;
+  backendUnsupportedByAxesPerFrame: Record<string, number>;
+  backendUnsupportedBySemanticFamilyPerFrame: Record<string, number>;
+  backendPartiallyHandledAxes: string[];
 };
 
 export type DrawTag =
@@ -147,12 +147,12 @@ const ZERO_FRAME: FrameCounters = {
   backendDefault: "canvas2d",
   backendWebglReadyForDefault: false,
   backendFallbackReason: null,
-  backendUnsupportedVariants: [],
-  backendWebglByFamily: {},
-  backendCanvasFallbackByFamily: {},
-  backendUnsupportedByFamily: {},
-  backendUnsupportedByKind: {},
-  backendPartiallyHandledFamilies: [],
+  backendUnsupportedCommandKeys: [],
+  backendWebglByAxes: {},
+  backendCanvasFallbackByAxes: {},
+  backendUnsupportedByAxes: {},
+  backendUnsupportedBySemanticFamily: {},
+  backendPartiallyHandledAxes: [],
 };
 
 function makeZeroFrame(): FrameCounters {
@@ -161,12 +161,12 @@ function makeZeroFrame(): FrameCounters {
     drawImageByTag: makeZeroByTag(),
     saveByTag: makeZeroByTag(),
     restoreByTag: makeZeroByTag(),
-    backendUnsupportedVariants: [],
-    backendWebglByFamily: {},
-    backendCanvasFallbackByFamily: {},
-    backendUnsupportedByFamily: {},
-    backendUnsupportedByKind: {},
-    backendPartiallyHandledFamilies: [],
+    backendUnsupportedCommandKeys: [],
+    backendWebglByAxes: {},
+    backendCanvasFallbackByAxes: {},
+    backendUnsupportedByAxes: {},
+    backendUnsupportedBySemanticFamily: {},
+    backendPartiallyHandledAxes: [],
   };
 }
 
@@ -211,12 +211,12 @@ let snapshot: Snapshot = {
   backendDefault: "canvas2d",
   backendWebglReadyForDefault: false,
   backendFallbackReason: null,
-  backendUnsupportedVariants: [],
-  backendWebglByFamilyPerFrame: {},
-  backendCanvasFallbackByFamilyPerFrame: {},
-  backendUnsupportedByFamilyPerFrame: {},
-  backendUnsupportedByKindPerFrame: {},
-  backendPartiallyHandledFamilies: [],
+  backendUnsupportedCommandKeys: [],
+  backendWebglByAxesPerFrame: {},
+  backendCanvasFallbackByAxesPerFrame: {},
+  backendUnsupportedByAxesPerFrame: {},
+  backendUnsupportedBySemanticFamilyPerFrame: {},
+  backendPartiallyHandledAxes: [],
 };
 
 function mergeCountMaps(target: Record<string, number>, source: Record<string, number>): void {
@@ -345,20 +345,21 @@ function foldCurrentFrame(nowSec: number): void {
   accum.backendDefault = frame.backendDefault;
   accum.backendWebglReadyForDefault = frame.backendWebglReadyForDefault;
   accum.backendFallbackReason = frame.backendFallbackReason;
-  mergeCountMaps(accum.backendWebglByFamily, frame.backendWebglByFamily);
-  mergeCountMaps(accum.backendCanvasFallbackByFamily, frame.backendCanvasFallbackByFamily);
-  mergeCountMaps(accum.backendUnsupportedByFamily, frame.backendUnsupportedByFamily);
-  if (frame.backendUnsupportedVariants.length > 0) {
-    for (let i = 0; i < frame.backendUnsupportedVariants.length; i++) {
-      if (!accum.backendUnsupportedVariants.includes(frame.backendUnsupportedVariants[i])) {
-        accum.backendUnsupportedVariants.push(frame.backendUnsupportedVariants[i]);
+  mergeCountMaps(accum.backendWebglByAxes, frame.backendWebglByAxes);
+  mergeCountMaps(accum.backendCanvasFallbackByAxes, frame.backendCanvasFallbackByAxes);
+  mergeCountMaps(accum.backendUnsupportedByAxes, frame.backendUnsupportedByAxes);
+  mergeCountMaps(accum.backendUnsupportedBySemanticFamily, frame.backendUnsupportedBySemanticFamily);
+  if (frame.backendUnsupportedCommandKeys.length > 0) {
+    for (let i = 0; i < frame.backendUnsupportedCommandKeys.length; i++) {
+      if (!accum.backendUnsupportedCommandKeys.includes(frame.backendUnsupportedCommandKeys[i])) {
+        accum.backendUnsupportedCommandKeys.push(frame.backendUnsupportedCommandKeys[i]);
       }
     }
   }
-  if (frame.backendPartiallyHandledFamilies.length > 0) {
-    for (let i = 0; i < frame.backendPartiallyHandledFamilies.length; i++) {
-      if (!accum.backendPartiallyHandledFamilies.includes(frame.backendPartiallyHandledFamilies[i])) {
-        accum.backendPartiallyHandledFamilies.push(frame.backendPartiallyHandledFamilies[i]);
+  if (frame.backendPartiallyHandledAxes.length > 0) {
+    for (let i = 0; i < frame.backendPartiallyHandledAxes.length; i++) {
+      if (!accum.backendPartiallyHandledAxes.includes(frame.backendPartiallyHandledAxes[i])) {
+        accum.backendPartiallyHandledAxes.push(frame.backendPartiallyHandledAxes[i]);
       }
     }
   }
@@ -409,12 +410,12 @@ function foldCurrentFrame(nowSec: number): void {
       backendDefault: accum.backendDefault,
       backendWebglReadyForDefault: accum.backendWebglReadyForDefault,
       backendFallbackReason: accum.backendFallbackReason,
-      backendUnsupportedVariants: [...accum.backendUnsupportedVariants],
-      backendWebglByFamilyPerFrame: divideCountMap(accum.backendWebglByFamily, denom),
-      backendCanvasFallbackByFamilyPerFrame: divideCountMap(accum.backendCanvasFallbackByFamily, denom),
-      backendUnsupportedByFamilyPerFrame: divideCountMap(accum.backendUnsupportedByFamily, denom),
-      backendUnsupportedByKindPerFrame: divideCountMap(accum.backendUnsupportedByKind, denom),
-      backendPartiallyHandledFamilies: [...accum.backendPartiallyHandledFamilies],
+      backendUnsupportedCommandKeys: [...accum.backendUnsupportedCommandKeys],
+      backendWebglByAxesPerFrame: divideCountMap(accum.backendWebglByAxes, denom),
+      backendCanvasFallbackByAxesPerFrame: divideCountMap(accum.backendCanvasFallbackByAxes, denom),
+      backendUnsupportedByAxesPerFrame: divideCountMap(accum.backendUnsupportedByAxes, denom),
+      backendUnsupportedBySemanticFamilyPerFrame: divideCountMap(accum.backendUnsupportedBySemanticFamily, denom),
+      backendPartiallyHandledAxes: [...accum.backendPartiallyHandledAxes],
     };
     accum = makeZeroFrame();
     framesAccum = 0;
@@ -511,12 +512,12 @@ export function setRenderBackendStats(input: {
   unsupportedCommandCount: number;
   webglGroundCommandCount: number;
   unsupportedGroundCommandCount: number;
-  unsupportedVariants: readonly string[];
-  webglByFamily: Readonly<Record<string, number>>;
-  canvasFallbackByFamily: Readonly<Record<string, number>>;
-  unsupportedByFamily: Readonly<Record<string, number>>;
-  unsupportedByKind: Readonly<Record<string, number>>;
-  partiallyHandledFamilies: readonly string[];
+  unsupportedCommandKeys: readonly string[];
+  webglByAxes: Readonly<Record<string, number>>;
+  canvasFallbackByAxes: Readonly<Record<string, number>>;
+  unsupportedByAxes: Readonly<Record<string, number>>;
+  unsupportedBySemanticFamily: Readonly<Record<string, number>>;
+  partiallyHandledAxes: readonly string[];
 }): void {
   if (!enabled) return;
   frame.backendRequested = input.requestedBackend;
@@ -529,12 +530,12 @@ export function setRenderBackendStats(input: {
   frame.backendUnsupportedCommands = Math.max(0, input.unsupportedCommandCount | 0);
   frame.backendWebglGroundCommands = Math.max(0, input.webglGroundCommandCount | 0);
   frame.backendUnsupportedGroundCommands = Math.max(0, input.unsupportedGroundCommandCount | 0);
-  frame.backendUnsupportedVariants = [...input.unsupportedVariants];
-  frame.backendWebglByFamily = { ...input.webglByFamily };
-  frame.backendCanvasFallbackByFamily = { ...input.canvasFallbackByFamily };
-  frame.backendUnsupportedByFamily = { ...input.unsupportedByFamily };
-  frame.backendUnsupportedByKind = { ...input.unsupportedByKind };
-  frame.backendPartiallyHandledFamilies = [...input.partiallyHandledFamilies];
+  frame.backendUnsupportedCommandKeys = [...input.unsupportedCommandKeys];
+  frame.backendWebglByAxes = { ...input.webglByAxes };
+  frame.backendCanvasFallbackByAxes = { ...input.canvasFallbackByAxes };
+  frame.backendUnsupportedByAxes = { ...input.unsupportedByAxes };
+  frame.backendUnsupportedBySemanticFamily = { ...input.unsupportedBySemanticFamily };
+  frame.backendPartiallyHandledAxes = [...input.partiallyHandledAxes];
 }
 
 export function getRenderPerfSnapshot(): Snapshot {
@@ -571,12 +572,12 @@ export function getRenderPerfSnapshot(): Snapshot {
       backendDefault: "canvas2d",
       backendWebglReadyForDefault: false,
       backendFallbackReason: null,
-      backendUnsupportedVariants: [],
-      backendWebglByFamilyPerFrame: {},
-      backendCanvasFallbackByFamilyPerFrame: {},
-      backendUnsupportedByFamilyPerFrame: {},
-      backendUnsupportedByKindPerFrame: {},
-      backendPartiallyHandledFamilies: [],
+      backendUnsupportedCommandKeys: [],
+      backendWebglByAxesPerFrame: {},
+      backendCanvasFallbackByAxesPerFrame: {},
+      backendUnsupportedByAxesPerFrame: {},
+      backendUnsupportedBySemanticFamilyPerFrame: {},
+      backendPartiallyHandledAxes: [],
     };
   }
   return snapshot;

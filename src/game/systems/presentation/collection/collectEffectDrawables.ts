@@ -53,17 +53,20 @@ export function collectEffectDrawables(input: CollectionContext): void {
         stableId: 100000 + i,
       };
 
-      enqueueSliceCommand(frameBuilder, renderKey, "primitive", {
-        variant: "zoneEffect",
-        zoneIndex: i,
-        zoneKind: w.zKind[i],
-        radius: w.zR[i],
-        worldX: zx,
-        worldY: zy,
-        screenX: toScreen(zx, zy).x,
-        screenY: toScreen(zx, zy).y,
-        radiusScreenX: w.zR[i] * ISO_X,
-        radiusScreenY: w.zR[i] * ISO_Y,
+      enqueueSliceCommand(frameBuilder, renderKey, {
+        semanticFamily: "worldPrimitive",
+        finalForm: "primitive",
+        payload: {
+          zoneIndex: i,
+          zoneKind: w.zKind[i],
+          radius: w.zR[i],
+          worldX: zx,
+          worldY: zy,
+          screenX: toScreen(zx, zy).x,
+          screenY: toScreen(zx, zy).y,
+          radiusScreenX: w.zR[i] * ISO_X,
+          radiusScreenY: w.zR[i] * ISO_Y,
+        },
       });
     }
   }
@@ -101,21 +104,27 @@ export function collectEffectDrawables(input: CollectionContext): void {
         const scale = w.vfxRadius[i] > 0 ? w.vfxRadius[i] / 32 : w.vfxScale[i];
         const size = 64 * scale;
         const p = toScreen(vx, vy);
-        enqueueSliceCommand(frameBuilder, renderKey, "sprite", {
-          variant: "imageSprite",
-          image: sprite.img,
-          dx: p.x - size * 0.5,
-          dy: p.y - size * 0.5 + w.vfxOffsetYPx[i],
-          dw: size,
-          dh: size,
-          alpha: 1,
+        enqueueSliceCommand(frameBuilder, renderKey, {
+          semanticFamily: "worldSprite",
+          finalForm: "quad",
+          payload: {
+            image: sprite.img,
+            dx: p.x - size * 0.5,
+            dy: p.y - size * 0.5 + w.vfxOffsetYPx[i],
+            dw: size,
+            dh: size,
+            alpha: 1,
+          },
         });
         continue;
       }
 
-      enqueueSliceCommand(frameBuilder, renderKey, "sprite", {
-        variant: "vfxClip",
-        vfxIndex: i,
+      enqueueSliceCommand(frameBuilder, renderKey, {
+        semanticFamily: "worldSprite",
+        finalForm: "quad",
+        payload: {
+          vfxIndex: i,
+        },
       });
     }
   }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { WebGLRenderer } from "../../../../game/systems/presentation/backend/WebGLRenderer";
 import type { RenderCommand } from "../../../../game/systems/presentation/contracts/renderCommands";
+import { buildDiamondSourceQuad, buildTrianglePairFromQuad } from "../../../../game/systems/presentation/renderCommandGeometry";
 import { KindOrder } from "../../../../game/systems/presentation/worldRenderOrdering";
 
 function makeFakeGl() {
@@ -106,16 +107,16 @@ function makeCommand(image: any, stableId: number): RenderCommand {
       kindOrder: KindOrder.ENTITY,
       stableId,
     },
-    kind: "sprite",
-    data: {
-      variant: "imageSprite",
+    semanticFamily: "worldSprite",
+    finalForm: "quad",
+    payload: {
       image,
       dx: stableId,
       dy: stableId,
       dw: 16,
       dh: 16,
     },
-  };
+  } as RenderCommand;
 }
 
 describe("WebGLRenderer", () => {
@@ -233,37 +234,28 @@ describe("WebGLRenderer", () => {
         kindOrder: KindOrder.STRUCTURE,
         stableId: 7,
       },
-      kind: "triangle",
-      data: {
-        variant: "structureTriangleGroup",
+      semanticFamily: "worldGeometry",
+      finalForm: "triangles",
+      payload: {
         image,
-        drawWidth: 16,
-        drawHeight: 16,
-        compareDistanceOnlyStableIds: [],
-        cutoutEnabled: true,
-        cutoutAlpha: 0.6,
-        buildingDirectionalEligible: true,
-        groupParentAfterPlayer: true,
-        cutoutScreenRect: {
-          minX: 0,
-          minY: 0,
-          maxX: 20,
-          maxY: 20,
-        },
-        finalVisibleTriangles: [
+        sourceWidth: 16,
+        sourceHeight: 16,
+        triangles: [
           {
             stableId: 1,
             srcPoints: [{ x: 0, y: 0 }, { x: 16, y: 0 }, { x: 0, y: 16 }],
-            points: [{ x: 2, y: 2 }, { x: 18, y: 2 }, { x: 2, y: 18 }],
+            dstPoints: [{ x: 2, y: 2 }, { x: 18, y: 2 }, { x: 2, y: 18 }],
+            alpha: 1,
           },
           {
             stableId: 2,
             srcPoints: [{ x: 16, y: 0 }, { x: 16, y: 16 }, { x: 0, y: 16 }],
-            points: [{ x: 18, y: 2 }, { x: 18, y: 18 }, { x: 2, y: 18 }],
+            dstPoints: [{ x: 18, y: 2 }, { x: 18, y: 18 }, { x: 2, y: 18 }],
+            alpha: 0.6,
           },
         ],
       },
-    }]);
+    } as RenderCommand]);
 
     expect(gl.drawOrder).toEqual(["structure-triangle", "structure-triangle"]);
     expect(gl.drawModes).toEqual([gl.TRIANGLES, gl.TRIANGLES]);
@@ -327,25 +319,20 @@ describe("WebGLRenderer", () => {
         kindOrder: KindOrder.FLOOR,
         stableId: 9,
       },
-      kind: "decal",
-      data: {
-        variant: "runtimeSidewalkTop",
-        mode: "projected",
+      semanticFamily: "groundSurface",
+      finalForm: "projectedSurface",
+      payload: {
         image,
         sourceWidth: 128,
         sourceHeight: 64,
-        finalVisibleTriangles: [
-          {
-            srcPoints: [{ x: 64, y: 0 }, { x: 128, y: 32 }, { x: 64, y: 64 }],
-            points: [{ x: 0, y: 0 }, { x: 32, y: 0 }, { x: 16, y: 16 }],
-          },
-          {
-            srcPoints: [{ x: 64, y: 0 }, { x: 64, y: 64 }, { x: 0, y: 32 }],
-            points: [{ x: 0, y: 0 }, { x: 16, y: 16 }, { x: -16, y: 16 }],
-          },
-        ],
+        triangles: buildTrianglePairFromQuad(buildDiamondSourceQuad(128, 64), {
+          nw: { x: 0, y: 0 },
+          ne: { x: 32, y: 0 },
+          se: { x: 16, y: 16 },
+          sw: { x: -16, y: 16 },
+        }),
       },
-    }]);
+    } as RenderCommand]);
 
     expect(gl.drawOrder).toEqual(["projected-ground", "projected-ground"]);
     expect(gl.drawModes).toEqual([gl.TRIANGLES, gl.TRIANGLES]);

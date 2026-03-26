@@ -16,21 +16,22 @@ function key(overrides: Partial<RenderKey>): RenderKey {
 
 type CommandOverrides = {
   pass?: RenderCommand["pass"];
-  kind?: RenderCommand["kind"];
+  semanticFamily?: RenderCommand["semanticFamily"];
+  finalForm?: RenderCommand["finalForm"];
   key?: Partial<RenderKey>;
-  data?: Record<string, unknown>;
+  payload?: Record<string, unknown>;
 };
 
 function command(stableId: number, overrides: CommandOverrides = {}): RenderCommand {
   return {
     pass: overrides.pass ?? "WORLD",
-    kind: overrides.kind ?? "sprite",
+    semanticFamily: overrides.semanticFamily ?? "worldSprite",
+    finalForm: overrides.finalForm ?? "quad",
     key: key({ stableId, ...(overrides.key ?? {}) }),
-    data: {
-      variant: "test",
-      ...(overrides.data ?? {}),
+    payload: {
+      ...(overrides.payload ?? {}),
     },
-  };
+  } as RenderCommand;
 }
 
 describe("buildRenderExecutionPlan", () => {
@@ -41,11 +42,11 @@ describe("buildRenderExecutionPlan", () => {
         command(2, { pass: "GROUND", key: { slice: 1, within: 1, baseZ: 1, kindOrder: KindOrder.FLOOR } }),
       ],
       world: [
-        command(3, { key: { slice: 1, within: 1, baseZ: 1, kindOrder: KindOrder.ENTITY }, data: { stage: "slice" } }),
-        command(4, { key: { slice: 2, within: 1, baseZ: 2, kindOrder: KindOrder.ENTITY }, data: { stage: "slice" } }),
-        command(5, { data: { stage: "band", zBand: "FIRST" } }),
-        command(6, { data: { stage: "band", zBand: 2 } }),
-        command(7, { data: { stage: "tail" } }),
+        command(3, { key: { slice: 1, within: 1, baseZ: 1, kindOrder: KindOrder.ENTITY }, payload: { stage: "slice" } }),
+        command(4, { key: { slice: 2, within: 1, baseZ: 2, kindOrder: KindOrder.ENTITY }, payload: { stage: "slice" } }),
+        command(5, { payload: { stage: "band", zBand: "FIRST" } }),
+        command(6, { payload: { stage: "band", zBand: 2 } }),
+        command(7, { payload: { stage: "tail" } }),
       ],
       screen: [command(8, { pass: "SCREEN" })],
     };

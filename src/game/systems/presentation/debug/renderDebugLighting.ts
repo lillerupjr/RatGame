@@ -12,7 +12,7 @@ function summarizeBackendFamilyCounts(counts: Record<string, number>): string {
   return entries.length > 0 ? entries.join(" ") : "none";
 }
 
-function summarizeBackendKindCounts(counts: Record<string, number>): string {
+function summarizeBackendSemanticFamilyCounts(counts: Record<string, number>): string {
   const entries = Object.entries(counts)
     .filter(([, value]) => value > 0)
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
@@ -87,11 +87,11 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
       `backend counts: webgl:${perf.backendWebglCommandsPerFrame.toFixed(1)} canvas:${perf.backendCanvasFallbackCommandsPerFrame.toFixed(1)} unsupported:${perf.backendUnsupportedCommandsPerFrame.toFixed(1)}`,
       `backend ground: webgl:${perf.backendWebglGroundCommandsPerFrame.toFixed(1)} unsupported:${perf.backendUnsupportedGroundCommandsPerFrame.toFixed(1)}`,
       `backend fallback reason: ${describeRenderBackendFallbackReason(perf.backendFallbackReason)}`,
-      `backend unsupported: ${perf.backendUnsupportedVariants.length > 0 ? perf.backendUnsupportedVariants.join(", ") : "none"}`,
-      `backend unsupported kinds: ${summarizeBackendKindCounts(perf.backendUnsupportedByKindPerFrame)}`,
-      `backend webgl families: ${summarizeBackendFamilyCounts(perf.backendWebglByFamilyPerFrame)}`,
-      `backend canvas families: ${summarizeBackendFamilyCounts(perf.backendCanvasFallbackByFamilyPerFrame)}`,
-      `backend partial families: ${perf.backendPartiallyHandledFamilies.length > 0 ? perf.backendPartiallyHandledFamilies.join(", ") : "none"}`,
+      `backend unsupported axes: ${perf.backendUnsupportedCommandKeys.length > 0 ? perf.backendUnsupportedCommandKeys.join(", ") : "none"}`,
+      `backend unsupported semantic families: ${summarizeBackendSemanticFamilyCounts(perf.backendUnsupportedBySemanticFamilyPerFrame)}`,
+      `backend webgl axes: ${summarizeBackendFamilyCounts(perf.backendWebglByAxesPerFrame)}`,
+      `backend canvas axes: ${summarizeBackendFamilyCounts(perf.backendCanvasFallbackByAxesPerFrame)}`,
+      `backend partial axes: ${perf.backendPartiallyHandledAxes.length > 0 ? perf.backendPartiallyHandledAxes.join(", ") : "none"}`,
     ];
     ctx.textAlign = "right";
     const perfX = cssW - 8;

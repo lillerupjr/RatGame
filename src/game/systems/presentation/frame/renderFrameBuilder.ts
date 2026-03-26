@@ -1,4 +1,10 @@
-import type { CommandData, CommandKind, RenderCommand, RenderFrame, RenderPass } from "../contracts/renderCommands";
+import type {
+  CommandStage,
+  RenderCommand,
+  RenderCommandPayload,
+  RenderFrame,
+  RenderPass,
+} from "../contracts/renderCommands";
 import {
   KindOrder,
   compareRenderKeys,
@@ -26,6 +32,8 @@ export interface FinalizeRenderFrameInput {
   projectToScreenAtZ: (worldX: number, worldY: number, zVisual: number) => { y: number };
   rampRoadTiles: ReadonlySet<string>;
 }
+
+type EnqueuedCommand = Omit<RenderCommand, "pass" | "key">;
 
 function cloneRenderKey(key: RenderKey): RenderKey {
   return {
@@ -60,76 +68,76 @@ export function createRenderFrameBuilder(): RenderFrameBuilder {
   };
 }
 
+function withStage<T extends RenderCommandPayload>(payload: T, stage: CommandStage): T {
+  return {
+    ...payload,
+    stage: payload.stage ?? stage,
+  };
+}
+
+function materializeCommand(
+  pass: RenderPass,
+  key: RenderKey,
+  command: EnqueuedCommand,
+  stage: CommandStage,
+): RenderCommand {
+  return {
+    pass,
+    key,
+    ...command,
+    payload: withStage(command.payload, stage),
+  } as RenderCommand;
+}
+
 export function enqueueSliceCommand(
   builder: RenderFrameBuilder,
   key: RenderKey,
-  kind: CommandKind,
-  data: CommandData,
+  command: EnqueuedCommand,
 ): void {
   const pass: RenderPass = isGroundKindForRenderPass(key.kindOrder) ? "GROUND" : "WORLD";
   const slice = key.slice | 0;
   const bucket = builder.sliceCommands.get(slice) ?? [];
-  bucket.push({
-    pass,
-    key: cloneRenderKey(key),
-    kind,
-    data: {
-      ...data,
-      stage: data.stage ?? "slice",
-    },
-  });
+  bucket.push(materializeCommand(pass, cloneRenderKey(key), command, "slice"));
   if (!builder.sliceCommands.has(slice)) builder.sliceCommands.set(slice, bucket);
 }
 
 export function enqueueWorldBandCommand(
   builder: RenderFrameBuilder,
-  kind: CommandKind,
-  data: CommandData,
+  command: EnqueuedCommand,
   key?: RenderKey,
 ): void {
-  builder.worldBand.push({
-    pass: "WORLD",
-    key: key ? cloneRenderKey(key) : syntheticKey(KindOrder.OVERLAY, builder.nextSyntheticStableId++),
-    kind,
-    data: {
-      ...data,
-      stage: "band",
-    },
-  });
+  builder.worldBand.push(materializeCommand(
+    "WORLD",
+    key ? cloneRenderKey(key) : syntheticKey(KindOrder.OVERLAY, builder.nextSyntheticStableId++),
+    command,
+    "band",
+  ));
 }
 
 export function enqueueWorldTailCommand(
   builder: RenderFrameBuilder,
-  kind: CommandKind,
-  data: CommandData,
+  command: EnqueuedCommand,
   key?: RenderKey,
 ): void {
-  builder.worldTail.push({
-    pass: "WORLD",
-    key: key ? cloneRenderKey(key) : syntheticKey(KindOrder.OVERLAY, builder.nextSyntheticStableId++),
-    kind,
-    data: {
-      ...data,
-      stage: "tail",
-    },
-  });
+  builder.worldTail.push(materializeCommand(
+    "WORLD",
+    key ? cloneRenderKey(key) : syntheticKey(KindOrder.OVERLAY, builder.nextSyntheticStableId++),
+    command,
+    "tail",
+  ));
 }
 
 export function enqueueScreenCommand(
   builder: RenderFrameBuilder,
-  kind: CommandKind,
-  data: CommandData,
+  command: EnqueuedCommand,
   key?: RenderKey,
 ): void {
-  builder.screen.push({
-    pass: "SCREEN",
-    key: key ? cloneRenderKey(key) : syntheticKey(KindOrder.OVERLAY, builder.nextSyntheticStableId++),
-    kind,
-    data: {
-      ...data,
-      stage: data.stage ?? "tail",
-    },
-  });
+  builder.screen.push(materializeCommand(
+    "SCREEN",
+    key ? cloneRenderKey(key) : syntheticKey(KindOrder.OVERLAY, builder.nextSyntheticStableId++),
+    command,
+    "tail",
+  ));
 }
 
 export function finalizeRenderFrame(input: FinalizeRenderFrameInput): RenderFrame {
@@ -169,7 +177,7 @@ export function finalizeRenderFrame(input: FinalizeRenderFrameInput): RenderFram
   }
 
   for (let i = 0; i < builder.worldBand.length; i++) {
-    const zBand = builder.worldBand[i].data.zBand;
+    const zBand = builder.worldBand[i].payload.zBand;
     if (typeof zBand === "number") zBands.add(zBand);
   }
 

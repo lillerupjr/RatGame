@@ -1,12 +1,12 @@
-import type { RenderCommand } from "../contracts/renderCommands";
+import { renderCommandAxesKey, type RenderCommand } from "../contracts/renderCommands";
 import { ZONE_KIND } from "../../../factories/zoneFactory";
-import { getRenderCapabilityEntry, renderCapabilityKey } from "./renderCapabilityMatrix";
+import { getRenderCapabilityEntry } from "./renderCapabilityMatrix";
 
 export type RenderBackendId = "canvas2d" | "webgl";
 export type RenderCommandBackend = "webgl" | "canvas2d" | "unsupported";
 
 export type BackendFamilyCounts = Record<string, number>;
-export type BackendKindCounts = Record<string, number>;
+export type BackendSemanticFamilyCounts = Record<string, number>;
 
 export type RenderBackendStats = {
   selectedBackend: RenderBackendId;
@@ -15,27 +15,20 @@ export type RenderBackendStats = {
   unsupportedCommandCount: number;
   webglGroundCommandCount: number;
   unsupportedGroundCommandCount: number;
-  unsupportedVariants: string[];
-  webglByFamily: BackendFamilyCounts;
-  canvasFallbackByFamily: BackendFamilyCounts;
-  unsupportedByFamily: BackendFamilyCounts;
-  unsupportedByKind: BackendKindCounts;
-  partiallyHandledFamilies: string[];
+  unsupportedCommandKeys: string[];
+  webglByAxes: BackendFamilyCounts;
+  canvasFallbackByAxes: BackendFamilyCounts;
+  unsupportedByAxes: BackendFamilyCounts;
+  unsupportedBySemanticFamily: BackendSemanticFamilyCounts;
+  partiallyHandledAxes: string[];
 };
-
-function hasFiniteRect(data: Record<string, unknown>): boolean {
-  return Number.isFinite(Number(data.dx))
-    && Number.isFinite(Number(data.dy))
-    && Number.isFinite(Number(data.dw))
-    && Number.isFinite(Number(data.dh));
-}
 
 function hasTriangleGeometry(data: Record<string, unknown>): boolean {
   return !!data.image
     && Number(data.sourceWidth) > 0
     && Number(data.sourceHeight) > 0
-    && Array.isArray(data.finalVisibleTriangles)
-    && data.finalVisibleTriangles.length > 0;
+    && Array.isArray(data.triangles)
+    && data.triangles.length > 0;
 }
 
 function incrementCount(record: BackendFamilyCounts, key: string): void {
@@ -44,23 +37,23 @@ function incrementCount(record: BackendFamilyCounts, key: string): void {
 
 export function noteRenderBackendFamilyPlacement(
   stats: RenderBackendStats,
-  family: string,
+  axesKey: string,
   backend: RenderCommandBackend,
 ): void {
-  if (backend === "webgl") incrementCount(stats.webglByFamily, family);
-  else if (backend === "canvas2d") incrementCount(stats.canvasFallbackByFamily, family);
-  else incrementCount(stats.unsupportedByFamily, family);
+  if (backend === "webgl") incrementCount(stats.webglByAxes, axesKey);
+  else if (backend === "canvas2d") incrementCount(stats.canvasFallbackByAxes, axesKey);
+  else incrementCount(stats.unsupportedByAxes, axesKey);
 
-  const placements = Number((stats.webglByFamily[family] ?? 0) > 0)
-    + Number((stats.canvasFallbackByFamily[family] ?? 0) > 0)
-    + Number((stats.unsupportedByFamily[family] ?? 0) > 0);
-  if (placements > 1 && !stats.partiallyHandledFamilies.includes(family)) {
-    stats.partiallyHandledFamilies.push(family);
+  const placements = Number((stats.webglByAxes[axesKey] ?? 0) > 0)
+    + Number((stats.canvasFallbackByAxes[axesKey] ?? 0) > 0)
+    + Number((stats.unsupportedByAxes[axesKey] ?? 0) > 0);
+  if (placements > 1 && !stats.partiallyHandledAxes.includes(axesKey)) {
+    stats.partiallyHandledAxes.push(axesKey);
   }
 }
 
 export function classifyCommandBackend(command: RenderCommand): RenderCommandBackend {
-  const data = command.data as Record<string, unknown>;
+  const payload = command.payload as Record<string, unknown>;
   const capability = getRenderCapabilityEntry(command);
   if (
     capability.status === "DEFER_STAGE_D"
@@ -70,75 +63,52 @@ export function classifyCommandBackend(command: RenderCommand): RenderCommandBac
     return "canvas2d";
   }
 
-  if (command.kind === "sprite" && data.variant === "imageSprite") {
-    if (data.image && hasFiniteRect(data)) return "webgl";
-    return "unsupported";
-  }
-
-  if (command.kind === "primitive" && data.variant === "zoneEffect") {
-    const zoneKind = Number(data.zoneKind);
-    return zoneKind === ZONE_KIND.FIRE ? "canvas2d" : "webgl";
-  }
-
-  if (command.kind === "sprite" && data.variant === "renderPieceSprite") {
-    const draw = (data.draw ?? null) as Record<string, unknown> | null;
-    if (draw?.img && hasFiniteRect(draw)) return "webgl";
-    return "unsupported";
-  }
-
-  if (command.kind === "overlay" && data.variant === "structureOverlay") {
-    const draw = ((data.piece ?? null) as Record<string, unknown> | null)?.draw as Record<string, unknown> | null;
-    if (draw?.img && hasFiniteRect(draw)) return "webgl";
-    return "unsupported";
-  }
-
-  if (command.kind === "triangle" && data.variant === "structureTriangleGroup") {
-    const hasCompareDistanceDebug = Array.isArray(data.compareDistanceOnlyStableIds)
-      && data.compareDistanceOnlyStableIds.length > 0;
-    if (hasCompareDistanceDebug) return "canvas2d";
-    const image = data.image;
-    const drawWidth = Number(data.drawWidth);
-    const drawHeight = Number(data.drawHeight);
-    const triangles = data.finalVisibleTriangles;
-    if (image && drawWidth > 0 && drawHeight > 0 && Array.isArray(triangles) && triangles.length > 0) {
-      return "webgl";
+  switch (command.semanticFamily) {
+    case "worldSprite": {
+      const draw = (payload.draw ?? null) as Record<string, unknown> | null;
+      if (
+        payload.image
+        && Number.isFinite(Number(payload.dx))
+        && Number.isFinite(Number(payload.dy))
+        && Number.isFinite(Number(payload.dw))
+        && Number.isFinite(Number(payload.dh))
+      ) {
+        return "webgl";
+      }
+      if (
+        draw?.img
+        && Number.isFinite(Number(draw.dx))
+        && Number.isFinite(Number(draw.dy))
+        && Number.isFinite(Number(draw.dw))
+        && Number.isFinite(Number(draw.dh))
+      ) {
+        return "webgl";
+      }
+      return "unsupported";
     }
-    return "unsupported";
-  }
-
-  if (command.kind === "overlay" && (data.variant === "screenTint" || data.variant === "ambientDarkness")) {
-    return "webgl";
-  }
-
-  if (command.kind === "overlay" && data.variant === "sweepShadowMap") {
-    return "canvas2d";
-  }
-
-  if (command.kind === "light" && data.variant === "projectedLight") {
-    return "webgl";
-  }
-
-  if (command.kind === "decal" && data.variant === "imageTop") {
-    if (data.mode === "flat" && data.image && hasFiniteRect(data)) return "webgl";
-    if (data.mode === "oceanProjected" && hasTriangleGeometry(data)) return "webgl";
-    return "canvas2d";
-  }
-
-  if (command.kind === "decal" && (data.variant === "runtimeSidewalkTop" || data.variant === "runtimeDecalTop")) {
-    if (data.mode === "flat" && data.image && hasFiniteRect(data)) return "webgl";
-    if (data.mode === "projected" && hasTriangleGeometry(data)) return "webgl";
-    return "canvas2d";
-  }
-
-  switch (command.kind) {
-    case "primitive":
-    case "light":
-    case "overlay":
-    case "triangle":
-    case "debug":
+    case "groundSurface":
+      return hasTriangleGeometry(payload) ? "webgl" : "unsupported";
+    case "groundDecal":
+      return hasTriangleGeometry(payload) ? "webgl" : "unsupported";
+    case "worldGeometry":
+      return hasTriangleGeometry(payload) ? "webgl" : "unsupported";
+    case "worldPrimitive":
+      if (payload.lightPiece) return "webgl";
+      if (Number.isFinite(Number(payload.zoneKind))) {
+        return Number(payload.zoneKind) === ZONE_KIND.FIRE ? "canvas2d" : "webgl";
+      }
       return "canvas2d";
-    case "sprite":
-    case "decal":
+    case "screenOverlay":
+      if (command.finalForm === "quad") return "webgl";
+      if (
+        payload.darknessAlpha !== undefined
+        || payload.ambientTint !== undefined
+        || payload.ambientTintStrength !== undefined
+      ) {
+        return "webgl";
+      }
+      return "canvas2d";
+    case "debug":
       return "canvas2d";
     default:
       return "unsupported";
@@ -153,15 +123,15 @@ export function createRenderBackendStats(selectedBackend: RenderBackendId): Rend
     unsupportedCommandCount: 0,
     webglGroundCommandCount: 0,
     unsupportedGroundCommandCount: 0,
-    unsupportedVariants: [],
-    webglByFamily: {},
-    canvasFallbackByFamily: {},
-    unsupportedByFamily: {},
-    unsupportedByKind: {},
-    partiallyHandledFamilies: [],
+    unsupportedCommandKeys: [],
+    webglByAxes: {},
+    canvasFallbackByAxes: {},
+    unsupportedByAxes: {},
+    unsupportedBySemanticFamily: {},
+    partiallyHandledAxes: [],
   };
 }
 
-export function commandFamilyKey(command: Pick<RenderCommand, "kind" | "data">): string {
-  return renderCapabilityKey(command);
+export function commandAxesKey(command: Pick<RenderCommand, "semanticFamily" | "finalForm">): string {
+  return renderCommandAxesKey(command);
 }

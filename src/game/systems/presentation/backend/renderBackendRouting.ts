@@ -1,6 +1,6 @@
 import type { RenderCommand } from "../contracts/renderCommands";
 import {
-  commandFamilyKey,
+  commandAxesKey,
   classifyCommandBackend,
   createRenderBackendStats,
   noteRenderBackendFamilyPlacement,
@@ -20,18 +20,18 @@ export function buildBackendSegments(
 
   for (let i = 0; i < commands.length; i++) {
     const command = commands[i];
-    const family = commandFamilyKey(command);
+    const axesKey = commandAxesKey(command);
     const backend = classifyCommandBackend(command);
     if (backend === "unsupported") {
       stats.unsupportedCommandCount += 1;
-      const variant = `${command.kind}:${command.data.variant}`;
-      if (!stats.unsupportedVariants.includes(variant)) stats.unsupportedVariants.push(variant);
-      noteRenderBackendFamilyPlacement(stats, family, backend);
+      if (!stats.unsupportedCommandKeys.includes(axesKey)) stats.unsupportedCommandKeys.push(axesKey);
+      stats.unsupportedBySemanticFamily[command.semanticFamily] = (stats.unsupportedBySemanticFamily[command.semanticFamily] ?? 0) + 1;
+      noteRenderBackendFamilyPlacement(stats, axesKey, backend);
       continue;
     }
     if (backend === "webgl") stats.webglCommandCount += 1;
     else stats.canvasFallbackCommandCount += 1;
-    noteRenderBackendFamilyPlacement(stats, family, backend);
+    noteRenderBackendFamilyPlacement(stats, axesKey, backend);
 
     const last = segments[segments.length - 1];
     if (last && last.backend === backend) {
@@ -55,22 +55,21 @@ export function buildPureWebGLCommandList(
 
   for (let i = 0; i < commands.length; i++) {
     const command = commands[i];
-    const family = commandFamilyKey(command);
+    const axesKey = commandAxesKey(command);
     const backend = classifyCommandBackend(command);
     if (backend === "webgl") {
       stats.webglCommandCount += 1;
       if (command.pass === "GROUND") stats.webglGroundCommandCount += 1;
-      noteRenderBackendFamilyPlacement(stats, family, "webgl");
+      noteRenderBackendFamilyPlacement(stats, axesKey, "webgl");
       supported.push(command);
       continue;
     }
 
     stats.unsupportedCommandCount += 1;
     if (command.pass === "GROUND") stats.unsupportedGroundCommandCount += 1;
-    const variant = `${command.kind}:${command.data.variant}`;
-    if (!stats.unsupportedVariants.includes(variant)) stats.unsupportedVariants.push(variant);
-    stats.unsupportedByKind[command.kind] = (stats.unsupportedByKind[command.kind] ?? 0) + 1;
-    noteRenderBackendFamilyPlacement(stats, family, "unsupported");
+    if (!stats.unsupportedCommandKeys.includes(axesKey)) stats.unsupportedCommandKeys.push(axesKey);
+    stats.unsupportedBySemanticFamily[command.semanticFamily] = (stats.unsupportedBySemanticFamily[command.semanticFamily] ?? 0) + 1;
+    noteRenderBackendFamilyPlacement(stats, axesKey, "unsupported");
   }
 
   return supported;

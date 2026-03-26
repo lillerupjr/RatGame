@@ -63,85 +63,100 @@ export function renderScreenOverlays(input: ScreenOverlayContext): void {
   // Optional floor tint overlay
   const floorVis = getFloorVisual(w);
   if (floorVis) {
-    enqueueScreenCommand(frameBuilder, "overlay", {
-      variant: "screenTint",
-      color: floorVis.tint,
-      alpha: floorVis.tintAlpha,
-      width: devW,
-      height: devH,
+    enqueueScreenCommand(frameBuilder, {
+      semanticFamily: "screenOverlay",
+      finalForm: "quad",
+      payload: {
+        color: floorVis.tint,
+        alpha: floorVis.tintAlpha,
+        width: devW,
+        height: devH,
+      },
     });
   }
 
   const GLOBAL_SCREEN_TINT_ALPHA = (w.lighting.darknessAlpha ?? 0) > 0 ? 0 : 0.3;
   if (GLOBAL_SCREEN_TINT_ALPHA > 0) {
-    enqueueScreenCommand(frameBuilder, "overlay", {
-      variant: "screenTint",
-      color: "#000",
-      alpha: GLOBAL_SCREEN_TINT_ALPHA,
-      width: devW,
-      height: devH,
+    enqueueScreenCommand(frameBuilder, {
+      semanticFamily: "screenOverlay",
+      finalForm: "quad",
+      payload: {
+        color: "#000",
+        alpha: GLOBAL_SCREEN_TINT_ALPHA,
+        width: devW,
+        height: devH,
+      },
     });
   }
 
   if (debugFrame.enabled) {
-    enqueueWorldTailCommand(frameBuilder, "debug", {
-      variant: "debugPass",
-      phase: "world",
-      input: {
-        debugContext,
-        viewRect,
-        toScreen,
-        tileWorld: T,
-        isTileInRenderRadius,
-        deferredStructureSliceDebugDraws,
-        flags: debugFlags,
+    enqueueWorldTailCommand(frameBuilder, {
+      semanticFamily: "debug",
+      finalForm: "primitive",
+      payload: {
+        phase: "world",
+        input: {
+          debugContext,
+          viewRect,
+          toScreen,
+          tileWorld: T,
+          isTileInRenderRadius,
+          deferredStructureSliceDebugDraws,
+          flags: debugFlags,
+        },
       },
     });
   }
 
   // Floating combat text: world pass (same camera transform as world content)
-  enqueueWorldTailCommand(frameBuilder, "primitive", {
-    variant: "floatingText",
+  enqueueWorldTailCommand(frameBuilder, {
+    semanticFamily: "screenOverlay",
+    finalForm: "primitive",
+    payload: {},
   });
 
   // PASS 8: final screen-space ambient darkness/tint only
   if (shouldApplyAmbientDarknessOverlay(renderSettings)) {
-    enqueueScreenCommand(frameBuilder, "overlay", {
-      variant: "ambientDarkness",
-      width: devW,
-      height: devH,
-      darknessAlpha: w.lighting.darknessAlpha ?? 0,
-      ambientTint: w.lighting.ambientTint ?? "#000000",
-      ambientTintStrength: w.lighting.ambientTintStrength ?? 0,
+    enqueueScreenCommand(frameBuilder, {
+      semanticFamily: "screenOverlay",
+      finalForm: "primitive",
+      payload: {
+        darknessAlpha: w.lighting.darknessAlpha ?? 0,
+        ambientTint: w.lighting.ambientTint ?? "#000000",
+        ambientTintStrength: w.lighting.ambientTintStrength ?? 0,
+      },
     });
   }
   // Building-mask debug overlay draw disabled to avoid full-canvas mask artifacts.
 
   if (debugFrame.enabled || renderPerfCountersEnabled || structureShadowFrame.routing.usesV6Debug) {
-    enqueueScreenCommand(frameBuilder, "debug", {
-      variant: "debugPass",
-      phase: "screen",
-      input: {
-        cssW,
-        cssH,
-        dpr,
-        flags: debugFlags,
-        renderPerfCountersEnabled,
-        structureShadowRouting: structureShadowFrame.routing,
-        structureV6VerticalShadowDebugData,
-        structureV6ShadowDebugCandidateCount: structureV6ShadowDebugCandidates.length,
-        structureV6ShadowCastCount: structureV6VerticalShadowDebugDataList.length,
-        structureV6ShadowCacheStats,
-        shadowSunModel,
-        structureTriangleAdmissionMode,
-        sliderPadding,
-        playerCameraTx,
-        playerCameraTy,
-        structureTriangleCutoutEnabled,
-        structureTriangleCutoutHalfWidth,
-        structureTriangleCutoutHalfHeight,
-        structureTriangleCutoutAlpha,
-        roadWidthAtPlayer: roadAreaWidthAt(playerTx, playerTy),
+    enqueueScreenCommand(frameBuilder, {
+      semanticFamily: "debug",
+      finalForm: "primitive",
+      payload: {
+        phase: "screen",
+        input: {
+          cssW,
+          cssH,
+          dpr,
+          flags: debugFlags,
+          renderPerfCountersEnabled,
+          structureShadowRouting: structureShadowFrame.routing,
+          structureV6VerticalShadowDebugData,
+          structureV6ShadowDebugCandidateCount: structureV6ShadowDebugCandidates.length,
+          structureV6ShadowCastCount: structureV6VerticalShadowDebugDataList.length,
+          structureV6ShadowCacheStats,
+          shadowSunModel,
+          structureTriangleAdmissionMode,
+          sliderPadding,
+          playerCameraTx,
+          playerCameraTy,
+          structureTriangleCutoutEnabled,
+          structureTriangleCutoutHalfWidth,
+          structureTriangleCutoutHalfHeight,
+          structureTriangleCutoutAlpha,
+          roadWidthAtPlayer: roadAreaWidthAt(playerTx, playerTy),
+        },
       },
     });
   }
@@ -169,9 +184,12 @@ export function renderScreenOverlays(input: ScreenOverlayContext): void {
         });
       }
     }
-    enqueueScreenCommand(frameBuilder, "primitive", {
-      variant: "playerWedge",
-      cells,
+    enqueueScreenCommand(frameBuilder, {
+      semanticFamily: "debug",
+      finalForm: "primitive",
+      payload: {
+        cells,
+      },
     });
   }
 }

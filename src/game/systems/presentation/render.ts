@@ -204,7 +204,7 @@ import { collectFrameDrawables } from "./collection/collectFrameDrawables";
 import { Canvas2DRenderer } from "./backend/Canvas2DRenderer";
 import { WebGLRenderer } from "./backend/WebGLRenderer";
 import { buildPureWebGLCommandList, createBackendStats } from "./backend/renderBackendRouting";
-import { commandFamilyKey, noteRenderBackendFamilyPlacement } from "./backend/renderBackendCapabilities";
+import { commandAxesKey, noteRenderBackendFamilyPlacement } from "./backend/renderBackendCapabilities";
 import {
   resolveRenderBackendSelection,
   WEBGL_RUNTIME_FAILURE_REASON,
@@ -399,6 +399,7 @@ export async function renderSystem(
   ctx.save();
   viewport.applyWorld(ctx);
   drawAlignmentDot(ctx, "rgba(255,0,255,0.9)"); // world
+  ctx.restore();
 
 
   // World-units per tile step (keep in sync with kenneyTiles constants)
@@ -1331,6 +1332,7 @@ export async function renderSystem(
     FLOOR_TOP_SCALE,
     OCEAN_BASE_FRAME_PX,
     getRuntimeIsoDecalCanvas,
+    getDiamondFitCanvas,
     getRuntimeDecalSprite,
     T,
     worldToScreen,
@@ -1559,22 +1561,28 @@ export async function renderSystem(
   if (SHADOW_CASTER_MODE === "v6SweepShadow") {
     const sweepShadowMap = getSweepShadowMap();
     if (sweepShadowMap) {
-      enqueueWorldBandCommand(frameBuilder, "overlay", {
-        variant: "sweepShadowMap",
-        zBand: "FIRST",
-        sweepShadowMap,
+      enqueueWorldBandCommand(frameBuilder, {
+        semanticFamily: "debug",
+        finalForm: "primitive",
+        payload: {
+          zBand: "FIRST",
+          sweepShadowMap,
+        },
       });
     }
   }
 
   for (let i = 0; i < structureV6VerticalShadowDebugDataList.length; i++) {
     const debugData = structureV6VerticalShadowDebugDataList[i];
-    enqueueWorldBandCommand(frameBuilder, "debug", {
-      variant: "debugPass",
-      phase: "structureV6MergedMask",
-      zBand: debugData.zBand,
-      input: {
-        debugData,
+    enqueueWorldBandCommand(frameBuilder, {
+      semanticFamily: "debug",
+      finalForm: "primitive",
+      payload: {
+        phase: "structureV6MergedMask",
+        zBand: debugData.zBand,
+        input: {
+          debugData,
+        },
       },
     });
   }
@@ -1685,20 +1693,19 @@ export async function renderSystem(
     const stats = createBackendStats("webgl");
     try {
       clearWebGLWorldSurfaceFailure(canvas);
+      syncWorldCanvasBackendVisibility(canvas, "webgl", true);
       const cachedSurface = webglSurface as typeof webglSurface & { renderer?: WebGLRenderer };
       const webglRenderer = cachedSurface.renderer ?? new WebGLRenderer(renderFrame, webglSurface.gl);
       cachedSurface.renderer = webglRenderer;
       webglRenderer.setFrameContext(renderFrame);
       const webglWorldCommands = buildPureWebGLCommandList(executionPlan.world, stats);
-      const webglScreenCommands = buildPureWebGLCommandList(executionPlan.screen, stats);
 
       canvasRenderer.clearOverlayCanvas();
       canvasRenderer.clearMainCanvas();
       webglRenderer.beginFrame();
       webglRenderer.useWorldSpace();
       webglRenderer.renderCommands(webglWorldCommands);
-      webglRenderer.useScreenSpace();
-      webglRenderer.renderCommands(webglScreenCommands);
+      canvasRenderer.renderScreenCommands(executionPlan.screen);
 
       setRenderBackendStats({
         requestedBackend: backendSelection.requestedBackend,
@@ -1711,12 +1718,12 @@ export async function renderSystem(
         unsupportedCommandCount: stats.unsupportedCommandCount,
         webglGroundCommandCount: stats.webglGroundCommandCount,
         unsupportedGroundCommandCount: stats.unsupportedGroundCommandCount,
-        unsupportedVariants: stats.unsupportedVariants,
-        webglByFamily: stats.webglByFamily,
-        canvasFallbackByFamily: stats.canvasFallbackByFamily,
-        unsupportedByFamily: stats.unsupportedByFamily,
-        unsupportedByKind: stats.unsupportedByKind,
-        partiallyHandledFamilies: stats.partiallyHandledFamilies,
+        unsupportedCommandKeys: stats.unsupportedCommandKeys,
+        webglByAxes: stats.webglByAxes,
+        canvasFallbackByAxes: stats.canvasFallbackByAxes,
+        unsupportedByAxes: stats.unsupportedByAxes,
+        unsupportedBySemanticFamily: stats.unsupportedBySemanticFamily,
+        partiallyHandledAxes: stats.partiallyHandledAxes,
       });
     } catch (error) {
       noteWebGLWorldSurfaceFailure(canvas, WEBGL_RUNTIME_FAILURE_REASON);
@@ -1727,7 +1734,7 @@ export async function renderSystem(
       const allCommands = [...executionPlan.world, ...executionPlan.screen];
       fallbackStats.canvasFallbackCommandCount = allCommands.length;
       for (let i = 0; i < allCommands.length; i++) {
-        noteRenderBackendFamilyPlacement(fallbackStats, commandFamilyKey(allCommands[i]), "canvas2d");
+        noteRenderBackendFamilyPlacement(fallbackStats, commandAxesKey(allCommands[i]), "canvas2d");
       }
       setRenderBackendStats({
         requestedBackend: backendSelection.requestedBackend,
@@ -1740,21 +1747,22 @@ export async function renderSystem(
         unsupportedCommandCount: fallbackStats.unsupportedCommandCount,
         webglGroundCommandCount: fallbackStats.webglGroundCommandCount,
         unsupportedGroundCommandCount: fallbackStats.unsupportedGroundCommandCount,
-        unsupportedVariants: fallbackStats.unsupportedVariants,
-        webglByFamily: fallbackStats.webglByFamily,
-        canvasFallbackByFamily: fallbackStats.canvasFallbackByFamily,
-        unsupportedByFamily: fallbackStats.unsupportedByFamily,
-        unsupportedByKind: fallbackStats.unsupportedByKind,
-        partiallyHandledFamilies: fallbackStats.partiallyHandledFamilies,
+        unsupportedCommandKeys: fallbackStats.unsupportedCommandKeys,
+        webglByAxes: fallbackStats.webglByAxes,
+        canvasFallbackByAxes: fallbackStats.canvasFallbackByAxes,
+        unsupportedByAxes: fallbackStats.unsupportedByAxes,
+        unsupportedBySemanticFamily: fallbackStats.unsupportedBySemanticFamily,
+        partiallyHandledAxes: fallbackStats.partiallyHandledAxes,
       });
     }
   } else {
+    syncWorldCanvasBackendVisibility(canvas, "canvas2d", true);
     canvasRenderer.render(executionPlan);
     const stats = createBackendStats("canvas2d");
     const allCommands = [...executionPlan.world, ...executionPlan.screen];
     stats.canvasFallbackCommandCount = allCommands.length;
     for (let i = 0; i < allCommands.length; i++) {
-      noteRenderBackendFamilyPlacement(stats, commandFamilyKey(allCommands[i]), "canvas2d");
+      noteRenderBackendFamilyPlacement(stats, commandAxesKey(allCommands[i]), "canvas2d");
     }
     setRenderBackendStats({
       requestedBackend: backendSelection.requestedBackend,
@@ -1767,12 +1775,12 @@ export async function renderSystem(
       unsupportedCommandCount: stats.unsupportedCommandCount,
       webglGroundCommandCount: stats.webglGroundCommandCount,
       unsupportedGroundCommandCount: stats.unsupportedGroundCommandCount,
-      unsupportedVariants: stats.unsupportedVariants,
-      webglByFamily: stats.webglByFamily,
-      canvasFallbackByFamily: stats.canvasFallbackByFamily,
-      unsupportedByFamily: stats.unsupportedByFamily,
-      unsupportedByKind: stats.unsupportedByKind,
-      partiallyHandledFamilies: stats.partiallyHandledFamilies,
+      unsupportedCommandKeys: stats.unsupportedCommandKeys,
+      webglByAxes: stats.webglByAxes,
+      canvasFallbackByAxes: stats.canvasFallbackByAxes,
+      unsupportedByAxes: stats.unsupportedByAxes,
+      unsupportedBySemanticFamily: stats.unsupportedBySemanticFamily,
+      partiallyHandledAxes: stats.partiallyHandledAxes,
     });
   }
   endRenderPerfFrame(w.timeSec ?? 0);

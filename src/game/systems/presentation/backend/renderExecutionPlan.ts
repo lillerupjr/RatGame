@@ -11,9 +11,9 @@ export function buildRenderExecutionPlan(
   rampRoadTiles: ReadonlySet<string>,
 ): RenderExecutionPlan {
   const groundSlice = frame.ground;
-  const worldSlice = frame.world.filter((command) => (command.data.stage ?? "slice") === "slice");
-  const worldBand = frame.world.filter((command) => command.data.stage === "band");
-  const worldTail = frame.world.filter((command) => command.data.stage === "tail");
+  const worldSlice = frame.world.filter((command) => (command.payload.stage ?? "slice") === "slice");
+  const worldBand = frame.world.filter((command) => command.payload.stage === "band");
+  const worldTail = frame.world.filter((command) => command.payload.stage === "tail");
   const zBands = new Set<number>();
 
   for (let i = 0; i < groundSlice.length; i++) {
@@ -23,7 +23,7 @@ export function buildRenderExecutionPlan(
     zBands.add(resolveRenderZBand(worldSlice[i].key, rampRoadTiles));
   }
   for (let i = 0; i < worldBand.length; i++) {
-    const zBand = worldBand[i].data.zBand;
+    const zBand = worldBand[i].payload.zBand;
     if (typeof zBand === "number") zBands.add(zBand);
   }
 
@@ -39,7 +39,7 @@ export function buildRenderExecutionPlan(
       orderedWorld.push(groundSlice[i]);
     }
     for (let i = 0; i < worldBand.length; i++) {
-      const targetBand = worldBand[i].data.zBand;
+      const targetBand = worldBand[i].payload.zBand;
       if (targetBand === "FIRST" && zBand !== firstZBand) continue;
       if (typeof targetBand === "number" && targetBand !== zBand) continue;
       orderedWorld.push(worldBand[i]);

@@ -12,89 +12,39 @@ export type StageDDeferredFamilyEntry = {
 
 const STAGE_D_DEFERRED_FAMILY_MATRIX: readonly StageDDeferredFamilyEntry[] = [
   {
-    family: "triangle:structureTriangleGroup",
+    family: "worldGeometry:triangles",
     disposition: "PORT_STAGE_D_NOW",
-    reason: "Highest-priority hard geometry family: command data already carries triangle points, UV-space source points, cutout state, and pass ordering.",
+    reason: "Canonical geometry routing is complete for triangle meshes; backend cleanup remains deferred to Phase 3.",
   },
   {
-    family: "decal:runtimeSidewalkTop",
+    family: "groundSurface:projectedSurface",
+    disposition: "PORT_STAGE_D_NOW",
+    reason: "Ground surfaces now use one normalized projected-surface payload; backend cleanup remains deferred to Phase 3.",
+  },
+  {
+    family: "groundDecal:projectedSurface",
+    disposition: "PORT_STAGE_D_NOW",
+    reason: "Ground decals now emit tile-diamond projected-surface payloads; backend cleanup remains deferred to Phase 3.",
+  },
+  {
+    family: "worldSprite:quad",
     disposition: "KEEP_CANVAS_FALLBACK",
-    reason: "Runtime top baking and ramp projection parity are still outside the hard-geometry migration focus.",
+    reason: "Descriptor-backed sprite fallback payloads are not part of Stage D geometry work.",
   },
   {
-    family: "decal:runtimeDecalTop",
-    disposition: "KEEP_CANVAS_FALLBACK",
-    reason: "Runtime decal baking and ramp-fit projection still need a later focused parity pass.",
-  },
-  {
-    family: "sprite:vfxClip",
-    disposition: "KEEP_CANVAS_FALLBACK",
-    reason: "Legacy unresolved clip draws are not part of the Stage D structure-geometry target.",
-  },
-  {
-    family: "sprite:pickup",
-    disposition: "KEEP_CANVAS_FALLBACK",
-    reason: "Still mixes textured sprites with fallback shapes and relight overlays.",
-  },
-  {
-    family: "sprite:enemy",
-    disposition: "KEEP_CANVAS_FALLBACK",
-    reason: "Animation, relight, and aura-side behaviors remain Canvas-backed.",
-  },
-  {
-    family: "sprite:npc",
-    disposition: "KEEP_CANVAS_FALLBACK",
-    reason: "Legacy animated character path is not a Stage D geometry blocker.",
-  },
-  {
-    family: "sprite:neutralMob",
-    disposition: "KEEP_CANVAS_FALLBACK",
-    reason: "Legacy animated neutral-mob path is not a Stage D geometry blocker.",
-  },
-  {
-    family: "sprite:projectileSpark",
-    disposition: "KEEP_CANVAS_FALLBACK",
-    reason: "Only the portable imageSprite path is WebGL-ready; legacy spark fallback remains Canvas-backed.",
-  },
-  {
-    family: "sprite:projectile",
-    disposition: "KEEP_CANVAS_FALLBACK",
-    reason: "Still mixes sprite bodies, followers, and other parity-sensitive effects.",
-  },
-  {
-    family: "sprite:player",
-    disposition: "KEEP_CANVAS_FALLBACK",
-    reason: "Player rendering still depends on layered relight and fallback behavior outside Stage D scope.",
-  },
-  {
-    family: "primitive:entityShadow",
+    family: "worldPrimitive:primitive",
     disposition: "DEFER_STAGE_E",
-    reason: "Shadow-heavy migration is intentionally deferred until after structure geometry parity is stable.",
+    reason: "Primitive normalization stays deferred until after geometry and ground forms are fully canonical.",
   },
   {
-    family: "primitive:playerBeam",
+    family: "screenOverlay:primitive",
     disposition: "DEFER_STAGE_E",
-    reason: "Beam/path rendering is not required for Stage D structure completeness.",
+    reason: "Floating text and other screen primitives remain Canvas-backed for now.",
   },
   {
-    family: "primitive:floatingText",
+    family: "debug:primitive",
     disposition: "DEFER_STAGE_E",
-    reason: "Canvas text remains the parity reference and no backend-neutral text rewrite is planned here.",
-  },
-  {
-    family: "primitive:playerWedge",
-    disposition: "DEFER_STAGE_E",
-    reason: "Debug/path wedge rendering can stay Canvas-backed without blocking WebGL structure migration.",
-  },
-  {
-    family: "overlay:zoneObjective",
-    disposition: "KEEP_CANVAS_FALLBACK",
-    reason: "Zone-objective overlay rendering is not part of the hard-geometry migration target.",
-  },
-  {
-    family: "debug:debugPass",
-    disposition: "DEFER_STAGE_E",
-    reason: "General debug rendering stays Canvas-backed unless a specific parity check requires migration.",
+    reason: "Debug rendering remains Canvas-backed unless a targeted parity check requires more work.",
   },
 ];
 

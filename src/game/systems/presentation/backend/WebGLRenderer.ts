@@ -213,6 +213,13 @@ function sourceHeight(image: TexImageSource): number {
   return (image as { height?: number }).height ?? 0;
 }
 
+function hasFiniteRectLikePayload(payload: Record<string, unknown>): boolean {
+  return Number.isFinite(Number(payload.dx))
+    && Number.isFinite(Number(payload.dy))
+    && Number.isFinite(Number(payload.dw))
+    && Number.isFinite(Number(payload.dh));
+}
+
 function isDynamicSource(image: TexImageSource): boolean {
   return (typeof HTMLCanvasElement !== "undefined" && image instanceof HTMLCanvasElement)
     || (typeof HTMLVideoElement !== "undefined" && image instanceof HTMLVideoElement)
@@ -350,62 +357,94 @@ export class WebGLRenderer {
   }
 
   private resolveTriangleDraws(command: RenderCommand): TriangleDraw[] {
-    const data = command.data as Record<string, unknown>;
+    const payload = command.payload as Record<string, unknown>;
     if (
-      command.kind === "decal"
-      && (data.variant === "runtimeSidewalkTop" || data.variant === "runtimeDecalTop" || data.variant === "imageTop")
+      (command.semanticFamily === "groundSurface" || command.semanticFamily === "groundDecal")
+      && command.finalForm === "projectedSurface"
     ) {
-      const image = (data.image ?? null) as TexImageSource | null;
-      if (!image) return [];
-      const drawSourceWidth = Number(data.sourceWidth ?? sourceWidth(image));
-      const drawSourceHeight = Number(data.sourceHeight ?? sourceHeight(image));
-      if (!(drawSourceWidth > 0 && drawSourceHeight > 0)) return [];
-      const finalVisibleTriangles = Array.isArray(data.finalVisibleTriangles)
-        ? data.finalVisibleTriangles as Array<Record<string, unknown>>
-        : [];
-      const out: TriangleDraw[] = [];
-      for (let i = 0; i < finalVisibleTriangles.length; i++) {
-        const triangle = finalVisibleTriangles[i];
-        const srcPoints = this.readTrianglePoints(triangle.srcPoints, false, 0);
-        const dstPoints = this.readTrianglePoints(triangle.points, false, 0);
-        if (!srcPoints || !dstPoints) continue;
-        out.push({
-          image,
-          srcPoints,
-          dstPoints,
-          alpha: Number.isFinite(Number(data.alpha)) ? Number(data.alpha) : 1,
-          blendMode: "normal",
-          color: [1, 1, 1, 1],
-          space: "world",
-          sourceWidth: drawSourceWidth,
-          sourceHeight: drawSourceHeight,
-        });
-      }
-      return out;
+      return this.buildTriangleDrawsFromPayload(payload);
     }
 
-    if (command.kind !== "triangle" || data.variant !== "structureTriangleGroup") return [];
+    if (command.semanticFamily !== "worldGeometry" || command.finalForm !== "triangles") return [];
+    return this.buildTriangleDrawsFromPayload(payload);
+  }
 
-    const image = (data.image ?? null) as TexImageSource | null;
-    const triangleSourceWidth = Number(data.drawWidth ?? 0);
-    const triangleSourceHeight = Number(data.drawHeight ?? 0);
+  private resolveQuadDraws(command: RenderCommand): QuadDraw[] {
+    const payload = command.payload as Record<string, unknown>;
+    if (command.semanticFamily === "worldSprite" && command.finalForm === "quad" && payload.image) {
+      return this.buildQuadFromData(payload, "world");
+    }
+
+    if (command.semanticFamily === "worldSprite" && command.finalForm === "quad") {
+      const draw = (payload.draw ?? null) as Record<string, unknown> | null;
+      if (!draw?.img) return [];
+      const scale = Number.isFinite(Number(draw.scale)) ? Number(draw.scale) : 1;
+      return [{
+        image: draw.img as TexImageSource,
+        sx: 0,
+        sy: 0,
+        sw: sourceWidth(draw.img as TexImageSource),
+        sh: sourceHeight(draw.img as TexImageSource),
+        dx: Number(draw.dx ?? 0),
+        dy: Number(draw.dy ?? 0),
+        dw: Number(draw.dw ?? 0) * scale,
+        dh: Number(draw.dh ?? 0) * scale,
+        alpha: 1,
+        rotationRad: 0,
+        flipX: !!draw.flipX,
+        blendMode: "normal",
+        color: [1, 1, 1, 1],
+        space: "world",
+      }];
+    }
+
+    if (command.semanticFamily === "screenOverlay" && command.finalForm === "quad") {
+      return [this.buildSolidQuad(
+        Number(payload.width ?? 0),
+        Number(payload.height ?? 0),
+        String(payload.color ?? "#000"),
+        Number(payload.alpha ?? 1),
+      )];
+    }
+
+    if (command.semanticFamily === "screenOverlay" && command.finalForm === "primitive" && (
+      payload.darknessAlpha !== undefined
+      || payload.ambientTint !== undefined
+      || payload.ambientTintStrength !== undefined
+    )) {
+      return this.buildAmbientDarknessQuads(payload);
+    }
+
+    if (command.semanticFamily === "worldPrimitive" && payload.zoneKind !== undefined) {
+      return this.buildZoneEffectQuads(payload);
+    }
+
+    if (command.semanticFamily === "worldPrimitive" && payload.lightPiece) {
+      return this.buildProjectedLightQuads(payload);
+    }
+
+    return [];
+  }
+
+  private buildTriangleDrawsFromPayload(payload: Record<string, unknown>): TriangleDraw[] {
+    const image = (payload.image ?? null) as TexImageSource | null;
+    const triangleSourceWidth = Number(payload.sourceWidth ?? 0);
+    const triangleSourceHeight = Number(payload.sourceHeight ?? 0);
     if (!image || !(triangleSourceWidth > 0 && triangleSourceHeight > 0)) return [];
-
-    const finalVisibleTriangles = Array.isArray(data.finalVisibleTriangles)
-      ? data.finalVisibleTriangles as Array<Record<string, unknown>>
+    const triangles = Array.isArray(payload.triangles)
+      ? payload.triangles as Array<Record<string, unknown>>
       : [];
-    const flipX = !!data.flipX;
     const out: TriangleDraw[] = [];
-    for (let i = 0; i < finalVisibleTriangles.length; i++) {
-      const triangle = finalVisibleTriangles[i];
-      const srcPoints = this.readTrianglePoints(triangle.srcPoints, flipX, triangleSourceWidth);
-      const dstPoints = this.readTrianglePoints(triangle.points, false, 0);
+    for (let i = 0; i < triangles.length; i++) {
+      const triangle = triangles[i];
+      const srcPoints = this.readTrianglePoints(triangle.srcPoints, false, 0);
+      const dstPoints = this.readTrianglePoints(triangle.dstPoints, false, 0);
       if (!srcPoints || !dstPoints) continue;
       out.push({
         image,
         srcPoints,
         dstPoints,
-        alpha: this.resolveStructureTriangleAlpha(data, dstPoints),
+        alpha: Number.isFinite(Number(triangle.alpha)) ? Number(triangle.alpha) : 1,
         blendMode: "normal",
         color: [1, 1, 1, 1],
         space: "world",
@@ -414,94 +453,6 @@ export class WebGLRenderer {
       });
     }
     return out;
-  }
-
-  private resolveQuadDraws(command: RenderCommand): QuadDraw[] {
-    const data = command.data as Record<string, unknown>;
-    if (command.kind === "sprite" && data.variant === "imageSprite") {
-      return this.buildQuadFromData(data, "world");
-    }
-
-    if (command.kind === "decal" && data.variant === "imageTop" && data.mode === "flat") {
-      return this.buildQuadFromData(data, "world");
-    }
-
-    if (command.kind === "decal" && data.variant === "runtimeSidewalkTop" && data.mode === "flat") {
-      return this.buildQuadFromData(data, "world");
-    }
-
-    if (command.kind === "decal" && data.variant === "runtimeDecalTop" && data.mode === "flat") {
-      return this.buildQuadFromData(data, "world");
-    }
-
-    if (command.kind === "sprite" && data.variant === "renderPieceSprite") {
-      const draw = (data.draw ?? null) as Record<string, unknown> | null;
-      if (!draw?.img) return [];
-      const scale = Number.isFinite(Number(draw.scale)) ? Number(draw.scale) : 1;
-      return [{
-        image: draw.img as TexImageSource,
-        sx: 0,
-        sy: 0,
-        sw: sourceWidth(draw.img as TexImageSource),
-        sh: sourceHeight(draw.img as TexImageSource),
-        dx: Number(draw.dx ?? 0),
-        dy: Number(draw.dy ?? 0),
-        dw: Number(draw.dw ?? 0) * scale,
-        dh: Number(draw.dh ?? 0) * scale,
-        alpha: 1,
-        rotationRad: 0,
-        flipX: !!draw.flipX,
-        blendMode: "normal",
-        color: [1, 1, 1, 1],
-        space: "world",
-      }];
-    }
-
-    if (command.kind === "overlay" && data.variant === "structureOverlay") {
-      const draw = ((data.piece ?? null) as Record<string, unknown> | null)?.draw as Record<string, unknown> | null;
-      if (!draw?.img) return [];
-      const scale = Number.isFinite(Number(draw.scale)) ? Number(draw.scale) : 1;
-      return [{
-        image: draw.img as TexImageSource,
-        sx: 0,
-        sy: 0,
-        sw: sourceWidth(draw.img as TexImageSource),
-        sh: sourceHeight(draw.img as TexImageSource),
-        dx: Number(draw.dx ?? 0),
-        dy: Number(draw.dy ?? 0),
-        dw: Number(draw.dw ?? 0) * scale,
-        dh: Number(draw.dh ?? 0) * scale,
-        alpha: 1,
-        rotationRad: 0,
-        flipX: !!draw.flipX,
-        blendMode: "normal",
-        color: [1, 1, 1, 1],
-        space: "world",
-      }];
-    }
-
-    if (command.kind === "overlay" && data.variant === "screenTint") {
-      return [this.buildSolidQuad(
-        Number(data.width ?? 0),
-        Number(data.height ?? 0),
-        String(data.color ?? "#000"),
-        Number(data.alpha ?? 1),
-      )];
-    }
-
-    if (command.kind === "overlay" && data.variant === "ambientDarkness") {
-      return this.buildAmbientDarknessQuads(data);
-    }
-
-    if (command.kind === "primitive" && data.variant === "zoneEffect") {
-      return this.buildZoneEffectQuads(data);
-    }
-
-    if (command.kind === "light" && data.variant === "projectedLight") {
-      return this.buildProjectedLightQuads(data);
-    }
-
-    return [];
   }
 
   private buildQuadFromData(data: Record<string, unknown>, space: QuadSpace): QuadDraw[] {

@@ -56,7 +56,7 @@ export function collectStructureOverlays(input: CollectStructureOverlaysInput): 
       overlay,
       draw,
       structureSouthTieBreak,
-      useRuntimeStructureSlicing: overlay.kind === "PROP" || overlay.layerRole === "STRUCTURE",
+      useRuntimeStructureSlicing: overlay.layerRole === "STRUCTURE",
     });
   }
 

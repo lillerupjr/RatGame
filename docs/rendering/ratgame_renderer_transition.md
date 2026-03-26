@@ -138,7 +138,7 @@ Stage B status:
 -   [x] Mixed-backend routing avoids double-draw: supported commands go to WebGL, unsupported commands fall back to Canvas2D
 -   [x] Backend/per-frame fallback counts are visible through existing render perf debug reporting
 -   [x] Initial WebGL textured-quad support exists for `imageSprite`, flat `imageTop`, and quad-safe `renderPieceSprite`
--   [ ] Runtime sidewalk/decal tops still fall back to Canvas2D
+-   [x] Ground surfaces and ground decals now emit normalized projected-surface payloads
 -   [ ] Lights, shadows, structure triangles, debug passes, and most entity sprite variants still fall back to Canvas2D
 -   [ ] Live browser parity audit for the WebGL path is still open
 
@@ -159,9 +159,9 @@ Stage D status:
 -   [x] `triangle:structureTriangleGroup` now routes through WebGL by default
 -   [x] Structure triangle groups render as real textured triangles in `WebGLRenderer`
 -   [x] Structure triangle cutout alpha behavior is preserved in the WebGL path
--   [x] The compare-distance structure-triangle debug subpath remains an explicit Canvas fallback instead of a silent approximation
--   [x] Backend routing/tests now track structure-triangle partial handling explicitly when debug-only fallback is active
--   [ ] Runtime sidewalk/decal tops, shadow-heavy systems, debug rendering, text/path primitives, and most legacy entity sprite variants still remain outside WebGL
+-   [x] Compare-distance structure-triangle visualization is now split into `debug` commands instead of a geometry fallback sidepath
+-   [x] Backend routing/tests no longer treat `worldGeometry:triangles` as partially handled because of debug-only geometry subpaths
+-   [ ] Shadow-heavy systems, debug rendering, text/path primitives, and most legacy entity sprite variants still remain outside WebGL
 -   [ ] Live browser parity audit for Stage D hard-geometry coverage is still open
 
 Stage E status:
@@ -171,16 +171,16 @@ Stage E status:
 -   [x] Render perf/debug output now shows requested backend, selected backend, default policy, and fallback reason
 -   [x] Runtime ambiguity around remaining Canvas families is reduced to explicit intentional/deferred/blocking buckets
 -   [ ] WebGL is still **not** signed off as the default backend
--   [ ] Exact blockers remain: `decal:runtimeSidewalkTop` and `decal:runtimeDecalTop`
+-   [ ] Exact blockers now live in mixed canonical families: `worldSprite:quad` and `worldPrimitive:primitive`
 -   [ ] Final manual/live parity audit is still open
 
 Current known boundary:
 -   Structure slice building still receives a Canvas context for debug-prep work during extraction; draw execution remains backend-owned
 -   Stage E finalizes policy, but fallback coverage is still intentional and not parity-complete
 -   `primitive:zoneEffect` is intentionally partial in Stage C: non-`FIRE` variants route to WebGL, `FIRE` stays on Canvas2D fallback
--   `triangle:structureTriangleGroup` is intentionally partial in Stage D: normal textured geometry routes to WebGL, compare-distance debug overlays stay on Canvas2D fallback
+-   `worldGeometry:triangles` is fully normalized in Phase 2; compare-distance overlays now live under `debug`
 -   Final Stage E backend policy is explicit: WebGL is a supported opt-in backend, but not the default backend yet
--   Blocking signoff families are explicit: `decal:runtimeSidewalkTop` and `decal:runtimeDecalTop`
+-   Blocking signoff families are explicit: `worldSprite:quad` and `worldPrimitive:primitive`
 -   Intentional/deferred Canvas families are explicit in `docs/rendering/ratgame_renderer_final_backend_matrix.md`
 
 Current verification completed:

@@ -64,47 +64,58 @@ export class Canvas2DRenderer {
     }
   }
 
+  private getCommandCanvasTarget(command: RenderCommand): {
+    ctx: CanvasRenderingContext2D;
+    width: number;
+    height: number;
+  } {
+    if (command.pass === "SCREEN") {
+      return {
+        ctx: this.frameContext.overlayCtx,
+        width: this.frameContext.overlayDevW,
+        height: this.frameContext.overlayDevH,
+      };
+    }
+    return {
+      ctx: this.frameContext.ctx,
+      width: this.frameContext.devW,
+      height: this.frameContext.devH,
+    };
+  }
+
   private executeCommand(command: RenderCommand): void {
-    const { kind, data } = command;
-    if (kind === "decal") {
-      if (data.variant === "runtimeSidewalkTop") this.drawRuntimeSidewalkTop(data);
-      else if (data.variant === "runtimeDecalTop") this.drawRuntimeDecalTop(data);
-      else if (data.variant === "imageTop") this.drawImageTop(data);
+    const payload = command.payload as any;
+    if (command.semanticFamily === "groundSurface") {
+      this.drawTriangleMesh(payload);
       return;
     }
 
-    if (kind === "primitive") {
-      if (data.variant === "entityShadow") {
+    if (command.semanticFamily === "groundDecal") {
+      this.drawTriangleMesh(payload);
+      return;
+    }
+
+    if (command.semanticFamily === "worldPrimitive") {
+      if (payload.shadowParams) {
         renderEntityShadow(
           this.frameContext.ctx,
-          data.shadowParams as any,
+          payload.shadowParams as any,
           this.deps.compiledMap,
           this.deps.shadowSunModel.projectionDirection,
         );
         return;
       }
-      if (data.variant === "zoneEffect") {
-        this.drawZoneEffect(data);
+      if (payload.zoneKind !== undefined) {
+        this.drawZoneEffect(payload);
         return;
       }
-      if (data.variant === "playerBeam") {
-        this.drawPlayerBeam(data);
+      if (payload.start && payload.end) {
+        this.drawPlayerBeam(payload);
         return;
       }
-      if (data.variant === "floatingText") {
-        this.drawFloatingText();
-        return;
-      }
-      if (data.variant === "playerWedge") {
-        this.drawPlayerWedge(data);
-        return;
-      }
-    }
-
-    if (kind === "overlay") {
-      if (data.variant === "zoneObjective") {
+      if (payload.zone) {
         renderZoneObjectives(this.frameContext.ctx, this.deps.w, {
-          zone: data.zone as any,
+          zone: payload.zone as any,
           mapOriginTx: this.deps.compiledMap.originTx,
           mapOriginTy: this.deps.compiledMap.originTy,
           tileWorld: this.deps.T,
@@ -113,111 +124,129 @@ export class Canvas2DRenderer {
         });
         return;
       }
-      if (data.variant === "structureOverlay") {
-        this.drawRenderPiece((data.piece as any).draw);
-        return;
-      }
-      if (data.variant === "sweepShadowMap") {
-        this.drawSweepShadowMap(data);
-        return;
-      }
-      if (data.variant === "screenTint") {
+      if (payload.lightPiece) {
+        const lightPiece = payload.lightPiece as any;
         const ctx = this.frameContext.ctx;
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.globalAlpha = Number(data.alpha ?? 1);
-        ctx.fillStyle = String(data.color ?? "#000");
-        ctx.fillRect(0, 0, Number(data.width ?? 0), Number(data.height ?? 0));
+        configurePixelPerfect(ctx);
+        drawProjectedLightAdditive(
+          ctx,
+          lightPiece.light.projected,
+          this.deps.w.time ?? 0,
+          this.deps.worldLightGroundYScale,
+        );
         ctx.restore();
         return;
       }
-      if (data.variant === "ambientDarkness") {
+    }
+
+    if (command.semanticFamily === "screenOverlay") {
+      const target = this.getCommandCanvasTarget(command);
+      if (command.finalForm === "quad") {
+        const ctx = target.ctx;
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = Number(payload.alpha ?? 1);
+        ctx.fillStyle = String(payload.color ?? "#000");
+        ctx.fillRect(0, 0, Number(payload.width ?? 0), Number(payload.height ?? 0));
+        ctx.restore();
+        return;
+      }
+      if (
+        payload.darknessAlpha !== undefined
+        || payload.ambientTint !== undefined
+        || payload.ambientTintStrength !== undefined
+      ) {
         this.deps.setRenderPerfDrawTag?.("lighting");
         this.deps.renderAmbientDarknessOverlay(
-          this.frameContext.ctx,
+          target.ctx,
           {
-            darknessAlpha: Number(data.darknessAlpha ?? 0),
-            ambientTint: data.ambientTint,
-            ambientTintStrength: data.ambientTintStrength,
+            darknessAlpha: Number(payload.darknessAlpha ?? 0),
+            ambientTint: payload.ambientTint,
+            ambientTintStrength: payload.ambientTintStrength,
           },
-          Number(data.width ?? 0),
-          Number(data.height ?? 0),
+          target.width,
+          target.height,
         );
         this.deps.setRenderPerfDrawTag?.(null);
         return;
       }
-    }
-
-    if (kind === "light" && data.variant === "projectedLight") {
-      const lightPiece = data.lightPiece as any;
-      const ctx = this.frameContext.ctx;
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      configurePixelPerfect(ctx);
-      drawProjectedLightAdditive(
-        ctx,
-        lightPiece.light.projected,
-        this.deps.w.time ?? 0,
-        this.deps.worldLightGroundYScale,
-      );
-      ctx.restore();
+      this.drawFloatingText();
       return;
     }
 
-    if (kind === "sprite") {
-      if (data.variant === "imageSprite") {
-        this.drawImageSprite(data);
+    if (command.semanticFamily === "worldSprite") {
+      if (payload.draw) {
+        this.drawRenderPiece(payload.draw);
         return;
       }
-      if (data.variant === "vfxClip") {
-        this.drawVfxClip(data);
+      if (payload.image && Number.isFinite(Number(payload.dx)) && Number.isFinite(Number(payload.dy))) {
+        this.drawImageSprite(payload);
         return;
       }
-      if (data.variant === "pickup") {
-        this.drawPickup(data);
+      if (payload.vfxIndex !== undefined) {
+        this.drawVfxClip(payload);
         return;
       }
-      if (data.variant === "enemy") {
-        this.drawEnemy(data);
+      if (payload.pickupIndex !== undefined) {
+        this.drawPickup(payload);
         return;
       }
-      if (data.variant === "npc") {
-        this.drawNpc(data);
+      if (payload.enemyIndex !== undefined) {
+        this.drawEnemy(payload);
         return;
       }
-      if (data.variant === "neutralMob") {
-        this.drawNeutralMob(data);
+      if (payload.npcIndex !== undefined) {
+        this.drawNpc(payload);
         return;
       }
-      if (data.variant === "projectileSpark") {
-        this.drawProjectileSpark(data);
+      if (payload.neutralMobIndex !== undefined) {
+        this.drawNeutralMob(payload);
         return;
       }
-      if (data.variant === "projectile") {
-        this.drawProjectile(data);
+      if (payload.projectileIndex !== undefined && payload.sparkStyle) {
+        this.drawProjectileSpark(payload);
         return;
       }
-      if (data.variant === "player") {
-        this.drawPlayer(data);
+      if (payload.projectileIndex !== undefined) {
+        this.drawProjectile(payload);
         return;
       }
-      if (data.variant === "renderPieceSprite") {
-        this.drawRenderPiece(data.draw as any);
+      if (payload.feet) {
+        if (payload.enemyIndex !== undefined) this.drawEnemy(payload);
+        else if (payload.npcIndex !== undefined) this.drawNpc(payload);
+        else if (payload.neutralMobIndex !== undefined) this.drawNeutralMob(payload);
+        else this.drawPlayer(payload);
         return;
       }
     }
 
-    if (kind === "triangle" && data.variant === "structureTriangleGroup") {
-      this.drawStructureTriangleGroup(data);
+    if (command.semanticFamily === "worldGeometry") {
+      this.drawTriangleMesh(payload);
       return;
     }
 
-    if (kind === "debug" && data.variant === "debugPass") {
-      const input = { ...(data.input as Record<string, unknown>), ctx: this.frameContext.ctx };
-      this.deps.executeDebugPass({
-        phase: data.phase,
-        input,
-      });
+    if (command.semanticFamily === "debug") {
+      if (payload.triangleOverlay) {
+        this.drawDebugTriangleOverlay(payload);
+        return;
+      }
+      if (payload.sweepShadowMap) {
+        this.drawSweepShadowMap(payload);
+        return;
+      }
+      if (payload.cells) {
+        this.drawPlayerWedge(payload);
+        return;
+      }
+      if (payload.phase) {
+        const input = { ...(payload.input as Record<string, unknown>), ctx: this.frameContext.ctx };
+        this.deps.executeDebugPass({
+          phase: payload.phase,
+          input,
+        });
+      }
     }
   }
 
@@ -919,50 +948,43 @@ export class Canvas2DRenderer {
     ctx.restore();
   }
 
-  private drawStructureTriangleGroup(data: any): void {
-    const image = data.flipX ? this.deps.getFlippedOverlayImage(data.image) : data.image;
+  private drawTriangleMesh(data: any): void {
+    const image = data.image;
     if (!image) return;
-    const compareDistanceOnlyStableIds = new Set<number>((data.compareDistanceOnlyStableIds ?? []) as number[]);
     const ctx = this.frameContext.ctx;
-    for (let i = 0; i < data.finalVisibleTriangles.length; i++) {
-      const triangle = data.finalVisibleTriangles[i];
+    for (let i = 0; i < data.triangles.length; i++) {
+      const triangle = data.triangles[i];
       const [s0, s1, s2] = triangle.srcPoints;
-      const [d0, d1, d2] = triangle.points;
-      const centroidX = (triangle.points[0].x + triangle.points[1].x + triangle.points[2].x) / 3;
-      const centroidY = (triangle.points[0].y + triangle.points[1].y + triangle.points[2].y) / 3;
-      const cutoutRect = data.cutoutScreenRect as any;
-      const cutoutEligible =
-        data.cutoutEnabled
-        && data.buildingDirectionalEligible
-        && data.groupParentAfterPlayer
-        && centroidX >= cutoutRect.minX
-        && centroidX <= cutoutRect.maxX
-        && centroidY >= cutoutRect.minY
-        && centroidY <= cutoutRect.maxY;
-      if (cutoutEligible && Number(data.cutoutAlpha) < 1) {
+      const [d0, d1, d2] = triangle.dstPoints;
+      const alpha = Number.isFinite(Number(triangle.alpha)) ? Number(triangle.alpha) : 1;
+      if (alpha < 1) {
         ctx.save();
-        ctx.globalAlpha = ctx.globalAlpha * Number(data.cutoutAlpha);
-        drawTexturedTriangle(ctx, image, Number(data.drawWidth), Number(data.drawHeight), s0, s1, s2, d0, d1, d2);
+        ctx.globalAlpha = ctx.globalAlpha * alpha;
+        drawTexturedTriangle(ctx, image, Number(data.sourceWidth), Number(data.sourceHeight), s0, s1, s2, d0, d1, d2);
         ctx.restore();
       } else {
-        drawTexturedTriangle(ctx, image, Number(data.drawWidth), Number(data.drawHeight), s0, s1, s2, d0, d1, d2);
+        drawTexturedTriangle(ctx, image, Number(data.sourceWidth), Number(data.sourceHeight), s0, s1, s2, d0, d1, d2);
       }
+    }
+  }
 
-      if (compareDistanceOnlyStableIds.has(triangle.stableId)) {
-        const [a, b, c] = triangle.points;
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.lineTo(c.x, c.y);
-        ctx.closePath();
-        ctx.fillStyle = "rgba(255,120,40,0.28)";
-        ctx.fill();
-        ctx.strokeStyle = "rgba(255,120,40,0.9)";
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        ctx.restore();
-      }
+  private drawDebugTriangleOverlay(data: any): void {
+    const ctx = this.frameContext.ctx;
+    for (let i = 0; i < data.triangleOverlay.length; i++) {
+      const triangle = data.triangleOverlay[i];
+      const [a, b, c] = triangle.points;
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.lineTo(c.x, c.y);
+      ctx.closePath();
+      ctx.fillStyle = String(triangle.fillStyle ?? "rgba(255,120,40,0.28)");
+      ctx.fill();
+      ctx.strokeStyle = String(triangle.strokeStyle ?? "rgba(255,120,40,0.9)");
+      ctx.lineWidth = Number(triangle.lineWidth ?? 1);
+      ctx.stroke();
+      ctx.restore();
     }
   }
 

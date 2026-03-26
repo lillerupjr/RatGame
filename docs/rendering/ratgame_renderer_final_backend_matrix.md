@@ -5,8 +5,8 @@
 - Current policy: `Canvas2D` remains the default world backend.
 - WebGL status: available as an opt-in world backend when a usable WebGL surface exists.
 - Why WebGL is not the default yet:
-  - `decal:runtimeSidewalkTop` is still Canvas-only and materially affects decal-heavy ground scenes.
-  - `decal:runtimeDecalTop` is still Canvas-only and materially affects road/decal-heavy scenes.
+  - `worldSprite:quad` still includes descriptor-backed fallback payloads and remains mixed.
+  - `worldPrimitive:primitive` still remains mixed across WebGL and Canvas paths.
 
 This means Stage E closes the transition policy, but does **not** sign off WebGL as the default backend yet.
 
@@ -19,7 +19,7 @@ This means Stage E closes the transition policy, but does **not** sign off WebGL
   - WebGL init/runtime failure falls back to Canvas2D explicitly.
 - Still pending for full default-backend signoff:
   - live visual/manual parity audit across representative structure-heavy, decal-heavy, and mixed-light scenes
-  - runtime top/decal parity for the remaining Canvas-only ground families
+  - mixed sprite/primitive cleanup that remains deferred to Phase 3
 
 ## Family Matrix
 
@@ -27,15 +27,16 @@ This means Stage E closes the transition policy, but does **not** sign off WebGL
 | --- | --- | --- | --- | --- | --- |
 | `sprite:imageSprite` | `WEBGL_PRIMARY` | `webgl` | `parity_pending_manual` | `yes` | Resolved image-frame sprites are fully on the textured-quad path. |
 | `sprite:renderPieceSprite` | `WEBGL_PRIMARY` | `webgl` | `parity_pending_manual` | `yes` | Quad-safe structure/world sprite pieces are WebGL-native. |
-| `decal:imageTop` | `WEBGL_PRIMARY` | `mixed` | `parity_pending_manual` | `yes` | Flat tops render in WebGL; projected/ocean tops still use explicit Canvas fallback. |
+| `groundSurface:projectedSurface` | `WEBGL_PRIMARY` | `webgl` | `parity_pending_manual` | `yes` | Ground surfaces now emit a single normalized projected-surface payload with explicit CPU-owned geometry. |
 | `primitive:zoneEffect` | `WEBGL_SUPPORTED_CANVAS_FALLBACK_ALLOWED` | `mixed` | `parity_pending_manual` | `yes` | Non-`FIRE` effects render in WebGL; `FIRE` remains Canvas-backed. |
 | `overlay:structureOverlay` | `WEBGL_PRIMARY` | `webgl` | `parity_pending_manual` | `yes` | Quad-safe structure overlays are WebGL-backed. |
 | `overlay:screenTint` | `WEBGL_PRIMARY` | `webgl` | `parity_pending_manual` | `yes` | Screen-space full-quad path. |
 | `overlay:ambientDarkness` | `WEBGL_PRIMARY` | `webgl` | `parity_pending_manual` | `yes` | Screen-space darkness/tint overlay path. |
 | `light:projectedLight` | `WEBGL_PRIMARY` | `webgl` | `parity_pending_manual` | `yes` | Projected additive light pieces render in WebGL. |
-| `triangle:structureTriangleGroup` | `WEBGL_SUPPORTED_CANVAS_FALLBACK_ALLOWED` | `mixed` | `parity_pending_manual` | `yes` | Main structure triangles are WebGL-backed; compare-distance debug overlay remains explicit Canvas fallback. |
-| `decal:runtimeSidewalkTop` | `BLOCKED_SIGNOFF` | `canvas2d` | `blocked` | `no` | Runtime top baking/ramp parity still depends on Canvas. |
-| `decal:runtimeDecalTop` | `BLOCKED_SIGNOFF` | `canvas2d` | `blocked` | `no` | Runtime decal baking/ramp-fit projection still depends on Canvas. |
+| `worldGeometry:triangles` | `WEBGL_PRIMARY` | `webgl` | `parity_pending_manual` | `yes` | World geometry now emits explicit triangle meshes only; compare-distance overlays moved to debug. |
+| `groundDecal:projectedSurface` | `WEBGL_PRIMARY` | `webgl` | `parity_pending_manual` | `yes` | Ground decals now emit normalized tile-diamond projected surfaces. |
+| `worldSprite:quad` | `BLOCKED_SIGNOFF` | `mixed` | `blocked` | `no` | Descriptor-backed sprite fallback payloads still block WebGL-by-default signoff. |
+| `worldPrimitive:primitive` | `BLOCKED_SIGNOFF` | `mixed` | `blocked` | `no` | Primitive families still rely on mixed backend support and remain a Phase 3 policy blocker. |
 | `sprite:vfxClip` | `INTENTIONALLY_CANVAS_ONLY` | `canvas2d` | `fallback_safe` | `yes` | Legacy unresolved clip path remains safe on Canvas. |
 | `sprite:pickup` | `INTENTIONALLY_CANVAS_ONLY` | `canvas2d` | `fallback_safe` | `yes` | Still mixes sprite draws with vector fallback and relight overlays. |
 | `sprite:enemy` | `INTENTIONALLY_CANVAS_ONLY` | `canvas2d` | `fallback_safe` | `yes` | Legacy animation/relight behavior remains Canvas-backed. |

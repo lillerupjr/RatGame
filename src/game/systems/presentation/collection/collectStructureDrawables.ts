@@ -9,6 +9,11 @@ import {
 import { buildStructureShadowFrameResult as buildOrchestratedStructureShadowFrameResult } from "../structureShadows/structureShadowOrchestrator";
 import { shouldBuildStructureV6ShadowMasksForFrame } from "../structureShadows/structureShadowVersionRouting";
 import { buildRuntimeStructureTriangleSemanticMap } from "../structureShadows/structureTriangleSemantics";
+import {
+  buildTriangleMeshFromRect,
+  buildTriangleMeshPayload,
+  resolveTriangleCutoutAlpha,
+} from "../renderCommandGeometry";
 
 type RenderKey = any;
 
@@ -107,6 +112,29 @@ export function collectStructureDrawables(input: CollectionContext): {
     };
   }
 
+  const normalizeRenderPieceToMesh = (draw: {
+    img: CanvasImageSource;
+    dx: number;
+    dy: number;
+    dw: number;
+    dh: number;
+    flipX?: boolean;
+    scale?: number;
+  }, stableId?: number) => {
+    const scale = Number.isFinite(Number(draw.scale)) ? Number(draw.scale) : 1;
+    return buildTriangleMeshFromRect({
+      image: draw.img,
+      sourceWidth: Number(draw.dw ?? 0),
+      sourceHeight: Number(draw.dh ?? 0),
+      dx: Number(draw.dx ?? 0),
+      dy: Number(draw.dy ?? 0),
+      dw: Number(draw.dw ?? 0) * scale,
+      dh: Number(draw.dh ?? 0) * scale,
+      flipX: !!draw.flipX,
+      stableId,
+    });
+  };
+
   // Collect non-wall FACE pieces into slices
   // ----------------------------
   {
@@ -137,10 +165,17 @@ export function collectStructureDrawables(input: CollectionContext): {
           kindOrder: faceKindOrder,
           stableId: faceStableId + di * 0.001,
         };
-        enqueueSliceCommand(frameBuilder, renderKey, "sprite", {
-          variant: "renderPieceSprite",
-          draw: d,
-        });
+        enqueueSliceCommand(frameBuilder, renderKey, face.kind === "WALL"
+          ? {
+              semanticFamily: "worldGeometry",
+              finalForm: "triangles",
+              payload: normalizeRenderPieceToMesh(d, renderKey.stableId),
+            }
+          : {
+              semanticFamily: "worldGeometry",
+              finalForm: "triangles",
+              payload: normalizeRenderPieceToMesh(d, renderKey.stableId),
+            });
       }
     }
   }
@@ -176,9 +211,10 @@ export function collectStructureDrawables(input: CollectionContext): {
         kindOrder: wallKindOrder,
         stableId: occStableId,
       };
-      enqueueSliceCommand(frameBuilder, renderKey, "sprite", {
-        variant: "renderPieceSprite",
-        draw,
+      enqueueSliceCommand(frameBuilder, renderKey, {
+        semanticFamily: "worldGeometry",
+        finalForm: "triangles",
+        payload: normalizeRenderPieceToMesh(draw, renderKey.stableId),
       });
     }
   }
@@ -248,27 +284,89 @@ export function collectStructureDrawables(input: CollectionContext): {
     for (let si = 0; si < structureDrawables.length; si++) {
       const structureDrawable = structureDrawables[si];
       if (structureDrawable.payload.kind === "overlay") {
-        enqueueSliceCommand(frameBuilder, structureDrawable.key, "overlay", {
-          variant: "structureOverlay",
-          piece: structureDrawable.payload.piece,
+        const overlay = structureDrawable.payload.piece.overlay;
+        const draw = structureDrawable.payload.piece.draw;
+        if ((overlay.kind ?? "ROOF") === "PROP") {
+          enqueueSliceCommand(frameBuilder, structureDrawable.key, {
+            semanticFamily: "worldSprite",
+            finalForm: "quad",
+            payload: {
+              draw,
+            },
+          });
+          continue;
+        }
+
+        enqueueSliceCommand(frameBuilder, structureDrawable.key, {
+          semanticFamily: "worldGeometry",
+          finalForm: "triangles",
+          payload: normalizeRenderPieceToMesh(draw, structureDrawable.key.stableId),
         });
         continue;
       }
 
-      enqueueSliceCommand(frameBuilder, structureDrawable.key, "triangle", {
-        variant: "structureTriangleGroup",
-        image: structureDrawable.payload.piece.draw.img,
-        flipX: !!structureDrawable.payload.piece.draw.flipX,
-        drawWidth: structureDrawable.payload.piece.draw.dw,
-        drawHeight: structureDrawable.payload.piece.draw.dh,
-        finalVisibleTriangles: structureDrawable.payload.piece.finalVisibleTriangles,
-        compareDistanceOnlyStableIds: structureDrawable.payload.piece.compareDistanceOnlyTriangles.map((triangle: any) => triangle.stableId),
-        cutoutEnabled: structureDrawable.payload.piece.cutoutEnabled,
-        cutoutAlpha: structureDrawable.payload.piece.cutoutAlpha,
-        buildingDirectionalEligible: structureDrawable.payload.piece.buildingDirectionalEligible,
-        groupParentAfterPlayer: structureDrawable.payload.piece.groupParentAfterPlayer,
-        cutoutScreenRect: structureCutoutScreenRect,
+      const piece = structureDrawable.payload.piece;
+      const sourceWidth = Number(piece.draw.dw ?? 0);
+      const sourceHeight = Number(piece.draw.dh ?? 0);
+      const compareDistanceOnlyStableIds = new Set<number>(
+        piece.compareDistanceOnlyTriangles.map((triangle: any) => triangle.stableId),
+      );
+      const normalizedTriangles = piece.finalVisibleTriangles.map((triangle: any) => {
+        const srcPoints = triangle.srcPoints.map((point: any) => ({
+          x: !!piece.draw.flipX ? sourceWidth - Number(point.x ?? 0) : Number(point.x ?? 0),
+          y: Number(point.y ?? 0),
+        }));
+        const dstPoints = triangle.points.map((point: any) => ({
+          x: Number(point.x ?? 0),
+          y: Number(point.y ?? 0),
+        }));
+        return {
+          stableId: triangle.stableId,
+          srcPoints: [srcPoints[0], srcPoints[1], srcPoints[2]],
+          dstPoints: [dstPoints[0], dstPoints[1], dstPoints[2]],
+          alpha: resolveTriangleCutoutAlpha(
+            [dstPoints[0], dstPoints[1], dstPoints[2]],
+            {
+              cutoutEnabled: piece.cutoutEnabled,
+              cutoutAlpha: piece.cutoutAlpha,
+              buildingDirectionalEligible: piece.buildingDirectionalEligible,
+              groupParentAfterPlayer: piece.groupParentAfterPlayer,
+              cutoutScreenRect: structureCutoutScreenRect,
+            },
+          ),
+        };
       });
+
+      enqueueSliceCommand(frameBuilder, structureDrawable.key, {
+        semanticFamily: "worldGeometry",
+        finalForm: "triangles",
+        payload: buildTriangleMeshPayload({
+          image: piece.draw.img,
+          sourceWidth,
+          sourceHeight,
+          triangles: normalizedTriangles,
+        }),
+      });
+
+      if (compareDistanceOnlyStableIds.size > 0) {
+        enqueueSliceCommand(frameBuilder, {
+          ...structureDrawable.key,
+          stableId: Number(structureDrawable.key.stableId) + 0.0005,
+        }, {
+          semanticFamily: "debug",
+          finalForm: "primitive",
+          payload: {
+            triangleOverlay: normalizedTriangles
+              .filter((triangle: any) => compareDistanceOnlyStableIds.has(triangle.stableId))
+              .map((triangle: any) => ({
+                points: triangle.dstPoints,
+                fillStyle: "rgba(255,120,40,0.28)",
+                strokeStyle: "rgba(255,120,40,0.9)",
+                lineWidth: 1,
+              })),
+          },
+        });
+      }
     }
   }
 

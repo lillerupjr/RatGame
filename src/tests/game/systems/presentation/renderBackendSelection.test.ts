@@ -18,8 +18,8 @@ describe("render backend selection", () => {
   it("keeps Canvas2D as the default policy while still allowing explicit WebGL opt-in", () => {
     const blockers = getFinalBackendMatrix().filter((entry) => entry.classification === "BLOCKED_SIGNOFF");
     expect(blockers.map((entry) => entry.family)).toEqual([
-      "decal:runtimeSidewalkTop",
-      "decal:runtimeDecalTop",
+      "worldSprite:quad",
+      "worldPrimitive:primitive",
     ]);
 
     const defaultSelection = resolveRenderBackendSelection(undefined, null);

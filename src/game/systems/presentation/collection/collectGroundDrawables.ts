@@ -1,5 +1,10 @@
 import type { CollectionContext } from "../contracts/collectionContext";
 import { enqueueSliceCommand } from "../frame/renderFrameBuilder";
+import {
+  buildFlatTileDestinationQuad,
+  buildGroundDecalProjectedSurfacePayload,
+  buildProjectedSurfacePayload,
+} from "../renderCommandGeometry";
 
 type RenderKey = any;
 type ShadowParams = any;
@@ -152,52 +157,32 @@ export function collectGroundDrawables(input: CollectionContext): void {
               kindOrder: KindOrder.FLOOR,
               stableId: (tx * 73856093 ^ ty * 19349663 ^ (surface.zBase * 100 | 0) * 83492791) + 17,
             };
-            enqueueSliceCommand(frameBuilder, renderKey, "decal", {
-              variant: "runtimeSidewalkTop",
-              mode: finalImage && isRampRoadTile ? "projected" : (!isRampRoadTile && finalImage ? "flat" : "projected"),
-              tx,
-              ty,
-              zBase: surface.zBase,
-              anchorY,
-              family: runtimeTop.family,
-              variantIndex: runtimeTop.variantIndex,
-              rotationQuarterTurns: runtimeTop.rotationQuarterTurns,
-              ...(finalImage && !isRampRoadTile ? (() => {
-                const centerX = snapPx(worldToScreen((tx + 0.5) * T, (ty + 0.5) * T).x + camX);
-                const centerY = snapPx(
-                  worldToScreen((tx + 0.5) * T, (ty + 0.5) * T).y
-                  + camY
-                  - surface.zBase * ELEV_PX
-                  - SIDEWALK_ISO_HEIGHT * (anchorY - 0.5),
-                );
-                return {
-                  image: finalImage,
-                  dx: centerX - SIDEWALK_SRC_SIZE * 0.5,
-                  dy: centerY - SIDEWALK_ISO_HEIGHT * 0.5,
-                  dw: finalImage.width,
-                  dh: finalImage.height,
-                };
-              })() : {}),
-              ...(finalImage && isRampRoadTile ? (() => {
-                const q = getRampQuadPoints(tx, ty, anchorY);
-                return {
-                  image: finalImage,
-                  sourceWidth: finalImage.width,
-                  sourceHeight: finalImage.height,
-                  finalVisibleTriangles: [
-                    {
-                      stableId: renderKey.stableId,
-                      srcPoints: [srcUvNW, srcUvNE, srcUvSE],
-                      points: [q.nw, q.ne, q.se],
-                    },
-                    {
-                      stableId: Number(renderKey.stableId) + 0.01,
-                      srcPoints: [srcUvNW, srcUvSE, srcUvSW],
-                      points: [q.nw, q.se, q.sw],
-                    },
-                  ],
-                };
-              })() : {}),
+            if (!finalImage) continue;
+            const destinationQuad = isRampRoadTile
+              ? getRampQuadPoints(tx, ty, anchorY)
+              : buildFlatTileDestinationQuad({
+                  tx,
+                  ty,
+                  zBase: surface.zBase,
+                  renderAnchorY: anchorY,
+                  tileWorld: T,
+                  elevPx: ELEV_PX,
+                  isoHeight: SIDEWALK_ISO_HEIGHT,
+                  camX,
+                  camY,
+                  worldToScreen,
+                  snapPoint: snapPx,
+                });
+            enqueueSliceCommand(frameBuilder, renderKey, {
+              semanticFamily: "groundSurface",
+              finalForm: "projectedSurface",
+              payload: buildProjectedSurfacePayload({
+                image: finalImage,
+                sourceWidth: finalImage.width,
+                sourceHeight: finalImage.height,
+                destinationQuad,
+                stableId: renderKey.stableId,
+              }),
             });
             continue;
           }
@@ -219,21 +204,7 @@ export function collectGroundDrawables(input: CollectionContext): void {
           const topW = projectedOceanTop ? topImg.width : (topImg.width * topScale);
           const topH = projectedOceanTop ? topImg.height : (topImg.height * topScale);
 
-          const wx = (tx + 0.5) * T;
-          const wy = (ty + 0.5) * T;
-
-          const p = worldToScreen(wx, wy);
-          const dx = p.x + camX - topW * 0.5;
-
           const anchorY = surface.renderAnchorY ?? ANCHOR_Y;
-          let dy = p.y + camY - topH * anchorY;
-
-          const h = surface.zBase;
-          dy -= h * ELEV_PX;
-
-          // Stair render-height tweak (screen-space)
-          if (isStairTop) dy += STAIR_TOP_DY;
-
           // Deterministic stableId based on tile and surface properties
           const topStableId = tx * 73856093 ^ ty * 19349663 ^ (surface.zBase * 100 | 0) * 83492791;
 
@@ -244,38 +215,35 @@ export function collectGroundDrawables(input: CollectionContext): void {
             kindOrder: KindOrder.FLOOR,
             stableId: topStableId,
           };
-          if (tdef.kind === TILE_ID_OCEAN && projectedOceanTop) {
-            enqueueSliceCommand(frameBuilder, renderKey, "decal", {
-              variant: "imageTop",
-              mode: "flat",
-              image: projectedOceanTop,
-              dx,
-              dy,
-              dw: topW,
-              dh: topH,
-            });
-          } else if (tdef.kind === TILE_ID_OCEAN) {
-            enqueueSliceCommand(frameBuilder, renderKey, "decal", {
-              variant: "imageTop",
-              mode: "oceanProjected",
-              image: topRec.img,
-              tx,
-              ty,
-              zBase: surface.zBase,
-              renderAnchorY: anchorY,
-              oceanProjectionScale,
-            });
-          } else {
-            enqueueSliceCommand(frameBuilder, renderKey, "decal", {
-              variant: "imageTop",
-              mode: "flat",
-              image: topImg,
-              dx,
-              dy,
-              dw: topW,
-              dh: topH,
-            });
-          }
+          const projectedTopImage = tdef.kind === TILE_ID_OCEAN
+            ? projectedOceanTop
+            : topImg;
+          if (!projectedTopImage) continue;
+          const destinationQuad = buildFlatTileDestinationQuad({
+            tx,
+            ty,
+            zBase: surface.zBase,
+            renderAnchorY: anchorY,
+            tileWorld: T,
+            elevPx: ELEV_PX,
+            isoHeight: SIDEWALK_ISO_HEIGHT,
+            camX,
+            camY,
+            worldToScreen,
+            snapPoint: snapPx,
+            extraDy: isStairTop ? STAIR_TOP_DY : 0,
+          });
+          enqueueSliceCommand(frameBuilder, renderKey, {
+            semanticFamily: "groundSurface",
+            finalForm: "projectedSurface",
+            payload: buildProjectedSurfacePayload({
+              image: projectedTopImage,
+              sourceWidth: topW,
+              sourceHeight: topH,
+              destinationQuad,
+              stableId: renderKey.stableId,
+            }),
+          });
         }
       }
     }
@@ -298,74 +266,54 @@ export function collectGroundDrawables(input: CollectionContext): void {
         stableId: (decal.tx * 73856093 ^ decal.ty * 19349663 ^ (decal.zBase * 100 | 0) * 83492791) + 19,
       };
 
-      enqueueSliceCommand(frameBuilder, renderKey, "decal", {
-        variant: "runtimeDecalTop",
-        mode: "projected",
-        tx: decal.tx,
-        ty: decal.ty,
-        zBase: decal.zBase,
-        renderAnchorY: decal.renderAnchorY,
-        setId: decal.setId,
-        variantIndex: decal.variantIndex,
-        rotationQuarterTurns: decal.rotationQuarterTurns,
-        ...(() => {
-          const src = getRuntimeDecalSprite(decal.setId, decal.variantIndex);
-          if (!src?.ready || !src.img || src.img.width <= 0 || src.img.height <= 0) return {};
-          const decalScale = roadMarkingDecalScale(decal.setId, decal.variantIndex);
-          const baked = getRuntimeIsoDecalCanvas(src.img, decal.rotationQuarterTurns, decalScale);
-          if (!baked) return {};
-          const pieceKey = staticRelightFrame
-            ? decalRelightPieceKey(
-              decal.tx,
-              decal.ty,
-              decal.zBase,
-              decal.renderAnchorY,
-              decal.setId,
-              decal.variantIndex,
-              decal.rotationQuarterTurns,
-              decalScale,
-            )
-            : null;
-          const bakedEntry = pieceKey ? staticRelightBakeStore.get(pieceKey) : null;
-          const relitCanvas = bakedEntry?.kind === "RELIT" ? bakedEntry.baked : null;
-          const finalImage = relitCanvas ?? baked;
-          if (rampRoadTiles.has(`${decal.tx},${decal.ty}`)) {
-            const diamond = getDiamondFitCanvas(finalImage);
-            const q = getRampQuadPoints(decal.tx, decal.ty, decal.renderAnchorY);
-            return {
-              image: diamond,
-              sourceWidth: diamond.width,
-              sourceHeight: diamond.height,
-              finalVisibleTriangles: [
-                {
-                  stableId: renderKey.stableId,
-                  srcPoints: [srcUvNW, srcUvNE, srcUvSE],
-                  points: [q.nw, q.ne, q.se],
-                },
-                {
-                  stableId: Number(renderKey.stableId) + 0.01,
-                  srcPoints: [srcUvNW, srcUvSE, srcUvSW],
-                  points: [q.nw, q.se, q.sw],
-                },
-              ],
-            };
-          }
-          const rawCenterX = worldToScreen(decal.tx * T, decal.ty * T).x + camX;
-          const rawCenterY = worldToScreen(decal.tx * T, decal.ty * T).y + camY - decal.zBase * ELEV_PX - SIDEWALK_ISO_HEIGHT * (decal.renderAnchorY - 0.5);
-          const snapRoad = shouldPixelSnapRoadMarking(decal.setId, decal.variantIndex);
-          const centerX = snapRoad ? Math.round(rawCenterX) : snapPx(rawCenterX);
-          const centerY = snapRoad ? Math.round(rawCenterY) : snapPx(rawCenterY);
-          const dx = centerX - baked.width * 0.5;
-          const dy = centerY - baked.height * 0.5;
-          return {
-            mode: "flat",
-            image: finalImage,
-            dx: snapRoad ? Math.round(dx) : snapPx(dx),
-            dy: snapRoad ? Math.round(dy) : snapPx(dy),
-            dw: baked.width,
-            dh: baked.height,
-          };
-        })(),
+      const src = getRuntimeDecalSprite(decal.setId, decal.variantIndex);
+      if (!src?.ready || !src.img || src.img.width <= 0 || src.img.height <= 0) continue;
+      const decalScale = roadMarkingDecalScale(decal.setId, decal.variantIndex);
+      const baked = getRuntimeIsoDecalCanvas(src.img, decal.rotationQuarterTurns, decalScale);
+      if (!baked) continue;
+      const pieceKey = staticRelightFrame
+        ? decalRelightPieceKey(
+          decal.tx,
+          decal.ty,
+          decal.zBase,
+          decal.renderAnchorY,
+          decal.setId,
+          decal.variantIndex,
+          decal.rotationQuarterTurns,
+          decalScale,
+        )
+        : null;
+      const bakedEntry = pieceKey ? staticRelightBakeStore.get(pieceKey) : null;
+      const relitCanvas = bakedEntry?.kind === "RELIT" ? bakedEntry.baked : null;
+      const finalImage = relitCanvas ?? baked;
+      const finalDiamond = getDiamondFitCanvas(finalImage);
+      const snapRoad = shouldPixelSnapRoadMarking(decal.setId, decal.variantIndex);
+      const destinationQuad = rampRoadTiles.has(`${decal.tx},${decal.ty}`)
+        ? getRampQuadPoints(decal.tx, decal.ty, decal.renderAnchorY)
+        : buildFlatTileDestinationQuad({
+            tx: decal.tx,
+            ty: decal.ty,
+            zBase: decal.zBase,
+            renderAnchorY: decal.renderAnchorY,
+            tileWorld: T,
+            elevPx: ELEV_PX,
+            isoHeight: SIDEWALK_ISO_HEIGHT,
+            camX,
+            camY,
+            worldToScreen,
+            snapPoint: snapRoad ? Math.round : snapPx,
+          });
+
+      enqueueSliceCommand(frameBuilder, renderKey, {
+        semanticFamily: "groundDecal",
+        finalForm: "projectedSurface",
+        payload: buildGroundDecalProjectedSurfacePayload({
+          image: finalDiamond,
+          sourceWidth: finalDiamond.width,
+          sourceHeight: finalDiamond.height,
+          destinationQuad,
+          stableId: renderKey.stableId,
+        }),
       });
     }
   }
@@ -394,9 +342,12 @@ export function collectGroundDrawables(input: CollectionContext): void {
           stableId: 210000 + zone.id,
         };
 
-        enqueueSliceCommand(frameBuilder, renderKey, "overlay", {
-          variant: "zoneObjective",
-          zone,
+        enqueueSliceCommand(frameBuilder, renderKey, {
+          semanticFamily: "worldPrimitive",
+          finalForm: "primitive",
+          payload: {
+            zone,
+          },
         });
       }
     }
@@ -438,9 +389,12 @@ export function collectGroundDrawables(input: CollectionContext): void {
         screenOffsetX: camX,
         screenOffsetY: camY,
       };
-      enqueueSliceCommand(frameBuilder, renderKey, "primitive", {
-        variant: "entityShadow",
-        shadowParams,
+      enqueueSliceCommand(frameBuilder, renderKey, {
+        semanticFamily: "worldPrimitive",
+        finalForm: "primitive",
+        payload: {
+          shadowParams,
+        },
       });
       const feet = getEntityFeetPos(ew.wx, ew.wy, zAbs);
       entitySilhouetteMaskDraws.push((maskCtx: any) => {
@@ -524,9 +478,12 @@ export function collectGroundDrawables(input: CollectionContext): void {
         screenOffsetX: camX,
         screenOffsetY: camY,
       };
-      enqueueSliceCommand(frameBuilder, renderKey, "primitive", {
-        variant: "entityShadow",
-        shadowParams,
+      enqueueSliceCommand(frameBuilder, renderKey, {
+        semanticFamily: "worldPrimitive",
+        finalForm: "primitive",
+        payload: {
+          shadowParams,
+        },
       });
       const feet = getEntityFeetPos(npc.wx, npc.wy, zAbs);
       entitySilhouetteMaskDraws.push((maskCtx: any) => {
@@ -592,9 +549,12 @@ export function collectGroundDrawables(input: CollectionContext): void {
         screenOffsetX: camX,
         screenOffsetY: camY,
       };
-      enqueueSliceCommand(frameBuilder, renderKey, "primitive", {
-        variant: "entityShadow",
-        shadowParams,
+      enqueueSliceCommand(frameBuilder, renderKey, {
+        semanticFamily: "worldPrimitive",
+        finalForm: "primitive",
+        payload: {
+          shadowParams,
+        },
       });
       const feet = getEntityFeetPos(mob.pos.wx, mob.pos.wy, zAbs);
       entitySilhouetteMaskDraws.push((maskCtx: any) => {
@@ -655,9 +615,12 @@ export function collectGroundDrawables(input: CollectionContext): void {
         screenOffsetX: camX,
         screenOffsetY: camY,
       };
-      enqueueSliceCommand(frameBuilder, renderKey, "primitive", {
-        variant: "entityShadow",
-        shadowParams,
+      enqueueSliceCommand(frameBuilder, renderKey, {
+        semanticFamily: "worldPrimitive",
+        finalForm: "primitive",
+        payload: {
+          shadowParams,
+        },
       });
       const feet = getEntityFeetPos(px, py, pzAbs);
       entitySilhouetteMaskDraws.push((maskCtx: any) => {
