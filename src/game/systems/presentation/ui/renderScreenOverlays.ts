@@ -129,7 +129,7 @@ export function renderScreenOverlays(input: ScreenOverlayContext): void {
   }
   // Building-mask debug overlay draw disabled to avoid full-canvas mask artifacts.
 
-  if (debugFrame.enabled || renderPerfCountersEnabled || structureShadowFrame.routing.usesV6Debug) {
+  if (debugFrame.enabled || structureShadowFrame.routing.usesV6Debug) {
     enqueueScreenCommand(frameBuilder, {
       semanticFamily: "debug",
       finalForm: "primitive",
@@ -140,7 +140,7 @@ export function renderScreenOverlays(input: ScreenOverlayContext): void {
           cssH,
           dpr,
           flags: debugFlags,
-          renderPerfCountersEnabled,
+          renderPerfCountersEnabled: false,
           structureShadowRouting: structureShadowFrame.routing,
           structureV6VerticalShadowDebugData,
           structureV6ShadowDebugCandidateCount: structureV6ShadowDebugCandidates.length,

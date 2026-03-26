@@ -228,6 +228,7 @@ import type { RenderFrameContext } from "./contracts/renderFrameContext";
 import type { CollectionContext } from "./contracts/collectionContext";
 import type { ScreenOverlayContext } from "./contracts/screenOverlayContext";
 import type { UiPassContext } from "./contracts/uiPassContext";
+import type { RenderDebugScreenPassInput } from "./debug/debugRenderTypes";
 import { resolveStructureOverlayAdmissionContext } from "./structures/structureOverlayAdmission";
 import { collectStructureOverlays } from "./structures/collectStructureOverlays";
 import { buildStructureSlices } from "./structures/buildStructureSlices";
@@ -1340,6 +1341,7 @@ export async function renderSystem(
     camY,
     ELEV_PX,
     STAIR_TOP_DY,
+    SIDEWALK_ISO_HEIGHT,
     decalsInView,
     viewRect,
     KindOrder,
@@ -1598,6 +1600,126 @@ export async function renderSystem(
   });
   const executionPlan = buildRenderExecutionPlan(commandFrame, rampRoadTiles);
 
+  {
+    const sampleGroundCommandDiagnostics = (
+      command: (typeof executionPlan.world)[number],
+    ) => {
+      if (command.semanticFamily !== "groundSurface" || command.finalForm !== "projectedSurface") return null;
+      const tx = Number(command.key.within);
+      const ty = Number(command.key.slice) - tx;
+      if (!Number.isFinite(tx) || !Number.isFinite(ty)) return null;
+      const surface = surfacesAtXY(tx, ty).find((candidate) => {
+        const stableId = candidate.runtimeTop?.kind === "SQUARE_128_RUNTIME"
+          ? ((tx * 73856093 ^ ty * 19349663 ^ (candidate.zBase * 100 | 0) * 83492791) + 17)
+          : (tx * 73856093 ^ ty * 19349663 ^ (candidate.zBase * 100 | 0) * 83492791);
+        return stableId === command.key.stableId;
+      }) ?? null;
+      const rawRenderAnchorY = surface?.renderAnchorY;
+      const resolvedAnchorY = Number.isFinite(Number(rawRenderAnchorY))
+        ? Number(rawRenderAnchorY)
+        : ANCHOR_Y;
+      const anchorYOffset = SIDEWALK_ISO_HEIGHT * (resolvedAnchorY - 0.5);
+      const x0 = tx * T;
+      const y0 = ty * T;
+      const corners = [
+        { label: "nw", worldX: x0, worldY: y0 },
+        { label: "ne", worldX: x0 + T, worldY: y0 },
+        { label: "se", worldX: x0 + T, worldY: y0 + T },
+        { label: "sw", worldX: x0, worldY: y0 + T },
+      ].map((corner) => {
+        const projected = worldToScreen(corner.worldX, corner.worldY);
+        const preSnapY = projected.y + camY - command.key.baseZ * ELEV_PX - anchorYOffset;
+        return {
+          label: corner.label,
+          worldX: corner.worldX,
+          worldY: corner.worldY,
+          projectedX: projected.x,
+          projectedY: projected.y,
+          preSnapY,
+          snappedY: snapPx(preSnapY),
+        };
+      });
+      return {
+        tx,
+        ty,
+        surfaceId: surface?.id ?? null,
+        rawRenderAnchorY,
+        resolvedAnchorY,
+        anchorYOffset,
+        corners,
+      };
+    };
+
+    const projectToDevice = (point: { x: number; y: number }) => ({
+      x: (point.x + viewport.camTx) * viewport.worldScaleDevice + viewport.safeOffsetDeviceX,
+      y: (point.y + viewport.camTy) * viewport.worldScaleDevice + viewport.safeOffsetDeviceY,
+    });
+    const groundProjectedSurfaceCommands = executionPlan.world.filter((command) =>
+      command.semanticFamily === "groundSurface" && command.finalForm === "projectedSurface"
+    ).slice(0, 5);
+    (globalThis as any).__renderGroundProjectedSurfaceSample = {
+      viewport: {
+        camTx: viewport.camTx,
+        camTy: viewport.camTy,
+        worldScaleDevice: viewport.worldScaleDevice,
+        safeOffsetDeviceX: viewport.safeOffsetDeviceX,
+        safeOffsetDeviceY: viewport.safeOffsetDeviceY,
+        devW,
+        devH,
+      },
+      totalGroundProjectedSurfaceCommands: executionPlan.world.filter((command) =>
+        command.semanticFamily === "groundSurface" && command.finalForm === "projectedSurface"
+      ).length,
+      samples: groundProjectedSurfaceCommands.map((command) => {
+        const payload = command.payload as unknown as {
+          sourceWidth: number;
+          sourceHeight: number;
+          triangles: ReadonlyArray<{
+            alpha: number;
+            dstPoints: ReadonlyArray<{ x: number; y: number }>;
+          }>;
+        };
+        const firstPoint = payload.triangles[0]?.dstPoints[0] ?? { x: NaN, y: NaN };
+        const inferredProjectedX = Number(firstPoint.x) - viewport.camTx;
+        const inferredProjectedY = Number(firstPoint.y) - viewport.camTy;
+        const deviceTriangles = payload.triangles.map((triangle) =>
+          triangle.dstPoints.map((point) => projectToDevice(point))
+        );
+        const allDevicePoints = deviceTriangles.flat();
+        const minX = Math.min(...allDevicePoints.map((point) => point.x));
+        const maxX = Math.max(...allDevicePoints.map((point) => point.x));
+        const minY = Math.min(...allDevicePoints.map((point) => point.y));
+        const maxY = Math.max(...allDevicePoints.map((point) => point.y));
+        return {
+          key: command.key,
+          emissionDiagnostics: sampleGroundCommandDiagnostics(command),
+          inferredWorldInputs: {
+            projectedX: inferredProjectedX,
+            projectedY: inferredProjectedY,
+            baseZ: command.key.baseZ,
+            kindOrder: command.key.kindOrder,
+          },
+          diagnosticInputs: {
+            camTx: viewport.camTx,
+            camTy: viewport.camTy,
+            worldScaleDevice: viewport.worldScaleDevice,
+            safeOffsetDeviceX: viewport.safeOffsetDeviceX,
+            safeOffsetDeviceY: viewport.safeOffsetDeviceY,
+            ELEV_PX,
+            SIDEWALK_ISO_HEIGHT,
+          },
+          sourceWidth: payload.sourceWidth,
+          sourceHeight: payload.sourceHeight,
+          triangleAlpha: payload.triangles.map((triangle) => triangle.alpha),
+          dstPoints: payload.triangles.map((triangle) => triangle.dstPoints),
+          deviceDstPoints: deviceTriangles,
+          deviceBounds: { minX, maxX, minY, maxY },
+          intersectsCanvas: maxX >= 0 && maxY >= 0 && minX <= devW && minY <= devH,
+        };
+      }),
+    };
+  }
+
   const canvasRenderer = new Canvas2DRenderer(renderFrame, {
     w,
     T,
@@ -1785,6 +1907,32 @@ export async function renderSystem(
   }
   endRenderPerfFrame(w.timeSec ?? 0);
 
+  const perfDebugScreenInput: RenderDebugScreenPassInput | null = renderPerfCountersEnabled
+    ? {
+        ctx: overlayCtx,
+        cssW,
+        cssH,
+        dpr,
+        flags: debugFlags,
+        renderPerfCountersEnabled: true,
+        structureShadowRouting: structureShadowFrame.routing,
+        structureV6VerticalShadowDebugData,
+        structureV6ShadowDebugCandidateCount: structureV6ShadowDebugCandidates.length,
+        structureV6ShadowCastCount: structureV6VerticalShadowDebugDataList.length,
+        structureV6ShadowCacheStats,
+        shadowSunModel,
+        structureTriangleAdmissionMode,
+        sliderPadding,
+        playerCameraTx,
+        playerCameraTy,
+        structureTriangleCutoutEnabled,
+        structureTriangleCutoutHalfWidth,
+        structureTriangleCutoutHalfHeight,
+        structureTriangleCutoutAlpha,
+        roadWidthAtPlayer: roadAreaWidthAt(playerTx, playerTy),
+      }
+    : null;
+
   const uiPassContext: UiPassContext = {
     frame: renderFrame,
     overlayCtx,
@@ -1806,6 +1954,7 @@ export async function renderSystem(
     getUserSettings,
     screenW,
     screenH,
+    perfDebugScreenInput,
     renderFrame,
   } as UiPassContext;
   renderUiPass(uiPassContext);

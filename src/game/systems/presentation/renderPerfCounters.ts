@@ -36,6 +36,13 @@ type FrameCounters = {
   backendUnsupportedByAxes: Record<string, number>;
   backendUnsupportedBySemanticFamily: Record<string, number>;
   backendPartiallyHandledAxes: string[];
+  webglDrawCalls: number;
+  webglTextureBinds: number;
+  webglBufferUploads: number;
+  webglCanvasComposites: number;
+  webglProjectedSurfaceDraws: number;
+  webglTrianglesSubmitted: number;
+  webglUniqueTextures: number;
 };
 
 type Snapshot = {
@@ -76,6 +83,13 @@ type Snapshot = {
   backendUnsupportedByAxesPerFrame: Record<string, number>;
   backendUnsupportedBySemanticFamilyPerFrame: Record<string, number>;
   backendPartiallyHandledAxes: string[];
+  webglDrawCallsPerFrame: number;
+  webglTextureBindsPerFrame: number;
+  webglBufferUploadsPerFrame: number;
+  webglCanvasCompositesPerFrame: number;
+  webglProjectedSurfaceDrawsPerFrame: number;
+  webglTrianglesSubmittedPerFrame: number;
+  webglUniqueTexturesPerFrame: number;
 };
 
 export type DrawTag =
@@ -153,6 +167,13 @@ const ZERO_FRAME: FrameCounters = {
   backendUnsupportedByAxes: {},
   backendUnsupportedBySemanticFamily: {},
   backendPartiallyHandledAxes: [],
+  webglDrawCalls: 0,
+  webglTextureBinds: 0,
+  webglBufferUploads: 0,
+  webglCanvasComposites: 0,
+  webglProjectedSurfaceDraws: 0,
+  webglTrianglesSubmitted: 0,
+  webglUniqueTextures: 0,
 };
 
 function makeZeroFrame(): FrameCounters {
@@ -178,6 +199,7 @@ let frame: FrameCounters = makeZeroFrame();
 let accum: FrameCounters = makeZeroFrame();
 let framesAccum = 0;
 let lastReportSec = -1;
+let webglUniqueTextureSet: WeakSet<object> = new WeakSet();
 
 let snapshot: Snapshot = {
   drawImageCallsPerFrame: 0,
@@ -217,6 +239,13 @@ let snapshot: Snapshot = {
   backendUnsupportedByAxesPerFrame: {},
   backendUnsupportedBySemanticFamilyPerFrame: {},
   backendPartiallyHandledAxes: [],
+  webglDrawCallsPerFrame: 0,
+  webglTextureBindsPerFrame: 0,
+  webglBufferUploadsPerFrame: 0,
+  webglCanvasCompositesPerFrame: 0,
+  webglProjectedSurfaceDrawsPerFrame: 0,
+  webglTrianglesSubmittedPerFrame: 0,
+  webglUniqueTexturesPerFrame: 0,
 };
 
 function mergeCountMaps(target: Record<string, number>, source: Record<string, number>): void {
@@ -236,6 +265,7 @@ let currentDrawTag: DrawTag = "untagged";
 function resetFrameCounters(): void {
   frame = makeZeroFrame();
   currentDrawTag = "untagged";
+  webglUniqueTextureSet = new WeakSet();
 }
 
 function installHooks(): void {
@@ -307,6 +337,33 @@ function installHooks(): void {
 }
 
 function foldCurrentFrame(nowSec: number): void {
+  snapshot = {
+    ...snapshot,
+    backendWebglCommandsPerFrame: frame.backendWebglCommands,
+    backendCanvasFallbackCommandsPerFrame: frame.backendCanvasFallbackCommands,
+    backendUnsupportedCommandsPerFrame: frame.backendUnsupportedCommands,
+    backendWebglGroundCommandsPerFrame: frame.backendWebglGroundCommands,
+    backendUnsupportedGroundCommandsPerFrame: frame.backendUnsupportedGroundCommands,
+    backendRequested: frame.backendRequested,
+    backendSelected: frame.backendSelected,
+    backendDefault: frame.backendDefault,
+    backendWebglReadyForDefault: frame.backendWebglReadyForDefault,
+    backendFallbackReason: frame.backendFallbackReason,
+    backendUnsupportedCommandKeys: [...frame.backendUnsupportedCommandKeys],
+    backendWebglByAxesPerFrame: { ...frame.backendWebglByAxes },
+    backendCanvasFallbackByAxesPerFrame: { ...frame.backendCanvasFallbackByAxes },
+    backendUnsupportedByAxesPerFrame: { ...frame.backendUnsupportedByAxes },
+    backendUnsupportedBySemanticFamilyPerFrame: { ...frame.backendUnsupportedBySemanticFamily },
+    backendPartiallyHandledAxes: [...frame.backendPartiallyHandledAxes],
+    webglDrawCallsPerFrame: frame.webglDrawCalls,
+    webglTextureBindsPerFrame: frame.webglTextureBinds,
+    webglBufferUploadsPerFrame: frame.webglBufferUploads,
+    webglCanvasCompositesPerFrame: frame.webglCanvasComposites,
+    webglProjectedSurfaceDrawsPerFrame: frame.webglProjectedSurfaceDraws,
+    webglTrianglesSubmittedPerFrame: frame.webglTrianglesSubmitted,
+    webglUniqueTexturesPerFrame: frame.webglUniqueTextures,
+  };
+
   accum.drawImageCalls += frame.drawImageCalls;
   for (let i = 0; i < DRAW_TAGS.length; i++) {
     const tag = DRAW_TAGS[i];
@@ -345,6 +402,13 @@ function foldCurrentFrame(nowSec: number): void {
   accum.backendDefault = frame.backendDefault;
   accum.backendWebglReadyForDefault = frame.backendWebglReadyForDefault;
   accum.backendFallbackReason = frame.backendFallbackReason;
+  accum.webglDrawCalls += frame.webglDrawCalls;
+  accum.webglTextureBinds += frame.webglTextureBinds;
+  accum.webglBufferUploads += frame.webglBufferUploads;
+  accum.webglCanvasComposites += frame.webglCanvasComposites;
+  accum.webglProjectedSurfaceDraws += frame.webglProjectedSurfaceDraws;
+  accum.webglTrianglesSubmitted += frame.webglTrianglesSubmitted;
+  accum.webglUniqueTextures += frame.webglUniqueTextures;
   mergeCountMaps(accum.backendWebglByAxes, frame.backendWebglByAxes);
   mergeCountMaps(accum.backendCanvasFallbackByAxes, frame.backendCanvasFallbackByAxes);
   mergeCountMaps(accum.backendUnsupportedByAxes, frame.backendUnsupportedByAxes);
@@ -416,6 +480,13 @@ function foldCurrentFrame(nowSec: number): void {
       backendUnsupportedByAxesPerFrame: divideCountMap(accum.backendUnsupportedByAxes, denom),
       backendUnsupportedBySemanticFamilyPerFrame: divideCountMap(accum.backendUnsupportedBySemanticFamily, denom),
       backendPartiallyHandledAxes: [...accum.backendPartiallyHandledAxes],
+      webglDrawCallsPerFrame: accum.webglDrawCalls / denom,
+      webglTextureBindsPerFrame: accum.webglTextureBinds / denom,
+      webglBufferUploadsPerFrame: accum.webglBufferUploads / denom,
+      webglCanvasCompositesPerFrame: accum.webglCanvasComposites / denom,
+      webglProjectedSurfaceDrawsPerFrame: accum.webglProjectedSurfaceDraws / denom,
+      webglTrianglesSubmittedPerFrame: accum.webglTrianglesSubmitted / denom,
+      webglUniqueTexturesPerFrame: accum.webglUniqueTextures / denom,
     };
     accum = makeZeroFrame();
     framesAccum = 0;
@@ -501,6 +572,43 @@ export function countRenderMaskDrawEntry(n: number = 1): void {
   frame.maskDrawEntries += n;
 }
 
+export function countRenderWebGLDrawCall(n: number = 1): void {
+  if (!enabled) return;
+  frame.webglDrawCalls += n;
+}
+
+export function countRenderWebGLTextureBind(n: number = 1): void {
+  if (!enabled) return;
+  frame.webglTextureBinds += n;
+}
+
+export function countRenderWebGLBufferUpload(n: number = 1): void {
+  if (!enabled) return;
+  frame.webglBufferUploads += n;
+}
+
+export function countRenderWebGLCanvasComposite(n: number = 1): void {
+  if (!enabled) return;
+  frame.webglCanvasComposites += n;
+}
+
+export function countRenderWebGLProjectedSurfaceDraw(n: number = 1): void {
+  if (!enabled) return;
+  frame.webglProjectedSurfaceDraws += n;
+}
+
+export function countRenderWebGLTrianglesSubmitted(n: number = 1): void {
+  if (!enabled) return;
+  frame.webglTrianglesSubmitted += n;
+}
+
+export function noteRenderWebGLTextureUsage(source: object | null | undefined): void {
+  if (!enabled || !source || (typeof source !== "object" && typeof source !== "function")) return;
+  if (webglUniqueTextureSet.has(source)) return;
+  webglUniqueTextureSet.add(source);
+  frame.webglUniqueTextures += 1;
+}
+
 export function setRenderBackendStats(input: {
   requestedBackend: "canvas2d" | "webgl";
   selectedBackend: "canvas2d" | "webgl";
@@ -578,6 +686,13 @@ export function getRenderPerfSnapshot(): Snapshot {
       backendUnsupportedByAxesPerFrame: {},
       backendUnsupportedBySemanticFamilyPerFrame: {},
       backendPartiallyHandledAxes: [],
+      webglDrawCallsPerFrame: 0,
+      webglTextureBindsPerFrame: 0,
+      webglBufferUploadsPerFrame: 0,
+      webglCanvasCompositesPerFrame: 0,
+      webglProjectedSurfaceDrawsPerFrame: 0,
+      webglTrianglesSubmittedPerFrame: 0,
+      webglUniqueTexturesPerFrame: 0,
     };
   }
   return snapshot;

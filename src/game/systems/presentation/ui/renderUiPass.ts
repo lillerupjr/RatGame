@@ -21,6 +21,7 @@ export function renderUiPass(input: UiPassContext): void {
     getUserSettings,
     screenW,
     screenH,
+    perfDebugScreenInput,
   } = input as any;
 
   overlayCtx.setTransform(overlayDpr, 0, 0, overlayDpr, 0, 0);
@@ -50,6 +51,12 @@ export function renderUiPass(input: UiPassContext): void {
   }
 
   overlayCtx.setTransform(overlayDpr, 0, 0, overlayDpr, 0, 0);
+  if (perfDebugScreenInput) {
+    executeDebugPass({
+      phase: "screen",
+      input: perfDebugScreenInput,
+    });
+  }
   if (getUserSettings().debug.dpsMeter) {
     renderDPSMeter(w, overlayCtx, screenW, screenH);
   }

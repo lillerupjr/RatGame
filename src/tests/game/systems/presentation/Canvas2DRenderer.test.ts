@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { Canvas2DRenderer } from "../../../../game/systems/presentation/backend/Canvas2DRenderer";
 import type { RenderCommand } from "../../../../game/systems/presentation/contracts/renderCommands";
 import type { RenderExecutionPlan } from "../../../../game/systems/presentation/backend/renderExecutionPlan";
+import { buildDiamondSourceQuad, buildTrianglePairFromQuad } from "../../../../game/systems/presentation/renderCommandGeometry";
 import { KindOrder } from "../../../../game/systems/presentation/worldRenderOrdering";
 
 type FakeCtx = CanvasRenderingContext2D & {
@@ -178,5 +179,80 @@ describe("Canvas2DRenderer", () => {
     expect(ctx.drawImage).toHaveBeenCalled();
     expect(overlayCtx.drawImage).not.toHaveBeenCalled();
     expect(overlayCtx.fillRect).toHaveBeenCalledWith(0, 0, 320, 180);
+  });
+
+  it("renders projected ground surfaces through the canonical triangle path", () => {
+    const ctx = makeCtx(320, 180);
+    const overlayCtx = makeCtx(320, 180);
+    const renderer = new Canvas2DRenderer({
+      world: {} as any,
+      ctx,
+      canvas: { width: 320, height: 180 } as any,
+      overlayCtx,
+      overlayCanvas: { width: 320, height: 180 } as any,
+      hasUiOverlay: true,
+      cssW: 320,
+      cssH: 180,
+      screenW: 320,
+      screenH: 180,
+      devW: 320,
+      devH: 180,
+      dpr: 1,
+      overlayDevW: 320,
+      overlayDevH: 180,
+      overlayDpr: 1,
+      visibleVerticalTiles: 10,
+      viewport: {
+        applyWorld: vi.fn(),
+      } as any,
+      zoom: 1,
+      worldWidth: 320,
+      worldHeight: 180,
+      scaledW: 320,
+      scaledH: 180,
+      safeOffsetX: 0,
+      safeOffsetY: 0,
+      playerWorldX: 0,
+      playerWorldY: 0,
+      playerTileX: 0,
+      playerTileY: 0,
+      cameraProjectedX: 0,
+      cameraProjectedY: 0,
+      camTx: 0,
+      camTy: 0,
+      worldScaleDevice: 1,
+      renderSettings: {},
+    } as any, {
+      renderAmbientDarknessOverlay: vi.fn(),
+      setRenderPerfDrawTag: vi.fn(),
+    } as any);
+
+    renderer.renderWorldCommands([{
+      pass: "GROUND",
+      key: {
+        slice: 0,
+        within: 0,
+        baseZ: 0,
+        kindOrder: KindOrder.FLOOR,
+        stableId: 3,
+      },
+      semanticFamily: "groundSurface",
+      finalForm: "projectedSurface",
+      payload: {
+        image: { width: 128, height: 64 } as any,
+        sourceWidth: 128,
+        sourceHeight: 64,
+        triangles: buildTrianglePairFromQuad(buildDiamondSourceQuad(128, 64), {
+          nw: { x: 0, y: 0 },
+          ne: { x: 32, y: 0 },
+          se: { x: 16, y: 16 },
+          sw: { x: -16, y: 16 },
+        }),
+      },
+    } as RenderCommand]);
+
+    expect(ctx.drawImage).toHaveBeenCalledTimes(2);
+    expect(ctx.transform).toHaveBeenCalledTimes(2);
+    expect(overlayCtx.drawImage).not.toHaveBeenCalled();
   });
 });

@@ -345,3 +345,28 @@ The renderer is a staged pipeline. `render.ts` is a conductor only and must not 
 ### Principle
 
 The renderer is a pipeline of systems, not a system itself.
+
+---
+
+## Canonical Document
+
+The canonical renderer reference is:
+
+- `docs/systems/canonical_render_pipeline_reference.md`
+
+Rules:
+
+- Maintain this document in the same patch as any renderer-flow change
+- Update it when changing:
+  - render entry sequencing
+  - command contract shape
+  - collector ownership
+  - frame builder or execution-plan behavior
+  - backend selection or routing
+  - Canvas2D vs WebGL surface ownership
+  - overlay-canvas or UI ownership
+  - known mixed-backend limitations
+- Keep it implementation-accurate and present tense
+- Document the live pipeline, not the intended future pipeline
+- If behavior is mixed, partial, or intentionally deferred, state that explicitly
+- Remove stale references to deleted files, stages, or backend paths immediately

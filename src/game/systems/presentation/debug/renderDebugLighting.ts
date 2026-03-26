@@ -64,20 +64,29 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
     const tag = perf.drawImageByTagPerFrame;
     const saveTag = perf.saveByTagPerFrame;
     const restoreTag = perf.restoreByTagPerFrame;
+    const rendererSpecificLines = perf.backendSelected === "webgl"
+      ? [
+          `gl draw/frame: ${perf.webglDrawCallsPerFrame.toFixed(1)} texBind/frame: ${perf.webglTextureBindsPerFrame.toFixed(1)} bufUpload/frame: ${perf.webglBufferUploadsPerFrame.toFixed(1)}`,
+          `gl composites/frame: ${perf.webglCanvasCompositesPerFrame.toFixed(1)} projectedSurface/frame: ${perf.webglProjectedSurfaceDrawsPerFrame.toFixed(1)} triSubmit/frame: ${perf.webglTrianglesSubmittedPerFrame.toFixed(1)}`,
+          `gl uniqueTextures/frame: ${perf.webglUniqueTexturesPerFrame.toFixed(1)}`,
+        ]
+      : [
+          `drawImage/frame: ${perf.drawImageCallsPerFrame.toFixed(1)}`,
+          `tag void:${tag.void.toFixed(1)} floors:${tag.floors.toFixed(1)} decals:${tag.decals.toFixed(1)} ent:${tag.entities.toFixed(1)}`,
+          `tag struct:${tag.structures.toFixed(1)}`,
+          `tag lighting:${tag.lighting.toFixed(1)} untagged:${tag.untagged.toFixed(1)}`,
+          `gradientCreate/frame: ${perf.gradientCreateCallsPerFrame.toFixed(1)} addColorStop/frame: ${perf.addColorStopCallsPerFrame.toFixed(1)}`,
+          `save/frame: ${perf.saveCallsPerFrame.toFixed(1)} restore/frame: ${perf.restoreCallsPerFrame.toFixed(1)}`,
+          `saveTag fl:${saveTag.floors.toFixed(1)} de:${saveTag.decals.toFixed(1)} li:${saveTag.lighting.toFixed(1)} un:${saveTag.untagged.toFixed(1)}`,
+          `saveTag struct:${saveTag.structures.toFixed(1)}`,
+          `restoreTag fl:${restoreTag.floors.toFixed(1)} de:${restoreTag.decals.toFixed(1)} li:${restoreTag.lighting.toFixed(1)} un:${restoreTag.untagged.toFixed(1)}`,
+          `restoreTag struct:${restoreTag.structures.toFixed(1)}`,
+          `fullCanvasBlits/frame: ${perf.fullCanvasBlitsPerFrame.toFixed(1)}`,
+        ];
     const perfLines = [
-      `drawImage/frame: ${perf.drawImageCallsPerFrame.toFixed(1)}`,
-      `tag void:${tag.void.toFixed(1)} floors:${tag.floors.toFixed(1)} decals:${tag.decals.toFixed(1)} ent:${tag.entities.toFixed(1)}`,
-      `tag struct:${tag.structures.toFixed(1)}`,
-      `tag lighting:${tag.lighting.toFixed(1)} untagged:${tag.untagged.toFixed(1)}`,
-      `gradientCreate/frame: ${perf.gradientCreateCallsPerFrame.toFixed(1)} addColorStop/frame: ${perf.addColorStopCallsPerFrame.toFixed(1)}`,
-      `save/frame: ${perf.saveCallsPerFrame.toFixed(1)} restore/frame: ${perf.restoreCallsPerFrame.toFixed(1)}`,
-      `saveTag fl:${saveTag.floors.toFixed(1)} de:${saveTag.decals.toFixed(1)} li:${saveTag.lighting.toFixed(1)} un:${saveTag.untagged.toFixed(1)}`,
-      `saveTag struct:${saveTag.structures.toFixed(1)}`,
-      `restoreTag fl:${restoreTag.floors.toFixed(1)} de:${restoreTag.decals.toFixed(1)} li:${restoreTag.lighting.toFixed(1)} un:${restoreTag.untagged.toFixed(1)}`,
-      `restoreTag struct:${restoreTag.structures.toFixed(1)}`,
+      ...rendererSpecificLines,
       `closures/frame: ${perf.closuresCreatedPerFrame.toFixed(1)}`,
       `sliceSorts/frame: ${perf.sliceKeySortsPerFrame.toFixed(1)} drawableSorts/frame: ${perf.drawableSortsPerFrame.toFixed(1)}`,
-      `fullCanvasBlits/frame: ${perf.fullCanvasBlitsPerFrame.toFixed(1)}`,
       `tileRadius: ${perf.tileLoopRadius.toFixed(0)} tileLoopIters/frame: ${perf.tileLoopIterationsPerFrame.toFixed(1)}`,
       `triAdmission: mode=${structureTriangleAdmissionMode} authority=${structureTriangleAdmissionMode === "viewport" ? "viewportRect" : "sharedRenderDistance(tileRadius)"} tileRadius=${sliderPadding}`,
       `triCutout: ${structureTriangleCutoutEnabled ? "on" : "off"} center=${playerCameraTx},${playerCameraTy} size=${structureTriangleCutoutHalfWidth}x${structureTriangleCutoutHalfHeight} alpha=${structureTriangleCutoutAlpha.toFixed(2)}`,

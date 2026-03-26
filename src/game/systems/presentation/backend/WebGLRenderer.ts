@@ -2,6 +2,15 @@ import { ZONE_KIND } from "../../../factories/zoneFactory";
 import type { RenderFrameContext } from "../contracts/renderFrameContext";
 import type { RenderCommand } from "../contracts/renderCommands";
 import { resolveProjectedLightTintSprite } from "../renderLighting";
+import {
+  countRenderWebGLBufferUpload,
+  countRenderWebGLCanvasComposite,
+  countRenderWebGLDrawCall,
+  countRenderWebGLProjectedSurfaceDraw,
+  countRenderWebGLTextureBind,
+  countRenderWebGLTrianglesSubmitted,
+  noteRenderWebGLTextureUsage,
+} from "../renderPerfCounters";
 
 type BlendMode = "normal" | "additive";
 type QuadSpace = "world" | "screen";
@@ -323,7 +332,10 @@ export class WebGLRenderer {
     if (sourceCanvas.width <= 0 || sourceCanvas.height <= 0) return;
     this.useScreenSpace();
     const { gl } = this;
+    countRenderWebGLCanvasComposite();
+    noteRenderWebGLTextureUsage(sourceCanvas as unknown as object);
     gl.activeTexture(gl.TEXTURE0);
+    countRenderWebGLTextureBind();
     gl.bindTexture(gl.TEXTURE_2D, this.compositeTexture);
     if (typeof gl.pixelStorei === "function" && "UNPACK_PREMULTIPLY_ALPHA_WEBGL" in gl) {
       gl.pixelStorei((gl as unknown as { UNPACK_PREMULTIPLY_ALPHA_WEBGL: number }).UNPACK_PREMULTIPLY_ALPHA_WEBGL, 1);
@@ -337,12 +349,20 @@ export class WebGLRenderer {
     gl.uniform4f(this.uColor, 1, 1, 1, 1);
     this.uploadQuadVertices(0, 0, sourceCanvas.width, sourceCanvas.height, 0, false);
     this.uploadQuadTexCoords(0, 0, 1, 1);
+    countRenderWebGLDrawCall();
+    countRenderWebGLTrianglesSubmitted(2);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
   private renderCommand(command: RenderCommand): void {
     const triangles = this.resolveTriangleDraws(command);
     if (triangles.length > 0) {
+      if (
+        (command.semanticFamily === "groundSurface" || command.semanticFamily === "groundDecal")
+        && command.finalForm === "projectedSurface"
+      ) {
+        countRenderWebGLProjectedSurfaceDraw();
+      }
       for (let i = 0; i < triangles.length; i++) {
         this.applySpace(triangles[i].space);
         this.drawTriangle(triangles[i]);
@@ -513,6 +533,7 @@ export class WebGLRenderer {
     if (!(sourceW > 0 && sourceH > 0)) return;
 
     gl.activeTexture(gl.TEXTURE0);
+    countRenderWebGLTextureBind();
     gl.bindTexture(gl.TEXTURE_2D, texture.texture);
     this.setBlendMode(quad.blendMode);
     gl.uniform1f(this.uAlpha, quad.alpha);
@@ -524,6 +545,8 @@ export class WebGLRenderer {
       (quad.sx + quad.sw) / sourceW,
       (quad.sy + quad.sh) / sourceH,
     );
+    countRenderWebGLDrawCall();
+    countRenderWebGLTrianglesSubmitted(2);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
@@ -534,12 +557,15 @@ export class WebGLRenderer {
 
     const { gl } = this;
     gl.activeTexture(gl.TEXTURE0);
+    countRenderWebGLTextureBind();
     gl.bindTexture(gl.TEXTURE_2D, texture.texture);
     this.setBlendMode(triangle.blendMode);
     gl.uniform1f(this.uAlpha, triangle.alpha);
     gl.uniform4f(this.uColor, triangle.color[0], triangle.color[1], triangle.color[2], triangle.color[3]);
     this.uploadTriangleVertices(triangle.dstPoints);
     this.uploadTriangleTexCoords(triangle.srcPoints, triangle.sourceWidth, triangle.sourceHeight);
+    countRenderWebGLDrawCall();
+    countRenderWebGLTrianglesSubmitted(1);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
@@ -692,6 +718,7 @@ export class WebGLRenderer {
     const width = sourceWidth(image);
     const height = sourceHeight(image);
     if (!(width > 0 && height > 0)) return null;
+    noteRenderWebGLTextureUsage(source);
     let cached = this.textureCache.get(source);
     const dynamic = isDynamicSource(image);
     if (!cached) {
@@ -699,6 +726,7 @@ export class WebGLRenderer {
       if (!texture) return null;
       cached = { texture, width, height };
       this.textureCache.set(source, cached);
+      countRenderWebGLTextureBind();
       this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
       this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
       this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
@@ -708,6 +736,7 @@ export class WebGLRenderer {
       return cached;
     }
 
+    countRenderWebGLTextureBind();
     this.gl.bindTexture(this.gl.TEXTURE_2D, cached.texture);
     if (dynamic || cached.width !== width || cached.height !== height) {
       cached.width = width;
@@ -766,6 +795,7 @@ export class WebGLRenderer {
       ]);
     }
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
+    countRenderWebGLBufferUpload();
     this.gl.bufferData(this.gl.ARRAY_BUFFER, vertices, this.gl.STREAM_DRAW);
   }
 
@@ -777,6 +807,7 @@ export class WebGLRenderer {
       u1, v1,
     ]);
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.texCoordBuffer);
+    countRenderWebGLBufferUpload();
     this.gl.bufferData(this.gl.ARRAY_BUFFER, texCoords, this.gl.STREAM_DRAW);
   }
 
@@ -787,6 +818,7 @@ export class WebGLRenderer {
       points[2].x, points[2].y,
     ]);
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
+    countRenderWebGLBufferUpload();
     this.gl.bufferData(this.gl.ARRAY_BUFFER, vertices, this.gl.STREAM_DRAW);
   }
 
@@ -801,6 +833,7 @@ export class WebGLRenderer {
       points[2].x / sourceWidth, points[2].y / sourceHeight,
     ]);
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.texCoordBuffer);
+    countRenderWebGLBufferUpload();
     this.gl.bufferData(this.gl.ARRAY_BUFFER, texCoords, this.gl.STREAM_DRAW);
   }
 

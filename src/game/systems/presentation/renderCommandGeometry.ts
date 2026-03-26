@@ -98,6 +98,22 @@ export function buildRectDestinationQuad(
   };
 }
 
+export function buildDiamondDestinationQuad(
+  dx: number,
+  dy: number,
+  dw: number,
+  dh: number,
+): RenderQuadPoints {
+  const halfWidth = dw * 0.5;
+  const halfHeight = dh * 0.5;
+  return {
+    nw: point(dx + halfWidth, dy),
+    ne: point(dx + dw, dy + halfHeight),
+    se: point(dx + halfWidth, dy + dh),
+    sw: point(dx, dy + halfHeight),
+  };
+}
+
 export function buildFlatTileDestinationQuad(input: FlatTileQuadPointInput): RenderQuadPoints {
   const {
     tx,
