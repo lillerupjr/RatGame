@@ -37,6 +37,7 @@ type FrameCounters = {
   backendUnsupportedBySemanticFamily: Record<string, number>;
   backendPartiallyHandledAxes: string[];
   webglDrawCalls: number;
+  webglBatches: number;
   webglTextureBinds: number;
   webglBufferUploads: number;
   webglCanvasComposites: number;
@@ -84,6 +85,7 @@ type Snapshot = {
   backendUnsupportedBySemanticFamilyPerFrame: Record<string, number>;
   backendPartiallyHandledAxes: string[];
   webglDrawCallsPerFrame: number;
+  webglBatchesPerFrame: number;
   webglTextureBindsPerFrame: number;
   webglBufferUploadsPerFrame: number;
   webglCanvasCompositesPerFrame: number;
@@ -168,6 +170,7 @@ const ZERO_FRAME: FrameCounters = {
   backendUnsupportedBySemanticFamily: {},
   backendPartiallyHandledAxes: [],
   webglDrawCalls: 0,
+  webglBatches: 0,
   webglTextureBinds: 0,
   webglBufferUploads: 0,
   webglCanvasComposites: 0,
@@ -240,6 +243,7 @@ let snapshot: Snapshot = {
   backendUnsupportedBySemanticFamilyPerFrame: {},
   backendPartiallyHandledAxes: [],
   webglDrawCallsPerFrame: 0,
+  webglBatchesPerFrame: 0,
   webglTextureBindsPerFrame: 0,
   webglBufferUploadsPerFrame: 0,
   webglCanvasCompositesPerFrame: 0,
@@ -356,6 +360,7 @@ function foldCurrentFrame(nowSec: number): void {
     backendUnsupportedBySemanticFamilyPerFrame: { ...frame.backendUnsupportedBySemanticFamily },
     backendPartiallyHandledAxes: [...frame.backendPartiallyHandledAxes],
     webglDrawCallsPerFrame: frame.webglDrawCalls,
+    webglBatchesPerFrame: frame.webglBatches,
     webglTextureBindsPerFrame: frame.webglTextureBinds,
     webglBufferUploadsPerFrame: frame.webglBufferUploads,
     webglCanvasCompositesPerFrame: frame.webglCanvasComposites,
@@ -403,6 +408,7 @@ function foldCurrentFrame(nowSec: number): void {
   accum.backendWebglReadyForDefault = frame.backendWebglReadyForDefault;
   accum.backendFallbackReason = frame.backendFallbackReason;
   accum.webglDrawCalls += frame.webglDrawCalls;
+  accum.webglBatches += frame.webglBatches;
   accum.webglTextureBinds += frame.webglTextureBinds;
   accum.webglBufferUploads += frame.webglBufferUploads;
   accum.webglCanvasComposites += frame.webglCanvasComposites;
@@ -481,6 +487,7 @@ function foldCurrentFrame(nowSec: number): void {
       backendUnsupportedBySemanticFamilyPerFrame: divideCountMap(accum.backendUnsupportedBySemanticFamily, denom),
       backendPartiallyHandledAxes: [...accum.backendPartiallyHandledAxes],
       webglDrawCallsPerFrame: accum.webglDrawCalls / denom,
+      webglBatchesPerFrame: accum.webglBatches / denom,
       webglTextureBindsPerFrame: accum.webglTextureBinds / denom,
       webglBufferUploadsPerFrame: accum.webglBufferUploads / denom,
       webglCanvasCompositesPerFrame: accum.webglCanvasComposites / denom,
@@ -575,6 +582,11 @@ export function countRenderMaskDrawEntry(n: number = 1): void {
 export function countRenderWebGLDrawCall(n: number = 1): void {
   if (!enabled) return;
   frame.webglDrawCalls += n;
+}
+
+export function countRenderWebGLBatch(n: number = 1): void {
+  if (!enabled) return;
+  frame.webglBatches += n;
 }
 
 export function countRenderWebGLTextureBind(n: number = 1): void {
@@ -687,6 +699,7 @@ export function getRenderPerfSnapshot(): Snapshot {
       backendUnsupportedBySemanticFamilyPerFrame: {},
       backendPartiallyHandledAxes: [],
       webglDrawCallsPerFrame: 0,
+      webglBatchesPerFrame: 0,
       webglTextureBindsPerFrame: 0,
       webglBufferUploadsPerFrame: 0,
       webglCanvasCompositesPerFrame: 0,

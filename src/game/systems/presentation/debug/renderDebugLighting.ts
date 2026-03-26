@@ -66,7 +66,8 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
     const restoreTag = perf.restoreByTagPerFrame;
     const rendererSpecificLines = perf.backendSelected === "webgl"
       ? [
-          `gl draw/frame: ${perf.webglDrawCallsPerFrame.toFixed(1)} texBind/frame: ${perf.webglTextureBindsPerFrame.toFixed(1)} bufUpload/frame: ${perf.webglBufferUploadsPerFrame.toFixed(1)}`,
+          `gl draw/frame: ${perf.webglDrawCallsPerFrame.toFixed(1)} gl batches/frame: ${perf.webglBatchesPerFrame.toFixed(1)}`,
+          `texBind/frame: ${perf.webglTextureBindsPerFrame.toFixed(1)} bufUpload/frame: ${perf.webglBufferUploadsPerFrame.toFixed(1)}`,
           `gl composites/frame: ${perf.webglCanvasCompositesPerFrame.toFixed(1)} projectedSurface/frame: ${perf.webglProjectedSurfaceDrawsPerFrame.toFixed(1)} triSubmit/frame: ${perf.webglTrianglesSubmittedPerFrame.toFixed(1)}`,
           `gl uniqueTextures/frame: ${perf.webglUniqueTexturesPerFrame.toFixed(1)}`,
         ]

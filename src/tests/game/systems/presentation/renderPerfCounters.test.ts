@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   beginRenderPerfFrame,
+  countRenderWebGLBatch,
   countRenderWebGLBufferUpload,
   countRenderWebGLCanvasComposite,
   countRenderWebGLDrawCall,
@@ -68,6 +69,7 @@ describe("render perf counters", () => {
     resetPerfCounters();
     beginRenderPerfFrame(320, 180);
     countRenderWebGLDrawCall(3);
+    countRenderWebGLBatch(2);
     countRenderWebGLTextureBind(5);
     countRenderWebGLBufferUpload(7);
     countRenderWebGLCanvasComposite(1);
@@ -81,6 +83,7 @@ describe("render perf counters", () => {
     const snapshot = getRenderPerfSnapshot();
     expect(snapshot.backendSelected).toBe("webgl");
     expect(snapshot.webglDrawCallsPerFrame).toBe(3);
+    expect(snapshot.webglBatchesPerFrame).toBe(2);
     expect(snapshot.webglTextureBindsPerFrame).toBe(5);
     expect(snapshot.webglBufferUploadsPerFrame).toBe(7);
     expect(snapshot.webglCanvasCompositesPerFrame).toBe(1);
@@ -95,6 +98,7 @@ describe("render perf counters", () => {
     resetPerfCounters();
     beginRenderPerfFrame(320, 180);
     countRenderWebGLDrawCall(4);
+    countRenderWebGLBatch(3);
     countRenderWebGLTextureBind(6);
     setBackend("webgl");
     publishCurrentPerfFrame();
@@ -123,6 +127,7 @@ describe("render perf counters", () => {
     } as any);
     const webglLines = ctx.fillText.mock.calls.map((call) => String(call[0]));
     expect(webglLines.some((line) => line.includes("gl draw/frame:"))).toBe(true);
+    expect(webglLines.some((line) => line.includes("gl batches/frame:"))).toBe(true);
     expect(webglLines.some((line) => line.includes("drawImage/frame:"))).toBe(false);
 
     ctx.fillText.mockClear();

@@ -3,6 +3,7 @@ import type { RenderFrameContext } from "../contracts/renderFrameContext";
 import type { RenderCommand } from "../contracts/renderCommands";
 import { resolveProjectedLightTintSprite } from "../renderLighting";
 import {
+  countRenderWebGLBatch,
   countRenderWebGLBufferUpload,
   countRenderWebGLCanvasComposite,
   countRenderWebGLDrawCall,
@@ -45,6 +46,27 @@ type TriangleDraw = {
   space: QuadSpace;
   sourceWidth: number;
   sourceHeight: number;
+};
+
+type BatchTriangle = {
+  image: TexImageSource;
+  positions: [TrianglePoint, TrianglePoint, TrianglePoint];
+  texCoords: [TrianglePoint, TrianglePoint, TrianglePoint];
+  alpha: number;
+  blendMode: BlendMode;
+  color: ColorRgba;
+  space: QuadSpace;
+};
+
+type OrderedTriangleBatch = {
+  image: TexImageSource;
+  alpha: number;
+  blendMode: BlendMode;
+  color: ColorRgba;
+  space: QuadSpace;
+  positions: number[];
+  texCoords: number[];
+  triangleCount: number;
 };
 
 type CachedTexture = {
@@ -127,6 +149,8 @@ function parseColorToRgba01(input: string | undefined): ColorRgba {
 let whiteTextureCanvas: HTMLCanvasElement | null = null;
 let radialMaskCanvas: HTMLCanvasElement | null = null;
 let ringMaskCanvas: HTMLCanvasElement | null = null;
+
+const MAX_BATCH_TRIANGLES = 2048;
 
 function getWhiteTextureCanvas(): HTMLCanvasElement {
   if (whiteTextureCanvas) return whiteTextureCanvas;
@@ -325,7 +349,33 @@ export class WebGLRenderer {
   }
 
   renderCommands(commands: readonly RenderCommand[]): void {
-    for (let i = 0; i < commands.length; i++) this.renderCommand(commands[i]);
+    let batch: OrderedTriangleBatch | null = null;
+    for (let i = 0; i < commands.length; i++) {
+      const command = commands[i];
+      const batchableTriangles = this.resolveBatchableTriangles(command);
+      if (batchableTriangles.length > 0) {
+        if (
+          (command.semanticFamily === "groundSurface" || command.semanticFamily === "groundDecal")
+          && command.finalForm === "projectedSurface"
+        ) {
+          countRenderWebGLProjectedSurfaceDraw();
+        }
+        for (let j = 0; j < batchableTriangles.length; j++) {
+          const triangle = batchableTriangles[j];
+          if (!batch || !this.canAppendTriangleToBatch(batch, triangle)) {
+            this.flushTriangleBatch(batch);
+            batch = this.createTriangleBatch(triangle);
+            continue;
+          }
+          this.appendTriangleToBatch(batch, triangle);
+        }
+        continue;
+      }
+      this.flushTriangleBatch(batch);
+      batch = null;
+      this.renderCommandStandalone(command);
+    }
+    this.flushTriangleBatch(batch);
   }
 
   compositeCanvasSurface(sourceCanvas: HTMLCanvasElement): void {
@@ -354,7 +404,7 @@ export class WebGLRenderer {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
-  private renderCommand(command: RenderCommand): void {
+  private renderCommandStandalone(command: RenderCommand): void {
     const triangles = this.resolveTriangleDraws(command);
     if (triangles.length > 0) {
       if (
@@ -374,6 +424,25 @@ export class WebGLRenderer {
       this.applySpace(quads[i].space);
       this.drawQuad(quads[i]);
     }
+  }
+
+  private resolveBatchableTriangles(command: RenderCommand): BatchTriangle[] {
+    if (
+      (command.semanticFamily === "groundSurface" || command.semanticFamily === "groundDecal")
+      && command.finalForm === "projectedSurface"
+    ) {
+      return this.resolveTriangleDraws(command).flatMap((triangle) => this.lowerTriangleDrawToBatchTriangles(triangle));
+    }
+
+    if (command.semanticFamily === "worldGeometry" && command.finalForm === "triangles") {
+      return this.resolveTriangleDraws(command).flatMap((triangle) => this.lowerTriangleDrawToBatchTriangles(triangle));
+    }
+
+    if (command.semanticFamily === "worldSprite" && command.finalForm === "quad") {
+      return this.resolveQuadDraws(command).flatMap((quad) => this.lowerQuadDrawToBatchTriangles(quad));
+    }
+
+    return [];
   }
 
   private resolveTriangleDraws(command: RenderCommand): TriangleDraw[] {
@@ -475,6 +544,32 @@ export class WebGLRenderer {
     return out;
   }
 
+  private lowerTriangleDrawToBatchTriangles(triangle: TriangleDraw): BatchTriangle[] {
+    if (!(triangle.sourceWidth > 0 && triangle.sourceHeight > 0)) return [];
+    return [{
+      image: triangle.image,
+      positions: triangle.dstPoints,
+      texCoords: [
+        {
+          x: triangle.srcPoints[0].x / triangle.sourceWidth,
+          y: triangle.srcPoints[0].y / triangle.sourceHeight,
+        },
+        {
+          x: triangle.srcPoints[1].x / triangle.sourceWidth,
+          y: triangle.srcPoints[1].y / triangle.sourceHeight,
+        },
+        {
+          x: triangle.srcPoints[2].x / triangle.sourceWidth,
+          y: triangle.srcPoints[2].y / triangle.sourceHeight,
+        },
+      ],
+      alpha: triangle.alpha,
+      blendMode: triangle.blendMode,
+      color: triangle.color,
+      space: triangle.space,
+    }];
+  }
+
   private buildQuadFromData(data: Record<string, unknown>, space: QuadSpace): QuadDraw[] {
     const image = (data.image ?? null) as TexImageSource | null;
     if (!image) return [];
@@ -504,6 +599,43 @@ export class WebGLRenderer {
     }];
   }
 
+  private lowerQuadDrawToBatchTriangles(quad: QuadDraw): BatchTriangle[] {
+    const sourceW = sourceWidth(quad.image);
+    const sourceH = sourceHeight(quad.image);
+    if (!(sourceW > 0 && sourceH > 0)) return [];
+    const vertices = this.buildQuadVertices(quad.dx, quad.dy, quad.dw, quad.dh, quad.rotationRad, quad.flipX);
+    const u0 = quad.sx / sourceW;
+    const v0 = quad.sy / sourceH;
+    const u1 = (quad.sx + quad.sw) / sourceW;
+    const v1 = (quad.sy + quad.sh) / sourceH;
+    const texCoords: [TrianglePoint, TrianglePoint, TrianglePoint, TrianglePoint] = [
+      { x: u0, y: v0 },
+      { x: u1, y: v0 },
+      { x: u0, y: v1 },
+      { x: u1, y: v1 },
+    ];
+    return [
+      {
+        image: quad.image,
+        positions: [vertices[0], vertices[1], vertices[2]],
+        texCoords: [texCoords[0], texCoords[1], texCoords[2]],
+        alpha: quad.alpha,
+        blendMode: quad.blendMode,
+        color: quad.color,
+        space: quad.space,
+      },
+      {
+        image: quad.image,
+        positions: [vertices[2], vertices[1], vertices[3]],
+        texCoords: [texCoords[2], texCoords[1], texCoords[3]],
+        alpha: quad.alpha,
+        blendMode: quad.blendMode,
+        color: quad.color,
+        space: quad.space,
+      },
+    ];
+  }
+
   private readTrianglePoints(
     input: unknown,
     flipX: boolean,
@@ -526,15 +658,13 @@ export class WebGLRenderer {
 
   private drawQuad(quad: QuadDraw): void {
     const { gl } = this;
+    gl.activeTexture(gl.TEXTURE0);
     const texture = this.bindTexture(quad.image);
     if (!texture) return;
     const sourceW = sourceWidth(quad.image);
     const sourceH = sourceHeight(quad.image);
     if (!(sourceW > 0 && sourceH > 0)) return;
 
-    gl.activeTexture(gl.TEXTURE0);
-    countRenderWebGLTextureBind();
-    gl.bindTexture(gl.TEXTURE_2D, texture.texture);
     this.setBlendMode(quad.blendMode);
     gl.uniform1f(this.uAlpha, quad.alpha);
     gl.uniform4f(this.uColor, quad.color[0], quad.color[1], quad.color[2], quad.color[3]);
@@ -551,14 +681,12 @@ export class WebGLRenderer {
   }
 
   private drawTriangle(triangle: TriangleDraw): void {
+    const { gl } = this;
+    gl.activeTexture(gl.TEXTURE0);
     const texture = this.bindTexture(triangle.image);
     if (!texture) return;
     if (!(triangle.sourceWidth > 0 && triangle.sourceHeight > 0)) return;
 
-    const { gl } = this;
-    gl.activeTexture(gl.TEXTURE0);
-    countRenderWebGLTextureBind();
-    gl.bindTexture(gl.TEXTURE_2D, texture.texture);
     this.setBlendMode(triangle.blendMode);
     gl.uniform1f(this.uAlpha, triangle.alpha);
     gl.uniform4f(this.uColor, triangle.color[0], triangle.color[1], triangle.color[2], triangle.color[3]);
@@ -746,14 +874,73 @@ export class WebGLRenderer {
     return cached;
   }
 
-  private uploadQuadVertices(
+  private createTriangleBatch(triangle: BatchTriangle): OrderedTriangleBatch {
+    const batch: OrderedTriangleBatch = {
+      image: triangle.image,
+      alpha: triangle.alpha,
+      blendMode: triangle.blendMode,
+      color: [...triangle.color] as ColorRgba,
+      space: triangle.space,
+      positions: [],
+      texCoords: [],
+      triangleCount: 0,
+    };
+    this.appendTriangleToBatch(batch, triangle);
+    return batch;
+  }
+
+  private appendTriangleToBatch(batch: OrderedTriangleBatch, triangle: BatchTriangle): void {
+    batch.positions.push(
+      triangle.positions[0].x, triangle.positions[0].y,
+      triangle.positions[1].x, triangle.positions[1].y,
+      triangle.positions[2].x, triangle.positions[2].y,
+    );
+    batch.texCoords.push(
+      triangle.texCoords[0].x, triangle.texCoords[0].y,
+      triangle.texCoords[1].x, triangle.texCoords[1].y,
+      triangle.texCoords[2].x, triangle.texCoords[2].y,
+    );
+    batch.triangleCount += 1;
+  }
+
+  private canAppendTriangleToBatch(batch: OrderedTriangleBatch, triangle: BatchTriangle): boolean {
+    return batch.image === triangle.image
+      && batch.alpha === triangle.alpha
+      && batch.blendMode === triangle.blendMode
+      && batch.space === triangle.space
+      && batch.color[0] === triangle.color[0]
+      && batch.color[1] === triangle.color[1]
+      && batch.color[2] === triangle.color[2]
+      && batch.color[3] === triangle.color[3]
+      && batch.triangleCount < MAX_BATCH_TRIANGLES;
+  }
+
+  private flushTriangleBatch(batch: OrderedTriangleBatch | null): void {
+    if (!batch || batch.triangleCount <= 0) return;
+    const { gl } = this;
+    gl.activeTexture(gl.TEXTURE0);
+    const texture = this.bindTexture(batch.image);
+    if (!texture) return;
+    this.applySpace(batch.space);
+    this.setBlendMode(batch.blendMode);
+    gl.uniform1f(this.uAlpha, batch.alpha);
+    gl.uniform4f(this.uColor, batch.color[0], batch.color[1], batch.color[2], batch.color[3]);
+    this.uploadVertices(new Float32Array(batch.positions));
+    this.uploadTexCoords(new Float32Array(batch.texCoords));
+    countRenderWebGLBatch();
+    countRenderWebGLDrawCall();
+    countRenderWebGLTrianglesSubmitted(batch.triangleCount);
+    gl.drawArrays(gl.TRIANGLES, 0, batch.triangleCount * 3);
+  }
+
+  private buildQuadVertices(
     dx: number,
     dy: number,
     dw: number,
     dh: number,
     rotationRad: number,
     flipX: boolean,
-  ): void {
+  ): [TrianglePoint, TrianglePoint, TrianglePoint, TrianglePoint] {
     let x0 = dx;
     let x1 = dx + dw;
     const y0 = dy;
@@ -762,41 +949,49 @@ export class WebGLRenderer {
       x0 = dx + dw;
       x1 = dx;
     }
-    let vertices: Float32Array;
     if (!rotationRad) {
-      vertices = new Float32Array([
-        x0, y0,
-        x1, y0,
-        x0, y1,
-        x1, y1,
-      ]);
-    } else {
-      const cx = dx + dw * 0.5;
-      const cy = dy + dh * 0.5;
-      const localLeft = flipX ? dw * 0.5 : -dw * 0.5;
-      const localRight = flipX ? -dw * 0.5 : dw * 0.5;
-      const localTop = -dh * 0.5;
-      const localBottom = dh * 0.5;
-      const cos = Math.cos(rotationRad);
-      const sin = Math.sin(rotationRad);
-      const rotate = (lx: number, ly: number): [number, number] => [
-        cx + lx * cos - ly * sin,
-        cy + lx * sin + ly * cos,
+      return [
+        { x: x0, y: y0 },
+        { x: x1, y: y0 },
+        { x: x0, y: y1 },
+        { x: x1, y: y1 },
       ];
-      const nw = rotate(localLeft, localTop);
-      const ne = rotate(localRight, localTop);
-      const sw = rotate(localLeft, localBottom);
-      const se = rotate(localRight, localBottom);
-      vertices = new Float32Array([
-        nw[0], nw[1],
-        ne[0], ne[1],
-        sw[0], sw[1],
-        se[0], se[1],
-      ]);
     }
-    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
-    countRenderWebGLBufferUpload();
-    this.gl.bufferData(this.gl.ARRAY_BUFFER, vertices, this.gl.STREAM_DRAW);
+    const cx = dx + dw * 0.5;
+    const cy = dy + dh * 0.5;
+    const localLeft = flipX ? dw * 0.5 : -dw * 0.5;
+    const localRight = flipX ? -dw * 0.5 : dw * 0.5;
+    const localTop = -dh * 0.5;
+    const localBottom = dh * 0.5;
+    const cos = Math.cos(rotationRad);
+    const sin = Math.sin(rotationRad);
+    const rotate = (lx: number, ly: number): TrianglePoint => ({
+      x: cx + lx * cos - ly * sin,
+      y: cy + lx * sin + ly * cos,
+    });
+    return [
+      rotate(localLeft, localTop),
+      rotate(localRight, localTop),
+      rotate(localLeft, localBottom),
+      rotate(localRight, localBottom),
+    ];
+  }
+
+  private uploadQuadVertices(
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+    rotationRad: number,
+    flipX: boolean,
+  ): void {
+    const points = this.buildQuadVertices(dx, dy, dw, dh, rotationRad, flipX);
+    this.uploadVertices(new Float32Array([
+      points[0].x, points[0].y,
+      points[1].x, points[1].y,
+      points[2].x, points[2].y,
+      points[3].x, points[3].y,
+    ]));
   }
 
   private uploadQuadTexCoords(u0: number, v0: number, u1: number, v1: number): void {
@@ -812,14 +1007,11 @@ export class WebGLRenderer {
   }
 
   private uploadTriangleVertices(points: [TrianglePoint, TrianglePoint, TrianglePoint]): void {
-    const vertices = new Float32Array([
+    this.uploadVertices(new Float32Array([
       points[0].x, points[0].y,
       points[1].x, points[1].y,
       points[2].x, points[2].y,
-    ]);
-    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
-    countRenderWebGLBufferUpload();
-    this.gl.bufferData(this.gl.ARRAY_BUFFER, vertices, this.gl.STREAM_DRAW);
+    ]));
   }
 
   private uploadTriangleTexCoords(
@@ -827,11 +1019,20 @@ export class WebGLRenderer {
     sourceWidth: number,
     sourceHeight: number,
   ): void {
-    const texCoords = new Float32Array([
+    this.uploadTexCoords(new Float32Array([
       points[0].x / sourceWidth, points[0].y / sourceHeight,
       points[1].x / sourceWidth, points[1].y / sourceHeight,
       points[2].x / sourceWidth, points[2].y / sourceHeight,
-    ]);
+    ]));
+  }
+
+  private uploadVertices(vertices: Float32Array): void {
+    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
+    countRenderWebGLBufferUpload();
+    this.gl.bufferData(this.gl.ARRAY_BUFFER, vertices, this.gl.STREAM_DRAW);
+  }
+
+  private uploadTexCoords(texCoords: Float32Array): void {
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.texCoordBuffer);
     countRenderWebGLBufferUpload();
     this.gl.bufferData(this.gl.ARRAY_BUFFER, texCoords, this.gl.STREAM_DRAW);

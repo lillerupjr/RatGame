@@ -119,6 +119,32 @@ function makeCommand(image: any, stableId: number): RenderCommand {
   } as RenderCommand;
 }
 
+function makeProjectedSurfaceCommand(image: any, stableId: number, offsetX: number = 0): RenderCommand {
+  return {
+    pass: "GROUND",
+    key: {
+      slice: 0,
+      within: 0,
+      baseZ: 0,
+      kindOrder: KindOrder.FLOOR,
+      stableId,
+    },
+    semanticFamily: "groundSurface",
+    finalForm: "projectedSurface",
+    payload: {
+      image,
+      sourceWidth: 128,
+      sourceHeight: 64,
+      triangles: buildTrianglePairFromQuad(buildDiamondSourceQuad(128, 64), {
+        nw: { x: offsetX + 0, y: 0 },
+        ne: { x: offsetX + 32, y: 0 },
+        se: { x: offsetX + 16, y: 16 },
+        sw: { x: offsetX - 16, y: 16 },
+      }),
+    },
+  } as RenderCommand;
+}
+
 describe("WebGLRenderer", () => {
   it("renders commands in input order without internal sorting", () => {
     const gl = makeFakeGl();
@@ -310,32 +336,183 @@ describe("WebGLRenderer", () => {
 
     renderer.beginFrame();
     renderer.useWorldSpace();
-    renderer.renderCommands([{
-      pass: "GROUND",
-      key: {
-        slice: 0,
-        within: 0,
-        baseZ: 0,
-        kindOrder: KindOrder.FLOOR,
-        stableId: 9,
-      },
-      semanticFamily: "groundSurface",
-      finalForm: "projectedSurface",
-      payload: {
-        image,
-        sourceWidth: 128,
-        sourceHeight: 64,
-        triangles: buildTrianglePairFromQuad(buildDiamondSourceQuad(128, 64), {
-          nw: { x: 0, y: 0 },
-          ne: { x: 32, y: 0 },
-          se: { x: 16, y: 16 },
-          sw: { x: -16, y: 16 },
-        }),
-      },
-    } as RenderCommand]);
+    renderer.renderCommands([makeProjectedSurfaceCommand(image, 9)]);
 
-    expect(gl.drawOrder).toEqual(["projected-ground", "projected-ground"]);
-    expect(gl.drawModes).toEqual([gl.TRIANGLES, gl.TRIANGLES]);
+    expect(gl.drawOrder).toEqual(["projected-ground"]);
+    expect(gl.drawModes).toEqual([gl.TRIANGLES]);
+  });
+
+  it("batches adjacent compatible projected surfaces without changing stream order", () => {
+    const gl = makeFakeGl();
+    const renderer = new WebGLRenderer({
+      world: {} as any,
+      ctx: {} as any,
+      canvas: gl.canvas,
+      overlayCtx: {} as any,
+      overlayCanvas: { width: 100, height: 100 } as any,
+      hasUiOverlay: true,
+      cssW: 100,
+      cssH: 100,
+      screenW: 100,
+      screenH: 100,
+      devW: 100,
+      devH: 100,
+      dpr: 1,
+      overlayDevW: 100,
+      overlayDevH: 100,
+      overlayDpr: 1,
+      visibleVerticalTiles: 10,
+      viewport: {
+        worldScaleDevice: 1,
+        camTx: 0,
+        camTy: 0,
+        safeOffsetDeviceX: 0,
+        safeOffsetDeviceY: 0,
+      } as any,
+      zoom: 1,
+      worldWidth: 100,
+      worldHeight: 100,
+      scaledW: 100,
+      scaledH: 100,
+      safeOffsetX: 0,
+      safeOffsetY: 0,
+      playerWorldX: 0,
+      playerWorldY: 0,
+      playerTileX: 0,
+      playerTileY: 0,
+      cameraProjectedX: 0,
+      cameraProjectedY: 0,
+      camTx: 0,
+      camTy: 0,
+      worldScaleDevice: 1,
+      renderSettings: {},
+    }, gl);
+    const image = makeImage("batched-ground");
+
+    renderer.beginFrame();
+    renderer.useWorldSpace();
+    renderer.renderCommands([
+      makeProjectedSurfaceCommand(image, 9, 0),
+      makeProjectedSurfaceCommand(image, 10, 40),
+    ]);
+
+    expect(gl.drawOrder).toEqual(["batched-ground"]);
+    expect(gl.drawModes).toEqual([gl.TRIANGLES]);
+  });
+
+  it("batches adjacent compatible world sprite quads into one ordered submission", () => {
+    const gl = makeFakeGl();
+    const renderer = new WebGLRenderer({
+      world: {} as any,
+      ctx: {} as any,
+      canvas: gl.canvas,
+      overlayCtx: {} as any,
+      overlayCanvas: { width: 100, height: 100 } as any,
+      hasUiOverlay: true,
+      cssW: 100,
+      cssH: 100,
+      screenW: 100,
+      screenH: 100,
+      devW: 100,
+      devH: 100,
+      dpr: 1,
+      overlayDevW: 100,
+      overlayDevH: 100,
+      overlayDpr: 1,
+      visibleVerticalTiles: 10,
+      viewport: {
+        worldScaleDevice: 1,
+        camTx: 0,
+        camTy: 0,
+        safeOffsetDeviceX: 0,
+        safeOffsetDeviceY: 0,
+      } as any,
+      zoom: 1,
+      worldWidth: 100,
+      worldHeight: 100,
+      scaledW: 100,
+      scaledH: 100,
+      safeOffsetX: 0,
+      safeOffsetY: 0,
+      playerWorldX: 0,
+      playerWorldY: 0,
+      playerTileX: 0,
+      playerTileY: 0,
+      cameraProjectedX: 0,
+      cameraProjectedY: 0,
+      camTx: 0,
+      camTy: 0,
+      worldScaleDevice: 1,
+      renderSettings: {},
+    }, gl);
+    const image = makeImage("batched-sprite");
+
+    renderer.beginFrame();
+    renderer.useWorldSpace();
+    renderer.renderCommands([
+      makeCommand(image, 1),
+      makeCommand(image, 2),
+    ]);
+
+    expect(gl.drawOrder).toEqual(["batched-sprite"]);
+    expect(gl.drawModes).toEqual([gl.TRIANGLES]);
+  });
+
+  it("flushes ordered runs when texture compatibility breaks", () => {
+    const gl = makeFakeGl();
+    const renderer = new WebGLRenderer({
+      world: {} as any,
+      ctx: {} as any,
+      canvas: gl.canvas,
+      overlayCtx: {} as any,
+      overlayCanvas: { width: 100, height: 100 } as any,
+      hasUiOverlay: true,
+      cssW: 100,
+      cssH: 100,
+      screenW: 100,
+      screenH: 100,
+      devW: 100,
+      devH: 100,
+      dpr: 1,
+      overlayDevW: 100,
+      overlayDevH: 100,
+      overlayDpr: 1,
+      visibleVerticalTiles: 10,
+      viewport: {
+        worldScaleDevice: 1,
+        camTx: 0,
+        camTy: 0,
+        safeOffsetDeviceX: 0,
+        safeOffsetDeviceY: 0,
+      } as any,
+      zoom: 1,
+      worldWidth: 100,
+      worldHeight: 100,
+      scaledW: 100,
+      scaledH: 100,
+      safeOffsetX: 0,
+      safeOffsetY: 0,
+      playerWorldX: 0,
+      playerWorldY: 0,
+      playerTileX: 0,
+      playerTileY: 0,
+      cameraProjectedX: 0,
+      cameraProjectedY: 0,
+      camTx: 0,
+      camTy: 0,
+      worldScaleDevice: 1,
+      renderSettings: {},
+    }, gl);
+
+    renderer.beginFrame();
+    renderer.useWorldSpace();
+    renderer.renderCommands([
+      makeCommand(makeImage("a"), 1),
+      makeCommand(makeImage("b"), 2),
+      makeCommand(makeImage("a"), 3),
+    ]);
+
+    expect(gl.drawOrder).toEqual(["a", "b", "a"]);
   });
 
   it("refreshes world matrices when the frame context changes between frames", () => {
