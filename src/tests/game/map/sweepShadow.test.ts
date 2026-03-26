@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { clearSweepShadowMap, computeSweepShadowMap, type TileHeightGrid } from "../../../game/map/sweepShadow";
+import {
+  buildUnifiedWorldShadowMap,
+  clearSweepShadowMap,
+  computeSweepShadowMap,
+  type TileHeightGrid,
+} from "../../../game/map/sweepShadow";
 import { getShadowSunV1Model } from "../../../shadowSunV1";
 
 describe("sweepShadow", () => {
@@ -39,5 +44,57 @@ describe("sweepShadow", () => {
     const third = computeSweepShadowMap(v2Grid, sun, "cache-test");
     expect(third).toBeTruthy();
     expect(third).not.toBe(first);
+  });
+
+  it("returns an empty shadow map at night", () => {
+    const sun = getShadowSunV1Model(20);
+    const grid: TileHeightGrid = {
+      originTx: 0,
+      originTy: 0,
+      width: 2,
+      height: 2,
+      version: "night",
+      heights: new Float32Array([
+        0, 4,
+        2, 6,
+      ]),
+    };
+
+    const map = computeSweepShadowMap(grid, sun, "night-test");
+
+    expect(map).toBeTruthy();
+    expect(Array.from(map!.data)).toEqual([0, 0, 0, 0]);
+  });
+
+  it("builds a unified world shadow map with ambient darkness as the floor", () => {
+    const grid: TileHeightGrid = {
+      originTx: 0,
+      originTy: 0,
+      width: 2,
+      height: 2,
+      version: "ambient-floor",
+      heights: new Float32Array([
+        0, 0,
+        0, 0,
+      ]),
+    };
+    const castShadowMap = {
+      originTx: 0,
+      originTy: 0,
+      width: 2,
+      height: 2,
+      data: new Float32Array([
+        0.1, 0.8,
+        0.0, 0.3,
+      ]),
+    };
+
+    const unified = buildUnifiedWorldShadowMap(grid, castShadowMap, 0.25);
+
+    expect(unified).toBeTruthy();
+    expect(unified!.data[0]).toBeCloseTo(0.25, 6);
+    expect(unified!.data[1]).toBeCloseTo(0.8, 6);
+    expect(unified!.data[2]).toBeCloseTo(0.25, 6);
+    expect(unified!.data[3]).toBeCloseTo(0.3, 6);
   });
 });

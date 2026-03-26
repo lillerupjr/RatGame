@@ -4,6 +4,10 @@ import {
   type LightColorMode,
   type LightStrength,
 } from "./lightColorResolution";
+import {
+  areStaticLightsActiveForSunHour,
+  type StaticLightCycleOverride,
+} from "../../../staticLightCycle";
 
 type LightFlicker = ProjectedLight["flicker"];
 
@@ -74,6 +78,8 @@ export type BuildFrameWorldLightRegistryParams = {
   elevPx: number;
   worldScale: number;
   streetLampOcclusionEnabled: boolean;
+  staticLightCycleOverride: StaticLightCycleOverride;
+  shadowSunTimeHour: number;
   lightOverrides: {
     colorModeOverride: "authored" | LightColorMode;
     strengthOverride: "authored" | LightStrength;
@@ -103,6 +109,10 @@ function buildStaticLightRecord(
   index: number,
   params: BuildFrameWorldLightRegistryParams,
 ): FrameWorldLightRecord | null {
+  if (!areStaticLightsActiveForSunHour(params.shadowSunTimeHour, params.staticLightCycleOverride)) {
+    return null;
+  }
+
   const ltx = Math.floor(light.worldX / params.tileWorld);
   const lty = Math.floor(light.worldY / params.tileWorld);
   if (!params.isTileInRenderRadius(ltx, lty)) return null;

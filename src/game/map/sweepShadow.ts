@@ -52,12 +52,53 @@ export function computeSweepShadowMap(
     return _cachedShadowMap;
 }
 
+export function buildUnifiedWorldShadowMap(
+    heightGrid: TileHeightGrid,
+    castShadowMap: SweepShadowMap | null,
+    ambientDarkness01: number,
+): SweepShadowMap | null {
+    const ambient = Math.max(0, Math.min(1, Number.isFinite(ambientDarkness01) ? ambientDarkness01 : 0));
+    if (!castShadowMap && ambient <= 0) return null;
+
+    const width = heightGrid.width;
+    const height = heightGrid.height;
+    const data = new Float32Array(width * height);
+    if (ambient > 0) data.fill(ambient);
+
+    if (castShadowMap) {
+        const { originTx, originTy, width: castWidth, height: castHeight, data: castData } = castShadowMap;
+        for (let ty = 0; ty < castHeight; ty++) {
+            for (let tx = 0; tx < castWidth; tx++) {
+                const castIntensity = castData[ty * castWidth + tx] ?? 0;
+                const index = ty * castWidth + tx;
+                if (castIntensity > data[index]) data[index] = castIntensity;
+            }
+        }
+        return {
+            originTx,
+            originTy,
+            width: castWidth,
+            height: castHeight,
+            data,
+        };
+    }
+
+    return {
+        originTx: heightGrid.originTx,
+        originTy: heightGrid.originTy,
+        width,
+        height,
+        data,
+    };
+}
+
 function sweepShadow(
     grid: TileHeightGrid,
     sunModel: ShadowSunV1Model,
 ): SweepShadowMap {
     const { width, height, heights, originTx, originTy } = grid;
     const data = new Float32Array(width * height);
+    if (!sunModel.castsShadows) return { originTx, originTy, width, height, data };
     const dirX = sunModel.forward.x;
     const dirY = sunModel.forward.y;
     const elevRad = sunModel.elevationDeg * (Math.PI / 180);

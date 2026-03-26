@@ -152,4 +152,34 @@ describe("userSettings palette darkness merge", () => {
     expect(getUserSettings().render.structureTriangleCutoutHeight).toBe(4);
     expect(getUserSettings().render.structureTriangleCutoutAlpha).toBe(0.35);
   });
+
+  it("bridges day-cycle debug controls into the bucketed settings store", () => {
+    updateUserSettings({
+      debug: {
+        shadowSunDayCycleEnabled: true,
+        shadowSunCycleMode: "dayOnly",
+        shadowSunDayCycleSpeedMultiplier: 64,
+        shadowSunStepsPerDay: 288,
+        staticLightCycleOverride: "on",
+      },
+    } as any);
+    expect(getUserSettings().debug.shadowSunDayCycleEnabled).toBe(true);
+    expect(getUserSettings().debug.shadowSunCycleMode).toBe("dayOnly");
+    expect(getUserSettings().debug.shadowSunDayCycleSpeedMultiplier).toBe(64);
+    expect(getUserSettings().debug.shadowSunStepsPerDay).toBe(288);
+    expect(getUserSettings().debug.staticLightCycleOverride).toBe("on");
+
+    updateUserSettings({
+      debug: {
+        shadowSunCycleMode: "__bad__" as any,
+        shadowSunDayCycleSpeedMultiplier: 3 as any,
+        shadowSunStepsPerDay: 12 as any,
+        staticLightCycleOverride: "__bad__" as any,
+      },
+    } as any);
+    expect(getUserSettings().debug.shadowSunCycleMode).toBe("full24h");
+    expect(getUserSettings().debug.shadowSunDayCycleSpeedMultiplier).toBe(1);
+    expect(getUserSettings().debug.shadowSunStepsPerDay).toBe(96);
+    expect(getUserSettings().debug.staticLightCycleOverride).toBe("automatic");
+  });
 });

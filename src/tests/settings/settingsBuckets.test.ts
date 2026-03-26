@@ -12,6 +12,11 @@ import {
   SHADOW_SUN_V1_MIN_ELEVATION_OVERRIDE_DEG,
 } from "../../shadowSunV1";
 import {
+  DEFAULT_SHADOW_SUN_CYCLE_MODE,
+  DEFAULT_SHADOW_SUN_DAY_CYCLE_SPEED_MULTIPLIER,
+  DEFAULT_SHADOW_SUN_DAY_CYCLE_STEPS_PER_DAY,
+} from "../../shadowSunDayCycle";
+import {
   DEFAULT_USER_SETTINGS,
   sanitizeUserSettings,
 } from "../../settings/userSettings";
@@ -21,10 +26,15 @@ import {
 } from "../../settings/systemOverrides";
 
 describe("settings bucket defaults", () => {
-  it("debug defaults keep boolean toggles OFF and sun hour at noon", () => {
+  it("debug defaults keep boolean toggles OFF and seed the sun validation controls", () => {
     const debug = DEFAULT_DEBUG_TOOLS_SETTINGS;
     const {
       shadowSunTimeHour,
+      shadowSunDayCycleEnabled,
+      shadowSunCycleMode,
+      shadowSunDayCycleSpeedMultiplier,
+      shadowSunStepsPerDay,
+      staticLightCycleOverride,
       shadowSunAzimuthDeg,
       sunElevationOverrideEnabled,
       sunElevationOverrideDeg,
@@ -42,10 +52,15 @@ describe("settings bucket defaults", () => {
     for (const [key, value] of Object.entries(booleanFlags)) {
       expect(value, key).toBe(false);
     }
-    expect(shadowSunTimeHour).toBe(DEFAULT_SHADOW_SUN_V1_TIME_HOUR);
+    expect(shadowSunTimeHour).toBe(17);
+    expect(shadowSunDayCycleEnabled).toBe(true);
+    expect(shadowSunCycleMode).toBe(DEFAULT_SHADOW_SUN_CYCLE_MODE);
+    expect(shadowSunDayCycleSpeedMultiplier).toBe(DEFAULT_SHADOW_SUN_DAY_CYCLE_SPEED_MULTIPLIER);
+    expect(shadowSunStepsPerDay).toBe(144);
+    expect(staticLightCycleOverride).toBe("automatic");
     expect(shadowSunAzimuthDeg).toBe(-1);
     expect(sunElevationOverrideEnabled).toBe(false);
-    expect(sunElevationOverrideDeg).toBe(DEFAULT_SHADOW_SUN_V1_ELEVATION_OVERRIDE_DEG);
+    expect(sunElevationOverrideDeg).toBe(45);
     expect(shadowCasterMode).toBe("v6SweepShadow");
     expect(shadowV6SemanticBucket).toBe("EAST_WEST");
     expect(shadowV6StructureIndex).toBe(0);
@@ -65,6 +80,24 @@ describe("settings bucket defaults", () => {
     expect(sanitizeDebugToolsSettings({ shadowSunTimeHour: 12.6 }).shadowSunTimeHour).toBe(13);
     expect(sanitizeDebugToolsSettings({ shadowSunTimeHour: Number.NaN }).shadowSunTimeHour)
       .toBe(DEFAULT_SHADOW_SUN_V1_TIME_HOUR);
+    expect(sanitizeDebugToolsSettings({ shadowSunDayCycleEnabled: 1 as any }).shadowSunDayCycleEnabled)
+      .toBe(true);
+    expect(sanitizeDebugToolsSettings({ shadowSunCycleMode: "dayOnly" as any }).shadowSunCycleMode)
+      .toBe("dayOnly");
+    expect(sanitizeDebugToolsSettings({ shadowSunCycleMode: "invalid" as any }).shadowSunCycleMode)
+      .toBe(DEFAULT_SHADOW_SUN_CYCLE_MODE);
+    expect(sanitizeDebugToolsSettings({ shadowSunDayCycleSpeedMultiplier: 64 as any }).shadowSunDayCycleSpeedMultiplier)
+      .toBe(64);
+    expect(sanitizeDebugToolsSettings({ shadowSunDayCycleSpeedMultiplier: 3 as any }).shadowSunDayCycleSpeedMultiplier)
+      .toBe(DEFAULT_SHADOW_SUN_DAY_CYCLE_SPEED_MULTIPLIER);
+    expect(sanitizeDebugToolsSettings({ shadowSunStepsPerDay: 144 as any }).shadowSunStepsPerDay)
+      .toBe(144);
+    expect(sanitizeDebugToolsSettings({ shadowSunStepsPerDay: 12 as any }).shadowSunStepsPerDay)
+      .toBe(DEFAULT_SHADOW_SUN_DAY_CYCLE_STEPS_PER_DAY);
+    expect(sanitizeDebugToolsSettings({ staticLightCycleOverride: "on" as any }).staticLightCycleOverride)
+      .toBe("on");
+    expect(sanitizeDebugToolsSettings({ staticLightCycleOverride: "__bad__" as any }).staticLightCycleOverride)
+      .toBe("automatic");
     expect(sanitizeDebugToolsSettings({ sunElevationOverrideEnabled: 1 as any }).sunElevationOverrideEnabled)
       .toBe(true);
     expect(sanitizeDebugToolsSettings({ shadowSunAzimuthDeg: -5 }).shadowSunAzimuthDeg).toBe(-1);

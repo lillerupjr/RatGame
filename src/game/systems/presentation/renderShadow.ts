@@ -55,6 +55,13 @@ export function renderEntityShadow(
   projectionDirection?: { x: number; y: number },
 ): void {
   if (params.castsShadow === false) return;
+  if (
+    projectionDirection
+    && Math.abs(projectionDirection.x) < 1e-6
+    && Math.abs(projectionDirection.y) < 1e-6
+  ) {
+    return;
+  }
   const { shadowX, shadowY, radiusX, radiusY, alpha } = computeShadowGeometry(params, compiledMap, projectionDirection);
   ctx.save();
   ctx.translate(shadowX, shadowY);

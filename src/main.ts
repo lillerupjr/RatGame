@@ -645,7 +645,7 @@ async function bootstrap() {
         if (appStateController.runState === RunState.PLAYING) {
           game.update(dtReal);
         }
-        game.render();
+        game.render(dtReal);
         syncUiSafeRect();
         if (appStateController.runState === RunState.PAUSED) {
           refs.hud.vitalsOrbRoot.hidden = true;

@@ -3503,8 +3503,8 @@ export function createGame(args: CreateGameArgs) {
     clearInputEdges(input);
   }
 
-  function render() {
-    renderSystem(world, args.ctx, args.canvas, args.uiCtx, args.uiCanvas);
+  function render(dtReal: number = 0) {
+    renderSystem(world, args.ctx, args.canvas, args.uiCtx, args.uiCanvas, dtReal);
   }
 
   function retryRunFromEndOverlay(): void {

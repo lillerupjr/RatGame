@@ -86,7 +86,7 @@ import {
   resolveLightingGroundYScale,
 } from "./renderLighting";
 import { renderEntityShadow, type ShadowParams } from "./renderShadow";
-import { computeSweepShadowMap, getSweepShadowMap } from "../../map/sweepShadow";
+import { buildUnifiedWorldShadowMap, computeSweepShadowMap, getSweepShadowMap } from "../../map/sweepShadow";
 import {
   buildFrameWorldLightRegistry,
   type WorldLightRenderPiece,
@@ -233,6 +233,7 @@ import { resolveStructureOverlayAdmissionContext } from "./structures/structureO
 import { collectStructureOverlays } from "./structures/collectStructureOverlays";
 import { buildStructureSlices } from "./structures/buildStructureSlices";
 import { buildStructureDrawables } from "./structures/buildStructureDrawables";
+import { resolveShadowSunDayCycleRuntime } from "./shadowSunDayCycleRuntime";
 
 const DEBUG_PLAYER_WEDGE = false;
 const DISABLE_WALLS_AND_CURTAINS = true;
@@ -256,6 +257,7 @@ export async function renderSystem(
   canvas: HTMLCanvasElement,
   uiCtx?: CanvasRenderingContext2D,
   uiCanvas?: HTMLCanvasElement,
+  presentationDtRealSec: number = 0,
 ) {
   const canvasRect = canvas.getBoundingClientRect();
   const cssW = Math.max(1, canvasRect.width);
@@ -365,7 +367,9 @@ export async function renderSystem(
   // Isometric camera: project world coords into screen space, then keep player centered
   const p0 = worldToScreen(px, py);
   const cameraSmoothingEnabled = renderSettings.cameraSmoothingEnabled !== false;
-  const dtReal = Number.isFinite(w.timeState?.dtReal) ? w.timeState.dtReal : 1 / 60;
+  const dtReal = Number.isFinite(presentationDtRealSec)
+    ? presentationDtRealSec
+    : (Number.isFinite(w.timeState?.dtReal) ? w.timeState.dtReal : 1 / 60);
   const cameraBootstrap = resolveCameraBootstrap({
     world: w,
     projectedPlayerX: p0.x,
@@ -1034,6 +1038,15 @@ export async function renderSystem(
 
   const debug = settings.debug;
   const debugFrame = buildDebugFrameContext(debug);
+  const shadowSunDayCycle = resolveShadowSunDayCycleRuntime({
+    world: w,
+    manualSeedHour: debug.shadowSunTimeHour,
+    enabled: debug.shadowSunDayCycleEnabled,
+    cycleMode: debug.shadowSunCycleMode,
+    speedMultiplier: debug.shadowSunDayCycleSpeedMultiplier,
+    stepsPerDay: debug.shadowSunStepsPerDay,
+    dtRealSec: dtReal,
+  });
   const RENDER_ENTITY_SHADOWS = !renderSettings.entityShadowsDisable;
   const RENDER_ENTITY_ANCHORS = renderSettings.entityAnchorsEnabled;
   const debugFlags = debugFrame.flags;
@@ -1137,6 +1150,8 @@ export async function renderSystem(
     elevPx: ELEV_PX,
     worldScale: s,
     streetLampOcclusionEnabled: w.lighting.occlusionEnabled,
+    staticLightCycleOverride: debug.staticLightCycleOverride,
+    shadowSunTimeHour: shadowSunDayCycle.effectiveTimeHour,
     lightOverrides: {
       colorModeOverride: currentSettings.render.lightColorModeOverride,
       strengthOverride: currentSettings.render.lightStrengthOverride,
@@ -1226,12 +1241,14 @@ export async function renderSystem(
   const structureShadowFrame = buildStructureShadowFrameContext({
     mapId: compiledMap.id,
     shadowCasterMode: SHADOW_CASTER_MODE,
-    shadowSunTimeHour: debugFlags.shadowSunTimeHour,
+    shadowSunTimeHour: shadowSunDayCycle.effectiveTimeHour,
+    shadowSunStepKeyOverride: shadowSunDayCycle.shadowStepKeyOverride,
     shadowSunAzimuthDeg: debugFlags.shadowSunAzimuthDeg,
     sunElevationOverrideEnabled: debugFlags.sunElevationOverrideEnabled,
     sunElevationOverrideDeg: debugFlags.sunElevationOverrideDeg,
   });
   const shadowSunModel = structureShadowFrame.sunModel;
+  const ambientSunLighting = structureShadowFrame.ambientSunLighting;
   if (SHADOW_CASTER_MODE === "v6SweepShadow") {
     computeSweepShadowMap(compiledMap.tileHeightGrid, shadowSunModel, compiledMap.id);
   }
@@ -1527,6 +1544,8 @@ export async function renderSystem(
     structureV6ShadowDebugCandidates,
     structureV6ShadowCacheStats,
     shadowSunModel,
+    ambientSunLighting,
+    shadowSunDayCycleStatus: shadowSunDayCycle.status,
     structureTriangleAdmissionMode,
     sliderPadding,
     playerCameraTx,
@@ -1561,14 +1580,18 @@ export async function renderSystem(
   renderScreenOverlays(screenOverlayContext);
 
   if (SHADOW_CASTER_MODE === "v6SweepShadow") {
-    const sweepShadowMap = getSweepShadowMap();
-    if (sweepShadowMap) {
+    const unifiedWorldShadowMap = buildUnifiedWorldShadowMap(
+      compiledMap.tileHeightGrid,
+      getSweepShadowMap(),
+      ambientSunLighting.ambientDarkness01,
+    );
+    if (unifiedWorldShadowMap) {
       enqueueWorldBandCommand(frameBuilder, {
         semanticFamily: "debug",
         finalForm: "primitive",
         payload: {
           zBand: "FIRST",
-          sweepShadowMap,
+          sweepShadowMap: unifiedWorldShadowMap,
         },
       });
     }
@@ -1725,6 +1748,7 @@ export async function renderSystem(
     T,
     compiledMap,
     shadowSunModel,
+    ambientSunLighting,
     rampRoadTiles,
     camX,
     camY,
@@ -1815,12 +1839,12 @@ export async function renderSystem(
     const stats = createBackendStats("webgl");
     try {
       clearWebGLWorldSurfaceFailure(canvas);
-      syncWorldCanvasBackendVisibility(canvas, "webgl", true);
       const cachedSurface = webglSurface as typeof webglSurface & { renderer?: WebGLRenderer };
       const webglRenderer = cachedSurface.renderer ?? new WebGLRenderer(renderFrame, webglSurface.gl);
       cachedSurface.renderer = webglRenderer;
       webglRenderer.setFrameContext(renderFrame);
       const webglWorldCommands = buildPureWebGLCommandList(executionPlan.world, stats);
+      const webglScreenCommands = buildPureWebGLCommandList(executionPlan.screen, stats);
 
       canvasRenderer.clearOverlayCanvas();
       canvasRenderer.clearMainCanvas();
@@ -1921,6 +1945,8 @@ export async function renderSystem(
         structureV6ShadowCastCount: structureV6VerticalShadowDebugDataList.length,
         structureV6ShadowCacheStats,
         shadowSunModel,
+        ambientSunLighting,
+        shadowSunDayCycleStatus: shadowSunDayCycle.status,
         structureTriangleAdmissionMode,
         sliderPadding,
         playerCameraTx,

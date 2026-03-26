@@ -178,6 +178,8 @@ export function resolveStaticRelightRuntimeState(w: World): StaticRelightRuntime
     elevPx: STATIC_RELIGHT_ELEV_PX,
     worldScale: 1,
     streetLampOcclusionEnabled: w.lighting.occlusionEnabled,
+    staticLightCycleOverride: settings.debug.staticLightCycleOverride,
+    shadowSunTimeHour: settings.debug.shadowSunTimeHour,
     lightOverrides: {
       colorModeOverride: settings.render.lightColorModeOverride,
       strengthOverride: settings.render.lightStrengthOverride,

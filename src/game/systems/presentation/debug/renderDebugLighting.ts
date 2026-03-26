@@ -35,6 +35,8 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
     structureV6ShadowCastCount,
     structureV6ShadowCacheStats,
     shadowSunModel,
+    ambientSunLighting,
+    shadowSunDayCycleStatus,
     structureTriangleAdmissionMode,
     sliderPadding,
     playerCameraTx,
@@ -114,10 +116,15 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
   }
 
   let screenDebugLineY = 30;
+  if (shadowSunDayCycleStatus.enabled) {
+    const cycleLine = `dayCycle active mode:${shadowSunDayCycleStatus.cycleModeLabel} x${shadowSunDayCycleStatus.multiplier} steps:${shadowSunDayCycleStatus.stepsPerDay} span:${shadowSunDayCycleStatus.stepSpanMinutes.toFixed(1)}m seed:${shadowSunDayCycleStatus.manualSeedLabel} cont:${shadowSunDayCycleStatus.continuousTimeLabel} quant:${shadowSunDayCycleStatus.quantizedTimeLabel} idx:${shadowSunDayCycleStatus.stepIndex} ambElev:${ambientSunLighting.ambientElevationDeg.toFixed(1)} ambDark:${ambientSunLighting.ambientDarkness01.toFixed(3)} state:${shadowSunDayCycleStatus.advancing ? "advancing" : "frozen"} changed:${shadowSunDayCycleStatus.stepChanged ? 1 : 0} clamped:${shadowSunDayCycleStatus.advancementClamped ? 1 : 0} base:${shadowSunDayCycleStatus.baseRateLabel}`;
+    ctx.fillText(cycleLine, 8, screenDebugLineY);
+    screenDebugLineY += 16;
+  }
   if (flags.showStructureTriangleFootprint) {
     const forward = shadowSunModel.forward;
     const projection = shadowSunModel.projectionDirection;
-    const sunLine = `shadowSun ${shadowSunModel.timeLabel} caster:${flags.shadowCasterMode} elev:${shadowSunModel.elevationDeg.toFixed(1)} dir:${shadowSunModel.directionLabel} f(${forward.x.toFixed(3)},${forward.y.toFixed(3)},${forward.z.toFixed(3)}) p(${projection.x.toFixed(3)},${projection.y.toFixed(3)}) step:${shadowSunModel.stepKey}`;
+    const sunLine = `shadowSun ${shadowSunModel.timeLabel} caster:${flags.shadowCasterMode} elev:${shadowSunModel.elevationDeg.toFixed(1)} ambElev:${ambientSunLighting.ambientElevationDeg.toFixed(1)} ambDark:${ambientSunLighting.ambientDarkness01.toFixed(3)} dir:${shadowSunModel.directionLabel} f(${forward.x.toFixed(3)},${forward.y.toFixed(3)},${forward.z.toFixed(3)}) p(${projection.x.toFixed(3)},${projection.y.toFixed(3)}) step:${shadowSunModel.stepKey}`;
     ctx.fillText(sunLine, 8, screenDebugLineY);
     screenDebugLineY += 16;
 

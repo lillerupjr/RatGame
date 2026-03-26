@@ -14,6 +14,8 @@ describe("worldLightRenderPieces", () => {
     elevPx: 16,
     worldScale: 2,
     streetLampOcclusionEnabled: true,
+    staticLightCycleOverride: "automatic",
+    shadowSunTimeHour: 20,
     lightOverrides: {
       colorModeOverride: "authored",
       strengthOverride: "authored",
@@ -128,6 +130,87 @@ describe("worldLightRenderPieces", () => {
     expect(registry.lights).toHaveLength(0);
     expect(registry.renderPieces).toHaveLength(0);
     expect(registry.projectedLights).toHaveLength(0);
+  });
+
+  it("uses the automatic light schedule for static lights", () => {
+    const dayRegistry = buildFrameWorldLightRegistry({
+      ...paramsBase,
+      shadowSunTimeHour: 13,
+      staticLights: [{
+        id: "map:auto:day",
+        worldX: 64,
+        worldY: 64,
+        heightUnits: 2,
+        intensity: 0.9,
+        radiusPx: 90,
+      }],
+      runtimeBeam: null,
+    });
+    expect(dayRegistry.lights).toHaveLength(0);
+
+    const eveningRegistry = buildFrameWorldLightRegistry({
+      ...paramsBase,
+      shadowSunTimeHour: 17,
+      staticLights: [{
+        id: "map:auto:evening",
+        worldX: 64,
+        worldY: 64,
+        heightUnits: 2,
+        intensity: 0.9,
+        radiusPx: 90,
+      }],
+      runtimeBeam: null,
+    });
+    expect(eveningRegistry.lights).toHaveLength(1);
+
+    const morningRegistry = buildFrameWorldLightRegistry({
+      ...paramsBase,
+      shadowSunTimeHour: 9,
+      staticLights: [{
+        id: "map:auto:morning",
+        worldX: 64,
+        worldY: 64,
+        heightUnits: 2,
+        intensity: 0.9,
+        radiusPx: 90,
+      }],
+      runtimeBeam: null,
+    });
+    expect(morningRegistry.lights).toHaveLength(0);
+  });
+
+  it("honors explicit static light on/off overrides", () => {
+    const onRegistry = buildFrameWorldLightRegistry({
+      ...paramsBase,
+      shadowSunTimeHour: 13,
+      staticLightCycleOverride: "on",
+      staticLights: [{
+        id: "map:override:on",
+        worldX: 64,
+        worldY: 64,
+        heightUnits: 2,
+        intensity: 0.9,
+        radiusPx: 90,
+      }],
+      runtimeBeam: null,
+    });
+    expect(onRegistry.lights).toHaveLength(1);
+
+    const offRegistry = buildFrameWorldLightRegistry({
+      ...paramsBase,
+      shadowSunTimeHour: 20,
+      staticLightCycleOverride: "off",
+      staticLights: [{
+        id: "map:override:off",
+        worldX: 64,
+        worldY: 64,
+        heightUnits: 2,
+        intensity: 0.9,
+        radiusPx: 90,
+      }],
+      runtimeBeam: null,
+    });
+    expect(offRegistry.lights).toHaveLength(0);
   });
 
   it("uses standard yellow tint and ignores authored color in standard mode", () => {

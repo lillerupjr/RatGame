@@ -1,4 +1,10 @@
 import type { PaletteGroup } from "../engine/render/palette/palettes";
+import type {
+  ShadowSunCycleMode,
+  ShadowSunDayCycleSpeedMultiplier,
+  ShadowSunDayCycleStepsPerDay,
+} from "../shadowSunDayCycle";
+import type { StaticLightCycleOverride } from "../staticLightCycle";
 
 export type VerticalTilesMode = "auto" | "manual";
 export type RenderBackendMode = "canvas2d" | "webgl";
@@ -78,6 +84,11 @@ export type DebugToolsSettings = {
   renderPerfCountersEnabled: boolean;
   paletteHudDebugOverlayEnabled: boolean;
   shadowSunTimeHour: number;
+  shadowSunDayCycleEnabled: boolean;
+  shadowSunCycleMode: ShadowSunCycleMode;
+  shadowSunDayCycleSpeedMultiplier: ShadowSunDayCycleSpeedMultiplier;
+  shadowSunStepsPerDay: ShadowSunDayCycleStepsPerDay;
+  staticLightCycleOverride: StaticLightCycleOverride;
   shadowSunAzimuthDeg: number;
   sunElevationOverrideEnabled: boolean;
   sunElevationOverrideDeg: number;

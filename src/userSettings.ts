@@ -1,4 +1,10 @@
 import type { PaletteGroup } from "./engine/render/palette/palettes";
+import type {
+  ShadowSunCycleMode,
+  ShadowSunDayCycleSpeedMultiplier,
+  ShadowSunDayCycleStepsPerDay,
+} from "./shadowSunDayCycle";
+import type { StaticLightCycleOverride } from "./staticLightCycle";
 import {
   DEFAULT_VISIBLE_VERTICAL_TILES,
   DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP,
@@ -145,6 +151,11 @@ export type DebugSettings = {
   pauseCsvControls: boolean;
   dpsMeter: boolean;
   shadowSunTimeHour: number;
+  shadowSunDayCycleEnabled: boolean;
+  shadowSunCycleMode: ShadowSunCycleMode;
+  shadowSunDayCycleSpeedMultiplier: ShadowSunDayCycleSpeedMultiplier;
+  shadowSunStepsPerDay: ShadowSunDayCycleStepsPerDay;
+  staticLightCycleOverride: StaticLightCycleOverride;
   shadowSunAzimuthDeg: number;
   sunElevationOverrideEnabled: boolean;
   sunElevationOverrideDeg: number;
@@ -232,6 +243,11 @@ function toLegacySettings(): UserSettings {
       pauseCsvControls: settings.debug.pauseCsvControls,
       dpsMeter: settings.debug.dpsMeter,
       shadowSunTimeHour: settings.debug.shadowSunTimeHour,
+      shadowSunDayCycleEnabled: settings.debug.shadowSunDayCycleEnabled,
+      shadowSunCycleMode: settings.debug.shadowSunCycleMode,
+      shadowSunDayCycleSpeedMultiplier: settings.debug.shadowSunDayCycleSpeedMultiplier,
+      shadowSunStepsPerDay: settings.debug.shadowSunStepsPerDay,
+      staticLightCycleOverride: settings.debug.staticLightCycleOverride,
       shadowSunAzimuthDeg: settings.debug.shadowSunAzimuthDeg,
       sunElevationOverrideEnabled: settings.debug.sunElevationOverrideEnabled,
       sunElevationOverrideDeg: settings.debug.sunElevationOverrideDeg,
@@ -448,6 +464,7 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
       "dpsMeter",
       "sweepShadowDebug",
       "tileHeightMap",
+      "shadowSunDayCycleEnabled",
       "sunElevationOverrideEnabled",
       "shadowV6AllStructures",
       "shadowV6OneStructureOnly",
@@ -461,6 +478,18 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     }
     if (debugAny.shadowSunTimeHour !== undefined) {
       debugPatch.shadowSunTimeHour = debugAny.shadowSunTimeHour;
+    }
+    if (debugAny.shadowSunDayCycleSpeedMultiplier !== undefined) {
+      debugPatch.shadowSunDayCycleSpeedMultiplier = debugAny.shadowSunDayCycleSpeedMultiplier;
+    }
+    if (debugAny.shadowSunCycleMode !== undefined) {
+      debugPatch.shadowSunCycleMode = debugAny.shadowSunCycleMode;
+    }
+    if (debugAny.shadowSunStepsPerDay !== undefined) {
+      debugPatch.shadowSunStepsPerDay = debugAny.shadowSunStepsPerDay;
+    }
+    if (debugAny.staticLightCycleOverride !== undefined) {
+      debugPatch.staticLightCycleOverride = debugAny.staticLightCycleOverride;
     }
     if (debugAny.shadowSunAzimuthDeg !== undefined) {
       debugPatch.shadowSunAzimuthDeg = debugAny.shadowSunAzimuthDeg;

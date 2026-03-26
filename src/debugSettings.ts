@@ -35,6 +35,10 @@ export type BooleanDebugSettingKey = Exclude<
   | "staticRelightStrengthPercent"
   | "staticRelightTargetDarknessPercent"
   | "shadowSunTimeHour"
+  | "shadowSunCycleMode"
+  | "shadowSunDayCycleSpeedMultiplier"
+  | "shadowSunStepsPerDay"
+  | "staticLightCycleOverride"
   | "shadowSunAzimuthDeg"
   | "sunElevationOverrideDeg"
   | "shadowCasterMode"
@@ -114,6 +118,11 @@ export function makeAllDebugOffSettings(): DebugSettings {
     sweepShadowDebug: false,
     tileHeightMap: false,
     waterFlowRate: 1,
+    shadowSunDayCycleEnabled: false,
+    shadowSunCycleMode: DEFAULT_DEBUG_SETTINGS.shadowSunCycleMode,
+    shadowSunDayCycleSpeedMultiplier: 1,
+    shadowSunStepsPerDay: 96,
+    staticLightCycleOverride: DEFAULT_DEBUG_SETTINGS.staticLightCycleOverride,
     neutralBirdAI: {
       ...DEFAULT_DEBUG_SETTINGS.neutralBirdAI,
       disabled: false,

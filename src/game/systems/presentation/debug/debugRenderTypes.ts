@@ -1,3 +1,4 @@
+import type { AmbientSunLightingState } from "../../../../shadowSunV1";
 import type { DebugOverlayContext } from "../../../../engine/render/debug/renderDebug";
 import type { ViewRect } from "../../../map/compile/kenneyMap";
 import type {
@@ -6,6 +7,7 @@ import type {
   StructureTriangleAdmissionMode,
 } from "../../../../settings/settingsTypes";
 import type { StructureShadowRenderMode } from "../structureShadows/structureShadowTypes";
+import type { ShadowSunDayCycleDebugStatus } from "../shadowSunDayCycleRuntime";
 import type {
   StructureV6FaceSlice,
   StructureV6SliceAxis,
@@ -162,6 +164,8 @@ export type RenderDebugScreenPassInput = {
     cacheSize: number;
   } | null;
   shadowSunModel: ShadowSunDebugModel;
+  ambientSunLighting: AmbientSunLightingState;
+  shadowSunDayCycleStatus: ShadowSunDayCycleDebugStatus;
   structureTriangleAdmissionMode: StructureTriangleAdmissionMode;
   sliderPadding: number;
   playerCameraTx: number;

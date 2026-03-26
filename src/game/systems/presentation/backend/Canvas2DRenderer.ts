@@ -325,43 +325,34 @@ export class Canvas2DRenderer {
 
     const ctx = this.frameContext.ctx;
     const SWEEP_MAX_DARKNESS = 0.38;
-    const BUCKET_COUNT = 4;
     const { originTx, originTy, width, height, data: intensityData } = sweepShadowMap;
 
     this.deps.setRenderPerfDrawTag?.("floors");
-    for (let bucket = 1; bucket <= BUCKET_COUNT; bucket++) {
-      const lo = (bucket - 1) / BUCKET_COUNT;
-      const hi = bucket / BUCKET_COUNT;
-      const alpha = hi * SWEEP_MAX_DARKNESS;
-      ctx.save();
-      ctx.globalCompositeOperation = "source-over";
-      ctx.beginPath();
-      let count = 0;
-      for (let ty = 0; ty < height; ty++) {
-        for (let tx = 0; tx < width; tx++) {
-          const intensity = intensityData[ty * width + tx] ?? 0;
-          if (intensity <= lo || intensity > hi) continue;
-          const mapTx = tx + originTx;
-          const mapTy = ty + originTy;
-          const tileH = this.deps.tileHAtWorld((mapTx + 0.5) * this.deps.T, (mapTy + 0.5) * this.deps.T);
-          const nw = this.deps.toScreenAtZ(mapTx * this.deps.T, mapTy * this.deps.T, tileH);
-          const ne = this.deps.toScreenAtZ((mapTx + 1) * this.deps.T, mapTy * this.deps.T, tileH);
-          const se = this.deps.toScreenAtZ((mapTx + 1) * this.deps.T, (mapTy + 1) * this.deps.T, tileH);
-          const sw = this.deps.toScreenAtZ(mapTx * this.deps.T, (mapTy + 1) * this.deps.T, tileH);
-          ctx.moveTo(nw.x, nw.y);
-          ctx.lineTo(ne.x, ne.y);
-          ctx.lineTo(se.x, se.y);
-          ctx.lineTo(sw.x, sw.y);
-          ctx.closePath();
-          count += 1;
-        }
-      }
-      if (count > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = "source-over";
+    for (let ty = 0; ty < height; ty++) {
+      for (let tx = 0; tx < width; tx++) {
+        const intensity = intensityData[ty * width + tx] ?? 0;
+        const alpha = intensity * SWEEP_MAX_DARKNESS;
+        if (alpha <= 0) continue;
+        const mapTx = tx + originTx;
+        const mapTy = ty + originTy;
+        const tileH = this.deps.tileHAtWorld((mapTx + 0.5) * this.deps.T, (mapTy + 0.5) * this.deps.T);
+        const nw = this.deps.toScreenAtZ(mapTx * this.deps.T, mapTy * this.deps.T, tileH);
+        const ne = this.deps.toScreenAtZ((mapTx + 1) * this.deps.T, mapTy * this.deps.T, tileH);
+        const se = this.deps.toScreenAtZ((mapTx + 1) * this.deps.T, (mapTy + 1) * this.deps.T, tileH);
+        const sw = this.deps.toScreenAtZ(mapTx * this.deps.T, (mapTy + 1) * this.deps.T, tileH);
+        ctx.beginPath();
+        ctx.moveTo(nw.x, nw.y);
+        ctx.lineTo(ne.x, ne.y);
+        ctx.lineTo(se.x, se.y);
+        ctx.lineTo(sw.x, sw.y);
+        ctx.closePath();
         ctx.fillStyle = `rgba(0,0,0,${alpha.toFixed(3)})`;
         ctx.fill("nonzero");
       }
-      ctx.restore();
     }
+    ctx.restore();
     this.deps.setRenderPerfDrawTag?.(null);
   }
 

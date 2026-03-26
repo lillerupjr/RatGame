@@ -9,11 +9,29 @@ import {
 } from "./devToolsSectionHelpers";
 import {
   SHADOW_SUN_V1_HOUR_OPTIONS,
+  getShadowSunV1LightingState,
   SHADOW_SUN_V1_MAX_ELEVATION_OVERRIDE_DEG,
   SHADOW_SUN_V1_MIN_ELEVATION_OVERRIDE_DEG,
   clampShadowSunElevationOverrideDeg,
+  formatShadowSunTimeLabel,
   getShadowSunV1Model,
 } from "../../shadowSunV1";
+import {
+  SHADOW_SUN_CYCLE_MODE_OPTIONS,
+  SHADOW_SUN_DAY_CYCLE_BASE_RATE_LABEL,
+  SHADOW_SUN_DAY_CYCLE_SPEED_MULTIPLIERS,
+  SHADOW_SUN_DAY_CYCLE_STEPS_PER_DAY_OPTIONS,
+  formatShadowSunCycleModeLabel,
+  formatShadowSunDayCycleSpeedLabel,
+  formatShadowSunDayCycleStepsPerDayLabel,
+  getShadowSunDayCycleStepSpanMinutes,
+} from "../../shadowSunDayCycle";
+import {
+  STATIC_LIGHTS_AUTOMATIC_OFF_HOUR,
+  STATIC_LIGHTS_AUTOMATIC_ON_HOUR,
+  STATIC_LIGHT_CYCLE_OVERRIDE_OPTIONS,
+  formatStaticLightCycleOverrideLabel,
+} from "../../staticLightCycle";
 
 export type DebugToolsSectionController = {
   sync(debug: DebugToolsSettings): void;
@@ -35,6 +53,39 @@ export function mountDebugToolsSection(
     SHADOW_SUN_V1_HOUR_OPTIONS,
     (value) => `${`${value}`.padStart(2, "0")}:00`,
     (value) => applyDebugPatch({ shadowSunTimeHour: value }),
+  );
+  const shadowSunDayCycleToggle = createToggleRow(
+    section,
+    "Continuous Sun Mode",
+    (checked) => applyDebugPatch({ shadowSunDayCycleEnabled: checked }),
+  );
+  const shadowSunCycleModeSelect = createSelectRow(
+    section,
+    "Sun Cycle Mode",
+    SHADOW_SUN_CYCLE_MODE_OPTIONS,
+    formatShadowSunCycleModeLabel,
+    (value) => applyDebugPatch({ shadowSunCycleMode: value }),
+  );
+  const shadowSunDayCycleSpeedSelect = createSelectRow(
+    section,
+    "Day Cycle Speed",
+    SHADOW_SUN_DAY_CYCLE_SPEED_MULTIPLIERS,
+    formatShadowSunDayCycleSpeedLabel,
+    (value) => applyDebugPatch({ shadowSunDayCycleSpeedMultiplier: value }),
+  );
+  const shadowSunStepsPerDaySelect = createSelectRow(
+    section,
+    "Steps Per Day",
+    SHADOW_SUN_DAY_CYCLE_STEPS_PER_DAY_OPTIONS,
+    formatShadowSunDayCycleStepsPerDayLabel,
+    (value) => applyDebugPatch({ shadowSunStepsPerDay: value }),
+  );
+  const staticLightCycleOverrideSelect = createSelectRow(
+    section,
+    "Static Lights",
+    STATIC_LIGHT_CYCLE_OVERRIDE_OPTIONS,
+    formatStaticLightCycleOverrideLabel,
+    (value) => applyDebugPatch({ staticLightCycleOverride: value }),
   );
   const shadowSunAzimuthSlider = createSliderRow(
     section,
@@ -141,16 +192,24 @@ export function mountDebugToolsSection(
   section.appendChild(shadowSunReadout);
 
   const syncShadowSunReadout = (debug: DebugToolsSettings) => {
-    const sun = getShadowSunV1Model(debug.shadowSunTimeHour, {
+    const lightingState = getShadowSunV1LightingState(debug.shadowSunTimeHour, {
       shadowSunAzimuthDeg: debug.shadowSunAzimuthDeg,
       sunElevationOverrideEnabled: debug.sunElevationOverrideEnabled,
       sunElevationOverrideDeg: debug.sunElevationOverrideDeg,
     });
+    const sun = lightingState.sunModel;
     const f = sun.forward;
     const p = sun.projectionDirection;
     const modeLabel = debug.sunElevationOverrideEnabled ? "override:on" : "override:off";
     const azLabel = debug.shadowSunAzimuthDeg >= 0 ? ` az:${debug.shadowSunAzimuthDeg}deg` : " az:auto";
-    shadowSunReadout.textContent = `Sun ${sun.timeLabel}${azLabel} elev:${sun.elevationDeg.toFixed(1)}deg ${modeLabel} dir:${sun.directionLabel} forward(${f.x.toFixed(3)}, ${f.y.toFixed(3)}, ${f.z.toFixed(3)}) proj(${p.x.toFixed(3)}, ${p.y.toFixed(3)})`;
+    const stepSpanMinutes = getShadowSunDayCycleStepSpanMinutes(debug.shadowSunStepsPerDay, debug.shadowSunCycleMode);
+    const cycleLabel = debug.shadowSunDayCycleEnabled
+      ? ` cycle:on mode:${formatShadowSunCycleModeLabel(debug.shadowSunCycleMode)} speed:${formatShadowSunDayCycleSpeedLabel(debug.shadowSunDayCycleSpeedMultiplier)} steps:${debug.shadowSunStepsPerDay} span:${stepSpanMinutes.toFixed(1)}m base:${SHADOW_SUN_DAY_CYCLE_BASE_RATE_LABEL} seed:${formatShadowSunTimeLabel(debug.shadowSunTimeHour)} continuous:on`
+      : ` cycle:off manual:${formatShadowSunTimeLabel(debug.shadowSunTimeHour)}`;
+    const lightCycleLabel = debug.staticLightCycleOverride === "automatic"
+      ? ` lights:auto(${`${STATIC_LIGHTS_AUTOMATIC_ON_HOUR}`.padStart(2, "0")}:00-${`${STATIC_LIGHTS_AUTOMATIC_OFF_HOUR}`.padStart(2, "0")}:00)`
+      : ` lights:${formatStaticLightCycleOverrideLabel(debug.staticLightCycleOverride).toLowerCase()}`;
+    shadowSunReadout.textContent = `Sun ${sun.timeLabel}${azLabel} elev:${sun.elevationDeg.toFixed(1)}deg ambElev:${lightingState.ambientSunLighting.ambientElevationDeg.toFixed(1)}deg ambDark:${lightingState.ambientSunLighting.ambientDarkness01.toFixed(3)} ${modeLabel}${cycleLabel}${lightCycleLabel} dir:${sun.directionLabel} forward(${f.x.toFixed(3)}, ${f.y.toFixed(3)}, ${f.z.toFixed(3)}) proj(${p.x.toFixed(3)}, ${p.y.toFixed(3)})`;
   };
 
   const syncSunElevationOverrideReadout = (debug: DebugToolsSettings): void => {
@@ -219,6 +278,17 @@ export function mountDebugToolsSection(
   return {
     sync(debug) {
       shadowSunHourSelect.value = `${debug.shadowSunTimeHour}`;
+      shadowSunDayCycleToggle.checked = !!debug.shadowSunDayCycleEnabled;
+      shadowSunCycleModeSelect.value = debug.shadowSunCycleMode;
+      shadowSunDayCycleSpeedSelect.value = `${debug.shadowSunDayCycleSpeedMultiplier}`;
+      shadowSunStepsPerDaySelect.value = `${debug.shadowSunStepsPerDay}`;
+      staticLightCycleOverrideSelect.value = debug.staticLightCycleOverride;
+      shadowSunCycleModeSelect.disabled = !debug.shadowSunDayCycleEnabled;
+      shadowSunDayCycleSpeedSelect.disabled = !debug.shadowSunDayCycleEnabled;
+      shadowSunStepsPerDaySelect.disabled = !debug.shadowSunDayCycleEnabled;
+      shadowSunCycleModeSelect.style.opacity = debug.shadowSunDayCycleEnabled ? "1" : "0.65";
+      shadowSunDayCycleSpeedSelect.style.opacity = debug.shadowSunDayCycleEnabled ? "1" : "0.65";
+      shadowSunStepsPerDaySelect.style.opacity = debug.shadowSunDayCycleEnabled ? "1" : "0.65";
       shadowSunAzimuthSlider.input.value = `${debug.shadowSunAzimuthDeg}`;
       shadowSunAzimuthSlider.value.textContent = debug.shadowSunAzimuthDeg >= 0 ? `${debug.shadowSunAzimuthDeg}` : "auto";
       sunElevationOverrideToggle.checked = !!debug.sunElevationOverrideEnabled;

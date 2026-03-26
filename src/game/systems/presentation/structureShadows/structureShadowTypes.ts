@@ -1,3 +1,4 @@
+import type { AmbientSunLightingState } from "../../../../shadowSunV1";
 import type { ShadowCasterMode, ShadowV6SemanticBucket } from "../../../../settings/settingsTypes";
 import type { ShadowSunModel } from "../renderShadow";
 
@@ -13,6 +14,7 @@ export type StructureShadowFrameInputs = {
   mapId: string;
   shadowCasterMode: ShadowCasterMode;
   shadowSunTimeHour: number;
+  shadowSunStepKeyOverride?: string;
   shadowSunAzimuthDeg: number;
   sunElevationOverrideEnabled: boolean;
   sunElevationOverrideDeg: number;
@@ -20,6 +22,7 @@ export type StructureShadowFrameInputs = {
 
 export type StructureShadowFrameResult = {
   sunModel: ShadowSunModel;
+  ambientSunLighting: AmbientSunLightingState;
   routing: StructureShadowRenderMode;
 };
 

@@ -10,6 +10,17 @@ import {
   clampShadowSunTimeHour,
 } from "../shadowSunV1";
 import {
+  DEFAULT_SHADOW_SUN_CYCLE_MODE,
+  DEFAULT_SHADOW_SUN_DAY_CYCLE_SPEED_MULTIPLIER,
+  DEFAULT_SHADOW_SUN_DAY_CYCLE_STEPS_PER_DAY,
+  clampShadowSunCycleMode,
+  clampShadowSunDayCycleSpeedMultiplier,
+  clampShadowSunDayCycleStepsPerDay,
+} from "../shadowSunDayCycle";
+import {
+  clampStaticLightCycleOverride,
+} from "../staticLightCycle";
+import {
   STRUCTURE_SHADOW_V6_DEFAULT_SLICE_COUNT,
   STRUCTURE_SHADOW_V6_DEFAULT_STRUCTURE_INDEX,
   clampStructureV6SliceCount,
@@ -51,6 +62,7 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "entityAnchorsEnabled", label: "entityAnchorsEnabled" },
   { key: "renderPerfCountersEnabled", label: "renderPerfCountersEnabled" },
   { key: "paletteHudDebugOverlayEnabled", label: "paletteHudDebugOverlayEnabled" },
+  { key: "shadowSunDayCycleEnabled", label: "shadowSunDayCycleEnabled" },
   { key: "sweepShadowDebug", label: "sweepShadowDebug" },
   { key: "tileHeightMap", label: "tileHeightMap" },
 ] as const;
@@ -84,10 +96,15 @@ export const DEFAULT_DEBUG_TOOLS_SETTINGS: DebugToolsSettings = {
   entityAnchorsEnabled: false,
   renderPerfCountersEnabled: false,
   paletteHudDebugOverlayEnabled: false,
-  shadowSunTimeHour: DEFAULT_SHADOW_SUN_V1_TIME_HOUR,
+  shadowSunTimeHour: 17,
+  shadowSunDayCycleEnabled: true,
+  shadowSunCycleMode: DEFAULT_SHADOW_SUN_CYCLE_MODE,
+  shadowSunDayCycleSpeedMultiplier: DEFAULT_SHADOW_SUN_DAY_CYCLE_SPEED_MULTIPLIER,
+  shadowSunStepsPerDay: 144,
+  staticLightCycleOverride: "automatic",
   shadowSunAzimuthDeg: -1,
   sunElevationOverrideEnabled: false,
-  sunElevationOverrideDeg: DEFAULT_SHADOW_SUN_V1_ELEVATION_OVERRIDE_DEG,
+  sunElevationOverrideDeg: 45,
   shadowCasterMode: "v6SweepShadow",
   shadowV6SemanticBucket: "EAST_WEST",
   shadowV6StructureIndex: STRUCTURE_SHADOW_V6_DEFAULT_STRUCTURE_INDEX,
@@ -107,6 +124,11 @@ function clampShadowSunAzimuthDeg(value: unknown): number {
   if (!Number.isFinite(numeric)) return -1;
   if (numeric < 0) return -1;
   return Math.round(numeric) % 360;
+}
+
+function sanitizeShadowSunTimeHourSetting(value: unknown): number {
+  const numeric = Number(value);
+  return clampShadowSunTimeHour(Number.isFinite(numeric) ? Math.round(numeric) : numeric);
 }
 
 function normalizeShadowCasterMode(value: unknown): ShadowCasterMode {
@@ -156,7 +178,12 @@ export function sanitizeDebugToolsSettings(input: Partial<DebugToolsSettings> | 
     entityAnchorsEnabled: !!merged.entityAnchorsEnabled,
     renderPerfCountersEnabled: !!merged.renderPerfCountersEnabled,
     paletteHudDebugOverlayEnabled: !!merged.paletteHudDebugOverlayEnabled,
-    shadowSunTimeHour: clampShadowSunTimeHour(merged.shadowSunTimeHour),
+    shadowSunTimeHour: sanitizeShadowSunTimeHourSetting(merged.shadowSunTimeHour),
+    shadowSunDayCycleEnabled: !!merged.shadowSunDayCycleEnabled,
+    shadowSunCycleMode: clampShadowSunCycleMode(merged.shadowSunCycleMode),
+    shadowSunDayCycleSpeedMultiplier: clampShadowSunDayCycleSpeedMultiplier(merged.shadowSunDayCycleSpeedMultiplier),
+    shadowSunStepsPerDay: clampShadowSunDayCycleStepsPerDay(merged.shadowSunStepsPerDay),
+    staticLightCycleOverride: clampStaticLightCycleOverride(merged.staticLightCycleOverride),
     shadowSunAzimuthDeg: clampShadowSunAzimuthDeg(merged.shadowSunAzimuthDeg),
     sunElevationOverrideEnabled: !!merged.sunElevationOverrideEnabled,
     sunElevationOverrideDeg: clampShadowSunElevationOverrideDeg(merged.sunElevationOverrideDeg),

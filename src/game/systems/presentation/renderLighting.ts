@@ -37,6 +37,17 @@ export function resolveLightingGroundYScale(v: number | undefined): number {
   return clampGroundYScale(v);
 }
 
+export function resolveAdditionalDarknessAlphaForMax(
+  castShadowAlpha: number,
+  ambientDarknessAlpha: number,
+): number {
+  const cast = clamp01(castShadowAlpha);
+  const ambient = clamp01(ambientDarknessAlpha);
+  if (cast <= ambient) return 0;
+  if (ambient >= 1) return 0;
+  return clamp01((cast - ambient) / (1 - ambient));
+}
+
 function hexToRgba(hex: string, alpha: number): string {
   const a = clamp01(alpha);
   const normalized = hex.trim().replace(/^#/, "");
