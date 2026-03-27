@@ -29,7 +29,7 @@ npm run test
 ```
 
 ## Agents
-See `docs/AGENTS.md`.
+See `docs/systems/architecture_invariants.md`.
 
 ## GitHub Pages (live)
 - Deployments trigger on pushes to the `live` branch via `.github/workflows/pages-live.yml`.

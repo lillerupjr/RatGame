@@ -42,8 +42,8 @@ Primary files:
 
 Supporting contract history:
 
-- `docs/rendering/canonical_render_phase1_contract.md`
-- `docs/rendering/canonical_render_phase2_contract.md`
+- `docs/contracts/active/rendering/canonical_render_phase1.md`
+- `docs/contracts/active/rendering/canonical_render_phase2.md`
 
 ---
 

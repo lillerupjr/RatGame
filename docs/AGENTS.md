@@ -1,4 +1,4 @@
-# ai/AGENTS.md
+# docs/AGENTS.md
 
 Audience note:
 This file defines repository and engine architecture invariants for implementation work.
@@ -348,24 +348,14 @@ The renderer is a pipeline of systems, not a system itself.
 
 ---
 
-## Canonical Document
+## Canonical Documents
 
-The canonical renderer reference is:
+The canonical references are in the `docs/systems` folder. They must be updated to reflect the live implementation and are the source of truth for renderer architecture.:
 
-- `docs/systems/canonical_render_pipeline_reference.md`
 
 Rules:
 
-- Maintain this document in the same patch as any renderer-flow change
-- Update it when changing:
-  - render entry sequencing
-  - command contract shape
-  - collector ownership
-  - frame builder or execution-plan behavior
-  - backend selection or routing
-  - Canvas2D vs WebGL surface ownership
-  - overlay-canvas or UI ownership
-  - known mixed-backend limitations
+- Maintain these documents in the same patch as any related changes.
 - Keep it implementation-accurate and present tense
 - Document the live pipeline, not the intended future pipeline
 - If behavior is mixed, partial, or intentionally deferred, state that explicitly

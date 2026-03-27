@@ -25,5 +25,5 @@
 - `src/ui/styles/overlays.css`
 - `index.html`
 - `supabase/migrations/202603051200_init.sql`
-- `docs/leaderboard/README.md`
-- `docs/leaderboard/integration_notes.md`
+- `docs/integrations/leaderboard/README.md`
+- `docs/integrations/leaderboard/integration_notes.md`
