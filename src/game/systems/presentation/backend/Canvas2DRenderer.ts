@@ -8,6 +8,7 @@ import type { RenderFrameContext } from "../contracts/renderFrameContext";
 import type { RenderCommand } from "../contracts/renderCommands";
 import { renderZoneObjectives } from "../../../render/renderZoneObjectives";
 import { resolveRenderZBand } from "../worldRenderOrdering";
+import type { DrawTag } from "../renderPerfCounters";
 
 type Canvas2DRendererDeps = any;
 const EMPTY_RAMP_ROAD_TILES = new Set<string>();
@@ -56,6 +57,18 @@ export class Canvas2DRenderer {
     }
   }
 
+  private withPerfDrawTag(
+    tag: DrawTag,
+    draw: () => void,
+  ): void {
+    this.deps.setRenderPerfDrawTag?.(tag);
+    try {
+      draw();
+    } finally {
+      this.deps.setRenderPerfDrawTag?.(null);
+    }
+  }
+
   render(plan: RenderExecutionPlan): void {
     this.clearMainCanvas();
     this.clearOverlayCanvas();
@@ -85,7 +98,9 @@ export class Canvas2DRenderer {
     const { ctx, viewport, canvas } = this.frameContext;
     const devW = Math.max(1, canvas.width);
     const devH = Math.max(1, canvas.height);
-    drawVoidBackgroundOnce(ctx, devW, devH, viewport);
+    this.withPerfDrawTag("void", () => {
+      drawVoidBackgroundOnce(ctx, devW, devH, viewport);
+    });
   }
 
   renderWorldCommands(commands: readonly RenderCommand[]): void {
@@ -157,57 +172,71 @@ export class Canvas2DRenderer {
   private executeCommand(command: RenderCommand): void {
     const payload = command.payload as any;
     if (command.semanticFamily === "groundSurface") {
-      this.drawTriangleMesh(payload);
+      this.withPerfDrawTag("floors", () => {
+        this.drawTriangleMesh(payload);
+      });
       return;
     }
 
     if (command.semanticFamily === "groundDecal") {
-      this.drawTriangleMesh(payload);
+      this.withPerfDrawTag("decals", () => {
+        this.drawTriangleMesh(payload);
+      });
       return;
     }
 
     if (command.semanticFamily === "worldPrimitive") {
       if (payload.shadowParams) {
-        renderEntityShadow(
-          this.frameContext.ctx,
-          payload.shadowParams as any,
-          this.deps.compiledMap,
-          this.deps.shadowSunModel.projectionDirection,
-        );
+        this.withPerfDrawTag("entities", () => {
+          renderEntityShadow(
+            this.frameContext.ctx,
+            payload.shadowParams as any,
+            this.deps.compiledMap,
+            this.deps.shadowSunModel.projectionDirection,
+          );
+        });
         return;
       }
       if (payload.zoneKind !== undefined) {
-        this.drawZoneEffect(payload);
+        this.withPerfDrawTag("lighting", () => {
+          this.drawZoneEffect(payload);
+        });
         return;
       }
       if (payload.start && payload.end) {
-        this.drawPlayerBeam(payload);
+        this.withPerfDrawTag("lighting", () => {
+          this.drawPlayerBeam(payload);
+        });
         return;
       }
       if (payload.zone) {
-        renderZoneObjectives(this.frameContext.ctx, this.deps.w, {
-          zone: payload.zone as any,
-          mapOriginTx: this.deps.compiledMap.originTx,
-          mapOriginTy: this.deps.compiledMap.originTy,
-          tileWorld: this.deps.T,
-          toScreen: this.deps.toScreen,
-          showZoneBounds: this.deps.SHOW_ZONE_OBJECTIVE_BOUNDS,
+        this.withPerfDrawTag("entities", () => {
+          renderZoneObjectives(this.frameContext.ctx, this.deps.w, {
+            zone: payload.zone as any,
+            mapOriginTx: this.deps.compiledMap.originTx,
+            mapOriginTy: this.deps.compiledMap.originTy,
+            tileWorld: this.deps.T,
+            toScreen: this.deps.toScreen,
+            showZoneBounds: this.deps.SHOW_ZONE_OBJECTIVE_BOUNDS,
+          });
         });
         return;
       }
       if (payload.lightPiece) {
-        const lightPiece = payload.lightPiece as any;
-        const ctx = this.frameContext.ctx;
-        ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        configurePixelPerfect(ctx);
-        drawProjectedLightAdditive(
-          ctx,
-          lightPiece.light.projected,
-          this.deps.w.time ?? 0,
-          this.deps.worldLightGroundYScale,
-        );
-        ctx.restore();
+        this.withPerfDrawTag("lighting", () => {
+          const lightPiece = payload.lightPiece as any;
+          const ctx = this.frameContext.ctx;
+          ctx.save();
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          configurePixelPerfect(ctx);
+          drawProjectedLightAdditive(
+            ctx,
+            lightPiece.light.projected,
+            this.deps.w.time ?? 0,
+            this.deps.worldLightGroundYScale,
+          );
+          ctx.restore();
+        });
         return;
       }
     }
@@ -215,13 +244,15 @@ export class Canvas2DRenderer {
     if (command.semanticFamily === "screenOverlay") {
       const target = this.getCommandCanvasTarget(command);
       if (command.finalForm === "quad") {
-        const ctx = target.ctx;
-        ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.globalAlpha = Number(payload.alpha ?? 1);
-        ctx.fillStyle = String(payload.color ?? "#000");
-        ctx.fillRect(0, 0, Number(payload.width ?? 0), Number(payload.height ?? 0));
-        ctx.restore();
+        this.withPerfDrawTag("lighting", () => {
+          const ctx = target.ctx;
+          ctx.save();
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.globalAlpha = Number(payload.alpha ?? 1);
+          ctx.fillStyle = String(payload.color ?? "#000");
+          ctx.fillRect(0, 0, Number(payload.width ?? 0), Number(payload.height ?? 0));
+          ctx.restore();
+        });
         return;
       }
       if (
@@ -243,58 +274,64 @@ export class Canvas2DRenderer {
         this.deps.setRenderPerfDrawTag?.(null);
         return;
       }
-      this.drawFloatingText();
+      this.withPerfDrawTag("entities", () => {
+        this.drawFloatingText();
+      });
       return;
     }
 
     if (command.semanticFamily === "worldSprite") {
-      if (payload.draw) {
-        this.drawRenderPiece(payload.draw);
-        return;
-      }
-      if (payload.image && Number.isFinite(Number(payload.dx)) && Number.isFinite(Number(payload.dy))) {
-        this.drawImageSprite(payload);
-        return;
-      }
-      if (payload.vfxIndex !== undefined) {
-        this.drawVfxClip(payload);
-        return;
-      }
-      if (payload.pickupIndex !== undefined) {
-        this.drawPickup(payload);
-        return;
-      }
-      if (payload.enemyIndex !== undefined) {
-        this.drawEnemy(payload);
-        return;
-      }
-      if (payload.npcIndex !== undefined) {
-        this.drawNpc(payload);
-        return;
-      }
-      if (payload.neutralMobIndex !== undefined) {
-        this.drawNeutralMob(payload);
-        return;
-      }
-      if (payload.projectileIndex !== undefined && payload.sparkStyle) {
-        this.drawProjectileSpark(payload);
-        return;
-      }
-      if (payload.projectileIndex !== undefined) {
-        this.drawProjectile(payload);
-        return;
-      }
-      if (payload.feet) {
-        if (payload.enemyIndex !== undefined) this.drawEnemy(payload);
-        else if (payload.npcIndex !== undefined) this.drawNpc(payload);
-        else if (payload.neutralMobIndex !== undefined) this.drawNeutralMob(payload);
-        else this.drawPlayer(payload);
-        return;
-      }
+      this.withPerfDrawTag(payload.draw ? "structures:live" : "entities", () => {
+        if (payload.draw) {
+          this.drawRenderPiece(payload.draw);
+          return;
+        }
+        if (payload.image && Number.isFinite(Number(payload.dx)) && Number.isFinite(Number(payload.dy))) {
+          this.drawImageSprite(payload);
+          return;
+        }
+        if (payload.vfxIndex !== undefined) {
+          this.drawVfxClip(payload);
+          return;
+        }
+        if (payload.pickupIndex !== undefined) {
+          this.drawPickup(payload);
+          return;
+        }
+        if (payload.enemyIndex !== undefined) {
+          this.drawEnemy(payload);
+          return;
+        }
+        if (payload.npcIndex !== undefined) {
+          this.drawNpc(payload);
+          return;
+        }
+        if (payload.neutralMobIndex !== undefined) {
+          this.drawNeutralMob(payload);
+          return;
+        }
+        if (payload.projectileIndex !== undefined && payload.sparkStyle) {
+          this.drawProjectileSpark(payload);
+          return;
+        }
+        if (payload.projectileIndex !== undefined) {
+          this.drawProjectile(payload);
+          return;
+        }
+        if (payload.feet) {
+          if (payload.enemyIndex !== undefined) this.drawEnemy(payload);
+          else if (payload.npcIndex !== undefined) this.drawNpc(payload);
+          else if (payload.neutralMobIndex !== undefined) this.drawNeutralMob(payload);
+          else this.drawPlayer(payload);
+        }
+      });
+      return;
     }
 
     if (command.semanticFamily === "worldGeometry") {
-      this.drawTriangleMesh(payload);
+      this.withPerfDrawTag("structures:live", () => {
+        this.drawTriangleMesh(payload);
+      });
       return;
     }
 

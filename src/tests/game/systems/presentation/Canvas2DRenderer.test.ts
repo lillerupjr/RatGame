@@ -332,6 +332,165 @@ describe("Canvas2DRenderer", () => {
     expect(ctx.drawImage).toHaveBeenCalledTimes(1);
   });
 
+  it("tags world sprite draws as entities and geometry draws as live structures", () => {
+    const ctx = makeCtx(320, 180);
+    const overlayCtx = makeCtx(320, 180);
+    const setRenderPerfDrawTag = vi.fn();
+    const renderer = new Canvas2DRenderer({
+      world: {} as any,
+      ctx,
+      canvas: { width: 320, height: 180 } as any,
+      overlayCtx,
+      overlayCanvas: { width: 320, height: 180 } as any,
+      hasUiOverlay: true,
+      cssW: 320,
+      cssH: 180,
+      screenW: 320,
+      screenH: 180,
+      devW: 320,
+      devH: 180,
+      dpr: 1,
+      overlayDevW: 320,
+      overlayDevH: 180,
+      overlayDpr: 1,
+      visibleVerticalTiles: 10,
+      viewport: {
+        applyWorld: vi.fn(),
+      } as any,
+      zoom: 1,
+      worldWidth: 320,
+      worldHeight: 180,
+      scaledW: 320,
+      scaledH: 180,
+      safeOffsetX: 0,
+      safeOffsetY: 0,
+      playerWorldX: 0,
+      playerWorldY: 0,
+      playerTileX: 0,
+      playerTileY: 0,
+      cameraProjectedX: 0,
+      cameraProjectedY: 0,
+      camTx: 0,
+      camTy: 0,
+      worldScaleDevice: 1,
+      renderSettings: {},
+    } as any, {
+      renderAmbientDarknessOverlay: vi.fn(),
+      setRenderPerfDrawTag,
+    } as any);
+
+    renderer.renderWorldCommands([
+      command(1, {
+        semanticFamily: "worldSprite",
+        finalForm: "quad",
+        payload: {
+          image: { width: 16, height: 16 } as any,
+          dx: 10,
+          dy: 10,
+          dw: 16,
+          dh: 16,
+        },
+      }),
+      command(2, {
+        semanticFamily: "worldGeometry",
+        finalForm: "triangles",
+        payload: {
+          image: { width: 128, height: 64 } as any,
+          sourceWidth: 128,
+          sourceHeight: 64,
+          triangles: buildTrianglePairFromQuad(buildDiamondSourceQuad(128, 64), {
+            nw: { x: 0, y: 0 },
+            ne: { x: 32, y: 0 },
+            se: { x: 16, y: 16 },
+            sw: { x: -16, y: 16 },
+          }),
+        },
+      }),
+    ]);
+
+    expect(setRenderPerfDrawTag).toHaveBeenCalledWith("entities");
+    expect(setRenderPerfDrawTag).toHaveBeenCalledWith("structures:live");
+  });
+
+  it("tags floating text screen overlay draws as entities", () => {
+    const ctx = makeCtx(320, 180);
+    const overlayCtx = makeCtx(320, 180);
+    const setRenderPerfDrawTag = vi.fn();
+    const renderer = new Canvas2DRenderer({
+      world: {
+        floatTextX: [10],
+        floatTextY: [20],
+        floatTextTtl: [0.4],
+        floatTextValue: [7],
+        floatTextColor: ["#fff"],
+        floatTextSize: [12],
+        floatTextIsCrit: [false],
+        floatTextIsPlayer: [false],
+      } as any,
+      ctx,
+      canvas: { width: 320, height: 180 } as any,
+      overlayCtx,
+      overlayCanvas: { width: 320, height: 180 } as any,
+      hasUiOverlay: true,
+      cssW: 320,
+      cssH: 180,
+      screenW: 320,
+      screenH: 180,
+      devW: 320,
+      devH: 180,
+      dpr: 1,
+      overlayDevW: 320,
+      overlayDevH: 180,
+      overlayDpr: 1,
+      visibleVerticalTiles: 10,
+      viewport: {
+        applyWorld: vi.fn(),
+      } as any,
+      zoom: 1,
+      worldWidth: 320,
+      worldHeight: 180,
+      scaledW: 320,
+      scaledH: 180,
+      safeOffsetX: 0,
+      safeOffsetY: 0,
+      playerWorldX: 0,
+      playerWorldY: 0,
+      playerTileX: 0,
+      playerTileY: 0,
+      cameraProjectedX: 0,
+      cameraProjectedY: 0,
+      camTx: 0,
+      camTy: 0,
+      worldScaleDevice: 1,
+      renderSettings: {},
+    } as any, {
+      renderAmbientDarknessOverlay: vi.fn(),
+      setRenderPerfDrawTag,
+      toScreen: vi.fn((x: number, y: number) => ({ x, y })),
+      w: {
+        floatTextX: [10],
+        floatTextY: [20],
+        floatTextTtl: [0.4],
+        floatTextValue: [7],
+        floatTextColor: ["#fff"],
+        floatTextSize: [12],
+        floatTextIsCrit: [false],
+        floatTextIsPlayer: [false],
+      },
+    } as any);
+
+    renderer.renderScreenCommands([
+      command(3, {
+        pass: "WORLD",
+        semanticFamily: "screenOverlay",
+        finalForm: "primitive",
+        payload: {},
+      }),
+    ]);
+
+    expect(setRenderPerfDrawTag).toHaveBeenCalledWith("entities");
+  });
+
   it("applies triangle alpha without an extra outer save/restore", () => {
     const ctx = makeCtx(320, 180);
     const overlayCtx = makeCtx(320, 180);

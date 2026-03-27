@@ -78,14 +78,14 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
           `drawImage/frame: ${perf.drawImageCallsPerFrame.toFixed(1)}`,
           `groundChunkDraw/frame: ${perf.canvasGroundChunkDrawsPerFrame.toFixed(1)} visibleChunks/frame: ${perf.canvasGroundChunksVisiblePerFrame.toFixed(1)} rebuildChunks/frame: ${perf.canvasGroundChunkRebuildsPerFrame.toFixed(1)}`,
           `tag void:${tag.void.toFixed(1)} floors:${tag.floors.toFixed(1)} decals:${tag.decals.toFixed(1)} ent:${tag.entities.toFixed(1)}`,
-          `tag struct:${tag.structures.toFixed(1)}`,
+          `tag structLive:${tag["structures:live"].toFixed(1)} structShadow:${tag["structures:shadow"].toFixed(1)}`,
           `tag lighting:${tag.lighting.toFixed(1)} untagged:${tag.untagged.toFixed(1)}`,
           `gradientCreate/frame: ${perf.gradientCreateCallsPerFrame.toFixed(1)} addColorStop/frame: ${perf.addColorStopCallsPerFrame.toFixed(1)}`,
           `save/frame: ${perf.saveCallsPerFrame.toFixed(1)} restore/frame: ${perf.restoreCallsPerFrame.toFixed(1)}`,
           `saveTag fl:${saveTag.floors.toFixed(1)} de:${saveTag.decals.toFixed(1)} li:${saveTag.lighting.toFixed(1)} un:${saveTag.untagged.toFixed(1)}`,
-          `saveTag struct:${saveTag.structures.toFixed(1)}`,
+          `saveTag structLive:${saveTag["structures:live"].toFixed(1)} structShadow:${saveTag["structures:shadow"].toFixed(1)}`,
           `restoreTag fl:${restoreTag.floors.toFixed(1)} de:${restoreTag.decals.toFixed(1)} li:${restoreTag.lighting.toFixed(1)} un:${restoreTag.untagged.toFixed(1)}`,
-          `restoreTag struct:${restoreTag.structures.toFixed(1)}`,
+          `restoreTag structLive:${restoreTag["structures:live"].toFixed(1)} structShadow:${restoreTag["structures:shadow"].toFixed(1)}`,
           `fullCanvasBlits/frame: ${perf.fullCanvasBlitsPerFrame.toFixed(1)}`,
         ];
     const perfLines = [

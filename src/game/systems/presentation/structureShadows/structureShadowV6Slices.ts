@@ -1,5 +1,6 @@
 import { configurePixelPerfect } from "../../../../engine/render/pixelPerfect";
 import type { ShadowV6SemanticBucket } from "../../../../settings/settingsTypes";
+import { setRenderPerfDrawTag, type DrawTag } from "../renderPerfCounters";
 import { drawTexturedTriangle } from "../renderPrimitives/drawTexturedTriangle";
 import {
   buildStructureV6FaceSlices,
@@ -21,6 +22,15 @@ type SliceSpaceAlphaSpan = {
 
 const STRUCTURE_SHADOW_V6_DEFAULT_DESIRED_SLICE_THICKNESS_PX = 8;
 const STRUCTURE_SHADOW_V6_FINAL_MASK_BINARY_ALPHA_THRESHOLD = 0.5;
+
+function withPerfDrawTag<T>(tag: DrawTag, draw: () => T): T {
+  setRenderPerfDrawTag(tag);
+  try {
+    return draw();
+  } finally {
+    setRenderPerfDrawTag(null);
+  }
+}
 
 export type StructureV6ExtrudedSliceDebug = {
   slice: StructureV6FaceSlice;
@@ -281,6 +291,7 @@ export function buildStructureV6FaceSliceDebugData(
   shadowVector: ScreenPt,
   options?: BuildStructureV6FaceSliceDebugOptions,
 ): StructureV6FaceSliceDebugData | null {
+  return withPerfDrawTag("structures:shadow", () => {
   if (candidate.triangles.length <= 0) return null;
   let minX = Number.POSITIVE_INFINITY;
   let minY = Number.POSITIVE_INFINITY;
@@ -599,6 +610,7 @@ export function buildStructureV6FaceSliceDebugData(
     displacedSlicesCanvas,
     mergedShadowCanvas,
   };
+  });
 }
 
 export function buildStructureV6VerticalShadowMaskDebugData(
@@ -611,6 +623,7 @@ export function buildStructureV6VerticalShadowMaskDebugData(
   shadowVector: ScreenPt,
   options?: BuildStructureV6VerticalShadowMaskOptions,
 ): StructureV6VerticalShadowMaskDebugData | null {
+  return withPerfDrawTag("structures:shadow", () => {
   const includeVertical = options?.includeVertical !== false;
   const includeTop = options?.includeTop !== false;
   const bucketAShadow = includeVertical
@@ -720,4 +733,5 @@ export function buildStructureV6VerticalShadowMaskDebugData(
     mergedVerticalShadowDrawOrigin: { x: mergedOriginX, y: mergedOriginY },
     mergedVerticalShadowCanvas,
   };
+  });
 }

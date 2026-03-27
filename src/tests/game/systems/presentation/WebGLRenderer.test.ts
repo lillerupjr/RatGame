@@ -56,7 +56,12 @@ function makeFakeGl() {
     deleteProgram: () => {},
     createBuffer: () => ({}),
     createTexture: () => ({ id: ++textureId }),
-    getAttribLocation: (_program: unknown, name: string) => (name === "a_position" ? 0 : 1),
+    getAttribLocation: (_program: unknown, name: string) => {
+      if (name === "a_position") return 0;
+      if (name === "a_texCoord") return 1;
+      if (name === "a_color") return 2;
+      return -1;
+    },
     getUniformLocation: () => ({}),
     useProgram: () => {},
     bindBuffer: () => {},
@@ -110,7 +115,11 @@ function makeChunkCanvas(label: string, width: number = 64, height: number = 32)
   };
 }
 
-function makeCommand(image: any, stableId: number): RenderCommand {
+function makeCommand(
+  image: any,
+  stableId: number,
+  payloadOverrides: Record<string, unknown> = {},
+): RenderCommand {
   return {
     pass: "WORLD",
     key: {
@@ -128,6 +137,7 @@ function makeCommand(image: any, stableId: number): RenderCommand {
       dy: stableId,
       dw: 16,
       dh: 16,
+      ...payloadOverrides,
     },
   } as RenderCommand;
 }
@@ -215,7 +225,7 @@ describe("WebGLRenderer", () => {
     expect(gl.drawOrder).toEqual(["second", "first"]);
   });
 
-  it("renders structure triangle groups through the WebGL triangle path", () => {
+  it("batches structure triangle groups even when triangle alpha differs", () => {
     const gl = makeFakeGl();
     const renderer = new WebGLRenderer({
       world: {} as any,
@@ -296,8 +306,8 @@ describe("WebGLRenderer", () => {
       },
     } as RenderCommand]);
 
-    expect(gl.drawOrder).toEqual(["structure-triangle", "structure-triangle"]);
-    expect(gl.drawModes).toEqual([gl.TRIANGLES, gl.TRIANGLES]);
+    expect(gl.drawOrder).toEqual(["structure-triangle"]);
+    expect(gl.drawModes).toEqual([gl.TRIANGLES]);
   });
 
   it("renders projected ground decals through the WebGL triangle path", () => {
@@ -888,7 +898,7 @@ describe("WebGLRenderer", () => {
     expect(gl.drawModes).toEqual([gl.TRIANGLES]);
   });
 
-  it("batches adjacent compatible world sprite quads into one ordered submission", () => {
+  it("batches adjacent world sprite quads even when alpha differs", () => {
     const gl = makeFakeGl();
     const renderer = new WebGLRenderer({
       world: {} as any,
@@ -938,12 +948,128 @@ describe("WebGLRenderer", () => {
     renderer.beginFrame();
     renderer.useWorldSpace();
     renderer.renderCommands([
-      makeCommand(image, 1),
-      makeCommand(image, 2),
+      makeCommand(image, 1, { alpha: 1 }),
+      makeCommand(image, 2, { alpha: 0.35 }),
     ]);
 
     expect(gl.drawOrder).toEqual(["batched-sprite"]);
     expect(gl.drawModes).toEqual([gl.TRIANGLES]);
+  });
+
+  it("batches adjacent world sprite quads even when color differs", () => {
+    const gl = makeFakeGl();
+    const renderer = new WebGLRenderer({
+      world: {} as any,
+      ctx: {} as any,
+      canvas: gl.canvas,
+      overlayCtx: {} as any,
+      overlayCanvas: { width: 100, height: 100 } as any,
+      hasUiOverlay: true,
+      cssW: 100,
+      cssH: 100,
+      screenW: 100,
+      screenH: 100,
+      devW: 100,
+      devH: 100,
+      dpr: 1,
+      overlayDevW: 100,
+      overlayDevH: 100,
+      overlayDpr: 1,
+      visibleVerticalTiles: 10,
+      viewport: {
+        worldScaleDevice: 1,
+        camTx: 0,
+        camTy: 0,
+        safeOffsetDeviceX: 0,
+        safeOffsetDeviceY: 0,
+      } as any,
+      zoom: 1,
+      worldWidth: 100,
+      worldHeight: 100,
+      scaledW: 100,
+      scaledH: 100,
+      safeOffsetX: 0,
+      safeOffsetY: 0,
+      playerWorldX: 0,
+      playerWorldY: 0,
+      playerTileX: 0,
+      playerTileY: 0,
+      cameraProjectedX: 0,
+      cameraProjectedY: 0,
+      camTx: 0,
+      camTy: 0,
+      worldScaleDevice: 1,
+      renderSettings: {},
+    }, gl);
+    const image = makeImage("tinted-sprite");
+
+    renderer.beginFrame();
+    renderer.useWorldSpace();
+    renderer.renderCommands([
+      makeCommand(image, 1, { color: "#ff6666" }),
+      makeCommand(image, 2, { color: "#66aaff" }),
+    ]);
+
+    expect(gl.drawOrder).toEqual(["tinted-sprite"]);
+    expect(gl.drawModes).toEqual([gl.TRIANGLES]);
+  });
+
+  it("still flushes ordered runs when blend mode differs", () => {
+    const gl = makeFakeGl();
+    const renderer = new WebGLRenderer({
+      world: {} as any,
+      ctx: {} as any,
+      canvas: gl.canvas,
+      overlayCtx: {} as any,
+      overlayCanvas: { width: 100, height: 100 } as any,
+      hasUiOverlay: true,
+      cssW: 100,
+      cssH: 100,
+      screenW: 100,
+      screenH: 100,
+      devW: 100,
+      devH: 100,
+      dpr: 1,
+      overlayDevW: 100,
+      overlayDevH: 100,
+      overlayDpr: 1,
+      visibleVerticalTiles: 10,
+      viewport: {
+        worldScaleDevice: 1,
+        camTx: 0,
+        camTy: 0,
+        safeOffsetDeviceX: 0,
+        safeOffsetDeviceY: 0,
+      } as any,
+      zoom: 1,
+      worldWidth: 100,
+      worldHeight: 100,
+      scaledW: 100,
+      scaledH: 100,
+      safeOffsetX: 0,
+      safeOffsetY: 0,
+      playerWorldX: 0,
+      playerWorldY: 0,
+      playerTileX: 0,
+      playerTileY: 0,
+      cameraProjectedX: 0,
+      cameraProjectedY: 0,
+      camTx: 0,
+      camTy: 0,
+      worldScaleDevice: 1,
+      renderSettings: {},
+    }, gl);
+    const image = makeImage("blend-break");
+
+    renderer.beginFrame();
+    renderer.useWorldSpace();
+    renderer.renderCommands([
+      makeCommand(image, 1, { alpha: 1 }),
+      makeCommand(image, 2, { alpha: 0.4, blendMode: "additive" }),
+    ]);
+
+    expect(gl.drawOrder).toEqual(["blend-break", "blend-break"]);
+    expect(gl.drawModes).toEqual([gl.TRIANGLES, gl.TRIANGLES]);
   });
 
   it("flushes ordered runs when texture compatibility breaks", () => {

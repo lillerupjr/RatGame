@@ -1,4 +1,5 @@
 import { configurePixelPerfect } from "../../../engine/render/pixelPerfect";
+import { setRenderPerfDrawTag, type DrawTag } from "./renderPerfCounters";
 
 export type ProjectedLight = {
   sx: number;
@@ -22,6 +23,15 @@ type AmbientLightingState = {
   ambientTint?: string;
   ambientTintStrength?: number;
 };
+
+function withPerfDrawTag<T>(tag: DrawTag, draw: () => T): T {
+  setRenderPerfDrawTag(tag);
+  try {
+    return draw();
+  } finally {
+    setRenderPerfDrawTag(null);
+  }
+}
 
 function clamp01(v: number): number {
   if (!Number.isFinite(v)) return 0;
@@ -114,23 +124,25 @@ function cacheSetBounded<T>(m: Map<string, T>, key: string, value: T, maxEntries
 
 function getRadialCutoutSprite(): HTMLCanvasElement {
   if (radialCutoutSprite) return radialCutoutSprite;
-  const c = document.createElement("canvas");
-  c.width = RADIAL_CUTOUT_SPRITE_SIZE;
-  c.height = RADIAL_CUTOUT_SPRITE_SIZE;
-  const g = c.getContext("2d");
-  if (!g) throw new Error("radial cutout sprite: no 2d ctx");
-  configurePixelPerfect(g);
-  const r = RADIAL_CUTOUT_SPRITE_SIZE * 0.5;
-  const grad = g.createRadialGradient(r, r, 0, r, r, r);
-  grad.addColorStop(0, "rgba(0,0,0,1)");
-  grad.addColorStop(1, "rgba(0,0,0,0)");
-  g.clearRect(0, 0, RADIAL_CUTOUT_SPRITE_SIZE, RADIAL_CUTOUT_SPRITE_SIZE);
-  g.fillStyle = grad;
-  g.beginPath();
-  g.arc(r, r, r, 0, Math.PI * 2);
-  g.fill();
-  radialCutoutSprite = c;
-  return c;
+  return withPerfDrawTag("lighting", () => {
+    const c = document.createElement("canvas");
+    c.width = RADIAL_CUTOUT_SPRITE_SIZE;
+    c.height = RADIAL_CUTOUT_SPRITE_SIZE;
+    const g = c.getContext("2d");
+    if (!g) throw new Error("radial cutout sprite: no 2d ctx");
+    configurePixelPerfect(g);
+    const r = RADIAL_CUTOUT_SPRITE_SIZE * 0.5;
+    const grad = g.createRadialGradient(r, r, 0, r, r, r);
+    grad.addColorStop(0, "rgba(0,0,0,1)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    g.clearRect(0, 0, RADIAL_CUTOUT_SPRITE_SIZE, RADIAL_CUTOUT_SPRITE_SIZE);
+    g.fillStyle = grad;
+    g.beginPath();
+    g.arc(r, r, r, 0, Math.PI * 2);
+    g.fill();
+    radialCutoutSprite = c;
+    return c;
+  });
 }
 
 function getStreetLampConeCutoutSprite(angleRad: number): HTMLCanvasElement {
@@ -143,39 +155,40 @@ function getStreetLampConeCutoutSprite(angleRad: number): HTMLCanvasElement {
   const halfW = Math.max(1, Math.round(Math.tan(angQ * 0.5) * len));
   const h = Math.max(8, halfW * 2);
 
-  const c = document.createElement("canvas");
-  c.width = len;
-  c.height = h;
-  const g = c.getContext("2d");
-  if (!g) throw new Error("cone cutout sprite: no 2d ctx");
-  configurePixelPerfect(g);
-  g.clearRect(0, 0, len, h);
+  return withPerfDrawTag("lighting", () => {
+    const c = document.createElement("canvas");
+    c.width = len;
+    c.height = h;
+    const g = c.getContext("2d");
+    if (!g) throw new Error("cone cutout sprite: no 2d ctx");
+    configurePixelPerfect(g);
+    g.clearRect(0, 0, len, h);
 
-  const grad = g.createLinearGradient(0, h * 0.5, len, h * 0.5);
-  grad.addColorStop(0, "rgba(0,0,0,0)");
-  grad.addColorStop(0.18, "rgba(0,0,0,0.85)");
-  grad.addColorStop(0.45, "rgba(0,0,0,0.28)");
-  grad.addColorStop(1, "rgba(0,0,0,0)");
-  g.fillStyle = grad;
-  g.fillRect(0, 0, len, h);
+    const grad = g.createLinearGradient(0, h * 0.5, len, h * 0.5);
+    grad.addColorStop(0, "rgba(0,0,0,0)");
+    grad.addColorStop(0.18, "rgba(0,0,0,0.85)");
+    grad.addColorStop(0.45, "rgba(0,0,0,0.28)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, len, h);
 
-  // Keep only a wedge footprint.
-  g.globalCompositeOperation = "destination-in";
-  g.beginPath();
-  g.moveTo(0, h * 0.5);
-  g.lineTo(len, 0);
-  g.lineTo(len, h);
-  g.closePath();
-  g.fillStyle = "#000";
-  g.fill();
-  g.globalCompositeOperation = "source-over";
+    g.globalCompositeOperation = "destination-in";
+    g.beginPath();
+    g.moveTo(0, h * 0.5);
+    g.lineTo(len, 0);
+    g.lineTo(len, h);
+    g.closePath();
+    g.fillStyle = "#000";
+    g.fill();
+    g.globalCompositeOperation = "source-over";
 
-  if (CONE_CUTOUT_SPRITE_CACHE.size >= 64) {
-    const firstKey = CONE_CUTOUT_SPRITE_CACHE.keys().next().value as string | undefined;
-    if (firstKey) CONE_CUTOUT_SPRITE_CACHE.delete(firstKey);
-  }
-  CONE_CUTOUT_SPRITE_CACHE.set(key, c);
-  return c;
+    if (CONE_CUTOUT_SPRITE_CACHE.size >= 64) {
+      const firstKey = CONE_CUTOUT_SPRITE_CACHE.keys().next().value as string | undefined;
+      if (firstKey) CONE_CUTOUT_SPRITE_CACHE.delete(firstKey);
+    }
+    CONE_CUTOUT_SPRITE_CACHE.set(key, c);
+    return c;
+  });
 }
 
 function normalizeColorKey(color: string): string {
@@ -188,25 +201,27 @@ function getRadialTintSprite(color: string): HTMLCanvasElement {
   const hit = RADIAL_TINT_SPRITE_CACHE.get(key);
   if (hit) return hit;
 
-  const c = document.createElement("canvas");
-  c.width = RADIAL_TINT_SPRITE_SIZE;
-  c.height = RADIAL_TINT_SPRITE_SIZE;
-  const g = c.getContext("2d");
-  if (!g) throw new Error("radial tint sprite: no 2d ctx");
-  configurePixelPerfect(g);
-  const r = RADIAL_TINT_SPRITE_SIZE * 0.5;
-  const stop0 = colorKey.startsWith("#") ? rgbaCached(colorKey, 1) : color;
-  const grad = g.createRadialGradient(r, r, 0, r, r, r);
-  grad.addColorStop(0, stop0);
-  grad.addColorStop(1, "rgba(0,0,0,0)");
-  g.clearRect(0, 0, RADIAL_TINT_SPRITE_SIZE, RADIAL_TINT_SPRITE_SIZE);
-  g.fillStyle = grad;
-  g.beginPath();
-  g.arc(r, r, r, 0, Math.PI * 2);
-  g.fill();
+  return withPerfDrawTag("lighting", () => {
+    const c = document.createElement("canvas");
+    c.width = RADIAL_TINT_SPRITE_SIZE;
+    c.height = RADIAL_TINT_SPRITE_SIZE;
+    const g = c.getContext("2d");
+    if (!g) throw new Error("radial tint sprite: no 2d ctx");
+    configurePixelPerfect(g);
+    const r = RADIAL_TINT_SPRITE_SIZE * 0.5;
+    const stop0 = colorKey.startsWith("#") ? rgbaCached(colorKey, 1) : color;
+    const grad = g.createRadialGradient(r, r, 0, r, r, r);
+    grad.addColorStop(0, stop0);
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    g.clearRect(0, 0, RADIAL_TINT_SPRITE_SIZE, RADIAL_TINT_SPRITE_SIZE);
+    g.fillStyle = grad;
+    g.beginPath();
+    g.arc(r, r, r, 0, Math.PI * 2);
+    g.fill();
 
-  cacheSetBounded(RADIAL_TINT_SPRITE_CACHE, key, c, 128);
-  return c;
+    cacheSetBounded(RADIAL_TINT_SPRITE_CACHE, key, c, 128);
+    return c;
+  });
 }
 
 function getStreetLampConeTintSprite(color: string, angleRad: number): HTMLCanvasElement {
@@ -219,37 +234,39 @@ function getStreetLampConeTintSprite(color: string, angleRad: number): HTMLCanva
   const len = CONE_TINT_BASE_LENGTH_PX;
   const halfW = Math.max(1, Math.round(Math.tan(angQ * 0.5) * len));
   const h = Math.max(8, halfW * 2);
-  const c = document.createElement("canvas");
-  c.width = len;
-  c.height = h;
-  const g = c.getContext("2d");
-  if (!g) throw new Error("cone tint sprite: no 2d ctx");
-  configurePixelPerfect(g);
-  g.clearRect(0, 0, len, h);
+  return withPerfDrawTag("lighting", () => {
+    const c = document.createElement("canvas");
+    c.width = len;
+    c.height = h;
+    const g = c.getContext("2d");
+    if (!g) throw new Error("cone tint sprite: no 2d ctx");
+    configurePixelPerfect(g);
+    g.clearRect(0, 0, len, h);
 
-  const c0 = colorKey.startsWith("#") ? rgbaCached(colorKey, 0) : color;
-  const c18 = colorKey.startsWith("#") ? rgbaCached(colorKey, 0.24) : color;
-  const c45 = colorKey.startsWith("#") ? rgbaCached(colorKey, 0.07) : color;
-  const grad = g.createLinearGradient(0, h * 0.5, len, h * 0.5);
-  grad.addColorStop(0, c0);
-  grad.addColorStop(0.18, c18);
-  grad.addColorStop(0.45, c45);
-  grad.addColorStop(1, c0);
-  g.fillStyle = grad;
-  g.fillRect(0, 0, len, h);
+    const c0 = colorKey.startsWith("#") ? rgbaCached(colorKey, 0) : color;
+    const c18 = colorKey.startsWith("#") ? rgbaCached(colorKey, 0.24) : color;
+    const c45 = colorKey.startsWith("#") ? rgbaCached(colorKey, 0.07) : color;
+    const grad = g.createLinearGradient(0, h * 0.5, len, h * 0.5);
+    grad.addColorStop(0, c0);
+    grad.addColorStop(0.18, c18);
+    grad.addColorStop(0.45, c45);
+    grad.addColorStop(1, c0);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, len, h);
 
-  g.globalCompositeOperation = "destination-in";
-  g.beginPath();
-  g.moveTo(0, h * 0.5);
-  g.lineTo(len, 0);
-  g.lineTo(len, h);
-  g.closePath();
-  g.fillStyle = "#000";
-  g.fill();
-  g.globalCompositeOperation = "source-over";
+    g.globalCompositeOperation = "destination-in";
+    g.beginPath();
+    g.moveTo(0, h * 0.5);
+    g.lineTo(len, 0);
+    g.lineTo(len, h);
+    g.closePath();
+    g.fillStyle = "#000";
+    g.fill();
+    g.globalCompositeOperation = "source-over";
 
-  cacheSetBounded(CONE_TINT_SPRITE_CACHE, key, c, 256);
-  return c;
+    cacheSetBounded(CONE_TINT_SPRITE_CACHE, key, c, 256);
+    return c;
+  });
 }
 
 function coneBounds(
@@ -310,21 +327,23 @@ function buildStreetLampCompositeSprite(
   const w = Math.max(1, Math.ceil(maxX - minX) + pad * 2);
   const h = Math.max(1, Math.ceil(maxY - minY) + pad * 2);
 
-  const c = document.createElement("canvas");
-  c.width = w;
-  c.height = h;
-  const g = c.getContext("2d");
-  if (!g) throw new Error("street lamp composite: no 2d ctx");
-  configurePixelPerfect(g);
+  return withPerfDrawTag("lighting", () => {
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const g = c.getContext("2d");
+    if (!g) throw new Error("street lamp composite: no 2d ctx");
+    configurePixelPerfect(g);
 
-  g.drawImage(radialSprite, ox - poolR, oy + poolDy - poolH * 0.5, poolR * 2, poolH);
-  const cos = Math.cos(dirRad);
-  const sin = Math.sin(dirRad);
-  g.setTransform(cos, sin * groundYScale, -sin, cos * groundYScale, ox, oy);
-  g.drawImage(coneSprite, 0, -coneH * 0.5, coneLen, coneH);
-  g.setTransform(1, 0, 0, 1, 0, 0);
+    g.drawImage(radialSprite, ox - poolR, oy + poolDy - poolH * 0.5, poolR * 2, poolH);
+    const cos = Math.cos(dirRad);
+    const sin = Math.sin(dirRad);
+    g.setTransform(cos, sin * groundYScale, -sin, cos * groundYScale, ox, oy);
+    g.drawImage(coneSprite, 0, -coneH * 0.5, coneLen, coneH);
+    g.setTransform(1, 0, 0, 1, 0, 0);
 
-  return { canvas: c, ox, oy };
+    return { canvas: c, ox, oy };
+  });
 }
 
 function getStreetLampCutoutCompositeSprite(

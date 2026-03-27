@@ -61,7 +61,6 @@ type BatchTriangle = {
   image: TexImageSource;
   positions: [TrianglePoint, TrianglePoint, TrianglePoint];
   texCoords: [TrianglePoint, TrianglePoint, TrianglePoint];
-  alpha: number;
   blendMode: BlendMode;
   color: ColorRgba;
   space: QuadSpace;
@@ -69,12 +68,11 @@ type BatchTriangle = {
 
 type OrderedTriangleBatch = {
   image: TexImageSource;
-  alpha: number;
   blendMode: BlendMode;
-  color: ColorRgba;
   space: QuadSpace;
   positions: number[];
   texCoords: number[];
+  colors: number[];
   triangleCount: number;
 };
 
@@ -100,13 +98,16 @@ type GroundChunkRenderContext = {
 const VERTEX_SHADER_SOURCE = `
 attribute vec2 a_position;
 attribute vec2 a_texCoord;
+attribute vec4 a_color;
 uniform mat3 u_matrix;
 varying vec2 v_texCoord;
+varying vec4 v_color;
 
 void main() {
   vec3 clip = u_matrix * vec3(a_position, 1.0);
   gl_Position = vec4(clip.xy, 0.0, 1.0);
   v_texCoord = a_texCoord;
+  v_color = a_color;
 }
 `;
 
@@ -114,13 +115,12 @@ const FRAGMENT_SHADER_SOURCE = `
 precision mediump float;
 
 uniform sampler2D u_texture;
-uniform float u_alpha;
-uniform vec4 u_color;
 varying vec2 v_texCoord;
+varying vec4 v_color;
 
 void main() {
   vec4 color = texture2D(u_texture, v_texCoord);
-  gl_FragColor = vec4(color.rgb * u_color.rgb, color.a * u_alpha * u_color.a);
+  gl_FragColor = vec4(color.rgb * v_color.rgb, color.a * v_color.a);
 }
 `;
 
@@ -166,6 +166,16 @@ function parseColorToRgba01(input: string | undefined): ColorRgba {
     return [r, g, b, a];
   }
   return [1, 1, 1, 1];
+}
+
+function withEffectiveAlpha(color: ColorRgba, alpha: number): ColorRgba {
+  const clampedAlpha = Number.isFinite(alpha) ? Math.max(0, Math.min(1, alpha)) : 1;
+  return [
+    color[0],
+    color[1],
+    color[2],
+    Math.max(0, Math.min(1, color[3] * clampedAlpha)),
+  ];
 }
 
 let whiteTextureCanvas: HTMLCanvasElement | null = null;
@@ -286,12 +296,12 @@ export class WebGLRenderer {
   private readonly program: WebGLProgram;
   private readonly positionBuffer: WebGLBuffer;
   private readonly texCoordBuffer: WebGLBuffer;
+  private readonly colorBuffer: WebGLBuffer;
   private readonly aPosition: number;
   private readonly aTexCoord: number;
+  private readonly aColor: number;
   private readonly uMatrix: WebGLUniformLocation;
   private readonly uTexture: WebGLUniformLocation;
-  private readonly uAlpha: WebGLUniformLocation;
-  private readonly uColor: WebGLUniformLocation;
   private readonly textureCache = new WeakMap<object, CachedTexture>();
   private readonly groundChunkTextureCache = new Map<string, CachedGroundChunkTexture>();
   private readonly compositeTexture: WebGLTexture;
@@ -307,28 +317,28 @@ export class WebGLRenderer {
     this.program = createProgram(gl);
     const positionBuffer = gl.createBuffer();
     const texCoordBuffer = gl.createBuffer();
+    const colorBuffer = gl.createBuffer();
     const compositeTexture = gl.createTexture();
-    if (!positionBuffer || !texCoordBuffer || !compositeTexture) {
+    if (!positionBuffer || !texCoordBuffer || !colorBuffer || !compositeTexture) {
       throw new Error("Failed to allocate WebGL buffers.");
     }
     this.positionBuffer = positionBuffer;
     this.texCoordBuffer = texCoordBuffer;
+    this.colorBuffer = colorBuffer;
     this.compositeTexture = compositeTexture;
     const aPosition = gl.getAttribLocation(this.program, "a_position");
     const aTexCoord = gl.getAttribLocation(this.program, "a_texCoord");
+    const aColor = gl.getAttribLocation(this.program, "a_color");
     const uMatrix = gl.getUniformLocation(this.program, "u_matrix");
     const uTexture = gl.getUniformLocation(this.program, "u_texture");
-    const uAlpha = gl.getUniformLocation(this.program, "u_alpha");
-    const uColor = gl.getUniformLocation(this.program, "u_color");
-    if (aPosition < 0 || aTexCoord < 0 || !uMatrix || !uTexture || !uAlpha || !uColor) {
+    if (aPosition < 0 || aTexCoord < 0 || aColor < 0 || !uMatrix || !uTexture) {
       throw new Error("Failed to resolve WebGL shader bindings.");
     }
     this.aPosition = aPosition;
     this.aTexCoord = aTexCoord;
+    this.aColor = aColor;
     this.uMatrix = uMatrix;
     this.uTexture = uTexture;
-    this.uAlpha = uAlpha;
-    this.uColor = uColor;
 
     gl.useProgram(this.program);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
@@ -337,8 +347,10 @@ export class WebGLRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.texCoordBuffer);
     gl.enableVertexAttribArray(this.aTexCoord);
     gl.vertexAttribPointer(this.aTexCoord, 2, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.colorBuffer);
+    gl.enableVertexAttribArray(this.aColor);
+    gl.vertexAttribPointer(this.aColor, 4, gl.FLOAT, false, 0, 0);
     gl.uniform1i(this.uTexture, 0);
-    gl.uniform4f(this.uColor, 1, 1, 1, 1);
     gl.bindTexture(gl.TEXTURE_2D, this.compositeTexture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -477,10 +489,9 @@ export class WebGLRenderer {
       gl.pixelStorei((gl as unknown as { UNPACK_PREMULTIPLY_ALPHA_WEBGL: number }).UNPACK_PREMULTIPLY_ALPHA_WEBGL, 0);
     }
     this.setPremultipliedCompositeBlendMode();
-    gl.uniform1f(this.uAlpha, 1);
-    gl.uniform4f(this.uColor, 1, 1, 1, 1);
     this.uploadQuadVertices(0, 0, sourceCanvas.width, sourceCanvas.height, 0, false);
     this.uploadQuadTexCoords(0, 0, 1, 1);
+    this.uploadQuadColors([1, 1, 1, 1]);
     countRenderWebGLDrawCall();
     countRenderWebGLTrianglesSubmitted(2);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -647,10 +658,9 @@ export class WebGLRenderer {
     if (!cached) return;
     this.applySpace("world");
     this.setBlendMode("normal");
-    gl.uniform1f(this.uAlpha, 1);
-    gl.uniform4f(this.uColor, 1, 1, 1, 1);
     this.uploadQuadVertices(entry.drawX, entry.drawY, cached.width, cached.height, 0, false);
     this.uploadQuadTexCoords(0, 0, 1, 1);
+    this.uploadQuadColors([1, 1, 1, 1]);
     countRenderWebGLGroundChunkDraw();
     countRenderWebGLDrawCall();
     countRenderWebGLTrianglesSubmitted(2);
@@ -665,6 +675,9 @@ export class WebGLRenderer {
     const triangles = Array.isArray(payload.triangles)
       ? payload.triangles as Array<Record<string, unknown>>
       : [];
+    const color = parseColorToRgba01(
+      typeof payload.color === "string" ? String(payload.color) : undefined,
+    );
     const out: TriangleDraw[] = [];
     for (let i = 0; i < triangles.length; i++) {
       const triangle = triangles[i];
@@ -677,7 +690,7 @@ export class WebGLRenderer {
         dstPoints,
         alpha: Number.isFinite(Number(triangle.alpha)) ? Number(triangle.alpha) : 1,
         blendMode: "normal",
-        color: [1, 1, 1, 1],
+        color,
         space: "world",
         sourceWidth: triangleSourceWidth,
         sourceHeight: triangleSourceHeight,
@@ -705,9 +718,8 @@ export class WebGLRenderer {
           y: triangle.srcPoints[2].y / triangle.sourceHeight,
         },
       ],
-      alpha: triangle.alpha,
       blendMode: triangle.blendMode,
-      color: triangle.color,
+      color: withEffectiveAlpha(triangle.color, triangle.alpha),
       space: triangle.space,
     }];
   }
@@ -736,7 +748,7 @@ export class WebGLRenderer {
       rotationRad: Number.isFinite(Number(data.rotationRad)) ? Number(data.rotationRad) : 0,
       flipX: !!data.flipX,
       blendMode: data.blendMode === "additive" ? "additive" : "normal",
-      color: [1, 1, 1, 1],
+      color: parseColorToRgba01(typeof data.color === "string" ? String(data.color) : undefined),
       space,
     }];
   }
@@ -761,18 +773,16 @@ export class WebGLRenderer {
         image: quad.image,
         positions: [vertices[0], vertices[1], vertices[2]],
         texCoords: [texCoords[0], texCoords[1], texCoords[2]],
-        alpha: quad.alpha,
         blendMode: quad.blendMode,
-        color: quad.color,
+        color: withEffectiveAlpha(quad.color, quad.alpha),
         space: quad.space,
       },
       {
         image: quad.image,
         positions: [vertices[2], vertices[1], vertices[3]],
         texCoords: [texCoords[2], texCoords[1], texCoords[3]],
-        alpha: quad.alpha,
         blendMode: quad.blendMode,
-        color: quad.color,
+        color: withEffectiveAlpha(quad.color, quad.alpha),
         space: quad.space,
       },
     ];
@@ -808,8 +818,6 @@ export class WebGLRenderer {
     if (!(sourceW > 0 && sourceH > 0)) return;
 
     this.setBlendMode(quad.blendMode);
-    gl.uniform1f(this.uAlpha, quad.alpha);
-    gl.uniform4f(this.uColor, quad.color[0], quad.color[1], quad.color[2], quad.color[3]);
     this.uploadQuadVertices(quad.dx, quad.dy, quad.dw, quad.dh, quad.rotationRad, quad.flipX);
     this.uploadQuadTexCoords(
       quad.sx / sourceW,
@@ -817,6 +825,7 @@ export class WebGLRenderer {
       (quad.sx + quad.sw) / sourceW,
       (quad.sy + quad.sh) / sourceH,
     );
+    this.uploadQuadColors(withEffectiveAlpha(quad.color, quad.alpha));
     countRenderWebGLDrawCall();
     countRenderWebGLTrianglesSubmitted(2);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -830,10 +839,9 @@ export class WebGLRenderer {
     if (!(triangle.sourceWidth > 0 && triangle.sourceHeight > 0)) return;
 
     this.setBlendMode(triangle.blendMode);
-    gl.uniform1f(this.uAlpha, triangle.alpha);
-    gl.uniform4f(this.uColor, triangle.color[0], triangle.color[1], triangle.color[2], triangle.color[3]);
     this.uploadTriangleVertices(triangle.dstPoints);
     this.uploadTriangleTexCoords(triangle.srcPoints, triangle.sourceWidth, triangle.sourceHeight);
+    this.uploadTriangleColors(withEffectiveAlpha(triangle.color, triangle.alpha));
     countRenderWebGLDrawCall();
     countRenderWebGLTrianglesSubmitted(1);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -1019,12 +1027,11 @@ export class WebGLRenderer {
   private createTriangleBatch(triangle: BatchTriangle): OrderedTriangleBatch {
     const batch: OrderedTriangleBatch = {
       image: triangle.image,
-      alpha: triangle.alpha,
       blendMode: triangle.blendMode,
-      color: [...triangle.color] as ColorRgba,
       space: triangle.space,
       positions: [],
       texCoords: [],
+      colors: [],
       triangleCount: 0,
     };
     this.appendTriangleToBatch(batch, triangle);
@@ -1042,18 +1049,18 @@ export class WebGLRenderer {
       triangle.texCoords[1].x, triangle.texCoords[1].y,
       triangle.texCoords[2].x, triangle.texCoords[2].y,
     );
+    batch.colors.push(
+      triangle.color[0], triangle.color[1], triangle.color[2], triangle.color[3],
+      triangle.color[0], triangle.color[1], triangle.color[2], triangle.color[3],
+      triangle.color[0], triangle.color[1], triangle.color[2], triangle.color[3],
+    );
     batch.triangleCount += 1;
   }
 
   private canAppendTriangleToBatch(batch: OrderedTriangleBatch, triangle: BatchTriangle): boolean {
     return batch.image === triangle.image
-      && batch.alpha === triangle.alpha
       && batch.blendMode === triangle.blendMode
       && batch.space === triangle.space
-      && batch.color[0] === triangle.color[0]
-      && batch.color[1] === triangle.color[1]
-      && batch.color[2] === triangle.color[2]
-      && batch.color[3] === triangle.color[3]
       && batch.triangleCount < MAX_BATCH_TRIANGLES;
   }
 
@@ -1065,10 +1072,9 @@ export class WebGLRenderer {
     if (!texture) return;
     this.applySpace(batch.space);
     this.setBlendMode(batch.blendMode);
-    gl.uniform1f(this.uAlpha, batch.alpha);
-    gl.uniform4f(this.uColor, batch.color[0], batch.color[1], batch.color[2], batch.color[3]);
     this.uploadVertices(new Float32Array(batch.positions));
     this.uploadTexCoords(new Float32Array(batch.texCoords));
+    this.uploadColors(new Float32Array(batch.colors));
     countRenderWebGLBatch();
     countRenderWebGLDrawCall();
     countRenderWebGLTrianglesSubmitted(batch.triangleCount);
@@ -1148,6 +1154,15 @@ export class WebGLRenderer {
     this.gl.bufferData(this.gl.ARRAY_BUFFER, texCoords, this.gl.STREAM_DRAW);
   }
 
+  private uploadQuadColors(color: ColorRgba): void {
+    this.uploadColors(new Float32Array([
+      color[0], color[1], color[2], color[3],
+      color[0], color[1], color[2], color[3],
+      color[0], color[1], color[2], color[3],
+      color[0], color[1], color[2], color[3],
+    ]));
+  }
+
   private uploadTriangleVertices(points: [TrianglePoint, TrianglePoint, TrianglePoint]): void {
     this.uploadVertices(new Float32Array([
       points[0].x, points[0].y,
@@ -1168,6 +1183,14 @@ export class WebGLRenderer {
     ]));
   }
 
+  private uploadTriangleColors(color: ColorRgba): void {
+    this.uploadColors(new Float32Array([
+      color[0], color[1], color[2], color[3],
+      color[0], color[1], color[2], color[3],
+      color[0], color[1], color[2], color[3],
+    ]));
+  }
+
   private uploadVertices(vertices: Float32Array): void {
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
     countRenderWebGLBufferUpload();
@@ -1178,6 +1201,12 @@ export class WebGLRenderer {
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.texCoordBuffer);
     countRenderWebGLBufferUpload();
     this.gl.bufferData(this.gl.ARRAY_BUFFER, texCoords, this.gl.STREAM_DRAW);
+  }
+
+  private uploadColors(colors: Float32Array): void {
+    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.colorBuffer);
+    countRenderWebGLBufferUpload();
+    this.gl.bufferData(this.gl.ARRAY_BUFFER, colors, this.gl.STREAM_DRAW);
   }
 
   private setBlendMode(mode: BlendMode): void {

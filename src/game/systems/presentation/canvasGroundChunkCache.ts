@@ -9,6 +9,7 @@ import {
   type GroundCommandResolverDeps,
   type ResolvedGroundProjectedCommand,
 } from "./groundCommandResolver";
+import { setRenderPerfDrawTag } from "./renderPerfCounters";
 import { compareRenderKeys, resolveRenderZBand } from "./worldRenderOrdering";
 
 const GROUND_CHUNK_SIZE = 16;
@@ -122,6 +123,8 @@ function translatePoint(point: { x: number; y: number }, dx: number, dy: number)
 }
 
 function renderBucketToEntry(bucket: CanvasGroundChunkBuildBucket): CanvasGroundChunkCacheEntry | null {
+  setRenderPerfDrawTag("floors");
+  try {
   let minX = Number.POSITIVE_INFINITY;
   let maxX = Number.NEGATIVE_INFINITY;
   let minY = Number.POSITIVE_INFINITY;
@@ -187,6 +190,9 @@ function renderBucketToEntry(bucket: CanvasGroundChunkBuildBucket): CanvasGround
     drawY: minY,
     canvas: target.canvas,
   };
+  } finally {
+    setRenderPerfDrawTag(null);
+  }
 }
 
 function buildGroundChunkBuckets(input: SyncCanvasGroundChunkCacheInput): CanvasGroundChunkBuildResult {

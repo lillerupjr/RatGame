@@ -112,7 +112,8 @@ export type DrawTag =
   | "floors"
   | "decals"
   | "entities"
-  | "structures"
+  | "structures:live"
+  | "structures:shadow"
   | "mask:building"
   | "mask:shadow"
   | "lighting";
@@ -123,7 +124,8 @@ const DRAW_TAGS: DrawTag[] = [
   "floors",
   "decals",
   "entities",
-  "structures",
+  "structures:live",
+  "structures:shadow",
   "mask:building",
   "mask:shadow",
   "lighting",
@@ -136,7 +138,8 @@ function makeZeroByTag(): Record<DrawTag, number> {
     floors: 0,
     decals: 0,
     entities: 0,
-    structures: 0,
+    "structures:live": 0,
+    "structures:shadow": 0,
     "mask:building": 0,
     "mask:shadow": 0,
     lighting: 0,
