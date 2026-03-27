@@ -122,6 +122,12 @@ import {
   countRenderCanvasGroundChunkRebuild,
   countRenderCanvasGroundChunkDraw,
   countRenderCanvasGroundChunksVisible,
+  countRenderGroundStaticDecalAuthorityFiltered,
+  countRenderGroundStaticDecalExamined,
+  countRenderGroundStaticDecalFallbackEmitted,
+  countRenderGroundStaticSurfaceAuthorityFiltered,
+  countRenderGroundStaticSurfaceExamined,
+  countRenderGroundStaticSurfaceFallbackEmitted,
   countRenderTileLoopIteration,
   countRenderDrawableSort,
   countRenderSliceKeySort,
@@ -234,6 +240,7 @@ import type { CollectionContext } from "./contracts/collectionContext";
 import type { ScreenOverlayContext } from "./contracts/screenOverlayContext";
 import type { UiPassContext } from "./contracts/uiPassContext";
 import type { RenderDebugScreenPassInput } from "./debug/debugRenderTypes";
+import { analyzeWorldBatchStream } from "./debug/worldBatchAudit";
 import { resolveStructureOverlayAdmissionContext } from "./structures/structureOverlayAdmission";
 import { collectStructureOverlays } from "./structures/collectStructureOverlays";
 import { buildStructureSlices } from "./structures/buildStructureSlices";
@@ -1213,6 +1220,7 @@ export async function renderSystem(
     compiledMap,
     renderAllHeights: RENDER_ALL_HEIGHTS,
     activeH,
+    viewRect,
     shouldCullBuildingAt,
     w,
     ANCHOR_Y,
@@ -1461,6 +1469,13 @@ export async function renderSystem(
     px,
     py,
     PLAYER_R,
+    isGroundChunkTileAuthoritative: (tx: number, ty: number) => canvasGroundChunkCacheStore.isTileAuthoritative(tx, ty),
+    countRenderGroundStaticSurfaceExamined,
+    countRenderGroundStaticSurfaceAuthorityFiltered,
+    countRenderGroundStaticSurfaceFallbackEmitted,
+    countRenderGroundStaticDecalExamined,
+    countRenderGroundStaticDecalAuthorityFiltered,
+    countRenderGroundStaticDecalFallbackEmitted,
     ZONE_KIND,
     getZoneWorld,
     snapToNearestWalkableGround,
@@ -1908,6 +1923,9 @@ export async function renderSystem(
     webglSurface,
     getWebGLWorldSurfaceFailureReason(canvas),
   );
+  const worldBatchAudit = renderPerfCountersEnabled
+    ? analyzeWorldBatchStream(executionPlan.world, backendSelection.selectedBackend)
+    : null;
   if (backendSelection.selectedBackend === "webgl" && webglSurface) {
     const stats = createBackendStats("webgl");
     try {
@@ -2033,6 +2051,7 @@ export async function renderSystem(
         structureTriangleCutoutHalfHeight,
         structureTriangleCutoutAlpha,
         roadWidthAtPlayer: roadAreaWidthAt(playerTx, playerTy),
+        worldBatchAudit,
       }
     : null;
 

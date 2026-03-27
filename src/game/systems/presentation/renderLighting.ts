@@ -1,4 +1,5 @@
 import { configurePixelPerfect } from "../../../engine/render/pixelPerfect";
+import { registerCacheMetricSource } from "./cacheMetricsRegistry";
 import { setRenderPerfDrawTag, type DrawTag } from "./renderPerfCounters";
 
 export type ProjectedLight = {
@@ -93,6 +94,146 @@ type StreetLampCompositeSprite = { canvas: HTMLCanvasElement; ox: number; oy: nu
 const STREET_LAMP_CUTOUT_COMPOSITE_CACHE = new Map<string, StreetLampCompositeSprite>();
 const STREET_LAMP_TINT_COMPOSITE_CACHE = new Map<string, StreetLampCompositeSprite>();
 
+type CacheCounters = { hits: number; misses: number; inserts: number };
+
+const radialCutoutCounters: CacheCounters = { hits: 0, misses: 0, inserts: 0 };
+const coneCutoutCounters: CacheCounters = { hits: 0, misses: 0, inserts: 0 };
+const radialTintCounters: CacheCounters = { hits: 0, misses: 0, inserts: 0 };
+const coneTintCounters: CacheCounters = { hits: 0, misses: 0, inserts: 0 };
+const streetLampCutoutCounters: CacheCounters = { hits: 0, misses: 0, inserts: 0 };
+const streetLampTintCounters: CacheCounters = { hits: 0, misses: 0, inserts: 0 };
+const rgbaCounters: CacheCounters = { hits: 0, misses: 0, inserts: 0 };
+
+function sumCanvasBytes(values: Iterable<{ width: number; height: number }>): number {
+  let total = 0;
+  for (const value of values) total += value.width * value.height * 4;
+  return total;
+}
+
+function registerLightingCacheMetrics(): void {
+  registerCacheMetricSource({
+    name: "lighting:radialCutoutSprite",
+    budgetBytes: 4 * 1024 * 1024,
+    sample: () => ({
+      name: "lighting:radialCutoutSprite",
+      kind: "derived",
+      entryCount: radialCutoutSprite ? 1 : 0,
+      approxBytes: radialCutoutSprite ? radialCutoutSprite.width * radialCutoutSprite.height * 4 : 0,
+      hits: radialCutoutCounters.hits,
+      misses: radialCutoutCounters.misses,
+      inserts: radialCutoutCounters.inserts,
+      evictions: 0,
+      clears: 0,
+      bounded: true,
+      hasEviction: false,
+    }),
+  });
+  registerCacheMetricSource({
+    name: "lighting:coneCutoutSprites",
+    budgetBytes: 4 * 1024 * 1024,
+    sample: () => ({
+      name: "lighting:coneCutoutSprites",
+      kind: "derived",
+      entryCount: CONE_CUTOUT_SPRITE_CACHE.size,
+      approxBytes: sumCanvasBytes(CONE_CUTOUT_SPRITE_CACHE.values()),
+      hits: coneCutoutCounters.hits,
+      misses: coneCutoutCounters.misses,
+      inserts: coneCutoutCounters.inserts,
+      evictions: Math.max(0, coneCutoutCounters.inserts - CONE_CUTOUT_SPRITE_CACHE.size),
+      clears: 0,
+      bounded: true,
+      hasEviction: true,
+    }),
+  });
+  registerCacheMetricSource({
+    name: "lighting:radialTintSprites",
+    budgetBytes: 4 * 1024 * 1024,
+    sample: () => ({
+      name: "lighting:radialTintSprites",
+      kind: "derived",
+      entryCount: RADIAL_TINT_SPRITE_CACHE.size,
+      approxBytes: sumCanvasBytes(RADIAL_TINT_SPRITE_CACHE.values()),
+      hits: radialTintCounters.hits,
+      misses: radialTintCounters.misses,
+      inserts: radialTintCounters.inserts,
+      evictions: Math.max(0, radialTintCounters.inserts - RADIAL_TINT_SPRITE_CACHE.size),
+      clears: 0,
+      bounded: true,
+      hasEviction: true,
+    }),
+  });
+  registerCacheMetricSource({
+    name: "lighting:coneTintSprites",
+    budgetBytes: 4 * 1024 * 1024,
+    sample: () => ({
+      name: "lighting:coneTintSprites",
+      kind: "derived",
+      entryCount: CONE_TINT_SPRITE_CACHE.size,
+      approxBytes: sumCanvasBytes(CONE_TINT_SPRITE_CACHE.values()),
+      hits: coneTintCounters.hits,
+      misses: coneTintCounters.misses,
+      inserts: coneTintCounters.inserts,
+      evictions: Math.max(0, coneTintCounters.inserts - CONE_TINT_SPRITE_CACHE.size),
+      clears: 0,
+      bounded: true,
+      hasEviction: true,
+    }),
+  });
+  registerCacheMetricSource({
+    name: "lighting:streetLampCutoutComposites",
+    budgetBytes: 4 * 1024 * 1024,
+    sample: () => ({
+      name: "lighting:streetLampCutoutComposites",
+      kind: "derived",
+      entryCount: STREET_LAMP_CUTOUT_COMPOSITE_CACHE.size,
+      approxBytes: sumCanvasBytes(Array.from(STREET_LAMP_CUTOUT_COMPOSITE_CACHE.values(), (value) => value.canvas)),
+      hits: streetLampCutoutCounters.hits,
+      misses: streetLampCutoutCounters.misses,
+      inserts: streetLampCutoutCounters.inserts,
+      evictions: Math.max(0, streetLampCutoutCounters.inserts - STREET_LAMP_CUTOUT_COMPOSITE_CACHE.size),
+      clears: 0,
+      bounded: true,
+      hasEviction: true,
+    }),
+  });
+  registerCacheMetricSource({
+    name: "lighting:streetLampTintComposites",
+    budgetBytes: 4 * 1024 * 1024,
+    sample: () => ({
+      name: "lighting:streetLampTintComposites",
+      kind: "derived",
+      entryCount: STREET_LAMP_TINT_COMPOSITE_CACHE.size,
+      approxBytes: sumCanvasBytes(Array.from(STREET_LAMP_TINT_COMPOSITE_CACHE.values(), (value) => value.canvas)),
+      hits: streetLampTintCounters.hits,
+      misses: streetLampTintCounters.misses,
+      inserts: streetLampTintCounters.inserts,
+      evictions: Math.max(0, streetLampTintCounters.inserts - STREET_LAMP_TINT_COMPOSITE_CACHE.size),
+      clears: 0,
+      bounded: true,
+      hasEviction: true,
+    }),
+  });
+  registerCacheMetricSource({
+    name: "lighting:rgbaStrings",
+    sample: () => ({
+      name: "lighting:rgbaStrings",
+      kind: "derived",
+      entryCount: RGBA_CACHE.size,
+      approxBytes: null,
+      hits: rgbaCounters.hits,
+      misses: rgbaCounters.misses,
+      inserts: rgbaCounters.inserts,
+      evictions: 0,
+      clears: 0,
+      bounded: false,
+      hasEviction: false,
+      notes: "String cache reports entry count only",
+    }),
+  });
+}
+
+registerLightingCacheMetrics();
+
 function q(n: number, step: number): number {
   return Math.round(n / step) * step;
 }
@@ -106,9 +247,14 @@ function rgbaCached(hex: string, alpha: number): string {
   const a = qAlpha(alpha);
   const key = `${hex}|${a}`;
   const hit = RGBA_CACHE.get(key);
-  if (hit) return hit;
+  if (hit) {
+    rgbaCounters.hits += 1;
+    return hit;
+  }
+  rgbaCounters.misses += 1;
   const v = hexToRgba(hex, a);
   RGBA_CACHE.set(key, v);
+  rgbaCounters.inserts += 1;
   return v;
 }
 
@@ -123,7 +269,11 @@ function cacheSetBounded<T>(m: Map<string, T>, key: string, value: T, maxEntries
 }
 
 function getRadialCutoutSprite(): HTMLCanvasElement {
-  if (radialCutoutSprite) return radialCutoutSprite;
+  if (radialCutoutSprite) {
+    radialCutoutCounters.hits += 1;
+    return radialCutoutSprite;
+  }
+  radialCutoutCounters.misses += 1;
   return withPerfDrawTag("lighting", () => {
     const c = document.createElement("canvas");
     c.width = RADIAL_CUTOUT_SPRITE_SIZE;
@@ -141,6 +291,7 @@ function getRadialCutoutSprite(): HTMLCanvasElement {
     g.arc(r, r, r, 0, Math.PI * 2);
     g.fill();
     radialCutoutSprite = c;
+    radialCutoutCounters.inserts += 1;
     return c;
   });
 }
@@ -149,7 +300,11 @@ function getStreetLampConeCutoutSprite(angleRad: number): HTMLCanvasElement {
   const angQ = Math.max(0.1, Math.min(1.6, q(angleRad, 0.05)));
   const key = `cone|${angQ}`;
   const hit = CONE_CUTOUT_SPRITE_CACHE.get(key);
-  if (hit) return hit;
+  if (hit) {
+    coneCutoutCounters.hits += 1;
+    return hit;
+  }
+  coneCutoutCounters.misses += 1;
 
   const len = CONE_CUTOUT_BASE_LENGTH_PX;
   const halfW = Math.max(1, Math.round(Math.tan(angQ * 0.5) * len));
@@ -187,6 +342,7 @@ function getStreetLampConeCutoutSprite(angleRad: number): HTMLCanvasElement {
       if (firstKey) CONE_CUTOUT_SPRITE_CACHE.delete(firstKey);
     }
     CONE_CUTOUT_SPRITE_CACHE.set(key, c);
+    coneCutoutCounters.inserts += 1;
     return c;
   });
 }
@@ -199,7 +355,11 @@ function getRadialTintSprite(color: string): HTMLCanvasElement {
   const colorKey = normalizeColorKey(color);
   const key = `radTint|${colorKey}`;
   const hit = RADIAL_TINT_SPRITE_CACHE.get(key);
-  if (hit) return hit;
+  if (hit) {
+    radialTintCounters.hits += 1;
+    return hit;
+  }
+  radialTintCounters.misses += 1;
 
   return withPerfDrawTag("lighting", () => {
     const c = document.createElement("canvas");
@@ -220,6 +380,7 @@ function getRadialTintSprite(color: string): HTMLCanvasElement {
     g.fill();
 
     cacheSetBounded(RADIAL_TINT_SPRITE_CACHE, key, c, 128);
+    radialTintCounters.inserts += 1;
     return c;
   });
 }
@@ -229,7 +390,11 @@ function getStreetLampConeTintSprite(color: string, angleRad: number): HTMLCanva
   const angQ = Math.max(0.1, Math.min(1.6, q(angleRad, 0.05)));
   const key = `coneTint|${colorKey}|${angQ}`;
   const hit = CONE_TINT_SPRITE_CACHE.get(key);
-  if (hit) return hit;
+  if (hit) {
+    coneTintCounters.hits += 1;
+    return hit;
+  }
+  coneTintCounters.misses += 1;
 
   const len = CONE_TINT_BASE_LENGTH_PX;
   const halfW = Math.max(1, Math.round(Math.tan(angQ * 0.5) * len));
@@ -265,6 +430,7 @@ function getStreetLampConeTintSprite(color: string, angleRad: number): HTMLCanva
     g.globalCompositeOperation = "source-over";
 
     cacheSetBounded(CONE_TINT_SPRITE_CACHE, key, c, 256);
+    coneTintCounters.inserts += 1;
     return c;
   });
 }
@@ -367,7 +533,11 @@ function getStreetLampCutoutCompositeSprite(
     q(groundYScale, 0.01),
   ].join("|");
   const hit = STREET_LAMP_CUTOUT_COMPOSITE_CACHE.get(key);
-  if (hit) return hit;
+  if (hit) {
+    streetLampCutoutCounters.hits += 1;
+    return hit;
+  }
+  streetLampCutoutCounters.misses += 1;
   const radialSprite = getRadialCutoutSprite();
   const coneSprite = getStreetLampConeCutoutSprite(angleRad);
   const sprite = buildStreetLampCompositeSprite(
@@ -382,6 +552,7 @@ function getStreetLampCutoutCompositeSprite(
     groundYScale,
   );
   cacheSetBounded(STREET_LAMP_CUTOUT_COMPOSITE_CACHE, key, sprite, 1024);
+  streetLampCutoutCounters.inserts += 1;
   return sprite;
 }
 
@@ -409,7 +580,11 @@ function getStreetLampTintCompositeSprite(
     q(groundYScale, 0.01),
   ].join("|");
   const hit = STREET_LAMP_TINT_COMPOSITE_CACHE.get(key);
-  if (hit) return hit;
+  if (hit) {
+    streetLampTintCounters.hits += 1;
+    return hit;
+  }
+  streetLampTintCounters.misses += 1;
   const radialSprite = getRadialTintSprite(color);
   const coneSprite = getStreetLampConeTintSprite(color, angleRad);
   const sprite = buildStreetLampCompositeSprite(
@@ -424,6 +599,7 @@ function getStreetLampTintCompositeSprite(
     groundYScale,
   );
   cacheSetBounded(STREET_LAMP_TINT_COMPOSITE_CACHE, key, sprite, 2048);
+  streetLampTintCounters.inserts += 1;
   return sprite;
 }
 

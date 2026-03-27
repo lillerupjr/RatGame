@@ -1,10 +1,57 @@
 import { configurePixelPerfect } from "../../../engine/render/pixelPerfect";
+import { registerCacheMetricSource } from "./cacheMetricsRegistry";
 import { setRenderPerfDrawTag, type DrawTag } from "./renderPerfCounters";
 
 const flippedOverlayImageCache = new WeakMap<HTMLImageElement, HTMLCanvasElement>();
 const runtimeIsoTopCache = new WeakMap<HTMLImageElement, Map<0 | 1 | 2 | 3, HTMLCanvasElement>>();
 const runtimeIsoDecalCache = new WeakMap<HTMLImageElement, Map<string, HTMLCanvasElement>>();
 const runtimeDiamondCanvasCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
+
+type WeakCanvasCacheStats = {
+  entryCount: number;
+  approxBytes: number;
+  hits: number;
+  misses: number;
+  inserts: number;
+  notes?: string;
+};
+
+const flippedOverlayStats: WeakCanvasCacheStats = { entryCount: 0, approxBytes: 0, hits: 0, misses: 0, inserts: 0 };
+const runtimeIsoTopStats: WeakCanvasCacheStats = { entryCount: 0, approxBytes: 0, hits: 0, misses: 0, inserts: 0 };
+const runtimeIsoDecalStats: WeakCanvasCacheStats = { entryCount: 0, approxBytes: 0, hits: 0, misses: 0, inserts: 0 };
+const runtimeDiamondStats: WeakCanvasCacheStats = { entryCount: 0, approxBytes: 0, hits: 0, misses: 0, inserts: 0 };
+
+function noteWeakCanvasCacheInsert(stats: WeakCanvasCacheStats, canvas: HTMLCanvasElement): void {
+  stats.entryCount += 1;
+  stats.inserts += 1;
+  stats.approxBytes += canvas.width * canvas.height * 4;
+}
+
+function registerWeakCanvasMetric(name: string, budgetBytes: number, stats: WeakCanvasCacheStats): void {
+  registerCacheMetricSource({
+    name,
+    budgetBytes,
+    sample: () => ({
+      name,
+      kind: "derived",
+      entryCount: stats.entryCount,
+      approxBytes: stats.approxBytes,
+      hits: stats.hits,
+      misses: stats.misses,
+      inserts: stats.inserts,
+      evictions: 0,
+      clears: 0,
+      bounded: false,
+      hasEviction: false,
+      notes: stats.notes ?? "WeakMap-backed cumulative insert count",
+    }),
+  });
+}
+
+registerWeakCanvasMetric("imageTransforms:flippedOverlay", 6 * 1024 * 1024, flippedOverlayStats);
+registerWeakCanvasMetric("imageTransforms:isoTop", 6 * 1024 * 1024, runtimeIsoTopStats);
+registerWeakCanvasMetric("imageTransforms:isoDecal", 6 * 1024 * 1024, runtimeIsoDecalStats);
+registerWeakCanvasMetric("imageTransforms:diamondFit", 6 * 1024 * 1024, runtimeDiamondStats);
 
 function withPerfDrawTag<T>(tag: DrawTag, draw: () => T): T {
   setRenderPerfDrawTag(tag);
@@ -17,7 +64,11 @@ function withPerfDrawTag<T>(tag: DrawTag, draw: () => T): T {
 
 export function getFlippedOverlayImage(img: HTMLImageElement): HTMLCanvasElement {
   const cached = flippedOverlayImageCache.get(img);
-  if (cached) return cached;
+  if (cached) {
+    flippedOverlayStats.hits += 1;
+    return cached;
+  }
+  flippedOverlayStats.misses += 1;
   return withPerfDrawTag("entities", () => {
     const canvas = document.createElement("canvas");
     canvas.width = img.width;
@@ -29,13 +80,18 @@ export function getFlippedOverlayImage(img: HTMLImageElement): HTMLCanvasElement
     c2d.scale(-1, 1);
     c2d.drawImage(img, 0, 0);
     flippedOverlayImageCache.set(img, canvas);
+    noteWeakCanvasCacheInsert(flippedOverlayStats, canvas);
     return canvas;
   });
 }
 
 export function getDiamondFitCanvas(src: HTMLCanvasElement): HTMLCanvasElement {
   const cached = runtimeDiamondCanvasCache.get(src);
-  if (cached) return cached;
+  if (cached) {
+    runtimeDiamondStats.hits += 1;
+    return cached;
+  }
+  runtimeDiamondStats.misses += 1;
   return withPerfDrawTag("decals", () => {
     const out = document.createElement("canvas");
     out.width = 128;
@@ -47,6 +103,7 @@ export function getDiamondFitCanvas(src: HTMLCanvasElement): HTMLCanvasElement {
       c2d.drawImage(src, Math.round((128 - src.width) * 0.5), Math.round((64 - src.height) * 0.5));
     }
     runtimeDiamondCanvasCache.set(src, out);
+    noteWeakCanvasCacheInsert(runtimeDiamondStats, out);
     return out;
   });
 }
@@ -64,7 +121,11 @@ export function getRuntimeIsoTopCanvas(
   }
 
   const cached = byRot.get(rotationQuarterTurns);
-  if (cached) return cached;
+  if (cached) {
+    runtimeIsoTopStats.hits += 1;
+    return cached;
+  }
+  runtimeIsoTopStats.misses += 1;
 
   return withPerfDrawTag("floors", () => {
     const outW = 128;
@@ -86,6 +147,7 @@ export function getRuntimeIsoTopCanvas(
     c2d.restore();
 
     byRot.set(rotationQuarterTurns, canvas);
+    noteWeakCanvasCacheInsert(runtimeIsoTopStats, canvas);
     return canvas;
   });
 }
@@ -107,7 +169,11 @@ export function getRuntimeIsoDecalCanvas(
   const scaleQ = Math.round(scale * 1000) / 1000;
   const key = `${rotationQuarterTurns}|${scaleQ}`;
   const cached = byKey.get(key);
-  if (cached) return cached;
+  if (cached) {
+    runtimeIsoDecalStats.hits += 1;
+    return cached;
+  }
+  runtimeIsoDecalStats.misses += 1;
 
   return withPerfDrawTag("decals", () => {
     const srcW = srcImg.width * scaleQ;
@@ -136,6 +202,7 @@ export function getRuntimeIsoDecalCanvas(
     c2d.restore();
 
     byKey.set(key, canvas);
+    noteWeakCanvasCacheInsert(runtimeIsoDecalStats, canvas);
     return canvas;
   });
 }

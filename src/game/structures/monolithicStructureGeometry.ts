@@ -999,24 +999,37 @@ export class RuntimeStructureTriangleCacheStore {
   private cacheByStructureId = new Map<string, RuntimeStructureTriangleCache>();
 
   private fallbackStructureIds = new Set<string>();
+  private hitCount = 0;
+  private missCount = 0;
+  private insertCount = 0;
+  private clearCount = 0;
 
   resetIfContextChanged(nextContextKey: string): boolean {
     if (this.contextKey === nextContextKey) return false;
     this.contextKey = nextContextKey;
     this.cacheByStructureId.clear();
     this.fallbackStructureIds.clear();
+    this.clearCount += 1;
     return true;
   }
 
   set(cache: RuntimeStructureTriangleCache): void {
     this.cacheByStructureId.set(cache.structureInstanceId, cache);
     this.fallbackStructureIds.delete(cache.structureInstanceId);
+    this.insertCount += 1;
   }
 
   get(structureInstanceId: string, geometrySignature: string): RuntimeStructureTriangleCache | undefined {
     const cache = this.cacheByStructureId.get(structureInstanceId);
-    if (!cache) return undefined;
-    if (cache.geometrySignature !== geometrySignature) return undefined;
+    if (!cache) {
+      this.missCount += 1;
+      return undefined;
+    }
+    if (cache.geometrySignature !== geometrySignature) {
+      this.missCount += 1;
+      return undefined;
+    }
+    this.hitCount += 1;
     return cache;
   }
 
@@ -1027,6 +1040,24 @@ export class RuntimeStructureTriangleCacheStore {
 
   isFallback(structureInstanceId: string): boolean {
     return this.fallbackStructureIds.has(structureInstanceId);
+  }
+
+  getDebugCacheMetrics(): import("../systems/presentation/cacheMetricsRegistry").RawCacheMetricSample {
+    return {
+      name: "structureTriangleCache",
+      kind: "derived",
+      entryCount: this.cacheByStructureId.size,
+      approxBytes: null,
+      hits: this.hitCount,
+      misses: this.missCount,
+      inserts: this.insertCount,
+      evictions: 0,
+      clears: this.clearCount,
+      bounded: false,
+      hasEviction: false,
+      contextKey: this.contextKey,
+      notes: `fallbacks:${this.fallbackStructureIds.size}`,
+    };
   }
 }
 

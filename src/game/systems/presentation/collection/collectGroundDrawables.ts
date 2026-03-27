@@ -1,6 +1,8 @@
 import type { CollectionContext } from "../contracts/collectionContext";
 import { enqueueSliceCommand } from "../frame/renderFrameBuilder";
 import {
+  isGroundDecalChunkAuthorityEligible,
+  isGroundSurfaceChunkAuthorityEligible,
   resolveGroundDecalProjectedCommand,
   resolveGroundSurfaceProjectedCommand,
   shouldRenderGroundDecalForFrame,
@@ -12,6 +14,7 @@ type ShadowParams = any;
 type Dir8 = any;
 
 export function collectGroundDrawables(input: CollectionContext): void {
+  const inputAny = input as any;
   const {
     w,
     minSum,
@@ -93,7 +96,28 @@ export function collectGroundDrawables(input: CollectionContext): void {
     srcUvSE,
     srcUvSW,
     getRampQuadPoints,
-  } = input as any;
+  } = inputAny;
+  const isGroundChunkTileAuthoritative = inputAny.isGroundChunkTileAuthoritative as
+    | ((tx: number, ty: number) => boolean)
+    | undefined;
+  const countStaticSurfaceExamined = inputAny.countRenderGroundStaticSurfaceExamined as
+    | ((n?: number) => void)
+    | undefined;
+  const countStaticSurfaceFiltered = inputAny.countRenderGroundStaticSurfaceAuthorityFiltered as
+    | ((n?: number) => void)
+    | undefined;
+  const countStaticSurfaceFallback = inputAny.countRenderGroundStaticSurfaceFallbackEmitted as
+    | ((n?: number) => void)
+    | undefined;
+  const countStaticDecalExamined = inputAny.countRenderGroundStaticDecalExamined as
+    | ((n?: number) => void)
+    | undefined;
+  const countStaticDecalFiltered = inputAny.countRenderGroundStaticDecalAuthorityFiltered as
+    | ((n?: number) => void)
+    | undefined;
+  const countStaticDecalFallback = inputAny.countRenderGroundStaticDecalFallbackEmitted as
+    | ((n?: number) => void)
+    | undefined;
 
   // Collect TOPS (surfaces) into slices
   // ----------------------------
@@ -113,6 +137,14 @@ export function collectGroundDrawables(input: CollectionContext): void {
         for (let si = 0; si < surfaces.length; si++) {
           const surface = surfaces[si];
           if (!shouldRenderGroundSurfaceForFrame(surface, RENDER_ALL_HEIGHTS, activeH, shouldCullBuildingAt)) continue;
+          const chunkAuthorityEligible = isGroundSurfaceChunkAuthorityEligible(surface, TILE_ID_OCEAN);
+          if (chunkAuthorityEligible) {
+            countStaticSurfaceExamined?.(1);
+            if (isGroundChunkTileAuthoritative?.(surface.tx, surface.ty)) {
+              countStaticSurfaceFiltered?.(1);
+              continue;
+            }
+          }
           const resolved = resolveGroundSurfaceProjectedCommand(surface, {
             w,
             ANCHOR_Y,
@@ -146,6 +178,7 @@ export function collectGroundDrawables(input: CollectionContext): void {
             getRampQuadPoints,
           });
           if (!resolved) continue;
+          if (chunkAuthorityEligible) countStaticSurfaceFallback?.(1);
           const anchorY = Number.isFinite(Number(surface.renderAnchorY))
             ? Number(surface.renderAnchorY)
             : ANCHOR_Y;
@@ -187,6 +220,14 @@ export function collectGroundDrawables(input: CollectionContext): void {
       const decal = decals[i];
       if (!isTileInRenderRadius(decal.tx, decal.ty)) continue;
       if (!shouldRenderGroundDecalForFrame(decal, RENDER_ALL_HEIGHTS, activeH)) continue;
+      const chunkAuthorityEligible = isGroundDecalChunkAuthorityEligible(decal);
+      if (chunkAuthorityEligible) {
+        countStaticDecalExamined?.(1);
+        if (isGroundChunkTileAuthoritative?.(decal.tx, decal.ty)) {
+          countStaticDecalFiltered?.(1);
+          continue;
+        }
+      }
       const resolved = resolveGroundDecalProjectedCommand(decal, {
         w,
         ANCHOR_Y,
@@ -220,6 +261,7 @@ export function collectGroundDrawables(input: CollectionContext): void {
         getRampQuadPoints,
       });
       if (!resolved) continue;
+      if (chunkAuthorityEligible) countStaticDecalFallback?.(1);
 
       enqueueSliceCommand(frameBuilder, resolved.key, {
         semanticFamily: resolved.semanticFamily,

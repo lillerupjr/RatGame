@@ -2,6 +2,8 @@ import type {
   StaticRelightDarknessBucket,
   StaticRelightLightCandidate,
 } from "./staticRelightPoc";
+import type { RawCacheMetricSample } from "./cacheMetricsRegistry";
+import { estimateCanvasLikeBytes } from "./cacheMetricsRegistry";
 
 export type StaticRelightPieceKind = "FLOOR_TOP" | "DECAL_TOP" | "STRUCTURE_SLICE";
 
@@ -98,24 +100,34 @@ export function buildStaticRelightPieceKey(
 export class StaticRelightBakeStore<T> {
   private contextKey = "";
   private readonly entries = new Map<string, StaticRelightBakeEntry<T>>();
+  private hitCount = 0;
+  private missCount = 0;
+  private insertCount = 0;
+  private clearCount = 0;
 
   clear(): void {
     this.entries.clear();
+    this.clearCount += 1;
   }
 
   resetIfContextChanged(nextContextKey: string): boolean {
     if (nextContextKey === this.contextKey) return false;
     this.contextKey = nextContextKey;
     this.entries.clear();
+    this.clearCount += 1;
     return true;
   }
 
   get(pieceKey: string): StaticRelightBakeEntry<T> | undefined {
-    return this.entries.get(pieceKey);
+    const entry = this.entries.get(pieceKey);
+    if (entry) this.hitCount += 1;
+    else this.missCount += 1;
+    return entry;
   }
 
   set(pieceKey: string, entry: StaticRelightBakeEntry<T>): void {
     this.entries.set(pieceKey, entry);
+    this.insertCount += 1;
   }
 
   getOrBake(
@@ -123,10 +135,43 @@ export class StaticRelightBakeStore<T> {
     baker: () => StaticRelightBakeEntry<T> | null,
   ): StaticRelightBakeEntry<T> | null {
     const cached = this.entries.get(pieceKey);
-    if (cached) return cached;
+    if (cached) {
+      this.hitCount += 1;
+      return cached;
+    }
+    this.missCount += 1;
     const baked = baker();
     if (!baked) return null;
     this.entries.set(pieceKey, baked);
+    this.insertCount += 1;
     return baked;
+  }
+
+  getDebugCacheMetrics(): RawCacheMetricSample {
+    let approxBytes = 0;
+    let hasKnownBytes = false;
+    for (const entry of this.entries.values()) {
+      if (entry.kind !== "RELIT") continue;
+      const bytes = estimateCanvasLikeBytes(entry.baked);
+      if (bytes != null) {
+        approxBytes += bytes;
+        hasKnownBytes = true;
+      }
+    }
+    return {
+      name: "staticRelightBakes",
+      kind: "derived",
+      entryCount: this.entries.size,
+      approxBytes: hasKnownBytes ? approxBytes : null,
+      hits: this.hitCount,
+      misses: this.missCount,
+      inserts: this.insertCount,
+      evictions: 0,
+      clears: this.clearCount,
+      bounded: false,
+      hasEviction: false,
+      contextKey: this.contextKey,
+      notes: "RELIT entries report bytes only when baked output exposes width/height",
+    };
   }
 }

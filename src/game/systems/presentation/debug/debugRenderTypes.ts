@@ -8,6 +8,7 @@ import type {
 } from "../../../../settings/settingsTypes";
 import type { StructureShadowRenderMode } from "../structureShadows/structureShadowTypes";
 import type { ShadowSunDayCycleDebugStatus } from "../shadowSunDayCycleRuntime";
+import type { WorldBatchAudit } from "./worldBatchAudit";
 import type {
   StructureV6FaceSlice,
   StructureV6SliceAxis,
@@ -175,4 +176,5 @@ export type RenderDebugScreenPassInput = {
   structureTriangleCutoutHalfHeight: number;
   structureTriangleCutoutAlpha: number;
   roadWidthAtPlayer: number;
+  worldBatchAudit?: WorldBatchAudit | null;
 };

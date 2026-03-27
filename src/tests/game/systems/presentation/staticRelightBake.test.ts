@@ -32,6 +32,26 @@ function makeLights(): StaticRelightLightCandidate[] {
 }
 
 describe("staticRelightBake", () => {
+  it("reports cache metrics for hits misses inserts and clears", () => {
+    const store = new StaticRelightBakeStore<HTMLCanvasElement>();
+    store.resetIfContextChanged("ctx:a");
+
+    expect(store.get("missing")).toBeUndefined();
+    store.set("relit:a", { kind: "RELIT", baked: { width: 32, height: 16 } as HTMLCanvasElement });
+    expect(store.get("relit:a")).toEqual({ kind: "RELIT", baked: { width: 32, height: 16 } });
+    store.clear();
+
+    const metrics = store.getDebugCacheMetrics();
+    expect(metrics).toMatchObject({
+      name: "staticRelightBakes",
+      entryCount: 0,
+      hits: 1,
+      misses: 1,
+      inserts: 1,
+      clears: 2,
+    });
+  });
+
   it("changes context key when relevant bake inputs change", () => {
     const base = buildStaticRelightBakeContextKey({
       mapId: "downtown",

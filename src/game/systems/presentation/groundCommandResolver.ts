@@ -150,6 +150,15 @@ export function shouldRenderGroundDecalForFrame(
   return renderAllHeights || decal.zLogical === activeH;
 }
 
+export function isGroundSurfaceChunkAuthorityEligible(surface: Surface, tileIdOcean: string): boolean {
+  if (surface.runtimeTop?.kind === "SQUARE_128_RUNTIME") return true;
+  return surface.tile.kind !== tileIdOcean;
+}
+
+export function isGroundDecalChunkAuthorityEligible(_decal: DecalPiece): boolean {
+  return true;
+}
+
 export function resolveGroundSurfaceProjectedCommand(
   surface: Surface,
   deps: GroundCommandResolverDeps,
@@ -191,6 +200,8 @@ export function resolveGroundSurfaceProjectedCommand(
   const anchorY = Number.isFinite(Number(surface.renderAnchorY))
     ? Number(surface.renderAnchorY)
     : ANCHOR_Y;
+
+  if (staticOnly && !isGroundSurfaceChunkAuthorityEligible(surface, TILE_ID_OCEAN)) return null;
 
   if (surface.runtimeTop?.kind === "SQUARE_128_RUNTIME") {
     const runtimeTop = surface.runtimeTop;
@@ -258,8 +269,6 @@ export function resolveGroundSurfaceProjectedCommand(
       destinationQuad,
     };
   }
-
-  if (staticOnly && tdef.kind === TILE_ID_OCEAN) return null;
 
   const topRec = tdef.kind === TILE_ID_OCEAN
     ? getAnimatedTileFrame("water1", (w.timeSec ?? w.time ?? 0) * OCEAN_ANIM_TIME_SCALE)
@@ -331,7 +340,7 @@ export function resolveGroundDecalProjectedCommand(
   deps: GroundCommandResolverDeps,
   options: GroundCommandResolutionOptions = {},
 ): ResolvedGroundDecalProjectedCommand | null {
-  const { onPendingVisualChange } = options;
+  const { staticOnly = false, onPendingVisualChange } = options;
   const {
     getRuntimeDecalSprite,
     getRuntimeIsoDecalCanvas,
@@ -351,6 +360,8 @@ export function resolveGroundDecalProjectedCommand(
     SIDEWALK_ISO_HEIGHT,
     snapPx,
   } = deps;
+
+  if (staticOnly && !isGroundDecalChunkAuthorityEligible(decal)) return null;
 
   const src = getRuntimeDecalSprite(decal.setId, decal.variantIndex);
   if (!src?.ready || !src.img || src.img.width <= 0 || src.img.height <= 0) {

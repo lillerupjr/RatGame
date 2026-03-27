@@ -1,3 +1,6 @@
+import type { CacheMetricsSnapshot } from "./cacheMetricsRegistry";
+import { sampleCacheMetricsRegistry } from "./cacheMetricsRegistry";
+
 type FrameCounters = {
   drawImageCalls: number;
   drawImageByTag: Record<DrawTag, number>;
@@ -13,6 +16,12 @@ type FrameCounters = {
   fullCanvasBlits: number;
   tileLoopIterations: number;
   tileLoopRadius: number;
+  groundStaticSurfaceExamined: number;
+  groundStaticSurfaceAuthorityFiltered: number;
+  groundStaticSurfaceFallbackEmitted: number;
+  groundStaticDecalExamined: number;
+  groundStaticDecalAuthorityFiltered: number;
+  groundStaticDecalFallbackEmitted: number;
   zBandCount: number;
   lightBandCount: number;
   maskBuilds: number;
@@ -67,6 +76,12 @@ type Snapshot = {
   fullCanvasBlitsPerFrame: number;
   tileLoopIterationsPerFrame: number;
   tileLoopRadius: number;
+  groundStaticSurfaceExaminedPerFrame: number;
+  groundStaticSurfaceAuthorityFilteredPerFrame: number;
+  groundStaticSurfaceFallbackEmittedPerFrame: number;
+  groundStaticDecalExaminedPerFrame: number;
+  groundStaticDecalAuthorityFilteredPerFrame: number;
+  groundStaticDecalFallbackEmittedPerFrame: number;
   zBandCountPerFrame: number;
   lightBandCountPerFrame: number;
   maskBuildsPerFrame: number;
@@ -104,6 +119,7 @@ type Snapshot = {
   canvasGroundChunkDrawsPerFrame: number;
   canvasGroundChunksVisiblePerFrame: number;
   canvasGroundChunkRebuildsPerFrame: number;
+  cacheMetrics: CacheMetricsSnapshot;
 };
 
 export type DrawTag =
@@ -161,6 +177,12 @@ const ZERO_FRAME: FrameCounters = {
   fullCanvasBlits: 0,
   tileLoopIterations: 0,
   tileLoopRadius: 0,
+  groundStaticSurfaceExamined: 0,
+  groundStaticSurfaceAuthorityFiltered: 0,
+  groundStaticSurfaceFallbackEmitted: 0,
+  groundStaticDecalExamined: 0,
+  groundStaticDecalAuthorityFiltered: 0,
+  groundStaticDecalFallbackEmitted: 0,
   zBandCount: 0,
   lightBandCount: 0,
   maskBuilds: 0,
@@ -240,6 +262,12 @@ let snapshot: Snapshot = {
   fullCanvasBlitsPerFrame: 0,
   tileLoopIterationsPerFrame: 0,
   tileLoopRadius: 0,
+  groundStaticSurfaceExaminedPerFrame: 0,
+  groundStaticSurfaceAuthorityFilteredPerFrame: 0,
+  groundStaticSurfaceFallbackEmittedPerFrame: 0,
+  groundStaticDecalExaminedPerFrame: 0,
+  groundStaticDecalAuthorityFilteredPerFrame: 0,
+  groundStaticDecalFallbackEmittedPerFrame: 0,
   zBandCountPerFrame: 0,
   lightBandCountPerFrame: 0,
   maskBuildsPerFrame: 0,
@@ -277,6 +305,17 @@ let snapshot: Snapshot = {
   canvasGroundChunkDrawsPerFrame: 0,
   canvasGroundChunksVisiblePerFrame: 0,
   canvasGroundChunkRebuildsPerFrame: 0,
+  cacheMetrics: {
+    caches: [],
+    totalEntries: 0,
+    totalKnownBytes: 0,
+    totalHits: 0,
+    totalMisses: 0,
+    totalInserts: 0,
+    totalEvictions: 0,
+    totalClears: 0,
+    totalBudgetBytes: 0,
+  },
 };
 
 function mergeCountMaps(target: Record<string, number>, source: Record<string, number>): void {
@@ -400,6 +439,13 @@ function foldCurrentFrame(nowSec: number): void {
     canvasGroundChunkDrawsPerFrame: frame.canvasGroundChunkDraws,
     canvasGroundChunksVisiblePerFrame: frame.canvasGroundChunksVisible,
     canvasGroundChunkRebuildsPerFrame: frame.canvasGroundChunkRebuilds,
+    cacheMetrics: sampleCacheMetricsRegistry(),
+    groundStaticSurfaceExaminedPerFrame: frame.groundStaticSurfaceExamined,
+    groundStaticSurfaceAuthorityFilteredPerFrame: frame.groundStaticSurfaceAuthorityFiltered,
+    groundStaticSurfaceFallbackEmittedPerFrame: frame.groundStaticSurfaceFallbackEmitted,
+    groundStaticDecalExaminedPerFrame: frame.groundStaticDecalExamined,
+    groundStaticDecalAuthorityFilteredPerFrame: frame.groundStaticDecalAuthorityFiltered,
+    groundStaticDecalFallbackEmittedPerFrame: frame.groundStaticDecalFallbackEmitted,
   };
 
   accum.drawImageCalls += frame.drawImageCalls;
@@ -425,6 +471,12 @@ function foldCurrentFrame(nowSec: number): void {
   accum.fullCanvasBlits += frame.fullCanvasBlits;
   accum.tileLoopIterations += frame.tileLoopIterations;
   accum.tileLoopRadius = frame.tileLoopRadius;
+  accum.groundStaticSurfaceExamined += frame.groundStaticSurfaceExamined;
+  accum.groundStaticSurfaceAuthorityFiltered += frame.groundStaticSurfaceAuthorityFiltered;
+  accum.groundStaticSurfaceFallbackEmitted += frame.groundStaticSurfaceFallbackEmitted;
+  accum.groundStaticDecalExamined += frame.groundStaticDecalExamined;
+  accum.groundStaticDecalAuthorityFiltered += frame.groundStaticDecalAuthorityFiltered;
+  accum.groundStaticDecalFallbackEmitted += frame.groundStaticDecalFallbackEmitted;
   accum.zBandCount += frame.zBandCount;
   accum.lightBandCount += frame.lightBandCount;
   accum.maskBuilds += frame.maskBuilds;
@@ -502,6 +554,12 @@ function foldCurrentFrame(nowSec: number): void {
       fullCanvasBlitsPerFrame: accum.fullCanvasBlits / denom,
       tileLoopIterationsPerFrame: accum.tileLoopIterations / denom,
       tileLoopRadius: accum.tileLoopRadius,
+      groundStaticSurfaceExaminedPerFrame: accum.groundStaticSurfaceExamined / denom,
+      groundStaticSurfaceAuthorityFilteredPerFrame: accum.groundStaticSurfaceAuthorityFiltered / denom,
+      groundStaticSurfaceFallbackEmittedPerFrame: accum.groundStaticSurfaceFallbackEmitted / denom,
+      groundStaticDecalExaminedPerFrame: accum.groundStaticDecalExamined / denom,
+      groundStaticDecalAuthorityFilteredPerFrame: accum.groundStaticDecalAuthorityFiltered / denom,
+      groundStaticDecalFallbackEmittedPerFrame: accum.groundStaticDecalFallbackEmitted / denom,
       zBandCountPerFrame: accum.zBandCount / denom,
       lightBandCountPerFrame: accum.lightBandCount / denom,
       maskBuildsPerFrame: accum.maskBuilds / denom,
@@ -539,6 +597,7 @@ function foldCurrentFrame(nowSec: number): void {
       canvasGroundChunkDrawsPerFrame: accum.canvasGroundChunkDraws / denom,
       canvasGroundChunksVisiblePerFrame: accum.canvasGroundChunksVisible / denom,
       canvasGroundChunkRebuildsPerFrame: accum.canvasGroundChunkRebuilds / denom,
+      cacheMetrics: sampleCacheMetricsRegistry(),
     };
     accum = makeZeroFrame();
     framesAccum = 0;
@@ -587,6 +646,36 @@ export function countRenderTileLoopIteration(n: number = 1): void {
 export function setRenderTileLoopRadius(radius: number): void {
   if (!enabled) return;
   frame.tileLoopRadius = radius;
+}
+
+export function countRenderGroundStaticSurfaceExamined(n: number = 1): void {
+  if (!enabled) return;
+  frame.groundStaticSurfaceExamined += n;
+}
+
+export function countRenderGroundStaticSurfaceAuthorityFiltered(n: number = 1): void {
+  if (!enabled) return;
+  frame.groundStaticSurfaceAuthorityFiltered += n;
+}
+
+export function countRenderGroundStaticSurfaceFallbackEmitted(n: number = 1): void {
+  if (!enabled) return;
+  frame.groundStaticSurfaceFallbackEmitted += n;
+}
+
+export function countRenderGroundStaticDecalExamined(n: number = 1): void {
+  if (!enabled) return;
+  frame.groundStaticDecalExamined += n;
+}
+
+export function countRenderGroundStaticDecalAuthorityFiltered(n: number = 1): void {
+  if (!enabled) return;
+  frame.groundStaticDecalAuthorityFiltered += n;
+}
+
+export function countRenderGroundStaticDecalFallbackEmitted(n: number = 1): void {
+  if (!enabled) return;
+  frame.groundStaticDecalFallbackEmitted += n;
 }
 
 export function setRenderZBandCount(count: number): void {
@@ -750,6 +839,12 @@ export function getRenderPerfSnapshot(): Snapshot {
       fullCanvasBlitsPerFrame: 0,
       tileLoopIterationsPerFrame: 0,
       tileLoopRadius: 0,
+      groundStaticSurfaceExaminedPerFrame: 0,
+      groundStaticSurfaceAuthorityFilteredPerFrame: 0,
+      groundStaticSurfaceFallbackEmittedPerFrame: 0,
+      groundStaticDecalExaminedPerFrame: 0,
+      groundStaticDecalAuthorityFilteredPerFrame: 0,
+      groundStaticDecalFallbackEmittedPerFrame: 0,
       zBandCountPerFrame: 0,
       lightBandCountPerFrame: 0,
       maskBuildsPerFrame: 0,
@@ -787,6 +882,17 @@ export function getRenderPerfSnapshot(): Snapshot {
       canvasGroundChunkDrawsPerFrame: 0,
       canvasGroundChunksVisiblePerFrame: 0,
       canvasGroundChunkRebuildsPerFrame: 0,
+      cacheMetrics: {
+        caches: [],
+        totalEntries: 0,
+        totalKnownBytes: 0,
+        totalHits: 0,
+        totalMisses: 0,
+        totalInserts: 0,
+        totalEvictions: 0,
+        totalClears: 0,
+        totalBudgetBytes: 0,
+      },
     };
   }
   return snapshot;

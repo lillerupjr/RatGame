@@ -58,6 +58,50 @@ function withFakeCanvasDocument(run: () => void): void {
   }
 }
 
+function makeSurface(id: string, tx: number, ty: number, zBase = 0) {
+  return {
+    id,
+    tx,
+    ty,
+    zBase,
+    zLogical: 0,
+    tile: { kind: "FLOOR", h: 0 },
+    renderTopKind: "FLOOR",
+    renderDir: "N",
+    renderAnchorY: 0.55,
+    renderDyOffset: 0,
+    spriteIdTop: `tiles/floor/sidewalk/${id}`,
+  };
+}
+
+function makeDecal(id: string, tx: number, ty: number, zBase = 0) {
+  return {
+    id,
+    tx,
+    ty,
+    zBase,
+    zLogical: 0,
+    setId: "lane_marking",
+    spriteId: id,
+    variantIndex: 0,
+    semanticType: "road",
+    renderAnchorY: 0.55,
+    rotationQuarterTurns: 0,
+  };
+}
+
+function buildSurfaceMap(): Map<string, any[]> {
+  const surfaces = new Map<string, any[]>();
+  for (let chunkY = 0; chunkY <= 2; chunkY++) {
+    for (let chunkX = 0; chunkX <= 6; chunkX++) {
+      const tx = chunkX * 8;
+      const ty = chunkY * 8;
+      surfaces.set(`${tx},${ty}`, [makeSurface(`surface_${chunkX}_${chunkY}`, tx, ty, chunkX === 3 ? 1 : 0)]);
+    }
+  }
+  return surfaces;
+}
+
 function makeSyncInput(overrides: Record<string, unknown> = {}) {
   return {
     cacheStore: new CanvasGroundChunkCacheStore(),
@@ -68,57 +112,24 @@ function makeSyncInput(overrides: Record<string, unknown> = {}) {
       originTy: 0,
       width: 64,
       height: 64,
-      surfacesByKey: new Map([
-        ["0,0", [{
-          id: "surface_a",
-          tx: 0,
-          ty: 0,
-          zBase: 0,
-          zLogical: 0,
-          tile: { kind: "FLOOR", h: 0 },
-          renderTopKind: "FLOOR",
-          renderDir: "N",
-          renderAnchorY: 0.55,
-          renderDyOffset: 0,
-          spriteIdTop: "tiles/floor/sidewalk/1",
-        }]],
-        ["0,1", [{
-          id: "surface_b",
-          tx: 0,
-          ty: 1,
-          zBase: 1,
-          zLogical: 1,
-          tile: { kind: "FLOOR", h: 1 },
-          renderTopKind: "FLOOR",
-          renderDir: "N",
-          renderAnchorY: 0.55,
-          renderDyOffset: 0,
-          spriteIdTop: "tiles/floor/sidewalk/2",
-        }]],
-      ]),
-      decals: [{
-        id: "decal_a",
-        tx: 0,
-        ty: 0,
-        zBase: 0,
-        zLogical: 0,
-        setId: "lane_marking",
-        spriteId: "lane",
-        variantIndex: 0,
-        semanticType: "road",
-        renderAnchorY: 0.55,
-        rotationQuarterTurns: 0,
-      }],
+      surfacesByKey: buildSurfaceMap(),
+      decals: [makeDecal("decal_a", 8, 8)],
     },
     renderAllHeights: true,
     activeH: 0,
+    viewRect: {
+      minTx: 0,
+      maxTx: 15,
+      minTy: 0,
+      maxTy: 15,
+    },
     shouldCullBuildingAt: () => false,
     w: { timeSec: 0, time: 0 },
     ANCHOR_Y: 0.55,
     TILE_ID_OCEAN: "OCEAN",
     getAnimatedTileFrame: vi.fn(() => ({ ready: true, img: { width: 32, height: 32 } })),
     OCEAN_ANIM_TIME_SCALE: 0.25,
-    getTileSpriteById: vi.fn(() => ({ ready: true, img: { width: 128, height: 128 } })),
+    getTileSpriteById: vi.fn((id: string) => ({ ready: true, img: { width: 128, height: 128, id } })),
     getRuntimeIsoTopCanvas: vi.fn(() => ({ width: 128, height: 64 })),
     OCEAN_TOP_SCALE: 4,
     STAIR_TOP_SCALE: 1,
@@ -153,32 +164,124 @@ function makeSyncInput(overrides: Record<string, unknown> = {}) {
 }
 
 describe("CanvasGroundChunkCacheStore", () => {
-  it("rebuilds chunk entries by chunk and z-band, then reuses them until the context changes", () => {
+  it("retains a visible-window working set and evicts logical chunks outside the grace ring", () => {
     withFakeCanvasDocument(() => {
       const input = makeSyncInput();
       const store = input.cacheStore as CanvasGroundChunkCacheStore;
+
       const first = syncCanvasGroundChunkCacheForFrame(input);
+      expect(first.rebuiltChunkCount).toBe(4);
+      expect(store.getDebugCacheMetrics()).toMatchObject({
+        name: "groundChunks",
+        entryCount: 4,
+        inserts: 4,
+        evictions: 0,
+        clears: 0,
+        generation: 1,
+      });
+      expect(store.getDebugCacheMetrics().notes).toContain("logical:4");
+      expect(store.getDebugCacheMetrics().notes).toContain("target:4");
+      expect(store.getDebugCacheMetrics().notes).toContain("grace:16");
 
-      expect(first.rebuiltChunkCount).toBe(2);
-      expect(store.getVisibleEntries(0, { minTx: -1, maxTx: 2, minTy: -1, maxTy: 2 })).toHaveLength(1);
-      expect(store.getVisibleEntries(1, { minTx: -1, maxTx: 2, minTy: -1, maxTy: 2 })).toHaveLength(1);
-
-      const surfaceStableId = resolveGroundSurfaceProjectedCommand(
-        input.compiledMap.surfacesByKey.get("0,0")[0],
+      const decalStableId = resolveGroundDecalProjectedCommand(input.compiledMap.decals[0], input)?.stableId;
+      const centerSurfaceStableId = resolveGroundSurfaceProjectedCommand(
+        input.compiledMap.surfacesByKey.get("8,8")[0],
         input,
       )?.stableId;
-      const decalStableId = resolveGroundDecalProjectedCommand(input.compiledMap.decals[0], input)?.stableId;
-      expect(store.hasCoveredStableId(surfaceStableId)).toBe(true);
       expect(store.hasCoveredStableId(decalStableId)).toBe(true);
+      expect(store.hasCoveredStableId(centerSurfaceStableId)).toBe(true);
+      expect(store.isTileAuthoritative(8, 8)).toBe(true);
 
       const second = syncCanvasGroundChunkCacheForFrame(input);
       expect(second.rebuiltChunkCount).toBe(0);
+      expect(store.getDebugCacheMetrics().generation).toBe(1);
 
       const third = syncCanvasGroundChunkCacheForFrame({
         ...input,
-        contextKey: "map:b",
+        viewRect: {
+          minTx: 8,
+          maxTx: 23,
+          minTy: 0,
+          maxTy: 15,
+        },
       });
       expect(third.rebuiltChunkCount).toBe(2);
+      expect(store.getDebugCacheMetrics().notes).toContain("logical:6");
+      expect(store.getDebugCacheMetrics().evictions).toBe(0);
+
+      const farMove = syncCanvasGroundChunkCacheForFrame({
+        ...input,
+        viewRect: {
+          minTx: 32,
+          maxTx: 47,
+          minTy: 0,
+          maxTy: 15,
+        },
+      });
+      expect(farMove.rebuiltChunkCount).toBe(4);
+      expect(store.getDebugCacheMetrics().evictions).toBeGreaterThan(0);
+      expect(store.getDebugCacheMetrics().notes).toContain("logical:4");
+
+      const oldSurfaceStableId = resolveGroundSurfaceProjectedCommand(
+        input.compiledMap.surfacesByKey.get("0,0")[0],
+        input,
+      )?.stableId;
+      expect(store.hasCoveredStableId(oldSurfaceStableId)).toBe(false);
+      expect(store.isTileAuthoritative(0, 0)).toBe(false);
+    });
+  });
+
+  it("retains pending visible chunks for retry without making them authoritative", () => {
+    withFakeCanvasDocument(() => {
+      let now = 0;
+      const originalPerformance = globalThis.performance;
+      Object.defineProperty(globalThis, "performance", {
+        value: { now: () => now },
+        configurable: true,
+      });
+
+      try {
+        const input = makeSyncInput({
+          getTileSpriteById: vi.fn((id: string) => {
+            if (id === "tiles/floor/sidewalk/surface_1_1" && now < 60) {
+              return { ready: false, img: null };
+            }
+            return { ready: true, img: { width: 128, height: 128, id } };
+          }),
+          compiledMap: {
+            id: "map-a",
+            originTx: 0,
+            originTy: 0,
+            width: 64,
+            height: 64,
+            surfacesByKey: buildSurfaceMap(),
+            decals: [],
+          },
+        });
+        const store = input.cacheStore as CanvasGroundChunkCacheStore;
+
+        const first = syncCanvasGroundChunkCacheForFrame(input);
+        expect(first.rebuiltChunkCount).toBe(3);
+        expect(store.getDebugCacheMetrics().notes).toContain("pending:1");
+        expect(store.isTileAuthoritative(8, 8)).toBe(false);
+
+        now = 10;
+        const second = syncCanvasGroundChunkCacheForFrame(input);
+        expect(second.rebuiltChunkCount).toBe(0);
+        expect(store.getDebugCacheMetrics().generation).toBe(1);
+
+        now = 75;
+        const third = syncCanvasGroundChunkCacheForFrame(input);
+        expect(third.rebuiltChunkCount).toBe(1);
+        expect(store.getDebugCacheMetrics().notes).toContain("pending:0");
+        expect(store.getDebugCacheMetrics().generation).toBe(2);
+        expect(store.isTileAuthoritative(8, 8)).toBe(true);
+      } finally {
+        Object.defineProperty(globalThis, "performance", {
+          value: originalPerformance,
+          configurable: true,
+        });
+      }
     });
   });
 });

@@ -2,6 +2,8 @@ import { getRenderPerfSnapshot } from "../renderPerfCounters";
 import type { RenderDebugScreenPassInput } from "./debugRenderTypes";
 import { drawStructureV6FaceSliceDebugPanel } from "./renderDebugStructures";
 import { describeRenderBackendFallbackReason } from "../backend/renderBackendSelection";
+import type { CacheMetricSample } from "../cacheMetricsRegistry";
+import type { WorldBatchAudit, WorldBatchBreakReason } from "./worldBatchAudit";
 
 function summarizeBackendFamilyCounts(counts: Record<string, number>): string {
   const entries = Object.entries(counts)
@@ -19,6 +21,52 @@ function summarizeBackendSemanticFamilyCounts(counts: Record<string, number>): s
     .slice(0, 4)
     .map(([key, value]) => `${key}:${value.toFixed(1)}`);
   return entries.length > 0 ? entries.join(" ") : "none";
+}
+
+function formatCacheBytes(bytes: number | null): string {
+  if (bytes == null) return "unknown";
+  const mib = bytes / (1024 * 1024);
+  if (mib >= 10) return `${mib.toFixed(0)}MiB`;
+  if (mib >= 1) return `${mib.toFixed(1)}MiB`;
+  const kib = bytes / 1024;
+  if (kib >= 10) return `${kib.toFixed(0)}KiB`;
+  return `${kib.toFixed(1)}KiB`;
+}
+
+function formatCacheHitRate(hits: number, misses: number): string {
+  const total = hits + misses;
+  if (total <= 0) return "n/a";
+  return `${((hits / total) * 100).toFixed(0)}%`;
+}
+
+function summarizeTopCaches(caches: CacheMetricSample[]): CacheMetricSample[] {
+  return [...caches]
+    .sort((a, b) => {
+      const aBytes = a.approxBytes ?? -1;
+      const bBytes = b.approxBytes ?? -1;
+      if (aBytes !== bBytes) return bBytes - aBytes;
+      if (a.entryCount !== b.entryCount) return b.entryCount - a.entryCount;
+      return a.name.localeCompare(b.name);
+    })
+    .slice(0, 6);
+}
+
+function summarizeWorldBreakReasons(audit: WorldBatchAudit): string {
+  const reasons: WorldBatchBreakReason[] = [
+    "texture changed",
+    "shader/material changed",
+    "blend mode changed",
+    "primitive type changed",
+    "render family changed",
+    "unsupported/fallback path changed",
+    "non-batchable path",
+    "other state incompatibility",
+  ];
+  return reasons
+    .filter((reason) => audit.breakReasonCounts[reason] > 0)
+    .map((reason) => `${reason}:${audit.breakReasonCounts[reason]}`)
+    .slice(0, 4)
+    .join(" ");
 }
 
 export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): void {
@@ -46,6 +94,7 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
     structureTriangleCutoutHalfHeight,
     structureTriangleCutoutAlpha,
     roadWidthAtPlayer,
+    worldBatchAudit,
   } = input;
 
   ctx.save();
@@ -88,8 +137,40 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
           `restoreTag structLive:${restoreTag["structures:live"].toFixed(1)} structShadow:${restoreTag["structures:shadow"].toFixed(1)}`,
           `fullCanvasBlits/frame: ${perf.fullCanvasBlitsPerFrame.toFixed(1)}`,
         ];
+    const cacheSummaryLines = (() => {
+      const cacheMetrics = perf.cacheMetrics;
+      const topCaches = summarizeTopCaches(cacheMetrics.caches);
+      const lines = [
+        `cache totals: entries:${cacheMetrics.totalEntries} bytes:${formatCacheBytes(cacheMetrics.totalKnownBytes)} hit:${cacheMetrics.totalHits} miss:${cacheMetrics.totalMisses} rate:${formatCacheHitRate(cacheMetrics.totalHits, cacheMetrics.totalMisses)}`,
+        `cache churn: insert:${cacheMetrics.totalInserts} evict:${cacheMetrics.totalEvictions} clear:${cacheMetrics.totalClears} budget:${formatCacheBytes(cacheMetrics.totalBudgetBytes)}`,
+      ];
+      for (const cache of topCaches) {
+        lines.push(
+          `cache ${cache.name} kind:${cache.kind} entries:${cache.entryCount} bytes:${formatCacheBytes(cache.approxBytes)} hit:${cache.hits} miss:${cache.misses} evict:${cache.evictions} clear:${cache.clears} status:${cache.status}${cache.notes ? ` notes:${cache.notes}` : ""}`,
+        );
+      }
+      return lines;
+    })();
     const perfLines = [
       ...rendererSpecificLines,
+      `groundAuthority surface/frame: seen:${perf.groundStaticSurfaceExaminedPerFrame.toFixed(1)} filtered:${perf.groundStaticSurfaceAuthorityFilteredPerFrame.toFixed(1)} fallback:${perf.groundStaticSurfaceFallbackEmittedPerFrame.toFixed(1)}`,
+      `groundAuthority decal/frame: seen:${perf.groundStaticDecalExaminedPerFrame.toFixed(1)} filtered:${perf.groundStaticDecalAuthorityFilteredPerFrame.toFixed(1)} fallback:${perf.groundStaticDecalFallbackEmittedPerFrame.toFixed(1)}`,
+      ...(worldBatchAudit
+        ? [
+            `worldBatch(${worldBatchAudit.inspectedBackend}): cmd:${worldBatchAudit.totalWorldCommands} batch:${worldBatchAudit.totalWorldBatches} avg:${worldBatchAudit.averageRunLength.toFixed(1)} max:${worldBatchAudit.maxRunLength} cont:${worldBatchAudit.compatibleContinuations} breaks:${worldBatchAudit.totalBatchBreaks}`,
+            `worldBreaks: ${summarizeWorldBreakReasons(worldBatchAudit) || "none"}`,
+            ...worldBatchAudit.familySummaries
+              .slice(0, 5)
+              .map((summary) => (
+                `worldFam ${summary.family} cmd:${summary.commands} batch:${summary.batches} avg:${summary.averageRunLength.toFixed(1)} max:${summary.maxRunLength} tex:${summary.uniqueTextures} dom:${summary.dominantBreakReason}`
+              )),
+            ...worldBatchAudit.sampleBoundaries
+              .slice(0, 3)
+              .map((boundary) => (
+                `worldBoundary ${boundary.index}->${boundary.index + 1} ${boundary.reason} | ${boundary.previous} -> ${boundary.next}`
+              )),
+          ]
+        : []),
       `closures/frame: ${perf.closuresCreatedPerFrame.toFixed(1)}`,
       `sliceSorts/frame: ${perf.sliceKeySortsPerFrame.toFixed(1)} drawableSorts/frame: ${perf.drawableSortsPerFrame.toFixed(1)}`,
       `tileRadius: ${perf.tileLoopRadius.toFixed(0)} tileLoopIters/frame: ${perf.tileLoopIterationsPerFrame.toFixed(1)}`,
@@ -106,6 +187,7 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
       `backend webgl axes: ${summarizeBackendFamilyCounts(perf.backendWebglByAxesPerFrame)}`,
       `backend canvas axes: ${summarizeBackendFamilyCounts(perf.backendCanvasFallbackByAxesPerFrame)}`,
       `backend partial axes: ${perf.backendPartiallyHandledAxes.length > 0 ? perf.backendPartiallyHandledAxes.join(", ") : "none"}`,
+      ...cacheSummaryLines,
     ];
     ctx.textAlign = "right";
     const perfX = cssW - 8;
