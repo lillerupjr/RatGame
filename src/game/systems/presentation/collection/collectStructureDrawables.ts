@@ -16,6 +16,12 @@ import {
   countRenderStaticAtlasBypass,
   countRenderStaticAtlasFallback,
   countRenderStructureEstimatedTrianglesAvoided,
+  countRenderStructureGroupedPostSubmission,
+  countRenderStructureGroupedPreSubmission,
+  countRenderStructureMergedSliceCacheHit,
+  countRenderStructureMergedSliceCacheMiss,
+  countRenderStructureMergedSliceCacheRebuild,
+  countRenderStructureMergedSliceSubmission,
   countRenderStructureMonolithicGroupSubmission,
   countRenderStructureMonolithicTriangles,
   countRenderStructureQuadApproxAccepted,
@@ -26,6 +32,7 @@ import {
   countRenderStructureTotalSubmission,
   countRenderStructureTrianglesSubmitted,
 } from "../renderPerfCounters";
+import { buildStructureMergedSliceCacheEntry } from "../structures/structureMergedSliceCache";
 
 type RenderKey = any;
 type RenderPoint = { x: number; y: number };
@@ -90,6 +97,8 @@ export function collectStructureDrawables(input: CollectionContext): {
     buildStructureSlices,
     ctx,
     T,
+    ISO_X,
+    ISO_Y,
     projectedViewportRect,
     structureTriangleCutoutEnabled,
     structureTriangleCutoutHalfWidth,
@@ -103,6 +112,7 @@ export function collectStructureDrawables(input: CollectionContext): {
     toScreenAtZ,
     getStaticAtlasSpriteFrame,
     monolithicStructureGeometryCacheStore,
+    structureMergedSliceCacheStore,
     getFlippedOverlayImage,
     SHOW_STRUCTURE_SLICE_DEBUG,
     SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG,
@@ -116,8 +126,8 @@ export function collectStructureDrawables(input: CollectionContext): {
 
   let didQueueStructureCutoutDebugRect = input.didQueueStructureCutoutDebugRect ?? false;
 
-  const buildStructureOverlayQuadPayload = (
-    overlaySpriteId: string | undefined,
+  const buildStructureSpriteQuadPayload = (
+    spriteId: string | undefined,
     draw: {
       img: CanvasImageSource;
       dx: number;
@@ -128,14 +138,22 @@ export function collectStructureDrawables(input: CollectionContext): {
       scale?: number;
     },
   ) => {
-    const atlasFrame = overlaySpriteId ? (getStaticAtlasSpriteFrame?.(overlaySpriteId) ?? null) : null;
+    const atlasFrame = spriteId ? (getStaticAtlasSpriteFrame?.(spriteId) ?? null) : null;
     if (!atlasFrame) {
-      if (overlaySpriteId) countRenderStaticAtlasFallback();
+      if (spriteId) countRenderStaticAtlasFallback();
       else countRenderStaticAtlasBypass();
     }
     const scale = Number.isFinite(Number(draw.scale)) ? Number(draw.scale) : 1;
-    const localSourceWidth = Number(draw.dw ?? 0);
-    const localSourceHeight = Number(draw.dh ?? 0);
+    const intrinsicSourceWidth = Number((draw.img as { width?: number }).width ?? 0);
+    const intrinsicSourceHeight = Number((draw.img as { height?: number }).height ?? 0);
+    const localSourceWidth = Number(
+      atlasFrame?.sw
+      ?? (intrinsicSourceWidth > 0 ? intrinsicSourceWidth : Number(draw.dw ?? 0)),
+    );
+    const localSourceHeight = Number(
+      atlasFrame?.sh
+      ?? (intrinsicSourceHeight > 0 ? intrinsicSourceHeight : Number(draw.dh ?? 0)),
+    );
     return buildRectQuadPayload({
       image: atlasFrame?.image ?? draw.img,
       sourceRectWidth: localSourceWidth,
@@ -203,6 +221,46 @@ export function collectStructureDrawables(input: CollectionContext): {
       maxX: Math.max(a.maxX, b.maxX),
       maxY: Math.max(a.maxY, b.maxY),
     };
+  };
+
+  const coarseCutoutInflateX = Number(T) * Number(ISO_X);
+  const coarseCutoutInflateY = Number(T) * Number(ISO_Y);
+  const coarseCutoutScreenRect = {
+    x: structureCutoutScreenRect.minX - coarseCutoutInflateX,
+    y: structureCutoutScreenRect.minY - coarseCutoutInflateY,
+    w: (structureCutoutScreenRect.maxX - structureCutoutScreenRect.minX) + coarseCutoutInflateX * 2,
+    h: (structureCutoutScreenRect.maxY - structureCutoutScreenRect.minY) + coarseCutoutInflateY * 2,
+  };
+
+  const isCutoutNearGroup = (piece: any): boolean => (
+    !!piece.cutoutEnabled
+    && !!piece.buildingDirectionalEligible
+    && !!piece.groupParentAfterPlayer
+    && runtimeStructureRectIntersects(piece.groupLocalBounds, coarseCutoutScreenRect)
+  );
+
+  const sourceFrameKeyForPiece = (
+    piece: any,
+    atlasFrame: { image: HTMLCanvasElement; sx: number; sy: number; sw: number; sh: number } | null,
+  ): string => {
+    if (atlasFrame) {
+      return [
+        "atlas",
+        piece.overlay.spriteId ?? piece.overlay.id,
+        atlasFrame.sx,
+        atlasFrame.sy,
+        atlasFrame.sw,
+        atlasFrame.sh,
+      ].join(":");
+    }
+    const imageWidth = Number((piece.draw.img as { width?: number } | undefined)?.width ?? 0);
+    const imageHeight = Number((piece.draw.img as { height?: number } | undefined)?.height ?? 0);
+    return [
+      "fallback",
+      piece.overlay.spriteId ?? piece.overlay.id,
+      imageWidth,
+      imageHeight,
+    ].join(":");
   };
 
   const processStructureTriangles = (
@@ -405,17 +463,7 @@ export function collectStructureDrawables(input: CollectionContext): {
         enqueueSliceCommand(frameBuilder, renderKey, {
           semanticFamily: "worldSprite",
           finalForm: "quad",
-          payload: buildRectQuadPayload({
-            image: d.img,
-            dx: Number(d.dx ?? 0),
-            dy: Number(d.dy ?? 0),
-            dw: Number(d.dw ?? 0) * (Number.isFinite(Number(d.scale)) ? Number(d.scale) : 1),
-            dh: Number(d.dh ?? 0) * (Number.isFinite(Number(d.scale)) ? Number(d.scale) : 1),
-            sourceRectWidth: Number(d.dw ?? 0),
-            sourceRectHeight: Number(d.dh ?? 0),
-            flipX: !!d.flipX,
-            auditFamily: "structures",
-          }),
+          payload: buildStructureSpriteQuadPayload(face.spriteId, d),
         });
       }
     }
@@ -460,17 +508,7 @@ export function collectStructureDrawables(input: CollectionContext): {
       enqueueSliceCommand(frameBuilder, renderKey, {
         semanticFamily: "worldSprite",
         finalForm: "quad",
-        payload: buildRectQuadPayload({
-          image: draw.img,
-          dx: Number(draw.dx ?? 0),
-          dy: Number(draw.dy ?? 0),
-          dw: Number(draw.dw ?? 0) * (Number.isFinite(Number(draw.scale)) ? Number(draw.scale) : 1),
-          dh: Number(draw.dh ?? 0) * (Number.isFinite(Number(draw.scale)) ? Number(draw.scale) : 1),
-          sourceRectWidth: Number(draw.dw ?? 0),
-          sourceRectHeight: Number(draw.dh ?? 0),
-          flipX: !!draw.flipX,
-          auditFamily: "structures",
-        }),
+        payload: buildStructureSpriteQuadPayload(occ.spriteId, draw),
       });
     }
   }
@@ -540,7 +578,7 @@ export function collectStructureDrawables(input: CollectionContext): {
         enqueueSliceCommand(frameBuilder, structureDrawable.key, {
           semanticFamily: "worldSprite",
           finalForm: "quad",
-          payload: buildStructureOverlayQuadPayload(overlay.spriteId, draw),
+          payload: buildStructureSpriteQuadPayload(overlay.spriteId, draw),
         });
         continue;
       }
@@ -551,7 +589,13 @@ export function collectStructureDrawables(input: CollectionContext): {
         if (piece.overlay.spriteId) countRenderStaticAtlasFallback();
         else countRenderStaticAtlasBypass();
       }
-      const sourceWidth = Number(piece.draw.dw ?? 0);
+      const overlaySourceWidth = Number(
+        ((piece.draw.img as { width?: number } | undefined)?.width ?? 0),
+      );
+      const sourceWidth = Number(
+        atlasFrame?.sw
+        ?? (overlaySourceWidth > 0 ? overlaySourceWidth : Number(piece.draw.dw ?? 0)),
+      );
       const compareDistanceOnlyStableIds = new Set<number>(
         piece.compareDistanceOnlyTriangles.map((triangle: any) => triangle.stableId),
       );
@@ -570,20 +614,93 @@ export function collectStructureDrawables(input: CollectionContext): {
           destinationBounds.maxY - destinationBounds.minY,
         ),
       );
-      for (let ci = 0; ci < extractedCells.accepted.length; ci++) {
-        const cell = extractedCells.accepted[ci];
-        countRenderStructureTotalSubmission();
-        countRenderStructureSingleQuadSubmission();
-        countRenderStructureQuadApproxAccepted();
-        countRenderStructureEstimatedTrianglesAvoided(cell.triangleCount);
-        enqueueSliceCommand(frameBuilder, structureDrawable.key, {
-          semanticFamily: "worldSprite",
-          finalForm: "quad",
-          payload: cell.payload,
-        });
+      if (extractedCells.accepted.length > 0) {
+        countRenderStructureQuadApproxAccepted(extractedCells.accepted.length);
       }
       if (extractedCells.rejected > 0) {
         countRenderStructureQuadApproxRejected(extractedCells.rejected);
+      }
+
+      const shouldUseCoarseMergedSlice = !!structureMergedSliceCacheStore
+        && piece.allTrianglesVisible === true
+        && extractedCells.rejected <= 0
+        && extractedCells.accepted.length > 1
+        && !isCutoutNearGroup(piece);
+
+      if (shouldUseCoarseMergedSlice) {
+        const sourceFrameKey = sourceFrameKeyForPiece(piece, atlasFrame);
+        let mergedEntry = structureMergedSliceCacheStore.get({
+          structureInstanceId: piece.overlay.id,
+          groupStableId: piece.stableId,
+          expectedGeometrySignature: piece.geometrySignature,
+          expectedSourceFrameKey: sourceFrameKey,
+        });
+        if (mergedEntry) {
+          countRenderStructureMergedSliceCacheHit();
+        } else {
+          countRenderStructureMergedSliceCacheMiss();
+          const mergedTriangleCount = extractedCells.accepted.reduce((total, cell) => total + cell.triangleCount, 0);
+          const builtEntry = buildStructureMergedSliceCacheEntry({
+            structureInstanceId: piece.overlay.id,
+            groupStableId: piece.stableId,
+            geometrySignature: piece.geometrySignature,
+            sourceFrameKey,
+            quads: extractedCells.accepted.map((cell) => cell.payload),
+            triangleCount: mergedTriangleCount,
+          });
+          if (builtEntry) {
+            structureMergedSliceCacheStore.set(builtEntry);
+            countRenderStructureMergedSliceCacheRebuild();
+            mergedEntry = builtEntry;
+          }
+        }
+
+        if (mergedEntry) {
+          countRenderStructureGroupedPreSubmission(extractedCells.accepted.length);
+          countRenderStructureGroupedPostSubmission();
+          countRenderStructureTotalSubmission();
+          countRenderStructureSingleQuadSubmission();
+          countRenderStructureMergedSliceSubmission();
+          countRenderStructureEstimatedTrianglesAvoided(mergedEntry.triangleCount);
+          enqueueSliceCommand(frameBuilder, structureDrawable.key, {
+            semanticFamily: "worldSprite",
+            finalForm: "quad",
+            payload: buildRectQuadPayload({
+              image: mergedEntry.canvas,
+              sourceRectWidth: mergedEntry.canvas.width,
+              sourceRectHeight: mergedEntry.canvas.height,
+              dx: mergedEntry.bounds.x,
+              dy: mergedEntry.bounds.y,
+              dw: mergedEntry.bounds.w,
+              dh: mergedEntry.bounds.h,
+              auditFamily: "structures",
+            }),
+          });
+        } else {
+          for (let ci = 0; ci < extractedCells.accepted.length; ci++) {
+            const cell = extractedCells.accepted[ci];
+            countRenderStructureTotalSubmission();
+            countRenderStructureSingleQuadSubmission();
+            countRenderStructureEstimatedTrianglesAvoided(cell.triangleCount);
+            enqueueSliceCommand(frameBuilder, structureDrawable.key, {
+              semanticFamily: "worldSprite",
+              finalForm: "quad",
+              payload: cell.payload,
+            });
+          }
+        }
+      } else {
+        for (let ci = 0; ci < extractedCells.accepted.length; ci++) {
+          const cell = extractedCells.accepted[ci];
+          countRenderStructureTotalSubmission();
+          countRenderStructureSingleQuadSubmission();
+          countRenderStructureEstimatedTrianglesAvoided(cell.triangleCount);
+          enqueueSliceCommand(frameBuilder, structureDrawable.key, {
+            semanticFamily: "worldSprite",
+            finalForm: "quad",
+            payload: cell.payload,
+          });
+        }
       }
 
       if (compareDistanceOnlyStableIds.size > 0) {

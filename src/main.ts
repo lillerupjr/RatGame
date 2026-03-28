@@ -1,7 +1,7 @@
 // src/main.ts
 import { createGame, precomputeStaticMapData } from "./game/game";
 import { AppState, RunState, createAppStateController } from "./game/app/appState";
-import { createLoadingController } from "./game/app/loadingFlow";
+import { attachLoadProfilerGlobal, createLoadingController } from "./game/app/loadingFlow";
 import { renderLoadingScreen } from "./game/app/loadingScreen";
 import { collectFloorDependencies } from "./game/loading/dependencyCollector";
 import { primeAudio } from "./game/audio/audioManager";
@@ -469,6 +469,10 @@ async function bootstrap() {
       activeFloorIntent = null;
     },
   });
+  attachLoadProfilerGlobal({
+    getSummary: () => loadingController.getSummary(),
+    getPhases: () => loadingController.getPhases(),
+  });
 
   const bootTick = () => {
     if (bootProgress < 0.5) {
@@ -667,6 +671,7 @@ async function bootstrap() {
         }
         if (firstRunDiagPending) {
           firstRunDiagPending = false;
+          loadingController.markFirstVisibleFrame();
           const deps = collectFloorDependencies();
           const paletteVariantKey = resolveActivePaletteVariantKey();
           const notReady = deps.spriteIds.filter((id) => !getSpriteByIdForVariantKey(id, paletteVariantKey).ready);

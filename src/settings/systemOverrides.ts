@@ -10,11 +10,14 @@ import {
   type SystemOverrides,
   type LightColorModeOverride,
   type LightStrengthOverride,
+  type RenderBackendMode,
   type StructureTriangleAdmissionMode,
   type WorldAtlasMode,
 } from "./settingsTypes";
 export type { LightColorModeOverride, LightStrengthOverride, StructureTriangleAdmissionMode, WorldAtlasMode } from "./settingsTypes";
 export { PALETTE_REMAP_WEIGHT_OPTIONS } from "./settingsTypes";
+
+export type EffectiveWorldAtlasMode = "dual" | "shared";
 
 export const MIN_GAME_SPEED = 0.5;
 export const MAX_GAME_SPEED = 1.5;
@@ -79,7 +82,18 @@ function normalizeStructureTriangleCutoutAlpha(value: unknown): number {
 }
 
 function normalizeWorldAtlasMode(value: unknown): WorldAtlasMode {
-  return value === "shared" ? "shared" : "dual";
+  if (value === "shared") return "shared";
+  if (value === "dual") return "dual";
+  return "auto";
+}
+
+export function resolveEffectiveWorldAtlasMode(
+  requestedMode: WorldAtlasMode | null | undefined,
+  backend: RenderBackendMode,
+): EffectiveWorldAtlasMode {
+  if (requestedMode === "shared") return "shared";
+  if (requestedMode === "dual") return "dual";
+  return backend === "webgl" ? "shared" : "dual";
 }
 
 function resolvePaletteIdForGroup(group: SystemOverrides["paletteGroup"], paletteId: unknown): string {
@@ -103,7 +117,7 @@ export const DEFAULT_SYSTEM_OVERRIDES: SystemOverrides = {
   structureTriangleCutoutHeight: 6,
   structureTriangleCutoutAlpha: 0.30,
   tileRenderRadius: 2,
-  worldAtlasMode: "dual",
+  worldAtlasMode: "auto",
 
   paletteSwapEnabled: false,
   darknessMaskDebugDisabled: true,

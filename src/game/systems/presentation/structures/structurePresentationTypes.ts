@@ -55,6 +55,9 @@ export type StructureTriangleSlicePiece = {
   parentTy: number;
   feetSortY: number;
   stableId: number;
+  groupLocalBounds: RuntimeStructureTriangleRect;
+  groupTriangleCount: number;
+  allTrianglesVisible: boolean;
   finalVisibleTriangles: RuntimeStructureTrianglePiece[];
   compareDistanceOnlyTriangles: RuntimeStructureTrianglePiece[];
   structureSouthTieBreak: StructureSouthTieBreak | null;

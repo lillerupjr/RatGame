@@ -1,6 +1,4 @@
 import { getTileSpriteById } from "../../../engine/render/sprites/renderSprites";
-import { overlaysInView } from "../../map/compile/kenneyMap";
-import { mapWideOverlayViewRect } from "../../structures/monolithicStructureGeometry";
 import type { RawCacheMetricSample } from "./cacheMetricsRegistry";
 import { buildAtlasPages } from "./atlasPageBuilder";
 import {
@@ -8,6 +6,7 @@ import {
   type DynamicAtlasImageSource,
   type DynamicAtlasSourceSnapshot,
 } from "./dynamicAtlasSources";
+import { buildUniqueStaticStructureSpriteIds } from "./staticStructureSpriteInventory";
 
 type SharedWorldAtlasRect = {
   sx: number;
@@ -23,6 +22,10 @@ export type SharedWorldAtlasFrame = SharedWorldAtlasRect & {
 type SharedWorldAtlasSyncInput = {
   compiledMap: {
     id: string;
+    originTx: number;
+    originTy: number;
+    width: number;
+    height: number;
   };
   paletteVariantKey: string;
 };
@@ -40,17 +43,6 @@ function buildContextKey(input: SharedWorldAtlasSyncInput): string {
 
 function spriteSourceKey(spriteId: string): string {
   return `sprite:${spriteId}`;
-}
-
-function buildUniqueOverlaySpriteIds(compiledMap: SharedWorldAtlasSyncInput["compiledMap"]): string[] {
-  const overlays = overlaysInView(mapWideOverlayViewRect(compiledMap as any));
-  const unique = new Set<string>();
-  for (let i = 0; i < overlays.length; i++) {
-    const spriteId = String(overlays[i].spriteId ?? "");
-    if (!spriteId) continue;
-    unique.add(spriteId);
-  }
-  return Array.from(unique).sort();
 }
 
 function sameStringSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
@@ -167,7 +159,7 @@ export class SharedWorldAtlasStore {
   }
 
   private collectSnapshot(input: SharedWorldAtlasSyncInput): SharedWorldAtlasSnapshot {
-    const spriteIds = buildUniqueOverlaySpriteIds(input.compiledMap);
+    const spriteIds = buildUniqueStaticStructureSpriteIds(input.compiledMap);
     const readyByKey = new Map<string, { sourceKey: string; image: DynamicAtlasImageSource }>();
     const pendingSourceKeys = new Set<string>();
     const fallbackSourceKeys = new Set<string>();

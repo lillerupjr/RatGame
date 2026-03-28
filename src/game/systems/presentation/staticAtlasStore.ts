@@ -1,11 +1,11 @@
 import { getRuntimeDecalSprite, getTileSpriteById } from "../../../engine/render/sprites/renderSprites";
 import type { RuntimeDecalSetId } from "../../content/runtimeDecalConfig";
-import { overlaysInView, type DecalPiece } from "../../map/compile/kenneyMap";
+import type { DecalPiece } from "../../map/compile/kenneyMap";
 import { roadMarkingDecalScale } from "../../roads/roadMarkingRender";
-import { mapWideOverlayViewRect } from "../../structures/monolithicStructureGeometry";
 import type { RawCacheMetricSample } from "./cacheMetricsRegistry";
 import { buildAtlasPages } from "./atlasPageBuilder";
 import { getDiamondFitCanvas, getRuntimeIsoDecalCanvas } from "./presentationImageTransforms";
+import { buildUniqueStaticStructureSpriteIds } from "./staticStructureSpriteInventory";
 
 type StaticAtlasRect = {
   sx: number;
@@ -28,6 +28,10 @@ export type StaticAtlasProjectedDecalLookup = {
 type StaticAtlasSyncInput = {
   compiledMap: {
     id: string;
+    originTx: number;
+    originTy: number;
+    width: number;
+    height: number;
     decals: readonly DecalPiece[];
   };
   paletteVariantKey: string;
@@ -55,17 +59,6 @@ function normalizeScaleKey(scale: number): string {
 
 function projectedDecalSourceKey(input: StaticAtlasProjectedDecalLookup): string {
   return `decal:${input.setId}|${input.variantIndex}|${input.rotationQuarterTurns}|${normalizeScaleKey(input.scale)}`;
-}
-
-function buildUniqueOverlaySpriteIds(compiledMap: StaticAtlasSyncInput["compiledMap"]): string[] {
-  const overlays = overlaysInView(mapWideOverlayViewRect(compiledMap as any));
-  const unique = new Set<string>();
-  for (let i = 0; i < overlays.length; i++) {
-    const spriteId = String(overlays[i].spriteId ?? "");
-    if (!spriteId) continue;
-    unique.add(spriteId);
-  }
-  return Array.from(unique).sort();
 }
 
 function buildUniqueProjectedDecalLookups(
@@ -118,7 +111,7 @@ export class StaticAtlasStore {
       this.contextKey = nextContextKey;
       this.allSpriteIds = input.includeSpriteSources === false
         ? []
-        : buildUniqueOverlaySpriteIds(input.compiledMap);
+        : buildUniqueStaticStructureSpriteIds(input.compiledMap);
       this.allDecalLookups = input.includeProjectedDecals === false
         ? []
         : buildUniqueProjectedDecalLookups(input.compiledMap);

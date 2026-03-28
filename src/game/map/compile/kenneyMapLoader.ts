@@ -33,6 +33,11 @@ import { buildRoadMarkingsPipeline } from "../../roads/markings/roadMarkingsPipe
 import { resolveMarkingSprite } from "../../roads/markings/markingSpriteResolver";
 import type { MarkingPiece, RoadBand, RoadContext } from "../../roads/markings/types";
 import {
+    beginLoadProfilerSubphase,
+    LOAD_PROFILER_SUBPHASE,
+    runWithLoadProfilerSubphase,
+} from "../../app/loadingFlow";
+import {
     assertMonolithicBuildingSemanticPrepassComplete,
     collectRequiredMonolithicBuildingSkinIdsForMap,
     getRequiredMonolithicBuildingPlacementGeometryForSprite,
@@ -664,185 +669,195 @@ export function compileKenneyMapFromTable(
     let goalTableX: number | null = null;
     let goalTableY: number | null = null;
     let goalH: number = 0;
+    let originTx = 0;
+    let originTy = 0;
+    let triggerDefs: TriggerDef[] = [];
 
-    for (const c of def.cells) {
-        const tx = c.x | 0;
-        const ty = c.y | 0;
-        const triggerType = c.triggerType;
-        const triggerId = c.triggerId;
-        if (triggerType) {
-            const id = triggerId && triggerId.trim() ? triggerId : `trigger_${triggerType}_${tx}_${ty}`;
-            pendingTriggers.push({ tx, ty, id, type: triggerType, radius: c.radius });
-        }
-        const parsed: { tile: IsoTile | null; walls: WallToken[] } = (() => {
-            const type = (c.type ?? "floor").toLowerCase();
-            const sprite = c.sprite;
-            const z = c.z ?? 0;
-            const parsedDir = (() => {
-                const rawDir = c.dir;
-                if (typeof rawDir === "string") {
-                    const up = rawDir.toUpperCase();
-                    if (up === "N" || up === "E" || up === "S" || up === "W") return up as WallDir;
-                }
-                if (Array.isArray(c.tags)) {
-                    for (let i = 0; i < c.tags.length; i++) {
-                        const up = c.tags[i].toUpperCase();
+    const endSourceMapReadOrParse = beginLoadProfilerSubphase(
+        LOAD_PROFILER_SUBPHASE.SOURCE_MAP_READ_OR_PARSE,
+    );
+    try {
+        for (const c of def.cells) {
+            const tx = c.x | 0;
+            const ty = c.y | 0;
+            const triggerType = c.triggerType;
+            const triggerId = c.triggerId;
+            if (triggerType) {
+                const id = triggerId && triggerId.trim() ? triggerId : `trigger_${triggerType}_${tx}_${ty}`;
+                pendingTriggers.push({ tx, ty, id, type: triggerType, radius: c.radius });
+            }
+            const parsed: { tile: IsoTile | null; walls: WallToken[] } = (() => {
+                const type = (c.type ?? "floor").toLowerCase();
+                const sprite = c.sprite;
+                const z = c.z ?? 0;
+                const parsedDir = (() => {
+                    const rawDir = c.dir;
+                    if (typeof rawDir === "string") {
+                        const up = rawDir.toUpperCase();
                         if (up === "N" || up === "E" || up === "S" || up === "W") return up as WallDir;
                     }
+                    if (Array.isArray(c.tags)) {
+                        for (let i = 0; i < c.tags.length; i++) {
+                            const up = c.tags[i].toUpperCase();
+                            if (up === "N" || up === "E" || up === "S" || up === "W") return up as WallDir;
+                        }
+                    }
+                    return undefined;
+                })();
+
+                const runtimeSquareFamily = (() => {
+                    switch (type) {
+                        case "sidewalk": return "sidewalk" as const;
+                        case "road": return "asphalt" as const;
+                        case "asphalt": return "asphalt" as const;
+                        case "park": return "park" as const;
+                        default: return undefined;
+                    }
+                })();
+                if (runtimeSquareFamily) {
+                    return {
+                        tile: {
+                            kind: "FLOOR" as const,
+                            h: z,
+                            skin: runtimeTileSkin(runtimeSquareFamily),
+                        },
+                        walls: [] as WallToken[],
+                    };
                 }
-                return undefined;
-            })();
-
-            const runtimeSquareFamily = (() => {
-                switch (type) {
-                    case "sidewalk": return "sidewalk" as const;
-                    case "road": return "asphalt" as const;
-                    case "asphalt": return "asphalt" as const;
-                    case "park": return "park" as const;
-                    default: return undefined;
+                if (type === "interact_shop" || type === "interact_rest" || type === "npc_vendor" || type === "npc_healer") {
+                    return {
+                        tile: {
+                            kind: "FLOOR" as const,
+                            h: z,
+                            skin: INHERIT_DOMINANT_FLOOR_SKIN,
+                        },
+                        walls: [] as WallToken[],
+                    };
                 }
-            })();
-            if (runtimeSquareFamily) {
-                return {
-                    tile: {
-                        kind: "FLOOR" as const,
-                        h: z,
-                        skin: runtimeTileSkin(runtimeSquareFamily),
-                    },
-                    walls: [] as WallToken[],
-                };
-            }
-            if (type === "interact_shop" || type === "interact_rest" || type === "npc_vendor" || type === "npc_healer") {
-                return {
-                    tile: {
-                        kind: "FLOOR" as const,
-                        h: z,
-                        skin: INHERIT_DOMINANT_FLOOR_SKIN,
-                    },
-                    walls: [] as WallToken[],
-                };
-            }
-            const semanticFloorSlot = (() => {
-                switch (type) {
-                    case "sea": return "SEA_FLOOR";
-                    default: return undefined;
+                const semanticFloorSlot = (() => {
+                    switch (type) {
+                        case "sea": return "SEA_FLOOR";
+                        default: return undefined;
+                    }
+                })();
+                if (type === "floor" || semanticFloorSlot) {
+                    const semanticSprite = semanticFloorSlot ? resolveSemanticSprite(skinIdToUse, semanticFloorSlot) : "";
+                    const fallbackFloor = resolveTileSpriteId({
+                        slot: "floor",
+                        mapSkin: resolvedMapSkin,
+                        mapSkinId: skinIdToUse,
+                        mapDefaults: mapSkinDefaults,
+                    });
+                    const floorSprite = sprite ?? semanticSprite ?? fallbackFloor;
+                    return { tile: { kind: "FLOOR" as const, h: z, skin: floorSprite }, walls: [] as WallToken[] };
                 }
+                if (type === "water" || type === "ocean") {
+                    return {
+                        tile: {
+                            kind: TILE_ID_OCEAN,
+                            h: z,
+                            skin: sprite ?? "tiles/animated/water1/1",
+                        },
+                        walls: [] as WallToken[],
+                    };
+                }
+                if (type === "spawn") {
+                    const fallbackFloor = resolveTileSpriteId({
+                        slot: "floor",
+                        mapSkin: resolvedMapSkin,
+                        mapSkinId: skinIdToUse,
+                        mapDefaults: mapSkinDefaults,
+                    });
+                    const spawnSprite = sprite ?? fallbackFloor;
+                    return { tile: { kind: "SPAWN" as const, h: z, skin: spawnSprite }, walls: [] as WallToken[] };
+                }
+                if (type === "goal") {
+                    return { tile: { kind: "GOAL" as const, h: z, skin: sprite }, walls: [] as WallToken[] };
+                }
+                if (type === "stairs") {
+                    const stairDir = parsedDir ?? "N";
+                    return {
+                        tile: { kind: "STAIRS" as const, h: z, dir: stairDir as StairDir, skin: sprite },
+                        walls: [] as WallToken[],
+                    };
+                }
+                if (type === "wall") {
+                    const height = Math.max(0, (c.height ?? z) | 0);
+                    const dir = parsedDir ?? "S";
+                    const wt: WallToken = { x: 0, y: 0, height, dir, skin: sprite, slot: "wall" };
+                    return { tile: null, walls: [wt] };
+                }
+                if (type === "void") {
+                    return { tile: { kind: "VOID", h: 0 }, walls: [] as WallToken[] };
+                }
+
+                return { tile: null, walls: [] as WallToken[] };
             })();
-            if (type === "floor" || semanticFloorSlot) {
-                const semanticSprite = semanticFloorSlot ? resolveSemanticSprite(skinIdToUse, semanticFloorSlot) : "";
-                const fallbackFloor = resolveTileSpriteId({
-                    slot: "floor",
-                    mapSkin: resolvedMapSkin,
-                    mapSkinId: skinIdToUse,
-                    mapDefaults: mapSkinDefaults,
-                });
-                const floorSprite = sprite ?? semanticSprite ?? fallbackFloor;
-                return { tile: { kind: "FLOOR" as const, h: z, skin: floorSprite }, walls: [] as WallToken[] };
-            }
-            if (type === "water" || type === "ocean") {
-                return {
-                    tile: {
-                        kind: TILE_ID_OCEAN,
-                        h: z,
-                        skin: sprite ?? "tiles/animated/water1/1",
-                    },
-                    walls: [] as WallToken[],
-                };
-            }
-            if (type === "spawn") {
-                const fallbackFloor = resolveTileSpriteId({
-                    slot: "floor",
-                    mapSkin: resolvedMapSkin,
-                    mapSkinId: skinIdToUse,
-                    mapDefaults: mapSkinDefaults,
-                });
-                const spawnSprite = sprite ?? fallbackFloor;
-                return { tile: { kind: "SPAWN" as const, h: z, skin: spawnSprite }, walls: [] as WallToken[] };
-            }
-            if (type === "goal") {
-                return { tile: { kind: "GOAL" as const, h: z, skin: sprite }, walls: [] as WallToken[] };
-            }
-            if (type === "stairs") {
-                const stairDir = parsedDir ?? "N";
-                return {
-                    tile: { kind: "STAIRS" as const, h: z, dir: stairDir as StairDir, skin: sprite },
-                    walls: [] as WallToken[],
-                };
-            }
-            if (type === "wall") {
-                const height = Math.max(0, (c.height ?? z) | 0);
-                const dir = parsedDir ?? "S";
-                const wt: WallToken = { x: 0, y: 0, height, dir, skin: sprite, slot: "wall" };
-                return { tile: null, walls: [wt] };
-            }
-            if (type === "void") {
-                return { tile: { kind: "VOID", h: 0 }, walls: [] as WallToken[] };
+            if (!parsed.tile && parsed.walls.length === 0) continue;
+
+            if (tx < minTx) minTx = tx;
+            if (tx > maxTx) maxTx = tx;
+            if (ty < minTy) minTy = ty;
+            if (ty > maxTy) maxTy = ty;
+
+            if (parsed.tile) {
+                const tile = parsed.tile;
+                if (tile.kind === "SPAWN" && spawnTableX === null) {
+                    spawnTableX = tx;
+                    spawnTableY = ty;
+                    spawnH = tile.h | 0;
+                }
+
+                if (tile.kind === "GOAL" && goalTableX === null) {
+                    goalTableX = tx;
+                    goalTableY = ty;
+                    goalH = tile.h | 0;
+                }
             }
 
-            return { tile: null, walls: [] as WallToken[] };
-        })();
-        if (!parsed.tile && parsed.walls.length === 0) continue;
+            parsedCells.push({
+                tx,
+                ty,
+                tile: parsed.tile,
+                walls: parsed.walls,
+            });
+        }
 
-        if (tx < minTx) minTx = tx;
-        if (tx > maxTx) maxTx = tx;
-        if (ty < minTy) minTy = ty;
-        if (ty > maxTy) maxTy = ty;
-
-        if (parsed.tile) {
-            const tile = parsed.tile;
-            if (tile.kind === "SPAWN" && spawnTableX === null) {
-                spawnTableX = tx;
-                spawnTableY = ty;
-                spawnH = tile.h | 0;
-            }
-
-            if (tile.kind === "GOAL" && goalTableX === null) {
-                goalTableX = tx;
-                goalTableY = ty;
-                goalH = tile.h | 0;
+        if (def.stamps && def.stamps.length > 0) {
+            for (let i = 0; i < def.stamps.length; i++) {
+                const s = def.stamps[i];
+                const w = Math.max(1, (s.w ?? 1) | 0);
+                const h = Math.max(1, (s.h ?? 1) | 0);
+                if (s.x < minTx) minTx = s.x;
+                if (s.x + w - 1 > maxTx) maxTx = s.x + w - 1;
+                if (s.y < minTy) minTy = s.y;
+                if (s.y + h - 1 > maxTy) maxTy = s.y + h - 1;
             }
         }
 
-        parsedCells.push({
-            tx,
-            ty,
-            tile: parsed.tile,
-            walls: parsed.walls,
-        });
-    }
-
-    if (def.stamps && def.stamps.length > 0) {
-        for (let i = 0; i < def.stamps.length; i++) {
-            const s = def.stamps[i];
-            const w = Math.max(1, (s.w ?? 1) | 0);
-            const h = Math.max(1, (s.h ?? 1) | 0);
-            if (s.x < minTx) minTx = s.x;
-            if (s.x + w - 1 > maxTx) maxTx = s.x + w - 1;
-            if (s.y < minTy) minTy = s.y;
-            if (s.y + h - 1 > maxTy) maxTy = s.y + h - 1;
+        if (!Number.isFinite(minTx)) {
+            minTx = 0;
+            maxTx = def.w - 1;
+            minTy = 0;
+            maxTy = def.h - 1;
         }
+
+        // Decide where table (0,0) lands in tile-space.
+        const boundsCenterTx = (minTx + maxTx) * 0.5;
+        const boundsCenterTy = (minTy + maxTy) * 0.5;
+        originTx = def.centerOnZero ? -Math.floor(boundsCenterTx) : 0;
+        originTy = def.centerOnZero ? -Math.floor(boundsCenterTy) : 0;
+
+        triggerDefs = pendingTriggers.map((t) => ({
+            id: t.id,
+            type: t.type,
+            tx: t.tx + originTx,
+            ty: t.ty + originTy,
+            radius: t.radius,
+        }));
+    } finally {
+        endSourceMapReadOrParse();
     }
-
-    if (!Number.isFinite(minTx)) {
-        minTx = 0;
-        maxTx = def.w - 1;
-        minTy = 0;
-        maxTy = def.h - 1;
-    }
-
-    // Decide where table (0,0) lands in tile-space.
-    const boundsCenterTx = (minTx + maxTx) * 0.5;
-    const boundsCenterTy = (minTy + maxTy) * 0.5;
-    const originTx = def.centerOnZero ? -Math.floor(boundsCenterTx) : 0;
-    const originTy = def.centerOnZero ? -Math.floor(boundsCenterTy) : 0;
-
-    const triggerDefs: TriggerDef[] = pendingTriggers.map((t) => ({
-        id: t.id,
-        type: t.type,
-        tx: t.tx + originTx,
-        ty: t.ty + originTy,
-        radius: t.radius,
-    }));
     const streetLampPreset = (_semanticType: "street_lamp_n" | "street_lamp_e" | "street_lamp_s" | "street_lamp_w") => {
         return {
             shape: "STREET_LAMP" as const,
@@ -897,47 +912,55 @@ export function compileKenneyMapFromTable(
         const zLogical = Math.floor(zBase + 1e-3);
         return { zBase, zLogical };
     };
-    const lightDefs: LightDef[] = (def.lights ?? []).map((light, lightIndex) => {
-        const semanticPreset: Partial<Pick<LightDef, "shape" | "color" | "tintStrength" | "pool" | "cone" | "radiusPx" | "intensity" | "flicker">> = (() => {
-            const t = light.semanticType;
-            if (!t) return {};
-            if (t === "street_lamp_n" || t === "street_lamp_e" || t === "street_lamp_s" || t === "street_lamp_w") {
-                return streetLampPreset(t);
-            }
-            if (t === "neon_sign_pink" || t === "neon_sign_blue" || t === "neon_sign_green") {
-                return neonPreset(t);
-            }
-            return {};
-        })();
-        const isStreetLampSemantic =
-            light.semanticType === "street_lamp_n"
-            || light.semanticType === "street_lamp_e"
-            || light.semanticType === "street_lamp_s"
-            || light.semanticType === "street_lamp_w";
-        const supportHeightUnits = light.heightUnits ?? 0;
-        const heightUnits = light.heightUnits ?? 0;
-        const { zBase, zLogical } = resolveLightSortZ(supportHeightUnits, heightUnits);
-        return {
-            id: `authored_light_${mapId}_${lightIndex}`,
-            worldX: (light.x + originTx + (isStreetLampSemantic ? 0 : 0.5)) * KENNEY_TILE_WORLD,
-            worldY: (light.y + originTy + (isStreetLampSemantic ? 0 : 0.5)) * KENNEY_TILE_WORLD,
-            zBase,
-            zLogical,
-            supportHeightUnits,
-            heightUnits,
-            poolHeightOffsetUnits: light.poolHeightOffsetUnits ?? 0,
-            intensity: semanticPreset?.intensity ?? light.intensity,
-            radiusPx: semanticPreset?.radiusPx ?? light.radiusPx,
-            colorMode: normalizeLightColorMode(light.colorMode),
-            strength: normalizeLightStrength(light.strength),
-            color: light.color ?? semanticPreset?.color,
-            tintStrength: light.tintStrength ?? semanticPreset?.tintStrength,
-            shape: light.shape ?? semanticPreset?.shape ?? "RADIAL",
-            pool: light.pool ?? semanticPreset?.pool,
-            cone: light.cone ?? semanticPreset?.cone,
-            flicker: light.flicker ?? semanticPreset?.flicker ?? { kind: "NONE" },
-        };
-    });
+    let lightDefs: LightDef[] = [];
+    const endShadowOrLightPrecompute = beginLoadProfilerSubphase(
+        LOAD_PROFILER_SUBPHASE.SHADOW_OR_LIGHT_PRECOMPUTE,
+    );
+    try {
+        lightDefs = (def.lights ?? []).map((light, lightIndex) => {
+            const semanticPreset: Partial<Pick<LightDef, "shape" | "color" | "tintStrength" | "pool" | "cone" | "radiusPx" | "intensity" | "flicker">> = (() => {
+                const t = light.semanticType;
+                if (!t) return {};
+                if (t === "street_lamp_n" || t === "street_lamp_e" || t === "street_lamp_s" || t === "street_lamp_w") {
+                    return streetLampPreset(t);
+                }
+                if (t === "neon_sign_pink" || t === "neon_sign_blue" || t === "neon_sign_green") {
+                    return neonPreset(t);
+                }
+                return {};
+            })();
+            const isStreetLampSemantic =
+                light.semanticType === "street_lamp_n"
+                || light.semanticType === "street_lamp_e"
+                || light.semanticType === "street_lamp_s"
+                || light.semanticType === "street_lamp_w";
+            const supportHeightUnits = light.heightUnits ?? 0;
+            const heightUnits = light.heightUnits ?? 0;
+            const { zBase, zLogical } = resolveLightSortZ(supportHeightUnits, heightUnits);
+            return {
+                id: `authored_light_${mapId}_${lightIndex}`,
+                worldX: (light.x + originTx + (isStreetLampSemantic ? 0 : 0.5)) * KENNEY_TILE_WORLD,
+                worldY: (light.y + originTy + (isStreetLampSemantic ? 0 : 0.5)) * KENNEY_TILE_WORLD,
+                zBase,
+                zLogical,
+                supportHeightUnits,
+                heightUnits,
+                poolHeightOffsetUnits: light.poolHeightOffsetUnits ?? 0,
+                intensity: semanticPreset?.intensity ?? light.intensity,
+                radiusPx: semanticPreset?.radiusPx ?? light.radiusPx,
+                colorMode: normalizeLightColorMode(light.colorMode),
+                strength: normalizeLightStrength(light.strength),
+                color: light.color ?? semanticPreset?.color,
+                tintStrength: light.tintStrength ?? semanticPreset?.tintStrength,
+                shape: light.shape ?? semanticPreset?.shape ?? "RADIAL",
+                pool: light.pool ?? semanticPreset?.pool,
+                cone: light.cone ?? semanticPreset?.cone,
+                flicker: light.flicker ?? semanticPreset?.flicker ?? { kind: "NONE" },
+            };
+        });
+    } finally {
+        endShadowOrLightPrecompute();
+    }
 
     const placed = new Map<string, IsoTile>();
     const placedStacks = new Map<string, IsoTile[]>();
@@ -960,88 +983,92 @@ export function compileKenneyMapFromTable(
         }
     };
 
-    for (let i = 0; i < parsedCells.length; i++) {
-        const cell = parsedCells[i];
-        const tx = cell.tx + originTx;
-        const ty = cell.ty + originTy;
-        const tile = cell.tile;
-        if (tile) setPlacedTile(tx, ty, tile);
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.TILE_OR_SURFACE_EXPANSION, () => {
+        for (let i = 0; i < parsedCells.length; i++) {
+            const cell = parsedCells[i];
+            const tx = cell.tx + originTx;
+            const ty = cell.ty + originTy;
+            const tile = cell.tile;
+            if (tile) setPlacedTile(tx, ty, tile);
 
-        if (cell.walls.length > 0) {
-            for (let j = 0; j < cell.walls.length; j++) {
-                wallTokens.push({ ...cell.walls[j], x: tx, y: ty });
+            if (cell.walls.length > 0) {
+                for (let j = 0; j < cell.walls.length; j++) {
+                    wallTokens.push({ ...cell.walls[j], x: tx, y: ty });
+                }
             }
         }
-    }
+    });
 
     const isRampSemantic = (semantic?: string): boolean => {
         if (!semantic) return false;
         const s = semantic.trim().toLowerCase();
         return s === "ramp" || s.startsWith("ramp_");
     };
-    if (def.roadSemanticRects && def.roadSemanticRects.length > 0) {
-        for (let i = 0; i < def.roadSemanticRects.length; i++) {
-            const rect = def.roadSemanticRects[i];
-            if (!isRampSemantic(rect.semantic)) continue;
-            const dir = rect.dir;
-            if (dir !== "N" && dir !== "E" && dir !== "S" && dir !== "W") continue;
-            const minX = (rect.x | 0) + originTx;
-            const minY = (rect.y | 0) + originTy;
-            const w = Math.max(1, (rect.w ?? 1) | 0);
-            const h = Math.max(1, (rect.h ?? 1) | 0);
-            const maxX = minX + w - 1;
-            const maxY = minY + h - 1;
-            const axisLen = dir === "N" || dir === "S" ? h : w;
-            const sampleStartX = dir === "E" ? minX : dir === "W" ? maxX : minX;
-            const sampleStartY = dir === "S" ? minY : dir === "N" ? maxY : minY;
-            const sampledStart = placed.get(`${sampleStartX},${sampleStartY}`)?.h ?? 0;
-            const startH = Number.isFinite(rect.startHeight) ? (rect.startHeight as number) : sampledStart;
-            const targetH = Number.isFinite(rect.targetHeight) ? (rect.targetHeight as number) : startH;
-            const deltaH = targetH - startH;
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.TILE_OR_SURFACE_EXPANSION, () => {
+        if (def.roadSemanticRects && def.roadSemanticRects.length > 0) {
+            for (let i = 0; i < def.roadSemanticRects.length; i++) {
+                const rect = def.roadSemanticRects[i];
+                if (!isRampSemantic(rect.semantic)) continue;
+                const dir = rect.dir;
+                if (dir !== "N" && dir !== "E" && dir !== "S" && dir !== "W") continue;
+                const minX = (rect.x | 0) + originTx;
+                const minY = (rect.y | 0) + originTy;
+                const w = Math.max(1, (rect.w ?? 1) | 0);
+                const h = Math.max(1, (rect.h ?? 1) | 0);
+                const maxX = minX + w - 1;
+                const maxY = minY + h - 1;
+                const axisLen = dir === "N" || dir === "S" ? h : w;
+                const sampleStartX = dir === "E" ? minX : dir === "W" ? maxX : minX;
+                const sampleStartY = dir === "S" ? minY : dir === "N" ? maxY : minY;
+                const sampledStart = placed.get(`${sampleStartX},${sampleStartY}`)?.h ?? 0;
+                const startH = Number.isFinite(rect.startHeight) ? (rect.startHeight as number) : sampledStart;
+                const targetH = Number.isFinite(rect.targetHeight) ? (rect.targetHeight as number) : startH;
+                const deltaH = targetH - startH;
 
-            for (let y = minY; y <= maxY; y++) {
-                for (let x = minX; x <= maxX; x++) {
-                    const key = `${x},${y}`;
-                    const stack = placedStacks.get(key);
-                    const tile = stack && stack.length > 0
-                        ? (() => {
-                            const targetZ = Number.isFinite(rect.z) ? ((rect.z as number) | 0) : null;
-                            if (targetZ !== null) {
-                                for (let si = 0; si < stack.length; si++) {
-                                    const cand = stack[si];
-                                    if (cand.kind === "VOID") continue;
-                                    if ((cand.h | 0) === targetZ) return cand;
+                for (let y = minY; y <= maxY; y++) {
+                    for (let x = minX; x <= maxX; x++) {
+                        const key = `${x},${y}`;
+                        const stack = placedStacks.get(key);
+                        const tile = stack && stack.length > 0
+                            ? (() => {
+                                const targetZ = Number.isFinite(rect.z) ? ((rect.z as number) | 0) : null;
+                                if (targetZ !== null) {
+                                    for (let si = 0; si < stack.length; si++) {
+                                        const cand = stack[si];
+                                        if (cand.kind === "VOID") continue;
+                                        if ((cand.h | 0) === targetZ) return cand;
+                                    }
                                 }
-                            }
-                            const top = placed.get(key);
-                            return top && top.kind !== "VOID" ? top : null;
-                        })()
-                        : null;
-                    if (!tile) continue;
-                    const axisIndex = (() => {
-                        if (dir === "N") return maxY - y;
-                        if (dir === "S") return y - minY;
-                        if (dir === "E") return x - minX;
-                        return maxX - x;
-                    })();
-                    const stepped = axisLen <= 0
-                        ? targetH
-                        : (() => {
-                            // Quantize monotonically across tile slots to avoid mid-ramp 2-step jumps.
-                            const numer = deltaH * (axisIndex + 1);
-                            if (deltaH >= 0) return startH + Math.floor(numer / axisLen);
-                            return startH + Math.ceil(numer / axisLen);
+                                const top = placed.get(key);
+                                return top && top.kind !== "VOID" ? top : null;
+                            })()
+                            : null;
+                        if (!tile) continue;
+                        const axisIndex = (() => {
+                            if (dir === "N") return maxY - y;
+                            if (dir === "S") return y - minY;
+                            if (dir === "E") return x - minX;
+                            return maxX - x;
                         })();
-                    tile.h = stepped;
+                        const stepped = axisLen <= 0
+                            ? targetH
+                            : (() => {
+                                // Quantize monotonically across tile slots to avoid mid-ramp 2-step jumps.
+                                const numer = deltaH * (axisIndex + 1);
+                                if (deltaH >= 0) return startH + Math.floor(numer / axisLen);
+                                return startH + Math.ceil(numer / axisLen);
+                            })();
+                        tile.h = stepped;
+                    }
                 }
             }
         }
-    }
+    });
 
     // Group contiguous stair tiles into staircase runs (for render ordering).
     // Group rule: 4-neighbor connected components with matching dir.
     // Step index is based on height within the group (low->high).
-    {
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.TILE_OR_SURFACE_EXPANSION, () => {
         let nextGroupId = 1;
         const visited = new Set<string>();
 
@@ -1097,7 +1124,7 @@ export function compileKenneyMapFromTable(
                 t.stairStepIndex = (t.h | 0) - minH;
             }
         }
-    }
+    });
 
     function getTile(tx: number, ty: number): IsoTile {
         return placed.get(`${tx},${ty}`) ?? { kind: "VOID", h: 0 };
@@ -1293,36 +1320,38 @@ export function compileKenneyMapFromTable(
         const mergedW = Math.max(roadCenterWidthHWorld[idx], roadCenterWidthVWorld[idx]) | 0;
         roadCenterWidthWorld[idx] = mergedW;
     };
-    for (let i = 0; i < roadBands.length; i++) {
-        const band = roadBands[i];
-        const sx = band.x0;
-        const sy = band.y0;
-        const rw = band.x1 - band.x0 + 1;
-        const rh = band.y1 - band.y0 + 1;
-        const areaWidth = band.roadW;
-        for (let dx = 0; dx < rw; dx++) {
-            for (let dy = 0; dy < rh; dy++) {
-                markRoadAreaWorld(sx + dx, sy + dy, areaWidth, roadBandHeightAt(band, sx + dx, sy + dy));
-            }
-        }
-        if (band.orient === "H") {
-            const y0 = sy + Math.floor((rh - 1) / 2);
-            const y1 = sy + Math.floor(rh / 2);
-            for (let yy = y0; yy <= y1; yy++) {
-                for (let xx = sx; xx <= band.x1; xx++) {
-                    markRoadCenterHWorld(xx, yy, rh, roadBandHeightAt(band, xx, yy));
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.TILE_OR_SURFACE_EXPANSION, () => {
+        for (let i = 0; i < roadBands.length; i++) {
+            const band = roadBands[i];
+            const sx = band.x0;
+            const sy = band.y0;
+            const rw = band.x1 - band.x0 + 1;
+            const rh = band.y1 - band.y0 + 1;
+            const areaWidth = band.roadW;
+            for (let dx = 0; dx < rw; dx++) {
+                for (let dy = 0; dy < rh; dy++) {
+                    markRoadAreaWorld(sx + dx, sy + dy, areaWidth, roadBandHeightAt(band, sx + dx, sy + dy));
                 }
             }
-        } else {
-            const x0 = sx + Math.floor((rw - 1) / 2);
-            const x1 = sx + Math.floor(rw / 2);
-            for (let xx = x0; xx <= x1; xx++) {
-                for (let yy = sy; yy <= band.y1; yy++) {
-                    markRoadCenterVWorld(xx, yy, rw, roadBandHeightAt(band, xx, yy));
+            if (band.orient === "H") {
+                const y0 = sy + Math.floor((rh - 1) / 2);
+                const y1 = sy + Math.floor(rh / 2);
+                for (let yy = y0; yy <= y1; yy++) {
+                    for (let xx = sx; xx <= band.x1; xx++) {
+                        markRoadCenterHWorld(xx, yy, rh, roadBandHeightAt(band, xx, yy));
+                    }
+                }
+            } else {
+                const x0 = sx + Math.floor((rw - 1) / 2);
+                const x1 = sx + Math.floor(rw / 2);
+                for (let xx = x0; xx <= x1; xx++) {
+                    for (let yy = sy; yy <= band.y1; yy++) {
+                        markRoadCenterVWorld(xx, yy, rw, roadBandHeightAt(band, xx, yy));
+                    }
                 }
             }
         }
-    }
+    });
     const roadIntersectionMaskByZ = new Map<number, Uint8Array>();
     const roadCrossingMaskByZ = new Map<number, Uint8Array>();
     const roadCrossingDirByZ = new Map<number, Uint8Array>();
@@ -1336,173 +1365,177 @@ export function compileKenneyMapFromTable(
         { dx: 0, dy: 1 },
     ];
     const centerHKeys = Array.from(centerHByZ.keys());
-    for (let zi = 0; zi < centerHKeys.length; zi++) {
-        const z = centerHKeys[zi] | 0;
-        const hMask = centerHByZ.get(z);
-        const vMask = centerVByZ.get(z);
-        if (!hMask || !vMask) continue;
-        const areaMask = roadAreaByZ.get(z);
-        if (!areaMask) continue;
-        const interMask = layerMask(roadIntersectionMaskByZ, z);
-        const visitedOverlap = new Uint8Array(worldW * worldH);
-        const qx: number[] = [];
-        const qy: number[] = [];
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.TILE_OR_SURFACE_EXPANSION, () => {
+        for (let zi = 0; zi < centerHKeys.length; zi++) {
+            const z = centerHKeys[zi] | 0;
+            const hMask = centerHByZ.get(z);
+            const vMask = centerVByZ.get(z);
+            if (!hMask || !vMask) continue;
+            const areaMask = roadAreaByZ.get(z);
+            if (!areaMask) continue;
+            const interMask = layerMask(roadIntersectionMaskByZ, z);
+            const visitedOverlap = new Uint8Array(worldW * worldH);
+            const qx: number[] = [];
+            const qy: number[] = [];
 
-        for (let tyWorld = originTy; tyWorld <= worldMaxTy; tyWorld++) {
-            for (let txWorld = originTx; txWorld <= worldMaxTx; txWorld++) {
-                const startIdx = worldIndex(txWorld, tyWorld);
-                if (hMask[startIdx] !== 1 || vMask[startIdx] !== 1) continue;
-                if (visitedOverlap[startIdx] === 1) continue;
-                visitedOverlap[startIdx] = 1;
-                qx.length = 0;
-                qy.length = 0;
-                qx.push(txWorld);
-                qy.push(tyWorld);
-                let qHead = 0;
+            for (let tyWorld = originTy; tyWorld <= worldMaxTy; tyWorld++) {
+                for (let txWorld = originTx; txWorld <= worldMaxTx; txWorld++) {
+                    const startIdx = worldIndex(txWorld, tyWorld);
+                    if (hMask[startIdx] !== 1 || vMask[startIdx] !== 1) continue;
+                    if (visitedOverlap[startIdx] === 1) continue;
+                    visitedOverlap[startIdx] = 1;
+                    qx.length = 0;
+                    qy.length = 0;
+                    qx.push(txWorld);
+                    qy.push(tyWorld);
+                    let qHead = 0;
 
-                let minX = txWorld;
-                let maxX = txWorld;
-                let minY = tyWorld;
-                let maxY = tyWorld;
-                let wH = 0;
-                let wV = 0;
+                    let minX = txWorld;
+                    let maxX = txWorld;
+                    let minY = tyWorld;
+                    let maxY = tyWorld;
+                    let wH = 0;
+                    let wV = 0;
 
-                while (qHead < qx.length) {
-                    const cx = qx[qHead];
-                    const cy = qy[qHead];
-                    qHead++;
-                    const ci = worldIndex(cx, cy);
+                    while (qHead < qx.length) {
+                        const cx = qx[qHead];
+                        const cy = qy[qHead];
+                        qHead++;
+                        const ci = worldIndex(cx, cy);
 
-                    if (cx < minX) minX = cx;
-                    if (cx > maxX) maxX = cx;
-                    if (cy < minY) minY = cy;
-                    if (cy > maxY) maxY = cy;
+                        if (cx < minX) minX = cx;
+                        if (cx > maxX) maxX = cx;
+                        if (cy < minY) minY = cy;
+                        if (cy > maxY) maxY = cy;
 
-                    if (vMask[ci] === 1) {
-                        const w = roadCenterWidthVWorld[ci] | 0;
-                        if (w > wH) wH = w;
+                        if (vMask[ci] === 1) {
+                            const w = roadCenterWidthVWorld[ci] | 0;
+                            if (w > wH) wH = w;
+                        }
+                        if (hMask[ci] === 1) {
+                            const w = roadCenterWidthHWorld[ci] | 0;
+                            if (w > wV) wV = w;
+                        }
+
+                        for (let ni = 0; ni < neighbors4.length; ni++) {
+                            const nx = cx + neighbors4[ni].dx;
+                            const ny = cy + neighbors4[ni].dy;
+                            if (!worldInBounds(nx, ny)) continue;
+                            const niIdx = worldIndex(nx, ny);
+                            if (hMask[niIdx] !== 1 || vMask[niIdx] !== 1) continue;
+                            if (visitedOverlap[niIdx] === 1) continue;
+                            visitedOverlap[niIdx] = 1;
+                            qx.push(nx);
+                            qy.push(ny);
+                        }
                     }
-                    if (hMask[ci] === 1) {
-                        const w = roadCenterWidthHWorld[ci] | 0;
-                        if (w > wV) wV = w;
-                    }
 
-                    for (let ni = 0; ni < neighbors4.length; ni++) {
-                        const nx = cx + neighbors4[ni].dx;
-                        const ny = cy + neighbors4[ni].dy;
-                        if (!worldInBounds(nx, ny)) continue;
-                        const niIdx = worldIndex(nx, ny);
-                        if (hMask[niIdx] !== 1 || vMask[niIdx] !== 1) continue;
-                        if (visitedOverlap[niIdx] === 1) continue;
-                        visitedOverlap[niIdx] = 1;
-                        qx.push(nx);
-                        qy.push(ny);
+                    wH = Math.max(1, wH | 0);
+                    wV = Math.max(1, wV | 0);
+                    const anchor2X = minX + maxX + 1;
+                    const anchor2Y = minY + maxY + 1;
+                    const rectBoundsFromCenter2 = (c2: number, w: number): { a: number; b: number } => {
+                        const a = Math.floor((c2 - w) / 2);
+                        return { a, b: a + w - 1 };
+                    };
+                    const xb = rectBoundsFromCenter2(anchor2X, wH);
+                    const yb = rectBoundsFromCenter2(anchor2Y, wV);
+                    for (let yy = yb.a; yy <= yb.b; yy++) {
+                        for (let xx = xb.a; xx <= xb.b; xx++) {
+                            if (!worldInBounds(xx, yy)) continue;
+                            const ii = worldIndex(xx, yy);
+                            if (areaMask[ii] !== 1) continue;
+                            interMask[ii] = 1;
+                        }
                     }
+                    roadIntersectionSeedsWorld.push({
+                        tx: Math.floor((anchor2X - 1) / 2),
+                        ty: Math.floor((anchor2Y - 1) / 2),
+                    });
+                    roadIntersectionClusterCentersWorld.push({
+                        worldX: (anchor2X * 0.5) * KENNEY_TILE_WORLD,
+                        worldY: (anchor2Y * 0.5) * KENNEY_TILE_WORLD,
+                    });
                 }
-
-                wH = Math.max(1, wH | 0);
-                wV = Math.max(1, wV | 0);
-                const anchor2X = minX + maxX + 1;
-                const anchor2Y = minY + maxY + 1;
-                const rectBoundsFromCenter2 = (c2: number, w: number): { a: number; b: number } => {
-                    const a = Math.floor((c2 - w) / 2);
-                    return { a, b: a + w - 1 };
-                };
-                const xb = rectBoundsFromCenter2(anchor2X, wH);
-                const yb = rectBoundsFromCenter2(anchor2Y, wV);
-                for (let yy = yb.a; yy <= yb.b; yy++) {
-                    for (let xx = xb.a; xx <= xb.b; xx++) {
-                        if (!worldInBounds(xx, yy)) continue;
-                        const ii = worldIndex(xx, yy);
-                        if (areaMask[ii] !== 1) continue;
-                        interMask[ii] = 1;
-                    }
-                }
-                roadIntersectionSeedsWorld.push({
-                    tx: Math.floor((anchor2X - 1) / 2),
-                    ty: Math.floor((anchor2Y - 1) / 2),
-                });
-                roadIntersectionClusterCentersWorld.push({
-                    worldX: (anchor2X * 0.5) * KENNEY_TILE_WORLD,
-                    worldY: (anchor2Y * 0.5) * KENNEY_TILE_WORLD,
-                });
             }
         }
-    }
+    });
 
     // Build intersection-component bounds per height-layer.
     const intersectionZKeys = Array.from(roadIntersectionMaskByZ.keys());
-    for (let zi = 0; zi < intersectionZKeys.length; zi++) {
-        const z = intersectionZKeys[zi] | 0;
-        const interMask = roadIntersectionMaskByZ.get(z);
-        if (!interMask) continue;
-        const visitedIntersection = new Uint8Array(worldW * worldH);
-        const qx: number[] = [];
-        const qy: number[] = [];
-        const tilesX: number[] = [];
-        const tilesY: number[] = [];
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.TILE_OR_SURFACE_EXPANSION, () => {
+        for (let zi = 0; zi < intersectionZKeys.length; zi++) {
+            const z = intersectionZKeys[zi] | 0;
+            const interMask = roadIntersectionMaskByZ.get(z);
+            if (!interMask) continue;
+            const visitedIntersection = new Uint8Array(worldW * worldH);
+            const qx: number[] = [];
+            const qy: number[] = [];
+            const tilesX: number[] = [];
+            const tilesY: number[] = [];
 
-        for (let tyWorld = originTy; tyWorld <= worldMaxTy; tyWorld++) {
-            for (let txWorld = originTx; txWorld <= worldMaxTx; txWorld++) {
-                const startIdx = worldIndex(txWorld, tyWorld);
-                if (interMask[startIdx] !== 1) continue;
-                if (visitedIntersection[startIdx] === 1) continue;
-                visitedIntersection[startIdx] = 1;
-                qx.length = 0;
-                qy.length = 0;
-                tilesX.length = 0;
-                tilesY.length = 0;
-                qx.push(txWorld);
-                qy.push(tyWorld);
-                let qHead = 0;
-                let minX = txWorld;
-                let maxX = txWorld;
-                let minY = tyWorld;
-                let maxY = tyWorld;
-                while (qHead < qx.length) {
-                    const cx = qx[qHead];
-                    const cy = qy[qHead];
-                    qHead++;
-                    tilesX.push(cx);
-                    tilesY.push(cy);
-                    if (cx < minX) minX = cx;
-                    if (cx > maxX) maxX = cx;
-                    if (cy < minY) minY = cy;
-                    if (cy > maxY) maxY = cy;
-                    for (let ni = 0; ni < neighbors4.length; ni++) {
-                        const nx = cx + neighbors4[ni].dx;
-                        const ny = cy + neighbors4[ni].dy;
-                        if (!worldInBounds(nx, ny)) continue;
-                        const niIdx = worldIndex(nx, ny);
-                        if (interMask[niIdx] !== 1) continue;
-                        if (visitedIntersection[niIdx] === 1) continue;
-                        visitedIntersection[niIdx] = 1;
-                        qx.push(nx);
-                        qy.push(ny);
+            for (let tyWorld = originTy; tyWorld <= worldMaxTy; tyWorld++) {
+                for (let txWorld = originTx; txWorld <= worldMaxTx; txWorld++) {
+                    const startIdx = worldIndex(txWorld, tyWorld);
+                    if (interMask[startIdx] !== 1) continue;
+                    if (visitedIntersection[startIdx] === 1) continue;
+                    visitedIntersection[startIdx] = 1;
+                    qx.length = 0;
+                    qy.length = 0;
+                    tilesX.length = 0;
+                    tilesY.length = 0;
+                    qx.push(txWorld);
+                    qy.push(tyWorld);
+                    let qHead = 0;
+                    let minX = txWorld;
+                    let maxX = txWorld;
+                    let minY = tyWorld;
+                    let maxY = tyWorld;
+                    while (qHead < qx.length) {
+                        const cx = qx[qHead];
+                        const cy = qy[qHead];
+                        qHead++;
+                        tilesX.push(cx);
+                        tilesY.push(cy);
+                        if (cx < minX) minX = cx;
+                        if (cx > maxX) maxX = cx;
+                        if (cy < minY) minY = cy;
+                        if (cy > maxY) maxY = cy;
+                        for (let ni = 0; ni < neighbors4.length; ni++) {
+                            const nx = cx + neighbors4[ni].dx;
+                            const ny = cy + neighbors4[ni].dy;
+                            if (!worldInBounds(nx, ny)) continue;
+                            const niIdx = worldIndex(nx, ny);
+                            if (interMask[niIdx] !== 1) continue;
+                            if (visitedIntersection[niIdx] === 1) continue;
+                            visitedIntersection[niIdx] = 1;
+                            qx.push(nx);
+                            qy.push(ny);
+                        }
                     }
-                }
-                const targetX = Math.floor((minX + maxX) / 2);
-                const targetY = Math.floor((minY + maxY) / 2);
-                let best = 0;
-                let bestDist = Number.POSITIVE_INFINITY;
-                for (let ti = 0; ti < tilesX.length; ti++) {
-                    const tx = tilesX[ti];
-                    const ty = tilesY[ti];
-                    const d = Math.abs(tx - targetX) + Math.abs(ty - targetY);
-                    const bestX = tilesX[best];
-                    const bestY = tilesY[best];
-                    if (d < bestDist || (d === bestDist && (ty < bestY || (ty === bestY && tx < bestX)))) {
-                        best = ti;
-                        bestDist = d;
+                    const targetX = Math.floor((minX + maxX) / 2);
+                    const targetY = Math.floor((minY + maxY) / 2);
+                    let best = 0;
+                    let bestDist = Number.POSITIVE_INFINITY;
+                    for (let ti = 0; ti < tilesX.length; ti++) {
+                        const tx = tilesX[ti];
+                        const ty = tilesY[ti];
+                        const d = Math.abs(tx - targetX) + Math.abs(ty - targetY);
+                        const bestX = tilesX[best];
+                        const bestY = tilesY[best];
+                        if (d < bestDist || (d === bestDist && (ty < bestY || (ty === bestY && tx < bestX)))) {
+                            best = ti;
+                            bestDist = d;
+                        }
                     }
+                    const center = { cx: tilesX[best], cy: tilesY[best] };
+                    roadIntersectionBoundsWorld.push({ minX, maxX, minY, maxY });
+                    roadIntersectionCenterTilesWorld.push({ tx: center.cx, ty: center.cy });
+                    roadIntersectionHeightsWorld.push(z);
                 }
-                const center = { cx: tilesX[best], cy: tilesY[best] };
-                roadIntersectionBoundsWorld.push({ minX, maxX, minY, maxY });
-                roadIntersectionCenterTilesWorld.push({ tx: center.cx, ty: center.cy });
-                roadIntersectionHeightsWorld.push(z);
             }
         }
-    }
+    });
 
     const writeCrossing = (txWorld: number, tyWorld: number, dir: number, expectedZ: number) => {
         if (!worldInBounds(txWorld, tyWorld)) return;
@@ -1532,48 +1565,52 @@ export function compileKenneyMapFromTable(
     };
 
     // Build directional halos from bounds; direction is assigned only here.
-    for (let bi = 0; bi < roadIntersectionBoundsWorld.length; bi++) {
-        const b = roadIntersectionBoundsWorld[bi];
-        const intersectionZ = roadIntersectionHeightsWorld[bi] | 0;
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.TILE_OR_SURFACE_EXPANSION, () => {
+        for (let bi = 0; bi < roadIntersectionBoundsWorld.length; bi++) {
+            const b = roadIntersectionBoundsWorld[bi];
+            const intersectionZ = roadIntersectionHeightsWorld[bi] | 0;
 
-        // Crossing ring (distance 1).
-        for (let x = b.minX; x <= b.maxX; x++) {
-            writeCrossing(x, b.minY - 1, ROAD_DIR_N, intersectionZ);
-            writeCrossing(x, b.maxY + 1, ROAD_DIR_S, intersectionZ);
-        }
-        for (let y = b.minY; y <= b.maxY; y++) {
-            writeCrossing(b.minX - 1, y, ROAD_DIR_W, intersectionZ);
-            writeCrossing(b.maxX + 1, y, ROAD_DIR_E, intersectionZ);
-        }
+            // Crossing ring (distance 1).
+            for (let x = b.minX; x <= b.maxX; x++) {
+                writeCrossing(x, b.minY - 1, ROAD_DIR_N, intersectionZ);
+                writeCrossing(x, b.maxY + 1, ROAD_DIR_S, intersectionZ);
+            }
+            for (let y = b.minY; y <= b.maxY; y++) {
+                writeCrossing(b.minX - 1, y, ROAD_DIR_W, intersectionZ);
+                writeCrossing(b.maxX + 1, y, ROAD_DIR_E, intersectionZ);
+            }
 
-        // Stop-bar ring (distance 2).
-        for (let x = b.minX; x <= b.maxX; x++) {
-            writeStop(x, b.minY - 2, ROAD_DIR_N, intersectionZ);
-            writeStop(x, b.maxY + 2, ROAD_DIR_S, intersectionZ);
+            // Stop-bar ring (distance 2).
+            for (let x = b.minX; x <= b.maxX; x++) {
+                writeStop(x, b.minY - 2, ROAD_DIR_N, intersectionZ);
+                writeStop(x, b.maxY + 2, ROAD_DIR_S, intersectionZ);
+            }
+            for (let y = b.minY; y <= b.maxY; y++) {
+                writeStop(b.minX - 2, y, ROAD_DIR_W, intersectionZ);
+                writeStop(b.maxX + 2, y, ROAD_DIR_E, intersectionZ);
+            }
         }
-        for (let y = b.minY; y <= b.maxY; y++) {
-            writeStop(b.minX - 2, y, ROAD_DIR_W, intersectionZ);
-            writeStop(b.maxX + 2, y, ROAD_DIR_E, intersectionZ);
-        }
-    }
+    });
 
     // Project layered 3D road-network masks onto the active tile height layer for compatibility.
-    for (let tyWorld = originTy; tyWorld <= worldMaxTy; tyWorld++) {
-        for (let txWorld = originTx; txWorld <= worldMaxTx; txWorld++) {
-            const i = worldIndex(txWorld, tyWorld);
-            const z = getTile(txWorld, tyWorld).h | 0;
-            const inter = roadIntersectionMaskByZ.get(z);
-            const cross = roadCrossingMaskByZ.get(z);
-            const crossDir = roadCrossingDirByZ.get(z);
-            const stop = roadStopMaskByZ.get(z);
-            const stopDir = roadStopDirByZ.get(z);
-            roadIntersectionMaskWorld[i] = inter?.[i] === 1 ? 1 : 0;
-            roadCrossingMaskWorld[i] = cross?.[i] === 1 ? 1 : 0;
-            roadCrossingDirWorld[i] = crossDir?.[i] ?? 0;
-            roadStopMaskWorld[i] = stop?.[i] === 1 ? 1 : 0;
-            roadStopDirWorld[i] = stopDir?.[i] ?? 0;
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.TILE_OR_SURFACE_EXPANSION, () => {
+        for (let tyWorld = originTy; tyWorld <= worldMaxTy; tyWorld++) {
+            for (let txWorld = originTx; txWorld <= worldMaxTx; txWorld++) {
+                const i = worldIndex(txWorld, tyWorld);
+                const z = getTile(txWorld, tyWorld).h | 0;
+                const inter = roadIntersectionMaskByZ.get(z);
+                const cross = roadCrossingMaskByZ.get(z);
+                const crossDir = roadCrossingDirByZ.get(z);
+                const stop = roadStopMaskByZ.get(z);
+                const stopDir = roadStopDirByZ.get(z);
+                roadIntersectionMaskWorld[i] = inter?.[i] === 1 ? 1 : 0;
+                roadCrossingMaskWorld[i] = cross?.[i] === 1 ? 1 : 0;
+                roadCrossingDirWorld[i] = crossDir?.[i] ?? 0;
+                roadStopMaskWorld[i] = stop?.[i] === 1 ? 1 : 0;
+                roadStopDirWorld[i] = stopDir?.[i] ?? 0;
+            }
         }
-    }
+    });
 
     const isRoadWorld = (txWorld: number, tyWorld: number): boolean => {
         if (!worldInBounds(txWorld, tyWorld)) return false;
@@ -1757,35 +1794,37 @@ export function compileKenneyMapFromTable(
         }
         return false;
     };
-    for (let zi = 0; zi < roadZKeys.length; zi++) {
-        const z = roadZKeys[zi] | 0;
-        const areaMask = roadAreaByZ.get(z);
-        if (!areaMask) continue;
-        const bandsForZ = roadBands.filter((b) => bandIntersectsZ(b, z));
-        if (bandsForZ.length === 0) continue;
-        const layerPipeline = buildRoadMarkingsPipeline({
-            w: worldW,
-            h: worldH,
-            originTx,
-            originTy,
-            isRoadFromSemantics: (x, y) => {
-                if (!worldInBounds(x, y)) return false;
-                return areaMask[worldIndex(x, y)] === 1;
-            },
-            roadBands: bandsForZ,
-            roadIntersectionMaskWorld: roadIntersectionMaskByZ.get(z) ?? emptyMask,
-            roadCrossingMaskWorld: roadCrossingMaskByZ.get(z) ?? emptyMask,
-            roadCrossingDirWorld: roadCrossingDirByZ.get(z) ?? emptyMask,
-            roadStopMaskWorld: roadStopMaskByZ.get(z) ?? emptyMask,
-            roadStopDirWorld: roadStopDirByZ.get(z) ?? emptyMask,
-            emitStopbarCrossingOverlay: true,
-            getTileZAt: () => z,
-        });
-        roadContextByZ.set(z, layerPipeline.context);
-        for (let mi = 0; mi < layerPipeline.markings.length; mi++) {
-            roadMarkingsAll.push(layerPipeline.markings[mi]);
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.TILE_OR_SURFACE_EXPANSION, () => {
+        for (let zi = 0; zi < roadZKeys.length; zi++) {
+            const z = roadZKeys[zi] | 0;
+            const areaMask = roadAreaByZ.get(z);
+            if (!areaMask) continue;
+            const bandsForZ = roadBands.filter((b) => bandIntersectsZ(b, z));
+            if (bandsForZ.length === 0) continue;
+            const layerPipeline = buildRoadMarkingsPipeline({
+                w: worldW,
+                h: worldH,
+                originTx,
+                originTy,
+                isRoadFromSemantics: (x, y) => {
+                    if (!worldInBounds(x, y)) return false;
+                    return areaMask[worldIndex(x, y)] === 1;
+                },
+                roadBands: bandsForZ,
+                roadIntersectionMaskWorld: roadIntersectionMaskByZ.get(z) ?? emptyMask,
+                roadCrossingMaskWorld: roadCrossingMaskByZ.get(z) ?? emptyMask,
+                roadCrossingDirWorld: roadCrossingDirByZ.get(z) ?? emptyMask,
+                roadStopMaskWorld: roadStopMaskByZ.get(z) ?? emptyMask,
+                roadStopDirWorld: roadStopDirByZ.get(z) ?? emptyMask,
+                emitStopbarCrossingOverlay: true,
+                getTileZAt: () => z,
+            });
+            roadContextByZ.set(z, layerPipeline.context);
+            for (let mi = 0; mi < layerPipeline.markings.length; mi++) {
+                roadMarkingsAll.push(layerPipeline.markings[mi]);
+            }
         }
-    }
+    });
 
     // Compatibility context projection for UI/debug consumers expecting a single 2D context.
     const roadContextCompatIsRoad = new Uint8Array(worldW * worldH);
@@ -1809,96 +1848,100 @@ export function compileKenneyMapFromTable(
         axis: roadContextCompatAxis,
     };
 
-    for (let i = 0; i < roadMarkingsAll.length; i++) {
-        const m = roadMarkingsAll[i];
-        const sprite = resolveMarkingSprite(m.variant);
-        if (!sprite) continue;
-        const zBase = m.zBase ?? 0;
-        const zLogical = m.zLogical ?? zBase;
-        const dedupeKey = `${sprite.variantIndex}:${Math.round(m.tx * 1024)}:${Math.round(m.ty * 1024)}:${zLogical}:${m.rot}`;
-        if (decalTileKeys.has(dedupeKey)) continue;
-        decalTileKeys.add(dedupeKey);
-        decals.push({
-            id: m.key ? `marking_${m.key}` : `marking_${i}`,
-            tx: m.tx,
-            ty: m.ty,
-            zBase,
-            zLogical,
-            setId: sprite.setId,
-            spriteId: sprite.spriteId,
-            variantIndex: sprite.variantIndex,
-            semanticType: "road",
-            renderAnchorY: floorAnchorY,
-            rotationQuarterTurns: m.rot,
-        });
-    }
-
-    for (const [key, stack] of placedStacks.entries()) {
-        if (!stack || stack.length === 0) continue;
-        const parts = key.split(",");
-        const tx = parseInt(parts[0], 10);
-        const ty = parseInt(parts[1], 10);
-        if (!Number.isFinite(tx) || !Number.isFinite(ty)) continue;
-        for (let si = 0; si < stack.length; si++) {
-            const tile = stack[si];
-            if (!tile || tile.kind === "VOID") continue;
-            const zBase = tile.h | 0;
-            const renderTopKind: RenderTopKind = tile.kind === "STAIRS" ? "STAIR" : "FLOOR";
-            const renderDir = (tile.dir ?? "N") as StairDir;
-            const renderAnchorY = renderTopKind === "STAIR" ? stairAnchorY : floorAnchorY;
-            const renderDyOffset = renderTopKind === "STAIR" ? (stairDyByDir[renderDir] ?? 16) : 0;
-
-            const zLogical = renderTopKind === "STAIR" ? Math.max(0, zBase - 1) : zBase;
-            const runtimeFamilyFromTileSkin = (() => {
-                if (renderTopKind !== "FLOOR") return undefined;
-                const skin = tile.skin ?? "";
-                if (!skin.startsWith(RUNTIME_TILE_SKIN_PREFIX)) return undefined;
-                const family = skin.slice(RUNTIME_TILE_SKIN_PREFIX.length);
-                if (family === "sidewalk" || family === "asphalt" || family === "park") return family;
-                return undefined;
-            })();
-            const runtimeTop = runtimeFamilyFromTileSkin ? pickRuntimeSquareTop(runtimeFamilyFromTileSkin, tx, ty) : undefined;
-            if (runtimeFamilyFromTileSkin === "sidewalk") {
-                maybeAddSemanticDecal(tx, ty, zBase, zLogical, "sidewalk", renderAnchorY);
-            } else if (runtimeFamilyFromTileSkin === "asphalt") {
-                maybeAddSemanticDecal(tx, ty, zBase, zLogical, "asphalt", renderAnchorY);
-            }
-            const tileOverride: MapSkinBundle | undefined = tile.skin && !runtimeTop
-                ? (renderTopKind === "STAIR" ? { stair: tile.skin } : { floor: tile.skin })
-                : undefined;
-            const useDominantFloorTop = tile.kind === "SPAWN" || tile.skin === INHERIT_DOMINANT_FLOOR_SKIN;
-            const spawnResolvedTop = useDominantFloorTop ? resolveSpawnSurfaceTop(tx, ty) : null;
-            const spriteIdTop = spawnResolvedTop
-                ? spawnResolvedTop.spriteIdTop
-                : runtimeTop
-                ? runtimeTop.spriteId
-                : resolveTileSpriteId({
-                    slot: renderTopKind === "STAIR" ? "stair" : "floor",
-                    dir: renderTopKind === "STAIR" ? renderDir : undefined,
-                    mapSkin: resolvedMapSkin,
-                    mapSkinId: skinIdToUse,
-                    mapDefaults: mapSkinDefaults,
-                    tileOverride,
-                });
-            const finalRuntimeTop = spawnResolvedTop?.runtimeTop ?? runtimeTop;
-
-            addSurface({
-                id: `tile_${tx}_${ty}_${si}_${tile.kind}_${zBase}`,
-                kind: "TILE_TOP",
-                tx,
-                ty,
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.TILE_OR_SURFACE_EXPANSION, () => {
+        for (let i = 0; i < roadMarkingsAll.length; i++) {
+            const m = roadMarkingsAll[i];
+            const sprite = resolveMarkingSprite(m.variant);
+            if (!sprite) continue;
+            const zBase = m.zBase ?? 0;
+            const zLogical = m.zLogical ?? zBase;
+            const dedupeKey = `${sprite.variantIndex}:${Math.round(m.tx * 1024)}:${Math.round(m.ty * 1024)}:${zLogical}:${m.rot}`;
+            if (decalTileKeys.has(dedupeKey)) continue;
+            decalTileKeys.add(dedupeKey);
+            decals.push({
+                id: m.key ? `marking_${m.key}` : `marking_${i}`,
+                tx: m.tx,
+                ty: m.ty,
                 zBase,
                 zLogical,
-                tile,
-                renderTopKind,
-                renderDir,
-                renderAnchorY,
-                renderDyOffset,
-                spriteIdTop,
-                runtimeTop: finalRuntimeTop,
+                setId: sprite.setId,
+                spriteId: sprite.spriteId,
+                variantIndex: sprite.variantIndex,
+                semanticType: "road",
+                renderAnchorY: floorAnchorY,
+                rotationQuarterTurns: m.rot,
             });
         }
-    }
+    });
+
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.TILE_OR_SURFACE_EXPANSION, () => {
+        for (const [key, stack] of placedStacks.entries()) {
+            if (!stack || stack.length === 0) continue;
+            const parts = key.split(",");
+            const tx = parseInt(parts[0], 10);
+            const ty = parseInt(parts[1], 10);
+            if (!Number.isFinite(tx) || !Number.isFinite(ty)) continue;
+            for (let si = 0; si < stack.length; si++) {
+                const tile = stack[si];
+                if (!tile || tile.kind === "VOID") continue;
+                const zBase = tile.h | 0;
+                const renderTopKind: RenderTopKind = tile.kind === "STAIRS" ? "STAIR" : "FLOOR";
+                const renderDir = (tile.dir ?? "N") as StairDir;
+                const renderAnchorY = renderTopKind === "STAIR" ? stairAnchorY : floorAnchorY;
+                const renderDyOffset = renderTopKind === "STAIR" ? (stairDyByDir[renderDir] ?? 16) : 0;
+
+                const zLogical = renderTopKind === "STAIR" ? Math.max(0, zBase - 1) : zBase;
+                const runtimeFamilyFromTileSkin = (() => {
+                    if (renderTopKind !== "FLOOR") return undefined;
+                    const skin = tile.skin ?? "";
+                    if (!skin.startsWith(RUNTIME_TILE_SKIN_PREFIX)) return undefined;
+                    const family = skin.slice(RUNTIME_TILE_SKIN_PREFIX.length);
+                    if (family === "sidewalk" || family === "asphalt" || family === "park") return family;
+                    return undefined;
+                })();
+                const runtimeTop = runtimeFamilyFromTileSkin ? pickRuntimeSquareTop(runtimeFamilyFromTileSkin, tx, ty) : undefined;
+                if (runtimeFamilyFromTileSkin === "sidewalk") {
+                    maybeAddSemanticDecal(tx, ty, zBase, zLogical, "sidewalk", renderAnchorY);
+                } else if (runtimeFamilyFromTileSkin === "asphalt") {
+                    maybeAddSemanticDecal(tx, ty, zBase, zLogical, "asphalt", renderAnchorY);
+                }
+                const tileOverride: MapSkinBundle | undefined = tile.skin && !runtimeTop
+                    ? (renderTopKind === "STAIR" ? { stair: tile.skin } : { floor: tile.skin })
+                    : undefined;
+                const useDominantFloorTop = tile.kind === "SPAWN" || tile.skin === INHERIT_DOMINANT_FLOOR_SKIN;
+                const spawnResolvedTop = useDominantFloorTop ? resolveSpawnSurfaceTop(tx, ty) : null;
+                const spriteIdTop = spawnResolvedTop
+                    ? spawnResolvedTop.spriteIdTop
+                    : runtimeTop
+                    ? runtimeTop.spriteId
+                    : resolveTileSpriteId({
+                        slot: renderTopKind === "STAIR" ? "stair" : "floor",
+                        dir: renderTopKind === "STAIR" ? renderDir : undefined,
+                        mapSkin: resolvedMapSkin,
+                        mapSkinId: skinIdToUse,
+                        mapDefaults: mapSkinDefaults,
+                        tileOverride,
+                    });
+                const finalRuntimeTop = spawnResolvedTop?.runtimeTop ?? runtimeTop;
+
+                addSurface({
+                    id: `tile_${tx}_${ty}_${si}_${tile.kind}_${zBase}`,
+                    kind: "TILE_TOP",
+                    tx,
+                    ty,
+                    zBase,
+                    zLogical,
+                    tile,
+                    renderTopKind,
+                    renderDir,
+                    renderAnchorY,
+                    renderDyOffset,
+                    spriteIdTop,
+                    runtimeTop: finalRuntimeTop,
+                });
+            }
+        }
+    });
 
 
     function surfacesAtXY(tx: number, ty: number): Surface[] {
@@ -2020,16 +2063,18 @@ export function compileKenneyMapFromTable(
     };
 
     const bakeBlockedFootprint = (tx: number, ty: number, w: number, h: number, zFrom?: number, zTo?: number): void => {
-        for (let dx = 0; dx < w; dx++) {
-            for (let dy = 0; dy < h; dy++) {
-                const bx = tx + dx;
-                const by = ty + dy;
-                blockedTiles.add(`${bx},${by}`);
-                if (Number.isFinite(zFrom) && Number.isFinite(zTo)) {
-                    addBlockedSpan(bx, by, zFrom as number, zTo as number);
+        runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.COLLISION_NAV_OR_BLOCKER_GENERATION, () => {
+            for (let dx = 0; dx < w; dx++) {
+                for (let dy = 0; dy < h; dy++) {
+                    const bx = tx + dx;
+                    const by = ty + dy;
+                    blockedTiles.add(`${bx},${by}`);
+                    if (Number.isFinite(zFrom) && Number.isFinite(zTo)) {
+                        addBlockedSpan(bx, by, zFrom as number, zTo as number);
+                    }
                 }
             }
-        }
+        });
     };
     const warnBuildingDimensionOverride = (input: {
         stamp: SemanticStamp;
@@ -2970,37 +3015,39 @@ export function compileKenneyMapFromTable(
                 h,
                 renderHeightUnitsToSweepTileHeight(Math.max(zBase + 1, preset.topGlow.heightUnits)),
             );
-            lightDefs.push({
-                id: `lamp_post_ground_${sx}_${sy}_${zBase}`,
-                worldX: sx * KENNEY_TILE_WORLD,
-                worldY: sy * KENNEY_TILE_WORLD,
-                zBase: preset.groundPool.heightUnits,
-                zLogical: Math.floor(preset.groundPool.heightUnits + 1e-3),
-                heightUnits: preset.groundPool.heightUnits,
-                intensity: preset.groundPool.intensity,
-                radiusPx: preset.groundPool.radiusPx,
-                colorMode: "standard",
-                strength: "medium",
-                color: preset.groundPool.color,
-                tintStrength: preset.groundPool.tintStrength,
-                shape: preset.groundPool.shape,
-                flicker: { kind: "NONE" },
-            });
-            lightDefs.push({
-                id: `lamp_post_top_${sx}_${sy}_${zBase}`,
-                worldX: sx * KENNEY_TILE_WORLD,
-                worldY: sy * KENNEY_TILE_WORLD,
-                zBase: preset.topGlow.heightUnits,
-                zLogical: Math.floor(preset.topGlow.heightUnits + 1e-3),
-                heightUnits: preset.topGlow.heightUnits,
-                intensity: preset.topGlow.intensity,
-                radiusPx: preset.topGlow.radiusPx,
-                colorMode: "standard",
-                strength: "medium",
-                color: preset.topGlow.color,
-                tintStrength: preset.topGlow.tintStrength,
-                shape: preset.topGlow.shape,
-                flicker: { kind: "NONE" },
+            runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.SHADOW_OR_LIGHT_PRECOMPUTE, () => {
+                lightDefs.push({
+                    id: `lamp_post_ground_${sx}_${sy}_${zBase}`,
+                    worldX: sx * KENNEY_TILE_WORLD,
+                    worldY: sy * KENNEY_TILE_WORLD,
+                    zBase: preset.groundPool.heightUnits,
+                    zLogical: Math.floor(preset.groundPool.heightUnits + 1e-3),
+                    heightUnits: preset.groundPool.heightUnits,
+                    intensity: preset.groundPool.intensity,
+                    radiusPx: preset.groundPool.radiusPx,
+                    colorMode: "standard",
+                    strength: "medium",
+                    color: preset.groundPool.color,
+                    tintStrength: preset.groundPool.tintStrength,
+                    shape: preset.groundPool.shape,
+                    flicker: { kind: "NONE" },
+                });
+                lightDefs.push({
+                    id: `lamp_post_top_${sx}_${sy}_${zBase}`,
+                    worldX: sx * KENNEY_TILE_WORLD,
+                    worldY: sy * KENNEY_TILE_WORLD,
+                    zBase: preset.topGlow.heightUnits,
+                    zLogical: Math.floor(preset.topGlow.heightUnits + 1e-3),
+                    heightUnits: preset.topGlow.heightUnits,
+                    intensity: preset.topGlow.intensity,
+                    radiusPx: preset.topGlow.radiusPx,
+                    colorMode: "standard",
+                    strength: "medium",
+                    color: preset.topGlow.color,
+                    tintStrength: preset.topGlow.tintStrength,
+                    shape: preset.topGlow.shape,
+                    flicker: { kind: "NONE" },
+                });
             });
             if (stampBlocksMovement(stamp, false)) {
                 bakeBlockedFootprint(sx, sy, w, h, zBase, zBase + 1);
@@ -3160,26 +3207,28 @@ export function compileKenneyMapFromTable(
                 const lightHeightOffsetUnits = prop.lightHeightOffsetUnits ?? 0;
                 const supportHeightUnits = zBase;
                 const heightUnits = zBase + (prop.anchorLiftUnits ?? 0) + lightHeightOffsetUnits;
-                lightDefs.push({
-                    id: `prop_light_${prop.id}_${anchorTx}_${anchorTy}_${zBase}`,
-                    worldX: ((stamp.x | 0) + originTx) * KENNEY_TILE_WORLD,
-                    worldY: ((stamp.y | 0) + originTy) * KENNEY_TILE_WORLD,
-                    zBase: supportHeightUnits,
-                    zLogical: Math.floor(supportHeightUnits + 1e-3),
-                    supportHeightUnits,
-                    heightUnits,
-                    poolHeightOffsetUnits: prop.lightPoolHeightOffsetUnits ?? -lightHeightOffsetUnits,
-                    screenOffsetPx: prop.lightScreenOffsetPx ?? { x: 0, y: 0 },
-                    intensity: 0.85,
-                    radiusPx: 140,
-                    colorMode: "standard",
-                    strength: "medium",
-                    color: preset.color,
-                    tintStrength: preset.tintStrength,
-                    shape: preset.shape,
-                    pool: preset.pool,
-                    cone: preset.cone,
-                    flicker: { kind: "NONE" },
+                runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.SHADOW_OR_LIGHT_PRECOMPUTE, () => {
+                    lightDefs.push({
+                        id: `prop_light_${prop.id}_${anchorTx}_${anchorTy}_${zBase}`,
+                        worldX: ((stamp.x | 0) + originTx) * KENNEY_TILE_WORLD,
+                        worldY: ((stamp.y | 0) + originTy) * KENNEY_TILE_WORLD,
+                        zBase: supportHeightUnits,
+                        zLogical: Math.floor(supportHeightUnits + 1e-3),
+                        supportHeightUnits,
+                        heightUnits,
+                        poolHeightOffsetUnits: prop.lightPoolHeightOffsetUnits ?? -lightHeightOffsetUnits,
+                        screenOffsetPx: prop.lightScreenOffsetPx ?? { x: 0, y: 0 },
+                        intensity: 0.85,
+                        radiusPx: 140,
+                        colorMode: "standard",
+                        strength: "medium",
+                        color: preset.color,
+                        tintStrength: preset.tintStrength,
+                        shape: preset.shape,
+                        pool: preset.pool,
+                        cone: preset.cone,
+                        flicker: { kind: "NONE" },
+                    });
                 });
             }
 
@@ -3201,12 +3250,14 @@ export function compileKenneyMapFromTable(
         }
         compileBuildingStamp(stamp, stampIndex);
     };
-    if (def.stamps && def.stamps.length > 0) {
-        for (let i = 0; i < def.stamps.length; i++) {
-            const s = def.stamps[i];
-            compileStamp(s, i);
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.STRUCTURE_PLACEMENT, () => {
+        if (def.stamps && def.stamps.length > 0) {
+            for (let i = 0; i < def.stamps.length; i++) {
+                const s = def.stamps[i];
+                compileStamp(s, i);
+            }
         }
-    }
+    });
 
     function oppositeDir(dir: WallDir): WallDir {
         switch (dir) {
@@ -3245,135 +3296,139 @@ export function compileKenneyMapFromTable(
     const emittedFaces = new Set<string>();
     let faceId = 0;
 
-    for (let coordI = 0; coordI < surfaceCoords.length; coordI++) {
-        const tx = surfaceCoords[coordI].tx;
-        const ty = surfaceCoords[coordI].ty;
-        const hereSurface = highestSurfaceAt(tx, ty);
-        if (!hereSurface) continue;
-        const zHere = hereSurface.zBase;
-        const hereIsOcean = hereSurface.tile.kind === TILE_ID_OCEAN;
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.COLLISION_NAV_OR_BLOCKER_GENERATION, () => {
+        for (let coordI = 0; coordI < surfaceCoords.length; coordI++) {
+            const tx = surfaceCoords[coordI].tx;
+            const ty = surfaceCoords[coordI].ty;
+            const hereSurface = highestSurfaceAt(tx, ty);
+            if (!hereSurface) continue;
+            const zHere = hereSurface.zBase;
+            const hereIsOcean = hereSurface.tile.kind === TILE_ID_OCEAN;
 
-        for (let d = 0; d < DIRS.length; d++) {
-            const { dir, dx, dy } = DIRS[d];
-            const nTx = tx + dx;
-            const nTy = ty + dy;
+            for (let d = 0; d < DIRS.length; d++) {
+                const { dir, dx, dy } = DIRS[d];
+                const nTx = tx + dx;
+                const nTy = ty + dy;
 
-            const neighborSurface = highestSurfaceAt(nTx, nTy);
-            const neighborIsOcean = neighborSurface?.tile.kind === TILE_ID_OCEAN;
-            if (hereIsOcean && neighborIsOcean) continue;
+                const neighborSurface = highestSurfaceAt(nTx, nTy);
+                const neighborIsOcean = neighborSurface?.tile.kind === TILE_ID_OCEAN;
+                if (hereIsOcean && neighborIsOcean) continue;
 
-            const neighborZ = neighborSurface?.zBase ?? apronBaseZ;
-            const zA = zHere;
-            const zB = neighborZ;
-            if (zA === zB) continue;
+                const neighborZ = neighborSurface?.zBase ?? apronBaseZ;
+                const zA = zHere;
+                const zB = neighborZ;
+                if (zA === zB) continue;
 
-            const ownerIsHere = zA > zB;
-            const ownerTx = ownerIsHere ? tx : nTx;
-            const ownerTy = ownerIsHere ? ty : nTy;
-            const ownerDir = ownerIsHere ? dir : oppositeDir(dir);
-            const canonical = canonicalizeEdge(ownerTx, ownerTy, ownerDir);
+                const ownerIsHere = zA > zB;
+                const ownerTx = ownerIsHere ? tx : nTx;
+                const ownerTy = ownerIsHere ? ty : nTy;
+                const ownerDir = ownerIsHere ? dir : oppositeDir(dir);
+                const canonical = canonicalizeEdge(ownerTx, ownerTy, ownerDir);
 
-            const zFrom = Math.min(zA, zB);
-            const zTo = Math.max(zA, zB);
-            const dedupKey = `${canonical.tx},${canonical.ty},${canonical.dir},${zFrom},${zTo}`;
-            if (emittedFaces.has(dedupKey)) continue;
-            emittedFaces.add(dedupKey);
+                const zFrom = Math.min(zA, zB);
+                const zTo = Math.max(zA, zB);
+                const dedupKey = `${canonical.tx},${canonical.ty},${canonical.dir},${zFrom},${zTo}`;
+                if (emittedFaces.has(dedupKey)) continue;
+                emittedFaces.add(dedupKey);
 
-            const ownerSurface = ownerIsHere ? hereSurface : neighborSurface;
-            if (ownerSurface?.tile.kind === TILE_ID_OCEAN) continue;
-            const renderTopKind = ownerSurface?.renderTopKind ?? "FLOOR";
-            const renderDir = ownerSurface?.renderDir ?? "N";
-            const renderAnchorY = ownerSurface?.renderAnchorY ?? floorAnchorY;
-            const renderDyOffset = ownerSurface?.renderDyOffset ?? 0;
-            const zLogical = ownerSurface?.zLogical ?? Math.floor(zTo);
+                const ownerSurface = ownerIsHere ? hereSurface : neighborSurface;
+                if (ownerSurface?.tile.kind === TILE_ID_OCEAN) continue;
+                const renderTopKind = ownerSurface?.renderTopKind ?? "FLOOR";
+                const renderDir = ownerSurface?.renderDir ?? "N";
+                const renderAnchorY = ownerSurface?.renderAnchorY ?? floorAnchorY;
+                const renderDyOffset = ownerSurface?.renderDyOffset ?? 0;
+                const zLogical = ownerSurface?.zLogical ?? Math.floor(zTo);
+                const spriteId = resolveTileSpriteId({
+                    slot: renderTopKind === "STAIR" ? "stairApron" : "apron",
+                    dir: canonical.dir,
+                    mapSkin: resolvedMapSkin,
+                    mapSkinId: skinIdToUse,
+                    mapDefaults: mapSkinDefaults,
+                });
+
+                const faceMeta = getSpriteMeta(spriteId);
+                addFace({
+                    id: `face_${canonical.tx}_${canonical.ty}_${canonical.dir}_${zFrom}_${zTo}_${faceId++}`,
+                    cls: "FACE",
+                    kind: renderTopKind === "STAIR" ? "STAIR_APRON" : "FLOOR_APRON",
+                    tx: canonical.tx,
+                    ty: canonical.ty,
+                    zFrom,
+                    zTo,
+                    zLogical,
+                    edgeDir: canonical.dir,
+                    apronKind: canonical.dir === "E" || canonical.dir === "W" ? "E" : "S",
+                    apronDyOffset: 0,
+                    flipX: false,
+                    renderTopKind,
+                    renderDir,
+                    renderAnchorY,
+                    renderDyOffset,
+                    spriteId,
+                    tw: faceMeta.tileWidth > 1 ? faceMeta.tileWidth : undefined,
+                    th: faceMeta.tileHeight > 1 ? faceMeta.tileHeight : undefined,
+                    zSpan: faceMeta.zHeight > 1 ? faceMeta.zHeight : undefined,
+                });
+            }
+        }
+    });
+
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.COLLISION_NAV_OR_BLOCKER_GENERATION, () => {
+        for (let i = 0; i < wallTokens.length; i++) {
+            const w = wallTokens[i];
+            const canonical = canonicalizeEdge(w.x, w.y, w.dir);
+            const tx = canonical.tx;
+            const ty = canonical.ty;
+            const height = Math.max(0, w.height | 0);
+            if (height <= 0) continue;
+
+            const flipX = false;
+            const segmentHeight = 2;
+            const zFrom = 0;
+            const zTo = height;
+            const wallSlot: "wall" | "apron" | "stairApron" = w.slot ?? "wall";
+            const wallAxis = canonical.dir === "E" || canonical.dir === "W" ? "E" : "S";
+            const wallSpriteDir = wallSlot === "stairApron" ? "N" : wallAxis;
+            const wallSkin = w.skin;
             const spriteId = resolveTileSpriteId({
-                slot: renderTopKind === "STAIR" ? "stairApron" : "apron",
-                dir: canonical.dir,
+                slot: wallSlot,
+                dir: wallSpriteDir,
                 mapSkin: resolvedMapSkin,
                 mapSkinId: skinIdToUse,
                 mapDefaults: mapSkinDefaults,
             });
+            const wallMeta = getSpriteMeta(spriteId);
 
-            const faceMeta = getSpriteMeta(spriteId);
-            addFace({
-                id: `face_${canonical.tx}_${canonical.ty}_${canonical.dir}_${zFrom}_${zTo}_${faceId++}`,
-                cls: "FACE",
-                kind: renderTopKind === "STAIR" ? "STAIR_APRON" : "FLOOR_APRON",
-                tx: canonical.tx,
-                ty: canonical.ty,
-                zFrom,
-                zTo,
-                zLogical,
-                edgeDir: canonical.dir,
-                apronKind: canonical.dir === "E" || canonical.dir === "W" ? "E" : "S",
-                apronDyOffset: 0,
-                flipX: false,
-                renderTopKind,
-                renderDir,
-                renderAnchorY,
-                renderDyOffset,
-                spriteId,
-                tw: faceMeta.tileWidth > 1 ? faceMeta.tileWidth : undefined,
-                th: faceMeta.tileHeight > 1 ? faceMeta.tileHeight : undefined,
-                zSpan: faceMeta.zHeight > 1 ? faceMeta.zHeight : undefined,
-            });
+            for (let z = zFrom; z < zTo; z += segmentHeight) {
+                const segFrom = z;
+                const segTo = Math.min(z + segmentHeight, zTo);
+                const zLogical = Math.floor(segFrom + 1e-6);
+                addFace({
+                    id: `wall_${tx}_${ty}_${w.dir}_${segFrom}_${segTo}`,
+                    cls: "FACE",
+                    kind: "WALL",
+                    tx,
+                    ty,
+                    zFrom: segFrom,
+                    zTo: segTo,
+                    zLogical,
+                    wallDir: canonical.dir,
+                    wallSkin,
+                    apronDyOffset: 0,
+                    flipX,
+                    renderTopKind: "FLOOR",
+                    renderDir: "N",
+                    renderAnchorY: floorAnchorY,
+                    renderDyOffset: 0,
+                    spriteId,
+                    tw: wallMeta.tileWidth > 1 ? wallMeta.tileWidth : undefined,
+                    th: wallMeta.tileHeight > 1 ? wallMeta.tileHeight : undefined,
+                    zSpan: wallMeta.zHeight > 1 ? wallMeta.zHeight : undefined,
+                    layerRole: "OCCLUDER",
+                });
+            }
         }
-    }
-
-    for (let i = 0; i < wallTokens.length; i++) {
-        const w = wallTokens[i];
-        const canonical = canonicalizeEdge(w.x, w.y, w.dir);
-        const tx = canonical.tx;
-        const ty = canonical.ty;
-        const height = Math.max(0, w.height | 0);
-        if (height <= 0) continue;
-
-        const flipX = false;
-        const segmentHeight = 2;
-        const zFrom = 0;
-        const zTo = height;
-        const wallSlot: "wall" | "apron" | "stairApron" = w.slot ?? "wall";
-        const wallAxis = canonical.dir === "E" || canonical.dir === "W" ? "E" : "S";
-        const wallSpriteDir = wallSlot === "stairApron" ? "N" : wallAxis;
-        const wallSkin = w.skin;
-        const spriteId = resolveTileSpriteId({
-            slot: wallSlot,
-            dir: wallSpriteDir,
-            mapSkin: resolvedMapSkin,
-            mapSkinId: skinIdToUse,
-            mapDefaults: mapSkinDefaults,
-        });
-        const wallMeta = getSpriteMeta(spriteId);
-
-        for (let z = zFrom; z < zTo; z += segmentHeight) {
-            const segFrom = z;
-            const segTo = Math.min(z + segmentHeight, zTo);
-            const zLogical = Math.floor(segFrom + 1e-6);
-            addFace({
-                id: `wall_${tx}_${ty}_${w.dir}_${segFrom}_${segTo}`,
-                cls: "FACE",
-                kind: "WALL",
-                tx,
-                ty,
-                zFrom: segFrom,
-                zTo: segTo,
-                zLogical,
-                wallDir: canonical.dir,
-                wallSkin,
-                apronDyOffset: 0,
-                flipX,
-                renderTopKind: "FLOOR",
-                renderDir: "N",
-                renderAnchorY: floorAnchorY,
-                renderDyOffset: 0,
-                spriteId,
-                tw: wallMeta.tileWidth > 1 ? wallMeta.tileWidth : undefined,
-                th: wallMeta.tileHeight > 1 ? wallMeta.tileHeight : undefined,
-                zSpan: wallMeta.zHeight > 1 ? wallMeta.zHeight : undefined,
-                layerRole: "OCCLUDER",
-            });
-        }
-    }
+    });
 
     function occludersForLayer(layer: number): RenderPiece[] {
         return occludersByLayer.get(layer) ?? [];
@@ -3522,121 +3577,128 @@ export function compileKenneyMapFromTable(
         }
     };
 
-    for (const surfaces of surfacesByKey.values()) {
-        for (let i = 0; i < surfaces.length; i++) {
-            const s = surfaces[i];
-            if ((s.zBase | 0) <= 0) continue;
-            const isBuildingSurface = s.id.startsWith("building_floor_");
-            addOcclusionRect(
-                s.zBase | 0,
-                isBuildingSurface ? "VOLUMETRIC" : "SURFACE",
-                s.tx,
-                s.ty,
-                s.tx + 1,
-                s.ty + 1,
-            );
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.COLLISION_NAV_OR_BLOCKER_GENERATION, () => {
+        for (const surfaces of surfacesByKey.values()) {
+            for (let i = 0; i < surfaces.length; i++) {
+                const s = surfaces[i];
+                if ((s.zBase | 0) <= 0) continue;
+                const isBuildingSurface = s.id.startsWith("building_floor_");
+                addOcclusionRect(
+                    s.zBase | 0,
+                    isBuildingSurface ? "VOLUMETRIC" : "SURFACE",
+                    s.tx,
+                    s.ty,
+                    s.tx + 1,
+                    s.ty + 1,
+                );
+            }
         }
-    }
-    for (let i = 0; i < decals.length; i++) {
-        const d = decals[i];
-        const z = d.zBase | 0;
-        if (z <= 0) continue;
-        const tx = Math.floor(d.tx);
-        const ty = Math.floor(d.ty);
-        addOcclusionRect(z, "SURFACE", tx, ty, tx + 1, ty + 1);
-    }
-    for (const list of occludersByLayer.values()) {
-        for (let i = 0; i < list.length; i++) {
-            const p = list[i];
-            const tw = p.tw ?? 1;
-            const th = p.th ?? 1;
-            const z = Math.floor((p.zTo ?? p.zFrom) + 1e-3);
-            addOcclusionRect(z, "VOLUMETRIC", p.tx, p.ty, p.tx + tw, p.ty + th);
+        for (let i = 0; i < decals.length; i++) {
+            const d = decals[i];
+            const z = d.zBase | 0;
+            if (z <= 0) continue;
+            const tx = Math.floor(d.tx);
+            const ty = Math.floor(d.ty);
+            addOcclusionRect(z, "SURFACE", tx, ty, tx + 1, ty + 1);
         }
-    }
-    for (const list of facePiecesByLayer.values()) {
-        for (let i = 0; i < list.length; i++) {
-            const p = list[i];
-            if (p.layerRole !== "STRUCTURE") continue;
-            const tw = p.tw ?? 1;
-            const th = p.th ?? 1;
-            const z = Math.floor((p.zTo ?? p.zFrom) + 1e-3);
-            addOcclusionRect(z, "VOLUMETRIC", p.tx, p.ty, p.tx + tw, p.ty + th);
+        for (const list of occludersByLayer.values()) {
+            for (let i = 0; i < list.length; i++) {
+                const p = list[i];
+                const tw = p.tw ?? 1;
+                const th = p.th ?? 1;
+                const z = Math.floor((p.zTo ?? p.zFrom) + 1e-3);
+                addOcclusionRect(z, "VOLUMETRIC", p.tx, p.ty, p.tx + tw, p.ty + th);
+            }
         }
-    }
-    for (let i = 0; i < overlays.length; i++) {
-        const o = overlays[i];
-        if (!(o.layerRole === "STRUCTURE" || (o.kind ?? "ROOF") === "ROOF")) continue;
-        const z = Math.floor(o.z + 1e-3);
-        addOcclusionRect(z, "VOLUMETRIC", o.tx, o.ty, o.tx + o.w, o.ty + o.h);
-    }
+        for (const list of facePiecesByLayer.values()) {
+            for (let i = 0; i < list.length; i++) {
+                const p = list[i];
+                if (p.layerRole !== "STRUCTURE") continue;
+                const tw = p.tw ?? 1;
+                const th = p.th ?? 1;
+                const z = Math.floor((p.zTo ?? p.zFrom) + 1e-3);
+                addOcclusionRect(z, "VOLUMETRIC", p.tx, p.ty, p.tx + tw, p.ty + th);
+            }
+        }
+        for (let i = 0; i < overlays.length; i++) {
+            const o = overlays[i];
+            if (!(o.layerRole === "STRUCTURE" || (o.kind ?? "ROOF") === "ROOF")) continue;
+            const z = Math.floor(o.z + 1e-3);
+            addOcclusionRect(z, "VOLUMETRIC", o.tx, o.ty, o.tx + o.w, o.ty + o.h);
+        }
+    });
     const occlusionGeometry: CompiledOcclusionGeometry = {
         chunkSize: OCCLUSION_CHUNK_SIZE,
         byBandAndClass: occlusionByBandAndClass,
         availableBands: Array.from(occlusionByBandAndClass.keys()).sort((a, b) => a - b),
     };
-    tileHeightGrid = buildTileHeightGrid();
+    const compiled = runWithLoadProfilerSubphase(
+        LOAD_PROFILER_SUBPHASE.POST_COMPILE_INDEXING_OR_FINALIZATION,
+        (): CompiledKenneyMap => {
+            tileHeightGrid = buildTileHeightGrid();
 
-    const compiled: CompiledKenneyMap = {
-        id: def.id,
-        originTx,
-        originTy,
-        width: def.w,
-        height: def.h,
+            return {
+                id: def.id,
+                originTx,
+                originTy,
+                width: def.w,
+                height: def.h,
 
-        spawnTx: (spawnTableX ?? 0) + originTx,
-        spawnTy: (spawnTableY ?? 0) + originTy,
-        spawnH: spawnH | 0,
+                spawnTx: (spawnTableX ?? 0) + originTx,
+                spawnTy: (spawnTableY ?? 0) + originTy,
+                spawnH: spawnH | 0,
 
-        goalTx: goalTableX === null ? null : goalTableX + originTx,
-        goalTy: goalTableY === null ? null : goalTableY + originTy,
-        goalH: goalH | 0,
-        lightDefs,
+                goalTx: goalTableX === null ? null : goalTableX + originTx,
+                goalTy: goalTableY === null ? null : goalTableY + originTy,
+                goalH: goalH | 0,
+                lightDefs,
 
-        triggerDefs,
+                triggerDefs,
 
-        getTile,
-        surfacesByKey,
-        surfacesAtXY,
-        topsByLayer,
-        occludersByLayer,
-        occludersForLayer,
-        occludersInViewForLayer,
-        facePiecesByLayer,
-        facePiecesForLayer,
-        facePiecesInViewForLayer,
-        solidFace,
-        solidFacesInView,
-        overlays,
-        overlaysInView,
-        decals,
-        decalsInView,
-        blockedTiles,
-        blockedTileSpansByKey,
-        tileHeightGrid,
-        roadMarkingContext: roadMarkingContextCompat,
-        roadMarkings: roadMarkingsAll,
-        roadAreaMaskWorld,
-        roadAreaWidthWorld,
-        roadCenterMaskHWorld,
-        roadCenterWidthHWorld,
-        roadCenterMaskVWorld,
-        roadCenterWidthVWorld,
-        roadCenterMaskWorld,
-        roadCenterWidthWorld,
-        roadIntersectionMaskWorld,
-        roadCrossingMaskWorld,
-        roadCrossingDirWorld,
-        roadStopMaskWorld,
-        roadStopDirWorld,
-        roadIntersectionCenterTilesWorld,
-        roadIntersectionBoundsWorld,
-        roadIntersectionSeedsWorld,
-        roadIntersectionClusterCentersWorld,
-        roadSemanticRects: roadSemanticRectsCompiled,
-        occlusionGeometry,
-        isRoadWorld,
-    };
+                getTile,
+                surfacesByKey,
+                surfacesAtXY,
+                topsByLayer,
+                occludersByLayer,
+                occludersForLayer,
+                occludersInViewForLayer,
+                facePiecesByLayer,
+                facePiecesForLayer,
+                facePiecesInViewForLayer,
+                solidFace,
+                solidFacesInView,
+                overlays,
+                overlaysInView,
+                decals,
+                decalsInView,
+                blockedTiles,
+                blockedTileSpansByKey,
+                tileHeightGrid,
+                roadMarkingContext: roadMarkingContextCompat,
+                roadMarkings: roadMarkingsAll,
+                roadAreaMaskWorld,
+                roadAreaWidthWorld,
+                roadCenterMaskHWorld,
+                roadCenterWidthHWorld,
+                roadCenterMaskVWorld,
+                roadCenterWidthVWorld,
+                roadCenterMaskWorld,
+                roadCenterWidthWorld,
+                roadIntersectionMaskWorld,
+                roadCrossingMaskWorld,
+                roadCrossingDirWorld,
+                roadStopMaskWorld,
+                roadStopDirWorld,
+                roadIntersectionCenterTilesWorld,
+                roadIntersectionBoundsWorld,
+                roadIntersectionSeedsWorld,
+                roadIntersectionClusterCentersWorld,
+                roadSemanticRects: roadSemanticRectsCompiled,
+                occlusionGeometry,
+                isRoadWorld,
+            };
+        },
+    );
 
     return compiled;
 }

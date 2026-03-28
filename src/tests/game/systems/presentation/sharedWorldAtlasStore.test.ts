@@ -45,6 +45,8 @@ describe("SharedWorldAtlasStore", () => {
   it("packs structure sprites and dynamic images into one shared page set", () => {
     const structureImage = makeImage("structure", 64, 48);
     const propImage = makeImage("prop", 32, 64);
+    const faceImage = makeImage("face", 64, 32);
+    const wallImage = makeImage("wall", 32, 96);
     const dropImage = makeImage("drop", 16, 16);
     const enemyImage = makeImage("enemy", 32, 32);
 
@@ -52,9 +54,19 @@ describe("SharedWorldAtlasStore", () => {
       { id: "s1", layerRole: "STRUCTURE", spriteId: "structures/a" },
       { id: "p1", kind: "PROP", spriteId: "props/lights/street_lamp_e" },
     ] as any);
+    vi.spyOn(kenneyMap, "facePieceLayers").mockReturnValue([0]);
+    vi.spyOn(kenneyMap, "facePiecesInViewForLayer").mockReturnValue([
+      { id: "f1", spriteId: "structures/floor_apron_a" },
+    ] as any);
+    vi.spyOn(kenneyMap, "occluderLayers").mockReturnValue([0]);
+    vi.spyOn(kenneyMap, "occludersInViewForLayer").mockReturnValue([
+      { id: "w1", spriteId: "structures/wall_a" },
+    ] as any);
     vi.spyOn(renderSprites, "getTileSpriteById").mockImplementation((spriteId: string) => {
       if (spriteId === "structures/a") return { ready: true, img: structureImage } as any;
       if (spriteId === "props/lights/street_lamp_e") return { ready: true, img: propImage } as any;
+      if (spriteId === "structures/floor_apron_a") return { ready: true, img: faceImage } as any;
+      if (spriteId === "structures/wall_a") return { ready: true, img: wallImage } as any;
       return null as any;
     });
     vi.spyOn(dynamicAtlasSources, "collectDynamicAtlasSources").mockReturnValue({
@@ -68,25 +80,31 @@ describe("SharedWorldAtlasStore", () => {
 
     const store = new SharedWorldAtlasStore();
     store.sync({
-      compiledMap: { id: "map_a" } as any,
+      compiledMap: { id: "map_a", originTx: 0, originTy: 0, width: 8, height: 8 } as any,
       paletteVariantKey: "pal_a",
     });
 
     const structureFrame = store.getSpriteFrame("structures/a");
     const propFrame = store.getSpriteFrame("props/lights/street_lamp_e");
+    const faceFrame = store.getSpriteFrame("structures/floor_apron_a");
+    const wallFrame = store.getSpriteFrame("structures/wall_a");
     const dropFrame = store.getFrameForImage(dropImage);
     const enemyFrame = store.getFrameForImage(enemyImage);
 
     expect(structureFrame).not.toBeNull();
     expect(propFrame).not.toBeNull();
+    expect(faceFrame).not.toBeNull();
+    expect(wallFrame).not.toBeNull();
     expect(dropFrame).not.toBeNull();
     expect(enemyFrame).not.toBeNull();
     expect(structureFrame?.image).toBe(propFrame?.image);
+    expect(structureFrame?.image).toBe(faceFrame?.image);
+    expect(structureFrame?.image).toBe(wallFrame?.image);
     expect(structureFrame?.image).toBe(dropFrame?.image);
     expect(structureFrame?.image).toBe(enemyFrame?.image);
     expect(isStableTextureSource(structureFrame?.image)).toBe(true);
     expect(store.getDebugCacheMetrics()).toMatchObject({
-      entryCount: 4,
+      entryCount: 6,
       contextKey: "map:map_a||palv:pal_a",
       generation: 1,
     });
@@ -100,6 +118,10 @@ describe("SharedWorldAtlasStore", () => {
     vi.spyOn(kenneyMap, "overlaysInView").mockReturnValue([
       { id: "s1", layerRole: "STRUCTURE", spriteId: "structures/a" },
     ] as any);
+    vi.spyOn(kenneyMap, "facePieceLayers").mockReturnValue([]);
+    vi.spyOn(kenneyMap, "facePiecesInViewForLayer").mockReturnValue([] as any);
+    vi.spyOn(kenneyMap, "occluderLayers").mockReturnValue([]);
+    vi.spyOn(kenneyMap, "occludersInViewForLayer").mockReturnValue([] as any);
     vi.spyOn(renderSprites, "getTileSpriteById").mockReturnValue({
       ready: true,
       img: structureImage,
@@ -128,16 +150,16 @@ describe("SharedWorldAtlasStore", () => {
       });
 
     const store = new SharedWorldAtlasStore();
-    store.sync({ compiledMap: { id: "map_a" } as any, paletteVariantKey: "pal_a" });
+    store.sync({ compiledMap: { id: "map_a", originTx: 0, originTy: 0, width: 8, height: 8 } as any, paletteVariantKey: "pal_a" });
     const first = store.getFrameForImage(dynamicImageA);
 
-    store.sync({ compiledMap: { id: "map_a" } as any, paletteVariantKey: "pal_a" });
+    store.sync({ compiledMap: { id: "map_a", originTx: 0, originTy: 0, width: 8, height: 8 } as any, paletteVariantKey: "pal_a" });
     const second = store.getFrameForImage(dynamicImageA);
 
-    store.sync({ compiledMap: { id: "map_a" } as any, paletteVariantKey: "pal_a" });
+    store.sync({ compiledMap: { id: "map_a", originTx: 0, originTy: 0, width: 8, height: 8 } as any, paletteVariantKey: "pal_a" });
     const third = store.getFrameForImage(dynamicImageB);
 
-    store.sync({ compiledMap: { id: "map_b" } as any, paletteVariantKey: "pal_a" });
+    store.sync({ compiledMap: { id: "map_b", originTx: 0, originTy: 0, width: 8, height: 8 } as any, paletteVariantKey: "pal_a" });
     const fourth = store.getFrameForImage(dynamicImageB);
 
     expect(first?.image).toBe(second?.image);

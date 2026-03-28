@@ -143,6 +143,7 @@ import {
   setRenderPerfDrawTag,
   setRenderTileLoopRadius,
 } from "./renderPerfCounters";
+import { resolveEffectiveWorldAtlasMode, type EffectiveWorldAtlasMode } from "../../../settings/systemOverrides";
 import { ViewportTransform } from "./viewportTransform";
 import {
   deriveFeetSortYFromKey,
@@ -178,6 +179,7 @@ import {
   monolithicStructureGeometryCacheStore,
   sharedWorldAtlasStore,
   staticAtlasStore,
+  structureMergedSliceCacheStore,
 } from "./presentationSubsystemStores";
 import { syncCanvasGroundChunkCacheForFrame } from "./canvasGroundChunkCache";
 import { buildDebugFrameContext } from "./debug/debugFrameContext";
@@ -244,7 +246,7 @@ const LOOT_GOBLIN_GLOW_PULSE_MIN = 0.95;
 const LOOT_GOBLIN_GLOW_PULSE_RANGE = 0.3;
 const LOOT_GOBLIN_GLOW_PULSE_SPEED = 2.8;
 const STRUCTURE_SHADOW_V1_MAX_DARKNESS = 0.38;
-let lastWorldAtlasMode: "dual" | "shared" | null = null;
+let lastEffectiveWorldAtlasMode: EffectiveWorldAtlasMode | null = null;
 type ScreenPt = { x: number; y: number };
 
 /** Render tiles, entities, overlays, and debug layers. */
@@ -1136,13 +1138,22 @@ export async function renderSystem(
   if (groundChunkCacheSync.rebuiltChunkCount > 0) {
     countRenderCanvasGroundChunkRebuild(groundChunkCacheSync.rebuiltChunkCount);
   }
-  const worldAtlasMode = renderSettings.worldAtlasMode === "shared" ? "shared" : "dual";
-  if (lastWorldAtlasMode !== worldAtlasMode) {
-    if (worldAtlasMode === "shared") dynamicAtlasStore.clear();
+  const webglSurface = getRenderableWebGLWorldSurface(canvas);
+  const backendSelection = resolveRenderBackendSelection(
+    renderSettings as any,
+    webglSurface,
+    getWebGLWorldSurfaceFailureReason(canvas),
+  );
+  const effectiveWorldAtlasMode = resolveEffectiveWorldAtlasMode(
+    renderSettings.worldAtlasMode,
+    backendSelection.selectedBackend,
+  );
+  if (lastEffectiveWorldAtlasMode !== effectiveWorldAtlasMode) {
+    if (effectiveWorldAtlasMode === "shared") dynamicAtlasStore.clear();
     else sharedWorldAtlasStore.clear();
-    lastWorldAtlasMode = worldAtlasMode;
+    lastEffectiveWorldAtlasMode = effectiveWorldAtlasMode;
   }
-  if (worldAtlasMode === "shared") {
+  if (effectiveWorldAtlasMode === "shared") {
     staticAtlasStore.sync({
       compiledMap,
       paletteVariantKey: activePaletteVariantKey,
@@ -1168,6 +1179,12 @@ export async function renderSystem(
     setRenderStaticAtlasTextureCount(staticAtlasStore.getPageCount());
     setRenderDynamicAtlasTextureCount(dynamicAtlasStore.getPageCount());
   }
+  const structureAtlasGeneration = effectiveWorldAtlasMode === "shared"
+    ? sharedWorldAtlasStore.generation
+    : staticAtlasStore.generation;
+  structureMergedSliceCacheStore.resetIfContextChanged(
+    `map:${compiledMap.id}||mode:${effectiveWorldAtlasMode}||palv:${activePaletteVariantKey}||atlas:${structureAtlasGeneration}`,
+  );
   const structureTriangleAdmissionMode = renderSettings.structureTriangleAdmissionMode ?? "hybrid";
   const structureTriangleCutoutEnabled = renderSettings.structureTriangleCutoutEnabled === true;
   const structureTriangleCutoutHalfWidth = Math.max(
@@ -1429,7 +1446,7 @@ export async function renderSystem(
     structureShadowFrame,
     getStaticAtlasSpriteFrame: (spriteId: string) => {
       countRenderStaticAtlasRequest();
-      const frame = worldAtlasMode === "shared"
+      const frame = effectiveWorldAtlasMode === "shared"
         ? sharedWorldAtlasStore.getSpriteFrame(spriteId)
         : staticAtlasStore.getSpriteFrame(spriteId);
       if (frame) countRenderStaticAtlasHit();
@@ -1449,11 +1466,12 @@ export async function renderSystem(
       return frame;
     },
     getDynamicAtlasFrameForImage: (image: object | null | undefined) => (
-      worldAtlasMode === "shared"
+      effectiveWorldAtlasMode === "shared"
         ? sharedWorldAtlasStore.getFrameForImage(image)
         : dynamicAtlasStore.getFrameForImage(image)
     ),
     monolithicStructureGeometryCacheStore,
+    structureMergedSliceCacheStore,
     getFlippedOverlayImage,
     SHOW_STRUCTURE_SLICE_DEBUG,
     SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG,
@@ -1876,12 +1894,6 @@ export async function renderSystem(
     countVisible: countRenderCanvasGroundChunksVisible,
     countDraw: countRenderCanvasGroundChunkDraw,
   };
-  const webglSurface = getRenderableWebGLWorldSurface(canvas);
-  const backendSelection = resolveRenderBackendSelection(
-    renderSettings as any,
-    webglSurface,
-    getWebGLWorldSurfaceFailureReason(canvas),
-  );
   const worldBatchAudit = renderPerfCountersEnabled
     ? analyzeWorldBatchStream(auditWorldCommands, backendSelection.selectedBackend)
     : null;

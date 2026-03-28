@@ -31,7 +31,8 @@ Achievements
 
 ## 1. Engine shape (system rules)
 
-- TypeScript + Vite + Canvas2D
+- TypeScript + Vite
+- World rendering supports Canvas2D and WebGL backends
 - ECS-lite: systems read/write world state and emit events
 - Systems do not call each other directly
 - Cross-system communication happens through shared world fields or events
@@ -194,24 +195,19 @@ Achievements
 
 Current render pipeline:
 
-Pass 0: UNDERLAYS (all apron underlays, depth-sorted)
-
-For each zLogical layer (ascending):
-1. TOPS
-2. ENTITIES
-3. LIGHTS
-4. OCCLUDERS
+1. `GROUND`
+2. `WORLD`
+3. `SCREEN/UI`
 
 Rules
-- Lights must render after entities and before occluders
-- Occluders must render after entities
-- All relevant layers must be included (not only surface layers)
-- Depth sorting within each pass is driven by zVisual (no per-system depth heuristics)
-
+- chunk-rasterized ground remains in the `GROUND` pass
+- all world-space competing objects share one `WORLD` ordering domain
+- screen-space debug, HUD, and full-screen overlays stay in `SCREEN/UI`
+- render ordering is driven by shared world sort metadata, not hidden phase-specific depth heuristics
 
 Achievements
-- [x] Entities are hidden by higher occluders via render order alone
-- [x] Final screen-space pass keeps only ambient darkness/tint (no normal-light pass)
+- [x] Final world ordering is not delegated to legacy underlay/entity/light/occluder phase splits
+- [x] Final screen-space pass keeps only ambient darkness/tint and screen overlays
 - [x] Legacy light-mask occlusion/debug pipeline is removed from runtime render path
 
 ---

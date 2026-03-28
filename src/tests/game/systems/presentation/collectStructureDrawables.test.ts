@@ -3,10 +3,54 @@ import { collectStructureDrawables } from "../../../../game/systems/presentation
 import type { RenderCommand } from "../../../../game/systems/presentation/contracts/renderCommands";
 import { createRenderFrameBuilder } from "../../../../game/systems/presentation/frame/renderFrameBuilder";
 import { KindOrder } from "../../../../game/systems/presentation/worldRenderOrdering";
+import { StructureMergedSliceCacheStore } from "../../../../game/systems/presentation/structures/structureMergedSliceCache";
+
+type FakeCanvasRecord = {
+  width: number;
+  height: number;
+  getContext: ReturnType<typeof vi.fn>;
+};
+
+function installFakeRasterCanvas(): { canvases: FakeCanvasRecord[]; restore: () => void } {
+  const canvases: FakeCanvasRecord[] = [];
+  const previousDocument = (globalThis as { document?: Document }).document;
+  const createElement = vi.fn((tagName: string) => {
+    if (tagName !== "canvas") throw new Error(`Unexpected element tag: ${tagName}`);
+    const ctx = {
+      globalAlpha: 1,
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      closePath: vi.fn(),
+      clip: vi.fn(),
+      transform: vi.fn(),
+      drawImage: vi.fn(),
+      save: vi.fn(),
+      restore: vi.fn(),
+    } as unknown as CanvasRenderingContext2D;
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: vi.fn(() => ctx),
+    } as unknown as FakeCanvasRecord & HTMLCanvasElement;
+    canvases.push(canvas);
+    return canvas;
+  });
+  (globalThis as { document?: Document }).document = {
+    createElement,
+  } as unknown as Document;
+  return {
+    canvases,
+    restore: () => {
+      (globalThis as { document?: Document }).document = previousDocument;
+    },
+  };
+}
 
 function makeBaseInput(
   pieces: readonly any[],
   getStaticAtlasSpriteFrame: ((spriteId: string) => any) | undefined,
+  structureMergedSliceCacheStore: StructureMergedSliceCacheStore | null = null,
 ) {
   const frameBuilder = createRenderFrameBuilder();
   return {
@@ -41,6 +85,8 @@ function makeBaseInput(
     })),
     ctx: {} as CanvasRenderingContext2D,
     T: 64,
+    ISO_X: 0.5,
+    ISO_Y: 0.25,
     projectedViewportRect: { minX: 0, maxX: 0, minY: 0, maxY: 0 },
     structureTriangleCutoutEnabled: false,
     structureTriangleCutoutHalfWidth: 0,
@@ -63,6 +109,7 @@ function makeBaseInput(
     },
     getStaticAtlasSpriteFrame,
     monolithicStructureGeometryCacheStore: {},
+    structureMergedSliceCacheStore,
     getTileSpriteById: vi.fn(),
     getFlippedOverlayImage: vi.fn(),
     SHOW_STRUCTURE_SLICE_DEBUG: false,
@@ -99,6 +146,52 @@ function collectCommands(input: any): RenderCommand[] {
 }
 
 describe("collectStructureDrawables", () => {
+  it("routes face-piece structure sprites through the static/shared atlas resolver", () => {
+    const originalImage = { width: 32, height: 16, id: "face-original" } as any;
+    const atlasImage = { width: 512, height: 512, id: "shared-world-atlas" } as any;
+    const input = makeBaseInput([], vi.fn((spriteId: string) => (
+      spriteId === "structures/floor_apron_a"
+        ? { image: atlasImage, sx: 24, sy: 36, sw: 32, sh: 16 }
+        : null
+    )));
+    input.facePieceLayers = () => [0];
+    input.facePiecesInViewForLayer = () => [{
+      id: "face-a",
+      kind: "FLOOR_APRON",
+      spriteId: "structures/floor_apron_a",
+      tx: 3,
+      ty: 4,
+      zFrom: 0,
+      zTo: 0,
+      layerRole: "STRUCTURE",
+    }];
+    input.buildFaceDraws = vi.fn(() => [{
+      img: originalImage,
+      dx: 10,
+      dy: 20,
+      dw: 64,
+      dh: 32,
+      flipX: false,
+      scale: 1,
+    }]);
+
+    const commands = collectCommands(input);
+    expect(commands).toHaveLength(1);
+    const payload = commands[0].payload as Extract<
+      RenderCommand,
+      { semanticFamily: "worldSprite"; finalForm: "quad" }
+    >["payload"];
+
+    expect(payload.auditFamily).toBe("structures");
+    expect(payload.image).toBe(atlasImage);
+    expect(payload.sx).toBe(24);
+    expect(payload.sy).toBe(36);
+    expect(payload.sw).toBe(32);
+    expect(payload.sh).toBe(16);
+    expect(payload.dx).toBe(10);
+    expect(payload.dy).toBe(20);
+  });
+
   it("extracts static-atlas-backed structure cells into one quad per camera tile", () => {
     const originalImage = { width: 64, height: 32, id: "structure-a" } as any;
     const atlasImage = { width: 512, height: 512, id: "structure-atlas" } as any;
@@ -113,8 +206,8 @@ describe("collectStructureDrawables", () => {
         img: originalImage,
         dx: 10,
         dy: 20,
-        dw: 64,
-        dh: 32,
+        dw: 128,
+        dh: 64,
         flipX: true,
       },
       stableId: 77,
@@ -172,7 +265,7 @@ describe("collectStructureDrawables", () => {
   });
 
   it("uses static-atlas-backed source rects for structure overlay fallback meshes", () => {
-    const originalImage = { width: 64, height: 32, id: "structure-overlay" } as any;
+    const originalImage = { width: 32, height: 16, id: "structure-overlay" } as any;
     const atlasImage = { width: 512, height: 512, id: "structure-atlas" } as any;
     const pieces = [{
       kind: "overlay",
@@ -198,8 +291,8 @@ describe("collectStructureDrawables", () => {
         image: atlasImage,
         sx: 100,
         sy: 200,
-        sw: 64,
-        sh: 32,
+        sw: 32,
+        sh: 16,
       })),
     ));
 
@@ -214,8 +307,8 @@ describe("collectStructureDrawables", () => {
     expect(payload.image).toBe(atlasImage);
     expect(payload.sx).toBe(100);
     expect(payload.sy).toBe(200);
-    expect(payload.sw).toBe(64);
-    expect(payload.sh).toBe(32);
+    expect(payload.sw).toBe(32);
+    expect(payload.sh).toBe(16);
     expect(payload.dx).toBe(7);
     expect(payload.dy).toBe(9);
     expect(payload.dw).toBe(64);
@@ -468,6 +561,243 @@ describe("collectStructureDrawables", () => {
     expect(payload.y2).toBe(232);
     expect(payload.x3).toBe(100);
     expect(payload.y3).toBe(232);
+  });
+
+  it("merges fully visible multi-cell structure slices into one cached coarse quad", () => {
+    const { canvases, restore } = installFakeRasterCanvas();
+    try {
+      const image = { width: 128, height: 32, id: "mono-coarse" } as any;
+      const pieces = [{
+        kind: "triangleGroup",
+        overlay: { id: "overlay-coarse", spriteId: "structures/coarse", z: 0 },
+        draw: { img: image, dx: 10, dy: 20, dw: 128, dh: 32, flipX: false },
+        stableId: 103,
+        parentTx: 0,
+        parentTy: 0,
+        feetSortY: 0,
+        groupLocalBounds: { x: 10, y: 20, w: 128, h: 32 },
+        groupTriangleCount: 4,
+        allTrianglesVisible: true,
+        finalVisibleTriangles: [
+          {
+            stableId: 1,
+            cameraTx: 0,
+            cameraTy: 0,
+            srcPoints: [{ x: 0, y: 0 }, { x: 64, y: 0 }, { x: 0, y: 32 }],
+            points: [{ x: 10, y: 20 }, { x: 74, y: 20 }, { x: 10, y: 52 }],
+            srcRectLocal: { x: 0, y: 0, w: 64, h: 32 },
+            dstRectLocal: { x: 10, y: 20, w: 64, h: 32 },
+          },
+          {
+            stableId: 2,
+            cameraTx: 0,
+            cameraTy: 0,
+            srcPoints: [{ x: 64, y: 0 }, { x: 64, y: 32 }, { x: 0, y: 32 }],
+            points: [{ x: 74, y: 20 }, { x: 74, y: 52 }, { x: 10, y: 52 }],
+            srcRectLocal: { x: 0, y: 0, w: 64, h: 32 },
+            dstRectLocal: { x: 10, y: 20, w: 64, h: 32 },
+          },
+          {
+            stableId: 3,
+            cameraTx: 1,
+            cameraTy: 0,
+            srcPoints: [{ x: 64, y: 0 }, { x: 128, y: 0 }, { x: 64, y: 32 }],
+            points: [{ x: 74, y: 20 }, { x: 138, y: 20 }, { x: 74, y: 52 }],
+            srcRectLocal: { x: 64, y: 0, w: 64, h: 32 },
+            dstRectLocal: { x: 74, y: 20, w: 64, h: 32 },
+          },
+          {
+            stableId: 4,
+            cameraTx: 1,
+            cameraTy: 0,
+            srcPoints: [{ x: 128, y: 0 }, { x: 128, y: 32 }, { x: 64, y: 32 }],
+            points: [{ x: 138, y: 20 }, { x: 138, y: 52 }, { x: 74, y: 52 }],
+            srcRectLocal: { x: 64, y: 0, w: 64, h: 32 },
+            dstRectLocal: { x: 74, y: 20, w: 64, h: 32 },
+          },
+        ],
+        compareDistanceOnlyTriangles: [],
+        cutoutEnabled: false,
+        cutoutAlpha: 0.25,
+        buildingDirectionalEligible: false,
+        groupParentAfterPlayer: false,
+      }];
+      const cacheStore = new StructureMergedSliceCacheStore();
+
+      const firstCommands = collectCommands(makeBaseInput(pieces, undefined, cacheStore));
+      expect(firstCommands).toHaveLength(1);
+      expect(canvases).toHaveLength(1);
+      const firstPayload = firstCommands[0].payload as Extract<
+        RenderCommand,
+        { semanticFamily: "worldSprite"; finalForm: "quad" }
+      >["payload"];
+      expect(firstPayload.image).toBe(canvases[0] as unknown as HTMLCanvasElement);
+      expect(firstPayload.dx).toBe(10);
+      expect(firstPayload.dy).toBe(20);
+      expect(firstPayload.dw).toBe(128);
+      expect(firstPayload.dh).toBe(32);
+
+      const secondCommands = collectCommands(makeBaseInput(pieces, undefined, cacheStore));
+      expect(secondCommands).toHaveLength(1);
+      expect(canvases).toHaveLength(1);
+      const secondPayload = secondCommands[0].payload as Extract<
+        RenderCommand,
+        { semanticFamily: "worldSprite"; finalForm: "quad" }
+      >["payload"];
+      expect(secondPayload.image).toBe(firstPayload.image);
+    } finally {
+      restore();
+    }
+  });
+
+  it("keeps fine per-cell quads when a slice intersects the cutout halo", () => {
+    const { restore } = installFakeRasterCanvas();
+    try {
+      const image = { width: 128, height: 32, id: "mono-cutout" } as any;
+      const pieces = [{
+        kind: "triangleGroup",
+        overlay: { id: "overlay-cutout", spriteId: "structures/cutout", z: 0 },
+        draw: { img: image, dx: 10, dy: 20, dw: 128, dh: 32, flipX: false },
+        stableId: 104,
+        parentTx: 0,
+        parentTy: 0,
+        feetSortY: 0,
+        groupLocalBounds: { x: 10, y: 20, w: 128, h: 32 },
+        groupTriangleCount: 4,
+        allTrianglesVisible: true,
+        finalVisibleTriangles: [
+          {
+            stableId: 1,
+            cameraTx: 0,
+            cameraTy: 0,
+            srcPoints: [{ x: 0, y: 0 }, { x: 64, y: 0 }, { x: 0, y: 32 }],
+            points: [{ x: 10, y: 20 }, { x: 74, y: 20 }, { x: 10, y: 52 }],
+            srcRectLocal: { x: 0, y: 0, w: 64, h: 32 },
+            dstRectLocal: { x: 10, y: 20, w: 64, h: 32 },
+          },
+          {
+            stableId: 2,
+            cameraTx: 0,
+            cameraTy: 0,
+            srcPoints: [{ x: 64, y: 0 }, { x: 64, y: 32 }, { x: 0, y: 32 }],
+            points: [{ x: 74, y: 20 }, { x: 74, y: 52 }, { x: 10, y: 52 }],
+            srcRectLocal: { x: 0, y: 0, w: 64, h: 32 },
+            dstRectLocal: { x: 10, y: 20, w: 64, h: 32 },
+          },
+          {
+            stableId: 3,
+            cameraTx: 1,
+            cameraTy: 0,
+            srcPoints: [{ x: 64, y: 0 }, { x: 128, y: 0 }, { x: 64, y: 32 }],
+            points: [{ x: 74, y: 20 }, { x: 138, y: 20 }, { x: 74, y: 52 }],
+            srcRectLocal: { x: 64, y: 0, w: 64, h: 32 },
+            dstRectLocal: { x: 74, y: 20, w: 64, h: 32 },
+          },
+          {
+            stableId: 4,
+            cameraTx: 1,
+            cameraTy: 0,
+            srcPoints: [{ x: 128, y: 0 }, { x: 128, y: 32 }, { x: 64, y: 32 }],
+            points: [{ x: 138, y: 20 }, { x: 138, y: 52 }, { x: 74, y: 52 }],
+            srcRectLocal: { x: 64, y: 0, w: 64, h: 32 },
+            dstRectLocal: { x: 74, y: 20, w: 64, h: 32 },
+          },
+        ],
+        compareDistanceOnlyTriangles: [],
+        cutoutEnabled: true,
+        cutoutAlpha: 0.25,
+        buildingDirectionalEligible: true,
+        groupParentAfterPlayer: true,
+      }];
+      const cacheStore = new StructureMergedSliceCacheStore();
+      const input = makeBaseInput(pieces, undefined, cacheStore);
+      input.structureTriangleCutoutEnabled = true;
+      input.structureCutoutScreenRect = {
+        minX: 170,
+        maxX: 180,
+        minY: 20,
+        maxY: 52,
+      };
+
+      const commands = collectCommands(input);
+      expect(commands).toHaveLength(2);
+      const payloads = commands.map((command) => command.payload) as Array<Extract<
+        RenderCommand,
+        { semanticFamily: "worldSprite"; finalForm: "quad" }
+      >["payload"]>;
+      expect(payloads.every((payload) => payload.image === image)).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it("keeps fine per-cell quads when the structure slice is only partially visible", () => {
+    const { canvases, restore } = installFakeRasterCanvas();
+    try {
+      const image = { width: 128, height: 32, id: "mono-partial" } as any;
+      const pieces = [{
+        kind: "triangleGroup",
+        overlay: { id: "overlay-partial", spriteId: "structures/partial", z: 0 },
+        draw: { img: image, dx: 10, dy: 20, dw: 128, dh: 32, flipX: false },
+        stableId: 105,
+        parentTx: 0,
+        parentTy: 0,
+        feetSortY: 0,
+        groupLocalBounds: { x: 10, y: 20, w: 128, h: 32 },
+        groupTriangleCount: 6,
+        allTrianglesVisible: false,
+        finalVisibleTriangles: [
+          {
+            stableId: 1,
+            cameraTx: 0,
+            cameraTy: 0,
+            srcPoints: [{ x: 0, y: 0 }, { x: 64, y: 0 }, { x: 0, y: 32 }],
+            points: [{ x: 10, y: 20 }, { x: 74, y: 20 }, { x: 10, y: 52 }],
+            srcRectLocal: { x: 0, y: 0, w: 64, h: 32 },
+            dstRectLocal: { x: 10, y: 20, w: 64, h: 32 },
+          },
+          {
+            stableId: 2,
+            cameraTx: 0,
+            cameraTy: 0,
+            srcPoints: [{ x: 64, y: 0 }, { x: 64, y: 32 }, { x: 0, y: 32 }],
+            points: [{ x: 74, y: 20 }, { x: 74, y: 52 }, { x: 10, y: 52 }],
+            srcRectLocal: { x: 0, y: 0, w: 64, h: 32 },
+            dstRectLocal: { x: 10, y: 20, w: 64, h: 32 },
+          },
+          {
+            stableId: 3,
+            cameraTx: 1,
+            cameraTy: 0,
+            srcPoints: [{ x: 64, y: 0 }, { x: 128, y: 0 }, { x: 64, y: 32 }],
+            points: [{ x: 74, y: 20 }, { x: 138, y: 20 }, { x: 74, y: 52 }],
+            srcRectLocal: { x: 64, y: 0, w: 64, h: 32 },
+            dstRectLocal: { x: 74, y: 20, w: 64, h: 32 },
+          },
+          {
+            stableId: 4,
+            cameraTx: 1,
+            cameraTy: 0,
+            srcPoints: [{ x: 128, y: 0 }, { x: 128, y: 32 }, { x: 64, y: 32 }],
+            points: [{ x: 138, y: 20 }, { x: 138, y: 52 }, { x: 74, y: 52 }],
+            srcRectLocal: { x: 64, y: 0, w: 64, h: 32 },
+            dstRectLocal: { x: 74, y: 20, w: 64, h: 32 },
+          },
+        ],
+        compareDistanceOnlyTriangles: [],
+        cutoutEnabled: false,
+        cutoutAlpha: 0.25,
+        buildingDirectionalEligible: false,
+        groupParentAfterPlayer: false,
+      }];
+      const cacheStore = new StructureMergedSliceCacheStore();
+      const commands = collectCommands(makeBaseInput(pieces, undefined, cacheStore));
+
+      expect(commands).toHaveLength(2);
+      expect(canvases).toHaveLength(0);
+    } finally {
+      restore();
+    }
   });
 
   it("suppresses unsafe monolithic cells instead of falling back to triangle rendering", () => {

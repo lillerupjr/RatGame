@@ -7,8 +7,15 @@ import {
 import {
   NEUTRAL_BIRD_FORCE_STATES,
   PALETTE_REMAP_WEIGHT_OPTIONS,
+  resolveEffectiveWorldAtlasMode,
 } from "../../settings/systemOverrides";
 import type { SystemOverrides } from "../../settings/settingsTypes";
+import { getSettings } from "../../settings/settingsStore";
+import { resolveRenderBackendSelection } from "../../game/systems/presentation/backend/renderBackendSelection";
+import {
+  getRenderableWebGLWorldSurface,
+  getWebGLWorldSurfaceFailureReason,
+} from "../../game/systems/presentation/backend/webglSurface";
 import {
   applyColumnMajorGridOrder,
   applySelectStyle,
@@ -84,10 +91,24 @@ export function mountSystemOverridesSection(
   const worldAtlasMode = createSelectRow<SystemOverrides["worldAtlasMode"]>(
     renderingGrid,
     "World Atlas Mode",
-    ["dual", "shared"],
+    ["auto", "dual", "shared"],
     (value) => value,
     (value) => applySystemPatch({ worldAtlasMode: value }),
   );
+  const worldAtlasEffectiveRow = document.createElement("label");
+  worldAtlasEffectiveRow.style.display = "flex";
+  worldAtlasEffectiveRow.style.alignItems = "center";
+  worldAtlasEffectiveRow.style.justifyContent = "space-between";
+  worldAtlasEffectiveRow.style.gap = "10px";
+  worldAtlasEffectiveRow.style.padding = "3px 0";
+  const worldAtlasEffectiveLabel = document.createElement("span");
+  worldAtlasEffectiveLabel.textContent = "World Atlas Effective";
+  const worldAtlasEffectiveValue = document.createElement("span");
+  worldAtlasEffectiveValue.style.opacity = "0.85";
+  worldAtlasEffectiveValue.style.fontWeight = "700";
+  worldAtlasEffectiveRow.appendChild(worldAtlasEffectiveLabel);
+  worldAtlasEffectiveRow.appendChild(worldAtlasEffectiveValue);
+  renderingGrid.appendChild(worldAtlasEffectiveRow);
   const disableVisualCompiledCutoutCache = createToggleRow(renderingGrid, "Disable Compiled Cutout Cache", (checked) => {
     applySystemPatch({ disableVisualCompiledCutoutCache: checked });
   });
@@ -264,6 +285,19 @@ export function mountSystemOverridesSection(
       structureTriangleCutoutAlpha.value = `${system.structureTriangleCutoutAlpha}`;
       tileRenderRadius.value = `${system.tileRenderRadius}`;
       worldAtlasMode.value = system.worldAtlasMode;
+      {
+        const settings = getSettings();
+        const canvas = document.getElementById("c") as HTMLCanvasElement | null;
+        const webglSurface = canvas ? getRenderableWebGLWorldSurface(canvas) : null;
+        const backendSelection = resolveRenderBackendSelection(
+          { renderBackend: settings.user.graphics.renderBackend },
+          webglSurface,
+          canvas ? getWebGLWorldSurfaceFailureReason(canvas) : null,
+        );
+        const backend = backendSelection.selectedBackend;
+        const effective = resolveEffectiveWorldAtlasMode(system.worldAtlasMode, backend);
+        worldAtlasEffectiveValue.textContent = `${effective} (backend:${backend})`;
+      }
       disableVisualCompiledCutoutCache.checked = system.disableVisualCompiledCutoutCache;
       mapOverlaysDisabled.checked = system.mapOverlaysDisabled;
       rampFaces.checked = system.rampFaces;

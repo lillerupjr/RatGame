@@ -30,6 +30,12 @@ type FrameCounters = {
   structureSingleQuadSubmissions: number;
   structureQuadApproxAccepted: number;
   structureQuadApproxRejected: number;
+  structureGroupedPreSubmissions: number;
+  structureGroupedPostSubmissions: number;
+  structureMergedSliceSubmissions: number;
+  structureMergedSliceCacheHits: number;
+  structureMergedSliceCacheMisses: number;
+  structureMergedSliceCacheRebuilds: number;
   structureTrianglesSubmitted: number;
   structureEstimatedTrianglesAvoided: number;
   zBandCount: number;
@@ -112,6 +118,12 @@ type Snapshot = {
   structureSingleQuadSubmissionsPerFrame: number;
   structureQuadApproxAcceptedPerFrame: number;
   structureQuadApproxRejectedPerFrame: number;
+  structureGroupedPreSubmissionsPerFrame: number;
+  structureGroupedPostSubmissionsPerFrame: number;
+  structureMergedSliceSubmissionsPerFrame: number;
+  structureMergedSliceCacheHitsPerFrame: number;
+  structureMergedSliceCacheMissesPerFrame: number;
+  structureMergedSliceCacheRebuildsPerFrame: number;
   structureTrianglesSubmittedPerFrame: number;
   structureEstimatedTrianglesAvoidedPerFrame: number;
   zBandCountPerFrame: number;
@@ -235,6 +247,12 @@ const ZERO_FRAME: FrameCounters = {
   structureSingleQuadSubmissions: 0,
   structureQuadApproxAccepted: 0,
   structureQuadApproxRejected: 0,
+  structureGroupedPreSubmissions: 0,
+  structureGroupedPostSubmissions: 0,
+  structureMergedSliceSubmissions: 0,
+  structureMergedSliceCacheHits: 0,
+  structureMergedSliceCacheMisses: 0,
+  structureMergedSliceCacheRebuilds: 0,
   structureTrianglesSubmitted: 0,
   structureEstimatedTrianglesAvoided: 0,
   zBandCount: 0,
@@ -342,6 +360,12 @@ let snapshot: Snapshot = {
   structureSingleQuadSubmissionsPerFrame: 0,
   structureQuadApproxAcceptedPerFrame: 0,
   structureQuadApproxRejectedPerFrame: 0,
+  structureGroupedPreSubmissionsPerFrame: 0,
+  structureGroupedPostSubmissionsPerFrame: 0,
+  structureMergedSliceSubmissionsPerFrame: 0,
+  structureMergedSliceCacheHitsPerFrame: 0,
+  structureMergedSliceCacheMissesPerFrame: 0,
+  structureMergedSliceCacheRebuildsPerFrame: 0,
   structureTrianglesSubmittedPerFrame: 0,
   structureEstimatedTrianglesAvoidedPerFrame: 0,
   zBandCountPerFrame: 0,
@@ -554,6 +578,12 @@ function foldCurrentFrame(nowSec: number): void {
     structureSingleQuadSubmissionsPerFrame: frame.structureSingleQuadSubmissions,
     structureQuadApproxAcceptedPerFrame: frame.structureQuadApproxAccepted,
     structureQuadApproxRejectedPerFrame: frame.structureQuadApproxRejected,
+    structureGroupedPreSubmissionsPerFrame: frame.structureGroupedPreSubmissions,
+    structureGroupedPostSubmissionsPerFrame: frame.structureGroupedPostSubmissions,
+    structureMergedSliceSubmissionsPerFrame: frame.structureMergedSliceSubmissions,
+    structureMergedSliceCacheHitsPerFrame: frame.structureMergedSliceCacheHits,
+    structureMergedSliceCacheMissesPerFrame: frame.structureMergedSliceCacheMisses,
+    structureMergedSliceCacheRebuildsPerFrame: frame.structureMergedSliceCacheRebuilds,
     structureTrianglesSubmittedPerFrame: frame.structureTrianglesSubmitted,
     structureEstimatedTrianglesAvoidedPerFrame: frame.structureEstimatedTrianglesAvoided,
   };
@@ -595,6 +625,12 @@ function foldCurrentFrame(nowSec: number): void {
   accum.structureSingleQuadSubmissions += frame.structureSingleQuadSubmissions;
   accum.structureQuadApproxAccepted += frame.structureQuadApproxAccepted;
   accum.structureQuadApproxRejected += frame.structureQuadApproxRejected;
+  accum.structureGroupedPreSubmissions += frame.structureGroupedPreSubmissions;
+  accum.structureGroupedPostSubmissions += frame.structureGroupedPostSubmissions;
+  accum.structureMergedSliceSubmissions += frame.structureMergedSliceSubmissions;
+  accum.structureMergedSliceCacheHits += frame.structureMergedSliceCacheHits;
+  accum.structureMergedSliceCacheMisses += frame.structureMergedSliceCacheMisses;
+  accum.structureMergedSliceCacheRebuilds += frame.structureMergedSliceCacheRebuilds;
   accum.structureTrianglesSubmitted += frame.structureTrianglesSubmitted;
   accum.structureEstimatedTrianglesAvoided += frame.structureEstimatedTrianglesAvoided;
   accum.zBandCount += frame.zBandCount;
@@ -700,6 +736,12 @@ function foldCurrentFrame(nowSec: number): void {
       structureSingleQuadSubmissionsPerFrame: accum.structureSingleQuadSubmissions / denom,
       structureQuadApproxAcceptedPerFrame: accum.structureQuadApproxAccepted / denom,
       structureQuadApproxRejectedPerFrame: accum.structureQuadApproxRejected / denom,
+      structureGroupedPreSubmissionsPerFrame: accum.structureGroupedPreSubmissions / denom,
+      structureGroupedPostSubmissionsPerFrame: accum.structureGroupedPostSubmissions / denom,
+      structureMergedSliceSubmissionsPerFrame: accum.structureMergedSliceSubmissions / denom,
+      structureMergedSliceCacheHitsPerFrame: accum.structureMergedSliceCacheHits / denom,
+      structureMergedSliceCacheMissesPerFrame: accum.structureMergedSliceCacheMisses / denom,
+      structureMergedSliceCacheRebuildsPerFrame: accum.structureMergedSliceCacheRebuilds / denom,
       structureTrianglesSubmittedPerFrame: accum.structureTrianglesSubmitted / denom,
       structureEstimatedTrianglesAvoidedPerFrame: accum.structureEstimatedTrianglesAvoided / denom,
       zBandCountPerFrame: accum.zBandCount / denom,
@@ -870,6 +912,36 @@ export function countRenderStructureQuadApproxAccepted(n: number = 1): void {
 export function countRenderStructureQuadApproxRejected(n: number = 1): void {
   if (!enabled) return;
   frame.structureQuadApproxRejected += n;
+}
+
+export function countRenderStructureGroupedPreSubmission(n: number = 1): void {
+  if (!enabled) return;
+  frame.structureGroupedPreSubmissions += n;
+}
+
+export function countRenderStructureGroupedPostSubmission(n: number = 1): void {
+  if (!enabled) return;
+  frame.structureGroupedPostSubmissions += n;
+}
+
+export function countRenderStructureMergedSliceSubmission(n: number = 1): void {
+  if (!enabled) return;
+  frame.structureMergedSliceSubmissions += n;
+}
+
+export function countRenderStructureMergedSliceCacheHit(n: number = 1): void {
+  if (!enabled) return;
+  frame.structureMergedSliceCacheHits += n;
+}
+
+export function countRenderStructureMergedSliceCacheMiss(n: number = 1): void {
+  if (!enabled) return;
+  frame.structureMergedSliceCacheMisses += n;
+}
+
+export function countRenderStructureMergedSliceCacheRebuild(n: number = 1): void {
+  if (!enabled) return;
+  frame.structureMergedSliceCacheRebuilds += n;
 }
 
 export function countRenderStructureTrianglesSubmitted(n: number = 1): void {
@@ -1117,6 +1189,12 @@ export function getRenderPerfSnapshot(): Snapshot {
       structureSingleQuadSubmissionsPerFrame: 0,
       structureQuadApproxAcceptedPerFrame: 0,
       structureQuadApproxRejectedPerFrame: 0,
+      structureGroupedPreSubmissionsPerFrame: 0,
+      structureGroupedPostSubmissionsPerFrame: 0,
+      structureMergedSliceSubmissionsPerFrame: 0,
+      structureMergedSliceCacheHitsPerFrame: 0,
+      structureMergedSliceCacheMissesPerFrame: 0,
+      structureMergedSliceCacheRebuildsPerFrame: 0,
       structureTrianglesSubmittedPerFrame: 0,
       structureEstimatedTrianglesAvoidedPerFrame: 0,
       zBandCountPerFrame: 0,

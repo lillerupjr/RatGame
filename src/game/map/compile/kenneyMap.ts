@@ -19,6 +19,10 @@ import {
 } from "./kenneyMapLoader";
 import type { TableMapDef } from "../formats/table/tableMapTypes";
 import {
+    LOAD_PROFILER_SUBPHASE,
+    runWithLoadProfilerSubphaseAsync,
+} from "../../app/loadingFlow";
+import {
     assertMonolithicBuildingSemanticPrepassComplete,
     collectRequiredMonolithicBuildingSkinIdsForMap,
     computeMonolithicBuildingSemanticsForSkinIds,
@@ -109,9 +113,12 @@ export async function setActiveMapAsync(
     options?: { runSeed?: number; mapId?: string; semanticTimeoutMs?: number },
 ): Promise<CompiledKenneyMap> {
     const requiredSkinIds = collectRequiredMonolithicBuildingSkinIdsForMap(mapDef);
-    await computeMonolithicBuildingSemanticsForSkinIds(requiredSkinIds, {
-        timeoutMs: options?.semanticTimeoutMs ?? 15000,
-    });
+    await runWithLoadProfilerSubphaseAsync(
+        LOAD_PROFILER_SUBPHASE.MONOLITHIC_SEMANTIC_PREPASS,
+        () => computeMonolithicBuildingSemanticsForSkinIds(requiredSkinIds, {
+            timeoutMs: options?.semanticTimeoutMs ?? 15000,
+        }),
+    );
     assertMonolithicBuildingSemanticPrepassComplete(
         `setActiveMapAsync:${options?.mapId ?? mapDef.id}`,
         requiredSkinIds,

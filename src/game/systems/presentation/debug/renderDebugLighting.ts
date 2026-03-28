@@ -2,6 +2,7 @@ import { getRenderPerfSnapshot } from "../renderPerfCounters";
 import type { RenderDebugScreenPassInput } from "./debugRenderTypes";
 import { describeRenderBackendFallbackReason } from "../backend/renderBackendSelection";
 import type { CacheMetricSample } from "../cacheMetricsRegistry";
+import type { LoadProfilerSummary } from "../../../app/loadingFlow";
 import type {
   WorldBatchAudit,
   WorldBatchBreakReason,
@@ -51,6 +52,28 @@ function formatCacheHitRate(hits: number, misses: number): string {
   const total = hits + misses;
   if (total <= 0) return "n/a";
   return `${((hits / total) * 100).toFixed(0)}%`;
+}
+
+function formatLoadProfilerDuration(durationMs: number | null): string {
+  return durationMs == null ? "n/a" : `${Math.round(durationMs)}ms`;
+}
+
+function readLoadProfilerSummary(): LoadProfilerSummary | null {
+  if (typeof window === "undefined") return null;
+  return window.__loadProfiler?.getSummary() ?? null;
+}
+
+export function buildLoadProfilerOverlayLines(summary: LoadProfilerSummary | null | undefined): string[] {
+  if (!summary || summary.status === "idle" || summary.totalLoadTimeMs == null) return [];
+  const lines = [
+    `LOAD total:${formatLoadProfilerDuration(summary.totalLoadTimeMs)} first:${formatLoadProfilerDuration(summary.firstVisibleFrameTimeMs)} ready:${formatLoadProfilerDuration(summary.fullyReadyTimeMs)}`,
+  ];
+  const topPhases = summary.topPhases.slice(0, 3);
+  for (let i = 0; i < topPhases.length; i++) {
+    const phase = topPhases[i];
+    lines.push(`LOAD ${i + 1} ${phase.name}:${formatLoadProfilerDuration(phase.durationMs)}`);
+  }
+  return lines;
 }
 
 function summarizeTopCaches(caches: CacheMetricSample[], limit = 3): CacheMetricSample[] {
@@ -179,6 +202,8 @@ function buildFramePerf(input: RenderDebugScreenPassInput): FramePerf {
     `perf(structures): total:${formatValue(perf.structureTotalSubmissionsPerFrame)} rect:${formatValue(perf.structureRectMeshSubmissionsPerFrame)} rectQuad:${formatValue(perf.structureRectMeshMigratedToQuadPerFrame)}`,
     `mono: groups:${formatValue(perf.structureMonolithicGroupSubmissionsPerFrame)} tri:${formatValue(perf.structureMonolithicTrianglesPerFrame)}`,
     `quadSafe: single:${formatValue(perf.structureSingleQuadSubmissionsPerFrame)} accept:${formatValue(perf.structureQuadApproxAcceptedPerFrame)} reject:${formatValue(perf.structureQuadApproxRejectedPerFrame)}`,
+    `grouping: pre:${formatValue(perf.structureGroupedPreSubmissionsPerFrame)} post:${formatValue(perf.structureGroupedPostSubmissionsPerFrame)}`,
+    `merged: submit:${formatValue(perf.structureMergedSliceSubmissionsPerFrame)} hit:${formatValue(perf.structureMergedSliceCacheHitsPerFrame)} miss:${formatValue(perf.structureMergedSliceCacheMissesPerFrame)} rebuild:${formatValue(perf.structureMergedSliceCacheRebuildsPerFrame)}`,
     `triangles: now:${formatValue(perf.structureTrianglesSubmittedPerFrame)} avoided:${formatValue(perf.structureEstimatedTrianglesAvoidedPerFrame)}`,
     `batch: ${structureFamily ? `cmd:${structureFamily.commands} batch:${structureFamily.batches} avg:${structureFamily.averageRunLength.toFixed(1)} dom:${structureFamily.dominantBreakReason}` : "none"}`,
   ];
@@ -282,6 +307,7 @@ function buildVisibleScreenDebugLines(input: RenderDebugScreenPassInput): string
     lines.push(
       `triAdmission:${input.structureTriangleAdmissionMode} tileRadius:${input.sliderPadding} cutout:${input.structureTriangleCutoutEnabled ? "on" : "off"} center:${input.playerCameraTx},${input.playerCameraTy} size:${input.structureTriangleCutoutHalfWidth}x${input.structureTriangleCutoutHalfHeight} alpha:${input.structureTriangleCutoutAlpha.toFixed(2)} zBands:${formatValue(perf.zBandCountPerFrame)}`,
     );
+    lines.push(...buildLoadProfilerOverlayLines(readLoadProfilerSummary()));
   }
   return lines;
 }

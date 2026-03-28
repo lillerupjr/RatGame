@@ -1,5 +1,10 @@
 // src/game/game.ts
 import { World, createWorld, clearEvents, emitEvent, gridAtPlayer } from "../engine/world/world";
+import {
+  LOAD_PROFILER_SUBPHASE,
+  runWithLoadProfilerSubphase,
+  runWithLoadProfilerSubphaseAsync,
+} from "./app/loadingFlow";
 
 import {
   InputState,
@@ -387,12 +392,16 @@ export function precomputeStaticMapData(): void {
 
   // Place all expensive O(mapTiles) stable computations here.
   if (!map.walkableMaskComputed && typeof map.computeWalkableMask === "function") {
-    map.computeWalkableMask();
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.WALKABLE_MASK_PRECOMPUTE, () => {
+      map.computeWalkableMask();
+    });
     map.walkableMaskComputed = true;
   }
 
   if (!map.roadContextComputed && typeof map.computeRoadContext === "function") {
-    map.computeRoadContext();
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.ROAD_CONTEXT_PRECOMPUTE, () => {
+      map.computeRoadContext();
+    });
     map.roadContextComputed = true;
   }
 }
@@ -2006,7 +2015,10 @@ export function createGame(args: CreateGameArgs) {
     }
     const variantSeed = floorIntent.variantSeed ?? w.rng.int(0, 0x7fffffff);
     const rng = new RNG(variantSeed);
-    const finalMap = applyObjective(baseMap, objectiveId, rng);
+    const finalMap = runWithLoadProfilerSubphase(
+      LOAD_PROFILER_SUBPHASE.MAP_CLONE_OR_CHUNK_DUPLICATION,
+      () => applyObjective(baseMap, objectiveId, rng),
+    );
     await activateMapDefAsync(finalMap, variantSeed);
 
     floorLoadContext = { floorIntent };
@@ -2016,15 +2028,28 @@ export function createGame(args: CreateGameArgs) {
   async function prewarmFloorLoadSprites(): Promise<boolean> {
     const w = world;
     const paletteVariantKey = resolveActivePaletteVariantKey();
-    const runtimeSpriteIds = collectRuntimeSpriteDeps(w, getActiveMap());
-    const depsSpriteIds = collectFloorDependencies().spriteIds;
+    const { runtimeSpriteIds, depsSpriteIds } = runWithLoadProfilerSubphase(
+      LOAD_PROFILER_SUBPHASE.DEPENDENCY_COLLECTION,
+      () => ({
+        runtimeSpriteIds: collectRuntimeSpriteDeps(w, getActiveMap()),
+        depsSpriteIds: collectFloorDependencies().spriteIds,
+      }),
+    );
     const spriteIds = Array.from(new Set([...runtimeSpriteIds, ...depsSpriteIds]));
     const requiredSpriteIds = spriteIds.filter((id) => !isOptionalRuntimeSpriteIdForLoading(id));
-    enqueuePrewarm(paletteVariantKey, spriteIds);
-    await awaitPrewarmDone(1500);
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.ENQUEUE_RUNTIME_PREWARM, () => {
+      enqueuePrewarm(paletteVariantKey, spriteIds);
+    });
+    await runWithLoadProfilerSubphaseAsync(
+      LOAD_PROFILER_SUBPHASE.RUNTIME_PREWARM_WAIT,
+      () => awaitPrewarmDone(1500),
+    );
 
     // 1) Always warm entity/core sprite modules.
-    const primaryState = await awaitCoreSpriteReadiness(requiredSpriteIds, 1500, paletteVariantKey);
+    const primaryState = await runWithLoadProfilerSubphaseAsync(
+      LOAD_PROFILER_SUBPHASE.PRIMARY_SPRITE_READINESS,
+      () => awaitCoreSpriteReadiness(requiredSpriteIds, 1500, paletteVariantKey),
+    );
     if (primaryState !== "READY") {
       console.debug(
         `[loading][prewarm-floor] primary readiness=${primaryState} required=${requiredSpriteIds.length} total=${spriteIds.length}`,
@@ -2033,7 +2058,10 @@ export function createGame(args: CreateGameArgs) {
     }
 
     // 2) One more short wait to ensure swapped images are installed.
-    const settleState = await awaitCoreSpriteReadiness(requiredSpriteIds, 300, paletteVariantKey);
+    const settleState = await runWithLoadProfilerSubphaseAsync(
+      LOAD_PROFILER_SUBPHASE.SETTLE_SPRITE_READINESS,
+      () => awaitCoreSpriteReadiness(requiredSpriteIds, 300, paletteVariantKey),
+    );
     if (settleState !== "READY") {
       console.debug(
         `[loading][prewarm-floor] settle readiness=${settleState} required=${requiredSpriteIds.length} total=${spriteIds.length}`,
@@ -2683,15 +2711,28 @@ export function createGame(args: CreateGameArgs) {
 
   async function prewarmActiveMapSpritesForCurrentPalette(): Promise<boolean> {
     const paletteVariantKey = resolveActivePaletteVariantKey();
-    const runtimeSpriteIds = collectRuntimeSpriteDeps(world, getActiveMap());
-    const depsSpriteIds = collectFloorDependencies().spriteIds;
+    const { runtimeSpriteIds, depsSpriteIds } = runWithLoadProfilerSubphase(
+      LOAD_PROFILER_SUBPHASE.DEPENDENCY_COLLECTION,
+      () => ({
+        runtimeSpriteIds: collectRuntimeSpriteDeps(world, getActiveMap()),
+        depsSpriteIds: collectFloorDependencies().spriteIds,
+      }),
+    );
     const spriteIds = Array.from(new Set([...runtimeSpriteIds, ...depsSpriteIds]));
     const requiredSpriteIds = spriteIds.filter((id) => !isOptionalRuntimeSpriteIdForLoading(id));
-    enqueuePrewarm(paletteVariantKey, spriteIds);
-    await awaitPrewarmDone(1500);
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.ENQUEUE_RUNTIME_PREWARM, () => {
+      enqueuePrewarm(paletteVariantKey, spriteIds);
+    });
+    await runWithLoadProfilerSubphaseAsync(
+      LOAD_PROFILER_SUBPHASE.RUNTIME_PREWARM_WAIT,
+      () => awaitPrewarmDone(1500),
+    );
 
     // Always warm entity/core sprite modules.
-    const primaryState = await awaitCoreSpriteReadiness(requiredSpriteIds, 1500, paletteVariantKey);
+    const primaryState = await runWithLoadProfilerSubphaseAsync(
+      LOAD_PROFILER_SUBPHASE.PRIMARY_SPRITE_READINESS,
+      () => awaitCoreSpriteReadiness(requiredSpriteIds, 1500, paletteVariantKey),
+    );
     if (primaryState !== "READY") {
       console.debug(
         `[loading][prewarm-map] primary readiness=${primaryState} required=${requiredSpriteIds.length} total=${spriteIds.length}`,
@@ -2700,7 +2741,10 @@ export function createGame(args: CreateGameArgs) {
     }
 
     // Ensure swapped images have landed before leaving LOADING.
-    const settleState = await awaitCoreSpriteReadiness(requiredSpriteIds, 300, paletteVariantKey);
+    const settleState = await runWithLoadProfilerSubphaseAsync(
+      LOAD_PROFILER_SUBPHASE.SETTLE_SPRITE_READINESS,
+      () => awaitCoreSpriteReadiness(requiredSpriteIds, 300, paletteVariantKey),
+    );
     if (settleState !== "READY") {
       console.debug(
         `[loading][prewarm-map] settle readiness=${settleState} required=${requiredSpriteIds.length} total=${spriteIds.length}`,

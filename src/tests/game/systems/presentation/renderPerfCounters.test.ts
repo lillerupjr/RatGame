@@ -11,8 +11,14 @@ import {
   countRenderGroundStaticSurfaceExamined,
   countRenderGroundStaticSurfaceFallbackEmitted,
   countRenderStructureEstimatedTrianglesAvoided,
+  countRenderStructureGroupedPostSubmission,
+  countRenderStructureGroupedPreSubmission,
   countRenderStructureMonolithicGroupSubmission,
   countRenderStructureMonolithicTriangles,
+  countRenderStructureMergedSliceCacheHit,
+  countRenderStructureMergedSliceCacheMiss,
+  countRenderStructureMergedSliceCacheRebuild,
+  countRenderStructureMergedSliceSubmission,
   countRenderStructureQuadApproxAccepted,
   countRenderStructureQuadApproxRejected,
   countRenderStructureRectMeshMigratedToQuad,
@@ -53,9 +59,11 @@ import {
   resetCacheMetricsRegistryForTests,
 } from "../../../../game/systems/presentation/cacheMetricsRegistry";
 import {
+  buildLoadProfilerOverlayLines,
   buildRenderDebugLightingSnapshotText,
   renderDebugLightingOverlay,
 } from "../../../../game/systems/presentation/debug/renderDebugLighting";
+import type { LoadProfilerSummary } from "../../../../game/app/loadingFlow";
 
 function resetPerfCounters(): void {
   setRenderPerfCountersEnabled(false);
@@ -118,6 +126,66 @@ describe("render perf counters", () => {
     resetCacheMetricsRegistryForTests();
   });
 
+  it("builds compact load profiler overlay lines only when summary data exists", () => {
+    const summary: LoadProfilerSummary = {
+      status: "completed",
+      mapId: "downtown",
+      startedAtMs: 0,
+      completedAtMs: 150,
+      totalLoadTimeMs: 150,
+      firstVisibleFrameTimeMs: 162,
+      fullyReadyTimeMs: null,
+      topPhases: [
+        {
+          name: "PREWARM_DEPENDENCIES",
+          stage: "PREWARM_DEPENDENCIES",
+          order: 2,
+          status: "completed",
+          durationMs: 60,
+          attemptCount: 1,
+          startedAtMs: 30,
+          endedAtMs: 90,
+          metadata: { mapId: "downtown" },
+        },
+        {
+          name: "PREPARE_STRUCTURE_TRIANGLES",
+          stage: "PREPARE_STRUCTURE_TRIANGLES",
+          order: 3,
+          status: "completed",
+          durationMs: 30,
+          attemptCount: 1,
+          startedAtMs: 90,
+          endedAtMs: 120,
+          metadata: { mapId: "downtown" },
+        },
+        {
+          name: "PRECOMPUTE_STATIC_MAP",
+          stage: "PRECOMPUTE_STATIC_MAP",
+          order: 1,
+          status: "completed",
+          durationMs: 20,
+          attemptCount: 1,
+          startedAtMs: 10,
+          endedAtMs: 30,
+          metadata: { mapId: "downtown" },
+        },
+      ],
+    };
+
+    expect(buildLoadProfilerOverlayLines(null)).toEqual([]);
+    expect(buildLoadProfilerOverlayLines({
+      ...summary,
+      status: "idle",
+      totalLoadTimeMs: null,
+    })).toEqual([]);
+    expect(buildLoadProfilerOverlayLines(summary)).toEqual([
+      "LOAD total:150ms first:162ms ready:n/a",
+      "LOAD 1 PREWARM_DEPENDENCIES:60ms",
+      "LOAD 2 PREPARE_STRUCTURE_TRIANGLES:30ms",
+      "LOAD 3 PRECOMPUTE_STATIC_MAP:20ms",
+    ]);
+  });
+
   it("captures WebGL frame counters in the shared snapshot model", () => {
     resetPerfCounters();
     beginRenderPerfFrame(320, 180);
@@ -145,6 +213,12 @@ describe("render perf counters", () => {
     countRenderStructureSingleQuadSubmission(4);
     countRenderStructureQuadApproxAccepted(1);
     countRenderStructureQuadApproxRejected(3);
+    countRenderStructureGroupedPreSubmission(6);
+    countRenderStructureGroupedPostSubmission(2);
+    countRenderStructureMergedSliceSubmission(2);
+    countRenderStructureMergedSliceCacheHit(5);
+    countRenderStructureMergedSliceCacheMiss(1);
+    countRenderStructureMergedSliceCacheRebuild(1);
     countRenderStructureTrianglesSubmitted(12);
     countRenderStructureEstimatedTrianglesAvoided(9);
     countRenderStaticAtlasRequest(5);
@@ -191,6 +265,12 @@ describe("render perf counters", () => {
     expect(snapshot.structureSingleQuadSubmissionsPerFrame).toBe(4);
     expect(snapshot.structureQuadApproxAcceptedPerFrame).toBe(1);
     expect(snapshot.structureQuadApproxRejectedPerFrame).toBe(3);
+    expect(snapshot.structureGroupedPreSubmissionsPerFrame).toBe(6);
+    expect(snapshot.structureGroupedPostSubmissionsPerFrame).toBe(2);
+    expect(snapshot.structureMergedSliceSubmissionsPerFrame).toBe(2);
+    expect(snapshot.structureMergedSliceCacheHitsPerFrame).toBe(5);
+    expect(snapshot.structureMergedSliceCacheMissesPerFrame).toBe(1);
+    expect(snapshot.structureMergedSliceCacheRebuildsPerFrame).toBe(1);
     expect(snapshot.structureTrianglesSubmittedPerFrame).toBe(12);
     expect(snapshot.structureEstimatedTrianglesAvoidedPerFrame).toBe(9);
     expect(snapshot.staticAtlasRequestsPerFrame).toBe(5);
@@ -249,6 +329,12 @@ describe("render perf counters", () => {
     countRenderStructureSingleQuadSubmission(3);
     countRenderStructureQuadApproxAccepted(1);
     countRenderStructureQuadApproxRejected(2);
+    countRenderStructureGroupedPreSubmission(4);
+    countRenderStructureGroupedPostSubmission(1);
+    countRenderStructureMergedSliceSubmission(1);
+    countRenderStructureMergedSliceCacheHit(2);
+    countRenderStructureMergedSliceCacheMiss(1);
+    countRenderStructureMergedSliceCacheRebuild(1);
     countRenderStructureTrianglesSubmitted(10);
     countRenderStructureEstimatedTrianglesAvoided(6);
     countRenderStaticAtlasRequest(2717);
@@ -604,6 +690,12 @@ describe("render perf counters", () => {
     countRenderStructureMonolithicGroupSubmission(2);
     countRenderStructureMonolithicTriangles(8);
     countRenderStructureSingleQuadSubmission(2);
+    countRenderStructureGroupedPreSubmission(2);
+    countRenderStructureGroupedPostSubmission(1);
+    countRenderStructureMergedSliceSubmission(1);
+    countRenderStructureMergedSliceCacheHit(2);
+    countRenderStructureMergedSliceCacheMiss(1);
+    countRenderStructureMergedSliceCacheRebuild(1);
     countRenderStructureTrianglesSubmitted(8);
     countRenderStructureEstimatedTrianglesAvoided(4);
     setBackend("canvas2d");
@@ -761,6 +853,8 @@ describe("render perf counters", () => {
     expect(allLines.some((line) => line.includes("perf(overview): fps:58"))).toBe(true);
     expect(allLines.some((line) => line.includes("perf(world): cmd:12 batch:5"))).toBe(true);
     expect(allLines.some((line) => line.includes("perf(structures): total:4.0 rect:2.0 rectQuad:2.0"))).toBe(true);
+    expect(allLines.some((line) => line.includes("grouping: pre:2.0 post:1.0"))).toBe(true);
+    expect(allLines.some((line) => line.includes("merged: submit:1.0 hit:2.0 miss:1.0 rebuild:1.0"))).toBe(true);
     expect(allLines.some((line) => line.includes("texBreak1: 2x props:staticAtlas:p0 -> entities:dynamicAtlas:p0"))).toBe(true);
     expect(allLines.some((line) => line.includes("perf(ground): surf seen:4.0 filtered:3.0 fallback:1.0"))).toBe(true);
     expect(allLines.some((line) => line.includes("perf(cache): entries:3 bytes:2.0KiB"))).toBe(true);

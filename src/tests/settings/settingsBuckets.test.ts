@@ -22,6 +22,7 @@ import {
 } from "../../settings/userSettings";
 import {
   DEFAULT_SYSTEM_OVERRIDES,
+  resolveEffectiveWorldAtlasMode,
   sanitizeSystemOverrides,
 } from "../../settings/systemOverrides";
 
@@ -137,9 +138,16 @@ describe("settings bucket defaults", () => {
     expect(sanitized.paletteSWeightPercent).toBe(50);
     expect(sanitized.spawnPerDepth).toBeLessThanOrEqual(1.5);
     expect(sanitized.paletteId.length).toBeGreaterThan(0);
-    expect(sanitized.worldAtlasMode).toBe("dual");
+    expect(sanitized.worldAtlasMode).toBe("auto");
     expect(DEFAULT_SYSTEM_OVERRIDES.gameSpeed).toBe(1);
     expect(DEFAULT_SYSTEM_OVERRIDES.darknessMaskDebugDisabled).toBe(true);
-    expect(DEFAULT_SYSTEM_OVERRIDES.worldAtlasMode).toBe("dual");
+    expect(DEFAULT_SYSTEM_OVERRIDES.worldAtlasMode).toBe("auto");
+  });
+
+  it("resolves effective atlas mode from requested mode and backend", () => {
+    expect(resolveEffectiveWorldAtlasMode("auto", "webgl")).toBe("shared");
+    expect(resolveEffectiveWorldAtlasMode("auto", "canvas2d")).toBe("dual");
+    expect(resolveEffectiveWorldAtlasMode("shared", "canvas2d")).toBe("shared");
+    expect(resolveEffectiveWorldAtlasMode("dual", "webgl")).toBe("dual");
   });
 });

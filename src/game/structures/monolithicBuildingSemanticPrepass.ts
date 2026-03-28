@@ -1,5 +1,9 @@
 import { getTileSpriteById } from "../../engine/render/sprites/renderSprites";
 import {
+  LOAD_PROFILER_SUBPHASE,
+  runWithLoadProfilerSubphase,
+} from "../app/loadingFlow";
+import {
   BUILDING_SKINS,
   BUILDING_PACKS,
   DEFAULT_BUILDING_PACK_ID,
@@ -718,7 +722,10 @@ export function buildMonolithicBuildingSemanticGeometryFromAlphaMap(
   },
 ): MonolithicBuildingSemanticGeometry | null {
   const flipX = !!input?.flipX;
-  const anchorResult = getStructureAnchorFromAlphaMap({ alphaMap, flipX });
+  const anchorResult = runWithLoadProfilerSubphase(
+    LOAD_PROFILER_SUBPHASE.ANCHOR_COMPUTATION,
+    () => getStructureAnchorFromAlphaMap({ alphaMap, flipX }),
+  );
   if (!anchorResult) return null;
   const bboxSpriteLocal = {
     x: anchorResult.occupiedBoundsPx.minX,
@@ -732,13 +739,16 @@ export function buildMonolithicBuildingSemanticGeometryFromAlphaMap(
     x: anchorResult.anchorPx.x - workRect.x,
     y: anchorResult.anchorPx.y - workRect.y,
   };
-  const slices = getStructureSlices({
-    bounds: {
-      width: workRect.w,
-      height: workRect.h,
-    },
-    anchor: workAnchor,
-  });
+  const slices = runWithLoadProfilerSubphase(
+    LOAD_PROFILER_SUBPHASE.STRUCTURE_SLICE_GENERATION,
+    () => getStructureSlices({
+      bounds: {
+        width: workRect.w,
+        height: workRect.h,
+      },
+      anchor: workAnchor,
+    }),
+  );
   const sortedByX = slices
     .map((slice, index) => ({ slice, index }))
     .sort((a, b) => a.slice.x - b.slice.x || a.index - b.index);
@@ -778,15 +788,21 @@ export function buildMonolithicBuildingSemanticGeometryFromAlphaMap(
   for (let si = 0; si < slices.length; si++) {
     const slice = slices[si];
     const bandIndex = bandIndexBySliceIndex.get(si) ?? si;
-    const geometry = buildMonolithicSliceGeometry(slice, workAnchor);
-    const cull = cullMonolithicTrianglesByAlphaWithDiagnostics({
-      triangles: geometry.triangles,
-      alphaMap,
-      workRectSpriteLocal: workRect,
-      workOffsetSpriteLocal: { x: workRect.x, y: workRect.y },
-      alphaThreshold: PREPASS_ALPHA_THRESHOLD,
-      minVisiblePixels: PREPASS_MIN_VISIBLE_PIXELS,
-    });
+    const { geometry, cull } = runWithLoadProfilerSubphase(
+      LOAD_PROFILER_SUBPHASE.TRIANGLE_GENERATION,
+      () => {
+        const geometry = buildMonolithicSliceGeometry(slice, workAnchor);
+        const cull = cullMonolithicTrianglesByAlphaWithDiagnostics({
+          triangles: geometry.triangles,
+          alphaMap,
+          workRectSpriteLocal: workRect,
+          workOffsetSpriteLocal: { x: workRect.x, y: workRect.y },
+          alphaThreshold: PREPASS_ALPHA_THRESHOLD,
+          minVisiblePixels: PREPASS_MIN_VISIBLE_PIXELS,
+        });
+        return { geometry, cull };
+      },
+    );
     const keptTriangles: MonolithicSliceTriangle[] = cull.keptTriangles.map((tri) => ({
       a: { x: tri.a.x + workRect.x, y: tri.a.y + workRect.y, side: tri.a.side },
       b: { x: tri.b.x + workRect.x, y: tri.b.y + workRect.y, side: tri.b.side },
@@ -809,16 +825,18 @@ export function buildMonolithicBuildingSemanticGeometryFromAlphaMap(
       y: p.y + workRect.y,
       side: p.side,
     }));
-    for (let ti = 0; ti < keptTriangles.length; ti++) {
-      const tri = keptTriangles[ti];
-      const onLeft = triangleIsFootprintCandidate(tri, leftGuideSegment);
-      const onRight = !onLeft && triangleIsFootprintCandidate(tri, rightGuideSegment);
-      if (!onLeft && !onRight) continue;
-      footprintCandidatesSpriteLocal.push(tri);
-      const centroidX = (tri.a.x + tri.b.x + tri.c.x) / 3;
-      if (centroidX < anchorResult.anchorPx.x) footprintLeftCount++;
-      else footprintRightCount++;
-    }
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.FOOTPRINT_OR_N_M_COMPUTATION, () => {
+      for (let ti = 0; ti < keptTriangles.length; ti++) {
+        const tri = keptTriangles[ti];
+        const onLeft = triangleIsFootprintCandidate(tri, leftGuideSegment);
+        const onRight = !onLeft && triangleIsFootprintCandidate(tri, rightGuideSegment);
+        if (!onLeft && !onRight) continue;
+        footprintCandidatesSpriteLocal.push(tri);
+        const centroidX = (tri.a.x + tri.b.x + tri.c.x) / 3;
+        if (centroidX < anchorResult.anchorPx.x) footprintLeftCount++;
+        else footprintRightCount++;
+      }
+    });
     pendingSliceEntries.push({
       index: si,
       bandIndex,
@@ -830,21 +848,38 @@ export function buildMonolithicBuildingSemanticGeometryFromAlphaMap(
     });
   }
 
-  const n = Math.max(1, footprintLeftCount | 0);
-  const m = Math.max(1, footprintRightCount | 0);
-  const sliceEntries: MonolithicBuildingSemanticSliceEntry[] = pendingSliceEntries.map((entry) => ({
-    ...entry,
-    ...resolveMonolithicSliceParentFootprintPosition(entry.bandIndex, n, m),
-  }));
-  const anchorSpriteLocal = {
-    x: anchorResult.anchorPx.x,
-    y: anchorResult.anchorPx.y,
-  } satisfies RuntimeStructureTrianglePoint;
-  const faceTriangleCounts = resolveSemanticFaceTriangleCounts(sliceEntries, n, anchorSpriteLocal);
-  const tileHeightUnits = Math.max(
-    pixelHeightToSweepTileHeight(STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
-    pixelHeightToSweepTileHeight(faceTriangleCounts.selected * STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
-  );
+  const {
+    n,
+    m,
+    sliceEntries,
+    anchorSpriteLocal,
+    faceTriangleCounts,
+    tileHeightUnits,
+  } = runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.FOOTPRINT_OR_N_M_COMPUTATION, () => {
+    const n = Math.max(1, footprintLeftCount | 0);
+    const m = Math.max(1, footprintRightCount | 0);
+    const sliceEntries: MonolithicBuildingSemanticSliceEntry[] = pendingSliceEntries.map((entry) => ({
+      ...entry,
+      ...resolveMonolithicSliceParentFootprintPosition(entry.bandIndex, n, m),
+    }));
+    const anchorSpriteLocal = {
+      x: anchorResult.anchorPx.x,
+      y: anchorResult.anchorPx.y,
+    } satisfies RuntimeStructureTrianglePoint;
+    const faceTriangleCounts = resolveSemanticFaceTriangleCounts(sliceEntries, n, anchorSpriteLocal);
+    const tileHeightUnits = Math.max(
+      pixelHeightToSweepTileHeight(STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
+      pixelHeightToSweepTileHeight(faceTriangleCounts.selected * STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
+    );
+    return {
+      n,
+      m,
+      sliceEntries,
+      anchorSpriteLocal,
+      faceTriangleCounts,
+      tileHeightUnits,
+    };
+  });
 
   return {
     skinId,
