@@ -127,7 +127,7 @@ export type DebugSettings = {
   structureTriangleFootprint: boolean;
   showStructureAnchors: boolean;
   showStructureTriangleOwnershipSort: boolean;
-  perfOverlayMode: "off" | "overview" | "world" | "structures" | "textures" | "ground" | "lighting" | "cache";
+  perfOverlayMode: "off" | "overview" | "world" | "structures" | "textures" | "ground" | "lighting" | "cache" | "all";
   projectileFaces: boolean;
   triggers: boolean;
   debugRoadSemantic: boolean;

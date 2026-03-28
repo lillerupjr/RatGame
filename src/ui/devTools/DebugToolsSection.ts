@@ -112,7 +112,7 @@ export function mountDebugToolsSection(
   const perfOverlayModeSelect = createSelectRow<DebugToolsSettings["perfOverlayMode"]>(
     section,
     "Perf Overlay",
-    ["off", "overview", "world", "structures", "textures", "ground", "lighting", "cache"],
+    ["off", "overview", "world", "structures", "textures", "ground", "lighting", "cache", "all"],
     (value) => value.charAt(0).toUpperCase() + value.slice(1),
     (value) => applyDebugPatch({ perfOverlayMode: value }),
   );

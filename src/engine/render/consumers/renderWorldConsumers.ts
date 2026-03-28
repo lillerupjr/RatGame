@@ -51,7 +51,7 @@ function drawVisibleChunkPiecesCanvas(
   const pieces = cache.getVisiblePieces(zBand, deps.viewRect);
   if (entries.length <= 0 || pieces.length <= 0) return;
   deps.countVisible?.(entries.length);
-  deps.countDraw?.(pieces.length);
+  deps.countDraw?.(entries.length);
   for (let i = 0; i < pieces.length; i++) renderStaticIsoPieceCanvas(ctx, pieces[i]);
 }
 
@@ -65,7 +65,7 @@ function appendVisibleChunkPiecesWebGL(
   const pieces = cache.getVisiblePieces(zBand, deps.viewRect);
   if (entries.length <= 0 || pieces.length <= 0) return;
   deps.countVisible?.(entries.length);
-  deps.countDraw?.(pieces.length);
+  deps.countDraw?.(entries.length);
   for (let i = 0; i < pieces.length; i++) renderStaticIsoPieceWebGL(batcher, pieces[i]);
 }
 

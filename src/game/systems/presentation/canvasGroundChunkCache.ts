@@ -2,6 +2,8 @@ import type { CompiledKenneyMap, ViewRect } from "../../map/compile/kenneyMap";
 import type { RawCacheMetricSample } from "./cacheMetricsRegistry";
 import type { RenderCommand } from "./contracts/renderCommands";
 import type { StaticWorldQuadRenderPiece } from "../../../engine/render/creator/renderPieceTypes";
+import { buildRectQuadPayload, type RenderQuadPoints } from "./renderCommandGeometry";
+import { drawTexturedQuad } from "./renderPrimitives/drawTexturedQuad";
 import {
   resolveGroundDecalProjectedCommand,
   resolveGroundSurfaceProjectedCommand,
@@ -15,11 +17,23 @@ import {
   toAuditRenderCommand,
 } from "../../../engine/render/creator/renderPieceTypes";
 import { setRenderPerfDrawTag } from "./renderPerfCounters";
+import {
+  markGroundChunkTextureSource,
+  markStableTextureSource,
+} from "./stableTextureSource";
 import { compareRenderKeys, resolveRenderZBand } from "./worldRenderOrdering";
 
 const GROUND_CHUNK_SIZE = 8;
 const VISIBLE_WINDOW_GRACE_MARGIN = 1;
 const CHUNK_RETRY_INTERVAL_MS = 50;
+const CHUNK_RASTER_PADDING_PX = 1;
+
+type RasterBounds = {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+};
 
 export type CanvasGroundChunkCacheEntry = {
   zBand: number;
@@ -29,7 +43,10 @@ export type CanvasGroundChunkCacheEntry = {
   maxTx: number;
   minTy: number;
   maxTy: number;
-  pieces: readonly StaticWorldQuadRenderPiece[];
+  piece: StaticWorldQuadRenderPiece;
+  rasterCanvas: HTMLCanvasElement;
+  sourceQuadCount: number;
+  approxBytes: number;
 };
 
 export type SyncCanvasGroundChunkCacheInput = GroundCommandResolverDeps & {
@@ -181,21 +198,125 @@ function viewIntersectsChunk(view: ViewRect, entry: CanvasGroundChunkCacheEntry)
   );
 }
 
-function toCachedGroundRenderPiece(command: ResolvedGroundProjectedCommand): StaticWorldQuadRenderPiece {
-  return createStaticWorldQuadRenderPiece({
-    key: command.key,
-    semanticFamily: command.semanticFamily,
-    payload: command.payload,
-    staticFamily: command.semanticFamily,
-    worldGeometry: "iso",
-    kind: "iso",
-  });
+function stableRasterChunkId(chunkX: number, chunkY: number, zBand: number): number {
+  return (chunkX * 73856093 ^ chunkY * 19349663 ^ (zBand * 100 | 0) * 83492791) + 101;
+}
+
+function boundsFromQuad(quad: RenderQuadPoints): RasterBounds {
+  return {
+    minX: Math.min(quad.nw.x, quad.ne.x, quad.se.x, quad.sw.x),
+    maxX: Math.max(quad.nw.x, quad.ne.x, quad.se.x, quad.sw.x),
+    minY: Math.min(quad.nw.y, quad.ne.y, quad.se.y, quad.sw.y),
+    maxY: Math.max(quad.nw.y, quad.ne.y, quad.se.y, quad.sw.y),
+  };
+}
+
+function unionBounds(a: RasterBounds | null, b: RasterBounds): RasterBounds {
+  if (!a) return b;
+  return {
+    minX: Math.min(a.minX, b.minX),
+    maxX: Math.max(a.maxX, b.maxX),
+    minY: Math.min(a.minY, b.minY),
+    maxY: Math.max(a.maxY, b.maxY),
+  };
+}
+
+function translateQuad(quad: RenderQuadPoints, dx: number, dy: number): RenderQuadPoints {
+  return {
+    nw: { x: quad.nw.x + dx, y: quad.nw.y + dy },
+    ne: { x: quad.ne.x + dx, y: quad.ne.y + dy },
+    se: { x: quad.se.x + dx, y: quad.se.y + dy },
+    sw: { x: quad.sw.x + dx, y: quad.sw.y + dy },
+  };
+}
+
+function createChunkRasterCanvas(width: number, height: number): HTMLCanvasElement | null {
+  if (typeof document === "undefined") return null;
+  const canvas = markStableTextureSource(markGroundChunkTextureSource(document.createElement("canvas")));
+  canvas.width = Math.max(1, width);
+  canvas.height = Math.max(1, height);
+  return canvas;
+}
+
+function rasterizeBucketCommands(
+  bucket: CanvasGroundChunkBuildBucket,
+): {
+  canvas: HTMLCanvasElement;
+  bounds: RasterBounds;
+} | null {
+  let bounds: RasterBounds | null = null;
+  for (let i = 0; i < bucket.commands.length; i++) {
+    bounds = unionBounds(bounds, boundsFromQuad(bucket.commands[i].destinationQuad));
+  }
+  if (!bounds) return null;
+
+  const paddedBounds: RasterBounds = {
+    minX: Math.floor(bounds.minX) - CHUNK_RASTER_PADDING_PX,
+    maxX: Math.ceil(bounds.maxX) + CHUNK_RASTER_PADDING_PX,
+    minY: Math.floor(bounds.minY) - CHUNK_RASTER_PADDING_PX,
+    maxY: Math.ceil(bounds.maxY) + CHUNK_RASTER_PADDING_PX,
+  };
+  const width = Math.max(1, paddedBounds.maxX - paddedBounds.minX);
+  const height = Math.max(1, paddedBounds.maxY - paddedBounds.minY);
+  const canvas = createChunkRasterCanvas(width, height);
+  if (!canvas) return null;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.imageSmoothingEnabled = false;
+
+  for (let i = 0; i < bucket.commands.length; i++) {
+    const command = bucket.commands[i];
+    const payload = command.payload as RenderCommand["payload"] & {
+      image?: CanvasImageSource;
+      sx?: number;
+      sy?: number;
+      sw?: number;
+      sh?: number;
+      sourceQuad?: RenderQuadPoints;
+      alpha?: number;
+    };
+    const image = payload.image;
+    if (!image) continue;
+    const alpha = Number.isFinite(Number(payload.alpha)) ? Number(payload.alpha) : 1;
+    const draw = () => {
+      drawTexturedQuad(
+        ctx,
+        image,
+        Number(payload.sx ?? 0),
+        Number(payload.sy ?? 0),
+        Number(payload.sw ?? 0),
+        Number(payload.sh ?? 0),
+        translateQuad(command.destinationQuad, -paddedBounds.minX, -paddedBounds.minY),
+        payload.sourceQuad,
+      );
+    };
+    if (alpha >= 1) {
+      draw();
+      continue;
+    }
+    const previousAlpha = ctx.globalAlpha;
+    ctx.globalAlpha = previousAlpha * alpha;
+    try {
+      draw();
+    } finally {
+      ctx.globalAlpha = previousAlpha;
+    }
+  }
+
+  return {
+    canvas,
+    bounds: paddedBounds,
+  };
 }
 
 function buildBucketToEntry(bucket: CanvasGroundChunkBuildBucket): CanvasGroundChunkCacheEntry | null {
   if (bucket.commands.length <= 0) return null;
   setRenderPerfDrawTag("floors");
   try {
+    const rasterized = rasterizeBucketCommands(bucket);
+    if (!rasterized) return null;
+    const firstKey = bucket.commands[0].key;
+    const stableId = stableRasterChunkId(bucket.chunkX, bucket.chunkY, bucket.zBand);
     return {
       zBand: bucket.zBand,
       chunkX: bucket.chunkX,
@@ -204,7 +325,27 @@ function buildBucketToEntry(bucket: CanvasGroundChunkBuildBucket): CanvasGroundC
       maxTx: bucket.maxTx,
       minTy: bucket.minTy,
       maxTy: bucket.maxTy,
-      pieces: bucket.commands.map((command) => toCachedGroundRenderPiece(command)),
+      piece: createStaticWorldQuadRenderPiece({
+        key: {
+          ...firstKey,
+          stableId,
+          kindOrder: firstKey.kindOrder,
+        },
+        semanticFamily: "groundSurface",
+        staticFamily: "groundSurface",
+        worldGeometry: "projected",
+        kind: "rect",
+        payload: buildRectQuadPayload({
+          image: rasterized.canvas,
+          dx: rasterized.bounds.minX,
+          dy: rasterized.bounds.minY,
+          dw: rasterized.canvas.width,
+          dh: rasterized.canvas.height,
+        }),
+      }),
+      rasterCanvas: rasterized.canvas,
+      sourceQuadCount: bucket.commands.length,
+      approxBytes: rasterized.canvas.width * rasterized.canvas.height * 4,
     };
   } finally {
     setRenderPerfDrawTag(null);
@@ -316,7 +457,9 @@ export class CanvasGroundChunkCacheStore {
   private lastGraceLogicalChunkCount = 0;
   private lastPendingLogicalChunkCount = 0;
   private builtLogicalChunkCount = 0;
-  private lastCachedQuadCount = 0;
+  private lastRasterSurfaceCount = 0;
+  private lastRasterSourceQuadCount = 0;
+  private lastApproxRasterBytes = 0;
   private lastCoveredStableIdCount = 0;
 
   get generation(): number {
@@ -337,7 +480,9 @@ export class CanvasGroundChunkCacheStore {
     this.lastTargetLogicalChunkCount = 0;
     this.lastGraceLogicalChunkCount = 0;
     this.lastPendingLogicalChunkCount = 0;
-    this.lastCachedQuadCount = 0;
+    this.lastRasterSurfaceCount = 0;
+    this.lastRasterSourceQuadCount = 0;
+    this.lastApproxRasterBytes = 0;
     this.lastCoveredStableIdCount = 0;
   }
 
@@ -365,10 +510,7 @@ export class CanvasGroundChunkCacheStore {
   getVisiblePieces(zBand: number, viewRect: ViewRect): readonly StaticWorldQuadRenderPiece[] {
     const entries = this.getVisibleEntries(zBand, viewRect);
     if (entries.length <= 0) return [];
-    const pieces: StaticWorldQuadRenderPiece[] = [];
-    for (let i = 0; i < entries.length; i++) {
-      for (let j = 0; j < entries[i].pieces.length; j++) pieces.push(entries[i].pieces[j]);
-    }
+    const pieces = entries.map((entry) => entry.piece);
     pieces.sort((a, b) => compareRenderKeys(a.key, b.key));
     return pieces;
   }
@@ -381,7 +523,9 @@ export class CanvasGroundChunkCacheStore {
     const nextEntriesByBand = new Map<number, CanvasGroundChunkCacheEntry[]>();
     const nextCoveredStableIds = new Set<number>();
     let pendingLogicalChunkCount = 0;
-    let cachedQuadCount = 0;
+    let rasterSurfaceCount = 0;
+    let rasterSourceQuadCount = 0;
+    let approxRasterBytes = 0;
 
     for (const logicalChunk of this.retainedLogicalChunks.values()) {
       if (logicalChunk.pendingRetryAtMs > 0) pendingLogicalChunkCount += 1;
@@ -390,7 +534,9 @@ export class CanvasGroundChunkCacheStore {
       for (const [zBand, entries] of logicalChunk.entriesByBand.entries()) {
         const bandEntries = nextEntriesByBand.get(zBand) ?? [];
         for (let i = 0; i < entries.length; i++) {
-          cachedQuadCount += entries[i].pieces.length;
+          rasterSurfaceCount += 1;
+          rasterSourceQuadCount += entries[i].sourceQuadCount;
+          approxRasterBytes += entries[i].approxBytes;
           bandEntries.push(entries[i]);
         }
         if (!nextEntriesByBand.has(zBand)) nextEntriesByBand.set(zBand, bandEntries);
@@ -401,7 +547,9 @@ export class CanvasGroundChunkCacheStore {
     this.coveredStableIds = nextCoveredStableIds;
     this.lastRetainedLogicalChunkCount = this.retainedLogicalChunks.size;
     this.lastPendingLogicalChunkCount = pendingLogicalChunkCount;
-    this.lastCachedQuadCount = cachedQuadCount;
+    this.lastRasterSurfaceCount = rasterSurfaceCount;
+    this.lastRasterSourceQuadCount = rasterSourceQuadCount;
+    this.lastApproxRasterBytes = approxRasterBytes;
     this.lastCoveredStableIdCount = nextCoveredStableIds.size;
   }
 
@@ -516,7 +664,7 @@ export class CanvasGroundChunkCacheStore {
       for (const entries of retained.entriesByBand.values()) {
         entryCount += entries.length;
         for (let i = 0; i < entries.length; i++) {
-          approxBytes += entries[i].pieces.length * 96;
+          approxBytes += entries[i].approxBytes;
         }
       }
     }
@@ -536,12 +684,14 @@ export class CanvasGroundChunkCacheStore {
       contextKey: this.contextKey,
       generation: this.rebuildGeneration,
       notes: [
-        "mode:quad",
+        "mode:raster",
         `avg:${avgBytes}`,
         `logical:${this.lastRetainedLogicalChunkCount}`,
         `target:${this.lastTargetLogicalChunkCount}`,
         `grace:${this.lastGraceLogicalChunkCount}`,
-        `quads:${this.lastCachedQuadCount}`,
+        `surfaces:${this.lastRasterSurfaceCount}`,
+        `sourceQuads:${this.lastRasterSourceQuadCount}`,
+        `bytes:${this.lastApproxRasterBytes}`,
         `covered:${this.lastCoveredStableIdCount}`,
         `rebuild:${this.lastRebuiltChunkCount}`,
         `built:${this.builtLogicalChunkCount}`,

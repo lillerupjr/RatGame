@@ -182,6 +182,8 @@ describe("CanvasGroundChunkCacheStore", () => {
       expect(store.getDebugCacheMetrics().notes).toContain("logical:4");
       expect(store.getDebugCacheMetrics().notes).toContain("target:4");
       expect(store.getDebugCacheMetrics().notes).toContain("grace:16");
+      expect(store.getDebugCacheMetrics().notes).toContain("mode:raster");
+      expect(store.getDebugCacheMetrics().notes).toContain("surfaces:4");
 
       const decalStableId = resolveGroundDecalProjectedCommand(input.compiledMap.decals[0], input)?.stableId;
       const centerSurfaceStableId = resolveGroundSurfaceProjectedCommand(
@@ -191,6 +193,7 @@ describe("CanvasGroundChunkCacheStore", () => {
       expect(store.hasCoveredStableId(decalStableId)).toBe(true);
       expect(store.hasCoveredStableId(centerSurfaceStableId)).toBe(true);
       expect(store.isTileAuthoritative(8, 8)).toBe(true);
+      expect(store.getVisiblePieces(0, input.viewRect)).toHaveLength(4);
 
       const second = syncCanvasGroundChunkCacheForFrame(input);
       expect(second.rebuiltChunkCount).toBe(0);
@@ -273,15 +276,37 @@ describe("CanvasGroundChunkCacheStore", () => {
         now = 75;
         const third = syncCanvasGroundChunkCacheForFrame(input);
         expect(third.rebuiltChunkCount).toBe(1);
-        expect(store.getDebugCacheMetrics().notes).toContain("pending:0");
-        expect(store.getDebugCacheMetrics().generation).toBe(2);
-        expect(store.isTileAuthoritative(8, 8)).toBe(true);
+      expect(store.getDebugCacheMetrics().notes).toContain("pending:0");
+      expect(store.getDebugCacheMetrics().generation).toBe(2);
+      expect(store.isTileAuthoritative(8, 8)).toBe(true);
       } finally {
         Object.defineProperty(globalThis, "performance", {
           value: originalPerformance,
           configurable: true,
         });
       }
+    });
+  });
+
+  it("reuses raster chunk surfaces until a chunk is rebuilt", () => {
+    withFakeCanvasDocument(() => {
+      const input = makeSyncInput();
+      const store = input.cacheStore as CanvasGroundChunkCacheStore;
+
+      syncCanvasGroundChunkCacheForFrame(input);
+      const firstVisiblePiece = store.getVisiblePieces(0, input.viewRect)[0];
+      expect(firstVisiblePiece?.image).toBeTruthy();
+
+      syncCanvasGroundChunkCacheForFrame(input);
+      const secondVisiblePiece = store.getVisiblePieces(0, input.viewRect)[0];
+      expect(secondVisiblePiece?.image).toBe(firstVisiblePiece?.image);
+
+      syncCanvasGroundChunkCacheForFrame({
+        ...input,
+        contextKey: "map:b",
+      });
+      const rebuiltVisiblePiece = store.getVisiblePieces(0, input.viewRect)[0];
+      expect(rebuiltVisiblePiece?.image).not.toBe(firstVisiblePiece?.image);
     });
   });
 });

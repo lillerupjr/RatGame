@@ -3201,7 +3201,7 @@ export function createGame(args: CreateGameArgs) {
   args.hud.perfOverlayModeSelect.addEventListener("change", () => {
     updateUserSettings({
       debug: {
-        perfOverlayMode: args.hud.perfOverlayModeSelect.value as "off" | "overview" | "world" | "structures" | "textures" | "ground" | "lighting" | "cache",
+        perfOverlayMode: args.hud.perfOverlayModeSelect.value as "off" | "overview" | "world" | "structures" | "textures" | "ground" | "lighting" | "cache" | "all",
       },
     });
   });

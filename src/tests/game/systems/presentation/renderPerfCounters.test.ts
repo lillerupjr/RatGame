@@ -69,7 +69,7 @@ function fakeCtx() {
   };
 }
 
-function makeFlags(mode: "off" | "overview" | "world" | "structures" | "textures" | "ground" | "lighting" | "cache" = "overview") {
+function makeFlags(mode: "off" | "overview" | "world" | "structures" | "textures" | "ground" | "lighting" | "cache" | "all" = "overview") {
   return {
     perfOverlayMode: mode,
     showStructureTriangleFootprint: false,
@@ -517,5 +517,100 @@ describe("render perf counters", () => {
     expect(canvasLines.some((line) => line.includes("chunks: visible:5.0 quads:3.0 rebuild:2.0"))).toBe(true);
     expect(canvasLines.some((line) => line.includes("cache testCache"))).toBe(false);
     expect(canvasLines.some((line) => line.includes("gl draw/frame:"))).toBe(false);
+
+    ctx.fillText.mockClear();
+
+    renderDebugLightingOverlay({
+      ctx,
+      cssW: 900,
+      cssH: 500,
+      dpr: 1,
+      flags: makeFlags("all"),
+      fps: 58,
+      frameTimeMs: 17.2,
+      renderPerfCountersEnabled: true,
+      shadowSunModel: { forward: { x: 0, y: 0, z: 0 }, projectionDirection: { x: 0, y: 0 }, timeLabel: "", elevationDeg: 0, directionLabel: "", stepKey: "" },
+      shadowSunDayCycleStatus: {
+        enabled: false,
+        cycleModeLabel: "",
+        multiplier: 1,
+        stepsPerDay: 0,
+        stepSpanMinutes: 0,
+        manualSeedLabel: "",
+        continuousTimeLabel: "",
+        quantizedTimeLabel: "",
+        stepIndex: 0,
+        advancing: false,
+        stepChanged: false,
+        advancementClamped: false,
+        baseRateLabel: "",
+      },
+      ambientSunLighting: {
+        ambientElevationDeg: 0,
+        ambientDarkness01: 0,
+      },
+      structureTriangleAdmissionMode: "viewport",
+      sliderPadding: 0,
+      playerCameraTx: 0,
+      playerCameraTy: 0,
+      structureTriangleCutoutEnabled: false,
+      structureTriangleCutoutHalfWidth: 0,
+      structureTriangleCutoutHalfHeight: 0,
+      structureTriangleCutoutAlpha: 0,
+      roadWidthAtPlayer: 0,
+      worldBatchAudit: {
+        inspectedBackend: "webgl",
+        compatibilityFields: ["semanticFamily/finalForm", "texture identity"],
+        totalWorldCommands: 12,
+        quadCommands: 6,
+        triangleCommands: 4,
+        batchableCommands: 10,
+        texturedCommands: 8,
+        uniqueTextures: 3,
+        totalWorldBatches: 5,
+        averageRunLength: 2.4,
+        maxRunLength: 4,
+        compatibleContinuations: 7,
+        totalBatchBreaks: 4,
+        breakReasonCounts: {
+          "compatible continuation": 7,
+          "render family changed": 1,
+          "primitive type changed": 0,
+          "shader/material changed": 0,
+          "texture changed": 2,
+          "blend mode changed": 0,
+          "unsupported/fallback path changed": 1,
+          "non-batchable path": 0,
+          "other state incompatibility": 0,
+        },
+        familySummaries: [{
+          family: "props",
+          commands: 6,
+          batches: 3,
+          averageRunLength: 2,
+          maxRunLength: 3,
+          uniqueTextures: 2,
+          dominantBreakReason: "texture changed",
+        }],
+        sampleBoundaries: [],
+        runLengths: {
+          averageTextureRun: 1.6,
+          maxTextureRun: 3,
+          averageCompatibleRun: 2.4,
+          maxCompatibleRun: 4,
+        },
+        reorderProbes: [
+          { windowSize: 4, totalWorldBatches: 4, averageRunLength: 3, totalBatchBreaks: 3, textureBreaks: 1, renderFamilyBreaks: 1, riskCount: 2, overlapRiskCount: 1, feetSortYRiskCount: 1, groupBoundaryRiskCount: 2 },
+          { windowSize: 8, totalWorldBatches: 3, averageRunLength: 4, totalBatchBreaks: 2, textureBreaks: 1, renderFamilyBreaks: 0, riskCount: 3, overlapRiskCount: 2, feetSortYRiskCount: 2, groupBoundaryRiskCount: 3 },
+          { windowSize: 16, totalWorldBatches: 2, averageRunLength: 6, totalBatchBreaks: 1, textureBreaks: 0, renderFamilyBreaks: 0, riskCount: 5, overlapRiskCount: 3, feetSortYRiskCount: 4, groupBoundaryRiskCount: 5 },
+        ],
+      },
+    } as any);
+    const allLines = ctx.fillText.mock.calls.map((call) => String(call[0]));
+    expect(allLines.some((line) => line.includes("perf(overview): fps:58"))).toBe(true);
+    expect(allLines.some((line) => line.includes("perf(world): cmd:12 batch:5"))).toBe(true);
+    expect(allLines.some((line) => line.includes("perf(structures): total:4.0 rect:2.0 rectQuad:2.0"))).toBe(true);
+    expect(allLines.some((line) => line.includes("perf(ground): surf seen:4.0 filtered:3.0 fallback:1.0"))).toBe(true);
+    expect(allLines.some((line) => line.includes("perf(cache): entries:3 bytes:2.0KiB"))).toBe(true);
   });
 });

@@ -123,6 +123,7 @@ function normalizePerfOverlayMode(value: unknown): PerfOverlayMode {
   if (value === "ground") return "ground";
   if (value === "lighting") return "lighting";
   if (value === "cache") return "cache";
+  if (value === "all") return "all";
   return "overview";
 }
 

@@ -237,7 +237,7 @@ export function getDomRefs(): DomRefs {
     const perfOverlayModeSelect = document.createElement("select");
     perfOverlayModeSelect.id = "perfOverlayModeSelect";
     perfOverlayModeSelect.setAttribute("aria-label", "Perf overlay mode");
-    for (const mode of ["off", "overview", "world", "structures", "textures", "ground", "lighting", "cache"] as const) {
+    for (const mode of ["off", "overview", "world", "structures", "textures", "ground", "lighting", "cache", "all"] as const) {
         const option = document.createElement("option");
         option.value = mode;
         option.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);

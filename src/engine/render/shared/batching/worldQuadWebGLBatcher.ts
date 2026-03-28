@@ -4,11 +4,15 @@ import {
   countRenderWebGLBatch,
   countRenderWebGLBufferUpload,
   countRenderWebGLDrawCall,
+  countRenderWebGLGroundChunkTextureUpload,
   countRenderWebGLTextureBind,
   countRenderWebGLTrianglesSubmitted,
   noteRenderWebGLTextureUsage,
 } from "../../../../game/systems/presentation/renderPerfCounters";
-import { isStableTextureSource } from "../../../../game/systems/presentation/stableTextureSource";
+import {
+  isGroundChunkTextureSource,
+  isStableTextureSource,
+} from "../../../../game/systems/presentation/stableTextureSource";
 import { pieceDestinationQuad } from "../../creator/renderPieceTypes";
 
 type BlendMode = "normal" | "additive";
@@ -362,6 +366,7 @@ export class WorldQuadWebGLBatcher {
     noteRenderWebGLTextureUsage(source);
     let cached = this.textureCache.get(source);
     const dynamic = isDynamicSource(image);
+    const groundChunkTexture = isGroundChunkTextureSource(image);
     if (!cached) {
       const texture = this.gl.createTexture();
       if (!texture) return null;
@@ -374,6 +379,7 @@ export class WorldQuadWebGLBatcher {
       this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
       this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.NEAREST);
       this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, image);
+      if (groundChunkTexture) countRenderWebGLGroundChunkTextureUpload();
       return cached;
     }
     countRenderWebGLTextureBind();
@@ -382,6 +388,7 @@ export class WorldQuadWebGLBatcher {
       cached.width = width;
       cached.height = height;
       this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, image);
+      if (groundChunkTexture) countRenderWebGLGroundChunkTextureUpload();
     }
     return cached;
   }
