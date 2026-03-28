@@ -451,9 +451,6 @@ async function bootstrap() {
     prepareStructureTriangles: async () => {
       return game.prepareRuntimeStructureTrianglesForLoading();
     },
-    prepareStaticRelight: async () => {
-      return game.prepareStaticGroundRelightForLoading();
-    },
     primeAudio: async () => {
       const deps = cachedDeps ?? collectFloorDependencies();
       await primeAudio(deps.audioIds);

@@ -14,12 +14,9 @@ export function collectEntityDrawables(input: CollectionContext): void {
     tileHAtWorld,
     KindOrder,
     toScreen,
-    resolveDynamicSpriteRelightAlpha,
     getCurrencyFrame,
     getCurrencyAtlasFrame,
     ctx,
-    dynamicSpriteRelightFrame,
-    getCurrencyFrameForDarknessPercent,
     coinColorFromValue,
     frameBuilder,
     getEnemyWorld,
@@ -40,12 +37,9 @@ export function collectEntityDrawables(input: CollectionContext): void {
     resolveAnchor01,
     ENTITY_ANCHOR_X01_DEFAULT,
     ENTITY_ANCHOR_Y01_DEFAULT,
-    getEnemySpriteFrameForDarknessPercent,
     drawEntityAnchorDebug,
     vendorNpcSpritesReady,
     getVendorNpcSpriteFrame,
-    getVendorNpcSpriteFrameForDarknessPercent,
-    getPigeonFramesForClipAndScreenDirForDarknessPercent,
     snapPx,
     debug,
     toScreenAtZ,
@@ -72,7 +66,6 @@ export function collectEntityDrawables(input: CollectionContext): void {
     snapToNearestWalkableGround,
     playerSpritesReady,
     getPlayerSpriteFrame,
-    getPlayerSpriteFrameForDarknessPercent,
     PLAYER_R,
   } = input as any;
 
@@ -177,34 +170,6 @@ export function collectEntityDrawables(input: CollectionContext): void {
               pickupKind: kind,
             },
           });
-          const dynamicRelightAlpha = resolveDynamicSpriteRelightAlpha(p.x, p.y);
-          if (dynamicRelightAlpha > 0 && dynamicSpriteRelightFrame) {
-            const litAtlasFrame = getCurrencyAtlasFrame?.(
-              value,
-              w.time ?? 0,
-              dynamicSpriteRelightFrame.targetDarknessBucket,
-            ) ?? null;
-            if (litAtlasFrame) {
-              enqueueSliceCommand(frameBuilder, imageSpriteKey(renderKey, 0.01), {
-                semanticFamily: "worldSprite",
-                finalForm: "quad",
-                payload: {
-                  image: litAtlasFrame.image,
-                  sx: litAtlasFrame.sx,
-                  sy: litAtlasFrame.sy,
-                  sw: litAtlasFrame.sw,
-                  sh: litAtlasFrame.sh,
-                  dx: p.x - size * 0.5,
-                  dy: p.y - size * 0.5,
-                  dw: size,
-                  dh: size,
-                  alpha: dynamicRelightAlpha,
-                  pickupIndex: i,
-                  pickupKind: kind,
-                },
-              });
-            }
-          }
           continue;
         }
 
@@ -225,30 +190,6 @@ export function collectEntityDrawables(input: CollectionContext): void {
               pickupKind: kind,
             },
           });
-          const dynamicRelightAlpha = resolveDynamicSpriteRelightAlpha(p.x, p.y);
-          if (dynamicRelightAlpha > 0 && dynamicSpriteRelightFrame) {
-            const litSprite = getCurrencyFrameForDarknessPercent(
-              value,
-              w.time ?? 0,
-              dynamicSpriteRelightFrame.targetDarknessBucket,
-            );
-            if (litSprite?.ready && litSprite.img) {
-              enqueueSliceCommand(frameBuilder, imageSpriteKey(renderKey, 0.01), {
-                semanticFamily: "worldSprite",
-                finalForm: "quad",
-                payload: {
-                  image: litSprite.img,
-                  dx: p.x - size * 0.5,
-                  dy: p.y - size * 0.5,
-                  dw: size,
-                  dh: size,
-                  alpha: dynamicRelightAlpha,
-                  pickupIndex: i,
-                  pickupKind: kind,
-                },
-              });
-            }
-          }
           continue;
         }
       }
@@ -330,36 +271,6 @@ export function collectEntityDrawables(input: CollectionContext): void {
             enemyIndex: i,
           },
         });
-        const dynamicRelightAlpha = resolveDynamicSpriteRelightAlpha(feet.screenX, feet.screenY);
-        if (dynamicRelightAlpha > 0 && dynamicSpriteRelightFrame) {
-          const litFrame = getEnemySpriteFrameForDarknessPercent({
-            type: w.eType[i],
-            time: w.time ?? 0,
-            faceDx,
-            faceDy,
-            moving,
-            darknessPercent: dynamicSpriteRelightFrame.targetDarknessBucket,
-          });
-          if (litFrame) {
-            enqueueSliceCommand(frameBuilder, imageSpriteKey(renderKey, 0.01), {
-              semanticFamily: "worldSprite",
-              finalForm: "quad",
-              payload: {
-                image: litFrame.img,
-                sx: litFrame.sx,
-                sy: litFrame.sy,
-                sw: litFrame.sw,
-                sh: litFrame.sh,
-                dx: Math.round(draw.dx),
-                dy: Math.round(draw.dy),
-                dw: draw.dw,
-                dh: draw.dh,
-                alpha: dynamicRelightAlpha,
-                enemyIndex: i,
-              },
-            });
-          }
-        }
         continue;
       }
 
@@ -423,33 +334,6 @@ export function collectEntityDrawables(input: CollectionContext): void {
             npcIndex: i,
           },
         });
-        const dynamicRelightAlpha = resolveDynamicSpriteRelightAlpha(feet.screenX, feet.screenY);
-        if (dynamicRelightAlpha > 0 && dynamicSpriteRelightFrame) {
-          const litFrame = getVendorNpcSpriteFrameForDarknessPercent({
-            dir: npc.dirCurrent,
-            time: w.time ?? 0,
-            darknessPercent: dynamicSpriteRelightFrame.targetDarknessBucket,
-          });
-          if (litFrame) {
-            enqueueSliceCommand(frameBuilder, imageSpriteKey(renderKey, 0.01), {
-              semanticFamily: "worldSprite",
-              finalForm: "quad",
-              payload: {
-                image: litFrame.img,
-                sx: litFrame.sx,
-                sy: litFrame.sy,
-                sw: litFrame.sw,
-                sh: litFrame.sh,
-                dx: Math.round(draw.dx),
-                dy: Math.round(draw.dy),
-                dw: draw.dw,
-                dh: draw.dh,
-                alpha: dynamicRelightAlpha,
-                npcIndex: i,
-              },
-            });
-          }
-        }
         continue;
       }
 
@@ -515,33 +399,6 @@ export function collectEntityDrawables(input: CollectionContext): void {
               neutralMobIndex: i,
             },
           });
-          const dynamicRelightAlpha = resolveDynamicSpriteRelightAlpha(feet.screenX, feet.screenY);
-          if (dynamicRelightAlpha > 0 && dynamicSpriteRelightFrame) {
-            const litFrames = getPigeonFramesForClipAndScreenDirForDarknessPercent(
-              mob.anim.clip,
-              mob.render.screenDir,
-              dynamicSpriteRelightFrame.targetDarknessBucket,
-            );
-            if (litFrames.length > 0) {
-              const litFrame = litFrames[mob.anim.frameIndex % litFrames.length];
-              if (litFrame) {
-                enqueueSliceCommand(frameBuilder, imageSpriteKey(renderKey, 0.01), {
-                  semanticFamily: "worldSprite",
-                  finalForm: "quad",
-                  payload: {
-                    image: litFrame,
-                    dx: snapPx(draw.dx),
-                    dy: snapPx(draw.dy),
-                    dw: draw.dw,
-                    dh: draw.dh,
-                    flipX: !!mob.render.flipX,
-                    alpha: dynamicRelightAlpha,
-                    neutralMobIndex: i,
-                  },
-                });
-              }
-            }
-          }
           continue;
         }
       }
@@ -749,33 +606,6 @@ export function collectEntityDrawables(input: CollectionContext): void {
           alpha: 1,
         },
       });
-      const dynamicRelightAlpha = resolveDynamicSpriteRelightAlpha(feet.screenX, feet.screenY);
-      if (dynamicRelightAlpha > 0 && dynamicSpriteRelightFrame) {
-        const litFrame = getPlayerSpriteFrameForDarknessPercent({
-          dir,
-          moving,
-          time: w.time ?? 0,
-          darknessPercent: dynamicSpriteRelightFrame.targetDarknessBucket,
-        });
-        if (litFrame) {
-          enqueueSliceCommand(frameBuilder, imageSpriteKey(renderKey, 0.01), {
-            semanticFamily: "worldSprite",
-            finalForm: "quad",
-            payload: {
-              image: litFrame.img,
-              sx: litFrame.sx,
-              sy: litFrame.sy,
-              sw: litFrame.sw,
-              sh: litFrame.sh,
-              dx: Math.round(draw.dx),
-              dy: Math.round(draw.dy),
-              dw: draw.dw,
-              dh: draw.dh,
-              alpha: dynamicRelightAlpha,
-            },
-          });
-        }
-      }
     } else {
       enqueueSliceCommand(frameBuilder, renderKey, {
         semanticFamily: "worldSprite",

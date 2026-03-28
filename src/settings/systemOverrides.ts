@@ -6,16 +6,14 @@ import {
 } from "../engine/render/palette/palettes";
 import {
   PALETTE_REMAP_WEIGHT_OPTIONS,
-  STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS,
   type PaletteRemapWeightPercent,
-  type StaticRelightTargetDarknessPercent,
   type SystemOverrides,
   type LightColorModeOverride,
   type LightStrengthOverride,
   type StructureTriangleAdmissionMode,
 } from "./settingsTypes";
 export type { LightColorModeOverride, LightStrengthOverride, StructureTriangleAdmissionMode } from "./settingsTypes";
-export { PALETTE_REMAP_WEIGHT_OPTIONS, STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS } from "./settingsTypes";
+export { PALETTE_REMAP_WEIGHT_OPTIONS } from "./settingsTypes";
 
 export const MIN_GAME_SPEED = 0.5;
 export const MAX_GAME_SPEED = 1.5;
@@ -42,25 +40,6 @@ export function normalizePaletteRemapWeightPercent(value: unknown): PaletteRemap
   let nearestDist = Math.abs(numeric - nearest);
   for (let i = 1; i < PALETTE_REMAP_WEIGHT_OPTIONS.length; i++) {
     const candidate = PALETTE_REMAP_WEIGHT_OPTIONS[i];
-    const dist = Math.abs(numeric - candidate);
-    if (dist < nearestDist) {
-      nearest = candidate;
-      nearestDist = dist;
-    }
-  }
-  return nearest;
-}
-
-export function normalizeStaticRelightTargetDarknessPercent(
-  value: unknown,
-): StaticRelightTargetDarknessPercent {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 50;
-
-  let nearest: StaticRelightTargetDarknessPercent = STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS[0];
-  let nearestDist = Math.abs(numeric - nearest);
-  for (let i = 1; i < STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS.length; i++) {
-    const candidate = STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS[i];
     const dist = Math.abs(numeric - candidate);
     if (dist < nearestDist) {
       nearest = candidate;
@@ -113,7 +92,6 @@ export const DEFAULT_SYSTEM_OVERRIDES: SystemOverrides = {
   waterFlowRate: 1,
 
   entityShadowsDisable: false,
-  staticRelightEnabled: true,
   structureTriangleAdmissionMode: "hybrid",
   structureTriangleCutoutEnabled: true,
   structureTriangleCutoutWidth: 4,
@@ -129,8 +107,6 @@ export const DEFAULT_SYSTEM_OVERRIDES: SystemOverrides = {
   paletteId: "db32",
   paletteSWeightPercent: 75,
   paletteDarknessPercent: 50,
-  staticRelightStrengthPercent: 100,
-  staticRelightTargetDarknessPercent: 0,
 
   ...DEFAULT_SPAWN_TUNING,
 
@@ -164,7 +140,6 @@ export function sanitizeSystemOverrides(input: Partial<SystemOverrides> | undefi
     waterFlowRate: Math.max(0, Number.isFinite(Number(merged.waterFlowRate)) ? Number(merged.waterFlowRate) : 1),
 
     entityShadowsDisable: !!merged.entityShadowsDisable,
-    staticRelightEnabled: merged.staticRelightEnabled !== false,
     structureTriangleAdmissionMode: normalizeStructureTriangleAdmissionMode(merged.structureTriangleAdmissionMode),
     structureTriangleCutoutEnabled: !!merged.structureTriangleCutoutEnabled,
     structureTriangleCutoutWidth: normalizeStructureTriangleCutoutSpan(merged.structureTriangleCutoutWidth),
@@ -180,8 +155,6 @@ export function sanitizeSystemOverrides(input: Partial<SystemOverrides> | undefi
     paletteId: resolvePaletteIdForGroup(normalizedPaletteGroup, merged.paletteId),
     paletteSWeightPercent: normalizePaletteRemapWeightPercent(merged.paletteSWeightPercent),
     paletteDarknessPercent: normalizePaletteRemapWeightPercent(merged.paletteDarknessPercent),
-    staticRelightStrengthPercent: normalizePaletteRemapWeightPercent(merged.staticRelightStrengthPercent),
-    staticRelightTargetDarknessPercent: normalizeStaticRelightTargetDarknessPercent(merged.staticRelightTargetDarknessPercent),
 
     spawnBase: Math.max(0.2, Math.min(4.0, Number.isFinite(Number(merged.spawnBase)) ? Number(merged.spawnBase) : DEFAULT_SPAWN_TUNING.spawnBase)),
     spawnPerDepth: Math.max(0.8, Math.min(1.5, Number.isFinite(Number(merged.spawnPerDepth)) ? Number(merged.spawnPerDepth) : DEFAULT_SPAWN_TUNING.spawnPerDepth)),

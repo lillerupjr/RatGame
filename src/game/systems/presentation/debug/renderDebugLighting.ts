@@ -1,6 +1,5 @@
 import { getRenderPerfSnapshot } from "../renderPerfCounters";
 import type { RenderDebugScreenPassInput } from "./debugRenderTypes";
-import { drawStructureV6FaceSliceDebugPanel } from "./renderDebugStructures";
 import { describeRenderBackendFallbackReason } from "../backend/renderBackendSelection";
 import type { CacheMetricSample } from "../cacheMetricsRegistry";
 import type { WorldBatchAudit, WorldBatchBreakReason, WorldBatchFamilySummary } from "./worldBatchAudit";
@@ -187,11 +186,6 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
     dpr,
     flags,
     renderPerfCountersEnabled,
-    structureShadowRouting,
-    structureV6VerticalShadowDebugData,
-    structureV6ShadowDebugCandidateCount,
-    structureV6ShadowCastCount,
-    structureV6ShadowCacheStats,
     shadowSunModel,
     ambientSunLighting,
     shadowSunDayCycleStatus,
@@ -211,14 +205,6 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
   ctx.font = "12px monospace";
   ctx.fillStyle = "#fff";
 
-  if (
-    structureShadowRouting.usesV6Debug
-    && flags.shadowV6FaceSliceDebugOverlay
-    && structureV6VerticalShadowDebugData
-  ) {
-    drawStructureV6FaceSliceDebugPanel(ctx, cssW, cssH, structureV6VerticalShadowDebugData);
-  }
-
   if (renderPerfCountersEnabled) {
     const framePerf = buildFramePerf(input);
     const mode = flags.perfOverlayMode ?? "overview";
@@ -237,32 +223,9 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
   if (flags.showStructureTriangleFootprint) {
     const forward = shadowSunModel.forward;
     const projection = shadowSunModel.projectionDirection;
-    const sunLine = `shadowSun ${shadowSunModel.timeLabel} caster:${flags.shadowCasterMode} elev:${shadowSunModel.elevationDeg.toFixed(1)} ambElev:${ambientSunLighting.ambientElevationDeg.toFixed(1)} ambDark:${ambientSunLighting.ambientDarkness01.toFixed(3)} dir:${shadowSunModel.directionLabel} f(${forward.x.toFixed(3)},${forward.y.toFixed(3)},${forward.z.toFixed(3)}) p(${projection.x.toFixed(3)},${projection.y.toFixed(3)}) step:${shadowSunModel.stepKey}`;
+    const sunLine = `shadowSun ${shadowSunModel.timeLabel} elev:${shadowSunModel.elevationDeg.toFixed(1)} ambElev:${ambientSunLighting.ambientElevationDeg.toFixed(1)} ambDark:${ambientSunLighting.ambientDarkness01.toFixed(3)} dir:${shadowSunModel.directionLabel} f(${forward.x.toFixed(3)},${forward.y.toFixed(3)},${forward.z.toFixed(3)}) p(${projection.x.toFixed(3)},${projection.y.toFixed(3)}) step:${shadowSunModel.stepKey}`;
     ctx.fillText(sunLine, 8, screenDebugLineY);
     screenDebugLineY += 16;
-
-    if (structureShadowRouting.usesV6Debug) {
-      const selectedId = structureV6VerticalShadowDebugData?.structureInstanceId ?? "none";
-      const bucketATris = structureV6VerticalShadowDebugData?.bucketAShadow?.sourceTriangleCount ?? 0;
-      const bucketBTriCount = structureV6VerticalShadowDebugData?.bucketBShadow?.sourceTriangleCount ?? 0;
-      const topTriCount = structureV6VerticalShadowDebugData?.topShadow?.sourceTriangleCount ?? 0;
-      const bucketACastSlices = structureV6VerticalShadowDebugData?.bucketAShadow?.nonEmptySliceCount ?? 0;
-      const bucketBCastSlices = structureV6VerticalShadowDebugData?.bucketBShadow?.nonEmptySliceCount ?? 0;
-      const topCastSlices = structureV6VerticalShadowDebugData?.topShadow?.nonEmptySliceCount ?? 0;
-      const shadowVector = structureV6VerticalShadowDebugData?.shadowVector ?? { x: 0, y: 0 };
-      const v6Mode = [
-        flags.shadowV6OneStructureOnly ? "one" : flags.shadowV6AllStructures ? "all" : "none",
-        flags.shadowV6VerticalOnly ? "verticalOnly" : "vertical+top",
-        flags.shadowV6TopOnly ? "topOnly" : "top+vertical",
-      ].join("|");
-      const v6Line = `v6Diag buckets:${flags.shadowV6PrimarySemanticBucket}+${flags.shadowV6SecondarySemanticBucket}+${flags.shadowV6TopSemanticBucket} reqBucket:${flags.shadowV6RequestedSemanticBucket} structReq:${flags.shadowV6StructureIndex} selected:${selectedId} candidates:${structureV6ShadowDebugCandidateCount} castStruct:${structureV6ShadowCastCount} mode:${v6Mode} triEW:${bucketATris} triSN:${bucketBTriCount} triTOP:${topTriCount} castEW:${bucketACastSlices} castSN:${bucketBCastSlices} castTOP:${topCastSlices} vec(${shadowVector.x.toFixed(1)},${shadowVector.y.toFixed(1)})`;
-      ctx.fillText(v6Line, 8, screenDebugLineY);
-      screenDebugLineY += 16;
-      const cacheStats = structureV6ShadowCacheStats;
-      const v6CacheLine = `v6Cache sun:${cacheStats?.sunStepKey ?? shadowSunModel.stepKey} hit:${cacheStats?.cacheHits ?? 0} miss:${cacheStats?.cacheMisses ?? 0} rebuilt:${cacheStats?.rebuiltStructures ?? 0} reused:${cacheStats?.reusedStructures ?? 0} changed:${cacheStats?.sunStepChanged ? 1 : 0} force:${(flags.shadowV6ForceRefresh || cacheStats?.forceRefresh) ? 1 : 0} size:${cacheStats?.cacheSize ?? 0}`;
-      ctx.fillText(v6CacheLine, 8, screenDebugLineY);
-      screenDebugLineY += 16;
-    }
   }
 
   if (flags.showRoadSemantic) {

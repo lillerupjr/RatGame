@@ -1,18 +1,13 @@
 import type { AmbientSunLightingState } from "../../../../shadowSunV1";
-import type { ShadowCasterMode, ShadowV6SemanticBucket } from "../../../../settings/settingsTypes";
+import type { StructureV6SemanticBucket } from "../structureShadowV6FaceSlices";
 import type { ShadowSunModel } from "../renderShadow";
 
-export type StructureShadowVersionId = ShadowCasterMode;
-
 export type StructureShadowRenderMode = {
-  mode: StructureShadowVersionId;
   usesV6Sweep: boolean;
-  usesV6Debug: boolean;
 };
 
 export type StructureShadowFrameInputs = {
   mapId: string;
-  shadowCasterMode: ShadowCasterMode;
   shadowSunTimeHour: number;
   shadowSunStepKeyOverride?: string;
   shadowSunAzimuthDeg: number;
@@ -33,7 +28,7 @@ export type StructureShadowScreenPoint = {
 
 export type StructureV6SemanticTriangle = {
   stableId: number;
-  semanticBucket: ShadowV6SemanticBucket;
+  semanticBucket: StructureV6SemanticBucket;
   srcTriangle: [
     StructureShadowScreenPoint,
     StructureShadowScreenPoint,
@@ -52,11 +47,6 @@ export type StructureV6ShadowDebugCandidate = {
   sourceImage: CanvasImageSource;
   sourceImageWidth: number;
   sourceImageHeight: number;
-  triangles: readonly StructureV6SemanticTriangle[];
+  triangles: StructureV6SemanticTriangle[];
   zBand: number;
-};
-
-export type StructureShadowOverlayQueueResult = {
-  structureShadowBand: number;
-  v6Candidate: StructureV6ShadowDebugCandidate | null;
 };

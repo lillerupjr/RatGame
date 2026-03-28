@@ -71,21 +71,8 @@ function fakeCtx() {
 
 function makeFlags(mode: "off" | "overview" | "world" | "structures" | "textures" | "ground" | "lighting" | "cache" = "overview") {
   return {
-    debugStructureRenderMode: "triangles" as const,
     perfOverlayMode: mode,
-    shadowV6FaceSliceDebugOverlay: false,
-    shadowV6OneStructureOnly: false,
-    shadowV6AllStructures: false,
-    shadowV6VerticalOnly: false,
-    shadowV6TopOnly: false,
-    shadowV6ForceRefresh: false,
-    shadowV6PrimarySemanticBucket: "EAST_WEST" as const,
-    shadowV6SecondarySemanticBucket: "SOUTH_NORTH" as const,
-    shadowV6TopSemanticBucket: "TOP" as const,
-    shadowV6RequestedSemanticBucket: "EAST_WEST" as const,
-    shadowV6StructureIndex: 0,
     showStructureTriangleFootprint: false,
-    shadowCasterMode: "v6SweepShadow" as const,
     showRoadSemantic: false,
   } as any;
 }
@@ -236,11 +223,6 @@ describe("render perf counters", () => {
       fps: 60,
       frameTimeMs: 16.7,
       renderPerfCountersEnabled: true,
-      structureShadowRouting: { usesV6Debug: false },
-      structureV6VerticalShadowDebugData: null,
-      structureV6ShadowDebugCandidateCount: 0,
-      structureV6ShadowCastCount: 0,
-      structureV6ShadowCacheStats: null,
       shadowSunModel: { forward: { x: 0, y: 0, z: 0 }, projectionDirection: { x: 0, y: 0 }, timeLabel: "", elevationDeg: 0, directionLabel: "", stepKey: "" },
       shadowSunDayCycleStatus: {
         enabled: false,
@@ -332,11 +314,6 @@ describe("render perf counters", () => {
       fps: 60,
       frameTimeMs: 16.7,
       renderPerfCountersEnabled: true,
-      structureShadowRouting: { usesV6Debug: false },
-      structureV6VerticalShadowDebugData: null,
-      structureV6ShadowDebugCandidateCount: 0,
-      structureV6ShadowCastCount: 0,
-      structureV6ShadowCacheStats: null,
       shadowSunModel: { forward: { x: 0, y: 0, z: 0 }, projectionDirection: { x: 0, y: 0 }, timeLabel: "", elevationDeg: 0, directionLabel: "", stepKey: "" },
       shadowSunDayCycleStatus: {
         enabled: false,
@@ -383,11 +360,6 @@ describe("render perf counters", () => {
       fps: 60,
       frameTimeMs: 16.7,
       renderPerfCountersEnabled: true,
-      structureShadowRouting: { usesV6Debug: false },
-      structureV6VerticalShadowDebugData: null,
-      structureV6ShadowDebugCandidateCount: 0,
-      structureV6ShadowCastCount: 0,
-      structureV6ShadowCacheStats: null,
       shadowSunModel: { forward: { x: 0, y: 0, z: 0 }, projectionDirection: { x: 0, y: 0 }, timeLabel: "", elevationDeg: 0, directionLabel: "", stepKey: "" },
       shadowSunDayCycleStatus: {
         enabled: false,
@@ -508,11 +480,6 @@ describe("render perf counters", () => {
       fps: 58,
       frameTimeMs: 17.2,
       renderPerfCountersEnabled: true,
-      structureShadowRouting: { usesV6Debug: false },
-      structureV6VerticalShadowDebugData: null,
-      structureV6ShadowDebugCandidateCount: 0,
-      structureV6ShadowCastCount: 0,
-      structureV6ShadowCacheStats: null,
       shadowSunModel: { forward: { x: 0, y: 0, z: 0 }, projectionDirection: { x: 0, y: 0 }, timeLabel: "", elevationDeg: 0, directionLabel: "", stepKey: "" },
       shadowSunDayCycleStatus: {
         enabled: false,

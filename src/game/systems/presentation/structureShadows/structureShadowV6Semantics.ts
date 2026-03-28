@@ -1,9 +1,11 @@
-import type { ShadowV6SemanticBucket } from "../../../../settings/settingsTypes";
 import type {
   RuntimeStructureTrianglePiece,
   RuntimeStructureTriangleSemanticClass,
 } from "../../../structures/monolithicStructureGeometry";
+import type { StructureV6SemanticBucket } from "../structureShadowV6FaceSlices";
 import type { StructureV6SemanticTriangle } from "./structureShadowTypes";
+
+type ShadowV6SemanticBucket = StructureV6SemanticBucket;
 
 function resolveSemanticBucketsForTriangleSemantic(
   semantic: RuntimeStructureTriangleSemanticClass,

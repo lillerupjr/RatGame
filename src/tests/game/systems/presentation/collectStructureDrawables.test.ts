@@ -55,15 +55,12 @@ function makeBaseInput(
     rampRoadTiles: new Set<string>(),
     resolveRenderZBand: vi.fn(() => 0),
     structureShadowFrame: {
-      routing: { usesV6Sweep: false, usesV6Debug: false },
+      routing: { usesV6Sweep: false },
       sunModel: {
         stepKey: "sun-step",
         projectionDirection: { x: 1, y: 1 },
       },
     },
-    SHADOW_V6_PRIMARY_SEMANTIC_BUCKET: "primary",
-    SHADOW_V6_SECONDARY_SEMANTIC_BUCKET: "secondary",
-    SHADOW_V6_TOP_SEMANTIC_BUCKET: "top",
     getStructureSpriteAtlasFrame,
     monolithicStructureGeometryCacheStore: {},
     getTileSpriteById: vi.fn(),
@@ -76,7 +73,6 @@ function makeBaseInput(
     deferredStructureSliceDebugDraws: [],
     LOG_STRUCTURE_OWNERSHIP_DEBUG: false,
     loggedStructureOwnershipDebugIds: new Set<string>(),
-    structureV6ShadowDebugCandidates: [],
     staticRelight: { frame: null },
     buildStructureDrawables: vi.fn((structurePieces: readonly any[]) => structurePieces.map((piece, index) => ({
       key: {
@@ -93,34 +89,7 @@ function makeBaseInput(
         piece,
       },
     }))),
-    buildStructureV6VerticalShadowFrameResults: vi.fn(() => ({
-      selected: null,
-      all: [],
-    })),
-    SHADOW_V6_REQUESTED_SEMANTIC_BUCKET: "primary",
-    SHADOW_V6_STRUCTURE_INDEX: 0,
-    SHADOW_V6_SLICE_COUNT: 4,
-    SHADOW_V6_ALL_STRUCTURES: false,
-    SHADOW_V6_ONE_STRUCTURE_ONLY: false,
-    SHADOW_V6_VERTICAL_ONLY: false,
-    SHADOW_V6_TOP_ONLY: false,
-    SHADOW_V6_FORCE_REFRESH: false,
-    STRUCTURE_SHADOW_V5_LENGTH_PX: 64,
-    countStructureV6CandidateTrianglesForBucket: vi.fn(() => 0),
-    resolveStructureV6SelectedCandidateIndex: vi.fn(() => 0),
-    buildStructureV6VerticalShadowMaskDebugData: vi.fn(() => null),
-    structureShadowV6CacheStore: {
-      beginFrame: vi.fn(() => ({ sunStepChanged: false })),
-      size: vi.fn(() => 0),
-      get: vi.fn(() => null),
-      set: vi.fn(),
-      isFullyPopulatedForKey: vi.fn(() => true),
-      markFullyPopulatedForKey: vi.fn(),
-    },
     didQueueStructureCutoutDebugRect: false,
-    structureV6VerticalShadowDebugData: null,
-    structureV6VerticalShadowDebugDataList: [],
-    structureV6ShadowCacheStats: null,
   } as any;
 }
 

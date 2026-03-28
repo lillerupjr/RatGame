@@ -1,13 +1,10 @@
 import type { CollectionContext } from "../contracts/collectionContext";
 import { enqueueSliceCommand } from "../frame/renderFrameBuilder";
-import type { StructureV6ShadowCacheFrameStats } from "../structureShadows/structureShadowV6Cache";
 import {
   buildRuntimeStructureProjectedDraw,
   rectIntersects as runtimeStructureRectIntersects,
   runtimeStructureTriangleGeometrySignatureForOverlay,
 } from "../../../structures/monolithicStructureGeometry";
-import { buildStructureShadowFrameResult as buildOrchestratedStructureShadowFrameResult } from "../structureShadows/structureShadowOrchestrator";
-import { shouldBuildStructureV6ShadowMasksForFrame } from "../structureShadows/structureShadowVersionRouting";
 import { buildRuntimeStructureTriangleSemanticMap } from "../structureShadows/structureTriangleSemantics";
 import {
   buildRectDestinationQuad,
@@ -65,9 +62,6 @@ type DestinationQuadBuilder = (input: {
 
 export function collectStructureDrawables(input: CollectionContext): {
   didQueueStructureCutoutDebugRect: boolean;
-  structureV6VerticalShadowDebugData: unknown;
-  structureV6VerticalShadowDebugDataList: readonly unknown[];
-  structureV6ShadowCacheStats: unknown;
 } {
   const {
     DISABLE_WALLS_AND_CURTAINS,
@@ -106,12 +100,6 @@ export function collectStructureDrawables(input: CollectionContext): {
     playerCameraTy,
     isParentTileAfterPlayer,
     toScreenAtZ,
-    rampRoadTiles,
-    resolveRenderZBand,
-    structureShadowFrame,
-    SHADOW_V6_PRIMARY_SEMANTIC_BUCKET,
-    SHADOW_V6_SECONDARY_SEMANTIC_BUCKET,
-    SHADOW_V6_TOP_SEMANTIC_BUCKET,
     getStructureSpriteAtlasFrame,
     monolithicStructureGeometryCacheStore,
     getTileSpriteById,
@@ -123,41 +111,10 @@ export function collectStructureDrawables(input: CollectionContext): {
     deferredStructureSliceDebugDraws,
     LOG_STRUCTURE_OWNERSHIP_DEBUG,
     loggedStructureOwnershipDebugIds,
-    structureV6ShadowDebugCandidates,
-    staticRelight,
     buildStructureDrawables,
-    buildStructureV6VerticalShadowFrameResults,
-    SHADOW_V6_REQUESTED_SEMANTIC_BUCKET,
-    SHADOW_V6_STRUCTURE_INDEX,
-    SHADOW_V6_SLICE_COUNT,
-    SHADOW_V6_ALL_STRUCTURES,
-    SHADOW_V6_ONE_STRUCTURE_ONLY,
-    SHADOW_V6_VERTICAL_ONLY,
-    SHADOW_V6_TOP_ONLY,
-    SHADOW_V6_FORCE_REFRESH,
-    STRUCTURE_SHADOW_V5_LENGTH_PX,
-    countStructureV6CandidateTrianglesForBucket,
-    resolveStructureV6SelectedCandidateIndex,
-    buildStructureV6VerticalShadowMaskDebugData,
-    structureShadowV6CacheStore,
   } = input as any;
 
   let didQueueStructureCutoutDebugRect = input.didQueueStructureCutoutDebugRect ?? false;
-  let structureV6VerticalShadowDebugData: unknown = input.structureV6VerticalShadowDebugData ?? null;
-  let structureV6VerticalShadowDebugDataList: readonly unknown[] = input.structureV6VerticalShadowDebugDataList ?? [];
-  let structureV6ShadowCacheStats: StructureV6ShadowCacheFrameStats = input.structureV6ShadowCacheStats as StructureV6ShadowCacheFrameStats;
-  if (!structureV6ShadowCacheStats) {
-    structureV6ShadowCacheStats = {
-      sunStepKey: structureShadowFrame.sunModel.stepKey,
-      cacheHits: 0,
-      cacheMisses: 0,
-      rebuiltStructures: 0,
-      reusedStructures: 0,
-      sunStepChanged: false,
-      forceRefresh: false,
-      cacheSize: 0,
-    };
-  }
 
   const buildStructureOverlayQuadPayload = (
     overlaySpriteId: string | undefined,
@@ -246,7 +203,7 @@ export function collectStructureDrawables(input: CollectionContext): {
 
   const processStructureTriangles = (
     piece: any,
-    atlasFrame: { image: HTMLCanvasElement | OffscreenCanvas; sx: number; sy: number; sw: number; sh: number } | null,
+    atlasFrame: { image: HTMLCanvasElement; sx: number; sy: number; sw: number; sh: number } | null,
     sourceWidth: number,
   ): ProcessedStructureTriangle[] => (
     piece.finalVisibleTriangles.map((triangle: any) => {
@@ -311,7 +268,7 @@ export function collectStructureDrawables(input: CollectionContext): {
 
   const tryBuildMonolithicCellQuadPayloads = (
     piece: any,
-    atlasFrame: { image: HTMLCanvasElement | OffscreenCanvas; sx: number; sy: number; sw: number; sh: number } | null,
+    atlasFrame: { image: HTMLCanvasElement; sx: number; sy: number; sw: number; sh: number } | null,
     processedTriangles: readonly ProcessedStructureTriangle[],
     buildDestinationQuad: DestinationQuadBuilder,
   ) => {
@@ -548,12 +505,6 @@ export function collectStructureDrawables(input: CollectionContext): {
       isTileInRenderRadius,
       isParentTileAfterPlayer,
       toScreenAtZ,
-      rampRoadTiles,
-      resolveRenderZBand,
-      structureShadowFrame,
-      v6PrimarySemanticBucket: SHADOW_V6_PRIMARY_SEMANTIC_BUCKET,
-      v6SecondarySemanticBucket: SHADOW_V6_SECONDARY_SEMANTIC_BUCKET,
-      v6TopSemanticBucket: SHADOW_V6_TOP_SEMANTIC_BUCKET,
       monolithicStructureGeometryCacheStore,
       getFlippedOverlayImage,
       showStructureSliceDebug: SHOW_STRUCTURE_SLICE_DEBUG,
@@ -564,10 +515,6 @@ export function collectStructureDrawables(input: CollectionContext): {
       didQueueStructureCutoutDebugRect,
       logStructureOwnershipDebug: LOG_STRUCTURE_OWNERSHIP_DEBUG,
       loggedStructureOwnershipDebugIds,
-      shadowQueueCallbacks: {
-        structureV6ShadowDebugCandidates,
-      },
-      staticRelightFrame: staticRelight.frame,
     });
 
     didQueueStructureCutoutDebugRect = structureSliceBuild.didQueueStructureCutoutDebugRect;
@@ -665,241 +612,7 @@ export function collectStructureDrawables(input: CollectionContext): {
     }
   }
 
-  const includeVerticalShadowBuckets = !SHADOW_V6_TOP_ONLY || SHADOW_V6_VERTICAL_ONLY;
-  const includeTopShadowBucket = !SHADOW_V6_VERTICAL_ONLY || SHADOW_V6_TOP_ONLY;
-  const forceRefresh = !!SHADOW_V6_FORCE_REFRESH;
-  const cacheFrameReset = structureShadowV6CacheStore.beginFrame(
-    compiledMap.id,
-    structureShadowFrame.sunModel.stepKey,
-    forceRefresh,
-  );
-  structureV6ShadowCacheStats = {
-    sunStepKey: structureShadowFrame.sunModel.stepKey,
-    cacheHits: 0,
-    cacheMisses: 0,
-    rebuiltStructures: 0,
-    reusedStructures: 0,
-    sunStepChanged: cacheFrameReset.sunStepChanged,
-    forceRefresh,
-    cacheSize: 0,
-  };
-  if (shouldBuildStructureV6ShadowMasksForFrame(structureShadowFrame)) {
-    const fullMapPopulationKey = [
-      `map:${compiledMap.id}`,
-      `sun:${structureShadowFrame.sunModel.stepKey}`,
-      `slice:${SHADOW_V6_SLICE_COUNT}`,
-      `vertical:${includeVerticalShadowBuckets ? 1 : 0}`,
-      `top:${includeTopShadowBucket ? 1 : 0}`,
-    ].join("||");
-    if (!structureShadowV6CacheStore.isFullyPopulatedForKey(fullMapPopulationKey)) {
-      const noopHybridDiagnostics = {
-        cacheHits: 0,
-        cacheMisses: 0,
-        casterTriangles: 0,
-        projectedTriangles: 0,
-      };
-      const noopV4Diagnostics = {
-        cacheHits: 0,
-        cacheMisses: 0,
-        correspondences: 0,
-        strips: 0,
-        layerEdges: 0,
-        layerBands: 0,
-        sourceBandTriangles: 0,
-        destinationBandEntries: 0,
-        correspondencePairs: 0,
-        correspondenceMismatches: 0,
-        topCapTriangles: 0,
-        destinationBandPairs: 0,
-        destinationTriangles: 0,
-        diagonalA: 0,
-        diagonalB: 0,
-        diagonalRule: "",
-        deltaConstPass: 0,
-        deltaConstFail: 0,
-        firstSliceSummary: "",
-        sampleRoofHeightPx: null,
-        sampleLayerHeights: "",
-        sampleSliceCount: 0,
-        sampleLayerEdges: 0,
-        sampleLayerBands: 0,
-        sampleSelectedSlice: "",
-        sampleSelectedBand: "",
-      };
-      const mapOverlays = Array.isArray(compiledMap.overlays) ? compiledMap.overlays : [];
-      for (let i = 0; i < mapOverlays.length; i++) {
-        const overlay = mapOverlays[i];
-        if (overlay.layerRole !== "STRUCTURE" || !overlay.spriteId) continue;
-        const spriteRec = getTileSpriteById(overlay.spriteId);
-        if (!spriteRec?.ready || !spriteRec.img || spriteRec.img.width <= 0 || spriteRec.img.height <= 0) continue;
-        const projectedDraw = buildRuntimeStructureProjectedDraw(overlay, spriteRec.img);
-        const geometrySignature = runtimeStructureTriangleGeometrySignatureForOverlay(overlay, projectedDraw);
-        const triangleCache = monolithicStructureGeometryCacheStore.get(overlay.id, geometrySignature);
-        if (!triangleCache || triangleCache.triangles.length <= 0) continue;
-        const cached = !forceRefresh
-          ? structureShadowV6CacheStore.get({
-            structureInstanceId: overlay.id,
-            expectedGeometrySignature: geometrySignature,
-            expectedSunStepKey: structureShadowFrame.sunModel.stepKey,
-            expectedSliceCount: SHADOW_V6_SLICE_COUNT,
-            expectedIncludeVertical: includeVerticalShadowBuckets,
-            expectedIncludeTop: includeTopShadowBucket,
-          })
-          : undefined;
-        if (cached) {
-          structureV6ShadowCacheStats.cacheHits += 1;
-          structureV6ShadowCacheStats.reusedStructures += 1;
-          continue;
-        }
-        const sourceImage: CanvasImageSource = projectedDraw.flipX
-          ? getFlippedOverlayImage(spriteRec.img)
-          : spriteRec.img;
-        const semanticByStableId = buildRuntimeStructureTriangleSemanticMap({
-          overlay,
-          triangleCache,
-          tileWorld: T,
-          toScreenAtZ,
-        });
-        const structureShadowBand = resolveRenderZBand(
-          {
-            slice: overlay.seTx + overlay.seTy,
-            within: overlay.seTx,
-            baseZ: overlay.z,
-          },
-          rampRoadTiles,
-        );
-        const shadowResult = buildOrchestratedStructureShadowFrameResult({
-          frame: structureShadowFrame,
-          structureInstanceId: overlay.id,
-          geometrySignature,
-          draw: {
-            dw: projectedDraw.dw,
-            dh: projectedDraw.dh,
-          },
-          sourceImage,
-          admittedTrianglesForSemanticMasks: triangleCache.triangles,
-          semanticByStableId,
-          structureShadowBand,
-          v6PrimarySemanticBucket: SHADOW_V6_PRIMARY_SEMANTIC_BUCKET,
-          v6SecondarySemanticBucket: SHADOW_V6_SECONDARY_SEMANTIC_BUCKET,
-          v6TopSemanticBucket: SHADOW_V6_TOP_SEMANTIC_BUCKET,
-        });
-        const candidate = shadowResult.v6Candidate;
-        if (!candidate) continue;
-        structureV6ShadowCacheStats.cacheMisses += 1;
-        const rebuilt = buildStructureV6VerticalShadowMaskDebugData(
-          candidate,
-          SHADOW_V6_REQUESTED_SEMANTIC_BUCKET,
-          0,
-          0,
-          1,
-          SHADOW_V6_SLICE_COUNT,
-          {
-            x: structureShadowFrame.sunModel.projectionDirection.x * STRUCTURE_SHADOW_V5_LENGTH_PX,
-            y: structureShadowFrame.sunModel.projectionDirection.y * STRUCTURE_SHADOW_V5_LENGTH_PX,
-          },
-          {
-            includeVertical: includeVerticalShadowBuckets,
-            includeTop: includeTopShadowBucket,
-          },
-        );
-        if (!rebuilt) continue;
-        structureShadowV6CacheStore.set({
-          structureInstanceId: overlay.id,
-          geometrySignature,
-          sunStepKey: structureShadowFrame.sunModel.stepKey,
-          requestedSliceCount: SHADOW_V6_SLICE_COUNT,
-          includeVertical: includeVerticalShadowBuckets,
-          includeTop: includeTopShadowBucket,
-          mergedShadowMask: rebuilt,
-        });
-        structureV6ShadowCacheStats.rebuiltStructures += 1;
-      }
-      structureShadowV6CacheStore.markFullyPopulatedForKey(fullMapPopulationKey);
-    }
-  }
-  const v6VerticalFrameResults = buildStructureV6VerticalShadowFrameResults({
-    frame: structureShadowFrame,
-    candidates: structureV6ShadowDebugCandidates,
-    primarySemanticBucket: SHADOW_V6_PRIMARY_SEMANTIC_BUCKET,
-    requestedSemanticBucket: SHADOW_V6_REQUESTED_SEMANTIC_BUCKET,
-    requestedStructureIndex: SHADOW_V6_STRUCTURE_INDEX,
-    requestedSliceCount: SHADOW_V6_SLICE_COUNT,
-    shadowLengthPx: STRUCTURE_SHADOW_V5_LENGTH_PX,
-    countCandidateTrianglesForBucket: countStructureV6CandidateTrianglesForBucket,
-    resolveSelectedCandidateIndex: resolveStructureV6SelectedCandidateIndex,
-    buildVerticalDebugData: (
-      candidate: any,
-      requestedSemanticBucket: any,
-      requestedStructureIndex: any,
-      selectedStructureIndex: any,
-      candidateCount: any,
-      requestedSliceCount: any,
-      shadowVector: any,
-    ) => {
-      if (!forceRefresh) {
-        const cached = structureShadowV6CacheStore.get({
-          structureInstanceId: candidate.structureInstanceId,
-          expectedGeometrySignature: candidate.geometrySignature,
-          expectedSunStepKey: structureShadowFrame.sunModel.stepKey,
-          expectedSliceCount: requestedSliceCount,
-          expectedIncludeVertical: includeVerticalShadowBuckets,
-          expectedIncludeTop: includeTopShadowBucket,
-        });
-        if (cached) {
-          structureV6ShadowCacheStats.cacheHits += 1;
-          structureV6ShadowCacheStats.reusedStructures += 1;
-          return cached.mergedShadowMask;
-        }
-      }
-      structureV6ShadowCacheStats.cacheMisses += 1;
-      const rebuilt = buildStructureV6VerticalShadowMaskDebugData(
-        candidate,
-        requestedSemanticBucket,
-        requestedStructureIndex,
-        selectedStructureIndex,
-        candidateCount,
-        requestedSliceCount,
-        shadowVector,
-        {
-          includeVertical: includeVerticalShadowBuckets,
-          includeTop: includeTopShadowBucket,
-        },
-      );
-      if (rebuilt) {
-        structureShadowV6CacheStore.set({
-          structureInstanceId: candidate.structureInstanceId,
-          geometrySignature: candidate.geometrySignature,
-          sunStepKey: structureShadowFrame.sunModel.stepKey,
-          requestedSliceCount: requestedSliceCount,
-          includeVertical: includeVerticalShadowBuckets,
-          includeTop: includeTopShadowBucket,
-          mergedShadowMask: rebuilt,
-        });
-        structureV6ShadowCacheStats.rebuiltStructures += 1;
-      }
-      return rebuilt;
-    },
-  });
-  structureV6VerticalShadowDebugData = v6VerticalFrameResults.selected;
-
-  const drawOneStructureOnly = !!SHADOW_V6_ONE_STRUCTURE_ONLY;
-  const drawAllStructures = !drawOneStructureOnly && !!SHADOW_V6_ALL_STRUCTURES;
-  if (drawOneStructureOnly) {
-    structureV6VerticalShadowDebugDataList = v6VerticalFrameResults.selected ? [v6VerticalFrameResults.selected] : [];
-  } else if (drawAllStructures) {
-    structureV6VerticalShadowDebugDataList = v6VerticalFrameResults.all;
-  } else {
-    structureV6VerticalShadowDebugDataList = [];
-  }
-  structureV6ShadowCacheStats.cacheSize = structureShadowV6CacheStore.size();
-
-  // ============================================
-
   return {
     didQueueStructureCutoutDebugRect,
-    structureV6VerticalShadowDebugData,
-    structureV6VerticalShadowDebugDataList,
-    structureV6ShadowCacheStats,
   };
 }

@@ -1,17 +1,19 @@
 import { configurePixelPerfect } from "../../../../engine/render/pixelPerfect";
-import type { ShadowV6SemanticBucket } from "../../../../settings/settingsTypes";
 import { setRenderPerfDrawTag, type DrawTag } from "../renderPerfCounters";
 import {
   buildStructureV6FaceSlices,
   buildStructureV6SliceAxis,
   clampStructureV6SliceCount,
   resolveStructureV6SliceIndex,
+  type StructureV6SemanticBucket,
   type StructureV6FaceSlice,
   type StructureV6SliceAxis,
 } from "../structureShadowV6FaceSlices";
 import { getStructureShadowV6FaceScratchContext } from "./structureShadowScratch";
 import { rasterStructureShadowTriangle } from "./structureShadowTriangleRaster";
 import type { StructureV6ShadowDebugCandidate } from "./structureShadowTypes";
+
+type ShadowV6SemanticBucket = StructureV6SemanticBucket;
 
 type ScreenPt = { x: number; y: number };
 type SliceSpaceAlphaSpan = {

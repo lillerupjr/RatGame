@@ -1,15 +1,11 @@
 import type {
   RenderDebugScreenPassInput,
   RenderDebugWorldPassInput,
-  StructureV6VerticalShadowMaskDebugData,
 } from "./debugRenderTypes";
 import type { World } from "../../../../engine/world/world";
 import { drawEntityAnchorOverlay, renderDebugEntityOverlays } from "./renderDebugEntities";
 import { renderDebugLightingOverlay } from "./renderDebugLighting";
-import {
-  drawStructureV65MergedShadowMaskInWorld,
-  renderDebugStructureOverlays,
-} from "./renderDebugStructures";
+import { renderDebugStructureOverlays } from "./renderDebugStructures";
 import { renderDebugWorldOverlays, renderTileGridCompass } from "./renderDebugWorld";
 
 export type RenderDebugPassInvocation =
@@ -32,13 +28,6 @@ export type RenderDebugPassInvocation =
         drawY: number;
         drawW: number;
         drawH: number;
-      };
-    }
-  | {
-      phase: "structureV6MergedMask";
-      input: {
-        ctx: CanvasRenderingContext2D;
-        debugData: StructureV6VerticalShadowMaskDebugData;
       };
     }
   | {
@@ -80,8 +69,5 @@ export function executeDebugPass(invocation: RenderDebugPassInvocation): void {
 
   if (invocation.phase === "gridCompass") {
     renderTileGridCompass(invocation.input.w, invocation.input.ctx, invocation.input.ww, invocation.input.hh);
-    return;
   }
-
-  drawStructureV65MergedShadowMaskInWorld(invocation.input.ctx, invocation.input.debugData);
 }

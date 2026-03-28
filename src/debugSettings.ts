@@ -1,7 +1,6 @@
 import {
   NEUTRAL_BIRD_FORCE_STATES,
   normalizePaletteRemapWeightPercent,
-  normalizeStaticRelightTargetDarknessPercent,
 } from "./settings/systemOverrides";
 import { DEFAULT_SETTINGS, type DebugSettings } from "./userSettings";
 
@@ -17,13 +16,10 @@ export type ObjectiveDebugSettings = { showZoneBounds: boolean };
 export {
   NEUTRAL_BIRD_FORCE_STATES,
   normalizePaletteRemapWeightPercent,
-  normalizeStaticRelightTargetDarknessPercent,
 };
 
 export const PALETTE_REMAP_WEIGHT_OPTIONS = [0, 25, 50, 75, 100] as const;
 export type PaletteRemapWeightPercent = (typeof PALETTE_REMAP_WEIGHT_OPTIONS)[number];
-export const STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS = [0, 25, 50, 75] as const;
-export type StaticRelightTargetDarknessPercent = (typeof STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS)[number];
 
 export type BooleanDebugSettingKey = Exclude<
   keyof DebugSettings,
@@ -32,8 +28,6 @@ export type BooleanDebugSettingKey = Exclude<
   | "fireRateMult"
   | "paletteSWeightPercent"
   | "paletteDarknessPercent"
-  | "staticRelightStrengthPercent"
-  | "staticRelightTargetDarknessPercent"
   | "shadowSunTimeHour"
   | "shadowSunCycleMode"
   | "shadowSunDayCycleSpeedMultiplier"
@@ -41,12 +35,7 @@ export type BooleanDebugSettingKey = Exclude<
   | "staticLightCycleOverride"
   | "shadowSunAzimuthDeg"
   | "sunElevationOverrideDeg"
-  | "shadowCasterMode"
-  | "debugStructureRenderMode"
   | "perfOverlayMode"
-  | "shadowV6SemanticBucket"
-  | "shadowV6StructureIndex"
-  | "shadowV6SliceCount"
   | "neutralBirdAI"
   | "objectives"
 >;
@@ -102,21 +91,10 @@ export function makeAllDebugOffSettings(): DebugSettings {
     fireRateMult: 1,
     paletteSWeightPercent: 0,
     paletteDarknessPercent: 0,
-    staticRelightStrengthPercent: 0,
-    staticRelightTargetDarknessPercent: 50,
     shadowSunTimeHour: DEFAULT_DEBUG_SETTINGS.shadowSunTimeHour,
     shadowSunAzimuthDeg: DEFAULT_DEBUG_SETTINGS.shadowSunAzimuthDeg,
     sunElevationOverrideEnabled: false,
     sunElevationOverrideDeg: DEFAULT_DEBUG_SETTINGS.sunElevationOverrideDeg,
-    shadowCasterMode: DEFAULT_DEBUG_SETTINGS.shadowCasterMode,
-    shadowV6SemanticBucket: DEFAULT_DEBUG_SETTINGS.shadowV6SemanticBucket,
-    shadowV6StructureIndex: DEFAULT_DEBUG_SETTINGS.shadowV6StructureIndex,
-    shadowV6SliceCount: DEFAULT_DEBUG_SETTINGS.shadowV6SliceCount,
-    shadowV6AllStructures: false,
-    shadowV6OneStructureOnly: false,
-    shadowV6VerticalOnly: false,
-    shadowV6TopOnly: false,
-    shadowV6ForceRefresh: false,
     sweepShadowDebug: false,
     tileHeightMap: false,
     waterFlowRate: 1,
@@ -152,7 +130,6 @@ export type ResolvedDebugFlags = {
   showStructureTriangleFootprint: boolean;
   showStructureAnchors: boolean;
   showStructureTriangleOwnershipSort: boolean;
-  debugStructureRenderMode: "triangles" | "quadApprox";
   perfOverlayMode: "off" | "overview" | "world" | "structures" | "textures" | "ground" | "lighting" | "cache";
   showMapOverlays: boolean;
   showEnemyAimOverlay: boolean;
@@ -178,7 +155,6 @@ export function resolveDebugFlags(debug: DebugSettings): ResolvedDebugFlags {
     showStructureTriangleFootprint: debug.structureTriangleFootprint,
     showStructureAnchors: debug.showStructureAnchors,
     showStructureTriangleOwnershipSort: debug.showStructureTriangleOwnershipSort,
-    debugStructureRenderMode: debug.debugStructureRenderMode,
     perfOverlayMode: debug.perfOverlayMode,
     showMapOverlays: !debug.mapOverlaysDisabled,
     showEnemyAimOverlay: debug.enemyAimOverlay,

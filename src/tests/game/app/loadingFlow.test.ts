@@ -13,7 +13,7 @@ async function tickUntilDone(
 }
 
 describe("loadingFlow", () => {
-  it("runs structure-triangle and static-relight stages after prewarm and before spawn", async () => {
+  it("runs structure-triangle stage after prewarm and before spawn", async () => {
     const calls: string[] = [];
     const controller = createLoadingController({
       compileMap: async () => { calls.push("compile"); },
@@ -24,10 +24,6 @@ describe("loadingFlow", () => {
       },
       prepareStructureTriangles: async () => {
         calls.push("triangles");
-        return true;
-      },
-      prepareStaticRelight: async () => {
-        calls.push("relight");
         return true;
       },
       primeAudio: async () => { calls.push("audio"); },
@@ -44,16 +40,15 @@ describe("loadingFlow", () => {
       "precompute",
       "prewarm",
       "triangles",
-      "relight",
       "audio",
       "spawn",
       "finalize",
     ]);
   });
 
-  it("keeps loading blocked until relight stage reports completion", async () => {
+  it("keeps loading blocked until structure stage reports completion", async () => {
     const calls: string[] = [];
-    let relightAttempts = 0;
+    let triangleAttempts = 0;
     const controller = createLoadingController({
       compileMap: async () => { calls.push("compile"); },
       precomputeStaticMap: async () => { calls.push("precompute"); },
@@ -62,13 +57,9 @@ describe("loadingFlow", () => {
         return true;
       },
       prepareStructureTriangles: async () => {
-        calls.push("triangles");
-        return true;
-      },
-      prepareStaticRelight: async () => {
-        relightAttempts++;
-        calls.push(`relight:${relightAttempts}`);
-        return relightAttempts >= 3;
+        triangleAttempts++;
+        calls.push(`triangles:${triangleAttempts}`);
+        return triangleAttempts >= 3;
       },
       primeAudio: async () => { calls.push("audio"); },
       spawnEntities: async () => { calls.push("spawn"); },
@@ -79,9 +70,9 @@ describe("loadingFlow", () => {
     await tickUntilDone(controller);
 
     expect(controller.isDone()).toBe(true);
-    expect(relightAttempts).toBe(3);
+    expect(triangleAttempts).toBe(3);
     expect(calls).toContain("spawn");
-    expect(calls.indexOf("spawn")).toBeGreaterThan(calls.indexOf("relight:3"));
+    expect(calls.indexOf("spawn")).toBeGreaterThan(calls.indexOf("triangles:3"));
   });
 
   it("fails open prewarm stage after bounded attempts so loading cannot hang forever", async () => {
@@ -97,10 +88,6 @@ describe("loadingFlow", () => {
       },
       prepareStructureTriangles: async () => {
         calls.push("triangles");
-        return true;
-      },
-      prepareStaticRelight: async () => {
-        calls.push("relight");
         return true;
       },
       primeAudio: async () => { calls.push("audio"); },

@@ -25,6 +25,6 @@ export function buildStructureShadowFrameContext(
   return {
     sunModel,
     ambientSunLighting: lightingState.ambientSunLighting,
-    routing: resolveStructureShadowRouting(input.shadowCasterMode),
+    routing: resolveStructureShadowRouting(),
   };
 }

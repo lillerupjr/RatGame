@@ -7,7 +7,6 @@ import {
 import {
   NEUTRAL_BIRD_FORCE_STATES,
   PALETTE_REMAP_WEIGHT_OPTIONS,
-  STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS,
 } from "../../settings/systemOverrides";
 import type { SystemOverrides } from "../../settings/settingsTypes";
 import {
@@ -43,9 +42,6 @@ export function mountSystemOverridesSection(
 
   const entityShadowsDisable = createToggleRow(renderingGrid, "Disable Entity Shadows", (checked) => {
     applySystemPatch({ entityShadowsDisable: checked });
-  });
-  const staticRelightEnabled = createToggleRow(renderingGrid, "Static Relight Enabled", (checked) => {
-    applySystemPatch({ staticRelightEnabled: checked });
   });
   const structureTriangleAdmissionMode = createSelectRow<SystemOverrides["structureTriangleAdmissionMode"]>(
     renderingGrid,
@@ -143,20 +139,6 @@ export function mountSystemOverridesSection(
     PALETTE_REMAP_WEIGHT_OPTIONS,
     (value) => `${value}%`,
     (value) => applySystemPatch({ paletteDarknessPercent: value as SystemOverrides["paletteDarknessPercent"] }),
-  );
-  const staticRelightStrengthPercent = createSelectRow(
-    lightingGrid,
-    "Static Relight Strength",
-    PALETTE_REMAP_WEIGHT_OPTIONS,
-    (value) => `${value}%`,
-    (value) => applySystemPatch({ staticRelightStrengthPercent: value as SystemOverrides["staticRelightStrengthPercent"] }),
-  );
-  const staticRelightTargetDarknessPercent = createSelectRow(
-    lightingGrid,
-    "Static Relight Target Darkness",
-    STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS,
-    (value) => `${value}%`,
-    (value) => applySystemPatch({ staticRelightTargetDarknessPercent: value as SystemOverrides["staticRelightTargetDarknessPercent"] }),
   );
   const darknessMaskDebugDisabled = createToggleRow(lightingGrid, "Disable Darkness Mask", (checked) => {
     applySystemPatch({ darknessMaskDebugDisabled: checked });
@@ -268,7 +250,6 @@ export function mountSystemOverridesSection(
   return {
     sync(system) {
       entityShadowsDisable.checked = system.entityShadowsDisable;
-      staticRelightEnabled.checked = system.staticRelightEnabled;
       structureTriangleAdmissionMode.value = system.structureTriangleAdmissionMode;
       structureTriangleCutoutEnabled.checked = system.structureTriangleCutoutEnabled;
       structureTriangleCutoutWidth.value = `${system.structureTriangleCutoutWidth}`;
@@ -286,8 +267,6 @@ export function mountSystemOverridesSection(
       lightStrength.value = system.lightStrengthOverride;
       paletteSWeightPercent.value = `${system.paletteSWeightPercent}`;
       paletteDarknessPercent.value = `${system.paletteDarknessPercent}`;
-      staticRelightStrengthPercent.value = `${system.staticRelightStrengthPercent}`;
-      staticRelightTargetDarknessPercent.value = `${system.staticRelightTargetDarknessPercent}`;
       darknessMaskDebugDisabled.checked = system.darknessMaskDebugDisabled;
 
       gameSpeed.input.value = `${system.gameSpeed}`;

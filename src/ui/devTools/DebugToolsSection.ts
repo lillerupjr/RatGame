@@ -109,87 +109,6 @@ export function mountDebugToolsSection(
     (value) => applyDebugPatch({ sunElevationOverrideDeg: value }),
   );
 
-  const shadowCasterModeSelect = createSelectRow<DebugToolsSettings["shadowCasterMode"]>(
-    section,
-    "Shadow Caster",
-    ["v6SweepShadow", "v6FaceSliceDebug"],
-    (value) => (
-      value === "v6SweepShadow"
-        ? "V6 Sweep Shadow"
-        : "V6 Face Slice Debug"
-    ),
-    (value) => applyDebugPatch({ shadowCasterMode: value }),
-  );
-
-  const shadowV6SemanticBucketSelect = createSelectRow<DebugToolsSettings["shadowV6SemanticBucket"]>(
-    section,
-    "V6 Semantic Bucket",
-    ["EAST_WEST", "SOUTH_NORTH", "TOP"],
-    (value) => value === "EAST_WEST" ? "East-West" : value === "SOUTH_NORTH" ? "South-North" : "Top",
-    (value) => applyDebugPatch({ shadowV6SemanticBucket: value }),
-  );
-
-  const shadowV6StructureIndexSlider = createSliderRow(
-    section,
-    "V6 Structure Slot",
-    0,
-    127,
-    1,
-    (value) => applyDebugPatch({ shadowV6StructureIndex: value }),
-  );
-  const shadowV6SliceCountSlider = createSliderRow(
-    section,
-    "V6 Slice Thickness Px",
-    1,
-    32,
-    1,
-    (value) => applyDebugPatch({ shadowV6SliceCount: value }),
-  );
-  const shadowV6AllStructuresToggle = createToggleRow(
-    section,
-    "V6 Cast All Structures",
-    (checked) => applyDebugPatch(
-      checked
-        ? { shadowV6AllStructures: true, shadowV6OneStructureOnly: false }
-        : { shadowV6AllStructures: false },
-    ),
-  );
-  const shadowV6OneStructureOnlyToggle = createToggleRow(
-    section,
-    "V6 Cast One Structure",
-    (checked) => applyDebugPatch(
-      checked
-        ? { shadowV6OneStructureOnly: true, shadowV6AllStructures: false }
-        : { shadowV6OneStructureOnly: false },
-    ),
-  );
-  const shadowV6VerticalOnlyToggle = createToggleRow(
-    section,
-    "V6 Vertical Only",
-    (checked) => applyDebugPatch({ shadowV6VerticalOnly: checked }),
-  );
-  const shadowV6TopOnlyToggle = createToggleRow(
-    section,
-    "V6 Top Only",
-    (checked) => applyDebugPatch({ shadowV6TopOnly: checked }),
-  );
-  const shadowV6ForceRefreshToggle = createToggleRow(
-    section,
-    "V6 Force Refresh",
-    (checked) => applyDebugPatch({ shadowV6ForceRefresh: checked }),
-  );
-  const shadowV6FaceSliceDebugOverlayToggle = createToggleRow(
-    section,
-    "V6 Face Slice Debug",
-    (checked) => applyDebugPatch({ shadowV6FaceSliceDebugOverlay: checked }),
-  );
-  const structureRenderModeSelect = createSelectRow<DebugToolsSettings["debugStructureRenderMode"]>(
-    section,
-    "Structure Render",
-    ["triangles", "quadApprox"],
-    (value) => value === "quadApprox" ? "Quad Approx" : "Triangles",
-    (value) => applyDebugPatch({ debugStructureRenderMode: value }),
-  );
   const perfOverlayModeSelect = createSelectRow<DebugToolsSettings["perfOverlayMode"]>(
     section,
     "Perf Overlay",
@@ -229,11 +148,6 @@ export function mountDebugToolsSection(
   const syncSunElevationOverrideReadout = (debug: DebugToolsSettings): void => {
     const clamped = clampShadowSunElevationOverrideDeg(debug.sunElevationOverrideDeg);
     sunElevationOverrideSlider.value.textContent = `${clamped.toFixed(1)}`;
-  };
-
-  const syncV6SliderReadouts = (debug: DebugToolsSettings): void => {
-    shadowV6StructureIndexSlider.value.textContent = `${Math.round(debug.shadowV6StructureIndex)}`;
-    shadowV6SliceCountSlider.value.textContent = `${Math.round(debug.shadowV6SliceCount)}`;
   };
 
   const grid = createThreeColumnGrid(section);
@@ -310,44 +224,9 @@ export function mountDebugToolsSection(
       sunElevationOverrideSlider.input.disabled = !debug.sunElevationOverrideEnabled;
       sunElevationOverrideSlider.input.style.opacity = debug.sunElevationOverrideEnabled ? "1" : "0.65";
       sunElevationOverrideSlider.value.style.opacity = debug.sunElevationOverrideEnabled ? "1" : "0.65";
-      shadowCasterModeSelect.value = debug.shadowCasterMode;
-      shadowV6SemanticBucketSelect.value = debug.shadowV6SemanticBucket;
-      shadowV6StructureIndexSlider.input.value = `${Math.round(debug.shadowV6StructureIndex)}`;
-      shadowV6SliceCountSlider.input.value = `${Math.round(debug.shadowV6SliceCount)}`;
-      shadowV6AllStructuresToggle.checked = !!debug.shadowV6AllStructures;
-      shadowV6OneStructureOnlyToggle.checked = !!debug.shadowV6OneStructureOnly;
-      shadowV6VerticalOnlyToggle.checked = !!debug.shadowV6VerticalOnly;
-      shadowV6TopOnlyToggle.checked = !!debug.shadowV6TopOnly;
-      shadowV6ForceRefreshToggle.checked = !!debug.shadowV6ForceRefresh;
-      shadowV6FaceSliceDebugOverlayToggle.checked = !!debug.shadowV6FaceSliceDebugOverlay;
-      structureRenderModeSelect.value = debug.debugStructureRenderMode;
       perfOverlayModeSelect.value = debug.perfOverlayMode;
-      const v6DebugViewActive = debug.shadowCasterMode === "v6FaceSliceDebug";
-      shadowV6SemanticBucketSelect.disabled = !v6DebugViewActive;
-      shadowV6SemanticBucketSelect.style.opacity = v6DebugViewActive ? "1" : "0.65";
-      shadowV6StructureIndexSlider.input.disabled = !v6DebugViewActive;
-      shadowV6SliceCountSlider.input.disabled = !v6DebugViewActive;
-      shadowV6StructureIndexSlider.input.style.opacity = v6DebugViewActive ? "1" : "0.65";
-      shadowV6SliceCountSlider.input.style.opacity = v6DebugViewActive ? "1" : "0.65";
-      shadowV6StructureIndexSlider.value.style.opacity = v6DebugViewActive ? "1" : "0.65";
-      shadowV6SliceCountSlider.value.style.opacity = v6DebugViewActive ? "1" : "0.65";
-      shadowV6AllStructuresToggle.disabled = !v6DebugViewActive;
-      shadowV6AllStructuresToggle.style.opacity = v6DebugViewActive ? "1" : "0.65";
-      shadowV6OneStructureOnlyToggle.disabled = !v6DebugViewActive;
-      shadowV6OneStructureOnlyToggle.style.opacity = v6DebugViewActive ? "1" : "0.65";
-      shadowV6VerticalOnlyToggle.disabled = !v6DebugViewActive;
-      shadowV6VerticalOnlyToggle.style.opacity = v6DebugViewActive ? "1" : "0.65";
-      shadowV6TopOnlyToggle.disabled = !v6DebugViewActive;
-      shadowV6TopOnlyToggle.style.opacity = v6DebugViewActive ? "1" : "0.65";
-      shadowV6ForceRefreshToggle.disabled = !v6DebugViewActive;
-      shadowV6ForceRefreshToggle.style.opacity = v6DebugViewActive ? "1" : "0.65";
-      shadowV6FaceSliceDebugOverlayToggle.disabled = !v6DebugViewActive;
-      if (shadowV6FaceSliceDebugOverlayToggle.parentElement) {
-        shadowV6FaceSliceDebugOverlayToggle.parentElement.style.display = v6DebugViewActive ? "flex" : "none";
-      }
       syncShadowSunReadout(debug);
       syncSunElevationOverrideReadout(debug);
-      syncV6SliderReadouts(debug);
       for (const [key, input] of Object.entries(controls)) {
         input.checked = !!(debug as any)[key];
       }

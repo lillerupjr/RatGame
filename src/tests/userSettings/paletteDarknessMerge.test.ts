@@ -29,18 +29,6 @@ describe("userSettings palette darkness merge", () => {
     expect(getUserSettings().debug.paletteDarknessPercent).toBe(50);
   });
 
-  it("normalizes static relight debug controls to allowed buckets", () => {
-    updateUserSettings({
-      debug: {
-        staticRelightStrengthPercent: 63 as any,
-        staticRelightTargetDarknessPercent: 61 as any,
-      },
-    });
-
-    expect(getUserSettings().debug.staticRelightStrengthPercent).toBe(75);
-    expect(getUserSettings().debug.staticRelightTargetDarknessPercent).toBe(50);
-  });
-
   it("snaps palette id to a valid id when palette group changes", () => {
     updateUserSettings({
       render: {
@@ -84,31 +72,6 @@ describe("userSettings palette darkness merge", () => {
 
     expect(getUserSettings().render.lightColorModeOverride).toBe("authored");
     expect(getUserSettings().render.lightStrengthOverride).toBe("authored");
-  });
-
-  it("persists static relight render toggle", () => {
-    updateUserSettings({
-      render: {
-        staticRelightEnabled: true,
-      },
-    } as any);
-    expect(getUserSettings().render.staticRelightEnabled).toBe(true);
-
-    updateUserSettings({
-      render: {
-        staticRelightEnabled: false,
-      },
-    } as any);
-    expect(getUserSettings().render.staticRelightEnabled).toBe(false);
-  });
-
-  it("migrates legacy static relight poc key to production render toggle", () => {
-    updateUserSettings({
-      render: {
-        staticRelightPocEnabled: true,
-      } as any,
-    } as any);
-    expect(getUserSettings().render.staticRelightEnabled).toBe(true);
   });
 
   it("normalizes and persists structure triangle admission mode", () => {

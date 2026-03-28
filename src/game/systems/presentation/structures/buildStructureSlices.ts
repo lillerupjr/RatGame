@@ -1,4 +1,3 @@
-import type { ShadowV6SemanticBucket } from "../../../../settings/settingsTypes";
 import {
   runtimeStructureTriangleGeometrySignatureForOverlay,
   buildMonolithicStructureTriangleCacheForOverlay,
@@ -6,7 +5,6 @@ import {
   resolveMonolithicFootprintTileBoundsForOverlay,
   resolveRuntimeStructureTriangleSemanticHeight,
   type RuntimeStructureTrianglePiece,
-  type RuntimeStructureTriangleSemanticClass,
   type RuntimeStructureTriangleRect,
   type RuntimeStructureTriangleCacheStore,
   type MonolithicStructureGeometry,
@@ -14,17 +12,9 @@ import {
 } from "../../../structures/monolithicStructureGeometry";
 import { pixelHeightToSweepTileHeight } from "../../../map/tileHeightUnits";
 import {
-  buildStructureShadowFrameResult as buildOrchestratedStructureShadowFrameResult,
-} from "../structureShadows/structureShadowOrchestrator";
-import { shouldBuildStructureV6ShadowMasksForFrame } from "../structureShadows/structureShadowVersionRouting";
-import {
   applyRuntimeStructureTriangleSemanticInfoMap,
   buildRuntimeStructureTriangleSemanticInfoMap,
 } from "../structureShadows/structureTriangleSemantics";
-import type {
-  StructureShadowFrameResult,
-} from "../structureShadows/structureShadowTypes";
-import type { StaticRelightFrameContext } from "../staticRelight/staticRelightTypes";
 import {
   isCameraTileInsideBounds,
   isTriangleVisibleForAdmissionMode,
@@ -32,7 +22,6 @@ import {
 import type {
   StructureAdmissionMode,
   StructureOverlayCandidate,
-  StructureShadowQueueCallbacks,
   StructureSliceBuildResult,
   StructureSlicePiece,
   StructureTileBounds,
@@ -85,19 +74,6 @@ type BuildStructureSlicesInput = {
   isTileInRenderRadius: (tx: number, ty: number) => boolean;
   isParentTileAfterPlayer: (parentTx: number, parentTy: number) => boolean;
   toScreenAtZ: (worldX: number, worldY: number, zVisual: number) => ScreenPt;
-  rampRoadTiles: ReadonlySet<string>;
-  resolveRenderZBand: (
-    key: {
-      slice: number;
-      within: number;
-      baseZ: number;
-    },
-    rampRoadTiles: ReadonlySet<string>,
-  ) => number;
-  structureShadowFrame: StructureShadowFrameResult;
-  v6PrimarySemanticBucket: ShadowV6SemanticBucket;
-  v6SecondarySemanticBucket: ShadowV6SemanticBucket;
-  v6TopSemanticBucket: ShadowV6SemanticBucket;
   monolithicStructureGeometryCacheStore: RuntimeStructureTriangleCacheStore;
   getFlippedOverlayImage: (img: HTMLImageElement) => HTMLCanvasElement;
   showStructureSliceDebug: boolean;
@@ -108,8 +84,6 @@ type BuildStructureSlicesInput = {
   didQueueStructureCutoutDebugRect: boolean;
   logStructureOwnershipDebug: boolean;
   loggedStructureOwnershipDebugIds: Set<string>;
-  shadowQueueCallbacks: StructureShadowQueueCallbacks;
-  staticRelightFrame: StaticRelightFrameContext | null;
 };
 
 export function buildStructureSlices(input: BuildStructureSlicesInput): StructureSliceBuildResult {
@@ -181,7 +155,6 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
         });
       }
 
-      const admittedTrianglesForSemanticMasks: typeof triangleCache.triangles = [];
       const finalVisibleTrianglesForDebug: RuntimeStructureTrianglePiece[] = [];
       const visibleTriangleGroupsForDebug: Array<{
         stableId: number;
@@ -238,9 +211,6 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
         }
 
         if (!finalVisibleTriangles.length) continue;
-        if (shouldBuildStructureV6ShadowMasksForFrame(input.structureShadowFrame)) {
-          admittedTrianglesForSemanticMasks.push(...finalVisibleTriangles);
-        }
         finalVisibleTrianglesForDebug.push(...finalVisibleTriangles);
         visibleTriangleGroupsForDebug.push({
           stableId: group.stableId,
@@ -281,9 +251,6 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
         tileWorld: input.tileWorld,
         toScreenAtZ: input.toScreenAtZ,
       });
-      const semanticByStableId = new Map(
-        Array.from(semanticInfoByStableId.entries(), ([stableId, info]) => [stableId, info.semantic] as const),
-      );
       applyRuntimeStructureTriangleSemanticInfoMap(triangleCache, semanticInfoByStableId);
       const resolvedStructuralRoofHeightUnits = pixelHeightToSweepTileHeight(triangleCache.maxSideHeightPx);
       if (
@@ -296,35 +263,6 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
           o.resolvedStructuralRoofHeightUnits = resolvedStructuralRoofHeightUnits;
         }
       }
-      const structureShadowBand = input.resolveRenderZBand(
-        {
-          slice: o.seTx + o.seTy,
-          within: o.seTx,
-          baseZ: o.z,
-        },
-        input.rampRoadTiles,
-      );
-      const structureShadowResult = buildOrchestratedStructureShadowFrameResult({
-        frame: input.structureShadowFrame,
-        structureInstanceId: o.id,
-        geometrySignature,
-        draw: {
-          dw: draw.dw,
-          dh: draw.dh,
-        },
-        sourceImage: sourceImg,
-        admittedTrianglesForSemanticMasks,
-        semanticByStableId,
-        structureShadowBand,
-        v6PrimarySemanticBucket: input.v6PrimarySemanticBucket,
-        v6SecondarySemanticBucket: input.v6SecondarySemanticBucket,
-        v6TopSemanticBucket: input.v6TopSemanticBucket,
-      });
-
-      if (structureShadowResult.v6Candidate) {
-        input.shadowQueueCallbacks.structureV6ShadowDebugCandidates.push(structureShadowResult.v6Candidate);
-      }
-
       if (
         monolithic
         && (
@@ -336,7 +274,7 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
       ) {
         const heightLevelByStableId = new Map<number, number>();
         const semanticFaceTriangles = finalVisibleTrianglesForDebug.map((tri) => {
-          const semantic = semanticByStableId.get(tri.stableId) ?? "UNCLASSIFIED";
+          const semantic = semanticInfoByStableId.get(tri.stableId)?.semantic ?? "UNCLASSIFIED";
           const resolvedHeight = resolveRuntimeStructureTriangleSemanticHeight(
             tri,
             semantic,

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { Canvas2DRenderer } from "../../../../game/systems/presentation/backend/Canvas2DRenderer";
+import { Canvas2DRenderer } from "../../../../engine/render/auxiliary/auxiliaryCanvasRenderer";
 import type { RenderCommand } from "../../../../game/systems/presentation/contracts/renderCommands";
 import type { RenderExecutionPlan } from "../../../../game/systems/presentation/backend/renderExecutionPlan";
 import {

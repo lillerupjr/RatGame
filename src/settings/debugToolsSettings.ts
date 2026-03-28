@@ -1,9 +1,6 @@
 import type {
-  DebugStructureRenderMode,
   DebugToolsSettings,
   PerfOverlayMode,
-  ShadowCasterMode,
-  ShadowV6SemanticBucket,
 } from "./settingsTypes";
 import {
   DEFAULT_SHADOW_SUN_V1_ELEVATION_OVERRIDE_DEG,
@@ -22,13 +19,6 @@ import {
 import {
   clampStaticLightCycleOverride,
 } from "../staticLightCycle";
-import {
-  STRUCTURE_SHADOW_V6_DEFAULT_SLICE_COUNT,
-  STRUCTURE_SHADOW_V6_DEFAULT_STRUCTURE_INDEX,
-  clampStructureV6SliceCount,
-  clampStructureV6StructureIndex,
-  normalizeStructureV6SemanticBucket,
-} from "../game/systems/presentation/structureShadowV6FaceSlices";
 
 export type DebugToggleDefinition = {
   key: keyof DebugToolsSettings;
@@ -84,7 +74,6 @@ export const DEFAULT_DEBUG_TOOLS_SETTINGS: DebugToolsSettings = {
   structureTriangleFootprint: false,
   showStructureAnchors: false,
   showStructureTriangleOwnershipSort: false,
-  debugStructureRenderMode: "triangles",
   perfOverlayMode: "overview",
   projectileFaces: false,
   triggers: false,
@@ -109,16 +98,6 @@ export const DEFAULT_DEBUG_TOOLS_SETTINGS: DebugToolsSettings = {
   shadowSunAzimuthDeg: -1,
   sunElevationOverrideEnabled: false,
   sunElevationOverrideDeg: 45,
-  shadowCasterMode: "v6SweepShadow",
-  shadowV6SemanticBucket: "EAST_WEST",
-  shadowV6StructureIndex: STRUCTURE_SHADOW_V6_DEFAULT_STRUCTURE_INDEX,
-  shadowV6SliceCount: STRUCTURE_SHADOW_V6_DEFAULT_SLICE_COUNT,
-  shadowV6AllStructures: true,
-  shadowV6OneStructureOnly: false,
-  shadowV6VerticalOnly: false,
-  shadowV6TopOnly: false,
-  shadowV6ForceRefresh: false,
-  shadowV6FaceSliceDebugOverlay: false,
   sweepShadowDebug: false,
   tileHeightMap: false,
 };
@@ -133,22 +112,6 @@ function clampShadowSunAzimuthDeg(value: unknown): number {
 function sanitizeShadowSunTimeHourSetting(value: unknown): number {
   const numeric = Number(value);
   return clampShadowSunTimeHour(Number.isFinite(numeric) ? Math.round(numeric) : numeric);
-}
-
-function normalizeShadowCasterMode(value: unknown): ShadowCasterMode {
-  if (value === "v6SweepShadow") return "v6SweepShadow";
-  if (value === "v6FaceSliceDebug") return "v6FaceSliceDebug";
-  return "v6SweepShadow";
-}
-
-function normalizeShadowV6SemanticBucket(value: unknown): ShadowV6SemanticBucket {
-  return normalizeStructureV6SemanticBucket(value);
-}
-
-function normalizeDebugStructureRenderMode(value: unknown): DebugStructureRenderMode {
-  if (value === "triangles") return "triangles";
-  if (value === "quadApprox") return "quadApprox";
-  return "triangles";
 }
 
 function normalizePerfOverlayMode(value: unknown): PerfOverlayMode {
@@ -186,7 +149,6 @@ export function sanitizeDebugToolsSettings(input: Partial<DebugToolsSettings> | 
     structureTriangleFootprint: !!merged.structureTriangleFootprint,
     showStructureAnchors: !!merged.showStructureAnchors,
     showStructureTriangleOwnershipSort: !!merged.showStructureTriangleOwnershipSort,
-    debugStructureRenderMode: normalizeDebugStructureRenderMode(merged.debugStructureRenderMode),
     perfOverlayMode: normalizePerfOverlayMode(merged.perfOverlayMode),
     projectileFaces: !!merged.projectileFaces,
     triggers: !!merged.triggers,
@@ -211,16 +173,6 @@ export function sanitizeDebugToolsSettings(input: Partial<DebugToolsSettings> | 
     shadowSunAzimuthDeg: clampShadowSunAzimuthDeg(merged.shadowSunAzimuthDeg),
     sunElevationOverrideEnabled: !!merged.sunElevationOverrideEnabled,
     sunElevationOverrideDeg: clampShadowSunElevationOverrideDeg(merged.sunElevationOverrideDeg),
-    shadowCasterMode: normalizeShadowCasterMode(merged.shadowCasterMode),
-    shadowV6SemanticBucket: normalizeShadowV6SemanticBucket(merged.shadowV6SemanticBucket),
-    shadowV6StructureIndex: clampStructureV6StructureIndex(merged.shadowV6StructureIndex),
-    shadowV6SliceCount: clampStructureV6SliceCount(merged.shadowV6SliceCount),
-    shadowV6AllStructures: !!merged.shadowV6AllStructures,
-    shadowV6OneStructureOnly: !!merged.shadowV6OneStructureOnly,
-    shadowV6VerticalOnly: !!merged.shadowV6VerticalOnly,
-    shadowV6TopOnly: !!merged.shadowV6TopOnly,
-    shadowV6ForceRefresh: !!merged.shadowV6ForceRefresh,
-    shadowV6FaceSliceDebugOverlay: !!merged.shadowV6FaceSliceDebugOverlay,
     sweepShadowDebug: !!merged.sweepShadowDebug,
     tileHeightMap: !!merged.tileHeightMap,
   };
@@ -251,7 +203,6 @@ export type ResolvedDebugFlags = {
   showStructureTriangleFootprint: boolean;
   showStructureAnchors: boolean;
   showStructureTriangleOwnershipSort: boolean;
-  debugStructureRenderMode: DebugStructureRenderMode;
   showMapOverlays: boolean;
   showEnemyAimOverlay: boolean;
   showLootGoblinOverlay: boolean;
@@ -281,7 +232,6 @@ export function resolveDebugFlags(args: {
     showStructureTriangleFootprint: args.debug.structureTriangleFootprint,
     showStructureAnchors: args.debug.showStructureAnchors,
     showStructureTriangleOwnershipSort: args.debug.showStructureTriangleOwnershipSort,
-    debugStructureRenderMode: args.debug.debugStructureRenderMode,
     showMapOverlays: !args.mapOverlaysDisabled,
     showEnemyAimOverlay: args.debug.enemyAimOverlay,
     showLootGoblinOverlay: args.debug.lootGoblinOverlay,

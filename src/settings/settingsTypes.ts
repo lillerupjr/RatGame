@@ -12,12 +12,7 @@ export type VerticalTilesViewportClass = "phone" | "desktop";
 export type LightColorModeOverride = "authored" | "off" | "standard" | "palette";
 export type LightStrengthOverride = "authored" | "low" | "medium" | "high";
 export type StructureTriangleAdmissionMode = "viewport" | "renderDistance" | "hybrid" | "compare";
-export type DebugStructureRenderMode = "triangles" | "quadApprox";
 export type PerfOverlayMode = "off" | "overview" | "world" | "structures" | "textures" | "ground" | "lighting" | "cache";
-export type ShadowCasterMode =
-  | "v6SweepShadow"
-  | "v6FaceSliceDebug";
-export type ShadowV6SemanticBucket = "TOP" | "EAST_WEST" | "SOUTH_NORTH";
 
 export type NeutralBirdForceState =
   | "NONE"
@@ -28,9 +23,6 @@ export type NeutralBirdForceState =
 
 export const PALETTE_REMAP_WEIGHT_OPTIONS = [0, 25, 50, 75, 100] as const;
 export type PaletteRemapWeightPercent = (typeof PALETTE_REMAP_WEIGHT_OPTIONS)[number];
-
-export const STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS = [0, 25, 50, 75] as const;
-export type StaticRelightTargetDarknessPercent = (typeof STATIC_RELIGHT_TARGET_DARKNESS_OPTIONS)[number];
 
 export type UserSettings = {
   game: {
@@ -71,7 +63,6 @@ export type DebugToolsSettings = {
   structureTriangleFootprint: boolean;
   showStructureAnchors: boolean;
   showStructureTriangleOwnershipSort: boolean;
-  debugStructureRenderMode: DebugStructureRenderMode;
   perfOverlayMode: PerfOverlayMode;
   projectileFaces: boolean;
   triggers: boolean;
@@ -96,16 +87,6 @@ export type DebugToolsSettings = {
   shadowSunAzimuthDeg: number;
   sunElevationOverrideEnabled: boolean;
   sunElevationOverrideDeg: number;
-  shadowCasterMode: ShadowCasterMode;
-  shadowV6SemanticBucket: ShadowV6SemanticBucket;
-  shadowV6StructureIndex: number;
-  shadowV6SliceCount: number;
-  shadowV6AllStructures: boolean;
-  shadowV6OneStructureOnly: boolean;
-  shadowV6VerticalOnly: boolean;
-  shadowV6TopOnly: boolean;
-  shadowV6ForceRefresh: boolean;
-  shadowV6FaceSliceDebugOverlay: boolean;
   sweepShadowDebug: boolean;
   tileHeightMap: boolean;
 };
@@ -119,7 +100,6 @@ export type SystemOverrides = {
   waterFlowRate: number;
 
   entityShadowsDisable: boolean;
-  staticRelightEnabled: boolean;
   structureTriangleAdmissionMode: StructureTriangleAdmissionMode;
   structureTriangleCutoutEnabled: boolean;
   structureTriangleCutoutWidth: number;
@@ -135,8 +115,6 @@ export type SystemOverrides = {
   paletteId: string;
   paletteSWeightPercent: PaletteRemapWeightPercent;
   paletteDarknessPercent: PaletteRemapWeightPercent;
-  staticRelightStrengthPercent: PaletteRemapWeightPercent;
-  staticRelightTargetDarknessPercent: StaticRelightTargetDarknessPercent;
 
   spawnBase: number;
   spawnPerDepth: number;

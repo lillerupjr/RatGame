@@ -122,6 +122,26 @@ function resolveLogicalChunkBoundsForView(viewRect: ViewRect): LogicalChunkBound
   };
 }
 
+export function buildRampRoadTiles(compiledMap: CompiledKenneyMap): Set<string> {
+  const rampRoadTiles = new Set<string>();
+  if (!compiledMap?.roadSemanticRects) return rampRoadTiles;
+  for (let i = 0; i < compiledMap.roadSemanticRects.length; i++) {
+    const rect = compiledMap.roadSemanticRects[i];
+    const semantic = rect.semantic?.trim().toLowerCase() ?? "";
+    if (!(semantic === "ramp" || semantic.startsWith("ramp_"))) continue;
+    const minX = rect.x | 0;
+    const minY = rect.y | 0;
+    const maxX = minX + Math.max(1, rect.w | 0) - 1;
+    const maxY = minY + Math.max(1, rect.h | 0) - 1;
+    for (let ty = minY; ty <= maxY; ty++) {
+      for (let tx = minX; tx <= maxX; tx++) {
+        rampRoadTiles.add(`${tx},${ty}`);
+      }
+    }
+  }
+  return rampRoadTiles;
+}
+
 function expandLogicalChunkBounds(bounds: LogicalChunkBounds, margin: number): LogicalChunkBounds {
   return {
     minChunkX: bounds.minChunkX - margin,

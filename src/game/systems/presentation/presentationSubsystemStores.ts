@@ -1,13 +1,9 @@
-import { StaticRelightBakeStore } from "./staticRelightBake";
 import { RuntimeStructureTriangleCacheStore } from "../../structures/monolithicStructureGeometry";
-import { StructureShadowV6CacheStore } from "./structureShadows/structureShadowV6Cache";
 import { CanvasGroundChunkCacheStore } from "./canvasGroundChunkCache";
 import { registerCacheMetricSource } from "./cacheMetricsRegistry";
 import { StructureSpriteAtlasStore } from "./structureSpriteAtlas";
 
-export const staticRelightBakeStore = new StaticRelightBakeStore<HTMLCanvasElement>();
 export const monolithicStructureGeometryCacheStore = new RuntimeStructureTriangleCacheStore();
-export const structureShadowV6CacheStore = new StructureShadowV6CacheStore();
 export const canvasGroundChunkCacheStore = new CanvasGroundChunkCacheStore();
 export const structureSpriteAtlasStore = new StructureSpriteAtlasStore();
 
@@ -24,19 +20,7 @@ registerCacheMetricSource({
 });
 
 registerCacheMetricSource({
-  name: "structureShadowMasks",
-  budgetBytes: 64 * 1024 * 1024,
-  sample: () => structureShadowV6CacheStore.getDebugCacheMetrics(),
-});
-
-registerCacheMetricSource({
   name: "structureSpriteAtlas",
   budgetBytes: 64 * 1024 * 1024,
   sample: () => structureSpriteAtlasStore.getDebugCacheMetrics(),
-});
-
-registerCacheMetricSource({
-  name: "staticRelightBakes",
-  budgetBytes: 64 * 1024 * 1024,
-  sample: () => staticRelightBakeStore.getDebugCacheMetrics(),
 });

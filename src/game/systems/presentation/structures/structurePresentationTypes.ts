@@ -9,10 +9,6 @@ import type {
   KindOrder,
   RenderKey,
 } from "../worldRenderOrdering";
-import type {
-  StructureV6ShadowDebugCandidate,
-} from "../structureShadows/structureShadowTypes";
-
 export type StructureOverlayDraw = {
   img: HTMLImageElement;
   dx: number;
@@ -104,9 +100,5 @@ export type StructureDrawable = {
 };
 
 export type HybridSemanticClass = "TOP" | "LEFT_SOUTH" | "RIGHT_EAST" | "UNCLASSIFIED" | "CONFLICT";
-
-export type StructureShadowQueueCallbacks = {
-  structureV6ShadowDebugCandidates: StructureV6ShadowDebugCandidate[];
-};
 
 export type StructureProjectedViewportRect = RuntimeStructureTriangleRect;

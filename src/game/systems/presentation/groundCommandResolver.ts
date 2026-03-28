@@ -12,9 +12,6 @@ import {
   type RenderQuadPoints,
 } from "./renderCommandGeometry";
 import { KindOrder, type RenderKey } from "./worldRenderOrdering";
-import type { StaticRelightBakeStore } from "./staticRelightBake";
-import type { StaticRelightFrameContext } from "./staticRelight/staticRelightTypes";
-import { hasNearbyStaticRelightTileLight } from "./staticRelight/staticRelightBlendPlanner";
 
 type ReadyImageRecord = {
   ready?: boolean;
@@ -76,27 +73,6 @@ export type GroundCommandResolverDeps = {
   STAIR_TOP_DY: number;
   SIDEWALK_ISO_HEIGHT: number;
   rampRoadTiles: ReadonlySet<string>;
-  staticRelightFrame: StaticRelightFrameContext | null;
-  staticRelightBakeStore: StaticRelightBakeStore<HTMLCanvasElement>;
-  floorRelightPieceKey: (
-    tx: number,
-    ty: number,
-    zBase: number,
-    renderAnchorY: number,
-    family: "sidewalk" | "asphalt" | "park",
-    variantIndex: number,
-    rotationQuarterTurns: 0 | 1 | 2 | 3,
-  ) => string;
-  decalRelightPieceKey: (
-    tx: number,
-    ty: number,
-    zBase: number,
-    renderAnchorY: number,
-    setId: RuntimeDecalSetId,
-    variantIndex: number,
-    rotationQuarterTurns: 0 | 1 | 2 | 3,
-    decalScale: number,
-  ) => string;
   roadMarkingDecalScale: (setId: RuntimeDecalSetId, variantIndex: number) => number;
   shouldPixelSnapRoadMarking: (setId: RuntimeDecalSetId, variantIndex: number) => boolean;
   snapPx: (value: number) => number;
@@ -186,9 +162,6 @@ export function resolveGroundSurfaceProjectedCommand(
     STAIR_TOP_DY,
     SIDEWALK_ISO_HEIGHT,
     rampRoadTiles,
-    staticRelightFrame,
-    staticRelightBakeStore,
-    floorRelightPieceKey,
     snapPx,
     getRampQuadPoints,
   } = deps;
@@ -213,21 +186,6 @@ export function resolveGroundSurfaceProjectedCommand(
     const baseBaked = getRuntimeIsoTopCanvas(src.img, runtimeTop.rotationQuarterTurns);
     if (!baseBaked) return null;
 
-    const pieceKey = staticRelightFrame
-      ? floorRelightPieceKey(
-        tx,
-        ty,
-        surface.zBase,
-        anchorY,
-        runtimeTop.family,
-        runtimeTop.variantIndex,
-        runtimeTop.rotationQuarterTurns,
-      )
-      : null;
-    const bakedEntry = pieceKey ? staticRelightBakeStore.get(pieceKey) : null;
-    if (pieceKey && !bakedEntry) onPendingVisualChange?.();
-    const relitCanvas = bakedEntry?.kind === "RELIT" ? bakedEntry.baked : null;
-    const finalImage = relitCanvas ?? baseBaked;
     const isRampRoadTile = runtimeTop.family === "asphalt" && rampRoadTiles.has(`${tx},${ty}`);
     const stableId = stableSurfaceId(tx, ty, surface.zBase, true);
     const key: RenderKey = {
@@ -260,7 +218,7 @@ export function resolveGroundSurfaceProjectedCommand(
       semanticFamily: "groundSurface",
       finalForm: "quad",
       payload: buildProjectedSurfacePayload({
-        image: finalImage,
+        image: baseBaked,
         destinationQuad,
       }),
       destinationQuad,
@@ -341,9 +299,6 @@ export function resolveGroundDecalProjectedCommand(
     getDiamondFitCanvas,
     roadMarkingDecalScale,
     shouldPixelSnapRoadMarking,
-    staticRelightFrame,
-    staticRelightBakeStore,
-    decalRelightPieceKey,
     rampRoadTiles,
     getRampQuadPoints,
     T,
@@ -366,31 +321,7 @@ export function resolveGroundDecalProjectedCommand(
   const decalScale = roadMarkingDecalScale(decal.setId, decal.variantIndex);
   const baked = getRuntimeIsoDecalCanvas(src.img, decal.rotationQuarterTurns, decalScale);
   if (!baked) return null;
-
-  const pieceKey = staticRelightFrame
-    ? decalRelightPieceKey(
-      decal.tx,
-      decal.ty,
-      decal.zBase,
-      decal.renderAnchorY,
-      decal.setId,
-      decal.variantIndex,
-      decal.rotationQuarterTurns,
-      decalScale,
-    )
-    : null;
-  const bakedEntry = pieceKey ? staticRelightBakeStore.get(pieceKey) : null;
-  if (
-    pieceKey
-    && !bakedEntry
-    && staticRelightFrame
-    && hasNearbyStaticRelightTileLight(staticRelightFrame, decal.tx, decal.ty)
-  ) {
-    onPendingVisualChange?.();
-  }
-  const relitCanvas = bakedEntry?.kind === "RELIT" ? bakedEntry.baked : null;
-  const finalImage = relitCanvas ?? baked;
-  const finalDiamond = getDiamondFitCanvas(finalImage);
+  const finalDiamond = getDiamondFitCanvas(baked);
   const snapRoad = shouldPixelSnapRoadMarking(decal.setId, decal.variantIndex);
   const destinationQuad = rampRoadTiles.has(`${decal.tx},${decal.ty}`)
     ? getRampQuadPoints(decal.tx, decal.ty, decal.renderAnchorY)

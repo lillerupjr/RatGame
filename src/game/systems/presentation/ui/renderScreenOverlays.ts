@@ -23,10 +23,6 @@ export function renderScreenOverlays(input: ScreenOverlayContext): void {
     renderAmbientDarknessOverlay,
     renderPerfCountersEnabled,
     structureShadowFrame,
-    structureV6VerticalShadowDebugData,
-    structureV6VerticalShadowDebugDataList,
-    structureV6ShadowDebugCandidates,
-    structureV6ShadowCacheStats,
     shadowSunModel,
     ambientSunLighting,
     shadowSunDayCycleStatus,
@@ -131,7 +127,7 @@ export function renderScreenOverlays(input: ScreenOverlayContext): void {
   }
   // Building-mask debug overlay draw disabled to avoid full-canvas mask artifacts.
 
-  if (debugFrame.enabled || structureShadowFrame.routing.usesV6Debug || shadowSunDayCycleStatus.enabled) {
+  if (debugFrame.enabled || shadowSunDayCycleStatus.enabled) {
     enqueueScreenCommand(frameBuilder, {
       semanticFamily: "debug",
       finalForm: "primitive",
@@ -143,11 +139,6 @@ export function renderScreenOverlays(input: ScreenOverlayContext): void {
           dpr,
           flags: debugFlags,
           renderPerfCountersEnabled: false,
-          structureShadowRouting: structureShadowFrame.routing,
-          structureV6VerticalShadowDebugData,
-          structureV6ShadowDebugCandidateCount: structureV6ShadowDebugCandidates.length,
-          structureV6ShadowCastCount: structureV6VerticalShadowDebugDataList.length,
-          structureV6ShadowCacheStats,
           shadowSunModel,
           ambientSunLighting,
           shadowSunDayCycleStatus,

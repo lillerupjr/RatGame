@@ -150,18 +150,7 @@ import {
   resolveRenderZBand,
   type RenderKey,
 } from "./worldRenderOrdering";
-import {
-  computeNearestDynamicRelightAlpha,
-  type DynamicRelightLightCandidate,
-} from "./dynamicSpriteRelightV1";
-import { type StaticRelightFrameContext } from "./staticRelight/staticRelightTypes";
-import {
-  STATIC_RELIGHT_INCLUDE_STRUCTURES,
-  buildRampRoadTiles,
-  decalRelightPieceKey,
-  floorRelightPieceKey,
-  syncStaticRelightRuntimeForFrame,
-} from "./staticRelight/staticRelightBakeRebuild";
+import { buildRampRoadTiles } from "./canvasGroundChunkCache";
 import {
   buildRuntimeStructureProjectedDraw,
   buildRuntimeStructureTriangleContextKey,
@@ -170,22 +159,8 @@ import {
   rebuildMonolithicStructureTriangleCacheForMap,
 } from "../../structures/monolithicStructureGeometry";
 import {
-  resolveStructureV6SelectedCandidateIndex,
-} from "./structureShadowV6FaceSlices";
-import {
   buildStructureShadowFrameContext,
 } from "./structureShadows/structureShadowFrameContext";
-import {
-  buildStructureV6VerticalShadowFrameResults,
-} from "./structureShadows/structureShadowOrchestrator";
-import {
-  type StructureV6ShadowDebugCandidate,
-} from "./structureShadows/structureShadowTypes";
-import {
-  buildStructureV6VerticalShadowMaskDebugData,
-  countStructureV6CandidateTrianglesForBucket,
-  type StructureV6VerticalShadowMaskDebugData,
-} from "./structureShadows/structureShadowV6Slices";
 import { drawTexturedQuad } from "./renderPrimitives/drawTexturedQuad";
 import {
   getDiamondFitCanvas,
@@ -196,12 +171,9 @@ import {
 import {
   canvasGroundChunkCacheStore,
   monolithicStructureGeometryCacheStore,
-  staticRelightBakeStore,
   structureSpriteAtlasStore,
-  structureShadowV6CacheStore,
 } from "./presentationSubsystemStores";
 import { syncCanvasGroundChunkCacheForFrame } from "./canvasGroundChunkCache";
-import type { StructureV6ShadowCacheFrameStats } from "./structureShadows/structureShadowV6Cache";
 import { buildDebugFrameContext } from "./debug/debugFrameContext";
 import { executeDebugPass } from "./debug/renderDebugPass";
 import { prepareRenderFrame } from "./frame/prepareRenderFrame";
@@ -214,7 +186,7 @@ import {
   type TileBounds,
 } from "./frame/viewportCulling";
 import { collectFrameDrawables } from "./collection/collectFrameDrawables";
-import { Canvas2DRenderer } from "./backend/Canvas2DRenderer";
+import { Canvas2DRenderer } from "../../../engine/render/auxiliary/auxiliaryCanvasRenderer";
 import { createBackendStats } from "./backend/renderBackendRouting";
 import { commandAxesKey, noteRenderBackendFamilyPlacement } from "./backend/renderBackendCapabilities";
 import {
@@ -248,7 +220,6 @@ import { buildStructureSlices } from "./structures/buildStructureSlices";
 import { buildStructureDrawables } from "./structures/buildStructureDrawables";
 import { resolveShadowSunDayCycleRuntime } from "./shadowSunDayCycleRuntime";
 import { createRenderWorld } from "../../../engine/render/creator/renderWorldCreator";
-import { AuxiliaryCanvasRenderer } from "../../../engine/render/auxiliary/auxiliaryCanvasRenderer";
 import { WorldQuadWebGLBatcher } from "../../../engine/render/shared/batching/worldQuadWebGLBatcher";
 import {
   renderDynamicFallbackPiecesCanvas,
@@ -267,8 +238,6 @@ const LOOT_GOBLIN_GLOW_PULSE_MIN = 0.95;
 const LOOT_GOBLIN_GLOW_PULSE_RANGE = 0.3;
 const LOOT_GOBLIN_GLOW_PULSE_SPEED = 2.8;
 const STRUCTURE_SHADOW_V1_MAX_DARKNESS = 0.38;
-const STRUCTURE_SHADOW_V5_LENGTH_PX = 220;
-
 type ScreenPt = { x: number; y: number };
 
 /** Render tiles, entities, overlays, and debug layers. */
@@ -560,30 +529,6 @@ export async function renderSystem(
   };
 
   const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-  const DYNAMIC_RELIGHT_MIN_ALPHA = 0.04;
-  let staticRelightFrame: StaticRelightFrameContext | null = null;
-  type DynamicSpriteRelightFrameContext = {
-    targetDarknessBucket: 0 | 25 | 50 | 75;
-    strengthScale: number;
-    minAlpha: number;
-    lights: DynamicRelightLightCandidate[];
-  };
-  let dynamicSpriteRelightFrame: DynamicSpriteRelightFrameContext | null = null;
-  const resolveDynamicSpriteRelightAlpha = (
-    screenX: number,
-    screenY: number,
-  ): number => {
-    if (!dynamicSpriteRelightFrame) return 0;
-    const nearest = computeNearestDynamicRelightAlpha({
-      screenX,
-      screenY,
-      lights: dynamicSpriteRelightFrame.lights,
-      strengthScale: dynamicSpriteRelightFrame.strengthScale,
-      minAlpha: dynamicSpriteRelightFrame.minAlpha,
-    });
-    if (!nearest) return 0;
-    return nearest.alpha;
-  };
   // Existing optional cull (kept, but unrelated to masking)
   const ENABLE_BUILDING_SOUTH_CULL = false;
   const shouldCullBuildingAt = (tx: number, ty: number, w: number = 1, h: number = 1) => {
@@ -734,25 +679,7 @@ export async function renderSystem(
         const dy = centerY - SIDEWALK_ISO_HEIGHT * 0.5;
         const drawX = snapPx(dx);
         const drawY = snapPx(dy);
-        let relitCanvas: HTMLCanvasElement | null = null;
-        if (staticRelightFrame) {
-          const pieceKey = floorRelightPieceKey(
-            tx,
-            ty,
-            zBase,
-            renderAnchorY,
-            family,
-            variantIndex,
-            rotationQuarterTurns,
-          );
-          const bakedEntry = staticRelightBakeStore.get(pieceKey);
-          if (bakedEntry?.kind === "RELIT") relitCanvas = bakedEntry.baked;
-        }
-        if (relitCanvas) {
-          ctx.drawImage(relitCanvas, drawX, drawY, baseBaked.width, baseBaked.height);
-        } else {
-          ctx.drawImage(baseBaked, drawX, drawY);
-        }
+        ctx.drawImage(baseBaked, drawX, drawY);
       }
 
       const wx = (tx + 0.5) * T;
@@ -805,26 +732,7 @@ export async function renderSystem(
         const dy = centerY - baked.height * 0.5;
         const drawX = shouldSnapRoadMarking ? Math.round(dx) : snapPx(dx);
         const drawY = shouldSnapRoadMarking ? Math.round(dy) : snapPx(dy);
-        let relitCanvas: HTMLCanvasElement | null = null;
-        if (staticRelightFrame) {
-          const pieceKey = decalRelightPieceKey(
-            Math.floor(tx),
-            Math.floor(ty),
-            zBase,
-            renderAnchorY,
-            setId,
-            variantIndex,
-            rotationQuarterTurns,
-            decalScale,
-          );
-          const bakedEntry = staticRelightBakeStore.get(pieceKey);
-          if (bakedEntry?.kind === "RELIT") relitCanvas = bakedEntry.baked;
-        }
-        if (relitCanvas) {
-          ctx.drawImage(relitCanvas, drawX, drawY, baked.width, baked.height);
-        } else {
-          ctx.drawImage(baked, drawX, drawY);
-        }
+        ctx.drawImage(baked, drawX, drawY);
       }
     };
 
@@ -1084,19 +992,6 @@ export async function renderSystem(
   const SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG = debugFlags.showStructureTriangleFootprint;
   const SHOW_STRUCTURE_ANCHORS = debugFlags.showStructureAnchors || ((w as any).showStructureAnchors ?? false);
   const SHOW_STRUCTURE_TRIANGLE_OWNERSHIP_SORT_DEBUG = debugFlags.showStructureTriangleOwnershipSort;
-  const DEBUG_STRUCTURE_RENDER_MODE = debugFlags.debugStructureRenderMode;
-  const SHADOW_CASTER_MODE = debugFlags.shadowCasterMode;
-  const SHADOW_V6_REQUESTED_SEMANTIC_BUCKET = debugFlags.shadowV6RequestedSemanticBucket;
-  const SHADOW_V6_PRIMARY_SEMANTIC_BUCKET = debugFlags.shadowV6PrimarySemanticBucket;
-  const SHADOW_V6_SECONDARY_SEMANTIC_BUCKET = debugFlags.shadowV6SecondarySemanticBucket;
-  const SHADOW_V6_TOP_SEMANTIC_BUCKET = debugFlags.shadowV6TopSemanticBucket;
-  const SHADOW_V6_STRUCTURE_INDEX = debugFlags.shadowV6StructureIndex;
-  const SHADOW_V6_SLICE_COUNT = debugFlags.shadowV6SliceCount;
-  const SHADOW_V6_ALL_STRUCTURES = debugFlags.shadowV6AllStructures;
-  const SHADOW_V6_ONE_STRUCTURE_ONLY = debugFlags.shadowV6OneStructureOnly;
-  const SHADOW_V6_VERTICAL_ONLY = debugFlags.shadowV6VerticalOnly;
-  const SHADOW_V6_TOP_ONLY = debugFlags.shadowV6TopOnly;
-  const SHADOW_V6_FORCE_REFRESH = debugFlags.shadowV6ForceRefresh;
   const SHOW_ZONE_OBJECTIVE_BOUNDS = debugFlags.showZoneObjectiveBounds;
   const drawEntityAnchorDebug = (
     feetX: number,
@@ -1174,30 +1069,7 @@ export async function renderSystem(
   const activePaletteVariantKey = resolveActivePaletteVariantKey();
   const activePaletteSwapWeights = resolveActivePaletteSwapWeights();
   const currentSettings = getUserSettings();
-  const staticRelight = syncStaticRelightRuntimeForFrame(w, {
-    bakeStore: staticRelightBakeStore,
-    getRuntimeIsoTopCanvas,
-    getRuntimeIsoDecalCanvas,
-  }, rampRoadTiles);
-  dynamicSpriteRelightFrame = null;
-  if (staticRelight.frame && staticRelight.relightLights.length > 0) {
-    const dynamicLights: DynamicRelightLightCandidate[] = staticRelight.relightLights.map((light) => ({
-      id: light.id,
-      centerX: light.centerX,
-      centerY: light.centerY,
-      radiusPx: light.radiusPx,
-      yScale: light.yScale,
-      intensity: light.intensity,
-    }));
-    dynamicSpriteRelightFrame = {
-      targetDarknessBucket: staticRelight.targetDarknessBucket,
-      strengthScale: staticRelight.strengthScale,
-      minAlpha: DYNAMIC_RELIGHT_MIN_ALPHA,
-      lights: dynamicLights,
-    };
-  }
   const groundChunkCacheContextKey = [
-    staticRelight.contextKey,
     `renderAll:${RENDER_ALL_HEIGHTS ? 1 : 0}`,
     `activeH:${activeH}`,
   ].join("||");
@@ -1231,10 +1103,6 @@ export async function renderSystem(
     STAIR_TOP_DY,
     SIDEWALK_ISO_HEIGHT,
     rampRoadTiles,
-    staticRelightFrame: staticRelight.frame,
-    staticRelightBakeStore,
-    floorRelightPieceKey,
-    decalRelightPieceKey,
     roadMarkingDecalScale,
     shouldPixelSnapRoadMarking,
     snapPx,
@@ -1308,7 +1176,6 @@ export async function renderSystem(
     .resetIfContextChanged(runtimeStructureTriangleContextKey);
   const structureShadowFrame = buildStructureShadowFrameContext({
     mapId: compiledMap.id,
-    shadowCasterMode: SHADOW_CASTER_MODE,
     shadowSunTimeHour: shadowSunDayCycle.effectiveTimeHour,
     shadowSunStepKeyOverride: shadowSunDayCycle.shadowStepKeyOverride,
     shadowSunAzimuthDeg: debugFlags.shadowSunAzimuthDeg,
@@ -1317,10 +1184,7 @@ export async function renderSystem(
   });
   const shadowSunModel = structureShadowFrame.sunModel;
   const ambientSunLighting = structureShadowFrame.ambientSunLighting;
-  if (SHADOW_CASTER_MODE === "v6SweepShadow") {
-    computeSweepShadowMap(compiledMap.tileHeightGrid, shadowSunModel, compiledMap.id);
-  }
-  staticRelightFrame = staticRelight.frame;
+  computeSweepShadowMap(compiledMap.tileHeightGrid, shadowSunModel, compiledMap.id);
   if (runtimeStructureTriangleContextChanged) {
     rebuildMonolithicStructureTriangleCacheForMap(compiledMap, {
       cacheStore: monolithicStructureGeometryCacheStore,
@@ -1337,10 +1201,6 @@ export async function renderSystem(
     // noop
   }
   const frameBuilder = createRenderFrameBuilder();
-  const structureV6ShadowDebugCandidates: StructureV6ShadowDebugCandidate[] = [];
-  let structureV6VerticalShadowDebugData: StructureV6VerticalShadowMaskDebugData | null = null;
-  let structureV6VerticalShadowDebugDataList: StructureV6VerticalShadowMaskDebugData[] = [];
-  let structureV6ShadowCacheStats: StructureV6ShadowCacheFrameStats | null = null;
   const deferredStructureSliceDebugDraws: Array<() => void> = [];
   let didQueueStructureCutoutDebugRect = false;
   // ----------------------------
@@ -1474,11 +1334,8 @@ export async function renderSystem(
     VFX_CLIPS,
     ctx,
     getPickupWorld,
-    resolveDynamicSpriteRelightAlpha,
     getCurrencyAtlasFrame,
     getCurrencyFrame,
-    dynamicSpriteRelightFrame,
-    getCurrencyFrameForDarknessPercent,
     coinColorFromValue,
     registry,
     ENEMY_TYPE,
@@ -1488,10 +1345,7 @@ export async function renderSystem(
     LOOT_GOBLIN_GLOW_PULSE_SPEED,
     LOOT_GOBLIN_GLOW_OUTER_RADIUS_MULT,
     LOOT_GOBLIN_GLOW_INNER_RADIUS_MULT,
-    getEnemySpriteFrameForDarknessPercent,
     drawEntityAnchorDebug,
-    getVendorNpcSpriteFrameForDarknessPercent,
-    getPigeonFramesForClipAndScreenDirForDarknessPercent,
     debug,
     toScreenAtZ,
     getProjectileWorld,
@@ -1503,17 +1357,12 @@ export async function renderSystem(
     getProjectileSpriteByKind,
     PROJECTILE_BASE_DRAW_PX,
     getProjectileDrawScale,
-    staticRelightFrame,
-    staticRelightBakeStore,
-    floorRelightPieceKey,
-    decalRelightPieceKey,
     roadMarkingDecalScale,
     shouldPixelSnapRoadMarking,
     bazookaExhaustAssets,
     BAZOOKA_EXHAUST_OFFSET,
     PRJ_KIND,
     VFX_CLIP_INDEX,
-    getPlayerSpriteFrameForDarknessPercent,
     DISABLE_WALLS_AND_CURTAINS,
     buildFaceDraws,
     facePieceLayers,
@@ -1544,9 +1393,6 @@ export async function renderSystem(
     rampRoadTiles,
     resolveRenderZBand,
     structureShadowFrame,
-    SHADOW_V6_PRIMARY_SEMANTIC_BUCKET,
-    SHADOW_V6_SECONDARY_SEMANTIC_BUCKET,
-    SHADOW_V6_TOP_SEMANTIC_BUCKET,
     getStructureSpriteAtlasFrame: (spriteId: string) => structureSpriteAtlasStore.getAtlasFrame(spriteId),
     monolithicStructureGeometryCacheStore,
     getFlippedOverlayImage,
@@ -1554,42 +1400,16 @@ export async function renderSystem(
     SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG,
     SHOW_STRUCTURE_ANCHORS,
     SHOW_STRUCTURE_TRIANGLE_OWNERSHIP_SORT_DEBUG,
-    DEBUG_STRUCTURE_RENDER_MODE,
     deferredStructureSliceDebugDraws,
     LOG_STRUCTURE_OWNERSHIP_DEBUG,
     loggedStructureOwnershipDebugIds,
-    structureV6ShadowDebugCandidates,
-    staticRelight,
     buildStructureDrawables,
-    buildStructureV6VerticalShadowFrameResults,
-    SHADOW_V6_REQUESTED_SEMANTIC_BUCKET,
-    SHADOW_V6_STRUCTURE_INDEX,
-    SHADOW_V6_SLICE_COUNT,
-    SHADOW_V6_ALL_STRUCTURES,
-    SHADOW_V6_ONE_STRUCTURE_ONLY,
-    SHADOW_V6_VERTICAL_ONLY,
-    SHADOW_V6_TOP_ONLY,
-    SHADOW_V6_FORCE_REFRESH,
-    STRUCTURE_SHADOW_V5_LENGTH_PX,
-    countStructureV6CandidateTrianglesForBucket,
-    resolveStructureV6SelectedCandidateIndex,
-    buildStructureV6VerticalShadowMaskDebugData,
-    structureShadowV6CacheStore,
     didQueueStructureCutoutDebugRect,
-    structureV6VerticalShadowDebugData,
-    structureV6VerticalShadowDebugDataList,
-    structureV6ShadowCacheStats,
   } as CollectionContext;
 
   const collectionResult = collectFrameDrawables(collectionContext);
 
   didQueueStructureCutoutDebugRect = collectionResult.didQueueStructureCutoutDebugRect;
-  structureV6VerticalShadowDebugData =
-    collectionResult.structureV6VerticalShadowDebugData as StructureV6VerticalShadowMaskDebugData | null;
-  structureV6VerticalShadowDebugDataList =
-    collectionResult.structureV6VerticalShadowDebugDataList as StructureV6VerticalShadowMaskDebugData[];
-  structureV6ShadowCacheStats =
-    collectionResult.structureV6ShadowCacheStats as StructureV6ShadowCacheFrameStats | null;
 
   const screenOverlayContext: ScreenOverlayContext = {
     frame: renderFrame,
@@ -1614,10 +1434,6 @@ export async function renderSystem(
     renderAmbientDarknessOverlay,
     renderPerfCountersEnabled,
     structureShadowFrame,
-    structureV6VerticalShadowDebugData,
-    structureV6VerticalShadowDebugDataList,
-    structureV6ShadowDebugCandidates,
-    structureV6ShadowCacheStats,
     shadowSunModel,
     ambientSunLighting,
     shadowSunDayCycleStatus: shadowSunDayCycle.status,
@@ -1654,7 +1470,7 @@ export async function renderSystem(
   } as ScreenOverlayContext;
   renderScreenOverlays(screenOverlayContext);
 
-  if (SHADOW_CASTER_MODE === "v6SweepShadow") {
+  {
     const unifiedWorldShadowMap = buildUnifiedWorldShadowMap(
       compiledMap.tileHeightGrid,
       getSweepShadowMap(),
@@ -1670,21 +1486,6 @@ export async function renderSystem(
         },
       });
     }
-  }
-
-  for (let i = 0; i < structureV6VerticalShadowDebugDataList.length; i++) {
-    const debugData = structureV6VerticalShadowDebugDataList[i];
-    enqueueWorldBandCommand(frameBuilder, {
-      semanticFamily: "debug",
-      finalForm: "primitive",
-      payload: {
-        phase: "structureV6MergedMask",
-        zBand: debugData.zBand,
-        input: {
-          debugData,
-        },
-      },
-    });
   }
 
   const commandFrame = finalizeRenderFrame({
@@ -1839,7 +1640,7 @@ export async function renderSystem(
     };
   }
 
-  const canvasWorldAuxBaseRenderer = new Canvas2DRenderer(renderFrame, {
+  const canvasWorldAuxRenderer = new Canvas2DRenderer(renderFrame, {
     w,
     T,
     compiledMap,
@@ -1852,8 +1653,6 @@ export async function renderSystem(
     ANCHOR_Y,
     SIDEWALK_SRC_SIZE,
     SIDEWALK_ISO_HEIGHT,
-    staticRelightFrame,
-    staticRelightBakeStore,
     SHOW_ZONE_OBJECTIVE_BOUNDS,
     SHOW_ENTITY_ANCHOR_OVERLAY,
     RENDER_ENTITY_ANCHORS,
@@ -1871,12 +1670,8 @@ export async function renderSystem(
     getTileSpriteById,
     getSpriteById,
     getEnemySpriteFrame,
-    getEnemySpriteFrameForDarknessPercent,
     getVendorNpcSpriteFrame,
-    getVendorNpcSpriteFrameForDarknessPercent,
-    getPigeonFramesForClipAndScreenDirForDarknessPercent,
     getPlayerSpriteFrame,
-    getPlayerSpriteFrameForDarknessPercent,
     playerSpritesReady,
     vendorNpcSpritesReady,
     getProjectileWorld,
@@ -1896,10 +1691,7 @@ export async function renderSystem(
     VFX_CLIPS,
     VFX_CLIP_INDEX,
     registry,
-    resolveDynamicSpriteRelightAlpha,
-    dynamicSpriteRelightFrame,
     getCurrencyFrame,
-    getCurrencyFrameForDarknessPercent,
     coinColorFromValue,
     ENEMY_TYPE,
     LOOT_GOBLIN_GLOW_OUTER_RADIUS_MULT,
@@ -1912,8 +1704,6 @@ export async function renderSystem(
     PLAYER_R,
     roadMarkingDecalScale,
     shouldPixelSnapRoadMarking,
-    floorRelightPieceKey,
-    decalRelightPieceKey,
     getUserSettings,
     setRenderPerfDrawTag,
     countRenderCanvasGroundChunkDraw,
@@ -1928,7 +1718,6 @@ export async function renderSystem(
     srcUvSW,
     getRampQuadPoints,
   });
-  const canvasWorldAuxRenderer = new AuxiliaryCanvasRenderer(canvasWorldAuxBaseRenderer);
   const overlayWorldFrame: RenderFrameContext = {
     ...renderFrame,
     ctx: overlayCtx,
@@ -1937,7 +1726,7 @@ export async function renderSystem(
     devH: overlayDevH,
     dpr: overlayDpr,
   };
-  const overlayWorldAuxBaseRenderer = new Canvas2DRenderer(overlayWorldFrame, {
+  const overlayWorldAuxRenderer = new Canvas2DRenderer(overlayWorldFrame, {
     w,
     T,
     compiledMap,
@@ -1950,8 +1739,6 @@ export async function renderSystem(
     ANCHOR_Y,
     SIDEWALK_SRC_SIZE,
     SIDEWALK_ISO_HEIGHT,
-    staticRelightFrame,
-    staticRelightBakeStore,
     SHOW_ZONE_OBJECTIVE_BOUNDS,
     SHOW_ENTITY_ANCHOR_OVERLAY,
     RENDER_ENTITY_ANCHORS,
@@ -1969,12 +1756,8 @@ export async function renderSystem(
     getTileSpriteById,
     getSpriteById,
     getEnemySpriteFrame,
-    getEnemySpriteFrameForDarknessPercent,
     getVendorNpcSpriteFrame,
-    getVendorNpcSpriteFrameForDarknessPercent,
-    getPigeonFramesForClipAndScreenDirForDarknessPercent,
     getPlayerSpriteFrame,
-    getPlayerSpriteFrameForDarknessPercent,
     playerSpritesReady,
     vendorNpcSpritesReady,
     getProjectileWorld,
@@ -1994,10 +1777,7 @@ export async function renderSystem(
     VFX_CLIPS,
     VFX_CLIP_INDEX,
     registry,
-    resolveDynamicSpriteRelightAlpha,
-    dynamicSpriteRelightFrame,
     getCurrencyFrame,
-    getCurrencyFrameForDarknessPercent,
     coinColorFromValue,
     ENEMY_TYPE,
     LOOT_GOBLIN_GLOW_OUTER_RADIUS_MULT,
@@ -2010,8 +1790,6 @@ export async function renderSystem(
     PLAYER_R,
     roadMarkingDecalScale,
     shouldPixelSnapRoadMarking,
-    floorRelightPieceKey,
-    decalRelightPieceKey,
     getUserSettings,
     setRenderPerfDrawTag,
     countRenderCanvasGroundChunkDraw,
@@ -2026,7 +1804,6 @@ export async function renderSystem(
     srcUvSW,
     getRampQuadPoints,
   });
-  const overlayWorldAuxRenderer = new AuxiliaryCanvasRenderer(overlayWorldAuxBaseRenderer);
 
   const rectCanvasDeps = {
     ISO_X,
@@ -2102,9 +1879,9 @@ export async function renderSystem(
       const cachedSurface = webglSurface as typeof webglSurface & { quadBatcher?: WorldQuadWebGLBatcher };
       const webglBatcher = cachedSurface.quadBatcher ?? new WorldQuadWebGLBatcher(renderFrame, webglSurface.gl);
       cachedSurface.quadBatcher = webglBatcher;
-      canvasWorldAuxBaseRenderer.clearOverlayCanvas();
-      canvasWorldAuxBaseRenderer.clearMainCanvas();
-      canvasWorldAuxBaseRenderer.drawBackground();
+      canvasWorldAuxRenderer.clearOverlayCanvas();
+      canvasWorldAuxRenderer.clearMainCanvas();
+      canvasWorldAuxRenderer.drawBackground();
       const canvasFallbackWorldPieces = renderWorldPiecesWebGL({
         frameContext: renderFrame,
         orderedPieces: createdRenderWorld.orderedPieces,
@@ -2125,9 +1902,9 @@ export async function renderSystem(
       noteWebGLWorldSurfaceFailure(canvas, WEBGL_RUNTIME_FAILURE_REASON);
       syncWorldCanvasBackendVisibility(canvas, "canvas2d", true);
       console.error("[render] WebGL backend failed, falling back to Canvas2D.", error);
-      canvasWorldAuxBaseRenderer.clearOverlayCanvas();
-      canvasWorldAuxBaseRenderer.clearMainCanvas();
-      canvasWorldAuxBaseRenderer.drawBackground();
+      canvasWorldAuxRenderer.clearOverlayCanvas();
+      canvasWorldAuxRenderer.clearMainCanvas();
+      canvasWorldAuxRenderer.drawBackground();
       renderWorldPiecesCanvas({
         frameContext: renderFrame,
         orderedPieces: createdRenderWorld.orderedPieces,
@@ -2141,9 +1918,9 @@ export async function renderSystem(
     }
   } else {
     syncWorldCanvasBackendVisibility(canvas, "canvas2d", true);
-    canvasWorldAuxBaseRenderer.clearOverlayCanvas();
-    canvasWorldAuxBaseRenderer.clearMainCanvas();
-    canvasWorldAuxBaseRenderer.drawBackground();
+    canvasWorldAuxRenderer.clearOverlayCanvas();
+    canvasWorldAuxRenderer.clearMainCanvas();
+    canvasWorldAuxRenderer.drawBackground();
     renderWorldPiecesCanvas({
       frameContext: renderFrame,
       orderedPieces: createdRenderWorld.orderedPieces,
@@ -2167,11 +1944,6 @@ export async function renderSystem(
         fps: Number((w as { fps?: number }).fps ?? 0),
         frameTimeMs: Number((w as { fps?: number }).fps ?? 0) > 0 ? 1000 / Number((w as { fps?: number }).fps ?? 0) : 0,
         renderPerfCountersEnabled: true,
-        structureShadowRouting: structureShadowFrame.routing,
-        structureV6VerticalShadowDebugData,
-        structureV6ShadowDebugCandidateCount: structureV6ShadowDebugCandidates.length,
-        structureV6ShadowCastCount: structureV6VerticalShadowDebugDataList.length,
-        structureV6ShadowCacheStats,
         shadowSunModel,
         ambientSunLighting,
         shadowSunDayCycleStatus: shadowSunDayCycle.status,

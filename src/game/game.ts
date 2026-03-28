@@ -24,16 +24,12 @@ import {
   prepareMonolithicStructureTrianglesForLoading as prepareRuntimeStructureTrianglesForLoadingInternal,
 } from "./structures/monolithicStructureGeometry";
 import {
-  prepareStaticGroundRelightForLoading as prepareStaticGroundRelightForLoadingInternal,
-} from "./systems/presentation/staticRelight/staticRelightBakeRebuild";
-import {
   getFlippedOverlayImage,
   getRuntimeIsoDecalCanvas,
   getRuntimeIsoTopCanvas,
 } from "./systems/presentation/presentationImageTransforms";
 import {
   monolithicStructureGeometryCacheStore,
-  staticRelightBakeStore,
 } from "./systems/presentation/presentationSubsystemStores";
 import { zonesSystem } from "./systems/sim/zones";
 import { relicExplodeOnKillSystem } from "./systems/sim/relicExplodeOnKill";
@@ -2656,14 +2652,6 @@ export function createGame(args: CreateGameArgs) {
     return settleState === "READY";
   }
 
-  async function prepareStaticGroundRelightForLoadingStage(): Promise<boolean> {
-    return prepareStaticGroundRelightForLoadingInternal(world, {
-      bakeStore: staticRelightBakeStore,
-      getRuntimeIsoTopCanvas,
-      getRuntimeIsoDecalCanvas,
-    });
-  }
-
   async function prepareRuntimeStructureTrianglesForLoadingStage(): Promise<boolean> {
     return prepareRuntimeStructureTrianglesForLoadingInternal({
       cacheStore: monolithicStructureGeometryCacheStore,
@@ -3645,7 +3633,6 @@ export function createGame(args: CreateGameArgs) {
     prepareStartMap,
     prewarmActiveMapSpritesForCurrentPalette,
     prepareRuntimeStructureTrianglesForLoading: prepareRuntimeStructureTrianglesForLoadingStage,
-    prepareStaticGroundRelightForLoading: prepareStaticGroundRelightForLoadingStage,
     performPreparedStartIntent,
     consumePendingStartIntent,
     beginFloorLoad,
