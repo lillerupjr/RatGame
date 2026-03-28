@@ -20,6 +20,8 @@ export function resolveRenderDebugFlags(debug: DebugSettings): RenderDebugFlags 
     showStructureTriangleFootprint: baseFlags.showStructureTriangleFootprint,
     showStructureAnchors: baseFlags.showStructureAnchors,
     showStructureTriangleOwnershipSort: baseFlags.showStructureTriangleOwnershipSort,
+    debugStructureRenderMode: debug.debugStructureRenderMode,
+    perfOverlayMode: debug.perfOverlayMode,
     showEnemyAimOverlay: baseFlags.showEnemyAimOverlay,
     showLootGoblinOverlay: baseFlags.showLootGoblinOverlay,
     showMapOverlays: baseFlags.showMapOverlays,

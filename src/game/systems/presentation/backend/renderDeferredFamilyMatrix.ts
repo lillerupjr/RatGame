@@ -12,19 +12,14 @@ export type StageDDeferredFamilyEntry = {
 
 const STAGE_D_DEFERRED_FAMILY_MATRIX: readonly StageDDeferredFamilyEntry[] = [
   {
-    family: "worldGeometry:triangles",
+    family: "groundSurface:quad",
     disposition: "PORT_STAGE_D_NOW",
-    reason: "Canonical geometry routing is complete for triangle meshes; backend cleanup remains deferred to Phase 3.",
+    reason: "Ground surfaces now use one quad-native payload; backend cleanup remains deferred to Phase 3.",
   },
   {
-    family: "groundSurface:projectedSurface",
+    family: "groundDecal:quad",
     disposition: "PORT_STAGE_D_NOW",
-    reason: "Ground surfaces now use one normalized projected-surface payload; backend cleanup remains deferred to Phase 3.",
-  },
-  {
-    family: "groundDecal:projectedSurface",
-    disposition: "PORT_STAGE_D_NOW",
-    reason: "Ground decals now emit tile-diamond projected-surface payloads; backend cleanup remains deferred to Phase 3.",
+    reason: "Ground decals now emit quad-native payloads; backend cleanup remains deferred to Phase 3.",
   },
   {
     family: "worldSprite:quad",

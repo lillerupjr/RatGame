@@ -32,14 +32,6 @@ const FINAL_BACKEND_MATRIX: readonly FinalBackendMatrixEntry[] = [
     releaseDefaultAllowed: false,
   },
   {
-    family: "worldGeometry:triangles",
-    classification: "WEBGL_PRIMARY",
-    currentRoute: "webgl",
-    parityStatus: "parity_pending_manual",
-    reason: "World geometry is now normalized to explicit triangle meshes; compare-distance overlays moved to debug commands.",
-    releaseDefaultAllowed: true,
-  },
-  {
     family: "screenOverlay:quad",
     classification: "WEBGL_PRIMARY",
     currentRoute: "webgl",
@@ -64,19 +56,19 @@ const FINAL_BACKEND_MATRIX: readonly FinalBackendMatrixEntry[] = [
     releaseDefaultAllowed: false,
   },
   {
-    family: "groundSurface:projectedSurface",
+    family: "groundSurface:quad",
     classification: "WEBGL_PRIMARY",
     currentRoute: "webgl",
     parityStatus: "parity_pending_manual",
-    reason: "Ground surfaces now emit a single projected-surface payload with explicit CPU-owned geometry.",
+    reason: "Ground surfaces now emit a single quad-native payload with explicit four-corner geometry.",
     releaseDefaultAllowed: true,
   },
   {
-    family: "groundDecal:projectedSurface",
+    family: "groundDecal:quad",
     classification: "WEBGL_PRIMARY",
     currentRoute: "webgl",
     parityStatus: "parity_pending_manual",
-    reason: "Ground decals now emit normalized projected-surface payloads and no longer rely on backend-time realization.",
+    reason: "Ground decals now emit quad-native payloads and no longer rely on backend-time realization.",
     releaseDefaultAllowed: true,
   },
   {

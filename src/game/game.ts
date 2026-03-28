@@ -128,7 +128,7 @@ import { findNearestWalkableSpawnGrid } from "./systems/spawn/findWalkableSpawn"
 import { DEFAULT_MAP_POOL } from "./map/mapIds";
 import { OBJECTIVE_TRIGGER_IDS } from "./systems/progression/objectiveSpec";
 import { getPlayableCharacter, PLAYABLE_CHARACTERS, type PlayableCharacterId } from "./content/playableCharacters";
-import { DEFAULT_GAME_SPEED, clampGameSpeed, getUserSettings } from "../userSettings";
+import { DEFAULT_GAME_SPEED, clampGameSpeed, getUserSettings, updateUserSettings } from "../userSettings";
 import { neutralMobSpritesReady, preloadNeutralMobSprites } from "../engine/render/sprites/neutralSprites";
 import { spawnMilestonePigeonNearPlayer } from "./factories/neutralMobFactory";
 import { neutralAnimatedMobsSystem } from "./systems/sim/neutralAnimatedMobs";
@@ -207,6 +207,7 @@ type HudRefs = {
   topStack: HTMLDivElement;
   topRow: HTMLDivElement;
   topLeft: HTMLDivElement;
+  perfOverlayModeSelect: HTMLSelectElement;
   topCenter: HTMLDivElement;
   topRight: HTMLDivElement;
   fpsPill: HTMLSpanElement;
@@ -3097,6 +3098,8 @@ export function createGame(args: CreateGameArgs) {
     args.hud.vitalsOrbRoot.classList.toggle("isRight", orbSide === "right");
 
     args.hud.fpsPill.hidden = false;
+    args.hud.perfOverlayModeSelect.hidden = !settings.render.renderPerfCountersEnabled;
+    args.hud.perfOverlayModeSelect.value = settings.debug.perfOverlayMode;
     args.hud.timePill.hidden = false;
     args.hud.lvlPill.hidden = false;
     args.hud.palettePill.hidden = !shouldShowPaletteHudDebugOverlay(settings);
@@ -3206,6 +3209,14 @@ export function createGame(args: CreateGameArgs) {
     }
     args.hud.objectiveOverlay.hidden = false;
   }
+
+  args.hud.perfOverlayModeSelect.addEventListener("change", () => {
+    updateUserSettings({
+      debug: {
+        perfOverlayMode: args.hud.perfOverlayModeSelect.value as "off" | "overview" | "world" | "structures" | "textures" | "ground" | "lighting" | "cache",
+      },
+    });
+  });
   // ---------------------------------
 
   function finishFloorEndCountdown(): boolean {

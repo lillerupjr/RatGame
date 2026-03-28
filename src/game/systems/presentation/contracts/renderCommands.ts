@@ -6,12 +6,11 @@ export type SemanticFamily =
   | "groundSurface"
   | "groundDecal"
   | "worldSprite"
-  | "worldGeometry"
   | "worldPrimitive"
   | "screenOverlay"
   | "debug";
 
-export type FinalForm = "quad" | "projectedSurface" | "triangles" | "primitive";
+export type FinalForm = "quad" | "primitive";
 
 export type CommandStage = "slice" | "band" | "tail";
 
@@ -27,13 +26,6 @@ export type RenderPoint = {
 
 export type RenderTrianglePoints = [RenderPoint, RenderPoint, RenderPoint];
 
-export type RenderTriangle = {
-  stableId?: number;
-  srcPoints: RenderTrianglePoints;
-  dstPoints: RenderTrianglePoints;
-  alpha: number;
-};
-
 export type RenderPieceDrawPayload = {
   img: CanvasImageSource;
   dx: number;
@@ -44,32 +36,41 @@ export type RenderPieceDrawPayload = {
   scale?: number;
 };
 
-export type RenderProjectedSurfaceTriangles = readonly [RenderTriangle, RenderTriangle];
+export type QuadRenderPieceKind = "iso" | "rect";
 
-export type ProjectedSurfacePayload = CommandPayloadBase & {
-  image: CanvasImageSource;
-  sourceWidth: number;
-  sourceHeight: number;
-  triangles: RenderProjectedSurfaceTriangles;
+export type RenderQuadPointsPayload = {
+  nw: RenderPoint;
+  ne: RenderPoint;
+  se: RenderPoint;
+  sw: RenderPoint;
 };
 
-export type GroundSurfaceProjectedSurfacePayload = ProjectedSurfacePayload;
-
-export type GroundDecalProjectedSurfacePayload = ProjectedSurfacePayload;
-
-export type WorldSpriteQuadPayload = CommandPayloadBase & {
+export type QuadRenderPiece = CommandPayloadBase & {
+  auditFamily?: "structures";
   image?: CanvasImageSource;
   sx?: number;
   sy?: number;
   sw?: number;
   sh?: number;
+  sourceQuad?: RenderQuadPointsPayload;
+  x0?: number;
+  y0?: number;
+  x1?: number;
+  y1?: number;
+  x2?: number;
+  y2?: number;
+  x3?: number;
+  y3?: number;
+  kind?: QuadRenderPieceKind;
+  alpha?: number;
+  rotationRad?: number;
+  flipX?: boolean;
   dx?: number;
   dy?: number;
   dw?: number;
   dh?: number;
-  alpha?: number;
-  rotationRad?: number;
-  flipX?: boolean;
+  blendMode?: "normal" | "additive";
+  color?: string;
   pickupIndex?: number;
   pickupKind?: number;
   screenX?: number;
@@ -87,12 +88,11 @@ export type WorldSpriteQuadPayload = CommandPayloadBase & {
   draw?: RenderPieceDrawPayload;
 };
 
-export type WorldGeometryTrianglesPayload = CommandPayloadBase & {
-  image: CanvasImageSource;
-  sourceWidth: number;
-  sourceHeight: number;
-  triangles: RenderTriangle[];
-};
+export type GroundSurfaceQuadPayload = QuadRenderPiece;
+
+export type GroundDecalQuadPayload = QuadRenderPiece;
+
+export type WorldSpriteQuadPayload = QuadRenderPiece;
 
 export type WorldPrimitivePayload = CommandPayloadBase & {
   shadowParams?: unknown;
@@ -142,15 +142,15 @@ export type RenderCommand =
       pass: RenderPass;
       key: RenderKey;
       semanticFamily: "groundSurface";
-      finalForm: "projectedSurface";
-      payload: GroundSurfaceProjectedSurfacePayload;
+      finalForm: "quad";
+      payload: GroundSurfaceQuadPayload;
     }
   | {
       pass: RenderPass;
       key: RenderKey;
       semanticFamily: "groundDecal";
-      finalForm: "projectedSurface";
-      payload: GroundDecalProjectedSurfacePayload;
+      finalForm: "quad";
+      payload: GroundDecalQuadPayload;
     }
   | {
       pass: RenderPass;
@@ -158,20 +158,6 @@ export type RenderCommand =
       semanticFamily: "worldSprite";
       finalForm: "quad";
       payload: WorldSpriteQuadPayload;
-    }
-  | {
-      pass: RenderPass;
-      key: RenderKey;
-      semanticFamily: "worldGeometry";
-      finalForm: "triangles";
-      payload: WorldGeometryTrianglesPayload;
-    }
-  | {
-      pass: RenderPass;
-      key: RenderKey;
-      semanticFamily: "worldPrimitive";
-      finalForm: "primitive";
-      payload: WorldPrimitivePayload;
     }
   | {
       pass: RenderPass;
@@ -186,6 +172,13 @@ export type RenderCommand =
       semanticFamily: "screenOverlay";
       finalForm: "primitive";
       payload: ScreenOverlayPrimitivePayload;
+    }
+  | {
+      pass: RenderPass;
+      key: RenderKey;
+      semanticFamily: "worldPrimitive";
+      finalForm: "primitive";
+      payload: WorldPrimitivePayload;
     }
   | {
       pass: RenderPass;

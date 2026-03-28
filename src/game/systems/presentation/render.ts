@@ -75,6 +75,7 @@ import { VFX_CLIPS, VFX_CLIP_INDEX } from "../../content/vfxRegistry";
 import { PRJ_KIND } from "../../factories/projectileFactory";
 import { getDecalSpriteId, type RuntimeDecalSetId } from "../../content/runtimeDecalConfig";
 import { roadMarkingDecalScale, shouldPixelSnapRoadMarking } from "../../roads/roadMarkingRender";
+import { buildDiamondSourceQuad } from "./renderCommandGeometry";
 import { orientedDims, seAnchorFromTopLeft } from "../../../engine/render/sprites/structureFootprintOwnership";
 import {
   type DebugOverlayContext,
@@ -116,7 +117,11 @@ import { shouldApplyAmbientDarknessOverlay } from "../../render/renderDebugPolic
 import { resolveNavArrowTarget } from "../../ui/navArrowTarget";
 import { renderNavArrow } from "../../ui/navArrowRender";
 import { coinColorFromValue } from "../../economy/coins";
-import { getCurrencyFrame, getCurrencyFrameForDarknessPercent } from "../../content/loot/currencyVisual";
+import {
+  getCurrencyAtlasFrame,
+  getCurrencyFrame,
+  getCurrencyFrameForDarknessPercent,
+} from "../../content/loot/currencyVisual";
 import {
   beginRenderPerfFrame,
   countRenderCanvasGroundChunkRebuild,
@@ -185,7 +190,7 @@ import {
   countStructureV6CandidateTrianglesForBucket,
   type StructureV6VerticalShadowMaskDebugData,
 } from "./structureShadows/structureShadowV6Slices";
-import { drawTexturedTriangle } from "./renderPrimitives/drawTexturedTriangle";
+import { drawTexturedQuad } from "./renderPrimitives/drawTexturedQuad";
 import {
   getDiamondFitCanvas,
   getFlippedOverlayImage,
@@ -196,6 +201,7 @@ import {
   canvasGroundChunkCacheStore,
   monolithicStructureGeometryCacheStore,
   staticRelightBakeStore,
+  structureSpriteAtlasStore,
   structureShadowV6CacheStore,
 } from "./presentationSubsystemStores";
 import { syncCanvasGroundChunkCacheForFrame } from "./canvasGroundChunkCache";
@@ -681,8 +687,16 @@ export async function renderSystem(
       renderAnchorY: number,
     ) => {
       const q = getRampQuadPoints(tx, ty, renderAnchorY);
-      drawTexturedTriangle(ctx, srcDiamond, 128, 64, srcUvNW, srcUvNE, srcUvSE, q.nw, q.ne, q.se);
-      drawTexturedTriangle(ctx, srcDiamond, 128, 64, srcUvNW, srcUvSE, srcUvSW, q.nw, q.se, q.sw);
+      drawTexturedQuad(
+        ctx,
+        srcDiamond,
+        0,
+        0,
+        srcDiamond.width,
+        srcDiamond.height,
+        q,
+        buildDiamondSourceQuad(srcDiamond.width, srcDiamond.height),
+      );
     };
 
     const drawRuntimeSidewalkTop = (
@@ -1067,6 +1081,7 @@ export async function renderSystem(
   const SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG = debugFlags.showStructureTriangleFootprint;
   const SHOW_STRUCTURE_ANCHORS = debugFlags.showStructureAnchors || ((w as any).showStructureAnchors ?? false);
   const SHOW_STRUCTURE_TRIANGLE_OWNERSHIP_SORT_DEBUG = debugFlags.showStructureTriangleOwnershipSort;
+  const DEBUG_STRUCTURE_RENDER_MODE = debugFlags.debugStructureRenderMode;
   const SHADOW_CASTER_MODE = debugFlags.shadowCasterMode;
   const SHADOW_V6_REQUESTED_SEMANTIC_BUCKET = debugFlags.shadowV6RequestedSemanticBucket;
   const SHADOW_V6_PRIMARY_SEMANTIC_BUCKET = debugFlags.shadowV6PrimarySemanticBucket;
@@ -1154,6 +1169,7 @@ export async function renderSystem(
 
   const beamLightZ = w.pzVisual ?? w.pz ?? tileHAtWorld(w.playerBeamStartX, w.playerBeamStartY);
   const activePaletteId = resolveActivePaletteId();
+  const activePaletteVariantKey = resolveActivePaletteVariantKey();
   const activePaletteSwapWeights = resolveActivePaletteSwapWeights();
   const currentSettings = getUserSettings();
   const worldLightRegistry = buildFrameWorldLightRegistry({
@@ -1274,6 +1290,10 @@ export async function renderSystem(
   if (groundChunkCacheSync.rebuiltChunkCount > 0) {
     countRenderCanvasGroundChunkRebuild(groundChunkCacheSync.rebuiltChunkCount);
   }
+  structureSpriteAtlasStore.sync({
+    compiledMap,
+    paletteVariantKey: activePaletteVariantKey,
+  });
   const structureTriangleAdmissionMode = renderSettings.structureTriangleAdmissionMode ?? "hybrid";
   const structureTriangleCutoutEnabled = renderSettings.structureTriangleCutoutEnabled === true;
   const structureTriangleCutoutHalfWidth = Math.max(
@@ -1486,6 +1506,7 @@ export async function renderSystem(
     ctx,
     getPickupWorld,
     resolveDynamicSpriteRelightAlpha,
+    getCurrencyAtlasFrame,
     getCurrencyFrame,
     dynamicSpriteRelightFrame,
     getCurrencyFrameForDarknessPercent,
@@ -1558,12 +1579,14 @@ export async function renderSystem(
     SHADOW_V6_PRIMARY_SEMANTIC_BUCKET,
     SHADOW_V6_SECONDARY_SEMANTIC_BUCKET,
     SHADOW_V6_TOP_SEMANTIC_BUCKET,
+    getStructureSpriteAtlasFrame: (spriteId: string) => structureSpriteAtlasStore.getAtlasFrame(spriteId),
     monolithicStructureGeometryCacheStore,
     getFlippedOverlayImage,
     SHOW_STRUCTURE_SLICE_DEBUG,
     SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG,
     SHOW_STRUCTURE_ANCHORS,
     SHOW_STRUCTURE_TRIANGLE_OWNERSHIP_SORT_DEBUG,
+    DEBUG_STRUCTURE_RENDER_MODE,
     deferredStructureSliceDebugDraws,
     LOG_STRUCTURE_OWNERSHIP_DEBUG,
     loggedStructureOwnershipDebugIds,
@@ -1711,7 +1734,7 @@ export async function renderSystem(
     const sampleGroundCommandDiagnostics = (
       command: (typeof executionPlan.world)[number],
     ) => {
-      if (command.semanticFamily !== "groundSurface" || command.finalForm !== "projectedSurface") return null;
+      if (command.semanticFamily !== "groundSurface" || command.finalForm !== "quad") return null;
       const tx = Number(command.key.within);
       const ty = Number(command.key.slice) - tx;
       if (!Number.isFinite(tx) || !Number.isFinite(ty)) return null;
@@ -1762,7 +1785,7 @@ export async function renderSystem(
       y: (point.y + viewport.camTy) * viewport.worldScaleDevice + viewport.safeOffsetDeviceY,
     });
     const groundProjectedSurfaceCommands = executionPlan.world.filter((command) =>
-      command.semanticFamily === "groundSurface" && command.finalForm === "projectedSurface"
+      command.semanticFamily === "groundSurface" && command.finalForm === "quad"
     ).slice(0, 5);
     (globalThis as any).__renderGroundProjectedSurfaceSample = {
       viewport: {
@@ -1775,24 +1798,34 @@ export async function renderSystem(
         devH,
       },
       totalGroundProjectedSurfaceCommands: executionPlan.world.filter((command) =>
-        command.semanticFamily === "groundSurface" && command.finalForm === "projectedSurface"
+        command.semanticFamily === "groundSurface" && command.finalForm === "quad"
       ).length,
       samples: groundProjectedSurfaceCommands.map((command) => {
         const payload = command.payload as unknown as {
-          sourceWidth: number;
-          sourceHeight: number;
-          triangles: ReadonlyArray<{
-            alpha: number;
-            dstPoints: ReadonlyArray<{ x: number; y: number }>;
-          }>;
+          sx?: number;
+          sy?: number;
+          sw?: number;
+          sh?: number;
+          alpha?: number;
+          x0: number;
+          y0: number;
+          x1: number;
+          y1: number;
+          x2: number;
+          y2: number;
+          x3: number;
+          y3: number;
         };
-        const firstPoint = payload.triangles[0]?.dstPoints[0] ?? { x: NaN, y: NaN };
+        const firstPoint = { x: payload.x0, y: payload.y0 };
         const inferredProjectedX = Number(firstPoint.x) - viewport.camTx;
         const inferredProjectedY = Number(firstPoint.y) - viewport.camTy;
-        const deviceTriangles = payload.triangles.map((triangle) =>
-          triangle.dstPoints.map((point) => projectToDevice(point))
-        );
-        const allDevicePoints = deviceTriangles.flat();
+        const deviceQuad = [
+          projectToDevice({ x: payload.x0, y: payload.y0 }),
+          projectToDevice({ x: payload.x1, y: payload.y1 }),
+          projectToDevice({ x: payload.x2, y: payload.y2 }),
+          projectToDevice({ x: payload.x3, y: payload.y3 }),
+        ];
+        const allDevicePoints = deviceQuad;
         const minX = Math.min(...allDevicePoints.map((point) => point.x));
         const maxX = Math.max(...allDevicePoints.map((point) => point.x));
         const minY = Math.min(...allDevicePoints.map((point) => point.y));
@@ -1815,11 +1848,20 @@ export async function renderSystem(
             ELEV_PX,
             SIDEWALK_ISO_HEIGHT,
           },
-          sourceWidth: payload.sourceWidth,
-          sourceHeight: payload.sourceHeight,
-          triangleAlpha: payload.triangles.map((triangle) => triangle.alpha),
-          dstPoints: payload.triangles.map((triangle) => triangle.dstPoints),
-          deviceDstPoints: deviceTriangles,
+          sourceRect: {
+            sx: payload.sx ?? 0,
+            sy: payload.sy ?? 0,
+            sw: payload.sw ?? 0,
+            sh: payload.sh ?? 0,
+          },
+          quadAlpha: payload.alpha ?? 1,
+          dstPoints: [
+            { x: payload.x0, y: payload.y0 },
+            { x: payload.x1, y: payload.y1 },
+            { x: payload.x2, y: payload.y2 },
+            { x: payload.x3, y: payload.y3 },
+          ],
+          deviceDstPoints: deviceQuad,
           deviceBounds: { minX, maxX, minY, maxY },
           intersectsCanvas: maxX >= 0 && maxY >= 0 && minX <= devW && minY <= devH,
         };
@@ -2033,6 +2075,8 @@ export async function renderSystem(
         cssH,
         dpr,
         flags: debugFlags,
+        fps: Number((w as { fps?: number }).fps ?? 0),
+        frameTimeMs: Number((w as { fps?: number }).fps ?? 0) > 0 ? 1000 / Number((w as { fps?: number }).fps ?? 0) : 0,
         renderPerfCountersEnabled: true,
         structureShadowRouting: structureShadowFrame.routing,
         structureV6VerticalShadowDebugData,

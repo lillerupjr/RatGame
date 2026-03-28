@@ -1,7 +1,6 @@
 import type { CompiledKenneyMap, ViewRect } from "../../map/compile/kenneyMap";
-import { configurePixelPerfect } from "../../../engine/render/pixelPerfect";
 import type { RawCacheMetricSample } from "./cacheMetricsRegistry";
-import { drawTexturedTriangle } from "./renderPrimitives/drawTexturedTriangle";
+import type { RenderCommand } from "./contracts/renderCommands";
 import {
   resolveGroundDecalProjectedCommand,
   resolveGroundSurfaceProjectedCommand,
@@ -25,11 +24,7 @@ export type CanvasGroundChunkCacheEntry = {
   maxTx: number;
   minTy: number;
   maxTy: number;
-  sortSlice: number;
-  sortWithin: number;
-  drawX: number;
-  drawY: number;
-  canvas: HTMLCanvasElement;
+  commands: readonly RenderCommand[];
 };
 
 export type SyncCanvasGroundChunkCacheInput = GroundCommandResolverDeps & {
@@ -152,50 +147,6 @@ function isLogicalChunkWithinBounds(bounds: LogicalChunkBounds, chunkX: number, 
     && chunkY <= bounds.maxChunkY;
 }
 
-function createChunkCanvas(
-  width: number,
-  height: number,
-): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null {
-  if (typeof document === "undefined") return null;
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.ceil(width));
-  canvas.height = Math.max(1, Math.ceil(height));
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  configurePixelPerfect(ctx);
-  ctx.imageSmoothingEnabled = false;
-  return { canvas, ctx };
-}
-
-function boundsForCommand(command: ResolvedGroundProjectedCommand): {
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-} {
-  let minX = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-  const triangles = command.payload.triangles;
-  for (let i = 0; i < triangles.length; i++) {
-    const points = triangles[i].dstPoints;
-    for (let j = 0; j < points.length; j++) {
-      const point = points[j];
-      if (point.x < minX) minX = point.x;
-      if (point.x > maxX) maxX = point.x;
-      if (point.y < minY) minY = point.y;
-      if (point.y > maxY) maxY = point.y;
-    }
-  }
-  return {
-    minX: Math.floor(minX),
-    maxX: Math.ceil(maxX),
-    minY: Math.floor(minY),
-    maxY: Math.ceil(maxY),
-  };
-}
-
 function viewIntersectsChunk(view: ViewRect, entry: CanvasGroundChunkCacheEntry): boolean {
   return !(
     entry.maxTx < view.minTx
@@ -205,64 +156,20 @@ function viewIntersectsChunk(view: ViewRect, entry: CanvasGroundChunkCacheEntry)
   );
 }
 
-function translatePoint(point: { x: number; y: number }, dx: number, dy: number): { x: number; y: number } {
-  return { x: point.x + dx, y: point.y + dy };
+function toCachedGroundRenderCommand(command: ResolvedGroundProjectedCommand): RenderCommand {
+  return {
+    pass: "GROUND",
+    key: command.key,
+    semanticFamily: command.semanticFamily,
+    finalForm: "quad",
+    payload: command.payload,
+  };
 }
 
-function renderBucketToEntry(bucket: CanvasGroundChunkBuildBucket): CanvasGroundChunkCacheEntry | null {
+function buildBucketToEntry(bucket: CanvasGroundChunkBuildBucket): CanvasGroundChunkCacheEntry | null {
+  if (bucket.commands.length <= 0) return null;
   setRenderPerfDrawTag("floors");
   try {
-    let minX = Number.POSITIVE_INFINITY;
-    let maxX = Number.NEGATIVE_INFINITY;
-    let minY = Number.POSITIVE_INFINITY;
-    let maxY = Number.NEGATIVE_INFINITY;
-
-    for (let i = 0; i < bucket.commands.length; i++) {
-      const bounds = boundsForCommand(bucket.commands[i]);
-      if (bounds.minX < minX) minX = bounds.minX;
-      if (bounds.maxX > maxX) maxX = bounds.maxX;
-      if (bounds.minY < minY) minY = bounds.minY;
-      if (bounds.maxY > maxY) maxY = bounds.maxY;
-    }
-
-    if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
-      return null;
-    }
-
-    const target = createChunkCanvas(Math.max(1, maxX - minX), Math.max(1, maxY - minY));
-    if (!target) return null;
-
-    for (let i = 0; i < bucket.commands.length; i++) {
-      const command = bucket.commands[i];
-      const triangles = command.payload.triangles;
-      const image = command.payload.image;
-      const sourceWidth = Number(command.payload.sourceWidth);
-      const sourceHeight = Number(command.payload.sourceHeight);
-      for (let ti = 0; ti < triangles.length; ti++) {
-        const triangle = triangles[ti];
-        const [s0, s1, s2] = triangle.srcPoints;
-        const [d0, d1, d2] = triangle.dstPoints;
-        const alpha = Number.isFinite(Number(triangle.alpha)) ? Number(triangle.alpha) : 1;
-        if (alpha < 1) {
-          target.ctx.save();
-          target.ctx.globalAlpha = target.ctx.globalAlpha * alpha;
-        }
-        drawTexturedTriangle(
-          target.ctx,
-          image,
-          sourceWidth,
-          sourceHeight,
-          s0,
-          s1,
-          s2,
-          translatePoint(d0, -minX, -minY),
-          translatePoint(d1, -minX, -minY),
-          translatePoint(d2, -minX, -minY),
-        );
-        if (alpha < 1) target.ctx.restore();
-      }
-    }
-
     return {
       zBand: bucket.zBand,
       chunkX: bucket.chunkX,
@@ -271,11 +178,7 @@ function renderBucketToEntry(bucket: CanvasGroundChunkBuildBucket): CanvasGround
       maxTx: bucket.maxTx,
       minTy: bucket.minTy,
       maxTy: bucket.maxTy,
-      sortSlice: bucket.minTx + bucket.minTy,
-      sortWithin: bucket.minTx,
-      drawX: minX,
-      drawY: minY,
-      canvas: target.canvas,
+      commands: bucket.commands.map((command) => toCachedGroundRenderCommand(command)),
     };
   } finally {
     setRenderPerfDrawTag(null);
@@ -353,15 +256,11 @@ function buildGroundChunkBucketsForLogicalChunk(
   const entriesByBand = new Map<number, CanvasGroundChunkCacheEntry[]>();
   for (const bucket of buckets.values()) {
     bucket.commands.sort((a, b) => compareRenderKeys(a.key, b.key));
-    const entry = renderBucketToEntry(bucket);
+    const entry = buildBucketToEntry(bucket);
     if (!entry) continue;
     const bandEntries = entriesByBand.get(bucket.zBand) ?? [];
     bandEntries.push(entry);
     if (!entriesByBand.has(bucket.zBand)) entriesByBand.set(bucket.zBand, bandEntries);
-  }
-
-  for (const entries of entriesByBand.values()) {
-    entries.sort((a, b) => a.sortSlice - b.sortSlice || a.sortWithin - b.sortWithin);
   }
 
   return {
@@ -391,6 +290,8 @@ export class CanvasGroundChunkCacheStore {
   private lastGraceLogicalChunkCount = 0;
   private lastPendingLogicalChunkCount = 0;
   private builtLogicalChunkCount = 0;
+  private lastCachedQuadCount = 0;
+  private lastCoveredStableIdCount = 0;
 
   get generation(): number {
     return this.rebuildGeneration;
@@ -410,6 +311,8 @@ export class CanvasGroundChunkCacheStore {
     this.lastTargetLogicalChunkCount = 0;
     this.lastGraceLogicalChunkCount = 0;
     this.lastPendingLogicalChunkCount = 0;
+    this.lastCachedQuadCount = 0;
+    this.lastCoveredStableIdCount = 0;
   }
 
   hasCoveredStableId(stableId: number | undefined): boolean {
@@ -433,10 +336,22 @@ export class CanvasGroundChunkCacheStore {
     return entries.filter((entry) => viewIntersectsChunk(viewRect, entry));
   }
 
+  getVisibleCommands(zBand: number, viewRect: ViewRect): readonly RenderCommand[] {
+    const entries = this.getVisibleEntries(zBand, viewRect);
+    if (entries.length <= 0) return [];
+    const commands: RenderCommand[] = [];
+    for (let i = 0; i < entries.length; i++) {
+      for (let j = 0; j < entries[i].commands.length; j++) commands.push(entries[i].commands[j]);
+    }
+    commands.sort((a, b) => compareRenderKeys(a.key, b.key));
+    return commands;
+  }
+
   private refreshAggregates(): void {
     const nextEntriesByBand = new Map<number, CanvasGroundChunkCacheEntry[]>();
     const nextCoveredStableIds = new Set<number>();
     let pendingLogicalChunkCount = 0;
+    let cachedQuadCount = 0;
 
     for (const logicalChunk of this.retainedLogicalChunks.values()) {
       if (logicalChunk.pendingRetryAtMs > 0) pendingLogicalChunkCount += 1;
@@ -444,19 +359,20 @@ export class CanvasGroundChunkCacheStore {
       for (const stableId of logicalChunk.coveredStableIds) nextCoveredStableIds.add(stableId);
       for (const [zBand, entries] of logicalChunk.entriesByBand.entries()) {
         const bandEntries = nextEntriesByBand.get(zBand) ?? [];
-        for (let i = 0; i < entries.length; i++) bandEntries.push(entries[i]);
+        for (let i = 0; i < entries.length; i++) {
+          cachedQuadCount += entries[i].commands.length;
+          bandEntries.push(entries[i]);
+        }
         if (!nextEntriesByBand.has(zBand)) nextEntriesByBand.set(zBand, bandEntries);
       }
-    }
-
-    for (const entries of nextEntriesByBand.values()) {
-      entries.sort((a, b) => a.sortSlice - b.sortSlice || a.sortWithin - b.sortWithin);
     }
 
     this.entriesByBand = nextEntriesByBand;
     this.coveredStableIds = nextCoveredStableIds;
     this.lastRetainedLogicalChunkCount = this.retainedLogicalChunks.size;
     this.lastPendingLogicalChunkCount = pendingLogicalChunkCount;
+    this.lastCachedQuadCount = cachedQuadCount;
+    this.lastCoveredStableIdCount = nextCoveredStableIds.size;
   }
 
   private replaceLogicalChunk(
@@ -570,7 +486,7 @@ export class CanvasGroundChunkCacheStore {
       for (const entries of retained.entriesByBand.values()) {
         entryCount += entries.length;
         for (let i = 0; i < entries.length; i++) {
-          approxBytes += entries[i].canvas.width * entries[i].canvas.height * 4;
+          approxBytes += entries[i].commands.length * 96;
         }
       }
     }
@@ -590,10 +506,13 @@ export class CanvasGroundChunkCacheStore {
       contextKey: this.contextKey,
       generation: this.rebuildGeneration,
       notes: [
+        "mode:quad",
         `avg:${avgBytes}`,
         `logical:${this.lastRetainedLogicalChunkCount}`,
         `target:${this.lastTargetLogicalChunkCount}`,
         `grace:${this.lastGraceLogicalChunkCount}`,
+        `quads:${this.lastCachedQuadCount}`,
+        `covered:${this.lastCoveredStableIdCount}`,
         `rebuild:${this.lastRebuiltChunkCount}`,
         `built:${this.builtLogicalChunkCount}`,
         `pending:${this.lastPendingLogicalChunkCount}`,

@@ -1,5 +1,7 @@
 import type {
+  DebugStructureRenderMode,
   DebugToolsSettings,
+  PerfOverlayMode,
   ShadowCasterMode,
   ShadowV6SemanticBucket,
 } from "./settingsTypes";
@@ -82,6 +84,8 @@ export const DEFAULT_DEBUG_TOOLS_SETTINGS: DebugToolsSettings = {
   structureTriangleFootprint: false,
   showStructureAnchors: false,
   showStructureTriangleOwnershipSort: false,
+  debugStructureRenderMode: "triangles",
+  perfOverlayMode: "overview",
   projectileFaces: false,
   triggers: false,
   debugRoadSemantic: false,
@@ -141,6 +145,24 @@ function normalizeShadowV6SemanticBucket(value: unknown): ShadowV6SemanticBucket
   return normalizeStructureV6SemanticBucket(value);
 }
 
+function normalizeDebugStructureRenderMode(value: unknown): DebugStructureRenderMode {
+  if (value === "triangles") return "triangles";
+  if (value === "quadApprox") return "quadApprox";
+  return "triangles";
+}
+
+function normalizePerfOverlayMode(value: unknown): PerfOverlayMode {
+  if (value === "off") return "off";
+  if (value === "overview") return "overview";
+  if (value === "world") return "world";
+  if (value === "structures") return "structures";
+  if (value === "textures") return "textures";
+  if (value === "ground") return "ground";
+  if (value === "lighting") return "lighting";
+  if (value === "cache") return "cache";
+  return "overview";
+}
+
 export type DebugToolsSettingsPatch = Partial<DebugToolsSettings>;
 
 export function sanitizeDebugToolsSettings(input: Partial<DebugToolsSettings> | undefined): DebugToolsSettings {
@@ -164,6 +186,8 @@ export function sanitizeDebugToolsSettings(input: Partial<DebugToolsSettings> | 
     structureTriangleFootprint: !!merged.structureTriangleFootprint,
     showStructureAnchors: !!merged.showStructureAnchors,
     showStructureTriangleOwnershipSort: !!merged.showStructureTriangleOwnershipSort,
+    debugStructureRenderMode: normalizeDebugStructureRenderMode(merged.debugStructureRenderMode),
+    perfOverlayMode: normalizePerfOverlayMode(merged.perfOverlayMode),
     projectileFaces: !!merged.projectileFaces,
     triggers: !!merged.triggers,
     debugRoadSemantic: !!merged.debugRoadSemantic,
@@ -227,6 +251,7 @@ export type ResolvedDebugFlags = {
   showStructureTriangleFootprint: boolean;
   showStructureAnchors: boolean;
   showStructureTriangleOwnershipSort: boolean;
+  debugStructureRenderMode: DebugStructureRenderMode;
   showMapOverlays: boolean;
   showEnemyAimOverlay: boolean;
   showLootGoblinOverlay: boolean;
@@ -256,6 +281,7 @@ export function resolveDebugFlags(args: {
     showStructureTriangleFootprint: args.debug.structureTriangleFootprint,
     showStructureAnchors: args.debug.showStructureAnchors,
     showStructureTriangleOwnershipSort: args.debug.showStructureTriangleOwnershipSort,
+    debugStructureRenderMode: args.debug.debugStructureRenderMode,
     showMapOverlays: !args.mapOverlaysDisabled,
     showEnemyAimOverlay: args.debug.enemyAimOverlay,
     showLootGoblinOverlay: args.debug.lootGoblinOverlay,

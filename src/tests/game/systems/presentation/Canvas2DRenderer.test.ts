@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { Canvas2DRenderer } from "../../../../game/systems/presentation/backend/Canvas2DRenderer";
 import type { RenderCommand } from "../../../../game/systems/presentation/contracts/renderCommands";
 import type { RenderExecutionPlan } from "../../../../game/systems/presentation/backend/renderExecutionPlan";
-import { buildDiamondSourceQuad, buildTrianglePairFromQuad } from "../../../../game/systems/presentation/renderCommandGeometry";
+import {
+  buildProjectedSurfacePayload,
+  buildQuadRenderPieceFromPoints,
+} from "../../../../game/systems/presentation/renderCommandGeometry";
 import { KindOrder } from "../../../../game/systems/presentation/worldRenderOrdering";
 
 type FakeCtx = CanvasRenderingContext2D & {
@@ -96,6 +99,37 @@ function command(
   } as RenderCommand;
 }
 
+function makeProjectedGroundPayload(image: any, offsetX = 0) {
+  return buildProjectedSurfacePayload({
+    image,
+    destinationQuad: {
+      nw: { x: offsetX + 0, y: 0 },
+      ne: { x: offsetX + 32, y: 0 },
+      se: { x: offsetX + 16, y: 16 },
+      sw: { x: offsetX - 16, y: 16 },
+    },
+  });
+}
+
+function makeStructureIsoQuadPayload(image: any, alpha = 1) {
+  return buildQuadRenderPieceFromPoints({
+    auditFamily: "structures",
+    image,
+    sx: 0,
+    sy: 0,
+    sw: 128,
+    sh: 64,
+    destinationQuad: {
+      nw: { x: 10, y: 10 },
+      ne: { x: 30, y: 10 },
+      se: { x: 20, y: 24 },
+      sw: { x: 0, y: 24 },
+    },
+    kind: "iso",
+    alpha,
+  });
+}
+
 describe("Canvas2DRenderer", () => {
   it("keeps world rendering on the main canvas while screen overlays render on the overlay canvas", () => {
     const ctx = makeCtx(320, 180);
@@ -181,7 +215,7 @@ describe("Canvas2DRenderer", () => {
     expect(overlayCtx.fillRect).toHaveBeenCalledWith(0, 0, 320, 180);
   });
 
-  it("renders projected ground surfaces through the canonical triangle path", () => {
+  it("renders projected ground surfaces through the quad-native iso path", () => {
     const ctx = makeCtx(320, 180);
     const overlayCtx = makeCtx(320, 180);
     const renderer = new Canvas2DRenderer({
@@ -237,22 +271,12 @@ describe("Canvas2DRenderer", () => {
         stableId: 3,
       },
       semanticFamily: "groundSurface",
-      finalForm: "projectedSurface",
-      payload: {
-        image: { width: 128, height: 64 } as any,
-        sourceWidth: 128,
-        sourceHeight: 64,
-        triangles: buildTrianglePairFromQuad(buildDiamondSourceQuad(128, 64), {
-          nw: { x: 0, y: 0 },
-          ne: { x: 32, y: 0 },
-          se: { x: 16, y: 16 },
-          sw: { x: -16, y: 16 },
-        }),
-      },
+      finalForm: "quad",
+      payload: makeProjectedGroundPayload({ width: 128, height: 64 } as any),
     } as RenderCommand]);
 
-    expect(ctx.drawImage).toHaveBeenCalledTimes(2);
-    expect(ctx.transform).toHaveBeenCalledTimes(2);
+    expect(ctx.drawImage).toHaveBeenCalledTimes(1);
+    expect(ctx.transform).toHaveBeenCalledTimes(1);
     expect(overlayCtx.drawImage).not.toHaveBeenCalled();
   });
 
@@ -332,7 +356,7 @@ describe("Canvas2DRenderer", () => {
     expect(ctx.drawImage).toHaveBeenCalledTimes(1);
   });
 
-  it("tags world sprite draws as entities and geometry draws as live structures", () => {
+  it("tags world sprite draws as entities and structure quads as live structures", () => {
     const ctx = makeCtx(320, 180);
     const overlayCtx = makeCtx(320, 180);
     const setRenderPerfDrawTag = vi.fn();
@@ -392,19 +416,9 @@ describe("Canvas2DRenderer", () => {
         },
       }),
       command(2, {
-        semanticFamily: "worldGeometry",
-        finalForm: "triangles",
-        payload: {
-          image: { width: 128, height: 64 } as any,
-          sourceWidth: 128,
-          sourceHeight: 64,
-          triangles: buildTrianglePairFromQuad(buildDiamondSourceQuad(128, 64), {
-            nw: { x: 0, y: 0 },
-            ne: { x: 32, y: 0 },
-            se: { x: 16, y: 16 },
-            sw: { x: -16, y: 16 },
-          }),
-        },
+        semanticFamily: "worldSprite",
+        finalForm: "quad",
+        payload: makeStructureIsoQuadPayload({ width: 128, height: 64 } as any),
       }),
     ]);
 
@@ -546,18 +560,9 @@ describe("Canvas2DRenderer", () => {
         kindOrder: KindOrder.STRUCTURE,
         stableId: 12,
       },
-      semanticFamily: "worldGeometry",
-      finalForm: "triangles",
-      payload: {
-        image: { width: 128, height: 64 } as any,
-        sourceWidth: 128,
-        sourceHeight: 64,
-        triangles: [{
-          srcPoints: [{ x: 0, y: 0 }, { x: 64, y: 32 }, { x: 0, y: 64 }],
-          dstPoints: [{ x: 10, y: 10 }, { x: 30, y: 10 }, { x: 20, y: 24 }],
-          alpha: 0.5,
-        }],
-      },
+      semanticFamily: "worldSprite",
+      finalForm: "quad",
+      payload: makeStructureIsoQuadPayload({ width: 128, height: 64 } as any, 0.5),
     } as RenderCommand]);
 
     expect(ctx.save).toHaveBeenCalledTimes(2);
@@ -568,7 +573,7 @@ describe("Canvas2DRenderer", () => {
   it("draws cached ground chunks and skips covered ground commands in the world stream", () => {
     const ctx = makeCtx(320, 180);
     const overlayCtx = makeCtx(320, 180);
-    const groundChunkCanvas = { width: 128, height: 64 } as any;
+    const cachedGroundImage = { width: 128, height: 64, id: "cached-ground" } as any;
     const renderer = new Canvas2DRenderer({
       world: {} as any,
       ctx,
@@ -623,13 +628,23 @@ describe("Canvas2DRenderer", () => {
       viewRect: { minTx: -2, maxTx: 2, minTy: -2, maxTy: 2 },
       groundChunkCache: {
         getVisibleEntries: vi.fn(() => [{
-          canvas: groundChunkCanvas,
-          drawX: -64,
-          drawY: -32,
           minTx: -1,
           maxTx: 1,
           minTy: -1,
           maxTy: 1,
+        }]),
+        getVisibleCommands: vi.fn(() => [{
+          pass: "GROUND",
+          key: {
+            slice: 0,
+            within: 0,
+            baseZ: 0,
+            kindOrder: KindOrder.FLOOR,
+            stableId: 700,
+          },
+          semanticFamily: "groundSurface",
+          finalForm: "quad",
+          payload: makeProjectedGroundPayload(cachedGroundImage),
         }]),
         hasCoveredStableId: vi.fn((stableId: number) => stableId === 7),
       },
@@ -646,29 +661,19 @@ describe("Canvas2DRenderer", () => {
         stableId: 7,
       },
       semanticFamily: "groundSurface",
-      finalForm: "projectedSurface",
-      payload: {
-        image: { width: 128, height: 64 } as any,
-        sourceWidth: 128,
-        sourceHeight: 64,
-        triangles: buildTrianglePairFromQuad(buildDiamondSourceQuad(128, 64), {
-          nw: { x: 0, y: 0 },
-          ne: { x: 32, y: 0 },
-          se: { x: 16, y: 16 },
-          sw: { x: -16, y: 16 },
-        }),
-      },
+      finalForm: "quad",
+      payload: makeProjectedGroundPayload({ width: 128, height: 64 } as any),
     } as RenderCommand]);
 
     expect(ctx.drawImage).toHaveBeenCalledTimes(1);
-    expect(ctx.drawImage).toHaveBeenCalledWith(groundChunkCanvas, -64, -32);
-    expect(ctx.transform).not.toHaveBeenCalled();
+    expect(ctx.drawImage.mock.calls[0][0]).toBe(cachedGroundImage);
+    expect(ctx.transform).toHaveBeenCalledTimes(1);
   });
 
   it("does not redraw cached ground chunks for tail-stage world commands", () => {
     const ctx = makeCtx(320, 180);
     const overlayCtx = makeCtx(320, 180);
-    const groundChunkCanvas = { width: 128, height: 64 } as any;
+    const cachedGroundImage = { width: 128, height: 64, id: "cached-ground" } as any;
     const renderer = new Canvas2DRenderer({
       world: {} as any,
       ctx,
@@ -723,13 +728,23 @@ describe("Canvas2DRenderer", () => {
       viewRect: { minTx: -2, maxTx: 2, minTy: -2, maxTy: 2 },
       groundChunkCache: {
         getVisibleEntries: vi.fn(() => [{
-          canvas: groundChunkCanvas,
-          drawX: -64,
-          drawY: -32,
           minTx: -1,
           maxTx: 1,
           minTy: -1,
           maxTy: 1,
+        }]),
+        getVisibleCommands: vi.fn(() => [{
+          pass: "GROUND",
+          key: {
+            slice: 0,
+            within: 0,
+            baseZ: 0,
+            kindOrder: KindOrder.FLOOR,
+            stableId: 701,
+          },
+          semanticFamily: "groundSurface",
+          finalForm: "quad",
+          payload: makeProjectedGroundPayload(cachedGroundImage),
         }]),
         hasCoveredStableId: vi.fn(() => false),
       },
@@ -747,18 +762,10 @@ describe("Canvas2DRenderer", () => {
           stableId: 1,
         },
         semanticFamily: "groundSurface",
-        finalForm: "projectedSurface",
+        finalForm: "quad",
         payload: {
           stage: "slice",
-          image: { width: 128, height: 64 } as any,
-          sourceWidth: 128,
-          sourceHeight: 64,
-          triangles: buildTrianglePairFromQuad(buildDiamondSourceQuad(128, 64), {
-            nw: { x: 0, y: 0 },
-            ne: { x: 32, y: 0 },
-            se: { x: 16, y: 16 },
-            sw: { x: -16, y: 16 },
-          }),
+          ...makeProjectedGroundPayload({ width: 128, height: 64 } as any),
         },
       } as RenderCommand,
       {
@@ -778,7 +785,7 @@ describe("Canvas2DRenderer", () => {
       } as RenderCommand,
     ]);
 
-    expect(ctx.drawImage).toHaveBeenCalledTimes(3);
-    expect(ctx.drawImage.mock.calls.filter((call) => call[0] === groundChunkCanvas)).toHaveLength(1);
+    expect(ctx.drawImage).toHaveBeenCalledTimes(2);
+    expect(ctx.drawImage.mock.calls.filter((call) => call[0] === cachedGroundImage)).toHaveLength(1);
   });
 });

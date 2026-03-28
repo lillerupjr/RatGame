@@ -1,8 +1,8 @@
 import type { DecalPiece, Surface } from "../../map/compile/kenneyMap";
 import type { RuntimeDecalSetId } from "../../content/runtimeDecalConfig";
 import type {
-  GroundDecalProjectedSurfacePayload,
-  GroundSurfaceProjectedSurfacePayload,
+  GroundDecalQuadPayload,
+  GroundSurfaceQuadPayload,
 } from "./contracts/renderCommands";
 import {
   buildDiamondDestinationQuad,
@@ -27,19 +27,19 @@ type GroundResolvedCommandBase<TFamily extends "groundSurface" | "groundDecal", 
   tx: number;
   ty: number;
   semanticFamily: TFamily;
-  finalForm: "projectedSurface";
+  finalForm: "quad";
   payload: TPayload;
   destinationQuad: RenderQuadPoints;
 };
 
 export type ResolvedGroundSurfaceProjectedCommand = GroundResolvedCommandBase<
   "groundSurface",
-  GroundSurfaceProjectedSurfacePayload
+  GroundSurfaceQuadPayload
 >;
 
 export type ResolvedGroundDecalProjectedCommand = GroundResolvedCommandBase<
   "groundDecal",
-  GroundDecalProjectedSurfacePayload
+  GroundDecalQuadPayload
 >;
 
 export type ResolvedGroundProjectedCommand =
@@ -258,13 +258,10 @@ export function resolveGroundSurfaceProjectedCommand(
       tx,
       ty,
       semanticFamily: "groundSurface",
-      finalForm: "projectedSurface",
+      finalForm: "quad",
       payload: buildProjectedSurfacePayload({
         image: finalImage,
-        sourceWidth: finalImage.width,
-        sourceHeight: finalImage.height,
         destinationQuad,
-        stableId,
       }),
       destinationQuad,
     };
@@ -323,13 +320,10 @@ export function resolveGroundSurfaceProjectedCommand(
     tx,
     ty,
     semanticFamily: "groundSurface",
-    finalForm: "projectedSurface",
+    finalForm: "quad",
     payload: buildProjectedSurfacePayload({
       image: projectedTopImage,
-      sourceWidth: projectedTopImage.width,
-      sourceHeight: projectedTopImage.height,
       destinationQuad,
-      stableId,
     }),
     destinationQuad,
   };
@@ -428,13 +422,10 @@ export function resolveGroundDecalProjectedCommand(
     tx: decal.tx,
     ty: decal.ty,
     semanticFamily: "groundDecal",
-    finalForm: "projectedSurface",
+    finalForm: "quad",
     payload: buildGroundDecalProjectedSurfacePayload({
       image: finalDiamond,
-      sourceWidth: finalDiamond.width,
-      sourceHeight: finalDiamond.height,
       destinationQuad,
-      stableId,
     }),
     destinationQuad,
   };

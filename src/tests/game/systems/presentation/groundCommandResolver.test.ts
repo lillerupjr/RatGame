@@ -72,7 +72,7 @@ describe("groundCommandResolver", () => {
 
     expect(live?.payload.image).toBe(normalizedTop);
     expect(staticCache?.payload.image).toBe(normalizedTop);
-    expect(staticCache?.payload.triangles).toEqual(live?.payload.triangles);
+    expect(staticCache?.payload).toEqual(live?.payload);
   });
 
   it("uses the ramp quad path for runtime asphalt tops", () => {
@@ -105,8 +105,16 @@ describe("groundCommandResolver", () => {
     const resolved = resolveGroundSurfaceProjectedCommand(surface, deps);
 
     expect(deps.getRampQuadPoints).toHaveBeenCalledWith(2, 3, 0.55);
-    expect(resolved?.payload.triangles[0].dstPoints[0]).toEqual({ x: 10, y: 20 });
-    expect(resolved?.payload.triangles[1].dstPoints[2]).toEqual({ x: 0, y: 30 });
+    expect(resolved?.payload.sourceQuad).toEqual({
+      nw: { x: 64, y: 0 },
+      ne: { x: 128, y: 32 },
+      se: { x: 64, y: 64 },
+      sw: { x: 0, y: 32 },
+    });
+    expect(resolved?.payload.x0).toBe(10);
+    expect(resolved?.payload.y0).toBe(20);
+    expect(resolved?.payload.x3).toBe(0);
+    expect(resolved?.payload.y3).toBe(30);
   });
 
   it("keeps flat decals centered on the tile origin while ramp decals use the ramp quad", () => {
@@ -125,8 +133,16 @@ describe("groundCommandResolver", () => {
       rotationQuarterTurns: 0,
     } as any;
     const flatResolved = resolveGroundDecalProjectedCommand(flatDecal, flatDeps);
-    expect(flatResolved?.payload.triangles[0].dstPoints[0]).toEqual({ x: 0, y: -36 });
-    expect(flatResolved?.payload.triangles[1].dstPoints[2]).toEqual({ x: -64, y: -4 });
+    expect(flatResolved?.payload.sourceQuad).toEqual({
+      nw: { x: 64, y: 0 },
+      ne: { x: 128, y: 32 },
+      se: { x: 64, y: 64 },
+      sw: { x: 0, y: 32 },
+    });
+    expect(flatResolved?.payload.x0).toBe(0);
+    expect(flatResolved?.payload.y0).toBe(-36);
+    expect(flatResolved?.payload.x3).toBe(-64);
+    expect(flatResolved?.payload.y3).toBe(-4);
 
     const rampDeps = makeDeps({
       rampRoadTiles: new Set<string>(["4,5"]),
@@ -143,7 +159,8 @@ describe("groundCommandResolver", () => {
     } as any;
     const rampResolved = resolveGroundDecalProjectedCommand(rampDecal, rampDeps);
     expect(rampDeps.getRampQuadPoints).toHaveBeenCalledWith(4, 5, 0.55);
-    expect(rampResolved?.payload.triangles[0].dstPoints[0]).toEqual({ x: 10, y: 20 });
+    expect(rampResolved?.payload.x0).toBe(10);
+    expect(rampResolved?.payload.y0).toBe(20);
   });
 
   it("excludes animated ocean tops from the static cache path while keeping them live", () => {

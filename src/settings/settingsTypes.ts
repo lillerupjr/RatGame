@@ -12,6 +12,8 @@ export type VerticalTilesViewportClass = "phone" | "desktop";
 export type LightColorModeOverride = "authored" | "off" | "standard" | "palette";
 export type LightStrengthOverride = "authored" | "low" | "medium" | "high";
 export type StructureTriangleAdmissionMode = "viewport" | "renderDistance" | "hybrid" | "compare";
+export type DebugStructureRenderMode = "triangles" | "quadApprox";
+export type PerfOverlayMode = "off" | "overview" | "world" | "structures" | "textures" | "ground" | "lighting" | "cache";
 export type ShadowCasterMode =
   | "v6SweepShadow"
   | "v6FaceSliceDebug";
@@ -69,6 +71,8 @@ export type DebugToolsSettings = {
   structureTriangleFootprint: boolean;
   showStructureAnchors: boolean;
   showStructureTriangleOwnershipSort: boolean;
+  debugStructureRenderMode: DebugStructureRenderMode;
+  perfOverlayMode: PerfOverlayMode;
   projectileFaces: boolean;
   triggers: boolean;
   debugRoadSemantic: boolean;

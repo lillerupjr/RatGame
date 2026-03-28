@@ -16,6 +16,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
     toScreen,
     resolveDynamicSpriteRelightAlpha,
     getCurrencyFrame,
+    getCurrencyAtlasFrame,
     ctx,
     dynamicSpriteRelightFrame,
     getCurrencyFrameForDarknessPercent,
@@ -156,6 +157,58 @@ export function collectEntityDrawables(input: CollectionContext): void {
       const p = toScreen(pickup.wx, pickup.wy);
       if (kind === 1) {
         const value = Math.max(1, Math.floor(w.xValue?.[i] ?? 1));
+        const atlasFrame = getCurrencyAtlasFrame?.(value, w.time ?? 0) ?? null;
+        if (atlasFrame) {
+          const size = 16;
+          enqueueSliceCommand(frameBuilder, imageSpriteKey(renderKey), {
+            semanticFamily: "worldSprite",
+            finalForm: "quad",
+            payload: {
+              image: atlasFrame.image,
+              sx: atlasFrame.sx,
+              sy: atlasFrame.sy,
+              sw: atlasFrame.sw,
+              sh: atlasFrame.sh,
+              dx: p.x - size * 0.5,
+              dy: p.y - size * 0.5,
+              dw: size,
+              dh: size,
+              alpha: 1,
+              pickupIndex: i,
+              pickupKind: kind,
+            },
+          });
+          const dynamicRelightAlpha = resolveDynamicSpriteRelightAlpha(p.x, p.y);
+          if (dynamicRelightAlpha > 0 && dynamicSpriteRelightFrame) {
+            const litAtlasFrame = getCurrencyAtlasFrame?.(
+              value,
+              w.time ?? 0,
+              dynamicSpriteRelightFrame.targetDarknessBucket,
+            ) ?? null;
+            if (litAtlasFrame) {
+              enqueueSliceCommand(frameBuilder, imageSpriteKey(renderKey, 0.01), {
+                semanticFamily: "worldSprite",
+                finalForm: "quad",
+                payload: {
+                  image: litAtlasFrame.image,
+                  sx: litAtlasFrame.sx,
+                  sy: litAtlasFrame.sy,
+                  sw: litAtlasFrame.sw,
+                  sh: litAtlasFrame.sh,
+                  dx: p.x - size * 0.5,
+                  dy: p.y - size * 0.5,
+                  dw: size,
+                  dh: size,
+                  alpha: dynamicRelightAlpha,
+                  pickupIndex: i,
+                  pickupKind: kind,
+                },
+              });
+            }
+          }
+          continue;
+        }
+
         const sprite = getCurrencyFrame(value, w.time ?? 0);
         if (sprite?.ready && sprite.img) {
           const size = 16;
@@ -169,6 +222,8 @@ export function collectEntityDrawables(input: CollectionContext): void {
               dw: size,
               dh: size,
               alpha: 1,
+              pickupIndex: i,
+              pickupKind: kind,
             },
           });
           const dynamicRelightAlpha = resolveDynamicSpriteRelightAlpha(p.x, p.y);
@@ -189,6 +244,8 @@ export function collectEntityDrawables(input: CollectionContext): void {
                   dw: size,
                   dh: size,
                   alpha: dynamicRelightAlpha,
+                  pickupIndex: i,
+                  pickupKind: kind,
                 },
               });
             }
@@ -271,6 +328,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
             dw: draw.dw,
             dh: draw.dh,
             alpha: 1,
+            enemyIndex: i,
           },
         });
         const dynamicRelightAlpha = resolveDynamicSpriteRelightAlpha(feet.screenX, feet.screenY);
@@ -298,6 +356,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
                 dw: draw.dw,
                 dh: draw.dh,
                 alpha: dynamicRelightAlpha,
+                enemyIndex: i,
               },
             });
           }
@@ -362,6 +421,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
             dw: draw.dw,
             dh: draw.dh,
             alpha: 1,
+            npcIndex: i,
           },
         });
         const dynamicRelightAlpha = resolveDynamicSpriteRelightAlpha(feet.screenX, feet.screenY);
@@ -386,6 +446,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
                 dw: draw.dw,
                 dh: draw.dh,
                 alpha: dynamicRelightAlpha,
+                npcIndex: i,
               },
             });
           }
@@ -452,6 +513,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
               dh: draw.dh,
               flipX: !!mob.render.flipX,
               alpha: 1,
+              neutralMobIndex: i,
             },
           });
           const dynamicRelightAlpha = resolveDynamicSpriteRelightAlpha(feet.screenX, feet.screenY);
@@ -475,6 +537,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
                     dh: draw.dh,
                     flipX: !!mob.render.flipX,
                     alpha: dynamicRelightAlpha,
+                    neutralMobIndex: i,
                   },
                 });
               }
@@ -555,6 +618,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
               dh: 32,
               rotationRad: angle,
               alpha: 1,
+              projectileIndex: i,
             },
           });
         } else {
@@ -593,6 +657,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
             dh: drawHeight,
             rotationRad: angle,
             alpha: 1,
+            projectileIndex: i,
           },
         });
         continue;

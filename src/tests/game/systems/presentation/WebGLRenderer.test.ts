@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { WebGLRenderer } from "../../../../game/systems/presentation/backend/WebGLRenderer";
 import type { RenderCommand } from "../../../../game/systems/presentation/contracts/renderCommands";
-import { buildDiamondSourceQuad, buildTrianglePairFromQuad } from "../../../../game/systems/presentation/renderCommandGeometry";
+import {
+  buildProjectedSurfacePayload,
+  buildQuadRenderPieceFromPoints,
+} from "../../../../game/systems/presentation/renderCommandGeometry";
+import { markStableTextureSource } from "../../../../game/systems/presentation/stableTextureSource";
 import { KindOrder } from "../../../../game/systems/presentation/worldRenderOrdering";
 
 function makeFakeGl() {
@@ -10,12 +14,14 @@ function makeFakeGl() {
   const drawModes: number[] = [];
   const matrices: number[][] = [];
   const textureUploads: string[] = [];
+  const bufferUploads: number[][] = [];
   let currentTexture: any = null;
   return {
     drawOrder,
     drawModes,
     matrices,
     textureUploads,
+    bufferUploads,
     VERTEX_SHADER: 0x8B31,
     FRAGMENT_SHADER: 0x8B30,
     COMPILE_STATUS: 0x8B81,
@@ -89,7 +95,9 @@ function makeFakeGl() {
     },
     deleteTexture: () => {},
     uniform1f: () => {},
-    bufferData: () => {},
+    bufferData: (_target: unknown, data: ArrayLike<number>) => {
+      bufferUploads.push(Array.from(data));
+    },
     blendFunc: () => {},
     blendFuncSeparate: () => {},
     drawArrays: (mode: number) => {
@@ -103,14 +111,6 @@ function makeImage(label: string): any {
   return {
     width: 16,
     height: 16,
-    getAttribute: (name: string) => (name === "data-label" ? label : null),
-  };
-}
-
-function makeChunkCanvas(label: string, width: number = 64, height: number = 32): any {
-  return {
-    width,
-    height,
     getAttribute: (name: string) => (name === "data-label" ? label : null),
   };
 }
@@ -153,18 +153,51 @@ function makeProjectedSurfaceCommand(image: any, stableId: number, offsetX: numb
       stableId,
     },
     semanticFamily: "groundSurface",
-    finalForm: "projectedSurface",
-    payload: {
+    finalForm: "quad",
+    payload: buildProjectedSurfacePayload({
       image,
-      sourceWidth: 128,
-      sourceHeight: 64,
-      triangles: buildTrianglePairFromQuad(buildDiamondSourceQuad(128, 64), {
+      destinationQuad: {
         nw: { x: offsetX + 0, y: 0 },
         ne: { x: offsetX + 32, y: 0 },
         se: { x: offsetX + 16, y: 16 },
         sw: { x: offsetX - 16, y: 16 },
-      }),
+      },
+    }),
+  } as RenderCommand;
+}
+
+function makeStructureQuadCommand(
+  image: any,
+  stableId: number,
+  offsetX: number,
+): RenderCommand {
+  return {
+    pass: "WORLD",
+    key: {
+      slice: 0,
+      within: 0,
+      baseZ: 0,
+      kindOrder: KindOrder.STRUCTURE,
+      stableId,
     },
+    semanticFamily: "worldSprite",
+    finalForm: "quad",
+    payload: buildQuadRenderPieceFromPoints({
+      auditFamily: "structures",
+      image,
+      sx: 100 + offsetX,
+      sy: 200,
+      sw: 32,
+      sh: 32,
+      destinationQuad: {
+        nw: { x: 2 + offsetX, y: 2 },
+        ne: { x: 18 + offsetX, y: 2 },
+        se: { x: 18 + offsetX, y: 18 },
+        sw: { x: 2 + offsetX, y: 18 },
+      },
+      kind: "iso",
+      alpha: 1,
+    }),
   } as RenderCommand;
 }
 
@@ -225,7 +258,66 @@ describe("WebGLRenderer", () => {
     expect(gl.drawOrder).toEqual(["second", "first"]);
   });
 
-  it("batches structure triangle groups even when triangle alpha differs", () => {
+  it("batches atlas-backed world sprite quads that share one texture with different source rects", () => {
+    const gl = makeFakeGl();
+    const renderer = new WebGLRenderer({
+      world: {} as any,
+      ctx: {} as any,
+      canvas: gl.canvas,
+      overlayCtx: {} as any,
+      overlayCanvas: { width: 100, height: 100 } as any,
+      hasUiOverlay: true,
+      cssW: 100,
+      cssH: 100,
+      screenW: 100,
+      screenH: 100,
+      devW: 100,
+      devH: 100,
+      dpr: 1,
+      overlayDevW: 100,
+      overlayDevH: 100,
+      overlayDpr: 1,
+      visibleVerticalTiles: 10,
+      viewport: {
+        worldScaleDevice: 1,
+        camTx: 0,
+        camTy: 0,
+        safeOffsetDeviceX: 0,
+        safeOffsetDeviceY: 0,
+      } as any,
+      zoom: 1,
+      worldWidth: 100,
+      worldHeight: 100,
+      scaledW: 100,
+      scaledH: 100,
+      safeOffsetX: 0,
+      safeOffsetY: 0,
+      playerWorldX: 0,
+      playerWorldY: 0,
+      playerTileX: 0,
+      playerTileY: 0,
+      cameraProjectedX: 0,
+      cameraProjectedY: 0,
+      camTx: 0,
+      camTy: 0,
+      worldScaleDevice: 1,
+      renderSettings: {},
+    }, gl);
+
+    const atlas = makeImage("currency-atlas");
+
+    renderer.beginFrame();
+    renderer.useWorldSpace();
+    renderer.renderCommands([
+      makeCommand(atlas, 1, { sx: 0, sy: 0, sw: 16, sh: 16, pickupIndex: 1, pickupKind: 1 }),
+      makeCommand(atlas, 2, { sx: 16, sy: 0, sw: 16, sh: 16, pickupIndex: 2, pickupKind: 1 }),
+    ]);
+
+    expect(gl.textureUploads).toEqual(["currency-atlas"]);
+    expect(gl.drawOrder).toEqual(["currency-atlas"]);
+  });
+
+  it("batches structure quads even when alpha differs", () => {
     const gl = makeFakeGl();
     const renderer = new WebGLRenderer({
       world: {} as any,
@@ -283,26 +375,25 @@ describe("WebGLRenderer", () => {
         kindOrder: KindOrder.STRUCTURE,
         stableId: 7,
       },
-      semanticFamily: "worldGeometry",
-      finalForm: "triangles",
+      semanticFamily: "worldSprite",
+      finalForm: "quad",
       payload: {
-        image,
-        sourceWidth: 16,
-        sourceHeight: 16,
-        triangles: [
-          {
-            stableId: 1,
-            srcPoints: [{ x: 0, y: 0 }, { x: 16, y: 0 }, { x: 0, y: 16 }],
-            dstPoints: [{ x: 2, y: 2 }, { x: 18, y: 2 }, { x: 2, y: 18 }],
-            alpha: 1,
+        ...buildQuadRenderPieceFromPoints({
+          auditFamily: "structures",
+          image,
+          sx: 0,
+          sy: 0,
+          sw: 16,
+          sh: 16,
+          destinationQuad: {
+            nw: { x: 2, y: 2 },
+            ne: { x: 18, y: 2 },
+            se: { x: 18, y: 18 },
+            sw: { x: 2, y: 18 },
           },
-          {
-            stableId: 2,
-            srcPoints: [{ x: 16, y: 0 }, { x: 16, y: 16 }, { x: 0, y: 16 }],
-            dstPoints: [{ x: 18, y: 2 }, { x: 18, y: 18 }, { x: 2, y: 18 }],
-            alpha: 0.6,
-          },
-        ],
+          kind: "iso",
+          alpha: 0.6,
+        }),
       },
     } as RenderCommand]);
 
@@ -310,7 +401,97 @@ describe("WebGLRenderer", () => {
     expect(gl.drawModes).toEqual([gl.TRIANGLES]);
   });
 
-  it("renders projected ground decals through the WebGL triangle path", () => {
+  it("reuses a stable structure atlas texture across frames for atlas-backed structure quads", () => {
+    const gl = makeFakeGl();
+    const renderer = new WebGLRenderer({
+      world: {} as any,
+      ctx: {} as any,
+      canvas: gl.canvas,
+      overlayCtx: {} as any,
+      overlayCanvas: { width: 100, height: 100 } as any,
+      hasUiOverlay: true,
+      cssW: 100,
+      cssH: 100,
+      screenW: 100,
+      screenH: 100,
+      devW: 100,
+      devH: 100,
+      dpr: 1,
+      overlayDevW: 100,
+      overlayDevH: 100,
+      overlayDpr: 1,
+      visibleVerticalTiles: 10,
+      viewport: {
+        worldScaleDevice: 1,
+        camTx: 0,
+        camTy: 0,
+        safeOffsetDeviceX: 0,
+        safeOffsetDeviceY: 0,
+      } as any,
+      zoom: 1,
+      worldWidth: 100,
+      worldHeight: 100,
+      scaledW: 100,
+      scaledH: 100,
+      safeOffsetX: 0,
+      safeOffsetY: 0,
+      playerWorldX: 0,
+      playerWorldY: 0,
+      playerTileX: 0,
+      playerTileY: 0,
+      cameraProjectedX: 0,
+      cameraProjectedY: 0,
+      camTx: 0,
+      camTy: 0,
+      worldScaleDevice: 1,
+      renderSettings: {},
+    }, gl);
+
+    const originalHTMLCanvasElement = (globalThis as any).HTMLCanvasElement;
+    class FakeCanvasElement {
+      width: number;
+      height: number;
+
+      constructor(
+        private readonly label: string,
+        width: number,
+        height: number,
+      ) {
+        this.width = width;
+        this.height = height;
+      }
+
+      getAttribute(name: string): string | null {
+        return name === "data-label" ? this.label : null;
+      }
+    }
+
+    (globalThis as any).HTMLCanvasElement = FakeCanvasElement;
+    try {
+      const atlas = markStableTextureSource(new FakeCanvasElement("structure-atlas", 256, 256) as any);
+      const commands = [
+        makeStructureQuadCommand(atlas, 1, 0),
+        makeStructureQuadCommand(atlas, 2, 40),
+      ];
+
+      renderer.beginFrame();
+      renderer.useWorldSpace();
+      renderer.renderCommands(commands);
+
+      renderer.beginFrame();
+      renderer.useWorldSpace();
+      renderer.renderCommands(commands);
+
+      expect(gl.textureUploads).toEqual(["structure-atlas"]);
+      expect(gl.drawOrder).toEqual(["structure-atlas", "structure-atlas"]);
+      expect(gl.drawModes).toEqual([gl.TRIANGLES, gl.TRIANGLES]);
+    } finally {
+      if (originalHTMLCanvasElement === undefined) delete (globalThis as any).HTMLCanvasElement;
+      else (globalThis as any).HTMLCanvasElement = originalHTMLCanvasElement;
+    }
+  });
+
+  it("renders projected ground decals through the WebGL quad path", () => {
     const gl = makeFakeGl();
     const renderer = new WebGLRenderer({
       world: {} as any,
@@ -410,7 +591,7 @@ describe("WebGLRenderer", () => {
       worldScaleDevice: 1,
       renderSettings: {},
     }, gl);
-    const chunkCanvas = makeChunkCanvas("chunk-z0");
+    const cachedGround = makeImage("chunk-ground-z0");
 
     renderer.beginFrame();
     renderer.useWorldSpace();
@@ -419,7 +600,6 @@ describe("WebGLRenderer", () => {
       makeCommand(makeImage("entity"), 10),
     ], {
       groundChunkCache: {
-        generation: 1,
         getVisibleEntries: (zBand: number) => zBand === 0 ? [{
           zBand: 0,
           chunkX: 0,
@@ -428,20 +608,19 @@ describe("WebGLRenderer", () => {
           maxTx: 1,
           minTy: 0,
           maxTy: 1,
-          sortSlice: 0,
-          sortWithin: 0,
-          drawX: -32,
-          drawY: -16,
-          canvas: chunkCanvas,
+          commands: [],
         }] : [],
+        getVisibleCommands: (zBand: number) => zBand === 0 ? [
+          makeProjectedSurfaceCommand(cachedGround, 700),
+        ] : [],
         hasCoveredStableId: (stableId: number) => stableId === 9,
       },
       viewRect: { minTx: -1, maxTx: 2, minTy: -1, maxTy: 2 },
       rampRoadTiles: new Set<string>(),
     });
 
-    expect(gl.drawOrder).toEqual(["chunk-z0", "entity"]);
-    expect(gl.drawModes).toEqual([gl.TRIANGLE_STRIP, gl.TRIANGLES]);
+    expect(gl.drawOrder).toEqual(["chunk-ground-z0", "entity"]);
+    expect(gl.drawModes).toEqual([gl.TRIANGLES, gl.TRIANGLES]);
   });
 
   it("keeps chunk draw order aligned with z-band transitions", () => {
@@ -517,7 +696,6 @@ describe("WebGLRenderer", () => {
       } as RenderCommand,
     ], {
       groundChunkCache: {
-        generation: 1,
         getVisibleEntries: (zBand: number) => zBand === 0
           ? [{
             zBand: 0,
@@ -527,11 +705,7 @@ describe("WebGLRenderer", () => {
             maxTx: 1,
             minTy: 0,
             maxTy: 1,
-            sortSlice: 0,
-            sortWithin: 0,
-            drawX: -32,
-            drawY: -16,
-            canvas: makeChunkCanvas("chunk-z0"),
+            commands: [],
           }]
           : zBand === 1
             ? [{
@@ -542,12 +716,13 @@ describe("WebGLRenderer", () => {
               maxTx: 1,
               minTy: 0,
               maxTy: 1,
-              sortSlice: 0,
-              sortWithin: 0,
-              drawX: -32,
-              drawY: 16,
-              canvas: makeChunkCanvas("chunk-z1"),
+              commands: [],
             }]
+            : [],
+        getVisibleCommands: (zBand: number) => zBand === 0
+          ? [makeProjectedSurfaceCommand(makeImage("chunk-z0"), 700)]
+          : zBand === 1
+            ? [makeProjectedSurfaceCommand(makeImage("chunk-z1"), 701, 40)]
             : [],
         hasCoveredStableId: (stableId: number) => stableId === 1 || stableId === 3,
       },
@@ -603,7 +778,7 @@ describe("WebGLRenderer", () => {
       worldScaleDevice: 1,
       renderSettings: {},
     }, gl);
-    const chunkCanvas = makeChunkCanvas("chunk-z0");
+    const cachedGround = makeImage("chunk-z0");
 
     renderer.beginFrame();
     renderer.useWorldSpace();
@@ -626,7 +801,6 @@ describe("WebGLRenderer", () => {
       } as RenderCommand,
     ], {
       groundChunkCache: {
-        generation: 1,
         getVisibleEntries: (zBand: number) => zBand === 0 ? [{
           zBand: 0,
           chunkX: 0,
@@ -635,12 +809,11 @@ describe("WebGLRenderer", () => {
           maxTx: 1,
           minTy: 0,
           maxTy: 1,
-          sortSlice: 0,
-          sortWithin: 0,
-          drawX: -32,
-          drawY: -16,
-          canvas: chunkCanvas,
+          commands: [],
         }] : [],
+        getVisibleCommands: (zBand: number) => zBand === 0 ? [
+          makeProjectedSurfaceCommand(cachedGround, 700),
+        ] : [],
         hasCoveredStableId: (stableId: number) => stableId === 9,
       },
       viewRect: { minTx: -1, maxTx: 2, minTy: -1, maxTy: 2 },
@@ -701,8 +874,8 @@ describe("WebGLRenderer", () => {
     renderer.useWorldSpace();
     renderer.renderCommands([makeProjectedSurfaceCommand(image, 9)], {
       groundChunkCache: {
-        generation: 1,
         getVisibleEntries: () => [],
+        getVisibleCommands: () => [],
         hasCoveredStableId: () => false,
       },
       viewRect: { minTx: -1, maxTx: 2, minTy: -1, maxTy: 2 },
@@ -711,133 +884,15 @@ describe("WebGLRenderer", () => {
 
     expect(gl.drawOrder).toEqual(["uncovered-ground"]);
     expect(gl.drawModes).toEqual([gl.TRIANGLES]);
-  });
-
-  it("reuses chunk textures across frames and reuploads after cache invalidation", () => {
-    const gl = makeFakeGl();
-    const renderer = new WebGLRenderer({
-      world: {} as any,
-      ctx: {} as any,
-      canvas: gl.canvas,
-      overlayCtx: {} as any,
-      overlayCanvas: { width: 100, height: 100 } as any,
-      hasUiOverlay: true,
-      cssW: 100,
-      cssH: 100,
-      screenW: 100,
-      screenH: 100,
-      devW: 100,
-      devH: 100,
-      dpr: 1,
-      overlayDevW: 100,
-      overlayDevH: 100,
-      overlayDpr: 1,
-      visibleVerticalTiles: 10,
-      viewport: {
-        worldScaleDevice: 1,
-        camTx: 0,
-        camTy: 0,
-        safeOffsetDeviceX: 0,
-        safeOffsetDeviceY: 0,
-      } as any,
-      zoom: 1,
-      worldWidth: 100,
-      worldHeight: 100,
-      scaledW: 100,
-      scaledH: 100,
-      safeOffsetX: 0,
-      safeOffsetY: 0,
-      playerWorldX: 0,
-      playerWorldY: 0,
-      playerTileX: 0,
-      playerTileY: 0,
-      cameraProjectedX: 0,
-      cameraProjectedY: 0,
-      camTx: 0,
-      camTy: 0,
-      worldScaleDevice: 1,
-      renderSettings: {},
-    }, gl);
-    const commands = [makeProjectedSurfaceCommand(makeImage("covered-ground"), 9)];
-    const chunkGen1Canvas = makeChunkCanvas("chunk-gen1");
-    const chunkGen2Canvas = makeChunkCanvas("chunk-gen2");
-
-    renderer.beginFrame();
-    renderer.useWorldSpace();
-    renderer.renderCommands(commands, {
-      groundChunkCache: {
-        generation: 1,
-        getVisibleEntries: () => [{
-          zBand: 0,
-          chunkX: 0,
-          chunkY: 0,
-          minTx: 0,
-          maxTx: 1,
-          minTy: 0,
-          maxTy: 1,
-          sortSlice: 0,
-          sortWithin: 0,
-          drawX: -32,
-          drawY: -16,
-          canvas: chunkGen1Canvas,
-        }],
-        hasCoveredStableId: () => true,
-      },
-      viewRect: { minTx: -1, maxTx: 2, minTy: -1, maxTy: 2 },
-      rampRoadTiles: new Set<string>(),
-    });
-
-    renderer.beginFrame();
-    renderer.useWorldSpace();
-    renderer.renderCommands(commands, {
-      groundChunkCache: {
-        generation: 1,
-        getVisibleEntries: () => [{
-          zBand: 0,
-          chunkX: 0,
-          chunkY: 0,
-          minTx: 0,
-          maxTx: 1,
-          minTy: 0,
-          maxTy: 1,
-          sortSlice: 0,
-          sortWithin: 0,
-          drawX: -32,
-          drawY: -16,
-          canvas: chunkGen1Canvas,
-        }],
-        hasCoveredStableId: () => true,
-      },
-      viewRect: { minTx: -1, maxTx: 2, minTy: -1, maxTy: 2 },
-      rampRoadTiles: new Set<string>(),
-    });
-
-    renderer.beginFrame();
-    renderer.useWorldSpace();
-    renderer.renderCommands(commands, {
-      groundChunkCache: {
-        generation: 2,
-        getVisibleEntries: () => [{
-          zBand: 0,
-          chunkX: 0,
-          chunkY: 0,
-          minTx: 0,
-          maxTx: 1,
-          minTy: 0,
-          maxTy: 1,
-          sortSlice: 0,
-          sortWithin: 0,
-          drawX: -32,
-          drawY: -16,
-          canvas: chunkGen2Canvas,
-        }],
-        hasCoveredStableId: () => true,
-      },
-      viewRect: { minTx: -1, maxTx: 2, minTy: -1, maxTy: 2 },
-      rampRoadTiles: new Set<string>(),
-    });
-
-    expect(gl.textureUploads).toEqual(["chunk-gen1", "chunk-gen2"]);
+    expect(gl.bufferUploads.some((upload: number[]) => (
+      upload.length === 12
+      && upload[0] === 0.5
+      && upload[1] === 0
+      && upload[2] === 1
+      && upload[3] === 0.5
+      && upload[4] === 0
+      && upload[5] === 0.5
+    ))).toBe(true);
   });
 
   it("batches adjacent compatible projected surfaces without changing stream order", () => {

@@ -130,6 +130,8 @@ export type DebugSettings = {
   structureTriangleFootprint: boolean;
   showStructureAnchors: boolean;
   showStructureTriangleOwnershipSort: boolean;
+  debugStructureRenderMode: "triangles" | "quadApprox";
+  perfOverlayMode: "off" | "overview" | "world" | "structures" | "textures" | "ground" | "lighting" | "cache";
   projectileFaces: boolean;
   triggers: boolean;
   debugRoadSemantic: boolean;
@@ -222,6 +224,8 @@ function toLegacySettings(): UserSettings {
       structureTriangleFootprint: settings.debug.structureTriangleFootprint,
       showStructureAnchors: settings.debug.showStructureAnchors,
       showStructureTriangleOwnershipSort: settings.debug.showStructureTriangleOwnershipSort,
+      debugStructureRenderMode: settings.debug.debugStructureRenderMode,
+      perfOverlayMode: settings.debug.perfOverlayMode,
       projectileFaces: settings.debug.projectileFaces,
       triggers: settings.debug.triggers,
       debugRoadSemantic: settings.debug.debugRoadSemantic,
@@ -499,6 +503,12 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     }
     if (debugAny.shadowCasterMode !== undefined) {
       debugPatch.shadowCasterMode = debugAny.shadowCasterMode;
+    }
+    if (debugAny.debugStructureRenderMode !== undefined) {
+      debugPatch.debugStructureRenderMode = debugAny.debugStructureRenderMode;
+    }
+    if (debugAny.perfOverlayMode !== undefined) {
+      debugPatch.perfOverlayMode = debugAny.perfOverlayMode;
     }
     if (debugAny.shadowV6SemanticBucket !== undefined) {
       debugPatch.shadowV6SemanticBucket = debugAny.shadowV6SemanticBucket;

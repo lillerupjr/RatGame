@@ -10,6 +10,16 @@ import {
   countRenderGroundStaticSurfaceAuthorityFiltered,
   countRenderGroundStaticSurfaceExamined,
   countRenderGroundStaticSurfaceFallbackEmitted,
+  countRenderStructureEstimatedTrianglesAvoided,
+  countRenderStructureMonolithicGroupSubmission,
+  countRenderStructureMonolithicTriangles,
+  countRenderStructureQuadApproxAccepted,
+  countRenderStructureQuadApproxRejected,
+  countRenderStructureRectMeshMigratedToQuad,
+  countRenderStructureRectMeshSubmission,
+  countRenderStructureSingleQuadSubmission,
+  countRenderStructureTotalSubmission,
+  countRenderStructureTrianglesSubmitted,
   countRenderWebGLBatch,
   countRenderWebGLBufferUpload,
   countRenderWebGLCanvasComposite,
@@ -59,6 +69,27 @@ function fakeCtx() {
   };
 }
 
+function makeFlags(mode: "off" | "overview" | "world" | "structures" | "textures" | "ground" | "lighting" | "cache" = "overview") {
+  return {
+    debugStructureRenderMode: "triangles" as const,
+    perfOverlayMode: mode,
+    shadowV6FaceSliceDebugOverlay: false,
+    shadowV6OneStructureOnly: false,
+    shadowV6AllStructures: false,
+    shadowV6VerticalOnly: false,
+    shadowV6TopOnly: false,
+    shadowV6ForceRefresh: false,
+    shadowV6PrimarySemanticBucket: "EAST_WEST" as const,
+    shadowV6SecondarySemanticBucket: "SOUTH_NORTH" as const,
+    shadowV6TopSemanticBucket: "TOP" as const,
+    shadowV6RequestedSemanticBucket: "EAST_WEST" as const,
+    shadowV6StructureIndex: 0,
+    showStructureTriangleFootprint: false,
+    shadowCasterMode: "v6SweepShadow" as const,
+    showRoadSemantic: false,
+  } as any;
+}
+
 function setBackend(selectedBackend: "canvas2d" | "webgl"): void {
   setRenderBackendStats({
     requestedBackend: selectedBackend,
@@ -72,7 +103,7 @@ function setBackend(selectedBackend: "canvas2d" | "webgl"): void {
     webglGroundCommandCount: selectedBackend === "webgl" ? 2 : 0,
     unsupportedGroundCommandCount: 0,
     unsupportedCommandKeys: [],
-    webglByAxes: selectedBackend === "webgl" ? { "groundSurface:projectedSurface": 2 } : {},
+    webglByAxes: selectedBackend === "webgl" ? { "groundSurface:quad": 2 } : {},
     canvasFallbackByAxes: {},
     unsupportedByAxes: {},
     unsupportedBySemanticFamily: {},
@@ -104,6 +135,16 @@ describe("render perf counters", () => {
     countRenderGroundStaticDecalExamined(6);
     countRenderGroundStaticDecalAuthorityFiltered(5);
     countRenderGroundStaticDecalFallbackEmitted(1);
+    countRenderStructureTotalSubmission(7);
+    countRenderStructureRectMeshSubmission(3);
+    countRenderStructureRectMeshMigratedToQuad(3);
+    countRenderStructureMonolithicGroupSubmission(4);
+    countRenderStructureMonolithicTriangles(18);
+    countRenderStructureSingleQuadSubmission(4);
+    countRenderStructureQuadApproxAccepted(1);
+    countRenderStructureQuadApproxRejected(3);
+    countRenderStructureTrianglesSubmitted(12);
+    countRenderStructureEstimatedTrianglesAvoided(9);
     noteRenderWebGLTextureUsage({ id: "a" });
     noteRenderWebGLTextureUsage({ id: "b" });
     setBackend("webgl");
@@ -128,9 +169,19 @@ describe("render perf counters", () => {
     expect(snapshot.groundStaticDecalExaminedPerFrame).toBe(6);
     expect(snapshot.groundStaticDecalAuthorityFilteredPerFrame).toBe(5);
     expect(snapshot.groundStaticDecalFallbackEmittedPerFrame).toBe(1);
+    expect(snapshot.structureTotalSubmissionsPerFrame).toBe(7);
+    expect(snapshot.structureRectMeshSubmissionsPerFrame).toBe(3);
+    expect(snapshot.structureRectMeshMigratedToQuadPerFrame).toBe(3);
+    expect(snapshot.structureMonolithicGroupSubmissionsPerFrame).toBe(4);
+    expect(snapshot.structureMonolithicTrianglesPerFrame).toBe(18);
+    expect(snapshot.structureSingleQuadSubmissionsPerFrame).toBe(4);
+    expect(snapshot.structureQuadApproxAcceptedPerFrame).toBe(1);
+    expect(snapshot.structureQuadApproxRejectedPerFrame).toBe(3);
+    expect(snapshot.structureTrianglesSubmittedPerFrame).toBe(12);
+    expect(snapshot.structureEstimatedTrianglesAvoidedPerFrame).toBe(9);
   });
 
-  it("switches overlay perf text based on the selected backend", () => {
+  it("groups overlay diagnostics by selected perf mode", () => {
     const ctx = fakeCtx();
     registerCacheMetricSource({
       name: "testCache",
@@ -164,6 +215,16 @@ describe("render perf counters", () => {
     countRenderGroundStaticDecalExamined(7);
     countRenderGroundStaticDecalAuthorityFiltered(4);
     countRenderGroundStaticDecalFallbackEmitted(3);
+    countRenderStructureTotalSubmission(5);
+    countRenderStructureRectMeshSubmission(2);
+    countRenderStructureRectMeshMigratedToQuad(2);
+    countRenderStructureMonolithicGroupSubmission(3);
+    countRenderStructureMonolithicTriangles(14);
+    countRenderStructureSingleQuadSubmission(3);
+    countRenderStructureQuadApproxAccepted(1);
+    countRenderStructureQuadApproxRejected(2);
+    countRenderStructureTrianglesSubmitted(10);
+    countRenderStructureEstimatedTrianglesAvoided(6);
     setBackend("webgl");
     publishCurrentPerfFrame();
     renderDebugLightingOverlay({
@@ -171,7 +232,9 @@ describe("render perf counters", () => {
       cssW: 320,
       cssH: 180,
       dpr: 1,
-      flags: {},
+      flags: makeFlags("overview"),
+      fps: 60,
+      frameTimeMs: 16.7,
       renderPerfCountersEnabled: true,
       structureShadowRouting: { usesV6Debug: false },
       structureV6VerticalShadowDebugData: null,
@@ -211,6 +274,11 @@ describe("render perf counters", () => {
         inspectedBackend: "webgl",
         compatibilityFields: ["semanticFamily/finalForm", "texture identity"],
         totalWorldCommands: 12,
+        quadCommands: 6,
+        triangleCommands: 4,
+        batchableCommands: 10,
+        texturedCommands: 8,
+        uniqueTextures: 3,
         totalWorldBatches: 5,
         averageRunLength: 2.4,
         maxRunLength: 4,
@@ -245,20 +313,162 @@ describe("render perf counters", () => {
       },
     } as any);
     const webglLines = ctx.fillText.mock.calls.map((call) => String(call[0]));
-    expect(webglLines.some((line) => line.includes("gl draw/frame:"))).toBe(true);
-    expect(webglLines.some((line) => line.includes("gl batches/frame:"))).toBe(true);
-    expect(webglLines.some((line) => line.includes("groundChunkDraw/frame:"))).toBe(true);
-    expect(webglLines.some((line) => line.includes("groundChunkTextureUpload/frame:"))).toBe(true);
-    expect(webglLines.some((line) => line.includes("groundAuthority surface/frame: seen:12.0 filtered:9.0 fallback:3.0"))).toBe(true);
-    expect(webglLines.some((line) => line.includes("groundAuthority decal/frame: seen:7.0 filtered:4.0 fallback:3.0"))).toBe(true);
-    expect(webglLines.some((line) => line.includes("worldBatch(webgl): cmd:12 batch:5 avg:2.4 max:4 cont:7 breaks:4"))).toBe(true);
-    expect(webglLines.some((line) => line.includes("worldBreaks: texture changed:2 render family changed:1 unsupported/fallback path changed:1"))).toBe(true);
-    expect(webglLines.some((line) => line.includes("worldFam props cmd:6 batch:3 avg:2.0 max:3 tex:2 dom:texture changed"))).toBe(true);
-    expect(webglLines.some((line) => line.includes("worldBoundary 3->4 texture changed"))).toBe(true);
-    expect(webglLines.some((line) => line.includes("cache totals:"))).toBe(true);
-    expect(webglLines.some((line) => line.includes("cache testCache"))).toBe(true);
-    expect(webglLines.some((line) => line.includes("status:warning"))).toBe(true);
-    expect(webglLines.some((line) => line.includes("drawImage/frame:"))).toBe(false);
+    expect(webglLines.some((line) => line.includes("perf(overview): fps:60"))).toBe(true);
+    expect(webglLines.some((line) => line.includes("draws:4.0 batches:3.0 breaks:4"))).toBe(true);
+    expect(webglLines.some((line) => line.includes("world: cmd:12 avgBatch:2.4 maxBatch:4"))).toBe(true);
+    expect(webglLines.some((line) => line.includes("breaks: texture changed:2"))).toBe(true);
+    expect(webglLines.some((line) => line.includes("textures: unique:0.0 binds:6.0"))).toBe(true);
+    expect(webglLines.some((line) => line.includes("cache testCache"))).toBe(false);
+    expect(webglLines.some((line) => line.includes("groundAuthority"))).toBe(false);
+
+    ctx.fillText.mockClear();
+
+    renderDebugLightingOverlay({
+      ctx,
+      cssW: 320,
+      cssH: 180,
+      dpr: 1,
+      flags: makeFlags("cache"),
+      fps: 60,
+      frameTimeMs: 16.7,
+      renderPerfCountersEnabled: true,
+      structureShadowRouting: { usesV6Debug: false },
+      structureV6VerticalShadowDebugData: null,
+      structureV6ShadowDebugCandidateCount: 0,
+      structureV6ShadowCastCount: 0,
+      structureV6ShadowCacheStats: null,
+      shadowSunModel: { forward: { x: 0, y: 0, z: 0 }, projectionDirection: { x: 0, y: 0 }, timeLabel: "", elevationDeg: 0, directionLabel: "", stepKey: "" },
+      shadowSunDayCycleStatus: {
+        enabled: false,
+        cycleModeLabel: "",
+        multiplier: 1,
+        stepsPerDay: 0,
+        stepSpanMinutes: 0,
+        manualSeedLabel: "",
+        continuousTimeLabel: "",
+        quantizedTimeLabel: "",
+        stepIndex: 0,
+        advancing: false,
+        stepChanged: false,
+        advancementClamped: false,
+        baseRateLabel: "",
+      },
+      ambientSunLighting: {
+        ambientElevationDeg: 0,
+        ambientDarkness01: 0,
+      },
+      structureTriangleAdmissionMode: "viewport",
+      sliderPadding: 0,
+      playerCameraTx: 0,
+      playerCameraTy: 0,
+      structureTriangleCutoutEnabled: false,
+      structureTriangleCutoutHalfWidth: 0,
+      structureTriangleCutoutHalfHeight: 0,
+      structureTriangleCutoutAlpha: 0,
+      roadWidthAtPlayer: 0,
+      worldBatchAudit: null,
+    } as any);
+    const cacheLines = ctx.fillText.mock.calls.map((call) => String(call[0]));
+    expect(cacheLines.some((line) => line.includes("perf(cache): entries:3 bytes:2.0KiB"))).toBe(true);
+    expect(cacheLines.some((line) => line.includes("cache testCache: entries:3 bytes:2.0KiB status:warning"))).toBe(true);
+
+    ctx.fillText.mockClear();
+
+    renderDebugLightingOverlay({
+      ctx,
+      cssW: 320,
+      cssH: 180,
+      dpr: 1,
+      flags: makeFlags("world"),
+      fps: 60,
+      frameTimeMs: 16.7,
+      renderPerfCountersEnabled: true,
+      structureShadowRouting: { usesV6Debug: false },
+      structureV6VerticalShadowDebugData: null,
+      structureV6ShadowDebugCandidateCount: 0,
+      structureV6ShadowCastCount: 0,
+      structureV6ShadowCacheStats: null,
+      shadowSunModel: { forward: { x: 0, y: 0, z: 0 }, projectionDirection: { x: 0, y: 0 }, timeLabel: "", elevationDeg: 0, directionLabel: "", stepKey: "" },
+      shadowSunDayCycleStatus: {
+        enabled: false,
+        cycleModeLabel: "",
+        multiplier: 1,
+        stepsPerDay: 0,
+        stepSpanMinutes: 0,
+        manualSeedLabel: "",
+        continuousTimeLabel: "",
+        quantizedTimeLabel: "",
+        stepIndex: 0,
+        advancing: false,
+        stepChanged: false,
+        advancementClamped: false,
+        baseRateLabel: "",
+      },
+      ambientSunLighting: {
+        ambientElevationDeg: 0,
+        ambientDarkness01: 0,
+      },
+      structureTriangleAdmissionMode: "viewport",
+      sliderPadding: 0,
+      playerCameraTx: 0,
+      playerCameraTy: 0,
+      structureTriangleCutoutEnabled: false,
+      structureTriangleCutoutHalfWidth: 0,
+      structureTriangleCutoutHalfHeight: 0,
+      structureTriangleCutoutAlpha: 0,
+      roadWidthAtPlayer: 0,
+      worldBatchAudit: {
+        inspectedBackend: "webgl",
+        compatibilityFields: ["semanticFamily/finalForm", "texture identity"],
+        totalWorldCommands: 12,
+        quadCommands: 6,
+        triangleCommands: 4,
+        batchableCommands: 10,
+        texturedCommands: 8,
+        uniqueTextures: 3,
+        totalWorldBatches: 5,
+        averageRunLength: 2.4,
+        maxRunLength: 4,
+        compatibleContinuations: 7,
+        totalBatchBreaks: 4,
+        breakReasonCounts: {
+          "compatible continuation": 7,
+          "render family changed": 1,
+          "primitive type changed": 0,
+          "shader/material changed": 0,
+          "texture changed": 2,
+          "blend mode changed": 0,
+          "unsupported/fallback path changed": 1,
+          "non-batchable path": 0,
+          "other state incompatibility": 0,
+        },
+        familySummaries: [{
+          family: "props",
+          commands: 6,
+          batches: 3,
+          averageRunLength: 2,
+          maxRunLength: 3,
+          uniqueTextures: 2,
+          dominantBreakReason: "texture changed",
+        }],
+        sampleBoundaries: [],
+        runLengths: {
+          averageTextureRun: 1.6,
+          maxTextureRun: 3,
+          averageCompatibleRun: 2.4,
+          maxCompatibleRun: 4,
+        },
+        reorderProbes: [
+          { windowSize: 4, totalWorldBatches: 4, averageRunLength: 3, totalBatchBreaks: 3, textureBreaks: 1, renderFamilyBreaks: 1, riskCount: 2, overlapRiskCount: 1, feetSortYRiskCount: 1, groupBoundaryRiskCount: 2 },
+          { windowSize: 8, totalWorldBatches: 3, averageRunLength: 4, totalBatchBreaks: 2, textureBreaks: 1, renderFamilyBreaks: 0, riskCount: 3, overlapRiskCount: 2, feetSortYRiskCount: 2, groupBoundaryRiskCount: 3 },
+          { windowSize: 16, totalWorldBatches: 2, averageRunLength: 6, totalBatchBreaks: 1, textureBreaks: 0, renderFamilyBreaks: 0, riskCount: 5, overlapRiskCount: 3, feetSortYRiskCount: 4, groupBoundaryRiskCount: 5 },
+        ],
+      },
+    } as any);
+    const worldLines = ctx.fillText.mock.calls.map((call) => String(call[0]));
+    expect(worldLines.some((line) => line.includes("runs: texAvg:1.6 texMax:3 compAvg:2.4 compMax:4"))).toBe(true);
+    expect(worldLines.some((line) => line.includes("probe4: batch:4 avg:3.0 tex:1 fam:1 risk:2"))).toBe(true);
+    expect(worldLines.some((line) => line.includes("riskDetail: ov:3 feet:4 group:5"))).toBe(true);
 
     ctx.fillText.mockClear();
 
@@ -273,6 +483,14 @@ describe("render perf counters", () => {
     countRenderGroundStaticDecalExamined(2);
     countRenderGroundStaticDecalAuthorityFiltered(1);
     countRenderGroundStaticDecalFallbackEmitted(1);
+    countRenderStructureTotalSubmission(4);
+    countRenderStructureRectMeshSubmission(2);
+    countRenderStructureRectMeshMigratedToQuad(2);
+    countRenderStructureMonolithicGroupSubmission(2);
+    countRenderStructureMonolithicTriangles(8);
+    countRenderStructureSingleQuadSubmission(2);
+    countRenderStructureTrianglesSubmitted(8);
+    countRenderStructureEstimatedTrianglesAvoided(4);
     setBackend("canvas2d");
     publishCurrentPerfFrame();
     const canvasSnapshot = getRenderPerfSnapshot();
@@ -286,7 +504,9 @@ describe("render perf counters", () => {
       cssW: 320,
       cssH: 180,
       dpr: 1,
-      flags: {},
+      flags: makeFlags("ground"),
+      fps: 58,
+      frameTimeMs: 17.2,
       renderPerfCountersEnabled: true,
       structureShadowRouting: { usesV6Debug: false },
       structureV6VerticalShadowDebugData: null,
@@ -325,12 +545,10 @@ describe("render perf counters", () => {
       worldBatchAudit: null,
     } as any);
     const canvasLines = ctx.fillText.mock.calls.map((call) => String(call[0]));
-    expect(canvasLines.some((line) => line.includes("drawImage/frame:"))).toBe(true);
-    expect(canvasLines.some((line) => line.includes("groundChunkDraw/frame:"))).toBe(true);
-    expect(canvasLines.some((line) => line.includes("groundAuthority surface/frame: seen:4.0 filtered:3.0 fallback:1.0"))).toBe(true);
-    expect(canvasLines.some((line) => line.includes("groundAuthority decal/frame: seen:2.0 filtered:1.0 fallback:1.0"))).toBe(true);
-    expect(canvasLines.some((line) => line.includes("cache totals:"))).toBe(true);
-    expect(canvasLines.some((line) => line.includes("cache testCache"))).toBe(true);
+    expect(canvasLines.some((line) => line.includes("perf(ground): surf seen:4.0 filtered:3.0 fallback:1.0"))).toBe(true);
+    expect(canvasLines.some((line) => line.includes("decal seen:2.0 filtered:1.0 fallback:1.0"))).toBe(true);
+    expect(canvasLines.some((line) => line.includes("chunks: visible:5.0 quads:3.0 rebuild:2.0"))).toBe(true);
+    expect(canvasLines.some((line) => line.includes("cache testCache"))).toBe(false);
     expect(canvasLines.some((line) => line.includes("gl draw/frame:"))).toBe(false);
   });
 });

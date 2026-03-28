@@ -114,6 +114,7 @@ export function collectEffectDrawables(input: CollectionContext): void {
             dw: size,
             dh: size,
             alpha: 1,
+            vfxIndex: i,
           },
         });
         continue;

@@ -41,6 +41,7 @@ export type HudRefs = {
     topStack: HTMLDivElement;
     topRow: HTMLDivElement;
     topLeft: HTMLDivElement;
+    perfOverlayModeSelect: HTMLSelectElement;
     topCenter: HTMLDivElement;
     topRight: HTMLDivElement;
     fpsPill: HTMLSpanElement;
@@ -233,6 +234,16 @@ export function getDomRefs(): DomRefs {
     const hudTopStack = getEl<HTMLDivElement>("hudTopStack");
     const hudTopRow = getEl<HTMLDivElement>("hudTopRow");
     const hudTopLeft = getEl<HTMLDivElement>("hudTopLeft");
+    const perfOverlayModeSelect = document.createElement("select");
+    perfOverlayModeSelect.id = "perfOverlayModeSelect";
+    perfOverlayModeSelect.setAttribute("aria-label", "Perf overlay mode");
+    for (const mode of ["off", "overview", "world", "structures", "textures", "ground", "lighting", "cache"] as const) {
+        const option = document.createElement("option");
+        option.value = mode;
+        option.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+        perfOverlayModeSelect.appendChild(option);
+    }
+    hudTopLeft.prepend(perfOverlayModeSelect);
     const hudTopCenter = getEl<HTMLDivElement>("hudTopCenter");
     const hudTopRight = getEl<HTMLDivElement>("hudTopRight");
     const fpsPill = getEl<HTMLSpanElement>("fpsPill");
@@ -297,6 +308,7 @@ export function getDomRefs(): DomRefs {
         topStack: hudTopStack,
         topRow: hudTopRow,
         topLeft: hudTopLeft,
+        perfOverlayModeSelect,
         topCenter: hudTopCenter,
         topRight: hudTopRight,
         fpsPill,

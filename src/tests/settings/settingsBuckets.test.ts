@@ -39,6 +39,8 @@ describe("settings bucket defaults", () => {
       sunElevationOverrideEnabled,
       sunElevationOverrideDeg,
       shadowCasterMode,
+      debugStructureRenderMode,
+      perfOverlayMode,
       shadowV6SemanticBucket,
       shadowV6StructureIndex,
       shadowV6SliceCount,
@@ -62,6 +64,8 @@ describe("settings bucket defaults", () => {
     expect(sunElevationOverrideEnabled).toBe(false);
     expect(sunElevationOverrideDeg).toBe(45);
     expect(shadowCasterMode).toBe("v6SweepShadow");
+    expect(debugStructureRenderMode).toBe("triangles");
+    expect(perfOverlayMode).toBe("overview");
     expect(shadowV6SemanticBucket).toBe("EAST_WEST");
     expect(shadowV6StructureIndex).toBe(0);
     expect(shadowV6SliceCount).toBe(8);
@@ -117,6 +121,16 @@ describe("settings bucket defaults", () => {
       .toBe("v6FaceSliceDebug");
     expect(sanitizeDebugToolsSettings({ shadowCasterMode: "invalid" as any }).shadowCasterMode)
       .toBe("v6SweepShadow");
+    expect(sanitizeDebugToolsSettings({ debugStructureRenderMode: "quadApprox" as any }).debugStructureRenderMode)
+      .toBe("quadApprox");
+    expect(sanitizeDebugToolsSettings({ debugStructureRenderMode: "bad" as any }).debugStructureRenderMode)
+      .toBe("triangles");
+    expect(sanitizeDebugToolsSettings({ perfOverlayMode: "off" as any }).perfOverlayMode)
+      .toBe("off");
+    expect(sanitizeDebugToolsSettings({ perfOverlayMode: "textures" as any }).perfOverlayMode)
+      .toBe("textures");
+    expect(sanitizeDebugToolsSettings({ perfOverlayMode: "bad" as any }).perfOverlayMode)
+      .toBe("overview");
     expect(sanitizeDebugToolsSettings({ shadowV6SemanticBucket: "TOP" as any }).shadowV6SemanticBucket)
       .toBe("TOP");
     expect(sanitizeDebugToolsSettings({ shadowV6SemanticBucket: "bad" as any }).shadowV6SemanticBucket)

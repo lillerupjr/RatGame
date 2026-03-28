@@ -5,7 +5,7 @@ import { createRenderFrameBuilder } from "../../../../game/systems/presentation/
 import { KindOrder } from "../../../../game/systems/presentation/worldRenderOrdering";
 
 describe("collectGroundDrawables", () => {
-  it("normalizes authored square floor tops before emitting projected surfaces", () => {
+  it("normalizes authored square floor tops before emitting quad-native ground surfaces", () => {
     const frameBuilder = createRenderFrameBuilder();
     const rawTopImage = { width: 128, height: 128 } as any;
     const normalizedTopImage = { width: 128, height: 64 } as any;
@@ -31,6 +31,8 @@ describe("collectGroundDrawables", () => {
       countRenderTileLoopIteration: () => {},
       surfacesAtXYCached: () => [{
         id: "surface_0_0",
+        tx: 0,
+        ty: 0,
         tile: { kind: "FLOOR", h: 0 },
         renderTopKind: "FLOOR",
         zLogical: 0,
@@ -87,17 +89,29 @@ describe("collectGroundDrawables", () => {
     const command = commands[0];
     const payload = command.payload as Extract<
       RenderCommand,
-      { semanticFamily: "groundSurface"; finalForm: "projectedSurface" }
+      { semanticFamily: "groundSurface"; finalForm: "quad" }
     >["payload"];
     expect(getRuntimeIsoTopCanvas).toHaveBeenCalledWith(rawTopImage, 0);
     expect(command.semanticFamily).toBe("groundSurface");
-    expect(command.finalForm).toBe("projectedSurface");
+    expect(command.finalForm).toBe("quad");
     expect(payload.image).toBe(normalizedTopImage);
-    expect(payload.sourceWidth).toBe(128);
-    expect(payload.sourceHeight).toBe(64);
-    expect(payload.triangles).toHaveLength(2);
-    expect(payload.triangles[0].srcPoints[0]).toEqual({ x: 64, y: 0 });
-    expect(payload.triangles[1].srcPoints[2]).toEqual({ x: 0, y: 32 });
+    expect(payload.sw).toBe(128);
+    expect(payload.sh).toBe(64);
+    expect(payload.sourceQuad).toEqual({
+      nw: { x: 64, y: 0 },
+      ne: { x: 128, y: 32 },
+      se: { x: 64, y: 64 },
+      sw: { x: 0, y: 32 },
+    });
+    expect(payload.kind).toBe("iso");
+    expect(payload.x0).toBe(0);
+    expect(payload.y0).toBe(-4);
+    expect(payload.x1).toBe(64);
+    expect(payload.y1).toBe(28);
+    expect(payload.x2).toBe(0);
+    expect(payload.y2).toBe(60);
+    expect(payload.x3).toBe(-64);
+    expect(payload.y3).toBe(28);
   });
 
   it("anchors flat ground decals from the tile origin center instead of the tile-corner diamond", () => {
@@ -182,16 +196,27 @@ describe("collectGroundDrawables", () => {
     const command = commands[0];
     const payload = command.payload as Extract<
       RenderCommand,
-      { semanticFamily: "groundDecal"; finalForm: "projectedSurface" }
+      { semanticFamily: "groundDecal"; finalForm: "quad" }
     >["payload"];
 
     expect(command.semanticFamily).toBe("groundDecal");
-    expect(command.finalForm).toBe("projectedSurface");
+    expect(command.finalForm).toBe("quad");
     expect(payload.image).toBe(diamondDecal);
-    expect(payload.triangles[0].dstPoints[0]).toEqual({ x: 0, y: -36 });
-    expect(payload.triangles[0].dstPoints[1]).toEqual({ x: 64, y: -4 });
-    expect(payload.triangles[0].dstPoints[2]).toEqual({ x: 0, y: 28 });
-    expect(payload.triangles[1].dstPoints[2]).toEqual({ x: -64, y: -4 });
+    expect(payload.kind).toBe("iso");
+    expect(payload.sourceQuad).toEqual({
+      nw: { x: 64, y: 0 },
+      ne: { x: 128, y: 32 },
+      se: { x: 64, y: 64 },
+      sw: { x: 0, y: 32 },
+    });
+    expect(payload.x0).toBe(0);
+    expect(payload.y0).toBe(-36);
+    expect(payload.x1).toBe(64);
+    expect(payload.y1).toBe(-4);
+    expect(payload.x2).toBe(0);
+    expect(payload.y2).toBe(28);
+    expect(payload.x3).toBe(-64);
+    expect(payload.y3).toBe(-4);
   });
 
   it("suppresses authoritative static floor surfaces before resolve/enqueue", () => {

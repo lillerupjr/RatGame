@@ -199,7 +199,12 @@ export function collectGroundDrawables(input: CollectionContext): void {
               extraDy,
             },
             destinationQuad: resolved.destinationQuad,
-            payloadDstPoints: resolved.payload.triangles.map((triangle) => triangle.dstPoints),
+            payloadQuadPoints: [
+              { x: resolved.payload.x0, y: resolved.payload.y0 },
+              { x: resolved.payload.x1, y: resolved.payload.y1 },
+              { x: resolved.payload.x2, y: resolved.payload.y2 },
+              { x: resolved.payload.x3, y: resolved.payload.y3 },
+            ],
           });
           enqueueSliceCommand(frameBuilder, resolved.key, {
             semanticFamily: resolved.semanticFamily,

@@ -3,24 +3,25 @@ import type { RenderDebugScreenPassInput } from "./debugRenderTypes";
 import { drawStructureV6FaceSliceDebugPanel } from "./renderDebugStructures";
 import { describeRenderBackendFallbackReason } from "../backend/renderBackendSelection";
 import type { CacheMetricSample } from "../cacheMetricsRegistry";
-import type { WorldBatchAudit, WorldBatchBreakReason } from "./worldBatchAudit";
+import type { WorldBatchAudit, WorldBatchBreakReason, WorldBatchFamilySummary } from "./worldBatchAudit";
 
-function summarizeBackendFamilyCounts(counts: Record<string, number>): string {
-  const entries = Object.entries(counts)
-    .filter(([, value]) => value > 0)
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, 4)
-    .map(([key, value]) => `${key}:${value.toFixed(1)}`);
-  return entries.length > 0 ? entries.join(" ") : "none";
+type FramePerf = {
+  off: string[];
+  overview: string[];
+  world: string[];
+  structures: string[];
+  textures: string[];
+  ground: string[];
+  lighting: string[];
+  cache: string[];
+};
+
+function formatValue(value: number): string {
+  return value >= 10 ? value.toFixed(0) : value.toFixed(1);
 }
 
-function summarizeBackendSemanticFamilyCounts(counts: Record<string, number>): string {
-  const entries = Object.entries(counts)
-    .filter(([, value]) => value > 0)
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, 4)
-    .map(([key, value]) => `${key}:${value.toFixed(1)}`);
-  return entries.length > 0 ? entries.join(" ") : "none";
+function formatPercent(value: number): string {
+  return `${value.toFixed(0)}%`;
 }
 
 function formatCacheBytes(bytes: number | null): string {
@@ -39,7 +40,7 @@ function formatCacheHitRate(hits: number, misses: number): string {
   return `${((hits / total) * 100).toFixed(0)}%`;
 }
 
-function summarizeTopCaches(caches: CacheMetricSample[]): CacheMetricSample[] {
+function summarizeTopCaches(caches: CacheMetricSample[], limit = 3): CacheMetricSample[] {
   return [...caches]
     .sort((a, b) => {
       const aBytes = a.approxBytes ?? -1;
@@ -48,25 +49,134 @@ function summarizeTopCaches(caches: CacheMetricSample[]): CacheMetricSample[] {
       if (a.entryCount !== b.entryCount) return b.entryCount - a.entryCount;
       return a.name.localeCompare(b.name);
     })
-    .slice(0, 6);
+    .slice(0, limit);
 }
 
-function summarizeWorldBreakReasons(audit: WorldBatchAudit): string {
+function topBreakReasons(audit: WorldBatchAudit | null | undefined, limit = 3): string {
+  if (!audit) return "none";
   const reasons: WorldBatchBreakReason[] = [
     "texture changed",
+    "render family changed",
     "shader/material changed",
     "blend mode changed",
     "primitive type changed",
-    "render family changed",
     "unsupported/fallback path changed",
     "non-batchable path",
     "other state incompatibility",
   ];
-  return reasons
+  const top = reasons
     .filter((reason) => audit.breakReasonCounts[reason] > 0)
-    .map((reason) => `${reason}:${audit.breakReasonCounts[reason]}`)
-    .slice(0, 4)
-    .join(" ");
+    .sort((a, b) => audit.breakReasonCounts[b] - audit.breakReasonCounts[a])
+    .slice(0, limit)
+    .map((reason) => `${reason}:${audit.breakReasonCounts[reason]}`);
+  return top.length > 0 ? top.join(" ") : "none";
+}
+
+function topFamiliesByUniqueTextures(families: readonly WorldBatchFamilySummary[], limit = 3): WorldBatchFamilySummary[] {
+  return [...families]
+    .sort((a, b) => b.uniqueTextures - a.uniqueTextures || b.commands - a.commands || a.family.localeCompare(b.family))
+    .slice(0, limit);
+}
+
+function familyByName(audit: WorldBatchAudit | null | undefined, family: string): WorldBatchFamilySummary | null {
+  return audit?.familySummaries.find((summary) => summary.family === family) ?? null;
+}
+
+function buildFramePerf(input: RenderDebugScreenPassInput): FramePerf {
+  const perf = getRenderPerfSnapshot();
+  const audit = input.worldBatchAudit ?? null;
+  const frameDraws = perf.backendSelected === "webgl"
+    ? perf.webglDrawCallsPerFrame
+    : perf.drawImageCallsPerFrame;
+  const frameBatches = perf.backendSelected === "webgl"
+    ? perf.webglBatchesPerFrame
+    : (audit?.totalWorldBatches ?? 0);
+  const quadPct = audit && audit.totalWorldCommands > 0 ? (audit.quadCommands / audit.totalWorldCommands) * 100 : 0;
+  const triPct = audit && audit.totalWorldCommands > 0 ? (audit.triangleCommands / audit.totalWorldCommands) * 100 : 0;
+  const sharedTexturePct = audit && audit.texturedCommands > 0 && audit.uniqueTextures > 0
+    ? ((audit.texturedCommands - audit.uniqueTextures) / audit.texturedCommands) * 100
+    : 0;
+  const cacheMetrics = perf.cacheMetrics;
+  const groundChunkCacheMetric = cacheMetrics.caches.find((cache) => cache.name === "groundChunks") ?? null;
+  const structureFamily = familyByName(audit, "structures");
+  const entityFamily = familyByName(audit, "entities");
+  const propFamily = familyByName(audit, "props");
+  const dropFamily = familyByName(audit, "drops");
+  const lightFamily = familyByName(audit, "lights");
+
+  return {
+    off: [],
+    overview: [
+      `perf(overview): fps:${formatValue(input.fps)} frame:${formatValue(input.frameTimeMs)}ms`,
+      `draws:${formatValue(frameDraws)} batches:${formatValue(frameBatches)} breaks:${audit?.totalBatchBreaks ?? 0}`,
+      `world: cmd:${audit?.totalWorldCommands ?? 0} avgBatch:${audit?.averageRunLength.toFixed(1) ?? "0.0"} maxBatch:${audit?.maxRunLength ?? 0}`,
+      `breaks: ${topBreakReasons(audit, 2)}`,
+      `geom: tri:${formatValue(perf.webglTrianglesSubmittedPerFrame || perf.structureTrianglesSubmittedPerFrame)} quad:${audit?.quadCommands ?? 0} tri%:${formatPercent(triPct)} quad%:${formatPercent(quadPct)}`,
+      `textures: unique:${formatValue(perf.webglUniqueTexturesPerFrame)} binds:${formatValue(perf.webglTextureBindsPerFrame)} shared:${formatPercent(sharedTexturePct)}`,
+    ],
+    world: [
+      `perf(world): cmd:${audit?.totalWorldCommands ?? 0} batch:${audit?.totalWorldBatches ?? 0} avg:${audit?.averageRunLength.toFixed(1) ?? "0.0"} max:${audit?.maxRunLength ?? 0}`,
+      `runs: texAvg:${audit?.runLengths?.averageTextureRun?.toFixed(1) ?? "0.0"} texMax:${audit?.runLengths?.maxTextureRun ?? 0} compAvg:${audit?.runLengths?.averageCompatibleRun?.toFixed(1) ?? "0.0"} compMax:${audit?.runLengths?.maxCompatibleRun ?? 0}`,
+      `breaks:${audit?.totalBatchBreaks ?? 0} cont:${audit?.compatibleContinuations ?? 0}`,
+      `breaksTop: ${topBreakReasons(audit, 4)}`,
+      ...(audit?.reorderProbes?.map((probe) => (
+        `probe${probe.windowSize}: batch:${probe.totalWorldBatches} avg:${probe.averageRunLength.toFixed(1)} tex:${probe.textureBreaks} fam:${probe.renderFamilyBreaks} risk:${probe.riskCount}`
+      )) ?? []),
+      `riskDetail: ov:${audit?.reorderProbes?.[2]?.overlapRiskCount ?? 0} feet:${audit?.reorderProbes?.[2]?.feetSortYRiskCount ?? 0} group:${audit?.reorderProbes?.[2]?.groupBoundaryRiskCount ?? 0}`,
+      `geomMix: quad:${audit?.quadCommands ?? 0} tri:${audit?.triangleCommands ?? 0} batchable:${audit?.batchableCommands ?? 0}`,
+      `family entities:${entityFamily?.batches ?? 0}/${entityFamily?.commands ?? 0} props:${propFamily?.batches ?? 0}/${propFamily?.commands ?? 0}`,
+      `family drops:${dropFamily?.batches ?? 0}/${dropFamily?.commands ?? 0} structures:${structureFamily?.batches ?? 0}/${structureFamily?.commands ?? 0}`,
+    ],
+    structures: [
+      `perf(structures): total:${formatValue(perf.structureTotalSubmissionsPerFrame)} rect:${formatValue(perf.structureRectMeshSubmissionsPerFrame)} rectQuad:${formatValue(perf.structureRectMeshMigratedToQuadPerFrame)}`,
+      `mono: groups:${formatValue(perf.structureMonolithicGroupSubmissionsPerFrame)} tri:${formatValue(perf.structureMonolithicTrianglesPerFrame)}`,
+      `quadSafe: single:${formatValue(perf.structureSingleQuadSubmissionsPerFrame)} accept:${formatValue(perf.structureQuadApproxAcceptedPerFrame)} reject:${formatValue(perf.structureQuadApproxRejectedPerFrame)}`,
+      `triangles: now:${formatValue(perf.structureTrianglesSubmittedPerFrame)} avoided:${formatValue(perf.structureEstimatedTrianglesAvoidedPerFrame)}`,
+      `batch: ${structureFamily ? `cmd:${structureFamily.commands} batch:${structureFamily.batches} avg:${structureFamily.averageRunLength.toFixed(1)} dom:${structureFamily.dominantBreakReason}` : "none"}`,
+    ],
+    textures: [
+      `perf(textures): unique:${formatValue(perf.webglUniqueTexturesPerFrame)} binds:${formatValue(perf.webglTextureBindsPerFrame)} uploads:${formatValue(perf.webglBufferUploadsPerFrame)}`,
+      `breaks(texture): ${audit?.breakReasonCounts["texture changed"] ?? 0} shared:${formatPercent(sharedTexturePct)}`,
+      ...topFamiliesByUniqueTextures(audit?.familySummaries ?? [], 3).map((summary) => (
+        `texFam ${summary.family}: unique:${summary.uniqueTextures} cmd:${summary.commands} batch:${summary.batches} dom:${summary.dominantBreakReason}`
+      )),
+    ],
+    ground: [
+      `perf(ground): surf seen:${formatValue(perf.groundStaticSurfaceExaminedPerFrame)} filtered:${formatValue(perf.groundStaticSurfaceAuthorityFilteredPerFrame)} fallback:${formatValue(perf.groundStaticSurfaceFallbackEmittedPerFrame)}`,
+      `decal seen:${formatValue(perf.groundStaticDecalExaminedPerFrame)} filtered:${formatValue(perf.groundStaticDecalAuthorityFilteredPerFrame)} fallback:${formatValue(perf.groundStaticDecalFallbackEmittedPerFrame)}`,
+      perf.backendSelected === "webgl"
+        ? `chunks: visible:${formatValue(perf.webglGroundChunksVisiblePerFrame)} quads:${formatValue(perf.webglGroundChunkDrawsPerFrame)}`
+        : `chunks: visible:${formatValue(perf.canvasGroundChunksVisiblePerFrame)} quads:${formatValue(perf.canvasGroundChunkDrawsPerFrame)} rebuild:${formatValue(perf.canvasGroundChunkRebuildsPerFrame)}`,
+      `backendGround: webgl:${formatValue(perf.backendWebglGroundCommandsPerFrame)} unsupported:${formatValue(perf.backendUnsupportedGroundCommandsPerFrame)}`,
+    ],
+    lighting: [
+      `perf(lighting): masks build:${formatValue(perf.maskBuildsPerFrame)} hit:${formatValue(perf.maskCacheHitsPerFrame)} miss:${formatValue(perf.maskCacheMissesPerFrame)}`,
+      `maskWork: raster:${formatValue(perf.maskRasterChunksPerFrame)} draw:${formatValue(perf.maskDrawEntriesPerFrame)} bands:${formatValue(perf.lightBandCountPerFrame)}`,
+      `sun: ${input.shadowSunModel.timeLabel} elev:${input.shadowSunModel.elevationDeg.toFixed(1)} amb:${input.ambientSunLighting.ambientDarkness01.toFixed(3)}`,
+      `backend: req=${perf.backendRequested} sel=${perf.backendSelected} fallback=${describeRenderBackendFallbackReason(perf.backendFallbackReason)}`,
+      `family lights: ${lightFamily ? `cmd:${lightFamily.commands} batch:${lightFamily.batches} avg:${lightFamily.averageRunLength.toFixed(1)} dom:${lightFamily.dominantBreakReason}` : "none"}`,
+    ],
+    cache: [
+      `perf(cache): entries:${cacheMetrics.totalEntries} bytes:${formatCacheBytes(cacheMetrics.totalKnownBytes)} budget:${formatCacheBytes(cacheMetrics.totalBudgetBytes)}`,
+      `hit:${cacheMetrics.totalHits} miss:${cacheMetrics.totalMisses} rate:${formatCacheHitRate(cacheMetrics.totalHits, cacheMetrics.totalMisses)}`,
+      `churn: ins:${cacheMetrics.totalInserts} evict:${cacheMetrics.totalEvictions} clear:${cacheMetrics.totalClears}`,
+      ...(groundChunkCacheMetric ? [`groundChunks: ${groundChunkCacheMetric.notes ?? "mode:unknown"}`] : []),
+      ...summarizeTopCaches(cacheMetrics.caches, 3).map((cache) => (
+        `cache ${cache.name}: entries:${cache.entryCount} bytes:${formatCacheBytes(cache.approxBytes)} status:${cache.status}`
+      )),
+    ],
+  };
+}
+
+function drawPerfLines(ctx: CanvasRenderingContext2D, cssW: number, cssH: number, lines: readonly string[]): void {
+  ctx.textAlign = "right";
+  const x = cssW - 8;
+  const lineH = 16;
+  const y0 = cssH - 8 - lineH * (lines.length - 1);
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], x, y0 + i * lineH);
+  }
+  ctx.textAlign = "left";
 }
 
 export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): void {
@@ -94,7 +204,6 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
     structureTriangleCutoutHalfHeight,
     structureTriangleCutoutAlpha,
     roadWidthAtPlayer,
-    worldBatchAudit,
   } = input;
 
   ctx.save();
@@ -110,93 +219,13 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
     drawStructureV6FaceSliceDebugPanel(ctx, cssW, cssH, structureV6VerticalShadowDebugData);
   }
 
-  const perf = getRenderPerfSnapshot();
   if (renderPerfCountersEnabled) {
-    const tag = perf.drawImageByTagPerFrame;
-    const saveTag = perf.saveByTagPerFrame;
-    const restoreTag = perf.restoreByTagPerFrame;
-    const rendererSpecificLines = perf.backendSelected === "webgl"
-      ? [
-          `gl draw/frame: ${perf.webglDrawCallsPerFrame.toFixed(1)} gl batches/frame: ${perf.webglBatchesPerFrame.toFixed(1)}`,
-          `texBind/frame: ${perf.webglTextureBindsPerFrame.toFixed(1)} bufUpload/frame: ${perf.webglBufferUploadsPerFrame.toFixed(1)}`,
-          `gl composites/frame: ${perf.webglCanvasCompositesPerFrame.toFixed(1)} projectedSurface/frame: ${perf.webglProjectedSurfaceDrawsPerFrame.toFixed(1)} triSubmit/frame: ${perf.webglTrianglesSubmittedPerFrame.toFixed(1)}`,
-          `groundChunkDraw/frame: ${perf.webglGroundChunkDrawsPerFrame.toFixed(1)} visibleGroundChunks/frame: ${perf.webglGroundChunksVisiblePerFrame.toFixed(1)} groundChunkTextureUpload/frame: ${perf.webglGroundChunkTextureUploadsPerFrame.toFixed(1)}`,
-          `gl uniqueTextures/frame: ${perf.webglUniqueTexturesPerFrame.toFixed(1)}`,
-        ]
-      : [
-          `drawImage/frame: ${perf.drawImageCallsPerFrame.toFixed(1)}`,
-          `groundChunkDraw/frame: ${perf.canvasGroundChunkDrawsPerFrame.toFixed(1)} visibleChunks/frame: ${perf.canvasGroundChunksVisiblePerFrame.toFixed(1)} rebuildChunks/frame: ${perf.canvasGroundChunkRebuildsPerFrame.toFixed(1)}`,
-          `tag void:${tag.void.toFixed(1)} floors:${tag.floors.toFixed(1)} decals:${tag.decals.toFixed(1)} ent:${tag.entities.toFixed(1)}`,
-          `tag structLive:${tag["structures:live"].toFixed(1)} structShadow:${tag["structures:shadow"].toFixed(1)}`,
-          `tag lighting:${tag.lighting.toFixed(1)} untagged:${tag.untagged.toFixed(1)}`,
-          `gradientCreate/frame: ${perf.gradientCreateCallsPerFrame.toFixed(1)} addColorStop/frame: ${perf.addColorStopCallsPerFrame.toFixed(1)}`,
-          `save/frame: ${perf.saveCallsPerFrame.toFixed(1)} restore/frame: ${perf.restoreCallsPerFrame.toFixed(1)}`,
-          `saveTag fl:${saveTag.floors.toFixed(1)} de:${saveTag.decals.toFixed(1)} li:${saveTag.lighting.toFixed(1)} un:${saveTag.untagged.toFixed(1)}`,
-          `saveTag structLive:${saveTag["structures:live"].toFixed(1)} structShadow:${saveTag["structures:shadow"].toFixed(1)}`,
-          `restoreTag fl:${restoreTag.floors.toFixed(1)} de:${restoreTag.decals.toFixed(1)} li:${restoreTag.lighting.toFixed(1)} un:${restoreTag.untagged.toFixed(1)}`,
-          `restoreTag structLive:${restoreTag["structures:live"].toFixed(1)} structShadow:${restoreTag["structures:shadow"].toFixed(1)}`,
-          `fullCanvasBlits/frame: ${perf.fullCanvasBlitsPerFrame.toFixed(1)}`,
-        ];
-    const cacheSummaryLines = (() => {
-      const cacheMetrics = perf.cacheMetrics;
-      const topCaches = summarizeTopCaches(cacheMetrics.caches);
-      const lines = [
-        `cache totals: entries:${cacheMetrics.totalEntries} bytes:${formatCacheBytes(cacheMetrics.totalKnownBytes)} hit:${cacheMetrics.totalHits} miss:${cacheMetrics.totalMisses} rate:${formatCacheHitRate(cacheMetrics.totalHits, cacheMetrics.totalMisses)}`,
-        `cache churn: insert:${cacheMetrics.totalInserts} evict:${cacheMetrics.totalEvictions} clear:${cacheMetrics.totalClears} budget:${formatCacheBytes(cacheMetrics.totalBudgetBytes)}`,
-      ];
-      for (const cache of topCaches) {
-        lines.push(
-          `cache ${cache.name} kind:${cache.kind} entries:${cache.entryCount} bytes:${formatCacheBytes(cache.approxBytes)} hit:${cache.hits} miss:${cache.misses} evict:${cache.evictions} clear:${cache.clears} status:${cache.status}${cache.notes ? ` notes:${cache.notes}` : ""}`,
-        );
-      }
-      return lines;
-    })();
-    const perfLines = [
-      ...rendererSpecificLines,
-      `groundAuthority surface/frame: seen:${perf.groundStaticSurfaceExaminedPerFrame.toFixed(1)} filtered:${perf.groundStaticSurfaceAuthorityFilteredPerFrame.toFixed(1)} fallback:${perf.groundStaticSurfaceFallbackEmittedPerFrame.toFixed(1)}`,
-      `groundAuthority decal/frame: seen:${perf.groundStaticDecalExaminedPerFrame.toFixed(1)} filtered:${perf.groundStaticDecalAuthorityFilteredPerFrame.toFixed(1)} fallback:${perf.groundStaticDecalFallbackEmittedPerFrame.toFixed(1)}`,
-      ...(worldBatchAudit
-        ? [
-            `worldBatch(${worldBatchAudit.inspectedBackend}): cmd:${worldBatchAudit.totalWorldCommands} batch:${worldBatchAudit.totalWorldBatches} avg:${worldBatchAudit.averageRunLength.toFixed(1)} max:${worldBatchAudit.maxRunLength} cont:${worldBatchAudit.compatibleContinuations} breaks:${worldBatchAudit.totalBatchBreaks}`,
-            `worldBreaks: ${summarizeWorldBreakReasons(worldBatchAudit) || "none"}`,
-            ...worldBatchAudit.familySummaries
-              .slice(0, 5)
-              .map((summary) => (
-                `worldFam ${summary.family} cmd:${summary.commands} batch:${summary.batches} avg:${summary.averageRunLength.toFixed(1)} max:${summary.maxRunLength} tex:${summary.uniqueTextures} dom:${summary.dominantBreakReason}`
-              )),
-            ...worldBatchAudit.sampleBoundaries
-              .slice(0, 3)
-              .map((boundary) => (
-                `worldBoundary ${boundary.index}->${boundary.index + 1} ${boundary.reason} | ${boundary.previous} -> ${boundary.next}`
-              )),
-          ]
-        : []),
-      `closures/frame: ${perf.closuresCreatedPerFrame.toFixed(1)}`,
-      `sliceSorts/frame: ${perf.sliceKeySortsPerFrame.toFixed(1)} drawableSorts/frame: ${perf.drawableSortsPerFrame.toFixed(1)}`,
-      `tileRadius: ${perf.tileLoopRadius.toFixed(0)} tileLoopIters/frame: ${perf.tileLoopIterationsPerFrame.toFixed(1)}`,
-      `triAdmission: mode=${structureTriangleAdmissionMode} authority=${structureTriangleAdmissionMode === "viewport" ? "viewportRect" : "sharedRenderDistance(tileRadius)"} tileRadius=${sliderPadding}`,
-      `triCutout: ${structureTriangleCutoutEnabled ? "on" : "off"} center=${playerCameraTx},${playerCameraTy} size=${structureTriangleCutoutHalfWidth}x${structureTriangleCutoutHalfHeight} alpha=${structureTriangleCutoutAlpha.toFixed(2)}`,
-      `bands z:${perf.zBandCountPerFrame.toFixed(1)} light:${perf.lightBandCountPerFrame.toFixed(1)} masks build:${perf.maskBuildsPerFrame.toFixed(1)} hit:${perf.maskCacheHitsPerFrame.toFixed(1)} miss:${perf.maskCacheMissesPerFrame.toFixed(1)}`,
-      `masks rasterChunks/frame: ${perf.maskRasterChunksPerFrame.toFixed(1)} drawEntries/frame: ${perf.maskDrawEntriesPerFrame.toFixed(1)}`,
-      `backend: req=${perf.backendRequested} selected=${perf.backendSelected} default=${perf.backendDefault} webglDefault=${perf.backendWebglReadyForDefault ? "yes" : "no"}`,
-      `backend counts: webgl:${perf.backendWebglCommandsPerFrame.toFixed(1)} canvas:${perf.backendCanvasFallbackCommandsPerFrame.toFixed(1)} unsupported:${perf.backendUnsupportedCommandsPerFrame.toFixed(1)}`,
-      `backend ground: webgl:${perf.backendWebglGroundCommandsPerFrame.toFixed(1)} unsupported:${perf.backendUnsupportedGroundCommandsPerFrame.toFixed(1)}`,
-      `backend fallback reason: ${describeRenderBackendFallbackReason(perf.backendFallbackReason)}`,
-      `backend unsupported axes: ${perf.backendUnsupportedCommandKeys.length > 0 ? perf.backendUnsupportedCommandKeys.join(", ") : "none"}`,
-      `backend unsupported semantic families: ${summarizeBackendSemanticFamilyCounts(perf.backendUnsupportedBySemanticFamilyPerFrame)}`,
-      `backend webgl axes: ${summarizeBackendFamilyCounts(perf.backendWebglByAxesPerFrame)}`,
-      `backend canvas axes: ${summarizeBackendFamilyCounts(perf.backendCanvasFallbackByAxesPerFrame)}`,
-      `backend partial axes: ${perf.backendPartiallyHandledAxes.length > 0 ? perf.backendPartiallyHandledAxes.join(", ") : "none"}`,
-      ...cacheSummaryLines,
-    ];
-    ctx.textAlign = "right";
-    const perfX = cssW - 8;
-    const perfLineH = 16;
-    const perfY0 = cssH - 8 - perfLineH * (perfLines.length - 1);
-    for (let i = 0; i < perfLines.length; i++) {
-      ctx.fillText(perfLines[i], perfX, perfY0 + i * perfLineH);
+    const framePerf = buildFramePerf(input);
+    const mode = flags.perfOverlayMode ?? "overview";
+    const perfLines = framePerf[mode].slice(0, 10);
+    if (perfLines.length > 0) {
+      drawPerfLines(ctx, cssW, cssH, perfLines);
     }
-    ctx.textAlign = "left";
   }
 
   let screenDebugLineY = 30;
@@ -238,6 +267,11 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
 
   if (flags.showRoadSemantic) {
     ctx.fillText(`roadW(player): ${roadWidthAtPlayer}`, 8, screenDebugLineY);
+  }
+  if (renderPerfCountersEnabled) {
+    const perf = getRenderPerfSnapshot();
+    const line = `triAdmission:${structureTriangleAdmissionMode} tileRadius:${sliderPadding} cutout:${structureTriangleCutoutEnabled ? "on" : "off"} center:${playerCameraTx},${playerCameraTy} size:${structureTriangleCutoutHalfWidth}x${structureTriangleCutoutHalfHeight} alpha:${structureTriangleCutoutAlpha.toFixed(2)} zBands:${formatValue(perf.zBandCountPerFrame)}`;
+    ctx.fillText(line, 8, screenDebugLineY);
   }
   ctx.restore();
 }

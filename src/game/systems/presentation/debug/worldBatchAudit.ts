@@ -29,10 +29,35 @@ export type WorldBatchBoundarySample = {
   next: string;
 };
 
+export type WorldRunLengthAudit = {
+  averageTextureRun: number;
+  maxTextureRun: number;
+  averageCompatibleRun: number;
+  maxCompatibleRun: number;
+};
+
+export type WorldReorderProbe = {
+  windowSize: 4 | 8 | 16;
+  totalWorldBatches: number;
+  averageRunLength: number;
+  totalBatchBreaks: number;
+  textureBreaks: number;
+  renderFamilyBreaks: number;
+  riskCount: number;
+  overlapRiskCount: number;
+  feetSortYRiskCount: number;
+  groupBoundaryRiskCount: number;
+};
+
 export type WorldBatchAudit = {
   inspectedBackend: "canvas2d" | "webgl";
   compatibilityFields: readonly string[];
   totalWorldCommands: number;
+  quadCommands: number;
+  triangleCommands: number;
+  batchableCommands: number;
+  texturedCommands: number;
+  uniqueTextures: number;
   totalWorldBatches: number;
   averageRunLength: number;
   maxRunLength: number;
@@ -41,10 +66,15 @@ export type WorldBatchAudit = {
   breakReasonCounts: Record<WorldBatchBreakReason, number>;
   familySummaries: WorldBatchFamilySummary[];
   sampleBoundaries: WorldBatchBoundarySample[];
+  runLengths: WorldRunLengthAudit;
+  reorderProbes: WorldReorderProbe[];
 };
+
+type AuditBounds = { minX: number; minY: number; maxX: number; maxY: number } | null;
 
 type AuditDescriptor = {
   command: RenderCommand;
+  originalIndex: number;
   reportFamily: string;
   primitiveKind: string;
   renderBackendPath: "webgl" | "canvas2d" | "unsupported";
@@ -54,6 +84,8 @@ type AuditDescriptor = {
   textureToken: string | null;
   blendMode: string | null;
   space: string | null;
+  ownerGroupToken: string;
+  bounds: AuditBounds;
   summary: string;
 };
 
@@ -65,6 +97,20 @@ type MutableFamilySummary = {
   uniqueTextures: Set<string>;
   breakReasonCounts: Record<WorldBatchBreakReason, number>;
 };
+
+type SequenceStats = {
+  totalWorldBatches: number;
+  averageRunLength: number;
+  maxRunLength: number;
+  compatibleContinuations: number;
+  totalBatchBreaks: number;
+  breakReasonCounts: Record<WorldBatchBreakReason, number>;
+  sampleBoundaries: WorldBatchBoundarySample[];
+  familySummaries: WorldBatchFamilySummary[];
+  runLengths: WorldRunLengthAudit;
+};
+
+const REORDER_PROBE_WINDOWS: readonly (4 | 8 | 16)[] = [4, 8, 16];
 
 const BREAK_REASON_ORDER: readonly WorldBatchBreakReason[] = [
   "render family changed",
@@ -110,6 +156,7 @@ function dominantBreakReason(counts: Record<WorldBatchBreakReason, number>): Wor
 function describeWorldFamily(command: RenderCommand): string {
   const payload = command.payload as Record<string, unknown>;
   if (command.semanticFamily === "worldSprite") {
+    if (payload.auditFamily === "structures") return "structures";
     if (payload.draw) return "structures";
     if (payload.pickupIndex !== undefined) return "drops";
     if (
@@ -123,7 +170,6 @@ function describeWorldFamily(command: RenderCommand): string {
     if (payload.vfxIndex !== undefined) return "vfx";
     return "props";
   }
-  if (command.semanticFamily === "worldGeometry") return "triangles";
   if (command.semanticFamily === "worldPrimitive") {
     if (payload.lightPiece) return "lights";
     if (payload.zoneKind !== undefined) return "zones";
@@ -134,10 +180,12 @@ function describeWorldFamily(command: RenderCommand): string {
 
 function extractTextureSource(command: RenderCommand): object | null {
   const payload = command.payload as Record<string, unknown>;
-  if (command.semanticFamily === "worldGeometry" && command.finalForm === "triangles") {
-    return (payload.image ?? null) as object | null;
-  }
-  if (command.semanticFamily === "worldSprite" && command.finalForm === "quad") {
+  if (
+    (command.semanticFamily === "groundSurface"
+      || command.semanticFamily === "groundDecal"
+      || command.semanticFamily === "worldSprite")
+    && command.finalForm === "quad"
+  ) {
     if (payload.image && typeof payload.image === "object") return payload.image as object;
     const draw = (payload.draw ?? null) as Record<string, unknown> | null;
     if (draw?.img && typeof draw.img === "object") return draw.img as object;
@@ -146,129 +194,96 @@ function extractTextureSource(command: RenderCommand): object | null {
   return null;
 }
 
-function buildAuditDescriptor(
-  command: RenderCommand,
-  selectedBackend: "canvas2d" | "webgl",
-  textureIds: WeakMap<object, number>,
-  nextTextureId: { value: number },
-): AuditDescriptor {
+function buildBounds(command: RenderCommand): AuditBounds {
   const payload = command.payload as Record<string, unknown>;
-  const reportFamily = describeWorldFamily(command);
-
-  if (selectedBackend === "canvas2d") {
-    const summary = `${reportFamily} ${command.semanticFamily}:${command.finalForm} canvas2d`;
-    return {
-      command,
-      reportFamily,
-      primitiveKind: command.finalForm,
-      renderBackendPath: "canvas2d",
-      submissionKind: "canvas2d",
-      batchable: false,
-      shaderMaterial: "canvas2d",
-      textureToken: null,
-      blendMode: null,
-      space: null,
-      summary,
-    };
-  }
-
-  const backend = classifyCommandBackend(command);
-  if (backend !== "webgl") {
-    const summary = `${reportFamily} ${command.semanticFamily}:${command.finalForm} ${backend}`;
-    return {
-      command,
-      reportFamily,
-      primitiveKind: command.finalForm,
-      renderBackendPath: backend,
-      submissionKind: backend === "canvas2d" ? "canvasFallback" : "unsupported",
-      batchable: false,
-      shaderMaterial: backend === "canvas2d" ? "canvas2d" : "unsupported",
-      textureToken: null,
-      blendMode: null,
-      space: null,
-      summary,
-    };
-  }
-
-  let submissionKind = `${command.semanticFamily}:${command.finalForm}`;
-  let batchable = false;
-  let shaderMaterial = submissionKind;
-  let blendMode: string | null = null;
-  let space: string | null = null;
-
-  if (command.semanticFamily === "worldGeometry" && command.finalForm === "triangles") {
-    submissionKind = "texturedTriangles";
-    batchable = true;
-    shaderMaterial = "textured";
-    blendMode = "normal";
-    space = "world";
-  } else if (command.semanticFamily === "worldSprite" && command.finalForm === "quad") {
-    submissionKind = "texturedTriangles";
-    batchable = true;
-    shaderMaterial = "textured";
-    blendMode = payload.blendMode === "additive" ? "additive" : "normal";
-    space = "world";
-  } else if (command.semanticFamily === "worldPrimitive" && payload.lightPiece) {
-    submissionKind = "projectedLight";
-    shaderMaterial = "projectedLight";
-    blendMode = "additive";
-    space = "screen";
-  } else if (command.semanticFamily === "worldPrimitive" && payload.zoneKind !== undefined) {
-    submissionKind = "zoneEffect";
-    shaderMaterial = "zoneEffect";
-    blendMode = "normal";
-    space = "world";
-  }
-
-  const textureSource = extractTextureSource(command);
-  let textureToken: string | null = null;
-  if (textureSource) {
-    let textureId = textureIds.get(textureSource);
-    if (!textureId) {
-      textureId = nextTextureId.value++;
-      textureIds.set(textureSource, textureId);
+  if (command.finalForm === "quad" && (
+    command.semanticFamily === "groundSurface"
+    || command.semanticFamily === "groundDecal"
+    || command.semanticFamily === "worldSprite"
+  )) {
+    const explicitPoints = [
+      { x: Number(payload.x0), y: Number(payload.y0) },
+      { x: Number(payload.x1), y: Number(payload.y1) },
+      { x: Number(payload.x2), y: Number(payload.y2) },
+      { x: Number(payload.x3), y: Number(payload.y3) },
+    ];
+    if (explicitPoints.every((point) => Number.isFinite(point.x) && Number.isFinite(point.y))) {
+      let minX = Number.POSITIVE_INFINITY;
+      let minY = Number.POSITIVE_INFINITY;
+      let maxX = Number.NEGATIVE_INFINITY;
+      let maxY = Number.NEGATIVE_INFINITY;
+      for (const pt of explicitPoints) {
+        minX = Math.min(minX, pt.x);
+        minY = Math.min(minY, pt.y);
+        maxX = Math.max(maxX, pt.x);
+        maxY = Math.max(maxY, pt.y);
+      }
+      return { minX, minY, maxX, maxY };
     }
-    textureToken = `tex${textureId}`;
+
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+    const dx = typeof payload.dx === "number" ? payload.dx : undefined;
+    const dy = typeof payload.dy === "number" ? payload.dy : undefined;
+    const dw = typeof payload.dw === "number" ? payload.dw : undefined;
+    const dh = typeof payload.dh === "number" ? payload.dh : undefined;
+    if (dx !== undefined && dy !== undefined && dw !== undefined && dh !== undefined) {
+      return { minX: dx, minY: dy, maxX: dx + dw, maxY: dy + dh };
+    }
+    const draw = (payload.draw ?? null) as Record<string, unknown> | null;
+    if (
+      draw
+      && typeof draw.dx === "number"
+      && typeof draw.dy === "number"
+      && typeof draw.dw === "number"
+      && typeof draw.dh === "number"
+    ) {
+      return {
+        minX: draw.dx,
+        minY: draw.dy,
+        maxX: draw.dx + draw.dw,
+        maxY: draw.dy + draw.dh,
+      };
+    }
+    return Number.isFinite(minX) ? { minX, minY, maxX, maxY } : null;
   }
 
-  const summary = [
-    reportFamily,
-    `${command.semanticFamily}:${command.finalForm}`,
-    submissionKind,
-    textureToken ?? "tex-",
-    blendMode ?? "blend-",
-    space ?? "space-",
-  ].join(" ");
-
-  return {
-    command,
-    reportFamily,
-    primitiveKind: command.finalForm,
-    renderBackendPath: "webgl",
-    submissionKind,
-    batchable,
-    shaderMaterial,
-    textureToken,
-    blendMode,
-    space,
-    summary,
-  };
+  return null;
 }
 
-function classifyBreakReason(previous: AuditDescriptor, next: AuditDescriptor): WorldBatchBreakReason {
-  if (previous.renderBackendPath !== next.renderBackendPath) {
-    return "unsupported/fallback path changed";
-  }
+function overlaps(a: AuditBounds, b: AuditBounds): boolean {
+  if (!a || !b) return false;
+  return !(a.maxX <= b.minX || b.maxX <= a.minX || a.maxY <= b.minY || b.maxY <= a.minY);
+}
 
-  const canContinueBatch = previous.batchable
+function compareBatchSignature(a: AuditDescriptor, b: AuditDescriptor): number {
+  if (a.renderBackendPath !== b.renderBackendPath) return a.renderBackendPath.localeCompare(b.renderBackendPath);
+  if (a.batchable !== b.batchable) return a.batchable ? -1 : 1;
+  if (a.submissionKind !== b.submissionKind) return a.submissionKind.localeCompare(b.submissionKind);
+  if (a.shaderMaterial !== b.shaderMaterial) return a.shaderMaterial.localeCompare(b.shaderMaterial);
+  if ((a.textureToken ?? "") !== (b.textureToken ?? "")) return (a.textureToken ?? "").localeCompare(b.textureToken ?? "");
+  if ((a.blendMode ?? "") !== (b.blendMode ?? "")) return (a.blendMode ?? "").localeCompare(b.blendMode ?? "");
+  if ((a.space ?? "") !== (b.space ?? "")) return (a.space ?? "").localeCompare(b.space ?? "");
+  return a.originalIndex - b.originalIndex;
+}
+
+function canContinueBatch(previous: AuditDescriptor, next: AuditDescriptor): boolean {
+  return previous.batchable
     && next.batchable
     && previous.submissionKind === next.submissionKind
     && previous.shaderMaterial === next.shaderMaterial
     && previous.textureToken === next.textureToken
     && previous.blendMode === next.blendMode
     && previous.space === next.space;
+}
 
-  if (canContinueBatch) return "compatible continuation";
+function classifyBreakReason(previous: AuditDescriptor, next: AuditDescriptor): WorldBatchBreakReason {
+  if (previous.renderBackendPath !== next.renderBackendPath) {
+    return "unsupported/fallback path changed";
+  }
+  if (canContinueBatch(previous, next)) return "compatible continuation";
 
   if (previous.batchable && next.batchable) {
     if (previous.submissionKind !== next.submissionKind) return "primitive type changed";
@@ -307,17 +322,189 @@ function ensureFamilySummary(
   return summary;
 }
 
-export function analyzeWorldBatchStream(
-  commands: readonly RenderCommand[],
+function buildAuditDescriptor(
+  command: RenderCommand,
+  originalIndex: number,
   selectedBackend: "canvas2d" | "webgl",
-): WorldBatchAudit {
-  const worldCommands = commands.filter((command) => command.pass === "WORLD");
+  textureIds: WeakMap<object, number>,
+  nextTextureId: { value: number },
+): AuditDescriptor {
+  const payload = command.payload as Record<string, unknown>;
+  const reportFamily = describeWorldFamily(command);
+  const ownerGroupToken = [
+    command.key.slice,
+    command.key.within,
+    command.key.baseZ,
+    command.key.kindOrder,
+    command.key.structureSouthSlice ?? "",
+    command.key.structureSouthWithin ?? "",
+  ].join("|");
+
+  if (selectedBackend === "canvas2d") {
+    return {
+      command,
+      originalIndex,
+      reportFamily,
+      primitiveKind: command.finalForm,
+      renderBackendPath: "canvas2d",
+      submissionKind: "canvas2d",
+      batchable: false,
+      shaderMaterial: "canvas2d",
+      textureToken: null,
+      blendMode: null,
+      space: null,
+      ownerGroupToken,
+      bounds: buildBounds(command),
+      summary: `${reportFamily} ${command.semanticFamily}:${command.finalForm} canvas2d`,
+    };
+  }
+
+  const backend = classifyCommandBackend(command);
+  if (backend !== "webgl") {
+    return {
+      command,
+      originalIndex,
+      reportFamily,
+      primitiveKind: command.finalForm,
+      renderBackendPath: backend,
+      submissionKind: backend === "canvas2d" ? "canvasFallback" : "unsupported",
+      batchable: false,
+      shaderMaterial: backend === "canvas2d" ? "canvas2d" : "unsupported",
+      textureToken: null,
+      blendMode: null,
+      space: null,
+      ownerGroupToken,
+      bounds: buildBounds(command),
+      summary: `${reportFamily} ${command.semanticFamily}:${command.finalForm} ${backend}`,
+    };
+  }
+
+  let submissionKind = `${command.semanticFamily}:${command.finalForm}`;
+  let batchable = false;
+  let shaderMaterial = submissionKind;
+  let blendMode: string | null = null;
+  let space: string | null = null;
+
+  if (
+    (command.semanticFamily === "groundSurface"
+      || command.semanticFamily === "groundDecal"
+      || command.semanticFamily === "worldSprite")
+    && command.finalForm === "quad"
+  ) {
+    submissionKind = "texturedTriangles";
+    batchable = true;
+    shaderMaterial = "textured";
+    blendMode = payload.blendMode === "additive" ? "additive" : "normal";
+    space = "world";
+  } else if (command.semanticFamily === "worldPrimitive" && payload.lightPiece) {
+    submissionKind = "projectedLight";
+    shaderMaterial = "projectedLight";
+    blendMode = "additive";
+    space = "screen";
+  } else if (command.semanticFamily === "worldPrimitive" && payload.zoneKind !== undefined) {
+    submissionKind = "zoneEffect";
+    shaderMaterial = "zoneEffect";
+    blendMode = "normal";
+    space = "world";
+  }
+
+  const textureSource = extractTextureSource(command);
+  let textureToken: string | null = null;
+  if (textureSource) {
+    let textureId = textureIds.get(textureSource);
+    if (!textureId) {
+      textureId = nextTextureId.value++;
+      textureIds.set(textureSource, textureId);
+    }
+    textureToken = `tex${textureId}`;
+  }
+
+  return {
+    command,
+    originalIndex,
+    reportFamily,
+    primitiveKind: command.finalForm,
+    renderBackendPath: "webgl",
+    submissionKind,
+    batchable,
+    shaderMaterial,
+    textureToken,
+    blendMode,
+    space,
+    ownerGroupToken,
+    bounds: buildBounds(command),
+    summary: [
+      reportFamily,
+      `${command.semanticFamily}:${command.finalForm}`,
+      submissionKind,
+      textureToken ?? "tex-",
+      blendMode ?? "blend-",
+      space ?? "space-",
+    ].join(" "),
+  };
+}
+
+function analyzeRunLengths(descriptors: readonly AuditDescriptor[]): WorldRunLengthAudit {
+  if (descriptors.length === 0) {
+    return {
+      averageTextureRun: 0,
+      maxTextureRun: 0,
+      averageCompatibleRun: 0,
+      maxCompatibleRun: 0,
+    };
+  }
+
+  let textureRunCount = 0;
+  let textureRunSum = 0;
+  let maxTextureRun = 0;
+  let currentTextureRun = 1;
+
+  let compatibleRunCount = 0;
+  let compatibleRunSum = 0;
+  let maxCompatibleRun = 0;
+  let currentCompatibleRun = 1;
+
+  for (let i = 1; i < descriptors.length; i++) {
+    const previous = descriptors[i - 1];
+    const next = descriptors[i];
+    if (previous.textureToken !== null && previous.textureToken === next.textureToken) {
+      currentTextureRun += 1;
+    } else {
+      textureRunCount += 1;
+      textureRunSum += currentTextureRun;
+      if (currentTextureRun > maxTextureRun) maxTextureRun = currentTextureRun;
+      currentTextureRun = 1;
+    }
+
+    if (canContinueBatch(previous, next)) {
+      currentCompatibleRun += 1;
+    } else {
+      compatibleRunCount += 1;
+      compatibleRunSum += currentCompatibleRun;
+      if (currentCompatibleRun > maxCompatibleRun) maxCompatibleRun = currentCompatibleRun;
+      currentCompatibleRun = 1;
+    }
+  }
+
+  textureRunCount += 1;
+  textureRunSum += currentTextureRun;
+  if (currentTextureRun > maxTextureRun) maxTextureRun = currentTextureRun;
+  compatibleRunCount += 1;
+  compatibleRunSum += currentCompatibleRun;
+  if (currentCompatibleRun > maxCompatibleRun) maxCompatibleRun = currentCompatibleRun;
+
+  return {
+    averageTextureRun: textureRunCount > 0 ? textureRunSum / textureRunCount : 0,
+    maxTextureRun,
+    averageCompatibleRun: compatibleRunCount > 0 ? compatibleRunSum / compatibleRunCount : 0,
+    maxCompatibleRun,
+  };
+}
+
+function analyzeSequence(descriptors: readonly AuditDescriptor[]): SequenceStats {
   const breakReasonCounts = makeZeroBreakReasonCounts();
   const familySummaries = new Map<string, MutableFamilySummary>();
   const sampleBoundaries: WorldBatchBoundarySample[] = [];
-  const textureIds = new WeakMap<object, number>();
-  const nextTextureId = { value: 1 };
-  const descriptors = worldCommands.map((command) => buildAuditDescriptor(command, selectedBackend, textureIds, nextTextureId));
 
   let totalWorldBatches = 0;
   let maxRunLength = 0;
@@ -369,35 +556,8 @@ export function analyzeWorldBatchStream(
   if (currentRunLength > maxRunLength) maxRunLength = currentRunLength;
 
   const totalWorldCommands = descriptors.length;
-  if (totalWorldCommands === 0) {
-    return {
-      inspectedBackend: selectedBackend,
-      compatibilityFields: [
-        "semanticFamily/finalForm",
-        "texture identity",
-        "shader/material lane",
-        "blend mode",
-        "render backend path",
-      ],
-      totalWorldCommands: 0,
-      totalWorldBatches: 0,
-      averageRunLength: 0,
-      maxRunLength: 0,
-      compatibleContinuations: 0,
-      totalBatchBreaks: 0,
-      breakReasonCounts,
-      familySummaries: [],
-      sampleBoundaries: [],
-    };
-  }
-
-  const mutableFamilyEntries = Array.from(familySummaries.entries()).map(([family, summary]) => ({
-    family,
-    summary,
-  }));
-
-  const familySummaryList: WorldBatchFamilySummary[] = mutableFamilyEntries
-    .map(({ family, summary }) => ({
+  const familySummaryList: WorldBatchFamilySummary[] = Array.from(familySummaries.entries())
+    .map(([family, summary]) => ({
       family,
       commands: summary.commands,
       batches: summary.batches,
@@ -409,15 +569,6 @@ export function analyzeWorldBatchStream(
     .sort((a, b) => b.commands - a.commands || b.batches - a.batches || a.family.localeCompare(b.family));
 
   return {
-    inspectedBackend: selectedBackend,
-    compatibilityFields: [
-      "semanticFamily/finalForm",
-      "texture identity",
-      "shader/material lane",
-      "blend mode",
-      "render backend path",
-    ],
-    totalWorldCommands,
     totalWorldBatches,
     averageRunLength: totalWorldBatches > 0 ? totalWorldCommands / totalWorldBatches : 0,
     maxRunLength,
@@ -426,5 +577,146 @@ export function analyzeWorldBatchStream(
     breakReasonCounts,
     familySummaries: familySummaryList,
     sampleBoundaries,
+    runLengths: analyzeRunLengths(descriptors),
+  };
+}
+
+function buildReorderedDescriptors(descriptors: readonly AuditDescriptor[], windowSize: 4 | 8 | 16): AuditDescriptor[] {
+  const reordered: AuditDescriptor[] = [];
+  for (let start = 0; start < descriptors.length; start += windowSize) {
+    const window = descriptors.slice(start, start + windowSize);
+    reordered.push(...[...window].sort(compareBatchSignature));
+  }
+  return reordered;
+}
+
+function analyzeReorderRisk(
+  original: readonly AuditDescriptor[],
+  reordered: readonly AuditDescriptor[],
+  windowSize: 4 | 8 | 16,
+): Pick<WorldReorderProbe, "riskCount" | "overlapRiskCount" | "feetSortYRiskCount" | "groupBoundaryRiskCount"> {
+  let riskCount = 0;
+  let overlapRiskCount = 0;
+  let feetSortYRiskCount = 0;
+  let groupBoundaryRiskCount = 0;
+
+  for (let start = 0; start < original.length; start += windowSize) {
+    const originalWindow = original.slice(start, start + windowSize);
+    const reorderedWindow = reordered.slice(start, start + windowSize);
+    const reorderedPosition = new Map<number, number>();
+    for (let i = 0; i < reorderedWindow.length; i++) {
+      reorderedPosition.set(reorderedWindow[i].originalIndex, i);
+    }
+
+    for (let i = 0; i < originalWindow.length; i++) {
+      for (let j = i + 1; j < originalWindow.length; j++) {
+        const a = originalWindow[i];
+        const b = originalWindow[j];
+        const posA = reorderedPosition.get(a.originalIndex) ?? i;
+        const posB = reorderedPosition.get(b.originalIndex) ?? j;
+        if (posA < posB) continue;
+
+        let risky = false;
+        if (overlaps(a.bounds, b.bounds)) {
+          overlapRiskCount += 1;
+          risky = true;
+        }
+        if ((a.command.key.feetSortY ?? 0) !== (b.command.key.feetSortY ?? 0)) {
+          feetSortYRiskCount += 1;
+          risky = true;
+        }
+        if (a.ownerGroupToken !== b.ownerGroupToken) {
+          groupBoundaryRiskCount += 1;
+          risky = true;
+        }
+        if (risky) riskCount += 1;
+      }
+    }
+  }
+
+  return {
+    riskCount,
+    overlapRiskCount,
+    feetSortYRiskCount,
+    groupBoundaryRiskCount,
+  };
+}
+
+function analyzeReorderProbe(
+  descriptors: readonly AuditDescriptor[],
+  windowSize: 4 | 8 | 16,
+): WorldReorderProbe {
+  const reordered = buildReorderedDescriptors(descriptors, windowSize);
+  const sequence = analyzeSequence(reordered);
+  const risk = analyzeReorderRisk(descriptors, reordered, windowSize);
+  return {
+    windowSize,
+    totalWorldBatches: sequence.totalWorldBatches,
+    averageRunLength: sequence.averageRunLength,
+    totalBatchBreaks: sequence.totalBatchBreaks,
+    textureBreaks: sequence.breakReasonCounts["texture changed"],
+    renderFamilyBreaks: sequence.breakReasonCounts["render family changed"],
+    riskCount: risk.riskCount,
+    overlapRiskCount: risk.overlapRiskCount,
+    feetSortYRiskCount: risk.feetSortYRiskCount,
+    groupBoundaryRiskCount: risk.groupBoundaryRiskCount,
+  };
+}
+
+export function analyzeWorldBatchStream(
+  commands: readonly RenderCommand[],
+  selectedBackend: "canvas2d" | "webgl",
+): WorldBatchAudit {
+  const worldCommands = commands.filter((command) => command.pass === "WORLD");
+  const textureIds = new WeakMap<object, number>();
+  const nextTextureId = { value: 1 };
+  const descriptors = worldCommands.map((command, index) => (
+    buildAuditDescriptor(command, index, selectedBackend, textureIds, nextTextureId)
+  ));
+
+  let quadCommands = 0;
+  let triangleCommands = 0;
+  let batchableCommands = 0;
+  let texturedCommands = 0;
+  const uniqueTextureTokens = new Set<string>();
+  for (const descriptor of descriptors) {
+    if (descriptor.primitiveKind === "quad") quadCommands += 1;
+    if (descriptor.batchable) batchableCommands += 1;
+    if (descriptor.textureToken) {
+      texturedCommands += 1;
+      uniqueTextureTokens.add(descriptor.textureToken);
+    }
+  }
+
+  const sequence = analyzeSequence(descriptors);
+  const reorderProbes = selectedBackend === "webgl"
+    ? REORDER_PROBE_WINDOWS.map((windowSize) => analyzeReorderProbe(descriptors, windowSize))
+    : [];
+
+  return {
+    inspectedBackend: selectedBackend,
+    compatibilityFields: [
+      "semanticFamily/finalForm",
+      "texture identity",
+      "shader/material lane",
+      "blend mode",
+      "render backend path",
+    ],
+    totalWorldCommands: descriptors.length,
+    quadCommands,
+    triangleCommands,
+    batchableCommands,
+    texturedCommands,
+    uniqueTextures: uniqueTextureTokens.size,
+    totalWorldBatches: sequence.totalWorldBatches,
+    averageRunLength: sequence.averageRunLength,
+    maxRunLength: sequence.maxRunLength,
+    compatibleContinuations: sequence.compatibleContinuations,
+    totalBatchBreaks: sequence.totalBatchBreaks,
+    breakReasonCounts: sequence.breakReasonCounts,
+    familySummaries: sequence.familySummaries,
+    sampleBoundaries: sequence.sampleBoundaries,
+    runLengths: sequence.runLengths,
+    reorderProbes,
   };
 }

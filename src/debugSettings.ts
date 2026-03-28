@@ -42,6 +42,8 @@ export type BooleanDebugSettingKey = Exclude<
   | "shadowSunAzimuthDeg"
   | "sunElevationOverrideDeg"
   | "shadowCasterMode"
+  | "debugStructureRenderMode"
+  | "perfOverlayMode"
   | "shadowV6SemanticBucket"
   | "shadowV6StructureIndex"
   | "shadowV6SliceCount"
@@ -150,6 +152,8 @@ export type ResolvedDebugFlags = {
   showStructureTriangleFootprint: boolean;
   showStructureAnchors: boolean;
   showStructureTriangleOwnershipSort: boolean;
+  debugStructureRenderMode: "triangles" | "quadApprox";
+  perfOverlayMode: "off" | "overview" | "world" | "structures" | "textures" | "ground" | "lighting" | "cache";
   showMapOverlays: boolean;
   showEnemyAimOverlay: boolean;
   showLootGoblinOverlay: boolean;
@@ -174,6 +178,8 @@ export function resolveDebugFlags(debug: DebugSettings): ResolvedDebugFlags {
     showStructureTriangleFootprint: debug.structureTriangleFootprint,
     showStructureAnchors: debug.showStructureAnchors,
     showStructureTriangleOwnershipSort: debug.showStructureTriangleOwnershipSort,
+    debugStructureRenderMode: debug.debugStructureRenderMode,
+    perfOverlayMode: debug.perfOverlayMode,
     showMapOverlays: !debug.mapOverlaysDisabled,
     showEnemyAimOverlay: debug.enemyAimOverlay,
     showLootGoblinOverlay: debug.lootGoblinOverlay,

@@ -491,6 +491,19 @@ html.ios-standalone-fix #ui {
   gap: clamp(4px, 0.6vw, 8px);
 }
 
+#perfOverlayModeSelect {
+  align-self: flex-start;
+  min-width: 140px;
+  padding: 4px 8px;
+  border: 1px solid rgba(120, 186, 229, 0.35);
+  border-radius: 8px;
+  background: rgba(8, 20, 36, 0.92);
+  color: rgba(235, 247, 255, 0.96);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
 #hudTopCenter {
   margin-top: 0;
   width: 100%;

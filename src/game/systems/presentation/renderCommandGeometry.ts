@@ -1,11 +1,10 @@
 import type {
-  GroundDecalProjectedSurfacePayload,
-  GroundSurfaceProjectedSurfacePayload,
+  GroundDecalQuadPayload,
+  GroundSurfaceQuadPayload,
+  QuadRenderPiece,
   RenderPoint,
-  RenderProjectedSurfaceTriangles,
-  RenderTriangle,
   RenderTrianglePoints,
-  WorldGeometryTrianglesPayload,
+  WorldSpriteQuadPayload,
 } from "./contracts/renderCommands";
 
 export type RenderQuadPoints = {
@@ -45,10 +44,6 @@ type CutoutAlphaInput = {
 
 function point(x: number, y: number): RenderPoint {
   return { x, y };
-}
-
-function trianglePoints(a: RenderPoint, b: RenderPoint, c: RenderPoint): RenderTrianglePoints {
-  return [a, b, c];
 }
 
 export function buildDiamondSourceQuad(sourceWidth: number, sourceHeight: number): RenderQuadPoints {
@@ -147,94 +142,119 @@ export function buildFlatTileDestinationQuad(input: FlatTileQuadPointInput): Ren
   };
 }
 
-export function buildTrianglePairFromQuad(
-  sourceQuad: RenderQuadPoints,
-  destinationQuad: RenderQuadPoints,
-  alpha = 1,
-  stableId?: number,
-): RenderProjectedSurfaceTriangles {
-  return [
-    {
-      stableId,
-      srcPoints: trianglePoints(sourceQuad.nw, sourceQuad.ne, sourceQuad.se),
-      dstPoints: trianglePoints(destinationQuad.nw, destinationQuad.ne, destinationQuad.se),
-      alpha,
-    },
-    {
-      stableId: stableId === undefined ? undefined : Number(stableId) + 0.01,
-      srcPoints: trianglePoints(sourceQuad.nw, sourceQuad.se, sourceQuad.sw),
-      dstPoints: trianglePoints(destinationQuad.nw, destinationQuad.se, destinationQuad.sw),
-      alpha,
-    },
-  ];
+export function buildQuadRenderPieceFromPoints(input: {
+  image: CanvasImageSource;
+  sx?: number;
+  sy?: number;
+  sw?: number;
+  sh?: number;
+  sourceQuad?: RenderQuadPoints;
+  destinationQuad: RenderQuadPoints;
+  kind: "iso" | "rect";
+  alpha?: number;
+  flipX?: boolean;
+  auditFamily?: "structures";
+}): QuadRenderPiece {
+  const sourceWidth = Number.isFinite(Number(input.sw))
+    ? Number(input.sw)
+    : Number((input.image as { width?: number }).width ?? 0);
+  const sourceHeight = Number.isFinite(Number(input.sh))
+    ? Number(input.sh)
+    : Number((input.image as { height?: number }).height ?? 0);
+  return {
+    image: input.image,
+    sx: Number.isFinite(Number(input.sx)) ? Number(input.sx) : 0,
+    sy: Number.isFinite(Number(input.sy)) ? Number(input.sy) : 0,
+    sw: sourceWidth,
+    sh: sourceHeight,
+    sourceQuad: input.sourceQuad,
+    x0: input.destinationQuad.nw.x,
+    y0: input.destinationQuad.nw.y,
+    x1: input.destinationQuad.ne.x,
+    y1: input.destinationQuad.ne.y,
+    x2: input.destinationQuad.se.x,
+    y2: input.destinationQuad.se.y,
+    x3: input.destinationQuad.sw.x,
+    y3: input.destinationQuad.sw.y,
+    kind: input.kind,
+    alpha: input.alpha ?? 1,
+    flipX: !!input.flipX,
+    auditFamily: input.auditFamily,
+  };
 }
 
 export function buildProjectedSurfacePayload(input: {
   image: CanvasImageSource;
-  sourceWidth: number;
-  sourceHeight: number;
   destinationQuad: RenderQuadPoints;
   alpha?: number;
-  stableId?: number;
-}): GroundSurfaceProjectedSurfacePayload {
-  return {
+}): GroundSurfaceQuadPayload {
+  const sourceWidth = Number((input.image as { width?: number }).width ?? 0);
+  const sourceHeight = Number((input.image as { height?: number }).height ?? 0);
+  return buildQuadRenderPieceFromPoints({
     image: input.image,
-    sourceWidth: input.sourceWidth,
-    sourceHeight: input.sourceHeight,
-    triangles: buildTrianglePairFromQuad(
-      buildDiamondSourceQuad(input.sourceWidth, input.sourceHeight),
-      input.destinationQuad,
-      input.alpha ?? 1,
-      input.stableId,
-    ),
-  };
+    sx: 0,
+    sy: 0,
+    sw: sourceWidth,
+    sh: sourceHeight,
+    sourceQuad: buildDiamondSourceQuad(sourceWidth, sourceHeight),
+    destinationQuad: input.destinationQuad,
+    kind: "iso",
+    alpha: input.alpha,
+  });
 }
 
 export function buildGroundDecalProjectedSurfacePayload(input: {
   image: CanvasImageSource;
-  sourceWidth: number;
-  sourceHeight: number;
   destinationQuad: RenderQuadPoints;
   alpha?: number;
-  stableId?: number;
-}): GroundDecalProjectedSurfacePayload {
+}): GroundDecalQuadPayload {
   return buildProjectedSurfacePayload(input);
 }
 
-export function buildTriangleMeshPayload(input: {
+export function buildRectQuadPayload(input: {
   image: CanvasImageSource;
-  sourceWidth: number;
-  sourceHeight: number;
-  triangles: RenderTriangle[];
-}): WorldGeometryTrianglesPayload {
-  return {
-    image: input.image,
-    sourceWidth: input.sourceWidth,
-    sourceHeight: input.sourceHeight,
-    triangles: input.triangles,
-  };
-}
-
-export function buildTriangleMeshFromRect(input: {
-  image: CanvasImageSource;
-  sourceWidth: number;
-  sourceHeight: number;
+  sourceRectWidth?: number;
+  sourceRectHeight?: number;
   dx: number;
   dy: number;
   dw: number;
   dh: number;
   flipX?: boolean;
   alpha?: number;
-  stableId?: number;
-}): WorldGeometryTrianglesPayload {
-  const sourceQuad = buildRectSourceQuad(input.sourceWidth, input.sourceHeight, !!input.flipX);
+  sourceOffsetX?: number;
+  sourceOffsetY?: number;
+  auditFamily?: "structures";
+}): WorldSpriteQuadPayload {
+  const sourceWidth = Number((input.image as { width?: number }).width ?? 0);
+  const sourceHeight = Number((input.image as { height?: number }).height ?? 0);
+  const sourceRectWidth = Number.isFinite(Number(input.sourceRectWidth)) ? Number(input.sourceRectWidth) : sourceWidth;
+  const sourceRectHeight = Number.isFinite(Number(input.sourceRectHeight)) ? Number(input.sourceRectHeight) : sourceHeight;
+  const sourceOffsetX = Number(input.sourceOffsetX ?? 0);
+  const sourceOffsetY = Number(input.sourceOffsetY ?? 0);
   const destinationQuad = buildRectDestinationQuad(input.dx, input.dy, input.dw, input.dh);
-  return buildTriangleMeshPayload({
+  const payload = buildQuadRenderPieceFromPoints({
     image: input.image,
-    sourceWidth: input.sourceWidth,
-    sourceHeight: input.sourceHeight,
-    triangles: [...buildTrianglePairFromQuad(sourceQuad, destinationQuad, input.alpha ?? 1, input.stableId)],
+    sx: sourceOffsetX,
+    sy: sourceOffsetY,
+    sw: sourceRectWidth,
+    sh: sourceRectHeight,
+    sourceQuad: {
+      nw: point(sourceOffsetX + (input.flipX ? sourceRectWidth : 0), sourceOffsetY),
+      ne: point(sourceOffsetX + (input.flipX ? 0 : sourceRectWidth), sourceOffsetY),
+      se: point(sourceOffsetX + (input.flipX ? 0 : sourceRectWidth), sourceOffsetY + sourceRectHeight),
+      sw: point(sourceOffsetX + (input.flipX ? sourceRectWidth : 0), sourceOffsetY + sourceRectHeight),
+    },
+    destinationQuad,
+    kind: "rect",
+    alpha: input.alpha ?? 1,
+    flipX: !!input.flipX,
+    auditFamily: input.auditFamily,
   });
+  payload.dx = input.dx;
+  payload.dy = input.dy;
+  payload.dw = input.dw;
+  payload.dh = input.dh;
+  return payload;
 }
 
 export function resolveTriangleCutoutAlpha(

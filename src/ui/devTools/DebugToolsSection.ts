@@ -183,6 +183,20 @@ export function mountDebugToolsSection(
     "V6 Face Slice Debug",
     (checked) => applyDebugPatch({ shadowV6FaceSliceDebugOverlay: checked }),
   );
+  const structureRenderModeSelect = createSelectRow<DebugToolsSettings["debugStructureRenderMode"]>(
+    section,
+    "Structure Render",
+    ["triangles", "quadApprox"],
+    (value) => value === "quadApprox" ? "Quad Approx" : "Triangles",
+    (value) => applyDebugPatch({ debugStructureRenderMode: value }),
+  );
+  const perfOverlayModeSelect = createSelectRow<DebugToolsSettings["perfOverlayMode"]>(
+    section,
+    "Perf Overlay",
+    ["off", "overview", "world", "structures", "textures", "ground", "lighting", "cache"],
+    (value) => value.charAt(0).toUpperCase() + value.slice(1),
+    (value) => applyDebugPatch({ perfOverlayMode: value }),
+  );
 
   const shadowSunReadout = document.createElement("div");
   shadowSunReadout.style.padding = "2px 0 10px 0";
@@ -306,6 +320,8 @@ export function mountDebugToolsSection(
       shadowV6TopOnlyToggle.checked = !!debug.shadowV6TopOnly;
       shadowV6ForceRefreshToggle.checked = !!debug.shadowV6ForceRefresh;
       shadowV6FaceSliceDebugOverlayToggle.checked = !!debug.shadowV6FaceSliceDebugOverlay;
+      structureRenderModeSelect.value = debug.debugStructureRenderMode;
+      perfOverlayModeSelect.value = debug.perfOverlayMode;
       const v6DebugViewActive = debug.shadowCasterMode === "v6FaceSliceDebug";
       shadowV6SemanticBucketSelect.disabled = !v6DebugViewActive;
       shadowV6SemanticBucketSelect.style.opacity = v6DebugViewActive ? "1" : "0.65";

@@ -10,12 +10,46 @@ import { buildStructureShadowFrameResult as buildOrchestratedStructureShadowFram
 import { shouldBuildStructureV6ShadowMasksForFrame } from "../structureShadows/structureShadowVersionRouting";
 import { buildRuntimeStructureTriangleSemanticMap } from "../structureShadows/structureTriangleSemantics";
 import {
-  buildTriangleMeshFromRect,
-  buildTriangleMeshPayload,
+  buildRectDestinationQuad,
+  buildRectQuadPayload,
+  buildQuadRenderPieceFromPoints,
   resolveTriangleCutoutAlpha,
 } from "../renderCommandGeometry";
+import { remapStructureTrianglePointToAtlas } from "../structureSpriteAtlas";
+import {
+  countRenderStructureEstimatedTrianglesAvoided,
+  countRenderStructureMonolithicGroupSubmission,
+  countRenderStructureMonolithicTriangles,
+  countRenderStructureQuadApproxAccepted,
+  countRenderStructureQuadApproxRejected,
+  countRenderStructureRectMeshMigratedToQuad,
+  countRenderStructureRectMeshSubmission,
+  countRenderStructureSingleQuadSubmission,
+  countRenderStructureTotalSubmission,
+  countRenderStructureTrianglesSubmitted,
+} from "../renderPerfCounters";
 
 type RenderKey = any;
+type RenderPoint = { x: number; y: number };
+type RectBounds = { minX: number; minY: number; maxX: number; maxY: number };
+type RuntimeLocalRect = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+type ProcessedStructureTriangle = {
+  stableId: number | undefined;
+  cameraTx: number;
+  cameraTy: number;
+  localSrcPoints: [RenderPoint, RenderPoint, RenderPoint];
+  srcPoints: [RenderPoint, RenderPoint, RenderPoint];
+  dstPoints: [RenderPoint, RenderPoint, RenderPoint];
+  sourceBounds: RectBounds;
+  destinationBounds: RectBounds;
+  heightFromParentLevel: number;
+  alpha: number;
+};
 
 export function collectStructureDrawables(input: CollectionContext): {
   didQueueStructureCutoutDebugRect: boolean;
@@ -66,6 +100,7 @@ export function collectStructureDrawables(input: CollectionContext): {
     SHADOW_V6_PRIMARY_SEMANTIC_BUCKET,
     SHADOW_V6_SECONDARY_SEMANTIC_BUCKET,
     SHADOW_V6_TOP_SEMANTIC_BUCKET,
+    getStructureSpriteAtlasFrame,
     monolithicStructureGeometryCacheStore,
     getTileSpriteById,
     getFlippedOverlayImage,
@@ -112,27 +147,247 @@ export function collectStructureDrawables(input: CollectionContext): {
     };
   }
 
-  const normalizeRenderPieceToMesh = (draw: {
-    img: CanvasImageSource;
-    dx: number;
-    dy: number;
-    dw: number;
-    dh: number;
-    flipX?: boolean;
-    scale?: number;
-  }, stableId?: number) => {
+  const buildStructureOverlayQuadPayload = (
+    overlaySpriteId: string | undefined,
+    draw: {
+      img: CanvasImageSource;
+      dx: number;
+      dy: number;
+      dw: number;
+      dh: number;
+      flipX?: boolean;
+      scale?: number;
+    },
+  ) => {
+    const atlasFrame = overlaySpriteId ? (getStructureSpriteAtlasFrame?.(overlaySpriteId) ?? null) : null;
     const scale = Number.isFinite(Number(draw.scale)) ? Number(draw.scale) : 1;
-    return buildTriangleMeshFromRect({
-      image: draw.img,
-      sourceWidth: Number(draw.dw ?? 0),
-      sourceHeight: Number(draw.dh ?? 0),
+    const localSourceWidth = Number(draw.dw ?? 0);
+    const localSourceHeight = Number(draw.dh ?? 0);
+    return buildRectQuadPayload({
+      image: atlasFrame?.image ?? draw.img,
+      sourceRectWidth: localSourceWidth,
+      sourceRectHeight: localSourceHeight,
+      sourceOffsetX: atlasFrame?.sx ?? 0,
+      sourceOffsetY: atlasFrame?.sy ?? 0,
       dx: Number(draw.dx ?? 0),
       dy: Number(draw.dy ?? 0),
       dw: Number(draw.dw ?? 0) * scale,
       dh: Number(draw.dh ?? 0) * scale,
       flipX: !!draw.flipX,
-      stableId,
+      auditFamily: "structures",
     });
+  };
+
+  const boundsFromPoints = (points: readonly RenderPoint[]): RectBounds | null => {
+    if (points.length <= 0) return null;
+    let minX = points[0].x;
+    let minY = points[0].y;
+    let maxX = points[0].x;
+    let maxY = points[0].y;
+    for (let i = 1; i < points.length; i++) {
+      const point = points[i];
+      if (point.x < minX) minX = point.x;
+      if (point.x > maxX) maxX = point.x;
+      if (point.y < minY) minY = point.y;
+      if (point.y > maxY) maxY = point.y;
+    }
+    return { minX, minY, maxX, maxY };
+  };
+
+  const boundsFromRuntimeRect = (rect: RuntimeLocalRect | null | undefined): RectBounds | null => {
+    if (!rect) return null;
+    const minX = Number(rect.x ?? 0);
+    const minY = Number(rect.y ?? 0);
+    const width = Number(rect.w ?? 0);
+    const height = Number(rect.h ?? 0);
+    if (
+      !Number.isFinite(minX)
+      || !Number.isFinite(minY)
+      || !Number.isFinite(width)
+      || !Number.isFinite(height)
+    ) {
+      return null;
+    }
+    return {
+      minX,
+      minY,
+      maxX: minX + Math.max(0, width),
+      maxY: minY + Math.max(0, height),
+    };
+  };
+
+  const rectArea = (bounds: RectBounds | null): number => {
+    if (!bounds) return 0;
+    return Math.max(0, bounds.maxX - bounds.minX) * Math.max(0, bounds.maxY - bounds.minY);
+  };
+
+  const unionBounds = (a: RectBounds | null, b: RectBounds | null): RectBounds | null => {
+    if (!a) return b;
+    if (!b) return a;
+    return {
+      minX: Math.min(a.minX, b.minX),
+      minY: Math.min(a.minY, b.minY),
+      maxX: Math.max(a.maxX, b.maxX),
+      maxY: Math.max(a.maxY, b.maxY),
+    };
+  };
+
+  const processStructureTriangles = (
+    piece: any,
+    atlasFrame: { image: HTMLCanvasElement | OffscreenCanvas; sx: number; sy: number; sw: number; sh: number } | null,
+    sourceWidth: number,
+  ): ProcessedStructureTriangle[] => (
+    piece.finalVisibleTriangles.map((triangle: any) => {
+      const localSrcPoints = triangle.srcPoints.map((point: any) => ({
+        x: Number(point.x ?? 0),
+        y: Number(point.y ?? 0),
+      })) as [RenderPoint, RenderPoint, RenderPoint];
+      const flippedSrcPoints = localSrcPoints.map((point) => ({
+        x: !!piece.draw.flipX ? sourceWidth - point.x : point.x,
+        y: point.y,
+      })) as [RenderPoint, RenderPoint, RenderPoint];
+      const remappedSrcPoints = atlasFrame
+        ? flippedSrcPoints.map((point) => remapStructureTrianglePointToAtlas(point, atlasFrame))
+        : flippedSrcPoints;
+      const dstPoints = triangle.points.map((point: any) => ({
+        x: Number(point.x ?? 0),
+        y: Number(point.y ?? 0),
+      })) as [RenderPoint, RenderPoint, RenderPoint];
+      const localSourceBounds = boundsFromRuntimeRect(triangle.srcRectLocal)
+        ?? (boundsFromPoints(localSrcPoints) ?? { minX: 0, minY: 0, maxX: 0, maxY: 0 });
+      const flippedSourceBounds = !!piece.draw.flipX
+        ? {
+          minX: sourceWidth - localSourceBounds.maxX,
+          minY: localSourceBounds.minY,
+          maxX: sourceWidth - localSourceBounds.minX,
+          maxY: localSourceBounds.maxY,
+        }
+        : localSourceBounds;
+      const atlasSourceBounds = atlasFrame
+        ? {
+          minX: atlasFrame.sx + flippedSourceBounds.minX,
+          minY: atlasFrame.sy + flippedSourceBounds.minY,
+          maxX: atlasFrame.sx + flippedSourceBounds.maxX,
+          maxY: atlasFrame.sy + flippedSourceBounds.maxY,
+        }
+        : flippedSourceBounds;
+      const destinationBounds = boundsFromRuntimeRect(triangle.dstRectLocal)
+        ?? (boundsFromPoints(dstPoints) ?? { minX: 0, minY: 0, maxX: 0, maxY: 0 });
+      return {
+        stableId: triangle.stableId,
+        cameraTx: Number(triangle.cameraTx ?? 0),
+        cameraTy: Number(triangle.cameraTy ?? 0),
+        localSrcPoints,
+        srcPoints: [remappedSrcPoints[0], remappedSrcPoints[1], remappedSrcPoints[2]],
+        dstPoints: [dstPoints[0], dstPoints[1], dstPoints[2]],
+        sourceBounds: atlasSourceBounds,
+        destinationBounds,
+        heightFromParentLevel: Math.max(0, Number(triangle.heightFromParentLevel ?? 0)),
+        alpha: resolveTriangleCutoutAlpha(
+          [dstPoints[0], dstPoints[1], dstPoints[2]],
+          {
+            cutoutEnabled: piece.cutoutEnabled,
+            cutoutAlpha: piece.cutoutAlpha,
+            buildingDirectionalEligible: piece.buildingDirectionalEligible,
+            groupParentAfterPlayer: piece.groupParentAfterPlayer,
+            cutoutScreenRect: structureCutoutScreenRect,
+          },
+        ),
+      };
+    })
+  );
+
+  const tryBuildMonolithicCellQuadPayloads = (
+    piece: any,
+    atlasFrame: { image: HTMLCanvasElement | OffscreenCanvas; sx: number; sy: number; sw: number; sh: number } | null,
+    processedTriangles: readonly ProcessedStructureTriangle[],
+  ) => {
+    const image = atlasFrame?.image ?? piece.draw.img;
+    if (!image) return { accepted: [], rejected: 0 };
+    const byCell = new Map<string, {
+      cameraTx: number;
+      cameraTy: number;
+      sourceBounds: RectBounds | null;
+      destinationBounds: RectBounds | null;
+      triangleCount: number;
+      alpha: number;
+      maxHeightFromParentLevel: number;
+    }>();
+
+    for (let i = 0; i < processedTriangles.length; i++) {
+      const triangle = processedTriangles[i];
+      const cellKey = `${triangle.cameraTx},${triangle.cameraTy}`;
+      const existing = byCell.get(cellKey);
+      if (existing) {
+        existing.sourceBounds = unionBounds(existing.sourceBounds, triangle.sourceBounds);
+        existing.destinationBounds = unionBounds(existing.destinationBounds, triangle.destinationBounds);
+        existing.triangleCount += 1;
+        existing.alpha = Math.min(existing.alpha, triangle.alpha);
+        existing.maxHeightFromParentLevel = Math.max(existing.maxHeightFromParentLevel, triangle.heightFromParentLevel);
+        continue;
+      }
+      byCell.set(cellKey, {
+        cameraTx: triangle.cameraTx,
+        cameraTy: triangle.cameraTy,
+        sourceBounds: triangle.sourceBounds,
+        destinationBounds: triangle.destinationBounds,
+        triangleCount: 1,
+        alpha: triangle.alpha,
+        maxHeightFromParentLevel: triangle.heightFromParentLevel,
+      });
+    }
+
+    const accepted: Array<{ payload: ReturnType<typeof buildQuadRenderPieceFromPoints>; triangleCount: number }> = [];
+    let rejected = 0;
+    for (const cell of byCell.values()) {
+      const sourceBounds = cell.sourceBounds;
+      const destinationBounds = cell.destinationBounds;
+      if (
+        !sourceBounds
+        || !destinationBounds
+        || !Number.isFinite(sourceBounds.minX)
+        || !Number.isFinite(sourceBounds.minY)
+        || !Number.isFinite(sourceBounds.maxX)
+        || !Number.isFinite(sourceBounds.maxY)
+        || !Number.isFinite(destinationBounds.minX)
+        || !Number.isFinite(destinationBounds.minY)
+        || !Number.isFinite(destinationBounds.maxX)
+        || !Number.isFinite(destinationBounds.maxY)
+        || !(sourceBounds.maxX > sourceBounds.minX)
+        || !(sourceBounds.maxY > sourceBounds.minY)
+        || !(destinationBounds.maxX > destinationBounds.minX)
+        || !(destinationBounds.maxY > destinationBounds.minY)
+      ) {
+        rejected += 1;
+        continue;
+      }
+
+      const zVisual = Number(piece.overlay.z ?? 0)
+        + Number(piece.overlay.zVisualOffsetUnits ?? 0)
+        + cell.maxHeightFromParentLevel;
+      const destinationQuad = buildRectDestinationQuad(
+        destinationBounds.minX,
+        destinationBounds.minY,
+        destinationBounds.maxX - destinationBounds.minX,
+        destinationBounds.maxY - destinationBounds.minY,
+      );
+      accepted.push({
+        payload: buildQuadRenderPieceFromPoints({
+          auditFamily: "structures",
+          image,
+          sx: sourceBounds.minX,
+          sy: sourceBounds.minY,
+          sw: sourceBounds.maxX - sourceBounds.minX,
+          sh: sourceBounds.maxY - sourceBounds.minY,
+          destinationQuad,
+          kind: "rect",
+          alpha: cell.alpha,
+        }),
+        triangleCount: cell.triangleCount,
+      });
+    }
+
+    return { accepted, rejected };
   };
 
   // Collect non-wall FACE pieces into slices
@@ -165,17 +420,26 @@ export function collectStructureDrawables(input: CollectionContext): {
           kindOrder: faceKindOrder,
           stableId: faceStableId + di * 0.001,
         };
-        enqueueSliceCommand(frameBuilder, renderKey, face.kind === "WALL"
-          ? {
-              semanticFamily: "worldGeometry",
-              finalForm: "triangles",
-              payload: normalizeRenderPieceToMesh(d, renderKey.stableId),
-            }
-          : {
-              semanticFamily: "worldGeometry",
-              finalForm: "triangles",
-              payload: normalizeRenderPieceToMesh(d, renderKey.stableId),
-            });
+        countRenderStructureTotalSubmission();
+        countRenderStructureRectMeshSubmission();
+        countRenderStructureRectMeshMigratedToQuad();
+        countRenderStructureSingleQuadSubmission();
+        countRenderStructureEstimatedTrianglesAvoided(2);
+        enqueueSliceCommand(frameBuilder, renderKey, {
+          semanticFamily: "worldSprite",
+          finalForm: "quad",
+          payload: buildRectQuadPayload({
+            image: d.img,
+            dx: Number(d.dx ?? 0),
+            dy: Number(d.dy ?? 0),
+            dw: Number(d.dw ?? 0) * (Number.isFinite(Number(d.scale)) ? Number(d.scale) : 1),
+            dh: Number(d.dh ?? 0) * (Number.isFinite(Number(d.scale)) ? Number(d.scale) : 1),
+            sourceRectWidth: Number(d.dw ?? 0),
+            sourceRectHeight: Number(d.dh ?? 0),
+            flipX: !!d.flipX,
+            auditFamily: "structures",
+          }),
+        });
       }
     }
   }
@@ -211,10 +475,25 @@ export function collectStructureDrawables(input: CollectionContext): {
         kindOrder: wallKindOrder,
         stableId: occStableId,
       };
+      countRenderStructureTotalSubmission();
+      countRenderStructureRectMeshSubmission();
+      countRenderStructureRectMeshMigratedToQuad();
+      countRenderStructureSingleQuadSubmission();
+      countRenderStructureEstimatedTrianglesAvoided(2);
       enqueueSliceCommand(frameBuilder, renderKey, {
-        semanticFamily: "worldGeometry",
-        finalForm: "triangles",
-        payload: normalizeRenderPieceToMesh(draw, renderKey.stableId),
+        semanticFamily: "worldSprite",
+        finalForm: "quad",
+        payload: buildRectQuadPayload({
+          image: draw.img,
+          dx: Number(draw.dx ?? 0),
+          dy: Number(draw.dy ?? 0),
+          dw: Number(draw.dw ?? 0) * (Number.isFinite(Number(draw.scale)) ? Number(draw.scale) : 1),
+          dh: Number(draw.dh ?? 0) * (Number.isFinite(Number(draw.scale)) ? Number(draw.scale) : 1),
+          sourceRectWidth: Number(draw.dw ?? 0),
+          sourceRectHeight: Number(draw.dh ?? 0),
+          flipX: !!draw.flipX,
+          auditFamily: "structures",
+        }),
       });
     }
   }
@@ -297,58 +576,51 @@ export function collectStructureDrawables(input: CollectionContext): {
           continue;
         }
 
+        countRenderStructureTotalSubmission();
+        countRenderStructureRectMeshSubmission();
+        countRenderStructureRectMeshMigratedToQuad();
+        countRenderStructureSingleQuadSubmission();
+        countRenderStructureEstimatedTrianglesAvoided(2);
         enqueueSliceCommand(frameBuilder, structureDrawable.key, {
-          semanticFamily: "worldGeometry",
-          finalForm: "triangles",
-          payload: normalizeRenderPieceToMesh(draw, structureDrawable.key.stableId),
+          semanticFamily: "worldSprite",
+          finalForm: "quad",
+          payload: buildStructureOverlayQuadPayload(overlay.spriteId, draw),
         });
         continue;
       }
 
       const piece = structureDrawable.payload.piece;
+      const atlasFrame = piece.overlay.spriteId ? (getStructureSpriteAtlasFrame?.(piece.overlay.spriteId) ?? null) : null;
       const sourceWidth = Number(piece.draw.dw ?? 0);
-      const sourceHeight = Number(piece.draw.dh ?? 0);
       const compareDistanceOnlyStableIds = new Set<number>(
         piece.compareDistanceOnlyTriangles.map((triangle: any) => triangle.stableId),
       );
-      const normalizedTriangles = piece.finalVisibleTriangles.map((triangle: any) => {
-        const srcPoints = triangle.srcPoints.map((point: any) => ({
-          x: !!piece.draw.flipX ? sourceWidth - Number(point.x ?? 0) : Number(point.x ?? 0),
-          y: Number(point.y ?? 0),
-        }));
-        const dstPoints = triangle.points.map((point: any) => ({
-          x: Number(point.x ?? 0),
-          y: Number(point.y ?? 0),
-        }));
-        return {
-          stableId: triangle.stableId,
-          srcPoints: [srcPoints[0], srcPoints[1], srcPoints[2]],
-          dstPoints: [dstPoints[0], dstPoints[1], dstPoints[2]],
-          alpha: resolveTriangleCutoutAlpha(
-            [dstPoints[0], dstPoints[1], dstPoints[2]],
-            {
-              cutoutEnabled: piece.cutoutEnabled,
-              cutoutAlpha: piece.cutoutAlpha,
-              buildingDirectionalEligible: piece.buildingDirectionalEligible,
-              groupParentAfterPlayer: piece.groupParentAfterPlayer,
-              cutoutScreenRect: structureCutoutScreenRect,
-            },
-          ),
-        };
-      });
+      const processedTriangles = processStructureTriangles(piece, atlasFrame, sourceWidth);
+      countRenderStructureMonolithicGroupSubmission();
+      countRenderStructureMonolithicTriangles(processedTriangles.length);
 
-      enqueueSliceCommand(frameBuilder, structureDrawable.key, {
-        semanticFamily: "worldGeometry",
-        finalForm: "triangles",
-        payload: buildTriangleMeshPayload({
-          image: piece.draw.img,
-          sourceWidth,
-          sourceHeight,
-          triangles: normalizedTriangles,
-        }),
-      });
+      const extractedCells = tryBuildMonolithicCellQuadPayloads(piece, atlasFrame, processedTriangles);
+      for (let ci = 0; ci < extractedCells.accepted.length; ci++) {
+        const cell = extractedCells.accepted[ci];
+        countRenderStructureTotalSubmission();
+        countRenderStructureSingleQuadSubmission();
+        countRenderStructureQuadApproxAccepted();
+        countRenderStructureEstimatedTrianglesAvoided(cell.triangleCount);
+        enqueueSliceCommand(frameBuilder, structureDrawable.key, {
+          semanticFamily: "worldSprite",
+          finalForm: "quad",
+          payload: cell.payload,
+        });
+      }
+      if (extractedCells.rejected > 0) {
+        countRenderStructureQuadApproxRejected(extractedCells.rejected);
+      }
 
       if (compareDistanceOnlyStableIds.size > 0) {
+        const normalizedTriangles = processedTriangles.map((triangle) => ({
+          stableId: triangle.stableId,
+          dstPoints: triangle.dstPoints,
+        }));
         enqueueSliceCommand(frameBuilder, {
           ...structureDrawable.key,
           stableId: Number(structureDrawable.key.stableId) + 0.0005,

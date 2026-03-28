@@ -9,10 +9,8 @@ import { getStageDDeferredFamilyMatrix } from "../../../../game/systems/presenta
 import type { RenderCommand } from "../../../../game/systems/presentation/contracts/renderCommands";
 import { ZONE_KIND } from "../../../../game/factories/zoneFactory";
 import {
-  buildDiamondSourceQuad,
-  buildRectDestinationQuad,
-  buildRectSourceQuad,
-  buildTrianglePairFromQuad,
+  buildProjectedSurfacePayload,
+  buildRectQuadPayload,
 } from "../../../../game/systems/presentation/renderCommandGeometry";
 import { KindOrder, type RenderKey } from "../../../../game/systems/presentation/worldRenderOrdering";
 
@@ -37,23 +35,16 @@ function command(
   } as RenderCommand;
 }
 
-function rectTriangles(width: number, height: number, dx: number, dy: number) {
-  return [...buildTrianglePairFromQuad(
-    buildRectSourceQuad(width, height),
-    buildRectDestinationQuad(dx, dy, width, height),
-  )];
-}
-
-function projectedSurfaceTriangles(width: number, height: number) {
-  return buildTrianglePairFromQuad(
-    buildDiamondSourceQuad(width, height),
-    {
+function projectedSurfacePayload(image: any, width: number, height: number) {
+  return buildProjectedSurfacePayload({
+    image,
+    destinationQuad: {
       nw: { x: 0, y: 0 },
       ne: { x: width, y: 0 },
       se: { x: width * 0.5, y: height },
       sw: { x: -width * 0.5, y: height },
     },
-  );
+  });
 }
 
 describe("buildBackendSegments", () => {
@@ -64,9 +55,9 @@ describe("buildBackendSegments", () => {
     expect(matrix["worldPrimitive:primitive"]?.status).toBe("WEBGL_READY");
     expect(matrix["screenOverlay:quad"]?.status).toBe("WEBGL_READY");
     expect(matrix["screenOverlay:primitive"]?.status).toBe("WEBGL_READY");
-    expect(matrix["worldGeometry:triangles"]?.status).toBe("WEBGL_READY");
+    expect(matrix["groundSurface:quad"]?.status).toBe("WEBGL_READY");
     expect(
-      deferred.find((entry) => entry.family === "worldGeometry:triangles"),
+      deferred.find((entry) => entry.family === "groundSurface:quad"),
     ).toMatchObject({
       disposition: "PORT_STAGE_D_NOW",
     });
@@ -129,31 +120,28 @@ describe("buildBackendSegments", () => {
         },
       }),
       command(9, {
-        semanticFamily: "worldGeometry",
-        finalForm: "triangles",
-        payload: {
+        semanticFamily: "worldSprite",
+        finalForm: "quad",
+        payload: buildRectQuadPayload({
           image: img,
-          sourceWidth: 3,
-          sourceHeight: 4,
-          triangles: rectTriangles(3, 4, 1, 2),
-        },
+          dx: 1,
+          dy: 2,
+          dw: 3,
+          dh: 4,
+          auditFamily: "structures",
+        }),
       }),
       command(10, {
-        semanticFamily: "worldGeometry",
-        finalForm: "triangles",
-        payload: {
+        semanticFamily: "worldSprite",
+        finalForm: "quad",
+        payload: buildRectQuadPayload({
           image: img,
-          sourceWidth: 16,
-          sourceHeight: 16,
-          triangles: [
-            {
-              stableId: 100,
-              srcPoints: [{ x: 0, y: 0 }, { x: 16, y: 0 }, { x: 0, y: 16 }],
-              dstPoints: [{ x: 1, y: 1 }, { x: 17, y: 1 }, { x: 1, y: 17 }],
-              alpha: 1,
-            },
-          ],
-        },
+          dx: 1,
+          dy: 1,
+          dw: 16,
+          dh: 16,
+          auditFamily: "structures",
+        }),
       }),
       command(11, {
         semanticFamily: "debug",
@@ -195,7 +183,7 @@ describe("buildBackendSegments", () => {
     expect(stats.webglByAxes["screenOverlay:quad"]).toBe(1);
     expect(stats.webglByAxes["screenOverlay:primitive"]).toBe(1);
     expect(stats.webglByAxes["worldPrimitive:primitive"]).toBe(2);
-    expect(stats.webglByAxes["worldGeometry:triangles"]).toBe(2);
+    expect(stats.webglByAxes["worldSprite:quad"]).toBe(4);
     expect(stats.canvasFallbackByAxes["debug:primitive"]).toBe(1);
     expect(stats.canvasFallbackByAxes["worldPrimitive:primitive"]).toBe(1);
     expect(stats.partiallyHandledAxes).toContain("worldPrimitive:primitive");
@@ -256,47 +244,37 @@ describe("buildBackendSegments", () => {
       command(20, {
         pass: "GROUND",
         semanticFamily: "groundSurface",
-        finalForm: "projectedSurface",
-        payload: { image: img, sourceWidth: 32, sourceHeight: 16, triangles: projectedSurfaceTriangles(32, 16) },
+        finalForm: "quad",
+        payload: projectedSurfacePayload(img, 32, 16),
       }),
       command(21, {
         pass: "GROUND",
         semanticFamily: "groundSurface",
-        finalForm: "projectedSurface",
-        payload: { image: img, sourceWidth: 32, sourceHeight: 16, triangles: projectedSurfaceTriangles(32, 16) },
+        finalForm: "quad",
+        payload: projectedSurfacePayload(img, 32, 16),
       }),
       command(22, {
         pass: "GROUND",
         semanticFamily: "groundDecal",
-        finalForm: "projectedSurface",
-        payload: { image: img, sourceWidth: 32, sourceHeight: 16, triangles: projectedSurfaceTriangles(32, 16) },
+        finalForm: "quad",
+        payload: projectedSurfacePayload(img, 32, 16),
       }),
       command(23, {
         pass: "GROUND",
         semanticFamily: "groundSurface",
-        finalForm: "projectedSurface",
-        payload: {
-          image: img,
-          sourceWidth: 32,
-          sourceHeight: 16,
-          triangles: projectedSurfaceTriangles(32, 16),
-        },
+        finalForm: "quad",
+        payload: projectedSurfacePayload(img, 32, 16),
       }),
       command(24, {
         pass: "GROUND",
         semanticFamily: "groundSurface",
-        finalForm: "projectedSurface",
-        payload: {
-          image: img,
-          sourceWidth: 32,
-          sourceHeight: 16,
-          triangles: projectedSurfaceTriangles(32, 16),
-        },
+        finalForm: "quad",
+        payload: projectedSurfacePayload(img, 32, 16),
       }),
       command(25, {
         pass: "GROUND",
         semanticFamily: "groundDecal",
-        finalForm: "projectedSurface",
+        finalForm: "quad",
         payload: {} as any,
       }),
     ], stats);
@@ -305,7 +283,7 @@ describe("buildBackendSegments", () => {
     expect(stats.webglGroundCommandCount).toBe(5);
     expect(stats.unsupportedGroundCommandCount).toBe(1);
     expect(stats.unsupportedCommandKeys).toEqual([
-      "groundDecal:projectedSurface",
+      "groundDecal:quad",
     ]);
   });
 });

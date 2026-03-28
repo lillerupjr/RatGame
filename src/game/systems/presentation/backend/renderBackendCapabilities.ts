@@ -23,12 +23,21 @@ export type RenderBackendStats = {
   partiallyHandledAxes: string[];
 };
 
-function hasTriangleGeometry(data: Record<string, unknown>): boolean {
+function hasQuadGeometry(data: Record<string, unknown>): boolean {
+  const hasExplicitQuad = Number.isFinite(Number(data.x0))
+    && Number.isFinite(Number(data.y0))
+    && Number.isFinite(Number(data.x1))
+    && Number.isFinite(Number(data.y1))
+    && Number.isFinite(Number(data.x2))
+    && Number.isFinite(Number(data.y2))
+    && Number.isFinite(Number(data.x3))
+    && Number.isFinite(Number(data.y3));
+  if (hasExplicitQuad) return !!data.image;
   return !!data.image
-    && Number(data.sourceWidth) > 0
-    && Number(data.sourceHeight) > 0
-    && Array.isArray(data.triangles)
-    && data.triangles.length > 0;
+    && Number(data.sw) > 0
+    && Number(data.sh) > 0
+    && Number(data.dw) > 0
+    && Number(data.dh) > 0;
 }
 
 function incrementCount(record: BackendFamilyCounts, key: string): void {
@@ -65,6 +74,9 @@ export function classifyCommandBackend(command: RenderCommand): RenderCommandBac
 
   switch (command.semanticFamily) {
     case "worldSprite": {
+      if (hasQuadGeometry(payload)) {
+        return "webgl";
+      }
       const draw = (payload.draw ?? null) as Record<string, unknown> | null;
       if (
         payload.image
@@ -87,11 +99,9 @@ export function classifyCommandBackend(command: RenderCommand): RenderCommandBac
       return "unsupported";
     }
     case "groundSurface":
-      return hasTriangleGeometry(payload) ? "webgl" : "unsupported";
+      return hasQuadGeometry(payload) ? "webgl" : "unsupported";
     case "groundDecal":
-      return hasTriangleGeometry(payload) ? "webgl" : "unsupported";
-    case "worldGeometry":
-      return hasTriangleGeometry(payload) ? "webgl" : "unsupported";
+      return hasQuadGeometry(payload) ? "webgl" : "unsupported";
     case "worldPrimitive":
       if (payload.lightPiece) return "webgl";
       if (Number.isFinite(Number(payload.zoneKind))) {

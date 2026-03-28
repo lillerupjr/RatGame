@@ -22,6 +22,16 @@ type FrameCounters = {
   groundStaticDecalExamined: number;
   groundStaticDecalAuthorityFiltered: number;
   groundStaticDecalFallbackEmitted: number;
+  structureTotalSubmissions: number;
+  structureRectMeshSubmissions: number;
+  structureRectMeshMigratedToQuad: number;
+  structureMonolithicGroupSubmissions: number;
+  structureMonolithicTriangles: number;
+  structureSingleQuadSubmissions: number;
+  structureQuadApproxAccepted: number;
+  structureQuadApproxRejected: number;
+  structureTrianglesSubmitted: number;
+  structureEstimatedTrianglesAvoided: number;
   zBandCount: number;
   lightBandCount: number;
   maskBuilds: number;
@@ -82,6 +92,16 @@ type Snapshot = {
   groundStaticDecalExaminedPerFrame: number;
   groundStaticDecalAuthorityFilteredPerFrame: number;
   groundStaticDecalFallbackEmittedPerFrame: number;
+  structureTotalSubmissionsPerFrame: number;
+  structureRectMeshSubmissionsPerFrame: number;
+  structureRectMeshMigratedToQuadPerFrame: number;
+  structureMonolithicGroupSubmissionsPerFrame: number;
+  structureMonolithicTrianglesPerFrame: number;
+  structureSingleQuadSubmissionsPerFrame: number;
+  structureQuadApproxAcceptedPerFrame: number;
+  structureQuadApproxRejectedPerFrame: number;
+  structureTrianglesSubmittedPerFrame: number;
+  structureEstimatedTrianglesAvoidedPerFrame: number;
   zBandCountPerFrame: number;
   lightBandCountPerFrame: number;
   maskBuildsPerFrame: number;
@@ -183,6 +203,16 @@ const ZERO_FRAME: FrameCounters = {
   groundStaticDecalExamined: 0,
   groundStaticDecalAuthorityFiltered: 0,
   groundStaticDecalFallbackEmitted: 0,
+  structureTotalSubmissions: 0,
+  structureRectMeshSubmissions: 0,
+  structureRectMeshMigratedToQuad: 0,
+  structureMonolithicGroupSubmissions: 0,
+  structureMonolithicTriangles: 0,
+  structureSingleQuadSubmissions: 0,
+  structureQuadApproxAccepted: 0,
+  structureQuadApproxRejected: 0,
+  structureTrianglesSubmitted: 0,
+  structureEstimatedTrianglesAvoided: 0,
   zBandCount: 0,
   lightBandCount: 0,
   maskBuilds: 0,
@@ -268,6 +298,16 @@ let snapshot: Snapshot = {
   groundStaticDecalExaminedPerFrame: 0,
   groundStaticDecalAuthorityFilteredPerFrame: 0,
   groundStaticDecalFallbackEmittedPerFrame: 0,
+  structureTotalSubmissionsPerFrame: 0,
+  structureRectMeshSubmissionsPerFrame: 0,
+  structureRectMeshMigratedToQuadPerFrame: 0,
+  structureMonolithicGroupSubmissionsPerFrame: 0,
+  structureMonolithicTrianglesPerFrame: 0,
+  structureSingleQuadSubmissionsPerFrame: 0,
+  structureQuadApproxAcceptedPerFrame: 0,
+  structureQuadApproxRejectedPerFrame: 0,
+  structureTrianglesSubmittedPerFrame: 0,
+  structureEstimatedTrianglesAvoidedPerFrame: 0,
   zBandCountPerFrame: 0,
   lightBandCountPerFrame: 0,
   maskBuildsPerFrame: 0,
@@ -446,6 +486,16 @@ function foldCurrentFrame(nowSec: number): void {
     groundStaticDecalExaminedPerFrame: frame.groundStaticDecalExamined,
     groundStaticDecalAuthorityFilteredPerFrame: frame.groundStaticDecalAuthorityFiltered,
     groundStaticDecalFallbackEmittedPerFrame: frame.groundStaticDecalFallbackEmitted,
+    structureTotalSubmissionsPerFrame: frame.structureTotalSubmissions,
+    structureRectMeshSubmissionsPerFrame: frame.structureRectMeshSubmissions,
+    structureRectMeshMigratedToQuadPerFrame: frame.structureRectMeshMigratedToQuad,
+    structureMonolithicGroupSubmissionsPerFrame: frame.structureMonolithicGroupSubmissions,
+    structureMonolithicTrianglesPerFrame: frame.structureMonolithicTriangles,
+    structureSingleQuadSubmissionsPerFrame: frame.structureSingleQuadSubmissions,
+    structureQuadApproxAcceptedPerFrame: frame.structureQuadApproxAccepted,
+    structureQuadApproxRejectedPerFrame: frame.structureQuadApproxRejected,
+    structureTrianglesSubmittedPerFrame: frame.structureTrianglesSubmitted,
+    structureEstimatedTrianglesAvoidedPerFrame: frame.structureEstimatedTrianglesAvoided,
   };
 
   accum.drawImageCalls += frame.drawImageCalls;
@@ -477,6 +527,16 @@ function foldCurrentFrame(nowSec: number): void {
   accum.groundStaticDecalExamined += frame.groundStaticDecalExamined;
   accum.groundStaticDecalAuthorityFiltered += frame.groundStaticDecalAuthorityFiltered;
   accum.groundStaticDecalFallbackEmitted += frame.groundStaticDecalFallbackEmitted;
+  accum.structureTotalSubmissions += frame.structureTotalSubmissions;
+  accum.structureRectMeshSubmissions += frame.structureRectMeshSubmissions;
+  accum.structureRectMeshMigratedToQuad += frame.structureRectMeshMigratedToQuad;
+  accum.structureMonolithicGroupSubmissions += frame.structureMonolithicGroupSubmissions;
+  accum.structureMonolithicTriangles += frame.structureMonolithicTriangles;
+  accum.structureSingleQuadSubmissions += frame.structureSingleQuadSubmissions;
+  accum.structureQuadApproxAccepted += frame.structureQuadApproxAccepted;
+  accum.structureQuadApproxRejected += frame.structureQuadApproxRejected;
+  accum.structureTrianglesSubmitted += frame.structureTrianglesSubmitted;
+  accum.structureEstimatedTrianglesAvoided += frame.structureEstimatedTrianglesAvoided;
   accum.zBandCount += frame.zBandCount;
   accum.lightBandCount += frame.lightBandCount;
   accum.maskBuilds += frame.maskBuilds;
@@ -560,6 +620,16 @@ function foldCurrentFrame(nowSec: number): void {
       groundStaticDecalExaminedPerFrame: accum.groundStaticDecalExamined / denom,
       groundStaticDecalAuthorityFilteredPerFrame: accum.groundStaticDecalAuthorityFiltered / denom,
       groundStaticDecalFallbackEmittedPerFrame: accum.groundStaticDecalFallbackEmitted / denom,
+      structureTotalSubmissionsPerFrame: accum.structureTotalSubmissions / denom,
+      structureRectMeshSubmissionsPerFrame: accum.structureRectMeshSubmissions / denom,
+      structureRectMeshMigratedToQuadPerFrame: accum.structureRectMeshMigratedToQuad / denom,
+      structureMonolithicGroupSubmissionsPerFrame: accum.structureMonolithicGroupSubmissions / denom,
+      structureMonolithicTrianglesPerFrame: accum.structureMonolithicTriangles / denom,
+      structureSingleQuadSubmissionsPerFrame: accum.structureSingleQuadSubmissions / denom,
+      structureQuadApproxAcceptedPerFrame: accum.structureQuadApproxAccepted / denom,
+      structureQuadApproxRejectedPerFrame: accum.structureQuadApproxRejected / denom,
+      structureTrianglesSubmittedPerFrame: accum.structureTrianglesSubmitted / denom,
+      structureEstimatedTrianglesAvoidedPerFrame: accum.structureEstimatedTrianglesAvoided / denom,
       zBandCountPerFrame: accum.zBandCount / denom,
       lightBandCountPerFrame: accum.lightBandCount / denom,
       maskBuildsPerFrame: accum.maskBuilds / denom,
@@ -676,6 +746,56 @@ export function countRenderGroundStaticDecalAuthorityFiltered(n: number = 1): vo
 export function countRenderGroundStaticDecalFallbackEmitted(n: number = 1): void {
   if (!enabled) return;
   frame.groundStaticDecalFallbackEmitted += n;
+}
+
+export function countRenderStructureTotalSubmission(n: number = 1): void {
+  if (!enabled) return;
+  frame.structureTotalSubmissions += n;
+}
+
+export function countRenderStructureRectMeshSubmission(n: number = 1): void {
+  if (!enabled) return;
+  frame.structureRectMeshSubmissions += n;
+}
+
+export function countRenderStructureRectMeshMigratedToQuad(n: number = 1): void {
+  if (!enabled) return;
+  frame.structureRectMeshMigratedToQuad += n;
+}
+
+export function countRenderStructureMonolithicGroupSubmission(n: number = 1): void {
+  if (!enabled) return;
+  frame.structureMonolithicGroupSubmissions += n;
+}
+
+export function countRenderStructureMonolithicTriangles(n: number = 1): void {
+  if (!enabled) return;
+  frame.structureMonolithicTriangles += n;
+}
+
+export function countRenderStructureSingleQuadSubmission(n: number = 1): void {
+  if (!enabled) return;
+  frame.structureSingleQuadSubmissions += n;
+}
+
+export function countRenderStructureQuadApproxAccepted(n: number = 1): void {
+  if (!enabled) return;
+  frame.structureQuadApproxAccepted += n;
+}
+
+export function countRenderStructureQuadApproxRejected(n: number = 1): void {
+  if (!enabled) return;
+  frame.structureQuadApproxRejected += n;
+}
+
+export function countRenderStructureTrianglesSubmitted(n: number = 1): void {
+  if (!enabled) return;
+  frame.structureTrianglesSubmitted += n;
+}
+
+export function countRenderStructureEstimatedTrianglesAvoided(n: number = 1): void {
+  if (!enabled) return;
+  frame.structureEstimatedTrianglesAvoided += n;
 }
 
 export function setRenderZBandCount(count: number): void {
@@ -845,6 +965,16 @@ export function getRenderPerfSnapshot(): Snapshot {
       groundStaticDecalExaminedPerFrame: 0,
       groundStaticDecalAuthorityFilteredPerFrame: 0,
       groundStaticDecalFallbackEmittedPerFrame: 0,
+      structureTotalSubmissionsPerFrame: 0,
+      structureRectMeshSubmissionsPerFrame: 0,
+      structureRectMeshMigratedToQuadPerFrame: 0,
+      structureMonolithicGroupSubmissionsPerFrame: 0,
+      structureMonolithicTrianglesPerFrame: 0,
+      structureSingleQuadSubmissionsPerFrame: 0,
+      structureQuadApproxAcceptedPerFrame: 0,
+      structureQuadApproxRejectedPerFrame: 0,
+      structureTrianglesSubmittedPerFrame: 0,
+      structureEstimatedTrianglesAvoidedPerFrame: 0,
       zBandCountPerFrame: 0,
       lightBandCountPerFrame: 0,
       maskBuildsPerFrame: 0,

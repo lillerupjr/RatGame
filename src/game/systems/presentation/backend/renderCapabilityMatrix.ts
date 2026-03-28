@@ -19,20 +19,15 @@ const CAPABILITY_MATRIX: Record<string, RenderCapabilityEntry> = {
     status: "WEBGL_READY",
     notes: "Canonical sprite quads are WebGL-ready; descriptor-based sprite fallbacks still route by payload shape.",
   },
-  "groundSurface:projectedSurface": {
-    key: "groundSurface:projectedSurface",
+  "groundSurface:quad": {
+    key: "groundSurface:quad",
     status: "WEBGL_READY",
-    notes: "Ground surfaces now emit a single normalized projected-surface payload and route directly to triangle rendering.",
+    notes: "Ground surfaces now emit quad-native payloads with explicit four-corner geometry.",
   },
-  "groundDecal:projectedSurface": {
-    key: "groundDecal:projectedSurface",
+  "groundDecal:quad": {
+    key: "groundDecal:quad",
     status: "WEBGL_READY",
-    notes: "Ground decals now emit normalized projected-surface payloads with explicit tile-diamond geometry.",
-  },
-  "worldGeometry:triangles": {
-    key: "worldGeometry:triangles",
-    status: "WEBGL_READY",
-    notes: "World geometry now emits explicit triangle meshes only; compare-distance overlays are split into debug commands.",
+    notes: "Ground decals now emit quad-native payloads with explicit four-corner geometry.",
   },
   "worldPrimitive:primitive": {
     key: "worldPrimitive:primitive",

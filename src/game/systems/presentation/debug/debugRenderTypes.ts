@@ -2,6 +2,8 @@ import type { AmbientSunLightingState } from "../../../../shadowSunV1";
 import type { DebugOverlayContext } from "../../../../engine/render/debug/renderDebug";
 import type { ViewRect } from "../../../map/compile/kenneyMap";
 import type {
+  DebugStructureRenderMode,
+  PerfOverlayMode,
   ShadowCasterMode,
   ShadowV6SemanticBucket,
   StructureTriangleAdmissionMode,
@@ -32,6 +34,8 @@ export type RenderDebugFlags = {
   showStructureTriangleFootprint: boolean;
   showStructureAnchors: boolean;
   showStructureTriangleOwnershipSort: boolean;
+  debugStructureRenderMode: DebugStructureRenderMode;
+  perfOverlayMode: PerfOverlayMode;
   showEnemyAimOverlay: boolean;
   showLootGoblinOverlay: boolean;
   showMapOverlays: boolean;
@@ -149,6 +153,8 @@ export type RenderDebugScreenPassInput = {
   cssH: number;
   dpr: number;
   flags: RenderDebugFlags;
+  fps: number;
+  frameTimeMs: number;
   renderPerfCountersEnabled: boolean;
   structureShadowRouting: StructureShadowRenderMode;
   structureV6VerticalShadowDebugData: StructureV6VerticalShadowMaskDebugData | null;

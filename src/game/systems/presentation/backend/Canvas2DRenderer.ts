@@ -1,8 +1,9 @@
 import { configurePixelPerfect, snapPx } from "../../../../engine/render/pixelPerfect";
 import { drawVoidBackgroundOnce } from "../frame/backgroundPass";
 import { drawProjectedLightAdditive } from "../renderLighting";
-import { drawTexturedTriangle } from "../renderPrimitives/drawTexturedTriangle";
+import { drawTexturedQuad } from "../renderPrimitives/drawTexturedQuad";
 import { renderEntityShadow } from "../renderShadow";
+import { buildDiamondSourceQuad } from "../renderCommandGeometry";
 import type { RenderExecutionPlan } from "./renderExecutionPlan";
 import type { RenderFrameContext } from "../contracts/renderFrameContext";
 import type { RenderCommand } from "../contracts/renderCommands";
@@ -153,15 +154,13 @@ export class Canvas2DRenderer {
     const viewRect = this.deps.viewRect;
     if (!cache || !viewRect) return;
     const entries = cache.getVisibleEntries(zBand, viewRect);
-    if (entries.length === 0) return;
-    const ctx = this.frameContext.ctx;
+    const commands = cache.getVisibleCommands?.(zBand, viewRect) ?? [];
+    if (entries.length === 0 || commands.length === 0) return;
     this.deps.countRenderCanvasGroundChunksVisible?.(entries.length);
-    this.deps.setRenderPerfDrawTag?.("floors");
-    for (let i = 0; i < entries.length; i++) {
-      ctx.drawImage(entries[i].canvas, entries[i].drawX, entries[i].drawY);
+    this.deps.countRenderCanvasGroundChunkDraw?.(commands.length);
+    for (let i = 0; i < commands.length; i++) {
+      this.executeCommand(commands[i]);
     }
-    this.deps.setRenderPerfDrawTag?.(null);
-    this.deps.countRenderCanvasGroundChunkDraw?.(entries.length);
   }
 
   private shouldSkipGroundCommand(command: RenderCommand): boolean {
@@ -173,14 +172,14 @@ export class Canvas2DRenderer {
     const payload = command.payload as any;
     if (command.semanticFamily === "groundSurface") {
       this.withPerfDrawTag("floors", () => {
-        this.drawTriangleMesh(payload);
+        this.drawQuadRenderPiece(payload);
       });
       return;
     }
 
     if (command.semanticFamily === "groundDecal") {
       this.withPerfDrawTag("decals", () => {
-        this.drawTriangleMesh(payload);
+        this.drawQuadRenderPiece(payload);
       });
       return;
     }
@@ -281,9 +280,16 @@ export class Canvas2DRenderer {
     }
 
     if (command.semanticFamily === "worldSprite") {
-      this.withPerfDrawTag(payload.draw ? "structures:live" : "entities", () => {
+      const drawTag = payload.draw || payload.auditFamily === "structures"
+        ? "structures:live"
+        : "entities";
+      this.withPerfDrawTag(drawTag, () => {
         if (payload.draw) {
           this.drawRenderPiece(payload.draw);
+          return;
+        }
+        if (payload.image && this.hasExplicitQuadGeometry(payload)) {
+          this.drawQuadRenderPiece(payload);
           return;
         }
         if (payload.image && Number.isFinite(Number(payload.dx)) && Number.isFinite(Number(payload.dy))) {
@@ -324,13 +330,6 @@ export class Canvas2DRenderer {
           else if (payload.neutralMobIndex !== undefined) this.drawNeutralMob(payload);
           else this.drawPlayer(payload);
         }
-      });
-      return;
-    }
-
-    if (command.semanticFamily === "worldGeometry") {
-      this.withPerfDrawTag("structures:live", () => {
-        this.drawTriangleMesh(payload);
       });
       return;
     }
@@ -508,8 +507,16 @@ export class Canvas2DRenderer {
 
   private drawRampDiamond(srcDiamond: HTMLCanvasElement, tx: number, ty: number, renderAnchorY: number): void {
     const q = this.deps.getRampQuadPoints(tx, ty, renderAnchorY);
-    drawTexturedTriangle(this.frameContext.ctx, srcDiamond, 128, 64, this.deps.srcUvNW, this.deps.srcUvNE, this.deps.srcUvSE, q.nw, q.ne, q.se);
-    drawTexturedTriangle(this.frameContext.ctx, srcDiamond, 128, 64, this.deps.srcUvNW, this.deps.srcUvSE, this.deps.srcUvSW, q.nw, q.se, q.sw);
+    drawTexturedQuad(
+      this.frameContext.ctx,
+      srcDiamond,
+      0,
+      0,
+      srcDiamond.width,
+      srcDiamond.height,
+      q,
+      buildDiamondSourceQuad(srcDiamond.width, srcDiamond.height),
+    );
   }
 
   private drawZoneEffect(data: any): void {
@@ -1053,23 +1060,45 @@ export class Canvas2DRenderer {
     ctx.restore();
   }
 
-  private drawTriangleMesh(data: any): void {
+  private hasExplicitQuadGeometry(data: Record<string, unknown>): boolean {
+    return Number.isFinite(Number(data.x0))
+      && Number.isFinite(Number(data.y0))
+      && Number.isFinite(Number(data.x1))
+      && Number.isFinite(Number(data.y1))
+      && Number.isFinite(Number(data.x2))
+      && Number.isFinite(Number(data.y2))
+      && Number.isFinite(Number(data.x3))
+      && Number.isFinite(Number(data.y3));
+  }
+
+  private drawQuadRenderPiece(data: any): void {
     const image = data.image;
-    if (!image) return;
+    if (!image || !this.hasExplicitQuadGeometry(data)) return;
     const ctx = this.frameContext.ctx;
-    for (let i = 0; i < data.triangles.length; i++) {
-      const triangle = data.triangles[i];
-      const [s0, s1, s2] = triangle.srcPoints;
-      const [d0, d1, d2] = triangle.dstPoints;
-      const alpha = Number.isFinite(Number(triangle.alpha)) ? Number(triangle.alpha) : 1;
-      if (alpha < 1) {
-        this.withMultipliedGlobalAlpha(ctx, alpha, () => {
-          drawTexturedTriangle(ctx, image, Number(data.sourceWidth), Number(data.sourceHeight), s0, s1, s2, d0, d1, d2);
-        });
-      } else {
-        drawTexturedTriangle(ctx, image, Number(data.sourceWidth), Number(data.sourceHeight), s0, s1, s2, d0, d1, d2);
-      }
+    const quad = {
+      nw: { x: Number(data.x0), y: Number(data.y0) },
+      ne: { x: Number(data.x1), y: Number(data.y1) },
+      se: { x: Number(data.x2), y: Number(data.y2) },
+      sw: { x: Number(data.x3), y: Number(data.y3) },
+    };
+    const alpha = Number.isFinite(Number(data.alpha)) ? Number(data.alpha) : 1;
+    const draw = () => {
+      drawTexturedQuad(
+        ctx,
+        image,
+        Number(data.sx ?? 0),
+        Number(data.sy ?? 0),
+        Number(data.sw ?? 0),
+        Number(data.sh ?? 0),
+        quad,
+        data.sourceQuad as any,
+      );
+    };
+    if (alpha < 1) {
+      this.withMultipliedGlobalAlpha(ctx, alpha, draw);
+      return;
     }
+    draw();
   }
 
   private drawDebugTriangleOverlay(data: any): void {
