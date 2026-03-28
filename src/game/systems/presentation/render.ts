@@ -82,16 +82,10 @@ import {
 } from "../../../engine/render/debug/renderDebug";
 import { configurePixelPerfect, snapPx } from "../../../engine/render/pixelPerfect";
 import {
-  drawProjectedLightAdditive,
   renderAmbientDarknessOverlay,
-  resolveLightingGroundYScale,
 } from "./renderLighting";
 import { renderEntityShadow, type ShadowParams } from "./renderShadow";
 import { buildUnifiedWorldShadowMap, computeSweepShadowMap, getSweepShadowMap } from "../../map/sweepShadow";
-import {
-  buildFrameWorldLightRegistry,
-  type WorldLightRenderPiece,
-} from "./worldLightRenderPieces";
 import {
   resolveEnemyShadowFootOffset,
   resolveNeutralShadowFootOffset,
@@ -137,6 +131,8 @@ import {
   countRenderDrawableSort,
   countRenderSliceKeySort,
   endRenderPerfFrame,
+  countRenderWebGLGroundChunkDraw,
+  countRenderWebGLGroundChunksVisible,
   setRenderBackendStats,
   setRenderZBandCount,
   setRenderPerfCountersEnabled,
@@ -219,8 +215,7 @@ import {
 } from "./frame/viewportCulling";
 import { collectFrameDrawables } from "./collection/collectFrameDrawables";
 import { Canvas2DRenderer } from "./backend/Canvas2DRenderer";
-import { WebGLRenderer } from "./backend/WebGLRenderer";
-import { buildPureWebGLCommandList, createBackendStats } from "./backend/renderBackendRouting";
+import { createBackendStats } from "./backend/renderBackendRouting";
 import { commandAxesKey, noteRenderBackendFamilyPlacement } from "./backend/renderBackendCapabilities";
 import {
   resolveRenderBackendSelection,
@@ -252,6 +247,14 @@ import { collectStructureOverlays } from "./structures/collectStructureOverlays"
 import { buildStructureSlices } from "./structures/buildStructureSlices";
 import { buildStructureDrawables } from "./structures/buildStructureDrawables";
 import { resolveShadowSunDayCycleRuntime } from "./shadowSunDayCycleRuntime";
+import { createRenderWorld } from "../../../engine/render/creator/renderWorldCreator";
+import { AuxiliaryCanvasRenderer } from "../../../engine/render/auxiliary/auxiliaryCanvasRenderer";
+import { WorldQuadWebGLBatcher } from "../../../engine/render/shared/batching/worldQuadWebGLBatcher";
+import {
+  renderDynamicFallbackPiecesCanvas,
+  renderWorldPiecesCanvas,
+  renderWorldPiecesWebGL,
+} from "../../../engine/render/consumers/renderWorldConsumers";
 
 const DEBUG_PLAYER_WEDGE = false;
 const DISABLE_WALLS_AND_CURTAINS = true;
@@ -1167,42 +1170,10 @@ export async function renderSystem(
   const compiledMap = getActiveCompiledMap();
   const rampRoadTiles = buildRampRoadTiles(compiledMap);
 
-  const beamLightZ = w.pzVisual ?? w.pz ?? tileHAtWorld(w.playerBeamStartX, w.playerBeamStartY);
   const activePaletteId = resolveActivePaletteId();
   const activePaletteVariantKey = resolveActivePaletteVariantKey();
   const activePaletteSwapWeights = resolveActivePaletteSwapWeights();
   const currentSettings = getUserSettings();
-  const worldLightRegistry = buildFrameWorldLightRegistry({
-    mapId: compiledMap.id,
-    tileWorld: T,
-    elevPx: ELEV_PX,
-    worldScale: s,
-    streetLampOcclusionEnabled: w.lighting.occlusionEnabled,
-    staticLightCycleOverride: debug.staticLightCycleOverride,
-    shadowSunTimeHour: shadowSunDayCycle.effectiveTimeHour,
-    lightOverrides: {
-      colorModeOverride: currentSettings.render.lightColorModeOverride,
-      strengthOverride: currentSettings.render.lightStrengthOverride,
-    },
-    lightPalette: {
-      paletteId: activePaletteId,
-      saturationWeight: activePaletteSwapWeights.sWeight,
-    },
-    staticLights: compiledMap.lightDefs,
-    runtimeBeam: {
-      active: !!w.playerBeamActive,
-      startWorldX: w.playerBeamStartX,
-      startWorldY: w.playerBeamStartY,
-      endWorldX: w.playerBeamEndX,
-      endWorldY: w.playerBeamEndY,
-      zVisual: beamLightZ,
-      widthPx: w.playerBeamWidthPx || 6,
-      glowIntensity: w.playerBeamGlowIntensity || 0,
-    },
-    tileHeightAtWorld: tileHAtWorld,
-    isTileInRenderRadius,
-    projectToScreen: (worldX, worldY, zPx) => viewport.project(worldX, worldY, zPx),
-  });
   const staticRelight = syncStaticRelightRuntimeForFrame(w, {
     bakeStore: staticRelightBakeStore,
     getRuntimeIsoTopCanvas,
@@ -1372,8 +1343,6 @@ export async function renderSystem(
   let structureV6ShadowCacheStats: StructureV6ShadowCacheFrameStats | null = null;
   const deferredStructureSliceDebugDraws: Array<() => void> = [];
   let didQueueStructureCutoutDebugRect = false;
-  const worldLightGroundYScale = resolveLightingGroundYScale(w.lighting.groundYScale ?? 0.65);
-
   // ----------------------------
   // Prepass: build all apron slice draws and bucket them by slice.
   // ----------------------------
@@ -1545,7 +1514,6 @@ export async function renderSystem(
     PRJ_KIND,
     VFX_CLIP_INDEX,
     getPlayerSpriteFrameForDarknessPercent,
-    worldLightRegistry,
     DISABLE_WALLS_AND_CURTAINS,
     buildFaceDraws,
     facePieceLayers,
@@ -1729,10 +1697,12 @@ export async function renderSystem(
     rampRoadTiles,
   });
   const executionPlan = buildRenderExecutionPlan(commandFrame, rampRoadTiles);
+  const createdRenderWorld = createRenderWorld(executionPlan);
+  const auditWorldCommands = createdRenderWorld.auditWorldCommands;
 
   {
     const sampleGroundCommandDiagnostics = (
-      command: (typeof executionPlan.world)[number],
+      command: (typeof auditWorldCommands)[number],
     ) => {
       if (command.semanticFamily !== "groundSurface" || command.finalForm !== "quad") return null;
       const tx = Number(command.key.within);
@@ -1784,7 +1754,7 @@ export async function renderSystem(
       x: (point.x + viewport.camTx) * viewport.worldScaleDevice + viewport.safeOffsetDeviceX,
       y: (point.y + viewport.camTy) * viewport.worldScaleDevice + viewport.safeOffsetDeviceY,
     });
-    const groundProjectedSurfaceCommands = executionPlan.world.filter((command) =>
+    const groundProjectedSurfaceCommands = auditWorldCommands.filter((command) =>
       command.semanticFamily === "groundSurface" && command.finalForm === "quad"
     ).slice(0, 5);
     (globalThis as any).__renderGroundProjectedSurfaceSample = {
@@ -1797,7 +1767,7 @@ export async function renderSystem(
         devW,
         devH,
       },
-      totalGroundProjectedSurfaceCommands: executionPlan.world.filter((command) =>
+      totalGroundProjectedSurfaceCommands: auditWorldCommands.filter((command) =>
         command.semanticFamily === "groundSurface" && command.finalForm === "quad"
       ).length,
       samples: groundProjectedSurfaceCommands.map((command) => {
@@ -1869,7 +1839,7 @@ export async function renderSystem(
     };
   }
 
-  const canvasRenderer = new Canvas2DRenderer(renderFrame, {
+  const canvasWorldAuxBaseRenderer = new Canvas2DRenderer(renderFrame, {
     w,
     T,
     compiledMap,
@@ -1884,7 +1854,6 @@ export async function renderSystem(
     SIDEWALK_ISO_HEIGHT,
     staticRelightFrame,
     staticRelightBakeStore,
-    worldLightGroundYScale,
     SHOW_ZONE_OBJECTIVE_BOUNDS,
     SHOW_ENTITY_ANCHOR_OVERLAY,
     RENDER_ENTITY_ANCHORS,
@@ -1950,7 +1919,7 @@ export async function renderSystem(
     countRenderCanvasGroundChunkDraw,
     countRenderCanvasGroundChunksVisible,
     viewRect,
-    groundChunkCache: canvasGroundChunkCacheStore,
+    groundChunkCache: null,
     renderAmbientDarknessOverlay,
     executeDebugPass,
     srcUvNW,
@@ -1959,6 +1928,118 @@ export async function renderSystem(
     srcUvSW,
     getRampQuadPoints,
   });
+  const canvasWorldAuxRenderer = new AuxiliaryCanvasRenderer(canvasWorldAuxBaseRenderer);
+  const overlayWorldFrame: RenderFrameContext = {
+    ...renderFrame,
+    ctx: overlayCtx,
+    canvas: overlayCanvas,
+    devW: overlayDevW,
+    devH: overlayDevH,
+    dpr: overlayDpr,
+  };
+  const overlayWorldAuxBaseRenderer = new Canvas2DRenderer(overlayWorldFrame, {
+    w,
+    T,
+    compiledMap,
+    shadowSunModel,
+    ambientSunLighting,
+    rampRoadTiles,
+    camX,
+    camY,
+    ELEV_PX,
+    ANCHOR_Y,
+    SIDEWALK_SRC_SIZE,
+    SIDEWALK_ISO_HEIGHT,
+    staticRelightFrame,
+    staticRelightBakeStore,
+    SHOW_ZONE_OBJECTIVE_BOUNDS,
+    SHOW_ENTITY_ANCHOR_OVERLAY,
+    RENDER_ENTITY_ANCHORS,
+    ENTITY_ANCHOR_X01_DEFAULT,
+    ENTITY_ANCHOR_Y01_DEFAULT,
+    worldToScreen,
+    toScreen,
+    toScreenAtZ,
+    tileHAtWorld,
+    getRuntimeIsoTopCanvas,
+    getRuntimeIsoDecalCanvas,
+    getRuntimeDecalSprite,
+    getDiamondFitCanvas,
+    getFlippedOverlayImage,
+    getTileSpriteById,
+    getSpriteById,
+    getEnemySpriteFrame,
+    getEnemySpriteFrameForDarknessPercent,
+    getVendorNpcSpriteFrame,
+    getVendorNpcSpriteFrameForDarknessPercent,
+    getPigeonFramesForClipAndScreenDirForDarknessPercent,
+    getPlayerSpriteFrame,
+    getPlayerSpriteFrameForDarknessPercent,
+    playerSpritesReady,
+    vendorNpcSpritesReady,
+    getProjectileWorld,
+    KENNEY_TILE_WORLD,
+    getProjectileSpriteByKind,
+    getProjectileDrawScale,
+    PROJECTILE_BASE_DRAW_PX,
+    resolveProjectileShadowFootOffset,
+    bazookaExhaustAssets,
+    BAZOOKA_EXHAUST_OFFSET,
+    worldDeltaToScreen,
+    snapToNearestWalkableGround,
+    renderFireZoneVfx,
+    ZONE_KIND,
+    ISO_X,
+    ISO_Y,
+    VFX_CLIPS,
+    VFX_CLIP_INDEX,
+    registry,
+    resolveDynamicSpriteRelightAlpha,
+    dynamicSpriteRelightFrame,
+    getCurrencyFrame,
+    getCurrencyFrameForDarknessPercent,
+    coinColorFromValue,
+    ENEMY_TYPE,
+    LOOT_GOBLIN_GLOW_OUTER_RADIUS_MULT,
+    LOOT_GOBLIN_GLOW_INNER_RADIUS_MULT,
+    LOOT_GOBLIN_GLOW_PULSE_MIN,
+    LOOT_GOBLIN_GLOW_PULSE_RANGE,
+    LOOT_GOBLIN_GLOW_PULSE_SPEED,
+    resolveAnchor01,
+    debug,
+    PLAYER_R,
+    roadMarkingDecalScale,
+    shouldPixelSnapRoadMarking,
+    floorRelightPieceKey,
+    decalRelightPieceKey,
+    getUserSettings,
+    setRenderPerfDrawTag,
+    countRenderCanvasGroundChunkDraw,
+    countRenderCanvasGroundChunksVisible,
+    viewRect,
+    groundChunkCache: null,
+    renderAmbientDarknessOverlay,
+    executeDebugPass,
+    srcUvNW,
+    srcUvNE,
+    srcUvSE,
+    srcUvSW,
+    getRampQuadPoints,
+  });
+  const overlayWorldAuxRenderer = new AuxiliaryCanvasRenderer(overlayWorldAuxBaseRenderer);
+
+  const rectCanvasDeps = {
+    ISO_X,
+    ISO_Y,
+    coinColorFromValue,
+    w,
+  };
+  const chunkRenderDeps = {
+    viewRect,
+    rampRoadTiles,
+    countVisible: countRenderCanvasGroundChunksVisible,
+    countDraw: countRenderCanvasGroundChunkDraw,
+  };
   const webglSurface = getRenderableWebGLWorldSurface(canvas);
   const backendSelection = resolveRenderBackendSelection(
     renderSettings as any,
@@ -1966,93 +2047,40 @@ export async function renderSystem(
     getWebGLWorldSurfaceFailureReason(canvas),
   );
   const worldBatchAudit = renderPerfCountersEnabled
-    ? analyzeWorldBatchStream(executionPlan.world, backendSelection.selectedBackend)
+    ? analyzeWorldBatchStream(auditWorldCommands, backendSelection.selectedBackend)
     : null;
-  if (backendSelection.selectedBackend === "webgl" && webglSurface) {
-    const stats = createBackendStats("webgl");
-    try {
-      clearWebGLWorldSurfaceFailure(canvas);
-      const cachedSurface = webglSurface as typeof webglSurface & { renderer?: WebGLRenderer };
-      const webglRenderer = cachedSurface.renderer ?? new WebGLRenderer(renderFrame, webglSurface.gl);
-      cachedSurface.renderer = webglRenderer;
-      webglRenderer.setFrameContext(renderFrame);
-      const webglWorldCommands = buildPureWebGLCommandList(executionPlan.world, stats);
-      const webglScreenCommands = buildPureWebGLCommandList(executionPlan.screen, stats);
 
-      canvasRenderer.clearOverlayCanvas();
-      canvasRenderer.clearMainCanvas();
-      webglRenderer.beginFrame();
-      webglRenderer.useWorldSpace();
-      webglRenderer.renderCommands(webglWorldCommands, {
-        groundChunkCache: canvasGroundChunkCacheStore,
-        viewRect,
-        rampRoadTiles,
-      });
-      canvasRenderer.renderScreenCommands(executionPlan.screen);
-
-      setRenderBackendStats({
-        requestedBackend: backendSelection.requestedBackend,
-        selectedBackend: backendSelection.selectedBackend,
-        defaultBackend: backendSelection.policy.defaultBackend,
-        webglReadyForDefault: backendSelection.policy.webglReadyForDefault,
-        fallbackReason: backendSelection.fallbackReason,
-        webglCommandCount: stats.webglCommandCount,
-        canvasFallbackCommandCount: stats.canvasFallbackCommandCount,
-        unsupportedCommandCount: stats.unsupportedCommandCount,
-        webglGroundCommandCount: stats.webglGroundCommandCount,
-        unsupportedGroundCommandCount: stats.unsupportedGroundCommandCount,
-        unsupportedCommandKeys: stats.unsupportedCommandKeys,
-        webglByAxes: stats.webglByAxes,
-        canvasFallbackByAxes: stats.canvasFallbackByAxes,
-        unsupportedByAxes: stats.unsupportedByAxes,
-        unsupportedBySemanticFamily: stats.unsupportedBySemanticFamily,
-        partiallyHandledAxes: stats.partiallyHandledAxes,
-      });
-    } catch (error) {
-      noteWebGLWorldSurfaceFailure(canvas, WEBGL_RUNTIME_FAILURE_REASON);
-      syncWorldCanvasBackendVisibility(canvas, "canvas2d", true);
-      console.error("[render] WebGL backend failed, falling back to Canvas2D.", error);
-      canvasRenderer.render(executionPlan);
-      const fallbackStats = createBackendStats("canvas2d");
-      const allCommands = [...executionPlan.world, ...executionPlan.screen];
-      fallbackStats.canvasFallbackCommandCount = allCommands.length;
-      for (let i = 0; i < allCommands.length; i++) {
-        noteRenderBackendFamilyPlacement(fallbackStats, commandAxesKey(allCommands[i]), "canvas2d");
+  const recordBackendStats = (
+    selectedBackend: "canvas2d" | "webgl",
+    fallbackReason: string | null,
+    canvasFallbackWorldPieceCount = 0,
+  ) => {
+    const stats = createBackendStats(selectedBackend);
+    if (selectedBackend === "webgl") {
+      stats.webglCommandCount = auditWorldCommands.length;
+      for (let i = 0; i < auditWorldCommands.length; i++) {
+        noteRenderBackendFamilyPlacement(stats, commandAxesKey(auditWorldCommands[i]), "webgl");
       }
-      setRenderBackendStats({
-        requestedBackend: backendSelection.requestedBackend,
-        selectedBackend: "canvas2d",
-        defaultBackend: backendSelection.policy.defaultBackend,
-        webglReadyForDefault: backendSelection.policy.webglReadyForDefault,
-        fallbackReason: WEBGL_RUNTIME_FAILURE_REASON,
-        webglCommandCount: fallbackStats.webglCommandCount,
-        canvasFallbackCommandCount: fallbackStats.canvasFallbackCommandCount,
-        unsupportedCommandCount: fallbackStats.unsupportedCommandCount,
-        webglGroundCommandCount: fallbackStats.webglGroundCommandCount,
-        unsupportedGroundCommandCount: fallbackStats.unsupportedGroundCommandCount,
-        unsupportedCommandKeys: fallbackStats.unsupportedCommandKeys,
-        webglByAxes: fallbackStats.webglByAxes,
-        canvasFallbackByAxes: fallbackStats.canvasFallbackByAxes,
-        unsupportedByAxes: fallbackStats.unsupportedByAxes,
-        unsupportedBySemanticFamily: fallbackStats.unsupportedBySemanticFamily,
-        partiallyHandledAxes: fallbackStats.partiallyHandledAxes,
-      });
+    } else {
+      stats.canvasFallbackCommandCount = auditWorldCommands.length;
+      for (let i = 0; i < auditWorldCommands.length; i++) {
+        noteRenderBackendFamilyPlacement(stats, commandAxesKey(auditWorldCommands[i]), "canvas2d");
+      }
     }
-  } else {
-    syncWorldCanvasBackendVisibility(canvas, "canvas2d", true);
-    canvasRenderer.render(executionPlan);
-    const stats = createBackendStats("canvas2d");
-    const allCommands = [...executionPlan.world, ...executionPlan.screen];
-    stats.canvasFallbackCommandCount = allCommands.length;
-    for (let i = 0; i < allCommands.length; i++) {
-      noteRenderBackendFamilyPlacement(stats, commandAxesKey(allCommands[i]), "canvas2d");
+    const canvasOnlyCommands = [
+      ...createdRenderWorld.auxiliaryWorldCommands,
+      ...createdRenderWorld.screenCommands,
+    ];
+    stats.canvasFallbackCommandCount += canvasOnlyCommands.length + canvasFallbackWorldPieceCount;
+    for (let i = 0; i < canvasOnlyCommands.length; i++) {
+      noteRenderBackendFamilyPlacement(stats, commandAxesKey(canvasOnlyCommands[i]), "canvas2d");
     }
     setRenderBackendStats({
       requestedBackend: backendSelection.requestedBackend,
-      selectedBackend: "canvas2d",
+      selectedBackend,
       defaultBackend: backendSelection.policy.defaultBackend,
       webglReadyForDefault: backendSelection.policy.webglReadyForDefault,
-      fallbackReason: backendSelection.fallbackReason,
+      fallbackReason,
       webglCommandCount: stats.webglCommandCount,
       canvasFallbackCommandCount: stats.canvasFallbackCommandCount,
       unsupportedCommandCount: stats.unsupportedCommandCount,
@@ -2065,6 +2093,67 @@ export async function renderSystem(
       unsupportedBySemanticFamily: stats.unsupportedBySemanticFamily,
       partiallyHandledAxes: stats.partiallyHandledAxes,
     });
+  };
+
+  if (backendSelection.selectedBackend === "webgl" && webglSurface) {
+    try {
+      clearWebGLWorldSurfaceFailure(canvas);
+      syncWorldCanvasBackendVisibility(canvas, "webgl", true);
+      const cachedSurface = webglSurface as typeof webglSurface & { quadBatcher?: WorldQuadWebGLBatcher };
+      const webglBatcher = cachedSurface.quadBatcher ?? new WorldQuadWebGLBatcher(renderFrame, webglSurface.gl);
+      cachedSurface.quadBatcher = webglBatcher;
+      canvasWorldAuxBaseRenderer.clearOverlayCanvas();
+      canvasWorldAuxBaseRenderer.clearMainCanvas();
+      canvasWorldAuxBaseRenderer.drawBackground();
+      const canvasFallbackWorldPieces = renderWorldPiecesWebGL({
+        frameContext: renderFrame,
+        orderedPieces: createdRenderWorld.orderedPieces,
+        groundChunkCache: canvasGroundChunkCacheStore,
+        chunkDeps: {
+          ...chunkRenderDeps,
+          countVisible: countRenderWebGLGroundChunksVisible,
+          countDraw: countRenderWebGLGroundChunkDraw,
+        },
+        rectCanvasDeps,
+        batcher: webglBatcher,
+      });
+      renderDynamicFallbackPiecesCanvas(overlayWorldFrame, canvasFallbackWorldPieces, rectCanvasDeps);
+      overlayWorldAuxRenderer.renderWorld(createdRenderWorld.auxiliaryWorldCommands);
+      overlayWorldAuxRenderer.renderScreen(createdRenderWorld.screenCommands);
+      recordBackendStats("webgl", backendSelection.fallbackReason, canvasFallbackWorldPieces.length);
+    } catch (error) {
+      noteWebGLWorldSurfaceFailure(canvas, WEBGL_RUNTIME_FAILURE_REASON);
+      syncWorldCanvasBackendVisibility(canvas, "canvas2d", true);
+      console.error("[render] WebGL backend failed, falling back to Canvas2D.", error);
+      canvasWorldAuxBaseRenderer.clearOverlayCanvas();
+      canvasWorldAuxBaseRenderer.clearMainCanvas();
+      canvasWorldAuxBaseRenderer.drawBackground();
+      renderWorldPiecesCanvas({
+        frameContext: renderFrame,
+        orderedPieces: createdRenderWorld.orderedPieces,
+        groundChunkCache: canvasGroundChunkCacheStore,
+        chunkDeps: chunkRenderDeps,
+        rectCanvasDeps,
+      });
+      canvasWorldAuxRenderer.renderWorld(createdRenderWorld.auxiliaryWorldCommands);
+      canvasWorldAuxRenderer.renderScreen(createdRenderWorld.screenCommands);
+      recordBackendStats("canvas2d", WEBGL_RUNTIME_FAILURE_REASON);
+    }
+  } else {
+    syncWorldCanvasBackendVisibility(canvas, "canvas2d", true);
+    canvasWorldAuxBaseRenderer.clearOverlayCanvas();
+    canvasWorldAuxBaseRenderer.clearMainCanvas();
+    canvasWorldAuxBaseRenderer.drawBackground();
+    renderWorldPiecesCanvas({
+      frameContext: renderFrame,
+      orderedPieces: createdRenderWorld.orderedPieces,
+      groundChunkCache: canvasGroundChunkCacheStore,
+      chunkDeps: chunkRenderDeps,
+      rectCanvasDeps,
+    });
+    canvasWorldAuxRenderer.renderWorld(createdRenderWorld.auxiliaryWorldCommands);
+    canvasWorldAuxRenderer.renderScreen(createdRenderWorld.screenCommands);
+    recordBackendStats("canvas2d", backendSelection.fallbackReason);
   }
   endRenderPerfFrame(w.timeSec ?? 0);
 

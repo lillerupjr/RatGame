@@ -3,7 +3,6 @@ import type { ViewRect } from "../../../map/compile/kenneyMap";
 import type { RenderFrameContext } from "../contracts/renderFrameContext";
 import type { RenderCommand } from "../contracts/renderCommands";
 import type { CanvasGroundChunkCacheStore } from "../canvasGroundChunkCache";
-import { resolveProjectedLightTintSprite } from "../renderLighting";
 import {
   countRenderWebGLBatch,
   countRenderWebGLBufferUpload,
@@ -552,10 +551,6 @@ export class WebGLRenderer {
       return this.buildZoneEffectQuads(payload);
     }
 
-    if (command.semanticFamily === "worldPrimitive" && payload.lightPiece) {
-      return this.buildProjectedLightQuads(payload);
-    }
-
     return [];
   }
 
@@ -711,31 +706,6 @@ export class WebGLRenderer {
     return [
       this.buildMaskedEllipseQuad(centerX, centerY, radiusX, radiusY, "#ff3a2e", 0.26 * pulse, "radial", "world"),
     ];
-  }
-
-  private buildProjectedLightQuads(data: Record<string, unknown>): QuadDraw[] {
-    const lightPiece = data.lightPiece as { light?: { projected?: Parameters<typeof resolveProjectedLightTintSprite>[0] } } | null;
-    const projected = lightPiece?.light?.projected;
-    if (!projected) return [];
-    const sprite = resolveProjectedLightTintSprite(
-      projected,
-      (this.frameContext.world as any).time ?? 0,
-      (this.frameContext.world as any).lighting?.groundYScale ?? 0.65,
-    );
-    if (!sprite) return [];
-    return [{
-      image: sprite.image,
-      sx: 0,
-      sy: 0,
-      sw: sprite.image.width,
-      sh: sprite.image.height,
-      texPoints: this.buildRectTexPoints(sprite.image.width, sprite.image.height, 0, 0, sprite.image.width, sprite.image.height),
-      points: this.buildRectQuadPoints(sprite.dx, sprite.dy, sprite.dw, sprite.dh, 0, false),
-      alpha: sprite.alpha,
-      blendMode: sprite.blendMode,
-      color: [1, 1, 1, 1],
-      space: "screen",
-    }];
   }
 
   private applySpace(space: QuadSpace): void {

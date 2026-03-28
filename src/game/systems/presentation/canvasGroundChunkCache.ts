@@ -1,6 +1,7 @@
 import type { CompiledKenneyMap, ViewRect } from "../../map/compile/kenneyMap";
 import type { RawCacheMetricSample } from "./cacheMetricsRegistry";
 import type { RenderCommand } from "./contracts/renderCommands";
+import type { StaticWorldQuadRenderPiece } from "../../../engine/render/creator/renderPieceTypes";
 import {
   resolveGroundDecalProjectedCommand,
   resolveGroundSurfaceProjectedCommand,
@@ -9,6 +10,10 @@ import {
   type GroundCommandResolverDeps,
   type ResolvedGroundProjectedCommand,
 } from "./groundCommandResolver";
+import {
+  createStaticWorldQuadRenderPiece,
+  toAuditRenderCommand,
+} from "../../../engine/render/creator/renderPieceTypes";
 import { setRenderPerfDrawTag } from "./renderPerfCounters";
 import { compareRenderKeys, resolveRenderZBand } from "./worldRenderOrdering";
 
@@ -24,7 +29,7 @@ export type CanvasGroundChunkCacheEntry = {
   maxTx: number;
   minTy: number;
   maxTy: number;
-  commands: readonly RenderCommand[];
+  pieces: readonly StaticWorldQuadRenderPiece[];
 };
 
 export type SyncCanvasGroundChunkCacheInput = GroundCommandResolverDeps & {
@@ -156,14 +161,15 @@ function viewIntersectsChunk(view: ViewRect, entry: CanvasGroundChunkCacheEntry)
   );
 }
 
-function toCachedGroundRenderCommand(command: ResolvedGroundProjectedCommand): RenderCommand {
-  return {
-    pass: "GROUND",
+function toCachedGroundRenderPiece(command: ResolvedGroundProjectedCommand): StaticWorldQuadRenderPiece {
+  return createStaticWorldQuadRenderPiece({
     key: command.key,
     semanticFamily: command.semanticFamily,
-    finalForm: "quad",
     payload: command.payload,
-  };
+    staticFamily: command.semanticFamily,
+    worldGeometry: "iso",
+    kind: "iso",
+  });
 }
 
 function buildBucketToEntry(bucket: CanvasGroundChunkBuildBucket): CanvasGroundChunkCacheEntry | null {
@@ -178,7 +184,7 @@ function buildBucketToEntry(bucket: CanvasGroundChunkBuildBucket): CanvasGroundC
       maxTx: bucket.maxTx,
       minTy: bucket.minTy,
       maxTy: bucket.maxTy,
-      commands: bucket.commands.map((command) => toCachedGroundRenderCommand(command)),
+      pieces: bucket.commands.map((command) => toCachedGroundRenderPiece(command)),
     };
   } finally {
     setRenderPerfDrawTag(null);
@@ -336,15 +342,19 @@ export class CanvasGroundChunkCacheStore {
     return entries.filter((entry) => viewIntersectsChunk(viewRect, entry));
   }
 
-  getVisibleCommands(zBand: number, viewRect: ViewRect): readonly RenderCommand[] {
+  getVisiblePieces(zBand: number, viewRect: ViewRect): readonly StaticWorldQuadRenderPiece[] {
     const entries = this.getVisibleEntries(zBand, viewRect);
     if (entries.length <= 0) return [];
-    const commands: RenderCommand[] = [];
+    const pieces: StaticWorldQuadRenderPiece[] = [];
     for (let i = 0; i < entries.length; i++) {
-      for (let j = 0; j < entries[i].commands.length; j++) commands.push(entries[i].commands[j]);
+      for (let j = 0; j < entries[i].pieces.length; j++) pieces.push(entries[i].pieces[j]);
     }
-    commands.sort((a, b) => compareRenderKeys(a.key, b.key));
-    return commands;
+    pieces.sort((a, b) => compareRenderKeys(a.key, b.key));
+    return pieces;
+  }
+
+  getVisibleCommands(zBand: number, viewRect: ViewRect): readonly RenderCommand[] {
+    return this.getVisiblePieces(zBand, viewRect).map((piece) => toAuditRenderCommand(piece));
   }
 
   private refreshAggregates(): void {
@@ -360,7 +370,7 @@ export class CanvasGroundChunkCacheStore {
       for (const [zBand, entries] of logicalChunk.entriesByBand.entries()) {
         const bandEntries = nextEntriesByBand.get(zBand) ?? [];
         for (let i = 0; i < entries.length; i++) {
-          cachedQuadCount += entries[i].commands.length;
+          cachedQuadCount += entries[i].pieces.length;
           bandEntries.push(entries[i]);
         }
         if (!nextEntriesByBand.has(zBand)) nextEntriesByBand.set(zBand, bandEntries);
@@ -486,7 +496,7 @@ export class CanvasGroundChunkCacheStore {
       for (const entries of retained.entriesByBand.values()) {
         entryCount += entries.length;
         for (let i = 0; i < entries.length; i++) {
-          approxBytes += entries[i].commands.length * 96;
+          approxBytes += entries[i].pieces.length * 96;
         }
       }
     }

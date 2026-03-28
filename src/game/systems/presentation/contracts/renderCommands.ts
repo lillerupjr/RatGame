@@ -107,7 +107,6 @@ export type WorldPrimitivePayload = CommandPayloadBase & {
   radiusScreenY?: number;
   start?: RenderPoint;
   end?: RenderPoint;
-  lightPiece?: unknown;
   zone?: unknown;
 };
 

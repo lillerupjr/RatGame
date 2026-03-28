@@ -1,7 +1,6 @@
 import { configurePixelPerfect } from "../../../../engine/render/pixelPerfect";
 import type { ShadowV6SemanticBucket } from "../../../../settings/settingsTypes";
 import { setRenderPerfDrawTag, type DrawTag } from "../renderPerfCounters";
-import { drawTexturedTriangle } from "../renderPrimitives/drawTexturedTriangle";
 import {
   buildStructureV6FaceSlices,
   buildStructureV6SliceAxis,
@@ -11,6 +10,7 @@ import {
   type StructureV6SliceAxis,
 } from "../structureShadowV6FaceSlices";
 import { getStructureShadowV6FaceScratchContext } from "./structureShadowScratch";
+import { rasterStructureShadowTriangle } from "./structureShadowTriangleRaster";
 import type { StructureV6ShadowDebugCandidate } from "./structureShadowTypes";
 
 type ScreenPt = { x: number; y: number };
@@ -327,7 +327,7 @@ export function buildStructureV6FaceSliceDebugData(
     const tri = candidate.triangles[ti];
     const [s0, s1, s2] = tri.srcTriangle;
     const [d0, d1, d2] = tri.dstTriangle;
-    drawTexturedTriangle(
+    rasterStructureShadowTriangle(
       faceCtx,
       candidate.sourceImage,
       candidate.sourceImageWidth,

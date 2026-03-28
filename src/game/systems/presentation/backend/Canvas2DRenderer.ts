@@ -1,6 +1,5 @@
 import { configurePixelPerfect, snapPx } from "../../../../engine/render/pixelPerfect";
 import { drawVoidBackgroundOnce } from "../frame/backgroundPass";
-import { drawProjectedLightAdditive } from "../renderLighting";
 import { drawTexturedQuad } from "../renderPrimitives/drawTexturedQuad";
 import { renderEntityShadow } from "../renderShadow";
 import { buildDiamondSourceQuad } from "../renderCommandGeometry";
@@ -218,23 +217,6 @@ export class Canvas2DRenderer {
             toScreen: this.deps.toScreen,
             showZoneBounds: this.deps.SHOW_ZONE_OBJECTIVE_BOUNDS,
           });
-        });
-        return;
-      }
-      if (payload.lightPiece) {
-        this.withPerfDrawTag("lighting", () => {
-          const lightPiece = payload.lightPiece as any;
-          const ctx = this.frameContext.ctx;
-          ctx.save();
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-          configurePixelPerfect(ctx);
-          drawProjectedLightAdditive(
-            ctx,
-            lightPiece.light.projected,
-            this.deps.w.time ?? 0,
-            this.deps.worldLightGroundYScale,
-          );
-          ctx.restore();
         });
         return;
       }

@@ -103,7 +103,6 @@ export function classifyCommandBackend(command: RenderCommand): RenderCommandBac
     case "groundDecal":
       return hasQuadGeometry(payload) ? "webgl" : "unsupported";
     case "worldPrimitive":
-      if (payload.lightPiece) return "webgl";
       if (Number.isFinite(Number(payload.zoneKind))) {
         return Number(payload.zoneKind) === ZONE_KIND.FIRE ? "canvas2d" : "webgl";
       }

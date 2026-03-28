@@ -51,6 +51,18 @@ type ProcessedStructureTriangle = {
   alpha: number;
 };
 
+type DestinationQuadBuilder = (input: {
+  cameraTx: number;
+  cameraTy: number;
+  zVisual: number;
+  destinationBounds: RectBounds;
+}) => {
+  nw: RenderPoint;
+  ne: RenderPoint;
+  se: RenderPoint;
+  sw: RenderPoint;
+};
+
 export function collectStructureDrawables(input: CollectionContext): {
   didQueueStructureCutoutDebugRect: boolean;
   structureV6VerticalShadowDebugData: unknown;
@@ -301,6 +313,7 @@ export function collectStructureDrawables(input: CollectionContext): {
     piece: any,
     atlasFrame: { image: HTMLCanvasElement | OffscreenCanvas; sx: number; sy: number; sw: number; sh: number } | null,
     processedTriangles: readonly ProcessedStructureTriangle[],
+    buildDestinationQuad: DestinationQuadBuilder,
   ) => {
     const image = atlasFrame?.image ?? piece.draw.img;
     if (!image) return { accepted: [], rejected: 0 };
@@ -365,12 +378,12 @@ export function collectStructureDrawables(input: CollectionContext): {
       const zVisual = Number(piece.overlay.z ?? 0)
         + Number(piece.overlay.zVisualOffsetUnits ?? 0)
         + cell.maxHeightFromParentLevel;
-      const destinationQuad = buildRectDestinationQuad(
-        destinationBounds.minX,
-        destinationBounds.minY,
-        destinationBounds.maxX - destinationBounds.minX,
-        destinationBounds.maxY - destinationBounds.minY,
-      );
+      const destinationQuad = buildDestinationQuad({
+        cameraTx: cell.cameraTx,
+        cameraTy: cell.cameraTy,
+        zVisual,
+        destinationBounds,
+      });
       accepted.push({
         payload: buildQuadRenderPieceFromPoints({
           auditFamily: "structures",
@@ -599,7 +612,17 @@ export function collectStructureDrawables(input: CollectionContext): {
       countRenderStructureMonolithicGroupSubmission();
       countRenderStructureMonolithicTriangles(processedTriangles.length);
 
-      const extractedCells = tryBuildMonolithicCellQuadPayloads(piece, atlasFrame, processedTriangles);
+      const extractedCells = tryBuildMonolithicCellQuadPayloads(
+        piece,
+        atlasFrame,
+        processedTriangles,
+        ({ destinationBounds }) => buildRectDestinationQuad(
+          destinationBounds.minX,
+          destinationBounds.minY,
+          destinationBounds.maxX - destinationBounds.minX,
+          destinationBounds.maxY - destinationBounds.minY,
+        ),
+      );
       for (let ci = 0; ci < extractedCells.accepted.length; ci++) {
         const cell = extractedCells.accepted[ci];
         countRenderStructureTotalSubmission();

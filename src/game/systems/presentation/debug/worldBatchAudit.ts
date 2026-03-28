@@ -171,7 +171,6 @@ function describeWorldFamily(command: RenderCommand): string {
     return "props";
   }
   if (command.semanticFamily === "worldPrimitive") {
-    if (payload.lightPiece) return "lights";
     if (payload.zoneKind !== undefined) return "zones";
     return "primitives";
   }
@@ -396,11 +395,6 @@ function buildAuditDescriptor(
     shaderMaterial = "textured";
     blendMode = payload.blendMode === "additive" ? "additive" : "normal";
     space = "world";
-  } else if (command.semanticFamily === "worldPrimitive" && payload.lightPiece) {
-    submissionKind = "projectedLight";
-    shaderMaterial = "projectedLight";
-    blendMode = "additive";
-    space = "screen";
   } else if (command.semanticFamily === "worldPrimitive" && payload.zoneKind !== undefined) {
     submissionKind = "zoneEffect";
     shaderMaterial = "zoneEffect";

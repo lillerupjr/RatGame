@@ -608,7 +608,7 @@ describe("WebGLRenderer", () => {
           maxTx: 1,
           minTy: 0,
           maxTy: 1,
-          commands: [],
+          pieces: [],
         }] : [],
         getVisibleCommands: (zBand: number) => zBand === 0 ? [
           makeProjectedSurfaceCommand(cachedGround, 700),
@@ -705,7 +705,7 @@ describe("WebGLRenderer", () => {
             maxTx: 1,
             minTy: 0,
             maxTy: 1,
-            commands: [],
+            pieces: [],
           }]
           : zBand === 1
             ? [{
@@ -716,7 +716,7 @@ describe("WebGLRenderer", () => {
               maxTx: 1,
               minTy: 0,
               maxTy: 1,
-              commands: [],
+              pieces: [],
             }]
             : [],
         getVisibleCommands: (zBand: number) => zBand === 0
@@ -809,7 +809,7 @@ describe("WebGLRenderer", () => {
           maxTx: 1,
           minTy: 0,
           maxTy: 1,
-          commands: [],
+          pieces: [],
         }] : [],
         getVisibleCommands: (zBand: number) => zBand === 0 ? [
           makeProjectedSurfaceCommand(cachedGround, 700),

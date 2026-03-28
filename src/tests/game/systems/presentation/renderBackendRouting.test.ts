@@ -97,28 +97,6 @@ describe("buildBackendSegments", () => {
         finalForm: "primitive",
         payload: { darknessAlpha: 0.4 },
       }),
-      command(8, {
-        semanticFamily: "worldPrimitive",
-        finalForm: "primitive",
-        payload: {
-          lightPiece: {
-            light: {
-              projected: {
-                sx: 1,
-                sy: 2,
-                intensity: 0.5,
-                occlusion: 0,
-                radiusPx: 16,
-                shape: "RADIAL",
-                color: "#fff",
-                tintStrength: 0.25,
-                flicker: { kind: "NONE" },
-                flickerPhase: 0,
-              },
-            },
-          },
-        },
-      }),
       command(9, {
         semanticFamily: "worldSprite",
         finalForm: "quad",
@@ -172,17 +150,17 @@ describe("buildBackendSegments", () => {
     expect(segments.map((segment) => [segment.backend, segment.commands.map((command) => command.key.stableId)])).toEqual([
       ["webgl", [1, 2]],
       ["canvas2d", [5]],
-      ["webgl", [6, 7, 8, 9, 10]],
+      ["webgl", [6, 7, 9, 10]],
       ["canvas2d", [11]],
       ["webgl", [4]],
     ]);
-    expect(stats.webglCommandCount).toBe(8);
+    expect(stats.webglCommandCount).toBe(7);
     expect(stats.canvasFallbackCommandCount).toBe(2);
     expect(stats.unsupportedCommandCount).toBe(1);
     expect(stats.unsupportedCommandKeys).toEqual(["worldSprite:quad"]);
     expect(stats.webglByAxes["screenOverlay:quad"]).toBe(1);
     expect(stats.webglByAxes["screenOverlay:primitive"]).toBe(1);
-    expect(stats.webglByAxes["worldPrimitive:primitive"]).toBe(2);
+    expect(stats.webglByAxes["worldPrimitive:primitive"]).toBe(1);
     expect(stats.webglByAxes["worldSprite:quad"]).toBe(4);
     expect(stats.canvasFallbackByAxes["debug:primitive"]).toBe(1);
     expect(stats.canvasFallbackByAxes["worldPrimitive:primitive"]).toBe(1);

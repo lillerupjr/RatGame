@@ -74,7 +74,6 @@ export function collectEntityDrawables(input: CollectionContext): void {
     getPlayerSpriteFrame,
     getPlayerSpriteFrameForDarknessPercent,
     PLAYER_R,
-    worldLightRegistry,
   } = input as any;
 
   const resolveSpriteBodyDraw = (
@@ -783,30 +782,6 @@ export function collectEntityDrawables(input: CollectionContext): void {
         finalForm: "quad",
         payload: {
           feet,
-        },
-      });
-    }
-  }
-
-  // ----------------------------
-  // Collect LIGHT render pieces into slices
-  // ----------------------------
-  {
-    const lightRenderPieces: any[] = worldLightRegistry.renderPieces;
-    for (let li = 0; li < lightRenderPieces.length; li++) {
-      const lightPiece = lightRenderPieces[li];
-      const renderKey: RenderKey = {
-        slice: lightPiece.slice,
-        within: lightPiece.within,
-        baseZ: lightPiece.baseZ,
-        kindOrder: KindOrder.LIGHT,
-        stableId: lightPiece.stableId,
-      };
-      enqueueSliceCommand(frameBuilder, renderKey, {
-        semanticFamily: "worldPrimitive",
-        finalForm: "primitive",
-        payload: {
-          lightPiece,
         },
       });
     }
