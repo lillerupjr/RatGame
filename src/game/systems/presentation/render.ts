@@ -112,7 +112,6 @@ import { resolveNavArrowTarget } from "../../ui/navArrowTarget";
 import { renderNavArrow } from "../../ui/navArrowRender";
 import { coinColorFromValue } from "../../economy/coins";
 import {
-  getCurrencyAtlasFrame,
   getCurrencyFrame,
   getCurrencyFrameForDarknessPercent,
 } from "../../content/loot/currencyVisual";
@@ -127,8 +126,13 @@ import {
   countRenderGroundStaticSurfaceAuthorityFiltered,
   countRenderGroundStaticSurfaceExamined,
   countRenderGroundStaticSurfaceFallbackEmitted,
+  countRenderStaticAtlasHit,
+  countRenderStaticAtlasMiss,
+  countRenderStaticAtlasRequest,
   countRenderTileLoopIteration,
   countRenderDrawableSort,
+  setRenderDynamicAtlasTextureCount,
+  setRenderStaticAtlasTextureCount,
   countRenderSliceKeySort,
   endRenderPerfFrame,
   countRenderWebGLGroundChunkDraw,
@@ -170,8 +174,10 @@ import {
 } from "./presentationImageTransforms";
 import {
   canvasGroundChunkCacheStore,
+  dynamicAtlasStore,
   monolithicStructureGeometryCacheStore,
-  structureSpriteAtlasStore,
+  sharedWorldAtlasStore,
+  staticAtlasStore,
 } from "./presentationSubsystemStores";
 import { syncCanvasGroundChunkCacheForFrame } from "./canvasGroundChunkCache";
 import { buildDebugFrameContext } from "./debug/debugFrameContext";
@@ -228,7 +234,7 @@ import {
 } from "../../../engine/render/consumers/renderWorldConsumers";
 
 const DEBUG_PLAYER_WEDGE = false;
-const DISABLE_WALLS_AND_CURTAINS = true;
+const DISABLE_WALLS_AND_CURTAINS = false;
 const CAMERA_FOLLOW_HALF_LIFE_DEFAULT_SEC = 0.08;
 const CAMERA_FOLLOW_SNAP_DISTANCE_SQ = 4096 * 4096;
 const CAMERA_SMOOTHING_INTENSITY_SCALE = 0.25;
@@ -238,6 +244,7 @@ const LOOT_GOBLIN_GLOW_PULSE_MIN = 0.95;
 const LOOT_GOBLIN_GLOW_PULSE_RANGE = 0.3;
 const LOOT_GOBLIN_GLOW_PULSE_SPEED = 2.8;
 const STRUCTURE_SHADOW_V1_MAX_DARKNESS = 0.38;
+let lastWorldAtlasMode: "dual" | "shared" | null = null;
 type ScreenPt = { x: number; y: number };
 
 /** Render tiles, entities, overlays, and debug layers. */
@@ -1129,10 +1136,38 @@ export async function renderSystem(
   if (groundChunkCacheSync.rebuiltChunkCount > 0) {
     countRenderCanvasGroundChunkRebuild(groundChunkCacheSync.rebuiltChunkCount);
   }
-  structureSpriteAtlasStore.sync({
-    compiledMap,
-    paletteVariantKey: activePaletteVariantKey,
-  });
+  const worldAtlasMode = renderSettings.worldAtlasMode === "shared" ? "shared" : "dual";
+  if (lastWorldAtlasMode !== worldAtlasMode) {
+    if (worldAtlasMode === "shared") dynamicAtlasStore.clear();
+    else sharedWorldAtlasStore.clear();
+    lastWorldAtlasMode = worldAtlasMode;
+  }
+  if (worldAtlasMode === "shared") {
+    staticAtlasStore.sync({
+      compiledMap,
+      paletteVariantKey: activePaletteVariantKey,
+      includeSpriteSources: false,
+      includeProjectedDecals: true,
+    });
+    sharedWorldAtlasStore.sync({
+      compiledMap,
+      paletteVariantKey: activePaletteVariantKey,
+    });
+    setRenderStaticAtlasTextureCount(staticAtlasStore.getPageCount() + sharedWorldAtlasStore.getPageCount());
+    setRenderDynamicAtlasTextureCount(sharedWorldAtlasStore.getPageCount());
+  } else {
+    staticAtlasStore.sync({
+      compiledMap,
+      paletteVariantKey: activePaletteVariantKey,
+      includeSpriteSources: true,
+      includeProjectedDecals: true,
+    });
+    dynamicAtlasStore.sync({
+      paletteVariantKey: activePaletteVariantKey,
+    });
+    setRenderStaticAtlasTextureCount(staticAtlasStore.getPageCount());
+    setRenderDynamicAtlasTextureCount(dynamicAtlasStore.getPageCount());
+  }
   const structureTriangleAdmissionMode = renderSettings.structureTriangleAdmissionMode ?? "hybrid";
   const structureTriangleCutoutEnabled = renderSettings.structureTriangleCutoutEnabled === true;
   const structureTriangleCutoutHalfWidth = Math.max(
@@ -1334,7 +1369,6 @@ export async function renderSystem(
     VFX_CLIPS,
     ctx,
     getPickupWorld,
-    getCurrencyAtlasFrame,
     getCurrencyFrame,
     coinColorFromValue,
     registry,
@@ -1393,7 +1427,32 @@ export async function renderSystem(
     rampRoadTiles,
     resolveRenderZBand,
     structureShadowFrame,
-    getStructureSpriteAtlasFrame: (spriteId: string) => structureSpriteAtlasStore.getAtlasFrame(spriteId),
+    getStaticAtlasSpriteFrame: (spriteId: string) => {
+      countRenderStaticAtlasRequest();
+      const frame = worldAtlasMode === "shared"
+        ? sharedWorldAtlasStore.getSpriteFrame(spriteId)
+        : staticAtlasStore.getSpriteFrame(spriteId);
+      if (frame) countRenderStaticAtlasHit();
+      else countRenderStaticAtlasMiss();
+      return frame;
+    },
+    getStaticAtlasProjectedDecalFrame: (lookup: {
+      setId: RuntimeDecalSetId;
+      variantIndex: number;
+      rotationQuarterTurns: 0 | 1 | 2 | 3;
+      scale: number;
+    }) => {
+      countRenderStaticAtlasRequest();
+      const frame = staticAtlasStore.getProjectedDecalFrame(lookup);
+      if (frame) countRenderStaticAtlasHit();
+      else countRenderStaticAtlasMiss();
+      return frame;
+    },
+    getDynamicAtlasFrameForImage: (image: object | null | undefined) => (
+      worldAtlasMode === "shared"
+        ? sharedWorldAtlasStore.getFrameForImage(image)
+        : dynamicAtlasStore.getFrameForImage(image)
+    ),
     monolithicStructureGeometryCacheStore,
     getFlippedOverlayImage,
     SHOW_STRUCTURE_SLICE_DEBUG,

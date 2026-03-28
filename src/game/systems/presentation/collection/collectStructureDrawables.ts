@@ -12,8 +12,9 @@ import {
   buildQuadRenderPieceFromPoints,
   resolveTriangleCutoutAlpha,
 } from "../renderCommandGeometry";
-import { remapStructureTrianglePointToAtlas } from "../structureSpriteAtlas";
 import {
+  countRenderStaticAtlasBypass,
+  countRenderStaticAtlasFallback,
   countRenderStructureEstimatedTrianglesAvoided,
   countRenderStructureMonolithicGroupSubmission,
   countRenderStructureMonolithicTriangles,
@@ -100,9 +101,8 @@ export function collectStructureDrawables(input: CollectionContext): {
     playerCameraTy,
     isParentTileAfterPlayer,
     toScreenAtZ,
-    getStructureSpriteAtlasFrame,
+    getStaticAtlasSpriteFrame,
     monolithicStructureGeometryCacheStore,
-    getTileSpriteById,
     getFlippedOverlayImage,
     SHOW_STRUCTURE_SLICE_DEBUG,
     SHOW_STRUCTURE_TRIANGLE_FOOTPRINT_DEBUG,
@@ -128,7 +128,11 @@ export function collectStructureDrawables(input: CollectionContext): {
       scale?: number;
     },
   ) => {
-    const atlasFrame = overlaySpriteId ? (getStructureSpriteAtlasFrame?.(overlaySpriteId) ?? null) : null;
+    const atlasFrame = overlaySpriteId ? (getStaticAtlasSpriteFrame?.(overlaySpriteId) ?? null) : null;
+    if (!atlasFrame) {
+      if (overlaySpriteId) countRenderStaticAtlasFallback();
+      else countRenderStaticAtlasBypass();
+    }
     const scale = Number.isFinite(Number(draw.scale)) ? Number(draw.scale) : 1;
     const localSourceWidth = Number(draw.dw ?? 0);
     const localSourceHeight = Number(draw.dh ?? 0);
@@ -216,7 +220,10 @@ export function collectStructureDrawables(input: CollectionContext): {
         y: point.y,
       })) as [RenderPoint, RenderPoint, RenderPoint];
       const remappedSrcPoints = atlasFrame
-        ? flippedSrcPoints.map((point) => remapStructureTrianglePointToAtlas(point, atlasFrame))
+        ? flippedSrcPoints.map((point) => ({
+          x: atlasFrame.sx + Number(point.x ?? 0),
+          y: atlasFrame.sy + Number(point.y ?? 0),
+        }))
         : flippedSrcPoints;
       const dstPoints = triangle.points.map((point: any) => ({
         x: Number(point.x ?? 0),
@@ -525,17 +532,6 @@ export function collectStructureDrawables(input: CollectionContext): {
       if (structureDrawable.payload.kind === "overlay") {
         const overlay = structureDrawable.payload.piece.overlay;
         const draw = structureDrawable.payload.piece.draw;
-        if ((overlay.kind ?? "ROOF") === "PROP") {
-          enqueueSliceCommand(frameBuilder, structureDrawable.key, {
-            semanticFamily: "worldSprite",
-            finalForm: "quad",
-            payload: {
-              draw,
-            },
-          });
-          continue;
-        }
-
         countRenderStructureTotalSubmission();
         countRenderStructureRectMeshSubmission();
         countRenderStructureRectMeshMigratedToQuad();
@@ -550,7 +546,11 @@ export function collectStructureDrawables(input: CollectionContext): {
       }
 
       const piece = structureDrawable.payload.piece;
-      const atlasFrame = piece.overlay.spriteId ? (getStructureSpriteAtlasFrame?.(piece.overlay.spriteId) ?? null) : null;
+      const atlasFrame = piece.overlay.spriteId ? (getStaticAtlasSpriteFrame?.(piece.overlay.spriteId) ?? null) : null;
+      if (!atlasFrame) {
+        if (piece.overlay.spriteId) countRenderStaticAtlasFallback();
+        else countRenderStaticAtlasBypass();
+      }
       const sourceWidth = Number(piece.draw.dw ?? 0);
       const compareDistanceOnlyStableIds = new Set<number>(
         piece.compareDistanceOnlyTriangles.map((triangle: any) => triangle.stableId),

@@ -2,7 +2,12 @@ import { getRenderPerfSnapshot } from "../renderPerfCounters";
 import type { RenderDebugScreenPassInput } from "./debugRenderTypes";
 import { describeRenderBackendFallbackReason } from "../backend/renderBackendSelection";
 import type { CacheMetricSample } from "../cacheMetricsRegistry";
-import type { WorldBatchAudit, WorldBatchBreakReason, WorldBatchFamilySummary } from "./worldBatchAudit";
+import type {
+  WorldBatchAudit,
+  WorldBatchBreakReason,
+  WorldBatchFamilySummary,
+  WorldBatchTextureBreakCause,
+} from "./worldBatchAudit";
 
 type FramePerf = {
   off: string[];
@@ -15,6 +20,14 @@ type FramePerf = {
   cache: string[];
   all: string[];
 };
+
+type RenderDebugLightingSnapshot = {
+  perfLines: string[];
+  screenLines: string[];
+  text: string;
+};
+
+let latestRenderDebugLightingSnapshotText = "";
 
 function formatValue(value: number): string {
   return value >= 10 ? value.toFixed(0) : value.toFixed(1);
@@ -82,6 +95,27 @@ function familyByName(audit: WorldBatchAudit | null | undefined, family: string)
   return audit?.familySummaries.find((summary) => summary.family === family) ?? null;
 }
 
+function topTextureBreakCauses(
+  audit: WorldBatchAudit | null | undefined,
+  limit = 3,
+): WorldBatchTextureBreakCause[] {
+  return (audit?.topTextureBreakCauses ?? []).slice(0, limit);
+}
+
+function formatAtlasOverlayLine(
+  scope: "static" | "dynamic",
+  metrics: {
+    requests: number;
+    hits: number;
+    misses: number;
+    bypasses: number;
+    fallbacks: number;
+    textures: number;
+  },
+): string {
+  return `atlas(${scope}): req:${formatValue(metrics.requests)} hit:${formatValue(metrics.hits)} miss:${formatValue(metrics.misses)} bypass:${formatValue(metrics.bypasses)} fb:${formatValue(metrics.fallbacks)} tex:${formatValue(metrics.textures)}`;
+}
+
 function buildFramePerf(input: RenderDebugScreenPassInput): FramePerf {
   const perf = getRenderPerfSnapshot();
   const audit = input.worldBatchAudit ?? null;
@@ -111,6 +145,22 @@ function buildFramePerf(input: RenderDebugScreenPassInput): FramePerf {
     `breaks: ${topBreakReasons(audit, 2)}`,
     `geom: tri:${formatValue(perf.webglTrianglesSubmittedPerFrame || perf.structureTrianglesSubmittedPerFrame)} quad:${audit?.quadCommands ?? 0} tri%:${formatPercent(triPct)} quad%:${formatPercent(quadPct)}`,
     `textures: unique:${formatValue(perf.webglUniqueTexturesPerFrame)} binds:${formatValue(perf.webglTextureBindsPerFrame)} shared:${formatPercent(sharedTexturePct)}`,
+    formatAtlasOverlayLine("static", {
+      requests: perf.staticAtlasRequestsPerFrame,
+      hits: perf.staticAtlasHitsPerFrame,
+      misses: perf.staticAtlasMissesPerFrame,
+      bypasses: perf.staticAtlasBypassesPerFrame,
+      fallbacks: perf.staticAtlasFallbacksPerFrame,
+      textures: perf.staticAtlasTexturesPerFrame,
+    }),
+    formatAtlasOverlayLine("dynamic", {
+      requests: perf.dynamicAtlasRequestsPerFrame,
+      hits: perf.dynamicAtlasHitsPerFrame,
+      misses: perf.dynamicAtlasMissesPerFrame,
+      bypasses: perf.dynamicAtlasBypassesPerFrame,
+      fallbacks: perf.dynamicAtlasFallbacksPerFrame,
+      textures: perf.dynamicAtlasTexturesPerFrame,
+    }),
   ];
   const world = [
     `perf(world): cmd:${audit?.totalWorldCommands ?? 0} batch:${audit?.totalWorldBatches ?? 0} avg:${audit?.averageRunLength.toFixed(1) ?? "0.0"} max:${audit?.maxRunLength ?? 0}`,
@@ -135,6 +185,25 @@ function buildFramePerf(input: RenderDebugScreenPassInput): FramePerf {
   const textures = [
     `perf(textures): unique:${formatValue(perf.webglUniqueTexturesPerFrame)} binds:${formatValue(perf.webglTextureBindsPerFrame)} uploads:${formatValue(perf.webglBufferUploadsPerFrame)}`,
     `breaks(texture): ${audit?.breakReasonCounts["texture changed"] ?? 0} shared:${formatPercent(sharedTexturePct)}`,
+    ...topTextureBreakCauses(audit, 3).map((cause, index) => (
+      `texBreak${index + 1}: ${cause.count}x ${cause.label}`
+    )),
+    formatAtlasOverlayLine("static", {
+      requests: perf.staticAtlasRequestsPerFrame,
+      hits: perf.staticAtlasHitsPerFrame,
+      misses: perf.staticAtlasMissesPerFrame,
+      bypasses: perf.staticAtlasBypassesPerFrame,
+      fallbacks: perf.staticAtlasFallbacksPerFrame,
+      textures: perf.staticAtlasTexturesPerFrame,
+    }),
+    formatAtlasOverlayLine("dynamic", {
+      requests: perf.dynamicAtlasRequestsPerFrame,
+      hits: perf.dynamicAtlasHitsPerFrame,
+      misses: perf.dynamicAtlasMissesPerFrame,
+      bypasses: perf.dynamicAtlasBypassesPerFrame,
+      fallbacks: perf.dynamicAtlasFallbacksPerFrame,
+      textures: perf.dynamicAtlasTexturesPerFrame,
+    }),
     ...topFamiliesByUniqueTextures(audit?.familySummaries ?? [], 3).map((summary) => (
       `texFam ${summary.family}: unique:${summary.uniqueTextures} cmd:${summary.commands} batch:${summary.batches} dom:${summary.dominantBreakReason}`
     )),
@@ -185,6 +254,69 @@ function buildFramePerf(input: RenderDebugScreenPassInput): FramePerf {
   };
 }
 
+function buildVisiblePerfLines(input: RenderDebugScreenPassInput, framePerf: FramePerf): string[] {
+  if (!input.renderPerfCountersEnabled) return [];
+  const mode = input.flags.perfOverlayMode ?? "overview";
+  return mode === "all" ? framePerf.all : framePerf[mode].slice(0, 10);
+}
+
+function buildVisibleScreenDebugLines(input: RenderDebugScreenPassInput): string[] {
+  const lines: string[] = [];
+  if (input.shadowSunDayCycleStatus.enabled) {
+    lines.push(
+      `dayCycle active mode:${input.shadowSunDayCycleStatus.cycleModeLabel} x${input.shadowSunDayCycleStatus.multiplier} steps:${input.shadowSunDayCycleStatus.stepsPerDay} span:${input.shadowSunDayCycleStatus.stepSpanMinutes.toFixed(1)}m seed:${input.shadowSunDayCycleStatus.manualSeedLabel} cont:${input.shadowSunDayCycleStatus.continuousTimeLabel} quant:${input.shadowSunDayCycleStatus.quantizedTimeLabel} idx:${input.shadowSunDayCycleStatus.stepIndex} ambElev:${input.ambientSunLighting.ambientElevationDeg.toFixed(1)} ambDark:${input.ambientSunLighting.ambientDarkness01.toFixed(3)} state:${input.shadowSunDayCycleStatus.advancing ? "advancing" : "frozen"} changed:${input.shadowSunDayCycleStatus.stepChanged ? 1 : 0} clamped:${input.shadowSunDayCycleStatus.advancementClamped ? 1 : 0} base:${input.shadowSunDayCycleStatus.baseRateLabel}`,
+    );
+  }
+  if (input.flags.showStructureTriangleFootprint) {
+    const forward = input.shadowSunModel.forward;
+    const projection = input.shadowSunModel.projectionDirection;
+    lines.push(
+      `shadowSun ${input.shadowSunModel.timeLabel} elev:${input.shadowSunModel.elevationDeg.toFixed(1)} ambElev:${input.ambientSunLighting.ambientElevationDeg.toFixed(1)} ambDark:${input.ambientSunLighting.ambientDarkness01.toFixed(3)} dir:${input.shadowSunModel.directionLabel} f(${forward.x.toFixed(3)},${forward.y.toFixed(3)},${forward.z.toFixed(3)}) p(${projection.x.toFixed(3)},${projection.y.toFixed(3)}) step:${input.shadowSunModel.stepKey}`,
+    );
+  }
+  if (input.flags.showRoadSemantic) {
+    lines.push(`roadW(player): ${input.roadWidthAtPlayer}`);
+  }
+  if (input.renderPerfCountersEnabled) {
+    const perf = getRenderPerfSnapshot();
+    lines.push(
+      `triAdmission:${input.structureTriangleAdmissionMode} tileRadius:${input.sliderPadding} cutout:${input.structureTriangleCutoutEnabled ? "on" : "off"} center:${input.playerCameraTx},${input.playerCameraTy} size:${input.structureTriangleCutoutHalfWidth}x${input.structureTriangleCutoutHalfHeight} alpha:${input.structureTriangleCutoutAlpha.toFixed(2)} zBands:${formatValue(perf.zBandCountPerFrame)}`,
+    );
+  }
+  return lines;
+}
+
+function buildRenderDebugLightingSnapshot(input: RenderDebugScreenPassInput): RenderDebugLightingSnapshot {
+  const perfLines = buildVisiblePerfLines(input, buildFramePerf(input));
+  const screenLines = buildVisibleScreenDebugLines(input);
+  if (perfLines.length <= 0 && screenLines.length <= 0) {
+    return {
+      perfLines,
+      screenLines,
+      text: "",
+    };
+  }
+  const perf = getRenderPerfSnapshot();
+  const sections: string[] = [
+    `Perf Snapshot backend:${perf.backendSelected} time:${new Date().toISOString()}`,
+  ];
+  if (perfLines.length > 0) sections.push(perfLines.join("\n"));
+  if (screenLines.length > 0) sections.push(screenLines.join("\n"));
+  return {
+    perfLines,
+    screenLines,
+    text: sections.join("\n\n"),
+  };
+}
+
+export function buildRenderDebugLightingSnapshotText(input: RenderDebugScreenPassInput): string {
+  return buildRenderDebugLightingSnapshot(input).text;
+}
+
+export function getLatestRenderDebugLightingSnapshotText(): string {
+  return latestRenderDebugLightingSnapshotText;
+}
+
 function drawPerfLines(ctx: CanvasRenderingContext2D, cssW: number, cssH: number, lines: readonly string[]): void {
   ctx.textAlign = "right";
   const x = cssW - 8;
@@ -225,18 +357,6 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
     dpr,
     flags,
     renderPerfCountersEnabled,
-    shadowSunModel,
-    ambientSunLighting,
-    shadowSunDayCycleStatus,
-    structureTriangleAdmissionMode,
-    sliderPadding,
-    playerCameraTx,
-    playerCameraTy,
-    structureTriangleCutoutEnabled,
-    structureTriangleCutoutHalfWidth,
-    structureTriangleCutoutHalfHeight,
-    structureTriangleCutoutAlpha,
-    roadWidthAtPlayer,
   } = input;
 
   ctx.save();
@@ -244,40 +364,22 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
   ctx.font = "12px monospace";
   ctx.fillStyle = "#fff";
 
-  if (renderPerfCountersEnabled) {
-    const framePerf = buildFramePerf(input);
+  const snapshot = buildRenderDebugLightingSnapshot(input);
+  latestRenderDebugLightingSnapshotText = snapshot.text;
+
+  if (renderPerfCountersEnabled && snapshot.perfLines.length > 0) {
     const mode = flags.perfOverlayMode ?? "overview";
-    const perfLines = mode === "all" ? framePerf.all : framePerf[mode].slice(0, 10);
-    if (perfLines.length > 0) {
-      if (mode === "all") {
-        drawPerfGrid(ctx, cssW, cssH, perfLines);
-      } else {
-        drawPerfLines(ctx, cssW, cssH, perfLines);
-      }
+    if (mode === "all") {
+      drawPerfGrid(ctx, cssW, cssH, snapshot.perfLines);
+    } else {
+      drawPerfLines(ctx, cssW, cssH, snapshot.perfLines);
     }
   }
 
   let screenDebugLineY = 30;
-  if (shadowSunDayCycleStatus.enabled) {
-    const cycleLine = `dayCycle active mode:${shadowSunDayCycleStatus.cycleModeLabel} x${shadowSunDayCycleStatus.multiplier} steps:${shadowSunDayCycleStatus.stepsPerDay} span:${shadowSunDayCycleStatus.stepSpanMinutes.toFixed(1)}m seed:${shadowSunDayCycleStatus.manualSeedLabel} cont:${shadowSunDayCycleStatus.continuousTimeLabel} quant:${shadowSunDayCycleStatus.quantizedTimeLabel} idx:${shadowSunDayCycleStatus.stepIndex} ambElev:${ambientSunLighting.ambientElevationDeg.toFixed(1)} ambDark:${ambientSunLighting.ambientDarkness01.toFixed(3)} state:${shadowSunDayCycleStatus.advancing ? "advancing" : "frozen"} changed:${shadowSunDayCycleStatus.stepChanged ? 1 : 0} clamped:${shadowSunDayCycleStatus.advancementClamped ? 1 : 0} base:${shadowSunDayCycleStatus.baseRateLabel}`;
-    ctx.fillText(cycleLine, 8, screenDebugLineY);
+  for (let i = 0; i < snapshot.screenLines.length; i++) {
+    ctx.fillText(snapshot.screenLines[i], 8, screenDebugLineY);
     screenDebugLineY += 16;
-  }
-  if (flags.showStructureTriangleFootprint) {
-    const forward = shadowSunModel.forward;
-    const projection = shadowSunModel.projectionDirection;
-    const sunLine = `shadowSun ${shadowSunModel.timeLabel} elev:${shadowSunModel.elevationDeg.toFixed(1)} ambElev:${ambientSunLighting.ambientElevationDeg.toFixed(1)} ambDark:${ambientSunLighting.ambientDarkness01.toFixed(3)} dir:${shadowSunModel.directionLabel} f(${forward.x.toFixed(3)},${forward.y.toFixed(3)},${forward.z.toFixed(3)}) p(${projection.x.toFixed(3)},${projection.y.toFixed(3)}) step:${shadowSunModel.stepKey}`;
-    ctx.fillText(sunLine, 8, screenDebugLineY);
-    screenDebugLineY += 16;
-  }
-
-  if (flags.showRoadSemantic) {
-    ctx.fillText(`roadW(player): ${roadWidthAtPlayer}`, 8, screenDebugLineY);
-  }
-  if (renderPerfCountersEnabled) {
-    const perf = getRenderPerfSnapshot();
-    const line = `triAdmission:${structureTriangleAdmissionMode} tileRadius:${sliderPadding} cutout:${structureTriangleCutoutEnabled ? "on" : "off"} center:${playerCameraTx},${playerCameraTy} size:${structureTriangleCutoutHalfWidth}x${structureTriangleCutoutHalfHeight} alpha:${structureTriangleCutoutAlpha.toFixed(2)} zBands:${formatValue(perf.zBandCountPerFrame)}`;
-    ctx.fillText(line, 8, screenDebugLineY);
   }
   ctx.restore();
 }

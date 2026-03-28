@@ -1,7 +1,9 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   currencyTierForValue,
-  getCurrencyAtlasFrame,
+  getCurrencyFrame,
+  getCurrencyFrameForDarknessPercent,
+  listCurrencyDynamicAtlasSpriteIds,
 } from "../../../../game/content/loot/currencyVisual";
 
 const rawSpriteCache = new Map<string, any>();
@@ -37,24 +39,9 @@ vi.mock("../../../../engine/render/sprites/renderSprites", () => ({
   }),
 }));
 
-beforeEach(() => {
-  (globalThis as any).document = {
-    createElement: (tag: string) => {
-      if (tag !== "canvas") throw new Error(`Unexpected element request: ${tag}`);
-      return {
-        width: 0,
-        height: 0,
-        getContext: () => ({
-          imageSmoothingEnabled: false,
-          drawImage: () => {},
-        }),
-      };
-    },
-  };
-});
-
 afterEach(() => {
-  delete (globalThis as any).document;
+  rawSpriteCache.clear();
+  litSpriteCache.clear();
 });
 
 describe("currencyTierForValue", () => {
@@ -76,17 +63,28 @@ describe("currencyTierForValue", () => {
     expect(currencyTierForValue(999)).toEqual({ dir: "gems", n: 5, frameCount: 4, fps: 10 });
   });
 
-  test("returns atlas-backed frames that share one image across currency tiers", () => {
-    const lowValueFrame = getCurrencyAtlasFrame(1, 0);
-    const highValueFrame = getCurrencyAtlasFrame(8, 0);
+  test("returns direct raw frames for live pickup rendering", () => {
+    const lowValueFrame = getCurrencyFrame(1, 0);
+    const highValueFrame = getCurrencyFrame(8, 0);
 
-    expect(lowValueFrame).not.toBeNull();
-    expect(highValueFrame).not.toBeNull();
-    expect(lowValueFrame?.image).toBe(highValueFrame?.image);
-    expect(lowValueFrame?.sw).toBe(16);
-    expect(lowValueFrame?.sh).toBe(16);
-    expect(highValueFrame?.sw).toBe(16);
-    expect(highValueFrame?.sh).toBe(16);
-    expect(`${lowValueFrame?.sx},${lowValueFrame?.sy}`).not.toBe(`${highValueFrame?.sx},${highValueFrame?.sy}`);
+    expect(lowValueFrame.ready).toBe(true);
+    expect(highValueFrame.ready).toBe(true);
+    expect((lowValueFrame.img as any).spriteId).toContain("loot/currency/coins/1/");
+    expect((highValueFrame.img as any).spriteId).toContain("loot/currency/gems/5/");
+  });
+
+  test("returns darkness-aware direct frames for lit pickup rendering", () => {
+    const litFrame = getCurrencyFrameForDarknessPercent(6, 0, 50);
+
+    expect(litFrame.ready).toBe(true);
+    expect((litFrame.img as any).spriteId).toContain("@dark:50");
+  });
+
+  test("lists every pickup frame for dynamic atlas inventory collection", () => {
+    const ids = listCurrencyDynamicAtlasSpriteIds();
+
+    expect(ids).toHaveLength(35);
+    expect(ids[0]).toContain("loot/currency/coins/1/");
+    expect(ids[ids.length - 1]).toContain("loot/currency/gems/5/");
   });
 });

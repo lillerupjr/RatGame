@@ -163,6 +163,46 @@ describe("groundCommandResolver", () => {
     expect(rampResolved?.payload.y0).toBe(20);
   });
 
+  it("uses static-atlas decal frames when available", () => {
+    const atlasImage = { width: 512, height: 512, id: "static-atlas" } as any;
+    const deps = makeDeps({
+      getStaticAtlasProjectedDecalFrame: vi.fn(() => ({
+        image: atlasImage,
+        sx: 80,
+        sy: 120,
+        sw: 128,
+        sh: 64,
+      })),
+      getRuntimeDecalSprite: vi.fn(() => {
+        throw new Error("direct decal fallback should not run when atlas frame exists");
+      }),
+      getRuntimeIsoDecalCanvas: vi.fn(() => {
+        throw new Error("direct decal bake should not run when atlas frame exists");
+      }),
+      getDiamondFitCanvas: vi.fn(() => {
+        throw new Error("direct decal diamond should not run when atlas frame exists");
+      }),
+    });
+    const decal = {
+      tx: 2,
+      ty: 3,
+      zBase: 0,
+      zLogical: 0,
+      renderAnchorY: 0.55,
+      setId: "road_markings",
+      variantIndex: 0,
+      rotationQuarterTurns: 0,
+    } as any;
+
+    const resolved = resolveGroundDecalProjectedCommand(decal, deps);
+
+    expect(resolved?.payload.image).toBe(atlasImage);
+    expect(resolved?.payload.sx).toBe(80);
+    expect(resolved?.payload.sy).toBe(120);
+    expect(resolved?.payload.sw).toBe(128);
+    expect(resolved?.payload.sh).toBe(64);
+  });
+
   it("excludes animated ocean tops from the static cache path while keeping them live", () => {
     const projectedOcean = { width: 128, height: 64 } as any;
     const deps = makeDeps({

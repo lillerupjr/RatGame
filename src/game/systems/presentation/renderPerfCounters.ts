@@ -69,6 +69,18 @@ type FrameCounters = {
   canvasGroundChunkDraws: number;
   canvasGroundChunksVisible: number;
   canvasGroundChunkRebuilds: number;
+  staticAtlasRequests: number;
+  staticAtlasHits: number;
+  staticAtlasMisses: number;
+  staticAtlasBypasses: number;
+  staticAtlasFallbacks: number;
+  staticAtlasTextures: number;
+  dynamicAtlasRequests: number;
+  dynamicAtlasHits: number;
+  dynamicAtlasMisses: number;
+  dynamicAtlasBypasses: number;
+  dynamicAtlasFallbacks: number;
+  dynamicAtlasTextures: number;
 };
 
 type Snapshot = {
@@ -139,6 +151,18 @@ type Snapshot = {
   canvasGroundChunkDrawsPerFrame: number;
   canvasGroundChunksVisiblePerFrame: number;
   canvasGroundChunkRebuildsPerFrame: number;
+  staticAtlasRequestsPerFrame: number;
+  staticAtlasHitsPerFrame: number;
+  staticAtlasMissesPerFrame: number;
+  staticAtlasBypassesPerFrame: number;
+  staticAtlasFallbacksPerFrame: number;
+  staticAtlasTexturesPerFrame: number;
+  dynamicAtlasRequestsPerFrame: number;
+  dynamicAtlasHitsPerFrame: number;
+  dynamicAtlasMissesPerFrame: number;
+  dynamicAtlasBypassesPerFrame: number;
+  dynamicAtlasFallbacksPerFrame: number;
+  dynamicAtlasTexturesPerFrame: number;
   cacheMetrics: CacheMetricsSnapshot;
 };
 
@@ -250,6 +274,18 @@ const ZERO_FRAME: FrameCounters = {
   canvasGroundChunkDraws: 0,
   canvasGroundChunksVisible: 0,
   canvasGroundChunkRebuilds: 0,
+  staticAtlasRequests: 0,
+  staticAtlasHits: 0,
+  staticAtlasMisses: 0,
+  staticAtlasBypasses: 0,
+  staticAtlasFallbacks: 0,
+  staticAtlasTextures: 0,
+  dynamicAtlasRequests: 0,
+  dynamicAtlasHits: 0,
+  dynamicAtlasMisses: 0,
+  dynamicAtlasBypasses: 0,
+  dynamicAtlasFallbacks: 0,
+  dynamicAtlasTextures: 0,
 };
 
 function makeZeroFrame(): FrameCounters {
@@ -345,6 +381,18 @@ let snapshot: Snapshot = {
   canvasGroundChunkDrawsPerFrame: 0,
   canvasGroundChunksVisiblePerFrame: 0,
   canvasGroundChunkRebuildsPerFrame: 0,
+  staticAtlasRequestsPerFrame: 0,
+  staticAtlasHitsPerFrame: 0,
+  staticAtlasMissesPerFrame: 0,
+  staticAtlasBypassesPerFrame: 0,
+  staticAtlasFallbacksPerFrame: 0,
+  staticAtlasTexturesPerFrame: 0,
+  dynamicAtlasRequestsPerFrame: 0,
+  dynamicAtlasHitsPerFrame: 0,
+  dynamicAtlasMissesPerFrame: 0,
+  dynamicAtlasBypassesPerFrame: 0,
+  dynamicAtlasFallbacksPerFrame: 0,
+  dynamicAtlasTexturesPerFrame: 0,
   cacheMetrics: {
     caches: [],
     totalEntries: 0,
@@ -479,6 +527,18 @@ function foldCurrentFrame(nowSec: number): void {
     canvasGroundChunkDrawsPerFrame: frame.canvasGroundChunkDraws,
     canvasGroundChunksVisiblePerFrame: frame.canvasGroundChunksVisible,
     canvasGroundChunkRebuildsPerFrame: frame.canvasGroundChunkRebuilds,
+    staticAtlasRequestsPerFrame: frame.staticAtlasRequests,
+    staticAtlasHitsPerFrame: frame.staticAtlasHits,
+    staticAtlasMissesPerFrame: frame.staticAtlasMisses,
+    staticAtlasBypassesPerFrame: frame.staticAtlasBypasses,
+    staticAtlasFallbacksPerFrame: frame.staticAtlasFallbacks,
+    staticAtlasTexturesPerFrame: frame.staticAtlasTextures,
+    dynamicAtlasRequestsPerFrame: frame.dynamicAtlasRequests,
+    dynamicAtlasHitsPerFrame: frame.dynamicAtlasHits,
+    dynamicAtlasMissesPerFrame: frame.dynamicAtlasMisses,
+    dynamicAtlasBypassesPerFrame: frame.dynamicAtlasBypasses,
+    dynamicAtlasFallbacksPerFrame: frame.dynamicAtlasFallbacks,
+    dynamicAtlasTexturesPerFrame: frame.dynamicAtlasTextures,
     cacheMetrics: sampleCacheMetricsRegistry(),
     groundStaticSurfaceExaminedPerFrame: frame.groundStaticSurfaceExamined,
     groundStaticSurfaceAuthorityFilteredPerFrame: frame.groundStaticSurfaceAuthorityFiltered,
@@ -566,6 +626,18 @@ function foldCurrentFrame(nowSec: number): void {
   accum.canvasGroundChunkDraws += frame.canvasGroundChunkDraws;
   accum.canvasGroundChunksVisible += frame.canvasGroundChunksVisible;
   accum.canvasGroundChunkRebuilds += frame.canvasGroundChunkRebuilds;
+  accum.staticAtlasRequests += frame.staticAtlasRequests;
+  accum.staticAtlasHits += frame.staticAtlasHits;
+  accum.staticAtlasMisses += frame.staticAtlasMisses;
+  accum.staticAtlasBypasses += frame.staticAtlasBypasses;
+  accum.staticAtlasFallbacks += frame.staticAtlasFallbacks;
+  accum.staticAtlasTextures += frame.staticAtlasTextures;
+  accum.dynamicAtlasRequests += frame.dynamicAtlasRequests;
+  accum.dynamicAtlasHits += frame.dynamicAtlasHits;
+  accum.dynamicAtlasMisses += frame.dynamicAtlasMisses;
+  accum.dynamicAtlasBypasses += frame.dynamicAtlasBypasses;
+  accum.dynamicAtlasFallbacks += frame.dynamicAtlasFallbacks;
+  accum.dynamicAtlasTextures += frame.dynamicAtlasTextures;
   mergeCountMaps(accum.backendWebglByAxes, frame.backendWebglByAxes);
   mergeCountMaps(accum.backendCanvasFallbackByAxes, frame.backendCanvasFallbackByAxes);
   mergeCountMaps(accum.backendUnsupportedByAxes, frame.backendUnsupportedByAxes);
@@ -667,6 +739,18 @@ function foldCurrentFrame(nowSec: number): void {
       canvasGroundChunkDrawsPerFrame: accum.canvasGroundChunkDraws / denom,
       canvasGroundChunksVisiblePerFrame: accum.canvasGroundChunksVisible / denom,
       canvasGroundChunkRebuildsPerFrame: accum.canvasGroundChunkRebuilds / denom,
+      staticAtlasRequestsPerFrame: accum.staticAtlasRequests / denom,
+      staticAtlasHitsPerFrame: accum.staticAtlasHits / denom,
+      staticAtlasMissesPerFrame: accum.staticAtlasMisses / denom,
+      staticAtlasBypassesPerFrame: accum.staticAtlasBypasses / denom,
+      staticAtlasFallbacksPerFrame: accum.staticAtlasFallbacks / denom,
+      staticAtlasTexturesPerFrame: accum.staticAtlasTextures / denom,
+      dynamicAtlasRequestsPerFrame: accum.dynamicAtlasRequests / denom,
+      dynamicAtlasHitsPerFrame: accum.dynamicAtlasHits / denom,
+      dynamicAtlasMissesPerFrame: accum.dynamicAtlasMisses / denom,
+      dynamicAtlasBypassesPerFrame: accum.dynamicAtlasBypasses / denom,
+      dynamicAtlasFallbacksPerFrame: accum.dynamicAtlasFallbacks / denom,
+      dynamicAtlasTexturesPerFrame: accum.dynamicAtlasTextures / denom,
       cacheMetrics: sampleCacheMetricsRegistry(),
     };
     accum = makeZeroFrame();
@@ -898,6 +982,66 @@ export function countRenderCanvasGroundChunkRebuild(n: number = 1): void {
   frame.canvasGroundChunkRebuilds += n;
 }
 
+export function countRenderStaticAtlasRequest(n: number = 1): void {
+  if (!enabled) return;
+  frame.staticAtlasRequests += n;
+}
+
+export function countRenderStaticAtlasHit(n: number = 1): void {
+  if (!enabled) return;
+  frame.staticAtlasHits += n;
+}
+
+export function countRenderStaticAtlasMiss(n: number = 1): void {
+  if (!enabled) return;
+  frame.staticAtlasMisses += n;
+}
+
+export function countRenderStaticAtlasBypass(n: number = 1): void {
+  if (!enabled) return;
+  frame.staticAtlasBypasses += n;
+}
+
+export function countRenderStaticAtlasFallback(n: number = 1): void {
+  if (!enabled) return;
+  frame.staticAtlasFallbacks += n;
+}
+
+export function setRenderStaticAtlasTextureCount(count: number): void {
+  if (!enabled) return;
+  frame.staticAtlasTextures = Math.max(0, count | 0);
+}
+
+export function countRenderDynamicAtlasRequest(n: number = 1): void {
+  if (!enabled) return;
+  frame.dynamicAtlasRequests += n;
+}
+
+export function countRenderDynamicAtlasHit(n: number = 1): void {
+  if (!enabled) return;
+  frame.dynamicAtlasHits += n;
+}
+
+export function countRenderDynamicAtlasMiss(n: number = 1): void {
+  if (!enabled) return;
+  frame.dynamicAtlasMisses += n;
+}
+
+export function countRenderDynamicAtlasBypass(n: number = 1): void {
+  if (!enabled) return;
+  frame.dynamicAtlasBypasses += n;
+}
+
+export function countRenderDynamicAtlasFallback(n: number = 1): void {
+  if (!enabled) return;
+  frame.dynamicAtlasFallbacks += n;
+}
+
+export function setRenderDynamicAtlasTextureCount(count: number): void {
+  if (!enabled) return;
+  frame.dynamicAtlasTextures = Math.max(0, count | 0);
+}
+
 export function noteRenderWebGLTextureUsage(source: object | null | undefined): void {
   if (!enabled || !source || (typeof source !== "object" && typeof source !== "function")) return;
   if (webglUniqueTextureSet.has(source)) return;
@@ -1012,6 +1156,18 @@ export function getRenderPerfSnapshot(): Snapshot {
       canvasGroundChunkDrawsPerFrame: 0,
       canvasGroundChunksVisiblePerFrame: 0,
       canvasGroundChunkRebuildsPerFrame: 0,
+      staticAtlasRequestsPerFrame: 0,
+      staticAtlasHitsPerFrame: 0,
+      staticAtlasMissesPerFrame: 0,
+      staticAtlasBypassesPerFrame: 0,
+      staticAtlasFallbacksPerFrame: 0,
+      staticAtlasTexturesPerFrame: 0,
+      dynamicAtlasRequestsPerFrame: 0,
+      dynamicAtlasHitsPerFrame: 0,
+      dynamicAtlasMissesPerFrame: 0,
+      dynamicAtlasBypassesPerFrame: 0,
+      dynamicAtlasFallbacksPerFrame: 0,
+      dynamicAtlasTexturesPerFrame: 0,
       cacheMetrics: {
         caches: [],
         totalEntries: 0,

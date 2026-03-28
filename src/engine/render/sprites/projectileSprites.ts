@@ -26,6 +26,11 @@ const PROJECTILE_URLS = {
     BAZOOKA: `${import.meta.env.BASE_URL}assets-runtime/projectiles/bazooka.png`,
 } as const;
 
+export type ProjectileAtlasSourceRecord = {
+    sourceKey: string;
+    record: Loaded;
+};
+
 function resolveUrl(file: string): string | null {
     for (const [kind, filename] of Object.entries(FILES)) {
         if (filename === file) return PROJECTILE_URLS[kind as keyof typeof PROJECTILE_URLS];
@@ -61,6 +66,14 @@ function loadByFile(file: string): Loaded {
 
 export function preloadProjectileSprites() {
     for (const f of Object.values(FILES)) loadByFile(f);
+}
+
+export function collectProjectileDynamicAtlasSources(): ProjectileAtlasSourceRecord[] {
+    const fileEntries = Array.from(new Set(Object.values(FILES))).sort();
+    return fileEntries.map((file) => ({
+        sourceKey: `projectile:${file}`,
+        record: loadByFile(file),
+    }));
 }
 
 // ---- Projectile Kind -> sprite ----

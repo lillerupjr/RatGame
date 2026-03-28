@@ -20,10 +20,20 @@ import {
   countRenderStructureSingleQuadSubmission,
   countRenderStructureTotalSubmission,
   countRenderStructureTrianglesSubmitted,
+  countRenderStaticAtlasBypass,
+  countRenderStaticAtlasFallback,
+  countRenderStaticAtlasHit,
+  countRenderStaticAtlasMiss,
+  countRenderStaticAtlasRequest,
   countRenderWebGLBatch,
   countRenderWebGLBufferUpload,
   countRenderWebGLCanvasComposite,
   countRenderWebGLDrawCall,
+  countRenderDynamicAtlasBypass,
+  countRenderDynamicAtlasFallback,
+  countRenderDynamicAtlasHit,
+  countRenderDynamicAtlasMiss,
+  countRenderDynamicAtlasRequest,
   countRenderWebGLGroundChunkDraw,
   countRenderWebGLGroundChunkTextureUpload,
   countRenderWebGLGroundChunksVisible,
@@ -33,14 +43,19 @@ import {
   endRenderPerfFrame,
   getRenderPerfSnapshot,
   noteRenderWebGLTextureUsage,
+  setRenderDynamicAtlasTextureCount,
   setRenderBackendStats,
   setRenderPerfCountersEnabled,
+  setRenderStaticAtlasTextureCount,
 } from "../../../../game/systems/presentation/renderPerfCounters";
 import {
   registerCacheMetricSource,
   resetCacheMetricsRegistryForTests,
 } from "../../../../game/systems/presentation/cacheMetricsRegistry";
-import { renderDebugLightingOverlay } from "../../../../game/systems/presentation/debug/renderDebugLighting";
+import {
+  buildRenderDebugLightingSnapshotText,
+  renderDebugLightingOverlay,
+} from "../../../../game/systems/presentation/debug/renderDebugLighting";
 
 function resetPerfCounters(): void {
   setRenderPerfCountersEnabled(false);
@@ -132,6 +147,18 @@ describe("render perf counters", () => {
     countRenderStructureQuadApproxRejected(3);
     countRenderStructureTrianglesSubmitted(12);
     countRenderStructureEstimatedTrianglesAvoided(9);
+    countRenderStaticAtlasRequest(5);
+    countRenderStaticAtlasHit(4);
+    countRenderStaticAtlasMiss(1);
+    countRenderStaticAtlasBypass(2);
+    countRenderStaticAtlasFallback(1);
+    setRenderStaticAtlasTextureCount(3);
+    countRenderDynamicAtlasRequest(7);
+    countRenderDynamicAtlasHit(3);
+    countRenderDynamicAtlasMiss(4);
+    countRenderDynamicAtlasBypass(5);
+    countRenderDynamicAtlasFallback(4);
+    setRenderDynamicAtlasTextureCount(6);
     noteRenderWebGLTextureUsage({ id: "a" });
     noteRenderWebGLTextureUsage({ id: "b" });
     setBackend("webgl");
@@ -166,6 +193,18 @@ describe("render perf counters", () => {
     expect(snapshot.structureQuadApproxRejectedPerFrame).toBe(3);
     expect(snapshot.structureTrianglesSubmittedPerFrame).toBe(12);
     expect(snapshot.structureEstimatedTrianglesAvoidedPerFrame).toBe(9);
+    expect(snapshot.staticAtlasRequestsPerFrame).toBe(5);
+    expect(snapshot.staticAtlasHitsPerFrame).toBe(4);
+    expect(snapshot.staticAtlasMissesPerFrame).toBe(1);
+    expect(snapshot.staticAtlasBypassesPerFrame).toBe(2);
+    expect(snapshot.staticAtlasFallbacksPerFrame).toBe(1);
+    expect(snapshot.staticAtlasTexturesPerFrame).toBe(3);
+    expect(snapshot.dynamicAtlasRequestsPerFrame).toBe(7);
+    expect(snapshot.dynamicAtlasHitsPerFrame).toBe(3);
+    expect(snapshot.dynamicAtlasMissesPerFrame).toBe(4);
+    expect(snapshot.dynamicAtlasBypassesPerFrame).toBe(5);
+    expect(snapshot.dynamicAtlasFallbacksPerFrame).toBe(4);
+    expect(snapshot.dynamicAtlasTexturesPerFrame).toBe(6);
   });
 
   it("groups overlay diagnostics by selected perf mode", () => {
@@ -212,6 +251,15 @@ describe("render perf counters", () => {
     countRenderStructureQuadApproxRejected(2);
     countRenderStructureTrianglesSubmitted(10);
     countRenderStructureEstimatedTrianglesAvoided(6);
+    countRenderStaticAtlasRequest(2717);
+    countRenderStaticAtlasHit(2717);
+    setRenderStaticAtlasTextureCount(3);
+    countRenderDynamicAtlasRequest(12);
+    countRenderDynamicAtlasHit(4);
+    countRenderDynamicAtlasMiss(8);
+    countRenderDynamicAtlasBypass(37);
+    countRenderDynamicAtlasFallback(8);
+    setRenderDynamicAtlasTextureCount(6);
     setBackend("webgl");
     publishCurrentPerfFrame();
     renderDebugLightingOverlay({
@@ -300,8 +348,95 @@ describe("render perf counters", () => {
     expect(webglLines.some((line) => line.includes("world: cmd:12 avgBatch:2.4 maxBatch:4"))).toBe(true);
     expect(webglLines.some((line) => line.includes("breaks: texture changed:2"))).toBe(true);
     expect(webglLines.some((line) => line.includes("textures: unique:0.0 binds:6.0"))).toBe(true);
+    expect(webglLines.some((line) => line.includes("atlas(static): req:2717"))).toBe(true);
+    expect(webglLines.some((line) => line.includes("atlas(dynamic): req:12 hit:4.0 miss:8.0 bypass:37"))).toBe(true);
     expect(webglLines.some((line) => line.includes("cache testCache"))).toBe(false);
     expect(webglLines.some((line) => line.includes("groundAuthority"))).toBe(false);
+
+    const snapshotText = buildRenderDebugLightingSnapshotText({
+      ctx,
+      cssW: 320,
+      cssH: 180,
+      dpr: 1,
+      flags: makeFlags("overview"),
+      fps: 60,
+      frameTimeMs: 16.7,
+      renderPerfCountersEnabled: true,
+      shadowSunModel: { forward: { x: 0, y: 0, z: 0 }, projectionDirection: { x: 0, y: 0 }, timeLabel: "", elevationDeg: 0, directionLabel: "", stepKey: "" },
+      shadowSunDayCycleStatus: {
+        enabled: false,
+        cycleModeLabel: "",
+        multiplier: 1,
+        stepsPerDay: 0,
+        stepSpanMinutes: 0,
+        manualSeedLabel: "",
+        continuousTimeLabel: "",
+        quantizedTimeLabel: "",
+        stepIndex: 0,
+        advancing: false,
+        stepChanged: false,
+        advancementClamped: false,
+        baseRateLabel: "",
+      },
+      ambientSunLighting: {
+        ambientElevationDeg: 0,
+        ambientDarkness01: 0,
+      },
+      structureTriangleAdmissionMode: "viewport",
+      sliderPadding: 0,
+      playerCameraTx: 0,
+      playerCameraTy: 0,
+      structureTriangleCutoutEnabled: false,
+      structureTriangleCutoutHalfWidth: 0,
+      structureTriangleCutoutHalfHeight: 0,
+      structureTriangleCutoutAlpha: 0,
+      roadWidthAtPlayer: 0,
+      worldBatchAudit: {
+        inspectedBackend: "webgl",
+        compatibilityFields: ["semanticFamily/finalForm", "texture identity"],
+        totalWorldCommands: 12,
+        quadCommands: 6,
+        triangleCommands: 4,
+        batchableCommands: 10,
+        texturedCommands: 8,
+        uniqueTextures: 3,
+        totalWorldBatches: 5,
+        averageRunLength: 2.4,
+        maxRunLength: 4,
+        compatibleContinuations: 7,
+        totalBatchBreaks: 4,
+        breakReasonCounts: {
+          "compatible continuation": 7,
+          "render family changed": 1,
+          "primitive type changed": 0,
+          "shader/material changed": 0,
+          "texture changed": 2,
+          "blend mode changed": 0,
+          "unsupported/fallback path changed": 1,
+          "non-batchable path": 0,
+          "other state incompatibility": 0,
+        },
+        familySummaries: [{
+          family: "props",
+          commands: 6,
+          batches: 3,
+          averageRunLength: 2,
+          maxRunLength: 3,
+          uniqueTextures: 2,
+          dominantBreakReason: "texture changed",
+        }],
+        sampleBoundaries: [{
+          index: 3,
+          reason: "texture changed",
+          previous: "props worldSprite:quad texturedTriangles tex1 normal world",
+          next: "props worldSprite:quad texturedTriangles tex2 normal world",
+        }],
+      },
+    } as any);
+    expect(snapshotText).toContain("Perf Snapshot backend:webgl");
+    expect(snapshotText).toContain("perf(overview): fps:60");
+    expect(snapshotText).toContain("atlas(static): req:2717");
+    expect(snapshotText).toContain("triAdmission:viewport");
 
     ctx.fillText.mockClear();
 
@@ -424,6 +559,14 @@ describe("render perf counters", () => {
           dominantBreakReason: "texture changed",
         }],
         sampleBoundaries: [],
+        topTextureBreakCauses: [
+          {
+            label: "props:staticAtlas:p0 -> entities:dynamicAtlas:p0",
+            count: 2,
+            previous: "props worldSprite:quad texturedTriangles tex1 normal world",
+            next: "entities worldSprite:quad texturedTriangles tex2 normal world",
+          },
+        ],
         runLengths: {
           averageTextureRun: 1.6,
           maxTextureRun: 3,
@@ -593,6 +736,14 @@ describe("render perf counters", () => {
           dominantBreakReason: "texture changed",
         }],
         sampleBoundaries: [],
+        topTextureBreakCauses: [
+          {
+            label: "props:staticAtlas:p0 -> entities:dynamicAtlas:p0",
+            count: 2,
+            previous: "props worldSprite:quad texturedTriangles tex1 normal world",
+            next: "entities worldSprite:quad texturedTriangles tex2 normal world",
+          },
+        ],
         runLengths: {
           averageTextureRun: 1.6,
           maxTextureRun: 3,
@@ -610,6 +761,7 @@ describe("render perf counters", () => {
     expect(allLines.some((line) => line.includes("perf(overview): fps:58"))).toBe(true);
     expect(allLines.some((line) => line.includes("perf(world): cmd:12 batch:5"))).toBe(true);
     expect(allLines.some((line) => line.includes("perf(structures): total:4.0 rect:2.0 rectQuad:2.0"))).toBe(true);
+    expect(allLines.some((line) => line.includes("texBreak1: 2x props:staticAtlas:p0 -> entities:dynamicAtlas:p0"))).toBe(true);
     expect(allLines.some((line) => line.includes("perf(ground): surf seen:4.0 filtered:3.0 fallback:1.0"))).toBe(true);
     expect(allLines.some((line) => line.includes("perf(cache): entries:3 bytes:2.0KiB"))).toBe(true);
   });

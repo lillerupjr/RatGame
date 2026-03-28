@@ -11,8 +11,9 @@ import {
   type LightColorModeOverride,
   type LightStrengthOverride,
   type StructureTriangleAdmissionMode,
+  type WorldAtlasMode,
 } from "./settingsTypes";
-export type { LightColorModeOverride, LightStrengthOverride, StructureTriangleAdmissionMode } from "./settingsTypes";
+export type { LightColorModeOverride, LightStrengthOverride, StructureTriangleAdmissionMode, WorldAtlasMode } from "./settingsTypes";
 export { PALETTE_REMAP_WEIGHT_OPTIONS } from "./settingsTypes";
 
 export const MIN_GAME_SPEED = 0.5;
@@ -77,6 +78,10 @@ function normalizeStructureTriangleCutoutAlpha(value: unknown): number {
   return Math.max(0, Math.min(1, numeric));
 }
 
+function normalizeWorldAtlasMode(value: unknown): WorldAtlasMode {
+  return value === "shared" ? "shared" : "dual";
+}
+
 function resolvePaletteIdForGroup(group: SystemOverrides["paletteGroup"], paletteId: unknown): string {
   const candidate = typeof paletteId === "string" ? paletteId : "";
   if (isPaletteIdInGroup(candidate, group)) return candidate;
@@ -98,6 +103,7 @@ export const DEFAULT_SYSTEM_OVERRIDES: SystemOverrides = {
   structureTriangleCutoutHeight: 6,
   structureTriangleCutoutAlpha: 0.30,
   tileRenderRadius: 2,
+  worldAtlasMode: "dual",
 
   paletteSwapEnabled: false,
   darknessMaskDebugDisabled: true,
@@ -146,6 +152,7 @@ export function sanitizeSystemOverrides(input: Partial<SystemOverrides> | undefi
     structureTriangleCutoutHeight: normalizeStructureTriangleCutoutSpan(merged.structureTriangleCutoutHeight),
     structureTriangleCutoutAlpha: normalizeStructureTriangleCutoutAlpha(merged.structureTriangleCutoutAlpha),
     tileRenderRadius: Math.max(-12, Math.min(12, Math.round(Number(merged.tileRenderRadius) || 0))),
+    worldAtlasMode: normalizeWorldAtlasMode(merged.worldAtlasMode),
 
     paletteSwapEnabled: !!merged.paletteSwapEnabled,
     darknessMaskDebugDisabled: !!merged.darknessMaskDebugDisabled,

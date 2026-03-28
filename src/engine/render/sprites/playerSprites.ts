@@ -35,6 +35,16 @@ const PLAYER_SOURCE: SpriteLoaderSource = { packRoot: "entities/player" };
 const PLAYER_WALK_ANIM = "walk";
 const PLAYER_ANCHOR_X = 0.5;
 const PLAYER_ANCHOR_Y = 0.75;
+const PLAYER_DIR_KEYS = [
+    "north",
+    "north-east",
+    "east",
+    "south-east",
+    "south",
+    "south-west",
+    "west",
+    "north-west",
+] as const;
 const PLAYER_SKIN_SCALE: Record<string, number> = {
     jack: 1,
     hobo: 1,
@@ -70,6 +80,21 @@ function getPaletteMap(paletteId: string): Map<string, SpritePack> {
     const created = new Map<string, SpritePack>();
     packsByPalette.set(paletteId, created);
     return created;
+}
+
+export function listPlayerDynamicAtlasSpriteIds(): string[] {
+    const ids: string[] = [];
+    for (const dirKey of PLAYER_DIR_KEYS) {
+        ids.push(`${PLAYER_SOURCE.packRoot}/${playerSkin}/rotations/${dirKey}`);
+    }
+    for (const dirKey of PLAYER_DIR_KEYS) {
+        for (let i = 0; i < 6; i++) {
+            ids.push(
+                `${PLAYER_SOURCE.packRoot}/${playerSkin}/animations/${PLAYER_WALK_ANIM}/${dirKey}/frame_${String(i).padStart(3, "0")}`,
+            );
+        }
+    }
+    return ids;
 }
 
 export function setPlayerSkin(skin: string) {

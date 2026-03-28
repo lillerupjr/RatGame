@@ -81,6 +81,13 @@ export function mountSystemOverridesSection(
     (value) => `${value}`,
     (value) => applySystemPatch({ tileRenderRadius: value }),
   );
+  const worldAtlasMode = createSelectRow<SystemOverrides["worldAtlasMode"]>(
+    renderingGrid,
+    "World Atlas Mode",
+    ["dual", "shared"],
+    (value) => value,
+    (value) => applySystemPatch({ worldAtlasMode: value }),
+  );
   const disableVisualCompiledCutoutCache = createToggleRow(renderingGrid, "Disable Compiled Cutout Cache", (checked) => {
     applySystemPatch({ disableVisualCompiledCutoutCache: checked });
   });
@@ -256,6 +263,7 @@ export function mountSystemOverridesSection(
       structureTriangleCutoutHeight.value = `${system.structureTriangleCutoutHeight}`;
       structureTriangleCutoutAlpha.value = `${system.structureTriangleCutoutAlpha}`;
       tileRenderRadius.value = `${system.tileRenderRadius}`;
+      worldAtlasMode.value = system.worldAtlasMode;
       disableVisualCompiledCutoutCache.checked = system.disableVisualCompiledCutoutCache;
       mapOverlaysDisabled.checked = system.mapOverlaysDisabled;
       rampFaces.checked = system.rampFaces;

@@ -130,13 +130,16 @@ describe("settings bucket defaults", () => {
       spawnPerDepth: 99,
       paletteGroup: "test",
       paletteId: "unknown",
+      worldAtlasMode: "bogus" as any,
     } as any);
 
     expect(sanitized.gameSpeed).toBeLessThanOrEqual(1.5);
     expect(sanitized.paletteSWeightPercent).toBe(50);
     expect(sanitized.spawnPerDepth).toBeLessThanOrEqual(1.5);
     expect(sanitized.paletteId.length).toBeGreaterThan(0);
+    expect(sanitized.worldAtlasMode).toBe("dual");
     expect(DEFAULT_SYSTEM_OVERRIDES.gameSpeed).toBe(1);
     expect(DEFAULT_SYSTEM_OVERRIDES.darknessMaskDebugDisabled).toBe(true);
+    expect(DEFAULT_SYSTEM_OVERRIDES.worldAtlasMode).toBe("dual");
   });
 });

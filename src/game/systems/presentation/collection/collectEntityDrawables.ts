@@ -1,5 +1,12 @@
 import type { CollectionContext } from "../contracts/collectionContext";
 import { enqueueSliceCommand } from "../frame/renderFrameBuilder";
+import {
+  countRenderDynamicAtlasBypass,
+  countRenderDynamicAtlasFallback,
+  countRenderDynamicAtlasHit,
+  countRenderDynamicAtlasMiss,
+  countRenderDynamicAtlasRequest,
+} from "../renderPerfCounters";
 
 type RenderKey = any;
 type Dir8 = any;
@@ -15,7 +22,6 @@ export function collectEntityDrawables(input: CollectionContext): void {
     KindOrder,
     toScreen,
     getCurrencyFrame,
-    getCurrencyAtlasFrame,
     ctx,
     coinColorFromValue,
     frameBuilder,
@@ -67,6 +73,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
     playerSpritesReady,
     getPlayerSpriteFrame,
     PLAYER_R,
+    getDynamicAtlasFrameForImage,
   } = input as any;
 
   const resolveSpriteBodyDraw = (
@@ -125,6 +132,34 @@ export function collectEntityDrawables(input: CollectionContext): void {
     stableId: Number(renderKey.stableId) + stableOffset,
   });
 
+  const resolveDynamicAtlasImage = (
+    image: CanvasImageSource,
+    fallbackSw?: number,
+    fallbackSh?: number,
+  ): {
+    image: CanvasImageSource;
+    sx: number;
+    sy: number;
+    sw: number;
+    sh: number;
+  } => {
+    countRenderDynamicAtlasRequest();
+    const atlasFrame = getDynamicAtlasFrameForImage?.(image as object) ?? null;
+    if (atlasFrame) {
+      countRenderDynamicAtlasHit();
+    } else {
+      countRenderDynamicAtlasMiss();
+      countRenderDynamicAtlasFallback();
+    }
+    return {
+      image: atlasFrame?.image ?? image,
+      sx: atlasFrame?.sx ?? 0,
+      sy: atlasFrame?.sy ?? 0,
+      sw: atlasFrame?.sw ?? Number(fallbackSw ?? (image as { width?: number }).width ?? 0),
+      sh: atlasFrame?.sh ?? Number(fallbackSh ?? (image as { height?: number }).height ?? 0),
+    };
+  };
+
   // Collect PICKUPS into slices
   // ----------------------------
   {
@@ -149,38 +184,19 @@ export function collectEntityDrawables(input: CollectionContext): void {
       const p = toScreen(pickup.wx, pickup.wy);
       if (kind === 1) {
         const value = Math.max(1, Math.floor(w.xValue?.[i] ?? 1));
-        const atlasFrame = getCurrencyAtlasFrame?.(value, w.time ?? 0) ?? null;
-        if (atlasFrame) {
-          const size = 16;
-          enqueueSliceCommand(frameBuilder, imageSpriteKey(renderKey), {
-            semanticFamily: "worldSprite",
-            finalForm: "quad",
-            payload: {
-              image: atlasFrame.image,
-              sx: atlasFrame.sx,
-              sy: atlasFrame.sy,
-              sw: atlasFrame.sw,
-              sh: atlasFrame.sh,
-              dx: p.x - size * 0.5,
-              dy: p.y - size * 0.5,
-              dw: size,
-              dh: size,
-              alpha: 1,
-              pickupIndex: i,
-              pickupKind: kind,
-            },
-          });
-          continue;
-        }
-
         const sprite = getCurrencyFrame(value, w.time ?? 0);
         if (sprite?.ready && sprite.img) {
+          const atlas = resolveDynamicAtlasImage(sprite.img, sprite.img.width, sprite.img.height);
           const size = 16;
           enqueueSliceCommand(frameBuilder, imageSpriteKey(renderKey), {
             semanticFamily: "worldSprite",
             finalForm: "quad",
             payload: {
-              image: sprite.img,
+              image: atlas.image,
+              sx: atlas.sx,
+              sy: atlas.sy,
+              sw: atlas.sw,
+              sh: atlas.sh,
               dx: p.x - size * 0.5,
               dy: p.y - size * 0.5,
               dw: size,
@@ -204,6 +220,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
           screenY: p.y,
         },
       });
+      countRenderDynamicAtlasBypass();
     }
   }
 
@@ -247,6 +264,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
         moving,
       });
       if (frame) {
+        const atlas = resolveDynamicAtlasImage(frame.img, frame.sw, frame.sh);
         const draw = resolveSpriteBodyDraw(
           frame,
           (w as any).eAnchorX01?.[i],
@@ -258,11 +276,11 @@ export function collectEntityDrawables(input: CollectionContext): void {
           semanticFamily: "worldSprite",
           finalForm: "quad",
           payload: {
-            image: frame.img,
-            sx: frame.sx,
-            sy: frame.sy,
-            sw: frame.sw,
-            sh: frame.sh,
+            image: atlas.image,
+            sx: atlas.sx,
+            sy: atlas.sy,
+            sw: atlas.sw,
+            sh: atlas.sh,
             dx: Math.round(draw.dx),
             dy: Math.round(draw.dy),
             dw: draw.dw,
@@ -284,6 +302,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
           isBoss,
         },
       });
+      countRenderDynamicAtlasBypass();
     }
   }
 
@@ -310,6 +329,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
 
       const frame = vendorNpcSpritesReady() ? getVendorNpcSpriteFrame({ dir: npc.dirCurrent, time: w.time ?? 0 }) : null;
       if (frame) {
+        const atlas = resolveDynamicAtlasImage(frame.img, frame.sw, frame.sh);
         const draw = resolveSpriteBodyDraw(
           frame,
           (npc as any).anchorX01,
@@ -321,11 +341,11 @@ export function collectEntityDrawables(input: CollectionContext): void {
           semanticFamily: "worldSprite",
           finalForm: "quad",
           payload: {
-            image: frame.img,
-            sx: frame.sx,
-            sy: frame.sy,
-            sw: frame.sw,
-            sh: frame.sh,
+            image: atlas.image,
+            sx: atlas.sx,
+            sy: atlas.sy,
+            sw: atlas.sw,
+            sh: atlas.sh,
             dx: Math.round(draw.dx),
             dy: Math.round(draw.dy),
             dw: draw.dw,
@@ -345,6 +365,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
           feet,
         },
       });
+      countRenderDynamicAtlasBypass();
     }
   }
 
@@ -374,6 +395,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
       if (frameCount > 0) {
         const frame = mob.spriteFrames[mob.anim.frameIndex % frameCount];
         if (frame && frame.width > 0 && frame.height > 0) {
+          const atlas = resolveDynamicAtlasImage(frame, frame.width, frame.height);
           const draw = resolveImageBodyDraw(
             frame.width,
             frame.height,
@@ -389,7 +411,11 @@ export function collectEntityDrawables(input: CollectionContext): void {
             semanticFamily: "worldSprite",
             finalForm: "quad",
             payload: {
-              image: frame,
+              image: atlas.image,
+              sx: atlas.sx,
+              sy: atlas.sy,
+              sw: atlas.sw,
+              sh: atlas.sh,
               dx: snapPx(draw.dx),
               dy: snapPx(draw.dy),
               dw: draw.dw,
@@ -411,6 +437,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
           feet,
         },
       });
+      countRenderDynamicAtlasBypass();
     }
   }
 
@@ -461,13 +488,18 @@ export function collectEntityDrawables(input: CollectionContext): void {
         const frameIdx = clip && clip.spriteIds.length > 0 ? rawFrame % clip.spriteIds.length : -1;
         const sprite = clip && frameIdx >= 0 ? getSpriteById(clip.spriteIds[frameIdx]) : null;
         if (sprite?.ready && sprite.img) {
+          const atlas = resolveDynamicAtlasImage(sprite.img, sprite.img.width, sprite.img.height);
           const delta = worldDeltaToScreen(w.prDirX[i] ?? 1, w.prDirY[i] ?? 0);
           const angle = Math.atan2(delta.dy, delta.dx);
           enqueueSliceCommand(frameBuilder, renderKey, {
             semanticFamily: "worldSprite",
             finalForm: "quad",
             payload: {
-              image: sprite.img,
+              image: atlas.image,
+              sx: atlas.sx,
+              sy: atlas.sy,
+              sw: atlas.sw,
+              sh: atlas.sh,
               dx: p.x - 16,
               dy: p.y - zLift - 16,
               dw: 32,
@@ -489,12 +521,14 @@ export function collectEntityDrawables(input: CollectionContext): void {
               sparkStyle: true,
             },
           });
+          countRenderDynamicAtlasBypass();
         }
         continue;
       }
 
       const spr = getProjectileSpriteByKind(w.prjKind[i]);
       if (spr?.ready && spr.img && spr.img.width > 0 && spr.img.height > 0) {
+        const atlas = resolveDynamicAtlasImage(spr.img, spr.img.width, spr.img.height);
         const delta = worldDeltaToScreen(w.prDirX[i] ?? 1, w.prDirY[i] ?? 0);
         const angle = Math.atan2(delta.dy, delta.dx);
         const areaMult = Math.max(0.6, Math.min(2.5, (w.prR[i] ?? 4) / 4));
@@ -506,7 +540,11 @@ export function collectEntityDrawables(input: CollectionContext): void {
           semanticFamily: "worldSprite",
           finalForm: "quad",
           payload: {
-            image: spr.img,
+            image: atlas.image,
+            sx: atlas.sx,
+            sy: atlas.sy,
+            sw: atlas.sw,
+            sh: atlas.sh,
             dx: p.x - drawWidth * 0.5,
             dy: p.y - zLift - drawHeight * 0.5,
             dw: drawWidth,
@@ -529,6 +567,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
           zLift,
         },
       });
+      countRenderDynamicAtlasBypass();
     }
   }
 
@@ -583,6 +622,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
     const moving = !!((w as any)._plMoving ?? false);
     const frame = playerSpritesReady() ? getPlayerSpriteFrame({ dir, moving, time: w.time ?? 0 }) : null;
     if (frame) {
+      const atlas = resolveDynamicAtlasImage(frame.img, frame.sw, frame.sh);
       const draw = resolveSpriteBodyDraw(
         frame,
         (w as any)._plAnchorX01,
@@ -594,11 +634,11 @@ export function collectEntityDrawables(input: CollectionContext): void {
         semanticFamily: "worldSprite",
         finalForm: "quad",
         payload: {
-          image: frame.img,
-          sx: frame.sx,
-          sy: frame.sy,
-          sw: frame.sw,
-          sh: frame.sh,
+          image: atlas.image,
+          sx: atlas.sx,
+          sy: atlas.sy,
+          sw: atlas.sw,
+          sh: atlas.sh,
           dx: Math.round(draw.dx),
           dy: Math.round(draw.dy),
           dw: draw.dw,
@@ -614,6 +654,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
           feet,
         },
       });
+      countRenderDynamicAtlasBypass();
     }
   }
 

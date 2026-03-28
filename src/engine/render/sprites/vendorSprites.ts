@@ -128,6 +128,14 @@ function resolveFrameId(dir: Dir8, frameIndex: number): string {
   return `entities/npc/vendor/breathing-idle/${dirPath}/${file.slice(0, -4)}`;
 }
 
+export function listVendorNpcDynamicAtlasSpriteIds(): string[] {
+  const ids: string[] = [];
+  for (const dir of Object.keys(DIR_TO_PATH) as Dir8[]) {
+    for (let i = 0; i < FRAME_COUNT; i++) ids.push(resolveFrameId(dir, i));
+  }
+  return ids;
+}
+
 export async function preloadVendorNpcSprites(
   requestedPaletteVariantKey?: string,
 ): Promise<void> {

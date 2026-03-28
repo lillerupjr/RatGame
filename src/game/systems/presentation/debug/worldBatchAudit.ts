@@ -1,5 +1,6 @@
 import type { RenderCommand } from "../contracts/renderCommands";
 import { classifyCommandBackend } from "../backend/renderBackendCapabilities";
+import { getTextureDebugLabel, isGroundChunkTextureSource, isStableTextureSource } from "../stableTextureSource";
 
 export type WorldBatchBreakReason =
   | "compatible continuation"
@@ -25,6 +26,13 @@ export type WorldBatchFamilySummary = {
 export type WorldBatchBoundarySample = {
   index: number;
   reason: WorldBatchBreakReason;
+  previous: string;
+  next: string;
+};
+
+export type WorldBatchTextureBreakCause = {
+  label: string;
+  count: number;
   previous: string;
   next: string;
 };
@@ -66,6 +74,7 @@ export type WorldBatchAudit = {
   breakReasonCounts: Record<WorldBatchBreakReason, number>;
   familySummaries: WorldBatchFamilySummary[];
   sampleBoundaries: WorldBatchBoundarySample[];
+  topTextureBreakCauses?: WorldBatchTextureBreakCause[];
   runLengths: WorldRunLengthAudit;
   reorderProbes: WorldReorderProbe[];
 };
@@ -82,6 +91,7 @@ type AuditDescriptor = {
   batchable: boolean;
   shaderMaterial: string;
   textureToken: string | null;
+  textureLabel: string | null;
   blendMode: string | null;
   space: string | null;
   ownerGroupToken: string;
@@ -106,6 +116,7 @@ type SequenceStats = {
   totalBatchBreaks: number;
   breakReasonCounts: Record<WorldBatchBreakReason, number>;
   sampleBoundaries: WorldBatchBoundarySample[];
+  topTextureBreakCauses: WorldBatchTextureBreakCause[];
   familySummaries: WorldBatchFamilySummary[];
   runLengths: WorldRunLengthAudit;
 };
@@ -321,6 +332,45 @@ function ensureFamilySummary(
   return summary;
 }
 
+function basenameFromPath(value: string): string {
+  const normalized = value.split("?")[0].split("#")[0];
+  const slash = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
+  return slash >= 0 ? normalized.slice(slash + 1) : normalized;
+}
+
+function describeTextureSourceLabel(textureSource: object | null, textureToken: string | null): string | null {
+  if (!textureSource) return textureToken;
+  const flaggedLabel = getTextureDebugLabel(textureSource);
+  if (flaggedLabel) return flaggedLabel;
+
+  const anySource = textureSource as Record<string, unknown> & {
+    getAttribute?: (name: string) => string | null;
+    currentSrc?: string;
+    src?: string;
+    id?: string;
+  };
+  const attrLabel = typeof anySource.getAttribute === "function" ? anySource.getAttribute("data-label") : null;
+  if (typeof attrLabel === "string" && attrLabel.trim()) return attrLabel;
+  if (typeof anySource.id === "string" && anySource.id.trim()) return anySource.id;
+  if (typeof anySource.currentSrc === "string" && anySource.currentSrc.trim()) {
+    return basenameFromPath(anySource.currentSrc);
+  }
+  if (typeof anySource.src === "string" && anySource.src.trim()) {
+    return basenameFromPath(anySource.src);
+  }
+  if (isGroundChunkTextureSource(textureSource)) return textureToken ? `groundChunk(${textureToken})` : "groundChunk";
+  if (isStableTextureSource(textureSource)) return textureToken ? `stableCanvas(${textureToken})` : "stableCanvas";
+  const ctor = (textureSource as { constructor?: { name?: string } }).constructor?.name;
+  if (typeof ctor === "string" && ctor) return textureToken ? `${ctor}(${textureToken})` : ctor;
+  return textureToken;
+}
+
+function formatTextureBreakTransition(previous: AuditDescriptor, next: AuditDescriptor): string {
+  const previousLabel = previous.textureLabel ?? previous.textureToken ?? "tex-";
+  const nextLabel = next.textureLabel ?? next.textureToken ?? "tex-";
+  return `${previous.reportFamily}:${previousLabel} -> ${next.reportFamily}:${nextLabel}`;
+}
+
 function buildAuditDescriptor(
   command: RenderCommand,
   originalIndex: number,
@@ -350,6 +400,7 @@ function buildAuditDescriptor(
       batchable: false,
       shaderMaterial: "canvas2d",
       textureToken: null,
+      textureLabel: null,
       blendMode: null,
       space: null,
       ownerGroupToken,
@@ -370,6 +421,7 @@ function buildAuditDescriptor(
       batchable: false,
       shaderMaterial: backend === "canvas2d" ? "canvas2d" : "unsupported",
       textureToken: null,
+      textureLabel: null,
       blendMode: null,
       space: null,
       ownerGroupToken,
@@ -404,6 +456,7 @@ function buildAuditDescriptor(
 
   const textureSource = extractTextureSource(command);
   let textureToken: string | null = null;
+  let textureLabel: string | null = null;
   if (textureSource) {
     let textureId = textureIds.get(textureSource);
     if (!textureId) {
@@ -411,6 +464,7 @@ function buildAuditDescriptor(
       textureIds.set(textureSource, textureId);
     }
     textureToken = `tex${textureId}`;
+    textureLabel = describeTextureSourceLabel(textureSource, textureToken);
   }
 
   return {
@@ -423,6 +477,7 @@ function buildAuditDescriptor(
     batchable,
     shaderMaterial,
     textureToken,
+    textureLabel,
     blendMode,
     space,
     ownerGroupToken,
@@ -499,6 +554,7 @@ function analyzeSequence(descriptors: readonly AuditDescriptor[]): SequenceStats
   const breakReasonCounts = makeZeroBreakReasonCounts();
   const familySummaries = new Map<string, MutableFamilySummary>();
   const sampleBoundaries: WorldBatchBoundarySample[] = [];
+  const textureBreakCauseCounts = new Map<string, WorldBatchTextureBreakCause>();
 
   let totalWorldBatches = 0;
   let maxRunLength = 0;
@@ -526,6 +582,21 @@ function analyzeSequence(descriptors: readonly AuditDescriptor[]): SequenceStats
         if (currentRunLength > maxRunLength) maxRunLength = currentRunLength;
         currentRunLength = 1;
         familySummary.breakReasonCounts[reason] += 1;
+        if (reason === "texture changed") {
+          const previousDescriptor = descriptors[i - 1];
+          const label = formatTextureBreakTransition(previousDescriptor, descriptor);
+          const existing = textureBreakCauseCounts.get(label);
+          if (existing) {
+            existing.count += 1;
+          } else {
+            textureBreakCauseCounts.set(label, {
+              label,
+              count: 1,
+              previous: previousDescriptor.summary,
+              next: descriptor.summary,
+            });
+          }
+        }
         if (sampleBoundaries.length < 5) {
           sampleBoundaries.push({
             index: i - 1,
@@ -561,6 +632,9 @@ function analyzeSequence(descriptors: readonly AuditDescriptor[]): SequenceStats
       dominantBreakReason: dominantBreakReason(summary.breakReasonCounts),
     }))
     .sort((a, b) => b.commands - a.commands || b.batches - a.batches || a.family.localeCompare(b.family));
+  const topTextureBreakCauses = Array.from(textureBreakCauseCounts.values())
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+    .slice(0, 3);
 
   return {
     totalWorldBatches,
@@ -571,6 +645,7 @@ function analyzeSequence(descriptors: readonly AuditDescriptor[]): SequenceStats
     breakReasonCounts,
     familySummaries: familySummaryList,
     sampleBoundaries,
+    topTextureBreakCauses,
     runLengths: analyzeRunLengths(descriptors),
   };
 }
@@ -710,6 +785,7 @@ export function analyzeWorldBatchStream(
     breakReasonCounts: sequence.breakReasonCounts,
     familySummaries: sequence.familySummaries,
     sampleBoundaries: sequence.sampleBoundaries,
+    topTextureBreakCauses: sequence.topTextureBreakCauses,
     runLengths: sequence.runLengths,
     reorderProbes,
   };

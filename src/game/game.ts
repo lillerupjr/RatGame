@@ -20,6 +20,7 @@ import { dropsSystem } from "./systems/progression/drops";
 import {
   renderSystem,
 } from "./systems/presentation/render";
+import { getLatestRenderDebugLightingSnapshotText } from "./systems/presentation/debug/renderDebugLighting";
 import {
   prepareMonolithicStructureTrianglesForLoading as prepareRuntimeStructureTrianglesForLoadingInternal,
 } from "./structures/monolithicStructureGeometry";
@@ -934,6 +935,62 @@ export function createGame(args: CreateGameArgs) {
       e.preventDefault();
     }
   });
+
+  const perfSnapshotNoticeEl = document.createElement("div");
+  perfSnapshotNoticeEl.hidden = true;
+  perfSnapshotNoticeEl.style.position = "fixed";
+  perfSnapshotNoticeEl.style.right = "16px";
+  perfSnapshotNoticeEl.style.bottom = "16px";
+  perfSnapshotNoticeEl.style.zIndex = "1000";
+  perfSnapshotNoticeEl.style.padding = "6px 10px";
+  perfSnapshotNoticeEl.style.borderRadius = "8px";
+  perfSnapshotNoticeEl.style.font = '12px "IBM Plex Mono", monospace';
+  perfSnapshotNoticeEl.style.pointerEvents = "none";
+  perfSnapshotNoticeEl.style.boxShadow = "0 6px 18px rgba(0,0,0,0.35)";
+  perfSnapshotNoticeEl.style.background = "rgba(12, 14, 18, 0.92)";
+  perfSnapshotNoticeEl.style.color = "#f4f6fb";
+  document.body.appendChild(perfSnapshotNoticeEl);
+  let perfSnapshotNoticeTimer: number | null = null;
+
+  function showPerfSnapshotNotice(message: string, tone: "success" | "failure"): void {
+    perfSnapshotNoticeEl.textContent = message;
+    perfSnapshotNoticeEl.style.border = tone === "success"
+      ? "1px solid rgba(104, 211, 145, 0.65)"
+      : "1px solid rgba(248, 113, 113, 0.65)";
+    perfSnapshotNoticeEl.hidden = false;
+    if (perfSnapshotNoticeTimer != null) {
+      window.clearTimeout(perfSnapshotNoticeTimer);
+    }
+    perfSnapshotNoticeTimer = window.setTimeout(() => {
+      perfSnapshotNoticeEl.hidden = true;
+      perfSnapshotNoticeTimer = null;
+    }, 1600);
+  }
+
+  async function copyPerfOverlaySnapshot(): Promise<boolean> {
+    if (world.state !== "RUN") {
+      showPerfSnapshotNotice("Perf snapshot available in-run only", "failure");
+      return false;
+    }
+    const snapshotText = getLatestRenderDebugLightingSnapshotText().trim();
+    if (!snapshotText) {
+      showPerfSnapshotNotice("Perf snapshot unavailable", "failure");
+      return false;
+    }
+    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      showPerfSnapshotNotice("Clipboard unavailable", "failure");
+      return false;
+    }
+    try {
+      await navigator.clipboard.writeText(snapshotText);
+      showPerfSnapshotNotice("Perf snapshot copied", "success");
+      return true;
+    } catch (error) {
+      console.warn("[perf-snapshot] clipboard write failed", error);
+      showPerfSnapshotNotice("Perf snapshot copy failed", "failure");
+      return false;
+    }
+  }
 
   let world: World = createWorld({ seed: 1337, stage: cloneStage("DOCKS") });
   applyObjectivesFromActiveMap(world);
@@ -3642,6 +3699,7 @@ export function createGame(args: CreateGameArgs) {
     consumePendingFloorLoadIntent,
     quitRunToMenu,
     setMobileControlsEnabled,
+    copyPerfOverlaySnapshot,
     getWorld: () => world,
   };
 }

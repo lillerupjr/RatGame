@@ -4,6 +4,7 @@ import type {
   GroundDecalQuadPayload,
   GroundSurfaceQuadPayload,
 } from "./contracts/renderCommands";
+import type { StaticAtlasFrame, StaticAtlasProjectedDecalLookup } from "./staticAtlasStore";
 import {
   buildDiamondDestinationQuad,
   buildFlatTileDestinationQuad,
@@ -11,6 +12,7 @@ import {
   buildProjectedSurfacePayload,
   type RenderQuadPoints,
 } from "./renderCommandGeometry";
+import { countRenderStaticAtlasFallback } from "./renderPerfCounters";
 import { KindOrder, type RenderKey } from "./worldRenderOrdering";
 
 type ReadyImageRecord = {
@@ -65,6 +67,7 @@ export type GroundCommandResolverDeps = {
   ) => HTMLCanvasElement | null;
   getDiamondFitCanvas: (src: HTMLCanvasElement) => HTMLCanvasElement;
   getRuntimeDecalSprite: (setId: RuntimeDecalSetId, variantIndex: number) => ReadyImageRecord;
+  getStaticAtlasProjectedDecalFrame?: (input: StaticAtlasProjectedDecalLookup) => StaticAtlasFrame | null;
   T: number;
   worldToScreen: (worldX: number, worldY: number) => { x: number; y: number };
   camX: number;
@@ -295,6 +298,7 @@ export function resolveGroundDecalProjectedCommand(
   const { staticOnly = false, onPendingVisualChange } = options;
   const {
     getRuntimeDecalSprite,
+    getStaticAtlasProjectedDecalFrame,
     getRuntimeIsoDecalCanvas,
     getDiamondFitCanvas,
     roadMarkingDecalScale,
@@ -312,16 +316,31 @@ export function resolveGroundDecalProjectedCommand(
 
   if (staticOnly && !isGroundDecalChunkAuthorityEligible(decal)) return null;
 
-  const src = getRuntimeDecalSprite(decal.setId, decal.variantIndex);
-  if (!src?.ready || !src.img || src.img.width <= 0 || src.img.height <= 0) {
-    notePending(src, onPendingVisualChange);
-    return null;
-  }
-
   const decalScale = roadMarkingDecalScale(decal.setId, decal.variantIndex);
-  const baked = getRuntimeIsoDecalCanvas(src.img, decal.rotationQuarterTurns, decalScale);
-  if (!baked) return null;
-  const finalDiamond = getDiamondFitCanvas(baked);
+  const atlasFrame = getStaticAtlasProjectedDecalFrame?.({
+    setId: decal.setId,
+    variantIndex: decal.variantIndex,
+    rotationQuarterTurns: decal.rotationQuarterTurns,
+    scale: decalScale,
+  }) ?? null;
+  let projectedImage = atlasFrame?.image ?? null;
+  let projectedWidth = atlasFrame?.sw ?? 0;
+  let projectedHeight = atlasFrame?.sh ?? 0;
+  if (!atlasFrame) {
+    const src = getRuntimeDecalSprite(decal.setId, decal.variantIndex);
+    if (!src?.ready || !src.img || src.img.width <= 0 || src.img.height <= 0) {
+      notePending(src, onPendingVisualChange);
+      return null;
+    }
+    const baked = getRuntimeIsoDecalCanvas(src.img, decal.rotationQuarterTurns, decalScale);
+    if (!baked) return null;
+    const finalDiamond = getDiamondFitCanvas(baked);
+    projectedImage = finalDiamond;
+    projectedWidth = finalDiamond.width;
+    projectedHeight = finalDiamond.height;
+    countRenderStaticAtlasFallback();
+  }
+  if (!projectedImage) return null;
   const snapRoad = shouldPixelSnapRoadMarking(decal.setId, decal.variantIndex);
   const destinationQuad = rampRoadTiles.has(`${decal.tx},${decal.ty}`)
     ? getRampQuadPoints(decal.tx, decal.ty, decal.renderAnchorY)
@@ -333,11 +352,11 @@ export function resolveGroundDecalProjectedCommand(
       const rawCenterY = p.y + camY - decal.zBase * ELEV_PX - SIDEWALK_ISO_HEIGHT * (decal.renderAnchorY - 0.5);
       const centerX = snapRoad ? Math.round(rawCenterX) : snapPx(rawCenterX);
       const centerY = snapRoad ? Math.round(rawCenterY) : snapPx(rawCenterY);
-      const dx = centerX - finalDiamond.width * 0.5;
-      const dy = centerY - finalDiamond.height * 0.5;
+      const dx = centerX - projectedWidth * 0.5;
+      const dy = centerY - projectedHeight * 0.5;
       const drawX = snapRoad ? Math.round(dx) : snapPx(dx);
       const drawY = snapRoad ? Math.round(dy) : snapPx(dy);
-      return buildDiamondDestinationQuad(drawX, drawY, finalDiamond.width, finalDiamond.height);
+      return buildDiamondDestinationQuad(drawX, drawY, projectedWidth, projectedHeight);
     })();
 
   const stableId = stableDecalId(decal.tx, decal.ty, decal.zBase);
@@ -355,8 +374,12 @@ export function resolveGroundDecalProjectedCommand(
     semanticFamily: "groundDecal",
     finalForm: "quad",
     payload: buildGroundDecalProjectedSurfacePayload({
-      image: finalDiamond,
+      image: projectedImage,
       destinationQuad,
+      sourceOffsetX: atlasFrame?.sx ?? 0,
+      sourceOffsetY: atlasFrame?.sy ?? 0,
+      sourceWidth: projectedWidth,
+      sourceHeight: projectedHeight,
     }),
     destinationQuad,
   };

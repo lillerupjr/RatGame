@@ -137,6 +137,16 @@ export function getEnemySpriteFrameMeta(type: EnemyType): EnemySpriteFrameMeta |
 const paletteState = createPaletteSwapState(resolveActivePaletteVariantKey());
 const packsByPalette = new Map<string, Map<string, SpritePack>>();
 const preloadByPaletteSkin = new Map<string, Promise<void>>();
+const ENEMY_DIR_KEYS = [
+    "north",
+    "north-east",
+    "east",
+    "south-east",
+    "south",
+    "south-west",
+    "west",
+    "north-west",
+] as const;
 type PreloadStatus = "READY" | "PENDING" | "UNSUPPORTED" | "FAILED_TRANSIENT" | "FAILED_PERMANENT";
 const preloadStatusByPaletteSkin = new Map<string, PreloadStatus>();
 const preloadWarnedByPaletteSkinStatus = new Set<string>();
@@ -168,6 +178,27 @@ function getRequiredSkins(): string[] {
         if (def?.skin) skins.add(def.skin);
     }
     return Array.from(skins);
+}
+
+export function listEnemyDynamicAtlasSpriteIds(): string[] {
+    const ids = new Set<string>();
+    for (const def of Object.values(ENEMY_SPRITES)) {
+        if (!def?.skin) continue;
+        const packRoot = def.source?.packRoot ?? "entities/enemies";
+        for (const dirKey of ENEMY_DIR_KEYS) {
+            ids.add(`${packRoot}/${def.skin}/rotations/${dirKey}`);
+        }
+        if (!def.runAnim) continue;
+        const frameCount = def.frameCount ?? 4;
+        for (const dirKey of ENEMY_DIR_KEYS) {
+            for (let i = 0; i < frameCount; i++) {
+                ids.add(
+                    `${packRoot}/${def.skin}/animations/${def.runAnim}/${dirKey}/frame_${String(i).padStart(3, "0")}`,
+                );
+            }
+        }
+    }
+    return Array.from(ids).sort();
 }
 
 function resolveRequestedSkins(requiredSkins?: readonly string[]): string[] {

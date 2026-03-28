@@ -502,6 +502,12 @@ async function bootstrap() {
 
     if (ev.repeat) return;
 
+    if (ev.code === "F2") {
+      ev.preventDefault();
+      void game.copyPerfOverlaySnapshot();
+      return;
+    }
+
     if (ev.code === "F5") {
       ev.preventDefault();
       const current = getUserSettings().render;

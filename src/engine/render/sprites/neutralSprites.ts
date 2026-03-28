@@ -133,6 +133,21 @@ function loadImage(
   });
 }
 
+export function listNeutralMobDynamicAtlasSpriteIds(): string[] {
+  const ids: string[] = [];
+  for (let i = 0; i < DIRS.length; i++) {
+    const dir = DIRS[i];
+    const dirPath = DIR_TO_PATH[dir];
+    for (let fi = 0; fi < 10; fi++) {
+      ids.push(`entities/animals/pigeon/animations/flying/${dirPath}/frame_${String(fi).padStart(3, "0")}`);
+    }
+    for (let ii = 0; ii < 10; ii++) {
+      ids.push(`entities/animals/pigeon/rotations/${dirPath}/frame_${String(ii).padStart(3, "0")}`);
+    }
+  }
+  return ids;
+}
+
 export function getPigeonFramesForClipAndScreenDir(
   clip: "IDLE" | "TAKEOFF" | "FLY_TO_TARGET" | "LAND",
   dir: Dir8,

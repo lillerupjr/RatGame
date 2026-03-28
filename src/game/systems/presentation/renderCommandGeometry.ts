@@ -187,16 +187,30 @@ export function buildProjectedSurfacePayload(input: {
   image: CanvasImageSource;
   destinationQuad: RenderQuadPoints;
   alpha?: number;
+  sourceOffsetX?: number;
+  sourceOffsetY?: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
 }): GroundSurfaceQuadPayload {
-  const sourceWidth = Number((input.image as { width?: number }).width ?? 0);
-  const sourceHeight = Number((input.image as { height?: number }).height ?? 0);
+  const imageWidth = Number((input.image as { width?: number }).width ?? 0);
+  const imageHeight = Number((input.image as { height?: number }).height ?? 0);
+  const sourceOffsetX = Number.isFinite(Number(input.sourceOffsetX)) ? Number(input.sourceOffsetX) : 0;
+  const sourceOffsetY = Number.isFinite(Number(input.sourceOffsetY)) ? Number(input.sourceOffsetY) : 0;
+  const sourceWidth = Number.isFinite(Number(input.sourceWidth)) ? Number(input.sourceWidth) : imageWidth;
+  const sourceHeight = Number.isFinite(Number(input.sourceHeight)) ? Number(input.sourceHeight) : imageHeight;
+  const diamondSourceQuad = buildDiamondSourceQuad(sourceWidth, sourceHeight);
   return buildQuadRenderPieceFromPoints({
     image: input.image,
-    sx: 0,
-    sy: 0,
+    sx: sourceOffsetX,
+    sy: sourceOffsetY,
     sw: sourceWidth,
     sh: sourceHeight,
-    sourceQuad: buildDiamondSourceQuad(sourceWidth, sourceHeight),
+    sourceQuad: {
+      nw: point(sourceOffsetX + diamondSourceQuad.nw.x, sourceOffsetY + diamondSourceQuad.nw.y),
+      ne: point(sourceOffsetX + diamondSourceQuad.ne.x, sourceOffsetY + diamondSourceQuad.ne.y),
+      se: point(sourceOffsetX + diamondSourceQuad.se.x, sourceOffsetY + diamondSourceQuad.se.y),
+      sw: point(sourceOffsetX + diamondSourceQuad.sw.x, sourceOffsetY + diamondSourceQuad.sw.y),
+    },
     destinationQuad: input.destinationQuad,
     kind: "iso",
     alpha: input.alpha,
@@ -207,6 +221,10 @@ export function buildGroundDecalProjectedSurfacePayload(input: {
   image: CanvasImageSource;
   destinationQuad: RenderQuadPoints;
   alpha?: number;
+  sourceOffsetX?: number;
+  sourceOffsetY?: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
 }): GroundDecalQuadPayload {
   return buildProjectedSurfacePayload(input);
 }

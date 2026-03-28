@@ -245,5 +245,13 @@ describe("analyzeWorldBatchStream", () => {
     expect(probe4?.totalWorldBatches).toBeLessThan(audit.totalWorldBatches);
     expect(probe4?.textureBreaks).toBeLessThan(audit.breakReasonCounts["texture changed"]);
     expect(probe4?.riskCount).toBeGreaterThan(0);
+    expect(audit.topTextureBreakCauses?.[0]).toMatchObject({
+      label: "drops:A -> drops:B",
+      count: 2,
+    });
+    expect(audit.topTextureBreakCauses?.[1]).toMatchObject({
+      label: "drops:B -> drops:A",
+      count: 1,
+    });
   });
 });

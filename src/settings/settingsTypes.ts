@@ -12,6 +12,7 @@ export type VerticalTilesViewportClass = "phone" | "desktop";
 export type LightColorModeOverride = "authored" | "off" | "standard" | "palette";
 export type LightStrengthOverride = "authored" | "low" | "medium" | "high";
 export type StructureTriangleAdmissionMode = "viewport" | "renderDistance" | "hybrid" | "compare";
+export type WorldAtlasMode = "dual" | "shared";
 export type PerfOverlayMode = "off" | "overview" | "world" | "structures" | "textures" | "ground" | "lighting" | "cache" | "all";
 
 export type NeutralBirdForceState =
@@ -106,6 +107,7 @@ export type SystemOverrides = {
   structureTriangleCutoutHeight: number;
   structureTriangleCutoutAlpha: number;
   tileRenderRadius: number;
+  worldAtlasMode: WorldAtlasMode;
 
   paletteSwapEnabled: boolean;
   darknessMaskDebugDisabled: boolean;

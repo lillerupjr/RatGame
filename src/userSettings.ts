@@ -27,6 +27,7 @@ import {
   type LightColorModeOverride,
   type LightStrengthOverride,
   type StructureTriangleAdmissionMode,
+  type WorldAtlasMode,
 } from "./settings/systemOverrides";
 import {
   getSettings,
@@ -69,6 +70,7 @@ export type RenderSettings = {
   structureTriangleCutoutAlpha: number;
   deathSlowdownEnabled: boolean;
   cameraSmoothingEnabled: boolean;
+  worldAtlasMode?: WorldAtlasMode;
   verticalTilesMode?: VerticalTilesMode;
   verticalTilesUser?: number;
   verticalTilesAutoPhone?: number;
@@ -266,6 +268,7 @@ function toLegacySettings(): UserSettings {
       structureTriangleCutoutAlpha: settings.system.structureTriangleCutoutAlpha,
       deathSlowdownEnabled: settings.user.graphics.deathSlowdownEnabled,
       cameraSmoothingEnabled: settings.user.graphics.cameraSmoothingEnabled,
+      worldAtlasMode: settings.system.worldAtlasMode,
       verticalTilesMode: settings.user.graphics.verticalTilesMode,
       verticalTilesUser: settings.user.graphics.verticalTilesUser,
       verticalTilesAutoPhone: settings.user.graphics.verticalTilesAutoPhone,

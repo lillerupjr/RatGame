@@ -20,6 +20,7 @@ import { setRenderPerfDrawTag } from "./renderPerfCounters";
 import {
   markGroundChunkTextureSource,
   markStableTextureSource,
+  setTextureDebugLabel,
 } from "./stableTextureSource";
 import { compareRenderKeys, resolveRenderZBand } from "./worldRenderOrdering";
 
@@ -230,9 +231,16 @@ function translateQuad(quad: RenderQuadPoints, dx: number, dy: number): RenderQu
   };
 }
 
-function createChunkRasterCanvas(width: number, height: number): HTMLCanvasElement | null {
+function createChunkRasterCanvas(
+  width: number,
+  height: number,
+  chunkLabel: string,
+): HTMLCanvasElement | null {
   if (typeof document === "undefined") return null;
-  const canvas = markStableTextureSource(markGroundChunkTextureSource(document.createElement("canvas")));
+  const canvas = setTextureDebugLabel(
+    markStableTextureSource(markGroundChunkTextureSource(document.createElement("canvas"))),
+    chunkLabel,
+  );
   canvas.width = Math.max(1, width);
   canvas.height = Math.max(1, height);
   return canvas;
@@ -258,7 +266,11 @@ function rasterizeBucketCommands(
   };
   const width = Math.max(1, paddedBounds.maxX - paddedBounds.minX);
   const height = Math.max(1, paddedBounds.maxY - paddedBounds.minY);
-  const canvas = createChunkRasterCanvas(width, height);
+  const canvas = createChunkRasterCanvas(
+    width,
+    height,
+    `groundChunk:${bucket.chunkX},${bucket.chunkY},z${bucket.zBand}`,
+  );
   if (!canvas) return null;
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;

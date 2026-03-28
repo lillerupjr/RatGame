@@ -1,5 +1,12 @@
 import type { CollectionContext } from "../contracts/collectionContext";
 import { enqueueSliceCommand } from "../frame/renderFrameBuilder";
+import {
+  countRenderDynamicAtlasBypass,
+  countRenderDynamicAtlasFallback,
+  countRenderDynamicAtlasHit,
+  countRenderDynamicAtlasMiss,
+  countRenderDynamicAtlasRequest,
+} from "../renderPerfCounters";
 
 type RenderKey = any;
 
@@ -22,7 +29,34 @@ export function collectEffectDrawables(input: CollectionContext): void {
     VFX_CLIPS,
     tileHAtWorld,
     ctx,
+    getDynamicAtlasFrameForImage,
   } = input as any;
+
+  const resolveDynamicAtlasImage = (
+    image: CanvasImageSource,
+  ): {
+    image: CanvasImageSource;
+    sx: number;
+    sy: number;
+    sw: number;
+    sh: number;
+  } => {
+    countRenderDynamicAtlasRequest();
+    const atlasFrame = getDynamicAtlasFrameForImage?.(image as object) ?? null;
+    if (atlasFrame) {
+      countRenderDynamicAtlasHit();
+    } else {
+      countRenderDynamicAtlasMiss();
+      countRenderDynamicAtlasFallback();
+    }
+    return {
+      image: atlasFrame?.image ?? image,
+      sx: atlasFrame?.sx ?? 0,
+      sy: atlasFrame?.sy ?? 0,
+      sw: atlasFrame?.sw ?? Number((image as { width?: number }).width ?? 0),
+      sh: atlasFrame?.sh ?? Number((image as { height?: number }).height ?? 0),
+    };
+  };
 
   // Collect ZONES into slices
   // ----------------------------
@@ -101,6 +135,7 @@ export function collectEffectDrawables(input: CollectionContext): void {
       const spriteId = clip && frameIndex >= 0 ? clip.spriteIds[frameIndex] : null;
       const sprite = spriteId ? getSpriteById(spriteId) : null;
       if (sprite?.ready && sprite.img) {
+        const atlas = resolveDynamicAtlasImage(sprite.img);
         const scale = w.vfxRadius[i] > 0 ? w.vfxRadius[i] / 32 : w.vfxScale[i];
         const size = 64 * scale;
         const p = toScreen(vx, vy);
@@ -108,7 +143,11 @@ export function collectEffectDrawables(input: CollectionContext): void {
           semanticFamily: "worldSprite",
           finalForm: "quad",
           payload: {
-            image: sprite.img,
+            image: atlas.image,
+            sx: atlas.sx,
+            sy: atlas.sy,
+            sw: atlas.sw,
+            sh: atlas.sh,
             dx: p.x - size * 0.5,
             dy: p.y - size * 0.5 + w.vfxOffsetYPx[i],
             dw: size,
@@ -127,6 +166,7 @@ export function collectEffectDrawables(input: CollectionContext): void {
           vfxIndex: i,
         },
       });
+      countRenderDynamicAtlasBypass();
     }
   }
 

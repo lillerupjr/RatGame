@@ -6,7 +6,7 @@ import { KindOrder } from "../../../../game/systems/presentation/worldRenderOrde
 
 function makeBaseInput(
   pieces: readonly any[],
-  getStructureSpriteAtlasFrame: ((spriteId: string) => any) | undefined,
+  getStaticAtlasSpriteFrame: ((spriteId: string) => any) | undefined,
 ) {
   const frameBuilder = createRenderFrameBuilder();
   return {
@@ -61,7 +61,7 @@ function makeBaseInput(
         projectionDirection: { x: 1, y: 1 },
       },
     },
-    getStructureSpriteAtlasFrame,
+    getStaticAtlasSpriteFrame,
     monolithicStructureGeometryCacheStore: {},
     getTileSpriteById: vi.fn(),
     getFlippedOverlayImage: vi.fn(),
@@ -99,7 +99,7 @@ function collectCommands(input: any): RenderCommand[] {
 }
 
 describe("collectStructureDrawables", () => {
-  it("extracts atlas-backed structure cells into one quad per camera tile", () => {
+  it("extracts static-atlas-backed structure cells into one quad per camera tile", () => {
     const originalImage = { width: 64, height: 32, id: "structure-a" } as any;
     const atlasImage = { width: 512, height: 512, id: "structure-atlas" } as any;
     const pieces = [{
@@ -171,7 +171,7 @@ describe("collectStructureDrawables", () => {
     expect(payload.y3).toBe(121);
   });
 
-  it("uses atlas-backed source rects for structure overlay fallback meshes", () => {
+  it("uses static-atlas-backed source rects for structure overlay fallback meshes", () => {
     const originalImage = { width: 64, height: 32, id: "structure-overlay" } as any;
     const atlasImage = { width: 512, height: 512, id: "structure-atlas" } as any;
     const pieces = [{
@@ -223,7 +223,7 @@ describe("collectStructureDrawables", () => {
     expect(payload.flipX).toBe(true);
   });
 
-  it("keeps the original structure overlay image path when atlas fallback is required", () => {
+  it("keeps the original structure overlay image path when static atlas fallback is required", () => {
     const originalImage = { width: 64, height: 32, id: "structure-overlay" } as any;
     const pieces = [{
       kind: "overlay",
@@ -262,6 +262,51 @@ describe("collectStructureDrawables", () => {
     expect(payload.sw).toBe(64);
     expect(payload.sh).toBe(32);
     expect(payload.flipX).toBe(true);
+  });
+
+  it("routes prop overlays through the static structure quad path", () => {
+    const atlasImage = { width: 512, height: 512, id: "static-atlas" } as any;
+    const pieces = [{
+      kind: "overlay",
+      overlayIndex: 0,
+      overlay: {
+        id: "overlay-prop",
+        kind: "PROP",
+        spriteId: "props/lights/street_lamp_e",
+        z: 0,
+      },
+      draw: {
+        img: { width: 32, height: 64, id: "prop-image" },
+        dx: 11,
+        dy: 13,
+        dw: 32,
+        dh: 64,
+        flipX: false,
+      },
+    }];
+    const commands = collectCommands(makeBaseInput(
+      pieces,
+      vi.fn(() => ({
+        image: atlasImage,
+        sx: 90,
+        sy: 140,
+        sw: 32,
+        sh: 64,
+      })),
+    ));
+
+    expect(commands).toHaveLength(1);
+    const payload = commands[0].payload as Extract<
+      RenderCommand,
+      { semanticFamily: "worldSprite"; finalForm: "quad" }
+    >["payload"];
+
+    expect(payload.auditFamily).toBe("structures");
+    expect(payload.image).toBe(atlasImage);
+    expect(payload.sx).toBe(90);
+    expect(payload.sy).toBe(140);
+    expect(payload.sw).toBe(32);
+    expect(payload.sh).toBe(64);
   });
 
   it("migrates rect-mesh face draws onto the structure quad path", () => {
