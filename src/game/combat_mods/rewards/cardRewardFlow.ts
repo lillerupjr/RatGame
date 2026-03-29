@@ -1,7 +1,7 @@
 import { applyCardToWorld } from "./cardApply";
 import { generateCardRewardOptions } from "./cardRewardGenerator";
 
-export type CardRewardSource = "ZONE_TRIAL" | "BOSS_CHEST";
+export type CardRewardSource = "ZONE_TRIAL" | "BOSS_CHEST" | "LEVEL_UP";
 
 export type CardRewardState = {
   active: boolean;

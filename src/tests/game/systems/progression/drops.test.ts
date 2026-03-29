@@ -63,15 +63,34 @@ describe("dropsSystem", () => {
     expect(chestCount).toBe(1);
   });
 
-  test("collecting gold pickup grants its stored value", () => {
+  test("collecting combat pickup grants its stored value as xp", () => {
     const w = createWorld({ seed: 2, stage: stageDocks });
     const pw = getPlayerWorld(w, KENNEY_TILE_WORLD);
 
     spawnGold(w, pw.wx, pw.wy, 7);
     dropsSystem(w, 1 / 60);
 
-    expect(w.run.runGold).toBe(7);
+    expect(w.run.xp).toBe(7);
+    expect(w.run.runGold).toBe(0);
+    expect(w.run.level).toBe(1);
     expect(w.xAlive.some(Boolean)).toBe(false);
+  });
+
+  test("large xp pickup can trigger multiple level-up rewards", () => {
+    const w = createWorld({ seed: 12, stage: stageDocks });
+    const pw = getPlayerWorld(w, KENNEY_TILE_WORLD);
+
+    spawnGold(w, pw.wx, pw.wy, 120);
+    dropsSystem(w, 1 / 60);
+
+    expect(w.run.xp).toBe(10);
+    expect(w.run.level).toBe(3);
+    expect(w.run.xpToNextLevel).toBe(72);
+    expect(w.level).toBe(3);
+    expect(w.runEvents).toEqual([
+      { type: "LEVEL_UP", floorIndex: 0, level: 2 },
+      { type: "LEVEL_UP", floorIndex: 0, level: 3 },
+    ]);
   });
 
   test("loot goblin kill emits delayed 300x1g drops and skips normal kill drops", () => {

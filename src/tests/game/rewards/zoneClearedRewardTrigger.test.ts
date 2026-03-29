@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { resolveActiveRewardTicket } from "../../../game/rewards/rewardTickets";
+import { OBJECTIVE_COMPLETION_GOLD } from "../../../game/rewards/rewardDirector";
 import { rewardPresenterSystem } from "../../../game/systems/progression/rewardPresenterSystem";
 import { rewardSchedulerSystem } from "../../../game/systems/progression/rewardSchedulerSystem";
 import { createRewardPipelineWorld, dismissActiveRewardUi, getActiveTicket } from "./rewardPipeline.testUtils";
@@ -18,17 +19,17 @@ describe("zone-cleared reward scheduling", () => {
     expect(w.cardRewardClaimKeys).toEqual(["0:ZONE_CLEAR:1", "0:ZONE_CLEAR:2"]);
   });
 
-  test("objective completion still schedules relic reward", () => {
+  test("objective completion grants gold without a reward ticket", () => {
     const w = createRewardPipelineWorld(11, "ZONE_TRIAL");
     w.runEvents.push({ type: "OBJECTIVE_COMPLETED", floorIndex: 0, objectiveId: "OBJ_ZONE_TRIAL" });
     rewardSchedulerSystem(w);
 
-    expect(w.rewardTickets).toHaveLength(1);
-    expect(w.rewardTickets[0].kind).toBe("RELIC_PICK");
+    expect(w.rewardTickets).toHaveLength(0);
+    expect(w.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
     expect(w.objectiveRewardClaimedKey).toBe("0:TRIAL_COMPLETE");
   });
 
-  test("zone trial sequence stays zone1 card, zone2 card, objective relic", () => {
+  test("zone trial sequence stays zone1 card, zone2 card, then gold-only objective", () => {
     const w = createRewardPipelineWorld(21, "ZONE_TRIAL");
     w.runEvents.push(
       { type: "ZONE_CLEARED", floorIndex: 0, zoneIndex: 1 },
@@ -50,7 +51,7 @@ describe("zone-cleared reward scheduling", () => {
     resolveActiveRewardTicket(w);
     w.state = "RUN";
 
-    expect(rewardPresenterSystem(w)).toBe(true);
-    expect(getActiveTicket(w)?.kind).toBe("RELIC_PICK");
+    expect(rewardPresenterSystem(w)).toBe(false);
+    expect(w.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
   });
 });

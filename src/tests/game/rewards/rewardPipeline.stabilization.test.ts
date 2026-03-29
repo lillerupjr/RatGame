@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { ENEMY_TYPE } from "../../../game/factories/enemyFactory";
 import { OBJECTIVE_TRIGGER_IDS } from "../../../game/systems/progression/objectiveSpec";
+import { OBJECTIVE_COMPLETION_GOLD } from "../../../game/rewards/rewardDirector";
 import { resolveActiveRewardTicket } from "../../../game/rewards/rewardTickets";
 import { rewardPresenterSystem } from "../../../game/systems/progression/rewardPresenterSystem";
 import { rewardRunEventProducerSystem } from "../../../game/systems/progression/rewardRunEventProducerSystem";
@@ -74,7 +75,7 @@ describe("reward pipeline stabilization", () => {
     expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(2);
   });
 
-  test("zone trial sequence is CARD, CARD, RELIC in FIFO order", () => {
+  test("zone trial sequence is CARD, CARD, then objective gold", () => {
     const world = createRewardPipelineWorld(84, "ZONE_TRIAL");
     world.runEvents.push(
       { type: "ZONE_CLEARED", floorIndex: 0, zoneIndex: 1 },
@@ -83,10 +84,10 @@ describe("reward pipeline stabilization", () => {
     );
 
     rewardSchedulerSystem(world);
-    expect(world.rewardTickets).toHaveLength(3);
+    expect(world.rewardTickets).toHaveLength(2);
 
     const kinds: string[] = [];
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 2; i++) {
       expect(rewardPresenterSystem(world)).toBe(true);
       kinds.push(getActiveTicket(world)?.kind ?? "");
       dismissActiveRewardUi(world);
@@ -94,7 +95,8 @@ describe("reward pipeline stabilization", () => {
       world.state = "RUN";
     }
 
-    expect(kinds).toEqual(["CARD_PICK", "CARD_PICK", "RELIC_PICK"]);
+    expect(kinds).toEqual(["CARD_PICK", "CARD_PICK"]);
+    expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
     expect(rewardPresenterSystem(world)).toBe(false);
   });
 });

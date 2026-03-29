@@ -3,7 +3,7 @@ export type ObjectiveMode = "NORMAL" | "SURVIVE_TRIAL" | "ZONE_TRIAL";
 export type FloorRewardBudget = {
   mode: ObjectiveMode;
   nonObjectiveCardsRemaining: number; // starts at 2
-  objectiveCardAvailable: boolean;    // starts true
+  objectiveCardAvailable: boolean;    // legacy flag; objective rewards no longer spend card budget
   fired: Record<string, boolean>;     // idempotency keys
 };
 

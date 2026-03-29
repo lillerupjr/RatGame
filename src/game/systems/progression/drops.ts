@@ -1,7 +1,7 @@
 import type { World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
-import { addGold } from "../../economy/gold";
 import { goldValueFromEnemyBaseLife } from "../../economy/coins";
+import { grantXp } from "../../economy/xp";
 import { spawnChest, spawnGold, PICKUP_KIND, handlePickupSpecialCase } from "./pickups";
 import { ENEMY_TYPE } from "../../factories/enemyFactory";
 import { getEnemyWorld, getPickupWorld, getPlayerWorld } from "../../coords/worldViews";
@@ -57,7 +57,7 @@ export function dropsSystem(w: World, dt: number) {
     if (kind === PICKUP_KIND.GOLD) {
       w.xAlive[i] = false;
       const stored = Number.isFinite(w.xValue[i]) ? Math.floor(w.xValue[i]) : 1;
-      addGold(w, Math.max(0, stored));
+      grantXp(w, Math.max(0, stored));
       continue;
     }
 

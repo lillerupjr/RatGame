@@ -25,9 +25,13 @@ function anyRewardUiActive(world: World): boolean {
   return relicReward.active;
 }
 
-function openTicketReward(world: World, ticket: { kind: "CARD_PICK" | "RELIC_PICK"; source: "ZONE_TRIAL" | "BOSS_CHEST" | "OBJECTIVE_COMPLETION"; optionCount: number }): boolean {
+function openTicketReward(world: World, ticket: { kind: "CARD_PICK" | "RELIC_PICK"; source: "ZONE_TRIAL" | "BOSS_CHEST" | "OBJECTIVE_COMPLETION" | "LEVEL_UP"; optionCount: number }): boolean {
   if (ticket.kind === "CARD_PICK") {
-    const source = ticket.source === "BOSS_CHEST" ? "BOSS_CHEST" : "ZONE_TRIAL";
+    const source = ticket.source === "BOSS_CHEST"
+      ? "BOSS_CHEST"
+      : ticket.source === "LEVEL_UP"
+        ? "LEVEL_UP"
+        : "ZONE_TRIAL";
     beginCardReward(world, source, ticket.optionCount);
     const cardReward = ensureCardRewardState(world);
     if (!cardReward.active || cardReward.options.length <= 0) {

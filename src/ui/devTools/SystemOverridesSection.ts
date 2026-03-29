@@ -182,6 +182,12 @@ export function mountSystemOverridesSection(
     (value) => `${value}x`,
     (value) => applySystemPatch({ fireRateMult: value }),
   );
+  const xpLevelBase = createSliderRow(gameplayGrid, "XP Base", 1, 500, 1, (value) => {
+    applySystemPatch({ xpLevelBase: value });
+  });
+  const xpLevelGrowth = createSliderRow(gameplayGrid, "XP Growth", 1, 3, 0.05, (value) => {
+    applySystemPatch({ xpLevelGrowth: value });
+  });
   const waterFlowRate = createSliderRow(gameplayGrid, "Water Flow", 0.25, 4, 0.05, (value) => {
     applySystemPatch({ waterFlowRate: value });
   });
@@ -295,6 +301,10 @@ export function mountSystemOverridesSection(
       godMode.checked = system.godMode;
       dmgMult.value = `${system.dmgMult}`;
       fireRateMult.value = `${system.fireRateMult}`;
+      xpLevelBase.input.value = `${system.xpLevelBase}`;
+      xpLevelBase.value.textContent = `${Math.round(system.xpLevelBase)}`;
+      xpLevelGrowth.input.value = `${system.xpLevelGrowth}`;
+      xpLevelGrowth.value.textContent = system.xpLevelGrowth.toFixed(2);
       waterFlowRate.input.value = `${system.waterFlowRate}`;
       waterFlowRate.value.textContent = formatX(system.waterFlowRate);
       forceSpawnOverride.checked = system.forceSpawnOverride;

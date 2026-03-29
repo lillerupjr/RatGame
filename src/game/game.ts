@@ -155,6 +155,7 @@ import { applySfxSettingsToWorld } from "./audio/audioSettings";
 import { chooseCardReward, ensureCardRewardState } from "./combat_mods/rewards/cardRewardFlow";
 import { chooseRelicReward, ensureRelicRewardState } from "./combat_mods/rewards/relicRewardFlow";
 import { getGold } from "./economy/gold";
+import { ensureRunProgressionState } from "./economy/xp";
 import { getCardById } from "./combat_mods/content/cards/cardPool";
 import { generateVendorCards } from "./vendor/generateVendorCards";
 import { generateVendorRelicOffers } from "./vendor/generateVendorRelics";
@@ -868,9 +869,8 @@ export function createGame(args: CreateGameArgs) {
   function syncRewardDebugFieldsFromBudget(w: World): void {
     const budget = w.floorRewardBudget;
     const nonObjectiveUsed = 2 - budget.nonObjectiveCardsRemaining;
-    const objectiveUsed = budget.objectiveCardAvailable ? 0 : 1;
-    w.cardRewardBudgetTotal = 3;
-    w.cardRewardBudgetUsed = nonObjectiveUsed + objectiveUsed;
+    w.cardRewardBudgetTotal = 2;
+    w.cardRewardBudgetUsed = nonObjectiveUsed;
     if (!Array.isArray(w.cardRewardClaimKeys)) w.cardRewardClaimKeys = [];
     const firedKeys = Object.keys(budget.fired ?? Object.create(null));
     for (let i = 0; i < firedKeys.length; i++) {
@@ -2076,7 +2076,7 @@ export function createGame(args: CreateGameArgs) {
     w.objectiveRewardClaimedKey = null;
     (w as any).zoneRewardClaimedKey = null;
     (w as any).zoneRewardClaimedKeys = [];
-    w.cardRewardBudgetTotal = 3;
+    w.cardRewardBudgetTotal = 2;
     w.cardRewardBudgetUsed = 0;
     w.cardRewardClaimKeys = [];
     w.lastCardRewardClaimKey = null;
@@ -3107,7 +3107,8 @@ export function createGame(args: CreateGameArgs) {
 
     args.hud.fpsPill.textContent = `FPS ${Math.round((world as any).fps ?? 0)}`;
     args.hud.timePill.textContent = `\u23f1 ${formatTimeMMSS(world.time)}`;
-    args.hud.lvlPill.textContent = `\ud83d\udcb0 ${getGold(world)}`;
+    const runProgress = ensureRunProgressionState(world);
+    args.hud.lvlPill.textContent = `Lv ${runProgress.level} · ${Math.floor(runProgress.xp)}/${Math.floor(runProgress.xpToNextLevel)} XP`;
     args.hud.palettePill.textContent = formatPaletteHudDebugText(resolveActivePaletteId());
     args.hud.killsPill.textContent = `Kills: ${world.kills}`;
     args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
@@ -3380,7 +3381,7 @@ export function createGame(args: CreateGameArgs) {
     world.phaseTime += dtSim;
     // Spawn pacing uses the same clock as floor progression/spawn cadence.
     world.timeSec = world.phaseTime;
-    world.level = 1;
+    ensureRunProgressionState(world);
     tickMomentumDecay(world, dtSim, world.timeSec);
     recomputeDerivedStats(world);
 

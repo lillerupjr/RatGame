@@ -1,5 +1,5 @@
 export type RewardTicketKind = "CARD_PICK" | "RELIC_PICK";
-export type RewardTicketSource = "ZONE_TRIAL" | "BOSS_CHEST" | "OBJECTIVE_COMPLETION";
+export type RewardTicketSource = "ZONE_TRIAL" | "BOSS_CHEST" | "OBJECTIVE_COMPLETION" | "LEVEL_UP";
 export type RewardTicketStatus = "PENDING" | "ACTIVE" | "RESOLVED";
 
 export type RewardTicket = {
