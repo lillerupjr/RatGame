@@ -1,6 +1,6 @@
 import { normalizePaletteRemapWeightPercent } from "../../debugSettings";
 import { getUserSettings } from "../../userSettings";
-import { getActiveMapSkinPaletteId } from "../content/mapSkins";
+import { getActiveMapSkinPaletteEntry, getActiveMapSkinPaletteId } from "../content/mapSkins";
 import type { PaletteSwapWeights } from "../../engine/render/palette/paletteSwap";
 
 export type ActivePaletteId =
@@ -16,7 +16,7 @@ export type PaletteSwapWeightPercents = {
  *
  * Priority:
  * 1) Dev override (if enabled)
- * 2) Active map skin chosen palette (pool pick or paletteId)
+ * 2) Active map skin chosen palette entry
  * 3) db32
  */
 export function resolveActivePaletteId(): ActivePaletteId {
@@ -31,10 +31,19 @@ export function resolveActivePaletteId(): ActivePaletteId {
 }
 
 export function resolveActivePaletteSwapWeightPercents(): PaletteSwapWeightPercents {
-  const debug = getUserSettings().debug;
+  const settings = getUserSettings();
+  if (settings.render.paletteSwapEnabled && settings.render.paletteId) {
+    const debug = settings.debug;
+    return {
+      sWeightPercent: normalizePaletteRemapWeightPercent(debug.paletteSWeightPercent),
+      darknessPercent: normalizePaletteRemapWeightPercent(debug.paletteDarknessPercent),
+    };
+  }
+
+  const authoredEntry = getActiveMapSkinPaletteEntry();
   return {
-    sWeightPercent: normalizePaletteRemapWeightPercent(debug.paletteSWeightPercent),
-    darknessPercent: normalizePaletteRemapWeightPercent(debug.paletteDarknessPercent),
+    sWeightPercent: normalizePaletteRemapWeightPercent(authoredEntry.saturationWeight * 100),
+    darknessPercent: normalizePaletteRemapWeightPercent(authoredEntry.darkness * 100),
   };
 }
 
