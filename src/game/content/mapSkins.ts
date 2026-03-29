@@ -45,7 +45,21 @@ export type PaletteId =
   | "arne_16"
   | "lush_sunset"
   | "vaporhaze_16"
-  | "sunset_cave_extended";
+  | "sunset_cave_extended"
+  | "midnight_ablaze"
+  | "blessing"
+  | "hollow"
+  | "berry_nebula"
+  | "cyclope6"
+  | "bloodmoon21"
+  | "blk_aqu4"
+  | "dustbyte"
+  | "hydrangea_11"
+  | "fiery_plague_gb"
+  | "leopolds_dreams"
+  | "look_of_horror"
+  | "aquaverse"
+  | "sunraze";
 
 export type MapSkinBundle = {
   /**

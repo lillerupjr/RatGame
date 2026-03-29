@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AuthoredDelvePaletteEntry } from "../../../game/content/delvePaletteRegistry";
+import {
+  AUTHORED_DELVE_PALETTE_ENTRIES,
+  type AuthoredDelvePaletteEntry,
+} from "../../../game/content/delvePaletteRegistry";
 import {
   getActiveMapSkinPaletteEntry,
   getActiveMapSkinPaletteId,
@@ -73,5 +76,24 @@ describe("mapSkins central palette registry", () => {
       enabledForRandomDelvePicker: false,
     });
     expect(randomSpy).not.toHaveBeenCalled();
+  });
+
+  it("includes the test-group palettes in the authored registry", () => {
+    const paletteIds = new Set(AUTHORED_DELVE_PALETTE_ENTRIES.map((entry) => entry.paletteId));
+
+    expect(paletteIds.has("midnight_ablaze")).toBe(true);
+    expect(paletteIds.has("blessing")).toBe(true);
+    expect(paletteIds.has("hollow")).toBe(true);
+    expect(paletteIds.has("berry_nebula")).toBe(true);
+    expect(paletteIds.has("cyclope6")).toBe(true);
+    expect(paletteIds.has("bloodmoon21")).toBe(true);
+    expect(paletteIds.has("blk_aqu4")).toBe(true);
+    expect(paletteIds.has("dustbyte")).toBe(true);
+    expect(paletteIds.has("hydrangea_11")).toBe(true);
+    expect(paletteIds.has("fiery_plague_gb")).toBe(true);
+    expect(paletteIds.has("leopolds_dreams")).toBe(true);
+    expect(paletteIds.has("look_of_horror")).toBe(true);
+    expect(paletteIds.has("aquaverse")).toBe(true);
+    expect(paletteIds.has("sunraze")).toBe(true);
   });
 });
