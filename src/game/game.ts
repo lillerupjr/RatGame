@@ -875,8 +875,9 @@ export function createGame(args: CreateGameArgs) {
 
   function syncRewardDebugFieldsFromBudget(w: World): void {
     const budget = w.floorRewardBudget;
-    const nonObjectiveUsed = 2 - budget.nonObjectiveCardsRemaining;
-    w.cardRewardBudgetTotal = 2;
+    const nonObjectiveBudgetTotal = 0;
+    const nonObjectiveUsed = Math.max(0, nonObjectiveBudgetTotal - budget.nonObjectiveCardsRemaining);
+    w.cardRewardBudgetTotal = nonObjectiveBudgetTotal;
     w.cardRewardBudgetUsed = nonObjectiveUsed;
     if (!Array.isArray(w.cardRewardClaimKeys)) w.cardRewardClaimKeys = [];
     const firedKeys = Object.keys(budget.fired ?? Object.create(null));
@@ -2158,7 +2159,7 @@ export function createGame(args: CreateGameArgs) {
     w.objectiveRewardClaimedKey = null;
     (w as any).zoneRewardClaimedKey = null;
     (w as any).zoneRewardClaimedKeys = [];
-    w.cardRewardBudgetTotal = 2;
+    w.cardRewardBudgetTotal = 0;
     w.cardRewardBudgetUsed = 0;
     w.cardRewardClaimKeys = [];
     w.lastCardRewardClaimKey = null;

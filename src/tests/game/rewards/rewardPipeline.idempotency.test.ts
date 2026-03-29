@@ -3,7 +3,7 @@ import { rewardSchedulerSystem } from "../../../game/systems/progression/rewardS
 import { createRewardPipelineWorld } from "./rewardPipeline.testUtils";
 
 describe("durable reward pipeline idempotency", () => {
-  test("duplicate events with same claim key do not create duplicate tickets", () => {
+  test("duplicate zone-clear events with same claim key do not create duplicate tickets", () => {
     const world = createRewardPipelineWorld(63, "ZONE_TRIAL");
 
     world.runEvents.push(
@@ -13,15 +13,15 @@ describe("durable reward pipeline idempotency", () => {
 
     rewardSchedulerSystem(world);
 
-    expect(world.rewardTickets).toHaveLength(1);
+    expect(world.rewardTickets).toHaveLength(0);
     expect(world.cardRewardClaimKeys).toEqual(["0:ZONE_CLEAR:1"]);
-    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(1);
+    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
 
     world.runEvents.push({ type: "ZONE_CLEARED", floorIndex: 0, zoneIndex: 1 });
     rewardSchedulerSystem(world);
 
-    expect(world.rewardTickets).toHaveLength(1);
+    expect(world.rewardTickets).toHaveLength(0);
     expect(world.cardRewardClaimKeys).toEqual(["0:ZONE_CLEAR:1"]);
-    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(1);
+    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
   });
 });

@@ -36,7 +36,7 @@ describe("durable reward pipeline queueing", () => {
     expect(rewardPresenterSystem(world)).toBe(true);
     const second = getActiveTicket(world);
     expect(second?.createdSeq).toBe(2);
-    expect(second?.kind).toBe("CARD_PICK");
+    expect(second?.kind).toBe("RELIC_PICK");
     expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
   });
 });

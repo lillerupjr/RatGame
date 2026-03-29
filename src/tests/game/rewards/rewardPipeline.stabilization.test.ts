@@ -32,7 +32,7 @@ describe("reward pipeline stabilization", () => {
 
     rewardSchedulerSystem(world);
     expect(world.rewardTickets).toHaveLength(0);
-    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(2);
+    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
   });
 
   test("boss-zone KILL creates exactly one boss milestone event", () => {
@@ -72,10 +72,10 @@ describe("reward pipeline stabilization", () => {
 
     expect(world.rewardTickets).toHaveLength(0);
     expect(world.cardRewardClaimKeys).toContain("0:BOSS_CHEST");
-    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(2);
+    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
   });
 
-  test("zone trial sequence is CARD, CARD, then objective gold", () => {
+  test("zone trial sequence is objective relic plus gold only", () => {
     const world = createRewardPipelineWorld(84, "ZONE_TRIAL");
     world.runEvents.push(
       { type: "ZONE_CLEARED", floorIndex: 0, zoneIndex: 1 },
@@ -84,10 +84,10 @@ describe("reward pipeline stabilization", () => {
     );
 
     rewardSchedulerSystem(world);
-    expect(world.rewardTickets).toHaveLength(2);
+    expect(world.rewardTickets).toHaveLength(1);
 
     const kinds: string[] = [];
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < 1; i++) {
       expect(rewardPresenterSystem(world)).toBe(true);
       kinds.push(getActiveTicket(world)?.kind ?? "");
       dismissActiveRewardUi(world);
@@ -95,7 +95,7 @@ describe("reward pipeline stabilization", () => {
       world.state = "RUN";
     }
 
-    expect(kinds).toEqual(["CARD_PICK", "CARD_PICK"]);
+    expect(kinds).toEqual(["RELIC_PICK"]);
     expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
     expect(rewardPresenterSystem(world)).toBe(false);
   });

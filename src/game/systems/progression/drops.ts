@@ -2,7 +2,7 @@ import type { World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { goldValueFromEnemyBaseLife } from "../../economy/coins";
 import { grantXp } from "../../economy/xp";
-import { spawnChest, spawnGold, PICKUP_KIND, handlePickupSpecialCase } from "./pickups";
+import { spawnGold, PICKUP_KIND, handlePickupSpecialCase } from "./pickups";
 import { ENEMY_TYPE } from "../../factories/enemyFactory";
 import { getEnemyWorld, getPickupWorld, getPlayerWorld } from "../../coords/worldViews";
 import {
@@ -15,7 +15,7 @@ import {
 export function dropsSystem(w: World, dt: number) {
   tickLootGoblinGoldBurst(w, dt);
 
-  // 1) Spawn gold orbs (and boss chest for bosses) from kill events.
+  // 1) Spawn XP pickups (reusing gold orb visuals) from kill events.
   for (let i = 0; i < w.events.length; i++) {
     const e = w.events[i];
     if (e.type !== "ENEMY_KILLED") continue;
@@ -32,10 +32,6 @@ export function dropsSystem(w: World, dt: number) {
     const enemyPos = getEnemyWorld(w, e.enemyIndex, KENNEY_TILE_WORLD);
     spawnGold(w, enemyPos.wx, enemyPos.wy, goldValue);
 
-    // Boss chest drop (no magnet)
-    if (isBoss) {
-      spawnChest(w, enemyPos.wx, enemyPos.wy, "BOSS_CHEST");
-    }
   }
 
   // 2) Collect pickups

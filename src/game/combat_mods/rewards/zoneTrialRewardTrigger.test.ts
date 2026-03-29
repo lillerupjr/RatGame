@@ -53,37 +53,40 @@ function canAdvance(world: any): boolean {
 }
 
 describe("zoneTrial reward trigger", () => {
-  test("grants objective gold exactly once and does not block advancement", () => {
+  test("grants objective gold plus relic exactly once and blocks advancement until resolved", () => {
     const world = createWorld(7);
 
     rewardRunEventProducerSystem(world, { includeCoreFacts: true, includeChest: false });
     rewardSchedulerSystem(world);
     const startedFirst = rewardPresenterSystem(world);
 
-    expect(startedFirst).toBe(false);
-    expect(world.relicReward.active).toBe(false);
+    expect(startedFirst).toBe(true);
+    expect(world.relicReward.active).toBe(true);
     expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
-    expect(canAdvance(world)).toBe(true);
+    expect(canAdvance(world)).toBe(false);
 
     resolveActiveRewardTicket(world);
+    world.relicReward.active = false;
+    world.relicReward.options = [];
     world.state = "RUN";
     rewardRunEventProducerSystem(world, { includeCoreFacts: true, includeChest: false });
     rewardSchedulerSystem(world);
     const startedSecond = rewardPresenterSystem(world);
     expect(startedSecond).toBe(false);
     expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
+    expect(canAdvance(world)).toBe(true);
   });
 
-  test("objective completion still records the claim key without opening reward UI", () => {
+  test("objective completion still records the claim key while opening reward UI", () => {
     const world = createWorld(9);
     rewardRunEventProducerSystem(world, { includeCoreFacts: true, includeChest: false });
     rewardSchedulerSystem(world);
     const started = rewardPresenterSystem(world);
 
-    expect(started).toBe(false);
-    expect(world.relicReward.active).toBe(false);
+    expect(started).toBe(true);
+    expect(world.relicReward.active).toBe(true);
     expect(world.objectiveRewardClaimedKey).toBe("0:TRIAL_COMPLETE");
     expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
-    expect(canAdvance(world)).toBe(true);
+    expect(canAdvance(world)).toBe(false);
   });
 });

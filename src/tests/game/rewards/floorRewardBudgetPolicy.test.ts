@@ -4,7 +4,7 @@ import { rewardSchedulerSystem } from "../../../game/systems/progression/rewardS
 import { createRewardPipelineWorld } from "./rewardPipeline.testUtils";
 
 describe("floor reward budget policies", () => {
-  test("ZONE_TRIAL grants zone1, zone2, and objective gold exactly once", () => {
+  test("ZONE_TRIAL grants only objective relic plus gold exactly once", () => {
     const world = createRewardPipelineWorld(101, "ZONE_TRIAL");
     world.runEvents.push(
       { type: "ZONE_CLEARED", floorIndex: 0, zoneIndex: 1 },
@@ -15,10 +15,9 @@ describe("floor reward budget policies", () => {
 
     rewardSchedulerSystem(world);
 
-    expect(world.rewardTickets).toHaveLength(2);
+    expect(world.rewardTickets).toHaveLength(1);
     expect(world.rewardTickets.map((ticket: any) => ticket.kind)).toEqual([
-      "CARD_PICK",
-      "CARD_PICK",
+      "RELIC_PICK",
     ]);
     expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
     expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
@@ -29,7 +28,7 @@ describe("floor reward budget policies", () => {
     ]);
   });
 
-  test("BOSS_TRIPLE grants boss milestones and objective gold, but chest gives no ticket", () => {
+  test("BOSS_TRIPLE grants only objective relic plus gold, and chest stays disabled", () => {
     const world = createRewardPipelineWorld(202, "NORMAL");
     world.floorArchetype = "BOSS_TRIPLE";
     world.runEvents.push(
@@ -41,17 +40,16 @@ describe("floor reward budget policies", () => {
 
     rewardSchedulerSystem(world);
 
-    expect(world.rewardTickets).toHaveLength(2);
+    expect(world.rewardTickets).toHaveLength(1);
     expect(world.rewardTickets.map((ticket: any) => ticket.kind)).toEqual([
-      "CARD_PICK",
-      "CARD_PICK",
+      "RELIC_PICK",
     ]);
     expect(world.cardRewardClaimKeys).toContain("0:BOSS_CHEST");
     expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
     expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
   });
 
-  test("SURVIVE policy grants rewards at 60s + objective + boss chest", () => {
+  test("SURVIVE policy grants only objective relic plus gold", () => {
     const world = createRewardPipelineWorld(303, "SURVIVE_TRIAL");
     world.floorArchetype = "SURVIVE";
     world.runEvents.push(
@@ -62,16 +60,15 @@ describe("floor reward budget policies", () => {
 
     rewardSchedulerSystem(world);
 
-    expect(world.rewardTickets).toHaveLength(2);
+    expect(world.rewardTickets).toHaveLength(1);
     expect(world.rewardTickets.map((ticket: any) => ticket.kind)).toEqual([
-      "CARD_PICK",
-      "CARD_PICK",
+      "RELIC_PICK",
     ]);
     expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
     expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
   });
 
-  test("SURVIVE_BOSS policy grants exactly 2 card rewards plus objective gold", () => {
+  test("SURVIVE_BOSS policy grants only objective relic plus gold", () => {
     const world = createRewardPipelineWorld(404, "SURVIVE_TRIAL");
     world.floorArchetype = "SURVIVE";
     world._surviveBossSpawned = true;
@@ -82,7 +79,7 @@ describe("floor reward budget policies", () => {
     );
 
     rewardSchedulerSystem(world);
-    expect(world.rewardTickets).toHaveLength(2);
+    expect(world.rewardTickets).toHaveLength(1);
     expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
     expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
   });
