@@ -689,6 +689,29 @@ describe("structure legacy transition", () => {
     expect(BUILDING_SKINS.bp_0?.roof).toBe("structures/buildings/batch_processed/0");
   });
 
+  it("registers industrial as an empty authored building pack", () => {
+    const def = getAuthoredMapDefByMapId("industrial");
+    expect(def).toBeTruthy();
+    expect(def?.mapSkinId).toBe("industrial");
+    expect(def?.buildingPackId).toBe("industrial_buildings");
+    expect(BUILDING_PACKS.industrial_buildings).toEqual([]);
+    expect(BUILDING_PACKS.industrial_buildings).not.toBe(BUILDING_PACKS.downtown_buildings);
+  });
+
+  it("compiles industrial through the authored map pipeline without downtown structure leakage", () => {
+    const def = getAuthoredMapDefByMapId("industrial");
+    expect(def).toBeTruthy();
+
+    const compiled = compileKenneyMapFromTable(def!, { runSeed: 404, mapId: "industrial" });
+    const buildingStructures = compiled.overlays.filter(
+      (o) => o.layerRole === "STRUCTURE" && o.spriteId.includes("structures/buildings/"),
+    );
+
+    expect(buildingStructures).toEqual([]);
+    expect(compiled.overlays.some((o) => o.spriteId.includes("structures/buildings/downtown/"))).toBe(false);
+    expect(compiled.overlays.some((o) => o.spriteId.includes("structures/buildings/avenue/"))).toBe(false);
+  });
+
   it("street lamp props emit their own lightDef and do not block movement", () => {
     const mapDef: TableMapDef = {
       id: "street_lamp_prop_semantic",
