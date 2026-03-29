@@ -19,13 +19,13 @@
 
   ],
   "stamps": [
-    { "x": 2,  "y": 11,  "type": "container", "w": 3, "h": 2, "pool": ["containers"] },
-    { "x": 6,  "y": 11,  "type": "container", "w": 3, "h": 2, "pool": ["containers"] },
-    { "x": 9,  "y": 11,  "type": "container", "w": 3, "h": 2, "pool": ["containers"] },
-    { "x": 13,  "y": 11,  "type": "container", "w": 3, "h": 2, "pool": ["containers"] },
-    { "x": 16,  "y": 11,  "type": "container", "w": 3, "h": 2, "pool": ["containers"] },
+    { "x": 2,  "y": 11,  "type": "building", "w": 3, "h": 2, "pool": ["containers"] },
+    { "x": 6,  "y": 11,  "type": "building", "w": 3, "h": 2, "pool": ["containers"] },
+    { "x": 9,  "y": 11,  "type": "building", "w": 3, "h": 2, "pool": ["containers"] },
+    { "x": 13,  "y": 11,  "type": "building", "w": 3, "h": 2, "pool": ["containers"] },
+    { "x": 16,  "y": 11,  "type": "building", "w": 3, "h": 2, "pool": ["containers"] },
 
-    { "x": 19,  "y": 11,  "type": "container", "w": 3, "h": 2, "pool": ["containers"] },
+    { "x": 19,  "y": 11,  "type": "building", "w": 3, "h": 2, "pool": ["containers"] },
 
     { "x": 15, "y": 23, "z": 0, "zVisualOffsetUnits": -3, "type": "prop", "propId": "boat3", "w": 1, "h": 1 },
     { "x": 8, "y": 1, "z": 0, "zVisualOffsetUnits": -3, "type": "prop", "propId": "boat4", "w": 1, "h": 1 },

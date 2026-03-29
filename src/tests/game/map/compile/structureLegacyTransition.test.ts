@@ -1,12 +1,13 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { getAuthoredMapDefByMapId } from "../../../../game/map/authored/authoredMapRegistry";
+import { setActiveMapAsync } from "../../../../game/map/compile/kenneyMap";
 import { compileKenneyMapFromTable } from "../../../../game/map/compile/kenneyMapLoader";
 import { BUILDING_PACKS, BUILDING_SKINS } from "../../../../game/content/buildings";
 import type { TableMapDef } from "../../../../game/map/formats/table/tableMapTypes";
-import { CONTAINER_SKINS } from "../../../../game/content/containers";
 import { seAnchorFromTopLeft } from "../../../../engine/render/sprites/structureFootprintOwnership";
 import { RUNTIME_FLOOR_VARIANT_COUNTS } from "../../../../game/content/runtimeFloorConfig";
 import {
+  collectRequiredMonolithicBuildingSkinIdsForMap,
   computeMonolithicBuildingSemanticsForSkinIds,
   getRequiredMonolithicBuildingPlacementGeometry,
 } from "../../../../game/structures/monolithicBuildingSemanticPrepass";
@@ -25,23 +26,55 @@ describe("structure legacy transition", () => {
     expect(BUILDING_PACKS.downtown_buildings).toEqual(["downtown_1", "downtown_2", "downtown_3"]);
   });
 
-  it("uses monolithic flat container assets during runtime-slicing", () => {
+  it("treats docks containers as ordinary building skins", () => {
+    const def = getAuthoredMapDefByMapId("docks");
+    expect(def).toBeTruthy();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const compiled = compileKenneyMapFromTable(def!);
+
+      const structureOverlays = compiled.overlays.filter(
+        (o) => o.layerRole === "STRUCTURE"
+          && o.spriteId.includes("structures/containers/")
+      );
+      expect(structureOverlays.length).toBeGreaterThan(0);
+      expect(structureOverlays.some((o) => o.spriteId === "structures/containers/container_base")).toBe(true);
+
+      const wallPieces = Array.from(compiled.occludersByLayer.values())
+        .flat()
+        .filter((p) => p.kind === "WALL" && p.spriteId.includes("structures/containers/"));
+      expect(wallPieces.length).toBe(0);
+      expect(
+        warnSpy.mock.calls.some(([message]) =>
+          String(message).includes("Legacy geometry metadata read for non-building skin"),
+        ),
+      ).toBe(false);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("includes container skins in the normal semantic prepass for docks", async () => {
     const def = getAuthoredMapDefByMapId("docks");
     expect(def).toBeTruthy();
 
-    const compiled = compileKenneyMapFromTable(def!);
+    const requiredSkinIds = collectRequiredMonolithicBuildingSkinIdsForMap(def!);
+    expect(requiredSkinIds).toContain("container1");
+    expect(requiredSkinIds).toContain("container_red");
 
-    const structureOverlays = compiled.overlays.filter(
-      (o) => o.layerRole === "STRUCTURE"
-        && o.spriteId.includes("structures/containers/")
-    );
-    expect(structureOverlays.length).toBeGreaterThan(0);
-    expect(structureOverlays.some((o) => o.spriteId === "structures/containers/container_base")).toBe(true);
+    const compiled = await setActiveMapAsync(def!, { mapId: def!.id, semanticTimeoutMs: 15000 });
+    expect(compiled.overlays.some((o) => o.spriteId.includes("structures/containers/"))).toBe(true);
 
-    const wallPieces = Array.from(compiled.occludersByLayer.values())
-      .flat()
-      .filter((p) => p.kind === "WALL" && p.spriteId.includes("structures/containers/"));
-    expect(wallPieces.length).toBe(0);
+    const skin = BUILDING_SKINS.container1;
+    expect(skin).toBeTruthy();
+    expect(() => (skin as any).w).toThrow();
+    expect(() => (skin as any).h).toThrow();
+    expect(() => (skin as any).heightUnits).toThrow();
+
+    const semantic = getRequiredMonolithicBuildingPlacementGeometry("container1", "test:container1");
+    expect(semantic.w).toBeGreaterThan(0);
+    expect(semantic.h).toBeGreaterThan(0);
+    expect(semantic.heightUnits).toBeGreaterThan(0);
   });
 
   it("uses avenue building pack assets for avenue semantic building areas", () => {
@@ -415,41 +448,13 @@ describe("structure legacy transition", () => {
     expect(compiled.blockedTiles.has("3,1")).toBe(false);
   });
 
-  it("applies stackLevel using heightUnits for container z placement", () => {
-    const container = CONTAINER_SKINS.container1;
-    const containerW = container.w ?? 3;
-    const containerH = container.h ?? 2;
-    const containerHeightUnits = container.heightUnits ?? 8;
+  it("uses shared building pool selection for container skins", () => {
     const mapDef: TableMapDef = {
-      id: "container_stack_level",
-      w: 6,
-      h: 6,
-      cells: [{ x: 0, y: 0, z: 0, type: "floor" }],
-      stamps: [{
-        x: 1,
-        y: 1,
-        z: 0,
-        type: "container",
-        skinId: "container1",
-        w: containerW,
-        h: containerH,
-        stackLevel: 1,
-        stackChance: 0,
-      }],
-    };
-    const compiled = compileKenneyMapFromTable(mapDef);
-    const structure = compiled.overlays.find((o) => o.layerRole === "STRUCTURE" && o.spriteId.includes("structures/containers/"));
-    expect(structure).toBeTruthy();
-    expect(structure!.z).toBeGreaterThanOrEqual(containerHeightUnits);
-  });
-
-  it("auto-flips container skin when only flipped orientation matches stamp dimensions", () => {
-    const mapDef: TableMapDef = {
-      id: "container_auto_flip_fit",
+      id: "container_building_pool_fit",
       w: 8,
       h: 8,
       cells: [{ x: 0, y: 0, z: 0, type: "floor" }],
-      stamps: [{ x: 1, y: 1, z: 0, type: "container", w: 2, h: 3, pool: ["containers"] }],
+      stamps: [{ x: 1, y: 1, z: 0, type: "building", w: 2, h: 3, pool: ["containers"] }],
     };
     const compiled = compileKenneyMapFromTable(mapDef);
     const structure = compiled.overlays.find((o) => o.layerRole === "STRUCTURE" && o.spriteId.includes("structures/containers/"));

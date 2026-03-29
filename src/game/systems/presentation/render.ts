@@ -429,9 +429,6 @@ export async function renderSystem(
   const OCEAN_ANIM_TIME_SCALE = 0.25;
   const OCEAN_BASE_FRAME_PX = 32;
 
-  // Small render-order bias so container walls can occlude stacked container roofs.
-  const CONTAINER_WALL_SORT_BIAS = 0.001;
-
   // Optional render-layer offset for stairs.
   // --- Render HEIGHT knobs (screen-space Y offsets, in pixels) ---
   // Positive moves DOWN on screen; negative moves UP.
@@ -1421,7 +1418,6 @@ export async function renderSystem(
     occluderLayers,
     occludersInViewForLayer,
     buildWallDraw,
-    CONTAINER_WALL_SORT_BIAS,
     resolveStructureOverlayAdmissionContext,
     strictViewportTileBounds,
     structureTriangleAdmissionMode,

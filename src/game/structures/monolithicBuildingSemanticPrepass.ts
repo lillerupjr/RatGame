@@ -273,12 +273,6 @@ export function collectRequiredMonolithicBuildingSkinIdsForMap(def: TableMapDef)
       }
       continue;
     }
-    if (stamp.type !== "container") continue;
-    addId(stamp.skinId);
-    const containerPools = Array.isArray(stamp.pool) ? stamp.pool : [];
-    for (let p = 0; p < containerPools.length; p++) {
-      addPack(containerPools[p]);
-    }
   }
 
   return Array.from(required).sort((a, b) => a.localeCompare(b));

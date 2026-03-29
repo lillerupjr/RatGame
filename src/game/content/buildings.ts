@@ -48,7 +48,7 @@ export type BuildingSkin = {
 type BuildingSkinOverrides = Omit<Partial<BuildingSkin>, "id" | "roof" | "wallSouth" | "wallEast">;
 
 const DEFAULT_BUILDING_SKIN: BuildingSkinOverrides = {
-  isFlippable: true,
+  isFlippable: false,
   defaultFacing: "S",
   flipMode: "H",
 };
@@ -123,6 +123,13 @@ const CANONICAL_BUILDING_SKINS: Record<BuildingSkinId, BuildingSkin> = {
   china_town_4: makeMonolithicBuilding("china_town_4", "structures/buildings/china_town/4", {}),
   china_town_5: makeMonolithicBuilding("china_town_5", "structures/buildings/china_town/5", {}),
 
+  container1: makeMonolithicBuilding("container1", "structures/containers/container_base", {}),
+  container_babyblue: makeMonolithicBuilding("container_babyblue", "structures/containers/container_babyblue", {}),
+  container_black: makeMonolithicBuilding("container_black", "structures/containers/container_black", {}),
+  container_blue: makeMonolithicBuilding("container_blue", "structures/containers/container_blue", {}),
+  container_green: makeMonolithicBuilding("container_green", "structures/containers/container_green", {}),
+  container_red: makeMonolithicBuilding("container_red", "structures/containers/container_red", {}),
+
   bp_0: makeMonolithicBuilding("bp_0", "structures/buildings/batch_processed/0", {}),
   bp_1: makeMonolithicBuilding("bp_1", "structures/buildings/batch_processed/1", {}),
   bp_2: makeMonolithicBuilding("bp_2", "structures/buildings/batch_processed/2", {}),
@@ -184,6 +191,14 @@ export const BUILDING_PACKS: Record<BuildingPackId, BuildingSkinId[]> = {
   avenue_buildings: ["avenue_1", "avenue_2", "avenue_3", "avenue_4", "avenue_5", "avenue_6", "avenue_7"],
   downtown_buildings: ["downtown_1", "downtown_2", "downtown_3"],
   china_town_buildings: ["china_town_1", "china_town_2", "china_town_3", "china_town_4", "china_town_5"],
+  containers: [
+    "container1",
+    "container_babyblue",
+    "container_black",
+    "container_blue",
+    "container_green",
+    "container_red",
+  ],
   batch_processed_buildings: [
     "bp_0", "bp_1", "bp_2", "bp_3", "bp_4", "bp_5", "bp_6", "bp_7", "bp_8", "bp_9",
     "bp_10", "bp_11", "bp_12", "bp_13", "bp_14", "bp_15", "bp_16", "bp_17", "bp_18",

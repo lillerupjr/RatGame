@@ -1,5 +1,4 @@
 import { BUILDING_SKINS } from "../../../game/content/buildings";
-import { CONTAINER_SKINS } from "../../../game/content/containers";
 import { MAP_SKINS, DEFAULT_MAP_SKIN } from "../../../game/content/mapSkins";
 import { PROPS } from "../../../game/content/props";
 import { RUNTIME_DECAL_SPRITE_IDS } from "../../../game/content/runtimeDecalConfig";
@@ -151,12 +150,6 @@ function collectRenderableSpriteIds(): ReadonlySet<string> {
   }
 
   for (const skin of Object.values(BUILDING_SKINS)) {
-    addId(ids, skin.roof);
-    for (let i = 0; i < skin.wallSouth.length; i++) addId(ids, skin.wallSouth[i]);
-    for (let i = 0; i < skin.wallEast.length; i++) addId(ids, skin.wallEast[i]);
-  }
-
-  for (const skin of Object.values(CONTAINER_SKINS)) {
     addId(ids, skin.roof);
     for (let i = 0; i < skin.wallSouth.length; i++) addId(ids, skin.wallSouth[i]);
     for (let i = 0; i < skin.wallEast.length; i++) addId(ids, skin.wallEast[i]);

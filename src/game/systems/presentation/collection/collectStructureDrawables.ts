@@ -84,7 +84,6 @@ export function collectStructureDrawables(input: CollectionContext): {
     occludersInViewForLayer,
     shouldCullBuildingAt,
     buildWallDraw,
-    CONTAINER_WALL_SORT_BIAS,
     resolveStructureOverlayAdmissionContext,
     compiledMap,
     strictViewportTileBounds,
@@ -491,12 +490,11 @@ export function collectStructureDrawables(input: CollectionContext): {
       if (occ.id.startsWith("stamp_wall_") && shouldCullBuildingAt(occ.tx, occ.ty)) continue;
       const draw = buildWallDraw(occ, occluderId++);
       if (!draw) continue;
-      const isContainerWall = occ.spriteId?.includes("structures/containers/");
       const wallKindOrder = occ.layerRole === "STRUCTURE" ? KindOrder.STRUCTURE : KindOrder.OCCLUDER;
       const renderKey: RenderKey = {
         slice: occ.tx + occ.ty,
         within: occ.tx,
-        baseZ: occ.zFrom + (isContainerWall ? CONTAINER_WALL_SORT_BIAS : 0),
+        baseZ: occ.zFrom,
         kindOrder: wallKindOrder,
         stableId: occStableId,
       };

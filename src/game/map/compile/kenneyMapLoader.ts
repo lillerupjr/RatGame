@@ -11,14 +11,13 @@ import { resolveMapSkin, resolveSemanticSprite, type MapSkinId, MapSkinBundle } 
 import { resolveTileSpriteId } from "../skins/tileSpriteResolver";
 import { TILE_ID_OCEAN } from "../../world/semanticFields";
 import {
+    BUILDING_PACKS,
     BUILDING_SKINS,
     DEFAULT_BUILDING_PACK_ID,
     HEIGHT_UNIT_PX,
     resolveBuildingCandidates,
     type BuildingSkin,
-    type BuildingSkinId,
 } from "../../content/buildings";
-import { CONTAINER_PACKS, CONTAINER_SKINS, CONTAINER_PACK_ID } from "../../content/containers";
 import { requireProp, resolvePropSprite } from "../../content/props";
 import { RNG } from "../../util/rng";
 import {getSpriteMeta} from "../../../engine/render/sprites/spriteMeta";
@@ -2205,6 +2204,27 @@ export function compileKenneyMapFromTable(
     };
 
     const EMIT_STRUCTURE_SUPPORT_TOPS = false;
+    const resolveCandidateSkinIdsForStamp = (stamp: SemanticStamp): string[] => {
+        const explicitPoolIds = (Array.isArray(stamp.pool) ? stamp.pool : [])
+            .map((id) => normalizeSkinId(id))
+            .filter((id): id is string => !!id);
+        if (explicitPoolIds.length <= 0) {
+            return resolveBuildingCandidates(buildingPackId);
+        }
+        const candidateIds = new Set<string>();
+        for (let i = 0; i < explicitPoolIds.length; i++) {
+            const poolId = explicitPoolIds[i];
+            const pack = BUILDING_PACKS[poolId];
+            if (!pack) continue;
+            for (let j = 0; j < pack.length; j++) {
+                candidateIds.add(pack[j]);
+            }
+        }
+        if (candidateIds.size <= 0) {
+            throw new Error(`[buildings] No candidates for explicit pool [${explicitPoolIds.join(", ")}] at stamp (${stamp.x},${stamp.y}).`);
+        }
+        return Array.from(candidateIds);
+    };
 
     const compileBuildingStamp = (
         stamp: SemanticStamp,
@@ -2220,7 +2240,7 @@ export function compileKenneyMapFromTable(
         if (buildingDir && typeof stamp.flipped === "boolean") {
             throw new Error(`[buildings] Building stamp at (${stamp.x},${stamp.y}) cannot combine dir with flipped.`);
         }
-        if (stamp.type === "building" || stamp.type === "container") {
+        if (stamp.type === "building") {
             if (stamp.w === undefined || stamp.h === undefined) {
                 throw new Error(`Building stamp at (${stamp.x},${stamp.y}) must define w/h.`);
             }
@@ -2250,15 +2270,15 @@ export function compileKenneyMapFromTable(
                 };
                 const candidateSkins: BuildingSkin[] = (() => {
                     if (forcedSkinId) {
-                        const forced = BUILDING_SKINS[forcedSkinId] ?? CONTAINER_SKINS[forcedSkinId];
+                        const forced = BUILDING_SKINS[forcedSkinId];
                         if (!forced) {
                             throw new Error(`[buildings] Missing skin entry for id=${forcedSkinId} (stamp (${stamp.x},${stamp.y}))`);
                         }
                         assertHeightRange(forced);
                         return [forced];
                     }
-                    return resolveBuildingCandidates(buildingPackId)
-                        .map((id) => BUILDING_SKINS[id] ?? CONTAINER_SKINS[id])
+                    return resolveCandidateSkinIdsForStamp(stamp)
+                        .map((id) => BUILDING_SKINS[id])
                         .filter((skin): skin is BuildingSkin => !!skin)
                         .filter((skin) => {
                             const geometry = resolvePlacementGeometryForSkin(skin, `perimeter-candidate-filter:${skin.id}`);
@@ -2533,7 +2553,7 @@ export function compileKenneyMapFromTable(
             }
 
             if (!forcedSkinId) {
-                const candidateIds = resolveBuildingCandidates(buildingPackId);
+                const candidateIds = resolveCandidateSkinIdsForStamp(stamp);
                 const candidates = candidateIds
                     .map((id) => BUILDING_SKINS[id])
                     .filter((skin): skin is BuildingSkin => !!skin)
@@ -2686,7 +2706,7 @@ export function compileKenneyMapFromTable(
                 }
                 return;
             }
-            const skin = BUILDING_SKINS[forcedSkinId] ?? CONTAINER_SKINS[forcedSkinId];
+            const skin = BUILDING_SKINS[forcedSkinId];
             if (!skin) {
                 throw new Error(`[buildings] Missing skin entry for id=${forcedSkinId} (stamp (${stamp.x},${stamp.y}))`);
             }
@@ -3054,106 +3074,6 @@ export function compileKenneyMapFromTable(
             }
             return;
         }
-        if (stamp.type === "container") {
-            const w = stamp.w ?? 2;
-            const h = stamp.h ?? 3;
-            const pool = stamp.pool ?? [CONTAINER_PACK_ID];
-            const flippedRequested = typeof stamp.flipped === "boolean" ? stamp.flipped : undefined;
-            let chosen: BuildingSkin;
-            let chosenGeometry: { w: number; h: number; heightUnits: number };
-            let chosenFlipped = false;
-            if (stamp.skinId) {
-                const forced = CONTAINER_SKINS[normalizeSkinId(stamp.skinId) ?? ""];
-                if (!forced) {
-                    throw new Error(`Container selection: unknown skinId "${stamp.skinId}".`);
-                }
-                const forcedGeometry = requireLegacySkinGeometry(forced, `container-forced:${forced.id}`);
-                if (flippedRequested !== undefined) {
-                    const oriented = resolveFlippedFootprint(forcedGeometry.w, forcedGeometry.h, forced.isFlippable, flippedRequested);
-                    if (oriented.w !== w || oriented.h !== h) {
-                        throw new Error(`Container selection: forced skin "${forced.id}" with flipped=${flippedRequested} does not match stamp ${w}x${h}.`);
-                    }
-                    chosenFlipped = oriented.flipped;
-                } else {
-                    const fitsNormal = forcedGeometry.w === w && forcedGeometry.h === h;
-                    const fitsFlipped = forced.isFlippable && forcedGeometry.h === w && forcedGeometry.w === h;
-                    if (!fitsNormal && !fitsFlipped) {
-                        throw new Error(`Container selection: forced skin "${forced.id}" does not match stamp ${w}x${h} in either orientation.`);
-                    }
-                    chosenFlipped = !fitsNormal && fitsFlipped;
-                }
-                chosen = forced;
-                chosenGeometry = forcedGeometry;
-            } else {
-                const poolIds = pool.map((id) => id.trim()).filter(Boolean);
-                const candidatesById = new Map<BuildingSkinId, BuildingSkin>();
-                for (let i = 0; i < poolIds.length; i++) {
-                    const pack = CONTAINER_PACKS[poolIds[i]];
-                    if (!pack) continue;
-                    for (let j = 0; j < pack.length; j++) {
-                        const containerId = pack[j];
-                        const skin = CONTAINER_SKINS[containerId];
-                        if (skin) candidatesById.set(containerId, skin);
-                    }
-                }
-                const candidates = Array.from(candidatesById.values())
-                    .flatMap((skin) => {
-                        const geometry = requireLegacySkinGeometry(skin, `container-candidate:${skin.id}`);
-                        if (flippedRequested !== undefined) {
-                            const oriented = resolveFlippedFootprint(geometry.w, geometry.h, skin.isFlippable, flippedRequested);
-                            if (oriented.w === w && oriented.h === h) {
-                                return [{ skin, geometry, flipped: oriented.flipped }];
-                            }
-                            return [];
-                        }
-                        const fitsNormal = geometry.w === w && geometry.h === h;
-                        const fitsFlipped = skin.isFlippable && geometry.h === w && geometry.w === h;
-                        if (fitsNormal) return [{ skin, geometry, flipped: false }];
-                        if (fitsFlipped) return [{ skin, geometry, flipped: true }];
-                        return [];
-                    })
-                    .filter(({ geometry }) => stamp.heightUnitsMin === undefined || geometry.heightUnits >= stamp.heightUnitsMin)
-                    .filter(({ geometry }) => stamp.heightUnitsMax === undefined || geometry.heightUnits <= stamp.heightUnitsMax)
-                    .sort((a, b) => a.skin.id.localeCompare(b.skin.id));
-                if (candidates.length === 0) {
-                    throw new Error(`Container selection: no candidates for stamp ${w}x${h} with pool [${pool.join(", ")}].`);
-                }
-                const seed = hashString(`${runSeed}:${mapId}:${stampIndex}:container:${stamp.x},${stamp.y}:${w}x${h}`);
-                const rng = new RNG(seed);
-                const picked = candidates[rng.int(0, candidates.length - 1)] ?? candidates[0];
-                chosen = picked.skin;
-                chosenGeometry = picked.geometry;
-                chosenFlipped = picked.flipped;
-            }
-
-            const stackLevel = Math.max(0, Math.trunc(stamp.stackLevel ?? 0));
-            const zStackUnits = Math.trunc(stamp.zStackUnits ?? (stackLevel * chosenGeometry.heightUnits));
-            const baseStamp: SemanticStamp = {
-                ...stamp,
-                type: "building",
-                w,
-                h,
-                z: (stamp.z ?? 0) + zStackUnits,
-                pool,
-                skinId: chosen.id,
-                flipped: chosenFlipped,
-            };
-            compileBuildingStamp(baseStamp, stampIndex, chosen.id);
-
-            const chance = Math.max(0, Math.min(1, stamp.stackChance ?? 0.2));
-            if (chance > 0) {
-                const seed = hashString(`${runSeed}:${mapId}:${stampIndex}:stack:${stamp.x},${stamp.y}`);
-                const roll = (seed % 10000) / 10000;
-                if (roll < chance) {
-                    compileBuildingStamp(
-                        { ...baseStamp, z: (stamp.z ?? 0) + chosenGeometry.heightUnits },
-                        stampIndex,
-                        chosen.id
-                    );
-                }
-            }
-            return;
-        }
         if (stamp.type === "prop") {
             const propId = stamp.propId ?? "";
             const prop = requireProp(propId, "prop stamp");
@@ -3238,14 +3158,7 @@ export function compileKenneyMapFromTable(
             return;
         }
         if (stamp.type === "building") {
-            const zStackUnits = Math.trunc(stamp.zStackUnits ?? 0);
-            compileBuildingStamp(
-                {
-                    ...stamp,
-                    z: (stamp.z ?? 0) + zStackUnits,
-                },
-                stampIndex
-            );
+            compileBuildingStamp(stamp, stampIndex);
             return;
         }
         compileBuildingStamp(stamp, stampIndex);

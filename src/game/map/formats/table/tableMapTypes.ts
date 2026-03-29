@@ -36,7 +36,6 @@ export type TableMapCell = {
 
 export type SemanticStampType =
     | "building"
-    | "container"
     | "prop"
     | "road"
     | "asphalt"
@@ -59,7 +58,6 @@ export type SemanticStamp = {
     pool?: string[];
     heightUnitsMin?: number;
     heightUnitsMax?: number;
-    stackChance?: number;
     propId?: string;
     dir?: string;
     layout?: "perimeter_outward";
@@ -69,8 +67,6 @@ export type SemanticStamp = {
     collision?: "BLOCK" | "PASS";
     blocksMovement?: boolean;
     flipped?: boolean;
-    stackLevel?: number;
-    zStackUnits?: number;
 };
 
 export type TableObjectiveRule =

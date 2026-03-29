@@ -66,7 +66,6 @@ function makeBaseInput(
     occludersInViewForLayer: () => [],
     shouldCullBuildingAt: () => false,
     buildWallDraw: vi.fn(),
-    CONTAINER_WALL_SORT_BIAS: 0,
     resolveStructureOverlayAdmissionContext: vi.fn(() => ({
       triangleOverlayPrefilterBounds: { minTx: 0, maxTx: 0, minTy: 0, maxTy: 0 },
       overlayPrefilterViewRect: { minTx: 0, maxTx: 0, minTy: 0, maxTy: 0 },
@@ -718,6 +717,12 @@ describe("collectStructureDrawables", () => {
         minY: 20,
         maxY: 52,
       };
+      input.isPointInsideStructureCutoutScreenRect = (x: number, y: number) => (
+        x >= input.structureCutoutScreenRect.minX
+        && x <= input.structureCutoutScreenRect.maxX
+        && y >= input.structureCutoutScreenRect.minY
+        && y <= input.structureCutoutScreenRect.maxY
+      );
 
       const commands = collectCommands(input);
       expect(commands).toHaveLength(2);

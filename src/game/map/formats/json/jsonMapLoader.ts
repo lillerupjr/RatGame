@@ -221,7 +221,6 @@ type JsonMapDef = {
     pool?: string[];
     heightUnitsMin?: number;
     heightUnitsMax?: number;
-    stackChance?: number;
     propId?: string;
     dir?: string;
     layout?: "perimeter_outward";
@@ -231,8 +230,6 @@ type JsonMapDef = {
     collision?: "BLOCK" | "PASS";
     blocksMovement?: boolean;
     flipped?: boolean;
-    stackLevel?: number;
-    zStackUnits?: number;
   }[];
   roadSemanticRects?: Array<{
     x: number;
@@ -735,8 +732,6 @@ function optionalFieldsField(
     const blocksMovement = optionalBooleanField(field, "blocksMovement");
     const skinId = optionalStringField(field, "skinId");
     const flipped = optionalBooleanField(field, "flipped");
-    const stackLevel = optionalNumberField(field, "stackLevel");
-    const zStackUnits = optionalNumberField(field, "zStackUnits");
     const resolvedTypeRaw = (type ?? "floor").toLowerCase();
     if (layoutRaw !== undefined && resolvedTypeRaw !== "building") {
       throw new Error(`JSON map loader${formatSource(source)}: fields[${index}].layout is only supported for type=building.`);
@@ -768,8 +763,6 @@ function optionalFieldsField(
         collision,
         blocksMovement,
         flipped,
-        stackLevel,
-        zStackUnits,
       });
       continue;
     }
@@ -822,7 +815,6 @@ function optionalSemanticStamp(
       const lowered = typeRaw.toLowerCase();
       if (
         lowered === "building" ||
-        lowered === "container" ||
         lowered === "prop" ||
         lowered === "road" ||
         lowered === "asphalt" ||
@@ -836,7 +828,7 @@ function optionalSemanticStamp(
         return lowered as SemanticStampType;
       }
       throw new Error(
-        `JSON map loader${formatSource(source)}: stamps[${index}].type must be one of building|container|prop|road|sidewalk|park|sea|boss_room|fence|lamp_post.`
+        `JSON map loader${formatSource(source)}: stamps[${index}].type must be one of building|prop|road|sidewalk|park|sea|boss_room|fence|lamp_post.`
       );
     })();
     const z = optionalNumberField(entry, "z") ?? 0;
@@ -847,7 +839,6 @@ function optionalSemanticStamp(
     const pool = optionalStringArrayField(entry, "pool", source);
     const heightUnitsMin = optionalNumberField(entry, "heightUnitsMin");
     const heightUnitsMax = optionalNumberField(entry, "heightUnitsMax");
-    const stackChance = optionalNumberField(entry, "stackChance");
     const propId = optionalStringField(entry, "propId");
     const dirRaw = optionalStringField(entry, "dir");
     const layoutRaw = optionalStringField(entry, "layout");
@@ -880,8 +871,6 @@ function optionalSemanticStamp(
       validatePerimeterBuildingLayoutOverrides(layout, buildingDir, flipped, `stamps[${index}]`, source);
     }
     const dir = type === "building" ? buildingDir : dirRaw;
-    const stackLevel = optionalNumberField(entry, "stackLevel");
-    const zStackUnits = optionalNumberField(entry, "zStackUnits");
     return {
       x,
       y,
@@ -894,7 +883,6 @@ function optionalSemanticStamp(
       pool,
       heightUnitsMin,
       heightUnitsMax,
-      stackChance,
       propId,
       dir,
       layout,
@@ -904,8 +892,6 @@ function optionalSemanticStamp(
       collision,
       blocksMovement,
       flipped,
-      stackLevel,
-      zStackUnits,
     };
   });
 }
