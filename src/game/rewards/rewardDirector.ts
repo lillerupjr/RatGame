@@ -11,6 +11,8 @@ export type RewardOutcome =
   | { type: "GRANT_GOLD"; amount: number; reason: string }
   | { type: "NO_REWARD"; reason: string };
 
+export const OBJECTIVE_COMPLETION_GOLD = 50;
+
 export function handleRewardEvent(
   budget: FloorRewardBudget,
   ev: RewardEvent,
@@ -23,18 +25,13 @@ export function handleRewardEvent(
           budget.nonObjectiveCardsRemaining -= 1;
           return { type: "GRANT_CARD", reason: "Boss chest consumed non-objective budget" };
         }
-        return { type: "GRANT_GOLD", amount: bossChestGold(ctx.depth), reason: "Boss chest fallback (budget exhausted)" };
+        return { type: "NO_REWARD", reason: "Boss chest skipped (budget exhausted)" };
       }
-      // Future/other chest kinds: default gold-only (no card coupling)
-      return { type: "GRANT_GOLD", amount: 10, reason: "Non-boss chest default gold" };
+      return { type: "NO_REWARD", reason: "Non-boss chest ignored" };
     }
 
     case "OBJECTIVE_COMPLETED": {
-      if (!budget.objectiveCardAvailable) {
-        return { type: "NO_REWARD", reason: "Objective card already claimed" };
-      }
-      budget.objectiveCardAvailable = false;
-      return { type: "GRANT_CARD", reason: "Objective completion reserved card" };
+      return { type: "GRANT_GOLD", amount: OBJECTIVE_COMPLETION_GOLD, reason: "Objective completion grants gold" };
     }
 
     case "SURVIVE_1MIN_REWARD": {
@@ -66,9 +63,4 @@ function consumeNonObjectiveOnce(budget: FloorRewardBudget, key: string, reason:
 
   // IMPORTANT: do NOT substitute gold here unless design changes later.
   return { type: "NO_REWARD", reason: `${reason} skipped (budget exhausted)` };
-}
-
-function bossChestGold(depth: number): number {
-  // Simple scaling; tune later.
-  return 50 + depth * 10;
 }

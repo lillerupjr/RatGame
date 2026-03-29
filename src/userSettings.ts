@@ -19,10 +19,14 @@ import {
   type RenderBackendMode,
 } from "./settings/userSettings";
 import {
+  DEFAULT_XP_LEVEL_BASE,
+  DEFAULT_XP_LEVEL_GROWTH,
   DEFAULT_GAME_SPEED,
   MAX_GAME_SPEED,
   MIN_GAME_SPEED,
   clampGameSpeed,
+  normalizeXpLevelBase,
+  normalizeXpLevelGrowth,
   normalizePaletteRemapWeightPercent,
   type LightColorModeOverride,
   type LightStrengthOverride,
@@ -38,6 +42,8 @@ import {
 } from "./settings/settingsStore";
 
 export {
+  DEFAULT_XP_LEVEL_BASE,
+  DEFAULT_XP_LEVEL_GROWTH,
   DEFAULT_GAME_SPEED,
   DEFAULT_VISIBLE_VERTICAL_TILES,
   DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP,
@@ -96,6 +102,8 @@ export type GameSettings = {
   userModeEnabled: boolean;
   healthOrbSide: "left" | "right";
   gameSpeed: number;
+  xpLevelBase: number;
+  xpLevelGrowth: number;
 };
 
 export type AudioPreferenceSettings = {
@@ -254,6 +262,8 @@ function toLegacySettings(): UserSettings {
       userModeEnabled: settings.user.game.userModeEnabled,
       healthOrbSide: settings.user.game.healthOrbSide,
       gameSpeed: settings.system.gameSpeed,
+      xpLevelBase: settings.system.xpLevelBase,
+      xpLevelGrowth: settings.system.xpLevelGrowth,
     },
     render: {
       entityShadowsDisable: settings.system.entityShadowsDisable,
@@ -316,6 +326,12 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     }
     if (gamePatch.gameSpeed !== undefined) {
       systemPatch.gameSpeed = gamePatch.gameSpeed;
+    }
+    if (gamePatch.xpLevelBase !== undefined) {
+      systemPatch.xpLevelBase = normalizeXpLevelBase(gamePatch.xpLevelBase);
+    }
+    if (gamePatch.xpLevelGrowth !== undefined) {
+      systemPatch.xpLevelGrowth = normalizeXpLevelGrowth(gamePatch.xpLevelGrowth);
     }
   }
 

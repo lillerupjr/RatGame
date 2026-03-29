@@ -32,6 +32,8 @@ import type { ExpectedPowerBudgetConfig, ExpectedPowerConfig } from "../../game/
 import { defaultEnemyPowerCostConfig, type EnemyPowerCostConfig } from "../../game/balance/enemyPower";
 import { createBalanceCsvLogger, type BalanceCsvLogger } from "../../game/balance/balanceCsvLogger";
 import { DEFAULT_SPAWN_TUNING } from "../../game/balance/spawnTuningDefaults";
+import { getSettings } from "../../settings/settingsStore";
+import { DEFAULT_XP_LEVEL_BASE } from "../../settings/systemOverrides";
 
 import type { RelicInstance } from "../../game/content/relics";
 
@@ -217,6 +219,9 @@ export type World = {
   deathFx: DeathFxState;
   run: {
     runGold: number;
+    xp: number;
+    level: number;
+    xpToNextLevel: number;
   };
   lighting: WorldLightingState;
 
@@ -371,7 +376,7 @@ export type World = {
   dotTickAcc: number;
 
   // -------------------------
-  // Level (frozen)
+  // Level (compatibility mirror of run.level)
   // -------------------------
   level: number;
 
@@ -715,6 +720,9 @@ export function createWorld(args: CreateWorldArgs): World {
     },
     run: {
       runGold: 0,
+      xp: 0,
+      level: 1,
+      xpToNextLevel: Math.max(1, Math.round(getSettings().system?.xpLevelBase ?? DEFAULT_XP_LEVEL_BASE)),
     },
     lighting: {
       darknessAlpha: 0.5,
@@ -819,7 +827,7 @@ export function createWorld(args: CreateWorldArgs): World {
       objectiveCardAvailable: true,
       fired: Object.create(null),
     },
-    cardRewardBudgetTotal: 3,
+    cardRewardBudgetTotal: 2,
     cardRewardBudgetUsed: 0,
     cardRewardClaimKeys: [],
     lastCardRewardClaimKey: null,

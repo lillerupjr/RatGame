@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { resolveActiveRewardTicket } from "../../../game/rewards/rewardTickets";
+import { OBJECTIVE_COMPLETION_GOLD } from "../../../game/rewards/rewardDirector";
 import { rewardPresenterSystem } from "../../../game/systems/progression/rewardPresenterSystem";
 import { rewardRunEventProducerSystem } from "../../../game/systems/progression/rewardRunEventProducerSystem";
 import { rewardSchedulerSystem } from "../../../game/systems/progression/rewardSchedulerSystem";
@@ -17,7 +18,8 @@ describe("durable reward pipeline zone+objective same frame", () => {
     expect(world.runEvents[1].type).toBe("OBJECTIVE_COMPLETED");
 
     rewardSchedulerSystem(world);
-    expect(world.rewardTickets).toHaveLength(2);
+    expect(world.rewardTickets).toHaveLength(1);
+    expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
 
     expect(rewardPresenterSystem(world)).toBe(true);
     const first = getActiveTicket(world);
@@ -27,8 +29,6 @@ describe("durable reward pipeline zone+objective same frame", () => {
     resolveActiveRewardTicket(world);
     world.state = "RUN";
 
-    expect(rewardPresenterSystem(world)).toBe(true);
-    const second = getActiveTicket(world);
-    expect(second?.kind).toBe("RELIC_PICK");
+    expect(rewardPresenterSystem(world)).toBe(false);
   });
 });

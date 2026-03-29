@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { resolveActiveRewardTicket } from "../../../game/rewards/rewardTickets";
+import { OBJECTIVE_COMPLETION_GOLD } from "../../../game/rewards/rewardDirector";
 import { rewardPresenterSystem } from "../../../game/systems/progression/rewardPresenterSystem";
 import { rewardSchedulerSystem } from "../../../game/systems/progression/rewardSchedulerSystem";
 import { createRewardPipelineWorld, dismissActiveRewardUi, getActiveTicket } from "./rewardPipeline.testUtils";
@@ -10,6 +11,7 @@ describe("durable reward pipeline queueing", () => {
 
     world.runEvents.push(
       { type: "ZONE_CLEARED", floorIndex: 0, zoneIndex: 1 },
+      { type: "LEVEL_UP", floorIndex: 0, level: 2 },
       { type: "OBJECTIVE_COMPLETED", floorIndex: 0, objectiveId: "OBJ_ZONE_TRIAL" },
     );
 
@@ -34,6 +36,7 @@ describe("durable reward pipeline queueing", () => {
     expect(rewardPresenterSystem(world)).toBe(true);
     const second = getActiveTicket(world);
     expect(second?.createdSeq).toBe(2);
-    expect(second?.kind).toBe("RELIC_PICK");
+    expect(second?.kind).toBe("CARD_PICK");
+    expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
   });
 });

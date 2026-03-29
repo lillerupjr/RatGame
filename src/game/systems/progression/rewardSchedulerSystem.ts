@@ -28,6 +28,8 @@ function claimKeyForRunEvent(world: World, ev: RunEvent): string {
     case "OBJECTIVE_COMPLETED":
       if (world.floorRewardBudget.mode === "ZONE_TRIAL") return `${floorIndex}:TRIAL_COMPLETE`;
       return `${floorIndex}:OBJ_COMPLETE:${ev.objectiveId}`;
+    case "LEVEL_UP":
+      return `${floorIndex}:LEVEL_UP:${ev.level}`;
     case "CHEST_OPEN_REQUESTED":
       return ev.chestKind === "BOSS"
         ? `${floorIndex}:BOSS_CHEST`
@@ -100,20 +102,19 @@ function rewardPlanForRunEvent(
         ticketSource: "ZONE_TRIAL",
       };
 
-    case "OBJECTIVE_COMPLETED": {
-      if (world.floorArchetype === "VENDOR" || world.floorArchetype === "HEAL") {
-        return {
-          outcome: { type: "NO_REWARD", reason: "Objective reward ignored on neutral floor" },
-          ticketKind: "RELIC_PICK",
-          ticketSource: "OBJECTIVE_COMPLETION",
-        };
-      }
+    case "OBJECTIVE_COMPLETED":
       return {
         outcome: handleRewardEvent(world.floorRewardBudget, { type: "OBJECTIVE_COMPLETED" }, { depth }),
         ticketKind: "RELIC_PICK",
         ticketSource: "OBJECTIVE_COMPLETION",
       };
-    }
+
+    case "LEVEL_UP":
+      return {
+        outcome: { type: "GRANT_CARD", reason: `Level ${ev.level} reward` },
+        ticketKind: "CARD_PICK",
+        ticketSource: "LEVEL_UP",
+      };
 
     case "CHEST_OPEN_REQUESTED":
       if (world.floorArchetype === "BOSS_TRIPLE") {

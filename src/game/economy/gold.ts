@@ -1,6 +1,8 @@
+import { ensureRunProgressionState } from "./xp";
+
 export function addGold(world: any, amount: number) {
-  if (!world.run) return;
-  world.run.runGold = (world.run.runGold ?? 0) + amount;
+  const run = ensureRunProgressionState(world);
+  run.runGold = (run.runGold ?? 0) + amount;
 }
 
 export function getGold(world: any) {

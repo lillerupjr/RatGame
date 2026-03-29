@@ -57,6 +57,7 @@ export function mountCardRewardMenu(args: {
 
   const sourceLabel = (source: string): string => {
     if (source === "BOSS_CHEST") return "Boss Chest";
+    if (source === "LEVEL_UP") return "Level Up";
     return "Zone Trial";
   };
 
