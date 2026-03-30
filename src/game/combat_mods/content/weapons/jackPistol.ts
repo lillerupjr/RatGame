@@ -10,7 +10,7 @@ export const JACK_PISTOL_V1: WeaponDef = {
 
   baseDamage: { physical: 12, fire: 0, chaos: 0 },
   baseCritChance: 0.05,
-  baseCritMulti: 2.0,
+  baseCritMulti: 1.5,
 
   projectile: {
     speedPxPerSec: 520,

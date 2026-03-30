@@ -74,6 +74,7 @@ export type DebugToolsSettings = {
   pauseDebugCards: boolean;
   pauseCsvControls: boolean;
   dpsMeter: boolean;
+  dpsSpawnBudgetOverlay: boolean;
   neutralBirdDrawDebug: boolean;
   objectivesShowZoneBounds: boolean;
   entityAnchorsEnabled: boolean;

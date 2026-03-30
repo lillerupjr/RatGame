@@ -25,6 +25,7 @@ type FramePerf = {
 type RenderDebugLightingSnapshot = {
   perfLines: string[];
   screenLines: string[];
+  dpsBudgetLines: string[];
   text: string;
 };
 
@@ -36,6 +37,14 @@ function formatValue(value: number): string {
 
 function formatPercent(value: number): string {
   return `${value.toFixed(0)}%`;
+}
+
+function formatCompactDebugValue(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+  if (Math.abs(value) >= 1000) return Math.round(value).toLocaleString();
+  if (Math.abs(value) >= 100) return value.toFixed(0);
+  if (Math.abs(value) >= 10) return value.toFixed(1);
+  return value.toFixed(2);
 }
 
 function formatCacheBytes(bytes: number | null): string {
@@ -312,13 +321,25 @@ function buildVisibleScreenDebugLines(input: RenderDebugScreenPassInput): string
   return lines;
 }
 
+function buildVisibleDpsBudgetLines(input: RenderDebugScreenPassInput): string[] {
+  if (!input.dpsSpawnBudgetOverlayEnabled || !input.dpsSpawnBudgetDebugInfo) return [];
+  const info = input.dpsSpawnBudgetDebugInfo;
+  return [
+    `dps/budget est:${formatCompactDebugValue(info.estimatedDps)} live:${formatCompactDebugValue(info.liveDps)} spawn:${formatCompactDebugValue(info.spawnHpPerSecond)}`,
+    `shape hit:${formatCompactDebugValue(info.damagePerHit)} sps:${formatCompactDebugValue(info.shotsPerSecond)} proj:${info.projectiles} crit:${formatCompactDebugValue(info.critFactor)}x`,
+    `delta ${info.margin >= 0 ? "+" : ""}${formatCompactDebugValue(info.margin)} ratio:${formatCompactDebugValue(info.ratio)} inst:${formatCompactDebugValue(info.liveDpsInstant)}`,
+  ];
+}
+
 function buildRenderDebugLightingSnapshot(input: RenderDebugScreenPassInput): RenderDebugLightingSnapshot {
   const perfLines = buildVisiblePerfLines(input, buildFramePerf(input));
   const screenLines = buildVisibleScreenDebugLines(input);
-  if (perfLines.length <= 0 && screenLines.length <= 0) {
+  const dpsBudgetLines = buildVisibleDpsBudgetLines(input);
+  if (perfLines.length <= 0 && screenLines.length <= 0 && dpsBudgetLines.length <= 0) {
     return {
       perfLines,
       screenLines,
+      dpsBudgetLines,
       text: "",
     };
   }
@@ -327,10 +348,12 @@ function buildRenderDebugLightingSnapshot(input: RenderDebugScreenPassInput): Re
     `Perf Snapshot backend:${perf.backendSelected} time:${new Date().toISOString()}`,
   ];
   if (perfLines.length > 0) sections.push(perfLines.join("\n"));
+  if (dpsBudgetLines.length > 0) sections.push(dpsBudgetLines.join("\n"));
   if (screenLines.length > 0) sections.push(screenLines.join("\n"));
   return {
     perfLines,
     screenLines,
+    dpsBudgetLines,
     text: sections.join("\n\n"),
   };
 }
@@ -350,6 +373,22 @@ function drawPerfLines(ctx: CanvasRenderingContext2D, cssW: number, cssH: number
   const y0 = cssH - 8 - lineH * (lines.length - 1);
   for (let i = 0; i < lines.length; i++) {
     ctx.fillText(lines[i], x, y0 + i * lineH);
+  }
+  ctx.textAlign = "left";
+}
+
+function drawTopRightLines(
+  ctx: CanvasRenderingContext2D,
+  cssW: number,
+  topY: number,
+  lines: readonly string[],
+): void {
+  if (lines.length <= 0) return;
+  ctx.textAlign = "right";
+  const x = cssW - 8;
+  const lineH = 16;
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], x, topY + i * lineH);
   }
   ctx.textAlign = "left";
 }
@@ -401,6 +440,8 @@ export function renderDebugLightingOverlay(input: RenderDebugScreenPassInput): v
       drawPerfLines(ctx, cssW, cssH, snapshot.perfLines);
     }
   }
+
+  drawTopRightLines(ctx, cssW, 16, snapshot.dpsBudgetLines);
 
   let screenDebugLineY = 30;
   for (let i = 0; i < snapshot.screenLines.length; i++) {

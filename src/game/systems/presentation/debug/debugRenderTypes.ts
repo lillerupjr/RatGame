@@ -1,6 +1,7 @@
 import type { AmbientSunLightingState } from "../../../../shadowSunV1";
 import type { DebugOverlayContext } from "../../../../engine/render/debug/renderDebug";
 import type { ViewRect } from "../../../map/compile/kenneyMap";
+import type { DpsSpawnBudgetDebugInfo } from "./dpsSpawnBudgetDebug";
 import type {
   PerfOverlayMode,
   StructureTriangleAdmissionMode,
@@ -73,6 +74,8 @@ export type RenderDebugScreenPassInput = {
   fps: number;
   frameTimeMs: number;
   renderPerfCountersEnabled: boolean;
+  dpsSpawnBudgetOverlayEnabled: boolean;
+  dpsSpawnBudgetDebugInfo: DpsSpawnBudgetDebugInfo | null;
   shadowSunModel: ShadowSunDebugModel;
   ambientSunLighting: AmbientSunLightingState;
   shadowSunDayCycleStatus: ShadowSunDayCycleDebugStatus;

@@ -57,7 +57,8 @@ export function renderUiPass(input: UiPassContext): void {
       input: perfDebugScreenInput,
     });
   }
-  if (getUserSettings().debug.dpsMeter) {
+  const debugSettings = getUserSettings().debug;
+  if (debugSettings.dpsMeter) {
     renderDPSMeter(w, overlayCtx, screenW, screenH);
   }
   renderDeathFxOverlay(w, overlayCtx, screenW, screenH);

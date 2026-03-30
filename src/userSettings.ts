@@ -156,6 +156,7 @@ export type DebugSettings = {
   pauseDebugCards: boolean;
   pauseCsvControls: boolean;
   dpsMeter: boolean;
+  dpsSpawnBudgetOverlay: boolean;
   shadowSunTimeHour: number;
   shadowSunDayCycleEnabled: boolean;
   shadowSunCycleMode: ShadowSunCycleMode;
@@ -235,6 +236,7 @@ function toLegacySettings(): UserSettings {
       pauseDebugCards: settings.debug.pauseDebugCards,
       pauseCsvControls: settings.debug.pauseCsvControls,
       dpsMeter: settings.debug.dpsMeter,
+      dpsSpawnBudgetOverlay: settings.debug.dpsSpawnBudgetOverlay,
       shadowSunTimeHour: settings.debug.shadowSunTimeHour,
       shadowSunDayCycleEnabled: settings.debug.shadowSunDayCycleEnabled,
       shadowSunCycleMode: settings.debug.shadowSunCycleMode,
@@ -448,6 +450,7 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
       "pauseDebugCards",
       "pauseCsvControls",
       "dpsMeter",
+      "dpsSpawnBudgetOverlay",
       "sweepShadowDebug",
       "tileHeightMap",
       "shadowSunDayCycleEnabled",

@@ -139,6 +139,8 @@ export function renderScreenOverlays(input: ScreenOverlayContext): void {
           dpr,
           flags: debugFlags,
           renderPerfCountersEnabled: false,
+          dpsSpawnBudgetOverlayEnabled: false,
+          dpsSpawnBudgetDebugInfo: null,
           shadowSunModel,
           ambientSunLighting,
           shadowSunDayCycleStatus,

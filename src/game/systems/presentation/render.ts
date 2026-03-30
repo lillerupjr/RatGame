@@ -221,6 +221,7 @@ import type { CollectionContext } from "./contracts/collectionContext";
 import type { ScreenOverlayContext } from "./contracts/screenOverlayContext";
 import type { UiPassContext } from "./contracts/uiPassContext";
 import type { RenderDebugScreenPassInput } from "./debug/debugRenderTypes";
+import { computeDpsSpawnBudgetDebugInfo } from "./debug/dpsSpawnBudgetDebug";
 import { analyzeWorldBatchStream } from "./debug/worldBatchAudit";
 import { resolveStructureOverlayAdmissionContext } from "./structures/structureOverlayAdmission";
 import { collectStructureOverlays } from "./structures/collectStructureOverlays";
@@ -2001,7 +2002,11 @@ export async function renderSystem(
   }
   endRenderPerfFrame(w.timeSec ?? 0);
 
-  const perfDebugScreenInput: RenderDebugScreenPassInput | null = renderPerfCountersEnabled
+  const dpsSpawnBudgetOverlayEnabled = !!debug.dpsSpawnBudgetOverlay;
+  const dpsSpawnBudgetDebugInfo = dpsSpawnBudgetOverlayEnabled
+    ? computeDpsSpawnBudgetDebugInfo(w)
+    : null;
+  const perfDebugScreenInput: RenderDebugScreenPassInput | null = (renderPerfCountersEnabled || dpsSpawnBudgetOverlayEnabled)
     ? {
         ctx: overlayCtx,
         cssW,
@@ -2010,7 +2015,9 @@ export async function renderSystem(
         flags: debugFlags,
         fps: Number((w as { fps?: number }).fps ?? 0),
         frameTimeMs: Number((w as { fps?: number }).fps ?? 0) > 0 ? 1000 / Number((w as { fps?: number }).fps ?? 0) : 0,
-        renderPerfCountersEnabled: true,
+        renderPerfCountersEnabled,
+        dpsSpawnBudgetOverlayEnabled,
+        dpsSpawnBudgetDebugInfo,
         shadowSunModel,
         ambientSunLighting,
         shadowSunDayCycleStatus: shadowSunDayCycle.status,

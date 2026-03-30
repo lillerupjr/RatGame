@@ -10,6 +10,7 @@ import {
 import type { TableMapDef } from "./formats/table/tableMapTypes";
 import { setObjectives } from "../systems/progression/objective";
 import { getSemanticFieldDefForTileId } from "../world/semanticFields";
+import { canvasGroundChunkCacheStore } from "../systems/presentation/presentationSubsystemStores";
 
 let activeMap: CompiledKenneyMap | null = null;
 let activeMapDef: TableMapDef | null = null;
@@ -23,6 +24,7 @@ export function getActiveMapDef(): TableMapDef | null {
 }
 
 export function activateMapDef(mapDef: TableMapDef, seed: number = 0): CompiledKenneyMap {
+  canvasGroundChunkCacheStore.clear();
   const compiled = setKenneyActiveMap(mapDef, { runSeed: seed, mapId: mapDef.id });
   activeMap = compiled;
   activeMapDef = mapDef;
@@ -31,6 +33,7 @@ export function activateMapDef(mapDef: TableMapDef, seed: number = 0): CompiledK
 }
 
 export async function activateMapDefAsync(mapDef: TableMapDef, seed: number = 0): Promise<CompiledKenneyMap> {
+  canvasGroundChunkCacheStore.clear();
   const compiled = await setKenneyActiveMapAsync(mapDef, { runSeed: seed, mapId: mapDef.id });
   activeMap = compiled;
   activeMapDef = mapDef;
