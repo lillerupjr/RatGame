@@ -1077,6 +1077,8 @@ export async function renderSystem(
   const activePaletteSwapWeights = resolveActivePaletteSwapWeights();
   const currentSettings = getUserSettings();
   const groundChunkCacheContextKey = [
+    `map:${compiledMap.id}`,
+    `palv:${activePaletteVariantKey}`,
     `renderAll:${RENDER_ALL_HEIGHTS ? 1 : 0}`,
     `activeH:${activeH}`,
   ].join("||");

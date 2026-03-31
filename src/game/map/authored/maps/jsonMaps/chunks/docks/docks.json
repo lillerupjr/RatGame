@@ -3,6 +3,10 @@
   "width": 24,
   "height": 24,
   "fields": [
+
+    { "x": 2, "y": 0, "w": 2, "h": 24, "type": "sidewalk" },
+    { "x": 20, "y": 0, "w": 2, "h": 24, "type": "sidewalk" },
+
     { "x": 2, "y": 2, "w": 20, "h": 2, "type": "sidewalk" },
     { "x": 2, "y": 8, "w": 20, "h": 2, "type": "sidewalk" },
     { "x": 2, "y": 14, "w": 20, "h": 2, "type": "sidewalk" },
