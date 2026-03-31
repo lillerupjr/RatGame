@@ -10,7 +10,7 @@ import { OBJECTIVE_COMPLETION_GOLD } from "../../../game/rewards/rewardDirector"
 import { createFloorRewardBudget } from "../../../game/rewards/floorRewardBudget";
 
 describe("zone trial completion reward chain", () => {
-  test("completion trigger resolves objective and grants gold without opening reward UI", () => {
+  test("completion trigger resolves objective and grants gold with relic reward UI", () => {
     const world = createWorld({ seed: 123, stage: stageDocks });
     world.state = "RUN";
     world.runState = "FLOOR";
@@ -42,9 +42,9 @@ describe("zone trial completion reward chain", () => {
     rewardSchedulerSystem(world);
     const started = rewardPresenterSystem(world);
 
-    expect(started).toBe(false);
-    expect(world.state).toBe("RUN");
-    expect(world.relicReward.active).toBe(false);
+    expect(started).toBe(true);
+    expect(world.state).toBe("REWARD");
+    expect(world.relicReward.active).toBe(true);
     expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
   });
 });

@@ -39,7 +39,7 @@ describe("dropsSystem", () => {
     expect(w.xKind.filter((kind) => kind === PICKUP_KIND.CHEST)).toHaveLength(0);
   });
 
-  test("boss gold multiplier applies after base-life calculation", () => {
+  test("boss gold multiplier applies after base-life calculation without spawning a chest", () => {
     const w = createWorld({ seed: 3, stage: stageDocks });
     const boss = spawnEnemyGrid(w, ENEMY_TYPE.BOSS, 8, 8);
     w.events.push({
@@ -60,7 +60,7 @@ describe("dropsSystem", () => {
     const chestCount = w.xKind.filter((kind) => kind === PICKUP_KIND.CHEST).length;
     expect(coinIndexes).toHaveLength(1);
     expect(w.xValue[coinIndexes[0]]).toBe(expectedGold);
-    expect(chestCount).toBe(1);
+    expect(chestCount).toBe(0);
   });
 
   test("collecting combat pickup grants its stored value as xp", () => {

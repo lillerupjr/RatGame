@@ -823,11 +823,11 @@ export function createWorld(args: CreateWorldArgs): World {
     },
     floorRewardBudget: {
       mode: "NORMAL",
-      nonObjectiveCardsRemaining: 2,
+      nonObjectiveCardsRemaining: 0,
       objectiveCardAvailable: true,
       fired: Object.create(null),
     },
-    cardRewardBudgetTotal: 2,
+    cardRewardBudgetTotal: 0,
     cardRewardBudgetUsed: 0,
     cardRewardClaimKeys: [],
     lastCardRewardClaimKey: null,

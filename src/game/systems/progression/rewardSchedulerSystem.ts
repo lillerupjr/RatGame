@@ -1,6 +1,6 @@
 import type { World } from "../../../engine/world/world";
 import { addGold } from "../../economy/gold";
-import { type RewardOutcome, handleRewardEvent } from "../../rewards/rewardDirector";
+import { OBJECTIVE_COMPLETION_GOLD, type RewardOutcome, handleRewardEvent } from "../../rewards/rewardDirector";
 import { type RunEvent, shiftRunEvent } from "../../rewards/runEvents";
 import {
   addRewardClaimKey,
@@ -42,23 +42,9 @@ function claimKeyForRunEvent(world: World, ev: RunEvent): string {
 }
 
 function applyBossMilestoneReward(world: World, bossIndex: 1 | 2): RewardOutcome {
-  if (world.floorArchetype !== "BOSS_TRIPLE") {
-    return { type: "NO_REWARD", reason: "Boss milestone ignored outside boss-triple floors" };
-  }
-  if (bossIndex !== 1 && bossIndex !== 2) {
-    return { type: "NO_REWARD", reason: "Boss milestone ignored for unsupported index" };
-  }
-
-  if (world.floorRewardBudget.nonObjectiveCardsRemaining > 0) {
-    world.floorRewardBudget.nonObjectiveCardsRemaining -= 1;
-    return {
-      type: "GRANT_CARD",
-      reason: `Boss milestone ${bossIndex} consumed non-objective budget`,
-    };
-  }
   return {
     type: "NO_REWARD",
-    reason: `Boss milestone ${bossIndex} skipped (budget exhausted)`,
+    reason: `Boss milestone ${bossIndex} reward disabled`,
   };
 }
 
@@ -69,6 +55,7 @@ function rewardPlanForRunEvent(
   outcome: RewardOutcome;
   ticketKind: RewardTicketKind;
   ticketSource: RewardTicketSource;
+  bonusGoldAmount: number;
 } {
   const depth = floorMapDepthForRewards(world);
 
@@ -82,6 +69,7 @@ function rewardPlanForRunEvent(
         ),
         ticketKind: "CARD_PICK",
         ticketSource: "ZONE_TRIAL",
+        bonusGoldAmount: 0,
       };
 
     case "BOSS_MILESTONE_CLEARED":
@@ -89,6 +77,7 @@ function rewardPlanForRunEvent(
         outcome: applyBossMilestoneReward(world, ev.bossIndex),
         ticketKind: "CARD_PICK",
         ticketSource: "ZONE_TRIAL",
+        bonusGoldAmount: 0,
       };
 
     case "SURVIVE_MILESTONE":
@@ -100,6 +89,7 @@ function rewardPlanForRunEvent(
         ),
         ticketKind: "CARD_PICK",
         ticketSource: "ZONE_TRIAL",
+        bonusGoldAmount: 0,
       };
 
     case "OBJECTIVE_COMPLETED":
@@ -107,6 +97,7 @@ function rewardPlanForRunEvent(
         outcome: handleRewardEvent(world.floorRewardBudget, { type: "OBJECTIVE_COMPLETED" }, { depth }),
         ticketKind: "RELIC_PICK",
         ticketSource: "OBJECTIVE_COMPLETION",
+        bonusGoldAmount: OBJECTIVE_COMPLETION_GOLD,
       };
 
     case "LEVEL_UP":
@@ -114,16 +105,10 @@ function rewardPlanForRunEvent(
         outcome: { type: "GRANT_CARD", reason: `Level ${ev.level} reward` },
         ticketKind: "CARD_PICK",
         ticketSource: "LEVEL_UP",
+        bonusGoldAmount: 0,
       };
 
     case "CHEST_OPEN_REQUESTED":
-      if (world.floorArchetype === "BOSS_TRIPLE") {
-        return {
-          outcome: { type: "NO_REWARD", reason: "Boss-triple chest reward disabled; use boss milestones" },
-          ticketKind: "CARD_PICK",
-          ticketSource: "BOSS_CHEST",
-        };
-      }
       return {
         outcome: handleRewardEvent(
           world.floorRewardBudget,
@@ -132,6 +117,7 @@ function rewardPlanForRunEvent(
         ),
         ticketKind: "CARD_PICK",
         ticketSource: ev.chestKind === "BOSS" ? "BOSS_CHEST" : "ZONE_TRIAL",
+        bonusGoldAmount: 0,
       };
 
     default:
@@ -139,6 +125,7 @@ function rewardPlanForRunEvent(
         outcome: { type: "NO_REWARD", reason: "Unhandled run event" },
         ticketKind: "CARD_PICK",
         ticketSource: "ZONE_TRIAL",
+        bonusGoldAmount: 0,
       };
   }
 }
@@ -164,7 +151,9 @@ export function rewardSchedulerSystem(world: World): void {
         event: ev.type,
         claimKey,
         outcome: plan.outcome.type,
-        ticketKind: plan.outcome.type === "GRANT_CARD" ? plan.ticketKind : null,
+        ticketKind: plan.outcome.type === "GRANT_CARD" || plan.outcome.type === "GRANT_RELIC"
+          ? plan.ticketKind
+          : null,
       });
     }
 
@@ -179,12 +168,16 @@ export function rewardSchedulerSystem(world: World): void {
       appendZoneRewardClaim(world, claimKey);
     }
 
+    if (plan.bonusGoldAmount > 0) {
+      addGold(world, plan.bonusGoldAmount);
+    }
+
     if (plan.outcome.type === "GRANT_GOLD") {
       addGold(world, plan.outcome.amount);
       continue;
     }
 
-    if (plan.outcome.type !== "GRANT_CARD") {
+    if (plan.outcome.type !== "GRANT_CARD" && plan.outcome.type !== "GRANT_RELIC") {
       continue;
     }
 

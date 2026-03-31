@@ -7,7 +7,7 @@ import { rewardSchedulerSystem } from "../../../game/systems/progression/rewardS
 import { createRewardPipelineWorld, dismissActiveRewardUi, getActiveTicket } from "./rewardPipeline.testUtils";
 
 describe("durable reward pipeline zone+objective same frame", () => {
-  test("captures both facts and presents rewards FIFO", () => {
+  test("captures both facts and only presents the objective relic reward", () => {
     const world = createRewardPipelineWorld(74, "ZONE_TRIAL");
     world.runEvents.push({ type: "ZONE_CLEARED", floorIndex: 0, zoneIndex: 1 });
     world.objectiveStates = [{ id: "OBJ_ZONE_TRIAL", status: "COMPLETED" }];
@@ -23,7 +23,7 @@ describe("durable reward pipeline zone+objective same frame", () => {
 
     expect(rewardPresenterSystem(world)).toBe(true);
     const first = getActiveTicket(world);
-    expect(first?.kind).toBe("CARD_PICK");
+    expect(first?.kind).toBe("RELIC_PICK");
 
     dismissActiveRewardUi(world);
     resolveActiveRewardTicket(world);
