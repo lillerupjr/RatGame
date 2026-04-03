@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { createWorld } from "../../../engine/world/world";
 import { stageDocks } from "../../content/stages";
-import { ENEMY_TYPE, spawnEnemyGrid } from "../../factories/enemyFactory";
+import { EnemyId, spawnEnemyGrid } from "../../factories/enemyFactory";
 import { clearSpatialHash, insertEntity } from "../../util/spatialHash";
 import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
@@ -23,7 +23,7 @@ describe("zonesSystem damage-to-poison behavior", () => {
   test("PASS_DAMAGE_TO_POISON_ALL does not auto-apply poison from zone damage", () => {
     const w = createWorld({ seed: 46, stage: stageDocks });
     w.relics = ["PASS_DAMAGE_TO_POISON_ALL"];
-    const enemy = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 8, 8);
+    const enemy = spawnEnemyGrid(w, EnemyId.MINION, 8, 8);
     w.eHpMax[enemy] = 200;
     w.eHp[enemy] = 200;
 
@@ -89,7 +89,7 @@ describe("zonesSystem damage-to-poison behavior", () => {
 
   test("enemy zone damage gates by logical floor, not visual ramp height", () => {
     const w = createWorld({ seed: 48, stage: stageDocks });
-    const enemy = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 9, 9);
+    const enemy = spawnEnemyGrid(w, EnemyId.MINION, 9, 9);
     w.eHpMax[enemy] = 100;
     w.eHp[enemy] = 100;
 

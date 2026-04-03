@@ -3,7 +3,7 @@ import { type World } from "../../../engine/world/world";
 import { registry } from "../../content/registry";
 import { ZONE_KIND } from "../../factories/zoneFactory";
 import { getBossAccent, getFloorVisual } from "../../content/floors";
-import { ENEMY_TYPE } from "../../content/enemies";
+import { EnemyId } from "../../content/enemies";
 import {
   getPlayerSkin,
   getPlayerSpriteFrame,
@@ -44,13 +44,6 @@ import {
   type ViewRect,
 } from "../../map/compile/kenneyMap";
 
-import {
-  getProjectileSpriteByKind,
-  preloadProjectileSprites,
-  getProjectileDrawScale,
-  PROJECTILE_BASE_DRAW_PX,
-} from "../../../engine/render/sprites/projectileSprites";
-
 import { screenToWorld, worldDeltaToScreen, worldToScreen, ISO_X, ISO_Y } from "../../../engine/math/iso";
 
 import { KENNEY_TILE_WORLD, KENNEY_TILE_ANCHOR_Y } from "../../../engine/render/kenneyTiles";
@@ -71,8 +64,7 @@ import {
   getSpriteByIdForDarknessPercent,
   type LoadedImg,
 } from "../../../engine/render/sprites/renderSprites";
-import { VFX_CLIPS, VFX_CLIP_INDEX } from "../../content/vfxRegistry";
-import { PRJ_KIND } from "../../factories/projectileFactory";
+import { VFX_CLIPS } from "../../content/vfxRegistry";
 import { getDecalSpriteId, type RuntimeDecalSetId } from "../../content/runtimeDecalConfig";
 import { roadMarkingDecalScale, shouldPixelSnapRoadMarking } from "../../roads/roadMarkingRender";
 import { buildDiamondSourceQuad } from "./renderCommandGeometry";
@@ -98,7 +90,6 @@ import {
   resolveVerticalTiles,
 } from "../../../userSettings";
 import { type FireZoneVfx, renderFireZoneVfx } from "../../vfx/fireZoneVfx";
-import { BAZOOKA_EXHAUST_OFFSET, bazookaExhaustAssets } from "../../vfx/bazookaExhaustAssets";
 import { TILE_ID_OCEAN } from "../../world/semanticFields";
 import { getZoneTrialObjectiveState } from "../../objectives/zoneObjectiveSystem";
 import { renderZoneObjectives } from "../../render/renderZoneObjectives";
@@ -350,12 +341,6 @@ export async function renderSystem(
   if (!(w as any)._neutralMobSpritesPreloaded) {
     (w as any)._neutralMobSpritesPreloaded = true;
     preloadNeutralMobSprites();
-  }
-
-  // one-time projectile sprite preload
-  if (!(w as any)._projectileSpritesPreloaded) {
-    (w as any)._projectileSpritesPreloaded = true;
-    preloadProjectileSprites();
   }
 
   // one-time render sprite preload
@@ -1389,7 +1374,7 @@ export async function renderSystem(
     getCurrencyFrame,
     coinColorFromValue,
     registry,
-    ENEMY_TYPE,
+    EnemyId,
     getBossAccent,
     LOOT_GOBLIN_GLOW_PULSE_MIN,
     LOOT_GOBLIN_GLOW_PULSE_RANGE,
@@ -1404,16 +1389,8 @@ export async function renderSystem(
     playerTyForProjectileCull,
     projectileTileRenderRadius,
     worldDeltaToScreen,
-    resolveProjectileShadowFootOffset,
-    getProjectileSpriteByKind,
-    PROJECTILE_BASE_DRAW_PX,
-    getProjectileDrawScale,
     roadMarkingDecalScale,
     shouldPixelSnapRoadMarking,
-    bazookaExhaustAssets,
-    BAZOOKA_EXHAUST_OFFSET,
-    PRJ_KIND,
-    VFX_CLIP_INDEX,
     DISABLE_WALLS_AND_CURTAINS,
     buildFaceDraws,
     facePieceLayers,
@@ -1752,12 +1729,7 @@ export async function renderSystem(
     vendorNpcSpritesReady,
     getProjectileWorld,
     KENNEY_TILE_WORLD,
-    getProjectileSpriteByKind,
-    getProjectileDrawScale,
-    PROJECTILE_BASE_DRAW_PX,
     resolveProjectileShadowFootOffset,
-    bazookaExhaustAssets,
-    BAZOOKA_EXHAUST_OFFSET,
     worldDeltaToScreen,
     snapToNearestWalkableGround,
     renderFireZoneVfx,
@@ -1765,11 +1737,10 @@ export async function renderSystem(
     ISO_X,
     ISO_Y,
     VFX_CLIPS,
-    VFX_CLIP_INDEX,
     registry,
     getCurrencyFrame,
     coinColorFromValue,
-    ENEMY_TYPE,
+    EnemyId,
     LOOT_GOBLIN_GLOW_OUTER_RADIUS_MULT,
     LOOT_GOBLIN_GLOW_INNER_RADIUS_MULT,
     LOOT_GOBLIN_GLOW_PULSE_MIN,
@@ -1838,12 +1809,7 @@ export async function renderSystem(
     vendorNpcSpritesReady,
     getProjectileWorld,
     KENNEY_TILE_WORLD,
-    getProjectileSpriteByKind,
-    getProjectileDrawScale,
-    PROJECTILE_BASE_DRAW_PX,
     resolveProjectileShadowFootOffset,
-    bazookaExhaustAssets,
-    BAZOOKA_EXHAUST_OFFSET,
     worldDeltaToScreen,
     snapToNearestWalkableGround,
     renderFireZoneVfx,
@@ -1851,11 +1817,10 @@ export async function renderSystem(
     ISO_X,
     ISO_Y,
     VFX_CLIPS,
-    VFX_CLIP_INDEX,
     registry,
     getCurrencyFrame,
     coinColorFromValue,
-    ENEMY_TYPE,
+    EnemyId,
     LOOT_GOBLIN_GLOW_OUTER_RADIUS_MULT,
     LOOT_GOBLIN_GLOW_INNER_RADIUS_MULT,
     LOOT_GOBLIN_GLOW_PULSE_MIN,

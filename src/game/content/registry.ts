@@ -1,7 +1,7 @@
 // src/game/content/registry.ts
 import { ITEMS, type ItemDef, type ItemId, MAX_ITEM_LEVEL } from "./items";
 import { stageDocks, stageSewers, stageChinatown, type StageDef, type StageId } from "./stages";
-import { ENEMIES, type EnemyDef, type EnemyType } from "./enemies";
+import { ENEMIES, EnemyId, type EnemyDefinition } from "./enemies";
 import { PRJ_KIND, type ProjectileSource } from "../factories/projectileFactory";
 
 export const registry = {
@@ -17,6 +17,7 @@ export const registry = {
             case PRJ_KIND.KNUCKLES:
                 return "KNUCKLES";
             case PRJ_KIND.SYRINGE:
+            case PRJ_KIND.ACID:
                 return "SYRINGE";
             case PRJ_KIND.BOUNCER:
                 return "BOUNCER";
@@ -41,12 +42,12 @@ export const registry = {
     },
 
     // ---- Enemies ----
-    enemyTypeIds(): EnemyType[] {
-        return Object.keys(ENEMIES).map((k) => Number(k) as EnemyType);
+    enemyIds(): EnemyId[] {
+        return Object.keys(ENEMIES).map((k) => Number(k) as EnemyId);
     },
-    enemy(type: EnemyType): EnemyDef {
+    enemy(type: EnemyId): EnemyDefinition {
         const def = ENEMIES[type];
-        if (!def) throw new Error(`Unknown enemy type: ${type}`);
+        if (!def) throw new Error(`Unknown enemy id: ${type}`);
         return def;
     },
 

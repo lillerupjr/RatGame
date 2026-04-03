@@ -60,8 +60,9 @@ describe("spriteLoader exact variant key readiness", () => {
   it("waits against the exact requested variant key", async () => {
     const requestedVariantKey = "cyberpunk@@sw:25@@dk:50";
 
-    await preloadSpritePack("rat1", {
+    await preloadSpritePack("enemies/small_rat", {
       frameCount: 1,
+      source: { packRoot: "entities" },
       paletteVariantKey: requestedVariantKey,
     });
 

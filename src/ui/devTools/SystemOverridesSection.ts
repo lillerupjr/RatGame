@@ -296,7 +296,7 @@ export function mountSystemOverridesSection(
         const canvas = document.getElementById("c") as HTMLCanvasElement | null;
         const webglSurface = canvas ? getRenderableWebGLWorldSurface(canvas) : null;
         const backendSelection = resolveRenderBackendSelection(
-          { renderBackend: settings.user.graphics.renderBackend },
+          { renderBackend: settings.debug.renderBackend },
           webglSurface,
           canvas ? getWebGLWorldSurfaceFailureReason(canvas) : null,
         );

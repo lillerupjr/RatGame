@@ -41,7 +41,6 @@ export type UserSettings = {
     performanceMode: boolean;
     deathSlowdownEnabled: boolean;
     cameraSmoothingEnabled: boolean;
-    renderBackend: RenderBackendMode;
     verticalTilesMode: VerticalTilesMode;
     verticalTilesUser: number;
     verticalTilesAutoPhone: number;
@@ -50,6 +49,7 @@ export type UserSettings = {
 };
 
 export type DebugToolsSettings = {
+  renderBackend: RenderBackendMode;
   grid: boolean;
   walkMask: boolean;
   blockedTiles: boolean;

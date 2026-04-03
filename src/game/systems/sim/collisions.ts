@@ -6,7 +6,6 @@ import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { registry } from "../../content/registry";
 import { spawnZone, ZONE_KIND } from "../../factories/zoneFactory";
 import { clearSpatialHash, insertEntity, queryCircle } from "../../util/spatialHash";
-import { onEnemyKilledForChallenge } from "../progression/roomChallenge";
 import { anchorFromWorld, writeAnchor } from "../../coords/anchor";
 import { enqueueDelayedExplosion } from "./delayedExplosions";
 import { resolveProjectileDamagePacket } from "../../combat_mods/runtime/critDamagePacket";
@@ -24,7 +23,6 @@ import { resolveDotStats } from "../../combat_mods/stats/combatStatsResolver";
 import { applyPlayerIncomingDamage } from "./playerArmor";
 import { isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
 import {
-  addMomentumOnKill,
   breakMomentumOnLifeDamage,
   relicTriggerMomentumDamageMultiplier,
 } from "./momentum";
@@ -41,6 +39,8 @@ import {
   makeUnknownDamageMeta,
   makeWeaponHitMeta,
 } from "../../combat/damageMeta";
+import { despawnProjectile } from "./projectileLifecycle";
+import { finalizeEnemyDeath } from "../enemies/finalize";
 const DMG_COLOR_PHYSICAL = "#ffffff";
 const DMG_COLOR_FIRE = "#ff9f3a";
 const DMG_COLOR_CHAOS = "#b57bff";
@@ -491,13 +491,15 @@ export function collisionsSystem(w: World, dt: number) {
         damageMeta: projectileDamageMeta,
       });
 
+      let shouldDespawnProjectile = false;
+
       // Bounce / pierce handling
       // If prBouncesLeft[p] >= 0 => this projectile uses ricochet rules.
       // Otherwise, use normal pierce rules.
       if (bLeft >= 0) {
         // If no bounces left, it dies on this hit (after dealing damage).
         if (bLeft <= 0) {
-          w.pAlive[p] = false;
+          shouldDespawnProjectile = true;
         } else {
           // Pool-style ricochet: reflect velocity about the collision normal.
           // Normal points from enemy center -> projectile center.
@@ -544,7 +546,7 @@ export function collisionsSystem(w: World, dt: number) {
         } else if (contaminatedPierceHit) {
           // Starter Contaminated Rounds: poisoned targets are always pierced.
         } else {
-          w.pAlive[p] = false;
+          shouldDespawnProjectile = true;
         }
       }
 
@@ -618,32 +620,27 @@ export function collisionsSystem(w: World, dt: number) {
             });
           }
         }
-        w.pAlive[p] = false;
+        shouldDespawnProjectile = true;
       }
 
 
       // Death handling
       if (w.eHp[e] <= 0) {
-        w.eAlive[e] = false;
-        w.kills++;
-        if (!projectileIsProc) {
-          addMomentumOnKill(w, w.timeSec ?? w.time ?? 0);
-        }
-        onEnemyKilledForChallenge(w);
-
-        // Snapshot poison-at-death from ailment authority in mods mode.
+        // Snapshot poison-at-death from ailment authority in mods mode before finalization.
         const poisonAlive = Array.isArray(ailmentState.poison) && ailmentState.poison.length > 0;
         w.ePoisonedOnDeath[e] = poisonAlive;
-
-        emitEvent(w, {
-          type: "ENEMY_KILLED",
-          enemyIndex: e,
+        finalizeEnemyDeath(w, e, {
+          damageMeta: projectileDamageMeta,
+          source,
           x: enemyAim.x,
           y: enemyAim.y,
-          spawnTriggerId: w.eSpawnTriggerId[e],
-          source,
-          damageMeta: projectileDamageMeta,
+          awardMomentum: !projectileIsProc,
+          recordPoisonedOnDeath: false,
         });
+      }
+
+      if (shouldDespawnProjectile) {
+        despawnProjectile(w, p, { x: enemyAim.x, y: enemyAim.y });
       }
 
       if (!w.pAlive[p]) break;
@@ -696,7 +693,7 @@ export function collisionsSystem(w: World, dt: number) {
       });
 
       // usually enemy bullets should be consumed on hit
-      w.pAlive[p] = false;
+      despawnProjectile(w, p, { x: px, y: py });
 
       hitCd = IFRAME_SECS;
       break;
@@ -722,9 +719,11 @@ export function collisionsSystem(w: World, dt: number) {
       const rr = w.eR[e] + PLAYER_R;
 
       if (!isPlayerHit(w, e, PLAYER_R)) continue;
+      const enemyArchetype = registry.enemy(w.eType[e] as any);
+      const dmg = w.eDamage[e] || 0;
+      if (!(enemyArchetype.stats.contactDamage > 0) || !(dmg > 0)) continue;
 
       // CONTACT HIT
-      const dmg = w.eDamage[e] || 1;
       const lifeDamage = godMode ? 0 : applyPlayerIncomingDamage(w, dmg);
       if (!godMode) w.playerHp -= lifeDamage;
       if (lifeDamage > 0) {

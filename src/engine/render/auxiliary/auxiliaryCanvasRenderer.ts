@@ -308,10 +308,6 @@ export class Canvas2DRenderer {
           this.drawNeutralMob(payload);
           return;
         }
-        if (payload.projectileIndex !== undefined && payload.sparkStyle) {
-          this.drawProjectileSpark(payload);
-          return;
-        }
         if (payload.projectileIndex !== undefined) {
           this.drawProjectile(payload);
           return;
@@ -553,11 +549,13 @@ export class Canvas2DRenderer {
     const alpha = Number.isFinite(Number(data.alpha)) ? Number(data.alpha) : 1;
     const rotationRad = Number.isFinite(Number(data.rotationRad)) ? Number(data.rotationRad) : 0;
     const flipX = !!data.flipX;
+    const blendMode = data.blendMode === "additive" ? "lighter" : "source-over";
     const ctx = this.frameContext.ctx;
     ctx.imageSmoothingEnabled = false;
     if (rotationRad || flipX) {
       ctx.save();
       ctx.globalAlpha = alpha;
+      ctx.globalCompositeOperation = blendMode;
       ctx.translate(snapPx(dx + dw * 0.5), snapPx(dy + dh * 0.5));
       if (rotationRad) ctx.rotate(rotationRad);
       ctx.scale(flipX ? -1 : 1, 1);
@@ -565,9 +563,15 @@ export class Canvas2DRenderer {
       ctx.restore();
       return;
     }
-    this.withAbsoluteGlobalAlpha(ctx, alpha, () => {
-      ctx.drawImage(image, sx, sy, sw, sh, snapPx(dx), snapPx(dy), dw, dh);
-    });
+    const previousBlendMode = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = blendMode;
+    try {
+      this.withAbsoluteGlobalAlpha(ctx, alpha, () => {
+        ctx.drawImage(image, sx, sy, sw, sh, snapPx(dx), snapPx(dy), dw, dh);
+      });
+    } finally {
+      ctx.globalCompositeOperation = previousBlendMode;
+    }
   }
 
   private drawPickup(data: any): void {
@@ -616,7 +620,7 @@ export class Canvas2DRenderer {
     const faceDx = this.deps.w.eFaceX?.[i] ?? 0;
     const faceDy = this.deps.w.eFaceY?.[i] ?? -1;
     const moving = Math.hypot(this.deps.w.evx?.[i] ?? 0, this.deps.w.evy?.[i] ?? 0) > 1e-4;
-    const isLootGoblin = this.deps.w.eType[i] === this.deps.ENEMY_TYPE.LOOT_GOBLIN;
+    const isLootGoblin = this.deps.w.eType[i] === this.deps.EnemyId.LOOT_GOBLIN;
 
     if (isLootGoblin) {
       const pulse =
@@ -759,27 +763,6 @@ export class Canvas2DRenderer {
     }
   }
 
-  private drawProjectileSpark(data: any): void {
-    const i = Number(data.projectileIndex);
-    const clip = this.deps.VFX_CLIPS[this.deps.VFX_CLIP_INDEX.LIGHTNING_PROJ];
-    if (!clip) return;
-    const elapsed = 3.0 - (this.deps.w.prTtl[i] ?? 0);
-    const rawFrame = Math.floor(elapsed * clip.fps);
-    const frameIdx = rawFrame % clip.spriteIds.length;
-    const sprite = this.deps.getSpriteById(clip.spriteIds[frameIdx]);
-    if (!sprite.ready) return;
-    const delta = this.deps.worldDeltaToScreen(this.deps.w.prDirX[i] ?? 1, this.deps.w.prDirY[i] ?? 0);
-    const angle = Math.atan2(delta.dy, delta.dx);
-    const ctx = this.frameContext.ctx;
-    ctx.save();
-    ctx.globalAlpha = 1;
-    ctx.imageSmoothingEnabled = false;
-    ctx.translate(snapPx(Number(data.screenX)), snapPx(Number(data.screenY) - Number(data.zLift)));
-    ctx.rotate(angle);
-    ctx.drawImage(sprite.img, -16, -16, 32, 32);
-    ctx.restore();
-  }
-
   private drawProjectile(data: any): void {
     const i = Number(data.projectileIndex);
     const screenX = Number(data.screenX);
@@ -809,60 +792,23 @@ export class Canvas2DRenderer {
 
     const delta = this.deps.worldDeltaToScreen(this.deps.w.prDirX[i] ?? 1, this.deps.w.prDirY[i] ?? 0);
     const angle = Math.atan2(delta.dy, delta.dx);
-    const sprite = this.deps.getProjectileSpriteByKind(this.deps.w.prjKind[i]);
-    if (sprite?.ready && sprite.img && sprite.img.width > 0 && sprite.img.height > 0) {
-      const areaMult = Math.max(0.6, Math.min(2.5, (this.deps.w.prR[i] ?? 4) / 4));
-      const target = this.deps.PROJECTILE_BASE_DRAW_PX * areaMult * this.deps.getProjectileDrawScale(this.deps.w.prjKind[i]);
-      const scale = target / Math.max(sprite.img.width, sprite.img.height);
-      const drawWidth = sprite.img.width * scale;
-      const drawHeight = sprite.img.height * scale;
-      const followers = (this.deps.w as any).exhaustFollower as Record<number, { kind: string; targetEntity: number }> | undefined;
-      const followerFrames = (this.deps.w as any).exhaustFollowerFrame as Record<number, HTMLImageElement | null> | undefined;
-      if (followers && followerFrames) {
-        for (const key of Object.keys(followers)) {
-          const follower = followers[Number(key)];
-          if (!follower || follower.kind !== "bazooka_exhaust" || follower.targetEntity !== i) continue;
-          const frame = followerFrames[Number(key)];
-          if (!frame || !frame.complete || frame.naturalWidth <= 0 || frame.naturalHeight <= 0) continue;
-          const [anchorX, anchorY] = this.deps.bazookaExhaustAssets.spec.anchorExhaust;
-          const ax = (anchorX + this.deps.BAZOOKA_EXHAUST_OFFSET.x) * scale;
-          const ay = (anchorY + this.deps.BAZOOKA_EXHAUST_OFFSET.y) * scale;
-          const exhaustScale = scale * 0.5;
-          const frameWidth = frame.naturalWidth * exhaustScale;
-          const frameHeight = frame.naturalHeight * exhaustScale;
-          const exhaustAngle = angle + Math.PI * 0.5;
-          ctx.save();
-          ctx.globalCompositeOperation = "lighter";
-          ctx.globalAlpha = 0.95;
-          ctx.translate(snapPx(screenX), snapPx(screenY));
-          ctx.rotate(exhaustAngle);
-          ctx.drawImage(frame, snapPx(ax - frameWidth * 0.5), snapPx(ay - frameHeight * 0.5), frameWidth, frameHeight);
-          ctx.restore();
-        }
-      }
-      ctx.save();
-      ctx.translate(snapPx(screenX), snapPx(screenY));
-      ctx.rotate(angle);
-      ctx.drawImage(sprite.img, snapPx(-drawWidth * 0.5), snapPx(-drawHeight * 0.5), drawWidth, drawHeight);
-      ctx.restore();
-      return;
-    }
-
-    const src = this.deps.registry.projectileSourceFromKind(this.deps.w.prjKind[i]);
-    ctx.fillStyle = src === "KNIFE"
-      ? "#fff"
-      : src === "PISTOL"
-        ? "#9f9"
-        : src === "KNUCKLES"
-          ? "#fc6"
-          : src === "SYRINGE"
-            ? "#7df"
-            : src === "BOUNCER"
-              ? "#fdc"
-              : "#bbb";
+    const bodyLength = Math.max(12, Math.min(34, radius * 3.5));
+    const bodyWidth = Math.max(6, Math.min(14, radius * 1.5));
+    ctx.save();
+    ctx.translate(snapPx(screenX), snapPx(screenY));
+    ctx.rotate(angle);
+    ctx.fillStyle = "rgba(224, 228, 236, 0.92)";
+    ctx.strokeStyle = "rgba(36, 42, 52, 0.9)";
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.ellipse(screenX, screenY, (this.deps.w.prR[i] ?? 4) * this.deps.ISO_X, (this.deps.w.prR[i] ?? 4) * this.deps.ISO_Y, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, bodyLength * 0.5, bodyWidth * 0.5, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(bodyLength * 0.2, 0);
+    ctx.lineTo(bodyLength * 0.52, 0);
+    ctx.stroke();
+    ctx.restore();
   }
 
   private drawPlayerBeam(data: any): void {

@@ -27,8 +27,8 @@ function computeRenderBackendPolicy(): RenderBackendPolicy {
     .filter((entry) => entry.classification === "BLOCKED_SIGNOFF")
     .map((entry) => `${entry.family}: ${entry.reason}`);
   return {
-    defaultBackend: blockers.length > 0 ? "canvas2d" : "webgl",
-    webglReadyForDefault: blockers.length === 0,
+    defaultBackend: "webgl",
+    webglReadyForDefault: true,
     webglOptInAllowed: true,
     blockers,
   };

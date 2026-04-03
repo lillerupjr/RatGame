@@ -1,6 +1,6 @@
 import type { World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
-import { ENEMY_TYPE, spawnEnemyGrid } from "../../factories/enemyFactory";
+import { EnemyId, spawnEnemyGrid } from "../../factories/enemyFactory";
 import { getActiveMap } from "../../map/compile/kenneyMap";
 import { pickZoneTrialLikePlacements } from "../../objectives/zoneObjectiveSystem";
 import { worldToGrid } from "../../coords/grid";
@@ -131,7 +131,7 @@ export function trySpawnLootGoblinForFloor(world: World): void {
   const gx = gp.gx;
   const gy = gp.gy;
 
-  const enemyIndex = spawnEnemyGrid(world, ENEMY_TYPE.LOOT_GOBLIN, gx, gy, KENNEY_TILE_WORLD);
+  const enemyIndex = spawnEnemyGrid(world, EnemyId.LOOT_GOBLIN, gx, gy, KENNEY_TILE_WORLD);
   const triggerId = `${LOOT_GOBLIN_TRIGGER_PREFIX}:${floorIndex}:${tx}:${ty}`;
   world.eSpawnTriggerId[enemyIndex] = triggerId;
   debug.spawned = true;

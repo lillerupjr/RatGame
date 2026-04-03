@@ -52,7 +52,7 @@ describe("enemySprites transient timeout retry behavior", () => {
   it("retries a transient timeout instead of permanently poisoning readiness", async () => {
     const paletteVariantKey = "db32@@sw:75@@dk:50";
     const readyPack = {
-      skin: "rat1",
+      skin: "enemies/small_rat",
       size: { w: 32, h: 32 },
       frameCount: 1,
       rotations: { S: { width: 32, height: 32 } as unknown as HTMLImageElement },
@@ -63,16 +63,16 @@ describe("enemySprites transient timeout retry behavior", () => {
       .mockRejectedValueOnce(new MockSpritePreloadError("TIMED_OUT", "timed out"))
       .mockResolvedValueOnce(readyPack);
 
-    preloadEnemySprites(["rat1"], paletteVariantKey);
+    preloadEnemySprites(["enemies/small_rat"], paletteVariantKey);
     await flushAsync();
 
-    expect(enemySpritesReady(["rat1"], paletteVariantKey)).toBe(false);
+    expect(enemySpritesReady(["enemies/small_rat"], paletteVariantKey)).toBe(false);
     expect(spriteLoaderMock.preloadSpritePack).toHaveBeenCalledTimes(1);
 
-    preloadEnemySprites(["rat1"], paletteVariantKey);
+    preloadEnemySprites(["enemies/small_rat"], paletteVariantKey);
     await flushAsync();
 
     expect(spriteLoaderMock.preloadSpritePack).toHaveBeenCalledTimes(2);
-    expect(enemySpritesReady(["rat1"], paletteVariantKey)).toBe(true);
+    expect(enemySpritesReady(["enemies/small_rat"], paletteVariantKey)).toBe(true);
   });
 });

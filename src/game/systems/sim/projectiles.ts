@@ -8,6 +8,8 @@ import { getEnemyWorld, getPlayerWorld, getProjectileWorld } from "../../coords/
 import { PRJ_KIND } from "../../factories/projectileFactory";
 import { getEnemyAimWorld } from "../../combat/aimPoints";
 import { makeUnknownDamageMeta } from "../../combat/damageMeta";
+import { finalizeEnemyDeath } from "../enemies/finalize";
+import { despawnProjectile } from "./projectileLifecycle";
 
 // --- Movement substepping (prevents "one whole tile per frame") ---
 export let PROJECTILE_MAX_MOVE_FRAC_PER_STEP = 0.5;   // fraction of tile per move substep
@@ -68,7 +70,7 @@ export function projectilesSystem(w: World, dt: number) {
         // TTL
         w.prTtl[i] -= dt;
         if (w.prTtl[i] <= 0) {
-            w.pAlive[i] = false;
+            despawnProjectile(w, i);
             continue;
         }
 
@@ -84,7 +86,7 @@ export function projectilesSystem(w: World, dt: number) {
                 w.prTargetY[i] = enemyAim.y;
             } else {
                 // Target died — kill spark
-                w.pAlive[i] = false;
+                despawnProjectile(w, i);
                 continue;
             }
         }
@@ -154,7 +156,7 @@ export function projectilesSystem(w: World, dt: number) {
                         oy = ny;
                         w.prDirX[i] = dist > 0.0001 ? dx / dist : w.prDirX[i];
                         w.prDirY[i] = dist > 0.0001 ? dy / dist : w.prDirY[i];
-                        w.pAlive[i] = false;
+                        despawnProjectile(w, i, { x: tx, y: ty });
                         if (isSpark) {
                             // Spark: apply damage + lightning hit VFX
                             const sparkDmg = w.prDamage[i];
@@ -176,20 +178,14 @@ export function projectilesSystem(w: World, dt: number) {
                                     damageMeta: projectileDamageMeta,
                                 });
                                 if (w.eHp[sparkTarget] <= 0) {
-                                    w.eAlive[sparkTarget] = false;
-                                    w.kills++;
-                                    emitEvent(w, {
-                                        type: "ENEMY_KILLED",
-                                        enemyIndex: sparkTarget,
+                                    finalizeEnemyDeath(w, sparkTarget, {
+                                        damageMeta: projectileDamageMeta,
+                                        source: "OTHER",
                                         x: ew2.wx,
                                         y: ew2.wy,
-                                        spawnTriggerId: w.eSpawnTriggerId[sparkTarget],
-                                        source: "OTHER",
-                                        damageMeta: projectileDamageMeta,
                                     });
                                 }
                             }
-                            emitEvent(w, { type: "VFX", id: "LIGHTNING_HIT", x: tx, y: ty, scale: 1 });
                             break;
                         }
                         const blastR = Math.max(0, w.prExplodeR[i] ?? 0);
@@ -239,7 +235,7 @@ export function projectilesSystem(w: World, dt: number) {
                         if (w.prWallBounce[i]) {
                             const bLeft = w.prBouncesLeft[i];
                             if (bLeft >= 0 && bLeft <= 0) {
-                                w.pAlive[i] = false;
+                                despawnProjectile(w, i, { x: ox, y: oy });
                                 break;
                             }
 
@@ -258,7 +254,7 @@ export function projectilesSystem(w: World, dt: number) {
                             break;
                         }
 
-                        w.pAlive[i] = false;
+                        despawnProjectile(w, i, { x: ox, y: oy });
                         break;
                     }
                 }
@@ -287,7 +283,7 @@ export function projectilesSystem(w: World, dt: number) {
                 // Left / Right
                 if (ox - r < left) {
                     if (bLeft >= 0 && bLeft <= 0) {
-                        w.pAlive[i] = false;
+                        despawnProjectile(w, i, { x: ox, y: oy });
                     } else {
                         ox = left + r;
                         w.prvx[i] = Math.abs(w.prvx[i]);
@@ -295,7 +291,7 @@ export function projectilesSystem(w: World, dt: number) {
                     }
                 } else if (ox + r > right) {
                     if (bLeft >= 0 && bLeft <= 0) {
-                        w.pAlive[i] = false;
+                        despawnProjectile(w, i, { x: ox, y: oy });
                     } else {
                         ox = right - r;
                         w.prvx[i] = -Math.abs(w.prvx[i]);
@@ -307,7 +303,7 @@ export function projectilesSystem(w: World, dt: number) {
                 if (w.pAlive[i]) {
                     if (oy - r < top) {
                         if (bLeft >= 0 && bLeft <= 0) {
-                            w.pAlive[i] = false;
+                            despawnProjectile(w, i, { x: ox, y: oy });
                         } else {
                             oy = top + r;
                             w.prvy[i] = Math.abs(w.prvy[i]);
@@ -315,7 +311,7 @@ export function projectilesSystem(w: World, dt: number) {
                         }
                     } else if (oy + r > bottom) {
                         if (bLeft >= 0 && bLeft <= 0) {
-                            w.pAlive[i] = false;
+                            despawnProjectile(w, i, { x: ox, y: oy });
                         } else {
                             oy = bottom - r;
                             w.prvy[i] = -Math.abs(w.prvy[i]);
@@ -342,6 +338,8 @@ export function projectilesSystem(w: World, dt: number) {
             }
 
         }
+
+        if (!w.pAlive[i]) continue;
 
         // -------------------------
         // Explode-on-target (non-missile targeted projectiles)
@@ -380,7 +378,7 @@ export function projectilesSystem(w: World, dt: number) {
                 }
 
                 // Rocket is consumed by the explosion
-                w.pAlive[i] = false;
+                despawnProjectile(w, i, { x: tx, y: ty });
                 continue;
             }
         }
@@ -393,7 +391,7 @@ export function projectilesSystem(w: World, dt: number) {
             const dx = ox - (w.prStartX[i] ?? ox);
             const dy = oy - (w.prStartY[i] ?? oy);
             if (dx * dx + dy * dy > maxDist * maxDist) {
-                w.pAlive[i] = false;
+                despawnProjectile(w, i, { x: ox, y: oy });
             }
         }
 

@@ -1,14 +1,11 @@
 import { getSpriteByIdForVariantKey } from "../../../engine/render/sprites/renderSprites";
-import {
-  collectProjectileDynamicAtlasSources,
-  type ProjectileAtlasSourceRecord,
-} from "../../../engine/render/sprites/projectileSprites";
 import { listPlayerDynamicAtlasSpriteIds } from "../../../engine/render/sprites/playerSprites";
 import { listEnemyDynamicAtlasSpriteIds } from "../../../engine/render/sprites/enemySprites";
 import { listVendorNpcDynamicAtlasSpriteIds } from "../../../engine/render/sprites/vendorSprites";
 import { listNeutralMobDynamicAtlasSpriteIds } from "../../../engine/render/sprites/neutralSprites";
 import { listCurrencyDynamicAtlasSpriteIds } from "../../content/loot/currencyVisual";
-import { VFX_CLIPS } from "../../content/vfxRegistry";
+import { listVfxSpriteIds } from "../../content/vfxRegistry";
+import { listProjectileTravelSpriteIds } from "../../content/projectilePresentationRegistry";
 
 export type DynamicAtlasImageSource = HTMLImageElement | HTMLCanvasElement;
 
@@ -65,31 +62,8 @@ function addSpriteIdFamilySources(
   }
 }
 
-function addProjectileSources(
-  accumulator: DynamicAtlasSourceAccumulator,
-  records: readonly ProjectileAtlasSourceRecord[],
-): void {
-  for (let i = 0; i < records.length; i++) {
-    const { sourceKey, record } = records[i];
-    if (record?.ready && isReadyImageSource(record.img)) {
-      accumulator.readyByKey.set(sourceKey, {
-        sourceKey,
-        image: record.img,
-        kind: "directFrame",
-      });
-      continue;
-    }
-    accumulator.pendingSourceKeys.add(sourceKey);
-  }
-}
-
 function listVfxDynamicAtlasSpriteIds(): string[] {
-  const ids = new Set<string>();
-  for (let i = 0; i < VFX_CLIPS.length; i++) {
-    const clip = VFX_CLIPS[i];
-    for (let j = 0; j < clip.spriteIds.length; j++) ids.add(clip.spriteIds[j]);
-  }
-  return Array.from(ids).sort();
+  return listVfxSpriteIds();
 }
 
 export function collectDynamicAtlasSources(paletteVariantKey: string): DynamicAtlasSourceSnapshot {
@@ -100,7 +74,7 @@ export function collectDynamicAtlasSources(paletteVariantKey: string): DynamicAt
   };
 
   addSpriteIdFamilySources(accumulator, listCurrencyDynamicAtlasSpriteIds(), paletteVariantKey, "directFrame");
-  addProjectileSources(accumulator, collectProjectileDynamicAtlasSources());
+  addSpriteIdFamilySources(accumulator, listProjectileTravelSpriteIds(), paletteVariantKey, "directFrame");
   addSpriteIdFamilySources(accumulator, listVfxDynamicAtlasSpriteIds(), paletteVariantKey, "directFrame");
   addSpriteIdFamilySources(accumulator, listVendorNpcDynamicAtlasSpriteIds(), paletteVariantKey, "directFrame");
   addSpriteIdFamilySources(accumulator, listNeutralMobDynamicAtlasSpriteIds(), paletteVariantKey, "directFrame");

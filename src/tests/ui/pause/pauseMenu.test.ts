@@ -250,7 +250,7 @@ const userSettingsState = vi.hoisted(() => ({
       performanceMode: false,
       deathSlowdownEnabled: true,
       cameraSmoothingEnabled: true,
-      renderBackend: "canvas2d",
+      renderBackend: "webgl",
       verticalTilesMode: "auto",
       verticalTilesUser: 9,
       verticalTilesAutoPhone: 6,
@@ -332,7 +332,7 @@ vi.mock("../../../userSettings", () => ({
       performanceMode: false,
       deathSlowdownEnabled: true,
       cameraSmoothingEnabled: true,
-      renderBackend: "canvas2d",
+      renderBackend: "webgl",
       verticalTilesMode: "auto",
       verticalTilesUser: 9,
       verticalTilesAutoPhone: 6,
@@ -446,7 +446,7 @@ describe("pauseMenu", () => {
         performanceMode: false,
         deathSlowdownEnabled: true,
         cameraSmoothingEnabled: true,
-        renderBackend: "canvas2d",
+        renderBackend: "webgl",
         verticalTilesMode: "auto",
         verticalTilesUser: 9,
         verticalTilesAutoPhone: 6,
@@ -901,21 +901,6 @@ describe("pauseMenu", () => {
     toggle.checked = false;
     toggle.dispatchEvent(new Event("change") as any);
     expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({ render: { cameraSmoothingEnabled: false } });
-  });
-
-  test("renderer toggle updates user settings from graphics tab", () => {
-    const root = document.createElement("div") as unknown as HTMLDivElement;
-    document.body.appendChild(root as any);
-    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
-    menu.setVisible(true);
-    menu.render(makeWorld());
-
-    (root.querySelector('[data-settings-tab="GRAPHICS"]') as any).click();
-    const webglBtn = root.querySelector('[data-render-backend="webgl"]') as any;
-    expect(webglBtn).toBeTruthy();
-
-    webglBtn.click();
-    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({ render: { renderBackend: "webgl" } });
   });
 
   test("vertical tiles slider updates user settings", () => {

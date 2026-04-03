@@ -4,7 +4,7 @@ import { walkInfo } from "../../map/compile/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { worldToGrid } from "../../coords/grid";
 import { getPlayerWorld } from "../../coords/worldViews";
-import { spawnEnemyGrid, type EnemyType } from "../../factories/enemyFactory";
+import { spawnEnemyGrid, type EnemyId } from "../../factories/enemyFactory";
 import type { EnemyPowerTier } from "../../balance/enemyPower";
 
 export function spawnSystem(w: World, dt: number) {
@@ -21,7 +21,7 @@ export function spawnSystem(w: World, dt: number) {
  */
 export function spawnOneEnemyOfType(
   w: World,
-  type: EnemyType,
+  type: EnemyId,
   originX?: number,
   originY?: number,
   powerTier: EnemyPowerTier = "trash"

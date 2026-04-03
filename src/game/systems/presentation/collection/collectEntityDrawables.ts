@@ -7,6 +7,12 @@ import {
   countRenderDynamicAtlasMiss,
   countRenderDynamicAtlasRequest,
 } from "../renderPerfCounters";
+import {
+  PROJECTILE_BASE_DRAW_PX,
+  getProjectilePresentation,
+  getProjectilePresentationDrawScale,
+  resolveProjectileTravelVisualSpriteId,
+} from "../../../content/projectilePresentationRegistry";
 
 type RenderKey = any;
 type Dir8 = any;
@@ -29,7 +35,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
     ez,
     getEntityFeetPos,
     registry,
-    ENEMY_TYPE,
+    EnemyId,
     getBossAccent,
     LOOT_GOBLIN_GLOW_PULSE_MIN,
     LOOT_GOBLIN_GLOW_PULSE_RANGE,
@@ -59,17 +65,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
     compiledMap,
     ELEV_PX,
     worldDeltaToScreen,
-    resolveProjectileShadowFootOffset,
-    getProjectileSpriteByKind,
-    PROJECTILE_BASE_DRAW_PX,
-    getProjectileDrawScale,
-    bazookaExhaustAssets,
-    BAZOOKA_EXHAUST_OFFSET,
-    PRJ_KIND,
-    VFX_CLIPS,
-    VFX_CLIP_INDEX,
     getSpriteById,
-    snapToNearestWalkableGround,
     playerSpritesReady,
     getPlayerSpriteFrame,
     PLAYER_R,
@@ -248,9 +244,9 @@ export function collectEntityDrawables(input: CollectionContext): void {
       };
 
       const def = registry.enemy(w.eType[i] as any);
-      let baseColor: string = (def as any).color ?? "#f66";
+      let baseColor: string = def.presentation?.color ?? "#f66";
 
-      const isBoss = w.eType[i] === ENEMY_TYPE.BOSS;
+      const isBoss = w.eType[i] === EnemyId.BOSS;
       if (isBoss) baseColor = getBossAccent(w) ?? baseColor;
 
       const faceDx = w.eFaceX?.[i] ?? 0;
@@ -479,64 +475,38 @@ export function collectEntityDrawables(input: CollectionContext): void {
 
       const zLift = (pzAbs - baseH) * ELEV_PX;
       const p = toScreen(pp.wx, pp.wy);
+      const nowSec = w.timeSec ?? w.time ?? 0;
+      const spawnTimeSec = w.prSpawnTime?.[i] ?? nowSec;
+      const projectilePresentation = getProjectilePresentation(w.prjKind[i]);
+      const bodySpriteId = resolveProjectileTravelVisualSpriteId(projectilePresentation.body, nowSec, spawnTimeSec);
+      const bodySprite = bodySpriteId ? getSpriteById(bodySpriteId) : null;
+      const delta = worldDeltaToScreen(w.prDirX[i] ?? 1, w.prDirY[i] ?? 0);
+      const bodyAngle = Math.atan2(delta.dy, delta.dx);
+      const areaMult = Math.max(0.6, Math.min(2.5, (w.prR[i] ?? 4) / 4));
+      const bodyTarget = PROJECTILE_BASE_DRAW_PX * areaMult * getProjectilePresentationDrawScale(w.prjKind[i]);
+      const bodyScale = bodySprite?.ready && bodySprite.img && bodySprite.img.width > 0 && bodySprite.img.height > 0
+        ? bodyTarget / Math.max(bodySprite.img.width, bodySprite.img.height)
+        : 0;
+      const projectileCenterX = p.x;
+      const projectileCenterY = p.y - zLift;
 
-      // Spark projectile: dedicated VFX clip rendering, skip generic path entirely
-      if (w.prjKind[i] === PRJ_KIND.SPARK) {
-        const clip = VFX_CLIPS[VFX_CLIP_INDEX.LIGHTNING_PROJ];
-        const elapsed = 3.0 - (w.prTtl[i] ?? 0);
-        const rawFrame = clip ? Math.floor(elapsed * clip.fps) : 0;
-        const frameIdx = clip && clip.spriteIds.length > 0 ? rawFrame % clip.spriteIds.length : -1;
-        const sprite = clip && frameIdx >= 0 ? getSpriteById(clip.spriteIds[frameIdx]) : null;
-        if (sprite?.ready && sprite.img) {
-          const atlas = resolveDynamicAtlasImage(sprite.img, sprite.img.width, sprite.img.height);
-          const delta = worldDeltaToScreen(w.prDirX[i] ?? 1, w.prDirY[i] ?? 0);
-          const angle = Math.atan2(delta.dy, delta.dx);
-          enqueueSliceCommand(frameBuilder, renderKey, {
-            semanticFamily: "worldSprite",
-            finalForm: "quad",
-            payload: {
-              image: atlas.image,
-              sx: atlas.sx,
-              sy: atlas.sy,
-              sw: atlas.sw,
-              sh: atlas.sh,
-              dx: p.x - 16,
-              dy: p.y - zLift - 16,
-              dw: 32,
-              dh: 32,
-              rotationRad: angle,
-              alpha: 1,
-              projectileIndex: i,
-            },
-          });
-        } else {
-          enqueueSliceCommand(frameBuilder, renderKey, {
-            semanticFamily: "worldSprite",
-            finalForm: "quad",
-            payload: {
-              projectileIndex: i,
-              screenX: p.x,
-              screenY: p.y,
-              zLift,
-              sparkStyle: true,
-            },
-          });
-          countRenderDynamicAtlasBypass();
-        }
-        continue;
-      }
-
-      const spr = getProjectileSpriteByKind(w.prjKind[i]);
-      if (spr?.ready && spr.img && spr.img.width > 0 && spr.img.height > 0) {
-        const atlas = resolveDynamicAtlasImage(spr.img, spr.img.width, spr.img.height);
-        const delta = worldDeltaToScreen(w.prDirX[i] ?? 1, w.prDirY[i] ?? 0);
-        const angle = Math.atan2(delta.dy, delta.dx);
-        const areaMult = Math.max(0.6, Math.min(2.5, (w.prR[i] ?? 4) / 4));
-        const target = PROJECTILE_BASE_DRAW_PX * areaMult * getProjectileDrawScale(w.prjKind[i]);
-        const scale = target / Math.max(spr.img.width, spr.img.height);
-        const drawWidth = spr.img.width * scale;
-        const drawHeight = spr.img.height * scale;
-        enqueueSliceCommand(frameBuilder, renderKey, {
+      const emitProjectileSprite = (
+        spriteId: string | null,
+        angleRad: number,
+        centerX: number,
+        centerY: number,
+        scale: number,
+        stableOffset: number,
+        alpha = 1,
+        blendMode: "normal" | "additive" = "normal",
+      ): boolean => {
+        if (!spriteId || !(scale > 0)) return false;
+        const sprite = getSpriteById(spriteId);
+        if (!sprite?.ready || !sprite.img || sprite.img.width <= 0 || sprite.img.height <= 0) return false;
+        const atlas = resolveDynamicAtlasImage(sprite.img, sprite.img.width, sprite.img.height);
+        const drawWidth = sprite.img.width * scale;
+        const drawHeight = sprite.img.height * scale;
+        enqueueSliceCommand(frameBuilder, imageSpriteKey(renderKey, stableOffset), {
           semanticFamily: "worldSprite",
           finalForm: "quad",
           payload: {
@@ -545,17 +515,65 @@ export function collectEntityDrawables(input: CollectionContext): void {
             sy: atlas.sy,
             sw: atlas.sw,
             sh: atlas.sh,
-            dx: p.x - drawWidth * 0.5,
-            dy: p.y - zLift - drawHeight * 0.5,
+            dx: centerX - drawWidth * 0.5,
+            dy: centerY - drawHeight * 0.5,
             dw: drawWidth,
             dh: drawHeight,
-            rotationRad: angle,
-            alpha: 1,
+            rotationRad: angleRad,
+            alpha,
+            blendMode,
             projectileIndex: i,
           },
         });
-        continue;
+        return true;
+      };
+
+      const emitProjectileAttachment = (attachment: any, stableOffset: number): void => {
+        if (!(bodyScale > 0)) return;
+        const spriteId = resolveProjectileTravelVisualSpriteId(attachment.visual, nowSec, spawnTimeSec);
+        const attachmentAngle = bodyAngle + Number(attachment.rotationOffsetRad ?? 0);
+        const offsetX = Number(attachment.offsetPx?.x ?? 0) * bodyScale;
+        const offsetY = Number(attachment.offsetPx?.y ?? 0) * bodyScale;
+        const cos = Math.cos(attachmentAngle);
+        const sin = Math.sin(attachmentAngle);
+        const centerX = projectileCenterX + offsetX * cos - offsetY * sin;
+        const centerY = projectileCenterY + offsetX * sin + offsetY * cos;
+        emitProjectileSprite(
+          spriteId,
+          attachmentAngle,
+          centerX,
+          centerY,
+          bodyScale * Number(attachment.scaleMult ?? 1),
+          stableOffset,
+          Number(attachment.alpha ?? 1),
+          attachment.blendMode === "additive" ? "additive" : "normal",
+        );
+      };
+
+      const behindAttachments = (projectilePresentation.attachments ?? []).filter(
+        (attachment) => attachment.renderLayer === "behindBody",
+      );
+      for (let j = 0; j < behindAttachments.length; j++) {
+        emitProjectileAttachment(behindAttachments[j], -50 + j);
       }
+
+      const didEmitBody = emitProjectileSprite(
+        bodySpriteId,
+        bodyAngle,
+        projectileCenterX,
+        projectileCenterY,
+        bodyScale,
+        0,
+      );
+
+      const frontAttachments = (projectilePresentation.attachments ?? []).filter(
+        (attachment) => attachment.renderLayer !== "behindBody",
+      );
+      for (let j = 0; j < frontAttachments.length; j++) {
+        emitProjectileAttachment(frontAttachments[j], 50 + j);
+      }
+
+      if (didEmitBody) continue;
 
       enqueueSliceCommand(frameBuilder, renderKey, {
         semanticFamily: "worldSprite",

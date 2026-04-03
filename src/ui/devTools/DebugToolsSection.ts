@@ -116,6 +116,14 @@ export function mountDebugToolsSection(
     (value) => value.charAt(0).toUpperCase() + value.slice(1),
     (value) => applyDebugPatch({ perfOverlayMode: value }),
   );
+  const renderBackendSelect = createSelectRow<DebugToolsSettings["renderBackend"]>(
+    section,
+    "Renderer",
+    ["webgl", "canvas2d"],
+    (value) => value === "webgl" ? "WebGL (Default)" : "Canvas2D",
+    (value) => applyDebugPatch({ renderBackend: value }),
+  );
+  renderBackendSelect.setAttribute("data-debug-render-backend", "1");
 
   const shadowSunReadout = document.createElement("div");
   shadowSunReadout.style.padding = "2px 0 10px 0";
@@ -210,6 +218,7 @@ export function mountDebugToolsSection(
 
   return {
     sync(debug) {
+      renderBackendSelect.value = debug.renderBackend;
       shadowSunHourSelect.value = `${debug.shadowSunTimeHour}`;
       shadowSunDayCycleToggle.checked = !!debug.shadowSunDayCycleEnabled;
       shadowSunCycleModeSelect.value = debug.shadowSunCycleMode;

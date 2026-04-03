@@ -1,7 +1,7 @@
 // src/game/systems/boss.ts
 
 import { type World } from "../../../engine/world/world";
-import { ENEMY_TYPE } from "../../content/enemies";
+import { EnemyId } from "../../content/enemies";
 import { spawnZone, ZONE_KIND } from "../../factories/zoneFactory";
 import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
 import { makeEnemyHitMeta } from "../../combat/damageMeta";
@@ -22,7 +22,7 @@ type BossCtx = {
 
 function findBossIndex(w: World): number {
     for (let i = 0; i < w.eAlive.length; i++) {
-        if (w.eAlive[i] && w.eType[i] === ENEMY_TYPE.BOSS) return i;
+        if (w.eAlive[i] && w.eType[i] === EnemyId.BOSS) return i;
     }
     return -1;
 }

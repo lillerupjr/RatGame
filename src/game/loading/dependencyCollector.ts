@@ -1,6 +1,8 @@
 import { getActiveMapDef } from "../map/authoredMapActivation";
 import { getActiveMap } from "../map/compile/kenneyMap";
 import { PLAYABLE_CHARACTERS } from "../content/playableCharacters";
+import { listProjectileTravelSpriteIds } from "../content/projectilePresentationRegistry";
+import { listEnemyDynamicAtlasSpriteIds } from "../../engine/render/sprites/enemySprites";
 
 export interface DependencySet {
   spriteIds: string[];
@@ -21,7 +23,8 @@ function isPrewarmableSpriteId(spriteId: string): boolean {
     || id.startsWith("props/")
     || id.startsWith("entities/")
     || id.startsWith("loot/")
-    || id.startsWith("vfx/");
+    || id.startsWith("vfx/")
+    || id.startsWith("projectiles/");
 }
 
 export function collectFloorDependencies(): DependencySet {
@@ -67,25 +70,12 @@ export function collectFloorDependencies(): DependencySet {
     }
   }
 
-  // Enemy core packs used by runtime enemy sprites.
-  const enemyDefs: Array<{ skin: string; anim?: string; frameCount?: number }> = [
-    { skin: "rat1", anim: "running-4-frames", frameCount: 4 },
-    { skin: "rat2", anim: "walk-4-frames", frameCount: 4 },
-    { skin: "rat4", anim: "walk-4-frames", frameCount: 4 },
-    { skin: "lootGoblin", anim: "walk", frameCount: 6 },
-    { skin: "infested", anim: "walk", frameCount: 4 },
-  ];
-  for (const def of enemyDefs) {
-    for (const dir of ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"]) {
-      spriteIds.add(`entities/enemies/${def.skin}/rotations/${dir}`);
-      if (def.anim && Number.isFinite(def.frameCount)) {
-        const frameCount = Math.max(0, def.frameCount ?? 0);
-        for (let i = 0; i < frameCount; i++) {
-          const frame = `frame_${String(i).padStart(3, "0")}`;
-          spriteIds.add(`entities/enemies/${def.skin}/animations/${def.anim}/${dir}/${frame}`);
-        }
-      }
-    }
+  for (const id of listEnemyDynamicAtlasSpriteIds()) {
+    spriteIds.add(id);
+  }
+
+  for (const id of listProjectileTravelSpriteIds()) {
+    spriteIds.add(id);
   }
 
   // Vendor idle set.

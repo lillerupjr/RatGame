@@ -18,6 +18,9 @@ import {
   isLootGoblinEnemy,
 } from "../progression/lootGoblin";
 import { getPoeEnemyLeashAnchor, isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
+import { EnemyId } from "../../content/enemies";
+import { registry } from "../../content/registry";
+import { ensureEnemyBrain } from "../enemies/brain";
 
 type GridPos = { gx: number; gy: number };
 type WorldPos = { wx: number; wy: number };
@@ -199,8 +202,12 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     // Query flow field for optimal direction toward player
     const flowDir = queryFlowDirection(flowField, ex, ey, eCur.floorH, KENNEY_TILE_WORLD);
 
+    const type = w.eType[i] as EnemyId;
     const isGoblin = isLootGoblinEnemy(w, i);
+    const isBoss = type === EnemyId.BOSS;
     const leashAnchor = getPoeEnemyLeashAnchor(w, i);
+    const archetype = registry.enemy(type);
+    const brain = ensureEnemyBrain(w, i);
     let chaseWx = 0;
     let chaseWy = 0;
 
@@ -248,8 +255,58 @@ export function movementSystem(w: World, input: InputState, dt: number) {
 
       const eWorldDir = gridDirToWorldDir(KENNEY_TILE_WORLD, gux, guy);
       const speedMult = isGoblin ? FLEE_SPEED_MULT : 1;
-      chaseWx = eWorldDir.wx * w.eSpeed[i] * speedMult;
-      chaseWy = eWorldDir.wy * w.eSpeed[i] * speedMult;
+      const desiredRange = archetype.movement.desiredRange;
+      const tolerance = archetype.movement.tolerance;
+      const reengageRange = archetype.movement.reengageRange;
+      const surfaceDist = Math.max(0, Math.hypot(px - ex, py - ey) - ((w.eR[i] ?? 0) + (w.playerR ?? 0)));
+      const minHold = Math.max(0, desiredRange - tolerance);
+      const maxHold = desiredRange + tolerance;
+      const shouldUseSharedRange =
+        archetype.movement.mode !== "scripted"
+        && !isBoss
+        && !isGoblin;
+
+      let dirWx = eWorldDir.wx;
+      let dirWy = eWorldDir.wy;
+      let applyMovement = Math.hypot(dirWx, dirWy) > 1e-6;
+      let chaseSpeed = w.eSpeed[i] * speedMult;
+      let moveScale = 1;
+
+        if (shouldUseSharedRange) {
+          if (brain.state === "idle" || brain.state === "dead") {
+            applyMovement = false;
+          } else if (
+            archetype.aiType === "leaper"
+          && archetype.ability?.kind === "leap"
+          && brain.state === "acting"
+          && brain.leapTimeLeftSec > 0
+        ) {
+          dirWx = brain.leapDirX;
+          dirWy = brain.leapDirY;
+            chaseSpeed = archetype.ability.leapSpeed;
+            moveScale = Math.min(1, brain.leapTimeLeftSec / Math.max(dt, 1e-6));
+          } else if (brain.state !== "move") {
+            applyMovement = false;
+          } else if (archetype.aiType === "contact" || archetype.aiType === "leaper") {
+            applyMovement = true;
+          } else if (surfaceDist > reengageRange || surfaceDist > maxHold) {
+            applyMovement = true;
+          } else if (surfaceDist < minHold && desiredRange > 0.0001) {
+            dirWx = -dirWx;
+          dirWy = -dirWy;
+          applyMovement = true;
+        } else {
+          applyMovement = false;
+        }
+      }
+
+      if (applyMovement) {
+        chaseWx = dirWx * chaseSpeed * moveScale;
+        chaseWy = dirWy * chaseSpeed * moveScale;
+      } else {
+        chaseWx = 0;
+        chaseWy = 0;
+      }
     }
     const moveWx = chaseWx + kvx;
     const moveWy = chaseWy + kvy;
@@ -299,6 +356,15 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     const movedDiag = tryEnemyMove(enx, eny);
     const movedX = movedDiag ? true : tryEnemyMove(enx, ey);
     const movedY = movedDiag ? true : tryEnemyMove(ex, eny);
+
+    if (
+      archetype.aiType === "leaper"
+      && archetype.ability?.kind === "leap"
+      && brain.state === "acting"
+      && brain.leapTimeLeftSec > 0
+    ) {
+      brain.leapTimeLeftSec = Math.max(0, brain.leapTimeLeftSec - dt);
+    }
 
     const eGrid1 = gridFromAnchor(w.egxi[i], w.egyi[i], w.egox[i], w.egoy[i]);
     const dGx = eGrid1.gx - eGrid0.gx;

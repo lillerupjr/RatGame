@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { createWorld } from "../../../../engine/world/world";
 import { stageDocks } from "../../../../game/content/stages";
-import { ENEMY_TYPE } from "../../../../game/factories/enemyFactory";
+import { EnemyId } from "../../../../game/factories/enemyFactory";
 import { getEnemyWorld } from "../../../../game/coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../../engine/render/kenneyTiles";
 import { walkInfo } from "../../../../game/map/compile/kenneyMap";
@@ -15,7 +15,7 @@ import {
   trySpawnLootGoblinForFloor,
 } from "../../../../game/systems/progression/lootGoblin";
 
-describe("lootGoblin progression runtime", () => {
+describe("loot_goblin progression runtime", () => {
   test("spawn roll fail does not spawn loot goblin", () => {
     const w = createWorld({ seed: 10_001, stage: stageDocks });
     const mapDef = getAuthoredMapDefByMapId("china_town");
@@ -46,7 +46,7 @@ describe("lootGoblin progression runtime", () => {
 
     trySpawnLootGoblinForFloor(w);
     expect(w.eAlive.length).toBe(1);
-    expect(w.eType[0]).toBe(ENEMY_TYPE.LOOT_GOBLIN);
+    expect(w.eType[0]).toBe(EnemyId.LOOT_GOBLIN);
     expect(w.eBaseLife[0]).toBe(500);
     expect(typeof w.eSpawnTriggerId[0]).toBe("string");
     expect((w.eSpawnTriggerId[0] ?? "").startsWith(LOOT_GOBLIN_TRIGGER_PREFIX)).toBe(true);

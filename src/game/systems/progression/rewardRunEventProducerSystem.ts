@@ -1,5 +1,5 @@
 import type { World } from "../../../engine/world/world";
-import { ENEMY_TYPE } from "../../factories/enemyFactory";
+import { EnemyId } from "../../factories/enemyFactory";
 import { enqueueRunEvent } from "../../rewards/runEvents";
 import { OBJECTIVE_TRIGGER_IDS } from "./objectiveSpec";
 
@@ -71,7 +71,7 @@ function captureBossMilestoneEvents(world: World): void {
 
     const enemyIndex = Number.isFinite(ev.enemyIndex) ? (ev.enemyIndex as number) : -1;
     if (enemyIndex < 0) continue;
-    if (world.eType?.[enemyIndex] !== ENEMY_TYPE.BOSS) continue;
+    if (world.eType?.[enemyIndex] !== EnemyId.BOSS) continue;
 
     const triggerId =
       typeof ev.spawnTriggerId === "string"

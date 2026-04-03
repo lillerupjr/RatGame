@@ -30,6 +30,7 @@ describe("settings bucket defaults", () => {
   it("debug defaults keep boolean toggles OFF and seed the sun validation controls", () => {
     const debug = DEFAULT_DEBUG_TOOLS_SETTINGS;
     const {
+      renderBackend,
       shadowSunTimeHour,
       shadowSunDayCycleEnabled,
       shadowSunCycleMode,
@@ -46,7 +47,8 @@ describe("settings bucket defaults", () => {
       expect(value, key).toBe(false);
     }
     expect(shadowSunTimeHour).toBe(17);
-    expect(shadowSunDayCycleEnabled).toBe(true);
+    expect(renderBackend).toBe("webgl");
+    expect(shadowSunDayCycleEnabled).toBe(false);
     expect(shadowSunCycleMode).toBe(DEFAULT_SHADOW_SUN_CYCLE_MODE);
     expect(shadowSunDayCycleSpeedMultiplier).toBe(DEFAULT_SHADOW_SUN_DAY_CYCLE_SPEED_MULTIPLIER);
     expect(shadowSunStepsPerDay).toBe(144);
@@ -54,7 +56,7 @@ describe("settings bucket defaults", () => {
     expect(shadowSunAzimuthDeg).toBe(-1);
     expect(sunElevationOverrideEnabled).toBe(false);
     expect(sunElevationOverrideDeg).toBe(45);
-    expect(perfOverlayMode).toBe("overview");
+    expect(perfOverlayMode).toBe("off");
   });
 
   it("sanitizes debug shadow sun hour to daylight range with hourly steps", () => {
@@ -102,6 +104,10 @@ describe("settings bucket defaults", () => {
       .toBe("textures");
     expect(sanitizeDebugToolsSettings({ perfOverlayMode: "bad" as any }).perfOverlayMode)
       .toBe("overview");
+    expect(sanitizeDebugToolsSettings({ renderBackend: "canvas2d" as any }).renderBackend)
+      .toBe("canvas2d");
+    expect(sanitizeDebugToolsSettings({ renderBackend: "bad" as any }).renderBackend)
+      .toBe("webgl");
     expect(sanitizeDebugToolsSettings({ sweepShadowDebug: 1 as any }).sweepShadowDebug)
       .toBe(true);
     expect(sanitizeDebugToolsSettings({ tileHeightMap: 0 as any }).tileHeightMap)
@@ -112,14 +118,13 @@ describe("settings bucket defaults", () => {
     const sanitized = sanitizeUserSettings({
       game: { healthOrbSide: "invalid" as any },
       audio: { masterVolume: 2, musicVolume: -1, sfxVolume: NaN },
-      graphics: { verticalTilesMode: "bad" as any, verticalTilesUser: 999, renderBackend: "broken" as any },
+      graphics: { verticalTilesMode: "bad" as any, verticalTilesUser: 999 },
     });
 
     expect(sanitized.game.healthOrbSide).toBe("left");
     expect(sanitized.audio.masterVolume).toBe(1);
     expect(sanitized.audio.musicVolume).toBe(0);
     expect(sanitized.audio.sfxVolume).toBe(DEFAULT_USER_SETTINGS.audio.sfxVolume);
-    expect(sanitized.graphics.renderBackend).toBe("canvas2d");
     expect(sanitized.graphics.verticalTilesMode).toBe("auto");
     expect(sanitized.graphics.verticalTilesUser).toBeLessThanOrEqual(24);
   });

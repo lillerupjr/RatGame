@@ -11,7 +11,6 @@ import {
   MAX_VISIBLE_VERTICAL_TILES,
   MIN_VISIBLE_VERTICAL_TILES,
   resolveVerticalTiles,
-  type RenderBackendMode,
   type VerticalTilesMode,
   updateUserSettings,
 } from "../../userSettings";
@@ -226,36 +225,6 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
   cameraSmoothingRow.input.setAttribute("data-camera-smoothing-toggle", "1");
   graphicsPanel.appendChild(cameraSmoothingRow.row);
 
-  const rendererRow = document.createElement("div");
-  rendererRow.className = "settingsRow";
-  const rendererLabelWrap = document.createElement("div");
-  rendererLabelWrap.className = "settingsRowLabelWrap";
-  const rendererLabel = document.createElement("div");
-  rendererLabel.className = "settingsRowLabel";
-  rendererLabel.textContent = "Renderer";
-  rendererLabelWrap.appendChild(rendererLabel);
-  const rendererHelper = document.createElement("div");
-  rendererHelper.className = "settingsRowHelper";
-  rendererHelper.textContent = "Canvas2D is the current default. WebGL is available as an opt-in world backend.";
-  rendererLabelWrap.appendChild(rendererHelper);
-  const rendererSegment = document.createElement("div");
-  rendererSegment.className = "settingsSegment";
-  const canvas2dBtn = document.createElement("button");
-  canvas2dBtn.type = "button";
-  canvas2dBtn.className = "settingsSegmentBtn";
-  canvas2dBtn.textContent = "Canvas2D Default";
-  canvas2dBtn.setAttribute("data-render-backend", "canvas2d");
-  const webglBtn = document.createElement("button");
-  webglBtn.type = "button";
-  webglBtn.className = "settingsSegmentBtn";
-  webglBtn.textContent = "WebGL Opt-in";
-  webglBtn.setAttribute("data-render-backend", "webgl");
-  rendererSegment.appendChild(canvas2dBtn);
-  rendererSegment.appendChild(webglBtn);
-  rendererRow.appendChild(rendererLabelWrap);
-  rendererRow.appendChild(rendererSegment);
-  graphicsPanel.appendChild(rendererRow);
-
   const verticalTilesModeRow = document.createElement("div");
   verticalTilesModeRow.className = "settingsRow";
   const verticalTilesModeLabelWrap = document.createElement("div");
@@ -360,14 +329,6 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
     verticalTilesModeManualBtn.setAttribute("aria-pressed", isAuto ? "false" : "true");
   };
 
-  const setRenderBackendUi = (backend: RenderBackendMode) => {
-    const isCanvas = backend !== "webgl";
-    canvas2dBtn.classList.toggle("active", isCanvas);
-    webglBtn.classList.toggle("active", !isCanvas);
-    canvas2dBtn.setAttribute("aria-pressed", isCanvas ? "true" : "false");
-    webglBtn.setAttribute("aria-pressed", isCanvas ? "false" : "true");
-  };
-
   const syncSliders = () => {
     const settings = readSettings();
 
@@ -419,11 +380,6 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
     updateUserSettings({ render: { cameraSmoothingEnabled: !!cameraSmoothingRow.input.checked } });
   };
 
-  const onRenderBackend = (backend: RenderBackendMode) => {
-    updateUserSettings({ render: { renderBackend: backend } });
-    setRenderBackendUi(backend);
-  };
-
   const onVerticalTilesMode = (mode: VerticalTilesMode) => {
     const settings = readSettings();
     const viewport = getViewportDimensions();
@@ -453,7 +409,6 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
     performanceModeRow.input.checked = !!settings.render.performanceMode;
     deathSlowdownRow.input.checked = !!settings.render.deathSlowdownEnabled;
     cameraSmoothingRow.input.checked = settings.render.cameraSmoothingEnabled !== false;
-    setRenderBackendUi(settings.render.renderBackend === "webgl" ? "webgl" : "canvas2d");
 
     musicMuteRow.input.checked = !!settings.audio.musicMuted;
     sfxMuteRow.input.checked = !!settings.audio.sfxMuted;
@@ -470,8 +425,6 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
   performanceModeRow.input.addEventListener("change", onPerformanceModeToggle);
   deathSlowdownRow.input.addEventListener("change", onDeathSlowdownToggle);
   cameraSmoothingRow.input.addEventListener("change", onCameraSmoothingToggle);
-  canvas2dBtn.addEventListener("click", () => onRenderBackend("canvas2d"));
-  webglBtn.addEventListener("click", () => onRenderBackend("webgl"));
   verticalTilesModeAutoBtn.addEventListener("click", () => onVerticalTilesMode("auto"));
   verticalTilesModeManualBtn.addEventListener("click", () => onVerticalTilesMode("manual"));
   verticalTilesRow.slider.addEventListener("input", () => {

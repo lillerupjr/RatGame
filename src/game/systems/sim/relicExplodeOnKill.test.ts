@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { createWorld } from "../../../engine/world/world";
 import { stageDocks } from "../../content/stages";
-import { ENEMY_TYPE, spawnEnemyGrid } from "../../factories/enemyFactory";
+import { EnemyId, spawnEnemyGrid } from "../../factories/enemyFactory";
 import { getEnemyWorld } from "../../coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { clearSpatialHash, insertEntity } from "../../util/spatialHash";
@@ -29,8 +29,8 @@ describe("relicExplodeOnKillSystem", () => {
     const w = createWorld({ seed: 11, stage: stageDocks });
     w.relics = ["ACT_EXPLODE_ON_KILL"];
 
-    const a = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 5);
-    const b = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 6, 5);
+    const a = spawnEnemyGrid(w, EnemyId.MINION, 5, 5);
+    const b = spawnEnemyGrid(w, EnemyId.MINION, 6, 5);
     w.eHpMax[a] = 100;
     w.eHp[a] = 0;
     w.eAlive[a] = false;
@@ -62,8 +62,8 @@ describe("relicExplodeOnKillSystem", () => {
     const w = createWorld({ seed: 12, stage: stageDocks });
     w.relics = ["ACT_EXPLODE_ON_KILL"];
 
-    const a = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 5);
-    const b = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 6, 5);
+    const a = spawnEnemyGrid(w, EnemyId.MINION, 5, 5);
+    const b = spawnEnemyGrid(w, EnemyId.MINION, 6, 5);
     w.eHpMax[a] = 100;
     w.eHp[a] = 0;
     w.eAlive[a] = false;
@@ -90,8 +90,8 @@ describe("relicExplodeOnKillSystem", () => {
     const w = createWorld({ seed: 77, stage: stageDocks });
     w.relics = ["ACT_EXPLODE_ON_KILL"];
 
-    const dead = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 5);
-    const nearby = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 6, 5);
+    const dead = spawnEnemyGrid(w, EnemyId.MINION, 5, 5);
+    const nearby = spawnEnemyGrid(w, EnemyId.MINION, 6, 5);
     w.eHpMax[dead] = 100;
     w.eAlive[dead] = false;
     w.eHp[nearby] = 200;
@@ -114,7 +114,7 @@ describe("relicExplodeOnKillSystem", () => {
   test("proc guard uses damageMeta even when source is not OTHER", () => {
     const w = createWorld({ seed: 78, stage: stageDocks });
     w.relics = ["ACT_EXPLODE_ON_KILL"];
-    const dead = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 5);
+    const dead = spawnEnemyGrid(w, EnemyId.MINION, 5, 5);
     const dw = getEnemyWorld(w, dead, KENNEY_TILE_WORLD);
     w.events.push({
       type: "ENEMY_KILLED",
@@ -133,8 +133,8 @@ describe("relicExplodeOnKillSystem", () => {
     const w = createWorld({ seed: 44, stage: stageDocks });
     w.relics = ["ACT_EXPLODE_ON_KILL", "PASS_DAMAGE_TO_POISON_ALL"];
 
-    const dead = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 5);
-    const target = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 6, 5);
+    const dead = spawnEnemyGrid(w, EnemyId.MINION, 5, 5);
+    const target = spawnEnemyGrid(w, EnemyId.MINION, 6, 5);
     w.eHpMax[dead] = 100;
     w.eHp[dead] = 0;
     w.eAlive[dead] = false;
@@ -163,7 +163,7 @@ describe("relicExplodeOnKillSystem", () => {
     const w = createWorld({ seed: 14, stage: stageDocks });
     w.relics = ["ACT_EXPLODE_ON_KILL", "ACT_TRIGGERS_DOUBLE"];
 
-    const a = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 5);
+    const a = spawnEnemyGrid(w, EnemyId.MINION, 5, 5);
     w.eHpMax[a] = 100;
     w.eHp[a] = 0;
     w.eAlive[a] = false;
@@ -198,7 +198,7 @@ describe("relicExplodeOnKillSystem", () => {
     const w = createWorld({ seed: 14_001, stage: stageDocks });
     w.relics = ["ACT_EXPLODE_ON_KILL", "ACT_TRIGGERS_HAPPEN_TWICE"];
 
-    const a = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 5);
+    const a = spawnEnemyGrid(w, EnemyId.MINION, 5, 5);
     w.eHpMax[a] = 100;
     w.eHp[a] = 0;
     w.eAlive[a] = false;
@@ -229,8 +229,8 @@ describe("relicExplodeOnKillSystem", () => {
     const w = createWorld({ seed: 45, stage: stageDocks });
     w.relics = ["ACT_ALL_HITS_EXPLODE_20", "PASS_DAMAGE_TO_POISON_ALL"];
 
-    const hitTarget = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 8, 8);
-    const splashTarget = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 9, 8);
+    const hitTarget = spawnEnemyGrid(w, EnemyId.MINION, 8, 8);
+    const splashTarget = spawnEnemyGrid(w, EnemyId.MINION, 9, 8);
     w.eHpMax[splashTarget] = 500;
     w.eHp[splashTarget] = 500;
 
@@ -269,9 +269,9 @@ describe("relicExplodeOnKillSystem", () => {
     w.relics = ["ACT_DAGGER_ON_KILL_50"];
     (w.rng as any).next = () => 0.1; // force proc success
 
-    const dead = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 5);
-    const near = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 6, 5);
-    const far = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 8, 5);
+    const dead = spawnEnemyGrid(w, EnemyId.MINION, 5, 5);
+    const near = spawnEnemyGrid(w, EnemyId.MINION, 6, 5);
+    const far = spawnEnemyGrid(w, EnemyId.MINION, 8, 5);
     w.eAlive[dead] = false;
     w.eHp[near] = 1_000_000;
     w.eHpMax[near] = 1_000_000;
@@ -329,8 +329,8 @@ describe("relicExplodeOnKillSystem", () => {
     const w = createWorld({ seed, stage: stageDocks });
     w.relics = ["ACT_DAGGER_ON_KILL_50"];
 
-    const dead = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 9, 9);
-    spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 10, 9);
+    const dead = spawnEnemyGrid(w, EnemyId.MINION, 9, 9);
+    spawnEnemyGrid(w, EnemyId.MINION, 10, 9);
     w.eAlive[dead] = false;
     rebuildEnemyHash(w);
     const dw = getEnemyWorld(w, dead, KENNEY_TILE_WORLD);
@@ -368,7 +368,7 @@ describe("relicExplodeOnKillSystem", () => {
   test("dagger kill source OTHER does not retrigger Soul Shards", () => {
     const w = createWorld({ seed: 16, stage: stageDocks });
     w.relics = ["ACT_DAGGER_ON_KILL_50"];
-    const dead = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 5);
+    const dead = spawnEnemyGrid(w, EnemyId.MINION, 5, 5);
     const dw = getEnemyWorld(w, dead, KENNEY_TILE_WORLD);
     w.events.push({
       type: "ENEMY_KILLED",
@@ -387,10 +387,10 @@ describe("relicExplodeOnKillSystem", () => {
     const w = createWorld({ seed: 31, stage: stageDocks });
     w.relics = ["ACT_IGNITE_SPREAD_ON_DEATH"];
 
-    const dead = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 5);
-    const a = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 6, 5);
-    const b = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 6);
-    const c = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 6, 6);
+    const dead = spawnEnemyGrid(w, EnemyId.MINION, 5, 5);
+    const a = spawnEnemyGrid(w, EnemyId.MINION, 6, 5);
+    const b = spawnEnemyGrid(w, EnemyId.MINION, 5, 6);
+    const c = spawnEnemyGrid(w, EnemyId.MINION, 6, 6);
     w.eAlive[dead] = false;
     w.eAilments[dead] = createEnemyAilmentsState();
     w.eAilments[dead]!.ignite = [
@@ -420,8 +420,8 @@ describe("relicExplodeOnKillSystem", () => {
     const w = createWorld({ seed: 32, stage: stageDocks });
     w.relics = ["ACT_IGNITE_SPREAD_ON_DEATH"];
 
-    const dead = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 5, 5);
-    const a = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 6, 5);
+    const dead = spawnEnemyGrid(w, EnemyId.MINION, 5, 5);
+    const a = spawnEnemyGrid(w, EnemyId.MINION, 6, 5);
     w.eAlive[dead] = false;
     w.eAilments[dead] = createEnemyAilmentsState();
     rebuildEnemyHash(w);
@@ -445,9 +445,9 @@ describe("relicExplodeOnKillSystem", () => {
     const run = () => {
       const w = createWorld({ seed: 33, stage: stageDocks });
       w.relics = ["ACT_IGNITE_SPREAD_ON_DEATH"];
-      const dead = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 10, 10);
-      const t1 = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 11, 10);
-      const t2 = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 10, 11);
+      const dead = spawnEnemyGrid(w, EnemyId.MINION, 10, 10);
+      const t1 = spawnEnemyGrid(w, EnemyId.MINION, 11, 10);
+      const t2 = spawnEnemyGrid(w, EnemyId.MINION, 10, 11);
       w.eAlive[dead] = false;
       w.eAilments[dead] = createEnemyAilmentsState();
       w.eAilments[dead]!.ignite = [
@@ -481,8 +481,8 @@ describe("relicExplodeOnKillSystem", () => {
   test("ACT_IGNITE_SPREAD_ON_DEATH does not trigger on OTHER kill events", () => {
     const w = createWorld({ seed: 34, stage: stageDocks });
     w.relics = ["ACT_IGNITE_SPREAD_ON_DEATH"];
-    const dead = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 12, 12);
-    const a = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 13, 12);
+    const dead = spawnEnemyGrid(w, EnemyId.MINION, 12, 12);
+    const a = spawnEnemyGrid(w, EnemyId.MINION, 13, 12);
     w.eAlive[dead] = false;
     w.eAilments[dead] = createEnemyAilmentsState();
     w.eAilments[dead]!.ignite = [{ kind: "ignite", dps: 20, tLeft: 3 }];

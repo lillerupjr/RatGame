@@ -1,15 +1,15 @@
 // src/game/factories/enemyFactory.ts
 import type { World } from "../../engine/world/world";
 import { registry } from "../content/registry";
-import { ENEMY_TYPE, type EnemyType } from "../content/enemies";
+import { EnemyId } from "../content/enemies";
 import { gridToWorld, worldToGrid } from "../coords/grid";
 import { anchorFromWorld } from "../coords/anchor";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { createEnemyAilmentsState } from "../combat_mods/ailments/enemyAilments";
 import { recordEnemySpawnedHp } from "../balance/balanceCsvLogger";
+import { createEnemyBrainState } from "../systems/enemies/brain";
 
-export { ENEMY_TYPE };
-export type { EnemyType };
+export { EnemyId };
 
 /**
  * Factory: creates one enemy with standardized stats (from registry).
@@ -18,16 +18,13 @@ export type { EnemyType };
 /** Spawn an enemy at grid coordinates with scaled stats. */
 export function spawnEnemyGrid(
     w: World,
-    type: EnemyType,
+    type: EnemyId,
     gx: number,
     gy: number,
     _tileWorld: number = KENNEY_TILE_WORLD
 ) {
     const s = registry.enemy(type);
-    const baseLife = Math.max(
-      1,
-      Math.round(Number.isFinite(s.baseLife) ? s.baseLife : (s.hp ?? 1))
-    );
+    const baseLife = Math.max(1, Math.round(s.stats.baseLife));
 
     // Apply run-heat scaling (damage only).
     const scaling = w.delveScaling ?? { hpMult: 1, damageMult: 1 };
@@ -41,7 +38,7 @@ export function spawnEnemyGrid(
     const effectiveHpMult = hpBase * Math.pow(hpPerDepth, heat);
 
     const scaledHp = Math.max(1, Math.round(baseLife * effectiveHpMult));
-    const scaledDamage = Math.round(s.damage * scaling.damageMult);
+    const scaledDamage = Math.round(s.stats.contactDamage * scaling.damageMult);
 
     // Balance telemetry: record how much HP just entered the world.
     const logger = (w as any).balanceCsvLogger;
@@ -64,8 +61,8 @@ export function spawnEnemyGrid(
     w.eBaseLife.push(baseLife);
     w.eHp.push(scaledHp);
     w.eHpMax.push(scaledHp);
-    w.eR.push(s.radius);
-    w.eSpeed.push(s.speed);
+    w.eR.push(s.body.radius);
+    w.eSpeed.push(s.movement.speed);
     w.eDamage.push(scaledDamage);
     w.ePoisonT.push(0);
     w.ePoisonDps.push(0);
@@ -74,12 +71,13 @@ export function spawnEnemyGrid(
     w.eAilments.push(createEnemyAilmentsState());
     w.ezVisual.push(0);
     w.ezLogical.push(0);
+    w.eBrain.push(createEnemyBrainState(s));
 
     return i;
 }
 
 /** Spawn an enemy at world coordinates (converted to grid). */
-export function spawnEnemy(w: World, type: EnemyType, x: number, y: number) {
+export function spawnEnemy(w: World, type: EnemyId, x: number, y: number) {
     const gp = worldToGrid(x, y, KENNEY_TILE_WORLD);
     return spawnEnemyGrid(w, type, gp.gx, gp.gy, KENNEY_TILE_WORLD);
 }

@@ -5,7 +5,7 @@ import {
 } from "../../../../game/systems/progression/bossTripleObjectiveSync";
 import { OBJECTIVE_TRIGGER_IDS } from "../../../../game/systems/progression/objectiveSpec";
 import { maybeStartFloorEndCountdown } from "../../../../game/systems/progression/floorEndCountdown";
-import { ENEMY_TYPE } from "../../../../game/factories/enemyFactory";
+import { EnemyId } from "../../../../game/factories/enemyFactory";
 import { makeUnknownDamageMeta } from "../../../../game/combat/damageMeta";
 
 function makeBossTripleWorld(): any {
@@ -51,7 +51,7 @@ describe("bossTripleObjectiveSync", () => {
 
   test("records boss zone clears from kill events using ENEMY_KILLED.spawnTriggerId", () => {
     const world = makeBossTripleWorld();
-    world.eType[7] = ENEMY_TYPE.BOSS;
+    world.eType[7] = EnemyId.BOSS;
     world.events.push({
       type: "ENEMY_KILLED",
       enemyIndex: 7,
@@ -68,7 +68,7 @@ describe("bossTripleObjectiveSync", () => {
 
   test("records boss zone clears from kill events using spawn trigger ownership fallback", () => {
     const world = makeBossTripleWorld();
-    world.eType[7] = ENEMY_TYPE.BOSS;
+    world.eType[7] = EnemyId.BOSS;
     world.eSpawnTriggerId[7] = `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}3`;
     world.events.push({
       type: "ENEMY_KILLED",
@@ -85,7 +85,7 @@ describe("bossTripleObjectiveSync", () => {
 
   test("ignores non-boss kills even if trigger ownership matches", () => {
     const world = makeBossTripleWorld();
-    world.eType[7] = ENEMY_TYPE.CHASER;
+    world.eType[7] = EnemyId.MINION;
     world.eSpawnTriggerId[7] = `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}3`;
     world.events.push({
       type: "ENEMY_KILLED",
@@ -111,9 +111,9 @@ describe("bossTripleObjectiveSync", () => {
 
   test("docks boss-triple flow can start floor end countdown after 3 attributed kills", () => {
     const world = makeBossTripleWorld();
-    world.eType[0] = ENEMY_TYPE.BOSS;
-    world.eType[1] = ENEMY_TYPE.BOSS;
-    world.eType[2] = ENEMY_TYPE.BOSS;
+    world.eType[0] = EnemyId.BOSS;
+    world.eType[1] = EnemyId.BOSS;
+    world.eType[2] = EnemyId.BOSS;
     world.floorIndex = 0;
     world.runState = "FLOOR";
     world.floorEndCountdownActive = false;

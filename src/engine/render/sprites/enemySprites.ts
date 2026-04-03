@@ -1,4 +1,4 @@
-import { ENEMY_TYPE, type EnemyType } from "../../../game/content/enemies";
+import { ENEMIES, type EnemyId } from "../../../game/content/enemies";
 import {
     buildPaletteVariantKey,
     resolveActivePaletteId,
@@ -32,85 +32,29 @@ type EnemySpriteDef = {
     frameCount?: number;
 };
 
-const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
-    [ENEMY_TYPE.CHASER]: {
-        skin: "rat1",
-        scale: 1.5,
-        anchorX: 0.5,
-        anchorY: 0.65,
-        frameW: 32,
-        frameH: 32,
-        runAnim: "running-4-frames",
-    },
-    [ENEMY_TYPE.RUNNER]: {
-        skin: "rat2",
-        scale: 1.5,
-        anchorX: 0.5,
-        anchorY: 0.65,
-        frameW: 92,
-        frameH: 92,
-        runAnim: "walk-4-frames",
-    },
-    [ENEMY_TYPE.BRUISER]: {
-        skin: "rat4",
-        scale: 2,
-        anchorX: 0.5,
-        anchorY: 0.65,
-        frameW: 92,
-        frameH: 92,
-        runAnim: "walk-4-frames",
+function getEnemySpriteDef(type: EnemyId): EnemySpriteDef | null {
+    const sprite = ENEMIES[type]?.presentation?.sprite;
+    if (!sprite) return null;
+    return {
+        skin: sprite.skin,
+        scale: sprite.scale,
+        anchorX: sprite.anchorX,
+        anchorY: sprite.anchorY,
+        frameW: sprite.frameW,
+        frameH: sprite.frameH,
+        runAnim: sprite.runAnim,
+        frameCount: sprite.frameCount,
+        source: sprite.packRoot ? { packRoot: sprite.packRoot } : undefined,
+    };
+}
 
-    },
-    [ENEMY_TYPE.MINOTAUR]: {
-        skin: "minotaur",
-        scale: 2,
-        anchorX: 0.5,
-        anchorY: 0.65,
-        frameW: 128,
-        frameH: 128,
-        runAnim: "walk-8-frames",
-        frameCount: 8,
-    },
-    [ENEMY_TYPE.ABOMINATION]: {
-        skin: "abomination",
-        scale: 2,
-        anchorX: 0.5,
-        anchorY: 0.65,
-        frameW: 96,
-        frameH: 96,
-        runAnim: "walk-6-frames",
-        frameCount: 6,
-    },
-    [ENEMY_TYPE.RATCHEMIST]: {
-        skin: "ratchemist",
-        scale: 1.5,
-        anchorX: 0.5,
-        anchorY: 0.65,
-        frameW: 92,
-        frameH: 92,
-        runAnim: "walk",
-        frameCount: 6,
-    },
-    [ENEMY_TYPE.LOOT_GOBLIN]: {
-        skin: "lootGoblin",
-        scale: 1.5,
-        anchorX: 0.5,
-        anchorY: 0.65,
-        frameW: 92,
-        frameH: 92,
-        runAnim: "walk",
-        frameCount: 6,
-    },
-    [ENEMY_TYPE.BOSS]: {
-        skin: "infested",
-        scale: 2,
-        anchorX: 0.5,
-        anchorY: 0.65,
-        frameW: 92,
-        frameH: 92,
-        runAnim: "walk",
-    },
-};
+function findEnemySpriteDefBySkin(skin: string): EnemySpriteDef | null {
+    for (const key of Object.keys(ENEMIES)) {
+        const def = getEnemySpriteDef(Number(key) as EnemyId);
+        if (def?.skin === skin) return def;
+    }
+    return null;
+}
 
 export type EnemySpriteFrameMeta = {
     skin: string;
@@ -121,8 +65,8 @@ export type EnemySpriteFrameMeta = {
     anchorY: number;
 };
 
-export function getEnemySpriteFrameMeta(type: EnemyType): EnemySpriteFrameMeta | null {
-    const def = ENEMY_SPRITES[type];
+export function getEnemySpriteFrameMeta(type: EnemyId): EnemySpriteFrameMeta | null {
+    const def = getEnemySpriteDef(type);
     if (!def) return null;
     return {
         skin: def.skin,
@@ -174,7 +118,8 @@ function getPaletteMap(paletteId: string): Map<string, SpritePack> {
 
 function getRequiredSkins(): string[] {
     const skins = new Set<string>();
-    for (const def of Object.values(ENEMY_SPRITES)) {
+    for (const key of Object.keys(ENEMIES)) {
+        const def = getEnemySpriteDef(Number(key) as EnemyId);
         if (def?.skin) skins.add(def.skin);
     }
     return Array.from(skins);
@@ -182,7 +127,8 @@ function getRequiredSkins(): string[] {
 
 export function listEnemyDynamicAtlasSpriteIds(): string[] {
     const ids = new Set<string>();
-    for (const def of Object.values(ENEMY_SPRITES)) {
+    for (const key of Object.keys(ENEMIES)) {
+        const def = getEnemySpriteDef(Number(key) as EnemyId);
         if (!def?.skin) continue;
         const packRoot = def.source?.packRoot ?? "entities/enemies";
         for (const dirKey of ENEMY_DIR_KEYS) {
@@ -273,7 +219,7 @@ export function preloadEnemySprites(
             });
         }
         preloadStatusByPaletteSkin.set(key, "PENDING");
-        const def = Object.values(ENEMY_SPRITES).find((entry) => entry?.skin === skin);
+        const def = findEnemySpriteDefBySkin(skin);
         const job = preloadSpritePack(skin, {
             source: def?.source,
             animKeys: def?.runAnim ? [def.runAnim] : undefined,
@@ -336,7 +282,7 @@ function preloadEnemySpritesForDarknessPercent(
         ) continue;
         if (preloadByPaletteSkin.has(key)) continue;
         preloadStatusByPaletteSkin.set(key, "PENDING");
-        const def = Object.values(ENEMY_SPRITES).find((entry) => entry?.skin === skin);
+        const def = findEnemySpriteDefBySkin(skin);
         const job = preloadSpritePack(skin, {
             source: def?.source,
             animKeys: def?.runAnim ? [def.runAnim] : undefined,
@@ -375,7 +321,7 @@ function preloadEnemySpritesForDarknessPercent(
 }
 
 export function getEnemySpriteFrame(args: {
-    type: EnemyType;
+    type: EnemyId;
     time: number;
     faceDx: number;
     faceDy: number;
@@ -395,7 +341,7 @@ export function getEnemySpriteFrame(args: {
     anchorY: number;
 }
     | null {
-    const def = ENEMY_SPRITES[args.type];
+    const def = getEnemySpriteDef(args.type);
     if (!def) return null;
     const paletteVariantKey = resolveActivePaletteVariantKey();
     notePaletteRequested(paletteState, paletteVariantKey);
@@ -430,7 +376,7 @@ export function getEnemySpriteFrame(args: {
 }
 
 export function getEnemySpriteFrameForDarknessPercent(args: {
-    type: EnemyType;
+    type: EnemyId;
     time: number;
     faceDx: number;
     faceDy: number;
@@ -451,7 +397,7 @@ export function getEnemySpriteFrameForDarknessPercent(args: {
     anchorY: number;
 }
     | null {
-    const def = ENEMY_SPRITES[args.type];
+    const def = getEnemySpriteDef(args.type);
     if (!def) return null;
     const paletteVariantKey = resolvePaletteVariantKeyForDarknessPercent(args.darknessPercent);
     notePaletteRequested(paletteState, paletteVariantKey);

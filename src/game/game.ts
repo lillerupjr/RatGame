@@ -67,9 +67,9 @@ import {
 } from "./systems/progression/bossTripleObjectiveSync";
 
 import { formatTimeMMSS } from "./util/time";
-import { getBossAccent } from "./content/floors";
+import { getBossAccent, pickFloorEnemyType } from "./content/floors";
 import { registry } from "./content/registry";
-import { spawnEnemyGrid, ENEMY_TYPE, type EnemyType } from "./factories/enemyFactory";
+import { spawnEnemyGrid, EnemyId } from "./factories/enemyFactory";
 import { gridToWorld } from "./coords/grid";
 import { anchorFromWorld } from "./coords/anchor";
 import { fissionSystem } from "./systems/sim/fission";
@@ -103,7 +103,6 @@ import { buildRouteMapLayout, computeScrollTopForNode } from "./map/routeMapLayo
 import { playerSpritesReady, preloadPlayerSprites, setPlayerSkin } from "../engine/render/sprites/playerSprites";
 import { preloadVendorNpcSprites, vendorNpcSpritesReady } from "../engine/render/sprites/vendorSprites";
 import { preloadBackgrounds } from "./render/background";
-import { getProjectileSpriteByKind, preloadProjectileSprites } from "../engine/render/sprites/projectileSprites";
 import { enemySpritesReady, preloadEnemySprites } from "../engine/render/sprites/enemySprites";
 import {
   getSpriteByIdForVariantKey,
@@ -167,7 +166,11 @@ import { tryPurchaseVendorCard, tryPurchaseVendorRelic } from "./vendor/vendorPu
 import { mountCardRewardMenu } from "../ui/rewards/cardRewardMenu";
 import { mountRelicRewardMenu } from "../ui/rewards/relicRewardMenu";
 import { mountVendorShopMenu } from "../ui/vendor/vendorShopMenu";
-import { tickSpawnDirector } from "./balance/spawnDirector";
+import {
+  createPlannedTrashSpawn,
+  queuePlannedTrashSpawns,
+  tickSpawnDirector,
+} from "./balance/spawnDirector";
 import { tickBalanceCsvLogger } from "./balance/balanceCsvLogger";
 import { BASELINE_PLAYER_DPS, computePressure } from "./balance/pressureModel";
 import { DEFAULT_SPAWN_TUNING } from "./balance/spawnTuningDefaults";
@@ -179,11 +182,11 @@ import { createMobileControls } from "../ui/mobile/mobileControls";
 import { renderDialogChoices } from "../ui/dialog/renderDialogChoices";
 import { ensureStarterRelicForCharacter } from "./systems/progression/starterRelics";
 import { getWorldRelicInstances } from "./systems/progression/relics";
-import { bazookaExhaustAssets, bazookaExhaustAssetsReady, preloadBazookaExhaustAssets } from "./vfx/bazookaExhaustAssets";
-import { updateExhaustFollowers } from "./systems/exhaustFollowerSystem";
 import { rewardRunEventProducerSystem } from "./systems/progression/rewardRunEventProducerSystem";
 import { rewardSchedulerSystem } from "./systems/progression/rewardSchedulerSystem";
 import { rewardPresenterSystem } from "./systems/progression/rewardPresenterSystem";
+import { enemyBehaviorSystem } from "./systems/enemies/behavior";
+import { enemyActionSystem } from "./systems/enemies/actions";
 import {
   resetLootGoblinFloorState,
   trySpawnLootGoblinForFloor,
@@ -203,6 +206,7 @@ import {
   buildPaletteSnapshotFloorIntent,
   extractPaletteSnapshotSceneRestoreState,
 } from "./paletteLab/snapshotRestore";
+import { listProjectileTravelSpriteIds } from "./content/projectilePresentationRegistry";
 
 
 type HudRefs = {
@@ -1615,8 +1619,7 @@ export function createGame(args: CreateGameArgs) {
     preloadBackgrounds();
     preloadPlayerSprites();
     preloadVendorNpcSprites();
-    preloadProjectileSprites();
-    preloadBazookaExhaustAssets();
+    preloadRenderSprites();
     preloadNeutralMobSprites();
     preloadSfx();
     preloadKenneyTiles();
@@ -1707,6 +1710,7 @@ export function createGame(args: CreateGameArgs) {
     w.eDamage = [];
     w.ezVisual = [];
     w.ezLogical = [];
+    w.eBrain = [];
     w.ePoisonT = [];
     w.ePoisonDps = [];
     w.ePoisonedOnDeath = [];
@@ -1784,6 +1788,7 @@ export function createGame(args: CreateGameArgs) {
     w.prMeleeRange = [];
     w.prDirX = [];
     w.prDirY = [];
+    w.prSpawnTime = [];
     w.prTtl = [];
     w.prDamageMeta = [];
 
@@ -1818,9 +1823,6 @@ export function createGame(args: CreateGameArgs) {
     // NEW: bouncer arrays must stay index-aligned with all projectile arrays
     (w as any).prBouncesLeft = [];
     (w as any).prWallBounce = [];
-    (w as any).exhaustFollower = {};
-    (w as any).exhaustFollowerFrame = {};
-    (w as any)._nextExhaustFollowerId = 1;
     // Milestone C: clear cached zone floor heights
     (w as any)._zFloorH = [];
 
@@ -1888,8 +1890,8 @@ export function createGame(args: CreateGameArgs) {
 
     for (const enemy of restored.enemies) {
       const enemyType = Number.isFinite(enemy.type)
-        ? (Math.max(0, Math.floor(enemy.type)) as EnemyType)
-        : ENEMY_TYPE.CHASER;
+        ? (Math.max(0, Math.floor(enemy.type)) as EnemyId)
+        : EnemyId.MINION;
       const enemyIndex = spawnEnemyGrid(w, enemyType, enemy.pgxi, enemy.pgyi, KENNEY_TILE_WORLD);
       w.egox[enemyIndex] = enemy.pgox;
       w.egoy[enemyIndex] = enemy.pgoy;
@@ -1918,7 +1920,7 @@ export function createGame(args: CreateGameArgs) {
   function findFirstAliveBossIndex(w: World): number {
     for (let i = 0; i < w.eAlive.length; i++) {
       if (!w.eAlive[i]) continue;
-      if (w.eType[i] === ENEMY_TYPE.BOSS) return i;
+      if (w.eType[i] === EnemyId.BOSS) return i;
     }
     return -1;
   }
@@ -1937,7 +1939,7 @@ export function createGame(args: CreateGameArgs) {
     const radius = w.rng.range(320, 520);
     const wx = pw.wx + Math.cos(angle) * radius;
     const wy = pw.wy + Math.sin(angle) * radius;
-    const spawnedHp = spawnOneEnemyOfType(w, ENEMY_TYPE.BOSS, wx, wy, "elite");
+    const spawnedHp = spawnOneEnemyOfType(w, EnemyId.BOSS, wx, wy, "elite");
     if (spawnedHp > 0) (w as any)._surviveBossSpawned = true;
   }
 
@@ -2192,6 +2194,9 @@ export function createGame(args: CreateGameArgs) {
       w.spawnDirectorState.powerBudget = 0;
       w.spawnDirectorState.pendingHpCommitted = 0;
       w.spawnDirectorState.pendingSpawns = 0;
+      w.spawnDirectorState.pendingSpawnQueue = [];
+      w.spawnDirectorState.waveSpawnQueue = [];
+      w.spawnDirectorState.releaseSpawnsBudget = 0;
       w.spawnDirectorState.waveRemaining = 0;
       w.spawnDirectorState.chunkCooldownSec = 0;
       w.spawnDirectorState.waveCooldownSecLeft = 0;
@@ -2208,7 +2213,14 @@ export function createGame(args: CreateGameArgs) {
     const seed = 10;
 
     if (w.spawnDirectorState && !isPoeMapFloorObjective) {
-      w.spawnDirectorState.pendingSpawns += seed;
+      const tuning = (w as any).balance?.spawnTuning ?? {};
+      const hpBase = typeof tuning.hpBase === "number" ? Math.max(0, tuning.hpBase) : 1.0;
+      const hpPerDepth = typeof tuning.hpPerDepth === "number" ? Math.max(0.0001, tuning.hpPerDepth) : 1.0;
+      const hpMult = hpBase * Math.pow(hpPerDepth, Math.max(0, heat));
+      queuePlannedTrashSpawns(w.spawnDirectorState, seed, () => {
+        const type = pickFloorEnemyType(w);
+        return createPlannedTrashSpawn(type, registry.enemy(type).stats.baseLife * hpMult);
+      });
     }
 
     if ((w as any).debug?.verboseSpawnLogs) {
@@ -2355,7 +2367,7 @@ export function createGame(args: CreateGameArgs) {
     const pw = gridToWorld(pg.gx, pg.gy, KENNEY_TILE_WORLD);
     const sx = pw.wx + Math.cos(a) * r;
     const sy = pw.wy + Math.sin(a) * r;
-    spawnOneEnemyOfType(w, ENEMY_TYPE.BOSS, sx, sy, "elite");
+    spawnOneEnemyOfType(w, EnemyId.BOSS, sx, sy, "elite");
   }
 
   function enterTransition(w: World) {
@@ -2577,8 +2589,6 @@ export function createGame(args: CreateGameArgs) {
     preloadEnemySprites(requiredEnemySkins, awaitedPaletteVariantKey);
     preloadVendorNpcSprites(awaitedPaletteVariantKey);
     preloadNeutralMobSprites(awaitedPaletteVariantKey);
-    preloadProjectileSprites();
-    preloadBazookaExhaustAssets();
     preloadRenderSprites();
 
     const start = performance.now();
@@ -2587,21 +2597,21 @@ export function createGame(args: CreateGameArgs) {
       const tick = () => {
         const elapsed = performance.now() - start;
         const activePaletteVariantKey = resolveActivePaletteVariantKey();
-        const projectileKinds = [1, 2, 5, 7, 8];
+        const projectileSpriteIds = listProjectileTravelSpriteIds();
         let failed = false;
-        const failedProjectileKinds: number[] = [];
-        const pendingProjectileKinds: number[] = [];
+        const failedProjectileSpriteIds: string[] = [];
+        const pendingProjectileSpriteIds: string[] = [];
         let projectilesReady = true;
-        for (let i = 0; i < projectileKinds.length; i++) {
-          const kind = projectileKinds[i];
-          const rec = getProjectileSpriteByKind(kind);
+        for (let i = 0; i < projectileSpriteIds.length; i++) {
+          const spriteId = projectileSpriteIds[i];
+          const rec = getSpriteByIdForVariantKey(spriteId, awaitedPaletteVariantKey);
           const state = classifyLoadedImg(rec as LoadedImg | null | undefined);
           if (state === "FAILED") {
             failed = true;
-            failedProjectileKinds.push(kind);
+            failedProjectileSpriteIds.push(spriteId);
             projectilesReady = false;
           } else if (state === "PENDING") {
-            pendingProjectileKinds.push(kind);
+            pendingProjectileSpriteIds.push(spriteId);
             projectilesReady = false;
           }
         }
@@ -2625,7 +2635,6 @@ export function createGame(args: CreateGameArgs) {
         const vendorReady = vendorNpcSpritesReady(awaitedPaletteVariantKey);
         const enemyReady = enemySpritesReady(requiredEnemySkins, awaitedPaletteVariantKey);
         const neutralReady = neutralMobSpritesReady(awaitedPaletteVariantKey);
-        const bazookaReady = bazookaExhaustAssetsReady();
 
         // Optional gate: vendor + pigeon assets are nice-to-have at map entry.
         const optionalReady = vendorReady && neutralReady;
@@ -2633,7 +2642,6 @@ export function createGame(args: CreateGameArgs) {
         if (!playerReady) blockingGates.push("player");
         if (!enemyReady) blockingGates.push("enemy");
         if (!projectilesReady) blockingGates.push("projectiles");
-        if (!bazookaReady) blockingGates.push("bazooka");
         if (!runtimeReady) blockingGates.push("runtime");
         if (!vendorReady) blockingGates.push("vendor(optional)");
         if (!neutralReady) blockingGates.push("neutral(optional)");
@@ -2642,7 +2650,6 @@ export function createGame(args: CreateGameArgs) {
           playerReady
           && enemyReady
           && projectilesReady
-          && bazookaReady
           && runtimeReady;
 
         if (ready) {
@@ -2670,10 +2677,9 @@ export function createGame(args: CreateGameArgs) {
             enemyReady,
             neutralReady,
             projectilesReady,
-            bazookaReady,
             runtimeReady,
-            failedProjectileKinds,
-            pendingProjectileKinds,
+            failedProjectileSpriteIds,
+            pendingProjectileSpriteIds,
             failedRuntimeIds,
             pendingRuntimeIds,
           });
@@ -2694,10 +2700,9 @@ export function createGame(args: CreateGameArgs) {
             enemyReady,
             neutralReady,
             projectilesReady,
-            bazookaReady,
             runtimeReady,
-            failedProjectileKinds,
-            pendingProjectileKinds,
+            failedProjectileSpriteIds,
+            pendingProjectileSpriteIds,
             failedRuntimeIds,
             pendingRuntimeIds,
           });
@@ -3503,6 +3508,7 @@ export function createGame(args: CreateGameArgs) {
     }
 
     if (!activeDialog && !vendorShopOpen) {
+      enemyBehaviorSystem(world, dtSim);
       movementSystem(world, input, dtSim);
     }
     tickPoeMapObjective(world);
@@ -3523,8 +3529,13 @@ export function createGame(args: CreateGameArgs) {
           getRunHeat: () => getRunHeat(world),
           isBossActive: () => world.runState === "BOSS" || bossAlive(world),
           canSpawnNow: () => world.runState === "FLOOR" && world.phaseTime >= 2,
-          spawnTrash: () => {
-            return spawnOneTrashEnemy(world, undefined, undefined, "trash");
+          planTrashSpawn: () => {
+            const type = pickFloorEnemyType(world);
+            const hpMult = world.spawnDirectorDebug?.spawnHpMult ?? 1;
+            return createPlannedTrashSpawn(type, registry.enemy(type).stats.baseLife * hpMult);
+          },
+          spawnTrash: (planned) => {
+            return spawnOneEnemyOfType(world, planned.type, undefined, undefined, "trash");
           },
         }
       );
@@ -3534,6 +3545,7 @@ export function createGame(args: CreateGameArgs) {
     if (!isNeutralObjectiveFloor && !deathFxActive) {
       combatSystem(world, dtSim);
     }
+    enemyActionSystem(world, dtSim);
     projectilesSystem(world, dtSim);
     collisionsSystem(world, dtSim);
     fissionSystem(world, dtSim);  // Nuclear fission: projectile-projectile collisions
@@ -3546,7 +3558,6 @@ export function createGame(args: CreateGameArgs) {
     triggerSystem(world, dtSim, input);
     tickPoeMapObjective(world);
     relicTriggerSystem(world);
-    updateExhaustFollowers(world as any, dtSim, bazookaExhaustAssets);
     vfxSystem(world, dtSim);
     relicRetriggerSystem(world);
     processCombatTextFromEvents(world, dtSim);

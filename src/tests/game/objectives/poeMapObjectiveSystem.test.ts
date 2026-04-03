@@ -11,7 +11,7 @@ import {
   POE_MAP_PACK_TEMPLATES,
   tickPoeMapObjective,
 } from "../../../game/objectives/poeMapObjectiveSystem";
-import { ENEMY_TYPE } from "../../../game/content/enemies";
+import { EnemyId } from "../../../game/content/enemies";
 import { OBJECTIVE_TRIGGER_IDS } from "../../../game/systems/progression/objectiveSpec";
 import { getEnemyWorld } from "../../../game/coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
@@ -44,38 +44,38 @@ describe("poe map template library", () => {
     expect(byId.size).toBe(6);
 
     expect(byId.get("chaser_swarm")).toMatchObject({ weight: 20, allowMagic: true, allowRareLeader: false });
-    expect(byId.get("chaser_swarm")?.members).toEqual([{ type: ENEMY_TYPE.CHASER, min: 4, max: 6 }]);
+    expect(byId.get("chaser_swarm")?.members).toEqual([{ type: EnemyId.MINION, min: 4, max: 6 }]);
 
     expect(byId.get("runner_swarm")).toMatchObject({ weight: 12, allowMagic: true, allowRareLeader: false });
-    expect(byId.get("runner_swarm")?.members).toEqual([{ type: ENEMY_TYPE.RUNNER, min: 5, max: 7 }]);
+    expect(byId.get("runner_swarm")?.members).toEqual([{ type: EnemyId.RUNNER, min: 5, max: 7 }]);
 
     expect(byId.get("bruiser_frontline")).toMatchObject({ weight: 10, allowMagic: true, allowRareLeader: true });
     expect(byId.get("bruiser_frontline")?.members).toEqual([
-      { type: ENEMY_TYPE.BRUISER, min: 2, max: 3 },
-      { type: ENEMY_TYPE.CHASER, min: 2, max: 4 },
+      { type: EnemyId.TANK, min: 2, max: 3 },
+      { type: EnemyId.MINION, min: 2, max: 4 },
     ]);
 
     expect(byId.get("ratchemist_support")).toMatchObject({ weight: 8, allowMagic: true, allowRareLeader: true });
     expect(byId.get("ratchemist_support")?.members).toEqual([
-      { type: ENEMY_TYPE.RATCHEMIST, min: 1, max: 1 },
-      { type: ENEMY_TYPE.CHASER, min: 3, max: 5 },
+      { type: EnemyId.SPITTER, min: 1, max: 1 },
+      { type: EnemyId.MINION, min: 3, max: 5 },
     ]);
 
-    expect(byId.get("minotaur_guard")).toMatchObject({ weight: 5, allowMagic: true, allowRareLeader: true });
-    expect(byId.get("minotaur_guard")?.members).toEqual([
-      { type: ENEMY_TYPE.MINOTAUR, min: 1, max: 1 },
-      { type: ENEMY_TYPE.BRUISER, min: 2, max: 3 },
+    expect(byId.get("leaper1_guard")).toMatchObject({ weight: 5, allowMagic: true, allowRareLeader: true });
+    expect(byId.get("leaper1_guard")?.members).toEqual([
+      { type: EnemyId.LEAPER1, min: 1, max: 1 },
+      { type: EnemyId.TANK, min: 2, max: 3 },
     ]);
 
     expect(byId.get("abomination_pack")).toMatchObject({ weight: 3, allowMagic: false, allowRareLeader: true });
     expect(byId.get("abomination_pack")?.members).toEqual([
-      { type: ENEMY_TYPE.ABOMINATION, min: 1, max: 1 },
-      { type: ENEMY_TYPE.CHASER, min: 3, max: 4 },
+      { type: EnemyId.BURSTER, min: 1, max: 1 },
+      { type: EnemyId.MINION, min: 3, max: 4 },
     ]);
     expect(byId.has("loot_goblin_encounter")).toBe(false);
     for (const template of POE_MAP_PACK_TEMPLATES) {
       for (const member of template.members) {
-        expect(member.type).not.toBe(ENEMY_TYPE.LOOT_GOBLIN);
+        expect(member.type).not.toBe(EnemyId.LOOT_GOBLIN);
       }
     }
   });
@@ -98,13 +98,13 @@ describe("poe map population runtime", () => {
       expect(pack.budgetCost).toBeLessThanOrEqual(chunkBudget + 1e-6);
       expect(activeMap.blockedTiles.has(`${pack.anchorTx},${pack.anchorTy}`)).toBe(false);
       for (let j = 0; j < pack.members.length; j++) {
-        expect(pack.members[j].type).not.toBe(ENEMY_TYPE.BOSS);
-        expect(pack.members[j].type).not.toBe(ENEMY_TYPE.LOOT_GOBLIN);
+        expect(pack.members[j].type).not.toBe(EnemyId.BOSS);
+        expect(pack.members[j].type).not.toBe(EnemyId.LOOT_GOBLIN);
       }
     }
 
     for (let i = 0; i < world.eType.length; i++) {
-      expect(world.eType[i]).not.toBe(ENEMY_TYPE.LOOT_GOBLIN);
+      expect(world.eType[i]).not.toBe(EnemyId.LOOT_GOBLIN);
     }
 
     // Regression guard: PoE pack tile placement must map into in-bounds world positions.

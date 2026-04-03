@@ -3,13 +3,13 @@ import { AILMENT_TICK_INTERVAL_SEC } from "../ailments/ailmentTypes";
 import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
 import type { World } from "../../../engine/world/world";
 import { emitEvent } from "../../../engine/world/world";
-import { onEnemyKilledForChallenge } from "../../systems/progression/roomChallenge";
 import { getEnemyWorld } from "../../coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getCardById } from "../content/cards/cardPool";
 import { resolveDotStats } from "../stats/combatStatsResolver";
 import { makeAilmentDotMeta } from "../../combat/damageMeta";
 import { DOT_TICK_INTERVAL_SEC } from "../../combat/dot/dotConstants";
+import { finalizeEnemyDeath } from "../../systems/enemies/finalize";
 
 function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
@@ -189,21 +189,14 @@ export function tickAilmentsOnce(w: any, dtTick: number): void {
 
       if (w.eHp[e] > 0) continue;
 
-      w.eAlive[e] = false;
-      w.kills = (w.kills ?? 0) + 1;
-      if ("roomChallengeActive" in w && "roomChallengeKillsCount" in w) {
-        onEnemyKilledForChallenge(w as World);
-      }
       w.ePoisonedOnDeath ??= [];
       w.ePoisonedOnDeath[e] = st.poison.length > 0;
-      emitEvent(w, {
-        type: "ENEMY_KILLED",
-        enemyIndex: e,
+      finalizeEnemyDeath(w as World, e, {
+        damageMeta: ailmentMeta,
+        source: "OTHER",
         x: pos.x,
         y: pos.y,
-        spawnTriggerId: w.eSpawnTriggerId?.[e],
-        source: "OTHER",
-        damageMeta: ailmentMeta,
+        recordPoisonedOnDeath: false,
       });
       break;
     }
@@ -227,4 +220,3 @@ export function ailmentTickSystem(w: any, dt: number): void {
     tickAilmentsOnce(w, DOT_TICK_INTERVAL_SEC);
   }
 }
-

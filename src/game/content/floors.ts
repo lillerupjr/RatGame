@@ -1,7 +1,7 @@
 // src/game/content/floors.ts
 import type { World } from "../../engine/world/world";
 import type { StageId } from "./stages";
-import { ENEMY_TYPE, type EnemyType } from "./enemies";
+import { EnemyId } from "./enemies";
 
 export type FloorId = "DOCKS" | "SEWERS" | "CHINATOWN";
 
@@ -18,7 +18,7 @@ export type FloorVisual = {
     decalEvery: number;
 };
 
-export type Weight = { type: EnemyType; w: number };
+export type Weight = { type: EnemyId; w: number };
 
 export type FloorSpawnProfile = {
     cadence: number; // seconds between trickle spawn ticks
@@ -75,25 +75,28 @@ export const FLOORS: readonly FloorDef[] = [
             ringMax: 680,
 
             early: [
-                { type: ENEMY_TYPE.CHASER, w: 0.78 },
-                { type: ENEMY_TYPE.RUNNER, w: 0.16 },
-                { type: ENEMY_TYPE.RATCHEMIST, w: 0.06 },
+                { type: EnemyId.MINION, w: 0.74 },
+                { type: EnemyId.RUNNER, w: 0.16 },
+                { type: EnemyId.SPITTER, w: 0.06 },
+                { type: EnemyId.SHARD_RAT, w: 0.04 },
             ],
             mid: [
-                { type: ENEMY_TYPE.CHASER, w: 0.48 },
-                { type: ENEMY_TYPE.RUNNER, w: 0.28 },
-                { type: ENEMY_TYPE.BRUISER, w: 0.08 },
-                { type: ENEMY_TYPE.RATCHEMIST, w: 0.08 },
-                { type: ENEMY_TYPE.MINOTAUR, w: 0.04 },
-                { type: ENEMY_TYPE.ABOMINATION, w: 0.04 },
+                { type: EnemyId.MINION, w: 0.44 },
+                { type: EnemyId.RUNNER, w: 0.24 },
+                { type: EnemyId.TANK, w: 0.08 },
+                { type: EnemyId.SPITTER, w: 0.08 },
+                { type: EnemyId.LEAPER1, w: 0.04 },
+                { type: EnemyId.BURSTER, w: 0.04 },
+                { type: EnemyId.SHARD_RAT, w: 0.08 },
             ],
             late: [
-                { type: ENEMY_TYPE.CHASER, w: 0.32 },
-                { type: ENEMY_TYPE.RUNNER, w: 0.26 },
-                { type: ENEMY_TYPE.BRUISER, w: 0.18 },
-                { type: ENEMY_TYPE.RATCHEMIST, w: 0.10 },
-                { type: ENEMY_TYPE.MINOTAUR, w: 0.07 },
-                { type: ENEMY_TYPE.ABOMINATION, w: 0.07 },
+                { type: EnemyId.MINION, w: 0.28 },
+                { type: EnemyId.RUNNER, w: 0.22 },
+                { type: EnemyId.TANK, w: 0.16 },
+                { type: EnemyId.SPITTER, w: 0.10 },
+                { type: EnemyId.LEAPER1, w: 0.06 },
+                { type: EnemyId.BURSTER, w: 0.06 },
+                { type: EnemyId.SHARD_RAT, w: 0.12 },
             ],
         },
         bossTitle: "Dock Kingpin",
@@ -122,27 +125,30 @@ export const FLOORS: readonly FloorDef[] = [
             ringMax: 700,
 
             early: [
-                { type: ENEMY_TYPE.CHASER, w: 0.55 },
-                { type: ENEMY_TYPE.RUNNER, w: 0.20 },
-                { type: ENEMY_TYPE.BRUISER, w: 0.12 },
-                { type: ENEMY_TYPE.RATCHEMIST, w: 0.07 },
-                { type: ENEMY_TYPE.ABOMINATION, w: 0.06 },
+                { type: EnemyId.MINION, w: 0.49 },
+                { type: EnemyId.RUNNER, w: 0.18 },
+                { type: EnemyId.TANK, w: 0.12 },
+                { type: EnemyId.SPITTER, w: 0.07 },
+                { type: EnemyId.BURSTER, w: 0.06 },
+                { type: EnemyId.SHARD_RAT, w: 0.08 },
             ],
             mid: [
-                { type: ENEMY_TYPE.CHASER, w: 0.35 },
-                { type: ENEMY_TYPE.RUNNER, w: 0.20 },
-                { type: ENEMY_TYPE.BRUISER, w: 0.20 },
-                { type: ENEMY_TYPE.RATCHEMIST, w: 0.09 },
-                { type: ENEMY_TYPE.MINOTAUR, w: 0.08 },
-                { type: ENEMY_TYPE.ABOMINATION, w: 0.08 },
+                { type: EnemyId.MINION, w: 0.31 },
+                { type: EnemyId.RUNNER, w: 0.18 },
+                { type: EnemyId.TANK, w: 0.18 },
+                { type: EnemyId.SPITTER, w: 0.09 },
+                { type: EnemyId.LEAPER1, w: 0.07 },
+                { type: EnemyId.BURSTER, w: 0.07 },
+                { type: EnemyId.SHARD_RAT, w: 0.10 },
             ],
             late: [
-                { type: ENEMY_TYPE.CHASER, w: 0.24 },
-                { type: ENEMY_TYPE.RUNNER, w: 0.18 },
-                { type: ENEMY_TYPE.BRUISER, w: 0.26 },
-                { type: ENEMY_TYPE.RATCHEMIST, w: 0.10 },
-                { type: ENEMY_TYPE.MINOTAUR, w: 0.11 },
-                { type: ENEMY_TYPE.ABOMINATION, w: 0.11 },
+                { type: EnemyId.MINION, w: 0.20 },
+                { type: EnemyId.RUNNER, w: 0.16 },
+                { type: EnemyId.TANK, w: 0.22 },
+                { type: EnemyId.SPITTER, w: 0.10 },
+                { type: EnemyId.LEAPER1, w: 0.10 },
+                { type: EnemyId.BURSTER, w: 0.10 },
+                { type: EnemyId.SHARD_RAT, w: 0.12 },
             ],
         },
         bossTitle: "Sludge Matron",
@@ -172,27 +178,30 @@ export const FLOORS: readonly FloorDef[] = [
             ringMax: 720,
 
             early: [
-                { type: ENEMY_TYPE.RUNNER, w: 0.52 },
-                { type: ENEMY_TYPE.CHASER, w: 0.30 },
-                { type: ENEMY_TYPE.BRUISER, w: 0.05 },
-                { type: ENEMY_TYPE.RATCHEMIST, w: 0.08 },
-                { type: ENEMY_TYPE.MINOTAUR, w: 0.05 },
+                { type: EnemyId.RUNNER, w: 0.48 },
+                { type: EnemyId.MINION, w: 0.28 },
+                { type: EnemyId.TANK, w: 0.05 },
+                { type: EnemyId.SPITTER, w: 0.08 },
+                { type: EnemyId.LEAPER1, w: 0.05 },
+                { type: EnemyId.SHARD_RAT, w: 0.06 },
             ],
             mid: [
-                { type: ENEMY_TYPE.RUNNER, w: 0.36 },
-                { type: ENEMY_TYPE.CHASER, w: 0.22 },
-                { type: ENEMY_TYPE.BRUISER, w: 0.16 },
-                { type: ENEMY_TYPE.RATCHEMIST, w: 0.10 },
-                { type: ENEMY_TYPE.MINOTAUR, w: 0.08 },
-                { type: ENEMY_TYPE.ABOMINATION, w: 0.08 },
+                { type: EnemyId.RUNNER, w: 0.32 },
+                { type: EnemyId.MINION, w: 0.18 },
+                { type: EnemyId.TANK, w: 0.15 },
+                { type: EnemyId.SPITTER, w: 0.10 },
+                { type: EnemyId.LEAPER1, w: 0.08 },
+                { type: EnemyId.BURSTER, w: 0.08 },
+                { type: EnemyId.SHARD_RAT, w: 0.09 },
             ],
             late: [
-                { type: ENEMY_TYPE.RUNNER, w: 0.24 },
-                { type: ENEMY_TYPE.CHASER, w: 0.16 },
-                { type: ENEMY_TYPE.BRUISER, w: 0.26 },
-                { type: ENEMY_TYPE.RATCHEMIST, w: 0.10 },
-                { type: ENEMY_TYPE.MINOTAUR, w: 0.12 },
-                { type: ENEMY_TYPE.ABOMINATION, w: 0.12 },
+                { type: EnemyId.RUNNER, w: 0.20 },
+                { type: EnemyId.MINION, w: 0.14 },
+                { type: EnemyId.TANK, w: 0.22 },
+                { type: EnemyId.SPITTER, w: 0.10 },
+                { type: EnemyId.LEAPER1, w: 0.12 },
+                { type: EnemyId.BURSTER, w: 0.12 },
+                { type: EnemyId.SHARD_RAT, w: 0.10 },
             ],
         },
         bossTitle: "Neon Triad Captain",
@@ -205,21 +214,21 @@ export function floorForIndex(idx: number): FloorDef {
     return FLOORS[i];
 }
 
-function pickWeighted(w: World, weights: Weight[]): EnemyType {
+function pickWeighted(w: World, weights: Weight[]): EnemyId {
     let sum = 0;
     for (const it of weights) sum += Math.max(0, it.w);
 
-    if (sum <= 0) return ENEMY_TYPE.CHASER;
+    if (sum <= 0) return EnemyId.MINION;
 
     let r = w.rng.range(0, sum);
     for (const it of weights) {
         r -= Math.max(0, it.w);
         if (r <= 0) return it.type;
     }
-    return weights[weights.length - 1]?.type ?? ENEMY_TYPE.CHASER;
+    return weights[weights.length - 1]?.type ?? EnemyId.MINION;
 }
 
-export function pickFloorEnemyType(w: World): EnemyType {
+export function pickFloorEnemyType(w: World): EnemyId {
     const f = floorForIndex(w.floorIndex ?? 0);
     const t = w.phaseTime ?? 0;
 

@@ -1,8 +1,13 @@
 import { describe, expect, test } from "vitest";
 import { createDpsMetrics } from "../../../game/balance/dpsMetrics";
-import { createSpawnDirectorState, tickSpawnDirector, type SpawnDirectorConfig } from "../../../game/balance/spawnDirector";
+import {
+  createPlannedTrashSpawn,
+  createSpawnDirectorState,
+  tickSpawnDirector,
+  type SpawnDirectorConfig,
+} from "../../../game/balance/spawnDirector";
 import type { ExpectedPowerBudgetConfig, ExpectedPowerConfig } from "../../../game/balance/expectedPower";
-import { ENEMY_TYPE } from "../../../game/content/enemies";
+import { EnemyId } from "../../../game/content/enemies";
 import { registry } from "../../../game/content/registry";
 
 const cfg: SpawnDirectorConfig = {
@@ -40,9 +45,9 @@ const powerBudgetCfg: ExpectedPowerBudgetConfig = {
 };
 
 const TARGET_REPRESENTATIVE_HP = 20;
-const chaserBaseLife = registry.enemy(ENEMY_TYPE.CHASER).baseLife ?? 1;
+const minionBaseLife = registry.enemy(EnemyId.MINION).stats.baseLife;
 const hpBaseForRepresentativeHp =
-  TARGET_REPRESENTATIVE_HP / Math.max(1, chaserBaseLife);
+  TARGET_REPRESENTATIVE_HP / Math.max(1, minionBaseLife);
 
 describe("spawnDirector interval queue", () => {
   test("same heat yields same scaling regardless of map-depth presentation", () => {
@@ -71,12 +76,14 @@ describe("spawnDirector interval queue", () => {
       getRunHeat: () => 10,
       isBossActive: () => false,
       canSpawnNow: () => false,
+      planTrashSpawn: () => createPlannedTrashSpawn(EnemyId.MINION, TARGET_REPRESENTATIVE_HP),
       spawnTrash: () => true,
     });
     tickSpawnDirector(wB, 1, cfg, expectedCfg, powerBudgetCfg, stateB, {
       getRunHeat: () => 10,
       isBossActive: () => false,
       canSpawnNow: () => false,
+      planTrashSpawn: () => createPlannedTrashSpawn(EnemyId.MINION, TARGET_REPRESENTATIVE_HP),
       spawnTrash: () => true,
     });
 
@@ -108,6 +115,7 @@ describe("spawnDirector interval queue", () => {
       getRunHeat: () => 0,
       isBossActive: () => false,
       canSpawnNow: () => false,
+      planTrashSpawn: () => createPlannedTrashSpawn(EnemyId.MINION, TARGET_REPRESENTATIVE_HP),
       spawnTrash: () => {
         spawned += 1;
         return true;
@@ -144,14 +152,15 @@ describe("spawnDirector interval queue", () => {
       getRunHeat: () => 0,
       isBossActive: () => false,
       canSpawnNow: () => true,
+      planTrashSpawn: () => createPlannedTrashSpawn(EnemyId.TANK, 40),
       // Spend more than representative HP (20) per spawn: 40 HP each.
       spawnTrash: () => 40,
     });
 
-    // 208 HP budget generated, 10 pending reserved (200), first chunk spawns 3 => 120 HP consumed.
+    // 208 HP budget generated, 5 tank spawns reserved (200), first chunk spawns 3 => 120 HP consumed.
     expect(w.spawnDirectorDebug.powerBudget).toBeCloseTo(88);
-    expect((w.spawnDirectorDebug as any).pendingHpCommitted).toBeCloseTo(140);
-    expect(state.waveRemaining).toBe(7);
+    expect((w.spawnDirectorDebug as any).pendingHpCommitted).toBeCloseTo(80);
+    expect(state.waveRemaining).toBe(2);
   });
 
   test("spawn director telemetry pressure exceeds 50 and keeps climbing over long time", () => {
@@ -177,6 +186,7 @@ describe("spawnDirector interval queue", () => {
       getRunHeat: () => 1,
       isBossActive: () => false,
       canSpawnNow: () => false,
+      planTrashSpawn: () => createPlannedTrashSpawn(EnemyId.MINION, TARGET_REPRESENTATIVE_HP),
       spawnTrash: () => true,
     });
     const p1 = w.spawnDirectorDebug.pressure;
@@ -188,6 +198,7 @@ describe("spawnDirector interval queue", () => {
       getRunHeat: () => 1,
       isBossActive: () => false,
       canSpawnNow: () => false,
+      planTrashSpawn: () => createPlannedTrashSpawn(EnemyId.MINION, TARGET_REPRESENTATIVE_HP),
       spawnTrash: () => true,
     });
     const p2 = w.spawnDirectorDebug.pressure;
@@ -222,6 +233,7 @@ describe("spawnDirector interval queue", () => {
         getRunHeat: () => 0,
         isBossActive: () => false,
         canSpawnNow: () => true,
+        planTrashSpawn: () => createPlannedTrashSpawn(EnemyId.MINION, TARGET_REPRESENTATIVE_HP),
         spawnTrash: () => {
           spawned += 1;
           return true;

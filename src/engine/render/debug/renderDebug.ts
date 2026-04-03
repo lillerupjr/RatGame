@@ -7,7 +7,7 @@ import { KENNEY_TILE_ANCHOR_Y, KENNEY_TILE_WORLD } from "../kenneyTiles";
 import { getTileSpriteById } from "../sprites/renderSprites";
 import { getEnemyAimDebugInfo, getEnemyAimWorld } from "../../../game/combat/aimPoints";
 import { getEnemyWorld } from "../../../game/coords/worldViews";
-import { ENEMIES, type EnemyType } from "../../../game/content/enemies";
+import { ENEMIES, type EnemyId } from "../../../game/content/enemies";
 import { getLootGoblinDebugSnapshot } from "../../../game/systems/progression/lootGoblin";
 import {
   getApronDebugStats,
@@ -867,7 +867,7 @@ export function drawEnemyAimOverlay(ctx: DebugOverlayContext, show: boolean) {
     c.arc(aimScreen.x, aimScreen.y, 3, 0, Math.PI * 2);
     c.fill();
 
-    const enemyType = ctx.w.eType[enemyIndex] as EnemyType;
+    const enemyType = ctx.w.eType[enemyIndex] as EnemyId;
     const enemyName = ENEMIES[enemyType]?.name ?? `Enemy ${enemyType}`;
     const info = getEnemyAimDebugInfo(ctx.w, enemyIndex);
     const line1 = `${enemyName} t:${enemyType} skin:${info.skin ?? "unknown"}`;

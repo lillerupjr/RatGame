@@ -22,6 +22,7 @@ import type { FloorRewardBudget } from "../../game/rewards/floorRewardBudget";
 import type { RunEvent } from "../../game/rewards/runEvents";
 import type { RewardTicket } from "../../game/rewards/rewardTickets";
 import type { VendorState } from "../../game/vendor/vendorState";
+import type { EnemyBrainState } from "../../game/systems/enemies/brain";
 import { createDpsMetrics, type DpsMetricsState } from "../../game/balance/dpsMetrics";
 import {
   createSpawnDirectorState,
@@ -406,6 +407,7 @@ export type World = {
   eDamage: number[];
   ezVisual: number[];
   ezLogical: number[];
+  eBrain: (EnemyBrainState | undefined)[];
 
   // Poison (enemy status)
   ePoisonT: number[];
@@ -475,6 +477,7 @@ export type World = {
   prMeleeRange: number[];
   prDirX: number[];
   prDirY: number[];
+  prSpawnTime: number[];
   prTtl: number[];
   prBouncesLeft: number[];
   prDamageMeta: (DamageMeta | undefined)[];
@@ -765,7 +768,7 @@ export function createWorld(args: CreateWorldArgs): World {
 
     activeFloorH: 0,
 
-    baseMoveSpeed: 300,
+    baseMoveSpeed: 240,
     basePickupRadius: 180,
 
     pSpeed: 260,
@@ -885,6 +888,7 @@ export function createWorld(args: CreateWorldArgs): World {
     eDamage: [],
     ezVisual: [],
     ezLogical: [],
+    eBrain: [],
 
     ePoisonT: [],
     ePoisonDps: [],
@@ -942,6 +946,7 @@ export function createWorld(args: CreateWorldArgs): World {
     prMeleeRange: [],
     prDirX: [],
     prDirY: [],
+    prSpawnTime: [],
     prTtl: [],
     prBouncesLeft: [],
     prDamageMeta: [],
