@@ -67,7 +67,7 @@ import {
 } from "./systems/progression/bossTripleObjectiveSync";
 
 import { formatTimeMMSS } from "./util/time";
-import { getBossAccent, pickFloorEnemyType } from "./content/floors";
+import { getBossAccent } from "./content/floors";
 import { registry } from "./content/registry";
 import { spawnEnemyGrid, EnemyId } from "./factories/enemyFactory";
 import { gridToWorld } from "./coords/grid";
@@ -166,11 +166,7 @@ import { tryPurchaseVendorCard, tryPurchaseVendorRelic } from "./vendor/vendorPu
 import { mountCardRewardMenu } from "../ui/rewards/cardRewardMenu";
 import { mountRelicRewardMenu } from "../ui/rewards/relicRewardMenu";
 import { mountVendorShopMenu } from "../ui/vendor/vendorShopMenu";
-import {
-  createPlannedTrashSpawn,
-  queuePlannedTrashSpawns,
-  tickSpawnDirector,
-} from "./balance/spawnDirector";
+import { tickSpawnDirector } from "./balance/spawnDirector";
 import { tickBalanceCsvLogger } from "./balance/balanceCsvLogger";
 import { BASELINE_PLAYER_DPS, computePressure } from "./balance/pressureModel";
 import { DEFAULT_SPAWN_TUNING } from "./balance/spawnTuningDefaults";
@@ -2194,9 +2190,6 @@ export function createGame(args: CreateGameArgs) {
       w.spawnDirectorState.powerBudget = 0;
       w.spawnDirectorState.pendingHpCommitted = 0;
       w.spawnDirectorState.pendingSpawns = 0;
-      w.spawnDirectorState.pendingSpawnQueue = [];
-      w.spawnDirectorState.waveSpawnQueue = [];
-      w.spawnDirectorState.releaseSpawnsBudget = 0;
       w.spawnDirectorState.waveRemaining = 0;
       w.spawnDirectorState.chunkCooldownSec = 0;
       w.spawnDirectorState.waveCooldownSecLeft = 0;
@@ -2213,14 +2206,7 @@ export function createGame(args: CreateGameArgs) {
     const seed = 10;
 
     if (w.spawnDirectorState && !isPoeMapFloorObjective) {
-      const tuning = (w as any).balance?.spawnTuning ?? {};
-      const hpBase = typeof tuning.hpBase === "number" ? Math.max(0, tuning.hpBase) : 1.0;
-      const hpPerDepth = typeof tuning.hpPerDepth === "number" ? Math.max(0.0001, tuning.hpPerDepth) : 1.0;
-      const hpMult = hpBase * Math.pow(hpPerDepth, Math.max(0, heat));
-      queuePlannedTrashSpawns(w.spawnDirectorState, seed, () => {
-        const type = pickFloorEnemyType(w);
-        return createPlannedTrashSpawn(type, registry.enemy(type).stats.baseLife * hpMult);
-      });
+      w.spawnDirectorState.pendingSpawns += seed;
     }
 
     if ((w as any).debug?.verboseSpawnLogs) {
@@ -3529,13 +3515,8 @@ export function createGame(args: CreateGameArgs) {
           getRunHeat: () => getRunHeat(world),
           isBossActive: () => world.runState === "BOSS" || bossAlive(world),
           canSpawnNow: () => world.runState === "FLOOR" && world.phaseTime >= 2,
-          planTrashSpawn: () => {
-            const type = pickFloorEnemyType(world);
-            const hpMult = world.spawnDirectorDebug?.spawnHpMult ?? 1;
-            return createPlannedTrashSpawn(type, registry.enemy(type).stats.baseLife * hpMult);
-          },
-          spawnTrash: (planned) => {
-            return spawnOneEnemyOfType(world, planned.type, undefined, undefined, "trash");
+          spawnTrash: () => {
+            return spawnOneTrashEnemy(world, undefined, undefined, "trash");
           },
         }
       );

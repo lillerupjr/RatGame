@@ -1,14 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { createDpsMetrics } from "../../../game/balance/dpsMetrics";
-import {
-  createPlannedTrashSpawn,
-  createSpawnDirectorState,
-  queuePlannedTrashSpawn,
-  tickSpawnDirector,
-  type SpawnDirectorConfig,
-} from "../../../game/balance/spawnDirector";
+import { createSpawnDirectorState, tickSpawnDirector, type SpawnDirectorConfig } from "../../../game/balance/spawnDirector";
 import type { ExpectedPowerBudgetConfig, ExpectedPowerConfig } from "../../../game/balance/expectedPower";
-import { EnemyId } from "../../../game/content/enemies";
 
 const cfg: SpawnDirectorConfig = {
   enabled: true,
@@ -47,9 +40,7 @@ const powerBudgetCfg: ExpectedPowerBudgetConfig = {
 describe("spawnDirector wave scheduler", () => {
   test("queues then releases chunked wave over cadence", () => {
     const state = createSpawnDirectorState();
-    for (let i = 0; i < 10; i++) {
-      queuePlannedTrashSpawn(state, createPlannedTrashSpawn(EnemyId.MINION, 20));
-    }
+    state.pendingSpawns = 50;
     let spawns = 0;
     const w: any = { timeSec: 0, metrics: { dps: createDpsMetrics() } };
 
@@ -57,7 +48,6 @@ describe("spawnDirector wave scheduler", () => {
       getRunHeat: () => 0,
       isBossActive: () => false,
       canSpawnNow: () => true,
-      planTrashSpawn: () => createPlannedTrashSpawn(EnemyId.MINION, 20),
       spawnTrash: () => {
         spawns += 1;
         return true;
@@ -65,7 +55,7 @@ describe("spawnDirector wave scheduler", () => {
     });
     expect(spawns).toBe(3);
     expect(state.waveRemaining).toBe(7);
-    expect(state.pendingSpawns).toBe(0);
+    expect(state.pendingSpawns).toBe(40);
     expect(state.chunkCooldownSec).toBeCloseTo(1.0);
     expect(state.lastChunkSize).toBe(3);
 
@@ -73,7 +63,6 @@ describe("spawnDirector wave scheduler", () => {
       getRunHeat: () => 0,
       isBossActive: () => false,
       canSpawnNow: () => true,
-      planTrashSpawn: () => createPlannedTrashSpawn(EnemyId.MINION, 20),
       spawnTrash: () => {
         spawns += 1;
         return true;
@@ -85,7 +74,6 @@ describe("spawnDirector wave scheduler", () => {
       getRunHeat: () => 0,
       isBossActive: () => false,
       canSpawnNow: () => true,
-      planTrashSpawn: () => createPlannedTrashSpawn(EnemyId.MINION, 20),
       spawnTrash: () => {
         spawns += 1;
         return true;
@@ -100,14 +88,11 @@ describe("spawnDirector wave scheduler", () => {
     let spawns = 0;
     const w: any = { timeSec: 0, metrics: { dps: createDpsMetrics() } };
 
-    for (let i = 0; i < 5; i++) {
-      queuePlannedTrashSpawn(state, createPlannedTrashSpawn(EnemyId.MINION, 20));
-    }
+    state.pendingSpawns = 5;
     tickSpawnDirector(w, 0.016, cfg, expectedZero, powerBudgetCfg, state, {
       getRunHeat: () => 0,
       isBossActive: () => false,
       canSpawnNow: () => true,
-      planTrashSpawn: () => createPlannedTrashSpawn(EnemyId.MINION, 20),
       spawnTrash: () => {
         spawns += 1;
         return true;
@@ -116,12 +101,11 @@ describe("spawnDirector wave scheduler", () => {
     expect(spawns).toBe(0);
     expect(state.pendingSpawns).toBe(5);
 
-    queuePlannedTrashSpawn(state, createPlannedTrashSpawn(EnemyId.MINION, 20)); // now 6
+    state.pendingSpawns += 1; // now 6
     tickSpawnDirector(w, 0.016, cfg, expectedZero, powerBudgetCfg, state, {
       getRunHeat: () => 0,
       isBossActive: () => false,
       canSpawnNow: () => true,
-      planTrashSpawn: () => createPlannedTrashSpawn(EnemyId.MINION, 20),
       spawnTrash: () => {
         spawns += 1;
         return true;
@@ -141,7 +125,6 @@ describe("spawnDirector wave scheduler", () => {
       getRunHeat: () => 0,
       isBossActive: () => false,
       canSpawnNow: () => false,
-      planTrashSpawn: () => createPlannedTrashSpawn(EnemyId.MINION, 20),
       spawnTrash: () => {
         spawns += 1;
         return true;

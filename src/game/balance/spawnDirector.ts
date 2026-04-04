@@ -28,19 +28,12 @@ export interface SpawnDirectorConfig {
   baseSpawnIntervalSec?: number;
 }
 
-export interface PlannedTrashSpawn {
-  type: EnemyId;
-  hpCost: number;
-}
-
 export interface SpawnDirectorState {
   powerBudget: number;
   pendingHpCommitted: number;
   pendingSpawns: number;
   releaseSpawnsBudget: number;
   waveRemaining: number;
-  pendingSpawnQueue: PlannedTrashSpawn[];
-  waveSpawnQueue: PlannedTrashSpawn[];
   chunkCooldownSec: number;
   waveCooldownSecLeft: number;
   lastChunkSize: number;
@@ -59,8 +52,6 @@ export function createSpawnDirectorState(): SpawnDirectorState {
     pendingSpawns: 0,
     releaseSpawnsBudget: 0,
     waveRemaining: 0,
-    pendingSpawnQueue: [],
-    waveSpawnQueue: [],
     chunkCooldownSec: 0,
     waveCooldownSecLeft: 0,
     lastChunkSize: 0,
@@ -125,16 +116,12 @@ function waveMultiplier(cfg: SpawnDirectorConfig, nowSec: number): number {
   return cfg.waveLowMult + (cfg.waveHighMult - cfg.waveLowMult) * s;
 }
 
-function syncSpawnCounts(state: SpawnDirectorState): void {
-  state.pendingSpawns = state.pendingSpawnQueue.length;
-  state.waveRemaining = state.waveSpawnQueue.length;
-}
-
 function resolveSpawnModelMultipliers(w: any, heat: number): {
   spawnMult: number;
   hpMult: number;
   pressureAt0Sec: number;
   pressureAt120Sec: number;
+  representativeEnemyHp: number;
 } {
   const tuning = w.balance?.spawnTuning ?? {};
   const pressureAt0Sec =
@@ -157,11 +144,16 @@ function resolveSpawnModelMultipliers(w: any, heat: number): {
     typeof tuning.hpPerDepth === "number" ? tuning.hpPerDepth : DEFAULT_SPAWN_TUNING.hpPerDepth;
   const hpMult = Math.max(0, hpBase) * Math.pow(Math.max(0.0001, hpPerDepth), heat);
 
+  const chaserDef = registry.enemy(EnemyId.MINION);
+  const baseEnemyHp = Math.max(1, chaserDef.stats.baseLife);
+  const representativeEnemyHp = Math.max(1, baseEnemyHp * hpMult);
+
   return {
     spawnMult,
     hpMult,
     pressureAt0Sec,
     pressureAt120Sec,
+    representativeEnemyHp,
   };
 }
 
@@ -194,39 +186,8 @@ export function computeSurviveEquivalentSpawnCountForDurationSeconds(w: any, dur
   const heat = Math.max(0, Math.floor(safeNum(w.runHeat, 0)));
   const multipliers = resolveSpawnModelMultipliers(w, heat);
   const hpBudget = computeSurviveBudgetForDurationSeconds(w, duration);
-  const baselineEnemyHp = Math.max(1, registry.enemy(EnemyId.MINION).stats.baseLife * multipliers.hpMult);
-  if (baselineEnemyHp <= 0) return 0;
-  return hpBudget / baselineEnemyHp;
-}
-
-export function createPlannedTrashSpawn(type: EnemyId, hpCost: number): PlannedTrashSpawn {
-  return {
-    type,
-    hpCost: Math.max(1, Math.round(hpCost)),
-  };
-}
-
-export function queuePlannedTrashSpawn(state: SpawnDirectorState, planned: PlannedTrashSpawn): void {
-  state.pendingSpawnQueue.push(planned);
-  state.pendingHpCommitted += planned.hpCost;
-  state.releaseSpawnsBudget += 1;
-  syncSpawnCounts(state);
-}
-
-export function queuePlannedTrashSpawns(
-  state: SpawnDirectorState,
-  count: number,
-  planner: () => PlannedTrashSpawn | null,
-): number {
-  let queued = 0;
-  const maxCount = Math.max(0, Math.floor(count));
-  for (let i = 0; i < maxCount; i++) {
-    const planned = planner();
-    if (!planned) break;
-    queuePlannedTrashSpawn(state, planned);
-    queued++;
-  }
-  return queued;
+  if (multipliers.representativeEnemyHp <= 0) return 0;
+  return hpBudget / multipliers.representativeEnemyHp;
 }
 
 export function tickSpawnDirector(
@@ -240,8 +201,7 @@ export function tickSpawnDirector(
     getRunHeat: () => number;
     isBossActive: () => boolean;
     canSpawnNow?: () => boolean;
-    planTrashSpawn: () => PlannedTrashSpawn | null;
-    spawnTrash: (planned: PlannedTrashSpawn) => boolean | number;
+    spawnTrash: () => boolean | number;
   }
 ): void {
   if (!cfg.enabled) return;
@@ -268,18 +228,21 @@ export function tickSpawnDirector(
 
   // Authoritative spawn HP/sec: baselineDps * pressure * spawnMult
   const spawnHpPerSecond = BASELINE_PLAYER_DPS * pressure * spawnMult;
+  // Convert HP budget flow to enemy-count interval using representative trash HP.
+  const enemyHpForRate = multipliers.representativeEnemyHp;
   state.powerBudget += spawnHpPerSecond * Math.max(0, dtSec);
 
   let queuedFromInterval = 0;
-  while (queuedFromInterval < cfg.maxSpawnsPerTick) {
-    const planned = callbacks.planTrashSpawn();
-    if (!planned) break;
-    const availableBudget = state.powerBudget - state.pendingHpCommitted;
-    if (availableBudget < planned.hpCost) break;
-    queuePlannedTrashSpawn(state, planned);
+  while (
+    (state.powerBudget - state.pendingHpCommitted) >= enemyHpForRate &&
+    queuedFromInterval < cfg.maxSpawnsPerTick
+  ) {
+    state.pendingHpCommitted += enemyHpForRate;
     queuedFromInterval++;
   }
   if (queuedFromInterval > 0) {
+    state.pendingSpawns += queuedFromInterval;
+    state.releaseSpawnsBudget += queuedFromInterval;
     state.queuedPerSecond = recordRate(
       state.queueEvents,
       state.queueWindowSec,
@@ -300,49 +263,41 @@ export function tickSpawnDirector(
 
   if (
     canSpawn &&
-    state.waveSpawnQueue.length <= 0 &&
+    state.waveRemaining <= 0 &&
     state.waveCooldownSecLeft <= 0 &&
     readyByThreshold
   ) {
-    const releaseCount = Math.min(Math.max(0, cfg.waveTotal), state.pendingSpawnQueue.length);
-    for (let i = 0; i < releaseCount; i++) {
-      const planned = state.pendingSpawnQueue.shift();
-      if (!planned) break;
-      state.waveSpawnQueue.push(planned);
-    }
-    syncSpawnCounts(state);
+    state.waveRemaining = Math.min(Math.max(0, cfg.waveTotal), state.pendingSpawns);
+    state.pendingSpawns -= state.waveRemaining;
     state.chunkCooldownSec = 0;
   }
 
   state.lastChunkSize = 0;
-  if (canSpawn && state.waveSpawnQueue.length > 0 && state.chunkCooldownSec <= 0) {
+  if (canSpawn && state.waveRemaining > 0 && state.chunkCooldownSec <= 0) {
     const chunkBase = Math.max(1, cfg.waveChunk);
     const chunkTarget = Math.min(
       chunkBase,
-      state.waveSpawnQueue.length,
+      state.waveRemaining,
       Math.max(0, cfg.maxSpawnsPerTick - spawned)
     );
     let chunkSpawned = 0;
     for (let i = 0; i < chunkTarget; i++) {
-      const planned = state.waveSpawnQueue[0];
-      if (!planned) break;
-      const spawnResult = callbacks.spawnTrash(planned);
+      const spawnResult = callbacks.spawnTrash();
       const didSpawn =
         spawnResult === true || (typeof spawnResult === "number" && spawnResult > 0);
       if (didSpawn) {
-        const spawnedHp = typeof spawnResult === "number" ? spawnResult : planned.hpCost;
+        const spawnedHp = typeof spawnResult === "number" ? spawnResult : enemyHpForRate;
         state.powerBudget = Math.max(0, state.powerBudget - Math.max(0, spawnedHp));
-        state.pendingHpCommitted = Math.max(0, state.pendingHpCommitted - planned.hpCost);
+        state.pendingHpCommitted = Math.max(0, state.pendingHpCommitted - enemyHpForRate);
         state.releaseSpawnsBudget = Math.max(0, state.releaseSpawnsBudget - 1);
-        state.waveSpawnQueue.shift();
         chunkSpawned++;
         spawned++;
       }
     }
-    syncSpawnCounts(state);
+    state.waveRemaining = Math.max(0, state.waveRemaining - chunkSpawned);
     state.lastChunkSize = chunkSpawned;
     state.chunkCooldownSec = Math.max(0.01, cfg.waveChunkDelaySec);
-    if (state.waveSpawnQueue.length <= 0) {
+    if (state.waveRemaining <= 0) {
       state.waveCooldownSecLeft = Math.max(0, cfg.waveCooldownSec);
     }
   }
@@ -350,7 +305,7 @@ export function tickSpawnDirector(
   // Throughput catch-up:
   // Preserve wave chunking for look/feel, but if backlog grows beyond one wave,
   // release additional spawns from queue budget so pressure is not throttled.
-  const backlogTotal = state.pendingSpawnQueue.length + state.waveSpawnQueue.length;
+  const backlogTotal = state.pendingSpawns + state.waveRemaining;
   const shouldCatchUp = canSpawn && backlogTotal > Math.max(0, cfg.waveTotal);
   if (shouldCatchUp) {
     const capLeft = Math.max(0, cfg.maxSpawnsPerTick - spawned);
@@ -358,32 +313,30 @@ export function tickSpawnDirector(
     const catchUpAttempts = Math.min(capLeft, budgeted);
     let catchUpSpawned = 0;
     for (let i = 0; i < catchUpAttempts; i++) {
-      const useWave = state.waveSpawnQueue.length > 0;
-      const planned = useWave ? state.waveSpawnQueue[0] : state.pendingSpawnQueue[0];
-      if (!planned) break;
-      const spawnResult = callbacks.spawnTrash(planned);
+      if (state.waveRemaining <= 0 && state.pendingSpawns <= 0) break;
+      const useWave = state.waveRemaining > 0;
+      const spawnResult = callbacks.spawnTrash();
       const didSpawn =
         spawnResult === true || (typeof spawnResult === "number" && spawnResult > 0);
       if (!didSpawn) continue;
 
-      const spawnedHp = typeof spawnResult === "number" ? spawnResult : planned.hpCost;
+      const spawnedHp = typeof spawnResult === "number" ? spawnResult : enemyHpForRate;
       state.powerBudget = Math.max(0, state.powerBudget - Math.max(0, spawnedHp));
-      state.pendingHpCommitted = Math.max(0, state.pendingHpCommitted - planned.hpCost);
+      state.pendingHpCommitted = Math.max(0, state.pendingHpCommitted - enemyHpForRate);
       state.releaseSpawnsBudget = Math.max(0, state.releaseSpawnsBudget - 1);
 
       if (useWave) {
-        state.waveSpawnQueue.shift();
+        state.waveRemaining = Math.max(0, state.waveRemaining - 1);
       } else {
-        state.pendingSpawnQueue.shift();
+        state.pendingSpawns = Math.max(0, state.pendingSpawns - 1);
       }
 
       catchUpSpawned++;
       spawned++;
       if (spawned >= cfg.maxSpawnsPerTick) break;
     }
-    syncSpawnCounts(state);
     state.lastChunkSize += catchUpSpawned;
-    if (state.waveSpawnQueue.length <= 0 && state.lastChunkSize > 0) {
+    if (state.waveRemaining <= 0 && state.lastChunkSize > 0) {
       state.waveCooldownSecLeft = Math.max(0, cfg.waveCooldownSec);
     }
   }
@@ -392,8 +345,7 @@ export function tickSpawnDirector(
   const actualDps = w.metrics?.dps?.dpsSmoothed ?? 0;
   const aheadFactor = actualDps > 0 ? actualDps / Math.max(0.0001, expectedDps) : 0;
   const spawnPressureMult = spawnMult;
-  const baselineEnemyHp = Math.max(1, registry.enemy(EnemyId.MINION).stats.baseLife * hpMult);
-  const spawnRatePerSec = baselineEnemyHp > 0 ? spawnHpPerSecond / baselineEnemyHp : 0;
+  const spawnRatePerSec = enemyHpForRate > 0 ? spawnHpPerSecond / enemyHpForRate : 0;
 
   w.spawnDirectorDebug = {
     heat,

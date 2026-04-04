@@ -1,11 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { createDpsMetrics } from "../../../game/balance/dpsMetrics";
-import {
-  createPlannedTrashSpawn,
-  createSpawnDirectorState,
-  tickSpawnDirector,
-  type SpawnDirectorConfig,
-} from "../../../game/balance/spawnDirector";
+import { createSpawnDirectorState, tickSpawnDirector, type SpawnDirectorConfig } from "../../../game/balance/spawnDirector";
 import type { ExpectedPowerBudgetConfig, ExpectedPowerConfig } from "../../../game/balance/expectedPower";
 import { EnemyId } from "../../../game/content/enemies";
 import { registry } from "../../../game/content/registry";
@@ -76,14 +71,12 @@ describe("spawnDirector interval queue", () => {
       getRunHeat: () => 10,
       isBossActive: () => false,
       canSpawnNow: () => false,
-      planTrashSpawn: () => createPlannedTrashSpawn(EnemyId.MINION, TARGET_REPRESENTATIVE_HP),
       spawnTrash: () => true,
     });
     tickSpawnDirector(wB, 1, cfg, expectedCfg, powerBudgetCfg, stateB, {
       getRunHeat: () => 10,
       isBossActive: () => false,
       canSpawnNow: () => false,
-      planTrashSpawn: () => createPlannedTrashSpawn(EnemyId.MINION, TARGET_REPRESENTATIVE_HP),
       spawnTrash: () => true,
     });
 
@@ -115,7 +108,6 @@ describe("spawnDirector interval queue", () => {
       getRunHeat: () => 0,
       isBossActive: () => false,
       canSpawnNow: () => false,
-      planTrashSpawn: () => createPlannedTrashSpawn(EnemyId.MINION, TARGET_REPRESENTATIVE_HP),
       spawnTrash: () => {
         spawned += 1;
         return true;
@@ -152,15 +144,14 @@ describe("spawnDirector interval queue", () => {
       getRunHeat: () => 0,
       isBossActive: () => false,
       canSpawnNow: () => true,
-      planTrashSpawn: () => createPlannedTrashSpawn(EnemyId.TANK, 40),
       // Spend more than representative HP (20) per spawn: 40 HP each.
       spawnTrash: () => 40,
     });
 
-    // 208 HP budget generated, 5 tank spawns reserved (200), first chunk spawns 3 => 120 HP consumed.
+    // 208 HP budget generated, 10 pending reserved (200), first chunk spawns 3 => 120 HP consumed.
     expect(w.spawnDirectorDebug.powerBudget).toBeCloseTo(88);
-    expect((w.spawnDirectorDebug as any).pendingHpCommitted).toBeCloseTo(80);
-    expect(state.waveRemaining).toBe(2);
+    expect((w.spawnDirectorDebug as any).pendingHpCommitted).toBeCloseTo(140);
+    expect(state.waveRemaining).toBe(7);
   });
 
   test("spawn director telemetry pressure exceeds 50 and keeps climbing over long time", () => {
@@ -186,7 +177,6 @@ describe("spawnDirector interval queue", () => {
       getRunHeat: () => 1,
       isBossActive: () => false,
       canSpawnNow: () => false,
-      planTrashSpawn: () => createPlannedTrashSpawn(EnemyId.MINION, TARGET_REPRESENTATIVE_HP),
       spawnTrash: () => true,
     });
     const p1 = w.spawnDirectorDebug.pressure;
@@ -198,7 +188,6 @@ describe("spawnDirector interval queue", () => {
       getRunHeat: () => 1,
       isBossActive: () => false,
       canSpawnNow: () => false,
-      planTrashSpawn: () => createPlannedTrashSpawn(EnemyId.MINION, TARGET_REPRESENTATIVE_HP),
       spawnTrash: () => true,
     });
     const p2 = w.spawnDirectorDebug.pressure;
@@ -233,7 +222,6 @@ describe("spawnDirector interval queue", () => {
         getRunHeat: () => 0,
         isBossActive: () => false,
         canSpawnNow: () => true,
-        planTrashSpawn: () => createPlannedTrashSpawn(EnemyId.MINION, TARGET_REPRESENTATIVE_HP),
         spawnTrash: () => {
           spawned += 1;
           return true;
