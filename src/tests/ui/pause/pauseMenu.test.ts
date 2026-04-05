@@ -1010,6 +1010,25 @@ describe("pauseMenu", () => {
         eHp: [12, 99, 8, 5],
         phaseTime: 42,
         floorDuration: 180,
+        hostileSpawnDebug: {
+          budget: 3.5,
+          powerPerSec: 1.25,
+          liveThreat: 4.5,
+          liveThreatCap: 9.5,
+          stockpileCap: 12.83,
+          spawnCooldownSec: 0.75,
+          burstCooldownSec: 8.5,
+          aliveByRole: {
+            baseline_chaser: 2,
+            fast_chaser: 1,
+            tank: 0,
+            ranged: 1,
+            suicide: 0,
+            leaper: 0,
+            special: 0,
+          },
+          lastRequests: [{ enemyId: 1, count: 3, reason: "normal" }],
+        },
       })
     );
 
@@ -1025,5 +1044,7 @@ describe("pauseMenu", () => {
     expect(flowTab).toBeTruthy();
     flowTab.click();
     expect(root.textContent).toContain("Floor Time42.0");
+    expect(root.textContent).toContain("Hostile Budget3.50");
+    expect(root.textContent).toContain("Hostile LastMinionx3 normal");
   });
 });

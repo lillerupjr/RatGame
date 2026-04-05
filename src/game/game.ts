@@ -183,6 +183,7 @@ import {
   resetLootGoblinFloorState,
   trySpawnLootGoblinForFloor,
 } from "./systems/neutral/lootGoblin";
+import { isNeutralMonsterId } from "./content/neutralMonsters";
 import {
   commitFloorClear,
   normalizedRunHeat,
@@ -193,6 +194,11 @@ import {
   LeaderboardClient,
   type LeaderboardRow,
 } from "../leaderboard/leaderboardClient";
+import {
+  resetHostileSpawnDirectorForFloor,
+  updateHostileSpawnDirector,
+} from "./systems/spawn/hostileSpawnDirector";
+import { executeHostileSpawnRequests } from "./systems/spawn/hostileSpawnExecution";
 import type { PaletteSnapshotStorageRecord } from "./paletteLab/snapshotStorage";
 import {
   buildPaletteSnapshotFloorIntent,
@@ -1909,6 +1915,32 @@ export function createGame(args: CreateGameArgs) {
     return findFirstAliveBossIndex(w) >= 0;
   }
 
+  function collectAliveHostileEnemiesForSpawnDirector(
+    w: World,
+  ): Array<{ enemyId: EnemyId }> {
+    const activeEnemies: Array<{ enemyId: EnemyId }> = [];
+    for (let i = 0; i < w.eAlive.length; i++) {
+      if (!w.eAlive[i]) continue;
+      const enemyId = w.eType[i] as EnemyId;
+      if (enemyId === EnemyId.BOSS || isNeutralMonsterId(enemyId)) continue;
+      activeEnemies.push({ enemyId });
+    }
+    return activeEnemies;
+  }
+
+  function hostileSpawningEnabled(w: World): boolean {
+    return (
+      w.state === "RUN" &&
+      w.runState === "FLOOR" &&
+      !w.floorEndCountdownActive &&
+      !w.deathFx.active &&
+      w.floorArchetype !== "VENDOR" &&
+      w.floorArchetype !== "HEAL" &&
+      !isPoeMapObjectiveActive(w) &&
+      !bossAlive(w)
+    );
+  }
+
   function findFirstAliveBossIndex(w: World): number {
     for (let i = 0; i < w.eAlive.length; i++) {
       if (!w.eAlive[i]) continue;
@@ -2142,6 +2174,7 @@ export function createGame(args: CreateGameArgs) {
     }
 
     resetFloorProgressionState(w);
+    resetHostileSpawnDirectorForFloor(w);
     w.currentObjectiveSpec = objectiveSpec;
     resetObjectiveRuntime(w);
     initObjectivesForFloor(w, {
@@ -3457,6 +3490,16 @@ export function createGame(args: CreateGameArgs) {
     neutralAnimatedMobsSystem(world, dtSim);
     roomChallengeSystem(world, dtSim);  // Track room challenges and lock exits
     spawnSurviveBossIfNeeded(world);
+    executeHostileSpawnRequests(
+      world,
+      updateHostileSpawnDirector(world, {
+        dt: dtSim,
+        elapsedSec: world.phaseTime,
+        floorDepth: getMapDepth(world),
+        spawningEnabled: hostileSpawningEnabled(world),
+        activeEnemies: collectAliveHostileEnemiesForSpawnDirector(world),
+      }),
+    );
     const isNeutralObjectiveFloor = world.floorArchetype === "VENDOR" || world.floorArchetype === "HEAL";
     if (!isNeutralObjectiveFloor && !deathFxActive) {
       combatSystem(world, dtSim);

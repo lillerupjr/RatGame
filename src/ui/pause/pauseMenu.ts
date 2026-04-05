@@ -5,6 +5,7 @@ import { resolveCombatStarterWeaponId } from "../../game/combat_mods/content/wea
 import { getCombatStarterWeaponById } from "../../game/combat_mods/content/weapons/starterWeapons";
 import { applyCardToWorld, removeCardFromWorld } from "../../game/combat_mods/rewards/cardApply";
 import { getGold } from "../../game/economy/gold";
+import { registry } from "../../game/content/registry";
 import { getAllRelicIds, getRelicById } from "../../game/content/relics";
 import {
   applyRelic,
@@ -126,6 +127,48 @@ function metricRowsForTab(world: any, tab: DebugMetricTab): Array<[string, strin
     ["Alive Enemies", safeNum(aliveEnemyCount, 0).toFixed(0)],
     ["On-screen Enemy HP", safeNum(liveEnemyHp, 0).toFixed(0)],
   ];
+
+  const hostileSpawnDebug = world?.hostileSpawnDebug;
+  if (hostileSpawnDebug && typeof hostileSpawnDebug === "object") {
+    const aliveByRole = hostileSpawnDebug.aliveByRole ?? {};
+    const roleSummary = [
+      `B:${safeNum(aliveByRole.baseline_chaser, 0).toFixed(0)}`,
+      `F:${safeNum(aliveByRole.fast_chaser, 0).toFixed(0)}`,
+      `T:${safeNum(aliveByRole.tank, 0).toFixed(0)}`,
+      `R:${safeNum(aliveByRole.ranged, 0).toFixed(0)}`,
+      `S:${safeNum(aliveByRole.suicide, 0).toFixed(0)}`,
+      `L:${safeNum(aliveByRole.leaper, 0).toFixed(0)}`,
+      `X:${safeNum(aliveByRole.special, 0).toFixed(0)}`,
+    ].join(" ");
+    const lastRequests = Array.isArray(hostileSpawnDebug.lastRequests)
+      ? hostileSpawnDebug.lastRequests
+      : [];
+    const requestSummary = lastRequests.length <= 0
+      ? "-"
+      : lastRequests
+          .map((request: any) => {
+            const enemyName = (() => {
+              try {
+                return registry.enemy(request.enemyId).name;
+              } catch {
+                return String(request.enemyId);
+              }
+            })();
+            return `${enemyName}x${safeNum(request.count, 0).toFixed(0)} ${String(request.reason ?? "normal")}`;
+          })
+          .join(", ");
+    flowRows.push(
+      ["Hostile Budget", safeNum(hostileSpawnDebug.budget, 0).toFixed(2)],
+      ["Hostile Power/sec", safeNum(hostileSpawnDebug.powerPerSec, 0).toFixed(2)],
+      ["Hostile Threat", safeNum(hostileSpawnDebug.liveThreat, 0).toFixed(2)],
+      ["Hostile Threat Cap", safeNum(hostileSpawnDebug.liveThreatCap, 0).toFixed(2)],
+      ["Hostile Stockpile", safeNum(hostileSpawnDebug.stockpileCap, 0).toFixed(2)],
+      ["Hostile Spawn CD", safeNum(hostileSpawnDebug.spawnCooldownSec, 0).toFixed(2)],
+      ["Hostile Burst CD", safeNum(hostileSpawnDebug.burstCooldownSec, 0).toFixed(2)],
+      ["Hostile Roles", roleSummary],
+      ["Hostile Last", requestSummary],
+    );
+  }
 
   return tab === "COMBAT" ? combatRows : flowRows;
 }

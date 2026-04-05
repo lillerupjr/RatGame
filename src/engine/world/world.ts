@@ -26,6 +26,10 @@ import type { EnemyBrainState } from "../../game/systems/enemies/brain";
 import { createDpsMetrics, type DpsMetricsState } from "../../game/balance/dpsMetrics";
 import { getSettings } from "../../settings/settingsStore";
 import { DEFAULT_XP_LEVEL_BASE } from "../../settings/systemOverrides";
+import type {
+  HostileSpawnDebugSnapshot,
+  HostileSpawnDirectorState,
+} from "../../game/systems/spawn/hostileSpawnDirector";
 
 import type { RelicInstance } from "../../game/content/relics";
 
@@ -202,6 +206,8 @@ export type World = {
   floorDuration: number; // seconds until boss for this stage
   phaseTime: number; // seconds since current phase began
   transitionTime: number; // seconds remaining in TRANSITION
+  hostileSpawnDirector: HostileSpawnDirectorState;
+  hostileSpawnDebug: HostileSpawnDebugSnapshot | null;
 
   // Total run time
   time: number;
@@ -635,6 +641,13 @@ export function createWorld(args: CreateWorldArgs): World {
     floorDuration: stage.duration,
     phaseTime: 0,
     transitionTime: 0,
+    hostileSpawnDirector: {
+      budget: 0,
+      spawnCooldownSec: 0,
+      burstCooldownSec: 12,
+      rngSeed: ((args.seed ?? 1337) ^ 0x9e3779b9) >>> 0,
+    },
+    hostileSpawnDebug: null,
 
     time: 0,
     timeSec: 0,
