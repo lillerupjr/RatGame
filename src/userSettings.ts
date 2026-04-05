@@ -166,6 +166,7 @@ export type DebugSettings = {
   objectives: {
     showZoneBounds: boolean;
   };
+  delveActShowCombatSubtypes: boolean;
 };
 
 export type UserSettings = {
@@ -251,6 +252,7 @@ function toLegacySettings(): UserSettings {
       objectives: {
         showZoneBounds: settings.debug.objectivesShowZoneBounds,
       },
+      delveActShowCombatSubtypes: settings.debug.delveActShowCombatSubtypes,
     },
     game: {
       userModeEnabled: settings.user.game.userModeEnabled,
@@ -480,6 +482,9 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
 
     if (debugAny.objectives?.showZoneBounds !== undefined) {
       debugPatch.objectivesShowZoneBounds = debugAny.objectives.showZoneBounds;
+    }
+    if (debugAny.delveActShowCombatSubtypes !== undefined) {
+      debugPatch.delveActShowCombatSubtypes = debugAny.delveActShowCombatSubtypes;
     }
 
     const neutralBirdPatch = { ...(debugAny.neutralBirdAI ?? {}) };

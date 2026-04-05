@@ -4221,8 +4221,9 @@ html.ios-standalone-fix #ui {
 #map.routeMode {
   padding: 0;
   background:
-    radial-gradient(120% 90% at 50% -20%, var(--accent-glow), transparent 52%),
-    var(--bg-overlay);
+    radial-gradient(130% 110% at 50% -10%, rgba(152, 182, 255, 0.18), transparent 52%),
+    radial-gradient(110% 130% at 50% 118%, rgba(255, 202, 122, 0.14), transparent 55%),
+    linear-gradient(180deg, rgba(7, 12, 23, 0.98), rgba(12, 18, 31, 0.98));
 }
 
 #map.routeMode .panel {
@@ -4234,15 +4235,19 @@ html.ios-standalone-fix #ui {
   padding: 0;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
-  background: linear-gradient(180deg, var(--bg-elevated), var(--bg-surface));
+  background:
+    radial-gradient(100% 80% at 50% 20%, rgba(255, 218, 150, 0.06), transparent 55%),
+    linear-gradient(180deg, rgba(11, 17, 29, 0.96), rgba(14, 22, 37, 0.98));
   box-shadow: none;
   overflow: hidden;
 }
 
 #map.routeMode #mapTopBar {
-  padding: calc(12px + var(--safe-top)) 16px 10px 16px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-elevated);
+  padding: calc(14px + var(--safe-top)) 18px 8px 18px;
+  border-bottom: 1px solid rgba(210, 191, 148, 0.12);
+  background:
+    linear-gradient(180deg, rgba(18, 24, 37, 0.94), rgba(14, 21, 33, 0.88));
+  box-shadow: inset 0 -1px 0 rgba(255, 233, 191, 0.03);
 }
 
 #map.routeMode .mapTopBarRow {
@@ -4255,51 +4260,105 @@ html.ios-standalone-fix #ui {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 44px;
-  min-height: 36px;
-  padding: 4px 12px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-subtle);
-  background: var(--hover-bg);
-  color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 700;
+  min-width: 38px;
+  min-height: 30px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(202, 181, 144, 0.2);
+  background: rgba(255, 248, 231, 0.04);
+  color: rgba(241, 229, 202, 0.84);
+  font: 700 12px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   cursor: pointer;
-  transition: background 100ms ease, border-color 100ms ease;
+  transition: background 100ms ease, border-color 100ms ease, color 100ms ease;
   flex-shrink: 0;
 }
 
 #map.routeMode .routeBackBtn:hover {
-  background: var(--active-bg);
-  border-color: var(--border-default);
+  background: rgba(255, 247, 224, 0.08);
+  border-color: rgba(219, 194, 146, 0.34);
+  color: rgba(255, 240, 205, 0.96);
 }
 
 #map.routeMode .routeBackBtn:active {
-  background: var(--primary-btn-hover-bg);
+  background: rgba(255, 247, 224, 0.12);
 }
 
 #map.routeMode .title {
   margin: 0;
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 900;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(248, 234, 202, 0.98);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.42);
 }
 
 #map.routeMode .sub {
-  margin: 4px 0 6px;
-  font-size: 14px;
-  opacity: 0.9;
+  margin: 5px 0 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: rgba(222, 216, 198, 0.78);
+  opacity: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+#map.routeMode .routeSubMessage {
+  white-space: pre-line;
+}
+
+#map.routeMode .routeLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+#map.routeMode .routeLegendChip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(228, 217, 186, 0.14);
+  background: rgba(255, 247, 224, 0.04);
+  color: rgba(239, 229, 202, 0.86);
+  font: 700 10px var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+#map.routeMode .routeLegendChip--available {
+  border-color: rgba(122, 210, 255, 0.34);
+  color: rgba(188, 233, 255, 0.96);
+}
+
+#map.routeMode .routeLegendChip--visited {
+  border-color: rgba(237, 197, 116, 0.34);
+  color: rgba(250, 223, 164, 0.95);
+}
+
+#map.routeMode .routeLegendChip--future {
+  border-color: rgba(155, 169, 194, 0.18);
+  color: rgba(192, 203, 225, 0.76);
 }
 
 
 #map.routeMode #mapDepthLabel {
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  color: var(--text-primary);
-  background: var(--focus-bg);
-  border-bottom: 1px solid var(--border-subtle);
+  justify-self: start;
+  margin: 10px 0 0 18px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(214, 190, 144, 0.24);
+  background: linear-gradient(180deg, rgba(43, 50, 66, 0.88), rgba(29, 35, 48, 0.92));
+  color: rgba(249, 232, 195, 0.92);
+  font: 800 12px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
+  z-index: 2;
 }
 
 #map.routeMode #mapGraphWrap,
@@ -4311,7 +4370,7 @@ html.ios-standalone-fix #ui {
   aspect-ratio: auto;
   border-radius: 0;
   border: 0;
-  background: var(--bg-surface);
+  background: linear-gradient(180deg, rgba(12, 17, 28, 0.96), rgba(10, 15, 24, 0.98));
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
@@ -4329,6 +4388,31 @@ html.ios-standalone-fix #ui {
   top: 0;
   transform: none;
   will-change: auto;
+  z-index: 1;
+  background:
+    linear-gradient(180deg, rgba(15, 21, 34, 0.62), rgba(12, 18, 28, 0.74)),
+    radial-gradient(52% 132% at 50% 50%, rgba(184, 154, 104, 0.08), transparent 64%);
+}
+
+#map.routeMode #mapGraphContent::before,
+#map.routeMode #mapGraphContent::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+#map.routeMode #mapGraphContent::before {
+  background:
+    radial-gradient(40% 120% at 50% 50%, rgba(233, 204, 140, 0.08), transparent 62%),
+    linear-gradient(90deg, rgba(6, 10, 17, 0.18), transparent 18%, transparent 82%, rgba(6, 10, 17, 0.18));
+  opacity: 0.92;
+}
+
+#map.routeMode #mapGraphContent::after {
+  background:
+    linear-gradient(180deg, rgba(255, 244, 216, 0.015), rgba(255, 244, 216, 0));
+  opacity: 0.58;
 }
 
 #map.routeMode #mapSvg {
@@ -4336,110 +4420,533 @@ html.ios-standalone-fix #ui {
   inset: 0;
   width: 100%;
   height: 100%;
+  z-index: 1;
 }
 
 #map.routeMode #mapHit {
   position: absolute;
   inset: 0;
+  z-index: 2;
 }
 
 #map.routeMode .routeEdge {
   fill: none;
-  stroke-width: 4;
+  stroke-width: 4.8;
   stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke 120ms ease, opacity 120ms ease, filter 120ms ease;
 }
 
-#map.routeMode .routeEdge--locked {
-  stroke: rgba(158, 168, 194, 0.24);
+#map.routeMode .routeEdge--future {
+  stroke: rgba(113, 126, 149, 0.38);
+  opacity: 0.66;
 }
 
-#map.routeMode .routeEdge--active {
-  stroke: rgba(187, 211, 255, 0.52);
+#map.routeMode .routeEdge--available {
+  stroke: rgba(114, 209, 255, 0.9);
+  opacity: 0.98;
+  filter: drop-shadow(0 0 9px rgba(90, 182, 237, 0.26));
+}
+
+#map.routeMode .routeEdge--visited {
+  stroke: rgba(232, 193, 112, 0.78);
+  opacity: 0.9;
+  filter: drop-shadow(0 0 10px rgba(222, 183, 116, 0.14));
 }
 
 #map.routeMode .routeNode {
   --route-accent: rgba(184, 198, 225, 0.68);
-  min-width: 100px;
-  height: auto;
-  min-height: 44px;
-  padding: 6px 12px;
-  border-radius: 14px;
-  border: 1px solid var(--route-accent);
-  background:
-    radial-gradient(110% 110% at 30% 20%, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04) 56%),
-    var(--bg-elevated);
+  --route-fill-a: rgba(30, 40, 54, 0.96);
+  --route-fill-b: rgba(16, 21, 31, 0.98);
+  --route-glyph: rgba(249, 242, 227, 0.94);
+  width: 72px;
+  height: 72px;
+  padding: 0;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  text-align: center;
-  font-size: 0.82rem;
-  font-weight: 800;
+  overflow: visible;
+  color: var(--route-glyph);
+  box-shadow: none;
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+#map.routeMode .routeNodeIcon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 239, 207, 0.12);
+  background:
+    radial-gradient(120% 120% at 30% 24%, rgba(255, 250, 232, 0.14), rgba(255, 250, 232, 0.02) 48%),
+    linear-gradient(180deg, var(--route-fill-a), var(--route-fill-b));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 246, 223, 0.12),
+    0 12px 24px rgba(0, 0, 0, 0.34);
+}
+
+#map.routeMode .routeNodeIcon::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: inherit;
+  border: 1px solid var(--route-accent);
+  opacity: 0.66;
+}
+
+#map.routeMode .routeNodeIcon::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 244, 217, 0.06);
+}
+
+#map.routeMode .routeNodeIcon svg {
+  width: 32px;
+  height: 32px;
+  overflow: visible;
+}
+
+#map.routeMode .routeNodeIcon .glyph-stroke {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 4.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#map.routeMode .routeNodeIcon .glyph-fill {
+  fill: currentColor;
+}
+
+#map.routeMode .routeNodeIcon .glyph-dot {
+  fill: currentColor;
+}
+
+#map.routeMode .routeNodeTag {
+  padding: 3px 8px 2px;
+  border-radius: 999px;
+  border: 1px solid rgba(223, 205, 170, 0.18);
+  background: linear-gradient(180deg, rgba(35, 43, 58, 0.96), rgba(24, 30, 42, 0.98));
+  color: rgba(245, 233, 203, 0.92);
+  font: 800 9px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: rgba(235, 241, 255, 0.97);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
-  transition: transform 100ms ease, box-shadow 120ms ease, border-color 120ms ease;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
+}
+
+#map.routeMode .routeNodeMeta {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 6px);
+  transform: translateX(-50%);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
+
+#map.routeMode .routeNodeLabel {
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(229, 218, 188, 0.1);
+  background: rgba(18, 25, 39, 0.92);
+  color: rgba(244, 236, 216, 0.92);
+  font: 800 10px var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.26);
+}
+
+#map.routeMode .routeNodeStateBadge {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 7px);
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font: 800 9px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
+}
+
+#map.routeMode .routeNodeStateBadge--current {
+  border: 1px solid rgba(245, 211, 127, 0.38);
+  background: rgba(86, 60, 20, 0.92);
+  color: rgba(255, 232, 179, 0.98);
+}
+
+#map.routeMode .routeNodeStateBadge--reachable {
+  border: 1px solid rgba(120, 211, 255, 0.34);
+  background: rgba(24, 57, 76, 0.94);
+  color: rgba(200, 239, 255, 0.98);
+}
+
+#map.routeMode .routeNodeStateBadge--completed {
+  border: 1px solid rgba(216, 195, 145, 0.26);
+  background: rgba(47, 42, 30, 0.9);
+  color: rgba(242, 225, 188, 0.94);
 }
 
 #map.routeMode .routeNode:hover:not([disabled]),
 #map.routeMode .routeNode:focus-visible:not([disabled]) {
-  transform: translate(-50%, -50%) scale(1.04);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.42);
+  transform: translate(-50%, -50%) scale(1.06);
+  background: transparent;
+  border-color: transparent;
 }
 
+@keyframes routeNodePulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 0 rgba(188, 215, 255, 0.02));
+  }
+  50% {
+    filter: drop-shadow(0 0 12px rgba(188, 215, 255, 0.16));
+  }
+}
 
-#map.routeMode .routeNode--survive { --route-accent: rgba(74, 212, 148, 0.78); }
-#map.routeMode .routeNode--time-trial { --route-accent: rgba(255, 184, 79, 0.8); }
-#map.routeMode .routeNode--vendor { --route-accent: rgba(255, 218, 97, 0.84); }
-#map.routeMode .routeNode--heal { --route-accent: rgba(90, 214, 241, 0.82); }
-#map.routeMode .routeNode--boss-triple { --route-accent: rgba(255, 95, 95, 0.84); }
+#map.routeMode .routeNode--combat {
+  --route-accent: rgba(110, 208, 164, 0.86);
+  --route-fill-a: rgba(24, 53, 43, 0.96);
+  --route-fill-b: rgba(15, 31, 25, 0.98);
+}
 
-#map.routeMode .routeNode--locked {
-  opacity: 0.42;
-  filter: saturate(0.55);
+#map.routeMode .routeNode--rest {
+  --route-accent: rgba(111, 199, 232, 0.88);
+  --route-fill-a: rgba(28, 57, 70, 0.96);
+  --route-fill-b: rgba(16, 32, 40, 0.98);
+}
+
+#map.routeMode .routeNode--shop {
+  --route-accent: rgba(227, 194, 112, 0.9);
+  --route-fill-a: rgba(70, 55, 28, 0.96);
+  --route-fill-b: rgba(41, 31, 15, 0.98);
+}
+
+#map.routeMode .routeNode--boss {
+  --route-accent: rgba(224, 117, 101, 0.92);
+  --route-fill-a: rgba(81, 31, 31, 0.98);
+  --route-fill-b: rgba(40, 15, 18, 0.98);
+}
+
+#map.routeMode .routeNode--elite {
+  --route-accent: rgba(232, 153, 78, 0.9);
+  --route-fill-a: rgba(80, 42, 20, 0.97);
+  --route-fill-b: rgba(43, 22, 12, 0.98);
+}
+
+#map.routeMode .routeNode--question-mark {
+  --route-accent: rgba(157, 172, 201, 0.8);
+  --route-fill-a: rgba(38, 45, 58, 0.97);
+  --route-fill-b: rgba(22, 28, 37, 0.98);
+}
+
+#map.routeMode .routeNode--locked,
+#map.routeMode .routeNode--future {
+  opacity: 0.5;
+  filter: saturate(0.44) brightness(0.8);
+}
+
+#map.routeMode .routeNode--locked .routeNodeIcon::before,
+#map.routeMode .routeNode--future .routeNodeIcon::before {
+  opacity: 0.34;
+}
+
+#map.routeMode .routeNode--locked .routeNodeLabel,
+#map.routeMode .routeNode--future .routeNodeLabel {
+  color: rgba(194, 203, 220, 0.64);
+  border-color: rgba(175, 189, 216, 0.08);
+  background: rgba(17, 23, 35, 0.86);
 }
 
 #map.routeMode .routeNode--reachable {
-  box-shadow: 0 0 0 2px rgba(190, 220, 255, 0.18), 0 10px 24px rgba(0, 0, 0, 0.34);
+  animation: routeNodePulse 2.1s ease-in-out infinite;
+}
+
+#map.routeMode .routeNode--reachable .routeNodeIcon::before {
+  opacity: 0.95;
+  box-shadow: 0 0 0 1px rgba(186, 216, 255, 0.18), 0 0 20px rgba(112, 157, 221, 0.16);
 }
 
 #map.routeMode .routeNode--current {
-  box-shadow: 0 0 0 3px rgba(255, 221, 122, 0.34), 0 14px 28px rgba(0, 0, 0, 0.4);
+  filter: drop-shadow(0 0 16px rgba(237, 196, 112, 0.24));
+}
+
+#map.routeMode .routeNode--current .routeNodeIcon::before {
+  opacity: 1;
+  box-shadow: 0 0 0 2px rgba(240, 205, 124, 0.2), 0 0 24px rgba(240, 188, 84, 0.18);
 }
 
 #map.routeMode .routeNode--completed {
-  opacity: 0.48;
-  filter: saturate(0.35);
-  text-decoration: line-through;
+  opacity: 0.72;
+  filter: saturate(0.44) brightness(0.92);
+}
+
+#map.routeMode .routeNode--completed .routeNodeLabel {
+  background: rgba(40, 34, 25, 0.9);
+}
+
+#map.routeMode .routeNode--reachable .routeNodeLabel {
+  border-color: rgba(124, 204, 247, 0.24);
+  background: rgba(18, 37, 54, 0.94);
+  color: rgba(221, 245, 255, 0.98);
+}
+
+#map.routeMode .routeNode--current .routeNodeLabel {
+  border-color: rgba(240, 205, 124, 0.28);
+  background: rgba(56, 42, 20, 0.94);
+  color: rgba(255, 238, 196, 0.99);
+}
+
+#map.routeMode .routeNode--boss .routeNodeIcon {
+  width: 66px;
+  height: 66px;
+}
+
+#map.routeMode .routeNode--boss .routeNodeIcon svg {
+  width: 34px;
+  height: 34px;
 }
 
 #map.routeMode .routeNode[disabled] {
   cursor: default;
+  opacity: 1;
+  background: transparent;
+  border-color: transparent;
 }
 
 #map.routeMode #mapInfoPanel {
-  min-height: 54px;
-  padding: 8px 14px calc(10px + var(--safe-bottom));
-  border-top: 1px solid var(--border-subtle);
-  background: var(--bg-elevated);
-  color: var(--text-primary);
+  min-height: 62px;
+  padding: 9px 16px calc(11px + var(--safe-bottom));
+  border-top: 1px solid rgba(210, 191, 148, 0.12);
+  background:
+    linear-gradient(180deg, rgba(18, 24, 37, 0.9), rgba(14, 20, 31, 0.96));
+  color: rgba(247, 236, 214, 0.94);
+  box-shadow: inset 0 1px 0 rgba(255, 240, 204, 0.03);
+}
+
+#map.routeMode .routeInfoTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#map.routeMode .routeInfoState {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font: 800 10px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#map.routeMode .routeInfoState--current {
+  border: 1px solid rgba(245, 211, 127, 0.34);
+  background: rgba(83, 58, 22, 0.92);
+  color: rgba(255, 232, 181, 0.98);
+}
+
+#map.routeMode .routeInfoState--reachable {
+  border: 1px solid rgba(118, 211, 255, 0.34);
+  background: rgba(21, 53, 73, 0.94);
+  color: rgba(204, 240, 255, 0.98);
+}
+
+#map.routeMode .routeInfoState--completed {
+  border: 1px solid rgba(216, 195, 145, 0.24);
+  background: rgba(46, 41, 31, 0.88);
+  color: rgba(242, 225, 188, 0.94);
+}
+
+#map.routeMode .routeInfoState--future {
+  border: 1px solid rgba(149, 163, 191, 0.18);
+  background: rgba(28, 35, 47, 0.9);
+  color: rgba(198, 209, 229, 0.82);
 }
 
 #map.routeMode .routeInfoTitle {
-  font-size: 14px;
-  font-weight: 800;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
 }
 
 #map.routeMode .routeInfoMeta {
-  margin-top: 2px;
+  margin-top: 3px;
   font-size: 12px;
+  color: rgba(223, 216, 198, 0.72);
+  opacity: 1;
+}
+
+#map.routeMode--phone .sub {
+  gap: 6px;
+}
+
+#map.routeMode--phone .routeSubMessage {
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+#map.routeMode--phone .routeLegend {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 1px;
+}
+
+#map.routeMode--phone .routeLegend::-webkit-scrollbar {
+  display: none;
+}
+
+#map.routeMode--phone .routeLegendChip {
+  flex: 0 0 auto;
+}
+
+#map.routeMode--phone #mapGraphWrap,
+#map.routeMode--phone.delveFull #mapGraphWrap {
+  background: linear-gradient(180deg, rgba(11, 16, 26, 0.99), rgba(10, 14, 23, 1));
+}
+
+#map.routeMode--phone #mapGraphContent {
+  background:
+    linear-gradient(180deg, rgba(14, 19, 30, 0.94), rgba(11, 16, 26, 0.98)),
+    radial-gradient(54% 132% at 50% 54%, rgba(175, 145, 96, 0.09), transparent 66%);
+}
+
+#map.routeMode--phone #mapGraphContent::before {
+  background:
+    radial-gradient(38% 118% at 50% 50%, rgba(224, 193, 126, 0.06), transparent 62%),
+    linear-gradient(90deg, rgba(7, 11, 18, 0.2), transparent 20%, transparent 80%, rgba(7, 11, 18, 0.2));
   opacity: 0.84;
+}
+
+#map.routeMode--phone #mapGraphContent::after {
+  background: linear-gradient(180deg, rgba(255, 245, 220, 0.008), rgba(255, 245, 220, 0));
+  opacity: 0.4;
+}
+
+#map.routeMode--phone .routeEdge {
+  stroke-width: 5.2;
+}
+
+#map.routeMode--phone .routeEdge--future {
+  stroke: rgba(109, 121, 144, 0.42);
+  opacity: 0.54;
+}
+
+#map.routeMode--phone .routeEdge--available {
+  stroke: rgba(128, 219, 255, 0.98);
+  filter: drop-shadow(0 0 11px rgba(90, 182, 237, 0.32));
+}
+
+#map.routeMode--phone .routeEdge--visited {
+  stroke: rgba(239, 199, 116, 0.84);
+  filter: drop-shadow(0 0 12px rgba(222, 183, 116, 0.18));
+}
+
+#map.routeMode--phone .routeNode {
+  width: 68px;
+  height: 68px;
+}
+
+#map.routeMode--phone .routeNodeIcon {
+  width: 54px;
+  height: 54px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 246, 223, 0.12),
+    0 10px 20px rgba(0, 0, 0, 0.32);
+}
+
+#map.routeMode--phone .routeNodeIcon svg {
+  width: 29px;
+  height: 29px;
+}
+
+#map.routeMode--phone .routeNode--boss .routeNodeIcon {
+  width: 60px;
+  height: 60px;
+}
+
+#map.routeMode--phone .routeNodeStateBadge {
+  min-height: 18px;
+  padding: 1px 7px;
+  font-size: 8px;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.22);
+}
+
+#map.routeMode--phone .routeNodeMeta {
+  top: calc(100% + 4px);
+  gap: 3px;
+}
+
+#map.routeMode--phone .routeNodeLabel {
+  padding: 2px 7px;
+  font-size: 8px;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+}
+
+#map.routeMode--phone .routeNodeTag {
+  padding: 2px 7px;
+  font-size: 8px;
+}
+
+#map.routeMode--phone .routeNode--future .routeNodeMeta,
+#map.routeMode--phone .routeNode--completed:not(.routeNode--current) .routeNodeTag,
+#map.routeMode--phone .routeNode--future .routeNodeTag {
+  display: none;
+}
+
+#map.routeMode--phone .routeNode--completed:not(.routeNode--current) .routeNodeLabel {
+  opacity: 0.86;
+}
+
+#map.routeMode--phone .routeNode--future {
+  opacity: 0.4;
+  filter: saturate(0.34) brightness(0.76);
+}
+
+#map.routeMode--phone .routeNode--completed {
+  opacity: 0.78;
+}
+
+#map.routeMode--phone #mapInfoPanel {
+  min-height: 68px;
+  padding: 10px 14px calc(12px + var(--safe-bottom));
+  background:
+    linear-gradient(180deg, rgba(18, 24, 37, 0.94), rgba(13, 19, 29, 0.98));
+}
+
+#map.routeMode--phone .routeInfoTop {
+  gap: 7px;
+}
+
+#map.routeMode--phone .routeInfoState {
+  min-height: 20px;
+  padding: 2px 8px;
+  font-size: 9px;
 }
 
 @media (max-width: 768px), (max-height: 500px) {
   #map.routeMode #mapTopBar {
-    padding: calc(8px + var(--safe-top)) 10px 6px 10px;
+    padding: calc(10px + var(--safe-top)) 12px 6px 12px;
   }
 
   #map.routeMode .mapTopBarRow {
@@ -4447,38 +4954,135 @@ html.ios-standalone-fix #ui {
   }
 
   #map.routeMode .routeBackBtn {
-    min-width: 40px;
-    min-height: 34px;
-    padding: 3px 10px;
+    min-width: 34px;
+    min-height: 28px;
+    padding: 2px 9px;
     font-size: 12px;
-    border-radius: 8px;
   }
 
   #map.routeMode .title {
-    font-size: 20px;
+    font-size: 18px;
   }
 
   #map.routeMode .sub {
-    margin: 3px 0 4px;
+    margin: 4px 0 0;
     font-size: 12px;
+  }
+
+  #map.routeMode .routeLegend {
+    gap: 4px;
+  }
+
+  #map.routeMode .routeLegendChip {
+    min-height: 20px;
+    padding: 1px 8px;
+    font-size: 9px;
   }
 
   #map.routeMode #mapDepthLabel {
-    padding: 6px 10px;
-    font-size: 12px;
+    margin: 8px 0 0 12px;
+    padding: 5px 10px;
+    font-size: 11px;
   }
 
   #map.routeMode .routeNode {
-    min-width: 88px;
-    min-height: 44px;
-    padding: 5px 10px;
-    border-radius: 12px;
-    font-size: 0.78rem;
+    width: 64px;
+    height: 64px;
+  }
+
+  #map.routeMode .routeNodeIcon {
+    width: 52px;
+    height: 52px;
+  }
+
+  #map.routeMode .routeNodeIcon svg {
+    width: 28px;
+    height: 28px;
+  }
+
+  #map.routeMode .routeNode--boss .routeNodeIcon {
+    width: 58px;
+    height: 58px;
+  }
+
+  #map.routeMode .routeNodeTag {
+    top: calc(100% + 3px);
+    font-size: 8px;
+    padding: 2px 7px;
+  }
+
+  #map.routeMode .routeNodeMeta {
+    top: calc(100% + 5px);
+    gap: 3px;
+  }
+
+  #map.routeMode .routeNodeLabel {
+    padding: 2px 7px;
+    font-size: 8px;
+  }
+
+  #map.routeMode .routeNodeStateBadge {
+    bottom: calc(100% + 5px);
+    min-height: 18px;
+    padding: 1px 7px;
+    font-size: 8px;
   }
 
   #map.routeMode #mapInfoPanel {
-    min-height: 50px;
-    padding: 7px 10px calc(8px + var(--safe-bottom));
+    min-height: 56px;
+    padding: 8px 12px calc(9px + var(--safe-bottom));
+  }
+
+  #map.routeMode--phone .mapTopBarRow {
+    align-items: flex-start;
+  }
+
+  #map.routeMode--phone .titleGroup {
+    min-width: 0;
+  }
+
+  #map.routeMode--phone .routeSubMessage {
+    max-width: min(100%, 34ch);
+  }
+
+  #map.routeMode--phone #mapDepthLabel {
+    position: sticky;
+    top: 8px;
+    z-index: 3;
+  }
+
+  #map.routeMode--phone .routeNode {
+    width: 66px;
+    height: 66px;
+  }
+
+  #map.routeMode--phone .routeNodeIcon {
+    width: 52px;
+    height: 52px;
+  }
+
+  #map.routeMode--phone .routeNodeIcon svg {
+    width: 28px;
+    height: 28px;
+  }
+
+  #map.routeMode--phone .routeNode--boss .routeNodeIcon {
+    width: 58px;
+    height: 58px;
+  }
+
+  #map.routeMode--phone .routeNodeStateBadge--completed,
+  #map.routeMode--phone .routeNode--future .routeNodeLabel {
+    display: none;
+  }
+
+  #map.routeMode--phone .routeNode--current .routeNodeMeta,
+  #map.routeMode--phone .routeNode--reachable .routeNodeMeta {
+    display: inline-flex;
+  }
+
+  #map.routeMode--phone #mapInfoPanel {
+    font-size: 13px;
   }
 }
 

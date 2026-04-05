@@ -76,6 +76,7 @@ export type DebugToolsSettings = {
   dpsMeter: boolean;
   neutralBirdDrawDebug: boolean;
   objectivesShowZoneBounds: boolean;
+  delveActShowCombatSubtypes: boolean;
   entityAnchorsEnabled: boolean;
   renderPerfCountersEnabled: boolean;
   paletteHudDebugOverlayEnabled: boolean;

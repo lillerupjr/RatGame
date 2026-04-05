@@ -21,6 +21,7 @@ type MapRefs = {
     root: HTMLDivElement;
     topBar: HTMLDivElement;
     backBtn: HTMLButtonElement;
+    title: HTMLDivElement;
     infoPanel: HTMLDivElement;
     depthLabel: HTMLDivElement;
     sub: HTMLDivElement;
@@ -295,6 +296,7 @@ export function getDomRefs(): DomRefs {
     const mapRoot = getEl<HTMLDivElement>("map");
     const mapTopBar = getEl<HTMLDivElement>("mapTopBar");
     const mapRouteBackBtn = getEl<HTMLButtonElement>("routeBackBtn");
+    const mapTitle = getEl<HTMLDivElement>("mapTitle");
     const mapInfoPanel = getEl<HTMLDivElement>("mapInfoPanel");
     const mapDepthLabel = getEl<HTMLDivElement>("mapDepthLabel");
     const mapSub = getEl<HTMLDivElement>("mapSub");
@@ -363,6 +365,7 @@ export function getDomRefs(): DomRefs {
             root: mapRoot,
             topBar: mapTopBar,
             backBtn: mapRouteBackBtn,
+            title: mapTitle,
             infoPanel: mapInfoPanel,
             depthLabel: mapDepthLabel,
             sub: mapSub,

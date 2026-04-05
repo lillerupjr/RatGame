@@ -80,10 +80,14 @@ import { dir8FromVector } from "../engine/render/sprites/dir8";
 
 import {
   canEnterNode,
+  clearPendingNode,
+  commitPendingNode,
   countClearedNodes,
   createDelveMap,
-  ensureAdjacentNodes,
+  floorArchetypeForNode,
   markCurrentNodeCleared,
+  markRunLost,
+  markRunWon,
   moveToNode,
   getDepthScaling,
   getNodeDepth,
@@ -282,6 +286,7 @@ type CreateGameArgs = {
       root: HTMLDivElement;
       topBar: HTMLDivElement;
       backBtn: HTMLButtonElement;
+      title: HTMLDivElement;
       infoPanel: HTMLDivElement;
       depthLabel: HTMLDivElement;
       sub: HTMLDivElement;
@@ -815,11 +820,11 @@ export function createGame(args: CreateGameArgs) {
     if (delve) {
       const currentId = delve.currentNodeId;
       const currentNode = currentId ? delve.nodes.get(currentId) ?? null : null;
-      if (!currentNode || currentNode.state !== "ACTIVE") {
+      if (!currentNode || (currentId !== null && delve.completedNodeIds.has(currentId))) {
         if (import.meta.env.DEV) {
           console.error("[delve] Refusing floor-clear commit without ACTIVE node", {
             currentNodeId: currentId ?? null,
-            currentState: currentNode?.state ?? null,
+            currentState: currentId ? (delve.completedNodeIds.has(currentId) ? "CLEARED" : "ACTIVE") : null,
           });
         }
         return false;
@@ -848,6 +853,8 @@ export function createGame(args: CreateGameArgs) {
     if (world.state === "REWARD" && world.cardReward?.active) return false;
     if (world.state === "REWARD" && world.relicReward?.active) return false;
     if (world.floorEndCountdownActive && world.floorEndCountdownSec > 0) return false;
+    const delve = world.delveMap as DelveMap | null;
+    const currentDelveNode = delve?.currentNodeId ? delve.nodes.get(delve.currentNodeId) ?? null : null;
     commitCurrentNodeClear(world);
 
     if (isDeterministicDelveMode()) {
@@ -859,9 +866,13 @@ export function createGame(args: CreateGameArgs) {
       return true;
     }
 
-    const delve = world.delveMap as DelveMap;
     if (delve) {
-      showDelveMap(`Depth ${getMapDepth(world)} cleared!\nChoose your next destination.`);
+      if (currentDelveNode?.nodeType === "BOSS") {
+        markRunWon(delve);
+        completeRun(world, "Victory", "The act boss has been defeated.");
+        return true;
+      }
+      showDelveMap(`Row ${getMapDepth(world)} cleared!\nChoose your next destination.`);
       return true;
     }
     completeRun(world);
@@ -2008,9 +2019,16 @@ export function createGame(args: CreateGameArgs) {
     const w = world;
     setDialog(null);
     closeVendorShop(false);
+    const delve = w.delveMap as DelveMap | null;
+    const reopenDelveMapOnFailure = (subText: string): boolean => {
+      if (!delve) return false;
+      clearPendingNode(delve, floorIntent.nodeId);
+      showDelveMap(subText);
+      return false;
+    };
     if (w.delveMap && !floorIntent.mapId) {
       console.error("[enterFloor] delve floor intent missing mapId");
-      return false;
+      return reopenDelveMapOnFailure("Unable to enter that node.\nChoose another destination.");
     }
     w.floorIndex = floorIntent.floorIndex;
     w.floorArchetype = floorIntent.archetype;
@@ -2038,7 +2056,7 @@ export function createGame(args: CreateGameArgs) {
     const baseMap = getStaticMapById(targetMapId) ?? getDefaultStaticMap();
     if (!baseMap) {
       console.error(`[enterFloor] missing authored map for mapId="${targetMapId ?? "AUTO"}"`);
-      return false;
+      return reopenDelveMapOnFailure("Unable to enter that node.\nChoose another destination.");
     }
     const variantSeed = floorIntent.variantSeed ?? w.rng.int(0, 0x7fffffff);
     const rng = new RNG(variantSeed);
@@ -2047,6 +2065,19 @@ export function createGame(args: CreateGameArgs) {
       () => applyObjective(baseMap, objectiveId, rng),
     );
     await activateMapDefAsync(finalMap, variantSeed);
+    if (delve) {
+      const committed = commitPendingNode(delve, floorIntent.nodeId);
+      if (!committed) {
+        if (import.meta.env.DEV) {
+          console.error("[delve] Refusing floor load without pending node selection", {
+            nodeId: floorIntent.nodeId,
+            pendingNodeId: delve.pendingNodeId,
+            currentNodeId: delve.currentNodeId,
+          });
+        }
+        return reopenDelveMapOnFailure("That node could not be entered.\nChoose another destination.");
+      }
+    }
 
     floorLoadContext = { floorIntent };
     return true;
@@ -2245,16 +2276,18 @@ export function createGame(args: CreateGameArgs) {
     finalizeFloorLoad();
   }
 
-  function buildFloorIntentFromDelveNode(node: DelveNode, floorIndex: number): FloorIntent {
+  function buildFloorIntentFromDelveNode(node: DelveNode): FloorIntent {
     return {
       nodeId: node.id,
-      zoneId: node.zoneId,
+      zoneId: node.runtime.zoneId,
       depth: getNodeDepth(node),
-      floorIndex,
-      archetype: node.floorArchetype,
-      mapId: node.plan.mapId,
-      objectiveId: node.plan.objectiveId,
-      variantSeed: node.plan.variantSeed,
+      floorIndex: node.rowIndex,
+      archetype: floorArchetypeForNode(node),
+      mapId: node.runtime.mapId,
+      objectiveId: node.runtime.objectiveId,
+      variantSeed: node.runtime.variantSeed,
+      bossCount: node.runtime.bossCount,
+      spawnZoneCount: node.runtime.spawnZoneCount,
     };
   }
 
@@ -2355,11 +2388,14 @@ export function createGame(args: CreateGameArgs) {
     clearFloorEntities(w);
   }
 
-  function completeRun(w: World) {
-    // WIN CONDITION: final-floor objective completion.
+  function completeRun(
+    w: World,
+    title: string = "Run Ended",
+    subtitle: string = "Final floor objective completed.",
+  ) {
     w.runState = "RUN_COMPLETE";
     w.state = "WIN";
-    showEndScreen(w, "Run Ended", "Final floor objective completed.");
+    showEndScreen(w, title, subtitle);
   }
 
 
@@ -2427,9 +2463,7 @@ export function createGame(args: CreateGameArgs) {
     (world as any).currentCharacterId = character.id;
     ensureStarterRelicForCharacter(world, character.id);
 
-    // Create infinite delve map
-    const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
-    const delve = createDelveMap(seed);
+    const delve = createDelveMap(world.runSeed);
     world.delveMap = delve;
     setMapDepth(world, 1);
     applyRunHeatScaling(world);
@@ -2439,7 +2473,7 @@ export function createGame(args: CreateGameArgs) {
       const starter = getWorldRelicInstances(world).find((it) => it.source === "starter");
       console.debug("[starterRelic] run-start", { characterId: character.id, starterRelicId: starter?.id ?? null });
     }
-    showDelveMap("Choose your starting location.\nGo deeper for greater challenge and rewards.");
+    showDelveMap("Choose your starting location.\nClimb the act map toward the boss.");
   }
 
   async function executeStartDeterministicRun(characterId: PlayableCharacterId): Promise<void> {
@@ -2899,9 +2933,12 @@ export function createGame(args: CreateGameArgs) {
 
   const MAP_VIEW_WIDTH = 1000;
   const MAP_VIEW_HEIGHT = 520;
-  const ROUTE_ROW_HEIGHT_PX = 132;
-  const ROUTE_TOP_PADDING_PX = 78;
-  const ROUTE_BOTTOM_PADDING_PX = 122;
+  const ROUTE_ROW_HEIGHT_PX = 148;
+  const ROUTE_ROW_HEIGHT_MOBILE_PX = 126;
+  const ROUTE_TOP_PADDING_PX = 86;
+  const ROUTE_TOP_PADDING_MOBILE_PX = 74;
+  const ROUTE_BOTTOM_PADDING_PX = 136;
+  const ROUTE_BOTTOM_PADDING_MOBILE_PX = 118;
 
   function setMapGraphFillLayout(): void {
     args.ui.mapEl.graphContent.style.width = "100%";
@@ -2938,37 +2975,90 @@ export function createGame(args: CreateGameArgs) {
         return "Completed";
       case "LOCKED":
       default:
-        return "Locked";
+        return "Future";
     }
   };
 
-  const routeArchetypeClass = (archetype: FloorArchetype): string => {
-    switch (archetype) {
-      case "SURVIVE":
-        return "survive";
-      case "TIME_TRIAL":
-        return "time-trial";
-      case "VENDOR":
-        return "vendor";
-      case "HEAL":
-        return "heal";
-      case "BOSS_TRIPLE":
-      default:
-        return "boss-triple";
-    }
+  const routeVisualClass = (visualType: RouteMapVM["nodes"][number]["visualType"]): string => visualType;
+
+  const routeNodeStateClass = (node: RouteMapVM["nodes"][number]): "current" | "reachable" | "completed" | "future" => {
+    if (node.current) return "current";
+    if (node.reachable) return "reachable";
+    if (node.completed) return "completed";
+    return "future";
   };
 
-  const routeStatusClass = (status: RouteNodeStatus): string => {
-    switch (status) {
-      case "CURRENT":
-        return "current";
-      case "REACHABLE":
-        return "reachable";
-      case "COMPLETED":
-        return "completed";
-      case "LOCKED":
+  const routeNodeStateBadgeText = (node: RouteMapVM["nodes"][number]): string | null => {
+    if (node.current) return "Current";
+    if (node.reachable) return "Next";
+    if (node.completed) return "Done";
+    return null;
+  };
+
+  const routeEdgeStateClass = (
+    from: RouteMapVM["nodes"][number] | undefined,
+    to: RouteMapVM["nodes"][number] | undefined,
+  ): "routeEdge--visited" | "routeEdge--available" | "routeEdge--future" => {
+    if (from && to && from.current && to.reachable) return "routeEdge--available";
+    if (from && to && from.completed && (to.completed || to.current)) return "routeEdge--visited";
+    return "routeEdge--future";
+  };
+
+  const routeNodeIconMarkup = (visualType: RouteMapVM["nodes"][number]["visualType"]): string => {
+    switch (visualType) {
+      case "rest":
+        return `
+          <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+            <path class="glyph-stroke" d="M22 44h20" />
+            <path class="glyph-stroke" d="M26 44l-7 8" />
+            <path class="glyph-stroke" d="M38 44l7 8" />
+            <path class="glyph-fill" d="M32 15c-3 4-3 8 0 11-7-2-11 3-9 8 1 5 6 8 9 11 3-3 8-6 9-11 2-5-2-10-9-8 3-3 3-7 0-11z" />
+          </svg>
+        `;
+      case "shop":
+        return `
+          <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+            <path class="glyph-stroke" d="M20 24h24" />
+            <path class="glyph-stroke" d="M24 24c0-7 4-12 8-12s8 5 8 12" />
+            <path class="glyph-stroke" d="M18 24l4 24h20l4-24" />
+            <path class="glyph-fill" d="M25 31h14v10H25z" />
+          </svg>
+        `;
+      case "boss":
+        return `
+          <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+            <path class="glyph-fill" d="M18 20l7 5 7-11 7 11 7-5v11c0 10-7 18-14 21-7-3-14-11-14-21z" />
+            <path class="glyph-stroke" d="M24 39c3-2 13-2 16 0" />
+            <circle class="glyph-dot" cx="27" cy="33" r="1.8" />
+            <circle class="glyph-dot" cx="37" cy="33" r="1.8" />
+          </svg>
+        `;
+      case "elite":
+        return `
+          <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+            <path class="glyph-fill" d="M20 24l6-10 6 7 6-7 6 10-4 18H24z" />
+            <path class="glyph-stroke" d="M26 30c3-2 9-2 12 0" />
+          </svg>
+        `;
+      case "question-mark":
+        return `
+          <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+            <path class="glyph-stroke" d="M24 24c0-5 4-9 8-9s8 3 8 8c0 4-2 6-6 8-3 2-4 3-4 7" />
+            <circle class="glyph-dot" cx="32" cy="46" r="2.4" />
+          </svg>
+        `;
+      case "combat":
       default:
-        return "locked";
+        return `
+          <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+            <path class="glyph-stroke" d="M20 20l24 24" />
+            <path class="glyph-stroke" d="M44 20L20 44" />
+            <path class="glyph-fill" d="M18 18l7 2-5 5-2-7z" />
+            <path class="glyph-fill" d="M46 18l-7 2 5 5 2-7z" />
+            <path class="glyph-fill" d="M18 46l7-2-5-5-2 7z" />
+            <path class="glyph-fill" d="M46 46l-7-2 5-5 2 7z" />
+          </svg>
+        `;
     }
   };
 
@@ -2977,10 +3067,14 @@ export function createGame(args: CreateGameArgs) {
       args.ui.mapEl.infoPanel.textContent = "";
       return;
     }
-    const zoneText = node.mode === "DETERMINISTIC" ? "Deterministic choice" : node.zoneId;
+    const summaryPrefix = `${routeStatusLabel(node.status)} ${node.kindLabel}`;
+    const stateClass = routeNodeStateClass(node);
     args.ui.mapEl.infoPanel.innerHTML = `
-      <div class="routeInfoTitle">${node.title} · Depth ${node.depth}</div>
-      <div class="routeInfoMeta">${zoneText} · ${routeStatusLabel(node.status)}</div>
+      <div class="routeInfoTop">
+        <span class="routeInfoState routeInfoState--${stateClass}">${routeStatusLabel(node.status)}</span>
+        <div class="routeInfoTitle">${node.title}</div>
+      </div>
+      <div class="routeInfoMeta">${summaryPrefix} · ${node.subtitle}</div>
     `;
   }
 
@@ -2988,19 +3082,41 @@ export function createGame(args: CreateGameArgs) {
   function renderRouteMap(vm: RouteMapVM, subText: string): void {
     args.ui.mapEl.root.classList.add("delveFull");
     args.ui.mapEl.root.classList.add("routeMode");
+    args.ui.mapEl.root.classList.toggle("routeMode--delve", vm.mode === "DELVE");
+    args.ui.mapEl.root.classList.toggle("routeMode--deterministic", vm.mode === "DETERMINISTIC");
     world.state = "MAP";
     args.ui.mapEl.root.hidden = false;
     setHudHidden(true);
-    args.ui.mapEl.sub.textContent = subText;
+    args.ui.mapEl.title.textContent = vm.mode === "DELVE" ? "Act I" : "Route Picker";
+    args.ui.mapEl.sub.innerHTML = "";
+    const subMessage = document.createElement("div");
+    subMessage.className = "routeSubMessage";
+    subMessage.textContent = subText;
+    args.ui.mapEl.sub.appendChild(subMessage);
+    if (vm.mode === "DELVE") {
+      const legend = document.createElement("div");
+      legend.className = "routeLegend";
+      legend.innerHTML = `
+        <span class="routeLegendChip routeLegendChip--available">Available Path</span>
+        <span class="routeLegendChip routeLegendChip--visited">Visited Path</span>
+        <span class="routeLegendChip routeLegendChip--future">Future Path</span>
+      `;
+      args.ui.mapEl.sub.appendChild(legend);
+    }
     args.ui.mapEl.graphWrap.classList.add("routeScrollable");
-    args.ui.mapEl.depthLabel.textContent = `Depth ${vm.currentDepth}`;
+    args.ui.mapEl.depthLabel.textContent =
+      vm.mode === "DELVE"
+        ? `Row ${vm.currentDepth}/${vm.rowCount}`
+        : `Depth ${vm.currentDepth}`;
 
     const viewportWidth = Math.max(1, Math.floor(args.ui.mapEl.graphWrap.clientWidth || MAP_VIEW_WIDTH));
     const viewportHeight = Math.max(1, Math.floor(args.ui.mapEl.graphWrap.clientHeight || MAP_VIEW_HEIGHT));
+    const compactRouteLayout = viewportWidth <= 768 || viewportHeight <= 500;
+    args.ui.mapEl.root.classList.toggle("routeMode--phone", compactRouteLayout);
     const layout = buildRouteMapLayout(vm, viewportWidth, {
-      rowHeight: ROUTE_ROW_HEIGHT_PX,
-      topPadding: ROUTE_TOP_PADDING_PX,
-      bottomPadding: ROUTE_BOTTOM_PADDING_PX,
+      rowHeight: compactRouteLayout ? ROUTE_ROW_HEIGHT_MOBILE_PX : ROUTE_ROW_HEIGHT_PX,
+      topPadding: compactRouteLayout ? ROUTE_TOP_PADDING_MOBILE_PX : ROUTE_TOP_PADDING_PX,
+      bottomPadding: compactRouteLayout ? ROUTE_BOTTOM_PADDING_MOBILE_PX : ROUTE_BOTTOM_PADDING_PX,
     });
     setMapGraphPixelLayout(layout.contentWidth, layout.contentHeight);
 
@@ -3009,10 +3125,8 @@ export function createGame(args: CreateGameArgs) {
       .map((e) => {
         const from = nodeById.get(e.fromId);
         const to = nodeById.get(e.toId);
-        const active = !!from && !!to && (
-          from.status !== "LOCKED" || to.status !== "LOCKED"
-        );
-        return `<line class="routeEdge ${active ? "routeEdge--active" : "routeEdge--locked"}" x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" />`;
+        const edgeClass = routeEdgeStateClass(from, to);
+        return `<path class="routeEdge ${edgeClass}" d="${e.pathD}" />`;
       })
       .join("");
 
@@ -3026,14 +3140,16 @@ export function createGame(args: CreateGameArgs) {
     for (const node of vm.nodes) {
       const pos = layout.nodeLayouts.get(node.id);
       if (!pos) continue;
-      const archetypeClass = routeArchetypeClass(node.archetype);
-      const statusClass = routeStatusClass(node.status);
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = `mapHitBtn routeNode routeNode--${archetypeClass} routeNode--${statusClass}`;
+      btn.className = `mapHitBtn routeNode routeNode--${routeVisualClass(node.visualType)}`;
+      const stateClass = routeNodeStateClass(node);
+      btn.classList.add(`routeNode--${stateClass}`);
+      if (node.combatTagText) btn.classList.add("routeNode--hasTag");
       btn.style.left = `${pos.x}px`;
       btn.style.top = `${pos.y}px`;
       btn.disabled = !node.reachable || node.current || node.completed;
+      btn.setAttribute("aria-label", `${node.title}. ${routeStatusLabel(node.status)}.`);
       if (node.mode === "DELVE") {
         btn.dataset.delveNodeId = node.id;
       } else if (node.deterministicData) {
@@ -3044,7 +3160,30 @@ export function createGame(args: CreateGameArgs) {
           btn.dataset.detObjectiveId = node.deterministicData.objectiveId;
         }
       }
-      btn.textContent = node.title;
+      const icon = document.createElement("span");
+      icon.className = "routeNodeIcon";
+      icon.innerHTML = routeNodeIconMarkup(node.visualType);
+      btn.appendChild(icon);
+      const stateBadgeText = routeNodeStateBadgeText(node);
+      if (stateBadgeText) {
+        const stateBadge = document.createElement("span");
+        stateBadge.className = `routeNodeStateBadge routeNodeStateBadge--${stateClass}`;
+        stateBadge.textContent = stateBadgeText;
+        btn.appendChild(stateBadge);
+      }
+      const meta = document.createElement("span");
+      meta.className = "routeNodeMeta";
+      const label = document.createElement("span");
+      label.className = "routeNodeLabel";
+      label.textContent = node.kindLabel;
+      meta.appendChild(label);
+      if (node.combatTagText) {
+        const tag = document.createElement("span");
+        tag.className = "routeNodeTag";
+        tag.textContent = node.combatTagText;
+        meta.appendChild(tag);
+      }
+      btn.appendChild(meta);
       btn.addEventListener("mouseenter", () => setRouteInfo(node));
       btn.addEventListener("focus", () => setRouteInfo(node));
       btn.addEventListener("pointerdown", () => setRouteInfo(node));
@@ -3086,17 +3225,9 @@ export function createGame(args: CreateGameArgs) {
       completeRun(world);
       return;
     }
-
-    const seed = world.rng.int(0, 0x7fffffff);
-
-    // Generate adjacent nodes from current position
-    if (delve.currentNodeId) {
-      ensureAdjacentNodes(delve, delve.currentNodeId, seed);
-    }
     validateDelveHeatInvariant(world, "showDelveMap");
     const vm = buildDelveRouteMapVM(delve, {
-      windowBack: 2,
-      windowForward: 8,
+      showCombatSubtypes: !!getUserSettings().debug.delveActShowCombatSubtypes,
     });
     renderRouteMap(vm, subText);
   }
@@ -3106,13 +3237,21 @@ export function createGame(args: CreateGameArgs) {
     setMapGraphFillLayout();
     args.ui.mapEl.root.classList.remove("delveFull");
     args.ui.mapEl.root.classList.remove("routeMode");
+    args.ui.mapEl.root.classList.remove("routeMode--delve");
+    args.ui.mapEl.root.classList.remove("routeMode--deterministic");
+    args.ui.mapEl.root.classList.remove("routeMode--phone");
     args.ui.mapEl.root.hidden = true;
     setHudHidden(false);
   }
 
 
   function hudTimeText(w: World): string {
-    const floor = `F${(w.floorIndex ?? 0) + 1}/3`;
+    const totalRows = (() => {
+      const delve = w.delveMap as DelveMap | null;
+      if (delve) return delve.actLengthRows;
+      return FLOORS_PER_RUN;
+    })();
+    const floor = `R${(w.floorIndex ?? 0) + 1}/${totalRows}`;
     switch (w.runState) {
       case "FLOOR":
         return `${floor} ${formatTimeMMSS(w.phaseTime)} / ${formatTimeMMSS(w.floorDuration)}`;
@@ -3311,6 +3450,8 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function triggerDeathFx(): void {
+    const delve = world.delveMap as DelveMap | null;
+    if (delve) markRunLost(delve);
     world.deathFx.active = true;
     world.deathFx.tReal = 0;
     world.deathFx.durationReal = DEATH_FX_DURATION;
@@ -3658,32 +3799,20 @@ export function createGame(args: CreateGameArgs) {
       const delve = world.delveMap as DelveMap;
       if (!delve) return;
       const destinationNode = delve.nodes.get(delveNodeId);
-      if (!destinationNode || destinationNode.state !== "UNVISITED") return;
+      if (!destinationNode) return;
+      if (!destinationNode.contentEnabled) {
+        if (import.meta.env.DEV) {
+          throw new Error(`[delve] attempted to enter disabled node type ${destinationNode.nodeType}`);
+        }
+        return;
+      }
       if (!canEnterNode(delve, delveNodeId)) return;
 
       const node = moveToNode(delve, delveNodeId);
       if (!node) return;
-      if (import.meta.env.DEV && node.state !== "ACTIVE") {
-        console.error("[delve] Entered node is not ACTIVE after moveToNode", {
-          nodeId: node.id,
-          state: node.state,
-        });
-        return;
-      }
-
-      // Update map depth for presentation and generation.
-      const depth = getNodeDepth(node);
-      setMapDepth(world, depth);
-
-      // Generate adjacent nodes for next time
-      const seed = world.rng.int(0, 0x7fffffff);
-      ensureAdjacentNodes(delve, delveNodeId, seed);
 
       hideMap();
-
-      // Enter the chosen zone. floorIndex is used for enemy type weights, zoneId for visuals/music.
-      const floorIndex = Math.min(2, Math.floor((depth - 1) / 3));
-      queueFloorLoadIntent(buildFloorIntentFromDelveNode(node, floorIndex));
+      queueFloorLoadIntent(buildFloorIntentFromDelveNode(node));
       return;
     }
 

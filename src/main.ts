@@ -425,6 +425,7 @@ async function bootstrap() {
     togglePause(appStateController, appStateController.appState);
   });
   document.body.appendChild(pauseCogBtn);
+  let activeFloorLoadReady = true;
   const loadingController = createLoadingController({
     compileMap: async () => {
       cachedDeps = null;
@@ -433,7 +434,7 @@ async function bootstrap() {
         return;
       }
       if (activeFloorIntent) {
-        await game.beginFloorLoad(activeFloorIntent);
+        activeFloorLoadReady = await game.beginFloorLoad(activeFloorIntent);
       }
     },
     precomputeStaticMap: async () => {
@@ -444,11 +445,13 @@ async function bootstrap() {
         return game.prewarmActiveMapSpritesForCurrentPalette();
       }
       if (activeFloorIntent) {
+        if (!activeFloorLoadReady) return true;
         return game.prewarmFloorLoadSprites();
       }
       return true;
     },
     prepareStructureTriangles: async () => {
+      if (activeFloorIntent && !activeFloorLoadReady) return true;
       return game.prepareRuntimeStructureTrianglesForLoading();
     },
     primeAudio: async () => {
@@ -461,12 +464,14 @@ async function bootstrap() {
         return;
       }
       if (activeFloorIntent) {
+        if (!activeFloorLoadReady) return;
         game.finalizeFloorLoad();
       }
     },
     finalize: async () => {
       activeStartIntent = null;
       activeFloorIntent = null;
+      activeFloorLoadReady = true;
     },
   });
   attachLoadProfilerGlobal({
@@ -589,6 +594,7 @@ async function bootstrap() {
         const pendingFloorIntent = game.consumePendingFloorLoadIntent();
         if (pendingFloorIntent) {
           activeFloorIntent = pendingFloorIntent;
+          activeFloorLoadReady = true;
           loadingDoneNextState = AppState.RUN;
           loadingDoneFramePending = false;
           loadingController.beginMapLoad(pendingFloorIntent.mapId ?? "");
@@ -643,6 +649,7 @@ async function bootstrap() {
           const pendingFloorIntent = game.consumePendingFloorLoadIntent();
           if (pendingFloorIntent) {
             activeFloorIntent = pendingFloorIntent;
+            activeFloorLoadReady = true;
             loadingController.beginMapLoad(pendingFloorIntent.mapId ?? "");
             appStateController.setAppState(AppState.LOADING);
             renderLoadingScreen(ctx, loadingController.progress);

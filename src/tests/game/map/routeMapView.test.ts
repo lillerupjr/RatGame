@@ -1,97 +1,115 @@
 import { describe, expect, test } from "vitest";
-import type { DelveMap, DelveNode, DelveNodeState } from "../../../game/map/delveMap";
+import type { DelveMap, DelveNode } from "../../../game/map/delveMap";
 import { buildDelveRouteMapVM, buildDeterministicRouteMapVM } from "../../../game/map/routeMapView";
 
-function mkNode(
+function node(
   id: string,
-  x: number,
-  y: number,
-  state: DelveNodeState = "UNVISITED",
+  rowIndex: number,
+  laneIndex: number,
+  nodeType: DelveNode["nodeType"] = "COMBAT",
 ): DelveNode {
   return {
     id,
-    x,
-    y,
-    zoneId: "DOCKS",
-    floorArchetype: "SURVIVE",
-    plan: {
-      depth: y + 1,
-      mapId: "docks",
-      objectiveId: "SURVIVE_TIMER",
+    rowIndex,
+    laneIndex,
+    nodeType,
+    combatSubtype: nodeType === "COMBAT" ? "SURVIVE_TIMER" : undefined,
+    outgoingNodeIds: [],
+    runtime: {
+      zoneId: "DOCKS",
+      mapId: nodeType === "SHOP" ? "SHOP" : nodeType === "REST" ? "REST" : "docks",
+      objectiveId:
+        nodeType === "SHOP"
+          ? "VENDOR_VISIT"
+          : nodeType === "REST"
+            ? "HEAL_VISIT"
+            : nodeType === "BOSS"
+              ? "KILL_RARES_IN_ZONES"
+              : "SURVIVE_TIMER",
       variantSeed: 1,
+      bossCount: nodeType === "BOSS" ? 1 : undefined,
+      spawnZoneCount: nodeType === "BOSS" ? 1 : undefined,
     },
-    title: `${id}`,
-    state,
+    contentEnabled: true,
   };
 }
 
 describe("routeMapView", () => {
-  test("buildDelveRouteMapVM applies statuses and depth window with forced reachable nodes", () => {
-    const nodes = new Map<string, DelveNode>();
-    const A = mkNode("0,0", 0, 0, "CLEARED");
-    const B = mkNode("0,1", 0, 1, "CLEARED");
-    const C = mkNode("0,2", 0, 2, "CLEARED");
-    const D = mkNode("1,2", 1, 2, "UNVISITED");
-    const E = mkNode("0,3", 0, 3, "UNVISITED");
-    const G = mkNode("0,11", 0, 11, "UNVISITED"); // outside normal window, but reachable
-    const H = mkNode("-1,9", -1, 9, "CLEARED"); // in window and must stay completed
-    const F = mkNode("0,12", 0, 12, "UNVISITED"); // outside window and not reachable
-    [A, B, C, D, E, F, G, H].forEach((n) => nodes.set(n.id, n));
+  test("buildDelveRouteMapVM exposes row/lane layout and current/completed state", () => {
+    const start = node("act:0:1", 0, 1);
+    const next = node("act:1:2", 1, 2, "SHOP");
+    const boss = node("act:2:2", 2, 2, "BOSS");
+    start.outgoingNodeIds = [next.id];
+    next.outgoingNodeIds = [boss.id];
 
     const map: DelveMap = {
-      nodes,
+      seed: 1,
+      actLengthRows: 3,
+      laneCount: 5,
+      nodes: new Map([
+        [start.id, start],
+        [next.id, next],
+        [boss.id, boss],
+      ]),
       edges: [
-        { from: A.id, to: B.id },
-        { from: B.id, to: C.id },
-        { from: C.id, to: D.id },
-        { from: C.id, to: E.id },
-        { from: C.id, to: G.id },
-        { from: E.id, to: H.id },
-        { from: E.id, to: F.id },
+        { from: start.id, to: next.id },
+        { from: next.id, to: boss.id },
       ],
-      currentNodeId: C.id,
-      exploredDepth: 2,
+      startNodeIds: [start.id],
+      bossNodeId: boss.id,
+      completedNodeIds: new Set([start.id]),
+      currentNodeId: start.id,
+      pendingNodeId: null,
+      runStatus: "IN_PROGRESS",
     };
 
-    const vm = buildDelveRouteMapVM(map, { windowBack: 2, windowForward: 8 });
-    const byId = new Map(vm.nodes.map((n) => [n.id, n]));
+    const vm = buildDelveRouteMapVM(map, { showCombatSubtypes: false });
+    const byId = new Map(vm.nodes.map((entry) => [entry.id, entry]));
 
-    expect(vm.currentDepth).toBe(3);
-    expect(vm.depthWindow).toEqual({ start: 1, end: 11 });
-
-    expect(byId.get(C.id)?.status).toBe("CURRENT");
-    expect(byId.get(G.id)?.status).toBe("REACHABLE");
-    expect(byId.get(H.id)?.status).toBe("COMPLETED");
-    expect(byId.get(A.id)?.status).toBe("COMPLETED");
-
-    expect(byId.has(G.id)).toBe(true); // forced include reachable, even outside window
-    expect(byId.has(F.id)).toBe(false); // outside window and not reachable
-
-    expect(vm.edges.some((e) => e.fromId === C.id && e.toId === G.id)).toBe(true);
-    expect(vm.edges.some((e) => e.fromId === E.id && e.toId === F.id)).toBe(false);
+    expect(vm.rowCount).toBe(3);
+    expect(vm.depthWindow).toEqual({ start: 1, end: 3 });
+    expect(byId.get(start.id)?.status).toBe("CURRENT");
+    expect(byId.get(start.id)?.completed).toBe(true);
+    expect(byId.get(start.id)?.subtitle).toBe("Docks · Row 1");
+    expect(byId.get(next.id)?.status).toBe("REACHABLE");
+    expect(byId.get(next.id)?.visualType).toBe("shop");
+    expect(byId.get(boss.id)?.status).toBe("LOCKED");
+    expect(byId.get(boss.id)?.visualType).toBe("boss");
   });
 
-  test("buildDelveRouteMapVM labels PoE objective nodes", () => {
-    const poe = mkNode("0,0", 0, 0, "UNVISITED");
-    poe.plan.objectiveId = "POE_MAP_CLEAR";
+  test("combat subtype toggle changes title without changing node type", () => {
+    const start = node("act:0:1", 0, 1);
+    start.combatSubtype = "POE_MAP_CLEAR";
+    start.runtime.objectiveId = "POE_MAP_CLEAR";
     const map: DelveMap = {
-      nodes: new Map([[poe.id, poe]]),
+      seed: 1,
+      actLengthRows: 1,
+      laneCount: 5,
+      nodes: new Map([[start.id, start]]),
       edges: [],
+      startNodeIds: [start.id],
+      bossNodeId: start.id,
+      completedNodeIds: new Set<string>(),
       currentNodeId: null,
-      exploredDepth: 0,
+      pendingNodeId: null,
+      runStatus: "IN_PROGRESS",
     };
 
-    const vm = buildDelveRouteMapVM(map);
-    expect(vm.nodes).toHaveLength(1);
-    expect(vm.nodes[0].title).toBe("PoE Map");
-    expect(vm.nodes[0].subtitle).toContain("Depth 1");
+    const hidden = buildDelveRouteMapVM(map, { showCombatSubtypes: false });
+    const shown = buildDelveRouteMapVM(map, { showCombatSubtypes: true });
+
+    expect(hidden.nodes[0].title).toBe("Combat");
+    expect(shown.nodes[0].title).toBe("PoE Map");
+    expect(hidden.nodes[0].combatTagText).toBeUndefined();
+    expect(shown.nodes[0].combatTagText).toBe("PoE Map");
+    expect(hidden.nodes[0].visualType).toBe("combat");
+    expect(shown.nodes[0].visualType).toBe("combat");
   });
 
-  test("buildDeterministicRouteMapVM builds reachable deterministic nodes", () => {
+  test("buildDeterministicRouteMapVM still produces reachable one-row choices", () => {
     const vm = buildDeterministicRouteMapVM(
       [
         { archetype: "SURVIVE" },
-        { archetype: "SURVIVE", objectiveId: "POE_MAP_CLEAR", title: "PoE Map" },
         { archetype: "TIME_TRIAL" },
         { archetype: "VENDOR" },
         { archetype: "HEAL" },
@@ -100,17 +118,18 @@ describe("routeMapView", () => {
       2,
       5,
     );
+
     expect(vm.mode).toBe("DETERMINISTIC");
-    expect(vm.nodes.length).toBe(6);
-    expect(vm.edges.length).toBe(0);
-    const poeNode = vm.nodes.find((node) => node.title === "PoE Map");
-    expect(poeNode?.deterministicData?.objectiveId).toBe("POE_MAP_CLEAR");
-    for (const node of vm.nodes) {
-      expect(node.status).toBe("REACHABLE");
-      expect(node.reachable).toBe(true);
-      expect(node.depth).toBe(5);
-      expect(node.deterministicData?.floorIndex).toBe(2);
-      expect(node.deterministicData?.depth).toBe(5);
+    expect(vm.rowCount).toBe(1);
+    expect(vm.nodes).toHaveLength(5);
+    expect(vm.edges).toHaveLength(0);
+    expect(vm.nodes[0].laneIndex).toBe(0);
+    expect(vm.nodes[4].visualType).toBe("boss");
+    for (const routeNode of vm.nodes) {
+      expect(routeNode.reachable).toBe(true);
+      expect(routeNode.status).toBe("REACHABLE");
+      expect(routeNode.deterministicData?.floorIndex).toBe(2);
+      expect(routeNode.depth).toBe(5);
     }
   });
 });
