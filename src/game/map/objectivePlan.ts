@@ -1,5 +1,6 @@
 import type { FloorArchetype } from "./floorArchetype";
 import type { ObjectiveSpec } from "../systems/progression/objectiveSpec";
+import type { BossId } from "../bosses/bossTypes";
 
 export type ObjectiveId =
   | "SURVIVE_TIMER"
@@ -8,6 +9,7 @@ export type ObjectiveId =
   | "TIME_TRIAL_ZONES"
   | "VENDOR_VISIT"
   | "HEAL_VISIT"
+  | "ACT_BOSS"
   | "KILL_RARES_IN_ZONES";
 
 export const OBJECTIVE_IDS: ObjectiveId[] = [
@@ -17,6 +19,7 @@ export const OBJECTIVE_IDS: ObjectiveId[] = [
   "TIME_TRIAL_ZONES",
   "VENDOR_VISIT",
   "HEAL_VISIT",
+  "ACT_BOSS",
   "KILL_RARES_IN_ZONES",
 ];
 
@@ -30,6 +33,8 @@ export function objectiveIdFromArchetype(archetype: FloorArchetype): ObjectiveId
       return "VENDOR_VISIT";
     case "HEAL":
       return "HEAL_VISIT";
+    case "ACT_BOSS":
+      return "ACT_BOSS";
     case "BOSS_TRIPLE":
       return "KILL_RARES_IN_ZONES";
   }
@@ -41,6 +46,7 @@ export function objectiveSpecFromObjectiveId(
     timeLimitSec: number;
     zoneCount: number;
     bossCount: number;
+    bossId: BossId | null;
   }>
 ): ObjectiveSpec {
   switch (objectiveId) {
@@ -85,6 +91,13 @@ export function objectiveSpecFromObjectiveId(
       return {
         objectiveType: "HEAL_VISIT",
         params: {},
+      };
+    case "ACT_BOSS":
+      return {
+        objectiveType: "ACT_BOSS",
+        params: {
+          bossId: params?.bossId ?? null,
+        },
       };
     case "KILL_RARES_IN_ZONES":
       return {

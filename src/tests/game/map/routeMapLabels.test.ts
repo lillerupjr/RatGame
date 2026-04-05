@@ -8,6 +8,7 @@ describe("floorArchetypeDisplayLabel", () => {
     ["TIME_TRIAL", "Zone Trial"],
     ["VENDOR", "Vendor"],
     ["HEAL", "Heal"],
+    ["ACT_BOSS", "Boss"],
     ["BOSS_TRIPLE", "3 Bosses"],
   ])('archetype %s maps to label "%s"', (archetype, expected) => {
     expect(floorArchetypeDisplayLabel(archetype)).toBe(expected);
@@ -23,6 +24,7 @@ describe("floorArchetypeDisplayLabel", () => {
       "TIME_TRIAL",
       "VENDOR",
       "HEAL",
+      "ACT_BOSS",
       "BOSS_TRIPLE",
     ];
     const abbreviationPattern = /^[A-Z_]{2,}$/;

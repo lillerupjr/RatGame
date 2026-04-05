@@ -74,6 +74,9 @@ export type TableObjectiveRule =
     type: "SIGNAL_COUNT";
     count: number;
     signalType?: "ENTER" | "EXIT" | "KILL" | "TICK" | "INTERACT";
+}
+    | {
+    type: "TRACK_BOSS_KILL";
 };
 
 export type TableOutcomeDef = {

@@ -1,4 +1,12 @@
 import { PRJ_KIND } from "../factories/projectileFactory";
+import type {
+    HostileBodyConfig,
+    HostileDeathEffectConfig,
+    HostileMovementConfig,
+    HostilePresentationConfig,
+    HostileRewardsConfig,
+    HostileStatsConfig,
+} from "../hostiles/hostileTypes";
 
 export const EnemyId = {
     MINION: 1,
@@ -25,17 +33,9 @@ export type EnemyStats = {
     contactDamage: number;
 };
 
-export type EnemyBodyConfig = {
-    radius: number;
-    hitHeightProjectile?: number;
-    hitHeightContact?: number;
-};
+export type EnemyBodyConfig = HostileBodyConfig;
 
-export type EnemyRewardsConfig = {
-    goldValue?: number;
-    goldMultiplier?: number;
-    isBoss?: boolean;
-};
+export type EnemyRewardsConfig = HostileRewardsConfig;
 
 export type EnemySpawnRole =
     | "baseline_chaser"
@@ -58,32 +58,9 @@ export type EnemySpawnConfig = {
     burstWeight?: number;
 };
 
-export type EnemySpriteConfig = {
-    skin: string;
-    scale: number;
-    anchorX: number;
-    anchorY: number;
-    frameW: number;
-    frameH: number;
-    runAnim?: string;
-    frameCount?: number;
-    packRoot?: string;
-};
+export type EnemyPresentationConfig = HostilePresentationConfig;
 
-export type EnemyPresentationConfig = {
-    color?: string;
-    sprite?: EnemySpriteConfig;
-    aimScreenOffset?: { x: number; y: number };
-    shadowFootOffset?: { x: number; y: number };
-};
-
-export type EnemyMovementConfig = {
-    mode: "approach_player" | "scripted";
-    speed: number;
-    desiredRange: number;
-    tolerance: number;
-    reengageRange: number;
-};
+export type EnemyMovementConfig = HostileMovementConfig;
 
 export type EnemyProjectileAbilityConfig = {
     kind: "projectile";
@@ -120,24 +97,14 @@ export type EnemyAbilityConfig =
     | EnemyExplodeAbilityConfig
     | EnemyLeapAbilityConfig;
 
-export type EnemyRadialProjectileDeathEffectConfig = {
-    type: "radial_projectiles";
-    count: number;
-    projectileKind: number;
-    speed: number;
-    damage: number;
-    ttl: number;
-};
-
-export type EnemyDeathEffectConfig =
-    | EnemyRadialProjectileDeathEffectConfig;
+export type EnemyDeathEffectConfig = HostileDeathEffectConfig;
 
 export type EnemyDefinition = {
     id: EnemyId;
     name: string;
     aiType: EnemyAiType;
     spawn: EnemySpawnConfig;
-    stats: EnemyStats;
+    stats: HostileStatsConfig;
     body: EnemyBodyConfig;
     rewards?: EnemyRewardsConfig;
     presentation?: EnemyPresentationConfig;

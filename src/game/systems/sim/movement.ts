@@ -2,7 +2,7 @@ import { World, gridAtPlayer } from "../../../engine/world/world";
 import { InputState } from "./input";
 import { walkInfo, worldToTile } from "../../map/compile/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
-import { dir8FromVector, type Dir8 } from "../../../engine/render/sprites/dir8";
+import { dir8FromVector } from "../../../engine/render/sprites/dir8";
 import { gridToWorld } from "../../coords/grid";
 import { anchorFromWorld, writeAnchor } from "../../coords/anchor";
 import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
@@ -17,8 +17,12 @@ import {
   FLEE_TRIGGER_RADIUS_TILES,
   isLootGoblinEnemy,
 } from "../neutral/lootGoblin";
+import {
+  getBossDefinitionForEntity,
+  isBossEntity,
+} from "../../bosses/bossRuntime";
 import { getPoeEnemyLeashAnchor, isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
-import { EnemyId } from "../../content/enemies";
+import type { EnemyId } from "../../content/enemies";
 import { registry } from "../../content/registry";
 import { ensureEnemyBrain } from "../enemies/brain";
 
@@ -204,10 +208,11 @@ export function movementSystem(w: World, input: InputState, dt: number) {
 
     const type = w.eType[i] as EnemyId;
     const isGoblin = isLootGoblinEnemy(w, i);
-    const isBoss = type === EnemyId.BOSS;
+    const bossDef = getBossDefinitionForEntity(w, i);
+    const isBoss = isBossEntity(w, i);
     const leashAnchor = getPoeEnemyLeashAnchor(w, i);
-    const archetype = registry.enemy(type);
-    const brain = ensureEnemyBrain(w, i);
+    const enemyDef = bossDef ?? registry.enemy(type);
+    const brain = isBoss ? null : ensureEnemyBrain(w, i);
     let chaseWx = 0;
     let chaseWy = 0;
 
@@ -255,14 +260,14 @@ export function movementSystem(w: World, input: InputState, dt: number) {
 
       const eWorldDir = gridDirToWorldDir(KENNEY_TILE_WORLD, gux, guy);
       const speedMult = isGoblin ? FLEE_SPEED_MULT : 1;
-      const desiredRange = archetype.movement.desiredRange;
-      const tolerance = archetype.movement.tolerance;
-      const reengageRange = archetype.movement.reengageRange;
+      const desiredRange = enemyDef.movement.desiredRange;
+      const tolerance = enemyDef.movement.tolerance;
+      const reengageRange = enemyDef.movement.reengageRange;
       const surfaceDist = Math.max(0, Math.hypot(px - ex, py - ey) - ((w.eR[i] ?? 0) + (w.playerR ?? 0)));
       const minHold = Math.max(0, desiredRange - tolerance);
       const maxHold = desiredRange + tolerance;
       const shouldUseSharedRange =
-        archetype.movement.mode !== "scripted"
+        enemyDef.movement.mode !== "scripted"
         && !isBoss
         && !isGoblin;
 
@@ -272,32 +277,35 @@ export function movementSystem(w: World, input: InputState, dt: number) {
       let chaseSpeed = w.eSpeed[i] * speedMult;
       let moveScale = 1;
 
-        if (shouldUseSharedRange) {
-          if (brain.state === "idle" || brain.state === "dead") {
-            applyMovement = false;
-          } else if (
-            archetype.aiType === "leaper"
-          && archetype.ability?.kind === "leap"
+      if (shouldUseSharedRange && brain) {
+        if (brain.state === "idle" || brain.state === "dead") {
+          applyMovement = false;
+        } else if (
+          enemyDef.aiType === "leaper"
+          && "ability" in enemyDef
+          && enemyDef.ability?.kind === "leap"
           && brain.state === "acting"
           && brain.leapTimeLeftSec > 0
         ) {
           dirWx = brain.leapDirX;
           dirWy = brain.leapDirY;
-            chaseSpeed = archetype.ability.leapSpeed;
-            moveScale = Math.min(1, brain.leapTimeLeftSec / Math.max(dt, 1e-6));
-          } else if (brain.state !== "move") {
-            applyMovement = false;
-          } else if (archetype.aiType === "contact" || archetype.aiType === "leaper") {
-            applyMovement = true;
-          } else if (surfaceDist > reengageRange || surfaceDist > maxHold) {
-            applyMovement = true;
-          } else if (surfaceDist < minHold && desiredRange > 0.0001) {
-            dirWx = -dirWx;
+          chaseSpeed = enemyDef.ability.leapSpeed;
+          moveScale = Math.min(1, brain.leapTimeLeftSec / Math.max(dt, 1e-6));
+        } else if (brain.state !== "move") {
+          applyMovement = false;
+        } else if (enemyDef.aiType === "contact" || enemyDef.aiType === "leaper") {
+          applyMovement = true;
+        } else if (surfaceDist > reengageRange || surfaceDist > maxHold) {
+          applyMovement = true;
+        } else if (surfaceDist < minHold && desiredRange > 0.0001) {
+          dirWx = -dirWx;
           dirWy = -dirWy;
           applyMovement = true;
         } else {
           applyMovement = false;
         }
+      } else if (enemyDef.movement.mode === "scripted") {
+        applyMovement = false;
       }
 
       if (applyMovement) {
@@ -358,8 +366,10 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     const movedY = movedDiag ? true : tryEnemyMove(ex, eny);
 
     if (
-      archetype.aiType === "leaper"
-      && archetype.ability?.kind === "leap"
+      brain
+      && enemyDef.aiType === "leaper"
+      && "ability" in enemyDef
+      && enemyDef.ability?.kind === "leap"
       && brain.state === "acting"
       && brain.leapTimeLeftSec > 0
     ) {

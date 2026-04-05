@@ -3,6 +3,7 @@ import { World, emitEvent } from "../../../engine/world/world";
 import {isEnemyHit, isPlayerHit, isPlayerProjectileHit} from "./hitDetection";
 import { walkInfo } from "../../map/compile/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
+import { getBossDefinitionForEntity } from "../../bosses/bossRuntime";
 import { registry } from "../../content/registry";
 import { spawnZone, ZONE_KIND } from "../../factories/zoneFactory";
 import { clearSpatialHash, insertEntity, queryCircle } from "../../util/spatialHash";
@@ -719,12 +720,17 @@ export function collisionsSystem(w: World, dt: number) {
       const rr = w.eR[e] + PLAYER_R;
 
       if (!isPlayerHit(w, e, PLAYER_R)) continue;
-      const enemyArchetype = registry.enemy(w.eType[e] as any);
-      const dmg = w.eDamage[e] || 0;
-      if (!(enemyArchetype.stats.contactDamage > 0) || !(dmg > 0)) continue;
+      const contactDamage = Math.max(
+        0,
+        Number.isFinite(w.eDamage[e])
+          ? (w.eDamage[e] as number)
+          : getBossDefinitionForEntity(w, e)?.stats.contactDamage
+            ?? registry.enemy(w.eType[e] as any).stats.contactDamage,
+      );
+      if (!(contactDamage > 0)) continue;
 
       // CONTACT HIT
-      const lifeDamage = godMode ? 0 : applyPlayerIncomingDamage(w, dmg);
+      const lifeDamage = godMode ? 0 : applyPlayerIncomingDamage(w, contactDamage);
       if (!godMode) w.playerHp -= lifeDamage;
       if (lifeDamage > 0) {
         breakMomentumOnLifeDamage(w, w.timeSec ?? w.time ?? 0);

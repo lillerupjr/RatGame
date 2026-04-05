@@ -1,4 +1,5 @@
 import type { ObjectiveDef } from "./objective";
+import type { BossId } from "../../bosses/bossTypes";
 
 export type ObjectiveSpec =
   | { objectiveType: "SURVIVE_TIMER"; params: { timeLimitSec: number } }
@@ -12,6 +13,7 @@ export type ObjectiveSpec =
     }
   | { objectiveType: "VENDOR_VISIT"; params: Record<string, never> }
   | { objectiveType: "HEAL_VISIT"; params: Record<string, never> }
+  | { objectiveType: "ACT_BOSS"; params: { bossId: BossId | null } }
   | {
       objectiveType: "KILL_RARES_IN_ZONES";
       params: { bossCount: number; zoneCount: number; timeLimitSec: number | null };
@@ -101,6 +103,17 @@ export function objectiveSpecToObjectiveDefs(spec: ObjectiveSpec): ObjectiveDef[
             type: "SIGNAL_COUNT",
             count: 1,
             signalType: "INTERACT",
+          },
+          outcomes: [],
+        },
+      ];
+    case "ACT_BOSS":
+      return [
+        {
+          id: "OBJ_ACT_BOSS",
+          listensTo: [],
+          completionRule: {
+            type: "TRACK_BOSS_KILL",
           },
           outcomes: [],
         },

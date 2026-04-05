@@ -8,5 +8,6 @@ export function objectiveSpecFromFloorIntent(intent: FloorIntent): ObjectiveSpec
     timeLimitSec: intent.timeLimitSec,
     zoneCount: intent.spawnZoneCount,
     bossCount: intent.bossCount,
+    bossId: intent.bossId ?? null,
   });
 }

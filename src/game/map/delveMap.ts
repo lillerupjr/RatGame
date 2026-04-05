@@ -1,3 +1,4 @@
+import type { BossId } from "../bosses/bossTypes";
 import type { StageId } from "../content/stages";
 import { RNG } from "../util/rng";
 import type { FloorArchetype } from "./floorArchetype";
@@ -25,9 +26,10 @@ export type DelveCombatSubtype = Extract<ObjectiveId, "SURVIVE_TIMER" | "POE_MAP
 
 export type DelveNodeRuntimePlan = {
   zoneId: StageId;
-  mapId: MapId;
+  mapId: string;
   objectiveId: ObjectiveId;
   variantSeed: number;
+  bossId?: BossId;
   bossCount?: number;
   spawnZoneCount?: number;
 };

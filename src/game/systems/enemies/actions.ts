@@ -36,11 +36,11 @@ export function enemyActionSystem(w: World, _dt: number): void {
   for (let i = 0; i < w.eAlive.length; i++) {
     if (!w.eAlive[i]) continue;
 
-    const brain = ensureEnemyBrain(w, i);
-    if (brain.state !== "acting") continue;
-
     const type = w.eType[i] as EnemyId;
     if (type === EnemyId.BOSS) continue;
+
+    const brain = ensureEnemyBrain(w, i);
+    if (brain.state !== "acting") continue;
 
     const archetype = registry.enemy(type);
     const ability = archetype.ability;

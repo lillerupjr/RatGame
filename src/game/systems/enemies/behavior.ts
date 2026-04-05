@@ -47,16 +47,16 @@ export function enemyBehaviorSystem(w: World, dt: number): void {
     if (!w.eAlive[i]) continue;
 
     const type = w.eType[i] as EnemyId;
+    if (type === EnemyId.BOSS || isLootGoblinEnemy(w, i)) {
+      continue;
+    }
+
     const archetype = registry.enemy(type);
     const brain = ensureEnemyBrain(w, i);
     if (brain.state === "dead") continue;
 
     brain.stateTimeSec += dt;
     brain.cooldownLeftSec = Math.max(0, brain.cooldownLeftSec - dt);
-
-    if (type === EnemyId.BOSS || isLootGoblinEnemy(w, i)) {
-      continue;
-    }
 
     if (archetype.movement.mode === "scripted" || isPoeEnemyDormant(w, i)) {
       continue;

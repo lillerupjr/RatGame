@@ -40,6 +40,16 @@ import {
 import { zonesSystem } from "./systems/sim/zones";
 import { relicExplodeOnKillSystem } from "./systems/sim/relicExplodeOnKill";
 import { bossSystem } from "./systems/progression/boss";
+import { buildActBossPlan } from "./bosses/actBossPlan";
+import { bossRegistry } from "./bosses/bossRegistry";
+import { bossEncounterSystem } from "./bosses/bossSystem";
+import {
+  getActiveBossEncounter,
+  getBossDefinitionForEntity,
+  isBossEntity,
+  resetBossRuntime,
+} from "./bosses/bossRuntime";
+import { spawnActBossEncounterFromActiveMap } from "./bosses/spawnBossEncounter";
 import { audioSystem } from "./systems/presentation/audio";
 import { preloadSfx } from "../engine/audio/sfx";
 import { roomChallengeSystem } from "./systems/progression/roomChallenge";
@@ -67,7 +77,7 @@ import {
 } from "./systems/progression/bossTripleObjectiveSync";
 
 import { formatTimeMMSS } from "./util/time";
-import { getBossAccent } from "./content/floors";
+import { getBossAccent, getBossTitle } from "./content/floors";
 import { registry } from "./content/registry";
 import { spawnEnemyGrid, EnemyId } from "./factories/enemyFactory";
 import { gridToWorld } from "./coords/grid";
@@ -1658,6 +1668,7 @@ export function createGame(args: CreateGameArgs) {
     { archetype: "TIME_TRIAL", title: "Zone Trial" },
     { archetype: "VENDOR", title: "Vendor" },
     { archetype: "HEAL", title: "Heal" },
+    { archetype: "ACT_BOSS", title: "Boss" },
     { archetype: "BOSS_TRIPLE", title: "3 Bosses" },
   ];
   const DETERMINISTIC_ZONES = ["DOCKS", "SEWERS", "CHINATOWN"] as const;
@@ -1680,6 +1691,8 @@ export function createGame(args: CreateGameArgs) {
         return "Vendor";
       case "HEAL":
         return "Heal";
+      case "ACT_BOSS":
+        return "Boss";
       case "BOSS_TRIPLE":
         return "3 Bosses";
     }
@@ -1724,7 +1737,9 @@ export function createGame(args: CreateGameArgs) {
     w.ePoisonDps = [];
     w.ePoisonedOnDeath = [];
     w.eSpawnTriggerId = [];
+    w.eBossId = [];
     w.eAilments = [];
+    resetBossRuntime(w);
 
     w.zAlive = [];
     w.zKind = [];
@@ -1933,7 +1948,7 @@ export function createGame(args: CreateGameArgs) {
     for (let i = 0; i < w.eAlive.length; i++) {
       if (!w.eAlive[i]) continue;
       const enemyId = w.eType[i] as EnemyId;
-      if (enemyId === EnemyId.BOSS || isNeutralMonsterId(enemyId)) continue;
+      if (isBossEntity(w, i) || isNeutralMonsterId(enemyId)) continue;
       activeEnemies.push({ enemyId });
     }
     return activeEnemies;
@@ -1953,11 +1968,32 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function findFirstAliveBossIndex(w: World): number {
+    const activeEncounter = getActiveBossEncounter(w);
+    if (activeEncounter && w.eAlive[activeEncounter.enemyIndex]) {
+      return activeEncounter.enemyIndex;
+    }
     for (let i = 0; i < w.eAlive.length; i++) {
       if (!w.eAlive[i]) continue;
-      if (w.eType[i] === EnemyId.BOSS) return i;
+      if (isBossEntity(w, i)) return i;
     }
     return -1;
+  }
+
+  function getBossBarDescriptor(
+    w: World,
+    bossIndex: number,
+  ): { title: string; accent: string } {
+    const def = getBossDefinitionForEntity(w, bossIndex);
+    if (def) {
+      return {
+        title: def.ui?.title ?? def.name,
+        accent: def.ui?.accent ?? def.presentation?.color ?? "#f66",
+      };
+    }
+    return {
+      title: getBossTitle(w) ?? "Boss",
+      accent: getBossAccent(w) ?? "#f66",
+    };
   }
 
   function spawnSurviveBossIfNeeded(w: World): void {
@@ -2026,6 +2062,15 @@ export function createGame(args: CreateGameArgs) {
       showDelveMap(subText);
       return false;
     };
+    const objectiveId = floorIntent.objectiveId ?? objectiveIdFromArchetype(floorIntent.archetype);
+    if (objectiveId === "ACT_BOSS" && (!floorIntent.mapId || !floorIntent.bossId)) {
+      const actBossPlan = buildActBossPlan(
+        floorIntent.variantSeed ?? deterministicVariantSeed(w.runSeed, floorIntent.floorIndex, floorIntent.depth, floorIntent.archetype),
+        floorIntent.depth,
+      );
+      floorIntent.mapId ??= actBossPlan.mapId;
+      floorIntent.bossId ??= actBossPlan.bossId;
+    }
     if (w.delveMap && !floorIntent.mapId) {
       console.error("[enterFloor] delve floor intent missing mapId");
       return reopenDelveMapOnFailure("Unable to enter that node.\nChoose another destination.");
@@ -2045,7 +2090,6 @@ export function createGame(args: CreateGameArgs) {
     // Drive floor timing from stage
     w.floorDuration = w.stage.duration;
 
-    const objectiveId = floorIntent.objectiveId ?? objectiveIdFromArchetype(floorIntent.archetype);
     const targetMapId =
       floorIntent.mapId
       ?? (floorIntent.archetype === "VENDOR"
@@ -2203,6 +2247,19 @@ export function createGame(args: CreateGameArgs) {
         },
       };
     }
+    if (objectiveSpec.objectiveType === "ACT_BOSS" && !floorIntent.bossId) {
+      const actBossPlan = buildActBossPlan(
+        floorIntent.variantSeed ?? hashString(`${floorIntent.nodeId}:${floorIntent.floorIndex}:${floorIntent.depth}:act_boss`),
+        floorIntent.depth,
+      );
+      floorIntent.bossId = actBossPlan.bossId;
+      objectiveSpec = {
+        objectiveType: "ACT_BOSS",
+        params: {
+          bossId: actBossPlan.bossId,
+        },
+      };
+    }
 
     resetFloorProgressionState(w);
     resetHostileSpawnDirectorForFloor(w);
@@ -2229,6 +2286,13 @@ export function createGame(args: CreateGameArgs) {
     startZoneTrial(w);
     syncZoneTrialNavState(w);
     syncBossTripleNavState(w);
+    if (objectiveSpec.objectiveType === "ACT_BOSS" && floorIntent.bossId) {
+      spawnActBossEncounterFromActiveMap(w, {
+        bossId: floorIntent.bossId,
+        objectiveId: "OBJ_ACT_BOSS",
+        seed: floorIntent.variantSeed ?? hashString(`${floorIntent.nodeId}:${floorIntent.floorIndex}:${floorIntent.depth}:boss_spawn`),
+      });
+    }
     if (objectiveSpec.objectiveType === "SURVIVE_TIMER") {
       w.floorDuration = objectiveSpec.params.timeLimitSec;
     }
@@ -2284,6 +2348,7 @@ export function createGame(args: CreateGameArgs) {
       floorIndex: node.rowIndex,
       archetype: floorArchetypeForNode(node),
       mapId: node.runtime.mapId,
+      bossId: node.runtime.bossId,
       objectiveId: node.runtime.objectiveId,
       variantSeed: node.runtime.variantSeed,
       bossCount: node.runtime.bossCount,
@@ -2294,12 +2359,17 @@ export function createGame(args: CreateGameArgs) {
   function buildFallbackFloorIntent(w: World, floorIndex: number): FloorIntent {
     const zoneId = (w.stage?.id ?? w.stageId ?? "DOCKS") as any;
     const archetype = w.floorArchetype ?? "SURVIVE";
+    const defaultSeed = deterministicVariantSeed(w.runSeed, floorIndex, floorIndex + 1, archetype);
+    const actBossPlan = archetype === "ACT_BOSS"
+      ? buildActBossPlan(defaultSeed, floorIndex + 1)
+      : null;
     const mapId =
       archetype === "VENDOR"
         ? "SHOP"
         : archetype === "HEAL"
           ? "REST"
-          : DEFAULT_MAP_POOL[floorIndex % DEFAULT_MAP_POOL.length];
+          : actBossPlan?.mapId
+            ?? DEFAULT_MAP_POOL[floorIndex % DEFAULT_MAP_POOL.length];
     return {
       nodeId: "LEGACY_FLOOR",
       zoneId,
@@ -2307,6 +2377,7 @@ export function createGame(args: CreateGameArgs) {
       floorIndex,
       archetype,
       mapId,
+      bossId: actBossPlan?.bossId,
       objectiveId: objectiveIdFromArchetype(archetype),
       variantSeed: deterministicVariantSeed(w.runSeed, floorIndex, floorIndex + 1, archetype, mapId),
     };
@@ -2325,16 +2396,28 @@ export function createGame(args: CreateGameArgs) {
 
   function buildDeterministicFloorIntent(choice: DeterministicChoice): FloorIntent {
     const objectiveId = choice.objectiveId ?? objectiveIdFromArchetype(choice.archetype);
+    const variantSeed = deterministicVariantSeed(
+      world.runSeed,
+      choice.floorIndex,
+      choice.depth,
+      choice.archetype,
+      undefined,
+      objectiveId,
+    );
+    const actBossPlan = choice.archetype === "ACT_BOSS"
+      ? buildActBossPlan(variantSeed, choice.depth)
+      : null;
     const mapId =
       choice.archetype === "VENDOR"
         ? "SHOP"
         : choice.archetype === "HEAL"
           ? "REST"
-          : DEFAULT_MAP_POOL[
-              hashString(
-                `${world.runSeed}:${choice.floorIndex}:${choice.depth}:${choice.archetype}:${objectiveId}:mapPick`,
-              ) % DEFAULT_MAP_POOL.length
-            ];
+          : actBossPlan?.mapId
+            ?? DEFAULT_MAP_POOL[
+                hashString(
+                  `${world.runSeed}:${choice.floorIndex}:${choice.depth}:${choice.archetype}:${objectiveId}:mapPick`,
+                ) % DEFAULT_MAP_POOL.length
+              ];
     const zoneId = DETERMINISTIC_ZONES[choice.floorIndex % DETERMINISTIC_ZONES.length];
     return {
       nodeId: `DET_${choice.floorIndex}_${choice.depth}_${choice.archetype}_${objectiveId}`,
@@ -2343,15 +2426,9 @@ export function createGame(args: CreateGameArgs) {
       floorIndex: choice.floorIndex,
       archetype: choice.archetype,
       mapId,
+      bossId: actBossPlan?.bossId,
       objectiveId,
-      variantSeed: deterministicVariantSeed(
-        world.runSeed,
-        choice.floorIndex,
-        choice.depth,
-        choice.archetype,
-        mapId,
-        objectiveId,
-      ),
+      variantSeed,
     };
   }
 
@@ -3339,10 +3416,11 @@ export function createGame(args: CreateGameArgs) {
       const hpNow = Math.max(0, world.eHp[bossIndex] ?? 0);
       const hpMax = Math.max(1, world.eHpMax[bossIndex] ?? 1);
       const bossHpPct = clamp01(hpNow / hpMax);
-      const accent = getBossAccent(world) ?? "#f66";
+      const descriptor = getBossBarDescriptor(world, bossIndex);
 
+      args.hud.bossTitle.textContent = descriptor.title;
       args.hud.bossValue.textContent = `${Math.ceil(hpNow)} / ${Math.ceil(hpMax)}`;
-      args.hud.bossBar.style.setProperty("--boss-accent", accent);
+      args.hud.bossBar.style.setProperty("--boss-accent", descriptor.accent);
       args.hud.bossFill.style.transform = `scaleX(${bossHpPct.toFixed(4)})`;
       args.hud.bossBar.hidden = false;
     }
@@ -3400,6 +3478,11 @@ export function createGame(args: CreateGameArgs) {
       case "HEAL_VISIT":
         title = "Use the heal station to continue.";
         break;
+      case "ACT_BOSS": {
+        const def = world.currentFloorIntent?.bossId ? bossRegistry.boss(world.currentFloorIntent.bossId) : null;
+        title = `Boss Hunt · ${def?.ui?.title ?? def?.name ?? "Boss"}`;
+        break;
+      }
       case "KILL_RARES_IN_ZONES": {
         const progress = world.objectiveStates[0]?.progress?.signalCount ?? 0;
         title = `Boss Hunt · ${Math.min(progress, spec.params.bossCount)}/${spec.params.bossCount}`;
@@ -3651,6 +3734,7 @@ export function createGame(args: CreateGameArgs) {
     fissionSystem(world, dtSim);  // Nuclear fission: projectile-projectile collisions
     relicExplodeOnKillSystem(world, dtSim);
     bossSystem(world, dtSim);          // NEW: boss mechanics (telegraphs/hazards/dash)
+    bossEncounterSystem(world, dtSim);
     zonesSystem(world, dtSim);
     dotTickSystem(world, dtSim);
     pickupsSystem(world, dtSim);

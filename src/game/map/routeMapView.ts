@@ -228,6 +228,7 @@ function visualTypeForArchetype(archetype: FloorArchetype): RouteNodeVisualType 
       return "rest";
     case "VENDOR":
       return "shop";
+    case "ACT_BOSS":
     case "BOSS_TRIPLE":
       return "boss";
     case "TIME_TRIAL":
@@ -243,6 +244,8 @@ function labelForArchetype(archetype: FloorArchetype, objectiveId?: ObjectiveId)
       return "Heal";
     case "VENDOR":
       return "Vendor";
+    case "ACT_BOSS":
+      return "Boss";
     case "BOSS_TRIPLE":
       return "Boss";
     case "TIME_TRIAL":

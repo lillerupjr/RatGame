@@ -1,6 +1,7 @@
 // src/game/systems/progression/objective.ts
 
 import type { World } from "../../../engine/world/world";
+import { getTrackedBossEncounterForObjective } from "../../bosses/bossRuntime";
 import type { TriggerSignal } from "../../triggers/triggerSignals";
 import { objectiveSpecToObjectiveDefs, type ObjectiveSpec } from "./objectiveSpec";
 
@@ -14,6 +15,9 @@ export type ObjectiveRule =
     type: "SIGNAL_COUNT";
     count: number;
     signalType?: TriggerSignal["type"];
+}
+    | {
+    type: "TRACK_BOSS_KILL";
 };
 
 export type ObjectiveDef = {
@@ -106,11 +110,12 @@ export function applySignalsToObjective(
 
     switch (def.completionRule.type) {
         case "SIGNAL_COUNT": {
+            const rule = def.completionRule;
             const required = normalizedRequiredCount(def);
-            const countSignals = def.completionRule.signalType
-                ? relevantSignals.filter((signal) => signal.type === def.completionRule.signalType)
+            const countSignals = rule.signalType
+                ? relevantSignals.filter((signal) => signal.type === rule.signalType)
                 : relevantSignals;
-            if (def.completionRule.signalType === "TICK") {
+            if (rule.signalType === "TICK") {
                 let total = 0;
                 for (const signal of countSignals) total += signal.type === "TICK" ? signal.dt : 0;
                 nextState.progress.signalCount += total;
@@ -122,6 +127,8 @@ export function applySignalsToObjective(
             }
             break;
         }
+        case "TRACK_BOSS_KILL":
+            break;
     }
 
     return nextState;
@@ -193,7 +200,24 @@ export function objectiveSystem(world: World): void {
     for (let i = 0; i < world.objectiveDefs.length; i++) {
         const def = world.objectiveDefs[i];
         const state = world.objectiveStates[i] ?? createObjectiveState(def);
-        const updated = applySignalsToObjective(def, state, signals);
+        const updated = def.completionRule.type === "TRACK_BOSS_KILL"
+          ? (() => {
+              const trackedEncounter = getTrackedBossEncounterForObjective(world, def.id);
+              const nextState: ObjectiveState = {
+                ...state,
+                status: state.status,
+                progress: { ...state.progress },
+              };
+              if (trackedEncounter && nextState.status === "IDLE") {
+                nextState.status = "ACTIVE";
+              }
+              if (trackedEncounter?.status === "DEFEATED") {
+                nextState.progress.signalCount = 1;
+                nextState.status = "COMPLETED";
+              }
+              return nextState;
+            })()
+          : applySignalsToObjective(def, state, signals);
         nextStates.push(updated);
 
         if (state.status !== updated.status && (updated.status === "COMPLETED" || updated.status === "FAILED")) {

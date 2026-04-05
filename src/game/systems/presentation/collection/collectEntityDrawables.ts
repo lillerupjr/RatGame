@@ -1,5 +1,6 @@
 import type { CollectionContext } from "../contracts/collectionContext";
 import { enqueueSliceCommand } from "../frame/renderFrameBuilder";
+import { getBossDefinitionForEntity, isBossEntity } from "../../../bosses/bossRuntime";
 import {
   countRenderDynamicAtlasBypass,
   countRenderDynamicAtlasFallback,
@@ -243,22 +244,25 @@ export function collectEntityDrawables(input: CollectionContext): void {
         stableId: 120000 + i,
       };
 
-      const def = registry.enemy(w.eType[i] as any);
+      const bossDef = getBossDefinitionForEntity(w, i);
+      const def = bossDef ?? registry.enemy(w.eType[i] as any);
       let baseColor: string = def.presentation?.color ?? "#f66";
 
-      const isBoss = w.eType[i] === EnemyId.BOSS;
-      if (isBoss) baseColor = getBossAccent(w) ?? baseColor;
+      const isBoss = isBossEntity(w, i);
+      if (isBoss) baseColor = bossDef?.ui?.accent ?? getBossAccent(w) ?? baseColor;
 
       const faceDx = w.eFaceX?.[i] ?? 0;
       const faceDy = w.eFaceY?.[i] ?? -1;
       const moving = Math.hypot(w.evx?.[i] ?? 0, w.evy?.[i] ?? 0) > 1e-4;
-      const frame = getEnemySpriteFrame({
-        type: w.eType[i],
-        time: w.time ?? 0,
-        faceDx,
-        faceDy,
-        moving,
-      });
+      const frame = bossDef
+        ? null
+        : getEnemySpriteFrame({
+            type: w.eType[i],
+            time: w.time ?? 0,
+            faceDx,
+            faceDy,
+            moving,
+          });
       if (frame) {
         const atlas = resolveDynamicAtlasImage(frame.img, frame.sw, frame.sh);
         const draw = resolveSpriteBodyDraw(

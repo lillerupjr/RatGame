@@ -113,6 +113,7 @@ describe("routeMapView", () => {
         { archetype: "TIME_TRIAL" },
         { archetype: "VENDOR" },
         { archetype: "HEAL" },
+        { archetype: "ACT_BOSS" },
         { archetype: "BOSS_TRIPLE" },
       ],
       2,
@@ -121,10 +122,12 @@ describe("routeMapView", () => {
 
     expect(vm.mode).toBe("DETERMINISTIC");
     expect(vm.rowCount).toBe(1);
-    expect(vm.nodes).toHaveLength(5);
+    expect(vm.nodes).toHaveLength(6);
     expect(vm.edges).toHaveLength(0);
     expect(vm.nodes[0].laneIndex).toBe(0);
     expect(vm.nodes[4].visualType).toBe("boss");
+    expect(vm.nodes[4].title).toBe("Boss");
+    expect(vm.nodes[5].visualType).toBe("boss");
     for (const routeNode of vm.nodes) {
       expect(routeNode.reachable).toBe(true);
       expect(routeNode.status).toBe("REACHABLE");

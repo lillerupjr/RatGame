@@ -23,6 +23,8 @@ import type { RunEvent } from "../../game/rewards/runEvents";
 import type { RewardTicket } from "../../game/rewards/rewardTickets";
 import type { VendorState } from "../../game/vendor/vendorState";
 import type { EnemyBrainState } from "../../game/systems/enemies/brain";
+import { createBossRuntimeState } from "../../game/bosses/bossRuntime";
+import type { BossRuntimeState } from "../../game/bosses/bossTypes";
 import { createDpsMetrics, type DpsMetricsState } from "../../game/balance/dpsMetrics";
 import { getSettings } from "../../settings/settingsStore";
 import { DEFAULT_XP_LEVEL_BASE } from "../../settings/systemOverrides";
@@ -188,6 +190,7 @@ export type World = {
     spawnPointsWorld: Array<{ x: number; y: number }>;
     completed: boolean[];
   };
+  bossRuntime: BossRuntimeState;
 
   // -------------------------
   // Stage / floor
@@ -411,6 +414,7 @@ export type World = {
   ePoisonDps: number[];
   ePoisonedOnDeath: boolean[];
   eSpawnTriggerId: (string | undefined)[];
+  eBossId: (string | undefined)[];
   eAilments: (EnemyAilmentsState | undefined)[];
 
   // Enemy spatial hash (perf)
@@ -626,6 +630,7 @@ export function createWorld(args: CreateWorldArgs): World {
     objectiveStates: [],
     objectiveEvents: [],
     currentObjectiveSpec: null,
+    bossRuntime: createBossRuntimeState(),
 
     // Stage / floor
     stage,
@@ -849,6 +854,7 @@ export function createWorld(args: CreateWorldArgs): World {
     ePoisonDps: [],
     ePoisonedOnDeath: [],
     eSpawnTriggerId: [],
+    eBossId: [],
     eAilments: [],
 
     enemySpatialHash: createSpatialHash(128),

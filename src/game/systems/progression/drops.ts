@@ -1,9 +1,9 @@
 import type { World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
+import { getBossDefinitionForEntity, isBossEntity } from "../../bosses/bossRuntime";
 import { goldValueFromEnemyBaseLife } from "../../economy/coins";
 import { grantXp } from "../../economy/xp";
 import { spawnGold, PICKUP_KIND, handlePickupSpecialCase } from "./pickups";
-import { EnemyId } from "../../factories/enemyFactory";
 import { registry } from "../../content/registry";
 import { getEnemyWorld, getPickupWorld, getPlayerWorld } from "../../coords/worldViews";
 import {
@@ -28,9 +28,10 @@ export function dropsSystem(w: World, dt: number) {
     const baseLife = Number.isFinite(w.eBaseLife[e.enemyIndex])
       ? Math.max(0, Math.floor(w.eBaseLife[e.enemyIndex]))
       : 0;
-    const archetype = registry.enemy(w.eType[e.enemyIndex] as any);
+    const bossDef = getBossDefinitionForEntity(w, e.enemyIndex);
+    const archetype = bossDef ?? registry.enemy(w.eType[e.enemyIndex] as any);
     const rewards = archetype.rewards ?? {};
-    const isBoss = rewards.isBoss ?? (w.eType[e.enemyIndex] === EnemyId.BOSS);
+    const isBoss = rewards.isBoss ?? isBossEntity(w, e.enemyIndex);
     const goldValue = Number.isFinite(rewards.goldValue)
       ? Math.max(1, Math.floor(rewards.goldValue as number))
       : goldValueFromEnemyBaseLife(baseLife, {

@@ -5,6 +5,7 @@ import {
   getPlayerWorld,
   getProjectileWorld,
 } from "../../coords/worldViews";
+import { getBossDefinitionForEntity } from "../../bosses/bossRuntime";
 import { ENEMIES, EnemyId } from "../../content/enemies";
 import { isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
 
@@ -39,8 +40,10 @@ export function isEnemyHit(
 
   // Enemy vertical height depends on enemy type (Milestone C)
 // Enemy vertical height depends on enemy type (Milestone C)
+  const bossDef = getBossDefinitionForEntity(w, e);
   const et = ((w.eType?.[e] ?? EnemyId.MINION) | 0) as keyof typeof ENEMIES;
-  const HIT_HEIGHT_Z = ENEMIES[et]?.body?.hitHeightProjectile
+  const HIT_HEIGHT_Z = bossDef?.body?.hitHeightProjectile
+      ?? ENEMIES[et]?.body?.hitHeightProjectile
       ?? 2;
 
 
@@ -106,8 +109,10 @@ export function isPlayerHit(w: World, e: number, playerR: number): boolean {
   // -----------------------------------------
   const PLAYER_HIT_HEIGHT_Z = 0.9;
 
+  const bossDef = getBossDefinitionForEntity(w, e);
   const et = ((w.eType?.[e] ?? EnemyId.MINION) | 0) as keyof typeof ENEMIES;
-  const ENEMY_HIT_HEIGHT_Z = ENEMIES[et]?.body?.hitHeightContact
+  const ENEMY_HIT_HEIGHT_Z = bossDef?.body?.hitHeightContact
+      ?? ENEMIES[et]?.body?.hitHeightContact
       ?? 1;
 
   const pzFeet = w.pzVisual ?? w.pz ?? 0;

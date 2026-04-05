@@ -487,6 +487,9 @@ function parseObjectiveRule(
   source?: string
 ): TableObjectiveRule {
   const type = requireStringField(data, "type", source);
+  if (type === "TRACK_BOSS_KILL") {
+    return { type: "TRACK_BOSS_KILL" };
+  }
   if (type !== "SIGNAL_COUNT") {
     throw new Error(`JSON map loader${formatSource(source)}: unsupported objective rule "${type}".`);
   }
@@ -498,7 +501,7 @@ function parseObjectiveRule(
   return {
     type: "SIGNAL_COUNT",
     count,
-    signalType: signalType as TableObjectiveRule["signalType"],
+    signalType: signalType as Extract<TableObjectiveRule, { type: "SIGNAL_COUNT" }>["signalType"],
   };
 }
 

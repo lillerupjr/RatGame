@@ -1,19 +1,26 @@
 import { emitEvent, type World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
+import { getBossDefinitionForEntity, markBossEncounterDefeated } from "../../bosses/bossRuntime";
 import { isProcDamage, makeEnemyHitMeta } from "../../combat/damageMeta";
 import { registry } from "../../content/registry";
 import type { DamageMeta, LegacyDamageSource } from "../../events";
 import { getEnemyWorld } from "../../coords/worldViews";
 import { spawnProjectile } from "../../factories/projectileFactory";
+import type { HostileDeathEffectConfig } from "../../hostiles/hostileTypes";
 import { onEnemyKilledForChallenge } from "../progression/roomChallenge";
 import { addMomentumOnKill } from "../sim/momentum";
 import { clearEnemyTransientState, ensureEnemyBrain, setEnemyBehaviorState } from "./brain";
 
 const ENEMY_DEATH_PROJECTILE_RADIUS = 8;
 
-function executeEnemyDeathEffects(w: World, enemyIndex: number, x: number, y: number): void {
-  const archetype = registry.enemy(w.eType[enemyIndex] as import("../../content/enemies").EnemyId);
-  const deathEffects = archetype.deathEffects ?? [];
+function executeEnemyDeathEffects(
+  w: World,
+  enemyIndex: number,
+  x: number,
+  y: number,
+  sourceId: string,
+  deathEffects: HostileDeathEffectConfig[],
+): void {
   if (deathEffects.length <= 0) return;
 
   for (let effectIndex = 0; effectIndex < deathEffects.length; effectIndex++) {
@@ -25,7 +32,7 @@ function executeEnemyDeathEffects(w: World, enemyIndex: number, x: number, y: nu
         const speed = Math.max(0, effect.speed);
         const damage = Math.max(0, effect.damage);
         const ttl = Math.max(0.05, effect.ttl);
-        const damageMeta = makeEnemyHitMeta(String(archetype.id), "DEATH_RADIAL_PROJECTILES", {
+        const damageMeta = makeEnemyHitMeta(sourceId, "DEATH_RADIAL_PROJECTILES", {
           category: "HIT",
           mode: "INTRINSIC",
           instigatorId: String(enemyIndex),
@@ -77,11 +84,20 @@ export function finalizeEnemyDeath(
   if (!w.eAlive[enemyIndex]) return false;
 
   w.eAlive[enemyIndex] = false;
-  const brain = ensureEnemyBrain(w, enemyIndex);
-  clearEnemyTransientState(brain);
-  brain.cooldownLeftSec = 0;
-  brain.windupLeftSec = 0;
-  setEnemyBehaviorState(brain, "dead");
+  const bossDef = getBossDefinitionForEntity(w, enemyIndex);
+  if (!bossDef) {
+    const brain = ensureEnemyBrain(w, enemyIndex);
+    clearEnemyTransientState(brain);
+    brain.cooldownLeftSec = 0;
+    brain.windupLeftSec = 0;
+    setEnemyBehaviorState(brain, "dead");
+  } else if (w.eBrain[enemyIndex]) {
+    const brain = w.eBrain[enemyIndex]!;
+    clearEnemyTransientState(brain);
+    brain.cooldownLeftSec = 0;
+    brain.windupLeftSec = 0;
+    setEnemyBehaviorState(brain, "dead");
+  }
 
   if (options.countKill !== false) {
     w.kills = (w.kills ?? 0) + 1;
@@ -105,7 +121,16 @@ export function finalizeEnemyDeath(
           return { x: ew.wx, y: ew.wy };
         })();
 
-  executeEnemyDeathEffects(w, enemyIndex, pos.x, pos.y);
+  const enemyDef = bossDef ? null : registry.enemy(w.eType[enemyIndex] as import("../../content/enemies").EnemyId);
+  executeEnemyDeathEffects(
+    w,
+    enemyIndex,
+    pos.x,
+    pos.y,
+    bossDef?.id ?? String(enemyDef?.id ?? "UNKNOWN"),
+    bossDef?.deathEffects ?? enemyDef?.deathEffects ?? [],
+  );
+  markBossEncounterDefeated(w, enemyIndex);
 
   emitEvent(w, {
     type: "ENEMY_KILLED",

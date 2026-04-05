@@ -1,6 +1,7 @@
 import type { World } from "../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { ISO_X, ISO_Y } from "../../engine/math/iso";
+import { getBossDefinitionForEntity } from "../bosses/bossRuntime";
 import { ENEMIES, type EnemyId } from "../content/enemies";
 import { getEnemyWorld, getPlayerWorld } from "../coords/worldViews";
 import { getEnemySpriteFrameMeta } from "../../engine/render/sprites/enemySprites";
@@ -76,8 +77,15 @@ function resolveEnemyAimDebugInfo(enemyType: EnemyId): EnemyAimDebugInfo {
 
 export function getEnemyAimWorld(w: World, enemyIndex: number): { x: number; y: number } {
   const ew = getEnemyWorld(w, enemyIndex, KENNEY_TILE_WORLD);
+  const bossDef = getBossDefinitionForEntity(w, enemyIndex);
   const enemyType = w.eType[enemyIndex] as EnemyId;
-  const info = resolveEnemyAimDebugInfo(enemyType);
+  const info = bossDef
+    ? {
+        effectiveWorldDelta: toWorldDeltaFromScreenOffset(
+          bossDef.presentation?.aimScreenOffset ?? FALLBACK_ENEMY_AIM_SCREEN_OFFSET,
+        ),
+      }
+    : resolveEnemyAimDebugInfo(enemyType);
   return {
     x: ew.wx + info.effectiveWorldDelta.dx,
     y: ew.wy + info.effectiveWorldDelta.dy,
