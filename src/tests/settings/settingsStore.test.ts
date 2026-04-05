@@ -61,19 +61,24 @@ describe("settingsStore", () => {
   it("updates user/debug/system buckets independently", () => {
     updateUserSettings({ game: { userModeEnabled: false } });
     updateDebugToolsSettings({ grid: true });
-    updateSystemOverrides({ godMode: true, gameSpeed: 1.25 });
+    updateSystemOverrides({
+      godMode: true,
+      gameSpeed: 1.25,
+      hostileSpawnHeatPowerPerSecFactor: 0.21,
+    });
 
     const settings = getSettings();
     expect(settings.user.game.userModeEnabled).toBe(false);
     expect(settings.debug.grid).toBe(true);
     expect(settings.system.godMode).toBe(true);
     expect(settings.system.gameSpeed).toBe(1.25);
+    expect(settings.system.hostileSpawnHeatPowerPerSecFactor).toBe(0.21);
   });
 
   it("supports per-bucket resets and hard reset", () => {
     updateUserSettings({ game: { userModeEnabled: false } });
     updateDebugToolsSettings({ grid: true });
-    updateSystemOverrides({ godMode: true });
+    updateSystemOverrides({ godMode: true, hostileSpawnBurstChancePerSpawnWindow: 0.42 });
 
     resetUserSettings();
     expect(getSettings().user.game.userModeEnabled).toBe(true);
@@ -83,6 +88,7 @@ describe("settingsStore", () => {
 
     resetSystemOverrides();
     expect(getSettings().system.godMode).toBe(false);
+    expect(getSettings().system.hostileSpawnBurstChancePerSpawnWindow).toBe(0.16);
 
     updateSystemOverrides({ godMode: true });
     const afterHardReset = hardResetAllSettings();

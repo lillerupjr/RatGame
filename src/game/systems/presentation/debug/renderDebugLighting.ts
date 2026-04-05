@@ -3,6 +3,7 @@ import type { RenderDebugScreenPassInput } from "./debugRenderTypes";
 import { describeRenderBackendFallbackReason } from "../backend/renderBackendSelection";
 import type { CacheMetricSample } from "../cacheMetricsRegistry";
 import type { LoadProfilerSummary } from "../../../app/loadingFlow";
+import { registry } from "../../../content/registry";
 import type {
   WorldBatchAudit,
   WorldBatchBreakReason,
@@ -321,10 +322,53 @@ function buildVisibleScreenDebugLines(input: RenderDebugScreenPassInput): string
   return lines;
 }
 
+function buildHostileSpawnOverlayLines(input: RenderDebugScreenPassInput): string[] {
+  const debug = input.hostileSpawnDebug;
+  if (!input.renderPerfCountersEnabled || !debug) return [];
+
+  const lastRequests = Array.isArray(debug.lastRequests) ? debug.lastRequests : [];
+  const lastRequestSummary = lastRequests.length <= 0
+    ? "-"
+    : lastRequests
+        .map((request) => {
+          const enemyName = (() => {
+            try {
+              return registry.enemy(request.enemyId).name;
+            } catch {
+              return String(request.enemyId);
+            }
+          })();
+          return `${enemyName}x${formatValue(request.count)}`;
+        })
+        .join(" ");
+
+  return [
+    "SPAWN ECON:",
+    `budget: ${debug.budget.toFixed(2)}`,
+    `pps: ${debug.powerPerSec.toFixed(2)}`,
+    `threat: ${debug.liveThreat.toFixed(2)} / ${debug.liveThreatCap.toFixed(2)}`,
+    `stockpile: ${debug.stockpileCap.toFixed(2)}`,
+    `room: ${debug.threatRoom.toFixed(2)}`,
+    "STATE:",
+    `spawnCD: ${debug.spawnCooldownSec.toFixed(2)}`,
+    `burstCD: ${debug.burstCooldownSec.toFixed(2)}`,
+    `mode: ${debug.lastMode}`,
+    `last: ${lastRequestSummary}`,
+    "ALIVE:",
+    `total: ${formatValue(debug.totalAliveHostileEnemies)}`,
+    `roles: base=${formatValue(debug.aliveByRole.baseline_chaser)} fast=${formatValue(debug.aliveByRole.fast_chaser)} tank=${formatValue(debug.aliveByRole.tank)} ranged=${formatValue(debug.aliveByRole.ranged)} suicide=${formatValue(debug.aliveByRole.suicide)} leaper=${formatValue(debug.aliveByRole.leaper)} special=${formatValue(debug.aliveByRole.special)}`,
+    "EXEC:",
+    `req: ${formatValue(debug.requestCount)}`,
+    `try: ${formatValue(debug.spawnAttempts)}`,
+    `ok: ${formatValue(debug.successfulSpawns)}`,
+    `fail: ${formatValue(debug.failedPlacements)}`,
+  ];
+}
+
 function buildRenderDebugLightingSnapshot(input: RenderDebugScreenPassInput): RenderDebugLightingSnapshot {
   const perfLines = buildVisiblePerfLines(input, buildFramePerf(input));
   const screenLines = buildVisibleScreenDebugLines(input);
-  const dpsBudgetLines: string[] = [];
+  const dpsBudgetLines = buildHostileSpawnOverlayLines(input);
   if (perfLines.length <= 0 && screenLines.length <= 0 && dpsBudgetLines.length <= 0) {
     return {
       perfLines,

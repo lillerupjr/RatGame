@@ -1991,6 +1991,7 @@ export async function renderSystem(
         structureTriangleCutoutAlpha,
         roadWidthAtPlayer: roadAreaWidthAt(playerTx, playerTy),
         worldBatchAudit,
+        hostileSpawnDebug: w.hostileSpawnDebug,
       }
     : null;
 

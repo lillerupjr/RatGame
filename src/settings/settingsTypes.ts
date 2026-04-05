@@ -128,6 +128,20 @@ export type SystemOverrides = {
   neutralBirdForceState: NeutralBirdForceState;
   neutralBirdDisableTransitions: boolean;
   neutralBirdDebugRepickTarget: boolean;
+
+  hostileSpawnT0PowerPerSec: number;
+  hostileSpawnT120PowerPerSec: number;
+  hostileSpawnOvertimePowerPerSecSlope: number;
+  hostileSpawnT0LiveThreatCap: number;
+  hostileSpawnT120LiveThreatCap: number;
+  hostileSpawnOvertimeLiveThreatCapSlope: number;
+  hostileSpawnHeatHealthFactor: number;
+  hostileSpawnHeatPowerPerSecFactor: number;
+  hostileSpawnHeatThreatCapFactor: number;
+  hostileSpawnStockpileMultiplier: number;
+  hostileSpawnBurstChancePerSpawnWindow: number;
+  hostileSpawnBurstExtraAttempts: number;
+  hostileSpawnMinSpawnIntervalSec: number;
 };
 
 export type AppSettings = {

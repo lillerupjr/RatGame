@@ -1,6 +1,7 @@
 import type { World } from "../../../engine/world/world";
 import { ENEMIES, EnemyId, type EnemyId as EnemyIdType, type EnemySpawnRole } from "../../content/enemies";
 import { isNeutralMonsterId } from "../../content/neutralMonsters";
+import { getSettings } from "../../../settings/settingsStore";
 
 export type HostileSpawnDirectorState = {
   budget: number;
@@ -43,6 +44,9 @@ export type HostileSpawnDirectorConfig = {
   burstChancePerSpawnWindow: number;
   burstExtraAttempts: number;
   maxPurchaseAttemptsPerUpdate: number;
+  heatHealthFactor: number;
+  heatPowerPerSecFactor: number;
+  heatThreatCapFactor: number;
   roleCaps: Record<EnemySpawnRole, number>;
   powerPerSec: HostileSpawnAnchorCurve;
   liveThreatCap: HostileSpawnAnchorCurve;
@@ -55,10 +59,17 @@ export type HostileSpawnDebugSnapshot = {
   liveThreat: number;
   liveThreatCap: number;
   stockpileCap: number;
+  threatRoom: number;
   spawnCooldownSec: number;
   burstCooldownSec: number;
+  lastMode: DirectorMode;
+  totalAliveHostileEnemies: number;
   aliveByRole: Record<EnemySpawnRole, number>;
   lastRequests: HostileSpawnRequest[];
+  requestCount: number;
+  spawnAttempts: number;
+  successfulSpawns: number;
+  failedPlacements: number;
 };
 
 type DirectorMode = "normal" | "burst";
@@ -104,6 +115,9 @@ export const HOSTILE_SPAWN_DIRECTOR_CONFIG: HostileSpawnDirectorConfig = {
   burstChancePerSpawnWindow: 0.16,
   burstExtraAttempts: 1,
   maxPurchaseAttemptsPerUpdate: 3,
+  heatHealthFactor: 0.12,
+  heatPowerPerSecFactor: 0.08,
+  heatThreatCapFactor: 0.05,
   roleCaps: {
     baseline_chaser: 28,
     fast_chaser: 20,
@@ -148,13 +162,60 @@ function makeFloorSeed(world: Pick<World, "runSeed" | "floorIndex" | "mapDepth" 
 }
 
 export function resetHostileSpawnDirectorForFloor(world: World): void {
+  const resolvedConfig = resolveHostileSpawnDirectorConfig();
   world.hostileSpawnDirector = {
     budget: 0,
     spawnCooldownSec: 0,
-    burstCooldownSec: HOSTILE_SPAWN_DIRECTOR_CONFIG.burstCooldownBaseSec,
+    burstCooldownSec: resolvedConfig.burstCooldownBaseSec,
     rngSeed: makeFloorSeed(world),
   };
   world.hostileSpawnDebug = null;
+}
+
+function worldDepthLike(world: Pick<World, "mapDepth" | "delveDepth" | "floorIndex">): number {
+  if (Number.isFinite(world.mapDepth) && world.mapDepth > 0) return Math.floor(world.mapDepth);
+  if (Number.isFinite(world.delveDepth) && world.delveDepth > 0) return Math.floor(world.delveDepth);
+  return Math.max(1, Math.floor((world.floorIndex ?? 0) + 1));
+}
+
+export function getHostileSpawnHeatFromDepth(depth: number): number {
+  return Math.max(0, Math.floor(Number(depth) || 0) - 1);
+}
+
+export function getHostileSpawnHeat(world: Pick<World, "mapDepth" | "delveDepth" | "floorIndex">): number {
+  return getHostileSpawnHeatFromDepth(worldDepthLike(world));
+}
+
+export function resolveHostileSpawnDirectorConfig(): HostileSpawnDirectorConfig {
+  const system = getSettings().system;
+  return {
+    ...HOSTILE_SPAWN_DIRECTOR_CONFIG,
+    stockpileMultiplier: system.hostileSpawnStockpileMultiplier,
+    minSpawnIntervalSec: system.hostileSpawnMinSpawnIntervalSec,
+    burstChancePerSpawnWindow: system.hostileSpawnBurstChancePerSpawnWindow,
+    burstExtraAttempts: system.hostileSpawnBurstExtraAttempts,
+    heatHealthFactor: system.hostileSpawnHeatHealthFactor,
+    heatPowerPerSecFactor: system.hostileSpawnHeatPowerPerSecFactor,
+    heatThreatCapFactor: system.hostileSpawnHeatThreatCapFactor,
+    powerPerSec: {
+      t0: system.hostileSpawnT0PowerPerSec,
+      t120: system.hostileSpawnT120PowerPerSec,
+      overtimeSlope: system.hostileSpawnOvertimePowerPerSecSlope,
+    },
+    liveThreatCap: {
+      t0: system.hostileSpawnT0LiveThreatCap,
+      t120: system.hostileSpawnT120LiveThreatCap,
+      overtimeSlope: system.hostileSpawnOvertimeLiveThreatCapSlope,
+    },
+  };
+}
+
+export function resolveHostileSpawnHeatHealthMultiplier(
+  world: Pick<World, "mapDepth" | "delveDepth" | "floorIndex">,
+): number {
+  const config = resolveHostileSpawnDirectorConfig();
+  const heat = getHostileSpawnHeat(world);
+  return 1 + heat * config.heatHealthFactor;
 }
 
 function sampleAnchorCurve(curve: HostileSpawnAnchorCurve, elapsedSec: number): number {
@@ -164,6 +225,31 @@ function sampleAnchorCurve(curve: HostileSpawnAnchorCurve, elapsedSec: number): 
     return curve.t0 + (curve.t120 - curve.t0) * alpha;
   }
   return curve.t120 + curve.overtimeSlope * (t - 120);
+}
+
+function integrateAnchorCurve(curve: HostileSpawnAnchorCurve, durationSec: number): number {
+  const duration = Math.max(0, Number.isFinite(durationSec) ? durationSec : 0);
+  if (duration <= 0) return 0;
+
+  if (duration <= 120) {
+    const endValue = sampleAnchorCurve(curve, duration);
+    return duration * (curve.t0 + endValue) * 0.5;
+  }
+
+  const firstSegment = 120 * (curve.t0 + curve.t120) * 0.5;
+  const extra = duration - 120;
+  const overtimeSegment = extra * curve.t120 + 0.5 * curve.overtimeSlope * extra * extra;
+  return firstSegment + overtimeSegment;
+}
+
+export function estimateHostileSpawnPowerBudgetForDurationSeconds(
+  world: Pick<World, "mapDepth" | "delveDepth" | "floorIndex">,
+  durationSec: number,
+): number {
+  const config = resolveHostileSpawnDirectorConfig();
+  const heat = getHostileSpawnHeat(world);
+  const baseBudget = integrateAnchorCurve(config.powerPerSec, durationSec);
+  return baseBudget * (1 + heat * config.heatPowerPerSecFactor);
 }
 
 function sampleRoleCurve(curve: HostileSpawnScalarCurve, elapsedSec: number): number {
@@ -223,22 +309,25 @@ function buildAliveState(activeEnemies: Array<{ enemyId: EnemyIdType }>): {
   liveThreat: number;
   aliveByEnemyId: Map<EnemyIdType, number>;
   aliveByRole: Record<EnemySpawnRole, number>;
+  totalAliveHostileEnemies: number;
 } {
   const aliveByEnemyId = new Map<EnemyIdType, number>();
   const aliveByRole = DEFAULT_ROLE_COUNTS();
   let liveThreat = 0;
+  let totalAliveHostileEnemies = 0;
 
   for (let i = 0; i < activeEnemies.length; i++) {
     const enemyId = activeEnemies[i].enemyId;
     if (enemyId === EnemyId.BOSS || isNeutralMonsterId(enemyId)) continue;
     const def = ENEMIES[enemyId];
     if (!def) continue;
+    totalAliveHostileEnemies += 1;
     liveThreat += Math.max(0, def.spawn.power);
     aliveByEnemyId.set(enemyId, (aliveByEnemyId.get(enemyId) ?? 0) + 1);
     aliveByRole[def.spawn.role] += 1;
   }
 
-  return { liveThreat, aliveByEnemyId, aliveByRole };
+  return { liveThreat, aliveByEnemyId, aliveByRole, totalAliveHostileEnemies };
 }
 
 function effectiveEnemyWeight(mode: DirectorMode, enemyId: EnemyIdType): number {
@@ -291,22 +380,59 @@ function snapshotRequests(requests: HostileSpawnRequest[]): HostileSpawnRequest[
   return requests.map((request) => ({ ...request }));
 }
 
+function buildDebugSnapshot(args: {
+  budget: number;
+  powerPerSec: number;
+  liveThreat: number;
+  liveThreatCap: number;
+  stockpileCap: number;
+  spawnCooldownSec: number;
+  burstCooldownSec: number;
+  lastMode: DirectorMode;
+  totalAliveHostileEnemies: number;
+  aliveByRole: Record<EnemySpawnRole, number>;
+  lastRequests: HostileSpawnRequest[];
+}): HostileSpawnDebugSnapshot {
+  return {
+    budget: args.budget,
+    powerPerSec: args.powerPerSec,
+    liveThreat: args.liveThreat,
+    liveThreatCap: args.liveThreatCap,
+    stockpileCap: args.stockpileCap,
+    threatRoom: Math.max(0, args.liveThreatCap - args.liveThreat),
+    spawnCooldownSec: args.spawnCooldownSec,
+    burstCooldownSec: args.burstCooldownSec,
+    lastMode: args.lastMode,
+    totalAliveHostileEnemies: args.totalAliveHostileEnemies,
+    aliveByRole: { ...args.aliveByRole },
+    lastRequests: snapshotRequests(args.lastRequests),
+    requestCount: args.lastRequests.length,
+    spawnAttempts: 0,
+    successfulSpawns: 0,
+    failedPlacements: 0,
+  };
+}
+
 export function updateHostileSpawnDirector(
   world: World,
   context: HostileSpawnDirectorContext,
 ): HostileSpawnRequest[] {
-  const config = HOSTILE_SPAWN_DIRECTOR_CONFIG;
+  const config = resolveHostileSpawnDirectorConfig();
   const state = world.hostileSpawnDirector;
   const dt = Math.max(0, Number.isFinite(context.dt) ? context.dt : 0);
   const elapsedSec = Math.max(0, Number.isFinite(context.elapsedSec) ? context.elapsedSec : 0);
   const floorDepth = Math.max(0, Math.floor(Number(context.floorDepth) || 0));
+  const heat = getHostileSpawnHeatFromDepth(floorDepth);
   const seedRef: MutableSeedRef = { seed: state.rngSeed >>> 0 };
+  const previousMode = world.hostileSpawnDebug?.lastMode ?? "normal";
 
   state.spawnCooldownSec = Math.max(0, state.spawnCooldownSec - dt);
   state.burstCooldownSec = Math.max(0, state.burstCooldownSec - dt);
 
-  const powerPerSec = sampleAnchorCurve(config.powerPerSec, elapsedSec);
-  const liveThreatCap = sampleAnchorCurve(config.liveThreatCap, elapsedSec);
+  const basePowerPerSec = sampleAnchorCurve(config.powerPerSec, elapsedSec);
+  const baseLiveThreatCap = sampleAnchorCurve(config.liveThreatCap, elapsedSec);
+  const powerPerSec = basePowerPerSec * (1 + heat * config.heatPowerPerSecFactor);
+  const liveThreatCap = baseLiveThreatCap * (1 + heat * config.heatThreatCapFactor);
   state.budget += powerPerSec * dt;
 
   const derived = buildAliveState(context.activeEnemies);
@@ -315,7 +441,7 @@ export function updateHostileSpawnDirector(
 
   const requests: HostileSpawnRequest[] = [];
   if (!context.spawningEnabled || state.spawnCooldownSec > 0) {
-    world.hostileSpawnDebug = {
+    world.hostileSpawnDebug = buildDebugSnapshot({
       budget: state.budget,
       powerPerSec,
       liveThreat: derived.liveThreat,
@@ -323,9 +449,11 @@ export function updateHostileSpawnDirector(
       stockpileCap,
       spawnCooldownSec: state.spawnCooldownSec,
       burstCooldownSec: state.burstCooldownSec,
-      aliveByRole: { ...derived.aliveByRole },
+      lastMode: previousMode,
+      totalAliveHostileEnemies: derived.totalAliveHostileEnemies,
+      aliveByRole: derived.aliveByRole,
       lastRequests: [],
-    };
+    });
     state.rngSeed = seedRef.seed >>> 0;
     return requests;
   }
@@ -417,16 +545,18 @@ export function updateHostileSpawnDirector(
     if (mode === "burst") state.burstCooldownSec = config.burstCooldownBaseSec;
   }
   state.rngSeed = seedRef.seed >>> 0;
-  world.hostileSpawnDebug = {
+  world.hostileSpawnDebug = buildDebugSnapshot({
     budget: state.budget,
     powerPerSec,
-    liveThreat: localLiveThreat,
+    liveThreat: derived.liveThreat,
     liveThreatCap,
     stockpileCap,
     spawnCooldownSec: state.spawnCooldownSec,
     burstCooldownSec: state.burstCooldownSec,
-    aliveByRole: { ...localAliveByRole },
-    lastRequests: snapshotRequests(requests),
-  };
+    lastMode: mode,
+    totalAliveHostileEnemies: derived.totalAliveHostileEnemies,
+    aliveByRole: derived.aliveByRole,
+    lastRequests: requests,
+  });
   return requests;
 }

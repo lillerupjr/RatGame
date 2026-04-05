@@ -31,6 +31,7 @@ export function isEnemyHit(
     dy: number,
     rr: number
 ): boolean {
+  if (isPoeEnemyDormant(w, e)) return false;
   // -----------------------------------------
   // Milestone C: symmetric height-aware hits
   // -----------------------------------------
@@ -169,6 +170,7 @@ export function isCircleHit(dx: number, dy: number, rr: number): boolean {
  * Includes enemy radius so it "feels" correct.
  */
 export function isEnemyInCircle(w: World, e: number, cx: number, cy: number, radius: number): boolean {
+  if (isPoeEnemyDormant(w, e)) return false;
   const ew = getEnemyWorld(w, e, KENNEY_TILE_WORLD);
   const dx = ew.wx - cx;
   const dy = ew.wy - cy;

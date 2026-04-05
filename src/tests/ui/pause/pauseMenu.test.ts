@@ -1016,8 +1016,11 @@ describe("pauseMenu", () => {
           liveThreat: 4.5,
           liveThreatCap: 9.5,
           stockpileCap: 12.83,
+          threatRoom: 5.0,
           spawnCooldownSec: 0.75,
           burstCooldownSec: 8.5,
+          lastMode: "normal",
+          totalAliveHostileEnemies: 4,
           aliveByRole: {
             baseline_chaser: 2,
             fast_chaser: 1,
@@ -1028,6 +1031,10 @@ describe("pauseMenu", () => {
             special: 0,
           },
           lastRequests: [{ enemyId: 1, count: 3, reason: "normal" }],
+          requestCount: 1,
+          spawnAttempts: 3,
+          successfulSpawns: 3,
+          failedPlacements: 0,
         },
       })
     );

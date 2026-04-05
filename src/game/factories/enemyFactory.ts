@@ -7,6 +7,8 @@ import { anchorFromWorld } from "../coords/anchor";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { createEnemyAilmentsState } from "../combat_mods/ailments/enemyAilments";
 import { createEnemyBrainState } from "../systems/enemies/brain";
+import { isNeutralMonsterId } from "../content/neutralMonsters";
+import { resolveHostileSpawnHeatHealthMultiplier } from "../systems/spawn/hostileSpawnDirector";
 
 export { EnemyId };
 
@@ -22,7 +24,11 @@ export function spawnEnemyGrid(
     const baseLife = Math.max(1, Math.round(s.stats.baseLife));
 
     const scaling = w.delveScaling ?? { hpMult: 1, damageMult: 1 };
-    const scaledHp = Math.max(1, Math.round(baseLife * scaling.hpMult));
+    const hostileHeatHealthMultiplier =
+      type !== EnemyId.BOSS && !isNeutralMonsterId(type)
+        ? resolveHostileSpawnHeatHealthMultiplier(w)
+        : 1;
+    const scaledHp = Math.max(1, Math.round(baseLife * scaling.hpMult * hostileHeatHealthMultiplier));
     const scaledDamage = Math.round(s.stats.contactDamage * scaling.damageMult);
 
     const i = w.eAlive.length;

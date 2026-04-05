@@ -10,6 +10,7 @@ import { resolveDotStats } from "../stats/combatStatsResolver";
 import { makeAilmentDotMeta } from "../../combat/damageMeta";
 import { DOT_TICK_INTERVAL_SEC } from "../../combat/dot/dotConstants";
 import { finalizeEnemyDeath } from "../../systems/enemies/finalize";
+import { isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
 
 function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
@@ -55,6 +56,7 @@ export function tickAilmentsOnce(w: any, dtTick: number): void {
 
   for (let e = 0; e < n; e++) {
     if (!w.eAlive[e]) continue;
+    if (isPoeEnemyDormant(w as World, e)) continue;
 
     if (!w.eAilments) w.eAilments = [];
     if (!w.eAilments[e]) w.eAilments[e] = createEnemyAilmentsState();

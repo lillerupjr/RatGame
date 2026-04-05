@@ -7,6 +7,7 @@ import { getActiveMap, getSpawnWorldFromActive, getTileHeight } from "../map/aut
 import { walkInfo } from "../map/compile/kenneyMap";
 import { RNG } from "../util/rng";
 import { OBJECTIVE_TRIGGER_IDS } from "../systems/progression/objectiveSpec";
+import { estimateHostileSpawnPowerBudgetForDurationSeconds } from "../systems/spawn/hostileSpawnDirector";
 
 export type PoeMapModifiers = {
   packSizeMultiplier?: number;
@@ -123,7 +124,6 @@ const MAX_ANCHOR_RETRIES = 48;
 
 const BASE_MAGIC_PACK_CHANCE = 0.22;
 const BASE_RARE_PACK_CHANCE = 0.1;
-const POE_BASE_ENEMY_EQUIVALENTS_PER_SECOND = 0.24;
 
 const MAGIC_HP_MULT = 1.35;
 const MAGIC_DAMAGE_MULT = 1.15;
@@ -225,10 +225,7 @@ function normalizeModifiers(modifiers: PoeMapModifiers | undefined): NormalizedP
 function estimatePoePopulationBudgetForDurationSeconds(world: World, durationSec: number): number {
   const duration = Math.max(0, Number.isFinite(durationSec) ? durationSec : 0);
   if (duration <= 0) return 0;
-
-  const scaling = world.delveScaling ?? { hpMult: 1, spawnRateMult: 1 };
-  const encounterScalar = Math.max(1, scaling.spawnRateMult * Math.sqrt(Math.max(1, scaling.hpMult)));
-  return duration * POE_BASE_ENEMY_EQUIVALENTS_PER_SECOND * encounterScalar;
+  return estimateHostileSpawnPowerBudgetForDurationSeconds(world, duration);
 }
 
 function hashString(value: string): number {

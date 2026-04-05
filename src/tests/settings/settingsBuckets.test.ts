@@ -137,6 +137,9 @@ describe("settings bucket defaults", () => {
       paletteGroup: "test",
       paletteId: "unknown",
       worldAtlasMode: "bogus" as any,
+      hostileSpawnT0PowerPerSec: 99,
+      hostileSpawnHeatHealthFactor: -10,
+      hostileSpawnBurstExtraAttempts: 999,
     } as any);
 
     expect(sanitized.gameSpeed).toBeLessThanOrEqual(1.5);
@@ -147,6 +150,11 @@ describe("settings bucket defaults", () => {
     expect(DEFAULT_SYSTEM_OVERRIDES.gameSpeed).toBe(1);
     expect(DEFAULT_SYSTEM_OVERRIDES.darknessMaskDebugDisabled).toBe(true);
     expect(DEFAULT_SYSTEM_OVERRIDES.worldAtlasMode).toBe("auto");
+    expect(sanitized.hostileSpawnT0PowerPerSec).toBe(5);
+    expect(sanitized.hostileSpawnHeatHealthFactor).toBe(0);
+    expect(sanitized.hostileSpawnBurstExtraAttempts).toBe(5);
+    expect(DEFAULT_SYSTEM_OVERRIDES.hostileSpawnHeatThreatCapFactor).toBe(0.05);
+    expect(DEFAULT_SYSTEM_OVERRIDES.hostileSpawnMinSpawnIntervalSec).toBe(1.25);
   });
 
   it("resolves effective atlas mode from requested mode and backend", () => {

@@ -7,6 +7,7 @@ import type {
 } from "../../../../settings/settingsTypes";
 import type { ShadowSunDayCycleDebugStatus } from "../shadowSunDayCycleRuntime";
 import type { WorldBatchAudit } from "./worldBatchAudit";
+import type { HostileSpawnDebugSnapshot } from "../../spawn/hostileSpawnDirector";
 
 export type ScreenPt = { x: number; y: number };
 
@@ -86,4 +87,5 @@ export type RenderDebugScreenPassInput = {
   structureTriangleCutoutAlpha: number;
   roadWidthAtPlayer: number;
   worldBatchAudit?: WorldBatchAudit | null;
+  hostileSpawnDebug?: HostileSpawnDebugSnapshot | null;
 };

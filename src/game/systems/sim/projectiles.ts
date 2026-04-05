@@ -10,6 +10,7 @@ import { getEnemyAimWorld } from "../../combat/aimPoints";
 import { makeUnknownDamageMeta } from "../../combat/damageMeta";
 import { finalizeEnemyDeath } from "../enemies/finalize";
 import { despawnProjectile } from "./projectileLifecycle";
+import { isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
 
 // --- Movement substepping (prevents "one whole tile per frame") ---
 export let PROJECTILE_MAX_MOVE_FRAC_PER_STEP = 0.5;   // fraction of tile per move substep
@@ -80,7 +81,7 @@ export function projectilesSystem(w: World, dt: number) {
         // Spark: track live enemy or die if target is dead
         if (w.prjKind[i] === PRJ_KIND.SPARK && w.prHasTarget[i]) {
             const sparkTarget = w.prLastHitEnemy[i];
-            if (sparkTarget >= 0 && w.eAlive[sparkTarget]) {
+            if (sparkTarget >= 0 && w.eAlive[sparkTarget] && !isPoeEnemyDormant(w, sparkTarget)) {
                 const enemyAim = getEnemyAimWorld(w, sparkTarget);
                 w.prTargetX[i] = enemyAim.x;
                 w.prTargetY[i] = enemyAim.y;
@@ -161,7 +162,12 @@ export function projectilesSystem(w: World, dt: number) {
                             // Spark: apply damage + lightning hit VFX
                             const sparkDmg = w.prDamage[i];
                             const sparkTarget = w.prLastHitEnemy[i];
-                            if (sparkTarget >= 0 && w.eAlive[sparkTarget] && sparkDmg > 0) {
+                            if (
+                              sparkTarget >= 0
+                              && w.eAlive[sparkTarget]
+                              && !isPoeEnemyDormant(w, sparkTarget)
+                              && sparkDmg > 0
+                            ) {
                                 w.eHp[sparkTarget] -= sparkDmg;
                                 const ew2 = getEnemyWorld(w, sparkTarget, T);
                                 emitEvent(w, {

@@ -3,11 +3,13 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createWorld } from "../../../../engine/world/world";
 import { stageDocks } from "../../../../game/content/stages";
 import { ENEMIES, EnemyId, type EnemySpawnConfig, type EnemySpawnRole } from "../../../../game/content/enemies";
+import { spawnEnemyGrid } from "../../../../game/factories/enemyFactory";
 import {
   HOSTILE_SPAWN_DIRECTOR_CONFIG,
   resetHostileSpawnDirectorForFloor,
   updateHostileSpawnDirector,
 } from "../../../../game/systems/spawn/hostileSpawnDirector";
+import { resetSystemOverrides, updateSystemOverrides } from "../../../../settings/settingsStore";
 
 function makeWorld(seed = 12345) {
   const world = createWorld({ seed, stage: stageDocks });
@@ -48,6 +50,9 @@ function restoreConfig(): void {
   HOSTILE_SPAWN_DIRECTOR_CONFIG.burstChancePerSpawnWindow = originalConfig.burstChancePerSpawnWindow;
   HOSTILE_SPAWN_DIRECTOR_CONFIG.burstExtraAttempts = originalConfig.burstExtraAttempts;
   HOSTILE_SPAWN_DIRECTOR_CONFIG.maxPurchaseAttemptsPerUpdate = originalConfig.maxPurchaseAttemptsPerUpdate;
+  HOSTILE_SPAWN_DIRECTOR_CONFIG.heatHealthFactor = originalConfig.heatHealthFactor;
+  HOSTILE_SPAWN_DIRECTOR_CONFIG.heatPowerPerSecFactor = originalConfig.heatPowerPerSecFactor;
+  HOSTILE_SPAWN_DIRECTOR_CONFIG.heatThreatCapFactor = originalConfig.heatThreatCapFactor;
   for (const role of Object.keys(originalConfig.roleCaps) as EnemySpawnRole[]) {
     HOSTILE_SPAWN_DIRECTOR_CONFIG.roleCaps[role] = originalConfig.roleCaps[role];
     HOSTILE_SPAWN_DIRECTOR_CONFIG.roleWeightCurves[role] = structuredClone(originalConfig.roleWeightCurves[role]);
@@ -57,6 +62,7 @@ function restoreConfig(): void {
 }
 
 beforeEach(() => {
+  resetSystemOverrides();
   originalEnemySpawns.clear();
   for (const enemy of Object.values(ENEMIES) as Array<(typeof ENEMIES)[EnemyId]>) {
     originalEnemySpawns.set(enemy.id, structuredClone(enemy.spawn));
@@ -65,6 +71,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  resetSystemOverrides();
   for (const enemy of Object.values(ENEMIES) as Array<(typeof ENEMIES)[EnemyId]>) {
     const originalSpawn = originalEnemySpawns.get(enemy.id);
     if (originalSpawn) enemy.spawn = structuredClone(originalSpawn);
@@ -94,8 +101,80 @@ describe("hostileSpawnDirector", () => {
     expect(world.hostileSpawnDebug?.powerPerSec).toBeCloseTo(1.3, 6);
     expect(world.hostileSpawnDebug?.liveThreat).toBeCloseTo(1.0, 6);
     expect(world.hostileSpawnDebug?.lastRequests).toEqual([]);
+    expect(world.hostileSpawnDebug?.threatRoom).toBeCloseTo(10.0, 6);
+    expect(world.hostileSpawnDebug?.totalAliveHostileEnemies).toBe(1);
     expect(world.hostileSpawnDebug?.aliveByRole.baseline_chaser).toBe(1);
     expect(world.hostileSpawnDebug?.aliveByRole.special).toBe(0);
+  });
+
+  it("applies heat scaling to power-per-sec and threat cap without changing authored spawn power", () => {
+    const world = makeWorld(150);
+    const authoredPower = ENEMIES[EnemyId.MINION].spawn.power;
+
+    const requests = updateHostileSpawnDirector(
+      world,
+      makeContext({
+        dt: 0,
+        elapsedSec: 60,
+        floorDepth: 4,
+        spawningEnabled: false,
+      }),
+    );
+
+    expect(requests).toEqual([]);
+    expect(world.hostileSpawnDebug?.powerPerSec).toBeCloseTo(1.612, 6);
+    expect(world.hostileSpawnDebug?.liveThreatCap).toBeCloseTo(12.65, 6);
+    expect(ENEMIES[EnemyId.MINION].spawn.power).toBe(authoredPower);
+  });
+
+  it("applies hostile heat scaling to spawned enemy health only for hostile enemies", () => {
+    const hostileWorld = makeWorld(151);
+    hostileWorld.mapDepth = 4;
+    hostileWorld.delveDepth = 4;
+    hostileWorld.delveScaling = { hpMult: 1, damageMult: 1, spawnRateMult: 1 };
+
+    const neutralWorld = makeWorld(152);
+    neutralWorld.mapDepth = 4;
+    neutralWorld.delveDepth = 4;
+    neutralWorld.delveScaling = { hpMult: 1, damageMult: 1, spawnRateMult: 1 };
+
+    const bossWorld = makeWorld(153);
+    bossWorld.mapDepth = 4;
+    bossWorld.delveDepth = 4;
+    bossWorld.delveScaling = { hpMult: 1, damageMult: 1, spawnRateMult: 1 };
+
+    const hostileIndex = spawnEnemyGrid(hostileWorld, EnemyId.MINION, 8, 8);
+    const neutralIndex = spawnEnemyGrid(neutralWorld, EnemyId.LOOT_GOBLIN, 8, 8);
+    const bossIndex = spawnEnemyGrid(bossWorld, EnemyId.BOSS, 8, 8);
+
+    expect(hostileWorld.eHp[hostileIndex]).toBe(33);
+    expect(neutralWorld.eHp[neutralIndex]).toBe(ENEMIES[EnemyId.LOOT_GOBLIN].stats.baseLife);
+    expect(bossWorld.eHp[bossIndex]).toBe(ENEMIES[EnemyId.BOSS].stats.baseLife);
+    expect(ENEMIES[EnemyId.MINION].spawn.power).toBe(1.0);
+  });
+
+  it("applies runtime hostile spawn overrides to pacing and cap sampling", () => {
+    updateSystemOverrides({
+      hostileSpawnT0PowerPerSec: 1.5,
+      hostileSpawnT0LiveThreatCap: 7,
+      hostileSpawnHeatPowerPerSecFactor: 0.2,
+      hostileSpawnHeatThreatCapFactor: 0.1,
+    });
+
+    const world = makeWorld(154);
+    const requests = updateHostileSpawnDirector(
+      world,
+      makeContext({
+        dt: 0,
+        elapsedSec: 0,
+        floorDepth: 3,
+        spawningEnabled: false,
+      }),
+    );
+
+    expect(requests).toEqual([]);
+    expect(world.hostileSpawnDebug?.powerPerSec).toBeCloseTo(2.1, 6);
+    expect(world.hostileSpawnDebug?.liveThreatCap).toBeCloseTo(8.4, 6);
   });
 
   it("clamps stockpiled budget to the current threat cap", () => {
@@ -124,8 +203,11 @@ describe("hostileSpawnDirector", () => {
       liveThreat: 3,
       liveThreatCap: 4,
       stockpileCap: 5,
+      threatRoom: 1,
       spawnCooldownSec: 6,
       burstCooldownSec: 7,
+      lastMode: "normal",
+      totalAliveHostileEnemies: 1,
       aliveByRole: {
         baseline_chaser: 1,
         fast_chaser: 0,
@@ -136,6 +218,10 @@ describe("hostileSpawnDirector", () => {
         special: 0,
       },
       lastRequests: [{ enemyId: EnemyId.MINION, count: 2, reason: "normal" }],
+      requestCount: 1,
+      spawnAttempts: 2,
+      successfulSpawns: 2,
+      failedPlacements: 0,
     };
 
     resetHostileSpawnDirectorForFloor(world);

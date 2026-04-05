@@ -14,6 +14,7 @@ import {
   makeWeaponDotMeta,
 } from "../../combat/damageMeta";
 import { finalizeEnemyDeath } from "../enemies/finalize";
+import { isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
 
 export type BeamContactConfig = {
   dirX: number;
@@ -48,6 +49,7 @@ function collectBeamTargets(
 
   for (let e = 0; e < w.eAlive.length; e++) {
     if (!w.eAlive[e]) continue;
+    if (isPoeEnemyDormant(w, e)) continue;
     const ew = getEnemyWorld(w, e, KENNEY_TILE_WORLD);
     const dx = ew.wx - originX;
     const dy = ew.wy - originY;

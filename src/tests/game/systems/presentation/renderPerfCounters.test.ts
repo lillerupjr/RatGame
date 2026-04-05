@@ -287,6 +287,92 @@ describe("render perf counters", () => {
     expect(snapshot.dynamicAtlasTexturesPerFrame).toBe(6);
   });
 
+  it("includes hostile spawn overlay rows in the perf snapshot text", () => {
+    const ctx = fakeCtx();
+
+    const snapshotText = buildRenderDebugLightingSnapshotText({
+      ctx,
+      cssW: 320,
+      cssH: 180,
+      dpr: 1,
+      flags: makeFlags("overview"),
+      fps: 60,
+      frameTimeMs: 16.7,
+      renderPerfCountersEnabled: true,
+      shadowSunModel: { forward: { x: 0, y: 0, z: 0 }, projectionDirection: { x: 0, y: 0 }, timeLabel: "", elevationDeg: 0, directionLabel: "", stepKey: "" },
+      shadowSunDayCycleStatus: {
+        enabled: false,
+        cycleModeLabel: "",
+        multiplier: 1,
+        stepsPerDay: 0,
+        stepSpanMinutes: 0,
+        manualSeedLabel: "",
+        continuousTimeLabel: "",
+        quantizedTimeLabel: "",
+        stepIndex: 0,
+        advancing: false,
+        stepChanged: false,
+        advancementClamped: false,
+        baseRateLabel: "",
+      },
+      ambientSunLighting: {
+        ambientElevationDeg: 0,
+        ambientDarkness01: 0,
+      },
+      structureTriangleAdmissionMode: "viewport",
+      sliderPadding: 0,
+      playerCameraTx: 0,
+      playerCameraTy: 0,
+      structureTriangleCutoutEnabled: false,
+      structureTriangleCutoutHalfWidth: 0,
+      structureTriangleCutoutHalfHeight: 0,
+      structureTriangleCutoutAlpha: 0,
+      roadWidthAtPlayer: 0,
+      worldBatchAudit: null,
+      hostileSpawnDebug: {
+        budget: 5.2,
+        powerPerSec: 1.3,
+        liveThreat: 8.0,
+        liveThreatCap: 12.0,
+        stockpileCap: 15.6,
+        threatRoom: 4.0,
+        spawnCooldownSec: 0.8,
+        burstCooldownSec: 6.2,
+        lastMode: "normal",
+        totalAliveHostileEnemies: 14,
+        aliveByRole: {
+          baseline_chaser: 6,
+          fast_chaser: 3,
+          tank: 2,
+          ranged: 2,
+          suicide: 1,
+          leaper: 0,
+          special: 0,
+        },
+        lastRequests: [
+          { enemyId: 1 as any, count: 3, reason: "normal" },
+          { enemyId: 2 as any, count: 2, reason: "normal" },
+        ],
+        requestCount: 2,
+        spawnAttempts: 5,
+        successfulSpawns: 3,
+        failedPlacements: 2,
+      },
+    } as any);
+
+    expect(snapshotText).toContain("SPAWN ECON:");
+    expect(snapshotText).toContain("budget: 5.20");
+    expect(snapshotText).toContain("threat: 8.00 / 12.00");
+    expect(snapshotText).toContain("STATE:");
+    expect(snapshotText).toContain("mode: normal");
+    expect(snapshotText).toContain("last: Minionx3.0 Runnerx2.0");
+    expect(snapshotText).toContain("ALIVE:");
+    expect(snapshotText).toContain("roles: base=6.0 fast=3.0 tank=2.0 ranged=2.0 suicide=1.0 leaper=0.0 special=0.0");
+    expect(snapshotText).toContain("EXEC:");
+    expect(snapshotText).toContain("req: 2.0");
+    expect(snapshotText).toContain("fail: 2.0");
+  });
+
   it("groups overlay diagnostics by selected perf mode", () => {
     const ctx = fakeCtx();
     registerCacheMetricSource({

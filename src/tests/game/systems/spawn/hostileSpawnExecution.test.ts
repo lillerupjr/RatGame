@@ -39,7 +39,36 @@ describe("hostileSpawnExecution", () => {
       .mockReturnValueOnce(12)
       .mockReturnValueOnce(0);
 
-    executeHostileSpawnRequests({} as any, [
+    const world = {
+      hostileSpawnDebug: {
+        budget: 4,
+        powerPerSec: 1,
+        liveThreat: 2,
+        liveThreatCap: 10,
+        stockpileCap: 12,
+        threatRoom: 8,
+        spawnCooldownSec: 0,
+        burstCooldownSec: 0,
+        lastMode: "burst",
+        totalAliveHostileEnemies: 2,
+        aliveByRole: {
+          baseline_chaser: 0,
+          fast_chaser: 0,
+          tank: 0,
+          ranged: 1,
+          suicide: 0,
+          leaper: 0,
+          special: 0,
+        },
+        lastRequests: [{ enemyId: EnemyId.SPITTER, count: 3, reason: "burst" }],
+        requestCount: 0,
+        spawnAttempts: 99,
+        successfulSpawns: 99,
+        failedPlacements: 99,
+      },
+    } as any;
+
+    executeHostileSpawnRequests(world, [
       { enemyId: EnemyId.SPITTER, count: 3, reason: "burst" },
     ]);
 
@@ -49,5 +78,13 @@ describe("hostileSpawnExecution", () => {
       EnemyId.SPITTER,
       EnemyId.SPITTER,
     ]);
+    expect(world.hostileSpawnDebug.requestCount).toBe(1);
+    expect(world.hostileSpawnDebug.spawnAttempts).toBe(3);
+    expect(world.hostileSpawnDebug.successfulSpawns).toBe(1);
+    expect(world.hostileSpawnDebug.failedPlacements).toBe(2);
+    expect(world.hostileSpawnDebug.totalAliveHostileEnemies).toBe(3);
+    expect(world.hostileSpawnDebug.aliveByRole.ranged).toBe(2);
+    expect(world.hostileSpawnDebug.liveThreat).toBeCloseTo(3.6, 6);
+    expect(world.hostileSpawnDebug.threatRoom).toBeCloseTo(6.4, 6);
   });
 });

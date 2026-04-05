@@ -16,6 +16,14 @@ import { OBJECTIVE_TRIGGER_IDS } from "../../../game/systems/progression/objecti
 import { getEnemyWorld } from "../../../game/coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { anchorFromWorld } from "../../../game/coords/anchor";
+import { isEnemyHit } from "../../../game/systems/sim/hitDetection";
+import { spawnProjectile, PRJ_KIND } from "../../../game/factories/projectileFactory";
+import { spawnZone, ZONE_KIND } from "../../../game/factories/zoneFactory";
+import { tickZonesOnce } from "../../../game/systems/sim/zones";
+import { createEnemyAilmentsState } from "../../../game/combat_mods/ailments/enemyAilments";
+import { tickAilmentsOnce } from "../../../game/combat_mods/systems/ailmentTickSystem";
+import { getPlayerWorld } from "../../../game/coords/worldViews";
+import { tickBeamContactsOnce, updatePlayerBeamCombat } from "../../../game/systems/sim/beamCombat";
 
 function setupWorld(seed: number) {
   const world = createWorld({ seed, stage: stageDocks });
@@ -173,5 +181,73 @@ describe("poe map population runtime", () => {
 
     const progress = getPoeMapObjectiveProgress(world);
     expect(progress).toEqual({ cleared: totalPacks, total: totalPacks });
+  });
+
+  test("sleeping pack members ignore shared damage paths", () => {
+    const world = setupWorld(71_003);
+    initializePoeMapObjective(world, { objectiveSeed: 71_003 });
+
+    const enemyIndex = world.eAlive.findIndex((alive) => alive);
+    expect(enemyIndex).toBeGreaterThanOrEqual(0);
+    expect(isPoeEnemyDormant(world, enemyIndex)).toBe(true);
+
+    const ew = getEnemyWorld(world, enemyIndex, KENNEY_TILE_WORLD);
+    const baseHp = world.eHp[enemyIndex];
+
+    const projectileIndex = spawnProjectile(world, {
+      kind: PRJ_KIND.PISTOL,
+      x: ew.wx,
+      y: ew.wy,
+      dirX: 1,
+      dirY: 0,
+      speed: 0,
+      damage: 999,
+      radius: 8,
+      pierce: 0,
+      ttl: 1,
+    });
+    expect(isEnemyHit(world, projectileIndex, enemyIndex, 0, 0, world.eR[enemyIndex] + world.prR[projectileIndex])).toBe(false);
+
+    spawnZone(world, {
+      kind: ZONE_KIND.EXPLOSION,
+      x: ew.wx,
+      y: ew.wy,
+      radius: 24,
+      damage: 999,
+      tickEvery: 0.2,
+      ttl: 1,
+      followPlayer: false,
+    });
+    tickZonesOnce(world, 0.2);
+    expect(world.eHp[enemyIndex]).toBe(baseHp);
+    expect(world.eAlive[enemyIndex]).toBe(true);
+
+    world.eAilments ??= [];
+    world.eAilments[enemyIndex] = createEnemyAilmentsState();
+    world.eAilments[enemyIndex]!.poison.push({ kind: "poison", dps: 999, tLeft: 10 });
+    tickAilmentsOnce(world, 0.5);
+    expect(world.eHp[enemyIndex]).toBe(baseHp);
+    expect(world.eAlive[enemyIndex]).toBe(true);
+
+    const pw = getPlayerWorld(world, KENNEY_TILE_WORLD);
+    updatePlayerBeamCombat(world, {
+      dirX: ew.wx - pw.wx,
+      dirY: ew.wy - pw.wy,
+      maxRangePx: Math.hypot(ew.wx - pw.wx, ew.wy - pw.wy) + 16,
+      widthPx: 48,
+      glowIntensity: 0,
+      dpsPhys: 999,
+      dpsFire: 0,
+      dpsChaos: 0,
+    });
+    tickBeamContactsOnce(world, 0.5);
+    expect(world.eHp[enemyIndex]).toBe(baseHp);
+    expect(world.eAlive[enemyIndex]).toBe(true);
+
+    world.triggerSignals.length = 0;
+    tickPoeMapObjective(world);
+    const clearSignals = world.triggerSignals.filter((s) => s.triggerId === OBJECTIVE_TRIGGER_IDS.poePackClear);
+    expect(clearSignals).toEqual([]);
+    expect(getPoeMapObjectiveProgress(world)?.cleared).toBe(0);
   });
 });
