@@ -6,15 +6,10 @@ import { gridToWorld, worldToGrid } from "../coords/grid";
 import { anchorFromWorld } from "../coords/anchor";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { createEnemyAilmentsState } from "../combat_mods/ailments/enemyAilments";
-import { recordEnemySpawnedHp } from "../balance/balanceCsvLogger";
 import { createEnemyBrainState } from "../systems/enemies/brain";
 
 export { EnemyId };
 
-/**
- * Factory: creates one enemy with standardized stats (from registry).
- * HP scaling is controlled only by spawn tuning HP knobs.
- */
 /** Spawn an enemy at grid coordinates with scaled stats. */
 export function spawnEnemyGrid(
     w: World,
@@ -26,23 +21,9 @@ export function spawnEnemyGrid(
     const s = registry.enemy(type);
     const baseLife = Math.max(1, Math.round(s.stats.baseLife));
 
-    // Apply run-heat scaling (damage only).
     const scaling = w.delveScaling ?? { hpMult: 1, damageMult: 1 };
-
-    const heat = Math.max(0, Math.floor((w.runHeat ?? 0) as number));
-
-    // Authoritative HP scaling: hpBase * hpPerDepth^heat
-    const tuning = (w as any).balance?.spawnTuning ?? {};
-    const hpBase = typeof tuning.hpBase === "number" ? Math.max(0, tuning.hpBase) : 1.0;
-    const hpPerDepth = typeof tuning.hpPerDepth === "number" ? Math.max(0.0001, tuning.hpPerDepth) : 1.0;
-    const effectiveHpMult = hpBase * Math.pow(hpPerDepth, heat);
-
-    const scaledHp = Math.max(1, Math.round(baseLife * effectiveHpMult));
+    const scaledHp = Math.max(1, Math.round(baseLife * scaling.hpMult));
     const scaledDamage = Math.round(s.stats.contactDamage * scaling.damageMult);
-
-    // Balance telemetry: record how much HP just entered the world.
-    const logger = (w as any).balanceCsvLogger;
-    if (logger) recordEnemySpawnedHp(logger, scaledHp);
 
     const i = w.eAlive.length;
     w.eAlive.push(true);

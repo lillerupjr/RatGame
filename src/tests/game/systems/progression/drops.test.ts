@@ -6,7 +6,7 @@ import { spawnEnemyGrid } from "../../../../game/factories/enemyFactory";
 import { goldValueFromEnemyBaseLife } from "../../../../game/economy/coins";
 import { dropsSystem } from "../../../../game/systems/progression/drops";
 import { PICKUP_KIND, spawnGold } from "../../../../game/systems/progression/pickups";
-import { LOOT_GOBLIN_TRIGGER_PREFIX } from "../../../../game/systems/progression/lootGoblin";
+import { LOOT_GOBLIN_TRIGGER_PREFIX } from "../../../../game/systems/neutral/lootGoblin";
 import { getPlayerWorld } from "../../../../game/coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../../engine/render/kenneyTiles";
 import { makeWeaponHitMeta } from "../../../../game/combat/damageMeta";

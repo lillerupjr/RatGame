@@ -37,6 +37,27 @@ export type EnemyRewardsConfig = {
     isBoss?: boolean;
 };
 
+export type EnemySpawnRole =
+    | "baseline_chaser"
+    | "fast_chaser"
+    | "tank"
+    | "ranged"
+    | "suicide"
+    | "leaper"
+    | "special";
+
+export type EnemySpawnConfig = {
+    power: number;
+    role: EnemySpawnRole;
+    unlockTimeSec: number;
+    unlockDepth: number;
+    weight: number;
+    minGroupSize: number;
+    maxGroupSize: number;
+    maxAlive: number;
+    burstWeight?: number;
+};
+
 export type EnemySpriteConfig = {
     skin: string;
     scale: number;
@@ -115,6 +136,7 @@ export type EnemyDefinition = {
     id: EnemyId;
     name: string;
     aiType: EnemyAiType;
+    spawn: EnemySpawnConfig;
     stats: EnemyStats;
     body: EnemyBodyConfig;
     rewards?: EnemyRewardsConfig;
@@ -139,6 +161,17 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
         id: EnemyId.MINION,
         name: "Minion",
         aiType: "contact",
+        spawn: {
+            power: 1.0,
+            role: "baseline_chaser",
+            unlockTimeSec: 0,
+            unlockDepth: 0,
+            weight: 1.0,
+            minGroupSize: 2,
+            maxGroupSize: 5,
+            maxAlive: 28,
+            burstWeight: 1.2,
+        },
         stats: {
             baseLife: 24,
             contactDamage: 10,
@@ -177,6 +210,17 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
         id: EnemyId.RUNNER,
         name: "Runner",
         aiType: "contact",
+        spawn: {
+            power: 0.9,
+            role: "fast_chaser",
+            unlockTimeSec: 20,
+            unlockDepth: 0,
+            weight: 0.8,
+            minGroupSize: 2,
+            maxGroupSize: 4,
+            maxAlive: 20,
+            burstWeight: 1.1,
+        },
         stats: {
             baseLife: 16,
             contactDamage: 8,
@@ -215,6 +259,17 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
         id: EnemyId.TANK,
         name: "Tank",
         aiType: "contact",
+        spawn: {
+            power: 2.1,
+            role: "tank",
+            unlockTimeSec: 45,
+            unlockDepth: 0,
+            weight: 0.45,
+            minGroupSize: 1,
+            maxGroupSize: 3,
+            maxAlive: 10,
+            burstWeight: 0.5,
+        },
         stats: {
             baseLife: 64,
             contactDamage: 16,
@@ -253,6 +308,17 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
         id: EnemyId.BURSTER,
         name: "Burster",
         aiType: "suicide",
+        spawn: {
+            power: 2.7,
+            role: "suicide",
+            unlockTimeSec: 75,
+            unlockDepth: 0,
+            weight: 0.35,
+            minGroupSize: 1,
+            maxGroupSize: 2,
+            maxAlive: 6,
+            burstWeight: 0.7,
+        },
         stats: {
             baseLife: 120,
             contactDamage: 10,
@@ -297,6 +363,17 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
         id: EnemyId.SPITTER,
         name: "Spitter",
         aiType: "caster",
+        spawn: {
+            power: 1.6,
+            role: "ranged",
+            unlockTimeSec: 35,
+            unlockDepth: 0,
+            weight: 0.5,
+            minGroupSize: 1,
+            maxGroupSize: 3,
+            maxAlive: 8,
+            burstWeight: 0.6,
+        },
         stats: {
             baseLife: 40,
             contactDamage: 10,
@@ -345,6 +422,16 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
         id: EnemyId.LOOT_GOBLIN,
         name: "Loot Goblin",
         aiType: "contact",
+        spawn: {
+            power: 3.5,
+            role: "special",
+            unlockTimeSec: 90,
+            unlockDepth: 0,
+            weight: 0.05,
+            minGroupSize: 1,
+            maxGroupSize: 1,
+            maxAlive: 1,
+        },
         stats: {
             baseLife: 500,
             contactDamage: 0,
@@ -382,6 +469,17 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
         id: EnemyId.LEAPER1,
         name: "Leaper1",
         aiType: "leaper",
+        spawn: {
+            power: 2.4,
+            role: "leaper",
+            unlockTimeSec: 65,
+            unlockDepth: 0,
+            weight: 0.3,
+            minGroupSize: 1,
+            maxGroupSize: 2,
+            maxAlive: 5,
+            burstWeight: 0.55,
+        },
         stats: {
             baseLife: 80,
             contactDamage: 0,
@@ -428,6 +526,17 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
         id: EnemyId.SHARD_RAT,
         name: "Shard Rat",
         aiType: "contact",
+        spawn: {
+            power: 1.7,
+            role: "special",
+            unlockTimeSec: 55,
+            unlockDepth: 0,
+            weight: 0.4,
+            minGroupSize: 1,
+            maxGroupSize: 3,
+            maxAlive: 8,
+            burstWeight: 0.75,
+        },
         stats: {
             baseLife: 52,
             contactDamage: 12,
@@ -476,6 +585,16 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
         id: EnemyId.BOSS,
         name: "Boss",
         aiType: "contact",
+        spawn: {
+            power: 10.0,
+            role: "special",
+            unlockTimeSec: 120,
+            unlockDepth: 0,
+            weight: 0,
+            minGroupSize: 1,
+            maxGroupSize: 1,
+            maxAlive: 1,
+        },
         stats: {
             baseLife: 240,
             contactDamage: 22,

@@ -12,7 +12,7 @@ import { getActiveMap, walkInfo } from "../../../../game/map/compile/kenneyMap";
 import { movementSystem } from "../../../../game/systems/sim/movement";
 import { collisionsSystem } from "../../../../game/systems/sim/collisions";
 import type { InputState } from "../../../../game/systems/sim/input";
-import { LOOT_GOBLIN_TRIGGER_PREFIX } from "../../../../game/systems/progression/lootGoblin";
+import { LOOT_GOBLIN_TRIGGER_PREFIX } from "../../../../game/systems/neutral/lootGoblin";
 
 type TilePos = { tx: number; ty: number };
 

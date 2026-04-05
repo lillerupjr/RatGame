@@ -13,7 +13,6 @@ import {
   removeRelic,
 } from "../../game/systems/progression/relics";
 import { DEFAULT_SETTINGS, getUserSettings, updateUserSettings } from "../../userSettings";
-import { DEFAULT_SPAWN_TUNING } from "../../game/balance/spawnTuningDefaults";
 import { mountSettingsPanel, type SettingsPanelController } from "../settings/settingsPanel";
 import {
   capturePaletteSnapshotDraft,
@@ -33,9 +32,9 @@ export type PauseMenuController = {
   destroy(): void;
 };
 
-type PauseSectionId = "OWNED_CARDS" | "SETTINGS" | "BUILD_STATS" | "DEBUG_METRICS" | "SPAWN_TUNING";
+type PauseSectionId = "OWNED_CARDS" | "SETTINGS" | "BUILD_STATS" | "DEBUG_METRICS";
 
-type DebugMetricTab = "SPAWN" | "COMBAT" | "FLOW";
+type DebugMetricTab = "COMBAT" | "FLOW";
 
 function safeNum(v: unknown, fallback = 0): number {
   return typeof v === "number" && Number.isFinite(v) ? v : fallback;
@@ -85,7 +84,6 @@ function describeCardMod(mod: { key: string; op: string; value: number }): strin
 }
 
 function metricRowsForTab(world: any, tab: DebugMetricTab): Array<[string, string]> {
-  const dbg = world?.spawnDirectorDebug;
   const liveEnemyHp = (() => {
     const alive = Array.isArray(world?.eAlive) ? world.eAlive : [];
     const hp = Array.isArray(world?.eHp) ? world.eHp : [];
@@ -97,31 +95,20 @@ function metricRowsForTab(world: any, tab: DebugMetricTab): Array<[string, strin
     }
     return total;
   })();
-
-  if (!dbg || typeof dbg !== "object") {
-    return [
-      ["Spawn Director", "No debug data"],
-      ["On-screen Enemy HP", `${Math.round(liveEnemyHp)}`],
-    ];
-  }
-
-  const spawnRows: Array<[string, string]> = [
-    ["Spawn Heat Mult (cum.)", `${safeNum(dbg.spawnPressureMult, 1).toFixed(2)}x`],
-    ["Enemy HP Heat Mult (cum.)", `${safeNum(dbg.spawnHpMult, 1).toFixed(2)}x`],
-    ["Time Pressure (base)", safeNum(dbg.basePressure, 0).toFixed(3)],
-    ["Time Pressure (effective)", safeNum(dbg.effectivePressure, safeNum(dbg.pressure, 0)).toFixed(3)],
-    ["Wave Intensity Mult", safeNum(dbg.waveMult, 1).toFixed(3)],
-    ["Spawn HP Budget/sec", safeNum(dbg.spawnHpPerSecond, 0).toFixed(0)],
-    ["On-screen Enemy HP", safeNum(liveEnemyHp, 0).toFixed(0)],
-    ["Queued Enemies/sec", safeNum(dbg.queuedPerSecond, 0).toFixed(2)],
-    ["Spawned Enemies/sec", safeNum(dbg.spawnsPerSecond, 0).toFixed(2)],
-  ];
+  const aliveEnemyCount = (() => {
+    const alive = Array.isArray(world?.eAlive) ? world.eAlive : [];
+    let total = 0;
+    for (let i = 0; i < alive.length; i++) {
+      if (alive[i]) total += 1;
+    }
+    return total;
+  })();
 
   const combatRows: Array<[string, string]> = [
-    ["Actual DPS (inst)", safeNum(dbg.actualDpsInstant, 0).toFixed(2)],
-    ["Actual DPS (smooth)", safeNum(dbg.actualDps, 0).toFixed(2)],
-    ["Expected DPS", safeNum(dbg.expectedDps, 0).toFixed(2)],
-    ["Ahead/Behind", `${safeNum(dbg.aheadFactor, 1).toFixed(2)}x`],
+    ["Actual DPS (inst)", safeNum(world?.metrics?.dps?.dpsInstant, 0).toFixed(2)],
+    ["Actual DPS (smooth)", safeNum(world?.metrics?.dps?.dpsSmoothed, 0).toFixed(2)],
+    ["On-screen Enemy HP", safeNum(liveEnemyHp, 0).toFixed(0)],
+    ["Alive Enemies", safeNum(aliveEnemyCount, 0).toFixed(0)],
   ];
 
   const flowRows: Array<[string, string]> = [
@@ -134,17 +121,13 @@ function metricRowsForTab(world: any, tab: DebugMetricTab): Array<[string, strin
       `${Array.isArray(world?.cardRewardClaimKeys) ? world.cardRewardClaimKeys.length : 0}`,
     ],
     ["Last Reward Key", `${world?.lastCardRewardClaimKey ?? "-"}`],
-    ["Pending", safeNum(dbg.pendingSpawns, 0).toFixed(0)],
-    ["Wave Remaining", safeNum(dbg.waveRemaining, 0).toFixed(0)],
-    ["Chunk CD", safeNum(dbg.chunkCooldownSec, 0).toFixed(2)],
-    ["Wave CD", safeNum(dbg.waveCooldownSecLeft, 0).toFixed(2)],
-    ["Last Chunk", safeNum(dbg.lastChunkSize, 0).toFixed(0)],
-    ["Wave Threshold", safeNum(dbg.pendingThresholdToStartWave, 0).toFixed(0)],
-    ["Trash Power Cost", safeNum(dbg.trashPowerCost, 0).toFixed(2)],
-    ["Power Budget", safeNum(dbg.powerBudget, 0).toFixed(2)],
+    ["Floor Time", safeNum(world?.phaseTime, 0).toFixed(1)],
+    ["Floor Duration", safeNum(world?.floorDuration, 0).toFixed(1)],
+    ["Alive Enemies", safeNum(aliveEnemyCount, 0).toFixed(0)],
+    ["On-screen Enemy HP", safeNum(liveEnemyHp, 0).toFixed(0)],
   ];
 
-  return tab === "COMBAT" ? combatRows : tab === "FLOW" ? flowRows : spawnRows;
+  return tab === "COMBAT" ? combatRows : flowRows;
 }
 
 export function mountPauseMenu(args: {
@@ -316,29 +299,17 @@ export function mountPauseMenu(args: {
   debugMetricsPanel.appendChild(debugTabRow);
   debugMetricsPanel.appendChild(debugMetricsBody);
 
-  const spawnTuningPanel = document.createElement("section");
-  spawnTuningPanel.className = "pauseModePanel";
-  const spawnTuningTitle = document.createElement("h3");
-  spawnTuningTitle.className = "pauseSectionTitle";
-  spawnTuningTitle.textContent = "Spawn Tuning";
-  const spawnTuningBody = document.createElement("div");
-  spawnTuningBody.className = "pauseSectionScroll";
-  spawnTuningPanel.appendChild(spawnTuningTitle);
-  spawnTuningPanel.appendChild(spawnTuningBody);
-
   const panelById: Record<PauseSectionId, HTMLElement> = {
     OWNED_CARDS: ownedCardsPanel,
     SETTINGS: settingsPanelSection,
     BUILD_STATS: buildStatsPanel,
     DEBUG_METRICS: debugMetricsPanel,
-    SPAWN_TUNING: spawnTuningPanel,
   };
 
   content.appendChild(ownedCardsPanel);
   content.appendChild(settingsPanelSection);
   content.appendChild(buildStatsPanel);
   content.appendChild(debugMetricsPanel);
-  content.appendChild(spawnTuningPanel);
 
   const navButtons: Partial<Record<PauseSectionId, HTMLButtonElement>> = {};
 
@@ -371,7 +342,6 @@ export function mountPauseMenu(args: {
   addNavButton("Settings", { sectionId: "SETTINGS" });
   addNavButton("Build Stats", { sectionId: "BUILD_STATS", devOnly: true });
   addNavButton("Debug Metrics", { sectionId: "DEBUG_METRICS", devOnly: true });
-  addNavButton("Spawn Tuning", { sectionId: "SPAWN_TUNING", devOnly: true });
 
   layout.appendChild(nav);
   layout.appendChild(content);
@@ -424,7 +394,7 @@ export function mountPauseMenu(args: {
   let visible = false;
   let selectedOwnedCardId: string | null = null;
   let activeSection: PauseSectionId = "OWNED_CARDS";
-  let debugMetricTab: DebugMetricTab = "SPAWN";
+  let debugMetricTab: DebugMetricTab = "COMBAT";
   let debugLayerOpen = false;
   let debugMode: "CARDS" | "RELICS" = "CARDS";
   let debugRelicMessage = "";
@@ -457,86 +427,6 @@ export function mountPauseMenu(args: {
     closeQuitConfirm();
   });
 
-  const spawnRateSlider = document.createElement("input");
-  spawnRateSlider.type = "range";
-  spawnRateSlider.setAttribute("data-spawn-rate-orb-slider", "1");
-  spawnRateSlider.min = "0.80";
-  spawnRateSlider.max = "1.50";
-  spawnRateSlider.step = "0.01";
-
-  const hpDepthSlider = document.createElement("input");
-  hpDepthSlider.type = "range";
-  hpDepthSlider.setAttribute("data-monster-health-orb-slider", "1");
-  hpDepthSlider.min = "0.80";
-  hpDepthSlider.max = "1.50";
-  hpDepthSlider.step = "0.01";
-
-  const spawnBaseSlider = document.createElement("input");
-  spawnBaseSlider.type = "range";
-  spawnBaseSlider.setAttribute("data-spawn-base-slider", "1");
-  spawnBaseSlider.min = "0.20";
-  spawnBaseSlider.max = "4.00";
-  spawnBaseSlider.step = "0.05";
-
-  const hpBaseSlider = document.createElement("input");
-  hpBaseSlider.type = "range";
-  hpBaseSlider.setAttribute("data-monster-health-base-slider", "1");
-  hpBaseSlider.min = "0.20";
-  hpBaseSlider.max = "4.00";
-  hpBaseSlider.step = "0.05";
-
-  const pressureT0Slider = document.createElement("input");
-  pressureT0Slider.type = "range";
-  pressureT0Slider.setAttribute("data-pressure-t0-slider", "1");
-  pressureT0Slider.min = "0.10";
-  pressureT0Slider.max = "3.00";
-  pressureT0Slider.step = "0.05";
-
-  const pressureT120Slider = document.createElement("input");
-  pressureT120Slider.type = "range";
-  pressureT120Slider.setAttribute("data-pressure-t120-slider", "1");
-  pressureT120Slider.min = "0.10";
-  pressureT120Slider.max = "3.00";
-  pressureT120Slider.step = "0.05";
-
-  const sliderValueByKey: Record<string, HTMLSpanElement> = {
-    spawnPerDepth: document.createElement("span"),
-    hpPerDepth: document.createElement("span"),
-    spawnBase: document.createElement("span"),
-    hpBase: document.createElement("span"),
-    pressureAt0Sec: document.createElement("span"),
-    pressureAt120Sec: document.createElement("span"),
-  };
-
-  const createSpawnRow = (
-    label: string,
-    slider: HTMLInputElement,
-    valueEl: HTMLSpanElement,
-  ) => {
-    const row = document.createElement("label");
-    row.className = "pauseTuningRow";
-    const text = document.createElement("span");
-    text.textContent = label;
-    valueEl.className = "pauseTuningValue";
-    row.appendChild(text);
-    row.appendChild(slider);
-    row.appendChild(valueEl);
-    spawnTuningBody.appendChild(row);
-  };
-
-  createSpawnRow("Spawn/Depth", spawnRateSlider, sliderValueByKey.spawnPerDepth);
-  createSpawnRow("HP/Depth", hpDepthSlider, sliderValueByKey.hpPerDepth);
-  createSpawnRow("Spawn Base", spawnBaseSlider, sliderValueByKey.spawnBase);
-  createSpawnRow("HP Base", hpBaseSlider, sliderValueByKey.hpBase);
-  createSpawnRow("Pressure T0", pressureT0Slider, sliderValueByKey.pressureAt0Sec);
-  createSpawnRow("Pressure T120", pressureT120Slider, sliderValueByKey.pressureAt120Sec);
-
-  const spawnResetBtn = document.createElement("button");
-  spawnResetBtn.type = "button";
-  spawnResetBtn.className = "pauseBtn pauseInlineAction";
-  spawnResetBtn.textContent = "Reset Spawn Tuning";
-  spawnTuningBody.appendChild(spawnResetBtn);
-
   const settingsPanel: SettingsPanelController = mountSettingsPanel({
     host: settingsHost,
     initialTab: "GAME",
@@ -554,71 +444,6 @@ export function mountPauseMenu(args: {
         window.dispatchEvent(new Event("resize"));
       }
     },
-  });
-
-  const syncSpawnTuningControls = () => {
-    const render = (getUserSettings() as any)?.render ?? DEFAULT_SETTINGS.render;
-    const spawnPerDepth = Math.max(0.8, Math.min(1.5, safeNum(render.spawnPerDepth, DEFAULT_SPAWN_TUNING.spawnPerDepth)));
-    const hpPerDepth = Math.max(0.8, Math.min(1.5, safeNum(render.hpPerDepth, DEFAULT_SPAWN_TUNING.hpPerDepth)));
-    const spawnBase = Math.max(0.2, Math.min(4.0, safeNum(render.spawnBase, DEFAULT_SPAWN_TUNING.spawnBase)));
-    const hpBase = Math.max(0.2, Math.min(4.0, safeNum(render.hpBase, DEFAULT_SPAWN_TUNING.hpBase)));
-    const pressureAt0Sec = Math.max(0.1, Math.min(3.0, safeNum(render.pressureAt0Sec, DEFAULT_SPAWN_TUNING.pressureAt0Sec)));
-    const pressureAt120Sec = Math.max(0.1, Math.min(3.0, safeNum(render.pressureAt120Sec, DEFAULT_SPAWN_TUNING.pressureAt120Sec)));
-
-    spawnRateSlider.value = `${spawnPerDepth}`;
-    hpDepthSlider.value = `${hpPerDepth}`;
-    spawnBaseSlider.value = `${spawnBase}`;
-    hpBaseSlider.value = `${hpBase}`;
-    pressureT0Slider.value = `${pressureAt0Sec}`;
-    pressureT120Slider.value = `${pressureAt120Sec}`;
-
-    sliderValueByKey.spawnPerDepth.textContent = spawnPerDepth.toFixed(2);
-    sliderValueByKey.hpPerDepth.textContent = hpPerDepth.toFixed(2);
-    sliderValueByKey.spawnBase.textContent = spawnBase.toFixed(2);
-    sliderValueByKey.hpBase.textContent = hpBase.toFixed(2);
-    sliderValueByKey.pressureAt0Sec.textContent = pressureAt0Sec.toFixed(2);
-    sliderValueByKey.pressureAt120Sec.textContent = pressureAt120Sec.toFixed(2);
-  };
-
-  const applySpawnTuningToWorld = () => {
-    if (!latestWorld) return;
-    const render = (getUserSettings() as any)?.render ?? DEFAULT_SETTINGS.render;
-    const w = latestWorld as any;
-    if (!w.balance) w.balance = {};
-    if (!w.balance.spawnTuning) w.balance.spawnTuning = {};
-    w.balance.spawnTuning.spawnBase = safeNum(render.spawnBase, DEFAULT_SPAWN_TUNING.spawnBase);
-    w.balance.spawnTuning.spawnPerDepth = safeNum(render.spawnPerDepth, DEFAULT_SPAWN_TUNING.spawnPerDepth);
-    w.balance.spawnTuning.hpBase = safeNum(render.hpBase, DEFAULT_SPAWN_TUNING.hpBase);
-    w.balance.spawnTuning.hpPerDepth = safeNum(render.hpPerDepth, DEFAULT_SPAWN_TUNING.hpPerDepth);
-    w.balance.spawnTuning.pressureAt0Sec = safeNum(render.pressureAt0Sec, DEFAULT_SPAWN_TUNING.pressureAt0Sec);
-    w.balance.spawnTuning.pressureAt120Sec = safeNum(render.pressureAt120Sec, DEFAULT_SPAWN_TUNING.pressureAt120Sec);
-  };
-
-  const onSpawnSliderInput = () => {
-    updateUserSettings({
-      render: {
-        spawnPerDepth: Math.max(0.8, Math.min(1.5, Number.parseFloat(spawnRateSlider.value))),
-        hpPerDepth: Math.max(0.8, Math.min(1.5, Number.parseFloat(hpDepthSlider.value))),
-        spawnBase: Math.max(0.2, Math.min(4.0, Number.parseFloat(spawnBaseSlider.value))),
-        hpBase: Math.max(0.2, Math.min(4.0, Number.parseFloat(hpBaseSlider.value))),
-        pressureAt0Sec: Math.max(0.1, Math.min(3.0, Number.parseFloat(pressureT0Slider.value))),
-        pressureAt120Sec: Math.max(0.1, Math.min(3.0, Number.parseFloat(pressureT120Slider.value))),
-      },
-    });
-    syncSpawnTuningControls();
-    applySpawnTuningToWorld();
-  };
-
-  spawnRateSlider.addEventListener("input", onSpawnSliderInput);
-  hpDepthSlider.addEventListener("input", onSpawnSliderInput);
-  spawnBaseSlider.addEventListener("input", onSpawnSliderInput);
-  hpBaseSlider.addEventListener("input", onSpawnSliderInput);
-  pressureT0Slider.addEventListener("input", onSpawnSliderInput);
-  pressureT120Slider.addEventListener("input", onSpawnSliderInput);
-  spawnResetBtn.addEventListener("click", () => {
-    updateUserSettings({ render: { ...DEFAULT_SPAWN_TUNING } });
-    syncSpawnTuningControls();
-    applySpawnTuningToWorld();
   });
 
   const renderBuildStats = (world: World | null) => {
@@ -666,7 +491,6 @@ export function mountPauseMenu(args: {
   const renderDebugMetricTabs = () => {
     clearChildren(debugTabRow);
     const tabs: Array<{ id: DebugMetricTab; label: string }> = [
-      { id: "SPAWN", label: "Spawn" },
       { id: "COMBAT", label: "Combat" },
       { id: "FLOW", label: "Flow" },
     ];
@@ -980,14 +804,13 @@ export function mountPauseMenu(args: {
       btn.hidden = isUserMode;
     });
 
-    if (isUserMode && (activeSection === "BUILD_STATS" || activeSection === "DEBUG_METRICS" || activeSection === "SPAWN_TUNING")) {
+    if (isUserMode && (activeSection === "BUILD_STATS" || activeSection === "DEBUG_METRICS")) {
       setActiveSection("OWNED_CARDS");
     }
 
     if (isUserMode) {
       buildStatsPanel.hidden = true;
       debugMetricsPanel.hidden = true;
-      spawnTuningPanel.hidden = true;
       debugLayerOpen = false;
     }
 
@@ -1022,8 +845,6 @@ export function mountPauseMenu(args: {
   const renderAll = (world: World | null) => {
     settingsPanel.refresh();
     syncDevVisibility();
-    syncSpawnTuningControls();
-    applySpawnTuningToWorld();
 
     renderOwnedCards(world);
     renderTopStatsForOwnedAndSettings(world);
@@ -1035,7 +856,6 @@ export function mountPauseMenu(args: {
   };
 
   setActiveSection("OWNED_CARDS");
-  syncSpawnTuningControls();
 
   return {
     setVisible(v: boolean): void {

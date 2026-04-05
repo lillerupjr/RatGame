@@ -15,7 +15,7 @@ import {
   setVirtualMoveAxes,
 } from "./systems/sim/input";
 import { movementSystem } from "./systems/sim/movement";
-import { spawnOneEnemyOfType, spawnOneTrashEnemy } from "./systems/spawn/spawn";
+import { spawnOneEnemyOfType } from "./systems/spawn/spawn";
 import { combatSystem } from "./systems/sim/combat";
 import { dotTickSystem } from "./combat/dot/dotTickSystem";
 import { collisionsSystem, processCombatTextFromEvents } from "./systems/sim/collisions";
@@ -166,10 +166,6 @@ import { tryPurchaseVendorCard, tryPurchaseVendorRelic } from "./vendor/vendorPu
 import { mountCardRewardMenu } from "../ui/rewards/cardRewardMenu";
 import { mountRelicRewardMenu } from "../ui/rewards/relicRewardMenu";
 import { mountVendorShopMenu } from "../ui/vendor/vendorShopMenu";
-import { tickSpawnDirector } from "./balance/spawnDirector";
-import { tickBalanceCsvLogger } from "./balance/balanceCsvLogger";
-import { BASELINE_PLAYER_DPS, computePressure } from "./balance/pressureModel";
-import { DEFAULT_SPAWN_TUNING } from "./balance/spawnTuningDefaults";
 import { createFloorRewardBudget, type ObjectiveMode } from "./rewards/floorRewardBudget";
 import { resolveActiveRewardTicket } from "./rewards/rewardTickets";
 import { recomputeDerivedStats } from "./stats/derivedStats";
@@ -186,7 +182,7 @@ import { enemyActionSystem } from "./systems/enemies/actions";
 import {
   resetLootGoblinFloorState,
   trySpawnLootGoblinForFloor,
-} from "./systems/progression/lootGoblin";
+} from "./systems/neutral/lootGoblin";
 import {
   commitFloorClear,
   normalizedRunHeat,
@@ -1935,7 +1931,7 @@ export function createGame(args: CreateGameArgs) {
     const radius = w.rng.range(320, 520);
     const wx = pw.wx + Math.cos(angle) * radius;
     const wy = pw.wy + Math.sin(angle) * radius;
-    const spawnedHp = spawnOneEnemyOfType(w, EnemyId.BOSS, wx, wy, "elite");
+    const spawnedHp = spawnOneEnemyOfType(w, EnemyId.BOSS, wx, wy);
     if (spawnedHp > 0) (w as any)._surviveBossSpawned = true;
   }
 
@@ -2185,46 +2181,7 @@ export function createGame(args: CreateGameArgs) {
     w.phaseTime = 0;
     w.transitionTime = 0;
 
-    // Reset Spawn Director per-floor.
-    if (w.spawnDirectorState) {
-      w.spawnDirectorState.powerBudget = 0;
-      w.spawnDirectorState.pendingHpCommitted = 0;
-      w.spawnDirectorState.pendingSpawns = 0;
-      w.spawnDirectorState.waveRemaining = 0;
-      w.spawnDirectorState.chunkCooldownSec = 0;
-      w.spawnDirectorState.waveCooldownSecLeft = 0;
-      w.spawnDirectorState.lastChunkSize = 0;
-      w.spawnDirectorState.queueEvents = [];
-      w.spawnDirectorState.queuedPerSecond = 0;
-      w.spawnDirectorState.spawnEvents = [];
-      w.spawnDirectorState.spawnsPerSecond = 0;
-    }
-
     applyRunHeatScaling(w);
-    const heat = getRunHeat(w);
-    const isPoeMapFloorObjective = objectiveSpec.objectiveType === "POE_MAP_CLEAR";
-    const seed = 10;
-
-    if (w.spawnDirectorState && !isPoeMapFloorObjective) {
-      w.spawnDirectorState.pendingSpawns += seed;
-    }
-
-    if ((w as any).debug?.verboseSpawnLogs) {
-      const tuning = (w as any).balance?.spawnTuning ?? {};
-      const spawnBase = typeof tuning.spawnBase === "number" ? tuning.spawnBase : DEFAULT_SPAWN_TUNING.spawnBase;
-      const spawnPerDepth = typeof tuning.spawnPerDepth === "number" ? tuning.spawnPerDepth : DEFAULT_SPAWN_TUNING.spawnPerDepth;
-      const pressureAt0Sec = typeof tuning.pressureAt0Sec === "number" ? tuning.pressureAt0Sec : DEFAULT_SPAWN_TUNING.pressureAt0Sec;
-      const pressureAt120Sec = typeof tuning.pressureAt120Sec === "number" ? tuning.pressureAt120Sec : DEFAULT_SPAWN_TUNING.pressureAt120Sec;
-      const spawnMult = spawnBase * Math.pow(Math.max(0.0001, spawnPerDepth), heat);
-      const pressure = computePressure(0, pressureAt0Sec, pressureAt120Sec);
-      const spawnHPPerSecond = BASELINE_PLAYER_DPS * pressure * spawnMult;
-      console.log(
-        "[SpawnModel]",
-        "heat=", heat,
-        "pressure=", pressure.toFixed(2),
-        "spawnHPPerSec=", spawnHPPerSecond.toFixed(2)
-      );
-    }
 
     emitEvent(w, { type: "SFX", id: "FLOOR_START", vol: 0.9, rate: 1 });
     floorLoadContext = null;
@@ -2353,7 +2310,7 @@ export function createGame(args: CreateGameArgs) {
     const pw = gridToWorld(pg.gx, pg.gy, KENNEY_TILE_WORLD);
     const sx = pw.wx + Math.cos(a) * r;
     const sy = pw.wy + Math.sin(a) * r;
-    spawnOneEnemyOfType(w, EnemyId.BOSS, sx, sy, "elite");
+    spawnOneEnemyOfType(w, EnemyId.BOSS, sx, sy);
   }
 
   function enterTransition(w: World) {
@@ -2412,7 +2369,6 @@ export function createGame(args: CreateGameArgs) {
     (world as any).deterministicDelveMode = false;
     const mapMode = isMapMode(mapId);
     (world as any).mapMode = mapMode;
-    world.balance.spawnDirectorEnabled = true;
     if (mapMode) {
       setObjectives(world, []);
     } else {
@@ -3469,9 +3425,8 @@ export function createGame(args: CreateGameArgs) {
     // total run time (optional for future meta / analytics)
     world.time += dtSim;
 
-    // phase time (drives FLOOR/BOSS/TRANSITION)
+    // phase time (drives FLOOR/BOSS/TRANSITION runtime state)
     world.phaseTime += dtSim;
-    // Spawn pacing uses the same clock as floor progression/spawn cadence.
     world.timeSec = world.phaseTime;
     ensureRunProgressionState(world);
     tickMomentumDecay(world, dtSim, world.timeSec);
@@ -3502,26 +3457,6 @@ export function createGame(args: CreateGameArgs) {
     neutralAnimatedMobsSystem(world, dtSim);
     roomChallengeSystem(world, dtSim);  // Track room challenges and lock exits
     spawnSurviveBossIfNeeded(world);
-    world.spawnDirectorConfig.enabled = true;
-    if (!world.floorEndCountdownActive && !isPoeMapObjectiveActive(world)) {
-      tickSpawnDirector(
-        world,
-        dtSim,
-        world.spawnDirectorConfig,
-        world.expectedPowerConfig,
-        world.expectedPowerBudgetConfig,
-        world.spawnDirectorState,
-        {
-          getRunHeat: () => getRunHeat(world),
-          isBossActive: () => world.runState === "BOSS" || bossAlive(world),
-          canSpawnNow: () => world.runState === "FLOOR" && world.phaseTime >= 2,
-          spawnTrash: () => {
-            return spawnOneTrashEnemy(world, undefined, undefined, "trash");
-          },
-        }
-      );
-    }
-    tickBalanceCsvLogger(world as any, dtSim);
     const isNeutralObjectiveFloor = world.floorArchetype === "VENDOR" || world.floorArchetype === "HEAL";
     if (!isNeutralObjectiveFloor && !deathFxActive) {
       combatSystem(world, dtSim);

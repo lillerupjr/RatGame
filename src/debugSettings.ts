@@ -73,7 +73,6 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "pauseDebugCards", label: "Enable Pause Debug Cards" },
   { key: "pauseCsvControls", label: "Enable Pause CSV Controls" },
   { key: "dpsMeter", label: "Show DPS Meter" },
-  { key: "dpsSpawnBudgetOverlay", label: "Show DPS vs Spawn Budget Overlay" },
 ] as const;
 
 export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {

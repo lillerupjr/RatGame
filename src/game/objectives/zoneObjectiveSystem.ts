@@ -1,6 +1,5 @@
 import type { World } from "../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
-import { DEFAULT_SPAWN_TUNING } from "../balance/spawnTuningDefaults";
 import { worldToTile } from "../coords/tile";
 import { getPlayerWorld } from "../coords/worldViews";
 import { getActiveMap, surfacesAtXY, walkInfo } from "../map/compile/kenneyMap";
@@ -18,6 +17,7 @@ type TilePoint = { x: number; y: number };
 const zoneTrialStateByWorld = new WeakMap<World, ZoneTrialObjectiveState>();
 type ZoneTileRejectReason = "BLOCKED_TILE" | "NO_SURFACE" | "VOID_OR_STAIRS" | "NOT_WALKABLE";
 type RandomIntSource = { int(min: number, max: number): number };
+const ZONE_TRIAL_FLOOR_CLEAR_MULT = 1.15;
 
 export type ZonePlacementRect = {
   tileX: number;
@@ -251,9 +251,12 @@ export function startZoneTrial(world: World, config: Partial<ZoneTrialConfig> = 
     config.killTargetPerZone ?? spec.params.killTargetPerZone ?? DEFAULT_ZONE_TRIAL_CONFIG.killTargetPerZone;
 
   const heat = effectiveHeat(world);
-  const spawnHeatMult = Math.pow(DEFAULT_SPAWN_TUNING.spawnPerDepth, heat);
-  const hpHeatMult = Math.pow(DEFAULT_SPAWN_TUNING.hpPerDepth, heat);
-  const scaledKillTargetRaw = Math.round(baseKillTargetPerZone * spawnHeatMult * hpHeatMult);
+  const depthScaling = world.delveScaling ?? { hpMult: 1, spawnRateMult: 1 };
+  const encounterScalar = Math.max(
+    1,
+    depthScaling.spawnRateMult * Math.max(1, depthScaling.hpMult) * ZONE_TRIAL_FLOOR_CLEAR_MULT,
+  );
+  const scaledKillTargetRaw = Math.round(baseKillTargetPerZone * encounterScalar);
 
   const killTargetPerZone = clamp(
     scaledKillTargetRaw,
@@ -264,8 +267,7 @@ export function startZoneTrial(world: World, config: Partial<ZoneTrialConfig> = 
     console.debug("[zoneTrial] killTarget scaling", {
       baseKillTargetPerZone,
       heat,
-      spawnHeatMult,
-      hpHeatMult,
+      encounterScalar,
       killTargetPerZone,
     });
   }

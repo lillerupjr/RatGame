@@ -1,4 +1,3 @@
-import { DEFAULT_SPAWN_TUNING } from "../game/balance/spawnTuningDefaults";
 import {
   getFirstPaletteInGroup,
   isPaletteIdInGroup,
@@ -144,8 +143,6 @@ export const DEFAULT_SYSTEM_OVERRIDES: SystemOverrides = {
   paletteSWeightPercent: 75,
   paletteDarknessPercent: 50,
 
-  ...DEFAULT_SPAWN_TUNING,
-
   disableVisualCompiledCutoutCache: false,
   mapOverlaysDisabled: false,
   rampFaces: false,
@@ -194,13 +191,6 @@ export function sanitizeSystemOverrides(input: Partial<SystemOverrides> | undefi
     paletteId: resolvePaletteIdForGroup(normalizedPaletteGroup, merged.paletteId),
     paletteSWeightPercent: normalizePaletteRemapWeightPercent(merged.paletteSWeightPercent),
     paletteDarknessPercent: normalizePaletteRemapWeightPercent(merged.paletteDarknessPercent),
-
-    spawnBase: Math.max(0.2, Math.min(4.0, Number.isFinite(Number(merged.spawnBase)) ? Number(merged.spawnBase) : DEFAULT_SPAWN_TUNING.spawnBase)),
-    spawnPerDepth: Math.max(0.8, Math.min(1.5, Number.isFinite(Number(merged.spawnPerDepth)) ? Number(merged.spawnPerDepth) : DEFAULT_SPAWN_TUNING.spawnPerDepth)),
-    hpBase: Math.max(0.2, Math.min(4.0, Number.isFinite(Number(merged.hpBase)) ? Number(merged.hpBase) : DEFAULT_SPAWN_TUNING.hpBase)),
-    hpPerDepth: Math.max(0.8, Math.min(1.5, Number.isFinite(Number(merged.hpPerDepth)) ? Number(merged.hpPerDepth) : DEFAULT_SPAWN_TUNING.hpPerDepth)),
-    pressureAt0Sec: Math.max(0.1, Math.min(3.0, Number.isFinite(Number(merged.pressureAt0Sec)) ? Number(merged.pressureAt0Sec) : DEFAULT_SPAWN_TUNING.pressureAt0Sec)),
-    pressureAt120Sec: Math.max(0.1, Math.min(3.0, Number.isFinite(Number(merged.pressureAt120Sec)) ? Number(merged.pressureAt120Sec) : DEFAULT_SPAWN_TUNING.pressureAt120Sec)),
 
     disableVisualCompiledCutoutCache: !!merged.disableVisualCompiledCutoutCache,
     mapOverlaysDisabled: !!merged.mapOverlaysDisabled,

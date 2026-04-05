@@ -10,7 +10,7 @@ import {
   isLootGoblinEnemy,
   scheduleLootGoblinGoldBurst,
   tickLootGoblinGoldBurst,
-} from "./lootGoblin";
+} from "../neutral/lootGoblin";
 
 /** Handle drop spawns from kill events and pickup collection. */
 export function dropsSystem(w: World, dt: number) {

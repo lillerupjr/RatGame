@@ -24,15 +24,6 @@ import type { RewardTicket } from "../../game/rewards/rewardTickets";
 import type { VendorState } from "../../game/vendor/vendorState";
 import type { EnemyBrainState } from "../../game/systems/enemies/brain";
 import { createDpsMetrics, type DpsMetricsState } from "../../game/balance/dpsMetrics";
-import {
-  createSpawnDirectorState,
-  type SpawnDirectorConfig,
-  type SpawnDirectorState,
-} from "../../game/balance/spawnDirector";
-import type { ExpectedPowerBudgetConfig, ExpectedPowerConfig } from "../../game/balance/expectedPower";
-import { defaultEnemyPowerCostConfig, type EnemyPowerCostConfig } from "../../game/balance/enemyPower";
-import { createBalanceCsvLogger, type BalanceCsvLogger } from "../../game/balance/balanceCsvLogger";
-import { DEFAULT_SPAWN_TUNING } from "../../game/balance/spawnTuningDefaults";
 import { getSettings } from "../../settings/settingsStore";
 import { DEFAULT_XP_LEVEL_BASE } from "../../settings/systemOverrides";
 
@@ -593,55 +584,6 @@ export type World = {
   metrics: {
     dps: DpsMetricsState;
   };
-  balance: {
-    spawnDirectorEnabled: boolean;
-    spawnTuning?: {
-      spawnBase?: number;
-      spawnPerDepth?: number;
-      hpBase?: number;
-      hpPerDepth?: number;
-      pressureAt0Sec?: number;
-      pressureAt120Sec?: number;
-    };
-  };
-  spawnDirectorState: SpawnDirectorState;
-  spawnDirectorConfig: SpawnDirectorConfig;
-  expectedPowerConfig: ExpectedPowerConfig;
-  expectedPowerBudgetConfig: ExpectedPowerBudgetConfig;
-  enemyPowerConfig: EnemyPowerCostConfig;
-  balanceCsvLogger: BalanceCsvLogger;
-  spawnDirectorDebug?: {
-    heat: number;
-    timeSec: number;
-    expectedDps: number;
-    actualDps: number;
-    actualDpsInstant: number;
-    aheadFactor: number;
-    basePressure: number;
-    effectivePressure: number;
-    pressure: number;
-    waveMult: number;
-    timePressure?: number;
-    spawnPressureMult?: number;
-    spawnHpMult?: number;
-    powerPerSecond: number;
-    effectivePowerPerSecond?: number;
-    throttleScale?: number;
-    tInFloorSec?: number;
-    inFrontload?: boolean;
-    spawnHpPerSecond?: number;
-    trashPowerCost: number;
-    powerBudget: number;
-    pendingHpCommitted?: number;
-    pendingSpawns: number;
-    waveRemaining: number;
-    chunkCooldownSec: number;
-    waveCooldownSecLeft: number;
-    lastChunkSize: number;
-    queuedPerSecond: number;
-    pendingThresholdToStartWave: number;
-    spawnsPerSecond: number;
-  };
 };
 
 export type CreateWorldArgs = {
@@ -1037,60 +979,6 @@ export function createWorld(args: CreateWorldArgs): World {
     metrics: {
       dps: createDpsMetrics(),
     },
-    balance: {
-      spawnDirectorEnabled: true,
-      // Tuning Orbs (authoritative knobs)
-      // All three scale multiplicatively with runHeat:
-      // mult(heat) = basePerDepth ^ max(0, heat)
-      spawnTuning: {
-        ...DEFAULT_SPAWN_TUNING,
-      },
-    },
-    spawnDirectorState: createSpawnDirectorState(),
-    spawnDirectorConfig: {
-      enabled: true,
-      pressureBase: 0.7,
-      pressurePerDepth: 0.05,
-      pressureMin: 0.6,
-      minFillPerTick: 0,
-      waveEnabled: false,
-      waveTotal: 10,
-      waveChunk: 3,
-      waveChunkDelaySec: 1.0,
-      waveCooldownSec: 0.5,
-      pendingThresholdToStartWave: 6,
-      wavePeriodSec: 12,
-      waveLowMult: 0.7,
-      waveHighMult: 1.3,
-      waveHighFrac: 0.35,
-      bossTrashPressureMult: 0.5,
-      maxSpawnsPerTick: 200,
-      // Queue control (prevents “pending poisoning”)
-      pendingSoftCap: 200,
-      pendingHardCap: 600,
-      baseSpawnIntervalSec: 1.0,
-    },
-    expectedPowerConfig: {
-      timeCurve: [
-        { tSec: 0, dps: 24 },
-        { tSec: 120, dps: 14 },
-        { tSec: 300, dps: 28 },
-        { tSec: 480, dps: 45 },
-        { tSec: 720, dps: 70 },
-      ],
-      depthMultBase: 1.0,
-      depthMultPerDepth: 0.05,
-      depthMultMin: 1.0,
-      depthMultMax: 1.8,
-    },
-    expectedPowerBudgetConfig: {
-      basePowerPerSecond: 1.0,
-      powerRampPerMinute: 0.0,
-      powerRampMax: 2.0,
-    },
-    enemyPowerConfig: defaultEnemyPowerCostConfig(),
-    // Balance CSV telemetry (pause-menu controlled)
-    balanceCsvLogger: createBalanceCsvLogger(),
   };
 
   // Map-authored player spawn (SPAWN/P<number> tile)

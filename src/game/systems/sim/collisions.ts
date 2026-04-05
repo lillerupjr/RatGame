@@ -17,7 +17,7 @@ import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
 import { getUserSettings } from "../../../userSettings";
 import { resolveCritRoll01 } from "../../combat_mods/runtime/critDamagePacket";
 import { getRelicMods, normalizeWorldRelics } from "../progression/relics";
-import { isLootGoblinEnemy } from "../progression/lootGoblin";
+import { isLootGoblinEnemy } from "../neutral/lootGoblin";
 import { getCardById } from "../../combat_mods/content/cards/cardPool";
 import { resolveDotStats } from "../../combat_mods/stats/combatStatsResolver";
 import { applyPlayerIncomingDamage } from "./playerArmor";

@@ -1,12 +1,14 @@
 import type { World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { EnemyId, spawnEnemyGrid } from "../../factories/enemyFactory";
+import { isNeutralMonsterId } from "../../content/neutralMonsters";
 import { getActiveMap } from "../../map/compile/kenneyMap";
 import { pickZoneTrialLikePlacements } from "../../objectives/zoneObjectiveSystem";
 import { worldToGrid } from "../../coords/grid";
-import { spawnGold } from "./pickups";
+import { spawnGold } from "../progression/pickups";
 
 export const LOOT_GOBLIN_TRIGGER_PREFIX = "LOOT_GOBLIN_RUNTIME";
+export const NEUTRAL_MONSTER_TRIGGER_PREFIX = "NEUTRAL_MONSTER_RUNTIME";
 
 export const SPAWN_CHANCE_DENOMINATOR = 2;
 export const FLEE_TRIGGER_RADIUS_TILES = 8;
@@ -131,7 +133,7 @@ export function trySpawnLootGoblinForFloor(world: World): void {
   const gx = gp.gx;
   const gy = gp.gy;
 
-  const enemyIndex = spawnEnemyGrid(world, EnemyId.LOOT_GOBLIN, gx, gy, KENNEY_TILE_WORLD);
+  const enemyIndex = spawnNeutralMonsterGrid(world, EnemyId.LOOT_GOBLIN, gx, gy, KENNEY_TILE_WORLD);
   const triggerId = `${LOOT_GOBLIN_TRIGGER_PREFIX}:${floorIndex}:${tx}:${ty}`;
   world.eSpawnTriggerId[enemyIndex] = triggerId;
   debug.spawned = true;
@@ -142,6 +144,23 @@ export function trySpawnLootGoblinForFloor(world: World): void {
   debug.spawnWx = wx;
   debug.spawnWy = wy;
   debug.failureReason = null;
+}
+
+export function spawnNeutralMonsterGrid(
+  world: World,
+  type: EnemyId,
+  gx: number,
+  gy: number,
+  tileWorld: number = KENNEY_TILE_WORLD,
+): number {
+  if (!isNeutralMonsterId(type)) {
+    throw new Error(`spawnNeutralMonsterGrid received non-neutral type: ${String(type)}`);
+  }
+  const enemyIndex = spawnEnemyGrid(world, type, gx, gy, tileWorld);
+  if (!world.eSpawnTriggerId[enemyIndex]) {
+    world.eSpawnTriggerId[enemyIndex] = `${NEUTRAL_MONSTER_TRIGGER_PREFIX}:${String(type)}`;
+  }
+  return enemyIndex;
 }
 
 export function scheduleLootGoblinGoldBurst(world: World, x: number, y: number): void {

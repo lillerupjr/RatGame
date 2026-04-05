@@ -321,20 +321,10 @@ function buildVisibleScreenDebugLines(input: RenderDebugScreenPassInput): string
   return lines;
 }
 
-function buildVisibleDpsBudgetLines(input: RenderDebugScreenPassInput): string[] {
-  if (!input.dpsSpawnBudgetOverlayEnabled || !input.dpsSpawnBudgetDebugInfo) return [];
-  const info = input.dpsSpawnBudgetDebugInfo;
-  return [
-    `dps/budget est:${formatCompactDebugValue(info.estimatedDps)} live:${formatCompactDebugValue(info.liveDps)} spawn:${formatCompactDebugValue(info.spawnHpPerSecond)}`,
-    `shape hit:${formatCompactDebugValue(info.damagePerHit)} sps:${formatCompactDebugValue(info.shotsPerSecond)} proj:${info.projectiles} crit:${formatCompactDebugValue(info.critFactor)}x`,
-    `delta ${info.margin >= 0 ? "+" : ""}${formatCompactDebugValue(info.margin)} ratio:${formatCompactDebugValue(info.ratio)} inst:${formatCompactDebugValue(info.liveDpsInstant)}`,
-  ];
-}
-
 function buildRenderDebugLightingSnapshot(input: RenderDebugScreenPassInput): RenderDebugLightingSnapshot {
   const perfLines = buildVisiblePerfLines(input, buildFramePerf(input));
   const screenLines = buildVisibleScreenDebugLines(input);
-  const dpsBudgetLines = buildVisibleDpsBudgetLines(input);
+  const dpsBudgetLines: string[] = [];
   if (perfLines.length <= 0 && screenLines.length <= 0 && dpsBudgetLines.length <= 0) {
     return {
       perfLines,

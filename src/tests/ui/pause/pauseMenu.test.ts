@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { DEFAULT_SPAWN_TUNING } from "../../../game/balance/spawnTuningDefaults";
 
 class FakeEvent {
   type: string;
@@ -257,12 +256,6 @@ const userSettingsState = vi.hoisted(() => ({
       verticalTilesAutoDesktop: 9,
       visibleVerticalTiles: 12,
       tileRenderRadius: 0,
-      spawnBase: 1.0,
-      spawnPerDepth: 1.12,
-      hpBase: 1.0,
-      hpPerDepth: 1.18,
-      pressureAt0Sec: 0.8,
-      pressureAt120Sec: 1.4,
     },
     audio: {
       masterVolume: 1,
@@ -341,12 +334,6 @@ vi.mock("../../../userSettings", () => ({
       tileRenderRadius: 0,
       paletteSwapEnabled: false,
       paletteId: "db32",
-      spawnBase: 1.0,
-      spawnPerDepth: 1.12,
-      hpBase: 1.0,
-      hpPerDepth: 1.18,
-      pressureAt0Sec: 0.8,
-      pressureAt120Sec: 1.4,
     },
     audio: {
       masterVolume: 1,
@@ -453,12 +440,6 @@ describe("pauseMenu", () => {
         verticalTilesAutoDesktop: 9,
         visibleVerticalTiles: 12,
         tileRenderRadius: 0,
-        spawnBase: 1.0,
-        spawnPerDepth: 1.12,
-        hpBase: 1.0,
-        hpPerDepth: 1.18,
-        pressureAt0Sec: 0.8,
-        pressureAt120Sec: 1.4,
       },
       audio: {
         masterVolume: 1,
@@ -1003,28 +984,6 @@ describe("pauseMenu", () => {
 
     menu.render(
       makeWorld({
-        spawnDirectorDebug: {
-          actualDpsInstant: 0,
-          actualDps: 0,
-          expectedDps: 0,
-          aheadFactor: 0,
-          basePressure: 1,
-          effectivePressure: 1,
-          pressure: 1,
-          waveMult: 1,
-          queuedPerSecond: 0,
-          pendingSpawns: 0,
-          waveRemaining: 0,
-          chunkCooldownSec: 0,
-          waveCooldownSecLeft: 0,
-          lastChunkSize: 0,
-          pendingThresholdToStartWave: 0,
-          powerPerSecond: 0,
-          spawnHpPerSecond: 0,
-          trashPowerCost: 1,
-          powerBudget: 0,
-          spawnsPerSecond: 0,
-        },
         eAlive: [true, false, true],
         eHp: [10, 999, 5],
       })
@@ -1041,34 +1000,21 @@ describe("pauseMenu", () => {
 
     menu.render(
       makeWorld({
-        spawnDirectorDebug: {
-          actualDpsInstant: 1,
-          actualDps: 2,
-          expectedDps: 3,
-          aheadFactor: 0.7,
-          basePressure: 1,
-          effectivePressure: 1,
-          pressure: 1,
-          waveMult: 1,
-          queuedPerSecond: 0,
-          pendingSpawns: 4,
-          waveRemaining: 5,
-          chunkCooldownSec: 0.1,
-          waveCooldownSecLeft: 0.2,
-          lastChunkSize: 2,
-          pendingThresholdToStartWave: 6,
-          powerPerSecond: 7,
-          spawnHpPerSecond: 80,
-          trashPowerCost: 1,
-          powerBudget: 2,
-          spawnsPerSecond: 1.2,
+        metrics: {
+          dps: {
+            dpsInstant: 1,
+            dpsSmoothed: 2,
+          },
         },
+        eAlive: [true, false, true, true],
+        eHp: [12, 99, 8, 5],
+        phaseTime: 42,
+        floorDuration: 180,
       })
     );
 
-    // Default tab: Spawn
-    expect(root.textContent).toContain("Spawn HP Budget/sec80");
-    expect(root.textContent).not.toContain("Actual DPS (inst)1.00");
+    expect(root.textContent).toContain("Actual DPS (inst)1.00");
+    expect(root.textContent).toContain("On-screen Enemy HP25");
 
     const combatTab = root.querySelector('[data-stats-debug-tab-id="COMBAT"]') as any;
     expect(combatTab).toBeTruthy();
@@ -1078,133 +1024,6 @@ describe("pauseMenu", () => {
     const flowTab = root.querySelector('[data-stats-debug-tab-id="FLOW"]') as any;
     expect(flowTab).toBeTruthy();
     flowTab.click();
-    expect(root.textContent).toContain("Pending4");
-  });
-
-  test("spawn tuning reset button restores defaults", () => {
-    const root = document.createElement("div") as unknown as HTMLDivElement;
-    document.body.appendChild(root as any);
-
-    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
-    menu.setVisible(true);
-
-    menu.render(makeWorld());
-    const spawnSlider = root.querySelector("[data-spawn-rate-orb-slider]") as any;
-    expect(spawnSlider).toBeTruthy();
-    spawnSlider.value = "1.25";
-    spawnSlider.dispatchEvent(new Event("input") as any);
-
-    const resetBtn = root.querySelector(".pauseInlineAction") as any;
-    expect(resetBtn).toBeTruthy();
-    resetBtn.click();
-    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({ render: { ...DEFAULT_SPAWN_TUNING } });
-  });
-
-  test("spawn tuning orb sliders persist to local settings and apply to world", () => {
-    const root = document.createElement("div") as unknown as HTMLDivElement;
-    document.body.appendChild(root as any);
-
-    const menu = mountPauseMenu({ root, actions: { onResume: vi.fn(), onQuitRun: vi.fn() } });
-    menu.setVisible(true);
-
-    const world = makeWorld({
-      expectedPowerBudgetConfig: { basePowerPerSecond: 1.0 },
-      balance: { spawnTuning: {} },
-    });
-    menu.render(world);
-
-    const spawnSlider = root.querySelector("[data-spawn-rate-orb-slider]") as any;
-    const healthOrbSlider = root.querySelector("[data-monster-health-orb-slider]") as any;
-    const spawnBaseSlider = root.querySelector("[data-spawn-base-slider]") as any;
-    const healthBaseSlider = root.querySelector("[data-monster-health-base-slider]") as any;
-    const pressureT0Slider = root.querySelector("[data-pressure-t0-slider]") as any;
-    const pressureT120Slider = root.querySelector("[data-pressure-t120-slider]") as any;
-    expect(spawnSlider).toBeTruthy();
-    expect(healthOrbSlider).toBeTruthy();
-    expect(spawnBaseSlider).toBeTruthy();
-    expect(healthBaseSlider).toBeTruthy();
-    expect(pressureT0Slider).toBeTruthy();
-    expect(pressureT120Slider).toBeTruthy();
-
-    spawnSlider.value = "1.25";
-    spawnSlider.dispatchEvent(new Event("input") as any);
-    healthOrbSlider.value = "1.30";
-    healthOrbSlider.dispatchEvent(new Event("input") as any);
-    spawnBaseSlider.value = "1.40";
-    spawnBaseSlider.dispatchEvent(new Event("input") as any);
-    healthBaseSlider.value = "1.15";
-    healthBaseSlider.dispatchEvent(new Event("input") as any);
-    pressureT0Slider.value = "0.90";
-    pressureT0Slider.dispatchEvent(new Event("input") as any);
-    pressureT120Slider.value = "1.80";
-    pressureT120Slider.dispatchEvent(new Event("input") as any);
-
-    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({
-      render: {
-        spawnBase: 1.0,
-        spawnPerDepth: 1.25,
-        hpBase: 1.0,
-        hpPerDepth: 1.18,
-        pressureAt0Sec: 0.8,
-        pressureAt120Sec: 1.4,
-      },
-    });
-    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({
-      render: {
-        spawnBase: 1.0,
-        spawnPerDepth: 1.25,
-        hpBase: 1.0,
-        hpPerDepth: 1.3,
-        pressureAt0Sec: 0.8,
-        pressureAt120Sec: 1.4,
-      },
-    });
-    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({
-      render: {
-        spawnBase: 1.4,
-        spawnPerDepth: 1.25,
-        hpBase: 1.0,
-        hpPerDepth: 1.3,
-        pressureAt0Sec: 0.8,
-        pressureAt120Sec: 1.4,
-      },
-    });
-    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({
-      render: {
-        spawnBase: 1.4,
-        spawnPerDepth: 1.25,
-        hpBase: 1.15,
-        hpPerDepth: 1.3,
-        pressureAt0Sec: 0.8,
-        pressureAt120Sec: 1.4,
-      },
-    });
-    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({
-      render: {
-        spawnBase: 1.4,
-        spawnPerDepth: 1.25,
-        hpBase: 1.15,
-        hpPerDepth: 1.3,
-        pressureAt0Sec: 0.9,
-        pressureAt120Sec: 1.4,
-      },
-    });
-    expect(userSettingsMock.updateUserSettings).toHaveBeenCalledWith({
-      render: {
-        spawnBase: 1.4,
-        spawnPerDepth: 1.25,
-        hpBase: 1.15,
-        hpPerDepth: 1.3,
-        pressureAt0Sec: 0.9,
-        pressureAt120Sec: 1.8,
-      },
-    });
-
-    expect((world as any).balance.spawnTuning.spawnPerDepth).toBeCloseTo(1.25, 3);
-    expect((world as any).balance.spawnTuning.hpPerDepth).toBeCloseTo(1.3, 3);
-    expect((world as any).balance.spawnTuning.spawnBase).toBeCloseTo(1.4, 3);
-    expect((world as any).balance.spawnTuning.hpBase).toBeCloseTo(1.15, 3);
-    expect((world as any).balance.spawnTuning.pressureAt0Sec).toBeCloseTo(0.9, 3);
-    expect((world as any).balance.spawnTuning.pressureAt120Sec).toBeCloseTo(1.8, 3);
+    expect(root.textContent).toContain("Floor Time42.0");
   });
 });

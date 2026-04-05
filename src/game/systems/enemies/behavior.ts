@@ -4,7 +4,7 @@ import { type EnemyAbilityConfig, EnemyId } from "../../content/enemies";
 import { registry } from "../../content/registry";
 import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
 import { getPoeEnemyLeashAnchor, isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
-import { isLootGoblinEnemy } from "../progression/lootGoblin";
+import { isLootGoblinEnemy } from "../neutral/lootGoblin";
 import { clearEnemyTransientState, ensureEnemyBrain, setEnemyBehaviorState } from "./brain";
 
 function surfaceDistanceToPlayer(w: World, enemyIndex: number): number {

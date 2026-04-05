@@ -13,7 +13,7 @@ import {
   scheduleLootGoblinGoldBurst,
   tickLootGoblinGoldBurst,
   trySpawnLootGoblinForFloor,
-} from "../../../../game/systems/progression/lootGoblin";
+} from "../../../../game/systems/neutral/lootGoblin";
 
 describe("loot_goblin progression runtime", () => {
   test("spawn roll fail does not spawn loot goblin", () => {

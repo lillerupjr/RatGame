@@ -90,12 +90,6 @@ export type RenderSettings = {
   lightStrengthOverride: LightStrengthOverride;
   paletteGroup: PaletteGroup;
   paletteId: string;
-  spawnBase: number;
-  spawnPerDepth: number;
-  hpBase: number;
-  hpPerDepth: number;
-  pressureAt0Sec: number;
-  pressureAt120Sec: number;
 };
 
 export type GameSettings = {
@@ -156,7 +150,6 @@ export type DebugSettings = {
   pauseDebugCards: boolean;
   pauseCsvControls: boolean;
   dpsMeter: boolean;
-  dpsSpawnBudgetOverlay: boolean;
   shadowSunTimeHour: number;
   shadowSunDayCycleEnabled: boolean;
   shadowSunCycleMode: ShadowSunCycleMode;
@@ -236,7 +229,6 @@ function toLegacySettings(): UserSettings {
       pauseDebugCards: settings.debug.pauseDebugCards,
       pauseCsvControls: settings.debug.pauseCsvControls,
       dpsMeter: settings.debug.dpsMeter,
-      dpsSpawnBudgetOverlay: settings.debug.dpsSpawnBudgetOverlay,
       shadowSunTimeHour: settings.debug.shadowSunTimeHour,
       shadowSunDayCycleEnabled: settings.debug.shadowSunDayCycleEnabled,
       shadowSunCycleMode: settings.debug.shadowSunCycleMode,
@@ -294,12 +286,6 @@ function toLegacySettings(): UserSettings {
       lightStrengthOverride: settings.system.lightStrengthOverride,
       paletteGroup: settings.system.paletteGroup,
       paletteId: settings.system.paletteId,
-      spawnBase: settings.system.spawnBase,
-      spawnPerDepth: settings.system.spawnPerDepth,
-      hpBase: settings.system.hpBase,
-      hpPerDepth: settings.system.hpPerDepth,
-      pressureAt0Sec: settings.system.pressureAt0Sec,
-      pressureAt120Sec: settings.system.pressureAt120Sec,
     },
     audio: {
       ...settings.user.audio,
@@ -415,12 +401,6 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     }
     if (renderPatch.paletteGroup !== undefined) systemPatch.paletteGroup = renderPatch.paletteGroup;
     if (renderPatch.paletteId !== undefined) systemPatch.paletteId = renderPatch.paletteId;
-    if (renderPatch.spawnBase !== undefined) systemPatch.spawnBase = renderPatch.spawnBase;
-    if (renderPatch.spawnPerDepth !== undefined) systemPatch.spawnPerDepth = renderPatch.spawnPerDepth;
-    if (renderPatch.hpBase !== undefined) systemPatch.hpBase = renderPatch.hpBase;
-    if (renderPatch.hpPerDepth !== undefined) systemPatch.hpPerDepth = renderPatch.hpPerDepth;
-    if (renderPatch.pressureAt0Sec !== undefined) systemPatch.pressureAt0Sec = renderPatch.pressureAt0Sec;
-    if (renderPatch.pressureAt120Sec !== undefined) systemPatch.pressureAt120Sec = renderPatch.pressureAt120Sec;
   }
 
   const debugAny = patch.debug as any;
@@ -449,7 +429,6 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
       "pauseDebugCards",
       "pauseCsvControls",
       "dpsMeter",
-      "dpsSpawnBudgetOverlay",
       "sweepShadowDebug",
       "tileHeightMap",
       "shadowSunDayCycleEnabled",

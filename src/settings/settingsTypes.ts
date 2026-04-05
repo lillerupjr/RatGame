@@ -74,7 +74,6 @@ export type DebugToolsSettings = {
   pauseDebugCards: boolean;
   pauseCsvControls: boolean;
   dpsMeter: boolean;
-  dpsSpawnBudgetOverlay: boolean;
   neutralBirdDrawDebug: boolean;
   objectivesShowZoneBounds: boolean;
   entityAnchorsEnabled: boolean;
@@ -120,13 +119,6 @@ export type SystemOverrides = {
   paletteId: string;
   paletteSWeightPercent: PaletteRemapWeightPercent;
   paletteDarknessPercent: PaletteRemapWeightPercent;
-
-  spawnBase: number;
-  spawnPerDepth: number;
-  hpBase: number;
-  hpPerDepth: number;
-  pressureAt0Sec: number;
-  pressureAt120Sec: number;
 
   disableVisualCompiledCutoutCache: boolean;
   mapOverlaysDisabled: boolean;

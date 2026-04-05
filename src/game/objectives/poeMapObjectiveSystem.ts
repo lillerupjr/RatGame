@@ -1,12 +1,12 @@
 import type { World } from "../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
+import { isNeutralMonsterId } from "../content/neutralMonsters";
 import { spawnEnemy, EnemyId } from "../factories/enemyFactory";
 import { getEnemyWorld, getPlayerWorld } from "../coords/worldViews";
 import { getActiveMap, getSpawnWorldFromActive, getTileHeight } from "../map/authoredMapActivation";
 import { walkInfo } from "../map/compile/kenneyMap";
 import { RNG } from "../util/rng";
 import { OBJECTIVE_TRIGGER_IDS } from "../systems/progression/objectiveSpec";
-import { computeSurviveEquivalentSpawnCountForDurationSeconds } from "../balance/spawnDirector";
 
 export type PoeMapModifiers = {
   packSizeMultiplier?: number;
@@ -123,6 +123,7 @@ const MAX_ANCHOR_RETRIES = 48;
 
 const BASE_MAGIC_PACK_CHANCE = 0.22;
 const BASE_RARE_PACK_CHANCE = 0.1;
+const POE_BASE_ENEMY_EQUIVALENTS_PER_SECOND = 0.24;
 
 const MAGIC_HP_MULT = 1.35;
 const MAGIC_DAMAGE_MULT = 1.15;
@@ -130,7 +131,7 @@ const RARE_HP_MULT = 1.9;
 const RARE_DAMAGE_MULT = 1.35;
 const RARE_SPEED_MULT = 1.08;
 
-const enemyBudgetCost: Record<EnemyId, number> = {
+const enemyBudgetCost: Partial<Record<EnemyId, number>> = {
   [EnemyId.MINION]: 1,
   [EnemyId.RUNNER]: 0.9,
   [EnemyId.TANK]: 2.5,
@@ -138,8 +139,6 @@ const enemyBudgetCost: Record<EnemyId, number> = {
   [EnemyId.BURSTER]: 4.2,
   [EnemyId.SPITTER]: 2.2,
   [EnemyId.SHARD_RAT]: 2.1,
-  [EnemyId.LOOT_GOBLIN]: 1,
-  [EnemyId.BOSS]: 0,
 };
 
 const PACK_TEMPLATES: PackTemplate[] = [
@@ -200,13 +199,12 @@ const PACK_TEMPLATES: PackTemplate[] = [
 ];
 
 export const POE_MAP_PACK_TEMPLATES: readonly PackTemplate[] = PACK_TEMPLATES;
-export const POE_MAP_ENEMY_BUDGET_COST: Readonly<Record<EnemyId, number>> = enemyBudgetCost;
+export const POE_MAP_ENEMY_BUDGET_COST: Readonly<Partial<Record<EnemyId, number>>> = enemyBudgetCost;
 
 const poeStateByWorld = new WeakMap<World, PoeMapRuntimeState>();
 
 function isExcludedPoeGenerationType(type: EnemyId): boolean {
-  // Loot Goblin has its own dedicated runtime system and must not be part of PoE pack generation.
-  return type === EnemyId.LOOT_GOBLIN || type === EnemyId.BOSS;
+  return isNeutralMonsterId(type) || type === EnemyId.BOSS;
 }
 
 function clampNumber(value: number | undefined, fallback: number, min: number, max: number): number {
@@ -222,6 +220,15 @@ function normalizeModifiers(modifiers: PoeMapModifiers | undefined): NormalizedP
     magicPackChanceMultiplier: clampNumber(modifiers?.magicPackChanceMultiplier, 1, 0, 4),
     extraPopulationScalar: clampNumber(modifiers?.extraPopulationScalar, 1, 0.2, 3),
   };
+}
+
+function estimatePoePopulationBudgetForDurationSeconds(world: World, durationSec: number): number {
+  const duration = Math.max(0, Number.isFinite(durationSec) ? durationSec : 0);
+  if (duration <= 0) return 0;
+
+  const scaling = world.delveScaling ?? { hpMult: 1, spawnRateMult: 1 };
+  const encounterScalar = Math.max(1, scaling.spawnRateMult * Math.sqrt(Math.max(1, scaling.hpMult)));
+  return duration * POE_BASE_ENEMY_EQUIVALENTS_PER_SECOND * encounterScalar;
 }
 
 function hashString(value: string): number {
@@ -886,7 +893,7 @@ export function initializePoeMapObjective(
   const width = map.width;
   const height = map.height;
 
-  const survive2MinBudget = computeSurviveEquivalentSpawnCountForDurationSeconds(world, SURVIVE_BUDGET_SECONDS);
+  const survive2MinBudget = estimatePoePopulationBudgetForDurationSeconds(world, SURVIVE_BUDGET_SECONDS);
   const totalPopulationBudget = Math.max(0, survive2MinBudget * POE_MODE_SCALAR * modifiers.extraPopulationScalar);
 
   const chunks = buildChunkBudgetSlices(

@@ -16,7 +16,7 @@ import {
   FLEE_SPEED_MULT,
   FLEE_TRIGGER_RADIUS_TILES,
   isLootGoblinEnemy,
-} from "../progression/lootGoblin";
+} from "../neutral/lootGoblin";
 import { getPoeEnemyLeashAnchor, isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
 import { EnemyId } from "../../content/enemies";
 import { registry } from "../../content/registry";

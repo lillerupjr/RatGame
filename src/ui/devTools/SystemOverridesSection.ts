@@ -44,7 +44,6 @@ export function mountSystemOverridesSection(
   const renderingGrid = createSubsectionGrid(section, "Rendering Overrides");
   const lightingGrid = createSubsectionGrid(section, "Lighting / Palette Overrides");
   const gameplayGrid = createSubsectionGrid(section, "Gameplay Overrides");
-  const spawnGrid = createSubsectionGrid(section, "Spawn / Director Overrides");
   const aiGrid = createSubsectionGrid(section, "AI Overrides");
 
   const entityShadowsDisable = createToggleRow(renderingGrid, "Disable Entity Shadows", (checked) => {
@@ -205,25 +204,6 @@ export function mountSystemOverridesSection(
     applySystemPatch({ forceSpawnOverride: checked });
   });
 
-  const spawnBase = createSliderRow(spawnGrid, "Spawn Base", 0.2, 4.0, 0.05, (value) => {
-    applySystemPatch({ spawnBase: value });
-  });
-  const spawnPerDepth = createSliderRow(spawnGrid, "Spawn/Depth", 0.8, 1.5, 0.01, (value) => {
-    applySystemPatch({ spawnPerDepth: value });
-  });
-  const hpBase = createSliderRow(spawnGrid, "HP Base", 0.2, 4.0, 0.05, (value) => {
-    applySystemPatch({ hpBase: value });
-  });
-  const hpPerDepth = createSliderRow(spawnGrid, "HP/Depth", 0.8, 1.5, 0.01, (value) => {
-    applySystemPatch({ hpPerDepth: value });
-  });
-  const pressureAt0Sec = createSliderRow(spawnGrid, "Pressure T0", 0.1, 3.0, 0.01, (value) => {
-    applySystemPatch({ pressureAt0Sec: value });
-  });
-  const pressureAt120Sec = createSliderRow(spawnGrid, "Pressure T120", 0.1, 3.0, 0.01, (value) => {
-    applySystemPatch({ pressureAt120Sec: value });
-  });
-
   const neutralBirdDisabled = createToggleRow(aiGrid, "Disable Neutral Bird AI", (checked) => {
     applySystemPatch({ neutralBirdDisabled: checked });
   });
@@ -244,7 +224,6 @@ export function mountSystemOverridesSection(
   applyColumnMajorGridOrder(renderingGrid, 3);
   applyColumnMajorGridOrder(lightingGrid, 3);
   applyColumnMajorGridOrder(gameplayGrid, 3);
-  applyColumnMajorGridOrder(spawnGrid, 3);
   applyColumnMajorGridOrder(aiGrid, 3);
 
   const rebuildPaletteOptions = (groupRaw: string, selectedIdRaw: string): string => {
@@ -329,19 +308,6 @@ export function mountSystemOverridesSection(
       waterFlowRate.input.value = `${system.waterFlowRate}`;
       waterFlowRate.value.textContent = formatX(system.waterFlowRate);
       forceSpawnOverride.checked = system.forceSpawnOverride;
-
-      spawnBase.input.value = `${system.spawnBase}`;
-      spawnBase.value.textContent = system.spawnBase.toFixed(2);
-      spawnPerDepth.input.value = `${system.spawnPerDepth}`;
-      spawnPerDepth.value.textContent = system.spawnPerDepth.toFixed(2);
-      hpBase.input.value = `${system.hpBase}`;
-      hpBase.value.textContent = system.hpBase.toFixed(2);
-      hpPerDepth.input.value = `${system.hpPerDepth}`;
-      hpPerDepth.value.textContent = system.hpPerDepth.toFixed(2);
-      pressureAt0Sec.input.value = `${system.pressureAt0Sec}`;
-      pressureAt0Sec.value.textContent = system.pressureAt0Sec.toFixed(2);
-      pressureAt120Sec.input.value = `${system.pressureAt120Sec}`;
-      pressureAt120Sec.value.textContent = system.pressureAt120Sec.toFixed(2);
 
       neutralBirdDisabled.checked = system.neutralBirdDisabled;
       neutralBirdDisableTransitions.checked = system.neutralBirdDisableTransitions;

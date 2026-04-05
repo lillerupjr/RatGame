@@ -8,7 +8,7 @@ import { getTileSpriteById } from "../sprites/renderSprites";
 import { getEnemyAimDebugInfo, getEnemyAimWorld } from "../../../game/combat/aimPoints";
 import { getEnemyWorld } from "../../../game/coords/worldViews";
 import { ENEMIES, type EnemyId } from "../../../game/content/enemies";
-import { getLootGoblinDebugSnapshot } from "../../../game/systems/progression/lootGoblin";
+import { getLootGoblinDebugSnapshot } from "../../../game/systems/neutral/lootGoblin";
 import {
   getApronDebugStats,
   getRampFacesForDebug,
