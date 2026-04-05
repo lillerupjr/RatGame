@@ -206,7 +206,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+4 fire damage",
     rarity: 2,
     powerTier: 1,
-    tags: ["fires"],
+    tags: ["fire"],
     mods: [{ key: STAT_KEYS.DAMAGE_ADD_FIRE, op: "add", value: 4 }],
   },
   {
@@ -233,7 +233,7 @@ export const STARTER_CARDS_V1: CardDef[] = [
     displayName: "+25% ignite chance",
     rarity: 2,
     powerTier: 1,
-    tags: ["fires"],
+    tags: ["fire"],
     mods: [{ key: STAT_KEYS.CHANCE_TO_IGNITE_ADD, op: "add", value: 0.25 }],
   },
   {

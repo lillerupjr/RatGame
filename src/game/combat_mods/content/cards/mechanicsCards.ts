@@ -53,7 +53,7 @@ export const MECHANICS_CARDS_V1: CardDef[] = [
     displayName: "+30% increased ignite damage",
     rarity: 2,
     powerTier: 2,
-    tags: ["fires"],
+    tags: ["fire"],
     mods: [{ key: STAT_KEYS.DOT_IGNITE_DAMAGE_INCREASED, op: "increased", value: 0.30 }],
   },
   {
