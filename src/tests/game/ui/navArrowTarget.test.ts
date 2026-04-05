@@ -2,11 +2,11 @@ import { describe, expect, test } from "vitest";
 import { resolveNavArrowTarget } from "../../../game/ui/navArrowTarget";
 
 describe("resolveNavArrowTarget", () => {
-  test("BOSS_TRIPLE returns nearest uncompleted boss spawn", () => {
+  test("RARE_TRIPLE returns nearest uncompleted rare spawn", () => {
     const world: any = {
-      floorArchetype: "BOSS_TRIPLE",
+      floorArchetype: "RARE_TRIPLE",
       playerWorld: { x: 0, y: 0 },
-      bossTriple: {
+      rareTriple: {
         spawnPointsWorld: [
           { x: 100, y: 0 },
           { x: 20, y: 0 },
@@ -19,11 +19,11 @@ describe("resolveNavArrowTarget", () => {
     expect(out).toEqual({ kind: "BOSS", worldX: 100, worldY: 0 });
   });
 
-  test("BOSS_TRIPLE returns null when all bosses completed", () => {
+  test("RARE_TRIPLE returns null when all rares are completed", () => {
     const world: any = {
-      floorArchetype: "BOSS_TRIPLE",
+      floorArchetype: "RARE_TRIPLE",
       playerWorld: { x: 0, y: 0 },
-      bossTriple: {
+      rareTriple: {
         spawnPointsWorld: [{ x: 100, y: 0 }],
         completed: [true],
       },
@@ -70,11 +70,11 @@ describe("resolveNavArrowTarget", () => {
     expect(out?.worldY).toBeCloseTo((50 + 3 + 1) * 10);
   });
 
-  test("BOSS_TRIPLE takes priority over zone data", () => {
+  test("RARE_TRIPLE takes priority over zone data", () => {
     const world: any = {
-      floorArchetype: "BOSS_TRIPLE",
+      floorArchetype: "RARE_TRIPLE",
       playerWorld: { x: 0, y: 0 },
-      bossTriple: {
+      rareTriple: {
         spawnPointsWorld: [{ x: 300, y: 0 }],
         completed: [false],
       },

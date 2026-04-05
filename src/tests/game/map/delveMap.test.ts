@@ -216,7 +216,9 @@ describe("delve act map", () => {
     const rest = Array.from(map.nodes.values()).find((node) => node.nodeType === "REST");
     const boss = map.nodes.get(map.bossNodeId);
     expect(floorArchetypeForNode(rest!)).toBe("HEAL");
-    expect(floorArchetypeForNode(boss!)).toBe("BOSS_TRIPLE");
+    expect(floorArchetypeForNode(boss!)).toBe("ACT_BOSS");
+    expect(boss?.runtime.objectiveId).toBe("ACT_BOSS");
+    expect(boss?.runtime.bossId).toBeTruthy();
   });
 });
 

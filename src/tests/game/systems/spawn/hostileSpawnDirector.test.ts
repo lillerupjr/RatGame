@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createWorld } from "../../../../engine/world/world";
+import { BossId } from "../../../../game/bosses/bossTypes";
+import { bossRegistry } from "../../../../game/bosses/bossRegistry";
+import { spawnBossEncounter } from "../../../../game/bosses/spawnBossEncounter";
 import { stageDocks } from "../../../../game/content/stages";
 import { ENEMIES, EnemyId, type EnemySpawnConfig, type EnemySpawnRole } from "../../../../game/content/enemies";
 import { spawnEnemyGrid } from "../../../../game/factories/enemyFactory";
@@ -64,7 +67,7 @@ function restoreConfig(): void {
 beforeEach(() => {
   resetSystemOverrides();
   originalEnemySpawns.clear();
-  for (const enemy of Object.values(ENEMIES) as Array<(typeof ENEMIES)[EnemyId]>) {
+  for (const enemy of Object.values(ENEMIES).filter(Boolean)) {
     originalEnemySpawns.set(enemy.id, structuredClone(enemy.spawn));
   }
   restoreConfig();
@@ -72,7 +75,7 @@ beforeEach(() => {
 
 afterEach(() => {
   resetSystemOverrides();
-  for (const enemy of Object.values(ENEMIES) as Array<(typeof ENEMIES)[EnemyId]>) {
+  for (const enemy of Object.values(ENEMIES).filter(Boolean)) {
     const originalSpawn = originalEnemySpawns.get(enemy.id);
     if (originalSpawn) enemy.spawn = structuredClone(originalSpawn);
   }
@@ -109,7 +112,7 @@ describe("hostileSpawnDirector", () => {
 
   it("applies heat scaling to power-per-sec and threat cap without changing authored spawn power", () => {
     const world = makeWorld(150);
-    const authoredPower = ENEMIES[EnemyId.MINION].spawn.power;
+    const authoredPower = ENEMIES[EnemyId.MINION]!.spawn.power;
 
     const requests = updateHostileSpawnDirector(
       world,
@@ -124,7 +127,7 @@ describe("hostileSpawnDirector", () => {
     expect(requests).toEqual([]);
     expect(world.hostileSpawnDebug?.powerPerSec).toBeCloseTo(1.612, 6);
     expect(world.hostileSpawnDebug?.liveThreatCap).toBeCloseTo(12.65, 6);
-    expect(ENEMIES[EnemyId.MINION].spawn.power).toBe(authoredPower);
+    expect(ENEMIES[EnemyId.MINION]!.spawn.power).toBe(authoredPower);
   });
 
   it("applies hostile heat scaling to spawned enemy health only for hostile enemies", () => {
@@ -145,12 +148,16 @@ describe("hostileSpawnDirector", () => {
 
     const hostileIndex = spawnEnemyGrid(hostileWorld, EnemyId.MINION, 8, 8);
     const neutralIndex = spawnEnemyGrid(neutralWorld, EnemyId.LOOT_GOBLIN, 8, 8);
-    const bossIndex = spawnEnemyGrid(bossWorld, EnemyId.BOSS, 8, 8);
+    const bossIndex = spawnBossEncounter(bossWorld, {
+      bossId: BossId.CHEM_GUY,
+      spawnWorldX: 8.5 * 64,
+      spawnWorldY: 8.5 * 64,
+    }).enemyIndex;
 
     expect(hostileWorld.eHp[hostileIndex]).toBe(33);
-    expect(neutralWorld.eHp[neutralIndex]).toBe(ENEMIES[EnemyId.LOOT_GOBLIN].stats.baseLife);
-    expect(bossWorld.eHp[bossIndex]).toBe(ENEMIES[EnemyId.BOSS].stats.baseLife);
-    expect(ENEMIES[EnemyId.MINION].spawn.power).toBe(1.0);
+    expect(neutralWorld.eHp[neutralIndex]).toBe(ENEMIES[EnemyId.LOOT_GOBLIN]!.stats.baseLife);
+    expect(bossWorld.eHp[bossIndex]).toBe(bossRegistry.boss(BossId.CHEM_GUY).stats.baseLife);
+    expect(ENEMIES[EnemyId.MINION]!.spawn.power).toBe(1.0);
   });
 
   it("applies runtime hostile spawn overrides to pacing and cap sampling", () => {
@@ -258,15 +265,15 @@ describe("hostileSpawnDirector", () => {
     HOSTILE_SPAWN_DIRECTOR_CONFIG.maxPurchaseAttemptsPerUpdate = 1;
     HOSTILE_SPAWN_DIRECTOR_CONFIG.burstChancePerSpawnWindow = 1;
 
-    ENEMIES[EnemyId.MINION].spawn.weight = 0;
-    ENEMIES[EnemyId.MINION].spawn.burstWeight = 2;
-    ENEMIES[EnemyId.MINION].spawn.minGroupSize = 2;
-    ENEMIES[EnemyId.MINION].spawn.maxGroupSize = 2;
-    ENEMIES[EnemyId.RUNNER].spawn.weight = 2;
-    ENEMIES[EnemyId.RUNNER].spawn.burstWeight = 0;
-    ENEMIES[EnemyId.RUNNER].spawn.unlockTimeSec = 0;
-    ENEMIES[EnemyId.RUNNER].spawn.minGroupSize = 2;
-    ENEMIES[EnemyId.RUNNER].spawn.maxGroupSize = 2;
+    ENEMIES[EnemyId.MINION]!.spawn.weight = 0;
+    ENEMIES[EnemyId.MINION]!.spawn.burstWeight = 2;
+    ENEMIES[EnemyId.MINION]!.spawn.minGroupSize = 2;
+    ENEMIES[EnemyId.MINION]!.spawn.maxGroupSize = 2;
+    ENEMIES[EnemyId.RUNNER]!.spawn.weight = 2;
+    ENEMIES[EnemyId.RUNNER]!.spawn.burstWeight = 0;
+    ENEMIES[EnemyId.RUNNER]!.spawn.unlockTimeSec = 0;
+    ENEMIES[EnemyId.RUNNER]!.spawn.minGroupSize = 2;
+    ENEMIES[EnemyId.RUNNER]!.spawn.maxGroupSize = 2;
 
     const normalWorld = makeWorld(105);
     normalWorld.hostileSpawnDirector.budget = 10;
@@ -294,12 +301,12 @@ describe("hostileSpawnDirector", () => {
 
   it("honors unlock time and depth gating", () => {
     HOSTILE_SPAWN_DIRECTOR_CONFIG.maxPurchaseAttemptsPerUpdate = 1;
-    ENEMIES[EnemyId.MINION].spawn.weight = 0;
-    ENEMIES[EnemyId.RUNNER].spawn.weight = 1;
-    ENEMIES[EnemyId.RUNNER].spawn.unlockTimeSec = 30;
-    ENEMIES[EnemyId.RUNNER].spawn.unlockDepth = 2;
-    ENEMIES[EnemyId.RUNNER].spawn.minGroupSize = 2;
-    ENEMIES[EnemyId.RUNNER].spawn.maxGroupSize = 2;
+    ENEMIES[EnemyId.MINION]!.spawn.weight = 0;
+    ENEMIES[EnemyId.RUNNER]!.spawn.weight = 1;
+    ENEMIES[EnemyId.RUNNER]!.spawn.unlockTimeSec = 30;
+    ENEMIES[EnemyId.RUNNER]!.spawn.unlockDepth = 2;
+    ENEMIES[EnemyId.RUNNER]!.spawn.minGroupSize = 2;
+    ENEMIES[EnemyId.RUNNER]!.spawn.maxGroupSize = 2;
 
     const world = makeWorld(107);
     world.hostileSpawnDirector.budget = 10;
@@ -324,10 +331,10 @@ describe("hostileSpawnDirector", () => {
 
   it("rejects purchases when group-size clamps below the minimum", () => {
     HOSTILE_SPAWN_DIRECTOR_CONFIG.maxPurchaseAttemptsPerUpdate = 1;
-    ENEMIES[EnemyId.MINION].spawn.weight = 1;
-    ENEMIES[EnemyId.MINION].spawn.minGroupSize = 3;
-    ENEMIES[EnemyId.MINION].spawn.maxGroupSize = 3;
-    ENEMIES[EnemyId.MINION].spawn.maxAlive = 5;
+    ENEMIES[EnemyId.MINION]!.spawn.weight = 1;
+    ENEMIES[EnemyId.MINION]!.spawn.minGroupSize = 3;
+    ENEMIES[EnemyId.MINION]!.spawn.maxGroupSize = 3;
+    ENEMIES[EnemyId.MINION]!.spawn.maxAlive = 5;
 
     const world = makeWorld(108);
     world.hostileSpawnDirector.budget = 10;

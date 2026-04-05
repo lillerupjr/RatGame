@@ -46,10 +46,10 @@ export function resolveNavArrowTarget(world: any): NavArrowTarget {
 
   const archetype = world?.floorArchetype ?? world?.floorKind ?? world?.currentFloorArchetype;
 
-  // 1) Boss triple floors: nearest uncompleted spawn point
-  if (archetype === "BOSS_TRIPLE") {
-    const sp = world?.bossTriple?.spawnPointsWorld as Array<{ x: number; y: number }> | undefined;
-    const done = world?.bossTriple?.completed as boolean[] | undefined;
+  // 1) Rare triple floors: nearest uncompleted spawn point
+  if (archetype === "RARE_TRIPLE") {
+    const sp = world?.rareTriple?.spawnPointsWorld as Array<{ x: number; y: number }> | undefined;
+    const done = world?.rareTriple?.completed as boolean[] | undefined;
     if (!sp || !sp.length) return null;
 
     let bestI = -1;

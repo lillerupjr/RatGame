@@ -79,7 +79,7 @@ describe("Objective applySignalsToObjective", () => {
             objectiveDefs: [],
             objectiveStates: [],
             objectiveEvents: [],
-            floorArchetype: "BOSS_TRIPLE",
+            floorArchetype: "RARE_TRIPLE",
             floorIndex: 2,
         } as any;
         initObjectivesForFloor(world, {
@@ -113,12 +113,12 @@ describe("ACT_BOSS objective tracking", () => {
             floorId: "ACT_BOSS_TEST",
             objectiveSpec: {
                 objectiveType: "ACT_BOSS",
-                params: { bossId: BossId.RAT_KING },
+                params: { bossId: BossId.CHEM_GUY },
             },
         });
 
         const spawned = spawnBossEncounter(world, {
-            bossId: BossId.RAT_KING,
+            bossId: BossId.CHEM_GUY,
             spawnWorldX: 128,
             spawnWorldY: 128,
             objectiveId: "OBJ_ACT_BOSS",
@@ -158,12 +158,12 @@ describe("ACT_BOSS objective tracking", () => {
             floorId: "ACT_BOSS_REWARD_TEST",
             objectiveSpec: {
                 objectiveType: "ACT_BOSS",
-                params: { bossId: BossId.RAT_KING },
+                params: { bossId: BossId.CHEM_GUY },
             },
         });
 
         const spawned = spawnBossEncounter(world, {
-            bossId: BossId.RAT_KING,
+            bossId: BossId.CHEM_GUY,
             spawnWorldX: 96,
             spawnWorldY: 160,
             objectiveId: "OBJ_ACT_BOSS",

@@ -24,7 +24,7 @@ import type { RewardTicket } from "../../game/rewards/rewardTickets";
 import type { VendorState } from "../../game/vendor/vendorState";
 import type { EnemyBrainState } from "../../game/systems/enemies/brain";
 import { createBossRuntimeState } from "../../game/bosses/bossRuntime";
-import type { BossRuntimeState } from "../../game/bosses/bossTypes";
+import type { BossRuntimeState, ArenaTileEffect } from "../../game/bosses/bossTypes";
 import { createDpsMetrics, type DpsMetricsState } from "../../game/balance/dpsMetrics";
 import { getSettings } from "../../settings/settingsStore";
 import { DEFAULT_XP_LEVEL_BASE } from "../../settings/systemOverrides";
@@ -52,7 +52,7 @@ export type GameState =
  * Run phase inside the RUN game-state.
  * (game.ts uses these values.)
  */
-export type RunState = "FLOOR" | "BOSS" | "TRANSITION" | "RUN_COMPLETE"  | "GAME_OVER";
+export type RunState = "FLOOR" | "TRANSITION" | "RUN_COMPLETE" | "GAME_OVER";
 
 export type StageId = "DOCKS" | "SEWERS" | "CHINATOWN";
 export type WorldLightingState = {
@@ -186,11 +186,12 @@ export type World = {
     originTy?: number;
     zones: Array<{ tx: number; ty: number; w: number; h: number; completed: boolean }>;
   };
-  bossTriple?: {
+  rareTriple?: {
     spawnPointsWorld: Array<{ x: number; y: number }>;
     completed: boolean[];
   };
   bossRuntime: BossRuntimeState;
+  arenaTileEffects: ArenaTileEffect[];
 
   // -------------------------
   // Stage / floor
@@ -206,7 +207,7 @@ export type World = {
   floorIndex: number;
   floorArchetype: FloorArchetype;
   currentFloorIntent: FloorIntent | null;
-  floorDuration: number; // seconds until boss for this stage
+  floorDuration: number; // baseline floor duration for this stage
   phaseTime: number; // seconds since current phase began
   transitionTime: number; // seconds remaining in TRANSITION
   hostileSpawnDirector: HostileSpawnDirectorState;
@@ -558,8 +559,8 @@ export type World = {
   vfxOffsetYPx: number[];
   vfxScale: number[];
 
-  // Boss reward bookkeeping
-  bossZoneSpawned: string[];
+  // Rare-triple reward bookkeeping
+  rareZoneSpawned: string[];
 
   // Magnet effect (pull XP to player)
   magnetActive: boolean;
@@ -631,6 +632,7 @@ export function createWorld(args: CreateWorldArgs): World {
     objectiveEvents: [],
     currentObjectiveSpec: null,
     bossRuntime: createBossRuntimeState(),
+    arenaTileEffects: [],
 
     // Stage / floor
     stage,
@@ -971,8 +973,8 @@ export function createWorld(args: CreateWorldArgs): World {
     vfxOffsetYPx: [],
     vfxScale: [],
 
-    // Boss / chest / magnet
-    bossZoneSpawned: [],
+    // Act boss / chest / magnet
+    rareZoneSpawned: [],
     magnetActive: false,
     magnetTimer: 0,
     chestOpenRequested: false,

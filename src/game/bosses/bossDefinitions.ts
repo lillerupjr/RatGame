@@ -2,10 +2,11 @@ import { BossAbilityId } from "./bossAbilities";
 import { BossId, type BossDefinition } from "./bossTypes";
 
 export const BOSSES: Record<BossId, BossDefinition> = {
-  [BossId.RAT_KING]: {
-    id: BossId.RAT_KING,
-    name: "Rat King",
+  [BossId.CHEM_GUY]: {
+    id: BossId.CHEM_GUY,
+    name: "Chem Guy",
     aiType: "contact",
+    engageDistanceTiles: 8,
     stats: {
       baseLife: 520,
       contactDamage: 20,
@@ -19,7 +20,18 @@ export const BOSSES: Record<BossId, BossDefinition> = {
       isBoss: true,
     },
     presentation: {
-      color: "#c08b47",
+      color: "#5aa55d",
+      sprite: {
+        skin: "bosses/chem_guy",
+        packRoot: "entities",
+        scale: 2,
+        anchorX: 0.5,
+        anchorY: 0.65,
+        frameW: 92,
+        frameH: 92,
+        runAnim: "walk",
+        frameCount: 6,
+      },
       shadowFootOffset: { x: 0, y: 0 },
       aimScreenOffset: { x: 0, y: -16 },
     },
@@ -31,16 +43,16 @@ export const BOSSES: Record<BossId, BossDefinition> = {
       reengageRange: 18,
     },
     abilityLoadout: [
-      { abilityId: BossAbilityId.RAT_KING_FAN, weight: 3, priority: 2 },
-      { abilityId: BossAbilityId.RAT_KING_PUDDLE, weight: 2, priority: 1 },
+      { abilityId: BossAbilityId.TOXIC_DROP_MARKER, weight: 1, priority: 1 },
+      { abilityId: BossAbilityId.CHECKERBOARD_IGNITION, weight: 1, priority: 1 },
     ],
     deathEffects: [],
     ui: {
-      title: "Rat King",
-      accent: "#d9a35f",
+      title: "Chem Guy",
+      accent: "#7ae08c",
     },
     metadata: {
-      family: "rat",
+      family: "chem",
     },
   },
 };

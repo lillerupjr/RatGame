@@ -9,13 +9,13 @@ describe("floorArchetypeDisplayLabel", () => {
     ["VENDOR", "Vendor"],
     ["HEAL", "Heal"],
     ["ACT_BOSS", "Boss"],
-    ["BOSS_TRIPLE", "3 Bosses"],
+    ["RARE_TRIPLE", "3 Rares"],
   ])('archetype %s maps to label "%s"', (archetype, expected) => {
     expect(floorArchetypeDisplayLabel(archetype)).toBe(expected);
   });
 
-  it('BOSS_TRIPLE renders exactly as "3 Bosses"', () => {
-    expect(floorArchetypeDisplayLabel("BOSS_TRIPLE")).toBe("3 Bosses");
+  it('RARE_TRIPLE renders exactly as "3 Rares"', () => {
+    expect(floorArchetypeDisplayLabel("RARE_TRIPLE")).toBe("3 Rares");
   });
 
   it("all labels are non-empty readable strings (no raw abbreviations)", () => {
@@ -25,7 +25,7 @@ describe("floorArchetypeDisplayLabel", () => {
       "VENDOR",
       "HEAL",
       "ACT_BOSS",
-      "BOSS_TRIPLE",
+      "RARE_TRIPLE",
     ];
     const abbreviationPattern = /^[A-Z_]{2,}$/;
     for (const archetype of archetypes) {

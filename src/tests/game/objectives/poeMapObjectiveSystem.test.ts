@@ -90,7 +90,7 @@ describe("poe map template library", () => {
 });
 
 describe("poe map population runtime", () => {
-  test("respects per-chunk budget and spawns no bosses or loot goblins", () => {
+  test("respects per-chunk budget and spawns no act-boss actors or loot goblins", () => {
     const world = setupWorld(71_001);
     const { plan, totalPacks } = initializePoeMapObjective(world, { objectiveSeed: 71_001 });
     const activeMap = getActiveMap();

@@ -34,7 +34,6 @@ export const SFX_VOL: Record<SfxId, number> = {
     CHEST_PICKUP: 1.0,
 
     FLOOR_START: 1.0,
-    BOSS_START: 1.0,
 
     RUN_WIN: 1.0,
     RUN_LOSE: 1.0,
@@ -65,7 +64,6 @@ const FILES: Record<SfxId, string> = {
     CHEST_PICKUP: "",
 
     FLOOR_START: "",
-    BOSS_START: "",
 
     RUN_WIN: "run_win.wav",
     RUN_LOSE: "",

@@ -7,7 +7,7 @@ export function objectiveSpecFromFloorIntent(intent: FloorIntent): ObjectiveSpec
   return objectiveSpecFromObjectiveId(objectiveId, {
     timeLimitSec: intent.timeLimitSec,
     zoneCount: intent.spawnZoneCount,
-    bossCount: intent.bossCount,
+    rareCount: intent.rareCount,
     bossId: intent.bossId ?? null,
   });
 }

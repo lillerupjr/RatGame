@@ -4,7 +4,7 @@ export type FloorArchetype =
   | "VENDOR"
   | "HEAL"
   | "ACT_BOSS"
-  | "BOSS_TRIPLE";
+  | "RARE_TRIPLE";
 
 export const FLOOR_ARCHETYPES: FloorArchetype[] = [
   "SURVIVE",
@@ -12,7 +12,7 @@ export const FLOOR_ARCHETYPES: FloorArchetype[] = [
   "VENDOR",
   "HEAL",
   "ACT_BOSS",
-  "BOSS_TRIPLE",
+  "RARE_TRIPLE",
 ];
 
 const FLOOR_ARCHETYPE_DISPLAY_LABEL: Record<FloorArchetype, string> = {
@@ -21,7 +21,7 @@ const FLOOR_ARCHETYPE_DISPLAY_LABEL: Record<FloorArchetype, string> = {
   VENDOR: "Vendor",
   HEAL: "Heal",
   ACT_BOSS: "Boss",
-  BOSS_TRIPLE: "3 Bosses",
+  RARE_TRIPLE: "3 Rares",
 };
 
 export function floorArchetypeDisplayLabel(archetype: FloorArchetype): string {

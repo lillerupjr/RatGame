@@ -10,6 +10,8 @@ import { LOOT_GOBLIN_TRIGGER_PREFIX } from "../../../../game/systems/neutral/loo
 import { getPlayerWorld } from "../../../../game/coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../../engine/render/kenneyTiles";
 import { makeWeaponHitMeta } from "../../../../game/combat/damageMeta";
+import { spawnBossEncounter } from "../../../../game/bosses/spawnBossEncounter";
+import { BossId } from "../../../../game/bosses/bossTypes";
 
 describe("dropsSystem", () => {
   test("enemy kill spawns exactly one gold pickup using enemy base life (not scaled hp)", () => {
@@ -41,7 +43,11 @@ describe("dropsSystem", () => {
 
   test("boss gold multiplier applies after base-life calculation without spawning a chest", () => {
     const w = createWorld({ seed: 3, stage: stageDocks });
-    const boss = spawnEnemyGrid(w, EnemyId.BOSS, 8, 8);
+    const boss = spawnBossEncounter(w, {
+      bossId: BossId.CHEM_GUY,
+      spawnWorldX: (8.5) * KENNEY_TILE_WORLD,
+      spawnWorldY: (8.5) * KENNEY_TILE_WORLD,
+    }).enemyIndex;
     w.events.push({
       type: "ENEMY_KILLED",
       enemyIndex: boss,

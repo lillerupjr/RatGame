@@ -136,20 +136,20 @@ function centerDistanceToPlayer(world: World, enemyIndex: number): number {
 
 describe("enemy definition contract", () => {
   test("exposes explicit ai types, new content names, and single ability ownership", () => {
-    expect(ENEMIES[EnemyId.MINION].name).toBe("Minion");
-    expect(ENEMIES[EnemyId.RUNNER].name).toBe("Runner");
-    expect(ENEMIES[EnemyId.TANK].name).toBe("Tank");
-    expect(ENEMIES[EnemyId.SPITTER].name).toBe("Spitter");
-    expect(ENEMIES[EnemyId.BURSTER].name).toBe("Burster");
-    expect(ENEMIES[EnemyId.LEAPER1].name).toBe("Leaper1");
-    expect(ENEMIES[EnemyId.SHARD_RAT].name).toBe("Shard Rat");
-    expect(ENEMIES[EnemyId.MINION].presentation?.sprite?.skin).toBe("enemies/small_rat");
-    expect(ENEMIES[EnemyId.RUNNER].presentation?.sprite?.skin).toBe("enemies/brown_rat");
-    expect(ENEMIES[EnemyId.TANK].presentation?.sprite?.skin).toBe("enemies/guerilla_rat");
-    expect(ENEMIES[EnemyId.SPITTER].presentation?.sprite?.skin).toBe("enemies/spitter");
-    expect(ENEMIES[EnemyId.BURSTER].presentation?.sprite?.skin).toBe("enemies/burster");
-    expect(ENEMIES[EnemyId.LEAPER1].presentation?.sprite?.skin).toBe("enemies/white_rat");
-    expect(ENEMIES[EnemyId.SHARD_RAT].presentation?.sprite?.skin).toBe("enemies/shard_rat");
+    expect(ENEMIES[EnemyId.MINION]!.name).toBe("Minion");
+    expect(ENEMIES[EnemyId.RUNNER]!.name).toBe("Runner");
+    expect(ENEMIES[EnemyId.TANK]!.name).toBe("Tank");
+    expect(ENEMIES[EnemyId.SPITTER]!.name).toBe("Spitter");
+    expect(ENEMIES[EnemyId.BURSTER]!.name).toBe("Burster");
+    expect(ENEMIES[EnemyId.LEAPER1]!.name).toBe("Leaper1");
+    expect(ENEMIES[EnemyId.SHARD_RAT]!.name).toBe("Shard Rat");
+    expect(ENEMIES[EnemyId.MINION]!.presentation?.sprite?.skin).toBe("enemies/small_rat");
+    expect(ENEMIES[EnemyId.RUNNER]!.presentation?.sprite?.skin).toBe("enemies/brown_rat");
+    expect(ENEMIES[EnemyId.TANK]!.presentation?.sprite?.skin).toBe("enemies/guerilla_rat");
+    expect(ENEMIES[EnemyId.SPITTER]!.presentation?.sprite?.skin).toBe("enemies/spitter");
+    expect(ENEMIES[EnemyId.BURSTER]!.presentation?.sprite?.skin).toBe("enemies/burster");
+    expect(ENEMIES[EnemyId.LEAPER1]!.presentation?.sprite?.skin).toBe("enemies/white_rat");
+    expect(ENEMIES[EnemyId.SHARD_RAT]!.presentation?.sprite?.skin).toBe("enemies/shard_rat");
 
     for (const type of [
       EnemyId.MINION,
@@ -160,25 +160,23 @@ describe("enemy definition contract", () => {
       EnemyId.LEAPER1,
       EnemyId.SHARD_RAT,
       EnemyId.LOOT_GOBLIN,
-      EnemyId.BOSS,
     ]) {
-      expect(typeof ENEMIES[type].aiType).toBe("string");
-      expect(ENEMIES[type].stats.baseLife).toBeGreaterThan(0);
-      expect(ENEMIES[type].body.radius).toBeGreaterThan(0);
-      expect(ENEMIES[type].movement.speed).toBeGreaterThanOrEqual(0);
+      expect(typeof ENEMIES[type]!.aiType).toBe("string");
+      expect(ENEMIES[type]!.stats.baseLife).toBeGreaterThan(0);
+      expect(ENEMIES[type]!.body.radius).toBeGreaterThan(0);
+      expect(ENEMIES[type]!.movement.speed).toBeGreaterThanOrEqual(0);
     }
 
-    expect(ENEMIES[EnemyId.MINION].ability).toBeNull();
-    expect(ENEMIES[EnemyId.RUNNER].ability).toBeNull();
-    expect(ENEMIES[EnemyId.TANK].ability).toBeNull();
-    expect(ENEMIES[EnemyId.SHARD_RAT].ability).toBeNull();
-    expect(ENEMIES[EnemyId.LOOT_GOBLIN].ability).toBeNull();
-    expect(ENEMIES[EnemyId.BOSS].ability).toBeNull();
+    expect(ENEMIES[EnemyId.MINION]!.ability).toBeNull();
+    expect(ENEMIES[EnemyId.RUNNER]!.ability).toBeNull();
+    expect(ENEMIES[EnemyId.TANK]!.ability).toBeNull();
+    expect(ENEMIES[EnemyId.SHARD_RAT]!.ability).toBeNull();
+    expect(ENEMIES[EnemyId.LOOT_GOBLIN]!.ability).toBeNull();
 
-    expect(ENEMIES[EnemyId.SPITTER].ability?.kind).toBe("projectile");
-    expect(ENEMIES[EnemyId.BURSTER].ability?.kind).toBe("explode");
-    expect(ENEMIES[EnemyId.LEAPER1].ability?.kind).toBe("leap");
-    expect(ENEMIES[EnemyId.SHARD_RAT].deathEffects).toEqual([
+    expect(ENEMIES[EnemyId.SPITTER]!.ability?.kind).toBe("projectile");
+    expect(ENEMIES[EnemyId.BURSTER]!.ability?.kind).toBe("explode");
+    expect(ENEMIES[EnemyId.LEAPER1]!.ability?.kind).toBe("leap");
+    expect(ENEMIES[EnemyId.SHARD_RAT]!.deathEffects).toEqual([
       expect.objectContaining({
         type: "radial_projectiles",
         count: 8,
@@ -211,7 +209,7 @@ describe("enemy shared behavior and action flow", () => {
     enemyBehaviorSystem(world, 0.1);
 
     expect(ensureEnemyBrain(world, enemy).state).toBe("move");
-    expect(ENEMIES[EnemyId.MINION].ability).toBeNull();
+    expect(ENEMIES[EnemyId.MINION]!.ability).toBeNull();
   });
 
   test("spitter winds up, fires through the shared projectile path, and enters cooldown", () => {

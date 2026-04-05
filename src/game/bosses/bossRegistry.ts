@@ -1,4 +1,8 @@
-import { BOSS_ABILITIES, type BossAbilityDefinition } from "./bossAbilities";
+import {
+  BOSS_ABILITIES,
+  type BossAbilityDefinition,
+  type BossAbilityId,
+} from "./bossAbilities";
 import { BOSSES } from "./bossDefinitions";
 import type { BossDefinition, BossId } from "./bossTypes";
 
@@ -11,8 +15,8 @@ export const bossRegistry = {
     if (!def) throw new Error(`Unknown boss id: ${id}`);
     return def;
   },
-  ability(id: string): BossAbilityDefinition {
-    const def = BOSS_ABILITIES[id as keyof typeof BOSS_ABILITIES];
+  ability(id: BossAbilityId): BossAbilityDefinition {
+    const def = BOSS_ABILITIES[id];
     if (!def) throw new Error(`Unknown boss ability id: ${id}`);
     return def;
   },

@@ -1,38 +1,31 @@
 import { OBJECTIVE_TRIGGER_IDS } from "./objectiveSpec";
-import { EnemyId } from "../../factories/enemyFactory";
 
-function bossZoneIndexFromTriggerId(triggerId: string): number | null {
-  if (!triggerId.startsWith(OBJECTIVE_TRIGGER_IDS.bossZonePrefix)) return null;
-  const raw = triggerId.slice(OBJECTIVE_TRIGGER_IDS.bossZonePrefix.length);
+function rareZoneIndexFromTriggerId(triggerId: string): number | null {
+  if (!triggerId.startsWith(OBJECTIVE_TRIGGER_IDS.rareZonePrefix)) return null;
+  const raw = triggerId.slice(OBJECTIVE_TRIGGER_IDS.rareZonePrefix.length);
   const idx = Number.parseInt(raw, 10) - 1;
   if (!Number.isFinite(idx) || idx < 0) return null;
   return idx;
 }
 
 function markCompletedIndex(world: any, idx: number): void {
-  const bt = world?.bossTriple;
-  if (!bt || !Array.isArray(bt.completed)) return;
-  if (idx >= bt.completed.length) return;
-  bt.completed[idx] = true;
+  const rt = world?.rareTriple;
+  if (!rt || !Array.isArray(rt.completed)) return;
+  if (idx >= rt.completed.length) return;
+  rt.completed[idx] = true;
 }
 
-function isBossEnemy(world: any, enemyIndex: number): boolean {
-  if (!Number.isFinite(enemyIndex) || enemyIndex < 0) return false;
-  return Array.isArray(world?.eType) && world.eType[enemyIndex] === EnemyId.BOSS;
-}
-
-export function markBossTripleClearsFromSignalsAndEvents(world: any): void {
-  const bt = world?.bossTriple;
-  if (!bt || !Array.isArray(bt.completed)) return;
+export function markRareTripleClearsFromSignalsAndEvents(world: any): void {
+  const rt = world?.rareTriple;
+  if (!rt || !Array.isArray(rt.completed)) return;
 
   const signals = Array.isArray(world.triggerSignals) ? world.triggerSignals : [];
   for (let i = 0; i < signals.length; i++) {
     const signal = signals[i];
     if (signal?.type !== "KILL") continue;
-    if (!isBossEnemy(world, Number(signal?.entityId))) continue;
     const triggerId = signal?.triggerId;
     if (typeof triggerId !== "string") continue;
-    const idx = bossZoneIndexFromTriggerId(triggerId);
+    const idx = rareZoneIndexFromTriggerId(triggerId);
     if (idx === null) continue;
     markCompletedIndex(world, idx);
   }
@@ -42,7 +35,6 @@ export function markBossTripleClearsFromSignalsAndEvents(world: any): void {
     const ev = events[i];
     if (ev?.type !== "ENEMY_KILLED") continue;
     const enemyIndex = Number.isFinite(ev.enemyIndex) ? (ev.enemyIndex as number) : -1;
-    if (!isBossEnemy(world, enemyIndex)) continue;
     const triggerIdFromEnemy =
       enemyIndex >= 0 && Array.isArray(world.eSpawnTriggerId) ? world.eSpawnTriggerId[enemyIndex] : undefined;
     const triggerId =
@@ -50,25 +42,25 @@ export function markBossTripleClearsFromSignalsAndEvents(world: any): void {
         ? (ev as any).spawnTriggerId
         : triggerIdFromEnemy;
     if (typeof triggerId !== "string") continue;
-    const idx = bossZoneIndexFromTriggerId(triggerId);
+    const idx = rareZoneIndexFromTriggerId(triggerId);
     if (idx === null) continue;
     markCompletedIndex(world, idx);
   }
 }
 
-export function syncBossTripleObjectiveStateFromClears(world: any): void {
-  if (world?.floorArchetype !== "BOSS_TRIPLE") return;
-  const bt = world?.bossTriple;
-  if (!bt || !Array.isArray(bt.completed)) return;
+export function syncRareTripleObjectiveStateFromClears(world: any): void {
+  if (world?.floorArchetype !== "RARE_TRIPLE") return;
+  const rt = world?.rareTriple;
+  if (!rt || !Array.isArray(rt.completed)) return;
   const defs = Array.isArray(world.objectiveDefs) ? world.objectiveDefs : [];
   const states = Array.isArray(world.objectiveStates) ? world.objectiveStates : [];
-  const idx = defs.findIndex((d: any) => d?.id === "OBJ_BOSS_RARES");
+  const idx = defs.findIndex((d: any) => d?.id === "OBJ_RARE_TRIPLE");
   if (idx < 0) return;
   const def = defs[idx];
   const st = states[idx];
   if (!st) return;
 
-  const completedCount = bt.completed.reduce((n: number, v: boolean) => n + (v ? 1 : 0), 0);
+  const completedCount = rt.completed.reduce((n: number, v: boolean) => n + (v ? 1 : 0), 0);
   const required =
     def?.completionRule?.type === "SIGNAL_COUNT" && Number.isFinite(def?.completionRule?.count)
       ? Math.max(1, Math.floor(def.completionRule.count))
@@ -80,10 +72,10 @@ export function syncBossTripleObjectiveStateFromClears(world: any): void {
   const wasCompleted = st.status === "COMPLETED";
   if (completedCount >= required) st.status = "COMPLETED";
   if (!wasCompleted && st.status === "COMPLETED") {
-    const floorId = world?.currentFloorIntent?.nodeId ?? `${world?.floorIndex ?? 0}:${world?.floorArchetype ?? "BOSS_TRIPLE"}`;
+    const floorId = world?.currentFloorIntent?.nodeId ?? `${world?.floorIndex ?? 0}:${world?.floorArchetype ?? "RARE_TRIPLE"}`;
     const frameNo = world?.__objectiveFrameNo ?? 0;
     console.debug(
-      `[objectives:complete] floorId=${floorId} objectiveId=OBJ_BOSS_RARES required=${required} progress=${st.progress.signalCount ?? 0} frame=${frameNo}`,
+      `[objectives:complete] floorId=${floorId} objectiveId=OBJ_RARE_TRIPLE required=${required} progress=${st.progress.signalCount ?? 0} frame=${frameNo}`,
     );
   }
 }

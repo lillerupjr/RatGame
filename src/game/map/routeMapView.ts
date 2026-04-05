@@ -229,8 +229,9 @@ function visualTypeForArchetype(archetype: FloorArchetype): RouteNodeVisualType 
     case "VENDOR":
       return "shop";
     case "ACT_BOSS":
-    case "BOSS_TRIPLE":
       return "boss";
+    case "RARE_TRIPLE":
+      return "elite";
     case "TIME_TRIAL":
     case "SURVIVE":
     default:
@@ -246,8 +247,8 @@ function labelForArchetype(archetype: FloorArchetype, objectiveId?: ObjectiveId)
       return "Vendor";
     case "ACT_BOSS":
       return "Boss";
-    case "BOSS_TRIPLE":
-      return "Boss";
+    case "RARE_TRIPLE":
+      return "3 Rares";
     case "TIME_TRIAL":
       return "Zone Trial";
     case "SURVIVE":

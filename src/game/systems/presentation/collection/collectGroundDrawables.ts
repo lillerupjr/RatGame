@@ -303,6 +303,41 @@ export function collectGroundDrawables(input: CollectionContext): void {
   }
 
   // ----------------------------
+  // Collect ARENA TILE EFFECTS into slices (after floor/decals, before entities)
+  // ----------------------------
+  {
+    const effects = Array.isArray(w.arenaTileEffects) ? w.arenaTileEffects : [];
+    for (let i = 0; i < effects.length; i++) {
+      const effect = effects[i];
+      if (!Array.isArray(effect.tiles) || effect.tiles.length <= 0) continue;
+      for (let j = 0; j < effect.tiles.length; j++) {
+        const tile = effect.tiles[j];
+        if (!isTileInRenderRadius(tile.tx, tile.ty)) continue;
+        const centerWx = (tile.tx + 0.5) * T;
+        const centerWy = (tile.ty + 0.5) * T;
+        const centerZ = tileHAtWorld(centerWx, centerWy);
+        const renderKey: RenderKey = {
+          slice: tile.tx + tile.ty,
+          within: tile.tx,
+          baseZ: centerZ,
+          kindOrder: KindOrder.ZONE_OBJECTIVE,
+          stableId: 211000 + i * 256 + j,
+        };
+        enqueueSliceCommand(frameBuilder, renderKey, {
+          semanticFamily: "worldPrimitive",
+          finalForm: "primitive",
+          payload: {
+            arenaTileEffect: {
+              effect,
+              tile,
+            },
+          },
+        });
+      }
+    }
+  }
+
+  // ----------------------------
   // Collect ENTITY SHADOWS into slices (after floor/decals, before entities)
   // ----------------------------
   if (RENDER_ENTITY_SHADOWS) {

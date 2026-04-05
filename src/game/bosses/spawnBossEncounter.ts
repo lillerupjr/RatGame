@@ -3,18 +3,13 @@ import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { EnemyId } from "../content/enemies";
 import { worldToGrid } from "../coords/grid";
 import { spawnHostileActorGrid } from "../hostiles/hostileActorFactory";
-import { getSpawnWorldFromActive } from "../map/authoredMapActivation";
-import {
-  collectReachableTiles,
-  pickReachableTilesLongestPath,
-} from "../map/reachablePlacements";
-import { RNG } from "../util/rng";
+import { getActiveMap } from "../map/authoredMapActivation";
 import { bossRegistry } from "./bossRegistry";
 import {
   bindObjectiveToBossEncounter,
   registerBossEncounter,
 } from "./bossRuntime";
-import type { BossId, SpawnBossEncounterResult } from "./bossTypes";
+import type { BossActivationState, BossId, SpawnBossEncounterResult } from "./bossTypes";
 
 export function spawnBossEncounter(
   world: World,
@@ -24,6 +19,7 @@ export function spawnBossEncounter(
     spawnWorldY: number;
     objectiveId?: string;
     spawnTriggerId?: string;
+    activationState?: BossActivationState;
   },
 ): SpawnBossEncounterResult {
   const boss = bossRegistry.boss(args.bossId);
@@ -46,6 +42,7 @@ export function spawnBossEncounter(
     bossId: boss.id,
     enemyIndex,
     objectiveId: args.objectiveId,
+    activationState: args.activationState,
   });
   if (args.objectiveId) {
     bindObjectiveToBossEncounter(world, args.objectiveId, encounter.id);
@@ -62,30 +59,21 @@ export function spawnActBossEncounterFromActiveMap(
   args: {
     bossId: BossId;
     objectiveId: string;
-    seed: number;
   },
 ): SpawnBossEncounterResult {
-  const spawn = getSpawnWorldFromActive();
-  const spawnTile = { tx: spawn.tx, ty: spawn.ty };
-  const { tiles, walkable, nodes } = collectReachableTiles(spawnTile);
-  const rng = new RNG(args.seed >>> 0);
-  const [pickedTile] = pickReachableTilesLongestPath(
-    tiles,
-    nodes,
-    walkable,
-    1,
-    0,
-    rng,
-    spawnTile,
-    0,
-  );
-  const targetTile = pickedTile ?? spawnTile;
-  const targetWorldX = (targetTile.tx + 0.5) * KENNEY_TILE_WORLD;
-  const targetWorldY = (targetTile.ty + 0.5) * KENNEY_TILE_WORLD;
+  const activeMap = getActiveMap();
+  const bossSpawn = activeMap?.semanticData?.bossSpawn;
+  if (!activeMap || !bossSpawn) {
+    const mapId = activeMap?.id ?? "UNKNOWN_MAP";
+    throw new Error(`Act boss map ${mapId} is missing required semantic boss_spawn.`);
+  }
+  const targetWorldX = (bossSpawn.tx + 0.5) * KENNEY_TILE_WORLD;
+  const targetWorldY = (bossSpawn.ty + 0.5) * KENNEY_TILE_WORLD;
   return spawnBossEncounter(world, {
     bossId: args.bossId,
     spawnWorldX: targetWorldX,
     spawnWorldY: targetWorldY,
     objectiveId: args.objectiveId,
+    activationState: "DORMANT",
   });
 }

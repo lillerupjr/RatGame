@@ -194,7 +194,7 @@ export function drawWalkMaskOverlay(ctx: DebugOverlayContext, show: boolean) {
 }
 
 function triggerColor(id: string): string {
-  if (id.startsWith("OBJ_BOSS_ZONE_")) return "rgba(235,95,95,0.95)";
+  if (id.startsWith("OBJ_RARE_ZONE_")) return "rgba(235,95,95,0.95)";
   if (id.startsWith("OBJ_ZONE_")) return "rgba(255,165,64,0.95)";
   if (id === "OBJ_VENDOR") return "rgba(240,210,90,0.95)";
   if (id === "OBJ_HEAL") return "rgba(90,200,200,0.95)";

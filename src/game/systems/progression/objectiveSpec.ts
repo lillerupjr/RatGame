@@ -16,13 +16,13 @@ export type ObjectiveSpec =
   | { objectiveType: "ACT_BOSS"; params: { bossId: BossId | null } }
   | {
       objectiveType: "KILL_RARES_IN_ZONES";
-      params: { bossCount: number; zoneCount: number; timeLimitSec: number | null };
+      params: { rareCount: number; zoneCount: number; timeLimitSec: number | null };
     };
 
 export const OBJECTIVE_TRIGGER_IDS = {
   timer: "OBJ_TIMER",
   zonePrefix: "OBJ_ZONE_",
-  bossZonePrefix: "OBJ_BOSS_ZONE_",
+  rareZonePrefix: "OBJ_RARE_ZONE_",
   poePackClear: "OBJ_POE_PACK_CLEAR",
 
   // Trial-level completion (existing)
@@ -119,14 +119,14 @@ export function objectiveSpecToObjectiveDefs(spec: ObjectiveSpec): ObjectiveDef[
         },
       ];
     case "KILL_RARES_IN_ZONES": {
-      const zones = buildIndexedTriggerIds(OBJECTIVE_TRIGGER_IDS.bossZonePrefix, spec.params.zoneCount);
+      const zones = buildIndexedTriggerIds(OBJECTIVE_TRIGGER_IDS.rareZonePrefix, spec.params.zoneCount);
       return [
         {
-          id: "OBJ_BOSS_RARES",
+          id: "OBJ_RARE_TRIPLE",
           listensTo: zones,
           completionRule: {
             type: "SIGNAL_COUNT",
-            count: spec.params.bossCount,
+            count: spec.params.rareCount,
             signalType: "KILL",
           },
           outcomes: [],

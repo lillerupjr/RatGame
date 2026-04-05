@@ -446,7 +446,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     function updateMenuSubline() {
         const mapLabel = getSelectedMapLabel();
         refs.menuSublineEl.textContent =
-            `Slice v0.5 - 3 floors (20 sec -> boss). Map: ${mapLabel}.`;
+            `Slice v0.5 - 3 floors (20 sec -> act boss). Map: ${mapLabel}.`;
     }
 
     function setSelectedCharacter(id: PlayableCharacterId) {

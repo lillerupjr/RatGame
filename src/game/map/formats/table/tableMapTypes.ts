@@ -43,6 +43,7 @@ export type SemanticStampType =
     | "park"
     | "sea"
     | "boss_room"
+    | "boss_spawn"
     | "fence"
     | "lamp_post";
 

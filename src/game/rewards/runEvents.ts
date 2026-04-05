@@ -5,9 +5,9 @@ export type RunEvent =
       zoneIndex: 1 | 2;
     }
   | {
-      type: "BOSS_MILESTONE_CLEARED";
+      type: "RARE_MILESTONE_CLEARED";
       floorIndex: number;
-      bossIndex: 1 | 2;
+      rareIndex: 1 | 2;
     }
   | {
       type: "OBJECTIVE_COMPLETED";

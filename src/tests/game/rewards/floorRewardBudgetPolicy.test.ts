@@ -28,14 +28,14 @@ describe("floor reward budget policies", () => {
     ]);
   });
 
-  test("BOSS_TRIPLE grants only objective relic plus gold, and chest stays disabled", () => {
+  test("RARE_TRIPLE grants only objective relic plus gold, and chest stays disabled", () => {
     const world = createRewardPipelineWorld(202, "NORMAL");
-    world.floorArchetype = "BOSS_TRIPLE";
+    world.floorArchetype = "RARE_TRIPLE";
     world.runEvents.push(
-      { type: "BOSS_MILESTONE_CLEARED", floorIndex: 0, bossIndex: 1 },
-      { type: "BOSS_MILESTONE_CLEARED", floorIndex: 0, bossIndex: 2 },
+      { type: "RARE_MILESTONE_CLEARED", floorIndex: 0, rareIndex: 1 },
+      { type: "RARE_MILESTONE_CLEARED", floorIndex: 0, rareIndex: 2 },
       { type: "CHEST_OPEN_REQUESTED", floorIndex: 0, chestKind: "BOSS" },
-      { type: "OBJECTIVE_COMPLETED", floorIndex: 0, objectiveId: "OBJ_BOSS_RARES" },
+      { type: "OBJECTIVE_COMPLETED", floorIndex: 0, objectiveId: "OBJ_RARE_TRIPLE" },
     );
 
     rewardSchedulerSystem(world);
@@ -68,10 +68,9 @@ describe("floor reward budget policies", () => {
     expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
   });
 
-  test("SURVIVE_BOSS policy grants only objective relic plus gold", () => {
+  test("SURVIVE policy remains objective-only after the legacy finale removal", () => {
     const world = createRewardPipelineWorld(404, "SURVIVE_TRIAL");
     world.floorArchetype = "SURVIVE";
-    world._surviveBossSpawned = true;
     world.runEvents.push(
       { type: "SURVIVE_MILESTONE", floorIndex: 0, seconds: 60 },
       { type: "OBJECTIVE_COMPLETED", floorIndex: 0, objectiveId: "OBJ_SURVIVE" },

@@ -5,7 +5,7 @@ import { BossId, type BossId as BossIdType } from "./bossTypes";
 export const ACT_BOSS_MAP_OVERRIDE: string | null = null;
 
 export const ACT_BOSS_POOL: Array<{ bossId: BossIdType; weight: number }> = [
-  { bossId: BossId.RAT_KING, weight: 1 },
+  { bossId: BossId.CHEM_GUY, weight: 1 },
 ];
 
 export const ACT_BOSS_MAP_POOL: Array<{ mapId: string; weight: number }> = [

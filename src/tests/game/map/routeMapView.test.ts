@@ -24,11 +24,10 @@ function node(
           : nodeType === "REST"
             ? "HEAL_VISIT"
             : nodeType === "BOSS"
-              ? "KILL_RARES_IN_ZONES"
+              ? "ACT_BOSS"
               : "SURVIVE_TIMER",
       variantSeed: 1,
-      bossCount: nodeType === "BOSS" ? 1 : undefined,
-      spawnZoneCount: nodeType === "BOSS" ? 1 : undefined,
+      bossId: nodeType === "BOSS" ? "chem_guy" : undefined,
     },
     contentEnabled: true,
   };
@@ -114,7 +113,7 @@ describe("routeMapView", () => {
         { archetype: "VENDOR" },
         { archetype: "HEAL" },
         { archetype: "ACT_BOSS" },
-        { archetype: "BOSS_TRIPLE" },
+        { archetype: "RARE_TRIPLE" },
       ],
       2,
       5,
@@ -127,7 +126,7 @@ describe("routeMapView", () => {
     expect(vm.nodes[0].laneIndex).toBe(0);
     expect(vm.nodes[4].visualType).toBe("boss");
     expect(vm.nodes[4].title).toBe("Boss");
-    expect(vm.nodes[5].visualType).toBe("boss");
+    expect(vm.nodes[5].visualType).toBe("elite");
     for (const routeNode of vm.nodes) {
       expect(routeNode.reachable).toBe(true);
       expect(routeNode.status).toBe("REACHABLE");

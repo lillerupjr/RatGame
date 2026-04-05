@@ -3,7 +3,7 @@ import { World, emitEvent } from "../../../engine/world/world";
 import {isEnemyHit, isPlayerHit, isPlayerProjectileHit} from "./hitDetection";
 import { walkInfo } from "../../map/compile/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
-import { getBossDefinitionForEntity } from "../../bosses/bossRuntime";
+import { getBossDefinitionForEntity, isBossEncounterDormant } from "../../bosses/bossRuntime";
 import { registry } from "../../content/registry";
 import { spawnZone, ZONE_KIND } from "../../factories/zoneFactory";
 import { clearSpatialHash, insertEntity, queryCircle } from "../../util/spatialHash";
@@ -713,6 +713,7 @@ export function collisionsSystem(w: World, dt: number) {
       if (!w.eAlive[e]) continue;
       if (isLootGoblinEnemy(w, e)) continue;
       if (isPoeEnemyDormant(w, e)) continue;
+      if (isBossEncounterDormant(w, e)) continue;
 
       const ew = getEnemyWorld(w, e, KENNEY_TILE_WORLD);
       const dx = ew.wx - px;

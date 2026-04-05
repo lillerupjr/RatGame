@@ -16,7 +16,7 @@ export type FloorIntent = {
   objectiveId?: ObjectiveId;
   variantSeed?: number;
   timeLimitSec?: number;
-  bossCount?: number;
+  rareCount?: number;
   spawnZoneCount?: number;
   spawnZoneRadiusTiles?: number;
   spawnZoneMinSeparationTiles?: number;

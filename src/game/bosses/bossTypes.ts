@@ -1,4 +1,11 @@
+import type { DamageMeta } from "../events";
 import type { EnemyAiType } from "../content/enemies";
+import type {
+  BossAbilityId,
+  BossAbilityKind,
+  BossAbilityPhase,
+  BossAnimationHookSet,
+} from "./bossAbilities";
 import type {
   HostileBodyConfig,
   HostileDeathEffectConfig,
@@ -9,13 +16,13 @@ import type {
 } from "../hostiles/hostileTypes";
 
 export const BossId = {
-  RAT_KING: "RAT_KING",
+  CHEM_GUY: "chem_guy",
 } as const;
 
 export type BossId = (typeof BossId)[keyof typeof BossId];
 
 export type BossAbilityLoadoutEntry = {
-  abilityId: string;
+  abilityId: BossAbilityId;
   weight?: number;
   constraints?: string[];
   cooldownGroup?: string;
@@ -26,6 +33,7 @@ export type BossDefinition = {
   id: BossId;
   name: string;
   aiType: EnemyAiType;
+  engageDistanceTiles: number;
   stats: HostileStatsConfig;
   body: HostileBodyConfig;
   rewards?: HostileRewardsConfig;
@@ -40,7 +48,45 @@ export type BossDefinition = {
   metadata?: Record<string, unknown>;
 };
 
+export type BossAnimationRequest = {
+  clip: string;
+  loop: boolean;
+};
+
+export type BossCastRuntimeState = {
+  castId: string;
+  abilityId: BossAbilityId;
+  kind: BossAbilityKind;
+  phase: BossAbilityPhase;
+  phaseElapsedSec: number;
+  phaseDurationSec: number;
+  castElapsedSec: number;
+  originWorld: { x: number; y: number };
+  targetWorld: { x: number; y: number } | null;
+  targetTile: { tx: number; ty: number } | null;
+  selectedTiles: Array<{ tx: number; ty: number }>;
+  arenaEffectIds: string[];
+  animationHooks: BossAnimationHookSet | null;
+  animationRequest: BossAnimationRequest | null;
+};
+
+export type ArenaTileEffectState = "WARNING" | "ACTIVE";
+
+export type ArenaTileEffect = {
+  id: string;
+  encounterId: string;
+  abilityId: BossAbilityId;
+  tiles: Array<{ tx: number; ty: number }>;
+  state: ArenaTileEffectState;
+  ttlSec: number;
+  tickEverySec: number;
+  tickLeftSec: number;
+  damagePlayer: number;
+  playerDamageMeta?: DamageMeta;
+};
+
 export type BossEncounterStatus = "ACTIVE" | "DEFEATED";
+export type BossActivationState = "DORMANT" | "ACTIVE";
 
 export type BossEncounterState = {
   id: string;
@@ -48,13 +94,18 @@ export type BossEncounterState = {
   enemyIndex: number;
   objectiveId?: string;
   status: BossEncounterStatus;
-  cooldowns: Record<string, number>;
+  activationState: BossActivationState;
+  activeCast: BossCastRuntimeState | null;
+  requestedAnimation: BossAnimationRequest | null;
+  cooldowns: Record<BossAbilityId, number>;
   globalCooldownLeftSec: number;
-  lastAbilityId: string | null;
+  lastAbilityId: BossAbilityId | null;
 };
 
 export type BossRuntimeState = {
   nextEncounterSeq: number;
+  nextCastSeq: number;
+  nextArenaEffectSeq: number;
   activeEncounterId: string | null;
   encounters: BossEncounterState[];
   enemyIndexToEncounterId: (string | undefined)[];

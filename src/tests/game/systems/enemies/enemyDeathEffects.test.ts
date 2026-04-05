@@ -13,7 +13,7 @@ describe("enemy death effects", () => {
     const world = createWorld({ seed: 91_101, stage: stageDocks });
     const enemyIndex = spawnEnemyGrid(world, EnemyId.SHARD_RAT, 8, 8, KENNEY_TILE_WORLD);
     const enemyPos = getEnemyWorld(world, enemyIndex, KENNEY_TILE_WORLD);
-    const effect = ENEMIES[EnemyId.SHARD_RAT].deathEffects?.[0];
+    const effect = ENEMIES[EnemyId.SHARD_RAT]!.deathEffects?.[0];
 
     expect(effect).toMatchObject({
       type: "radial_projectiles",

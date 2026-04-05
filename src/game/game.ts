@@ -39,7 +39,6 @@ import {
 } from "./systems/presentation/presentationSubsystemStores";
 import { zonesSystem } from "./systems/sim/zones";
 import { relicExplodeOnKillSystem } from "./systems/sim/relicExplodeOnKill";
-import { bossSystem } from "./systems/progression/boss";
 import { buildActBossPlan } from "./bosses/actBossPlan";
 import { bossRegistry } from "./bosses/bossRegistry";
 import { bossEncounterSystem } from "./bosses/bossSystem";
@@ -70,11 +69,11 @@ import {
   setObjectives,
 } from "./systems/progression/objective";
 import { outcomeSystem } from "./systems/progression/outcomeSystem";
-import { bossZoneSpawnSystem } from "./systems/progression/bossZoneSpawn";
+import { rareZoneSpawnSystem } from "./systems/progression/rareZoneSpawn";
 import {
-  markBossTripleClearsFromSignalsAndEvents,
-  syncBossTripleObjectiveStateFromClears,
-} from "./systems/progression/bossTripleObjectiveSync";
+  markRareTripleClearsFromSignalsAndEvents,
+  syncRareTripleObjectiveStateFromClears,
+} from "./systems/progression/rareTripleObjectiveSync";
 
 import { formatTimeMMSS } from "./util/time";
 import { getBossAccent, getBossTitle } from "./content/floors";
@@ -118,6 +117,7 @@ import { playerSpritesReady, preloadPlayerSprites, setPlayerSkin } from "../engi
 import { preloadVendorNpcSprites, vendorNpcSpritesReady } from "../engine/render/sprites/vendorSprites";
 import { preloadBackgrounds } from "./render/background";
 import { enemySpritesReady, preloadEnemySprites } from "../engine/render/sprites/enemySprites";
+import { bossSpritesReady, preloadBossSprites } from "../engine/render/sprites/bossSprites";
 import {
   getSpriteByIdForVariantKey,
   type LoadedImg,
@@ -1669,7 +1669,7 @@ export function createGame(args: CreateGameArgs) {
     { archetype: "VENDOR", title: "Vendor" },
     { archetype: "HEAL", title: "Heal" },
     { archetype: "ACT_BOSS", title: "Boss" },
-    { archetype: "BOSS_TRIPLE", title: "3 Bosses" },
+    { archetype: "RARE_TRIPLE", title: "3 Rares" },
   ];
   const DETERMINISTIC_ZONES = ["DOCKS", "SEWERS", "CHINATOWN"] as const;
 
@@ -1693,8 +1693,8 @@ export function createGame(args: CreateGameArgs) {
         return "Heal";
       case "ACT_BOSS":
         return "Boss";
-      case "BOSS_TRIPLE":
-        return "3 Bosses";
+      case "RARE_TRIPLE":
+        return "3 Rares";
     }
   };
 
@@ -1996,31 +1996,13 @@ export function createGame(args: CreateGameArgs) {
     };
   }
 
-  function spawnSurviveBossIfNeeded(w: World): void {
-    if (w.floorArchetype !== "SURVIVE") return;
-    if (w.currentObjectiveSpec?.objectiveType !== "SURVIVE_TIMER") return;
-    if (w.runState !== "FLOOR") return;
-    if ((w as any)._surviveBossSpawned) return;
-    const remaining = (w.floorDuration ?? 0) - (w.phaseTime ?? 0);
-    if (remaining > 30) return;
-
-    const pg = gridAtPlayer(w);
-    const pw = gridToWorld(pg.gx, pg.gy, KENNEY_TILE_WORLD);
-    const angle = w.rng.range(0, Math.PI * 2);
-    const radius = w.rng.range(320, 520);
-    const wx = pw.wx + Math.cos(angle) * radius;
-    const wy = pw.wy + Math.sin(angle) * radius;
-    const spawnedHp = spawnOneEnemyOfType(w, EnemyId.BOSS, wx, wy);
-    if (spawnedHp > 0) (w as any)._surviveBossSpawned = true;
-  }
-
-  function syncBossTripleNavState(w: World): void {
-    if (w.floorArchetype !== "BOSS_TRIPLE") {
-      w.bossTriple = undefined;
+  function syncRareTripleNavState(w: World): void {
+    if (w.floorArchetype !== "RARE_TRIPLE") {
+      w.rareTriple = undefined;
       return;
     }
     const defs = (w.overlayTriggerDefs ?? []).filter((d) =>
-      typeof d.id === "string" && d.id.startsWith(OBJECTIVE_TRIGGER_IDS.bossZonePrefix)
+      typeof d.id === "string" && d.id.startsWith(OBJECTIVE_TRIGGER_IDS.rareZonePrefix)
     );
     defs.sort((a, b) => a.id.localeCompare(b.id));
     const spawnPointsWorld = defs.map((d) => ({
@@ -2028,7 +2010,7 @@ export function createGame(args: CreateGameArgs) {
       y: (d.ty + 0.5) * KENNEY_TILE_WORLD,
     }));
     const completed = spawnPointsWorld.map(() => false);
-    w.bossTriple = { spawnPointsWorld, completed };
+    w.rareTriple = { spawnPointsWorld, completed };
   }
 
   function syncZoneTrialNavState(w: World): void {
@@ -2189,8 +2171,8 @@ export function createGame(args: CreateGameArgs) {
     w.rewardTicketSeq = 0;
     w._rewardObjectiveCompletedSeen = Object.create(null);
     w._rewardSurviveMilestoneSeen = Object.create(null);
-    w._rewardBossMilestoneCount = 0;
-    w._rewardSeenBossKillEvents = new WeakSet();
+    w._rewardRareMilestoneCount = 0;
+    w._rewardSeenRareKillEvents = new WeakSet();
 
     w.floorEndCountdownActive = false;
     w.floorEndCountdownSec = 0;
@@ -2199,8 +2181,7 @@ export function createGame(args: CreateGameArgs) {
 
     w.pendingAdvanceToNextFloor = false;
 
-    // boss bookkeeping if present
-    if (Array.isArray(w.bossZoneSpawned)) w.bossZoneSpawned = [];
+    if (Array.isArray(w.rareZoneSpawned)) w.rareZoneSpawned = [];
   }
 
   function finalizeFloorLoad(): void {
@@ -2285,12 +2266,11 @@ export function createGame(args: CreateGameArgs) {
     w.relicReward.options = [];
     startZoneTrial(w);
     syncZoneTrialNavState(w);
-    syncBossTripleNavState(w);
+    syncRareTripleNavState(w);
     if (objectiveSpec.objectiveType === "ACT_BOSS" && floorIntent.bossId) {
       spawnActBossEncounterFromActiveMap(w, {
         bossId: floorIntent.bossId,
         objectiveId: "OBJ_ACT_BOSS",
-        seed: floorIntent.variantSeed ?? hashString(`${floorIntent.nodeId}:${floorIntent.floorIndex}:${floorIntent.depth}:boss_spawn`),
       });
     }
     if (objectiveSpec.objectiveType === "SURVIVE_TIMER") {
@@ -2304,7 +2284,6 @@ export function createGame(args: CreateGameArgs) {
       )
       : null;
     w.vendorOffers = [];
-    (w as any)._surviveBossSpawned = false;
     w.runState = "FLOOR";
     w.phaseTime = 0;
     w.transitionTime = 0;
@@ -2351,7 +2330,7 @@ export function createGame(args: CreateGameArgs) {
       bossId: node.runtime.bossId,
       objectiveId: node.runtime.objectiveId,
       variantSeed: node.runtime.variantSeed,
-      bossCount: node.runtime.bossCount,
+      rareCount: node.runtime.rareCount,
       spawnZoneCount: node.runtime.spawnZoneCount,
     };
   }
@@ -2430,30 +2409,6 @@ export function createGame(args: CreateGameArgs) {
       objectiveId,
       variantSeed,
     };
-  }
-
-  function enterBoss(w: World) {
-    w.runState = "BOSS";
-    w.phaseTime = 0;
-    w.transitionTime = 0;
-
-    emitEvent(w, { type: "SFX", id: "BOSS_START", vol: 1.0, rate: 1 });
-
-    // Reset chest handshake state for this encounter.
-    (w as any).chestOpenRequested = false;
-    w.magnetActive = false;
-    w.magnetTimer = 0;
-
-    // Clean slate for the boss encounter (feels fair + deterministic).
-    //clearFloorEntities(w);
-
-    const a = w.rng.range(0, Math.PI * 2);
-    const r = 320;
-    const pg = gridAtPlayer(w);
-    const pw = gridToWorld(pg.gx, pg.gy, KENNEY_TILE_WORLD);
-    const sx = pw.wx + Math.cos(a) * r;
-    const sy = pw.wy + Math.sin(a) * r;
-    spawnOneEnemyOfType(w, EnemyId.BOSS, sx, sy);
   }
 
   function enterTransition(w: World) {
@@ -2673,6 +2628,7 @@ export function createGame(args: CreateGameArgs) {
     // Kick idempotent loads.
     preloadPlayerSprites(awaitedPaletteVariantKey);
     preloadEnemySprites(requiredEnemySkins, awaitedPaletteVariantKey);
+    preloadBossSprites(undefined, awaitedPaletteVariantKey);
     preloadVendorNpcSprites(awaitedPaletteVariantKey);
     preloadNeutralMobSprites(awaitedPaletteVariantKey);
     preloadRenderSprites();
@@ -2720,6 +2676,7 @@ export function createGame(args: CreateGameArgs) {
         const playerReady = playerSpritesReady(awaitedPaletteVariantKey);
         const vendorReady = vendorNpcSpritesReady(awaitedPaletteVariantKey);
         const enemyReady = enemySpritesReady(requiredEnemySkins, awaitedPaletteVariantKey);
+        const bossReady = bossSpritesReady(undefined, awaitedPaletteVariantKey);
         const neutralReady = neutralMobSpritesReady(awaitedPaletteVariantKey);
 
         // Optional gate: vendor + pigeon assets are nice-to-have at map entry.
@@ -2727,6 +2684,7 @@ export function createGame(args: CreateGameArgs) {
         const blockingGates: string[] = [];
         if (!playerReady) blockingGates.push("player");
         if (!enemyReady) blockingGates.push("enemy");
+        if (!bossReady) blockingGates.push("boss");
         if (!projectilesReady) blockingGates.push("projectiles");
         if (!runtimeReady) blockingGates.push("runtime");
         if (!vendorReady) blockingGates.push("vendor(optional)");
@@ -2735,6 +2693,7 @@ export function createGame(args: CreateGameArgs) {
         const ready =
           playerReady
           && enemyReady
+          && bossReady
           && projectilesReady
           && runtimeReady;
 
@@ -2744,6 +2703,7 @@ export function createGame(args: CreateGameArgs) {
               awaitedPaletteVariantKey,
               activePaletteVariantKey,
               vendorReady,
+              bossReady,
               neutralReady,
             });
           }
@@ -2761,6 +2721,7 @@ export function createGame(args: CreateGameArgs) {
             playerReady,
             vendorReady,
             enemyReady,
+            bossReady,
             neutralReady,
             projectilesReady,
             runtimeReady,
@@ -2784,6 +2745,7 @@ export function createGame(args: CreateGameArgs) {
             playerReady,
             vendorReady,
             enemyReady,
+            bossReady,
             neutralReady,
             projectilesReady,
             runtimeReady,
@@ -3332,8 +3294,6 @@ export function createGame(args: CreateGameArgs) {
     switch (w.runState) {
       case "FLOOR":
         return `${floor} ${formatTimeMMSS(w.phaseTime)} / ${formatTimeMMSS(w.floorDuration)}`;
-      case "BOSS":
-        return `${floor} BOSS ${formatTimeMMSS(w.phaseTime)}`;
       case "TRANSITION":
         return `${floor} TRANSITION ${Math.ceil(w.transitionTime)}s`;
       default:
@@ -3409,8 +3369,7 @@ export function createGame(args: CreateGameArgs) {
     updateVitalsOrb(hasMomentumRelic);
 
     const bossIndex = findFirstAliveBossIndex(world);
-    const inBossContext = world.runState === "BOSS" || bossIndex >= 0;
-    if (!inBossContext || bossIndex < 0) {
+    if (bossIndex < 0) {
       args.hud.bossBar.hidden = true;
     } else {
       const hpNow = Math.max(0, world.eHp[bossIndex] ?? 0);
@@ -3485,7 +3444,7 @@ export function createGame(args: CreateGameArgs) {
       }
       case "KILL_RARES_IN_ZONES": {
         const progress = world.objectiveStates[0]?.progress?.signalCount ?? 0;
-        title = `Boss Hunt · ${Math.min(progress, spec.params.bossCount)}/${spec.params.bossCount}`;
+        title = `Rare Hunt · ${Math.min(progress, spec.params.rareCount)}/${spec.params.rareCount}`;
         break;
       }
     }
@@ -3682,7 +3641,7 @@ export function createGame(args: CreateGameArgs) {
     // total run time (optional for future meta / analytics)
     world.time += dtSim;
 
-    // phase time (drives FLOOR/BOSS/TRANSITION runtime state)
+    // phase time drives the current floor and transition runtime state
     world.phaseTime += dtSim;
     world.timeSec = world.phaseTime;
     ensureRunProgressionState(world);
@@ -3692,11 +3651,7 @@ export function createGame(args: CreateGameArgs) {
     const mapMode = !!(world as any).mapMode;
 
     // RunState progression (delve mode only)
-    if (!mapMode) {
-      if (world.runState === "FLOOR" && world.objectiveDefs.length === 0 && world.phaseTime >= world.floorDuration) {
-        enterBoss(world);
-      }
-    }
+    void mapMode;
     if (world.runState === "TRANSITION") {
       world.transitionTime = Math.max(0, world.transitionTime - dtSim);
       if (world.transitionTime <= 0) {
@@ -3713,7 +3668,6 @@ export function createGame(args: CreateGameArgs) {
     neutralBirdAISystem(world, dtSim);
     neutralAnimatedMobsSystem(world, dtSim);
     roomChallengeSystem(world, dtSim);  // Track room challenges and lock exits
-    spawnSurviveBossIfNeeded(world);
     executeHostileSpawnRequests(
       world,
       updateHostileSpawnDirector(world, {
@@ -3733,7 +3687,6 @@ export function createGame(args: CreateGameArgs) {
     collisionsSystem(world, dtSim);
     fissionSystem(world, dtSim);  // Nuclear fission: projectile-projectile collisions
     relicExplodeOnKillSystem(world, dtSim);
-    bossSystem(world, dtSim);          // NEW: boss mechanics (telegraphs/hazards/dash)
     bossEncounterSystem(world, dtSim);
     zonesSystem(world, dtSim);
     dotTickSystem(world, dtSim);
@@ -3747,10 +3700,10 @@ export function createGame(args: CreateGameArgs) {
     processCombatTextFromEvents(world, dtSim);
     updateZoneTrialObjective(world);
     syncZoneTrialNavState(world);
-    markBossTripleClearsFromSignalsAndEvents(world);
-    bossZoneSpawnSystem(world);
+    markRareTripleClearsFromSignalsAndEvents(world);
+    rareZoneSpawnSystem(world);
     objectiveSystem(world);
-    syncBossTripleObjectiveStateFromClears(world);
+    syncRareTripleObjectiveStateFromClears(world);
     processMomentumEventQueue(world);
 
     if (world.playerHp <= 0 && !world.deathFx.active && world.runState !== "GAME_OVER") {

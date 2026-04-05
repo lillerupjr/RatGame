@@ -6,7 +6,6 @@ import type {
 } from "./contracts/renderCommands";
 import type { StaticAtlasFrame, StaticAtlasProjectedDecalLookup } from "./staticAtlasStore";
 import {
-  buildDiamondDestinationQuad,
   buildFlatTileDestinationQuad,
   buildGroundDecalProjectedSurfacePayload,
   buildProjectedSurfacePayload,
@@ -342,22 +341,24 @@ export function resolveGroundDecalProjectedCommand(
   }
   if (!projectedImage) return null;
   const snapRoad = shouldPixelSnapRoadMarking(decal.setId, decal.variantIndex);
+  // Keep decals centered on their historical tile-origin anchor without letting source height drive placement.
+  const decalQuadOffsetY = -SIDEWALK_ISO_HEIGHT * 0.5;
   const destinationQuad = rampRoadTiles.has(`${decal.tx},${decal.ty}`)
     ? getRampQuadPoints(decal.tx, decal.ty, decal.renderAnchorY)
-    : (() => {
-      const wx = decal.tx * T;
-      const wy = decal.ty * T;
-      const p = worldToScreen(wx, wy);
-      const rawCenterX = p.x + camX;
-      const rawCenterY = p.y + camY - decal.zBase * ELEV_PX - SIDEWALK_ISO_HEIGHT * (decal.renderAnchorY - 0.5);
-      const centerX = snapRoad ? Math.round(rawCenterX) : snapPx(rawCenterX);
-      const centerY = snapRoad ? Math.round(rawCenterY) : snapPx(rawCenterY);
-      const dx = centerX - projectedWidth * 0.5;
-      const dy = centerY - projectedHeight * 0.5;
-      const drawX = snapRoad ? Math.round(dx) : snapPx(dx);
-      const drawY = snapRoad ? Math.round(dy) : snapPx(dy);
-      return buildDiamondDestinationQuad(drawX, drawY, projectedWidth, projectedHeight);
-    })();
+    : buildFlatTileDestinationQuad({
+      tx: decal.tx,
+      ty: decal.ty,
+      zBase: decal.zBase,
+      renderAnchorY: decal.renderAnchorY,
+      tileWorld: T,
+      elevPx: ELEV_PX,
+      isoHeight: SIDEWALK_ISO_HEIGHT,
+      camX,
+      camY,
+      worldToScreen,
+      snapPoint: snapRoad ? Math.round : snapPx,
+      extraDy: decalQuadOffsetY,
+    });
 
   const stableId = stableDecalId(decal.tx, decal.ty, decal.zBase);
   return {

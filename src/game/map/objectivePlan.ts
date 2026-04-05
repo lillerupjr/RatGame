@@ -35,7 +35,7 @@ export function objectiveIdFromArchetype(archetype: FloorArchetype): ObjectiveId
       return "HEAL_VISIT";
     case "ACT_BOSS":
       return "ACT_BOSS";
-    case "BOSS_TRIPLE":
+    case "RARE_TRIPLE":
       return "KILL_RARES_IN_ZONES";
   }
 }
@@ -45,7 +45,7 @@ export function objectiveSpecFromObjectiveId(
   params?: Partial<{
     timeLimitSec: number;
     zoneCount: number;
-    bossCount: number;
+    rareCount: number;
     bossId: BossId | null;
   }>
 ): ObjectiveSpec {
@@ -103,7 +103,7 @@ export function objectiveSpecFromObjectiveId(
       return {
         objectiveType: "KILL_RARES_IN_ZONES",
         params: {
-          bossCount: params?.bossCount ?? 3,
+          rareCount: params?.rareCount ?? 3,
           zoneCount: params?.zoneCount ?? 3,
           timeLimitSec: params?.timeLimitSec ?? null,
         },

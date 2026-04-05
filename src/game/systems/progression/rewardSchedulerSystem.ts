@@ -23,8 +23,8 @@ function claimKeyForRunEvent(world: World, ev: RunEvent): string {
   switch (ev.type) {
     case "ZONE_CLEARED":
       return `${floorIndex}:ZONE_CLEAR:${ev.zoneIndex}`;
-    case "BOSS_MILESTONE_CLEARED":
-      return `${floorIndex}:BOSS_CLEAR:${ev.bossIndex}`;
+    case "RARE_MILESTONE_CLEARED":
+      return `${floorIndex}:RARE_CLEAR:${ev.rareIndex}`;
     case "OBJECTIVE_COMPLETED":
       if (world.floorRewardBudget.mode === "ZONE_TRIAL") return `${floorIndex}:TRIAL_COMPLETE`;
       return `${floorIndex}:OBJ_COMPLETE:${ev.objectiveId}`;
@@ -41,10 +41,10 @@ function claimKeyForRunEvent(world: World, ev: RunEvent): string {
   }
 }
 
-function applyBossMilestoneReward(world: World, bossIndex: 1 | 2): RewardOutcome {
+function applyRareMilestoneReward(world: World, rareIndex: 1 | 2): RewardOutcome {
   return {
     type: "NO_REWARD",
-    reason: `Boss milestone ${bossIndex} reward disabled`,
+    reason: `Rare milestone ${rareIndex} reward disabled`,
   };
 }
 
@@ -72,9 +72,9 @@ function rewardPlanForRunEvent(
         bonusGoldAmount: 0,
       };
 
-    case "BOSS_MILESTONE_CLEARED":
+    case "RARE_MILESTONE_CLEARED":
       return {
-        outcome: applyBossMilestoneReward(world, ev.bossIndex),
+        outcome: applyRareMilestoneReward(world, ev.rareIndex),
         ticketKind: "CARD_PICK",
         ticketSource: "ZONE_TRIAL",
         bonusGoldAmount: 0,
@@ -164,7 +164,7 @@ export function rewardSchedulerSystem(world: World): void {
     if (ev.type === "OBJECTIVE_COMPLETED") {
       world.objectiveRewardClaimedKey = claimKey;
     }
-    if (ev.type === "ZONE_CLEARED" || ev.type === "BOSS_MILESTONE_CLEARED") {
+    if (ev.type === "ZONE_CLEARED" || ev.type === "RARE_MILESTONE_CLEARED") {
       appendZoneRewardClaim(world, claimKey);
     }
 

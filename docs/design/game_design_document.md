@@ -21,7 +21,7 @@ The city is loud, filthy, and alive. Everyone’s yelling. Everyone wants a cut.
 - Humor lands at:
   - Run start
   - Weapon evolutions
-  - Boss introductions
+  - Act-boss introductions
   - Item descriptions
 - NY slang, mob bravado, sleazy one-liners
 - Suggestive jokes only, no explicit content
@@ -86,7 +86,7 @@ Factions define **weapon themes, upgrade tendencies, and build identity**. They 
 
 ### Personality
 - Fodder enemies: silent
-- Elite enemies and bosses: bark-heavy, NY insults
+- Elite enemies and act bosses: bark-heavy, NY insults
 - Faction-reflective behavior comes later
 
 ---
@@ -194,9 +194,9 @@ Each floor contains:
 - Elite encounters
 - Ambient modifiers or hazards (zone-flavored)
 - Gradually increasing difficulty
-- **One guaranteed boss fight** at the end
+- **One guaranteed act-boss fight** at the end
 
-The goal of a floor is to survive long enough to reach the boss while assembling a viable build.
+The goal of a floor is to survive long enough to reach the act boss while assembling a viable build.
 
 ---
 
@@ -206,9 +206,9 @@ Zones represent **districts of the city**, each controlled by a specific faction
 - Visual identity
 - Enemy composition bias
 - Weapon and upgrade bias
-- Boss personality and mechanics
+- Act-boss personality and mechanics
 
-After defeating a floor boss, the player **chooses the next zone**, gaining agency over build direction.
+After defeating a floor act boss, the player **chooses the next zone**, gaining agency over build direction.
 
 Zone choice influences **loot weighting**, not hard guarantees, preserving roguelike uncertainty while rewarding intent.
 
@@ -220,8 +220,8 @@ Zone choice influences **loot weighting**, not hard guarantees, preserving rogue
 - Visuals: neon lights, velvet interiors, stages, spotlights
 - Enemy bias: charm, distraction, glass-cannon elites
 - Weapon bias: debuff and control-oriented weapons
-- Boss: Madame / Club Owner / Star Performer
-- Guaranteed boss drop bias:
+- Act boss: Madame / Club Owner / Star Performer
+- Guaranteed act-boss drop bias:
   - Hooker-aligned weapon, passive, or evolution component
 
 ---
@@ -230,8 +230,8 @@ Zone choice influences **loot weighting**, not hard guarantees, preserving rogue
 - Visuals: shipping containers, fog, floodlights
 - Enemy bias: suppressive fire, tanky enemies
 - Weapon bias: guns, raw projectile DPS
-- Boss: Dock Capo / Enforcer
-- Guaranteed boss drop bias:
+- Act boss: Dock Capo / Enforcer
+- Guaranteed act-boss drop bias:
   - Gun weapon, projectile passive, or gun-related evolution component
 
 ---
@@ -240,8 +240,8 @@ Zone choice influences **loot weighting**, not hard guarantees, preserving rogue
 - Visuals: tight streets, signage, cluttered alleys
 - Enemy bias: fast enemies, ambushes, flanking behavior
 - Weapon bias: knives, martial and precision weapons
-- Boss: Assassin / Syndicate Leader
-- Guaranteed boss drop bias:
+- Act boss: Assassin / Syndicate Leader
+- Guaranteed act-boss drop bias:
   - Martial weapon, crit/bleed passive, or precision evolution component
 
 ---
@@ -250,15 +250,15 @@ Zone choice influences **loot weighting**, not hard guarantees, preserving rogue
 - Visuals: pipes, sludge, steam, toxic clouds
 - Enemy bias: DOT, area denial, environmental hazards
 - Weapon bias: chemical and mutation-based weapons
-- Boss: Mutant Rat / Chem Overlord
-- Guaranteed boss drop bias:
+- Act boss: Mutant Rat / Chem Overlord
+- Guaranteed act-boss drop bias:
   - Chemical weapon, DOT passive, or mutation-style evolution component
 
 ---
 
-### Boss Rewards & Player Agency
+### Act Boss Rewards & Player Agency
 
-After defeating a floor boss:
+After defeating a floor act boss:
 - The player is presented with **2–3 reward choices**
 - At least **one option is guaranteed** to align with the current zone’s faction
 
@@ -270,7 +270,7 @@ This ensures that:
 ---
 
 ### Win Condition
-- Defeat the boss of Floor 3
+- Defeat the act boss of Floor 3
 - Display a run summary including:
   - Final build
   - Faction alignment

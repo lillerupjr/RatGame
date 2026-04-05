@@ -34,6 +34,11 @@ const ENTITY_MANIFEST: SkinEntry[] = [
   { path: "enemies/white_rat", rotations: true, anims: [{ key: "walk-6-frames", frames: 6 }] },
   { path: "enemies/lootGoblin", rotations: true, anims: [{ key: "walk", frames: 6 }] },
   { path: "enemies/infested", rotations: true, anims: [{ key: "walk", frames: 6 }] },
+  // bosses
+  { path: "bosses/chem_guy", rotations: true, anims: [
+    { key: "walk", frames: 6 },
+    { key: "fireball", frames: 6 },
+  ] },
   // npc
   { path: "npc/vendor", rotations: true, anims: [{ key: "breathing-idle", frames: 4, nested: false }] },
   // player

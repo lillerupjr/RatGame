@@ -228,7 +228,7 @@ Achievements
 ## 10. Gameplay loop invariants
 
 - Runs are deterministic from seed and floor index
-- Boss behavior is keyed by floor identity
+- Act-boss behavior is owned by the canonical boss encounter pipeline
 - UI and audio react to events and game state only
 
 Rules

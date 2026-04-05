@@ -3,6 +3,7 @@ import { getActiveMap } from "../map/compile/kenneyMap";
 import { PLAYABLE_CHARACTERS } from "../content/playableCharacters";
 import { listProjectileTravelSpriteIds } from "../content/projectilePresentationRegistry";
 import { listEnemyDynamicAtlasSpriteIds } from "../../engine/render/sprites/enemySprites";
+import { listBossDynamicAtlasSpriteIds } from "../../engine/render/sprites/bossSprites";
 
 export interface DependencySet {
   spriteIds: string[];
@@ -71,6 +72,10 @@ export function collectFloorDependencies(): DependencySet {
   }
 
   for (const id of listEnemyDynamicAtlasSpriteIds()) {
+    spriteIds.add(id);
+  }
+
+  for (const id of listBossDynamicAtlasSpriteIds()) {
     spriteIds.add(id);
   }
 

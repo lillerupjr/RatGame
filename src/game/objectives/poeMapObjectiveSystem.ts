@@ -101,7 +101,7 @@ type ChunkBudgetSlice = {
   ty1: number;
   budget: number;
   isStartChunk: boolean;
-  isBossChunk: boolean;
+  isTerminalChunk: boolean;
 };
 
 type NormalizedPoeMapModifiers = {
@@ -433,8 +433,8 @@ function buildChunkBudgetSlices(
   const startCy = Math.max(0, Math.min(rows - 1, Math.floor((spawnTy - originTy) / MAP_CHUNK_SIZE_TILES)));
   const startChunkIndex = startCy * cols + startCx;
 
-  let bossChunkIndex = 0;
-  let bestBossDistance = -1;
+  let terminalChunkIndex = 0;
+  let bestTerminalDistance = -1;
 
   for (let cy = 0; cy < rows; cy++) {
     for (let cx = 0; cx < cols; cx++) {
@@ -446,9 +446,9 @@ function buildChunkBudgetSlices(
       const centerTx = (tx0 + tx1) * 0.5;
       const centerTy = (ty0 + ty1) * 0.5;
       const dist = tileDistance(centerTx, centerTy, spawnTx, spawnTy);
-      if (dist > bestBossDistance) {
-        bestBossDistance = dist;
-        bossChunkIndex = index;
+      if (dist > bestTerminalDistance) {
+        bestTerminalDistance = dist;
+        terminalChunkIndex = index;
       }
 
       slices.push({
@@ -459,19 +459,19 @@ function buildChunkBudgetSlices(
         ty1,
         budget: 0,
         isStartChunk: index === startChunkIndex,
-        isBossChunk: false,
+        isTerminalChunk: false,
       });
     }
   }
 
   for (let i = 0; i < slices.length; i++) {
-    slices[i].isBossChunk = slices[i].index === bossChunkIndex;
+    slices[i].isTerminalChunk = slices[i].index === terminalChunkIndex;
   }
 
   const weights: number[] = [];
   for (let i = 0; i < slices.length; i++) {
     const slice = slices[i];
-    if (slice.isBossChunk && slices.length > 1) {
+    if (slice.isTerminalChunk && slices.length > 1) {
       weights.push(0);
       continue;
     }
@@ -702,7 +702,7 @@ function ensureStartChunkPack(
   globalAnchors: Array<{ tx: number; ty: number }>,
 ): void {
   if (plan.packs.length <= 0 || chunks.length <= 0) return;
-  const startChunk = chunks.find((chunk) => chunk.isStartChunk && !chunk.isBossChunk) ?? chunks.find((chunk) => chunk.isStartChunk);
+  const startChunk = chunks.find((chunk) => chunk.isStartChunk && !chunk.isTerminalChunk) ?? chunks.find((chunk) => chunk.isStartChunk);
   if (!startChunk) return;
   if (plan.packs.some((pack) => pack.chunkIndex === startChunk.index)) return;
 
@@ -917,7 +917,7 @@ export function initializePoeMapObjective(
 
   for (let c = 0; c < chunks.length; c++) {
     const chunk = chunks[c];
-    if (chunk.isBossChunk && chunks.length > 1) continue;
+    if (chunk.isTerminalChunk && chunks.length > 1) continue;
 
     let remaining = chunk.budget;
     let tries = 0;

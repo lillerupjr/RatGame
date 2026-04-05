@@ -117,7 +117,7 @@ describe("groundCommandResolver", () => {
     expect(resolved?.payload.y3).toBe(30);
   });
 
-  it("keeps flat decals centered on the tile origin while ramp decals use the ramp quad", () => {
+  it("derives flat decal destination quads from logical tile corners while ramp decals use the ramp quad", () => {
     const flatDeps = makeDeps({
       getRuntimeIsoDecalCanvas: vi.fn(() => ({ width: 48, height: 24 })),
       getDiamondFitCanvas: vi.fn(() => ({ width: 128, height: 64 })),
@@ -141,6 +141,10 @@ describe("groundCommandResolver", () => {
     });
     expect(flatResolved?.payload.x0).toBe(0);
     expect(flatResolved?.payload.y0).toBe(-36);
+    expect(flatResolved?.payload.x1).toBe(64);
+    expect(flatResolved?.payload.y1).toBe(-4);
+    expect(flatResolved?.payload.x2).toBe(0);
+    expect(flatResolved?.payload.y2).toBe(28);
     expect(flatResolved?.payload.x3).toBe(-64);
     expect(flatResolved?.payload.y3).toBe(-4);
 
@@ -161,6 +165,43 @@ describe("groundCommandResolver", () => {
     expect(rampDeps.getRampQuadPoints).toHaveBeenCalledWith(4, 5, 0.55);
     expect(rampResolved?.payload.x0).toBe(10);
     expect(rampResolved?.payload.y0).toBe(20);
+  });
+
+  it("keeps flat decal placement fixed when the sampled source canvas size changes", () => {
+    const decal = {
+      tx: 1,
+      ty: 2,
+      zBase: 0,
+      zLogical: 0,
+      renderAnchorY: 0.55,
+      setId: "lane_marking",
+      variantIndex: 0,
+      rotationQuarterTurns: 0,
+    } as any;
+    const baseResolved = resolveGroundDecalProjectedCommand(decal, makeDeps({
+      getDiamondFitCanvas: vi.fn(() => ({ width: 128, height: 64 })),
+    }));
+    const oversizedSourceResolved = resolveGroundDecalProjectedCommand(decal, makeDeps({
+      getDiamondFitCanvas: vi.fn(() => ({ width: 192, height: 96 })),
+    }));
+
+    expect(baseResolved).not.toBeNull();
+    expect(oversizedSourceResolved).not.toBeNull();
+    expect(oversizedSourceResolved?.payload.sourceQuad).toEqual({
+      nw: { x: 96, y: 0 },
+      ne: { x: 192, y: 48 },
+      se: { x: 96, y: 96 },
+      sw: { x: 0, y: 48 },
+    });
+    expect(oversizedSourceResolved?.destinationQuad).toEqual(baseResolved?.destinationQuad);
+    expect(oversizedSourceResolved?.payload.x0).toBe(baseResolved?.payload.x0);
+    expect(oversizedSourceResolved?.payload.y0).toBe(baseResolved?.payload.y0);
+    expect(oversizedSourceResolved?.payload.x1).toBe(baseResolved?.payload.x1);
+    expect(oversizedSourceResolved?.payload.y1).toBe(baseResolved?.payload.y1);
+    expect(oversizedSourceResolved?.payload.x2).toBe(baseResolved?.payload.x2);
+    expect(oversizedSourceResolved?.payload.y2).toBe(baseResolved?.payload.y2);
+    expect(oversizedSourceResolved?.payload.x3).toBe(baseResolved?.payload.x3);
+    expect(oversizedSourceResolved?.payload.y3).toBe(baseResolved?.payload.y3);
   });
 
   it("uses static-atlas decal frames when available", () => {

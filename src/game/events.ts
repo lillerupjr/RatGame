@@ -65,7 +65,6 @@ export type SfxId =
     | "PLAYER_HIT"
     | "CHEST_PICKUP"
     | "FLOOR_START"
-    | "BOSS_START"
     | "RUN_WIN"
     | "RUN_LOSE"
     | "UI_CLICK";

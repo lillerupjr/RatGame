@@ -331,7 +331,7 @@ function buildAliveState(activeEnemies: Array<{ enemyId: EnemyIdType }>): {
 }
 
 function effectiveEnemyWeight(mode: DirectorMode, enemyId: EnemyIdType): number {
-  const spawn = ENEMIES[enemyId].spawn;
+  const spawn = ENEMIES[enemyId]!.spawn;
   return mode === "burst" ? (spawn.burstWeight ?? spawn.weight) : spawn.weight;
 }
 

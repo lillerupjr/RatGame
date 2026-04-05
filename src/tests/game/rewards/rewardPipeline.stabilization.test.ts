@@ -10,19 +10,19 @@ import { createRewardPipelineWorld, dismissActiveRewardUi, getActiveTicket } fro
 import { makeUnknownDamageMeta } from "../../../game/combat/damageMeta";
 
 describe("reward pipeline stabilization", () => {
-  test("boss-zone ENTER/EXIT do not create reward events or consume budget", () => {
+  test("rare-zone ENTER/EXIT do not create reward events or consume budget", () => {
     const world = createRewardPipelineWorld(81, "NORMAL");
-    world.floorArchetype = "BOSS_TRIPLE";
+    world.floorArchetype = "RARE_TRIPLE";
     world.triggerSignals.push(
       {
         type: "ENTER",
         entityId: 0,
-        triggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}1`,
+        triggerId: `${OBJECTIVE_TRIGGER_IDS.rareZonePrefix}1`,
       },
       {
         type: "EXIT",
         entityId: 0,
-        triggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}1`,
+        triggerId: `${OBJECTIVE_TRIGGER_IDS.rareZonePrefix}1`,
       },
     );
 
@@ -35,33 +35,33 @@ describe("reward pipeline stabilization", () => {
     expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
   });
 
-  test("boss-zone KILL creates exactly one boss milestone event", () => {
+  test("rare-zone KILL creates exactly one rare milestone event", () => {
     const world = createRewardPipelineWorld(82, "NORMAL");
-    world.floorArchetype = "BOSS_TRIPLE";
-    world.eType[7] = EnemyId.BOSS;
-    world.eSpawnTriggerId[7] = `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}1`;
+    world.floorArchetype = "RARE_TRIPLE";
+    world.eType[7] = EnemyId.TANK;
+    world.eSpawnTriggerId[7] = `${OBJECTIVE_TRIGGER_IDS.rareZonePrefix}1`;
     world.events.push({
       type: "ENEMY_KILLED",
       enemyIndex: 7,
       x: 0,
       y: 0,
       source: "OTHER",
-      damageMeta: makeUnknownDamageMeta("TEST_REWARD_PIPELINE_BOSS_KILL"),
+      damageMeta: makeUnknownDamageMeta("TEST_REWARD_PIPELINE_RARE_KILL"),
     });
 
     rewardRunEventProducerSystem(world, { includeCoreFacts: true, includeChest: false });
 
     expect(world.runEvents).toHaveLength(1);
     expect(world.runEvents[0]).toMatchObject({
-      type: "BOSS_MILESTONE_CLEARED",
-      bossIndex: 1,
+      type: "RARE_MILESTONE_CLEARED",
+      rareIndex: 1,
       floorIndex: 0,
     });
   });
 
-  test("BOSS_TRIPLE chest open does not enqueue reward tickets", () => {
+  test("RARE_TRIPLE chest open does not enqueue reward tickets", () => {
     const world = createRewardPipelineWorld(83, "NORMAL");
-    world.floorArchetype = "BOSS_TRIPLE";
+    world.floorArchetype = "RARE_TRIPLE";
     world.runEvents.push({
       type: "CHEST_OPEN_REQUESTED",
       floorIndex: 0,

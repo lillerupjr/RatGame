@@ -2,7 +2,10 @@ import { configurePixelPerfect, snapPx } from "../pixelPerfect";
 import { drawVoidBackgroundOnce } from "../../../game/systems/presentation/frame/backgroundPass";
 import { drawTexturedQuad } from "../../../game/systems/presentation/renderPrimitives/drawTexturedQuad";
 import { renderEntityShadow } from "../../../game/systems/presentation/renderShadow";
-import { buildDiamondSourceQuad } from "../../../game/systems/presentation/renderCommandGeometry";
+import {
+  buildDiamondSourceQuad,
+  buildFlatTileDestinationQuad,
+} from "../../../game/systems/presentation/renderCommandGeometry";
 import type { RenderExecutionPlan } from "../../../game/systems/presentation/backend/renderExecutionPlan";
 import type { RenderFrameContext } from "../../../game/systems/presentation/contracts/renderFrameContext";
 import type { RenderCommand } from "../../../game/systems/presentation/contracts/renderCommands";
@@ -230,6 +233,12 @@ export class Canvas2DRenderer {
         });
         return;
       }
+      if (payload.arenaTileEffect) {
+        this.withPerfDrawTag("lighting", () => {
+          this.drawArenaTileEffect(payload.arenaTileEffect);
+        });
+        return;
+      }
     }
 
     if (command.semanticFamily === "screenOverlay") {
@@ -356,17 +365,29 @@ export class Canvas2DRenderer {
       this.drawRampDiamond(diamond, data.tx, data.ty, data.anchorY);
       return;
     }
-    const wx = (data.tx + 0.5) * this.deps.T;
-    const wy = (data.ty + 0.5) * this.deps.T;
-    const p = this.deps.worldToScreen(wx, wy);
-    const centerX = snapPx(p.x + this.deps.camX);
-    const centerY = snapPx(
-      p.y + this.deps.camY - data.zBase * this.deps.ELEV_PX - this.deps.SIDEWALK_ISO_HEIGHT * (data.anchorY - 0.5),
+    const quad = buildFlatTileDestinationQuad({
+      tx: data.tx,
+      ty: data.ty,
+      zBase: data.zBase,
+      renderAnchorY: data.anchorY,
+      tileWorld: this.deps.T,
+      elevPx: this.deps.ELEV_PX,
+      isoHeight: this.deps.SIDEWALK_ISO_HEIGHT,
+      camX: this.deps.camX,
+      camY: this.deps.camY,
+      worldToScreen: this.deps.worldToScreen,
+      snapPoint: snapPx,
+    });
+    drawTexturedQuad(
+      this.frameContext.ctx,
+      baseBaked,
+      0,
+      0,
+      baseBaked.width,
+      baseBaked.height,
+      quad,
+      buildDiamondSourceQuad(baseBaked.width, baseBaked.height),
     );
-    const dx = centerX - this.deps.SIDEWALK_SRC_SIZE * 0.5;
-    const dy = centerY - this.deps.SIDEWALK_ISO_HEIGHT * 0.5;
-    const ctx = this.frameContext.ctx;
-    ctx.drawImage(baseBaked, snapPx(dx), snapPx(dy));
   }
 
   private drawImageTop(data: any): void {
@@ -374,14 +395,29 @@ export class Canvas2DRenderer {
     if (data.mode === "oceanProjected") {
       const baked = this.deps.getRuntimeIsoDecalCanvas(data.image, 0, data.oceanProjectionScale);
       if (!baked) return;
-      const wx = (data.tx + 0.5) * this.deps.T;
-      const wy = (data.ty + 0.5) * this.deps.T;
-      const p = this.deps.worldToScreen(wx, wy);
-      const centerX = snapPx(p.x + this.deps.camX);
-      const centerY = snapPx(
-        p.y + this.deps.camY - data.zBase * this.deps.ELEV_PX - this.deps.SIDEWALK_ISO_HEIGHT * (data.renderAnchorY - 0.5),
+      const quad = buildFlatTileDestinationQuad({
+        tx: data.tx,
+        ty: data.ty,
+        zBase: data.zBase,
+        renderAnchorY: data.renderAnchorY,
+        tileWorld: this.deps.T,
+        elevPx: this.deps.ELEV_PX,
+        isoHeight: this.deps.SIDEWALK_ISO_HEIGHT,
+        camX: this.deps.camX,
+        camY: this.deps.camY,
+        worldToScreen: this.deps.worldToScreen,
+        snapPoint: snapPx,
+      });
+      drawTexturedQuad(
+        ctx,
+        baked,
+        0,
+        0,
+        baked.width,
+        baked.height,
+        quad,
+        buildDiamondSourceQuad(baked.width, baked.height),
       );
-      ctx.drawImage(baked, centerX - baked.width * 0.5, centerY - baked.height * 0.5);
       return;
     }
 
@@ -443,25 +479,37 @@ export class Canvas2DRenderer {
     const decalScale = this.deps.roadMarkingDecalScale(data.setId, data.variantIndex);
     const baked = this.deps.getRuntimeIsoDecalCanvas(src.img, data.rotationQuarterTurns, decalScale);
     if (!baked) return;
-    const wx = data.tx * this.deps.T;
-    const wy = data.ty * this.deps.T;
-    const p = this.deps.worldToScreen(wx, wy);
-    const rawCenterX = p.x + this.deps.camX;
-    const rawCenterY = p.y + this.deps.camY - data.zBase * this.deps.ELEV_PX - this.deps.SIDEWALK_ISO_HEIGHT * (data.renderAnchorY - 0.5);
     const shouldSnapRoadMarking = this.deps.shouldPixelSnapRoadMarking(data.setId, data.variantIndex);
-    const centerX = shouldSnapRoadMarking ? Math.round(rawCenterX) : snapPx(rawCenterX);
-    const centerY = shouldSnapRoadMarking ? Math.round(rawCenterY) : snapPx(rawCenterY);
+    const diamond = this.deps.getDiamondFitCanvas(baked);
+    const decalQuadOffsetY = -this.deps.SIDEWALK_ISO_HEIGHT * 0.5;
     if (this.deps.rampRoadTiles.has(`${data.tx},${data.ty}`)) {
-      const diamond = this.deps.getDiamondFitCanvas(baked);
       this.drawRampDiamond(diamond, data.tx, data.ty, data.renderAnchorY);
       return;
     }
-    const dx = centerX - baked.width * 0.5;
-    const dy = centerY - baked.height * 0.5;
-    const drawX = shouldSnapRoadMarking ? Math.round(dx) : snapPx(dx);
-    const drawY = shouldSnapRoadMarking ? Math.round(dy) : snapPx(dy);
-    const ctx = this.frameContext.ctx;
-    ctx.drawImage(baked, drawX, drawY);
+    const quad = buildFlatTileDestinationQuad({
+      tx: data.tx,
+      ty: data.ty,
+      zBase: data.zBase,
+      renderAnchorY: data.renderAnchorY,
+      tileWorld: this.deps.T,
+      elevPx: this.deps.ELEV_PX,
+      isoHeight: this.deps.SIDEWALK_ISO_HEIGHT,
+      camX: this.deps.camX,
+      camY: this.deps.camY,
+      worldToScreen: this.deps.worldToScreen,
+      snapPoint: shouldSnapRoadMarking ? Math.round : snapPx,
+      extraDy: decalQuadOffsetY,
+    });
+    drawTexturedQuad(
+      this.frameContext.ctx,
+      diamond,
+      0,
+      0,
+      diamond.width,
+      diamond.height,
+      quad,
+      buildDiamondSourceQuad(diamond.width, diamond.height),
+    );
   }
 
   private drawRampDiamond(srcDiamond: HTMLCanvasElement, tx: number, ty: number, renderAnchorY: number): void {
@@ -516,6 +564,42 @@ export class Canvas2DRenderer {
     ctx.ellipse(p.x, p.y, rx, ry, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
+  }
+
+  private drawArenaTileEffect(data: any): void {
+    const tile = data?.tile;
+    const effect = data?.effect;
+    if (!tile || !effect) return;
+    const tx = Number(tile.tx);
+    const ty = Number(tile.ty);
+    if (!Number.isFinite(tx) || !Number.isFinite(ty)) return;
+    const pN = this.deps.toScreen((tx + 0.5) * this.deps.T, ty * this.deps.T);
+    const pE = this.deps.toScreen((tx + 1) * this.deps.T, (ty + 0.5) * this.deps.T);
+    const pS = this.deps.toScreen((tx + 0.5) * this.deps.T, (ty + 1) * this.deps.T);
+    const pW = this.deps.toScreen(tx * this.deps.T, (ty + 0.5) * this.deps.T);
+    const ctx = this.frameContext.ctx;
+    const isActive = effect.state === "ACTIVE";
+    ctx.save();
+    ctx.globalAlpha = isActive ? 0.36 : 0.2;
+    ctx.fillStyle = isActive ? "#3fdc62" : "#98f7a4";
+    ctx.beginPath();
+    ctx.moveTo(pN.x, pN.y);
+    ctx.lineTo(pE.x, pE.y);
+    ctx.lineTo(pS.x, pS.y);
+    ctx.lineTo(pW.x, pW.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = isActive ? 0.9 : 0.72;
+    ctx.strokeStyle = isActive ? "#d8ffe1" : "#f1fff4";
+    ctx.lineWidth = isActive ? 2 : 1.5;
+    ctx.beginPath();
+    ctx.moveTo(pN.x, pN.y);
+    ctx.lineTo(pE.x, pE.y);
+    ctx.lineTo(pS.x, pS.y);
+    ctx.lineTo(pW.x, pW.y);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
   }
 
   private drawVfxClip(data: any): void {

@@ -19,6 +19,7 @@ import {
 } from "../neutral/lootGoblin";
 import {
   getBossDefinitionForEntity,
+  isBossEncounterDormant,
   isBossEntity,
 } from "../../bosses/bossRuntime";
 import { getPoeEnemyLeashAnchor, isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
@@ -191,6 +192,11 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     ezLogical[i] = eCur.zLogical;
 
     if (isPoeEnemyDormant(w, i)) {
+      knockVx[i] = 0;
+      knockVy[i] = 0;
+      continue;
+    }
+    if (isBossEncounterDormant(w, i)) {
       knockVx[i] = 0;
       knockVy[i] = 0;
       continue;

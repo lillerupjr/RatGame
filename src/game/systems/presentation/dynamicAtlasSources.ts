@@ -1,6 +1,7 @@
 import { getSpriteByIdForVariantKey } from "../../../engine/render/sprites/renderSprites";
 import { listPlayerDynamicAtlasSpriteIds } from "../../../engine/render/sprites/playerSprites";
 import { listEnemyDynamicAtlasSpriteIds } from "../../../engine/render/sprites/enemySprites";
+import { listBossDynamicAtlasSpriteIds } from "../../../engine/render/sprites/bossSprites";
 import { listVendorNpcDynamicAtlasSpriteIds } from "../../../engine/render/sprites/vendorSprites";
 import { listNeutralMobDynamicAtlasSpriteIds } from "../../../engine/render/sprites/neutralSprites";
 import { listCurrencyDynamicAtlasSpriteIds } from "../../content/loot/currencyVisual";
@@ -80,6 +81,7 @@ export function collectDynamicAtlasSources(paletteVariantKey: string): DynamicAt
   addSpriteIdFamilySources(accumulator, listNeutralMobDynamicAtlasSpriteIds(), paletteVariantKey, "directFrame");
   addSpriteIdFamilySources(accumulator, listPlayerDynamicAtlasSpriteIds(), paletteVariantKey, "spritePackFrame");
   addSpriteIdFamilySources(accumulator, listEnemyDynamicAtlasSpriteIds(), paletteVariantKey, "spritePackFrame");
+  addSpriteIdFamilySources(accumulator, listBossDynamicAtlasSpriteIds(), paletteVariantKey, "spritePackFrame");
 
   return {
     readySources: Array.from(accumulator.readyByKey.values()).sort((a, b) => a.sourceKey.localeCompare(b.sourceKey)),

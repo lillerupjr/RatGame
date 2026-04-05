@@ -46,7 +46,6 @@ export function audioSystem(w: World, dt: number) {
 
             // structure
             FLOOR_START: 1.0,
-            BOSS_START: 1.0,
             RUN_WIN: 1.0,
             RUN_LOSE: 1.0,
 

@@ -189,7 +189,7 @@ export function applyFloorOverlays(world: World, intent: FloorIntent): void {
         );
         for (let i = 0; i < centers.length; i++) {
           overlayTriggers.push({
-            id: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}${i + 1}`,
+            id: `${OBJECTIVE_TRIGGER_IDS.rareZonePrefix}${i + 1}`,
             type: "radius",
             tx: centers[i].tx,
             ty: centers[i].ty,

@@ -248,6 +248,13 @@ export type CompiledOcclusionGeometry = {
     availableBands: number[];
 };
 
+export type CompiledMapSemanticData = {
+    bossSpawn?: {
+        tx: number;
+        ty: number;
+    };
+};
+
 export type CompiledKenneyMap = {
     id: string;
     originTx: number;
@@ -264,6 +271,7 @@ export type CompiledKenneyMap = {
     goalTx: number | null;
     goalTy: number | null;
     goalH: number;
+    semanticData: CompiledMapSemanticData;
     lightDefs: LightDef[];
 
     triggerDefs: TriggerDef[];
@@ -668,6 +676,7 @@ export function compileKenneyMapFromTable(
     let goalTableX: number | null = null;
     let goalTableY: number | null = null;
     let goalH: number = 0;
+    let bossSpawnTable: { tx: number; ty: number } | null = null;
     let originTx = 0;
     let originTy = 0;
     let triggerDefs: TriggerDef[] = [];
@@ -3003,6 +3012,17 @@ export function compileKenneyMapFromTable(
         }
     };
     const compileStamp = (stamp: SemanticStamp, stampIndex: number) => {
+        if (stamp.type === "boss_spawn") {
+            const tx = (stamp.x | 0) + originTx;
+            const ty = (stamp.y | 0) + originTy;
+            if (bossSpawnTable) {
+                throw new Error(
+                    `Map ${def.id}: duplicate boss_spawn stamp at (${tx}, ${ty}); first boss_spawn was at (${bossSpawnTable.tx}, ${bossSpawnTable.ty}).`,
+                );
+            }
+            bossSpawnTable = { tx, ty };
+            return;
+        }
         if (stamp.type === "lamp_post") {
             const w = Math.max(1, (stamp.w ?? 1) | 0);
             const h = Math.max(1, (stamp.h ?? 1) | 0);
@@ -3564,6 +3584,9 @@ export function compileKenneyMapFromTable(
                 goalTx: goalTableX === null ? null : goalTableX + originTx,
                 goalTy: goalTableY === null ? null : goalTableY + originTy,
                 goalH: goalH | 0,
+                semanticData: {
+                    bossSpawn: bossSpawnTable ? { tx: bossSpawnTable.tx, ty: bossSpawnTable.ty } : undefined,
+                },
                 lightDefs,
 
                 triggerDefs,

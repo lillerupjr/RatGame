@@ -201,6 +201,26 @@ describe("jsonMapLoader", () => {
     );
   });
 
+  it("accepts boss_spawn as a semantic authored stamp", () => {
+    const mapDef = loadTableMapDefFromJson({
+      id: "STAMP_BOSS_SPAWN_TEST",
+      width: 8,
+      height: 8,
+      cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
+      stamps: [{ x: 4, y: 5, type: "boss_spawn" }],
+    }, "inline");
+
+    expect(mapDef.stamps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          x: 4,
+          y: 5,
+          type: "boss_spawn",
+        }),
+      ]),
+    );
+  });
+
   it("rejects diagonal dir for buildings", () => {
     expect(() => loadTableMapDefFromJson({
       id: "FIELD_BUILDING_DIAGONAL_DIR_TEST",

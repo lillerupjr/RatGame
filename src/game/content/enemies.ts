@@ -123,7 +123,7 @@ function makeEnemyDefinition(def: EnemyDefinition): EnemyDefinition {
     };
 }
 
-export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
+export const ENEMIES: Partial<Record<EnemyId, EnemyDefinition>> = {
     [EnemyId.MINION]: makeEnemyDefinition({
         id: EnemyId.MINION,
         name: "Minion",
@@ -547,54 +547,5 @@ export const ENEMIES: Record<EnemyId, EnemyDefinition> = {
                 ttl: 1.35,
             },
         ],
-    }),
-    [EnemyId.BOSS]: makeEnemyDefinition({
-        id: EnemyId.BOSS,
-        name: "Boss",
-        aiType: "contact",
-        spawn: {
-            power: 10.0,
-            role: "special",
-            unlockTimeSec: 120,
-            unlockDepth: 0,
-            weight: 0,
-            minGroupSize: 1,
-            maxGroupSize: 1,
-            maxAlive: 1,
-        },
-        stats: {
-            baseLife: 240,
-            contactDamage: 22,
-        },
-        body: {
-            radius: 34,
-            hitHeightProjectile: 4,
-            hitHeightContact: 3,
-        },
-        rewards: {
-            isBoss: true,
-        },
-        presentation: {
-            color: "#c8f",
-            sprite: {
-                skin: "infested",
-                scale: 2,
-                anchorX: 0.5,
-                anchorY: 0.65,
-                frameW: 92,
-                frameH: 92,
-                runAnim: "walk",
-                frameCount: 4,
-            },
-            shadowFootOffset: { x: 0, y: 0 },
-        },
-        movement: {
-            mode: "scripted",
-            speed: 55,
-            desiredRange: 0,
-            tolerance: 8,
-            reengageRange: 16,
-        },
-        ability: null,
     }),
 };

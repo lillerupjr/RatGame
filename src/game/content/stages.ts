@@ -4,7 +4,7 @@ export type StageId = "DOCKS" | "SEWERS" | "CHINATOWN";
 export type StageDef = {
   id: StageId;
   name: string;
-  duration: number; // seconds until boss (boss system / objectives decide actual end)
+  duration: number; // baseline floor duration; objective flow decides the actual end
 };
 
 export const stageDocks: StageDef = {

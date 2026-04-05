@@ -1,7 +1,9 @@
 import type { World } from "../../engine/world/world";
 import { EnemyId } from "../content/enemies";
+import type { BossAbilityId } from "./bossAbilities";
 import { bossRegistry } from "./bossRegistry";
 import type {
+  BossActivationState,
   BossDefinition,
   BossEncounterState,
   BossId,
@@ -11,6 +13,8 @@ import type {
 export function createBossRuntimeState(): BossRuntimeState {
   return {
     nextEncounterSeq: 1,
+    nextCastSeq: 1,
+    nextArenaEffectSeq: 1,
     activeEncounterId: null,
     encounters: [],
     enemyIndexToEncounterId: [],
@@ -36,7 +40,7 @@ export function getBossDefinitionForEntity(world: Pick<World, "eBossId">, enemyI
 
 export function registerBossEncounter(
   world: World,
-  args: { bossId: BossId; enemyIndex: number; objectiveId?: string },
+  args: { bossId: BossId; enemyIndex: number; objectiveId?: string; activationState?: BossActivationState },
 ): BossEncounterState {
   const runtime = world.bossRuntime;
   const encounterId = `BOSS_ENCOUNTER_${runtime.nextEncounterSeq++}`;
@@ -46,7 +50,10 @@ export function registerBossEncounter(
     enemyIndex: args.enemyIndex,
     objectiveId: args.objectiveId,
     status: "ACTIVE",
-    cooldowns: Object.create(null) as Record<string, number>,
+    activationState: args.activationState ?? "ACTIVE",
+    activeCast: null,
+    requestedAnimation: null,
+    cooldowns: Object.create(null) as Record<BossAbilityId, number>,
     globalCooldownLeftSec: 0,
     lastAbilityId: null,
   };
@@ -108,10 +115,30 @@ export function getActiveBossEncounter(world: Pick<World, "bossRuntime">): BossE
   return null;
 }
 
+export function isBossEncounterDormant(
+  world: Pick<World, "bossRuntime">,
+  enemyIndex: number,
+): boolean {
+  return getBossEncounterForEntity(world, enemyIndex)?.activationState === "DORMANT";
+}
+
+export function activateBossEncounter(
+  world: Pick<World, "bossRuntime">,
+  enemyIndex: number,
+): BossEncounterState | null {
+  const encounter = getBossEncounterForEntity(world, enemyIndex);
+  if (!encounter || encounter.status !== "ACTIVE") return encounter;
+  encounter.activationState = "ACTIVE";
+  return encounter;
+}
+
 export function markBossEncounterDefeated(world: World, enemyIndex: number): void {
   const encounter = getBossEncounterForEntity(world, enemyIndex);
   if (!encounter) return;
   encounter.status = "DEFEATED";
+  encounter.activeCast = null;
+  encounter.requestedAnimation = null;
+  world.arenaTileEffects = world.arenaTileEffects.filter((effect) => effect.encounterId !== encounter.id);
   if (world.bossRuntime.activeEncounterId === encounter.id) {
     world.bossRuntime.activeEncounterId = null;
   }

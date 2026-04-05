@@ -67,7 +67,10 @@ import {
 import { VFX_CLIPS } from "../../content/vfxRegistry";
 import { getDecalSpriteId, type RuntimeDecalSetId } from "../../content/runtimeDecalConfig";
 import { roadMarkingDecalScale, shouldPixelSnapRoadMarking } from "../../roads/roadMarkingRender";
-import { buildDiamondSourceQuad } from "./renderCommandGeometry";
+import {
+  buildDiamondSourceQuad,
+  buildFlatTileDestinationQuad,
+} from "./renderCommandGeometry";
 import { orientedDims, seAnchorFromTopLeft } from "../../../engine/render/sprites/structureFootprintOwnership";
 import {
   type DebugOverlayContext,
@@ -656,21 +659,29 @@ export async function renderSystem(
       if (isRampRoadTile) {
         drawDiamondOnRampQuad(baseBaked, tx, ty, renderAnchorY);
       } else {
-        const wx = (tx + 0.5) * T;
-        const wy = (ty + 0.5) * T;
-        const p = worldToScreen(wx, wy);
-
-        // This matches the old "centerX/centerY" placement, but now we draw the prebaked 128x64.
-        const centerX = snapPx(p.x + camX);
-        const centerY = snapPx(
-          p.y + camY - zBase * ELEV_PX - SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5),
+        const quad = buildFlatTileDestinationQuad({
+          tx,
+          ty,
+          zBase,
+          renderAnchorY,
+          tileWorld: T,
+          elevPx: ELEV_PX,
+          isoHeight: SIDEWALK_ISO_HEIGHT,
+          camX,
+          camY,
+          worldToScreen,
+          snapPoint: snapPx,
+        });
+        drawTexturedQuad(
+          ctx,
+          baseBaked,
+          0,
+          0,
+          baseBaked.width,
+          baseBaked.height,
+          quad,
+          buildDiamondSourceQuad(baseBaked.width, baseBaked.height),
         );
-
-        const dx = centerX - SIDEWALK_SRC_SIZE * 0.5;
-        const dy = centerY - SIDEWALK_ISO_HEIGHT * 0.5;
-        const drawX = snapPx(dx);
-        const drawY = snapPx(dy);
-        ctx.drawImage(baseBaked, drawX, drawY);
       }
 
       const wx = (tx + 0.5) * T;
@@ -705,25 +716,37 @@ export async function renderSystem(
       const decalScale = roadMarkingDecalScale(setId, variantIndex);
       const baked = getRuntimeIsoDecalCanvas(src.img, rotationQuarterTurns, decalScale);
       if (!baked) return;
-
-      const wx = tx * T;
-      const wy = ty * T;
-      const p = worldToScreen(wx, wy);
-      const rawCenterX = p.x + camX;
-      const rawCenterY = p.y + camY - zBase * ELEV_PX - SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5);
       const shouldSnapRoadMarking = shouldPixelSnapRoadMarking(setId, variantIndex);
-      const centerX = shouldSnapRoadMarking ? Math.round(rawCenterX) : snapPx(rawCenterX);
-      const centerY = shouldSnapRoadMarking ? Math.round(rawCenterY) : snapPx(rawCenterY);
+      const diamond = getDiamondFitCanvas(baked);
+      const decalQuadOffsetY = -SIDEWALK_ISO_HEIGHT * 0.5;
 
       if (rampRoadTiles.has(`${tx},${ty}`)) {
-        const diamond = getDiamondFitCanvas(baked);
         drawDiamondOnRampQuad(diamond, tx, ty, renderAnchorY);
       } else {
-        const dx = centerX - baked.width * 0.5;
-        const dy = centerY - baked.height * 0.5;
-        const drawX = shouldSnapRoadMarking ? Math.round(dx) : snapPx(dx);
-        const drawY = shouldSnapRoadMarking ? Math.round(dy) : snapPx(dy);
-        ctx.drawImage(baked, drawX, drawY);
+        const quad = buildFlatTileDestinationQuad({
+          tx,
+          ty,
+          zBase,
+          renderAnchorY,
+          tileWorld: T,
+          elevPx: ELEV_PX,
+          isoHeight: SIDEWALK_ISO_HEIGHT,
+          camX,
+          camY,
+          worldToScreen,
+          snapPoint: shouldSnapRoadMarking ? Math.round : snapPx,
+          extraDy: decalQuadOffsetY,
+        });
+        drawTexturedQuad(
+          ctx,
+          diamond,
+          0,
+          0,
+          diamond.width,
+          diamond.height,
+          quad,
+          buildDiamondSourceQuad(diamond.width, diamond.height),
+        );
       }
     };
 

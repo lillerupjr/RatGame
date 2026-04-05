@@ -1,4 +1,5 @@
 import type { BossId } from "../bosses/bossTypes";
+import { buildActBossPlan } from "../bosses/actBossPlan";
 import type { StageId } from "../content/stages";
 import { RNG } from "../util/rng";
 import type { FloorArchetype } from "./floorArchetype";
@@ -30,7 +31,7 @@ export type DelveNodeRuntimePlan = {
   objectiveId: ObjectiveId;
   variantSeed: number;
   bossId?: BossId;
-  bossCount?: number;
+  rareCount?: number;
   spawnZoneCount?: number;
 };
 
@@ -554,6 +555,7 @@ function weightedPickCombatSubtype(rng: RNG): DelveCombatSubtype {
 function runtimePlanForNodeType(
   rng: RNG,
   nodeType: DelveNodeType,
+  depth: number,
 ): { combatSubtype?: DelveCombatSubtype; runtime: DelveNodeRuntimePlan } {
   const zoneId = pickZoneId(rng);
   const variantSeed = rng.int(0, 0x7fffffff);
@@ -588,17 +590,18 @@ function runtimePlanForNodeType(
           variantSeed,
         },
       };
-    case "BOSS":
+    case "BOSS": {
+      const actBossPlan = buildActBossPlan(variantSeed, depth);
       return {
         runtime: {
           zoneId,
-          mapId: pickMapId(rng),
-          objectiveId: "KILL_RARES_IN_ZONES",
+          mapId: actBossPlan.mapId,
+          bossId: actBossPlan.bossId,
+          objectiveId: "ACT_BOSS",
           variantSeed,
-          bossCount: 1,
-          spawnZoneCount: 1,
         },
       };
+    }
     case "ELITE":
     case "QUESTION_MARK":
       return {
@@ -703,7 +706,7 @@ function buildNodesForRows(seed: number, rows: RowLayout[], edges: DelveEdge[], 
   const finalizedNodes = new Map<string, DelveNode>();
   for (const node of nodes.values()) {
     const nodeRng = new RNG(seed ^ hashString(`${node.id}:${node.nodeType}`));
-    const plan = runtimePlanForNodeType(nodeRng, node.nodeType);
+    const plan = runtimePlanForNodeType(nodeRng, node.nodeType, node.rowIndex + 1);
     if (node.nodeType === "ELITE" && !config.enableEliteNodes) {
       node.contentEnabled = false;
     } else if (node.nodeType === "QUESTION_MARK" && !config.enableQuestionMarkNodes) {
@@ -921,7 +924,7 @@ export function floorArchetypeForNode(node: DelveNode): FloorArchetype {
     case "SHOP":
       return "VENDOR";
     case "BOSS":
-      return "BOSS_TRIPLE";
+      return "ACT_BOSS";
     case "COMBAT":
       return node.combatSubtype === "ZONE_TRIAL" ? "TIME_TRIAL" : "SURVIVE";
     case "ELITE":

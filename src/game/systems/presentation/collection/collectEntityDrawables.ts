@@ -1,6 +1,7 @@
 import type { CollectionContext } from "../contracts/collectionContext";
 import { enqueueSliceCommand } from "../frame/renderFrameBuilder";
 import { getBossDefinitionForEntity, isBossEntity } from "../../../bosses/bossRuntime";
+import { getBossSpriteFrame } from "../../../../engine/render/sprites/bossSprites";
 import {
   countRenderDynamicAtlasBypass,
   countRenderDynamicAtlasFallback,
@@ -255,7 +256,13 @@ export function collectEntityDrawables(input: CollectionContext): void {
       const faceDy = w.eFaceY?.[i] ?? -1;
       const moving = Math.hypot(w.evx?.[i] ?? 0, w.evy?.[i] ?? 0) > 1e-4;
       const frame = bossDef
-        ? null
+        ? getBossSpriteFrame({
+            bossId: bossDef.id,
+            time: w.time ?? 0,
+            faceDx,
+            faceDy,
+            moving,
+          })
         : getEnemySpriteFrame({
             type: w.eType[i],
             time: w.time ?? 0,

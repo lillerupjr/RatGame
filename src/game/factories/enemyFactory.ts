@@ -19,12 +19,15 @@ export function spawnEnemyGrid(
     gy: number,
     _tileWorld: number = KENNEY_TILE_WORLD
 ) {
+    if (type === EnemyId.BOSS) {
+      throw new Error("Use spawnBossEncounter for canonical boss actors.");
+    }
     const s = registry.enemy(type);
     const baseLife = Math.max(1, Math.round(s.stats.baseLife));
 
     const scaling = w.delveScaling ?? { hpMult: 1, damageMult: 1 };
     const hostileHeatHealthMultiplier =
-      type !== EnemyId.BOSS && !isNeutralMonsterId(type)
+      !isNeutralMonsterId(type)
         ? resolveHostileSpawnHeatHealthMultiplier(w)
         : 1;
     const scaledHp = Math.max(1, Math.round(baseLife * scaling.hpMult * hostileHeatHealthMultiplier));
