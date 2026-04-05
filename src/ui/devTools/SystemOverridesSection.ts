@@ -5,6 +5,19 @@ import {
   PALETTE_GROUPS,
 } from "../../engine/render/palette/palettes";
 import {
+  DEFAULT_HOSTILE_SPAWN_BURST_CHANCE,
+  DEFAULT_HOSTILE_SPAWN_BURST_EXTRA_ATTEMPTS,
+  DEFAULT_HOSTILE_SPAWN_HEAT_HEALTH_FACTOR,
+  DEFAULT_HOSTILE_SPAWN_HEAT_POWER_PER_SEC_FACTOR,
+  DEFAULT_HOSTILE_SPAWN_HEAT_THREAT_CAP_FACTOR,
+  DEFAULT_HOSTILE_SPAWN_MIN_INTERVAL_SEC,
+  DEFAULT_HOSTILE_SPAWN_OVERTIME_LIVE_THREAT_CAP_SLOPE,
+  DEFAULT_HOSTILE_SPAWN_OVERTIME_POWER_PER_SEC_SLOPE,
+  DEFAULT_HOSTILE_SPAWN_STOCKPILE_MULTIPLIER,
+  DEFAULT_HOSTILE_SPAWN_T0_LIVE_THREAT_CAP,
+  DEFAULT_HOSTILE_SPAWN_T0_POWER_PER_SEC,
+  DEFAULT_HOSTILE_SPAWN_T120_LIVE_THREAT_CAP,
+  DEFAULT_HOSTILE_SPAWN_T120_POWER_PER_SEC,
   NEUTRAL_BIRD_FORCE_STATES,
   PALETTE_REMAP_WEIGHT_OPTIONS,
   resolveEffectiveWorldAtlasMode,
@@ -17,6 +30,7 @@ import {
   getWebGLWorldSurfaceFailureReason,
 } from "../../game/systems/presentation/backend/webglSurface";
 import {
+  applyButtonStyle,
   applyColumnMajorGridOrder,
   applySelectStyle,
   createSection,
@@ -44,8 +58,8 @@ export function mountSystemOverridesSection(
   const renderingGrid = createSubsectionGrid(section, "Rendering Overrides");
   const lightingGrid = createSubsectionGrid(section, "Lighting / Palette Overrides");
   const gameplayGrid = createSubsectionGrid(section, "Gameplay Overrides");
-  const spawnGrid = createSubsectionGrid(section, "Spawn / Director Overrides");
   const aiGrid = createSubsectionGrid(section, "AI Overrides");
+  const hostileSpawnGrid = createSubsectionGrid(section, "Hostile Spawn Overrides");
 
   const entityShadowsDisable = createToggleRow(renderingGrid, "Disable Entity Shadows", (checked) => {
     applySystemPatch({ entityShadowsDisable: checked });
@@ -205,25 +219,6 @@ export function mountSystemOverridesSection(
     applySystemPatch({ forceSpawnOverride: checked });
   });
 
-  const spawnBase = createSliderRow(spawnGrid, "Spawn Base", 0.2, 4.0, 0.05, (value) => {
-    applySystemPatch({ spawnBase: value });
-  });
-  const spawnPerDepth = createSliderRow(spawnGrid, "Spawn/Depth", 0.8, 1.5, 0.01, (value) => {
-    applySystemPatch({ spawnPerDepth: value });
-  });
-  const hpBase = createSliderRow(spawnGrid, "HP Base", 0.2, 4.0, 0.05, (value) => {
-    applySystemPatch({ hpBase: value });
-  });
-  const hpPerDepth = createSliderRow(spawnGrid, "HP/Depth", 0.8, 1.5, 0.01, (value) => {
-    applySystemPatch({ hpPerDepth: value });
-  });
-  const pressureAt0Sec = createSliderRow(spawnGrid, "Pressure T0", 0.1, 3.0, 0.01, (value) => {
-    applySystemPatch({ pressureAt0Sec: value });
-  });
-  const pressureAt120Sec = createSliderRow(spawnGrid, "Pressure T120", 0.1, 3.0, 0.01, (value) => {
-    applySystemPatch({ pressureAt120Sec: value });
-  });
-
   const neutralBirdDisabled = createToggleRow(aiGrid, "Disable Neutral Bird AI", (checked) => {
     applySystemPatch({ neutralBirdDisabled: checked });
   });
@@ -241,11 +236,57 @@ export function mountSystemOverridesSection(
     applySystemPatch({ neutralBirdDebugRepickTarget: checked });
   });
 
+  const hostileSpawnT0PowerPerSec = createSliderRow(hostileSpawnGrid, "t0 Power/sec", 0, 5, 0.05, (value) => {
+    applySystemPatch({ hostileSpawnT0PowerPerSec: value });
+  });
+  const hostileSpawnT120PowerPerSec = createSliderRow(hostileSpawnGrid, "t120 Power/sec", 0, 8, 0.05, (value) => {
+    applySystemPatch({ hostileSpawnT120PowerPerSec: value });
+  });
+  const hostileSpawnOvertimePowerPerSecSlope = createSliderRow(hostileSpawnGrid, "Overtime Power Slope", 0, 0.2, 0.002, (value) => {
+    applySystemPatch({ hostileSpawnOvertimePowerPerSecSlope: value });
+  });
+  const hostileSpawnT0LiveThreatCap = createSliderRow(hostileSpawnGrid, "t0 Threat Cap", 0, 30, 0.5, (value) => {
+    applySystemPatch({ hostileSpawnT0LiveThreatCap: value });
+  });
+  const hostileSpawnT120LiveThreatCap = createSliderRow(hostileSpawnGrid, "t120 Threat Cap", 0, 60, 0.5, (value) => {
+    applySystemPatch({ hostileSpawnT120LiveThreatCap: value });
+  });
+  const hostileSpawnOvertimeLiveThreatCapSlope = createSliderRow(hostileSpawnGrid, "Overtime Cap Slope", 0, 1, 0.01, (value) => {
+    applySystemPatch({ hostileSpawnOvertimeLiveThreatCapSlope: value });
+  });
+  const hostileSpawnHeatHealthFactor = createSliderRow(hostileSpawnGrid, "Heat Health Factor", 0, 0.5, 0.01, (value) => {
+    applySystemPatch({ hostileSpawnHeatHealthFactor: value });
+  });
+  const hostileSpawnHeatPowerPerSecFactor = createSliderRow(hostileSpawnGrid, "Heat Power Factor", 0, 0.5, 0.01, (value) => {
+    applySystemPatch({ hostileSpawnHeatPowerPerSecFactor: value });
+  });
+  const hostileSpawnHeatThreatCapFactor = createSliderRow(hostileSpawnGrid, "Heat Cap Factor", 0, 0.5, 0.01, (value) => {
+    applySystemPatch({ hostileSpawnHeatThreatCapFactor: value });
+  });
+  const hostileSpawnStockpileMultiplier = createSliderRow(hostileSpawnGrid, "Stockpile Mult", 1, 3, 0.05, (value) => {
+    applySystemPatch({ hostileSpawnStockpileMultiplier: value });
+  });
+  const hostileSpawnBurstChancePerSpawnWindow = createSliderRow(hostileSpawnGrid, "Burst Chance", 0, 1, 0.01, (value) => {
+    applySystemPatch({ hostileSpawnBurstChancePerSpawnWindow: value });
+  });
+  const hostileSpawnBurstExtraAttempts = createSliderRow(hostileSpawnGrid, "Burst Extra Attempts", 0, 5, 1, (value) => {
+    applySystemPatch({ hostileSpawnBurstExtraAttempts: value });
+  });
+  const hostileSpawnMinSpawnIntervalSec = createSliderRow(hostileSpawnGrid, "Min Spawn Interval", 0.1, 10, 0.05, (value) => {
+    applySystemPatch({ hostileSpawnMinSpawnIntervalSec: value });
+  });
+  const hostileSpawnResetBtn = document.createElement("button");
+  hostileSpawnResetBtn.type = "button";
+  hostileSpawnResetBtn.textContent = "Reset Hostile Spawn";
+  applyButtonStyle(hostileSpawnResetBtn);
+  hostileSpawnResetBtn.style.marginTop = "6px";
+  hostileSpawnGrid.parentElement?.appendChild(hostileSpawnResetBtn);
+
   applyColumnMajorGridOrder(renderingGrid, 3);
   applyColumnMajorGridOrder(lightingGrid, 3);
   applyColumnMajorGridOrder(gameplayGrid, 3);
-  applyColumnMajorGridOrder(spawnGrid, 3);
   applyColumnMajorGridOrder(aiGrid, 3);
+  applyColumnMajorGridOrder(hostileSpawnGrid, 3);
 
   const rebuildPaletteOptions = (groupRaw: string, selectedIdRaw: string): string => {
     const group = normalizePaletteGroup(groupRaw);
@@ -280,6 +321,26 @@ export function mountSystemOverridesSection(
   });
 
   const formatX = (v: number) => `${v.toFixed(2)}x`;
+  const formatScalar = (v: number) => v.toFixed(2);
+  const formatSlope = (v: number) => v.toFixed(3);
+
+  hostileSpawnResetBtn.addEventListener("click", () => {
+    applySystemPatch({
+      hostileSpawnT0PowerPerSec: DEFAULT_HOSTILE_SPAWN_T0_POWER_PER_SEC,
+      hostileSpawnT120PowerPerSec: DEFAULT_HOSTILE_SPAWN_T120_POWER_PER_SEC,
+      hostileSpawnOvertimePowerPerSecSlope: DEFAULT_HOSTILE_SPAWN_OVERTIME_POWER_PER_SEC_SLOPE,
+      hostileSpawnT0LiveThreatCap: DEFAULT_HOSTILE_SPAWN_T0_LIVE_THREAT_CAP,
+      hostileSpawnT120LiveThreatCap: DEFAULT_HOSTILE_SPAWN_T120_LIVE_THREAT_CAP,
+      hostileSpawnOvertimeLiveThreatCapSlope: DEFAULT_HOSTILE_SPAWN_OVERTIME_LIVE_THREAT_CAP_SLOPE,
+      hostileSpawnHeatHealthFactor: DEFAULT_HOSTILE_SPAWN_HEAT_HEALTH_FACTOR,
+      hostileSpawnHeatPowerPerSecFactor: DEFAULT_HOSTILE_SPAWN_HEAT_POWER_PER_SEC_FACTOR,
+      hostileSpawnHeatThreatCapFactor: DEFAULT_HOSTILE_SPAWN_HEAT_THREAT_CAP_FACTOR,
+      hostileSpawnStockpileMultiplier: DEFAULT_HOSTILE_SPAWN_STOCKPILE_MULTIPLIER,
+      hostileSpawnBurstChancePerSpawnWindow: DEFAULT_HOSTILE_SPAWN_BURST_CHANCE,
+      hostileSpawnBurstExtraAttempts: DEFAULT_HOSTILE_SPAWN_BURST_EXTRA_ATTEMPTS,
+      hostileSpawnMinSpawnIntervalSec: DEFAULT_HOSTILE_SPAWN_MIN_INTERVAL_SEC,
+    });
+  });
 
   return {
     sync(system) {
@@ -296,7 +357,7 @@ export function mountSystemOverridesSection(
         const canvas = document.getElementById("c") as HTMLCanvasElement | null;
         const webglSurface = canvas ? getRenderableWebGLWorldSurface(canvas) : null;
         const backendSelection = resolveRenderBackendSelection(
-          { renderBackend: settings.user.graphics.renderBackend },
+          { renderBackend: settings.debug.renderBackend },
           webglSurface,
           canvas ? getWebGLWorldSurfaceFailureReason(canvas) : null,
         );
@@ -330,23 +391,37 @@ export function mountSystemOverridesSection(
       waterFlowRate.value.textContent = formatX(system.waterFlowRate);
       forceSpawnOverride.checked = system.forceSpawnOverride;
 
-      spawnBase.input.value = `${system.spawnBase}`;
-      spawnBase.value.textContent = system.spawnBase.toFixed(2);
-      spawnPerDepth.input.value = `${system.spawnPerDepth}`;
-      spawnPerDepth.value.textContent = system.spawnPerDepth.toFixed(2);
-      hpBase.input.value = `${system.hpBase}`;
-      hpBase.value.textContent = system.hpBase.toFixed(2);
-      hpPerDepth.input.value = `${system.hpPerDepth}`;
-      hpPerDepth.value.textContent = system.hpPerDepth.toFixed(2);
-      pressureAt0Sec.input.value = `${system.pressureAt0Sec}`;
-      pressureAt0Sec.value.textContent = system.pressureAt0Sec.toFixed(2);
-      pressureAt120Sec.input.value = `${system.pressureAt120Sec}`;
-      pressureAt120Sec.value.textContent = system.pressureAt120Sec.toFixed(2);
-
       neutralBirdDisabled.checked = system.neutralBirdDisabled;
       neutralBirdDisableTransitions.checked = system.neutralBirdDisableTransitions;
       neutralBirdForceState.value = system.neutralBirdForceState;
       neutralBirdDebugRepickTarget.checked = system.neutralBirdDebugRepickTarget;
+
+      hostileSpawnT0PowerPerSec.input.value = `${system.hostileSpawnT0PowerPerSec}`;
+      hostileSpawnT0PowerPerSec.value.textContent = formatScalar(system.hostileSpawnT0PowerPerSec);
+      hostileSpawnT120PowerPerSec.input.value = `${system.hostileSpawnT120PowerPerSec}`;
+      hostileSpawnT120PowerPerSec.value.textContent = formatScalar(system.hostileSpawnT120PowerPerSec);
+      hostileSpawnOvertimePowerPerSecSlope.input.value = `${system.hostileSpawnOvertimePowerPerSecSlope}`;
+      hostileSpawnOvertimePowerPerSecSlope.value.textContent = formatSlope(system.hostileSpawnOvertimePowerPerSecSlope);
+      hostileSpawnT0LiveThreatCap.input.value = `${system.hostileSpawnT0LiveThreatCap}`;
+      hostileSpawnT0LiveThreatCap.value.textContent = formatScalar(system.hostileSpawnT0LiveThreatCap);
+      hostileSpawnT120LiveThreatCap.input.value = `${system.hostileSpawnT120LiveThreatCap}`;
+      hostileSpawnT120LiveThreatCap.value.textContent = formatScalar(system.hostileSpawnT120LiveThreatCap);
+      hostileSpawnOvertimeLiveThreatCapSlope.input.value = `${system.hostileSpawnOvertimeLiveThreatCapSlope}`;
+      hostileSpawnOvertimeLiveThreatCapSlope.value.textContent = formatSlope(system.hostileSpawnOvertimeLiveThreatCapSlope);
+      hostileSpawnHeatHealthFactor.input.value = `${system.hostileSpawnHeatHealthFactor}`;
+      hostileSpawnHeatHealthFactor.value.textContent = formatScalar(system.hostileSpawnHeatHealthFactor);
+      hostileSpawnHeatPowerPerSecFactor.input.value = `${system.hostileSpawnHeatPowerPerSecFactor}`;
+      hostileSpawnHeatPowerPerSecFactor.value.textContent = formatScalar(system.hostileSpawnHeatPowerPerSecFactor);
+      hostileSpawnHeatThreatCapFactor.input.value = `${system.hostileSpawnHeatThreatCapFactor}`;
+      hostileSpawnHeatThreatCapFactor.value.textContent = formatScalar(system.hostileSpawnHeatThreatCapFactor);
+      hostileSpawnStockpileMultiplier.input.value = `${system.hostileSpawnStockpileMultiplier}`;
+      hostileSpawnStockpileMultiplier.value.textContent = formatScalar(system.hostileSpawnStockpileMultiplier);
+      hostileSpawnBurstChancePerSpawnWindow.input.value = `${system.hostileSpawnBurstChancePerSpawnWindow}`;
+      hostileSpawnBurstChancePerSpawnWindow.value.textContent = formatScalar(system.hostileSpawnBurstChancePerSpawnWindow);
+      hostileSpawnBurstExtraAttempts.input.value = `${system.hostileSpawnBurstExtraAttempts}`;
+      hostileSpawnBurstExtraAttempts.value.textContent = `${Math.round(system.hostileSpawnBurstExtraAttempts)}`;
+      hostileSpawnMinSpawnIntervalSec.input.value = `${system.hostileSpawnMinSpawnIntervalSec}`;
+      hostileSpawnMinSpawnIntervalSec.value.textContent = formatScalar(system.hostileSpawnMinSpawnIntervalSec);
     },
   };
 }

@@ -21,6 +21,7 @@ import {
 } from "../../../game/content/runtimeDecalConfig";
 import { preloadCurrencySprites } from "../../../game/content/loot/currencyVisual";
 import { preloadVfxSprites } from "../../../game/content/vfxRegistry";
+import { listProjectilePresentationSpriteIds } from "../../../game/content/projectilePresentationRegistry";
 
 export type LoadedImg = {
     img: HTMLImageElement;
@@ -194,7 +195,7 @@ function resolveUrl(spriteId: string): string | null {
     const normalized = trimmed.toLowerCase().endsWith(".png") ? trimmed.slice(0, -4) : trimmed;
     const id = remapLegacySpriteId(normalized);
 
-    if (id.startsWith("entities/") || id.startsWith("loot/") || id.startsWith("vfx/")) {
+    if (id.startsWith("entities/") || id.startsWith("loot/") || id.startsWith("vfx/") || id.startsWith("projectiles/")) {
         return `${import.meta.env.BASE_URL}assets-runtime/${id}.png`;
     }
     if (
@@ -525,6 +526,7 @@ export function preloadRenderSprites(): void {
     }
     preloadCurrencySprites();
     preloadVfxSprites();
+    for (const spriteId of listProjectilePresentationSpriteIds()) void getSpriteById(spriteId);
 }
 
 export function enqueueSpritePrewarm(

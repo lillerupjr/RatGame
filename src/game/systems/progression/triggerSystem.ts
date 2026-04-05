@@ -8,7 +8,7 @@ import type { InputState } from "../sim/input";
 import { instantiateTriggers, type TriggerInstance } from "../../triggers/triggerTypes";
 import type { TriggerSignal } from "../../triggers/triggerSignals";
 import { OBJECTIVE_TRIGGER_IDS } from "./objectiveSpec";
-import { ENEMY_TYPE } from "../../factories/enemyFactory";
+import { EnemyId } from "../../factories/enemyFactory";
 
 const PLAYER_ENTITY_ID = 0;
 const DEFAULT_RADIUS_TILES = 0.5;
@@ -109,7 +109,7 @@ export function isBossZoneKillForTrigger(
 
 function isBossKillForObjective(world: World, enemyIndex: number): boolean {
     if (!Number.isFinite(enemyIndex) || enemyIndex < 0) return false;
-    return world.eType[enemyIndex] === ENEMY_TYPE.BOSS;
+    return world.eType[enemyIndex] === EnemyId.BOSS;
 }
 
 function updateKillSignals(world: World, trigger: TriggerInstance) {

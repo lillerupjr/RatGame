@@ -1,51 +1,35 @@
 // src/game/factories/enemyFactory.ts
 import type { World } from "../../engine/world/world";
 import { registry } from "../content/registry";
-import { ENEMY_TYPE, type EnemyType } from "../content/enemies";
+import { EnemyId } from "../content/enemies";
 import { gridToWorld, worldToGrid } from "../coords/grid";
 import { anchorFromWorld } from "../coords/anchor";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { createEnemyAilmentsState } from "../combat_mods/ailments/enemyAilments";
-import { recordEnemySpawnedHp } from "../balance/balanceCsvLogger";
+import { createEnemyBrainState } from "../systems/enemies/brain";
+import { isNeutralMonsterId } from "../content/neutralMonsters";
+import { resolveHostileSpawnHeatHealthMultiplier } from "../systems/spawn/hostileSpawnDirector";
 
-export { ENEMY_TYPE };
-export type { EnemyType };
+export { EnemyId };
 
-/**
- * Factory: creates one enemy with standardized stats (from registry).
- * HP scaling is controlled only by spawn tuning HP knobs.
- */
 /** Spawn an enemy at grid coordinates with scaled stats. */
 export function spawnEnemyGrid(
     w: World,
-    type: EnemyType,
+    type: EnemyId,
     gx: number,
     gy: number,
     _tileWorld: number = KENNEY_TILE_WORLD
 ) {
     const s = registry.enemy(type);
-    const baseLife = Math.max(
-      1,
-      Math.round(Number.isFinite(s.baseLife) ? s.baseLife : (s.hp ?? 1))
-    );
+    const baseLife = Math.max(1, Math.round(s.stats.baseLife));
 
-    // Apply run-heat scaling (damage only).
     const scaling = w.delveScaling ?? { hpMult: 1, damageMult: 1 };
-
-    const heat = Math.max(0, Math.floor((w.runHeat ?? 0) as number));
-
-    // Authoritative HP scaling: hpBase * hpPerDepth^heat
-    const tuning = (w as any).balance?.spawnTuning ?? {};
-    const hpBase = typeof tuning.hpBase === "number" ? Math.max(0, tuning.hpBase) : 1.0;
-    const hpPerDepth = typeof tuning.hpPerDepth === "number" ? Math.max(0.0001, tuning.hpPerDepth) : 1.0;
-    const effectiveHpMult = hpBase * Math.pow(hpPerDepth, heat);
-
-    const scaledHp = Math.max(1, Math.round(baseLife * effectiveHpMult));
-    const scaledDamage = Math.round(s.damage * scaling.damageMult);
-
-    // Balance telemetry: record how much HP just entered the world.
-    const logger = (w as any).balanceCsvLogger;
-    if (logger) recordEnemySpawnedHp(logger, scaledHp);
+    const hostileHeatHealthMultiplier =
+      type !== EnemyId.BOSS && !isNeutralMonsterId(type)
+        ? resolveHostileSpawnHeatHealthMultiplier(w)
+        : 1;
+    const scaledHp = Math.max(1, Math.round(baseLife * scaling.hpMult * hostileHeatHealthMultiplier));
+    const scaledDamage = Math.round(s.stats.contactDamage * scaling.damageMult);
 
     const i = w.eAlive.length;
     w.eAlive.push(true);
@@ -64,8 +48,8 @@ export function spawnEnemyGrid(
     w.eBaseLife.push(baseLife);
     w.eHp.push(scaledHp);
     w.eHpMax.push(scaledHp);
-    w.eR.push(s.radius);
-    w.eSpeed.push(s.speed);
+    w.eR.push(s.body.radius);
+    w.eSpeed.push(s.movement.speed);
     w.eDamage.push(scaledDamage);
     w.ePoisonT.push(0);
     w.ePoisonDps.push(0);
@@ -74,12 +58,13 @@ export function spawnEnemyGrid(
     w.eAilments.push(createEnemyAilmentsState());
     w.ezVisual.push(0);
     w.ezLogical.push(0);
+    w.eBrain.push(createEnemyBrainState(s));
 
     return i;
 }
 
 /** Spawn an enemy at world coordinates (converted to grid). */
-export function spawnEnemy(w: World, type: EnemyType, x: number, y: number) {
+export function spawnEnemy(w: World, type: EnemyId, x: number, y: number) {
     const gp = worldToGrid(x, y, KENNEY_TILE_WORLD);
     return spawnEnemyGrid(w, type, gp.gx, gp.gy, KENNEY_TILE_WORLD);
 }

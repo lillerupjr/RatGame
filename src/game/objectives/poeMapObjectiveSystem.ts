@@ -1,12 +1,13 @@
 import type { World } from "../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
-import { spawnEnemy, type EnemyType, ENEMY_TYPE } from "../factories/enemyFactory";
+import { isNeutralMonsterId } from "../content/neutralMonsters";
+import { spawnEnemy, EnemyId } from "../factories/enemyFactory";
 import { getEnemyWorld, getPlayerWorld } from "../coords/worldViews";
 import { getActiveMap, getSpawnWorldFromActive, getTileHeight } from "../map/authoredMapActivation";
 import { walkInfo } from "../map/compile/kenneyMap";
 import { RNG } from "../util/rng";
 import { OBJECTIVE_TRIGGER_IDS } from "../systems/progression/objectiveSpec";
-import { computeSurviveEquivalentSpawnCountForDurationSeconds } from "../balance/spawnDirector";
+import { estimateHostileSpawnPowerBudgetForDurationSeconds } from "../systems/spawn/hostileSpawnDirector";
 
 export type PoeMapModifiers = {
   packSizeMultiplier?: number;
@@ -16,7 +17,7 @@ export type PoeMapModifiers = {
 };
 
 export type PackTemplateMember = {
-  type: EnemyType;
+  type: EnemyId;
   min: number;
   max: number;
 };
@@ -39,7 +40,7 @@ export type PoeMapPackPlan = {
   anchorTx: number;
   anchorTy: number;
   budgetCost: number;
-  members: Array<{ type: EnemyType; count: number }>;
+  members: Array<{ type: EnemyId; count: number }>;
   rarity: PoeMapPackRarity;
   magicCount: number;
 };
@@ -130,29 +131,28 @@ const RARE_HP_MULT = 1.9;
 const RARE_DAMAGE_MULT = 1.35;
 const RARE_SPEED_MULT = 1.08;
 
-const enemyBudgetCost: Record<EnemyType, number> = {
-  [ENEMY_TYPE.CHASER]: 1,
-  [ENEMY_TYPE.RUNNER]: 0.9,
-  [ENEMY_TYPE.BRUISER]: 2.5,
-  [ENEMY_TYPE.MINOTAUR]: 3.4,
-  [ENEMY_TYPE.ABOMINATION]: 4.2,
-  [ENEMY_TYPE.RATCHEMIST]: 2.2,
-  [ENEMY_TYPE.LOOT_GOBLIN]: 1,
-  [ENEMY_TYPE.BOSS]: 0,
+const enemyBudgetCost: Partial<Record<EnemyId, number>> = {
+  [EnemyId.MINION]: 1,
+  [EnemyId.RUNNER]: 0.9,
+  [EnemyId.TANK]: 2.5,
+  [EnemyId.LEAPER1]: 3.4,
+  [EnemyId.BURSTER]: 4.2,
+  [EnemyId.SPITTER]: 2.2,
+  [EnemyId.SHARD_RAT]: 2.1,
 };
 
 const PACK_TEMPLATES: PackTemplate[] = [
   {
     id: "chaser_swarm",
     weight: 20,
-    members: [{ type: ENEMY_TYPE.CHASER, min: 4, max: 6 }],
+    members: [{ type: EnemyId.MINION, min: 4, max: 6 }],
     allowMagic: true,
     allowRareLeader: false,
   },
   {
     id: "runner_swarm",
     weight: 12,
-    members: [{ type: ENEMY_TYPE.RUNNER, min: 5, max: 7 }],
+    members: [{ type: EnemyId.RUNNER, min: 5, max: 7 }],
     allowMagic: true,
     allowRareLeader: false,
   },
@@ -160,8 +160,8 @@ const PACK_TEMPLATES: PackTemplate[] = [
     id: "bruiser_frontline",
     weight: 10,
     members: [
-      { type: ENEMY_TYPE.BRUISER, min: 2, max: 3 },
-      { type: ENEMY_TYPE.CHASER, min: 2, max: 4 },
+      { type: EnemyId.TANK, min: 2, max: 3 },
+      { type: EnemyId.MINION, min: 2, max: 4 },
     ],
     allowMagic: true,
     allowRareLeader: true,
@@ -170,18 +170,18 @@ const PACK_TEMPLATES: PackTemplate[] = [
     id: "ratchemist_support",
     weight: 8,
     members: [
-      { type: ENEMY_TYPE.RATCHEMIST, min: 1, max: 1 },
-      { type: ENEMY_TYPE.CHASER, min: 3, max: 5 },
+      { type: EnemyId.SPITTER, min: 1, max: 1 },
+      { type: EnemyId.MINION, min: 3, max: 5 },
     ],
     allowMagic: true,
     allowRareLeader: true,
   },
   {
-    id: "minotaur_guard",
+    id: "leaper1_guard",
     weight: 5,
     members: [
-      { type: ENEMY_TYPE.MINOTAUR, min: 1, max: 1 },
-      { type: ENEMY_TYPE.BRUISER, min: 2, max: 3 },
+      { type: EnemyId.LEAPER1, min: 1, max: 1 },
+      { type: EnemyId.TANK, min: 2, max: 3 },
     ],
     allowMagic: true,
     allowRareLeader: true,
@@ -190,8 +190,8 @@ const PACK_TEMPLATES: PackTemplate[] = [
     id: "abomination_pack",
     weight: 3,
     members: [
-      { type: ENEMY_TYPE.ABOMINATION, min: 1, max: 1 },
-      { type: ENEMY_TYPE.CHASER, min: 3, max: 4 },
+      { type: EnemyId.BURSTER, min: 1, max: 1 },
+      { type: EnemyId.MINION, min: 3, max: 4 },
     ],
     allowMagic: false,
     allowRareLeader: true,
@@ -199,13 +199,12 @@ const PACK_TEMPLATES: PackTemplate[] = [
 ];
 
 export const POE_MAP_PACK_TEMPLATES: readonly PackTemplate[] = PACK_TEMPLATES;
-export const POE_MAP_ENEMY_BUDGET_COST: Readonly<Record<EnemyType, number>> = enemyBudgetCost;
+export const POE_MAP_ENEMY_BUDGET_COST: Readonly<Partial<Record<EnemyId, number>>> = enemyBudgetCost;
 
 const poeStateByWorld = new WeakMap<World, PoeMapRuntimeState>();
 
-function isExcludedPoeGenerationType(type: EnemyType): boolean {
-  // Loot Goblin has its own dedicated runtime system and must not be part of PoE pack generation.
-  return type === ENEMY_TYPE.LOOT_GOBLIN || type === ENEMY_TYPE.BOSS;
+function isExcludedPoeGenerationType(type: EnemyId): boolean {
+  return isNeutralMonsterId(type) || type === EnemyId.BOSS;
 }
 
 function clampNumber(value: number | undefined, fallback: number, min: number, max: number): number {
@@ -221,6 +220,12 @@ function normalizeModifiers(modifiers: PoeMapModifiers | undefined): NormalizedP
     magicPackChanceMultiplier: clampNumber(modifiers?.magicPackChanceMultiplier, 1, 0, 4),
     extraPopulationScalar: clampNumber(modifiers?.extraPopulationScalar, 1, 0.2, 3),
   };
+}
+
+function estimatePoePopulationBudgetForDurationSeconds(world: World, durationSec: number): number {
+  const duration = Math.max(0, Number.isFinite(durationSec) ? durationSec : 0);
+  if (duration <= 0) return 0;
+  return estimateHostileSpawnPowerBudgetForDurationSeconds(world, duration);
 }
 
 function hashString(value: string): number {
@@ -264,8 +269,8 @@ function rollTemplateMembers(
   template: PackTemplate,
   rng: RNG,
   packSizeMultiplier: number,
-): Array<{ type: EnemyType; count: number }> {
-  const out: Array<{ type: EnemyType; count: number }> = [];
+): Array<{ type: EnemyId; count: number }> {
+  const out: Array<{ type: EnemyId; count: number }> = [];
   for (let i = 0; i < template.members.length; i++) {
     const m = template.members[i];
     if (isExcludedPoeGenerationType(m.type)) continue;
@@ -279,7 +284,7 @@ function rollTemplateMembers(
   return out;
 }
 
-function computePackCost(members: Array<{ type: EnemyType; count: number }>): number {
+function computePackCost(members: Array<{ type: EnemyId; count: number }>): number {
   let cost = 0;
   for (let i = 0; i < members.length; i++) {
     const member = members[i];
@@ -511,8 +516,8 @@ function choosePackRarity(
   return { rarity: "NORMAL", magicCount: 0 };
 }
 
-function flattenMembers(members: Array<{ type: EnemyType; count: number }>): EnemyType[] {
-  const out: EnemyType[] = [];
+function flattenMembers(members: Array<{ type: EnemyId; count: number }>): EnemyId[] {
+  const out: EnemyId[] = [];
   for (let i = 0; i < members.length; i++) {
     const row = members[i];
     if (isExcludedPoeGenerationType(row.type)) continue;
@@ -521,7 +526,7 @@ function flattenMembers(members: Array<{ type: EnemyType; count: number }>): Ene
   return out;
 }
 
-function pickRareLeaderIndex(slots: EnemyType[]): number {
+function pickRareLeaderIndex(slots: EnemyId[]): number {
   if (slots.length <= 0) return -1;
   let best = 0;
   let bestCost = -1;
@@ -535,8 +540,8 @@ function pickRareLeaderIndex(slots: EnemyType[]): number {
   return best;
 }
 
-function isEliteType(type: EnemyType): boolean {
-  return type === ENEMY_TYPE.MINOTAUR || type === ENEMY_TYPE.ABOMINATION || type === ENEMY_TYPE.BOSS;
+function isEliteType(type: EnemyId): boolean {
+  return type === EnemyId.LEAPER1 || type === EnemyId.BURSTER || type === EnemyId.BOSS;
 }
 
 function tileToWorldCenter(tx: number, ty: number): { wx: number; wy: number } {
@@ -546,7 +551,7 @@ function tileToWorldCenter(tx: number, ty: number): { wx: number; wy: number } {
   };
 }
 
-function pickMagicIndices(rng: RNG, slots: EnemyType[], desiredCount: number): Set<number> {
+function pickMagicIndices(rng: RNG, slots: EnemyId[], desiredCount: number): Set<number> {
   const out = new Set<number>();
   const count = Math.max(0, Math.min(desiredCount, slots.length));
   if (count <= 0) return out;
@@ -681,7 +686,7 @@ function ensureFallbackPack(plan: PoeMapPopulationPlan, rng: RNG, originTx: numb
     anchorTx: anchor.tx,
     anchorTy: anchor.ty,
     budgetCost: chaserCount,
-    members: [{ type: ENEMY_TYPE.CHASER, count: chaserCount }],
+    members: [{ type: EnemyId.MINION, count: chaserCount }],
     rarity: "NORMAL",
     magicCount: 0,
   });
@@ -716,7 +721,7 @@ function ensureStartChunkPack(
   );
 
   let template: PackTemplate | null = null;
-  let members: Array<{ type: EnemyType; count: number }> = [];
+  let members: Array<{ type: EnemyId; count: number }> = [];
   let budgetCost = 0;
 
   if (affordableTemplates.length > 0) {
@@ -735,11 +740,11 @@ function ensureStartChunkPack(
     template = {
       id: "start_chunk_fallback",
       weight: 0,
-      members: [{ type: ENEMY_TYPE.CHASER, min: chaserCount, max: chaserCount }],
+      members: [{ type: EnemyId.MINION, min: chaserCount, max: chaserCount }],
       allowMagic: true,
       allowRareLeader: false,
     };
-    members = [{ type: ENEMY_TYPE.CHASER, count: chaserCount }];
+    members = [{ type: EnemyId.MINION, count: chaserCount }];
     budgetCost = chaserCount;
   }
 
@@ -885,7 +890,7 @@ export function initializePoeMapObjective(
   const width = map.width;
   const height = map.height;
 
-  const survive2MinBudget = computeSurviveEquivalentSpawnCountForDurationSeconds(world, SURVIVE_BUDGET_SECONDS);
+  const survive2MinBudget = estimatePoePopulationBudgetForDurationSeconds(world, SURVIVE_BUDGET_SECONDS);
   const totalPopulationBudget = Math.max(0, survive2MinBudget * POE_MODE_SCALAR * modifiers.extraPopulationScalar);
 
   const chunks = buildChunkBudgetSlices(

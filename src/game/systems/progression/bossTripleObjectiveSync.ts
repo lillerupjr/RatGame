@@ -1,5 +1,5 @@
 import { OBJECTIVE_TRIGGER_IDS } from "./objectiveSpec";
-import { ENEMY_TYPE } from "../../factories/enemyFactory";
+import { EnemyId } from "../../factories/enemyFactory";
 
 function bossZoneIndexFromTriggerId(triggerId: string): number | null {
   if (!triggerId.startsWith(OBJECTIVE_TRIGGER_IDS.bossZonePrefix)) return null;
@@ -18,7 +18,7 @@ function markCompletedIndex(world: any, idx: number): void {
 
 function isBossEnemy(world: any, enemyIndex: number): boolean {
   if (!Number.isFinite(enemyIndex) || enemyIndex < 0) return false;
-  return Array.isArray(world?.eType) && world.eType[enemyIndex] === ENEMY_TYPE.BOSS;
+  return Array.isArray(world?.eType) && world.eType[enemyIndex] === EnemyId.BOSS;
 }
 
 export function markBossTripleClearsFromSignalsAndEvents(world: any): void {

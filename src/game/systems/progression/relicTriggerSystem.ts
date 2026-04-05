@@ -6,7 +6,6 @@ import { normalizeWorldRelics } from "./relics";
 import { queryCircle } from "../../util/spatialHash";
 import { isEnemyInCircle } from "../sim/hitDetection";
 import { spawnZone, ZONE_KIND } from "../../factories/zoneFactory";
-import { onEnemyKilledForChallenge } from "./roomChallenge";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getUserSettings } from "../../../userSettings";
 import type { DamageMeta, RelicTriggerEvent } from "../../events";
@@ -14,8 +13,9 @@ import { addIgniteStacksFromSnapshots, createEnemyAilmentsState } from "../../co
 import { restoreArmor } from "../sim/playerArmor";
 import { aimDir, getEnemyAimWorld, getPlayerAimWorld } from "../../combat/aimPoints";
 import { STARTER_RELIC_IDS } from "../../content/starterRelics";
-import { makeBazookaExhaustFollower } from "../../components/exhaustFollower";
 import { isProcDamage, makeRelicTriggeredMeta } from "../../combat/damageMeta";
+import { finalizeEnemyDeath } from "../enemies/finalize";
+import { despawnProjectile } from "../sim/projectileLifecycle";
 
 const RELIC_MISSILE_EXPLODE_RADIUS = 64;
 const RELIC_ALL_HITS_EXPLODE_RADIUS = 64;
@@ -149,7 +149,7 @@ function processPendingDaggerShots(world: World): void {
       item.excludeEnemyIndex,
     );
     if (targets.length === 0) {
-      world.pAlive[p] = false;
+      despawnProjectile(world, p);
       continue;
     }
     const tw = getEnemyAimWorld(world, targets[0]);
@@ -235,17 +235,11 @@ function applyAllHitsExplosion(
     });
 
     if (world.eHp[e] <= 0) {
-      world.eAlive[e] = false;
-      world.kills++;
-      onEnemyKilledForChallenge(world);
-      emitEvent(world, {
-        type: "ENEMY_KILLED",
-        enemyIndex: e,
+      finalizeEnemyDeath(world, e, {
+        damageMeta,
+        source: "OTHER",
         x: ew.wx,
         y: ew.wy,
-        spawnTriggerId: world.eSpawnTriggerId[e],
-        source: "OTHER",
-        damageMeta,
       });
     }
   }
@@ -299,17 +293,11 @@ function applyExplodeOnKill(world: World, ev: EnemyKilledEvent, damageMeta: Dama
     });
 
     if (world.eHp[e] <= 0) {
-      world.eAlive[e] = false;
-      world.kills++;
-      onEnemyKilledForChallenge(world);
-      emitEvent(world, {
-        type: "ENEMY_KILLED",
-        enemyIndex: e,
+      finalizeEnemyDeath(world, e, {
+        damageMeta,
+        source: "OTHER",
         x: ew.wx,
         y: ew.wy,
-        spawnTriggerId: world.eSpawnTriggerId[e],
-        source: "OTHER",
-        damageMeta,
       });
     }
   }
@@ -467,13 +455,6 @@ export function dispatchRelicTriggers(world: World, ev: RelicTriggerEvent): void
         explodeRadius: RELIC_MISSILE_EXPLODE_RADIUS,
         damageMeta: bazookaMeta,
       });
-      // Spawn exhaust follower entity.
-      const worldAny = world as any;
-      worldAny.exhaustFollower ??= {};
-      worldAny.exhaustFollowerFrame ??= {};
-      if (!Number.isFinite(worldAny._nextExhaustFollowerId)) worldAny._nextExhaustFollowerId = 1;
-      const exhaustEid = worldAny._nextExhaustFollowerId++;
-      worldAny.exhaustFollower[exhaustEid] = makeBazookaExhaustFollower(p);
       world.prExplodeR[p] = RELIC_MISSILE_EXPLODE_RADIUS;
       world.prExplodeDmg[p] = explodeDamage;
       world.prExplodeTtl[p] = 0.25;

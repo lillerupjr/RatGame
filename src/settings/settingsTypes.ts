@@ -41,7 +41,6 @@ export type UserSettings = {
     performanceMode: boolean;
     deathSlowdownEnabled: boolean;
     cameraSmoothingEnabled: boolean;
-    renderBackend: RenderBackendMode;
     verticalTilesMode: VerticalTilesMode;
     verticalTilesUser: number;
     verticalTilesAutoPhone: number;
@@ -50,6 +49,7 @@ export type UserSettings = {
 };
 
 export type DebugToolsSettings = {
+  renderBackend: RenderBackendMode;
   grid: boolean;
   walkMask: boolean;
   blockedTiles: boolean;
@@ -74,7 +74,6 @@ export type DebugToolsSettings = {
   pauseDebugCards: boolean;
   pauseCsvControls: boolean;
   dpsMeter: boolean;
-  dpsSpawnBudgetOverlay: boolean;
   neutralBirdDrawDebug: boolean;
   objectivesShowZoneBounds: boolean;
   entityAnchorsEnabled: boolean;
@@ -121,13 +120,6 @@ export type SystemOverrides = {
   paletteSWeightPercent: PaletteRemapWeightPercent;
   paletteDarknessPercent: PaletteRemapWeightPercent;
 
-  spawnBase: number;
-  spawnPerDepth: number;
-  hpBase: number;
-  hpPerDepth: number;
-  pressureAt0Sec: number;
-  pressureAt120Sec: number;
-
   disableVisualCompiledCutoutCache: boolean;
   mapOverlaysDisabled: boolean;
   rampFaces: boolean;
@@ -136,6 +128,20 @@ export type SystemOverrides = {
   neutralBirdForceState: NeutralBirdForceState;
   neutralBirdDisableTransitions: boolean;
   neutralBirdDebugRepickTarget: boolean;
+
+  hostileSpawnT0PowerPerSec: number;
+  hostileSpawnT120PowerPerSec: number;
+  hostileSpawnOvertimePowerPerSecSlope: number;
+  hostileSpawnT0LiveThreatCap: number;
+  hostileSpawnT120LiveThreatCap: number;
+  hostileSpawnOvertimeLiveThreatCapSlope: number;
+  hostileSpawnHeatHealthFactor: number;
+  hostileSpawnHeatPowerPerSecFactor: number;
+  hostileSpawnHeatThreatCapFactor: number;
+  hostileSpawnStockpileMultiplier: number;
+  hostileSpawnBurstChancePerSpawnWindow: number;
+  hostileSpawnBurstExtraAttempts: number;
+  hostileSpawnMinSpawnIntervalSec: number;
 };
 
 export type AppSettings = {

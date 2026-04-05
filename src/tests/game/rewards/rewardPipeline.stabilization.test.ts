@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { ENEMY_TYPE } from "../../../game/factories/enemyFactory";
+import { EnemyId } from "../../../game/factories/enemyFactory";
 import { OBJECTIVE_TRIGGER_IDS } from "../../../game/systems/progression/objectiveSpec";
 import { OBJECTIVE_COMPLETION_GOLD } from "../../../game/rewards/rewardDirector";
 import { resolveActiveRewardTicket } from "../../../game/rewards/rewardTickets";
@@ -38,7 +38,7 @@ describe("reward pipeline stabilization", () => {
   test("boss-zone KILL creates exactly one boss milestone event", () => {
     const world = createRewardPipelineWorld(82, "NORMAL");
     world.floorArchetype = "BOSS_TRIPLE";
-    world.eType[7] = ENEMY_TYPE.BOSS;
+    world.eType[7] = EnemyId.BOSS;
     world.eSpawnTriggerId[7] = `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}1`;
     world.events.push({
       type: "ENEMY_KILLED",

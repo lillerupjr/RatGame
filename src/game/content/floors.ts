@@ -1,7 +1,5 @@
-// src/game/content/floors.ts
 import type { World } from "../../engine/world/world";
 import type { StageId } from "./stages";
-import { ENEMY_TYPE, type EnemyType } from "./enemies";
 
 export type FloorId = "DOCKS" | "SEWERS" | "CHINATOWN";
 
@@ -18,38 +16,15 @@ export type FloorVisual = {
     decalEvery: number;
 };
 
-export type Weight = { type: EnemyType; w: number };
-
-export type FloorSpawnProfile = {
-    cadence: number; // seconds between trickle spawn ticks
-    perTickMin: number;
-    perTickMax: number;
-
-    ringMin: number;
-    ringMax: number;
-
-    early: Weight[];
-    mid: Weight[];
-    late: Weight[];
-};
-
 export type FloorDef = {
     id: FloorId;
     name: string;
     stageId: StageId;
     visual: FloorVisual;
-    spawns: FloorSpawnProfile;
 
     bossTitle: string;
     bossAccent: string;
 };
-
-// For 180s floors:
-// - Reduce trickle rate vs old 20s tuning, or you get *thousands* of enemies.
-// - Ramp counts late so Lv5 evolutions don’t auto-win.
-// - Docks: mostly chasers early.
-// - Sewers: bruisers show earlier.
-// - Chinatown: runner-heavy + bruiser-heavy late.
 
 export const FLOORS: readonly FloorDef[] = [
     {
@@ -65,36 +40,6 @@ export const FLOORS: readonly FloorDef[] = [
             decalAlpha: 0.12,
             decalColor: "#9fb7ff",
             decalEvery: 180,
-        },
-        spawns: {
-            // ~4 ticks/sec; early = 1, mid/late = 1-2 => ramps naturally
-            cadence: 0.25,
-            perTickMin: 1,
-            perTickMax: 2,
-            ringMin: 520,
-            ringMax: 680,
-
-            early: [
-                { type: ENEMY_TYPE.CHASER, w: 0.78 },
-                { type: ENEMY_TYPE.RUNNER, w: 0.16 },
-                { type: ENEMY_TYPE.RATCHEMIST, w: 0.06 },
-            ],
-            mid: [
-                { type: ENEMY_TYPE.CHASER, w: 0.48 },
-                { type: ENEMY_TYPE.RUNNER, w: 0.28 },
-                { type: ENEMY_TYPE.BRUISER, w: 0.08 },
-                { type: ENEMY_TYPE.RATCHEMIST, w: 0.08 },
-                { type: ENEMY_TYPE.MINOTAUR, w: 0.04 },
-                { type: ENEMY_TYPE.ABOMINATION, w: 0.04 },
-            ],
-            late: [
-                { type: ENEMY_TYPE.CHASER, w: 0.32 },
-                { type: ENEMY_TYPE.RUNNER, w: 0.26 },
-                { type: ENEMY_TYPE.BRUISER, w: 0.18 },
-                { type: ENEMY_TYPE.RATCHEMIST, w: 0.10 },
-                { type: ENEMY_TYPE.MINOTAUR, w: 0.07 },
-                { type: ENEMY_TYPE.ABOMINATION, w: 0.07 },
-            ],
         },
         bossTitle: "Dock Kingpin",
         bossAccent: "#c8f",
@@ -114,37 +59,6 @@ export const FLOORS: readonly FloorDef[] = [
             decalColor: "#37ff6b",
             decalEvery: 160,
         },
-        spawns: {
-            cadence: 0.23,
-            perTickMin: 1,
-            perTickMax: 2,
-            ringMin: 520,
-            ringMax: 700,
-
-            early: [
-                { type: ENEMY_TYPE.CHASER, w: 0.55 },
-                { type: ENEMY_TYPE.RUNNER, w: 0.20 },
-                { type: ENEMY_TYPE.BRUISER, w: 0.12 },
-                { type: ENEMY_TYPE.RATCHEMIST, w: 0.07 },
-                { type: ENEMY_TYPE.ABOMINATION, w: 0.06 },
-            ],
-            mid: [
-                { type: ENEMY_TYPE.CHASER, w: 0.35 },
-                { type: ENEMY_TYPE.RUNNER, w: 0.20 },
-                { type: ENEMY_TYPE.BRUISER, w: 0.20 },
-                { type: ENEMY_TYPE.RATCHEMIST, w: 0.09 },
-                { type: ENEMY_TYPE.MINOTAUR, w: 0.08 },
-                { type: ENEMY_TYPE.ABOMINATION, w: 0.08 },
-            ],
-            late: [
-                { type: ENEMY_TYPE.CHASER, w: 0.24 },
-                { type: ENEMY_TYPE.RUNNER, w: 0.18 },
-                { type: ENEMY_TYPE.BRUISER, w: 0.26 },
-                { type: ENEMY_TYPE.RATCHEMIST, w: 0.10 },
-                { type: ENEMY_TYPE.MINOTAUR, w: 0.11 },
-                { type: ENEMY_TYPE.ABOMINATION, w: 0.11 },
-            ],
-        },
         bossTitle: "Sludge Matron",
         bossAccent: "#37ff6b",
     },
@@ -163,38 +77,6 @@ export const FLOORS: readonly FloorDef[] = [
             decalColor: "#ff4fd2",
             decalEvery: 170,
         },
-        spawns: {
-            // Chinatown is the “fast” floor: slightly higher trickle
-            cadence: 0.20,
-            perTickMin: 2,
-            perTickMax: 3,
-            ringMin: 520,
-            ringMax: 720,
-
-            early: [
-                { type: ENEMY_TYPE.RUNNER, w: 0.52 },
-                { type: ENEMY_TYPE.CHASER, w: 0.30 },
-                { type: ENEMY_TYPE.BRUISER, w: 0.05 },
-                { type: ENEMY_TYPE.RATCHEMIST, w: 0.08 },
-                { type: ENEMY_TYPE.MINOTAUR, w: 0.05 },
-            ],
-            mid: [
-                { type: ENEMY_TYPE.RUNNER, w: 0.36 },
-                { type: ENEMY_TYPE.CHASER, w: 0.22 },
-                { type: ENEMY_TYPE.BRUISER, w: 0.16 },
-                { type: ENEMY_TYPE.RATCHEMIST, w: 0.10 },
-                { type: ENEMY_TYPE.MINOTAUR, w: 0.08 },
-                { type: ENEMY_TYPE.ABOMINATION, w: 0.08 },
-            ],
-            late: [
-                { type: ENEMY_TYPE.RUNNER, w: 0.24 },
-                { type: ENEMY_TYPE.CHASER, w: 0.16 },
-                { type: ENEMY_TYPE.BRUISER, w: 0.26 },
-                { type: ENEMY_TYPE.RATCHEMIST, w: 0.10 },
-                { type: ENEMY_TYPE.MINOTAUR, w: 0.12 },
-                { type: ENEMY_TYPE.ABOMINATION, w: 0.12 },
-            ],
-        },
         bossTitle: "Neon Triad Captain",
         bossAccent: "#ff4fd2",
     },
@@ -203,32 +85,6 @@ export const FLOORS: readonly FloorDef[] = [
 export function floorForIndex(idx: number): FloorDef {
     const i = Math.max(0, Math.min(FLOORS.length - 1, idx | 0));
     return FLOORS[i];
-}
-
-function pickWeighted(w: World, weights: Weight[]): EnemyType {
-    let sum = 0;
-    for (const it of weights) sum += Math.max(0, it.w);
-
-    if (sum <= 0) return ENEMY_TYPE.CHASER;
-
-    let r = w.rng.range(0, sum);
-    for (const it of weights) {
-        r -= Math.max(0, it.w);
-        if (r <= 0) return it.type;
-    }
-    return weights[weights.length - 1]?.type ?? ENEMY_TYPE.CHASER;
-}
-
-export function pickFloorEnemyType(w: World): EnemyType {
-    const f = floorForIndex(w.floorIndex ?? 0);
-    const t = w.phaseTime ?? 0;
-
-    // split floor into thirds by *stage duration* (so tuning duration keeps behavior aligned)
-    const dur = Math.max(1, w.floorDuration || w.stage?.duration || 1);
-    const p = t / dur;
-
-    const weights = p < 0.33 ? f.spawns.early : p < 0.66 ? f.spawns.mid : f.spawns.late;
-    return pickWeighted(w, weights);
 }
 
 export function getFloorVisual(w: World): FloorVisual {

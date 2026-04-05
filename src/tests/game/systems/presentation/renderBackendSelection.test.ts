@@ -15,7 +15,7 @@ import {
 } from "../../../../game/systems/presentation/backend/webglSurface";
 
 describe("render backend selection", () => {
-  it("keeps Canvas2D as the default policy while still allowing explicit WebGL opt-in", () => {
+  it("keeps WebGL as the default policy while still allowing Canvas2D fallback", () => {
     const blockers = getFinalBackendMatrix().filter((entry) => entry.classification === "BLOCKED_SIGNOFF");
     expect(blockers.map((entry) => entry.family)).toEqual([
       "worldSprite:quad",
@@ -23,10 +23,10 @@ describe("render backend selection", () => {
     ]);
 
     const defaultSelection = resolveRenderBackendSelection(undefined, null);
-    expect(defaultSelection.requestedBackend).toBe("canvas2d");
+    expect(defaultSelection.requestedBackend).toBe("webgl");
     expect(defaultSelection.selectedBackend).toBe("canvas2d");
-    expect(defaultSelection.policy.defaultBackend).toBe("canvas2d");
-    expect(defaultSelection.policy.webglReadyForDefault).toBe(false);
+    expect(defaultSelection.policy.defaultBackend).toBe("webgl");
+    expect(defaultSelection.policy.webglReadyForDefault).toBe(true);
 
     const missingSurface = resolveRenderBackendSelection({ renderBackend: "webgl" } as any, null, WEBGL_INIT_UNAVAILABLE_REASON);
     expect(missingSurface.requestedBackend).toBe("webgl");

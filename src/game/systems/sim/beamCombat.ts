@@ -2,8 +2,7 @@ import { emitEvent, type World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
 import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
-import { onEnemyKilledForChallenge } from "../progression/roomChallenge";
-import { addMomentumOnKill, relicTriggerMomentumDamageMultiplier } from "./momentum";
+import { relicTriggerMomentumDamageMultiplier } from "./momentum";
 import { raycast3D } from "./collision3D";
 import { getCardById } from "../../combat_mods/content/cards/cardPool";
 import { resolveDotStats } from "../../combat_mods/stats/combatStatsResolver";
@@ -14,6 +13,8 @@ import {
   makeUnknownDamageMeta,
   makeWeaponDotMeta,
 } from "../../combat/damageMeta";
+import { finalizeEnemyDeath } from "../enemies/finalize";
+import { isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
 
 export type BeamContactConfig = {
   dirX: number;
@@ -48,6 +49,7 @@ function collectBeamTargets(
 
   for (let e = 0; e < w.eAlive.length; e++) {
     if (!w.eAlive[e]) continue;
+    if (isPoeEnemyDormant(w, e)) continue;
     const ew = getEnemyWorld(w, e, KENNEY_TILE_WORLD);
     const dx = ew.wx - originX;
     const dy = ew.wy - originY;
@@ -187,23 +189,15 @@ export function tickBeamContactsOnce(w: World, dtTick: number): void {
 
     if (w.eHp[t.enemyIndex] > 0) continue;
 
-    w.eAlive[t.enemyIndex] = false;
-    w.kills++;
-    if (!isProcDamage(damageMeta)) {
-      addMomentumOnKill(w, w.timeSec ?? w.time ?? 0);
-    }
-    onEnemyKilledForChallenge(w);
     const poisonStacks = w.eAilments?.[t.enemyIndex]?.poison ?? [];
     w.ePoisonedOnDeath[t.enemyIndex] = poisonStacks.length > 0;
-    emitEvent(w, {
-      type: "ENEMY_KILLED",
-      enemyIndex: t.enemyIndex,
+    finalizeEnemyDeath(w, t.enemyIndex, {
+      damageMeta,
+      source: legacySource,
       x: t.wx,
       y: t.wy,
-      spawnTriggerId: w.eSpawnTriggerId[t.enemyIndex],
-      source: legacySource,
-      damageMeta,
+      awardMomentum: !isProcDamage(damageMeta),
+      recordPoisonedOnDeath: false,
     });
   }
 }
-

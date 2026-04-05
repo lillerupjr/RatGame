@@ -7,7 +7,7 @@ import {
 } from "../../../../game/systems/progression/relicTriggerSystem";
 import { relicRetriggerSystem } from "../../../../game/systems/progression/relicRetriggerSystem";
 import { PRJ_KIND } from "../../../../game/factories/projectileFactory";
-import { ENEMY_TYPE, spawnEnemyGrid } from "../../../../game/factories/enemyFactory";
+import { EnemyId, spawnEnemyGrid } from "../../../../game/factories/enemyFactory";
 import { getEnemyWorld, getPlayerWorld } from "../../../../game/coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../../engine/render/kenneyTiles";
 import { clearSpatialHash, insertEntity } from "../../../../game/util/spatialHash";
@@ -97,7 +97,7 @@ describe("relicTriggerSystem", () => {
   test("ACT_BAZOOKA_ON_HIT_20 targets event hit coordinates and spawns from player aim point", () => {
     const world = createWorld({ seed: 12, stage: stageDocks });
     world.relics.push("ACT_BAZOOKA_ON_HIT_20");
-    const enemy = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 5, 5);
+    const enemy = spawnEnemyGrid(world, EnemyId.MINION, 5, 5);
     rebuildEnemyHash(world);
     const enemyFeet = getEnemyWorld(world, enemy, KENNEY_TILE_WORLD);
     const hitX = enemyFeet.wx + 7;
@@ -222,7 +222,7 @@ describe("relicTriggerSystem", () => {
   test("STARTER_POINT_BLANK_CARNAGE adds knockback impulse on close ENEMY_HIT", () => {
     const world = createWorld({ seed: 501, stage: stageDocks });
     world.relics.push(STARTER_RELIC_IDS.POINT_BLANK_CARNAGE);
-    const enemy = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 8, 8);
+    const enemy = spawnEnemyGrid(world, EnemyId.MINION, 8, 8);
     rebuildEnemyHash(world);
     const enemyAim = getEnemyAimWorld(world, enemy);
     setPlayerWorld(world, enemyAim.x - 20, enemyAim.y);
@@ -248,7 +248,7 @@ describe("relicTriggerSystem", () => {
   test("STARTER_POINT_BLANK_CARNAGE does not add knockback outside close range", () => {
     const world = createWorld({ seed: 502, stage: stageDocks });
     world.relics.push(STARTER_RELIC_IDS.POINT_BLANK_CARNAGE);
-    const enemy = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 8, 8);
+    const enemy = spawnEnemyGrid(world, EnemyId.MINION, 8, 8);
     rebuildEnemyHash(world);
     const enemyAim = getEnemyAimWorld(world, enemy);
     setPlayerWorld(world, enemyAim.x - 400, enemyAim.y);
@@ -296,8 +296,8 @@ describe("relicTriggerSystem", () => {
     world.rng = new RNG(seed);
     world.relics.push("ACT_SPARK_ON_HIT_20");
 
-    const a = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 5, 5);
-    const b = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 6, 5);
+    const a = spawnEnemyGrid(world, EnemyId.MINION, 5, 5);
+    const b = spawnEnemyGrid(world, EnemyId.MINION, 6, 5);
     world.eHp[a] = 1_000_000;
     world.eHpMax[a] = 1_000_000;
     world.eHp[b] = 1_000_000;
@@ -334,8 +334,8 @@ describe("relicTriggerSystem", () => {
     const world = createWorld({ seed: 33, stage: stageDocks });
     world.relics.push("ACT_SPARK_ON_HIT_20");
     (world.rng as any).next = () => 0.0; // force proc
-    const a = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 9, 9);
-    const b = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 10, 9);
+    const a = spawnEnemyGrid(world, EnemyId.MINION, 9, 9);
+    const b = spawnEnemyGrid(world, EnemyId.MINION, 10, 9);
     rebuildEnemyHash(world);
     const aw = getEnemyWorld(world, a, KENNEY_TILE_WORLD);
     const bw = getEnemyWorld(world, b, KENNEY_TILE_WORLD);
@@ -366,8 +366,8 @@ describe("relicTriggerSystem", () => {
     world.relics.push(STARTER_RELIC_IDS.STREET_REFLEX);
     (world.rng as any).next = () => 0.0; // force proc
 
-    const a = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 9, 9);
-    const b = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 10, 9);
+    const a = spawnEnemyGrid(world, EnemyId.MINION, 9, 9);
+    const b = spawnEnemyGrid(world, EnemyId.MINION, 10, 9);
     rebuildEnemyHash(world);
     const aw = getEnemyWorld(world, a, KENNEY_TILE_WORLD);
     const bw = getEnemyWorld(world, b, KENNEY_TILE_WORLD);
@@ -401,8 +401,8 @@ describe("relicTriggerSystem", () => {
     world.rng = new RNG(seed);
     world.relics.push("ACT_SPARK_ON_HIT_20", "ACT_RETRY_FAILED_PROCS_ONCE");
 
-    const a = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 7, 7);
-    const b = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 8, 7);
+    const a = spawnEnemyGrid(world, EnemyId.MINION, 7, 7);
+    const b = spawnEnemyGrid(world, EnemyId.MINION, 8, 7);
     world.eHp[a] = 1_000_000;
     world.eHpMax[a] = 1_000_000;
     world.eHp[b] = 1_000_000;
@@ -447,8 +447,8 @@ describe("relicTriggerSystem", () => {
     const rolls = [0.1, 0.1];
     (world.rng as any).next = () => (rolls.length ? rolls.shift() : 0.99);
 
-    const a = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 10, 10);
-    const b = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 11, 10);
+    const a = spawnEnemyGrid(world, EnemyId.MINION, 10, 10);
+    const b = spawnEnemyGrid(world, EnemyId.MINION, 11, 10);
     world.eHp[a] = 1_000_000;
     world.eHpMax[a] = 1_000_000;
     world.eHp[b] = 1_000_000;
@@ -489,8 +489,8 @@ describe("relicTriggerSystem", () => {
     const base = createWorld({ seed, stage: stageDocks });
     base.rng = new RNG(seed);
     base.relics.push("ACT_SPARK_ON_HIT_20");
-    const aBase = spawnEnemyGrid(base, ENEMY_TYPE.CHASER, aTx, aTy);
-    spawnEnemyGrid(base, ENEMY_TYPE.CHASER, aTx + 1, aTy);
+    const aBase = spawnEnemyGrid(base, EnemyId.MINION, aTx, aTy);
+    spawnEnemyGrid(base, EnemyId.MINION, aTx + 1, aTy);
     base.eHp[aBase] = 1_000_000;
     base.eHpMax[aBase] = 1_000_000;
     rebuildEnemyHash(base);
@@ -500,8 +500,8 @@ describe("relicTriggerSystem", () => {
     const overclock = createWorld({ seed, stage: stageDocks });
     overclock.rng = new RNG(seed);
     overclock.relics.push("ACT_SPARK_ON_HIT_20", "ACT_PROC_CHANCE_PERCENT_50");
-    const aOver = spawnEnemyGrid(overclock, ENEMY_TYPE.CHASER, aTx, aTy);
-    spawnEnemyGrid(overclock, ENEMY_TYPE.CHASER, aTx + 1, aTy);
+    const aOver = spawnEnemyGrid(overclock, EnemyId.MINION, aTx, aTy);
+    spawnEnemyGrid(overclock, EnemyId.MINION, aTx + 1, aTy);
     overclock.eHp[aOver] = 1_000_000;
     overclock.eHpMax[aOver] = 1_000_000;
     rebuildEnemyHash(overclock);
@@ -534,8 +534,8 @@ describe("relicTriggerSystem", () => {
       "ACT_PROC_CHANCE_PERCENT_50",
       "ACT_RETRY_FAILED_PROCS_ONCE",
     );
-    const a = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 16, 16);
-    spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 17, 16);
+    const a = spawnEnemyGrid(world, EnemyId.MINION, 16, 16);
+    spawnEnemyGrid(world, EnemyId.MINION, 17, 16);
     world.eHp[a] = 1_000_000;
     world.eHpMax[a] = 1_000_000;
     rebuildEnemyHash(world);
@@ -565,7 +565,7 @@ describe("relicTriggerSystem", () => {
   test("ACT_NOVA_ON_CRIT_FIRE spawns a fire zone on each crit with expected tick damage", () => {
     const world = createWorld({ seed: 44, stage: stageDocks });
     world.relics.push("ACT_NOVA_ON_CRIT_FIRE");
-    const a = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 20, 20);
+    const a = spawnEnemyGrid(world, EnemyId.MINION, 20, 20);
     rebuildEnemyHash(world);
     const aw = getEnemyWorld(world, a, KENNEY_TILE_WORLD);
     const critHitDamage = 100;
@@ -598,7 +598,7 @@ describe("relicTriggerSystem", () => {
   test("ACT_NOVA_ON_CRIT_FIRE zone ticks are proc-marked and do not retrigger relic procs", () => {
     const world = createWorld({ seed: 45, stage: stageDocks });
     world.relics.push("ACT_NOVA_ON_CRIT_FIRE");
-    const a = spawnEnemyGrid(world, ENEMY_TYPE.CHASER, 22, 22);
+    const a = spawnEnemyGrid(world, EnemyId.MINION, 22, 22);
     world.eHp[a] = 1_000_000;
     world.eHpMax[a] = 1_000_000;
     rebuildEnemyHash(world);

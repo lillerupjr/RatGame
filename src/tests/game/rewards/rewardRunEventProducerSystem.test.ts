@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { ENEMY_TYPE } from "../../../game/factories/enemyFactory";
+import { EnemyId } from "../../../game/factories/enemyFactory";
 import { rewardRunEventProducerSystem } from "../../../game/systems/progression/rewardRunEventProducerSystem";
 import { OBJECTIVE_TRIGGER_IDS } from "../../../game/systems/progression/objectiveSpec";
 import { createRewardPipelineWorld } from "./rewardPipeline.testUtils";
@@ -17,7 +17,7 @@ describe("rewardRunEventProducerSystem", () => {
       spawnTriggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}1`,
       damageMeta: makeUnknownDamageMeta("TEST_REWARD_BOSS_KILL"),
     });
-    world.eType[3] = ENEMY_TYPE.BOSS;
+    world.eType[3] = EnemyId.BOSS;
 
     rewardRunEventProducerSystem(world, { includeCoreFacts: true, includeChest: false });
 
@@ -41,7 +41,7 @@ describe("rewardRunEventProducerSystem", () => {
       spawnTriggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}1`,
       damageMeta: makeUnknownDamageMeta("TEST_REWARD_NON_BOSS_KILL"),
     });
-    world.eType[4] = ENEMY_TYPE.CHASER;
+    world.eType[4] = EnemyId.MINION;
 
     rewardRunEventProducerSystem(world, { includeCoreFacts: true, includeChest: false });
     expect(world.runEvents).toHaveLength(0);
@@ -49,8 +49,8 @@ describe("rewardRunEventProducerSystem", () => {
 
   test("boss milestones are based on kill order, not zone id", () => {
     const world = createRewardPipelineWorld(96, "NORMAL");
-    world.eType[1] = ENEMY_TYPE.BOSS;
-    world.eType[2] = ENEMY_TYPE.BOSS;
+    world.eType[1] = EnemyId.BOSS;
+    world.eType[2] = EnemyId.BOSS;
     world.events.push(
       {
         type: "ENEMY_KILLED",

@@ -3,13 +3,14 @@ import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { goldValueFromEnemyBaseLife } from "../../economy/coins";
 import { grantXp } from "../../economy/xp";
 import { spawnGold, PICKUP_KIND, handlePickupSpecialCase } from "./pickups";
-import { ENEMY_TYPE } from "../../factories/enemyFactory";
+import { EnemyId } from "../../factories/enemyFactory";
+import { registry } from "../../content/registry";
 import { getEnemyWorld, getPickupWorld, getPlayerWorld } from "../../coords/worldViews";
 import {
   isLootGoblinEnemy,
   scheduleLootGoblinGoldBurst,
   tickLootGoblinGoldBurst,
-} from "./lootGoblin";
+} from "../neutral/lootGoblin";
 
 /** Handle drop spawns from kill events and pickup collection. */
 export function dropsSystem(w: World, dt: number) {
@@ -27,8 +28,15 @@ export function dropsSystem(w: World, dt: number) {
     const baseLife = Number.isFinite(w.eBaseLife[e.enemyIndex])
       ? Math.max(0, Math.floor(w.eBaseLife[e.enemyIndex]))
       : 0;
-    const isBoss = w.eType[e.enemyIndex] === ENEMY_TYPE.BOSS;
-    const goldValue = goldValueFromEnemyBaseLife(baseLife, { isBoss });
+    const archetype = registry.enemy(w.eType[e.enemyIndex] as any);
+    const rewards = archetype.rewards ?? {};
+    const isBoss = rewards.isBoss ?? (w.eType[e.enemyIndex] === EnemyId.BOSS);
+    const goldValue = Number.isFinite(rewards.goldValue)
+      ? Math.max(1, Math.floor(rewards.goldValue as number))
+      : goldValueFromEnemyBaseLife(baseLife, {
+          isBoss,
+          multiplier: rewards.goldMultiplier,
+        });
     const enemyPos = getEnemyWorld(w, e.enemyIndex, KENNEY_TILE_WORLD);
     spawnGold(w, enemyPos.wx, enemyPos.wy, goldValue);
 

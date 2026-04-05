@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { collectEntityDrawables } from "../../../../game/systems/presentation/collection/collectEntityDrawables";
 import { createRenderFrameBuilder } from "../../../../game/systems/presentation/frame/renderFrameBuilder";
+import { PRJ_KIND } from "../../../../game/factories/projectileFactory";
 
 function makeBaseInput(overrides: Record<string, unknown> = {}) {
   const frameBuilder = createRenderFrameBuilder();
   const baseWorld = {
     time: 0,
+    timeSec: 0,
     xAlive: [],
     xKind: [],
     xValue: [],
@@ -25,6 +27,7 @@ function makeBaseInput(overrides: Record<string, unknown> = {}) {
     prZ: [],
     prDirX: [],
     prDirY: [],
+    prSpawnTime: [],
     prR: [],
     prjKind: [],
     prTtl: [],
@@ -51,7 +54,7 @@ function makeBaseInput(overrides: Record<string, unknown> = {}) {
     ez: [],
     getEntityFeetPos: vi.fn(() => ({ slice: 0, within: 0, screenX: 40, screenY: 50 })),
     registry: { enemy: vi.fn(() => ({ color: "#f66" })) },
-    ENEMY_TYPE: { BOSS: "BOSS" },
+    EnemyId: { BOSS: "BOSS" },
     getBossAccent: vi.fn(() => null),
     LOOT_GOBLIN_GLOW_PULSE_MIN: 0,
     LOOT_GOBLIN_GLOW_PULSE_RANGE: 0,
@@ -81,17 +84,7 @@ function makeBaseInput(overrides: Record<string, unknown> = {}) {
     compiledMap: {},
     ELEV_PX: 16,
     worldDeltaToScreen: vi.fn(() => ({ dx: 1, dy: 0 })),
-    resolveProjectileShadowFootOffset: vi.fn(),
-    getProjectileSpriteByKind: vi.fn(() => null),
-    PROJECTILE_BASE_DRAW_PX: 36,
-    getProjectileDrawScale: vi.fn(() => 1),
-    bazookaExhaustAssets: null,
-    BAZOOKA_EXHAUST_OFFSET: 0,
-    PRJ_KIND: { SPARK: 999 },
-    VFX_CLIPS: [{ spriteIds: ["spark-0"], fps: 10, loop: true }],
-    VFX_CLIP_INDEX: { LIGHTNING_PROJ: 0 },
     getSpriteById: vi.fn(() => null),
-    snapToNearestWalkableGround: vi.fn(),
     playerSpritesReady: vi.fn(() => false),
     getPlayerSpriteFrame: vi.fn(() => null),
     PLAYER_R: 0,
@@ -158,7 +151,7 @@ describe("collectEntityDrawables", () => {
     const input = makeBaseInput({
       w: {
         eAlive: [true],
-        eType: ["CHASER"],
+        eType: ["MINION"],
         eFaceX: [0],
         eFaceY: [1],
         evx: [0],
@@ -251,6 +244,9 @@ describe("collectEntityDrawables", () => {
   it("routes projectile sprites through the dynamic atlas", () => {
     const projectileImage = { width: 12, height: 12, id: "knife" } as any;
     const atlasImage = { width: 256, height: 256, id: "dynamic-atlas" } as any;
+    const getSpriteById = vi.fn((spriteId: string) => (
+      spriteId === "projectiles/knife" ? { ready: true, img: projectileImage } : null
+    ));
     const input = makeBaseInput({
       w: {
         pAlive: [true],
@@ -260,10 +256,11 @@ describe("collectEntityDrawables", () => {
         prZVisual: [0],
         prDirX: [1],
         prDirY: [0],
+        prSpawnTime: [0],
         prR: [4],
-        prjKind: [1],
+        prjKind: [PRJ_KIND.KNIFE],
       },
-      getProjectileSpriteByKind: vi.fn(() => ({ ready: true, img: projectileImage })),
+      getSpriteById,
       getDynamicAtlasFrameForImage: vi.fn((image: object) => (
         image === projectileImage ? { image: atlasImage, sx: 9, sy: 12, sw: 12, sh: 12 } : null
       )),
@@ -275,6 +272,97 @@ describe("collectEntityDrawables", () => {
     expect(projectileCommand?.payload.image).toBe(atlasImage);
     expect(projectileCommand?.payload.sx).toBe(9);
     expect(projectileCommand?.payload.sy).toBe(12);
+    expect(projectileCommand?.payload.rotationRad).toBe(0);
+    expect(getSpriteById).toHaveBeenCalledWith("projectiles/knife");
+  });
+
+  it("selects animated projectile loop frames from prSpawnTime and preserves rotation", () => {
+    const projectileImage = { width: 32, height: 32, id: "acid-loop-03" } as any;
+    const atlasImage = { width: 256, height: 256, id: "dynamic-atlas" } as any;
+    const getSpriteById = vi.fn((spriteId: string) => (
+      spriteId === "vfx/projectiles/acid/loop/loop_03" ? { ready: true, img: projectileImage } : null
+    ));
+    const input = makeBaseInput({
+      w: {
+        timeSec: 0.12,
+        pAlive: [true],
+        prHidden: [false],
+        prPlayerFireX: [0],
+        prPlayerFireY: [0],
+        prZVisual: [0],
+        prDirX: [0],
+        prDirY: [1],
+        prSpawnTime: [0],
+        prR: [4],
+        prjKind: [PRJ_KIND.ACID],
+      },
+      getSpriteById,
+      worldDeltaToScreen: vi.fn(() => ({ dx: 0, dy: 2 })),
+      getDynamicAtlasFrameForImage: vi.fn((image: object) => (
+        image === projectileImage ? { image: atlasImage, sx: 21, sy: 22, sw: 32, sh: 32 } : null
+      )),
+    });
+
+    const commands = collectCommands(input);
+    const projectileCommand = commands.find((command) => command.payload.projectileIndex === 0);
+
+    expect(projectileCommand?.payload.image).toBe(atlasImage);
+    expect(projectileCommand?.payload.sx).toBe(21);
+    expect(projectileCommand?.payload.sy).toBe(22);
+    expect(projectileCommand?.payload.rotationRad).toBeCloseTo(Math.PI / 2);
+    expect(getSpriteById).toHaveBeenCalledWith("vfx/projectiles/acid/loop/loop_03");
+  });
+
+  it("emits composite bazooka body and exhaust through the same projectile path", () => {
+    const bazookaBodyImage = { width: 36, height: 16, id: "bazooka-body" } as any;
+    const exhaustImage = { width: 20, height: 20, id: "bazooka-exhaust" } as any;
+    const atlasImage = { width: 512, height: 512, id: "dynamic-atlas" } as any;
+    const getSpriteById = vi.fn((spriteId: string) => {
+      if (spriteId === "projectiles/bazooka") return { ready: true, img: bazookaBodyImage };
+      if (spriteId === "vfx/bazooka/exhaust_1/loop/loop_03") return { ready: true, img: exhaustImage };
+      return null;
+    });
+    const input = makeBaseInput({
+      w: {
+        timeSec: 0.125,
+        pAlive: [true],
+        prHidden: [false],
+        prPlayerFireX: [0],
+        prPlayerFireY: [0],
+        prZVisual: [0],
+        prDirX: [1],
+        prDirY: [0],
+        prSpawnTime: [0],
+        prR: [4],
+        prjKind: [PRJ_KIND.MISSILE],
+      },
+      getSpriteById,
+      getDynamicAtlasFrameForImage: vi.fn((image: object) => (
+        image === bazookaBodyImage || image === exhaustImage
+          ? { image: atlasImage, sx: 3, sy: 4, sw: (image as any).width, sh: (image as any).height }
+          : null
+      )),
+    });
+
+    const commands = collectCommands(input).filter((command) => command.payload.projectileIndex === 0);
+    expect(commands).toHaveLength(2);
+
+    const [exhaustCommand, bodyCommand] = commands;
+    expect(exhaustCommand.key.stableId).toBeLessThan(bodyCommand.key.stableId);
+    expect(exhaustCommand.payload.image).toBe(atlasImage);
+    expect(exhaustCommand.payload.blendMode).toBe("additive");
+    expect(exhaustCommand.payload.alpha).toBeCloseTo(0.95);
+    expect(exhaustCommand.payload.rotationRad).toBeCloseTo(Math.PI / 2);
+    expect(exhaustCommand.payload.dx).toBeCloseTo(0);
+    expect(exhaustCommand.payload.dy).toBeCloseTo(45);
+
+    expect(bodyCommand.payload.image).toBe(atlasImage);
+    expect(bodyCommand.payload.rotationRad).toBeCloseTo(0);
+    expect(bodyCommand.payload.dx).toBeCloseTo(22);
+    expect(bodyCommand.payload.dy).toBeCloseTo(42);
+
+    expect(getSpriteById).toHaveBeenCalledWith("projectiles/bazooka");
+    expect(getSpriteById).toHaveBeenCalledWith("vfx/bazooka/exhaust_1/loop/loop_03");
   });
 
   it("routes player sprite-pack frames through the dynamic atlas", () => {

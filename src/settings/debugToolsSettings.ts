@@ -1,5 +1,6 @@
 import type {
   DebugToolsSettings,
+  RenderBackendMode,
   PerfOverlayMode,
 } from "./settingsTypes";
 import {
@@ -49,7 +50,6 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "pauseDebugCards", label: "Enable Pause Debug Cards" },
   { key: "pauseCsvControls", label: "Enable Pause CSV Controls" },
   { key: "dpsMeter", label: "Show DPS Meter" },
-  { key: "dpsSpawnBudgetOverlay", label: "Show DPS vs Spawn Budget Overlay" },
   { key: "neutralBirdDrawDebug", label: "neutralBirdDrawDebug" },
   { key: "objectivesShowZoneBounds", label: "objectivesShowZoneBounds" },
   { key: "entityAnchorsEnabled", label: "entityAnchorsEnabled" },
@@ -60,7 +60,12 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "tileHeightMap", label: "tileHeightMap" },
 ] as const;
 
+function normalizeRenderBackend(value: unknown): RenderBackendMode {
+  return value === "canvas2d" ? "canvas2d" : "webgl";
+}
+
 export const DEFAULT_DEBUG_TOOLS_SETTINGS: DebugToolsSettings = {
+  renderBackend: "webgl",
   grid: false,
   walkMask: false,
   blockedTiles: false,
@@ -75,7 +80,7 @@ export const DEFAULT_DEBUG_TOOLS_SETTINGS: DebugToolsSettings = {
   structureTriangleFootprint: false,
   showStructureAnchors: false,
   showStructureTriangleOwnershipSort: false,
-  perfOverlayMode: "overview",
+  perfOverlayMode: "off",
   projectileFaces: false,
   triggers: false,
   debugRoadSemantic: false,
@@ -85,14 +90,13 @@ export const DEFAULT_DEBUG_TOOLS_SETTINGS: DebugToolsSettings = {
   pauseDebugCards: false,
   pauseCsvControls: false,
   dpsMeter: false,
-  dpsSpawnBudgetOverlay: false,
   neutralBirdDrawDebug: false,
   objectivesShowZoneBounds: false,
   entityAnchorsEnabled: false,
   renderPerfCountersEnabled: false,
   paletteHudDebugOverlayEnabled: false,
   shadowSunTimeHour: 17,
-  shadowSunDayCycleEnabled: true,
+  shadowSunDayCycleEnabled: false,
   shadowSunCycleMode: DEFAULT_SHADOW_SUN_CYCLE_MODE,
   shadowSunDayCycleSpeedMultiplier: DEFAULT_SHADOW_SUN_DAY_CYCLE_SPEED_MULTIPLIER,
   shadowSunStepsPerDay: 144,
@@ -138,6 +142,7 @@ export function sanitizeDebugToolsSettings(input: Partial<DebugToolsSettings> | 
   };
 
   return {
+    renderBackend: normalizeRenderBackend(merged.renderBackend),
     grid: !!merged.grid,
     walkMask: !!merged.walkMask,
     blockedTiles: !!merged.blockedTiles,
@@ -162,7 +167,6 @@ export function sanitizeDebugToolsSettings(input: Partial<DebugToolsSettings> | 
     pauseDebugCards: !!merged.pauseDebugCards,
     pauseCsvControls: !!merged.pauseCsvControls,
     dpsMeter: !!merged.dpsMeter,
-    dpsSpawnBudgetOverlay: !!merged.dpsSpawnBudgetOverlay,
     neutralBirdDrawDebug: !!merged.neutralBirdDrawDebug,
     objectivesShowZoneBounds: !!merged.objectivesShowZoneBounds,
     entityAnchorsEnabled: !!merged.entityAnchorsEnabled,

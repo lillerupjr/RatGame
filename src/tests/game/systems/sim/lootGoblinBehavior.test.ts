@@ -5,14 +5,14 @@ import { KENNEY_TILE_WORLD } from "../../../../engine/render/kenneyTiles";
 import { anchorFromWorld } from "../../../../game/coords/anchor";
 import { worldToGrid } from "../../../../game/coords/grid";
 import { getEnemyWorld, getPlayerWorld } from "../../../../game/coords/worldViews";
-import { ENEMY_TYPE, spawnEnemyGrid, type EnemyType } from "../../../../game/factories/enemyFactory";
+import { EnemyId, spawnEnemyGrid } from "../../../../game/factories/enemyFactory";
 import { getAuthoredMapDefByMapId } from "../../../../game/map/authored/authoredMapRegistry";
 import { activateMapDef } from "../../../../game/map/authoredMapActivation";
 import { getActiveMap, walkInfo } from "../../../../game/map/compile/kenneyMap";
 import { movementSystem } from "../../../../game/systems/sim/movement";
 import { collisionsSystem } from "../../../../game/systems/sim/collisions";
 import type { InputState } from "../../../../game/systems/sim/input";
-import { LOOT_GOBLIN_TRIGGER_PREFIX } from "../../../../game/systems/progression/lootGoblin";
+import { LOOT_GOBLIN_TRIGGER_PREFIX } from "../../../../game/systems/neutral/lootGoblin";
 
 type TilePos = { tx: number; ty: number };
 
@@ -46,7 +46,7 @@ function spawnEnemyAtTile(
   world: World,
   tx: number,
   ty: number,
-  type: EnemyType = ENEMY_TYPE.LOOT_GOBLIN,
+  type: EnemyId = EnemyId.LOOT_GOBLIN,
 ): number {
   const wx = (tx + 0.5) * KENNEY_TILE_WORLD;
   const wy = (ty + 0.5) * KENNEY_TILE_WORLD;
@@ -182,7 +182,7 @@ describe("loot goblin behavior", () => {
     const world = createWorld({ seed: 22_004, stage: stageDocks });
     const pair = findFleePairWithOpenAwayTile();
     setPlayerAtTile(world, pair.player.tx, pair.player.ty);
-    const enemy = spawnEnemyAtTile(world, pair.player.tx, pair.player.ty, ENEMY_TYPE.RUNNER);
+    const enemy = spawnEnemyAtTile(world, pair.player.tx, pair.player.ty, EnemyId.RUNNER);
     const playerZ = Number.isFinite(world.pzVisual) ? world.pzVisual : world.pz;
     world.ezVisual[enemy] = playerZ;
     world.ezLogical[enemy] = playerZ;

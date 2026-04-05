@@ -45,12 +45,7 @@ export type LegacyDamageSource =
   | "BOUNCER"
   | "OTHER";
 
-export type VfxId =
-  | "EXPLOSION"
-  | "LIGHTNING_HIT"
-  | "STATUS_BLEED_LOOP"
-  | "STATUS_POISON_LOOP"
-  | "STATUS_BURNING_LOOP";
+export type VfxClipKey = string;
 
 export type SfxId =
     | "FIRE_KNIFE"
@@ -127,12 +122,12 @@ export type GameEvent =
     | { type: "FULL_MOMENTUM_REACHED" }
     | { type: "FULL_MOMENTUM_LOST" }
     | {
-    type: "VFX"; id: VfxId; x: number; y: number;
+    type: "VFX"; id: VfxClipKey; x: number; y: number;
     radius?: number; z?: number;
     scale?: number; loop?: boolean;
     followEnemyIndex?: number; offsetYPx?: number;
   }
-    | { type: "VFX_STOP_FOLLOW"; id: VfxId; enemyIndex: number };
+    | { type: "VFX_STOP_FOLLOW"; id: VfxClipKey; enemyIndex: number };
 
 export type RelicTriggerEvent = Extract<GameEvent, { type: "ENEMY_HIT" | "ENEMY_KILLED" }> & {
   isRetrigger?: boolean;

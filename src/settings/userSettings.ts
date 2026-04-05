@@ -1,4 +1,4 @@
-import type { RenderBackendMode, UserSettings, VerticalTilesMode, VerticalTilesViewportClass } from "./settingsTypes";
+import type { UserSettings, VerticalTilesMode, VerticalTilesViewportClass } from "./settingsTypes";
 export type { RenderBackendMode, VerticalTilesMode, VerticalTilesViewportClass } from "./settingsTypes";
 
 export const DEFAULT_VISIBLE_VERTICAL_TILES_PHONE = 7;
@@ -7,7 +7,6 @@ export const DEFAULT_VISIBLE_VERTICAL_TILES = DEFAULT_VISIBLE_VERTICAL_TILES_DES
 export const MIN_VISIBLE_VERTICAL_TILES = 2;
 export const MAX_VISIBLE_VERTICAL_TILES = 24;
 export const DEFAULT_VERTICAL_TILES_MODE: VerticalTilesMode = "auto";
-export const DEFAULT_RENDER_BACKEND: RenderBackendMode = "canvas2d";
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
   game: {
@@ -25,7 +24,6 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
     performanceMode: false,
     deathSlowdownEnabled: true,
     cameraSmoothingEnabled: true,
-    renderBackend: DEFAULT_RENDER_BACKEND,
     verticalTilesMode: DEFAULT_VERTICAL_TILES_MODE,
     verticalTilesUser: DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP,
     verticalTilesAutoPhone: DEFAULT_VISIBLE_VERTICAL_TILES_PHONE,
@@ -46,10 +44,6 @@ export function clampVisibleVerticalTiles(value: number): number {
 
 function normalizeVerticalTilesMode(value: unknown): VerticalTilesMode {
   return value === "manual" ? "manual" : "auto";
-}
-
-function normalizeRenderBackend(value: unknown): RenderBackendMode {
-  return value === "webgl" ? "webgl" : "canvas2d";
 }
 
 function classifyVerticalTilesViewport(viewportWidth: number, viewportHeight: number): VerticalTilesViewportClass {
@@ -129,7 +123,6 @@ export function sanitizeUserSettings(input: Partial<{
       performanceMode: !!merged.graphics.performanceMode,
       deathSlowdownEnabled: merged.graphics.deathSlowdownEnabled !== false,
       cameraSmoothingEnabled: merged.graphics.cameraSmoothingEnabled !== false,
-      renderBackend: normalizeRenderBackend(merged.graphics.renderBackend),
       verticalTilesMode: normalizeVerticalTilesMode(merged.graphics.verticalTilesMode),
       verticalTilesUser: clampVisibleVerticalTiles(merged.graphics.verticalTilesUser),
       verticalTilesAutoPhone: clampVisibleVerticalTiles(merged.graphics.verticalTilesAutoPhone),

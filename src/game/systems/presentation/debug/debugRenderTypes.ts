@@ -1,13 +1,13 @@
 import type { AmbientSunLightingState } from "../../../../shadowSunV1";
 import type { DebugOverlayContext } from "../../../../engine/render/debug/renderDebug";
 import type { ViewRect } from "../../../map/compile/kenneyMap";
-import type { DpsSpawnBudgetDebugInfo } from "./dpsSpawnBudgetDebug";
 import type {
   PerfOverlayMode,
   StructureTriangleAdmissionMode,
 } from "../../../../settings/settingsTypes";
 import type { ShadowSunDayCycleDebugStatus } from "../shadowSunDayCycleRuntime";
 import type { WorldBatchAudit } from "./worldBatchAudit";
+import type { HostileSpawnDebugSnapshot } from "../../spawn/hostileSpawnDirector";
 
 export type ScreenPt = { x: number; y: number };
 
@@ -74,8 +74,6 @@ export type RenderDebugScreenPassInput = {
   fps: number;
   frameTimeMs: number;
   renderPerfCountersEnabled: boolean;
-  dpsSpawnBudgetOverlayEnabled: boolean;
-  dpsSpawnBudgetDebugInfo: DpsSpawnBudgetDebugInfo | null;
   shadowSunModel: ShadowSunDebugModel;
   ambientSunLighting: AmbientSunLightingState;
   shadowSunDayCycleStatus: ShadowSunDayCycleDebugStatus;
@@ -89,4 +87,5 @@ export type RenderDebugScreenPassInput = {
   structureTriangleCutoutAlpha: number;
   roadWidthAtPlayer: number;
   worldBatchAudit?: WorldBatchAudit | null;
+  hostileSpawnDebug?: HostileSpawnDebugSnapshot | null;
 };

@@ -1,12 +1,12 @@
 import { describe, expect, test } from "vitest";
 import { createWorld } from "../../../../engine/world/world";
 import { stageDocks } from "../../../../game/content/stages";
-import { ENEMY_TYPE } from "../../../../game/factories/enemyFactory";
+import { EnemyId } from "../../../../game/factories/enemyFactory";
 import { spawnEnemyGrid } from "../../../../game/factories/enemyFactory";
 import { goldValueFromEnemyBaseLife } from "../../../../game/economy/coins";
 import { dropsSystem } from "../../../../game/systems/progression/drops";
 import { PICKUP_KIND, spawnGold } from "../../../../game/systems/progression/pickups";
-import { LOOT_GOBLIN_TRIGGER_PREFIX } from "../../../../game/systems/progression/lootGoblin";
+import { LOOT_GOBLIN_TRIGGER_PREFIX } from "../../../../game/systems/neutral/lootGoblin";
 import { getPlayerWorld } from "../../../../game/coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../../engine/render/kenneyTiles";
 import { makeWeaponHitMeta } from "../../../../game/combat/damageMeta";
@@ -14,7 +14,7 @@ import { makeWeaponHitMeta } from "../../../../game/combat/damageMeta";
 describe("dropsSystem", () => {
   test("enemy kill spawns exactly one gold pickup using enemy base life (not scaled hp)", () => {
     const w = createWorld({ seed: 1, stage: stageDocks });
-    const e = spawnEnemyGrid(w, ENEMY_TYPE.BRUISER, 5, 5);
+    const e = spawnEnemyGrid(w, EnemyId.TANK, 5, 5);
 
     // Inflate scaled hp to ensure drop calculation ignores it.
     w.eHpMax[e] = 10_000;
@@ -41,7 +41,7 @@ describe("dropsSystem", () => {
 
   test("boss gold multiplier applies after base-life calculation without spawning a chest", () => {
     const w = createWorld({ seed: 3, stage: stageDocks });
-    const boss = spawnEnemyGrid(w, ENEMY_TYPE.BOSS, 8, 8);
+    const boss = spawnEnemyGrid(w, EnemyId.BOSS, 8, 8);
     w.events.push({
       type: "ENEMY_KILLED",
       enemyIndex: boss,
@@ -95,7 +95,7 @@ describe("dropsSystem", () => {
 
   test("loot goblin kill emits delayed 300x1g drops and skips normal kill drops", () => {
     const w = createWorld({ seed: 4, stage: stageDocks });
-    const goblin = spawnEnemyGrid(w, ENEMY_TYPE.LOOT_GOBLIN, 40, 40);
+    const goblin = spawnEnemyGrid(w, EnemyId.LOOT_GOBLIN, 40, 40);
     w.eSpawnTriggerId[goblin] = `${LOOT_GOBLIN_TRIGGER_PREFIX}:0:40:40`;
     w.events.push({
       type: "ENEMY_KILLED",

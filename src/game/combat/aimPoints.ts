@@ -1,7 +1,7 @@
 import type { World } from "../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { ISO_X, ISO_Y } from "../../engine/math/iso";
-import type { EnemyType } from "../content/enemies";
+import { ENEMIES, type EnemyId } from "../content/enemies";
 import { getEnemyWorld, getPlayerWorld } from "../coords/worldViews";
 import { getEnemySpriteFrameMeta } from "../../engine/render/sprites/enemySprites";
 
@@ -41,14 +41,17 @@ function getSkinScreenOffset(skin: string | null | undefined): ScreenOffset {
   return { x, y };
 }
 
-function resolveEnemyAimDebugInfo(enemyType: EnemyType): EnemyAimDebugInfo {
+function resolveEnemyAimDebugInfo(enemyType: EnemyId): EnemyAimDebugInfo {
   const frame = getEnemySpriteFrameMeta(enemyType);
   const spriteFrameHeightPx = frame?.h ?? 0;
   const spriteScale = frame?.scale ?? 1;
   const spriteHeightWorld = spriteFrameHeightPx * spriteScale;
+  const archetypeOffset = ENEMIES[enemyType]?.presentation?.aimScreenOffset;
   const baseScreenOffset: ScreenOffset = {
-    x: 0,
-    y: spriteHeightWorld > 0
+    x: Number.isFinite(archetypeOffset?.x) ? archetypeOffset!.x : 0,
+    y: Number.isFinite(archetypeOffset?.y)
+      ? archetypeOffset!.y
+      : spriteHeightWorld > 0
       ? -Math.round(spriteHeightWorld * DEFAULT_AIM_Y_FRAC)
       : FALLBACK_ENEMY_AIM_SCREEN_OFFSET.y,
   };
@@ -73,7 +76,7 @@ function resolveEnemyAimDebugInfo(enemyType: EnemyType): EnemyAimDebugInfo {
 
 export function getEnemyAimWorld(w: World, enemyIndex: number): { x: number; y: number } {
   const ew = getEnemyWorld(w, enemyIndex, KENNEY_TILE_WORLD);
-  const enemyType = w.eType[enemyIndex] as EnemyType;
+  const enemyType = w.eType[enemyIndex] as EnemyId;
   const info = resolveEnemyAimDebugInfo(enemyType);
   return {
     x: ew.wx + info.effectiveWorldDelta.dx,
@@ -82,7 +85,7 @@ export function getEnemyAimWorld(w: World, enemyIndex: number): { x: number; y: 
 }
 
 export function getEnemyAimDebugInfo(w: World, enemyIndex: number): EnemyAimDebugInfo {
-  const enemyType = w.eType[enemyIndex] as EnemyType;
+  const enemyType = w.eType[enemyIndex] as EnemyId;
   return resolveEnemyAimDebugInfo(enemyType);
 }
 

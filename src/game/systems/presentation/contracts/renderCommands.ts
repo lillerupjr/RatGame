@@ -83,7 +83,6 @@ export type QuadRenderPiece = CommandPayloadBase & {
   neutralMobIndex?: number;
   projectileIndex?: number;
   zLift?: number;
-  sparkStyle?: boolean;
   vfxIndex?: number;
   draw?: RenderPieceDrawPayload;
 };

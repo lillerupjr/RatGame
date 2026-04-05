@@ -18,6 +18,7 @@ export function drawDynamicRectPieceCanvas(
   const destinationQuad = pieceDestinationQuad(piece);
   if (image && destinationQuad) {
     const alpha = Number.isFinite(Number(piece.alpha)) ? Number(piece.alpha) : 1;
+    const blendMode = piece.blendMode === "additive" ? "lighter" : "source-over";
     const draw = () => {
       drawTexturedQuad(
         ctx,
@@ -30,18 +31,21 @@ export function drawDynamicRectPieceCanvas(
         piece.sourceQuad,
       );
     };
-    if (alpha >= 1) {
+    const previousAlpha = ctx.globalAlpha;
+    const previousBlendMode = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = blendMode;
+    try {
+      if (alpha >= 1) {
+        draw();
+        return true;
+      }
+      ctx.globalAlpha = previousAlpha * alpha;
       draw();
       return true;
-    }
-    const previousAlpha = ctx.globalAlpha;
-    ctx.globalAlpha = previousAlpha * alpha;
-    try {
-      draw();
     } finally {
       ctx.globalAlpha = previousAlpha;
+      ctx.globalCompositeOperation = previousBlendMode;
     }
-    return true;
   }
 
   if (piece.pickupIndex !== undefined) {
@@ -83,4 +87,3 @@ export function drawDynamicRectPieceCanvas(
 
   return false;
 }
-

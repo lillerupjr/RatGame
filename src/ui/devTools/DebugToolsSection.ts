@@ -116,6 +116,14 @@ export function mountDebugToolsSection(
     (value) => value.charAt(0).toUpperCase() + value.slice(1),
     (value) => applyDebugPatch({ perfOverlayMode: value }),
   );
+  const renderBackendSelect = createSelectRow<DebugToolsSettings["renderBackend"]>(
+    section,
+    "Renderer",
+    ["webgl", "canvas2d"],
+    (value) => value === "webgl" ? "WebGL (Default)" : "Canvas2D",
+    (value) => applyDebugPatch({ renderBackend: value }),
+  );
+  renderBackendSelect.setAttribute("data-debug-render-backend", "1");
 
   const shadowSunReadout = document.createElement("div");
   shadowSunReadout.style.padding = "2px 0 10px 0";
@@ -190,11 +198,6 @@ export function mountDebugToolsSection(
     enemyAimOverlay: createToggleRow(grid, "Enemy Aim Overlay", (checked) => applyDebugPatch({ enemyAimOverlay: checked })),
     lootGoblinOverlay: createToggleRow(grid, "Loot Goblin Overlay", (checked) => applyDebugPatch({ lootGoblinOverlay: checked })),
     dpsMeter: createToggleRow(grid, "DPS Meter", (checked) => applyDebugPatch({ dpsMeter: checked })),
-    dpsSpawnBudgetOverlay: createToggleRow(
-      grid,
-      "DPS vs Spawn Budget",
-      (checked) => applyDebugPatch({ dpsSpawnBudgetOverlay: checked }),
-    ),
     pauseDebugCards: createToggleRow(grid, "Pause Debug Cards", (checked) => applyDebugPatch({ pauseDebugCards: checked })),
     pauseCsvControls: createToggleRow(grid, "Pause CSV Controls", (checked) => applyDebugPatch({ pauseCsvControls: checked })),
     neutralBirdDrawDebug: createToggleRow(grid, "Neutral Bird Draw Debug", (checked) => applyDebugPatch({ neutralBirdDrawDebug: checked })),
@@ -210,6 +213,7 @@ export function mountDebugToolsSection(
 
   return {
     sync(debug) {
+      renderBackendSelect.value = debug.renderBackend;
       shadowSunHourSelect.value = `${debug.shadowSunTimeHour}`;
       shadowSunDayCycleToggle.checked = !!debug.shadowSunDayCycleEnabled;
       shadowSunCycleModeSelect.value = debug.shadowSunCycleMode;

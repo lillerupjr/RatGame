@@ -19,7 +19,7 @@ import {
 } from "./systemOverrides";
 
 const STORAGE_KEY = "ratgame:settings:v1";
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const FORCE_SETTINGS_RESET = false;
 
 let currentSettings: AppSettings = {
@@ -77,7 +77,27 @@ export async function initSettings(): Promise<AppSettings> {
   }
 
   const stored = loadStoredSettings();
-  if (!stored || stored.schemaVersion !== SCHEMA_VERSION) {
+  if (!stored) {
+    currentSettings = sanitizeAppSettings(undefined);
+    saveStoredSettings(currentSettings);
+    return currentSettings;
+  }
+
+  if (stored.schemaVersion === 1) {
+    const legacyRenderBackend = (stored as any)?.user?.graphics?.renderBackend;
+    currentSettings = sanitizeAppSettings({
+      user: stored.user,
+      debug: {
+        ...stored.debug,
+        renderBackend: (stored as any)?.debug?.renderBackend ?? legacyRenderBackend,
+      },
+      system: stored.system,
+    });
+    saveStoredSettings(currentSettings);
+    return currentSettings;
+  }
+
+  if (stored.schemaVersion !== SCHEMA_VERSION) {
     currentSettings = sanitizeAppSettings(undefined);
     saveStoredSettings(currentSettings);
     return currentSettings;

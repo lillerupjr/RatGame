@@ -3,6 +3,8 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { PNG } from "pngjs";
 
+const DB32_TRANSFORM_MODE = "hsv-hue-lock";
+
 const ROOT = process.cwd();
 const IN_ROOT = path.join(ROOT, "public", "assets-runtime");
 const OUT_ROOT = path.join(ROOT, "public", "assets-runtime", "base_db32");
@@ -69,15 +71,105 @@ function distSq(a, b) {
   return dr * dr + dg * dg + db * db;
 }
 
-function buildNearestMap(palette) {
+function clamp01(v) {
+  if (!Number.isFinite(v)) return 0;
+  return Math.max(0, Math.min(1, v));
+}
+
+function clamp255(v) {
+  if (!Number.isFinite(v)) return 0;
+  return Math.max(0, Math.min(255, v));
+}
+
+function normalizeHueDegrees(h) {
+  if (!Number.isFinite(h)) return 0;
+  const wrapped = h % 360;
+  return wrapped < 0 ? wrapped + 360 : wrapped;
+}
+
+function hueDistanceDegrees(a, b) {
+  const ah = normalizeHueDegrees(a);
+  const bh = normalizeHueDegrees(b);
+  const d = Math.abs(ah - bh);
+  return Math.min(d, 360 - d);
+}
+
+function rgbToHsv(rgb) {
+  const r = clamp255(rgb.r) / 255;
+  const g = clamp255(rgb.g) / 255;
+  const b = clamp255(rgb.b) / 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+
+  let h = 0;
+  if (delta > 0) {
+    if (max === r) {
+      h = ((g - b) / delta) % 6;
+    } else if (max === g) {
+      h = (b - r) / delta + 2;
+    } else {
+      h = (r - g) / delta + 4;
+    }
+    h *= 60;
+  }
+
+  const s = max === 0 ? 0 : delta / max;
+  const v = max;
+  return { h: normalizeHueDegrees(h), s, v };
+}
+
+function hsvToRgb(hsv) {
+  const h = normalizeHueDegrees(hsv.h);
+  const s = clamp01(hsv.s);
+  const v = clamp01(hsv.v);
+
+  const c = v * s;
+  const hp = h / 60;
+  const x = c * (1 - Math.abs((hp % 2) - 1));
+
+  let r1 = 0;
+  let g1 = 0;
+  let b1 = 0;
+  if (hp >= 0 && hp < 1) {
+    r1 = c;
+    g1 = x;
+  } else if (hp >= 1 && hp < 2) {
+    r1 = x;
+    g1 = c;
+  } else if (hp >= 2 && hp < 3) {
+    g1 = c;
+    b1 = x;
+  } else if (hp >= 3 && hp < 4) {
+    g1 = x;
+    b1 = c;
+  } else if (hp >= 4 && hp < 5) {
+    r1 = x;
+    b1 = c;
+  } else {
+    r1 = c;
+    b1 = x;
+  }
+
+  const m = v - c;
+  return {
+    r: Math.round((r1 + m) * 255),
+    g: Math.round((g1 + m) * 255),
+    b: Math.round((b1 + m) * 255),
+  };
+}
+
+function buildPaletteEntries(palette) {
   // Palette small (32), brute force per pixel is fine for the runtime bake subset.
   return palette.map((hex) => {
     const rgb = hexToRgb(hex);
-    return { hex: hex.toLowerCase(), ...rgb };
+    const hsv = rgbToHsv(rgb);
+    return { hex: hex.toLowerCase(), ...rgb, h: hsv.h, s: hsv.s, v: hsv.v };
   });
 }
 
-function mapPixelToNearest(rgb, pal) {
+function mapPixelToNearestRgb(rgb, pal) {
   let bestI = 0;
   let bestD = Number.POSITIVE_INFINITY;
   for (let i = 0; i < pal.length; i++) {
@@ -88,6 +180,40 @@ function mapPixelToNearest(rgb, pal) {
     }
   }
   return pal[bestI];
+}
+
+function pickNearestPaletteHsvAnchor(sourceHue, palette) {
+  let nearest = palette[0];
+  let nearestDist = hueDistanceDegrees(sourceHue, nearest.h);
+  for (let i = 1; i < palette.length; i++) {
+    const candidate = palette[i];
+    const candidateDist = hueDistanceDegrees(sourceHue, candidate.h);
+    if (candidateDist < nearestDist) {
+      nearest = candidate;
+      nearestDist = candidateDist;
+    }
+  }
+  return nearest;
+}
+
+function mapPixelByHsvHueLock(rgb, palette) {
+  const hsv = rgbToHsv(rgb);
+  const nearest = pickNearestPaletteHsvAnchor(hsv.h, palette);
+  return {
+    ...hsvToRgb({
+      h: nearest.h,
+      s: hsv.s,
+      v: hsv.v,
+    }),
+    hex: nearest.hex,
+  };
+}
+
+function mapPixelToDb32(rgb, palette) {
+  if (DB32_TRANSFORM_MODE === "hsv-hue-lock") {
+    return mapPixelByHsvHueLock(rgb, palette);
+  }
+  return mapPixelToNearestRgb(rgb, palette);
 }
 
 function addCount(map, key) {
@@ -142,7 +268,7 @@ function normalizePngToDb32(inFile, outFile, pal, options = {}) {
     if (a === 0) continue; // preserve fully transparent pixels
 
     const before = { r: data[i], g: data[i + 1], b: data[i + 2], a };
-    const nearest = mapPixelToNearest(before, pal);
+    const nearest = mapPixelToDb32(before, pal);
     if (inspect) {
       addCount(sourceColorCounts, rgbaKey(before.r, before.g, before.b, before.a));
       addCount(paletteUsage, nearest.hex);
@@ -179,7 +305,7 @@ function normalizePngToDb32(inFile, outFile, pal, options = {}) {
         topTransformedColors: summarizeTopCounts(transformedColorCounts),
         topRemaps: summarizeTopCounts(remapCounts),
         paletteUsage: summarizeTopCounts(paletteUsage),
-        transformBranch: "nearest-db32-rgb",
+        transformBranch: DB32_TRANSFORM_MODE === "hsv-hue-lock" ? "hsv-hue-lock-db32" : "nearest-db32-rgb",
       }
     : { pixelsMapped, changedPixels };
 }
@@ -294,7 +420,7 @@ function main() {
     process.exit(1);
   }
 
-  const pal = buildNearestMap(db32.colors);
+  const pal = buildPaletteEntries(db32.colors);
   const inspectTargets = parseInspectFilter();
 
   const t0 = performance.now();
@@ -368,6 +494,7 @@ function main() {
   const ms = Math.round(t1 - t0);
 
   console.log("[assets:db32] Output: public/assets-runtime/base_db32/...");
+  console.log(`[assets:db32] Transform mode: ${DB32_TRANSFORM_MODE}`);
   console.log(`[assets:db32] Files processed: ${files}`);
   console.log(`[assets:db32] Files skipped: ${failed}`);
   console.log(`[assets:db32] Pixels mapped: ${pixels}`);

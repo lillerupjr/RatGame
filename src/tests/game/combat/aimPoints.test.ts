@@ -3,7 +3,7 @@ import { createWorld } from "../../../engine/world/world";
 import { worldDeltaToScreen } from "../../../engine/math/iso";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { stageDocks } from "../../../game/content/stages";
-import { ENEMY_TYPE, spawnEnemyGrid } from "../../../game/factories/enemyFactory";
+import { EnemyId, spawnEnemyGrid } from "../../../game/factories/enemyFactory";
 import { getEnemyWorld, getPlayerWorld } from "../../../game/coords/worldViews";
 import { getEnemyAimDebugInfo, getEnemyAimWorld, getPlayerAimWorld } from "../../../game/combat/aimPoints";
 
@@ -20,7 +20,7 @@ describe("aimPoints screen-axis offsets", () => {
 
   test("enemy aim conversion is deterministic and matches effective screen offset", () => {
     const w = createWorld({ seed: 202, stage: stageDocks });
-    const enemyIndex = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 8, 8);
+    const enemyIndex = spawnEnemyGrid(w, EnemyId.MINION, 8, 8);
     const infoA = getEnemyAimDebugInfo(w, enemyIndex);
     const infoB = getEnemyAimDebugInfo(w, enemyIndex);
 

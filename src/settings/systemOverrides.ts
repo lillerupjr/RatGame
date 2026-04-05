@@ -1,4 +1,3 @@
-import { DEFAULT_SPAWN_TUNING } from "../game/balance/spawnTuningDefaults";
 import {
   getFirstPaletteInGroup,
   isPaletteIdInGroup,
@@ -24,6 +23,19 @@ export const MAX_GAME_SPEED = 1.5;
 export const DEFAULT_GAME_SPEED = 1.0;
 export const DEFAULT_XP_LEVEL_BASE = 50;
 export const DEFAULT_XP_LEVEL_GROWTH = 1.2;
+export const DEFAULT_HOSTILE_SPAWN_T0_POWER_PER_SEC = 0.6;
+export const DEFAULT_HOSTILE_SPAWN_T120_POWER_PER_SEC = 2.0;
+export const DEFAULT_HOSTILE_SPAWN_OVERTIME_POWER_PER_SEC_SLOPE = 0.006;
+export const DEFAULT_HOSTILE_SPAWN_T0_LIVE_THREAT_CAP = 4.0;
+export const DEFAULT_HOSTILE_SPAWN_T120_LIVE_THREAT_CAP = 18.0;
+export const DEFAULT_HOSTILE_SPAWN_OVERTIME_LIVE_THREAT_CAP_SLOPE = 0.05;
+export const DEFAULT_HOSTILE_SPAWN_HEAT_HEALTH_FACTOR = 0.12;
+export const DEFAULT_HOSTILE_SPAWN_HEAT_POWER_PER_SEC_FACTOR = 0.08;
+export const DEFAULT_HOSTILE_SPAWN_HEAT_THREAT_CAP_FACTOR = 0.05;
+export const DEFAULT_HOSTILE_SPAWN_STOCKPILE_MULTIPLIER = 1.35;
+export const DEFAULT_HOSTILE_SPAWN_BURST_CHANCE = 0.16;
+export const DEFAULT_HOSTILE_SPAWN_BURST_EXTRA_ATTEMPTS = 1;
+export const DEFAULT_HOSTILE_SPAWN_MIN_INTERVAL_SEC = 1.25;
 
 export const NEUTRAL_BIRD_FORCE_STATES = [
   "NONE",
@@ -48,6 +60,18 @@ export function normalizeXpLevelGrowth(value: unknown): number {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return DEFAULT_XP_LEVEL_GROWTH;
   return Math.max(1, Math.min(3, numeric));
+}
+
+function clampFinite(value: unknown, fallback: number, min: number, max: number): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(min, Math.min(max, numeric));
+}
+
+function clampRounded(value: unknown, fallback: number, min: number, max: number): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(numeric)));
 }
 
 export function normalizePaletteRemapWeightPercent(value: unknown): PaletteRemapWeightPercent {
@@ -144,8 +168,6 @@ export const DEFAULT_SYSTEM_OVERRIDES: SystemOverrides = {
   paletteSWeightPercent: 75,
   paletteDarknessPercent: 50,
 
-  ...DEFAULT_SPAWN_TUNING,
-
   disableVisualCompiledCutoutCache: false,
   mapOverlaysDisabled: false,
   rampFaces: false,
@@ -154,6 +176,20 @@ export const DEFAULT_SYSTEM_OVERRIDES: SystemOverrides = {
   neutralBirdForceState: "NONE",
   neutralBirdDisableTransitions: false,
   neutralBirdDebugRepickTarget: false,
+
+  hostileSpawnT0PowerPerSec: DEFAULT_HOSTILE_SPAWN_T0_POWER_PER_SEC,
+  hostileSpawnT120PowerPerSec: DEFAULT_HOSTILE_SPAWN_T120_POWER_PER_SEC,
+  hostileSpawnOvertimePowerPerSecSlope: DEFAULT_HOSTILE_SPAWN_OVERTIME_POWER_PER_SEC_SLOPE,
+  hostileSpawnT0LiveThreatCap: DEFAULT_HOSTILE_SPAWN_T0_LIVE_THREAT_CAP,
+  hostileSpawnT120LiveThreatCap: DEFAULT_HOSTILE_SPAWN_T120_LIVE_THREAT_CAP,
+  hostileSpawnOvertimeLiveThreatCapSlope: DEFAULT_HOSTILE_SPAWN_OVERTIME_LIVE_THREAT_CAP_SLOPE,
+  hostileSpawnHeatHealthFactor: DEFAULT_HOSTILE_SPAWN_HEAT_HEALTH_FACTOR,
+  hostileSpawnHeatPowerPerSecFactor: DEFAULT_HOSTILE_SPAWN_HEAT_POWER_PER_SEC_FACTOR,
+  hostileSpawnHeatThreatCapFactor: DEFAULT_HOSTILE_SPAWN_HEAT_THREAT_CAP_FACTOR,
+  hostileSpawnStockpileMultiplier: DEFAULT_HOSTILE_SPAWN_STOCKPILE_MULTIPLIER,
+  hostileSpawnBurstChancePerSpawnWindow: DEFAULT_HOSTILE_SPAWN_BURST_CHANCE,
+  hostileSpawnBurstExtraAttempts: DEFAULT_HOSTILE_SPAWN_BURST_EXTRA_ATTEMPTS,
+  hostileSpawnMinSpawnIntervalSec: DEFAULT_HOSTILE_SPAWN_MIN_INTERVAL_SEC,
 };
 
 export type SystemOverridesPatch = Partial<SystemOverrides>;
@@ -195,13 +231,6 @@ export function sanitizeSystemOverrides(input: Partial<SystemOverrides> | undefi
     paletteSWeightPercent: normalizePaletteRemapWeightPercent(merged.paletteSWeightPercent),
     paletteDarknessPercent: normalizePaletteRemapWeightPercent(merged.paletteDarknessPercent),
 
-    spawnBase: Math.max(0.2, Math.min(4.0, Number.isFinite(Number(merged.spawnBase)) ? Number(merged.spawnBase) : DEFAULT_SPAWN_TUNING.spawnBase)),
-    spawnPerDepth: Math.max(0.8, Math.min(1.5, Number.isFinite(Number(merged.spawnPerDepth)) ? Number(merged.spawnPerDepth) : DEFAULT_SPAWN_TUNING.spawnPerDepth)),
-    hpBase: Math.max(0.2, Math.min(4.0, Number.isFinite(Number(merged.hpBase)) ? Number(merged.hpBase) : DEFAULT_SPAWN_TUNING.hpBase)),
-    hpPerDepth: Math.max(0.8, Math.min(1.5, Number.isFinite(Number(merged.hpPerDepth)) ? Number(merged.hpPerDepth) : DEFAULT_SPAWN_TUNING.hpPerDepth)),
-    pressureAt0Sec: Math.max(0.1, Math.min(3.0, Number.isFinite(Number(merged.pressureAt0Sec)) ? Number(merged.pressureAt0Sec) : DEFAULT_SPAWN_TUNING.pressureAt0Sec)),
-    pressureAt120Sec: Math.max(0.1, Math.min(3.0, Number.isFinite(Number(merged.pressureAt120Sec)) ? Number(merged.pressureAt120Sec) : DEFAULT_SPAWN_TUNING.pressureAt120Sec)),
-
     disableVisualCompiledCutoutCache: !!merged.disableVisualCompiledCutoutCache,
     mapOverlaysDisabled: !!merged.mapOverlaysDisabled,
     rampFaces: !!merged.rampFaces,
@@ -212,6 +241,85 @@ export function sanitizeSystemOverrides(input: Partial<SystemOverrides> | undefi
       : "NONE",
     neutralBirdDisableTransitions: !!merged.neutralBirdDisableTransitions,
     neutralBirdDebugRepickTarget: !!merged.neutralBirdDebugRepickTarget,
+
+    hostileSpawnT0PowerPerSec: clampFinite(
+      merged.hostileSpawnT0PowerPerSec,
+      DEFAULT_HOSTILE_SPAWN_T0_POWER_PER_SEC,
+      0,
+      5,
+    ),
+    hostileSpawnT120PowerPerSec: clampFinite(
+      merged.hostileSpawnT120PowerPerSec,
+      DEFAULT_HOSTILE_SPAWN_T120_POWER_PER_SEC,
+      0,
+      8,
+    ),
+    hostileSpawnOvertimePowerPerSecSlope: clampFinite(
+      merged.hostileSpawnOvertimePowerPerSecSlope,
+      DEFAULT_HOSTILE_SPAWN_OVERTIME_POWER_PER_SEC_SLOPE,
+      0,
+      0.2,
+    ),
+    hostileSpawnT0LiveThreatCap: clampFinite(
+      merged.hostileSpawnT0LiveThreatCap,
+      DEFAULT_HOSTILE_SPAWN_T0_LIVE_THREAT_CAP,
+      0,
+      30,
+    ),
+    hostileSpawnT120LiveThreatCap: clampFinite(
+      merged.hostileSpawnT120LiveThreatCap,
+      DEFAULT_HOSTILE_SPAWN_T120_LIVE_THREAT_CAP,
+      0,
+      60,
+    ),
+    hostileSpawnOvertimeLiveThreatCapSlope: clampFinite(
+      merged.hostileSpawnOvertimeLiveThreatCapSlope,
+      DEFAULT_HOSTILE_SPAWN_OVERTIME_LIVE_THREAT_CAP_SLOPE,
+      0,
+      1,
+    ),
+    hostileSpawnHeatHealthFactor: clampFinite(
+      merged.hostileSpawnHeatHealthFactor,
+      DEFAULT_HOSTILE_SPAWN_HEAT_HEALTH_FACTOR,
+      0,
+      0.5,
+    ),
+    hostileSpawnHeatPowerPerSecFactor: clampFinite(
+      merged.hostileSpawnHeatPowerPerSecFactor,
+      DEFAULT_HOSTILE_SPAWN_HEAT_POWER_PER_SEC_FACTOR,
+      0,
+      0.5,
+    ),
+    hostileSpawnHeatThreatCapFactor: clampFinite(
+      merged.hostileSpawnHeatThreatCapFactor,
+      DEFAULT_HOSTILE_SPAWN_HEAT_THREAT_CAP_FACTOR,
+      0,
+      0.5,
+    ),
+    hostileSpawnStockpileMultiplier: clampFinite(
+      merged.hostileSpawnStockpileMultiplier,
+      DEFAULT_HOSTILE_SPAWN_STOCKPILE_MULTIPLIER,
+      1,
+      3,
+    ),
+    hostileSpawnBurstChancePerSpawnWindow: clampFinite(
+      merged.hostileSpawnBurstChancePerSpawnWindow,
+      DEFAULT_HOSTILE_SPAWN_BURST_CHANCE,
+      0,
+      1,
+    ),
+    hostileSpawnBurstExtraAttempts: clampRounded(
+      merged.hostileSpawnBurstExtraAttempts,
+      DEFAULT_HOSTILE_SPAWN_BURST_EXTRA_ATTEMPTS,
+      0,
+      5,
+    ),
+    hostileSpawnMinSpawnIntervalSec: clampFinite(
+      merged.hostileSpawnMinSpawnIntervalSec,
+      DEFAULT_HOSTILE_SPAWN_MIN_INTERVAL_SEC,
+      0.1,
+      10,
+    ),
   };
 }
 
