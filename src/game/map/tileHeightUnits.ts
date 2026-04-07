@@ -10,17 +10,17 @@ export type TileHeightGrid = {
     heights: Float32Array;
 };
 
-export const SWEEP_TILE_HEIGHT_PER_RENDER_HEIGHT_UNIT = HEIGHT_UNIT_PX / KENNEY_TILE_WORLD;
+export const TILE_HEIGHT_PER_RENDER_HEIGHT_UNIT = HEIGHT_UNIT_PX / KENNEY_TILE_WORLD;
 
-export function renderHeightUnitsToSweepTileHeight(heightUnits: number): number {
-  return heightUnits * SWEEP_TILE_HEIGHT_PER_RENDER_HEIGHT_UNIT;
+export function renderHeightUnitsToTileHeight(heightUnits: number): number {
+  return heightUnits * TILE_HEIGHT_PER_RENDER_HEIGHT_UNIT;
 }
 
-export function pixelHeightToSweepTileHeight(pixelHeight: number): number {
+export function pixelHeightToTileHeight(pixelHeight: number): number {
   return pixelHeight / KENNEY_TILE_WORLD;
 }
 
-export function formatSweepTileHeight(value: number): string {
+export function formatTileHeight(value: number): string {
   const rounded = Math.round(value);
   if (Math.abs(value - rounded) < 1e-3) return `${rounded}`;
   return value.toFixed(2).replace(/\.?0+$/, "");

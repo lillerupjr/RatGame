@@ -3,8 +3,8 @@ import { KENNEY_TILE_WORLD } from "../../../../engine/render/kenneyTiles";
 import type { CompiledKenneyMap } from "../../../map/compile/kenneyMap";
 import type { TileHeightGrid } from "../../../map/tileHeightUnits";
 import {
-  formatSweepTileHeight,
-  renderHeightUnitsToSweepTileHeight,
+  formatTileHeight,
+  renderHeightUnitsToTileHeight,
 } from "../../../map/tileHeightUnits";
 
 export type TileHeightMapDebugOverlay = {
@@ -126,13 +126,13 @@ function buildTileHeightMapDebugOverlay(
       const idx = ly * width + lx;
       const tileHeight = heights[idx];
       const terrainHeight = compiledMap.getTile(tx, ty).h | 0;
-      const terrainSweepHeight = renderHeightUnitsToSweepTileHeight(terrainHeight);
+      const terrainTileHeight = renderHeightUnitsToTileHeight(terrainHeight);
       const diamond = projectDiamond(tx, ty, terrainHeight, elevPx);
       const [nw, ne, se, sw] = diamond;
       const normalized = (tileHeight - hMin) / (hMax - hMin);
       const red = normalized < 0.5 ? Math.round(normalized * 2 * 255) : 255;
       const green = normalized < 0.5 ? 255 : Math.round((1 - (normalized - 0.5) * 2) * 255);
-      const hasRaisedContribution = tileHeight > terrainSweepHeight + 1e-3;
+      const hasRaisedContribution = tileHeight > terrainTileHeight + 1e-3;
 
       ctx.globalAlpha = hasRaisedContribution ? 0.58 : 0.26;
       ctx.fillStyle = `rgb(${red},${green},40)`;
@@ -155,11 +155,11 @@ function buildTileHeightMapDebugOverlay(
       const cy = (nw.y + ne.y + se.y + sw.y) * 0.25 - originY;
       ctx.globalAlpha = 0.95;
       ctx.fillStyle = hasRaisedContribution ? "#fff" : "rgba(20,20,20,0.82)";
-      ctx.fillText(formatSweepTileHeight(tileHeight), cx, cy);
+      ctx.fillText(formatTileHeight(tileHeight), cx, cy);
       if (hasRaisedContribution) {
         ctx.globalAlpha = 0.88;
         ctx.fillStyle = "#ffe59a";
-        ctx.fillText(`t${formatSweepTileHeight(terrainSweepHeight)}`, cx, cy + 10);
+        ctx.fillText(`t${formatTileHeight(terrainTileHeight)}`, cx, cy + 10);
       }
     }
   }

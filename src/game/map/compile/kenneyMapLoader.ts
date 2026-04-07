@@ -42,7 +42,7 @@ import {
     getRequiredMonolithicBuildingPlacementGeometryForSprite,
 } from "../../structures/monolithicBuildingSemanticPrepass";
 import type { TileHeightGrid } from "../tileHeightUnits";
-import { renderHeightUnitsToSweepTileHeight } from "../tileHeightUnits";
+import { renderHeightUnitsToTileHeight } from "../tileHeightUnits";
 
 export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL" | typeof TILE_ID_OCEAN;
 export type StairDir = "N" | "E" | "S" | "W";
@@ -523,7 +523,7 @@ export function compileKenneyMapFromTable(
         w: number;
         h: number;
         topZ: number;
-        baseSweepZ?: number;
+        baseTileZ?: number;
         overlay?: StampOverlay;
     };
 
@@ -550,7 +550,7 @@ export function compileKenneyMapFromTable(
         h: number,
         topZ: number,
         input?: {
-            baseSweepZ?: number;
+            baseTileZ?: number;
             overlay?: StampOverlay;
         },
     ): void => {
@@ -561,7 +561,7 @@ export function compileKenneyMapFromTable(
             w: Math.max(1, w | 0),
             h: Math.max(1, h | 0),
             topZ,
-            baseSweepZ: input?.baseSweepZ,
+            baseTileZ: input?.baseTileZ,
             overlay: input?.overlay,
         });
     };
@@ -592,9 +592,9 @@ export function compileKenneyMapFromTable(
         if (
             Number.isFinite(resolvedStructuralRoofHeightUnits)
             && resolvedStructuralRoofHeightUnits !== undefined
-            && Number.isFinite(stamp.baseSweepZ)
+            && Number.isFinite(stamp.baseTileZ)
         ) {
-            return (stamp.baseSweepZ ?? 0) + resolvedStructuralRoofHeightUnits;
+            return (stamp.baseTileZ ?? 0) + resolvedStructuralRoofHeightUnits;
         }
         return stamp.topZ;
     };
@@ -607,7 +607,7 @@ export function compileKenneyMapFromTable(
                 const atx = tx + originTx;
                 const aty = ty + originTy;
                 const tile = getTile(atx, aty);
-                heights[ty * w + tx] = renderHeightUnitsToSweepTileHeight(tile.h);
+                heights[ty * w + tx] = renderHeightUnitsToTileHeight(tile.h);
             }
         }
         for (let i = 0; i < heightStampRecs.length; i++) {
@@ -2148,8 +2148,8 @@ export function compileKenneyMapFromTable(
             h: Math.max(1, (rawH as number) | 0),
             heightUnits: Math.max(1, (rawHeightUnits as number) | 0),
             tileHeightUnits: Math.max(
-                renderHeightUnitsToSweepTileHeight(1),
-                renderHeightUnitsToSweepTileHeight(rawHeightUnits as number),
+                renderHeightUnitsToTileHeight(1),
+                renderHeightUnitsToTileHeight(rawHeightUnits as number),
             ),
         };
     };
@@ -2806,9 +2806,9 @@ export function compileKenneyMapFromTable(
                     sy,
                     placeW,
                     placeH,
-                    renderHeightUnitsToSweepTileHeight(zBase) + tileHeightUnits,
+                    renderHeightUnitsToTileHeight(zBase) + tileHeightUnits,
                     {
-                        baseSweepZ: renderHeightUnitsToSweepTileHeight(zBase),
+                        baseTileZ: renderHeightUnitsToTileHeight(zBase),
                         overlay,
                     },
                 );
@@ -2901,7 +2901,7 @@ export function compileKenneyMapFromTable(
                 sy,
                 placeW,
                 placeH,
-                renderHeightUnitsToSweepTileHeight(zBase) + tileHeightUnits,
+                renderHeightUnitsToTileHeight(zBase) + tileHeightUnits,
             );
 
             if (EMIT_STRUCTURE_SUPPORT_TOPS) {
@@ -3033,7 +3033,7 @@ export function compileKenneyMapFromTable(
                 sy,
                 w,
                 h,
-                renderHeightUnitsToSweepTileHeight(Math.max(zBase + 1, preset.topGlow.heightUnits)),
+                renderHeightUnitsToTileHeight(Math.max(zBase + 1, preset.topGlow.heightUnits)),
             );
             runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.SHADOW_OR_LIGHT_PRECOMPUTE, () => {
                 lightDefs.push({
@@ -3117,7 +3117,7 @@ export function compileKenneyMapFromTable(
                     (stamp.y | 0) + originTy,
                     w,
                     h,
-                    renderHeightUnitsToSweepTileHeight(zBase + Math.max(1, prop.lightHeightOffsetUnits)),
+                    renderHeightUnitsToTileHeight(zBase + Math.max(1, prop.lightHeightOffsetUnits)),
                 );
             }
 

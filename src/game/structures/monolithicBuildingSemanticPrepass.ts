@@ -25,8 +25,8 @@ import {
 } from "./getStructureAnchor";
 import { getStructureSlices, type StructureSliceBand } from "./getStructureSlices";
 import {
-  pixelHeightToSweepTileHeight,
-  renderHeightUnitsToSweepTileHeight,
+  pixelHeightToTileHeight,
+  renderHeightUnitsToTileHeight,
 } from "../map/tileHeightUnits";
 
 type RuntimeStructureTrianglePoint = { x: number; y: number };
@@ -306,12 +306,12 @@ function buildPlacementOnlySemanticGeometry(input: {
   m: number;
 }): MonolithicBuildingSemanticGeometry {
   const tileHeightUnits = Math.max(
-    pixelHeightToSweepTileHeight(STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
-    input.tileHeightUnits ?? renderHeightUnitsToSweepTileHeight(input.heightUnits),
+    pixelHeightToTileHeight(STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
+    input.tileHeightUnits ?? renderHeightUnitsToTileHeight(input.heightUnits),
   );
   const faceTriangleCount = Math.max(
     1,
-    Math.round(tileHeightUnits / pixelHeightToSweepTileHeight(STRUCTURE_TRIANGLE_HEIGHT_STEP_PX)),
+    Math.round(tileHeightUnits / pixelHeightToTileHeight(STRUCTURE_TRIANGLE_HEIGHT_STEP_PX)),
   );
   return {
     skinId: input.skinId,
@@ -862,8 +862,8 @@ export function buildMonolithicBuildingSemanticGeometryFromAlphaMap(
     } satisfies RuntimeStructureTrianglePoint;
     const faceTriangleCounts = resolveSemanticFaceTriangleCounts(sliceEntries, n, anchorSpriteLocal);
     const tileHeightUnits = Math.max(
-      pixelHeightToSweepTileHeight(STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
-      pixelHeightToSweepTileHeight(faceTriangleCounts.selected * STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
+      pixelHeightToTileHeight(STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
+      pixelHeightToTileHeight(faceTriangleCounts.selected * STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
     );
     return {
       n,
@@ -1116,7 +1116,7 @@ function toPlacementGeometry(semantic: MonolithicBuildingSemanticGeometry): Mono
     h: Math.max(1, semantic.m | 0),
     heightUnits: Math.max(1, semantic.heightUnits | 0),
     tileHeightUnits: Math.max(
-      pixelHeightToSweepTileHeight(STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
+      pixelHeightToTileHeight(STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
       semantic.tileHeightUnits,
     ),
     source: semantic.source,

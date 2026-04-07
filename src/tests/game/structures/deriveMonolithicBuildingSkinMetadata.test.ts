@@ -7,7 +7,7 @@ import {
   resolveMonolithicSliceParentTileFromSeAnchor,
 } from "../../../game/structures/monolithicBuildingSemanticPrepass";
 import { getDowntown2MonolithicAlphaMap } from "../../../game/content/monolithicBuildingAlphaDowntown2";
-import { pixelHeightToSweepTileHeight } from "../../../game/map/tileHeightUnits";
+import { pixelHeightToTileHeight } from "../../../game/map/tileHeightUnits";
 
 describe("monolithicBuildingSemanticPrepass", () => {
   it("maps semantic slice bands to the open footprint walk with endpoint clamping", () => {
@@ -66,7 +66,7 @@ describe("monolithicBuildingSemanticPrepass", () => {
     expect(first?.m).toBe(4);
     expect(first?.heightUnits).toBe(32);
     expect(first?.tileHeightUnits).toBe(
-      pixelHeightToSweepTileHeight((first?.faceTriangleCounts.selected ?? 0) * STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
+      pixelHeightToTileHeight((first?.faceTriangleCounts.selected ?? 0) * STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
     );
     expect(first?.faceTriangleCounts.rule).toBe("max");
     expect(first?.faceTriangleCounts.triangleHeightPx).toBe(STRUCTURE_TRIANGLE_HEIGHT_STEP_PX);
@@ -91,7 +91,7 @@ describe("monolithicBuildingSemanticPrepass", () => {
     expect(semantic?.source).toBe("computed");
     expect(semantic?.sliceEntries.length).toBeGreaterThan(0);
     expect(semantic?.tileHeightUnits).toBe(
-      pixelHeightToSweepTileHeight((semantic?.faceTriangleCounts.selected ?? 0) * STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
+      pixelHeightToTileHeight((semantic?.faceTriangleCounts.selected ?? 0) * STRUCTURE_TRIANGLE_HEIGHT_STEP_PX),
     );
     expect(semantic?.faceTriangleCounts.triangleHeightPx).toBe(STRUCTURE_TRIANGLE_HEIGHT_STEP_PX);
   });
