@@ -95,7 +95,6 @@ export function makeAllDebugOffSettings(): DebugSettings {
     shadowSunAzimuthDeg: DEFAULT_DEBUG_SETTINGS.shadowSunAzimuthDeg,
     sunElevationOverrideEnabled: false,
     sunElevationOverrideDeg: DEFAULT_DEBUG_SETTINGS.sunElevationOverrideDeg,
-    sweepShadowDebug: false,
     tileHeightMap: false,
     waterFlowRate: 1,
     shadowSunDayCycleEnabled: false,
@@ -135,7 +134,6 @@ export type ResolvedDebugFlags = {
   showEnemyAimOverlay: boolean;
   showLootGoblinOverlay: boolean;
   visualCompiledCutoutCache: boolean;
-  showSweepShadowDebug: boolean;
   showTileHeightMap: boolean;
 };
 
@@ -160,7 +158,6 @@ export function resolveDebugFlags(debug: DebugSettings): ResolvedDebugFlags {
     showEnemyAimOverlay: debug.enemyAimOverlay,
     showLootGoblinOverlay: debug.lootGoblinOverlay,
     visualCompiledCutoutCache: !debug.disableVisualCompiledCutoutCache,
-    showSweepShadowDebug: debug.sweepShadowDebug,
     showTileHeightMap: debug.tileHeightMap,
   };
 }

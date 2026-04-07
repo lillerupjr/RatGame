@@ -1,7 +1,7 @@
 import { worldToScreen } from "../../../../engine/math/iso";
 import { KENNEY_TILE_WORLD } from "../../../../engine/render/kenneyTiles";
 import type { CompiledKenneyMap } from "../../../map/compile/kenneyMap";
-import type { TileHeightGrid } from "../../../map/sweepShadow";
+import type { TileHeightGrid } from "../../../map/tileHeightUnits";
 import {
   formatSweepTileHeight,
   renderHeightUnitsToSweepTileHeight,

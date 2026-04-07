@@ -253,7 +253,7 @@ export function resolveAmbientDarkness01FromElevationDeg(ambientElevationDeg: nu
     (ambientElevationDeg - SHADOW_SUN_V1_AMBIENT_MIN_ELEVATION_DEG)
     / (SHADOW_SUN_V1_MAX_ELEVATION_DEG - SHADOW_SUN_V1_AMBIENT_MIN_ELEVATION_DEG),
   );
-  return 1 - smoothstep(0, 1, elevation01);
+  return 0 ;//- smoothstep(0, 1, elevation01);
 }
 
 export function clampShadowSunElevationOverrideDeg(value: unknown): number {

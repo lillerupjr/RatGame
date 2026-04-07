@@ -24,6 +24,8 @@ const SUBSET_DIRS = [
   "structures/buildings/downtown",
   "structures/buildings/china_town",
   "structures/buildings/batch_processed",
+  "structures/buildings/batch1",
+  "structures/buildings/batch4",
   "structures/containers",
   "props",
   "entities",

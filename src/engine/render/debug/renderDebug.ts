@@ -1,6 +1,5 @@
 import type { World } from "../../world/world";
 import { worldToScreen } from "../../math/iso";
-import { getSweepShadowMap } from "../../../game/map/sweepShadow";
 import { getActiveMap as getActiveCompiledMap_ } from "../../../game/map/compile/kenneyMap";
 import { getTileHeightMapDebugOverlay } from "../../../game/systems/presentation/debug/tileHeightMapDebugOverlay";
 import { KENNEY_TILE_ANCHOR_Y, KENNEY_TILE_WORLD } from "../kenneyTiles";
@@ -758,37 +757,6 @@ export function drawStructureHeightOverlay(ctx: DebugOverlayContext, show: boole
   c.restore();
 }
 
-export function drawSweepShadowDebugOverlay(ctx: DebugOverlayContext, show: boolean, viewRect: ViewRect) {
-  if (!show) return;
-  const shadowMap = getSweepShadowMap();
-  if (!shadowMap) return;
-  const c = ctx.ctx;
-  const { T } = ctx;
-
-  c.save();
-  c.globalAlpha = 0.95;
-  c.textAlign = "center";
-  c.textBaseline = "middle";
-  c.font = "10px monospace";
-
-  for (let ty = viewRect.minTy; ty <= viewRect.maxTy; ty++) {
-    for (let tx = viewRect.minTx; tx <= viewRect.maxTx; tx++) {
-      const gx = tx - shadowMap.originTx;
-      const gy = ty - shadowMap.originTy;
-      if (gx < 0 || gy < 0 || gx >= shadowMap.width || gy >= shadowMap.height) continue;
-      const intensity = shadowMap.data[gy * shadowMap.width + gx] ?? 0;
-      if (intensity <= 0) continue;
-      const wx = (tx + 0.5) * T;
-      const wy = (ty + 0.5) * T;
-      const z = ctx.tileHAtWorld(wx, wy);
-      const p = ctx.toScreenAtZ(wx, wy, z);
-      c.fillStyle = intensity >= 0.75 ? "rgba(255,110,110,0.95)" : intensity >= 0.4 ? "rgba(255,205,120,0.95)" : "rgba(140,220,255,0.95)";
-      c.fillText(intensity.toFixed(2), p.x, p.y - 6);
-    }
-  }
-
-  c.restore();
-}
 
 export function drawTileHeightMapOverlay(ctx: DebugOverlayContext, show: boolean, _viewRect: ViewRect) {
   if (!show) return;

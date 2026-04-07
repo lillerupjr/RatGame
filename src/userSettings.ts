@@ -1,10 +1,4 @@
 import type { PaletteGroup } from "./engine/render/palette/palettes";
-import type {
-  ShadowSunCycleMode,
-  ShadowSunDayCycleSpeedMultiplier,
-  ShadowSunDayCycleStepsPerDay,
-} from "./shadowSunDayCycle";
-import type { StaticLightCycleOverride } from "./staticLightCycle";
 import {
   DEFAULT_VISIBLE_VERTICAL_TILES,
   DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP,
@@ -17,21 +11,15 @@ import {
   type ResolvedVerticalTiles,
   type VerticalTilesMode,
 } from "./settings/userSettings";
-import type { RenderBackendMode } from "./settings/settingsTypes";
 import {
-  DEFAULT_XP_LEVEL_BASE,
-  DEFAULT_XP_LEVEL_GROWTH,
   DEFAULT_GAME_SPEED,
   MAX_GAME_SPEED,
   MIN_GAME_SPEED,
   clampGameSpeed,
-  normalizeXpLevelBase,
-  normalizeXpLevelGrowth,
   normalizePaletteRemapWeightPercent,
   type LightColorModeOverride,
   type LightStrengthOverride,
   type StructureTriangleAdmissionMode,
-  type WorldAtlasMode,
 } from "./settings/systemOverrides";
 import {
   getSettings,
@@ -42,8 +30,6 @@ import {
 } from "./settings/settingsStore";
 
 export {
-  DEFAULT_XP_LEVEL_BASE,
-  DEFAULT_XP_LEVEL_GROWTH,
   DEFAULT_GAME_SPEED,
   DEFAULT_VISIBLE_VERTICAL_TILES,
   DEFAULT_VISIBLE_VERTICAL_TILES_DESKTOP,
@@ -55,7 +41,6 @@ export {
   MIN_VISIBLE_VERTICAL_TILES,
   clampGameSpeed,
   clampVisibleVerticalTiles,
-  type RenderBackendMode,
   type ResolvedVerticalTiles,
   type VerticalTilesMode,
 };
@@ -65,10 +50,12 @@ export type VerticalTilesViewportClass = "phone" | "desktop";
 
 export type RenderSettings = {
   entityShadowsDisable: boolean;
+  heightmapShadowsEnabled: boolean;
   entityAnchorsEnabled: boolean;
   renderPerfCountersEnabled: boolean;
   performanceMode: boolean;
-  renderBackend: RenderBackendMode;
+  staticRelightEnabled: boolean;
+  structureTriangleGeometryEnabled: boolean;
   structureTriangleAdmissionMode: StructureTriangleAdmissionMode;
   structureTriangleCutoutEnabled: boolean;
   structureTriangleCutoutWidth: number;
@@ -76,7 +63,6 @@ export type RenderSettings = {
   structureTriangleCutoutAlpha: number;
   deathSlowdownEnabled: boolean;
   cameraSmoothingEnabled: boolean;
-  worldAtlasMode?: WorldAtlasMode;
   verticalTilesMode?: VerticalTilesMode;
   verticalTilesUser?: number;
   verticalTilesAutoPhone?: number;
@@ -90,14 +76,20 @@ export type RenderSettings = {
   lightStrengthOverride: LightStrengthOverride;
   paletteGroup: PaletteGroup;
   paletteId: string;
+  spawnBase: number;
+  spawnPerDepth: number;
+  hpBase: number;
+  hpPerDepth: number;
+  pressureAt0Sec: number;
+  pressureAt120Sec: number;
+  staticRelightPocEnabled?: boolean;
+  structureTriangleGeometryPocEnabled?: boolean;
 };
 
 export type GameSettings = {
   userModeEnabled: boolean;
   healthOrbSide: "left" | "right";
   gameSpeed: number;
-  xpLevelBase: number;
-  xpLevelGrowth: number;
 };
 
 export type AudioPreferenceSettings = {
@@ -126,12 +118,9 @@ export type DebugSettings = {
   occluders: boolean;
   decals: boolean;
   structureHeights: boolean;
+  tileHeightMap: boolean;
   spriteBounds: boolean;
-  showStructureSlices: boolean;
   structureTriangleFootprint: boolean;
-  showStructureAnchors: boolean;
-  showStructureTriangleOwnershipSort: boolean;
-  perfOverlayMode: "off" | "overview" | "world" | "structures" | "textures" | "ground" | "lighting" | "cache" | "all";
   projectileFaces: boolean;
   triggers: boolean;
   debugRoadSemantic: boolean;
@@ -144,6 +133,8 @@ export type DebugSettings = {
   fireRateMult: number;
   paletteSWeightPercent: 0 | 25 | 50 | 75 | 100;
   paletteDarknessPercent: 0 | 25 | 50 | 75 | 100;
+  staticRelightStrengthPercent: 0 | 25 | 50 | 75 | 100;
+  staticRelightTargetDarknessPercent: 0 | 25 | 50 | 75;
   entityAnchorOverlay: boolean;
   enemyAimOverlay: boolean;
   lootGoblinOverlay: boolean;
@@ -151,17 +142,18 @@ export type DebugSettings = {
   pauseCsvControls: boolean;
   dpsMeter: boolean;
   shadowSunTimeHour: number;
-  shadowSunDayCycleEnabled: boolean;
-  shadowSunCycleMode: ShadowSunCycleMode;
-  shadowSunDayCycleSpeedMultiplier: ShadowSunDayCycleSpeedMultiplier;
-  shadowSunStepsPerDay: ShadowSunDayCycleStepsPerDay;
-  staticLightCycleOverride: StaticLightCycleOverride;
-  shadowSunAzimuthDeg: number;
-  sunElevationOverrideEnabled: boolean;
-  sunElevationOverrideDeg: number;
-  sweepShadowDebug: boolean;
-  tileHeightMap: boolean;
+  shadowV1DebugGeometryMode: "full" | "capOnly" | "connectorsOnly";
+  shadowCasterMode: "v1Roof" | "v2AlphaSilhouette" | "v3HybridTriangles" | "v4SliceStrips" | "v5TriangleShadowMask";
+  shadowHybridDiagnosticMode: "off" | "solidShadowPass" | "solidMainCanvas";
+  shadowDebugMode: "flatOnly" | "warpedOnly" | "both";
+  shadowV5DebugView: "finalOnly" | "topMask" | "eastWestMask" | "southNorthMask" | "all";
+  shadowV5TransformDebugMode: "deformed" | "raw";
   waterFlowRate: number;
+  heightmapShadowDebugShowHeightBuffer: boolean;
+  heightmapShadowResolutionDivisor: number;
+  heightmapShadowStepSize: number;
+  heightmapShadowMaxSteps: number;
+  heightmapShadowIntensity: number;
   neutralBirdAI: NeutralBirdAIDebugSettings;
   objectives: {
     showZoneBounds: boolean;
@@ -205,12 +197,9 @@ function toLegacySettings(): UserSettings {
       occluders: settings.debug.occluders,
       decals: settings.debug.decals,
       structureHeights: settings.debug.structureHeights,
+      tileHeightMap: settings.debug.tileHeightMap,
       spriteBounds: settings.debug.spriteBounds,
-      showStructureSlices: settings.debug.showStructureSlices,
       structureTriangleFootprint: settings.debug.structureTriangleFootprint,
-      showStructureAnchors: settings.debug.showStructureAnchors,
-      showStructureTriangleOwnershipSort: settings.debug.showStructureTriangleOwnershipSort,
-      perfOverlayMode: settings.debug.perfOverlayMode,
       projectileFaces: settings.debug.projectileFaces,
       triggers: settings.debug.triggers,
       debugRoadSemantic: settings.debug.debugRoadSemantic,
@@ -223,6 +212,8 @@ function toLegacySettings(): UserSettings {
       fireRateMult: settings.system.fireRateMult,
       paletteSWeightPercent: settings.system.paletteSWeightPercent,
       paletteDarknessPercent: settings.system.paletteDarknessPercent,
+      staticRelightStrengthPercent: settings.system.staticRelightStrengthPercent,
+      staticRelightTargetDarknessPercent: settings.system.staticRelightTargetDarknessPercent,
       entityAnchorOverlay: settings.debug.entityAnchorOverlay,
       enemyAimOverlay: settings.debug.enemyAimOverlay,
       lootGoblinOverlay: settings.debug.lootGoblinOverlay,
@@ -230,17 +221,18 @@ function toLegacySettings(): UserSettings {
       pauseCsvControls: settings.debug.pauseCsvControls,
       dpsMeter: settings.debug.dpsMeter,
       shadowSunTimeHour: settings.debug.shadowSunTimeHour,
-      shadowSunDayCycleEnabled: settings.debug.shadowSunDayCycleEnabled,
-      shadowSunCycleMode: settings.debug.shadowSunCycleMode,
-      shadowSunDayCycleSpeedMultiplier: settings.debug.shadowSunDayCycleSpeedMultiplier,
-      shadowSunStepsPerDay: settings.debug.shadowSunStepsPerDay,
-      staticLightCycleOverride: settings.debug.staticLightCycleOverride,
-      shadowSunAzimuthDeg: settings.debug.shadowSunAzimuthDeg,
-      sunElevationOverrideEnabled: settings.debug.sunElevationOverrideEnabled,
-      sunElevationOverrideDeg: settings.debug.sunElevationOverrideDeg,
-      sweepShadowDebug: settings.debug.sweepShadowDebug,
-      tileHeightMap: settings.debug.tileHeightMap,
+      shadowV1DebugGeometryMode: settings.debug.shadowV1DebugGeometryMode,
+      shadowCasterMode: settings.debug.shadowCasterMode,
+      shadowHybridDiagnosticMode: settings.debug.shadowHybridDiagnosticMode,
+      shadowDebugMode: settings.debug.shadowDebugMode,
+      shadowV5DebugView: settings.debug.shadowV5DebugView,
+      shadowV5TransformDebugMode: settings.debug.shadowV5TransformDebugMode,
       waterFlowRate: settings.system.waterFlowRate,
+      heightmapShadowDebugShowHeightBuffer: settings.debug.heightmapShadowDebugShowHeightBuffer,
+      heightmapShadowResolutionDivisor: settings.debug.heightmapShadowResolutionDivisor,
+      heightmapShadowStepSize: settings.debug.heightmapShadowStepSize,
+      heightmapShadowMaxSteps: settings.debug.heightmapShadowMaxSteps,
+      heightmapShadowIntensity: settings.debug.heightmapShadowIntensity,
       neutralBirdAI: {
         disabled: settings.system.neutralBirdDisabled,
         forceState: settings.system.neutralBirdForceState,
@@ -256,15 +248,15 @@ function toLegacySettings(): UserSettings {
       userModeEnabled: settings.user.game.userModeEnabled,
       healthOrbSide: settings.user.game.healthOrbSide,
       gameSpeed: settings.system.gameSpeed,
-      xpLevelBase: settings.system.xpLevelBase,
-      xpLevelGrowth: settings.system.xpLevelGrowth,
     },
     render: {
       entityShadowsDisable: settings.system.entityShadowsDisable,
+      heightmapShadowsEnabled: settings.system.heightmapShadowsEnabled,
       entityAnchorsEnabled: settings.debug.entityAnchorsEnabled,
       renderPerfCountersEnabled: settings.debug.renderPerfCountersEnabled,
       performanceMode: settings.user.graphics.performanceMode,
-      renderBackend: settings.debug.renderBackend,
+      staticRelightEnabled: settings.system.staticRelightEnabled,
+      structureTriangleGeometryEnabled: settings.system.structureTriangleGeometryEnabled,
       structureTriangleAdmissionMode: settings.system.structureTriangleAdmissionMode,
       structureTriangleCutoutEnabled: settings.system.structureTriangleCutoutEnabled,
       structureTriangleCutoutWidth: settings.system.structureTriangleCutoutWidth,
@@ -272,7 +264,6 @@ function toLegacySettings(): UserSettings {
       structureTriangleCutoutAlpha: settings.system.structureTriangleCutoutAlpha,
       deathSlowdownEnabled: settings.user.graphics.deathSlowdownEnabled,
       cameraSmoothingEnabled: settings.user.graphics.cameraSmoothingEnabled,
-      worldAtlasMode: settings.system.worldAtlasMode,
       verticalTilesMode: settings.user.graphics.verticalTilesMode,
       verticalTilesUser: settings.user.graphics.verticalTilesUser,
       verticalTilesAutoPhone: settings.user.graphics.verticalTilesAutoPhone,
@@ -286,6 +277,14 @@ function toLegacySettings(): UserSettings {
       lightStrengthOverride: settings.system.lightStrengthOverride,
       paletteGroup: settings.system.paletteGroup,
       paletteId: settings.system.paletteId,
+      spawnBase: settings.system.spawnBase,
+      spawnPerDepth: settings.system.spawnPerDepth,
+      hpBase: settings.system.hpBase,
+      hpPerDepth: settings.system.hpPerDepth,
+      pressureAt0Sec: settings.system.pressureAt0Sec,
+      pressureAt120Sec: settings.system.pressureAt120Sec,
+      staticRelightPocEnabled: undefined,
+      structureTriangleGeometryPocEnabled: undefined,
     },
     audio: {
       ...settings.user.audio,
@@ -314,12 +313,6 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     }
     if (gamePatch.gameSpeed !== undefined) {
       systemPatch.gameSpeed = gamePatch.gameSpeed;
-    }
-    if (gamePatch.xpLevelBase !== undefined) {
-      systemPatch.xpLevelBase = normalizeXpLevelBase(gamePatch.xpLevelBase);
-    }
-    if (gamePatch.xpLevelGrowth !== undefined) {
-      systemPatch.xpLevelGrowth = normalizeXpLevelGrowth(gamePatch.xpLevelGrowth);
     }
   }
 
@@ -364,7 +357,6 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     }
 
     if (renderPatch.entityAnchorsEnabled !== undefined) debugPatch.entityAnchorsEnabled = renderPatch.entityAnchorsEnabled;
-    if (renderPatch.renderBackend !== undefined) debugPatch.renderBackend = renderPatch.renderBackend;
     if (renderPatch.renderPerfCountersEnabled !== undefined) {
       debugPatch.renderPerfCountersEnabled = renderPatch.renderPerfCountersEnabled;
     }
@@ -373,6 +365,20 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     }
 
     if (renderPatch.entityShadowsDisable !== undefined) systemPatch.entityShadowsDisable = renderPatch.entityShadowsDisable;
+    if (renderPatch.heightmapShadowsEnabled !== undefined) systemPatch.heightmapShadowsEnabled = renderPatch.heightmapShadowsEnabled;
+    if (renderPatch.staticRelightEnabled !== undefined) systemPatch.staticRelightEnabled = renderPatch.staticRelightEnabled;
+    if (renderPatch.staticRelightPocEnabled !== undefined && renderPatch.staticRelightEnabled === undefined) {
+      systemPatch.staticRelightEnabled = renderPatch.staticRelightPocEnabled;
+    }
+    if (renderPatch.structureTriangleGeometryEnabled !== undefined) {
+      systemPatch.structureTriangleGeometryEnabled = renderPatch.structureTriangleGeometryEnabled;
+    }
+    if (
+      renderPatch.structureTriangleGeometryPocEnabled !== undefined
+      && renderPatch.structureTriangleGeometryEnabled === undefined
+    ) {
+      systemPatch.structureTriangleGeometryEnabled = renderPatch.structureTriangleGeometryPocEnabled;
+    }
     if (renderPatch.structureTriangleAdmissionMode !== undefined) {
       systemPatch.structureTriangleAdmissionMode = renderPatch.structureTriangleAdmissionMode;
     }
@@ -401,6 +407,12 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     }
     if (renderPatch.paletteGroup !== undefined) systemPatch.paletteGroup = renderPatch.paletteGroup;
     if (renderPatch.paletteId !== undefined) systemPatch.paletteId = renderPatch.paletteId;
+    if (renderPatch.spawnBase !== undefined) systemPatch.spawnBase = renderPatch.spawnBase;
+    if (renderPatch.spawnPerDepth !== undefined) systemPatch.spawnPerDepth = renderPatch.spawnPerDepth;
+    if (renderPatch.hpBase !== undefined) systemPatch.hpBase = renderPatch.hpBase;
+    if (renderPatch.hpPerDepth !== undefined) systemPatch.hpPerDepth = renderPatch.hpPerDepth;
+    if (renderPatch.pressureAt0Sec !== undefined) systemPatch.pressureAt0Sec = renderPatch.pressureAt0Sec;
+    if (renderPatch.pressureAt120Sec !== undefined) systemPatch.pressureAt120Sec = renderPatch.pressureAt120Sec;
   }
 
   const debugAny = patch.debug as any;
@@ -415,11 +427,9 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
       "occluders",
       "decals",
       "structureHeights",
+      "tileHeightMap",
       "spriteBounds",
-      "showStructureSlices",
       "structureTriangleFootprint",
-      "showStructureAnchors",
-      "showStructureTriangleOwnershipSort",
       "projectileFaces",
       "triggers",
       "debugRoadSemantic",
@@ -429,10 +439,6 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
       "pauseDebugCards",
       "pauseCsvControls",
       "dpsMeter",
-      "sweepShadowDebug",
-      "tileHeightMap",
-      "shadowSunDayCycleEnabled",
-      "sunElevationOverrideEnabled",
     ] as const;
     for (const key of debugBooleanKeys) {
       if (debugAny[key] !== undefined) (debugPatch as any)[key] = debugAny[key];
@@ -440,27 +446,25 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     if (debugAny.shadowSunTimeHour !== undefined) {
       debugPatch.shadowSunTimeHour = debugAny.shadowSunTimeHour;
     }
-    if (debugAny.shadowSunDayCycleSpeedMultiplier !== undefined) {
-      debugPatch.shadowSunDayCycleSpeedMultiplier = debugAny.shadowSunDayCycleSpeedMultiplier;
+    if (debugAny.shadowV1DebugGeometryMode !== undefined) {
+      debugPatch.shadowV1DebugGeometryMode = debugAny.shadowV1DebugGeometryMode;
     }
-    if (debugAny.shadowSunCycleMode !== undefined) {
-      debugPatch.shadowSunCycleMode = debugAny.shadowSunCycleMode;
+    if (debugAny.shadowCasterMode !== undefined) {
+      debugPatch.shadowCasterMode = debugAny.shadowCasterMode;
     }
-    if (debugAny.shadowSunStepsPerDay !== undefined) {
-      debugPatch.shadowSunStepsPerDay = debugAny.shadowSunStepsPerDay;
+    if (debugAny.shadowHybridDiagnosticMode !== undefined) {
+      debugPatch.shadowHybridDiagnosticMode = debugAny.shadowHybridDiagnosticMode;
     }
-    if (debugAny.staticLightCycleOverride !== undefined) {
-      debugPatch.staticLightCycleOverride = debugAny.staticLightCycleOverride;
+    if (debugAny.shadowDebugMode !== undefined) {
+      debugPatch.shadowDebugMode = debugAny.shadowDebugMode;
     }
-    if (debugAny.shadowSunAzimuthDeg !== undefined) {
-      debugPatch.shadowSunAzimuthDeg = debugAny.shadowSunAzimuthDeg;
+    if (debugAny.shadowV5DebugView !== undefined) {
+      debugPatch.shadowV5DebugView = debugAny.shadowV5DebugView;
     }
-    if (debugAny.sunElevationOverrideDeg !== undefined) {
-      debugPatch.sunElevationOverrideDeg = debugAny.sunElevationOverrideDeg;
+    if (debugAny.shadowV5TransformDebugMode !== undefined) {
+      debugPatch.shadowV5TransformDebugMode = debugAny.shadowV5TransformDebugMode;
     }
-    if (debugAny.perfOverlayMode !== undefined) {
-      debugPatch.perfOverlayMode = debugAny.perfOverlayMode;
-    }
+
     if (debugAny.disableVisualCompiledCutoutCache !== undefined) {
       systemPatch.disableVisualCompiledCutoutCache = debugAny.disableVisualCompiledCutoutCache;
     }
@@ -476,6 +480,14 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
     }
     if (debugAny.paletteDarknessPercent !== undefined) {
       systemPatch.paletteDarknessPercent = normalizePaletteRemapWeightPercent(debugAny.paletteDarknessPercent);
+    }
+    if (debugAny.staticRelightStrengthPercent !== undefined) {
+      systemPatch.staticRelightStrengthPercent = normalizePaletteRemapWeightPercent(debugAny.staticRelightStrengthPercent);
+    }
+    if (debugAny.staticRelightTargetDarknessPercent !== undefined) {
+      systemPatch.staticRelightTargetDarknessPercent = normalizeStaticRelightTargetDarknessPercent(
+        debugAny.staticRelightTargetDarknessPercent,
+      );
     }
 
     if (debugAny.objectives?.showZoneBounds !== undefined) {

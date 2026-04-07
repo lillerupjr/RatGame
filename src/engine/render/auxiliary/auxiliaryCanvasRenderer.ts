@@ -327,8 +327,8 @@ export class Canvas2DRenderer {
         this.drawDebugTriangleOverlay(payload);
         return;
       }
-      if (payload.sweepShadowMap) {
-        this.drawSweepShadowMap(payload);
+      if (payload.heightmapShadowMask) {
+        this.drawHeightmapShadowMask(payload);
         return;
       }
       if (payload.cells) {
@@ -394,48 +394,67 @@ export class Canvas2DRenderer {
     );
   }
 
-  private drawSweepShadowMap(data: any): void {
-    const sweepShadowMap = data.sweepShadowMap as {
-      originTx: number;
-      originTy: number;
+  private drawHeightmapShadowMask(data: any): void {
+    const mask = data.heightmapShadowMask as {
       width: number;
       height: number;
       data: Float32Array;
+      scale: number;
     } | null;
-    if (!sweepShadowMap) return;
+    if (!mask || mask.width <= 0 || mask.height <= 0) return;
 
     const ctx = this.frameContext.ctx;
-    const SWEEP_MAX_DARKNESS = 0.38;
-    const { originTx, originTy, width, height, data: intensityData } = sweepShadowMap;
+    const { width, height, data: maskData, scale } = mask;
 
-    this.deps.setRenderPerfDrawTag?.("floors");
+    this.deps.setRenderPerfDrawTag?.("heightmapShadow");
     ctx.save();
+    // Keep the active world transform — the mask is in world-projected space
     ctx.globalCompositeOperation = "source-over";
-    for (let ty = 0; ty < height; ty++) {
-      for (let tx = 0; tx < width; tx++) {
-        const intensity = intensityData[ty * width + tx] ?? 0;
-        const alpha = intensity * SWEEP_MAX_DARKNESS;
-        if (alpha <= 0) continue;
-        const mapTx = tx + originTx;
-        const mapTy = ty + originTy;
-        const tileH = this.deps.tileHAtWorld((mapTx + 0.5) * this.deps.T, (mapTy + 0.5) * this.deps.T);
-        const nw = this.deps.toScreenAtZ(mapTx * this.deps.T, mapTy * this.deps.T, tileH);
-        const ne = this.deps.toScreenAtZ((mapTx + 1) * this.deps.T, mapTy * this.deps.T, tileH);
-        const se = this.deps.toScreenAtZ((mapTx + 1) * this.deps.T, (mapTy + 1) * this.deps.T, tileH);
-        const sw = this.deps.toScreenAtZ(mapTx * this.deps.T, (mapTy + 1) * this.deps.T, tileH);
-        ctx.beginPath();
-        ctx.moveTo(nw.x, nw.y);
-        ctx.lineTo(ne.x, ne.y);
-        ctx.lineTo(se.x, se.y);
-        ctx.lineTo(sw.x, sw.y);
-        ctx.closePath();
-        ctx.fillStyle = `rgba(0,0,0,${alpha.toFixed(3)})`;
-        ctx.fill("nonzero");
-      }
+
+    // Build an ImageData with the shadow mask as black pixels with alpha
+    if (!this._hmScratchCanvas) {
+      this._hmScratchCanvas = document.createElement("canvas");
+      this._hmScratchCtx = this._hmScratchCanvas.getContext("2d");
     }
+    const scratchCanvas = this._hmScratchCanvas!;
+    const scratchCtx = this._hmScratchCtx!;
+    if (scratchCanvas.width !== width || scratchCanvas.height !== height) {
+      scratchCanvas.width = width;
+      scratchCanvas.height = height;
+    }
+
+    const imageData = scratchCtx.createImageData(width, height);
+    const pixels = imageData.data;
+    for (let i = 0; i < width * height; i++) {
+      const offset = i * 4;
+      const alpha = maskData[i];
+      if (alpha > 0) {
+        pixels[offset] = 0;     // R
+        pixels[offset + 1] = 0; // G
+        pixels[offset + 2] = 0; // B
+        pixels[offset + 3] = Math.round(alpha * 255); // A
+      }
+      // else: all zeros = fully transparent (default)
+    }
+    scratchCtx.putImageData(imageData, 0, 0);
+
+    // Draw through the world transform: the mask covers the viewport in projected space
+    // The viewport origin in projected space is (-camTx, -camTy)
+    const viewport = this.frameContext.viewport;
+    const drawX = -viewport.camTx;
+    const drawY = -viewport.camTy;
+    const drawW = viewport.cssWidth / viewport.zoom;
+    const drawH = viewport.cssHeight / viewport.zoom;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(scratchCanvas, 0, 0, width, height, drawX, drawY, drawW, drawH);
+    ctx.imageSmoothingEnabled = false;
+
     ctx.restore();
     this.deps.setRenderPerfDrawTag?.(null);
   }
+
+  private _hmScratchCanvas: HTMLCanvasElement | null = null;
+  private _hmScratchCtx: CanvasRenderingContext2D | null = null;
 
   private drawRuntimeDecalTop(data: any): void {
     const src = this.deps.getRuntimeDecalSprite(data.setId, data.variantIndex);

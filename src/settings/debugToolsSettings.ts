@@ -56,7 +56,6 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "renderPerfCountersEnabled", label: "renderPerfCountersEnabled" },
   { key: "paletteHudDebugOverlayEnabled", label: "paletteHudDebugOverlayEnabled" },
   { key: "shadowSunDayCycleEnabled", label: "shadowSunDayCycleEnabled" },
-  { key: "sweepShadowDebug", label: "sweepShadowDebug" },
   { key: "tileHeightMap", label: "tileHeightMap" },
 ] as const;
 
@@ -104,8 +103,12 @@ export const DEFAULT_DEBUG_TOOLS_SETTINGS: DebugToolsSettings = {
   shadowSunAzimuthDeg: -1,
   sunElevationOverrideEnabled: false,
   sunElevationOverrideDeg: 45,
-  sweepShadowDebug: false,
   tileHeightMap: false,
+  heightmapShadowDebugShowHeightBuffer: false,
+  heightmapShadowResolutionDivisor: 2,
+  heightmapShadowStepSize: 2,
+  heightmapShadowMaxSteps: 128,
+  heightmapShadowIntensity: 0.45,
 };
 
 function clampShadowSunAzimuthDeg(value: unknown): number {
@@ -131,6 +134,17 @@ function normalizePerfOverlayMode(value: unknown): PerfOverlayMode {
   if (value === "cache") return "cache";
   if (value === "all") return "all";
   return "overview";
+}
+
+function sanitizePositiveNumber(value: unknown, fallback: number): number {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : fallback;
+}
+
+function sanitizeClamp01(value: unknown, fallback: number): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(0, Math.min(1, numeric));
 }
 
 export type DebugToolsSettingsPatch = Partial<DebugToolsSettings>;
@@ -181,8 +195,12 @@ export function sanitizeDebugToolsSettings(input: Partial<DebugToolsSettings> | 
     shadowSunAzimuthDeg: clampShadowSunAzimuthDeg(merged.shadowSunAzimuthDeg),
     sunElevationOverrideEnabled: !!merged.sunElevationOverrideEnabled,
     sunElevationOverrideDeg: clampShadowSunElevationOverrideDeg(merged.sunElevationOverrideDeg),
-    sweepShadowDebug: !!merged.sweepShadowDebug,
     tileHeightMap: !!merged.tileHeightMap,
+    heightmapShadowDebugShowHeightBuffer: !!merged.heightmapShadowDebugShowHeightBuffer,
+    heightmapShadowResolutionDivisor: sanitizePositiveNumber(merged.heightmapShadowResolutionDivisor, 2),
+    heightmapShadowStepSize: sanitizePositiveNumber(merged.heightmapShadowStepSize, 2),
+    heightmapShadowMaxSteps: sanitizePositiveNumber(merged.heightmapShadowMaxSteps, 128),
+    heightmapShadowIntensity: sanitizeClamp01(merged.heightmapShadowIntensity, 0.45),
   };
 }
 
@@ -215,7 +233,6 @@ export type ResolvedDebugFlags = {
   showEnemyAimOverlay: boolean;
   showLootGoblinOverlay: boolean;
   visualCompiledCutoutCache: boolean;
-  showSweepShadowDebug: boolean;
   showTileHeightMap: boolean;
 };
 
@@ -244,7 +261,6 @@ export function resolveDebugFlags(args: {
     showEnemyAimOverlay: args.debug.enemyAimOverlay,
     showLootGoblinOverlay: args.debug.lootGoblinOverlay,
     visualCompiledCutoutCache: !args.disableVisualCompiledCutoutCache,
-    showSweepShadowDebug: args.debug.sweepShadowDebug,
     showTileHeightMap: args.debug.tileHeightMap,
   };
 }
