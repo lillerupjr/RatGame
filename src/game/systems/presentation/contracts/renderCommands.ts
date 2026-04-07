@@ -125,7 +125,7 @@ export type ScreenOverlayPrimitivePayload = CommandPayloadBase & {
 export type DebugPrimitivePayload = CommandPayloadBase & {
   phase?: string;
   input?: Record<string, unknown>;
-  sweepShadowMap?: unknown;
+  heightmapShadowMask?: unknown;
   cells?: Array<{ x: number; y: number; w: number; h: number }>;
   triangleOverlay?: Array<{
     points: RenderTrianglePoints;

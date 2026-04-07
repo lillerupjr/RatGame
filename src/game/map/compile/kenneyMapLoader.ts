@@ -41,7 +41,7 @@ import {
     collectRequiredMonolithicBuildingSkinIdsForMap,
     getRequiredMonolithicBuildingPlacementGeometryForSprite,
 } from "../../structures/monolithicBuildingSemanticPrepass";
-import type { TileHeightGrid } from "../sweepShadow";
+import type { TileHeightGrid } from "../tileHeightUnits";
 import { renderHeightUnitsToSweepTileHeight } from "../tileHeightUnits";
 
 export type IsoTileKind = "VOID" | "FLOOR" | "STAIRS" | "SPAWN" | "GOAL" | typeof TILE_ID_OCEAN;

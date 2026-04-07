@@ -151,6 +151,7 @@ export const DEFAULT_SYSTEM_OVERRIDES: SystemOverrides = {
   waterFlowRate: 1,
 
   entityShadowsDisable: false,
+  heightmapShadowsEnabled: true,
   structureTriangleAdmissionMode: "hybrid",
   structureTriangleCutoutEnabled: true,
   structureTriangleCutoutWidth: 4,
@@ -214,6 +215,7 @@ export function sanitizeSystemOverrides(input: Partial<SystemOverrides> | undefi
     waterFlowRate: Math.max(0, Number.isFinite(Number(merged.waterFlowRate)) ? Number(merged.waterFlowRate) : 1),
 
     entityShadowsDisable: !!merged.entityShadowsDisable,
+    heightmapShadowsEnabled: merged.heightmapShadowsEnabled !== false,
     structureTriangleAdmissionMode: normalizeStructureTriangleAdmissionMode(merged.structureTriangleAdmissionMode),
     structureTriangleCutoutEnabled: !!merged.structureTriangleCutoutEnabled,
     structureTriangleCutoutWidth: normalizeStructureTriangleCutoutSpan(merged.structureTriangleCutoutWidth),

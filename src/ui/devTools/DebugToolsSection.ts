@@ -205,11 +205,42 @@ export function mountDebugToolsSection(
     entityAnchorsEnabled: createToggleRow(grid, "Render Entity Anchors", (checked) => applyDebugPatch({ entityAnchorsEnabled: checked })),
     renderPerfCountersEnabled: createToggleRow(grid, "Render Perf Counters", (checked) => applyDebugPatch({ renderPerfCountersEnabled: checked })),
     paletteHudDebugOverlayEnabled: createToggleRow(grid, "Palette HUD Debug Overlay", (checked) => applyDebugPatch({ paletteHudDebugOverlayEnabled: checked })),
-    sweepShadowDebug: createToggleRow(grid, "Sweep Shadow Debug", (checked) => applyDebugPatch({ sweepShadowDebug: checked })),
     tileHeightMap: createToggleRow(grid, "Show Tile Height Map", (checked) => applyDebugPatch({ tileHeightMap: checked })),
+    heightmapShadowDebugShowHeightBuffer: createToggleRow(grid, "Heightmap Shadow Height Buffer", (checked) => applyDebugPatch({ heightmapShadowDebugShowHeightBuffer: checked })),
   };
 
   applyColumnMajorGridOrder(grid, 3);
+
+  const hmSection = createSection(
+    root,
+    "Heightmap Shadow Tuning",
+    "Per-pixel heightmap shadow ray march parameters. Changes take effect immediately.",
+  );
+
+  const hmResolutionDivisor = createSliderRow(
+    hmSection,
+    "Resolution Divisor",
+    1, 8, 1,
+    (value) => applyDebugPatch({ heightmapShadowResolutionDivisor: value }),
+  );
+  const hmStepSize = createSliderRow(
+    hmSection,
+    "Step Size (px)",
+    0.5, 8, 0.5,
+    (value) => applyDebugPatch({ heightmapShadowStepSize: value }),
+  );
+  const hmMaxSteps = createSliderRow(
+    hmSection,
+    "Max Steps",
+    1, 512, 1,
+    (value) => applyDebugPatch({ heightmapShadowMaxSteps: value }),
+  );
+  const hmIntensity = createSliderRow(
+    hmSection,
+    "Shadow Intensity",
+    0, 1, 0.01,
+    (value) => applyDebugPatch({ heightmapShadowIntensity: value }),
+  );
 
   return {
     sync(debug) {
@@ -239,6 +270,15 @@ export function mountDebugToolsSection(
       for (const [key, input] of Object.entries(controls)) {
         input.checked = !!(debug as any)[key];
       }
+
+      hmResolutionDivisor.input.value = `${debug.heightmapShadowResolutionDivisor}`;
+      hmResolutionDivisor.value.textContent = `${Math.round(debug.heightmapShadowResolutionDivisor)}`;
+      hmStepSize.input.value = `${debug.heightmapShadowStepSize}`;
+      hmStepSize.value.textContent = `${debug.heightmapShadowStepSize.toFixed(1)}`;
+      hmMaxSteps.input.value = `${debug.heightmapShadowMaxSteps}`;
+      hmMaxSteps.value.textContent = `${Math.round(debug.heightmapShadowMaxSteps)}`;
+      hmIntensity.input.value = `${debug.heightmapShadowIntensity}`;
+      hmIntensity.value.textContent = `${debug.heightmapShadowIntensity.toFixed(2)}`;
     },
   };
 }

@@ -32,12 +32,16 @@ export type RenderDebugFlags = {
   showLootGoblinOverlay: boolean;
   showMapOverlays: boolean;
   showZoneObjectiveBounds: boolean;
-  showSweepShadowDebug: boolean;
   showTileHeightMap: boolean;
   shadowSunTimeHour: number;
   shadowSunAzimuthDeg: number;
   sunElevationOverrideEnabled: boolean;
   sunElevationOverrideDeg: number;
+  heightmapShadowDebugShowHeightBuffer: boolean;
+  heightmapShadowResolutionDivisor: number;
+  heightmapShadowStepSize: number;
+  heightmapShadowMaxSteps: number;
+  heightmapShadowIntensity: number;
 };
 
 export type RenderDebugFrameContext = {

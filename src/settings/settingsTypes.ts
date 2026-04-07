@@ -88,8 +88,12 @@ export type DebugToolsSettings = {
   shadowSunAzimuthDeg: number;
   sunElevationOverrideEnabled: boolean;
   sunElevationOverrideDeg: number;
-  sweepShadowDebug: boolean;
   tileHeightMap: boolean;
+  heightmapShadowDebugShowHeightBuffer: boolean;
+  heightmapShadowResolutionDivisor: number;
+  heightmapShadowStepSize: number;
+  heightmapShadowMaxSteps: number;
+  heightmapShadowIntensity: number;
 };
 
 export type SystemOverrides = {
@@ -103,6 +107,7 @@ export type SystemOverrides = {
   waterFlowRate: number;
 
   entityShadowsDisable: boolean;
+  heightmapShadowsEnabled: boolean;
   structureTriangleAdmissionMode: StructureTriangleAdmissionMode;
   structureTriangleCutoutEnabled: boolean;
   structureTriangleCutoutWidth: number;

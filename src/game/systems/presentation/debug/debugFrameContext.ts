@@ -23,7 +23,6 @@ function computeDebugPassEnabled(debug: DebugSettings): boolean {
     || debug.showStructureTriangleOwnershipSort
     || debug.enemyAimOverlay
     || debug.lootGoblinOverlay
-    || debug.sweepShadowDebug
     || debug.tileHeightMap
   );
 }

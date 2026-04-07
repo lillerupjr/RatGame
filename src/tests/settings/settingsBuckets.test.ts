@@ -108,8 +108,6 @@ describe("settings bucket defaults", () => {
       .toBe("canvas2d");
     expect(sanitizeDebugToolsSettings({ renderBackend: "bad" as any }).renderBackend)
       .toBe("webgl");
-    expect(sanitizeDebugToolsSettings({ sweepShadowDebug: 1 as any }).sweepShadowDebug)
-      .toBe(true);
     expect(sanitizeDebugToolsSettings({ tileHeightMap: 0 as any }).tileHeightMap)
       .toBe(false);
   });

@@ -25,11 +25,15 @@ export function resolveRenderDebugFlags(debug: DebugSettings): RenderDebugFlags 
     showLootGoblinOverlay: baseFlags.showLootGoblinOverlay,
     showMapOverlays: baseFlags.showMapOverlays,
     showZoneObjectiveBounds: !!debug.objectives?.showZoneBounds,
-    showSweepShadowDebug: baseFlags.showSweepShadowDebug,
     showTileHeightMap: baseFlags.showTileHeightMap,
     shadowSunTimeHour: debug.shadowSunTimeHour,
     shadowSunAzimuthDeg: debug.shadowSunAzimuthDeg,
     sunElevationOverrideEnabled: debug.sunElevationOverrideEnabled,
     sunElevationOverrideDeg: debug.sunElevationOverrideDeg,
+    heightmapShadowDebugShowHeightBuffer: debug.heightmapShadowDebugShowHeightBuffer ?? false,
+    heightmapShadowResolutionDivisor: debug.heightmapShadowResolutionDivisor ?? 2,
+    heightmapShadowStepSize: debug.heightmapShadowStepSize ?? 2,
+    heightmapShadowMaxSteps: debug.heightmapShadowMaxSteps ?? 128,
+    heightmapShadowIntensity: debug.heightmapShadowIntensity ?? 0.45,
   };
 }
