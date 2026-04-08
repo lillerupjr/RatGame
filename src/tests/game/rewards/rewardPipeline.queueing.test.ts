@@ -17,26 +17,21 @@ describe("durable reward pipeline queueing", () => {
 
     rewardSchedulerSystem(world);
 
-    expect(world.rewardTickets).toHaveLength(2);
+    expect(world.rewardTickets).toHaveLength(1);
     expect(world.rewardTickets[0].status).toBe("PENDING");
-    expect(world.rewardTickets[1].status).toBe("PENDING");
 
     expect(rewardPresenterSystem(world)).toBe(true);
     expect(world.state).toBe("REWARD");
 
     const first = getActiveTicket(world);
     expect(first?.createdSeq).toBe(1);
-    expect(first?.kind).toBe("CARD_PICK");
-    expect(world.rewardTickets[1].status).toBe("PENDING");
+    expect(first?.kind).toBe("RELIC_PICK");
 
     dismissActiveRewardUi(world);
     resolveActiveRewardTicket(world);
     world.state = "RUN";
 
-    expect(rewardPresenterSystem(world)).toBe(true);
-    const second = getActiveTicket(world);
-    expect(second?.createdSeq).toBe(2);
-    expect(second?.kind).toBe("RELIC_PICK");
+    expect(rewardPresenterSystem(world)).toBe(false);
     expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
   });
 });

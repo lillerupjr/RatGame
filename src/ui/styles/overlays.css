@@ -177,13 +177,13 @@ html.ios-standalone-fix #ui {
   padding: 8px;
 }
 
-.pauseOwnedCardsList {
+.pauseOwnedRelicList {
   display: grid;
   gap: 8px;
   margin-bottom: 10px;
 }
 
-.pauseOwnedCardRow {
+.pauseOwnedRelicRow {
   width: 100%;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -198,28 +198,28 @@ html.ios-standalone-fix #ui {
   cursor: pointer;
 }
 
-.pauseOwnedCardRow.active {
+.pauseOwnedRelicRow.active {
   border-color: var(--border-strong);
   background: linear-gradient(180deg, var(--bg-elevated), var(--active-bg));
 }
 
-.pauseOwnedCardMain {
+.pauseOwnedRelicMain {
   min-width: 0;
 }
 
-.pauseOwnedCardName {
+.pauseOwnedRelicName {
   font-size: 15px;
   font-weight: 900;
 }
 
-.pauseOwnedCardSummary {
+.pauseOwnedRelicSummary {
   margin-top: 2px;
   font-size: 12px;
   opacity: 0.86;
   line-height: 1.3;
 }
 
-.pauseOwnedCardMeta {
+.pauseOwnedRelicMeta {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -239,14 +239,14 @@ html.ios-standalone-fix #ui {
   background: var(--hover-bg);
 }
 
-.pauseOwnedCardDetail {
+.pauseOwnedRelicDetail {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   background: var(--focus-bg);
   padding: 12px;
 }
 
-.pauseOwnedCardDetail h4 {
+.pauseOwnedRelicDetail h4 {
   margin: 0 0 6px 0;
   font-size: 18px;
 }
@@ -371,19 +371,19 @@ html.ios-standalone-fix #ui {
     padding: 10px;
   }
 
-  .pauseOwnedCardRow {
+  .pauseOwnedRelicRow {
     padding: 9px;
   }
 
-  .pauseOwnedCardName {
+  .pauseOwnedRelicName {
     font-size: 14px;
   }
 
-  .pauseOwnedCardSummary {
+  .pauseOwnedRelicSummary {
     font-size: 11px;
   }
 
-  .pauseOwnedCardMeta {
+  .pauseOwnedRelicMeta {
     gap: 6px;
   }
 
@@ -2361,7 +2361,7 @@ html.ios-standalone-fix #ui {
   opacity: 0.95;
 }
 
-.pauseDebugCardsSection {
+.pauseDevQuickRow {
   margin-top: 10px;
 }
 
@@ -2465,46 +2465,7 @@ html.ios-standalone-fix #ui {
   overscroll-behavior: contain;
 }
 
-.pauseDebugCardList {
-  display: grid;
-  gap: 8px;
-}
-
-.pauseDebugCardHeaderRow {
-  display: flex;
-  justify-content: flex-start;
-  margin-bottom: 8px;
-}
-
-.pauseDebugCardToggleBtn,
-.pauseDebugCardSaveBtn {
-  height: 30px;
-  border: 1px solid var(--border-default);
-  border-radius: 8px;
-  background: var(--focus-bg);
-  color: var(--text-primary);
-  font-weight: 700;
-  cursor: pointer;
-  padding: 0 10px;
-}
-
-.pauseDebugCardToggleBtn:hover,
-.pauseDebugCardSaveBtn:hover {
-  background: var(--primary-btn-hover-bg);
-}
-
-.pauseDebugCardControls {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 8px;
-}
-
-.pauseDebugCardSaveBtn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.pauseDebugCardRow {
+.pauseDebugRelicRow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto auto;
   gap: 8px;
@@ -2530,12 +2491,12 @@ html.ios-standalone-fix #ui {
   }
 }
 
-.pauseDebugCardId {
+.pauseDebugRelicId {
   font-size: 12px;
   color: var(--text-primary);
 }
 
-.pauseDebugCardBtn {
+.pauseDebugRelicBtn {
   width: 26px;
   height: 26px;
   border: 1px solid var(--border-default);
@@ -2546,7 +2507,7 @@ html.ios-standalone-fix #ui {
   cursor: pointer;
 }
 
-.pauseDebugCardBtn:hover {
+.pauseDebugRelicBtn:hover {
   background: var(--primary-btn-hover-bg);
 }
 

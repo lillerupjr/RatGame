@@ -201,7 +201,6 @@ async function bootstrap() {
     refs.creditsMenuEl.hidden = true;
     refs.ui.menuEl.hidden = true;
     refs.ui.mapEl.root.hidden = true;
-    refs.ui.levelupEl.root.hidden = true;
     refs.ui.endEl.root.hidden = true;
     refs.ui.dialogEl.root.hidden = true;
     refs.hud.root.hidden = true;
@@ -257,7 +256,6 @@ async function bootstrap() {
       refs.hud.root.hidden = true;
       refs.hud.vitalsOrbRoot.hidden = true;
       refs.ui.mapEl.root.hidden = true;
-      refs.ui.levelupEl.root.hidden = true;
       refs.ui.endEl.root.hidden = true;
       refs.ui.dialogEl.root.hidden = true;
       if (pauseCogBtn) pauseCogBtn.hidden = true;
@@ -268,7 +266,6 @@ async function bootstrap() {
       refs.ui.menuEl.hidden = true;
       refs.hud.root.hidden = true;
       refs.hud.vitalsOrbRoot.hidden = true;
-      refs.ui.levelupEl.root.hidden = true;
       refs.ui.endEl.root.hidden = true;
       refs.ui.dialogEl.root.hidden = true;
       if (pauseCogBtn) pauseCogBtn.hidden = true;
@@ -306,7 +303,6 @@ async function bootstrap() {
       const isMapOpen = w.state === "MAP" || !refs.ui.mapEl.root.hidden;
       const isPauseOpen = runState === RunState.PAUSED || !refs.ui.menuEl.hidden;
       const isEndOpen = !refs.ui.endEl.root.hidden;
-      const isLevelupOpen = !refs.ui.levelupEl.root.hidden;
       const isDialogOpen = !refs.ui.dialogEl.root.hidden;
       const vendorRoot = document.getElementById("vendorShop");
       const relicRewardRoot = document.getElementById("relicReward");
@@ -316,7 +312,6 @@ async function bootstrap() {
         isMapOpen
         || isPauseOpen
         || isEndOpen
-        || isLevelupOpen
         || isDialogOpen
         || isVendorOpen
         || isRelicRewardOpen;

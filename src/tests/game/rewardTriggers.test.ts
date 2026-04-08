@@ -17,9 +17,8 @@ describe("reward pipeline runtime facts", () => {
 
     expect(started).toBe(false);
     expect(w.state).toBe("RUN");
-    expect(w.cardReward.active).toBe(false);
-    expect(w.cardRewardClaimKeys).toContain("0:BOSS_CHEST");
-    expect(w.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
+    expect(w.relicReward.active).toBe(false);
+    expect(w.rewardClaimKeys).toContain("0:BOSS_CHEST");
   });
 
   test("objective completion grants gold plus relic once and edge-gates repeats", () => {

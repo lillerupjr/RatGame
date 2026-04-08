@@ -2,8 +2,6 @@
 import type { World } from "../../engine/world/world";
 import { registry } from "../content/registry";
 import { getRelicMods } from "../systems/progression/relics";
-import { getCardById } from "../combat_mods/content/cards/cardPool";
-import { STAT_KEYS } from "../combat_mods/stats/statKeys";
 import { resolveScalarPipeline } from "./playerStatPipeline";
 
 const BASE_DAMAGE_REFERENCE = 100;
@@ -58,24 +56,12 @@ export function recomputeDerivedStats(w: World) {
     const hasArmorDoubleMax = hasRelic("ARMOR_DOUBLE_MAX");
     if (hasArmorDoubleMax) w.maxArmor *= 2;
 
-    // Apply card defense mods (LIFE_ADD)
-    let cardLifeAdd = 0;
-    for (const cardId of w.cards) {
-        const def = getCardById(cardId);
-        if (!def) continue;
-        for (const mod of def.mods) {
-            if (mod.key === STAT_KEYS.LIFE_ADD && mod.op === "add") cardLifeAdd += mod.value;
-        }
-    }
-
-    const hpFlatAdds = cardLifeAdd >= 0 ? [cardLifeAdd] : [];
-    const hpFlatSubs = cardLifeAdd < 0 ? [-cardLifeAdd] : [];
     const hpLess: number[] = [];
     if (hasRelic("SPEC_DAMAGE_MORE_200_MAX_LIFE_LESS_50")) hpLess.push(0.5);
     w.playerHpMax = resolveScalarPipeline({
         base: finite(w.basePlayerHpMax, 0),
-        flatAdds: hpFlatAdds,
-        flatSubs: hpFlatSubs,
+        flatAdds: [],
+        flatSubs: [],
         increased: [],
         decreased: [],
         more: [],

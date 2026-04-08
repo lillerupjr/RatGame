@@ -16,16 +16,6 @@ export interface StatMod {
   value: number;
 }
 
-export interface CardDef {
-  id: string; // generic for now
-  isEnabled: boolean;
-  displayName: string; // generic for now
-  rarity: 1 | 2 | 3 | 4;
-  powerTier: 1 | 2 | 3 | 4 | 5;
-  tags: CardTag[];
-  mods: StatMod[];
-}
-
 export type DamageType = "physical" | "fire" | "chaos";
 
 export interface DamageBundle {
@@ -48,28 +38,10 @@ export type WeaponTag =
   | "physical"
   | "fire"
   | "chaos"
-  // ailment identity (used for card gating)
+  // ailment identity (used for stat-tag filtering)
   | "bleed"
   | "ignite"
   | "poison";
-
-export type CardTag =
-  | "gun"
-  | "fires"
-  | "projectile"
-  | "hit"
-  | "crit"
-  | "dot"
-  | "beam"
-  | "physical"
-  | "fire"
-  | "chaos"
-  | "bleed"
-  | "ignite"
-  | "poison"
-  // survivability
-  | "life"
-  | "defense";
 
 export interface WeaponBeamDef {
   maxRangePx: number;
@@ -109,7 +81,7 @@ export interface WeaponDef {
     // Optional delay between burst shots for weapons that fire additional projectiles sequentially.
     burstShotIntervalSec?: number;
     pierce: number;
-    // Base projectile count before additive card modifiers.
+    // Base projectile count before additive stat modifiers.
     baseProjectiles?: number;
   };
 

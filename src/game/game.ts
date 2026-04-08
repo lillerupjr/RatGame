@@ -167,17 +167,13 @@ import { resolveActivePaletteId, resolveActivePaletteVariantKey } from "./render
 import { collectFloorDependencies } from "./loading/dependencyCollector";
 import { formatPaletteHudDebugText, shouldShowPaletteHudDebugOverlay } from "./render/renderDebugPolicy";
 import { applySfxSettingsToWorld } from "./audio/audioSettings";
-import { chooseCardReward, ensureCardRewardState } from "./combat_mods/rewards/cardRewardFlow";
 import { chooseRelicReward, ensureRelicRewardState } from "./combat_mods/rewards/relicRewardFlow";
 import { getGold } from "./economy/gold";
 import { ensureRunProgressionState } from "./economy/xp";
-import { getCardById } from "./combat_mods/content/cards/cardPool";
-import { generateVendorCards } from "./vendor/generateVendorCards";
 import { generateVendorRelicOffers } from "./vendor/generateVendorRelics";
-import { getVendorCardPriceG, VENDOR_RELIC_PRICE_G } from "./vendor/pricing";
+import { VENDOR_RELIC_PRICE_G } from "./vendor/pricing";
 import { createVendorState } from "./vendor/vendorState";
-import { tryPurchaseVendorCard, tryPurchaseVendorRelic } from "./vendor/vendorPurchase";
-import { mountCardRewardMenu } from "../ui/rewards/cardRewardMenu";
+import { tryPurchaseVendorRelic } from "./vendor/vendorPurchase";
 import { mountRelicRewardMenu } from "../ui/rewards/relicRewardMenu";
 import { mountVendorShopMenu } from "../ui/vendor/vendorShopMenu";
 import { createFloorRewardBudget, type ObjectiveMode } from "./rewards/floorRewardBudget";
@@ -284,13 +280,7 @@ type CreateGameArgs = {
       kills: HTMLElement;
       gold: HTMLElement;
       relics: HTMLElement;
-      cards: HTMLElement;
-    };
-
-    levelupEl: {
-      root: HTMLDivElement;
-      choices: HTMLDivElement;
-      sub: HTMLDivElement;
+      level: HTMLElement;
     };
     mapEl: {
       root: HTMLDivElement;
@@ -860,7 +850,6 @@ export function createGame(args: CreateGameArgs) {
       return true;
     }
     if (world.runState === "TRANSITION") return false;
-    if (world.state === "REWARD" && world.cardReward?.active) return false;
     if (world.state === "REWARD" && world.relicReward?.active) return false;
     if (world.floorEndCountdownActive && world.floorEndCountdownSec > 0) return false;
     const delve = world.delveMap as DelveMap | null;
@@ -896,27 +885,12 @@ export function createGame(args: CreateGameArgs) {
     return "NORMAL";
   }
 
-  function syncRewardDebugFieldsFromBudget(w: World): void {
-    const budget = w.floorRewardBudget;
-    const nonObjectiveBudgetTotal = 0;
-    const nonObjectiveUsed = Math.max(0, nonObjectiveBudgetTotal - budget.nonObjectiveCardsRemaining);
-    w.cardRewardBudgetTotal = nonObjectiveBudgetTotal;
-    w.cardRewardBudgetUsed = nonObjectiveUsed;
-    if (!Array.isArray(w.cardRewardClaimKeys)) w.cardRewardClaimKeys = [];
-    const firedKeys = Object.keys(budget.fired ?? Object.create(null));
-    for (let i = 0; i < firedKeys.length; i++) {
-      const key = firedKeys[i];
-      if (!w.cardRewardClaimKeys.includes(key)) w.cardRewardClaimKeys.push(key);
-    }
-  }
-
   function runRewardPipeline(options: { includeCoreFacts?: boolean; includeChest?: boolean } = {}): boolean {
     rewardRunEventProducerSystem(world, {
       includeCoreFacts: options.includeCoreFacts,
       includeChest: options.includeChest,
     });
     rewardSchedulerSystem(world);
-    syncRewardDebugFieldsFromBudget(world);
     const opened = rewardPresenterSystem(world);
     if (!opened) return false;
 
@@ -1029,22 +1003,6 @@ export function createGame(args: CreateGameArgs) {
   applyObjectivesFromActiveMap(world);
   applyMapFeaturesFromCells(world);
   applyDebugSpawn(world);
-  const cardRewardMenu = mountCardRewardMenu({
-    root: args.ui.levelupEl.root,
-    onPick: (cardId: string) => {
-      const reward = ensureCardRewardState(world);
-      if (!reward.active) return;
-      const source = reward.source;
-      chooseCardReward(world, cardId);
-      resolveActiveRewardTicket(world);
-      renderRewardMenuIfNeeded();
-
-      if (source === "ZONE_TRIAL" && tryAdvanceAfterObjectiveCompletion()) {
-        return;
-      }
-      world.state = "RUN";
-    },
-  });
   const relicRewardRoot = document.createElement("div");
   relicRewardRoot.id = "relicReward";
   relicRewardRoot.hidden = true;
@@ -1067,11 +1025,6 @@ export function createGame(args: CreateGameArgs) {
   document.body.appendChild(vendorRoot);
   const vendorShopMenu = mountVendorShopMenu({
     root: vendorRoot,
-    onBuy: (index: number) => {
-      if (tryPurchaseVendorCard(world, index)) {
-        renderVendorShopIfNeeded();
-      }
-    },
     onBuyRelic: (index: number) => {
       if (tryPurchaseVendorRelic(world, index)) {
         renderVendorShopIfNeeded();
@@ -1088,11 +1041,9 @@ export function createGame(args: CreateGameArgs) {
   let lastRewardRenderKey = "";
 
   const renderRewardMenuIfNeeded = (): void => {
-    const reward = ensureCardRewardState(world);
     const relicReward = ensureRelicRewardState(world);
-    const key = `${world.state}|c:${reward.active ? 1 : 0}|${reward.source}|${reward.options.join(",")}|r:${relicReward.active ? 1 : 0}|${relicReward.source}|${relicReward.options.join(",")}`;
+    const key = `${world.state}|r:${relicReward.active ? 1 : 0}|${relicReward.source}|${relicReward.options.join(",")}`;
     if (key === lastRewardRenderKey) return;
-    cardRewardMenu.render(reward.active ? reward : null);
     relicRewardMenu.render(relicReward.active ? relicReward : null);
     lastRewardRenderKey = key;
   };
@@ -1108,16 +1059,11 @@ export function createGame(args: CreateGameArgs) {
       closeVendorShop(false);
       return;
     }
-    const key = `${getGold(world)}|${vendor.cards.join(",")}|${vendor.purchased.map((p) => (p ? "1" : "0")).join("")}|${(vendor.relicOffers ?? []).map((o) => `${o.relicId}:${o.priceG}:${o.isSold ? 1 : 0}`).join(",")}`;
+    const key = `${getGold(world)}|${(vendor.relicOffers ?? []).map((o) => `${o.relicId}:${o.priceG}:${o.isSold ? 1 : 0}`).join(",")}`;
     if (key === lastVendorRenderKey) return;
     vendorShopMenu.render({
       active: true,
       gold: getGold(world),
-      cards: vendor.cards.map((cardId, index) => ({
-        cardId,
-        priceG: getVendorCardPriceG(cardId),
-        purchased: !!vendor.purchased[index],
-      })),
       relicOffers: (vendor.relicOffers ?? []).map((offer) => ({
         relicId: offer.relicId,
         priceG: offer.priceG,
@@ -1160,12 +1106,6 @@ export function createGame(args: CreateGameArgs) {
     return getMapDepth(w);
   }
 
-  function getEndStatsCardCount(w: World): number {
-    const cards = Array.isArray(w.cards) ? w.cards.length : 0;
-    if (cards > 0) return cards;
-    return Array.isArray(w.combatCardIds) ? w.combatCardIds.length : 0;
-  }
-
   function populateEndStats(w: World): void {
     const summary = getEndRunSummary(w);
     args.ui.endEl.time.textContent = formatTimeMMSS(getEndStatsTimeSec(w));
@@ -1173,7 +1113,7 @@ export function createGame(args: CreateGameArgs) {
     args.ui.endEl.kills.textContent = String(summary.kills);
     args.ui.endEl.gold.textContent = String(Math.max(0, Math.floor(getGold(w))));
     args.ui.endEl.relics.textContent = String(Array.isArray(w.relics) ? w.relics.length : 0);
-    args.ui.endEl.cards.textContent = String(getEndStatsCardCount(w));
+    args.ui.endEl.level.textContent = String(Math.max(1, Math.floor(w.run.level ?? w.level ?? 1)));
   }
 
   function getEndRunSummary(w: World): EndLeaderboardRunPayload {
@@ -1602,7 +1542,7 @@ export function createGame(args: CreateGameArgs) {
     });
     args.ui.menuEl.hidden = true;
     setHudHidden(true);
-    hideCardRewardMenu();
+    hideRewardMenu();
     closeVendorShop(false);
     setDialog(null);
     setEndActiveTab("stats");
@@ -1932,7 +1872,7 @@ export function createGame(args: CreateGameArgs) {
 
     setDialog(null);
     closeVendorShop(false);
-    hideCardRewardMenu();
+    hideRewardMenu();
     args.ui.mapEl.root.hidden = true;
     setHudHidden(true);
     w.state = "MAP";
@@ -2257,13 +2197,7 @@ export function createGame(args: CreateGameArgs) {
     w.objectiveRewardClaimedKey = null;
     (w as any).zoneRewardClaimedKey = null;
     (w as any).zoneRewardClaimedKeys = [];
-    w.cardRewardBudgetTotal = 0;
-    w.cardRewardBudgetUsed = 0;
-    w.cardRewardClaimKeys = [];
-    w.lastCardRewardClaimKey = null;
-    syncRewardDebugFieldsFromBudget(w);
-    w.cardReward.active = false;
-    w.cardReward.options = [];
+    w.rewardClaimKeys = [];
     w.relicReward.active = false;
     w.relicReward.options = [];
     startZoneTrial(w);
@@ -2280,10 +2214,7 @@ export function createGame(args: CreateGameArgs) {
     }
 
     w.vendor = floorIntent.archetype === "VENDOR"
-      ? createVendorState(
-        generateVendorCards(5, (w as any).currentCharacterId),
-        generateVendorRelicOffers(w, 5, VENDOR_RELIC_PRICE_G),
-      )
+      ? createVendorState(generateVendorRelicOffers(w, 5, VENDOR_RELIC_PRICE_G))
       : null;
     w.vendorOffers = [];
     w.runState = "FLOOR";
@@ -2310,7 +2241,7 @@ export function createGame(args: CreateGameArgs) {
     // UI: hide map overlay, show HUD.
     args.ui.mapEl.root.hidden = true;
     setHudHidden(!!(w as any).paletteSnapshotViewerActive);
-    hideCardRewardMenu();
+    hideRewardMenu();
   }
 
   async function enterFloor(w: World, floorIntent: FloorIntent): Promise<void> {
@@ -2483,7 +2414,7 @@ export function createGame(args: CreateGameArgs) {
     applyDebugSpawn(world);
     spawnMilestonePigeonNearPlayer(world);
 
-    hideCardRewardMenu();
+    hideRewardMenu();
   }
 
   async function executeStartRun(characterId: PlayableCharacterId): Promise<void> {
@@ -2531,7 +2462,7 @@ export function createGame(args: CreateGameArgs) {
     args.ui.mapEl.root.hidden = false;
     hideEndScreen();
     setHudHidden(false);
-    hideCardRewardMenu();
+    hideRewardMenu();
 
     if (import.meta.env.DEV) {
       const starter = getWorldRelicInstances(world).find((it) => it.source === "starter");
@@ -2567,7 +2498,7 @@ export function createGame(args: CreateGameArgs) {
     args.ui.mapEl.root.hidden = true;
     hideEndScreen();
     setHudHidden(false);
-    hideCardRewardMenu();
+    hideRewardMenu();
 
     if (import.meta.env.DEV) {
       const starter = getWorldRelicInstances(world).find((it) => it.source === "starter");
@@ -2946,7 +2877,7 @@ export function createGame(args: CreateGameArgs) {
     world.objectiveRewardClaimedKey = null;
     (world as any).deterministicDelveMode = false;
     args.ui.mapEl.root.hidden = true;
-    hideCardRewardMenu();
+    hideRewardMenu();
     closeVendorShop(false);
     hideEndScreen();
     args.ui.dialogEl.root.hidden = true;
@@ -3249,8 +3180,7 @@ export function createGame(args: CreateGameArgs) {
     }
   }
 
-  function hideCardRewardMenu(): void {
-    cardRewardMenu.render(null);
+  function hideRewardMenu(): void {
     relicRewardMenu.render(null);
     lastRewardRenderKey = "";
   }
@@ -3475,15 +3405,11 @@ export function createGame(args: CreateGameArgs) {
 
   function finishFloorEndCountdown(): boolean {
     world.state = "RUN";
-    if (world.cardReward) {
-      world.cardReward.active = false;
-      world.cardReward.options = [];
-    }
     if (world.relicReward) {
       world.relicReward.active = false;
       world.relicReward.options = [];
     }
-    hideCardRewardMenu();
+    hideRewardMenu();
     world.floorEndCountdownActive = false;
     if (tryAdvanceAfterObjectiveCompletion()) {
       clearEvents(world);
@@ -3717,7 +3643,7 @@ export function createGame(args: CreateGameArgs) {
         clearEvents(world);
         return;
       }
-      if (!world.cardReward?.active && !world.relicReward?.active) {
+      if (!world.relicReward?.active) {
         maybeStartFloorEndCountdown(world);
       }
       tickFloorEndCountdown(world, dtSim);

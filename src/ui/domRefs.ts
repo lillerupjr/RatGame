@@ -8,13 +8,7 @@ type EndRefs = {
     kills: HTMLElement;
     gold: HTMLElement;
     relics: HTMLElement;
-    cards: HTMLElement;
-};
-
-type LevelupRefs = {
-    root: HTMLDivElement;
-    choices: HTMLDivElement;
-    sub: HTMLDivElement;
+    level: HTMLElement;
 };
 
 type MapRefs = {
@@ -77,7 +71,6 @@ export type HudRefs = {
 export type UiRefs = {
     menuEl: HTMLDivElement;
     endEl: EndRefs;
-    levelupEl: LevelupRefs;
     mapEl: MapRefs;
     dialogEl: DialogRefs;
 };
@@ -132,10 +125,7 @@ export type DomRefs = {
     endStatKills: HTMLElement;
     endStatGold: HTMLElement;
     endStatRelics: HTMLElement;
-    endStatCards: HTMLElement;
-    levelupRoot: HTMLDivElement;
-    levelupChoices: HTMLDivElement;
-    levelupSub: HTMLDivElement;
+    endStatLevel: HTMLElement;
     mapRoot: HTMLDivElement;
     mapTopBar: HTMLDivElement;
     mapRouteBackBtn: HTMLButtonElement;
@@ -287,11 +277,7 @@ export function getDomRefs(): DomRefs {
     const endStatKills = getEl<HTMLElement>("endStatKills");
     const endStatGold = getEl<HTMLElement>("endStatGold");
     const endStatRelics = getEl<HTMLElement>("endStatRelics");
-    const endStatCards = getEl<HTMLElement>("endStatCards");
-
-    const levelupRoot = getEl<HTMLDivElement>("levelup");
-    const levelupChoices = getEl<HTMLDivElement>("luChoices");
-    const levelupSub = getEl<HTMLDivElement>("luSub");
+    const endStatLevel = getEl<HTMLElement>("endStatLevel");
 
     const mapRoot = getEl<HTMLDivElement>("map");
     const mapTopBar = getEl<HTMLDivElement>("mapTopBar");
@@ -354,12 +340,7 @@ export function getDomRefs(): DomRefs {
             kills: endStatKills,
             gold: endStatGold,
             relics: endStatRelics,
-            cards: endStatCards,
-        },
-        levelupEl: {
-            root: levelupRoot,
-            choices: levelupChoices,
-            sub: levelupSub,
+            level: endStatLevel,
         },
         mapEl: {
             root: mapRoot,
@@ -431,10 +412,7 @@ export function getDomRefs(): DomRefs {
         endStatKills,
         endStatGold,
         endStatRelics,
-        endStatCards,
-        levelupRoot,
-        levelupChoices,
-        levelupSub,
+        endStatLevel,
         mapRoot,
         mapTopBar,
         mapRouteBackBtn,

@@ -1,22 +1,16 @@
 import type { PlayableCharacterId } from "../../../content/playableCharacters";
 import { STAT_KEYS } from "../../stats/statKeys";
-import type { CardDef } from "../../stats/modifierTypes";
+import type { StatMod } from "../../stats/modifierTypes";
 
-const JAMAL_STARTER_PROJECTILE_CARD: CardDef = {
-  id: "CHAR_STARTER_JAMAL_PROJECTILES_ADD_1",
-  isEnabled: true,
-  displayName: "Jamal Starter: +1 projectile",
-  rarity: 1,
-  powerTier: 1,
-  tags: ["projectile"],
-  mods: [{ key: STAT_KEYS.PROJECTILES_ADD, op: "add", value: 1 }],
+const JAMAL_STARTER_PROJECTILE_MODS: readonly StatMod[] = [
+  { key: STAT_KEYS.PROJECTILES_ADD, op: "add", value: 1 },
+];
+
+const CHARACTER_STARTER_MODS: Partial<Record<PlayableCharacterId, readonly StatMod[]>> = {
+  JAMAL: JAMAL_STARTER_PROJECTILE_MODS,
 };
 
-const CHARACTER_STARTER_CARDS: Partial<Record<PlayableCharacterId, readonly CardDef[]>> = {
-  JAMAL: [JAMAL_STARTER_PROJECTILE_CARD],
-};
-
-export function resolveCombatStarterStatCards(characterId?: string): readonly CardDef[] {
+export function resolveCombatStarterStatMods(characterId?: string): readonly StatMod[] {
   if (!characterId) return [];
-  return CHARACTER_STARTER_CARDS[characterId as PlayableCharacterId] ?? [];
+  return CHARACTER_STARTER_MODS[characterId as PlayableCharacterId] ?? [];
 }

@@ -71,7 +71,6 @@ export type DebugToolsSettings = {
   entityAnchorOverlay: boolean;
   enemyAimOverlay: boolean;
   lootGoblinOverlay: boolean;
-  pauseDebugCards: boolean;
   pauseCsvControls: boolean;
   dpsMeter: boolean;
   neutralBirdDrawDebug: boolean;

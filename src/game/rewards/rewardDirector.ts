@@ -7,7 +7,6 @@ export type RewardEvent =
   | { type: "ZONE_COMPLETED"; zoneIndex: 1 | 2 };
 
 export type RewardOutcome =
-  | { type: "GRANT_CARD"; reason: string }
   | { type: "GRANT_RELIC"; reason: string }
   | { type: "GRANT_GOLD"; amount: number; reason: string }
   | { type: "NO_REWARD"; reason: string };

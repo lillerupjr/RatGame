@@ -104,7 +104,6 @@ function canRecomputeDerivedStats(world: World): boolean {
   const w = world as unknown as Record<string, unknown>;
   return (
     Array.isArray(w.items) &&
-    Array.isArray(w.cards) &&
     typeof w.baseMoveSpeed === "number" &&
     typeof w.basePickupRadius === "number" &&
     typeof w.basePlayerHpMax === "number" &&
@@ -115,7 +114,6 @@ function canRecomputeDerivedStats(world: World): boolean {
 function primeDerivedStatsDefaults(world: World): void {
   const w = world as unknown as Record<string, unknown>;
   if (!Array.isArray(w.items)) w.items = [];
-  if (!Array.isArray(w.cards)) w.cards = [];
   if (typeof w.baseMoveSpeed !== "number") {
     w.baseMoveSpeed = typeof w.pSpeed === "number" ? (w.pSpeed as number) : 0;
   }

@@ -16,7 +16,6 @@ import type { FloorIntent } from "../../game/map/floorIntent";
 import type { TriggerDef } from "../../game/triggers/triggerTypes";
 import type { Dir8 } from "../render/sprites/dir8";
 import type { EnemyAilmentsState } from "../../game/combat_mods/ailments/enemyAilments";
-import type { CardRewardState } from "../../game/combat_mods/rewards/cardRewardFlow";
 import type { RelicRewardState } from "../../game/combat_mods/rewards/relicRewardFlow";
 import type { FloorRewardBudget } from "../../game/rewards/floorRewardBudget";
 import type { RunEvent } from "../../game/rewards/runEvents";
@@ -337,18 +336,12 @@ export type World = {
   neutralMobs: NeutralAnimatedMob[];
 
   // -------------------------
-  // Items + cards
+  // Items
   // -------------------------
   items: { id: any; level: number }[];
-  cards: string[];
-  combatCardIds: string[];
-  cardReward: CardRewardState;
   relicReward: RelicRewardState;
   floorRewardBudget: FloorRewardBudget;
-  cardRewardBudgetTotal: number;
-  cardRewardBudgetUsed: number;
-  cardRewardClaimKeys: string[];
-  lastCardRewardClaimKey: string | null;
+  rewardClaimKeys: string[];
   runEvents: RunEvent[];
   rewardTickets: RewardTicket[];
   activeRewardTicketId: string | null;
@@ -774,15 +767,8 @@ export function createWorld(args: CreateWorldArgs): World {
     npcs: [],
     neutralMobs: [],
 
-    // Items + cards
+    // Items
     items: [],
-    cards: [],
-    combatCardIds: [],
-    cardReward: {
-      active: false,
-      source: "ZONE_TRIAL",
-      options: [],
-    },
     relicReward: {
       active: false,
       source: "OBJECTIVE_COMPLETION",
@@ -790,14 +776,9 @@ export function createWorld(args: CreateWorldArgs): World {
     },
     floorRewardBudget: {
       mode: "NORMAL",
-      nonObjectiveCardsRemaining: 0,
-      objectiveCardAvailable: true,
       fired: Object.create(null),
     },
-    cardRewardBudgetTotal: 0,
-    cardRewardBudgetUsed: 0,
-    cardRewardClaimKeys: [],
-    lastCardRewardClaimKey: null,
+    rewardClaimKeys: [],
     runEvents: [],
     rewardTickets: [],
     activeRewardTicketId: null,

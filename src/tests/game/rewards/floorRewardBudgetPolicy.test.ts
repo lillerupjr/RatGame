@@ -19,9 +19,8 @@ describe("floor reward budget policies", () => {
     expect(world.rewardTickets.map((ticket: any) => ticket.kind)).toEqual([
       "RELIC_PICK",
     ]);
-    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
     expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
-    expect(world.cardRewardClaimKeys).toEqual([
+    expect(world.rewardClaimKeys).toEqual([
       "0:ZONE_CLEAR:1",
       "0:ZONE_CLEAR:2",
       "0:TRIAL_COMPLETE",
@@ -44,8 +43,7 @@ describe("floor reward budget policies", () => {
     expect(world.rewardTickets.map((ticket: any) => ticket.kind)).toEqual([
       "RELIC_PICK",
     ]);
-    expect(world.cardRewardClaimKeys).toContain("0:BOSS_CHEST");
-    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
+    expect(world.rewardClaimKeys).toContain("0:BOSS_CHEST");
     expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
   });
 
@@ -64,7 +62,6 @@ describe("floor reward budget policies", () => {
     expect(world.rewardTickets.map((ticket: any) => ticket.kind)).toEqual([
       "RELIC_PICK",
     ]);
-    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
     expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
   });
 
@@ -79,7 +76,6 @@ describe("floor reward budget policies", () => {
 
     rewardSchedulerSystem(world);
     expect(world.rewardTickets).toHaveLength(1);
-    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
     expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
   });
 });

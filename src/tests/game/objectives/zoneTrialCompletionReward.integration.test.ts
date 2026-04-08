@@ -20,7 +20,7 @@ describe("zone trial completion reward chain", () => {
     world.rewardTickets = [];
     world.activeRewardTicketId = null;
     world.rewardTicketSeq = 0;
-    world.cardRewardClaimKeys = [];
+    world.rewardClaimKeys = [];
 
     setObjectivesFromSpec(world, {
       objectiveType: "ZONE_TRIAL",

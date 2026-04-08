@@ -3,7 +3,6 @@ import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
 import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
 import { relicTriggerMomentumDamageMultiplier } from "./momentum";
-import { getCardById } from "../../combat_mods/content/cards/cardPool";
 import { resolveDotStats } from "../../combat_mods/stats/combatStatsResolver";
 import type { DamageMeta } from "../../events";
 import {
@@ -124,11 +123,7 @@ export function tickBeamContactsOnce(w: World, dtTick: number): void {
   );
   if (targets.length === 0) return;
 
-  const cardIds = [...(w.cards ?? []), ...(w.combatCardIds ?? [])];
-  const cards = cardIds
-    .map((id) => getCardById(id))
-    .filter((card): card is NonNullable<typeof card> => Boolean(card));
-  const dotStats = resolveDotStats({ cards });
+  const dotStats = resolveDotStats({ mods: [] });
   const relicIds: string[] = Array.isArray(w.relics) ? w.relics : [];
   const relicDotMoreMult =
     (relicIds.includes("PASS_DOT_MORE_50") ? 1.5 : 1) *

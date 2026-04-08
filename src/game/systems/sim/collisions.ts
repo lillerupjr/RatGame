@@ -19,7 +19,6 @@ import { getUserSettings } from "../../../userSettings";
 import { resolveCritRoll01 } from "../../combat_mods/runtime/critDamagePacket";
 import { getRelicMods, normalizeWorldRelics } from "../progression/relics";
 import { isLootGoblinEnemy } from "../neutral/lootGoblin";
-import { getCardById } from "../../combat_mods/content/cards/cardPool";
 import { resolveDotStats } from "../../combat_mods/stats/combatStatsResolver";
 import { applyPlayerIncomingDamage } from "./playerArmor";
 import { isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
@@ -185,11 +184,7 @@ export function collisionsSystem(w: World, dt: number) {
   const hasStarterContaminatedRounds = w.relics.includes(STARTER_RELIC_IDS.CONTAMINATED_ROUNDS);
   const hasStarterPointBlankCarnage = w.relics.includes(STARTER_RELIC_IDS.POINT_BLANK_CARNAGE);
   const hasStarterThermalStarter = w.relics.includes(STARTER_RELIC_IDS.THERMAL_STARTER);
-  const cardIds = [...(w.cards ?? []), ...(w.combatCardIds ?? [])];
-  const cards = cardIds
-    .map((id: string) => getCardById(id))
-    .filter((card): card is NonNullable<typeof card> => Boolean(card));
-  const dotStats = resolveDotStats({ cards });
+  const dotStats = resolveDotStats({ mods: [] });
   const poisonDamageMult = Math.max(0, dotStats.poisonDamageMult);
   const igniteDamageMult = Math.max(0, dotStats.igniteDamageMult);
   const poisonDurationMult = Math.max(0, dotStats.dotDurationMult);

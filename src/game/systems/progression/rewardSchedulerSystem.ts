@@ -6,7 +6,6 @@ import {
   addRewardClaimKey,
   enqueueRewardTicket,
   hasRewardClaimKey,
-  type RewardTicketKind,
   type RewardTicketSource,
 } from "../../rewards/rewardTickets";
 
@@ -53,8 +52,7 @@ function rewardPlanForRunEvent(
   ev: RunEvent,
 ): {
   outcome: RewardOutcome;
-  ticketKind: RewardTicketKind;
-  ticketSource: RewardTicketSource;
+  ticketSource: RewardTicketSource | null;
   bonusGoldAmount: number;
 } {
   const depth = floorMapDepthForRewards(world);
@@ -67,16 +65,14 @@ function rewardPlanForRunEvent(
           { type: "ZONE_COMPLETED", zoneIndex: ev.zoneIndex },
           { depth },
         ),
-        ticketKind: "CARD_PICK",
-        ticketSource: "ZONE_TRIAL",
+        ticketSource: null,
         bonusGoldAmount: 0,
       };
 
     case "RARE_MILESTONE_CLEARED":
       return {
         outcome: applyRareMilestoneReward(world, ev.rareIndex),
-        ticketKind: "CARD_PICK",
-        ticketSource: "ZONE_TRIAL",
+        ticketSource: null,
         bonusGoldAmount: 0,
       };
 
@@ -87,24 +83,21 @@ function rewardPlanForRunEvent(
           { type: "SURVIVE_1MIN_REWARD" },
           { depth },
         ),
-        ticketKind: "CARD_PICK",
-        ticketSource: "ZONE_TRIAL",
+        ticketSource: null,
         bonusGoldAmount: 0,
       };
 
     case "OBJECTIVE_COMPLETED":
       return {
         outcome: handleRewardEvent(world.floorRewardBudget, { type: "OBJECTIVE_COMPLETED" }, { depth }),
-        ticketKind: "RELIC_PICK",
         ticketSource: "OBJECTIVE_COMPLETION",
         bonusGoldAmount: OBJECTIVE_COMPLETION_GOLD,
       };
 
     case "LEVEL_UP":
       return {
-        outcome: { type: "GRANT_CARD", reason: `Level ${ev.level} reward` },
-        ticketKind: "CARD_PICK",
-        ticketSource: "LEVEL_UP",
+        outcome: { type: "NO_REWARD", reason: `Level ${ev.level} grants no interim reward` },
+        ticketSource: null,
         bonusGoldAmount: 0,
       };
 
@@ -115,16 +108,14 @@ function rewardPlanForRunEvent(
           { type: "CHEST_OPENED", chestKind: ev.chestKind },
           { depth },
         ),
-        ticketKind: "CARD_PICK",
-        ticketSource: ev.chestKind === "BOSS" ? "BOSS_CHEST" : "ZONE_TRIAL",
+        ticketSource: null,
         bonusGoldAmount: 0,
       };
 
     default:
       return {
         outcome: { type: "NO_REWARD", reason: "Unhandled run event" },
-        ticketKind: "CARD_PICK",
-        ticketSource: "ZONE_TRIAL",
+        ticketSource: null,
         bonusGoldAmount: 0,
       };
   }
@@ -151,15 +142,12 @@ export function rewardSchedulerSystem(world: World): void {
         event: ev.type,
         claimKey,
         outcome: plan.outcome.type,
-        ticketKind: plan.outcome.type === "GRANT_CARD" || plan.outcome.type === "GRANT_RELIC"
-          ? plan.ticketKind
-          : null,
+        ticketKind: plan.outcome.type === "GRANT_RELIC" ? "RELIC_PICK" : null,
       });
     }
 
     // Claim once scheduler has decided the outcome. This prevents event replay loss.
     addRewardClaimKey(world, claimKey);
-    world.lastCardRewardClaimKey = claimKey;
 
     if (ev.type === "OBJECTIVE_COMPLETED") {
       world.objectiveRewardClaimedKey = claimKey;
@@ -177,13 +165,13 @@ export function rewardSchedulerSystem(world: World): void {
       continue;
     }
 
-    if (plan.outcome.type !== "GRANT_CARD" && plan.outcome.type !== "GRANT_RELIC") {
+    if (plan.outcome.type !== "GRANT_RELIC" || !plan.ticketSource) {
       continue;
     }
 
     enqueueRewardTicket(world, {
       claimKey,
-      kind: plan.ticketKind,
+      kind: "RELIC_PICK",
       source: plan.ticketSource,
       optionCount: DEFAULT_OPTION_COUNT,
     });

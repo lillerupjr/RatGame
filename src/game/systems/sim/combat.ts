@@ -1,13 +1,11 @@
 import { World, emitEvent } from "../../../engine/world/world";
 import { findClosestTarget } from "../../util/targeting";
 import { PRJ_KIND, spawnProjectile } from "../../factories/projectileFactory";
-import { getCardById } from "../../combat_mods/content/cards/cardPool";
 import { resolveWeaponStats } from "../../combat_mods/stats/combatStatsResolver";
 import { applySpreadToDirection, computeProjectileAngles } from "../../combat_mods/runtime/spread";
-import { getDevGrantedCardIds } from "../../combat_mods/debug/devCombatModsDebug";
 import { getUserSettings } from "../../../userSettings";
 import { resolveCombatStarterWeaponId } from "../../combat_mods/content/weapons/characterStarterMap";
-import { resolveCombatStarterStatCards } from "../../combat_mods/content/weapons/characterStarterMods";
+import { resolveCombatStarterStatMods } from "../../combat_mods/content/weapons/characterStarterMods";
 import { getCombatStarterWeaponById } from "../../combat_mods/content/weapons/starterWeapons";
 import { resetPlayerBeamState, updatePlayerBeamCombat } from "./beamCombat";
 import { getPlayerAimWorld } from "../../combat/aimPoints";
@@ -35,18 +33,11 @@ export function combatSystem(w: World, dt: number) {
   w.lastAimX = defaultAimX;
   w.lastAimY = defaultAimY;
 
-  const cardIds = [...(w.cards ?? []), ...(w.combatCardIds ?? [])];
-  if (import.meta.env.DEV) {
-    cardIds.push(...getDevGrantedCardIds());
-  }
-  const cards = cardIds
-    .map((id) => getCardById(id))
-    .filter((card): card is NonNullable<typeof card> => Boolean(card));
-  const starterCards = resolveCombatStarterStatCards((w as any).currentCharacterId);
+  const starterMods = resolveCombatStarterStatMods((w as any).currentCharacterId);
 
   const weaponId = resolveCombatStarterWeaponId((w as any).currentCharacterId);
   const selectedWeapon = getCombatStarterWeaponById(weaponId);
-  const resolved = resolveWeaponStats(selectedWeapon, { cards: [...cards, ...starterCards] });
+  const resolved = resolveWeaponStats(selectedWeapon, { mods: [...starterMods] });
   const debug = getUserSettings().debug;
   const debugDamageMult = Math.max(0, debug.dmgMult || 1);
   const debugFireRateMult = Math.max(0.001, debug.fireRateMult || 1);

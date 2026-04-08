@@ -32,7 +32,6 @@ describe("reward pipeline stabilization", () => {
 
     rewardSchedulerSystem(world);
     expect(world.rewardTickets).toHaveLength(0);
-    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
   });
 
   test("rare-zone KILL creates exactly one rare milestone event", () => {
@@ -71,8 +70,7 @@ describe("reward pipeline stabilization", () => {
     rewardSchedulerSystem(world);
 
     expect(world.rewardTickets).toHaveLength(0);
-    expect(world.cardRewardClaimKeys).toContain("0:BOSS_CHEST");
-    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
+    expect(world.rewardClaimKeys).toContain("0:BOSS_CHEST");
   });
 
   test("zone trial sequence is objective relic plus gold only", () => {

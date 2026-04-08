@@ -1,5 +1,4 @@
 import type { World } from "../../../engine/world/world";
-import { beginCardReward, ensureCardRewardState } from "../../combat_mods/rewards/cardRewardFlow";
 import { beginRelicReward, ensureRelicRewardState } from "../../combat_mods/rewards/relicRewardFlow";
 import {
   activateRewardTicket,
@@ -9,39 +8,17 @@ import {
 } from "../../rewards/rewardTickets";
 
 function closeRewardStates(world: World): void {
-  const cardReward = ensureCardRewardState(world);
-  cardReward.active = false;
-  cardReward.options = [];
-
   const relicReward = ensureRelicRewardState(world);
   relicReward.active = false;
   relicReward.options = [];
 }
 
 function anyRewardUiActive(world: World): boolean {
-  const cardReward = ensureCardRewardState(world);
-  if (cardReward.active) return true;
   const relicReward = ensureRelicRewardState(world);
   return relicReward.active;
 }
 
-function openTicketReward(world: World, ticket: { kind: "CARD_PICK" | "RELIC_PICK"; source: "ZONE_TRIAL" | "BOSS_CHEST" | "OBJECTIVE_COMPLETION" | "LEVEL_UP"; optionCount: number }): boolean {
-  if (ticket.kind === "CARD_PICK") {
-    const source = ticket.source === "BOSS_CHEST"
-      ? "BOSS_CHEST"
-      : ticket.source === "LEVEL_UP"
-        ? "LEVEL_UP"
-        : "ZONE_TRIAL";
-    beginCardReward(world, source, ticket.optionCount);
-    const cardReward = ensureCardRewardState(world);
-    if (!cardReward.active || cardReward.options.length <= 0) {
-      cardReward.active = false;
-      cardReward.options = [];
-      return false;
-    }
-    return true;
-  }
-
+function openTicketReward(world: World, ticket: { kind: "RELIC_PICK"; source: "OBJECTIVE_COMPLETION"; optionCount: number }): boolean {
   beginRelicReward(world, "OBJECTIVE_COMPLETION", ticket.optionCount);
   const relicReward = ensureRelicRewardState(world);
   if (!relicReward.active || relicReward.options.length <= 0) {

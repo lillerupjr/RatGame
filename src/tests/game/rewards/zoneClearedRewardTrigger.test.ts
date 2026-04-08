@@ -16,7 +16,7 @@ describe("zone-cleared reward scheduling", () => {
 
     rewardSchedulerSystem(w);
     expect(w.rewardTickets).toHaveLength(0);
-    expect(w.cardRewardClaimKeys).toEqual(["0:ZONE_CLEAR:1", "0:ZONE_CLEAR:2"]);
+    expect(w.rewardClaimKeys).toEqual(["0:ZONE_CLEAR:1", "0:ZONE_CLEAR:2"]);
   });
 
   test("objective completion grants gold and a relic reward ticket", () => {

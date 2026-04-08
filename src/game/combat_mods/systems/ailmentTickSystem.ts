@@ -5,7 +5,6 @@ import type { World } from "../../../engine/world/world";
 import { emitEvent } from "../../../engine/world/world";
 import { getEnemyWorld } from "../../coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
-import { getCardById } from "../content/cards/cardPool";
 import { resolveDotStats } from "../stats/combatStatsResolver";
 import { makeAilmentDotMeta } from "../../combat/damageMeta";
 import { DOT_TICK_INTERVAL_SEC } from "../../combat/dot/dotConstants";
@@ -42,11 +41,7 @@ export function tickAilmentsOnce(w: any, dtTick: number): void {
   const n = w.eHp?.length ?? 0;
   if (!w.eAlive || !w.eHp) return;
 
-  const cardIds = [...(w.cards ?? []), ...(w.combatCardIds ?? [])];
-  const cards = cardIds
-    .map((id: string) => getCardById(id))
-    .filter((card): card is NonNullable<typeof card> => Boolean(card));
-  const dotStats = resolveDotStats({ cards });
+  const dotStats = resolveDotStats({ mods: [] });
   const relicIds: string[] = Array.isArray(w.relics) ? w.relics : [];
   // Dot-only scaling stays in the DoT pipeline; global hit multipliers must not be applied here.
   const relicDotMoreMult =

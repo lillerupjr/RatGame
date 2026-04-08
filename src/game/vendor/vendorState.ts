@@ -5,15 +5,11 @@ export type VendorRelicOffer = {
 };
 
 export type VendorState = {
-  cards: string[];
-  purchased: boolean[];
   relicOffers: VendorRelicOffer[];
 };
 
-export function createVendorState(cardIds: string[], relicOffers: VendorRelicOffer[] = []): VendorState {
+export function createVendorState(relicOffers: VendorRelicOffer[] = []): VendorState {
   return {
-    cards: cardIds,
-    purchased: new Array(cardIds.length).fill(false),
     relicOffers,
   };
 }

@@ -1,5 +1,5 @@
-export type RewardTicketKind = "CARD_PICK" | "RELIC_PICK";
-export type RewardTicketSource = "ZONE_TRIAL" | "BOSS_CHEST" | "OBJECTIVE_COMPLETION" | "LEVEL_UP";
+export type RewardTicketKind = "RELIC_PICK";
+export type RewardTicketSource = "OBJECTIVE_COMPLETION";
 export type RewardTicketStatus = "PENDING" | "ACTIVE" | "RESOLVED";
 
 export type RewardTicket = {
@@ -96,8 +96,8 @@ export function resolveActiveRewardTicket(world: any): void {
 }
 
 export function ensureRewardClaimKeys(world: any): string[] {
-  if (!Array.isArray(world.cardRewardClaimKeys)) world.cardRewardClaimKeys = [];
-  return world.cardRewardClaimKeys as string[];
+  if (!Array.isArray(world.rewardClaimKeys)) world.rewardClaimKeys = [];
+  return world.rewardClaimKeys as string[];
 }
 
 export function hasRewardClaimKey(world: any, claimKey: string): boolean {

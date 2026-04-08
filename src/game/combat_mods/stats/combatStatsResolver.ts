@@ -1,5 +1,5 @@
 import { STAT_KEYS, type StatKey } from "./statKeys";
-import type { CardDef, DamageBundle, StatMod, WeaponDef } from "./modifierTypes";
+import type { DamageBundle, StatMod, WeaponDef } from "./modifierTypes";
 import { applyConversionPriorityFill } from "../damage/conversion";
 
 export interface ResolvedWeaponStats {
@@ -33,8 +33,7 @@ export interface ResolvedWeaponStats {
 }
 
 export interface CombatModsLoadout {
-  cards: CardDef[];
-  // later: relics, buffs, debuffs
+  mods: StatMod[];
 }
 
 export interface DotStatsScalars {
@@ -45,12 +44,10 @@ export interface DotStatsScalars {
 }
 
 /**
- * Collect mods from a loadout. (Phase A: cards only)
+ * Collect mods from a loadout.
  */
 export function collectStatMods(loadout: CombatModsLoadout): StatMod[] {
-  const mods: StatMod[] = [];
-  for (const c of loadout.cards) mods.push(...c.mods);
-  return mods;
+  return [...loadout.mods];
 }
 
 type Acc = {

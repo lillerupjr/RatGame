@@ -138,7 +138,6 @@ export type DebugSettings = {
   entityAnchorOverlay: boolean;
   enemyAimOverlay: boolean;
   lootGoblinOverlay: boolean;
-  pauseDebugCards: boolean;
   pauseCsvControls: boolean;
   dpsMeter: boolean;
   shadowSunTimeHour: number;
@@ -218,7 +217,6 @@ function toLegacySettings(): UserSettings {
       entityAnchorOverlay: settings.debug.entityAnchorOverlay,
       enemyAimOverlay: settings.debug.enemyAimOverlay,
       lootGoblinOverlay: settings.debug.lootGoblinOverlay,
-      pauseDebugCards: settings.debug.pauseDebugCards,
       pauseCsvControls: settings.debug.pauseCsvControls,
       dpsMeter: settings.debug.dpsMeter,
       shadowSunTimeHour: settings.debug.shadowSunTimeHour,
@@ -438,7 +436,6 @@ function splitLegacyPatch(patch: UserSettingsPatch): {
       "entityAnchorOverlay",
       "enemyAimOverlay",
       "lootGoblinOverlay",
-      "pauseDebugCards",
       "pauseCsvControls",
       "dpsMeter",
     ] as const;
@@ -555,10 +552,6 @@ export function updateUserSettings(patch: UserSettingsPatch): UserSettings {
     updateSystemOverrides(split.systemPatch);
   }
   return getUserSettings();
-}
-
-export function isPauseDebugCardsEnabled(): boolean {
-  return !!getSettings().debug.pauseDebugCards;
 }
 
 export function isPauseCsvControlsEnabled(): boolean {
