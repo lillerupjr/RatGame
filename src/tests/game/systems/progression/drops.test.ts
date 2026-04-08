@@ -79,6 +79,7 @@ describe("dropsSystem", () => {
     expect(w.run.xp).toBe(7);
     expect(w.run.runGold).toBe(0);
     expect(w.run.level).toBe(1);
+    expect(w.clusterJewelSkillPoints).toBe(0);
     expect(w.xAlive.some(Boolean)).toBe(false);
   });
 
@@ -89,13 +90,17 @@ describe("dropsSystem", () => {
     spawnGold(w, pw.wx, pw.wy, 120);
     dropsSystem(w, 1 / 60);
 
-    expect(w.run.xp).toBe(10);
-    expect(w.run.level).toBe(3);
-    expect(w.run.xpToNextLevel).toBe(72);
-    expect(w.level).toBe(3);
+    expect(w.run.xp).toBe(5);
+    expect(w.run.level).toBe(6);
+    expect(w.run.xpToNextLevel).toBe(40);
+    expect(w.level).toBe(6);
+    expect(w.clusterJewelSkillPoints).toBe(5);
     expect(w.runEvents).toEqual([
       { type: "LEVEL_UP", floorIndex: 0, level: 2 },
       { type: "LEVEL_UP", floorIndex: 0, level: 3 },
+      { type: "LEVEL_UP", floorIndex: 0, level: 4 },
+      { type: "LEVEL_UP", floorIndex: 0, level: 5 },
+      { type: "LEVEL_UP", floorIndex: 0, level: 6 },
     ]);
   });
 

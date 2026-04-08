@@ -1,5 +1,6 @@
 import { getSettings } from "../../settings/settingsStore";
 import { DEFAULT_XP_LEVEL_BASE, DEFAULT_XP_LEVEL_GROWTH } from "../../settings/systemOverrides";
+import { addClusterJewelSkillPoints } from "../cluster_jewels/state";
 import { enqueueRunEvent } from "../rewards/runEvents";
 
 export type RunProgressionState = {
@@ -55,6 +56,7 @@ export function grantXp(world: any, amount: number): number {
     run.level = Math.max(1, Math.floor(run.level)) + 1;
     world.level = run.level;
     run.xpToNextLevel = Math.max(1, Math.ceil(run.xpToNextLevel * getXpConfig().xpLevelGrowth));
+    addClusterJewelSkillPoints(world, 1);
     enqueueRunEvent(world, {
       type: "LEVEL_UP",
       floorIndex: getFloorIndex(world),

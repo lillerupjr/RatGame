@@ -17,6 +17,7 @@ import type { TriggerDef } from "../../game/triggers/triggerTypes";
 import type { Dir8 } from "../render/sprites/dir8";
 import type { EnemyAilmentsState } from "../../game/combat_mods/ailments/enemyAilments";
 import type { RelicRewardState } from "../../game/combat_mods/rewards/relicRewardFlow";
+import type { ClusterJewelInstance } from "../../game/cluster_jewels/types";
 import type { FloorRewardBudget } from "../../game/rewards/floorRewardBudget";
 import type { RunEvent } from "../../game/rewards/runEvents";
 import type { RewardTicket } from "../../game/rewards/rewardTickets";
@@ -339,6 +340,8 @@ export type World = {
   // Items
   // -------------------------
   items: { id: any; level: number }[];
+  clusterJewels: ClusterJewelInstance[];
+  clusterJewelSkillPoints: number;
   relicReward: RelicRewardState;
   floorRewardBudget: FloorRewardBudget;
   rewardClaimKeys: string[];
@@ -769,6 +772,8 @@ export function createWorld(args: CreateWorldArgs): World {
 
     // Items
     items: [],
+    clusterJewels: [],
+    clusterJewelSkillPoints: 0,
     relicReward: {
       active: false,
       source: "OBJECTIVE_COMPLETION",

@@ -27,6 +27,8 @@ import { mountPauseMenu } from "./ui/pause/pauseMenu";
 import { togglePause } from "./game/app/pauseController";
 import { mountSettingsPanel } from "./ui/settings/settingsPanel";
 import { installDevToolsPanel } from "./ui/devTools/devToolsPanel";
+import { STARTER_CLUSTER_JEWELS, validateStarterClusterJewels } from "./game/cluster_jewels/starterJewels";
+import { validateClusterJewelContent } from "./game/cluster_jewels/content";
 import { STARTER_RELIC_BY_CHARACTER, validateStarterRelics } from "./game/content/starterRelics";
 import { installStandaloneViewportFix } from "./game/app/viewportSizing";
 import { buildPaletteSnapshotArtifactFromCanvas } from "./game/paletteLab/snapshotThumbnail";
@@ -80,7 +82,10 @@ async function bootstrap() {
 
   await initUserSettings();
   if (import.meta.env.DEV) {
+    validateClusterJewelContent();
+    validateStarterClusterJewels();
     validateStarterRelics();
+    console.debug("[clusterJewels] starters", STARTER_CLUSTER_JEWELS);
     console.debug("[starterRelics] mapping", STARTER_RELIC_BY_CHARACTER);
   }
   const audioPrefs = getUserSettings().audio;

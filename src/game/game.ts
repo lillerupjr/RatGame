@@ -182,6 +182,7 @@ import { recomputeDerivedStats } from "./stats/derivedStats";
 import { hasAnyRelicWithTag, MOMENTUM_RELIC_TAG } from "./content/relics";
 import { createMobileControls } from "../ui/mobile/mobileControls";
 import { renderDialogChoices } from "../ui/dialog/renderDialogChoices";
+import { ensureStarterClusterJewelForCharacter } from "./systems/progression/starterClusterJewels";
 import { ensureStarterRelicForCharacter } from "./systems/progression/starterRelics";
 import { getWorldRelicInstances } from "./systems/progression/relics";
 import { rewardRunEventProducerSystem } from "./systems/progression/rewardRunEventProducerSystem";
@@ -2426,6 +2427,7 @@ export function createGame(args: CreateGameArgs) {
 
     await resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
     (world as any).currentCharacterId = character.id;
+    ensureStarterClusterJewelForCharacter(world, character.id);
     ensureStarterRelicForCharacter(world, character.id);
 
     const delve = createDelveMap(world.runSeed);
@@ -2450,6 +2452,7 @@ export function createGame(args: CreateGameArgs) {
 
     await resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
     (world as any).currentCharacterId = character.id;
+    ensureStarterClusterJewelForCharacter(world, character.id);
     ensureStarterRelicForCharacter(world, character.id);
     world.delveMap = null;
     setMapDepth(world, 1);
@@ -2485,6 +2488,7 @@ export function createGame(args: CreateGameArgs) {
 
     await resetRun(mapId, { skipMapSelection: true, seedOverride: preparedStart?.seed });
     (world as any).currentCharacterId = character.id;
+    ensureStarterClusterJewelForCharacter(world, character.id);
     ensureStarterRelicForCharacter(world, character.id);
     world.delveMap = null;
     setMapDepth(world, 1);
