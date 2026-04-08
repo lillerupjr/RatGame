@@ -1,358 +1,137 @@
-# docs/AGENTS.md
+# AGENTS.md
 
-Audience note:
-This file defines repository and engine architecture invariants for implementation work.
-It is not the source of truth for design-discussion behavior.
-Design discussions are governed separately by the RatGame Design Partner Protocol.
+## Purpose
 
-Instruction to implementation agents
+This file is the top-level operational guide for implementation agents.
 
-* No time-gated comments
-* Contract-style documentation only
-* This document is linear and complete
-* Each section represents a locked architectural rule
-* Achievements are boolean invariants; checked items must remain true
-* No change may invalidate agents.md; if a rule becomes untrue, agents.md must be updated first
+It defines:
 
----
+- agent workflow in this repo
+- source-of-truth and drift rules
+- global repo and engine invariants
+- contract and documentation maintenance rules
+- a small set of editing rules
+- Canonical docs include design constraints (non-negotiable system rules)
 
-## 0. Purpose
+It does **not** contain deep system architecture. Canonical system docs in `/docs/canonical/` are the primary source of truth for system architecture and intended behavior.
 
-This document defines the **non-negotiable architectural contracts** of this repo.
-Its goal is to prevent accidental redefinition of Z semantics, directions,
-map ownership, and rendering order.
+## Agent Workflow
 
-If a change violates a rule here, the rule must be updated first.
+1. Start with the relevant canonical doc in `/docs/canonical/`.
+2. Use `/docs/file_tree.md` to find the owned files and nearby integration points.
+3. Inspect only the local code needed to implement or verify the change.
+4. Do not rediscover full-system architecture from code during normal work.
+5. If the change affects system behavior, boundaries, invariants, design constraints, or entrypoints, update the canonical doc in the same patch.
+6. If working from a contract, use the contract for scope and intent, then bring canonical docs up to date before considering the work complete.
 
-Achievements
-- [ ] Core spatial rules are enforced without per-system redefinition
+## Source of Truth and Drift
 
----
+- Canonical docs are the primary source of truth for system architecture and intended behavior.
+- Code inspection is for implementation and local verification, not for replacing canonical docs as the architectural reference.
+- Contracts describe intended changes and implementation scope. After implementation, canonical docs remain authoritative.
+- `AGENTS.md` is not a substitute for canonical system documents.
 
-## 1. Engine shape (system rules)
+If local code conflicts with a canonical doc:
 
-- TypeScript + Vite
-- World rendering supports Canvas2D and WebGL backends
-- ECS-lite: systems read/write world state and emit events
-- Systems do not call each other directly
-- Cross-system communication happens through shared world fields or events
+- treat the mismatch as drift
+- stop and report it clearly
+- do not silently trust code over docs
+- do not silently work around the inconsistency
 
-Rules
-- A system may only mutate fields it owns
-- Ownership means a system is the sole writer of a field or structure by contract
-- New shared behavior must be centralized in helpers, not duplicated
+Drift resolution requires one of two outcomes:
 
-Achievements
-- [ ] No system-specific spatial or render math exists outside shared helpers
+- fix the code, or
+- update the canonical doc because intent changed
 
----
+Drift is blocking work, not a note to clean up later.
 
-## 2. Coordinate spaces (do not improvise)
+## Global Repo / Engine Invariants
 
-This engine uses four distinct spaces:
+### System Interaction and Ownership
 
-- Table space: map authoring grid (TableMapDef)
-- Tile space: compiled logical grid used for map queries
-- World space: continuous coordinates for movement and collision
-- Screen space: canvas pixels after isometric projection
+- The repo uses a shared mutable world model with system-style updates.
+- Systems should communicate through world state, shared helpers, and events, not through hidden cross-system coupling.
+- Shared behavior must be centralized. Do not create parallel copies of coordinate logic, render ordering logic, collision rules, or other cross-system helpers.
+- A shared field or structure should have a clear owner or a clearly centralized write path.
 
-Rules
-- All conversions must be explicit
-- Tile or table coordinates must never be mixed with screen math
-- World to screen projection is centralized
+### Coordinate Spaces
 
-Achievements
-- [ ] All coordinate conversions flow through shared helpers
-- [ ] No system redefines axis orientation or dimension meaning
-## 2.1 Axis and dimension identity (locked)
+- The engine uses four distinct spaces:
+  - table space: authored map grid
+  - tile space: logical compiled grid
+  - world space: continuous gameplay coordinates
+  - screen space: projected canvas coordinates
+- Conversions between spaces must be explicit.
+- Do not mix table or tile coordinates with screen-space math.
+- World-to-screen projection must stay centralized.
 
-Table space and tile space share the same axis orientation.
+### Axis and Dimension Identity
 
-Canonical truths:
-- +x is east (right)
-- +y is south (down)
-- Width extends along +x
-- Height extends along +y
+- Table space and tile space use the same axis orientation.
+- `+x` is east/right.
+- `+y` is south/down.
+- Width extends along `+x`.
+- Height extends along `+y`.
+- Do not swap `x/y`, swap `w/h`, flip signs, or introduce hidden rotations.
 
-One-liners (never revisit):
-> Excel +y == Tile-grid +y == South  
-> w+ == x+ and h+ == y+
+### Direction Semantics
 
-Rules
-- Excel column index maps directly to tile-grid `x`
-- Excel row index maps directly to tile-grid `y`
-- `w` is the extent of +x (number of columns)
-- `h` is the extent of +y (number of rows)
-- No axis swaps, sign flips, or rotations are permitted
-- No system may reinterpret width as height or height as width
+- Direction semantics are domain-specific and must not be conflated.
+- Tile/map directions use tile-space axes:
+  - `E` = `+x`
+  - `W` = `-x`
+  - `S` = `+y`
+  - `N` = `-y`
+- Stair-direction tokens describe uphill direction in map/tile space.
+- Sprite/facing direction tokens may be derived from projected or screen-derived vectors and should be treated as presentation-facing labels, not as raw tile-axis truth.
+- Table space has no standalone directional meaning beyond its identity mapping into tile-space axes.
+- If a direction mapping changes, update all consumers in the same patch through the shared mapping/helper path.
 
-Forbidden
-- Any Excel→tile transform that swaps or flips axes
-- Any bounds logic that uses `h` as an x-extent or `w` as a y-extent
-- Any “north-is-right” or compass-compensation hacks
+### Z Role Semantics
 
-Achievements
-- [ ] Table space, tile space, and grid math use identity axis mapping
-- [ ] No code path swaps `w/h` or `x/y`
+- Vertical state is split by role.
+- `zLogical` is gameplay-layer membership.
+- `zVisual` is render-sorting depth.
+- `zOcclusion` is visibility blocking.
+- `zBase` / `zTop` describe physical height bands.
+- Do not overload one Z field to mean another role. Add a new named field if a new vertical contract is needed.
 
----
+### Surfaces and Blocking
 
-## 3. Direction semantics (single source of truth)
-
-Directional names (N/E/S/W) are **screen-aligned**, not math-aligned.
-
-Rules
-- Directional semantics (N/E/S/W) are defined in tile space relative to screen space
-- Table space has no inherent directional meaning
-- World space derives direction only through tile space
-- Screen space is a projection target, not a source of semantics
-- North always means up on screen
-- Stair direction tokens describe uphill direction
-- Wall, apron, stair, movement, and debug logic must agree
-
-If direction meaning changes:
-- It must change in one place
-- All consumers must be updated in the same patch
-
-Achievements
-- [ ] All direction semantics route through a single direction-mapping helper
-
----
-
-## 4. Z is a contract
-
-Z is not a single value.
-
-Distinct roles exist:
-- zLogical: gameplay layer membership
-- zVisual: render sorting depth
-- zOcclusion: visibility blocking
-- zBase / zTop: physical height band
-
-Rules
-- Never overload one Z value to mean multiple things
-- New vertical behavior requires a new named field
-
-Achievements
-- [ ] No system derives height without querying map helpers or Z roles
-
----
-
-## 5. Surfaces and connectors
-
-- Floors are surfaces
-- Stairs are connectors between surfaces
-- Walls are occluders
-
-Rules
-- Movement chooses a surface explicitly
-- Stairs never behave as generic walkable floors
-- Multiple surfaces per (x, y) are supported via queries, not hacks
-
-Achievements
-- [ ] Movement and spawn logic exclusively use surface queries
-
----
-
-## 6. Map compilation contract
-
-Maps are authored as TableMapDef and compiled into a runtime map.
-
-Compiled map must expose:
-- getTile(tx, ty)
-- surfacesAtXY(tx, ty)
-- layer-grouped surfaces and occluders
-- apron underlays and deferred apron data
-
-Rules
-- Systems must read from the active compiled map only
-- Procedural and authored maps use the same compile pipeline
-
-Achievements
-- [ ] No runtime system reads raw TableMapDef data
-
----
-
-## 7. Rendering terminology
-
-Definitions:
-- Aprons: background thickness art (non-occluding)
-- Underlays: apron prepass visuals
-- Tops: walkable surface faces
-- Entities: players, enemies, projectiles
-- Occluders: walls only
-
-Rules
-- Aprons never block visibility
-- Occluders are the only visibility blockers
-
-Achievements
-- [ ] Aprons and occluders are stored and rendered in distinct structures
-
----
-
-## 8. Render order (locked)
-
-Current render pipeline:
-
-1. `GROUND`
-2. `WORLD`
-3. `SCREEN/UI`
-
-Rules
-- chunk-rasterized ground remains in the `GROUND` pass
-- all world-space competing objects share one `WORLD` ordering domain
-- screen-space debug, HUD, and full-screen overlays stay in `SCREEN/UI`
-- render ordering is driven by shared world sort metadata, not hidden phase-specific depth heuristics
-
-Achievements
-- [x] Final world ordering is not delegated to legacy underlay/entity/light/occluder phase splits
-- [x] Final screen-space pass keeps only ambient darkness/tint and screen overlays
-- [x] Legacy light-mask occlusion/debug pipeline is removed from runtime render path
-
----
-
-## 9. Collision and combat helpers
-
-Rules
-- Broad-phase uses spatial hashing
-- Tile-grid queries determine walkability and blocking
-- New collision rules must live in shared helpers
-- Prefer tile/grid-based vertical collision over bespoke ramp math
-
-Achievements
-- [ ] Projectile vs vertical-face collision is grid-driven and centralized
-
----
-
-## 10. Gameplay loop invariants
-
-- Runs are deterministic from seed and floor index
-- Act-boss behavior is owned by the canonical boss encounter pipeline
-- UI and audio react to events and game state only
-
-Rules
-- Systems must not reach into DOM or audio directly
-- Emit events; let dedicated systems consume them
-
-Achievements
-- [ ] Gameplay systems do not directly manipulate UI or audio
-
----
-
-## 11. Editing rules
-
-If you change any of these, update all consumers together:
-- Direction semantics
-- Z role definitions
-- Map compile outputs
-- Render pass order
-- Axis or dimension identity (x/y, w/h)
-- 
-When adding new behavior:
-- Centralize logic
-- Avoid new magic constants
-
-Achievements
-- [ ] Core spatial and render rules exist in exactly one place each
-
----
-
-## 12. Contract-driven changes (how to apply new contracts)
-
-This repo evolves through **explicit contract documents** (`*.md`).
-
-When a new contract file is explicitly introduced (example: `render4.0.md`),
-the following rules apply.
-
-LLM instruction pattern:
-> New contract: "render4.0.md"  
-> Read it and tell me when ready.
-
-### Contract consumption rules
-
-- Read the entire contract before making any changes
-- Do not implement anything until the contract is fully understood
-- Do not reinterpret or weaken agents.md unless explicitly overridden
-- Do not introduce time-gated comments or speculative notes
-- Treat each section as a locked architectural step
-
-If a contract conflicts with agents.md:
-- The conflict must be explicit and intentional
-- Silent conflicts are invalid
-
-### Step execution and gating
-
-- Execute the contract one section at a time, in order
-- After completing a section:
-    - Mark its Achievements as completed in the contract
-    - Update any affected Achievements in agents.md
-    - Summarize newly true invariants
-    - State the next step
-    - Stop execution
-
-The LLM must not proceed until the user responds with:
-> next
-
-Partial execution or batching steps is invalid.
-
-### Completion signal
-
-- When all contract steps are complete and achievements are marked:
-    - Provide a brief final state summary
-    - State that the contract is complete
-
----
-## Renderer Architecture Contract (Post-Decomposition)
-
-The renderer is a staged pipeline. `render.ts` is a conductor only and must not contain subsystem logic.
-
-### Pipeline Stages (locked)
-
-1. prepareRenderFrame — frame context, camera, viewport, settings snapshot
-2. collectFrameDrawables — gather all world drawables (delegates to subsystems)
-3. sortFrameDrawables — ordering authority (single source of truth)
-4. executeWorldPasses — ground, world, shadows, lighting
-5. executeScreenOverlays — screen-space effects
-6. executeUiPass — UI layer
-7. executeDebugPass — debug overlays (optional)
-
-### Ownership Rules (locked)
-
-* structures → presentation/structures/*
-* structure shadows → presentation/structureShadows/*
-* structure triangles → presentation/structureTriangles/*
-* static relight → presentation/staticRelight/*
-* debug overlays → presentation/debug/*
-
-### Hard Rules
-
-* render.ts must NOT contain:
-
-  * slice generation
-  * triangle math
-  * shadow algorithms
-  * relight algorithms
-  * debug drawing logic
-* No large loops (>100 lines) inside renderSystem
-* No new "renderUtils" or helper dump files
-* All new rendering features must attach to an existing stage
-
-### Principle
-
-The renderer is a pipeline of systems, not a system itself.
-
----
-
-## Canonical Documents
-
-The canonical references are in the `docs/systems` folder. They must be updated to reflect the live implementation and are the source of truth for renderer architecture.:
-
-
-Rules:
-
-- Maintain these documents in the same patch as any related changes.
-- Keep it implementation-accurate and present tense
-- Document the live pipeline, not the intended future pipeline
-- If behavior is mixed, partial, or intentionally deferred, state that explicitly
-- Remove stale references to deleted files, stages, or backend paths immediately
+- Floors are surfaces.
+- Stairs and ramps are connectors between surfaces.
+- Walls are occluders/blockers, not generic walkable surfaces.
+- Movement, spawn placement, and similar walkability decisions must use shared surface/walkability queries rather than ad hoc geometry rules.
+
+### High-Level Render Ordering
+
+- The top-level render-pass order is:
+  1. `GROUND`
+  2. `WORLD`
+  3. `SCREEN/UI`
+- Chunk-rasterized ground belongs in `GROUND`.
+- Competing world-space objects share the `WORLD` ordering domain.
+- HUD, screen overlays, and other screen-space layers belong in `SCREEN/UI`.
+- Detailed render-pipeline behavior belongs in the relevant canonical docs, not here.
+
+## Contracts and Documentation
+
+- Canonical docs must stay aligned with implementation.
+- Any system-level change is incomplete until its canonical doc is updated in the same patch.
+- Use `/docs/canonical/documentation_framework.md` as the rulebook for canonical doc structure and maintenance.
+- Keep system-specific architecture out of `AGENTS.md`. Put it in the relevant canonical doc instead.
+
+When working from a contract:
+
+- use the contract for intended scope and implementation order
+- keep any explicit progress checklist current
+- do not treat the contract as current architectural truth after implementation
+- When given a contract in raw text, persist it to /docs/contracts/implemented/ only if it defines a meaningful system-level change or reusable design; otherwise treat it as ephemeral.
+
+## Editing Rules
+
+- Prefer extending existing systems over creating duplicate ownership paths.
+- Centralize new shared logic in helpers or existing ownership boundaries.
+- Avoid one-off coordinate, direction, Z, render-order, or walkability conventions.
+- If a change modifies a global invariant in this file, update all affected code and docs in the same patch.
+- Keep this file concise and global. If a section starts reading like a system doc, move that detail to `/docs/canonical/`.
