@@ -7,7 +7,6 @@ import {
   drawProjectileFaceOverlay,
   drawRampOverlay,
   drawRoadSemanticOverlay,
-  drawSweepShadowDebugOverlay,
   drawStructureHeightOverlay,
   drawTileHeightMapOverlay,
   drawTriggerOverlay,
@@ -61,7 +60,6 @@ export function renderDebugWorldOverlays(input: RenderDebugWorldPassInput): void
 
   drawProjectileFaceOverlay(debugContext, flags.showProjectileFaces, viewRect);
   drawStructureHeightOverlay(debugContext, flags.showStructureHeights, viewRect);
-  drawSweepShadowDebugOverlay(debugContext, flags.showSweepShadowDebug, viewRect);
   drawTileHeightMapOverlay(debugContext, flags.showTileHeightMap, viewRect);
   drawTriggerOverlay(debugContext, flags.showTriggers);
   drawRoadSemanticOverlay(debugContext, flags.showRoadSemantic, viewRect);

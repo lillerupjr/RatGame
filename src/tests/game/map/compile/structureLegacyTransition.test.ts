@@ -11,7 +11,7 @@ import {
   computeMonolithicBuildingSemanticsForSkinIds,
   getRequiredMonolithicBuildingPlacementGeometry,
 } from "../../../../game/structures/monolithicBuildingSemanticPrepass";
-import { renderHeightUnitsToSweepTileHeight } from "../../../../game/map/tileHeightUnits";
+import { renderHeightUnitsToTileHeight } from "../../../../game/map/tileHeightUnits";
 
 describe("structure legacy transition", () => {
   beforeAll(async () => {
@@ -645,7 +645,7 @@ describe("structure legacy transition", () => {
 
     expect(at(2, 2)).toBe(avenueGeometry.tileHeightUnits);
     expect(at(2 + avenueGeometry.w - 1, 2 + avenueGeometry.h - 1)).toBe(avenueGeometry.tileHeightUnits);
-    expect(at(5, 5)).toBe(renderHeightUnitsToSweepTileHeight(12));
+    expect(at(5, 5)).toBe(renderHeightUnitsToTileHeight(12));
     expect(grid.version).toMatch(/^h[0-9a-f]+$/);
   });
 

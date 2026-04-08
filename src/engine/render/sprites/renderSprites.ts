@@ -22,6 +22,7 @@ import {
 import { preloadCurrencySprites } from "../../../game/content/loot/currencyVisual";
 import { preloadVfxSprites } from "../../../game/content/vfxRegistry";
 import { listProjectilePresentationSpriteIds } from "../../../game/content/projectilePresentationRegistry";
+import { hasHeightmapSupport, requestHeightmapForSprite } from "./heightmapLoader";
 
 export type LoadedImg = {
     img: HTMLImageElement;
@@ -322,6 +323,11 @@ function loadByIdInternal(
 
     const baseImg = new Image();
     baseImg.onload = () => {
+        // Trigger heightmap loading for sprites that support it
+        if (hasHeightmapSupport(rawId)) {
+            requestHeightmapForSprite(rawId);
+        }
+
         const enabled = paletteManaged && (paletteId !== "db32" || paletteSwapWeights.darkness > 0);
 
         if (!enabled) {

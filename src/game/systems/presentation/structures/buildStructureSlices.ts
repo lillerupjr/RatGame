@@ -10,7 +10,7 @@ import {
   type MonolithicStructureGeometry,
   type RuntimeStructureAnchorPlacementDebug,
 } from "../../../structures/monolithicStructureGeometry";
-import { pixelHeightToSweepTileHeight } from "../../../map/tileHeightUnits";
+import { pixelHeightToTileHeight } from "../../../map/tileHeightUnits";
 import {
   applyRuntimeStructureTriangleSemanticInfoMap,
   buildRuntimeStructureTriangleSemanticInfoMap,
@@ -255,7 +255,7 @@ export function buildStructureSlices(input: BuildStructureSlicesInput): Structur
         toScreenAtZ: input.toScreenAtZ,
       });
       applyRuntimeStructureTriangleSemanticInfoMap(triangleCache, semanticInfoByStableId);
-      const resolvedStructuralRoofHeightUnits = pixelHeightToSweepTileHeight(triangleCache.maxSideHeightPx);
+      const resolvedStructuralRoofHeightUnits = pixelHeightToTileHeight(triangleCache.maxSideHeightPx);
       if (
         resolvedStructuralRoofHeightUnits > 0
         && o.resolvedStructuralRoofHeightUnits !== resolvedStructuralRoofHeightUnits

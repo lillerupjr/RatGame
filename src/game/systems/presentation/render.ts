@@ -1,4 +1,5 @@
 // src/game/systems/render.ts
+
 import { type World } from "../../../engine/world/world";
 import { registry } from "../../content/registry";
 import { ZONE_KIND } from "../../factories/zoneFactory";
@@ -80,7 +81,9 @@ import {
   renderAmbientDarknessOverlay,
 } from "./renderLighting";
 import { renderEntityShadow, type ShadowParams } from "./renderShadow";
-import { buildUnifiedWorldShadowMap, computeSweepShadowMap, getSweepShadowMap } from "../../map/sweepShadow";
+import { getHeightmapForSprite } from "../../../engine/render/sprites/heightmapLoader";
+import { compositeSceneHeightBuffer, type HeightmapStructureInstance } from "./heightmapShadow/sceneHeightBuffer";
+import { computeHeightmapShadowMask, DEFAULT_HEIGHTMAP_SHADOW_PARAMS } from "./heightmapShadow/heightmapRayMarch";
 import {
   resolveEnemyShadowFootOffset,
   resolveNeutralShadowFootOffset,
@@ -1244,7 +1247,64 @@ export async function renderSystem(
   });
   const shadowSunModel = structureShadowFrame.sunModel;
   const ambientSunLighting = structureShadowFrame.ambientSunLighting;
-  computeSweepShadowMap(compiledMap.tileHeightGrid, shadowSunModel, compiledMap.id);
+  // --- Heightmap-based per-pixel shadow pass ---
+  let heightmapShadowMaskResult: ReturnType<typeof computeHeightmapShadowMask> = null;
+  const _hmEnabled = renderSettings.heightmapShadowsEnabled !== false;
+  const _hmCasts = shadowSunModel.castsShadows;
+  if (_hmEnabled && _hmCasts) {
+    const heightmapStructures: HeightmapStructureInstance[] = [];
+    const visibleOverlays = compiledMap.overlaysInView(viewRect);
+    // Compute viewport bounds in world-projected space (no camera)
+    // The world transform is: screenPos = (projected + cam) * zoom + offset
+    // So: projected = (screen - offset) / zoom - cam
+    // Viewport in projected space: left = -camTx, top = -camTy, size = css / zoom
+    const hmViewX = -viewport.camTx;
+    const hmViewY = -viewport.camTy;
+    const hmViewW = cssW / viewport.zoom;
+    const hmViewH = cssH / viewport.zoom;
+    for (let i = 0; i < visibleOverlays.length; i++) {
+      const overlay = visibleOverlays[i];
+      if (!overlay.spriteId) continue;
+      const heightmap = getHeightmapForSprite(overlay.spriteId);
+      if (!heightmap) continue;
+      const rec = getTileSpriteById(overlay.spriteId);
+      if (!rec?.ready || !rec.img || rec.img.width <= 0 || rec.img.height <= 0) continue;
+      const projected = buildRuntimeStructureProjectedDraw(overlay, rec.img);
+      const drawScale = projected.scale ?? 1;
+      // Position relative to viewport origin in projected space
+      heightmapStructures.push({
+        heightmap,
+        screenX: projected.dx - hmViewX,
+        screenY: projected.dy - hmViewY,
+        drawWidth: projected.dw * drawScale,
+        drawHeight: projected.dh * drawScale,
+        flipX: projected.flipX,
+        colorSpriteImg: rec.img,
+      });
+    }
+    if (heightmapStructures.length > 0) {
+      const _div = Number(debugFlags.heightmapShadowResolutionDivisor);
+      const resolutionDivisor = Number.isFinite(_div) && _div >= 1 ? _div : 2;
+      const heightBuffer = compositeSceneHeightBuffer(
+        hmViewW, hmViewH, resolutionDivisor, heightmapStructures,
+      );
+      if (heightBuffer) {
+        const _step = Number(debugFlags.heightmapShadowStepSize);
+        const _max = Number(debugFlags.heightmapShadowMaxSteps);
+        const _int = Number(debugFlags.heightmapShadowIntensity);
+        const params = {
+          stepSize: Number.isFinite(_step) && _step > 0 ? _step : DEFAULT_HEIGHTMAP_SHADOW_PARAMS.stepSize,
+          maxSteps: Number.isFinite(_max) && _max > 0 ? _max : DEFAULT_HEIGHTMAP_SHADOW_PARAMS.maxSteps,
+          shadowIntensity: Number.isFinite(_int) ? _int : DEFAULT_HEIGHTMAP_SHADOW_PARAMS.shadowIntensity,
+        };
+        const hmCacheKey = `${compiledMap.id}:${shadowSunModel.stepKey}:hm:${cssW}x${cssH}:cam${viewport.camTx},${viewport.camTy}:d${resolutionDivisor}:s${params.stepSize}:m${params.maxSteps}:i${params.shadowIntensity}`;
+        heightmapShadowMaskResult = computeHeightmapShadowMask(
+          heightBuffer, shadowSunModel, params, hmCacheKey,
+        );
+      }
+    }
+  }
+
   if (runtimeStructureTriangleContextChanged) {
     rebuildMonolithicStructureTriangleCacheForMap(compiledMap, {
       cacheStore: monolithicStructureGeometryCacheStore,
@@ -1546,22 +1606,16 @@ export async function renderSystem(
   } as ScreenOverlayContext;
   renderScreenOverlays(screenOverlayContext);
 
-  {
-    const unifiedWorldShadowMap = buildUnifiedWorldShadowMap(
-      compiledMap.tileHeightGrid,
-      getSweepShadowMap(),
-      ambientSunLighting.ambientDarkness01,
-    );
-    if (unifiedWorldShadowMap) {
-      enqueueWorldBandCommand(frameBuilder, {
-        semanticFamily: "debug",
-        finalForm: "primitive",
-        payload: {
-          zBand: "FIRST",
-          sweepShadowMap: unifiedWorldShadowMap,
-        },
-      });
-    }
+  // Enqueue heightmap shadow mask
+  if (heightmapShadowMaskResult) {
+    enqueueWorldBandCommand(frameBuilder, {
+      semanticFamily: "debug",
+      finalForm: "primitive",
+      payload: {
+        zBand: "FIRST",
+        heightmapShadowMask: heightmapShadowMaskResult,
+      },
+    });
   }
 
   const commandFrame = finalizeRenderFrame({

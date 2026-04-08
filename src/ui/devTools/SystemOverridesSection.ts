@@ -132,6 +132,9 @@ export function mountSystemOverridesSection(
   const rampFaces = createToggleRow(renderingGrid, "Show Ramp Faces", (checked) => {
     applySystemPatch({ rampFaces: checked });
   });
+  const heightmapShadowsEnabled = createToggleRow(renderingGrid, "Heightmap Shadows", (checked) => {
+    applySystemPatch({ heightmapShadowsEnabled: checked });
+  });
 
   const paletteSwapEnabled = createToggleRow(lightingGrid, "Palette Override Enabled", (checked) => {
     applySystemPatch({ paletteSwapEnabled: checked });
@@ -368,6 +371,7 @@ export function mountSystemOverridesSection(
       disableVisualCompiledCutoutCache.checked = system.disableVisualCompiledCutoutCache;
       mapOverlaysDisabled.checked = system.mapOverlaysDisabled;
       rampFaces.checked = system.rampFaces;
+      heightmapShadowsEnabled.checked = system.heightmapShadowsEnabled;
 
       paletteSwapEnabled.checked = system.paletteSwapEnabled;
       paletteGroup.value = normalizePaletteGroup(system.paletteGroup);
