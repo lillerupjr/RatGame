@@ -16,7 +16,7 @@ describe("combatModsSnapshot", () => {
 
   test("getCombatModsSnapshot resolves baseline stats with no cards", () => {
     const snap = getCombatModsSnapshot({ cards: [] });
-    expect(snap.weaponStats.shotsPerSecond).toBeCloseTo(3.0);
+    expect(snap.weaponStats.shotsPerSecond).toBeCloseTo(2.0);
     expect(snap.weaponStats.baseDamage.physical).toBeGreaterThan(0);
   });
 
@@ -46,7 +46,7 @@ describe("combatModsSnapshot", () => {
 
   test("getCombatModsSnapshot resolves TOMMY starter shotgun profile", () => {
     const snap = getCombatModsSnapshot({ currentCharacterId: "TOMMY", cards: [] });
-    expect(snap.weaponStats.shotsPerSecond).toBeCloseTo(2 / 3);
+    expect(snap.weaponStats.shotsPerSecond).toBeCloseTo(1.0);
     expect(snap.weaponStats.baseDamage.physical).toBeCloseTo(16);
     expect(snap.weaponStats.projectiles).toBe(4);
     expect(snap.weaponStats.rangePx).toBeLessThan(420);

@@ -1,5 +1,5 @@
 import {
-  drawEnemyAimOverlay,
+  drawEnemyAimOverlayForVisibleEnemies,
   drawLootGoblinOverlay,
   type DebugOverlayContext,
 } from "../../../../engine/render/debug/renderDebug";
@@ -33,7 +33,8 @@ export function drawEntityAnchorOverlay(
 export function renderDebugEntityOverlays(
   debugContext: DebugOverlayContext,
   flags: RenderDebugFlags,
+  isTileInRenderRadius: (tx: number, ty: number) => boolean,
 ): void {
-  drawEnemyAimOverlay(debugContext, flags.showEnemyAimOverlay);
+  drawEnemyAimOverlayForVisibleEnemies(debugContext, flags.showEnemyAimOverlay, isTileInRenderRadius);
   drawLootGoblinOverlay(debugContext, flags.showLootGoblinOverlay);
 }

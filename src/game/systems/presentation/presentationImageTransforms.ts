@@ -4,7 +4,7 @@ import { setRenderPerfDrawTag, type DrawTag } from "./renderPerfCounters";
 
 const flippedOverlayImageCache = new WeakMap<HTMLImageElement, HTMLCanvasElement>();
 const runtimeIsoTopCache = new WeakMap<HTMLImageElement, Map<0 | 1 | 2 | 3, HTMLCanvasElement>>();
-const runtimeIsoDecalCache = new WeakMap<HTMLImageElement, Map<string, HTMLCanvasElement>>();
+const runtimeIsoDecalCache = new WeakMap<object, Map<string, HTMLCanvasElement>>();
 const runtimeDiamondCanvasCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
 
 type WeakCanvasCacheStats = {
@@ -153,17 +153,17 @@ export function getRuntimeIsoTopCanvas(
 }
 
 export function getRuntimeIsoDecalCanvas(
-  srcImg: HTMLImageElement,
+  srcImg: CanvasImageSource & { width?: number; height?: number },
   rotationQuarterTurns: 0 | 1 | 2 | 3,
   scale: number,
 ): HTMLCanvasElement | null {
-  if (!srcImg || srcImg.width <= 0 || srcImg.height <= 0) return null;
+  if (!srcImg || Number(srcImg.width ?? 0) <= 0 || Number(srcImg.height ?? 0) <= 0) return null;
   if (!(scale > 0)) return null;
 
-  let byKey = runtimeIsoDecalCache.get(srcImg);
+  let byKey = runtimeIsoDecalCache.get(srcImg as object);
   if (!byKey) {
     byKey = new Map();
-    runtimeIsoDecalCache.set(srcImg, byKey);
+    runtimeIsoDecalCache.set(srcImg as object, byKey);
   }
 
   const scaleQ = Math.round(scale * 1000) / 1000;
@@ -176,8 +176,8 @@ export function getRuntimeIsoDecalCanvas(
   runtimeIsoDecalStats.misses += 1;
 
   return withPerfDrawTag("decals", () => {
-    const srcW = srcImg.width * scaleQ;
-    const srcH = srcImg.height * scaleQ;
+    const srcW = Number(srcImg.width ?? 0) * scaleQ;
+    const srcH = Number(srcImg.height ?? 0) * scaleQ;
     const rotOdd = (rotationQuarterTurns & 1) === 1;
     const rotW = rotOdd ? srcH : srcW;
     const rotH = rotOdd ? srcW : srcH;

@@ -108,6 +108,7 @@ export type WorldPrimitivePayload = CommandPayloadBase & {
   end?: RenderPoint;
   zone?: unknown;
   arenaTileEffect?: unknown;
+  groundVfx?: unknown;
 };
 
 export type ScreenOverlayQuadPayload = CommandPayloadBase & {

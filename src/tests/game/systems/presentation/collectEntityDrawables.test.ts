@@ -85,6 +85,7 @@ function makeBaseInput(overrides: Record<string, unknown> = {}) {
     ELEV_PX: 16,
     worldDeltaToScreen: vi.fn(() => ({ dx: 1, dy: 0 })),
     getSpriteById: vi.fn(() => null),
+    VFX_CLIPS: [],
     playerSpritesReady: vi.fn(() => false),
     getPlayerSpriteFrame: vi.fn(() => null),
     PLAYER_R: 0,
@@ -178,6 +179,60 @@ describe("collectEntityDrawables", () => {
     expect(enemyCommand?.payload.image).toBe(atlasImage);
     expect(enemyCommand?.payload.sx).toBe(40);
     expect(enemyCommand?.payload.sy).toBe(48);
+  });
+
+  it("renders Chem Guy's active flamethrower as additive rotated world sprites", () => {
+    const beamImage = { width: 56, height: 32, id: "poison-flame-loop" } as any;
+    const atlasImage = { width: 512, height: 512, id: "dynamic-atlas" } as any;
+    const input = makeBaseInput({
+      w: {
+        time: 0.25,
+        timeSec: 0.25,
+        eAlive: [true],
+        eType: ["BOSS"],
+        eBossId: ["chem_guy"],
+        eFaceX: [1],
+        eFaceY: [0],
+        evx: [0],
+        evy: [0],
+        bossRuntime: {
+          enemyIndexToEncounterId: ["BOSS_ENCOUNTER_1"],
+          encounters: [{
+            id: "BOSS_ENCOUNTER_1",
+            activeCast: {
+              phase: "ACTIVE",
+              phaseElapsedSec: 0.2,
+              beam: {
+                startWorldX: 32,
+                startWorldY: 32,
+                endWorldX: 160,
+                endWorldY: 32,
+                widthPx: 52,
+                visualScale: 2.1,
+                loopClipId: 0,
+                endingClipId: 1,
+              },
+            },
+          }],
+        },
+      },
+      VFX_CLIPS: [
+        { spriteIds: ["vfx/flamethrower_poison/loop/Acid VFX 02Repeatable1"], fps: 18, loop: true },
+        { spriteIds: ["vfx/flamethrower_poison/ending/Acid VFX 02 Ending1"], fps: 18, loop: false },
+      ],
+      getSpriteById: vi.fn(() => ({ ready: true, img: beamImage })),
+      toScreenAtZ: vi.fn((x: number, y: number) => ({ x, y })),
+      getDynamicAtlasFrameForImage: vi.fn((image: object) => (
+        image === beamImage ? { image: atlasImage, sx: 12, sy: 18, sw: 56, sh: 32 } : null
+      )),
+    });
+
+    const commands = collectCommands(input);
+    const beamCommands = commands.filter((command) => command.payload.enemyIndex === 0 && command.payload.blendMode === "additive");
+
+    expect(beamCommands.length).toBe(1);
+    expect(beamCommands[0]?.payload.image).toBe(atlasImage);
+    expect(beamCommands[0]?.payload.rotationRad).toBeCloseTo(0, 6);
   });
 
   it("routes vendor NPC frames through the dynamic atlas", () => {

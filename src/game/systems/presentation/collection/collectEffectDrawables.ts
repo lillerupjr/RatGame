@@ -134,9 +134,28 @@ export function collectEffectDrawables(input: CollectionContext): void {
         : -1;
       const spriteId = clip && frameIndex >= 0 ? clip.spriteIds[frameIndex] : null;
       const sprite = spriteId ? getSpriteById(spriteId) : null;
+      const explicitScale = Number.isFinite(w.vfxScale[i]) && w.vfxScale[i] > 0 ? w.vfxScale[i] : 0;
       if (sprite?.ready && sprite.img) {
+        if (clip?.projection === "ground_decal") {
+          const scale = explicitScale || (w.vfxRadius[i] > 0 ? w.vfxRadius[i] / 32 : 1);
+          enqueueSliceCommand(frameBuilder, renderKey, {
+            semanticFamily: "worldPrimitive",
+            finalForm: "primitive",
+            payload: {
+              groundVfx: {
+                image: sprite.img,
+                tx: vtx,
+                ty: vty,
+                zBase: vZ,
+                scale,
+                vfxIndex: i,
+              },
+            },
+          });
+          continue;
+        }
         const atlas = resolveDynamicAtlasImage(sprite.img);
-        const scale = w.vfxRadius[i] > 0 ? w.vfxRadius[i] / 32 : w.vfxScale[i];
+        const scale = explicitScale || (w.vfxRadius[i] > 0 ? w.vfxRadius[i] / 32 : 1);
         const size = 64 * scale;
         const p = toScreen(vx, vy);
         enqueueSliceCommand(frameBuilder, renderKey, {
@@ -167,6 +186,80 @@ export function collectEffectDrawables(input: CollectionContext): void {
         },
       });
       countRenderDynamicAtlasBypass();
+    }
+  }
+
+  // ----------------------------
+  // Collect BOSS CAST WORLD EFFECTS into slices
+  // ----------------------------
+  {
+    const encounters = Array.isArray(w.bossRuntime?.encounters) ? w.bossRuntime.encounters : [];
+    for (let encounterIndex = 0; encounterIndex < encounters.length; encounterIndex++) {
+      const cast = encounters[encounterIndex]?.activeCast;
+      const effects = Array.isArray(cast?.worldEffects) ? cast.worldEffects : [];
+      for (let effectIndex = 0; effectIndex < effects.length; effectIndex++) {
+        const effect = effects[effectIndex];
+        const projectionMode = effect.projectionMode ?? "flat_quad";
+        const effectTx = Number.isFinite(Number(effect.tileTx)) ? Number(effect.tileTx) : Math.floor(effect.worldX / T);
+        const effectTy = Number.isFinite(Number(effect.tileTy)) ? Number(effect.tileTy) : Math.floor(effect.worldY / T);
+        const tx = effectTx;
+        const ty = effectTy;
+        if (!isTileInRenderRadius(tx, ty)) continue;
+        const zBase = tileHAtWorld(effect.worldX, effect.worldY);
+        const renderKey: RenderKey = {
+          slice: tx + ty,
+          within: tx,
+          baseZ: zBase,
+          kindOrder: KindOrder.VFX,
+          stableId: 230000 + encounterIndex * 64 + effectIndex,
+        };
+        const sprite = getSpriteById(effect.spriteId);
+        if (!sprite?.ready || !sprite.img) continue;
+        if (projectionMode === "ground_iso") {
+          enqueueSliceCommand(frameBuilder, renderKey, {
+            semanticFamily: "worldPrimitive",
+            finalForm: "primitive",
+            payload: {
+              groundVfx: {
+                image: sprite.img,
+                tx,
+                ty,
+                zBase,
+                scale: Math.max(0.1, effect.baseScale),
+                bossWorldEffectId: effect.id,
+              },
+            },
+          });
+          continue;
+        }
+        const atlas = resolveDynamicAtlasImage(sprite.img);
+        const pulse = effect.pulse;
+        const pulseRange = pulse ? Math.max(0, pulse.maxScale - pulse.minScale) : 0;
+        const cycleSec = pulse ? Math.max(0.05, pulse.cycleSec) : 1;
+        const pulsePhase = pulse ? ((w.timeSec ?? w.time ?? 0) % cycleSec) / cycleSec : 0;
+        const pulseScale = pulse
+          ? pulse.minScale + pulseRange * (0.5 + 0.5 * Math.sin(pulsePhase * Math.PI * 2))
+          : 1;
+        const scale = Math.max(0.1, effect.baseScale * pulseScale);
+        const size = 64 * scale;
+        const p = toScreen(effect.worldX, effect.worldY);
+        enqueueSliceCommand(frameBuilder, renderKey, {
+          semanticFamily: "worldSprite",
+          finalForm: "quad",
+          payload: {
+            image: atlas.image,
+            sx: atlas.sx,
+            sy: atlas.sy,
+            sw: atlas.sw,
+            sh: atlas.sh,
+            dx: p.x - size * 0.5,
+            dy: p.y - size * 0.5 + Number(effect.zOffsetPx ?? 0),
+            dw: size,
+            dh: size,
+            alpha: Number.isFinite(Number(effect.alpha)) ? Number(effect.alpha) : 1,
+          },
+        });
+      }
     }
   }
 

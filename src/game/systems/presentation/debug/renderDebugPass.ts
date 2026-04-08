@@ -42,9 +42,16 @@ export type RenderDebugPassInvocation =
 
 export function executeDebugPass(invocation: RenderDebugPassInvocation): void {
   if (invocation.phase === "world") {
-    renderDebugWorldOverlays(invocation.input);
-    renderDebugEntityOverlays(invocation.input.debugContext, invocation.input.flags);
-    renderDebugStructureOverlays(invocation.input);
+    const input: RenderDebugWorldPassInput = {
+      ...invocation.input,
+      debugContext: {
+        ...invocation.input.debugContext,
+        ctx: invocation.input.ctx,
+      },
+    };
+    renderDebugWorldOverlays(input);
+    renderDebugEntityOverlays(input.debugContext, input.flags, input.isTileInRenderRadius);
+    renderDebugStructureOverlays(input);
     return;
   }
 

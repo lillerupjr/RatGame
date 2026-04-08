@@ -46,8 +46,8 @@ describe("cardVisibilityPolicy", () => {
     expect(isCardVisibleForWeapon(poison, HOBO_SYRINGE_V1.tags)).toBe(true);
     expect(isCardVisibleForWeapon(poison, JACK_PISTOL_V1.tags)).toBe(false);
     expect(isCardVisibleForWeapon(poison, JOEY_RIFLE_V1.tags)).toBe(false);
-    expect(isCardVisibleForWeapon(ignite, JOEY_RIFLE_V1.tags)).toBe(false);
-    expect(isCardVisibleForWeapon(ignite, JACK_PISTOL_V1.tags)).toBe(true);
+    expect(isCardVisibleForWeapon(ignite, JOEY_RIFLE_V1.tags)).toBe(true);
+    expect(isCardVisibleForWeapon(ignite, JACK_PISTOL_V1.tags)).toBe(false);
     expect(isCardVisibleForWeapon(fireRate, JACK_PISTOL_V1.tags)).toBe(true);
     expect(isCardVisibleForWeapon(fireRate, JOEY_RIFLE_V1.tags)).toBe(false);
     expect(isCardVisibleForWeapon(crit, JACK_PISTOL_V1.tags)).toBe(true);
@@ -97,8 +97,8 @@ describe("cardVisibilityPolicy", () => {
   test("card-id API resolves visibility by character starter weapon tags", () => {
     expect(isCardVisibleForCharacter("CARD_DAMAGE_INC_1", "JOEY")).toBe(true);
     expect(isCardVisibleForCharacter("CARD_DAMAGE_FLAT_1", "JOEY")).toBe(false);
-    expect(isCardVisibleForCharacter("CARD_IGNITE_CHANCE_1", "JACK")).toBe(true);
-    expect(isCardVisibleForCharacter("CARD_IGNITE_CHANCE_1", "JOEY")).toBe(false);
+    expect(isCardVisibleForCharacter("CARD_IGNITE_CHANCE_1", "JACK")).toBe(false);
+    expect(isCardVisibleForCharacter("CARD_IGNITE_CHANCE_1", "JOEY")).toBe(true);
     expect(isCardVisibleForCharacter("CARD_POISON_CHANCE_1", "JACK")).toBe(false);
     expect(isCardVisibleForCharacter("CARD_POISON_CHANCE_1", "HOBO")).toBe(true);
     expect(isCardVisibleForCharacter("CARD_DOES_NOT_EXIST", "HOBO")).toBe(false);

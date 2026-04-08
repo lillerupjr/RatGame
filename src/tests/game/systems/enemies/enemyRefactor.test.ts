@@ -148,7 +148,7 @@ describe("enemy definition contract", () => {
     expect(ENEMIES[EnemyId.TANK]!.presentation?.sprite?.skin).toBe("enemies/guerilla_rat");
     expect(ENEMIES[EnemyId.SPITTER]!.presentation?.sprite?.skin).toBe("enemies/spitter");
     expect(ENEMIES[EnemyId.BURSTER]!.presentation?.sprite?.skin).toBe("enemies/burster");
-    expect(ENEMIES[EnemyId.LEAPER1]!.presentation?.sprite?.skin).toBe("enemies/white_rat");
+    expect(ENEMIES[EnemyId.LEAPER1]!.presentation?.sprite?.skin).toBe("enemies/rhino_rat");
     expect(ENEMIES[EnemyId.SHARD_RAT]!.presentation?.sprite?.skin).toBe("enemies/shard_rat");
 
     for (const type of [
@@ -218,6 +218,13 @@ describe("enemy shared behavior and action flow", () => {
     const line = findStraightWalkableLine(4, 4, 4);
     setPlayerAtTile(world, line.player.tx, line.player.ty);
     const enemy = spawnEnemyAtTile(world, line.enemy.tx, line.enemy.ty, EnemyId.SPITTER);
+    const pw = getPlayerWorld(world, KENNEY_TILE_WORLD);
+    setEnemyWorld(
+      world,
+      enemy,
+      pw.wx + line.dir.dx * 288,
+      pw.wy + line.dir.dy * 288,
+    );
     const hpBefore = world.playerHp;
 
     enemyBehaviorSystem(world, 0.05);

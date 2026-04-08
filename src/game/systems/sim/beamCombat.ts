@@ -3,7 +3,6 @@ import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
 import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
 import { relicTriggerMomentumDamageMultiplier } from "./momentum";
-import { raycast3D } from "./collision3D";
 import { getCardById } from "../../combat_mods/content/cards/cardPool";
 import { resolveDotStats } from "../../combat_mods/stats/combatStatsResolver";
 import type { DamageMeta } from "../../events";
@@ -15,6 +14,7 @@ import {
 } from "../../combat/damageMeta";
 import { finalizeEnemyDeath } from "../enemies/finalize";
 import { isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
+import { resolveClampedBeamGeometry } from "./beamShared";
 
 export type BeamContactConfig = {
   dirX: number;
@@ -81,33 +81,25 @@ export function updatePlayerBeamCombat(w: World, cfg: BeamContactConfig): void {
   const playerWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
   const originX = playerWorld.wx;
   const originY = playerWorld.wy;
-
-  const dirLen = Math.hypot(cfg.dirX, cfg.dirY);
-  const dirX = dirLen > 0.0001 ? cfg.dirX / dirLen : 1;
-  const dirY = dirLen > 0.0001 ? cfg.dirY / dirLen : 0;
-
-  const ray = raycast3D(
+  const beam = resolveClampedBeamGeometry(w, {
     originX,
     originY,
-    w.pzVisual ?? w.pz ?? 0,
-    dirX,
-    dirY,
-    0,
-    cfg.maxRangePx,
-  );
-  const endDistance = ray.hit && ray.hitType === "TILE"
-    ? Math.max(0, Math.min(cfg.maxRangePx, ray.hitDistance))
-    : Math.max(0, cfg.maxRangePx);
+    originZ: w.pzVisual ?? w.pz ?? 0,
+    dirX: cfg.dirX,
+    dirY: cfg.dirY,
+    maxRangePx: cfg.maxRangePx,
+    widthPx: cfg.widthPx,
+  });
 
   const damageMeta = cfg.damageMeta ?? makeUnknownDamageMeta("BEAM_DAMAGE_META_MISSING", { category: "DOT" });
 
   w.playerBeamActive = true;
   w.playerBeamStartX = originX;
   w.playerBeamStartY = originY;
-  w.playerBeamEndX = originX + dirX * endDistance;
-  w.playerBeamEndY = originY + dirY * endDistance;
-  w.playerBeamDirX = dirX;
-  w.playerBeamDirY = dirY;
+  w.playerBeamEndX = beam.endX;
+  w.playerBeamEndY = beam.endY;
+  w.playerBeamDirX = beam.dirX;
+  w.playerBeamDirY = beam.dirY;
   w.playerBeamWidthPx = Math.max(1, cfg.widthPx);
   w.playerBeamGlowIntensity = Math.max(0, cfg.glowIntensity);
   w.playerBeamDpsPhys = Math.max(0, cfg.dpsPhys);

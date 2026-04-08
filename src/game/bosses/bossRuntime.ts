@@ -1,6 +1,6 @@
 import type { World } from "../../engine/world/world";
 import { EnemyId } from "../content/enemies";
-import type { BossAbilityId } from "./bossAbilities";
+import { BossAbilityId as BossAbilityIds, type BossAbilityId } from "./bossAbilities";
 import { bossRegistry } from "./bossRegistry";
 import type {
   BossActivationState,
@@ -56,6 +56,7 @@ export function registerBossEncounter(
     cooldowns: Object.create(null) as Record<BossAbilityId, number>,
     globalCooldownLeftSec: 0,
     lastAbilityId: null,
+    nextAbilityCursor: 0,
   };
   runtime.encounters.push(encounter);
   runtime.enemyIndexToEncounterId[args.enemyIndex] = encounterId;
@@ -120,6 +121,14 @@ export function isBossEncounterDormant(
   enemyIndex: number,
 ): boolean {
   return getBossEncounterForEntity(world, enemyIndex)?.activationState === "DORMANT";
+}
+
+export function isBossMovementLockedByCast(
+  world: Pick<World, "bossRuntime">,
+  enemyIndex: number,
+): boolean {
+  const cast = getBossEncounterForEntity(world, enemyIndex)?.activeCast;
+  return cast?.abilityId === BossAbilityIds.POISON_FLAMETHROWER && cast.phase === "ACTIVE";
 }
 
 export function activateBossEncounter(

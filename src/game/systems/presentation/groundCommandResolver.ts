@@ -19,6 +19,8 @@ type ReadyImageRecord = {
   img?: HTMLImageElement | null;
 } | null;
 
+const LOGICAL_GROUND_SURFACE_ANCHOR_Y = 0.5;
+
 type GroundResolvedCommandBase<TFamily extends "groundSurface" | "groundDecal", TPayload> = {
   key: RenderKey;
   stableId: number;
@@ -60,7 +62,7 @@ export type GroundCommandResolverDeps = {
   FLOOR_TOP_SCALE: number;
   OCEAN_BASE_FRAME_PX: number;
   getRuntimeIsoDecalCanvas: (
-    srcImg: HTMLImageElement,
+    srcImg: CanvasImageSource & { width?: number; height?: number },
     rotationQuarterTurns: 0 | 1 | 2 | 3,
     scale: number,
   ) => HTMLCanvasElement | null;
@@ -172,9 +174,7 @@ export function resolveGroundSurfaceProjectedCommand(
   const ty = surface.ty;
   const tdef = surface.tile;
   const isStairTop = surface.renderTopKind === "STAIR";
-  const anchorY = Number.isFinite(Number(surface.renderAnchorY))
-    ? Number(surface.renderAnchorY)
-    : ANCHOR_Y;
+  const placementAnchorY = LOGICAL_GROUND_SURFACE_ANCHOR_Y;
 
   if (staticOnly && !isGroundSurfaceChunkAuthorityEligible(surface, TILE_ID_OCEAN)) return null;
 
@@ -198,12 +198,12 @@ export function resolveGroundSurfaceProjectedCommand(
       stableId,
     };
     const destinationQuad = isRampRoadTile
-      ? getRampQuadPoints(tx, ty, anchorY)
+      ? getRampQuadPoints(tx, ty, placementAnchorY)
       : buildFlatTileDestinationQuad({
         tx,
         ty,
         zBase: surface.zBase,
-        renderAnchorY: anchorY,
+        renderAnchorY: placementAnchorY,
         tileWorld: T,
         elevPx: ELEV_PX,
         isoHeight: SIDEWALK_ISO_HEIGHT,
@@ -264,7 +264,7 @@ export function resolveGroundSurfaceProjectedCommand(
     tx,
     ty,
     zBase: surface.zBase,
-    renderAnchorY: anchorY,
+    renderAnchorY: placementAnchorY,
     tileWorld: T,
     elevPx: ELEV_PX,
     isoHeight: SIDEWALK_ISO_HEIGHT,

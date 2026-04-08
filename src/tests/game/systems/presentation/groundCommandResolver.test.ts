@@ -73,6 +73,49 @@ describe("groundCommandResolver", () => {
     expect(live?.payload.image).toBe(normalizedTop);
     expect(staticCache?.payload.image).toBe(normalizedTop);
     expect(staticCache?.payload).toEqual(live?.payload);
+    expect(live?.payload.x0).toBe(0);
+    expect(live?.payload.y0).toBe(0);
+    expect(live?.payload.x1).toBe(64);
+    expect(live?.payload.y1).toBe(32);
+    expect(live?.payload.x2).toBe(0);
+    expect(live?.payload.y2).toBe(64);
+    expect(live?.payload.x3).toBe(-64);
+    expect(live?.payload.y3).toBe(32);
+  });
+
+  it("keeps ground surface placement fixed regardless of authored renderAnchorY", () => {
+    const deps = makeDeps();
+    const baseSurface = {
+      id: "surface_0_0",
+      tx: 1,
+      ty: 2,
+      zBase: 0,
+      zLogical: 0,
+      tile: { kind: "FLOOR", h: 0 },
+      renderTopKind: "FLOOR",
+      renderDir: "N",
+      renderAnchorY: 0.55,
+      renderDyOffset: 0,
+      spriteIdTop: "tiles/floor/sidewalk/1",
+    } as any;
+
+    const anchored = resolveGroundSurfaceProjectedCommand(baseSurface, deps);
+    const exaggerated = resolveGroundSurfaceProjectedCommand({
+      ...baseSurface,
+      renderAnchorY: 1,
+    }, deps);
+
+    expect(anchored).not.toBeNull();
+    expect(exaggerated).not.toBeNull();
+    expect(exaggerated?.destinationQuad).toEqual(anchored?.destinationQuad);
+    expect(exaggerated?.payload.x0).toBe(anchored?.payload.x0);
+    expect(exaggerated?.payload.y0).toBe(anchored?.payload.y0);
+    expect(exaggerated?.payload.x1).toBe(anchored?.payload.x1);
+    expect(exaggerated?.payload.y1).toBe(anchored?.payload.y1);
+    expect(exaggerated?.payload.x2).toBe(anchored?.payload.x2);
+    expect(exaggerated?.payload.y2).toBe(anchored?.payload.y2);
+    expect(exaggerated?.payload.x3).toBe(anchored?.payload.x3);
+    expect(exaggerated?.payload.y3).toBe(anchored?.payload.y3);
   });
 
   it("uses the ramp quad path for runtime asphalt tops", () => {
@@ -104,7 +147,7 @@ describe("groundCommandResolver", () => {
 
     const resolved = resolveGroundSurfaceProjectedCommand(surface, deps);
 
-    expect(deps.getRampQuadPoints).toHaveBeenCalledWith(2, 3, 0.55);
+    expect(deps.getRampQuadPoints).toHaveBeenCalledWith(2, 3, 0.5);
     expect(resolved?.payload.sourceQuad).toEqual({
       nw: { x: 64, y: 0 },
       ne: { x: 128, y: 32 },

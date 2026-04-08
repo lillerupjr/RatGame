@@ -1,3 +1,5 @@
+import type { EnemyId } from "../content/enemies";
+
 export type HostileStatsConfig = {
   baseLife: number;
   contactDamage: number;
@@ -23,6 +25,7 @@ export type HostileSpriteConfig = {
   frameW: number;
   frameH: number;
   runAnim?: string;
+  castAnim?: string;
   frameCount?: number;
   packRoot?: string;
 };
@@ -51,7 +54,18 @@ export type HostileRadialProjectileDeathEffectConfig = {
   ttl: number;
 };
 
-export type HostileDeathEffectConfig = HostileRadialProjectileDeathEffectConfig;
+export type HostileSplitIntoChildrenDeathEffectConfig = {
+  type: "split_into_children";
+  childCount: number;
+  childTypeId?: EnemyId;
+  maxSplitStage: number;
+  spreadRadius?: number;
+  separationImpulse?: number;
+};
+
+export type HostileDeathEffectConfig =
+  | HostileRadialProjectileDeathEffectConfig
+  | HostileSplitIntoChildrenDeathEffectConfig;
 
 export type SharedHostileDefinition = {
   name: string;

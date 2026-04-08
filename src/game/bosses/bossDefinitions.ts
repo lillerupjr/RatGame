@@ -8,7 +8,7 @@ export const BOSSES: Record<BossId, BossDefinition> = {
     aiType: "contact",
     engageDistanceTiles: 8,
     stats: {
-      baseLife: 520,
+      baseLife: 2000,
       contactDamage: 20,
     },
     body: {
@@ -30,6 +30,7 @@ export const BOSSES: Record<BossId, BossDefinition> = {
         frameW: 92,
         frameH: 92,
         runAnim: "walk",
+        castAnim: "fireball",
         frameCount: 6,
       },
       shadowFootOffset: { x: 0, y: 0 },
@@ -45,6 +46,7 @@ export const BOSSES: Record<BossId, BossDefinition> = {
     abilityLoadout: [
       { abilityId: BossAbilityId.TOXIC_DROP_MARKER, weight: 1, priority: 1 },
       { abilityId: BossAbilityId.CHECKERBOARD_IGNITION, weight: 1, priority: 1 },
+      { abilityId: BossAbilityId.POISON_FLAMETHROWER, weight: 1, priority: 1 },
     ],
     deathEffects: [],
     ui: {

@@ -29,6 +29,7 @@ type BossSpriteDef = {
   frameW: number;
   frameH: number;
   runAnim?: string;
+  castAnim?: string;
   source?: SpriteLoaderSource;
   frameCount?: number;
 };
@@ -62,6 +63,7 @@ function getBossSpriteDef(bossId: BossId): BossSpriteDef | null {
     frameW: sprite.frameW,
     frameH: sprite.frameH,
     runAnim: sprite.runAnim,
+    castAnim: sprite.castAnim,
     frameCount: sprite.frameCount,
     source: sprite.packRoot ? { packRoot: sprite.packRoot } : undefined,
   };
@@ -134,10 +136,14 @@ export function listBossDynamicAtlasSpriteIds(): string[] {
       ids.add(`${packRoot}/${def.skin}/rotations/${DIR_KEYS[j]}`);
     }
     if (!def.runAnim) continue;
+    const animKeys = [def.runAnim, def.castAnim].filter((value, index, arr): value is string => !!value && arr.indexOf(value) === index);
     const frameCount = def.frameCount ?? 1;
-    for (let j = 0; j < DIR_KEYS.length; j++) {
-      for (let frame = 0; frame < frameCount; frame++) {
-        ids.add(`${packRoot}/${def.skin}/animations/${def.runAnim}/${DIR_KEYS[j]}/frame_${String(frame).padStart(3, "0")}`);
+    for (let animIndex = 0; animIndex < animKeys.length; animIndex++) {
+      const animKey = animKeys[animIndex];
+      for (let j = 0; j < DIR_KEYS.length; j++) {
+        for (let frame = 0; frame < frameCount; frame++) {
+          ids.add(`${packRoot}/${def.skin}/animations/${animKey}/${DIR_KEYS[j]}/frame_${String(frame).padStart(3, "0")}`);
+        }
       }
     }
   }
@@ -183,7 +189,7 @@ export function preloadBossSprites(
     const def = findBossSpriteDefBySkin(skin);
     const job = preloadSpritePack(skin, {
       source: def?.source,
-      animKeys: def?.runAnim ? [def.runAnim] : undefined,
+      animKeys: [def?.runAnim, def?.castAnim].filter((value, index, arr): value is string => !!value && arr.indexOf(value) === index),
       frameCount: def?.frameCount,
       paletteVariantKey,
     })
@@ -214,6 +220,12 @@ export function getBossSpriteFrame(args: {
   faceDx: number;
   faceDy: number;
   moving: boolean;
+  requestedAnimation?: {
+    clip: string;
+    loop: boolean;
+    startedAtSec: number;
+    durationSec?: number;
+  } | null;
 }):
   | {
       img: HTMLImageElement;
@@ -238,11 +250,21 @@ export function getBossSpriteFrame(args: {
     ?? getPaletteMap(paletteState.lastReadyPaletteId).get(def.skin);
   if (!pack) return null;
   const dir = dir8FromVector(args.faceDx, args.faceDy);
-  const anim = args.moving ? def.runAnim : undefined;
+  const requestedAnimation = args.requestedAnimation;
+  const anim = requestedAnimation?.clip ?? (args.moving ? def.runAnim : undefined);
+  const animDurationSec = Math.max(0.0001, requestedAnimation?.durationSec ?? 0);
+  const animTimeSec = requestedAnimation
+    ? Math.max(0, args.time - requestedAnimation.startedAtSec)
+    : args.time;
+  const animFps = requestedAnimation && animDurationSec > 0
+    ? Math.max(0.001, (def.frameCount ?? pack.frameCount ?? 1) / animDurationSec)
+    : undefined;
   const img = getSpriteFrame(pack, {
     dir,
     anim,
-    t: args.time,
+    t: animTimeSec,
+    fps: animFps,
+    loop: requestedAnimation?.loop,
     useRotationIfNoAnim: true,
   });
   return {

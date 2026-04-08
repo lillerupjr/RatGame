@@ -1,3 +1,11 @@
+import {
+  buildFlatTileDestinationQuad,
+  buildGroundDecalProjectedSurfacePayload,
+} from "../renderCommandGeometry";
+import {
+  getAnimatedSurface,
+  getAnimatedSurfaceFrame,
+} from "../animatedSurfaces/animatedSurfaceFactory";
 import type { CollectionContext } from "../contracts/collectionContext";
 import { enqueueSliceCommand } from "../frame/renderFrameBuilder";
 import {
@@ -8,6 +16,7 @@ import {
   shouldRenderGroundDecalForFrame,
   shouldRenderGroundSurfaceForFrame,
 } from "../groundCommandResolver";
+import { resolveEnemyVisualScale } from "../../enemies/enemyRuntime";
 
 type RenderKey = any;
 type ShadowParams = any;
@@ -177,6 +186,7 @@ export function collectGroundDrawables(input: CollectionContext): void {
             ? Number(surface.renderAnchorY)
             : ANCHOR_Y;
           const extraDy = surface.renderTopKind === "STAIR" ? STAIR_TOP_DY : 0;
+          const placementAnchorY = 0.5;
           const groundDiagStore = ((globalThis as any).__groundProjectedSurfaceEmitterDiagnostics ??= new Map());
           groundDiagStore.set(resolved.key.stableId, {
             surfaceId: surface.id,
@@ -184,7 +194,8 @@ export function collectGroundDrawables(input: CollectionContext): void {
             ty,
             destinationQuadInputs: {
               zBase: surface.zBase,
-              renderAnchorY: anchorY,
+              renderAnchorY: placementAnchorY,
+              authoredRenderAnchorY: anchorY,
               tileWorld: T,
               elevPx: ELEV_PX,
               isoHeight: SIDEWALK_ISO_HEIGHT,
@@ -309,13 +320,53 @@ export function collectGroundDrawables(input: CollectionContext): void {
     const effects = Array.isArray(w.arenaTileEffects) ? w.arenaTileEffects : [];
     for (let i = 0; i < effects.length; i++) {
       const effect = effects[i];
+      if (effect.renderOverlay === false) continue;
       if (!Array.isArray(effect.tiles) || effect.tiles.length <= 0) continue;
+      const animatedSurface = effect.surfaceId ? getAnimatedSurface(effect.surfaceId) : null;
+      const animatedFrame = effect.surfaceId
+        ? getAnimatedSurfaceFrame(effect.surfaceId, w.timeSec ?? w.time ?? 0)
+        : null;
       for (let j = 0; j < effect.tiles.length; j++) {
         const tile = effect.tiles[j];
         if (!isTileInRenderRadius(tile.tx, tile.ty)) continue;
         const centerWx = (tile.tx + 0.5) * T;
         const centerWy = (tile.ty + 0.5) * T;
         const centerZ = tileHAtWorld(centerWx, centerWy);
+        if (animatedSurface && animatedFrame) {
+          const destinationQuad = buildFlatTileDestinationQuad({
+            tx: tile.tx,
+            ty: tile.ty,
+            zBase: centerZ,
+            renderAnchorY: ANCHOR_Y,
+            tileWorld: T,
+            elevPx: ELEV_PX,
+            isoHeight: SIDEWALK_ISO_HEIGHT,
+            camX,
+            camY,
+            worldToScreen,
+            snapPoint: snapPx,
+          });
+          const alpha = effect.state === "ACTIVE"
+            ? animatedSurface.activeAlpha
+            : animatedSurface.warningAlpha;
+          const renderKey: RenderKey = {
+            slice: tile.tx + tile.ty,
+            within: tile.tx,
+            baseZ: centerZ,
+            kindOrder: KindOrder.DECAL,
+            stableId: 211000 + i * 256 + j,
+          };
+          enqueueSliceCommand(frameBuilder, renderKey, {
+            semanticFamily: "groundDecal",
+            finalForm: "quad",
+            payload: buildGroundDecalProjectedSurfacePayload({
+              image: animatedFrame,
+              destinationQuad,
+              alpha,
+            }),
+          });
+          continue;
+        }
         const renderKey: RenderKey = {
           slice: tile.tx + tile.ty,
           within: tile.tx,
@@ -352,7 +403,15 @@ export function collectGroundDrawables(input: CollectionContext): void {
       const faceDx = w.eFaceX?.[i] ?? 0;
       const faceDy = w.eFaceY?.[i] ?? -1;
       const moving = Math.hypot(w.evx?.[i] ?? 0, w.evy?.[i] ?? 0) > 1e-4;
-      const fr = getEnemySpriteFrame({ type: w.eType[i] as any, time: w.time ?? 0, faceDx, faceDy, moving });
+      const visualScale = resolveEnemyVisualScale(w, i);
+      const fr = getEnemySpriteFrame({
+        type: w.eType[i] as any,
+        time: w.time ?? 0,
+        faceDx,
+        faceDy,
+        moving,
+        scaleMultiplier: visualScale,
+      });
       const spriteW = fr ? fr.sw * fr.scale : Math.max(16, (w.eR[i] ?? 10) * 2.4);
       const enemyShadowOffset = resolveEnemyShadowFootOffset(w.eType[i] as any);
       const renderKey: RenderKey = {
@@ -388,6 +447,7 @@ export function collectGroundDrawables(input: CollectionContext): void {
           faceDx,
           faceDy,
           moving,
+          scaleMultiplier: visualScale,
         });
         if (frSilhouette) {
           const dw = frSilhouette.sw * frSilhouette.scale;

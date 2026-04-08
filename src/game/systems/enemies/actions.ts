@@ -121,10 +121,11 @@ export function enemyActionSystem(w: World, _dt: number): void {
 
       emitEvent(w, {
         type: "VFX",
-        id: "EXPLOSION",
+        id: "BURSTER_EXPLOSION",
         x: enemyPos.wx,
         y: enemyPos.wy,
         radius: ability.radius,
+        scale: 4,
       });
       emitEvent(w, { type: "SFX", id: "EXPLOSION_SYRINGE", vol: 0.75, rate: 1 });
 

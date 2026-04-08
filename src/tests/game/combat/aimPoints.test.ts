@@ -37,4 +37,19 @@ describe("aimPoints screen-axis offsets", () => {
     expect(enemyAim.x - enemyWorld.wx).toBeCloseTo(infoA.effectiveWorldDelta.dx, 6);
     expect(enemyAim.y - enemyWorld.wy).toBeCloseTo(infoA.effectiveWorldDelta.dy, 6);
   });
+
+  test("runtime enemy visual scale shrinks the authored aim offset", () => {
+    const w = createWorld({ seed: 303, stage: stageDocks });
+    const root = spawnEnemyGrid(w, EnemyId.SPLITTER, 8, 8);
+    const child = spawnEnemyGrid(w, EnemyId.SPLITTER, 9, 8, KENNEY_TILE_WORLD, { splitStage: 2 });
+
+    const rootInfo = getEnemyAimDebugInfo(w, root);
+    const childInfo = getEnemyAimDebugInfo(w, child);
+
+    expect(childInfo.spriteScale).toBeCloseTo(rootInfo.spriteScale * 0.25, 6);
+    expect(Math.abs(childInfo.effectiveScreenOffset.y)).toBeLessThan(Math.abs(rootInfo.effectiveScreenOffset.y));
+
+    const projected = worldDeltaToScreen(childInfo.effectiveWorldDelta.dx, childInfo.effectiveWorldDelta.dy);
+    expect(projected.dy).toBeCloseTo(childInfo.effectiveScreenOffset.y, 6);
+  });
 });

@@ -52,6 +52,13 @@ const STARTER_POINT_BLANK_MAX_RANGE = 220;
 type EnemyHitEvent = Extract<import("../../events").GameEvent, { type: "ENEMY_HIT" }>;
 type PlayerHitEvent = Extract<import("../../events").GameEvent, { type: "PLAYER_HIT" }>;
 
+function projectileExplosionVfxId(projectileDamageMeta: any): string {
+  if (projectileDamageMeta?.cause?.kind === "RELIC" && projectileDamageMeta.cause.relicId === "ACT_BAZOOKA_ON_HIT_20") {
+    return "RELIC_BAZOOKA_EXPLOSION";
+  }
+  return "EXPLOSION";
+}
+
 function nextFloatJitter(seed: number): { nextSeed: number; offsetX: number; offsetY: number } {
   let s = (seed + 0x9e3779b9) | 0;
   s ^= s << 13;
@@ -577,7 +584,7 @@ export function collisionsSystem(w: World, dt: number) {
 // Force immediate tick this frame so it *feels* like an explosion
         w.zTickLeft[z] = 0;
 
-        emitEvent(w, { type: "VFX", id: "EXPLOSION", x: zx, y: zy, radius: exR });
+        emitEvent(w, { type: "VFX", id: projectileExplosionVfxId(projectileDamageMeta), x: zx, y: zy, radius: exR });
 
 // NEW: bazooka explosion sound
         emitEvent(w, { type: "SFX", id: "EXPLOSION_BAZOOKA", vol: 0.65 });

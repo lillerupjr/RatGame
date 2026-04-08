@@ -4,7 +4,8 @@ import { ISO_X, ISO_Y } from "../../engine/math/iso";
 import { getBossDefinitionForEntity } from "../bosses/bossRuntime";
 import { ENEMIES, type EnemyId } from "../content/enemies";
 import { getEnemyWorld, getPlayerWorld } from "../coords/worldViews";
-import { getEnemySpriteFrameMeta } from "../../engine/render/sprites/enemySprites";
+import { getEnemySpriteFrameMetaScaled } from "../../engine/render/sprites/enemySprites";
+import { resolveEnemyVisualScale } from "../systems/enemies/enemyRuntime";
 
 const DEFAULT_AIM_Y_FRAC = 0.2;
 const FALLBACK_ENEMY_AIM_SCREEN_OFFSET = { x: 0, y: -12 } as const;
@@ -42,8 +43,8 @@ function getSkinScreenOffset(skin: string | null | undefined): ScreenOffset {
   return { x, y };
 }
 
-function resolveEnemyAimDebugInfo(enemyType: EnemyId): EnemyAimDebugInfo {
-  const frame = getEnemySpriteFrameMeta(enemyType);
+function resolveEnemyAimDebugInfo(enemyType: EnemyId, visualScale = 1): EnemyAimDebugInfo {
+  const frame = getEnemySpriteFrameMetaScaled(enemyType, visualScale);
   const spriteFrameHeightPx = frame?.h ?? 0;
   const spriteScale = frame?.scale ?? 1;
   const spriteHeightWorld = spriteFrameHeightPx * spriteScale;
@@ -79,13 +80,14 @@ export function getEnemyAimWorld(w: World, enemyIndex: number): { x: number; y: 
   const ew = getEnemyWorld(w, enemyIndex, KENNEY_TILE_WORLD);
   const bossDef = getBossDefinitionForEntity(w, enemyIndex);
   const enemyType = w.eType[enemyIndex] as EnemyId;
+  const visualScale = resolveEnemyVisualScale(w, enemyIndex);
   const info = bossDef
     ? {
         effectiveWorldDelta: toWorldDeltaFromScreenOffset(
           bossDef.presentation?.aimScreenOffset ?? FALLBACK_ENEMY_AIM_SCREEN_OFFSET,
         ),
       }
-    : resolveEnemyAimDebugInfo(enemyType);
+    : resolveEnemyAimDebugInfo(enemyType, visualScale);
   return {
     x: ew.wx + info.effectiveWorldDelta.dx,
     y: ew.wy + info.effectiveWorldDelta.dy,
@@ -94,7 +96,7 @@ export function getEnemyAimWorld(w: World, enemyIndex: number): { x: number; y: 
 
 export function getEnemyAimDebugInfo(w: World, enemyIndex: number): EnemyAimDebugInfo {
   const enemyType = w.eType[enemyIndex] as EnemyId;
-  return resolveEnemyAimDebugInfo(enemyType);
+  return resolveEnemyAimDebugInfo(enemyType, resolveEnemyVisualScale(w, enemyIndex));
 }
 
 export function getPlayerAimWorld(w: World): { x: number; y: number } {

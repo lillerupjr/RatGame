@@ -9,6 +9,41 @@ import { breakMomentumOnLifeDamage } from "../systems/sim/momentum";
 import type { DamageMeta } from "../events";
 import type { ArenaTileEffect, ArenaTileEffectState } from "./bossTypes";
 import type { BossAbilityId } from "./bossAbilities";
+import type { AnimatedSurfaceId } from "../systems/presentation/animatedSurfaces/animatedSurfaceTypes";
+
+function createArenaTileEffect(
+  world: World,
+  args: {
+    effectIds: string[];
+    encounterId: string;
+    abilityId: BossAbilityId;
+    tiles: Array<{ tx: number; ty: number }>;
+    state: ArenaTileEffectState;
+    surfaceId?: AnimatedSurfaceId;
+    renderOverlay?: boolean;
+    ttlSec: number;
+    tickEverySec: number;
+    damagePlayer: number;
+    playerDamageMeta?: DamageMeta;
+  },
+): void {
+  const effectId = `ARENA_TILE_EFFECT_${world.bossRuntime.nextArenaEffectSeq++}`;
+  args.effectIds.push(effectId);
+  world.arenaTileEffects.push({
+    id: effectId,
+    encounterId: args.encounterId,
+    abilityId: args.abilityId,
+    tiles: args.tiles.map((tile) => ({ ...tile })),
+    state: args.state,
+    surfaceId: args.surfaceId,
+    renderOverlay: args.renderOverlay ?? true,
+    ttlSec: args.ttlSec,
+    tickEverySec: args.tickEverySec,
+    tickLeftSec: args.tickEverySec,
+    damagePlayer: args.damagePlayer,
+    playerDamageMeta: args.playerDamageMeta,
+  });
+}
 
 export function removeArenaTileEffectsByIds(world: World, effectIds: string[]): void {
   if (effectIds.length <= 0) return;
@@ -25,6 +60,8 @@ export function upsertArenaTileEffect(
     abilityId: BossAbilityId;
     tiles: Array<{ tx: number; ty: number }>;
     state: ArenaTileEffectState;
+    surfaceId?: AnimatedSurfaceId;
+    renderOverlay?: boolean;
     ttlSec: number;
     tickEverySec?: number;
     damagePlayer?: number;
@@ -36,32 +73,37 @@ export function upsertArenaTileEffect(
   const tickEverySec = Math.max(0.01, args.tickEverySec ?? ttlSec);
   const damagePlayer = Math.max(0, args.damagePlayer ?? 0);
   if (args.effectIds.length <= 0) {
-    const effectId = `ARENA_TILE_EFFECT_${world.bossRuntime.nextArenaEffectSeq++}`;
-    args.effectIds.push(effectId);
-    world.arenaTileEffects.push({
-      id: effectId,
-      encounterId: args.encounterId,
-      abilityId: args.abilityId,
-      tiles: args.tiles.map((tile) => ({ ...tile })),
-      state: args.state,
+    createArenaTileEffect(world, {
+      ...args,
       ttlSec,
       tickEverySec,
-      tickLeftSec: tickEverySec,
       damagePlayer,
-      playerDamageMeta: args.playerDamageMeta,
     });
     return;
   }
+  let matched = false;
   for (let i = 0; i < world.arenaTileEffects.length; i++) {
     const effect = world.arenaTileEffects[i];
     if (!args.effectIds.includes(effect.id)) continue;
+    matched = true;
     effect.tiles = args.tiles.map((tile) => ({ ...tile }));
     effect.state = args.state;
+    effect.surfaceId = args.surfaceId;
+    effect.renderOverlay = args.renderOverlay ?? true;
     effect.ttlSec = ttlSec;
     effect.tickEverySec = tickEverySec;
     effect.tickLeftSec = tickEverySec;
     effect.damagePlayer = damagePlayer;
     effect.playerDamageMeta = args.playerDamageMeta;
+  }
+  if (!matched) {
+    args.effectIds.length = 0;
+    createArenaTileEffect(world, {
+      ...args,
+      ttlSec,
+      tickEverySec,
+      damagePlayer,
+    });
   }
 }
 

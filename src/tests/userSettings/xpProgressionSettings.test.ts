@@ -12,7 +12,7 @@ describe("userSettings xp progression merge", () => {
   it("exposes default xp progression values through the legacy wrapper", () => {
     const game = getUserSettings().game;
 
-    expect(game.xpLevelBase).toBe(50);
+    expect(game.xpLevelBase).toBe(15);
     expect(game.xpLevelGrowth).toBe(1.2);
   });
 

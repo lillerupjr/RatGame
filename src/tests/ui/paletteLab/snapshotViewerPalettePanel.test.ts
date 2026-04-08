@@ -303,7 +303,7 @@ describe("snapshot viewer palette panel", () => {
     expect(userSettingsState.settings.render.lightStrengthOverride).toBe("high");
   });
 
-  test("static relight controls persist in settings", () => {
+  test("static relight controls are not rendered in the snapshot viewer palette panel", () => {
     const panel = mountSnapshotViewerPalettePanel({ onClose: vi.fn() });
     panel.sync(true);
 
@@ -313,15 +313,7 @@ describe("snapshot viewer palette panel", () => {
       "snapshotViewerControl",
       "static-relight-target-darkness",
     );
-    expect(strengthSelect).toBeTruthy();
-    expect(targetDarknessSelect).toBeTruthy();
-
-    (strengthSelect as FakeElement).value = "75";
-    strengthSelect?.dispatchEvent(new FakeEvent("change", strengthSelect));
-    (targetDarknessSelect as FakeElement).value = "25";
-    targetDarknessSelect?.dispatchEvent(new FakeEvent("change", targetDarknessSelect));
-
-    expect(userSettingsState.settings.debug.staticRelightStrengthPercent).toBe(75);
-    expect(userSettingsState.settings.debug.staticRelightTargetDarknessPercent).toBe(25);
+    expect(strengthSelect).toBeNull();
+    expect(targetDarknessSelect).toBeNull();
   });
 });

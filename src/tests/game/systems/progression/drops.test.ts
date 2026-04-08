@@ -129,4 +129,36 @@ describe("dropsSystem", () => {
     expect(total).toBe(300);
     expect(w.xKind.filter((kind) => kind === PICKUP_KIND.CHEST)).toHaveLength(0);
   });
+
+  test("splitter rewards scale with staged base life instead of paying full root reward", () => {
+    const w = createWorld({ seed: 13, stage: stageDocks });
+    const root = spawnEnemyGrid(w, EnemyId.SPLITTER, 5, 5);
+    const stage1 = spawnEnemyGrid(w, EnemyId.SPLITTER, 6, 5, KENNEY_TILE_WORLD, { splitStage: 1 });
+    const stage2 = spawnEnemyGrid(w, EnemyId.SPLITTER, 7, 5, KENNEY_TILE_WORLD, { splitStage: 2 });
+
+    for (const enemyIndex of [root, stage1, stage2]) {
+      w.events.push({
+        type: "ENEMY_KILLED",
+        enemyIndex,
+        x: 0,
+        y: 0,
+        source: "PISTOL",
+        damageMeta: makeWeaponHitMeta("PISTOL", { category: "HIT", instigatorId: "player" }),
+      });
+    }
+
+    dropsSystem(w, 1 / 60);
+
+    const coinValues = w.xKind
+      .map((kind, index) => (kind === PICKUP_KIND.GOLD ? w.xValue[index] : null))
+      .filter((value): value is number => value !== null)
+      .sort((a, b) => a - b);
+
+    expect(coinValues).toEqual([
+      goldValueFromEnemyBaseLife(w.eBaseLife[stage2]),
+      goldValueFromEnemyBaseLife(w.eBaseLife[stage1]),
+      goldValueFromEnemyBaseLife(w.eBaseLife[root]),
+    ]);
+    expect(coinValues).toEqual([1, 2, 5]);
+  });
 });

@@ -404,6 +404,8 @@ export type World = {
   eHp: number[];
   eHpMax: number[];
   eR: number[];
+  eSplitStage: number[];
+  eVisualScale: number[];
   eSpeed: number[];
   eDamage: number[];
   ezVisual: number[];
@@ -846,6 +848,8 @@ export function createWorld(args: CreateWorldArgs): World {
     eHp: [],
     eHpMax: [],
     eR: [],
+    eSplitStage: [],
+    eVisualScale: [],
     eSpeed: [],
     eDamage: [],
     ezVisual: [],

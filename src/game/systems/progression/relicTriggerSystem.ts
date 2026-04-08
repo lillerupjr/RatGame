@@ -194,7 +194,7 @@ function applyAllHitsExplosion(
     followPlayer: false,
     enemyDamageMeta: { ...damageMeta, category: "HIT" },
   });
-  emitEvent(world, { type: "VFX", id: "EXPLOSION", x: cx, y: cy, radius: RELIC_ALL_HITS_EXPLODE_RADIUS });
+  emitEvent(world, { type: "VFX", id: "RELIC_ALL_HITS_EXPLODE", x: cx, y: cy, radius: RELIC_ALL_HITS_EXPLODE_RADIUS, scale: 2 });
   emitEvent(world, { type: "SFX", id: "EXPLOSION_SYRINGE", vol: 0.55 });
   if (debugRelicLogs) {
     console.debug("[Relic] Explosion triggered");
@@ -265,7 +265,7 @@ function applyExplodeOnKill(world: World, ev: EnemyKilledEvent, damageMeta: Dama
     followPlayer: false,
     enemyDamageMeta: { ...damageMeta, category: "HIT" },
   });
-  emitEvent(world, { type: "VFX", id: "EXPLOSION", x: cx, y: cy, radius: RELIC_EXPLODE_ON_KILL_RADIUS });
+  emitEvent(world, { type: "VFX", id: "RELIC_EXPLODE_ON_KILL", x: cx, y: cy, radius: RELIC_EXPLODE_ON_KILL_RADIUS, scale: 3 });
   emitEvent(world, { type: "SFX", id: "EXPLOSION_SYRINGE", vol: 0.55 });
 
   const nearbyEnemies = queryCircle(world.enemySpatialHash, cx, cy, RELIC_EXPLODE_ON_KILL_RADIUS + 50);

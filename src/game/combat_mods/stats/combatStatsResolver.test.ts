@@ -17,7 +17,7 @@ describe("resolveWeaponStats", () => {
   test("baseline pistol resolves stable defaults", () => {
     const out = resolveWeaponStats(JACK_PISTOL_V1, { cards: [] });
 
-    expect(out.shotsPerSecond).toBeCloseTo(3.0);
+    expect(out.shotsPerSecond).toBeCloseTo(2.0);
     expect(out.baseDamage.physical).toBeCloseTo(12);
     expect(out.baseDamage.fire).toBeCloseTo(0);
     expect(out.baseDamage.chaos).toBeCloseTo(0);
@@ -54,9 +54,9 @@ describe("resolveWeaponStats", () => {
     expect(out.projectiles).toBe(1);
   });
 
-  test("baseline shotgun resolves 0.666x16x4 profile and uses authored multi spread", () => {
+  test("baseline shotgun resolves 1.0x16x4 profile and uses authored multi spread", () => {
     const out = resolveWeaponStats(TOMMY_SHOTGUN_V1, { cards: [] });
-    expect(out.shotsPerSecond).toBeCloseTo(2 / 3);
+    expect(out.shotsPerSecond).toBeCloseTo(1.0);
     expect(out.baseDamage.physical).toBeCloseTo(16);
     expect(out.projectiles).toBe(4);
     expect(out.rangePx).toBeLessThan(420);
@@ -95,13 +95,13 @@ describe("resolveWeaponStats", () => {
     const c2 = mkCard("T2", [{ key: STAT_KEYS.SHOTS_PER_SECOND_INCREASED, op: "increased", value: 0.12 }]);
 
     const out = resolveWeaponStats(JACK_PISTOL_V1, { cards: [c1, c2] });
-    expect(out.shotsPerSecond).toBeCloseTo(3.0 * (1 + 0.27));
+    expect(out.shotsPerSecond).toBeCloseTo(2.0 * (1 + 0.27));
   });
 
   test("engine supports more on the same key (even if starter cards don't use it)", () => {
     const c = mkCard("T_MORE", [{ key: STAT_KEYS.SHOTS_PER_SECOND_INCREASED, op: "more", value: 0.20 }]); // 20% more
     const out = resolveWeaponStats(JACK_PISTOL_V1, { cards: [c] });
-    expect(out.shotsPerSecond).toBeCloseTo(3.0 * 1.2);
+    expect(out.shotsPerSecond).toBeCloseTo(2.0 * 1.2);
   });
 
   test("engine supports decreased and less on the same key", () => {
@@ -110,7 +110,7 @@ describe("resolveWeaponStats", () => {
     const cLess = mkCard("T_LESS", [{ key: STAT_KEYS.SHOTS_PER_SECOND_INCREASED, op: "less", value: 0.25 }]);
 
     const out = resolveWeaponStats(JACK_PISTOL_V1, { cards: [cDec, cMore, cLess] });
-    expect(out.shotsPerSecond).toBeCloseTo(3.0 * 0.9 * 1.2 * 0.75);
+    expect(out.shotsPerSecond).toBeCloseTo(2.0 * 0.9 * 1.2 * 0.75);
   });
 
   test("flat adds apply per damage type before conversion", () => {

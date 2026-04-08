@@ -7,7 +7,7 @@ function idsFor(characterId: string): string[] {
 }
 
 describe("cardPool character visibility", () => {
-  test("JOEY laser pool excludes fires/hit/projectile/crit cards", () => {
+  test("JOEY laser pool excludes fires/hit/projectile/crit cards but keeps fire-tag overlaps", () => {
     const ids = idsFor("JOEY");
     for (const id of ids) {
       const card = getCardById(id);
@@ -23,7 +23,7 @@ describe("cardPool character visibility", () => {
     expect(ids).not.toContain("CARD_CRIT_CHANCE_1");
     expect(ids).not.toContain("CARD_DAMAGE_FLAT_1");
     expect(ids).not.toContain("CARD_PROJECTILE_1");
-    expect(ids).not.toContain("CARD_IGNITE_CHANCE_1");
+    expect(ids).toContain("CARD_IGNITE_CHANCE_1");
   });
 
   test("JOEY laser pool keeps global and gun cards", () => {
@@ -39,6 +39,7 @@ describe("cardPool character visibility", () => {
     expect(ids).toContain("CARD_DAMAGE_FLAT_1");
     expect(ids).toContain("CARD_PROJECTILE_1");
     expect(ids).toContain("CARD_DAMAGE_INC_1");
+    expect(ids).not.toContain("CARD_IGNITE_CHANCE_1");
     expect(ids).not.toContain("CARD_POISON_CHANCE_1");
   });
 });

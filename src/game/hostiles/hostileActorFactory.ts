@@ -20,6 +20,10 @@ export type SpawnHostileActorGridArgs = {
   movement: HostileMovementConfig;
   scaledHp: number;
   scaledDamage: number;
+  baseLife?: number;
+  radius?: number;
+  splitStage?: number;
+  visualScale?: number;
   spawnTriggerId?: string;
   bossId?: string;
   brainFactory?: () => EnemyBrainState;
@@ -30,9 +34,12 @@ export function spawnHostileActorGrid(
   args: SpawnHostileActorGridArgs,
 ): number {
   const tileWorld = args.tileWorld ?? KENNEY_TILE_WORLD;
-  const baseLife = Math.max(1, Math.round(args.stats.baseLife));
+  const baseLife = Math.max(1, Math.round(args.baseLife ?? args.stats.baseLife));
   const scaledHp = Math.max(1, Math.round(args.scaledHp));
   const scaledDamage = Math.max(0, Math.round(args.scaledDamage));
+  const radius = Math.max(1, args.radius ?? args.body.radius);
+  const splitStage = Number.isFinite(args.splitStage) ? Math.max(0, Math.floor(args.splitStage as number)) : 0;
+  const visualScale = Number.isFinite(args.visualScale) ? Math.max(0.1, args.visualScale as number) : 1;
 
   const index = world.eAlive.length;
   world.eAlive.push(true);
@@ -52,7 +59,9 @@ export function spawnHostileActorGrid(
   world.eBaseLife.push(baseLife);
   world.eHp.push(scaledHp);
   world.eHpMax.push(scaledHp);
-  world.eR.push(args.body.radius);
+  world.eR.push(radius);
+  world.eSplitStage.push(splitStage);
+  world.eVisualScale.push(visualScale);
   world.eSpeed.push(args.movement.speed);
   world.eDamage.push(scaledDamage);
   world.ePoisonT.push(0);

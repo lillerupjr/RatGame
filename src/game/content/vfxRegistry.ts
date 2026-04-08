@@ -5,6 +5,7 @@ export type VfxClipDef = {
   spriteIds: string[];
   fps: number;
   loop: boolean;
+  projection?: "billboard" | "ground_decal";
 };
 
 function frames16(root: string): string[] {
@@ -13,25 +14,79 @@ function frames16(root: string): string[] {
   return out;
 }
 
-const EXPLOSION_SPRITE_IDS = [
-  "vfx/explosion_1/1_frame_01",
-  "vfx/explosion_1/1_frame_02",
-  "vfx/explosion_1/1_frame_03",
-  "vfx/explosion_1/1_frame_04",
-  "vfx/explosion_1/1_frame_05",
-  "vfx/explosion_1/1_frame_06",
-  "vfx/explosion_1/1_frame_07",
-  "vfx/explosion_1/1_frame_08",
-  "vfx/explosion_1/1_frame_09",
-  "vfx/explosion_1/1_frame_10",
-  "vfx/explosion_1/1_frame_11",
-  "vfx/explosion_1/1_frame_12",
-  "vfx/explosion_1/1_frame_13",
-  "vfx/explosion_1/1_frame_14",
-];
+function numberedFrames(root: string, count: number): string[] {
+  const out: string[] = [];
+  for (let i = 1; i <= count; i++) out.push(`${root}/1_frame_${String(i).padStart(2, "0")}`);
+  return out;
+}
+
+function namedFrames(root: string, stem: string, count: number): string[] {
+  const out: string[] = [];
+  for (let i = 1; i <= count; i++) out.push(`${root}/${stem}${i}`);
+  return out;
+}
+
+const EXPLOSION_SPRITE_IDS = numberedFrames("vfx/explosion_1", 14);
+const RELIC_EXPLODE_ON_KILL_SPRITE_IDS = namedFrames("vfx/explosions/1", "explosion-b", 12);
+const RELIC_ALL_HITS_EXPLODE_SPRITE_IDS = namedFrames("vfx/explosions/3", "explosion-f", 8);
+const RELIC_BAZOOKA_EXPLOSION_SPRITE_IDS = numberedFrames("vfx/explosions/5", 14);
+
+const GREEN_EXPLOSION_3_SPRITE_IDS = [
+  "vfx/explosions/3_green/explosion-f1",
+  "vfx/explosions/3_green/explosion-f2",
+  "vfx/explosions/3_green/explosion-f3",
+  "vfx/explosions/3_green/explosion-f4",
+  "vfx/explosions/3_green/explosion-f5",
+  "vfx/explosions/3_green/explosion-f6",
+  "vfx/explosions/3_green/explosion-f7",
+  "vfx/explosions/3_green/explosion-f8",
+] as const;
+
+const CHEM_GUY_FLAMETHROWER_LOOP_SPRITE_IDS = [
+  "vfx/flamethrower_poison/loop/Acid VFX 02Repeatable1",
+  "vfx/flamethrower_poison/loop/Acid VFX 02Repeatable2",
+  "vfx/flamethrower_poison/loop/Acid VFX 02Repeatable3",
+  "vfx/flamethrower_poison/loop/Acid VFX 02Repeatable4",
+  "vfx/flamethrower_poison/loop/Acid VFX 02Repeatable5",
+  "vfx/flamethrower_poison/loop/Acid VFX 02Repeatable6",
+  "vfx/flamethrower_poison/loop/Acid VFX 02Repeatable7",
+  "vfx/flamethrower_poison/loop/Acid VFX 02Repeatable8",
+  "vfx/flamethrower_poison/loop/Acid VFX 02Repeatable9",
+  "vfx/flamethrower_poison/loop/Acid VFX 02Repeatable10",
+  "vfx/flamethrower_poison/loop/Acid VFX 02Repeatable11",
+  "vfx/flamethrower_poison/loop/Acid VFX 02Repeatable12",
+] as const;
+
+const CHEM_GUY_FLAMETHROWER_END_SPRITE_IDS = [
+  "vfx/flamethrower_poison/ending/Acid VFX 02 Ending1",
+  "vfx/flamethrower_poison/ending/Acid VFX 02 Ending2",
+  "vfx/flamethrower_poison/ending/Acid VFX 02 Ending3",
+  "vfx/flamethrower_poison/ending/Acid VFX 02 Ending4",
+  "vfx/flamethrower_poison/ending/Acid VFX 02 Ending5",
+  "vfx/flamethrower_poison/ending/Acid VFX 02 Ending6",
+] as const;
+
+const SLIME_IDLE_SPRITE_IDS = [
+  "vfx/slime/idle/0",
+  "vfx/slime/idle/1",
+  "vfx/slime/idle/2",
+  "vfx/slime/idle/3",
+  "vfx/slime/idle/4",
+  "vfx/slime/idle/5",
+  "vfx/slime/idle/6",
+  "vfx/slime/idle/7",
+] as const;
 
 const BASE_VFX_CLIP_ENTRIES: ReadonlyArray<readonly [string, VfxClipDef]> = [
-  ["EXPLOSION", { spriteIds: EXPLOSION_SPRITE_IDS, fps: 20, loop: false }],
+  ["EXPLOSION", { spriteIds: EXPLOSION_SPRITE_IDS, fps: 20, loop: false, projection: "billboard" }],
+  ["BURSTER_EXPLOSION", { spriteIds: [...GREEN_EXPLOSION_3_SPRITE_IDS], fps: 9, loop: false, projection: "billboard" }],
+  ["RELIC_EXPLODE_ON_KILL", { spriteIds: RELIC_EXPLODE_ON_KILL_SPRITE_IDS, fps: 18, loop: false, projection: "billboard" }],
+  ["RELIC_ALL_HITS_EXPLODE", { spriteIds: RELIC_ALL_HITS_EXPLODE_SPRITE_IDS, fps: 9, loop: false, projection: "billboard" }],
+  ["RELIC_BAZOOKA_EXPLOSION", { spriteIds: RELIC_BAZOOKA_EXPLOSION_SPRITE_IDS, fps: 20, loop: false, projection: "billboard" }],
+  ["CHEM_GUY_POISON_RAIN", { spriteIds: [...GREEN_EXPLOSION_3_SPRITE_IDS], fps: 9, loop: false, projection: "ground_decal" }],
+  ["CHEM_GUY_FLAMETHROWER_LOOP", { spriteIds: [...CHEM_GUY_FLAMETHROWER_LOOP_SPRITE_IDS], fps: 18, loop: true, projection: "billboard" }],
+  ["CHEM_GUY_FLAMETHROWER_END", { spriteIds: [...CHEM_GUY_FLAMETHROWER_END_SPRITE_IDS], fps: 18, loop: false, projection: "billboard" }],
+  ["SLIME_IDLE_LOOP", { spriteIds: [...SLIME_IDLE_SPRITE_IDS], fps: 6, loop: true }],
   ["STATUS_BLEED_LOOP", { spriteIds: frames16("vfx/status/bleed_1"), fps: 12, loop: true }],
   ["STATUS_POISON_LOOP", { spriteIds: frames16("vfx/status/poisoned_1"), fps: 12, loop: true }],
   ["STATUS_BURNING_LOOP", { spriteIds: frames16("vfx/status/burning_1"), fps: 12, loop: true }],

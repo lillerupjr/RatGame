@@ -66,13 +66,18 @@ export type EnemySpriteFrameMeta = {
 };
 
 export function getEnemySpriteFrameMeta(type: EnemyId): EnemySpriteFrameMeta | null {
+    return getEnemySpriteFrameMetaScaled(type, 1);
+}
+
+export function getEnemySpriteFrameMetaScaled(type: EnemyId, scaleMultiplier: number = 1): EnemySpriteFrameMeta | null {
     const def = getEnemySpriteDef(type);
     if (!def) return null;
+    const resolvedScaleMultiplier = Number.isFinite(scaleMultiplier) ? Math.max(0.1, scaleMultiplier) : 1;
     return {
         skin: def.skin,
         w: def.frameW,
         h: def.frameH,
-        scale: def.scale,
+        scale: def.scale * resolvedScaleMultiplier,
         anchorX: def.anchorX,
         anchorY: def.anchorY,
     };
@@ -326,6 +331,7 @@ export function getEnemySpriteFrame(args: {
     faceDx: number;
     faceDy: number;
     moving: boolean;
+    scaleMultiplier?: number;
 }):
     | {
     img: HTMLImageElement;
@@ -343,6 +349,7 @@ export function getEnemySpriteFrame(args: {
     | null {
     const def = getEnemySpriteDef(args.type);
     if (!def) return null;
+    const scaleMultiplier = Number.isFinite(args.scaleMultiplier) ? Math.max(0.1, args.scaleMultiplier as number) : 1;
     const paletteVariantKey = resolveActivePaletteVariantKey();
     notePaletteRequested(paletteState, paletteVariantKey);
     preloadEnemySprites([def.skin], paletteVariantKey);
@@ -369,7 +376,7 @@ export function getEnemySpriteFrame(args: {
         path: def.skin,
         w: pack.size.w,
         h: pack.size.h,
-        scale: def.scale,
+        scale: def.scale * scaleMultiplier,
         anchorX: def.anchorX,
         anchorY: def.anchorY,
     };
@@ -382,6 +389,7 @@ export function getEnemySpriteFrameForDarknessPercent(args: {
     faceDy: number;
     moving: boolean;
     darknessPercent: SpriteDarknessPercent;
+    scaleMultiplier?: number;
 }):
     | {
     img: HTMLImageElement;
@@ -399,6 +407,7 @@ export function getEnemySpriteFrameForDarknessPercent(args: {
     | null {
     const def = getEnemySpriteDef(args.type);
     if (!def) return null;
+    const scaleMultiplier = Number.isFinite(args.scaleMultiplier) ? Math.max(0.1, args.scaleMultiplier as number) : 1;
     const paletteVariantKey = resolvePaletteVariantKeyForDarknessPercent(args.darknessPercent);
     notePaletteRequested(paletteState, paletteVariantKey);
     const statusKey = `${paletteVariantKey}:${def.skin}`;
@@ -428,7 +437,7 @@ export function getEnemySpriteFrameForDarknessPercent(args: {
         path: def.skin,
         w: pack.size.w,
         h: pack.size.h,
-        scale: def.scale,
+        scale: def.scale * scaleMultiplier,
         anchorX: def.anchorX,
         anchorY: def.anchorY,
     };

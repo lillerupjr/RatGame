@@ -1,3 +1,4 @@
+import { EnemyId } from "../../content/enemies";
 import { OBJECTIVE_TRIGGER_IDS } from "./objectiveSpec";
 
 function rareZoneIndexFromTriggerId(triggerId: string): number | null {
@@ -13,6 +14,10 @@ function markCompletedIndex(world: any, idx: number): void {
   if (!rt || !Array.isArray(rt.completed)) return;
   if (idx >= rt.completed.length) return;
   rt.completed[idx] = true;
+}
+
+function isRareTripleEnemyType(type: unknown): boolean {
+  return type === EnemyId.LEAPER1 || type === EnemyId.BURSTER || type === EnemyId.BOSS;
 }
 
 export function markRareTripleClearsFromSignalsAndEvents(world: any): void {
@@ -35,8 +40,14 @@ export function markRareTripleClearsFromSignalsAndEvents(world: any): void {
     const ev = events[i];
     if (ev?.type !== "ENEMY_KILLED") continue;
     const enemyIndex = Number.isFinite(ev.enemyIndex) ? (ev.enemyIndex as number) : -1;
+    const enemyType =
+      enemyIndex >= 0 && Array.isArray(world.eType) ? world.eType[enemyIndex] : undefined;
     const triggerIdFromEnemy =
-      enemyIndex >= 0 && Array.isArray(world.eSpawnTriggerId) ? world.eSpawnTriggerId[enemyIndex] : undefined;
+      enemyIndex >= 0
+      && Array.isArray(world.eSpawnTriggerId)
+      && isRareTripleEnemyType(enemyType)
+        ? world.eSpawnTriggerId[enemyIndex]
+        : undefined;
     const triggerId =
       typeof (ev as any).spawnTriggerId === "string"
         ? (ev as any).spawnTriggerId

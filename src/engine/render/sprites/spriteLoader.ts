@@ -322,12 +322,16 @@ export function getSpriteFrame(
         anim?: AnimKey;
         t: number;
         fps?: number;
+        loop?: boolean;
         useRotationIfNoAnim?: boolean;
     },
 ): HTMLImageElement {
     const fps = opts.fps ?? DEFAULT_FPS;
     const frameCount = Math.max(1, pack.frameCount || DEFAULT_FRAME_COUNT);
-    const frameIndex = Math.floor(Math.max(0, opts.t) * fps) % frameCount;
+    const rawFrameIndex = Math.floor(Math.max(0, opts.t) * fps);
+    const frameIndex = opts.loop === false
+        ? Math.min(frameCount - 1, rawFrameIndex)
+        : rawFrameIndex % frameCount;
     const useRotation = opts.useRotationIfNoAnim ?? true;
 
     if (opts.anim && pack.animations[opts.anim]) {

@@ -222,8 +222,9 @@ export function collectStructureDrawables(input: CollectionContext): {
     };
   };
 
-  const coarseCutoutInflateX = Number(T) * Number(ISO_X);
-  const coarseCutoutInflateY = Number(T) * Number(ISO_Y);
+  const coarseCutoutGuardPx = 1;
+  const coarseCutoutInflateX = Number(T) * Number(ISO_X) + coarseCutoutGuardPx;
+  const coarseCutoutInflateY = Number(T) * Number(ISO_Y) + coarseCutoutGuardPx;
   const coarseCutoutScreenRect = {
     x: structureCutoutScreenRect.minX - coarseCutoutInflateX,
     y: structureCutoutScreenRect.minY - coarseCutoutInflateY,

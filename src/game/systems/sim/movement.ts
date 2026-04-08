@@ -21,6 +21,7 @@ import {
   getBossDefinitionForEntity,
   isBossEncounterDormant,
   isBossEntity,
+  isBossMovementLockedByCast,
 } from "../../bosses/bossRuntime";
 import { getPoeEnemyLeashAnchor, isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
 import type { EnemyId } from "../../content/enemies";
@@ -199,6 +200,13 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     if (isBossEncounterDormant(w, i)) {
       knockVx[i] = 0;
       knockVy[i] = 0;
+      continue;
+    }
+    if (isBossMovementLockedByCast(w, i)) {
+      knockVx[i] = 0;
+      knockVy[i] = 0;
+      w.evx[i] = 0;
+      w.evy[i] = 0;
       continue;
     }
 

@@ -1,13 +1,12 @@
 import type { World } from "../../world/world";
-import { worldToScreen } from "../../math/iso";
+import { ISO_X, ISO_Y, worldToScreen } from "../../math/iso";
 import { getSweepShadowMap } from "../../../game/map/sweepShadow";
 import { getActiveMap as getActiveCompiledMap_ } from "../../../game/map/compile/kenneyMap";
 import { getTileHeightMapDebugOverlay } from "../../../game/systems/presentation/debug/tileHeightMapDebugOverlay";
 import { KENNEY_TILE_ANCHOR_Y, KENNEY_TILE_WORLD } from "../kenneyTiles";
 import { getTileSpriteById } from "../sprites/renderSprites";
-import { getEnemyAimDebugInfo, getEnemyAimWorld } from "../../../game/combat/aimPoints";
+import { getEnemyAimWorld } from "../../../game/combat/aimPoints";
 import { getEnemyWorld } from "../../../game/coords/worldViews";
-import { ENEMIES, type EnemyId } from "../../../game/content/enemies";
 import { getLootGoblinDebugSnapshot } from "../../../game/systems/neutral/lootGoblin";
 import {
   getApronDebugStats,
@@ -826,17 +825,22 @@ export function drawEnemyAimOverlay(ctx: DebugOverlayContext, show: boolean) {
   if (!show) return;
 
   const c = ctx.ctx;
-  const margin = 96;
-  const isNearScreen = (x: number, y: number) => (
-    x >= -margin
-    && x <= ctx.ww + margin
-    && y >= -margin
-    && y <= ctx.hh + margin
+  const collisionColor = "rgba(255, 190, 90, 0.95)";
+  const feetColor = "rgba(80, 235, 255, 0.95)";
+  const aimColor = "rgba(255, 110, 210, 0.95)";
+  const markerRadius = 5;
+  const labelLineHeight = 12;
+  const labelPadX = 5;
+  const labelPadY = 4;
+  const isOnScreen = (x: number, y: number) => (
+    x >= 0
+    && x <= ctx.ww
+    && y >= 0
+    && y <= ctx.hh
   );
 
   c.save();
   c.globalAlpha = 1;
-  c.lineWidth = 1.5;
   c.font = "10px monospace";
   c.textAlign = "left";
   c.textBaseline = "top";
@@ -844,56 +848,234 @@ export function drawEnemyAimOverlay(ctx: DebugOverlayContext, show: boolean) {
   for (let enemyIndex = 0; enemyIndex < ctx.w.eAlive.length; enemyIndex++) {
     if (!ctx.w.eAlive[enemyIndex]) continue;
 
-    const anchorWorld = getEnemyWorld(ctx.w, enemyIndex, KENNEY_TILE_WORLD);
+    // Keep each source resolution explicit so the overlay stays diagnostic even if values coincide today.
+    const collisionCenterWorld = getEnemyWorld(ctx.w, enemyIndex, KENNEY_TILE_WORLD);
+    const feetAnchorWorld = getEnemyWorld(ctx.w, enemyIndex, KENNEY_TILE_WORLD);
     const aimWorld = getEnemyAimWorld(ctx.w, enemyIndex);
-    const enemyZ = ctx.w.ezVisual?.[enemyIndex] ?? ctx.tileHAtWorld(anchorWorld.wx, anchorWorld.wy);
-    const anchorScreen = ctx.toScreenAtZ(anchorWorld.wx, anchorWorld.wy, enemyZ);
+    const enemyZ = ctx.w.ezVisual?.[enemyIndex] ?? ctx.tileHAtWorld(collisionCenterWorld.wx, collisionCenterWorld.wy);
+    const collisionCenterScreen = ctx.toScreenAtZ(collisionCenterWorld.wx, collisionCenterWorld.wy, enemyZ);
+    const feetAnchorScreen = ctx.toScreenAtZ(feetAnchorWorld.wx, feetAnchorWorld.wy, enemyZ);
     const aimScreen = ctx.toScreenAtZ(aimWorld.x, aimWorld.y, enemyZ);
-    if (!isNearScreen(anchorScreen.x, anchorScreen.y) && !isNearScreen(aimScreen.x, aimScreen.y)) continue;
+    const collisionRadius = Math.max(0, Number(ctx.w.eR?.[enemyIndex] ?? 0));
+    const collisionRadiusScreenX = collisionRadius * ISO_X;
+    const collisionRadiusScreenY = collisionRadius * ISO_Y;
+    if (
+      !isOnScreen(collisionCenterScreen.x, collisionCenterScreen.y)
+      && !isOnScreen(feetAnchorScreen.x, feetAnchorScreen.y)
+      && !isOnScreen(aimScreen.x, aimScreen.y)
+    ) {
+      continue;
+    }
 
-    c.strokeStyle = "rgba(255, 220, 120, 0.95)";
+    c.strokeStyle = "rgba(255, 255, 255, 0.2)";
+    c.lineWidth = 1;
     c.beginPath();
-    c.moveTo(anchorScreen.x, anchorScreen.y);
+    c.moveTo(collisionCenterScreen.x, collisionCenterScreen.y);
     c.lineTo(aimScreen.x, aimScreen.y);
     c.stroke();
 
-    c.fillStyle = "rgba(255, 110, 110, 0.95)";
+    c.strokeStyle = collisionColor;
+    c.lineWidth = 2;
     c.beginPath();
-    c.arc(anchorScreen.x, anchorScreen.y, 3, 0, Math.PI * 2);
-    c.fill();
+    c.ellipse(
+      collisionCenterScreen.x,
+      collisionCenterScreen.y,
+      collisionRadiusScreenX,
+      collisionRadiusScreenY,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    c.stroke();
 
-    c.fillStyle = "rgba(80, 235, 255, 0.95)";
+    c.fillStyle = collisionColor;
+    c.strokeStyle = "rgba(0, 0, 0, 0.75)";
+    c.lineWidth = 1.25;
     c.beginPath();
-    c.arc(aimScreen.x, aimScreen.y, 3, 0, Math.PI * 2);
+    c.arc(collisionCenterScreen.x, collisionCenterScreen.y, 4, 0, Math.PI * 2);
     c.fill();
+    c.stroke();
 
-    const enemyType = ctx.w.eType[enemyIndex] as EnemyId;
-    const enemyName = ENEMIES[enemyType]?.name ?? `Enemy ${enemyType}`;
-    const info = getEnemyAimDebugInfo(ctx.w, enemyIndex);
-    const line1 = `${enemyName} t:${enemyType} skin:${info.skin ?? "unknown"}`;
-    const line2 = `screen=(${info.effectiveScreenOffset.x},${info.effectiveScreenOffset.y}) base=(${info.baseScreenOffset.x},${info.baseScreenOffset.y}) skin=(${info.skinScreenOffset.x},${info.skinScreenOffset.y})`;
-    const line3 = `worldD=(${info.effectiveWorldDelta.dx.toFixed(1)},${info.effectiveWorldDelta.dy.toFixed(1)}) h*scale=${info.spriteFrameHeightPx}*${info.spriteScale.toFixed(2)}=${info.spriteHeightWorld.toFixed(1)}`;
-    const lines = [line1, line2, line3];
-    const lineHeight = 12;
-    const padX = 5;
-    const padY = 4;
+    c.strokeStyle = feetColor;
+    c.lineWidth = 2;
+    c.beginPath();
+    c.moveTo(feetAnchorScreen.x - markerRadius, feetAnchorScreen.y);
+    c.lineTo(feetAnchorScreen.x + markerRadius, feetAnchorScreen.y);
+    c.moveTo(feetAnchorScreen.x, feetAnchorScreen.y - markerRadius);
+    c.lineTo(feetAnchorScreen.x, feetAnchorScreen.y + markerRadius);
+    c.stroke();
+
+    c.fillStyle = aimColor;
+    c.strokeStyle = "rgba(0, 0, 0, 0.75)";
+    c.lineWidth = 1.25;
+    c.beginPath();
+    c.moveTo(aimScreen.x, aimScreen.y - markerRadius);
+    c.lineTo(aimScreen.x + markerRadius, aimScreen.y);
+    c.lineTo(aimScreen.x, aimScreen.y + markerRadius);
+    c.lineTo(aimScreen.x - markerRadius, aimScreen.y);
+    c.closePath();
+    c.fill();
+    c.stroke();
+
+    const labelLines = [
+      { text: "collision center", color: collisionColor },
+      { text: "feet anchor", color: feetColor },
+      { text: "aiming point", color: aimColor },
+    ];
     let boxWidth = 0;
-    for (let i = 0; i < lines.length; i++) {
-      boxWidth = Math.max(boxWidth, c.measureText(lines[i]).width);
+    for (let i = 0; i < labelLines.length; i++) {
+      boxWidth = Math.max(boxWidth, c.measureText(labelLines[i].text).width);
     }
-    const boxHeight = padY * 2 + lines.length * lineHeight;
-    const rawX = aimScreen.x + 10;
-    const rawY = aimScreen.y - boxHeight - 8;
-    const boxX = Math.min(Math.max(6, rawX), Math.max(6, ctx.ww - boxWidth - padX * 2 - 6));
+    const boxHeight = labelPadY * 2 + labelLines.length * labelLineHeight;
+    const rawX = Math.max(
+      collisionCenterScreen.x + collisionRadiusScreenX,
+      feetAnchorScreen.x,
+      aimScreen.x,
+    ) + 10;
+    const rawY = Math.min(
+      collisionCenterScreen.y - collisionRadiusScreenY,
+      feetAnchorScreen.y,
+      aimScreen.y,
+    ) - 4;
+    const boxX = Math.min(Math.max(6, rawX), Math.max(6, ctx.ww - boxWidth - labelPadX * 2 - 6));
     const boxY = Math.min(Math.max(6, rawY), Math.max(6, ctx.hh - boxHeight - 6));
 
     c.fillStyle = "rgba(0, 0, 0, 0.72)";
-    c.fillRect(boxX, boxY, boxWidth + padX * 2, boxHeight);
-    c.strokeStyle = "rgba(220, 245, 255, 0.28)";
-    c.strokeRect(boxX + 0.5, boxY + 0.5, boxWidth + padX * 2 - 1, boxHeight - 1);
-    c.fillStyle = "rgba(220, 245, 255, 0.95)";
-    for (let i = 0; i < lines.length; i++) {
-      c.fillText(lines[i], boxX + padX, boxY + padY + i * lineHeight);
+    c.fillRect(boxX, boxY, boxWidth + labelPadX * 2, boxHeight);
+    c.strokeStyle = "rgba(220, 245, 255, 0.18)";
+    c.lineWidth = 1;
+    c.strokeRect(boxX + 0.5, boxY + 0.5, boxWidth + labelPadX * 2 - 1, boxHeight - 1);
+    for (let i = 0; i < labelLines.length; i++) {
+      c.fillStyle = labelLines[i].color;
+      c.fillText(labelLines[i].text, boxX + labelPadX, boxY + labelPadY + i * labelLineHeight);
+    }
+  }
+
+  c.restore();
+}
+
+export function drawEnemyAimOverlayForVisibleEnemies(
+  ctx: DebugOverlayContext,
+  show: boolean,
+  isTileInRenderRadius: (tx: number, ty: number) => boolean,
+): void {
+  if (!show) return;
+
+  const c = ctx.ctx;
+  const collisionColor = "rgba(255, 190, 90, 0.95)";
+  const feetColor = "rgba(80, 235, 255, 0.95)";
+  const aimColor = "rgba(255, 110, 210, 0.95)";
+  const markerRadius = 5;
+  const labelLineHeight = 12;
+  const labelPadX = 5;
+  const labelPadY = 4;
+
+  c.save();
+  c.globalAlpha = 1;
+  c.font = "10px monospace";
+  c.textAlign = "left";
+  c.textBaseline = "top";
+
+  for (let enemyIndex = 0; enemyIndex < ctx.w.eAlive.length; enemyIndex++) {
+    if (!ctx.w.eAlive[enemyIndex]) continue;
+
+    // Keep each source resolution explicit so the overlay stays diagnostic even if values coincide today.
+    const collisionCenterWorld = getEnemyWorld(ctx.w, enemyIndex, KENNEY_TILE_WORLD);
+    const feetAnchorWorld = getEnemyWorld(ctx.w, enemyIndex, KENNEY_TILE_WORLD);
+    const aimWorld = getEnemyAimWorld(ctx.w, enemyIndex);
+    const enemyTx = Math.floor(collisionCenterWorld.wx / ctx.T);
+    const enemyTy = Math.floor(collisionCenterWorld.wy / ctx.T);
+    if (!isTileInRenderRadius(enemyTx, enemyTy)) continue;
+
+    const enemyZ = ctx.w.ezVisual?.[enemyIndex] ?? ctx.tileHAtWorld(collisionCenterWorld.wx, collisionCenterWorld.wy);
+    const collisionCenterScreen = ctx.toScreenAtZ(collisionCenterWorld.wx, collisionCenterWorld.wy, enemyZ);
+    const feetAnchorScreen = ctx.toScreenAtZ(feetAnchorWorld.wx, feetAnchorWorld.wy, enemyZ);
+    const aimScreen = ctx.toScreenAtZ(aimWorld.x, aimWorld.y, enemyZ);
+    const collisionRadius = Math.max(0, Number(ctx.w.eR?.[enemyIndex] ?? 0));
+    const collisionRadiusScreenX = collisionRadius * ISO_X;
+    const collisionRadiusScreenY = collisionRadius * ISO_Y;
+
+    c.strokeStyle = "rgba(255, 255, 255, 0.2)";
+    c.lineWidth = 1;
+    c.beginPath();
+    c.moveTo(collisionCenterScreen.x, collisionCenterScreen.y);
+    c.lineTo(aimScreen.x, aimScreen.y);
+    c.stroke();
+
+    c.strokeStyle = collisionColor;
+    c.lineWidth = 2;
+    c.beginPath();
+    c.ellipse(
+      collisionCenterScreen.x,
+      collisionCenterScreen.y,
+      collisionRadiusScreenX,
+      collisionRadiusScreenY,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    c.stroke();
+
+    c.fillStyle = collisionColor;
+    c.strokeStyle = "rgba(0, 0, 0, 0.75)";
+    c.lineWidth = 1.25;
+    c.beginPath();
+    c.arc(collisionCenterScreen.x, collisionCenterScreen.y, 4, 0, Math.PI * 2);
+    c.fill();
+    c.stroke();
+
+    c.strokeStyle = feetColor;
+    c.lineWidth = 2;
+    c.beginPath();
+    c.moveTo(feetAnchorScreen.x - markerRadius, feetAnchorScreen.y);
+    c.lineTo(feetAnchorScreen.x + markerRadius, feetAnchorScreen.y);
+    c.moveTo(feetAnchorScreen.x, feetAnchorScreen.y - markerRadius);
+    c.lineTo(feetAnchorScreen.x, feetAnchorScreen.y + markerRadius);
+    c.stroke();
+
+    c.fillStyle = aimColor;
+    c.strokeStyle = "rgba(0, 0, 0, 0.75)";
+    c.lineWidth = 1.25;
+    c.beginPath();
+    c.moveTo(aimScreen.x, aimScreen.y - markerRadius);
+    c.lineTo(aimScreen.x + markerRadius, aimScreen.y);
+    c.lineTo(aimScreen.x, aimScreen.y + markerRadius);
+    c.lineTo(aimScreen.x - markerRadius, aimScreen.y);
+    c.closePath();
+    c.fill();
+    c.stroke();
+
+    const labelLines = [
+      { text: "collision center", color: collisionColor },
+      { text: "feet anchor", color: feetColor },
+      { text: "aiming point", color: aimColor },
+    ];
+    let boxWidth = 0;
+    for (let i = 0; i < labelLines.length; i++) {
+      boxWidth = Math.max(boxWidth, c.measureText(labelLines[i].text).width);
+    }
+    const boxHeight = labelPadY * 2 + labelLines.length * labelLineHeight;
+    const rawX = Math.max(
+      collisionCenterScreen.x + collisionRadiusScreenX,
+      feetAnchorScreen.x,
+      aimScreen.x,
+    ) + 10;
+    const rawY = Math.min(
+      collisionCenterScreen.y - collisionRadiusScreenY,
+      feetAnchorScreen.y,
+      aimScreen.y,
+    ) - 4;
+    const boxX = Math.min(Math.max(6, rawX), Math.max(6, ctx.ww - boxWidth - labelPadX * 2 - 6));
+    const boxY = Math.min(Math.max(6, rawY), Math.max(6, ctx.hh - boxHeight - 6));
+
+    c.fillStyle = "rgba(0, 0, 0, 0.72)";
+    c.fillRect(boxX, boxY, boxWidth + labelPadX * 2, boxHeight);
+    c.strokeStyle = "rgba(220, 245, 255, 0.18)";
+    c.lineWidth = 1;
+    c.strokeRect(boxX + 0.5, boxY + 0.5, boxWidth + labelPadX * 2 - 1, boxHeight - 1);
+    for (let i = 0; i < labelLines.length; i++) {
+      c.fillStyle = labelLines[i].color;
+      c.fillText(labelLines[i].text, boxX + labelPadX, boxY + labelPadY + i * labelLineHeight);
     }
   }
 

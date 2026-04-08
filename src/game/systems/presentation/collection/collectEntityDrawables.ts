@@ -1,6 +1,6 @@
 import type { CollectionContext } from "../contracts/collectionContext";
 import { enqueueSliceCommand } from "../frame/renderFrameBuilder";
-import { getBossDefinitionForEntity, isBossEntity } from "../../../bosses/bossRuntime";
+import { getBossDefinitionForEntity, getBossEncounterForEntity, isBossEntity } from "../../../bosses/bossRuntime";
 import { getBossSpriteFrame } from "../../../../engine/render/sprites/bossSprites";
 import {
   countRenderDynamicAtlasBypass,
@@ -15,6 +15,7 @@ import {
   getProjectilePresentationDrawScale,
   resolveProjectileTravelVisualSpriteId,
 } from "../../../content/projectilePresentationRegistry";
+import { resolveEnemyVisualScale } from "../../enemies/enemyRuntime";
 
 type RenderKey = any;
 type Dir8 = any;
@@ -68,6 +69,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
     ELEV_PX,
     worldDeltaToScreen,
     getSpriteById,
+    VFX_CLIPS,
     playerSpritesReady,
     getPlayerSpriteFrame,
     PLAYER_R,
@@ -156,6 +158,100 @@ export function collectEntityDrawables(input: CollectionContext): void {
       sw: atlasFrame?.sw ?? Number(fallbackSw ?? (image as { width?: number }).width ?? 0),
       sh: atlasFrame?.sh ?? Number(fallbackSh ?? (image as { height?: number }).height ?? 0),
     };
+  };
+
+  const collectBossBeamDrawables = (enemyIndex: number, zAbs: number): void => {
+    const encounterId = w.bossRuntime?.enemyIndexToEncounterId?.[enemyIndex];
+    if (typeof encounterId !== "string") return;
+    const encounter = (w.bossRuntime?.encounters ?? []).find((entry: any) => entry.id === encounterId) ?? null;
+    const cast = encounter?.activeCast ?? null;
+    const beam = cast?.beam ?? null;
+    if (!cast || !beam) return;
+    if (cast.phase !== "ACTIVE" && cast.phase !== "RESOLVE") return;
+
+    const clip = VFX_CLIPS[cast.phase === "ACTIVE" ? beam.loopClipId : beam.endingClipId];
+    if (!clip?.spriteIds?.length) return;
+    const rawFrame = Math.floor((cast.phaseElapsedSec ?? 0) * clip.fps);
+    const frameIndex = clip.loop
+      ? rawFrame % clip.spriteIds.length
+      : Math.min(clip.spriteIds.length - 1, rawFrame);
+    const spriteId = clip.spriteIds[frameIndex];
+    const sprite = spriteId ? getSpriteById(spriteId) : null;
+    if (!sprite?.ready || !sprite.img || sprite.img.width <= 0 || sprite.img.height <= 0) return;
+
+    const atlas = resolveDynamicAtlasImage(sprite.img, sprite.img.width, sprite.img.height);
+    const screenStart = toScreenAtZ(beam.startWorldX, beam.startWorldY, zAbs + 2.6);
+    const screenEnd = toScreenAtZ(beam.endWorldX, beam.endWorldY, zAbs + 2.1);
+    const screenDx = screenEnd.x - screenStart.x;
+    const screenDy = screenEnd.y - screenStart.y;
+    const totalScreenLen = Math.hypot(screenDx, screenDy);
+    if (!(totalScreenLen > 1)) return;
+
+    const angle = Math.atan2(screenDy, screenDx);
+    const drawHeightScaled = sprite.img.height * Math.max(0.1, beam.visualScale);
+    const emitBeamQuad = (
+      stableOffset: number,
+      worldX: number,
+      worldY: number,
+      screenX: number,
+      screenY: number,
+      drawWidth: number,
+      alpha: number,
+    ): void => {
+      const feet = getEntityFeetPos(worldX, worldY, zAbs);
+      const renderKey: RenderKey = {
+        slice: feet.slice,
+        within: feet.within,
+        baseZ: zAbs,
+        feetSortY: feet.screenY,
+        kindOrder: KindOrder.VFX,
+        stableId: 128000 + enemyIndex * 64 + stableOffset,
+      };
+      enqueueSliceCommand(frameBuilder, imageSpriteKey(renderKey), {
+        semanticFamily: "worldSprite",
+        finalForm: "quad",
+        payload: {
+          image: atlas.image,
+          sx: atlas.sx,
+          sy: atlas.sy,
+          sw: atlas.sw,
+          sh: atlas.sh,
+          dx: screenX - drawWidth * 0.5,
+          dy: screenY - drawHeightScaled * 0.5,
+          dw: drawWidth,
+          dh: drawHeightScaled,
+          rotationRad: angle,
+          alpha,
+          blendMode: "additive",
+          enemyIndex,
+        },
+      });
+    };
+
+    const emitOriginAnchoredBeamQuad = (
+      stableOffset: number,
+      worldX: number,
+      worldY: number,
+      originScreenX: number,
+      originScreenY: number,
+      drawWidth: number,
+      alpha: number,
+    ): void => {
+      const centerScreenX = originScreenX + Math.cos(angle) * drawWidth * 0.5;
+      const centerScreenY = originScreenY + Math.sin(angle) * drawWidth * 0.5;
+      emitBeamQuad(stableOffset, worldX, worldY, centerScreenX, centerScreenY, drawWidth, alpha);
+    };
+
+    if (cast.phase === "RESOLVE") {
+      const drawWidth = sprite.img.width * Math.max(0.1, beam.visualScale);
+      emitBeamQuad(0, beam.endWorldX, beam.endWorldY, screenEnd.x, screenEnd.y, drawWidth, 1);
+      return;
+    }
+
+    const drawWidth = Math.max(sprite.img.width * Math.max(0.1, beam.visualScale), totalScreenLen + drawHeightScaled * 0.35);
+    const midWorldX = beam.startWorldX + (beam.endWorldX - beam.startWorldX) * 0.5;
+    const midWorldY = beam.startWorldY + (beam.endWorldY - beam.startWorldY) * 0.5;
+    emitOriginAnchoredBeamQuad(0, midWorldX, midWorldY, screenStart.x, screenStart.y, drawWidth, 0.92);
   };
 
   // Collect PICKUPS into slices
@@ -255,13 +351,15 @@ export function collectEntityDrawables(input: CollectionContext): void {
       const faceDx = w.eFaceX?.[i] ?? 0;
       const faceDy = w.eFaceY?.[i] ?? -1;
       const moving = Math.hypot(w.evx?.[i] ?? 0, w.evy?.[i] ?? 0) > 1e-4;
+      const visualScale = resolveEnemyVisualScale(w, i);
       const frame = bossDef
         ? getBossSpriteFrame({
             bossId: bossDef.id,
-            time: w.time ?? 0,
+            time: w.timeSec ?? w.time ?? 0,
             faceDx,
             faceDy,
             moving,
+            requestedAnimation: getBossEncounterForEntity(w, i)?.requestedAnimation ?? null,
           })
         : getEnemySpriteFrame({
             type: w.eType[i],
@@ -269,6 +367,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
             faceDx,
             faceDy,
             moving,
+            scaleMultiplier: visualScale,
           });
       if (frame) {
         const atlas = resolveDynamicAtlasImage(frame.img, frame.sw, frame.sh);
@@ -296,6 +395,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
             enemyIndex: i,
           },
         });
+        collectBossBeamDrawables(i, zAbs);
         continue;
       }
 
@@ -309,6 +409,7 @@ export function collectEntityDrawables(input: CollectionContext): void {
           isBoss,
         },
       });
+      collectBossBeamDrawables(i, zAbs);
       countRenderDynamicAtlasBypass();
     }
   }

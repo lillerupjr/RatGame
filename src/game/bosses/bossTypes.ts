@@ -6,6 +6,8 @@ import type {
   BossAbilityPhase,
   BossAnimationHookSet,
 } from "./bossAbilities";
+import type { BossArenaSequenceRuntimeState } from "./bossArenaTypes";
+import type { AnimatedSurfaceId } from "../systems/presentation/animatedSurfaces/animatedSurfaceTypes";
 import type {
   HostileBodyConfig,
   HostileDeathEffectConfig,
@@ -51,6 +53,52 @@ export type BossDefinition = {
 export type BossAnimationRequest = {
   clip: string;
   loop: boolean;
+  startedAtSec: number;
+  durationSec?: number;
+};
+
+export type BossBeamRuntimeState = {
+  lockedDirX: number;
+  lockedDirY: number;
+  startWorldX: number;
+  startWorldY: number;
+  endWorldX: number;
+  endWorldY: number;
+  maxRangePx: number;
+  widthPx: number;
+  visualScale: number;
+  damagePerTick: number;
+  tickEverySec: number;
+  tickLeftSec: number;
+  loopClipId: number;
+  endingClipId: number;
+};
+
+export type BossWorldEffect = {
+  id: string;
+  spriteId: string;
+  worldX: number;
+  worldY: number;
+  projectionMode?: "flat_quad" | "ground_iso";
+  tileTx?: number;
+  tileTy?: number;
+  zOffsetPx?: number;
+  baseScale: number;
+  alpha?: number;
+  pulse?: {
+    minScale: number;
+    maxScale: number;
+    cycleSec: number;
+  };
+};
+
+export type BossBurstSequenceRuntimeState = {
+  burstCount: number;
+  burstSpacingSec: number;
+  telegraphLeadSec: number;
+  burstsTelegraphed: number;
+  burstsExploded: number;
+  burstTiles: Array<{ tx: number; ty: number }>;
 };
 
 export type BossCastRuntimeState = {
@@ -66,6 +114,10 @@ export type BossCastRuntimeState = {
   targetTile: { tx: number; ty: number } | null;
   selectedTiles: Array<{ tx: number; ty: number }>;
   arenaEffectIds: string[];
+  arenaSequence: BossArenaSequenceRuntimeState | null;
+  worldEffects: BossWorldEffect[];
+  burstSequence: BossBurstSequenceRuntimeState | null;
+  beam: BossBeamRuntimeState | null;
   animationHooks: BossAnimationHookSet | null;
   animationRequest: BossAnimationRequest | null;
 };
@@ -78,6 +130,8 @@ export type ArenaTileEffect = {
   abilityId: BossAbilityId;
   tiles: Array<{ tx: number; ty: number }>;
   state: ArenaTileEffectState;
+  surfaceId?: AnimatedSurfaceId;
+  renderOverlay?: boolean;
   ttlSec: number;
   tickEverySec: number;
   tickLeftSec: number;
@@ -100,6 +154,7 @@ export type BossEncounterState = {
   cooldowns: Record<BossAbilityId, number>;
   globalCooldownLeftSec: number;
   lastAbilityId: BossAbilityId | null;
+  nextAbilityCursor: number;
 };
 
 export type BossRuntimeState = {

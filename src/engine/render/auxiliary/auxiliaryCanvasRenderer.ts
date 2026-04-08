@@ -12,9 +12,11 @@ import type { RenderCommand } from "../../../game/systems/presentation/contracts
 import { renderZoneObjectives } from "../../../game/render/renderZoneObjectives";
 import { resolveRenderZBand } from "../../../game/systems/presentation/worldRenderOrdering";
 import type { DrawTag } from "../../../game/systems/presentation/renderPerfCounters";
+import { resolveEnemyVisualScale } from "../../../game/systems/enemies/enemyRuntime";
 
 type Canvas2DRendererDeps = any;
 const EMPTY_RAMP_ROAD_TILES = new Set<string>();
+const LOGICAL_GROUND_SURFACE_ANCHOR_Y = 0.5;
 
 export class Canvas2DRenderer {
   constructor(
@@ -239,6 +241,12 @@ export class Canvas2DRenderer {
         });
         return;
       }
+      if (payload.groundVfx) {
+        this.withPerfDrawTag("lighting", () => {
+          this.drawGroundVfx(payload.groundVfx);
+        });
+        return;
+      }
     }
 
     if (command.semanticFamily === "screenOverlay") {
@@ -362,14 +370,14 @@ export class Canvas2DRenderer {
     const isRampRoadTile = data.family === "asphalt" && this.deps.rampRoadTiles.has(`${data.tx},${data.ty}`);
     if (isRampRoadTile) {
       const diamond = baseBaked;
-      this.drawRampDiamond(diamond, data.tx, data.ty, data.anchorY);
+      this.drawRampDiamond(diamond, data.tx, data.ty, LOGICAL_GROUND_SURFACE_ANCHOR_Y);
       return;
     }
     const quad = buildFlatTileDestinationQuad({
       tx: data.tx,
       ty: data.ty,
       zBase: data.zBase,
-      renderAnchorY: data.anchorY,
+      renderAnchorY: LOGICAL_GROUND_SURFACE_ANCHOR_Y,
       tileWorld: this.deps.T,
       elevPx: this.deps.ELEV_PX,
       isoHeight: this.deps.SIDEWALK_ISO_HEIGHT,
@@ -399,7 +407,7 @@ export class Canvas2DRenderer {
         tx: data.tx,
         ty: data.ty,
         zBase: data.zBase,
-        renderAnchorY: data.renderAnchorY,
+        renderAnchorY: LOGICAL_GROUND_SURFACE_ANCHOR_Y,
         tileWorld: this.deps.T,
         elevPx: this.deps.ELEV_PX,
         isoHeight: this.deps.SIDEWALK_ISO_HEIGHT,
@@ -573,33 +581,79 @@ export class Canvas2DRenderer {
     const tx = Number(tile.tx);
     const ty = Number(tile.ty);
     if (!Number.isFinite(tx) || !Number.isFinite(ty)) return;
-    const pN = this.deps.toScreen((tx + 0.5) * this.deps.T, ty * this.deps.T);
-    const pE = this.deps.toScreen((tx + 1) * this.deps.T, (ty + 0.5) * this.deps.T);
-    const pS = this.deps.toScreen((tx + 0.5) * this.deps.T, (ty + 1) * this.deps.T);
-    const pW = this.deps.toScreen(tx * this.deps.T, (ty + 0.5) * this.deps.T);
+    const centerWx = (tx + 0.5) * this.deps.T;
+    const centerWy = (ty + 0.5) * this.deps.T;
+    const zBase = this.deps.tileHAtWorld(centerWx, centerWy);
+    const quad = buildFlatTileDestinationQuad({
+      tx,
+      ty,
+      zBase,
+      renderAnchorY: this.deps.ANCHOR_Y,
+      tileWorld: this.deps.T,
+      elevPx: this.deps.ELEV_PX,
+      isoHeight: this.deps.SIDEWALK_ISO_HEIGHT,
+      camX: this.deps.camX,
+      camY: this.deps.camY,
+      worldToScreen: this.deps.worldToScreen,
+      snapPoint: snapPx,
+    });
     const ctx = this.frameContext.ctx;
     const isActive = effect.state === "ACTIVE";
     ctx.save();
     ctx.globalAlpha = isActive ? 0.36 : 0.2;
     ctx.fillStyle = isActive ? "#3fdc62" : "#98f7a4";
     ctx.beginPath();
-    ctx.moveTo(pN.x, pN.y);
-    ctx.lineTo(pE.x, pE.y);
-    ctx.lineTo(pS.x, pS.y);
-    ctx.lineTo(pW.x, pW.y);
+    ctx.moveTo(quad.nw.x, quad.nw.y);
+    ctx.lineTo(quad.ne.x, quad.ne.y);
+    ctx.lineTo(quad.se.x, quad.se.y);
+    ctx.lineTo(quad.sw.x, quad.sw.y);
     ctx.closePath();
     ctx.fill();
     ctx.globalAlpha = isActive ? 0.9 : 0.72;
     ctx.strokeStyle = isActive ? "#d8ffe1" : "#f1fff4";
     ctx.lineWidth = isActive ? 2 : 1.5;
     ctx.beginPath();
-    ctx.moveTo(pN.x, pN.y);
-    ctx.lineTo(pE.x, pE.y);
-    ctx.lineTo(pS.x, pS.y);
-    ctx.lineTo(pW.x, pW.y);
+    ctx.moveTo(quad.nw.x, quad.nw.y);
+    ctx.lineTo(quad.ne.x, quad.ne.y);
+    ctx.lineTo(quad.se.x, quad.se.y);
+    ctx.lineTo(quad.sw.x, quad.sw.y);
     ctx.closePath();
     ctx.stroke();
     ctx.restore();
+  }
+
+  private drawGroundVfx(data: any): void {
+    const image = data?.image as HTMLImageElement | undefined;
+    const tx = Number(data?.tx);
+    const ty = Number(data?.ty);
+    const zBase = Number(data?.zBase);
+    const scale = Number(data?.scale);
+    if (!image || !Number.isFinite(tx) || !Number.isFinite(ty)) return;
+    const baked = this.deps.getRuntimeIsoDecalCanvas(image, 0, Number.isFinite(scale) && scale > 0 ? scale : 1);
+    if (!baked) return;
+    const quad = buildFlatTileDestinationQuad({
+      tx,
+      ty,
+      zBase: Number.isFinite(zBase) ? zBase : 0,
+      renderAnchorY: this.deps.ANCHOR_Y,
+      tileWorld: this.deps.T,
+      elevPx: this.deps.ELEV_PX,
+      isoHeight: this.deps.SIDEWALK_ISO_HEIGHT,
+      camX: this.deps.camX,
+      camY: this.deps.camY,
+      worldToScreen: this.deps.worldToScreen,
+      snapPoint: snapPx,
+    });
+    drawTexturedQuad(
+      this.frameContext.ctx,
+      baked,
+      0,
+      0,
+      baked.width,
+      baked.height,
+      quad,
+      buildDiamondSourceQuad(baked.width, baked.height),
+    );
   }
 
   private drawVfxClip(data: any): void {
@@ -705,6 +759,7 @@ export class Canvas2DRenderer {
     const faceDy = this.deps.w.eFaceY?.[i] ?? -1;
     const moving = Math.hypot(this.deps.w.evx?.[i] ?? 0, this.deps.w.evy?.[i] ?? 0) > 1e-4;
     const isLootGoblin = this.deps.w.eType[i] === this.deps.EnemyId.LOOT_GOBLIN;
+    const visualScale = resolveEnemyVisualScale(this.deps.w, i);
 
     if (isLootGoblin) {
       const pulse =
@@ -739,6 +794,7 @@ export class Canvas2DRenderer {
       faceDx,
       faceDy,
       moving,
+      scaleMultiplier: visualScale,
     });
     if (frame) {
       const draw = this.resolveSpriteDraw(frame, (this.deps.w as any).eAnchorX01?.[i], (this.deps.w as any).eAnchorY01?.[i], feet.screenX, feet.screenY);

@@ -1728,6 +1728,8 @@ export function createGame(args: CreateGameArgs) {
     w.eHp = [];
     w.eHpMax = [];
     w.eR = [];
+    w.eSplitStage = [];
+    w.eVisualScale = [];
     w.eSpeed = [];
     w.eDamage = [];
     w.ezVisual = [];

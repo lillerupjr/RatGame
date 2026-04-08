@@ -48,7 +48,8 @@ export type BuildingSkin = {
 type BuildingSkinOverrides = Omit<Partial<BuildingSkin>, "id" | "roof" | "wallSouth" | "wallEast">;
 
 const DEFAULT_BUILDING_SKIN: BuildingSkinOverrides = {
-  isFlippable: false,
+  // Monolithic placement geometry is authored for both normal and flipped variants.
+  isFlippable: true,
   defaultFacing: "S",
   flipMode: "H",
 };

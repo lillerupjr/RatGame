@@ -240,6 +240,7 @@ const LOOT_GOBLIN_GLOW_PULSE_MIN = 0.95;
 const LOOT_GOBLIN_GLOW_PULSE_RANGE = 0.3;
 const LOOT_GOBLIN_GLOW_PULSE_SPEED = 2.8;
 const STRUCTURE_SHADOW_V1_MAX_DARKNESS = 0.38;
+const LOGICAL_GROUND_SURFACE_ANCHOR_Y = 0.5;
 let lastEffectiveWorldAtlasMode: EffectiveWorldAtlasMode | null = null;
 type ScreenPt = { x: number; y: number };
 
@@ -657,13 +658,13 @@ export async function renderSystem(
       if (!baseBaked) return;
       const isRampRoadTile = family === "asphalt" && rampRoadTiles.has(`${tx},${ty}`);
       if (isRampRoadTile) {
-        drawDiamondOnRampQuad(baseBaked, tx, ty, renderAnchorY);
+        drawDiamondOnRampQuad(baseBaked, tx, ty, LOGICAL_GROUND_SURFACE_ANCHOR_Y);
       } else {
         const quad = buildFlatTileDestinationQuad({
           tx,
           ty,
           zBase,
-          renderAnchorY,
+          renderAnchorY: LOGICAL_GROUND_SURFACE_ANCHOR_Y,
           tileWorld: T,
           elevPx: ELEV_PX,
           isoHeight: SIDEWALK_ISO_HEIGHT,
@@ -1594,7 +1595,8 @@ export async function renderSystem(
       const resolvedAnchorY = Number.isFinite(Number(rawRenderAnchorY))
         ? Number(rawRenderAnchorY)
         : ANCHOR_Y;
-      const anchorYOffset = SIDEWALK_ISO_HEIGHT * (resolvedAnchorY - 0.5);
+      const placementAnchorY = LOGICAL_GROUND_SURFACE_ANCHOR_Y;
+      const anchorYOffset = SIDEWALK_ISO_HEIGHT * (placementAnchorY - 0.5);
       const x0 = tx * T;
       const y0 = ty * T;
       const corners = [
@@ -1615,16 +1617,17 @@ export async function renderSystem(
           snappedY: snapPx(preSnapY),
         };
       });
-      return {
-        tx,
-        ty,
-        surfaceId: surface?.id ?? null,
-        rawRenderAnchorY,
-        resolvedAnchorY,
-        anchorYOffset,
-        corners,
+        return {
+          tx,
+          ty,
+          surfaceId: surface?.id ?? null,
+          rawRenderAnchorY,
+          resolvedAnchorY,
+          placementAnchorY,
+          anchorYOffset,
+          corners,
+        };
       };
-    };
 
     const projectToDevice = (point: { x: number; y: number }) => ({
       x: (point.x + viewport.camTx) * viewport.worldScaleDevice + viewport.safeOffsetDeviceX,
