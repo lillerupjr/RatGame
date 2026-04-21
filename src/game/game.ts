@@ -172,6 +172,7 @@ import {
   chooseProgressionReward,
   ensureProgressionRewardState,
 } from "./progression/rewards/progressionRewardFlow";
+import { equipStarterRingForCharacter } from "./progression/rings/characterStarterRingMap";
 import { getGold } from "./economy/gold";
 import { ensureRunProgressionState } from "./economy/xp";
 import { generateVendorProgressionOffers } from "./vendor/generateVendorProgressionOffers";
@@ -187,6 +188,7 @@ import { renderDialogChoices } from "../ui/dialog/renderDialogChoices";
 import { rewardRunEventProducerSystem } from "./systems/progression/rewardRunEventProducerSystem";
 import { rewardSchedulerSystem } from "./systems/progression/rewardSchedulerSystem";
 import { rewardPresenterSystem } from "./systems/progression/rewardPresenterSystem";
+import { processProgressionTriggeredEffects } from "./progression/effects/triggeredEffects";
 import { enemyBehaviorSystem } from "./systems/enemies/behavior";
 import { enemyActionSystem } from "./systems/enemies/actions";
 import {
@@ -1058,7 +1060,7 @@ export function createGame(args: CreateGameArgs) {
 
   const renderRewardMenuIfNeeded = (): void => {
     const progressionReward = ensureProgressionRewardState(world);
-    const key = `${world.state}|p:${progressionReward.active ? 1 : 0}|${progressionReward.family}|${progressionReward.source}|${progressionReward.options.join(",")}`;
+    const key = `${world.state}|p:${progressionReward.active ? 1 : 0}|${progressionReward.family}|${progressionReward.source}|${progressionReward.options.map((option) => option.id).join(",")}`;
     if (key === lastRewardRenderKey) return;
     progressionRewardMenu.render(progressionReward.active ? progressionReward : null);
     lastRewardRenderKey = key;
@@ -1075,14 +1077,13 @@ export function createGame(args: CreateGameArgs) {
       closeVendorShop(false);
       return;
     }
-    const key = `${getGold(world)}|${vendor.offers.map((o) => `${o.family}:${o.optionId}:${o.priceG}:${o.isSold ? 1 : 0}`).join(",")}`;
+    const key = `${getGold(world)}|${vendor.offers.map((offer) => `${offer.option.family}:${offer.option.id}:${offer.priceG}:${offer.isSold ? 1 : 0}`).join(",")}`;
     if (key === lastVendorRenderKey) return;
     vendorShopMenu.render({
       active: true,
       gold: getGold(world),
       offers: vendor.offers.map((offer) => ({
-        family: offer.family,
-        optionId: offer.optionId,
+        option: offer.option,
         priceG: offer.priceG,
         isSold: offer.isSold,
       })),
@@ -2460,6 +2461,7 @@ export function createGame(args: CreateGameArgs) {
 
     await resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
     (world as any).currentCharacterId = character.id;
+    equipStarterRingForCharacter(world, character.id);
 
     const delve = createDelveMap(world.runSeed);
     world.delveMap = delve;
@@ -2478,6 +2480,7 @@ export function createGame(args: CreateGameArgs) {
 
     await resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
     (world as any).currentCharacterId = character.id;
+    equipStarterRingForCharacter(world, character.id);
     world.delveMap = null;
     setMapDepth(world, 1);
     applyRunHeatScaling(world);
@@ -2507,6 +2510,7 @@ export function createGame(args: CreateGameArgs) {
 
     await resetRun(mapId, { skipMapSelection: true, seedOverride: preparedStart?.seed });
     (world as any).currentCharacterId = character.id;
+    equipStarterRingForCharacter(world, character.id);
     world.delveMap = null;
     setMapDepth(world, 1);
     applyRunHeatScaling(world);
@@ -3647,6 +3651,7 @@ export function createGame(args: CreateGameArgs) {
     rareZoneSpawnSystem(world);
     objectiveSystem(world);
     syncRareTripleObjectiveStateFromClears(world);
+    processProgressionTriggeredEffects(world);
     processMomentumEventQueue(world);
 
     if (world.playerHp <= 0 && !world.deathFx.active && world.runState !== "GAME_OVER") {

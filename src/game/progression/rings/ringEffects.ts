@@ -20,7 +20,7 @@ export function collectRingRuntimeEffects(state: RingProgressionState): RuntimeE
         ringDefId: def.id,
         slotId: instance.slotId,
       },
-      effect: def.effectParams,
+      effect: def.mainEffect,
       increasedEffectScalar: instance.increasedEffectScalar + slotScalar,
     });
 

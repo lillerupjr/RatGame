@@ -1,7 +1,7 @@
 import {
-  progressionRewardOptionView,
   type ProgressionRewardState,
 } from "../../game/progression/rewards/progressionRewardFlow";
+import { progressionRewardOptionView } from "../../game/progression/rewards/progressionOffers";
 import { rewardFamilyLabel } from "../../game/progression/rewards/rewardFamilies";
 import { createTapSafeActivator } from "../interaction/tapSafeActivate";
 
@@ -73,12 +73,12 @@ export function mountProgressionRewardMenu(args: {
     sub.textContent = `Pick 1 reward (${sourceLabel(currentState.source)})`;
     choices.innerHTML = "";
 
-    for (const optionId of currentState.options) {
-      const view = progressionRewardOptionView(currentState.family, optionId);
+    for (const option of currentState.options) {
+      const view = progressionRewardOptionView(option);
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "deckCardButton rarity-3";
-      btn.dataset.progressionRewardId = optionId;
+      btn.dataset.progressionRewardId = option.id;
 
       const top = document.createElement("div");
       top.className = "deckCardTopRow";
@@ -102,7 +102,7 @@ export function mountProgressionRewardMenu(args: {
       btn.appendChild(top);
       btn.appendChild(name);
       btn.appendChild(subtitle);
-      tapSafe.bindActivate(btn, () => args.onPick(optionId));
+      tapSafe.bindActivate(btn, () => args.onPick(option.id));
       choices.appendChild(btn);
     }
 

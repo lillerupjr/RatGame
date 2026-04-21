@@ -30,6 +30,7 @@ export const STAT_KEYS = {
   CHANCE_TO_POISON_ADD: "chanceToPoison.add",
 
   // Damage over time (phase 1)
+  DOT_DAMAGE_MORE: "dot.damage.more",
   DOT_POISON_DAMAGE_INCREASED: "dot.poisonDamage.increased",
   DOT_IGNITE_DAMAGE_INCREASED: "dot.igniteDamage.increased",
   DOT_DURATION_INCREASED: "dot.duration.increased",
@@ -45,6 +46,7 @@ export const STAT_KEYS = {
   GLOBAL_HIT_DAMAGE_INCREASED: "globalHitDamage.increased",
   GLOBAL_HIT_DAMAGE_MORE: "globalHitDamage.more",
   GLOBAL_HIT_DAMAGE_LESS: "globalHitDamage.less",
+  PHYSICAL_HIT_DAMAGE_MORE: "physicalHitDamage.more",
 
   GLOBAL_ATTACK_SPEED_ADD: "globalAttackSpeed.add",
   GLOBAL_ATTACK_SPEED_INCREASED: "globalAttackSpeed.increased",

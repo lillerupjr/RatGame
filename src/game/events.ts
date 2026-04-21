@@ -85,6 +85,11 @@ export type GameEvent =
     | {
     type: "ENEMY_KILLED";
     enemyIndex: number;
+    damage?: number;
+    dmgPhys?: number;
+    dmgFire?: number;
+    dmgChaos?: number;
+    isCrit?: boolean;
     x: number;
     y: number;
     spawnTriggerId?: string;

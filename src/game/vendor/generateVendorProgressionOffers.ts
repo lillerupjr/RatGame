@@ -1,45 +1,31 @@
-import { RING_DEFS_V1 } from "../progression/rings/ringContent";
-import type { ModifierTokenType } from "../progression/rings/ringTypes";
-import type { ProgressionRewardFamily } from "../progression/rewards/rewardFamilies";
+import { generateProgressionOffers } from "../progression/rewards/progressionOffers";
 import { getVendorOfferPriceG } from "./pricing";
 import type { VendorProgressionOffer } from "./vendorState";
 
-const TOKEN_OFFERS: ModifierTokenType[] = ["LEVEL_UP", "INCREASED_EFFECT_20"];
-
-function rngNext(world: any): number {
-  if (typeof world?.rng?.float === "function") return world.rng.float();
-  if (typeof world?.rng?.next === "function") return world.rng.next();
-  return Math.random();
-}
-
-function pickIndex(world: any, length: number): number {
-  if (length <= 1) return 0;
-  return Math.floor(Math.max(0, Math.min(0.999999999, rngNext(world))) * length);
-}
-
-function makeOffer(family: ProgressionRewardFamily, optionId: string, index: number): VendorProgressionOffer {
+function makeOffer(option: VendorProgressionOffer["option"], index: number): VendorProgressionOffer {
   return {
-    id: `vendor-offer-${family}-${optionId}-${index}`,
-    family,
-    optionId,
-    priceG: getVendorOfferPriceG(family),
+    id: `vendor-offer-${option.family}-${option.id}-${index}`,
+    option,
+    priceG: getVendorOfferPriceG(option.family),
     isSold: false,
   };
 }
 
 export function generateVendorProgressionOffers(world: any, count = 5): VendorProgressionOffer[] {
   const offers: VendorProgressionOffer[] = [];
-  const rings = [...RING_DEFS_V1];
+  const ringOptions = generateProgressionOffers(world, "RING", "SIDE_OBJECTIVE", count);
+  const tokenOptions = generateProgressionOffers(world, "RING_MODIFIER_TOKEN", "SIDE_OBJECTIVE", count);
+  const reservedTokenSlots = count >= 5 ? 2 : count >= 3 ? 1 : 0;
+  const ringTargetCount = Math.max(0, count - Math.min(reservedTokenSlots, tokenOptions.length));
 
-  while (offers.length < count && rings.length > 0) {
-    const idx = pickIndex(world, rings.length);
-    const [ring] = rings.splice(idx, 1);
-    offers.push(makeOffer("RING", ring.id, offers.length));
+  for (const option of ringOptions) {
+    if (offers.length >= ringTargetCount) break;
+    offers.push(makeOffer(option, offers.length));
   }
 
-  for (const token of TOKEN_OFFERS) {
+  for (const option of tokenOptions) {
     if (offers.length >= count) break;
-    offers.push(makeOffer("RING_MODIFIER_TOKEN", token, offers.length));
+    offers.push(makeOffer(option, offers.length));
   }
 
   return offers;

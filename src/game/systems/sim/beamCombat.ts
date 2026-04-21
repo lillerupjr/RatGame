@@ -169,6 +169,11 @@ export function tickBeamContactsOnce(w: World, dtTick: number): void {
     finalizeEnemyDeath(w, t.enemyIndex, {
       damageMeta,
       source: legacySource,
+      damage,
+      dmgPhys: finalPhys,
+      dmgFire: finalFire,
+      dmgChaos: finalChaos,
+      isCrit: false,
       x: t.wx,
       y: t.wy,
       awardMomentum: !isProcDamage(damageMeta),

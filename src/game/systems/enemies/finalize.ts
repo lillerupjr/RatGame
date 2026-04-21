@@ -175,6 +175,11 @@ export function finalizeEnemyDeath(
   options: {
     damageMeta: DamageMeta;
     source?: LegacyDamageSource;
+    damage?: number;
+    dmgPhys?: number;
+    dmgFire?: number;
+    dmgChaos?: number;
+    isCrit?: boolean;
     x?: number;
     y?: number;
     awardMomentum?: boolean;
@@ -239,6 +244,11 @@ export function finalizeEnemyDeath(
   emitEvent(w, {
     type: "ENEMY_KILLED",
     enemyIndex,
+    damage: options.damage,
+    dmgPhys: options.dmgPhys,
+    dmgFire: options.dmgFire,
+    dmgChaos: options.dmgChaos,
+    isCrit: options.isCrit,
     x: pos.x,
     y: pos.y,
     spawnTriggerId: w.eSpawnTriggerId[enemyIndex],

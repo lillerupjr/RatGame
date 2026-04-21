@@ -6,6 +6,7 @@ export default defineConfig({
     environment: "node",
     pool: "threads",
     include: ["src/**/*.test.ts", "src/**/*.spec.ts"],
+    setupFiles: ["./src/tests/setup/testEnvironment.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],

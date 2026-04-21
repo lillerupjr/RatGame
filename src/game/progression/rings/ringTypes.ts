@@ -1,26 +1,40 @@
 import type { EffectDef } from "../effects/effectTypes";
 
-export type RingFamilyId =
-  | "physical"
-  | "fire"
-  | "poison"
-  | "projectile"
-  | "crit"
-  | "defense";
+export const RING_FAMILY_IDS = [
+  "starter",
+  "generic",
+  "physical",
+  "dot",
+  "chaos",
+  "poison",
+  "projectile",
+  "ignite",
+  "crit",
+  "trigger",
+  "defense",
+  "utility",
+] as const;
 
-export type HandId = "LEFT" | "RIGHT";
+export type RingFamilyId = (typeof RING_FAMILY_IDS)[number];
+
+export const HAND_IDS = ["LEFT", "RIGHT"] as const;
+export type HandId = (typeof HAND_IDS)[number];
 export type FingerSlotId = `${HandId}:${number}`;
 
-export type ModifierTokenType = "LEVEL_UP" | "INCREASED_EFFECT_20";
-export type HandEffectType = "ADD_FINGER" | "EMPOWER_FINGER";
+export const MODIFIER_TOKEN_TYPES = ["LEVEL_UP", "INCREASED_EFFECT_20"] as const;
+export type ModifierTokenType = (typeof MODIFIER_TOKEN_TYPES)[number];
+
+export const HAND_EFFECT_TYPES = ["ADD_FINGER", "EMPOWER_FINGER"] as const;
+export type HandEffectType = (typeof HAND_EFFECT_TYPES)[number];
 
 export type RingDef = {
   id: string;
   name: string;
+  description: string;
+  tier: 1;
   familyId: RingFamilyId;
   tags: string[];
-  effectType: EffectDef["kind"];
-  effectParams: EffectDef;
+  mainEffect: EffectDef;
 };
 
 export type RingInstance = {

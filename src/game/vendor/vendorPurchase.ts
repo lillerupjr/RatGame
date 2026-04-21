@@ -1,7 +1,5 @@
 import { addGold, getGold } from "../economy/gold";
-import { recomputeDerivedStats } from "../stats/derivedStats";
-import { equipRing, grantModifierToken } from "../progression/rings/ringState";
-import type { ModifierTokenType } from "../progression/rings/ringTypes";
+import { applyProgressionRewardOption } from "../progression/rewards/progressionRewardFlow";
 
 export function tryPurchaseVendorOffer(world: any, index: number): boolean {
   const vendor = world.vendor;
@@ -12,12 +10,7 @@ export function tryPurchaseVendorOffer(world: any, index: number): boolean {
   if (getGold(world) < offer.priceG) return false;
 
   addGold(world, -offer.priceG);
-  if (offer.family === "RING") {
-    equipRing(world, offer.optionId);
-    recomputeDerivedStats(world);
-  } else if (offer.family === "RING_MODIFIER_TOKEN") {
-    grantModifierToken(world, offer.optionId as ModifierTokenType);
-  }
+  applyProgressionRewardOption(world, offer.option);
   offer.isSold = true;
   return true;
 }

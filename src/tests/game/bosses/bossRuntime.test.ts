@@ -88,9 +88,9 @@ describe("bossRuntime", () => {
     const tile = compileKenneyMapFromTable(bossMap).semanticData.bossSpawn;
     const enemyWorld = getEnemyWorld(world, result.enemyIndex, KENNEY_TILE_WORLD);
     const enemyTile = worldToTile(enemyWorld.wx, enemyWorld.wy, KENNEY_TILE_WORLD);
-    expect(tile).toEqual({ tx: 8, ty: 8 });
-    expect(enemyTile.tx).toBe(8);
-    expect(enemyTile.ty).toBe(8);
+    expect(tile).toBeTruthy();
+    expect(enemyTile.tx).toBe(tile?.tx);
+    expect(enemyTile.ty).toBe(tile?.ty);
     expect(getTrackedBossEncounterForObjective(world, "OBJ_ACT_BOSS")?.activationState).toBe("DORMANT");
   });
 

@@ -5,7 +5,7 @@ This folder is intentionally strict. If a document does not describe the current
 ## Top-level folders
 
 - `systems/` Canonical architecture references that must stay maintained and are safe to reference from agent instructions.
-- `contracts/active/` Implemented contracts that match the current repo behavior.
+- `contracts/implemented/` Implemented contracts that match the current repo behavior.
 - `contracts/draft/` Proposed, exploratory, or not-yet-authoritative contracts.
 - `integrations/` Live external setup and integration notes.
 - `design/` Product and content design material.
@@ -16,3 +16,8 @@ This folder is intentionally strict. If a document does not describe the current
 - Move stale or superseded proposals out of `active/` immediately.
 - Delete temporary handoff files instead of keeping them as hidden source-of-truth competitors.
 - Reference files in `systems/` from agent guidance, not drafts.
+
+## Current Canonical Progression Docs
+
+- `contracts/implemented/ring_v1_backend_contract.md`
+- `contracts/implemented/ring_v1_content_catalog.md`

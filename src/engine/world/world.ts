@@ -20,9 +20,13 @@ import type { FloorRewardBudget } from "../../game/rewards/floorRewardBudget";
 import type { RunEvent } from "../../game/rewards/runEvents";
 import type { RewardTicket } from "../../game/rewards/rewardTickets";
 import type { VendorState } from "../../game/vendor/vendorState";
-import { createInitialRingProgressionState } from "../../game/progression/rings/ringState";
+import {
+  createInitialRingProgressionState,
+  ensureRingProgressionState,
+} from "../../game/progression/rings/ringState";
 import type { RingProgressionState } from "../../game/progression/rings/ringTypes";
 import type { ProgressionRewardState } from "../../game/progression/rewards/progressionRewardFlow";
+import { assertProgressionContentValid } from "../../game/progression/rings/ringContent";
 import type { EnemyBrainState } from "../../game/systems/enemies/brain";
 import { createBossRuntimeState } from "../../game/bosses/bossRuntime";
 import type { BossRuntimeState, ArenaTileEffect } from "../../game/bosses/bossTypes";
@@ -599,6 +603,7 @@ function cloneStage(stage: StageDef): StageDef {
 
 /** Initialize a new World with seeded RNG and stage state. */
 export function createWorld(args: CreateWorldArgs): World {
+  assertProgressionContentValid();
   const rng = new RNG((args.seed ?? 1337) >>> 0);
 
   const stage = cloneStage(args.stage);
@@ -995,6 +1000,7 @@ export function createWorld(args: CreateWorldArgs): World {
     w.activeFloorH = sp.h | 0;
   }
 
+  ensureRingProgressionState(w);
   recomputeDerivedStats(w);
 
   return w;

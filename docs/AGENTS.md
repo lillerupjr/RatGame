@@ -240,6 +240,37 @@ Achievements
 
 ---
 
+## 10.1 Progression backbone (locked)
+
+The run progression model is ring-first.
+
+Canonical truths:
+- Rings, stored ring modifier tokens, and immediate hand effects are the only progression families
+- Reward tickets and vendor offers are progression-family only
+- Passive ring effects are applied through centralized progression runtime effects
+- There is no surviving relic path, card path, or separate level-up draft path in runtime or UI
+
+Rules
+- New progression behavior must be implemented under `src/game/progression/`
+- Rings own build identity; no parallel relic or draft reward system may be introduced
+- Reward generation and vendor offers must consume typed progression options, not string payload conventions
+- Hand structure changes are owned by ring progression state, not ad hoc stat modifiers
+- Triggered ring effects must execute through the centralized progression trigger dispatcher
+
+Achievements
+- [x] Ring/hand/token progression is the only runtime progression model
+- [x] Reward tickets and vendor offers are progression-family only
+- [x] Centralized progression runtime effects own passive ring stat application
+- [x] Centralized progression combat rules and trigger actions own non-passive ring behavior
+- [x] No relic/card reward runtime or UI path survives after the ring migration
+- [x] The first authored V1 ring catalog replaces the placeholder sample ring catalog
+- [x] Starter ring names, descriptions, and baseline behaviors are recovered from git history where available
+- [x] Character run start equips exactly one recovered starter ring into `LEFT:0`
+- [x] The first V1 content pass ships with empty family trees across all V1 ring families
+- [x] Every shipped V1 ring has runtime smoke coverage across inspection, stat, combat-rule, or trigger surfaces
+
+---
+
 ## 11. Editing rules
 
 If you change any of these, update all consumers together:

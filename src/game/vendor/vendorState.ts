@@ -1,9 +1,8 @@
-import type { ProgressionRewardFamily } from "../progression/rewards/rewardFamilies";
+import type { ProgressionRewardOption } from "../progression/rewards/progressionOffers";
 
 export type VendorProgressionOffer = {
   id: string;
-  family: ProgressionRewardFamily;
-  optionId: string;
+  option: ProgressionRewardOption;
   priceG: number;
   isSold: boolean;
 };

@@ -42,7 +42,7 @@ describe("progressionRewardFlow", () => {
     expect(state.active).toBe(true);
     expect(state.options).toHaveLength(3);
 
-    chooseProgressionReward(world, state.options[0]);
+    chooseProgressionReward(world, state.options[0].id);
     expect(state.active).toBe(false);
     expect(Object.keys(world.progression.ringsByInstanceId)).toHaveLength(1);
   });
@@ -53,7 +53,11 @@ describe("progressionRewardFlow", () => {
 
     const state = ensureProgressionRewardState(world);
     expect(state.options).toHaveLength(3);
-    chooseProgressionReward(world, "INCREASED_EFFECT_20");
+    const increasedEffectOption = state.options.find(
+      (option) => option.family === "RING_MODIFIER_TOKEN" && option.tokenType === "INCREASED_EFFECT_20",
+    );
+    expect(increasedEffectOption).toBeTruthy();
+    chooseProgressionReward(world, increasedEffectOption!.id);
 
     expect(world.progression.storedModifierTokens.INCREASED_EFFECT_20).toBe(1);
     expect(Object.keys(world.progression.ringsByInstanceId)).toHaveLength(0);
@@ -63,7 +67,12 @@ describe("progressionRewardFlow", () => {
     const world = stubWorld();
     beginProgressionReward(world, "HAND_EFFECT", "FLOOR_COMPLETION", 3);
 
-    chooseProgressionReward(world, "HAND:ADD_FINGER:LEFT");
+    const state = ensureProgressionRewardState(world);
+    const addFingerOption = state.options.find(
+      (option) => option.family === "HAND_EFFECT" && option.effectType === "ADD_FINGER" && option.handId === "LEFT",
+    );
+    expect(addFingerOption).toBeTruthy();
+    chooseProgressionReward(world, addFingerOption!.id);
     expect(world.progression.hands.LEFT.slots).toHaveLength(5);
   });
 });

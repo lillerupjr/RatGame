@@ -1,14 +1,14 @@
 import {
   progressionRewardOptionView,
-} from "../../game/progression/rewards/progressionRewardFlow";
-import { rewardFamilyLabel, type ProgressionRewardFamily } from "../../game/progression/rewards/rewardFamilies";
+  type ProgressionRewardOption,
+} from "../../game/progression/rewards/progressionOffers";
+import { rewardFamilyLabel } from "../../game/progression/rewards/rewardFamilies";
 import { createTapSafeActivator } from "../interaction/tapSafeActivate";
 
 const OVERLAY_ENTRY_SHIELD_MS = 300;
 
 export type VendorShopOffer = {
-  family: ProgressionRewardFamily;
-  optionId: string;
+  option: ProgressionRewardOption;
   priceG: number;
   isSold: boolean;
 };
@@ -99,7 +99,7 @@ export function mountVendorShopMenu(args: {
 
     for (let i = 0; i < state.offers.length; i++) {
       const offer = state.offers[i];
-      const view = progressionRewardOptionView(offer.family, offer.optionId);
+      const view = progressionRewardOptionView(offer.option);
       const canAfford = state.gold >= offer.priceG;
       const disabled = offer.isSold || !canAfford;
       const stateClass = offer.isSold ? "sold" : !canAfford ? "locked" : "available";
@@ -114,7 +114,7 @@ export function mountVendorShopMenu(args: {
       topRow.className = "deckCardTopRow";
       const family = document.createElement("span");
       family.className = "deckCardTier";
-      family.textContent = rewardFamilyLabel(offer.family);
+      family.textContent = rewardFamilyLabel(offer.option.family);
       const price = document.createElement("span");
       price.className = "deckCardRarity";
       price.textContent = offer.isSold ? "Sold" : `${offer.priceG}g`;

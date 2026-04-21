@@ -180,6 +180,11 @@ export function tickZonesOnce(w: World, dtTick: number): void {
       finalizeEnemyDeath(w, e, {
         damageMeta: enemyDamageMeta,
         source: "OTHER",
+        damage: enemyTickDamage,
+        dmgPhys: w.zKind[z] === ZONE_KIND.FIRE ? 0 : enemyTickDamage,
+        dmgFire: w.zKind[z] === ZONE_KIND.FIRE ? enemyTickDamage : 0,
+        dmgChaos: 0,
+        isCrit: false,
         x: ew.wx,
         y: ew.wy,
       });

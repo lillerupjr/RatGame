@@ -50,6 +50,26 @@ export function makeWeaponDotMeta(
   };
 }
 
+export function makePlayerTriggerHitMeta(
+  triggerId: string,
+  options?: {
+    category?: DamageCategory;
+    instigatorId?: string;
+    isProcDamage?: boolean;
+  },
+): DamageMeta {
+  return {
+    category: options?.category ?? "HIT",
+    cause: {
+      kind: "TRIGGER",
+      mode: "TRIGGERED",
+      triggerId,
+    },
+    instigator: playerInstigator(options?.instigatorId),
+    isProcDamage: options?.isProcDamage,
+  };
+}
+
 export function makeEnemyHitMeta(
   enemyTypeId: string,
   attackId: string,

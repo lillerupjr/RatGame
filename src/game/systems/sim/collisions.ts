@@ -20,6 +20,7 @@ import { resolveCritRoll01 } from "../../combat_mods/runtime/critDamagePacket";
 import { isLootGoblinEnemy } from "../neutral/lootGoblin";
 import { resolveDotStats } from "../../combat_mods/stats/combatStatsResolver";
 import { collectWorldStatMods } from "../../progression/effects/worldEffects";
+import { collectWorldCombatRules } from "../../progression/effects/combatRules";
 import { applyPlayerIncomingDamage } from "./playerArmor";
 import { isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
 import { breakMomentumOnLifeDamage } from "./momentum";
@@ -168,7 +169,8 @@ function spawnDamageTextFromEvent(w: World, ev: EnemyHitEvent | PlayerHitEvent):
 export function collisionsSystem(w: World, dt: number) {
   const debugSettings = getUserSettings().debug;
   const godMode = !!debugSettings.godMode;
-  const critRolls = 1;
+  const combatRules = collectWorldCombatRules(w);
+  const critRolls = combatRules.critRollsTwice ? 2 : 1;
   const allDamageContributesToPoison = false;
   const dotStats = resolveDotStats({ statMods: collectWorldStatMods(w) });
   const poisonDamageMult = Math.max(0, dotStats.poisonDamageMult);
@@ -377,22 +379,50 @@ export function collisionsSystem(w: World, dt: number) {
       const bLeft = w.prBouncesLeft[p];
       const contaminatedPierceHit =
         bLeft < 0
-        && false
+        && combatRules.piercePoisonedTargets
         && enemyPoisoned
         && !projectileIsProc;
       const isPiercingHit = bLeft < 0 && (w.prPierce[p] > 0 || contaminatedPierceHit);
-      const dmg = finalPhysDealt + finalFireDealt + finalChaosDealt;
+
+      if (isPiercingHit && enemyPoisoned && combatRules.pierceHitsMoreDamageToPoisoned > 0) {
+        const damageMult = 1 + combatRules.pierceHitsMoreDamageToPoisoned;
+        finalPhysDealt *= damageMult;
+        finalFireDealt *= damageMult;
+        finalChaosDealt *= damageMult;
+      }
+
+      if (!projectileIsProc && enemyBurning && combatRules.moreDamageToBurningTargets > 0) {
+        const damageMult = 1 + combatRules.moreDamageToBurningTargets;
+        finalPhysDealt *= damageMult;
+        finalFireDealt *= damageMult;
+        finalChaosDealt *= damageMult;
+      }
+
+      if (!projectileIsProc && combatRules.pointBlankDamageFalloff) {
+        const playerNow = getPlayerWorld(w, KENNEY_TILE_WORLD);
+        const distToPlayer = Math.hypot(enemyAim.x - playerNow.wx, enemyAim.y - playerNow.wy);
+        const nearFrac = Math.max(0, 1 - Math.min(1, distToPlayer / Math.max(1, combatRules.pointBlankDamageFalloff.maxRangePx)));
+        const damageMult = 1 + nearFrac * combatRules.pointBlankDamageFalloff.maxMore;
+        finalPhysDealt *= damageMult;
+        finalFireDealt *= damageMult;
+        finalChaosDealt *= damageMult;
+      }
+
+      const ailmentChances =
+        projectileIsProc && !combatRules.triggeredHitsCanApplyDots
+          ? { bleed: 0, ignite: 0, poison: 0 }
+          : {
+              bleed: w.prChanceBleed[p] ?? 0,
+              ignite: w.prChanceIgnite[p] ?? 0,
+              poison: w.prChancePoison[p] ?? 0,
+            };
 
       if (!w.eAilments) w.eAilments = [];
       const ailmentState = ensureEnemyAilmentsAt(w.eAilments, e);
       applyAilmentsFromHit(
         ailmentState,
         { physical: finalPhysDealt, fire: finalFireDealt, chaos: finalChaosDealt },
-        {
-          bleed: w.prChanceBleed[p] ?? 0,
-          ignite: w.prChanceIgnite[p] ?? 0,
-          poison: w.prChancePoison[p] ?? 0,
-        },
+        ailmentChances,
         {
           bleed: w.rng.range(0, 1),
           ignite: w.rng.range(0, 1),
@@ -404,8 +434,11 @@ export function collisionsSystem(w: World, dt: number) {
           poisonDurationMult,
           igniteDurationMult,
           allDamageContributesToPoison,
+          additionalPoisonStackChance: combatRules.poisonExtraStackChance,
+          additionalPoisonStackRoll: w.rng.range(0, 1),
         }
       );
+      const dmg = finalPhysDealt + finalFireDealt + finalChaosDealt;
       
       w.eHp[e] -= dmg;
       if (!(w as any).metrics) (w as any).metrics = {};
@@ -579,6 +612,22 @@ export function collisionsSystem(w: World, dt: number) {
         shouldDespawnProjectile = true;
       }
 
+      if (!projectileIsProc && combatRules.pointBlankCloseHitKnockback) {
+        const enemyFeet = getEnemyWorld(w, e, KENNEY_TILE_WORLD);
+        const playerNow = getPlayerWorld(w, KENNEY_TILE_WORLD);
+        const distToPlayerFeet = Math.hypot(enemyFeet.wx - playerNow.wx, enemyFeet.wy - playerNow.wy);
+        if (distToPlayerFeet <= combatRules.pointBlankCloseHitKnockback.rangePx) {
+          const len = Math.max(0.0001, distToPlayerFeet);
+          const ux = (enemyFeet.wx - playerNow.wx) / len;
+          const uy = (enemyFeet.wy - playerNow.wy) / len;
+          const closeFrac = 1 - Math.min(1, distToPlayerFeet / combatRules.pointBlankCloseHitKnockback.rangePx);
+          const push =
+            combatRules.pointBlankCloseHitKnockback.basePushPx
+            + combatRules.pointBlankCloseHitKnockback.bonusPushPx * closeFrac;
+          setEnemyAnchorFromWorld(e, enemyFeet.wx + ux * push, enemyFeet.wy + uy * push);
+        }
+      }
+
 
       // Death handling
       if (w.eHp[e] <= 0) {
@@ -588,6 +637,11 @@ export function collisionsSystem(w: World, dt: number) {
         finalizeEnemyDeath(w, e, {
           damageMeta: projectileDamageMeta,
           source,
+          damage: dmg,
+          dmgPhys: finalPhysDealt,
+          dmgFire: finalFireDealt,
+          dmgChaos: finalChaosDealt,
+          isCrit,
           x: enemyAim.x,
           y: enemyAim.y,
           awardMomentum: !projectileIsProc,

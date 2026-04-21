@@ -188,6 +188,11 @@ export function tickAilmentsOnce(w: any, dtTick: number): void {
       finalizeEnemyDeath(w as World, e, {
         damageMeta: ailmentMeta,
         source: "OTHER",
+        damage: comp.damage,
+        dmgPhys: comp.dmgPhys,
+        dmgFire: comp.dmgFire,
+        dmgChaos: comp.dmgChaos,
+        isCrit: false,
         x: pos.x,
         y: pos.y,
         recordPoisonedOnDeath: false,

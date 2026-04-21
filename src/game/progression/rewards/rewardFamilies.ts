@@ -6,12 +6,6 @@ export type ProgressionRewardSource =
   | "SIDE_OBJECTIVE"
   | "LEVEL_UP";
 
-export type ProgressionRewardOffer = {
-  family: ProgressionRewardFamily;
-  source: ProgressionRewardSource;
-  optionIds: string[];
-};
-
 export function rewardFamilyLabel(family: ProgressionRewardFamily): string {
   switch (family) {
     case "RING":

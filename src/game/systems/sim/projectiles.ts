@@ -191,6 +191,11 @@ export function projectilesSystem(w: World, dt: number) {
                                     finalizeEnemyDeath(w, sparkTarget, {
                                         damageMeta: projectileDamageMeta,
                                         source: "OTHER",
+                                        damage: sparkDmg,
+                                        dmgPhys: w.prDmgPhys[i],
+                                        dmgFire: w.prDmgFire[i],
+                                        dmgChaos: w.prDmgChaos[i],
+                                        isCrit: false,
                                         x: ew2.wx,
                                         y: ew2.wy,
                                     });

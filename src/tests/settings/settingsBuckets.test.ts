@@ -41,6 +41,10 @@ describe("settings bucket defaults", () => {
       sunElevationOverrideEnabled,
       sunElevationOverrideDeg,
       perfOverlayMode,
+      heightmapShadowResolutionDivisor,
+      heightmapShadowStepSize,
+      heightmapShadowMaxSteps,
+      heightmapShadowIntensity,
       ...booleanFlags
     } = debug;
     for (const [key, value] of Object.entries(booleanFlags)) {
@@ -57,6 +61,10 @@ describe("settings bucket defaults", () => {
     expect(sunElevationOverrideEnabled).toBe(false);
     expect(sunElevationOverrideDeg).toBe(45);
     expect(perfOverlayMode).toBe("off");
+    expect(heightmapShadowResolutionDivisor).toBe(2);
+    expect(heightmapShadowStepSize).toBe(2);
+    expect(heightmapShadowMaxSteps).toBe(128);
+    expect(heightmapShadowIntensity).toBe(0.45);
   });
 
   it("sanitizes debug shadow sun hour to daylight range with hourly steps", () => {

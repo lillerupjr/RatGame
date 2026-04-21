@@ -12,6 +12,7 @@ import { getPlayerAimWorld } from "../../combat/aimPoints";
 import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { makeWeaponDotMeta, makeWeaponHitMeta } from "../../combat/damageMeta";
+import { applyChaosHitConversion, collectWorldCombatRules } from "../../progression/effects/combatRules";
 
 /** Handle weapon cooldowns, targeting, and firing events. */
 export function combatSystem(w: World, dt: number) {
@@ -38,6 +39,7 @@ export function combatSystem(w: World, dt: number) {
     statMods: collectWorldStatMods(w),
   });
   const debug = getUserSettings().debug;
+  const combatRules = collectWorldCombatRules(w);
   const debugDamageMult = Math.max(0, debug.dmgMult || 1);
   const debugFireRateMult = Math.max(0.001, debug.fireRateMult || 1);
   const derivedDamageMult = Math.max(0, w.dmgMult ?? 1);
@@ -46,9 +48,14 @@ export function combatSystem(w: World, dt: number) {
   const fireRangePx = Math.max(0, resolved.rangePx || 0);
   const cooldown = 1 / shotsPerSecond;
   const burstShotIntervalSec = Math.max(0, selectedWeapon.projectile.burstShotIntervalSec ?? 0);
-  const dmgPhys = resolved.baseDamage.physical * derivedDamageMult * debugDamageMult;
-  const dmgFire = resolved.baseDamage.fire * derivedDamageMult * debugDamageMult;
-  const dmgChaos = resolved.baseDamage.chaos * derivedDamageMult * debugDamageMult;
+  const convertedHitDamage = applyChaosHitConversion({
+    physical: resolved.baseDamage.physical * derivedDamageMult * debugDamageMult,
+    fire: resolved.baseDamage.fire * derivedDamageMult * debugDamageMult,
+    chaos: resolved.baseDamage.chaos * derivedDamageMult * debugDamageMult,
+  }, combatRules);
+  const dmgPhys = convertedHitDamage.physical;
+  const dmgFire = convertedHitDamage.fire;
+  const dmgChaos = convertedHitDamage.chaos;
   const totalDamage = dmgPhys + dmgFire + dmgChaos;
   const finalCritChance = Math.min(1, resolved.critChance);
   const projectileKind = selectedWeapon.projectile.kind ?? PRJ_KIND.PISTOL;
@@ -70,8 +77,15 @@ export function combatSystem(w: World, dt: number) {
   if (!Number.isFinite(runtime.primaryBurstAimX)) runtime.primaryBurstAimX = 1;
   if (!Number.isFinite(runtime.primaryBurstAimY)) runtime.primaryBurstAimY = 0;
   if (!Number.isFinite(runtime.primaryBurstTailCooldown)) runtime.primaryBurstTailCooldown = cooldown;
+  if (!Number.isFinite(runtime.ringEveryNthShotCritCounter)) runtime.ringEveryNthShotCritCounter = 0;
 
   const nextShotCritChance = (): number => {
+    if (combatRules.everyNthShotCrits && combatRules.everyNthShotCrits > 0) {
+      runtime.ringEveryNthShotCritCounter = (runtime.ringEveryNthShotCritCounter ?? 0) + 1;
+      if ((runtime.ringEveryNthShotCritCounter % combatRules.everyNthShotCrits) === 0) {
+        return 1;
+      }
+    }
     return finalCritChance;
   };
 

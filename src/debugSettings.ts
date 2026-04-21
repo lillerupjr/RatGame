@@ -23,12 +23,19 @@ export type PaletteRemapWeightPercent = (typeof PALETTE_REMAP_WEIGHT_OPTIONS)[nu
 
 export type BooleanDebugSettingKey = Exclude<
   keyof DebugSettings,
+  | "renderBackend"
   | "waterFlowRate"
   | "dmgMult"
   | "fireRateMult"
   | "paletteSWeightPercent"
   | "paletteDarknessPercent"
   | "shadowSunTimeHour"
+  | "shadowV1DebugGeometryMode"
+  | "shadowCasterMode"
+  | "shadowHybridDiagnosticMode"
+  | "shadowDebugMode"
+  | "shadowV5DebugView"
+  | "shadowV5TransformDebugMode"
   | "shadowSunCycleMode"
   | "shadowSunDayCycleSpeedMultiplier"
   | "shadowSunStepsPerDay"
@@ -36,6 +43,10 @@ export type BooleanDebugSettingKey = Exclude<
   | "shadowSunAzimuthDeg"
   | "sunElevationOverrideDeg"
   | "perfOverlayMode"
+  | "heightmapShadowResolutionDivisor"
+  | "heightmapShadowStepSize"
+  | "heightmapShadowMaxSteps"
+  | "heightmapShadowIntensity"
   | "neutralBirdAI"
   | "objectives"
 >;

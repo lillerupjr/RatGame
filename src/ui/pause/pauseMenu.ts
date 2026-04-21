@@ -4,7 +4,7 @@ import { resolveCombatStarterWeaponId } from "../../game/combat_mods/content/wea
 import { getCombatStarterWeaponById } from "../../game/combat_mods/content/weapons/starterWeapons";
 import { getGold } from "../../game/economy/gold";
 import { registry } from "../../game/content/registry";
-import { getRingDefById } from "../../game/progression/rings/ringContent";
+import { inspectWorldRingProgression } from "../../game/progression/rings/ringInspection";
 import { DEFAULT_SETTINGS, getUserSettings, updateUserSettings } from "../../userSettings";
 import { mountSettingsPanel, type SettingsPanelController } from "../settings/settingsPanel";
 import {
@@ -492,8 +492,8 @@ export function mountPauseMenu(args: {
       return;
     }
 
-    const ringState = world.progression;
-    const rings = Object.values(ringState?.ringsByInstanceId ?? {});
+    const inspection = inspectWorldRingProgression(world);
+    const rings = [...inspection.rings].sort((a, b) => a.instance.slotId.localeCompare(b.instance.slotId));
 
     if (rings.length === 0) {
       ownedList.textContent = "No rings equipped yet.";
@@ -505,27 +505,26 @@ export function mountPauseMenu(args: {
       return;
     }
 
-    if (!selectedRingInstanceId || !rings.some((ring) => ring.instanceId === selectedRingInstanceId)) {
-      selectedRingInstanceId = rings[0].instanceId;
+    if (!selectedRingInstanceId || !rings.some((ring) => ring.instance.instanceId === selectedRingInstanceId)) {
+      selectedRingInstanceId = rings[0].instance.instanceId;
     }
 
     for (const ring of rings) {
-      const def = getRingDefById(ring.defId);
       const row = document.createElement("button");
       row.type = "button";
       row.className = "pauseOwnedRingRow";
-      row.classList.toggle("active", ring.instanceId === selectedRingInstanceId);
+      row.classList.toggle("active", ring.instance.instanceId === selectedRingInstanceId);
 
       const left = document.createElement("div");
       left.className = "pauseOwnedRingMain";
 
       const name = document.createElement("div");
       name.className = "pauseOwnedRingName";
-      name.textContent = def?.name ?? ring.defId;
+      name.textContent = ring.ringName;
 
       const effect = document.createElement("div");
       effect.className = "pauseOwnedRingSummary";
-      effect.textContent = `${def?.familyId ?? "unknown"} family`;
+      effect.textContent = `${ring.familyId} family`;
 
       left.appendChild(name);
       left.appendChild(effect);
@@ -535,33 +534,33 @@ export function mountPauseMenu(args: {
 
       const tier = document.createElement("span");
       tier.className = "pauseOwnedTier";
-      tier.textContent = ring.slotId;
+      tier.textContent = ring.instance.slotId;
       meta.appendChild(tier);
 
       const stack = document.createElement("span");
       stack.className = "pauseOwnedStack";
-      stack.textContent = `${ring.unlockedTalentNodeIds.length} nodes`;
+      stack.textContent = `${ring.unlockedNodes.length} nodes`;
       meta.appendChild(stack);
 
       row.appendChild(left);
       row.appendChild(meta);
 
       row.addEventListener("click", () => {
-        selectedRingInstanceId = ring.instanceId;
+        selectedRingInstanceId = ring.instance.instanceId;
         renderOwnedRings(latestWorld);
       });
 
       ownedList.appendChild(row);
     }
 
-    const selected = rings.find((ring) => ring.instanceId === selectedRingInstanceId) ?? rings[0];
-    const selectedDef = getRingDefById(selected.defId);
+    const selected = rings.find((ring) => ring.instance.instanceId === selectedRingInstanceId) ?? rings[0];
+    const selectedMainEffect = selected.runtimeEffects.find((effect) => effect.source.kind === "RING_MAIN")?.effect ?? null;
 
     const detailTitle = document.createElement("h4");
-    detailTitle.textContent = selectedDef?.name ?? selected.defId;
+    detailTitle.textContent = selected.ringName;
     const detailMeta = document.createElement("div");
     detailMeta.className = "pauseMeta";
-    detailMeta.textContent = `Instance: ${selected.instanceId} · Slot ${selected.slotId} · ${selected.allocatedPassivePoints} passive points`;
+    detailMeta.textContent = `Instance: ${selected.instance.instanceId} · Slot ${selected.instance.slotId} · ${selected.instance.allocatedPassivePoints} passive points · Scalar ${pct(selected.mainEffectScalar)}`;
 
     ownedDetail.appendChild(detailTitle);
     ownedDetail.appendChild(detailMeta);
@@ -574,10 +573,10 @@ export function mountPauseMenu(args: {
     const modList = document.createElement("ul");
     modList.className = "pauseOwnedModList";
 
-    const mods = selectedDef?.effectParams.kind === "STAT_MODIFIERS" ? selectedDef.effectParams.mods : [];
+    const mods = selectedMainEffect?.kind === "STAT_MODIFIERS" ? selectedMainEffect.mods : [];
     if (mods.length === 0) {
       const li = document.createElement("li");
-      li.textContent = selectedDef?.effectType ?? "No stat modifiers";
+      li.textContent = selectedMainEffect?.kind ?? "No stat modifiers";
       modList.appendChild(li);
     } else {
       for (const mod of mods) {
@@ -585,6 +584,12 @@ export function mountPauseMenu(args: {
         li.textContent = describeStatMod(mod);
         modList.appendChild(li);
       }
+    }
+
+    if ((selected.slot?.empowermentScalar ?? 0) > 0) {
+      const li = document.createElement("li");
+      li.textContent = `+${Math.round((selected.slot?.empowermentScalar ?? 0) * 100)}% finger empowerment`;
+      modList.appendChild(li);
     }
 
     ownedDetail.appendChild(modList);

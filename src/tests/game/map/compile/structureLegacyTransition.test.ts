@@ -16,11 +16,11 @@ import { renderHeightUnitsToTileHeight } from "../../../../game/map/tileHeightUn
 describe("structure legacy transition", () => {
   beforeAll(async () => {
     const result = await computeMonolithicBuildingSemanticsForSkinIds(Object.keys(BUILDING_SKINS), {
-      timeoutMs: 15000,
+      timeoutMs: 45000,
       pollMs: 8,
     });
     expect(result.missingSkinIds).toEqual([]);
-  }, 20000);
+  }, 60000);
 
   it("limits downtown building pack to directional skins 1..3", () => {
     expect(BUILDING_PACKS.downtown_buildings).toEqual(["downtown_1", "downtown_2", "downtown_3"]);

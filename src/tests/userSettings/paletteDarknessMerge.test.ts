@@ -3,7 +3,7 @@ import { getUserSettings, updateUserSettings } from "../../userSettings";
 import { getFirstPaletteInGroup, getPalettesByGroup } from "../../engine/render/palette/palettes";
 
 describe("userSettings palette darkness merge", () => {
-  it("drops legacy paletteVWeightPercent", () => {
+  it("ignores unknown debug patch keys", () => {
     updateUserSettings({
       debug: {
         paletteDarknessPercent: 0,
@@ -12,7 +12,7 @@ describe("userSettings palette darkness merge", () => {
 
     updateUserSettings({
       debug: {
-        paletteVWeightPercent: 100,
+        __unknownDebugKey: 100,
       } as any,
     });
 
