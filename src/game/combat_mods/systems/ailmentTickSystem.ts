@@ -5,8 +5,8 @@ import type { World } from "../../../engine/world/world";
 import { emitEvent } from "../../../engine/world/world";
 import { getEnemyWorld } from "../../coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
-import { getCardById } from "../content/cards/cardPool";
 import { resolveDotStats } from "../stats/combatStatsResolver";
+import { collectWorldStatMods } from "../../progression/effects/worldEffects";
 import { makeAilmentDotMeta } from "../../combat/damageMeta";
 import { DOT_TICK_INTERVAL_SEC } from "../../combat/dot/dotConstants";
 import { finalizeEnemyDeath } from "../../systems/enemies/finalize";
@@ -42,17 +42,9 @@ export function tickAilmentsOnce(w: any, dtTick: number): void {
   const n = w.eHp?.length ?? 0;
   if (!w.eAlive || !w.eHp) return;
 
-  const cardIds = [...(w.cards ?? []), ...(w.combatCardIds ?? [])];
-  const cards = cardIds
-    .map((id: string) => getCardById(id))
-    .filter((card): card is NonNullable<typeof card> => Boolean(card));
-  const dotStats = resolveDotStats({ cards });
-  const relicIds: string[] = Array.isArray(w.relics) ? w.relics : [];
-  // Dot-only scaling stays in the DoT pipeline; global hit multipliers must not be applied here.
-  const relicDotMoreMult =
-    (relicIds.includes("PASS_DOT_MORE_50") ? 1.5 : 1) *
-    (relicIds.includes("SPEC_DOT_SPECIALIST") ? 3.0 : 1);
+  const dotStats = resolveDotStats({ statMods: collectWorldStatMods(w) });
   const tickRateMult = Math.max(0.0001, dotStats.tickRateMult);
+  const dotMoreMult = 1;
 
   for (let e = 0; e < n; e++) {
     if (!w.eAlive[e]) continue;
@@ -141,13 +133,13 @@ export function tickAilmentsOnce(w: any, dtTick: number): void {
     const damageReduction = w.eDamageReduction?.[e] ?? 0;
 
     const poisonFinal = applyDotMitigation(
-      poisonRaw * dotStats.poisonDamageMult * relicDotMoreMult,
+      poisonRaw * dotStats.poisonDamageMult * dotMoreMult,
       resistChaos,
       damageReduction,
     );
-    const bleedFinal = applyDotMitigation(bleedRaw * relicDotMoreMult, resistPhysical, damageReduction);
+    const bleedFinal = applyDotMitigation(bleedRaw * dotMoreMult, resistPhysical, damageReduction);
     const igniteFinal = applyDotMitigation(
-      igniteRawDamage * dotStats.igniteDamageMult * relicDotMoreMult,
+      igniteRawDamage * dotStats.igniteDamageMult * dotMoreMult,
       resistFire,
       damageReduction,
     );

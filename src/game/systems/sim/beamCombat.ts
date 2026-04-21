@@ -2,9 +2,8 @@ import { emitEvent, type World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
 import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
-import { relicTriggerMomentumDamageMultiplier } from "./momentum";
-import { getCardById } from "../../combat_mods/content/cards/cardPool";
 import { resolveDotStats } from "../../combat_mods/stats/combatStatsResolver";
+import { collectWorldStatMods } from "../../progression/effects/worldEffects";
 import type { DamageMeta } from "../../events";
 import {
   inferLegacySourceFromMeta,
@@ -124,16 +123,8 @@ export function tickBeamContactsOnce(w: World, dtTick: number): void {
   );
   if (targets.length === 0) return;
 
-  const cardIds = [...(w.cards ?? []), ...(w.combatCardIds ?? [])];
-  const cards = cardIds
-    .map((id) => getCardById(id))
-    .filter((card): card is NonNullable<typeof card> => Boolean(card));
-  const dotStats = resolveDotStats({ cards });
-  const relicIds: string[] = Array.isArray(w.relics) ? w.relics : [];
-  const relicDotMoreMult =
-    (relicIds.includes("PASS_DOT_MORE_50") ? 1.5 : 1) *
-    (relicIds.includes("SPEC_DOT_SPECIALIST") ? 3.0 : 1);
-  const dotScale = Math.max(0, relicDotMoreMult * Math.max(0.0001, dotStats.tickRateMult));
+  const dotStats = resolveDotStats({ statMods: collectWorldStatMods(w) });
+  const dotScale = Math.max(0, Math.max(0.0001, dotStats.tickRateMult));
 
   for (let i = 0; i < targets.length; i++) {
     const t = targets[i];
@@ -142,14 +133,6 @@ export function tickBeamContactsOnce(w: World, dtTick: number): void {
     let finalPhys = w.playerBeamDpsPhys * dtTick * dotScale;
     let finalFire = w.playerBeamDpsFire * dtTick * dotScale;
     let finalChaos = w.playerBeamDpsChaos * dtTick * dotScale;
-    if (isProcDamage(damageMeta)) {
-      const procMult = relicTriggerMomentumDamageMultiplier(w);
-      if (procMult !== 1) {
-        finalPhys *= procMult;
-        finalFire *= procMult;
-        finalChaos *= procMult;
-      }
-    }
     const damage = finalPhys + finalFire + finalChaos;
     if (damage <= 0) continue;
 

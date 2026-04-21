@@ -6,7 +6,7 @@ import { rewardSchedulerSystem } from "../../../game/systems/progression/rewardS
 import { createRewardPipelineWorld, dismissActiveRewardUi, getActiveTicket } from "./rewardPipeline.testUtils";
 
 describe("durable reward pipeline queueing", () => {
-  test("queues multiple same-frame rewards and presents one at a time", () => {
+  test("stores level-up token and queues the floor progression reward", () => {
     const world = createRewardPipelineWorld(41, "ZONE_TRIAL");
 
     world.runEvents.push(
@@ -17,26 +17,20 @@ describe("durable reward pipeline queueing", () => {
 
     rewardSchedulerSystem(world);
 
-    expect(world.rewardTickets).toHaveLength(2);
+    expect(world.progression.storedModifierTokens.LEVEL_UP).toBe(1);
+    expect(world.rewardTickets).toHaveLength(1);
     expect(world.rewardTickets[0].status).toBe("PENDING");
-    expect(world.rewardTickets[1].status).toBe("PENDING");
 
     expect(rewardPresenterSystem(world)).toBe(true);
     expect(world.state).toBe("REWARD");
 
     const first = getActiveTicket(world);
     expect(first?.createdSeq).toBe(1);
-    expect(first?.kind).toBe("CARD_PICK");
-    expect(world.rewardTickets[1].status).toBe("PENDING");
+    expect(first?.family).toBe("RING");
+    expect(world.progressionReward.active).toBe(true);
+    expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
 
     dismissActiveRewardUi(world);
     resolveActiveRewardTicket(world);
-    world.state = "RUN";
-
-    expect(rewardPresenterSystem(world)).toBe(true);
-    const second = getActiveTicket(world);
-    expect(second?.createdSeq).toBe(2);
-    expect(second?.kind).toBe("RELIC_PICK");
-    expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
   });
 });

@@ -1,5 +1,10 @@
 import type { StageId } from "../content/stages";
 import { getReachableNodes, type DelveMap, type DelveNode, type DelveNodeType } from "./delveMap";
+import {
+  defaultRewardFamilyForDepth,
+  rewardFamilyLabel,
+  type ProgressionRewardFamily,
+} from "../progression/rewards/rewardFamilies";
 import type { FloorArchetype } from "./floorArchetype";
 import type { ObjectiveId } from "./objectivePlan";
 
@@ -25,6 +30,8 @@ export type RouteNodeVM = {
   title: string;
   subtitle: string;
   iconText: string;
+  rewardFamily: ProgressionRewardFamily;
+  rewardFamilyLabel: string;
   combatTagText?: string;
   kindLabel: string;
   deterministicData?: {
@@ -38,6 +45,7 @@ export type RouteNodeVM = {
 export type DeterministicRouteOption = {
   archetype: FloorArchetype;
   objectiveId?: ObjectiveId;
+  rewardFamily?: ProgressionRewardFamily;
   title?: string;
   subtitle?: string;
 };
@@ -187,6 +195,7 @@ export function buildDelveRouteMapVM(
     .map((node) => {
       const current = node.id === delveMap.currentNodeId;
       const visualType = visualTypeForNodeType(node.nodeType);
+      const rewardFamily = defaultRewardFamilyForDepth(node.rowIndex + 1);
       return {
         id: node.id,
         mode: "DELVE" as const,
@@ -203,6 +212,8 @@ export function buildDelveRouteMapVM(
         title: titleForDelveNode(node, showCombatSubtypes),
         subtitle: subtitleForDelveNode(node),
         iconText: iconForVisualType(visualType),
+        rewardFamily,
+        rewardFamilyLabel: rewardFamilyLabel(rewardFamily),
         combatTagText: node.nodeType === "COMBAT" && showCombatSubtypes ? combatSubtypeLabel(node.combatSubtype) : undefined,
         kindLabel: kindLabelForDelveNode(node),
       };
@@ -265,6 +276,7 @@ export function buildDeterministicRouteMapVM(
   const laneCount = Math.max(1, options.length);
   const nodes: RouteNodeVM[] = options.map((choice, index) => {
     const visualType = visualTypeForArchetype(choice.archetype);
+    const rewardFamily = choice.rewardFamily ?? defaultRewardFamilyForDepth(depth);
     return {
       id: `det-${floorIndex}-${depth}-${choice.archetype}-${choice.objectiveId ?? "AUTO"}-${index}`,
       mode: "DETERMINISTIC",
@@ -281,6 +293,8 @@ export function buildDeterministicRouteMapVM(
       title: choice.title ?? labelForArchetype(choice.archetype, choice.objectiveId),
       subtitle: choice.subtitle ?? `Deterministic · Depth ${depth}`,
       iconText: iconForVisualType(visualType),
+      rewardFamily,
+      rewardFamilyLabel: rewardFamilyLabel(rewardFamily),
       kindLabel: labelForArchetype(choice.archetype, choice.objectiveId),
       deterministicData: {
         floorIndex,

@@ -26,7 +26,7 @@ describe("applyAilmentsFromHit", () => {
     expect(st.poison.length).toBe(0);
   });
 
-  test("PASS_DAMAGE_TO_POISON_ALL mode lets non-chaos hit damage feed poison", () => {
+  test("all-damage poison mode lets non-chaos hit damage feed poison", () => {
     const st = createEnemyAilmentsState();
     applyAilmentsFromHit(
       st,
@@ -39,7 +39,7 @@ describe("applyAilmentsFromHit", () => {
     expect(st.poison[0]?.dps ?? 0).toBeGreaterThan(0);
   });
 
-  test("PASS_DAMAGE_TO_POISON_ALL still requires poison chance to apply poison", () => {
+  test("all-damage poison mode still requires poison chance to apply poison", () => {
     const st = createEnemyAilmentsState();
     applyAilmentsFromHit(
       st,

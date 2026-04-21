@@ -38,7 +38,6 @@ import {
   monolithicStructureGeometryCacheStore,
 } from "./systems/presentation/presentationSubsystemStores";
 import { zonesSystem } from "./systems/sim/zones";
-import { relicExplodeOnKillSystem } from "./systems/sim/relicExplodeOnKill";
 import { buildActBossPlan } from "./bosses/actBossPlan";
 import { bossRegistry } from "./bosses/bossRegistry";
 import { bossEncounterSystem } from "./bosses/bossSystem";
@@ -53,8 +52,6 @@ import { audioSystem } from "./systems/presentation/audio";
 import { preloadSfx } from "../engine/audio/sfx";
 import { roomChallengeSystem } from "./systems/progression/roomChallenge";
 import { triggerSystem } from "./systems/progression/triggerSystem";
-import { relicTriggerSystem } from "./systems/progression/relicTriggerSystem";
-import { relicRetriggerSystem } from "./systems/progression/relicRetriggerSystem";
 import { vfxSystem } from "./systems/vfxSystem";
 import {
   isFloorEndCountdownDone,
@@ -105,6 +102,10 @@ import {
 } from "./map/delveMap";
 import type { FloorArchetype } from "./map/floorArchetype";
 import type { FloorIntent } from "./map/floorIntent";
+import {
+  defaultRewardFamilyForDepth,
+  type ProgressionRewardFamily,
+} from "./progression/rewards/rewardFamilies";
 import {
   buildDelveRouteMapVM,
   buildDeterministicRouteMapVM,
@@ -167,27 +168,22 @@ import { resolveActivePaletteId, resolveActivePaletteVariantKey } from "./render
 import { collectFloorDependencies } from "./loading/dependencyCollector";
 import { formatPaletteHudDebugText, shouldShowPaletteHudDebugOverlay } from "./render/renderDebugPolicy";
 import { applySfxSettingsToWorld } from "./audio/audioSettings";
-import { chooseCardReward, ensureCardRewardState } from "./combat_mods/rewards/cardRewardFlow";
-import { chooseRelicReward, ensureRelicRewardState } from "./combat_mods/rewards/relicRewardFlow";
+import {
+  chooseProgressionReward,
+  ensureProgressionRewardState,
+} from "./progression/rewards/progressionRewardFlow";
 import { getGold } from "./economy/gold";
 import { ensureRunProgressionState } from "./economy/xp";
-import { getCardById } from "./combat_mods/content/cards/cardPool";
-import { generateVendorCards } from "./vendor/generateVendorCards";
-import { generateVendorRelicOffers } from "./vendor/generateVendorRelics";
-import { getVendorCardPriceG, VENDOR_RELIC_PRICE_G } from "./vendor/pricing";
+import { generateVendorProgressionOffers } from "./vendor/generateVendorProgressionOffers";
 import { createVendorState } from "./vendor/vendorState";
-import { tryPurchaseVendorCard, tryPurchaseVendorRelic } from "./vendor/vendorPurchase";
-import { mountCardRewardMenu } from "../ui/rewards/cardRewardMenu";
-import { mountRelicRewardMenu } from "../ui/rewards/relicRewardMenu";
+import { tryPurchaseVendorOffer } from "./vendor/vendorPurchase";
+import { mountProgressionRewardMenu } from "../ui/rewards/progressionRewardMenu";
 import { mountVendorShopMenu } from "../ui/vendor/vendorShopMenu";
 import { createFloorRewardBudget, type ObjectiveMode } from "./rewards/floorRewardBudget";
 import { resolveActiveRewardTicket } from "./rewards/rewardTickets";
 import { recomputeDerivedStats } from "./stats/derivedStats";
-import { hasAnyRelicWithTag, MOMENTUM_RELIC_TAG } from "./content/relics";
 import { createMobileControls } from "../ui/mobile/mobileControls";
 import { renderDialogChoices } from "../ui/dialog/renderDialogChoices";
-import { ensureStarterRelicForCharacter } from "./systems/progression/starterRelics";
-import { getWorldRelicInstances } from "./systems/progression/relics";
 import { rewardRunEventProducerSystem } from "./systems/progression/rewardRunEventProducerSystem";
 import { rewardSchedulerSystem } from "./systems/progression/rewardSchedulerSystem";
 import { rewardPresenterSystem } from "./systems/progression/rewardPresenterSystem";
@@ -283,15 +279,10 @@ type CreateGameArgs = {
       depth: HTMLElement;
       kills: HTMLElement;
       gold: HTMLElement;
-      relics: HTMLElement;
-      cards: HTMLElement;
+      rings: HTMLElement;
+      tokens: HTMLElement;
     };
 
-    levelupEl: {
-      root: HTMLDivElement;
-      choices: HTMLDivElement;
-      sub: HTMLDivElement;
-    };
     mapEl: {
       root: HTMLDivElement;
       topBar: HTMLDivElement;
@@ -860,8 +851,7 @@ export function createGame(args: CreateGameArgs) {
       return true;
     }
     if (world.runState === "TRANSITION") return false;
-    if (world.state === "REWARD" && world.cardReward?.active) return false;
-    if (world.state === "REWARD" && world.relicReward?.active) return false;
+    if (world.state === "REWARD" && world.progressionReward?.active) return false;
     if (world.floorEndCountdownActive && world.floorEndCountdownSec > 0) return false;
     const delve = world.delveMap as DelveMap | null;
     const currentDelveNode = delve?.currentNodeId ? delve.nodes.get(delve.currentNodeId) ?? null : null;
@@ -899,14 +889,14 @@ export function createGame(args: CreateGameArgs) {
   function syncRewardDebugFieldsFromBudget(w: World): void {
     const budget = w.floorRewardBudget;
     const nonObjectiveBudgetTotal = 0;
-    const nonObjectiveUsed = Math.max(0, nonObjectiveBudgetTotal - budget.nonObjectiveCardsRemaining);
-    w.cardRewardBudgetTotal = nonObjectiveBudgetTotal;
-    w.cardRewardBudgetUsed = nonObjectiveUsed;
-    if (!Array.isArray(w.cardRewardClaimKeys)) w.cardRewardClaimKeys = [];
+    const nonObjectiveUsed = Math.max(0, nonObjectiveBudgetTotal - budget.nonObjectiveRewardsRemaining);
+    w.rewardBudgetTotal = nonObjectiveBudgetTotal;
+    w.rewardBudgetUsed = nonObjectiveUsed;
+    if (!Array.isArray(w.rewardClaimKeys)) w.rewardClaimKeys = [];
     const firedKeys = Object.keys(budget.fired ?? Object.create(null));
     for (let i = 0; i < firedKeys.length; i++) {
       const key = firedKeys[i];
-      if (!w.cardRewardClaimKeys.includes(key)) w.cardRewardClaimKeys.push(key);
+      if (!w.rewardClaimKeys.includes(key)) w.rewardClaimKeys.push(key);
     }
   }
 
@@ -1029,32 +1019,16 @@ export function createGame(args: CreateGameArgs) {
   applyObjectivesFromActiveMap(world);
   applyMapFeaturesFromCells(world);
   applyDebugSpawn(world);
-  const cardRewardMenu = mountCardRewardMenu({
-    root: args.ui.levelupEl.root,
-    onPick: (cardId: string) => {
-      const reward = ensureCardRewardState(world);
+  const progressionRewardRoot = document.createElement("div");
+  progressionRewardRoot.id = "progressionReward";
+  progressionRewardRoot.hidden = true;
+  document.body.appendChild(progressionRewardRoot);
+  const progressionRewardMenu = mountProgressionRewardMenu({
+    root: progressionRewardRoot,
+    onPick: (optionId: string) => {
+      const reward = ensureProgressionRewardState(world);
       if (!reward.active) return;
-      const source = reward.source;
-      chooseCardReward(world, cardId);
-      resolveActiveRewardTicket(world);
-      renderRewardMenuIfNeeded();
-
-      if (source === "ZONE_TRIAL" && tryAdvanceAfterObjectiveCompletion()) {
-        return;
-      }
-      world.state = "RUN";
-    },
-  });
-  const relicRewardRoot = document.createElement("div");
-  relicRewardRoot.id = "relicReward";
-  relicRewardRoot.hidden = true;
-  document.body.appendChild(relicRewardRoot);
-  const relicRewardMenu = mountRelicRewardMenu({
-    root: relicRewardRoot,
-    onPick: (relicId: string) => {
-      const reward = ensureRelicRewardState(world);
-      if (!reward.active) return;
-      chooseRelicReward(world, relicId);
+      chooseProgressionReward(world, optionId);
       resolveActiveRewardTicket(world);
       renderRewardMenuIfNeeded();
       if (tryAdvanceAfterObjectiveCompletion()) return;
@@ -1068,12 +1042,7 @@ export function createGame(args: CreateGameArgs) {
   const vendorShopMenu = mountVendorShopMenu({
     root: vendorRoot,
     onBuy: (index: number) => {
-      if (tryPurchaseVendorCard(world, index)) {
-        renderVendorShopIfNeeded();
-      }
-    },
-    onBuyRelic: (index: number) => {
-      if (tryPurchaseVendorRelic(world, index)) {
+      if (tryPurchaseVendorOffer(world, index)) {
         renderVendorShopIfNeeded();
       }
     },
@@ -1088,12 +1057,10 @@ export function createGame(args: CreateGameArgs) {
   let lastRewardRenderKey = "";
 
   const renderRewardMenuIfNeeded = (): void => {
-    const reward = ensureCardRewardState(world);
-    const relicReward = ensureRelicRewardState(world);
-    const key = `${world.state}|c:${reward.active ? 1 : 0}|${reward.source}|${reward.options.join(",")}|r:${relicReward.active ? 1 : 0}|${relicReward.source}|${relicReward.options.join(",")}`;
+    const progressionReward = ensureProgressionRewardState(world);
+    const key = `${world.state}|p:${progressionReward.active ? 1 : 0}|${progressionReward.family}|${progressionReward.source}|${progressionReward.options.join(",")}`;
     if (key === lastRewardRenderKey) return;
-    cardRewardMenu.render(reward.active ? reward : null);
-    relicRewardMenu.render(relicReward.active ? relicReward : null);
+    progressionRewardMenu.render(progressionReward.active ? progressionReward : null);
     lastRewardRenderKey = key;
   };
 
@@ -1108,18 +1075,14 @@ export function createGame(args: CreateGameArgs) {
       closeVendorShop(false);
       return;
     }
-    const key = `${getGold(world)}|${vendor.cards.join(",")}|${vendor.purchased.map((p) => (p ? "1" : "0")).join("")}|${(vendor.relicOffers ?? []).map((o) => `${o.relicId}:${o.priceG}:${o.isSold ? 1 : 0}`).join(",")}`;
+    const key = `${getGold(world)}|${vendor.offers.map((o) => `${o.family}:${o.optionId}:${o.priceG}:${o.isSold ? 1 : 0}`).join(",")}`;
     if (key === lastVendorRenderKey) return;
     vendorShopMenu.render({
       active: true,
       gold: getGold(world),
-      cards: vendor.cards.map((cardId, index) => ({
-        cardId,
-        priceG: getVendorCardPriceG(cardId),
-        purchased: !!vendor.purchased[index],
-      })),
-      relicOffers: (vendor.relicOffers ?? []).map((offer) => ({
-        relicId: offer.relicId,
+      offers: vendor.offers.map((offer) => ({
+        family: offer.family,
+        optionId: offer.optionId,
         priceG: offer.priceG,
         isSold: offer.isSold,
       })),
@@ -1160,10 +1123,14 @@ export function createGame(args: CreateGameArgs) {
     return getMapDepth(w);
   }
 
-  function getEndStatsCardCount(w: World): number {
-    const cards = Array.isArray(w.cards) ? w.cards.length : 0;
-    if (cards > 0) return cards;
-    return Array.isArray(w.combatCardIds) ? w.combatCardIds.length : 0;
+  function getEndStatsRingCount(w: World): number {
+    return Object.keys(w.progression?.ringsByInstanceId ?? {}).length;
+  }
+
+  function getEndStatsTokenCount(w: World): number {
+    const tokens = w.progression?.storedModifierTokens;
+    if (!tokens) return 0;
+    return Object.values(tokens).reduce((sum, value) => sum + Math.max(0, Math.floor(value ?? 0)), 0);
   }
 
   function populateEndStats(w: World): void {
@@ -1172,8 +1139,8 @@ export function createGame(args: CreateGameArgs) {
     args.ui.endEl.depth.textContent = String(getEndStatsDepth(w));
     args.ui.endEl.kills.textContent = String(summary.kills);
     args.ui.endEl.gold.textContent = String(Math.max(0, Math.floor(getGold(w))));
-    args.ui.endEl.relics.textContent = String(Array.isArray(w.relics) ? w.relics.length : 0);
-    args.ui.endEl.cards.textContent = String(getEndStatsCardCount(w));
+    args.ui.endEl.rings.textContent = String(getEndStatsRingCount(w));
+    args.ui.endEl.tokens.textContent = String(getEndStatsTokenCount(w));
   }
 
   function getEndRunSummary(w: World): EndLeaderboardRunPayload {
@@ -1602,7 +1569,7 @@ export function createGame(args: CreateGameArgs) {
     });
     args.ui.menuEl.hidden = true;
     setHudHidden(true);
-    hideCardRewardMenu();
+    hideProgressionRewardMenu();
     closeVendorShop(false);
     setDialog(null);
     setEndActiveTab("stats");
@@ -1676,6 +1643,7 @@ export function createGame(args: CreateGameArgs) {
   type DeterministicChoice = {
     archetype: FloorArchetype;
     objectiveId?: ObjectiveId;
+    rewardFamily?: ProgressionRewardFamily;
     title?: string;
     floorIndex: number;
     depth: number;
@@ -1932,7 +1900,7 @@ export function createGame(args: CreateGameArgs) {
 
     setDialog(null);
     closeVendorShop(false);
-    hideCardRewardMenu();
+    hideProgressionRewardMenu();
     args.ui.mapEl.root.hidden = true;
     setHudHidden(true);
     w.state = "MAP";
@@ -2257,15 +2225,13 @@ export function createGame(args: CreateGameArgs) {
     w.objectiveRewardClaimedKey = null;
     (w as any).zoneRewardClaimedKey = null;
     (w as any).zoneRewardClaimedKeys = [];
-    w.cardRewardBudgetTotal = 0;
-    w.cardRewardBudgetUsed = 0;
-    w.cardRewardClaimKeys = [];
-    w.lastCardRewardClaimKey = null;
+    w.rewardBudgetTotal = 0;
+    w.rewardBudgetUsed = 0;
+    w.rewardClaimKeys = [];
+    w.lastRewardClaimKey = null;
     syncRewardDebugFieldsFromBudget(w);
-    w.cardReward.active = false;
-    w.cardReward.options = [];
-    w.relicReward.active = false;
-    w.relicReward.options = [];
+    w.progressionReward.active = false;
+    w.progressionReward.options = [];
     startZoneTrial(w);
     syncZoneTrialNavState(w);
     syncRareTripleNavState(w);
@@ -2280,12 +2246,8 @@ export function createGame(args: CreateGameArgs) {
     }
 
     w.vendor = floorIntent.archetype === "VENDOR"
-      ? createVendorState(
-        generateVendorCards(5, (w as any).currentCharacterId),
-        generateVendorRelicOffers(w, 5, VENDOR_RELIC_PRICE_G),
-      )
+      ? createVendorState(generateVendorProgressionOffers(w, 5))
       : null;
-    w.vendorOffers = [];
     w.runState = "FLOOR";
     w.phaseTime = 0;
     w.transitionTime = 0;
@@ -2310,7 +2272,7 @@ export function createGame(args: CreateGameArgs) {
     // UI: hide map overlay, show HUD.
     args.ui.mapEl.root.hidden = true;
     setHudHidden(!!(w as any).paletteSnapshotViewerActive);
-    hideCardRewardMenu();
+    hideProgressionRewardMenu();
   }
 
   async function enterFloor(w: World, floorIntent: FloorIntent): Promise<void> {
@@ -2331,6 +2293,7 @@ export function createGame(args: CreateGameArgs) {
       mapId: node.runtime.mapId,
       bossId: node.runtime.bossId,
       objectiveId: node.runtime.objectiveId,
+      rewardFamily: defaultRewardFamilyForDepth(getNodeDepth(node)),
       variantSeed: node.runtime.variantSeed,
       rareCount: node.runtime.rareCount,
       spawnZoneCount: node.runtime.spawnZoneCount,
@@ -2360,6 +2323,7 @@ export function createGame(args: CreateGameArgs) {
       mapId,
       bossId: actBossPlan?.bossId,
       objectiveId: objectiveIdFromArchetype(archetype),
+      rewardFamily: defaultRewardFamilyForDepth(floorIndex + 1),
       variantSeed: deterministicVariantSeed(w.runSeed, floorIndex, floorIndex + 1, archetype, mapId),
     };
   }
@@ -2409,6 +2373,7 @@ export function createGame(args: CreateGameArgs) {
       mapId,
       bossId: actBossPlan?.bossId,
       objectiveId,
+      rewardFamily: choice.rewardFamily ?? defaultRewardFamilyForDepth(choice.depth),
       variantSeed,
     };
   }
@@ -2483,7 +2448,7 @@ export function createGame(args: CreateGameArgs) {
     applyDebugSpawn(world);
     spawnMilestonePigeonNearPlayer(world);
 
-    hideCardRewardMenu();
+    hideProgressionRewardMenu();
   }
 
   async function executeStartRun(characterId: PlayableCharacterId): Promise<void> {
@@ -2495,18 +2460,12 @@ export function createGame(args: CreateGameArgs) {
 
     await resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
     (world as any).currentCharacterId = character.id;
-    ensureStarterRelicForCharacter(world, character.id);
 
     const delve = createDelveMap(world.runSeed);
     world.delveMap = delve;
     setMapDepth(world, 1);
     applyRunHeatScaling(world);
 
-    // Pick starting node
-    if (import.meta.env.DEV) {
-      const starter = getWorldRelicInstances(world).find((it) => it.source === "starter");
-      console.debug("[starterRelic] run-start", { characterId: character.id, starterRelicId: starter?.id ?? null });
-    }
     showDelveMap("Choose your starting location.\nClimb the act map toward the boss.");
   }
 
@@ -2519,7 +2478,6 @@ export function createGame(args: CreateGameArgs) {
 
     await resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
     (world as any).currentCharacterId = character.id;
-    ensureStarterRelicForCharacter(world, character.id);
     world.delveMap = null;
     setMapDepth(world, 1);
     applyRunHeatScaling(world);
@@ -2531,12 +2489,7 @@ export function createGame(args: CreateGameArgs) {
     args.ui.mapEl.root.hidden = false;
     hideEndScreen();
     setHudHidden(false);
-    hideCardRewardMenu();
-
-    if (import.meta.env.DEV) {
-      const starter = getWorldRelicInstances(world).find((it) => it.source === "starter");
-      console.debug("[starterRelic] deterministic-start", { characterId: character.id, starterRelicId: starter?.id ?? null });
-    }
+    hideProgressionRewardMenu();
 
     showDeterministicFloorPicker(
       "Path Select mode: choose any floor type.",
@@ -2554,7 +2507,6 @@ export function createGame(args: CreateGameArgs) {
 
     await resetRun(mapId, { skipMapSelection: true, seedOverride: preparedStart?.seed });
     (world as any).currentCharacterId = character.id;
-    ensureStarterRelicForCharacter(world, character.id);
     world.delveMap = null;
     setMapDepth(world, 1);
     applyRunHeatScaling(world);
@@ -2567,12 +2519,8 @@ export function createGame(args: CreateGameArgs) {
     args.ui.mapEl.root.hidden = true;
     hideEndScreen();
     setHudHidden(false);
-    hideCardRewardMenu();
+    hideProgressionRewardMenu();
 
-    if (import.meta.env.DEV) {
-      const starter = getWorldRelicInstances(world).find((it) => it.source === "starter");
-      console.debug("[starterRelic] sandbox-start", { characterId: character.id, starterRelicId: starter?.id ?? null });
-    }
   }
 
   async function prepareStartMap(intent: StartIntent): Promise<void> {
@@ -2946,7 +2894,7 @@ export function createGame(args: CreateGameArgs) {
     world.objectiveRewardClaimedKey = null;
     (world as any).deterministicDelveMode = false;
     args.ui.mapEl.root.hidden = true;
-    hideCardRewardMenu();
+    hideProgressionRewardMenu();
     closeVendorShop(false);
     hideEndScreen();
     args.ui.dialogEl.root.hidden = true;
@@ -3115,7 +3063,7 @@ export function createGame(args: CreateGameArgs) {
         <span class="routeInfoState routeInfoState--${stateClass}">${routeStatusLabel(node.status)}</span>
         <div class="routeInfoTitle">${node.title}</div>
       </div>
-      <div class="routeInfoMeta">${summaryPrefix} · ${node.subtitle}</div>
+      <div class="routeInfoMeta">${summaryPrefix} · ${node.rewardFamilyLabel} Reward · ${node.subtitle}</div>
     `;
   }
 
@@ -3197,6 +3145,7 @@ export function createGame(args: CreateGameArgs) {
         btn.dataset.detFloorArchetype = node.deterministicData.archetype;
         btn.dataset.detFloorIndex = String(node.deterministicData.floorIndex);
         btn.dataset.detDepth = String(node.deterministicData.depth);
+        btn.dataset.detRewardFamily = node.rewardFamily;
         if (node.deterministicData.objectiveId) {
           btn.dataset.detObjectiveId = node.deterministicData.objectiveId;
         }
@@ -3218,6 +3167,10 @@ export function createGame(args: CreateGameArgs) {
       label.className = "routeNodeLabel";
       label.textContent = node.kindLabel;
       meta.appendChild(label);
+      const rewardTag = document.createElement("span");
+      rewardTag.className = "routeNodeTag routeNodeRewardTag";
+      rewardTag.textContent = node.rewardFamilyLabel;
+      meta.appendChild(rewardTag);
       if (node.combatTagText) {
         const tag = document.createElement("span");
         tag.className = "routeNodeTag";
@@ -3249,9 +3202,8 @@ export function createGame(args: CreateGameArgs) {
     }
   }
 
-  function hideCardRewardMenu(): void {
-    cardRewardMenu.render(null);
-    relicRewardMenu.render(null);
+  function hideProgressionRewardMenu(): void {
+    progressionRewardMenu.render(null);
     lastRewardRenderKey = "";
   }
 
@@ -3305,7 +3257,7 @@ export function createGame(args: CreateGameArgs) {
 
   const clamp01 = (v: number): number => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
 
-  function updateVitalsOrb(hasMomentumRelic: boolean) {
+  function updateVitalsOrb(hasMomentumRing: boolean) {
     const hpNow = Math.max(0, world.playerHp);
     const hpMax = Math.max(1, world.playerHpMax);
     const armorNow = Math.max(0, world.currentArmor);
@@ -3317,23 +3269,23 @@ export function createGame(args: CreateGameArgs) {
       _vitalsMomentumUnlocked?: boolean;
     };
     if (armorNow > 0) vitalsState._vitalsArmorUnlocked = true;
-    if (hasMomentumRelic && momNow > 0) vitalsState._vitalsMomentumUnlocked = true;
+    if (hasMomentumRing && momNow > 0) vitalsState._vitalsMomentumUnlocked = true;
     const hasArmorRing = !!vitalsState._vitalsArmorUnlocked;
-    const hasMomentumRing = hasMomentumRelic && !!vitalsState._vitalsMomentumUnlocked;
+    const showMomentumRing = hasMomentumRing && !!vitalsState._vitalsMomentumUnlocked;
 
     const hpFrac = clamp01(hpNow / hpMax);
     const armorFrac = hasArmorRing && armorMax > 0 ? clamp01(armorNow / armorMax) : 0;
-    const momFrac = hasMomentumRing && momMax > 0 ? clamp01(momNow / momMax) : 0;
+    const momFrac = showMomentumRing && momMax > 0 ? clamp01(momNow / momMax) : 0;
 
     args.hud.vitalsOrb.style.setProperty("--hpFrac", hpFrac.toFixed(4));
     args.hud.vitalsOrb.style.setProperty("--armorFrac", armorFrac.toFixed(4));
     args.hud.vitalsOrb.style.setProperty("--momFrac", momFrac.toFixed(4));
     args.hud.vitalsOrbRoot.classList.toggle("hasArmor", hasArmorRing);
-    args.hud.vitalsOrbRoot.classList.toggle("hasMomentum", hasMomentumRing);
+    args.hud.vitalsOrbRoot.classList.toggle("hasMomentum", showMomentumRing);
     args.hud.vitalsOrbRoot.classList.toggle("isFullArmor", hasArmorRing && armorMax > 0 && armorNow >= armorMax);
-    args.hud.vitalsOrbRoot.classList.toggle("isFullMomentum", hasMomentumRing && momMax > 0 && momNow >= momMax);
+    args.hud.vitalsOrbRoot.classList.toggle("isFullMomentum", showMomentumRing && momMax > 0 && momNow >= momMax);
     args.hud.vitalsArmorText.hidden = !hasArmorRing;
-    args.hud.vitalsMomentumText.hidden = !hasMomentumRing;
+    args.hud.vitalsMomentumText.hidden = !showMomentumRing;
 
     args.hud.vitalsOrbText.textContent = `${Math.ceil(hpNow)}/${Math.ceil(hpMax)}`;
     args.hud.vitalsArmorText.textContent = `Armor: ${Math.ceil(armorNow)}/${Math.ceil(armorMax)}`;
@@ -3364,11 +3316,7 @@ export function createGame(args: CreateGameArgs) {
     args.hud.killsPill.textContent = `Kills: ${world.kills}`;
     args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
     args.hud.armorPill.textContent = `Armor: ${Math.max(0, Math.ceil(world.currentArmor))}/${world.maxArmor}`;
-    const hasMomentumRelic = hasAnyRelicWithTag(world.relics, MOMENTUM_RELIC_TAG);
-    if (hasMomentumRelic) {
-      args.hud.momentumPill.textContent = `Momentum: ${Math.max(0, Math.ceil(world.momentumValue))}/${Math.max(0, Math.ceil(world.momentumMax))}`;
-    }
-    updateVitalsOrb(hasMomentumRelic);
+    updateVitalsOrb(false);
 
     const bossIndex = findFirstAliveBossIndex(world);
     if (bossIndex < 0) {
@@ -3475,15 +3423,11 @@ export function createGame(args: CreateGameArgs) {
 
   function finishFloorEndCountdown(): boolean {
     world.state = "RUN";
-    if (world.cardReward) {
-      world.cardReward.active = false;
-      world.cardReward.options = [];
+    if (world.progressionReward) {
+      world.progressionReward.active = false;
+      world.progressionReward.options = [];
     }
-    if (world.relicReward) {
-      world.relicReward.active = false;
-      world.relicReward.options = [];
-    }
-    hideCardRewardMenu();
+    hideProgressionRewardMenu();
     world.floorEndCountdownActive = false;
     if (tryAdvanceAfterObjectiveCompletion()) {
       clearEvents(world);
@@ -3688,7 +3632,6 @@ export function createGame(args: CreateGameArgs) {
     projectilesSystem(world, dtSim);
     collisionsSystem(world, dtSim);
     fissionSystem(world, dtSim);  // Nuclear fission: projectile-projectile collisions
-    relicExplodeOnKillSystem(world, dtSim);
     bossEncounterSystem(world, dtSim);
     zonesSystem(world, dtSim);
     dotTickSystem(world, dtSim);
@@ -3696,9 +3639,7 @@ export function createGame(args: CreateGameArgs) {
     dropsSystem(world, dtSim);
     triggerSystem(world, dtSim, input);
     tickPoeMapObjective(world);
-    relicTriggerSystem(world);
     vfxSystem(world, dtSim);
-    relicRetriggerSystem(world);
     processCombatTextFromEvents(world, dtSim);
     updateZoneTrialObjective(world);
     syncZoneTrialNavState(world);
@@ -3717,7 +3658,7 @@ export function createGame(args: CreateGameArgs) {
         clearEvents(world);
         return;
       }
-      if (!world.cardReward?.active && !world.relicReward?.active) {
+      if (!world.progressionReward?.active) {
         maybeStartFloorEndCountdown(world);
       }
       tickFloorEndCountdown(world, dtSim);
@@ -3814,6 +3755,7 @@ export function createGame(args: CreateGameArgs) {
     if (detArchetype) {
       const floorIndex = Number.parseInt(btn.dataset.detFloorIndex ?? "0", 10) || 0;
       const depth = Number.parseInt(btn.dataset.detDepth ?? "1", 10) || 1;
+      const rewardFamily = btn.dataset.detRewardFamily as ProgressionRewardFamily | undefined;
       const rawObjectiveId = btn.dataset.detObjectiveId;
       const detObjectiveId =
         rawObjectiveId && OBJECTIVE_IDS.includes(rawObjectiveId as ObjectiveId)
@@ -3825,6 +3767,7 @@ export function createGame(args: CreateGameArgs) {
         buildDeterministicFloorIntent({
           archetype: detArchetype,
           objectiveId: detObjectiveId,
+          rewardFamily,
           floorIndex,
           depth,
         }),

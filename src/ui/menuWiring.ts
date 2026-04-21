@@ -5,8 +5,6 @@ import { PLAYABLE_CHARACTERS, type PlayableCharacterId } from "../game/content/p
 import { getPlayerIdleSpriteUrl } from "../engine/render/sprites/playerSprites";
 import { resolveCombatStarterWeaponId } from "../game/combat_mods/content/weapons/characterStarterMap";
 import { getCombatStarterWeaponById } from "../game/combat_mods/content/weapons/starterWeapons";
-import { getRelicById, getRelicShortDesc } from "../game/content/relics";
-import { STARTER_RELIC_BY_CHARACTER } from "../game/content/starterRelics";
 import { isUserModeEnabled } from "../userSettings";
 import {
     deletePaletteSnapshotRecord,
@@ -82,8 +80,8 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     let starterModalOverlay: HTMLDivElement | null = null;
     let starterModalCharacterName: HTMLDivElement | null = null;
     let starterModalSpriteWrap: HTMLDivElement | null = null;
-    let starterModalRelicName: HTMLDivElement | null = null;
-  let starterModalRelicDesc: HTMLDivElement | null = null;
+    let starterModalWeaponName: HTMLDivElement | null = null;
+  let starterModalWeaponDesc: HTMLDivElement | null = null;
   let starterModalCharacterId: PlayableCharacterId | null = null;
   const paletteSnapshotThumbUrlById = new Map<string, string>();
     const SUPPRESS_CLICK_WINDOW_MS = 450;
@@ -136,7 +134,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
     paletteSnapshotThumbUrlById.clear();
   };
 
-    const clearPaletteSnapshotCards = () => {
+    const clearPaletteSnapshotTiles = () => {
         revokePaletteSnapshotThumbUrls();
         while (refs.paletteLabSnapshotGridEl.firstChild) {
             refs.paletteLabSnapshotGridEl.removeChild(refs.paletteLabSnapshotGridEl.firstChild);
@@ -177,7 +175,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         }
         try {
             await renamePaletteSnapshotRecord(snapshotId, nextName);
-            await renderPaletteSnapshotCards();
+            await renderPaletteSnapshotTiles();
         } catch (err) {
             refs.paletteLabSublineEl.textContent =
                 err instanceof Error ? err.message : "Failed to rename snapshot.";
@@ -191,16 +189,16 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         if (!confirmed) return;
         try {
             await deletePaletteSnapshotRecord(snapshotId);
-            await renderPaletteSnapshotCards();
+            await renderPaletteSnapshotTiles();
         } catch (err) {
             refs.paletteLabSublineEl.textContent =
                 err instanceof Error ? err.message : "Failed to delete snapshot.";
         }
     };
 
-    const renderPaletteSnapshotCards = async () => {
+    const renderPaletteSnapshotTiles = async () => {
         refs.paletteLabSublineEl.textContent = "Loading snapshots...";
-        clearPaletteSnapshotCards();
+        clearPaletteSnapshotTiles();
 
         try {
             const records = await listPaletteSnapshotRecords();
@@ -215,9 +213,9 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
 
             refs.paletteLabSublineEl.textContent = `Saved palette snapshots: ${records.length}`;
             for (const record of records) {
-                const card = document.createElement("article");
-                card.className = "paletteLabSnapshotCard";
-                card.setAttribute("data-palette-snapshot-id", record.id);
+                const tile = document.createElement("article");
+                tile.className = "paletteLabSnapshotTile";
+                tile.setAttribute("data-palette-snapshot-id", record.id);
 
                 const thumbWrap = document.createElement("div");
                 thumbWrap.className = "paletteLabSnapshotThumbWrap";
@@ -278,9 +276,9 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
                 body.appendChild(time);
                 body.appendChild(map);
                 body.appendChild(actions);
-                card.appendChild(thumbWrap);
-                card.appendChild(body);
-                refs.paletteLabSnapshotGridEl.appendChild(card);
+                tile.appendChild(thumbWrap);
+                tile.appendChild(body);
+                refs.paletteLabSnapshotGridEl.appendChild(tile);
             }
         } catch (err) {
             const error = document.createElement("div");
@@ -296,7 +294,7 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         closeStarterModal();
         refs.mainMenuEl.hidden = true;
         refs.paletteLabMenuEl.hidden = false;
-        void renderPaletteSnapshotCards();
+        void renderPaletteSnapshotTiles();
     };
 
     const bindActivate = (el: HTMLElement, action: () => void) => {
@@ -521,15 +519,15 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
 
         const infoPane = document.createElement("div");
         infoPane.className = "characterStarterModalInfoPane";
-        const relicLabel = document.createElement("div");
-        relicLabel.className = "characterStarterModalRelicLabel";
-        relicLabel.textContent = "Starter Relic";
-        const relicName = document.createElement("div");
-        relicName.className = "characterStarterModalRelicName";
-        relicName.setAttribute("data-character-starter-relic-name", "1");
-        const relicDesc = document.createElement("div");
-        relicDesc.className = "characterStarterModalRelicDesc";
-        relicDesc.setAttribute("data-character-starter-relic-desc", "1");
+        const weaponLabel = document.createElement("div");
+        weaponLabel.className = "characterStarterModalWeaponLabel";
+        weaponLabel.textContent = "Starter Weapon";
+        const weaponName = document.createElement("div");
+        weaponName.className = "characterStarterModalWeaponName";
+        weaponName.setAttribute("data-character-starter-weapon-name", "1");
+        const weaponDesc = document.createElement("div");
+        weaponDesc.className = "characterStarterModalWeaponDesc";
+        weaponDesc.setAttribute("data-character-starter-weapon-desc", "1");
         const selectBtn = document.createElement("button");
         selectBtn.type = "button";
         selectBtn.className = "characterStarterModalSelectBtn";
@@ -541,9 +539,9 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
                 launchRunForCharacter(starterModalCharacterId);
             }
         });
-        infoPane.appendChild(relicLabel);
-        infoPane.appendChild(relicName);
-        infoPane.appendChild(relicDesc);
+        infoPane.appendChild(weaponLabel);
+        infoPane.appendChild(weaponName);
+        infoPane.appendChild(weaponDesc);
         infoPane.appendChild(selectBtn);
 
         body.appendChild(spritePane);
@@ -574,14 +572,14 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
         starterModalOverlay = overlay;
         starterModalCharacterName = headerTitle;
         starterModalSpriteWrap = spriteWrap;
-        starterModalRelicName = relicName;
-        starterModalRelicDesc = relicDesc;
+        starterModalWeaponName = weaponName;
+        starterModalWeaponDesc = weaponDesc;
     };
 
     const openStarterModal = (characterId: PlayableCharacterId) => {
         ensureStarterModal();
         const character = PLAYABLE_CHARACTERS.find((it) => it.id === characterId);
-        if (!character || !starterModalOverlay || !starterModalCharacterName || !starterModalSpriteWrap || !starterModalRelicName || !starterModalRelicDesc) {
+        if (!character || !starterModalOverlay || !starterModalCharacterName || !starterModalSpriteWrap || !starterModalWeaponName || !starterModalWeaponDesc) {
             return;
         }
         starterModalCharacterName.textContent = character.displayName;
@@ -595,10 +593,10 @@ export function wireMenus(refs: DomRefs, game: GameApi): void {
             starterModalSpriteWrap.appendChild(sprite);
         }
 
-        const starterRelicId = STARTER_RELIC_BY_CHARACTER[character.id];
-        const starterRelic = getRelicById(starterRelicId);
-        starterModalRelicName.textContent = starterRelic?.displayName ?? starterRelicId ?? "Starter Relic";
-        starterModalRelicDesc.textContent = getRelicShortDesc(starterRelic) || starterRelic?.desc?.[0] || "No description.";
+        const starterWeaponId = resolveCombatStarterWeaponId(character.id);
+        const starterWeapon = getCombatStarterWeaponById(starterWeaponId);
+        starterModalWeaponName.textContent = starterWeapon.displayName;
+        starterModalWeaponDesc.textContent = `${starterWeapon.shotsPerSecond.toFixed(1)} shots/sec`;
         starterModalCharacterId = character.id;
         starterModalOverlay.hidden = false;
     };

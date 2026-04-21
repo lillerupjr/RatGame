@@ -177,13 +177,13 @@ html.ios-standalone-fix #ui {
   padding: 8px;
 }
 
-.pauseOwnedCardsList {
+.pauseOwnedRingsList {
   display: grid;
   gap: 8px;
   margin-bottom: 10px;
 }
 
-.pauseOwnedCardRow {
+.pauseOwnedRingRow {
   width: 100%;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -198,28 +198,28 @@ html.ios-standalone-fix #ui {
   cursor: pointer;
 }
 
-.pauseOwnedCardRow.active {
+.pauseOwnedRingRow.active {
   border-color: var(--border-strong);
   background: linear-gradient(180deg, var(--bg-elevated), var(--active-bg));
 }
 
-.pauseOwnedCardMain {
+.pauseOwnedRingMain {
   min-width: 0;
 }
 
-.pauseOwnedCardName {
+.pauseOwnedRingName {
   font-size: 15px;
   font-weight: 900;
 }
 
-.pauseOwnedCardSummary {
+.pauseOwnedRingSummary {
   margin-top: 2px;
   font-size: 12px;
   opacity: 0.86;
   line-height: 1.3;
 }
 
-.pauseOwnedCardMeta {
+.pauseOwnedRingMeta {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -239,14 +239,14 @@ html.ios-standalone-fix #ui {
   background: var(--hover-bg);
 }
 
-.pauseOwnedCardDetail {
+.pauseOwnedRingDetail {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   background: var(--focus-bg);
   padding: 12px;
 }
 
-.pauseOwnedCardDetail h4 {
+.pauseOwnedRingDetail h4 {
   margin: 0 0 6px 0;
   font-size: 18px;
 }
@@ -371,19 +371,19 @@ html.ios-standalone-fix #ui {
     padding: 10px;
   }
 
-  .pauseOwnedCardRow {
+  .pauseOwnedRingRow {
     padding: 9px;
   }
 
-  .pauseOwnedCardName {
+  .pauseOwnedRingName {
     font-size: 14px;
   }
 
-  .pauseOwnedCardSummary {
+  .pauseOwnedRingSummary {
     font-size: 11px;
   }
 
-  .pauseOwnedCardMeta {
+  .pauseOwnedRingMeta {
     gap: 6px;
   }
 
@@ -1144,7 +1144,6 @@ html.ios-standalone-fix #ui {
 [hidden] { display: none !important; }
 
 /* Keep fullscreen menu shells clear of iPhone notch/home-indicator safe areas. */
-#levelup,
 #end,
 #welcomeScreen,
 #mainMenu,
@@ -1171,7 +1170,6 @@ html.ios-standalone-fix #ui {
 #creditsMenu .panel,
 #menu .panel,
 #end .panel,
-#levelup .panel,
 #map .panel,
 .deckOverlay .panel {
   border: 1px solid var(--border-default);
@@ -1341,7 +1339,7 @@ html.ios-standalone-fix #ui {
   gap: 12px;
   margin-bottom: 14px;
 }
-.paletteLabSnapshotCard {
+.paletteLabSnapshotTile {
   border: 1px solid var(--border-default);
   background: linear-gradient(180deg, var(--bg-elevated), var(--focus-bg));
   box-shadow: var(--shadow-subtle);
@@ -1629,14 +1627,14 @@ html.ios-standalone-fix #ui {
   overflow: hidden;
 }
 .characterSprite {
-  --character-card-sprite-offset-y: -10px;
+  --character-sprite-offset-y: -10px;
   width: 100%;
   height: 100%;
   object-fit: contain;
   object-position: center center;
   display: block;
   image-rendering: pixelated;
-  transform: translateY(var(--character-card-sprite-offset-y));
+  transform: translateY(var(--character-sprite-offset-y));
 }
 
 .characterName { font-weight: 900; font-size: 15px; margin-bottom: 4px; }
@@ -1743,7 +1741,7 @@ html.ios-standalone-fix #ui {
   gap: 8px;
 }
 
-.characterStarterModalRelicLabel {
+.characterStarterModalWeaponLabel {
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -1751,13 +1749,13 @@ html.ios-standalone-fix #ui {
   color: var(--text-muted);
 }
 
-.characterStarterModalRelicName {
+.characterStarterModalWeaponName {
   font-size: 20px;
   font-weight: 900;
   line-height: 1.15;
 }
 
-.characterStarterModalRelicDesc {
+.characterStarterModalWeaponDesc {
   margin: 0;
   font-size: 14px;
   line-height: 1.45;
@@ -2350,18 +2348,18 @@ html.ios-standalone-fix #ui {
   font-weight: 700;
 }
 
-.pauseCardCount {
+.pauseProgressionCount {
   font-weight: 900;
   opacity: 0.95;
 }
 
-.relicList {
+.ringList {
   min-height: 20px;
   font-size: 12px;
   opacity: 0.95;
 }
 
-.pauseDebugCardsSection {
+.pauseDebugProgressionSection {
   margin-top: 10px;
 }
 
@@ -2607,10 +2605,6 @@ html.ios-standalone-fix #ui {
     width: 100%;
   }
 }
-
-/* Run end overlay (WIN / LOSE) */
-#levelup { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 8; }
-#levelup .panel { width: min(980px, 95vw); padding: 20px; border-radius: 18px; }
 
 #end {
   position: fixed;
@@ -3194,7 +3188,7 @@ html.ios-standalone-fix #ui {
   opacity: 0.55;
   cursor: not-allowed;
 }
-.vendorRelicTitle {
+.vendorProgressionTitle {
   margin-top: 12px;
   margin-bottom: 6px;
   font-size: 12px;
@@ -3328,7 +3322,6 @@ html.ios-standalone-fix #ui {
   #settingsMenu,
   #map,
   #end,
-  #levelup,
   #menu {
     padding:
       max(10px, var(--overlay-pad-top))
@@ -3345,7 +3338,6 @@ html.ios-standalone-fix #ui {
   #creditsMenu .panel,
   #settingsMenu .panel,
   #end .panel,
-  #levelup .panel,
   #menu .panel {
     width: min(100%, 560px);
     max-height: 100%;
@@ -3549,11 +3541,11 @@ html.ios-standalone-fix #ui {
     --starter-modal-sprite-scale: 3.2;
   }
 
-  .characterStarterModalRelicName {
+  .characterStarterModalWeaponName {
     font-size: 18px;
   }
 
-  .characterStarterModalRelicDesc {
+  .characterStarterModalWeaponDesc {
     font-size: 13px;
     line-height: 1.35;
   }
@@ -3702,7 +3694,6 @@ html.ios-standalone-fix #ui {
   #settingsMenu,
   #map,
   #end,
-  #levelup,
   #menu {
     padding:
       max(6px, var(--overlay-pad-top))
@@ -3719,7 +3710,6 @@ html.ios-standalone-fix #ui {
   #creditsMenu .panel,
   #settingsMenu .panel,
   #end .panel,
-  #levelup .panel,
   #menu .panel,
   #map .panel {
     width: min(100%, 900px);
@@ -3877,7 +3867,7 @@ html.ios-standalone-fix #ui {
     --starter-modal-sprite-scale: 3.15;
   }
 
-  .characterStarterModalRelicDesc {
+  .characterStarterModalWeaponDesc {
     font-size: 13px;
     line-height: 1.3;
   }
@@ -5372,7 +5362,6 @@ html.ios-standalone-fix #ui {
 }
 
 /* Global hard-edge pass for runtime UI surfaces and controls. */
-#levelup *,
 #end *,
 #map *,
 .deckOverlay *,

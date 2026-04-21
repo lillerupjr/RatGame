@@ -70,7 +70,6 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "entityAnchorOverlay", label: "entityAnchorOverlay" },
   { key: "enemyAimOverlay", label: "enemyAimOverlay" },
   { key: "lootGoblinOverlay", label: "lootGoblinOverlay" },
-  { key: "pauseDebugCards", label: "Enable Pause Debug Cards" },
   { key: "pauseCsvControls", label: "Enable Pause CSV Controls" },
   { key: "dpsMeter", label: "Show DPS Meter" },
 ] as const;

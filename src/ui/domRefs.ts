@@ -7,14 +7,8 @@ type EndRefs = {
     depth: HTMLElement;
     kills: HTMLElement;
     gold: HTMLElement;
-    relics: HTMLElement;
-    cards: HTMLElement;
-};
-
-type LevelupRefs = {
-    root: HTMLDivElement;
-    choices: HTMLDivElement;
-    sub: HTMLDivElement;
+    rings: HTMLElement;
+    tokens: HTMLElement;
 };
 
 type MapRefs = {
@@ -77,7 +71,6 @@ export type HudRefs = {
 export type UiRefs = {
     menuEl: HTMLDivElement;
     endEl: EndRefs;
-    levelupEl: LevelupRefs;
     mapEl: MapRefs;
     dialogEl: DialogRefs;
 };
@@ -131,11 +124,8 @@ export type DomRefs = {
     endStatDepth: HTMLElement;
     endStatKills: HTMLElement;
     endStatGold: HTMLElement;
-    endStatRelics: HTMLElement;
-    endStatCards: HTMLElement;
-    levelupRoot: HTMLDivElement;
-    levelupChoices: HTMLDivElement;
-    levelupSub: HTMLDivElement;
+    endStatRings: HTMLElement;
+    endStatTokens: HTMLElement;
     mapRoot: HTMLDivElement;
     mapTopBar: HTMLDivElement;
     mapRouteBackBtn: HTMLButtonElement;
@@ -286,12 +276,8 @@ export function getDomRefs(): DomRefs {
     const endStatDepth = getEl<HTMLElement>("endStatDepth");
     const endStatKills = getEl<HTMLElement>("endStatKills");
     const endStatGold = getEl<HTMLElement>("endStatGold");
-    const endStatRelics = getEl<HTMLElement>("endStatRelics");
-    const endStatCards = getEl<HTMLElement>("endStatCards");
-
-    const levelupRoot = getEl<HTMLDivElement>("levelup");
-    const levelupChoices = getEl<HTMLDivElement>("luChoices");
-    const levelupSub = getEl<HTMLDivElement>("luSub");
+    const endStatRings = getEl<HTMLElement>("endStatRings");
+    const endStatTokens = getEl<HTMLElement>("endStatTokens");
 
     const mapRoot = getEl<HTMLDivElement>("map");
     const mapTopBar = getEl<HTMLDivElement>("mapTopBar");
@@ -353,13 +339,8 @@ export function getDomRefs(): DomRefs {
             depth: endStatDepth,
             kills: endStatKills,
             gold: endStatGold,
-            relics: endStatRelics,
-            cards: endStatCards,
-        },
-        levelupEl: {
-            root: levelupRoot,
-            choices: levelupChoices,
-            sub: levelupSub,
+            rings: endStatRings,
+            tokens: endStatTokens,
         },
         mapEl: {
             root: mapRoot,
@@ -430,11 +411,8 @@ export function getDomRefs(): DomRefs {
         endStatDepth,
         endStatKills,
         endStatGold,
-        endStatRelics,
-        endStatCards,
-        levelupRoot,
-        levelupChoices,
-        levelupSub,
+        endStatRings,
+        endStatTokens,
         mapRoot,
         mapTopBar,
         mapRouteBackBtn,

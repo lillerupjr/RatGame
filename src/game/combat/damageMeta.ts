@@ -5,7 +5,6 @@ import type {
   EffectMode,
   Instigator,
   LegacyDamageSource,
-  TriggerKey,
 } from "../events";
 
 function playerInstigator(id?: string): Instigator {
@@ -48,29 +47,6 @@ export function makeWeaponDotMeta(
     cause: { kind: "WEAPON", weaponId },
     instigator: playerInstigator(options?.instigatorId),
     isProcDamage: options?.isProcDamage,
-  };
-}
-
-export function makeRelicTriggeredMeta(
-  relicId: string,
-  triggerKey: TriggerKey,
-  options?: {
-    category?: DamageCategory;
-    mode?: EffectMode;
-    instigator?: Instigator;
-    isProcDamage?: boolean;
-  },
-): DamageMeta {
-  return {
-    category: options?.category ?? "HIT",
-    cause: {
-      kind: "RELIC",
-      relicId,
-      mode: options?.mode ?? "TRIGGERED",
-      triggerKey,
-    },
-    instigator: options?.instigator ?? playerInstigator(),
-    isProcDamage: options?.isProcDamage ?? true,
   };
 }
 

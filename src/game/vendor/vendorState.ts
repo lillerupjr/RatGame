@@ -1,19 +1,19 @@
-export type VendorRelicOffer = {
-  relicId: string;
+import type { ProgressionRewardFamily } from "../progression/rewards/rewardFamilies";
+
+export type VendorProgressionOffer = {
+  id: string;
+  family: ProgressionRewardFamily;
+  optionId: string;
   priceG: number;
   isSold: boolean;
 };
 
 export type VendorState = {
-  cards: string[];
-  purchased: boolean[];
-  relicOffers: VendorRelicOffer[];
+  offers: VendorProgressionOffer[];
 };
 
-export function createVendorState(cardIds: string[], relicOffers: VendorRelicOffer[] = []): VendorState {
+export function createVendorState(offers: VendorProgressionOffer[] = []): VendorState {
   return {
-    cards: cardIds,
-    purchased: new Array(cardIds.length).fill(false),
-    relicOffers,
+    offers,
   };
 }

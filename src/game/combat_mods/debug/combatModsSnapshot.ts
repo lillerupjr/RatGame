@@ -1,11 +1,9 @@
-import { getCardById } from "../content/cards/cardPool";
 import { resolveWeaponStats, type ResolvedWeaponStats } from "../stats/combatStatsResolver";
-import type { CardDef } from "../stats/modifierTypes";
 import { resolveCombatStarterWeaponId } from "../content/weapons/characterStarterMap";
-import { resolveCombatStarterStatCards } from "../content/weapons/characterStarterMods";
 import { getCombatStarterWeaponById } from "../content/weapons/starterWeapons";
+import { collectWorldStatMods } from "../../progression/effects/worldEffects";
 
-export interface CardCountEntry {
+export interface ModifierCountEntry {
   id: string;
   name: string;
   count: number;
@@ -14,32 +12,20 @@ export interface CardCountEntry {
 }
 
 export interface CombatModsSnapshot {
-  cards: CardCountEntry[];
+  modifiers: ModifierCountEntry[];
   weaponStats: ResolvedWeaponStats;
 }
 
-function readCardIdsFromWorld(w: any): string[] {
-  const ids =
-    (Array.isArray(w?.cards) && w.cards) ||
-    (Array.isArray(w?.runCards) && w.runCards) ||
-    (Array.isArray(w?.pickedCards) && w.pickedCards) ||
-    [];
-  return ids.filter((x: any) => typeof x === "string");
-}
-
-export function aggregateCardCounts(cardIds: string[]): CardCountEntry[] {
+export function aggregateModifierCounts(modifierIds: string[]): ModifierCountEntry[] {
   const counts = new Map<string, number>();
-  for (const id of cardIds) counts.set(id, (counts.get(id) ?? 0) + 1);
+  for (const id of modifierIds) counts.set(id, (counts.get(id) ?? 0) + 1);
 
-  const entries: CardCountEntry[] = [];
+  const entries: ModifierCountEntry[] = [];
   for (const [id, count] of counts.entries()) {
-    const def = getCardById(id);
     entries.push({
       id,
-      name: def?.displayName ?? id,
+      name: id,
       count,
-      rarity: def?.rarity,
-      powerTier: def?.powerTier,
     });
   }
 
@@ -57,24 +43,11 @@ export function aggregateCardCounts(cardIds: string[]): CardCountEntry[] {
   return entries;
 }
 
-function cardDefsFromIds(cardIds: string[]): CardDef[] {
-  const defs: CardDef[] = [];
-  for (const id of cardIds) {
-    const d = getCardById(id);
-    if (d) defs.push(d);
-  }
-  return defs;
-}
-
 export function getCombatModsSnapshot(world: any): CombatModsSnapshot {
-  const cardIds = readCardIdsFromWorld(world);
-  const cards = aggregateCardCounts(cardIds);
-  const defs = cardDefsFromIds(cardIds);
-  const starterDefs = resolveCombatStarterStatCards(world?.currentCharacterId);
   const starterWeaponId = resolveCombatStarterWeaponId(world?.currentCharacterId);
   const starterWeapon = getCombatStarterWeaponById(starterWeaponId);
 
-  const weaponStats = resolveWeaponStats(starterWeapon, { cards: [...defs, ...starterDefs] });
+  const weaponStats = resolveWeaponStats(starterWeapon, { statMods: collectWorldStatMods(world) });
 
-  return { cards, weaponStats };
+  return { modifiers: [], weaponStats };
 }

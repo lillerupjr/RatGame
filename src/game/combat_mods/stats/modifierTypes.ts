@@ -1,28 +1,14 @@
-import type { StatKey } from "./statKeys";
+import type { StatMod } from "../../progression/effects/effectTypes";
 
-export type ModOp = "add" | "increased" | "decreased" | "more" | "less";
+export type { ModOp, StatMod } from "../../progression/effects/effectTypes";
 
-/**
- * A single stat modifier.
- *
- * Conventions:
- * - "add" is raw addition to a base stat (e.g. +3 fire damage, +0.04 crit chance).
- * - "increased"/"decreased" are additive scaling (sum bucket), expressed as fraction (0.15 = +15%).
- * - "more"/"less" are multiplicative scaling, expressed as fraction (0.20 = 20% more => *1.2).
- */
-export interface StatMod {
-  key: StatKey;
-  op: ModOp;
-  value: number;
-}
-
-export interface CardDef {
-  id: string; // generic for now
+export interface ModifierDef {
+  id: string;
   isEnabled: boolean;
-  displayName: string; // generic for now
+  displayName: string;
   rarity: 1 | 2 | 3 | 4;
   powerTier: 1 | 2 | 3 | 4 | 5;
-  tags: CardTag[];
+  tags: ModifierTag[];
   mods: StatMod[];
 }
 
@@ -48,12 +34,12 @@ export type WeaponTag =
   | "physical"
   | "fire"
   | "chaos"
-  // ailment identity (used for card gating)
+  // ailment identity
   | "bleed"
   | "ignite"
   | "poison";
 
-export type CardTag =
+export type ModifierTag =
   | "gun"
   | "fires"
   | "projectile"
@@ -109,7 +95,7 @@ export interface WeaponDef {
     // Optional delay between burst shots for weapons that fire additional projectiles sequentially.
     burstShotIntervalSec?: number;
     pierce: number;
-    // Base projectile count before additive card modifiers.
+    // Base projectile count before additive modifiers.
     baseProjectiles?: number;
   };
 

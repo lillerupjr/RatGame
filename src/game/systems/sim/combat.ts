@@ -1,19 +1,16 @@
 import { World, emitEvent } from "../../../engine/world/world";
 import { findClosestTarget } from "../../util/targeting";
 import { PRJ_KIND, spawnProjectile } from "../../factories/projectileFactory";
-import { getCardById } from "../../combat_mods/content/cards/cardPool";
 import { resolveWeaponStats } from "../../combat_mods/stats/combatStatsResolver";
+import { collectWorldStatMods } from "../../progression/effects/worldEffects";
 import { applySpreadToDirection, computeProjectileAngles } from "../../combat_mods/runtime/spread";
-import { getDevGrantedCardIds } from "../../combat_mods/debug/devCombatModsDebug";
 import { getUserSettings } from "../../../userSettings";
 import { resolveCombatStarterWeaponId } from "../../combat_mods/content/weapons/characterStarterMap";
-import { resolveCombatStarterStatCards } from "../../combat_mods/content/weapons/characterStarterMods";
 import { getCombatStarterWeaponById } from "../../combat_mods/content/weapons/starterWeapons";
 import { resetPlayerBeamState, updatePlayerBeamCombat } from "./beamCombat";
 import { getPlayerAimWorld } from "../../combat/aimPoints";
 import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
-import { STARTER_RELIC_IDS } from "../../content/starterRelics";
 import { makeWeaponDotMeta, makeWeaponHitMeta } from "../../combat/damageMeta";
 
 /** Handle weapon cooldowns, targeting, and firing events. */
@@ -35,25 +32,16 @@ export function combatSystem(w: World, dt: number) {
   w.lastAimX = defaultAimX;
   w.lastAimY = defaultAimY;
 
-  const cardIds = [...(w.cards ?? []), ...(w.combatCardIds ?? [])];
-  if (import.meta.env.DEV) {
-    cardIds.push(...getDevGrantedCardIds());
-  }
-  const cards = cardIds
-    .map((id) => getCardById(id))
-    .filter((card): card is NonNullable<typeof card> => Boolean(card));
-  const starterCards = resolveCombatStarterStatCards((w as any).currentCharacterId);
-
   const weaponId = resolveCombatStarterWeaponId((w as any).currentCharacterId);
   const selectedWeapon = getCombatStarterWeaponById(weaponId);
-  const resolved = resolveWeaponStats(selectedWeapon, { cards: [...cards, ...starterCards] });
+  const resolved = resolveWeaponStats(selectedWeapon, {
+    statMods: collectWorldStatMods(w),
+  });
   const debug = getUserSettings().debug;
   const debugDamageMult = Math.max(0, debug.dmgMult || 1);
   const debugFireRateMult = Math.max(0.001, debug.fireRateMult || 1);
   const derivedDamageMult = Math.max(0, w.dmgMult ?? 1);
   const derivedFireRateMult = Math.max(0.001, w.fireRateMult ?? 1);
-  const hasFullCritRelic = w.relics.includes("MOM_FULL_CRIT_DOUBLE");
-  const isAtFullMomentum = hasFullCritRelic && w.momentumMax > 0 && w.momentumValue >= w.momentumMax;
   const shotsPerSecond = Math.max(0.001, resolved.shotsPerSecond * derivedFireRateMult * debugFireRateMult);
   const fireRangePx = Math.max(0, resolved.rangePx || 0);
   const cooldown = 1 / shotsPerSecond;
@@ -62,8 +50,7 @@ export function combatSystem(w: World, dt: number) {
   const dmgFire = resolved.baseDamage.fire * derivedDamageMult * debugDamageMult;
   const dmgChaos = resolved.baseDamage.chaos * derivedDamageMult * debugDamageMult;
   const totalDamage = dmgPhys + dmgFire + dmgChaos;
-  const finalCritChance = Math.min(1, resolved.critChance * (isAtFullMomentum ? 2 : 1));
-  const hasStarterLuckyChamber = w.relics.includes(STARTER_RELIC_IDS.LUCKY_CHAMBER);
+  const finalCritChance = Math.min(1, resolved.critChance);
   const projectileKind = selectedWeapon.projectile.kind ?? PRJ_KIND.PISTOL;
   const weaponHitDamageMeta = makeWeaponHitMeta(selectedWeapon.id, {
     category: "HIT",
@@ -83,12 +70,8 @@ export function combatSystem(w: World, dt: number) {
   if (!Number.isFinite(runtime.primaryBurstAimX)) runtime.primaryBurstAimX = 1;
   if (!Number.isFinite(runtime.primaryBurstAimY)) runtime.primaryBurstAimY = 0;
   if (!Number.isFinite(runtime.primaryBurstTailCooldown)) runtime.primaryBurstTailCooldown = cooldown;
-  if (!Number.isFinite(w.starterLuckyChamberShotCounter as any)) w.starterLuckyChamberShotCounter = 0;
 
   const nextShotCritChance = (): number => {
-    if (!hasStarterLuckyChamber) return finalCritChance;
-    w.starterLuckyChamberShotCounter = (w.starterLuckyChamberShotCounter ?? 0) + 1;
-    if ((w.starterLuckyChamberShotCounter % 5) === 0) return 1;
     return finalCritChance;
   };
 

@@ -21,6 +21,6 @@ describe("durable reward pipeline recovery", () => {
 
     const active = getActiveTicket(world);
     expect(active?.status).toBe("ACTIVE");
-    expect(active?.kind).toBe("RELIC_PICK");
+    expect(active?.family).toBe("RING");
   });
 });

@@ -20,16 +20,7 @@ function numberedFrames(root: string, count: number): string[] {
   return out;
 }
 
-function namedFrames(root: string, stem: string, count: number): string[] {
-  const out: string[] = [];
-  for (let i = 1; i <= count; i++) out.push(`${root}/${stem}${i}`);
-  return out;
-}
-
 const EXPLOSION_SPRITE_IDS = numberedFrames("vfx/explosion_1", 14);
-const RELIC_EXPLODE_ON_KILL_SPRITE_IDS = namedFrames("vfx/explosions/1", "explosion-b", 12);
-const RELIC_ALL_HITS_EXPLODE_SPRITE_IDS = namedFrames("vfx/explosions/3", "explosion-f", 8);
-const RELIC_BAZOOKA_EXPLOSION_SPRITE_IDS = numberedFrames("vfx/explosions/5", 14);
 
 const GREEN_EXPLOSION_3_SPRITE_IDS = [
   "vfx/explosions/3_green/explosion-f1",
@@ -80,9 +71,6 @@ const SLIME_IDLE_SPRITE_IDS = [
 const BASE_VFX_CLIP_ENTRIES: ReadonlyArray<readonly [string, VfxClipDef]> = [
   ["EXPLOSION", { spriteIds: EXPLOSION_SPRITE_IDS, fps: 20, loop: false, projection: "billboard" }],
   ["BURSTER_EXPLOSION", { spriteIds: [...GREEN_EXPLOSION_3_SPRITE_IDS], fps: 9, loop: false, projection: "billboard" }],
-  ["RELIC_EXPLODE_ON_KILL", { spriteIds: RELIC_EXPLODE_ON_KILL_SPRITE_IDS, fps: 18, loop: false, projection: "billboard" }],
-  ["RELIC_ALL_HITS_EXPLODE", { spriteIds: RELIC_ALL_HITS_EXPLODE_SPRITE_IDS, fps: 9, loop: false, projection: "billboard" }],
-  ["RELIC_BAZOOKA_EXPLOSION", { spriteIds: RELIC_BAZOOKA_EXPLOSION_SPRITE_IDS, fps: 20, loop: false, projection: "billboard" }],
   ["CHEM_GUY_POISON_RAIN", { spriteIds: [...GREEN_EXPLOSION_3_SPRITE_IDS], fps: 9, loop: false, projection: "ground_decal" }],
   ["CHEM_GUY_FLAMETHROWER_LOOP", { spriteIds: [...CHEM_GUY_FLAMETHROWER_LOOP_SPRITE_IDS], fps: 18, loop: true, projection: "billboard" }],
   ["CHEM_GUY_FLAMETHROWER_END", { spriteIds: [...CHEM_GUY_FLAMETHROWER_END_SPRITE_IDS], fps: 18, loop: false, projection: "billboard" }],

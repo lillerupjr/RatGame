@@ -29,23 +29,16 @@ export function createRewardPipelineWorld(seed = 1, mode: ObjectiveMode = "ZONE_
     eType: [],
     eSpawnTriggerId: [],
 
-    cards: [] as string[],
-    relics: [] as string[],
-
-    cardReward: {
+    progressionReward: {
       active: false,
-      source: "ZONE_TRIAL",
-      options: [] as string[],
-    },
-    relicReward: {
-      active: false,
-      source: "OBJECTIVE_COMPLETION",
+      family: "RING",
+      source: "FLOOR_COMPLETION",
       options: [] as string[],
     },
 
     floorRewardBudget: createFloorRewardBudget(mode),
-    cardRewardClaimKeys: [] as string[],
-    lastCardRewardClaimKey: null,
+    rewardClaimKeys: [] as string[],
+    lastRewardClaimKey: null,
     objectiveRewardClaimedKey: null,
     zoneRewardClaimedKey: null,
     zoneRewardClaimedKeys: [] as string[],
@@ -65,8 +58,6 @@ export function getActiveTicket(world: any): any | null {
 }
 
 export function dismissActiveRewardUi(world: any): void {
-  world.cardReward.active = false;
-  world.cardReward.options = [];
-  world.relicReward.active = false;
-  world.relicReward.options = [];
+  world.progressionReward.active = false;
+  world.progressionReward.options = [];
 }

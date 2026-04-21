@@ -16,11 +16,7 @@ import { isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
 export let PROJECTILE_MAX_MOVE_FRAC_PER_STEP = 0.5;   // fraction of tile per move substep
 export let PROJECTILE_MAX_MOVE_STEPS = 12;            // hard cap for perf
 
-function projectileExplosionVfxId(w: World, projectileIndex: number): string {
-    const damageMeta = w.prDamageMeta[projectileIndex];
-    if (damageMeta?.cause.kind === "RELIC" && damageMeta.cause.relicId === "ACT_BAZOOKA_ON_HIT_20") {
-        return "RELIC_BAZOOKA_EXPLOSION";
-    }
+function projectileExplosionVfxId(): string {
     return "EXPLOSION";
 }
 
@@ -217,7 +213,7 @@ export function projectilesSystem(w: World, dt: number) {
                                 enemyDamageMeta: { ...projectileDamageMeta, category: "HIT" },
                             });
                             w.zTickLeft[z] = 0;
-                            emitEvent(w, { type: "VFX", id: projectileExplosionVfxId(w, i), x: tx, y: ty, radius: blastR });
+                            emitEvent(w, { type: "VFX", id: projectileExplosionVfxId(), x: tx, y: ty, radius: blastR });
                         }
                         break;
                     }
@@ -388,7 +384,7 @@ export function projectilesSystem(w: World, dt: number) {
 
                     // Apply first tick immediately (instant explosion feel)
                     w.zTickLeft[z] = 0;
-                    emitEvent(w, { type: "VFX", id: projectileExplosionVfxId(w, i), x: tx, y: ty, radius: blastR });
+                    emitEvent(w, { type: "VFX", id: projectileExplosionVfxId(), x: tx, y: ty, radius: blastR });
                 }
 
                 // Rocket is consumed by the explosion

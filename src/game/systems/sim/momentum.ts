@@ -1,14 +1,12 @@
 import type { World } from "../../../engine/world/world";
 import { restoreArmor } from "./playerArmor";
 import type { GameEvent } from "../../events";
-import { hasAnyRelicWithTag, MOMENTUM_RELIC_TAG } from "../../content/relics";
 
 export const MOMENTUM_IDLE_RESET_DELAY = 2.0;
 export const MOMENTUM_DECAY_PER_SEC = 3.0;
 export const MOMENTUM_GAIN_CAP_PER_HIT = 0.5;
 export const MOMENTUM_KILL_BONUS = 0.75;
 export const MOMENTUM_GLOBAL_CAP = 20;
-const MOMENTUM_PROC_POWER_CAP = 20;
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
@@ -22,8 +20,8 @@ function momentumCap(world: World): number {
   return Math.max(0, finiteOr(world.momentumMax, MOMENTUM_GLOBAL_CAP));
 }
 
-function momentumEnabled(world: World): boolean {
-  return hasAnyRelicWithTag(world.relics ?? [], MOMENTUM_RELIC_TAG);
+function momentumEnabled(_world: World): boolean {
+  return false;
 }
 
 function pushMomentumEvent(world: World, event: GameEvent): void {
@@ -46,9 +44,7 @@ function updateFullMomentumTransitions(world: World): void {
 }
 
 export function getMomentumIdleResetDelay(world: World): number {
-  const base = MOMENTUM_IDLE_RESET_DELAY;
-  const bonus = world.relics.includes("MOM_DECAY_DELAY_PLUS_1") ? 1.0 : 0.0;
-  return base + bonus;
+  return MOMENTUM_IDLE_RESET_DELAY;
 }
 
 export function addMomentumFromDamage(world: World, damageDealt: number, enemyMaxLife: number, now: number): void {
@@ -91,12 +87,6 @@ export function breakMomentumOnLifeDamage(world: World, now: number): void {
   updateFullMomentumTransitions(world);
 }
 
-export function relicTriggerMomentumDamageMultiplier(world: World): number {
-  if (!world.relics.includes("MOM_PROC_POWER_SCALING_2P")) return 1;
-  const m = Math.max(0, Math.min(MOMENTUM_PROC_POWER_CAP, finiteOr(world.momentumValue, 0)));
-  return 1 + 0.02 * m;
-}
-
 export function tickMomentumDecay(world: World, dt: number, now: number): void {
   if (!momentumEnabled(world)) {
     if ((world.momentumValue ?? 0) !== 0 || world.momentumWasFull) {
@@ -123,17 +113,16 @@ export function tickMomentumDecay(world: World, dt: number, now: number): void {
 
 export function processMomentumEventQueue(world: World): void {
   if (!Array.isArray(world.eventQueue) || world.eventQueue.length === 0) return;
-  const hasBreakArmorRelic = world.relics.includes("MOM_FULL_BREAK_GRANTS_ARMOR_20");
-  const hasFullCritRelic = world.relics.includes("MOM_FULL_CRIT_DOUBLE");
-  if (!hasFullCritRelic) world.fullMomentumActive = false;
+  const fullMomentumEffectsEnabled = false;
+  world.fullMomentumActive = false;
 
   for (let i = 0; i < world.eventQueue.length; i++) {
     const ev = world.eventQueue[i];
-    if (ev.type === "MOMENTUM_BREAK" && ev.wasFull && hasBreakArmorRelic) {
+    if (ev.type === "MOMENTUM_BREAK" && ev.wasFull && fullMomentumEffectsEnabled) {
       restoreArmor(world, 20);
       continue;
     }
-    if (!hasFullCritRelic) continue;
+    if (!fullMomentumEffectsEnabled) continue;
     if (ev.type === "FULL_MOMENTUM_REACHED") {
       world.fullMomentumActive = true;
       continue;

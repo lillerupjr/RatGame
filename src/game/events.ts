@@ -1,5 +1,3 @@
-import type { VendorOffer } from "./events/vendor";
-
 export type DamageCategory = "HIT" | "DOT";
 
 export type EffectMode = "INTRINSIC" | "TRIGGERED";
@@ -17,7 +15,6 @@ export type TriggerKey =
 
 export type DamageCause =
   | { kind: "WEAPON"; weaponId: string }
-  | { kind: "RELIC"; relicId: string; mode: EffectMode; triggerKey?: TriggerKey }
   | { kind: "TRIGGER"; mode: EffectMode; triggerId?: string; objectiveId?: string }
   | { kind: "ENVIRONMENT"; mode: EffectMode; hazardId: string }
   | { kind: "AILMENT"; ailment: AilmentKind }
@@ -112,10 +109,6 @@ export type GameEvent =
     vol?: number; // 0..1
     rate?: number; // playback rate
 }
-    | {
-    type: "VENDOR_PURCHASE";
-    offer: VendorOffer;
-}
     | { type: "MOMENTUM_BREAK"; wasFull: boolean }
     | { type: "MOMENTUM_DECAYED" }
     | { type: "FULL_MOMENTUM_REACHED" }
@@ -127,20 +120,3 @@ export type GameEvent =
     followEnemyIndex?: number; offsetYPx?: number;
   }
     | { type: "VFX_STOP_FOLLOW"; id: VfxClipKey; enemyIndex: number };
-
-export type RelicTriggerEvent = Extract<GameEvent, { type: "ENEMY_HIT" | "ENEMY_KILLED" }> & {
-  isRetrigger?: boolean;
-  killDamage?: number;
-};
-
-export type PendingRelicRetrigger = {
-  fireAt: number;
-  event: RelicTriggerEvent;
-};
-
-export type PendingRelicDaggerShot = {
-  fireAt: number;
-  projectileIndex: number;
-  excludeEnemyIndex: number;
-  range: number;
-};

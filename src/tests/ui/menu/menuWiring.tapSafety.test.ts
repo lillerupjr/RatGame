@@ -472,7 +472,7 @@ describe("menuWiring tap safety", () => {
     expect(game.startSandboxRun).not.toHaveBeenCalled();
   });
 
-  test("palette lab opens from main menu and renders snapshot cards", async () => {
+  test("palette lab opens from main menu and renders snapshot tiles", async () => {
     paletteSnapshotStorageState.records = [
       {
         id: "snap-1",
@@ -499,7 +499,7 @@ describe("menuWiring tap safety", () => {
     expect(refs.paletteLabSnapshotGridEl.textContent).toContain("Sewers");
   });
 
-  test("palette lab snapshot card actions support open, rename, and confirmed delete", async () => {
+  test("palette lab snapshot tile actions support open, rename, and confirmed delete", async () => {
     paletteSnapshotStorageState.records = [
       {
         id: "snap-1",

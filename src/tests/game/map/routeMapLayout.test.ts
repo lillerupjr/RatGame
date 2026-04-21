@@ -25,6 +25,8 @@ const vm: RouteMapVM = {
       title: "N1",
       subtitle: "r1",
       iconText: "C",
+      rewardFamily: "RING",
+      rewardFamilyLabel: "Ring",
       kindLabel: "Combat",
     },
     {
@@ -43,6 +45,8 @@ const vm: RouteMapVM = {
       title: "N2",
       subtitle: "r2",
       iconText: "$",
+      rewardFamily: "RING_MODIFIER_TOKEN",
+      rewardFamilyLabel: "Modifier",
       kindLabel: "Shop",
     },
     {
@@ -61,6 +65,8 @@ const vm: RouteMapVM = {
       title: "N3",
       subtitle: "r4",
       iconText: "B",
+      rewardFamily: "HAND_EFFECT",
+      rewardFamilyLabel: "Hand",
       kindLabel: "Boss",
     },
   ],

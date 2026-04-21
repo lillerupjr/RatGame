@@ -1,18 +1,10 @@
 import type { World } from "../../engine/world/world";
 import { getCombatModsSnapshot } from "../../game/combat_mods";
-import { getAllCardIds, getCardById } from "../../game/combat_mods/content/cards/cardPool";
 import { resolveCombatStarterWeaponId } from "../../game/combat_mods/content/weapons/characterStarterMap";
 import { getCombatStarterWeaponById } from "../../game/combat_mods/content/weapons/starterWeapons";
-import { applyCardToWorld, removeCardFromWorld } from "../../game/combat_mods/rewards/cardApply";
 import { getGold } from "../../game/economy/gold";
 import { registry } from "../../game/content/registry";
-import { getAllRelicIds, getRelicById } from "../../game/content/relics";
-import {
-  applyRelic,
-  getWorldRelicInstances,
-  normalizeWorldRelics,
-  removeRelic,
-} from "../../game/systems/progression/relics";
+import { getRingDefById } from "../../game/progression/rings/ringContent";
 import { DEFAULT_SETTINGS, getUserSettings, updateUserSettings } from "../../userSettings";
 import { mountSettingsPanel, type SettingsPanelController } from "../settings/settingsPanel";
 import {
@@ -33,7 +25,7 @@ export type PauseMenuController = {
   destroy(): void;
 };
 
-type PauseSectionId = "OWNED_CARDS" | "SETTINGS" | "BUILD_STATS" | "DEBUG_METRICS";
+type PauseSectionId = "RINGS" | "SETTINGS" | "BUILD_STATS" | "DEBUG_METRICS";
 
 type DebugMetricTab = "COMBAT" | "FLOW";
 
@@ -47,15 +39,6 @@ function pct(v: number): string {
 
 function clearChildren(el: HTMLElement): void {
   while (el.firstChild) el.removeChild(el.firstChild);
-}
-
-function countInstances(arr: unknown, id: string): number {
-  if (!Array.isArray(arr)) return 0;
-  let count = 0;
-  for (let i = 0; i < arr.length; i++) {
-    if (arr[i] === id) count += 1;
-  }
-  return count;
 }
 
 function createStatTable(rows: Array<[string, string]>): HTMLTableElement {
@@ -74,7 +57,7 @@ function createStatTable(rows: Array<[string, string]>): HTMLTableElement {
   return table;
 }
 
-function describeCardMod(mod: { key: string; op: string; value: number }): string {
+function describeStatMod(mod: { key: string; op: string; value: number }): string {
   const value = Number.isFinite(mod.value) ? mod.value : 0;
   if (mod.op === "more" || mod.op === "increased" || mod.op === "less" || mod.op === "decreased") {
     const sign = value >= 0 ? "+" : "";
@@ -114,14 +97,14 @@ function metricRowsForTab(world: any, tab: DebugMetricTab): Array<[string, strin
 
   const flowRows: Array<[string, string]> = [
     [
-      "Card Rewards",
-      `${safeNum(world?.cardRewardBudgetUsed, 0).toFixed(0)}/${safeNum(world?.cardRewardBudgetTotal, 0).toFixed(0)}`,
+      "Progression Rewards",
+      `${safeNum(world?.rewardBudgetUsed, 0).toFixed(0)}/${safeNum(world?.rewardBudgetTotal, 0).toFixed(0)}`,
     ],
     [
       "Reward Claim Keys",
-      `${Array.isArray(world?.cardRewardClaimKeys) ? world.cardRewardClaimKeys.length : 0}`,
+      `${Array.isArray(world?.rewardClaimKeys) ? world.rewardClaimKeys.length : 0}`,
     ],
-    ["Last Reward Key", `${world?.lastCardRewardClaimKey ?? "-"}`],
+    ["Last Reward Key", `${world?.lastRewardClaimKey ?? "-"}`],
     ["Floor Time", safeNum(world?.phaseTime, 0).toFixed(1)],
     ["Floor Duration", safeNum(world?.floorDuration, 0).toFixed(1)],
     ["Alive Enemies", safeNum(aliveEnemyCount, 0).toFixed(0)],
@@ -276,38 +259,19 @@ export function mountPauseMenu(args: {
   quitConfirmDialog.appendChild(quitConfirmActions);
   quitConfirmOverlay.appendChild(quitConfirmDialog);
 
-  const ownedCardsPanel = document.createElement("section");
-  ownedCardsPanel.className = "pauseModePanel";
+  const ringsPanel = document.createElement("section");
+  ringsPanel.className = "pauseModePanel";
   const ownedTitle = document.createElement("h3");
   ownedTitle.className = "pauseSectionTitle";
-  ownedTitle.textContent = "Cards / Relics";
+  ownedTitle.textContent = "Rings";
   const ownedList = document.createElement("div");
-  ownedList.className = "pauseOwnedCardsList";
+  ownedList.className = "pauseOwnedRingsList";
   const ownedDetail = document.createElement("div");
-  ownedDetail.className = "pauseOwnedCardDetail";
+  ownedDetail.className = "pauseOwnedRingDetail";
 
-  const ownedDebugQuickRow = document.createElement("div");
-  ownedDebugQuickRow.className = "pauseDevQuickRow pauseDebugCardsSection";
-  ownedDebugQuickRow.setAttribute("data-dev-only", "1");
-  ownedDebugQuickRow.setAttribute("data-debug-cards-section", "1");
-  const ownedOpenDebugCardsBtn = document.createElement("button");
-  ownedOpenDebugCardsBtn.type = "button";
-  ownedOpenDebugCardsBtn.className = "pauseDevQuickBtn pauseDebugOpenBtn";
-  ownedOpenDebugCardsBtn.textContent = "Open Debug Cards Editor";
-  ownedOpenDebugCardsBtn.setAttribute("data-dev-only", "1");
-  ownedOpenDebugCardsBtn.setAttribute("data-debug-cards-open", "1");
-  const ownedOpenDebugRelicsBtn = document.createElement("button");
-  ownedOpenDebugRelicsBtn.type = "button";
-  ownedOpenDebugRelicsBtn.className = "pauseDevQuickBtn pauseDebugOpenBtn";
-  ownedOpenDebugRelicsBtn.textContent = "Open Debug Relics Editor";
-  ownedOpenDebugRelicsBtn.setAttribute("data-dev-only", "1");
-  ownedOpenDebugRelicsBtn.setAttribute("data-debug-relics-open", "1");
-  ownedDebugQuickRow.appendChild(ownedOpenDebugCardsBtn);
-  ownedDebugQuickRow.appendChild(ownedOpenDebugRelicsBtn);
-
-  ownedCardsPanel.appendChild(ownedTitle);
-  ownedCardsPanel.appendChild(ownedList);
-  ownedCardsPanel.appendChild(ownedDetail);
+  ringsPanel.appendChild(ownedTitle);
+  ringsPanel.appendChild(ownedList);
+  ringsPanel.appendChild(ownedDetail);
 
   const settingsPanelSection = document.createElement("section");
   settingsPanelSection.className = "pauseModePanel";
@@ -343,13 +307,13 @@ export function mountPauseMenu(args: {
   debugMetricsPanel.appendChild(debugMetricsBody);
 
   const panelById: Record<PauseSectionId, HTMLElement> = {
-    OWNED_CARDS: ownedCardsPanel,
+    RINGS: ringsPanel,
     SETTINGS: settingsPanelSection,
     BUILD_STATS: buildStatsPanel,
     DEBUG_METRICS: debugMetricsPanel,
   };
 
-  content.appendChild(ownedCardsPanel);
+  content.appendChild(ringsPanel);
   content.appendChild(settingsPanelSection);
   content.appendChild(buildStatsPanel);
   content.appendChild(debugMetricsPanel);
@@ -381,7 +345,7 @@ export function mountPauseMenu(args: {
     return btn;
   };
 
-  addNavButton("Cards / Relics", { sectionId: "OWNED_CARDS" });
+  addNavButton("Rings", { sectionId: "RINGS" });
   addNavButton("Settings", { sectionId: "SETTINGS" });
   addNavButton("Build Stats", { sectionId: "BUILD_STATS", devOnly: true });
   addNavButton("Debug Metrics", { sectionId: "DEBUG_METRICS", devOnly: true });
@@ -391,58 +355,15 @@ export function mountPauseMenu(args: {
   panel.appendChild(header);
   panel.appendChild(layout);
 
-  const debugLayer = document.createElement("div");
-  debugLayer.className = "pauseDebugLayer";
-  debugLayer.hidden = true;
-  debugLayer.setAttribute("data-debug-layer", "1");
-
-  const debugLayerPanel = document.createElement("div");
-  debugLayerPanel.className = "pauseDebugLayerPanel";
-
-  const debugLayerHeader = document.createElement("div");
-  debugLayerHeader.className = "pauseDebugLayerHeader";
-
-  const debugLayerTitle = document.createElement("h3");
-  debugLayerTitle.textContent = "Debug Cards Editor";
-  debugLayerHeader.appendChild(debugLayerTitle);
-
-  const debugLayerActions = document.createElement("div");
-  debugLayerActions.className = "pauseDebugLayerActions";
-  const debugCancelBtn = document.createElement("button");
-  debugCancelBtn.type = "button";
-  debugCancelBtn.className = "pauseBtn";
-  debugCancelBtn.textContent = "Close";
-  debugCancelBtn.setAttribute("data-debug-cards-cancel", "1");
-  debugLayerActions.appendChild(debugCancelBtn);
-  debugLayerHeader.appendChild(debugLayerActions);
-
-  const debugLayerBody = document.createElement("div");
-  debugLayerBody.className = "pauseDebugLayerBody pauseSectionScroll";
-  debugLayerBody.setAttribute("data-debug-cards-list", "1");
-  const debugLayerNote = document.createElement("div");
-  debugLayerNote.className = "pauseDebugLayerNote";
-  debugLayerNote.hidden = true;
-
-  debugLayerPanel.appendChild(debugLayerHeader);
-  debugLayerPanel.appendChild(debugLayerNote);
-  debugLayerPanel.appendChild(debugLayerBody);
-  debugLayer.appendChild(debugLayerPanel);
-  panel.appendChild(debugLayer);
-
   host.appendChild(panel);
   host.appendChild(quitConfirmOverlay);
   root.appendChild(host);
 
   let latestWorld: World | null = null;
   let visible = false;
-  let selectedOwnedCardId: string | null = null;
-  let activeSection: PauseSectionId = "OWNED_CARDS";
+  let selectedRingInstanceId: string | null = null;
+  let activeSection: PauseSectionId = "RINGS";
   let debugMetricTab: DebugMetricTab = "COMBAT";
-  let debugLayerOpen = false;
-  let debugMode: "CARDS" | "RELICS" = "CARDS";
-  let debugRelicMessage = "";
-  const debugCardIds = getAllCardIds();
-  const debugRelicIds = getAllRelicIds();
 
   savePaletteSnapshotBtn.addEventListener("click", () => {
     if (!latestWorld) return;
@@ -476,7 +397,7 @@ export function mountPauseMenu(args: {
     onUserModeChanged: () => {
       syncDevVisibility();
       if (((getUserSettings() as any).game?.userModeEnabled ?? true)) {
-        setActiveSection("OWNED_CARDS");
+        setActiveSection("RINGS");
       }
       if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
         window.dispatchEvent(new Event("ratgame:settings-changed"));
@@ -554,277 +475,119 @@ export function mountPauseMenu(args: {
     }
   };
 
-  const resetRelicDraft = () => {
-    const w = latestWorld as any;
-    if (!w || typeof w !== "object") return;
-    normalizeWorldRelics(w);
-  };
-
   const closeDebugLayer = () => {
-    debugLayerOpen = false;
-    debugLayer.hidden = true;
+    // Old debug progression editors were removed with the ring migration.
   };
 
   const renderDebugLayer = () => {
-    const isUserMode = !!((getUserSettings() as any).game?.userModeEnabled ?? true);
-    debugLayer.hidden = !debugLayerOpen || isUserMode;
-    if (debugLayer.hidden) return;
-
-    clearChildren(debugLayerBody);
-    debugLayerTitle.textContent = debugMode === "CARDS" ? "Debug Cards Editor" : "Debug Relics Editor";
-    if (debugMode === "RELICS") {
-      if (debugRelicMessage.length > 0) {
-        debugLayerNote.textContent = debugRelicMessage;
-        debugLayerNote.hidden = false;
-      } else {
-        debugLayerNote.textContent = "Starter relics are locked and cannot be removed.";
-        debugLayerNote.hidden = false;
-      }
-    } else {
-      debugLayerNote.textContent = "";
-      debugLayerNote.hidden = true;
-    }
-
-    if (debugMode === "CARDS") {
-      for (const cardId of debugCardIds) {
-        const row = document.createElement("div");
-        row.className = "pauseDebugCardRow";
-
-        const label = document.createElement("span");
-        label.className = "pauseDebugCardId";
-        label.textContent = getCardById(cardId)?.displayName ?? cardId;
-
-        const count = document.createElement("span");
-        count.className = "pauseCardCount";
-        count.textContent = `x${countInstances((latestWorld as any)?.cards, cardId)}`;
-        count.setAttribute("data-debug-card-count", cardId);
-
-        const plusBtn = document.createElement("button");
-        plusBtn.type = "button";
-        plusBtn.className = "pauseDebugCardBtn";
-        plusBtn.textContent = "+";
-        plusBtn.setAttribute("data-debug-card-add", cardId);
-        plusBtn.addEventListener("click", () => {
-          const w = latestWorld as any;
-          if (!w || typeof w !== "object") return;
-          applyCardToWorld(w, cardId);
-          count.textContent = `x${countInstances(w.cards, cardId)}`;
-          renderOwnedCards(latestWorld);
-          renderTopStatsForOwnedAndSettings(latestWorld);
-        });
-
-        const minusBtn = document.createElement("button");
-        minusBtn.type = "button";
-        minusBtn.className = "pauseDebugCardBtn";
-        minusBtn.textContent = "-";
-        minusBtn.setAttribute("data-debug-card-remove", cardId);
-        minusBtn.addEventListener("click", () => {
-          const w = latestWorld as any;
-          if (!w || typeof w !== "object" || !Array.isArray(w.cards)) {
-            count.textContent = "x0";
-            return;
-          }
-          removeCardFromWorld(w, cardId);
-          count.textContent = `x${countInstances(w.cards, cardId)}`;
-          renderOwnedCards(latestWorld);
-          renderTopStatsForOwnedAndSettings(latestWorld);
-        });
-
-        row.appendChild(label);
-        row.appendChild(count);
-        row.appendChild(plusBtn);
-        row.appendChild(minusBtn);
-        debugLayerBody.appendChild(row);
-      }
-      return;
-    }
-
-    const w = latestWorld as any;
-    const instances = w && typeof w === "object" ? getWorldRelicInstances(w) : [];
-    const ownedById = new Set(instances.map((it) => it.id));
-
-    for (const relicId of debugRelicIds) {
-      const relic = getRelicById(relicId);
-      if (!relic || !relic.isEnabled) continue;
-
-      const row = document.createElement("div");
-      row.className = "pauseDebugCardRow";
-
-      const label = document.createElement("span");
-      label.className = "pauseDebugCardId";
-      label.textContent = relic.displayName;
-
-      const toggleBtn = document.createElement("button");
-      toggleBtn.type = "button";
-      toggleBtn.className = "pauseDebugCardBtn";
-      const isOwned = ownedById.has(relicId);
-      toggleBtn.textContent = isOwned ? "Remove" : "Add";
-      toggleBtn.setAttribute(isOwned ? "data-debug-relic-remove" : "data-debug-relic-add", relicId);
-      toggleBtn.addEventListener("click", () => {
-        const world = latestWorld as any;
-        if (!world || typeof world !== "object") return;
-        if (ownedById.has(relicId)) {
-          const result = removeRelic(world, relicId);
-          if (!result.removed && result.reason === "LOCKED") {
-            debugRelicMessage = "Starter relic can't be removed.";
-          } else {
-            debugRelicMessage = "";
-          }
-        } else {
-          applyRelic(world, relicId, { source: "debug" });
-          debugRelicMessage = "";
-        }
-
-        renderOwnedCards(latestWorld);
-        renderTopStatsForOwnedAndSettings(latestWorld);
-        renderBuildStats(latestWorld);
-        renderDebugMetrics(latestWorld);
-        renderDebugLayer();
-      });
-
-      row.appendChild(label);
-      row.appendChild(toggleBtn);
-      debugLayerBody.appendChild(row);
-    }
+    // No debug layer in the ring-first progression UI.
   };
 
-  const openDebugCardsEditor = () => {
-    if ((getUserSettings() as any)?.game?.userModeEnabled ?? true) return;
-    debugMode = "CARDS";
-    debugRelicMessage = "";
-    debugLayerOpen = true;
-    renderDebugLayer();
-  };
-
-  const openDebugRelicsEditor = () => {
-    if ((getUserSettings() as any)?.game?.userModeEnabled ?? true) return;
-    debugMode = "RELICS";
-    debugRelicMessage = "";
-    resetRelicDraft();
-    debugLayerOpen = true;
-    renderDebugLayer();
-  };
-
-  ownedOpenDebugCardsBtn.addEventListener("click", openDebugCardsEditor);
-  ownedOpenDebugRelicsBtn.addEventListener("click", openDebugRelicsEditor);
-  debugCancelBtn.addEventListener("click", closeDebugLayer);
-  debugLayer.addEventListener("click", (ev) => {
-    if (ev.target !== debugLayer) return;
-    closeDebugLayer();
-  });
-
-  const renderOwnedCards = (world: World | null) => {
+  const renderOwnedRings = (world: World | null) => {
     clearChildren(ownedList);
     clearChildren(ownedDetail);
 
-    const appendDebugQuickActions = () => {
-      ownedDetail.appendChild(ownedDebugQuickRow);
-    };
-
     if (!world) {
       ownedList.textContent = "No run state";
-      appendDebugQuickActions();
       return;
     }
 
-    const snapshot = getCombatModsSnapshot(world as any);
-    const cards = snapshot.cards;
+    const ringState = world.progression;
+    const rings = Object.values(ringState?.ringsByInstanceId ?? {});
 
-    if (cards.length === 0) {
-      ownedList.textContent = "No cards owned yet.";
+    if (rings.length === 0) {
+      ownedList.textContent = "No rings equipped yet.";
       const hint = document.createElement("div");
       hint.className = "pauseMeta";
-      hint.textContent = "Pick cards from rewards and vendors to build your run.";
+      hint.textContent = "Choose ring rewards and vendor offers to build your run.";
       ownedDetail.appendChild(hint);
-      appendDebugQuickActions();
-      selectedOwnedCardId = null;
+      selectedRingInstanceId = null;
       return;
     }
 
-    if (!selectedOwnedCardId || !cards.some((c) => c.id === selectedOwnedCardId)) {
-      selectedOwnedCardId = cards[0].id;
+    if (!selectedRingInstanceId || !rings.some((ring) => ring.instanceId === selectedRingInstanceId)) {
+      selectedRingInstanceId = rings[0].instanceId;
     }
 
-    for (const card of cards) {
-      const cardDef = getCardById(card.id);
+    for (const ring of rings) {
+      const def = getRingDefById(ring.defId);
       const row = document.createElement("button");
       row.type = "button";
-      row.className = "pauseOwnedCardRow";
-      row.classList.toggle("active", card.id === selectedOwnedCardId);
+      row.className = "pauseOwnedRingRow";
+      row.classList.toggle("active", ring.instanceId === selectedRingInstanceId);
 
       const left = document.createElement("div");
-      left.className = "pauseOwnedCardMain";
+      left.className = "pauseOwnedRingMain";
 
       const name = document.createElement("div");
-      name.className = "pauseOwnedCardName";
-      name.textContent = card.name;
+      name.className = "pauseOwnedRingName";
+      name.textContent = def?.name ?? ring.defId;
 
       const effect = document.createElement("div");
-      effect.className = "pauseOwnedCardSummary";
-      effect.textContent = cardDef?.displayName ?? card.id;
+      effect.className = "pauseOwnedRingSummary";
+      effect.textContent = `${def?.familyId ?? "unknown"} family`;
 
       left.appendChild(name);
       left.appendChild(effect);
 
       const meta = document.createElement("div");
-      meta.className = "pauseOwnedCardMeta";
+      meta.className = "pauseOwnedRingMeta";
 
       const tier = document.createElement("span");
       tier.className = "pauseOwnedTier";
-      tier.textContent = `T${card.powerTier ?? "?"}`;
+      tier.textContent = ring.slotId;
       meta.appendChild(tier);
 
       const stack = document.createElement("span");
       stack.className = "pauseOwnedStack";
-      stack.textContent = `x${card.count}`;
+      stack.textContent = `${ring.unlockedTalentNodeIds.length} nodes`;
       meta.appendChild(stack);
 
       row.appendChild(left);
       row.appendChild(meta);
 
       row.addEventListener("click", () => {
-        selectedOwnedCardId = card.id;
-        renderOwnedCards(latestWorld);
+        selectedRingInstanceId = ring.instanceId;
+        renderOwnedRings(latestWorld);
       });
 
       ownedList.appendChild(row);
     }
 
-    const selected = cards.find((c) => c.id === selectedOwnedCardId) ?? cards[0];
-    const selectedDef = getCardById(selected.id);
+    const selected = rings.find((ring) => ring.instanceId === selectedRingInstanceId) ?? rings[0];
+    const selectedDef = getRingDefById(selected.defId);
 
     const detailTitle = document.createElement("h4");
-    detailTitle.textContent = selected.name;
+    detailTitle.textContent = selectedDef?.name ?? selected.defId;
     const detailMeta = document.createElement("div");
     detailMeta.className = "pauseMeta";
-    detailMeta.textContent = `ID: ${selected.id} · Tier ${selected.powerTier ?? "?"} · Rarity ${selected.rarity ?? "?"} · Stack x${selected.count}`;
+    detailMeta.textContent = `Instance: ${selected.instanceId} · Slot ${selected.slotId} · ${selected.allocatedPassivePoints} passive points`;
 
     ownedDetail.appendChild(detailTitle);
     ownedDetail.appendChild(detailMeta);
 
     const modsHeader = document.createElement("div");
     modsHeader.className = "pauseMeta pauseMetaHeader";
-    modsHeader.textContent = "Exact modifiers";
+    modsHeader.textContent = "Main effect";
     ownedDetail.appendChild(modsHeader);
 
     const modList = document.createElement("ul");
     modList.className = "pauseOwnedModList";
 
-    const mods = selectedDef?.mods ?? [];
+    const mods = selectedDef?.effectParams.kind === "STAT_MODIFIERS" ? selectedDef.effectParams.mods : [];
     if (mods.length === 0) {
       const li = document.createElement("li");
-      li.textContent = selectedDef?.displayName ?? "No extra modifiers";
+      li.textContent = selectedDef?.effectType ?? "No stat modifiers";
       modList.appendChild(li);
     } else {
       for (const mod of mods) {
         const li = document.createElement("li");
-        li.textContent = describeCardMod(mod);
+        li.textContent = describeStatMod(mod);
         modList.appendChild(li);
       }
     }
 
     ownedDetail.appendChild(modList);
-    appendDebugQuickActions();
   };
 
   const setActiveSection = (id: PauseSectionId) => {
@@ -848,24 +611,19 @@ export function mountPauseMenu(args: {
     });
 
     if (isUserMode && (activeSection === "BUILD_STATS" || activeSection === "DEBUG_METRICS")) {
-      setActiveSection("OWNED_CARDS");
+      setActiveSection("RINGS");
     }
 
     if (isUserMode) {
       buildStatsPanel.hidden = true;
       debugMetricsPanel.hidden = true;
-      debugLayerOpen = false;
     }
 
     renderDebugLayer();
   };
 
-  const computeEffectiveCrit = (world: World, baseCrit: number): number => {
-    const hasFullCritRelic = world.relics.includes("MOM_FULL_CRIT_DOUBLE");
-    const hasLuckyCrit = world.relics.includes("PASS_CRIT_ROLLS_TWICE");
-    const isAtFullMomentum = hasFullCritRelic && world.momentumMax > 0 && world.momentumValue >= world.momentumMax;
-    const afterMomentum = Math.min(1, baseCrit * (isAtFullMomentum ? 2 : 1));
-    return hasLuckyCrit ? 1 - (1 - afterMomentum) ** 2 : afterMomentum;
+  const computeEffectiveCrit = (_world: World, baseCrit: number): number => {
+    return Math.min(1, baseCrit);
   };
 
   const renderTopStatsForOwnedAndSettings = (world: World | null) => {
@@ -880,16 +638,16 @@ export function mountPauseMenu(args: {
       `Gold ${Math.ceil(safeNum(getGold(world)))} · ` +
       `Crit ${(baseCritChance * 100).toFixed(1)}% (${(effectiveCritChance * 100).toFixed(1)}% eff)`;
 
-    const first = ownedCardsPanel.querySelector(".pauseMeta");
-    if (first && first.parentElement === ownedCardsPanel) first.remove();
-    ownedCardsPanel.insertBefore(summary, ownedList);
+    const first = ringsPanel.querySelector(".pauseMeta");
+    if (first && first.parentElement === ringsPanel) first.remove();
+    ringsPanel.insertBefore(summary, ownedList);
   };
 
   const renderAll = (world: World | null) => {
     settingsPanel.refresh();
     syncDevVisibility();
 
-    renderOwnedCards(world);
+    renderOwnedRings(world);
     renderTopStatsForOwnedAndSettings(world);
     renderBuildStats(world);
     renderDebugMetricTabs();
@@ -898,7 +656,7 @@ export function mountPauseMenu(args: {
     syncDevVisibility();
   };
 
-  setActiveSection("OWNED_CARDS");
+  setActiveSection("RINGS");
 
   return {
     setVisible(v: boolean): void {

@@ -2,7 +2,7 @@
 import { RNG } from "../../game/util/rng";
 import { createSpatialHash, type SpatialHash } from "../../game/util/spatialHash";
 import type { StageDef } from "../../game/content/stages";
-import type { DamageMeta, GameEvent, PendingRelicDaggerShot, PendingRelicRetrigger } from "../../game/events";
+import type { DamageMeta, GameEvent } from "../../game/events";
 import { KENNEY_TILE_WORLD } from "../render/kenneyTiles";
 import { getSpawnWorld } from "../../game/map/compile/kenneyMap";
 import { recomputeDerivedStats } from "../../game/stats/derivedStats";
@@ -16,12 +16,13 @@ import type { FloorIntent } from "../../game/map/floorIntent";
 import type { TriggerDef } from "../../game/triggers/triggerTypes";
 import type { Dir8 } from "../render/sprites/dir8";
 import type { EnemyAilmentsState } from "../../game/combat_mods/ailments/enemyAilments";
-import type { CardRewardState } from "../../game/combat_mods/rewards/cardRewardFlow";
-import type { RelicRewardState } from "../../game/combat_mods/rewards/relicRewardFlow";
 import type { FloorRewardBudget } from "../../game/rewards/floorRewardBudget";
 import type { RunEvent } from "../../game/rewards/runEvents";
 import type { RewardTicket } from "../../game/rewards/rewardTickets";
 import type { VendorState } from "../../game/vendor/vendorState";
+import { createInitialRingProgressionState } from "../../game/progression/rings/ringState";
+import type { RingProgressionState } from "../../game/progression/rings/ringTypes";
+import type { ProgressionRewardState } from "../../game/progression/rewards/progressionRewardFlow";
 import type { EnemyBrainState } from "../../game/systems/enemies/brain";
 import { createBossRuntimeState } from "../../game/bosses/bossRuntime";
 import type { BossRuntimeState, ArenaTileEffect } from "../../game/bosses/bossTypes";
@@ -32,8 +33,6 @@ import type {
   HostileSpawnDebugSnapshot,
   HostileSpawnDirectorState,
 } from "../../game/systems/spawn/hostileSpawnDirector";
-
-import type { RelicInstance } from "../../game/content/relics";
 
 /**
  * NOTE:
@@ -322,33 +321,23 @@ export type World = {
   fullMomentumActive: boolean;
   momentumLastGainTime: number;
 
-  // Vendor economy (scaffold)
-  vendorOffers: { kind: "RELIC" | "UPGRADE" | "HEAL" | "REROLL"; id: string; cost: number }[];
-  vendorPurchases: string[];
+  // Vendor economy
   vendor: VendorState | null;
   pendingAdvanceToNextFloor: boolean;
-  relics: string[];
-  relicInstances?: RelicInstance[];
-  starterLuckyChamberShotCounter?: number;
-  relicRetriggerQueue: PendingRelicRetrigger[];
-  relicDaggerQueue: PendingRelicDaggerShot[];
-  relicEffects: { hpBonus: number };
+  progression: RingProgressionState;
   npcs: NpcActor[];
   neutralMobs: NeutralAnimatedMob[];
 
   // -------------------------
-  // Items + cards
+  // Items + progression effects
   // -------------------------
   items: { id: any; level: number }[];
-  cards: string[];
-  combatCardIds: string[];
-  cardReward: CardRewardState;
-  relicReward: RelicRewardState;
+  progressionReward: ProgressionRewardState;
   floorRewardBudget: FloorRewardBudget;
-  cardRewardBudgetTotal: number;
-  cardRewardBudgetUsed: number;
-  cardRewardClaimKeys: string[];
-  lastCardRewardClaimKey: string | null;
+  rewardBudgetTotal: number;
+  rewardBudgetUsed: number;
+  rewardClaimKeys: string[];
+  lastRewardClaimKey: string | null;
   runEvents: RunEvent[];
   rewardTickets: RewardTicket[];
   activeRewardTicketId: string | null;
@@ -759,45 +748,30 @@ export function createWorld(args: CreateWorldArgs): World {
     momentumWasFull: false,
     fullMomentumActive: false,
     momentumLastGainTime: 0,
-    vendorOffers: [],
-    vendorPurchases: [],
     vendor: null,
     pendingAdvanceToNextFloor: false,
-    relics: [],
-    relicInstances: [],
-    starterLuckyChamberShotCounter: 0,
-    relicRetriggerQueue: [],
-    relicDaggerQueue: [],
-    relicEffects: {
-      hpBonus: 0,
-    },
+    progression: createInitialRingProgressionState(),
     npcs: [],
     neutralMobs: [],
 
-    // Items + cards
+    // Items + progression effects
     items: [],
-    cards: [],
-    combatCardIds: [],
-    cardReward: {
+    progressionReward: {
       active: false,
-      source: "ZONE_TRIAL",
-      options: [],
-    },
-    relicReward: {
-      active: false,
-      source: "OBJECTIVE_COMPLETION",
+      family: "RING",
+      source: "FLOOR_COMPLETION",
       options: [],
     },
     floorRewardBudget: {
       mode: "NORMAL",
-      nonObjectiveCardsRemaining: 0,
-      objectiveCardAvailable: true,
+      nonObjectiveRewardsRemaining: 0,
+      objectiveRewardAvailable: true,
       fired: Object.create(null),
     },
-    cardRewardBudgetTotal: 0,
-    cardRewardBudgetUsed: 0,
-    cardRewardClaimKeys: [],
-    lastCardRewardClaimKey: null,
+    rewardBudgetTotal: 0,
+    rewardBudgetUsed: 0,
+    rewardClaimKeys: [],
+    lastRewardClaimKey: null,
     runEvents: [],
     rewardTickets: [],
     activeRewardTicketId: null,

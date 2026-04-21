@@ -25,35 +25,29 @@ function createWorld(seed = 123): any {
     timeSec: 0,
     run: { runGold: 0, xp: 0, level: 1, xpToNextLevel: 50 },
     level: 1,
-    cards: [] as string[],
-    relics: [] as string[],
     objectiveStates: [{ id: "OBJ_ZONE_TRIAL", status: "COMPLETED" }],
     floorRewardBudget: createFloorRewardBudget("ZONE_TRIAL"),
     objectiveRewardClaimedKey: null,
-    cardRewardClaimKeys: [],
+    rewardClaimKeys: [],
     runEvents: [],
     rewardTickets: [],
     activeRewardTicketId: null,
     rewardTicketSeq: 0,
-    cardReward: {
+    progressionReward: {
       active: false,
-      source: "ZONE_TRIAL",
-      options: [],
-    },
-    relicReward: {
-      active: false,
-      source: "OBJECTIVE_COMPLETION",
+      family: "RING",
+      source: "FLOOR_COMPLETION",
       options: [],
     },
   };
 }
 
 function canAdvance(world: any): boolean {
-  return world.state === "RUN" && !world.cardReward.active && !world.relicReward.active;
+  return world.state === "RUN" && !world.progressionReward.active;
 }
 
 describe("zoneTrial reward trigger", () => {
-  test("grants objective gold plus relic exactly once and blocks advancement until resolved", () => {
+  test("grants objective gold plus progression reward exactly once and blocks advancement until resolved", () => {
     const world = createWorld(7);
 
     rewardRunEventProducerSystem(world, { includeCoreFacts: true, includeChest: false });
@@ -61,13 +55,13 @@ describe("zoneTrial reward trigger", () => {
     const startedFirst = rewardPresenterSystem(world);
 
     expect(startedFirst).toBe(true);
-    expect(world.relicReward.active).toBe(true);
+    expect(world.progressionReward.active).toBe(true);
     expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
     expect(canAdvance(world)).toBe(false);
 
     resolveActiveRewardTicket(world);
-    world.relicReward.active = false;
-    world.relicReward.options = [];
+    world.progressionReward.active = false;
+    world.progressionReward.options = [];
     world.state = "RUN";
     rewardRunEventProducerSystem(world, { includeCoreFacts: true, includeChest: false });
     rewardSchedulerSystem(world);
@@ -84,7 +78,7 @@ describe("zoneTrial reward trigger", () => {
     const started = rewardPresenterSystem(world);
 
     expect(started).toBe(true);
-    expect(world.relicReward.active).toBe(true);
+    expect(world.progressionReward.active).toBe(true);
     expect(world.objectiveRewardClaimedKey).toBe("0:TRIAL_COMPLETE");
     expect(world.run.runGold).toBe(OBJECTIVE_COMPLETION_GOLD);
     expect(canAdvance(world)).toBe(false);

@@ -14,14 +14,14 @@ describe("durable reward pipeline idempotency", () => {
     rewardSchedulerSystem(world);
 
     expect(world.rewardTickets).toHaveLength(0);
-    expect(world.cardRewardClaimKeys).toEqual(["0:ZONE_CLEAR:1"]);
-    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
+    expect(world.rewardClaimKeys).toEqual(["0:ZONE_CLEAR:1"]);
+    expect(world.floorRewardBudget.nonObjectiveRewardsRemaining).toBe(0);
 
     world.runEvents.push({ type: "ZONE_CLEARED", floorIndex: 0, zoneIndex: 1 });
     rewardSchedulerSystem(world);
 
     expect(world.rewardTickets).toHaveLength(0);
-    expect(world.cardRewardClaimKeys).toEqual(["0:ZONE_CLEAR:1"]);
-    expect(world.floorRewardBudget.nonObjectiveCardsRemaining).toBe(0);
+    expect(world.rewardClaimKeys).toEqual(["0:ZONE_CLEAR:1"]);
+    expect(world.floorRewardBudget.nonObjectiveRewardsRemaining).toBe(0);
   });
 });

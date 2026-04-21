@@ -17,23 +17,18 @@ import { AILMENT_DURATIONS } from "../../combat_mods/ailments/ailmentTypes";
 import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
 import { getUserSettings } from "../../../userSettings";
 import { resolveCritRoll01 } from "../../combat_mods/runtime/critDamagePacket";
-import { getRelicMods, normalizeWorldRelics } from "../progression/relics";
 import { isLootGoblinEnemy } from "../neutral/lootGoblin";
-import { getCardById } from "../../combat_mods/content/cards/cardPool";
 import { resolveDotStats } from "../../combat_mods/stats/combatStatsResolver";
+import { collectWorldStatMods } from "../../progression/effects/worldEffects";
 import { applyPlayerIncomingDamage } from "./playerArmor";
 import { isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
-import {
-  breakMomentumOnLifeDamage,
-  relicTriggerMomentumDamageMultiplier,
-} from "./momentum";
+import { breakMomentumOnLifeDamage } from "./momentum";
 import {
   getEnemyWorld,
   getPlayerWorld,
   getProjectileWorld,
 } from "../../coords/worldViews";
 import { getEnemyAimWorld } from "../../combat/aimPoints";
-import { STARTER_RELIC_IDS } from "../../content/starterRelics";
 import {
   isProcDamage,
   makeEnemyHitMeta,
@@ -47,15 +42,11 @@ const DMG_COLOR_FIRE = "#ff9f3a";
 const DMG_COLOR_CHAOS = "#b57bff";
 const DMG_COLOR_POISON = "#6fe36f";
 const DMG_COLOR_PLAYER = "#ff4b4b";
-const STARTER_POINT_BLANK_MAX_RANGE = 220;
 
 type EnemyHitEvent = Extract<import("../../events").GameEvent, { type: "ENEMY_HIT" }>;
 type PlayerHitEvent = Extract<import("../../events").GameEvent, { type: "PLAYER_HIT" }>;
 
-function projectileExplosionVfxId(projectileDamageMeta: any): string {
-  if (projectileDamageMeta?.cause?.kind === "RELIC" && projectileDamageMeta.cause.relicId === "ACT_BAZOOKA_ON_HIT_20") {
-    return "RELIC_BAZOOKA_EXPLOSION";
-  }
+function projectileExplosionVfxId(): string {
   return "EXPLOSION";
 }
 
@@ -177,19 +168,9 @@ function spawnDamageTextFromEvent(w: World, ev: EnemyHitEvent | PlayerHitEvent):
 export function collisionsSystem(w: World, dt: number) {
   const debugSettings = getUserSettings().debug;
   const godMode = !!debugSettings.godMode;
-  const debugRelicLogs = import.meta.env.DEV && !!debugSettings.triggers;
-  normalizeWorldRelics(w);
-  const relicMods = getRelicMods(w);
-  const critRolls = relicMods.critRolls ?? 1;
-  const allDamageContributesToPoison = w.relics.includes("PASS_DAMAGE_TO_POISON_ALL");
-  const hasStarterContaminatedRounds = w.relics.includes(STARTER_RELIC_IDS.CONTAMINATED_ROUNDS);
-  const hasStarterPointBlankCarnage = w.relics.includes(STARTER_RELIC_IDS.POINT_BLANK_CARNAGE);
-  const hasStarterThermalStarter = w.relics.includes(STARTER_RELIC_IDS.THERMAL_STARTER);
-  const cardIds = [...(w.cards ?? []), ...(w.combatCardIds ?? [])];
-  const cards = cardIds
-    .map((id: string) => getCardById(id))
-    .filter((card): card is NonNullable<typeof card> => Boolean(card));
-  const dotStats = resolveDotStats({ cards });
+  const critRolls = 1;
+  const allDamageContributesToPoison = false;
+  const dotStats = resolveDotStats({ statMods: collectWorldStatMods(w) });
   const poisonDamageMult = Math.max(0, dotStats.poisonDamageMult);
   const igniteDamageMult = Math.max(0, dotStats.igniteDamageMult);
   const poisonDurationMult = Math.max(0, dotStats.dotDurationMult);
@@ -368,9 +349,6 @@ export function collisionsSystem(w: World, dt: number) {
         () => w.rng.range(0, 1),
         critRolls
       );
-      if (critRoll.secondUsed && debugRelicLogs) {
-        console.debug("[Relic] Lucky Crit second roll used");
-      }
       const resolvedDamage = resolveProjectileDamagePacket(
         {
           physical: physBefore,
@@ -399,40 +377,10 @@ export function collisionsSystem(w: World, dt: number) {
       const bLeft = w.prBouncesLeft[p];
       const contaminatedPierceHit =
         bLeft < 0
-        && hasStarterContaminatedRounds
+        && false
         && enemyPoisoned
         && !projectileIsProc;
       const isPiercingHit = bLeft < 0 && (w.prPierce[p] > 0 || contaminatedPierceHit);
-      if (isPiercingHit && hasStarterContaminatedRounds && enemyPoisoned) {
-        finalPhysDealt *= 1.2;
-        finalFireDealt *= 1.2;
-        finalChaosDealt *= 1.2;
-      }
-
-      if (hasStarterThermalStarter && enemyBurning && !projectileIsProc) {
-        finalPhysDealt *= 1.15;
-        finalFireDealt *= 1.15;
-        finalChaosDealt *= 1.15;
-      }
-
-      if (hasStarterPointBlankCarnage && !projectileIsProc) {
-        const playerNow = getPlayerWorld(w, KENNEY_TILE_WORLD);
-        const distToPlayer = Math.hypot(enemyAim.x - playerNow.wx, enemyAim.y - playerNow.wy);
-        const nearFrac = Math.max(0, 1 - Math.min(1, distToPlayer / STARTER_POINT_BLANK_MAX_RANGE));
-        const pointBlankMult = 1 + nearFrac * 0.5;
-        finalPhysDealt *= pointBlankMult;
-        finalFireDealt *= pointBlankMult;
-        finalChaosDealt *= pointBlankMult;
-      }
-
-      if (projectileIsProc) {
-        const procMult = relicTriggerMomentumDamageMultiplier(w);
-        if (procMult !== 1) {
-          finalPhysDealt *= procMult;
-          finalFireDealt *= procMult;
-          finalChaosDealt *= procMult;
-        }
-      }
       const dmg = finalPhysDealt + finalFireDealt + finalChaosDealt;
 
       if (!w.eAilments) w.eAilments = [];
@@ -584,7 +532,7 @@ export function collisionsSystem(w: World, dt: number) {
 // Force immediate tick this frame so it *feels* like an explosion
         w.zTickLeft[z] = 0;
 
-        emitEvent(w, { type: "VFX", id: projectileExplosionVfxId(projectileDamageMeta), x: zx, y: zy, radius: exR });
+        emitEvent(w, { type: "VFX", id: projectileExplosionVfxId(), x: zx, y: zy, radius: exR });
 
 // NEW: bazooka explosion sound
         emitEvent(w, { type: "SFX", id: "EXPLOSION_BAZOOKA", vol: 0.65 });
