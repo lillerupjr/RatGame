@@ -11,6 +11,7 @@ import {
   capturePaletteSnapshotDraft,
   type PaletteSnapshotCaptureDraft,
 } from "../../game/paletteLab/snapshotCapture";
+import { describeStatMod } from "../formatters";
 
 export type PauseMenuActions = {
   onResume(): void;
@@ -55,16 +56,6 @@ function createStatTable(rows: Array<[string, string]>): HTMLTableElement {
     table.appendChild(tr);
   }
   return table;
-}
-
-function describeStatMod(mod: { key: string; op: string; value: number }): string {
-  const value = Number.isFinite(mod.value) ? mod.value : 0;
-  if (mod.op === "more" || mod.op === "increased" || mod.op === "less" || mod.op === "decreased") {
-    const sign = value >= 0 ? "+" : "";
-    return `${sign}${Math.round(value * 100)}% ${mod.op} ${mod.key}`;
-  }
-  const sign = value >= 0 ? "+" : "";
-  return `${sign}${value.toFixed(2)} ${mod.key}`;
 }
 
 function metricRowsForTab(world: any, tab: DebugMetricTab): Array<[string, string]> {

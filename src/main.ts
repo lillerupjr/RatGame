@@ -25,6 +25,7 @@ import {
 import { getUserSettings, initUserSettings, updateUserSettings } from "./userSettings";
 import { mountPauseMenu } from "./ui/pause/pauseMenu";
 import { togglePause } from "./game/app/pauseController";
+import { mountHandsScreen, type HandsScreenController } from "./ui/pixi/hands/handsScreen";
 import { mountSettingsPanel } from "./ui/settings/settingsPanel";
 import { installDevToolsPanel } from "./ui/devTools/devToolsPanel";
 import { installStandaloneViewportFix } from "./game/app/viewportSizing";
@@ -216,6 +217,33 @@ async function bootstrap() {
       game.openPaletteSnapshotRecord(snapshot);
     },
   });
+  // ── Hands screen (PixiJS) — lazy-initialized on first open ──
+  let handsScreen: HandsScreenController | null = null;
+  let handsScreenMounting = false;
+  async function ensureHandsScreen(): Promise<HandsScreenController | null> {
+    if (handsScreen) return handsScreen;
+    if (handsScreenMounting) return null; // already in-flight
+    handsScreenMounting = true;
+    try {
+      handsScreen = await mountHandsScreen({
+        onEquipToSlot: (slotId) => {
+          game.handsScreenEquipToSlot(slotId);
+          handsScreen?.hide();
+        },
+        onClose: () => {
+          game.closeHandsScreen();
+          handsScreen?.hide();
+        },
+      });
+      if (import.meta.env.DEV) console.log("[hands-screen] mounted successfully");
+      return handsScreen;
+    } catch (err) {
+      console.error("[hands-screen] failed to mount:", err);
+      handsScreenMounting = false;
+      return null;
+    }
+  }
+
   const snapshotViewerPalettePanel = mountSnapshotViewerPalettePanel({
     onClose: () => {
       returnToPaletteLabMenu("Returned from snapshot viewer.");
@@ -302,13 +330,15 @@ async function bootstrap() {
       const progressionRewardRoot = document.getElementById("progressionReward");
       const isVendorOpen = !!vendorRoot && !vendorRoot.hidden;
       const isProgressionRewardOpen = !!progressionRewardRoot && !progressionRewardRoot.hidden;
+      const isHandsScreenOpen = game.isHandsScreenOpen() || !!handsScreen?.isVisible();
       const isAnyBlockingOverlayOpen =
         isMapOpen
         || isPauseOpen
         || isEndOpen
         || isDialogOpen
         || isVendorOpen
-        || isProgressionRewardOpen;
+        || isProgressionRewardOpen
+        || isHandsScreenOpen;
 
       game.setMobileControlsEnabled(runState === RunState.PLAYING && !isAnyBlockingOverlayOpen);
       refs.welcomeScreen.hidden = true;
@@ -327,6 +357,13 @@ async function bootstrap() {
         refs.hud.vitalsOrbRoot.hidden = true;
       }
       if (pauseCogBtn) pauseCogBtn.hidden = isMapOpen;
+
+      // Sync hands screen: game.ts may open it from reward interception
+      if (game.isHandsScreenOpen() && handsScreen && !handsScreen.isVisible()) {
+        handsScreen.show(w, game.getHandsScreenPendingRingDefId());
+      } else if (!game.isHandsScreenOpen() && handsScreen?.isVisible()) {
+        handsScreen.hide();
+      }
     }
   }
 
@@ -552,8 +589,31 @@ async function bootstrap() {
       return;
     }
 
+    // H key: toggle hands screen
+    if (ev.code === "KeyH" && appStateController.appState === AppState.RUN && appStateController.runState === RunState.PLAYING) {
+      if (handsScreen?.isVisible()) {
+        game.closeHandsScreen();
+        handsScreen.hide();
+
+      } else if (!game.isHandsScreenOpen()) {
+        game.openHandsScreen();
+        void ensureHandsScreen().then((hs) => {
+          if (hs && game.isHandsScreenOpen()) {
+            hs.show(game.getWorld(), game.getHandsScreenPendingRingDefId());
+          }
+        });
+      }
+      return;
+    }
+
     if (ev.code === "Escape" && appStateController.appState === AppState.RUN) {
       ev.preventDefault();
+      // Hands screen takes precedence over pause
+      if (handsScreen?.isVisible()) {
+        game.closeHandsScreen();
+        handsScreen.hide();
+        return;
+      }
       togglePause(appStateController, appStateController.appState);
     }
   });

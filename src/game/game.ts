@@ -171,7 +171,9 @@ import { applySfxSettingsToWorld } from "./audio/audioSettings";
 import {
   chooseProgressionReward,
   ensureProgressionRewardState,
+  cancelProgressionReward,
 } from "./progression/rewards/progressionRewardFlow";
+import { equipRing } from "./progression/rings/ringState";
 import { equipStarterRingForCharacter } from "./progression/rings/characterStarterRingMap";
 import { getGold } from "./economy/gold";
 import { ensureRunProgressionState } from "./economy/xp";
@@ -549,6 +551,8 @@ export function createGame(args: CreateGameArgs) {
   let activeDialog: DialogState | null = null;
   let pendingNpcFaceRestoreId: string | null = null;
   let vendorShopOpen = false;
+  let handsScreenOpen = false;
+  let handsScreenChooseSlotPending: { ringDefId: string } | null = null;
 
   const staticMaps: TableMapDef[] = AUTHORED_MAP_DEFS;
 
@@ -1030,6 +1034,21 @@ export function createGame(args: CreateGameArgs) {
     onPick: (optionId: string) => {
       const reward = ensureProgressionRewardState(world);
       if (!reward.active) return;
+
+      // Intercept ring rewards: open hands screen for slot selection
+      const pickedOption = reward.options.find((o) => o.id === optionId);
+      if (pickedOption && pickedOption.family === "RING") {
+        const ringDefId = (pickedOption as { ringDefId: string }).ringDefId;
+        // Clear reward state without applying the reward
+        reward.active = false;
+        reward.options = [];
+        hideProgressionRewardMenu();
+        // Open hands screen in choose-slot mode
+        handsScreenChooseSlotPending = { ringDefId };
+        handsScreenOpen = true;
+        return;
+      }
+
       chooseProgressionReward(world, optionId);
       resolveActiveRewardTicket(world);
       renderRewardMenuIfNeeded();
@@ -3211,6 +3230,41 @@ export function createGame(args: CreateGameArgs) {
     lastRewardRenderKey = "";
   }
 
+  function openHandsScreen(pendingRingDefId?: string | null): void {
+    handsScreenOpen = true;
+    handsScreenChooseSlotPending = pendingRingDefId
+      ? { ringDefId: pendingRingDefId }
+      : null;
+  }
+
+  function closeHandsScreen(): void {
+    if (!handsScreenOpen) return;
+    const wasChooseSlot = !!handsScreenChooseSlotPending;
+    handsScreenOpen = false;
+    handsScreenChooseSlotPending = null;
+
+    if (wasChooseSlot) {
+      // Ring was discarded (cancellation) — resolve the reward ticket and resume
+      resolveActiveRewardTicket(world);
+      if (!tryAdvanceAfterObjectiveCompletion()) {
+        world.state = "RUN";
+      }
+    }
+  }
+
+  function handsScreenEquipToSlot(slotId: string): void {
+    const pending = handsScreenChooseSlotPending;
+    if (!pending) return;
+    equipRing(world, pending.ringDefId, slotId as any);
+    recomputeDerivedStats(world);
+    handsScreenChooseSlotPending = null;
+    handsScreenOpen = false;
+    resolveActiveRewardTicket(world);
+    if (!tryAdvanceAfterObjectiveCompletion()) {
+      world.state = "RUN";
+    }
+  }
+
   function showDeterministicFloorPicker(subText: string, floorIndex: number, depth: number) {
     const vm = buildDeterministicRouteMapVM(DETERMINISTIC_CHOICES, floorIndex, depth);
     renderRouteMap(vm, subText);
@@ -3833,5 +3887,10 @@ export function createGame(args: CreateGameArgs) {
     setMobileControlsEnabled,
     copyPerfOverlaySnapshot,
     getWorld: () => world,
+    openHandsScreen,
+    closeHandsScreen,
+    handsScreenEquipToSlot,
+    isHandsScreenOpen: () => handsScreenOpen,
+    getHandsScreenPendingRingDefId: () => handsScreenChooseSlotPending?.ringDefId ?? null,
   };
 }
