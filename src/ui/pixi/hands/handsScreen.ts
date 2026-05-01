@@ -16,16 +16,22 @@ import {
   buildHandsScreenSnapshot,
   type HandsScreenSnapshot,
 } from "./handsDataBridge";
+import type { StatDelta } from "./statsRail";
 import { getRingDefById, getAllRingDefs } from "../../../game/progression/rings/ringContent";
 import { equipRing } from "../../../game/progression/rings/ringState";
-import type { FingerSlotId } from "../../../game/progression/rings/ringTypes";
+import type { FingerSlotId, ModifierTokenType } from "../../../game/progression/rings/ringTypes";
 import { COLORS } from "../pixiTheme";
-import { describeStatMod } from "../../formatters";
 import { DebugSlotTuner } from "./debugSlotTuner";
+import { getSlotConfigs, generateDynamicSlotConfigs } from "./ringSlotConfig";
+import { RingSlotView } from "./ringSlot";
 
 export type HandsScreenCallbacks = {
   onEquipToSlot: (slotId: FingerSlotId) => void;
   onClose: () => void;
+  onUnequip: (slotId: FingerSlotId) => void;
+  onApplyToken: (instanceId: string, tokenType: ModifierTokenType) => void;
+  /** Compute stats-preview delta for a hypothetical equip. Returns null if not supported. */
+  computeStatsPreview?: (slotId: FingerSlotId, ringDefId: string) => StatDelta | null;
 };
 
 export type HandsScreenController = {
@@ -51,6 +57,7 @@ export async function mountHandsScreen(
   let entranceAnimating = false;
   let exitAnimating = false;
   let devChooseSlotPending: string | null = null; // DEV-only: ring def ID for dev-triggered choose-slot
+  let hoveredSlotId: FingerSlotId | null = null; // Track hovered slot for stats preview
 
   // Debug slot tuner (DEV only)
   let debugTuner: DebugSlotTuner | null = null;
@@ -59,6 +66,21 @@ export async function mountHandsScreen(
     nodes.handsViewport.addChild(debugTuner);
     debugTuner.updateDimensions(nodes.layout.handsW, nodes.layout.handsH);
   }
+
+  // Wire drawer callbacks
+  nodes.detailDrawer.setCallbacks({
+    onUnequip: (slotId) => {
+      callbacks.onUnequip(slotId);
+      refreshSnapshot();
+      dispatch({ type: "UNEQUIP_RING", slotId });
+    },
+    onApplyToken: (instanceId, tokenType) => {
+      callbacks.onApplyToken(instanceId, tokenType);
+      refreshSnapshot();
+      // Re-apply state to update drawer content with new token counts
+      applyState();
+    },
+  });
 
   // Add scene to stage (hidden initially)
   nodes.screenRoot.visible = false;
@@ -82,16 +104,14 @@ export async function mountHandsScreen(
   };
   window.addEventListener("keydown", onKeyDown);
 
-  // ── Wire slot clicks ──
-  for (const sv of nodes.slotViews) {
+  function wireSlotEvents(sv: RingSlotView): void {
     sv.onSlotClick = (slotId) => {
       if (state.mode === "choose-slot") {
         // DEV-triggered: equip directly and stay in hands screen
         if (devChooseSlotPending && world) {
           equipRing(world, devChooseSlotPending, slotId);
           devChooseSlotPending = null;
-          // Refresh snapshot and return to browse
-          snapshot = buildHandsScreenSnapshot(world);
+          refreshSnapshot();
           state = createInitialHandsState();
           drawerOpen = false;
           handsShifted = false;
@@ -108,6 +128,19 @@ export async function mountHandsScreen(
         dispatch({ type: "SELECT_RING", slotId });
       }
     };
+
+    sv.onSlotHover = (slotId, hovered) => {
+      if (state.mode === "choose-slot" && snapshot?.pendingRingDef) {
+        hoveredSlotId = hovered ? slotId : null;
+        updateChooseSlotDrawer();
+        updateStatsPreview();
+      }
+    };
+  }
+
+  // ── Wire slot clicks ──
+  for (const sv of nodes.slotViews) {
+    wireSlotEvents(sv);
   }
 
   // ── Close button ──
@@ -140,6 +173,67 @@ export async function mountHandsScreen(
   };
   app.ticker.add(tickFn);
 
+  // ── Helpers ──
+  function refreshSnapshot(): void {
+    if (!world) return;
+    snapshot = buildHandsScreenSnapshot(
+      world,
+      state.pendingRingDefId ?? undefined,
+    );
+  }
+
+  function updateChooseSlotDrawer(): void {
+    if (!snapshot || state.mode !== "choose-slot" || !snapshot.pendingRingDef) return;
+    const pr = snapshot.pendingRingDef;
+
+    // Check if hovered slot has an existing ring
+    let replacingRingName: string | null = null;
+    if (hoveredSlotId) {
+      const hoveredSlot = snapshot.slots.find((s) => s.slotId === hoveredSlotId);
+      if (hoveredSlot?.equipped && hoveredSlot.ringName) {
+        replacingRingName = hoveredSlot.ringName;
+      }
+    }
+
+    nodes.detailDrawer.update({
+      ringName: pr.name,
+      familyId: pr.familyId,
+      description: pr.description,
+      statMods: pr.statMods,
+      mode: "choose-slot",
+      replacingRingName,
+    });
+  }
+
+  function updateStatsPreview(): void {
+    if (!snapshot) return;
+    if (state.mode !== "choose-slot" || !state.pendingRingDefId || !hoveredSlotId) {
+      nodes.statsRail.update(snapshot, null);
+      return;
+    }
+    const delta = callbacks.computeStatsPreview?.(hoveredSlotId, state.pendingRingDefId) ?? null;
+    nodes.statsRail.update(snapshot, delta);
+  }
+
+  // Sync dynamic slot count to match snapshot
+  function syncDynamicSlots(): void {
+    if (!snapshot) return;
+    const totalSlots = snapshot.slots.length;
+    if (totalSlots <= nodes.slotViews.length) return;
+
+    // Generate configs for additional slots
+    const dynamicConfigs = generateDynamicSlotConfigs(totalSlots);
+    for (let i = nodes.slotViews.length; i < totalSlots; i++) {
+      const config = dynamicConfigs[i];
+      if (!config) continue;
+      const sv = new RingSlotView(config);
+      sv.positionOnHands(nodes.layout.handsW, nodes.layout.handsH);
+      wireSlotEvents(sv);
+      nodes.slotViews.push(sv);
+      nodes.slotsContainer.addChild(sv);
+    }
+  }
+
   // ── State management ──
   function dispatch(action: HandsAction): void {
     state = transition(state, action);
@@ -164,11 +258,16 @@ export async function mountHandsScreen(
         isSelected: state.selectedSlotId === sv.slotId,
         mode: state.mode,
         ringName: slotSnap?.ringName,
+        empowermentScalar: slotSnap?.empowermentScalar ?? 0,
       });
     }
 
     // Stats rail
-    nodes.statsRail.update(snapshot);
+    if (state.mode === "choose-slot" && hoveredSlotId && state.pendingRingDefId) {
+      updateStatsPreview();
+    } else {
+      nodes.statsRail.update(snapshot);
+    }
 
     // Top bar mode text
     if (state.mode === "choose-slot") {
@@ -181,14 +280,7 @@ export async function mountHandsScreen(
     // Detail drawer content
     if (state.drawerOpen) {
       if (state.mode === "choose-slot" && snapshot.pendingRingDef) {
-        const pr = snapshot.pendingRingDef;
-        nodes.detailDrawer.update({
-          ringName: pr.name,
-          familyId: pr.familyId,
-          description: pr.description,
-          statMods: pr.statMods,
-          mode: "choose-slot",
-        });
+        updateChooseSlotDrawer();
       } else if (state.mode === "selected" && state.selectedSlotId) {
         const slotSnap = snapshot.slots.find((s) => s.slotId === state.selectedSlotId);
         if (slotSnap?.equipped) {
@@ -198,6 +290,13 @@ export async function mountHandsScreen(
             description: slotSnap.description ?? "",
             statMods: slotSnap.statMods,
             mode: "selected",
+            slotId: slotSnap.slotId,
+            instanceId: slotSnap.instanceId,
+            levelUpTokens: snapshot.storedTokens.LEVEL_UP,
+            effectTokens: snapshot.storedTokens.INCREASED_EFFECT_20,
+            unlockedTalentCount: slotSnap.unlockedTalentCount,
+            totalTalentCount: slotSnap.totalTalentCount,
+            availablePassivePoints: slotSnap.availablePassivePoints,
           });
         }
       } else {
@@ -300,7 +399,7 @@ export async function mountHandsScreen(
           setTimeout(() => {
             sv.alpha = 0;
             sv.scale.set(0);
-            // Pop: scale 0 → 1.12 → 1
+            // Pop: scale 0 -> 1.12 -> 1
             tweenTo(sv, { alpha: 1 }, 200, Easing.cubicOut);
             tweenTo(sv.scale, { x: 1.12, y: 1.12 }, 200, Easing.cubicOut).then(() => {
               tweenTo(sv.scale, { x: 1, y: 1 }, 180, Easing.cubicOut).then(resolve);
@@ -357,11 +456,13 @@ export async function mountHandsScreen(
       state = createInitialHandsState(pendingRingDefId);
       drawerOpen = false;
       handsShifted = false;
+      hoveredSlotId = null;
       visible = true;
       nodes.screenRoot.visible = true;
       showPixiCanvas();
       app.resize();
       relayoutScene(nodes);
+      syncDynamicSlots();
       applyState();
 
       // Play entrance animation
@@ -380,6 +481,7 @@ export async function mountHandsScreen(
         state = createInitialHandsState();
         drawerOpen = false;
         handsShifted = false;
+        hoveredSlotId = null;
         devChooseSlotPending = null;
         nodes.detailDrawer.setDrawerHeight(0);
         if (debugTuner?.active) debugTuner.deactivate();
@@ -410,7 +512,7 @@ export async function mountHandsScreen(
   };
 }
 
-// Simple string hash for family → texture mapping
+// Simple string hash for family -> texture mapping
 function hashStr(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) {

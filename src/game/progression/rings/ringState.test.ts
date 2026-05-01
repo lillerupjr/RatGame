@@ -11,6 +11,7 @@ import {
   equipRing,
   grantModifierToken,
   resolveRingEquipTargetSlotId,
+  unequipRing,
 } from "./ringState";
 
 function stubWorld(): any {
@@ -109,6 +110,26 @@ describe("ring progression state", () => {
       reason: "Unknown finger slot: RIGHT:99",
     });
     expect(world.progression.hands.RIGHT.slots).toHaveLength(before);
+  });
+
+  test("unequipRing removes the ring from its slot and deletes the instance", () => {
+    const world = stubWorld();
+    const instance = equipRing(world, "RING_GENERIC_DAMAGE_PERCENT_20", "LEFT:1");
+
+    expect(world.progression.hands.LEFT.slots[1].ringInstanceId).toBe(instance.instanceId);
+    expect(world.progression.ringsByInstanceId[instance.instanceId]).toBeDefined();
+
+    unequipRing(world, "LEFT:1");
+
+    expect(world.progression.hands.LEFT.slots[1].ringInstanceId).toBeNull();
+    expect(world.progression.ringsByInstanceId[instance.instanceId]).toBeUndefined();
+    expect(collectWorldRingStatMods(world)).toEqual([]);
+  });
+
+  test("unequipRing on an empty slot is a no-op", () => {
+    const world = stubWorld();
+    unequipRing(world, "LEFT:0");
+    expect(world.progression.hands.LEFT.slots[0].ringInstanceId).toBeNull();
   });
 
   test("normalization rebuilds malformed state and removes orphaned progression data", () => {

@@ -1,4 +1,9 @@
 // src/game/map/kenneyMapLoader.ts
+// @system   map-compilation/activation/floor-topology
+// @owns     compiles table map defs into topology, surfaces, triggers, occlusion, road and height outputs
+// @doc      docs/canonical/map_compilation_activation_floor_topology.md
+// @agents   no active-map switching, route selection, or rendering consumption; see kenneyMap.ts, authoredMapActivation.ts, game.ts, and presentation/*
+
 import type {
     SemanticStamp,
     TableMapDef,

@@ -1,3 +1,8 @@
+// @system   map-compilation/activation/floor-topology
+// @owns     derives objective overlay trigger placements from active reachable topology and floor intent
+// @doc      docs/canonical/map_compilation_activation_floor_topology.md
+// @agents   no trigger execution, objective resolution, or authored map compiling; see triggerSystem.ts, objective.ts, and compile/kenneyMapLoader.ts
+
 import type { World } from "../../engine/world/world";
 import { getActiveMap, getSpawnWorldFromActive } from "./authoredMapActivation";
 import type { TriggerDef } from "../triggers/triggerTypes";

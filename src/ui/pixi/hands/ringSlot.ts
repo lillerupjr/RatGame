@@ -22,6 +22,7 @@ export type RingSlotVisualState = {
   isSelected: boolean;
   mode: HandsMode;
   ringName?: string | null;
+  empowermentScalar?: number;
 };
 
 export class RingSlotView extends Container {
@@ -38,6 +39,8 @@ export class RingSlotView extends Container {
   private _hovered = false;
 
   onSlotClick: ((slotId: FingerSlotId) => void) | null = null;
+  onSlotHover: ((slotId: FingerSlotId, hovered: boolean) => void) | null = null;
+  private empowerGfx: Graphics | null = null;
 
   constructor(config: SlotConfig) {
     super();
@@ -80,10 +83,12 @@ export class RingSlotView extends Container {
       this._hovered = true;
       this.updateTooltip();
       this.tooltip.visible = true;
+      this.onSlotHover?.(this.slotId, true);
     });
     this.on("pointerout", () => {
       this._hovered = false;
       this.tooltip.visible = false;
+      this.onSlotHover?.(this.slotId, false);
     });
 
     this.drawDiamond("browse", false);
@@ -112,6 +117,7 @@ export class RingSlotView extends Container {
 
   private showEquipped(tex: Texture, color: number, selected: boolean, mode: HandsMode): void {
     this.diamondGfx.visible = false;
+    const empScalar = this._visualState.empowermentScalar ?? 0;
 
     // Glow sprite (blurred tinted copy behind ring) — create once, reuse
     if (!this.glowSprite) {
@@ -149,37 +155,69 @@ export class RingSlotView extends Container {
     this.ringSprite.width = size;
     this.ringSprite.height = size;
 
+    // Empowerment multiplier: increases glow intensity and scale
+    const empGlowMult = 1 + empScalar;
+
     // Glow: tinted blurred copy, larger than the ring
     if (selected || mode === "choose-slot") {
-      const glowScale = 1.35;
+      const glowScale = 1.35 * empGlowMult;
       this.glowSprite.width = size * glowScale;
       this.glowSprite.height = size * glowScale;
       this.glowSprite.tint = color;
-      this.glowSprite.alpha = 0.8;
-      this.glowFilter.strength = 8;
+      this.glowSprite.alpha = Math.min(1, 0.8 * empGlowMult);
+      this.glowFilter.strength = 8 + empScalar * 4;
       this.glowSprite.visible = true;
     } else if (this._hovered) {
-      const glowScale = 1.15;
+      const glowScale = 1.15 * empGlowMult;
       this.glowSprite.width = size * glowScale;
       this.glowSprite.height = size * glowScale;
       this.glowSprite.tint = color;
-      this.glowSprite.alpha = 0.4;
-      this.glowFilter.strength = 6;
+      this.glowSprite.alpha = Math.min(1, 0.4 * empGlowMult);
+      this.glowFilter.strength = 6 + empScalar * 3;
       this.glowSprite.visible = true;
     } else {
-      // Subtle ambient glow
-      this.glowSprite.width = size * 1.1;
-      this.glowSprite.height = size * 1.1;
+      // Subtle ambient glow — empowerment makes it more prominent
+      const glowScale = (1.1 + empScalar * 0.15);
+      this.glowSprite.width = size * glowScale;
+      this.glowSprite.height = size * glowScale;
       this.glowSprite.tint = color;
-      this.glowSprite.alpha = 0.25;
-      this.glowFilter.strength = 4;
+      this.glowSprite.alpha = Math.min(1, 0.25 + empScalar * 0.2);
+      this.glowFilter.strength = 4 + empScalar * 3;
       this.glowSprite.visible = true;
+    }
+
+    // Empowerment indicator: small diamond icon below the ring
+    this.updateEmpowermentIndicator(empScalar);
+  }
+
+  private updateEmpowermentIndicator(scalar: number): void {
+    if (scalar <= 0) {
+      if (this.empowerGfx) this.empowerGfx.visible = false;
+      return;
+    }
+    if (!this.empowerGfx) {
+      this.empowerGfx = new Graphics();
+      this.addChild(this.empowerGfx);
+    }
+    this.empowerGfx.clear();
+    this.empowerGfx.visible = true;
+
+    // Small empowerment pip(s) below the ring — one per 0.2 scalar
+    const pips = Math.round(scalar / 0.2);
+    const pipSize = 3;
+    const pipGap = 7;
+    const startX = -((pips - 1) * pipGap) / 2;
+    for (let i = 0; i < pips; i++) {
+      const px = startX + i * pipGap;
+      this.empowerGfx.poly([px, 28, px + pipSize, 28 + pipSize, px, 28 + pipSize * 2, px - pipSize, 28 + pipSize])
+        .fill({ color: COLORS.amber, alpha: 0.75 });
     }
   }
 
   private showEmpty(mode: HandsMode): void {
     if (this.ringSprite) this.ringSprite.visible = false;
     if (this.glowSprite) this.glowSprite.visible = false;
+    if (this.empowerGfx) this.empowerGfx.visible = false;
     this.diamondGfx.visible = true;
 
     if (mode === "choose-slot") {

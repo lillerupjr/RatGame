@@ -1,4 +1,9 @@
 // src/game/world.ts
+// @system   world-state/runtime-data-model
+// @owns     defines World/GameState storage, creates fresh world state, exposes player-grid and event helpers
+// @doc      docs/canonical/world_state_runtime_data_model.md
+// @agents   no app pause/loading, gameplay mutation, rendering, or map compilation; see app/*, systems/*, presentation/*, and map/*
+
 import { RNG } from "../../game/util/rng";
 import { createSpatialHash, type SpatialHash } from "../../game/util/spatialHash";
 import type { StageDef } from "../../game/content/stages";

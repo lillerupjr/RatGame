@@ -3,6 +3,15 @@ import { Panel } from "../primitives/Panel";
 import { createTextLabel } from "../primitives/TextLabel";
 import { COLORS, SPACING, TEXT_STYLES } from "../pixiTheme";
 import type { HandsScreenSnapshot } from "./handsDataBridge";
+import type { ResolvedWeaponStats } from "../../../game/combat_mods/stats/combatStatsResolver";
+
+export type StatDelta = {
+  shotsPerSecond: number;
+  critChance: number;
+  critMulti: number;
+  basePhysical: number;
+  chanceToPoison: number;
+};
 
 export class StatsRail extends Container {
   private panel: Panel;
@@ -37,7 +46,7 @@ export class StatsRail extends Container {
     this.panel.resize(width, height);
   }
 
-  update(snapshot: HandsScreenSnapshot | null): void {
+  update(snapshot: HandsScreenSnapshot | null, deltas?: StatDelta | null): void {
     this.contentContainer.removeChildren();
     if (!snapshot) return;
 
@@ -85,20 +94,43 @@ export class StatsRail extends Container {
     yPos += 18;
 
     const stats = snapshot.stats;
-    const statRows: Array<[string, string]> = [
-      ["Shots/sec", stats.shotsPerSecond.toFixed(2)],
-      ["Crit Chance", `${Math.round(stats.critChance * 100)}%`],
-      ["Crit Multi", `${stats.critMulti.toFixed(2)}x`],
-      ["Base Physical", stats.baseDamage.physical.toFixed(1)],
-      ["Poison Chance", `${Math.round(stats.chanceToPoison * 100)}%`],
+    const statRows: Array<[string, string, number | null]> = [
+      ["Shots/sec", stats.shotsPerSecond.toFixed(2), deltas?.shotsPerSecond ?? null],
+      ["Crit Chance", `${Math.round(stats.critChance * 100)}%`, deltas ? deltas.critChance * 100 : null],
+      ["Crit Multi", `${stats.critMulti.toFixed(2)}x`, deltas?.critMulti ?? null],
+      ["Base Physical", stats.baseDamage.physical.toFixed(1), deltas?.basePhysical ?? null],
+      ["Poison Chance", `${Math.round(stats.chanceToPoison * 100)}%`, deltas ? deltas.chanceToPoison * 100 : null],
     ];
 
-    for (const [label, value] of statRows) {
-      yPos = this.addStatRow(label, value, yPos, contentW);
+    for (const [label, value, delta] of statRows) {
+      yPos = this.addStatRow(label, value, yPos, contentW, delta);
+    }
+
+    // ── Tokens ──
+    const tokens = snapshot.storedTokens;
+    const totalTokens = tokens.LEVEL_UP + tokens.INCREASED_EFFECT_20;
+    if (totalTokens > 0) {
+      yPos += 4;
+      const tokenDivider = new Graphics();
+      tokenDivider.rect(0, yPos, contentW + 20, 1).fill({ color: COLORS.border, alpha: 0.65 });
+      this.contentContainer.addChild(tokenDivider);
+      yPos += SPACING.md;
+
+      const tokenHeader = createTextLabel("TOKENS", "sectionHeader");
+      tokenHeader.y = yPos;
+      this.contentContainer.addChild(tokenHeader);
+      yPos += 18;
+
+      if (tokens.LEVEL_UP > 0) {
+        yPos = this.addTokenRow("Level Up", tokens.LEVEL_UP, yPos, contentW);
+      }
+      if (tokens.INCREASED_EFFECT_20 > 0) {
+        yPos = this.addTokenRow("+20% Effect", tokens.INCREASED_EFFECT_20, yPos, contentW);
+      }
     }
   }
 
-  private addStatRow(label: string, value: string, y: number, contentW: number): number {
+  private addStatRow(label: string, value: string, y: number, contentW: number, delta: number | null): number {
     const labelText = createTextLabel(label, "statLabel");
     labelText.y = y;
     this.contentContainer.addChild(labelText);
@@ -108,6 +140,19 @@ export class StatsRail extends Container {
     valueText.y = y;
     this.contentContainer.addChild(valueText);
 
+    // Delta indicator
+    if (delta !== null && Math.abs(delta) > 0.01) {
+      const isPositive = delta > 0;
+      const deltaStr = isPositive ? `+${formatDelta(delta)}` : formatDelta(delta);
+      const deltaStyle = TEXT_STYLES.muted.clone();
+      deltaStyle.fill = isPositive ? COLORS.green : COLORS.crimson;
+      deltaStyle.fontSize = 10;
+      const deltaText = new Text({ text: deltaStr, style: deltaStyle });
+      deltaText.x = contentW - valueText.width - deltaText.width - 6;
+      deltaText.y = y + 1;
+      this.contentContainer.addChild(deltaText);
+    }
+
     // Divider
     const div = new Graphics();
     div.rect(0, y + 22, contentW, 1).fill({ color: COLORS.border, alpha: 0.3 });
@@ -115,4 +160,24 @@ export class StatsRail extends Container {
 
     return y + 30;
   }
+
+  private addTokenRow(label: string, count: number, y: number, contentW: number): number {
+    const labelText = createTextLabel(label, "statLabel");
+    labelText.y = y;
+    this.contentContainer.addChild(labelText);
+
+    const countStyle = TEXT_STYLES.statValue.clone();
+    countStyle.fill = COLORS.amber;
+    const countText = new Text({ text: String(count), style: countStyle });
+    countText.x = contentW - countText.width;
+    countText.y = y;
+    this.contentContainer.addChild(countText);
+
+    return y + 24;
+  }
+}
+
+function formatDelta(value: number): string {
+  if (Number.isInteger(value)) return String(value);
+  return value.toFixed(1);
 }

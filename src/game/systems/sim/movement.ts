@@ -1,3 +1,8 @@
+// @system   core-simulation/combat-runtime
+// @owns     resolves player/enemy movement intent, walkability/ramp validation, anchor sync, facing and flow-field steering
+// @doc      docs/canonical/core_simulation_combat_runtime.md
+// @agents   no input event capture, combat damage, or map topology generation; see input.ts, collisions.ts, and map/compile/*
+
 import { World, gridAtPlayer } from "../../../engine/world/world";
 import { InputState } from "./input";
 import { walkInfo, worldToTile } from "../../map/compile/kenneyMap";

@@ -1,4 +1,9 @@
 // src/main.ts
+// @system   game-runtime/app-loop
+// @owns     bootstraps DOM/canvas/runtime wiring, loading hooks, app-state visibility, rAF frame loop
+// @doc      docs/canonical/game_runtime_app_loop.md
+// @agents   no simulation internals, world schema, or map compiler; see game.ts, engine/world/world.ts, and map/compile/*
+
 import { createGame, precomputeStaticMapData } from "./game/game";
 import { AppState, RunState, createAppStateController } from "./game/app/appState";
 import { attachLoadProfilerGlobal, createLoadingController } from "./game/app/loadingFlow";
@@ -235,6 +240,12 @@ async function bootstrap() {
           game.closeHandsScreen();
           handsScreen?.hide();
           appStateController.setRunState(RunState.PLAYING);
+        },
+        onUnequip: (slotId) => {
+          game.handsScreenUnequipSlot(slotId);
+        },
+        onApplyToken: (instanceId, tokenType) => {
+          game.handsScreenApplyToken(instanceId, tokenType);
         },
       });
       if (import.meta.env.DEV) console.log("[hands-screen] mounted successfully");

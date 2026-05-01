@@ -1,3 +1,8 @@
+// @system   core-simulation/combat-runtime
+// @owns     resolves player weapon fire cadence, aim, projectile spawning, beam state, and fire SFX events
+// @doc      docs/canonical/core_simulation_combat_runtime.md
+// @agents   no hit resolution, projectile lifecycle, or stat authoring; see collisions.ts, projectiles.ts, and combat_mods/*
+
 import { World, emitEvent } from "../../../engine/world/world";
 import { findClosestTarget } from "../../util/targeting";
 import { PRJ_KIND, spawnProjectile } from "../../factories/projectileFactory";

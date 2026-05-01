@@ -3,6 +3,10 @@
 // STAIRS → CONNECTORS migration (Phase 0: contract freeze)
 // See: docs/stairs-connectors-master.md
 // Phase 1 will delete: ramp math, stair walk masks/hitboxes, movement exceptions, projectile stair coupling.
+// @system   map-compilation/activation/floor-topology
+// @owns     maintains active compiled-map facade, spawn/tile/surface/road/walkability/ramp queries
+// @doc      docs/canonical/map_compilation_activation_floor_topology.md
+// @agents   no authored-map nullable state, route selection, or renderer drawing; see authoredMapActivation.ts, delveMap.ts, and presentation/render.ts
 
 import {
     compileKenneyMapFromTable,

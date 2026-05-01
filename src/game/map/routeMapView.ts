@@ -1,3 +1,8 @@
+// @system   map-compilation/activation/floor-topology
+// @owns     builds delve and deterministic route-map view models, statuses, labels, and reward metadata
+// @doc      docs/canonical/map_compilation_activation_floor_topology.md
+// @agents   no route DOM rendering, layout geometry, or node commits; see game.ts, routeMapLayout.ts, and delveMap.ts
+
 import type { StageId } from "../content/stages";
 import { getReachableNodes, type DelveMap, type DelveNode, type DelveNodeType } from "./delveMap";
 import {

@@ -1,3 +1,8 @@
+// @system   core-simulation/combat-runtime
+// @owns     composes keyboard/virtual movement and interact input, camera coordinate helpers, edge clearing
+// @doc      docs/canonical/core_simulation_combat_runtime.md
+// @agents   no movement physics, pause gating, or mobile DOM controls; see movement.ts, src/main.ts, and ui/mobile/*
+
 export type InputState = {
   /** Composed movement x-axis in screen-grid space, -1..1 */
   moveX: number;

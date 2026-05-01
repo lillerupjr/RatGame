@@ -1,4 +1,8 @@
 // src/game/systems/progression/objective.ts
+// @system   progression/objectives/rewards
+// @owns     defines objective runtime contracts, initializes objective states, applies signals, emits resolution events
+// @doc      docs/canonical/progression_objectives_rewards.md
+// @agents   no trigger collection, reward scheduling, or floor advancement; see triggerSystem.ts, rewardSchedulerSystem.ts, and game.ts
 
 import type { World } from "../../../engine/world/world";
 import { getTrackedBossEncounterForObjective } from "../../bosses/bossRuntime";

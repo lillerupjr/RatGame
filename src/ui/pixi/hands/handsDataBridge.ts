@@ -1,8 +1,8 @@
 import type { ResolvedWeaponStats } from "../../../game/combat_mods/stats/combatStatsResolver";
 import { getCombatModsSnapshot } from "../../../game/combat_mods/debug/combatModsSnapshot";
 import { inspectWorldRingProgression } from "../../../game/progression/rings/ringInspection";
-import { getRingDefById } from "../../../game/progression/rings/ringContent";
-import type { FingerSlotId } from "../../../game/progression/rings/ringTypes";
+import { getRingDefById, getRingFamilyTalentTreeById } from "../../../game/progression/rings/ringContent";
+import type { FingerSlotId, StoredModifierTokens } from "../../../game/progression/rings/ringTypes";
 import { describeStatMod } from "../../formatters";
 
 export type HandsSlotSnapshot = {
@@ -12,10 +12,16 @@ export type HandsSlotSnapshot = {
   equipped: boolean;
   ringName: string | null;
   ringDefId: string | null;
+  instanceId: string | null;
   familyId: string | null;
   description: string | null;
   statMods: string[];
   familyColor: number;
+  allocatedPassivePoints: number;
+  availablePassivePoints: number;
+  unlockedTalentCount: number;
+  totalTalentCount: number;
+  empowermentScalar: number;
 };
 
 export type PendingRingDef = {
@@ -31,6 +37,7 @@ export type HandsScreenSnapshot = {
   stats: ResolvedWeaponStats;
   equippedCount: number;
   pendingRingDef: PendingRingDef | null;
+  storedTokens: StoredModifierTokens;
 };
 
 const FAMILY_COLORS: Record<string, number> = {
@@ -81,6 +88,18 @@ export function buildHandsScreenSnapshot(
     for (const slot of hand.slots) {
       const ringEntry = inspection.rings.find((r) => r.instance.slotId === slot.slotId);
       const def = ringEntry ? getRingDefById(ringEntry.instance.defId) : null;
+      const tree = def ? getRingFamilyTalentTreeById(def.familyId) : undefined;
+
+      // Compute talent/passive point info
+      const allocatedPassivePoints = ringEntry?.instance.allocatedPassivePoints ?? 0;
+      const unlockedTalentCount = ringEntry?.unlockedNodes.length ?? 0;
+      // spentPassivePoints = sum of costs of unlocked nodes
+      let spentPoints = 0;
+      if (ringEntry) {
+        for (const node of ringEntry.unlockedNodes) {
+          spentPoints += node.cost;
+        }
+      }
 
       slots.push({
         slotId: slot.slotId,
@@ -89,10 +108,16 @@ export function buildHandsScreenSnapshot(
         equipped: !!ringEntry,
         ringName: ringEntry?.ringName ?? null,
         ringDefId: ringEntry?.instance.defId ?? null,
+        instanceId: ringEntry?.instance.instanceId ?? null,
         familyId: def?.familyId ?? null,
         description: def?.description ?? null,
         statMods: ringEntry ? extractStatModStrings(ringEntry.runtimeEffects) : [],
         familyColor: getFamilyColor(def?.familyId ?? null),
+        allocatedPassivePoints,
+        availablePassivePoints: allocatedPassivePoints - spentPoints,
+        unlockedTalentCount,
+        totalTalentCount: tree?.nodes.length ?? 0,
+        empowermentScalar: slot.empowermentScalar,
       });
     }
   }
@@ -127,5 +152,6 @@ export function buildHandsScreenSnapshot(
     stats: combatSnapshot.weaponStats,
     equippedCount: slots.filter((s) => s.equipped).length,
     pendingRingDef,
+    storedTokens: inspection.storedModifierTokens,
   };
 }

@@ -1,3 +1,8 @@
+// @system   world-state/runtime-data-model
+// @owns     defines shared GameEvent, DamageMeta, SFX, and VFX event contracts
+// @doc      docs/canonical/world_state_runtime_data_model.md
+// @agents   no event queue storage, audio playback, or combat handling; see engine/world/world.ts, presentation/audio.ts, and systems/sim/*
+
 export type DamageCategory = "HIT" | "DOT";
 
 export type EffectMode = "INTRINSIC" | "TRIGGERED";

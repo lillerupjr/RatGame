@@ -15,6 +15,8 @@ export type HandsAction =
   | { type: "DESELECT" }
   | { type: "CHOOSE_SLOT"; slotId: FingerSlotId }
   | { type: "ENTER_CHOOSE_MODE"; ringDefId: string }
+  | { type: "UNEQUIP_RING"; slotId: FingerSlotId }
+  | { type: "APPLY_TOKEN"; slotId: FingerSlotId }
   | { type: "CLOSE" };
 
 export function createInitialHandsState(pendingRingDefId?: string | null): HandsScreenState {
@@ -84,6 +86,18 @@ export function transition(
         drawerOpen: true,
         handsShiftActive: true,
       };
+    case "UNEQUIP_RING":
+      // After unequip, return to browse mode
+      return {
+        ...state,
+        mode: "browse",
+        selectedSlotId: null,
+        drawerOpen: false,
+        handsShiftActive: false,
+      };
+    case "APPLY_TOKEN":
+      // Stay in selected mode — snapshot refresh will update the drawer
+      return state;
     case "CLOSE":
       return {
         mode: "browse",

@@ -1,4 +1,9 @@
 // src/game/game.ts
+// @system   game-runtime/app-loop
+// @owns     orchestrates runtime API, start/floor intents, sim tick dispatch, render dispatch, runtime overlays
+// @doc      docs/canonical/game_runtime_app_loop.md
+// @agents   no app rAF loop, renderer internals, or compiled-map topology; see src/main.ts, presentation/render.ts, and map/compile/*
+
 import { World, createWorld, clearEvents, emitEvent, gridAtPlayer } from "../engine/world/world";
 import {
   LOAD_PROFILER_SUBPHASE,
@@ -173,7 +178,8 @@ import {
   ensureProgressionRewardState,
   cancelProgressionReward,
 } from "./progression/rewards/progressionRewardFlow";
-import { equipRing } from "./progression/rings/ringState";
+import { equipRing, unequipRing, applyModifierTokenToRing } from "./progression/rings/ringState";
+import type { ModifierTokenType } from "./progression/rings/ringTypes";
 import { equipStarterRingForCharacter } from "./progression/rings/characterStarterRingMap";
 import { getGold } from "./economy/gold";
 import { ensureRunProgressionState } from "./economy/xp";
@@ -3265,6 +3271,16 @@ export function createGame(args: CreateGameArgs) {
     }
   }
 
+  function handsScreenUnequipSlot(slotId: string): void {
+    unequipRing(world, slotId as any);
+    recomputeDerivedStats(world);
+  }
+
+  function handsScreenApplyToken(instanceId: string, tokenType: ModifierTokenType): void {
+    applyModifierTokenToRing(world, tokenType, instanceId);
+    recomputeDerivedStats(world);
+  }
+
   function showDeterministicFloorPicker(subText: string, floorIndex: number, depth: number) {
     const vm = buildDeterministicRouteMapVM(DETERMINISTIC_CHOICES, floorIndex, depth);
     renderRouteMap(vm, subText);
@@ -3890,6 +3906,8 @@ export function createGame(args: CreateGameArgs) {
     openHandsScreen,
     closeHandsScreen,
     handsScreenEquipToSlot,
+    handsScreenUnequipSlot,
+    handsScreenApplyToken,
     isHandsScreenOpen: () => handsScreenOpen,
     getHandsScreenPendingRingDefId: () => handsScreenChooseSlotPending?.ringDefId ?? null,
   };

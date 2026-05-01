@@ -278,6 +278,14 @@ export function canEquipRing(
   return { ok: true, value: { state, slotId } };
 }
 
+export function unequipRing(world: any, slotId: FingerSlotId): void {
+  const state = ensureRingProgressionState(world);
+  const slot = getFingerSlot(state, slotId);
+  if (!slot || !slot.ringInstanceId) return;
+  delete state.ringsByInstanceId[slot.ringInstanceId];
+  slot.ringInstanceId = null;
+}
+
 export function equipRing(world: any, defId: string, preferredSlotId?: FingerSlotId): RingInstance {
   const { state, slotId } = expectCheck(canEquipRing(world, defId, preferredSlotId));
   const slot = expectCheck(

@@ -1,4 +1,9 @@
 // src/game/systems/projectiles.ts
+// @system   core-simulation/combat-runtime
+// @owns     updates projectile lifetime, movement/substepping, homing/orbital behavior, wall bounce, range and explosions
+// @doc      docs/canonical/core_simulation_combat_runtime.md
+// @agents   no weapon spawning, hit damage resolution, or zone DOT ticking; see combat.ts, collisions.ts, and zones.ts
+
 import { type World, emitEvent } from "../../../engine/world/world";
 import { spawnZone, ZONE_KIND } from "../../factories/zoneFactory";
 import { solidFace, worldToTile } from "../../map/compile/kenneyMap";

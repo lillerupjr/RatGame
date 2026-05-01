@@ -1,3 +1,8 @@
+// @system   map-compilation/activation/floor-topology
+// @owns     generates seeded route graph, node runtime plans, pending/committed node transitions, depth scaling
+// @doc      docs/canonical/map_compilation_activation_floor_topology.md
+// @agents   no route-map DOM rendering, floor load execution, or map compiling; see routeMapView.ts, game.ts, and compile/*
+
 import type { BossId } from "../bosses/bossTypes";
 import { buildActBossPlan } from "../bosses/actBossPlan";
 import type { StageId } from "../content/stages";

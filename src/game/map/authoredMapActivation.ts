@@ -1,3 +1,8 @@
+// @system   map-compilation/activation/floor-topology
+// @owns     switches active authored/compiled maps, syncs render skin/cache, exposes safe spawn/goal/debug queries
+// @doc      docs/canonical/map_compilation_activation_floor_topology.md
+// @agents   no compile internals, delve route state, or objective execution; see compile/kenneyMapLoader.ts, delveMap.ts, and systems/progression/*
+
 import type { World } from "../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { setActiveMapSkinId } from "../../engine/render/sprites/renderSprites";

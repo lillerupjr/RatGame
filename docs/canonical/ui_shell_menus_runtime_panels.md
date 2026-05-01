@@ -9,7 +9,7 @@ Own the DOM-facing shell around the runtime: static element lookup, menu choreog
 - Static refs: `src/ui/domRefs.ts`
 - Menus/local menu state: `src/ui/menuWiring.ts`
 - Pause overlay: `src/ui/pause/pauseMenu.ts`
-- Runtime panels/controllers: `src/ui/rewards/relicRewardMenu.ts`, `vendor/vendorShopMenu.ts`, `dialog/renderDialogChoices.ts`, `mobile/mobileControls.ts`, `paletteLab/snapshotViewerPalettePanel.ts`, `interaction/tapSafeActivate.ts`
+- Runtime panels/controllers: `src/ui/rewards/progressionRewardMenu.ts`, `vendor/vendorShopMenu.ts`, `dialog/renderDialogChoices.ts`, `mobile/mobileControls.ts`, `paletteLab/snapshotViewerPalettePanel.ts`, `interaction/tapSafeActivate.ts`
 - Top-level shell bootstrap/visibility: `src/main.ts`
 - Runtime UI mounting/DOM updates: `src/game/game.ts`
 
@@ -25,7 +25,7 @@ Own the DOM-facing shell around the runtime: static element lookup, menu choreog
 - `src/ui/domRefs.ts`
 - `src/ui/menuWiring.ts`
 - `src/ui/pause/pauseMenu.ts`
-- `src/ui/rewards/relicRewardMenu.ts`
+- `src/ui/rewards/progressionRewardMenu.ts`
 - `src/ui/vendor/vendorShopMenu.ts`
 - `src/ui/dialog/renderDialogChoices.ts`
 - `src/ui/mobile/mobileControls.ts`
@@ -33,6 +33,8 @@ Own the DOM-facing shell around the runtime: static element lookup, menu choreog
 - `src/ui/interaction/tapSafeActivate.ts`
 - `src/main.ts`
 - `src/game/game.ts`
+- `src/ui/pixi/hands/handsScreen.ts`
+- `src/ui/pixi/hands/handsDataBridge.ts`
 
 ## Pipeline
 
@@ -40,18 +42,19 @@ Own the DOM-facing shell around the runtime: static element lookup, menu choreog
 2. **Bootstrap / Wiring**: `main.ts` initializes settings, creates game runtime, mounts settings/dev tools/pause/snapshot viewer panels, then calls `wireMenus(refs, gameApi)`. Menu shell uses injected callbacks, not direct world mutation.
 3. **Visibility**: `syncUiForAppState(...)` coordinates boot/loading, menu screens, pause, HUD, route map, end screen, dialog/reward/vendor overlays. In `RUN`, blocking overlays gate HUD/mobile controls. In `MENU`, exactly the active menu screen stays visible, defaulting to welcome.
 4. **Menus**: `wireMenus(...)` owns selected character/map, pending start mode, starter modal, palette-lab snapshot card rendering. Palette Lab lists IndexedDB snapshots, renders card metadata, renames/deletes records, and opens snapshots through runtime callback. Menu actions use `GameApi`: `previewMap(...)`, starts, `openPaletteSnapshot(...)`. User mode hides dev-only affordances. `bindActivate(...)` suppresses duplicate touch/click activation.
-5. **Pause**: `mountPauseMenu(...)` preserves root children, hides them while active, restores on close. It owns section switching, quit confirmation, debug relic editor visibility, read-only build/debug stat views, and embedded settings panel. Palette snapshot capture starts here: `pauseMenu.ts` creates visual-only draft; `main.ts` thumbnails/persists from active render canvas. Pause uses callbacks (`onResume`, `onQuitRun`, `onOpenDevTools`, `onSavePaletteSnapshot`) for runtime changes.
-6. **Runtime Overlays**: `game.ts` mounts reward/vendor overlays into body roots. Controllers render from state and callbacks; `game.ts` remains authority for choosing relics, purchases, leaving vendor, and advancement. `renderDialogChoices(...)` renders dialog model from `game.ts`.
+5. **Pause**: `mountPauseMenu(...)` preserves root children, hides them while active, restores on close. It owns section switching, quit confirmation, read-only build/debug stat views, and embedded settings panel. Palette snapshot capture starts here: `pauseMenu.ts` creates visual-only draft; `main.ts` thumbnails/persists from active render canvas. Pause uses callbacks (`onResume`, `onQuitRun`, `onOpenDevTools`, `onSavePaletteSnapshot`) for runtime changes.
+6. **Runtime Overlays**: `game.ts` mounts reward/vendor overlays into body roots. Controllers render from state and callbacks; `game.ts` remains authority for choosing progression reward options, purchases, leaving vendor, and advancement. `renderDialogChoices(...)` renders dialog model from `game.ts`.
 7. **Dialog / Interaction**: `game.ts` owns `activeDialog`, writes dialog text/choices and HUD interaction prompt from run state, dialog, vendor state, nearby interactables, and phone controls. Opening vendor clears dialog; reward pipeline closes dialog/vendor before reward UI.
 8. **Mobile Controls**: `createMobileControls(...)` owns virtual stick/interact DOM and emits `onMove(x,y,active)` / `onInteractDown(down)`. `game.ts` adapts to virtual sim input; `main.ts` decides enablement from run state and blocking overlays.
 9. **Map / End / Snapshot Viewer**: `game.ts` updates HUD, route map, end stats, and leaderboard tabs. Route clicks use DOM dataset payloads to queue floor-load intents. End buttons call retry/quit. `main.ts` controls snapshot-viewer panel visibility; `game.ts` opens records and rerolls seed. Viewer shows only during `RUN` + `PLAYING` with `paletteSnapshotViewerActive`, closes to Palette Lab, rerolls through `game.ts`, and writes palette/light controls through settings facade.
+10. **Hands Screen (PixiJS)**: `mountHandsScreen(callbacks)` lazy-initializes a PixiJS overlay for ring progression. `main.ts` owns mounting and visibility sync via `game.isHandsScreenOpen()`. Callbacks: `onEquipToSlot` routes to `game.handsScreenEquipToSlot()`; `onClose` routes to `game.closeHandsScreen()`; `onUnequip` routes to `game.handsScreenUnequipSlot()`; `onApplyToken` routes to `game.handsScreenApplyToken()`. The hands screen renders from `handsDataBridge.buildHandsScreenSnapshot()` snapshots and does not mutate world state directly. Modes: browse (H key toggle), choose-slot (ring reward interception), selected (ring detail with unequip/token actions). The stats rail shows current weapon stats, stored modifier tokens, and optional stat-delta previews in choose-slot mode. The detail drawer shows ring info, replacement warnings, talent info, and action buttons. Dynamic slot views are created for extra fingers from `ADD_FINGER` hand effects. Empowerment is visualized through increased glow intensity.
 
 ## Invariants
 
 - `getDomRefs()` is the only static DOM lookup boundary.
 - `main.ts` owns top-level visibility for `BOOT`, `LOADING`, `MENU`, `RUN`.
 - `menuWiring.ts` talks to runtime only through `GameApi`.
-- Runtime overlays (`reward`, `vendor`, `dialog`, `pause`, `snapshot viewer`) render from state + callbacks and do not own gameplay state.
+- Runtime overlays (`reward`, `vendor`, `dialog`, `pause`, `snapshot viewer`, `hands screen`) render from state + callbacks and do not own gameplay state.
 - Blocking overlays gate phone controls; mobile controls enable only in active run play with no blocker.
 - `pauseMenu.ts` preserves/restores host children.
 - Route/end interactions depend on explicit DOM payload/button contracts handled in `game.ts`.

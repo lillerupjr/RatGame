@@ -1,4 +1,9 @@
 // src/game/systems/collisions.ts
+// @system   core-simulation/combat-runtime
+// @owns     resolves projectile/enemy/player collisions, damage packets, ailment application, kill finalization, combat text
+// @doc      docs/canonical/core_simulation_combat_runtime.md
+// @agents   no projectile movement, weapon fire cadence, or reward grants; see projectiles.ts, combat.ts, and systems/progression/*
+
 import { World, emitEvent } from "../../../engine/world/world";
 import {isEnemyHit, isPlayerHit, isPlayerProjectileHit} from "./hitDetection";
 import { walkInfo } from "../../map/compile/kenneyMap";

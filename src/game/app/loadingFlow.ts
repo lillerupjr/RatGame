@@ -1,3 +1,8 @@
+// @system   game-runtime/app-loop
+// @owns     runs fixed loading stages, progress/fail-open policy, load-profiler session and subphases
+// @doc      docs/canonical/game_runtime_app_loop.md
+// @agents   no stage hook implementations, asset prewarm, or map compilation; see src/main.ts, game.ts, and map/compile/*
+
 export const enum LoadingStage {
   COMPILE_MAP = 0,
   PRECOMPUTE_STATIC_MAP = 1,
