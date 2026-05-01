@@ -1,30 +1,53 @@
 // src/main.ts
+// @system   game-runtime/app-loop
+// @owns     bootstraps DOM/canvas/runtime wiring, loading hooks, app-state visibility, rAF frame loop
+// @doc      docs/canonical/game_runtime_app_loop.md
+// @agents   no simulation internals, world schema, or map compiler; see game.ts, engine/world/world.ts, and map/compile/*
+
 import { createGame, precomputeStaticMapData } from "./game/game";
 import { AppState, RunState, createAppStateController } from "./game/app/appState";
-import { createLoadingController } from "./game/app/loadingFlow";
+import { attachLoadProfilerGlobal, createLoadingController } from "./game/app/loadingFlow";
 import { renderLoadingScreen } from "./game/app/loadingScreen";
 import { collectFloorDependencies } from "./game/loading/dependencyCollector";
 import { primeAudio } from "./game/audio/audioManager";
 import { setMusicMuted, setMusicVolume, setSfxMuted, setSfxVolume } from "./game/audio/audioSettings";
-import { resolveActivePaletteId } from "./game/render/activePalette";
-import { getSpriteByIdForPalette } from "./engine/render/sprites/renderSprites";
+import { resolveActivePaletteVariantKey } from "./game/render/activePalette";
+import { getSpriteByIdForVariantKey } from "./engine/render/sprites/renderSprites";
+import {
+  getFirstPaletteInGroup,
+  getNextPaletteInGroup,
+  getPalettesByGroup,
+  normalizePaletteGroup,
+  PALETTE_GROUPS,
+} from "./engine/render/palette/palettes";
 import { attachCanvasAutoResize } from "./engine/render/pixelPerfect";
 import { getDomRefs } from "./ui/domRefs";
 import { applyTheme } from "./ui/theme";
 import { wireMenus } from "./ui/menuWiring";
 import {
-  DEBUG_TOGGLE_DEFINITIONS,
-  LIGHTING_MASK_DEBUG_MODES,
-  NEUTRAL_BIRD_FORCE_STATES,
-  makeAllDebugOffSettings,
-  type BooleanDebugSettingKey,
+  PALETTE_REMAP_WEIGHT_OPTIONS,
 } from "./debugSettings";
 import { getUserSettings, initUserSettings, updateUserSettings } from "./userSettings";
 import { mountPauseMenu } from "./ui/pause/pauseMenu";
 import { togglePause } from "./game/app/pauseController";
+import { mountHandsScreen, type HandsScreenController } from "./ui/pixi/hands/handsScreen";
 import { mountSettingsPanel } from "./ui/settings/settingsPanel";
-import { STARTER_RELIC_BY_CHARACTER, validateStarterRelics } from "./game/content/starterRelics";
+import { installDevToolsPanel } from "./ui/devTools/devToolsPanel";
 import { installStandaloneViewportFix } from "./game/app/viewportSizing";
+import { buildPaletteSnapshotArtifactFromCanvas } from "./game/paletteLab/snapshotThumbnail";
+import { getPaletteSnapshotRecord, savePaletteSnapshotArtifact } from "./game/paletteLab/snapshotStorage";
+import { mountSnapshotViewerPalettePanel } from "./ui/paletteLab/snapshotViewerPalettePanel";
+import {
+  attachWebGLWorldSurface,
+  getRenderableWebGLWorldSurface,
+  getWebGLWorldSurfaceFailureReason,
+  noteWebGLWorldSurfaceFailure,
+  syncWorldCanvasBackendVisibility,
+} from "./game/systems/presentation/backend/webglSurface";
+import {
+  resolveRenderBackendSelection,
+  WEBGL_INIT_UNAVAILABLE_REASON,
+} from "./game/systems/presentation/backend/renderBackendSelection";
 
 type DevSettingsUiController = {
   open(): void;
@@ -33,607 +56,7 @@ type DevSettingsUiController = {
 };
 
 function installDevSettingsUi(): DevSettingsUiController {
-  const settingsMenu = document.getElementById("settingsMenu") as HTMLDivElement | null;
-  const settingsPanel = settingsMenu?.querySelector(".panel") as HTMLDivElement | null;
-  const settingsBackBtn = settingsPanel?.querySelector("#settingsBackBtn") as HTMLButtonElement | null;
-  const noopController: DevSettingsUiController = {
-    open() {},
-    close() {},
-    toggle() {},
-  };
-  if (!settingsPanel) return noopController;
-
-  const applyDevButtonStyle = (btn: HTMLButtonElement, variant: "primary" | "secondary" = "secondary") => {
-    btn.style.border = "1px solid var(--border-default)";
-    btn.style.borderRadius = "0";
-    btn.style.background = variant === "primary" ? "var(--primary-btn-bg)" : "var(--focus-bg)";
-    btn.style.color = "var(--text-primary)";
-    btn.style.fontFamily = "var(--font-mono)";
-    btn.style.fontWeight = "700";
-    btn.style.cursor = "pointer";
-  };
-
-  const applyDevSelectStyle = (select: HTMLSelectElement) => {
-    select.style.background = "var(--focus-bg)";
-    select.style.color = "var(--text-primary)";
-    select.style.border = "1px solid var(--border-default)";
-    select.style.borderRadius = "0";
-    select.style.fontFamily = "var(--font-mono)";
-  };
-
-  const debugLayerToggleBtn = document.createElement("button");
-  debugLayerToggleBtn.type = "button";
-  debugLayerToggleBtn.textContent = "Dev Tools";
-  debugLayerToggleBtn.style.marginTop = "10px";
-  debugLayerToggleBtn.style.width = "100%";
-  debugLayerToggleBtn.style.minHeight = "36px";
-  applyDevButtonStyle(debugLayerToggleBtn, "primary");
-
-  const layer = document.createElement("div");
-  layer.hidden = true;
-  layer.style.position = "fixed";
-  layer.style.inset = "0";
-  layer.style.display = "grid";
-  layer.style.placeItems = "center";
-  layer.style.background = "var(--bg-overlay)";
-  layer.style.boxSizing = "border-box";
-  layer.style.padding = "var(--overlay-pad-top) var(--overlay-pad-right) var(--overlay-pad-bottom) var(--overlay-pad-left)";
-  layer.style.zIndex = "10000";
-
-  const panel = document.createElement("div");
-  panel.style.width = "min(980px, 100%)";
-  panel.style.maxHeight = "100%";
-  panel.style.overflowY = "auto";
-  panel.style.padding = "12px";
-  panel.style.border = "1px solid var(--border-default)";
-  panel.style.borderRadius = "0";
-  panel.style.background = "linear-gradient(180deg, var(--bg-elevated), var(--focus-bg))";
-  panel.style.color = "var(--text-primary)";
-  panel.style.font = "12px var(--font-mono)";
-  panel.style.boxShadow = "inset 0 0 0 1px var(--border-subtle), var(--shadow-medium)";
-  panel.style.boxSizing = "border-box";
-  layer.appendChild(panel);
-  document.body.appendChild(layer);
-
-  if (settingsBackBtn) {
-    settingsPanel.insertBefore(debugLayerToggleBtn, settingsBackBtn);
-  } else {
-    settingsPanel.appendChild(debugLayerToggleBtn);
-  }
-
-  const headerRow = document.createElement("div");
-  headerRow.style.display = "flex";
-  headerRow.style.alignItems = "center";
-  headerRow.style.justifyContent = "space-between";
-  headerRow.style.gap = "10px";
-  headerRow.style.marginBottom = "8px";
-  panel.appendChild(headerRow);
-
-  const title = document.createElement("div");
-  title.textContent = "Debug Tools";
-  title.style.fontWeight = "700";
-  headerRow.appendChild(title);
-
-  const closeBtn = document.createElement("button");
-  closeBtn.type = "button";
-  closeBtn.textContent = "Close";
-  closeBtn.style.padding = "4px 10px";
-  applyDevButtonStyle(closeBtn);
-  headerRow.appendChild(closeBtn);
-
-  type SettingsDebug = ReturnType<typeof getUserSettings>["debug"];
-  const checks = new Map<BooleanDebugSettingKey, HTMLInputElement>();
-  const debugToggleGrid = document.createElement("div");
-  debugToggleGrid.style.display = "grid";
-  debugToggleGrid.style.gridTemplateColumns = "1fr 1fr";
-  debugToggleGrid.style.columnGap = "14px";
-  debugToggleGrid.style.rowGap = "2px";
-  panel.appendChild(debugToggleGrid);
-
-  const prettyLabelByKey: Partial<Record<BooleanDebugSettingKey, string>> = {
-    grid: "Show Grid",
-    walkMask: "Show Walk Mask",
-    blockedTiles: "Show Blocked Tiles",
-    ramps: "Show Ramps",
-    colliders: "Show Colliders",
-    slices: "Show Slices",
-    occluders: "Show Occluders",
-    decals: "Show Decals",
-    structureHeights: "Show Structure Heights",
-    spriteBounds: "Show Sprite Bounds",
-    projectileFaces: "Show Projectile Faces",
-    triggers: "Show Trigger Zones",
-    debugRoadSemantic: "Show Road Semantics",
-    disableLightingOcclusion: "Disable Lighting Occlusion",
-    lightingMasks: "Show Lighting Masks",
-    mapOverlaysDisabled: "Disable Map Overlays",
-    rampFaces: "Show Ramp Faces",
-    forceSpawnOverride: "Force Spawn Override",
-    godMode: "God Mode",
-    entityAnchorOverlay: "Show Entity Anchors",
-    enemyAimOverlay: "Enemy Aim Overlay",
-    pauseDebugCards: "Pause Debug Cards",
-    pauseCsvControls: "Pause CSV Controls",
-    dpsMeter: "DPS Meter",
-  };
-
-  const addToggle = (key: BooleanDebugSettingKey, label: string) => {
-    const row = document.createElement("label");
-    row.style.display = "flex";
-    row.style.alignItems = "center";
-    row.style.justifyContent = "space-between";
-    row.style.gap = "10px";
-    row.style.padding = "4px 0";
-    row.style.cursor = "pointer";
-
-    const text = document.createElement("span");
-    text.textContent = prettyLabelByKey[key] ?? label;
-
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.addEventListener("change", () => {
-      updateUserSettings({ debug: { [key]: input.checked } });
-    });
-
-    row.appendChild(text);
-    row.appendChild(input);
-    debugToggleGrid.appendChild(row);
-    checks.set(key, input);
-  };
-
-  for (let i = 0; i < DEBUG_TOGGLE_DEFINITIONS.length; i++) {
-    addToggle(DEBUG_TOGGLE_DEFINITIONS[i].key, DEBUG_TOGGLE_DEFINITIONS[i].label);
-  }
-
-  const renderTitle = document.createElement("div");
-  renderTitle.textContent = "Render";
-  renderTitle.style.fontWeight = "700";
-  renderTitle.style.marginTop = "10px";
-  renderTitle.style.marginBottom = "4px";
-  panel.appendChild(renderTitle);
-
-  const entityShadowsRow = document.createElement("label");
-  entityShadowsRow.style.display = "flex";
-  entityShadowsRow.style.alignItems = "center";
-  entityShadowsRow.style.justifyContent = "space-between";
-  entityShadowsRow.style.gap = "10px";
-  entityShadowsRow.style.padding = "4px 0";
-  const entityShadowsText = document.createElement("span");
-  entityShadowsText.textContent = "Disable Entity Shadows";
-  const entityShadowsInput = document.createElement("input");
-  entityShadowsInput.type = "checkbox";
-  entityShadowsInput.addEventListener("change", () => {
-    updateUserSettings({
-      render: {
-        entityShadowsDisable: entityShadowsInput.checked,
-      },
-    });
-  });
-  entityShadowsRow.appendChild(entityShadowsText);
-  entityShadowsRow.appendChild(entityShadowsInput);
-  panel.appendChild(entityShadowsRow);
-
-  const entityAnchorsRow = document.createElement("label");
-  entityAnchorsRow.style.display = "flex";
-  entityAnchorsRow.style.alignItems = "center";
-  entityAnchorsRow.style.justifyContent = "space-between";
-  entityAnchorsRow.style.gap = "10px";
-  entityAnchorsRow.style.padding = "4px 0";
-  const entityAnchorsText = document.createElement("span");
-  entityAnchorsText.textContent = "Entity Anchors";
-  const entityAnchorsInput = document.createElement("input");
-  entityAnchorsInput.type = "checkbox";
-  entityAnchorsInput.addEventListener("change", () => {
-    updateUserSettings({
-      render: {
-        entityAnchorsEnabled: entityAnchorsInput.checked,
-      },
-    });
-  });
-  entityAnchorsRow.appendChild(entityAnchorsText);
-  entityAnchorsRow.appendChild(entityAnchorsInput);
-  panel.appendChild(entityAnchorsRow);
-
-  const renderPerfCountersRow = document.createElement("label");
-  renderPerfCountersRow.style.display = "flex";
-  renderPerfCountersRow.style.alignItems = "center";
-  renderPerfCountersRow.style.justifyContent = "space-between";
-  renderPerfCountersRow.style.gap = "10px";
-  renderPerfCountersRow.style.padding = "4px 0";
-  const renderPerfCountersText = document.createElement("span");
-  renderPerfCountersText.textContent = "Render Perf Counters";
-  const renderPerfCountersInput = document.createElement("input");
-  renderPerfCountersInput.type = "checkbox";
-  renderPerfCountersInput.addEventListener("change", () => {
-    updateUserSettings({
-      render: {
-        renderPerfCountersEnabled: renderPerfCountersInput.checked,
-      },
-    });
-  });
-  renderPerfCountersRow.appendChild(renderPerfCountersText);
-  renderPerfCountersRow.appendChild(renderPerfCountersInput);
-  panel.appendChild(renderPerfCountersRow);
-
-  const paletteSwapRow = document.createElement("label");
-  paletteSwapRow.style.display = "flex";
-  paletteSwapRow.style.alignItems = "center";
-  paletteSwapRow.style.justifyContent = "space-between";
-  paletteSwapRow.style.gap = "10px";
-  paletteSwapRow.style.padding = "4px 0";
-  const paletteSwapText = document.createElement("span");
-  paletteSwapText.textContent = "Palette Override";
-  const paletteSwapInput = document.createElement("input");
-  paletteSwapInput.type = "checkbox";
-  paletteSwapInput.addEventListener("change", () => {
-    updateUserSettings({
-      render: {
-        paletteSwapEnabled: paletteSwapInput.checked,
-      },
-    });
-  });
-  paletteSwapRow.appendChild(paletteSwapText);
-  paletteSwapRow.appendChild(paletteSwapInput);
-  panel.appendChild(paletteSwapRow);
-
-  const paletteIdRow = document.createElement("label");
-  paletteIdRow.style.display = "flex";
-  paletteIdRow.style.alignItems = "center";
-  paletteIdRow.style.justifyContent = "space-between";
-  paletteIdRow.style.gap = "10px";
-  paletteIdRow.style.padding = "4px 0";
-  const paletteIdText = document.createElement("span");
-  paletteIdText.textContent = "Palette";
-  const paletteIdSelect = document.createElement("select");
-  applyDevSelectStyle(paletteIdSelect);
-  const PALETTE_IDS = [
-    "db32",
-    "divination",
-    "cyberpunk",
-    "moonlight_15",
-    "st8_moonlight",
-    "chroma_noir",
-    "swamp_kin",
-    "lost_in_the_desert",
-    "endesga_16",
-    "sweetie_16",
-    "dawnbringer_16",
-    "night_16",
-    "fun_16",
-    "reha_16",
-    "arne_16",
-    "lush_sunset",
-    "vaporhaze_16",
-    "sunset_cave_extended",
-  ] as const;
-
-  type PaletteId = (typeof PALETTE_IDS)[number];
-
-  for (const id of PALETTE_IDS) {
-    const opt = document.createElement("option");
-    opt.value = id;
-    opt.textContent = id;
-    paletteIdSelect.appendChild(opt);
-  }
-  paletteIdSelect.addEventListener("change", () => {
-    updateUserSettings({
-      render: {
-        paletteId: paletteIdSelect.value as PaletteId,
-      },
-    });
-  });
-  paletteIdRow.appendChild(paletteIdText);
-  paletteIdRow.appendChild(paletteIdSelect);
-  panel.appendChild(paletteIdRow);
-
-  const modeRow = document.createElement("label");
-  modeRow.style.display = "flex";
-  modeRow.style.alignItems = "center";
-  modeRow.style.justifyContent = "space-between";
-  modeRow.style.gap = "10px";
-  modeRow.style.padding = "4px 0";
-  const modeText = document.createElement("span");
-  modeText.textContent = "Lighting Mask Mode";
-  const modeSelect = document.createElement("select");
-  applyDevSelectStyle(modeSelect);
-  const modes = LIGHTING_MASK_DEBUG_MODES;
-  for (let i = 0; i < modes.length; i++) {
-    const opt = document.createElement("option");
-    opt.value = modes[i];
-    opt.textContent = modes[i];
-    modeSelect.appendChild(opt);
-  }
-  modeSelect.addEventListener("change", () => {
-    updateUserSettings({
-      debug: {
-        lightingMaskDebugMode: modeSelect.value as SettingsDebug["lightingMaskDebugMode"],
-      },
-    });
-  });
-  modeRow.appendChild(modeText);
-  modeRow.appendChild(modeSelect);
-  panel.appendChild(modeRow);
-
-  const waterFlowRow = document.createElement("div");
-  waterFlowRow.style.display = "flex";
-  waterFlowRow.style.flexDirection = "column";
-  waterFlowRow.style.gap = "4px";
-  waterFlowRow.style.padding = "6px 0";
-  const waterFlowTop = document.createElement("div");
-  waterFlowTop.style.display = "flex";
-  waterFlowTop.style.alignItems = "center";
-  waterFlowTop.style.justifyContent = "space-between";
-  waterFlowTop.style.gap = "10px";
-  const waterFlowText = document.createElement("span");
-  waterFlowText.textContent = "Water Flow";
-  const waterFlowValue = document.createElement("span");
-  waterFlowValue.textContent = "1.00x";
-  const waterFlowInput = document.createElement("input");
-  waterFlowInput.type = "range";
-  waterFlowInput.min = "0.25";
-  waterFlowInput.max = "4";
-  waterFlowInput.step = "0.05";
-  waterFlowInput.value = "1";
-  waterFlowInput.addEventListener("input", () => {
-    const value = Number.parseFloat(waterFlowInput.value) || 1;
-    waterFlowValue.textContent = `${value.toFixed(2)}x`;
-    updateUserSettings({
-      debug: {
-        waterFlowRate: value,
-      },
-    });
-  });
-  waterFlowTop.appendChild(waterFlowText);
-  waterFlowTop.appendChild(waterFlowValue);
-  waterFlowRow.appendChild(waterFlowTop);
-  waterFlowRow.appendChild(waterFlowInput);
-  panel.appendChild(waterFlowRow);
-
-  const dmgMultRow = document.createElement("div");
-  dmgMultRow.style.display = "flex";
-  dmgMultRow.style.alignItems = "center";
-  dmgMultRow.style.justifyContent = "space-between";
-  dmgMultRow.style.gap = "10px";
-  dmgMultRow.style.padding = "4px 0";
-  const dmgMultText = document.createElement("span");
-  dmgMultText.textContent = "Damage Mult";
-  const dmgMultBtn = document.createElement("button");
-  dmgMultBtn.type = "button";
-  applyDevButtonStyle(dmgMultBtn);
-  dmgMultBtn.addEventListener("click", () => {
-    const s = getUserSettings().debug;
-    const next = s.dmgMult === 10 ? 1 : 10;
-    updateUserSettings({ debug: { dmgMult: next } });
-    dmgMultBtn.textContent = `${next}x`;
-  });
-  dmgMultRow.appendChild(dmgMultText);
-  dmgMultRow.appendChild(dmgMultBtn);
-  panel.appendChild(dmgMultRow);
-
-  const fireRateMultRow = document.createElement("div");
-  fireRateMultRow.style.display = "flex";
-  fireRateMultRow.style.alignItems = "center";
-  fireRateMultRow.style.justifyContent = "space-between";
-  fireRateMultRow.style.gap = "10px";
-  fireRateMultRow.style.padding = "4px 0";
-  const fireRateMultText = document.createElement("span");
-  fireRateMultText.textContent = "Fire Rate Mult";
-  const fireRateMultBtn = document.createElement("button");
-  fireRateMultBtn.type = "button";
-  applyDevButtonStyle(fireRateMultBtn);
-  fireRateMultBtn.addEventListener("click", () => {
-    const s = getUserSettings().debug;
-    const next = s.fireRateMult === 10 ? 1 : 10;
-    updateUserSettings({ debug: { fireRateMult: next } });
-    fireRateMultBtn.textContent = `${next}x`;
-  });
-  fireRateMultRow.appendChild(fireRateMultText);
-  fireRateMultRow.appendChild(fireRateMultBtn);
-  panel.appendChild(fireRateMultRow);
-
-  const birdTitle = document.createElement("div");
-  birdTitle.textContent = "Neutral Bird AI";
-  birdTitle.style.fontWeight = "700";
-  birdTitle.style.marginTop = "10px";
-  birdTitle.style.marginBottom = "4px";
-  panel.appendChild(birdTitle);
-
-  const birdEnabledRow = document.createElement("label");
-  birdEnabledRow.style.display = "flex";
-  birdEnabledRow.style.alignItems = "center";
-  birdEnabledRow.style.justifyContent = "space-between";
-  birdEnabledRow.style.gap = "10px";
-  birdEnabledRow.style.padding = "4px 0";
-  const birdEnabledText = document.createElement("span");
-  birdEnabledText.textContent = "Disable Neutral Bird AI";
-  const birdEnabledInput = document.createElement("input");
-  birdEnabledInput.type = "checkbox";
-  birdEnabledInput.addEventListener("change", () => {
-    updateUserSettings({
-      debug: {
-        neutralBirdAI: {
-          ...getUserSettings().debug.neutralBirdAI,
-          disabled: birdEnabledInput.checked,
-        },
-      },
-    });
-  });
-  birdEnabledRow.appendChild(birdEnabledText);
-  birdEnabledRow.appendChild(birdEnabledInput);
-  panel.appendChild(birdEnabledRow);
-
-  const birdDisableTransitionsRow = document.createElement("label");
-  birdDisableTransitionsRow.style.display = "flex";
-  birdDisableTransitionsRow.style.alignItems = "center";
-  birdDisableTransitionsRow.style.justifyContent = "space-between";
-  birdDisableTransitionsRow.style.gap = "10px";
-  birdDisableTransitionsRow.style.padding = "4px 0";
-  const birdDisableTransitionsText = document.createElement("span");
-  birdDisableTransitionsText.textContent = "Disable Transitions";
-  const birdDisableTransitionsInput = document.createElement("input");
-  birdDisableTransitionsInput.type = "checkbox";
-  birdDisableTransitionsInput.addEventListener("change", () => {
-    updateUserSettings({
-      debug: {
-        neutralBirdAI: {
-          ...getUserSettings().debug.neutralBirdAI,
-          disableTransitions: birdDisableTransitionsInput.checked,
-        },
-      },
-    });
-  });
-  birdDisableTransitionsRow.appendChild(birdDisableTransitionsText);
-  birdDisableTransitionsRow.appendChild(birdDisableTransitionsInput);
-  panel.appendChild(birdDisableTransitionsRow);
-
-  const birdDrawDebugRow = document.createElement("label");
-  birdDrawDebugRow.style.display = "flex";
-  birdDrawDebugRow.style.alignItems = "center";
-  birdDrawDebugRow.style.justifyContent = "space-between";
-  birdDrawDebugRow.style.gap = "10px";
-  birdDrawDebugRow.style.padding = "4px 0";
-  const birdDrawDebugText = document.createElement("span");
-  birdDrawDebugText.textContent = "Draw Debug";
-  const birdDrawDebugInput = document.createElement("input");
-  birdDrawDebugInput.type = "checkbox";
-  birdDrawDebugInput.addEventListener("change", () => {
-    updateUserSettings({
-      debug: {
-        neutralBirdAI: {
-          ...getUserSettings().debug.neutralBirdAI,
-          drawDebug: birdDrawDebugInput.checked,
-        },
-      },
-    });
-  });
-  birdDrawDebugRow.appendChild(birdDrawDebugText);
-  birdDrawDebugRow.appendChild(birdDrawDebugInput);
-  panel.appendChild(birdDrawDebugRow);
-
-  const birdForceStateRow = document.createElement("label");
-  birdForceStateRow.style.display = "flex";
-  birdForceStateRow.style.alignItems = "center";
-  birdForceStateRow.style.justifyContent = "space-between";
-  birdForceStateRow.style.gap = "10px";
-  birdForceStateRow.style.padding = "4px 0";
-  const birdForceStateText = document.createElement("span");
-  birdForceStateText.textContent = "Force State";
-  const birdForceStateSelect = document.createElement("select");
-  applyDevSelectStyle(birdForceStateSelect);
-  for (let i = 0; i < NEUTRAL_BIRD_FORCE_STATES.length; i++) {
-    const opt = document.createElement("option");
-    opt.value = NEUTRAL_BIRD_FORCE_STATES[i];
-    opt.textContent = NEUTRAL_BIRD_FORCE_STATES[i];
-    birdForceStateSelect.appendChild(opt);
-  }
-  birdForceStateSelect.addEventListener("change", () => {
-    updateUserSettings({
-      debug: {
-        neutralBirdAI: {
-          ...getUserSettings().debug.neutralBirdAI,
-          forceState: birdForceStateSelect.value as SettingsDebug["neutralBirdAI"]["forceState"],
-        },
-      },
-    });
-  });
-  birdForceStateRow.appendChild(birdForceStateText);
-  birdForceStateRow.appendChild(birdForceStateSelect);
-  panel.appendChild(birdForceStateRow);
-
-  const birdRepickTargetRow = document.createElement("label");
-  birdRepickTargetRow.style.display = "flex";
-  birdRepickTargetRow.style.alignItems = "center";
-  birdRepickTargetRow.style.justifyContent = "space-between";
-  birdRepickTargetRow.style.gap = "10px";
-  birdRepickTargetRow.style.padding = "4px 0";
-  const birdRepickTargetText = document.createElement("span");
-  birdRepickTargetText.textContent = "Repick Target Debug";
-  const birdRepickTargetInput = document.createElement("input");
-  birdRepickTargetInput.type = "checkbox";
-  birdRepickTargetInput.addEventListener("change", () => {
-    updateUserSettings({
-      debug: {
-        neutralBirdAI: {
-          ...getUserSettings().debug.neutralBirdAI,
-          debugRepickTarget: birdRepickTargetInput.checked,
-        },
-      },
-    });
-  });
-  birdRepickTargetRow.appendChild(birdRepickTargetText);
-  birdRepickTargetRow.appendChild(birdRepickTargetInput);
-  panel.appendChild(birdRepickTargetRow);
-
-  const offAllBtn = document.createElement("button");
-  offAllBtn.type = "button";
-  offAllBtn.textContent = "Turn Off All";
-  offAllBtn.style.marginTop = "10px";
-  offAllBtn.style.width = "100%";
-  offAllBtn.style.height = "30px";
-  applyDevButtonStyle(offAllBtn);
-  offAllBtn.addEventListener("click", () => {
-    updateUserSettings({
-      debug: makeAllDebugOffSettings(),
-      render: {
-        entityShadowsDisable: false,
-        entityAnchorsEnabled: false,
-        renderPerfCountersEnabled: false,
-        performanceMode: false,
-        paletteSwapEnabled: false,
-      },
-    });
-    syncFromSettings();
-  });
-  panel.appendChild(offAllBtn);
-
-  const syncFromSettings = () => {
-    const s = getUserSettings();
-    for (let i = 0; i < DEBUG_TOGGLE_DEFINITIONS.length; i++) {
-      const def = DEBUG_TOGGLE_DEFINITIONS[i];
-      checks.get(def.key)!.checked = s.debug[def.key];
-    }
-    modeSelect.value = s.debug.lightingMaskDebugMode;
-    birdEnabledInput.checked = s.debug.neutralBirdAI.disabled;
-    birdDisableTransitionsInput.checked = s.debug.neutralBirdAI.disableTransitions;
-    birdDrawDebugInput.checked = s.debug.neutralBirdAI.drawDebug;
-    birdForceStateSelect.value = s.debug.neutralBirdAI.forceState;
-    birdRepickTargetInput.checked = s.debug.neutralBirdAI.debugRepickTarget;
-    waterFlowInput.value = `${s.debug.waterFlowRate}`;
-    waterFlowValue.textContent = `${s.debug.waterFlowRate.toFixed(2)}x`;
-    dmgMultBtn.textContent = `${s.debug.dmgMult}x`;
-    fireRateMultBtn.textContent = `${s.debug.fireRateMult}x`;
-    entityShadowsInput.checked = s.render.entityShadowsDisable;
-    entityAnchorsInput.checked = s.render.entityAnchorsEnabled;
-    renderPerfCountersInput.checked = s.render.renderPerfCountersEnabled;
-    paletteSwapInput.checked = s.render.paletteSwapEnabled;
-    paletteIdSelect.value = s.render.paletteId;
-    const isUserMode = !!(s as any).game?.userModeEnabled;
-    debugLayerToggleBtn.hidden = isUserMode;
-    if (isUserMode) setOpen(false);
-  };
-
-  const setOpen = (open: boolean) => {
-    layer.hidden = !open;
-    if (open) syncFromSettings();
-  };
-
-  layer.addEventListener("click", (ev) => {
-    if (ev.target === layer) setOpen(false);
-  });
-  closeBtn.addEventListener("click", () => setOpen(false));
-  debugLayerToggleBtn.addEventListener("click", () => {
-    setOpen(layer.hidden);
-  });
-  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-    window.addEventListener("ratgame:settings-changed", syncFromSettings as EventListener);
-  }
-  syncFromSettings();
-
-  return {
-    open: () => setOpen(true),
-    close: () => setOpen(false),
-    toggle: () => setOpen(layer.hidden),
-  };
+  return installDevToolsPanel();
 }
 
 async function bootstrap() {
@@ -643,6 +66,7 @@ async function bootstrap() {
     "mainMenu",
     "characterSelect",
     "mapMenu",
+    "paletteLabMenu",
     "innkeeperMenu",
     "settingsMenu",
     "creditsMenu",
@@ -650,7 +74,6 @@ async function bootstrap() {
     "hud",
     "vitalsOrbRoot",
     "map",
-    "levelup",
     "end",
     "dialogBar",
   ];
@@ -660,10 +83,6 @@ async function bootstrap() {
   }
 
   await initUserSettings();
-  if (import.meta.env.DEV) {
-    validateStarterRelics();
-    console.debug("[starterRelics] mapping", STARTER_RELIC_BY_CHARACTER);
-  }
   const audioPrefs = getUserSettings().audio;
   const master = Math.max(0, Math.min(1, Number.isFinite(audioPrefs.masterVolume) ? audioPrefs.masterVolume : 1));
   const music = Math.max(0, Math.min(1, Number.isFinite(audioPrefs.musicVolume) ? audioPrefs.musicVolume : 0.6));
@@ -672,12 +91,6 @@ async function bootstrap() {
   setSfxMuted(!!audioPrefs.sfxMuted);
   setMusicVolume(master * music);
   setSfxVolume(master * sfx);
-  const hasPersistedSettings = !!localStorage.getItem("ratgame:userSettings");
-  const isPhoneLikeViewport = window.matchMedia("(pointer: coarse)").matches
-    && (window.matchMedia("(max-width: 768px)").matches || window.matchMedia("(max-height: 500px)").matches);
-  if (!hasPersistedSettings && isPhoneLikeViewport && !getUserSettings().render.performanceMode) {
-    updateUserSettings({ render: { performanceMode: true } });
-  }
   const devSettingsUi = installDevSettingsUi();
 
   const refs = getDomRefs();
@@ -704,10 +117,28 @@ async function bootstrap() {
   });
   const canvas = refs.canvas;
   const uiCanvas = refs.uiCanvas;
+  const webglCanvas = document.createElement("canvas");
+  webglCanvas.id = "c-webgl";
+  webglCanvas.setAttribute("aria-hidden", "true");
+  canvas.insertAdjacentElement("afterend", webglCanvas);
   const detachStandaloneViewportFix = installStandaloneViewportFix();
   const rawCtx = canvas.getContext("2d");
   if (!rawCtx) throw new Error("Canvas 2D context not available");
   const ctx = rawCtx;
+  const webglCtx = webglCanvas.getContext("webgl", {
+    alpha: true,
+    antialias: false,
+    premultipliedAlpha: true,
+    preserveDrawingBuffer: false,
+  });
+  if (webglCtx) {
+    attachWebGLWorldSurface(canvas, {
+      canvas: webglCanvas,
+      gl: webglCtx,
+    });
+  } else {
+    noteWebGLWorldSurfaceFailure(canvas, WEBGL_INIT_UNAVAILABLE_REASON);
+  }
   const uiRawCtx = uiCanvas.getContext("2d");
   if (!uiRawCtx) throw new Error("UI canvas 2D context not available");
   const uiCtx = uiRawCtx;
@@ -731,6 +162,10 @@ async function bootstrap() {
   const syncCanvasResolutionMetadata = () => {
     uiCanvas.dataset.effectiveDpr = canvas.dataset.effectiveDpr;
     uiCanvas.dataset.pixelScale = canvas.dataset.pixelScale;
+    webglCanvas.width = canvas.width;
+    webglCanvas.height = canvas.height;
+    webglCanvas.dataset.effectiveDpr = canvas.dataset.effectiveDpr;
+    webglCanvas.dataset.pixelScale = canvas.dataset.pixelScale;
   };
   const detachWorldCanvasAutoResize = attachCanvasAutoResize(canvas, ctx, syncCanvasResolutionMetadata);
   const detachUiCanvasAutoResize = attachCanvasAutoResize(uiCanvas, uiCtx, syncCanvasResolutionMetadata);
@@ -752,8 +187,94 @@ async function bootstrap() {
 
   syncUiSafeRect();
 
-  wireMenus(refs, game);
+  const returnToPaletteLabMenu = (sublineText: string) => {
+    appStateController.setRunState(RunState.PLAYING);
+    appStateController.setAppState(AppState.MENU);
+    game.quitRunToMenu();
+    refs.welcomeScreen.hidden = true;
+    refs.mainMenuEl.hidden = true;
+    refs.characterSelectEl.hidden = true;
+    refs.mapMenuEl.hidden = true;
+    refs.paletteLabMenuEl.hidden = false;
+    refs.innkeeperMenuEl.hidden = true;
+    refs.settingsMenuEl.hidden = true;
+    refs.creditsMenuEl.hidden = true;
+    refs.ui.menuEl.hidden = true;
+    refs.ui.mapEl.root.hidden = true;
+    refs.ui.endEl.root.hidden = true;
+    refs.ui.dialogEl.root.hidden = true;
+    refs.hud.root.hidden = true;
+    refs.hud.vitalsOrbRoot.hidden = true;
+    refs.paletteLabSublineEl.textContent = sublineText;
+  };
+
+  wireMenus(refs, {
+    previewMap: game.previewMap,
+    reloadCurrentMapForDebug: game.reloadCurrentMapForDebug,
+    startRun: game.startRun,
+    startDeterministicRun: game.startDeterministicRun,
+    startSandboxRun: game.startSandboxRun,
+    openPaletteSnapshot: async (snapshotId: string) => {
+      const snapshot = await getPaletteSnapshotRecord(snapshotId);
+      if (!snapshot) {
+        throw new Error(`Palette snapshot "${snapshotId}" was not found.`);
+      }
+      game.openPaletteSnapshotRecord(snapshot);
+    },
+  });
+  // ── Hands screen (PixiJS) — lazy-initialized on first open ──
+  let handsScreen: HandsScreenController | null = null;
+  let handsScreenMounting = false;
+  async function ensureHandsScreen(): Promise<HandsScreenController | null> {
+    if (handsScreen) return handsScreen;
+    if (handsScreenMounting) return null; // already in-flight
+    handsScreenMounting = true;
+    try {
+      handsScreen = await mountHandsScreen({
+        onEquipToSlot: (slotId) => {
+          game.handsScreenEquipToSlot(slotId);
+          handsScreen?.hide();
+          appStateController.setRunState(RunState.PLAYING);
+        },
+        onClose: () => {
+          game.closeHandsScreen();
+          handsScreen?.hide();
+          appStateController.setRunState(RunState.PLAYING);
+        },
+        onUnequip: (slotId) => {
+          game.handsScreenUnequipSlot(slotId);
+        },
+        onApplyToken: (instanceId, tokenType) => {
+          game.handsScreenApplyToken(instanceId, tokenType);
+        },
+      });
+      if (import.meta.env.DEV) console.log("[hands-screen] mounted successfully");
+      return handsScreen;
+    } catch (err) {
+      console.error("[hands-screen] failed to mount:", err);
+      handsScreenMounting = false;
+      return null;
+    }
+  }
+
+  const snapshotViewerPalettePanel = mountSnapshotViewerPalettePanel({
+    onClose: () => {
+      returnToPaletteLabMenu("Returned from snapshot viewer.");
+    },
+    onRerollSeed: () => {
+      game.rerollPaletteSnapshotViewerSeed();
+    },
+  });
   let pauseCogBtn: HTMLButtonElement | null = null;
+  const resolveWorldSnapshotCanvas = () => {
+    const backendSelection = resolveRenderBackendSelection(
+      getUserSettings().render as any,
+      getRenderableWebGLWorldSurface(canvas),
+      getWebGLWorldSurfaceFailureReason(canvas),
+    );
+    const webglSurface = getRenderableWebGLWorldSurface(canvas);
+    return backendSelection.selectedBackend === "webgl" && webglSurface ? webglSurface.canvas : canvas;
+  };
 
   function syncUiForAppState(appState: AppState, runState: RunState): void {
     if (appState === AppState.BOOT || appState === AppState.LOADING) {
@@ -762,6 +283,7 @@ async function bootstrap() {
       refs.mainMenuEl.hidden = true;
       refs.characterSelectEl.hidden = true;
       refs.mapMenuEl.hidden = true;
+      refs.paletteLabMenuEl.hidden = true;
       refs.innkeeperMenuEl.hidden = true;
       refs.settingsMenuEl.hidden = true;
       refs.creditsMenuEl.hidden = true;
@@ -769,7 +291,6 @@ async function bootstrap() {
       refs.hud.root.hidden = true;
       refs.hud.vitalsOrbRoot.hidden = true;
       refs.ui.mapEl.root.hidden = true;
-      refs.ui.levelupEl.root.hidden = true;
       refs.ui.endEl.root.hidden = true;
       refs.ui.dialogEl.root.hidden = true;
       if (pauseCogBtn) pauseCogBtn.hidden = true;
@@ -780,7 +301,6 @@ async function bootstrap() {
       refs.ui.menuEl.hidden = true;
       refs.hud.root.hidden = true;
       refs.hud.vitalsOrbRoot.hidden = true;
-      refs.ui.levelupEl.root.hidden = true;
       refs.ui.endEl.root.hidden = true;
       refs.ui.dialogEl.root.hidden = true;
       if (pauseCogBtn) pauseCogBtn.hidden = true;
@@ -790,6 +310,7 @@ async function bootstrap() {
         refs.mainMenuEl.hidden = true;
         refs.characterSelectEl.hidden = true;
         refs.mapMenuEl.hidden = true;
+        refs.paletteLabMenuEl.hidden = true;
         refs.innkeeperMenuEl.hidden = true;
         refs.settingsMenuEl.hidden = true;
         refs.creditsMenuEl.hidden = true;
@@ -801,6 +322,7 @@ async function bootstrap() {
         || !refs.mainMenuEl.hidden
         || !refs.characterSelectEl.hidden
         || !refs.mapMenuEl.hidden
+        || !refs.paletteLabMenuEl.hidden
         || !refs.innkeeperMenuEl.hidden
         || !refs.settingsMenuEl.hidden
         || !refs.creditsMenuEl.hidden
@@ -816,30 +338,31 @@ async function bootstrap() {
       const isMapOpen = w.state === "MAP" || !refs.ui.mapEl.root.hidden;
       const isPauseOpen = runState === RunState.PAUSED || !refs.ui.menuEl.hidden;
       const isEndOpen = !refs.ui.endEl.root.hidden;
-      const isLevelupOpen = !refs.ui.levelupEl.root.hidden;
       const isDialogOpen = !refs.ui.dialogEl.root.hidden;
       const vendorRoot = document.getElementById("vendorShop");
-      const relicRewardRoot = document.getElementById("relicReward");
+      const progressionRewardRoot = document.getElementById("progressionReward");
       const isVendorOpen = !!vendorRoot && !vendorRoot.hidden;
-      const isRelicRewardOpen = !!relicRewardRoot && !relicRewardRoot.hidden;
+      const isProgressionRewardOpen = !!progressionRewardRoot && !progressionRewardRoot.hidden;
+      const isHandsScreenOpen = game.isHandsScreenOpen() || !!handsScreen?.isVisible();
       const isAnyBlockingOverlayOpen =
         isMapOpen
         || isPauseOpen
         || isEndOpen
-        || isLevelupOpen
         || isDialogOpen
         || isVendorOpen
-        || isRelicRewardOpen;
+        || isProgressionRewardOpen
+        || isHandsScreenOpen;
 
       game.setMobileControlsEnabled(runState === RunState.PLAYING && !isAnyBlockingOverlayOpen);
       refs.welcomeScreen.hidden = true;
       refs.mainMenuEl.hidden = true;
       refs.characterSelectEl.hidden = true;
       refs.mapMenuEl.hidden = true;
+      refs.paletteLabMenuEl.hidden = true;
       refs.innkeeperMenuEl.hidden = true;
       refs.settingsMenuEl.hidden = true;
       refs.creditsMenuEl.hidden = true;
-      refs.ui.menuEl.hidden = runState !== RunState.PAUSED;
+      refs.ui.menuEl.hidden = runState !== RunState.PAUSED || (!!handsScreen?.isVisible() && !wasPausedVisible);
       refs.hud.root.hidden = isMapOpen;
       refs.hud.vitalsOrbRoot.hidden = runState === RunState.PAUSED || isMapOpen;
       if (isEndOpen) {
@@ -847,10 +370,27 @@ async function bootstrap() {
         refs.hud.vitalsOrbRoot.hidden = true;
       }
       if (pauseCogBtn) pauseCogBtn.hidden = isMapOpen;
+
+      // Sync hands screen: game.ts may open it from reward interception
+      if (game.isHandsScreenOpen() && handsScreen && !handsScreen.isVisible()) {
+        handsScreen.show(w, game.getHandsScreenPendingRingDefId());
+        appStateController.setRunState(RunState.PAUSED);
+      } else if (!game.isHandsScreenOpen() && handsScreen?.isVisible()) {
+        handsScreen.hide();
+        appStateController.setRunState(RunState.PLAYING);
+      }
     }
   }
 
   const appStateController = createAppStateController();
+  const syncWorldBackendSurface = () => {
+    const backendSelection = resolveRenderBackendSelection(
+      getUserSettings().render as any,
+      getRenderableWebGLWorldSurface(canvas),
+      getWebGLWorldSurfaceFailureReason(canvas),
+    );
+    syncWorldCanvasBackendVisibility(canvas, backendSelection.selectedBackend, appStateController.appState === AppState.RUN);
+  };
   let bootProgress = 0;
   let activeStartIntent: ReturnType<typeof game.consumePendingStartIntent> = null;
   let activeFloorIntent: ReturnType<typeof game.consumePendingFloorLoadIntent> = null;
@@ -864,11 +404,17 @@ async function bootstrap() {
     root: refs.ui.menuEl,
     actions: {
       onResume: () => {
-        appStateController.setRunState(RunState.PLAYING);
+        if (!handsScreen?.isVisible()) {
+          appStateController.setRunState(RunState.PLAYING);
+        }
         pauseMenu.setVisible(false);
         wasPausedVisible = false;
       },
       onQuitRun: () => {
+        if (handsScreen?.isVisible()) {
+          game.closeHandsScreen();
+          handsScreen.hide();
+        }
         appStateController.setRunState(RunState.PLAYING);
         appStateController.setAppState(AppState.MENU);
         activeStartIntent = null;
@@ -882,6 +428,24 @@ async function bootstrap() {
       },
       onOpenDevTools: () => {
         devSettingsUi.open();
+      },
+      onSavePaletteSnapshot: (snapshotDraft) => {
+        void buildPaletteSnapshotArtifactFromCanvas(snapshotDraft, resolveWorldSnapshotCanvas())
+          .then(async (artifact) => {
+            const world = game.getWorld() as any;
+            if (!world || typeof world !== "object") return;
+            world.paletteSnapshotArtifact = artifact;
+            world.paletteSnapshotSavedRecord = await savePaletteSnapshotArtifact(artifact);
+            world.paletteSnapshotSaveError = null;
+          })
+          .catch((err) => {
+            const world = game.getWorld() as any;
+            if (world && typeof world === "object") {
+              world.paletteSnapshotSaveError =
+                err instanceof Error ? err.message : "Failed to capture or store snapshot.";
+            }
+            console.error("[palette-snapshot] Failed to capture or store snapshot.", err);
+          });
       },
     },
   });
@@ -905,18 +469,26 @@ async function bootstrap() {
   pauseCogBtn.hidden = true;
   pauseCogBtn.addEventListener("click", () => {
     if (appStateController.appState !== AppState.RUN) return;
+    if (handsScreen?.isVisible()) {
+      // Already paused due to hands screen — show pause menu overlay
+      pauseMenu.setVisible(true);
+      pauseMenu.render(game.getWorld());
+      wasPausedVisible = true;
+      return;
+    }
     togglePause(appStateController, appStateController.appState);
   });
   document.body.appendChild(pauseCogBtn);
+  let activeFloorLoadReady = true;
   const loadingController = createLoadingController({
     compileMap: async () => {
       cachedDeps = null;
       if (activeStartIntent) {
-        game.prepareStartMap(activeStartIntent);
+        await game.prepareStartMap(activeStartIntent);
         return;
       }
       if (activeFloorIntent) {
-        game.beginFloorLoad(activeFloorIntent);
+        activeFloorLoadReady = await game.beginFloorLoad(activeFloorIntent);
       }
     },
     precomputeStaticMap: async () => {
@@ -924,14 +496,17 @@ async function bootstrap() {
     },
     prewarmDependencies: async () => {
       if (activeStartIntent) {
-        await game.prewarmActiveMapSpritesForCurrentPalette();
-        return true;
+        return game.prewarmActiveMapSpritesForCurrentPalette();
       }
       if (activeFloorIntent) {
-        await game.prewarmFloorLoadSprites();
-        return true;
+        if (!activeFloorLoadReady) return true;
+        return game.prewarmFloorLoadSprites();
       }
       return true;
+    },
+    prepareStructureTriangles: async () => {
+      if (activeFloorIntent && !activeFloorLoadReady) return true;
+      return game.prepareRuntimeStructureTrianglesForLoading();
     },
     primeAudio: async () => {
       const deps = cachedDeps ?? collectFloorDependencies();
@@ -939,17 +514,23 @@ async function bootstrap() {
     },
     spawnEntities: async () => {
       if (activeStartIntent) {
-        game.performPreparedStartIntent(activeStartIntent);
+        await game.performPreparedStartIntent(activeStartIntent);
         return;
       }
       if (activeFloorIntent) {
+        if (!activeFloorLoadReady) return;
         game.finalizeFloorLoad();
       }
     },
     finalize: async () => {
       activeStartIntent = null;
       activeFloorIntent = null;
+      activeFloorLoadReady = true;
     },
+  });
+  attachLoadProfilerGlobal({
+    getSummary: () => loadingController.getSummary(),
+    getPhases: () => loadingController.getPhases(),
   });
 
   const bootTick = () => {
@@ -963,6 +544,15 @@ async function bootstrap() {
   };
 
   // Runtime render/debug toggles (works outside dev panel too).
+  const cyclePaletteRemapWeight = (
+    currentValue: (typeof PALETTE_REMAP_WEIGHT_OPTIONS)[number],
+  ): (typeof PALETTE_REMAP_WEIGHT_OPTIONS)[number] => {
+    const idx = PALETTE_REMAP_WEIGHT_OPTIONS.indexOf(currentValue);
+    const currentIdx = idx >= 0 ? idx : 0;
+    const nextIdx = (currentIdx + 1) % PALETTE_REMAP_WEIGHT_OPTIONS.length;
+    return PALETTE_REMAP_WEIGHT_OPTIONS[nextIdx];
+  };
+
   window.addEventListener("keydown", (ev) => {
     const target = ev.target as HTMLElement | null;
     const active = document.activeElement as HTMLElement | null;
@@ -975,52 +565,91 @@ async function bootstrap() {
 
     if (ev.repeat) return;
 
+    if (ev.code === "F2") {
+      ev.preventDefault();
+      void game.copyPerfOverlaySnapshot();
+      return;
+    }
+
     if (ev.code === "F5") {
       ev.preventDefault();
-      const PALETTE_CYCLE = [
-        "db32",
-        "divination",
-        "cyberpunk",
-        "moonlight_15",
-        "st8_moonlight",
-        "chroma_noir",
-        "swamp_kin",
-        "lost_in_the_desert",
-        "endesga_16",
-        "sweetie_16",
-        "dawnbringer_16",
-        "night_16",
-        "fun_16",
-        "reha_16",
-        "arne_16",
-        "lush_sunset",
-        "vaporhaze_16",
-        "sunset_cave_extended",
-      ] as const;
-
-      type PaletteId = (typeof PALETTE_CYCLE)[number];
-
       const current = getUserSettings().render;
+      const group = normalizePaletteGroup(current.paletteGroup);
 
       if (!current.paletteSwapEnabled) {
-        updateUserSettings({ render: { paletteSwapEnabled: true, paletteId: PALETTE_CYCLE[0] as PaletteId } });
+        const first = getFirstPaletteInGroup(group);
+        updateUserSettings({
+          render: {
+            paletteSwapEnabled: true,
+            paletteGroup: group,
+            paletteId: first.id,
+          },
+        });
         return;
       }
 
-      const idx = Math.max(0, PALETTE_CYCLE.indexOf(current.paletteId as PaletteId));
-      const nextIdx = idx + 1;
+      const next = getNextPaletteInGroup(current.paletteId, group);
+      updateUserSettings({
+        render: {
+          paletteSwapEnabled: true,
+          paletteGroup: group,
+          paletteId: next.id,
+        },
+      });
+      return;
+    }
 
-      if (nextIdx >= PALETTE_CYCLE.length) {
-        updateUserSettings({ render: { paletteSwapEnabled: false } });
-        return;
+    if (ev.code === "F6") {
+      ev.preventDefault();
+      const current = getUserSettings().debug.paletteSWeightPercent;
+      updateUserSettings({
+        debug: { paletteSWeightPercent: cyclePaletteRemapWeight(current) },
+      });
+      return;
+    }
+
+    if (ev.code === "F7") {
+      ev.preventDefault();
+      const current = getUserSettings().debug.paletteDarknessPercent;
+      updateUserSettings({
+        debug: { paletteDarknessPercent: cyclePaletteRemapWeight(current) },
+      });
+      return;
+    }
+
+    // H key: toggle hands screen
+    if (ev.code === "KeyH" && appStateController.appState === AppState.RUN && (appStateController.runState === RunState.PLAYING || handsScreen?.isVisible())) {
+      if (handsScreen?.isVisible()) {
+        game.closeHandsScreen();
+        handsScreen.hide();
+        appStateController.setRunState(RunState.PLAYING);
+      } else if (!game.isHandsScreenOpen()) {
+        game.openHandsScreen();
+        void ensureHandsScreen().then((hs) => {
+          if (hs && game.isHandsScreenOpen()) {
+            hs.show(game.getWorld(), game.getHandsScreenPendingRingDefId());
+            appStateController.setRunState(RunState.PAUSED);
+          }
+        });
       }
-
-      updateUserSettings({ render: { paletteSwapEnabled: true, paletteId: PALETTE_CYCLE[nextIdx] as PaletteId } });
       return;
     }
 
     if (ev.code === "Escape" && appStateController.appState === AppState.RUN) {
       ev.preventDefault();
+      // Pause menu over hands screen: close pause menu only, stay on hands screen
+      if (wasPausedVisible && handsScreen?.isVisible()) {
+        pauseMenu.setVisible(false);
+        wasPausedVisible = false;
+        return;
+      }
+      // Hands screen takes precedence over pause
+      if (handsScreen?.isVisible()) {
+        game.closeHandsScreen();
+        handsScreen.hide();
+        appStateController.setRunState(RunState.PLAYING);
+        return;
+      }
       togglePause(appStateController, appStateController.appState);
     }
   });
@@ -1030,6 +659,14 @@ async function bootstrap() {
     const dtReal = Math.min(0.05, (now - last) / 1000);
     last = now;
     syncUiForAppState(appStateController.appState, appStateController.runState);
+    syncWorldBackendSurface();
+    const w = game.getWorld() as any;
+    snapshotViewerPalettePanel.sync(
+      appStateController.appState === AppState.RUN
+      && appStateController.runState === RunState.PLAYING
+      && !!w?.paletteSnapshotViewerActive
+      && w?.state === "MAP",
+    );
     uiCtx.setTransform(1, 0, 0, 1, 0, 0);
     uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
 
@@ -1042,6 +679,7 @@ async function bootstrap() {
         const pendingFloorIntent = game.consumePendingFloorLoadIntent();
         if (pendingFloorIntent) {
           activeFloorIntent = pendingFloorIntent;
+          activeFloorLoadReady = true;
           loadingDoneNextState = AppState.RUN;
           loadingDoneFramePending = false;
           loadingController.beginMapLoad(pendingFloorIntent.mapId ?? "");
@@ -1059,8 +697,8 @@ async function bootstrap() {
             appStateController.setAppState(AppState.LOADING);
           } else {
             // DELVE / DETERMINISTIC: do not enter LOADING at character pick.
-            game.prepareStartMap(pending);
-            game.performPreparedStartIntent(pending);
+            void game.prepareStartMap(pending);
+            void game.performPreparedStartIntent(pending);
           }
         } else {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -1096,6 +734,7 @@ async function bootstrap() {
           const pendingFloorIntent = game.consumePendingFloorLoadIntent();
           if (pendingFloorIntent) {
             activeFloorIntent = pendingFloorIntent;
+            activeFloorLoadReady = true;
             loadingController.beginMapLoad(pendingFloorIntent.mapId ?? "");
             appStateController.setAppState(AppState.LOADING);
             renderLoadingScreen(ctx, loadingController.progress);
@@ -1105,11 +744,11 @@ async function bootstrap() {
         if (appStateController.runState === RunState.PLAYING) {
           game.update(dtReal);
         }
-        game.render();
+        game.render(dtReal);
         syncUiSafeRect();
         if (appStateController.runState === RunState.PAUSED) {
           refs.hud.vitalsOrbRoot.hidden = true;
-          if (!wasPausedVisible) {
+          if (!wasPausedVisible && !(handsScreen?.isVisible())) {
             pauseMenu.setVisible(true);
             pauseMenu.render(game.getWorld());
             wasPausedVisible = true;
@@ -1124,9 +763,10 @@ async function bootstrap() {
         }
         if (firstRunDiagPending) {
           firstRunDiagPending = false;
+          loadingController.markFirstVisibleFrame();
           const deps = collectFloorDependencies();
-          const paletteId = resolveActivePaletteId();
-          const notReady = deps.spriteIds.filter((id) => !getSpriteByIdForPalette(id, paletteId).ready);
+          const paletteVariantKey = resolveActivePaletteVariantKey();
+          const notReady = deps.spriteIds.filter((id) => !getSpriteByIdForVariantKey(id, paletteVariantKey).ready);
           if (notReady.length > 0) {
             console.warn(
               `[loading] First RUN frame had ${notReady.length} not-ready sprites (showing up to 20):`,

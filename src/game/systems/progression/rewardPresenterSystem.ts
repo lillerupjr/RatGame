@@ -1,6 +1,12 @@
 import type { World } from "../../../engine/world/world";
-import { beginCardReward, ensureCardRewardState } from "../../combat_mods/rewards/cardRewardFlow";
-import { beginRelicReward, ensureRelicRewardState } from "../../combat_mods/rewards/relicRewardFlow";
+import {
+  beginProgressionReward,
+  ensureProgressionRewardState,
+} from "../../progression/rewards/progressionRewardFlow";
+import {
+  defaultRewardFamilyForDepth,
+  type ProgressionRewardFamily,
+} from "../../progression/rewards/rewardFamilies";
 import {
   activateRewardTicket,
   findOldestPendingRewardTicket,
@@ -9,40 +15,29 @@ import {
 } from "../../rewards/rewardTickets";
 
 function closeRewardStates(world: World): void {
-  const cardReward = ensureCardRewardState(world);
-  cardReward.active = false;
-  cardReward.options = [];
-
-  const relicReward = ensureRelicRewardState(world);
-  relicReward.active = false;
-  relicReward.options = [];
+  const progressionReward = ensureProgressionRewardState(world);
+  progressionReward.active = false;
+  progressionReward.options = [];
 }
 
 function anyRewardUiActive(world: World): boolean {
-  const cardReward = ensureCardRewardState(world);
-  if (cardReward.active) return true;
-  const relicReward = ensureRelicRewardState(world);
-  return relicReward.active;
+  const progressionReward = ensureProgressionRewardState(world);
+  return progressionReward.active;
 }
 
-function openTicketReward(world: World, ticket: { kind: "CARD_PICK" | "RELIC_PICK"; source: "ZONE_TRIAL" | "BOSS_CHEST" | "OBJECTIVE_COMPLETION"; optionCount: number }): boolean {
-  if (ticket.kind === "CARD_PICK") {
-    const source = ticket.source === "BOSS_CHEST" ? "BOSS_CHEST" : "ZONE_TRIAL";
-    beginCardReward(world, source, ticket.optionCount);
-    const cardReward = ensureCardRewardState(world);
-    if (!cardReward.active || cardReward.options.length <= 0) {
-      cardReward.active = false;
-      cardReward.options = [];
-      return false;
-    }
-    return true;
-  }
+type PresentableRewardTicket = {
+  source: "FLOOR_COMPLETION" | "BOSS_CHEST" | "SIDE_OBJECTIVE" | "LEVEL_UP";
+  optionCount: number;
+  family: ProgressionRewardFamily;
+};
 
-  beginRelicReward(world, "OBJECTIVE_COMPLETION", ticket.optionCount);
-  const relicReward = ensureRelicRewardState(world);
-  if (!relicReward.active || relicReward.options.length <= 0) {
-    relicReward.active = false;
-    relicReward.options = [];
+function openTicketReward(world: World, ticket: PresentableRewardTicket): boolean {
+  const family = ticket.family ?? defaultRewardFamilyForDepth(world.currentFloorIntent?.depth ?? world.mapDepth ?? 1);
+  beginProgressionReward(world, family, ticket.source, ticket.optionCount);
+  const progressionReward = ensureProgressionRewardState(world);
+  if (!progressionReward.active || progressionReward.options.length <= 0) {
+    progressionReward.active = false;
+    progressionReward.options = [];
     return false;
   }
   return true;

@@ -1,19 +1,23 @@
 import { describe, expect, test } from "vitest";
 import { createWorld } from "../../../../engine/world/world";
 import { stageDocks } from "../../../../game/content/stages";
-import { ENEMY_TYPE } from "../../../../game/factories/enemyFactory";
+import { EnemyId } from "../../../../game/factories/enemyFactory";
 import { spawnEnemyGrid } from "../../../../game/factories/enemyFactory";
 import { goldValueFromEnemyBaseLife } from "../../../../game/economy/coins";
 import { dropsSystem } from "../../../../game/systems/progression/drops";
 import { PICKUP_KIND, spawnGold } from "../../../../game/systems/progression/pickups";
+import { LOOT_GOBLIN_TRIGGER_PREFIX } from "../../../../game/systems/neutral/lootGoblin";
 import { getPlayerWorld } from "../../../../game/coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../../engine/render/kenneyTiles";
 import { makeWeaponHitMeta } from "../../../../game/combat/damageMeta";
+import { spawnBossEncounter } from "../../../../game/bosses/spawnBossEncounter";
+import { BossId } from "../../../../game/bosses/bossTypes";
+import { getSettings } from "../../../../settings/settingsStore";
 
 describe("dropsSystem", () => {
   test("enemy kill spawns exactly one gold pickup using enemy base life (not scaled hp)", () => {
     const w = createWorld({ seed: 1, stage: stageDocks });
-    const e = spawnEnemyGrid(w, ENEMY_TYPE.BRUISER, 5, 5);
+    const e = spawnEnemyGrid(w, EnemyId.TANK, 5, 5);
 
     // Inflate scaled hp to ensure drop calculation ignores it.
     w.eHpMax[e] = 10_000;
@@ -38,9 +42,13 @@ describe("dropsSystem", () => {
     expect(w.xKind.filter((kind) => kind === PICKUP_KIND.CHEST)).toHaveLength(0);
   });
 
-  test("boss gold multiplier applies after base-life calculation", () => {
+  test("boss gold multiplier applies after base-life calculation without spawning a chest", () => {
     const w = createWorld({ seed: 3, stage: stageDocks });
-    const boss = spawnEnemyGrid(w, ENEMY_TYPE.BOSS, 8, 8);
+    const boss = spawnBossEncounter(w, {
+      bossId: BossId.CHEM_GUY,
+      spawnWorldX: (8.5) * KENNEY_TILE_WORLD,
+      spawnWorldY: (8.5) * KENNEY_TILE_WORLD,
+    }).enemyIndex;
     w.events.push({
       type: "ENEMY_KILLED",
       enemyIndex: boss,
@@ -59,17 +67,113 @@ describe("dropsSystem", () => {
     const chestCount = w.xKind.filter((kind) => kind === PICKUP_KIND.CHEST).length;
     expect(coinIndexes).toHaveLength(1);
     expect(w.xValue[coinIndexes[0]]).toBe(expectedGold);
-    expect(chestCount).toBe(1);
+    expect(chestCount).toBe(0);
   });
 
-  test("collecting gold pickup grants its stored value", () => {
+  test("collecting combat pickup grants its stored value as xp", () => {
     const w = createWorld({ seed: 2, stage: stageDocks });
     const pw = getPlayerWorld(w, KENNEY_TILE_WORLD);
 
     spawnGold(w, pw.wx, pw.wy, 7);
     dropsSystem(w, 1 / 60);
 
-    expect(w.run.runGold).toBe(7);
+    expect(w.run.xp).toBe(7);
+    expect(w.run.runGold).toBe(0);
+    expect(w.run.level).toBe(1);
     expect(w.xAlive.some(Boolean)).toBe(false);
+  });
+
+  test("large xp pickup can trigger multiple level-up rewards", () => {
+    const w = createWorld({ seed: 12, stage: stageDocks });
+    const pw = getPlayerWorld(w, KENNEY_TILE_WORLD);
+    const startingLevel = w.run.level;
+    const xpGrowth = Math.max(1, getSettings().system.xpLevelGrowth);
+    let expectedXp = 120;
+    let expectedLevel = startingLevel;
+    let expectedXpToNext = w.run.xpToNextLevel;
+    const expectedRunEvents: Array<{ type: "LEVEL_UP"; floorIndex: number; level: number }> = [];
+
+    while (expectedXp >= expectedXpToNext) {
+      expectedXp -= expectedXpToNext;
+      expectedLevel += 1;
+      expectedXpToNext = Math.max(1, Math.ceil(expectedXpToNext * xpGrowth));
+      expectedRunEvents.push({
+        type: "LEVEL_UP",
+        floorIndex: 0,
+        level: expectedLevel,
+      });
+    }
+
+    spawnGold(w, pw.wx, pw.wy, 120);
+    dropsSystem(w, 1 / 60);
+
+    expect(w.run.xp).toBe(expectedXp);
+    expect(w.run.level).toBe(expectedLevel);
+    expect(w.run.xpToNextLevel).toBe(expectedXpToNext);
+    expect(w.level).toBe(expectedLevel);
+    expect(w.runEvents).toEqual(expectedRunEvents);
+  });
+
+  test("loot goblin kill emits delayed 300x1g drops and skips normal kill drops", () => {
+    const w = createWorld({ seed: 4, stage: stageDocks });
+    const goblin = spawnEnemyGrid(w, EnemyId.LOOT_GOBLIN, 40, 40);
+    w.eSpawnTriggerId[goblin] = `${LOOT_GOBLIN_TRIGGER_PREFIX}:0:40:40`;
+    w.events.push({
+      type: "ENEMY_KILLED",
+      enemyIndex: goblin,
+      x: (40.5) * KENNEY_TILE_WORLD,
+      y: (40.5) * KENNEY_TILE_WORLD,
+      source: "PISTOL",
+      damageMeta: makeWeaponHitMeta("PISTOL", { category: "HIT", instigatorId: "player" }),
+    });
+
+    // Schedules delayed drops only; no immediate regular kill drop.
+    dropsSystem(w, 0);
+    expect(w.xAlive.filter(Boolean)).toHaveLength(0);
+    w.events.length = 0;
+
+    for (let i = 0; i < 320; i++) {
+      dropsSystem(w, 0.1);
+    }
+
+    const aliveCoinIndexes = w.xAlive
+      .map((alive, idx) => (alive && (w.xKind[idx] ?? PICKUP_KIND.GOLD) === PICKUP_KIND.GOLD ? idx : -1))
+      .filter((idx) => idx >= 0);
+    expect(aliveCoinIndexes).toHaveLength(300);
+    const total = aliveCoinIndexes.reduce((sum, idx) => sum + (w.xValue[idx] ?? 0), 0);
+    expect(total).toBe(300);
+    expect(w.xKind.filter((kind) => kind === PICKUP_KIND.CHEST)).toHaveLength(0);
+  });
+
+  test("splitter rewards scale with staged base life instead of paying full root reward", () => {
+    const w = createWorld({ seed: 13, stage: stageDocks });
+    const root = spawnEnemyGrid(w, EnemyId.SPLITTER, 5, 5);
+    const stage1 = spawnEnemyGrid(w, EnemyId.SPLITTER, 6, 5, KENNEY_TILE_WORLD, { splitStage: 1 });
+    const stage2 = spawnEnemyGrid(w, EnemyId.SPLITTER, 7, 5, KENNEY_TILE_WORLD, { splitStage: 2 });
+
+    for (const enemyIndex of [root, stage1, stage2]) {
+      w.events.push({
+        type: "ENEMY_KILLED",
+        enemyIndex,
+        x: 0,
+        y: 0,
+        source: "PISTOL",
+        damageMeta: makeWeaponHitMeta("PISTOL", { category: "HIT", instigatorId: "player" }),
+      });
+    }
+
+    dropsSystem(w, 1 / 60);
+
+    const coinValues = w.xKind
+      .map((kind, index) => (kind === PICKUP_KIND.GOLD ? w.xValue[index] : null))
+      .filter((value): value is number => value !== null)
+      .sort((a, b) => a - b);
+
+    expect(coinValues).toEqual([
+      goldValueFromEnemyBaseLife(w.eBaseLife[stage2]),
+      goldValueFromEnemyBaseLife(w.eBaseLife[stage1]),
+      goldValueFromEnemyBaseLife(w.eBaseLife[root]),
+    ]);
+    expect(coinValues).toEqual([1, 2, 5]);
   });
 });

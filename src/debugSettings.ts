@@ -1,84 +1,60 @@
-export type LightingMaskDebugMode = "OFF" | "SOURCE" | "INVERSE" | "COMBINED";
-export type NeutralBirdForceState =
-  | "NONE"
-  | "IDLE"
-  | "TAKEOFF"
-  | "FLY_TO_TARGET"
-  | "LAND";
+import {
+  NEUTRAL_BIRD_FORCE_STATES,
+  normalizePaletteRemapWeightPercent,
+} from "./settings/systemOverrides";
+import { DEFAULT_SETTINGS, type DebugSettings } from "./userSettings";
 
-export type NeutralBirdAIDebugSettings = {
-  disabled: boolean;
-  forceState: NeutralBirdForceState;
-  disableTransitions: boolean;
-  drawDebug: boolean;
-  debugRepickTarget: boolean;
+export type {
+  DebugSettings,
+  NeutralBirdAIDebugSettings,
+  UserSettings,
+} from "./userSettings";
+
+export type NeutralBirdForceState = (typeof NEUTRAL_BIRD_FORCE_STATES)[number];
+export type ObjectiveDebugSettings = { showZoneBounds: boolean };
+
+export {
+  NEUTRAL_BIRD_FORCE_STATES,
+  normalizePaletteRemapWeightPercent,
 };
 
-export type ObjectiveDebugSettings = {
-  showZoneBounds: boolean;
-};
-
-export type DebugSettings = {
-  grid: boolean;
-  walkMask: boolean;
-  blockedTiles: boolean;
-  ramps: boolean;
-  colliders: boolean;
-  slices: boolean;
-  occluders: boolean;
-  decals: boolean;
-  structureHeights: boolean;
-  spriteBounds: boolean;
-  projectileFaces: boolean;
-  triggers: boolean;
-  debugRoadSemantic: boolean;
-  disableLightingOcclusion: boolean;
-  disableLightingHeightBandedOcclusion: boolean;
-  lightingUseLegacyGlobalOcclusion: boolean;
-  disableLightingCompiledMaskCache: boolean;
-  disableVisualCompiledCutoutCache: boolean;
-  lightingMasks: boolean;
-  lightingMaskDebugMode: LightingMaskDebugMode;
-  mapOverlaysDisabled: boolean;
-  rampFaces: boolean;
-  forceSpawnOverride: boolean;
-  godMode: boolean;
-  dmgMult: number;
-  fireRateMult: number;
-  entityAnchorOverlay: boolean;
-  enemyAimOverlay: boolean;
-  pauseDebugCards: boolean;
-  pauseCsvControls: boolean;
-  dpsMeter: boolean;
-  waterFlowRate: number;
-  neutralBirdAI: NeutralBirdAIDebugSettings;
-  objectives: ObjectiveDebugSettings;
-};
+export const PALETTE_REMAP_WEIGHT_OPTIONS = [0, 25, 50, 75, 100] as const;
+export type PaletteRemapWeightPercent = (typeof PALETTE_REMAP_WEIGHT_OPTIONS)[number];
 
 export type BooleanDebugSettingKey = Exclude<
   keyof DebugSettings,
-  "lightingMaskDebugMode" | "waterFlowRate" | "dmgMult" | "fireRateMult" | "neutralBirdAI" | "objectives"
+  | "renderBackend"
+  | "waterFlowRate"
+  | "dmgMult"
+  | "fireRateMult"
+  | "paletteSWeightPercent"
+  | "paletteDarknessPercent"
+  | "shadowSunTimeHour"
+  | "shadowV1DebugGeometryMode"
+  | "shadowCasterMode"
+  | "shadowHybridDiagnosticMode"
+  | "shadowDebugMode"
+  | "shadowV5DebugView"
+  | "shadowV5TransformDebugMode"
+  | "shadowSunCycleMode"
+  | "shadowSunDayCycleSpeedMultiplier"
+  | "shadowSunStepsPerDay"
+  | "staticLightCycleOverride"
+  | "shadowSunAzimuthDeg"
+  | "sunElevationOverrideDeg"
+  | "perfOverlayMode"
+  | "heightmapShadowResolutionDivisor"
+  | "heightmapShadowStepSize"
+  | "heightmapShadowMaxSteps"
+  | "heightmapShadowIntensity"
+  | "neutralBirdAI"
+  | "objectives"
 >;
 
 export type DebugToggleDefinition = {
   key: BooleanDebugSettingKey;
   label: string;
 };
-
-export const LIGHTING_MASK_DEBUG_MODES: readonly LightingMaskDebugMode[] = [
-  "OFF",
-  "SOURCE",
-  "INVERSE",
-  "COMBINED",
-] as const;
-
-export const NEUTRAL_BIRD_FORCE_STATES: readonly NeutralBirdForceState[] = [
-  "NONE",
-  "IDLE",
-  "TAKEOFF",
-  "FLY_TO_TARGET",
-  "LAND",
-] as const;
 
 export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "grid", label: "grid" },
@@ -91,73 +67,61 @@ export const DEBUG_TOGGLE_DEFINITIONS: readonly DebugToggleDefinition[] = [
   { key: "decals", label: "decals" },
   { key: "structureHeights", label: "structureHeights" },
   { key: "spriteBounds", label: "spriteBounds" },
+  { key: "showStructureSlices", label: "showStructureSlices" },
+  { key: "structureTriangleFootprint", label: "structureTriangleFootprint" },
+  { key: "showStructureTriangleOwnershipSort", label: "showStructureTriangleOwnershipSort" },
   { key: "projectileFaces", label: "projectileFaces" },
   { key: "triggers", label: "triggers" },
   { key: "debugRoadSemantic", label: "debugRoadSemantic" },
-  { key: "disableLightingOcclusion", label: "disableLightingOcclusion" },
-  { key: "disableLightingHeightBandedOcclusion", label: "disableLightingHeightBandedOcclusion" },
-  { key: "lightingUseLegacyGlobalOcclusion", label: "lightingUseLegacyGlobalOcclusion" },
-  { key: "disableLightingCompiledMaskCache", label: "disableLightingCompiledMaskCache" },
   { key: "disableVisualCompiledCutoutCache", label: "disableVisualCompiledCutoutCache" },
-  { key: "lightingMasks", label: "lightingMasks" },
   { key: "mapOverlaysDisabled", label: "mapOverlaysDisabled" },
   { key: "rampFaces", label: "rampFaces" },
   { key: "forceSpawnOverride", label: "forceSpawnOverride" },
   { key: "godMode", label: "godMode" },
   { key: "entityAnchorOverlay", label: "entityAnchorOverlay" },
   { key: "enemyAimOverlay", label: "enemyAimOverlay" },
-  { key: "pauseDebugCards", label: "Enable Pause Debug Cards" },
+  { key: "lootGoblinOverlay", label: "lootGoblinOverlay" },
   { key: "pauseCsvControls", label: "Enable Pause CSV Controls" },
   { key: "dpsMeter", label: "Show DPS Meter" },
 ] as const;
 
 export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
-  grid: false,
-  walkMask: false,
-  blockedTiles: false,
-  ramps: false,
-  colliders: false,
-  slices: false,
-  occluders: false,
-  decals: false,
-  structureHeights: false,
-  spriteBounds: false,
-  projectileFaces: false,
-  triggers: false,
-  debugRoadSemantic: false,
-  disableLightingOcclusion: false,
-  disableLightingHeightBandedOcclusion: false,
-  lightingUseLegacyGlobalOcclusion: false,
-  disableLightingCompiledMaskCache: false,
-  disableVisualCompiledCutoutCache: false,
-  lightingMasks: false,
-  lightingMaskDebugMode: "OFF",
-  mapOverlaysDisabled: false,
-  rampFaces: false,
-  forceSpawnOverride: false,
-  godMode: false,
-  dmgMult: 1,
-  fireRateMult: 1,
-  entityAnchorOverlay: false,
-  enemyAimOverlay: false,
-  pauseDebugCards: false,
-  pauseCsvControls: false,
-  dpsMeter: false,
-  waterFlowRate: 1,
-  neutralBirdAI: {
-    disabled: false,
-    forceState: "NONE",
-    disableTransitions: false,
-    drawDebug: false,
-    debugRepickTarget: false,
-  },
-  objectives: {
-    showZoneBounds: false,
-  },
+  ...DEFAULT_SETTINGS.debug,
 };
 
 export function makeAllDebugOffSettings(): DebugSettings {
-  return { ...DEFAULT_DEBUG_SETTINGS };
+  return {
+    ...DEFAULT_DEBUG_SETTINGS,
+    disableVisualCompiledCutoutCache: false,
+    mapOverlaysDisabled: false,
+    rampFaces: false,
+    forceSpawnOverride: false,
+    godMode: false,
+    dmgMult: 1,
+    fireRateMult: 1,
+    paletteSWeightPercent: 0,
+    paletteDarknessPercent: 0,
+    shadowSunTimeHour: DEFAULT_DEBUG_SETTINGS.shadowSunTimeHour,
+    shadowSunAzimuthDeg: DEFAULT_DEBUG_SETTINGS.shadowSunAzimuthDeg,
+    sunElevationOverrideEnabled: false,
+    sunElevationOverrideDeg: DEFAULT_DEBUG_SETTINGS.sunElevationOverrideDeg,
+    tileHeightMap: false,
+    waterFlowRate: 1,
+    shadowSunDayCycleEnabled: false,
+    shadowSunCycleMode: DEFAULT_DEBUG_SETTINGS.shadowSunCycleMode,
+    shadowSunDayCycleSpeedMultiplier: 1,
+    shadowSunStepsPerDay: 96,
+    staticLightCycleOverride: DEFAULT_DEBUG_SETTINGS.staticLightCycleOverride,
+    neutralBirdAI: {
+      ...DEFAULT_DEBUG_SETTINGS.neutralBirdAI,
+      disabled: false,
+      forceState: "NONE",
+      disableTransitions: false,
+      drawDebug: false,
+      debugRepickTarget: false,
+    },
+    objectives: { showZoneBounds: false },
+  };
 }
 
 export type ResolvedDebugFlags = {
@@ -172,21 +136,18 @@ export type ResolvedDebugFlags = {
   showStructureHeights: boolean;
   showStructureCollision: boolean;
   showStructureSlices: boolean;
+  showStructureTriangleFootprint: boolean;
+  showStructureAnchors: boolean;
+  showStructureTriangleOwnershipSort: boolean;
+  perfOverlayMode: "off" | "overview" | "world" | "structures" | "textures" | "ground" | "lighting" | "cache" | "all";
   showMapOverlays: boolean;
   showEnemyAimOverlay: boolean;
-  lightingOcclusionEnabled: boolean;
-  lightingHeightBandedOcclusion: boolean;
-  lightingUseLegacyGlobalOcclusion: boolean;
-  lightingCompiledMaskCache: boolean;
+  showLootGoblinOverlay: boolean;
   visualCompiledCutoutCache: boolean;
-  buildingMaskDebugView: LightingMaskDebugMode;
-  showBuildingMaskDebug: boolean;
+  showTileHeightMap: boolean;
 };
 
 export function resolveDebugFlags(debug: DebugSettings): ResolvedDebugFlags {
-  const buildingMaskDebugView: LightingMaskDebugMode = debug.lightingMasks
-    ? debug.lightingMaskDebugMode
-    : "OFF";
   return {
     showGrid: debug.grid,
     showWalkMask: debug.walkMask,
@@ -198,15 +159,15 @@ export function resolveDebugFlags(debug: DebugSettings): ResolvedDebugFlags {
     showRoadSemantic: debug.debugRoadSemantic,
     showStructureHeights: debug.structureHeights,
     showStructureCollision: debug.blockedTiles || debug.colliders,
-    showStructureSlices: debug.slices || debug.spriteBounds,
+    showStructureSlices: debug.showStructureSlices,
+    showStructureTriangleFootprint: debug.structureTriangleFootprint,
+    showStructureAnchors: debug.showStructureAnchors,
+    showStructureTriangleOwnershipSort: debug.showStructureTriangleOwnershipSort,
+    perfOverlayMode: debug.perfOverlayMode,
     showMapOverlays: !debug.mapOverlaysDisabled,
     showEnemyAimOverlay: debug.enemyAimOverlay,
-    lightingOcclusionEnabled: !debug.disableLightingOcclusion,
-    lightingHeightBandedOcclusion: !debug.disableLightingHeightBandedOcclusion,
-    lightingUseLegacyGlobalOcclusion: debug.lightingUseLegacyGlobalOcclusion,
-    lightingCompiledMaskCache: !debug.disableLightingCompiledMaskCache,
+    showLootGoblinOverlay: debug.lootGoblinOverlay,
     visualCompiledCutoutCache: !debug.disableVisualCompiledCutoutCache,
-    buildingMaskDebugView,
-    showBuildingMaskDebug: buildingMaskDebugView !== "OFF",
+    showTileHeightMap: debug.tileHeightMap,
   };
 }

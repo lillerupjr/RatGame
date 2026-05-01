@@ -2,11 +2,8 @@ import { emitEvent, type World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
 import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
-import { onEnemyKilledForChallenge } from "../progression/roomChallenge";
-import { addMomentumOnKill, relicTriggerMomentumDamageMultiplier } from "./momentum";
-import { raycast3D } from "./collision3D";
-import { getCardById } from "../../combat_mods/content/cards/cardPool";
 import { resolveDotStats } from "../../combat_mods/stats/combatStatsResolver";
+import { collectWorldStatMods } from "../../progression/effects/worldEffects";
 import type { DamageMeta } from "../../events";
 import {
   inferLegacySourceFromMeta,
@@ -14,6 +11,9 @@ import {
   makeUnknownDamageMeta,
   makeWeaponDotMeta,
 } from "../../combat/damageMeta";
+import { finalizeEnemyDeath } from "../enemies/finalize";
+import { isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
+import { resolveClampedBeamGeometry } from "./beamShared";
 
 export type BeamContactConfig = {
   dirX: number;
@@ -48,6 +48,7 @@ function collectBeamTargets(
 
   for (let e = 0; e < w.eAlive.length; e++) {
     if (!w.eAlive[e]) continue;
+    if (isPoeEnemyDormant(w, e)) continue;
     const ew = getEnemyWorld(w, e, KENNEY_TILE_WORLD);
     const dx = ew.wx - originX;
     const dy = ew.wy - originY;
@@ -79,33 +80,25 @@ export function updatePlayerBeamCombat(w: World, cfg: BeamContactConfig): void {
   const playerWorld = getPlayerWorld(w, KENNEY_TILE_WORLD);
   const originX = playerWorld.wx;
   const originY = playerWorld.wy;
-
-  const dirLen = Math.hypot(cfg.dirX, cfg.dirY);
-  const dirX = dirLen > 0.0001 ? cfg.dirX / dirLen : 1;
-  const dirY = dirLen > 0.0001 ? cfg.dirY / dirLen : 0;
-
-  const ray = raycast3D(
+  const beam = resolveClampedBeamGeometry(w, {
     originX,
     originY,
-    w.pzVisual ?? w.pz ?? 0,
-    dirX,
-    dirY,
-    0,
-    cfg.maxRangePx,
-  );
-  const endDistance = ray.hit && ray.hitType === "TILE"
-    ? Math.max(0, Math.min(cfg.maxRangePx, ray.hitDistance))
-    : Math.max(0, cfg.maxRangePx);
+    originZ: w.pzVisual ?? w.pz ?? 0,
+    dirX: cfg.dirX,
+    dirY: cfg.dirY,
+    maxRangePx: cfg.maxRangePx,
+    widthPx: cfg.widthPx,
+  });
 
   const damageMeta = cfg.damageMeta ?? makeUnknownDamageMeta("BEAM_DAMAGE_META_MISSING", { category: "DOT" });
 
   w.playerBeamActive = true;
   w.playerBeamStartX = originX;
   w.playerBeamStartY = originY;
-  w.playerBeamEndX = originX + dirX * endDistance;
-  w.playerBeamEndY = originY + dirY * endDistance;
-  w.playerBeamDirX = dirX;
-  w.playerBeamDirY = dirY;
+  w.playerBeamEndX = beam.endX;
+  w.playerBeamEndY = beam.endY;
+  w.playerBeamDirX = beam.dirX;
+  w.playerBeamDirY = beam.dirY;
   w.playerBeamWidthPx = Math.max(1, cfg.widthPx);
   w.playerBeamGlowIntensity = Math.max(0, cfg.glowIntensity);
   w.playerBeamDpsPhys = Math.max(0, cfg.dpsPhys);
@@ -130,16 +123,8 @@ export function tickBeamContactsOnce(w: World, dtTick: number): void {
   );
   if (targets.length === 0) return;
 
-  const cardIds = [...(w.cards ?? []), ...(w.combatCardIds ?? [])];
-  const cards = cardIds
-    .map((id) => getCardById(id))
-    .filter((card): card is NonNullable<typeof card> => Boolean(card));
-  const dotStats = resolveDotStats({ cards });
-  const relicIds: string[] = Array.isArray(w.relics) ? w.relics : [];
-  const relicDotMoreMult =
-    (relicIds.includes("PASS_DOT_MORE_50") ? 1.5 : 1) *
-    (relicIds.includes("SPEC_DOT_SPECIALIST") ? 3.0 : 1);
-  const dotScale = Math.max(0, relicDotMoreMult * Math.max(0.0001, dotStats.tickRateMult));
+  const dotStats = resolveDotStats({ statMods: collectWorldStatMods(w) });
+  const dotScale = Math.max(0, Math.max(0.0001, dotStats.tickRateMult));
 
   for (let i = 0; i < targets.length; i++) {
     const t = targets[i];
@@ -148,14 +133,6 @@ export function tickBeamContactsOnce(w: World, dtTick: number): void {
     let finalPhys = w.playerBeamDpsPhys * dtTick * dotScale;
     let finalFire = w.playerBeamDpsFire * dtTick * dotScale;
     let finalChaos = w.playerBeamDpsChaos * dtTick * dotScale;
-    if (isProcDamage(damageMeta)) {
-      const procMult = relicTriggerMomentumDamageMultiplier(w);
-      if (procMult !== 1) {
-        finalPhys *= procMult;
-        finalFire *= procMult;
-        finalChaos *= procMult;
-      }
-    }
     const damage = finalPhys + finalFire + finalChaos;
     if (damage <= 0) continue;
 
@@ -187,23 +164,20 @@ export function tickBeamContactsOnce(w: World, dtTick: number): void {
 
     if (w.eHp[t.enemyIndex] > 0) continue;
 
-    w.eAlive[t.enemyIndex] = false;
-    w.kills++;
-    if (!isProcDamage(damageMeta)) {
-      addMomentumOnKill(w, w.timeSec ?? w.time ?? 0);
-    }
-    onEnemyKilledForChallenge(w);
     const poisonStacks = w.eAilments?.[t.enemyIndex]?.poison ?? [];
     w.ePoisonedOnDeath[t.enemyIndex] = poisonStacks.length > 0;
-    emitEvent(w, {
-      type: "ENEMY_KILLED",
-      enemyIndex: t.enemyIndex,
+    finalizeEnemyDeath(w, t.enemyIndex, {
+      damageMeta,
+      source: legacySource,
+      damage,
+      dmgPhys: finalPhys,
+      dmgFire: finalFire,
+      dmgChaos: finalChaos,
+      isCrit: false,
       x: t.wx,
       y: t.wy,
-      spawnTriggerId: w.eSpawnTriggerId[t.enemyIndex],
-      source: legacySource,
-      damageMeta,
+      awardMomentum: !isProcDamage(damageMeta),
+      recordPoisonedOnDeath: false,
     });
   }
 }
-

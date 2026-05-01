@@ -1,0 +1,10 @@
+{
+  "id": "avenue2",
+  "buildingPackId": "batch_processed_buildings",
+  "mapSkinId": "avenue",
+  "chunkGrid": {
+    "id": "avenue2",
+    "cols": 3,
+    "rows": 3
+  }
+}

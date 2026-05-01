@@ -1,5 +1,15 @@
 // src/game/game.ts
+// @system   game-runtime/app-loop
+// @owns     orchestrates runtime API, start/floor intents, sim tick dispatch, render dispatch, runtime overlays
+// @doc      docs/canonical/game_runtime_app_loop.md
+// @agents   no app rAF loop, renderer internals, or compiled-map topology; see src/main.ts, presentation/render.ts, and map/compile/*
+
 import { World, createWorld, clearEvents, emitEvent, gridAtPlayer } from "../engine/world/world";
+import {
+  LOAD_PROFILER_SUBPHASE,
+  runWithLoadProfilerSubphase,
+  runWithLoadProfilerSubphaseAsync,
+} from "./app/loadingFlow";
 
 import {
   InputState,
@@ -10,23 +20,43 @@ import {
   setVirtualMoveAxes,
 } from "./systems/sim/input";
 import { movementSystem } from "./systems/sim/movement";
-import { spawnOneEnemyOfType, spawnOneTrashEnemy } from "./systems/spawn/spawn";
+import { spawnOneEnemyOfType } from "./systems/spawn/spawn";
 import { combatSystem } from "./systems/sim/combat";
 import { dotTickSystem } from "./combat/dot/dotTickSystem";
 import { collisionsSystem, processCombatTextFromEvents } from "./systems/sim/collisions";
 import { projectilesSystem } from "./systems/sim/projectiles";
 import { pickupsSystem } from "./systems/progression/pickups";
 import { dropsSystem } from "./systems/progression/drops";
-import { renderSystem } from "./systems/presentation/render";
+import {
+  renderSystem,
+} from "./systems/presentation/render";
+import { getLatestRenderDebugLightingSnapshotText } from "./systems/presentation/debug/renderDebugLighting";
+import {
+  prepareMonolithicStructureTrianglesForLoading as prepareRuntimeStructureTrianglesForLoadingInternal,
+} from "./structures/monolithicStructureGeometry";
+import {
+  getFlippedOverlayImage,
+  getRuntimeIsoDecalCanvas,
+  getRuntimeIsoTopCanvas,
+} from "./systems/presentation/presentationImageTransforms";
+import {
+  monolithicStructureGeometryCacheStore,
+} from "./systems/presentation/presentationSubsystemStores";
 import { zonesSystem } from "./systems/sim/zones";
-import { relicExplodeOnKillSystem } from "./systems/sim/relicExplodeOnKill";
-import { bossSystem } from "./systems/progression/boss";
+import { buildActBossPlan } from "./bosses/actBossPlan";
+import { bossRegistry } from "./bosses/bossRegistry";
+import { bossEncounterSystem } from "./bosses/bossSystem";
+import {
+  getActiveBossEncounter,
+  getBossDefinitionForEntity,
+  isBossEntity,
+  resetBossRuntime,
+} from "./bosses/bossRuntime";
+import { spawnActBossEncounterFromActiveMap } from "./bosses/spawnBossEncounter";
 import { audioSystem } from "./systems/presentation/audio";
 import { preloadSfx } from "../engine/audio/sfx";
 import { roomChallengeSystem } from "./systems/progression/roomChallenge";
 import { triggerSystem } from "./systems/progression/triggerSystem";
-import { relicTriggerSystem } from "./systems/progression/relicTriggerSystem";
-import { relicRetriggerSystem } from "./systems/progression/relicRetriggerSystem";
 import { vfxSystem } from "./systems/vfxSystem";
 import {
   isFloorEndCountdownDone,
@@ -41,16 +71,16 @@ import {
   setObjectives,
 } from "./systems/progression/objective";
 import { outcomeSystem } from "./systems/progression/outcomeSystem";
-import { bossZoneSpawnSystem } from "./systems/progression/bossZoneSpawn";
+import { rareZoneSpawnSystem } from "./systems/progression/rareZoneSpawn";
 import {
-  markBossTripleClearsFromSignalsAndEvents,
-  syncBossTripleObjectiveStateFromClears,
-} from "./systems/progression/bossTripleObjectiveSync";
+  markRareTripleClearsFromSignalsAndEvents,
+  syncRareTripleObjectiveStateFromClears,
+} from "./systems/progression/rareTripleObjectiveSync";
 
 import { formatTimeMMSS } from "./util/time";
-import { getBossAccent } from "./content/floors";
+import { getBossAccent, getBossTitle } from "./content/floors";
 import { registry } from "./content/registry";
-import { spawnEnemyGrid, ENEMY_TYPE } from "./factories/enemyFactory";
+import { spawnEnemyGrid, EnemyId } from "./factories/enemyFactory";
 import { gridToWorld } from "./coords/grid";
 import { anchorFromWorld } from "./coords/anchor";
 import { fissionSystem } from "./systems/sim/fission";
@@ -61,10 +91,14 @@ import { dir8FromVector } from "../engine/render/sprites/dir8";
 
 import {
   canEnterNode,
+  clearPendingNode,
+  commitPendingNode,
   countClearedNodes,
   createDelveMap,
-  ensureAdjacentNodes,
+  floorArchetypeForNode,
   markCurrentNodeCleared,
+  markRunLost,
+  markRunWon,
   moveToNode,
   getDepthScaling,
   getNodeDepth,
@@ -74,8 +108,13 @@ import {
 import type { FloorArchetype } from "./map/floorArchetype";
 import type { FloorIntent } from "./map/floorIntent";
 import {
+  defaultRewardFamilyForDepth,
+  type ProgressionRewardFamily,
+} from "./progression/rewards/rewardFamilies";
+import {
   buildDelveRouteMapVM,
   buildDeterministicRouteMapVM,
+  type DeterministicRouteOption,
   type RouteMapVM,
   type RouteNodeStatus,
 } from "./map/routeMapView";
@@ -83,75 +122,88 @@ import { buildRouteMapLayout, computeScrollTopForNode } from "./map/routeMapLayo
 import { playerSpritesReady, preloadPlayerSprites, setPlayerSkin } from "../engine/render/sprites/playerSprites";
 import { preloadVendorNpcSprites, vendorNpcSpritesReady } from "../engine/render/sprites/vendorSprites";
 import { preloadBackgrounds } from "./render/background";
-import { getProjectileSpriteByKind, preloadProjectileSprites } from "../engine/render/sprites/projectileSprites";
 import { enemySpritesReady, preloadEnemySprites } from "../engine/render/sprites/enemySprites";
+import { bossSpritesReady, preloadBossSprites } from "../engine/render/sprites/bossSprites";
 import {
-  getSpriteByIdForPalette,
+  getSpriteByIdForVariantKey,
+  type LoadedImg,
   preloadRenderSprites,
 } from "../engine/render/sprites/renderSprites";
 import { setMusicStage, stopMusic } from "../engine/audio/music";
 import type { TableMapCell, TableMapDef } from "./map/formats/table/tableMapTypes";
 import { AUTHORED_MAP_DEFS, getAuthoredMapDefByMapId } from "./map/authored/authoredMapRegistry";
 import {
-  activateMapDef,
+  activateMapDefAsync,
   getActiveMap,
   getActiveMapDef,
   applyObjectivesFromActiveMap,
   getSpawnWorldFromActive,
-  reloadActiveMap,
+  reloadActiveMapAsync,
 } from "./map/authoredMapActivation";
 import { objectiveSpecFromFloorIntent } from "./map/floorObjectiveBinding";
 import { applyFloorOverlays } from "./map/floorOverlays";
 import { RNG } from "./util/rng";
 import { applyObjective } from "./map/objectiveTransforms";
-import { objectiveIdFromArchetype } from "./map/objectivePlan";
+import { OBJECTIVE_IDS, objectiveIdFromArchetype, type ObjectiveId } from "./map/objectivePlan";
 import { findNearestWalkableSpawnGrid } from "./systems/spawn/findWalkableSpawn";
 import { DEFAULT_MAP_POOL } from "./map/mapIds";
 import { OBJECTIVE_TRIGGER_IDS } from "./systems/progression/objectiveSpec";
 import { getPlayableCharacter, PLAYABLE_CHARACTERS, type PlayableCharacterId } from "./content/playableCharacters";
-import { DEFAULT_GAME_SPEED, clampGameSpeed, getUserSettings } from "../userSettings";
+import { DEFAULT_GAME_SPEED, clampGameSpeed, getUserSettings, updateUserSettings } from "../userSettings";
 import { neutralMobSpritesReady, preloadNeutralMobSprites } from "../engine/render/sprites/neutralSprites";
 import { spawnMilestonePigeonNearPlayer } from "./factories/neutralMobFactory";
 import { neutralAnimatedMobsSystem } from "./systems/sim/neutralAnimatedMobs";
 import { neutralBirdAISystem } from "./systems/sim/neutralBirdAI";
 import { getZoneTrialObjectiveState, startZoneTrial, updateZoneTrialObjective } from "./objectives/zoneObjectiveSystem";
 import {
+  getPoeMapObjectiveDebugSnapshot,
+  getPoeMapObjectiveProgress,
+  initializePoeMapObjective,
+  isPoeMapObjectiveActive,
+  resetPoeMapObjectiveState,
+  tickPoeMapObjective,
+} from "./objectives/poeMapObjectiveSystem";
+import {
   awaitPrewarmDone,
   collectRuntimeSpriteDeps,
   enqueuePrewarm,
   tickPrewarm,
 } from "./render/prewarmOwner";
-import { resolveActivePaletteId } from "./render/activePalette";
+import { resolveActivePaletteId, resolveActivePaletteVariantKey } from "./render/activePalette";
+import { collectFloorDependencies } from "./loading/dependencyCollector";
+import { formatPaletteHudDebugText, shouldShowPaletteHudDebugOverlay } from "./render/renderDebugPolicy";
 import { applySfxSettingsToWorld } from "./audio/audioSettings";
-import { chooseCardReward, ensureCardRewardState } from "./combat_mods/rewards/cardRewardFlow";
-import { chooseRelicReward, ensureRelicRewardState } from "./combat_mods/rewards/relicRewardFlow";
+import {
+  chooseProgressionReward,
+  ensureProgressionRewardState,
+  cancelProgressionReward,
+} from "./progression/rewards/progressionRewardFlow";
+import { equipRing, unequipRing, applyModifierTokenToRing } from "./progression/rings/ringState";
+import type { ModifierTokenType } from "./progression/rings/ringTypes";
+import { equipStarterRingForCharacter } from "./progression/rings/characterStarterRingMap";
 import { getGold } from "./economy/gold";
-import { getCardById } from "./combat_mods/content/cards/cardPool";
-import { generateVendorCards } from "./vendor/generateVendorCards";
-import { generateVendorRelicOffers } from "./vendor/generateVendorRelics";
-import { getVendorCardPriceG, VENDOR_RELIC_PRICE_G } from "./vendor/pricing";
+import { ensureRunProgressionState } from "./economy/xp";
+import { generateVendorProgressionOffers } from "./vendor/generateVendorProgressionOffers";
 import { createVendorState } from "./vendor/vendorState";
-import { tryPurchaseVendorCard, tryPurchaseVendorRelic } from "./vendor/vendorPurchase";
-import { mountCardRewardMenu } from "../ui/rewards/cardRewardMenu";
-import { mountRelicRewardMenu } from "../ui/rewards/relicRewardMenu";
+import { tryPurchaseVendorOffer } from "./vendor/vendorPurchase";
+import { mountProgressionRewardMenu } from "../ui/rewards/progressionRewardMenu";
 import { mountVendorShopMenu } from "../ui/vendor/vendorShopMenu";
-import { tickSpawnDirector } from "./balance/spawnDirector";
-import { tickBalanceCsvLogger } from "./balance/balanceCsvLogger";
-import { BASELINE_PLAYER_DPS, computePressure } from "./balance/pressureModel";
-import { DEFAULT_SPAWN_TUNING } from "./balance/spawnTuningDefaults";
 import { createFloorRewardBudget, type ObjectiveMode } from "./rewards/floorRewardBudget";
 import { resolveActiveRewardTicket } from "./rewards/rewardTickets";
 import { recomputeDerivedStats } from "./stats/derivedStats";
-import { hasAnyRelicWithTag, MOMENTUM_RELIC_TAG } from "./content/relics";
 import { createMobileControls } from "../ui/mobile/mobileControls";
 import { renderDialogChoices } from "../ui/dialog/renderDialogChoices";
-import { ensureStarterRelicForCharacter } from "./systems/progression/starterRelics";
-import { getWorldRelicInstances } from "./systems/progression/relics";
-import { bazookaExhaustAssets, bazookaExhaustAssetsReady, preloadBazookaExhaustAssets } from "./vfx/bazookaExhaustAssets";
-import { updateExhaustFollowers } from "./systems/exhaustFollowerSystem";
 import { rewardRunEventProducerSystem } from "./systems/progression/rewardRunEventProducerSystem";
 import { rewardSchedulerSystem } from "./systems/progression/rewardSchedulerSystem";
 import { rewardPresenterSystem } from "./systems/progression/rewardPresenterSystem";
+import { processProgressionTriggeredEffects } from "./progression/effects/triggeredEffects";
+import { enemyBehaviorSystem } from "./systems/enemies/behavior";
+import { enemyActionSystem } from "./systems/enemies/actions";
+import {
+  resetLootGoblinFloorState,
+  trySpawnLootGoblinForFloor,
+} from "./systems/neutral/lootGoblin";
+import { isNeutralMonsterId } from "./content/neutralMonsters";
 import {
   commitFloorClear,
   normalizedRunHeat,
@@ -162,6 +214,17 @@ import {
   LeaderboardClient,
   type LeaderboardRow,
 } from "../leaderboard/leaderboardClient";
+import {
+  resetHostileSpawnDirectorForFloor,
+  updateHostileSpawnDirector,
+} from "./systems/spawn/hostileSpawnDirector";
+import { executeHostileSpawnRequests } from "./systems/spawn/hostileSpawnExecution";
+import type { PaletteSnapshotStorageRecord } from "./paletteLab/snapshotStorage";
+import {
+  buildPaletteSnapshotFloorIntent,
+  extractPaletteSnapshotSceneRestoreState,
+} from "./paletteLab/snapshotRestore";
+import { listProjectileTravelSpriteIds } from "./content/projectilePresentationRegistry";
 
 
 type HudRefs = {
@@ -169,6 +232,7 @@ type HudRefs = {
   topStack: HTMLDivElement;
   topRow: HTMLDivElement;
   topLeft: HTMLDivElement;
+  perfOverlayModeSelect: HTMLSelectElement;
   topCenter: HTMLDivElement;
   topRight: HTMLDivElement;
   fpsPill: HTMLSpanElement;
@@ -225,19 +289,15 @@ type CreateGameArgs = {
       depth: HTMLElement;
       kills: HTMLElement;
       gold: HTMLElement;
-      relics: HTMLElement;
-      cards: HTMLElement;
+      rings: HTMLElement;
+      tokens: HTMLElement;
     };
 
-    levelupEl: {
-      root: HTMLDivElement;
-      choices: HTMLDivElement;
-      sub: HTMLDivElement;
-    };
     mapEl: {
       root: HTMLDivElement;
       topBar: HTMLDivElement;
       backBtn: HTMLButtonElement;
+      title: HTMLDivElement;
       infoPanel: HTMLDivElement;
       depthLabel: HTMLDivElement;
       sub: HTMLDivElement;
@@ -351,12 +411,16 @@ export function precomputeStaticMapData(): void {
 
   // Place all expensive O(mapTiles) stable computations here.
   if (!map.walkableMaskComputed && typeof map.computeWalkableMask === "function") {
-    map.computeWalkableMask();
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.WALKABLE_MASK_PRECOMPUTE, () => {
+      map.computeWalkableMask();
+    });
     map.walkableMaskComputed = true;
   }
 
   if (!map.roadContextComputed && typeof map.computeRoadContext === "function") {
-    map.computeRoadContext();
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.ROAD_CONTEXT_PRECOMPUTE, () => {
+      map.computeRoadContext();
+    });
     map.roadContextComputed = true;
   }
 }
@@ -493,6 +557,8 @@ export function createGame(args: CreateGameArgs) {
   let activeDialog: DialogState | null = null;
   let pendingNpcFaceRestoreId: string | null = null;
   let vendorShopOpen = false;
+  let handsScreenOpen = false;
+  let handsScreenChooseSlotPending: { ringDefId: string } | null = null;
 
   const staticMaps: TableMapDef[] = AUTHORED_MAP_DEFS;
 
@@ -767,11 +833,11 @@ export function createGame(args: CreateGameArgs) {
     if (delve) {
       const currentId = delve.currentNodeId;
       const currentNode = currentId ? delve.nodes.get(currentId) ?? null : null;
-      if (!currentNode || currentNode.state !== "ACTIVE") {
+      if (!currentNode || (currentId !== null && delve.completedNodeIds.has(currentId))) {
         if (import.meta.env.DEV) {
           console.error("[delve] Refusing floor-clear commit without ACTIVE node", {
             currentNodeId: currentId ?? null,
-            currentState: currentNode?.state ?? null,
+            currentState: currentId ? (delve.completedNodeIds.has(currentId) ? "CLEARED" : "ACTIVE") : null,
           });
         }
         return false;
@@ -797,9 +863,10 @@ export function createGame(args: CreateGameArgs) {
       return true;
     }
     if (world.runState === "TRANSITION") return false;
-    if (world.state === "REWARD" && world.cardReward?.active) return false;
-    if (world.state === "REWARD" && world.relicReward?.active) return false;
+    if (world.state === "REWARD" && world.progressionReward?.active) return false;
     if (world.floorEndCountdownActive && world.floorEndCountdownSec > 0) return false;
+    const delve = world.delveMap as DelveMap | null;
+    const currentDelveNode = delve?.currentNodeId ? delve.nodes.get(delve.currentNodeId) ?? null : null;
     commitCurrentNodeClear(world);
 
     if (isDeterministicDelveMode()) {
@@ -811,9 +878,13 @@ export function createGame(args: CreateGameArgs) {
       return true;
     }
 
-    const delve = world.delveMap as DelveMap;
     if (delve) {
-      showDelveMap(`Depth ${getMapDepth(world)} cleared!\nChoose your next destination.`);
+      if (currentDelveNode?.nodeType === "BOSS") {
+        markRunWon(delve);
+        completeRun(world, "Victory", "The act boss has been defeated.");
+        return true;
+      }
+      showDelveMap(`Row ${getMapDepth(world)} cleared!\nChoose your next destination.`);
       return true;
     }
     completeRun(world);
@@ -821,6 +892,7 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function objectiveModeForFloor(w: World): ObjectiveMode {
+    if (w.currentObjectiveSpec?.objectiveType === "POE_MAP_CLEAR") return "NORMAL";
     if (w.floorArchetype === "SURVIVE") return "SURVIVE_TRIAL";
     if (w.floorArchetype === "TIME_TRIAL") return "ZONE_TRIAL";
     return "NORMAL";
@@ -828,15 +900,15 @@ export function createGame(args: CreateGameArgs) {
 
   function syncRewardDebugFieldsFromBudget(w: World): void {
     const budget = w.floorRewardBudget;
-    const nonObjectiveUsed = 2 - budget.nonObjectiveCardsRemaining;
-    const objectiveUsed = budget.objectiveCardAvailable ? 0 : 1;
-    w.cardRewardBudgetTotal = 3;
-    w.cardRewardBudgetUsed = nonObjectiveUsed + objectiveUsed;
-    if (!Array.isArray(w.cardRewardClaimKeys)) w.cardRewardClaimKeys = [];
+    const nonObjectiveBudgetTotal = 0;
+    const nonObjectiveUsed = Math.max(0, nonObjectiveBudgetTotal - budget.nonObjectiveRewardsRemaining);
+    w.rewardBudgetTotal = nonObjectiveBudgetTotal;
+    w.rewardBudgetUsed = nonObjectiveUsed;
+    if (!Array.isArray(w.rewardClaimKeys)) w.rewardClaimKeys = [];
     const firedKeys = Object.keys(budget.fired ?? Object.create(null));
     for (let i = 0; i < firedKeys.length; i++) {
       const key = firedKeys[i];
-      if (!w.cardRewardClaimKeys.includes(key)) w.cardRewardClaimKeys.push(key);
+      if (!w.rewardClaimKeys.includes(key)) w.rewardClaimKeys.push(key);
     }
   }
 
@@ -899,36 +971,91 @@ export function createGame(args: CreateGameArgs) {
     }
   });
 
+  const perfSnapshotNoticeEl = document.createElement("div");
+  perfSnapshotNoticeEl.hidden = true;
+  perfSnapshotNoticeEl.style.position = "fixed";
+  perfSnapshotNoticeEl.style.right = "16px";
+  perfSnapshotNoticeEl.style.bottom = "16px";
+  perfSnapshotNoticeEl.style.zIndex = "1000";
+  perfSnapshotNoticeEl.style.padding = "6px 10px";
+  perfSnapshotNoticeEl.style.borderRadius = "8px";
+  perfSnapshotNoticeEl.style.font = '12px "IBM Plex Mono", monospace';
+  perfSnapshotNoticeEl.style.pointerEvents = "none";
+  perfSnapshotNoticeEl.style.boxShadow = "0 6px 18px rgba(0,0,0,0.35)";
+  perfSnapshotNoticeEl.style.background = "rgba(12, 14, 18, 0.92)";
+  perfSnapshotNoticeEl.style.color = "#f4f6fb";
+  document.body.appendChild(perfSnapshotNoticeEl);
+  let perfSnapshotNoticeTimer: number | null = null;
+
+  function showPerfSnapshotNotice(message: string, tone: "success" | "failure"): void {
+    perfSnapshotNoticeEl.textContent = message;
+    perfSnapshotNoticeEl.style.border = tone === "success"
+      ? "1px solid rgba(104, 211, 145, 0.65)"
+      : "1px solid rgba(248, 113, 113, 0.65)";
+    perfSnapshotNoticeEl.hidden = false;
+    if (perfSnapshotNoticeTimer != null) {
+      window.clearTimeout(perfSnapshotNoticeTimer);
+    }
+    perfSnapshotNoticeTimer = window.setTimeout(() => {
+      perfSnapshotNoticeEl.hidden = true;
+      perfSnapshotNoticeTimer = null;
+    }, 1600);
+  }
+
+  async function copyPerfOverlaySnapshot(): Promise<boolean> {
+    if (world.state !== "RUN") {
+      showPerfSnapshotNotice("Perf snapshot available in-run only", "failure");
+      return false;
+    }
+    const snapshotText = getLatestRenderDebugLightingSnapshotText().trim();
+    if (!snapshotText) {
+      showPerfSnapshotNotice("Perf snapshot unavailable", "failure");
+      return false;
+    }
+    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      showPerfSnapshotNotice("Clipboard unavailable", "failure");
+      return false;
+    }
+    try {
+      await navigator.clipboard.writeText(snapshotText);
+      showPerfSnapshotNotice("Perf snapshot copied", "success");
+      return true;
+    } catch (error) {
+      console.warn("[perf-snapshot] clipboard write failed", error);
+      showPerfSnapshotNotice("Perf snapshot copy failed", "failure");
+      return false;
+    }
+  }
+
   let world: World = createWorld({ seed: 1337, stage: cloneStage("DOCKS") });
   applyObjectivesFromActiveMap(world);
   applyMapFeaturesFromCells(world);
   applyDebugSpawn(world);
-  const cardRewardMenu = mountCardRewardMenu({
-    root: args.ui.levelupEl.root,
-    onPick: (cardId: string) => {
-      const reward = ensureCardRewardState(world);
+  const progressionRewardRoot = document.createElement("div");
+  progressionRewardRoot.id = "progressionReward";
+  progressionRewardRoot.hidden = true;
+  document.body.appendChild(progressionRewardRoot);
+  const progressionRewardMenu = mountProgressionRewardMenu({
+    root: progressionRewardRoot,
+    onPick: (optionId: string) => {
+      const reward = ensureProgressionRewardState(world);
       if (!reward.active) return;
-      const source = reward.source;
-      chooseCardReward(world, cardId);
-      resolveActiveRewardTicket(world);
-      renderRewardMenuIfNeeded();
 
-      if (source === "ZONE_TRIAL" && tryAdvanceAfterObjectiveCompletion()) {
+      // Intercept ring rewards: open hands screen for slot selection
+      const pickedOption = reward.options.find((o) => o.id === optionId);
+      if (pickedOption && pickedOption.family === "RING") {
+        const ringDefId = (pickedOption as { ringDefId: string }).ringDefId;
+        // Clear reward state without applying the reward
+        reward.active = false;
+        reward.options = [];
+        hideProgressionRewardMenu();
+        // Open hands screen in choose-slot mode
+        handsScreenChooseSlotPending = { ringDefId };
+        handsScreenOpen = true;
         return;
       }
-      world.state = "RUN";
-    },
-  });
-  const relicRewardRoot = document.createElement("div");
-  relicRewardRoot.id = "relicReward";
-  relicRewardRoot.hidden = true;
-  document.body.appendChild(relicRewardRoot);
-  const relicRewardMenu = mountRelicRewardMenu({
-    root: relicRewardRoot,
-    onPick: (relicId: string) => {
-      const reward = ensureRelicRewardState(world);
-      if (!reward.active) return;
-      chooseRelicReward(world, relicId);
+
+      chooseProgressionReward(world, optionId);
       resolveActiveRewardTicket(world);
       renderRewardMenuIfNeeded();
       if (tryAdvanceAfterObjectiveCompletion()) return;
@@ -942,12 +1069,7 @@ export function createGame(args: CreateGameArgs) {
   const vendorShopMenu = mountVendorShopMenu({
     root: vendorRoot,
     onBuy: (index: number) => {
-      if (tryPurchaseVendorCard(world, index)) {
-        renderVendorShopIfNeeded();
-      }
-    },
-    onBuyRelic: (index: number) => {
-      if (tryPurchaseVendorRelic(world, index)) {
+      if (tryPurchaseVendorOffer(world, index)) {
         renderVendorShopIfNeeded();
       }
     },
@@ -962,12 +1084,10 @@ export function createGame(args: CreateGameArgs) {
   let lastRewardRenderKey = "";
 
   const renderRewardMenuIfNeeded = (): void => {
-    const reward = ensureCardRewardState(world);
-    const relicReward = ensureRelicRewardState(world);
-    const key = `${world.state}|c:${reward.active ? 1 : 0}|${reward.source}|${reward.options.join(",")}|r:${relicReward.active ? 1 : 0}|${relicReward.source}|${relicReward.options.join(",")}`;
+    const progressionReward = ensureProgressionRewardState(world);
+    const key = `${world.state}|p:${progressionReward.active ? 1 : 0}|${progressionReward.family}|${progressionReward.source}|${progressionReward.options.map((option) => option.id).join(",")}`;
     if (key === lastRewardRenderKey) return;
-    cardRewardMenu.render(reward.active ? reward : null);
-    relicRewardMenu.render(relicReward.active ? relicReward : null);
+    progressionRewardMenu.render(progressionReward.active ? progressionReward : null);
     lastRewardRenderKey = key;
   };
 
@@ -982,18 +1102,13 @@ export function createGame(args: CreateGameArgs) {
       closeVendorShop(false);
       return;
     }
-    const key = `${getGold(world)}|${vendor.cards.join(",")}|${vendor.purchased.map((p) => (p ? "1" : "0")).join("")}|${(vendor.relicOffers ?? []).map((o) => `${o.relicId}:${o.priceG}:${o.isSold ? 1 : 0}`).join(",")}`;
+    const key = `${getGold(world)}|${vendor.offers.map((offer) => `${offer.option.family}:${offer.option.id}:${offer.priceG}:${offer.isSold ? 1 : 0}`).join(",")}`;
     if (key === lastVendorRenderKey) return;
     vendorShopMenu.render({
       active: true,
       gold: getGold(world),
-      cards: vendor.cards.map((cardId, index) => ({
-        cardId,
-        priceG: getVendorCardPriceG(cardId),
-        purchased: !!vendor.purchased[index],
-      })),
-      relicOffers: (vendor.relicOffers ?? []).map((offer) => ({
-        relicId: offer.relicId,
+      offers: vendor.offers.map((offer) => ({
+        option: offer.option,
         priceG: offer.priceG,
         isSold: offer.isSold,
       })),
@@ -1020,6 +1135,8 @@ export function createGame(args: CreateGameArgs) {
   }
   let pendingStartIntent: StartIntent | null = null;
   let pendingFloorIntent: FloorIntent | null = null;
+  let pendingPaletteSnapshotRestore: PaletteSnapshotStorageRecord | null = null;
+  let activePaletteSnapshotViewerRecord: PaletteSnapshotStorageRecord | null = null;
   let preparedStart: PreparedStart | null = null;
   let bootAssetsPreloaded = false;
   let floorLoadContext: FloorLoadContext | null = null;
@@ -1032,10 +1149,14 @@ export function createGame(args: CreateGameArgs) {
     return getMapDepth(w);
   }
 
-  function getEndStatsCardCount(w: World): number {
-    const cards = Array.isArray(w.cards) ? w.cards.length : 0;
-    if (cards > 0) return cards;
-    return Array.isArray(w.combatCardIds) ? w.combatCardIds.length : 0;
+  function getEndStatsRingCount(w: World): number {
+    return Object.keys(w.progression?.ringsByInstanceId ?? {}).length;
+  }
+
+  function getEndStatsTokenCount(w: World): number {
+    const tokens = w.progression?.storedModifierTokens;
+    if (!tokens) return 0;
+    return Object.values(tokens).reduce((sum, value) => sum + Math.max(0, Math.floor(value ?? 0)), 0);
   }
 
   function populateEndStats(w: World): void {
@@ -1044,8 +1165,8 @@ export function createGame(args: CreateGameArgs) {
     args.ui.endEl.depth.textContent = String(getEndStatsDepth(w));
     args.ui.endEl.kills.textContent = String(summary.kills);
     args.ui.endEl.gold.textContent = String(Math.max(0, Math.floor(getGold(w))));
-    args.ui.endEl.relics.textContent = String(Array.isArray(w.relics) ? w.relics.length : 0);
-    args.ui.endEl.cards.textContent = String(getEndStatsCardCount(w));
+    args.ui.endEl.rings.textContent = String(getEndStatsRingCount(w));
+    args.ui.endEl.tokens.textContent = String(getEndStatsTokenCount(w));
   }
 
   function getEndRunSummary(w: World): EndLeaderboardRunPayload {
@@ -1474,7 +1595,7 @@ export function createGame(args: CreateGameArgs) {
     });
     args.ui.menuEl.hidden = true;
     setHudHidden(true);
-    hideCardRewardMenu();
+    hideProgressionRewardMenu();
     closeVendorShop(false);
     setDialog(null);
     setEndActiveTab("stats");
@@ -1510,8 +1631,7 @@ export function createGame(args: CreateGameArgs) {
     preloadBackgrounds();
     preloadPlayerSprites();
     preloadVendorNpcSprites();
-    preloadProjectileSprites();
-    preloadBazookaExhaustAssets();
+    preloadRenderSprites();
     preloadNeutralMobSprites();
     preloadSfx();
     preloadKenneyTiles();
@@ -1535,17 +1655,22 @@ export function createGame(args: CreateGameArgs) {
 
   const FLOORS_PER_RUN = 3;
   const TRANSITION_SECS = 0;
-  const DETERMINISTIC_ARCHETYPES: FloorArchetype[] = [
-    "SURVIVE",
-    "TIME_TRIAL",
-    "VENDOR",
-    "HEAL",
-    "BOSS_TRIPLE",
+  const DETERMINISTIC_CHOICES: DeterministicRouteOption[] = [
+    { archetype: "SURVIVE", title: "Survive" },
+    { archetype: "SURVIVE", objectiveId: "POE_MAP_CLEAR", title: "PoE Map" },
+    { archetype: "TIME_TRIAL", title: "Zone Trial" },
+    { archetype: "VENDOR", title: "Vendor" },
+    { archetype: "HEAL", title: "Heal" },
+    { archetype: "ACT_BOSS", title: "Boss" },
+    { archetype: "RARE_TRIPLE", title: "3 Rares" },
   ];
   const DETERMINISTIC_ZONES = ["DOCKS", "SEWERS", "CHINATOWN"] as const;
 
   type DeterministicChoice = {
     archetype: FloorArchetype;
+    objectiveId?: ObjectiveId;
+    rewardFamily?: ProgressionRewardFamily;
+    title?: string;
     floorIndex: number;
     depth: number;
   };
@@ -1560,8 +1685,10 @@ export function createGame(args: CreateGameArgs) {
         return "Vendor";
       case "HEAL":
         return "Heal";
-      case "BOSS_TRIPLE":
-        return "3 Bosses";
+      case "ACT_BOSS":
+        return "Boss";
+      case "RARE_TRIPLE":
+        return "3 Rares";
     }
   };
 
@@ -1580,6 +1707,7 @@ export function createGame(args: CreateGameArgs) {
 
   function clearFloorEntities(w: World) {
     // Keep player stats/items/weapons; wipe transient entities.
+    resetPoeMapObjectiveState(w);
     w.eAlive = [];
     w.eType = [];
     w.egxi = [];
@@ -1594,15 +1722,20 @@ export function createGame(args: CreateGameArgs) {
     w.eHp = [];
     w.eHpMax = [];
     w.eR = [];
+    w.eSplitStage = [];
+    w.eVisualScale = [];
     w.eSpeed = [];
     w.eDamage = [];
     w.ezVisual = [];
     w.ezLogical = [];
+    w.eBrain = [];
     w.ePoisonT = [];
     w.ePoisonDps = [];
     w.ePoisonedOnDeath = [];
     w.eSpawnTriggerId = [];
+    w.eBossId = [];
     w.eAilments = [];
+    resetBossRuntime(w);
 
     w.zAlive = [];
     w.zKind = [];
@@ -1675,6 +1808,7 @@ export function createGame(args: CreateGameArgs) {
     w.prMeleeRange = [];
     w.prDirX = [];
     w.prDirY = [];
+    w.prSpawnTime = [];
     w.prTtl = [];
     w.prDamageMeta = [];
 
@@ -1709,9 +1843,6 @@ export function createGame(args: CreateGameArgs) {
     // NEW: bouncer arrays must stay index-aligned with all projectile arrays
     (w as any).prBouncesLeft = [];
     (w as any).prWallBounce = [];
-    (w as any).exhaustFollower = {};
-    (w as any).exhaustFollowerFrame = {};
-    (w as any)._nextExhaustFollowerId = 1;
     // Milestone C: clear cached zone floor heights
     (w as any)._zFloorH = [];
 
@@ -1738,42 +1869,136 @@ export function createGame(args: CreateGameArgs) {
     w.neutralMobs = [];
   }
 
+  function clearPaletteSnapshotViewerState(w: World): void {
+    (w as any).paletteSnapshotViewerActive = false;
+    (w as any).paletteSnapshotViewerCamera = null;
+  }
+
+  function applyPaletteSnapshotSceneRestore(
+    w: World,
+    snapshot: PaletteSnapshotStorageRecord,
+  ): void {
+    const restored = extractPaletteSnapshotSceneRestoreState(snapshot, w.stageId);
+    clearFloorEntities(w);
+
+    w.pgxi = restored.player.pgxi;
+    w.pgyi = restored.player.pgyi;
+    w.pgox = restored.player.pgox;
+    w.pgoy = restored.player.pgoy;
+    w.pz = restored.player.pz;
+    w.pzVisual = restored.player.pzVisual;
+    w.pzLogical = restored.player.pzLogical;
+    w.activeFloorH = restored.player.pzLogical;
+    w.pvx = restored.player.pvx;
+    w.pvy = restored.player.pvy;
+    w.lastAimX = restored.player.lastAimX;
+    w.lastAimY = restored.player.lastAimY;
+
+    w.camera.posX = restored.cameraX;
+    w.camera.posY = restored.cameraY;
+    w.camera.targetX = restored.cameraX;
+    w.camera.targetY = restored.cameraY;
+    (w as any).paletteSnapshotViewerCamera = {
+      x: restored.cameraX,
+      y: restored.cameraY,
+      zoom: restored.cameraZoom,
+    };
+
+    w.lighting.darknessAlpha = restored.lighting.darknessAlpha;
+    w.lighting.ambientTint = restored.lighting.ambientTint;
+    w.lighting.ambientTintStrength = restored.lighting.ambientTintStrength;
+
+    for (const enemy of restored.enemies) {
+      const enemyType = Number.isFinite(enemy.type)
+        ? (Math.max(0, Math.floor(enemy.type)) as EnemyId)
+        : EnemyId.MINION;
+      const enemyIndex = spawnEnemyGrid(w, enemyType, enemy.pgxi, enemy.pgyi, KENNEY_TILE_WORLD);
+      w.egox[enemyIndex] = enemy.pgox;
+      w.egoy[enemyIndex] = enemy.pgoy;
+      w.eHp[enemyIndex] = Math.max(0, enemy.hp);
+      w.eHpMax[enemyIndex] = Math.max(1, enemy.hp);
+      w.eFaceX[enemyIndex] = enemy.faceX;
+      w.eFaceY[enemyIndex] = enemy.faceY;
+      w.ezVisual[enemyIndex] = enemy.zVisual;
+      w.ezLogical[enemyIndex] = enemy.zLogical;
+      if (enemy.hp <= 0) w.eAlive[enemyIndex] = false;
+    }
+
+    setDialog(null);
+    closeVendorShop(false);
+    hideProgressionRewardMenu();
+    args.ui.mapEl.root.hidden = true;
+    setHudHidden(true);
+    w.state = "MAP";
+    (w as any).paletteSnapshotViewerActive = true;
+  }
+
   function bossAlive(w: World): boolean {
     return findFirstAliveBossIndex(w) >= 0;
   }
 
-  function findFirstAliveBossIndex(w: World): number {
+  function collectAliveHostileEnemiesForSpawnDirector(
+    w: World,
+  ): Array<{ enemyId: EnemyId }> {
+    const activeEnemies: Array<{ enemyId: EnemyId }> = [];
     for (let i = 0; i < w.eAlive.length; i++) {
       if (!w.eAlive[i]) continue;
-      if (w.eType[i] === ENEMY_TYPE.BOSS) return i;
+      const enemyId = w.eType[i] as EnemyId;
+      if (isBossEntity(w, i) || isNeutralMonsterId(enemyId)) continue;
+      activeEnemies.push({ enemyId });
+    }
+    return activeEnemies;
+  }
+
+  function hostileSpawningEnabled(w: World): boolean {
+    return (
+      w.state === "RUN" &&
+      w.runState === "FLOOR" &&
+      !w.floorEndCountdownActive &&
+      !w.deathFx.active &&
+      w.floorArchetype !== "VENDOR" &&
+      w.floorArchetype !== "HEAL" &&
+      !isPoeMapObjectiveActive(w) &&
+      !bossAlive(w)
+    );
+  }
+
+  function findFirstAliveBossIndex(w: World): number {
+    const activeEncounter = getActiveBossEncounter(w);
+    if (activeEncounter && w.eAlive[activeEncounter.enemyIndex]) {
+      return activeEncounter.enemyIndex;
+    }
+    for (let i = 0; i < w.eAlive.length; i++) {
+      if (!w.eAlive[i]) continue;
+      if (isBossEntity(w, i)) return i;
     }
     return -1;
   }
 
-  function spawnSurviveBossIfNeeded(w: World): void {
-    if (w.floorArchetype !== "SURVIVE") return;
-    if (w.runState !== "FLOOR") return;
-    if ((w as any)._surviveBossSpawned) return;
-    const remaining = (w.floorDuration ?? 0) - (w.phaseTime ?? 0);
-    if (remaining > 30) return;
-
-    const pg = gridAtPlayer(w);
-    const pw = gridToWorld(pg.gx, pg.gy, KENNEY_TILE_WORLD);
-    const angle = w.rng.range(0, Math.PI * 2);
-    const radius = w.rng.range(320, 520);
-    const wx = pw.wx + Math.cos(angle) * radius;
-    const wy = pw.wy + Math.sin(angle) * radius;
-    const spawnedHp = spawnOneEnemyOfType(w, ENEMY_TYPE.BOSS, wx, wy, "elite");
-    if (spawnedHp > 0) (w as any)._surviveBossSpawned = true;
+  function getBossBarDescriptor(
+    w: World,
+    bossIndex: number,
+  ): { title: string; accent: string } {
+    const def = getBossDefinitionForEntity(w, bossIndex);
+    if (def) {
+      return {
+        title: def.ui?.title ?? def.name,
+        accent: def.ui?.accent ?? def.presentation?.color ?? "#f66",
+      };
+    }
+    return {
+      title: getBossTitle(w) ?? "Boss",
+      accent: getBossAccent(w) ?? "#f66",
+    };
   }
 
-  function syncBossTripleNavState(w: World): void {
-    if (w.floorArchetype !== "BOSS_TRIPLE") {
-      w.bossTriple = undefined;
+  function syncRareTripleNavState(w: World): void {
+    if (w.floorArchetype !== "RARE_TRIPLE") {
+      w.rareTriple = undefined;
       return;
     }
     const defs = (w.overlayTriggerDefs ?? []).filter((d) =>
-      typeof d.id === "string" && d.id.startsWith(OBJECTIVE_TRIGGER_IDS.bossZonePrefix)
+      typeof d.id === "string" && d.id.startsWith(OBJECTIVE_TRIGGER_IDS.rareZonePrefix)
     );
     defs.sort((a, b) => a.id.localeCompare(b.id));
     const spawnPointsWorld = defs.map((d) => ({
@@ -1781,7 +2006,7 @@ export function createGame(args: CreateGameArgs) {
       y: (d.ty + 0.5) * KENNEY_TILE_WORLD,
     }));
     const completed = spawnPointsWorld.map(() => false);
-    w.bossTriple = { spawnPointsWorld, completed };
+    w.rareTriple = { spawnPointsWorld, completed };
   }
 
   function syncZoneTrialNavState(w: World): void {
@@ -1804,13 +2029,29 @@ export function createGame(args: CreateGameArgs) {
     };
   }
 
-  function beginFloorLoad(floorIntent: FloorIntent): boolean {
+  async function beginFloorLoad(floorIntent: FloorIntent): Promise<boolean> {
     const w = world;
     setDialog(null);
     closeVendorShop(false);
+    const delve = w.delveMap as DelveMap | null;
+    const reopenDelveMapOnFailure = (subText: string): boolean => {
+      if (!delve) return false;
+      clearPendingNode(delve, floorIntent.nodeId);
+      showDelveMap(subText);
+      return false;
+    };
+    const objectiveId = floorIntent.objectiveId ?? objectiveIdFromArchetype(floorIntent.archetype);
+    if (objectiveId === "ACT_BOSS" && (!floorIntent.mapId || !floorIntent.bossId)) {
+      const actBossPlan = buildActBossPlan(
+        floorIntent.variantSeed ?? deterministicVariantSeed(w.runSeed, floorIntent.floorIndex, floorIntent.depth, floorIntent.archetype),
+        floorIntent.depth,
+      );
+      floorIntent.mapId ??= actBossPlan.mapId;
+      floorIntent.bossId ??= actBossPlan.bossId;
+    }
     if (w.delveMap && !floorIntent.mapId) {
       console.error("[enterFloor] delve floor intent missing mapId");
-      return false;
+      return reopenDelveMapOnFailure("Unable to enter that node.\nChoose another destination.");
     }
     w.floorIndex = floorIntent.floorIndex;
     w.floorArchetype = floorIntent.archetype;
@@ -1827,7 +2068,6 @@ export function createGame(args: CreateGameArgs) {
     // Drive floor timing from stage
     w.floorDuration = w.stage.duration;
 
-    const objectiveId = floorIntent.objectiveId ?? objectiveIdFromArchetype(floorIntent.archetype);
     const targetMapId =
       floorIntent.mapId
       ?? (floorIntent.archetype === "VENDOR"
@@ -1838,29 +2078,76 @@ export function createGame(args: CreateGameArgs) {
     const baseMap = getStaticMapById(targetMapId) ?? getDefaultStaticMap();
     if (!baseMap) {
       console.error(`[enterFloor] missing authored map for mapId="${targetMapId ?? "AUTO"}"`);
-      return false;
+      return reopenDelveMapOnFailure("Unable to enter that node.\nChoose another destination.");
     }
     const variantSeed = floorIntent.variantSeed ?? w.rng.int(0, 0x7fffffff);
     const rng = new RNG(variantSeed);
-    const finalMap = applyObjective(baseMap, objectiveId, rng);
-    activateMapDef(finalMap, variantSeed);
+    const finalMap = runWithLoadProfilerSubphase(
+      LOAD_PROFILER_SUBPHASE.MAP_CLONE_OR_CHUNK_DUPLICATION,
+      () => applyObjective(baseMap, objectiveId, rng),
+    );
+    await activateMapDefAsync(finalMap, variantSeed);
+    if (delve) {
+      const committed = commitPendingNode(delve, floorIntent.nodeId);
+      if (!committed) {
+        if (import.meta.env.DEV) {
+          console.error("[delve] Refusing floor load without pending node selection", {
+            nodeId: floorIntent.nodeId,
+            pendingNodeId: delve.pendingNodeId,
+            currentNodeId: delve.currentNodeId,
+          });
+        }
+        return reopenDelveMapOnFailure("That node could not be entered.\nChoose another destination.");
+      }
+    }
 
     floorLoadContext = { floorIntent };
     return true;
   }
 
-  async function prewarmFloorLoadSprites(): Promise<void> {
+  async function prewarmFloorLoadSprites(): Promise<boolean> {
     const w = world;
-    const paletteId = resolveActivePaletteId();
-    const spriteIds = collectRuntimeSpriteDeps(w, getActiveMap());
-    enqueuePrewarm(paletteId, spriteIds);
-    await awaitPrewarmDone(1500);
+    const paletteVariantKey = resolveActivePaletteVariantKey();
+    const { runtimeSpriteIds, depsSpriteIds } = runWithLoadProfilerSubphase(
+      LOAD_PROFILER_SUBPHASE.DEPENDENCY_COLLECTION,
+      () => ({
+        runtimeSpriteIds: collectRuntimeSpriteDeps(w, getActiveMap()),
+        depsSpriteIds: collectFloorDependencies().spriteIds,
+      }),
+    );
+    const spriteIds = Array.from(new Set([...runtimeSpriteIds, ...depsSpriteIds]));
+    const requiredSpriteIds = spriteIds.filter((id) => !isOptionalRuntimeSpriteIdForLoading(id));
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.ENQUEUE_RUNTIME_PREWARM, () => {
+      enqueuePrewarm(paletteVariantKey, spriteIds);
+    });
+    await runWithLoadProfilerSubphaseAsync(
+      LOAD_PROFILER_SUBPHASE.RUNTIME_PREWARM_WAIT,
+      () => awaitPrewarmDone(1500),
+    );
 
     // 1) Always warm entity/core sprite modules.
-    await awaitCoreSpriteReadiness(spriteIds, 1500);
+    const primaryState = await runWithLoadProfilerSubphaseAsync(
+      LOAD_PROFILER_SUBPHASE.PRIMARY_SPRITE_READINESS,
+      () => awaitCoreSpriteReadiness(requiredSpriteIds, 1500, paletteVariantKey),
+    );
+    if (primaryState !== "READY") {
+      console.debug(
+        `[loading][prewarm-floor] primary readiness=${primaryState} required=${requiredSpriteIds.length} total=${spriteIds.length}`,
+      );
+      return false;
+    }
 
     // 2) One more short wait to ensure swapped images are installed.
-    await awaitCoreSpriteReadiness(spriteIds, 300);
+    const settleState = await runWithLoadProfilerSubphaseAsync(
+      LOAD_PROFILER_SUBPHASE.SETTLE_SPRITE_READINESS,
+      () => awaitCoreSpriteReadiness(requiredSpriteIds, 300, paletteVariantKey),
+    );
+    if (settleState !== "READY") {
+      console.debug(
+        `[loading][prewarm-floor] settle readiness=${settleState} required=${requiredSpriteIds.length} total=${spriteIds.length}`,
+      );
+    }
+    return settleState === "READY";
   }
 
   /**
@@ -1880,8 +2167,8 @@ export function createGame(args: CreateGameArgs) {
     w.rewardTicketSeq = 0;
     w._rewardObjectiveCompletedSeen = Object.create(null);
     w._rewardSurviveMilestoneSeen = Object.create(null);
-    w._rewardBossMilestoneCount = 0;
-    w._rewardSeenBossKillEvents = new WeakSet();
+    w._rewardRareMilestoneCount = 0;
+    w._rewardSeenRareKillEvents = new WeakSet();
 
     w.floorEndCountdownActive = false;
     w.floorEndCountdownSec = 0;
@@ -1890,8 +2177,7 @@ export function createGame(args: CreateGameArgs) {
 
     w.pendingAdvanceToNextFloor = false;
 
-    // boss bookkeeping if present
-    if (Array.isArray(w.bossZoneSpawned)) w.bossZoneSpawned = [];
+    if (Array.isArray(w.rareZoneSpawned)) w.rareZoneSpawned = [];
   }
 
   function finalizeFloorLoad(): void {
@@ -1916,10 +2202,44 @@ export function createGame(args: CreateGameArgs) {
     clearFloorEntities(w);
     applyMapFeaturesFromCells(w);
     spawnMilestonePigeonNearPlayer(w);
+    let objectiveSpec = objectiveSpecFromFloorIntent(ctx.floorIntent);
+    const isPoeMapFloor = objectiveSpec.objectiveType === "POE_MAP_CLEAR";
+    resetLootGoblinFloorState(w);
+    if (!isPoeMapFloor) {
+      trySpawnLootGoblinForFloor(w);
+    }
+
+    if (objectiveSpec.objectiveType === "POE_MAP_CLEAR") {
+      const objectiveSeed =
+        floorIntent.variantSeed
+        ?? hashString(`${floorIntent.nodeId}:${floorIntent.floorIndex}:${floorIntent.depth}:poe`);
+      const poeInit = initializePoeMapObjective(w, {
+        objectiveSeed,
+        modifiers: floorIntent.poeMapModifiers,
+      });
+      objectiveSpec = {
+        objectiveType: "POE_MAP_CLEAR",
+        params: {
+          clearCount: Math.max(1, poeInit.totalPacks),
+        },
+      };
+    }
+    if (objectiveSpec.objectiveType === "ACT_BOSS" && !floorIntent.bossId) {
+      const actBossPlan = buildActBossPlan(
+        floorIntent.variantSeed ?? hashString(`${floorIntent.nodeId}:${floorIntent.floorIndex}:${floorIntent.depth}:act_boss`),
+        floorIntent.depth,
+      );
+      floorIntent.bossId = actBossPlan.bossId;
+      objectiveSpec = {
+        objectiveType: "ACT_BOSS",
+        params: {
+          bossId: actBossPlan.bossId,
+        },
+      };
+    }
 
     resetFloorProgressionState(w);
-
-    const objectiveSpec = objectiveSpecFromFloorIntent(ctx.floorIntent);
+    resetHostileSpawnDirectorForFloor(w);
     w.currentObjectiveSpec = objectiveSpec;
     resetObjectiveRuntime(w);
     initObjectivesForFloor(w, {
@@ -1931,115 +2251,95 @@ export function createGame(args: CreateGameArgs) {
     w.objectiveRewardClaimedKey = null;
     (w as any).zoneRewardClaimedKey = null;
     (w as any).zoneRewardClaimedKeys = [];
-    w.cardRewardBudgetTotal = 3;
-    w.cardRewardBudgetUsed = 0;
-    w.cardRewardClaimKeys = [];
-    w.lastCardRewardClaimKey = null;
+    w.rewardBudgetTotal = 0;
+    w.rewardBudgetUsed = 0;
+    w.rewardClaimKeys = [];
+    w.lastRewardClaimKey = null;
     syncRewardDebugFieldsFromBudget(w);
-    w.cardReward.active = false;
-    w.cardReward.options = [];
-    w.relicReward.active = false;
-    w.relicReward.options = [];
+    w.progressionReward.active = false;
+    w.progressionReward.options = [];
     startZoneTrial(w);
     syncZoneTrialNavState(w);
-    syncBossTripleNavState(w);
+    syncRareTripleNavState(w);
+    if (objectiveSpec.objectiveType === "ACT_BOSS" && floorIntent.bossId) {
+      spawnActBossEncounterFromActiveMap(w, {
+        bossId: floorIntent.bossId,
+        objectiveId: "OBJ_ACT_BOSS",
+      });
+    }
     if (objectiveSpec.objectiveType === "SURVIVE_TIMER") {
       w.floorDuration = objectiveSpec.params.timeLimitSec;
     }
 
     w.vendor = floorIntent.archetype === "VENDOR"
-      ? createVendorState(
-        generateVendorCards(5, (w as any).currentCharacterId),
-        generateVendorRelicOffers(w, 5, VENDOR_RELIC_PRICE_G),
-      )
+      ? createVendorState(generateVendorProgressionOffers(w, 5))
       : null;
-    w.vendorOffers = [];
-    (w as any)._surviveBossSpawned = false;
     w.runState = "FLOOR";
     w.phaseTime = 0;
     w.transitionTime = 0;
 
-    // Reset Spawn Director per-floor.
-    if (w.spawnDirectorState) {
-      w.spawnDirectorState.powerBudget = 0;
-      w.spawnDirectorState.pendingHpCommitted = 0;
-      w.spawnDirectorState.pendingSpawns = 0;
-      w.spawnDirectorState.waveRemaining = 0;
-      w.spawnDirectorState.chunkCooldownSec = 0;
-      w.spawnDirectorState.waveCooldownSecLeft = 0;
-      w.spawnDirectorState.lastChunkSize = 0;
-      w.spawnDirectorState.queueEvents = [];
-      w.spawnDirectorState.queuedPerSecond = 0;
-      w.spawnDirectorState.spawnEvents = [];
-      w.spawnDirectorState.spawnsPerSecond = 0;
-    }
-
     applyRunHeatScaling(w);
-    const heat = getRunHeat(w);
-    const seed = 10;
-
-    if (w.spawnDirectorState) {
-      w.spawnDirectorState.pendingSpawns += seed;
-    }
-
-    if ((w as any).debug?.verboseSpawnLogs) {
-      const tuning = (w as any).balance?.spawnTuning ?? {};
-      const spawnBase = typeof tuning.spawnBase === "number" ? tuning.spawnBase : DEFAULT_SPAWN_TUNING.spawnBase;
-      const spawnPerDepth = typeof tuning.spawnPerDepth === "number" ? tuning.spawnPerDepth : DEFAULT_SPAWN_TUNING.spawnPerDepth;
-      const pressureAt0Sec = typeof tuning.pressureAt0Sec === "number" ? tuning.pressureAt0Sec : DEFAULT_SPAWN_TUNING.pressureAt0Sec;
-      const pressureAt120Sec = typeof tuning.pressureAt120Sec === "number" ? tuning.pressureAt120Sec : DEFAULT_SPAWN_TUNING.pressureAt120Sec;
-      const spawnMult = spawnBase * Math.pow(Math.max(0.0001, spawnPerDepth), heat);
-      const pressure = computePressure(0, pressureAt0Sec, pressureAt120Sec);
-      const spawnHPPerSecond = BASELINE_PLAYER_DPS * pressure * spawnMult;
-      console.log(
-        "[SpawnModel]",
-        "heat=", heat,
-        "pressure=", pressure.toFixed(2),
-        "spawnHPPerSec=", spawnHPPerSecond.toFixed(2)
-      );
-    }
 
     emitEvent(w, { type: "SFX", id: "FLOOR_START", vol: 0.9, rate: 1 });
     floorLoadContext = null;
 
     // Enter gameplay state (delve picker leaves us in MAP; floor load must resume RUN).
     w.state = "RUN";
+    clearPaletteSnapshotViewerState(w);
+    const snapshotRestore = pendingPaletteSnapshotRestore;
+    pendingPaletteSnapshotRestore = null;
+    if (snapshotRestore) {
+      activePaletteSnapshotViewerRecord = snapshotRestore;
+      applyPaletteSnapshotSceneRestore(w, snapshotRestore);
+    } else {
+      activePaletteSnapshotViewerRecord = null;
+    }
 
     // UI: hide map overlay, show HUD.
     args.ui.mapEl.root.hidden = true;
-    setHudHidden(false);
-    hideCardRewardMenu();
+    setHudHidden(!!(w as any).paletteSnapshotViewerActive);
+    hideProgressionRewardMenu();
   }
 
   async function enterFloor(w: World, floorIntent: FloorIntent): Promise<void> {
     void w;
-    if (!beginFloorLoad(floorIntent)) return;
-    await prewarmFloorLoadSprites();
+    if (!(await beginFloorLoad(floorIntent))) return;
+    const ready = await prewarmFloorLoadSprites();
+    if (!ready) return;
     finalizeFloorLoad();
   }
 
-  function buildFloorIntentFromDelveNode(node: DelveNode, floorIndex: number): FloorIntent {
+  function buildFloorIntentFromDelveNode(node: DelveNode): FloorIntent {
     return {
       nodeId: node.id,
-      zoneId: node.zoneId,
+      zoneId: node.runtime.zoneId,
       depth: getNodeDepth(node),
-      floorIndex,
-      archetype: node.floorArchetype,
-      mapId: node.plan.mapId,
-      objectiveId: node.plan.objectiveId,
-      variantSeed: node.plan.variantSeed,
+      floorIndex: node.rowIndex,
+      archetype: floorArchetypeForNode(node),
+      mapId: node.runtime.mapId,
+      bossId: node.runtime.bossId,
+      objectiveId: node.runtime.objectiveId,
+      rewardFamily: defaultRewardFamilyForDepth(getNodeDepth(node)),
+      variantSeed: node.runtime.variantSeed,
+      rareCount: node.runtime.rareCount,
+      spawnZoneCount: node.runtime.spawnZoneCount,
     };
   }
 
   function buildFallbackFloorIntent(w: World, floorIndex: number): FloorIntent {
     const zoneId = (w.stage?.id ?? w.stageId ?? "DOCKS") as any;
     const archetype = w.floorArchetype ?? "SURVIVE";
+    const defaultSeed = deterministicVariantSeed(w.runSeed, floorIndex, floorIndex + 1, archetype);
+    const actBossPlan = archetype === "ACT_BOSS"
+      ? buildActBossPlan(defaultSeed, floorIndex + 1)
+      : null;
     const mapId =
       archetype === "VENDOR"
         ? "SHOP"
         : archetype === "HEAL"
           ? "REST"
-          : DEFAULT_MAP_POOL[floorIndex % DEFAULT_MAP_POOL.length];
+          : actBossPlan?.mapId
+            ?? DEFAULT_MAP_POOL[floorIndex % DEFAULT_MAP_POOL.length];
     return {
       nodeId: "LEGACY_FLOOR",
       zoneId,
@@ -2047,7 +2347,9 @@ export function createGame(args: CreateGameArgs) {
       floorIndex,
       archetype,
       mapId,
+      bossId: actBossPlan?.bossId,
       objectiveId: objectiveIdFromArchetype(archetype),
+      rewardFamily: defaultRewardFamilyForDepth(floorIndex + 1),
       variantSeed: deterministicVariantSeed(w.runSeed, floorIndex, floorIndex + 1, archetype, mapId),
     };
   }
@@ -2058,62 +2360,48 @@ export function createGame(args: CreateGameArgs) {
     depth: number,
     archetype: FloorArchetype,
     mapId?: string,
+    objectiveId?: ObjectiveId,
   ): number {
-    return hashString(`${runSeed}:${floorIndex}:${depth}:${archetype}:${mapId ?? "AUTO"}`);
+    return hashString(`${runSeed}:${floorIndex}:${depth}:${archetype}:${mapId ?? "AUTO"}:${objectiveId ?? "AUTO"}`);
   }
 
   function buildDeterministicFloorIntent(choice: DeterministicChoice): FloorIntent {
+    const objectiveId = choice.objectiveId ?? objectiveIdFromArchetype(choice.archetype);
+    const variantSeed = deterministicVariantSeed(
+      world.runSeed,
+      choice.floorIndex,
+      choice.depth,
+      choice.archetype,
+      undefined,
+      objectiveId,
+    );
+    const actBossPlan = choice.archetype === "ACT_BOSS"
+      ? buildActBossPlan(variantSeed, choice.depth)
+      : null;
     const mapId =
       choice.archetype === "VENDOR"
         ? "SHOP"
         : choice.archetype === "HEAL"
           ? "REST"
-          : DEFAULT_MAP_POOL[
-              hashString(
-                `${world.runSeed}:${choice.floorIndex}:${choice.depth}:${choice.archetype}:mapPick`,
-              ) % DEFAULT_MAP_POOL.length
-            ];
+          : actBossPlan?.mapId
+            ?? DEFAULT_MAP_POOL[
+                hashString(
+                  `${world.runSeed}:${choice.floorIndex}:${choice.depth}:${choice.archetype}:${objectiveId}:mapPick`,
+                ) % DEFAULT_MAP_POOL.length
+              ];
     const zoneId = DETERMINISTIC_ZONES[choice.floorIndex % DETERMINISTIC_ZONES.length];
     return {
-      nodeId: `DET_${choice.floorIndex}_${choice.depth}_${choice.archetype}`,
+      nodeId: `DET_${choice.floorIndex}_${choice.depth}_${choice.archetype}_${objectiveId}`,
       zoneId,
       depth: choice.depth,
       floorIndex: choice.floorIndex,
       archetype: choice.archetype,
       mapId,
-      objectiveId: objectiveIdFromArchetype(choice.archetype),
-      variantSeed: deterministicVariantSeed(
-        world.runSeed,
-        choice.floorIndex,
-        choice.depth,
-        choice.archetype,
-        mapId,
-      ),
+      bossId: actBossPlan?.bossId,
+      objectiveId,
+      rewardFamily: choice.rewardFamily ?? defaultRewardFamilyForDepth(choice.depth),
+      variantSeed,
     };
-  }
-
-  function enterBoss(w: World) {
-    w.runState = "BOSS";
-    w.phaseTime = 0;
-    w.transitionTime = 0;
-
-    emitEvent(w, { type: "SFX", id: "BOSS_START", vol: 1.0, rate: 1 });
-
-    // Reset chest handshake state for this encounter.
-    (w as any).chestOpenRequested = false;
-    w.magnetActive = false;
-    w.magnetTimer = 0;
-
-    // Clean slate for the boss encounter (feels fair + deterministic).
-    //clearFloorEntities(w);
-
-    const a = w.rng.range(0, Math.PI * 2);
-    const r = 320;
-    const pg = gridAtPlayer(w);
-    const pw = gridToWorld(pg.gx, pg.gy, KENNEY_TILE_WORLD);
-    const sx = pw.wx + Math.cos(a) * r;
-    const sy = pw.wy + Math.sin(a) * r;
-    spawnOneEnemyOfType(w, ENEMY_TYPE.BOSS, sx, sy, "elite");
   }
 
   function enterTransition(w: World) {
@@ -2125,18 +2413,21 @@ export function createGame(args: CreateGameArgs) {
     clearFloorEntities(w);
   }
 
-  function completeRun(w: World) {
-    // WIN CONDITION: final-floor objective completion.
+  function completeRun(
+    w: World,
+    title: string = "Run Ended",
+    subtitle: string = "Final floor objective completed.",
+  ) {
     w.runState = "RUN_COMPLETE";
     w.state = "WIN";
-    showEndScreen(w, "Run Ended", "Final floor objective completed.");
+    showEndScreen(w, title, subtitle);
   }
 
 
-  function applyMapSelection(mapId: string | undefined, seed: number) {
+  async function applyMapSelection(mapId: string | undefined, seed: number): Promise<void> {
     const staticDef = getStaticMapById(mapId) ?? getDefaultStaticMap();
     if (staticDef) {
-      activateMapDef(staticDef, seed);
+      await activateMapDefAsync(staticDef, seed);
     }
   }
 
@@ -2144,25 +2435,25 @@ export function createGame(args: CreateGameArgs) {
     return !!mapId;
   }
 
-  function previewMap(mapId?: string) {
+  async function previewMap(mapId?: string): Promise<void> {
     const seed = preparedStart?.seed ?? ((Date.now() ^ (Math.random() * 1e9)) >>> 0);
-    applyMapSelection(mapId, seed);
+    await applyMapSelection(mapId, seed);
   }
 
-  function reloadCurrentMapForDebug() {
+  async function reloadCurrentMapForDebug(): Promise<void> {
     const seed = preparedStart?.seed ?? ((Date.now() ^ (Math.random() * 1e9)) >>> 0);
-    const reloaded = reloadActiveMap(seed);
+    const reloaded = await reloadActiveMapAsync(seed);
     if (!reloaded && import.meta.env.DEV) {
       console.warn("[map-selector] reload requested without an active authored map");
     }
   }
 
-  function resetRun(mapId?: string, options?: { skipMapSelection?: boolean; seedOverride?: number }) {
+  async function resetRun(mapId?: string, options?: { skipMapSelection?: boolean; seedOverride?: number }) {
     setDialog(null);
     closeVendorShop(false);
     const seed = options?.seedOverride ?? ((Date.now() ^ (Math.random() * 1e9)) >>> 0);
     if (!options?.skipMapSelection) {
-      applyMapSelection(mapId, seed);
+      await applyMapSelection(mapId, seed);
     }
     world = createWorld({
       seed,
@@ -2172,9 +2463,6 @@ export function createGame(args: CreateGameArgs) {
     (world as any).deterministicDelveMode = false;
     const mapMode = isMapMode(mapId);
     (world as any).mapMode = mapMode;
-    (world as any).runtimeStructureSlicingEnabled = false;
-    (world as any).runtimeStructureSliceDebug = false;
-    world.balance.spawnDirectorEnabled = true;
     if (mapMode) {
       setObjectives(world, []);
     } else {
@@ -2186,45 +2474,38 @@ export function createGame(args: CreateGameArgs) {
     applyDebugSpawn(world);
     spawnMilestonePigeonNearPlayer(world);
 
-    hideCardRewardMenu();
+    hideProgressionRewardMenu();
   }
 
-  function executeStartRun(characterId: PlayableCharacterId) {
+  async function executeStartRun(characterId: PlayableCharacterId): Promise<void> {
     const character = getPlayableCharacter(characterId);
     if (!character) return;
 
     applyPlayerSkinSelection(character.idleSpriteKey);
     preloadPlayerSprites();
 
-    resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
+    await resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
     (world as any).currentCharacterId = character.id;
-    ensureStarterRelicForCharacter(world, character.id);
+    equipStarterRingForCharacter(world, character.id);
 
-    // Create infinite delve map
-    const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
-    const delve = createDelveMap(seed);
+    const delve = createDelveMap(world.runSeed);
     world.delveMap = delve;
     setMapDepth(world, 1);
     applyRunHeatScaling(world);
 
-    // Pick starting node
-    if (import.meta.env.DEV) {
-      const starter = getWorldRelicInstances(world).find((it) => it.source === "starter");
-      console.debug("[starterRelic] run-start", { characterId: character.id, starterRelicId: starter?.id ?? null });
-    }
-    showDelveMap("Choose your starting location.\nGo deeper for greater challenge and rewards.");
+    showDelveMap("Choose your starting location.\nClimb the act map toward the boss.");
   }
 
-  function executeStartDeterministicRun(characterId: PlayableCharacterId) {
+  async function executeStartDeterministicRun(characterId: PlayableCharacterId): Promise<void> {
     const character = getPlayableCharacter(characterId);
     if (!character) return;
 
     applyPlayerSkinSelection(character.idleSpriteKey);
     preloadPlayerSprites();
 
-    resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
+    await resetRun(undefined, { skipMapSelection: true, seedOverride: preparedStart?.seed });
     (world as any).currentCharacterId = character.id;
-    ensureStarterRelicForCharacter(world, character.id);
+    equipStarterRingForCharacter(world, character.id);
     world.delveMap = null;
     setMapDepth(world, 1);
     applyRunHeatScaling(world);
@@ -2236,12 +2517,7 @@ export function createGame(args: CreateGameArgs) {
     args.ui.mapEl.root.hidden = false;
     hideEndScreen();
     setHudHidden(false);
-    hideCardRewardMenu();
-
-    if (import.meta.env.DEV) {
-      const starter = getWorldRelicInstances(world).find((it) => it.source === "starter");
-      console.debug("[starterRelic] deterministic-start", { characterId: character.id, starterRelicId: starter?.id ?? null });
-    }
+    hideProgressionRewardMenu();
 
     showDeterministicFloorPicker(
       "Path Select mode: choose any floor type.",
@@ -2250,16 +2526,16 @@ export function createGame(args: CreateGameArgs) {
     );
   }
 
-  function executeStartSandboxRun(characterId: PlayableCharacterId, mapId?: string) {
+  async function executeStartSandboxRun(characterId: PlayableCharacterId, mapId?: string): Promise<void> {
     const character = getPlayableCharacter(characterId);
     if (!character) return;
 
     applyPlayerSkinSelection(character.idleSpriteKey);
     preloadPlayerSprites();
 
-    resetRun(mapId, { skipMapSelection: true, seedOverride: preparedStart?.seed });
+    await resetRun(mapId, { skipMapSelection: true, seedOverride: preparedStart?.seed });
     (world as any).currentCharacterId = character.id;
-    ensureStarterRelicForCharacter(world, character.id);
+    equipStarterRingForCharacter(world, character.id);
     world.delveMap = null;
     setMapDepth(world, 1);
     applyRunHeatScaling(world);
@@ -2272,15 +2548,11 @@ export function createGame(args: CreateGameArgs) {
     args.ui.mapEl.root.hidden = true;
     hideEndScreen();
     setHudHidden(false);
-    hideCardRewardMenu();
+    hideProgressionRewardMenu();
 
-    if (import.meta.env.DEV) {
-      const starter = getWorldRelicInstances(world).find((it) => it.source === "starter");
-      console.debug("[starterRelic] sandbox-start", { characterId: character.id, starterRelicId: starter?.id ?? null });
-    }
   }
 
-  function prepareStartMap(intent: StartIntent): void {
+  async function prepareStartMap(intent: StartIntent): Promise<void> {
     const seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
  
     // Only sandbox preloads/activates a map at start.
@@ -2288,52 +2560,180 @@ export function createGame(args: CreateGameArgs) {
     const mapId = intent.mode === "SANDBOX" ? intent.mapId : undefined;
 
     if (intent.mode === "SANDBOX") {
-      applyMapSelection(mapId, seed);
+      await applyMapSelection(mapId, seed);
     }
 
     preparedStart = { seed, mapId };
   }
 
+  type ReadinessState = "READY" | "PENDING" | "FAILED";
+
+  function classifyLoadedImg(rec: LoadedImg | null | undefined): ReadinessState {
+    if (!rec) return "FAILED";
+    if (rec.ready && rec.img && rec.img.naturalWidth > 0 && rec.img.naturalHeight > 0) return "READY";
+    if (rec.failed || rec.unsupported) return "FAILED";
+    if (rec.ready) return "FAILED";
+    return "PENDING";
+  }
+
+  function normalizeRuntimeSpriteId(spriteId: string): string {
+    const trimmed = spriteId.trim();
+    return trimmed.toLowerCase().endsWith(".png") ? trimmed.slice(0, -4) : trimmed;
+  }
+
+  function isOptionalRuntimeSpriteIdForLoading(spriteId: string): boolean {
+    const normalized = normalizeRuntimeSpriteId(spriteId);
+    return normalized.startsWith("entities/npc/vendor/")
+      || normalized.startsWith("entities/animals/pigeon/");
+  }
+
+  function collectEnemySkinsForReadiness(runtimeSpriteIds: string[]): string[] {
+    const out = new Set<string>();
+    for (let i = 0; i < runtimeSpriteIds.length; i++) {
+      const normalized = normalizeRuntimeSpriteId(runtimeSpriteIds[i]);
+      const match = /^entities\/enemies\/([^/]+)\//.exec(normalized);
+      if (match && match[1]) out.add(match[1]);
+    }
+    return Array.from(out);
+  }
+
   async function awaitCoreSpriteReadiness(
     runtimeSpriteIds: string[],
     maxWaitMs: number = 1500,
-  ): Promise<void> {
+    awaitedPaletteVariantKey: string = resolveActivePaletteVariantKey(),
+  ): Promise<ReadinessState> {
+    const requiredEnemySkins = collectEnemySkinsForReadiness(runtimeSpriteIds);
+
     // Kick idempotent loads.
-    preloadPlayerSprites();
-    preloadEnemySprites();
-    preloadVendorNpcSprites();
-    preloadNeutralMobSprites();
-    preloadProjectileSprites();
-    preloadBazookaExhaustAssets();
+    preloadPlayerSprites(awaitedPaletteVariantKey);
+    preloadEnemySprites(requiredEnemySkins, awaitedPaletteVariantKey);
+    preloadBossSprites(undefined, awaitedPaletteVariantKey);
+    preloadVendorNpcSprites(awaitedPaletteVariantKey);
+    preloadNeutralMobSprites(awaitedPaletteVariantKey);
     preloadRenderSprites();
 
     const start = performance.now();
 
-    await new Promise<void>((resolve) => {
+    return await new Promise<ReadinessState>((resolve) => {
       const tick = () => {
         const elapsed = performance.now() - start;
-        const paletteId = resolveActivePaletteId();
-        const projectileKinds = [1, 2, 3, 4, 5, 6];
-        const projectilesReady = projectileKinds.every((kind) => {
-          const rec = getProjectileSpriteByKind(kind);
-          return !!rec?.ready;
-        });
-        const runtimeReady = runtimeSpriteIds.every((id) => {
-          const rec = getSpriteByIdForPalette(id, paletteId);
-          return rec.ready;
-        });
+        const activePaletteVariantKey = resolveActivePaletteVariantKey();
+        const projectileSpriteIds = listProjectileTravelSpriteIds();
+        let failed = false;
+        const failedProjectileSpriteIds: string[] = [];
+        const pendingProjectileSpriteIds: string[] = [];
+        let projectilesReady = true;
+        for (let i = 0; i < projectileSpriteIds.length; i++) {
+          const spriteId = projectileSpriteIds[i];
+          const rec = getSpriteByIdForVariantKey(spriteId, awaitedPaletteVariantKey);
+          const state = classifyLoadedImg(rec as LoadedImg | null | undefined);
+          if (state === "FAILED") {
+            failed = true;
+            failedProjectileSpriteIds.push(spriteId);
+            projectilesReady = false;
+          } else if (state === "PENDING") {
+            pendingProjectileSpriteIds.push(spriteId);
+            projectilesReady = false;
+          }
+        }
+        const failedRuntimeIds: string[] = [];
+        const pendingRuntimeIds: string[] = [];
+        let runtimeReady = true;
+        for (let i = 0; i < runtimeSpriteIds.length; i++) {
+          const id = runtimeSpriteIds[i];
+          const rec = getSpriteByIdForVariantKey(id, awaitedPaletteVariantKey);
+          const state = classifyLoadedImg(rec);
+          if (state === "FAILED") {
+            failed = true;
+            runtimeReady = false;
+            if (failedRuntimeIds.length < 20) failedRuntimeIds.push(id);
+          } else if (state === "PENDING") {
+            runtimeReady = false;
+            if (pendingRuntimeIds.length < 20) pendingRuntimeIds.push(id);
+          }
+        }
+        const playerReady = playerSpritesReady(awaitedPaletteVariantKey);
+        const vendorReady = vendorNpcSpritesReady(awaitedPaletteVariantKey);
+        const enemyReady = enemySpritesReady(requiredEnemySkins, awaitedPaletteVariantKey);
+        const bossReady = bossSpritesReady(undefined, awaitedPaletteVariantKey);
+        const neutralReady = neutralMobSpritesReady(awaitedPaletteVariantKey);
+
+        // Optional gate: vendor + pigeon assets are nice-to-have at map entry.
+        const optionalReady = vendorReady && neutralReady;
+        const blockingGates: string[] = [];
+        if (!playerReady) blockingGates.push("player");
+        if (!enemyReady) blockingGates.push("enemy");
+        if (!bossReady) blockingGates.push("boss");
+        if (!projectilesReady) blockingGates.push("projectiles");
+        if (!runtimeReady) blockingGates.push("runtime");
+        if (!vendorReady) blockingGates.push("vendor(optional)");
+        if (!neutralReady) blockingGates.push("neutral(optional)");
 
         const ready =
-          playerSpritesReady()
-          && vendorNpcSpritesReady()
-          && enemySpritesReady()
-          && neutralMobSpritesReady()
+          playerReady
+          && enemyReady
+          && bossReady
           && projectilesReady
-          && bazookaExhaustAssetsReady()
           && runtimeReady;
 
-        if (ready || elapsed >= maxWaitMs) {
-          resolve();
+        if (ready) {
+          if (!optionalReady) {
+            console.warn("[loading][sprite-ready] proceeding with optional sprite families not ready", {
+              awaitedPaletteVariantKey,
+              activePaletteVariantKey,
+              vendorReady,
+              bossReady,
+              neutralReady,
+            });
+          }
+          resolve("READY");
+          return;
+        }
+        if (failed) {
+          console.warn("[loading][sprite-ready] FAILED", {
+            elapsedMs: Math.round(elapsed),
+            runtimeSpriteCount: runtimeSpriteIds.length,
+            requiredEnemySkins,
+            awaitedPaletteVariantKey,
+            activePaletteVariantKey,
+            blockingGates,
+            playerReady,
+            vendorReady,
+            enemyReady,
+            bossReady,
+            neutralReady,
+            projectilesReady,
+            runtimeReady,
+            failedProjectileSpriteIds,
+            pendingProjectileSpriteIds,
+            failedRuntimeIds,
+            pendingRuntimeIds,
+          });
+          resolve("FAILED");
+          return;
+        }
+        if (elapsed >= maxWaitMs) {
+          console.debug("[loading][sprite-ready] PENDING/TIMEOUT", {
+            elapsedMs: Math.round(elapsed),
+            maxWaitMs,
+            runtimeSpriteCount: runtimeSpriteIds.length,
+            requiredEnemySkins,
+            awaitedPaletteVariantKey,
+            activePaletteVariantKey,
+            blockingGates,
+            playerReady,
+            vendorReady,
+            enemyReady,
+            bossReady,
+            neutralReady,
+            projectilesReady,
+            runtimeReady,
+            failedProjectileSpriteIds,
+            pendingProjectileSpriteIds,
+            failedRuntimeIds,
+            pendingRuntimeIds,
+          });
+          resolve("PENDING");
           return;
         }
         requestAnimationFrame(tick);
@@ -2342,29 +2742,67 @@ export function createGame(args: CreateGameArgs) {
     });
   }
 
-  async function prewarmActiveMapSpritesForCurrentPalette(): Promise<void> {
-    const paletteId = resolveActivePaletteId();
-    const spriteIds = collectRuntimeSpriteDeps(world, getActiveMap());
-    enqueuePrewarm(paletteId, spriteIds);
-    await awaitPrewarmDone(1500);
+  async function prewarmActiveMapSpritesForCurrentPalette(): Promise<boolean> {
+    const paletteVariantKey = resolveActivePaletteVariantKey();
+    const { runtimeSpriteIds, depsSpriteIds } = runWithLoadProfilerSubphase(
+      LOAD_PROFILER_SUBPHASE.DEPENDENCY_COLLECTION,
+      () => ({
+        runtimeSpriteIds: collectRuntimeSpriteDeps(world, getActiveMap()),
+        depsSpriteIds: collectFloorDependencies().spriteIds,
+      }),
+    );
+    const spriteIds = Array.from(new Set([...runtimeSpriteIds, ...depsSpriteIds]));
+    const requiredSpriteIds = spriteIds.filter((id) => !isOptionalRuntimeSpriteIdForLoading(id));
+    runWithLoadProfilerSubphase(LOAD_PROFILER_SUBPHASE.ENQUEUE_RUNTIME_PREWARM, () => {
+      enqueuePrewarm(paletteVariantKey, spriteIds);
+    });
+    await runWithLoadProfilerSubphaseAsync(
+      LOAD_PROFILER_SUBPHASE.RUNTIME_PREWARM_WAIT,
+      () => awaitPrewarmDone(1500),
+    );
 
     // Always warm entity/core sprite modules.
-    await awaitCoreSpriteReadiness(spriteIds, 1500);
+    const primaryState = await runWithLoadProfilerSubphaseAsync(
+      LOAD_PROFILER_SUBPHASE.PRIMARY_SPRITE_READINESS,
+      () => awaitCoreSpriteReadiness(requiredSpriteIds, 1500, paletteVariantKey),
+    );
+    if (primaryState !== "READY") {
+      console.debug(
+        `[loading][prewarm-map] primary readiness=${primaryState} required=${requiredSpriteIds.length} total=${spriteIds.length}`,
+      );
+      return false;
+    }
 
     // Ensure swapped images have landed before leaving LOADING.
-    await awaitCoreSpriteReadiness(spriteIds, 300);
+    const settleState = await runWithLoadProfilerSubphaseAsync(
+      LOAD_PROFILER_SUBPHASE.SETTLE_SPRITE_READINESS,
+      () => awaitCoreSpriteReadiness(requiredSpriteIds, 300, paletteVariantKey),
+    );
+    if (settleState !== "READY") {
+      console.debug(
+        `[loading][prewarm-map] settle readiness=${settleState} required=${requiredSpriteIds.length} total=${spriteIds.length}`,
+      );
+    }
+    return settleState === "READY";
   }
 
-  function performPreparedStartIntent(intent: StartIntent): void {
+  async function prepareRuntimeStructureTrianglesForLoadingStage(): Promise<boolean> {
+    return prepareRuntimeStructureTrianglesForLoadingInternal({
+      cacheStore: monolithicStructureGeometryCacheStore,
+      getFlippedOverlayImage,
+    });
+  }
+
+  async function performPreparedStartIntent(intent: StartIntent): Promise<void> {
     if (!preparedStart) {
-      prepareStartMap(intent);
+      await prepareStartMap(intent);
     }
     if (intent.mode === "SANDBOX") {
-      executeStartSandboxRun(intent.characterId, intent.mapId);
+      await executeStartSandboxRun(intent.characterId, intent.mapId);
     } else if (intent.mode === "DETERMINISTIC") {
-      executeStartDeterministicRun(intent.characterId);
+      await executeStartDeterministicRun(intent.characterId);
     } else {
-      executeStartRun(intent.characterId);
+      await executeStartRun(intent.characterId);
     }
     preparedStart = null;
   }
@@ -2401,9 +2839,77 @@ export function createGame(args: CreateGameArgs) {
     queueStartIntent({ mode: "SANDBOX", characterId, mapId });
   }
 
+  function normalizePaletteSnapshotRecordSeed(
+    record: PaletteSnapshotStorageRecord,
+  ): PaletteSnapshotStorageRecord {
+    const rawSeed = record.sceneContext?.seed;
+    const resolvedSeed = Number.isFinite(rawSeed)
+      ? Math.floor(rawSeed as number)
+      : hashString(
+        `${record.id}|${record.metadata?.createdAt ?? 0}|${record.sceneContext?.mapId ?? ""}|${record.sceneContext?.biomeId ?? ""}`,
+      );
+
+    return {
+      ...record,
+      sceneContext: {
+        ...record.sceneContext,
+        seed: resolvedSeed,
+      },
+    };
+  }
+
+  function openPaletteSnapshotRecord(record: PaletteSnapshotStorageRecord): void {
+    const mapId =
+      typeof record.sceneContext?.mapId === "string" && record.sceneContext.mapId.trim().length > 0
+        ? record.sceneContext.mapId.trim()
+        : undefined;
+    if (mapId && !getStaticMapById(mapId)) {
+      const snapshotName =
+        typeof record.metadata?.name === "string" && record.metadata.name.trim().length > 0
+          ? record.metadata.name.trim()
+          : record.id;
+      throw new Error(
+        `Snapshot "${snapshotName}" references map "${mapId}" that is unavailable in this build.`,
+      );
+    }
+    pendingStartIntent = null;
+    preparedStart = null;
+    const seededRecord = normalizePaletteSnapshotRecordSeed(record);
+    activePaletteSnapshotViewerRecord = seededRecord;
+    pendingPaletteSnapshotRestore = seededRecord;
+    const fallbackSeed = Number.isFinite(seededRecord.sceneContext.seed)
+      ? Math.floor(seededRecord.sceneContext.seed as number)
+      : 1337;
+    queueFloorLoadIntent(buildPaletteSnapshotFloorIntent(seededRecord, world.stageId, fallbackSeed));
+  }
+
+  function rerollPaletteSnapshotViewerSeed(): boolean {
+    if (!(world as any).paletteSnapshotViewerActive) return false;
+    const activeRecord = activePaletteSnapshotViewerRecord;
+    if (!activeRecord) return false;
+
+    const rerolledSeed = (Date.now() ^ (Math.random() * 1e9)) >>> 0;
+    const rerolledRecord: PaletteSnapshotStorageRecord = {
+      ...activeRecord,
+      sceneContext: {
+        ...activeRecord.sceneContext,
+        seed: rerolledSeed,
+      },
+    };
+
+    pendingStartIntent = null;
+    preparedStart = null;
+    activePaletteSnapshotViewerRecord = rerolledRecord;
+    pendingPaletteSnapshotRestore = rerolledRecord;
+    queueFloorLoadIntent(buildPaletteSnapshotFloorIntent(rerolledRecord, world.stageId, rerolledSeed));
+    return true;
+  }
+
   function quitRunToMenu() {
     pendingStartIntent = null;
     pendingFloorIntent = null;
+    pendingPaletteSnapshotRestore = null;
+    activePaletteSnapshotViewerRecord = null;
     preparedStart = null;
     floorLoadContext = null;
     setDialog(null);
@@ -2412,11 +2918,12 @@ export function createGame(args: CreateGameArgs) {
     world.state = "MENU";
     world.runState = "FLOOR";
     world.currentFloorIntent = null;
+    clearPaletteSnapshotViewerState(world);
     world.deathFx.active = false;
     world.objectiveRewardClaimedKey = null;
     (world as any).deterministicDelveMode = false;
     args.ui.mapEl.root.hidden = true;
-    hideCardRewardMenu();
+    hideProgressionRewardMenu();
     closeVendorShop(false);
     hideEndScreen();
     args.ui.dialogEl.root.hidden = true;
@@ -2430,21 +2937,26 @@ export function createGame(args: CreateGameArgs) {
     const mainMenu = document.getElementById("mainMenu") as HTMLDivElement | null;
     const characterSelect = document.getElementById("characterSelect") as HTMLDivElement | null;
     const mapMenu = document.getElementById("mapMenu") as HTMLDivElement | null;
+    const paletteLabMenu = document.getElementById("paletteLabMenu") as HTMLDivElement | null;
     const innkeeperMenu = document.getElementById("innkeeperMenu") as HTMLDivElement | null;
     const settingsMenu = document.getElementById("settingsMenu") as HTMLDivElement | null;
     if (welcomeScreen) welcomeScreen.hidden = true;
     if (mainMenu) mainMenu.hidden = false;
     if (characterSelect) characterSelect.hidden = true;
     if (mapMenu) mapMenu.hidden = true;
+    if (paletteLabMenu) paletteLabMenu.hidden = true;
     if (innkeeperMenu) innkeeperMenu.hidden = true;
     if (settingsMenu) settingsMenu.hidden = true;
   }
 
   const MAP_VIEW_WIDTH = 1000;
   const MAP_VIEW_HEIGHT = 520;
-  const ROUTE_ROW_HEIGHT_PX = 132;
-  const ROUTE_TOP_PADDING_PX = 78;
-  const ROUTE_BOTTOM_PADDING_PX = 122;
+  const ROUTE_ROW_HEIGHT_PX = 148;
+  const ROUTE_ROW_HEIGHT_MOBILE_PX = 126;
+  const ROUTE_TOP_PADDING_PX = 86;
+  const ROUTE_TOP_PADDING_MOBILE_PX = 74;
+  const ROUTE_BOTTOM_PADDING_PX = 136;
+  const ROUTE_BOTTOM_PADDING_MOBILE_PX = 118;
 
   function setMapGraphFillLayout(): void {
     args.ui.mapEl.graphContent.style.width = "100%";
@@ -2481,37 +2993,90 @@ export function createGame(args: CreateGameArgs) {
         return "Completed";
       case "LOCKED":
       default:
-        return "Locked";
+        return "Future";
     }
   };
 
-  const routeArchetypeClass = (archetype: FloorArchetype): string => {
-    switch (archetype) {
-      case "SURVIVE":
-        return "survive";
-      case "TIME_TRIAL":
-        return "time-trial";
-      case "VENDOR":
-        return "vendor";
-      case "HEAL":
-        return "heal";
-      case "BOSS_TRIPLE":
-      default:
-        return "boss-triple";
-    }
+  const routeVisualClass = (visualType: RouteMapVM["nodes"][number]["visualType"]): string => visualType;
+
+  const routeNodeStateClass = (node: RouteMapVM["nodes"][number]): "current" | "reachable" | "completed" | "future" => {
+    if (node.current) return "current";
+    if (node.reachable) return "reachable";
+    if (node.completed) return "completed";
+    return "future";
   };
 
-  const routeStatusClass = (status: RouteNodeStatus): string => {
-    switch (status) {
-      case "CURRENT":
-        return "current";
-      case "REACHABLE":
-        return "reachable";
-      case "COMPLETED":
-        return "completed";
-      case "LOCKED":
+  const routeNodeStateBadgeText = (node: RouteMapVM["nodes"][number]): string | null => {
+    if (node.current) return "Current";
+    if (node.reachable) return "Next";
+    if (node.completed) return "Done";
+    return null;
+  };
+
+  const routeEdgeStateClass = (
+    from: RouteMapVM["nodes"][number] | undefined,
+    to: RouteMapVM["nodes"][number] | undefined,
+  ): "routeEdge--visited" | "routeEdge--available" | "routeEdge--future" => {
+    if (from && to && from.current && to.reachable) return "routeEdge--available";
+    if (from && to && from.completed && (to.completed || to.current)) return "routeEdge--visited";
+    return "routeEdge--future";
+  };
+
+  const routeNodeIconMarkup = (visualType: RouteMapVM["nodes"][number]["visualType"]): string => {
+    switch (visualType) {
+      case "rest":
+        return `
+          <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+            <path class="glyph-stroke" d="M22 44h20" />
+            <path class="glyph-stroke" d="M26 44l-7 8" />
+            <path class="glyph-stroke" d="M38 44l7 8" />
+            <path class="glyph-fill" d="M32 15c-3 4-3 8 0 11-7-2-11 3-9 8 1 5 6 8 9 11 3-3 8-6 9-11 2-5-2-10-9-8 3-3 3-7 0-11z" />
+          </svg>
+        `;
+      case "shop":
+        return `
+          <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+            <path class="glyph-stroke" d="M20 24h24" />
+            <path class="glyph-stroke" d="M24 24c0-7 4-12 8-12s8 5 8 12" />
+            <path class="glyph-stroke" d="M18 24l4 24h20l4-24" />
+            <path class="glyph-fill" d="M25 31h14v10H25z" />
+          </svg>
+        `;
+      case "boss":
+        return `
+          <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+            <path class="glyph-fill" d="M18 20l7 5 7-11 7 11 7-5v11c0 10-7 18-14 21-7-3-14-11-14-21z" />
+            <path class="glyph-stroke" d="M24 39c3-2 13-2 16 0" />
+            <circle class="glyph-dot" cx="27" cy="33" r="1.8" />
+            <circle class="glyph-dot" cx="37" cy="33" r="1.8" />
+          </svg>
+        `;
+      case "elite":
+        return `
+          <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+            <path class="glyph-fill" d="M20 24l6-10 6 7 6-7 6 10-4 18H24z" />
+            <path class="glyph-stroke" d="M26 30c3-2 9-2 12 0" />
+          </svg>
+        `;
+      case "question-mark":
+        return `
+          <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+            <path class="glyph-stroke" d="M24 24c0-5 4-9 8-9s8 3 8 8c0 4-2 6-6 8-3 2-4 3-4 7" />
+            <circle class="glyph-dot" cx="32" cy="46" r="2.4" />
+          </svg>
+        `;
+      case "combat":
       default:
-        return "locked";
+        return `
+          <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+            <path class="glyph-stroke" d="M20 20l24 24" />
+            <path class="glyph-stroke" d="M44 20L20 44" />
+            <path class="glyph-fill" d="M18 18l7 2-5 5-2-7z" />
+            <path class="glyph-fill" d="M46 18l-7 2 5 5 2-7z" />
+            <path class="glyph-fill" d="M18 46l7-2-5-5-2 7z" />
+            <path class="glyph-fill" d="M46 46l-7-2 5-5 2 7z" />
+          </svg>
+        `;
     }
   };
 
@@ -2520,10 +3085,14 @@ export function createGame(args: CreateGameArgs) {
       args.ui.mapEl.infoPanel.textContent = "";
       return;
     }
-    const zoneText = node.mode === "DETERMINISTIC" ? "Deterministic choice" : node.zoneId;
+    const summaryPrefix = `${routeStatusLabel(node.status)} ${node.kindLabel}`;
+    const stateClass = routeNodeStateClass(node);
     args.ui.mapEl.infoPanel.innerHTML = `
-      <div class="routeInfoTitle">${floorArchetypeLabel(node.archetype)} · Depth ${node.depth}</div>
-      <div class="routeInfoMeta">${zoneText} · ${routeStatusLabel(node.status)}</div>
+      <div class="routeInfoTop">
+        <span class="routeInfoState routeInfoState--${stateClass}">${routeStatusLabel(node.status)}</span>
+        <div class="routeInfoTitle">${node.title}</div>
+      </div>
+      <div class="routeInfoMeta">${summaryPrefix} · ${node.rewardFamilyLabel} Reward · ${node.subtitle}</div>
     `;
   }
 
@@ -2531,19 +3100,41 @@ export function createGame(args: CreateGameArgs) {
   function renderRouteMap(vm: RouteMapVM, subText: string): void {
     args.ui.mapEl.root.classList.add("delveFull");
     args.ui.mapEl.root.classList.add("routeMode");
+    args.ui.mapEl.root.classList.toggle("routeMode--delve", vm.mode === "DELVE");
+    args.ui.mapEl.root.classList.toggle("routeMode--deterministic", vm.mode === "DETERMINISTIC");
     world.state = "MAP";
     args.ui.mapEl.root.hidden = false;
     setHudHidden(true);
-    args.ui.mapEl.sub.textContent = subText;
+    args.ui.mapEl.title.textContent = vm.mode === "DELVE" ? "Act I" : "Route Picker";
+    args.ui.mapEl.sub.innerHTML = "";
+    const subMessage = document.createElement("div");
+    subMessage.className = "routeSubMessage";
+    subMessage.textContent = subText;
+    args.ui.mapEl.sub.appendChild(subMessage);
+    if (vm.mode === "DELVE") {
+      const legend = document.createElement("div");
+      legend.className = "routeLegend";
+      legend.innerHTML = `
+        <span class="routeLegendChip routeLegendChip--available">Available Path</span>
+        <span class="routeLegendChip routeLegendChip--visited">Visited Path</span>
+        <span class="routeLegendChip routeLegendChip--future">Future Path</span>
+      `;
+      args.ui.mapEl.sub.appendChild(legend);
+    }
     args.ui.mapEl.graphWrap.classList.add("routeScrollable");
-    args.ui.mapEl.depthLabel.textContent = `Depth ${vm.currentDepth}`;
+    args.ui.mapEl.depthLabel.textContent =
+      vm.mode === "DELVE"
+        ? `Row ${vm.currentDepth}/${vm.rowCount}`
+        : `Depth ${vm.currentDepth}`;
 
     const viewportWidth = Math.max(1, Math.floor(args.ui.mapEl.graphWrap.clientWidth || MAP_VIEW_WIDTH));
     const viewportHeight = Math.max(1, Math.floor(args.ui.mapEl.graphWrap.clientHeight || MAP_VIEW_HEIGHT));
+    const compactRouteLayout = viewportWidth <= 768 || viewportHeight <= 500;
+    args.ui.mapEl.root.classList.toggle("routeMode--phone", compactRouteLayout);
     const layout = buildRouteMapLayout(vm, viewportWidth, {
-      rowHeight: ROUTE_ROW_HEIGHT_PX,
-      topPadding: ROUTE_TOP_PADDING_PX,
-      bottomPadding: ROUTE_BOTTOM_PADDING_PX,
+      rowHeight: compactRouteLayout ? ROUTE_ROW_HEIGHT_MOBILE_PX : ROUTE_ROW_HEIGHT_PX,
+      topPadding: compactRouteLayout ? ROUTE_TOP_PADDING_MOBILE_PX : ROUTE_TOP_PADDING_PX,
+      bottomPadding: compactRouteLayout ? ROUTE_BOTTOM_PADDING_MOBILE_PX : ROUTE_BOTTOM_PADDING_PX,
     });
     setMapGraphPixelLayout(layout.contentWidth, layout.contentHeight);
 
@@ -2552,10 +3143,8 @@ export function createGame(args: CreateGameArgs) {
       .map((e) => {
         const from = nodeById.get(e.fromId);
         const to = nodeById.get(e.toId);
-        const active = !!from && !!to && (
-          from.status !== "LOCKED" || to.status !== "LOCKED"
-        );
-        return `<line class="routeEdge ${active ? "routeEdge--active" : "routeEdge--locked"}" x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" />`;
+        const edgeClass = routeEdgeStateClass(from, to);
+        return `<path class="routeEdge ${edgeClass}" d="${e.pathD}" />`;
       })
       .join("");
 
@@ -2569,22 +3158,55 @@ export function createGame(args: CreateGameArgs) {
     for (const node of vm.nodes) {
       const pos = layout.nodeLayouts.get(node.id);
       if (!pos) continue;
-      const archetypeClass = routeArchetypeClass(node.archetype);
-      const statusClass = routeStatusClass(node.status);
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = `mapHitBtn routeNode routeNode--${archetypeClass} routeNode--${statusClass}`;
+      btn.className = `mapHitBtn routeNode routeNode--${routeVisualClass(node.visualType)}`;
+      const stateClass = routeNodeStateClass(node);
+      btn.classList.add(`routeNode--${stateClass}`);
+      if (node.combatTagText) btn.classList.add("routeNode--hasTag");
       btn.style.left = `${pos.x}px`;
       btn.style.top = `${pos.y}px`;
       btn.disabled = !node.reachable || node.current || node.completed;
+      btn.setAttribute("aria-label", `${node.title}. ${routeStatusLabel(node.status)}.`);
       if (node.mode === "DELVE") {
         btn.dataset.delveNodeId = node.id;
       } else if (node.deterministicData) {
         btn.dataset.detFloorArchetype = node.deterministicData.archetype;
         btn.dataset.detFloorIndex = String(node.deterministicData.floorIndex);
         btn.dataset.detDepth = String(node.deterministicData.depth);
+        btn.dataset.detRewardFamily = node.rewardFamily;
+        if (node.deterministicData.objectiveId) {
+          btn.dataset.detObjectiveId = node.deterministicData.objectiveId;
+        }
       }
-      btn.textContent = floorArchetypeLabel(node.archetype);
+      const icon = document.createElement("span");
+      icon.className = "routeNodeIcon";
+      icon.innerHTML = routeNodeIconMarkup(node.visualType);
+      btn.appendChild(icon);
+      const stateBadgeText = routeNodeStateBadgeText(node);
+      if (stateBadgeText) {
+        const stateBadge = document.createElement("span");
+        stateBadge.className = `routeNodeStateBadge routeNodeStateBadge--${stateClass}`;
+        stateBadge.textContent = stateBadgeText;
+        btn.appendChild(stateBadge);
+      }
+      const meta = document.createElement("span");
+      meta.className = "routeNodeMeta";
+      const label = document.createElement("span");
+      label.className = "routeNodeLabel";
+      label.textContent = node.kindLabel;
+      meta.appendChild(label);
+      const rewardTag = document.createElement("span");
+      rewardTag.className = "routeNodeTag routeNodeRewardTag";
+      rewardTag.textContent = node.rewardFamilyLabel;
+      meta.appendChild(rewardTag);
+      if (node.combatTagText) {
+        const tag = document.createElement("span");
+        tag.className = "routeNodeTag";
+        tag.textContent = node.combatTagText;
+        meta.appendChild(tag);
+      }
+      btn.appendChild(meta);
       btn.addEventListener("mouseenter", () => setRouteInfo(node));
       btn.addEventListener("focus", () => setRouteInfo(node));
       btn.addEventListener("pointerdown", () => setRouteInfo(node));
@@ -2609,14 +3231,58 @@ export function createGame(args: CreateGameArgs) {
     }
   }
 
-  function hideCardRewardMenu(): void {
-    cardRewardMenu.render(null);
-    relicRewardMenu.render(null);
+  function hideProgressionRewardMenu(): void {
+    progressionRewardMenu.render(null);
     lastRewardRenderKey = "";
   }
 
+  function openHandsScreen(pendingRingDefId?: string | null): void {
+    handsScreenOpen = true;
+    handsScreenChooseSlotPending = pendingRingDefId
+      ? { ringDefId: pendingRingDefId }
+      : null;
+  }
+
+  function closeHandsScreen(): void {
+    if (!handsScreenOpen) return;
+    const wasChooseSlot = !!handsScreenChooseSlotPending;
+    handsScreenOpen = false;
+    handsScreenChooseSlotPending = null;
+
+    if (wasChooseSlot) {
+      // Ring was discarded (cancellation) — resolve the reward ticket and resume
+      resolveActiveRewardTicket(world);
+      if (!tryAdvanceAfterObjectiveCompletion()) {
+        world.state = "RUN";
+      }
+    }
+  }
+
+  function handsScreenEquipToSlot(slotId: string): void {
+    const pending = handsScreenChooseSlotPending;
+    if (!pending) return;
+    equipRing(world, pending.ringDefId, slotId as any);
+    recomputeDerivedStats(world);
+    handsScreenChooseSlotPending = null;
+    handsScreenOpen = false;
+    resolveActiveRewardTicket(world);
+    if (!tryAdvanceAfterObjectiveCompletion()) {
+      world.state = "RUN";
+    }
+  }
+
+  function handsScreenUnequipSlot(slotId: string): void {
+    unequipRing(world, slotId as any);
+    recomputeDerivedStats(world);
+  }
+
+  function handsScreenApplyToken(instanceId: string, tokenType: ModifierTokenType): void {
+    applyModifierTokenToRing(world, tokenType, instanceId);
+    recomputeDerivedStats(world);
+  }
+
   function showDeterministicFloorPicker(subText: string, floorIndex: number, depth: number) {
-    const vm = buildDeterministicRouteMapVM(DETERMINISTIC_ARCHETYPES, floorIndex, depth);
+    const vm = buildDeterministicRouteMapVM(DETERMINISTIC_CHOICES, floorIndex, depth);
     renderRouteMap(vm, subText);
   }
 
@@ -2626,17 +3292,9 @@ export function createGame(args: CreateGameArgs) {
       completeRun(world);
       return;
     }
-
-    const seed = world.rng.int(0, 0x7fffffff);
-
-    // Generate adjacent nodes from current position
-    if (delve.currentNodeId) {
-      ensureAdjacentNodes(delve, delve.currentNodeId, seed);
-    }
     validateDelveHeatInvariant(world, "showDelveMap");
     const vm = buildDelveRouteMapVM(delve, {
-      windowBack: 2,
-      windowForward: 8,
+      showCombatSubtypes: !!getUserSettings().debug.delveActShowCombatSubtypes,
     });
     renderRouteMap(vm, subText);
   }
@@ -2646,18 +3304,24 @@ export function createGame(args: CreateGameArgs) {
     setMapGraphFillLayout();
     args.ui.mapEl.root.classList.remove("delveFull");
     args.ui.mapEl.root.classList.remove("routeMode");
+    args.ui.mapEl.root.classList.remove("routeMode--delve");
+    args.ui.mapEl.root.classList.remove("routeMode--deterministic");
+    args.ui.mapEl.root.classList.remove("routeMode--phone");
     args.ui.mapEl.root.hidden = true;
     setHudHidden(false);
   }
 
 
   function hudTimeText(w: World): string {
-    const floor = `F${(w.floorIndex ?? 0) + 1}/3`;
+    const totalRows = (() => {
+      const delve = w.delveMap as DelveMap | null;
+      if (delve) return delve.actLengthRows;
+      return FLOORS_PER_RUN;
+    })();
+    const floor = `R${(w.floorIndex ?? 0) + 1}/${totalRows}`;
     switch (w.runState) {
       case "FLOOR":
         return `${floor} ${formatTimeMMSS(w.phaseTime)} / ${formatTimeMMSS(w.floorDuration)}`;
-      case "BOSS":
-        return `${floor} BOSS ${formatTimeMMSS(w.phaseTime)}`;
       case "TRANSITION":
         return `${floor} TRANSITION ${Math.ceil(w.transitionTime)}s`;
       default:
@@ -2667,7 +3331,7 @@ export function createGame(args: CreateGameArgs) {
 
   const clamp01 = (v: number): number => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
 
-  function updateVitalsOrb(hasMomentumRelic: boolean) {
+  function updateVitalsOrb(hasMomentumRing: boolean) {
     const hpNow = Math.max(0, world.playerHp);
     const hpMax = Math.max(1, world.playerHpMax);
     const armorNow = Math.max(0, world.currentArmor);
@@ -2679,23 +3343,23 @@ export function createGame(args: CreateGameArgs) {
       _vitalsMomentumUnlocked?: boolean;
     };
     if (armorNow > 0) vitalsState._vitalsArmorUnlocked = true;
-    if (hasMomentumRelic && momNow > 0) vitalsState._vitalsMomentumUnlocked = true;
+    if (hasMomentumRing && momNow > 0) vitalsState._vitalsMomentumUnlocked = true;
     const hasArmorRing = !!vitalsState._vitalsArmorUnlocked;
-    const hasMomentumRing = hasMomentumRelic && !!vitalsState._vitalsMomentumUnlocked;
+    const showMomentumRing = hasMomentumRing && !!vitalsState._vitalsMomentumUnlocked;
 
     const hpFrac = clamp01(hpNow / hpMax);
     const armorFrac = hasArmorRing && armorMax > 0 ? clamp01(armorNow / armorMax) : 0;
-    const momFrac = hasMomentumRing && momMax > 0 ? clamp01(momNow / momMax) : 0;
+    const momFrac = showMomentumRing && momMax > 0 ? clamp01(momNow / momMax) : 0;
 
     args.hud.vitalsOrb.style.setProperty("--hpFrac", hpFrac.toFixed(4));
     args.hud.vitalsOrb.style.setProperty("--armorFrac", armorFrac.toFixed(4));
     args.hud.vitalsOrb.style.setProperty("--momFrac", momFrac.toFixed(4));
     args.hud.vitalsOrbRoot.classList.toggle("hasArmor", hasArmorRing);
-    args.hud.vitalsOrbRoot.classList.toggle("hasMomentum", hasMomentumRing);
+    args.hud.vitalsOrbRoot.classList.toggle("hasMomentum", showMomentumRing);
     args.hud.vitalsOrbRoot.classList.toggle("isFullArmor", hasArmorRing && armorMax > 0 && armorNow >= armorMax);
-    args.hud.vitalsOrbRoot.classList.toggle("isFullMomentum", hasMomentumRing && momMax > 0 && momNow >= momMax);
+    args.hud.vitalsOrbRoot.classList.toggle("isFullMomentum", showMomentumRing && momMax > 0 && momNow >= momMax);
     args.hud.vitalsArmorText.hidden = !hasArmorRing;
-    args.hud.vitalsMomentumText.hidden = !hasMomentumRing;
+    args.hud.vitalsMomentumText.hidden = !showMomentumRing;
 
     args.hud.vitalsOrbText.textContent = `${Math.ceil(hpNow)}/${Math.ceil(hpMax)}`;
     args.hud.vitalsArmorText.textContent = `Armor: ${Math.ceil(armorNow)}/${Math.ceil(armorMax)}`;
@@ -2703,13 +3367,16 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function updateHud() {
-    const orbSide = ((getUserSettings() as any).game?.healthOrbSide ?? "left") as "left" | "right";
+    const settings = getUserSettings();
+    const orbSide = (settings.game?.healthOrbSide ?? "left") as "left" | "right";
     args.hud.vitalsOrbRoot.classList.toggle("isRight", orbSide === "right");
 
     args.hud.fpsPill.hidden = false;
+    args.hud.perfOverlayModeSelect.hidden = !settings.render.renderPerfCountersEnabled;
+    args.hud.perfOverlayModeSelect.value = settings.debug.perfOverlayMode;
     args.hud.timePill.hidden = false;
     args.hud.lvlPill.hidden = false;
-    args.hud.palettePill.hidden = true;
+    args.hud.palettePill.hidden = !shouldShowPaletteHudDebugOverlay(settings);
     args.hud.killsPill.hidden = true;
     args.hud.hpPill.hidden = true;
     args.hud.armorPill.hidden = true;
@@ -2717,29 +3384,26 @@ export function createGame(args: CreateGameArgs) {
 
     args.hud.fpsPill.textContent = `FPS ${Math.round((world as any).fps ?? 0)}`;
     args.hud.timePill.textContent = `\u23f1 ${formatTimeMMSS(world.time)}`;
-    args.hud.lvlPill.textContent = `\ud83d\udcb0 ${getGold(world)}`;
-    args.hud.palettePill.textContent = `Palette: ${resolveActivePaletteId()}`;
+    const runProgress = ensureRunProgressionState(world);
+    args.hud.lvlPill.textContent = `Lv ${runProgress.level} · ${Math.floor(runProgress.xp)}/${Math.floor(runProgress.xpToNextLevel)} XP`;
+    args.hud.palettePill.textContent = formatPaletteHudDebugText(resolveActivePaletteId());
     args.hud.killsPill.textContent = `Kills: ${world.kills}`;
     args.hud.hpPill.textContent = `HP: ${Math.max(0, Math.ceil(world.playerHp))}/${world.playerHpMax}`;
     args.hud.armorPill.textContent = `Armor: ${Math.max(0, Math.ceil(world.currentArmor))}/${world.maxArmor}`;
-    const hasMomentumRelic = hasAnyRelicWithTag(world.relics, MOMENTUM_RELIC_TAG);
-    if (hasMomentumRelic) {
-      args.hud.momentumPill.textContent = `Momentum: ${Math.max(0, Math.ceil(world.momentumValue))}/${Math.max(0, Math.ceil(world.momentumMax))}`;
-    }
-    updateVitalsOrb(hasMomentumRelic);
+    updateVitalsOrb(false);
 
     const bossIndex = findFirstAliveBossIndex(world);
-    const inBossContext = world.runState === "BOSS" || bossIndex >= 0;
-    if (!inBossContext || bossIndex < 0) {
+    if (bossIndex < 0) {
       args.hud.bossBar.hidden = true;
     } else {
       const hpNow = Math.max(0, world.eHp[bossIndex] ?? 0);
       const hpMax = Math.max(1, world.eHpMax[bossIndex] ?? 1);
       const bossHpPct = clamp01(hpNow / hpMax);
-      const accent = getBossAccent(world) ?? "#f66";
+      const descriptor = getBossBarDescriptor(world, bossIndex);
 
+      args.hud.bossTitle.textContent = descriptor.title;
       args.hud.bossValue.textContent = `${Math.ceil(hpNow)} / ${Math.ceil(hpMax)}`;
-      args.hud.bossBar.style.setProperty("--boss-accent", accent);
+      args.hud.bossBar.style.setProperty("--boss-accent", descriptor.accent);
       args.hud.bossFill.style.transform = `scaleX(${bossHpPct.toFixed(4)})`;
       args.hud.bossBar.hidden = false;
     }
@@ -2763,15 +3427,48 @@ export function createGame(args: CreateGameArgs) {
         title = "Slay enemies inside the marked zones.";
         break;
       }
+      case "POE_MAP_CLEAR": {
+        const progress = getPoeMapObjectiveProgress(world);
+        const cleared = progress?.cleared ?? 0;
+        const total = progress?.total ?? Math.max(1, spec.params.clearCount);
+        title = `Clear Packs · ${Math.min(cleared, total)}/${total}`;
+        if (import.meta.env.DEV) {
+          const debug = getPoeMapObjectiveDebugSnapshot(world);
+          if (debug) {
+            const nearest = debug.nearestPackDistanceTiles;
+            const nearestSleeping = debug.nearestSleepingPackDistanceTiles;
+            const nearestText = nearest == null ? "-" : nearest.toFixed(1);
+            const sleepingText = nearestSleeping == null ? "-" : nearestSleeping.toFixed(1);
+            args.hud.objectiveStatus.textContent =
+              `DBG mobs ${debug.aliveEnemies}/${debug.totalEnemies} | `
+              + `hp ${Math.round(debug.aliveEnemyHp)}/${Math.round(debug.totalEnemyHp)} | `
+              + `preBudget ${debug.totalPopulationBudget.toFixed(1)} | `
+              + `spent ${debug.spentPopulationBudget.toFixed(1)} | `
+              + `packs ${debug.packCount} (S:${debug.sleepingPacks} C:${debug.combatPacks} L:${debug.leashingPacks} X:${debug.clearedPacks}) | `
+              + `dormant ${debug.dormantEnemies} | `
+              + `nearest ${nearestText}t sleeping ${sleepingText}t`;
+            args.hud.objectiveStatus.hidden = false;
+          } else {
+            args.hud.objectiveStatus.textContent = "DBG no active PoE runtime state";
+            args.hud.objectiveStatus.hidden = false;
+          }
+        }
+        break;
+      }
       case "VENDOR_VISIT":
         title = "Visit the vendor to continue.";
         break;
       case "HEAL_VISIT":
         title = "Use the heal station to continue.";
         break;
+      case "ACT_BOSS": {
+        const def = world.currentFloorIntent?.bossId ? bossRegistry.boss(world.currentFloorIntent.bossId) : null;
+        title = `Boss Hunt · ${def?.ui?.title ?? def?.name ?? "Boss"}`;
+        break;
+      }
       case "KILL_RARES_IN_ZONES": {
         const progress = world.objectiveStates[0]?.progress?.signalCount ?? 0;
-        title = `Boss Hunt · ${Math.min(progress, spec.params.bossCount)}/${spec.params.bossCount}`;
+        title = `Rare Hunt · ${Math.min(progress, spec.params.rareCount)}/${spec.params.rareCount}`;
         break;
       }
     }
@@ -2782,23 +3479,29 @@ export function createGame(args: CreateGameArgs) {
     }
 
     args.hud.objectiveTitle.textContent = title;
-    args.hud.objectiveStatus.textContent = "";
-    args.hud.objectiveStatus.hidden = true;
+    if (spec.objectiveType !== "POE_MAP_CLEAR" || !import.meta.env.DEV) {
+      args.hud.objectiveStatus.textContent = "";
+      args.hud.objectiveStatus.hidden = true;
+    }
     args.hud.objectiveOverlay.hidden = false;
   }
+
+  args.hud.perfOverlayModeSelect.addEventListener("change", () => {
+    updateUserSettings({
+      debug: {
+        perfOverlayMode: args.hud.perfOverlayModeSelect.value as "off" | "overview" | "world" | "structures" | "textures" | "ground" | "lighting" | "cache" | "all",
+      },
+    });
+  });
   // ---------------------------------
 
   function finishFloorEndCountdown(): boolean {
     world.state = "RUN";
-    if (world.cardReward) {
-      world.cardReward.active = false;
-      world.cardReward.options = [];
+    if (world.progressionReward) {
+      world.progressionReward.active = false;
+      world.progressionReward.options = [];
     }
-    if (world.relicReward) {
-      world.relicReward.active = false;
-      world.relicReward.options = [];
-    }
-    hideCardRewardMenu();
+    hideProgressionRewardMenu();
     world.floorEndCountdownActive = false;
     if (tryAdvanceAfterObjectiveCompletion()) {
       clearEvents(world);
@@ -2809,6 +3512,8 @@ export function createGame(args: CreateGameArgs) {
   }
 
   function triggerDeathFx(): void {
+    const delve = world.delveMap as DelveMap | null;
+    if (delve) markRunLost(delve);
     world.deathFx.active = true;
     world.deathFx.tReal = 0;
     world.deathFx.durationReal = DEATH_FX_DURATION;
@@ -2956,22 +3661,17 @@ export function createGame(args: CreateGameArgs) {
     // total run time (optional for future meta / analytics)
     world.time += dtSim;
 
-    // phase time (drives FLOOR/BOSS/TRANSITION)
+    // phase time drives the current floor and transition runtime state
     world.phaseTime += dtSim;
-    // Spawn pacing uses the same clock as floor progression/spawn cadence.
     world.timeSec = world.phaseTime;
-    world.level = 1;
+    ensureRunProgressionState(world);
     tickMomentumDecay(world, dtSim, world.timeSec);
     recomputeDerivedStats(world);
 
     const mapMode = !!(world as any).mapMode;
 
     // RunState progression (delve mode only)
-    if (!mapMode) {
-      if (world.runState === "FLOOR" && world.objectiveDefs.length === 0 && world.phaseTime >= world.floorDuration) {
-        enterBoss(world);
-      }
-    }
+    void mapMode;
     if (world.runState === "TRANSITION") {
       world.transitionTime = Math.max(0, world.transitionTime - dtSim);
       if (world.transitionTime <= 0) {
@@ -2981,57 +3681,47 @@ export function createGame(args: CreateGameArgs) {
     }
 
     if (!activeDialog && !vendorShopOpen) {
+      enemyBehaviorSystem(world, dtSim);
       movementSystem(world, input, dtSim);
     }
+    tickPoeMapObjective(world);
     neutralBirdAISystem(world, dtSim);
     neutralAnimatedMobsSystem(world, dtSim);
     roomChallengeSystem(world, dtSim);  // Track room challenges and lock exits
-    spawnSurviveBossIfNeeded(world);
-    world.spawnDirectorConfig.enabled = true;
-    if (!world.floorEndCountdownActive) {
-      tickSpawnDirector(
-        world,
-        dtSim,
-        world.spawnDirectorConfig,
-        world.expectedPowerConfig,
-        world.expectedPowerBudgetConfig,
-        world.spawnDirectorState,
-        {
-          getRunHeat: () => getRunHeat(world),
-          isBossActive: () => world.runState === "BOSS" || bossAlive(world),
-          canSpawnNow: () => world.runState === "FLOOR" && world.phaseTime >= 2,
-          spawnTrash: () => {
-            return spawnOneTrashEnemy(world, undefined, undefined, "trash");
-          },
-        }
-      );
-    }
-    tickBalanceCsvLogger(world as any, dtSim);
+    executeHostileSpawnRequests(
+      world,
+      updateHostileSpawnDirector(world, {
+        dt: dtSim,
+        elapsedSec: world.phaseTime,
+        floorDepth: getMapDepth(world),
+        spawningEnabled: hostileSpawningEnabled(world),
+        activeEnemies: collectAliveHostileEnemiesForSpawnDirector(world),
+      }),
+    );
     const isNeutralObjectiveFloor = world.floorArchetype === "VENDOR" || world.floorArchetype === "HEAL";
     if (!isNeutralObjectiveFloor && !deathFxActive) {
       combatSystem(world, dtSim);
     }
+    enemyActionSystem(world, dtSim);
     projectilesSystem(world, dtSim);
     collisionsSystem(world, dtSim);
     fissionSystem(world, dtSim);  // Nuclear fission: projectile-projectile collisions
-    relicExplodeOnKillSystem(world, dtSim);
-    bossSystem(world, dtSim);          // NEW: boss mechanics (telegraphs/hazards/dash)
+    bossEncounterSystem(world, dtSim);
     zonesSystem(world, dtSim);
     dotTickSystem(world, dtSim);
     pickupsSystem(world, dtSim);
     dropsSystem(world, dtSim);
     triggerSystem(world, dtSim, input);
-    relicTriggerSystem(world);
-    updateExhaustFollowers(world as any, dtSim, bazookaExhaustAssets);
+    tickPoeMapObjective(world);
     vfxSystem(world, dtSim);
-    relicRetriggerSystem(world);
     processCombatTextFromEvents(world, dtSim);
     updateZoneTrialObjective(world);
     syncZoneTrialNavState(world);
-    markBossTripleClearsFromSignalsAndEvents(world);
-    bossZoneSpawnSystem(world);
+    markRareTripleClearsFromSignalsAndEvents(world);
+    rareZoneSpawnSystem(world);
     objectiveSystem(world);
-    syncBossTripleObjectiveStateFromClears(world);
+    syncRareTripleObjectiveStateFromClears(world);
+    processProgressionTriggeredEffects(world);
     processMomentumEventQueue(world);
 
     if (world.playerHp <= 0 && !world.deathFx.active && world.runState !== "GAME_OVER") {
@@ -3043,7 +3733,7 @@ export function createGame(args: CreateGameArgs) {
         clearEvents(world);
         return;
       }
-      if (!world.cardReward?.active && !world.relicReward?.active) {
+      if (!world.progressionReward?.active) {
         maybeStartFloorEndCountdown(world);
       }
       tickFloorEndCountdown(world, dtSim);
@@ -3081,8 +3771,8 @@ export function createGame(args: CreateGameArgs) {
     clearInputEdges(input);
   }
 
-  function render() {
-    renderSystem(world, args.ctx, args.canvas, args.uiCtx, args.uiCanvas);
+  function render(dtReal: number = 0) {
+    renderSystem(world, args.ctx, args.canvas, args.uiCtx, args.uiCanvas, dtReal);
   }
 
   function retryRunFromEndOverlay(): void {
@@ -3140,11 +3830,19 @@ export function createGame(args: CreateGameArgs) {
     if (detArchetype) {
       const floorIndex = Number.parseInt(btn.dataset.detFloorIndex ?? "0", 10) || 0;
       const depth = Number.parseInt(btn.dataset.detDepth ?? "1", 10) || 1;
+      const rewardFamily = btn.dataset.detRewardFamily as ProgressionRewardFamily | undefined;
+      const rawObjectiveId = btn.dataset.detObjectiveId;
+      const detObjectiveId =
+        rawObjectiveId && OBJECTIVE_IDS.includes(rawObjectiveId as ObjectiveId)
+          ? (rawObjectiveId as ObjectiveId)
+          : undefined;
       setMapDepth(world, depth);
       hideMap();
       queueFloorLoadIntent(
         buildDeterministicFloorIntent({
           archetype: detArchetype,
+          objectiveId: detObjectiveId,
+          rewardFamily,
           floorIndex,
           depth,
         }),
@@ -3158,32 +3856,20 @@ export function createGame(args: CreateGameArgs) {
       const delve = world.delveMap as DelveMap;
       if (!delve) return;
       const destinationNode = delve.nodes.get(delveNodeId);
-      if (!destinationNode || destinationNode.state !== "UNVISITED") return;
+      if (!destinationNode) return;
+      if (!destinationNode.contentEnabled) {
+        if (import.meta.env.DEV) {
+          throw new Error(`[delve] attempted to enter disabled node type ${destinationNode.nodeType}`);
+        }
+        return;
+      }
       if (!canEnterNode(delve, delveNodeId)) return;
 
       const node = moveToNode(delve, delveNodeId);
       if (!node) return;
-      if (import.meta.env.DEV && node.state !== "ACTIVE") {
-        console.error("[delve] Entered node is not ACTIVE after moveToNode", {
-          nodeId: node.id,
-          state: node.state,
-        });
-        return;
-      }
-
-      // Update map depth for presentation and generation.
-      const depth = getNodeDepth(node);
-      setMapDepth(world, depth);
-
-      // Generate adjacent nodes for next time
-      const seed = world.rng.int(0, 0x7fffffff);
-      ensureAdjacentNodes(delve, delveNodeId, seed);
 
       hideMap();
-
-      // Enter the chosen zone. floorIndex is used for enemy type weights, zoneId for visuals/music.
-      const floorIndex = Math.min(2, Math.floor((depth - 1) / 3));
-      queueFloorLoadIntent(buildFloorIntentFromDelveNode(node, floorIndex));
+      queueFloorLoadIntent(buildFloorIntentFromDelveNode(node));
       return;
     }
 
@@ -3198,11 +3884,14 @@ export function createGame(args: CreateGameArgs) {
     startRun,
     startDeterministicRun,
     startSandboxRun,
+    openPaletteSnapshotRecord,
+    rerollPaletteSnapshotViewerSeed,
     previewMap,
     reloadCurrentMapForDebug,
     preloadBootAssets,
     prepareStartMap,
     prewarmActiveMapSpritesForCurrentPalette,
+    prepareRuntimeStructureTrianglesForLoading: prepareRuntimeStructureTrianglesForLoadingStage,
     performPreparedStartIntent,
     consumePendingStartIntent,
     beginFloorLoad,
@@ -3212,6 +3901,14 @@ export function createGame(args: CreateGameArgs) {
     consumePendingFloorLoadIntent,
     quitRunToMenu,
     setMobileControlsEnabled,
+    copyPerfOverlaySnapshot,
     getWorld: () => world,
+    openHandsScreen,
+    closeHandsScreen,
+    handsScreenEquipToSlot,
+    handsScreenUnequipSlot,
+    handsScreenApplyToken,
+    isHandsScreenOpen: () => handsScreenOpen,
+    getHandsScreenPendingRingDefId: () => handsScreenChooseSlotPending?.ringDefId ?? null,
   };
 }

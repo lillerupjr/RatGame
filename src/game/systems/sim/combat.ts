@@ -1,20 +1,23 @@
+// @system   core-simulation/combat-runtime
+// @owns     resolves player weapon fire cadence, aim, projectile spawning, beam state, and fire SFX events
+// @doc      docs/canonical/core_simulation_combat_runtime.md
+// @agents   no hit resolution, projectile lifecycle, or stat authoring; see collisions.ts, projectiles.ts, and combat_mods/*
+
 import { World, emitEvent } from "../../../engine/world/world";
 import { findClosestTarget } from "../../util/targeting";
 import { PRJ_KIND, spawnProjectile } from "../../factories/projectileFactory";
-import { getCardById } from "../../combat_mods/content/cards/cardPool";
 import { resolveWeaponStats } from "../../combat_mods/stats/combatStatsResolver";
+import { collectWorldStatMods } from "../../progression/effects/worldEffects";
 import { applySpreadToDirection, computeProjectileAngles } from "../../combat_mods/runtime/spread";
-import { getDevGrantedCardIds } from "../../combat_mods/debug/devCombatModsDebug";
 import { getUserSettings } from "../../../userSettings";
 import { resolveCombatStarterWeaponId } from "../../combat_mods/content/weapons/characterStarterMap";
-import { resolveCombatStarterStatCards } from "../../combat_mods/content/weapons/characterStarterMods";
 import { getCombatStarterWeaponById } from "../../combat_mods/content/weapons/starterWeapons";
 import { resetPlayerBeamState, updatePlayerBeamCombat } from "./beamCombat";
 import { getPlayerAimWorld } from "../../combat/aimPoints";
 import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
-import { STARTER_RELIC_IDS } from "../../content/starterRelics";
 import { makeWeaponDotMeta, makeWeaponHitMeta } from "../../combat/damageMeta";
+import { applyChaosHitConversion, collectWorldCombatRules } from "../../progression/effects/combatRules";
 
 /** Handle weapon cooldowns, targeting, and firing events. */
 export function combatSystem(w: World, dt: number) {
@@ -35,35 +38,31 @@ export function combatSystem(w: World, dt: number) {
   w.lastAimX = defaultAimX;
   w.lastAimY = defaultAimY;
 
-  const cardIds = [...(w.cards ?? []), ...(w.combatCardIds ?? [])];
-  if (import.meta.env.DEV) {
-    cardIds.push(...getDevGrantedCardIds());
-  }
-  const cards = cardIds
-    .map((id) => getCardById(id))
-    .filter((card): card is NonNullable<typeof card> => Boolean(card));
-  const starterCards = resolveCombatStarterStatCards((w as any).currentCharacterId);
-
   const weaponId = resolveCombatStarterWeaponId((w as any).currentCharacterId);
   const selectedWeapon = getCombatStarterWeaponById(weaponId);
-  const resolved = resolveWeaponStats(selectedWeapon, { cards: [...cards, ...starterCards] });
+  const resolved = resolveWeaponStats(selectedWeapon, {
+    statMods: collectWorldStatMods(w),
+  });
   const debug = getUserSettings().debug;
+  const combatRules = collectWorldCombatRules(w);
   const debugDamageMult = Math.max(0, debug.dmgMult || 1);
   const debugFireRateMult = Math.max(0.001, debug.fireRateMult || 1);
   const derivedDamageMult = Math.max(0, w.dmgMult ?? 1);
   const derivedFireRateMult = Math.max(0.001, w.fireRateMult ?? 1);
-  const hasFullCritRelic = w.relics.includes("MOM_FULL_CRIT_DOUBLE");
-  const isAtFullMomentum = hasFullCritRelic && w.momentumMax > 0 && w.momentumValue >= w.momentumMax;
   const shotsPerSecond = Math.max(0.001, resolved.shotsPerSecond * derivedFireRateMult * debugFireRateMult);
   const fireRangePx = Math.max(0, resolved.rangePx || 0);
   const cooldown = 1 / shotsPerSecond;
   const burstShotIntervalSec = Math.max(0, selectedWeapon.projectile.burstShotIntervalSec ?? 0);
-  const dmgPhys = resolved.baseDamage.physical * derivedDamageMult * debugDamageMult;
-  const dmgFire = resolved.baseDamage.fire * derivedDamageMult * debugDamageMult;
-  const dmgChaos = resolved.baseDamage.chaos * derivedDamageMult * debugDamageMult;
+  const convertedHitDamage = applyChaosHitConversion({
+    physical: resolved.baseDamage.physical * derivedDamageMult * debugDamageMult,
+    fire: resolved.baseDamage.fire * derivedDamageMult * debugDamageMult,
+    chaos: resolved.baseDamage.chaos * derivedDamageMult * debugDamageMult,
+  }, combatRules);
+  const dmgPhys = convertedHitDamage.physical;
+  const dmgFire = convertedHitDamage.fire;
+  const dmgChaos = convertedHitDamage.chaos;
   const totalDamage = dmgPhys + dmgFire + dmgChaos;
-  const finalCritChance = Math.min(1, resolved.critChance * (isAtFullMomentum ? 2 : 1));
-  const hasStarterLuckyChamber = w.relics.includes(STARTER_RELIC_IDS.LUCKY_CHAMBER);
+  const finalCritChance = Math.min(1, resolved.critChance);
   const projectileKind = selectedWeapon.projectile.kind ?? PRJ_KIND.PISTOL;
   const weaponHitDamageMeta = makeWeaponHitMeta(selectedWeapon.id, {
     category: "HIT",
@@ -83,12 +82,15 @@ export function combatSystem(w: World, dt: number) {
   if (!Number.isFinite(runtime.primaryBurstAimX)) runtime.primaryBurstAimX = 1;
   if (!Number.isFinite(runtime.primaryBurstAimY)) runtime.primaryBurstAimY = 0;
   if (!Number.isFinite(runtime.primaryBurstTailCooldown)) runtime.primaryBurstTailCooldown = cooldown;
-  if (!Number.isFinite(w.starterLuckyChamberShotCounter as any)) w.starterLuckyChamberShotCounter = 0;
+  if (!Number.isFinite(runtime.ringEveryNthShotCritCounter)) runtime.ringEveryNthShotCritCounter = 0;
 
   const nextShotCritChance = (): number => {
-    if (!hasStarterLuckyChamber) return finalCritChance;
-    w.starterLuckyChamberShotCounter = (w.starterLuckyChamberShotCounter ?? 0) + 1;
-    if ((w.starterLuckyChamberShotCounter % 5) === 0) return 1;
+    if (combatRules.everyNthShotCrits && combatRules.everyNthShotCrits > 0) {
+      runtime.ringEveryNthShotCritCounter = (runtime.ringEveryNthShotCritCounter ?? 0) + 1;
+      if ((runtime.ringEveryNthShotCritCounter % combatRules.everyNthShotCrits) === 0) {
+        return 1;
+      }
+    }
     return finalCritChance;
   };
 

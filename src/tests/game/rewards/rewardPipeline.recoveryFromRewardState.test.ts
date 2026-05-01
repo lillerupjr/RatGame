@@ -4,10 +4,10 @@ import { rewardSchedulerSystem } from "../../../game/systems/progression/rewardS
 import { createRewardPipelineWorld, getActiveTicket } from "./rewardPipeline.testUtils";
 
 describe("durable reward pipeline recovery", () => {
-  test("retains tickets while in REWARD state and presents when RUN resumes", () => {
+  test("retains pending tickets while in REWARD state and presents when RUN resumes", () => {
     const world = createRewardPipelineWorld(52, "ZONE_TRIAL");
     world.state = "REWARD";
-    world.runEvents.push({ type: "ZONE_CLEARED", floorIndex: 0, zoneIndex: 1 });
+    world.runEvents.push({ type: "OBJECTIVE_COMPLETED", floorIndex: 0, objectiveId: "OBJ_ZONE_TRIAL" });
 
     rewardSchedulerSystem(world);
 
@@ -21,6 +21,6 @@ describe("durable reward pipeline recovery", () => {
 
     const active = getActiveTicket(world);
     expect(active?.status).toBe("ACTIVE");
-    expect(active?.kind).toBe("CARD_PICK");
+    expect(active?.family).toBe("RING");
   });
 });

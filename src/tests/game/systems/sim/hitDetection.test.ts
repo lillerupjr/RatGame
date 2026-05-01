@@ -1,10 +1,11 @@
 // src/game/systems/hitDetection.test.ts
 // @ts-ignore
 import { describe, it, expect } from "vitest";
-import { isCircleHit, isPlayerHit, isEnemyInCircle } from "../../../../game/systems/sim/hitDetection";
+import { isCircleHit, isEnemyHit, isEnemyInCircle, isPlayerHit } from "../../../../game/systems/sim/hitDetection";
 import type { World } from "../../../../engine/world/world";
 import { anchorFromWorld } from "../../../../game/coords/anchor";
 import { KENNEY_TILE_WORLD } from "../../../../engine/render/kenneyTiles";
+import { EnemyId } from "../../../../game/content/enemies";
 
 function worldToAnchor(wx: number, wy: number) {
   return anchorFromWorld(wx, wy, KENNEY_TILE_WORLD);
@@ -141,6 +142,24 @@ describe("hitDetection", () => {
       expect(isPlayerHit(w, 0, 10)).toBe(false); // First enemy far
       expect(isPlayerHit(w, 1, 10)).toBe(true);  // Second enemy close
       expect(isPlayerHit(w, 2, 10)).toBe(false); // Third enemy far
+    });
+  });
+
+  describe("isEnemyHit", () => {
+    it("keeps stage-2 splitters hittable by flat-ground player shots", () => {
+      const w = createMockWorld({
+        eType: [EnemyId.SPLITTER],
+        eVisualScale: [0.25],
+        eR: [4],
+        prIsmelee: [false],
+        prR: [5],
+        prZ: [1],
+        prZVisual: [1],
+      });
+      setEnemyWorld(w, 0, 0, 0);
+      (w as any).ezVisual = [0];
+
+      expect(isEnemyHit(w, 0, 0, 0, 0, (w.prR[0] ?? 0) + (w.eR[0] ?? 0))).toBe(true);
     });
   });
 

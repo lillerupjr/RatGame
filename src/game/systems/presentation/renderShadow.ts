@@ -1,5 +1,11 @@
 import type { CompiledKenneyMap } from "../../map/compile/kenneyMap";
 import { getSupportSurfaceAt } from "../../map/compile/kenneyMap";
+import {
+  DEFAULT_SHADOW_SUN_V1_TIME_HOUR,
+  getShadowSunV1Model,
+  type ShadowSunElevationOverride,
+  type ShadowSunV1Model,
+} from "../../../shadowSunV1";
 
 export interface ShadowParams {
   worldX: number;
@@ -18,11 +24,21 @@ export interface ShadowParams {
 
 export type Entity = ShadowParams;
 
-const SHADOW_DIR_X = -0.6;
-const SHADOW_DIR_Y = 0.8;
+const DEFAULT_SUN_MODEL = getShadowSunV1Model(DEFAULT_SHADOW_SUN_V1_TIME_HOUR);
+const SHADOW_DIR_X = DEFAULT_SUN_MODEL.projectionDirection.x;
+const SHADOW_DIR_Y = DEFAULT_SUN_MODEL.projectionDirection.y;
 const SHADOW_FADE_HEIGHT = 4;
 const SHADOW_FOOT_OFFSET_X = 0;
 const SHADOW_FOOT_OFFSET_Y = 0;
+
+export type ShadowSunModel = ShadowSunV1Model;
+
+export function getShadowSunModel(
+  timeHour: number = DEFAULT_SHADOW_SUN_V1_TIME_HOUR,
+  elevationOverride?: ShadowSunElevationOverride,
+): ShadowSunModel {
+  return getShadowSunV1Model(timeHour, elevationOverride);
+}
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
@@ -36,9 +52,17 @@ export function renderEntityShadow(
   ctx: CanvasRenderingContext2D,
   params: ShadowParams,
   compiledMap: CompiledKenneyMap,
+  projectionDirection?: { x: number; y: number },
 ): void {
   if (params.castsShadow === false) return;
-  const { shadowX, shadowY, radiusX, radiusY, alpha } = computeShadowGeometry(params, compiledMap);
+  if (
+    projectionDirection
+    && Math.abs(projectionDirection.x) < 1e-6
+    && Math.abs(projectionDirection.y) < 1e-6
+  ) {
+    return;
+  }
+  const { shadowX, shadowY, radiusX, radiusY, alpha } = computeShadowGeometry(params, compiledMap, projectionDirection);
   ctx.save();
   ctx.translate(shadowX, shadowY);
   ctx.scale(radiusX, radiusY);
@@ -56,30 +80,29 @@ export function renderEntityShadow(
   ctx.restore();
 }
 
-export function renderEntityShadowMask(
-  ctx: CanvasRenderingContext2D,
-  params: ShadowParams,
-  compiledMap: CompiledKenneyMap,
-): void {
-  if (params.castsShadow === false) return;
-  const { shadowX, shadowY, radiusX, radiusY } = computeShadowGeometry(params, compiledMap);
-
-  ctx.save();
-  ctx.translate(shadowX, shadowY);
-  ctx.scale(radiusX, radiusY);
-
-  ctx.fillStyle = "rgba(255,255,255,0.5)";
-  ctx.beginPath();
-  ctx.arc(0, 0, 1, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.restore();
+function resolveProjectionDirection(
+  projectionDirection: { x: number; y: number } | undefined,
+): { x: number; y: number } {
+  const x = Number(projectionDirection?.x);
+  const y = Number(projectionDirection?.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return {
+      x: SHADOW_DIR_X,
+      y: SHADOW_DIR_Y,
+    };
+  }
+  return { x, y };
 }
 
-function computeShadowGeometry(params: ShadowParams, compiledMap: CompiledKenneyMap) {
+function computeShadowGeometry(
+  params: ShadowParams,
+  compiledMap: CompiledKenneyMap,
+  projectionDirection: { x: number; y: number } | undefined,
+) {
   const support = getSupportSurfaceAt(params.worldX, params.worldY, compiledMap, params.worldZ);
   const hoverZ = Math.max(0, params.worldZ - support.worldZ);
   const t = clamp(hoverZ / SHADOW_FADE_HEIGHT, 0, 1);
+  const projection = resolveProjectionDirection(projectionDirection);
 
   const baseRadiusX = params.shadowRadiusX ?? Math.max(6, params.spriteWidth * 0.18);
   const baseRadiusY = params.shadowRadiusY ?? Math.max(3, params.spriteWidth * 0.1);
@@ -96,12 +119,12 @@ function computeShadowGeometry(params: ShadowParams, compiledMap: CompiledKenney
   const shadowX =
     support.screenX +
     (params.screenOffsetX ?? 0) +
-    hoverZ * SHADOW_DIR_X +
+    hoverZ * projection.x +
     footOffsetX;
   const shadowY =
     support.screenY +
     (params.screenOffsetY ?? 0) +
-    hoverZ * SHADOW_DIR_Y +
+    hoverZ * projection.y +
     (params.shadowOffsetPx ?? 2) +
     footOffsetY;
 

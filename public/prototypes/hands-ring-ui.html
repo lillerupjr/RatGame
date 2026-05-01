@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hands Ring UI Prototype</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #07111e; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/pixi.js@8/dist/pixi.min.js"></script>
+<script>
+// ─── SLOT CONFIGURATION (tunable) ───────────────────────────────────
+const SLOT_CONFIG = [
+  { slotId: 'LEFT:0',  handId: 'left',  index: 0, x: -160, y: -300, rotationDeg: 10,  ringScale: 0.03, hitRadius: 32 },
+  { slotId: 'LEFT:1',  handId: 'left',  index: 1, x: -270, y: -350, rotationDeg: -15, ringScale: 0.03, hitRadius: 32 },
+  { slotId: 'LEFT:2',  handId: 'left',  index: 2, x: -370, y: -310, rotationDeg: -35, ringScale: 0.03, hitRadius: 32 },
+  { slotId: 'LEFT:3',  handId: 'left',  index: 3, x: -440, y: -220, rotationDeg: -55, ringScale: 0.03, hitRadius: 32 },
+  { slotId: 'RIGHT:0', handId: 'right', index: 0, x: 160,  y: -300, rotationDeg: -10, ringScale: 0.03, hitRadius: 32 },
+  { slotId: 'RIGHT:1', handId: 'right', index: 1, x: 270,  y: -350, rotationDeg: 15,  ringScale: 0.03, hitRadius: 32 },
+  { slotId: 'RIGHT:2', handId: 'right', index: 2, x: 370,  y: -310, rotationDeg: 35,  ringScale: 0.03, hitRadius: 32 },
+  { slotId: 'RIGHT:3', handId: 'right', index: 3, x: 440,  y: -220, rotationDeg: 55,  ringScale: 0.03, hitRadius: 32 },
+];
+
+// ─── THEME COLORS ───────────────────────────────────────────────────
+const THEME = {
+  bgBase:       0x07111e,
+  bgSurface:    0x0a1628,
+  bgOverlay:    0x000000,
+  bgOverlayA:   0.85,
+  textPrimary:  0xd9f6ff,
+  textMuted:    0xbee2eb,
+  textMutedA:   0.65,
+  accent:       0x76e8ff,
+  accentSoft:   'rgba(118,232,255,0.34)',
+  borderDefault: 'rgba(118,232,255,0.24)',
+  borderStrong:  0x76e8ff,
+  positive:     0x4ade80,
+  negative:     0xf87171,
+  bgElevated:   0x06101e,
+};
+
+// ─── MOCK RING DATA ─────────────────────────────────────────────────
+const RING_TEXTURES = [
+  '../assets-runtime/UI/rings/ring_test.png',
+  '../assets-runtime/UI/rings/ring_test2.png',
+  '../assets-runtime/UI/rings/ring_test3.png',
+];
+
+const MOCK_RINGS = [
+  {
+    name: 'Street Reflex',
+    family: 'starter',
+    description: 'On hit, 20% chance to throw an additional knife at a nearby enemy.',
+    effects: ['+20% proc chance', 'Knife projectile', 'Range: 260px'],
+    textureIndex: 0,
+  },
+  {
+    name: 'Lucky Chamber',
+    family: 'starter',
+    description: 'Every 5th shot is guaranteed to crit.',
+    effects: ['Every 5th shot crits', '+100% crit on proc'],
+    textureIndex: 1,
+  },
+  {
+    name: 'Contaminated Rounds',
+    family: 'starter',
+    description: 'Projectiles pierce poisoned enemies. Poisoned enemies take +20% damage from piercing hits.',
+    effects: ['Pierce poisoned', '+20% pierce damage'],
+    textureIndex: 2,
+  },
+  {
+    name: 'DOT Specialist',
+    family: 'dot',
+    description: '50% less hit damage. Damage over time deals 200% more damage.',
+    effects: ['-50% hit damage', '+200% DOT damage'],
+    textureIndex: 0,
+  },
+];
+
+// Which slots have rings equipped (slot index → MOCK_RINGS index)
+const EQUIPPED = { 0: 0, 1: 1, 5: 2, 6: 3 };
+
+// Mock aggregate stats for the stats panel
+const MOCK_STATS = [
+  { label: 'Crit Chance',     value: '+15%',  color: THEME.positive },
+  { label: 'Proj. Speed',     value: '+20%',  color: THEME.positive },
+  { label: 'DOT Damage',      value: '+200%', color: THEME.positive },
+  { label: 'Hit Damage',      value: '-50%',  color: THEME.negative },
+  { label: 'Pierce Chance',   value: '+10%',  color: THEME.positive },
+  { label: 'Proc Rate',       value: '+20%',  color: THEME.positive },
+];
+
+// ─── TWEEN ENGINE (~40 lines) ───────────────────────────────────────
+const activeTweens = [];
+
+function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+function easeInOutQuad(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+function linear(t) { return t; }
+
+function tween(target, props, duration, easing = easeOutCubic, delay = 0) {
+  return new Promise(resolve => {
+    const startValues = {};
+    for (const key in props) startValues[key] = target[key];
+    const tw = { target, props, startValues, duration, easing, delay, elapsed: -delay, resolve };
+    activeTweens.push(tw);
+  });
+}
+
+function updateTweens(dt) {
+  const ms = dt * (1000 / 60); // approximate ms per tick at 60fps
+  for (let i = activeTweens.length - 1; i >= 0; i--) {
+    const tw = activeTweens[i];
+    tw.elapsed += ms;
+    if (tw.elapsed < 0) continue; // still in delay
+    const t = Math.min(tw.elapsed / tw.duration, 1);
+    const e = tw.easing(t);
+    for (const key in tw.props) {
+      tw.target[key] = tw.startValues[key] + (tw.props[key] - tw.startValues[key]) * e;
+    }
+    if (t >= 1) {
+      activeTweens.splice(i, 1);
+      tw.resolve();
+    }
+  }
+}
+
+// ─── MAIN ───────────────────────────────────────────────────────────
+(async () => {
+  const app = new PIXI.Application();
+  await app.init({
+    resizeTo: window,
+    background: THEME.bgBase,
+    antialias: true,
+    resolution: window.devicePixelRatio || 1,
+    autoDensity: true,
+  });
+  document.body.appendChild(app.canvas);
+
+  // Ticker for tweens
+  app.ticker.add((ticker) => updateTweens(ticker.deltaTime));
+
+  // ─── LOAD TEXTURES ──────────────────────────────────────────────
+  const handsTex = await PIXI.Assets.load('../assets-runtime/UI/hands/ratHands.png');
+  handsTex.source.scaleMode = 'nearest';
+
+  const ringTextures = [];
+  for (const path of RING_TEXTURES) {
+    const tex = await PIXI.Assets.load(path);
+    tex.source.scaleMode = 'nearest';
+    ringTextures.push(tex);
+  }
+
+  // A new ring to be acquired in acquisition mode
+  const ACQUISITION_RING = {
+    name: 'Bazooka on Hit',
+    family: 'trigger',
+    description: 'On hit: 10% chance to fire a bazooka dealing 300% of hit damage as physical damage.',
+    effects: ['10% proc chance', '300% damage missile', 'Physical damage'],
+    textureIndex: 1,
+  };
+
+  // ─── STATE ──────────────────────────────────────────────────────
+  let screenOpen = false;
+  let mode = 'default'; // 'default' | 'selected' | 'acquisition'
+  let selectedSlotIndex = null;
+  let acquisitionTargetIndex = null;
+  let debugVisible = false;
+
+  // Clone equipped data so we can mutate it
+  const equipped = { ...EQUIPPED };
+
+  // ─── BG OVERLAY ─────────────────────────────────────────────────
+  const bgOverlay = new PIXI.Graphics();
+  bgOverlay.eventMode = 'static';
+  bgOverlay.on('pointerdown', onBgClick);
+  bgOverlay.visible = false;
+  app.stage.addChild(bgOverlay);
+
+  function drawBgOverlay() {
+    bgOverlay.clear();
+    bgOverlay.rect(0, 0, app.screen.width, app.screen.height);
+    bgOverlay.fill({ color: THEME.bgOverlay, alpha: THEME.bgOverlayA });
+  }
+
+  // ─── SCREEN CONTAINER ───────────────────────────────────────────
+  const screenContainer = new PIXI.Container();
+  screenContainer.visible = false;
+  app.stage.addChild(screenContainer);
+
+  // ─── HANDS CONTAINER ────────────────────────────────────────────
+  const handsContainer = new PIXI.Container();
+  screenContainer.addChild(handsContainer);
+
+  const handsSprite = new PIXI.Sprite(handsTex);
+  handsSprite.anchor.set(0.5, 0.5);
+  handsSprite.scale.set(0.65);
+  handsContainer.addChild(handsSprite);
+
+  // ─── RING SLOTS ─────────────────────────────────────────────────
+  const ringSlotsContainer = new PIXI.Container();
+  handsContainer.addChild(ringSlotsContainer);
+
+  const slotGroups = [];
+
+  for (let i = 0; i < SLOT_CONFIG.length; i++) {
+    const cfg = SLOT_CONFIG[i];
+    const group = new PIXI.Container();
+    group.x = cfg.x;
+    group.y = cfg.y;
+    ringSlotsContainer.addChild(group);
+
+    // Hit area (invisible circle)
+    const hitArea = new PIXI.Graphics();
+    hitArea.circle(0, 0, cfg.hitRadius);
+    hitArea.fill({ color: 0xffffff, alpha: 0.001 });
+    hitArea.eventMode = 'static';
+    hitArea.cursor = 'pointer';
+    hitArea.on('pointerdown', () => onSlotClick(i));
+    hitArea.on('pointerover', () => onSlotHover(i, true));
+    hitArea.on('pointerout', () => onSlotHover(i, false));
+    group.addChild(hitArea);
+
+    // Empty marker (dashed outline circle)
+    const emptyMarker = new PIXI.Graphics();
+    drawDashedCircle(emptyMarker, 0, 0, cfg.hitRadius - 4, THEME.accent, 0.3);
+    group.addChild(emptyMarker);
+
+    // Selection / acquisition highlight ring
+    const highlight = new PIXI.Graphics();
+    highlight.circle(0, 0, cfg.hitRadius + 2);
+    highlight.stroke({ color: THEME.borderStrong, width: 2 });
+    highlight.alpha = 0;
+    group.addChild(highlight);
+
+    // Glow sprite (radial glow via graphics)
+    const glowSprite = new PIXI.Graphics();
+    glowSprite.circle(0, 0, cfg.hitRadius + 10);
+    glowSprite.fill({ color: THEME.accent, alpha: 0.25 });
+    glowSprite.alpha = 0;
+    group.addChild(glowSprite);
+
+    // Ring sprite
+    const ringSprite = new PIXI.Sprite(ringTextures[0]);
+    ringSprite.anchor.set(0.5, 0.5);
+    ringSprite.scale.set(cfg.ringScale);
+    ringSprite.rotation = cfg.rotationDeg * Math.PI / 180;
+    ringSprite.visible = false;
+    group.addChild(ringSprite);
+
+    // Slot number label (for acquisition mode)
+    const slotLabel = new PIXI.Text({
+      text: String(i + 1),
+      style: { fontFamily: 'monospace', fontSize: 14, fontWeight: 'bold', fill: THEME.textPrimary },
+    });
+    slotLabel.anchor.set(0.5, 0.5);
+    slotLabel.y = cfg.hitRadius + 14;
+    slotLabel.visible = false;
+    group.addChild(slotLabel);
+
+    slotGroups.push({
+      group, hitArea, emptyMarker, highlight, glowSprite, ringSprite, slotLabel, cfg,
+      hovered: false,
+    });
+  }
+
+  // Update slot visuals from equipped state
+  function refreshSlots() {
+    for (let i = 0; i < slotGroups.length; i++) {
+      const sg = slotGroups[i];
+      const ringIdx = equipped[i];
+      if (ringIdx !== undefined) {
+        const ring = MOCK_RINGS[ringIdx];
+        sg.ringSprite.texture = ringTextures[ring.textureIndex];
+        sg.ringSprite.visible = true;
+        sg.emptyMarker.visible = false;
+      } else {
+        sg.ringSprite.visible = false;
+        sg.emptyMarker.visible = true;
+      }
+    }
+  }
+  refreshSlots();
+
+  // ─── STATS PANEL (right side) ───────────────────────────────────
+  const statsPanel = new PIXI.Container();
+  screenContainer.addChild(statsPanel);
+
+  const statsPanelBg = new PIXI.Graphics();
+  statsPanel.addChild(statsPanelBg);
+
+  const statsPanelTitle = new PIXI.Text({
+    text: 'Ring Stats',
+    style: { fontFamily: 'monospace', fontSize: 16, fontWeight: 'bold', fill: THEME.accent },
+  });
+  statsPanelTitle.x = 16;
+  statsPanelTitle.y = 16;
+  statsPanel.addChild(statsPanelTitle);
+
+  const statsTexts = [];
+  for (let i = 0; i < MOCK_STATS.length; i++) {
+    const stat = MOCK_STATS[i];
+    const label = new PIXI.Text({
+      text: stat.label,
+      style: { fontFamily: 'monospace', fontSize: 12, fill: THEME.textMuted, alpha: THEME.textMutedA },
+    });
+    label.x = 16;
+    label.y = 48 + i * 28;
+    statsPanel.addChild(label);
+
+    const value = new PIXI.Text({
+      text: stat.value,
+      style: { fontFamily: 'monospace', fontSize: 12, fontWeight: 'bold', fill: stat.color },
+    });
+    value.anchor.set(1, 0);
+    value.x = 200;
+    value.y = 48 + i * 28;
+    statsPanel.addChild(value);
+
+    statsTexts.push({ label, value });
+  }
+
+  function drawStatsPanel() {
+    const panelW = 220;
+    const panelH = 48 + MOCK_STATS.length * 28 + 16;
+    statsPanelBg.clear();
+    statsPanelBg.roundRect(0, 0, panelW, panelH, 8);
+    statsPanelBg.fill({ color: THEME.bgSurface, alpha: 0.95 });
+    statsPanelBg.roundRect(0, 0, panelW, panelH, 8);
+    statsPanelBg.stroke({ color: THEME.accent, width: 1, alpha: 0.24 });
+  }
+
+  // ─── DETAIL PANEL (bottom, slides up) ───────────────────────────
+  const detailPanel = new PIXI.Container();
+  detailPanel.visible = false;
+  screenContainer.addChild(detailPanel);
+
+  const detailBg = new PIXI.Graphics();
+  detailPanel.addChild(detailBg);
+
+  const detailName = new PIXI.Text({
+    text: '',
+    style: { fontFamily: 'monospace', fontSize: 18, fontWeight: 'bold', fill: THEME.textPrimary },
+  });
+  detailName.x = 20;
+  detailName.y = 16;
+  detailPanel.addChild(detailName);
+
+  const detailFamily = new PIXI.Text({
+    text: '',
+    style: { fontFamily: 'monospace', fontSize: 11, fill: THEME.accent },
+  });
+  detailFamily.x = 20;
+  detailFamily.y = 40;
+  detailPanel.addChild(detailFamily);
+
+  const detailDesc = new PIXI.Text({
+    text: '',
+    style: { fontFamily: 'monospace', fontSize: 12, fill: THEME.textMuted, wordWrap: true, wordWrapWidth: 500 },
+  });
+  detailDesc.x = 20;
+  detailDesc.y = 62;
+  detailPanel.addChild(detailDesc);
+
+  const detailEffects = new PIXI.Text({
+    text: '',
+    style: { fontFamily: 'monospace', fontSize: 11, fill: THEME.positive },
+  });
+  detailEffects.x = 20;
+  detailEffects.y = 100;
+  detailPanel.addChild(detailEffects);
+
+  // Confirm hint text (for acquisition mode)
+  const confirmHint = new PIXI.Text({
+    text: '',
+    style: { fontFamily: 'monospace', fontSize: 12, fill: THEME.accent },
+  });
+  confirmHint.x = 20;
+  confirmHint.y = 136;
+  detailPanel.addChild(confirmHint);
+
+  const DETAIL_PANEL_H = 170;
+
+  function drawDetailPanel(w) {
+    const panelW = Math.min(560, w - 40);
+    detailBg.clear();
+    detailBg.roundRect(0, 0, panelW, DETAIL_PANEL_H, 8);
+    detailBg.fill({ color: THEME.bgSurface, alpha: 0.95 });
+    detailBg.roundRect(0, 0, panelW, DETAIL_PANEL_H, 8);
+    detailBg.stroke({ color: THEME.accent, width: 1, alpha: 0.24 });
+    detailDesc.style.wordWrapWidth = panelW - 40;
+  }
+
+  function showDetailForRing(ringData, isReplace) {
+    detailName.text = ringData.name;
+    detailFamily.text = `[${ringData.family.toUpperCase()}]`;
+    detailDesc.text = ringData.description;
+    detailEffects.text = ringData.effects.join('  |  ');
+    if (mode === 'acquisition' && acquisitionTargetIndex !== null) {
+      const existing = equipped[acquisitionTargetIndex];
+      if (existing !== undefined) {
+        confirmHint.text = `Replace ${MOCK_RINGS[existing].name}? [Enter] confirm  [Esc] cancel`;
+      } else {
+        confirmHint.text = '[Enter] equip  [Esc] cancel';
+      }
+      confirmHint.visible = true;
+    } else {
+      confirmHint.text = '';
+      confirmHint.visible = false;
+    }
+  }
+
+  // ─── ACQUISITION BANNER (top, slides down) ──────────────────────
+  const acquisitionBanner = new PIXI.Container();
+  acquisitionBanner.visible = false;
+  screenContainer.addChild(acquisitionBanner);
+
+  const bannerBg = new PIXI.Graphics();
+  acquisitionBanner.addChild(bannerBg);
+
+  const bannerText = new PIXI.Text({
+    text: 'New Ring Acquired \u2014 Choose a Slot',
+    style: { fontFamily: 'monospace', fontSize: 16, fontWeight: 'bold', fill: THEME.textPrimary },
+  });
+  bannerText.anchor.set(0.5, 0.5);
+  acquisitionBanner.addChild(bannerText);
+
+  const bannerSubText = new PIXI.Text({
+    text: 'Click a slot or press 1-8  |  [Esc] cancel',
+    style: { fontFamily: 'monospace', fontSize: 11, fill: THEME.textMuted },
+  });
+  bannerSubText.anchor.set(0.5, 0.5);
+  acquisitionBanner.addChild(bannerSubText);
+
+  function drawBanner(w) {
+    const bw = Math.min(460, w - 40);
+    bannerBg.clear();
+    bannerBg.roundRect(-bw / 2, -28, bw, 56, 8);
+    bannerBg.fill({ color: THEME.bgSurface, alpha: 0.95 });
+    bannerBg.roundRect(-bw / 2, -28, bw, 56, 8);
+    bannerBg.stroke({ color: THEME.positive, width: 1.5, alpha: 0.6 });
+    bannerText.y = -8;
+    bannerSubText.y = 14;
+  }
+
+  // ─── DEBUG OVERLAY ──────────────────────────────────────────────
+  const debugOverlay = new PIXI.Container();
+  debugOverlay.eventMode = 'none';
+  debugOverlay.visible = false;
+  screenContainer.addChild(debugOverlay);
+
+  const debugMouseLabel = new PIXI.Text({
+    text: 'Mouse: (0, 0)',
+    style: { fontFamily: 'monospace', fontSize: 11, fill: 0xff00ff },
+  });
+  debugMouseLabel.x = 10;
+  debugMouseLabel.y = 10;
+  debugOverlay.addChild(debugMouseLabel);
+
+  const debugModeLabel = new PIXI.Text({
+    text: 'Mode: default',
+    style: { fontFamily: 'monospace', fontSize: 11, fill: 0xff00ff },
+  });
+  debugModeLabel.x = 10;
+  debugModeLabel.y = 26;
+  debugOverlay.addChild(debugModeLabel);
+
+  const debugSlotMarkers = [];
+  for (let i = 0; i < SLOT_CONFIG.length; i++) {
+    const cfg = SLOT_CONFIG[i];
+    const marker = new PIXI.Graphics();
+    // Crosshair
+    marker.moveTo(-8, 0); marker.lineTo(8, 0); marker.stroke({ color: 0xff00ff, width: 1 });
+    marker.moveTo(0, -8); marker.lineTo(0, 8); marker.stroke({ color: 0xff00ff, width: 1 });
+    marker.circle(0, 0, cfg.hitRadius);
+    marker.stroke({ color: 0xff00ff, width: 1, alpha: 0.5 });
+    marker.eventMode = 'none';
+
+    const label = new PIXI.Text({
+      text: `${cfg.slotId}\n(${cfg.x}, ${cfg.y})\nrot: ${cfg.rotationDeg}\u00b0`,
+      style: { fontFamily: 'monospace', fontSize: 9, fill: 0xff00ff },
+    });
+    label.x = cfg.hitRadius + 4;
+    label.y = -14;
+    marker.addChild(label);
+    marker.x = cfg.x;
+    marker.y = cfg.y;
+    debugSlotMarkers.push(marker);
+  }
+
+  // Debug markers parent — positioned relative to handsContainer origin
+  const debugSlotsParent = new PIXI.Container();
+  debugSlotsParent.eventMode = 'none';
+  debugOverlay.addChild(debugSlotsParent);
+  for (const m of debugSlotMarkers) debugSlotsParent.addChild(m);
+
+  // ─── LAYOUT ─────────────────────────────────────────────────────
+  function layout() {
+    const w = app.screen.width;
+    const h = app.screen.height;
+
+    drawBgOverlay();
+
+    // Hands centered, slightly below center so fingers point up nicely
+    handsContainer.x = w / 2;
+    handsContainer.y = h / 2 + 80;
+
+    // Stats panel — right edge
+    drawStatsPanel();
+    statsPanel.x = w - 240;
+    statsPanel.y = 60;
+
+    // Detail panel — bottom center
+    drawDetailPanel(w);
+    detailPanel.x = (w - Math.min(560, w - 40)) / 2;
+    // detailPanel.y set by animation state; default off-screen
+    if (!detailPanel.visible) {
+      detailPanel.y = h + 10;
+    }
+
+    // Acquisition banner — top center
+    drawBanner(w);
+    acquisitionBanner.x = w / 2;
+    if (!acquisitionBanner.visible) {
+      acquisitionBanner.y = -60;
+    }
+
+    // Debug overlay: match debug slots to handsContainer world position
+    debugSlotsParent.x = handsContainer.x;
+    debugSlotsParent.y = handsContainer.y;
+  }
+
+  layout();
+  window.addEventListener('resize', layout);
+
+  // ─── INTERACTION HANDLERS ───────────────────────────────────────
+  function onBgClick() {
+    if (mode === 'acquisition') return; // must use Escape
+    if (mode === 'selected') {
+      deselectRing();
+    }
+  }
+
+  function onSlotClick(index) {
+    if (mode === 'default') {
+      // Select an equipped ring
+      if (equipped[index] !== undefined) {
+        selectRing(index);
+      }
+    } else if (mode === 'selected') {
+      if (index === selectedSlotIndex) {
+        deselectRing();
+      } else if (equipped[index] !== undefined) {
+        deselectRing().then(() => selectRing(index));
+      }
+    } else if (mode === 'acquisition') {
+      targetSlotForAcquisition(index);
+    }
+  }
+
+  function onSlotHover(index, isOver) {
+    const sg = slotGroups[index];
+    sg.hovered = isOver;
+    if (mode === 'acquisition') return; // acquisition has its own highlight logic
+    if (equipped[index] !== undefined) {
+      tween(sg.glowSprite, { alpha: isOver ? 1 : 0 }, 120, linear);
+      const baseScale = sg.cfg.ringScale;
+      const targetScale = isOver ? baseScale * 1.08 : baseScale;
+      tween(sg.ringSprite.scale, { x: targetScale, y: targetScale }, 120, linear);
+    }
+  }
+
+  // ─── STATE TRANSITIONS ──────────────────────────────────────────
+
+  async function openScreen() {
+    screenOpen = true;
+    bgOverlay.visible = true;
+    screenContainer.visible = true;
+    layout();
+    refreshSlots();
+    refreshAcquisitionHighlights();
+  }
+
+  async function closeScreen() {
+    if (mode === 'acquisition') {
+      cancelAcquisition();
+      return;
+    }
+    if (mode === 'selected') {
+      await deselectRing();
+    }
+    screenOpen = false;
+    bgOverlay.visible = false;
+    screenContainer.visible = false;
+  }
+
+  async function selectRing(index) {
+    mode = 'selected';
+    selectedSlotIndex = index;
+    const sg = slotGroups[index];
+    const ring = MOCK_RINGS[equipped[index]];
+
+    // Highlight selected ring
+    sg.highlight.alpha = 1;
+    const baseScale = sg.cfg.ringScale;
+    tween(sg.ringSprite.scale, { x: baseScale * 1.12, y: baseScale * 1.12 }, 150, easeOutCubic);
+
+    // Lift hands
+    tween(handsContainer, { y: handsContainer.y - 60 }, 250, easeOutCubic);
+
+    // Show detail panel
+    showDetailForRing(ring, false);
+    detailPanel.visible = true;
+    const targetY = app.screen.height - DETAIL_PANEL_H - 20;
+    detailPanel.y = app.screen.height + 10;
+    tween(detailPanel, { y: targetY }, 300, easeOutCubic, 50);
+
+    // Move debug slots with hands
+    tween(debugSlotsParent, { y: debugSlotsParent.y - 60 }, 250, easeOutCubic);
+  }
+
+  async function deselectRing() {
+    if (selectedSlotIndex !== null) {
+      const sg = slotGroups[selectedSlotIndex];
+      sg.highlight.alpha = 0;
+      const baseScale = sg.cfg.ringScale;
+      tween(sg.ringSprite.scale, { x: baseScale, y: baseScale }, 150, easeOutCubic);
+    }
+    mode = 'default';
+    selectedSlotIndex = null;
+
+    // Drop hands back
+    const baseY = app.screen.height / 2 + 80;
+    tween(handsContainer, { y: baseY }, 200, easeOutCubic);
+    tween(debugSlotsParent, { y: baseY }, 200, easeOutCubic);
+
+    // Slide detail panel down
+    tween(detailPanel, { y: app.screen.height + 10 }, 200, easeOutCubic).then(() => {
+      detailPanel.visible = false;
+    });
+  }
+
+  // ─── ACQUISITION MODE ───────────────────────────────────────────
+  let acquisitionPulseTime = 0;
+
+  async function enterAcquisition() {
+    if (mode === 'selected') await deselectRing();
+    mode = 'acquisition';
+    acquisitionTargetIndex = null;
+
+    // Show slot labels
+    for (const sg of slotGroups) sg.slotLabel.visible = true;
+
+    // Show banner
+    acquisitionBanner.visible = true;
+    acquisitionBanner.y = -60;
+    tween(acquisitionBanner, { y: 50 }, 300, easeOutCubic);
+
+    refreshAcquisitionHighlights();
+  }
+
+  function refreshAcquisitionHighlights() {
+    if (mode !== 'acquisition') {
+      // Clear all acquisition visuals
+      for (const sg of slotGroups) {
+        sg.highlight.alpha = 0;
+        sg.slotLabel.visible = false;
+      }
+      return;
+    }
+    // Set highlight colors: green for empty, amber for occupied
+    for (let i = 0; i < slotGroups.length; i++) {
+      const sg = slotGroups[i];
+      const isOccupied = equipped[i] !== undefined;
+      const isTargeted = acquisitionTargetIndex === i;
+      if (isTargeted) {
+        sg.highlight.clear();
+        sg.highlight.circle(0, 0, sg.cfg.hitRadius + 2);
+        sg.highlight.stroke({ color: THEME.borderStrong, width: 2.5 });
+        sg.highlight.alpha = 1;
+      } else {
+        sg.highlight.clear();
+        sg.highlight.circle(0, 0, sg.cfg.hitRadius + 2);
+        sg.highlight.stroke({ color: isOccupied ? 0xfbbf24 : THEME.positive, width: 1.5 });
+        // alpha will be animated by pulse
+      }
+    }
+  }
+
+  function targetSlotForAcquisition(index) {
+    acquisitionTargetIndex = index;
+    refreshAcquisitionHighlights();
+
+    // Show detail panel with acquisition ring info
+    showDetailForRing(ACQUISITION_RING, equipped[index] !== undefined);
+    detailPanel.visible = true;
+    const targetY = app.screen.height - DETAIL_PANEL_H - 20;
+    detailPanel.y = app.screen.height + 10;
+    tween(detailPanel, { y: targetY }, 300, easeOutCubic, 50);
+  }
+
+  async function confirmAcquisition() {
+    if (acquisitionTargetIndex === null) return;
+    const slotIdx = acquisitionTargetIndex;
+
+    // Add the ring to mock data (or reuse existing index)
+    let ringIdx = MOCK_RINGS.length;
+    MOCK_RINGS.push({ ...ACQUISITION_RING });
+    equipped[slotIdx] = ringIdx;
+    refreshSlots();
+
+    // Equip animation: scale pop + glow burst
+    const sg = slotGroups[slotIdx];
+    const baseScale = sg.cfg.ringScale;
+    sg.ringSprite.scale.set(baseScale * 0.5);
+    sg.glowSprite.alpha = 1;
+    await Promise.all([
+      tween(sg.ringSprite.scale, { x: baseScale * 1.3, y: baseScale * 1.3 }, 200, easeOutCubic)
+        .then(() => tween(sg.ringSprite.scale, { x: baseScale, y: baseScale }, 200, easeOutCubic)),
+      tween(sg.glowSprite, { alpha: 0 }, 400, easeOutCubic),
+    ]);
+
+    exitAcquisition();
+  }
+
+  async function cancelAcquisition() {
+    exitAcquisition();
+  }
+
+  async function exitAcquisition() {
+    mode = 'default';
+    acquisitionTargetIndex = null;
+    acquisitionPulseTime = 0;
+
+    // Hide slot labels
+    for (const sg of slotGroups) sg.slotLabel.visible = false;
+
+    // Hide banner
+    tween(acquisitionBanner, { y: -60 }, 200, easeOutCubic).then(() => {
+      acquisitionBanner.visible = false;
+    });
+
+    // Hide detail panel
+    tween(detailPanel, { y: app.screen.height + 10 }, 200, easeOutCubic).then(() => {
+      detailPanel.visible = false;
+    });
+
+    refreshAcquisitionHighlights();
+  }
+
+  // Acquisition pulse animation (continuous)
+  app.ticker.add((ticker) => {
+    if (mode !== 'acquisition') return;
+    acquisitionPulseTime += ticker.deltaTime * 0.05;
+    const pulse = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(acquisitionPulseTime * Math.PI * 2));
+    for (let i = 0; i < slotGroups.length; i++) {
+      if (i === acquisitionTargetIndex) continue; // targeted slot stays fully visible
+      slotGroups[i].highlight.alpha = pulse;
+    }
+  });
+
+  // ─── DEBUG MOUSE TRACKING ───────────────────────────────────────
+  app.stage.eventMode = 'static';
+  app.stage.hitArea = app.screen;
+  app.stage.on('pointermove', (e) => {
+    if (!debugVisible) return;
+    // Convert to hands-local coords
+    const localX = e.global.x - handsContainer.x;
+    const localY = e.global.y - handsContainer.y;
+    debugMouseLabel.text = `Mouse local: (${Math.round(localX)}, ${Math.round(localY)})`;
+    debugModeLabel.text = `Mode: ${mode}  Selected: ${selectedSlotIndex}  AcqTarget: ${acquisitionTargetIndex}`;
+  });
+
+  // Update stage hit area on resize
+  window.addEventListener('resize', () => {
+    app.stage.hitArea = app.screen;
+  });
+
+  // ─── KEYBOARD HANDLING ──────────────────────────────────────────
+  window.addEventListener('keydown', (e) => {
+    const key = e.key.toLowerCase();
+
+    if (key === 'h') {
+      if (screenOpen) closeScreen();
+      else openScreen();
+      return;
+    }
+
+    if (!screenOpen) return;
+
+    if (key === 'escape') {
+      // Peel back layers
+      if (mode === 'acquisition') {
+        if (acquisitionTargetIndex !== null) {
+          // Deselect target first
+          acquisitionTargetIndex = null;
+          refreshAcquisitionHighlights();
+          tween(detailPanel, { y: app.screen.height + 10 }, 200, easeOutCubic).then(() => {
+            detailPanel.visible = false;
+          });
+        } else {
+          cancelAcquisition();
+        }
+      } else if (mode === 'selected') {
+        deselectRing();
+      } else {
+        closeScreen();
+      }
+      return;
+    }
+
+    if (key === 'd') {
+      debugVisible = !debugVisible;
+      debugOverlay.visible = debugVisible;
+      return;
+    }
+
+    if (key === 'a' && mode === 'default') {
+      enterAcquisition();
+      return;
+    }
+
+    // Number keys 1-8 for slot selection in acquisition mode
+    if (mode === 'acquisition') {
+      const num = parseInt(key);
+      if (num >= 1 && num <= 8) {
+        targetSlotForAcquisition(num - 1);
+        return;
+      }
+    }
+
+    if (key === 'enter' && mode === 'acquisition' && acquisitionTargetIndex !== null) {
+      confirmAcquisition();
+      return;
+    }
+  });
+
+  // ─── HELPER: DASHED CIRCLE ──────────────────────────────────────
+  function drawDashedCircle(g, cx, cy, radius, color, alpha) {
+    const dashCount = 12;
+    const dashAngle = (Math.PI * 2) / dashCount;
+    const gapRatio = 0.4;
+    for (let i = 0; i < dashCount; i++) {
+      const startAngle = i * dashAngle;
+      const endAngle = startAngle + dashAngle * (1 - gapRatio);
+      // Draw arc segment as line segments
+      const steps = 6;
+      const step = (endAngle - startAngle) / steps;
+      g.moveTo(cx + Math.cos(startAngle) * radius, cy + Math.sin(startAngle) * radius);
+      for (let s = 1; s <= steps; s++) {
+        const a = startAngle + step * s;
+        g.lineTo(cx + Math.cos(a) * radius, cy + Math.sin(a) * radius);
+      }
+      g.stroke({ color, width: 1.5, alpha });
+    }
+  }
+
+  // ─── INITIAL STATE ─────────────────────────────────────────────
+  // Show a hint
+  const hintText = new PIXI.Text({
+    text: 'Press H to open ring equipment screen',
+    style: { fontFamily: 'monospace', fontSize: 14, fill: THEME.textMuted },
+  });
+  hintText.anchor.set(0.5, 0.5);
+  hintText.x = app.screen.width / 2;
+  hintText.y = app.screen.height / 2;
+  app.stage.addChild(hintText);
+
+  // Pulse the hint
+  app.ticker.add((ticker) => {
+    if (!screenOpen) {
+      hintText.visible = true;
+      hintText.alpha = 0.5 + 0.5 * Math.sin(Date.now() / 600);
+      hintText.x = app.screen.width / 2;
+      hintText.y = app.screen.height / 2;
+    } else {
+      hintText.visible = false;
+    }
+  });
+
+})();
+</script>
+</body>
+</html>

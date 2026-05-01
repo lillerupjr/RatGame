@@ -10,10 +10,7 @@ export type RouteNodeLayout = {
 export type RouteEdgeLayout = {
   fromId: string;
   toId: string;
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
+  pathD: string;
 };
 
 export type RouteMapLayout = {
@@ -26,8 +23,6 @@ export type RouteMapLayout = {
 };
 
 export type BuildRouteLayoutOptions = {
-  laneCountMin?: number;
-  laneCountMax?: number;
   rowHeight?: number;
   topPadding?: number;
   bottomPadding?: number;
@@ -38,59 +33,55 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function laneFromX(x: number, minX: number, maxX: number, laneCount: number): number {
-  if (laneCount <= 1) return 0;
-  const range = maxX - minX;
-  if (range <= 0.0001) return Math.floor((laneCount - 1) * 0.5);
-  const t = (x - minX) / range;
-  return clamp(Math.round(t * (laneCount - 1)), 0, laneCount - 1);
-}
-
 export function buildRouteMapLayout(
   vm: RouteMapVM,
   viewportWidth: number,
   options?: BuildRouteLayoutOptions,
 ): RouteMapLayout {
-  const laneCountMin = Math.max(1, Math.floor(options?.laneCountMin ?? 5));
-  const laneCountMax = Math.max(laneCountMin, Math.floor(options?.laneCountMax ?? 7));
-  const rowHeight = Math.max(80, Math.floor(options?.rowHeight ?? 132));
+  const rowHeight = Math.max(80, Math.floor(options?.rowHeight ?? 148));
   const topPadding = Math.max(0, Math.floor(options?.topPadding ?? 84));
   const bottomPadding = Math.max(0, Math.floor(options?.bottomPadding ?? 120));
   const sidePadding = Math.max(0, Math.floor(options?.sidePadding ?? 76));
+  const laneCount = Math.max(
+    1,
+    vm.nodes.reduce((max, node) => Math.max(max, node.laneCount), 1),
+  );
   const contentWidth = Math.max(320, Math.floor(viewportWidth || 960));
-
-  const nodeLayouts = new Map<string, RouteNodeLayout>();
-  const xValues = vm.nodes.map((n) => n.x);
-  const minX = xValues.length ? Math.min(...xValues) : 0;
-  const maxX = xValues.length ? Math.max(...xValues) : 0;
-  const uniqueXCount = new Set(xValues.map((x) => x.toFixed(4))).size;
-  const laneCount = clamp(uniqueXCount || 1, laneCountMin, laneCountMax);
-  const depthStart = vm.depthWindow.start;
-  const depthEnd = Math.max(vm.depthWindow.end, vm.currentDepth, depthStart);
-  const depthRows = Math.max(1, depthEnd - depthStart + 1);
-  const contentHeight = topPadding + bottomPadding + depthRows * rowHeight;
+  const contentHeight = topPadding + bottomPadding + Math.max(1, vm.rowCount) * rowHeight;
   const laneSpanPx = Math.max(1, contentWidth - sidePadding * 2);
   const laneStepPx = laneCount <= 1 ? 0 : laneSpanPx / (laneCount - 1);
 
-  for (const node of vm.nodes) {
-    const lane = laneFromX(node.x, minX, maxX, laneCount);
-    const x = sidePadding + lane * laneStepPx;
-    const y = topPadding + (node.depth - depthStart) * rowHeight + rowHeight * 0.5;
-    nodeLayouts.set(node.id, { id: node.id, lane, x, y });
+  const nodeLayouts = new Map<string, RouteNodeLayout>();
+  for (let i = 0; i < vm.nodes.length; i++) {
+    const node = vm.nodes[i];
+    const lane = clamp(node.laneIndex, 0, Math.max(0, laneCount - 1));
+    const x = laneCount <= 1
+      ? sidePadding + laneSpanPx * 0.5
+      : sidePadding + lane * laneStepPx;
+    const y = topPadding + node.rowIndex * rowHeight + rowHeight * 0.5;
+    nodeLayouts.set(node.id, {
+      id: node.id,
+      lane,
+      x,
+      y,
+    });
   }
 
   const edgeLayouts: RouteEdgeLayout[] = [];
-  for (const edge of vm.edges) {
+  for (let i = 0; i < vm.edges.length; i++) {
+    const edge = vm.edges[i];
     const from = nodeLayouts.get(edge.fromId);
     const to = nodeLayouts.get(edge.toId);
     if (!from || !to) continue;
+    const deltaY = to.y - from.y;
+    const cp1x = from.x;
+    const cp1y = from.y + deltaY * 0.38;
+    const cp2x = to.x;
+    const cp2y = to.y - deltaY * 0.38;
     edgeLayouts.push({
       fromId: edge.fromId,
       toId: edge.toId,
-      x1: from.x,
-      y1: from.y,
-      x2: to.x,
-      y2: to.y,
+      pathD: `M ${from.x} ${from.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${to.x} ${to.y}`,
     });
   }
 
@@ -115,4 +106,3 @@ export function computeScrollTopForNode(
   const raw = nodeCenterY - vh * 0.5;
   return clamp(raw, 0, maxTop);
 }
-

@@ -1,11 +1,12 @@
-export type RewardTicketKind = "CARD_PICK" | "RELIC_PICK";
-export type RewardTicketSource = "ZONE_TRIAL" | "BOSS_CHEST" | "OBJECTIVE_COMPLETION";
+import type { ProgressionRewardFamily } from "../progression/rewards/rewardFamilies";
+
+export type RewardTicketSource = "FLOOR_COMPLETION" | "BOSS_CHEST" | "SIDE_OBJECTIVE" | "LEVEL_UP";
 export type RewardTicketStatus = "PENDING" | "ACTIVE" | "RESOLVED";
 
 export type RewardTicket = {
   id: string;
   claimKey: string;
-  kind: RewardTicketKind;
+  family: ProgressionRewardFamily;
   source: RewardTicketSource;
   optionCount: number;
   status: RewardTicketStatus;
@@ -33,7 +34,7 @@ export function enqueueRewardTicket(
   world: any,
   input: {
     claimKey: string;
-    kind: RewardTicketKind;
+    family: ProgressionRewardFamily;
     source: RewardTicketSource;
     optionCount: number;
   },
@@ -43,7 +44,7 @@ export function enqueueRewardTicket(
   const ticket: RewardTicket = {
     id: `reward-ticket-${createdSeq}`,
     claimKey: input.claimKey,
-    kind: input.kind,
+    family: input.family,
     source: input.source,
     optionCount: input.optionCount,
     status: "PENDING",
@@ -96,8 +97,8 @@ export function resolveActiveRewardTicket(world: any): void {
 }
 
 export function ensureRewardClaimKeys(world: any): string[] {
-  if (!Array.isArray(world.cardRewardClaimKeys)) world.cardRewardClaimKeys = [];
-  return world.cardRewardClaimKeys as string[];
+  if (!Array.isArray(world.rewardClaimKeys)) world.rewardClaimKeys = [];
+  return world.rewardClaimKeys as string[];
 }
 
 export function hasRewardClaimKey(world: any, claimKey: string): boolean {

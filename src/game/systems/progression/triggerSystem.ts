@@ -8,7 +8,6 @@ import type { InputState } from "../sim/input";
 import { instantiateTriggers, type TriggerInstance } from "../../triggers/triggerTypes";
 import type { TriggerSignal } from "../../triggers/triggerSignals";
 import { OBJECTIVE_TRIGGER_IDS } from "./objectiveSpec";
-import { ENEMY_TYPE } from "../../factories/enemyFactory";
 
 const PLAYER_ENTITY_ID = 0;
 const DEFAULT_RADIUS_TILES = 0.5;
@@ -97,31 +96,25 @@ function updateInteractSignals(
     emitTriggerSignal(world, { type: "INTERACT", entityId, triggerId: trigger.id });
 }
 
-export function isBossZoneKillForTrigger(
-    world: Pick<World, "eSpawnTriggerId">,
-    enemyIndex: number,
-    triggerId: string,
+export function isRareZoneKillForTrigger(
+  world: Pick<World, "eSpawnTriggerId">,
+  enemyIndex: number,
+  triggerId: string,
     eventSpawnTriggerId?: string,
 ): boolean {
     if (eventSpawnTriggerId === triggerId) return true;
     return world.eSpawnTriggerId[enemyIndex] === triggerId;
 }
 
-function isBossKillForObjective(world: World, enemyIndex: number): boolean {
-    if (!Number.isFinite(enemyIndex) || enemyIndex < 0) return false;
-    return world.eType[enemyIndex] === ENEMY_TYPE.BOSS;
-}
-
 function updateKillSignals(world: World, trigger: TriggerInstance) {
-    const requireBoss = trigger.id.startsWith(OBJECTIVE_TRIGGER_IDS.bossZonePrefix);
-    if (trigger.type !== "kill" && !requireBoss) return;
+    const requireRare = trigger.id.startsWith(OBJECTIVE_TRIGGER_IDS.rareZonePrefix);
+    if (trigger.type !== "kill" && !requireRare) return;
 
     for (let i = 0; i < world.events.length; i++) {
         const ev = world.events[i];
         if (ev.type !== "ENEMY_KILLED") continue;
-        if (requireBoss) {
-            if (!isBossKillForObjective(world, ev.enemyIndex)) continue;
-            if (!isBossZoneKillForTrigger(world, ev.enemyIndex, trigger.id, ev.spawnTriggerId)) continue;
+        if (requireRare) {
+            if (!isRareZoneKillForTrigger(world, ev.enemyIndex, trigger.id, ev.spawnTriggerId)) continue;
             emitTriggerSignal(world, { type: "KILL", entityId: ev.enemyIndex, triggerId: trigger.id });
             continue;
         }

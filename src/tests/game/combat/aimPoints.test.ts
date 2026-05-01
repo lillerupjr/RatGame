@@ -3,7 +3,7 @@ import { createWorld } from "../../../engine/world/world";
 import { worldDeltaToScreen } from "../../../engine/math/iso";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { stageDocks } from "../../../game/content/stages";
-import { ENEMY_TYPE, spawnEnemyGrid } from "../../../game/factories/enemyFactory";
+import { EnemyId, spawnEnemyGrid } from "../../../game/factories/enemyFactory";
 import { getEnemyWorld, getPlayerWorld } from "../../../game/coords/worldViews";
 import { getEnemyAimDebugInfo, getEnemyAimWorld, getPlayerAimWorld } from "../../../game/combat/aimPoints";
 
@@ -20,7 +20,7 @@ describe("aimPoints screen-axis offsets", () => {
 
   test("enemy aim conversion is deterministic and matches effective screen offset", () => {
     const w = createWorld({ seed: 202, stage: stageDocks });
-    const enemyIndex = spawnEnemyGrid(w, ENEMY_TYPE.CHASER, 8, 8);
+    const enemyIndex = spawnEnemyGrid(w, EnemyId.MINION, 8, 8);
     const infoA = getEnemyAimDebugInfo(w, enemyIndex);
     const infoB = getEnemyAimDebugInfo(w, enemyIndex);
 
@@ -36,5 +36,20 @@ describe("aimPoints screen-axis offsets", () => {
     const enemyAim = getEnemyAimWorld(w, enemyIndex);
     expect(enemyAim.x - enemyWorld.wx).toBeCloseTo(infoA.effectiveWorldDelta.dx, 6);
     expect(enemyAim.y - enemyWorld.wy).toBeCloseTo(infoA.effectiveWorldDelta.dy, 6);
+  });
+
+  test("runtime enemy visual scale shrinks the authored aim offset", () => {
+    const w = createWorld({ seed: 303, stage: stageDocks });
+    const root = spawnEnemyGrid(w, EnemyId.SPLITTER, 8, 8);
+    const child = spawnEnemyGrid(w, EnemyId.SPLITTER, 9, 8, KENNEY_TILE_WORLD, { splitStage: 2 });
+
+    const rootInfo = getEnemyAimDebugInfo(w, root);
+    const childInfo = getEnemyAimDebugInfo(w, child);
+
+    expect(childInfo.spriteScale).toBeCloseTo(rootInfo.spriteScale * 0.25, 6);
+    expect(Math.abs(childInfo.effectiveScreenOffset.y)).toBeLessThan(Math.abs(rootInfo.effectiveScreenOffset.y));
+
+    const projected = worldDeltaToScreen(childInfo.effectiveWorldDelta.dx, childInfo.effectiveWorldDelta.dy);
+    expect(projected.dy).toBeCloseTo(childInfo.effectiveScreenOffset.y, 6);
   });
 });

@@ -2,7 +2,6 @@ import { emitEvent, type World } from "../../../engine/world/world";
 import { isEnemyInCircle } from "./hitDetection";
 import { tickDelayedExplosions } from "./delayedExplosions";
 import { queryCircle } from "../../util/spatialHash";
-import { onEnemyKilledForChallenge } from "../progression/roomChallenge";
 import { anchorFromWorld, writeAnchor } from "../../coords/anchor";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { getEnemyWorld, getPlayerWorld, getZoneWorld } from "../../coords/worldViews";
@@ -12,6 +11,7 @@ import { breakMomentumOnLifeDamage } from "./momentum";
 import { ZONE_KIND } from "../../factories/zoneFactory";
 import { type FireZoneVfx, spawnFireZoneVfx, updateFireZoneVfx } from "../../vfx/fireZoneVfx";
 import { makeEnvironmentDamageMeta } from "../../combat/damageMeta";
+import { finalizeEnemyDeath } from "../enemies/finalize";
 
 function zoneTickScale(zoneTickEvery: number, dtTick: number): number {
   const every = Math.max(0.02, zoneTickEvery);
@@ -177,18 +177,16 @@ export function tickZonesOnce(w: World, dtTick: number): void {
 
       if (w.eHp[e] > 0) continue;
 
-      w.eAlive[e] = false;
-      w.kills++;
-      onEnemyKilledForChallenge(w);
-
-      emitEvent(w, {
-        type: "ENEMY_KILLED",
-        enemyIndex: e,
+      finalizeEnemyDeath(w, e, {
+        damageMeta: enemyDamageMeta,
+        source: "OTHER",
+        damage: enemyTickDamage,
+        dmgPhys: w.zKind[z] === ZONE_KIND.FIRE ? 0 : enemyTickDamage,
+        dmgFire: w.zKind[z] === ZONE_KIND.FIRE ? enemyTickDamage : 0,
+        dmgChaos: 0,
+        isCrit: false,
         x: ew.wx,
         y: ew.wy,
-        spawnTriggerId: w.eSpawnTriggerId[e],
-        source: "OTHER",
-        damageMeta: enemyDamageMeta,
       });
     }
   }

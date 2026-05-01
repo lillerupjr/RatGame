@@ -2,16 +2,16 @@ export type ObjectiveMode = "NORMAL" | "SURVIVE_TRIAL" | "ZONE_TRIAL";
 
 export type FloorRewardBudget = {
   mode: ObjectiveMode;
-  nonObjectiveCardsRemaining: number; // starts at 2
-  objectiveCardAvailable: boolean;    // starts true
+  nonObjectiveRewardsRemaining: number;
+  objectiveRewardAvailable: boolean;
   fired: Record<string, boolean>;     // idempotency keys
 };
 
 export function createFloorRewardBudget(mode: ObjectiveMode): FloorRewardBudget {
   return {
     mode,
-    nonObjectiveCardsRemaining: 2,
-    objectiveCardAvailable: true,
+    nonObjectiveRewardsRemaining: 0,
+    objectiveRewardAvailable: true,
     fired: Object.create(null),
   };
 }

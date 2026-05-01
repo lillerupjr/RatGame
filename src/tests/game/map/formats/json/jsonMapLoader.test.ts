@@ -42,6 +42,30 @@ describe("jsonMapLoader", () => {
     ]);
   });
 
+  it("parses light colorMode and strength fields", () => {
+    const mapDef = loadTableMapDefFromJson({
+      id: "LIGHTS_MODE_STRENGTH_TEST",
+      width: 2,
+      height: 2,
+      cells: [{ x: 0, y: 0, type: "floor", z: 0 }],
+      lights: [{
+        x: 1,
+        y: 1,
+        radiusPx: 120,
+        intensity: 0.65,
+        colorMode: "palette",
+        strength: "high",
+        color: "#ffaa44",
+      }],
+    }, "inline");
+
+    expect(mapDef.lights?.[0]).toMatchObject({
+      colorMode: "palette",
+      strength: "high",
+      color: "#ffaa44",
+    });
+  });
+
   it("parses street lamp semantic light fields", () => {
     const mapDef = loadTableMapDefFromJson({
       id: "LIGHTS_SEMANTIC_TEST",
@@ -111,6 +135,254 @@ describe("jsonMapLoader", () => {
       }],
     }, "inline");
     expect(mapDef.lights?.[0].flicker).toEqual({ kind: "NOISE", speed: 9, amount: 0.25 });
+  });
+
+  it("preserves skinId on building semantic fields", () => {
+    const mapDef = loadTableMapDefFromJson({
+      id: "FIELD_BUILDING_SKINID_TEST",
+      width: 8,
+      height: 8,
+      cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
+      fields: [{ x: 2, y: 2, z: 0, type: "building", w: 4, h: 4, skinId: "downtown_2" }],
+    }, "inline");
+
+    expect(mapDef.stamps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          x: 2,
+          y: 2,
+          z: 0,
+          type: "building",
+          w: 4,
+          h: 4,
+          skinId: "downtown_2",
+        }),
+      ]),
+    );
+  });
+
+  it("normalizes building dir from fields to cardinal uppercase", () => {
+    const mapDef = loadTableMapDefFromJson({
+      id: "FIELD_BUILDING_DIR_TEST",
+      width: 8,
+      height: 8,
+      cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
+      fields: [{ x: 2, y: 2, z: 0, type: "building", w: 4, h: 4, skinId: "downtown_2", dir: "e" }],
+    }, "inline");
+
+    expect(mapDef.stamps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "building",
+          skinId: "downtown_2",
+          dir: "E",
+        }),
+      ]),
+    );
+  });
+
+  it("preserves building dir from authored stamps", () => {
+    const mapDef = loadTableMapDefFromJson({
+      id: "STAMP_BUILDING_DIR_TEST",
+      width: 8,
+      height: 8,
+      cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
+      stamps: [{ x: 2, y: 2, z: 0, type: "building", w: 5, h: 7, skinId: "downtown_1", dir: "N" }],
+    }, "inline");
+
+    expect(mapDef.stamps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "building",
+          skinId: "downtown_1",
+          dir: "N",
+        }),
+      ]),
+    );
+  });
+
+  it("accepts boss_spawn as a semantic authored stamp", () => {
+    const mapDef = loadTableMapDefFromJson({
+      id: "STAMP_BOSS_SPAWN_TEST",
+      width: 8,
+      height: 8,
+      cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
+      stamps: [{ x: 4, y: 5, type: "boss_spawn" }],
+    }, "inline");
+
+    expect(mapDef.stamps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          x: 4,
+          y: 5,
+          type: "boss_spawn",
+        }),
+      ]),
+    );
+  });
+
+  it("rejects diagonal dir for buildings", () => {
+    expect(() => loadTableMapDefFromJson({
+      id: "FIELD_BUILDING_DIAGONAL_DIR_TEST",
+      width: 8,
+      height: 8,
+      cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
+      fields: [{ x: 2, y: 2, z: 0, type: "building", w: 4, h: 4, skinId: "downtown_2", dir: "NE" }],
+    }, "inline")).toThrow(/fields\[0\]\.dir must be cardinal for buildings/i);
+  });
+
+  it("rejects building dir+flipped combinations", () => {
+    expect(() => loadTableMapDefFromJson({
+      id: "STAMP_BUILDING_DIR_FLIPPED_TEST",
+      width: 8,
+      height: 8,
+      cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
+      stamps: [{ x: 2, y: 2, z: 0, type: "building", w: 5, h: 7, skinId: "downtown_1", dir: "E", flipped: true }],
+    }, "inline")).toThrow(/cannot define both dir and flipped/i);
+  });
+
+  it("preserves building perimeter layout from fields", () => {
+    const mapDef = loadTableMapDefFromJson({
+      id: "FIELD_BUILDING_LAYOUT_TEST",
+      width: 12,
+      height: 12,
+      cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
+      fields: [{ x: 1, y: 1, z: 0, type: "building", w: 8, h: 8, layout: "perimeter_outward" }],
+    }, "inline");
+
+    expect(mapDef.stamps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "building",
+          layout: "perimeter_outward",
+        }),
+      ]),
+    );
+  });
+
+  it("preserves building perimeter layout from authored stamps", () => {
+    const mapDef = loadTableMapDefFromJson({
+      id: "STAMP_BUILDING_LAYOUT_TEST",
+      width: 12,
+      height: 12,
+      cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
+      stamps: [{ x: 1, y: 1, z: 0, type: "building", w: 8, h: 8, layout: "perimeter_outward" }],
+    }, "inline");
+
+    expect(mapDef.stamps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "building",
+          layout: "perimeter_outward",
+        }),
+      ]),
+    );
+  });
+
+  it("rejects layout on non-building entries", () => {
+    expect(() => loadTableMapDefFromJson({
+      id: "FIELD_NON_BUILDING_LAYOUT_TEST",
+      width: 8,
+      height: 8,
+      cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
+      fields: [{ x: 2, y: 2, z: 0, type: "road", w: 2, h: 2, layout: "perimeter_outward" }],
+    }, "inline")).toThrow(/layout is only supported for type=building/i);
+  });
+
+  it("allows perimeter layout with dir and rejects flipped", () => {
+    const withDir = loadTableMapDefFromJson({
+      id: "STAMP_BUILDING_LAYOUT_DIR_TEST",
+      width: 12,
+      height: 12,
+      cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
+      stamps: [{ x: 1, y: 1, z: 0, type: "building", w: 8, h: 8, layout: "perimeter_outward", dir: "S" }],
+    }, "inline");
+    expect(withDir.stamps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "building",
+          layout: "perimeter_outward",
+          dir: "S",
+        }),
+      ]),
+    );
+
+    expect(() => loadTableMapDefFromJson({
+      id: "STAMP_BUILDING_LAYOUT_FLIPPED_TEST",
+      width: 12,
+      height: 12,
+      cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
+      stamps: [{ x: 1, y: 1, z: 0, type: "building", w: 8, h: 8, layout: "perimeter_outward", flipped: true }],
+    }, "inline")).toThrow(/cannot define flipped when layout=perimeter_outward/i);
+  });
+
+  it("applies root layout to building fields when field layout is omitted", () => {
+    const mapDef = loadTableMapDefFromJson({
+      id: "ROOT_LAYOUT_FIELDS_TEST",
+      width: 12,
+      height: 12,
+      layout: "perimeter_outward",
+      cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
+      fields: [{ x: 1, y: 1, z: 0, type: "building", w: 8, h: 8 }],
+    }, "inline");
+
+    expect(mapDef.stamps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "building",
+          layout: "perimeter_outward",
+        }),
+      ]),
+    );
+  });
+
+  it("applies root layout to authored building stamps when stamp layout is omitted", () => {
+    const mapDef = loadTableMapDefFromJson({
+      id: "ROOT_LAYOUT_STAMPS_TEST",
+      width: 12,
+      height: 12,
+      layout: "perimeter_outward",
+      cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
+      stamps: [{ x: 1, y: 1, z: 0, type: "building", w: 8, h: 8 }],
+    }, "inline");
+
+    expect(mapDef.stamps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "building",
+          layout: "perimeter_outward",
+        }),
+      ]),
+    );
+  });
+
+  it("allows root perimeter layout with dir and rejects flipped", () => {
+    const withDir = loadTableMapDefFromJson({
+      id: "ROOT_LAYOUT_DIR_CONFLICT_TEST",
+      width: 12,
+      height: 12,
+      layout: "perimeter_outward",
+      cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
+      fields: [{ x: 1, y: 1, z: 0, type: "building", w: 8, h: 8, dir: "S" }],
+    }, "inline");
+    expect(withDir.stamps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "building",
+          layout: "perimeter_outward",
+          dir: "S",
+        }),
+      ]),
+    );
+
+    expect(() => loadTableMapDefFromJson({
+      id: "ROOT_LAYOUT_FLIPPED_CONFLICT_TEST",
+      width: 12,
+      height: 12,
+      layout: "perimeter_outward",
+      cells: [{ x: 0, y: 0, type: "spawn", z: 0 }],
+      stamps: [{ x: 1, y: 1, z: 0, type: "building", w: 8, h: 8, flipped: true }],
+    }, "inline")).toThrow(/cannot define flipped when layout=perimeter_outward/i);
   });
 
   it("surrounds DOCKS chunk-grid with one 24x24 ocean chunk border at z=-2", () => {

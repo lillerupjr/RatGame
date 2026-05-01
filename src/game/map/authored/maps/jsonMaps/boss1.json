@@ -1,0 +1,29 @@
+{
+  "id": "BOSS1",
+  "width": 21,
+  "height": 21,
+  "metadata": {
+    "author": "contract"
+  },
+  "fields": [
+    { "x": 0, "y": 0, "w": 21, "h": 21, "type": "sidewalk" }
+  ],
+  "cells": [
+    { "x": 0, "y": 10, "type": "spawn" }
+  ],
+  "stamps": [
+    { "x": 10, "y": 10, "type": "boss_spawn" },
+
+    { "x": 1, "y": 0, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 11, "y": 0, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+
+    { "x": 1, "y": 5, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 11, "y": 5, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+
+    { "x": 1, "y": 10, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 11, "y": 10, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+
+    { "x": 1, "y": 15, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 },
+    { "x": 11, "y": 15, "z": 0, "type": "prop", "propId": "street_lamp_s", "w": 1, "h": 1 }
+  ]
+}

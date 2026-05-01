@@ -1,85 +1,86 @@
 // src/game/factories/enemyFactory.ts
 import type { World } from "../../engine/world/world";
 import { registry } from "../content/registry";
-import { ENEMY_TYPE, type EnemyType } from "../content/enemies";
-import { gridToWorld, worldToGrid } from "../coords/grid";
-import { anchorFromWorld } from "../coords/anchor";
+import { EnemyId } from "../content/enemies";
+import { worldToGrid } from "../coords/grid";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
-import { createEnemyAilmentsState } from "../combat_mods/ailments/enemyAilments";
-import { recordEnemySpawnedHp } from "../balance/balanceCsvLogger";
+import { createEnemyBrainState } from "../systems/enemies/brain";
+import {
+  coerceEnemyVisualScale,
+  DEFAULT_ENEMY_SPLIT_STAGE,
+  MIN_ENEMY_COLLISION_RADIUS,
+  resolveSplitterStageVisualScale,
+} from "../systems/enemies/enemyRuntime";
+import { isNeutralMonsterId } from "../content/neutralMonsters";
+import { resolveHostileSpawnHeatHealthMultiplier } from "../systems/spawn/hostileSpawnDirector";
+import { spawnHostileActorGrid } from "../hostiles/hostileActorFactory";
 
-export { ENEMY_TYPE };
-export type { EnemyType };
+export { EnemyId };
 
-/**
- * Factory: creates one enemy with standardized stats (from registry).
- * HP scaling is controlled only by spawn tuning HP knobs.
- */
+export type EnemySpawnRuntimeOverrides = {
+  splitStage?: number;
+  visualScale?: number;
+  rewardBaseLife?: number;
+};
+
 /** Spawn an enemy at grid coordinates with scaled stats. */
 export function spawnEnemyGrid(
     w: World,
-    type: EnemyType,
+    type: EnemyId,
     gx: number,
     gy: number,
-    _tileWorld: number = KENNEY_TILE_WORLD
+    _tileWorld: number = KENNEY_TILE_WORLD,
+    overrides?: EnemySpawnRuntimeOverrides,
 ) {
+    if (type === EnemyId.BOSS) {
+      throw new Error("Use spawnBossEncounter for canonical boss actors.");
+    }
     const s = registry.enemy(type);
-    const baseLife = Math.max(
-      1,
-      Math.round(Number.isFinite(s.baseLife) ? s.baseLife : (s.hp ?? 1))
-    );
+    const baseLife = Math.max(1, Math.round(s.stats.baseLife));
+    const splitStage = Number.isFinite(overrides?.splitStage)
+      ? Math.max(0, Math.floor(overrides!.splitStage as number))
+      : DEFAULT_ENEMY_SPLIT_STAGE;
+    const visualScale = overrides?.visualScale !== undefined
+      ? coerceEnemyVisualScale(overrides.visualScale)
+      : resolveSplitterStageVisualScale(splitStage);
+    const rewardBaseLife = Number.isFinite(overrides?.rewardBaseLife)
+      ? Math.max(1, Math.round(overrides!.rewardBaseLife as number))
+      : Math.max(1, Math.round(baseLife * visualScale));
 
-    // Apply run-heat scaling (damage only).
     const scaling = w.delveScaling ?? { hpMult: 1, damageMult: 1 };
-
-    const heat = Math.max(0, Math.floor((w.runHeat ?? 0) as number));
-
-    // Authoritative HP scaling: hpBase * hpPerDepth^heat
-    const tuning = (w as any).balance?.spawnTuning ?? {};
-    const hpBase = typeof tuning.hpBase === "number" ? Math.max(0, tuning.hpBase) : 1.0;
-    const hpPerDepth = typeof tuning.hpPerDepth === "number" ? Math.max(0.0001, tuning.hpPerDepth) : 1.0;
-    const effectiveHpMult = hpBase * Math.pow(hpPerDepth, heat);
-
-    const scaledHp = Math.max(1, Math.round(baseLife * effectiveHpMult));
-    const scaledDamage = Math.round(s.damage * scaling.damageMult);
-
-    // Balance telemetry: record how much HP just entered the world.
-    const logger = (w as any).balanceCsvLogger;
-    if (logger) recordEnemySpawnedHp(logger, scaledHp);
-
-    const i = w.eAlive.length;
-    w.eAlive.push(true);
-    w.eType.push(type);
-    const wp = gridToWorld(gx, gy, _tileWorld);
-    const anchor = anchorFromWorld(wp.wx, wp.wy, _tileWorld);
-    w.egxi.push(anchor.gxi);
-    w.egyi.push(anchor.gyi);
-    w.egox.push(anchor.gox);
-    w.egoy.push(anchor.goy);
-
-    w.evx.push(0);
-    w.evy.push(0);
-    w.eFaceX.push(0);
-    w.eFaceY.push(-1);
-    w.eBaseLife.push(baseLife);
-    w.eHp.push(scaledHp);
-    w.eHpMax.push(scaledHp);
-    w.eR.push(s.radius);
-    w.eSpeed.push(s.speed);
-    w.eDamage.push(scaledDamage);
-    w.ePoisonT.push(0);
-    w.ePoisonDps.push(0);
-    w.ePoisonedOnDeath.push(false);
-    w.eSpawnTriggerId.push(undefined);
-    w.eAilments.push(createEnemyAilmentsState());
-    w.ezVisual.push(0);
-    w.ezLogical.push(0);
-
-    return i;
+    const hostileHeatHealthMultiplier =
+      !isNeutralMonsterId(type)
+        ? resolveHostileSpawnHeatHealthMultiplier(w)
+        : 1;
+    const scaledHp = Math.max(1, Math.round(baseLife * visualScale * scaling.hpMult * hostileHeatHealthMultiplier));
+    const scaledDamage = Math.max(0, Math.round(s.stats.contactDamage * visualScale * scaling.damageMult));
+    const radius = Math.max(MIN_ENEMY_COLLISION_RADIUS, s.body.radius * visualScale);
+    return spawnHostileActorGrid(w, {
+      actorType: type,
+      gx,
+      gy,
+      tileWorld: _tileWorld,
+      stats: s.stats,
+      body: s.body,
+      movement: s.movement,
+      baseLife: rewardBaseLife,
+      radius,
+      splitStage,
+      visualScale,
+      scaledHp,
+      scaledDamage,
+      brainFactory: () => createEnemyBrainState(s),
+    });
 }
 
 /** Spawn an enemy at world coordinates (converted to grid). */
-export function spawnEnemy(w: World, type: EnemyType, x: number, y: number) {
+export function spawnEnemy(
+  w: World,
+  type: EnemyId,
+  x: number,
+  y: number,
+  overrides?: EnemySpawnRuntimeOverrides,
+) {
     const gp = worldToGrid(x, y, KENNEY_TILE_WORLD);
-    return spawnEnemyGrid(w, type, gp.gx, gp.gy, KENNEY_TILE_WORLD);
+    return spawnEnemyGrid(w, type, gp.gx, gp.gy, KENNEY_TILE_WORLD, overrides);
 }

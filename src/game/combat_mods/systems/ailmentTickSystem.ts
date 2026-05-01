@@ -3,13 +3,14 @@ import { AILMENT_TICK_INTERVAL_SEC } from "../ailments/ailmentTypes";
 import { createDpsMetrics, recordDamage } from "../../balance/dpsMetrics";
 import type { World } from "../../../engine/world/world";
 import { emitEvent } from "../../../engine/world/world";
-import { onEnemyKilledForChallenge } from "../../systems/progression/roomChallenge";
 import { getEnemyWorld } from "../../coords/worldViews";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
-import { getCardById } from "../content/cards/cardPool";
 import { resolveDotStats } from "../stats/combatStatsResolver";
+import { collectWorldStatMods } from "../../progression/effects/worldEffects";
 import { makeAilmentDotMeta } from "../../combat/damageMeta";
 import { DOT_TICK_INTERVAL_SEC } from "../../combat/dot/dotConstants";
+import { finalizeEnemyDeath } from "../../systems/enemies/finalize";
+import { isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
 
 function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
@@ -41,20 +42,13 @@ export function tickAilmentsOnce(w: any, dtTick: number): void {
   const n = w.eHp?.length ?? 0;
   if (!w.eAlive || !w.eHp) return;
 
-  const cardIds = [...(w.cards ?? []), ...(w.combatCardIds ?? [])];
-  const cards = cardIds
-    .map((id: string) => getCardById(id))
-    .filter((card): card is NonNullable<typeof card> => Boolean(card));
-  const dotStats = resolveDotStats({ cards });
-  const relicIds: string[] = Array.isArray(w.relics) ? w.relics : [];
-  // Dot-only scaling stays in the DoT pipeline; global hit multipliers must not be applied here.
-  const relicDotMoreMult =
-    (relicIds.includes("PASS_DOT_MORE_50") ? 1.5 : 1) *
-    (relicIds.includes("SPEC_DOT_SPECIALIST") ? 3.0 : 1);
+  const dotStats = resolveDotStats({ statMods: collectWorldStatMods(w) });
   const tickRateMult = Math.max(0.0001, dotStats.tickRateMult);
+  const dotMoreMult = 1;
 
   for (let e = 0; e < n; e++) {
     if (!w.eAlive[e]) continue;
+    if (isPoeEnemyDormant(w as World, e)) continue;
 
     if (!w.eAilments) w.eAilments = [];
     if (!w.eAilments[e]) w.eAilments[e] = createEnemyAilmentsState();
@@ -139,13 +133,13 @@ export function tickAilmentsOnce(w: any, dtTick: number): void {
     const damageReduction = w.eDamageReduction?.[e] ?? 0;
 
     const poisonFinal = applyDotMitigation(
-      poisonRaw * dotStats.poisonDamageMult * relicDotMoreMult,
+      poisonRaw * dotStats.poisonDamageMult * dotMoreMult,
       resistChaos,
       damageReduction,
     );
-    const bleedFinal = applyDotMitigation(bleedRaw * relicDotMoreMult, resistPhysical, damageReduction);
+    const bleedFinal = applyDotMitigation(bleedRaw * dotMoreMult, resistPhysical, damageReduction);
     const igniteFinal = applyDotMitigation(
-      igniteRawDamage * dotStats.igniteDamageMult * relicDotMoreMult,
+      igniteRawDamage * dotStats.igniteDamageMult * dotMoreMult,
       resistFire,
       damageReduction,
     );
@@ -189,21 +183,19 @@ export function tickAilmentsOnce(w: any, dtTick: number): void {
 
       if (w.eHp[e] > 0) continue;
 
-      w.eAlive[e] = false;
-      w.kills = (w.kills ?? 0) + 1;
-      if ("roomChallengeActive" in w && "roomChallengeKillsCount" in w) {
-        onEnemyKilledForChallenge(w as World);
-      }
       w.ePoisonedOnDeath ??= [];
       w.ePoisonedOnDeath[e] = st.poison.length > 0;
-      emitEvent(w, {
-        type: "ENEMY_KILLED",
-        enemyIndex: e,
+      finalizeEnemyDeath(w as World, e, {
+        damageMeta: ailmentMeta,
+        source: "OTHER",
+        damage: comp.damage,
+        dmgPhys: comp.dmgPhys,
+        dmgFire: comp.dmgFire,
+        dmgChaos: comp.dmgChaos,
+        isCrit: false,
         x: pos.x,
         y: pos.y,
-        spawnTriggerId: w.eSpawnTriggerId?.[e],
-        source: "OTHER",
-        damageMeta: ailmentMeta,
+        recordPoisonedOnDeath: false,
       });
       break;
     }
@@ -227,4 +219,3 @@ export function ailmentTickSystem(w: any, dt: number): void {
     tickAilmentsOnce(w, DOT_TICK_INTERVAL_SEC);
   }
 }
-

@@ -1,8 +1,13 @@
+// @system   core-simulation/combat-runtime
+// @owns     resolves player/enemy movement intent, walkability/ramp validation, anchor sync, facing and flow-field steering
+// @doc      docs/canonical/core_simulation_combat_runtime.md
+// @agents   no input event capture, combat damage, or map topology generation; see input.ts, collisions.ts, and map/compile/*
+
 import { World, gridAtPlayer } from "../../../engine/world/world";
 import { InputState } from "./input";
 import { walkInfo, worldToTile } from "../../map/compile/kenneyMap";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
-import { dir8FromVector, type Dir8 } from "../../../engine/render/sprites/dir8";
+import { dir8FromVector } from "../../../engine/render/sprites/dir8";
 import { gridToWorld } from "../../coords/grid";
 import { anchorFromWorld, writeAnchor } from "../../coords/anchor";
 import { getEnemyWorld, getPlayerWorld } from "../../coords/worldViews";
@@ -12,6 +17,21 @@ import {
   isFieldStale,
   type FlowField,
 } from "../../map/generators/flowField";
+import {
+  FLEE_SPEED_MULT,
+  FLEE_TRIGGER_RADIUS_TILES,
+  isLootGoblinEnemy,
+} from "../neutral/lootGoblin";
+import {
+  getBossDefinitionForEntity,
+  isBossEncounterDormant,
+  isBossEntity,
+  isBossMovementLockedByCast,
+} from "../../bosses/bossRuntime";
+import { getPoeEnemyLeashAnchor, isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
+import type { EnemyId } from "../../content/enemies";
+import { registry } from "../../content/registry";
+import { ensureEnemyBrain } from "../enemies/brain";
 
 type GridPos = { gx: number; gy: number };
 type WorldPos = { wx: number; wy: number };
@@ -177,6 +197,24 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     ezVisual[i] = eCur.zVisual;
     ezLogical[i] = eCur.zLogical;
 
+    if (isPoeEnemyDormant(w, i)) {
+      knockVx[i] = 0;
+      knockVy[i] = 0;
+      continue;
+    }
+    if (isBossEncounterDormant(w, i)) {
+      knockVx[i] = 0;
+      knockVy[i] = 0;
+      continue;
+    }
+    if (isBossMovementLockedByCast(w, i)) {
+      knockVx[i] = 0;
+      knockVy[i] = 0;
+      w.evx[i] = 0;
+      w.evy[i] = 0;
+      continue;
+    }
+
     // Apply and decay knockback velocity
     let kvx = knockVx[i] ?? 0;
     let kvy = knockVy[i] ?? 0;
@@ -187,24 +225,116 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     // Query flow field for optimal direction toward player
     const flowDir = queryFlowDirection(flowField, ex, ey, eCur.floorH, KENNEY_TILE_WORLD);
 
-    let gux: number;
-    let guy: number;
-    if (flowDir) {
-      gux = flowDir.dx;
-      guy = flowDir.dy;
-    } else {
-      // Fallback: direct chase for off-graph or unreachable enemies
-      const enemyGrid = gridFromAnchor(w.egxi[i], w.egyi[i], w.egox[i], w.egoy[i]);
-      const gvx = playerGrid.gx - enemyGrid.gx;
-      const gvy = playerGrid.gy - enemyGrid.gy;
-      const gdist = Math.hypot(gvx, gvy) || 1;
-      gux = gvx / gdist;
-      guy = gvy / gdist;
-    }
+    const type = w.eType[i] as EnemyId;
+    const isGoblin = isLootGoblinEnemy(w, i);
+    const bossDef = getBossDefinitionForEntity(w, i);
+    const isBoss = isBossEntity(w, i);
+    const leashAnchor = getPoeEnemyLeashAnchor(w, i);
+    const enemyDef = bossDef ?? registry.enemy(type);
+    const brain = isBoss ? null : ensureEnemyBrain(w, i);
+    let chaseWx = 0;
+    let chaseWy = 0;
 
-    const eWorldDir = gridDirToWorldDir(KENNEY_TILE_WORLD, gux, guy);
-    const chaseWx = eWorldDir.wx * w.eSpeed[i];
-    const chaseWy = eWorldDir.wy * w.eSpeed[i];
+    if (leashAnchor) {
+      const dx = leashAnchor.wx - ex;
+      const dy = leashAnchor.wy - ey;
+      const len = Math.hypot(dx, dy);
+      if (len > 1e-6) {
+        chaseWx = (dx / len) * w.eSpeed[i];
+        chaseWy = (dy / len) * w.eSpeed[i];
+      }
+    } else {
+      let gux = 0;
+      let guy = 0;
+      if (isGoblin) {
+        const fleeRadiusWorld = FLEE_TRIGGER_RADIUS_TILES * KENNEY_TILE_WORLD;
+        const distToPlayer = Math.hypot(ex - px, ey - py);
+        if (distToPlayer <= fleeRadiusWorld) {
+          if (flowDir) {
+            gux = -flowDir.dx;
+            guy = -flowDir.dy;
+          }
+          if (Math.hypot(gux, guy) <= 1e-6) {
+            const gvx = eGrid0.gx - playerGrid.gx;
+            const gvy = eGrid0.gy - playerGrid.gy;
+            const gdist = Math.hypot(gvx, gvy);
+            if (gdist > 1e-6) {
+              gux = gvx / gdist;
+              guy = gvy / gdist;
+            }
+          }
+        }
+      } else if (flowDir) {
+        gux = flowDir.dx;
+        guy = flowDir.dy;
+      } else {
+        // Fallback: direct chase for off-graph or unreachable enemies
+        const enemyGrid = gridFromAnchor(w.egxi[i], w.egyi[i], w.egox[i], w.egoy[i]);
+        const gvx = playerGrid.gx - enemyGrid.gx;
+        const gvy = playerGrid.gy - enemyGrid.gy;
+        const gdist = Math.hypot(gvx, gvy) || 1;
+        gux = gvx / gdist;
+        guy = gvy / gdist;
+      }
+
+      const eWorldDir = gridDirToWorldDir(KENNEY_TILE_WORLD, gux, guy);
+      const speedMult = isGoblin ? FLEE_SPEED_MULT : 1;
+      const desiredRange = enemyDef.movement.desiredRange;
+      const tolerance = enemyDef.movement.tolerance;
+      const reengageRange = enemyDef.movement.reengageRange;
+      const surfaceDist = Math.max(0, Math.hypot(px - ex, py - ey) - ((w.eR[i] ?? 0) + (w.playerR ?? 0)));
+      const minHold = Math.max(0, desiredRange - tolerance);
+      const maxHold = desiredRange + tolerance;
+      const shouldUseSharedRange =
+        enemyDef.movement.mode !== "scripted"
+        && !isBoss
+        && !isGoblin;
+
+      let dirWx = eWorldDir.wx;
+      let dirWy = eWorldDir.wy;
+      let applyMovement = Math.hypot(dirWx, dirWy) > 1e-6;
+      let chaseSpeed = w.eSpeed[i] * speedMult;
+      let moveScale = 1;
+
+      if (shouldUseSharedRange && brain) {
+        if (brain.state === "idle" || brain.state === "dead") {
+          applyMovement = false;
+        } else if (
+          enemyDef.aiType === "leaper"
+          && "ability" in enemyDef
+          && enemyDef.ability?.kind === "leap"
+          && brain.state === "acting"
+          && brain.leapTimeLeftSec > 0
+        ) {
+          dirWx = brain.leapDirX;
+          dirWy = brain.leapDirY;
+          chaseSpeed = enemyDef.ability.leapSpeed;
+          moveScale = Math.min(1, brain.leapTimeLeftSec / Math.max(dt, 1e-6));
+        } else if (brain.state !== "move") {
+          applyMovement = false;
+        } else if (enemyDef.aiType === "contact" || enemyDef.aiType === "leaper") {
+          applyMovement = true;
+        } else if (surfaceDist > reengageRange || surfaceDist > maxHold) {
+          applyMovement = true;
+        } else if (surfaceDist < minHold && desiredRange > 0.0001) {
+          dirWx = -dirWx;
+          dirWy = -dirWy;
+          applyMovement = true;
+        } else {
+          applyMovement = false;
+        }
+      } else if (enemyDef.movement.mode === "scripted") {
+        applyMovement = false;
+      }
+
+      if (applyMovement) {
+        chaseWx = dirWx * chaseSpeed * moveScale;
+        chaseWy = dirWy * chaseSpeed * moveScale;
+      } else {
+        chaseWx = 0;
+        chaseWy = 0;
+      }
+    }
     const moveWx = chaseWx + kvx;
     const moveWy = chaseWy + kvy;
 
@@ -253,6 +383,17 @@ export function movementSystem(w: World, input: InputState, dt: number) {
     const movedDiag = tryEnemyMove(enx, eny);
     const movedX = movedDiag ? true : tryEnemyMove(enx, ey);
     const movedY = movedDiag ? true : tryEnemyMove(ex, eny);
+
+    if (
+      brain
+      && enemyDef.aiType === "leaper"
+      && "ability" in enemyDef
+      && enemyDef.ability?.kind === "leap"
+      && brain.state === "acting"
+      && brain.leapTimeLeftSec > 0
+    ) {
+      brain.leapTimeLeftSec = Math.max(0, brain.leapTimeLeftSec - dt);
+    }
 
     const eGrid1 = gridFromAnchor(w.egxi[i], w.egyi[i], w.egox[i], w.egoy[i]);
     const dGx = eGrid1.gx - eGrid0.gx;

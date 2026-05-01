@@ -1,5 +1,4 @@
 import type { World } from "../../../engine/world/world";
-import { ENEMY_TYPE } from "../../factories/enemyFactory";
 import { enqueueRunEvent } from "../../rewards/runEvents";
 import { OBJECTIVE_TRIGGER_IDS } from "./objectiveSpec";
 
@@ -12,31 +11,31 @@ function getFloorIndex(world: World): number {
   return Number.isFinite(world.floorIndex) ? (world.floorIndex | 0) : 0;
 }
 
-function parseBossZoneIndex(triggerId: string): number {
-  if (!triggerId.startsWith(OBJECTIVE_TRIGGER_IDS.bossZonePrefix)) return -1;
-  const raw = triggerId.slice(OBJECTIVE_TRIGGER_IDS.bossZonePrefix.length);
+function parseRareZoneIndex(triggerId: string): number {
+  if (!triggerId.startsWith(OBJECTIVE_TRIGGER_IDS.rareZonePrefix)) return -1;
+  const raw = triggerId.slice(OBJECTIVE_TRIGGER_IDS.rareZonePrefix.length);
   const n = Number.parseInt(raw, 10);
   if (!Number.isFinite(n)) return -1;
   return n;
 }
 
-function ensureBossMilestoneCount(world: World): number {
-  const w = world as World & { _rewardBossMilestoneCount?: number };
-  if (!Number.isFinite(w._rewardBossMilestoneCount)) w._rewardBossMilestoneCount = 0;
-  return w._rewardBossMilestoneCount ?? 0;
+function ensureRareMilestoneCount(world: World): number {
+  const w = world as World & { _rewardRareMilestoneCount?: number };
+  if (!Number.isFinite(w._rewardRareMilestoneCount)) w._rewardRareMilestoneCount = 0;
+  return w._rewardRareMilestoneCount ?? 0;
 }
 
-function incrementBossMilestoneCount(world: World): number {
-  const w = world as World & { _rewardBossMilestoneCount?: number };
-  const next = ensureBossMilestoneCount(world) + 1;
-  w._rewardBossMilestoneCount = next;
+function incrementRareMilestoneCount(world: World): number {
+  const w = world as World & { _rewardRareMilestoneCount?: number };
+  const next = ensureRareMilestoneCount(world) + 1;
+  w._rewardRareMilestoneCount = next;
   return next;
 }
 
-function ensureSeenBossKillEvents(world: World): WeakSet<object> {
-  const w = world as World & { _rewardSeenBossKillEvents?: WeakSet<object> };
-  if (!w._rewardSeenBossKillEvents) w._rewardSeenBossKillEvents = new WeakSet<object>();
-  return w._rewardSeenBossKillEvents;
+function ensureSeenRareKillEvents(world: World): WeakSet<object> {
+  const w = world as World & { _rewardSeenRareKillEvents?: WeakSet<object> };
+  if (!w._rewardSeenRareKillEvents) w._rewardSeenRareKillEvents = new WeakSet<object>();
+  return w._rewardSeenRareKillEvents;
 }
 
 function ensureObjectiveSeenMap(world: World): Record<string, true> {
@@ -55,23 +54,22 @@ function ensureSurviveMilestoneSeenMap(world: World): Record<string, true> {
   return w._rewardSurviveMilestoneSeen;
 }
 
-function captureBossMilestoneEvents(world: World): void {
+function captureRareMilestoneEvents(world: World): void {
   const events = world.events;
   if (!Array.isArray(events) || events.length <= 0) return;
 
   const floorIndex = getFloorIndex(world);
-  const seenBossKillEvents = ensureSeenBossKillEvents(world);
+  const seenRareKillEvents = ensureSeenRareKillEvents(world);
   for (let i = 0; i < events.length; i++) {
     const ev = events[i];
     if (ev?.type !== "ENEMY_KILLED") continue;
     if (typeof ev === "object" && ev !== null) {
-      if (seenBossKillEvents.has(ev as object)) continue;
-      seenBossKillEvents.add(ev as object);
+      if (seenRareKillEvents.has(ev as object)) continue;
+      seenRareKillEvents.add(ev as object);
     }
 
     const enemyIndex = Number.isFinite(ev.enemyIndex) ? (ev.enemyIndex as number) : -1;
     if (enemyIndex < 0) continue;
-    if (world.eType?.[enemyIndex] !== ENEMY_TYPE.BOSS) continue;
 
     const triggerId =
       typeof ev.spawnTriggerId === "string"
@@ -79,18 +77,18 @@ function captureBossMilestoneEvents(world: World): void {
         : world.eSpawnTriggerId?.[enemyIndex];
     if (typeof triggerId !== "string") continue;
 
-    const bossIndex = parseBossZoneIndex(triggerId);
-    if (bossIndex < 1) continue;
+    const rareZoneIndex = parseRareZoneIndex(triggerId);
+    if (rareZoneIndex < 1) continue;
 
-    // Boss-triple rewards are based on kill order (first/second boss killed),
+    // Rare-triple rewards are based on kill order (first/second rare killed),
     // not on fixed trigger zone ids.
-    const milestone = incrementBossMilestoneCount(world);
+    const milestone = incrementRareMilestoneCount(world);
     if (milestone !== 1 && milestone !== 2) continue;
 
     enqueueRunEvent(world, {
-      type: "BOSS_MILESTONE_CLEARED",
+      type: "RARE_MILESTONE_CLEARED",
       floorIndex,
-      bossIndex: milestone,
+      rareIndex: milestone,
     });
   }
 }
@@ -149,7 +147,7 @@ export function rewardRunEventProducerSystem(
   options: RewardRunEventProducerOptions = {},
 ): void {
   if (options.includeCoreFacts !== false) {
-    captureBossMilestoneEvents(world);
+    captureRareMilestoneEvents(world);
     captureObjectiveCompletionEvents(world);
     captureSurviveMilestoneEvents(world);
   }

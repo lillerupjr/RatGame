@@ -46,7 +46,6 @@ export function audioSystem(w: World, dt: number) {
 
             // structure
             FLOOR_START: 1.0,
-            BOSS_START: 1.0,
             RUN_WIN: 1.0,
             RUN_LOSE: 1.0,
 
@@ -116,7 +115,7 @@ export function audioSystem(w: World, dt: number) {
 
                 if (kind === PRJ_KIND.KNIFE) sfx = "FIRE_KNIFE";
                 else if (kind === PRJ_KIND.PISTOL) sfx = "FIRE_PISTOL";
-                else if (kind === PRJ_KIND.SYRINGE) sfx = "FIRE_SYRINGE";
+                else if (kind === PRJ_KIND.SYRINGE || kind === PRJ_KIND.ACID) sfx = "FIRE_SYRINGE";
                 else if (kind === PRJ_KIND.BOUNCER) sfx = "FIRE_BOUNCER";
                 else if (kind === PRJ_KIND.MISSILE) sfx = "FIRE_BAZOOKA";
 

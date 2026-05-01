@@ -1,5 +1,10 @@
 // src/game/content/mapSkins.ts
 
+import {
+  AUTHORED_DELVE_PALETTE_ENTRIES,
+  type AuthoredDelvePaletteEntry,
+} from "./delvePaletteRegistry";
+
 export type MapSkinId =
   | "default"
   | "docks"
@@ -40,16 +45,28 @@ export type PaletteId =
   | "arne_16"
   | "lush_sunset"
   | "vaporhaze_16"
-  | "sunset_cave_extended";
+  | "sunset_cave_extended"
+  | "midnight_ablaze"
+  | "blessing"
+  | "hollow"
+  | "berry_nebula"
+  | "cyclope6"
+  | "bloodmoon21"
+  | "blk_aqu4"
+  | "dustbyte"
+  | "hydrangea_11"
+  | "fiery_plague_gb"
+  | "leopolds_dreams"
+  | "look_of_horror"
+  | "aquaverse"
+  | "sunraze";
 
 export type MapSkinBundle = {
-  paletteId?: PaletteId;
-
   /**
-   * Optional palette pool: if present and non-empty, one palette is randomly chosen
-   * when the skin becomes active and then stays locked for that map.
+   * Fixed palette selection for skins that should bypass registry-backed
+   * random delve palette selection.
    */
-  palettePool?: readonly PaletteId[];
+  paletteId?: PaletteId;
 
   floor?: string;
   apron?: string;
@@ -109,8 +126,6 @@ export const MAP_SKINS: Record<string, MapSkinBundle> = {
   // ─────────────────────────────────────────────────────────────
 
   docks: {
-    // Wet/cold night. Keeps divination, but adds fuller night palettes.
-    palettePool: ["divination", "moonlight_15", "night_16", "reha_16"],
     floor: "tiles/floor/asphalt/1",
     apron: "tiles/walls/sidewalk_apron",
     wall: "tiles/walls/asphalt",
@@ -125,8 +140,6 @@ export const MAP_SKINS: Record<string, MapSkinBundle> = {
   },
 
   green: {
-    // Park-ish / nature vibe.
-    palettePool: ["swamp_kin", "dawnbringer_16", "arne_16"],
     floor: "tiles/floor/park/1",
     apron: "tiles/walls/green",
     wall: "tiles/walls/green",
@@ -134,13 +147,9 @@ export const MAP_SKINS: Record<string, MapSkinBundle> = {
   },
 
   avenue: {
-    // Baseline gritty city. DB32 + two strong 16-color “general urban” palettes.
-    palettePool: ["db32", "sweetie_16", "endesga_16"],
   },
 
   china_town: {
-    // Neon + noir. Cyberpunk stays, chroma adds harsh noir, vaporhaze adds stylized neon dusk.
-    palettePool: ["cyberpunk", "chroma_noir", "vaporhaze_16"],
   },
 
   building1: {
@@ -164,51 +173,39 @@ export const MAP_SKINS: Record<string, MapSkinBundle> = {
   // ─────────────────────────────────────────────────────────────
 
   downtown: {
-    palettePool: ["db32", "sweetie_16", "endesga_16"],
   },
 
   industrial: {
-    palettePool: ["reha_16", "night_16", "endesga_16"],
   },
 
   slums: {
-    palettePool: ["endesga_16", "chroma_noir"],
   },
 
   park: {
-    palettePool: ["arne_16", "dawnbringer_16", "lush_sunset"],
   },
 
   sewers: {
-    palettePool: ["swamp_kin", "reha_16"],
   },
 
   subway: {
-    palettePool: ["st8_moonlight", "night_16"],
   },
 
   rooftops: {
-    palettePool: ["moonlight_15", "st8_moonlight"],
   },
 
   snow: {
-    palettePool: ["st8_moonlight", "moonlight_15", "sweetie_16"],
   },
 
   countryside: {
-    palettePool: ["lush_sunset", "arne_16"],
   },
 
   beach: {
-    palettePool: ["lush_sunset", "lost_in_the_desert"],
   },
 
   desert: {
-    palettePool: ["lost_in_the_desert", "sunset_cave_extended"],
   },
 
   boss_arena: {
-    palettePool: ["night_16", "cyberpunk", "chroma_noir"],
   },
 };
 
@@ -218,20 +215,41 @@ export const MAP_SKINS: Record<string, MapSkinBundle> = {
 
 let activeMapSkinId: MapSkinId | undefined = undefined;
 
-// Locked-in palette for the currently active skin (so we don't change every frame)
-let activeMapSkinPaletteId: PaletteId = DEFAULT_MAP_SKIN.paletteId;
+const DEFAULT_ACTIVE_MAP_SKIN_SATURATION_WEIGHT = 0.75;
+const DEFAULT_ACTIVE_MAP_SKIN_DARKNESS = 0.5;
 
-function pickFromPool(pool: readonly PaletteId[]): PaletteId {
-  if (!pool || pool.length === 0) return DEFAULT_MAP_SKIN.paletteId;
-  const idx = Math.floor(Math.random() * pool.length);
-  return pool[Math.max(0, Math.min(pool.length - 1, idx))]!;
+function createFixedPaletteEntry(paletteId: PaletteId): AuthoredDelvePaletteEntry {
+  return {
+    paletteId,
+    saturationWeight: DEFAULT_ACTIVE_MAP_SKIN_SATURATION_WEIGHT,
+    darkness: DEFAULT_ACTIVE_MAP_SKIN_DARKNESS,
+    enabledForRandomDelvePicker: false,
+  };
 }
 
-function resolvePaletteForSkin(id?: MapSkinId): PaletteId {
-  const bundle = MAP_SKINS[id ?? ""] ?? {};
-  if (bundle.palettePool && bundle.palettePool.length > 0) return pickFromPool(bundle.palettePool);
-  if (bundle.paletteId) return bundle.paletteId;
-  return DEFAULT_MAP_SKIN.paletteId;
+const DEFAULT_ACTIVE_MAP_SKIN_PALETTE_ENTRY = createFixedPaletteEntry(DEFAULT_MAP_SKIN.paletteId);
+
+// Locked-in palette for the currently active skin (so we don't change every frame)
+let activeMapSkinPaletteEntry: AuthoredDelvePaletteEntry = { ...DEFAULT_ACTIVE_MAP_SKIN_PALETTE_ENTRY };
+
+export function pickRandomEnabledDelvePaletteEntry(
+  entries: readonly AuthoredDelvePaletteEntry[] = AUTHORED_DELVE_PALETTE_ENTRIES,
+  randomValue: number = Math.random(),
+): AuthoredDelvePaletteEntry | null {
+  const enabledEntries = entries.filter((entry) => entry.enabledForRandomDelvePicker);
+  if (enabledEntries.length === 0) return null;
+
+  const normalizedRandom = Number.isFinite(randomValue) ? randomValue : 0;
+  const clampedRandom = Math.max(0, Math.min(0.999999999, normalizedRandom));
+  const index = Math.min(enabledEntries.length - 1, Math.floor(clampedRandom * enabledEntries.length));
+  return { ...enabledEntries[index]! };
+}
+
+function resolvePaletteEntryForSkin(id?: MapSkinId): AuthoredDelvePaletteEntry {
+  const bundle = id ? MAP_SKINS[id] : undefined;
+  if (!bundle) return { ...DEFAULT_ACTIVE_MAP_SKIN_PALETTE_ENTRY };
+  if (bundle.paletteId) return createFixedPaletteEntry(bundle.paletteId);
+  return pickRandomEnabledDelvePaletteEntry() ?? { ...DEFAULT_ACTIVE_MAP_SKIN_PALETTE_ENTRY };
 }
 
 export function resolveMapSkin(id?: MapSkinId): ResolvedMapSkin {
@@ -250,16 +268,20 @@ export function resolveMapSkin(id?: MapSkinId): ResolvedMapSkin {
 
 export function setActiveMapSkinId(id?: MapSkinId): void {
   activeMapSkinId = id;
-  activeMapSkinPaletteId = resolvePaletteForSkin(id);
+  activeMapSkinPaletteEntry = resolvePaletteEntryForSkin(id);
 }
 
 export function getActiveMapSkinId(): MapSkinId | undefined {
   return activeMapSkinId;
 }
 
-/** The palette actually in use for the currently active skin (includes pool random-pick). */
+/** The palette actually in use for the currently active skin. */
 export function getActiveMapSkinPaletteId(): PaletteId {
-  return activeMapSkinPaletteId;
+  return activeMapSkinPaletteEntry.paletteId;
+}
+
+export function getActiveMapSkinPaletteEntry(): AuthoredDelvePaletteEntry {
+  return { ...activeMapSkinPaletteEntry };
 }
 
 export function resolveSemanticSprite(mapSkinId: MapSkinId | undefined, slot: string, index?: number): string {

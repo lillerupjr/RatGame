@@ -36,7 +36,6 @@ export type TableMapCell = {
 
 export type SemanticStampType =
     | "building"
-    | "container"
     | "prop"
     | "road"
     | "asphalt"
@@ -44,6 +43,7 @@ export type SemanticStampType =
     | "park"
     | "sea"
     | "boss_room"
+    | "boss_spawn"
     | "fence"
     | "lamp_post";
 
@@ -59,17 +59,15 @@ export type SemanticStamp = {
     pool?: string[];
     heightUnitsMin?: number;
     heightUnitsMax?: number;
-    stackChance?: number;
     propId?: string;
     dir?: string;
+    layout?: "perimeter_outward";
     semantic?: string;
     startHeight?: number;
     targetHeight?: number;
     collision?: "BLOCK" | "PASS";
     blocksMovement?: boolean;
     flipped?: boolean;
-    stackLevel?: number;
-    zStackUnits?: number;
 };
 
 export type TableObjectiveRule =
@@ -77,6 +75,9 @@ export type TableObjectiveRule =
     type: "SIGNAL_COUNT";
     count: number;
     signalType?: "ENTER" | "EXIT" | "KILL" | "TICK" | "INTERACT";
+}
+    | {
+    type: "TRACK_BOSS_KILL";
 };
 
 export type TableOutcomeDef = {
@@ -93,6 +94,8 @@ export type TableObjectiveDef = {
 
 export type ApronBaseMode = "PLATEAU" | "ISLANDS";
 export type TableMapLightShape = "RADIAL" | "STREET_LAMP";
+export type TableMapLightColorMode = "off" | "standard" | "palette";
+export type TableMapLightStrength = "low" | "medium" | "high";
 export type TableMapLightSemanticType =
     | "street_lamp_n"
     | "street_lamp_e"
@@ -112,6 +115,8 @@ export type TableMapLight = {
     poolHeightOffsetUnits?: number;
     radiusPx: number;
     intensity: number;
+    colorMode?: TableMapLightColorMode;
+    strength?: TableMapLightStrength;
     color?: string;
     tintStrength?: number;
     shape?: TableMapLightShape;

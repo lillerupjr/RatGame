@@ -1,12 +1,13 @@
 import type { World } from "../../../engine/world/world";
 import { addGold } from "../../economy/gold";
-import { type RewardOutcome, handleRewardEvent } from "../../rewards/rewardDirector";
+import { OBJECTIVE_COMPLETION_GOLD, type RewardOutcome, handleRewardEvent } from "../../rewards/rewardDirector";
+import { defaultRewardFamilyForDepth, type ProgressionRewardFamily } from "../../progression/rewards/rewardFamilies";
+import { grantModifierToken } from "../../progression/rings/ringState";
 import { type RunEvent, shiftRunEvent } from "../../rewards/runEvents";
 import {
   addRewardClaimKey,
   enqueueRewardTicket,
   hasRewardClaimKey,
-  type RewardTicketKind,
   type RewardTicketSource,
 } from "../../rewards/rewardTickets";
 
@@ -23,11 +24,13 @@ function claimKeyForRunEvent(world: World, ev: RunEvent): string {
   switch (ev.type) {
     case "ZONE_CLEARED":
       return `${floorIndex}:ZONE_CLEAR:${ev.zoneIndex}`;
-    case "BOSS_MILESTONE_CLEARED":
-      return `${floorIndex}:BOSS_CLEAR:${ev.bossIndex}`;
+    case "RARE_MILESTONE_CLEARED":
+      return `${floorIndex}:RARE_CLEAR:${ev.rareIndex}`;
     case "OBJECTIVE_COMPLETED":
       if (world.floorRewardBudget.mode === "ZONE_TRIAL") return `${floorIndex}:TRIAL_COMPLETE`;
       return `${floorIndex}:OBJ_COMPLETE:${ev.objectiveId}`;
+    case "LEVEL_UP":
+      return `${floorIndex}:LEVEL_UP:${ev.level}`;
     case "CHEST_OPEN_REQUESTED":
       return ev.chestKind === "BOSS"
         ? `${floorIndex}:BOSS_CHEST`
@@ -39,24 +42,10 @@ function claimKeyForRunEvent(world: World, ev: RunEvent): string {
   }
 }
 
-function applyBossMilestoneReward(world: World, bossIndex: 1 | 2): RewardOutcome {
-  if (world.floorArchetype !== "BOSS_TRIPLE") {
-    return { type: "NO_REWARD", reason: "Boss milestone ignored outside boss-triple floors" };
-  }
-  if (bossIndex !== 1 && bossIndex !== 2) {
-    return { type: "NO_REWARD", reason: "Boss milestone ignored for unsupported index" };
-  }
-
-  if (world.floorRewardBudget.nonObjectiveCardsRemaining > 0) {
-    world.floorRewardBudget.nonObjectiveCardsRemaining -= 1;
-    return {
-      type: "GRANT_CARD",
-      reason: `Boss milestone ${bossIndex} consumed non-objective budget`,
-    };
-  }
+function applyRareMilestoneReward(world: World, rareIndex: 1 | 2): RewardOutcome {
   return {
     type: "NO_REWARD",
-    reason: `Boss milestone ${bossIndex} skipped (budget exhausted)`,
+    reason: `Rare milestone ${rareIndex} reward disabled`,
   };
 }
 
@@ -65,8 +54,10 @@ function rewardPlanForRunEvent(
   ev: RunEvent,
 ): {
   outcome: RewardOutcome;
-  ticketKind: RewardTicketKind;
   ticketSource: RewardTicketSource;
+  progressionFamily?: ProgressionRewardFamily;
+  grantLevelUpToken?: boolean;
+  bonusGoldAmount: number;
 } {
   const depth = floorMapDepthForRewards(world);
 
@@ -78,15 +69,15 @@ function rewardPlanForRunEvent(
           { type: "ZONE_COMPLETED", zoneIndex: ev.zoneIndex },
           { depth },
         ),
-        ticketKind: "CARD_PICK",
-        ticketSource: "ZONE_TRIAL",
+        ticketSource: "FLOOR_COMPLETION",
+        bonusGoldAmount: 0,
       };
 
-    case "BOSS_MILESTONE_CLEARED":
+    case "RARE_MILESTONE_CLEARED":
       return {
-        outcome: applyBossMilestoneReward(world, ev.bossIndex),
-        ticketKind: "CARD_PICK",
-        ticketSource: "ZONE_TRIAL",
+        outcome: applyRareMilestoneReward(world, ev.rareIndex),
+        ticketSource: "FLOOR_COMPLETION",
+        bonusGoldAmount: 0,
       };
 
     case "SURVIVE_MILESTONE":
@@ -96,48 +87,43 @@ function rewardPlanForRunEvent(
           { type: "SURVIVE_1MIN_REWARD" },
           { depth },
         ),
-        ticketKind: "CARD_PICK",
-        ticketSource: "ZONE_TRIAL",
+        ticketSource: "FLOOR_COMPLETION",
+        bonusGoldAmount: 0,
       };
 
-    case "OBJECTIVE_COMPLETED": {
-      if (world.floorArchetype === "VENDOR" || world.floorArchetype === "HEAL") {
-        return {
-          outcome: { type: "NO_REWARD", reason: "Objective reward ignored on neutral floor" },
-          ticketKind: "RELIC_PICK",
-          ticketSource: "OBJECTIVE_COMPLETION",
-        };
-      }
+    case "OBJECTIVE_COMPLETED":
       return {
         outcome: handleRewardEvent(world.floorRewardBudget, { type: "OBJECTIVE_COMPLETED" }, { depth }),
-        ticketKind: "RELIC_PICK",
-        ticketSource: "OBJECTIVE_COMPLETION",
+        ticketSource: "FLOOR_COMPLETION",
+        progressionFamily: world.currentFloorIntent?.rewardFamily ?? defaultRewardFamilyForDepth(depth),
+        bonusGoldAmount: OBJECTIVE_COMPLETION_GOLD,
       };
-    }
+
+    case "LEVEL_UP":
+      return {
+        outcome: { type: "NO_REWARD", reason: `Level ${ev.level} grants ring level-up token` },
+        ticketSource: "LEVEL_UP",
+        progressionFamily: "RING_MODIFIER_TOKEN",
+        grantLevelUpToken: true,
+        bonusGoldAmount: 0,
+      };
 
     case "CHEST_OPEN_REQUESTED":
-      if (world.floorArchetype === "BOSS_TRIPLE") {
-        return {
-          outcome: { type: "NO_REWARD", reason: "Boss-triple chest reward disabled; use boss milestones" },
-          ticketKind: "CARD_PICK",
-          ticketSource: "BOSS_CHEST",
-        };
-      }
       return {
         outcome: handleRewardEvent(
           world.floorRewardBudget,
           { type: "CHEST_OPENED", chestKind: ev.chestKind },
           { depth },
         ),
-        ticketKind: "CARD_PICK",
-        ticketSource: ev.chestKind === "BOSS" ? "BOSS_CHEST" : "ZONE_TRIAL",
+        ticketSource: ev.chestKind === "BOSS" ? "BOSS_CHEST" : "SIDE_OBJECTIVE",
+        bonusGoldAmount: 0,
       };
 
     default:
       return {
         outcome: { type: "NO_REWARD", reason: "Unhandled run event" },
-        ticketKind: "CARD_PICK",
-        ticketSource: "ZONE_TRIAL",
+        ticketSource: "FLOOR_COMPLETION",
+        bonusGoldAmount: 0,
       };
   }
 }
@@ -163,19 +149,28 @@ export function rewardSchedulerSystem(world: World): void {
         event: ev.type,
         claimKey,
         outcome: plan.outcome.type,
-        ticketKind: plan.outcome.type === "GRANT_CARD" ? plan.ticketKind : null,
+        family: plan.outcome.type === "GRANT_PROGRESSION_REWARD" ? plan.progressionFamily : null,
       });
     }
 
     // Claim once scheduler has decided the outcome. This prevents event replay loss.
     addRewardClaimKey(world, claimKey);
-    world.lastCardRewardClaimKey = claimKey;
+    world.lastRewardClaimKey = claimKey;
 
     if (ev.type === "OBJECTIVE_COMPLETED") {
       world.objectiveRewardClaimedKey = claimKey;
     }
-    if (ev.type === "ZONE_CLEARED" || ev.type === "BOSS_MILESTONE_CLEARED") {
+    if (ev.type === "ZONE_CLEARED" || ev.type === "RARE_MILESTONE_CLEARED") {
       appendZoneRewardClaim(world, claimKey);
+    }
+
+    if (plan.bonusGoldAmount > 0) {
+      addGold(world, plan.bonusGoldAmount);
+    }
+
+    if (plan.grantLevelUpToken) {
+      grantModifierToken(world, "LEVEL_UP");
+      continue;
     }
 
     if (plan.outcome.type === "GRANT_GOLD") {
@@ -183,13 +178,13 @@ export function rewardSchedulerSystem(world: World): void {
       continue;
     }
 
-    if (plan.outcome.type !== "GRANT_CARD") {
+    if (plan.outcome.type !== "GRANT_PROGRESSION_REWARD") {
       continue;
     }
 
     enqueueRewardTicket(world, {
       claimKey,
-      kind: plan.ticketKind,
+      family: plan.progressionFamily ?? defaultRewardFamilyForDepth(floorMapDepthForRewards(world)),
       source: plan.ticketSource,
       optionCount: DEFAULT_OPTION_COUNT,
     });

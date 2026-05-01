@@ -1,3 +1,8 @@
+// @system   game-runtime/app-loop
+// @owns     defines AppState/RunState enums and mutable app-state controller
+// @doc      docs/canonical/game_runtime_app_loop.md
+// @agents   no pause policy, loading stages, or frame loop; see pauseController.ts, loadingFlow.ts, and src/main.ts
+
 export const enum AppState {
   BOOT = 0,
   MENU = 1,

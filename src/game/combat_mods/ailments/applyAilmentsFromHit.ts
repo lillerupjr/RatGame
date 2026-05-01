@@ -48,6 +48,8 @@ export function applyAilmentsFromHit(
     poisonDurationMult?: number;
     igniteDurationMult?: number;
     allDamageContributesToPoison?: boolean;
+    additionalPoisonStackChance?: number;
+    additionalPoisonStackRoll?: number;
   }
 ): void {
   const chanceBleed = clamp01(chances.bleed);
@@ -58,6 +60,8 @@ export function applyAilmentsFromHit(
   const poisonDurationMult = Math.max(0, extra?.poisonDurationMult ?? 1);
   const igniteDurationMult = Math.max(0, extra?.igniteDurationMult ?? 1);
   const allDamageContributesToPoison = !!extra?.allDamageContributesToPoison;
+  const additionalPoisonStackChance = clamp01(extra?.additionalPoisonStackChance ?? 0);
+  const additionalPoisonStackRoll = clamp01(extra?.additionalPoisonStackRoll ?? 1);
   // DoT is derived from already-resolved hit payload; never reapply global hit damage here.
   const poisonBaseDamage = allDamageContributesToPoison
     ? Math.max(0, dealt.physical + dealt.fire + dealt.chaos)
@@ -69,6 +73,9 @@ export function applyAilmentsFromHit(
 
   if (poisonBaseDamage > 0 && rolls.poison < chancePoison) {
     addPoison(state, poisonBaseDamage * poisonDamageMult, { durationMult: poisonDurationMult });
+    if (additionalPoisonStackRoll < additionalPoisonStackChance) {
+      addPoison(state, poisonBaseDamage * poisonDamageMult, { durationMult: poisonDurationMult });
+    }
   }
 
   if (dealt.fire > 0 && rolls.ignite < chanceIgnite) {

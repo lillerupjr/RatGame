@@ -1,4 +1,7 @@
-import type { VendorOffer } from "./events/vendor";
+// @system   world-state/runtime-data-model
+// @owns     defines shared GameEvent, DamageMeta, SFX, and VFX event contracts
+// @doc      docs/canonical/world_state_runtime_data_model.md
+// @agents   no event queue storage, audio playback, or combat handling; see engine/world/world.ts, presentation/audio.ts, and systems/sim/*
 
 export type DamageCategory = "HIT" | "DOT";
 
@@ -17,7 +20,6 @@ export type TriggerKey =
 
 export type DamageCause =
   | { kind: "WEAPON"; weaponId: string }
-  | { kind: "RELIC"; relicId: string; mode: EffectMode; triggerKey?: TriggerKey }
   | { kind: "TRIGGER"; mode: EffectMode; triggerId?: string; objectiveId?: string }
   | { kind: "ENVIRONMENT"; mode: EffectMode; hazardId: string }
   | { kind: "AILMENT"; ailment: AilmentKind }
@@ -45,12 +47,7 @@ export type LegacyDamageSource =
   | "BOUNCER"
   | "OTHER";
 
-export type VfxId =
-  | "EXPLOSION"
-  | "LIGHTNING_HIT"
-  | "STATUS_BLEED_LOOP"
-  | "STATUS_POISON_LOOP"
-  | "STATUS_BURNING_LOOP";
+export type VfxClipKey = string;
 
 export type SfxId =
     | "FIRE_KNIFE"
@@ -70,7 +67,6 @@ export type SfxId =
     | "PLAYER_HIT"
     | "CHEST_PICKUP"
     | "FLOOR_START"
-    | "BOSS_START"
     | "RUN_WIN"
     | "RUN_LOSE"
     | "UI_CLICK";
@@ -94,6 +90,11 @@ export type GameEvent =
     | {
     type: "ENEMY_KILLED";
     enemyIndex: number;
+    damage?: number;
+    dmgPhys?: number;
+    dmgFire?: number;
+    dmgChaos?: number;
+    isCrit?: boolean;
     x: number;
     y: number;
     spawnTriggerId?: string;
@@ -118,35 +119,14 @@ export type GameEvent =
     vol?: number; // 0..1
     rate?: number; // playback rate
 }
-    | {
-    type: "VENDOR_PURCHASE";
-    offer: VendorOffer;
-}
     | { type: "MOMENTUM_BREAK"; wasFull: boolean }
     | { type: "MOMENTUM_DECAYED" }
     | { type: "FULL_MOMENTUM_REACHED" }
     | { type: "FULL_MOMENTUM_LOST" }
     | {
-    type: "VFX"; id: VfxId; x: number; y: number;
+    type: "VFX"; id: VfxClipKey; x: number; y: number;
     radius?: number; z?: number;
     scale?: number; loop?: boolean;
     followEnemyIndex?: number; offsetYPx?: number;
   }
-    | { type: "VFX_STOP_FOLLOW"; id: VfxId; enemyIndex: number };
-
-export type RelicTriggerEvent = Extract<GameEvent, { type: "ENEMY_HIT" | "ENEMY_KILLED" }> & {
-  isRetrigger?: boolean;
-  killDamage?: number;
-};
-
-export type PendingRelicRetrigger = {
-  fireAt: number;
-  event: RelicTriggerEvent;
-};
-
-export type PendingRelicDaggerShot = {
-  fireAt: number;
-  projectileIndex: number;
-  excludeEnemyIndex: number;
-  range: number;
-};
+    | { type: "VFX_STOP_FOLLOW"; id: VfxClipKey; enemyIndex: number };

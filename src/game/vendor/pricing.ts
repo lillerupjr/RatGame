@@ -1,9 +1,11 @@
-import { getCardById } from "../combat_mods/content/cards/cardPool";
+import type { ProgressionRewardFamily } from "../progression/rewards/rewardFamilies";
 
-export const VENDOR_RELIC_PRICE_G = 300;
+export const VENDOR_RING_PRICE_G = 300;
+export const VENDOR_MODIFIER_TOKEN_PRICE_G = 150;
+export const VENDOR_HAND_EFFECT_PRICE_G = 250;
 
-export function getVendorCardPriceG(cardId: string): number {
-  const tier = Math.max(1, Math.floor(getCardById(cardId)?.powerTier ?? 1));
-  return tier * 50;
+export function getVendorOfferPriceG(family: ProgressionRewardFamily): number {
+  if (family === "RING") return VENDOR_RING_PRICE_G;
+  if (family === "RING_MODIFIER_TOKEN") return VENDOR_MODIFIER_TOKEN_PRICE_G;
+  return VENDOR_HAND_EFFECT_PRICE_G;
 }
-

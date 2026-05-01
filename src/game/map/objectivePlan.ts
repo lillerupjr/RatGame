@@ -1,20 +1,25 @@
 import type { FloorArchetype } from "./floorArchetype";
 import type { ObjectiveSpec } from "../systems/progression/objectiveSpec";
+import type { BossId } from "../bosses/bossTypes";
 
 export type ObjectiveId =
   | "SURVIVE_TIMER"
   | "ZONE_TRIAL"
+  | "POE_MAP_CLEAR"
   | "TIME_TRIAL_ZONES"
   | "VENDOR_VISIT"
   | "HEAL_VISIT"
+  | "ACT_BOSS"
   | "KILL_RARES_IN_ZONES";
 
 export const OBJECTIVE_IDS: ObjectiveId[] = [
   "SURVIVE_TIMER",
   "ZONE_TRIAL",
+  "POE_MAP_CLEAR",
   "TIME_TRIAL_ZONES",
   "VENDOR_VISIT",
   "HEAL_VISIT",
+  "ACT_BOSS",
   "KILL_RARES_IN_ZONES",
 ];
 
@@ -28,7 +33,9 @@ export function objectiveIdFromArchetype(archetype: FloorArchetype): ObjectiveId
       return "VENDOR_VISIT";
     case "HEAL":
       return "HEAL_VISIT";
-    case "BOSS_TRIPLE":
+    case "ACT_BOSS":
+      return "ACT_BOSS";
+    case "RARE_TRIPLE":
       return "KILL_RARES_IN_ZONES";
   }
 }
@@ -38,7 +45,8 @@ export function objectiveSpecFromObjectiveId(
   params?: Partial<{
     timeLimitSec: number;
     zoneCount: number;
-    bossCount: number;
+    rareCount: number;
+    bossId: BossId | null;
   }>
 ): ObjectiveSpec {
   switch (objectiveId) {
@@ -56,6 +64,13 @@ export function objectiveSpecFromObjectiveId(
           zoneCount: params?.zoneCount ?? 3,
           zoneSize: 4,
           killTargetPerZone: 8,
+        },
+      };
+    case "POE_MAP_CLEAR":
+      return {
+        objectiveType: "POE_MAP_CLEAR",
+        params: {
+          clearCount: 1,
         },
       };
     case "TIME_TRIAL_ZONES":
@@ -77,11 +92,18 @@ export function objectiveSpecFromObjectiveId(
         objectiveType: "HEAL_VISIT",
         params: {},
       };
+    case "ACT_BOSS":
+      return {
+        objectiveType: "ACT_BOSS",
+        params: {
+          bossId: params?.bossId ?? null,
+        },
+      };
     case "KILL_RARES_IN_ZONES":
       return {
         objectiveType: "KILL_RARES_IN_ZONES",
         params: {
-          bossCount: params?.bossCount ?? 3,
+          rareCount: params?.rareCount ?? 3,
           zoneCount: params?.zoneCount ?? 3,
           timeLimitSec: params?.timeLimitSec ?? null,
         },

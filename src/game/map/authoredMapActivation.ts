@@ -1,11 +1,21 @@
+// @system   map-compilation/activation/floor-topology
+// @owns     switches active authored/compiled maps, syncs render skin/cache, exposes safe spawn/goal/debug queries
+// @doc      docs/canonical/map_compilation_activation_floor_topology.md
+// @agents   no compile internals, delve route state, or objective execution; see compile/kenneyMapLoader.ts, delveMap.ts, and systems/progression/*
+
 import type { World } from "../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { setActiveMapSkinId } from "../../engine/render/sprites/renderSprites";
 import { type CompiledKenneyMap, type IsoTile } from "./compile/kenneyMapLoader";
-import { PLANE_TILE_Z_OFFSET, setActiveMap as setKenneyActiveMap } from "./compile/kenneyMap";
+import {
+  PLANE_TILE_Z_OFFSET,
+  setActiveMap as setKenneyActiveMap,
+  setActiveMapAsync as setKenneyActiveMapAsync,
+} from "./compile/kenneyMap";
 import type { TableMapDef } from "./formats/table/tableMapTypes";
 import { setObjectives } from "../systems/progression/objective";
 import { getSemanticFieldDefForTileId } from "../world/semanticFields";
+import { canvasGroundChunkCacheStore } from "../systems/presentation/presentationSubsystemStores";
 
 let activeMap: CompiledKenneyMap | null = null;
 let activeMapDef: TableMapDef | null = null;
@@ -19,7 +29,17 @@ export function getActiveMapDef(): TableMapDef | null {
 }
 
 export function activateMapDef(mapDef: TableMapDef, seed: number = 0): CompiledKenneyMap {
+  canvasGroundChunkCacheStore.clear();
   const compiled = setKenneyActiveMap(mapDef, { runSeed: seed, mapId: mapDef.id });
+  activeMap = compiled;
+  activeMapDef = mapDef;
+  setActiveMapSkinId(activeMapDef?.mapSkinId);
+  return compiled;
+}
+
+export async function activateMapDefAsync(mapDef: TableMapDef, seed: number = 0): Promise<CompiledKenneyMap> {
+  canvasGroundChunkCacheStore.clear();
+  const compiled = await setKenneyActiveMapAsync(mapDef, { runSeed: seed, mapId: mapDef.id });
   activeMap = compiled;
   activeMapDef = mapDef;
   setActiveMapSkinId(activeMapDef?.mapSkinId);
@@ -29,6 +49,11 @@ export function activateMapDef(mapDef: TableMapDef, seed: number = 0): CompiledK
 export function reloadActiveMap(seed: number = 0): CompiledKenneyMap | null {
   if (!activeMapDef) return null;
   return activateMapDef(activeMapDef, seed);
+}
+
+export async function reloadActiveMapAsync(seed: number = 0): Promise<CompiledKenneyMap | null> {
+  if (!activeMapDef) return null;
+  return activateMapDefAsync(activeMapDef, seed);
 }
 
 export function applyObjectivesFromActiveMap(world: World): void {

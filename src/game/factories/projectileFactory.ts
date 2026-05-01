@@ -27,7 +27,10 @@ export const PRJ_KIND = {
     MISSILE: 7,
     DAGGER: 8,
     SPARK: 9,
+    ACID: 10,
 } as const;
+
+export type ProjectileKind = typeof PRJ_KIND[keyof typeof PRJ_KIND];
 
 
 export type SpawnProjectileArgs = {
@@ -139,6 +142,7 @@ export function spawnProjectile(w: World, a: SpawnProjectileArgs) {
     w.prHidden.push(false);
     w.prjKind.push(a.kind);
     (w as any)._lastFireProjKind = a.kind;
+    w.prSpawnTime.push(w.timeSec ?? w.time ?? 0);
 
     const anchor = anchorFromWorld(a.x, a.y, KENNEY_TILE_WORLD);
     const gp = { gx: anchor.gxi + anchor.gox, gy: anchor.gyi + anchor.goy };

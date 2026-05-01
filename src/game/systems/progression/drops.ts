@@ -1,30 +1,46 @@
 import type { World } from "../../../engine/world/world";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
-import { addGold } from "../../economy/gold";
+import { getBossDefinitionForEntity, isBossEntity } from "../../bosses/bossRuntime";
 import { goldValueFromEnemyBaseLife } from "../../economy/coins";
-import { spawnChest, spawnGold, PICKUP_KIND, handlePickupSpecialCase } from "./pickups";
-import { ENEMY_TYPE } from "../../factories/enemyFactory";
+import { grantXp } from "../../economy/xp";
+import { spawnGold, PICKUP_KIND, handlePickupSpecialCase } from "./pickups";
+import { registry } from "../../content/registry";
 import { getEnemyWorld, getPickupWorld, getPlayerWorld } from "../../coords/worldViews";
+import {
+  isLootGoblinEnemy,
+  scheduleLootGoblinGoldBurst,
+  tickLootGoblinGoldBurst,
+} from "../neutral/lootGoblin";
 
 /** Handle drop spawns from kill events and pickup collection. */
-export function dropsSystem(w: World, _dt: number) {
-  // 1) Spawn gold orbs (and boss chest for bosses) from kill events.
+export function dropsSystem(w: World, dt: number) {
+  tickLootGoblinGoldBurst(w, dt);
+
+  // 1) Spawn XP pickups (reusing gold orb visuals) from kill events.
   for (let i = 0; i < w.events.length; i++) {
     const e = w.events[i];
     if (e.type !== "ENEMY_KILLED") continue;
+    if (isLootGoblinEnemy(w, e.enemyIndex)) {
+      scheduleLootGoblinGoldBurst(w, e.x, e.y);
+      continue;
+    }
 
     const baseLife = Number.isFinite(w.eBaseLife[e.enemyIndex])
       ? Math.max(0, Math.floor(w.eBaseLife[e.enemyIndex]))
       : 0;
-    const isBoss = w.eType[e.enemyIndex] === ENEMY_TYPE.BOSS;
-    const goldValue = goldValueFromEnemyBaseLife(baseLife, { isBoss });
+    const bossDef = getBossDefinitionForEntity(w, e.enemyIndex);
+    const archetype = bossDef ?? registry.enemy(w.eType[e.enemyIndex] as any);
+    const rewards = archetype.rewards ?? {};
+    const isBoss = rewards.isBoss ?? isBossEntity(w, e.enemyIndex);
+    const goldValue = Number.isFinite(rewards.goldValue)
+      ? Math.max(1, Math.floor(rewards.goldValue as number))
+      : goldValueFromEnemyBaseLife(baseLife, {
+          isBoss,
+          multiplier: rewards.goldMultiplier,
+        });
     const enemyPos = getEnemyWorld(w, e.enemyIndex, KENNEY_TILE_WORLD);
     spawnGold(w, enemyPos.wx, enemyPos.wy, goldValue);
 
-    // Boss chest drop (no magnet)
-    if (isBoss) {
-      spawnChest(w, enemyPos.wx, enemyPos.wy, "BOSS_CHEST");
-    }
   }
 
   // 2) Collect pickups
@@ -46,7 +62,7 @@ export function dropsSystem(w: World, _dt: number) {
     if (kind === PICKUP_KIND.GOLD) {
       w.xAlive[i] = false;
       const stored = Number.isFinite(w.xValue[i]) ? Math.floor(w.xValue[i]) : 1;
-      addGold(w, Math.max(0, stored));
+      grantXp(w, Math.max(0, stored));
       continue;
     }
 

@@ -1,308 +1,166 @@
-# ai/AGENTS.md
+# AGENTS.md
 
-Instruction to LLM
-
-* No time-gated comments
-* Contract-style documentation only
-* This document is linear and complete
-* Each section represents a locked architectural rule
-* Achievements are boolean invariants; checked items must remain true
-* No change may invalidate agents.md; if a rule becomes untrue, agents.md must be updated first
+Architecture invariants for implementation agents. Every rule is locked.
+If a change violates a rule, update this file first, then implement.
+No time-gated comments. No speculative notes. Contract-style only.
 
 ---
 
-## 0. Purpose
+## 1. Engine shape
 
-This document defines the **non-negotiable architectural contracts** of this repo.
-Its goal is to prevent accidental redefinition of Z semantics, directions,
-map ownership, and rendering order.
-
-If a change violates a rule here, the rule must be updated first.
-
-Achievements
-- [ ] Core spatial rules are enforced without per-system redefinition
-
----
-
-## 1. Engine shape (system rules)
-
-- TypeScript + Vite + Canvas2D
-- ECS-lite: systems read/write world state and emit events
-- Systems do not call each other directly
-- Cross-system communication happens through shared world fields or events
-
-Rules
-- A system may only mutate fields it owns
-- Ownership means a system is the sole writer of a field or structure by contract
+- TypeScript + Vite
+- Canvas2D and WebGL rendering backends
+- ECS-lite: systems read/write world state and emit events; they do not call each other directly
+- Cross-system communication via shared world fields or events only
+- A system may only mutate fields it owns (sole writer by contract)
 - New shared behavior must be centralized in helpers, not duplicated
 
-Achievements
-- [ ] No system-specific spatial or render math exists outside shared helpers
+---
+
+## 2. Coordinate spaces
+
+Four distinct spaces — never mix them:
+
+| Space | Purpose |
+|-------|---------|
+| Table space | Map authoring grid (TableMapDef) |
+- Tile space | Compiled logical grid for map queries |
+| World space | Continuous coords for movement and collision |
+| Screen space | Canvas pixels after isometric projection |
+
+- All conversions must be explicit and flow through shared helpers
+- Tile/table coordinates must never be mixed with screen math
+- World-to-screen projection is centralized
+
+**Axis identity (locked):** `+x` = east, `+y` = south, `w` = x-extent, `h` = y-extent.
+Excel column → tile `x`. Excel row → tile `y`. No swaps, flips, or rotations. Ever.
 
 ---
 
-## 2. Coordinate spaces (do not improvise)
+## 3. Direction semantics
 
-This engine uses four distinct spaces:
+N/E/S/W are **screen-aligned**. North = up on screen.
 
-- Table space: map authoring grid (TableMapDef)
-- Tile space: compiled logical grid used for map queries
-- World space: continuous coordinates for movement and collision
-- Screen space: canvas pixels after isometric projection
-
-Rules
-- All conversions must be explicit
-- Tile or table coordinates must never be mixed with screen math
-- World to screen projection is centralized
-
-Achievements
-- [ ] All coordinate conversions flow through shared helpers
-- [ ] No system redefines axis orientation or dimension meaning
-## 2.1 Axis and dimension identity (locked)
-
-Table space and tile space share the same axis orientation.
-
-Canonical truths:
-- +x is east (right)
-- +y is south (down)
-- Width extends along +x
-- Height extends along +y
-
-One-liners (never revisit):
-> Excel +y == Tile-grid +y == South  
-> w+ == x+ and h+ == y+
-
-Rules
-- Excel column index maps directly to tile-grid `x`
-- Excel row index maps directly to tile-grid `y`
-- `w` is the extent of +x (number of columns)
-- `h` is the extent of +y (number of rows)
-- No axis swaps, sign flips, or rotations are permitted
-- No system may reinterpret width as height or height as width
-
-Forbidden
-- Any Excel→tile transform that swaps or flips axes
-- Any bounds logic that uses `h` as an x-extent or `w` as a y-extent
-- Any “north-is-right” or compass-compensation hacks
-
-Achievements
-- [ ] Table space, tile space, and grid math use identity axis mapping
-- [ ] No code path swaps `w/h` or `x/y`
-
----
-
-## 3. Direction semantics (single source of truth)
-
-Directional names (N/E/S/W) are **screen-aligned**, not math-aligned.
-
-Rules
-- Directional semantics (N/E/S/W) are defined in tile space relative to screen space
-- Table space has no inherent directional meaning
-- World space derives direction only through tile space
-- Screen space is a projection target, not a source of semantics
-- North always means up on screen
+- Direction semantics are defined in tile space relative to screen space
+- Table space has no directional meaning
 - Stair direction tokens describe uphill direction
-- Wall, apron, stair, movement, and debug logic must agree
-
-If direction meaning changes:
-- It must change in one place
-- All consumers must be updated in the same patch
-
-Achievements
-- [ ] All direction semantics route through a single direction-mapping helper
+- Wall, apron, stair, movement, and debug logic must all agree
+- Direction meaning must route through a single direction-mapping helper
+- If direction meaning changes: one place, all consumers updated in the same patch
 
 ---
 
-## 4. Z is a contract
+## 4. Z roles
 
-Z is not a single value.
+Z is not a single value. Each role is distinct and must not be overloaded:
 
-Distinct roles exist:
-- zLogical: gameplay layer membership
-- zVisual: render sorting depth
-- zOcclusion: visibility blocking
-- zBase / zTop: physical height band
+- `zLogical` — gameplay layer membership
+- `zVisual` — render sorting depth
+- `zOcclusion` — visibility blocking
+- `zBase` / `zTop` — physical height band
 
-Rules
-- Never overload one Z value to mean multiple things
-- New vertical behavior requires a new named field
-
-Achievements
-- [ ] No system derives height without querying map helpers or Z roles
+New vertical behavior requires a new named field, not reuse of an existing Z role.
 
 ---
 
 ## 5. Surfaces and connectors
 
-- Floors are surfaces
-- Stairs are connectors between surfaces
-- Walls are occluders
-
-Rules
+- Floors are surfaces. Stairs are connectors between surfaces. Walls are occluders.
 - Movement chooses a surface explicitly
 - Stairs never behave as generic walkable floors
 - Multiple surfaces per (x, y) are supported via queries, not hacks
 
-Achievements
-- [ ] Movement and spawn logic exclusively use surface queries
-
 ---
 
-## 6. Map compilation contract
+## 6. Map compilation
 
-Maps are authored as TableMapDef and compiled into a runtime map.
+Maps are authored as `TableMapDef` and compiled into a runtime map.
 
-Compiled map must expose:
-- getTile(tx, ty)
-- surfacesAtXY(tx, ty)
-- layer-grouped surfaces and occluders
-- apron underlays and deferred apron data
+Compiled map must expose: `getTile(tx, ty)`, `surfacesAtXY(tx, ty)`, layer-grouped surfaces and occluders, apron underlays and deferred apron data.
 
-Rules
-- Systems must read from the active compiled map only
+- Systems must read from the active compiled map only — never raw `TableMapDef`
 - Procedural and authored maps use the same compile pipeline
 
-Achievements
-- [ ] No runtime system reads raw TableMapDef data
+---
+
+## 7. Rendering
+
+**Terminology:**
+
+| Term | Definition |
+|------|-----------|
+| Aprons | Background thickness art — non-occluding |
+| Underlays | Apron prepass visuals |
+| Tops | Walkable surface faces |
+| Entities | Players, enemies, projectiles |
+| Occluders | Walls only |
+
+Aprons never block visibility. Occluders are the only visibility blockers.
+
+**Render order (locked):** `GROUND` → `WORLD` → `SCREEN/UI`
+
+- Chunk-rasterized ground stays in `GROUND`
+- All world-space objects share one `WORLD` ordering domain
+- Screen-space debug, HUD, and overlays stay in `SCREEN/UI`
+- Ordering driven by shared world sort metadata only
+
+**render.ts is a conductor — it must not contain:** slice generation, triangle math, shadow algorithms, relight algorithms, or debug drawing logic.
+
+Pipeline stages (locked):
+1. `prepareRenderFrame`
+2. `collectFrameDrawables`
+3. `sortFrameDrawables`
+4. `executeWorldPasses`
+5. `executeScreenOverlays`
+6. `executeUiPass`
+7. `executeDebugPass`
+
+Subsystem ownership:
+- structures → `presentation/structures/*`
+- structure shadows → `presentation/structureShadows/*`
+- structure triangles → `presentation/structureTriangles/*`
+- static relight → `presentation/staticRelight/*`
+- debug overlays → `presentation/debug/*`
 
 ---
 
-## 7. Rendering terminology
+## 8. Collision and combat
 
-Definitions:
-- Aprons: background thickness art (non-occluding)
-- Underlays: apron prepass visuals
-- Tops: walkable surface faces
-- Entities: players, enemies, projectiles
-- Occluders: walls only
-
-Rules
-- Aprons never block visibility
-- Occluders are the only visibility blockers
-
-Achievements
-- [ ] Aprons and occluders are stored and rendered in distinct structures
-
----
-
-## 8. Render order (locked)
-
-Current render pipeline:
-
-Pass 0: UNDERLAYS (all apron underlays, depth-sorted)
-
-For each zLogical layer (ascending):
-1. TOPS
-2. ENTITIES
-3. OCCLUDERS
-
-Rules
-- Occluders must render after entities
-- All relevant layers must be included (not only surface layers)
-- Depth sorting within each pass is driven by zVisual (no per-system depth heuristics)
-
-
-Achievements
-- [ ] Entities are hidden by higher occluders via render order alone
-
----
-
-## 9. Collision and combat helpers
-
-Rules
 - Broad-phase uses spatial hashing
 - Tile-grid queries determine walkability and blocking
 - New collision rules must live in shared helpers
 - Prefer tile/grid-based vertical collision over bespoke ramp math
 
-Achievements
-- [ ] Projectile vs vertical-face collision is grid-driven and centralized
-
 ---
 
-## 10. Gameplay loop invariants
+## 9. Gameplay loop
 
 - Runs are deterministic from seed and floor index
-- Boss behavior is keyed by floor identity
-- UI and audio react to events and game state only
-
-Rules
-- Systems must not reach into DOM or audio directly
-- Emit events; let dedicated systems consume them
-
-Achievements
-- [ ] Gameplay systems do not directly manipulate UI or audio
+- Act-boss behavior is owned by the canonical boss encounter pipeline
+- UI and audio react to events and game state only — systems must not reach into DOM or audio directly
 
 ---
 
-## 11. Editing rules
+## 10. Progression
 
-If you change any of these, update all consumers together:
-- Direction semantics
-- Z role definitions
-- Map compile outputs
-- Render pass order
-- Axis or dimension identity (x/y, w/h)
-- 
-When adding new behavior:
-- Centralize logic
-- Avoid new magic constants
+The run progression model is ring-first. Rings, stored ring modifier tokens, and immediate hand effects are the only progression families.
 
-Achievements
-- [ ] Core spatial and render rules exist in exactly one place each
+- New progression behavior must be implemented under `src/game/progression/`
+- Rings own build identity — no parallel relic or draft reward system may be introduced
+- Reward generation and vendor offers must consume typed progression options, not string payloads
+- Hand structure changes are owned by ring progression state, not ad hoc stat modifiers
+- Triggered ring effects must execute through the centralized progression trigger dispatcher
+- Passive ring effects are applied through centralized progression runtime effects
 
 ---
 
-## 12. Contract-driven changes (how to apply new contracts)
+## 11. Contract workflow
 
-This repo evolves through **explicit contract documents** (`*.md`).
-
-When a new contract file is explicitly introduced (example: `render4.0.md`),
-the following rules apply.
-
-LLM instruction pattern:
-> New contract: "render4.0.md"  
-> Read it and tell me when ready.
-
-### Contract consumption rules
+When a contract file is introduced:
 
 - Read the entire contract before making any changes
-- Do not implement anything until the contract is fully understood
-- Do not reinterpret or weaken agents.md unless explicitly overridden
-- Do not introduce time-gated comments or speculative notes
-- Treat each section as a locked architectural step
-
-If a contract conflicts with agents.md:
-- The conflict must be explicit and intentional
-- Silent conflicts are invalid
-
-### Step execution and gating
-
-- Execute the contract one section at a time, in order
-- After completing a section:
-    - Mark its Achievements as completed in the contract
-    - Update any affected Achievements in agents.md
-    - Summarize newly true invariants
-    - State the next step
-    - Stop execution
-
-The LLM must not proceed until the user responds with:
-> next
-
-Partial execution or batching steps is invalid.
-
-### Completion signal
-
-- When all contract steps are complete and achievements are marked:
-    - Provide a brief final state summary
-    - State that the contract is complete
-
----
-
-## 13. Current focus
-
-High-value, allowed work:
-- Finalize direction mapping helper
-- Keep apron vs occluder separation strict
-- Centralize remaining render heuristics into map compilation
-- Strengthen tile-grid-based vertical collision
+- Do not implement until fully understood
+- Silent conflicts with this file are invalid — conflicts must be explicit and intentional
+- Execute one section at a time; stop after each and wait for `next`
+- Mark section achievements in the contract after completion
+- Update this file if any rule here is affected

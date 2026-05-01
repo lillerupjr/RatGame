@@ -7,20 +7,15 @@ type EndRefs = {
     depth: HTMLElement;
     kills: HTMLElement;
     gold: HTMLElement;
-    relics: HTMLElement;
-    cards: HTMLElement;
-};
-
-type LevelupRefs = {
-    root: HTMLDivElement;
-    choices: HTMLDivElement;
-    sub: HTMLDivElement;
+    rings: HTMLElement;
+    tokens: HTMLElement;
 };
 
 type MapRefs = {
     root: HTMLDivElement;
     topBar: HTMLDivElement;
     backBtn: HTMLButtonElement;
+    title: HTMLDivElement;
     infoPanel: HTMLDivElement;
     depthLabel: HTMLDivElement;
     sub: HTMLDivElement;
@@ -41,6 +36,7 @@ export type HudRefs = {
     topStack: HTMLDivElement;
     topRow: HTMLDivElement;
     topLeft: HTMLDivElement;
+    perfOverlayModeSelect: HTMLSelectElement;
     topCenter: HTMLDivElement;
     topRight: HTMLDivElement;
     fpsPill: HTMLSpanElement;
@@ -75,7 +71,6 @@ export type HudRefs = {
 export type UiRefs = {
     menuEl: HTMLDivElement;
     endEl: EndRefs;
-    levelupEl: LevelupRefs;
     mapEl: MapRefs;
     dialogEl: DialogRefs;
 };
@@ -87,6 +82,7 @@ export type DomRefs = {
     continueBtn: HTMLButtonElement;
     mainMenuEl: HTMLDivElement;
     startRunBtn: HTMLButtonElement;
+    paletteLabBtn: HTMLButtonElement;
     creditsBtn: HTMLButtonElement | null;
     innkeeperBtn: HTMLButtonElement;
     settingsBtn: HTMLButtonElement;
@@ -104,6 +100,10 @@ export type DomRefs = {
     mapMenuSublineEl: HTMLDivElement;
     mapBackBtn: HTMLButtonElement;
     mapContinueBtn: HTMLButtonElement;
+    paletteLabMenuEl: HTMLDivElement;
+    paletteLabSublineEl: HTMLDivElement;
+    paletteLabSnapshotGridEl: HTMLDivElement;
+    paletteLabBackBtn: HTMLButtonElement;
     innkeeperMenuEl: HTMLDivElement;
     innkeeperBackBtn: HTMLButtonElement;
     settingsMenuEl: HTMLDivElement;
@@ -124,11 +124,8 @@ export type DomRefs = {
     endStatDepth: HTMLElement;
     endStatKills: HTMLElement;
     endStatGold: HTMLElement;
-    endStatRelics: HTMLElement;
-    endStatCards: HTMLElement;
-    levelupRoot: HTMLDivElement;
-    levelupChoices: HTMLDivElement;
-    levelupSub: HTMLDivElement;
+    endStatRings: HTMLElement;
+    endStatTokens: HTMLElement;
     mapRoot: HTMLDivElement;
     mapTopBar: HTMLDivElement;
     mapRouteBackBtn: HTMLButtonElement;
@@ -184,6 +181,7 @@ export function getDomRefs(): DomRefs {
 
     const mainMenuEl = getEl<HTMLDivElement>("mainMenu");
     const startRunBtn = getEl<HTMLButtonElement>("startRunBtn");
+    const paletteLabBtn = getEl<HTMLButtonElement>("paletteLabBtn");
     const creditsBtn = document.getElementById("creditsBtn") as HTMLButtonElement | null;
     const innkeeperBtn = getEl<HTMLButtonElement>("innkeeperBtn");
     const settingsBtn = getEl<HTMLButtonElement>("settingsBtn");
@@ -204,6 +202,11 @@ export function getDomRefs(): DomRefs {
     const mapBackBtn = getEl<HTMLButtonElement>("mapBackBtn");
     const mapContinueBtn = getEl<HTMLButtonElement>("mapContinueBtn");
 
+    const paletteLabMenuEl = getEl<HTMLDivElement>("paletteLabMenu");
+    const paletteLabSublineEl = getEl<HTMLDivElement>("paletteLabSubline");
+    const paletteLabSnapshotGridEl = getEl<HTMLDivElement>("paletteLabSnapshotGrid");
+    const paletteLabBackBtn = getEl<HTMLButtonElement>("paletteLabBackBtn");
+
     const innkeeperMenuEl = getEl<HTMLDivElement>("innkeeperMenu");
     const innkeeperBackBtn = getEl<HTMLButtonElement>("innkeeperBackBtn");
 
@@ -222,6 +225,16 @@ export function getDomRefs(): DomRefs {
     const hudTopStack = getEl<HTMLDivElement>("hudTopStack");
     const hudTopRow = getEl<HTMLDivElement>("hudTopRow");
     const hudTopLeft = getEl<HTMLDivElement>("hudTopLeft");
+    const perfOverlayModeSelect = document.createElement("select");
+    perfOverlayModeSelect.id = "perfOverlayModeSelect";
+    perfOverlayModeSelect.setAttribute("aria-label", "Perf overlay mode");
+    for (const mode of ["off", "overview", "world", "structures", "textures", "ground", "lighting", "cache", "all"] as const) {
+        const option = document.createElement("option");
+        option.value = mode;
+        option.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+        perfOverlayModeSelect.appendChild(option);
+    }
+    hudTopLeft.prepend(perfOverlayModeSelect);
     const hudTopCenter = getEl<HTMLDivElement>("hudTopCenter");
     const hudTopRight = getEl<HTMLDivElement>("hudTopRight");
     const fpsPill = getEl<HTMLSpanElement>("fpsPill");
@@ -263,16 +276,13 @@ export function getDomRefs(): DomRefs {
     const endStatDepth = getEl<HTMLElement>("endStatDepth");
     const endStatKills = getEl<HTMLElement>("endStatKills");
     const endStatGold = getEl<HTMLElement>("endStatGold");
-    const endStatRelics = getEl<HTMLElement>("endStatRelics");
-    const endStatCards = getEl<HTMLElement>("endStatCards");
-
-    const levelupRoot = getEl<HTMLDivElement>("levelup");
-    const levelupChoices = getEl<HTMLDivElement>("luChoices");
-    const levelupSub = getEl<HTMLDivElement>("luSub");
+    const endStatRings = getEl<HTMLElement>("endStatRings");
+    const endStatTokens = getEl<HTMLElement>("endStatTokens");
 
     const mapRoot = getEl<HTMLDivElement>("map");
     const mapTopBar = getEl<HTMLDivElement>("mapTopBar");
     const mapRouteBackBtn = getEl<HTMLButtonElement>("routeBackBtn");
+    const mapTitle = getEl<HTMLDivElement>("mapTitle");
     const mapInfoPanel = getEl<HTMLDivElement>("mapInfoPanel");
     const mapDepthLabel = getEl<HTMLDivElement>("mapDepthLabel");
     const mapSub = getEl<HTMLDivElement>("mapSub");
@@ -286,6 +296,7 @@ export function getDomRefs(): DomRefs {
         topStack: hudTopStack,
         topRow: hudTopRow,
         topLeft: hudTopLeft,
+        perfOverlayModeSelect,
         topCenter: hudTopCenter,
         topRight: hudTopRight,
         fpsPill,
@@ -328,18 +339,14 @@ export function getDomRefs(): DomRefs {
             depth: endStatDepth,
             kills: endStatKills,
             gold: endStatGold,
-            relics: endStatRelics,
-            cards: endStatCards,
-        },
-        levelupEl: {
-            root: levelupRoot,
-            choices: levelupChoices,
-            sub: levelupSub,
+            rings: endStatRings,
+            tokens: endStatTokens,
         },
         mapEl: {
             root: mapRoot,
             topBar: mapTopBar,
             backBtn: mapRouteBackBtn,
+            title: mapTitle,
             infoPanel: mapInfoPanel,
             depthLabel: mapDepthLabel,
             sub: mapSub,
@@ -362,6 +369,7 @@ export function getDomRefs(): DomRefs {
         continueBtn,
         mainMenuEl,
         startRunBtn,
+        paletteLabBtn,
         creditsBtn,
         innkeeperBtn,
         settingsBtn,
@@ -379,6 +387,10 @@ export function getDomRefs(): DomRefs {
         mapMenuSublineEl,
         mapBackBtn,
         mapContinueBtn,
+        paletteLabMenuEl,
+        paletteLabSublineEl,
+        paletteLabSnapshotGridEl,
+        paletteLabBackBtn,
         innkeeperMenuEl,
         innkeeperBackBtn,
         settingsMenuEl,
@@ -399,11 +411,8 @@ export function getDomRefs(): DomRefs {
         endStatDepth,
         endStatKills,
         endStatGold,
-        endStatRelics,
-        endStatCards,
-        levelupRoot,
-        levelupChoices,
-        levelupSub,
+        endStatRings,
+        endStatTokens,
         mapRoot,
         mapTopBar,
         mapRouteBackBtn,

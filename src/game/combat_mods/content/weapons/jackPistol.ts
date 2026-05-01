@@ -6,7 +6,7 @@ export const JACK_PISTOL_V1: WeaponDef = {
   tags: ["weapon", "gun", "fires", "projectile", "hit", "crit", "single_shot", "physical", "bleed"],
 
   // Crit burst baseline.
-  shotsPerSecond: 3.0,
+  shotsPerSecond: 2.0,
 
   baseDamage: { physical: 12, fire: 0, chaos: 0 },
   baseCritChance: 0.05,

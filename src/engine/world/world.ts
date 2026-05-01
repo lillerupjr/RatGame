@@ -1,8 +1,13 @@
 // src/game/world.ts
+// @system   world-state/runtime-data-model
+// @owns     defines World/GameState storage, creates fresh world state, exposes player-grid and event helpers
+// @doc      docs/canonical/world_state_runtime_data_model.md
+// @agents   no app pause/loading, gameplay mutation, rendering, or map compilation; see app/*, systems/*, presentation/*, and map/*
+
 import { RNG } from "../../game/util/rng";
 import { createSpatialHash, type SpatialHash } from "../../game/util/spatialHash";
 import type { StageDef } from "../../game/content/stages";
-import type { DamageMeta, GameEvent, PendingRelicDaggerShot, PendingRelicRetrigger } from "../../game/events";
+import type { DamageMeta, GameEvent } from "../../game/events";
 import { KENNEY_TILE_WORLD } from "../render/kenneyTiles";
 import { getSpawnWorld } from "../../game/map/compile/kenneyMap";
 import { recomputeDerivedStats } from "../../game/stats/derivedStats";
@@ -16,24 +21,27 @@ import type { FloorIntent } from "../../game/map/floorIntent";
 import type { TriggerDef } from "../../game/triggers/triggerTypes";
 import type { Dir8 } from "../render/sprites/dir8";
 import type { EnemyAilmentsState } from "../../game/combat_mods/ailments/enemyAilments";
-import type { CardRewardState } from "../../game/combat_mods/rewards/cardRewardFlow";
-import type { RelicRewardState } from "../../game/combat_mods/rewards/relicRewardFlow";
 import type { FloorRewardBudget } from "../../game/rewards/floorRewardBudget";
 import type { RunEvent } from "../../game/rewards/runEvents";
 import type { RewardTicket } from "../../game/rewards/rewardTickets";
 import type { VendorState } from "../../game/vendor/vendorState";
-import { createDpsMetrics, type DpsMetricsState } from "../../game/balance/dpsMetrics";
 import {
-  createSpawnDirectorState,
-  type SpawnDirectorConfig,
-  type SpawnDirectorState,
-} from "../../game/balance/spawnDirector";
-import type { ExpectedPowerBudgetConfig, ExpectedPowerConfig } from "../../game/balance/expectedPower";
-import { defaultEnemyPowerCostConfig, type EnemyPowerCostConfig } from "../../game/balance/enemyPower";
-import { createBalanceCsvLogger, type BalanceCsvLogger } from "../../game/balance/balanceCsvLogger";
-import { DEFAULT_SPAWN_TUNING } from "../../game/balance/spawnTuningDefaults";
-
-import type { RelicInstance } from "../../game/content/relics";
+  createInitialRingProgressionState,
+  ensureRingProgressionState,
+} from "../../game/progression/rings/ringState";
+import type { RingProgressionState } from "../../game/progression/rings/ringTypes";
+import type { ProgressionRewardState } from "../../game/progression/rewards/progressionRewardFlow";
+import { assertProgressionContentValid } from "../../game/progression/rings/ringContent";
+import type { EnemyBrainState } from "../../game/systems/enemies/brain";
+import { createBossRuntimeState } from "../../game/bosses/bossRuntime";
+import type { BossRuntimeState, ArenaTileEffect } from "../../game/bosses/bossTypes";
+import { createDpsMetrics, type DpsMetricsState } from "../../game/balance/dpsMetrics";
+import { getSettings } from "../../settings/settingsStore";
+import { DEFAULT_XP_LEVEL_BASE } from "../../settings/systemOverrides";
+import type {
+  HostileSpawnDebugSnapshot,
+  HostileSpawnDirectorState,
+} from "../../game/systems/spawn/hostileSpawnDirector";
 
 /**
  * NOTE:
@@ -52,7 +60,7 @@ export type GameState =
  * Run phase inside the RUN game-state.
  * (game.ts uses these values.)
  */
-export type RunState = "FLOOR" | "BOSS" | "TRANSITION" | "RUN_COMPLETE"  | "GAME_OVER";
+export type RunState = "FLOOR" | "TRANSITION" | "RUN_COMPLETE" | "GAME_OVER";
 
 export type StageId = "DOCKS" | "SEWERS" | "CHINATOWN";
 export type WorldLightingState = {
@@ -61,16 +69,6 @@ export type WorldLightingState = {
   ambientTintStrength?: number;
   groundYScale?: number;
   occlusionEnabled: boolean;
-  showBuildingMaskDebug: boolean;
-  buildingMaskDebugView: "OFF" | "SOURCE" | "INVERSE" | "COMBINED";
-  occlusionMaskCanvas?: HTMLCanvasElement | null;
-  occlusionMaskCtx?: CanvasRenderingContext2D | null;
-  inverseBuildingSliceMaskCanvas?: HTMLCanvasElement | null;
-  inverseBuildingSliceMaskCtx?: CanvasRenderingContext2D | null;
-  combinedOcclusionMaskCanvas?: HTMLCanvasElement | null;
-  combinedOcclusionMaskCtx?: CanvasRenderingContext2D | null;
-  debugBuildingMaskCanvas?: HTMLCanvasElement | null;
-  debugBuildingMaskCtx?: CanvasRenderingContext2D | null;
 };
 
 export type NpcActor = {
@@ -196,10 +194,12 @@ export type World = {
     originTy?: number;
     zones: Array<{ tx: number; ty: number; w: number; h: number; completed: boolean }>;
   };
-  bossTriple?: {
+  rareTriple?: {
     spawnPointsWorld: Array<{ x: number; y: number }>;
     completed: boolean[];
   };
+  bossRuntime: BossRuntimeState;
+  arenaTileEffects: ArenaTileEffect[];
 
   // -------------------------
   // Stage / floor
@@ -215,9 +215,11 @@ export type World = {
   floorIndex: number;
   floorArchetype: FloorArchetype;
   currentFloorIntent: FloorIntent | null;
-  floorDuration: number; // seconds until boss for this stage
+  floorDuration: number; // baseline floor duration for this stage
   phaseTime: number; // seconds since current phase began
   transitionTime: number; // seconds remaining in TRANSITION
+  hostileSpawnDirector: HostileSpawnDirectorState;
+  hostileSpawnDebug: HostileSpawnDebugSnapshot | null;
 
   // Total run time
   time: number;
@@ -227,6 +229,9 @@ export type World = {
   deathFx: DeathFxState;
   run: {
     runGold: number;
+    xp: number;
+    level: number;
+    xpToNextLevel: number;
   };
   lighting: WorldLightingState;
 
@@ -325,33 +330,23 @@ export type World = {
   fullMomentumActive: boolean;
   momentumLastGainTime: number;
 
-  // Vendor economy (scaffold)
-  vendorOffers: { kind: "RELIC" | "UPGRADE" | "HEAL" | "REROLL"; id: string; cost: number }[];
-  vendorPurchases: string[];
+  // Vendor economy
   vendor: VendorState | null;
   pendingAdvanceToNextFloor: boolean;
-  relics: string[];
-  relicInstances?: RelicInstance[];
-  starterLuckyChamberShotCounter?: number;
-  relicRetriggerQueue: PendingRelicRetrigger[];
-  relicDaggerQueue: PendingRelicDaggerShot[];
-  relicEffects: { hpBonus: number };
+  progression: RingProgressionState;
   npcs: NpcActor[];
   neutralMobs: NeutralAnimatedMob[];
 
   // -------------------------
-  // Items + cards
+  // Items + progression effects
   // -------------------------
   items: { id: any; level: number }[];
-  cards: string[];
-  combatCardIds: string[];
-  cardReward: CardRewardState;
-  relicReward: RelicRewardState;
+  progressionReward: ProgressionRewardState;
   floorRewardBudget: FloorRewardBudget;
-  cardRewardBudgetTotal: number;
-  cardRewardBudgetUsed: number;
-  cardRewardClaimKeys: string[];
-  lastCardRewardClaimKey: string | null;
+  rewardBudgetTotal: number;
+  rewardBudgetUsed: number;
+  rewardClaimKeys: string[];
+  lastRewardClaimKey: string | null;
   runEvents: RunEvent[];
   rewardTickets: RewardTicket[];
   activeRewardTicketId: string | null;
@@ -381,7 +376,7 @@ export type World = {
   dotTickAcc: number;
 
   // -------------------------
-  // Level (frozen)
+  // Level (compatibility mirror of run.level)
   // -------------------------
   level: number;
 
@@ -407,16 +402,20 @@ export type World = {
   eHp: number[];
   eHpMax: number[];
   eR: number[];
+  eSplitStage: number[];
+  eVisualScale: number[];
   eSpeed: number[];
   eDamage: number[];
   ezVisual: number[];
   ezLogical: number[];
+  eBrain: (EnemyBrainState | undefined)[];
 
   // Poison (enemy status)
   ePoisonT: number[];
   ePoisonDps: number[];
   ePoisonedOnDeath: boolean[];
   eSpawnTriggerId: (string | undefined)[];
+  eBossId: (string | undefined)[];
   eAilments: (EnemyAilmentsState | undefined)[];
 
   // Enemy spatial hash (perf)
@@ -480,6 +479,7 @@ export type World = {
   prMeleeRange: number[];
   prDirX: number[];
   prDirY: number[];
+  prSpawnTime: number[];
   prTtl: number[];
   prBouncesLeft: number[];
   prDamageMeta: (DamageMeta | undefined)[];
@@ -559,8 +559,8 @@ export type World = {
   vfxOffsetYPx: number[];
   vfxScale: number[];
 
-  // Boss reward bookkeeping
-  bossZoneSpawned: string[];
+  // Rare-triple reward bookkeeping
+  rareZoneSpawned: string[];
 
   // Magnet effect (pull XP to player)
   magnetActive: boolean;
@@ -595,55 +595,6 @@ export type World = {
   metrics: {
     dps: DpsMetricsState;
   };
-  balance: {
-    spawnDirectorEnabled: boolean;
-    spawnTuning?: {
-      spawnBase?: number;
-      spawnPerDepth?: number;
-      hpBase?: number;
-      hpPerDepth?: number;
-      pressureAt0Sec?: number;
-      pressureAt120Sec?: number;
-    };
-  };
-  spawnDirectorState: SpawnDirectorState;
-  spawnDirectorConfig: SpawnDirectorConfig;
-  expectedPowerConfig: ExpectedPowerConfig;
-  expectedPowerBudgetConfig: ExpectedPowerBudgetConfig;
-  enemyPowerConfig: EnemyPowerCostConfig;
-  balanceCsvLogger: BalanceCsvLogger;
-  spawnDirectorDebug?: {
-    heat: number;
-    timeSec: number;
-    expectedDps: number;
-    actualDps: number;
-    actualDpsInstant: number;
-    aheadFactor: number;
-    basePressure: number;
-    effectivePressure: number;
-    pressure: number;
-    waveMult: number;
-    timePressure?: number;
-    spawnPressureMult?: number;
-    spawnHpMult?: number;
-    powerPerSecond: number;
-    effectivePowerPerSecond?: number;
-    throttleScale?: number;
-    tInFloorSec?: number;
-    inFrontload?: boolean;
-    spawnHpPerSecond?: number;
-    trashPowerCost: number;
-    powerBudget: number;
-    pendingHpCommitted?: number;
-    pendingSpawns: number;
-    waveRemaining: number;
-    chunkCooldownSec: number;
-    waveCooldownSecLeft: number;
-    lastChunkSize: number;
-    queuedPerSecond: number;
-    pendingThresholdToStartWave: number;
-    spawnsPerSecond: number;
-  };
 };
 
 export type CreateWorldArgs = {
@@ -657,6 +608,7 @@ function cloneStage(stage: StageDef): StageDef {
 
 /** Initialize a new World with seeded RNG and stage state. */
 export function createWorld(args: CreateWorldArgs): World {
+  assertProgressionContentValid();
   const rng = new RNG((args.seed ?? 1337) >>> 0);
 
   const stage = cloneStage(args.stage);
@@ -680,6 +632,8 @@ export function createWorld(args: CreateWorldArgs): World {
     objectiveStates: [],
     objectiveEvents: [],
     currentObjectiveSpec: null,
+    bossRuntime: createBossRuntimeState(),
+    arenaTileEffects: [],
 
     // Stage / floor
     stage,
@@ -695,6 +649,13 @@ export function createWorld(args: CreateWorldArgs): World {
     floorDuration: stage.duration,
     phaseTime: 0,
     transitionTime: 0,
+    hostileSpawnDirector: {
+      budget: 0,
+      spawnCooldownSec: 0,
+      burstCooldownSec: 12,
+      rngSeed: ((args.seed ?? 1337) ^ 0x9e3779b9) >>> 0,
+    },
+    hostileSpawnDebug: null,
 
     time: 0,
     timeSec: 0,
@@ -725,6 +686,9 @@ export function createWorld(args: CreateWorldArgs): World {
     },
     run: {
       runGold: 0,
+      xp: 0,
+      level: 1,
+      xpToNextLevel: Math.max(1, Math.round(getSettings().system?.xpLevelBase ?? DEFAULT_XP_LEVEL_BASE)),
     },
     lighting: {
       darknessAlpha: 0.5,
@@ -732,16 +696,6 @@ export function createWorld(args: CreateWorldArgs): World {
       ambientTintStrength: 0,
       groundYScale: 0.65,
       occlusionEnabled: true,
-      showBuildingMaskDebug: false,
-      buildingMaskDebugView: "OFF",
-      occlusionMaskCanvas: null,
-      occlusionMaskCtx: null,
-      inverseBuildingSliceMaskCanvas: null,
-      inverseBuildingSliceMaskCtx: null,
-      combinedOcclusionMaskCanvas: null,
-      combinedOcclusionMaskCtx: null,
-      debugBuildingMaskCanvas: null,
-      debugBuildingMaskCtx: null,
     },
 
     // Delve / route
@@ -777,7 +731,7 @@ export function createWorld(args: CreateWorldArgs): World {
 
     activeFloorH: 0,
 
-    baseMoveSpeed: 300,
+    baseMoveSpeed: 240,
     basePickupRadius: 180,
 
     pSpeed: 260,
@@ -804,45 +758,30 @@ export function createWorld(args: CreateWorldArgs): World {
     momentumWasFull: false,
     fullMomentumActive: false,
     momentumLastGainTime: 0,
-    vendorOffers: [],
-    vendorPurchases: [],
     vendor: null,
     pendingAdvanceToNextFloor: false,
-    relics: [],
-    relicInstances: [],
-    starterLuckyChamberShotCounter: 0,
-    relicRetriggerQueue: [],
-    relicDaggerQueue: [],
-    relicEffects: {
-      hpBonus: 0,
-    },
+    progression: createInitialRingProgressionState(),
     npcs: [],
     neutralMobs: [],
 
-    // Items + cards
+    // Items + progression effects
     items: [],
-    cards: [],
-    combatCardIds: [],
-    cardReward: {
+    progressionReward: {
       active: false,
-      source: "ZONE_TRIAL",
-      options: [],
-    },
-    relicReward: {
-      active: false,
-      source: "OBJECTIVE_COMPLETION",
+      family: "RING",
+      source: "FLOOR_COMPLETION",
       options: [],
     },
     floorRewardBudget: {
       mode: "NORMAL",
-      nonObjectiveCardsRemaining: 2,
-      objectiveCardAvailable: true,
+      nonObjectiveRewardsRemaining: 0,
+      objectiveRewardAvailable: true,
       fired: Object.create(null),
     },
-    cardRewardBudgetTotal: 3,
-    cardRewardBudgetUsed: 0,
-    cardRewardClaimKeys: [],
-    lastCardRewardClaimKey: null,
+    rewardBudgetTotal: 0,
+    rewardBudgetUsed: 0,
+    rewardClaimKeys: [],
+    lastRewardClaimKey: null,
     runEvents: [],
     rewardTickets: [],
     activeRewardTicketId: null,
@@ -893,15 +832,19 @@ export function createWorld(args: CreateWorldArgs): World {
     eHp: [],
     eHpMax: [],
     eR: [],
+    eSplitStage: [],
+    eVisualScale: [],
     eSpeed: [],
     eDamage: [],
     ezVisual: [],
     ezLogical: [],
+    eBrain: [],
 
     ePoisonT: [],
     ePoisonDps: [],
     ePoisonedOnDeath: [],
     eSpawnTriggerId: [],
+    eBossId: [],
     eAilments: [],
 
     enemySpatialHash: createSpatialHash(128),
@@ -954,6 +897,7 @@ export function createWorld(args: CreateWorldArgs): World {
     prMeleeRange: [],
     prDirX: [],
     prDirY: [],
+    prSpawnTime: [],
     prTtl: [],
     prBouncesLeft: [],
     prDamageMeta: [],
@@ -1017,8 +961,8 @@ export function createWorld(args: CreateWorldArgs): World {
     vfxOffsetYPx: [],
     vfxScale: [],
 
-    // Boss / chest / magnet
-    bossZoneSpawned: [],
+    // Act boss / chest / magnet
+    rareZoneSpawned: [],
     magnetActive: false,
     magnetTimer: 0,
     chestOpenRequested: false,
@@ -1044,60 +988,6 @@ export function createWorld(args: CreateWorldArgs): World {
     metrics: {
       dps: createDpsMetrics(),
     },
-    balance: {
-      spawnDirectorEnabled: true,
-      // Tuning Orbs (authoritative knobs)
-      // All three scale multiplicatively with runHeat:
-      // mult(heat) = basePerDepth ^ max(0, heat)
-      spawnTuning: {
-        ...DEFAULT_SPAWN_TUNING,
-      },
-    },
-    spawnDirectorState: createSpawnDirectorState(),
-    spawnDirectorConfig: {
-      enabled: true,
-      pressureBase: 0.7,
-      pressurePerDepth: 0.05,
-      pressureMin: 0.6,
-      minFillPerTick: 0,
-      waveEnabled: false,
-      waveTotal: 10,
-      waveChunk: 3,
-      waveChunkDelaySec: 1.0,
-      waveCooldownSec: 0.5,
-      pendingThresholdToStartWave: 6,
-      wavePeriodSec: 12,
-      waveLowMult: 0.7,
-      waveHighMult: 1.3,
-      waveHighFrac: 0.35,
-      bossTrashPressureMult: 0.5,
-      maxSpawnsPerTick: 200,
-      // Queue control (prevents “pending poisoning”)
-      pendingSoftCap: 200,
-      pendingHardCap: 600,
-      baseSpawnIntervalSec: 1.0,
-    },
-    expectedPowerConfig: {
-      timeCurve: [
-        { tSec: 0, dps: 24 },
-        { tSec: 120, dps: 14 },
-        { tSec: 300, dps: 28 },
-        { tSec: 480, dps: 45 },
-        { tSec: 720, dps: 70 },
-      ],
-      depthMultBase: 1.0,
-      depthMultPerDepth: 0.05,
-      depthMultMin: 1.0,
-      depthMultMax: 1.8,
-    },
-    expectedPowerBudgetConfig: {
-      basePowerPerSecond: 1.0,
-      powerRampPerMinute: 0.0,
-      powerRampMax: 2.0,
-    },
-    enemyPowerConfig: defaultEnemyPowerCostConfig(),
-    // Balance CSV telemetry (pause-menu controlled)
-    balanceCsvLogger: createBalanceCsvLogger(),
   };
 
   // Map-authored player spawn (SPAWN/P<number> tile)
@@ -1115,6 +1005,7 @@ export function createWorld(args: CreateWorldArgs): World {
     w.activeFloorH = sp.h | 0;
   }
 
+  ensureRingProgressionState(w);
   recomputeDerivedStats(w);
 
   return w;

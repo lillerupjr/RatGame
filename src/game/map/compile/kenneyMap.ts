@@ -3,6 +3,10 @@
 // STAIRS → CONNECTORS migration (Phase 0: contract freeze)
 // See: docs/stairs-connectors-master.md
 // Phase 1 will delete: ramp math, stair walk masks/hitboxes, movement exceptions, projectile stair coupling.
+// @system   map-compilation/activation/floor-topology
+// @owns     maintains active compiled-map facade, spawn/tile/surface/road/walkability/ramp queries
+// @doc      docs/canonical/map_compilation_activation_floor_topology.md
+// @agents   no authored-map nullable state, route selection, or renderer drawing; see authoredMapActivation.ts, delveMap.ts, and presentation/render.ts
 
 import {
     compileKenneyMapFromTable,
@@ -18,6 +22,15 @@ import {
     type DecalPiece,
 } from "./kenneyMapLoader";
 import type { TableMapDef } from "../formats/table/tableMapTypes";
+import {
+    LOAD_PROFILER_SUBPHASE,
+    runWithLoadProfilerSubphaseAsync,
+} from "../../app/loadingFlow";
+import {
+    assertMonolithicBuildingSemanticPrepassComplete,
+    collectRequiredMonolithicBuildingSkinIdsForMap,
+    computeMonolithicBuildingSemanticsForSkinIds,
+} from "../../structures/monolithicBuildingSemanticPrepass";
 import { worldDeltaToScreen, worldToScreen } from "../../../engine/math/iso";
 import { KENNEY_TILE_WORLD } from "../../../engine/render/kenneyTiles";
 import { gridToWorld, worldToGrid } from "../../coords/grid";
@@ -93,6 +106,27 @@ let _compiled: CompiledKenneyMap = compileKenneyMapFromTable({
  */
 /** Compile and activate a new map definition. */
 export function setActiveMap(mapDef: TableMapDef, options?: { runSeed?: number; mapId?: string }): CompiledKenneyMap {
+    // Sync contract: caller is responsible for ensuring required monolithic semantics are already computed.
+    _compiled = compileKenneyMapFromTable(mapDef, options);
+    _rampCache.clear();
+    return _compiled;
+}
+
+export async function setActiveMapAsync(
+    mapDef: TableMapDef,
+    options?: { runSeed?: number; mapId?: string; semanticTimeoutMs?: number },
+): Promise<CompiledKenneyMap> {
+    const requiredSkinIds = collectRequiredMonolithicBuildingSkinIdsForMap(mapDef);
+    await runWithLoadProfilerSubphaseAsync(
+        LOAD_PROFILER_SUBPHASE.MONOLITHIC_SEMANTIC_PREPASS,
+        () => computeMonolithicBuildingSemanticsForSkinIds(requiredSkinIds, {
+            timeoutMs: options?.semanticTimeoutMs ?? 15000,
+        }),
+    );
+    assertMonolithicBuildingSemanticPrepassComplete(
+        `setActiveMapAsync:${options?.mapId ?? mapDef.id}`,
+        requiredSkinIds,
+    );
     _compiled = compileKenneyMapFromTable(mapDef, options);
     _rampCache.clear();
     return _compiled;

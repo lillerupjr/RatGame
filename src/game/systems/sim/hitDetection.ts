@@ -5,6 +5,10 @@ import {
   getPlayerWorld,
   getProjectileWorld,
 } from "../../coords/worldViews";
+import { getBossDefinitionForEntity } from "../../bosses/bossRuntime";
+import { ENEMIES, EnemyId } from "../../content/enemies";
+import { resolveEnemyVisualScale, scaleEnemyHitHeight } from "../enemies/enemyRuntime";
+import { isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
 
 /**
  * Determines if a projectile hits an enemy based on whether it's melee or ranged.
@@ -29,6 +33,7 @@ export function isEnemyHit(
     dy: number,
     rr: number
 ): boolean {
+  if (isPoeEnemyDormant(w, e)) return false;
   // -----------------------------------------
   // Milestone C: symmetric height-aware hits
   // -----------------------------------------
@@ -36,13 +41,12 @@ export function isEnemyHit(
 
   // Enemy vertical height depends on enemy type (Milestone C)
 // Enemy vertical height depends on enemy type (Milestone C)
-  const et = (w.eType?.[e] ?? 1) | 0; // fallback to CHASER-ish
-  const HIT_HEIGHT_Z =
-      et === 1 ? 2 :      // CHASER (was 1)
-          et === 2 ? 3 :      // RUNNER (was 2)
-              et === 3 ? 4 :      // BRUISER (was 3)
-                  et === 99 ? 4 :     // BOSS   (was 3)
-                      2;
+  const bossDef = getBossDefinitionForEntity(w, e);
+  const et = ((w.eType?.[e] ?? EnemyId.MINION) | 0) as keyof typeof ENEMIES;
+  const baseHitHeight = bossDef?.body?.hitHeightProjectile
+      ?? ENEMIES[et]?.body?.hitHeightProjectile
+      ?? 2;
+  const HIT_HEIGHT_Z = scaleEnemyHitHeight(baseHitHeight, resolveEnemyVisualScale(w, e));
 
 
   const ezFeet = w.ezVisual?.[e] ?? 0; // stored by movement on stairs
@@ -100,19 +104,19 @@ export function isEnemyHit(
  */
 /** Return true if the player overlaps an enemy. */
 export function isPlayerHit(w: World, e: number, playerR: number): boolean {
+  if (isPoeEnemyDormant(w, e)) return false;
   // -----------------------------------------
   // Milestone C: height-aware contact hits
   // Player and enemy only collide if their vertical ranges overlap.
   // -----------------------------------------
   const PLAYER_HIT_HEIGHT_Z = 0.9;
 
-  const et = (w.eType?.[e] ?? 1) | 0;
-  const ENEMY_HIT_HEIGHT_Z =
-      et === 1 ? 1 :
-          et === 2 ? 2 :
-              et === 3 ? 3 :
-                  et === 99 ? 3 :
-                      1;
+  const bossDef = getBossDefinitionForEntity(w, e);
+  const et = ((w.eType?.[e] ?? EnemyId.MINION) | 0) as keyof typeof ENEMIES;
+  const baseHitHeight = bossDef?.body?.hitHeightContact
+      ?? ENEMIES[et]?.body?.hitHeightContact
+      ?? 1;
+  const ENEMY_HIT_HEIGHT_Z = scaleEnemyHitHeight(baseHitHeight, resolveEnemyVisualScale(w, e));
 
   const pzFeet = w.pzVisual ?? w.pz ?? 0;
   const ezFeet = w.ezVisual?.[e] ?? 0;
@@ -174,6 +178,7 @@ export function isCircleHit(dx: number, dy: number, rr: number): boolean {
  * Includes enemy radius so it "feels" correct.
  */
 export function isEnemyInCircle(w: World, e: number, cx: number, cy: number, radius: number): boolean {
+  if (isPoeEnemyDormant(w, e)) return false;
   const ew = getEnemyWorld(w, e, KENNEY_TILE_WORLD);
   const dx = ew.wx - cx;
   const dy = ew.wy - cy;

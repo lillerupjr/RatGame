@@ -1,6 +1,8 @@
 import { STAT_KEYS, type StatKey } from "./statKeys";
-import type { CardDef, DamageBundle, StatMod, WeaponDef } from "./modifierTypes";
+import type { ModifierDef, DamageBundle, StatMod, WeaponDef } from "./modifierTypes";
 import { applyConversionPriorityFill } from "../damage/conversion";
+import type { RuntimeEffect } from "../../progression/effects/effectTypes";
+import { collectStatMods as collectCentralStatMods } from "../../progression/effects/statMods";
 
 export interface ResolvedWeaponStats {
   shotsPerSecond: number;
@@ -33,8 +35,9 @@ export interface ResolvedWeaponStats {
 }
 
 export interface CombatModsLoadout {
-  cards: CardDef[];
-  // later: relics, buffs, debuffs
+  modifiers?: ModifierDef[];
+  statMods?: StatMod[];
+  runtimeEffects?: RuntimeEffect[];
 }
 
 export interface DotStatsScalars {
@@ -44,13 +47,12 @@ export interface DotStatsScalars {
   tickRateMult: number;
 }
 
-/**
- * Collect mods from a loadout. (Phase A: cards only)
- */
 export function collectStatMods(loadout: CombatModsLoadout): StatMod[] {
-  const mods: StatMod[] = [];
-  for (const c of loadout.cards) mods.push(...c.mods);
-  return mods;
+  return collectCentralStatMods({
+    carriers: loadout.modifiers,
+    statMods: loadout.statMods,
+    runtimeEffects: loadout.runtimeEffects,
+  });
 }
 
 type Acc = {
@@ -145,8 +147,9 @@ export function resolveWeaponStats(weapon: WeaponDef, loadout: CombatModsLoadout
     fireToChaos: clamp01(getAcc(STAT_KEYS.CONVERT_FIRE_TO_CHAOS).add),
   };
 
+  const physicalHitMore = Math.max(0, getAcc(STAT_KEYS.PHYSICAL_HIT_DAMAGE_MORE).more);
   const baseBeforeConv: DamageBundle = {
-    physical: weapon.baseDamage.physical + getAcc(STAT_KEYS.DAMAGE_ADD_PHYSICAL).add,
+    physical: (weapon.baseDamage.physical + getAcc(STAT_KEYS.DAMAGE_ADD_PHYSICAL).add) * physicalHitMore,
     fire: weapon.baseDamage.fire + getAcc(STAT_KEYS.DAMAGE_ADD_FIRE).add,
     chaos: weapon.baseDamage.chaos + getAcc(STAT_KEYS.DAMAGE_ADD_CHAOS).add,
   };
@@ -203,11 +206,13 @@ export function resolveDotStats(loadout: CombatModsLoadout): DotStatsScalars {
 
   const poisonAcc = getAcc(STAT_KEYS.DOT_POISON_DAMAGE_INCREASED);
   const igniteAcc = getAcc(STAT_KEYS.DOT_IGNITE_DAMAGE_INCREASED);
+  const genericDotAcc = getAcc(STAT_KEYS.DOT_DAMAGE_MORE);
   const durationAcc = getAcc(STAT_KEYS.DOT_DURATION_INCREASED);
   const tickRateAcc = getAcc(STAT_KEYS.DOT_TICK_RATE_MORE);
 
-  const poisonDamageMult = Math.max(0, (1 + poisonAcc.inc) * poisonAcc.more * poisonAcc.less);
-  const igniteDamageMult = Math.max(0, (1 + igniteAcc.inc) * igniteAcc.more * igniteAcc.less);
+  const genericDotMult = Math.max(0, (1 + genericDotAcc.inc) * genericDotAcc.more * genericDotAcc.less);
+  const poisonDamageMult = Math.max(0, genericDotMult * (1 + poisonAcc.inc) * poisonAcc.more * poisonAcc.less);
+  const igniteDamageMult = Math.max(0, genericDotMult * (1 + igniteAcc.inc) * igniteAcc.more * igniteAcc.less);
   const dotDurationMult = Math.max(0, (1 + durationAcc.inc) * durationAcc.more * durationAcc.less);
   const tickRateMult = Math.max(0.0001, (1 + tickRateAcc.inc) * tickRateAcc.more * tickRateAcc.less);
 

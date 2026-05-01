@@ -5,14 +5,10 @@ import {
   setSfxVolume,
 } from "../../game/audio/audioSettings";
 import {
-  DEFAULT_GAME_SPEED,
   DEFAULT_SETTINGS,
   clampVisibleVerticalTiles,
-  clampGameSpeed,
   getUserSettings,
-  MAX_GAME_SPEED,
   MAX_VISIBLE_VERTICAL_TILES,
-  MIN_GAME_SPEED,
   MIN_VISIBLE_VERTICAL_TILES,
   resolveVerticalTiles,
   type VerticalTilesMode,
@@ -37,11 +33,6 @@ export type SettingsPanelController = {
 function clamp01(v: number): number {
   if (!Number.isFinite(v)) return 0;
   return Math.max(0, Math.min(1, v));
-}
-
-function clampInt(v: number, lo: number, hi: number): number {
-  if (!Number.isFinite(v)) return lo;
-  return Math.max(lo, Math.min(hi, Math.round(v)));
 }
 
 function readSettings() {
@@ -217,15 +208,6 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
   healthOrbRow.appendChild(healthOrbSegment);
   gamePanel.appendChild(healthOrbRow);
 
-  const gameSpeedRow = createSliderRow(
-    "Game speed",
-    MIN_GAME_SPEED,
-    MAX_GAME_SPEED,
-    0.05,
-  );
-  gameSpeedRow.slider.setAttribute("data-game-speed-slider", "1");
-  gamePanel.appendChild(gameSpeedRow.row);
-
   const deathSlowdownRow = createToggleRow("Death slowmo");
   deathSlowdownRow.input.setAttribute("data-death-slowmo-toggle", "1");
   gamePanel.appendChild(deathSlowdownRow.row);
@@ -277,12 +259,6 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
   );
   verticalTilesRow.slider.setAttribute("data-vertical-tiles-slider", "1");
   graphicsPanel.appendChild(verticalTilesRow.row);
-
-  // Render padding (tile render radius) — dev-facing but safe to keep here.
-  // Range matches renderer clamp expectations (-12..12).
-  const renderPaddingRow = createSliderRow("Render padding", -12, 12, 1);
-  renderPaddingRow.slider.setAttribute("data-render-padding-slider", "1");
-  graphicsPanel.appendChild(renderPaddingRow.row);
 
   const audioHeader = document.createElement("h4");
   audioHeader.className = "settingsCategoryTitle";
@@ -356,10 +332,6 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
   const syncSliders = () => {
     const settings = readSettings();
 
-    const gameSpeed = clampGameSpeed(Number(settings.game.gameSpeed ?? DEFAULT_GAME_SPEED));
-    gameSpeedRow.slider.value = `${gameSpeed}`;
-    gameSpeedRow.value.textContent = `${gameSpeed.toFixed(2)}x`;
-
     const audio = settings.audio;
     masterRow.slider.value = `${clamp01(audio.masterVolume)}`;
     musicRow.slider.value = `${clamp01(audio.musicVolume)}`;
@@ -376,9 +348,6 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
       : `${resolvedVerticalTiles.effective}`;
     setVerticalTilesModeUi(resolvedVerticalTiles.mode);
 
-    const pad = clampInt(Number(settings.render.tileRenderRadius), -12, 12);
-    renderPaddingRow.slider.value = `${pad}`;
-    renderPaddingRow.value.textContent = `${pad}`;
   };
 
   const applyAudioPatch = (patch: Partial<ReturnType<typeof getUserSettings>["audio"]>) => {
@@ -458,11 +427,6 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
   cameraSmoothingRow.input.addEventListener("change", onCameraSmoothingToggle);
   verticalTilesModeAutoBtn.addEventListener("click", () => onVerticalTilesMode("auto"));
   verticalTilesModeManualBtn.addEventListener("click", () => onVerticalTilesMode("manual"));
-  gameSpeedRow.slider.addEventListener("input", () => {
-    const v = clampGameSpeed(Number.parseFloat(gameSpeedRow.slider.value));
-    updateUserSettings({ game: { gameSpeed: v } });
-    syncSliders();
-  });
   verticalTilesRow.slider.addEventListener("input", () => {
     const v = clampVisibleVerticalTiles(Number.parseFloat(verticalTilesRow.slider.value));
     const settings = readSettings();
@@ -482,12 +446,6 @@ export function mountSettingsPanel(options: MountSettingsPanelOptions): Settings
     }
     syncSliders();
   });
-  renderPaddingRow.slider.addEventListener("input", () => {
-    const v = clampInt(Number.parseFloat(renderPaddingRow.slider.value), -12, 12);
-    updateUserSettings({ render: { tileRenderRadius: v } });
-    syncSliders();
-  });
-
   masterRow.slider.addEventListener("input", () => {
     applyAudioPatch({ masterVolume: clamp01(Number.parseFloat(masterRow.slider.value)) });
   });

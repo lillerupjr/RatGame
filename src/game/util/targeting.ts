@@ -6,6 +6,7 @@ import { gridToWorld, worldToGrid } from "../coords/grid";
 import { KENNEY_TILE_WORLD } from "../../engine/render/kenneyTiles";
 import { queryCircle, queryCircleUnique } from "./spatialHash";
 import { getEnemyAimWorld, getPlayerAimWorld } from "../combat/aimPoints";
+import { isPoeEnemyDormant } from "../objectives/poeMapObjectiveSystem";
 
 /**
  * Targeting strategies for weapons.
@@ -76,6 +77,11 @@ function gridDir(dxg: number, dyg: number) {
   return { dx: dxg / len, dy: dyg / len };
 }
 
+function isEnemyTargetable(w: World, enemyIndex: number): boolean {
+  if (!w.eAlive[enemyIndex]) return false;
+  return !isPoeEnemyDormant(w, enemyIndex);
+}
+
 /**
  * Finds a target using the specified strategy.
  * 
@@ -122,7 +128,7 @@ export function findClosestTarget(w: World, maxRange: number = 0): TargetResult 
   if (maxRange > 0) {
     const nearby = queryCircleUnique(w.enemySpatialHash, pw.x, pw.y, maxRange + 50);
     for (const e of nearby) {
-      if (!w.eAlive[e]) continue;
+      if (!isEnemyTargetable(w, e)) continue;
       const eg = enemyGrid(w, e);
       const dxg = eg.gx - pg.gx;
       const dyg = eg.gy - pg.gy;
@@ -134,7 +140,7 @@ export function findClosestTarget(w: World, maxRange: number = 0): TargetResult 
     }
   } else {
     for (let e = 0; e < w.eAlive.length; e++) {
-      if (!w.eAlive[e]) continue;
+      if (!isEnemyTargetable(w, e)) continue;
       const eg = enemyGrid(w, e);
       const dxg = eg.gx - pg.gx;
       const dyg = eg.gy - pg.gy;
@@ -170,7 +176,7 @@ export function findClusterTarget(
   if (maxRange > 0) {
     const nearby = queryCircleUnique(w.enemySpatialHash, pw.x, pw.y, maxRange + 50);
     for (const e of nearby) {
-      if (!w.eAlive[e]) continue;
+      if (!isEnemyTargetable(w, e)) continue;
       const eg = enemyGrid(w, e);
       const dxg = eg.gx - pg.gx;
       const dyg = eg.gy - pg.gy;
@@ -180,7 +186,7 @@ export function findClusterTarget(
     }
   } else {
     for (let e = 0; e < w.eAlive.length; e++) {
-      if (!w.eAlive[e]) continue;
+      if (!isEnemyTargetable(w, e)) continue;
       candidates.push(e);
     }
   }
@@ -260,7 +266,7 @@ export function findRandomTarget(w: World, maxRange: number = 0): TargetResult {
   if (maxRange > 0) {
     const nearby = queryCircleUnique(w.enemySpatialHash, pw.x, pw.y, maxRange + 50);
     for (const e of nearby) {
-      if (!w.eAlive[e]) continue;
+      if (!isEnemyTargetable(w, e)) continue;
       const eg = enemyGrid(w, e);
       const dxg = eg.gx - pg.gx;
       const dyg = eg.gy - pg.gy;
@@ -270,7 +276,7 @@ export function findRandomTarget(w: World, maxRange: number = 0): TargetResult {
     }
   } else {
     for (let e = 0; e < w.eAlive.length; e++) {
-      if (!w.eAlive[e]) continue;
+      if (!isEnemyTargetable(w, e)) continue;
       candidates.push(e);
     }
   }
@@ -292,7 +298,7 @@ export function findStrongestTarget(w: World, maxRange: number = 0): TargetResul
   const pw = worldPosFromGrid(pg.gx, pg.gy);
 
   const checkEnemy = (e: number) => {
-    if (!w.eAlive[e]) return;
+    if (!isEnemyTargetable(w, e)) return;
     const eg = enemyGrid(w, e);
     const dxg = eg.gx - pg.gx;
     const dyg = eg.gy - pg.gy;
@@ -326,7 +332,7 @@ export function findWeakestTarget(w: World, maxRange: number = 0): TargetResult 
   const pw = worldPosFromGrid(pg.gx, pg.gy);
 
   const checkEnemy = (e: number) => {
-    if (!w.eAlive[e]) return;
+    if (!isEnemyTargetable(w, e)) return;
     const eg = enemyGrid(w, e);
     const dxg = eg.gx - pg.gx;
     const dyg = eg.gy - pg.gy;
@@ -360,7 +366,7 @@ export function findFarthestTarget(w: World, maxRange: number = 0): TargetResult
   const pw = worldPosFromGrid(pg.gx, pg.gy);
 
   const checkEnemy = (e: number) => {
-    if (!w.eAlive[e]) return;
+    if (!isEnemyTargetable(w, e)) return;
     const eg = enemyGrid(w, e);
     const dxg = eg.gx - pg.gx;
     const dyg = eg.gy - pg.gy;
@@ -417,7 +423,7 @@ export function getEnemiesInRange(w: World, maxRange: number): number[] {
 
   const nearby = queryCircleUnique(w.enemySpatialHash, pw.x, pw.y, maxRange + 50);
   for (const e of nearby) {
-    if (!w.eAlive[e]) continue;
+    if (!isEnemyTargetable(w, e)) continue;
     const eg = enemyGrid(w, e);
     const dxg = eg.gx - pg.gx;
     const dyg = eg.gy - pg.gy;
@@ -449,7 +455,7 @@ export function countEnemiesNear(
     if (seen.has(e)) continue;
     seen.add(e);
     
-    if (!w.eAlive[e]) continue;
+    if (!isEnemyTargetable(w, e)) continue;
     const eg = enemyGrid(w, e);
     const tg = gridPosFromWorld(x, y);
     const dxg = eg.gx - tg.gx;

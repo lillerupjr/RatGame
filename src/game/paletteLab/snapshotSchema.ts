@@ -1,0 +1,1 @@
+export const PALETTE_SNAPSHOT_SCHEMA_VERSION = 1;

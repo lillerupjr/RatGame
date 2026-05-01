@@ -1,4 +1,9 @@
 // src/game/systems/projectiles.ts
+// @system   core-simulation/combat-runtime
+// @owns     updates projectile lifetime, movement/substepping, homing/orbital behavior, wall bounce, range and explosions
+// @doc      docs/canonical/core_simulation_combat_runtime.md
+// @agents   no weapon spawning, hit damage resolution, or zone DOT ticking; see combat.ts, collisions.ts, and zones.ts
+
 import { type World, emitEvent } from "../../../engine/world/world";
 import { spawnZone, ZONE_KIND } from "../../factories/zoneFactory";
 import { solidFace, worldToTile } from "../../map/compile/kenneyMap";
@@ -8,10 +13,17 @@ import { getEnemyWorld, getPlayerWorld, getProjectileWorld } from "../../coords/
 import { PRJ_KIND } from "../../factories/projectileFactory";
 import { getEnemyAimWorld } from "../../combat/aimPoints";
 import { makeUnknownDamageMeta } from "../../combat/damageMeta";
+import { finalizeEnemyDeath } from "../enemies/finalize";
+import { despawnProjectile } from "./projectileLifecycle";
+import { isPoeEnemyDormant } from "../../objectives/poeMapObjectiveSystem";
 
 // --- Movement substepping (prevents "one whole tile per frame") ---
 export let PROJECTILE_MAX_MOVE_FRAC_PER_STEP = 0.5;   // fraction of tile per move substep
 export let PROJECTILE_MAX_MOVE_STEPS = 12;            // hard cap for perf
+
+function projectileExplosionVfxId(): string {
+    return "EXPLOSION";
+}
 
 /**
  * Projectile movement + lifetime cleanup.
@@ -68,7 +80,7 @@ export function projectilesSystem(w: World, dt: number) {
         // TTL
         w.prTtl[i] -= dt;
         if (w.prTtl[i] <= 0) {
-            w.pAlive[i] = false;
+            despawnProjectile(w, i);
             continue;
         }
 
@@ -78,13 +90,13 @@ export function projectilesSystem(w: World, dt: number) {
         // Spark: track live enemy or die if target is dead
         if (w.prjKind[i] === PRJ_KIND.SPARK && w.prHasTarget[i]) {
             const sparkTarget = w.prLastHitEnemy[i];
-            if (sparkTarget >= 0 && w.eAlive[sparkTarget]) {
+            if (sparkTarget >= 0 && w.eAlive[sparkTarget] && !isPoeEnemyDormant(w, sparkTarget)) {
                 const enemyAim = getEnemyAimWorld(w, sparkTarget);
                 w.prTargetX[i] = enemyAim.x;
                 w.prTargetY[i] = enemyAim.y;
             } else {
                 // Target died — kill spark
-                w.pAlive[i] = false;
+                despawnProjectile(w, i);
                 continue;
             }
         }
@@ -154,12 +166,17 @@ export function projectilesSystem(w: World, dt: number) {
                         oy = ny;
                         w.prDirX[i] = dist > 0.0001 ? dx / dist : w.prDirX[i];
                         w.prDirY[i] = dist > 0.0001 ? dy / dist : w.prDirY[i];
-                        w.pAlive[i] = false;
+                        despawnProjectile(w, i, { x: tx, y: ty });
                         if (isSpark) {
                             // Spark: apply damage + lightning hit VFX
                             const sparkDmg = w.prDamage[i];
                             const sparkTarget = w.prLastHitEnemy[i];
-                            if (sparkTarget >= 0 && w.eAlive[sparkTarget] && sparkDmg > 0) {
+                            if (
+                              sparkTarget >= 0
+                              && w.eAlive[sparkTarget]
+                              && !isPoeEnemyDormant(w, sparkTarget)
+                              && sparkDmg > 0
+                            ) {
                                 w.eHp[sparkTarget] -= sparkDmg;
                                 const ew2 = getEnemyWorld(w, sparkTarget, T);
                                 emitEvent(w, {
@@ -176,20 +193,19 @@ export function projectilesSystem(w: World, dt: number) {
                                     damageMeta: projectileDamageMeta,
                                 });
                                 if (w.eHp[sparkTarget] <= 0) {
-                                    w.eAlive[sparkTarget] = false;
-                                    w.kills++;
-                                    emitEvent(w, {
-                                        type: "ENEMY_KILLED",
-                                        enemyIndex: sparkTarget,
+                                    finalizeEnemyDeath(w, sparkTarget, {
+                                        damageMeta: projectileDamageMeta,
+                                        source: "OTHER",
+                                        damage: sparkDmg,
+                                        dmgPhys: w.prDmgPhys[i],
+                                        dmgFire: w.prDmgFire[i],
+                                        dmgChaos: w.prDmgChaos[i],
+                                        isCrit: false,
                                         x: ew2.wx,
                                         y: ew2.wy,
-                                        spawnTriggerId: w.eSpawnTriggerId[sparkTarget],
-                                        source: "OTHER",
-                                        damageMeta: projectileDamageMeta,
                                     });
                                 }
                             }
-                            emitEvent(w, { type: "VFX", id: "LIGHTNING_HIT", x: tx, y: ty, scale: 1 });
                             break;
                         }
                         const blastR = Math.max(0, w.prExplodeR[i] ?? 0);
@@ -207,7 +223,7 @@ export function projectilesSystem(w: World, dt: number) {
                                 enemyDamageMeta: { ...projectileDamageMeta, category: "HIT" },
                             });
                             w.zTickLeft[z] = 0;
-                            emitEvent(w, { type: "VFX", id: "EXPLOSION", x: tx, y: ty, radius: blastR });
+                            emitEvent(w, { type: "VFX", id: projectileExplosionVfxId(), x: tx, y: ty, radius: blastR });
                         }
                         break;
                     }
@@ -239,7 +255,7 @@ export function projectilesSystem(w: World, dt: number) {
                         if (w.prWallBounce[i]) {
                             const bLeft = w.prBouncesLeft[i];
                             if (bLeft >= 0 && bLeft <= 0) {
-                                w.pAlive[i] = false;
+                                despawnProjectile(w, i, { x: ox, y: oy });
                                 break;
                             }
 
@@ -258,7 +274,7 @@ export function projectilesSystem(w: World, dt: number) {
                             break;
                         }
 
-                        w.pAlive[i] = false;
+                        despawnProjectile(w, i, { x: ox, y: oy });
                         break;
                     }
                 }
@@ -287,7 +303,7 @@ export function projectilesSystem(w: World, dt: number) {
                 // Left / Right
                 if (ox - r < left) {
                     if (bLeft >= 0 && bLeft <= 0) {
-                        w.pAlive[i] = false;
+                        despawnProjectile(w, i, { x: ox, y: oy });
                     } else {
                         ox = left + r;
                         w.prvx[i] = Math.abs(w.prvx[i]);
@@ -295,7 +311,7 @@ export function projectilesSystem(w: World, dt: number) {
                     }
                 } else if (ox + r > right) {
                     if (bLeft >= 0 && bLeft <= 0) {
-                        w.pAlive[i] = false;
+                        despawnProjectile(w, i, { x: ox, y: oy });
                     } else {
                         ox = right - r;
                         w.prvx[i] = -Math.abs(w.prvx[i]);
@@ -307,7 +323,7 @@ export function projectilesSystem(w: World, dt: number) {
                 if (w.pAlive[i]) {
                     if (oy - r < top) {
                         if (bLeft >= 0 && bLeft <= 0) {
-                            w.pAlive[i] = false;
+                            despawnProjectile(w, i, { x: ox, y: oy });
                         } else {
                             oy = top + r;
                             w.prvy[i] = Math.abs(w.prvy[i]);
@@ -315,7 +331,7 @@ export function projectilesSystem(w: World, dt: number) {
                         }
                     } else if (oy + r > bottom) {
                         if (bLeft >= 0 && bLeft <= 0) {
-                            w.pAlive[i] = false;
+                            despawnProjectile(w, i, { x: ox, y: oy });
                         } else {
                             oy = bottom - r;
                             w.prvy[i] = -Math.abs(w.prvy[i]);
@@ -342,6 +358,8 @@ export function projectilesSystem(w: World, dt: number) {
             }
 
         }
+
+        if (!w.pAlive[i]) continue;
 
         // -------------------------
         // Explode-on-target (non-missile targeted projectiles)
@@ -376,11 +394,11 @@ export function projectilesSystem(w: World, dt: number) {
 
                     // Apply first tick immediately (instant explosion feel)
                     w.zTickLeft[z] = 0;
-                    emitEvent(w, { type: "VFX", id: "EXPLOSION", x: tx, y: ty, radius: blastR });
+                    emitEvent(w, { type: "VFX", id: projectileExplosionVfxId(), x: tx, y: ty, radius: blastR });
                 }
 
                 // Rocket is consumed by the explosion
-                w.pAlive[i] = false;
+                despawnProjectile(w, i, { x: tx, y: ty });
                 continue;
             }
         }
@@ -393,7 +411,7 @@ export function projectilesSystem(w: World, dt: number) {
             const dx = ox - (w.prStartX[i] ?? ox);
             const dy = oy - (w.prStartY[i] ?? oy);
             if (dx * dx + dy * dy > maxDist * maxDist) {
-                w.pAlive[i] = false;
+                despawnProjectile(w, i, { x: ox, y: oy });
             }
         }
 

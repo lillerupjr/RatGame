@@ -1,5 +1,10 @@
-import { ENEMY_TYPE, type EnemyType } from "../../../game/content/enemies";
-import { resolveActivePaletteId } from "../../../game/render/activePalette";
+import { ENEMIES, type EnemyId } from "../../../game/content/enemies";
+import {
+    buildPaletteVariantKey,
+    resolveActivePaletteId,
+    resolveActivePaletteSwapWeightPercents,
+    resolveActivePaletteVariantKey,
+} from "../../../game/render/activePalette";
 import { dir8FromVector } from "./dir8";
 import {
     createPaletteSwapState,
@@ -8,7 +13,9 @@ import {
 } from "./paletteSwapState";
 import {
     getSpriteFrame,
+    isSpritePreloadError,
     preloadSpritePack,
+    type SpriteDarknessPercent,
     type SpriteLoaderSource,
     type SpritePack,
 } from "./spriteLoader";
@@ -25,75 +32,29 @@ type EnemySpriteDef = {
     frameCount?: number;
 };
 
-const ENEMY_SPRITES: Partial<Record<EnemyType, EnemySpriteDef>> = {
-    [ENEMY_TYPE.CHASER]: {
-        skin: "rat1",
-        scale: 1.5,
-        anchorX: 0.5,
-        anchorY: 0.65,
-        frameW: 32,
-        frameH: 32,
-        runAnim: "running-4-frames",
-    },
-    [ENEMY_TYPE.RUNNER]: {
-        skin: "rat2",
-        scale: 1.5,
-        anchorX: 0.5,
-        anchorY: 0.65,
-        frameW: 92,
-        frameH: 92,
-        runAnim: "walk-4-frames",
-    },
-    [ENEMY_TYPE.BRUISER]: {
-        skin: "rat4",
-        scale: 2,
-        anchorX: 0.5,
-        anchorY: 0.65,
-        frameW: 92,
-        frameH: 92,
-        runAnim: "walk-4-frames",
+function getEnemySpriteDef(type: EnemyId): EnemySpriteDef | null {
+    const sprite = ENEMIES[type]?.presentation?.sprite;
+    if (!sprite) return null;
+    return {
+        skin: sprite.skin,
+        scale: sprite.scale,
+        anchorX: sprite.anchorX,
+        anchorY: sprite.anchorY,
+        frameW: sprite.frameW,
+        frameH: sprite.frameH,
+        runAnim: sprite.runAnim,
+        frameCount: sprite.frameCount,
+        source: sprite.packRoot ? { packRoot: sprite.packRoot } : undefined,
+    };
+}
 
-    },
-    [ENEMY_TYPE.MINOTAUR]: {
-        skin: "minotaur",
-        scale: 2,
-        anchorX: 0.5,
-        anchorY: 0.65,
-        frameW: 128,
-        frameH: 128,
-        runAnim: "walk-8-frames",
-        frameCount: 8,
-    },
-    [ENEMY_TYPE.ABOMINATION]: {
-        skin: "abomination",
-        scale: 2,
-        anchorX: 0.5,
-        anchorY: 0.65,
-        frameW: 96,
-        frameH: 96,
-        runAnim: "walk-6-frames",
-        frameCount: 6,
-    },
-    [ENEMY_TYPE.RATCHEMIST]: {
-        skin: "ratchemist",
-        scale: 1.5,
-        anchorX: 0.5,
-        anchorY: 0.65,
-        frameW: 92,
-        frameH: 92,
-        runAnim: "walk",
-        frameCount: 6,
-    },
-    [ENEMY_TYPE.BOSS]: {
-        skin: "infested",
-        scale: 2,
-        anchorX: 0.5,
-        anchorY: 0.65,
-        frameW: 92,
-        frameH: 92,
-        runAnim: "walk",
-    },
-};
+function findEnemySpriteDefBySkin(skin: string): EnemySpriteDef | null {
+    for (const key of Object.keys(ENEMIES)) {
+        const def = getEnemySpriteDef(Number(key) as EnemyId);
+        if (def?.skin === skin) return def;
+    }
+    return null;
+}
 
 export type EnemySpriteFrameMeta = {
     skin: string;
@@ -104,22 +65,53 @@ export type EnemySpriteFrameMeta = {
     anchorY: number;
 };
 
-export function getEnemySpriteFrameMeta(type: EnemyType): EnemySpriteFrameMeta | null {
-    const def = ENEMY_SPRITES[type];
+export function getEnemySpriteFrameMeta(type: EnemyId): EnemySpriteFrameMeta | null {
+    return getEnemySpriteFrameMetaScaled(type, 1);
+}
+
+export function getEnemySpriteFrameMetaScaled(type: EnemyId, scaleMultiplier: number = 1): EnemySpriteFrameMeta | null {
+    const def = getEnemySpriteDef(type);
     if (!def) return null;
+    const resolvedScaleMultiplier = Number.isFinite(scaleMultiplier) ? Math.max(0.1, scaleMultiplier) : 1;
     return {
         skin: def.skin,
         w: def.frameW,
         h: def.frameH,
-        scale: def.scale,
+        scale: def.scale * resolvedScaleMultiplier,
         anchorX: def.anchorX,
         anchorY: def.anchorY,
     };
 }
 
-const paletteState = createPaletteSwapState(resolveActivePaletteId());
+const paletteState = createPaletteSwapState(resolveActivePaletteVariantKey());
 const packsByPalette = new Map<string, Map<string, SpritePack>>();
 const preloadByPaletteSkin = new Map<string, Promise<void>>();
+const ENEMY_DIR_KEYS = [
+    "north",
+    "north-east",
+    "east",
+    "south-east",
+    "south",
+    "south-west",
+    "west",
+    "north-west",
+] as const;
+type PreloadStatus = "READY" | "PENDING" | "UNSUPPORTED" | "FAILED_TRANSIENT" | "FAILED_PERMANENT";
+const preloadStatusByPaletteSkin = new Map<string, PreloadStatus>();
+const preloadWarnedByPaletteSkinStatus = new Set<string>();
+const preloadSkippedByPaletteSkinStatus = new Set<string>();
+
+function resolvePaletteVariantKeyForDarknessPercent(
+    darknessPercent?: SpriteDarknessPercent,
+): string {
+    if (darknessPercent == null) return resolveActivePaletteVariantKey();
+    const paletteId = resolveActivePaletteId();
+    const active = resolveActivePaletteSwapWeightPercents();
+    return buildPaletteVariantKey(paletteId, {
+        sWeightPercent: active.sWeightPercent,
+        darknessPercent,
+    });
+}
 
 function getPaletteMap(paletteId: string): Map<string, SpritePack> {
     const existing = packsByPalette.get(paletteId);
@@ -131,46 +123,200 @@ function getPaletteMap(paletteId: string): Map<string, SpritePack> {
 
 function getRequiredSkins(): string[] {
     const skins = new Set<string>();
-    for (const def of Object.values(ENEMY_SPRITES)) {
+    for (const key of Object.keys(ENEMIES)) {
+        const def = getEnemySpriteDef(Number(key) as EnemyId);
         if (def?.skin) skins.add(def.skin);
     }
     return Array.from(skins);
 }
 
-function markPaletteReadyIfComplete(paletteId: string): void {
-    const map = getPaletteMap(paletteId);
-    const allLoaded = getRequiredSkins().every((skin) => map.has(skin));
-    if (allLoaded) notePaletteReady(paletteState, paletteId);
+export function listEnemyDynamicAtlasSpriteIds(): string[] {
+    const ids = new Set<string>();
+    for (const key of Object.keys(ENEMIES)) {
+        const def = getEnemySpriteDef(Number(key) as EnemyId);
+        if (!def?.skin) continue;
+        const packRoot = def.source?.packRoot ?? "entities/enemies";
+        for (const dirKey of ENEMY_DIR_KEYS) {
+            ids.add(`${packRoot}/${def.skin}/rotations/${dirKey}`);
+        }
+        if (!def.runAnim) continue;
+        const frameCount = def.frameCount ?? 4;
+        for (const dirKey of ENEMY_DIR_KEYS) {
+            for (let i = 0; i < frameCount; i++) {
+                ids.add(
+                    `${packRoot}/${def.skin}/animations/${def.runAnim}/${dirKey}/frame_${String(i).padStart(3, "0")}`,
+                );
+            }
+        }
+    }
+    return Array.from(ids).sort();
 }
 
-export function enemySpritesReady(): boolean {
-    const paletteId = resolveActivePaletteId();
-    const map = getPaletteMap(paletteId);
-    return getRequiredSkins().every((skin) => map.has(skin));
+function resolveRequestedSkins(requiredSkins?: readonly string[]): string[] {
+    if (requiredSkins === undefined) return getRequiredSkins();
+    const known = new Set(getRequiredSkins());
+    const out: string[] = [];
+    for (let i = 0; i < requiredSkins.length; i++) {
+        const skin = requiredSkins[i];
+        if (!known.has(skin) || out.includes(skin)) continue;
+        out.push(skin);
+    }
+    return out;
 }
 
-export function preloadEnemySprites() {
-    const paletteId = resolveActivePaletteId();
-    notePaletteRequested(paletteState, paletteId);
-    const map = getPaletteMap(paletteId);
-    const skins = getRequiredSkins();
+function markPaletteReadyIfComplete(paletteId: string, requiredSkins?: readonly string[]): void {
+  const map = getPaletteMap(paletteId);
+  const skins = resolveRequestedSkins(requiredSkins);
+  const allLoaded = skins.every((skin) => map.has(skin));
+  if (allLoaded) notePaletteReady(paletteState, paletteId);
+}
+
+export function enemySpritesReady(
+    requiredSkins?: readonly string[],
+    paletteVariantKey: string = resolveActivePaletteVariantKey(),
+): boolean {
+    const map = getPaletteMap(paletteVariantKey);
+    const skins = resolveRequestedSkins(requiredSkins);
+    if (skins.length === 0) return true;
+    return skins.every((skin) => map.has(skin));
+}
+
+export function preloadEnemySprites(
+    requiredSkins?: readonly string[],
+    paletteVariantKey: string = resolvePaletteVariantKeyForDarknessPercent(),
+) {
+    notePaletteRequested(paletteState, paletteVariantKey);
+    const map = getPaletteMap(paletteVariantKey);
+    const skins = resolveRequestedSkins(requiredSkins);
+    if (skins.length === 0) {
+        notePaletteReady(paletteState, paletteVariantKey);
+        return;
+    }
 
     for (const skin of skins) {
         if (map.has(skin)) continue;
-        const key = `${paletteId}:${skin}`;
+        const key = `${paletteVariantKey}:${skin}`;
+        const existingStatus = preloadStatusByPaletteSkin.get(key);
+        if (
+            existingStatus === "PENDING"
+            || existingStatus === "READY"
+            || existingStatus === "UNSUPPORTED"
+            || existingStatus === "FAILED_PERMANENT"
+        ) {
+            if (existingStatus === "UNSUPPORTED" || existingStatus === "FAILED_PERMANENT") {
+                const skipKey = `${key}:${existingStatus}`;
+                if (!preloadSkippedByPaletteSkinStatus.has(skipKey)) {
+                    preloadSkippedByPaletteSkinStatus.add(skipKey);
+                    console.debug("[enemySprites] Skipping non-retryable preload status", {
+                        skin,
+                        paletteVariantKey,
+                        status: existingStatus,
+                    });
+                }
+            }
+            continue;
+        }
         if (preloadByPaletteSkin.has(key)) continue;
-        const def = Object.values(ENEMY_SPRITES).find((entry) => entry?.skin === skin);
+        if (existingStatus === "FAILED_TRANSIENT") {
+            console.debug("[enemySprites] Retrying transient preload failure", {
+                skin,
+                paletteVariantKey,
+            });
+        }
+        preloadStatusByPaletteSkin.set(key, "PENDING");
+        const def = findEnemySpriteDefBySkin(skin);
         const job = preloadSpritePack(skin, {
             source: def?.source,
             animKeys: def?.runAnim ? [def.runAnim] : undefined,
             frameCount: def?.frameCount,
+            paletteVariantKey,
         })
             .then((pack) => {
                 map.set(skin, pack);
-                markPaletteReadyIfComplete(paletteId);
+                preloadStatusByPaletteSkin.set(key, "READY");
+                markPaletteReadyIfComplete(paletteVariantKey, skins);
             })
             .catch((err) => {
-                console.warn(`[enemySprites] Failed to preload ${skin}`, err);
+                const status: PreloadStatus =
+                    isSpritePreloadError(err) && err.kind === "TIMED_OUT"
+                        ? "FAILED_TRANSIENT"
+                        : isSpritePreloadError(err) && err.kind === "UNSUPPORTED"
+                            ? "UNSUPPORTED"
+                            : "FAILED_PERMANENT";
+                preloadStatusByPaletteSkin.set(key, status);
+                const warnKey = `${key}:${status}`;
+                if (!preloadWarnedByPaletteSkinStatus.has(warnKey)) {
+                    preloadWarnedByPaletteSkinStatus.add(warnKey);
+                    if (status === "FAILED_TRANSIENT") {
+                        console.warn(`[enemySprites] Timed out preloading ${skin}; will retry`, err);
+                    } else if (status === "FAILED_PERMANENT") {
+                        console.warn(`[enemySprites] Failed to preload ${skin}; marked permanent`, err);
+                    }
+                }
+            })
+            .finally(() => {
+                preloadByPaletteSkin.delete(key);
+            });
+        preloadByPaletteSkin.set(key, job);
+    }
+}
+
+function preloadEnemySpritesForDarknessPercent(
+    darknessPercent: SpriteDarknessPercent,
+    requiredSkins?: readonly string[],
+    requestedPaletteVariantKey: string = resolvePaletteVariantKeyForDarknessPercent(darknessPercent),
+) {
+    const paletteVariantKey = requestedPaletteVariantKey;
+    notePaletteRequested(paletteState, paletteVariantKey);
+    const map = getPaletteMap(paletteVariantKey);
+    const skins = resolveRequestedSkins(requiredSkins);
+    if (skins.length === 0) {
+        notePaletteReady(paletteState, paletteVariantKey);
+        return;
+    }
+
+    for (const skin of skins) {
+        if (map.has(skin)) continue;
+        const key = `${paletteVariantKey}:${skin}`;
+        const existingStatus = preloadStatusByPaletteSkin.get(key);
+        if (
+            existingStatus === "PENDING"
+            || existingStatus === "READY"
+            || existingStatus === "UNSUPPORTED"
+            || existingStatus === "FAILED_PERMANENT"
+        ) continue;
+        if (preloadByPaletteSkin.has(key)) continue;
+        preloadStatusByPaletteSkin.set(key, "PENDING");
+        const def = findEnemySpriteDefBySkin(skin);
+        const job = preloadSpritePack(skin, {
+            source: def?.source,
+            animKeys: def?.runAnim ? [def.runAnim] : undefined,
+            frameCount: def?.frameCount,
+            darknessPercent,
+            paletteVariantKey,
+        })
+            .then((pack) => {
+                map.set(skin, pack);
+                preloadStatusByPaletteSkin.set(key, "READY");
+                markPaletteReadyIfComplete(paletteVariantKey, skins);
+            })
+            .catch((err) => {
+                const status: PreloadStatus =
+                    isSpritePreloadError(err) && err.kind === "TIMED_OUT"
+                        ? "FAILED_TRANSIENT"
+                        : isSpritePreloadError(err) && err.kind === "UNSUPPORTED"
+                            ? "UNSUPPORTED"
+                            : "FAILED_PERMANENT";
+                preloadStatusByPaletteSkin.set(key, status);
+                const warnKey = `${key}:${status}`;
+                if (!preloadWarnedByPaletteSkinStatus.has(warnKey)) {
+                    preloadWarnedByPaletteSkinStatus.add(warnKey);
+                    if (status === "FAILED_TRANSIENT") {
+                        console.warn(`[enemySprites] Timed out preloading ${skin}; will retry`, err);
+                    } else if (status === "FAILED_PERMANENT") {
+                        console.warn(`[enemySprites] Failed to preload ${skin}; marked permanent`, err);
+                    }
+                }
             })
             .finally(() => {
                 preloadByPaletteSkin.delete(key);
@@ -180,11 +326,12 @@ export function preloadEnemySprites() {
 }
 
 export function getEnemySpriteFrame(args: {
-    type: EnemyType;
+    type: EnemyId;
     time: number;
     faceDx: number;
     faceDy: number;
     moving: boolean;
+    scaleMultiplier?: number;
 }):
     | {
     img: HTMLImageElement;
@@ -200,13 +347,14 @@ export function getEnemySpriteFrame(args: {
     anchorY: number;
 }
     | null {
-    const def = ENEMY_SPRITES[args.type];
+    const def = getEnemySpriteDef(args.type);
     if (!def) return null;
-    const paletteId = resolveActivePaletteId();
-    notePaletteRequested(paletteState, paletteId);
-    preloadEnemySprites();
+    const scaleMultiplier = Number.isFinite(args.scaleMultiplier) ? Math.max(0.1, args.scaleMultiplier as number) : 1;
+    const paletteVariantKey = resolveActivePaletteVariantKey();
+    notePaletteRequested(paletteState, paletteVariantKey);
+    preloadEnemySprites([def.skin], paletteVariantKey);
 
-    const pack = getPaletteMap(paletteId).get(def.skin)
+    const pack = getPaletteMap(paletteVariantKey).get(def.skin)
         ?? getPaletteMap(paletteState.lastReadyPaletteId).get(def.skin);
     if (!pack) return null;
 
@@ -228,7 +376,68 @@ export function getEnemySpriteFrame(args: {
         path: def.skin,
         w: pack.size.w,
         h: pack.size.h,
-        scale: def.scale,
+        scale: def.scale * scaleMultiplier,
+        anchorX: def.anchorX,
+        anchorY: def.anchorY,
+    };
+}
+
+export function getEnemySpriteFrameForDarknessPercent(args: {
+    type: EnemyId;
+    time: number;
+    faceDx: number;
+    faceDy: number;
+    moving: boolean;
+    darknessPercent: SpriteDarknessPercent;
+    scaleMultiplier?: number;
+}):
+    | {
+    img: HTMLImageElement;
+    sx: number;
+    sy: number;
+    sw: number;
+    sh: number;
+    path: string;
+    w: number;
+    h: number;
+    scale: number;
+    anchorX: number;
+    anchorY: number;
+}
+    | null {
+    const def = getEnemySpriteDef(args.type);
+    if (!def) return null;
+    const scaleMultiplier = Number.isFinite(args.scaleMultiplier) ? Math.max(0.1, args.scaleMultiplier as number) : 1;
+    const paletteVariantKey = resolvePaletteVariantKeyForDarknessPercent(args.darknessPercent);
+    notePaletteRequested(paletteState, paletteVariantKey);
+    const statusKey = `${paletteVariantKey}:${def.skin}`;
+    const currentStatus = preloadStatusByPaletteSkin.get(statusKey);
+    if (currentStatus !== "UNSUPPORTED" && currentStatus !== "FAILED_PERMANENT") {
+        preloadEnemySpritesForDarknessPercent(args.darknessPercent, [def.skin], paletteVariantKey);
+    }
+
+    const pack = getPaletteMap(paletteVariantKey).get(def.skin);
+    if (!pack) return null;
+
+    const dir = dir8FromVector(args.faceDx, args.faceDy);
+    const anim = args.moving ? def.runAnim : undefined;
+    const img = getSpriteFrame(pack, {
+        dir,
+        anim,
+        t: args.time,
+        useRotationIfNoAnim: true,
+    });
+
+    return {
+        img,
+        sx: 0,
+        sy: 0,
+        sw: pack.size.w,
+        sh: pack.size.h,
+        path: def.skin,
+        w: pack.size.w,
+        h: pack.size.h,
+        scale: def.scale * scaleMultiplier,
         anchorX: def.anchorX,
         anchorY: def.anchorY,
     };

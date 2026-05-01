@@ -5,14 +5,19 @@ export type RunEvent =
       zoneIndex: 1 | 2;
     }
   | {
-      type: "BOSS_MILESTONE_CLEARED";
+      type: "RARE_MILESTONE_CLEARED";
       floorIndex: number;
-      bossIndex: 1 | 2;
+      rareIndex: 1 | 2;
     }
   | {
       type: "OBJECTIVE_COMPLETED";
       floorIndex: number;
       objectiveId: string;
+    }
+  | {
+      type: "LEVEL_UP";
+      floorIndex: number;
+      level: number;
     }
   | {
       type: "CHEST_OPEN_REQUESTED";

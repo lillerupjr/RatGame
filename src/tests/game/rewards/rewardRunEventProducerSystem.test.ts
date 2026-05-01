@@ -1,12 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { ENEMY_TYPE } from "../../../game/factories/enemyFactory";
+import { EnemyId } from "../../../game/factories/enemyFactory";
 import { rewardRunEventProducerSystem } from "../../../game/systems/progression/rewardRunEventProducerSystem";
 import { OBJECTIVE_TRIGGER_IDS } from "../../../game/systems/progression/objectiveSpec";
 import { createRewardPipelineWorld } from "./rewardPipeline.testUtils";
 import { makeUnknownDamageMeta } from "../../../game/combat/damageMeta";
 
 describe("rewardRunEventProducerSystem", () => {
-  test("emits boss milestone from ENEMY_KILLED boss with boss-zone spawn trigger", () => {
+  test("emits a rare milestone from ENEMY_KILLED rare with rare-zone spawn trigger", () => {
     const world = createRewardPipelineWorld(91, "NORMAL");
     world.events.push({
       type: "ENEMY_KILLED",
@@ -14,23 +14,23 @@ describe("rewardRunEventProducerSystem", () => {
       x: 0,
       y: 0,
       source: "OTHER",
-      spawnTriggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}1`,
-      damageMeta: makeUnknownDamageMeta("TEST_REWARD_BOSS_KILL"),
+      spawnTriggerId: `${OBJECTIVE_TRIGGER_IDS.rareZonePrefix}1`,
+      damageMeta: makeUnknownDamageMeta("TEST_REWARD_RARE_KILL"),
     });
-    world.eType[3] = ENEMY_TYPE.BOSS;
+    world.eType[3] = EnemyId.TANK;
 
     rewardRunEventProducerSystem(world, { includeCoreFacts: true, includeChest: false });
 
     expect(world.runEvents).toEqual([
       {
-        type: "BOSS_MILESTONE_CLEARED",
+        type: "RARE_MILESTONE_CLEARED",
         floorIndex: 0,
-        bossIndex: 1,
+        rareIndex: 1,
       },
     ]);
   });
 
-  test("ignores non-boss kill events", () => {
+  test("ignores kill events outside rare zones", () => {
     const world = createRewardPipelineWorld(92, "NORMAL");
     world.events.push({
       type: "ENEMY_KILLED",
@@ -38,19 +38,19 @@ describe("rewardRunEventProducerSystem", () => {
       x: 0,
       y: 0,
       source: "OTHER",
-      spawnTriggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}1`,
-      damageMeta: makeUnknownDamageMeta("TEST_REWARD_NON_BOSS_KILL"),
+      spawnTriggerId: "OBJ_ZONE_1",
+      damageMeta: makeUnknownDamageMeta("TEST_REWARD_NON_RARE_ZONE_KILL"),
     });
-    world.eType[4] = ENEMY_TYPE.CHASER;
+    world.eType[4] = EnemyId.MINION;
 
     rewardRunEventProducerSystem(world, { includeCoreFacts: true, includeChest: false });
     expect(world.runEvents).toHaveLength(0);
   });
 
-  test("boss milestones are based on kill order, not zone id", () => {
+  test("rare milestones are based on kill order, not zone id", () => {
     const world = createRewardPipelineWorld(96, "NORMAL");
-    world.eType[1] = ENEMY_TYPE.BOSS;
-    world.eType[2] = ENEMY_TYPE.BOSS;
+    world.eType[1] = EnemyId.TANK;
+    world.eType[2] = EnemyId.LEAPER1;
     world.events.push(
       {
         type: "ENEMY_KILLED",
@@ -58,8 +58,8 @@ describe("rewardRunEventProducerSystem", () => {
         x: 0,
         y: 0,
         source: "OTHER",
-        spawnTriggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}2`,
-        damageMeta: makeUnknownDamageMeta("TEST_REWARD_BOSS_KILL_1"),
+        spawnTriggerId: `${OBJECTIVE_TRIGGER_IDS.rareZonePrefix}2`,
+        damageMeta: makeUnknownDamageMeta("TEST_REWARD_RARE_KILL_1"),
       },
       {
         type: "ENEMY_KILLED",
@@ -67,16 +67,16 @@ describe("rewardRunEventProducerSystem", () => {
         x: 0,
         y: 0,
         source: "OTHER",
-        spawnTriggerId: `${OBJECTIVE_TRIGGER_IDS.bossZonePrefix}3`,
-        damageMeta: makeUnknownDamageMeta("TEST_REWARD_BOSS_KILL_2"),
+        spawnTriggerId: `${OBJECTIVE_TRIGGER_IDS.rareZonePrefix}3`,
+        damageMeta: makeUnknownDamageMeta("TEST_REWARD_RARE_KILL_2"),
       },
     );
 
     rewardRunEventProducerSystem(world, { includeCoreFacts: true, includeChest: false });
 
     expect(world.runEvents).toEqual([
-      { type: "BOSS_MILESTONE_CLEARED", floorIndex: 0, bossIndex: 1 },
-      { type: "BOSS_MILESTONE_CLEARED", floorIndex: 0, bossIndex: 2 },
+      { type: "RARE_MILESTONE_CLEARED", floorIndex: 0, rareIndex: 1 },
+      { type: "RARE_MILESTONE_CLEARED", floorIndex: 0, rareIndex: 2 },
     ]);
   });
 

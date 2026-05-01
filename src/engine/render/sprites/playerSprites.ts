@@ -1,5 +1,10 @@
 import { type Dir8 } from "./dir8";
-import { resolveActivePaletteId } from "../../../game/render/activePalette";
+import {
+    buildPaletteVariantKey,
+    resolveActivePaletteId,
+    resolveActivePaletteSwapWeightPercents,
+    resolveActivePaletteVariantKey,
+} from "../../../game/render/activePalette";
 import {
     createPaletteSwapState,
     notePaletteReady,
@@ -8,6 +13,7 @@ import {
 import {
     getSpriteFrame,
     preloadSpritePack,
+    type SpriteDarknessPercent,
     type SpriteLoaderSource,
     type SpritePack,
 } from "./spriteLoader";
@@ -29,6 +35,16 @@ const PLAYER_SOURCE: SpriteLoaderSource = { packRoot: "entities/player" };
 const PLAYER_WALK_ANIM = "walk";
 const PLAYER_ANCHOR_X = 0.5;
 const PLAYER_ANCHOR_Y = 0.75;
+const PLAYER_DIR_KEYS = [
+    "north",
+    "north-east",
+    "east",
+    "south-east",
+    "south",
+    "south-west",
+    "west",
+    "north-west",
+] as const;
 const PLAYER_SKIN_SCALE: Record<string, number> = {
     jack: 1,
     hobo: 1,
@@ -38,9 +54,21 @@ const PLAYER_SKIN_SCALE: Record<string, number> = {
 };
 
 let playerSkin = "jamal";
-const paletteState = createPaletteSwapState(resolveActivePaletteId());
+const paletteState = createPaletteSwapState(resolveActivePaletteVariantKey());
 const packsByPalette = new Map<string, Map<string, SpritePack>>();
 const preloadByPaletteSkin = new Map<string, Promise<void>>();
+
+function resolvePaletteVariantKeyForDarknessPercent(
+    darknessPercent?: SpriteDarknessPercent,
+): string {
+    if (darknessPercent == null) return resolveActivePaletteVariantKey();
+    const paletteId = resolveActivePaletteId();
+    const active = resolveActivePaletteSwapWeightPercents();
+    return buildPaletteVariantKey(paletteId, {
+        sWeightPercent: active.sWeightPercent,
+        darknessPercent,
+    });
+}
 
 export function getPlayerSkin(): string {
     return playerSkin;
@@ -54,6 +82,21 @@ function getPaletteMap(paletteId: string): Map<string, SpritePack> {
     return created;
 }
 
+export function listPlayerDynamicAtlasSpriteIds(): string[] {
+    const ids: string[] = [];
+    for (const dirKey of PLAYER_DIR_KEYS) {
+        ids.push(`${PLAYER_SOURCE.packRoot}/${playerSkin}/rotations/${dirKey}`);
+    }
+    for (const dirKey of PLAYER_DIR_KEYS) {
+        for (let i = 0; i < 6; i++) {
+            ids.push(
+                `${PLAYER_SOURCE.packRoot}/${playerSkin}/animations/${PLAYER_WALK_ANIM}/${dirKey}/frame_${String(i).padStart(3, "0")}`,
+            );
+        }
+    }
+    return ids;
+}
+
 export function setPlayerSkin(skin: string) {
     if (skin === playerSkin) return;
     playerSkin = skin;
@@ -64,16 +107,18 @@ export function getPlayerIdleSpriteUrl(skin: string): string {
     return `${import.meta.env.BASE_URL}assets-runtime/base_db32/entities/player/${skin}/rotations/south.png`;
 }
 
-export async function preloadPlayerSprites() {
-    const paletteId = resolveActivePaletteId();
-    notePaletteRequested(paletteState, paletteId);
-    const map = getPaletteMap(paletteId);
+export async function preloadPlayerSprites(
+    requestedPaletteVariantKey?: string,
+) {
+    const paletteVariantKey = requestedPaletteVariantKey ?? resolvePaletteVariantKeyForDarknessPercent();
+    notePaletteRequested(paletteState, paletteVariantKey);
+    const map = getPaletteMap(paletteVariantKey);
     if (map.has(playerSkin)) {
-        notePaletteReady(paletteState, paletteId);
+        notePaletteReady(paletteState, paletteVariantKey);
         return;
     }
 
-    const key = `${paletteId}:${playerSkin}`;
+    const key = `${paletteVariantKey}:${playerSkin}`;
     const inFlight = preloadByPaletteSkin.get(key);
     if (inFlight) {
         await inFlight;
@@ -84,10 +129,11 @@ export async function preloadPlayerSprites() {
             source: PLAYER_SOURCE,
             animKeys: [PLAYER_WALK_ANIM],
             frameCount: 6,
+            paletteVariantKey,
         })
         .then((pack) => {
             map.set(playerSkin, pack);
-            notePaletteReady(paletteState, paletteId);
+            notePaletteReady(paletteState, paletteVariantKey);
         })
         .catch((err) => {
             console.warn("[playerSprites] Failed to preload player pack", err);
@@ -99,10 +145,50 @@ export async function preloadPlayerSprites() {
     await job;
 }
 
-export function playerSpritesReady() {
-    const paletteId = resolveActivePaletteId();
-    notePaletteRequested(paletteState, paletteId);
-    const current = getPaletteMap(paletteId).get(playerSkin);
+async function preloadPlayerSpritesForDarknessPercent(
+    darknessPercent: SpriteDarknessPercent,
+): Promise<void> {
+    const paletteVariantKey = resolvePaletteVariantKeyForDarknessPercent(darknessPercent);
+    notePaletteRequested(paletteState, paletteVariantKey);
+    const map = getPaletteMap(paletteVariantKey);
+    if (map.has(playerSkin)) {
+        notePaletteReady(paletteState, paletteVariantKey);
+        return;
+    }
+
+    const key = `${paletteVariantKey}:${playerSkin}`;
+    const inFlight = preloadByPaletteSkin.get(key);
+    if (inFlight) {
+        await inFlight;
+        return;
+    }
+
+    const job = preloadSpritePack(playerSkin, {
+            source: PLAYER_SOURCE,
+            animKeys: [PLAYER_WALK_ANIM],
+            frameCount: 6,
+            darknessPercent,
+            paletteVariantKey,
+        })
+        .then((pack) => {
+            map.set(playerSkin, pack);
+            notePaletteReady(paletteState, paletteVariantKey);
+        })
+        .catch((err) => {
+            console.warn("[playerSprites] Failed to preload player pack", err);
+        })
+        .finally(() => {
+            preloadByPaletteSkin.delete(key);
+        });
+    preloadByPaletteSkin.set(key, job);
+    await job;
+}
+
+export function playerSpritesReady(
+    paletteVariantKey: string = resolveActivePaletteVariantKey(),
+) {
+    notePaletteRequested(paletteState, paletteVariantKey);
+    const current = getPaletteMap(paletteVariantKey).get(playerSkin);
     if (!current) {
         void preloadPlayerSprites();
     }
@@ -116,14 +202,52 @@ export function getPlayerSpriteFrame(args: {
     moving: boolean;
     time: number;
 }): SpriteFrame | null {
-    const paletteId = resolveActivePaletteId();
-    notePaletteRequested(paletteState, paletteId);
-    const currentPack = getPaletteMap(paletteId).get(playerSkin);
+    const paletteVariantKey = resolveActivePaletteVariantKey();
+    notePaletteRequested(paletteState, paletteVariantKey);
+    const currentPack = getPaletteMap(paletteVariantKey).get(playerSkin);
     if (!currentPack) {
         void preloadPlayerSprites();
     }
     const playerPack = currentPack ?? getPaletteMap(paletteState.lastReadyPaletteId).get(playerSkin);
     if (!playerPack) {
+        return null;
+    }
+
+    try {
+        const img = getSpriteFrame(playerPack, {
+            dir: args.dir,
+            anim: args.moving ? PLAYER_WALK_ANIM : undefined,
+            t: args.time,
+            useRotationIfNoAnim: true,
+        });
+
+        return {
+            img,
+            sx: 0,
+            sy: 0,
+            sw: playerPack.size.w,
+            sh: playerPack.size.h,
+            scale: PLAYER_SKIN_SCALE[playerSkin] ?? PLAYER_SPRITE_SCALE,
+            anchorX: PLAYER_ANCHOR_X,
+            anchorY: PLAYER_ANCHOR_Y,
+        };
+    } catch (err) {
+        console.warn("[playerSprites] Failed to read player frame", err);
+        return null;
+    }
+}
+
+export function getPlayerSpriteFrameForDarknessPercent(args: {
+    dir: Dir8;
+    moving: boolean;
+    time: number;
+    darknessPercent: SpriteDarknessPercent;
+}): SpriteFrame | null {
+    const paletteVariantKey = resolvePaletteVariantKeyForDarknessPercent(args.darknessPercent);
+    notePaletteRequested(paletteState, paletteVariantKey);
+    const playerPack = getPaletteMap(paletteVariantKey).get(playerSkin);
+    if (!playerPack) {
+        void preloadPlayerSpritesForDarknessPercent(args.darknessPercent);
         return null;
     }
 

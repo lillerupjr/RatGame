@@ -1,11 +1,41 @@
 import { type Dir8 } from "./dir8";
-import { resolveActivePaletteId } from "../../../game/render/activePalette";
-import { getSpriteByIdForPalette } from "./renderSprites";
+import {
+    buildPaletteVariantKey,
+    resolveActivePaletteId,
+    resolveActivePaletteSwapWeightPercents,
+    resolveActivePaletteVariantKey,
+} from "../../../game/render/activePalette";
+import {
+    getSpriteByIdForVariantKey,
+    hasSpriteRecordForCacheKey,
+    resolveSpriteCacheKeyForVariantKey,
+    getSpriteCacheDebugSnapshotByKey,
+    type LoadedImg,
+} from "./renderSprites";
 
 export type AnimKey = string;
 export type SpriteLoaderSource = {
     packRoot: string;
 };
+
+export type SpriteDarknessPercent = 0 | 25 | 50 | 75 | 100;
+export type SpritePreloadState = "READY" | "PENDING" | "UNSUPPORTED" | "FAILED";
+
+export class SpritePreloadError extends Error {
+    kind: "UNSUPPORTED" | "FAILED" | "TIMED_OUT";
+    constructor(kind: "UNSUPPORTED" | "FAILED" | "TIMED_OUT", message: string, cause?: unknown) {
+        super(message);
+        this.name = "SpritePreloadError";
+        this.kind = kind;
+        if (cause !== undefined) {
+            (this as { cause?: unknown }).cause = cause;
+        }
+    }
+}
+
+export function isSpritePreloadError(value: unknown): value is SpritePreloadError {
+    return value instanceof SpritePreloadError;
+}
 
 export type SpritePack = {
     skin: string;
@@ -67,9 +97,15 @@ function asSpriteId(assetPath: string): string {
     return normalized.toLowerCase().endsWith(".png") ? normalized.slice(0, -4) : normalized;
 }
 
-async function loadImage(spriteId: string, paletteId: string): Promise<HTMLImageElement> {
+async function loadImage(
+    spriteId: string,
+    paletteVariantKey: string,
+    darknessPercent?: SpriteDarknessPercent,
+): Promise<HTMLImageElement> {
     const id = asSpriteId(spriteId);
-    const cacheId = `${id}@@pal:${paletteId}`;
+    const cacheId = `${id}@@palv:${paletteVariantKey}@@dk:${darknessPercent == null ? "active" : darknessPercent}`;
+    const awaitedCacheKey = resolveSpriteCacheKeyForVariantKey(id, paletteVariantKey);
+    const cacheHitAtRequest = hasSpriteRecordForCacheKey(awaitedCacheKey);
     const existing = imageCache.get(cacheId);
     if (existing) return existing;
 
@@ -78,13 +114,35 @@ async function loadImage(spriteId: string, paletteId: string): Promise<HTMLImage
         const MAX_WAIT_MS = 1500;
 
         const tick = () => {
-            const rec = getSpriteByIdForPalette(id, paletteId);
-            if (rec.ready) {
+            const rec = getSpriteByIdForVariantKey(id, paletteVariantKey);
+            const state = classifyLoadedImgState(rec);
+            if (state === "READY") {
                 resolve(rec.img);
                 return;
             }
+            if (state === "UNSUPPORTED") {
+                reject(new SpritePreloadError(
+                    darknessPercent == null ? "FAILED" : "UNSUPPORTED",
+                    `[spriteLoader] Unsupported sprite source: ${id}`,
+                ));
+                return;
+            }
+            if (state === "FAILED") {
+                reject(new SpritePreloadError("FAILED", `[spriteLoader] Failed sprite source: ${id}`));
+                return;
+            }
             if (performance.now() - started >= MAX_WAIT_MS) {
-                reject(new Error(`[spriteLoader] Failed to load: ${id}`));
+                const cacheSnapshot = getSpriteCacheDebugSnapshotByKey(awaitedCacheKey);
+                const activePaletteVariantKey = resolveActivePaletteVariantKey();
+                console.warn("[spriteLoader] preload timeout", {
+                    spriteId: id,
+                    awaitedCacheKey,
+                    cacheHitAtRequest,
+                    awaitedPaletteVariantKey: paletteVariantKey,
+                    activePaletteVariantKey,
+                    cacheSnapshot,
+                });
+                reject(new SpritePreloadError("TIMED_OUT", `[spriteLoader] Timed out waiting for sprite: ${id}`));
                 return;
             }
             requestAnimationFrame(tick);
@@ -97,12 +155,32 @@ async function loadImage(spriteId: string, paletteId: string): Promise<HTMLImage
 
     try {
         const img = await job;
-        if (img.decode) await img.decode();
+        if (img.decode) {
+            try {
+                await img.decode();
+            } catch (err) {
+                if (!(img.complete && img.naturalWidth > 0 && img.naturalHeight > 0)) {
+                    throw new SpritePreloadError("FAILED", `[spriteLoader] Failed to decode sprite: ${id}`, err);
+                }
+            }
+        }
+        if (!(img.complete && img.naturalWidth > 0 && img.naturalHeight > 0)) {
+            throw new SpritePreloadError("FAILED", `[spriteLoader] Sprite is not decodable: ${id}`);
+        }
         return img;
     } catch (err) {
         imageCache.delete(cacheId);
-        throw err;
+        if (isSpritePreloadError(err)) throw err;
+        throw new SpritePreloadError("FAILED", `[spriteLoader] Failed to load image: ${id}`, err);
     }
+}
+
+function classifyLoadedImgState(rec: LoadedImg): SpritePreloadState {
+    if (rec.ready && rec.img && rec.img.naturalWidth > 0 && rec.img.naturalHeight > 0) return "READY";
+    if (rec.unsupported) return "UNSUPPORTED";
+    if (rec.failed) return "FAILED";
+    if (rec.ready) return "FAILED";
+    return "PENDING";
 }
 
 function pickDir<T>(record: Partial<Record<Dir8, T>>, requested: Dir8): Dir8 {
@@ -133,12 +211,26 @@ function packCacheKey(
     source: SpriteLoaderSource,
     animKeys?: AnimKey[],
     frameCount?: number,
-    paletteId?: string,
+    paletteVariantKey?: string,
+    darknessPercent?: SpriteDarknessPercent,
 ) {
     const animKey = animKeys ? animKeys.join(",") : "*";
     const frames = frameCount ?? DEFAULT_FRAME_COUNT;
-    const pal = paletteId ?? "db32";
-    return `${source.packRoot}:${skin}:${animKey}:${frames}:@@pal:${pal}`;
+    const pal = paletteVariantKey ?? "db32@@sw:0@@dk:0";
+    const darknessKey = darknessPercent == null ? "active" : `${darknessPercent}`;
+    return `${source.packRoot}:${skin}:${animKey}:${frames}:@@palv:${pal}:@@dk:${darknessKey}`;
+}
+
+function resolveVariantKeyForDarknessPercent(
+    darknessPercent: SpriteDarknessPercent | undefined,
+): string {
+    if (darknessPercent == null) return resolveActivePaletteVariantKey();
+    const paletteId = resolveActivePaletteId();
+    const active = resolveActivePaletteSwapWeightPercents();
+    return buildPaletteVariantKey(paletteId, {
+        sWeightPercent: active.sWeightPercent,
+        darknessPercent,
+    });
 }
 
 export async function preloadSpritePack(
@@ -147,13 +239,17 @@ export async function preloadSpritePack(
         source?: SpriteLoaderSource;
         animKeys?: AnimKey[];
         frameCount?: number;
+        darknessPercent?: SpriteDarknessPercent;
+        paletteVariantKey?: string;
     },
 ): Promise<SpritePack> {
     const source = options?.source ?? ENEMY_SOURCE;
     const animKeys = options?.animKeys;
     const frameCount = options?.frameCount ?? DEFAULT_FRAME_COUNT;
-    const paletteId = resolveActivePaletteId();
-    const cacheKey = packCacheKey(skin, source, animKeys, frameCount, paletteId);
+    const darknessPercent = options?.darknessPercent;
+    const paletteVariantKey = options?.paletteVariantKey
+        ?? resolveVariantKeyForDarknessPercent(darknessPercent);
+    const cacheKey = packCacheKey(skin, source, animKeys, frameCount, paletteVariantKey, darknessPercent);
     const cached = packCache.get(cacheKey);
     if (cached) return cached;
 
@@ -162,7 +258,8 @@ export async function preloadSpritePack(
         const rotationJobs = DIR_KEYS.map(async (dirKey) => {
             const img = await loadImage(
                 packSuffix(source.packRoot, skin, `rotations/${dirKey}.png`),
-                paletteId,
+                paletteVariantKey,
+                darknessPercent,
             );
             rotations[dirKeyToDir8(dirKey)] = img;
         });
@@ -186,7 +283,8 @@ export async function preloadSpritePack(
                     animJobs.push(
                         loadImage(
                             packSuffix(source.packRoot, skin, `animations/${animKey}/${dirKey}/${frameName}`),
-                            paletteId,
+                            paletteVariantKey,
+                            darknessPercent,
                         ).then((img) => {
                             frames[i] = img;
                         }),
@@ -224,12 +322,16 @@ export function getSpriteFrame(
         anim?: AnimKey;
         t: number;
         fps?: number;
+        loop?: boolean;
         useRotationIfNoAnim?: boolean;
     },
 ): HTMLImageElement {
     const fps = opts.fps ?? DEFAULT_FPS;
     const frameCount = Math.max(1, pack.frameCount || DEFAULT_FRAME_COUNT);
-    const frameIndex = Math.floor(Math.max(0, opts.t) * fps) % frameCount;
+    const rawFrameIndex = Math.floor(Math.max(0, opts.t) * fps);
+    const frameIndex = opts.loop === false
+        ? Math.min(frameCount - 1, rawFrameIndex)
+        : rawFrameIndex % frameCount;
     const useRotation = opts.useRotationIfNoAnim ?? true;
 
     if (opts.anim && pack.animations[opts.anim]) {

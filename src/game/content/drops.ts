@@ -10,6 +10,6 @@ export const DROPS: Record<DropId, DropDef> = {
     BOSS_CHEST: {
         id: "BOSS_CHEST",
         title: "Boss Chest",
-        desc: "Grants a card reward.",
+        desc: "Grants a progression reward.",
     },
 } as const;

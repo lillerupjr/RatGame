@@ -1,10 +1,31 @@
 import { getActiveMapDef } from "../map/authoredMapActivation";
 import { getActiveMap } from "../map/compile/kenneyMap";
 import { PLAYABLE_CHARACTERS } from "../content/playableCharacters";
+import { listProjectileTravelSpriteIds } from "../content/projectilePresentationRegistry";
+import { listEnemyDynamicAtlasSpriteIds } from "../../engine/render/sprites/enemySprites";
+import { listBossDynamicAtlasSpriteIds } from "../../engine/render/sprites/bossSprites";
 
 export interface DependencySet {
   spriteIds: string[];
   audioIds: string[];
+}
+
+function isPrewarmableSpriteId(spriteId: string): boolean {
+  const id = spriteId.trim().replace(/\.png$/i, "");
+  if (
+    id === "tiles/floor/decals/sidewalk_2"
+    || id === "tiles/walls/sidewalk_s"
+    || id === "tiles/walls/sidewalk_e"
+  ) {
+    return false;
+  }
+  return id.startsWith("tiles/")
+    || id.startsWith("structures/")
+    || id.startsWith("props/")
+    || id.startsWith("entities/")
+    || id.startsWith("loot/")
+    || id.startsWith("vfx/")
+    || id.startsWith("projectiles/");
 }
 
 export function collectFloorDependencies(): DependencySet {
@@ -13,22 +34,28 @@ export function collectFloorDependencies(): DependencySet {
 
   const spriteIds = new Set<string>();
   const audioIds = new Set<string>();
+  const addSpriteId = (id: string): void => {
+    const normalized = id.trim().replace(/\.png$/i, "");
+    if (!normalized) return;
+    if (!isPrewarmableSpriteId(normalized)) return;
+    spriteIds.add(normalized);
+  };
 
   if (Array.isArray(mapDef?.spritesUsed)) {
     for (const id of mapDef.spritesUsed) {
-      if (typeof id === "string" && id.trim()) spriteIds.add(id.trim().replace(/\.png$/i, ""));
+      if (typeof id === "string" && id.trim()) addSpriteId(id);
     }
   }
 
   if (Array.isArray(compiled?.overlays)) {
     for (const p of compiled.overlays) {
-      if (p && typeof p.spriteId === "string") spriteIds.add(p.spriteId.replace(/\.png$/i, ""));
+      if (p && typeof p.spriteId === "string") addSpriteId(p.spriteId);
     }
   }
 
   if (Array.isArray(compiled?.decals)) {
     for (const p of compiled.decals) {
-      if (p && typeof p.spriteId === "string") spriteIds.add(p.spriteId.replace(/\.png$/i, ""));
+      if (p && typeof p.spriteId === "string") addSpriteId(p.spriteId);
     }
   }
 
@@ -44,21 +71,16 @@ export function collectFloorDependencies(): DependencySet {
     }
   }
 
-  // Enemy core packs used by runtime enemy sprites.
-  const enemyDefs: Array<{ skin: string; anim: string; frameCount: number }> = [
-    { skin: "rat1", anim: "running-4-frames", frameCount: 4 },
-    { skin: "rat2", anim: "walk-4-frames", frameCount: 4 },
-    { skin: "rat4", anim: "walk-4-frames", frameCount: 4 },
-    { skin: "infested", anim: "walk", frameCount: 4 },
-  ];
-  for (const def of enemyDefs) {
-    for (const dir of ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"]) {
-      spriteIds.add(`entities/enemies/${def.skin}/rotations/${dir}`);
-      for (let i = 0; i < def.frameCount; i++) {
-        const frame = `frame_${String(i).padStart(3, "0")}`;
-        spriteIds.add(`entities/enemies/${def.skin}/animations/${def.anim}/${dir}/${frame}`);
-      }
-    }
+  for (const id of listEnemyDynamicAtlasSpriteIds()) {
+    spriteIds.add(id);
+  }
+
+  for (const id of listBossDynamicAtlasSpriteIds()) {
+    spriteIds.add(id);
+  }
+
+  for (const id of listProjectileTravelSpriteIds()) {
+    spriteIds.add(id);
   }
 
   // Vendor idle set.

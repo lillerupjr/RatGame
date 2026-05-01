@@ -1,5 +1,4 @@
 import { BUILDING_SKINS } from "../../../game/content/buildings";
-import { CONTAINER_SKINS } from "../../../game/content/containers";
 import { MAP_SKINS, DEFAULT_MAP_SKIN } from "../../../game/content/mapSkins";
 import { PROPS } from "../../../game/content/props";
 import { RUNTIME_DECAL_SPRITE_IDS } from "../../../game/content/runtimeDecalConfig";
@@ -27,21 +26,19 @@ const ENTITY_MANIFEST: SkinEntry[] = [
   // animals
   { path: "animals/pigeon", rotations: true, anims: [{ key: "flying", frames: 10 }] },
   // enemies
-  { path: "enemies/rat1", rotations: true, anims: [{ key: "running-4-frames", frames: 4 }] },
-  { path: "enemies/rat2", rotations: true, anims: [{ key: "walk-4-frames", frames: 4 }] },
-  { path: "enemies/rat3", rotations: true, anims: [{ key: "walk-4-frames", frames: 4 }] },
-  { path: "enemies/rat4", rotations: true, anims: [{ key: "walk-4-frames", frames: 4 }] },
-  { path: "enemies/bruiser", rotations: true, anims: [{ key: "walk-6-frames", frames: 6 }] },
+  { path: "enemies/small_rat", rotations: true, anims: [{ key: "running-4-frames", frames: 4 }] },
+  { path: "enemies/brown_rat", rotations: true, anims: [{ key: "walk-4-frames", frames: 4 }] },
+  { path: "enemies/guerilla_rat", rotations: true, anims: [{ key: "walk-4-frames", frames: 4 }] },
+  { path: "enemies/spitter", rotations: true, anims: [{ key: "walk", frames: 6 }] },
+  { path: "enemies/burster", rotations: true, anims: [{ key: "walking-6-frames", frames: 6 }] },
+  { path: "enemies/white_rat", rotations: true, anims: [{ key: "walk-6-frames", frames: 6 }] },
+  { path: "enemies/lootGoblin", rotations: true, anims: [{ key: "walk", frames: 6 }] },
   { path: "enemies/infested", rotations: true, anims: [{ key: "walk", frames: 6 }] },
-  { path: "enemies/abomination", rotations: true, anims: [{ key: "walk-6-frames", frames: 6 }] },
-  { path: "enemies/minotaur", rotations: true, anims: [
-    { key: "walk-8-frames", frames: 8 },
-    { key: "block", frames: 2 },
-    { key: "hit_die", frames: 6 },
-    { key: "idle", frames: 4 },
-    { key: "swing", frames: 4 },
+  // bosses
+  { path: "bosses/chem_guy", rotations: true, anims: [
+    { key: "walk", frames: 6 },
+    { key: "fireball", frames: 6 },
   ] },
-  { path: "enemies/ratchemist", rotations: true, anims: [{ key: "walk", frames: 6 }] },
   // npc
   { path: "npc/vendor", rotations: true, anims: [{ key: "breathing-idle", frames: 4, nested: false }] },
   // player
@@ -151,12 +148,6 @@ function collectRenderableSpriteIds(): ReadonlySet<string> {
   }
 
   for (const skin of Object.values(BUILDING_SKINS)) {
-    addId(ids, skin.roof);
-    for (let i = 0; i < skin.wallSouth.length; i++) addId(ids, skin.wallSouth[i]);
-    for (let i = 0; i < skin.wallEast.length; i++) addId(ids, skin.wallEast[i]);
-  }
-
-  for (const skin of Object.values(CONTAINER_SKINS)) {
     addId(ids, skin.roof);
     for (let i = 0; i < skin.wallSouth.length; i++) addId(ids, skin.wallSouth[i]);
     for (let i = 0; i < skin.wallEast.length; i++) addId(ids, skin.wallEast[i]);
