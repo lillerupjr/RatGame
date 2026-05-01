@@ -1,8 +1,19 @@
-import { Container, Graphics, Sprite, Texture } from "pixi.js";
+import { BlurFilter, Container, Graphics, Sprite, Text, TextStyle, Texture } from "pixi.js";
 import type { FingerSlotId } from "../../../game/progression/rings/ringTypes";
-import { COLORS } from "../pixiTheme";
+import { COLORS, TEXT_STYLES } from "../pixiTheme";
 import type { SlotConfig } from "./ringSlotConfig";
 import type { HandsMode } from "./handsState";
+
+const FINGER_LABELS: Record<string, string> = {
+  "LEFT:0": "L Pinky",
+  "LEFT:1": "L Ring",
+  "LEFT:2": "L Middle",
+  "LEFT:3": "L Index",
+  "RIGHT:0": "R Index",
+  "RIGHT:1": "R Middle",
+  "RIGHT:2": "R Ring",
+  "RIGHT:3": "R Pinky",
+};
 
 export type RingSlotVisualState = {
   equipped: boolean;
@@ -10,17 +21,21 @@ export type RingSlotVisualState = {
   familyColor: number;
   isSelected: boolean;
   mode: HandsMode;
+  ringName?: string | null;
 };
 
 export class RingSlotView extends Container {
   readonly slotId: FingerSlotId;
   private config: SlotConfig;
-  private emptyCircle: Graphics;
+  private diamondGfx: Graphics;
   private ringSprite: Sprite | null = null;
-  private glowGfx: Graphics;
+  private glowSprite: Sprite | null = null;
+  private glowFilter: BlurFilter;
   private hitArea_: Graphics;
+  private tooltip: Container;
   private _visualState: RingSlotVisualState;
   private _pulseTime = Math.random() * Math.PI * 2; // random phase offset
+  private _hovered = false;
 
   onSlotClick: ((slotId: FingerSlotId) => void) | null = null;
 
@@ -37,14 +52,12 @@ export class RingSlotView extends Container {
       mode: "browse",
     };
 
-    // Glow behind ring
-    this.glowGfx = new Graphics();
-    this.glowGfx.alpha = 0;
-    this.addChild(this.glowGfx);
+    // Blur filter for glow sprite (shared instance)
+    this.glowFilter = new BlurFilter({ strength: 8, quality: 3 });
 
-    // Empty slot circle
-    this.emptyCircle = new Graphics();
-    this.addChild(this.emptyCircle);
+    // Diamond marker (replaces old emptyCircle)
+    this.diamondGfx = new Graphics();
+    this.addChild(this.diamondGfx);
 
     // Hit area
     this.hitArea_ = new Graphics();
@@ -53,20 +66,34 @@ export class RingSlotView extends Container {
     this.hitArea_.circle(0, 0, hr).fill({ color: 0xffffff });
     this.addChild(this.hitArea_);
 
+    // Tooltip
+    this.tooltip = this.buildTooltip();
+    this.tooltip.visible = false;
+    this.addChild(this.tooltip);
+
     this.eventMode = "static";
     this.cursor = "pointer";
     this.on("pointertap", () => {
       this.onSlotClick?.(this.slotId);
     });
+    this.on("pointerover", () => {
+      this._hovered = true;
+      this.updateTooltip();
+      this.tooltip.visible = true;
+    });
+    this.on("pointerout", () => {
+      this._hovered = false;
+      this.tooltip.visible = false;
+    });
 
-    this.drawEmpty();
+    this.drawDiamond("browse", false);
   }
 
   /** Position this slot on the hands sprite given the sprite's pixel dimensions. */
   positionOnHands(handsW: number, handsH: number): void {
     this.x = (this.config.xPct / 100) * handsW;
     this.y = (this.config.yPct / 100) * handsH;
-    this.rotation = (this.config.rotationDeg * Math.PI) / 180;
+    // Rotation applied only to ring sprite, not the whole container
     this.scale.set(this.config.scale);
   }
 
@@ -84,7 +111,17 @@ export class RingSlotView extends Container {
   }
 
   private showEquipped(tex: Texture, color: number, selected: boolean, mode: HandsMode): void {
-    this.emptyCircle.visible = false;
+    this.diamondGfx.visible = false;
+
+    // Glow sprite (blurred tinted copy behind ring) — create once, reuse
+    if (!this.glowSprite) {
+      this.glowSprite = new Sprite(tex);
+      this.glowSprite.anchor.set(0.5);
+      this.glowSprite.filters = [this.glowFilter];
+      this.addChildAt(this.glowSprite, 0); // behind everything
+    } else {
+      this.glowSprite.texture = tex;
+    }
 
     if (!this.ringSprite) {
       this.ringSprite = new Sprite(tex);
@@ -95,44 +132,148 @@ export class RingSlotView extends Container {
     }
     this.ringSprite.visible = true;
 
-    const size = selected ? 42 : 30;
+    // Apply per-finger rotation only to ring sprite and glow
+    const rot = (this.config.rotationDeg * Math.PI) / 180;
+    this.ringSprite.rotation = rot;
+    this.glowSprite.rotation = rot;
+
+    // Size depends on state + hover
+    let size: number;
+    if (selected) {
+      size = 80;
+    } else if (this._hovered) {
+      size = 64;
+    } else {
+      size = 52;
+    }
     this.ringSprite.width = size;
     this.ringSprite.height = size;
 
-    // Glow
-    this.glowGfx.clear();
+    // Glow: tinted blurred copy, larger than the ring
     if (selected || mode === "choose-slot") {
-      const gr = size * 0.7;
-      this.glowGfx.circle(0, 0, gr).fill({ color, alpha: 0.3 });
-      this.glowGfx.alpha = 1;
+      const glowScale = 1.35;
+      this.glowSprite.width = size * glowScale;
+      this.glowSprite.height = size * glowScale;
+      this.glowSprite.tint = color;
+      this.glowSprite.alpha = 0.8;
+      this.glowFilter.strength = 8;
+      this.glowSprite.visible = true;
+    } else if (this._hovered) {
+      const glowScale = 1.15;
+      this.glowSprite.width = size * glowScale;
+      this.glowSprite.height = size * glowScale;
+      this.glowSprite.tint = color;
+      this.glowSprite.alpha = 0.4;
+      this.glowFilter.strength = 6;
+      this.glowSprite.visible = true;
     } else {
-      this.glowGfx.alpha = 0;
+      // Subtle ambient glow
+      this.glowSprite.width = size * 1.1;
+      this.glowSprite.height = size * 1.1;
+      this.glowSprite.tint = color;
+      this.glowSprite.alpha = 0.25;
+      this.glowFilter.strength = 4;
+      this.glowSprite.visible = true;
     }
   }
 
   private showEmpty(mode: HandsMode): void {
     if (this.ringSprite) this.ringSprite.visible = false;
-    this.glowGfx.alpha = 0;
-    this.emptyCircle.visible = true;
-    this.drawEmpty();
+    if (this.glowSprite) this.glowSprite.visible = false;
+    this.diamondGfx.visible = true;
 
     if (mode === "choose-slot") {
-      this.drawChooseEmpty();
+      this.drawDiamond("choose-slot", this._hovered);
+    } else {
+      this.drawDiamond("browse", this._hovered);
     }
   }
 
-  private drawEmpty(): void {
-    this.emptyCircle.clear();
-    this.emptyCircle
-      .circle(0, 0, 7)
-      .stroke({ color: COLORS.goldDim, width: 1.5, alpha: 0.6 });
+  private drawDiamond(mode: "browse" | "choose-slot", hovered: boolean): void {
+    this.diamondGfx.clear();
+
+    let color: number;
+    let strokeOuter: number;
+    let strokeInner: number;
+    let dotAlpha: number;
+    let fillAlpha: number;
+
+    if (mode === "choose-slot") {
+      color = COLORS.green;
+      strokeOuter = 0.85;
+      strokeInner = 0.35;
+      dotAlpha = 0.9;
+      fillAlpha = 0.08;
+    } else if (hovered) {
+      color = COLORS.gold;
+      strokeOuter = 0.70;
+      strokeInner = 0.18;
+      dotAlpha = 0.5;
+      fillAlpha = 0;
+    } else {
+      color = COLORS.gold;
+      strokeOuter = 0.42;
+      strokeInner = 0.18;
+      dotAlpha = 0.5;
+      fillAlpha = 0;
+    }
+
+    // Outer diamond
+    this.diamondGfx.poly([0, -11, 11, 0, 0, 11, -11, 0]).stroke({ color, width: 1.2, alpha: strokeOuter });
+    // Inner diamond
+    this.diamondGfx.poly([0, -6.5, 6.5, 0, 0, 6.5, -6.5, 0]).stroke({ color, width: 0.8, alpha: strokeInner });
+    // Center dot
+    this.diamondGfx.circle(0, 0, 2.8).fill({ color, alpha: dotAlpha });
+    // Fill for choose-slot mode
+    if (fillAlpha > 0) {
+      this.diamondGfx.poly([0, -11, 11, 0, 0, 11, -11, 0]).fill({ color, alpha: fillAlpha });
+    }
   }
 
-  private drawChooseEmpty(): void {
-    this.emptyCircle.clear();
-    this.emptyCircle
-      .circle(0, 0, 10)
-      .stroke({ color: COLORS.green, width: 1.5, alpha: 0.85 });
+  private buildTooltip(): Container {
+    const c = new Container();
+    c.y = -(this.config.hitRadius + 22);
+
+    const bg = new Graphics();
+    c.addChild(bg);
+
+    const labelStyle = TEXT_STYLES.slotLabel.clone();
+    labelStyle.fill = COLORS.text;
+    const label = new Text({ text: FINGER_LABELS[this.slotId] ?? this.slotId, style: labelStyle });
+    label.anchor.set(0.5, 0);
+    label.x = 0;
+    label.y = 4;
+    c.addChild(label);
+
+    const padX = 8;
+    const padY = 4;
+    const w = label.width + padX * 2;
+    const h = label.height + padY * 2;
+    bg.roundRect(-w / 2, 0, w, h, 3).fill({ color: COLORS.bgPanel, alpha: 0.92 });
+    bg.roundRect(-w / 2, 0, w, h, 3).stroke({ color: COLORS.border, width: 1, alpha: 0.5 });
+
+    return c;
+  }
+
+  private updateTooltip(): void {
+    const vs = this._visualState;
+    const label = this.tooltip.getChildAt(1) as Text;
+    const fingerLabel = FINGER_LABELS[this.slotId] ?? this.slotId;
+    if (vs.equipped && vs.ringName) {
+      label.text = `${fingerLabel} — ${vs.ringName}`;
+    } else {
+      label.text = `${fingerLabel} — Empty`;
+    }
+
+    // Rebuild bg to fit new text
+    const bg = this.tooltip.getChildAt(0) as Graphics;
+    bg.clear();
+    const padX = 8;
+    const padY = 4;
+    const w = label.width + padX * 2;
+    const h = label.height + padY * 2;
+    bg.roundRect(-w / 2, 0, w, h, 3).fill({ color: COLORS.bgPanel, alpha: 0.92 });
+    bg.roundRect(-w / 2, 0, w, h, 3).stroke({ color: COLORS.border, width: 1, alpha: 0.5 });
   }
 
   /** Call each frame for pulse/float animations. */
@@ -141,18 +282,37 @@ export class RingSlotView extends Container {
     const vs = this._visualState;
 
     if (!vs.equipped && vs.mode === "browse") {
-      // Pulse empty: alpha 0.4↔0.85
-      this.emptyCircle.alpha = 0.4 + 0.45 * (0.5 + 0.5 * Math.sin(this._pulseTime));
+      // Pulse empty diamond: alpha 0.38↔0.78
+      this.diamondGfx.alpha = 0.38 + 0.40 * (0.5 + 0.5 * Math.sin(this._pulseTime));
     } else if (!vs.equipped && vs.mode === "choose-slot") {
-      // Choose-slot pulse: scale 1.0↔1.2 + alpha
+      // Choose-slot pulse: scale 1.0↔1.22 + alpha
       const t = 0.5 + 0.5 * Math.sin(this._pulseTime * 1.2);
-      this.emptyCircle.scale.set(1 + 0.2 * t);
-      this.emptyCircle.alpha = 0.75 + 0.25 * t;
+      this.diamondGfx.scale.set(1 + 0.22 * t);
+      this.diamondGfx.alpha = 0.75 + 0.25 * t;
     } else if (vs.equipped && vs.isSelected && this.ringSprite) {
       // Selected ring float: Y +/- 4px
       this.ringSprite.y = 4 * Math.sin(this._pulseTime * 0.8);
     } else if (this.ringSprite) {
       this.ringSprite.y = 0;
+    }
+
+    // Re-draw diamond state when hovered changes (handled per-frame for simplicity)
+    if (!vs.equipped) {
+      const mode = vs.mode === "choose-slot" ? "choose-slot" : "browse";
+      // Only redraw on hover change — check via a simple flag
+      this.drawDiamond(mode, this._hovered);
+    } else if (this.ringSprite) {
+      // Update ring size on hover
+      let size: number;
+      if (vs.isSelected) {
+        size = 80;
+      } else if (this._hovered) {
+        size = 64;
+      } else {
+        size = 52;
+      }
+      this.ringSprite.width = size;
+      this.ringSprite.height = size;
     }
   }
 }

@@ -1,6 +1,6 @@
-import { Container, Graphics, Sprite, Assets, Texture } from "pixi.js";
+import { Container, Graphics, Sprite, Assets, Texture, Text } from "pixi.js";
 import { createTextLabel } from "../primitives/TextLabel";
-import { COLORS } from "../pixiTheme";
+import { COLORS, TEXT_STYLES } from "../pixiTheme";
 import { RingSlotView } from "./ringSlot";
 import { StatsRail } from "./statsRail";
 import { DetailDrawer } from "./detailDrawer";
@@ -13,7 +13,9 @@ export type HandsSceneNodes = {
   screenRoot: Container;
   bgOverlay: Graphics;
   topBar: Container;
+  topBarModeText: Text;
   closeBtn: InteractiveRegion;
+  devAddRingBtn: InteractiveRegion | null;
   centerColumn: Container;
   acquisitionBanner: AcquisitionBanner;
   handsViewport: Container;
@@ -27,12 +29,26 @@ export type HandsSceneNodes = {
 };
 
 const TEXTURE_PATHS = [
-  "/assets-runtime/UI/rings/ring_test.png",
-  "/assets-runtime/UI/rings/ring_test2.png",
-  "/assets-runtime/UI/rings/ring_test3.png",
+  `${import.meta.env.BASE_URL}assets-runtime/UI/rings/ring_test.png`,
+  `${import.meta.env.BASE_URL}assets-runtime/UI/rings/ring_test2.png`,
+  `${import.meta.env.BASE_URL}assets-runtime/UI/rings/ring_test3.png`,
 ];
 
-const HANDS_PATH = "/assets-runtime/UI/hands/ratHands.png";
+const HANDS_PATH = `${import.meta.env.BASE_URL}assets-runtime/UI/hands/ratHands.png`;
+
+const GRID_SIZE = 42;
+const GRID_ALPHA = 0.04;
+
+function drawGridOverlay(gfx: Graphics, w: number, h: number): void {
+  // Vertical lines
+  for (let x = 0; x <= w; x += GRID_SIZE) {
+    gfx.rect(x, 0, 1, h).fill({ color: COLORS.gold, alpha: GRID_ALPHA });
+  }
+  // Horizontal lines
+  for (let y = 0; y <= h; y += GRID_SIZE) {
+    gfx.rect(0, y, w, 1).fill({ color: COLORS.gold, alpha: GRID_ALPHA });
+  }
+}
 
 export async function buildHandsSceneGraph(): Promise<HandsSceneNodes> {
   // Load textures
@@ -46,7 +62,8 @@ export async function buildHandsSceneGraph(): Promise<HandsSceneNodes> {
 
   // ── Background overlay ──
   const bgOverlay = new Graphics();
-  bgOverlay.rect(0, 0, layout.screenW, layout.screenH).fill({ color: COLORS.bg, alpha: 0.85 });
+  bgOverlay.rect(0, 0, layout.screenW, layout.screenH).fill({ color: COLORS.bg, alpha: 0.92 });
+  drawGridOverlay(bgOverlay, layout.screenW, layout.screenH);
   bgOverlay.eventMode = "static";
   screenRoot.addChild(bgOverlay);
 
@@ -57,7 +74,7 @@ export async function buildHandsSceneGraph(): Promise<HandsSceneNodes> {
     topBg.rect(0, 0, layout.screenW, layout.topBarH).fill({ color: COLORS.bgPanel });
     topBg
       .rect(0, layout.topBarH - 1, layout.screenW, 1)
-      .fill({ color: COLORS.border, alpha: 0.65 });
+      .fill({ color: COLORS.gold, alpha: 0.18 });
     topBar.addChild(topBg);
 
     const title = createTextLabel("RINGS", "title");
@@ -74,15 +91,33 @@ export async function buildHandsSceneGraph(): Promise<HandsSceneNodes> {
   }
   screenRoot.addChild(topBar);
 
+  // Mode text (shows "CHOOSE SLOT" in choose-slot mode)
+  const modeTextStyle = TEXT_STYLES.accent.clone();
+  modeTextStyle.fontSize = 11;
+  modeTextStyle.letterSpacing = 2.0;
+  const topBarModeText = new Text({ text: "", style: modeTextStyle });
+  // Position after the separator — the title and sep are children 1,2 of topBar
+  const titleChild = topBar.getChildAt(1) as Text;
+  topBarModeText.x = titleChild.x + titleChild.width + 28;
+  topBarModeText.y = (layout.topBarH - topBarModeText.height) / 2;
+  topBarModeText.visible = false;
+  topBar.addChild(topBarModeText);
+
   // Close button
   const closeBtn = new InteractiveRegion({
     width: 26,
     height: 26,
     onHoverChange: (h) => {
       closeBtnText.style.fill = h ? COLORS.text : COLORS.textMuted;
+      closeBtnBorder.clear();
+      closeBtnBorder.roundRect(0, 0, 26, 26, 2).stroke({
+        color: h ? COLORS.gold : COLORS.border,
+        width: 1,
+        alpha: h ? 0.5 : 1,
+      });
     },
   });
-  closeBtn.x = layout.screenW - COLORS.border - 46; // position near right of top bar
+  closeBtn.x = layout.screenW - layout.statsRailW - 46;
   closeBtn.y = (layout.topBarH - 26) / 2;
 
   const closeBtnBorder = new Graphics();
@@ -94,6 +129,42 @@ export async function buildHandsSceneGraph(): Promise<HandsSceneNodes> {
   closeBtnText.y = (26 - closeBtnText.height) / 2;
   closeBtn.addChild(closeBtnText);
   topBar.addChild(closeBtn);
+
+  // DEV: Add random ring button
+  let devAddRingBtn: InteractiveRegion | null = null;
+  if (import.meta.env.DEV) {
+    const btnW = 100;
+    const btnH = 22;
+    const devBtnText = createTextLabel("+ ADD RING", "sectionHeader");
+    devBtnText.style.fill = COLORS.green;
+    devBtnText.style.letterSpacing = 1.0;
+
+    const devBtnBorder = new Graphics();
+    devBtnBorder.roundRect(0, 0, btnW, btnH, 3).stroke({ color: COLORS.green, width: 1, alpha: 0.4 });
+
+    devAddRingBtn = new InteractiveRegion({
+      width: btnW,
+      height: btnH,
+      onHoverChange: (h) => {
+        devBtnBorder.clear();
+        devBtnBorder.roundRect(0, 0, btnW, btnH, 3).stroke({
+          color: COLORS.green,
+          width: 1,
+          alpha: h ? 0.8 : 0.4,
+        });
+        if (h) {
+          devBtnBorder.roundRect(0, 0, btnW, btnH, 3).fill({ color: COLORS.green, alpha: 0.08 });
+        }
+      },
+    });
+    devAddRingBtn.addChild(devBtnBorder);
+    devBtnText.x = (btnW - devBtnText.width) / 2;
+    devBtnText.y = (btnH - devBtnText.height) / 2;
+    devAddRingBtn.addChild(devBtnText);
+    devAddRingBtn.x = closeBtn.x - btnW - 12;
+    devAddRingBtn.y = (layout.topBarH - btnH) / 2;
+    topBar.addChild(devAddRingBtn);
+  }
 
   // ── Center column ──
   const centerColumn = new Container();
@@ -148,7 +219,9 @@ export async function buildHandsSceneGraph(): Promise<HandsSceneNodes> {
     screenRoot,
     bgOverlay,
     topBar,
+    topBarModeText,
     closeBtn,
+    devAddRingBtn,
     centerColumn,
     acquisitionBanner,
     handsViewport,
@@ -170,7 +243,8 @@ export function relayoutScene(nodes: HandsSceneNodes): void {
   nodes.bgOverlay.clear();
   nodes.bgOverlay
     .rect(0, 0, layout.screenW, layout.screenH)
-    .fill({ color: COLORS.bg, alpha: 0.85 });
+    .fill({ color: COLORS.bg, alpha: 0.92 });
+  drawGridOverlay(nodes.bgOverlay, layout.screenW, layout.screenH);
 
   // Top bar background: redraw
   const topBg = nodes.topBar.getChildAt(0) as Graphics;
@@ -178,7 +252,7 @@ export function relayoutScene(nodes: HandsSceneNodes): void {
   topBg.rect(0, 0, layout.screenW, layout.topBarH).fill({ color: COLORS.bgPanel });
   topBg
     .rect(0, layout.topBarH - 1, layout.screenW, 1)
-    .fill({ color: COLORS.border, alpha: 0.65 });
+    .fill({ color: COLORS.gold, alpha: 0.18 });
 
   // Close button position
   nodes.closeBtn.x = layout.screenW - layout.statsRailW - 46;

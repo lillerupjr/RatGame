@@ -229,10 +229,12 @@ async function bootstrap() {
         onEquipToSlot: (slotId) => {
           game.handsScreenEquipToSlot(slotId);
           handsScreen?.hide();
+          appStateController.setRunState(RunState.PLAYING);
         },
         onClose: () => {
           game.closeHandsScreen();
           handsScreen?.hide();
+          appStateController.setRunState(RunState.PLAYING);
         },
       });
       if (import.meta.env.DEV) console.log("[hands-screen] mounted successfully");
@@ -349,7 +351,7 @@ async function bootstrap() {
       refs.innkeeperMenuEl.hidden = true;
       refs.settingsMenuEl.hidden = true;
       refs.creditsMenuEl.hidden = true;
-      refs.ui.menuEl.hidden = runState !== RunState.PAUSED;
+      refs.ui.menuEl.hidden = runState !== RunState.PAUSED || (!!handsScreen?.isVisible() && !wasPausedVisible);
       refs.hud.root.hidden = isMapOpen;
       refs.hud.vitalsOrbRoot.hidden = runState === RunState.PAUSED || isMapOpen;
       if (isEndOpen) {
@@ -361,8 +363,10 @@ async function bootstrap() {
       // Sync hands screen: game.ts may open it from reward interception
       if (game.isHandsScreenOpen() && handsScreen && !handsScreen.isVisible()) {
         handsScreen.show(w, game.getHandsScreenPendingRingDefId());
+        appStateController.setRunState(RunState.PAUSED);
       } else if (!game.isHandsScreenOpen() && handsScreen?.isVisible()) {
         handsScreen.hide();
+        appStateController.setRunState(RunState.PLAYING);
       }
     }
   }
@@ -389,11 +393,17 @@ async function bootstrap() {
     root: refs.ui.menuEl,
     actions: {
       onResume: () => {
-        appStateController.setRunState(RunState.PLAYING);
+        if (!handsScreen?.isVisible()) {
+          appStateController.setRunState(RunState.PLAYING);
+        }
         pauseMenu.setVisible(false);
         wasPausedVisible = false;
       },
       onQuitRun: () => {
+        if (handsScreen?.isVisible()) {
+          game.closeHandsScreen();
+          handsScreen.hide();
+        }
         appStateController.setRunState(RunState.PLAYING);
         appStateController.setAppState(AppState.MENU);
         activeStartIntent = null;
@@ -448,6 +458,13 @@ async function bootstrap() {
   pauseCogBtn.hidden = true;
   pauseCogBtn.addEventListener("click", () => {
     if (appStateController.appState !== AppState.RUN) return;
+    if (handsScreen?.isVisible()) {
+      // Already paused due to hands screen — show pause menu overlay
+      pauseMenu.setVisible(true);
+      pauseMenu.render(game.getWorld());
+      wasPausedVisible = true;
+      return;
+    }
     togglePause(appStateController, appStateController.appState);
   });
   document.body.appendChild(pauseCogBtn);
@@ -590,16 +607,17 @@ async function bootstrap() {
     }
 
     // H key: toggle hands screen
-    if (ev.code === "KeyH" && appStateController.appState === AppState.RUN && appStateController.runState === RunState.PLAYING) {
+    if (ev.code === "KeyH" && appStateController.appState === AppState.RUN && (appStateController.runState === RunState.PLAYING || handsScreen?.isVisible())) {
       if (handsScreen?.isVisible()) {
         game.closeHandsScreen();
         handsScreen.hide();
-
+        appStateController.setRunState(RunState.PLAYING);
       } else if (!game.isHandsScreenOpen()) {
         game.openHandsScreen();
         void ensureHandsScreen().then((hs) => {
           if (hs && game.isHandsScreenOpen()) {
             hs.show(game.getWorld(), game.getHandsScreenPendingRingDefId());
+            appStateController.setRunState(RunState.PAUSED);
           }
         });
       }
@@ -608,10 +626,17 @@ async function bootstrap() {
 
     if (ev.code === "Escape" && appStateController.appState === AppState.RUN) {
       ev.preventDefault();
+      // Pause menu over hands screen: close pause menu only, stay on hands screen
+      if (wasPausedVisible && handsScreen?.isVisible()) {
+        pauseMenu.setVisible(false);
+        wasPausedVisible = false;
+        return;
+      }
       // Hands screen takes precedence over pause
       if (handsScreen?.isVisible()) {
         game.closeHandsScreen();
         handsScreen.hide();
+        appStateController.setRunState(RunState.PLAYING);
         return;
       }
       togglePause(appStateController, appStateController.appState);
@@ -712,7 +737,7 @@ async function bootstrap() {
         syncUiSafeRect();
         if (appStateController.runState === RunState.PAUSED) {
           refs.hud.vitalsOrbRoot.hidden = true;
-          if (!wasPausedVisible) {
+          if (!wasPausedVisible && !(handsScreen?.isVisible())) {
             pauseMenu.setVisible(true);
             pauseMenu.render(game.getWorld());
             wasPausedVisible = true;

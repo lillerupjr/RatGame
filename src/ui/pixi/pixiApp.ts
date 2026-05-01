@@ -20,7 +20,7 @@ export async function getOrCreatePixiApp(): Promise<Application> {
   canvasEl = app.canvas as HTMLCanvasElement;
   canvasEl.id = "pixiCanvas";
   canvasEl.style.cssText =
-    "position:fixed;inset:0;z-index:50;pointer-events:none;visibility:hidden;";
+    "position:fixed;inset:0;width:100%;height:100%;z-index:50;pointer-events:none;visibility:hidden;";
 
   // Insert after the #ui canvas
   const uiCanvas = document.getElementById("ui");

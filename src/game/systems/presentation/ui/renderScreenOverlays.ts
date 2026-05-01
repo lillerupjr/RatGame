@@ -1,5 +1,5 @@
 import type { ScreenOverlayContext } from "../contracts/screenOverlayContext";
-import { enqueueScreenCommand, enqueueWorldTailCommand } from "../frame/renderFrameBuilder";
+import { enqueueScreenCommand, enqueueWorldBandCommand, enqueueWorldTailCommand } from "../frame/renderFrameBuilder";
 
 export function renderScreenOverlays(input: ScreenOverlayContext): void {
   const {
@@ -56,6 +56,7 @@ export function renderScreenOverlays(input: ScreenOverlayContext): void {
     cssW,
     cssH,
     dpr,
+    heightmapShadowMaskResult,
   } = input as any;
 
   // Optional floor tint overlay
@@ -102,6 +103,17 @@ export function renderScreenOverlays(input: ScreenOverlayContext): void {
           deferredStructureSliceDebugDraws,
           flags: debugFlags,
         },
+      },
+    });
+  }
+
+  if (heightmapShadowMaskResult) {
+    enqueueWorldBandCommand(frameBuilder, {
+      semanticFamily: "debug",
+      finalForm: "primitive",
+      payload: {
+        zBand: "FIRST",
+        heightmapShadowMask: heightmapShadowMaskResult,
       },
     });
   }

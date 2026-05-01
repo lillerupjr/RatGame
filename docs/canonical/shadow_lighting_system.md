@@ -2,44 +2,28 @@
 
 ## Purpose
 
-- Own the frame-level sun model, shadow projection rules, ambient darkness compositing, and heightmap shadow-mask generation used by presentation.
-- Provide a single shadow/lighting context that downstream render, debug, and structure-presentation code can consume without recomputing sun state independently.
+Own frame-level sun model, shadow projection rules, ambient darkness overlay inputs, and heightmap shadow-mask generation consumed by presentation, debug, and structure-presentation code.
 
 ## Scope
 
-- Sun-model and ambient-sun state derivation in:
-  - `src/shadowSunV1.ts`
-- Day-cycle math and per-world runtime state in:
-  - `src/shadowSunDayCycle.ts`
-  - `src/game/systems/presentation/shadowSunDayCycleRuntime.ts`
-- Frame-level shadow context build and routing metadata in:
-  - `src/game/systems/presentation/structureShadows/structureShadowFrameContext.ts`
-  - `src/game/systems/presentation/structureShadows/structureShadowTypes.ts`
-  - `src/game/systems/presentation/structureShadows/structureShadowVersionRouting.ts`
-- Entity shadow geometry and projection in:
-  - `src/game/systems/presentation/renderShadow.ts`
-  - `src/engine/render/auxiliary/auxiliaryCanvasRenderer.ts`
-- Heightmap asset discovery and on-demand load in:
-  - `src/engine/render/sprites/heightmapLoader.ts`
-- Heightmap shadow-buffer composition and ray-march masking in:
-  - `src/game/systems/presentation/heightmapShadow/sceneHeightBuffer.ts`
-  - `src/game/systems/presentation/heightmapShadow/heightmapRayMarch.ts`
-- Ambient darkness overlay composition in:
-  - `src/game/systems/presentation/renderLighting.ts`
-  - `src/game/systems/presentation/ui/renderScreenOverlays.ts`
-  - `src/game/render/renderDebugPolicy.ts`
-- Render-pipeline integration and backend handoff in:
-  - `src/game/systems/presentation/render.ts`
+- Sun/ambient model: `src/shadowSunV1.ts`
+- Day-cycle math/runtime: `src/shadowSunDayCycle.ts`, `src/game/systems/presentation/shadowSunDayCycleRuntime.ts`
+- Frame shadow context/routing: `structureShadowFrameContext.ts`, `structureShadowTypes.ts`, `structureShadowVersionRouting.ts`
+- Entity shadow projection: `src/game/systems/presentation/renderShadow.ts`, `src/engine/render/auxiliary/auxiliaryCanvasRenderer.ts`
+- Heightmap loading: `src/engine/render/sprites/heightmapLoader.ts`
+- Heightmap buffer/ray march: `heightmapShadow/sceneHeightBuffer.ts`, `heightmapRayMarch.ts`
+- Ambient darkness overlay: `renderLighting.ts`, `ui/renderScreenOverlays.ts`, `src/game/render/renderDebugPolicy.ts`
+- Render integration: `src/game/systems/presentation/render.ts`
 
 ## Non-scope
 
-- Structure geometry generation, triangle ownership, and structure-slice derivation
-- Atlas/cache ownership and render-command ordering
-- Production of `w.lighting` state outside this system’s consumption of that state for final screen overlays
-- The parked projected/static light registry in `src/game/systems/presentation/worldLightRenderPieces.ts`, which is not wired into `render.ts`
-- The parked structure-shadow raster/cache implementation under `src/game/systems/presentation/structureShadows/structureShadowV6*`, which is not part of the live frame path
+- Structure geometry/slicing: `docs/canonical/structure_geometry_slicing_system.md`
+- Atlas/cache and render ordering/backend submission: `docs/canonical/atlas_render_cache_system.md`, `docs/canonical/presentation_rendering_pipeline.md`
+- Production of `w.lighting` outside final overlay consumption
+- Parked `worldLightRenderPieces.ts` projected/static light registry; not wired into `render.ts`
+- Parked `structureShadowV6*` raster/cache implementation; not part of live frame submission
 
-## Key Entrypoints
+## Entrypoints
 
 - `src/shadowSunV1.ts`
 - `src/shadowSunDayCycle.ts`
@@ -55,150 +39,75 @@
 - `src/game/systems/presentation/render.ts`
 - `src/engine/render/auxiliary/auxiliaryCanvasRenderer.ts`
 
-## Data Flow / Pipeline
+## Pipeline
 
-1. **Settings and Day-Cycle Runtime**
-   - `render.ts` resolves the current debug/render flags and calls `resolveShadowSunDayCycleRuntime(...)`.
-   - `shadowSunDayCycleRuntime.ts` keeps per-world day-cycle state in a `WeakMap<World, ...>`.
-   - The runtime:
-     - reseeds when the manual hour, cycle mode, or steps-per-day change
-     - advances only while `world.state === "RUN"`
-     - clamps per-frame advancement to at most one quantized step span
-   - The result is:
-     - `continuousTimeHour`
-     - `effectiveTimeHour` / quantized shadow hour
-     - optional `shadowStepKeyOverride`
-     - debug status for overlays and perf surfaces
+1. **Day Cycle**: `render.ts` resolves debug/render flags and calls `resolveShadowSunDayCycleRuntime(...)`. Runtime is `WeakMap<World, ...>`, reseeds on manual hour/cycle mode/steps-per-day changes, advances only in `world.state === "RUN"`, clamps to one quantized step span, and outputs continuous/effective hour, optional `shadowStepKeyOverride`, and debug status.
+2. **Sun Context**: `buildStructureShadowFrameContext(...)` combines effective hour and azimuth/elevation overrides via `getShadowSunV1LightingState(...)`. `shadowSunV1.ts` outputs direction label, forward vector, projected shadow direction, cast enablement, deterministic `stepKey`, and `ambientSunLighting`. Quantized day cycle may override step key suffix. Routing metadata currently resolves `usesV6Sweep: true`.
+3. **Entity Shadows**: world collection emits `worldPrimitive` with `shadowParams`; `Canvas2DRenderer.executeCommand()` calls `renderEntityShadow(...)`, which uses support surface height, hover delta, and sun projection to fade/compress/offset ellipses. Disabled casting or zero projection draws nothing.
+4. **Heightmap Mask**: enabled only when `heightmapShadowsEnabled !== false` and sun casts shadows. `renderSprites.ts` loads manifest-enabled sibling heightmaps; live manifest enables `structures/buildings/batch1/`. Visible overlays contribute only with structure sprite id, loaded heightmap, and ready color sprite. `compositeSceneHeightBuffer(...)` builds downscaled max-height buffer using color-sprite alpha as occupancy and grayscale height `0..1`; `computeHeightmapShadowMask(...)` ray-marches to a `Float32Array`. Cache key includes map id, sun step key, viewport size, camera translation, resolution divisor, and ray parameters. `render.ts` enqueues mask as debug/world primitive; `Canvas2DRenderer` draws black alpha in world space.
+5. **Ambient Overlay**: `renderScreenOverlays(...)` gates final darkness with `shouldApplyAmbientDarknessOverlay(...)` and enqueues a screen primitive with `w.lighting.darknessAlpha`, `ambientTint`, `ambientTintStrength`. `renderAmbientDarknessOverlay(...)` draws full-screen darkness/tint. Final overlay is driven by `w.lighting`, not `ambientSunLighting.ambientDarkness01`.
+6. **Backend / Debug Handoff**: `render.ts` passes `shadowSunModel` and `ambientSunLighting` to world and overlay `Canvas2DRenderer`; screen debug/perf surfaces read the same state. Even with WebGL world pieces, shadow/ambient auxiliary commands remain Canvas2D-backed.
 
-2. **Sun Model and Frame Shadow Context**
-   - `buildStructureShadowFrameContext(...)` turns the effective hour plus azimuth/elevation overrides into frame-wide shadow state via `getShadowSunV1LightingState(...)`.
-   - `shadowSunV1.ts` derives:
-     - sun direction label
-     - forward vector
-     - projected shadow direction
-     - shadow-casting enablement
-     - deterministic `stepKey`
-     - `ambientSunLighting`
-   - When day-cycle quantization is active, `shadowStepKeyOverride` replaces the sun model’s step key suffix so downstream caches can align with quantized steps.
-   - The same frame context currently resolves routing metadata with `usesV6Sweep: true`.
+## Invariants
 
-3. **Entity Shadow Projection**
-   - World collection emits `worldPrimitive` commands carrying `shadowParams`.
-   - `Canvas2DRenderer.executeCommand()` routes those payloads to `renderEntityShadow(...)`.
-   - `renderEntityShadow(...)`:
-     - queries the support surface at the entity’s world position
-     - derives hover height from `worldZ - support.worldZ`
-     - fades and compresses the ellipse as hover height increases
-     - offsets the shadow along the sun projection direction
-   - If the entity disables shadow casting, or the resolved projection vector is zero, no shadow is drawn.
+- Day-cycle runtime is per `World` via `WeakMap`, not process-global.
+- Disabled day cycle has `shadowStepKeyOverride === undefined` and effective hour equal to manual seed.
+- Automatic shadow time advances only in `RUN`.
+- Each render pass has one shared `shadowSunModel` and `ambientSunLighting`.
+- Quantized day-cycle steps produce deterministic cache keys.
+- Entity shadows derive from support-surface height plus sun projection, not sprite bounds alone.
+- Heightmap mask requires casting sun and enabled flag.
+- Heightmap support is manifest opt-in; live rollout is `structures/buildings/batch1/`.
+- Height buffer uses color-sprite alpha occupancy, grayscale height normalization, and max-blending.
+- Heightmap mask cache reuses only on exact explicit-key match.
+- Final darkness/tint overlay consumes `w.lighting.*`; `ambientSunLighting` is not final overlay authority.
+- Shadow/ambient auxiliary rendering stays Canvas2D-backed with WebGL world rendering.
+- Frame routing metadata currently always has `usesV6Sweep: true`.
 
-4. **Heightmap Shadow-Mask Pass**
-   - `render.ts` enables the pass only when:
-     - `renderSettings.heightmapShadowsEnabled !== false`
-     - `shadowSunModel.castsShadows === true`
-   - `renderSprites.ts` triggers on-demand heightmap loading through `heightmapLoader.ts` for manifest-enabled sprite ids; the live manifest currently enables `structures/buildings/batch1/`.
-   - It gathers visible overlays that have:
-     - a structure sprite id
-     - a loaded heightmap
-     - a ready color sprite image
-   - `compositeSceneHeightBuffer(...)` builds a screen-space max-height buffer at the configured downscaled resolution, using the sprite alpha channel as the authoritative occupancy mask and normalizing heightmap grayscale values into `0..1` scene-height values.
-   - `computeHeightmapShadowMask(...)` ray-marches from each pixel toward the light source and writes a `Float32Array` shadow mask.
-   - The mask is cached by an explicit key that includes:
-     - map id
-     - sun step key
-     - viewport size
-     - camera translation
-     - resolution divisor
-     - ray-march parameters
-   - `render.ts` enqueues the resulting mask as a debug/world primitive, and `Canvas2DRenderer` draws it back into world space as a black alpha mask.
+## Constraints
 
-5. **Ambient Darkness Screen Overlay**
-   - `renderScreenOverlays(...)` decides whether the final darkness overlay is allowed through `shouldApplyAmbientDarknessOverlay(...)`.
-   - When enabled, it enqueues a `screenOverlay:primitive` payload carrying:
-     - `w.lighting.darknessAlpha`
-     - `w.lighting.ambientTint`
-     - `w.lighting.ambientTintStrength`
-   - `Canvas2DRenderer` delegates that payload to `renderAmbientDarknessOverlay(...)`, which applies a full-screen darkness fill and optional tint pass.
-   - The final ambient darkness overlay is currently driven by `w.lighting`, not by `ambientSunLighting.ambientDarkness01`.
+- One authoritative sun model/step key per frame; consumers must not derive independent time.
+- Shadow cache keys must include every visible-output input, especially map id, quantized sun step, viewport/camera, ray params.
+- Day-cycle advancement remains world-scoped and paused outside active run state.
+- Heightmap generation only admits overlays with ready color sprite and loaded heightmap.
+- Heightmap silhouettes continue using rendered color sprite alpha unless asset contract changes.
+- If final ambient darkness moves from `w.lighting` to sun-derived data, update this doc with the new authority.
 
-6. **Backend Handoff, Debug, and Auxiliary Rendering**
-   - `render.ts` passes `shadowSunModel` and `ambientSunLighting` into both world and overlay `Canvas2DRenderer` instances.
-   - Screen debug overlays and perf-debug surfaces consume the same frame state for readouts.
-   - Even when the main world backend is WebGL, shadow/ambient auxiliary commands still execute through the Canvas2D auxiliary renderer.
-
-## Core Invariants
-
-- Shadow day-cycle runtime state is keyed per `World` instance via `WeakMap`, not global process state.
-- When day-cycle mode is disabled, `shadowStepKeyOverride` is `undefined` and the effective shadow hour remains the manual seed hour.
-- Automatic shadow time advancement occurs only while `world.state === "RUN"`.
-- The live frame uses one shared `shadowSunModel` and one shared `ambientSunLighting` object for that render pass.
-- A quantized day-cycle step produces a deterministic step key that downstream shadow consumers can cache against.
-- `renderEntityShadow(...)` derives shadow placement from support-surface height plus sun projection, not from sprite bounds alone.
-- Heightmap shadow masking only runs when the sun is casting shadows and the feature flag is enabled.
-- Heightmap support is opt-in through the `heightmapLoader.ts` manifest; the live asset rollout currently enables `structures/buildings/batch1/` only.
-- `compositeSceneHeightBuffer(...)` uses color-sprite alpha as the occupancy mask, normalizes heightmap grayscale values into `0..1`, and max-blends per-pixel height values.
-- `computeHeightmapShadowMask(...)` reuses cached mask storage only when the explicit cache key matches the current frame inputs.
-- The final full-screen darkness/tint overlay consumes `w.lighting.*` values; `ambientSunLighting` is not the authoritative final overlay input in the live path.
-- Shadow/ambient auxiliary rendering stays Canvas2D-backed even when the ordered world pieces render through WebGL.
-- The frame shadow routing metadata currently always resolves `usesV6Sweep: true`.
-
-## Design Constraints
-
-- The frame must have one authoritative sun model and one authoritative sun step key. Shadow consumers must not derive independent time-of-day state per subsystem.
-- Shadow cache invalidation must remain explicit and include every input that changes visible output, especially map id, quantized sun step, viewport/camera, and ray-march parameters.
-- Day-cycle advancement must remain world-scoped and paused outside active run state so menus, map nodes, and reward screens do not advance shadow time.
-- Heightmap shadow generation must stay conservative: only overlays with both ready color sprites and loaded heightmaps may contribute to the scene height buffer.
-- Heightmap silhouettes must continue to use the rendered color sprite alpha as occupancy authority unless the asset contract changes and this document is updated.
-- Final ambient darkness behavior must remain explicit about its source of truth. If the system moves from `w.lighting`-driven overlay alpha to sun-derived ambient darkness, this document must be updated with the new authority.
-
-## Dependencies (In/Out)
+## Dependencies
 
 ### Incoming
 
-- Debug and render settings from:
-  - `src/settings/debugToolsSettings.ts`
-  - `src/settings/systemOverrides.ts`
-  - `src/userSettings.ts`
-- World state inputs:
-  - `world.state`
-  - `w.lighting.darknessAlpha`
-  - `w.lighting.ambientTint`
-  - `w.lighting.ambientTintStrength`
-- Compiled-map support-surface queries and visible overlay data
-- Loaded sprite heightmaps and ready structure sprite images
-- Frame viewport and camera translation from the render pipeline
+- Debug/render settings from `src/settings/debugToolsSettings.ts`, `src/settings/systemOverrides.ts`, `src/userSettings.ts`
+- World inputs: `world.state`, `w.lighting.darknessAlpha`, `w.lighting.ambientTint`, `w.lighting.ambientTintStrength`
+- Compiled-map support-surface queries and visible overlays
+- Loaded heightmaps and ready structure sprite images
+- Frame viewport/camera from render pipeline
 
 ### Outgoing
 
-- `shadowSunModel` and `ambientSunLighting` shared across render/debug consumers
-- Entity-shadow world primitives executed by the auxiliary Canvas2D renderer
-- Heightmap shadow-mask primitives enqueued into the frame
-- Final screen-space ambient darkness/tint overlay commands
-- Day-cycle debug status consumed by screen overlays and perf-debug surfaces
+- `shadowSunModel` / `ambientSunLighting` to render/debug consumers
+- Entity-shadow world primitives through auxiliary Canvas2D
+- Heightmap mask primitives
+- Final screen-space ambient darkness/tint commands
+- Day-cycle debug status for overlays/perf surfaces
 
-## Extension Points
+## Extension
 
-- Sun direction/elevation mapping in `getShadowSunV1Model(...)`
-- Day-cycle modes, step counts, and speed multipliers in `shadowSunDayCycle.ts`
-- Additional frame-level shadow consumers through `buildStructureShadowFrameContext(...)`
-- Heightmap shadow resolution and ray-march tuning through the debug/render settings inputs
-- Future activation of the parked projected-light registry or structure-shadow raster/cache path, if they are wired into `render.ts` and this document is updated
+- Sun direction/elevation in `getShadowSunV1Model(...)`
+- Day-cycle modes, step counts, speed multipliers
+- Frame-level consumers through `buildStructureShadowFrameContext(...)`
+- Heightmap resolution/ray tuning via settings
+- Parked projected-light or structure-shadow raster/cache paths only after wiring into `render.ts` and updating this doc
 
-## Failure Modes / Common Mistakes
+## Failure Modes
 
-- Assuming `ambientSunLighting.ambientDarkness01` drives the final screen darkness is incorrect in the live path; the overlay currently reads `w.lighting`.
-- Forgetting to include sun-step or viewport inputs in a heightmap shadow cache key causes stale masks to survive camera or time-of-day changes.
-- Advancing the day cycle outside `RUN` state would desynchronize shadow time across menus and non-combat states.
-- Treating the parked `worldLightRenderPieces.ts` registry as a live render dependency causes misleading architecture assumptions; it is not wired into `render.ts`.
-- Treating the parked `structureShadowV6*` modules as active frame submission logic is incorrect; the live path only resolves routing metadata for structure-shadow consumers.
-- Building the height buffer without masking against the visible color sprite alpha would shadow transparent regions and produce incorrect silhouettes.
-- Assuming every structure sprite participates in heightmap shadows is incorrect; only manifest-enabled asset families with loaded sibling heightmaps can contribute today.
+- Assuming `ambientSunLighting.ambientDarkness01` drives final darkness is wrong today.
+- Missing sun/viewport inputs in heightmap cache keys leaves stale masks.
+- Advancing day cycle outside `RUN` desyncs non-combat states.
+- Treating parked `worldLightRenderPieces.ts` or `structureShadowV6*` as live frame submission misreads architecture.
+- Omitting color-sprite alpha mask shadows transparent regions.
+- Assuming all structures contribute to heightmap shadows ignores manifest/loading gates.
 
-## Verification Status
+## Verification
 
-- Status: `Verified`
-- Inferred items: none
-
-## Last Reviewed
-
-- `2026-04-08`
+`Verified`; inferred: none; reviewed `2026-04-08`.

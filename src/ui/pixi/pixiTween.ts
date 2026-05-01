@@ -2,6 +2,25 @@
 
 export type EasingFn = (t: number) => number;
 
+// Attempt to evaluate a cubic-bezier curve at parameter t.
+// Numerically solves for the t parameter on the X curve, then evaluates Y.
+function cubicBezier(x1: number, y1: number, x2: number, y2: number): EasingFn {
+  return (t: number) => {
+    if (t <= 0) return 0;
+    if (t >= 1) return 1;
+    // Newton-Raphson to find the bezier t for the given x
+    let bt = t;
+    for (let i = 0; i < 8; i++) {
+      const bx = 3 * (1 - bt) * (1 - bt) * bt * x1 + 3 * (1 - bt) * bt * bt * x2 + bt * bt * bt;
+      const dx = 3 * (1 - bt) * (1 - bt) * x1 + 6 * (1 - bt) * bt * (x2 - x1) + 3 * bt * bt * (1 - x2);
+      if (Math.abs(dx) < 1e-7) break;
+      bt -= (bx - t) / dx;
+      bt = Math.max(0, Math.min(1, bt));
+    }
+    return 3 * (1 - bt) * (1 - bt) * bt * y1 + 3 * (1 - bt) * bt * bt * y2 + bt * bt * bt;
+  };
+}
+
 export const Easing = {
   linear: (t: number) => t,
   cubicOut: (t: number) => 1 - (1 - t) ** 3,
@@ -15,6 +34,10 @@ export const Easing = {
         ? 1
         : 2 ** (-10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1;
   },
+  /** cubic-bezier(0.22, 1, 0.36, 1) — top bar, drawer, stats rail, hands shift */
+  decelerate: cubicBezier(0.22, 1, 0.36, 1),
+  /** cubic-bezier(0.16, 1, 0.3, 1) — hands entrance */
+  decelerateStrong: cubicBezier(0.16, 1, 0.3, 1),
 } as const;
 
 type TweenTarget = Record<string, number>;

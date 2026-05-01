@@ -22,14 +22,13 @@ export class AcquisitionBanner extends Container {
     this.dot.y = height / 2;
     this.addChild(this.dot);
 
+    const labelStyle = TEXT_STYLES.accent.clone();
+    labelStyle.fontSize = 11;
+    labelStyle.fill = COLORS.green;
+    labelStyle.letterSpacing = 1.0;
     this.bannerLabel = new Text({
       text: "NEW RING FOUND \u2014 Select a finger to equip",
-      style: {
-        ...TEXT_STYLES.accent,
-        fontSize: 11,
-        fill: COLORS.green,
-        letterSpacing: 1.0,
-      },
+      style: labelStyle,
     });
     this.bannerLabel.x = 38;
     this.bannerLabel.y = (height - this.bannerLabel.height) / 2;

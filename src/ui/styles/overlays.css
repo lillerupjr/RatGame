@@ -1964,7 +1964,7 @@ html.ios-standalone-fix #ui {
 }
 
 /* Weapon Selection Menu */
-#menu { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 4; }
+#menu { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg-overlay); z-index: 60; }
 #menu .panel { width: min(560px, 92vw); padding: 20px; border-radius: 16px; }
 #menu .title { font-size: 24px; font-weight: 800; margin-bottom: 6px; }
 #menu .subline { opacity: 0.9; margin-bottom: 14px; }

@@ -2,63 +2,30 @@
 
 ## Purpose
 
-- Own the floor-level progression runtime that turns trigger facts, objective intent, kill/zone/chest/level milestones, and interaction completions into objective state, reward queues, reward presentation, countdown-to-exit behavior, and advancement to the next floor or run outcome.
-- Convert transient gameplay facts into durable progression state through explicit buffers:
-  - `triggerSignals`
-  - `objectiveStates` / `objectiveEvents`
-  - `runEvents`
-  - `rewardTickets`
+Own floor progression: trigger facts, objective intent, kill/zone/chest/level milestones, interaction completions, reward queues, reward presentation, countdown-to-exit, floor advancement, run outcome, and run heat.
 
 ## Scope
 
-- Floor-scoped progression reset, objective wiring, reward-pipeline orchestration, floor-end countdown, pending-advance handling, and run-heat commit hooks in:
-  - `src/game/game.ts`
-- World-owned progression/runtime fields in:
-  - `src/engine/world/world.ts`
-- Objective spec mapping, objective runtime state, and objective resolution in:
-  - `src/game/systems/progression/objectiveSpec.ts`
-  - `src/game/systems/progression/objective.ts`
-- Trigger registry refresh and per-frame trigger signal emission in:
-  - `src/game/systems/progression/triggerSystem.ts`
-- Zone-trial runtime, zone-cleared milestones, and zone overlay sync inputs in:
-  - `src/game/objectives/zoneObjectiveSystem.ts`
-  - `src/game/objectives/zoneObjectiveTypes.ts`
-- Rare-triple milestone sync and rare-zone encounter spawning in:
-  - `src/game/systems/progression/rareTripleObjectiveSync.ts`
-  - `src/game/systems/progression/rareZoneSpawn.ts`
-- Room-challenge room locks and kill-count challenge state in:
-  - `src/game/systems/progression/roomChallenge.ts`
-- Drop spawning, pickup collection, XP gain, and level-up run-event production in:
-  - `src/game/systems/progression/drops.ts`
-  - `src/game/systems/progression/pickups.ts`
-  - `src/game/economy/xp.ts`
-- Reward event capture, reward claim/ticket queues, reward planning, and reward presentation in:
-  - `src/game/systems/progression/rewardRunEventProducerSystem.ts`
-  - `src/game/systems/progression/rewardSchedulerSystem.ts`
-  - `src/game/systems/progression/rewardPresenterSystem.ts`
-  - `src/game/rewards/runEvents.ts`
-  - `src/game/rewards/rewardTickets.ts`
-  - `src/game/rewards/rewardDirector.ts`
-  - `src/game/rewards/floorRewardBudget.ts`
-- Objective outcome application, floor-end countdown, and run-heat commit helpers in:
-  - `src/game/systems/progression/outcomeSystem.ts`
-  - `src/game/systems/progression/floorEndCountdown.ts`
-  - `src/game/systems/progression/runHeat.ts`
-- Vendor floor offer state and purchase flow in:
-  - `src/game/vendor/vendorState.ts`
-  - `src/game/vendor/generateVendorRelics.ts`
-  - `src/game/vendor/vendorPurchase.ts`
+- Floor reset, objective wiring, reward orchestration, countdown, advance handling, run heat in `src/game/game.ts`
+- Progression fields in `src/engine/world/world.ts`
+- Objective mapping/runtime: `src/game/systems/progression/objectiveSpec.ts`, `objective.ts`
+- Trigger registry/signals: `triggerSystem.ts`
+- Zone/rare/room objectives: `src/game/objectives/zoneObjectiveSystem.ts`, `zoneObjectiveTypes.ts`, `rareTripleObjectiveSync.ts`, `rareZoneSpawn.ts`, `roomChallenge.ts`
+- Drops/pickups/XP: `drops.ts`, `pickups.ts`, `src/game/economy/xp.ts`
+- Run events/reward tickets/director/presenter: `rewardRunEventProducerSystem.ts`, `rewardSchedulerSystem.ts`, `rewardPresenterSystem.ts`, `src/game/rewards/runEvents.ts`, `rewardTickets.ts`, `rewardDirector.ts`, `floorRewardBudget.ts`
+- Outcomes/countdown/heat: `outcomeSystem.ts`, `floorEndCountdown.ts`, `runHeat.ts`
+- Vendor floors: `src/game/vendor/vendorState.ts`, `generateVendorRelics.ts`, `vendorPurchase.ts`
 
 ## Non-scope
 
-- Core movement, collision, projectile, DOT, and hostile-combat execution; this system consumes their emitted facts
-- Hostile spawn pacing, enemy brain/action logic, and boss encounter runtime
-- Map compilation and floor-intent generation; this system consumes `currentObjectiveSpec` and active-map trigger data
-- UI layout and DOM rendering for dialogs, reward menus, vendor menus, or HUD overlays
-- Relic option generation, relic stat application, and combat-mod effect resolution, beyond this system opening the reward flow and invoking the existing apply path
-- Audio and VFX rendering, even when progression emits events those systems consume
+- Movement/combat/projectile/DOT execution that emits facts: `docs/canonical/core_simulation_combat_runtime.md`
+- Hostile spawn/AI and boss runtime: `docs/canonical/hostile_ai_spawn_runtime.md`, `docs/canonical/boss_encounter_system.md`
+- Map compilation/floor intent generation: `docs/canonical/map_compilation_activation_floor_topology.md`
+- Dialog/reward/vendor/HUD UI layout: `docs/canonical/ui_shell_menus_runtime_panels.md`
+- Relic option generation/stat application beyond opening/apply path: `docs/canonical/combat_mods_stat_resolution_loadout_effects.md`
+- Audio/VFX rendering
 
-## Key Entrypoints
+## Entrypoints
 
 - `src/engine/world/world.ts`
 - `src/game/game.ts`
@@ -87,238 +54,82 @@
 - `src/game/vendor/generateVendorRelics.ts`
 - `src/game/vendor/vendorPurchase.ts`
 
-## Data Flow / Pipeline
+## Pipeline
 
-1. **Floor Entry and Progression Reset**
-   - `game.ts:beginFloorLoad(...)` calls `resetFloorProgressionState(world)` before new objective wiring.
-   - The reset path clears floor-scoped progression buffers and guards:
-     - `triggerSignals`
-     - `objectiveEvents`
-     - `events`
-     - `chestOpenRequested`
-     - `runEvents`
-     - `rewardTickets`
-     - `activeRewardTicketId`
-     - reward-producer dedupe maps/counters
-     - floor-end countdown fields
-     - `floorClearCommitted`
-     - `pendingAdvanceToNextFloor`
-     - `rareZoneSpawned`
-   - The same load path then wires progression for the new floor:
-     - `currentObjectiveSpec`
-     - `objectiveDefs` / `objectiveStates` through `initObjectivesForFloor(...)`
-     - `floorRewardBudget` from `objectiveModeForFloor(...)`
-     - zone-trial runtime via `startZoneTrial(...)`
-     - zone/rare navigation mirrors via `syncZoneTrialNavState(...)` and `syncRareTripleNavState(...)`
-     - vendor offer state for `VENDOR` floors via `createVendorState(generateVendorRelicOffers(...))`
+1. **Floor Entry Reset / Wiring**: `beginFloorLoad(...)` calls `resetFloorProgressionState(world)`, clearing `triggerSignals`, `objectiveEvents`, `events`, `chestOpenRequested`, `runEvents`, `rewardTickets`, `activeRewardTicketId`, reward-producer dedupe state, countdown fields, `floorClearCommitted`, `pendingAdvanceToNextFloor`, `rareZoneSpawned`. Then it wires `currentObjectiveSpec`, `objectiveDefs`/`objectiveStates`, `floorRewardBudget`, zone trial runtime/nav mirrors, rare nav mirrors, and vendor offers for `VENDOR`.
+2. **Trigger / Challenge Facts**: `triggerSystem(...)` rebuilds registry on active-map or overlay-trigger version changes, clears `triggerSignals`, and emits `ENTER`, `EXIT`, `INTERACT`, `KILL`, `TICK` from active-map and overlay trigger defs. `roomChallengeSystem(...)` manages room locks; `onEnemyKilledForChallenge(...)` tracks progress; `canExitRoom(...)` gates movement.
+3. **Objective Sidecars**: zone trials consume `ENEMY_KILLED`, count kills inside zones, enqueue first two `ZONE_CLEARED` run events, and emit synthetic `KILL` for `OBJ_ZONE_TRIAL_COMPLETE`; rare-zone entry spawns one hostile per rare zone and stamps `eSpawnTriggerId`; rare-triple sync marks clears from trigger signals and kill events.
+4. **Objective Resolution**: `objectiveSystem(world)` resolves `objectiveDefs` + `objectiveStates`. `SIGNAL_COUNT` counts matching signals by event count or `TICK` dt; `TRACK_BOSS_KILL` polls boss runtime. Status transitions emit `objectiveEvents`. Heal/vendor direct completions still use `completeObjectiveById(...)`; rewards still observe them because producer watches `objectiveStates`. Rare-triple state reconciles after objective resolution.
+5. **Drops / XP / Run Facts**: `dropsSystem(...)` converts `ENEMY_KILLED` to gold pickups and handles physical pickup collection. Gold pickup calls `grantXp(...)`, which mutates XP/level and emits `LEVEL_UP` run events. Chest pickup sets `world.chestOpenRequested`. `rewardRunEventProducerSystem(...)` captures durable facts into `runEvents`: objective completions, rare milestones by trigger attribution, survive-trial 60s, chest-open requests, with internal seen maps/sets.
+6. **Reward Scheduling**: `rewardSchedulerSystem(...)` drains `runEvents`, assigns floor-scoped claim keys, ignores repeated `rewardClaimKeys`, stores objective/zone claimed keys, grants flat `OBJECTIVE_COMPLETION_GOLD`, and plans via `rewardDirector.ts`: `OBJECTIVE_COMPLETED -> GRANT_RELIC`; zone/rare/survive/chest/level-up currently `NO_REWARD`; `GRANT_GOLD` applies immediately; valid `GRANT_RELIC` enqueues `RELIC_PICK`.
+7. **Reward Presentation**: `runRewardPipeline(...)` runs facts in two phases: core facts before audio, chest facts after audio so chest SFX is not skipped. `rewardPresenterSystem(...)` runs only in `RUN`, refuses if reward UI active, activates oldest ticket, calls `beginRelicReward(...)`, and sets `world.state = "REWARD"` only when menu opens. Reward callback chooses relic, resolves ticket, re-renders, then advances or returns to `RUN`.
+8. **Countdown / Advancement**: after objective resolution and first reward pass, `maybeStartFloorEndCountdown(...)` starts once per completed floor after at least one objective complete. `tickFloorEndCountdown(...)` advances timer; finish closes reward UI and retries advancement. Built-in objective specs have empty `outcomes`, so normal completion uses `tryAdvanceAfterObjectiveCompletion()`: require complete objective, block during reward/countdown, commit clear once, increment `runHeat`, then choose deterministic picker, delve destination, final victory, or next floor. Vendor/heal use `pendingAdvanceToNextFloor` until interaction UI closes.
+9. **Vendor Floors**: vendor floor load seeds `world.vendor`; `tryPurchaseVendorRelic(...)` checks gold, prevents duplicates, deducts gold, applies relic, marks sold. Leaving vendor completes `OBJ_VENDOR`, sets `pendingAdvanceToNextFloor`, then normal reward/advance path resolves.
 
-2. **Per-Frame Trigger and Challenge Fact Capture**
-   - `triggerSystem(...)` rebuilds `triggerRegistry` when the active map or overlay-trigger version changes.
-   - It clears `world.triggerSignals` each frame, then emits:
-     - `ENTER`
-     - `EXIT`
-     - `INTERACT`
-     - `KILL`
-     - `TICK`
-   - Trigger sources include active-map trigger defs plus `overlayTriggerDefs`.
-   - `roomChallengeSystem(...)` runs earlier in the frame and manages kill-count room locks:
-     - entering a challenge room activates the lock
-     - `onEnemyKilledForChallenge(...)` increments progress from shared death finalization
-     - `canExitRoom(...)` is the movement-side gate for leaving locked rooms
+## Invariants
 
-3. **Objective-Specific Sidecars**
-   - `updateZoneTrialObjective(...)` consumes `ENEMY_KILLED` events while the player is inside an active zone-trial area.
-   - Zone-trial completions:
-     - increment per-zone kill counts
-     - enqueue `ZONE_CLEARED` run events for the first two completed zones
-     - emit a synthetic `KILL` trigger for `OBJ_ZONE_TRIAL_COMPLETE` once all zones are done
-   - `syncZoneTrialNavState(...)` mirrors the hidden zone-trial runtime into `world.zoneTrial` for downstream overlay consumers.
-   - `rareZoneSpawnSystem(...)` consumes `ENTER` signals for rare-zone overlay triggers, spawns exactly one hostile for each unspawned rare zone, and stamps `eSpawnTriggerId` for later kill attribution.
-   - `markRareTripleClearsFromSignalsAndEvents(...)` marks rare-triple clear state from both trigger signals and kill events before objective resolution.
+- Floor progression reset precedes new objective wiring.
+- `currentObjectiveSpec`, `objectiveDefs`, and `objectiveStates` are authoritative objective model.
+- `triggerSignals` is a transient per-frame buffer cleared by `triggerSystem(...)`; sidecars may append later that frame.
+- `objectiveSystem(...)` is signal-driven, but reward capture observes `objectiveStates`, not only `objectiveEvents`.
+- `objectiveEvents` records transitions only; it is not long-lived truth.
+- Queues: `runEvents` bridges fact capture -> scheduler; `rewardTickets` bridges scheduler -> presenter.
+- Reward dedupe requires producer seen-state plus scheduler `rewardClaimKeys`.
+- `rewardPresenterSystem(...)` is the runtime path that opens reward UI and sets `world.state = "REWARD"`.
+- Current reward planning grants relic tickets only for `OBJECTIVE_COMPLETED`.
+- `grantXp(...)` owns XP/level mutation and `LEVEL_UP` run events.
+- `commitFloorClear(...)` runs at most once per floor; `runHeat` increments only through clear commit.
+- Standard floor completion bypasses `outcomeSystem(...)`; advancement is explicit in `game.ts`.
+- Vendor/heal complete via direct objective-state mutation plus deferred advancement, not triggers alone.
 
-4. **Objective Resolution**
-   - `objectiveSystem(world)` is the canonical resolver for `objectiveDefs` + `objectiveStates`.
-   - `SIGNAL_COUNT` rules count matching trigger signals:
-     - by event count for `ENTER` / `INTERACT` / `KILL`
-     - by accumulated `dt` for `TICK`
-   - `TRACK_BOSS_KILL` rules poll boss runtime through `getTrackedBossEncounterForObjective(...)`.
-   - Status transitions to `COMPLETED` or `FAILED` emit `objectiveEvents`.
-   - Direct imperative completions still exist in `game.ts` through `completeObjectiveById(...)` for:
-     - heal-station confirmation
-     - vendor leave
-   - Because the reward producer watches `objectiveStates`, those direct completions still feed the reward pipeline even though they do not emit `objectiveEvents` themselves.
-   - After `objectiveSystem(...)`, `syncRareTripleObjectiveStateFromClears(...)` reconciles the rare-triple objective state from the floor's tracked rare clears.
+## Constraints
 
-5. **Drop, XP, and Run-Fact Production**
-   - `dropsSystem(...)` converts `ENEMY_KILLED` events into gold pickups and handles physical pickup collection.
-   - Gold pickups call `grantXp(...)`, which owns run XP/level state and enqueues `LEVEL_UP` run events.
-   - Chest pickups route through `handlePickupSpecialCase(...)` and `handleChestPickup(...)`, which set `world.chestOpenRequested` for the later reward pipeline.
-   - `rewardRunEventProducerSystem(...)` captures durable progression facts into `world.runEvents`:
-     - objective completions from `objectiveStates`
-     - rare milestones from kill-event trigger attribution
-     - survive-trial 60-second milestone
-     - chest-open requests
-   - Objective and rare capture use internal seen maps/sets so one fact does not enqueue repeatedly across frames.
+- Layer order stays trigger/objective facts -> `runEvents` -> reward planning -> `rewardTickets` -> reward UI / advancement.
+- Objective rewards must be offered before floor advancement; chest-triggered rewards stay after audio to preserve chest SFX.
+- New rewardable run events need stable claim keys and scheduler plans.
+- Objective completion must remain observable from `objectiveStates` because some paths complete imperatively.
+- Run heat remains single-commit per cleared floor.
 
-6. **Reward Scheduling and Claim Keys**
-   - `rewardSchedulerSystem(...)` drains `world.runEvents` and assigns each event a floor-scoped claim key.
-   - `rewardClaimKeys` is the durable dedupe list; repeated facts with the same claim key are ignored.
-   - Scheduler side effects:
-     - `OBJECTIVE_COMPLETED` stores `objectiveRewardClaimedKey`
-     - zone/rare milestone events append `zoneRewardClaimedKey` / `zoneRewardClaimedKeys`
-     - objective completion also grants a flat `OBJECTIVE_COMPLETION_GOLD` bonus
-   - Reward planning currently routes through `rewardDirector.ts`:
-     - `OBJECTIVE_COMPLETED` => `GRANT_RELIC`
-     - zone, rare, survive, chest, and level-up reward events currently resolve to `NO_REWARD`
-   - `GRANT_GOLD` is applied immediately.
-   - `GRANT_RELIC` with a valid source enqueues a `RELIC_PICK` ticket into `world.rewardTickets`.
-
-7. **Reward Presentation and UI State Handoff**
-   - `runRewardPipeline(...)` is the top-level orchestration wrapper in `game.ts`.
-   - It runs in two phases:
-     - core facts before audio: objective/rare/survive/level-up
-     - chest facts after audio, so chest pickup SFX is never skipped by an early reward-menu return
-   - `rewardPresenterSystem(...)`:
-     - only runs while `world.state === "RUN"`
-     - refuses to open if reward UI is already active
-     - activates the oldest pending reward ticket
-     - calls `beginRelicReward(...)`
-     - sets `world.state = "REWARD"` if a reward menu actually opened
-   - The relic reward UI callback in `game.ts`:
-     - chooses the relic
-     - resolves the active reward ticket
-     - re-renders reward state
-     - then either advances immediately or returns the game to `RUN`
-
-8. **Countdown, Outcomes, and Floor Advancement**
-   - After objective resolution and the first reward-pipeline pass, `game.ts` may start the floor-end countdown through `maybeStartFloorEndCountdown(...)`.
-   - The countdown only starts once per completed floor and only after at least one objective is complete.
-   - `tickFloorEndCountdown(...)` advances the timer; `finishFloorEndCountdown()` closes reward UI state and re-attempts advancement.
-   - `outcomeSystem(...)` applies `objectiveEvents` outcomes through a small handler table (`SET_RUN_STATE`, `SET_GAME_STATE`).
-   - Current built-in objective specs define empty `outcomes`, so standard floor completion is driven by `tryAdvanceAfterObjectiveCompletion()`, not by `outcomeSystem(...)`.
-   - `tryAdvanceAfterObjectiveCompletion()`:
-     - requires a completed objective
-     - refuses to advance during active reward UI or an in-progress countdown
-     - commits floor clear once through `commitCurrentNodeClear(...)` / `commitFloorClear(...)`
-     - increments `runHeat`
-     - then resolves one of:
-       - deterministic delve picker
-       - delve-map destination choice
-       - final run victory
-       - ordinary next-floor completion
-   - Vendor/heal interactions use `pendingAdvanceToNextFloor`; advancement is deferred until dialog/shop closure through `resolvePendingAdvanceAfterInteractionClose()`.
-
-9. **Vendor Floor Progression**
-   - Vendor floors are progression-owned floor states, not generic shop overlays.
-   - Floor load seeds `world.vendor` with relic offers.
-   - Purchases go through `tryPurchaseVendorRelic(...)`, which:
-     - checks gold
-     - prevents duplicate relic ownership
-     - deducts gold
-     - applies the relic
-     - marks the offer sold
-   - Leaving the vendor shop completes `OBJ_VENDOR`, sets `pendingAdvanceToNextFloor`, and lets the normal reward/advance path resolve after the UI closes.
-
-## Core Invariants
-
-- Floor progression state must be reset before new objective wiring. A new floor must not inherit trigger signals, objective events, run events, reward tickets, or countdown state from the previous floor.
-- `currentObjectiveSpec`, `objectiveDefs`, and `objectiveStates` are the authoritative floor objective model.
-- `triggerSignals` is a transient per-frame fact buffer. It is cleared by `triggerSystem(...)` before that frame's trigger evaluation and may be appended to later in the same frame by objective sidecars.
-- `objectiveSystem(...)` is the canonical signal-driven objective resolver, but reward capture is based on `objectiveStates`, not only on `objectiveEvents`.
-- `objectiveEvents` only records status transitions; it is not the long-lived source of objective truth.
-- `world.runEvents` is the queue between progression fact capture and reward scheduling.
-- `world.rewardTickets` is the queue between reward scheduling and reward presentation.
-- Reward claim de-dup requires both:
-  - producer-side seen state for noisy frame facts
-  - scheduler-side `rewardClaimKeys` for durable claim semantics
-- `rewardPresenterSystem(...)` is the only runtime path in this system that opens reward UI and sets `world.state = "REWARD"`.
-- Current reward planning grants a relic ticket only for `OBJECTIVE_COMPLETED`. Zone, rare, survive, chest, and level-up run events currently do not open a reward menu.
-- `grantXp(...)` is the authoritative level-up path; it owns run XP/level mutation and emits `LEVEL_UP` run events.
-- `commitFloorClear(...)` must run at most once per cleared floor. `runHeat` increments through that commit path, not through ad hoc writes.
-- Standard objective completion does not currently rely on `outcomeSystem(...)`; objective specs ship with empty `outcomes`, and floor advancement is driven by the explicit advance gate in `game.ts`.
-- Vendor and heal progression complete through direct objective-state mutation plus deferred advancement, not through the trigger-system alone.
-
-## Design Constraints
-
-- The progression pipeline remains layered: trigger/objective facts -> `runEvents` -> reward planning -> `rewardTickets` -> reward UI / advancement. Skipping a layer changes replay, dedupe, and gating semantics.
-- Reward/advance ordering in `game.ts` is architectural. Objective rewards must be offered before floor advancement, and chest-triggered rewards must remain after audio so chest SFX is preserved.
-- Floor-scoped reset before `initObjectivesForFloor(...)` is mandatory. Removing or weakening that reset creates stale-state instant-completion bugs.
-- Claim-key dedupe is mandatory for reward issuance. New rewardable run events must define a stable claim key and scheduler path.
-- Objective completion must remain observable from `objectiveStates`, not only from `objectiveEvents`, because some current progression paths complete objectives imperatively.
-- Run-heat progression must stay single-commit per cleared floor. Any alternative path that increments `runHeat` outside the clear-commit helper is drift.
-
-## Dependencies (In/Out)
+## Dependencies
 
 ### Incoming
 
-- World state, event buffers, and floor/run-state fields from `src/engine/world/world.ts`
-- Active-map trigger defs, overlay trigger defs, and surface/walkability queries from the map system
-- `ENEMY_KILLED` events, chest-open requests, and room-exit gating pressure from combat/sim systems
-- Boss runtime status from `src/game/bosses/bossRuntime.ts` for `ACT_BOSS` objectives
-- Relic reward option generation and reward application from `src/game/combat_mods/rewards/relicRewardFlow.ts`
-- Gold and XP mutation helpers from the economy layer
-- Vendor/relic content registries used to generate or apply relic offers
-- UI callbacks in `game.ts` that choose rewards, confirm healing, or leave the vendor
+- World progression fields from `src/engine/world/world.ts`
+- Active-map and overlay trigger defs plus map walkability
+- `ENEMY_KILLED`, chest-open requests, room-exit pressure from sim/combat
+- Boss runtime from `src/game/bosses/bossRuntime.ts`
+- Relic reward option/apply path from `src/game/combat_mods/rewards/relicRewardFlow.ts`
+- Gold/XP helpers, vendor/relic registries, UI callbacks in `game.ts`
 
 ### Outgoing
 
-- Updated objective state in:
-  - `objectiveDefs`
-  - `objectiveStates`
-  - `objectiveEvents`
-- Progression queues and claim tracking in:
-  - `runEvents`
-  - `rewardTickets`
-  - `rewardClaimKeys`
-  - `activeRewardTicketId`
-  - `objectiveRewardClaimedKey`
-  - `zoneRewardClaimedKey`
-  - `zoneRewardClaimedKeys`
-- Floor progression control state in:
-  - `floorEndCountdown*`
-  - `pendingAdvanceToNextFloor`
-  - `floorClearCommitted`
-  - `runHeat`
-  - `delveScaling`
-- Navigation/overlay mirrors in:
-  - `zoneTrial`
-  - `rareTriple`
-- `world.state = "REWARD"` when a reward menu is opened
-- Vendor offer/sold state in `world.vendor`
+- Objective state: `objectiveDefs`, `objectiveStates`, `objectiveEvents`
+- Queues/claims: `runEvents`, `rewardTickets`, `rewardClaimKeys`, `activeRewardTicketId`, objective/zone claimed keys
+- Floor control: `floorEndCountdown*`, `pendingAdvanceToNextFloor`, `floorClearCommitted`, `runHeat`, `delveScaling`
+- Navigation mirrors: `zoneTrial`, `rareTriple`
+- `world.state = "REWARD"` on reward menu open
+- `world.vendor` offer/sold state
 
-## Extension Points
+## Extension
 
-- Add a new objective family by extending:
-  - `ObjectiveSpec`
-  - `objectiveSpecToObjectiveDefs(...)`
-  - any sidecar runtime that must emit matching trigger or run events
-- Add a new rewardable milestone by extending:
-  - `RunEvent`
-  - `rewardRunEventProducerSystem(...)`
-  - `claimKeyForRunEvent(...)`
-  - `rewardPlanForRunEvent(...)`
-  - reward ticket/presenter logic if it needs new UI
-- Add new objective outcomes by extending `outcomeHandlers` in `outcomeSystem.ts`
-- Add new vendor reward types by extending vendor offer state, purchase validation, and effect application
-- Add new zone/rare progression modes by extending the zone-trial and rare-triple sidecar systems without overloading base objective counting semantics
+- Objective family: `ObjectiveSpec`, `objectiveSpecToObjectiveDefs(...)`, sidecar facts/events
+- Rewardable milestone: `RunEvent`, producer, `claimKeyForRunEvent(...)`, `rewardPlanForRunEvent(...)`, ticket/presenter UI
+- Outcomes: `outcomeHandlers` in `outcomeSystem.ts`
+- Vendor reward types: offer state, purchase validation, effect application
+- Zone/rare modes: sidecar systems without overloading base objective counting
 
-## Failure Modes / Common Mistakes
+## Failure Modes
 
-- Forgetting `resetFloorProgressionState(...)` on floor load can cause immediate objective completion or duplicate rewards from stale queues.
-- Assuming `objectiveEvents` alone drive rewards is incorrect; vendor/heal completions mutate `objectiveStates` directly.
-- Adding a new `RunEvent` without a claim key or scheduler plan causes silent no-op rewards or duplicate reward issuance.
-- Opening reward UI directly instead of going through reward tickets breaks ordering, dedupe, and advancement gating.
-- Advancing the floor before the reward pipeline runs can skip objective rewards or bypass reward UI entirely.
-- Expecting `outcomeSystem(...)` to handle normal floor completion is incorrect in the current runtime; built-in objective specs define empty `outcomes`.
-- Treating rare or zone milestone rewards as fixed trigger identities is wrong; the reward pipeline currently uses completion order for the first two milestones.
-- Granting XP outside `grantXp(...)` skips level-up run events and cluster-jewel skill-point grants.
-- Wiring current vendor purchases through the unused event-driven `vendorSystem.ts` path would diverge from the live runtime, which purchases directly through `tryPurchaseVendorRelic(...)`.
+- Missing reset causes stale instant completion or duplicate rewards.
+- `objectiveEvents` alone miss vendor/heal direct completions.
+- New `RunEvent` without claim key/plan can no-op or duplicate rewards.
+- Direct reward UI opens break ordering, dedupe, and advancement gating.
+- Advancing before reward pipeline skips rewards/UI.
+- Expecting `outcomeSystem(...)` to handle normal completion is wrong today.
+- Rare/zone milestones use completion order for first two rewards, not fixed trigger identity.
+- XP outside `grantXp(...)` skips level-up run events and skill-point grants.
+- Current vendor purchases must use `tryPurchaseVendorRelic(...)`, not unused event-driven `vendorSystem.ts`.
 
-## Verification Status
+## Verification
 
-- Status: `Verified`
-- Inferred items: none
-
-## Last Reviewed
-
-- `2026-04-08`
+`Verified`; inferred: none; reviewed `2026-04-08`.

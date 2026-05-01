@@ -2,34 +2,26 @@
 
 ## Purpose
 
-- Orchestrate application bootstrap, app-level state transitions, loading-stage execution, pause gating, and the top-level frame loop.
-- Decide when the game is booting, showing menus, loading content, updating simulation, or rendering a paused/live run.
+Own application bootstrap, app-level state transitions, loading-stage execution, pause gating, and the top-level `requestAnimationFrame` loop that decides when the app boots, menus, loads, updates, or renders.
 
 ## Scope
 
-- `bootstrap()` and the top-level `requestAnimationFrame` loop in `src/main.ts`
-- App-level state control via `AppState`, `RunState`, and `AppStateController`
+- `bootstrap()` and frame loop in `src/main.ts`
+- `AppState`, `RunState`, `AppStateController`
 - Pause gating via `togglePause()`
-- Loading orchestration via `createLoadingController()` and its hooks
-- The public `createGame()` runtime surface used by `src/main.ts`:
-  - start intent queue/consume
-  - floor-load intent queue/consume
-  - map/start preparation
-  - floor-load preparation/finalization
-  - `update()`
-  - `render()`
-  - `quitRunToMenu()`
-- Top-level UI visibility sync that is keyed directly off app/run state
+- Loading orchestration via `createLoadingController()` and hooks
+- `createGame()` runtime surface used by `main.ts`: start/floor intents, map/start prep, floor-load prep/finalize, `update()`, `render()`, `quitRunToMenu()`
+- Top-level UI visibility sync keyed from app/run state
 
 ## Non-scope
 
-- The internal gameplay systems executed by `game.update()` such as combat, movement, projectiles, objectives, or bosses
-- The internal world renderer executed by `game.render()`
-- The world data model defined in `src/engine/world/world.ts`
-- Detailed menu, settings, vendor, reward, or dialog UI implementations
-- Map compilation, sprite prewarming, and floor finalization internals beyond how this system sequences them
+- Systems inside `game.update()` such as combat, movement, objectives, bosses: `docs/canonical/core_simulation_combat_runtime.md`, `docs/canonical/progression_objectives_rewards.md`, `docs/canonical/boss_encounter_system.md`
+- Renderer internals inside `game.render()`: `docs/canonical/presentation_rendering_pipeline.md`
+- World data model: `docs/canonical/world_state_runtime_data_model.md`
+- Menu/settings/vendor/reward/dialog internals: `docs/canonical/ui_shell_menus_runtime_panels.md`, `docs/canonical/settings_overrides_debug_controls.md`
+- Map compilation, sprite prewarm, floor finalization internals beyond sequencing: `docs/canonical/map_compilation_activation_floor_topology.md`
 
-## Key Entrypoints
+## Entrypoints
 
 - `src/main.ts`
 - `src/game/game.ts`
@@ -38,165 +30,72 @@
 - `src/game/app/pauseController.ts`
 - `src/game/app/loadingScreen.ts`
 
-## Data Flow / Pipeline
+## Pipeline
 
-1. **Bootstrap**
-   - `bootstrap()` hides preboot screens, initializes user settings, applies audio preferences, mounts UI surfaces, configures 2D/WebGL canvases, and creates the `game` instance.
-   - `bootstrap()` also creates:
-     - `appStateController`
-     - `loadingController`
-     - pause/dev/settings UI glue
-     - frame-local runtime orchestration state such as `activeStartIntent`, `activeFloorIntent`, and `loadingDoneNextState`
+1. **Bootstrap**: `bootstrap()` hides preboot UI, initializes settings/audio, mounts UI surfaces, configures Canvas2D/WebGL canvases, creates `game`, `appStateController`, `loadingController`, pause/dev/settings glue, and frame-local orchestration state (`activeStartIntent`, `activeFloorIntent`, `loadingDoneNextState`).
+2. **BOOT**: frame loop starts in `AppState.BOOT`; `bootTick()` first runs `game.preloadBootAssets()` and `bootProgress = 0.5`, next sets `bootProgress = 1` and `MENU`. BOOT renders only loading screen.
+3. **MENU**: polls `game` for pending intents. `consumePendingFloorLoadIntent()` takes priority and enters `LOADING`. `consumePendingStartIntent()` handles starts: `SANDBOX` enters `LOADING`; `DELVE`/`DETERMINISTIC` call `prepareStartMap()` and `performPreparedStartIntent()` immediately, deferring loading until floor choice.
+4. **LOADING**: `beginMapLoad()` resets controller/profiler. `tick()` advances one fixed stage at a time: `COMPILE_MAP`, `PRECOMPUTE_STATIC_MAP`, `PREWARM_DEPENDENCIES`, `PREPARE_STRUCTURE_TRIANGLES`, `PRIME_AUDIO`, `SPAWN_ENTITIES`, `FINALIZE`. Start path: `prepareStartMap()` -> prewarm active map -> `performPreparedStartIntent()`. Floor path: `beginFloorLoad()` -> prewarm sprites -> `finalizeFloorLoad()`. LOADING renders only loading screen.
+5. **Post-Load**: after `loadingController.isDone()`, `main.ts` holds one extra loading frame before state change; transitions to `RUN` force `runState = PLAYING`.
+6. **RUN**: if `game.getWorld().state === "MENU"`, app returns to `MENU`; otherwise `game.update(dtReal)` runs only in `PLAYING`, while `game.render(dtReal)` always runs. Queued floor-load intent can return to `LOADING`.
+7. **Pause**: `togglePause()` only changes `runState` in `RUN`. Paused frames skip update and still render. Pause menu visibility is controlled in `main.ts`.
+8. **Run Exit**: `quitRunToMenu()` clears pending intents, prepared/floor-load context, world/menu state, overlays, and sets `world.state = "MENU"`. The frame loop observes and returns to `MENU`; pause-menu quit also sets `AppState.MENU` immediately.
+9. **First Visible RUN Frame**: after load into RUN, `markFirstVisibleFrame()` runs and sprite-readiness diagnostics log unresolved sprites.
 
-2. **Boot Phase**
-   - The frame loop starts in `AppState.BOOT`.
-   - `bootTick()` runs from the frame loop:
-     - first pass: `game.preloadBootAssets()` and `bootProgress = 0.5`
-     - next pass: `bootProgress = 1` and `appState = MENU`
-   - BOOT frames render only the loading screen.
+## Invariants
 
-3. **Menu Phase**
-   - `AppState.MENU` polls the `game` instance for pending intents.
-   - `consumePendingFloorLoadIntent()` takes priority and moves the app into `LOADING`.
-   - `consumePendingStartIntent()` then handles queued run starts:
-     - `SANDBOX`: enters `LOADING`
-     - `DELVE` and `DETERMINISTIC`: call `prepareStartMap()` and `performPreparedStartIntent()` immediately and stay out of `LOADING` until a floor is chosen
+- `AppStateController` starts with `appState = BOOT`, `runState = PLAYING`.
+- `togglePause()` returns `false` and does nothing outside `RUN`.
+- `game.update()` requires `appState === RUN` and `runState === PLAYING`.
+- `game.render()` runs on every RUN frame, including pause.
+- Loading stages are fixed-order, one at a time.
+- `PREWARM_DEPENDENCIES` is the only fail-open loading stage: attempt limit `4`, elapsed limit `9000 ms`.
+- Loading screen remains visible one extra rendered frame after controller done.
+- `pendingStartIntent` and `pendingFloorIntent` are single-slot handoff fields; consume calls clear them.
+- `DELVE` and `DETERMINISTIC` do not enter `LOADING` at character selection time.
+- `beginFloorLoad()` sets `floorLoadContext` only after authored map activation succeeds and delve pending-node commit succeeds.
+- `finalizeFloorLoad()` sets `world.state = "RUN"` and clears `floorLoadContext`.
+- `quitRunToMenu()` clears pending start/floor intent, prepared start state, and floor-load context before menu state.
 
-4. **Loading Phase**
-   - `beginMapLoad()` resets the loading controller and starts a new profiler session.
-   - `tick()` advances a fixed stage pipeline:
-     1. `COMPILE_MAP`
-     2. `PRECOMPUTE_STATIC_MAP`
-     3. `PREWARM_DEPENDENCIES`
-     4. `PREPARE_STRUCTURE_TRIANGLES`
-     5. `PRIME_AUDIO`
-     6. `SPAWN_ENTITIES`
-     7. `FINALIZE`
-   - In `src/main.ts`, these stages are wired to either the start-intent path or the floor-load path:
-     - start path: `prepareStartMap()` -> prewarm active map -> `performPreparedStartIntent()`
-     - floor path: `beginFloorLoad()` -> prewarm floor sprites -> `finalizeFloorLoad()`
-   - While loading, frames render only the loading screen.
+## Constraints
 
-5. **Post-Load Transition**
-   - After `loadingController.isDone()` becomes true, `src/main.ts` holds one additional loading frame before changing app state.
-   - When transitioning into `RUN`, `runState` is forced to `PLAYING`.
+- App orchestration stays centralized in bootstrap/frame loop plus `createGame()` surface.
+- App pause is `AppStateController` state, not `world.runState`.
+- Simulation stepping remains gated by `RUN` + `PLAYING`; rendering may continue while paused.
+- Load-stage execution must go through `LoadingController`; ad hoc map/start/floor loading paths require doc updates.
 
-6. **Run Phase**
-   - In `AppState.RUN`, the frame loop first checks whether `game.getWorld().state === "MENU"`.
-   - If so, the app returns to `MENU`.
-   - Otherwise:
-     - if `runState === PLAYING`, `game.update(dtReal)` runs
-     - `game.render(dtReal)` always runs
-   - During RUN, a newly queued floor-load intent can move the app back into `LOADING`.
-
-7. **Pause Path**
-   - `togglePause()` only changes `runState` while `appState === RUN`.
-   - Paused RUN frames skip `game.update()` but still execute `game.render()`.
-   - Pause-menu visibility is controlled in `src/main.ts`, not in `togglePause()`.
-
-8. **Run Exit Path**
-   - `quitRunToMenu()` in `src/game/game.ts` clears pending runtime intents and floor-load context, resets world/menu-related state, hides overlays, and sets `world.state = "MENU"`.
-   - The top-level frame loop observes that world state and returns the app to `AppState.MENU`.
-   - The pause-menu quit action sets `AppState.MENU` immediately before calling `quitRunToMenu()`.
-
-9. **First Visible RUN Frame**
-   - After a load completes into RUN, `src/main.ts` marks the first visible RUN frame with `loadingController.markFirstVisibleFrame()`.
-   - The same path performs a sprite-readiness diagnostic and logs unresolved sprites if any remain.
-
-## Core Invariants
-
-- `AppStateController` initializes with:
-  - `appState = BOOT`
-  - `runState = PLAYING`
-- `togglePause()` returns `false` and does nothing unless the current app state is `RUN`.
-- `game.update()` is only called when:
-  - `appState === RUN`
-  - `runState === PLAYING`
-- `game.render()` is called on every RUN frame, including paused frames.
-- Loading stages run in fixed order and only one stage runs at a time.
-- `PREWARM_DEPENDENCIES` is the only loading stage in this controller with fail-open thresholds:
-  - attempt limit: `4`
-  - elapsed limit: `9000 ms`
-- The loading screen remains visible for one extra rendered frame after the loading controller reports done.
-- `pendingStartIntent` and `pendingFloorIntent` in `src/game/game.ts` are single-slot handoff fields, not multi-entry queues.
-- `consumePendingStartIntent()` and `consumePendingFloorLoadIntent()` clear the stored intent when read.
-- `DELVE` and `DETERMINISTIC` start intents do not enter `LOADING` at character selection time.
-- `beginFloorLoad()` sets `floorLoadContext` only after authored map activation succeeds and, for delve runs, pending-node commit succeeds.
-- `finalizeFloorLoad()` returns the runtime to `world.state = "RUN"` and clears `floorLoadContext`.
-- `quitRunToMenu()` clears:
-  - pending start intent
-  - pending floor intent
-  - prepared start state
-  - floor-load context
-  before leaving the runtime in menu state
-
-## Design Constraints
-
-- App-level runtime orchestration must remain centralized in the top-level bootstrap/frame-loop path plus the `createGame()` runtime surface.
-- App pause state must be owned by `AppStateController`; it must not be modeled by `world.runState`.
-- Simulation stepping must remain gated by `appState === RUN` and `runState === PLAYING`.
-- Rendering of the world frame may continue while the app is paused.
-- Load-stage execution must go through `LoadingController`; map/start/floor loading stages must not be split into unrelated ad hoc entry paths without updating this document.
-
-## Dependencies (In/Out)
+## Dependencies
 
 ### Incoming
 
-- Browser frame scheduling via `requestAnimationFrame`
-- DOM/canvas references from `getDomRefs()`
-- User settings from `initUserSettings()` / `getUserSettings()`
-- UI-triggered start requests routed through:
-  - `startRun()`
-  - `startDeterministicRun()`
-  - `startSandboxRun()`
-- World-state exits signaled by `game.getWorld().state`
+- `requestAnimationFrame`
+- DOM/canvas refs from `getDomRefs()`
+- Settings from `initUserSettings()` / `getUserSettings()`
+- UI start requests through `startRun()`, `startDeterministicRun()`, `startSandboxRun()`
+- World exits via `game.getWorld().state`
 
 ### Outgoing
 
-- Calls into the `createGame()` runtime surface:
-  - `preloadBootAssets()`
-  - `prepareStartMap()`
-  - `performPreparedStartIntent()`
-  - `beginFloorLoad()`
-  - `prewarmFloorLoadSprites()`
-  - `prepareRuntimeStructureTrianglesForLoading()`
-  - `finalizeFloorLoad()`
-  - `update()`
-  - `render()`
-  - `quitRunToMenu()`
-- Calls into loading/profiling support:
-  - `createLoadingController()`
-  - `attachLoadProfilerGlobal()`
-  - `markFirstVisibleFrame()`
-- Calls into app-shell helpers:
-  - pause menu mounting/rendering
-  - settings/dev-tools refresh hooks
-  - world-backend visibility sync
+- `createGame()` calls: `preloadBootAssets()`, `prepareStartMap()`, `performPreparedStartIntent()`, `beginFloorLoad()`, `prewarmFloorLoadSprites()`, `prepareRuntimeStructureTrianglesForLoading()`, `finalizeFloorLoad()`, `update()`, `render()`, `quitRunToMenu()`
+- Loading/profiling calls: `createLoadingController()`, `attachLoadProfilerGlobal()`, `markFirstVisibleFrame()`
+- Shell calls: pause menu mount/render, settings/dev refresh hooks, backend visibility sync
 
-## Extension Points
+## Extension
 
-- `LoadingHooks` in `createLoadingController()`
-- `LoadingStage` and the `stageOrder` sequence in `src/game/app/loadingFlow.ts`
-- `StartIntent` and the queue/consume handoff in `src/game/game.ts`
-- Load-profiler subphases via:
-  - `runWithLoadProfilerSubphase()`
-  - `runWithLoadProfilerSubphaseAsync()`
-- The public runtime surface returned by `createGame()`
+- `LoadingHooks`, `LoadingStage`, and `stageOrder` in `src/game/app/loadingFlow.ts`
+- `StartIntent` and intent handoff in `src/game/game.ts`
+- Load-profiler subphases via `runWithLoadProfilerSubphase()` and `runWithLoadProfilerSubphaseAsync()`
+- Public runtime surface returned by `createGame()`
 
-## Failure Modes / Common Mistakes
+## Failure Modes
 
-- Calling `togglePause()` outside `AppState.RUN` has no effect.
-- Expecting a loading screen immediately after selecting a character for `DELVE` or `DETERMINISTIC` is incorrect; those modes defer loading until a floor is selected.
-- `beginFloorLoad()` can return `false` and reopen the delve map when floor entry cannot be committed or no valid authored map can be resolved.
-- `PREWARM_DEPENDENCIES` can fail-open after its configured attempt/elapsed limits; load completion does not guarantee that stage finished with `completed` status.
-- Returning to menu by mutating only `world.state` does not immediately switch the app loop out of `RUN`; the top-level frame loop performs that transition on the next frame unless another path sets `AppState.MENU` directly.
-- Because start and floor intents are single-slot fields, an unconsumed intent can be overwritten by a later write.
+- `togglePause()` outside `RUN` has no effect.
+- `DELVE`/`DETERMINISTIC` character selection does not show loading until floor selection.
+- `beginFloorLoad()` can fail and reopen delve map when floor commit or map resolution fails.
+- `PREWARM_DEPENDENCIES` fail-open means load completion may not mean `completed` status.
+- Mutating only `world.state` to menu switches app loop on the next frame unless another path sets `AppState.MENU`.
+- Single-slot intents can be overwritten by later writes before consumption.
 
-## Verification Status
+## Verification
 
-- Status: `Verified`
-- Inferred items: none
-
-## Last Reviewed
-
-- `2026-04-08`
+`Verified`; inferred: none; reviewed `2026-04-08`.

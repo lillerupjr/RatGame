@@ -1,24 +1,24 @@
 import { TextStyle } from "pixi.js";
 
 // ── Color constants ──────────────────────────────────────────────────────────
-// Converted from the prototype's oklch palette to hex.
+// Cyberpunk navy/cyan palette.
 export const COLORS = {
-  bg:          0x110d0b,
-  bgPanel:     0x1a1512,
-  bgPanel2:    0x1f1915,
-  border:      0x3d2e1f,
-  borderGold:  0x9a7940,
-  gold:        0xd4a84a,
-  goldDim:     0x8a6b30,
-  text:        0xe0d0b8,
-  textDim:     0x9a8870,
-  textMuted:   0x645848,
-  green:       0x3db55a,
+  bg:          0x07111e,
+  bgPanel:     0x0a1628,
+  bgPanel2:    0x081422,
+  border:      0x1b3a4a,   // cyan at ~0.18 alpha baked to solid
+  borderGold:  0x3b7480,   // cyan at ~0.50 alpha
+  gold:        0x76e8ff,   // cyan accent (replaces old gold)
+  goldDim:     0x416e80,   // cyan at ~0.55 alpha
+  text:        0xd9f6ff,
+  textDim:     0x7b9399,   // bee2eb at ~0.65 alpha
+  textMuted:   0x3d6872,   // bee2eb at ~0.32 alpha
+  green:       0x4ade80,
   amber:       0xd49530,
   crimson:     0xa03020,
   magic:       0x4488cc,
-  uncommon:    0x3db55a,
-  rare:        0xd4a84a,
+  uncommon:    0x4ade80,
+  rare:        0x76e8ff,
   legendary:   0xd06030,
   white:       0xffffff,
   black:       0x000000,
@@ -41,93 +41,92 @@ export const RADII = {
 } as const;
 
 // ── Font family ──────────────────────────────────────────────────────────────
-const FONT_SERIF = "Cinzel, Georgia, serif";
-const FONT_SANS = "'Segoe UI', system-ui, sans-serif";
+const FONT_MONO = "'IBM Plex Mono', 'SFMono-Regular', Menlo, Monaco, Consolas, monospace";
 
 // ── Text style presets ───────────────────────────────────────────────────────
 export const TEXT_STYLES = {
   title: new TextStyle({
-    fontFamily: FONT_SERIF,
-    fontSize: 13,
+    fontFamily: FONT_MONO,
+    fontSize: 12,
     fontWeight: "700",
     fill: COLORS.gold,
-    letterSpacing: 2.6,
+    letterSpacing: 3.4,
   }),
   sectionHeader: new TextStyle({
-    fontFamily: FONT_SERIF,
+    fontFamily: FONT_MONO,
     fontSize: 9,
     fill: COLORS.textMuted,
     letterSpacing: 1.3,
   }),
   body: new TextStyle({
-    fontFamily: FONT_SANS,
+    fontFamily: FONT_MONO,
     fontSize: 12,
     fill: COLORS.text,
   }),
   statLabel: new TextStyle({
-    fontFamily: FONT_SANS,
+    fontFamily: FONT_MONO,
     fontSize: 11,
     fill: COLORS.textDim,
     letterSpacing: 0.4,
   }),
   statValue: new TextStyle({
-    fontFamily: FONT_SANS,
-    fontSize: 13,
+    fontFamily: FONT_MONO,
+    fontSize: 12,
     fontWeight: "600",
-    fill: COLORS.text,
+    fill: COLORS.gold,
   }),
   muted: new TextStyle({
-    fontFamily: FONT_SANS,
+    fontFamily: FONT_MONO,
     fontSize: 11,
     fill: COLORS.textMuted,
   }),
   accent: new TextStyle({
-    fontFamily: FONT_SERIF,
+    fontFamily: FONT_MONO,
     fontSize: 11,
     fill: COLORS.green,
     letterSpacing: 0.9,
   }),
   ringName: new TextStyle({
-    fontFamily: FONT_SERIF,
-    fontSize: 17,
+    fontFamily: FONT_MONO,
+    fontSize: 13,
     fontWeight: "700",
     fill: COLORS.gold,
     letterSpacing: 0.7,
   }),
   ringFamily: new TextStyle({
-    fontFamily: FONT_SERIF,
+    fontFamily: FONT_MONO,
     fontSize: 9,
     fill: COLORS.gold,
     letterSpacing: 1.4,
   }),
   drawerStat: new TextStyle({
-    fontFamily: FONT_SANS,
-    fontSize: 13,
+    fontFamily: FONT_MONO,
+    fontSize: 11,
     fill: COLORS.text,
     letterSpacing: 0.3,
   }),
   drawerAction: new TextStyle({
-    fontFamily: FONT_SANS,
+    fontFamily: FONT_MONO,
     fontSize: 11,
     fill: COLORS.textMuted,
     letterSpacing: 0.5,
   }),
   slotLabel: new TextStyle({
-    fontFamily: FONT_SANS,
+    fontFamily: FONT_MONO,
     fontSize: 10,
     fill: COLORS.textDim,
   }),
   equipProgress: new TextStyle({
-    fontFamily: FONT_SANS,
+    fontFamily: FONT_MONO,
     fontSize: 10,
     fill: COLORS.textMuted,
   }),
   charName: new TextStyle({
-    fontFamily: FONT_SERIF,
+    fontFamily: FONT_MONO,
     fontSize: 18,
     fontWeight: "700",
     fill: COLORS.gold,
-    letterSpacing: 0.9,
+    letterSpacing: 1.1,
   }),
 } as const;
 

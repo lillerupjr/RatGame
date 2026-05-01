@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ring Equipment — Rat Hands</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    #root { width: 100%; height: 100%; }
+
+    @keyframes pulse-empty {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 0.85; }
+    }
+    @keyframes pulse-choose-empty {
+      0%, 100% { opacity: 0.75; transform: scale(1); box-shadow: 0 0 6px var(--c-green); }
+      50% { opacity: 1; transform: scale(1.2); box-shadow: 0 0 14px var(--c-green); }
+    }
+    @keyframes pulse-replace {
+      0%, 100% { opacity: 0.85; }
+      50% { opacity: 1; }
+    }
+    @keyframes float-ring {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-4px); }
+    }
+    @keyframes shimmer-border {
+      0% { opacity: 0.5; }
+      50% { opacity: 1; }
+      100% { opacity: 0.5; }
+    }
+
+    :root {
+      --c-bg:          oklch(0.07 0.02 25);
+      --c-bg-panel:    oklch(0.10 0.02 25);
+      --c-bg-panel2:   oklch(0.12 0.015 25);
+      --c-border:      oklch(0.22 0.04 50 / 0.65);
+      --c-border-gold: oklch(0.60 0.10 80 / 0.45);
+      --c-gold:        oklch(0.78 0.13 80);
+      --c-gold-dim:    oklch(0.52 0.08 80);
+      --c-text:        oklch(0.88 0.025 70);
+      --c-text-dim:    oklch(0.58 0.02 70);
+      --c-text-muted:  oklch(0.38 0.015 70);
+      --c-green:       oklch(0.62 0.14 145);
+      --c-amber:       oklch(0.74 0.16 68);
+      --c-crimson:     oklch(0.52 0.18 20);
+      --c-magic:       oklch(0.68 0.14 235);
+      --c-uncommon:    oklch(0.62 0.14 145);
+      --c-rare:        oklch(0.78 0.13 80);
+      --c-legendary:   oklch(0.74 0.20 30);
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--c-border); border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+      "handsGlow": false,
+      "ringScale": 1.8,
+      "showLore": true,
+      "dimBackground": true
+    }/*EDITMODE-END*/;
+
+    // ── Data ──────────────────────────────────────────────────────────────────
+
+    const RARITY_META = {
+      magic:     { label: 'Magic',     cssVar: 'var(--c-magic)'    },
+      uncommon:  { label: 'Uncommon',  cssVar: 'var(--c-uncommon)' },
+      rare:      { label: 'Rare',      cssVar: 'var(--c-rare)'     },
+      legendary: { label: 'Legendary', cssVar: 'var(--c-legendary)'},
+    };
+
+    const RINGS_DB = {
+      ashwalker: { id: 'ashwalker', name: "Ashwalker's Coil",    rarity: 'rare',      stats: ['+18 Shadow Damage', '+5% Move Speed'],                lore: 'Forged in the ashes of the Pale March.' },
+      ember:     { id: 'ember',     name: "Ember Band",           rarity: 'uncommon',  stats: ['+12% Fire Resistance', '+8 Vitality'],                 lore: 'Still warm, as if freshly pulled from a pyre.' },
+      widow:     { id: 'widow',     name: "Widow's Loop",         rarity: 'rare',      stats: ['+25 Vitality', '+3% Life on Hit'],                    lore: 'She wore it until the very end.' },
+      verdant:   { id: 'verdant',   name: "Verdant Signet",       rarity: 'magic',     stats: ['+8% Life Regen', '+12 Spell Power'],                  lore: 'Green as living wood. Green as old envy.' },
+      iron:      { id: 'iron',      name: "Ironbound Circle",     rarity: 'uncommon',  stats: ['+30 Armor', '+5 Strength'],                           lore: 'Unbroken through ten thousand blows.' },
+    };
+
+    const NEW_RING = {
+      id: 'pale_court', name: "Ring of the Pale Court", rarity: 'legendary',
+      stats: ['+45 Spell Power', '+15% Arcane Damage', '+10% Cooldown Reduction'],
+      lore: 'The court is long dead. The ring remembers every name.'
+    };
+
+    // Finger tip positions as % of the full image (1536×1024)
+    // Left hand: fingers fan left from center-left
+    // Right hand: mirror image
+    const INITIAL_SLOTS = [
+      { id: 'L0', label: 'Left Pinky',   px:  5.5, py: 31.3, ring: RINGS_DB.ashwalker },
+      { id: 'L1', label: 'Left Ring',    px: 14.3, py: 13.5, ring: RINGS_DB.ember },
+      { id: 'L2', label: 'Left Middle',  px: 20.2, py:  7.0, ring: null },
+      { id: 'L3', label: 'Left Index',   px: 26.7, py: 10.9, ring: RINGS_DB.widow },
+      { id: 'R0', label: 'Right Index',  px: 71.6, py: 10.9, ring: RINGS_DB.verdant },
+      { id: 'R1', label: 'Right Middle', px: 78.1, py:  7.0, ring: null },
+      { id: 'R2', label: 'Right Ring',   px: 85.0, py: 13.5, ring: RINGS_DB.iron },
+      { id: 'R3', label: 'Right Pinky',  px: 93.5, py: 31.3, ring: null },
+    ];
+
+    const STAT_DEFS = [
+      { key: 'Vitality',        base: 120, parse: s => s.includes('Vitality')        ? +s.match(/\d+/)[0] : 0, fmt: v => v,              unit: '' },
+      { key: 'Spell Power',     base: 85,  parse: s => s.includes('Spell Power')     ? +s.match(/\d+/)[0] : 0, fmt: v => v,              unit: '' },
+      { key: 'Armor',           base: 240, parse: s => s.includes('Armor')           ? +s.match(/\d+/)[0] : 0, fmt: v => v,              unit: '' },
+      { key: 'Strength',        base: 28,  parse: s => s.includes('Strength')        ? +s.match(/\d+/)[0] : 0, fmt: v => v,              unit: '' },
+      { key: 'Shadow Damage',   base: 0,   parse: s => s.includes('Shadow Damage')   ? +s.match(/\d+/)[0] : 0, fmt: v => v > 0 ? `+${v}` : v, unit: '' },
+      { key: 'Fire Resistance', base: 0,   parse: s => s.includes('Fire Resistance') ? +s.match(/[\d.]+/)[0] : 0, fmt: v => v > 0 ? `+${v}` : v, unit: '%' },
+      { key: 'Life Regen',      base: 1.2, parse: s => s.includes('Life Regen')      ? +s.match(/[\d.]+/)[0] : 0, fmt: v => `+${v.toFixed(1)}`, unit: '%/s' },
+      { key: 'Move Speed',      base: 100, parse: s => s.includes('Move Speed')      ? +s.match(/[\d.]+/)[0] : 0, fmt: v => v,              unit: '%' },
+    ];
+
+    function computeStats(slots) {
+      const totals = {};
+      STAT_DEFS.forEach(sd => { totals[sd.key] = sd.base; });
+      slots.forEach(slot => {
+        if (!slot.ring) return;
+        slot.ring.stats.forEach(stat => {
+          STAT_DEFS.forEach(sd => {
+            totals[sd.key] += sd.parse(stat);
+          });
+        });
+      });
+      return totals;
+    }
+
+    // ── Tooltip ───────────────────────────────────────────────────────────────
+    function Tooltip({ text, sub, color, visible, above }) {
+      if (!visible) return null;
+      return (
+        <div style={{
+          position: 'absolute',
+          [above ? 'bottom' : 'top']: above ? 'calc(100% + 8px)' : 'calc(100% + 8px)',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          whiteSpace: 'nowrap',
+          background: 'var(--c-bg-panel)',
+          border: `1px solid ${color || 'var(--c-border)'}`,
+          borderOpacity: 0.5,
+          padding: '5px 12px',
+          borderRadius: 3,
+          fontSize: 11,
+          fontFamily: 'Cinzel, serif',
+          color: color || 'var(--c-text-dim)',
+          pointerEvents: 'none',
+          zIndex: 200,
+          letterSpacing: '0.04em',
+          boxShadow: `0 4px 20px oklch(0 0 0 / 0.6)`,
+        }}>
+          {text}
+          {sub && <span style={{ color: 'var(--c-text-muted)', marginLeft: 8, fontSize: 9 }}>{sub}</span>}
+        </div>
+      );
+    }
+
+    // ── Ring Slot ─────────────────────────────────────────────────────────────
+    function RingSlot({ slot, isSelected, mode, ringScale, onSelect, onChoose }) {
+      const [hovered, setHovered] = useState(false);
+      const isChoose = mode === 'choose-slot';
+      const isEmpty = !slot.ring;
+      const rarityColor = slot.ring ? RARITY_META[slot.ring.rarity].cssVar : null;
+
+      const SIZE = Math.round(30 * ringScale);
+      const SIZE_SEL = Math.round(42 * ringScale);
+
+      const handleClick = () => {
+        if (isChoose) { onChoose(slot.id); return; }
+        if (!isEmpty) onSelect(slot.id);
+      };
+
+      const tooltipText = isChoose
+        ? (isEmpty ? `Equip here` : `Replace ring`)
+        : (isEmpty ? 'Empty' : slot.ring.name);
+      const tooltipSub = isChoose
+        ? slot.label
+        : (slot.ring ? RARITY_META[slot.ring.rarity].label : slot.label);
+      const tooltipColor = isChoose
+        ? (isEmpty ? 'var(--c-green)' : 'var(--c-amber)')
+        : rarityColor;
+
+      return (
+        <div
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          onClick={handleClick}
+          style={{
+            position: 'absolute',
+            left: `${slot.px}%`,
+            top: `${slot.py}%`,
+            transform: 'translate(-50%, -50%)',
+            zIndex: isSelected ? 12 : 6,
+            cursor: (isChoose || !isEmpty) ? 'pointer' : 'default',
+          }}
+        >
+          {!isEmpty ? (
+            // ── Equipped ──
+            <div style={{ position: 'relative' }}>
+              {/* Float wrapper */}
+              <div style={{
+                animation: isSelected ? 'float-ring 2.2s ease-in-out infinite' : 'none',
+                transition: 'transform 0.2s ease',
+                transform: `scale(${hovered && !isSelected ? 1.18 : 1})`,
+              }}>
+                <img
+                  src="uploads/Ring2.png"
+                  alt={slot.ring.name}
+                  style={{
+                    width: isSelected ? SIZE_SEL : SIZE,
+                    height: isSelected ? SIZE_SEL : SIZE,
+                    objectFit: 'contain',
+                    display: 'block',
+                    imageRendering: 'pixelated',
+                    transition: 'filter 0.25s ease, width 0.3s cubic-bezier(0.34,1.3,0.64,1), height 0.3s cubic-bezier(0.34,1.3,0.64,1)',
+                    filter: isSelected
+                      ? `drop-shadow(0 0 8px ${rarityColor}) drop-shadow(0 0 18px ${rarityColor})`
+                      : isChoose
+                        ? `drop-shadow(0 0 6px var(--c-amber)) brightness(0.9)`
+                        : hovered
+                          ? `drop-shadow(0 0 7px ${rarityColor})`
+                          : `drop-shadow(0 0 3px ${rarityColor}80)`,
+                  }}
+                />
+              </div>
+
+              {/* Selection ring */}
+              {isSelected && (
+                <div style={{
+                  position: 'absolute', inset: -5,
+                  borderRadius: '50%',
+                  border: `1.5px solid ${rarityColor}`,
+                  animation: 'shimmer-border 2s ease-in-out infinite',
+                  pointerEvents: 'none',
+                }} />
+              )}
+
+              {/* Replace badge (choose mode) */}
+              {isChoose && (
+                <div style={{
+                  position: 'absolute', top: -7, right: -7,
+                  width: 15, height: 15, borderRadius: '50%',
+                  background: 'var(--c-amber)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 9, fontWeight: 900, color: '#1a1000',
+                  animation: 'pulse-replace 1.4s ease-in-out infinite',
+                  boxShadow: '0 0 8px var(--c-amber)',
+                }}>↺</div>
+              )}
+            </div>
+          ) : (
+            // ── Empty ──
+            <div style={{
+              width: isChoose ? 20 : 14,
+              height: isChoose ? 20 : 14,
+              borderRadius: '50%',
+              border: `1.5px ${isChoose ? 'solid' : 'dashed'} ${isChoose ? 'var(--c-green)' : 'var(--c-gold-dim)'}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: isChoose ? 'var(--c-green)' : 'var(--c-gold-dim)',
+              fontSize: 10, fontWeight: 700,
+              transition: 'all 0.2s',
+              animation: isChoose
+                ? 'pulse-choose-empty 1.5s ease-in-out infinite'
+                : 'pulse-empty 2.8s ease-in-out infinite',
+            }}>
+              {isChoose && '+'}
+            </div>
+          )}
+
+          <Tooltip text={tooltipText} sub={tooltipSub} color={tooltipColor} visible={hovered} above />
+        </div>
+      );
+    }
+
+    // ── Stats Panel ───────────────────────────────────────────────────────────
+    function StatsPanel({ slots }) {
+      const stats = computeStats(slots);
+      const equipped = slots.filter(s => s.ring).length;
+
+      return (
+        <div style={{
+          width: 264,
+          flexShrink: 0,
+          height: '100%',
+          background: 'var(--c-bg-panel)',
+          borderLeft: '1px solid var(--c-border)',
+          display: 'flex',
+          flexDirection: 'column',
+          fontFamily: 'Cinzel, serif',
+          overflow: 'hidden',
+        }}>
+          {/* Header */}
+          <div style={{ padding: '16px 20px 14px', borderBottom: '1px solid var(--c-border)' }}>
+            <div style={{ fontSize: 9, color: 'var(--c-gold-dim)', letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 6 }}>Character</div>
+            <div style={{ fontSize: 18, color: 'var(--c-gold)', fontWeight: 700, letterSpacing: '0.05em', marginBottom: 2 }}>Gnaw</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ height: 3, flex: 1, background: 'oklch(0.15 0.02 25)', borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{ width: `${(equipped / 8) * 100}%`, height: '100%', background: 'var(--c-gold-dim)', borderRadius: 2, transition: 'width 0.4s ease' }} />
+              </div>
+              <span style={{ fontSize: 10, color: 'var(--c-text-muted)', flexShrink: 0 }}>{equipped}/8</span>
+            </div>
+          </div>
+
+          {/* Equipped rings list */}
+          <div style={{ padding: '12px 20px 14px', borderBottom: '1px solid var(--c-border)' }}>
+            <div style={{ fontSize: 9, color: 'var(--c-text-muted)', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 10 }}>Equipped Rings</div>
+            {slots.map(slot => (
+              <div key={slot.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                marginBottom: 5, opacity: slot.ring ? 1 : 0.35,
+                transition: 'opacity 0.3s',
+              }}>
+                <div style={{
+                  width: 5, height: 5, borderRadius: '50%', flexShrink: 0,
+                  background: slot.ring ? RARITY_META[slot.ring.rarity].cssVar : 'var(--c-text-muted)',
+                  boxShadow: slot.ring ? `0 0 5px ${RARITY_META[slot.ring.rarity].cssVar}80` : 'none',
+                  transition: 'background 0.3s',
+                }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: 11, letterSpacing: '0.025em',
+                    color: slot.ring ? 'var(--c-text)' : 'var(--c-text-muted)',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>{slot.ring ? slot.ring.name : '— Empty —'}</div>
+                  <div style={{ fontSize: 9, color: 'var(--c-text-muted)', letterSpacing: '0.06em' }}>{slot.label}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Stats */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px' }}>
+            <div style={{ fontSize: 9, color: 'var(--c-text-muted)', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 12 }}>Attributes</div>
+            {STAT_DEFS.map(sd => (
+              <div key={sd.key} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+                paddingBottom: 8, marginBottom: 8,
+                borderBottom: '1px solid oklch(0.18 0.02 25)',
+              }}>
+                <span style={{ fontSize: 11, color: 'var(--c-text-dim)', letterSpacing: '0.04em' }}>{sd.key}</span>
+                <span style={{ fontSize: 13, color: 'var(--c-text)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                  {sd.fmt(stats[sd.key])}{sd.unit}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ── Ring Detail Panel ─────────────────────────────────────────────────────
+    function RingDetailPanel({ mode, selectedSlot, slots, showLore, onUnequip, onDismiss }) {
+      const isOpen = mode === 'selected' || mode === 'choose-slot';
+      const slot = selectedSlot ? slots.find(s => s.id === selectedSlot) : null;
+      const ring = mode === 'choose-slot' ? NEW_RING : (slot?.ring || null);
+      const rarColor = ring ? RARITY_META[ring.rarity].cssVar : 'var(--c-border)';
+
+      return (
+        <div style={{
+          height: isOpen ? 198 : 0,
+          overflow: 'hidden',
+          flexShrink: 0,
+          transition: 'height 0.42s cubic-bezier(0.4, 0, 0.2, 1)',
+          borderTop: `1px solid ${isOpen ? rarColor + '50' : 'var(--c-border)'}`,
+          background: 'var(--c-bg-panel)',
+          position: 'relative',
+        }}>
+          {/* Top accent line */}
+          {isOpen && ring && (
+            <div style={{
+              position: 'absolute', top: 0, left: 0, right: 0,
+              height: 1,
+              background: `linear-gradient(90deg, transparent, ${rarColor}90, ${rarColor}, ${rarColor}90, transparent)`,
+            }} />
+          )}
+
+          {ring && (
+            <div style={{
+              padding: '20px 28px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 22,
+              fontFamily: 'Cinzel, serif',
+            }}>
+              {/* Ring image */}
+              <div style={{ flexShrink: 0, paddingTop: 2 }}>
+                <img
+                  src="uploads/Ring2.png"
+                  alt={ring.name}
+                  style={{
+                    width: 78, height: 78,
+                    objectFit: 'contain',
+                    imageRendering: 'pixelated',
+                    filter: `drop-shadow(0 0 10px ${rarColor}) drop-shadow(0 0 22px ${rarColor}60)`,
+                    display: 'block',
+                    animation: mode === 'choose-slot' ? 'float-ring 2.5s ease-in-out infinite' : 'none',
+                  }}
+                />
+              </div>
+
+              {/* Ring info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 17, fontWeight: 700, color: rarColor, letterSpacing: '0.04em', lineHeight: 1 }}>
+                    {ring.name}
+                  </span>
+                  <span style={{
+                    fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase',
+                    color: rarColor, border: `1px solid ${rarColor}50`,
+                    padding: '2px 8px', borderRadius: 2, flexShrink: 0,
+                  }}>{RARITY_META[ring.rarity].label}</span>
+                </div>
+
+                {/* Stats */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 18px', marginBottom: showLore ? 6 : 12 }}>
+                  {ring.stats.map(s => (
+                    <span key={s} style={{
+                      fontSize: 13, color: 'var(--c-text)', letterSpacing: '0.03em',
+                    }}>{s}</span>
+                  ))}
+                </div>
+
+                {/* Lore */}
+                {showLore && (
+                  <div style={{
+                    fontSize: 11, color: 'var(--c-text-muted)', fontStyle: 'italic',
+                    letterSpacing: '0.03em', marginBottom: 12,
+                    lineHeight: 1.5,
+                    textWrap: 'pretty',
+                  }}>{ring.lore}</div>
+                )}
+
+                {/* Actions */}
+                {mode === 'selected' && slot && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontSize: 11, color: 'var(--c-text-muted)', letterSpacing: '0.05em' }}>
+                      {slot.label}
+                    </span>
+                    <PanelButton color="var(--c-crimson)" onClick={onUnequip}>Unequip</PanelButton>
+                    <PanelButton color="var(--c-border)" textColor="var(--c-text-dim)" onClick={onDismiss}>Close</PanelButton>
+                  </div>
+                )}
+
+                {mode === 'choose-slot' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{
+                        width: 6, height: 6, borderRadius: '50%',
+                        background: 'var(--c-green)',
+                        boxShadow: '0 0 8px var(--c-green)',
+                        animation: 'pulse-replace 1.3s ease-in-out infinite',
+                      }} />
+                      <span style={{ fontSize: 11, color: 'var(--c-green)', letterSpacing: '0.08em' }}>
+                        Choose a finger to equip
+                      </span>
+                    </div>
+                    <PanelButton color="var(--c-crimson)" onClick={onDismiss}>Discard</PanelButton>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function PanelButton({ color, textColor, onClick, children }) {
+      const [hovered, setHovered] = useState(false);
+      return (
+        <button
+          onClick={onClick}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          style={{
+            padding: '5px 16px',
+            background: hovered ? `${color}22` : 'transparent',
+            border: `1px solid ${color}${hovered ? 'cc' : '70'}`,
+            color: textColor || color,
+            fontFamily: 'Cinzel, serif',
+            fontSize: 10, letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            cursor: 'pointer', borderRadius: 2,
+            transition: 'all 0.2s',
+          }}
+        >{children}</button>
+      );
+    }
+
+    // ── App ───────────────────────────────────────────────────────────────────
+    function App() {
+      const [mode, setMode] = useState('default');
+      const [selectedSlot, setSelectedSlot] = useState(null);
+      const [slots, setSlots] = useState(INITIAL_SLOTS);
+      const [tweaks, setTweaks] = useState(TWEAK_DEFAULTS);
+      const [tweaksOpen, setTweaksOpen] = useState(false);
+
+      useEffect(() => {
+        const handler = e => {
+          if (e.data?.type === '__activate_edit_mode')   setTweaksOpen(true);
+          if (e.data?.type === '__deactivate_edit_mode') setTweaksOpen(false);
+        };
+        window.addEventListener('message', handler);
+        window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+        return () => window.removeEventListener('message', handler);
+      }, []);
+
+      const panelOpen = mode === 'selected' || mode === 'choose-slot';
+      const handsShiftY = panelOpen ? -50 : 0;
+
+      const switchDemoMode = (m) => {
+        if (m === 'default') {
+          setMode('default'); setSelectedSlot(null);
+        } else if (m === 'selected') {
+          const first = slots.find(s => s.ring);
+          if (first) { setMode('selected'); setSelectedSlot(first.id); }
+        } else if (m === 'choose-slot') {
+          setMode('choose-slot'); setSelectedSlot(null);
+        }
+      };
+
+      const handleSlotSelect = (slotId) => {
+        if (mode !== 'default' && mode !== 'selected') return;
+        if (mode === 'selected' && slotId === selectedSlot) {
+          setMode('default'); setSelectedSlot(null); return;
+        }
+        const s = slots.find(s => s.id === slotId);
+        if (s?.ring) { setMode('selected'); setSelectedSlot(slotId); }
+      };
+
+      const handleChooseSlot = (slotId) => {
+        setSlots(prev => prev.map(s => s.id === slotId ? { ...s, ring: NEW_RING } : s));
+        setMode('default'); setSelectedSlot(null);
+      };
+
+      const handleUnequip = () => {
+        setSlots(prev => prev.map(s => s.id === selectedSlot ? { ...s, ring: null } : s));
+        setMode('default'); setSelectedSlot(null);
+      };
+
+      const DEMO_LABELS = { default: 'Default', selected: 'Ring Selected', 'choose-slot': 'New Ring' };
+
+      return (
+        <div style={{
+          width: '100vw', height: '100vh',
+          background: 'var(--c-bg)',
+          display: 'flex', flexDirection: 'column',
+          fontFamily: 'Cinzel, serif',
+          userSelect: 'none',
+        }}>
+
+          {/* ── Top bar ── */}
+          <div style={{
+            height: 50, flexShrink: 0,
+            display: 'flex', alignItems: 'center',
+            padding: '0 20px',
+            background: 'var(--c-bg-panel)',
+            borderBottom: '1px solid var(--c-border)',
+            gap: 12,
+          }}>
+            {/* Title */}
+            <div style={{
+              fontSize: 13, fontWeight: 700, color: 'var(--c-gold)',
+              letterSpacing: '0.2em', textTransform: 'uppercase',
+            }}>Rings</div>
+
+            {/* Decorative separator */}
+            <div style={{ width: 1, height: 18, background: 'var(--c-border)', margin: '0 4px' }} />
+
+            <div style={{ flex: 1 }} />
+
+            {/* Demo state switcher */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 9, color: 'var(--c-text-muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginRight: 4 }}>
+                Preview:
+              </span>
+              {['default', 'selected', 'choose-slot'].map(m => {
+                const active = mode === m;
+                return (
+                  <button key={m} onClick={() => switchDemoMode(m)} style={{
+                    padding: '4px 13px',
+                    fontFamily: 'Cinzel, serif', fontSize: 10,
+                    letterSpacing: '0.06em', textTransform: 'uppercase',
+                    cursor: 'pointer', borderRadius: 2, transition: 'all 0.2s',
+                    background: active ? 'oklch(0.78 0.13 80 / 0.12)' : 'transparent',
+                    border: `1px solid ${active ? 'var(--c-gold)' : 'var(--c-border)'}`,
+                    color: active ? 'var(--c-gold)' : 'var(--c-text-muted)',
+                  }}>{DEMO_LABELS[m]}</button>
+                );
+              })}
+            </div>
+
+            <div style={{ width: 1, height: 18, background: 'var(--c-border)', margin: '0 6px' }} />
+
+            {/* Close */}
+            <div style={{
+              width: 26, height: 26,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              border: '1px solid var(--c-border)',
+              color: 'var(--c-text-muted)', fontSize: 12,
+              cursor: 'pointer', borderRadius: 2,
+            }}>✕</div>
+          </div>
+
+          {/* ── Main ── */}
+          <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
+
+            {/* Center column */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+
+              {/* Acquisition banner */}
+              <div style={{
+                position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20,
+                height: mode === 'choose-slot' ? 40 : 0,
+                overflow: 'hidden',
+                transition: 'height 0.35s ease',
+                background: 'linear-gradient(90deg, oklch(0.62 0.14 145 / 0.08), oklch(0.62 0.14 145 / 0.04))',
+                borderBottom: mode === 'choose-slot' ? '1px solid oklch(0.62 0.14 145 / 0.3)' : 'none',
+                display: 'flex', alignItems: 'center', padding: '0 24px', gap: 10,
+              }}>
+                <div style={{
+                  width: 5, height: 5, borderRadius: '50%',
+                  background: 'var(--c-green)', boxShadow: '0 0 8px var(--c-green)',
+                  animation: 'pulse-replace 1.4s ease-in-out infinite',
+                }} />
+                <span style={{ fontSize: 11, color: 'var(--c-green)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                  New Ring Found — Select a finger to equip
+                </span>
+              </div>
+
+              {/* Hands area */}
+              <div style={{
+                flex: 1, overflow: 'hidden',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'transform 0.45s cubic-bezier(0.34, 1.15, 0.64, 1)',
+                transform: `translateY(${handsShiftY}px)`,
+              }}>
+                {/* Ambient vignette behind hands */}
+                {tweaks.dimBackground && (
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    background: 'radial-gradient(ellipse 55% 55% at 50% 52%, oklch(0.13 0.025 30), transparent)',
+                    pointerEvents: 'none',
+                  }} />
+                )}
+
+                {/* Hands + slots container */}
+                <div style={{ position: 'relative', display: 'inline-block', zIndex: 1 }}>
+                  <img
+                    src="uploads/ratHands.png"
+                    alt="Rat Hands"
+                    draggable={false}
+                    style={{
+                      height: 'min(61vh, 500px)',
+                      width: 'auto',
+                      display: 'block',
+                      imageRendering: 'pixelated',
+                      filter: tweaks.handsGlow
+                        ? 'drop-shadow(0 0 35px oklch(0.45 0.08 45 / 0.35)) drop-shadow(0 0 70px oklch(0.35 0.06 45 / 0.15))'
+                        : 'none',
+                      transition: 'filter 0.3s',
+                    }}
+                  />
+
+                  {slots.map(slot => (
+                    <RingSlot
+                      key={slot.id}
+                      slot={slot}
+                      isSelected={selectedSlot === slot.id}
+                      mode={mode}
+                      ringScale={tweaks.ringScale}
+                      onSelect={handleSlotSelect}
+                      onChoose={handleChooseSlot}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Ring detail panel */}
+              <RingDetailPanel
+                mode={mode}
+                selectedSlot={selectedSlot}
+                slots={slots}
+                showLore={tweaks.showLore}
+                onUnequip={handleUnequip}
+                onDismiss={() => { setMode('default'); setSelectedSlot(null); }}
+              />
+            </div>
+
+            {/* Right — stats */}
+            <StatsPanel slots={slots} />
+          </div>
+
+          {/* ── Tweaks panel ── */}
+          {tweaksOpen && (
+            <div style={{
+              position: 'fixed', bottom: 20, right: 280,
+              width: 230, background: 'var(--c-bg-panel2)',
+              border: '1px solid var(--c-border)',
+              borderRadius: 4, padding: '16px 18px', zIndex: 300,
+              fontFamily: 'Cinzel, serif',
+              boxShadow: '0 8px 32px oklch(0 0 0 / 0.5)',
+            }}>
+              <div style={{ fontSize: 11, color: 'var(--c-gold)', letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 14 }}>Tweaks</div>
+
+              {[
+                { key: 'handsGlow',      label: 'Hand Glow',       type: 'bool' },
+                { key: 'showLore',       label: 'Show Lore',        type: 'bool' },
+                { key: 'dimBackground',  label: 'Dim Background',   type: 'bool' },
+              ].map(({ key, label, type }) => (
+                <label key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 11, fontSize: 11, color: 'var(--c-text-dim)', cursor: 'pointer' }}>
+                  {label}
+                  <input type="checkbox" checked={tweaks[key]} onChange={e => {
+                    const v = { ...tweaks, [key]: e.target.checked };
+                    setTweaks(v);
+                    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: v }, '*');
+                  }} />
+                </label>
+              ))}
+
+              <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: 'var(--c-text-dim)' }}>
+                Ring Scale
+                <input
+                  type="range" min={0.6} max={1.8} step={0.05}
+                  value={tweaks.ringScale} style={{ width: 90 }}
+                  onChange={e => {
+                    const v = { ...tweaks, ringScale: parseFloat(e.target.value) };
+                    setTweaks(v);
+                    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: v }, '*');
+                  }}
+                />
+              </label>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

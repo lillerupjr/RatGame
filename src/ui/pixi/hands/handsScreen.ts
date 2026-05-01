@@ -1,6 +1,6 @@
 import type { Application } from "pixi.js";
 import { getOrCreatePixiApp, showPixiCanvas, hidePixiCanvas } from "../pixiApp";
-import { tweenTo, Easing, cancelAllTweens } from "../pixiTween";
+import { tweenTo, Easing, cancelAllTweens, cancelTweensOf } from "../pixiTween";
 import {
   buildHandsSceneGraph,
   relayoutScene,
@@ -16,7 +16,8 @@ import {
   buildHandsScreenSnapshot,
   type HandsScreenSnapshot,
 } from "./handsDataBridge";
-import { getRingDefById } from "../../../game/progression/rings/ringContent";
+import { getRingDefById, getAllRingDefs } from "../../../game/progression/rings/ringContent";
+import { equipRing } from "../../../game/progression/rings/ringState";
 import type { FingerSlotId } from "../../../game/progression/rings/ringTypes";
 import { COLORS } from "../pixiTheme";
 import { describeStatMod } from "../../formatters";
@@ -47,6 +48,9 @@ export async function mountHandsScreen(
   let snapshot: HandsScreenSnapshot | null = null;
   let visible = false;
   let world: any = null;
+  let entranceAnimating = false;
+  let exitAnimating = false;
+  let devChooseSlotPending: string | null = null; // DEV-only: ring def ID for dev-triggered choose-slot
 
   // Debug slot tuner (DEV only)
   let debugTuner: DebugSlotTuner | null = null;
@@ -82,8 +86,19 @@ export async function mountHandsScreen(
   for (const sv of nodes.slotViews) {
     sv.onSlotClick = (slotId) => {
       if (state.mode === "choose-slot") {
+        // DEV-triggered: equip directly and stay in hands screen
+        if (devChooseSlotPending && world) {
+          equipRing(world, devChooseSlotPending, slotId);
+          devChooseSlotPending = null;
+          // Refresh snapshot and return to browse
+          snapshot = buildHandsScreenSnapshot(world);
+          state = createInitialHandsState();
+          drawerOpen = false;
+          handsShifted = false;
+          applyState();
+          return;
+        }
         dispatch({ type: "CHOOSE_SLOT", slotId });
-        // Actually equip
         callbacks.onEquipToSlot(slotId);
         return;
       }
@@ -99,6 +114,19 @@ export async function mountHandsScreen(
   nodes.closeBtn.setOnPress(() => {
     callbacks.onClose();
   });
+
+  // ── DEV: Add random ring button ──
+  if (import.meta.env.DEV && nodes.devAddRingBtn) {
+    nodes.devAddRingBtn.setOnPress(() => {
+      if (state.mode === "choose-slot") return; // already choosing
+      const allDefs = getAllRingDefs();
+      if (allDefs.length === 0) return;
+      const def = allDefs[Math.floor(Math.random() * allDefs.length)];
+      devChooseSlotPending = def.id;
+      snapshot = buildHandsScreenSnapshot(world, def.id);
+      dispatch({ type: "ENTER_CHOOSE_MODE", ringDefId: def.id });
+    });
+  }
 
   // ── Tick animations ──
   const tickFn = (ticker: { deltaMS: number }) => {
@@ -135,11 +163,20 @@ export async function mountHandsScreen(
         familyColor: slotSnap?.familyColor ?? COLORS.goldDim,
         isSelected: state.selectedSlotId === sv.slotId,
         mode: state.mode,
+        ringName: slotSnap?.ringName,
       });
     }
 
     // Stats rail
     nodes.statsRail.update(snapshot);
+
+    // Top bar mode text
+    if (state.mode === "choose-slot") {
+      nodes.topBarModeText.text = "CHOOSE SLOT";
+      nodes.topBarModeText.visible = true;
+    } else {
+      nodes.topBarModeText.visible = false;
+    }
 
     // Detail drawer content
     if (state.drawerOpen) {
@@ -188,14 +225,6 @@ export async function mountHandsScreen(
   function animateDrawer(open: boolean): void {
     if (open === drawerOpen) return;
     drawerOpen = open;
-    const targetH = open ? nodes.layout.drawerH : 0;
-    tweenTo(
-      { h: open ? 0 : nodes.layout.drawerH },
-      { h: targetH },
-      420,
-      Easing.cubicInOut,
-    ).then(() => {});
-    // Use a simple approach: set height directly since tweenTo operates on objects
     if (open) {
       nodes.detailDrawer.setDrawerHeight(nodes.layout.drawerH);
     } else {
@@ -216,6 +245,110 @@ export async function mountHandsScreen(
     nodes.acquisitionBanner.visible = show;
   }
 
+  // ── Entrance animation ──
+  async function playEntranceAnimation(): Promise<void> {
+    if (entranceAnimating) return;
+    entranceAnimating = true;
+    const layout = nodes.layout;
+
+    // Set initial states for all elements
+    nodes.bgOverlay.alpha = 0;
+    nodes.topBar.y = -layout.topBarH;
+
+    // Hands start below screen
+    const handsBaseY = layout.handsY - layout.topBarH;
+    const handsStartY = handsBaseY + layout.handsH * 1.15;
+    nodes.handsViewport.y = handsStartY;
+
+    // Stats rail starts off-screen right
+    nodes.statsRail.x = layout.screenW;
+
+    // All slots start hidden
+    for (const sv of nodes.slotViews) {
+      sv.alpha = 0;
+      sv.scale.set(0);
+    }
+
+    // 1. BG overlay fade (immediate, 350ms)
+    const bgTween = tweenTo(nodes.bgOverlay, { alpha: 1 }, 350, Easing.cubicOut);
+
+    // 2. Top bar slide down (immediate, 420ms)
+    const topBarTween = tweenTo(nodes.topBar, { y: 0 }, 420, Easing.decelerate);
+
+    // 3. Hands slide up (immediate, 680ms)
+    const handsTargetY = state.handsShiftActive ? handsBaseY + layout.handsShiftY : handsBaseY;
+    const handsTween = tweenTo(
+      nodes.handsViewport,
+      { y: handsTargetY },
+      680,
+      Easing.decelerateStrong,
+    );
+
+    // 4. Stats rail slide in (120ms delay, 420ms duration)
+    const statsRailFinalX = layout.screenW - layout.statsRailW;
+    const statsRailTween = new Promise<void>((resolve) => {
+      setTimeout(() => {
+        tweenTo(nodes.statsRail, { x: statsRailFinalX }, 420, Easing.decelerate).then(resolve);
+      }, 120);
+    });
+
+    // 5. Staggered slot pop-ins (560ms delay + 42ms stagger per slot)
+    const slotTweens = nodes.slotViews.map(
+      (sv, i) =>
+        new Promise<void>((resolve) => {
+          const delay = 560 + i * 42;
+          setTimeout(() => {
+            sv.alpha = 0;
+            sv.scale.set(0);
+            // Pop: scale 0 → 1.12 → 1
+            tweenTo(sv, { alpha: 1 }, 200, Easing.cubicOut);
+            tweenTo(sv.scale, { x: 1.12, y: 1.12 }, 200, Easing.cubicOut).then(() => {
+              tweenTo(sv.scale, { x: 1, y: 1 }, 180, Easing.cubicOut).then(resolve);
+            });
+          }, delay);
+        }),
+    );
+
+    await Promise.all([bgTween, topBarTween, handsTween, statsRailTween, ...slotTweens]);
+
+    // Update handsShifted flag so later shift animations don't jump
+    if (state.handsShiftActive) {
+      handsShifted = true;
+    }
+
+    entranceAnimating = false;
+  }
+
+  // ── Exit animation ──
+  async function playExitAnimation(): Promise<void> {
+    if (exitAnimating) return;
+    exitAnimating = true;
+    const layout = nodes.layout;
+
+    // Cancel any entrance tweens still running
+    cancelAllTweens();
+
+    // Animate everything out (fast ~300ms)
+    const bgTween = tweenTo(nodes.bgOverlay, { alpha: 0 }, 250, Easing.cubicOut);
+    const topBarTween = tweenTo(nodes.topBar, { y: -layout.topBarH }, 300, Easing.decelerate);
+    const handsTween = tweenTo(
+      nodes.handsViewport,
+      { y: nodes.handsViewport.y + layout.handsH * 0.5 },
+      300,
+      Easing.decelerate,
+    );
+    const statsRailTween = tweenTo(nodes.statsRail, { x: layout.screenW }, 300, Easing.decelerate);
+
+    // Fade slots quickly
+    for (const sv of nodes.slotViews) {
+      tweenTo(sv, { alpha: 0 }, 200, Easing.cubicOut);
+    }
+
+    await Promise.all([bgTween, topBarTween, handsTween, statsRailTween]);
+
+    exitAnimating = false;
+  }
+
   // ── Public API ──
   return {
     show(w: any, pendingRingDefId?: string | null) {
@@ -227,19 +360,38 @@ export async function mountHandsScreen(
       visible = true;
       nodes.screenRoot.visible = true;
       showPixiCanvas();
+      app.resize();
       relayoutScene(nodes);
       applyState();
+
+      // Play entrance animation
+      void playEntranceAnimation();
     },
 
     hide() {
-      visible = false;
-      nodes.screenRoot.visible = false;
-      hidePixiCanvas();
-      cancelAllTweens();
-      state = createInitialHandsState();
-      drawerOpen = false;
-      handsShifted = false;
-      if (debugTuner?.active) debugTuner.deactivate();
+      if (!visible) return;
+
+      // Play exit animation, then clean up
+      void playExitAnimation().then(() => {
+        visible = false;
+        nodes.screenRoot.visible = false;
+        hidePixiCanvas();
+        cancelAllTweens();
+        state = createInitialHandsState();
+        drawerOpen = false;
+        handsShifted = false;
+        devChooseSlotPending = null;
+        nodes.detailDrawer.setDrawerHeight(0);
+        if (debugTuner?.active) debugTuner.deactivate();
+
+        // Reset positions for next show
+        nodes.topBar.y = 0;
+        nodes.bgOverlay.alpha = 1;
+        for (const sv of nodes.slotViews) {
+          sv.alpha = 1;
+          sv.scale.set(1);
+        }
+      });
     },
 
     destroy() {

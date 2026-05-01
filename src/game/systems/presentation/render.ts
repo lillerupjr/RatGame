@@ -1,4 +1,8 @@
 // src/game/systems/render.ts
+// @system   presentation/rendering
+// @owns     top-level visual frame orchestration, context assembly, cache/backend routing, pass sequencing
+// @doc      docs/canonical/presentation_rendering_pipeline.md
+// @agents   no structure draw builders, heightmap shadow algorithms, or debug drawing; see structures/*, heightmapShadow/*, and debug/*
 
 import { type World } from "../../../engine/world/world";
 import { registry } from "../../content/registry";
@@ -8,23 +12,18 @@ import { EnemyId } from "../../content/enemies";
 import {
   getPlayerSkin,
   getPlayerSpriteFrame,
-  getPlayerSpriteFrameForDarknessPercent,
   playerSpritesReady,
 } from "../../../engine/render/sprites/playerSprites";
-import { type Dir8 } from "../../../engine/render/sprites/dir8";
 import {
   getEnemySpriteFrame,
-  getEnemySpriteFrameForDarknessPercent,
   preloadEnemySprites,
 } from "../../../engine/render/sprites/enemySprites";
 import {
   getVendorNpcSpriteFrame,
-  getVendorNpcSpriteFrameForDarknessPercent,
   preloadVendorNpcSprites,
   vendorNpcSpritesReady,
 } from "../../../engine/render/sprites/vendorSprites";
 import {
-  getPigeonFramesForClipAndScreenDirForDarknessPercent,
   preloadNeutralMobSprites,
 } from "../../../engine/render/sprites/neutralSprites";
 import {
@@ -35,14 +34,10 @@ import {
   facePiecesInViewForLayer,
   occluderLayers,
   occludersInViewForLayer,
-  overlaysInView,
   decalsInView,
   getActiveMap as getActiveCompiledMap,
   getSupportSurfaceAt,
   roadAreaWidthAt,
-  type RenderPiece,
-  type StampOverlay,
-  type ViewRect,
 } from "../../map/compile/kenneyMap";
 
 import { screenToWorld, worldDeltaToScreen, worldToScreen, ISO_X, ISO_Y } from "../../../engine/math/iso";
@@ -62,17 +57,10 @@ import {
   getRuntimeDecalSprite,
   getTileSpriteById,
   getSpriteById,
-  getSpriteByIdForDarknessPercent,
-  type LoadedImg,
 } from "../../../engine/render/sprites/renderSprites";
 import { VFX_CLIPS } from "../../content/vfxRegistry";
-import { getDecalSpriteId, type RuntimeDecalSetId } from "../../content/runtimeDecalConfig";
+import { type RuntimeDecalSetId } from "../../content/runtimeDecalConfig";
 import { roadMarkingDecalScale, shouldPixelSnapRoadMarking } from "../../roads/roadMarkingRender";
-import {
-  buildDiamondSourceQuad,
-  buildFlatTileDestinationQuad,
-} from "./renderCommandGeometry";
-import { orientedDims, seAnchorFromTopLeft } from "../../../engine/render/sprites/structureFootprintOwnership";
 import {
   type DebugOverlayContext,
 } from "../../../engine/render/debug/renderDebug";
@@ -80,10 +68,6 @@ import { configurePixelPerfect, snapPx } from "../../../engine/render/pixelPerfe
 import {
   renderAmbientDarknessOverlay,
 } from "./renderLighting";
-import { renderEntityShadow, type ShadowParams } from "./renderShadow";
-import { getHeightmapForSprite } from "../../../engine/render/sprites/heightmapLoader";
-import { compositeSceneHeightBuffer, type HeightmapStructureInstance } from "./heightmapShadow/sceneHeightBuffer";
-import { computeHeightmapShadowMask, DEFAULT_HEIGHTMAP_SHADOW_PARAMS } from "./heightmapShadow/heightmapRayMarch";
 import {
   resolveEnemyShadowFootOffset,
   resolveNeutralShadowFootOffset,
@@ -95,13 +79,10 @@ import {
   getUserSettings,
   resolveVerticalTiles,
 } from "../../../userSettings";
-import { type FireZoneVfx, renderFireZoneVfx } from "../../vfx/fireZoneVfx";
+import { renderFireZoneVfx } from "../../vfx/fireZoneVfx";
 import { TILE_ID_OCEAN } from "../../world/semanticFields";
 import { getZoneTrialObjectiveState } from "../../objectives/zoneObjectiveSystem";
-import { renderZoneObjectives } from "../../render/renderZoneObjectives";
 import {
-  resolveActivePaletteId,
-  resolveActivePaletteSwapWeights,
   resolveActivePaletteVariantKey,
 } from "../../render/activePalette";
 import { shouldApplyAmbientDarknessOverlay } from "../../render/renderDebugPolicy";
@@ -110,7 +91,6 @@ import { renderNavArrow } from "../../ui/navArrowRender";
 import { coinColorFromValue } from "../../economy/coins";
 import {
   getCurrencyFrame,
-  getCurrencyFrameForDarknessPercent,
 } from "../../content/loot/currencyVisual";
 import {
   beginRenderPerfFrame,
@@ -143,27 +123,19 @@ import {
 import { resolveEffectiveWorldAtlasMode, type EffectiveWorldAtlasMode } from "../../../settings/systemOverrides";
 import { ViewportTransform } from "./viewportTransform";
 import {
-  deriveFeetSortYFromKey,
   deriveStructureSouthTieBreakFromSeAnchor,
   KindOrder,
-  compareRenderKeys,
-  isGroundKindForRenderPass,
-  isWorldKindForRenderPass,
   resolveRenderZBand,
-  type RenderKey,
 } from "./worldRenderOrdering";
 import { buildRampRoadTiles } from "./canvasGroundChunkCache";
 import {
-  buildRuntimeStructureProjectedDraw,
   buildRuntimeStructureTriangleContextKey,
-  type RuntimeStructureAnchorPlacementDebug,
   type RuntimeStructureTriangleRect,
   rebuildMonolithicStructureTriangleCacheForMap,
 } from "../../structures/monolithicStructureGeometry";
 import {
   buildStructureShadowFrameContext,
 } from "./structureShadows/structureShadowFrameContext";
-import { drawTexturedQuad } from "./renderPrimitives/drawTexturedQuad";
 import {
   getDiamondFitCanvas,
   getFlippedOverlayImage,
@@ -182,7 +154,6 @@ import { syncCanvasGroundChunkCacheForFrame } from "./canvasGroundChunkCache";
 import { buildDebugFrameContext } from "./debug/debugFrameContext";
 import { executeDebugPass } from "./debug/renderDebugPass";
 import { prepareRenderFrame } from "./frame/prepareRenderFrame";
-import { drawVoidBackgroundOnce } from "./frame/backgroundPass";
 import { resolveCameraBootstrap } from "./frame/cameraBootstrap";
 import {
   buildViewportCulling,
@@ -208,7 +179,6 @@ import {
 } from "./backend/webglSurface";
 import {
   createRenderFrameBuilder,
-  enqueueWorldBandCommand,
   finalizeRenderFrame,
 } from "./frame/renderFrameBuilder";
 import { renderScreenOverlays } from "./ui/renderScreenOverlays";
@@ -223,6 +193,8 @@ import { resolveStructureOverlayAdmissionContext } from "./structures/structureO
 import { collectStructureOverlays } from "./structures/collectStructureOverlays";
 import { buildStructureSlices } from "./structures/buildStructureSlices";
 import { buildStructureDrawables } from "./structures/buildStructureDrawables";
+import { createStructureDrawBuilders } from "./structures/structureDrawBuilders";
+import { resolveHeightmapShadowMaskForFrame } from "./heightmapShadow/heightmapShadowFrame";
 import { resolveShadowSunDayCycleRuntime } from "./shadowSunDayCycleRuntime";
 import { createRenderWorld } from "../../../engine/render/creator/renderWorldCreator";
 import { WorldQuadWebGLBatcher } from "../../../engine/render/shared/batching/worldQuadWebGLBatcher";
@@ -242,7 +214,6 @@ const LOOT_GOBLIN_GLOW_INNER_RADIUS_MULT = 0.35;
 const LOOT_GOBLIN_GLOW_PULSE_MIN = 0.95;
 const LOOT_GOBLIN_GLOW_PULSE_RANGE = 0.3;
 const LOOT_GOBLIN_GLOW_PULSE_SPEED = 2.8;
-const STRUCTURE_SHADOW_V1_MAX_DARKNESS = 0.38;
 const LOGICAL_GROUND_SURFACE_ANCHOR_Y = 0.5;
 let lastEffectiveWorldAtlasMode: EffectiveWorldAtlasMode | null = null;
 type ScreenPt = { x: number; y: number };
@@ -380,23 +351,9 @@ export async function renderSystem(
   const camTx = viewport.camTx;
   const camTy = viewport.camTy;
   const s = viewport.worldScaleDevice;
-  // NEW: draw background once, world-locked to the camera
-  drawVoidBackgroundOnce(ctx, devW, devH, viewport);
   const camX = 0;
   const camY = 0;
   const worldToScreenPx = (xWorld: number, yWorld: number) => viewport.projectProjectedToDevice(xWorld, yWorld);
-  const drawAlignmentDot = (target: CanvasRenderingContext2D, color: string) => {
-    target.save();
-    target.fillStyle = color;
-    target.fillRect(Math.round(p0.x) - 1, Math.round(p0.y) - 1, 3, 3);
-    target.restore();
-  };
-
-  ctx.save();
-  viewport.applyWorld(ctx);
-  drawAlignmentDot(ctx, "rgba(255,0,255,0.9)"); // world
-  ctx.restore();
-
 
   // World-units per tile step (keep in sync with kenneyTiles constants)
   const T = KENNEY_TILE_WORLD;
@@ -416,7 +373,6 @@ export async function renderSystem(
   const STAIR_TOP_SCALE = 1;
   const STAIR_APRON_SCALE = 1;
   const WALL_APRON_SCALE = 1;
-  const VOID_TOP_SCALE = 1;
   const OCEAN_TOP_SCALE = 4;
   const OCEAN_ANIM_TIME_SCALE = 0.25;
   const OCEAN_BASE_FRAME_PX = 32;
@@ -426,7 +382,6 @@ export async function renderSystem(
   // Positive moves DOWN on screen; negative moves UP.
   // These do NOT affect layer/sort; they only shift draw Y.
   const STAIR_TOP_DY = (w as any).stairTopDy ?? 8;
-  const SHOW_SIDEWALK_VARIANT_DEBUG = (w as any).sidewalkVariantDebug ?? false;
   const SIDEWALK_SRC_SIZE = 128;
   const SIDEWALK_ISO_HEIGHT = 64;
 
@@ -473,8 +428,6 @@ export async function renderSystem(
   const LOG_STRUCTURE_OWNERSHIP_DEBUG = (w as any).structureOwnershipDebug ?? false;
   const loggedStructureAnchorDebugIds = new Set<string>();
   const loggedStructureOwnershipDebugIds = new Set<string>();
-
-  const floorFromZ = (z: number) => Math.ceil(z - 1e-6);
 
   const toScreen = (x: number, y: number) => {
     const p = worldToScreen(x, y);
@@ -568,410 +521,52 @@ export async function renderSystem(
     return best;
   };
 
-  type RenderPieceDraw = {
-    img: HTMLImageElement;
-    dx: number;
-    dy: number;
-    dw: number;
-    dh: number;
-    zVisual?: number;
-
-    flipX?: boolean;
-    scale?: number;
-    anchorPlacementDebugNoCamera?: RuntimeStructureAnchorPlacementDebug;
-  };
-
   type MaskDraw = (maskCtx: CanvasRenderingContext2D) => void;
   const entitySilhouetteMaskDraws: MaskDraw[] = [];
 
-    // Preserve caller transform (world camera / mask camera) per piece.
-    const drawRenderPieceTo = (target: CanvasRenderingContext2D, c: RenderPieceDraw) => {
-      const img = c.img;
-      if (!img || img.width <= 0 || img.height <= 0) return;
-      const scale = c.scale ?? 1;
-
-      target.save();
-      target.translate(snapPx(c.dx), snapPx(c.dy));
-      target.scale(scale, scale);
-      if (c.flipX) {
-        target.translate(c.dw, 0);
-        target.scale(-1, 1);
-      }
-      target.drawImage(img, 0, 0, c.dw, c.dh);
-      target.restore();
-    };
-    // Default draw to main ctx (unchanged behavior for most pieces)
-    const drawRenderPiece = (c: RenderPieceDraw) => drawRenderPieceTo(ctx, c);
-
-    const srcUvNW: ScreenPt = { x: 64, y: 0 };
-    const srcUvNE: ScreenPt = { x: 128, y: 32 };
-    const srcUvSE: ScreenPt = { x: 64, y: 64 };
-    const srcUvSW: ScreenPt = { x: 0, y: 32 };
-    const getRampQuadPoints = (tx: number, ty: number, renderAnchorY: number) => {
-      const anchorYOffset = SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5);
-      const sample = (wx: number, wy: number): ScreenPt => {
-        const p = worldToScreen(wx, wy);
-        const hz = tileHAtWorld(wx, wy);
-        return {
-          x: snapPx(p.x + camX),
-          y: snapPx(p.y + camY - hz * ELEV_PX - anchorYOffset),
-        };
-      };
-      const x0 = tx * T;
-      const y0 = ty * T;
+  const srcUvNW: ScreenPt = { x: 64, y: 0 };
+  const srcUvNE: ScreenPt = { x: 128, y: 32 };
+  const srcUvSE: ScreenPt = { x: 64, y: 64 };
+  const srcUvSW: ScreenPt = { x: 0, y: 32 };
+  const getRampQuadPoints = (tx: number, ty: number, renderAnchorY: number) => {
+    const anchorYOffset = SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5);
+    const sample = (wx: number, wy: number): ScreenPt => {
+      const p = worldToScreen(wx, wy);
+      const hz = tileHAtWorld(wx, wy);
       return {
-        nw: sample(x0, y0),
-        ne: sample(x0 + T, y0),
-        se: sample(x0 + T, y0 + T),
-        sw: sample(x0, y0 + T),
+        x: snapPx(p.x + camX),
+        y: snapPx(p.y + camY - hz * ELEV_PX - anchorYOffset),
       };
     };
-    const drawDiamondOnRampQuad = (
-      srcDiamond: HTMLCanvasElement,
-      tx: number,
-      ty: number,
-      renderAnchorY: number,
-    ) => {
-      const q = getRampQuadPoints(tx, ty, renderAnchorY);
-      drawTexturedQuad(
-        ctx,
-        srcDiamond,
-        0,
-        0,
-        srcDiamond.width,
-        srcDiamond.height,
-        q,
-        buildDiamondSourceQuad(srcDiamond.width, srcDiamond.height),
-      );
-    };
-
-    const drawRuntimeSidewalkTop = (
-      tx: number,
-      ty: number,
-      zBase: number,
-      renderAnchorY: number,
-      family: "sidewalk" | "asphalt" | "park",
-      variantIndex: number,
-      rotationQuarterTurns: 0 | 1 | 2 | 3,
-    ) => {
-      const src = getTileSpriteById(`tiles/floor/${family}/${variantIndex}`);
-      if (!src.ready || !src.img || src.img.width <= 0 || src.img.height <= 0) return;
-
-      const baseBaked = getRuntimeIsoTopCanvas(src.img, rotationQuarterTurns);
-      if (!baseBaked) return;
-      const isRampRoadTile = family === "asphalt" && rampRoadTiles.has(`${tx},${ty}`);
-      if (isRampRoadTile) {
-        drawDiamondOnRampQuad(baseBaked, tx, ty, LOGICAL_GROUND_SURFACE_ANCHOR_Y);
-      } else {
-        const quad = buildFlatTileDestinationQuad({
-          tx,
-          ty,
-          zBase,
-          renderAnchorY: LOGICAL_GROUND_SURFACE_ANCHOR_Y,
-          tileWorld: T,
-          elevPx: ELEV_PX,
-          isoHeight: SIDEWALK_ISO_HEIGHT,
-          camX,
-          camY,
-          worldToScreen,
-          snapPoint: snapPx,
-        });
-        drawTexturedQuad(
-          ctx,
-          baseBaked,
-          0,
-          0,
-          baseBaked.width,
-          baseBaked.height,
-          quad,
-          buildDiamondSourceQuad(baseBaked.width, baseBaked.height),
-        );
-      }
-
-      const wx = (tx + 0.5) * T;
-      const wy = (ty + 0.5) * T;
-      const p = worldToScreen(wx, wy);
-      const centerX = snapPx(p.x + camX);
-      const centerY = snapPx(
-        p.y + camY - zBase * ELEV_PX - SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5),
-      );
-
-      if (SHOW_SIDEWALK_VARIANT_DEBUG) {
-        ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.fillStyle = "#00ffd5";
-        ctx.font = "9px monospace";
-        ctx.fillText(`${variantIndex} r${rotationQuarterTurns}`, centerX + 4, centerY - 4);
-        ctx.restore();
-      }
-    };
-
-    const drawRuntimeDecalTop = (
-      tx: number,
-      ty: number,
-      zBase: number,
-      renderAnchorY: number,
-      setId: RuntimeDecalSetId,
-      variantIndex: number,
-      rotationQuarterTurns: 0 | 1 | 2 | 3,
-    ) => {
-      const src = getRuntimeDecalSprite(setId, variantIndex);
-      if (!src.ready || !src.img || src.img.width <= 0 || src.img.height <= 0) return;
-      const decalScale = roadMarkingDecalScale(setId, variantIndex);
-      const baked = getRuntimeIsoDecalCanvas(src.img, rotationQuarterTurns, decalScale);
-      if (!baked) return;
-      const shouldSnapRoadMarking = shouldPixelSnapRoadMarking(setId, variantIndex);
-      const diamond = getDiamondFitCanvas(baked);
-      const decalQuadOffsetY = -SIDEWALK_ISO_HEIGHT * 0.5;
-
-      if (rampRoadTiles.has(`${tx},${ty}`)) {
-        drawDiamondOnRampQuad(diamond, tx, ty, renderAnchorY);
-      } else {
-        const quad = buildFlatTileDestinationQuad({
-          tx,
-          ty,
-          zBase,
-          renderAnchorY,
-          tileWorld: T,
-          elevPx: ELEV_PX,
-          isoHeight: SIDEWALK_ISO_HEIGHT,
-          camX,
-          camY,
-          worldToScreen,
-          snapPoint: shouldSnapRoadMarking ? Math.round : snapPx,
-          extraDy: decalQuadOffsetY,
-        });
-        drawTexturedQuad(
-          ctx,
-          diamond,
-          0,
-          0,
-          diamond.width,
-          diamond.height,
-          quad,
-          buildDiamondSourceQuad(diamond.width, diamond.height),
-        );
-      }
-    };
-
-    const drawProjectedVoidTop = (
-      img: HTMLImageElement,
-      tx: number,
-      ty: number,
-      renderAnchorY: number,
-    ) => {
-      const wx = (tx + 0.5) * T;
-      const wy = (ty + 0.5) * T;
-      const p = worldToScreen(wx, wy);
-      const centerX = snapPx(p.x + camX);
-      const centerY = snapPx(
-        p.y + camY + 2 * ELEV_PX - SIDEWALK_ISO_HEIGHT * (renderAnchorY - 0.5),
-      );
-
-      const srcW = img.width * VOID_TOP_SCALE;
-      const srcH = img.height * VOID_TOP_SCALE;
-      // Slightly overdraw each projected tile to hide subpixel seam cracks between neighbors.
-      const bleed = 1;
-      ctx.save();
-      ctx.translate(centerX, centerY);
-      ctx.transform(0.5, 0.25, -0.5, 0.25, 0, 0);
-      ctx.translate(-(srcW * 0.5) - bleed, -(srcH * 0.5) - bleed);
-      ctx.drawImage(img, 0, 0, srcW + bleed * 2, srcH + bleed * 2);
-      ctx.restore();
-    };
-
-    const dirToDelta = (dir: "N" | "E" | "S" | "W") => {
-      switch (dir) {
-        case "N": return { dx: 0, dy: -1 };
-        case "E": return { dx: 1, dy: 0 };
-        case "S": return { dx: 0, dy: 1 };
-        case "W": return { dx: -1, dy: 0 };
-      }
-    };
-
-  const buildMultiZFaceDraw = (
-    c: RenderPiece,
-    apronRec: { img: HTMLImageElement; ready: boolean },
-    flipX: boolean,
-  ): RenderPieceDraw[] => {
-    if (!apronRec?.ready || !apronRec.img) return [];
-
-    const scale = c.scale ?? 1;
-    const anchorY = c.renderAnchorY ?? ANCHOR_Y;
-    // Use native image dimensions (same pattern as buildOverlayDraw)
-    const ow = apronRec.img.width;
-    const oh = apronRec.img.height;
-
-    // Position at the tile edge
-    const wx = (c.tx + 0.5) * T;
-    const wy = (c.ty + 0.5) * T;
-    const edgeDir = c.edgeDir ?? c.renderDir ?? "N";
-    const delta = dirToDelta(edgeDir);
-    const apronWx = wx + delta.dx * T * 0.5;
-    const apronWy = wy + delta.dy * T * 0.5;
-
-    const p = worldToScreen(apronWx, apronWy);
-    // Anchor at the top of the Z range; image hangs downward
-    const zVisual = Math.floor(c.zTo) - 1;
-    const dx = p.x + camX - ow * scale * 0.5;
-    const dy = p.y + camY - oh * scale * anchorY - zVisual * ELEV_PX;
-
-    return [{
-      img: apronRec.img,
-      dx,
-      dy,
-      dw: ow,
-      dh: oh,
-      zVisual,
-      flipX,
-      scale,
-    }];
-  };
-
-  const buildFaceDraws = (c: RenderPiece): RenderPieceDraw[] => {
-    const dir4 = c.renderDir ?? "N";
-    const apronRec = c.spriteId ? getTileSpriteById(c.spriteId) : null;
-    const apronFlipX = !!c.flipX;
-    if (!apronRec?.ready || !apronRec.img || apronRec.img.width <= 0 || apronRec.img.height <= 0) return [];
-
-      // Multi-Z sprite: draw one image covering the full Z range
-      if (c.zSpan && c.zSpan > 1) {
-        return buildMultiZFaceDraw(c, apronRec, apronFlipX);
-      }
-
-      const anchorY = c.renderAnchorY ?? ANCHOR_Y;
-      const apronScale = c.kind === "FLOOR_APRON" ? FLOOR_APRON_SCALE : STAIR_APRON_SCALE;
-      const aw = apronRec.img.width * apronScale;
-      const ah = apronRec.img.height * apronScale;
-      const scale = c.scale ?? 1;
-
-      const wx = (c.tx + 0.5) * T;
-      const wy = (c.ty + 0.5) * T;
-      const edgeDirForApron = c.edgeDir ?? dir4;
-      const apronDelta = dirToDelta(edgeDirForApron);
-      const apronWx = wx + apronDelta.dx * T * 0.5;
-      const apronWy = wy + apronDelta.dy * T * 0.5;
-
-      const p = worldToScreen(apronWx, apronWy);
-      const ax = p.x + camX - aw * scale * 0.5;
-      const ayBase = p.y + camY - ah * scale * anchorY;
-
-// Allow negative apron spans (e.g. -1 -> 0) so height-0 platforms still show aprons.
-    const zTop = Math.floor(c.zTo);
-    const zBottom = Math.floor(c.zFrom ?? c.zTo);
-    const zStart = Math.min(zTop, zBottom);
-    const zEnd = Math.max(zTop, zBottom);
-
-    const draws: RenderPieceDraw[] = [];
-
-    const edgeDir = c.edgeDir;
-    const neighborBlocksAtZ = (z: number) => {
-      if (!edgeDir) return false;
-      let dx = 0;
-      let dy = 0;
-      if (edgeDir === "N") dy = -1;
-      else if (edgeDir === "S") dy = 1;
-      else if (edgeDir === "E") dx = 1;
-      else if (edgeDir === "W") dx = -1;
-      const nTx = c.tx + dx;
-      const nTy = c.ty + dy;
-      const surfaces = surfacesAtXYCached(nTx, nTy);
-      if (surfaces.length === 0) return false;
-      let maxZ = surfaces[0].zBase;
-      for (let i = 1; i < surfaces.length; i++) {
-        const zBase = surfaces[i].zBase;
-        if (zBase > maxZ) maxZ = zBase;
-      }
-      return maxZ >= z;
-    };
-
-      for (let z = zEnd; z >= zStart; z -= 2) {
-        if (neighborBlocksAtZ(z)) continue;
-        const zVisual = z - 1;
-        draws.push({
-          img: apronRec.img,
-          dx: ax,
-          dy: ayBase - zVisual * ELEV_PX,
-          dw: aw,
-          dh: ah,
-          zVisual,
-          flipX: apronFlipX,
-          scale,
-        });
-      }
-
-    return draws;
-  };
-  const buildWallDraw = (c: RenderPiece, stableId: number): RenderPieceDraw | null => {
-    if (c.kind !== "WALL") return null;
-    const wallDir = c.wallDir ?? "N";
-    const apronRec = c.spriteId ? getTileSpriteById(c.spriteId) : null;
-    const apronFlipX = !!c.flipX;
-      if (!apronRec?.ready || !apronRec.img || apronRec.img.width <= 0 || apronRec.img.height <= 0) return null;
-
-      let wx = (c.tx + 0.5) * T;
-      let wy = (c.ty + 0.5) * T;
-      const wallDelta = dirToDelta(wallDir);
-      wx += wallDelta.dx * T * 0.5;
-      wy += wallDelta.dy * T * 0.5;
-
-      const p = worldToScreen(wx, wy);
-      const anchorY = c.renderAnchorY ?? ANCHOR_Y;
-
-    // Walls should render at the midpoint of their vertical span (centered on half-height).
-    const h = ((c.zFrom ?? c.zTo) + c.zTo) * 0.5;
-    const dyOffset = c.renderDyOffset ?? 0;
-    const scale = c.scale ?? 1;
-
-    // Multi-Z wall sprites use native image dimensions
-    const useNative = !!(c.zSpan && c.zSpan > 1);
-    const aw = useNative ? apronRec.img.width : apronRec.img.width * WALL_APRON_SCALE;
-    const ah = useNative ? apronRec.img.height : apronRec.img.height * WALL_APRON_SCALE;
-    const ax = p.x + camX - aw * scale * 0.5;
-    const ay = p.y + camY - ah * scale * anchorY - h * ELEV_PX - dyOffset;
-
-
+    const x0 = tx * T;
+    const y0 = ty * T;
     return {
-      img: apronRec.img,
-      dx: ax,
-      dy: ay,
-      dw: aw,
-      dh: ah,
-      flipX: apronFlipX,
-      scale,
+      nw: sample(x0, y0),
+      ne: sample(x0 + T, y0),
+      se: sample(x0 + T, y0 + T),
+      sw: sample(x0, y0 + T),
     };
   };
 
-  const buildOverlayDraw = (o: StampOverlay): RenderPieceDraw | null => {
-    const rec = o.spriteId ? getTileSpriteById(o.spriteId) : null;
-    if (!rec?.ready || !rec.img || rec.img.width <= 0 || rec.img.height <= 0) return null;
-    const projectedNoCamera = buildRuntimeStructureProjectedDraw(o, rec.img);
-    const footprintW = Math.max(1, o.w | 0);
-    const isFootprintOverlay =
-      o.layerRole === "STRUCTURE" || ((o.kind ?? "ROOF") === "PROP" && (footprintW > 1 || (o.h | 0) > 1));
-    const dx = projectedNoCamera.dx + camX;
-    const dy = projectedNoCamera.dy + camY;
-    if (LOG_STRUCTURE_ANCHOR_DEBUG && isFootprintOverlay && !loggedStructureAnchorDebugIds.has(o.id)) {
-      loggedStructureAnchorDebugIds.add(o.id);
-      console.log("[structure-anchor-debug]", {
-        id: o.id,
-        tileW: footprintW,
-        mode: projectedNoCamera.anchorPlacementDebugNoCamera?.mode ?? "n/a",
-        alignmentDelta: projectedNoCamera.anchorPlacementDebugNoCamera?.alignmentDeltaPx ?? null,
-        screenX: dx,
-      });
-    }
-    return {
-      img: rec.img,
-      dx,
-      dy,
-      dw: projectedNoCamera.dw,
-      dh: projectedNoCamera.dh,
-      flipX: projectedNoCamera.flipX,
-      scale: projectedNoCamera.scale,
-      anchorPlacementDebugNoCamera: projectedNoCamera.anchorPlacementDebugNoCamera,
-    };
-  };
+  const {
+    buildFaceDraws,
+    buildWallDraw,
+    buildOverlayDraw,
+  } = createStructureDrawBuilders({
+    anchorY: ANCHOR_Y,
+    tileWorld: T,
+    elevPx: ELEV_PX,
+    camX,
+    camY,
+    floorApronScale: FLOOR_APRON_SCALE,
+    stairApronScale: STAIR_APRON_SCALE,
+    wallApronScale: WALL_APRON_SCALE,
+    worldToScreen,
+    surfacesAtXYCached,
+    getTileSpriteById,
+    logStructureAnchorDebug: LOG_STRUCTURE_ANCHOR_DEBUG,
+    loggedStructureAnchorDebugIds,
+  });
 
   const debugContext: DebugOverlayContext = {
     ctx,
@@ -1083,10 +678,7 @@ export async function renderSystem(
   const compiledMap = getActiveCompiledMap();
   const rampRoadTiles = buildRampRoadTiles(compiledMap);
 
-  const activePaletteId = resolveActivePaletteId();
   const activePaletteVariantKey = resolveActivePaletteVariantKey();
-  const activePaletteSwapWeights = resolveActivePaletteSwapWeights();
-  const currentSettings = getUserSettings();
   const groundChunkCacheContextKey = [
     `map:${compiledMap.id}`,
     `palv:${activePaletteVariantKey}`,
@@ -1247,63 +839,17 @@ export async function renderSystem(
   });
   const shadowSunModel = structureShadowFrame.sunModel;
   const ambientSunLighting = structureShadowFrame.ambientSunLighting;
-  // --- Heightmap-based per-pixel shadow pass ---
-  let heightmapShadowMaskResult: ReturnType<typeof computeHeightmapShadowMask> = null;
-  const _hmEnabled = renderSettings.heightmapShadowsEnabled !== false;
-  const _hmCasts = shadowSunModel.castsShadows;
-  if (_hmEnabled && _hmCasts) {
-    const heightmapStructures: HeightmapStructureInstance[] = [];
-    const visibleOverlays = compiledMap.overlaysInView(viewRect);
-    // Compute viewport bounds in world-projected space (no camera)
-    // The world transform is: screenPos = (projected + cam) * zoom + offset
-    // So: projected = (screen - offset) / zoom - cam
-    // Viewport in projected space: left = -camTx, top = -camTy, size = css / zoom
-    const hmViewX = -viewport.camTx;
-    const hmViewY = -viewport.camTy;
-    const hmViewW = cssW / viewport.zoom;
-    const hmViewH = cssH / viewport.zoom;
-    for (let i = 0; i < visibleOverlays.length; i++) {
-      const overlay = visibleOverlays[i];
-      if (!overlay.spriteId) continue;
-      const heightmap = getHeightmapForSprite(overlay.spriteId);
-      if (!heightmap) continue;
-      const rec = getTileSpriteById(overlay.spriteId);
-      if (!rec?.ready || !rec.img || rec.img.width <= 0 || rec.img.height <= 0) continue;
-      const projected = buildRuntimeStructureProjectedDraw(overlay, rec.img);
-      const drawScale = projected.scale ?? 1;
-      // Position relative to viewport origin in projected space
-      heightmapStructures.push({
-        heightmap,
-        screenX: projected.dx - hmViewX,
-        screenY: projected.dy - hmViewY,
-        drawWidth: projected.dw * drawScale,
-        drawHeight: projected.dh * drawScale,
-        flipX: projected.flipX,
-        colorSpriteImg: rec.img,
-      });
-    }
-    if (heightmapStructures.length > 0) {
-      const _div = Number(debugFlags.heightmapShadowResolutionDivisor);
-      const resolutionDivisor = Number.isFinite(_div) && _div >= 1 ? _div : 2;
-      const heightBuffer = compositeSceneHeightBuffer(
-        hmViewW, hmViewH, resolutionDivisor, heightmapStructures,
-      );
-      if (heightBuffer) {
-        const _step = Number(debugFlags.heightmapShadowStepSize);
-        const _max = Number(debugFlags.heightmapShadowMaxSteps);
-        const _int = Number(debugFlags.heightmapShadowIntensity);
-        const params = {
-          stepSize: Number.isFinite(_step) && _step > 0 ? _step : DEFAULT_HEIGHTMAP_SHADOW_PARAMS.stepSize,
-          maxSteps: Number.isFinite(_max) && _max > 0 ? _max : DEFAULT_HEIGHTMAP_SHADOW_PARAMS.maxSteps,
-          shadowIntensity: Number.isFinite(_int) ? _int : DEFAULT_HEIGHTMAP_SHADOW_PARAMS.shadowIntensity,
-        };
-        const hmCacheKey = `${compiledMap.id}:${shadowSunModel.stepKey}:hm:${cssW}x${cssH}:cam${viewport.camTx},${viewport.camTy}:d${resolutionDivisor}:s${params.stepSize}:m${params.maxSteps}:i${params.shadowIntensity}`;
-        heightmapShadowMaskResult = computeHeightmapShadowMask(
-          heightBuffer, shadowSunModel, params, hmCacheKey,
-        );
-      }
-    }
-  }
+  const heightmapShadowMaskResult = resolveHeightmapShadowMaskForFrame({
+    enabled: renderSettings.heightmapShadowsEnabled !== false,
+    shadowSunModel,
+    debugFlags,
+    compiledMap,
+    viewRect,
+    viewport,
+    cssW,
+    cssH,
+    getTileSpriteById,
+  });
 
   if (runtimeStructureTriangleContextChanged) {
     rebuildMonolithicStructureTriangleCacheForMap(compiledMap, {
@@ -1312,14 +858,6 @@ export async function renderSystem(
     });
   }
 
-  // ----------------------------
-  // Void
-  // ----------------------------
-  // Disabled: VOID is now drawn once as a screen background (see drawVoidBackgroundOnce).
-  // This avoids thousands of drawImage calls per frame.
-  {
-    // noop
-  }
   const frameBuilder = createRenderFrameBuilder();
   const deferredStructureSliceDebugDraws: Array<() => void> = [];
   let didQueueStructureCutoutDebugRect = false;
@@ -1603,20 +1141,9 @@ export async function renderSystem(
     cssW,
     cssH,
     dpr,
+    heightmapShadowMaskResult,
   } as ScreenOverlayContext;
   renderScreenOverlays(screenOverlayContext);
-
-  // Enqueue heightmap shadow mask
-  if (heightmapShadowMaskResult) {
-    enqueueWorldBandCommand(frameBuilder, {
-      semanticFamily: "debug",
-      finalForm: "primitive",
-      payload: {
-        zBand: "FIRST",
-        heightmapShadowMask: heightmapShadowMaskResult,
-      },
-    });
-  }
 
   const commandFrame = finalizeRenderFrame({
     builder: frameBuilder,
