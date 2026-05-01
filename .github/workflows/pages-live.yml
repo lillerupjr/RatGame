@@ -70,8 +70,14 @@ jobs:
             echo "Skipping Supabase link/db push because SUPABASE_ACCESS_TOKEN or SUPABASE_DB_PASSWORD is not set."
             exit 0
           fi
-          supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
-          supabase db push --yes
+          if ! supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"; then
+            echo "::warning::Skipping Supabase db push because project linking failed. Check SUPABASE_ACCESS_TOKEN and SUPABASE_DB_PASSWORD in the github-pages environment secrets."
+            exit 0
+          fi
+          if ! supabase db push --yes; then
+            echo "::warning::Supabase db push failed. GitHub Pages deployment will continue; check the Supabase credentials/migrations separately."
+            exit 0
+          fi
 
       - name: Build
         run: npm run build

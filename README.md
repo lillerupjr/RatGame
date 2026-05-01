@@ -34,3 +34,5 @@ See `docs/systems/architecture_invariants.md`.
 ## GitHub Pages (live)
 - Deployments trigger on pushes to the `live` branch via `.github/workflows/pages-live.yml`.
 - In GitHub Settings -> Pages, set **Build and deployment** source to **GitHub Actions**.
+- Required for the website build: set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as repository or `github-pages` environment secrets/variables.
+- Optional for applying database migrations during deploy: set `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD` as `github-pages` environment secrets. If those are missing or invalid, the workflow skips the DB push and still deploys the site.
